@@ -13,7 +13,7 @@
 #include <string.h>
 #include "weight.h"
 #include "TMC5130.h"
-
+#include "fault_manager.h"
 // 主程序初始化
 void App_Init(void);
 

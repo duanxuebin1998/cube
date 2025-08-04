@@ -142,8 +142,8 @@ void Error_Handler(void);
 #define AD5421_FAULT_GPIO_Port GPIOB
 
 /* USER CODE BEGIN Private defines */
-extern int16_t weight;//称重值
-extern volatile int32_t encoder_count;
+extern int16_t g_weight;//称重值
+extern volatile int32_t g_encoder_count ;
 
 //usart1接收数据缓冲区
 // 存储接收到的数据

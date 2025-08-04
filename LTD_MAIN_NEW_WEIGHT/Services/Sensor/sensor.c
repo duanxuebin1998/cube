@@ -22,6 +22,7 @@
 #include "sensor.h"
 #include "system_parameter.h"
 #include "main.h"
+#include "stdio.h"
 
 #define DSM_MAX_RETRY 1 //最大重试次数
 #define DSM_CMD_TIMEOUT 500  //接收字节间超时时间

@@ -8,6 +8,7 @@
 #include "CH9141EVT.h"
 #include "usart.h"
 #include "string.h"
+#include "stdio.h"
 
 char BLE_MAC[18] = "36:1D:1A:26:3B:38";
 

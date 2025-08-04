@@ -15,8 +15,6 @@
 #define SSI             hspi5               // SPI interface used for AS5145 communication
 #define SSI_CSN_PIN     GPIO_PIN_6          // Chip Select (CS) pin for AS5145
 #define SSI_CSN_PORT    GPIOF               // GPIO port for CS pin
-//#define SSI_CLK_PIN     GPIO_PIN_3          // Chip Select (CLK) pin for AS5145
-//#define SSI_CLK_PORT    GPIOB               // GPIO port for CLK pin
 #define ENCODER_TIM_HANDLE  htim1              //编码器定时采集定时器
 
 typedef enum {

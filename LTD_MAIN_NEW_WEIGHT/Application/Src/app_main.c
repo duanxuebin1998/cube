@@ -9,46 +9,43 @@
 #include "main.h"
 #include "system_parameter.h"
 #include "measure.h"
-#include "communication.h"
 #include "encoder.h"
 //测试用
 #include "sensor.h"
-
+#include <mb85rs2m.h>
+#include "my_crc.h"
+#include "test.h"
+#include "motor_ctrl.h"
+void Test_main(void); // 测试函数声明
 // 初始化函数
-void App_Init(void)
-{
+void App_Init(void) {
 	printf("LTD demo restart!\n");
-	Initialize_Encoder();
+	Initialize_Encoder(); // 初始化编码器
 	motor_Init(); //电机初始化
-//	Test_FRAM_ReadWrite();
-//	motor_text();
-//	motorMoveAndWaitUntilStop(1000.0, MOTOR_DIRECTION_DOWN);
+	init_device_params(); // 初始化设备参数
+	g_measurement.device_status.zero_point_status == 1;// 设置零点状态为需要回零点
+	weight_init();
+	HostCommuInit(); // 初始化Modbus通信
+	//测试函数
+//	Test_main(); // 测试函数
 }
 
 // 主循环任务
-void App_MainLoop(void)
-{
-//	motorMoveNoWait(1000.0, MOTOR_DIRECTION_UP);
-//	HAL_Delay(1000);
-//	stpr_waitMove(&stepper);
-//	Start_Read_SSI_Data(); // 开始一次DMA读取
-//	HAL_Delay(50);
-//	Update_Encoder_Count(currentangle);
+void App_MainLoop(void) {
 
-	while (1)
-	{
+
+	while (1) {
 		// 如果有新的命令
-		if (new_command_ready)
-		{
+		if (new_command_ready) {
 			new_command_ready = 0;  // 重置标志，避免重复处理
 
 			// 处理接收到的命令
 			process_command(received_buffer);
 		}
 //		Test_FRAM_ReadWrite();
-//		DSMSendcommand3times(DSM_POWER, strlen(DSM_POWER));
-		printf("{encoder}%d\r\n{weight}%d\r\n", (int) encoder_count, weight);
-		HAL_Delay(50);
+////		DSMSendcommand3times(DSM_POWER, strlen(DSM_POWER));
+//		printf("{encoder}%d\r\n{weight}%d\r\n", (int) g_encoder_count, g_weight);
+		HAL_Delay(50); // 延时50ms
 	}
 //
 //	switch (g_measurement.device_status.current_command)
@@ -79,3 +76,16 @@ void App_MainLoop(void)
 //
 //	}
 }
+//测试主函数
+void Test_main(void) {
+	Test_FRAM_ReadWrite(); //测试FRAM读写
+//	motor_text();
+	Test_Params_Storage(); //测试参数存储
+	CRC32_HAL_Test(); //CRC校验测试
+	test_macro(); // 测试宏函数
+}
+int test_macro(void) {
+	CHECK_ERROR(0x10001); // 测试宏函数
+	 fault_info_init(); // 初始化故障信息
+	return NO_ERROR; // 返回无错误状态
+}// 测试宏函数

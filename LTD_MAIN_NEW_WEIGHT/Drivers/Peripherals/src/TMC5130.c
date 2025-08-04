@@ -4,10 +4,11 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include "spi.h"
+#include "fault_manager.h"
+
 
 #include "motor_ctrl.h" //测试用
-TMC5130TypeDef stepper =
-{ .home_state = HOME, // 假设 HOMING_IDLE 是归位状态的某个枚举�??
+TMC5130TypeDef stepper = { .home_state = HOME, // 假设 HOMING_IDLE 是归位状态的某个枚举�??
 		.prev_home_state = HOME,     // 上一个归位状�??
 		.control_type = INTERNAL, // 假设控制类型为位置控�??
 		.spi = &hspi2,                      // SPI 句柄
@@ -26,18 +27,14 @@ TMC5130TypeDef stepper =
 		};
 
 // => SPI wrapper.
-uint32_t tmc5130_readArray(TMC5130TypeDef *tmc5130, uint8_t *data,
-		size_t length);
+uint32_t tmc5130_readArray(TMC5130TypeDef *tmc5130, uint8_t *data, size_t length);
 void tmc5130_writeArray(TMC5130TypeDef *tmc5130, uint8_t *data, size_t length);
 // <= SPI wrapper
 
 // => SPI wrappers
 
-uint32_t tmc5130_readArray(TMC5130TypeDef *tmc5130, uint8_t *data,
-		size_t length)
-{
-	uint8_t rxBuff[5] =
-	{ 0, 0, 0, 0, 0 };
+uint32_t tmc5130_readArray(TMC5130TypeDef *tmc5130, uint8_t *data, size_t length) {
+	uint8_t rxBuff[5] = { 0, 0, 0, 0, 0 };
 
 	HAL_GPIO_WritePin(tmc5130->cs_port, tmc5130->cs_pin, GPIO_PIN_RESET);
 
@@ -53,8 +50,7 @@ uint32_t tmc5130_readArray(TMC5130TypeDef *tmc5130, uint8_t *data,
 
 }
 
-void tmc5130_writeArray(TMC5130TypeDef *tmc5130, uint8_t *data, size_t length)
-{
+void tmc5130_writeArray(TMC5130TypeDef *tmc5130, uint8_t *data, size_t length) {
 
 	HAL_GPIO_WritePin(tmc5130->cs_port, tmc5130->cs_pin, GPIO_PIN_RESET);
 
@@ -69,33 +65,26 @@ void tmc5130_writeArray(TMC5130TypeDef *tmc5130, uint8_t *data, size_t length)
 }
 
 // Writes (x1 << 24) | (x2 << 16) | (x3 << 8) | x4 to the given address
-void tmc5130_writeDatagram(TMC5130TypeDef *tmc5130, uint8_t address, uint8_t x1,
-		uint8_t x2, uint8_t x3, uint8_t x4)
-{
-	uint8_t data[5] =
-	{ address | TMC5130_WRITE_BIT, x1, x2, x3, x4 };
+void tmc5130_writeDatagram(TMC5130TypeDef *tmc5130, uint8_t address, uint8_t x1, uint8_t x2, uint8_t x3, uint8_t x4) {
+	uint8_t data[5] = { address | TMC5130_WRITE_BIT, x1, x2, x3, x4 };
 	tmc5130_writeArray(tmc5130, &data[0], 5);
 
 }
 
 // Write an integer to the given address
-void stpr_writeInt(TMC5130TypeDef *tmc5130, uint8_t address, int32_t value)
-{
-	tmc5130_writeDatagram(tmc5130, address, BYTE(value, 3), BYTE(value, 2),
-			BYTE(value, 1), BYTE(value, 0));
+void stpr_writeInt(TMC5130TypeDef *tmc5130, uint8_t address, int32_t value) {
+	tmc5130_writeDatagram(tmc5130, address, BYTE(value, 3), BYTE(value, 2), BYTE(value, 1), BYTE(value, 0));
 }
 
 // Read an integer from the given address
-int32_t stpr_readInt(TMC5130TypeDef *tmc5130, uint8_t address)
-{
+int32_t stpr_readInt(TMC5130TypeDef *tmc5130, uint8_t address) {
 	/*address = TMC_ADDRESS(address);
 
 	 // register not readable -> shadow register copy
 	 if(!TMC_IS_READABLE(tmc5130->registerAccess[address]))
 	 return tmc5130->config->shadowRegister[address];*/
 
-	uint8_t data[5] =
-	{ 0, 0, 0, 0, 0 };
+	uint8_t data[5] = { 0, 0, 0, 0, 0 };
 	uint32_t dummy = 0;
 
 	data[0] = address;
@@ -108,37 +97,30 @@ int32_t stpr_readInt(TMC5130TypeDef *tmc5130, uint8_t address)
 }
 
 // Rotate with a given velocity (to the right)
-void tmc5130_rotate(TMC5130TypeDef *tmc5130, int32_t velocity)
-{
+void tmc5130_rotate(TMC5130TypeDef *tmc5130, int32_t velocity) {
 	// Set absolute velocity
 	stpr_writeInt(tmc5130, TMC5130_VMAX, abs(velocity));
 	// Set direction
-	stpr_writeInt(tmc5130, TMC5130_RAMPMODE,
-			(velocity >= 0) ? TMC5130_MODE_VELPOS : TMC5130_MODE_VELNEG);
+	stpr_writeInt(tmc5130, TMC5130_RAMPMODE, (velocity >= 0) ? TMC5130_MODE_VELPOS : TMC5130_MODE_VELNEG);
 }
 
 // Rotate to the right
-void stpr_right(TMC5130TypeDef *tmc5130, uint32_t velocity)
-{
+void stpr_right(TMC5130TypeDef *tmc5130, uint32_t velocity) {
 	tmc5130_rotate(tmc5130, velocity);
 }
 
 // Rotate to the left
-void stpr_left(TMC5130TypeDef *tmc5130, uint32_t velocity)
-{
+void stpr_left(TMC5130TypeDef *tmc5130, uint32_t velocity) {
 	tmc5130_rotate(tmc5130, -velocity);
 }
 
 // Stop moving
-void stpr_stop(TMC5130TypeDef *tmc5130)
-{
+void stpr_stop(TMC5130TypeDef *tmc5130) {
 	tmc5130_rotate(tmc5130, 0);
 }
 
 // Move to a specified position with a given velocity
-void stpr_moveTo(TMC5130TypeDef *tmc5130, int32_t position,
-		uint32_t velocityMax)
-{
+void stpr_moveTo(TMC5130TypeDef *tmc5130, int32_t position, uint32_t velocityMax) {
 	stpr_writeInt(tmc5130, TMC5130_RAMPMODE, TMC5130_MODE_POSITION);
 
 	// VMAX also holds the target velocity in velocity mode.
@@ -150,8 +132,7 @@ void stpr_moveTo(TMC5130TypeDef *tmc5130, int32_t position,
 
 // Move by a given amount with a given velocity
 // This function will write the absolute target position to *ticks
-void stpr_moveBy(TMC5130TypeDef *tmc5130, int32_t *ticks, uint32_t velocityMax)
-{
+void stpr_moveBy(TMC5130TypeDef *tmc5130, int32_t *ticks, uint32_t velocityMax) {
 	// determine actual position and add numbers of ticks to move
 	*ticks += stpr_readInt(tmc5130, TMC5130_XACTUAL);
 
@@ -159,8 +140,7 @@ void stpr_moveBy(TMC5130TypeDef *tmc5130, int32_t *ticks, uint32_t velocityMax)
 }
 
 // Translate angle to steps with a resolution of 0.01 degrees
-void stpr_moveAngle(TMC5130TypeDef *tmc5130, float angle, uint32_t velocityMax)
-{
+void stpr_moveAngle(TMC5130TypeDef *tmc5130, float angle, uint32_t velocityMax) {
 
 	int32_t position;
 
@@ -177,64 +157,64 @@ void stpr_moveAngle(TMC5130TypeDef *tmc5130, float angle, uint32_t velocityMax)
 }
 
 // Get current stepper position
-int32_t stpr_getPos(TMC5130TypeDef *tmc5130)
-{
+int32_t stpr_getPos(TMC5130TypeDef *tmc5130) {
 	int32_t XActual;
 	XActual = stpr_readInt(tmc5130, TMC5130_XACTUAL);
 
 	return XActual;
 }
 
-void stpr_disableDriver(TMC5130TypeDef *tmc5130)
-{
+void stpr_disableDriver(TMC5130TypeDef *tmc5130) {
 	HAL_GPIO_WritePin(tmc5130->en_port, tmc5130->en_pin, GPIO_PIN_SET);
 }
 
-void stpr_enableDriver(TMC5130TypeDef *tmc5130)
-{
+void stpr_enableDriver(TMC5130TypeDef *tmc5130) {
 	HAL_GPIO_WritePin(tmc5130->en_port, tmc5130->en_pin, GPIO_PIN_RESET);
 }
 
-void stpr_setPos(TMC5130TypeDef *tmc5130, int32_t position)
-{
+void stpr_setPos(TMC5130TypeDef *tmc5130, int32_t position) {
 	stpr_writeInt(tmc5130, TMC5130_XTARGET, position);
 	stpr_writeInt(tmc5130, TMC5130_XACTUAL, position);
 }
 
-void stpr_waitMove(TMC5130TypeDef *tmc5130)
-{
-	while ((stpr_readInt(tmc5130, TMC5130_RAMPSTAT) & 0x400) != 0x400)
-	{
+uint32_t stpr_waitMove(TMC5130TypeDef *tmc5130) {
+	while ((stpr_readInt(tmc5130, TMC5130_RAMPSTAT) & 0x400) != 0x400) {
 //		printf("{encoder}%d\t{weight}%d\r\n", (int) encoder_count, weight);
 		uint32_t gstat = stpr_readInt(tmc5130, TMC5130_GSTAT);
-		        if (gstat)
-		        {
-		            // 打印故障信息
-		            if (gstat & (1 << 0)) printf("芯片自上次读取 GSTAT 以来发生了复位\n");
-		            if (gstat & (1 << 1)) printf("驱动器因过热或短路检测被关闭\n");
-		            if (gstat & (1 << 2)) printf("charge pump 欠压\n");
+		if (gstat) {
+			// 打印故障信息
+			if (gstat & (1 << 0)) {
+				printf("芯片自上次读取 GSTAT 以来发生了复位\n");
+				CHECK_ERROR(MOTOR_RESET_FAIL);
+			}
 
-		            // 可以选择清除故障（可选）
-		            stpr_writeInt(tmc5130, TMC5130_GSTAT, 0x07); // 清除所有状态位
+			if (gstat & (1 << 1)) {
+				printf("驱动器因过热或短路检测被关闭\n");
+				CHECK_ERROR(MOTOR_OVERTEMPERATURE);
+			}
 
-		            return; // 提前退出等待
-		        }
+			if (gstat & (1 << 2)) {
+				printf("charge pump 欠压\n");
+				CHECK_ERROR(MOTOR_CHARGE_PUMP_UNDER_VOLTAGE);
+			}
+
+			// 可以选择清除故障（可选）
+			stpr_writeInt(tmc5130, TMC5130_GSTAT, 0x07); // 清除所有状态位
+			CHECK_ERROR(MOTOR_UNKNOWN_FEEDBACK);
+		}
 		HAL_Delay(50);
 	}
+	return NO_ERROR; // 返回无错误状态
 }
 
-void stpr_setCurrent(TMC5130TypeDef *tmc5130, uint8_t current)
-{
+void stpr_setCurrent(TMC5130TypeDef *tmc5130, uint8_t current) {
 	stpr_writeInt(tmc5130, TMC5130_IHOLD_IRUN, (current << 8) | 0x0007006); //IHOLD_IRUN: IHOLD=6, IRUN=19 (max.current), IHOLDDELAY=6
 }
-void stpr_setVelocity(TMC5130TypeDef *tmc5130, uint32_t velocity)
-{
+void stpr_setVelocity(TMC5130TypeDef *tmc5130, uint32_t velocity) {
 	stpr_writeInt(tmc5130, VMAX, velocity); //DMAX = 700 Deceleration above V1//10*32  	0.2S
 }
 
-void stpr_initStepper(TMC5130TypeDef *tmc5130, SPI_HandleTypeDef *spi,
-		GPIO_TypeDef *cs_port, uint16_t cs_pin, uint8_t dir, uint8_t current)
-{
+void stpr_initStepper(TMC5130TypeDef *tmc5130, SPI_HandleTypeDef *spi, GPIO_TypeDef *cs_port, uint16_t cs_pin, uint8_t dir, uint8_t current) {
 	uint32_t value = 0;
 	tmc5130->spi = spi;
 	tmc5130->cs_pin = cs_pin;
@@ -259,8 +239,8 @@ void stpr_initStepper(TMC5130TypeDef *tmc5130, SPI_HandleTypeDef *spi,
 
 	stpr_writeInt(tmc5130, TMC5130_AMAX, 10 * 32); // AMAX for stallGuard homing shall be significantly lower than AMAX for printing
 	stpr_writeInt(tmc5130, TMC5130_A1, 20 * 32);	// 0x000003E8);    //A1=1000
-	stpr_writeInt(tmc5130, TMC5130_V1, 800 * 32);// 0x000186A0);    //V1=100000
-	stpr_writeInt(tmc5130, TMC5130_D1, 20 * 32);// must be != 0 !!!!!!!//20*32
+	stpr_writeInt(tmc5130, TMC5130_V1, 800 * 32);	// 0x000186A0);    //V1=100000
+	stpr_writeInt(tmc5130, TMC5130_D1, 20 * 32);	// must be != 0 !!!!!!!//20*32
 	stpr_writeInt(tmc5130, DMAX, 10 * 32); //DMAX = 700 Deceleration above V1//10*32  	0.2S
 	stpr_writeInt(tmc5130, TMC5130_VSTOP, 0x00000000A);   // VSTOP=20
 	stpr_writeInt(tmc5130, TMC5130_VSTART, 0x000000005);   // VSTART=5
@@ -282,7 +262,7 @@ void stpr_initStepper(TMC5130TypeDef *tmc5130, SPI_HandleTypeDef *spi,
 
 //	   stpr_writeInt(tmc5130, RAMPMODE, 0);             //RAMPMODE = 0 (Target position move)    目标位置移动
 //	   stpr_writeInt(tmc5130, GCONF, 0x1084 | NORMAL_MOTOR_DIRECTION);	//General Configuration  //常规配置     --运动方向
-
+	stpr_writeInt(tmc5130, TMC5130_GSTAT, 0x07); // 清除所有状态位
 }
 
 /*
@@ -292,9 +272,7 @@ void stpr_initStepper(TMC5130TypeDef *tmc5130, SPI_HandleTypeDef *spi,
  * Homing_speed: 30000
  */
 
-void stpr_home(TMC5130TypeDef *tmc5130, uint16_t homing_speed,
-		uint8_t stallguardthreshold)
-{
+void stpr_home(TMC5130TypeDef *tmc5130, uint16_t homing_speed, uint8_t stallguardthreshold) {
 //	int16_t homing_retract = -5000;
 	uint16_t stall_speed;
 	stall_speed = 16777216 / homing_speed;
@@ -302,14 +280,13 @@ void stpr_home(TMC5130TypeDef *tmc5130, uint16_t homing_speed,
 	stall_speed = stall_speed * 1.10; // Activate stallGuard sligthly below desired homing velocity (provide 10% tolerance)
 
 	stpr_writeInt(tmc5130, TMC5130_GCONF, 0x1080); //stealthchop off for stallguard homing
-	stpr_writeInt(tmc5130, TMC5130_COOLCONF,
-			((stallguardthreshold & 0x7F) << 16)); //sgt <-- Entry the value determined for SGT: lower value=higher sensitivity (lower force for stall detection)
+	stpr_writeInt(tmc5130, TMC5130_COOLCONF, ((stallguardthreshold & 0x7F) << 16)); //sgt <-- Entry the value determined for SGT: lower value=higher sensitivity (lower force for stall detection)
 	stpr_writeInt(tmc5130, TMC5130_TCOOLTHRS, stall_speed);	//TCOOLTHRS
 	stpr_writeInt(tmc5130, TMC5130_SWMODE, 0x400);	//SWITCH REGISTER
 	stpr_writeInt(tmc5130, TMC5130_AMAX, 1000);	//AMAX for stallGuard homing shall be significantly lower than AMAX for printing
 
 	// Set velocity mode in direction to the endstop
-	stpr_writeInt(tmc5130, TMC5130_RAMPMODE, TMC5130_MODE_VELPOS);//VELOCITY MODE, direction to the endstop
+	stpr_writeInt(tmc5130, TMC5130_RAMPMODE, TMC5130_MODE_VELPOS);	//VELOCITY MODE, direction to the endstop
 	stpr_writeInt(tmc5130, TMC5130_VMAX, homing_speed);	//Homing Speed in VMAX
 
 	HAL_Delay(20);
@@ -321,7 +298,7 @@ void stpr_home(TMC5130TypeDef *tmc5130, uint16_t homing_speed,
 	// Endstop reached. Reset and retract
 	stpr_writeInt(tmc5130, TMC5130_RAMPMODE, TMC5130_MODE_HOLD);	//HOLD Mode
 	stpr_writeInt(tmc5130, TMC5130_SWMODE, 0x0);			//SWITCH REGISTER
-	stpr_writeInt(tmc5130, TMC5130_RAMPMODE, TMC5130_MODE_POSITION);//Position MODE
+	stpr_writeInt(tmc5130, TMC5130_RAMPMODE, TMC5130_MODE_POSITION);			//Position MODE
 	stpr_writeInt(tmc5130, TMC5130_DMAX, 0xFFFF);				//DMAX
 	stpr_writeInt(tmc5130, TMC5130_GCONF, 0x1080);	//Turn on stealthchop again
 	stpr_writeInt(tmc5130, TMC5130_XACTUAL, 0x0);	//XACTUAL = 0

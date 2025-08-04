@@ -9,24 +9,21 @@
 #define INC_MOTOR_CTRL_H_
 
 #include "main.h"
-#include "../../Peripherals/inc/TMC5130.h"
+#include "TMC5130.h"
 
 #define MOTOR_DIRECTION_DOWN 0
 #define MOTOR_DIRECTION_UP 1
 
 extern uint32_t velocity;
 
-void motor_Init(void); //电机初始化
-void motorMoveNoWait(float mm, int dir);
-void motorMove_up(void);
-void motorMove_down(void);
-
+uint32_t motor_Init(void); //电机初始化
+uint32_t motorMoveNoWait(float mm, int dir);// 电机移动不等待
+uint32_t motorMoveAndWaitUntilStop(float mm, int dir);// 电机移动并等待停止
+uint32_t motorMove_up(void);// 电机向上移动
+uint32_t motorMove_down(void);// 电机向下移动
+uint32_t motorQuickStop(void);// 电机快速停止
+uint32_t motorSlowStop(void);// 电机慢速停止
 void motor_text(void);
-
-//电机紧急刹车
-void motorQuickStop(void);
-//电机停止
-void motorSlowStop(void);
 
 //motorMoveForward(int distance) // 前进指定距离
 //motorMoveBackward(int distance) // 后退指定距离
