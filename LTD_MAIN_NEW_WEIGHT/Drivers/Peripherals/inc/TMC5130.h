@@ -269,7 +269,7 @@ void 		stpr_moveBy			(TMC5130TypeDef *tmc5130, int32_t *ticks, uint32_t velocity
 void 		stpr_moveAngle		(TMC5130TypeDef *tmc5130, float angle, uint32_t velocityMax);
 void 		stpr_setPos			(TMC5130TypeDef *tmc5130, int32_t position);
 int32_t 	stpr_getPos			(TMC5130TypeDef *tmc5130);
-void 		stpr_waitMove		(TMC5130TypeDef *tmc5130);
+uint32_t 		stpr_waitMove		(TMC5130TypeDef *tmc5130);
 void 		stpr_setCurrent		(TMC5130TypeDef *tmc5130, uint8_t current);
 void 		stpr_setVelocity	(TMC5130TypeDef *tmc5130, uint32_t velocity);
 void homing_test(TMC5130TypeDef *tmc5130, uint16_t homing_speed, uint8_t stallguardthreshold);

@@ -13,18 +13,19 @@
 
 uint32_t velocity = 1600 * 2 * 32;
 
-void motor_Init(void)
+uint32_t motor_Init(void)
 {
-	stpr_initStepper(&stepper, &hspi2, GPIOB, GPIO_PIN_12, 1, 25);
+	stpr_initStepper(&stepper, &hspi2, GPIOB, GPIO_PIN_12, 1, 22);
 	stpr_enableDriver(&stepper);
+	return NO_ERROR; // 初始化电机，返回无错误状态
 }
 
 // 控制电机移动函数
-void motorMoveNoWait(float mm, int dir)
+uint32_t motorMoveNoWait(float mm, int dir)
 {
 	if (mm < 0)
 	{
-		return; // 距离必须为正值，直接返回
+		return NO_ERROR; // 距离必须为正值，直接返回 duan
 	}
 	printf("startp%.2f\n", mm);
 	// 计算对应的步数
@@ -36,22 +37,36 @@ void motorMoveNoWait(float mm, int dir)
 
 	// 调用实际的步进电机控制函数
 	stpr_moveBy(&stepper, &ticks, velocity); // 最大速度为 1600 * 2 * 32
+	return NO_ERROR; // 返回无错误状态
 }
-void motorMoveAndWaitUntilStop(float mm, int dir)
+uint32_t motorMoveAndWaitUntilStop(float mm, int dir)
 {
+	uint32_t ret;
 	motorMoveNoWait(mm, dir);
 	HAL_Delay(1000);
-	stpr_waitMove(&stepper);
+	ret = stpr_waitMove(&stepper);
+	CHECK_ERROR(ret); // 等待电机移动完成，并检查是否有错误
+	return NO_ERROR; // 等待电机移动完成
 }
-void motorMove_up(void)
+uint32_t motorMove_up(void)
 {
 	printf("start up\n");
 	motorMoveNoWait(100000, MOTOR_DIRECTION_UP);
+	return NO_ERROR; // 向上移动，返回无错误状态
 }
-void motorMove_down(void)
+uint32_t motorMove_down(void)
 {
 	printf("start down\n");
 	motorMoveNoWait(100000, MOTOR_DIRECTION_DOWN);
+	return NO_ERROR; // 向下移动，返回无错误状态
+}
+void motorRun(float distance_mm,      		// 移动距离（毫米）
+		int direction,          			// 运动方向
+		bool enable_step_loss_detection,  	// 是否启用丢步检测
+		bool enable_weight_detection      	// 是否启用称重检测
+		)
+{
+
 }
 void motor_text(void)
 {
@@ -77,9 +92,9 @@ void motor_text(void)
 }
 
 //电机紧急刹车
-void motorQuickStop(void)
+uint32_t motorQuickStop(void)
 {
-	printf("急刹前{encoder}%d\t{weight}%d\r\n", (int) encoder_count, weight);
+	printf("急刹前{encoder}%d\t{weight}%d\r\n", (int) g_encoder_count , g_weight);
 	stpr_stop(&stepper);
 	stpr_disableDriver(&stepper); //使能电机
 	HAL_Delay(1000);
@@ -87,12 +102,15 @@ void motorQuickStop(void)
 	HAL_Delay(1000);
 	HAL_Delay(1000);
 	stpr_enableDriver(&stepper); //使能电机
-	printf("急刹后{encoder}%d\t{weight}%d\r\n", (int) encoder_count, weight);
+	printf("急刹后{encoder}%d\t{weight}%d\r\n", (int) g_encoder_count , g_weight);
+	return NO_ERROR; // 返回无错误状态
 }
 
 //电机停止
-void motorSlowStop(void)
+uint32_t motorSlowStop(void)
 {
 	stpr_stop(&stepper);
+
+	return NO_ERROR; // 返回无错误状态
 }
 

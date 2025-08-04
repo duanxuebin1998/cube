@@ -5,16 +5,38 @@
  *      Author: 1
  */
 #include "fault_manager.h"
+#include "system_parameter.h"
+#include <stdio.h>
 
+ErrorInfo err;// 全局错误信息变量
+// 错误处理函数
+void LogError(const ErrorInfo* err) {
+    // 保存到错误环形缓冲区
+	if (g_measurement.device_status.error_code == NO_ERROR && g_measurement.device_status.error_code != STATE_SWITCH) {
+//		g_measurement.device_status.device_state = STATE_ERROR; // 设置设备状态为错误
+		g_measurement.device_status.error_code = err->error_code; // 更新错误码
+		g_measurement.device_status.zero_point_status = 1;// 设置零点状态为需要回零点
+//		g_measurement.device_status.current_command = COMMAND_NONE; // 清除当前命令
+		// 打印错误信息到控制台
+		printf("故障\tCODE: 0x%X | FILE: %s | LINE: %lu | FUNC: %s \r\n", err->error_code, err->file, err->line, err->func);
+
+	}
+}
+// 提取短文件名 (从路径中提取)
+const char* GetShortFilename(const char* fullpath) {
+    const char* p = fullpath + strlen(fullpath);
+    while (p > fullpath) {
+        if (*(p-1) == '/' || *(p-1) == '\\') break;
+        p--;
+    }
+    return p;
+}
 // 全局故障信息结构体
-volatile FaultInfo g_faultInfo =
-{ .severity = FAULT_SEVERITY_NONE };
+volatile FaultInfo g_faultInfo = { .severity = FAULT_SEVERITY_NONE };
 
 /* 故障信息初始化函数（系统启动时调用） */
-void fault_info_init(void)
-{
-	memset((void*) &g_faultInfo, 0, sizeof(FaultInfo));
-	g_faultInfo.severity = FAULT_SEVERITY_NONE; // 初始化为无故障状态
+void fault_info_init(void) {
+	g_measurement.device_status.error_code = NO_ERROR; // 清除设备状态错误码;
 }
 
 /**
@@ -26,27 +48,18 @@ void fault_info_init(void)
  * @param retry_count 故障恢复尝试次数
  * @return 32位故障寄存器值
  */
-uint32_t update_and_encode_fault(FaultCategory category, uint8_t error_code,
-		uint8_t location, FaultSeverity severity)
-{
+uint32_t update_errorcode(uint8_t error_code) {
 	// 更新全局故障信息（符合ISO 14229-1标准）
-	g_faultInfo.category = category;
 	g_faultInfo.error_code = error_code;
-	g_faultInfo.location = location;
-	g_faultInfo.severity = severity;
-	g_faultInfo.retry_count += 1;
 
 	// 实时寄存器编码
-	uint32_t register_value = ((uint32_t) (g_faultInfo.category & 0xFF) << 16)
-			| ((uint32_t) (g_faultInfo.location & 0xFF) << 8)
-			| (uint32_t) (g_faultInfo.error_code & 0xFF);
+	uint32_t register_value = ((uint32_t) (g_faultInfo.location & 0xFF) << 8) | (uint32_t) (g_faultInfo.error_code & 0xFF);
 
 	return register_value;
 }
 
 /* 带阈值的故障状态检测函数 */
-uint8_t check_fault_with_threshold(FaultSeverity threshold)
-{
+uint8_t check_fault_with_threshold(FaultSeverity threshold) {
 	// 原子操作读取当前严重级别（防止中断干扰）
 	FaultSeverity current_severity = g_faultInfo.severity;
 
