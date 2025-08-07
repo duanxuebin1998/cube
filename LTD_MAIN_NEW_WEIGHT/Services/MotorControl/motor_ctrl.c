@@ -27,7 +27,7 @@ uint32_t motorMoveNoWait(float mm, int dir)
 	{
 		return NO_ERROR; // 距离必须为正值，直接返回 duan
 	}
-	printf("startp%.2f\n", mm);
+	printf("start move %.2fmm, dir %d\n", mm, dir);
 	// 计算对应的步数
 	int32_t ticks = (int32_t) ((mm * 30 * 1600 * 32) / 600); // 转换为步数
 	if (dir == MOTOR_DIRECTION_UP)
@@ -50,13 +50,11 @@ uint32_t motorMoveAndWaitUntilStop(float mm, int dir)
 }
 uint32_t motorMove_up(void)
 {
-	printf("start up\n");
 	motorMoveNoWait(100000, MOTOR_DIRECTION_UP);
 	return NO_ERROR; // 向上移动，返回无错误状态
 }
 uint32_t motorMove_down(void)
 {
-	printf("start down\n");
 	motorMoveNoWait(100000, MOTOR_DIRECTION_DOWN);
 	return NO_ERROR; // 向下移动，返回无错误状态
 }

@@ -59,7 +59,15 @@ uint32_t SearchBottom(void) {
 		HAL_Delay(3000); // 短暂等待
 		// 优化：检查是否真正到达零点
 		if (determine_weight_status() == BOTTOM)
+		{
 			break;
+		}
+		else {
+			printf("罐底测量\t粗找罐底未成功，尝试再次粗找\r\n");
+			ret = motorMoveAndWaitUntilStop(100.0, MOTOR_DIRECTION_UP);
+			CHECK_ERROR(ret);  // 检查上行是否成功
+			printf("罐底测量\t上行100mm\r\n");
+		}
 	}
 	CHECK_ERROR(ret); // 检查粗找罐底是否成功,是否有错误代码
 	if (try_times >= 3) {

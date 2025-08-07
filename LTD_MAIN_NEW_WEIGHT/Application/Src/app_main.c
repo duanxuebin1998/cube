@@ -44,7 +44,7 @@ void App_MainLoop(void) {
 		}
 //		Test_FRAM_ReadWrite();
 ////		DSMSendcommand3times(DSM_POWER, strlen(DSM_POWER));
-//		printf("{encoder}%d\r\n{weight}%d\r\n", (int) g_encoder_count, g_weight);
+		printf("{encoder}%d\r\n{weight}%d\r\n", (int) g_encoder_count, g_weight);
 		HAL_Delay(50); // 延时50ms
 	}
 //

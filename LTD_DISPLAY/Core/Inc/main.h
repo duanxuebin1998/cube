@@ -31,7 +31,9 @@ extern "C" {
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include <stdint.h>
+#include <stdbool.h>
+#include <stdio.h>
 /* USER CODE END Includes */
 
 /* Exported types ------------------------------------------------------------*/
@@ -57,9 +59,27 @@ void Error_Handler(void);
 /* USER CODE END EFP */
 
 /* Private defines -----------------------------------------------------------*/
+#define OLED_NREST_Pin GPIO_PIN_5
+#define OLED_NREST_GPIO_Port GPIOF
+#define KEY_BACK_Pin GPIO_PIN_0
+#define KEY_BACK_GPIO_Port GPIOC
+#define KEY_BACK_EXTI_IRQn EXTI0_IRQn
+#define KEY_UP_Pin GPIO_PIN_1
+#define KEY_UP_GPIO_Port GPIOC
+#define KEY_UP_EXTI_IRQn EXTI1_IRQn
+#define KEY_DOWN_Pin GPIO_PIN_2
+#define KEY_DOWN_GPIO_Port GPIOC
+#define KEY_DOWN_EXTI_IRQn EXTI2_IRQn
+#define KEY_SURE_Pin GPIO_PIN_3
+#define KEY_SURE_GPIO_Port GPIOC
+#define KEY_SURE_EXTI_IRQn EXTI3_IRQn
+#define OLED_D_C_Pin GPIO_PIN_2
+#define OLED_D_C_GPIO_Port GPIOA
 
 /* USER CODE BEGIN Private defines */
-
+#define u8 uint8_t
+#define u16 uint16_t
+#define u32 uint32_t
 /* USER CODE END Private defines */
 
 #ifdef __cplusplus

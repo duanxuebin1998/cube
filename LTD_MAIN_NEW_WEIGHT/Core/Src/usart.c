@@ -41,8 +41,8 @@ uint8_t USART2_RX_BUF[USART2_RX_BUF_SIZE]={0};   // 接收数据缓冲区
 volatile uint8_t USART4_RX_LEN = 0;              // 接收一帧数据的长度
 uint8_t USART4_RX_BUF[USART4_RX_BUF_SIZE]={0};   // 接收数据缓冲区
 
-volatile uint8_t USART5_RX_LEN = 0;              // 接收一帧数据的长度
-uint8_t USART5_RX_BUF[USART5_RX_BUF_SIZE]={0};   // 接收数据缓冲区
+//volatile uint8_t USART5_RX_LEN = 0;              // 接收一帧数据的长度
+//uint8_t USART5_RX_BUF[USART5_RX_BUF_SIZE]={0};   // 接收数据缓冲区
 /* USER CODE END 0 */
 
 UART_HandleTypeDef huart4;
@@ -110,8 +110,8 @@ void MX_UART5_Init(void)
     Error_Handler();
   }
   /* USER CODE BEGIN UART5_Init 2 */
-  __HAL_UART_ENABLE_IT(&huart5,UART_IT_IDLE);
-  HAL_UART_Receive_DMA(&huart5,USART5_RX_BUF,USART5_RX_BUF_SIZE);
+//  __HAL_UART_ENABLE_IT(&huart5,UART_IT_IDLE);
+//  HAL_UART_Receive_DMA(&huart5,USART5_RX_BUF,USART5_RX_BUF_SIZE);
   /* USER CODE END UART5_Init 2 */
 
 }
@@ -359,9 +359,6 @@ void HAL_UART_MspInit(UART_HandleTypeDef* uartHandle)
 
     __HAL_LINKDMA(uartHandle,hdmarx,hdma_uart5_rx);
 
-    /* UART5 interrupt Init */
-    HAL_NVIC_SetPriority(UART5_IRQn, 0, 0);
-    HAL_NVIC_EnableIRQ(UART5_IRQn);
   /* USER CODE BEGIN UART5_MspInit 1 */
 
   /* USER CODE END UART5_MspInit 1 */
@@ -576,9 +573,6 @@ void HAL_UART_MspDeInit(UART_HandleTypeDef* uartHandle)
 
     /* UART5 DMA DeInit */
     HAL_DMA_DeInit(uartHandle->hdmarx);
-
-    /* UART5 interrupt Deinit */
-    HAL_NVIC_DisableIRQ(UART5_IRQn);
   /* USER CODE BEGIN UART5_MspDeInit 1 */
 
   /* USER CODE END UART5_MspDeInit 1 */
