@@ -6,7 +6,7 @@
 #include "spi.h"
 #include "fault_manager.h"
 
-
+#include "sensor.h"//测试用
 #include "motor_ctrl.h" //测试用
 TMC5130TypeDef stepper = { .home_state = HOME, // 假设 HOMING_IDLE 是归位状态的某个枚举�??
 		.prev_home_state = HOME,     // 上一个归位状�??
@@ -202,6 +202,7 @@ uint32_t stpr_waitMove(TMC5130TypeDef *tmc5130) {
 			stpr_writeInt(tmc5130, TMC5130_GSTAT, 0x07); // 清除所有状态位
 			CHECK_ERROR(MOTOR_UNKNOWN_FEEDBACK);
 		}
+		DSMSendcommand3times(DSM_POWER, strlen(DSM_POWER));
 		HAL_Delay(50);
 	}
 	return NO_ERROR; // 返回无错误状态

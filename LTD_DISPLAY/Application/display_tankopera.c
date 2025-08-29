@@ -1,5 +1,5 @@
 #include "display_tankopera.h"
-//#include "timer.h"
+#include "tim.h"
 #include "usart.h"
 #include "exit.h"
 #include "Display.h"
@@ -7,6 +7,8 @@
 #include "modbus_agreement.h"
 #include <math.h>
 #include "communicate.h"
+#include "system_parameter.h"
+
 #define PASSWORD_ENTERMAIN 1009
 
 typedef void (*pFunc_void)(void);
@@ -211,11 +213,12 @@ void useKey(void)
 void exitTankOpera(void)
 {
     FlagofTankOpera = false;
+    HAL_TIM_Base_Stop_IT(&htim1);
 //    Timer1Stop();
     oled_clear();
     ClearPageNum();
     DisplayLangaugeLineWords((uint8_t*)"正在退出罐上操作",OLED_LINE8_1,OLED_ROW3_2,0,(uint8_t*)"Exit operation");
-	 CPU2_CombinatePackage_Send(FUNCTIONCODE_06,0x000E,0xFF00,NULL);
+//	 CPU2_CombinatePackage_Send(FUNCTIONCODE_06,0x000E,0xFF00,NULL);
 }
 /* 输入参数的数值 */
 static void inputcmdpara(void)
@@ -651,45 +654,29 @@ static pFunc_void dtm_suretofunc(void)
 /* 不带参线圈指令处理过程 */
 static void cmd_nopara_process(void)
 {
-static const uint16_t nopara_cmd_map[][2] = {
-    { COM_NUM_SET_WORKPATTERN,     COIL_SET_WORKPATTERN },       // 设置工作模式
-    { COM_NUM_BACK_ZERO,           COIL_RETURN_ZERO },           // 返回零点
-    { COM_NUM_FIND_ZERO,           COIL_CALIBRATE_ZERO },        // 标定零点
-    { COM_NUM_SPREADPOINTS_AI,     COIL_MEASURE_DISTRIBUTED_AI },// 自动分布测量
-    { COM_NUM_FIND_OIL,            COIL_FIND_OIL_LEVEL },        // 寻找液位
-    { COM_NUM_FIND_WATER,          COIL_FIND_WATER_LEVEL },      // 寻找水位
-    { COM_NUM_FIND_BOTTOM,         COIL_FIND_BOTTOM },           // 寻找罐底
-    { COM_NUM_SYNTHETIC,           COIL_MEASURE_SYNTHETIC },     // 综合测量
-    { COM_NUM_METER_DENSITY,       COIL_MEASURE_DENSITY_PER_M }, // 每米测量
-    { COM_NUM_INTERVAL_DENSITY,    COIL_MEASURE_DENSITY_RANGE }, // 区间测量
-
-    { COM_NUM_READPARAMETER,       COIL_READ_PARAMETERS },       // 读取参数
-    { COM_NUM_FORCE_ZERO,          COIL_FORCE_RETURN_ZERO },     // 置零点
-
-    { COM_NUM_RESTOR_EFACTORYSETTING, COIL_RESTORE_FACTORY },    // 恢复出厂设置
-    { COM_NUM_BACKUP_FILE,         COIL_BACKUP_CONFIG_FILE },    // 备份配置文件
-    { COM_NUM_RESTORY_FILE,        COIL_RESTORE_CONFIG_FILE },   // 恢复配置文件
+static const uint32_t nopara_cmd_map[][2] = {
+    { COM_NUM_BACK_ZERO,           CMD_BACK_ZERO },           // 返回零点
+    { COM_NUM_FIND_ZERO,           CMD_CALIBRATE_ZERO },        // 标定零点
+    { COM_NUM_SPREADPOINTS_AI,     CMD_MEASURE_DISTRIBUTED },// 自动分布测量
+    { COM_NUM_FIND_OIL,            CMD_FIND_OIL },        // 寻找液位
+    { COM_NUM_FIND_WATER,          CMD_FIND_WATER },      // 寻找水位
+    { COM_NUM_FIND_BOTTOM,         CMD_FIND_BOTTOM },           // 寻找罐底
+    { COM_NUM_SYNTHETIC,           CMD_SYNTHETIC },     // 综合测量
+    { COM_NUM_METER_DENSITY,       CMD_MEASURE_DENSITY_METER }, // 每米测量
+    { COM_NUM_INTERVAL_DENSITY,    CMD_MEASURE_DENSITY_RANGE }, // 区间测量
+    { COM_NUM_READPARAMETER,       CMD_READ_PARAM },       // 读取参数
+    { COM_NUM_RESTOR_EFACTORYSETTING, CMD_RESTORE_FACTORY },    // 恢复出厂设置
 };
-	uint8_t password_data[12];
 
-	password_data[0]  = 0x00; password_data[1]  = 'A'; // 0x0041
-	password_data[2]  = 0x00; password_data[3]  = 'U'; // 0x0055
-	password_data[4]  = 0x00; password_data[5]  = 'B'; // 0x0042
-	password_data[6]  = 0x00; password_data[7]  = 'O'; // 0x004F
-	password_data[8]  = 0x00; password_data[9]  = 'N'; // 0x004E
-	password_data[10] = 0x00; password_data[11] = '1'; // 0x0031
     int mapamount = sizeof(nopara_cmd_map) / sizeof(nopara_cmd_map[0]);
     int i;
     //发送指令
-    if(now_Opera_Num == COM_NUM_SET_WORKPATTERN)//进入调试模式首先输入密码
-    {
-		CPU2_CombinatePackage_Send(FUNCTIONCODE_WRITE_MULREGISTER,HOLDREGISTER_WORKPATTER_PASSWORD,6,password_data);
-	}
+
     for(i = 0;i < mapamount;i++)
     {
         if(now_Opera_Num == nopara_cmd_map[i][0])
         {
-            CPU2_CombinatePackage_Send(FUNCTIONCODE_WRITE_COIL,nopara_cmd_map[i][1],0xFF00,NULL);
+           CPU2_CombinatePackage_Send(FUNCTIONCODE_WRITE_MULREGISTER,HOLDREGISTER_DEVICEPARAM_COMMAND,2,&nopara_cmd_map[i][1]);
             flag_SendCommand = true;
             break;
         }
@@ -699,10 +686,10 @@ static const uint16_t nopara_cmd_map[][2] = {
         //读状态，看是否成功进入调试模式
         oled_clear();
         DisplayLangaugeLineWords((uint8_t*)"正在进入调试模式",OLED_LINE8_1,OLED_ROW3_2,0,(uint8_t*)"Entering debug mode");
-        CPU2_CombinatePackage_Send(FUNCTIONCODE_READ_INPUTREGISTER,INPUTREG_PATTERNOFWORK,1,NULL);
+        CPU2_CombinatePackage_Send(FUNCTIONCODE_READ_INPUTREGISTER,REG_DEVICE_STATUS_WORK_MODE,1,NULL);
         HAL_Delay(150);
         oled_clear();
-        if(inputValue.PatternOfWork == 1)//调试模式重新处理
+        if(g_measurement.device_status.work_mode == 1)//调试模式重新处理
         {
             DisplayLangaugeLineWords((uint8_t*)"成功!",OLED_LINE8_4,OLED_ROW3_2,0,(uint8_t*)"succeed!");
             HAL_Delay(500);
@@ -733,8 +720,8 @@ static const uint16_t nopara_cmd_map[][2] = {
     else if(now_Opera_Num == COM_NUM_RESTOR_EFACTORYSETTING || now_Opera_Num == COM_NUM_RESTORY_FILE)
     {//恢复出厂设置、恢复备份文件
         oled_clear();
-        if((inputValue.EquipState != STATE_STANDBY) 
-            && (inputValue.EquipState != STATE_FAIL))
+        if((g_measurement.device_status.device_state != STATE_STANDBY) 
+            && (g_measurement.device_status.device_state != STATE_ERROR))
         {
             DisplayLangaugeLineWords((uint8_t*)"失败",OLED_LINE8_1,OLED_ROW4_2,0,(uint8_t*)"Failed to set");
             DisplayLangaugeLineWords((uint8_t*)"请先进入调试模式",OLED_LINE8_1,OLED_ROW4_3,0,(uint8_t*)"Enter debug mode");
@@ -836,8 +823,8 @@ static void parawritecheck(void)
     int index;
     index = getHoldValueNum(now_Opera_Num);
     if(index != -1 && holdValue[index].authority_write 
-        && (inputValue.EquipState == STATE_STANDBY
-            || inputValue.EquipState == STATE_FAIL))
+        && (g_measurement.device_status.device_state == STATE_STANDBY
+            || g_measurement.device_status.device_state == STATE_ERROR))
     {
         if(holdValue[index].pword == NULL)//数字输入类
             inputcmdpara();
@@ -899,11 +886,11 @@ static void measuremenu(void)
     static struct MenuData menu[] = {
         {(uint8_t*)"回零点",COM_NUM_BACK_ZERO,ifsendcmd,COMMANE_NORW,(uint8_t*)"Return to Zero"},
         {(uint8_t*)"液位跟随",COM_NUM_FIND_OIL,ifsendcmd,COMMANE_NORW,(uint8_t*)"Level Follow"},
-        {(uint8_t*)"密度分布测量",COM_NUM_SPREADPOINTS,ifsendcmd,COMMANE_NORW,(uint8_t*)"DT-M"},
         {(uint8_t*)"水位测量",COM_NUM_FIND_WATER,ifsendcmd,COMMANE_NORW,(uint8_t*)"Water level-M"},
+        {(uint8_t*)"罐底测量",COM_NUM_FIND_BOTTOM,ifsendcmd,COMMANE_NORW,(uint8_t*)"Tank Bottom-M"},
+        {(uint8_t*)"密度分布测量",COM_NUM_SPREADPOINTS,ifsendcmd,COMMANE_NORW,(uint8_t*)"DT-M"},
         {(uint8_t*)"固定点测量",COM_NUM_SINGLE_POINT,inputcmdpara,COMMANE_NORW,(uint8_t*)"DT-SinglePoint-M"},
         {(uint8_t*)"固定点监测",COM_NUM_SP_TEST,ifsendcmd,COMMANE_NORW,(uint8_t*)"DT-National-M"},
-        {(uint8_t*)"罐底测量",COM_NUM_FIND_BOTTOM,ifsendcmd,COMMANE_NORW,(uint8_t*)"Tank Bottom-M"},
 		{(uint8_t*)"测量参数",COM_NUM_NOOPERA,menu_basepara,COMMANE_NORW,(uint8_t*)"M-Parameters"},
         {(uint8_t*)"退出",COM_NUM_NOOPERA,mainmenu,COMMANE_NORW,(uint8_t*)"Exit"},
     };
@@ -911,6 +898,25 @@ static void measuremenu(void)
 
     all_screen(0x00);
     func_index = KEYNUM_MEASURE_MAINMENU;
+    menuselect(menu,menulen);
+}
+/* 菜单 - 调试指令 */
+static void menu_cmdconfig_main(void)
+{
+    static struct MenuData menu[] = {
+        {(uint8_t*)"进入调试模式",COM_NUM_SET_WORKPATTERN,ifsendcmd,COMMANE_NORW,(uint8_t*)"Go Into Debug"},
+        {(uint8_t*)"上行",COM_NUM_RUNUP,inputcmdpara,COMMANE_NORW,(uint8_t*)"Move Up"},
+        {(uint8_t*)"下行",COM_NUM_RUNDOWN,inputcmdpara,COMMANE_NORW,(uint8_t*)"Move Down"},
+        {(uint8_t*)"置零点",COM_NUM_FORCE_ZERO,ifsendcmd,COMMANE_NORW,(uint8_t*)"MeasLevel(NoFit)"},
+		{(uint8_t*)"液位修正",COM_NUM_CORRECTION_OIL,inputcmdpara,COMMANE_NORW,(uint8_t*)"LevelCorrect"},
+        {(uint8_t*)"标定液位",COM_NUM_CAL_OIL,inputcmdpara,COMMANE_NORW,(uint8_t*)"LevelCalibrat"},
+        {(uint8_t*)"退出",COM_NUM_NOOPERA,mainmenu,COMMANE_NORW,(uint8_t*)"Exit"},
+    };
+    int menulen = sizeof(menu) / sizeof(menu[0]);
+
+    all_screen(0x00);
+    func_index = KEYNUM_MENU_CMD_MAIN;
+	debugmode_back = 1;
     menuselect(menu,menulen);
 }
 /* 参数配置菜单 */
@@ -937,9 +943,6 @@ static void menu_paraconfig(void)
 static void menu_basepara(void)
 {
     static struct MenuData menu[] = {
-//	{(uint8_t*)"综合测是否测罐底",	COM_NUM_SYNTHETIC_BOTTOM_FREE,	para_mainprocess,	COMMAND_READ,	(uint8_t*)"IntgMeasTankBot"},
-//	{(uint8_t*)"综合测是否测水位",	COM_NUM_SYNTHETIC_WATER_FREE,	para_mainprocess,	COMMAND_READ,	(uint8_t*)"IntgMeasWaterLvl"},
-//	{(uint8_t*)"综合测是否固定点",	COM_NUM_SYNTHETIC_SINGLEPOINT_FREE,	para_mainprocess,	COMMAND_READ,	(uint8_t*)"IntgUseFixPt"},
 	{(uint8_t*)"分布测模式",	COM_NUM_SPREAD_STATE_FREE,	para_mainprocess,	COMMAND_READ,	(uint8_t*)"DistMeasMode"},
 	{(uint8_t*)"分布测测量点数",	COM_NUM_SPREAD_NUM_FREE,	para_mainprocess,	COMMAND_READ,	(uint8_t*)"DistMeasPts"},
 	{(uint8_t*)"分布测量密度点间距",	COM_NUM_SPREAD_DISTANCE_FREE,	para_mainprocess,	COMMAND_READ,	(uint8_t*)"DistDensPtDist"},
@@ -1128,25 +1131,6 @@ static void password_enter_cmd(void)
     inputcmdpara();
 }
 
-/* 菜单 - 调试指令 */
-static void menu_cmdconfig_main(void)
-{
-    static struct MenuData menu[] = {
-        {(uint8_t*)"进入调试模式",COM_NUM_SET_WORKPATTERN,ifsendcmd,COMMANE_NORW,(uint8_t*)"Go Into Debug"},
-        {(uint8_t*)"上行",COM_NUM_RUNUP,inputcmdpara,COMMANE_NORW,(uint8_t*)"Move Up"},
-        {(uint8_t*)"下行",COM_NUM_RUNDOWN,inputcmdpara,COMMANE_NORW,(uint8_t*)"Move Down"},
-        {(uint8_t*)"置零点",COM_NUM_FORCE_ZERO,ifsendcmd,COMMANE_NORW,(uint8_t*)"MeasLevel(NoFit)"},
-		{(uint8_t*)"液位修正",COM_NUM_CORRECTION_OIL,inputcmdpara,COMMANE_NORW,(uint8_t*)"LevelCorrect"},
-        {(uint8_t*)"标定液位",COM_NUM_CAL_OIL,inputcmdpara,COMMANE_NORW,(uint8_t*)"LevelCalibrat"},
-        {(uint8_t*)"退出",COM_NUM_NOOPERA,mainmenu,COMMANE_NORW,(uint8_t*)"Exit"},
-    };
-    int menulen = sizeof(menu) / sizeof(menu[0]);
-
-    all_screen(0x00);
-    func_index = KEYNUM_MENU_CMD_MAIN;
-	debugmode_back = 1;
-    menuselect(menu,menulen);
-}
 /* 带一参线圈指令处理过程 */
 static void cmd_onepara_process(void)
 {
@@ -1191,7 +1175,7 @@ static void cmd_onepara_process(void)
         {
             if(now_Opera_Num == onepara_cmd_map[i][0])
             {
-                CPU2_CombinatePackage_Send(FUNCTIONCODE_WRITE_COIL,onepara_cmd_map[i][1],0xFF00,NULL);
+//                CPU2_CombinatePackage_Send(FUNCTIONCODE_WRITE_COIL,onepara_cmd_map[i][1],0xFF00,NULL);
                 flag_SendCommand = true;
                 break;
             }

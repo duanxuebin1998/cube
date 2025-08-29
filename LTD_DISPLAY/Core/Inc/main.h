@@ -34,6 +34,7 @@ extern "C" {
 #include <stdint.h>
 #include <stdbool.h>
 #include <stdio.h>
+#include "usart.h"
 /* USER CODE END Includes */
 
 /* Exported types ------------------------------------------------------------*/
@@ -59,20 +60,20 @@ void Error_Handler(void);
 /* USER CODE END EFP */
 
 /* Private defines -----------------------------------------------------------*/
+#define KEY_DOWN_Pin GPIO_PIN_1
+#define KEY_DOWN_GPIO_Port GPIOF
+#define KEY_DOWN_EXTI_IRQn EXTI1_IRQn
+#define KEY_SURE_Pin GPIO_PIN_2
+#define KEY_SURE_GPIO_Port GPIOF
+#define KEY_SURE_EXTI_IRQn EXTI2_IRQn
+#define KEY_BACK_Pin GPIO_PIN_3
+#define KEY_BACK_GPIO_Port GPIOF
+#define KEY_BACK_EXTI_IRQn EXTI3_IRQn
+#define KEY_UP_Pin GPIO_PIN_4
+#define KEY_UP_GPIO_Port GPIOF
+#define KEY_UP_EXTI_IRQn EXTI4_IRQn
 #define OLED_NREST_Pin GPIO_PIN_5
 #define OLED_NREST_GPIO_Port GPIOF
-#define KEY_BACK_Pin GPIO_PIN_0
-#define KEY_BACK_GPIO_Port GPIOC
-#define KEY_BACK_EXTI_IRQn EXTI0_IRQn
-#define KEY_UP_Pin GPIO_PIN_1
-#define KEY_UP_GPIO_Port GPIOC
-#define KEY_UP_EXTI_IRQn EXTI1_IRQn
-#define KEY_DOWN_Pin GPIO_PIN_2
-#define KEY_DOWN_GPIO_Port GPIOC
-#define KEY_DOWN_EXTI_IRQn EXTI2_IRQn
-#define KEY_SURE_Pin GPIO_PIN_3
-#define KEY_SURE_GPIO_Port GPIOC
-#define KEY_SURE_EXTI_IRQn EXTI3_IRQn
 #define OLED_D_C_Pin GPIO_PIN_2
 #define OLED_D_C_GPIO_Port GPIOA
 

@@ -124,6 +124,7 @@ static int SearchZeroRough() {
 		printf("零点测量\t长距离寻找零点\t{encoder}%d\t{weight}%d\r\n", (int) g_encoder_count, g_weight);
 		// 下面注释代码为速度调整的预留
 		//丢步检测
+		CHECK_ERROR(ret); // 检查快速停止是否成功
 	}
 	zero_value = g_encoder_count;
 	ret = motorQuickStop(); // 到达零点后快速停止电机
@@ -162,7 +163,7 @@ static int SearchZeroPrecise() {
 			printf("零点测量\t细找零点失败\r\n");
 			CHECK_ERROR(MEASUREMENT_WEIGHT_UP_FAIL); // 检查快速停止是否成功
 		}
-
+		CHECK_ERROR(ret); // 检查快速停止是否成功
 	}
 	zero_value = g_encoder_count;
 	ret = motorQuickStop(); // 到达零点后快速停止电机

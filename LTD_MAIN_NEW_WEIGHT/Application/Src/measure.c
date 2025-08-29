@@ -13,7 +13,74 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include "test.h"
-
+#include "sensor.h"
+void ProcessMeasureCmd(CommandType command)
+{
+	switch (command) {
+	case CMD_BACK_ZERO:
+		printf("执行回零点指令\n");
+		MeasureZero();
+		break;
+//	case CMD_FIND_OIL:
+//		printf("执行寻找液位指令\n");
+//		SearchOilLevel();
+//		break;
+//	case CMD_FIND_WATER:
+//		printf("执行寻找水位指令\n");
+//		SearchWaterLevel();
+//		break;
+	case CMD_FIND_BOTTOM:
+		printf("执行寻找罐底指令\n");
+		MeasureBottom();
+		break;
+//	case CMD_MEASURE_SINGLE:
+//		printf("执行单点测量指令\n");
+//		SinglePointMeasurement();
+//		break;
+//	case CMD_MONITOR_SINGLE:
+//		printf("执行单点监测指令\n");
+//		SinglePointMonitoring();
+//		break;
+//	case CMD_SYNTHETIC:
+//		printf("执行综合测量指令\n");
+//		SyntheticMeasurement();
+//		break;
+//	case CMD_MEASURE_DISTRIBUTED:
+//		printf("执行分布测量指令\n");
+//		DensityDistributionMeasurement();
+//		break;
+//	case CMD_MEASURE_DENSITY_METER:
+//		printf("执行密度每米测量指令\n");
+//		DensityMeterMeasurement();
+//		break;
+//	case CMD_MEASURE_DENSITY_RANGE:
+//		printf("执行液位区间测量指令\n");
+//		DensityRangeMeasurement();
+//		break;
+//	case CMD_CALIBRATE_ZERO:
+//		printf("执行标定零点指令\n");
+//		CalibrateZeroPoint();
+//		break;
+//	case CMD_CALIBRATE_OIL:
+//		printf("执行标定液位指令\n");
+//		CalibrateOilLevel();
+//		break;
+//	case CMD_READ_PARAM:
+//		printf("执行读取参数指令\n");
+//		ReadDeviceParameters();
+//		break;
+//	case CMD_MOVE_UP:
+//		printf("电机上行操作\n");
+//		motorMoveNoWait(100, MOTOR_DIRECTION_UP);
+//		break;
+//	case CMD_MOVE_DOWN:
+//		printf("电机下行操作\n");
+//		motorMoveNoWait(100, MOTOR_DIRECTION_DOWN);
+//		break;
+	default:
+		printf("未知命令类型: %d\n", command);
+	}
+}
 // 处理接收到的命令
 void process_command(uint8_t *command) {
 	printf("Command received\n");
@@ -36,6 +103,8 @@ void process_command(uint8_t *command) {
 	}
 	if (command[0] == 'B') {//
 		printf("motor text start\n");
+		printf("***编码值清零***\r\n");
+		g_encoder_count = 0; // 重置编码器计数
 		while (1) {
 			stpr_enableDriver(&stepper);  //使能电机
 //						stpr_initStepper(&stepper, &hspi2, GPIOB, GPIO_PIN_12, 1, 18);
@@ -45,6 +114,7 @@ void process_command(uint8_t *command) {
 			printf("start down\n");
 			while (abs(g_encoder_count) < 20000) {
 				printf("{encoder}%d\t{weight}%d\r\n", (int) g_encoder_count, g_weight);
+				DSMSendcommand3times(DSM_POWER, strlen(DSM_POWER));
 				HAL_Delay(50);
 			}
 			printf("down over!\n");
@@ -52,9 +122,13 @@ void process_command(uint8_t *command) {
 			motorMoveNoWait(200000, MOTOR_DIRECTION_UP);
 			printf("start up to zero\n");
 			HAL_Delay(1000);
-			stpr_waitMove(&stepper);
+			while (abs(g_encoder_count) >1000) {
+				printf("{encoder}%d\t{weight}%d\r\n", (int) g_encoder_count, g_weight);
+				DSMSendcommand3times(DSM_POWER, strlen(DSM_POWER));
+				HAL_Delay(50);
+			}
+			motorQuickStop();
 			printf("上行结束\n");
-			HAL_Delay(1000);
 			stpr_disableDriver(&stepper); //使能电机
 		}
 	}
@@ -155,14 +229,16 @@ void MeasureZero(void)
 	int ret = 0;
 	g_measurement.device_status.device_state = STATE_BACKZEROING;
     ret = MeasureStart();
-    if(ret != NO_ERROR)
-    {
-        return;
-    }
+	if ((ret != NO_ERROR)&& (ret != STATE_SWITCH))
+	{
+		g_measurement.device_status.device_state = STATE_ERROR;
+		return;
+	}
 	//开始回零点
 	ret = SearchZero();
-	if (ret != NO_ERROR)
+	if ((ret != NO_ERROR)&& (ret != STATE_SWITCH))
 	{
+		g_measurement.device_status.device_state = STATE_ERROR;
 		return;
 	}
 
@@ -177,14 +253,16 @@ void MeasureBottom(void)
 	int ret = 0;
 	g_measurement.device_status.device_state = STATE_FINDBOTTOM;
     ret = MeasureStart();
-    if(ret != NO_ERROR)
-    {
-        return;
-    }
+	if ((ret != NO_ERROR)&& (ret != STATE_SWITCH))
+	{
+		g_measurement.device_status.device_state = STATE_ERROR;
+		return;
+	}
 	//开始测量罐高
 	ret = SearchBottom();
-	if (ret != NO_ERROR)
+	if ((ret != NO_ERROR)&& (ret != STATE_SWITCH))
 	{
+		g_measurement.device_status.device_state = STATE_ERROR;
 		return;
 	}
 

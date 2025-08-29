@@ -156,7 +156,7 @@ extern ErrorInfo err; // 全局错误信息变量
 			LogError(&err); \
 			return err.error_code;\
 		}\
-		if(g_measurement.device_status.next_command != COMMAND_NONE) \
+		if(g_deviceParams.command != CMD_NONE) \
 		{	\
 			err.error_code =  STATE_SWITCH;\
 			return err.error_code;\

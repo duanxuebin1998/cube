@@ -10,12 +10,12 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include "../../Peripherals/inc/TMC5130.h"
-
-uint32_t velocity = 1600 * 2 * 32;
+#define VELOCITY_MAX 2
+uint32_t velocity = 1600 * VELOCITY_MAX * 32;
 
 uint32_t motor_Init(void)
 {
-	stpr_initStepper(&stepper, &hspi2, GPIOB, GPIO_PIN_12, 1, 22);
+	stpr_initStepper(&stepper, &hspi2, GPIOB, GPIO_PIN_12, 1, 25);
 	stpr_enableDriver(&stepper);
 	return NO_ERROR; // 初始化电机，返回无错误状态
 }

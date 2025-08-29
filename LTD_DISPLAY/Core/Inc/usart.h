@@ -32,12 +32,17 @@ extern "C" {
 
 /* USER CODE END Includes */
 
+extern UART_HandleTypeDef huart5;
+
 extern UART_HandleTypeDef huart1;
 
 /* USER CODE BEGIN Private defines */
-
+#define UART5_RX_BUF_SIZE 256
+extern volatile uint8_t UART5_RX_LEN;              // 接收一帧数据的长度
+extern uint8_t UART5_RX_BUF[UART5_RX_BUF_SIZE];   // 接收数据缓冲区
 /* USER CODE END Private defines */
 
+void MX_UART5_Init(void);
 void MX_USART1_UART_Init(void);
 
 /* USER CODE BEGIN Prototypes */

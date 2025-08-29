@@ -41,8 +41,8 @@ uint8_t USART2_RX_BUF[USART2_RX_BUF_SIZE]={0};   // 接收数据缓冲区
 volatile uint8_t USART4_RX_LEN = 0;              // 接收一帧数据的长度
 uint8_t USART4_RX_BUF[USART4_RX_BUF_SIZE]={0};   // 接收数据缓冲区
 
-//volatile uint8_t USART5_RX_LEN = 0;              // 接收一帧数据的长度
-//uint8_t USART5_RX_BUF[USART5_RX_BUF_SIZE]={0};   // 接收数据缓冲区
+volatile uint8_t UART5_RX_LEN = 0;              // 接收一帧数据的长度
+uint8_t UART5_RX_BUF[UART5_RX_BUF_SIZE]={0};   // 接收数据缓冲区
 /* USER CODE END 0 */
 
 UART_HandleTypeDef huart4;
@@ -54,6 +54,7 @@ UART_HandleTypeDef huart3;
 UART_HandleTypeDef huart6;
 DMA_HandleTypeDef hdma_uart4_rx;
 DMA_HandleTypeDef hdma_uart5_rx;
+DMA_HandleTypeDef hdma_uart5_tx;
 DMA_HandleTypeDef hdma_usart1_rx;
 DMA_HandleTypeDef hdma_usart2_rx;
 
@@ -110,8 +111,8 @@ void MX_UART5_Init(void)
     Error_Handler();
   }
   /* USER CODE BEGIN UART5_Init 2 */
-//  __HAL_UART_ENABLE_IT(&huart5,UART_IT_IDLE);
-//  HAL_UART_Receive_DMA(&huart5,USART5_RX_BUF,USART5_RX_BUF_SIZE);
+  __HAL_UART_ENABLE_IT(&huart5,UART_IT_IDLE);
+  HAL_UART_Receive_DMA(&huart5,UART5_RX_BUF,UART5_RX_BUF_SIZE);
   /* USER CODE END UART5_Init 2 */
 
 }
@@ -359,6 +360,27 @@ void HAL_UART_MspInit(UART_HandleTypeDef* uartHandle)
 
     __HAL_LINKDMA(uartHandle,hdmarx,hdma_uart5_rx);
 
+    /* UART5_TX Init */
+    hdma_uart5_tx.Instance = DMA1_Stream7;
+    hdma_uart5_tx.Init.Channel = DMA_CHANNEL_4;
+    hdma_uart5_tx.Init.Direction = DMA_MEMORY_TO_PERIPH;
+    hdma_uart5_tx.Init.PeriphInc = DMA_PINC_DISABLE;
+    hdma_uart5_tx.Init.MemInc = DMA_MINC_ENABLE;
+    hdma_uart5_tx.Init.PeriphDataAlignment = DMA_PDATAALIGN_BYTE;
+    hdma_uart5_tx.Init.MemDataAlignment = DMA_MDATAALIGN_BYTE;
+    hdma_uart5_tx.Init.Mode = DMA_NORMAL;
+    hdma_uart5_tx.Init.Priority = DMA_PRIORITY_LOW;
+    hdma_uart5_tx.Init.FIFOMode = DMA_FIFOMODE_DISABLE;
+    if (HAL_DMA_Init(&hdma_uart5_tx) != HAL_OK)
+    {
+      Error_Handler();
+    }
+
+    __HAL_LINKDMA(uartHandle,hdmatx,hdma_uart5_tx);
+
+    /* UART5 interrupt Init */
+    HAL_NVIC_SetPriority(UART5_IRQn, 0, 0);
+    HAL_NVIC_EnableIRQ(UART5_IRQn);
   /* USER CODE BEGIN UART5_MspInit 1 */
 
   /* USER CODE END UART5_MspInit 1 */
@@ -573,6 +595,10 @@ void HAL_UART_MspDeInit(UART_HandleTypeDef* uartHandle)
 
     /* UART5 DMA DeInit */
     HAL_DMA_DeInit(uartHandle->hdmarx);
+    HAL_DMA_DeInit(uartHandle->hdmatx);
+
+    /* UART5 interrupt Deinit */
+    HAL_NVIC_DisableIRQ(UART5_IRQn);
   /* USER CODE BEGIN UART5_MspDeInit 1 */
 
   /* USER CODE END UART5_MspDeInit 1 */

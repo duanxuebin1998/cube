@@ -13,9 +13,7 @@
 
 void WriteDeviceParamsToHoldingRegisters(int *p_holdregister);//写入保持寄存器
 void ReadDeviceParamsFromHoldingRegisters(int *p_inputregister);//从输入寄存器读取设备参数
-int ProcessWriteCoil(int const *p_coilarray);
-void ResetCoil(int *p_coilarray,int coilamount);
-int UpdateHoldRegisterParameter(int const *p_holdingregister,bool iswrite);
+void write_measurement_result_to_IputerRegisters(uint16_t *regs); // 将测量结果写入输入寄存器数组
 
 
 

@@ -21,8 +21,6 @@
 #include <stdio.h>
 #include <math.h>
 
-// 全局液位测量结构体，存储当前状态
-struct measure_density_level measure_density_level;
 
 // 静态函数声明
 static int findTheLiquidLevelByFrequency(float per_mm_Frequency);
@@ -63,7 +61,7 @@ static int findTheLiquidLevelByFrequency(float per_mm_Frequency) {
 		HAL_Delay(1000);
 
 		// 获取当前传感器频率
-		ret = DSM_Get_LevelMode_Frequence(&measure_density_level.current_frequency);
+		ret = DSM_Get_LevelMode_Frequence(&g_measurement.oil_measurement.current_frequency);
 		if (ret != NO_ERROR)
 			return ret;
 
@@ -74,13 +72,13 @@ static int findTheLiquidLevelByFrequency(float per_mm_Frequency) {
 		}
 
 		// 计算当前频率与目标频率差值
-//		float frequency_difference = measure_density_level.follow_frequency - measure_density_level.current_frequency;
-		printf("当前频率%f\t频率阈值%f\t阈值差%f\r\n", measure_density_level.current_frequency, measure_density_level.follow_frequency,
+//		float frequency_difference = g_measurement.oil_measurement.follow_frequency - g_measurement.oil_measurement.current_frequency;
+		printf("当前频率%f\t频率阈值%f\t阈值差%f\r\n", g_measurement.oil_measurement.current_frequency, g_measurement.oil_measurement.follow_frequency,
 		frequency_difference);
 
 		// 方向决策树（基于频率偏差）
 		if (frequency_difference > 1000 ||  // 超大正偏差
-				(measure_density_level.air_frequency - measure_density_level.current_frequency < 200)) { // 接近空气频率
+				(g_measurement.oil_measurement.air_frequency - g_measurement.oil_measurement.current_frequency < 200)) { // 接近空气频率
 			// 向下加速移动（补偿步长）
 			overTime++;
 			lowerTime = 0;
@@ -93,7 +91,7 @@ static int findTheLiquidLevelByFrequency(float per_mm_Frequency) {
 			runlenth = frequency_difference / per_mm_Frequency;
 			dir = MOTOR_DIRECTION_DOWN;
 		} else if (frequency_difference < -1000 ||  // 超大负偏差
-				(measure_density_level.current_frequency - measure_density_level.oil_frequency < 200)) { // 接近油中频率
+				(g_measurement.oil_measurement.current_frequency - g_measurement.oil_measurement.oil_frequency < 200)) { // 接近油中频率
 			// 向上加速移动
 			lowerTime++;
 			overTime = 0;
@@ -112,8 +110,8 @@ static int findTheLiquidLevelByFrequency(float per_mm_Frequency) {
 		}
 
 		// 稳定性检测（连续稳定计数）
-		if ((fabs(frequency_difference) <= STABILITYTHRESHOLD) && (measure_density_level.air_frequency - measure_density_level.current_frequency > 200)
-				&& (measure_density_level.current_frequency - measure_density_level.oil_frequency > 200)) {
+		if ((fabs(frequency_difference) <= STABILITYTHRESHOLD) && (g_measurement.oil_measurement.air_frequency - g_measurement.oil_measurement.current_frequency > 200)
+				&& (g_measurement.oil_measurement.current_frequency - g_measurement.oil_measurement.oil_frequency > 200)) {
 			followTime++;
 			runlenth = 0;
 			printf("频率跟随\t电机不动作\t等待频率稳定\t频率稳定次数%d\r\n", followTime);
@@ -182,7 +180,7 @@ int findAndFollowTheLiquidLevel(void) {
 		printf("液位跟随\t");
 
 		// 获取当前频率
-		ret = DSM_Get_LevelMode_Frequence(&measure_density_level.current_frequency);
+		ret = DSM_Get_LevelMode_Frequence(&g_measurement.oil_measurement.current_frequency);
 		if (ret != NO_ERROR)
 			return ret;
 
@@ -297,15 +295,15 @@ int lookForTheLevelInterface(void)
 //	}
 //
 //	DSM_Switch_LevelMode();
-//	measure_density_level.follow_frequency = 5500.0;
-//	measure_density_level.air_frequency = 6500.0;
-//	measure_density_level.oil_frequency = 4500.0;
+//	g_measurement.oil_measurement.follow_frequency = 5500.0;
+//	g_measurement.oil_measurement.air_frequency = 6500.0;
+//	g_measurement.oil_measurement.oil_frequency = 4500.0;
 //
 ////	if (FlagofContinue == false)
 ////	{
 ////		return STATE_SWITCH;
 ////	}
-//	ret = DSM_Get_LevelMode_Frequence(&measure_density_level.air_frequency); /*获取空气中频率值*/
+//	ret = DSM_Get_LevelMode_Frequence(&g_measurement.oil_measurement.air_frequency); /*获取空气中频率值*/
 //	if (ret != NO_ERROR)
 //	{
 //		return ret;
@@ -440,7 +438,7 @@ int lookForTheLevelInterface(void)
 //
 //				printf("向下寻找液位\t确认频率值\t");
 //				ret = DSM_Get_LevelMode_Frequence(
-//						&measure_density_level.current_frequency);
+//						&g_measurement.oil_measurement.current_frequency);
 //				if (ret != NO_ERROR)
 //				{
 //					ret_tem = MotorSpotStd(); // V1.106
@@ -465,7 +463,7 @@ int lookForTheLevelInterface(void)
 //
 //					printf("向下寻找液位\t再次确认频率值\t");
 //					ret = DSM_Get_LevelMode_Frequence(
-//							&measure_density_level.current_frequency);
+//							&g_measurement.oil_measurement.current_frequency);
 //
 //					if (ret != NO_ERROR)
 //					{
@@ -477,14 +475,14 @@ int lookForTheLevelInterface(void)
 //						ret = MMMortorRun_MM_CheackLose(50,
 //								MOTOR_DIRECTION_DOWN, &mag_angle); /*确保传感器在油里*/
 //						ret = DSM_Get_LevelMode_Frequence(
-//								&measure_density_level.oil_frequency); /*确定油里的频率*/
+//								&g_measurement.oil_measurement.oil_frequency); /*确定油里的频率*/
 //						if (ret != NO_ERROR)
 //						{
 //							return ret;
 //						}
-//						measure_density_level.follow_frequency =
-//								(measure_density_level.air_frequency
-//										+ measure_density_level.oil_frequency)
+//						g_measurement.oil_measurement.follow_frequency =
+//								(g_measurement.oil_measurement.air_frequency
+//										+ g_measurement.oil_measurement.oil_frequency)
 //										/ 2;
 //						return NO_ERROR;
 //					}
@@ -780,12 +778,12 @@ static int determineTheSensorPositionAndUpdateTheLevelValue(void) {
 	// 判断是否需要更新液位值
 	// 条件1: 频率差在稳定阈值内（系统稳定）
 	// 条件2: 新旧液位值差异大于100（需要强制更新）
-	if ((fabs(frequency_difference) < STABILITYTHRESHOLD) || (abs(oil_level - g_measurement.oil_level) > 100)) {
+	if ((fabs(frequency_difference) < STABILITYTHRESHOLD) || (abs(oil_level - g_measurement.oil_measurement.oil_level) > 100)) {
 		// 更新当前液位值
-		g_measurement.oil_level = oil_level;
+		g_measurement.oil_measurement.oil_level = oil_level;
 
 		// 打印正常液位值信息
-		printf("液位跟随\t液位值为%ld\r\n", g_measurement.oil_level);
+		printf("液位跟随\t液位值为%ld\r\n", g_measurement.oil_measurement.oil_level);
 
 		// 将液位值转换为4-20mA模拟信号输出
 //        Out_4_20mA(systemunion.systemparameter.TankHigh, Measure_One.MeasureOil_Level);
@@ -835,12 +833,12 @@ static int determineTheSensorPositionAndUpdateTheLevelValue(void) {
 static int waitForTheLiquidLevelToExceedTheBlindZone(void) {
 	int32_t ret;
 	while (1) {
-		ret = DSM_Get_LevelMode_Frequence(&measure_density_level.current_frequency);
+		ret = DSM_Get_LevelMode_Frequence(&g_measurement.oil_measurement.current_frequency);
 		if (ret != NO_ERROR) {
 			return ret;
 		}
-		printf("盲区等待\t频率阈值\t%f\t当前频率\t%f\t阈值差\t%f\r\n", measure_density_level.follow_frequency, measure_density_level.current_frequency, frequency_difference);
-		if (measure_density_level.current_frequency > measure_density_level.follow_frequency) {
+		printf("盲区等待\t频率阈值\t%f\t当前频率\t%f\t阈值差\t%f\r\n", g_measurement.oil_measurement.follow_frequency, g_measurement.oil_measurement.current_frequency, frequency_difference);
+		if (g_measurement.oil_measurement.current_frequency > g_measurement.oil_measurement.follow_frequency) {
 			break;
 		}
 		HAL_Delay(1000);

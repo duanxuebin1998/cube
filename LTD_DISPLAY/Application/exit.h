@@ -12,7 +12,8 @@ extern bool FlagofTankOpera;
 #define USE_KEY_SURE    0x08
 
 
-
+extern volatile uint8_t button_press_counter;
+#define REQUIRED_PRESS_COUNT 30  // 需要连续按下3次才触发
 
 
 

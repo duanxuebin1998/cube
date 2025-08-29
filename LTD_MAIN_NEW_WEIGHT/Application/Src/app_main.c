@@ -23,7 +23,8 @@ void App_Init(void) {
 	Initialize_Encoder(); // 初始化编码器
 	motor_Init(); //电机初始化
 	init_device_params(); // 初始化设备参数
-	g_measurement.device_status.zero_point_status == 1;// 设置零点状态为需要回零点
+	g_measurement.device_status.zero_point_status == 1; // 设置零点状态为需要回零点
+	g_deviceParams.command = CMD_NONE; // 清除命令
 	weight_init();
 	HostCommuInit(); // 初始化Modbus通信
 	//测试函数
@@ -33,7 +34,6 @@ void App_Init(void) {
 // 主循环任务
 void App_MainLoop(void) {
 
-
 	while (1) {
 		// 如果有新的命令
 		if (new_command_ready) {
@@ -42,8 +42,16 @@ void App_MainLoop(void) {
 			// 处理接收到的命令
 			process_command(received_buffer);
 		}
+		if (g_deviceParams.command != CMD_NONE) {
+			printf("当前命令：%d\r\n", g_deviceParams.command);
+			g_measurement.device_status.current_command = g_deviceParams.command; // 更新当前命令
+			g_deviceParams.command = CMD_NONE; // 清除命令
+			ProcessMeasureCmd(g_measurement.device_status.current_command); // 处理测量命令
+			g_measurement.device_status.current_command =CMD_NONE; // 重置当前命令
+			//
+		}
 //		Test_FRAM_ReadWrite();
-////		DSMSendcommand3times(DSM_POWER, strlen(DSM_POWER));
+		DSMSendcommand3times(DSM_POWER, strlen(DSM_POWER));
 		printf("{encoder}%d\r\n{weight}%d\r\n", (int) g_encoder_count, g_weight);
 		HAL_Delay(50); // 延时50ms
 	}
@@ -86,6 +94,6 @@ void Test_main(void) {
 }
 int test_macro(void) {
 	CHECK_ERROR(0x10001); // 测试宏函数
-	 fault_info_init(); // 初始化故障信息
+	fault_info_init(); // 初始化故障信息
 	return NO_ERROR; // 返回无错误状态
-}// 测试宏函数
+} // 测试宏函数
