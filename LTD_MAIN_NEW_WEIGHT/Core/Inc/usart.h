@@ -59,9 +59,9 @@ extern uint8_t USART2_RX_BUF[USART2_RX_BUF_SIZE];   // 接收数据缓冲区
 extern volatile uint8_t USART4_RX_LEN;              // 接收一帧数据的长度
 extern uint8_t USART4_RX_BUF[USART4_RX_BUF_SIZE];   // 接收数据缓冲区
 
-//#define USART5_RX_BUF_SIZE 512
-//extern volatile uint8_t USART5_RX_LEN;              // 接收一帧数据的长度
-//extern uint8_t USART5_RX_BUF[USART4_RX_BUF_SIZE];   // 接收数据缓冲区
+#define UART5_RX_BUF_SIZE 512
+extern volatile uint8_t UART5_RX_LEN;              // 接收一帧数据的长度
+extern uint8_t UART5_RX_BUF[UART5_RX_BUF_SIZE];   // 接收数据缓冲区
 /* USER CODE END Private defines */
 
 void MX_UART4_Init(void);

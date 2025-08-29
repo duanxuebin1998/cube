@@ -8,11 +8,10 @@
 #include <ctype.h>
 
 /*从机地址*/
-int SlaveAddress = 0;
+int SlaveAddress = 1;
 /*功能码*/
 static const int readholdingregisterfuncode = 0x03; //读保持寄存器功能码
 static const int readinputregisterfuncode = 0x04; //读输入寄存器功能码
-static const int presetsinglecoilfuncode = 0x05; //写单个线圈功能码
 static const int presetmultipleregisterfuncode = 0x10; //写多个寄存器功能码
 /*异常码*/
 static const int illegalfunction = 0x01; //非法功能
@@ -27,15 +26,7 @@ static int HoldingRegisterArray[HOLEREGISTER_STOP] = { 0 }; //保持寄存器数
 /*输入寄存器*/
 static const int InputregisterAddress = 0x00; //输入寄存器起始地址
 static const int InputRegisterAmount = INPUTREGISTER_AMOUNT; //输入寄存器总数
-static int InputRegisterArray[INPUTREGISTER_AMOUNT] = { 0 };    //输入寄存器数组
-/*线圈*/
-static const int CoilstartAddress = 0x0A; //线圈的起始地址
-static const int coilamount_single = 1;
-static const int CoilAmount = COIL_AMOUNT; //线圈总数
-static int RCV_coilvalue = 0xFFFF; //线圈状态暂存变量
-static const int CoilStatus_ON = 0xFF00; //线圈通断状态-->开启
-static const int CoilStatus_OFF = 0x0000; //线圈通断状态-->关闭
-static int CoilArray[COIL_AMOUNT] = { 0 }; //线圈数组
+static uint16_t InputRegisterArray[INPUTREGISTER_AMOUNT] = { 0 };    //输入寄存器数组
 /*发送区暂存数组*/
 static int SlaveTempBuffer[HOSTCOMMU_SENDLENGTH];
 /*接收到的命令包数据暂存变量*/
@@ -47,7 +38,6 @@ static bool JudgeFunctioncode(void);
 static bool JudgeStartAddress(void);
 static void ReadRegister(bool registertype, int *registervalue); //读寄存器
 static void PresetRegister(bool registertype, int const *registervalue); //写寄存器
-static void PresetCoil(unsigned int startaddress, int coilvalue);
 static int ResponseException(int exception, char *sendframe);
 static int Compose03Package(char *revframe, char *sendframe);
 static int Compose04Package(char *revframe, char *sendframe);
@@ -71,7 +61,7 @@ void SetSlaveaddress(int address) {
 
 /*判断功能码是否正确*/
 static bool JudgeFunctioncode(void) {
-	if ((RCV_functioncode != readholdingregisterfuncode) && (RCV_functioncode != readinputregisterfuncode) && (RCV_functioncode != presetsinglecoilfuncode)
+	if ((RCV_functioncode != readholdingregisterfuncode) && (RCV_functioncode != readinputregisterfuncode)
 			&& (RCV_functioncode != presetmultipleregisterfuncode)) {
 		return false;
 	} else {
@@ -97,12 +87,7 @@ static bool JudgeStartAddress(void) {
 		}
 		break;
 	}
-	case FUNCTIONCODE_WRITE_COIL: {
-		if ((RCV_startaddress < CoilstartAddress) || ((RCV_startaddress + coilamount_single - 1) >= (CoilstartAddress + CoilAmount))) {
-			ret = false;
-		}
-		break;
-	}
+
 	}
 	return ret;
 }
@@ -196,7 +181,7 @@ static int Compose03Package(char *revframe, char *sendframe) {
 int Response04Process(char *revframe, char *sendframe) {
 	int length;
 	/*重置输入寄存器*/
-	ResetInputRegister(InputRegisterArray);
+	write_measurement_result_to_IputerRegisters(InputRegisterArray);
 	/*组包*/
 	length = Compose04Package(revframe, sendframe);
 	return length;
@@ -218,64 +203,6 @@ static int Compose04Package(char *revframe, char *sendframe) {
 	sendlength = 3 + RCV_registercnt * 2;
 	return sendlength;
 }
-/*处理05功能码命令包 并组织响应包*/
-int Response05Process(char const *revframe, char *sendframe) {
-	int length;
-	int ret;
-
-	RCV_coilvalue = RCV_registercnt;
-	if ((RCV_coilvalue != CoilStatus_ON) && (RCV_coilvalue != CoilStatus_OFF)) {
-		sendframe[0] = SlaveAddress;
-		sendframe[1] = 0x80 + presetsinglecoilfuncode;
-		sendframe[2] = illegaldatavalue;
-		length = 3;
-	} else {
-		/*写线圈*/
-		PresetCoil(RCV_startaddress, RCV_coilvalue);
-
-		sendframe[0] = SlaveAddress;
-		sendframe[1] = presetsinglecoilfuncode;
-		sendframe[2] = revframe[2];
-		sendframe[3] = revframe[3];
-		sendframe[4] = revframe[4];
-		sendframe[5] = revframe[5];
-		length = 6;
-	}
-	/*执行命令*/
-	ret = ProcessWriteCoil(CoilArray);
-	if (ret != RETURN_OK) {
-		memset(sendframe, 0, HOSTCOMMU_SENDLENGTH);
-		if (ret == RETURN_EXEFAIL) {
-			length = ResponseException(slavedevicefailure, sendframe);
-		} else if (ret == RETURN_UNSUPPORTED) {
-			length = ResponseException(illegaldatavalue, sendframe);
-		} else if (ret == RETURN_UNDEFADDRESS) {
-			length = ResponseException(illegaldataaddress, sendframe);
-		}
-	}
-	/*重置线圈*/
-	ResetCoil(CoilArray, CoilAmount);
-	return length;
-}
-
-/*写线圈*/
-static void PresetCoil(unsigned int startaddress, int coilvalue) {
-	int i;
-	int j;
-
-	if (coilvalue == CoilStatus_OFF) {
-		CoilArray[startaddress - CoilstartAddress] = 0;
-	} else if (coilvalue == CoilStatus_ON) {
-		for (i = 0; i < startaddress - CoilstartAddress; i++) {
-			CoilArray[i] = 0;
-		}
-		CoilArray[startaddress - CoilstartAddress] = 1;
-
-		for (j = startaddress - CoilstartAddress + 1; j < CoilAmount; j++) {
-			CoilArray[j] = 0;
-		}
-	}
-}
 
 static int ResponseException(int exception, char *sendframe) {
 	int framelen;
@@ -293,7 +220,7 @@ int Response10Process(char const *revframe, char *sendframe) {
 	WriteDeviceParamsToHoldingRegisters(HoldingRegisterArray);
 	/*更新保持寄存器并组包*/
 	length = Compose10Package(revframe, sendframe);
-
+	printf("command: %u\n", g_deviceParams.command);
 	/*更新对应参数,若需存储则写入铁电*/
 	ReadDeviceParamsFromHoldingRegisters(HoldingRegisterArray);
 //	ret = ReadDeviceParamsFromHoldingRegisters(HoldingRegisterArray);
@@ -307,7 +234,7 @@ int Response10Process(char const *revframe, char *sendframe) {
 //		}
 //	}
 	/* 存储参数 	*/
-	save_device_params();// 保存设备参数到铁电
+	save_device_params(); // 保存设备参数到铁电
 	return length;
 }
 
@@ -349,6 +276,7 @@ static void PresetRegister(bool registertype, int const *registervalue) {
 	} else {
 		for (i = RCV_startaddress, j = 0; i < range; i++, j++) {
 			HoldingRegisterArray[i] = registervalue[j];
+			printf("HoldingRegisterArray[%d] = %d\n", i, HoldingRegisterArray[i]);
 		}
 	}
 }

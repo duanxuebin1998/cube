@@ -68,6 +68,9 @@ void init_device_params(void) {
  * 恢复出厂参数配置
  *-----------------------------------------------------*/
 void RestoreFactoryParamsConfig(void) {
+	/* 指令 */
+	g_deviceParams.command = CMD_NONE;
+
 	/* —— 基础参数 —— */
 	g_deviceParams.tankHeight = 200000; // 20 000 mm
 	g_deviceParams.blindZone = 5000; // 500 mm
@@ -116,6 +119,8 @@ void print_device_params(void) {
 
 	printf("======= Device Parameters =======\n");
 
+	/* 指令 */
+	printf("command: %lu\n", params.command);
 	/* 基础参数 */
 	printf("tankHeight: %lu mm\n", params.tankHeight);
 	printf("blindZone: %lu mm\n", params.blindZone);

@@ -24,6 +24,7 @@ typedef enum{/* 数据源取自 */
 #define UNVALID_QUALITY 0//质量无效值
 #define UNVALID_VOLUME 0//体积无效值
 #define UNVALID_X 0//暂用于流速流量无效值
+
 /*报警状态*/
 #define ALARMSTATE_NONE 0
 #define ALARMSTATE_LOW 1
@@ -58,94 +59,6 @@ extern uint8_t input_register_value[];
 extern struct InputRegisterData inputValue;
 
 
-/* 功能码 */
-typedef enum {
-    FUNCTIONCODE_READ_HOLDREGISTER = 0x03,
-    FUNCTIONCODE_READ_INPUTREGISTER = 0x04,
-    FUNCTIONCODE_WRITE_COIL = 0x05,
-	FUNCTIONCODE_06 = 0x06,
-    FUNCTIONCODE_WRITE_MULREGISTER = 0x10,
-}FUNCTIONCODE;
-/* 输入寄存器地址 */
-
-typedef enum
-{
-    INPUTREG_PATTERNOFWORK              = 0x0000, // 工作模式
-    INPUTREG_SYSTEMSTATE                = 0x0001, // 伺服密度计状态
-    INPUTREG_ERRORNUM                   = 0x0002, // 故障代码
-    INPUTREG_SP_TEMPERATURE             = 0x0004, // 单点测量温度
-    INPUTREG_SP_DENSITY                 = 0x0005, // 单点测量密度
-    INPUTREG_SP_TDSTATE                 = 0x0006, // 单点测量密度温度状态
-    INPUTREG_SP_POSITION                = 0x0007, // 单点测量密度点位置
-    INPUTREG_SP_STANDARDDENSITY         = 0x0009, // 单点测量标准密度
-    INPUTREG_SP_VCF20                   = 0x000A, // 单点测量VCF
-    INPUTREG_SP_WEIGHTDENSITY           = 0x000C, // 单点测量计重密度
-
-    INPUTREG_SPT_TEMPERATURE            = 0x000D, // 单点检测温度
-    INPUTREG_SPT_DENSITY                = 0x000E, // 单点检测密度
-    INPUTREG_SPT_TDSTATE                = 0x000F, // 单点检测密度温度状态
-    INPUTREG_SPT_POSITION               = 0x0010, // 单点检测密度点位置
-    INPUTREG_SPT_STANDARDDENSITY        = 0x0012, // 单点检测标准密度
-    INPUTREG_SPT_VCF20                  = 0x0013, // 单点检测VCF
-    INPUTREG_SPT_WEIGHTDENSITY          = 0x0015, // 单点检测计重密度
-
-    INPUTREG_SPREAD_AVERAGETEMPERATURE  = 0x0016, // 分布测量平均温度
-    INPUTREG_SPREAD_AVERAGEDENSITY      = 0x0017, // 分布测量平均密度
-    INPUTREG_SPREAD_AVERAGETDSTATE      = 0x0018, // 分布测量温度密度状态
-    INPUTREG_SPREAD_STANDARDDENSITY     = 0x0019, // 分布测量标准密度
-    INPUTREG_SPREAD_VCF20               = 0x001A, // 分布测量VCF
-    INPUTREG_SPREAD_WEIGHTDENSITY       = 0x001C, // 分布测量计重密度
-    INPUTREG_SPREAD_NUMOFDENSITY        = 0x001D, // 分布测量密度点数
-    INPUTREG_LIQUIDLEVEL                = 0x001E, // 分布测量液位值
-	
-    INPUTREG_OILLEVEL                   = 0x0020, // 液位值
-    INPUTREG_WATERLEVEL                 = 0x0022, // 水位值
-    INPUTREG_BOTTOMHIGH                 = 0x0024, // 罐底值
-    INPUTREG_REALTIMEPOSITION           = 0x0026, // 实时位置
-    INPUTREG_VALUE_P1                   = 0x0028, // 罐底压力值
-    INPUTREG_VALUE_P3                   = 0x002A,// 气相压力值
-	INPUTREGISTER_END					= 0x002B
-
-} ModbusInputRegister;
-
-/* 输入寄存器测量值 */
-struct InputRegisterData {
-    int32_t PatternOfWork;              // 工作模式
-    int32_t EquipState;                // 伺服密度计状态
-    int32_t ErrorCode;                   // 故障代码
-
-    int32_t SP_Temperature;             // 单点测量温度
-    int32_t SP_Density;                 // 单点测量密度
-    int32_t SP_TDState;                 // 单点测量密度温度状态
-    int32_t SP_Position;                // 单点测量密度点位置
-    int32_t SP_StandardDensity;         // 单点测量标准密度
-    int32_t SP_VCF20;                   // 单点测量VCF
-    int32_t SP_WeightDensity;           // 单点测量计重密度
-
-    int32_t SPM_Temperature;            // 单点监测温度
-    int32_t SPM_Density;                // 单点监测密度
-    int32_t SPM_TDState;                // 单点监测密度温度状态
-    int32_t SPM_Position;               // 单点监测密度点位置
-    int32_t SPM_StandardDensity;        // 单点监测标准密度
-    int32_t SPM_VCF20;                  // 单点监测VCF
-    int32_t SPM_WeightDensity;          // 单点监测计重密度
-
-    int32_t Spread_AvgTemperature;      // 分布测量平均温度
-    int32_t Spread_AvgDensity;          // 分布测量平均密度
-    int32_t Spread_AvgTDState;          // 分布测量温度密度状态
-    int32_t Spread_StandardDensity;     // 分布测量标准密度
-    int32_t Spread_VCF20;               // 分布测量VCF
-    int32_t Spread_WeightDensity;       // 分布测量计重密度
-    int32_t Spread_NumOfDensity;        // 分布测量密度点数
-    int32_t LiquidLevel;                // 分布测量液位值
-
-    int32_t OilLevel;                   // 液位值
-    int32_t WaterLevel;                 // 水位值
-    int32_t BottomHigh;                 // 罐底值
-    int32_t RealtimePosition;           // 实时位置
-    int32_t Value_P1;                   // 罐底压力值
-    int32_t Value_P3;                   // 气相压力值
-};
 #define SUBSECTION_OIL_AMOUNT 10 //液位分段修正--共分几段
 #define SUBSETTION_WATER_AMOUNT 5 //水位分段修正--共分几段
 /* 保持寄存器地址 */
@@ -301,60 +214,13 @@ typedef enum{
 
 
 extern struct HoldRegisterData holdValue[];
-/* 线圈指令地址 */
-typedef enum{
-     STARTADDRESS_COIL = 0x0A,                              //线圈起始地址
-     COIL_FINDLEVEL = 0x0A,                                 //跟随液位
-     COIL_MEASUREWATER = 0x0B,                              //测量水位
-     COIL_MEASUREDENSITY = 0x0C,                            //密度测量
-     COIL_CORRECTLEVEL = 0x0D,                              //修正液位
-     COIL_MEASUREDENSITYANDTEMPERATURE = 0x0E,              //密度温度测量
-     COIL_CALIBRATIONDENSITY = 0x0F,                        //密度校正
-     COIL_CALIBRATIONORIGIN = 0x10,                         //标定零点
-     COIL_CALIBRATIONLEVEL = 0x11,                          //标定液位
-     COIL_BRINGUPDISPLACERTOORIGIN = 0x12,                  //提浮子至零点
-     COIL_MEASUREDENSITY_ASSIGNHEIGHT = 0x13,               //指定高度密度测量
-     COIL_MEASUREDENSITYANDTEMPERATURE_ASSIGNHEIGHT = 0x14, //指定高度密度温度测量
-     COIL_MEASUREBOTTOM = 0x15,                             //罐底测量
-     COIL_SYSTEMRESTART = 0x16,                             //系统重启
-     COIL_RESERCOIL_INTEGRATEDVE6 = 0x17,                   //综合测量
-     COIL_DENSITY_NATION = 0x18,                            //国标测量
-     COIL_RESERVE7 = 0x19,
-     COIL_RESTOREFACTORYSETTINGS = 0x1A,                    //恢复出厂设置
-     COIL_BACKUPCONFIGURATIONFILE = 0x1B,
-     COIL_RESTORECONFIGURATIONFILE = 0x1C,                  //恢复配置文件
-     COIL_RESETSCOPEOFWEIGHT = 0x1D,                        //重置称重阈值
-     COIL_GETVALUEOFWEIGHT = 0x1E,                          //读取称重值
-     COIL_GETVALUEOFMOTORSTEPS = 0x1F,                      //读取步进数
-     COIL_GETVALUEOFTEMPERATURE = 0x20,                     //读无线温度
-     COIL_MOTORRUNUP = 0x21,                                //向上运行
-     COIL_MOTORRUNDOWN = 0x22,                              //向下运行
-     COIL_INTERVALMEASURE = 0x23,                           //区间测量
-     COIL_PERMETERMEASURE = 0x24,                           //每米测量
-     COIL_SELFINSPECTION = 0x25,                            //设备自检
-     COIL_CONFIG = 0x26,                                    //进入仪表配置模式
-     COIL_SETNOLOAD = 0x27,                                 //设置空载阈值
-     COIL_SETFULLLOAD = 0x28,                               //设置满载阈值
-     COIL_REDAREALTMP = 0x29,                               //读实时温度
-     COIL_NOSINEFINDOIL= 0x2A,                              //无拟合找液位
-     COIL_NOSINEZERO = 0x2B,                                //无拟合回零点
-     COIL_VCHECK_STATIC,                                    //电压检测 - 静止
-     COIL_VCHECK_RUN,                                       //电压检测 - 运动
-     COIL_WATERFOLLOWING,                                   //水位跟随
-     COIL_CORRECTWATERLEVEL,                                //修正水位
-     COIL_EQUIPRUNNINGIN,                                   //设备磨合
-     COIL_CHECKMODE,                                        //进入检修模式
-     
-     
-     COIL_AMOUNT,//线圈总数
-}COIL;
+
 typedef enum
 {
     /************ 工作模式线圈区段 (起始地址 0x000A) ************/
-    COIL_SET_WORKPATTERN        = 0x000A, // 设置工作模式
-    COIL_RETURN_ZERO            = 0x000B, // 返回零点
-    COIL_CALIBRATE_ZERO         = 0x000C, // 标定零点
-    COIL_MEASURE_SINGLE_POINT   = 0x000D, // 单点测量
+    COIL_RETURN_ZERO            = 0x0001, // 返回零点
+    COIL_CALIBRATE_ZERO         = 0x0002, // 标定零点
+    COIL_MEASURE_SINGLE_POINT   = 0x0003, // 单点测量
     COIL_MONITOR_SINGLE_POINT   = 0x000E, // 单点监测
     COIL_MEASURE_DISTRIBUTED    = 0x000F, // 分布测量（带高度）
     COIL_MEASURE_DISTRIBUTED_AI = 0x0010, // 分布测量（自动）
@@ -364,7 +230,7 @@ typedef enum
     COIL_MEASURE_SYNTHETIC      = 0x0014, // 综合指令测量
     COIL_MEASURE_DENSITY_PER_M  = 0x0015, // 密度每米测量
     COIL_MEASURE_DENSITY_RANGE  = 0x0016, // 区间密度测量
-
+    COIL_RESTORE_FACTORY        = 0x0200, // 恢复出厂设置
     /************ 调试模式线圈区段 (起始地址 0x0100) ************/
     COIL_CALIBRATE_OIL_LEVEL    = 0x0100, // 液位标定
     COIL_READ_PARAMETERS        = 0x0101, // 读取当前参数
@@ -374,69 +240,9 @@ typedef enum
     COIL_SET_ZERO_ANGLE         = 0x0105, // 设置零点角度
     COIL_CORRECT_OIL_LEVEL      = 0x0106, // 修正液位
     COIL_FORCE_RETURN_ZERO      = 0x0107, // 强制零点
-
-    /************ 解锁模式线圈区段 (起始地址 0x0200) ************/
-    COIL_RESTORE_FACTORY        = 0x0200, // 恢复出厂设置
-    COIL_BACKUP_CONFIG_FILE     = 0x0201, // 备份配置文件
-    COIL_RESTORE_CONFIG_FILE    = 0x0202  // 恢复配置文件
-
 } ModbusCoil;
 
 
-/*****************************状态*****************************************/
-typedef enum
-{
-	STATE_STANDBY = 0x0000,					  // 待机状态
-	STATE_INIT = 0x0001,					  // 初始化状态
-	STATE_BACKZEROING = 0x0002,				  // 回零点中
-	STATE_FINDZEROING = 0x0010,				  // 标定零点中
-	STATE_SINGLEPOINTING = 0x0011,			  // 单点测量中
-	STATE_RUNTOPOINTING = 0x0012,			  // 运行到测量点中
-	STATE_SPREADPOINTING = 0x0013,			  // 分布测量中
-	STATE_AI_SPREADPOINTING = 0x0014,		  // 无参分布测量中
-	STATE_CALIBRATIONOILING = 0x0015,		  // 标定液位
-	STATE_READPARAMETERING = 0x0016,		  // 读取参数中
-	STATE_RUNUPING = 0x0017,				  // 向上运行中
-	STATE_RUNDOWNING = 0x0018,				  // 向下运行中
-	STATE_SETZEROCIRCLING = 0x0019,			  // 设置零点编码值
-	STATE_SETZEROANGLING = 0x001A,			  // 设置零点编码值
-	STATE_EFACTORYSETTING_RESTORING = 0x001B, // 恢复出厂设置中
-	STATE_BACKUPING = 0x001C,				  // 备份配置文件中
-	STATE_RESTORYING = 0x001D,				  // 恢复配置文件中
-	STATE_FINDOIL = 0x001E,					  // 寻找液位中
-	STATE_FINDWATER = 0x001F,				  // 寻找水位中
-	STATE_FINDBOTTOM = 0x0020,				  // 寻找罐底中
-	STATE_FORCEZERO = 0x0021,				  // 设置电机零点中
-	STATE_ONTANKOPRATIONING = 0x0022,		  // 罐上仪表操作中
-	STATE_SYNTHETICING = 0x0023,			  // 综合指令
-	STATE_METER_DENSITY = 0x0024,			  // 密度每米测量中
-	STATE_INTERVAL_DENSITY = 0x0025,		  // 液位区间测量中
-
-	STATE_FINDZEROOVER = 0x8010,			   // 标定零点完成
-	STATE_SINGLEPOINTOVER = 0x8011,			   // 单点测量完成
-	STATE_SPTESTING = 0x8012,				   // 正在单点检测
-	STATE_SPREADPOINTOVER = 0x8013,			   // 分布测量完成
-	STATE_AI_SPREADPOINTOVER = 0x8014,		   // 无参分布测量完成
-	STATE_FINDOILOVER = 0x8015,				   // 标定液位完成
-	STATE_READPARAMETEROVER = 0x8016,		   // 读取参数完成
-	STATE_RUNUPOVER = 0x8017,				   // 向上运行完成
-	STATE_RUNDOWNOVER = 0x8018,				   // 向下运行完成
-	STATE_SETZEROCIRCLOVER = 0x8019,		   // 设置零点编码值完成
-	STATE_SETZEROANGLOVER = 0x801A,			   // 设置零点编码值完成
-	STATE_EFACTORYSETTING_RESTOROVER = 0x801B, // 恢复出厂设置完成
-	STATE_BACKUPOVER = 0x801C,				   // 备份配置文件完成
-	STATE_RESTORYOVER = 0x801D,				   // 恢复配置文件完成
-	STATE_FLOWOIL = 0x801E,					   // 液位跟随中
-	STATE_FINDWATER_OVER = 0x801F,			   // 寻找水位完成
-	STATE_FINDBOTTOM_OVER = 0x8020,			   // 寻找罐底完成
-	STATE_FORCEZERO_OVER = 0x8021,			   // 设置电机零点完成
-	STATE_ONTANKOPRATIONCOMPLATE = 0x8022,	   // 罐上仪表操作完成
-	STATE_SYNTHETICING_OVER = 0x8023,		   // 综合指令完成
-	STATE_COM_METER_DENSITY_OVER = 0x8024,	   // 密度每米测量完成
-	STATE_INTERVAL_DENSITY_OVER = 0x8025,	   // 液位区间测量完成
-
-	STATE_FAIL = 0xFFFF // 故障
-} DeviceState;
 
 
 

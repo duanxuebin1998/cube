@@ -134,6 +134,7 @@ static int SearchBottomRough() {
 	while (determine_weight_status() != BOTTOM) {
 		// 实时输出编码器位置和重量值（用于调试）
 		printf("罐底测量\t长距离寻找罐底\t{encoder}%d\t{weight}%d\r\n", (int) g_encoder_count, g_weight);
+		CHECK_ERROR(ret);
 	}
 
 	// 记录首次检测到的罐底位置
@@ -178,6 +179,7 @@ static int SearchBottomPrecise() {
 			printf("罐底测量\tt精确寻找罐底未找到罐底\r\n");
 			CHECK_ERROR(MEASUREMENT_WEIGHT_DOWN_FAIL); // 如果编码器位置异常，返回错误
 		}
+		CHECK_ERROR(ret);
 	}
 	// 更新罐底位置并停止电机
 	bottom_value = g_encoder_count;

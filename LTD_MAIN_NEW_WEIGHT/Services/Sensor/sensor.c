@@ -24,7 +24,7 @@
 #include "main.h"
 #include "stdio.h"
 
-#define DSM_MAX_RETRY 1 //最大重试次数
+#define DSM_MAX_RETRY 3 //最大重试次数
 #define DSM_CMD_TIMEOUT 500  //接收字节间超时时间
 #define DSM_BCC_DELAY 300 //校验错误延时
 #define DSM_PRE_SEND_DELAY 5//重试延时
@@ -65,8 +65,8 @@ static char CalculationBCC_DSM(char command[], int count) // count=5
 int DSMSendcommand3times(uint8_t *pCommand, uint16_t commandLen)
 {
 	int retFlag = NO_ERROR;
-	char bcc;
-	HAL_StatusTypeDef halStatus;
+    HAL_StatusTypeDef halStatus;
+    uint8_t bcc = 0;
 
 	for (int attempt = 0; attempt < DSM_MAX_RETRY; attempt++)
 	{
@@ -103,7 +103,6 @@ int DSMSendcommand3times(uint8_t *pCommand, uint16_t commandLen)
 		/* 接收阶段（带超时机制） */
 		uint32_t startTick = HAL_GetTick();
 		while (HAL_GetTick() - startTick < DSM_CMD_TIMEOUT)
-//		while (1)
 		{
 			uint8_t byte;
 			halStatus = HAL_UART_Receive(&huart6, &byte, 1, 1); // 1ms单字节接收
@@ -130,7 +129,7 @@ int DSMSendcommand3times(uint8_t *pCommand, uint16_t commandLen)
 		if (DSMRcvLen == 0)
 		{
 			 printf("communication error\r\n");
-			retFlag = 0; //3-3
+			retFlag = SENSOR_COMM_TIMEOUT; //通信超时
 			continue;
 		}
 		 printf("communication success:%s\r\n", DSMRcvBuffer+1);
@@ -144,7 +143,7 @@ int DSMSendcommand3times(uint8_t *pCommand, uint16_t commandLen)
 		}
 		else
 		{
-			retFlag = 3 - 1;
+			retFlag = SENSOR_BCC_ERROR;//校验失败
 		}
 	}
 

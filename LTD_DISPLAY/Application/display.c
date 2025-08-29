@@ -5,8 +5,8 @@
 #include "exit.h"
 #include "modbus_agreement.h"
 #include "display_tankopera.h"
-
-
+#include "tim.h"
+#include "system_parameter.h"
 
 #define DEBUG_DISPLAY 0
 
@@ -57,7 +57,7 @@ static uint8_t StockMap[] = "通讯尝试中液位跟随密度温℃版本水测
                             "误础界面程序减比股长介信号后限例权屏幕维护视终继状态最探头浸小第悬停禁用弦工固产反先动当前"
                             "大英更传层滞域使磨结束针总阻六级内息命感顺有阈值角导本整";
 static const int StockmapLength = (sizeof(StockMap) - 1) / 2; /*索引数组总文字个数*/
-static const int wordbyte = 2;//一个汉字由几个字节组成
+static const int wordbyte = 3;//一个汉字由几个字节组成
 static uint8_t WordStock[255 * 28] =
 {
     0x47,0xF0,0x21,0x20,0x20,0xC0,0x07,0xF0,0x04,0x90,0xE4,0x90,0x27,0xF0,0x24,0x90,0x24,0x90,0x27,0xF0,0x24,0x90,0x24,0xB0,0x50,0x00,0x8F,0xF8,/*"通",0*/
@@ -629,7 +629,7 @@ static uint8_t matchingwordstock(uint8_t **display,int cnt,int x,int y,int shift
             /*遍历字库中是否有要显示的汉字*/
             for(j = 0;j< StockmapLength ;j++)
             {
-                if((*pstockmap == *pdisplay) && (*(pstockmap + 1)== *(pdisplay + 1)))
+                if((*pstockmap == *pdisplay) && (*(pstockmap + 1)== *(pdisplay + 1)) && (*(pstockmap + 2)== *(pdisplay + 2)))
                 {
                     if(j < 255)//第一个字库255汉字
                     {
@@ -768,6 +768,7 @@ static uint8_t dis_number(int sgn,int value,int points,uint8_t line,uint8_t row,
 void DisplayInit(void)
 {
     OLED_Init();    //屏幕初始化
+    HAL_TIM_Base_Start_IT(&htim3);
 //    Timer7Init();   //长按确定键计时定时器
 //    Timer1Init();   //检测按键,超时退出罐上操作定时器
 //    Timer6Init();   //刷新屏幕定时器
@@ -819,34 +820,34 @@ static void oled_equipment(void)
         else
             row = OLED_ROW4_2;
         line = DisplayLangaugeLineWords((u8*)"液位:",OLED_LINE8_1,row,0,(u8*)"Level:");
-        if(inputValue.OilLevel == OILLEVELDOWNLIMIT)
+        if(g_measurement.oil_measurement.oil_level == OILLEVELDOWNLIMIT)
             DisplayLangaugeLineWords((u8*)"低于盲区",line,row,0,(u8*)"Below Blind");
         else
-            OledValueDisplay(inputValue.OilLevel,line,row,0,1,(u8*)"mm");
+            OledValueDisplay(g_measurement.oil_measurement.oil_level,line,row,0,1,(u8*)"mm");
     }
     //水位
     if(ValidParaDisArr[Para_Waterlevel][PARA_VALID] == true && now_page == ValidParaDisArr[Para_Waterlevel][PARA_PAGE])
     {
         row = ValidParaDisArr[Para_Waterlevel][PARA_X];
         line = DisplayLangaugeLineWords((u8*)"水位:",OLED_LINE8_1,row,0,(u8*)"Water:");
-        if(inputValue.WaterLevel == OILLEVELDOWNLIMIT)
+        if(g_measurement.water_measurement.water_level == OILLEVELDOWNLIMIT)
             DisplayLangaugeLineWords((u8*)"低于盲区",line,row,0,(u8*)"Below Blind");
         else
-            OledValueDisplay(inputValue.WaterLevel,line,row,0,1,(u8*)"mm");
+            OledValueDisplay(g_measurement.water_measurement.water_level,line,row,0,1,(u8*)"mm");
     }
     //密度
     if(ValidParaDisArr[Para_AveDensity][PARA_VALID] == true && now_page == ValidParaDisArr[Para_AveDensity][PARA_PAGE])
     {
         row = ValidParaDisArr[Para_AveDensity][PARA_X];
         line = DisplayLangaugeLineWords((u8*)"密度:",OLED_LINE8_1,row,0,(u8*)"D:");
-        OledValueDisplay(inputValue.SPM_Density,line,row,0,1,(u8*)"kg/m3");
+        OledValueDisplay(g_measurement.single_point_monitoring.density,line,row,0,1,(u8*)"kg/m3");
     }
     //温度
     if(ValidParaDisArr[Para_AveTemperature][PARA_VALID] == true && now_page == ValidParaDisArr[Para_AveTemperature][PARA_PAGE])
     {
         row = ValidParaDisArr[Para_AveTemperature][PARA_X];
         line = DisplayLangaugeLineWords((u8*)"温度:",OLED_LINE8_1,row,0,(u8*)"Temp:");
-        OledValueDisplay(inputValue.SPM_Temperature,line,row,0,1,(u8*)"℃");
+        OledValueDisplay(g_measurement.single_point_monitoring.temperature,line,row,0,1,(u8*)"℃");
     }
  
     //位置
@@ -854,7 +855,7 @@ static void oled_equipment(void)
     {
         row = ValidParaDisArr[Para_position][PARA_X];
         line = DisplayLangaugeLineWords((u8*)"位置:",OLED_LINE8_1,row,0,(u8*)"Pos:");
-        OledValueDisplay(inputValue.RealtimePosition,line,row,0,1,(u8*)"mm");
+        OledValueDisplay(g_measurement.debug_data.sensor_position,line,row,0,1,(u8*)"mm");
     }
 }
 /* 显示多个汉字或字符 - 带中英文选择 */
@@ -878,7 +879,7 @@ static void CalculateValidPara(void)
     /******计算总共有多少个有效参数需要显示******/
     ValidParaCnt = 0;
     //液位
-    if((inputValue.OilLevel == UNVALID_LEVEL )||(inputValue.OilLevel == 0 ))
+    if((g_measurement.oil_measurement.oil_level == UNVALID_LEVEL )||(g_measurement.oil_measurement.oil_level == 0 ))
     {
         flagofoillevelvalid = false;
     }
@@ -887,7 +888,7 @@ static void CalculateValidPara(void)
         flagofoillevelvalid = true;
     }
     //密度
-    if(!(inputValue.SPM_Density == UNVALID_DENSITY ))
+    if(!(g_measurement.single_point_monitoring.density == UNVALID_DENSITY ))
     {
         ValidParaCnt++;
         ValidParaDisArr[Para_AveDensity][PARA_NUM] = ValidParaCnt;
@@ -897,7 +898,7 @@ static void CalculateValidPara(void)
     else
         ValidParaDisArr[Para_AveDensity][PARA_VALID] = false;
     //温度
-    if((inputValue.SPM_Temperature > UNVALID_TEMPERATURE_WIRELESS )&&(inputValue.SPM_Temperature <2000 ))
+    if((g_measurement.single_point_monitoring.temperature > UNVALID_TEMPERATURE_WIRELESS )&&(g_measurement.single_point_monitoring.temperature <2000 ))
     {
         ValidParaCnt++;
         ValidParaDisArr[Para_AveTemperature][PARA_NUM] = ValidParaCnt;
@@ -906,7 +907,7 @@ static void CalculateValidPara(void)
     else
         ValidParaDisArr[Para_AveTemperature][PARA_VALID] = false;
     //水位
-    if(!(inputValue.WaterLevel == LEVEL_DOWNLIMITWATER ))
+    if(!(g_measurement.water_measurement.water_level == LEVEL_DOWNLIMITWATER ))
     {
         ValidParaCnt++;
         ValidParaDisArr[Para_Waterlevel][PARA_NUM] = ValidParaCnt;
@@ -916,7 +917,7 @@ static void CalculateValidPara(void)
         ValidParaDisArr[Para_Waterlevel][PARA_VALID] = false;
   
     //位置
-    if((!(inputValue.EquipState == STATE_FLOWOIL))&&(inputValue.RealtimePosition != 0 ))
+    if((!(g_measurement.device_status.device_state == STATE_FLOWOIL))&&(g_measurement.debug_data.sensor_position != 0 ))
     {
         ValidParaCnt++;
         ValidParaDisArr[Para_position][PARA_NUM] = ValidParaCnt;
@@ -1026,7 +1027,7 @@ const char* GetStateString(uint16_t state, uint8_t lang)
 static void DIS_Equipment(void)
 {
     int row, line;
-    uint16_t state = inputValue.EquipState;
+    uint16_t state = g_measurement.device_status.device_state;
     uint8_t lang = screen_parameter.language;
 
     if (lang > 1) lang = 1;
@@ -1036,8 +1037,8 @@ static void DIS_Equipment(void)
     line = OledDisplayLineWords((uint8_t*)disp_str, OLED_LINE8_1, row, 0);
 
     if (state == 0xFFFF) {
-		uint16_t err_type = (inputValue.ErrorCode >> 16) & 0xFFFF;
-		uint16_t err_pos  = inputValue.ErrorCode & 0xFFFF;
+		uint16_t err_type = (g_measurement.device_status.error_code >> 16) & 0xFFFF;
+		uint16_t err_pos  = g_measurement.device_status.error_code & 0xFFFF;
 
 		char err_text[16];
 		snprintf(err_text, sizeof(err_text), "%d-%d", err_type, err_pos);

@@ -171,7 +171,6 @@ void write_816(u8 x,u8 y, u8 *buf,u8 coder,u8 en)
 ******************************************/
 void OLED_Init(void)
 {
-    printf("显示初始化完成\r\n");
     HAL_GPIO_WritePin(OLED_NREST_GPIO_Port, OLED_NREST_Pin, GPIO_PIN_RESET); //复位引脚拉低
     HAL_Delay(200); //延时100ms
     HAL_GPIO_WritePin(OLED_NREST_GPIO_Port, OLED_NREST_Pin, GPIO_PIN_SET); //复位引脚拉高
