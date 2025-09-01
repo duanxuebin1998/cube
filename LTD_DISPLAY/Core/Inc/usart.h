@@ -36,7 +36,13 @@ extern UART_HandleTypeDef huart5;
 
 extern UART_HandleTypeDef huart1;
 
+extern UART_HandleTypeDef huart3;
+
 /* USER CODE BEGIN Private defines */
+#define USART3_RX_BUF_SIZE 512
+extern volatile uint8_t USART3_RX_LEN;              // 接收一帧数据的长度
+extern uint8_t USART3_RX_BUF[USART3_RX_BUF_SIZE];   // 接收数据缓冲区
+
 #define UART5_RX_BUF_SIZE 256
 extern volatile uint8_t UART5_RX_LEN;              // 接收一帧数据的长度
 extern uint8_t UART5_RX_BUF[UART5_RX_BUF_SIZE];   // 接收数据缓冲区
@@ -44,6 +50,7 @@ extern uint8_t UART5_RX_BUF[UART5_RX_BUF_SIZE];   // 接收数据缓冲区
 
 void MX_UART5_Init(void);
 void MX_USART1_UART_Init(void);
+void MX_USART3_UART_Init(void);
 
 /* USER CODE BEGIN Prototypes */
 
