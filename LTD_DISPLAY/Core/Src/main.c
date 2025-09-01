@@ -99,6 +99,7 @@ int main(void)
   MX_TIM3_Init();
   MX_UART5_Init();
   MX_CRC_Init();
+  MX_USART3_UART_Init();
   /* USER CODE BEGIN 2 */
   DisplayInit(); // Initialize the OLED display
 

@@ -48,7 +48,7 @@ void HostCommuProcess(uint8_t*rcv,int len)
 {
     #if DEBUG_COMMUCPU2
     int i;
-    printf("CPU2com_RCV %d : ",len);
+    printf("CPU3com_RCV %d : ",len);
     for(i = 0;i < len;i++)
         printf("%02X ",rcv[i]);
     printf("\r\n");
@@ -57,13 +57,13 @@ void HostCommuProcess(uint8_t*rcv,int len)
         return;
     if(!SlaveCheckCRC(rcv,len))
     {
-        printf("CPU2 CRC ERROR");
+        printf("CPU3 CRC ERROR");
         return;
     }
     /* 解析数据 */
 	if(rcv[0]!= ADERSS)
     {
-        printf("CPU2 Address Error");
+        printf("CPU3 Address Error");
         return;
     }
 	RCV_functioncode = rcv[1];
@@ -73,7 +73,7 @@ void HostCommuProcess(uint8_t*rcv,int len)
         case FUNCTIONCODE_READ_HOLDREGISTER:
         {
             CPU2_Response03Process(rcv);
-            printf("CPU2 Response03Process\r\n");
+            printf("CPU3 Response03Process\r\n");
             break;
         }
         case FUNCTIONCODE_READ_INPUTREGISTER:
