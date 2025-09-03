@@ -19,7 +19,7 @@ void ProcessMeasureCmd(CommandType command)
 	switch (command) {
 	case CMD_BACK_ZERO:
 		printf("执行回零点指令\n");
-		MeasureZero();
+		MeasureZero();//
 		break;
 //	case CMD_FIND_OIL:
 //		printf("执行寻找液位指令\n");
@@ -30,7 +30,7 @@ void ProcessMeasureCmd(CommandType command)
 //		SearchWaterLevel();
 //		break;
 	case CMD_FIND_BOTTOM:
-		printf("执行寻找罐底指令\n");
+		printf("执行罐底测量指令\n");
 		MeasureBottom();
 		break;
 //	case CMD_MEASURE_SINGLE:
