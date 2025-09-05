@@ -23,25 +23,25 @@
 /* USER CODE BEGIN 0 */
 #include "stdio.h"
 #define NOP() __asm volatile("nop")
-#define UART1_TX_BUF_SIZE 512
-uint8_t uart1_tx_buf[UART1_TX_BUF_SIZE];
-volatile uint16_t uart1_tx_head = 0;   // 写指针
-volatile uint16_t uart1_tx_tail = 0;   // 读指针
-volatile uint8_t uart1_tx_busy = 0;    // DMA是否正在发送
-
-static void UART1_StartTx(void) {
-	if (!uart1_tx_busy && uart1_tx_head != uart1_tx_tail) {
-		uart1_tx_busy = 1;
-		uint16_t len;
-
-		if (uart1_tx_head > uart1_tx_tail)
-			len = uart1_tx_head - uart1_tx_tail;
-		else
-			len = UART1_TX_BUF_SIZE - uart1_tx_tail;
-
-		HAL_UART_Transmit_DMA(&huart1, &uart1_tx_buf[uart1_tx_tail], len);
-	}
-}
+//#define UART1_TX_BUF_SIZE 16
+//uint8_t uart1_tx_buf[UART1_TX_BUF_SIZE];
+//volatile uint16_t uart1_tx_head = 0;   // 写指针
+//volatile uint16_t uart1_tx_tail = 0;   // 读指针
+//volatile uint8_t uart1_tx_busy = 0;    // DMA是否正在发送
+//
+//static void UART1_StartTx(void) {
+//	if ((!uart1_tx_busy) && (uart1_tx_head != uart1_tx_tail)) {
+//		uart1_tx_busy = 1;
+//		uint16_t len;
+//
+//		if (uart1_tx_head > uart1_tx_tail)
+//			len = uart1_tx_head - uart1_tx_tail;
+//		else
+//			len = UART1_TX_BUF_SIZE - uart1_tx_tail;
+//
+//		HAL_UART_Transmit_DMA(&huart1, &uart1_tx_buf[uart1_tx_tail], len);
+//	}
+//}
 
 //#ifdef __GNUC__
 //#define PUTCHAR_PROTOTYPE int __io_putchar(int ch)
@@ -68,9 +68,40 @@ PUTCHAR_PROTOTYPE {
 	return ch;
 }
 #endif
+
+void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart) {
+//	    if (huart->Instance == USART1) {
+//	        uart1_tx_tail = (uart1_tx_tail + huart->TxXferSize) % UART1_TX_BUF_SIZE;
+//	        uart1_tx_busy = 0;
+////	        UART1_StartTx();  // 看看还有没有数据要发
+//	    }
+	if (huart->Instance == USART6)  // 比较指针
+	{
+		//等待DMA完全发送完成
+		while (__HAL_UART_GET_FLAG(&huart6, UART_FLAG_TC) == RESET)
+			;
+		//继续延时0.1ms，保证发送数据电平完全恢复空闲
+		for (volatile uint32_t i = 0; i < 18000; i++) {
+			__NOP();
+		}
+		HAL_UART_Receive_DMA(&huart6, UART6_RX_BUF, UART6_RX_BUF_SIZE);
+
+	} else if (huart->Instance == USART2) {
+		//等待DMA完全发送完成
+		while (__HAL_UART_GET_FLAG(&huart2, UART_FLAG_TC) == RESET)
+			;
+		//继续延时0.1ms，保证发送数据电平完全恢复空闲
+		for (volatile uint32_t i = 0; i < 18000; i++) {
+			__NOP();
+		}
+		HAL_UART_Receive_DMA(&huart2, UART2_RX_BUF, UART2_RX_BUF_SIZE);
+	}
+}
+
 volatile uint8_t UART2_RX_LEN = 0;              // 接收一帧数据的长度
 uint8_t UART2_RX_BUF[UART2_RX_BUF_SIZE] = { 0 };   // 接收数据缓冲区
 
+volatile uint8_t uart3_rx_ready = 0;
 volatile uint8_t UART3_RX_LEN = 0;              // 接收一帧数据的长度
 uint8_t UART3_RX_BUF[UART3_RX_BUF_SIZE] = { 0 };   // 接收数据缓冲区
 
@@ -201,7 +232,8 @@ void MX_USART3_UART_Init(void) {
 		Error_Handler();
 	}
 	/* USER CODE BEGIN USART3_Init 2 */
-
+	__HAL_UART_ENABLE_IT(&huart3, UART_IT_IDLE);
+	HAL_UART_Receive_DMA(&huart3, UART3_RX_BUF, UART3_RX_BUF_SIZE);
 	/* USER CODE END USART3_Init 2 */
 
 }
@@ -648,32 +680,5 @@ void HAL_UART_MspDeInit(UART_HandleTypeDef *uartHandle) {
 }
 
 /* USER CODE BEGIN 1 */
-void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart) {
-	if (huart->Instance == USART1) {
-		uart1_tx_tail = (uart1_tx_tail + huart->TxXferSize) % UART1_TX_BUF_SIZE;
-		uart1_tx_busy = 0;
-		UART1_StartTx();  // 继续发送剩余数据
-	} else if (huart->Instance == USART6)  // 比较指针
-	{
-		//等待DMA完全发送完成
-		while (__HAL_UART_GET_FLAG(&huart6, UART_FLAG_TC) == RESET)
-			;
-		//继续延时0.1ms，保证发送数据电平完全恢复空闲
-		for (volatile uint32_t i = 0; i < 18000; i++) {
-			__NOP();
-		}
-		HAL_UART_Receive_DMA(&huart6, UART6_RX_BUF, UART6_RX_BUF_SIZE);
-
-	} else if (huart->Instance == USART2) {
-		//等待DMA完全发送完成
-		while (__HAL_UART_GET_FLAG(&huart2, UART_FLAG_TC) == RESET)
-			;
-		//继续延时0.1ms，保证发送数据电平完全恢复空闲
-		for (volatile uint32_t i = 0; i < 18000; i++) {
-			__NOP();
-		}
-		HAL_UART_Receive_DMA(&huart2, UART2_RX_BUF, UART2_RX_BUF_SIZE);
-	}
-}
 
 /* USER CODE END 1 */

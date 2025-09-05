@@ -73,7 +73,9 @@ void HostCommuProcess(uint8_t*rcv,int len)
         case FUNCTIONCODE_READ_HOLDREGISTER:
         {
             CPU2_Response03Process(rcv);
+#if DEBUG_COMMUCPU2
             printf("CPU3 Response03Process\r\n");
+#endif
             break;
         }
         case FUNCTIONCODE_READ_INPUTREGISTER:
@@ -145,8 +147,9 @@ void CPU2_CombinatePackage_Send(uint8_t f_code,uint16_t startadd,uint16_t regist
     crc = CRC16_Calculate((u8*)arr,len);
     arr[len++] = crc & 0xff;
     arr[len++] = crc >> 8;
-
+#if DEBUG_COMMUCPU2
 	printf("CPU2 send %d bytes:", len);
+#endif
     sendToCPU2(arr,len,false);
     //全局变量赋值，用于接收CPU2的响应包处理
 	RCV_functioncode = f_code;

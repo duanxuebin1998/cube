@@ -4,114 +4,8 @@
 #include "DSM_stateformodbus2.h"
 #include "DSM_SlaveModbus_modbus2.h"
 #include "main.h"
+#include "my_crc.h"
 
-
-struct RESULT // V1.116 dq2020.4.2
-{
-	int Density[102];	  // 视密度
-	int Temperature[102]; // 温度
-	int Density20[102];	  // 标密
-	int Vcf[102];		  // 体积修正系数
-	int DensityT[102];
-	int Postion[102];
-	int Frequence;
-	int FrequenceInAir;
-	int NumOfPoints;
-};
-
-extern struct RESULT Result;
-
-struct EDUCT // V1.116 dq2020.4.2
-{
-	int Density[102];	  // 视密度
-	int Temperature[102]; // 温度
-	int Density20[102];	  // 标密
-	int Vcf[102];		  // 体积修正系数
-	int DensityT[102];
-	int Postion[102];
-	int Frequence;
-	int FrequenceInAir;
-	int NumOfPoints;
-};
-
-extern struct EDUCT Educt; // V1.116 dq2020.4.2
-
-// #pragma pack (2)
-typedef volatile struct
-{
-	u16 PatternOfWork;			   // 0
-	u16 EquipmentState;			   // 1
-	u32 EquipmentErrorCode;		   // 2-3
-	u16 Measure_TempOnePoint;	   // 4
-	u16 Measure_DensityOnePoint;   // 5
-	u16 Measure_OnePointState;	   // 6
-	u32 Measure_OnePointPosition;  // 7-8
-	u16 Measure_Density20OnePoint; // 9
-	u32 Measure_VCF20OnePoint;	   // 10-11
-	u16 Measure_DensityTOnePoint;  // 12
-
-	u16 Monitor_TempOnePoint;	   // 13
-	u16 Monitor_DensityOnePoint;   // 14
-	u16 Monitor_OnePointState;	   // 15
-	u32 Monitor_OnePointPosition;  // 16-17
-	u16 Monitor_Density20OnePoint; // 18
-	u32 Monitor_VCF20OnePoint;	   // 19-20
-	u16 Monitor_DensityTOnePoint;  // 21
-
-	u16 Spread_TempAverage;				// 22
-	u16 Spread_DensityAverage;			// 23
-	u16 Spread_TempDensityAverageState; // 24
-	u16 Spread_Density20Average;		// 25
-	u32 Spread_Vcf20Average;			// 26-27
-	u16 Spread_DensityTAverage;			// 28
-	u32 Spread_Points;					// 29
-	u32 Spread_OilLevel;				// 30-31
-
-	int MeasureOil_Level;	 // 32-33
-	int MeasureWater_Level;	 // 34-35
-	int MeasureBottom_Level; // 36-37
-
-	u32 Read_AM4096_Position; // 38-39传感器对应的位置，距离罐底；
-	u32 PressValue1;		  // 40-41  液体压力 meng
-	u32 PressValue3;		  // 42-43	气相压力 meng
-	int SelfCheck_Rank;
-} Measure_One_Area; // 输入寄存器第一区段数据
-// #pragma pack ()
-typedef volatile struct // V1.116 dq2020.4.2
-{
-	u16 Spread_TempAverage;				// 22
-	u16 Spread_DensityAverage;			// 23
-	u16 Spread_TempDensityAverageState; // 24
-	u16 Spread_Density20Average;		// 25
-	u32 Spread_Vcf20Average;			// 26-27
-	u16 Spread_DensityTAverage;			// 28
-	u32 Spread_Points;					// 29
-	u32 Spread_OilLevel;				// 30-31
-} Measure_Meter_D;
-
-extern Measure_Meter_D Measure_Meter; // V1.116 dq2020.4.2
-extern Measure_One_Area Measure_One;
-
-// #pragma pack (2)
-typedef struct
-{
-	u16 Am4096_Setzero_Circle; // 0
-	u16 Am4096_Setzero_Angle;  // 1
-	u32 Set_Level_TankHigh;	   // 2-3
-	u16 Am4096_Circle;		   // 4
-	u16 Am4096_Angle;		   // 5
-	u32 Am4096_Position;	   // 6-7
-	u32 Sensor_Fre;			   // 8-9
-	u16 Sensor_Temp;		   // 10
-	u16 Hall_State;			   // 11
-	u32 Air_Fre;			   // 12-13
-	u16 Amplitude;			   // 14
-	short X_Angele;			   // 15
-	short Y_Angele;			   // 16
-	u16 Water_Voltage;		   // 17
-} Measure_Debug_Area;
-// #pragma pack ()
-extern Measure_Debug_Area measure_debug_area;
 
 /*****************************命令*****************************************/
 #define COMMAND_NONE 0
@@ -218,22 +112,4 @@ extern Measure_Debug_Area measure_debug_area;
 #define DSM_STATE_ERROR 0xFFFF // 故障
 
 
-
-
-//extern volatile int EquipmentState;
-//extern volatile int MeasureCommand;
-//
-//extern volatile bool Power_Flag;
-//extern volatile bool XY_Initialize;
-//extern float Gyro_Angle_X_Zero;
-//extern float Gyro_Angle_Y_Zero;
-//extern float Gyro_Angle_Oil;
-//extern float Sonic_A_Zero;
-//extern float Sonic_B_Zero;
-//extern float Sonic_A_Oil;
-//extern float Sonic_B_Oil;
-//extern float Gyro_Angle_Threshold;
-//extern float X_Zero;
-//extern float Y_Zero;
-//extern char NumOfPoints;
 #endif

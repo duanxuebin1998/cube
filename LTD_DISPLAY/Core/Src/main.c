@@ -28,6 +28,7 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "Display.h"
+
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -104,20 +105,28 @@ int main(void)
   MX_USART6_UART_Init();
   /* USER CODE BEGIN 2 */
 	DisplayInit(); // Initialize the OLED display
-
 	DisplayAubonLogo(); /* 刚上电显示AUBON LOGO */
+	DSM_CommunicationInit();
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
 	while (1) {
-		PollingInputData(); // Polling for input data
-		print_device_params();
-	    // 测试用例1: 普通数据包
-	    uint8_t testData1[] = {0x01, 0x02, 0x03, 0x04, 0x05};
-	    printf("\n测试用例1: 普通数据包\n");
-	    SendPacketToHost(testData1, sizeof(testData1));
-		HAL_Delay(1000); //
+
+		if (uart3_rx_ready == 1) { // 如果接收到数据
+			printf("usart3_rx_ready == 1\r\n");
+			uart3_rx_ready = 0; // 重置标志
+//			HAL_UART_Transmit_DMA(&huart3, UART3_RX_BUF, UART3_RX_LEN);//返回接受到的包
+			DSM_CommunicationProcess(UART3_RX_BUF, UART3_RX_LEN);  // 处理接收到的数据
+			HAL_UART_Receive_DMA(&huart3, UART3_RX_BUF, UART3_RX_BUF_SIZE); // 重新启用DMA接收
+		}
+		else
+		{
+			PollingInputData(); // Polling for input data
+		}
+//		print_device_params();
+//		HAL_Delay(1000); //
+//		HAL_UART_Transmit_DMA(&huart1, "123", 3);
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */

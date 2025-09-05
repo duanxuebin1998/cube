@@ -5,71 +5,13 @@
 #include "DSM_SlaveModbus_modbus2.h"
 
 
-// #define NUMOFFLASH 48
-union SystemUnion systemunion;
-union Coefficient_K coefficient_k0;
-union Coefficient_K coefficient_k1;
-union Coefficient_K coefficient_k2;
-union Coefficient_K coefficient_k3;
-union Coefficient_K coefficient_k18;
-union Coefficient_K coefficient_k19;
-union Coefficient_K coefficient_k4;
-union Coefficient_K coefficient_k5;
-union Coefficient_K coefficient_detT;
-
-union Coefficient_K coefficient_v1;
-union Coefficient_K coefficient_v2;
-union Coefficient_K coefficient_v3;
-
-union Coefficient_A coefficient_a2;
-union Coefficient_A coefficient_a1;
-union Coefficient_A coefficient_a0;
-
-System_Measure_Parameter System_measure_parameter; // 测量配置的参数
-System_Measure_Correct System_measure_correct;	   // 分段修正的参数
-int LevelCorrection;							   // 修正液位高度,应该定义到结构体中，对数据结构理解不充分。
-int TankHigh_LevelCorrection;					   // 修正液位后罐高
-int TankHighSteps;
-int FadeZeroSteps;
 
 char SoftOfversion6 = 'F'; // 版本号最低位
-float Resistance_Inair = 0.0;
-int MagnaticValueofOrigin; // 零点位置的编码值
-int MAGNATICVALUEOFORIGIN = 0;
-
-int FlagofLevelFollowing = 0;
 
 
 
 
-/**********************************************************************************************
-**函数名称：	SystemParameterInit()
-**函数功能：	系统参数初始化：系统参数赋初始值、读取系统参数
-**参数:			无
-**返回值:		int：
-				0:	成功!
-				-1:	失败!
-**********************************************************************************************/
-int SystemParameterInit(void)
-{
-	int ret = 0;
 
-//	ret = SystemParameterRead();
-//	System_Measure_Correc_Init();
-//
-//	if (ret != 0)
-//	{
-//		return ret;
-//	}
-//
-//	System_Parameter_Inito_Measure(); // 测量参数赋值//V1.106
-//	SystemParameterSet();			  // 参数写入保持寄存器
-//	Parameter_Init();				  // 参数写入输入寄存器
-//	// 程序版本不能从配置文件中读取
-//	systemunion.systemparameter.SoftOfversion_H = (u32)SOFTOFVERSION_0 * 0x10000 + (u32)SOFTOFVERSION_2 + (u32)SOFTOFVERSION_1 * 0x100; // 程序版本
-//	systemunion.systemparameter.SoftOfversion_L = SoftOfversion6 + (u32)SOFTOFVERSION_5 * 0x100 + (u32)SOFTOFVERSION_4 * 0x10000 + (u32)SOFTOFVERSION_3 * 0x1000000;
-	return ret;
-}
 
 
 
@@ -85,128 +27,125 @@ int SystemParameterInit(void)
 void SystemParameterSet(void)
 {
 	/*无需权限读取的*/
-	WriteOneHoldingRegister(HOLDREGISTER_SP_POSITION, 1, System_measure_parameter.Density_Single_St_High);						 // 固定点监测测量位置V1.106
-	WriteOneHoldingRegister(HOLDREGISTER_SPT_POSITION, 1, System_measure_parameter.Density_Single_Mm_High);						 // 单点测量的测量位置V1.106
-	WriteOneHoldingRegister(HOLDREGISTER_SYNTHETIC_BOTTOM_FREE, 1, System_measure_parameter.Synthetic_Need_FindBottom);			 // 无需权限综合指令是否需要测罐底默认为0不测V1.105
-	WriteOneHoldingRegister(HOLDREGISTER_SYNTHETIC_WATER_FREE, 1, System_measure_parameter.Synthetic_Need_FindWater);			 // 无需权限综合指令是否需要测水位默认为0不测V1.105
-	WriteOneHoldingRegister(HOLDREGISTER_SYNTHETIC_SINGLEPOINT_FREE, 1, System_measure_parameter.Synthetic_Need_SinglePoint);	 // 无需权限综合指令是否需要测水位默认为0不测V1.105
-	WriteOneHoldingRegister(HOLDREGISTER_SPREAD_DSM_STATE_FREE, 1, System_measure_parameter.SpredState);							 // 无需权限分布测量时测量模式V1.105
-	WriteOneHoldingRegister(HOLDREGISTER_SPREAD_NUM_FREE, 1, System_measure_parameter.SpredNum);								 // 无需权限分布测量点数	V1.105
-	WriteOneHoldingRegister(HOLDREGISTER_SPREAD_DISTANCE_FREE, 2, System_measure_parameter.SpredDistance);						 // 无需权限分布测量点之间间距V1.105
-	WriteOneHoldingRegister(HOLDREGISTER_SPREAD_TOPLIMIT_FREE, 2, System_measure_parameter.SpredTopLimit);						 // 无需权限分布测量最高点距液面间距V1.105
-	WriteOneHoldingRegister(HOLDREGISTER_SPREAD_FLOORLIMIT_FREE, 2, System_measure_parameter.SpredFloorLimit);					 // 无需权限分布测量最低点距罐底间距V1.105
-	WriteOneHoldingRegister(HOLDREGISTER_SPSYNTHETIC_POSITION, 2, System_measure_parameter.Density_Single_Synthetic_High);		 // 无需权限综合指令单点测量的位置V1.106
-	WriteOneHoldingRegister(HOLDREGISTER_MEASREMENT_METER, 1, System_measure_parameter.Measrement_Meter);						 // 密度每米测量方向
-	WriteOneHoldingRegister(HOLDREGISTER_INTERVAL_POINT, 1, System_measure_parameter.Interval_Point);							 // 密度液位区间测量点数
-	WriteOneHoldingRegister(HOLDREGISTER_INTERVAL_DIREDION, 1, System_measure_parameter.Interval_Diredion);						 // 密度液位区间测量方向
-	WriteOneHoldingRegister(HOLDREGISTER_INTERVAL_OIL_A, 2, System_measure_parameter.Interval_Oil_A);							 // 密度液位区间测量液位点A
-	WriteOneHoldingRegister(HOLDREGISTER_INTERVAL_OIL_B, 2, System_measure_parameter.Interval_Oil_B);							 // 密度液位区间测量液位点B
-	WriteOneHoldingRegister(HOLDREGISTER_D_CORRECTION_TEM1, 1, systemunion.systemparameter.Density_Correction_Temperature[0]);	 // 密度分段修正温度阈值1
-	WriteOneHoldingRegister(HOLDREGISTER_D_CORRECTION_TEM2, 1, systemunion.systemparameter.Density_Correction_Temperature[1]);	 // 密度分段修正温度阈值2
-	WriteOneHoldingRegister(HOLDREGISTER_D_CORRECTION_TEM3, 1, systemunion.systemparameter.Density_Correction_Temperature[2]);	 // 密度分段修正温度阈值3
-	WriteOneHoldingRegister(HOLDREGISTER_D_CORRECTION_TEM4, 1, systemunion.systemparameter.Density_Correction_Temperature[3]);	 // 密度分段修正温度阈值4
-	WriteOneHoldingRegister(HOLDREGISTER_D_CORRECTION_TEM5, 1, systemunion.systemparameter.Density_Correction_Temperature[4]);	 // 密度分段修正温度阈值5
-	WriteOneHoldingRegister(HOLDREGISTER_D_CORRECTION_TEM6, 1, systemunion.systemparameter.Density_Correction_Temperature[5]);	 // 密度分段修正温度阈值6
-	WriteOneHoldingRegister(HOLDREGISTER_D_CORRECTION_TEM7, 1, systemunion.systemparameter.Density_Correction_Temperature[6]);	 // 密度分段修正温度阈值7
-	WriteOneHoldingRegister(HOLDREGISTER_D_CORRECTION_TEM8, 1, systemunion.systemparameter.Density_Correction_Temperature[7]);	 // 密度分段修正温度阈值8
-	WriteOneHoldingRegister(HOLDREGISTER_D_CORRECTION_TEM9, 1, systemunion.systemparameter.Density_Correction_Temperature[8]);	 // 密度分段修正温度阈值9
-	WriteOneHoldingRegister(HOLDREGISTER_D_CORRECTION_TEM10, 1, systemunion.systemparameter.Density_Correction_Temperature[9]);	 // 密度分段修正温度阈值10
-	WriteOneHoldingRegister(HOLDREGISTER_D_CORRECTION_TEM11, 1, systemunion.systemparameter.Density_Correction_Temperature[10]); // 密度分段修正温度阈值11
-	WriteOneHoldingRegister(HOLDREGISTER_D_CORRECTION_1, 1, systemunion.systemparameter.Density_Correction_Value[0]);			 // 密度分段修正值1
-	WriteOneHoldingRegister(HOLDREGISTER_D_CORRECTION_2, 1, systemunion.systemparameter.Density_Correction_Value[1]);			 // 密度分段修正值2
-	WriteOneHoldingRegister(HOLDREGISTER_D_CORRECTION_3, 1, systemunion.systemparameter.Density_Correction_Value[2]);			 // 密度分段修正值3
-	WriteOneHoldingRegister(HOLDREGISTER_D_CORRECTION_4, 1, systemunion.systemparameter.Density_Correction_Value[3]);			 // 密度分段修正值4
-	WriteOneHoldingRegister(HOLDREGISTER_D_CORRECTION_5, 1, systemunion.systemparameter.Density_Correction_Value[4]);			 // 密度分段修正值5
-	WriteOneHoldingRegister(HOLDREGISTER_D_CORRECTION_6, 1, systemunion.systemparameter.Density_Correction_Value[5]);			 // 密度分段修正值6
-	WriteOneHoldingRegister(HOLDREGISTER_D_CORRECTION_7, 1, systemunion.systemparameter.Density_Correction_Value[6]);			 // 密度分段修正值7
-	WriteOneHoldingRegister(HOLDREGISTER_D_CORRECTION_8, 1, systemunion.systemparameter.Density_Correction_Value[7]);			 // 密度分段修正值8
-	WriteOneHoldingRegister(HOLDREGISTER_D_CORRECTION_9, 1, systemunion.systemparameter.Density_Correction_Value[8]);			 // 密度分段修正值9
-	WriteOneHoldingRegister(HOLDREGISTER_D_CORRECTION_10, 1, systemunion.systemparameter.Density_Correction_Value[9]);			 // 密度分段修正值10
-	WriteOneHoldingRegister(HOLDREGISTER_D_CORRECTION_11, 1, systemunion.systemparameter.Density_Correction_Value[10]);			 // 密度分段修正值11
-	WriteOneHoldingRegister(HOLDREGISTER_D_CORRECTION_12, 1, systemunion.systemparameter.Density_Correction_Value[11]);			 // 密度分段修正值12
+	WriteOneHoldingRegister(HOLDREGISTER_SP_POSITION, 1, 0);						 // 固定点监测测量位置V1.106
+	WriteOneHoldingRegister(HOLDREGISTER_SPT_POSITION, 1, 0);						 // 单点测量的测量位置V1.106
+	WriteOneHoldingRegister(HOLDREGISTER_SYNTHETIC_BOTTOM_FREE, 1, g_deviceParams.requireBottomMeasurement);			 // 无需权限综合指令是否需要测罐底默认为0不测V1.105
+	WriteOneHoldingRegister(HOLDREGISTER_SYNTHETIC_WATER_FREE, 1, g_deviceParams.requireWaterMeasurement);			 // 无需权限综合指令是否需要测水位默认为0不测V1.105
+	WriteOneHoldingRegister(HOLDREGISTER_SYNTHETIC_SINGLEPOINT_FREE, 1, g_deviceParams.requireSinglePointDensity);	 // 无需权限综合指令是否需要测水位默认为0不测V1.105
+	WriteOneHoldingRegister(HOLDREGISTER_SPREAD_DSM_STATE_FREE, 1, g_deviceParams.spreadMeasurementMode);							 // 无需权限分布测量时测量模式V1.105
+	WriteOneHoldingRegister(HOLDREGISTER_SPREAD_NUM_FREE, 1, g_deviceParams.spreadMeasurementCount);								 // 无需权限分布测量点数	V1.105
+	WriteOneHoldingRegister(HOLDREGISTER_SPREAD_DISTANCE_FREE, 2,g_deviceParams.spreadMeasurementDistance);						 // 无需权限分布测量点之间间距V1.105
+	WriteOneHoldingRegister(HOLDREGISTER_SPREAD_TOPLIMIT_FREE, 2, g_deviceParams.spreadTopLimit);						 // 无需权限分布测量最高点距液面间距V1.105
+	WriteOneHoldingRegister(HOLDREGISTER_SPREAD_FLOORLIMIT_FREE, 2, g_deviceParams.spreadBottomLimit);					 // 无需权限分布测量最低点距罐底间距V1.105
+	WriteOneHoldingRegister(HOLDREGISTER_SPSYNTHETIC_POSITION, 2, 0);		 // 无需权限综合指令单点测量的位置V1.106
+	WriteOneHoldingRegister(HOLDREGISTER_MEASREMENT_METER, 1, g_deviceParams.spreadMeasurementOrder);						 // 密度每米测量方向
+	WriteOneHoldingRegister(HOLDREGISTER_INTERVAL_POINT, 1, g_deviceParams.spreadMeasurementCount);							 // 密度液位区间测量点数
+	WriteOneHoldingRegister(HOLDREGISTER_INTERVAL_DIREDION, 1, g_deviceParams.spreadMeasurementOrder);						 // 密度液位区间测量方向
+	WriteOneHoldingRegister(HOLDREGISTER_INTERVAL_OIL_A, 2, 0);							 // 密度液位区间测量液位点A
+	WriteOneHoldingRegister(HOLDREGISTER_INTERVAL_OIL_B, 2, 0);							 // 密度液位区间测量液位点B
+	WriteOneHoldingRegister(HOLDREGISTER_D_CORRECTION_TEM1, 1, 0);	 // 密度分段修正温度阈值1
+	WriteOneHoldingRegister(HOLDREGISTER_D_CORRECTION_TEM2, 1, 0);	 // 密度分段修正温度阈值2
+	WriteOneHoldingRegister(HOLDREGISTER_D_CORRECTION_TEM3, 1, 0);	 // 密度分段修正温度阈值3
+	WriteOneHoldingRegister(HOLDREGISTER_D_CORRECTION_TEM4, 1, 0);	 // 密度分段修正温度阈值4
+	WriteOneHoldingRegister(HOLDREGISTER_D_CORRECTION_TEM5, 1, 0);	 // 密度分段修正温度阈值5
+	WriteOneHoldingRegister(HOLDREGISTER_D_CORRECTION_TEM6, 1, 0);	 // 密度分段修正温度阈值6
+	WriteOneHoldingRegister(HOLDREGISTER_D_CORRECTION_TEM7, 1, 0);	 // 密度分段修正温度阈值7
+	WriteOneHoldingRegister(HOLDREGISTER_D_CORRECTION_TEM8, 1, 0);	 // 密度分段修正温度阈值8
+	WriteOneHoldingRegister(HOLDREGISTER_D_CORRECTION_TEM9, 1, 0);	 // 密度分段修正温度阈值9
+	WriteOneHoldingRegister(HOLDREGISTER_D_CORRECTION_TEM10, 1, 0);	 // 密度分段修正温度阈值10
+	WriteOneHoldingRegister(HOLDREGISTER_D_CORRECTION_TEM11, 1, 0); // 密度分段修正温度阈值11
+	WriteOneHoldingRegister(HOLDREGISTER_D_CORRECTION_1, 1, 0);			 // 密度分段修正值1
+	WriteOneHoldingRegister(HOLDREGISTER_D_CORRECTION_2, 1, 0);			 // 密度分段修正值2
+	WriteOneHoldingRegister(HOLDREGISTER_D_CORRECTION_3, 1, 0);			 // 密度分段修正值3
+	WriteOneHoldingRegister(HOLDREGISTER_D_CORRECTION_4, 1, 0);			 // 密度分段修正值4
+	WriteOneHoldingRegister(HOLDREGISTER_D_CORRECTION_5, 1,0);			 // 密度分段修正值5
+	WriteOneHoldingRegister(HOLDREGISTER_D_CORRECTION_6, 1, 0);			 // 密度分段修正值6
+	WriteOneHoldingRegister(HOLDREGISTER_D_CORRECTION_7, 1, 0);			 // 密度分段修正值7
+	WriteOneHoldingRegister(HOLDREGISTER_D_CORRECTION_8, 1, 0);			 // 密度分段修正值8
+	WriteOneHoldingRegister(HOLDREGISTER_D_CORRECTION_9, 1, 0);			 // 密度分段修正值9
+	WriteOneHoldingRegister(HOLDREGISTER_D_CORRECTION_10, 1, 0);			 // 密度分段修正值10
+	WriteOneHoldingRegister(HOLDREGISTER_D_CORRECTION_11, 1, 0);			 // 密度分段修正值11
+	WriteOneHoldingRegister(HOLDREGISTER_D_CORRECTION_12, 1, 0);			 // 密度分段修正值12
 
 	/*权限读取的*/
-	WriteOneHoldingRegister(HOLDREGISTER_TANKHIGHT, 2, systemunion.systemparameter.TankHigh);						   // 罐高
-	WriteOneHoldingRegister(HOLDREGISTER_SRREAD_MEASURETURN, 1, systemunion.systemparameter.SpredMeasureTurn);		   // 分布测量顺序
-	WriteOneHoldingRegister(HOLDREGISTER_SPREAD_STATE, 1, systemunion.systemparameter.SpredState);					   // 分布测量模式
-	WriteOneHoldingRegister(HOLDREGISTER_SPREAD_NUM, 1, systemunion.systemparameter.SpredNum);						   // 分布测量数量
-	WriteOneHoldingRegister(HOLDREGISTER_SPREAD_DISTANCE, 2, systemunion.systemparameter.SpredDistance);			   // 分布测量间距
-	WriteOneHoldingRegister(HOLDREGISTER_SPREAD_TOPLIMIT, 2, systemunion.systemparameter.SpredTopLimit);			   // 分布测量上限（距液面）
-	WriteOneHoldingRegister(HOLDREGISTER_SPREAD_FLOORLIMIT, 2, systemunion.systemparameter.SpredFloorLimit);		   // 分布测量下限（距罐底）
-	WriteOneHoldingRegister(HOLDREGISTER_SPREAD_1POINTTHRESHOLD, 2, systemunion.systemparameter.Spred1PointThreshold); // 分布测量一个点时的液位阈值
-	WriteOneHoldingRegister(HOLDREGISTER_SPREAD_5POINTTHRESHOLD, 2, systemunion.systemparameter.Spred5PointThreshold); // 分布测量五个点时的液位阈值
-	WriteOneHoldingRegister(HOLDREGISTER_SPREAD_OTHERNUM, 1, systemunion.systemparameter.SpredOtherNum);			   // 分布测量其他点数时的液位阈值
+	WriteOneHoldingRegister(HOLDREGISTER_TANKHIGHT, 2, g_deviceParams.tankHeight);						   // 罐高
+	WriteOneHoldingRegister(HOLDREGISTER_SRREAD_MEASURETURN, 1, g_deviceParams.spreadMeasurementOrder);		   // 分布测量顺序
+	WriteOneHoldingRegister(HOLDREGISTER_SPREAD_STATE, 1, g_deviceParams.spreadMeasurementMode);					   // 分布测量模式
+	WriteOneHoldingRegister(HOLDREGISTER_SPREAD_NUM, 1, g_deviceParams.spreadMeasurementCount);						   // 分布测量数量
+	WriteOneHoldingRegister(HOLDREGISTER_SPREAD_DISTANCE, 2, g_deviceParams.spreadMeasurementDistance);			   // 分布测量间距
+	WriteOneHoldingRegister(HOLDREGISTER_SPREAD_TOPLIMIT, 2, g_deviceParams.spreadTopLimit);			   // 分布测量上限（距液面）
+	WriteOneHoldingRegister(HOLDREGISTER_SPREAD_FLOORLIMIT, 2, g_deviceParams.spreadBottomLimit);		   // 分布测量下限（距罐底）
+	WriteOneHoldingRegister(HOLDREGISTER_SPREAD_1POINTTHRESHOLD, 2, 0); // 分布测量一个点时的液位阈值
+	WriteOneHoldingRegister(HOLDREGISTER_SPREAD_5POINTTHRESHOLD, 2, 0); // 分布测量五个点时的液位阈值
+	WriteOneHoldingRegister(HOLDREGISTER_SPREAD_OTHERNUM, 1, 0);			   // 分布测量其他点数时的液位阈值
 
-	WriteOneHoldingRegister(HOLDREGISTER_SPREAD_FIXEDDISTANCE, 2, systemunion.systemparameter.SpredFixedDistance); // 固定间距分布测量的间距
-	WriteOneHoldingRegister(HOLDREGISTER_SPREAD_FIXEDTOP, 2, systemunion.systemparameter.SpredFixTop);			   // 固定间距分布测量最高点距液面间距
-	WriteOneHoldingRegister(HOLDREGISTER_SPREAD_FIXEDBASE, 2, systemunion.systemparameter.SpredFixBase);		   // 固定间距分布测量最低点距罐底间距
-	WriteOneHoldingRegister(HOLDREGISTER_THRESHOLD_A, 1, systemunion.systemparameter.Oil_Add_A);				   // 密度分层加测密度点A
-	WriteOneHoldingRegister(HOLDREGISTER_THRESHOLD_B, 1, systemunion.systemparameter.Oil_Add_B);				   // 密度分层加测密度点B
-	WriteOneHoldingRegister(HOLDREGISTER_THRESHOLD_STANDARD, 1, systemunion.systemparameter.Oil_Standard);		   // 国标密度测量阈值
-	WriteOneHoldingRegister(HOLDREGISTER_ZEROCIRCLE, 1, systemunion.systemparameter.ZeroCircle);				   // 预设零点编码圈数
-	WriteOneHoldingRegister(HOLDREGISTER_ZEROANGLE, 1, systemunion.systemparameter.ZeroAngle);					   // 预设零点编码角度
+	WriteOneHoldingRegister(HOLDREGISTER_SPREAD_FIXEDDISTANCE, 2, g_deviceParams.spreadMeasurementDistance); // 固定间距分布测量的间距
+	WriteOneHoldingRegister(HOLDREGISTER_SPREAD_FIXEDTOP, 2, g_deviceParams.spreadTopLimit);			   // 固定间距分布测量最高点距液面间距
+	WriteOneHoldingRegister(HOLDREGISTER_SPREAD_FIXEDBASE, 2, g_deviceParams.spreadBottomLimit);		   // 固定间距分布测量最低点距罐底间距
+	WriteOneHoldingRegister(HOLDREGISTER_THRESHOLD_A, 1,0);				   // 密度分层加测密度点A
+	WriteOneHoldingRegister(HOLDREGISTER_THRESHOLD_B, 1,0);				   // 密度分层加测密度点B
+	WriteOneHoldingRegister(HOLDREGISTER_THRESHOLD_STANDARD, 1,0);		   // 国标密度测量阈值
+	WriteOneHoldingRegister(HOLDREGISTER_ZEROCIRCLE, 1, 0);				   // 预设零点编码圈数
+	WriteOneHoldingRegister(HOLDREGISTER_ZEROANGLE, 1, 0);					   // 预设零点编码角度
 	// WriteOneHoldingRegister(HOLDREGISTER_GIRTH_USELESS,1,systemunion.systemparameter.Girth);				//导论周长
 
-	WriteOneHoldingRegister(HOLDREGISTER_WATER_IS_REAL_HIGH, 1, systemunion.systemparameter.water_is_realhigh);
-	WriteOneHoldingRegister(HOLDREGISTER_REAL_WATER_LEVEL_CORRECT, 1, systemunion.systemparameter.real_water_level_correct);
-	WriteOneHoldingRegister(HOLDREGISTER_IF_REFRESH_TANKHIGH, 1, systemunion.systemparameter.if_refresh_tankhigh);
-	WriteOneHoldingRegister(HOLDREGISTER_REAL_TANKHIGH_MAX_DIFF, 1, systemunion.systemparameter.real_tankhigh_max_diff);
-	WriteOneHoldingRegister(HOLDREGISTER_LEVEL_MEASURE_METHOD, 1, systemunion.systemparameter.level_masure_method);
-	WriteOneHoldingRegister(HOLDREGISTER_TEMPERATURE_MODE, 1, systemunion.systemparameter.synthetic_temperature_mode);
-	WriteOneHoldingRegister(HOLDREGISTER_TEMPERATURE_MODE_D, 1, systemunion.systemparameter.synthetic_temperature_mode_density);
+	WriteOneHoldingRegister(HOLDREGISTER_WATER_IS_REAL_HIGH, 1, 0);
+	WriteOneHoldingRegister(HOLDREGISTER_REAL_WATER_LEVEL_CORRECT, 1, g_deviceParams.waterLevelCorrection);
+	WriteOneHoldingRegister(HOLDREGISTER_IF_REFRESH_TANKHIGH, 1, 0);
+	WriteOneHoldingRegister(HOLDREGISTER_REAL_TANKHIGH_MAX_DIFF, 1, 0);
+	WriteOneHoldingRegister(HOLDREGISTER_LEVEL_MEASURE_METHOD, 1, g_deviceParams.liquidLevelMeasurementMethod);
+	WriteOneHoldingRegister(HOLDREGISTER_TEMPERATURE_MODE, 1, 0);
+	WriteOneHoldingRegister(HOLDREGISTER_TEMPERATURE_MODE_D, 1, 0);
 
-	WriteOneHoldingRegister(HOLDREGISTER_REDUCTIONRATIO, 1, systemunion.systemparameter.ReductionRatio);	  // 减速比
-	WriteOneHoldingRegister(HOLDREGISTER_TYPEOFSENSOR, 1, systemunion.systemparameter.TypeOfSensor);		  // 传感器类型
-	WriteOneHoldingRegister(HOLDREGISTER_LENGTHOFSENSOR, 1, systemunion.systemparameter.LengthOfSensor);	  // 传感器长度
-	WriteOneHoldingRegister(HOLDREGISTER_FADEZERO, 2, systemunion.systemparameter.FadeZero);				  // 盲区
-	WriteOneHoldingRegister(HOLDREGISTER_GIRTH_YITI, 2, systemunion.systemparameter.Girth);					  // 一体机导论周长
-	WriteOneHoldingRegister(HOLDREGISTER_LEVELTOWATER_HIGH, 1, systemunion.systemparameter.Dis_Leveltowater); // 液位传感器到水位传感器距离
-	WriteOneHoldingRegister(HOLDREGISTER_MAXDOWN_DIS, 1, systemunion.systemparameter.Dis_Maxdown);			  // 罐底/水位测量时的最大下行值
+	WriteOneHoldingRegister(HOLDREGISTER_REDUCTIONRATIO, 1,23);	  // 减速比
+	WriteOneHoldingRegister(HOLDREGISTER_TYPEOFSENSOR, 1, 0);		  // 传感器类型
+	WriteOneHoldingRegister(HOLDREGISTER_LENGTHOFSENSOR, 1, 0);	  // 传感器长度
+	WriteOneHoldingRegister(HOLDREGISTER_FADEZERO, 2, g_deviceParams.blindZone);				  // 盲区
+	WriteOneHoldingRegister(HOLDREGISTER_GIRTH_YITI, 2, g_deviceParams.encoder_wheel_circumference_mm);		 // 一体机导论周长
+	WriteOneHoldingRegister(HOLDREGISTER_LEVELTOWATER_HIGH, 1, 0); // 液位传感器到水位传感器距离
+	WriteOneHoldingRegister(HOLDREGISTER_MAXDOWN_DIS, 1, g_deviceParams.maxDownDistance);			  // 罐底/水位测量时的最大下行值
 
-	WriteOneHoldingRegister(HOLDREGISTER_TYPEOFEINDUCTION, 1, systemunion.systemparameter.TypeOfEinduction);			 // 霍尔器件类型
-	WriteOneHoldingRegister(HOLDREGISTER_NUMOFEINDUCTION, 1, systemunion.systemparameter.NumOfEinduction);				 // 霍尔器件数量
-	WriteOneHoldingRegister(HOLDREGISTER_USEFULNUMOFEINDUCTION, 1, systemunion.systemparameter.UsefulNumOfEinduction);	 // 霍尔器件作用数量
-	WriteOneHoldingRegister(HOLDREGISTER_DIATANCEFROMEINDUCTION, 1, systemunion.systemparameter.DiatanceFromEinduction); // 脱离配重步进数
+	WriteOneHoldingRegister(HOLDREGISTER_TYPEOFEINDUCTION, 1, 0);			 // 霍尔器件类型
+	WriteOneHoldingRegister(HOLDREGISTER_NUMOFEINDUCTION, 1, 0);				 // 霍尔器件数量
+	WriteOneHoldingRegister(HOLDREGISTER_USEFULNUMOFEINDUCTION, 1, 0);	 // 霍尔器件作用数量
+	WriteOneHoldingRegister(HOLDREGISTER_DIATANCEFROMEINDUCTION, 1, 0); // 脱离配重步进数
+	WriteOneHoldingRegister(HOLDREGISTER_CORRECTIONFACTOR, 1,0); // 脱离配重步进数
+	WriteOneHoldingRegister(HOLDREGISTER_THRESHOLDOFFREQUENCE, 2, 0);	 // 频率阈值
+	WriteOneHoldingRegister(HOLDREGISTER_RANGE_FREQUENCE, 1, 0); // 频率阈值范围
+	WriteOneHoldingRegister(HOLDREGISTER_RANGE_POSITION, 1, 0);			 // 位置范围
+	WriteOneHoldingRegister(HOLDREGISTER_RANGE_STABLEFREQUENCE, 1, 0);	  // 频率稳定范围
+	WriteOneHoldingRegister(HOLDREGISTER_RANGE_STABLETEMPERATURE, 1, 0); // 温度稳定范围
+	WriteOneHoldingRegister(HOLDREGISTER_NUMOFSTABLEHITS, 1, 0);			  // 测量时数据稳定数
+	WriteOneHoldingRegister(HOLDREGISTER_NUMOFHITS, 1, 0);						  // 测量时总采样数
 
-	WriteOneHoldingRegister(HOLDREGISTER_CORRECTIONFACTOR, 1, systemunion.systemparameter.CorrectionFactor); // 脱离配重步进数
+	WriteOneHoldingRegister(HOLDREGISTER_SYNTHETIC_BOTTOM, 1, g_deviceParams.requireBottomMeasurement);		// 综合指令是否需要测罐底默认为0不测V1.105
+	WriteOneHoldingRegister(HOLDREGISTER_SYNTHETIC_WATER, 1, g_deviceParams.requireWaterMeasurement);			// 综合指令是否需要测水位默认为0不测V1.105
+	WriteOneHoldingRegister(HOLDREGISTER_SYNTHETIC_SINGLEPOINT, 1, g_deviceParams.requireSinglePointDensity); // 综合指令是否需要测单点密度
 
-	WriteOneHoldingRegister(HOLDREGISTER_THRESHOLDOFFREQUENCE, 2, systemunion.systemparameter.FrequenceThreshold);	 // 频率阈值
-	WriteOneHoldingRegister(HOLDREGISTER_RANGE_FREQUENCE, 1, systemunion.systemparameter.RangeOfFrequenceThreshold); // 频率阈值范围
-	WriteOneHoldingRegister(HOLDREGISTER_RANGE_POSITION, 1, systemunion.systemparameter.RangeOfPosition);			 // 位置范围
+	WriteOneHoldingRegister(HOLDREGISTER_NUMOFDECIMALS, 1, 0);		// 温度的有效点数默认是2位V1.105
+	WriteOneHoldingRegister(HOLDREGISTER_TEMCORRECTCALUE, 1, g_deviceParams.temperatureCorrection);		// 温度的修正系数 温度+(修正-1000)V1.105
+	WriteOneHoldingRegister(HOLDREGISTER_DENSITYCORRECTCALUE, 1, g_deviceParams.densityCorrection);		// 密度的修正系数 密度+(修正-10000)V1.105
+	WriteOneHoldingRegister(HOLDREGISTER_DEVICENUM, 2, 0);						// 传感器系数V1.105
+	WriteOneHoldingRegister(HOLDREGISTER_OIL_MEASUR_POSITION, 2, 0); // 综合指令发油口密度测量位置
 
-	WriteOneHoldingRegister(HOLDREGISTER_RANGE_STABLEFREQUENCE, 1, systemunion.systemparameter.RangeOfFrequence);	  // 频率稳定范围
-	WriteOneHoldingRegister(HOLDREGISTER_RANGE_STABLETEMPERATURE, 1, systemunion.systemparameter.RangeOfTemperature); // 温度稳定范围
-	WriteOneHoldingRegister(HOLDREGISTER_NUMOFSTABLEHITS, 1, systemunion.systemparameter.NumOfStableHits);			  // 测量时数据稳定数
-	WriteOneHoldingRegister(HOLDREGISTER_NUMOFHITS, 1, systemunion.systemparameter.NumOfHits);						  // 测量时总采样数
+	WriteOneHoldingRegister(HOLDREGISTER_WATER_ZERO_MIN_DISTANCE, 1, 0); // 水位与零点最小距离
+	WriteOneHoldingRegister(HOLDREGISTER_IF_FINDOIL_POWERON, 1, 0);		  // 上电是否自动找液位
+	WriteOneHoldingRegister(HOLDREGISTER_DENSITY_TIME, 1, 0);				  // 密度测量前提出油面时间
 
-	WriteOneHoldingRegister(HOLDREGISTER_SYNTHETIC_BOTTOM, 1, systemunion.systemparameter.Synthetic_Need_FindBottom);		// 综合指令是否需要测罐底默认为0不测V1.105
-	WriteOneHoldingRegister(HOLDREGISTER_SYNTHETIC_WATER, 1, systemunion.systemparameter.Synthetic_Need_FindWater);			// 综合指令是否需要测水位默认为0不测V1.105
-	WriteOneHoldingRegister(HOLDREGISTER_SYNTHETIC_SINGLEPOINT, 1, systemunion.systemparameter.Synthetic_Need_SinglePoint); // 综合指令是否需要测水位默认为0不测V1.105
-
-	WriteOneHoldingRegister(HOLDREGISTER_NUMOFDECIMALS, 1, systemunion.systemparameter.Temperature_Decimals);		// 温度的有效点数默认是2位V1.105
-	WriteOneHoldingRegister(HOLDREGISTER_TEMCORRECTCALUE, 1, systemunion.systemparameter.Temperature_Correct);		// 温度的修正系数 温度+(修正-1000)V1.105
-	WriteOneHoldingRegister(HOLDREGISTER_DENSITYCORRECTCALUE, 1, systemunion.systemparameter.Density_Correct);		// 密度的修正系数 密度+(修正-10000)V1.105
-	WriteOneHoldingRegister(HOLDREGISTER_DEVICENUM, 2, systemunion.systemparameter.DeviceNum);						// 传感器系数V1.105
-	WriteOneHoldingRegister(HOLDREGISTER_OIL_MEASUR_POSITION, 2, systemunion.systemparameter.Oil_Measure_Position); // 综合指令发油口密度测量位置
-
-	WriteOneHoldingRegister(HOLDREGISTER_WATER_ZERO_MIN_DISTANCE, 1, systemunion.systemparameter.Water_zero_min_disance); // 水位与零点最小距离
-	WriteOneHoldingRegister(HOLDREGISTER_IF_FINDOIL_POWERON, 1, systemunion.systemparameter.If_findoil_poweron);		  // 上电是否自动找液位
-	WriteOneHoldingRegister(HOLDREGISTER_DENSITY_TIME, 1, systemunion.systemparameter.Density_air_time);				  // 密度测量前提出油面时间
-
-	WriteOneHoldingRegister(HOLDREGISTER_SOFTOFVERSION, 2, systemunion.systemparameter.SoftOfversion_H);	 // 程序版本
-	WriteOneHoldingRegister(HOLDREGISTER_SOFTOFVERSION + 2, 2, systemunion.systemparameter.SoftOfversion_L); // 程序版本
-	WriteOneHoldingRegister(HOLDREGISTER_K0, 2, systemunion.systemparameter.K0_H);							 // K0_H
-	WriteOneHoldingRegister(HOLDREGISTER_K0 + 2, 2, systemunion.systemparameter.K0_L);						 // K0_L
-	WriteOneHoldingRegister(HOLDREGISTER_K1, 2, systemunion.systemparameter.K1_H);							 // K1_H
-	WriteOneHoldingRegister(HOLDREGISTER_K1 + 2, 2, systemunion.systemparameter.K1_L);						 // K1_L
-	WriteOneHoldingRegister(HOLDREGISTER_K2, 2, systemunion.systemparameter.K2_H);							 // K2_H
-	WriteOneHoldingRegister(HOLDREGISTER_K2 + 2, 2, systemunion.systemparameter.K2_L);						 // K2_L
-	WriteOneHoldingRegister(HOLDREGISTER_K3, 2, systemunion.systemparameter.K3_H);							 // K3_H
-	WriteOneHoldingRegister(HOLDREGISTER_K3 + 2, 2, systemunion.systemparameter.K3_L);						 // K3_L
-	WriteOneHoldingRegister(HOLDREGISTER_K18, 2, systemunion.systemparameter.K18_H);						 // K18_H
-	WriteOneHoldingRegister(HOLDREGISTER_K18 + 2, 2, systemunion.systemparameter.K18_L);					 // K18_L
-	WriteOneHoldingRegister(HOLDREGISTER_K19, 2, systemunion.systemparameter.K19_H);						 // K19_H
-	WriteOneHoldingRegister(HOLDREGISTER_K19 + 2, 2, systemunion.systemparameter.K19_L);					 // K19_L
+	WriteOneHoldingRegister(HOLDREGISTER_SOFTOFVERSION, 2,0);	 // 程序版本
+	WriteOneHoldingRegister(HOLDREGISTER_SOFTOFVERSION + 2, 2,0); // 程序版本
+	WriteOneHoldingRegister(HOLDREGISTER_K0, 2,0);							 // K0_H
+	WriteOneHoldingRegister(HOLDREGISTER_K0 + 2, 2, 0);						 // K0_L
+	WriteOneHoldingRegister(HOLDREGISTER_K1, 2,0);							 // K1_H
+	WriteOneHoldingRegister(HOLDREGISTER_K1 + 2, 2, 0);						 // K1_L
+	WriteOneHoldingRegister(HOLDREGISTER_K2, 2,0);							 // K2_H
+	WriteOneHoldingRegister(HOLDREGISTER_K2 + 2, 2, 0);						 // K2_L
+	WriteOneHoldingRegister(HOLDREGISTER_K3, 2, 0);							 // K3_H
+	WriteOneHoldingRegister(HOLDREGISTER_K3 + 2, 2, 0);						 // K3_L
+	WriteOneHoldingRegister(HOLDREGISTER_K18, 2, 0);						 // K18_H
+	WriteOneHoldingRegister(HOLDREGISTER_K18 + 2, 2, 0);					 // K18_L
+	WriteOneHoldingRegister(HOLDREGISTER_K19, 2, 0);						 // K19_H
+	WriteOneHoldingRegister(HOLDREGISTER_K19 + 2, 2, 0);					 // K19_L
 }
 
 /**********************************************************************************************
@@ -217,7 +156,7 @@ void SystemParameterSet(void)
 				0:	成功!
 				-1:	失败!
 **********************************************************************************************/
-int SystemParameterSaveMul(int startadd, int reamount)
+int SystemParameterSave(int startadd, int reamount)
 {
 	u32 temp;
 

@@ -1,6 +1,5 @@
 
 #include "DSM_communication.h"
-
 #include <stdlib.h>
 #include <string.h>
 #include "spi.h"
@@ -11,7 +10,7 @@
 #include "DSM_SlaveModbus_modbus2.h"
 #include "my_crc.h"
 
-
+#define DEBUG_COMM 1
 /**********************************************************************************************
 **函数名称：	CommunicationInit()
 **函数功能：	与上位机通信初始化:串口4初始化；DMA初始化；定时器2初始化；地址初始化并读取当前地址
@@ -20,7 +19,7 @@
 **********************************************************************************************/
 int DSM_CommunicationInit(void)
 {
-	int i;
+	int LocalAddress = 1;
 //	uart4_init(36, 4800, 8, 2, 'N', 20);
 //	MYDMA2CH5_Config((u32)&UART4->DR); // 初始化DMA通道
 //	Timer2Init();					   // 初始化定时器2
@@ -28,7 +27,7 @@ int DSM_CommunicationInit(void)
 //	delay_ms(10);
 //	LocalAddress = GetAddress();
 //	SetSlaveaddress(LocalAddress);
-
+//用于权限设置
 	MaxNum_Coil = ENDADDRESS1_COM;					   // 线圈工作模式有效值
 	MaxNum_HoldingRegister = ENDADDRESS1_HOLDREGISTER; // 保持寄存器工作模式有效值
 	MaxNum_InputRegister = ENDADDRESS2_INPUTREGISTER;  // 输入寄存器工作模式有效值
@@ -51,7 +50,6 @@ void DSM_CommunicationProcess(unsigned char *rcvbuff, int rcvcount)
 #ifdef DEBUG_COMM
 	int i;
 #endif
-
 	int functioncode, ret;
 
 	if (rcvcount <= 3)
@@ -100,7 +98,6 @@ void DSM_CommunicationProcess(unsigned char *rcvbuff, int rcvcount)
 
 		case FUNCTIONCODE_READ_INPUTREGISTER:
 		{
-			densitytoP1(); // 压力换算 meng
 			Input_Write(); // 更新数据,每一个输入寄存器的参数必须写入，否则读出来会不变；
 			sendcount = Response04(rcvbuff, sendbuff);
 			break;
@@ -110,8 +107,8 @@ void DSM_CommunicationProcess(unsigned char *rcvbuff, int rcvcount)
 		{
 			sendcount = Response05(rcvbuff, sendbuff);
 			ret = ProcessWriteCoil();
-
-			if (ret == RETURN_SLAVEFAIL)
+			// 根据处理结果返回不同的异常码，这里需要重新梳理
+			if (ret == RETURN_SLAVEFAIL)//从设备故障
 			{
 				memset(sendbuff, 0, 128);
 				sendcount = ResponseException(functioncode, EXCEPTIONCODE_ERRORDEVICEFAIL, sendbuff);
@@ -136,8 +133,6 @@ void DSM_CommunicationProcess(unsigned char *rcvbuff, int rcvcount)
 				memset(sendbuff, 0, 128);
 				sendcount = ResponseException(functioncode, EXCEPTIONCODE_ERRORDEVIVEBUSY, sendbuff);
 			}
-
-			ResetCoil();
 			break;
 		}
 
@@ -153,9 +148,7 @@ void DSM_CommunicationProcess(unsigned char *rcvbuff, int rcvcount)
 		}
 		}
 	}
-//  发送响应
-//	uart4_dma();
-//	MYDMA2CH5_Enable((u32)sendbuff, sendcount);
+	HAL_UART_Transmit_DMA(&huart3, sendbuff, sendcount);//返回响应包
 	return;
 }
 
