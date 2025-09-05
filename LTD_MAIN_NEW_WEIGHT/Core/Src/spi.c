@@ -101,7 +101,7 @@ void MX_SPI4_Init(void)
   /* USER CODE BEGIN SPI4_Init 0 */
 
   /* USER CODE END SPI4_Init 0 */
-
+ b
   /* USER CODE BEGIN SPI4_Init 1 */
 
   /* USER CODE END SPI4_Init 1 */

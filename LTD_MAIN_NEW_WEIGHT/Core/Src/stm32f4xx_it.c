@@ -336,7 +336,7 @@ void USART2_IRQHandler(void)
 			HAL_UART_DMAStop(&huart2);  // 停止DMA接收
 			temp = __HAL_DMA_GET_COUNTER(&hdma_usart2_rx);  // 获取DMA中未传输的数据个数
 			USART2_RX_LEN = USART2_RX_BUF_SIZE - temp;  // 计算已经接收到的数据个数
-//			HostCommuProcess(USART2_RX_BUF, USART2_RX_LEN);  // 处理接收到的数据
+			HostCommuProcess(USART2_RX_BUF, USART2_RX_LEN);  // 处理接收到的数据
 			HAL_UART_Receive_DMA(&huart2, USART2_RX_BUF, USART2_RX_BUF_SIZE); // 重新启用DMA接收
 		}
 	}
@@ -409,7 +409,7 @@ void UART5_IRQHandler(void)
 			HAL_UART_DMAStop(&huart5);  // 停止DMA接收
 			temp = __HAL_DMA_GET_COUNTER(&hdma_uart5_rx);  // 获取DMA中未传输的数据个数
 			UART5_RX_LEN = UART5_RX_BUF_SIZE - temp;  // 计算已经接收到的数据个数
-//			HostCommuProcess(UART5_RX_BUF, UART5_RX_LEN);  // 处理接收到的数据
+			HostCommuProcess(UART5_RX_BUF, UART5_RX_LEN);  // 处理接收到的数据
 			HAL_UART_Receive_DMA(&huart5, UART5_RX_BUF, UART5_RX_BUF_SIZE); // 重新启用DMA接收
 		}
 	}
