@@ -4,4 +4,5 @@
 
 int  DSM_CommunicationInit(void);
 void DSM_CommunicationProcess(unsigned char* rcvbuff, int rcvcount);
+void SendPacketToHost(uint8_t*arr,uint16_t len);
 #endif
