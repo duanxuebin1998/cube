@@ -25,6 +25,7 @@
 #include "exit.h"
 #include "display_tankopera.h"
 #include "communicate.h"
+#include "DSM_communication.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -441,7 +442,7 @@ void USART3_IRQHandler(void)
   /* USER CODE END USART3_IRQn 0 */
   HAL_UART_IRQHandler(&huart3);
   /* USER CODE BEGIN USART3_IRQn 1 */
-
+//  printf("USART3 RECEIVE %d bytes:", UART3_RX_LEN);
 	if (USART3 == huart3.Instance) {
 		tmp_flag = __HAL_UART_GET_FLAG(&huart3, UART_FLAG_IDLE);  // 获取IDLE标志位
 
@@ -450,8 +451,7 @@ void USART3_IRQHandler(void)
 			HAL_UART_DMAStop(&huart3);  // 停止DMA接收
 			temp = __HAL_DMA_GET_COUNTER(&hdma_usart3_rx);  // 获取DMA中未传输的数据个数
 			UART3_RX_LEN = UART3_RX_BUF_SIZE - temp;  // 计算已经接收到的数据个数
-			HostCommuProcess(UART3_RX_BUF, UART3_RX_LEN);  // 处理接收到的数据
-			HAL_UART_Receive_DMA(&huart3, UART3_RX_BUF, UART3_RX_BUF_SIZE); // 重新启用DMA接收
+			uart3_rx_ready = 1; // 标记接收完成
 		}
 	}
   /* USER CODE END USART3_IRQn 1 */

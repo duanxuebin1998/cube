@@ -212,7 +212,6 @@ void read_measurement_result_from_inputRegisters(uint16_t *regs)
     /* ==== DeviceStatus ==== */
     g_measurement.device_status.work_mode      = read_u32_from_regs(regs, REG_DEVICE_STATUS_WORK_MODE);
     g_measurement.device_status.device_state   = (DeviceState)read_u32_from_regs(regs, REG_DEVICE_STATUS_DEVICE_STATE);
-    printf("Device State: %d\n", g_measurement.device_status.device_state);
     g_measurement.device_status.error_code     = read_u32_from_regs(regs, REG_DEVICE_STATUS_ERROR_CODE);
     g_measurement.device_status.current_command = (CommandType)read_u32_from_regs(regs, REG_DEVICE_STATUS_CURRENT_COMMAND);
     g_measurement.device_status.zero_point_status = read_u8_from_regs(regs, REG_DEVICE_STATUS_ZERO_POINT_STATUS);

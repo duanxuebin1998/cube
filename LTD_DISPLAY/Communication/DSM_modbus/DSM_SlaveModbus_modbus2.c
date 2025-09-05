@@ -13,8 +13,7 @@
 #include <string.h>
 
 extern struct MEASURE_DATA Measure_Data;
-int SlaveAddress = 0xF8;							// 下位机地址
-int CoilArray[COILAMOUNT] = {0};					// 线圈数组
+int SlaveAddress = 0x01;							// 下位机地址
 int HoldingRegisterArray[HOLDREGISTERAMOUNT] = {0}; // 保持寄存器数组
 int InputRegisterArray[INPUTREGISTERAMOUNT] = {0};	// 输入寄存器数组
 int MaxNum_Coil;									// 线圈最大有效值
@@ -82,7 +81,6 @@ bool GetFunctioncode(unsigned char *revframe, int *funcode)
 		return true;
 	}
 }
-
 
 
 /******************************************************
@@ -487,61 +485,60 @@ bool WriteHoldingRegister(unsigned int startaddress, unsigned int registeramount
 
 	return true;
 }
-/******************************************************
-函数功能： 写线圈
-
-函 数 名： PresetCoil
-参    数： unsigned int startaddress   起始地址
-		   unsigned int coilamount     数量
-		   unsigned int *coilvalue     线圈值 [0x0000 0xff00]
-
-返 回 值：
-		   true   成功
-		   false  失败,返回参数无效
-******************************************************/
-bool PresetCoil(unsigned int startaddress, int coilvalue)
-{
-	int coilarrayaddress;
-	int tempvalue;
-	int i;
-
-	if (startaddress < 0x0100)
-	{
-		coilarrayaddress = startaddress - STARTADDRESS1_COM;
-	}
-	else if (startaddress < 0x0200)
-	{
-		coilarrayaddress = startaddress - STARTADDRESS2_COM + (ENDADDRESS1_COM - STARTADDRESS1_COM + 1);
-	}
-	else
-	{
-		coilarrayaddress = startaddress - STARTADDRESS3_COM + (ENDADDRESS2_COM - STARTADDRESS2_COM + 1) + (ENDADDRESS1_COM - STARTADDRESS1_COM + 1);
-	}
-
-	if (coilvalue == 0x0000)
-	{
-		tempvalue = 0;
-		CoilArray[coilarrayaddress] = tempvalue;
-	}
-	else if (coilvalue == 0xff00)
-	{
-		tempvalue = 1;
-
-		for (i = 0; i < coilarrayaddress; i++)
-		{
-			CoilArray[i] = 0;
-		}
-
-		CoilArray[coilarrayaddress] = tempvalue;
-
-		for (i = coilarrayaddress + 1; i < COILAMOUNT; i++)
-		{
-			CoilArray[i] = 0;
-		}
-	}
-
-	return true;
-}
+///******************************************************
+//函数功能： 写线圈
+//
+//函 数 名： PresetCoil
+//参    数： unsigned int startaddress   起始地址
+//		   unsigned int coilamount     数量
+//		   unsigned int *coilvalue     线圈值 [0x0000 0xff00]
+//
+//返 回 值：
+//		   true   成功
+//		   false  失败,返回参数无效
+//******************************************************/
+//bool PresetCoil(unsigned int startaddress, int coilvalue)
+//{
+//	int coilarrayaddress;
+//	int tempvalue;
+//	int i;
+//
+//	if (startaddress < 0x0100)
+//	{
+//		coilarrayaddress = startaddress - STARTADDRESS1_COM;
+//	}
+//	else if (startaddress < 0x0200)
+//	{
+//		coilarrayaddress = startaddress - STARTADDRESS2_COM + (ENDADDRESS1_COM - STARTADDRESS1_COM + 1);
+//	}
+//	else
+//	{
+//		coilarrayaddress = startaddress - STARTADDRESS3_COM + (ENDADDRESS2_COM - STARTADDRESS2_COM + 1) + (ENDADDRESS1_COM - STARTADDRESS1_COM + 1);
+//	}
+//
+//	if (coilvalue == 0x0000)
+//	{
+//		tempvalue = 0;
+//		CoilArray[coilarrayaddress] = tempvalue;
+//	}
+//	else if (coilvalue == 0xff00)
+//	{
+//		tempvalue = 1;
+//
+//		for (i = 0; i < coilarrayaddress; i++)
+//		{
+//			CoilArray[i] = 0;
+//		}
+//
+//		CoilArray[coilarrayaddress] = tempvalue;
+//
+//		for (i = coilarrayaddress + 1; i < COILAMOUNT; i++)
+//		{
+//			CoilArray[i] = 0;
+//		}
+//	}
+//	return true;
+//}
 /******************************************************
 函数功能： 下位机响应0x03请求
 
@@ -631,7 +628,7 @@ int Response03(unsigned char *revframe, unsigned char *sendframe)
 		framelen = 3 + registeramount * 2;
 	}
 
-	crc = CRC16(sendframe, framelen);
+	crc = CRC16_Calculate(sendframe, framelen);
 	sendframe[framelen] = crc & 0xff;
 	sendframe[framelen + 1] = (crc >> 8) & 0xff;
 
@@ -722,7 +719,7 @@ int Response04(unsigned char *revframe, unsigned char *sendframe)
 		framelen = 3 + registeramount * 2;
 	}
 
-	crc = CRC16(sendframe, framelen);
+	crc = CRC16_Calculate(sendframe, framelen);
 	sendframe[framelen] = crc & 0xff;
 	sendframe[framelen + 1] = (crc >> 8) & 0xff;
 
@@ -766,7 +763,8 @@ int Response05(unsigned char *revframe, unsigned char *sendframe)
 	else
 	{
 		// 写线圈
-		PresetCoil(startaddress, coilvalue);
+//		PresetCoil(startaddress, coilvalue);
+		//改成获取功能码
 		sendframe[0] = SlaveAddress;
 		sendframe[1] = presetsinglecoilfuncode;
 		sendframe[2] = revframe[2];
@@ -776,7 +774,7 @@ int Response05(unsigned char *revframe, unsigned char *sendframe)
 		framelen = 6;
 	}
 
-	crc = CRC16(sendframe, framelen);
+	crc = CRC16_Calculate(sendframe, framelen);
 	sendframe[framelen] = crc & 0xff;
 	sendframe[framelen + 1] = (crc >> 8) & 0xff;
 
@@ -877,7 +875,7 @@ int Response16(unsigned char *revframe, unsigned char *sendframe)
 	{
 		// 写保持寄存器
 		WriteHoldingRegister(startaddress, registeramount, TempBuffer);
-		ret = SystemParameterSaveMul(startaddress, registeramount);
+		ret = SystemParameterSave(startaddress, registeramount);
 
 		if (ret == PARAMETER_ERROR) // 设置的数据错误
 		{
@@ -905,7 +903,7 @@ int Response16(unsigned char *revframe, unsigned char *sendframe)
 		}
 	}
 
-	crc = CRC16(sendframe, framelen);
+	crc = CRC16_Calculate(sendframe, framelen);
 	sendframe[framelen] = crc & 0xff;
 	sendframe[framelen + 1] = (crc >> 8) & 0xff;
 	return (framelen + 2);
@@ -931,7 +929,7 @@ int ResponseException(unsigned int functioncode, unsigned int exception, unsigne
 	sendframe[0] = SlaveAddress;
 	sendframe[1] = functioncode + 0x80;
 	sendframe[2] = exception;
-	crc = CRC16((unsigned char *)sendframe, framelen);
+	crc = CRC16_Calculate((unsigned char *)sendframe, framelen);
 	sendframe[framelen] = crc & 0xff;
 	sendframe[framelen + 1] = (crc >> 8) & 0xff;
 

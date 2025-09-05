@@ -17,10 +17,9 @@
 
 #define HOLDREGISTERAMOUNT 200    //
 #define INPUTREGISTERAMOUNT 1700 //
-#define COILAMOUNT  22 //
+
 
 extern int SlaveAddress;
-extern int CoilArray[COILAMOUNT];            //线圈数组
 extern int HoldingRegisterArray[HOLDREGISTERAMOUNT]; //保持寄存器数组
 extern int InputRegisterArray[INPUTREGISTERAMOUNT];   //输入寄存器数组
 
@@ -40,7 +39,6 @@ int Response16(unsigned char *revframe, unsigned char* sendframe);
 bool ReadInputRegister(unsigned int startaddress, unsigned int registeramount, int *registervalue);
 bool ReadHoldingRegister(unsigned int startaddress, unsigned int registeramount, int *registervalue);
 bool WriteHoldingRegister(unsigned int startaddress, unsigned int registeramount, int *registervalue);
-bool PresetCoil(unsigned int startaddress, int coilvalue);	//默认 只支持0x05
 bool WriteInputRegister(unsigned int startaddress, unsigned int registeramount, int *registervalue);
 
 bool WriteOneInputRegister(unsigned int startaddress, unsigned int registeramount, int registervalue);

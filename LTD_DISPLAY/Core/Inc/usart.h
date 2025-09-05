@@ -49,6 +49,7 @@ extern volatile uint8_t UART2_RX_LEN;              // 接收一帧数据的长�
 extern uint8_t UART2_RX_BUF[UART2_RX_BUF_SIZE];   // 接收数据缓冲区
  /** USART3 485接收缓冲区 */
 #define UART3_RX_BUF_SIZE 512
+extern volatile uint8_t uart3_rx_ready ;
 extern volatile uint8_t UART3_RX_LEN;              // 接收一帧数据的长度
 extern uint8_t UART3_RX_BUF[UART3_RX_BUF_SIZE];   // 接收数据缓冲区
 
