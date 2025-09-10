@@ -114,7 +114,7 @@ void process_command(uint8_t *command) {
 			printf("start down\n");
 			while (abs(g_encoder_count) < 20000) {
 				printf("{encoder}%d\t{weight}%d\r\n", (int) g_encoder_count, g_weight);
-				DSMSendcommand3times(DSM_POWER, strlen(DSM_POWER));
+//				DSMSendcommand3times(DSM_POWER, strlen(DSM_POWER));
 				HAL_Delay(50);
 			}
 			printf("down over!\n");
@@ -124,7 +124,7 @@ void process_command(uint8_t *command) {
 			HAL_Delay(1000);
 			while (abs(g_encoder_count) >1000) {
 				printf("{encoder}%d\t{weight}%d\r\n", (int) g_encoder_count, g_weight);
-				DSMSendcommand3times(DSM_POWER, strlen(DSM_POWER));
+//				DSMSendcommand3times(DSM_POWER, strlen(DSM_POWER));
 				HAL_Delay(50);
 			}
 			motorQuickStop();

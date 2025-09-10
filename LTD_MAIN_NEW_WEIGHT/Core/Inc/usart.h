@@ -53,7 +53,9 @@ extern uint8_t USART1_RX_BUF[USART1_RX_BUF_SIZE];   // 接收数据缓冲区
 
 #define USART2_RX_BUF_SIZE 512
 extern volatile uint8_t USART2_RX_LEN;              // 接收一帧数据的长度
+extern volatile uint8_t USART2_TX_LEN;              // 发送一帧数据的长度
 extern uint8_t USART2_RX_BUF[USART2_RX_BUF_SIZE];   // 接收数据缓冲区
+extern uint8_t USART2_TX_BUF[USART2_RX_BUF_SIZE];   // 发送数据缓冲区
 
 #define USART4_RX_BUF_SIZE 512
 extern volatile uint8_t USART4_RX_LEN;              // 接收一帧数据的长度

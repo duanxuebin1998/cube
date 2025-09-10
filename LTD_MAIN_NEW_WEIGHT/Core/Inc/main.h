@@ -33,6 +33,7 @@ extern "C" {
 /* USER CODE BEGIN Includes */
 #include "system_parameter.h"
 #include "usart.h"
+#include <stdio.h>
 /* USER CODE END Includes */
 
 /* Exported types ------------------------------------------------------------*/
@@ -116,10 +117,10 @@ void Error_Handler(void);
 #define CPU2_RXD5_GPIO_Port GPIOD
 #define RELAY4_NO_Pin GPIO_PIN_3
 #define RELAY4_NO_GPIO_Port GPIOD
-#define RXD2_485_Pin GPIO_PIN_5
-#define RXD2_485_GPIO_Port GPIOD
-#define TXD2_485_Pin GPIO_PIN_6
-#define TXD2_485_GPIO_Port GPIOD
+#define HART_RXD2_Pin GPIO_PIN_5
+#define HART_RXD2_GPIO_Port GPIOD
+#define HART_TXD2_Pin GPIO_PIN_6
+#define HART_TXD2_GPIO_Port GPIOD
 #define RELAY1_Pin GPIO_PIN_9
 #define RELAY1_GPIO_Port GPIOG
 #define RELAY2_Pin GPIO_PIN_10
@@ -128,20 +129,25 @@ void Error_Handler(void);
 #define RELAY3_GPIO_Port GPIOG
 #define RELAY4_Pin GPIO_PIN_12
 #define RELAY4_GPIO_Port GPIOG
-#define AD5421_SPI3_CS_Pin GPIO_PIN_3
-#define AD5421_SPI3_CS_GPIO_Port GPIOB
+#define AD5421_SPI3_CLK_Pin GPIO_PIN_3
+#define AD5421_SPI3_CLK_GPIO_Port GPIOB
 #define AD5421_SPI3_MOSI_Pin GPIO_PIN_4
 #define AD5421_SPI3_MOSI_GPIO_Port GPIOB
 #define AD5421_SPI3_MOSIB5_Pin GPIO_PIN_5
 #define AD5421_SPI3_MOSIB5_GPIO_Port GPIOB
-#define AD5421_SPI3_CSB6_Pin GPIO_PIN_6
-#define AD5421_SPI3_CSB6_GPIO_Port GPIOB
-#define AD5421_LDAC_Pin GPIO_PIN_7
-#define AD5421_LDAC_GPIO_Port GPIOB
+#define AD5421_SPI3_CS_Pin GPIO_PIN_6
+#define AD5421_SPI3_CS_GPIO_Port GPIOB
+#define HART_RTS_Pin GPIO_PIN_7
+#define HART_RTS_GPIO_Port GPIOB
 #define AD5421_FAULT_Pin GPIO_PIN_8
 #define AD5421_FAULT_GPIO_Port GPIOB
 
 /* USER CODE BEGIN Private defines */
+#define u8 uint8_t
+#define u16 uint16_t
+#define u32 uint32_t
+
+
 extern int16_t g_weight;//称重值
 extern volatile int32_t g_encoder_count ;
 
@@ -151,7 +157,6 @@ extern uint8_t received_buffer[64];
 extern uint16_t buffer_index;  // 当前接收的数据索引
 // 标志，表示有新命令待处理
 extern volatile uint8_t new_command_ready;
-
 
 /* USER CODE END Private defines */
 
