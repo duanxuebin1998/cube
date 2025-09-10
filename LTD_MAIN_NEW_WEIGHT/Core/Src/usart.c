@@ -36,13 +36,30 @@ volatile uint8_t USART1_RX_LEN = 0;              // 接收一帧数据的长度
 uint8_t USART1_RX_BUF[USART1_RX_BUF_SIZE]={0};   // 接收数据缓冲区
 
 volatile uint8_t USART2_RX_LEN = 0;              // 接收一帧数据的长度
+volatile uint8_t USART2_TX_LEN = 0;              // 接收一帧数据的长度
 uint8_t USART2_RX_BUF[USART2_RX_BUF_SIZE]={0};   // 接收数据缓冲区
+uint8_t USART2_TX_BUF[USART2_RX_BUF_SIZE]={0};   // 发送数据缓冲区
 
 volatile uint8_t USART4_RX_LEN = 0;              // 接收一帧数据的长度
 uint8_t USART4_RX_BUF[USART4_RX_BUF_SIZE]={0};   // 接收数据缓冲区
 
 volatile uint8_t UART5_RX_LEN = 0;              // 接收一帧数据的长度
 uint8_t UART5_RX_BUF[UART5_RX_BUF_SIZE]={0};   // 接收数据缓冲区
+
+void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart) {
+	if (huart->Instance == USART2) {
+		//等待DMA完全发送完成
+		while (__HAL_UART_GET_FLAG(&huart2, UART_FLAG_TC) == RESET)
+			;
+		//继续延时0.1ms，保证发送数据电平完全恢复空闲
+		for (volatile uint32_t i = 0; i < 180000; i++) {
+			__NOP();
+		}
+		HAL_GPIO_WritePin(HART_RTS_GPIO_Port, HART_RTS_Pin, GPIO_PIN_SET);//切换接收模式
+		HAL_UART_Receive_DMA(&huart2, USART2_RX_BUF, USART2_RX_BUF_SIZE);
+	}
+}
+
 /* USER CODE END 0 */
 
 UART_HandleTypeDef huart4;
@@ -57,6 +74,7 @@ DMA_HandleTypeDef hdma_uart5_rx;
 DMA_HandleTypeDef hdma_uart5_tx;
 DMA_HandleTypeDef hdma_usart1_rx;
 DMA_HandleTypeDef hdma_usart2_rx;
+DMA_HandleTypeDef hdma_usart2_tx;
 
 /* UART4 init function */
 void MX_UART4_Init(void)
@@ -187,8 +205,8 @@ void MX_USART2_UART_Init(void)
 
   /* USER CODE END USART2_Init 1 */
   huart2.Instance = USART2;
-  huart2.Init.BaudRate = 115200;
-  huart2.Init.WordLength = UART_WORDLENGTH_8B;
+  huart2.Init.BaudRate = 1200;
+  huart2.Init.WordLength = UART_WORDLENGTH_9B;
   huart2.Init.StopBits = UART_STOPBITS_1;
   huart2.Init.Parity = UART_PARITY_NONE;
   huart2.Init.Mode = UART_MODE_TX_RX;
@@ -468,7 +486,7 @@ void HAL_UART_MspInit(UART_HandleTypeDef* uartHandle)
     PD5     ------> USART2_TX
     PD6     ------> USART2_RX
     */
-    GPIO_InitStruct.Pin = RXD2_485_Pin|TXD2_485_Pin;
+    GPIO_InitStruct.Pin = HART_RXD2_Pin|HART_TXD2_Pin;
     GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
     GPIO_InitStruct.Pull = GPIO_NOPULL;
     GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
@@ -493,6 +511,24 @@ void HAL_UART_MspInit(UART_HandleTypeDef* uartHandle)
     }
 
     __HAL_LINKDMA(uartHandle,hdmarx,hdma_usart2_rx);
+
+    /* USART2_TX Init */
+    hdma_usart2_tx.Instance = DMA1_Stream6;
+    hdma_usart2_tx.Init.Channel = DMA_CHANNEL_4;
+    hdma_usart2_tx.Init.Direction = DMA_MEMORY_TO_PERIPH;
+    hdma_usart2_tx.Init.PeriphInc = DMA_PINC_DISABLE;
+    hdma_usart2_tx.Init.MemInc = DMA_MINC_ENABLE;
+    hdma_usart2_tx.Init.PeriphDataAlignment = DMA_PDATAALIGN_BYTE;
+    hdma_usart2_tx.Init.MemDataAlignment = DMA_MDATAALIGN_BYTE;
+    hdma_usart2_tx.Init.Mode = DMA_NORMAL;
+    hdma_usart2_tx.Init.Priority = DMA_PRIORITY_LOW;
+    hdma_usart2_tx.Init.FIFOMode = DMA_FIFOMODE_DISABLE;
+    if (HAL_DMA_Init(&hdma_usart2_tx) != HAL_OK)
+    {
+      Error_Handler();
+    }
+
+    __HAL_LINKDMA(uartHandle,hdmatx,hdma_usart2_tx);
 
     /* USART2 interrupt Init */
     HAL_NVIC_SetPriority(USART2_IRQn, 0, 0);
@@ -656,10 +692,11 @@ void HAL_UART_MspDeInit(UART_HandleTypeDef* uartHandle)
     PD5     ------> USART2_TX
     PD6     ------> USART2_RX
     */
-    HAL_GPIO_DeInit(GPIOD, RXD2_485_Pin|TXD2_485_Pin);
+    HAL_GPIO_DeInit(GPIOD, HART_RXD2_Pin|HART_TXD2_Pin);
 
     /* USART2 DMA DeInit */
     HAL_DMA_DeInit(uartHandle->hdmarx);
+    HAL_DMA_DeInit(uartHandle->hdmatx);
 
     /* USART2 interrupt Deinit */
     HAL_NVIC_DisableIRQ(USART2_IRQn);

@@ -78,9 +78,9 @@ void MX_SPI3_Init(void)
   hspi3.Init.Direction = SPI_DIRECTION_2LINES;
   hspi3.Init.DataSize = SPI_DATASIZE_8BIT;
   hspi3.Init.CLKPolarity = SPI_POLARITY_LOW;
-  hspi3.Init.CLKPhase = SPI_PHASE_1EDGE;
+  hspi3.Init.CLKPhase = SPI_PHASE_2EDGE;
   hspi3.Init.NSS = SPI_NSS_SOFT;
-  hspi3.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_256;
+  hspi3.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_32;
   hspi3.Init.FirstBit = SPI_FIRSTBIT_MSB;
   hspi3.Init.TIMode = SPI_TIMODE_DISABLE;
   hspi3.Init.CRCCalculation = SPI_CRCCALCULATION_DISABLE;
@@ -101,7 +101,7 @@ void MX_SPI4_Init(void)
   /* USER CODE BEGIN SPI4_Init 0 */
 
   /* USER CODE END SPI4_Init 0 */
- b
+
   /* USER CODE BEGIN SPI4_Init 1 */
 
   /* USER CODE END SPI4_Init 1 */
@@ -202,7 +202,7 @@ void HAL_SPI_MspInit(SPI_HandleTypeDef* spiHandle)
     PB4     ------> SPI3_MISO
     PB5     ------> SPI3_MOSI
     */
-    GPIO_InitStruct.Pin = AD5421_SPI3_CS_Pin|AD5421_SPI3_MOSI_Pin|AD5421_SPI3_MOSIB5_Pin;
+    GPIO_InitStruct.Pin = AD5421_SPI3_CLK_Pin|AD5421_SPI3_MOSI_Pin|AD5421_SPI3_MOSIB5_Pin;
     GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
     GPIO_InitStruct.Pull = GPIO_NOPULL;
     GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
@@ -318,7 +318,7 @@ void HAL_SPI_MspDeInit(SPI_HandleTypeDef* spiHandle)
     PB4     ------> SPI3_MISO
     PB5     ------> SPI3_MOSI
     */
-    HAL_GPIO_DeInit(GPIOB, AD5421_SPI3_CS_Pin|AD5421_SPI3_MOSI_Pin|AD5421_SPI3_MOSIB5_Pin);
+    HAL_GPIO_DeInit(GPIOB, AD5421_SPI3_CLK_Pin|AD5421_SPI3_MOSI_Pin|AD5421_SPI3_MOSIB5_Pin);
 
   /* USER CODE BEGIN SPI3_MspDeInit 1 */
 

@@ -9,7 +9,7 @@
 #include "my_crc.h"
 #include "stdio.h"
 
-#define DEBUG_HOSTCOMMU 1
+#define DEBUG_HOSTCOMMU 0
 // 常量定义
 #define MAXRCVLENGTH 256 // Modbus帧最大接收长度（RTU模式一般为256字节）
 

@@ -4,13 +4,13 @@ uint32_t current_frequency = 160000;
 void auto_change_out_frequence(void)
 {
 	uint8_t fre;
-	if(current_frequency<4000000)
+	if(current_frequency<1000000)
 	{
 		current_frequency=current_frequency+1000;
 	}
 	else
 	{
-		current_frequency = 10000;
+		current_frequency = 3000000;
 	}
 	change_out_frequence(current_frequency);
 	fre =  (uint8_t)(current_frequency/1000);

@@ -62,6 +62,7 @@ extern DMA_HandleTypeDef hdma_uart5_rx;
 extern DMA_HandleTypeDef hdma_uart5_tx;
 extern DMA_HandleTypeDef hdma_usart1_rx;
 extern DMA_HandleTypeDef hdma_usart2_rx;
+extern DMA_HandleTypeDef hdma_usart2_tx;
 extern UART_HandleTypeDef huart4;
 extern UART_HandleTypeDef huart5;
 extern UART_HandleTypeDef huart1;
@@ -254,6 +255,20 @@ void DMA1_Stream5_IRQHandler(void)
 }
 
 /**
+  * @brief This function handles DMA1 stream6 global interrupt.
+  */
+void DMA1_Stream6_IRQHandler(void)
+{
+  /* USER CODE BEGIN DMA1_Stream6_IRQn 0 */
+
+  /* USER CODE END DMA1_Stream6_IRQn 0 */
+  HAL_DMA_IRQHandler(&hdma_usart2_tx);
+  /* USER CODE BEGIN DMA1_Stream6_IRQn 1 */
+
+  /* USER CODE END DMA1_Stream6_IRQn 1 */
+}
+
+/**
   * @brief This function handles TIM1 update interrupt and TIM10 global interrupt.
   */
 void TIM1_UP_TIM10_IRQHandler(void)
@@ -336,8 +351,24 @@ void USART2_IRQHandler(void)
 			HAL_UART_DMAStop(&huart2);  // 停止DMA接收
 			temp = __HAL_DMA_GET_COUNTER(&hdma_usart2_rx);  // 获取DMA中未传输的数据个数
 			USART2_RX_LEN = USART2_RX_BUF_SIZE - temp;  // 计算已经接收到的数据个数
-			HostCommuProcess(USART2_RX_BUF, USART2_RX_LEN);  // 处理接收到的数据
-			HAL_UART_Receive_DMA(&huart2, USART2_RX_BUF, USART2_RX_BUF_SIZE); // 重新启用DMA接收
+
+			HartCommunicationProcess(USART2_RX_BUF, USART2_TX_BUF, &USART2_TX_LEN); // 处理接收到的数据
+			if (USART2_TX_LEN > 0) {
+				HAL_GPIO_WritePin(HART_RTS_GPIO_Port, HART_RTS_Pin, GPIO_PIN_RESET); //切换发送模式
+//				int i;
+//				printf("SED %d:\t", USART2_TX_LEN);
+//				for (i = 0; i < USART2_TX_LEN; i++) {
+//					printf("%02X ", USART2_TX_BUF[i]);
+//				}
+//				printf("\n");
+				HAL_UART_Transmit_DMA(&huart2, USART2_TX_BUF, USART2_TX_LEN);
+			}
+			else
+			{
+				HAL_GPIO_WritePin(HART_RTS_GPIO_Port, HART_RTS_Pin, GPIO_PIN_RESET); //切换发送模式
+				HAL_UART_Transmit_DMA(&huart2, USART2_RX_BUF, USART2_RX_LEN);
+				HAL_UART_Receive_DMA(&huart2, USART2_RX_BUF, USART2_RX_BUF_SIZE); // 重新启用DMA接收
+			}
 		}
 	}
   /* USER CODE END USART2_IRQn 1 */

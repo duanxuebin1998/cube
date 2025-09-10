@@ -16,12 +16,14 @@
 #include "my_crc.h"
 #include "test.h"
 #include "motor_ctrl.h"
+#include "ad5421.h"
 void Test_main(void); // 测试函数声明
 // 初始化函数
 void App_Init(void) {
 	printf("LTD demo restart!\n");
 	Initialize_Encoder(); // 初始化编码器
 	motor_Init(); //电机初始化
+	HartInit(); // 初始化AD5421
 	init_device_params(); // 初始化设备参数
 	g_measurement.device_status.zero_point_status == 1; // 设置零点状态为需要回零点
 	g_deviceParams.command = CMD_NONE; // 清除命令
@@ -29,6 +31,9 @@ void App_Init(void) {
 	HostCommuInit(); // 初始化Modbus通信
 	//测试函数
 //	Test_main(); // 测试函数
+	AD5421_SetCurrent(6.0); // 设置初始电流为4mA
+	DSMSendcommand3times(DSM_GET_FREQUENCE_START, strlen(DSM_GET_FREQUENCE_START));
+
 }
 
 // 主循环任务
@@ -50,9 +55,14 @@ void App_MainLoop(void) {
 			g_measurement.device_status.current_command =CMD_NONE; // 重置当前命令
 			//
 		}
+		Sensor_Test(); // 传感器测试
 //		Test_FRAM_ReadWrite();
 		DSMSendcommand3times(DSM_POWER, strlen(DSM_POWER));
-		printf("{encoder}%d\r\n{weight}%d\r\n", (int) g_encoder_count, g_weight);
+		DSMSendcommand3times(DSM_SENSORGET, strlen(DSM_SENSORGET));
+		Probe_EnableWaterSensor();
+//		printf("{encoder}%d\r\n{weight}%d\r\n", (int) g_encoder_count, g_weight);
+//		HAL_GPIO_WritePin(HART_RTS_GPIO_Port, HART_RTS_Pin, GPIO_PIN_RESET);
+//		HAL_UART_Transmit_DMA(&huart2, "123456", 6);  // 通过UART发送响应
 		HAL_Delay(50); // 延时50ms
 	}
 //

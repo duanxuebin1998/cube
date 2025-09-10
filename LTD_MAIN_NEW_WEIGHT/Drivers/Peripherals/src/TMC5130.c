@@ -202,7 +202,6 @@ uint32_t stpr_waitMove(TMC5130TypeDef *tmc5130) {
 			stpr_writeInt(tmc5130, TMC5130_GSTAT, 0x07); // 清除所有状态位
 			CHECK_ERROR(MOTOR_UNKNOWN_FEEDBACK);
 		}
-		DSMSendcommand3times(DSM_POWER, strlen(DSM_POWER));
 		HAL_Delay(50);
 	}
 	return NO_ERROR; // 返回无错误状态
