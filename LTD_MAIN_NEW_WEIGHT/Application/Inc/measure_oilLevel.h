@@ -9,9 +9,12 @@
 #define INC_MEASURE_OILLEVEL_H_
 
 #include "system_parameter.h"
+typedef enum {
+	OIL, AIR
+} Level_StateTypeDef;
 
-#define frequency_difference (g_measurement.oil_measurement.current_frequency-g_measurement.oil_measurement.follow_frequency)
-#define STABILITYTHRESHOLD  15
+#define frequency_difference ((float)g_measurement.oil_measurement.current_frequency-(float)g_measurement.oil_measurement.follow_frequency)
+#define STABILITYTHRESHOLD  15.0
 #define OILWATERDETERMINATIONTHRESHOLD  5500
 #define INAIR   (g_measurement.oil_measurement.current_frequency > OILWATERDETERMINATIONTHRESHOLD)
 #define INOIL   (g_measurement.oil_measurement.current_frequency < OILWATERDETERMINATIONTHRESHOLD)
@@ -19,7 +22,6 @@
 #define MEASURE_DOWNLIMIT -1
 
 
-int lookForLiquidLevelButNotFollow(void); //寻找油面但不跟随
-int findAndFollowTheLiquidLevel(void); //寻找并跟随油面
-
+uint32_t SearchOilLevel(void); //寻找油面但不跟随
+uint32_t SearchAndFollowOilLevel(void);
 #endif /* INC_MEASURE_OILLEVEL_H_ */

@@ -13,5 +13,6 @@
 void process_command(uint8_t *command); // 处理接收到的命令
 void MeasureZero(void);
 void MeasureBottom(void);
+void MeasureAndFollowOilLevel(void);
 
 #endif /* INC_MEASURE_H_ */

@@ -15,7 +15,7 @@ uint32_t velocity = 1600 * VELOCITY_MAX * 32;
 
 uint32_t motor_Init(void)
 {
-	stpr_initStepper(&stepper, &hspi2, GPIOB, GPIO_PIN_12, 1, 25);
+	stpr_initStepper(&stepper, &hspi2, GPIOB, GPIO_PIN_12, 1, 11);
 	stpr_enableDriver(&stepper);
 	return NO_ERROR; // 初始化电机，返回无错误状态
 }
@@ -48,6 +48,35 @@ uint32_t motorMoveAndWaitUntilStop(float mm, int dir)
 	CHECK_ERROR(ret); // 等待电机移动完成，并检查是否有错误
 	return NO_ERROR; // 等待电机移动完成
 }
+/**
+ * @brief 电机带回差补偿的移动函数
+ *        上行：正常走
+ *        下行：多走20mm，再往上走20mm克服回差
+ * @param mm   目标移动距离 (mm)
+ * @param dir  方向：0=下行，1=上行
+ * @return uint32_t 错误码
+ */
+uint32_t motorMoveWithBacklash(float mm, int dir)
+{
+    uint32_t ret;
+
+    if (dir == MOTOR_DIRECTION_UP) {
+        // 上行：正常走
+        ret = motorMoveAndWaitUntilStop(mm, dir);
+        CHECK_ERROR(ret);
+    } else {
+        // 下行：先比目标多走20mm
+        ret = motorMoveAndWaitUntilStop(mm + 20.0f, dir);
+        CHECK_ERROR(ret);
+
+        // 再往上走20mm，消除回差
+        ret = motorMoveAndWaitUntilStop(20.0f, 1);
+        CHECK_ERROR(ret);
+    }
+
+    return NO_ERROR;
+}
+
 uint32_t motorMove_up(void)
 {
 	motorMoveNoWait(100000, MOTOR_DIRECTION_UP);

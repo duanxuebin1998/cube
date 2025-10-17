@@ -11,7 +11,7 @@
 #include "system_parameter.h"
 #include "dataanalysis_modbus.h"
 
-#define DEBUG_COMMUCPU2 1
+#define DEBUG_COMMUCPU2 0
 #define ADERSS 0X01
 
 

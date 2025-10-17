@@ -263,6 +263,7 @@ void stpr_initStepper(TMC5130TypeDef *tmc5130, SPI_HandleTypeDef *spi, GPIO_Type
 //	   stpr_writeInt(tmc5130, RAMPMODE, 0);             //RAMPMODE = 0 (Target position move)    目标位置移动
 //	   stpr_writeInt(tmc5130, GCONF, 0x1084 | NORMAL_MOTOR_DIRECTION);	//General Configuration  //常规配置     --运动方向
 	stpr_writeInt(tmc5130, TMC5130_GSTAT, 0x07); // 清除所有状态位
+	stpr_waitMove(&stepper);//2025/9/13 消除第一次上电电机报警
 }
 
 /*

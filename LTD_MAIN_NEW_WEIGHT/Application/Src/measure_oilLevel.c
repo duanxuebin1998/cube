@@ -18,18 +18,244 @@
 #include "measure_oilLevel.h"
 #include "motor_ctrl.h"
 #include "sensor.h"
-#include <stdio.h>
-#include <math.h>
+#include "weight.h"
 
-
-// 静态函数声明
-static int findTheLiquidLevelByFrequency(float per_mm_Frequency);
-static int waitForTheLiquidLevelToExceedTheBlindZone(void);
+// 函数原型声明
+static int SearchOil();   // 粗略搜索液位
+static int SearchAir(); // 精确搜索液位
+static int SearchOilPrecise(float per_mm_Frequency);
 static int determineTheSensorPositionAndUpdateTheLevelValue(void);
-int lookForTheLevelInterface(void);  // 注：实际函数实现在本文件外
+Level_StateTypeDef determine_level_status(void);
+uint32_t FollowOilLevel(void);
+
+uint32_t SearchAndFollowOilLevel(void)
+{
+	uint32_t ret;
+	ret = EnableLevelMode();//开启液位模式
+	CHECK_ERROR(ret);// 检查开启液位模式是否成功
+	ret = SearchOilLevel();//寻找液位
+	CHECK_ERROR(ret);// 检查液位测量是否成功
+	g_measurement.device_status.device_state = STATE_FLOWOIL;//切换到液位跟随状态
+	ret = FollowOilLevel();//跟随液位
+	CHECK_ERROR(ret);// 检查液位跟随是否成功
+}
+/*
+ * @brief 主测量函数 - 执行液位的完整搜索流程
+ *
+ * @return uint32_t 错误代码（NO_ERROR表示成功）
+ */
+uint32_t SearchOilLevel(void) {
+	uint32_t ret;
+	int try_times = 0;
+	determine_level_status();//第一次读取可能错误，临时用
+	fault_info_init();  // 清除故障信息
+	printf("液位测量\t开始\r\n");
+	if (g_measurement.device_status.zero_point_status == 1) {
+		printf("液位测量\t设备需要回零点\r\n");
+		ret = SearchZero();  // 如果设备需要回零点，先执行回零点测量
+		CHECK_ERROR(ret);  // 检查回零点是否成功
+		printf("液位测量\t回零点完成\r\n");
+	}
+	ret = get_stable_weight();  // 获取稳定的重量读数
+	CHECK_ERROR(ret);  // 检查获取稳定重量是否成功
+	printf("液位测量\t初始重量：%d\r\n", g_weight);
+
+	/*************** 粗找阶段 - 带重试机制 ***************/
+	while (try_times < 3) {
+		try_times++;
+		printf("液位测量\t粗找液位第%d次尝试\r\n", try_times);
+		fault_info_init(); // 清除故障信息
+		ret = DSM_Get_LevelMode_Frequence_Avg(&g_measurement.oil_measurement.current_frequency);
+		if (INOIL) {
+			//向下运行保证传感器全部在油
+			ret = motorMoveAndWaitUntilStop(100.0, MOTOR_DIRECTION_DOWN);
+			CHECK_ERROR(ret); // 检查下行是否成功
+			//取油中频率
+			ret = DSM_Get_LevelMode_Frequence_Avg(&g_measurement.oil_measurement.oil_frequency);
+			printf("液位测量\t油中频率：%f\r\n", g_measurement.oil_measurement.oil_frequency);
+			CHECK_ERROR(ret);  // 检查获取油中频率是否成功
+
+			printf("液位测量\t传感器已在液位中，向上寻找空气\r\n");
+			ret = SearchAir();
+			CHECK_ERROR(ret); // 检查寻找空气是否成功
+			break;
+		}
+		else if (INAIR) {
+			printf("液位测量\t传感器在空气中，向下寻找液位\r\n");
+			ret = SearchOil();
+			CHECK_ERROR(ret); // 检查寻找液位是否成功
+			break;
+		}
+	}
+	if (try_times >= 3) {
+		printf("液位测量\t粗找液位失败(尝试%d次)\r\n", try_times);
+		CHECK_ERROR(MEASUREMENT_WEIGHT_DOWN_FAIL);
+	}
+	printf("液位测量\t粗找液位完成\r\n");
+	/*************** 精找阶段  ***************/
+	// 精确找液位
+	g_measurement.oil_measurement.follow_frequency=  (g_measurement.oil_measurement.air_frequency + g_measurement.oil_measurement.oil_frequency) / 2.0;
+	printf("液位测量\t目标频率：%d Hz\r\n", g_measurement.oil_measurement.follow_frequency);
+
+	ret = SearchOilPrecise(100);  // 执行精确搜索
+	if (ret != NO_ERROR) {
+		printf("液位测量\t精找失败:0x%lX\r\n", ret);
+		CHECK_ERROR(ret);
+	}
+	/*************** 最终校验与记录 ***************/
+	// 记录最终液位位置
+	g_measurement.oil_measurement.oil_level = g_measurement.debug_data.sensor_position;  // 更新测量数据中的传感器位置
+	// 打印测量结果
+	printf("液位测量\t液位：%ld mm\r\n", g_measurement.oil_measurement.oil_level);
+
+
+	return NO_ERROR;  // 返回成功状态
+}
+uint32_t FollowOilLevel(void)
+{
+	uint32_t ret;
+	// 切换到跟随状态
+	g_measurement.device_status.device_state = STATE_FLOWOIL;
+
+	// 液位跟随主循环
+	while (1) {
+		printf("液位跟随\t");
+
+		// 获取当前频率
+		ret = DSM_Get_LevelMode_Frequence(&g_measurement.oil_measurement.current_frequency);
+		CHECK_ERROR(ret);// 检查开启液位模式是否成功
+		// 稳定性判断（频率波动在阈值内）
+		if (fabs(frequency_difference) < STABILITYTHRESHOLD) {
+			printf("液位稳定,电机不动作\r\n");
+			HAL_Delay(3000);  // 等待3秒
+		} else {
+			// 检测到液位变动，重新跟踪
+			printf("识别到液位变动\t");
+			ret = SearchOilPrecise(100);
+			if (ret != NO_ERROR)
+				return ret;
+		}
+
+		// 更新位置和液位值
+		ret = determineTheSensorPositionAndUpdateTheLevelValue();
+		if (ret == MEASURE_DOWNLIMIT) {
+			// 处理盲区状态
+			ret = waitForTheLiquidLevelToExceedTheBlindZone();
+			CHECK_ERROR(ret);// 检查开启液位模式是否成功
+		}
+		else
+		{
+			CHECK_ERROR(ret);// 检查开启液位模式是否成功
+		}
+	}
+}
+
+static int SearchOil() {
+	uint32_t ret;
+
+	ret = get_stable_weight();  // 获取稳定的重量读数
+	CHECK_ERROR(ret);  // 检查获取稳定重量是否成功
+	printf("液位测量\t初始重量：%d\r\n", g_weight);
+
+	//向上运行保证传感器全部在空气
+	if (g_measurement.debug_data.cable_length > 2000) { // 如果尺带长度大于200mm，先将电机上行到安全位置
+		ret = motorMoveAndWaitUntilStop(100.0, MOTOR_DIRECTION_UP);
+		CHECK_ERROR(ret); // 检查下行是否成功
+	}
+	//长距离下行寻找油面
+	ret = motorMove_down();  // 启动电机向下运动
+	CHECK_ERROR(ret); // 检查上行是否成功
+	// 持续监控重量状态，直到检测到液位
+	while (determine_level_status() != OIL) {
+		// 实时输出编码器位置和重量值（用于调试）
+		printf("液位测量\t长距离寻找液位\t{encoder}%d\t{weight}%d\r\n", (int) g_encoder_count, g_weight);
+		CHECK_ERROR(ret);
+		//丢步检测
+
+		//称重检测
+		if (determine_weight_status() != NORMAL) {
+			return WEIGHT_COLLISION_DETECTED; // 返回称重异常错误码
+		}
+	}
+	ret = motorQuickStop(); // 到达零点后快速停止电机
+	CHECK_ERROR(ret); // 检查快速停止是否成功
+	//向下运行保证传感器全部在油
+	ret = motorMoveAndWaitUntilStop(100.0, MOTOR_DIRECTION_DOWN);
+	CHECK_ERROR(ret); // 检查下行是否成功
+	//取油中频率
+	ret = DSM_Get_LevelMode_Frequence_Avg(&g_measurement.oil_measurement.oil_frequency);
+	printf("液位测量\t油中频率：%d\r\n", g_measurement.oil_measurement.oil_frequency);
+	CHECK_ERROR(ret);  // 检查获取油中频率是否成功
+
+	printf("液位测量\t传感器已在液位中，向上寻找空气\r\n");
+	ret = SearchAir();
+	CHECK_ERROR(ret); // 检查寻找空气是否成功
+
+	return NO_ERROR;
+}
+
+static int SearchAir() {
+	uint32_t ret;
+	uint32_t frequency;	//当前频率
+	ret = get_stable_weight();  // 获取稳定的重量读数
+	CHECK_ERROR(ret);  // 检查获取稳定重量是否成功
+	printf("液位测量\t初始重量：%d\r\n", g_weight);
+
+	ret = motorMove_up();  // 启动电机向下运动
+	CHECK_ERROR(ret); // 检查上行是否成功
+	// 持续监控重量状态，直到检测到液位
+
+	while (determine_level_status() != AIR) {
+		// 实时输出编码器位置和重量值（用于调试）
+		printf("液位测量\t长距离寻找空气\t{encoder}%d\t{weight}%d\r\n", (int) g_encoder_count, g_weight);
+		CHECK_ERROR(ret);
+		//丢步检测
+
+//		//称重检测
+		if (determine_weight_status() != NORMAL) {
+			return WEIGHT_COLLISION_DETECTED; // 返回称重异常错误码
+		}
+
+	}
+	ret = motorQuickStop(); // 到达零点后快速停止电机
+	CHECK_ERROR(ret); // 检查快速停止是否成功
+	//向上运行保证传感器全部在空气
+	ret = motorMoveAndWaitUntilStop(100.0, MOTOR_DIRECTION_UP);
+	CHECK_ERROR(ret); // 检查上行是否成功
+	//取空气中频率
+	ret = DSM_Get_LevelMode_Frequence_Avg(&g_measurement.oil_measurement.air_frequency);
+	printf("液位测量\t空气中频率：%d\r\n", g_measurement.oil_measurement.air_frequency);
+	CHECK_ERROR(ret);  // 检查获取空气中频率是否成功
+	ret = motorMoveAndWaitUntilStop(100.0, MOTOR_DIRECTION_DOWN);//返回
+	CHECK_ERROR(ret); // 检查下行是否成功
+
+	return NO_ERROR;
+}
+
+
+
+Level_StateTypeDef determine_level_status(void) {
+	int ret;
+	// 计算当前重量
+	ret = DSM_Get_LevelMode_Frequence(&g_measurement.oil_measurement.current_frequency);
+	CHECK_ERROR(ret);
+	printf("液位状态检测\t当前频率\t%d\t", g_measurement.oil_measurement.current_frequency);
+
+	// 判断是否超过上限阈值
+	if (INAIR) {
+		printf("传感器在空气中\r\n");
+		return AIR; // 返回重量过大状态
+	}
+	// 判断是否低于下限阈值
+	else  {
+		printf("传感器在油中\r\n");
+		return OIL; // 返回重量过小状态
+	}
+}
+
 
 /**
- * @func: findTheLiquidLevelByFrequency
+ * @func: SearchOilPrecise
  * @brief 通过频率跟随策略定位液位界面
  * @param per_mm_Frequency 每毫米对应的频率变化量（频率-位置换算系数）
  * @return 执行状态码
@@ -45,7 +271,7 @@ int lookForTheLevelInterface(void);  // 注：实际函数实现在本文件外
  * - 死循环保护：超过100次循环强制退出
  * - 超限保护：连续加速移动仍无法跟踪时报错
  */
-static int findTheLiquidLevelByFrequency(float per_mm_Frequency) {
+static int SearchOilPrecise(float per_mm_Frequency) {
 	// 初始化状态变量
 	int ret, mag_angle;
 	uint32_t dir;
@@ -73,7 +299,7 @@ static int findTheLiquidLevelByFrequency(float per_mm_Frequency) {
 
 		// 计算当前频率与目标频率差值
 //		float frequency_difference = g_measurement.oil_measurement.follow_frequency - g_measurement.oil_measurement.current_frequency;
-		printf("当前频率%f\t频率阈值%f\t阈值差%f\r\n", g_measurement.oil_measurement.current_frequency, g_measurement.oil_measurement.follow_frequency,
+		printf("当前频率%d\t频率阈值%d\t阈值差%f\r\n", g_measurement.oil_measurement.current_frequency, g_measurement.oil_measurement.follow_frequency,
 		frequency_difference);
 
 		// 方向决策树（基于频率偏差）
@@ -82,7 +308,7 @@ static int findTheLiquidLevelByFrequency(float per_mm_Frequency) {
 			// 向下加速移动（补偿步长）
 			overTime++;
 			lowerTime = 0;
-			runlenth = 4 * overTime + frequency_difference / per_mm_Frequency - 4;
+			runlenth = 4.0 * overTime + frequency_difference / per_mm_Frequency - 4.0;
 			dir = MOTOR_DIRECTION_DOWN;
 		} else if (frequency_difference > STABILITYTHRESHOLD) { // 可接受正偏差
 			// 标准向下移动
@@ -95,13 +321,13 @@ static int findTheLiquidLevelByFrequency(float per_mm_Frequency) {
 			// 向上加速移动
 			lowerTime++;
 			overTime = 0;
-			runlenth = fabs(frequency_difference / per_mm_Frequency) + 4 * lowerTime - 4;
+			runlenth = -(frequency_difference / per_mm_Frequency) + 4.0 * lowerTime - 4.0;
 			dir = MOTOR_DIRECTION_UP;
 		} else if (frequency_difference < -STABILITYTHRESHOLD) { // 可接受负偏差
 			// 标准向上移动
 			overTime = 0;
 			lowerTime = 0;
-			runlenth = fabs(frequency_difference / per_mm_Frequency);
+			runlenth = -(frequency_difference / per_mm_Frequency);
 			dir = MOTOR_DIRECTION_UP;
 		} else {  // 频率在稳定范围内
 			runlenth = 0;
@@ -110,7 +336,7 @@ static int findTheLiquidLevelByFrequency(float per_mm_Frequency) {
 		}
 
 		// 稳定性检测（连续稳定计数）
-		if ((fabs(frequency_difference) <= STABILITYTHRESHOLD) && (g_measurement.oil_measurement.air_frequency - g_measurement.oil_measurement.current_frequency > 200)
+		if ((abs(frequency_difference) <= STABILITYTHRESHOLD) && (g_measurement.oil_measurement.air_frequency - g_measurement.oil_measurement.current_frequency > 200)
 				&& (g_measurement.oil_measurement.current_frequency - g_measurement.oil_measurement.oil_frequency > 200)) {
 			followTime++;
 			runlenth = 0;
@@ -126,9 +352,9 @@ static int findTheLiquidLevelByFrequency(float per_mm_Frequency) {
 				runlenth = runlenth / 2;
 			if (runlenth < 0.3)
 				runlenth = 0.1;
-
+			printf("频率跟随\t电机移动\t距离%f\t方向%s\r\n", runlenth, (dir == MOTOR_DIRECTION_UP) ? "上" : "下");
 			// 执行电机移动（带丢步检测）
-			ret = MMMortorRun_MM_CheackLose(runlenth, dir, &mag_angle);
+			ret = motorMoveAndWaitUntilStop(runlenth, dir);
 			if (NO_ERROR != ret)
 				return ret;
 		}
@@ -152,612 +378,6 @@ static int findTheLiquidLevelByFrequency(float per_mm_Frequency) {
 }
 
 /**
- * @func: findAndFollowTheLiquidLevel
- * @brief 液位跟随主函数
- * @return 执行状态码
- *
- * 工作流程：
- * 1. 初始定位液位界面
- * 2. 进入无限循环跟随：
- *    - 检测频率变化
- *    - 当频率稳定时保持位置
- *    - 当频率变化超过阈值时重新跟踪
- * 3. 持续更新实际液位值
- */
-int findAndFollowTheLiquidLevel(void) {
-	int ret;
-
-	// 初始液位定位（换算系数100Hz/mm）
-	ret = findTheLiquidLevelByFrequency(100);
-	if (ret != NO_ERROR)
-		return ret;
-
-	// 切换到跟随状态
-	g_measurement.device_status.device_state = STATE_FLOWOIL;
-
-	// 液位跟随主循环
-	while (1) {
-		printf("液位跟随\t");
-
-		// 获取当前频率
-		ret = DSM_Get_LevelMode_Frequence(&g_measurement.oil_measurement.current_frequency);
-		if (ret != NO_ERROR)
-			return ret;
-
-		// 稳定性判断（频率波动在阈值内）
-		if (fabs(frequency_difference) < STABILITYTHRESHOLD) {
-			printf("液位稳定,电机不动作\r\n");
-			HAL_Delay(3000);  // 等待3秒
-		} else {
-			// 检测到液位变动，重新跟踪
-			printf("识别到液位变动\t");
-			ret = findTheLiquidLevelByFrequency(100);
-			if (ret != NO_ERROR)
-				return ret;
-		}
-
-		// 更新位置和液位值
-		ret = determineTheSensorPositionAndUpdateTheLevelValue();
-		if (ret == MEASURE_DOWNLIMIT) {
-			// 处理盲区状态
-			ret = waitForTheLiquidLevelToExceedTheBlindZone();
-		}
-		if (ret != NO_ERROR)
-			return ret;
-	}
-}
-
-/* 注：以下函数在实际代码中有实现，此处仅保留声明和接口说明 */
-
-/**
- * @func: determineTheSensorPositionAndUpdateTheLevelValue
- * @brief 计算当前位置并更新液位值
- *
- * 功能：
- * 1. 通过角度传感器计算当前高度
- * 2. 转换高度为实际液位值（罐高-传感器高度）
- * 3. 更新全局液位数据
- * 4. 越界检测（超过罐高/低于零点）
- */
-//static int determineTheSensorPositionAndUpdateTheLevelValue(void) { ... }
-/**
- * @func: waitForTheLiquidLevelToExceedTheBlindZone
- * @brief 盲区等待函数（当传感器低于最低测量位置时）
- *
- * 策略：
- * 持续监测频率直到传感器重新进入可测量区域
- * 退出条件：当前频率 > 目标跟随频率
- */
-//static int waitForTheLiquidLevelToExceedTheBlindZone(void) { ... }
-/**
- * @func: lookForTheLevelInterface
- * @brief 液位搜索初始化函数（未完整实现）
- *
- * 设计功能：
- * 1. 零点校准
- * 2. 确定空气/油中基准频率
- * 3. 初始定位液面
- */
-//int lookForTheLevelInterface(void) { ... }
-/**
- * @func: int lookForLiquidLevelButNotFollow(void)
- * @description: 寻找液位不跟随
- * @return { }
- */
-int lookForLiquidLevelButNotFollow(void) {
-	int ret;
-	ret = findTheLiquidLevelByFrequency(100); /*确定液位*/
-	if (ret != NO_ERROR) {
-		return ret;
-	}
-	ret = determineTheSensorPositionAndUpdateTheLevelValue();
-	if (ret != NO_ERROR) {
-		return ret;
-	}
-	return ret;
-}
-
-int lookForTheLevelInterface(void)
-{
-//	int ret;
-//	int flagofdown;
-//	char countofanglechange = 0;
-//	int times;
-//
-//	ret = Am_GetData(&mag_angle); /* 读取编码值 */
-//	if (NO_ERROR != ret)
-//	{
-//		return ret;
-//	}
-//	if (Am_Cal_ToHigh(mag_angle) > 100)
-//	{
-//		printf("液位测量\t震动管找液位需要寻找零点\r\n");
-//		ret = MMFindZero();
-//
-//		if (ret != NO_ERROR)
-//		{
-//			if (ret == STATE_SWITCH)
-//			{
-//				printf("液位测量\t回零点过程\t被打断\r\n");
-//				return ret;
-//			}
-//			else
-//			{
-//				printf("液位测量\t回零点过程\t报错=%X\r\n", ret); // 内部有三次尝试无需进行尝试
-//				return ret;
-//			}
-//		}
-//		else
-//		{
-//			printf("液位测量\t回零点过程\t完成\r\n");
-////			FlagofOriginOkPowerOn = true;
-//		}
-//	}
-//
-//	DSM_Switch_LevelMode();
-//	g_measurement.oil_measurement.follow_frequency = 5500.0;
-//	g_measurement.oil_measurement.air_frequency = 6500.0;
-//	g_measurement.oil_measurement.oil_frequency = 4500.0;
-//
-////	if (FlagofContinue == false)
-////	{
-////		return STATE_SWITCH;
-////	}
-//	ret = DSM_Get_LevelMode_Frequence(&g_measurement.oil_measurement.air_frequency); /*获取空气中频率值*/
-//	if (ret != NO_ERROR)
-//	{
-//		return ret;
-//	}
-//	printf("超声波向下寻找液位\t");
-//	while (1)
-//	{
-//
-//		if (Am_Cal_ToHigh(mag_angle)< (systemunion.systemparameter.TankHigh- systemunion.systemparameter.FadeZero)) /* 不在盲区 */
-//		{
-//			stepsofmotorrun = (abs(FadeZeroSteps));
-//			delaytime = MotorDownLimit(stepsofmotorrun * 1.3);
-//
-//			if (delaytime == MOTORCOM_RESET)
-//			{
-//				return MOTORCOM_RESET;
-//			}
-//			else if (delaytime == MOTORCOM_FAIL)
-//			{
-//				return MOTORCOM_FAIL;
-//			}
-//			else if (delaytime == MOTORCOM_WRONGSTEPS)
-//			{
-//				return MOTORCOM_WRONGSTEPS;
-//			}
-//
-//			ret = Am_GetDataLoop_Start();
-//
-//			if (ret != NO_ERROR)
-//			{
-//				return ret;
-//			}
-//
-//			Timer5Start(delaytime);
-//			flagofdown = 1;
-//
-//			while (flagofdown)
-//			{
-//				if (FlagofTimeout5)
-//				{
-//					ret = MotorSpotStd();
-//
-//					if (ret != MOTORCOM_OK)
-//					{
-//						return ret;
-//					}
-//
-//					ret = MotorTest();
-//
-//					if (ret == MOTORCOM_RESET)
-//					{
-//						return MOTORCOM_RESET;
-//					}
-//					else if (ret == MOTORCOM_FAIL)
-//					{
-//						return MOTORCOM_FAIL;
-//					}
-//					else
-//					{
-//						printf("超声波寻找液位\t下行确定液面\t液面太低\r\n");
-//						flagofdown = 0;
-//						return ERR_OIL_LOW;
-//					}
-//				}
-//
-//				ret = DSM_AngleGet(&gyro_anglex, &gyro_angley); // 读取X/Y轴的角度值
-//
-//				if (NO_ERROR != ret)
-//				{
-//					ret_tem = MotorSpotStd();
-//
-//					if (ret_tem != MOTORCOM_OK)
-//					{
-//						return ret_tem;
-//					}
-//
-//					return ret;
-//				}
-//				printf("超声波寻找液位\t下行确定液面\t运行过程X=\t%f\tY=\t%f\t\r\n", gyro_anglex,
-//						gyro_angley);
-//				if (isSensorTiltAngleAbnormal(gyro_anglex, gyro_angley))
-//				{
-//					printf("超声波寻找液位\t下行确定液面\t角度变化过大X=%f\r\n", gyro_anglex);
-//					Timer5Stop();
-//					ret = MotorSpotStd();
-//
-//					if (ret == MOTORCOM_RESET)
-//					{
-//						return MOTORCOM_RESET;
-//					}
-//					else if (ret == MOTORCOM_FAIL)
-//					{
-//						return MOTORCOM_FAIL;
-//					}
-//					ret = DSM_AngleStart();
-//					if (ret != NO_ERROR)
-//					{
-//						ret_tem = MotorSpotStd(); // V1.106
-//						if (ret_tem != MOTORCOM_OK)
-//						{
-//							return ret_tem;
-//						}
-//						return ret;
-//					}
-//					ret = DSM_AngleGet(&gyro_anglex, &gyro_angley);
-//					printf("超声波寻找液位\t下行确定液面\t角度变化过大再次确认X=\t%f\tY=\t%f\tZ=\r\n",
-//							gyro_anglex, gyro_angley);
-//					if (ret != NO_ERROR)
-//					{
-//						// 角度读取故障
-//						return ret;
-//					}
-//
-//					if (isSensorTiltAngleAbnormal(gyro_anglex, gyro_angley))
-//					{
-//						return ERR_ANGLE_CHANGE;
-//					}
-//					else
-//					{
-//						++countofanglechange;
-//						printf("超声波寻找液位\t下行确定液面\t角度变化过大r尝试次数=%d\r\n",
-//								countofanglechange);
-//						if (countofanglechange >= 3)
-//						{
-//							return ERR_ANGLE_CHANGE;
-//						}
-//						flagofdown = 0;
-//						Timer3Stop();
-//						break;
-//					}
-//				}
-//
-//				printf("向下寻找液位\t确认频率值\t");
-//				ret = DSM_Get_LevelMode_Frequence(
-//						&g_measurement.oil_measurement.current_frequency);
-//				if (ret != NO_ERROR)
-//				{
-//					ret_tem = MotorSpotStd(); // V1.106
-//
-//					if (ret_tem != MOTORCOM_OK)
-//					{
-//						return ret_tem;
-//					}
-//
-//					return ret;
-//				}
-//
-//				if (INOIL) /* A路超声进入油中 */
-//				{
-//					Timer5Stop();
-//					ret = MotorSpotStd();
-//
-//					if (ret != MOTORCOM_OK)
-//					{
-//						return ret;
-//					}
-//
-//					printf("向下寻找液位\t再次确认频率值\t");
-//					ret = DSM_Get_LevelMode_Frequence(
-//							&g_measurement.oil_measurement.current_frequency);
-//
-//					if (ret != NO_ERROR)
-//					{
-//						return ret;
-//					}
-//
-//					if (INOIL)
-//					{
-//						ret = MMMortorRun_MM_CheackLose(50,
-//								MOTOR_DIRECTION_DOWN, &mag_angle); /*确保传感器在油里*/
-//						ret = DSM_Get_LevelMode_Frequence(
-//								&g_measurement.oil_measurement.oil_frequency); /*确定油里的频率*/
-//						if (ret != NO_ERROR)
-//						{
-//							return ret;
-//						}
-//						g_measurement.oil_measurement.follow_frequency =
-//								(g_measurement.oil_measurement.air_frequency
-//										+ g_measurement.oil_measurement.oil_frequency)
-//										/ 2;
-//						return NO_ERROR;
-//					}
-//					else
-//					{
-//						++countofanglechange;
-//
-//						if (countofanglechange >= 3)
-//						{
-//							printf("超声波寻找液位\t下行确定液面\t确认找到液面失败次数=%d\r\n",
-//									countofanglechange);
-//							return ERR_NIC_NOUSE;
-//						}
-//
-//						flagofdown = 0;
-//						Timer3Stop();
-//						break;
-//					}
-//				}
-//
-//				ret = MotorGetState(); // 确认电机在运行状态时看看是否丢步的丢步
-//
-//				if (ret == MOTORCOM_RUNNING)
-//				{
-//					ret = Am_GetData(&mag_angle);
-//
-//					if (NO_ERROR != ret)
-//					{
-//						return ret;
-//					}
-//
-//					if (last_magangle != 0X7FFE)
-//					{
-//						times = (Timer3GetTime() / 10);
-//						Timer3Stop();
-//						Timer3Startms(AM4096_GetOntime_timems);
-//						ret = Caculate_Check_Ve_Change(mag_angle,
-//								(mag_angle - last_magangle), times, MOTOR_VE);
-//
-//						if (ret != NO_ERROR)
-//						{
-//							ret_tem = MotorSpotSt(); // V1.121();
-//
-//							if (ret_tem != MOTORCOM_OK)
-//							{
-//								return ret_tem;
-//							}
-//
-//							return ret;
-//						}
-//					}
-//					else
-//					{
-//						printf("第一次时间%d\r\n", Timer3GetTime());
-//						Timer3Stop();
-//						Timer3Startms(AM4096_GetOntime_timems);
-//					}
-//
-//					last_magangle = mag_angle;
-//
-//					// 位置判断到盲区
-//					if (Am_Cal_ToHigh(mag_angle)
-//							> (systemunion.systemparameter.TankHigh
-//									- systemunion.systemparameter.FadeZero))
-//					{
-//						ret = MotorSpotStd();
-//
-//						if (ret != MOTORCOM_OK)
-//						{
-//							return ret;
-//						}
-//
-//						printf("超声波寻找液位\t下行确定液面\t位置=%d\t运行到达盲区,盲区距离罐底=%d\r\n",
-//								Am_Cal_ToHigh(mag_angle),
-//								(systemunion.systemparameter.TankHigh
-//										- Am_Cal_ToHigh(mag_angle)));
-//						flagofdown = 0;
-//						return ERR_OIL_LOW;
-//					}
-//				}
-//				else if (ret == MOTORCOM_NORUNNING) // 电机停下了则认为到达盲区
-//				{
-//					ret = MotorSpotStd();
-//
-//					if (ret != MOTORCOM_OK)
-//					{
-//						return ret;
-//					}
-//
-//					ret = MotorTest();
-//
-//					if (ret == MOTORCOM_RESET)
-//					{
-//						return MOTORCOM_RESET;
-//					}
-//					else if (ret == MOTORCOM_FAIL)
-//					{
-//						return MOTORCOM_FAIL;
-//					}
-//					else
-//					{
-//						printf(
-//								"find oil or flowing \tserch face\t too low\r\n");
-//						flagofdown = 0;
-//						return ERR_OIL_LOW;
-//					}
-//				}
-//				else
-//				{
-//					Timer3Stop();
-//					Timer5Stop();
-//					ret = MotorSpotStd();
-//
-//					if (ret != MOTORCOM_OK)
-//					{
-//						printf("停止电机未成功\r\n");
-//					}
-//
-//					ret = MotorGetState();
-//
-//					if (ret != MOTORCOM_NORUNNING && ret != MOTORCOM_RUNNING) // dq 8.20
-//					{
-//						printf("运行过程电机检查失败\r\n");
-//						return ret;
-//					}
-//					else
-//					{
-//						break;
-//					}
-//				}
-//
-//				/*
-//				 过程被打断
-//				 */
-//				if (FlagofContinue == false)
-//				{
-//					ret = MotorSpotStd();
-//
-//					if (ret != MOTORCOM_OK)
-//					{
-//						return ret;
-//					}
-//
-//					return STATE_SWITCH;
-//				}
-//			}
-//		}
-//		else // 盲区以下低液位
-//		{
-//			printf("find oil or flowing \tserch face\t too low\r\n");
-//			return ERR_OIL_LOW;
-//		}
-//	}
-}
-
-/**
- * @func: int stepLossDetectionDuringLongDistanceRunning(int last_magangle)
- * @description: 长距离运行时电机丢步检测
- * @param {int} last_magangle	0X7FFE
- * @return { }
- */
-int stepLossDetectionDuringLongDistanceRunning(int last_magangle)
-{
-//	int ret, ret_tem;
-//	int mag_angle;
-//	int times;
-//	ret = MotorGetState(); // 确认电机在运行状态时看看是否丢步的丢步
-//
-//	if (ret == MOTORCOM_RUNNING)
-//	{
-//		ret = Am_GetData(&mag_angle);
-//
-//		if (NO_ERROR != ret)
-//		{
-//			return ret;
-//		}
-//
-//		if (last_magangle != 0X7FFE)
-//		{
-//			times = (Timer3GetTime() / 10);
-//			Timer3Stop();
-//			Timer3Startms(AM4096_GetOntime_timems);
-//			ret = Caculate_Check_Ve_Change(mag_angle,
-//					(mag_angle - last_magangle), times, MOTOR_VE);
-//
-//			if (ret != NO_ERROR)
-//			{
-//				ret_tem = MotorSpotSt(); // V1.121();
-//
-//				if (ret_tem != MOTORCOM_OK)
-//				{
-//					return ret_tem;
-//				}
-//
-//				return ret;
-//			}
-//		}
-//		else
-//		{
-//			printf("第一次时间%d\r\n", Timer3GetTime());
-//			Timer3Stop();
-//			Timer3Startms(AM4096_GetOntime_timems);
-//		}
-//
-//		last_magangle = mag_angle;
-//
-//		// 位置判断到盲区
-//		if (Am_Cal_ToHigh(mag_angle)
-//				> (systemunion.systemparameter.TankHigh
-//						- systemunion.systemparameter.FadeZero))
-//		{
-//			ret = MotorSpotStd();
-//
-//			if (ret != MOTORCOM_OK)
-//			{
-//				return ret;
-//			}
-//			printf("超声波寻找液位\t下行确定液面\t位置=%d\t运行到达盲区,盲区距离罐底=%d\r\n",
-//					Am_Cal_ToHigh(mag_angle),
-//					(systemunion.systemparameter.TankHigh
-//							- Am_Cal_ToHigh(mag_angle)));
-//			return ERR_OIL_LOW;
-//		}
-//		return ret;
-//	}
-//	else if (ret == MOTORCOM_NORUNNING) // 电机停下了则认为到达盲区
-//	{
-//		ret = MotorSpotStd();
-//
-//		if (ret != MOTORCOM_OK)
-//		{
-//			return ret;
-//		}
-//
-//		ret = MotorTest();
-//
-//		if (ret == MOTORCOM_RESET)
-//		{
-//			return MOTORCOM_RESET;
-//		}
-//		else if (ret == MOTORCOM_FAIL)
-//		{
-//			return MOTORCOM_FAIL;
-//		}
-//		else
-//		{
-//			printf("find oil or flowing \tserch face\t too low\r\n");
-//			return ERR_OIL_LOW;
-//		}
-//	}
-//	else
-//	{
-//		Timer3Stop();
-//		Timer5Stop();
-//		ret = MotorSpotStd();
-//
-//		if (ret != MOTORCOM_OK)
-//		{
-//			printf("停止电机未成功\r\n");
-//		}
-//
-//		ret = MotorGetState();
-//
-//		if (ret != MOTORCOM_NORUNNING && ret != MOTORCOM_RUNNING)
-//		{
-//			printf("运行过程电机检查失败\r\n");
-//			return ret;
-//		}
-//		else
-//		{
-//		}
-//	}
-	return NO_ERROR; // 返回正常状态;
-}
-/**
  * @func: int determineTheSensorPositionAndUpdateTheLevelValue(void)
  * @description: 判断传感器位置并更新液位值
  * 主要功能：
@@ -778,49 +398,25 @@ static int determineTheSensorPositionAndUpdateTheLevelValue(void) {
 	// 判断是否需要更新液位值
 	// 条件1: 频率差在稳定阈值内（系统稳定）
 	// 条件2: 新旧液位值差异大于100（需要强制更新）
-	if ((fabs(frequency_difference) < STABILITYTHRESHOLD) || (abs(oil_level - g_measurement.oil_measurement.oil_level) > 100)) {
+	if ((abs(frequency_difference) < STABILITYTHRESHOLD) || (abs((int)oil_level - (int)g_measurement.oil_measurement.oil_level) > 100)) {
 		// 更新当前液位值
 		g_measurement.oil_measurement.oil_level = oil_level;
-
 		// 打印正常液位值信息
 		printf("液位跟随\t液位值为%ld\r\n", g_measurement.oil_measurement.oil_level);
-
-		// 将液位值转换为4-20mA模拟信号输出
-//        Out_4_20mA(systemunion.systemparameter.TankHigh, Measure_One.MeasureOil_Level);
 	} else {
 		// 系统不稳定时仅打印动态液位值（不更新测量值）
 		printf("液位跟随\t动态液位值为%ld\r\n", g_measurement.debug_data.sensor_position);
 	}
 
-	// 步骤3: 检查油位是否超出储罐上限
 	if (oil_level >= g_deviceParams.tankHeight) {
 		printf("超声波找液位\t到达位置上限\r\n");
-
-//		// 到达下限后停止电机
-//		ret = MotorSpotStd();
-//
-//		// 检查停止电机操作是否成功
-//		if (ret != MOTORCOM_OK) {
-//			printf("停止电机未成功\r\n");
-//		}
-		// 返回下限状态码（停止测量）
 		return MEASURE_DOWNLIMIT;
 	}
 	// 步骤4: 检查油位是否低于0（超出下限）
 	else if (oil_level < 0) {
 		printf("超声波找液位\t到达位置下限\r\n");
-
-//		// 到达上限后停止电机
-//		ret = MotorSpotStd();
-//
-//		// 检查停止电机操作是否成功
-//		if (ret != MOTORCOM_OK) {
-//			printf("停止电机未成功\r\n");
-//		}
-//		// 返回上限状态码（停止测量）
-//		return MEASURE_UPLIMIT;
+		return -1;
 	}
-
 	// 步骤5: 正常返回（无错误）
 	return NO_ERROR;
 }
@@ -830,7 +426,7 @@ static int determineTheSensorPositionAndUpdateTheLevelValue(void) {
  * @description:在盲区等待，直到液位超过盲区退出
  * @return NO_ERROR
  */
-static int waitForTheLiquidLevelToExceedTheBlindZone(void) {
+int waitForTheLiquidLevelToExceedTheBlindZone(void) {
 	int32_t ret;
 	while (1) {
 		ret = DSM_Get_LevelMode_Frequence(&g_measurement.oil_measurement.current_frequency);
@@ -842,7 +438,7 @@ static int waitForTheLiquidLevelToExceedTheBlindZone(void) {
 			break;
 		}
 		HAL_Delay(1000);
-//打断监测
+		//打断监测
 	}
 	return NO_ERROR;
 }

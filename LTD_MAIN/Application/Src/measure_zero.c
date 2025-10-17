@@ -22,6 +22,30 @@ int32_t zero_value = 100000000;
 static int SearchZeroRough();
 static int SearchZeroPrecise();
 
+/**
+ * @brief 搜索零点位置
+ *
+ * 该函数通过粗找和细找两个阶段，完成零点位置的测量。
+ * 粗找阶段通过多次尝试确定零点的大致位置，细找阶段则精确调整到零点位置。
+ * 最终记录零点位置的编码值，并输出相关信息。
+ *
+ * @return int 返回状态码：
+ *             - 0: 零点测量成功
+ *             - 1: 粗找零点失败（超过最大尝试次数）
+ *
+ * @note 函数内部会调用以下辅助函数：
+ *       - get_stable_weight(): 获取稳定重量
+ *       - determine_weight_status(): 判断重量状态
+ *       - SearchZeroRough(): 粗找零点
+ *       - SearchZeroPrecise(): 细找零点
+ *       - motorMoveNoWait(): 非阻塞电机移动
+ *       - stpr_waitMove(): 等待电机移动完成
+ *
+ * @note 输出信息包括：
+ *       - 零点测量进度
+ *       - 零点位置的编码值
+ *       - 零点位置的计算值（以毫米为单位）
+ */
 int SearchZero(void) // V1.120
 {
 	int try_times = 0;
@@ -52,9 +76,9 @@ int SearchZero(void) // V1.120
 	printf("零点测量完成 \t当前编码值\t %ld\t（0.1MM)\r\n", zero_value);
 	printf("{zero_value}%ld,%f\r\n", zero_value,
 			(float) zero_value * 95.0 / 4096.0);
-	motorMoveNoWait(400, MOTOR_DIRECTION_DOWN);
-	HAL_Delay(5000);
-	stpr_waitMove(&stepper);
+	motorMoveNoWait(400, MOTOR_DIRECTION_DOWN);//向下移动400mm
+	HAL_Delay(5000);//等待5秒
+	stpr_waitMove(&stepper);//等待移动完成
 	return 0;
 }
 

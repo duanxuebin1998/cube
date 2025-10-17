@@ -18,7 +18,7 @@
 #include "stdio.h"
 #define DEBUG_UART6 1
 
-#define DSM_CMD_TIMEOUT 500  //接收字节间超时时间
+#define DSM_CMD_TIMEOUT 1000  //接收字节间超时时间
 #define RX_BUF_LEN 128
 uint8_t rx_buf[RX_BUF_LEN];
 DSMSENSOR_DATA dsmsensor_data;
@@ -45,15 +45,6 @@ const char *error_codes[] = { "A+111.11B+111.11", // 超声无谐振
 		"A+999.99B+999.99"  // 与CPU0通讯校验错误
 		};
 #define ERROR_CODES_COUNT (sizeof(error_codes)/sizeof(error_codes[0]))
-// 打印16进制数据
-static void printHex(const uint8_t *data, uint16_t len)
-{
-    for (uint16_t i = 0; i < len; i++)
-    {
-        printf("%02X ", data[i]);
-    }
-    printf("\n");
-}
 
 // 检查返回是否为错误码
 int IsErrorResponse(const char *resp) {
@@ -68,6 +59,7 @@ int IsErrorResponse(const char *resp) {
 // 串口发送并接收（带调试打印）
 int UART6_SendCommand(const char *cmd, char *response, uint16_t maxLen, uint32_t timeout)
 {
+	uint32_t ret;
     memset(rx_buf, 0, RX_BUF_LEN);
     memset(response, 0, maxLen);
     uint16_t recvLen = 0;
@@ -98,11 +90,10 @@ int UART6_SendCommand(const char *cmd, char *response, uint16_t maxLen, uint32_t
              }
          }
      }
-
      /* 响应校验 */
      if (recvLen == 0) {
          printf("[UART6] 通信失败：无数据\r\n");
-         return -1;
+         return SENSOR_COMM_TIMEOUT;
      } else {
  #ifdef DEBUG_UART6
          printf("[UART6] 接收成功，共 %d 字节\r\n", recvLen);
@@ -117,27 +108,34 @@ int UART6_SendCommand(const char *cmd, char *response, uint16_t maxLen, uint32_t
          return 0;
      }
 
-     return -1;
+     return SENSOR_COMM_TIMEOUT;
 }
 // 发送指令，带3次重试机制
 int UART6_SendWithRetry(const char *cmd, char *response, uint16_t maxLen, uint32_t timeout) {
+	uint32_t ret;
 	for (int i = 0; i < 3; i++) {
-		if (UART6_SendCommand(cmd, response, maxLen, timeout) == 0) {
+		ret = UART6_SendCommand(cmd, response, maxLen, timeout);
+		if (ret == 0) {
 			if (!IsErrorResponse(response)) {
-				return 0; // 成功且不是错误码
+				return NO_ERROR; // 成功且不是错误码
 			}
 			else {
 				printf("[UART6] 接收到错误码，重试 %d/3\r\n", i + 1);
 			}
 		}
+		else {
+			printf("[UART6] 通信失败，重试 %d/3\r\n", i + 1);
+		}
 	}
-	return -1; // 重试3次失败
+	CHECK_ERROR(ret);// 重试3次失败
 }
 
 // 读取传感器电压
 float Read_Sensor_Voltage(void) {
+	uint32_t ret;
 	char resp[RX_BUF_LEN];
-	if (UART6_SendWithRetry("CK\r\n", resp, RX_BUF_LEN, 500) == 0) {
+	ret = UART6_SendWithRetry("CK\r\n", resp, RX_BUF_LEN, 500);
+	if (ret == NO_ERROR) {
 		// 响应格式: E06.6379V
         printf("[UART6] 接收成功: %s\r\n", resp);
 		if ((resp[0] == 'E')||(resp[0] == 'e'))  {
@@ -161,8 +159,8 @@ int Probe_EnableWaterSensor(void)
         printf("[Probe] 开启测水探针响应: %s\r\n", resp);
 
         // 协议约定：如果返回包含 "OK" 或其他成功标识，就认为成功
-        if (strstr(resp, "OK") != NULL ||
-            strstr(resp, "ok") != NULL)
+        if (strstr(resp, "%") != NULL ||
+            strstr(resp, "%") != NULL)
         {
             printf("[Probe] 测水探针开启成功！\r\n");
             return 0;
@@ -179,7 +177,35 @@ int Probe_EnableWaterSensor(void)
         return -1; // 通信失败或错误码
     }
 }
+// 开启测水探针 (CL 命令)
+int EnableLevelMode(void)
+{
+    char resp[RX_BUF_LEN];
 
+    // 发送命令 "CL\r\n" 并带 3 次重试
+    if (UART6_SendWithRetry("CB\r\n", resp, RX_BUF_LEN, 500) == 0)
+    {
+        printf("[液位模式] 开启液位模式响应: %s\r\n", resp);
+
+        // 协议约定：如果返回包含 "OK" 或其他成功标识，就认为成功
+        if (strstr(resp, "%") != NULL ||
+            strstr(resp, "%") != NULL)
+        {
+            printf("[液位模式] 开启成功！\r\n");
+            return NO_ERROR;
+        }
+        else
+        {
+            printf("[液位模式] 无效响应: %s\r\n", resp);
+            return NO_ERROR; // 响应格式不对
+        }
+    }
+    else
+    {
+        printf("[液位模式] 开启失败！\r\n");
+        return -1; // 通信失败或错误码
+    }
+}
 
 // 读取液位跟随频率
 float Read_Level_Frequency(void) {
@@ -197,6 +223,56 @@ float Read_Level_Frequency(void) {
 	}
 	return -1.0f; // 错误
 }
+uint32_t DSM_Get_LevelMode_Frequence(volatile uint32_t *frequency) {
+	if (*frequency < 0) {
+		return SENSOR_COMM_TIMEOUT;
+	}
+	*frequency = (uint32_t)Read_Level_Frequency();
+	printf("液位频率: %d Hz\r\n", *frequency);
+	return NO_ERROR;
+}
+/**
+ * @brief 获取液位跟随频率的平均值
+ *        共采样10次，每次间隔2秒，去掉两个最大值和两个最小值，
+ *        对中间6次结果求平均。
+ * @param frequency  输出平均频率值 (Hz)
+ * @return uint32_t  错误码，NO_ERROR 表示成功
+ */
+uint32_t DSM_Get_LevelMode_Frequence_Avg(volatile uint32_t *frequency) {
+    float values[10];
+    float sum = 0.0f;
+
+    // 采集10次数据
+    for (int i = 0; i < 10; i++) {
+        values[i] = Read_Level_Frequency();
+        printf("第%d次液位频率: %.2f Hz\r\n", i + 1, values[i]);
+        HAL_Delay(2000); // 2秒间隔
+    }
+
+    // 排序 (简单冒泡排序)
+    for (int i = 0; i < 10 - 1; i++) {
+        for (int j = 0; j < 10 - i - 1; j++) {
+            if (values[j] > values[j + 1]) {
+                float tmp = values[j];
+                values[j] = values[j + 1];
+                values[j + 1] = tmp;
+            }
+        }
+    }
+
+    // 去掉两个最大和两个最小值，取中间6个
+    for (int i = 2; i < 8; i++) {
+        sum += values[i];
+    }
+
+    float avg = sum / 6.0f;
+    *frequency = (uint32_t)avg;
+
+    printf("液位频率平均值(去掉极值): %d Hz\r\n", *frequency);
+
+    return NO_ERROR;
+}
+
 // 读取密度、温度
 int Read_Density_Temp(float *density, float *viscosity, float *temp) {
 	char resp[RX_BUF_LEN];

@@ -11,6 +11,7 @@
 #include "DSM_system_parameter.h"
 #include <stdlib.h>
 #include <string.h>
+#include "stateformodbus.h"
 
 extern struct MEASURE_DATA Measure_Data;
 int SlaveAddress = 0x01;							// 下位机地址
@@ -739,6 +740,7 @@ int Response04(unsigned char *revframe, unsigned char *sendframe)
 ******************************************************/
 int Response05(unsigned char *revframe, unsigned char *sendframe)
 {
+	uint32_t cmd = 1;
 	int startaddress;
 	int coilvalue;
 	int framelen = 0;
@@ -777,7 +779,18 @@ int Response05(unsigned char *revframe, unsigned char *sendframe)
 	crc = CRC16_Calculate(sendframe, framelen);
 	sendframe[framelen] = crc & 0xff;
 	sendframe[framelen + 1] = (crc >> 8) & 0xff;
-
+	printf("startaddress=%04X,coilvalue=%04X\r\n", startaddress, coilvalue);
+	if (startaddress == 0x000B) // 回零点
+		cmd = CMD_BACK_ZERO;
+	else if (startaddress == 0x0011) // 液位测量
+		cmd = CMD_FIND_OIL;
+	else if (startaddress == 0x0013) // 罐底测量
+		cmd = CMD_FIND_BOTTOM;
+	else
+		cmd = CMD_NONE;
+	// 发送命令给主控单元
+	printf("cmd=%d\r\n", cmd);
+	CPU2_CombinatePackage_Send(FUNCTIONCODE_WRITE_MULREGISTER, HOLDREGISTER_DEVICEPARAM_COMMAND, 2, &cmd);
 	return (framelen + 2);
 }
 /******************************************************
