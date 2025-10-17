@@ -213,8 +213,34 @@ void Input_Write(void) {
  ******************************************************/
 int ProcessWriteCoil(void) {
 	uint32_t cmd = 1;
+//	static const uint32_t nopara_cmd_map[][2] = {
+//	    { COM_NUM_BACK_ZERO,           CMD_BACK_ZERO },           // 返回零点
+//	    { COM_NUM_FIND_ZERO,           CMD_CALIBRATE_ZERO },        // 标定零点
+//	    { COM_NUM_SPREADPOINTS_AI,     CMD_MEASURE_DISTRIBUTED },// 自动分布测量
+//	    { COM_NUM_FIND_OIL,            CMD_FIND_OIL },        // 寻找液位
+//	    { COM_NUM_FIND_WATER,          CMD_FIND_WATER },      // 寻找水位
+//	    { COM_NUM_FIND_BOTTOM,         CMD_FIND_BOTTOM },           // 寻找罐底
+//	    { COM_NUM_SYNTHETIC,           CMD_SYNTHETIC },     // 综合测量
+//	    { COM_NUM_METER_DENSITY,       CMD_MEASURE_DENSITY_METER }, // 每米测量
+//	    { COM_NUM_INTERVAL_DENSITY,    CMD_MEASURE_DENSITY_RANGE }, // 区间测量
+//	    { COM_NUM_READPARAMETER,       CMD_READ_PARAM },       // 读取参数
+//	    { COM_NUM_RESTOR_EFACTORYSETTING, CMD_RESTORE_FACTORY },    // 恢复出厂设置
+//	};
+
+//	    int mapamount = sizeof(nopara_cmd_map) / sizeof(nopara_cmd_map[0]);
+//	    int i;
+//	    //发送指令
+//
+//	    for(i = 0;i < mapamount;i++)
+//	    {
+//	        if(now_Opera_Num == nopara_cmd_map[i][0])
+//	        {
+//	           CPU2_CombinatePackage_Send(FUNCTIONCODE_WRITE_MULREGISTER,HOLDREGISTER_DEVICEPARAM_COMMAND,2,&nopara_cmd_map[i][1]);
+//	           printf("send command to cpu2 %lu\r\n", cmd);
+//	           break;
+//	        }
+//	    }
 	CPU2_CombinatePackage_Send(FUNCTIONCODE_WRITE_MULREGISTER, HOLDREGISTER_DEVICEPARAM_COMMAND, 2, &cmd); //发送命令给CPU2
-	printf("send command to cpu2 %lu\r\n", cmd);
 
 	return RETURN_OK;
 }

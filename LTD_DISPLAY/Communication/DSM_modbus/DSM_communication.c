@@ -106,7 +106,7 @@ void DSM_CommunicationProcess(unsigned char *rcvbuff, int rcvcount)
 		case FUNCTIONCODE_WRITE_COIL:
 		{
 			sendcount = Response05(rcvbuff, sendbuff);
-			ret = ProcessWriteCoil();
+//			ret = ProcessWriteCoil();
 			// 根据处理结果返回不同的异常码，这里需要重新梳理
 			if (ret == RETURN_SLAVEFAIL)//从设备故障
 			{

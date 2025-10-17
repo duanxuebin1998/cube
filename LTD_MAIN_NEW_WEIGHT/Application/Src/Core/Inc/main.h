@@ -34,6 +34,8 @@ extern "C" {
 #include "system_parameter.h"
 #include "usart.h"
 #include <stdio.h>
+#include <stdlib.h>
+#include <math.h>
 /* USER CODE END Includes */
 
 /* Exported types ------------------------------------------------------------*/

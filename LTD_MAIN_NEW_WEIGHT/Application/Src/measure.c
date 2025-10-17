@@ -21,10 +21,10 @@ void ProcessMeasureCmd(CommandType command)
 		printf("执行回零点指令\n");
 		MeasureZero();//
 		break;
-//	case CMD_FIND_OIL:
-//		printf("执行寻找液位指令\n");
-//		SearchOilLevel();
-//		break;
+	case CMD_FIND_OIL:
+		printf("执行寻找液位指令\n");
+		MeasureAndFollowOilLevel();
+		break;
 //	case CMD_FIND_WATER:
 //		printf("执行寻找水位指令\n");
 //		SearchWaterLevel();
@@ -32,6 +32,14 @@ void ProcessMeasureCmd(CommandType command)
 	case CMD_FIND_BOTTOM:
 		printf("执行罐底测量指令\n");
 		MeasureBottom();
+		break;
+	case CMD_SET_EMPTY_WEIGHT:
+		printf("执行设置空载称重指令\n");
+		get_empty_weight();
+		break;
+	case CMD_SET_FULL_WEIGHT:
+		printf("执行设置满载称重指令\n");
+		get_full_weight();
 		break;
 //	case CMD_MEASURE_SINGLE:
 //		printf("执行单点测量指令\n");
@@ -82,6 +90,32 @@ void ProcessMeasureCmd(CommandType command)
 	}
 }
 // 处理接收到的命令
+
+/**
+ * @brief 处理接收到的命令并执行相应的操作。
+ *
+ * 该函数根据传入的命令字符数组执行不同的电机控制操作，包括刹车、上下移动、编码器清零、测试模式等。
+ *
+ * @param command 指向命令字符数组的指针，命令格式为单个字符后跟可选参数。
+ * @note 命令格式说明：
+ *       - 'A0': 刹车操作
+ *       - 'A+<数字>': 电机上行指定距离
+ *       - 'A-<数字>': 电机下行指定距离
+ *       - 'B': 进入编码器测试模式（循环上下移动并打印编码器值）
+ *       - 'C': 电机步进分辨率测试
+ *       - 'D': 电机下行触底测试
+ *       - 'E': 电机上行碰零点测试
+ *       - 'F': 罐底测量重复性测试
+ *       - 'G': 罐底测量单次测试
+ *       - 'H': 零点/罐底测量重复性测试
+ *       - 'I': 零点单次测试
+ *       - 'J': 液位测量重复性测试
+ *       - 'K': 液位测量单次测试
+ *       - 'L': 编码器值清零
+ *       - 'M': 电机高温测试
+ *       - 'N': 电机简单测试模式（循环上下移动）
+ *       - 'O': 获取空载称重
+ */
 void process_command(uint8_t *command) {
 	printf("Command received\n");
 //	stpr_initStepper(&stepper, &hspi2, GPIOB, GPIO_PIN_12, 1, 18);
@@ -209,9 +243,15 @@ void process_command(uint8_t *command) {
 		}
 	}
 	if (command[0] == 'O') //获取空载称重
-			{
+	{
 		printf("Get empty weight\n");
 		get_empty_weight();
+
+	}
+	if (command[0] == 'P') //获取满载称重
+	{
+		printf("Get full weight\n");
+		get_full_weight();
 
 	}
 }
@@ -246,8 +286,19 @@ void MeasureZero(void)
 	return;
 }
 
-
-//罐底测量主函数
+/**
+ * @brief 测量罐底高度的函数。
+ *
+ * 该函数用于启动测量罐底高度的过程，包括以下步骤：
+ * 1. 设置设备状态为 STATE_FINDBOTTOM。
+ * 2. 调用 MeasureStart() 开始测量。
+ * 3. 调用 SearchBottom() 搜索罐底高度。
+ * 4. 根据返回结果更新设备状态。
+ *
+ * @note 如果测量过程中发生错误（非 NO_ERROR 或 STATE_SWITCH），设备状态将被设置为 STATE_ERROR。
+ *
+ * @return 无返回值。
+ */
 void MeasureBottom(void)
 {
 	int ret = 0;
@@ -267,5 +318,26 @@ void MeasureBottom(void)
 	}
 
 	g_measurement.device_status.device_state = STATE_FINDBOTTOM_OVER;
+	return;
+}
+void MeasureAndFollowOilLevel(void)
+{
+	int ret = 0;
+	g_measurement.device_status.device_state = STATE_FINDOIL;
+    ret = MeasureStart();
+	if ((ret != NO_ERROR)&& (ret != STATE_SWITCH))
+	{
+		g_measurement.device_status.device_state = STATE_ERROR;
+		return;
+	}
+	//开始测量罐高
+	ret = SearchAndFollowOilLevel();
+	if ((ret != NO_ERROR)&& (ret != STATE_SWITCH))
+	{
+		g_measurement.device_status.device_state = STATE_ERROR;
+		return;
+	}
+
+	g_measurement.device_status.device_state = STATE_STANDBY;
 	return;
 }

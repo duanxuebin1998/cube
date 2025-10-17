@@ -19,6 +19,7 @@ extern uint32_t velocity;
 uint32_t motor_Init(void); //电机初始化
 uint32_t motorMoveNoWait(float mm, int dir);// 电机移动不等待
 uint32_t motorMoveAndWaitUntilStop(float mm, int dir);// 电机移动并等待停止
+uint32_t motorMoveWithBacklash(float mm, int dir);// 电机移动带回差补偿
 uint32_t motorMove_up(void);// 电机向上移动
 uint32_t motorMove_down(void);// 电机向下移动
 uint32_t motorQuickStop(void);// 电机快速停止

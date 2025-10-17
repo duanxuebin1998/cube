@@ -9,7 +9,7 @@
 #define INC_WEIGHT_H_
 
 #include "as5145.h"
-
+#include "system_parameter.h"
 #include "motor_ctrl.h"
 #define ZERO_WEIGHT_THRESHOLD 70
 #define BOTTOM_WEIGHT_THRESHOLD 50
@@ -22,6 +22,7 @@ typedef struct {
 	int stable_weight; /* 稳态基准重量（单位：0.1克） */
 	int current_weight; /* 实时采样重量（不带滤波处理） */
 	int empty_weight; /* 空载称重 */
+	int full_weight; /* 满载称重 */
 } Weight_ParamentTypeDef;
 
 extern Weight_ParamentTypeDef weight_parament;
@@ -29,6 +30,7 @@ extern Weight_ParamentTypeDef weight_parament;
 uint32_t weight_init() ;
 uint32_t get_stable_weight(void);
 uint32_t get_empty_weight(void);
+uint32_t get_full_weight(void);
 Weight_StateTypeDef determine_weight_status(void);
 
 #endif /* INC_WEIGHT_H_ */
