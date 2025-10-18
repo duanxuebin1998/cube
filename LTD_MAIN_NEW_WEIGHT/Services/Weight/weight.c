@@ -125,13 +125,13 @@ Weight_StateTypeDef determine_weight_status(void) {
 		printf("称重值过小\r\n");
 		return BOTTOM; // 返回重量过小状态
 	}
-	// // 判断是否有剧烈波动（
-	// else if(fabs(weight_parament.current_weight-weight_parament.stable_weight)>IMPACT_WEIGHT_THRESHOLD)
-	// {
-	//     printf("稳定的称重\t%d\r\n",weight_parament.stable_weight);
-	//     printf("称重值波动超限\r\n");
-	//     return IMPACT;
-	// }
+	 // 判断是否有剧烈波动（
+	 else if(fabs(weight_parament.current_weight-weight_parament.stable_weight)>IMPACT_WEIGHT_THRESHOLD)
+	 {
+	     printf("稳定的称重\t%d\r\n",weight_parament.stable_weight);
+	     printf("称重值波动超限\r\n");
+	     return IMPACT;
+	 }
 	// 重量正常
 	else {
 		printf("称重值正常\r\n");
