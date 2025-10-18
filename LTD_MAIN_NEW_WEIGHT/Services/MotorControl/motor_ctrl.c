@@ -15,7 +15,7 @@ uint32_t velocity = 1600 * VELOCITY_MAX * 32;
 
 uint32_t motor_Init(void)
 {
-	stpr_initStepper(&stepper, &hspi2, GPIOB, GPIO_PIN_12, 1, 11);
+	stpr_initStepper(&stepper, &hspi2, GPIOB, GPIO_PIN_12, 1, 19);
 	stpr_enableDriver(&stepper);
 	return NO_ERROR; // 初始化电机，返回无错误状态
 }

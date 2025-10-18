@@ -13,7 +13,7 @@
 #include "motor_ctrl.h"
 #define ZERO_WEIGHT_THRESHOLD 70
 #define BOTTOM_WEIGHT_THRESHOLD 50
-#define IMPACT_WEIGHT_THRESHOLD 20
+#define IMPACT_WEIGHT_THRESHOLD 2000
 typedef enum {
 	NORMAL, IMPACT, ZERO, BOTTOM
 } Weight_StateTypeDef;
