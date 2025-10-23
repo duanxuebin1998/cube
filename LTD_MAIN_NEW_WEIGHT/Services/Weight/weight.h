@@ -10,10 +10,11 @@
 
 #include "as5145.h"
 #include "system_parameter.h"
-#include "motor_ctrl.h"
+//#include "motor_ctrl.h"
+
 #define ZERO_WEIGHT_THRESHOLD 70
 #define BOTTOM_WEIGHT_THRESHOLD 50
-#define IMPACT_WEIGHT_THRESHOLD 2000
+#define IMPACT_WEIGHT_THRESHOLD 4000.0
 typedef enum {
 	NORMAL, IMPACT, ZERO, BOTTOM
 } Weight_StateTypeDef;
@@ -28,9 +29,12 @@ typedef struct {
 extern Weight_ParamentTypeDef weight_parament;
 
 uint32_t weight_init() ;
-uint32_t get_stable_weight(void);
+//uint32_t get_stable_weight(void);
 uint32_t get_empty_weight(void);
 uint32_t get_full_weight(void);
-Weight_StateTypeDef determine_weight_status(void);
-
+//Weight_StateTypeDef determine_weight_status(void);
+Weight_StateTypeDef check_zero_point_status(void);
+Weight_StateTypeDef check_bottom_status(void);
+uint32_t CheckWeightCollision(void);
+void Weight_Update(uint32_t currWeight);
 #endif /* INC_WEIGHT_H_ */

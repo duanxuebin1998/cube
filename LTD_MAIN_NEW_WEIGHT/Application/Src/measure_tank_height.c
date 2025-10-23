@@ -14,6 +14,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include "measure_zero.h"
+#include "motor_ctrl.h"
 // 全局变量：存储最终确定的罐底位置（编码器计数值）
 int32_t bottom_value = -100000000; // 初始值设为较大数值作为无效状态标识
 
@@ -42,9 +43,7 @@ uint32_t SearchBottom(void) {
 		CHECK_ERROR(ret);  // 检查上行是否成功
 		printf("罐底测量\t上行完成\r\n");
 	}
-	ret = get_stable_weight();  // 获取稳定的重量读数
-	CHECK_ERROR(ret);  // 检查获取稳定重量是否成功
-	printf("罐底测量\t初始重量：%d\r\n", g_weight);
+	printf("罐底测量\t初始重量：%d\r\n", weight_parament.stable_weight);
 	/*************** 粗找阶段 - 带重试机制 ***************/
 	while (try_times < 3) {
 		try_times++;
@@ -52,21 +51,13 @@ uint32_t SearchBottom(void) {
 		fault_info_init(); // 清除故障信息
 
 		ret = SearchBottomRough();
+		CHECK_COMMAND_SWITCH(ret);// 检查是否收到命令切换请求
 		if (ret != NO_ERROR) {
 			printf("罐底测量\t粗找失败[%d]:0x%lX\r\n", try_times, ret);
 			continue; // 继续尝试
 		}
-		HAL_Delay(3000); // 短暂等待
-		// 优化：检查是否真正到达零点
-		if (determine_weight_status() == BOTTOM)
-		{
-			break;
-		}
 		else {
-			printf("罐底测量\t粗找罐底未成功，尝试再次粗找\r\n");
-			ret = motorMoveAndWaitUntilStop(100.0, MOTOR_DIRECTION_UP);
-			CHECK_ERROR(ret);  // 检查上行是否成功
-			printf("罐底测量\t上行100mm\r\n");
+			break;  // 成功找到罐底，退出循环
 		}
 	}
 	CHECK_ERROR(ret); // 检查粗找罐底是否成功,是否有错误代码
@@ -74,7 +65,7 @@ uint32_t SearchBottom(void) {
 		printf("罐底测量\t粗找罐底失败(尝试%d次)\r\n", try_times);
 		CHECK_ERROR(MEASUREMENT_WEIGHT_DOWN_FAIL);
 	}
-	printf("罐底测量\t粗找罐底完成\r\n");
+	printf("罐底测量\t粗找罐底完成：实高：%ld mm\r\n", bottom_value);
 	/*************** 精找阶段 - 增强错误处理 ***************/
 	// 电机继续提升，为精确搜索做准备
 	ret = motorMoveAndWaitUntilStop(200, MOTOR_DIRECTION_UP);  // 电机小幅度提升，为精确搜索做准备
@@ -90,7 +81,7 @@ uint32_t SearchBottom(void) {
 	// 再次下行，进一步精确
 	ret = motorMoveAndWaitUntilStop(100, MOTOR_DIRECTION_UP);
 	CHECK_ERROR(ret); // 检查下行是否成功
-	printf("罐底测量\t电机下行完成\r\n");
+	printf("罐底测量\t电机上行完成\r\n");
 
 	// 第二次精确找零点
 	ret = SearchBottomPrecise();
@@ -100,8 +91,6 @@ uint32_t SearchBottom(void) {
 	}
 	printf("罐底测量\t第二次精找完成\r\n");
 	/*************** 最终校验与记录 ***************/
-	// 记录最终罐底位置
-	bottom_value = g_encoder_count;
 	g_measurement.height_measurement.current_real_height = g_measurement.debug_data.cable_length;  // 更新测量数据中的传感器位置
 	// 打印测量结果
 	printf("罐底测量\t实高：%ld mm\r\n", g_measurement.debug_data.cable_length);
@@ -131,17 +120,31 @@ static int SearchBottomRough() {
 	ret = motorMove_down();  // 启动电机向下运动
 	CHECK_ERROR(ret); // 检查上行是否成功
 	// 持续监控重量状态，直到检测到罐底
-	while (determine_weight_status() != BOTTOM) {
+	while (check_bottom_status() == NORMAL) {
 		// 实时输出编码器位置和重量值（用于调试）
-		printf("罐底测量\t长距离寻找罐底\t{encoder}%d\t{weight}%d\r\n", (int) g_encoder_count, g_weight);
-		CHECK_ERROR(ret);
+		printf("罐底测量\t长距离寻找罐底\t{传感器位置}%.1f\t{称重值}%d\r\n", (float)(g_measurement.debug_data.sensor_position)/10.0, weight_parament.current_weight);
+		ret = CheckWeightCollision();
+		CHECK_ERROR(ret); // 检查碰撞检测是否成功
+		ret = Motor_CheckLostStep_AutoTiming(g_measurement.debug_data.cable_length);
+		CHECK_ERROR(ret); // 检查丢步检测是否成功
 	}
-
-	// 记录首次检测到的罐底位置
-	bottom_value = g_encoder_count;
 	ret = motorQuickStop(); // 到达零点后快速停止电机
 	CHECK_ERROR(ret); // 检查快速停止是否成功
-	return NO_ERROR;
+	HAL_Delay(3000); // 短暂等待
+	// 优化：检查是否真正到达零点
+	if (check_bottom_status() == BOTTOM)
+	{
+		// 记录首次检测到的罐底位置
+		bottom_value = g_measurement.debug_data.cable_length;
+		return NO_ERROR;
+	}
+	else {
+		printf("罐底测量\t粗找罐底未成功，尝试再次粗找\r\n");
+		ret = motorMoveAndWaitUntilStop(100.0, MOTOR_DIRECTION_UP);
+		CHECK_ERROR(ret);  // 检查上行是否成功
+		printf("罐底测量\t上行100mm\r\n");
+		return MEASUREMENT_WEIGHT_DOWN_FAIL;
+	}
 }
 
 /**
@@ -153,37 +156,39 @@ static int SearchBottomPrecise() {
 	uint32_t ret;
 	int v1flag = 0;  // 第一速度切换标志
 	int v2flag = 0;  // 第二速度切换标志
-	ret = get_stable_weight();  // 获取稳定的重量读数
-	printf("罐底测量\t稳定重量：%d\r\n", g_weight);
+	printf("罐底测量\t稳定重量：%d\r\n", weight_parament.stable_weight);
 	ret = motorMove_down();     // 启动电机向下运动
 	CHECK_ERROR(ret); // 检查上行是否成功
 	// 持续监控重量状态，直到检测到罐底
-	while (determine_weight_status() != BOTTOM) {
+	while (check_bottom_status() != BOTTOM) {
 		// 实时输出编码器位置和重量值（用于调试）
-		printf("罐底测量\t精确寻找罐底\t{encoder}%d\t{weight}%d\r\n", (int) g_encoder_count, g_weight);
+		printf("罐底测量\t精确寻找罐底\t{传感器位置}%.1f\t{称重值}%d\r\n", (float)(g_measurement.debug_data.sensor_position)/10.0, weight_parament.current_weight);
 		// 距离上次粗定位位置4096步时减速（约10cm）
-		if ((g_encoder_count - bottom_value < 4096) && (v1flag == 0)) {
+		if ((bottom_value-g_measurement.debug_data.cable_length  < 1000) && (v1flag == 0)) {
 			stpr_setVelocity(&stepper, 16 * 32 * 40); // 设置中等速度
 			printf("罐底测量\t速度变化：%d\r\n", 40); // 速度变化通知
 			v1flag = 1;  // 设置速度切换标志（只执行一次）
 		}
 
 		// 距离粗定位位置100步时再次减速（约2.3mm）
-		if ((g_encoder_count - bottom_value < 100) && (v2flag == 0)) {
+		if ((bottom_value-g_measurement.debug_data.cable_length < 100) && (v2flag == 0)) {
 			stpr_setVelocity(&stepper, 16 * 32 * 2);  // 设置慢速
 			printf("罐底测量\t速度变化：%d\r\n", 2); // 速度变化通知
 			v2flag = 1;  // 设置速度切换标志（只执行一次）
 		}
 		// 距离粗定位位置100步时再次减速（约2.3mm）
-		if (g_encoder_count - bottom_value < -400)  {
+		if (bottom_value-g_measurement.debug_data.cable_length < -100)  {
 			printf("罐底测量\tt精确寻找罐底未找到罐底\r\n");
 			CHECK_ERROR(MEASUREMENT_WEIGHT_DOWN_FAIL); // 如果编码器位置异常，返回错误
 		}
-		CHECK_ERROR(ret);
+		ret = CheckWeightCollision();
+		CHECK_ERROR(ret); // 检查碰撞检测是否成功
+		ret = Motor_CheckLostStep_AutoTiming(g_measurement.debug_data.cable_length);
+		CHECK_ERROR(ret); // 检查丢步检测是否成功
 	}
-	// 更新罐底位置并停止电机
-	bottom_value = g_encoder_count;
 	ret = motorQuickStop();
 	CHECK_ERROR(ret); // 检查快速停止是否成功
+	// 更新罐底位置并停止电机
+	bottom_value = g_measurement.debug_data.cable_length;
 	return NO_ERROR;
 }

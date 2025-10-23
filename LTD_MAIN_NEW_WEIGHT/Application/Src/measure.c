@@ -147,7 +147,7 @@ void process_command(uint8_t *command) {
 			HAL_Delay(1000);
 			printf("start down\n");
 			while (abs(g_encoder_count) < 20000) {
-				printf("{encoder}%d\t{weight}%d\r\n", (int) g_encoder_count, g_weight);
+				printf("{encoder}%d\t{weight}%d\r\n", (int) g_encoder_count, weight_parament.current_weight);
 //				DSMSendcommand3times(DSM_POWER, strlen(DSM_POWER));
 				HAL_Delay(50);
 			}
@@ -157,7 +157,7 @@ void process_command(uint8_t *command) {
 			printf("start up to zero\n");
 			HAL_Delay(1000);
 			while (abs(g_encoder_count) >1000) {
-				printf("{encoder}%d\t{weight}%d\r\n", (int) g_encoder_count, g_weight);
+				printf("{encoder}%d\t{weight}%d\r\n", (int) g_encoder_count, weight_parament.current_weight);
 //				DSMSendcommand3times(DSM_POWER, strlen(DSM_POWER));
 				HAL_Delay(50);
 			}
@@ -267,13 +267,9 @@ static int MeasureStart(void)
 void MeasureZero(void)
 {
 	int ret = 0;
+	MeasureStart();
 	g_measurement.device_status.device_state = STATE_BACKZEROING;
-    ret = MeasureStart();
-	if ((ret != NO_ERROR)&& (ret != STATE_SWITCH))
-	{
-		g_measurement.device_status.device_state = STATE_ERROR;
-		return;
-	}
+
 	//开始回零点
 	ret = SearchZero();
 	if ((ret != NO_ERROR)&& (ret != STATE_SWITCH))
@@ -302,13 +298,8 @@ void MeasureZero(void)
 void MeasureBottom(void)
 {
 	int ret = 0;
+    MeasureStart();
 	g_measurement.device_status.device_state = STATE_FINDBOTTOM;
-    ret = MeasureStart();
-	if ((ret != NO_ERROR)&& (ret != STATE_SWITCH))
-	{
-		g_measurement.device_status.device_state = STATE_ERROR;
-		return;
-	}
 	//开始测量罐高
 	ret = SearchBottom();
 	if ((ret != NO_ERROR)&& (ret != STATE_SWITCH))
@@ -323,13 +314,9 @@ void MeasureBottom(void)
 void MeasureAndFollowOilLevel(void)
 {
 	int ret = 0;
+    MeasureStart();
+
 	g_measurement.device_status.device_state = STATE_FINDOIL;
-    ret = MeasureStart();
-	if ((ret != NO_ERROR)&& (ret != STATE_SWITCH))
-	{
-		g_measurement.device_status.device_state = STATE_ERROR;
-		return;
-	}
 	//开始测量罐高
 	ret = SearchAndFollowOilLevel();
 	if ((ret != NO_ERROR)&& (ret != STATE_SWITCH))

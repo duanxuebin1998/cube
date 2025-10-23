@@ -56,12 +56,10 @@ uint32_t SearchOilLevel(void) {
 		CHECK_ERROR(ret);  // 检查回零点是否成功
 		printf("液位测量\t回零点完成\r\n");
 	}
-	ret = get_stable_weight();  // 获取稳定的重量读数
-	CHECK_ERROR(ret);  // 检查获取稳定重量是否成功
-	printf("液位测量\t初始重量：%d\r\n", g_weight);
+	printf("液位测量\t初始重量：%d\r\n", weight_parament.stable_weight);
 
 	/*************** 粗找阶段 - 带重试机制 ***************/
-	while (try_times < 3) {
+	while (try_times < 3) {//这里重试没有起作用
 		try_times++;
 		printf("液位测量\t粗找液位第%d次尝试\r\n", try_times);
 		fault_info_init(); // 清除故障信息
@@ -72,7 +70,7 @@ uint32_t SearchOilLevel(void) {
 			CHECK_ERROR(ret); // 检查下行是否成功
 			//取油中频率
 			ret = DSM_Get_LevelMode_Frequence_Avg(&g_measurement.oil_measurement.oil_frequency);
-			printf("液位测量\t油中频率：%f\r\n", g_measurement.oil_measurement.oil_frequency);
+			printf("液位测量\t油中频率：%ld\r\n", g_measurement.oil_measurement.oil_frequency);
 			CHECK_ERROR(ret);  // 检查获取油中频率是否成功
 
 			printf("液位测量\t传感器已在液位中，向上寻找空气\r\n");
@@ -153,9 +151,7 @@ uint32_t FollowOilLevel(void)
 static int SearchOil() {
 	uint32_t ret;
 
-	ret = get_stable_weight();  // 获取稳定的重量读数
-	CHECK_ERROR(ret);  // 检查获取稳定重量是否成功
-	printf("液位测量\t初始重量：%d\r\n", g_weight);
+	printf("液位测量\t初始重量：%d\r\n", weight_parament.stable_weight);
 
 	//向上运行保证传感器全部在空气
 	if (g_measurement.debug_data.cable_length > 2000) { // 如果尺带长度大于200mm，先将电机上行到安全位置
@@ -168,14 +164,15 @@ static int SearchOil() {
 	// 持续监控重量状态，直到检测到液位
 	while (determine_level_status() != OIL) {
 		// 实时输出编码器位置和重量值（用于调试）
-		printf("液位测量\t长距离寻找液位\t{encoder}%d\t{weight}%d\r\n", (int) g_encoder_count, g_weight);
+		printf("液位测量\t长距离寻找液位\t{传感器位置}%.1f\t{称重值}%d\r\n", (float)(g_measurement.debug_data.sensor_position)/10.0, weight_parament.current_weight);
 		CHECK_ERROR(ret);
 		//丢步检测
+		ret = Motor_CheckLostStep_AutoTiming(g_measurement.debug_data.cable_length);
+		CHECK_ERROR(ret); // 检查丢步检测是否成功
 
 		//称重检测
-		if (determine_weight_status() != NORMAL) {
-			return WEIGHT_COLLISION_DETECTED; // 返回称重异常错误码
-		}
+		ret = CheckWeightCollision();
+		CHECK_ERROR(ret); // 检查碰撞检测是否成功
 	}
 	ret = motorQuickStop(); // 到达零点后快速停止电机
 	CHECK_ERROR(ret); // 检查快速停止是否成功
@@ -196,10 +193,8 @@ static int SearchOil() {
 
 static int SearchAir() {
 	uint32_t ret;
-	uint32_t frequency;	//当前频率
-	ret = get_stable_weight();  // 获取稳定的重量读数
-	CHECK_ERROR(ret);  // 检查获取稳定重量是否成功
-	printf("液位测量\t初始重量：%d\r\n", g_weight);
+//	uint32_t frequency;	//当前频率
+	printf("液位测量\t初始重量：%d\r\n", weight_parament.stable_weight);
 
 	ret = motorMove_up();  // 启动电机向下运动
 	CHECK_ERROR(ret); // 检查上行是否成功
@@ -207,14 +202,14 @@ static int SearchAir() {
 
 	while (determine_level_status() != AIR) {
 		// 实时输出编码器位置和重量值（用于调试）
-		printf("液位测量\t长距离寻找空气\t{encoder}%d\t{weight}%d\r\n", (int) g_encoder_count, g_weight);
+		printf("液位测量\t长距离寻找空气\t{传感器位置}%.1f\t{称重值}%d\r\n", (float)(g_measurement.debug_data.sensor_position)/10.0, weight_parament.current_weight);
 		CHECK_ERROR(ret);
 		//丢步检测
-
+		ret = Motor_CheckLostStep_AutoTiming(g_measurement.debug_data.cable_length);
+		CHECK_ERROR(ret); // 检查丢步检测是否成功
 //		//称重检测
-		if (determine_weight_status() != NORMAL) {
-			return WEIGHT_COLLISION_DETECTED; // 返回称重异常错误码
-		}
+		ret = CheckWeightCollision();
+		CHECK_ERROR(ret); // 检查碰撞检测是否成功
 
 	}
 	ret = motorQuickStop(); // 到达零点后快速停止电机
@@ -224,7 +219,7 @@ static int SearchAir() {
 	CHECK_ERROR(ret); // 检查上行是否成功
 	//取空气中频率
 	ret = DSM_Get_LevelMode_Frequence_Avg(&g_measurement.oil_measurement.air_frequency);
-	printf("液位测量\t空气中频率：%d\r\n", g_measurement.oil_measurement.air_frequency);
+	printf("液位测量\t空气中频率：%ld\r\n", g_measurement.oil_measurement.air_frequency);
 	CHECK_ERROR(ret);  // 检查获取空气中频率是否成功
 	ret = motorMoveAndWaitUntilStop(100.0, MOTOR_DIRECTION_DOWN);//返回
 	CHECK_ERROR(ret); // 检查下行是否成功

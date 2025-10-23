@@ -26,11 +26,11 @@ void motor_step_up_text(void) {
 		ticks = -4 * 32;
 		stpr_moveBy(&stepper, &ticks, velocity);
 		HAL_Delay(2000);
-		printf("%d\t{encoder}%d\t{weight}%d\t", i, (int) g_encoder_count, g_weight);
+		printf("%d\t{传感器位置}%.1f\t{称重值}%d\r\n",  i,(float)(g_measurement.debug_data.sensor_position)/10.0, weight_parament.current_weight);
 		HAL_Delay(100);
-		printf("%d\t", g_weight);
+		printf("%d\t", weight_parament.current_weight);
 		HAL_Delay(100);
-		printf("%d\r\n", g_weight);
+		printf("%d\r\n", weight_parament.current_weight);
 	}
 	stpr_disableDriver(&stepper); //使能电机
 	printf("motor text over\n");
@@ -46,11 +46,11 @@ void motor_step_down_text(void) {
 		ticks = 4 * 32;
 		stpr_moveBy(&stepper, &ticks, velocity);
 		HAL_Delay(2000);
-		printf("%d\t{encoder}%d\t{weight}%d\t", i, (int) g_encoder_count, g_weight);
+		printf("%d\t{传感器位置}%.1f\t{称重值}%d\r\n",  i,(float)(g_measurement.debug_data.sensor_position)/10.0, weight_parament.current_weight);
 		HAL_Delay(100);
-		printf("%d\t", g_weight);
+		printf("%d\t", weight_parament.current_weight);
 		HAL_Delay(100);
-		printf("%d\r\n", g_weight);
+		printf("%d\r\n", weight_parament.current_weight);
 	}
 	printf("down over!\n");
 	stpr_disableDriver(&stepper); //使能电机
@@ -67,11 +67,11 @@ void motor_step_text(void) {
 		ticks = 4 * 32;
 		stpr_moveBy(&stepper, &ticks, velocity);
 		HAL_Delay(2000);
-		printf("%d\t{encoder}%d\t{weight}%d\t", i, (int) g_encoder_count, g_weight);
+		printf("%d\t{encoder}%d\t{weight}%d\t", i, (int) g_encoder_count, weight_parament.current_weight);
 		HAL_Delay(100);
-		printf("%d\t", g_weight);
+		printf("%d\t", weight_parament.current_weight);
 		HAL_Delay(100);
-		printf("%d\r\n", g_weight);
+		printf("%d\r\n", weight_parament.current_weight);
 	}
 	printf("down over!\n");
 	printf("start up\n");
@@ -79,11 +79,11 @@ void motor_step_text(void) {
 		ticks = -4 * 32;
 		stpr_moveBy(&stepper, &ticks, velocity);
 		HAL_Delay(2000);
-		printf("%d\t{encoder}%d\t{weight}%d\t", i, (int) g_encoder_count, g_weight);
+		printf("%d\t{encoder}%d\t{weight}%d\t", i, (int) g_encoder_count, weight_parament.current_weight);
 		HAL_Delay(100);
-		printf("%d\t", g_weight);
+		printf("%d\t", weight_parament.current_weight);
 		HAL_Delay(100);
-		printf("%d\r\n", g_weight);
+		printf("%d\r\n", weight_parament.current_weight);
 	}
 	stpr_disableDriver(&stepper); //使能电机
 	printf("motor text over\n");

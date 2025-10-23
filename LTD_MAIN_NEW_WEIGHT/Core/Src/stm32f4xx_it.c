@@ -22,6 +22,7 @@
 #include "stm32f4xx_it.h"
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include "weight.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -414,7 +415,8 @@ void UART4_IRQHandler(void)
 			high_byte = USART4_RX_BUF[19]; // FF
 			low_byte = USART4_RX_BUF[20];  // 69
 			g_weight = (high_byte << 8) | low_byte;
-
+			weight_parament.current_weight = weight_parament.empty_weight - g_weight;//更新当前称重值
+			Weight_Update(weight_parament.current_weight); // 稳定重量
 			HAL_UART_Receive_DMA(&huart4, USART4_RX_BUF, USART4_RX_BUF_SIZE); //重新打开DMA接收
 		}
 	}

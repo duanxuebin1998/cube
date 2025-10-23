@@ -44,7 +44,7 @@ void Update_Encoder_Count(uint16_t current_angle) {
 	g_encoder_count += delta;
 	prev_angle = current_angle; // 更新上一角度值
 
-	if (abs((int)g_encoder_count - (int)g_encoder_saved) > 3) {
+	if ((abs((int)g_encoder_count - (int)g_encoder_saved) > 3)||(g_measurement.debug_data.sensor_position ==0 )) {
 		WriteEncoderData(g_encoder_count, prev_angle); // 写入编码计数和上次角度值到 FRAM
 		g_encoder_saved = g_encoder_count; // 更新保存的编码计数值
 		update_sensor_height_from_encoder(); // 更新传感器高度测量
@@ -63,6 +63,7 @@ static void ReadEncoderData(volatile int32_t *encoder_count, uint16_t *prev_angl
 
 	// 从 FRAM 地址 0x0004 读取上次角度值
 	*prev_angle = ReadSingleData(FRAM_ENCODER_ADDRESS);
+	update_sensor_height_from_encoder(); // 更新传感器高度测量
 }
 
 /**
@@ -97,6 +98,5 @@ void set_encoder_zero(void) {
 	// 更新调试信息
 	g_measurement.debug_data.current_encoder_value = -g_encoder_count;
 	// 写入新的零点到 FRAM
-	WriteEncoderData(g_encoder_count, prev_angle);
 	printf("编码器零点设置为 %ld\r\n", g_encoder_count);
 }

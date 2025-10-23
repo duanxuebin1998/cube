@@ -1,4 +1,4 @@
-#include "../../Peripherals/inc/TMC5130.h"
+#include "TMC5130.h"
 
 #include "assert.h"
 #include <stdlib.h>
@@ -178,14 +178,18 @@ void stpr_setPos(TMC5130TypeDef *tmc5130, int32_t position) {
 }
 
 uint32_t stpr_waitMove(TMC5130TypeDef *tmc5130) {
+	uint32_t ret;
 	while ((stpr_readInt(tmc5130, TMC5130_RAMPSTAT) & 0x400) != 0x400) {
 //		printf("{encoder}%d\t{weight}%d\r\n", (int) encoder_count, weight);
+		ret = CheckWeightCollision();//检测碰撞
+		CHECK_ERROR(ret);
 		uint32_t gstat = stpr_readInt(tmc5130, TMC5130_GSTAT);
 		if (gstat) {
 			// 打印故障信息
 			if (gstat & (1 << 0)) {
 				printf("芯片自上次读取 GSTAT 以来发生了复位\n");
-				CHECK_ERROR(MOTOR_RESET_FAIL);
+				stpr_writeInt(tmc5130, TMC5130_GSTAT, 0x07); // 清除所有状态位
+				continue;
 			}
 
 			if (gstat & (1 << 1)) {
@@ -263,7 +267,7 @@ void stpr_initStepper(TMC5130TypeDef *tmc5130, SPI_HandleTypeDef *spi, GPIO_Type
 //	   stpr_writeInt(tmc5130, RAMPMODE, 0);             //RAMPMODE = 0 (Target position move)    目标位置移动
 //	   stpr_writeInt(tmc5130, GCONF, 0x1084 | NORMAL_MOTOR_DIRECTION);	//General Configuration  //常规配置     --运动方向
 	stpr_writeInt(tmc5130, TMC5130_GSTAT, 0x07); // 清除所有状态位
-	stpr_waitMove(&stepper);//2025/9/13 消除第一次上电电机报警
+	stpr_waitMove(&stepper); //2025/9/13 消除第一次上电电机报警
 }
 
 /*
