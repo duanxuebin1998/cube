@@ -4,9 +4,9 @@
 
 #include "main.h"
 
-#include "../../Peripherals/inc/TMC5130_Constants.h"
-#include "../../Peripherals/inc/TMC5130_Pins.h"
-#include "../../Peripherals/inc/TMC5130_Register.h"
+#include "TMC5130_Constants.h"
+#include "TMC5130_Pins.h"
+#include "TMC5130_Register.h"
 
 #define BYTE(value, n)    (((value) >> ((n) << 3)) & 0xFF)
 // 定义控制类型的枚举类型，用于选择不同的控制方式

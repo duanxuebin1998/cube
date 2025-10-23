@@ -16,7 +16,7 @@
 #include "system_parameter.h"
 #include "main.h"
 #include "stdio.h"
-#define DEBUG_UART6 1
+#define DEBUG_UART6 0
 
 #define DSM_CMD_TIMEOUT 1000  //接收字节间超时时间
 #define RX_BUF_LEN 128

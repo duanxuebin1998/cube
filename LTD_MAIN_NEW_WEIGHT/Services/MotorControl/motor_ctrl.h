@@ -8,7 +8,7 @@
 #ifndef INC_MOTOR_CTRL_H_
 #define INC_MOTOR_CTRL_H_
 
-#include "main.h"
+//#include "main.h"
 #include "TMC5130.h"
 
 #define MOTOR_DIRECTION_DOWN 0
@@ -25,7 +25,9 @@ uint32_t motorMove_down(void);// 电机向下移动
 uint32_t motorQuickStop(void);// 电机快速停止
 uint32_t motorSlowStop(void);// 电机慢速停止
 void motor_text(void);
-
+void MotorLostStep_Init(void);// 丢步检测初始化
+uint32_t Motor_CheckLostStep_AutoTiming(int32_t currentPos);// 电机丢步检测
+//uint32_t stpr_wait_until_stop(TMC5130TypeDef *tmc5130);// 等待电机停止
 //motorMoveForward(int distance) // 前进指定距离
 //motorMoveBackward(int distance) // 后退指定距离
 //motorMoveToPosition(int position) // 移动到指定位置

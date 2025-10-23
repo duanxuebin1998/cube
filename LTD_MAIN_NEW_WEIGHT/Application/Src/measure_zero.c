@@ -11,9 +11,10 @@
 #include <stdlib.h>
 #include "measure_zero.h"
 #include "system_parameter.h"
+#include "motor_ctrl.h"
 
 // 全局变量，记录零点的编码器数值
-int32_t zero_value = -100000000;
+int32_t zero_position ;
 
 // 内部函数声明：粗略和精确寻找零点
 static int SearchZeroRough();
@@ -35,10 +36,7 @@ int SearchZero(void) {
 		CHECK_ERROR(ret); // 检查下行是否成功
 		printf("零点测量\t脱离零点完成\r\n");
 	}
-	// 获取初始重量状态
-	ret = get_stable_weight();
-	CHECK_ERROR(ret); // 检查获取稳定重量是否成功
-	printf("零点测量\t初始重量：%d\r\n", g_weight);
+	printf("零点测量\t初始重量：%d\r\n", weight_parament.stable_weight);
 	/*************** 粗找阶段 - 带重试机制 ***************/
 	while (try_times < 3) {
 		try_times++;
@@ -47,21 +45,30 @@ int SearchZero(void) {
 		printf("零点测量\t粗找零点第%d次尝试\r\n", try_times);
 
 		ret = SearchZeroRough();
-		if (ret != NO_ERROR) {
-			printf("零点测量\t粗找失败[%d]:0x%X\r\n", try_times,  (unsigned int)ret);
+		CHECK_COMMAND_SWITCH(ret);// 检查是否收到命令切换请求
+		//位置判断，与上一个零点距离差
+		if (abs(g_measurement.debug_data.cable_length) > 100) { //
+			printf("零点测量\t编码值异常，可能需要重新校准\r\n");
+			ret =MEASUREMENT_ZERO_OUT_OF_RANGE;
+			ret = motorMoveAndWaitUntilStop(100.0, MOTOR_DIRECTION_DOWN);
+			CHECK_ERROR(ret); // 检查下行是否成功
 			continue; // 继续尝试
 		}
 		HAL_Delay(3000); // 短暂等待
 		// 优化：检查是否真正到达零点
-		if (determine_weight_status() == ZERO)
+		if (check_zero_point_status() == ZERO)
 			break;
+		if (ret != NO_ERROR) {
+			printf("零点测量\t粗找失败[%d]:0x%X\r\n", try_times,  (unsigned int)ret);
+			continue; // 继续尝试
+		}
 	}
 	CHECK_ERROR(ret); // 检查粗找零点是否成功,是否有错误代码
 	if (try_times >= 3) {
 		printf("零点测量\t粗找零点失败(尝试%d次)\r\n", try_times);
 		CHECK_ERROR(MEASUREMENT_WEIGHT_UP_FAIL);
 	}
-	printf("零点测量\t粗找零点完成\r\n");
+	printf("零点测量\t粗找零点完成\t位置%d\r\n",zero_position);
 
 	/*************** 精找阶段 - 增强错误处理 ***************/
 	// 电机继续下行，为后续精确找零点做准备
@@ -73,7 +80,7 @@ int SearchZero(void) {
 		printf("零点测量\t第一次精找失败:0x%X\r\n",  (unsigned int)ret);
 		CHECK_ERROR (ret);
 	}
-	printf("零点测量\t第一次精找完成\r\n");
+	printf("零点测量\t第一次精找完成\t位置%d\r\n",zero_position);
 
 	// 再次下行，进一步精确
 	ret = motorMoveAndWaitUntilStop(100.0, MOTOR_DIRECTION_DOWN);
@@ -90,10 +97,9 @@ int SearchZero(void) {
 
 	/*************** 最终校验与记录 ***************/
 	// 记录最终零点编码器值
-	zero_value = g_encoder_count;
-	printf("零点测量完成 \t当前编码值\t %ld\r\n", zero_value);
-	printf("{zero_value}%ld\r\n", zero_value);
-	if (abs(zero_value) > 4096) { //
+	printf("零点测量完成 \t当前编码值\t %ld\r\n", g_encoder_count);
+	printf("{zero_value}%ld mm\r\n", g_measurement.debug_data.cable_length);
+	if (abs(g_measurement.debug_data.cable_length) > 100) { //
 		printf("零点测量\t编码值异常，可能需要重新校准\r\n");
 		CHECK_ERROR(MEASUREMENT_ZERO_OUT_OF_RANGE); // 检查零点编码值是否在合理范围内
 	} else {
@@ -119,14 +125,17 @@ static int SearchZeroRough() {
 	ret = motorMove_up();// 电机上行
 	CHECK_ERROR(ret); // 检查上行是否成功
 	// 循环直到重量状态为ZERO
-	while (determine_weight_status() != ZERO) {
+	while (check_zero_point_status() != ZERO) {
 		// 实时打印编码器和重量信息
-		printf("零点测量\t长距离寻找零点\t{encoder}%d\t{weight}%d\r\n", (int) g_encoder_count, g_weight);
-		// 下面注释代码为速度调整的预留
+		printf("零点测量\t长距离寻找零点\t{传感器位置}%.1f\t{称重值}%d\r\n", (float)(g_measurement.debug_data.sensor_position)/10.0, weight_parament.current_weight);
+		//碰撞检测
+		ret = CheckWeightCollision();
+		CHECK_ERROR(ret); // 检查碰撞检测是否成功
 		//丢步检测
-		CHECK_ERROR(ret); // 检查快速停止是否成功
+		ret = Motor_CheckLostStep_AutoTiming(g_measurement.debug_data.cable_length);
+		CHECK_ERROR(ret); // 检查丢步检测是否成功
 	}
-	zero_value = g_encoder_count;
+	zero_position = g_measurement.debug_data.cable_length;
 	ret = motorQuickStop(); // 到达零点后快速停止电机
 	CHECK_ERROR(ret); // 检查快速停止是否成功
 	return NO_ERROR; // 返回无错误状态
@@ -145,27 +154,37 @@ static int SearchZeroPrecise() {
 	// motorMove_up()：电机上行
 	ret = motorMove_up();
 	CHECK_ERROR(ret); // 检查上行是否成功
-	while (determine_weight_status() != ZERO) {
-		printf("零点测量\t精确寻找零点\t{encoder}%d\t{weight}%d\r\n", (int) g_encoder_count, g_weight);
+	while (check_zero_point_status() != ZERO) {
+		printf("零点测量\t精确寻找零点\t{传感器位置}%.1f\t{称重值}%d\r\n", (float)(g_measurement.debug_data.sensor_position)/10.0, weight_parament.current_weight);
 		// 距离零点4096以内，速度降为40
-		if ((-(g_encoder_count - zero_value) < 4096) && (v1flag == 0)) {
+		if (((g_measurement.debug_data.cable_length-zero_position)< 1000) && (v1flag == 0)) {
+			printf("零点位置%d\t尺带长度%d\t", zero_position, g_measurement.debug_data.cable_length);
 			stpr_setVelocity(&stepper, 16 * 32 * 40);
 			printf("速度调整\t{Velocity}%d\r\n", 40);
 			v1flag = 1;
 		}
 		// 距离零点100以内，速度降为2
-		if ((-(g_encoder_count - zero_value) < 100) && (v2flag == 0)) {
+		if (((g_measurement.debug_data.cable_length-zero_position) < 100) && (v2flag == 0)) {
+
+			printf("零点位置%d\t尺带长度%d\t", zero_position, g_measurement.debug_data.cable_length);
 			stpr_setVelocity(&stepper, 16 * 32 * 2);
 			printf("速度调整\t{Velocity}%d\r\n", 2);
 			v2flag = 1;
 		}
-		if(-(g_encoder_count - zero_value) < -400) {
-			printf("零点测量\t细找零点失败\r\n");
+		if(g_measurement.debug_data.cable_length<(zero_position-100)) {
+			printf("零点测量\t精找零点超出范围\t尺带长度\t%d\r\n", g_measurement.debug_data.cable_length);
+			ret = motorQuickStop(); // 到达零点后快速停止电机
+			CHECK_ERROR(ret); // 检查快速停止是否成功
 			CHECK_ERROR(MEASUREMENT_WEIGHT_UP_FAIL); // 检查快速停止是否成功
 		}
-		CHECK_ERROR(ret); // 检查快速停止是否成功
+		//碰撞检测
+		ret = CheckWeightCollision();
+		CHECK_ERROR(ret); // 检查碰撞检测是否成功
+
+		ret = Motor_CheckLostStep_AutoTiming(g_measurement.debug_data.cable_length);
+		CHECK_ERROR(ret); // 检查丢步检测是否成功
 	}
-	zero_value = g_encoder_count;
+	zero_position = g_measurement.debug_data.cable_length;
 	ret = motorQuickStop(); // 到达零点后快速停止电机
 	CHECK_ERROR(ret); // 检查快速停止是否成功
 	return NO_ERROR; // 返回无错误状态

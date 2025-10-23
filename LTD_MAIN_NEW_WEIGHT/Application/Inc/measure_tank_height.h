@@ -9,6 +9,9 @@
 #define INC_MEASURE_TANK_HEIGHT_H_
 #include "system_parameter.h"
 
+extern int32_t bottom_value;
+
+
 uint32_t SearchBottom(void);
 
 #endif /* INC_MEASURE_TANK_HEIGHT_H_ */

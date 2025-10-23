@@ -36,6 +36,7 @@ extern "C" {
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
+#include "weight.h"
 /* USER CODE END Includes */
 
 /* Exported types ------------------------------------------------------------*/

@@ -32,14 +32,15 @@ void App_Init(void) {
 	//测试函数
 //	Test_main(); // 测试函数
 	AD5421_SetCurrent(6.0); // 设置初始电流为4mA
+	motor_Init(); //电机初始化
 	fault_info_init(); // 初始化故障信息
 //	DSMSendcommand3times(DSM_GET_FREQUENCE_START, strlen(DSM_GET_FREQUENCE_START));
-//	EnableLevelMode();//开启液位模式
-	motor_Init(); //电机初始化
+	Probe_EnableWaterSensor();//开启液位模式
 }
 
 // 主循环任务
 void App_MainLoop(void) {
+
 
 	while (1) {
 		// 如果有新的命令
@@ -63,6 +64,7 @@ void App_MainLoop(void) {
 //		DSMSendcommand3times(DSM_SENSORGET, strlen(DSM_SENSORGET));
 //		Probe_EnableWaterSensor();
 //		printf("{encoder}%d\r\n{weight}%d\r\n", (int) g_encoder_count, g_weight);
+//		printf("位置%d", g_measurement.debug_data.sensor_position);
 //		HAL_GPIO_WritePin(HART_RTS_GPIO_Port, HART_RTS_Pin, GPIO_PIN_RESET);
 //		HAL_UART_Transmit_DMA(&huart2, "123456", 6);  // 通过UART发送响应
 //		 DSM_Get_LevelMode_Frequence(&g_measurement.oil_measurement.current_frequency);

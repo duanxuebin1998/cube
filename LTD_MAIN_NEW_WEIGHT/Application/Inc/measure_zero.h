@@ -7,7 +7,7 @@
 
 #ifndef INC_MEASURE_ZERO_H_
 #define INC_MEASURE_ZERO_H_
-
+extern int32_t zero_position ;
 int SearchZero(void);
 
 #endif /* INC_MEASURE_ZERO_H_ */
