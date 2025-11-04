@@ -9,6 +9,7 @@
 #include "system_parameter.h"
 #include "measure_zero.h"
 #include "measure_tank_height.h"
+#include "measure_oilLevel.h"
 #include "motor_ctrl.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -41,14 +42,14 @@ void ProcessMeasureCmd(CommandType command)
 		printf("执行设置满载称重指令\n");
 		get_full_weight();
 		break;
-//	case CMD_MEASURE_SINGLE:
-//		printf("执行单点测量指令\n");
+	case CMD_MEASURE_SINGLE:
+		printf("执行单点测量指令\n");
 //		SinglePointMeasurement();
-//		break;
-//	case CMD_MONITOR_SINGLE:
-//		printf("执行单点监测指令\n");
+		break;
+	case CMD_MONITOR_SINGLE:
+		printf("执行单点监测指令\n");
 //		SinglePointMonitoring();
-//		break;
+		break;
 //	case CMD_SYNTHETIC:
 //		printf("执行综合测量指令\n");
 //		SyntheticMeasurement();
@@ -272,12 +273,7 @@ void MeasureZero(void)
 
 	//开始回零点
 	ret = SearchZero();
-	if ((ret != NO_ERROR)&& (ret != STATE_SWITCH))
-	{
-		g_measurement.device_status.device_state = STATE_ERROR;
-		return;
-	}
-
+	SET_ERROR(ret);
 	g_measurement.device_status.device_state = STATE_STANDBY;
 	return;
 }
@@ -302,11 +298,7 @@ void MeasureBottom(void)
 	g_measurement.device_status.device_state = STATE_FINDBOTTOM;
 	//开始测量罐高
 	ret = SearchBottom();
-	if ((ret != NO_ERROR)&& (ret != STATE_SWITCH))
-	{
-		g_measurement.device_status.device_state = STATE_ERROR;
-		return;
-	}
+	SET_ERROR(ret);
 
 	g_measurement.device_status.device_state = STATE_FINDBOTTOM_OVER;
 	return;
@@ -319,11 +311,7 @@ void MeasureAndFollowOilLevel(void)
 	g_measurement.device_status.device_state = STATE_FINDOIL;
 	//开始测量罐高
 	ret = SearchAndFollowOilLevel();
-	if ((ret != NO_ERROR)&& (ret != STATE_SWITCH))
-	{
-		g_measurement.device_status.device_state = STATE_ERROR;
-		return;
-	}
+	SET_ERROR(ret);
 
 	g_measurement.device_status.device_state = STATE_STANDBY;
 	return;

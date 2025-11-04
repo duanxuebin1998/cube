@@ -148,7 +148,7 @@ void ResetAD5421(void)
 
 static uint32_t WriteControlRegister(uint16_t  controldata)
 {
-	uint16_t  readback;
+//	uint16_t  readback;
 	AD5421_WriteReg(WRITECONTROL, controldata);
 	//验证写入是否成功
 //	ReadControlRegister(&readback);
@@ -169,34 +169,34 @@ static uint32_t WriteControlRegister(uint16_t  controldata)
 * Data    2023-06-08
 ******************************************************/
 
-static uint16_t  CalculateCurrentCRC(uint32_t data)
-{
-	uint32_t divisor = 0x107u;
-	uint32_t res;
-	uint32_t bitcount = 23u;
-	uint32_t fir;
-
-	for(;bitcount!=0u;bitcount--)
-	{
-		fir = ((data>>bitcount)&0x100u);
-		if(fir!=0u)
-		{
-			break;
-		}
-	}
-
-	res = (data>>bitcount)^divisor;
-	for(;bitcount!=0u;bitcount--)
-	{
-		res = (res<<1u)+((data>>(bitcount-1u))&0x01u);
-		if((res&0x100u)!=0u)
-		{
-			res ^= divisor;
-		}
-	}
-
-	return (uint16_t )res;
-}
+//static uint16_t  CalculateCurrentCRC(uint32_t data)
+//{
+//	uint32_t divisor = 0x107u;
+//	uint32_t res;
+//	uint32_t bitcount = 23u;
+//	uint32_t fir;
+//
+//	for(;bitcount!=0u;bitcount--)
+//	{
+//		fir = ((data>>bitcount)&0x100u);
+//		if(fir!=0u)
+//		{
+//			break;
+//		}
+//	}
+//
+//	res = (data>>bitcount)^divisor;
+//	for(;bitcount!=0u;bitcount--)
+//	{
+//		res = (res<<1u)+((data>>(bitcount-1u))&0x01u);
+//		if((res&0x100u)!=0u)
+//		{
+//			res ^= divisor;
+//		}
+//	}
+//
+//	return (uint16_t )res;
+//}
 
 void CurrentStateJudgeAndSend(void)
 {
@@ -215,7 +215,7 @@ void CurrentStateJudgeAndSend(void)
 
 uint32_t Ad5421Init(void)
 {
-	uint32_t ret;
+	uint32_t ret = NO_ERROR;
 	ResetAD5421();//软件复位
 
 	(void)WriteControlRegister(CUR_SPIOFF_COMMAND);

@@ -159,7 +159,7 @@ void CPU2_CombinatePackage_Send(uint8_t f_code,uint16_t startadd,uint16_t regist
     uint32_t timeout = HAL_GetTick();
     while(wait_response)
     {
-        if (HAL_GetTick() - timeout > 100) // 100ms超时
+        if (HAL_GetTick() - timeout > 1000) // 100ms超时
         {
             printf("Wait response timeout!\n");
             return;
@@ -170,6 +170,7 @@ void CPU2_CombinatePackage_Send(uint8_t f_code,uint16_t startadd,uint16_t regist
 /*向CPU2发送数据包*/
 void sendToCPU2(uint8_t*arr,uint16_t len,bool flag_fromhost)
 {
+	RS485_SET_SEND_MODE();  // 切换到发送
 	HAL_UART_Transmit_DMA(&huart5, arr, len);
 	wait_response = true; // 设置等待响应标志位
     cnt_commutoCPU2++;

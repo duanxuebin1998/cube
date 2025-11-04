@@ -19,26 +19,129 @@
 #include "motor_ctrl.h"
 #include "sensor.h"
 #include "weight.h"
+#include "measure_zero.h"
 
 // 函数原型声明
 static int SearchOil();   // 粗略搜索液位
 static int SearchAir(); // 精确搜索液位
 static int SearchOilPrecise(float per_mm_Frequency);
 static int determineTheSensorPositionAndUpdateTheLevelValue(void);
+static int waitForTheLiquidLevelToExceedTheBlindZone(void);
 Level_StateTypeDef determine_level_status(void);
 uint32_t FollowOilLevel(void);
 
+/**
+ * @brief 液位测量与跟随主流程
+ *        包含3个阶段：启用液位模式、搜索液位、跟随液位
+ *        每个阶段失败时自动重试3次（状态切换时不重试）
+ *
+ * @return uint32_t 错误代码（NO_ERROR表示成功）
+ */
 uint32_t SearchAndFollowOilLevel(void)
 {
-	uint32_t ret;
-	ret = EnableLevelMode();//开启液位模式
-	CHECK_ERROR(ret);// 检查开启液位模式是否成功
-	ret = SearchOilLevel();//寻找液位
-	CHECK_ERROR(ret);// 检查液位测量是否成功
-	g_measurement.device_status.device_state = STATE_FLOWOIL;//切换到液位跟随状态
-	ret = FollowOilLevel();//跟随液位
-	CHECK_ERROR(ret);// 检查液位跟随是否成功
+    uint32_t ret;
+    uint8_t try_times;
+
+    printf("液位流程\t开始执行\r\n");
+
+    /*************** Step 1: 启用液位模式 ***************/
+    try_times = 0;
+    while (try_times < 3)
+    {
+        try_times++;
+        printf("液位流程\t启用液位模式第%d次尝试\r\n", try_times);
+
+        ret = EnableLevelMode();
+
+        if (ret == NO_ERROR)
+        {
+            printf("液位流程\t液位模式启用成功\r\n");
+            break;
+        }
+        else if (ret == STATE_SWITCH)
+        {
+            printf("液位流程\t检测到状态切换，中止液位模式启用\r\n");
+            break;
+        }
+        else
+        {
+            printf("液位流程\t启用液位模式失败，错误码:0x%lX\r\n", ret);
+            HAL_Delay(500);
+        }
+    }
+    if (ret != NO_ERROR)
+    {
+        printf("液位流程\t液位模式启用失败(尝试%d次)\r\n", try_times);
+        CHECK_ERROR(ret);
+    }
+
+    /*************** Step 2: 搜索液位 ***************/
+    try_times = 0;
+    while (try_times < 3)
+    {
+        try_times++;
+        printf("液位流程\t液位搜索第%d次尝试\r\n", try_times);
+
+        ret = SearchOilLevel();
+
+        if (ret == NO_ERROR)
+        {
+            printf("液位流程\t液位搜索成功\r\n");
+            break;
+        }
+        else if (ret == STATE_SWITCH)
+        {
+            printf("液位流程\t检测到状态切换，中止液位搜索\r\n");
+            break;
+        }
+        else
+        {
+            printf("液位流程\t液位搜索失败，错误码:0x%lX\r\n", ret);
+            HAL_Delay(1000);
+        }
+    }
+    if (ret != NO_ERROR)
+    {
+        printf("液位流程\t液位搜索失败(尝试%d次)\r\n", try_times);
+        CHECK_ERROR(ret);
+    }
+
+    /*************** Step 3: 跟随液位 ***************/
+    g_measurement.device_status.device_state = STATE_FLOWOIL; // 切换到液位跟随状态
+    try_times = 0;
+    while (try_times < 3)
+    {
+        try_times++;
+        printf("液位流程\t液位跟随第%d次尝试\r\n", try_times);
+
+        ret = FollowOilLevel();
+
+        if (ret == NO_ERROR)
+        {
+            printf("液位流程\t液位跟随成功\r\n");
+            break;
+        }
+        else if (ret == STATE_SWITCH)
+        {
+            printf("液位流程\t检测到状态切换，中止液位跟随\r\n");
+            break;
+        }
+        else
+        {
+            printf("液位流程\t液位跟随失败，错误码:0x%lX\r\n", ret);
+            HAL_Delay(1000);
+        }
+    }
+    if (ret != NO_ERROR)
+    {
+        printf("液位流程\t液位跟随失败(尝试%d次)\r\n", try_times);
+        CHECK_ERROR(ret);
+    }
+
+    printf("液位流程\t全部完成\r\n");
+    return NO_ERROR;
 }
+
 /*
  * @brief 主测量函数 - 执行液位的完整搜索流程
  *
@@ -87,13 +190,13 @@ uint32_t SearchOilLevel(void) {
 	}
 	if (try_times >= 3) {
 		printf("液位测量\t粗找液位失败(尝试%d次)\r\n", try_times);
-		CHECK_ERROR(MEASUREMENT_WEIGHT_DOWN_FAIL);
+		RETURN_ERROR(MEASUREMENT_WEIGHT_DOWN_FAIL);
 	}
 	printf("液位测量\t粗找液位完成\r\n");
 	/*************** 精找阶段  ***************/
 	// 精确找液位
 	g_measurement.oil_measurement.follow_frequency=  (g_measurement.oil_measurement.air_frequency + g_measurement.oil_measurement.oil_frequency) / 2.0;
-	printf("液位测量\t目标频率：%d Hz\r\n", g_measurement.oil_measurement.follow_frequency);
+	printf("液位测量\t目标频率：%ld Hz\r\n", g_measurement.oil_measurement.follow_frequency);
 
 	ret = SearchOilPrecise(100);  // 执行精确搜索
 	if (ret != NO_ERROR) {
@@ -181,7 +284,7 @@ static int SearchOil() {
 	CHECK_ERROR(ret); // 检查下行是否成功
 	//取油中频率
 	ret = DSM_Get_LevelMode_Frequence_Avg(&g_measurement.oil_measurement.oil_frequency);
-	printf("液位测量\t油中频率：%d\r\n", g_measurement.oil_measurement.oil_frequency);
+	printf("液位测量\t油中频率：%ld\r\n", g_measurement.oil_measurement.oil_frequency);
 	CHECK_ERROR(ret);  // 检查获取油中频率是否成功
 
 	printf("液位测量\t传感器已在液位中，向上寻找空气\r\n");
@@ -234,7 +337,7 @@ Level_StateTypeDef determine_level_status(void) {
 	// 计算当前重量
 	ret = DSM_Get_LevelMode_Frequence(&g_measurement.oil_measurement.current_frequency);
 	CHECK_ERROR(ret);
-	printf("液位状态检测\t当前频率\t%d\t", g_measurement.oil_measurement.current_frequency);
+	printf("液位状态检测\t当前频率\t%ld\t", g_measurement.oil_measurement.current_frequency);
 
 	// 判断是否超过上限阈值
 	if (INAIR) {
@@ -268,7 +371,7 @@ Level_StateTypeDef determine_level_status(void) {
  */
 static int SearchOilPrecise(float per_mm_Frequency) {
 	// 初始化状态变量
-	int ret, mag_angle;
+	int ret;
 	uint32_t dir;
 	float runlenth;
 	int followTime = 0, overTime = 0, lowerTime = 0, loopTime = 0;
@@ -294,7 +397,7 @@ static int SearchOilPrecise(float per_mm_Frequency) {
 
 		// 计算当前频率与目标频率差值
 //		float frequency_difference = g_measurement.oil_measurement.follow_frequency - g_measurement.oil_measurement.current_frequency;
-		printf("当前频率%d\t频率阈值%d\t阈值差%f\r\n", g_measurement.oil_measurement.current_frequency, g_measurement.oil_measurement.follow_frequency,
+		printf("当前频率%ld\t频率阈值%ld\t阈值差%f\r\n", g_measurement.oil_measurement.current_frequency, g_measurement.oil_measurement.follow_frequency,
 		frequency_difference);
 
 		// 方向决策树（基于频率偏差）
@@ -421,14 +524,14 @@ static int determineTheSensorPositionAndUpdateTheLevelValue(void) {
  * @description:在盲区等待，直到液位超过盲区退出
  * @return NO_ERROR
  */
-int waitForTheLiquidLevelToExceedTheBlindZone(void) {
+static int waitForTheLiquidLevelToExceedTheBlindZone(void) {
 	int32_t ret;
 	while (1) {
 		ret = DSM_Get_LevelMode_Frequence(&g_measurement.oil_measurement.current_frequency);
 		if (ret != NO_ERROR) {
 			return ret;
 		}
-		printf("盲区等待\t频率阈值\t%f\t当前频率\t%f\t阈值差\t%f\r\n", g_measurement.oil_measurement.follow_frequency, g_measurement.oil_measurement.current_frequency, frequency_difference);
+		printf("盲区等待\t频率阈值\t%ld\t当前频率\t%ld\t阈值差\t%f\r\n", g_measurement.oil_measurement.follow_frequency, g_measurement.oil_measurement.current_frequency, frequency_difference);
 		if (g_measurement.oil_measurement.current_frequency > g_measurement.oil_measurement.follow_frequency) {
 			break;
 		}

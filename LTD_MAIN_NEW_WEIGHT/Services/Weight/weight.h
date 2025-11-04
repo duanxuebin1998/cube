@@ -36,5 +36,5 @@ uint32_t get_full_weight(void);
 Weight_StateTypeDef check_zero_point_status(void);
 Weight_StateTypeDef check_bottom_status(void);
 uint32_t CheckWeightCollision(void);
-void Weight_Update(uint32_t currWeight);
+void Weight_Update(int32_t currWeight);
 #endif /* INC_WEIGHT_H_ */

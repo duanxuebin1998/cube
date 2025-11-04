@@ -50,7 +50,7 @@ uint32_t get_empty_weight(void) {
 	printf("空载称重值获取成功\t空载称重：\t%d\r\n", weight_parament.empty_weight); // 打印空载重量
 	if (abs(weight_parament.empty_weight > MAX_EMPTY_WEIGHT)) { // 检查空载重量是否在合理范围内
 		printf("空载称重值异常，请检查传感器或重新校准\r\n");
-		CHECK_ERROR(WEIGHT_DRIFT_ERROR); // 如果空载重量不在合理范围内，打印错误信息并返回
+		RETURN_ERROR(WEIGHT_DRIFT_ERROR); // 如果空载重量不在合理范围内，打印错误信息并返回
 	} else {
 		g_deviceParams.empty_weight = weight_parament.empty_weight; // 更新设备参数中的空载重量
 		printf("空载称重值获取成功\t空载称重：\t%d\r\n", weight_parament.empty_weight); // 打印空载重量
@@ -71,10 +71,10 @@ uint32_t get_full_weight(void) {
 
 	if (weight_parament.full_weight < MIN_WEIGHT) {
 		printf("满载重量小于最小限制，可能需要重新校准\r\n");
-		CHECK_ERROR(WEIGHT_UNDER_RANGE); // 小于最小限制，报错
+		RETURN_ERROR(WEIGHT_UNDER_RANGE); // 小于最小限制，报错
 	} else if (weight_parament.full_weight > MAX_WEIGHT) {
 		printf("满载重量超出范围，可能需要重新校准\r\n");
-		CHECK_ERROR(WEIGHT_OUT_OF_RANGE); // 超出范围，报错
+		RETURN_ERROR(WEIGHT_OUT_OF_RANGE); // 超出范围，报错
 	} else {
 		g_deviceParams.full_weight = weight_parament.full_weight; // 更新设备参数中的满载重量
 		printf("满载称重值获取成功\t满载的称重：\t%d\r\n", weight_parament.full_weight); // 打印满载重量
@@ -180,7 +180,7 @@ uint32_t CheckWeightCollision(void)
     float cable_mm  = (float)g_measurement.debug_data.cable_length / 10.0f;
     float sensor_mm = (float)g_measurement.debug_data.sensor_position / 10.0f;
     float diff      = fabs(weight_parament.current_weight - weight_parament.stable_weight);
-    float threshold = weight_parament.stable_weight * 0.3f; // 30%变化阈值
+    float threshold = weight_parament.full_weight * 0.5f; // 30%变化阈值
 
     if ((diff > threshold) &&
         (g_measurement.debug_data.cable_length > 1000) &&
@@ -199,9 +199,10 @@ uint32_t CheckWeightCollision(void)
     }
     else
     {
-        printf("称重检测：正常 | 当前:%d | 稳定:%d | 差值:%.1f | 阈值:%.1f | 状态:OK\r\n",
+        printf("称重检测：正常 | 当前:%d | 稳定:%d | 稳定:%d | 差值:%.1f | 阈值:%.1f | 状态:OK\r\n",
                weight_parament.current_weight,
                weight_parament.stable_weight,
+			   weight_parament.full_weight,
                diff,
                threshold);
         return NO_ERROR;
@@ -246,7 +247,7 @@ uint32_t CheckWeightCollision(void)
  * @param currWeight 当前称重原始值（例如ADC或整数克重）
  * @return 稳态称重值（整数）
  */
-void Weight_Update(uint32_t currWeight) {
+void Weight_Update(int32_t currWeight) {
 	static uint32_t lastTime = 0;
 	uint32_t now = HAL_GetTick();
 

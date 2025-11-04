@@ -55,6 +55,7 @@ int DSMSendcommand3times(uint8_t *pCommand, uint16_t commandLen);
 int EnableLevelMode(void);
 uint32_t DSM_Get_LevelMode_Frequence(volatile uint32_t *frequency);
 uint32_t DSM_Get_LevelMode_Frequence_Avg(volatile uint32_t *frequency);
+int Probe_EnableWaterSensor(void);
 //int DSM_GetSonicverage(float *sonic_a_average, float *sonic_b_average,
 //		float *sonic_c_average, int count); // V1.118
 //int DSM_AngleStart(void);

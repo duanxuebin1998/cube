@@ -62,6 +62,8 @@ void Error_Handler(void);
 /* USER CODE END EFP */
 
 /* Private defines -----------------------------------------------------------*/
+#define CPU2_485_SEL_Pin GPIO_PIN_13
+#define CPU2_485_SEL_GPIO_Port GPIOC
 #define ENCODE_SPI5_CS_Pin GPIO_PIN_6
 #define ENCODE_SPI5_CS_GPIO_Port GPIOF
 #define ENCODE_SPI5_SCK_Pin GPIO_PIN_7
@@ -92,6 +94,8 @@ void Error_Handler(void);
 #define MOTOR_SPI2_MOSIB15_GPIO_Port GPIOB
 #define DRV_ENN_Pin GPIO_PIN_10
 #define DRV_ENN_GPIO_Port GPIOD
+#define SENSOR_ENN_Pin GPIO_PIN_8
+#define SENSOR_ENN_GPIO_Port GPIOG
 #define SENSOR_TXD6_Pin GPIO_PIN_6
 #define SENSOR_TXD6_GPIO_Port GPIOC
 #define SENSOR_RXD6_Pin GPIO_PIN_7
@@ -112,12 +116,12 @@ void Error_Handler(void);
 #define RELAY3_NC_GPIO_Port GPIOC
 #define RELAY3_NO_Pin GPIO_PIN_11
 #define RELAY3_NO_GPIO_Port GPIOC
-#define CPU2_TXD5_Pin GPIO_PIN_12
-#define CPU2_TXD5_GPIO_Port GPIOC
+#define CPU2_485_TXD5_Pin GPIO_PIN_12
+#define CPU2_485_TXD5_GPIO_Port GPIOC
 #define RELAY4_NC_Pin GPIO_PIN_0
 #define RELAY4_NC_GPIO_Port GPIOD
-#define CPU2_RXD5_Pin GPIO_PIN_2
-#define CPU2_RXD5_GPIO_Port GPIOD
+#define CPU2_485_RXD5_Pin GPIO_PIN_2
+#define CPU2_485_RXD5_GPIO_Port GPIOD
 #define RELAY4_NO_Pin GPIO_PIN_3
 #define RELAY4_NO_GPIO_Port GPIOD
 #define HART_RXD2_Pin GPIO_PIN_5

@@ -21,7 +21,7 @@ void save_device_params(void) {
 // 计算CRC（不包含crc字段自身）
 	uint32_t crc_size = sizeof(params) - sizeof(params.crc);
 	params.crc = CRC32_HAL((uint8_t*) &params, crc_size);
-	printf("保存设备参数，CRC: 0x%08X\n", params.crc);
+	printf("保存设备参数，CRC: 0x%08X\n", (unsigned int)params.crc);
 // 通过现有接口写入
 	WriteMultiData((uint8_t*) &params, FRAM_PARAM_ADDRESS, sizeof(DeviceParameters));
 	printf("设备参数已保存到FRAM。\n");
@@ -48,7 +48,7 @@ int load_device_params(void) {
 		return 1; // 校验成功
 	} else {
 		printf("设备参数校验失败，CRC不匹配。\n");
-		printf("校验计算的CRC: 0x%08X, 保存的CRC: 0x%08X\n", calc_crc, saved_crc);
+		printf("校验计算的CRC: 0x%08X, 保存的CRC: 0x%08X\n", (unsigned int)calc_crc, (unsigned int)saved_crc);
 	}
 	return 0; // 校验失败
 }
@@ -58,9 +58,11 @@ void init_device_params(void) {
 // 尝试加载参数
 	if (!load_device_params()) {
 // 加载失败时初始化默认值
-		memset((void* volatile ) &g_deviceParams, 0, sizeof(DeviceParameters));
-		RestoreFactoryParamsConfig(); //恢复出厂设置
-		printf("设备参数加载失败，已恢复出厂设置。\n");
+//		memset((void* volatile ) &g_deviceParams, 0, sizeof(DeviceParameters));
+//		RestoreFactoryParamsConfig(); //恢复出厂设置
+		//置错误代码
+		g_measurement.device_status.error_code = PARAM_UNINITIALIZED;
+		printf("设备参数加载失败\n");
 	}
 	print_device_params(); // 打印当前参数
 }
@@ -120,7 +122,7 @@ void print_device_params(void) {
 	printf("======= Device Parameters =======\n");
 
 	/* 指令 */
-	printf("command: %lu\n", params.command);
+	printf("command: %u\n", params.command);
 	/* 基础参数 */
 	printf("tankHeight: %lu mm\n", params.tankHeight);
 	printf("blindZone: %lu mm\n", params.blindZone);

@@ -20,9 +20,8 @@
 
 #define DSM_CMD_TIMEOUT 1000  //接收字节间超时时间
 #define RX_BUF_LEN 128
-uint8_t rx_buf[RX_BUF_LEN];
+//uint8_t rx_buf[RX_BUF_LEN];
 DSMSENSOR_DATA dsmsensor_data;
-
 
 #define DSM_MAX_RETRY 1 //最大重试次数
 #define DSM_BCC_DELAY 300 //校验错误延时
@@ -33,7 +32,7 @@ char DSMCommand[RCVBUFFLEN];
 char DSMRcvBuffer[RCVBUFFLEN];
 int DSMRcvLen;
 
-
+static char CalculationBCC_DSM(char command[], int count);
 
 // 错误码关键字表
 const char *error_codes[] = { "A+111.11B+111.11", // 超声无谐振
@@ -57,58 +56,65 @@ int IsErrorResponse(const char *resp) {
 }
 
 // 串口发送并接收（带调试打印）
-int UART6_SendCommand(const char *cmd, char *response, uint16_t maxLen, uint32_t timeout)
-{
-	uint32_t ret;
-    memset(rx_buf, 0, RX_BUF_LEN);
-    memset(response, 0, maxLen);
-    uint16_t recvLen = 0;
+int UART6_SendCommand(const char *cmd, char *response, uint16_t maxLen, uint32_t timeout) {
+	char bcc;
+//	memset(rx_buf, 0, RX_BUF_LEN);
+	memset(response, 0, maxLen);
+	uint16_t recvLen = 0;
 #ifdef DEBUG_UART6
-    printf("[UART6] Send: %s\n", cmd);
+	printf("[UART6] Send: %s\n", cmd);
 #endif
 
-    // 发送
-    if (HAL_UART_Transmit(&huart6, (uint8_t *)cmd, strlen(cmd), 100) != HAL_OK)
-    {
+	// 发送
+	if (HAL_UART_Transmit(&huart6, (uint8_t*) cmd, strlen(cmd), 100) != HAL_OK) {
 #ifdef DEBUG_UART6
-        printf("[UART6] Transmit failed!\n");
+		printf("[UART6] Transmit failed!\n");
 #endif
-        return -2;
-    }
+		return OTHER_PERIPHERAL_CONFIG_ERROR;
+	}
 
-    /* 接收阶段（带超时机制） */
-     uint32_t startTick = HAL_GetTick();
-     while (HAL_GetTick() - startTick < DSM_CMD_TIMEOUT) {
-         uint8_t byte;
+	/* 接收阶段（带超时机制） */
+	uint32_t startTick = HAL_GetTick();
+	while (HAL_GetTick() - startTick < DSM_CMD_TIMEOUT) {
+		uint8_t byte;
 
-         if (HAL_UART_Receive(&huart6, &byte, 1, 1) == HAL_OK) {
-             if (recvLen < RX_BUF_LEN - 1) {
-                 response[recvLen++] = byte;
-                 // 根据协议判断帧结束符（示例为 0x0D 换行）
-                 if (byte == 0x0A)
-                     break;
-             }
-         }
-     }
-     /* 响应校验 */
-     if (recvLen == 0) {
-         printf("[UART6] 通信失败：无数据\r\n");
-         return SENSOR_COMM_TIMEOUT;
-     } else {
- #ifdef DEBUG_UART6
-         printf("[UART6] 接收成功，共 %d 字节\r\n", recvLen);
-         printf("[UART6] 响应字符串: %s\r\n", response);
-
-         printf("[UART6] 响应HEX: ");
-         for (int i = 0; i < recvLen; i++) {
-             printf("%02X ", (uint8_t)response[i]);
-         }
-         printf("\r\n");
- #endif
-         return 0;
-     }
-
-     return SENSOR_COMM_TIMEOUT;
+		if (HAL_UART_Receive(&huart6, &byte, 1, 1) == HAL_OK) {
+			if (recvLen < RX_BUF_LEN - 1) {
+				response[recvLen++] = byte;
+				// 根据协议判断帧结束符（示例为 0x0D 换行）
+				if (byte == 0x0A)
+					break;
+			}
+		}
+	}
+	/* 响应校验 */
+	if (recvLen == 0) {
+		printf("[UART6] 通信失败：无数据\r\n");
+		return SENSOR_COMM_TIMEOUT;
+	}
+#ifdef DEBUG_UART6
+	printf("[UART6] 接收成功，共 %d 字节\r\n", recvLen);
+	printf("[UART6] 响应字符串: %s\r\n", response);
+	printf("[UART6] 响应HEX: ");
+	for (int i = 0; i < recvLen; i++) {
+		printf("%02X ", (uint8_t) response[i]);
+	}
+	printf("\r\n");
+#endif
+	//校验BCC
+	bcc = CalculationBCC_DSM(response, (recvLen - 3));
+	if (bcc == response[recvLen - 3]) {
+#ifdef DEBUG_UART6
+		printf("DSM:**rcv:BCC校验通过!\r\n");
+#endif
+		return NO_ERROR;
+	} else {
+#ifdef DEBUG_UART6
+		printf("DSM:**rcv:BCC校验失败!\r\n");
+#endif
+		return SENSOR_BCC_ERROR; //校验失败
+	}
+	return NO_ERROR;
 }
 // 发送指令，带3次重试机制
 int UART6_SendWithRetry(const char *cmd, char *response, uint16_t maxLen, uint32_t timeout) {
@@ -118,16 +124,15 @@ int UART6_SendWithRetry(const char *cmd, char *response, uint16_t maxLen, uint32
 		if (ret == 0) {
 			if (!IsErrorResponse(response)) {
 				return NO_ERROR; // 成功且不是错误码
-			}
-			else {
+			} else {
 				printf("[UART6] 接收到错误码，重试 %d/3\r\n", i + 1);
 			}
-		}
-		else {
+		} else {
 			printf("[UART6] 通信失败，重试 %d/3\r\n", i + 1);
 		}
 	}
-	CHECK_ERROR(ret);// 重试3次失败
+	CHECK_ERROR(ret); // 重试3次失败
+	return ret;
 }
 
 // 读取传感器电压
@@ -137,74 +142,57 @@ float Read_Sensor_Voltage(void) {
 	ret = UART6_SendWithRetry("CK\r\n", resp, RX_BUF_LEN, 500);
 	if (ret == NO_ERROR) {
 		// 响应格式: E06.6379V
-        printf("[UART6] 接收成功: %s\r\n", resp);
-		if ((resp[0] == 'E')||(resp[0] == 'e'))  {
+		printf("[UART6] 接收成功: %s\r\n", resp);
+		if ((resp[0] == 'E') || (resp[0] == 'e')) {
 //			printf("电压数据: %s\r\n", atof(resp + 1));
 			return atof(resp + 1);
-		}
-		else {
+		} else {
 			printf("无效电压响应: %x\r\n", resp[0]);
 		}
 	}
 	return -1.0f; // 错误
 }
 // 开启测水探针 (CL 命令)
-int Probe_EnableWaterSensor(void)
-{
-    char resp[RX_BUF_LEN];
+int Probe_EnableWaterSensor(void) {
+	char resp[RX_BUF_LEN];
 
-    // 发送命令 "CL\r\n" 并带 3 次重试
-    if (UART6_SendWithRetry("CL\r\n", resp, RX_BUF_LEN, 500) == 0)
-    {
-        printf("[Probe] 开启测水探针响应: %s\r\n", resp);
+	// 发送命令 "CL\r\n" 并带 3 次重试
+	if (UART6_SendWithRetry("CL\r\n", resp, RX_BUF_LEN, 500) == 0) {
+		printf("[Probe] 开启测水探针响应: %s\r\n", resp);
 
-        // 协议约定：如果返回包含 "OK" 或其他成功标识，就认为成功
-        if (strstr(resp, "%") != NULL ||
-            strstr(resp, "%") != NULL)
-        {
-            printf("[Probe] 测水探针开启成功！\r\n");
-            return 0;
-        }
-        else
-        {
-            printf("[Probe] 无效响应: %s\r\n", resp);
-            return -2; // 响应格式不对
-        }
-    }
-    else
-    {
-        printf("[Probe] 测水探针开启失败！\r\n");
-        return -1; // 通信失败或错误码
-    }
+		// 协议约定：如果返回包含 "OK" 或其他成功标识，就认为成功
+		if (strstr(resp, "%") != NULL || strstr(resp, "%") != NULL) {
+			printf("[Probe] 测水探针开启成功！\r\n");
+			return 0;
+		} else {
+			printf("[Probe] 无效响应: %s\r\n", resp);
+			return -2; // 响应格式不对
+		}
+	} else {
+		printf("[Probe] 测水探针开启失败！\r\n");
+		return -1; // 通信失败或错误码
+	}
 }
 // 开启测水探针 (CL 命令)
-int EnableLevelMode(void)
-{
-    char resp[RX_BUF_LEN];
+int EnableLevelMode(void) {
+	char resp[RX_BUF_LEN];
 
-    // 发送命令 "CL\r\n" 并带 3 次重试
-    if (UART6_SendWithRetry("CB\r\n", resp, RX_BUF_LEN, 500) == 0)
-    {
-        printf("[液位模式] 开启液位模式响应: %s\r\n", resp);
+	// 发送命令 "CL\r\n" 并带 3 次重试
+	if (UART6_SendWithRetry("CB\r\n", resp, RX_BUF_LEN, 500) == 0) {
+		printf("[液位模式] 开启液位模式响应: %s\r\n", resp);
 
-        // 协议约定：如果返回包含 "OK" 或其他成功标识，就认为成功
-        if (strstr(resp, "%") != NULL ||
-            strstr(resp, "%") != NULL)
-        {
-            printf("[液位模式] 开启成功！\r\n");
-            return NO_ERROR;
-        }
-        else
-        {
-            printf("[液位模式] 无效响应: %s\r\n", resp);
-            return NO_ERROR; // 响应格式不对
-        }
-    }
-    else
-    {
-        printf("[液位模式] 开启失败！\r\n");
-        return -1; // 通信失败或错误码
-    }
+		// 协议约定：如果返回包含 "OK" 或其他成功标识，就认为成功
+		if (strstr(resp, "%") != NULL || strstr(resp, "%") != NULL) {
+			printf("[液位模式] 开启成功！\r\n");
+			return NO_ERROR;
+		} else {
+			printf("[液位模式] 无效响应: %s\r\n", resp);
+			return NO_ERROR; // 响应格式不对
+		}
+	} else {
+		printf("[液位模式] 开启失败！\r\n");
+		return -1; // 通信失败或错误码
+	}
 }
 
 // 读取液位跟随频率
@@ -212,12 +200,11 @@ float Read_Level_Frequency(void) {
 	char resp[RX_BUF_LEN];
 	if (UART6_SendWithRetry("Cb\r\n", resp, RX_BUF_LEN, 500) == 0) {
 		// 响应格式: E06.6379V
-        printf("[UART6] 接收成功: %s\r\n", resp);
-		if (1)  {
+		printf("[UART6] 接收成功: %s\r\n", resp);
+		if (1) {
 //			printf("电压数据: %s\r\n", atof(resp + 1));
 			return atof(resp + 1);
-		}
-		else {
+		} else {
 			printf("无效电压响应: %x\r\n", resp[0]);
 		}
 	}
@@ -227,8 +214,8 @@ uint32_t DSM_Get_LevelMode_Frequence(volatile uint32_t *frequency) {
 	if (*frequency < 0) {
 		return SENSOR_COMM_TIMEOUT;
 	}
-	*frequency = (uint32_t)Read_Level_Frequency();
-	printf("液位频率: %d Hz\r\n", *frequency);
+	*frequency = (uint32_t) Read_Level_Frequency();
+	printf("液位频率: %ld Hz\r\n", *frequency);
 	return NO_ERROR;
 }
 /**
@@ -239,46 +226,65 @@ uint32_t DSM_Get_LevelMode_Frequence(volatile uint32_t *frequency) {
  * @return uint32_t  错误码，NO_ERROR 表示成功
  */
 uint32_t DSM_Get_LevelMode_Frequence_Avg(volatile uint32_t *frequency) {
-    float values[10];
-    float sum = 0.0f;
+	float values[10];
+	float sum = 0.0f;
 
-    // 采集10次数据
-    for (int i = 0; i < 10; i++) {
-        values[i] = Read_Level_Frequency();
-        printf("第%d次液位频率: %.2f Hz\r\n", i + 1, values[i]);
-        HAL_Delay(2000); // 2秒间隔
-    }
+	// 采集10次数据
+	for (int i = 0; i < 10; i++) {
+		values[i] = Read_Level_Frequency();
+		printf("第%d次液位频率: %.2f Hz\r\n", i + 1, values[i]);
+		HAL_Delay(2000); // 2秒间隔
+	}
 
-    // 排序 (简单冒泡排序)
-    for (int i = 0; i < 10 - 1; i++) {
-        for (int j = 0; j < 10 - i - 1; j++) {
-            if (values[j] > values[j + 1]) {
-                float tmp = values[j];
-                values[j] = values[j + 1];
-                values[j + 1] = tmp;
-            }
-        }
-    }
+	// 排序 (简单冒泡排序)
+	for (int i = 0; i < 10 - 1; i++) {
+		for (int j = 0; j < 10 - i - 1; j++) {
+			if (values[j] > values[j + 1]) {
+				float tmp = values[j];
+				values[j] = values[j + 1];
+				values[j + 1] = tmp;
+			}
+		}
+	}
 
-    // 去掉两个最大和两个最小值，取中间6个
-    for (int i = 2; i < 8; i++) {
-        sum += values[i];
-    }
+	// 去掉两个最大和两个最小值，取中间6个
+	for (int i = 2; i < 8; i++) {
+		sum += values[i];
+	}
 
-    float avg = sum / 6.0f;
-    *frequency = (uint32_t)avg;
+	float avg = sum / 6.0f;
+	*frequency = (uint32_t) avg;
 
-    printf("液位频率平均值(去掉极值): %d Hz\r\n", *frequency);
+	printf("液位频率平均值(去掉极值): %ld Hz\r\n", *frequency);
 
-    return NO_ERROR;
+	return NO_ERROR;
 }
 
 // 读取密度、温度
 int Read_Density_Temp(float *density, float *viscosity, float *temp) {
 	char resp[RX_BUF_LEN];
+	if (UART6_SendWithRetry("Cd\r\n", resp, RX_BUF_LEN, 500) == 0) {
+		// 格式: F+0000.0V+000.00T+19.570P
+		if ((resp[0] == 'E') || (resp[0] == 'F')) {
+			char *pT = strchr(resp, 'T');
+			char *pP = strchr(resp, 'V');
+
+			if (pT && pP) {
+				*density = atof(resp + 1);
+				*viscosity = atof(pP + 1);
+				*temp = atof(pT + 1);
+				return 0;
+			}
+		}
+	}
+	return -1;
+}
+// 读取超声小管的密度、温度
+int Read_Density_SIL(float *density, float *viscosity, float *temp) {
+	char resp[RX_BUF_LEN];
 	if (UART6_SendWithRetry("Cf\r\n", resp, RX_BUF_LEN, 500) == 0) {
 		// 格式: F+0000.0V+000.00T+19.570P
-		if ((resp[0] == 'E')||(resp[0] == 'F')) {
+		if ((resp[0] == 'E') || (resp[0] == 'F')) {
 			char *pT = strchr(resp, 'T');
 			char *pP = strchr(resp, 'D');
 
@@ -292,7 +298,6 @@ int Read_Density_Temp(float *density, float *viscosity, float *temp) {
 	}
 	return -1;
 }
-
 void Sensor_Test(void) {
 	float voltage;
 	float frequency;
@@ -300,20 +305,20 @@ void Sensor_Test(void) {
 
 	printf("=== 开始传感器测试 ===\r\n");
 
-	// 读取电压
-	voltage = Read_Sensor_Voltage();
-	if (voltage > 0) {
-		printf("传感器电压: %.4f V\r\n", voltage);
-	} else {
-		printf("读取电压失败！\r\n");
-	}
-	// 读取电压
-	frequency = Read_Level_Frequency();
-	if (Read_Level_Frequency > 0) {
-		printf("液位跟随频率: %.1f V\r\n", frequency);
-	} else {
-		printf("读取电压失败！\r\n");
-	}
+//	// 读取电压
+//	voltage = Read_Sensor_Voltage();
+//	if (voltage > 0) {
+//		printf("传感器电压: %.4f V\r\n", voltage);
+//	} else {
+//		printf("读取电压失败！\r\n");
+//	}
+//	// 读取电压
+//	frequency = Read_Level_Frequency();
+//	if (Read_Level_Frequency > 0) {
+//		printf("液位跟随频率: %.1f V\r\n", frequency);
+//	} else {
+//		printf("读取电压失败！\r\n");
+//	}
 	// 读取密度、温度
 	if (Read_Density_Temp(&density, &viscosity, &temp) == 0) {
 		printf("密度: %.3f  粘度: %.3f  温度: %.3f ℃\r\n", density, viscosity, temp);
@@ -330,8 +335,7 @@ void Sensor_Test(void) {
  * @param {int} count		数组长度：编码值长度：5 ————两位圈数，两位角度，一位校验
  * @return {char}bcc		返回BCC校验码
  */
-static char CalculationBCC_DSM(char command[], int count) // count=5
-{
+static char CalculationBCC_DSM(char command[], int count) {
 	char i, bcc;
 	bcc = command[0];
 	for (i = 1; i < count - 1; i++) {
@@ -347,17 +351,14 @@ static char CalculationBCC_DSM(char command[], int count) // count=5
  * @param {unsigned int} commandlen
  * @return { }
  */
-int DSMSendcommand3times(uint8_t *pCommand, uint16_t commandLen)
-{
+int DSMSendcommand3times(uint8_t *pCommand, uint16_t commandLen) {
 	int retFlag = NO_ERROR;
-    HAL_StatusTypeDef halStatus;
-    uint8_t bcc = 0;
+	HAL_StatusTypeDef halStatus;
+	uint8_t bcc = 0;
 
-	for (int attempt = 0; attempt < DSM_MAX_RETRY; attempt++)
-	{
+	for (int attempt = 0; attempt < DSM_MAX_RETRY; attempt++) {
 		// 错误退避策略
-		if (retFlag == 0)
-		{
+		if (retFlag == 0) {
 			HAL_Delay(DSM_BCC_DELAY); //3-1
 		}
 
@@ -370,32 +371,28 @@ int DSMSendcommand3times(uint8_t *pCommand, uint16_t commandLen)
 
 		/* 发送阶段 */
 		halStatus = HAL_UART_Transmit(&huart6, pCommand, commandLen,
-				DSM_CMD_TIMEOUT);
-		if (halStatus != HAL_OK)
-		{
+		DSM_CMD_TIMEOUT);
+		if (halStatus != HAL_OK) {
 #ifdef DEBUG_DSM
-            printf("DSM TX Error: %d\r\n", halStatus);
+			printf("DSM TX Error: %d\r\n", halStatus);
 #endif
 			retFlag = 0;
 			continue;
 		}
 
 #ifdef DEBUG_DSM
-        printf("DSM:**snd:");
-        printf("%s ", pCommand);
-        printf("\r\n");
+		printf("DSM:**snd:");
+		printf("%s ", pCommand);
+		printf("\r\n");
 #endif
 		/* 接收阶段（带超时机制） */
 		uint32_t startTick = HAL_GetTick();
-		while (HAL_GetTick() - startTick < DSM_CMD_TIMEOUT)
-		{
+		while (HAL_GetTick() - startTick < DSM_CMD_TIMEOUT) {
 			uint8_t byte;
 			halStatus = HAL_UART_Receive(&huart6, &byte, 1, 1); // 1ms单字节接收
 
-			if (halStatus == HAL_OK)
-			{
-				if (DSMRcvLen < sizeof(DSMRcvBuffer) - 1)
-				{
+			if (halStatus == HAL_OK) {
+				if (DSMRcvLen < sizeof(DSMRcvBuffer) - 1) {
 					DSMRcvBuffer[DSMRcvLen++] = byte;
 					// 根据协议判断帧结束符（示例为0x0D）
 					if (byte == 0x0A)
@@ -404,31 +401,25 @@ int DSMSendcommand3times(uint8_t *pCommand, uint16_t commandLen)
 			}
 		}
 #ifdef DEBUG_DSM
-        printf("DSM:**rcv:");
-        printf("%s ", DSMRcvBuffer);
-        printf("\r\n");
+		printf("DSM:**rcv:");
+		printf("%s ", DSMRcvBuffer);
+		printf("\r\n");
 #endif
 
-
 		/* 响应校验 */
-		if (DSMRcvLen == 0)
-		{
-			 printf("communication error\r\n");
+		if (DSMRcvLen == 0) {
+			printf("communication error\r\n");
 			retFlag = SENSOR_COMM_TIMEOUT; //通信超时
 			continue;
 		}
-		 printf("communication success:%s\r\n", DSMRcvBuffer+1);
+		printf("communication success:%s\r\n", DSMRcvBuffer + 1);
 		bcc = CalculationBCC_DSM(DSMRcvBuffer, (DSMRcvLen - 3));
 		//		if (bcc == DSMRcvBuffer[DSMRcvLen - 3])
 		// 改进校验：长度+头部+BCC校验
-		if ((DSMRcvLen >= DSM_MIN_RESP_LEN)
-				&& (bcc == DSMRcvBuffer[DSMRcvLen - 3]))
-		{
+		if ((DSMRcvLen >= DSM_MIN_RESP_LEN) && (bcc == DSMRcvBuffer[DSMRcvLen - 3])) {
 			return NO_ERROR; // 全校验通过
-		}
-		else
-		{
-			retFlag = SENSOR_BCC_ERROR;//校验失败
+		} else {
+			retFlag = SENSOR_BCC_ERROR; //校验失败
 		}
 	}
 

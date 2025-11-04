@@ -7,6 +7,7 @@
 #include "fault_manager.h"
 #include "system_parameter.h"
 #include <stdio.h>
+#include "motor_ctrl.h"
 
 ErrorInfo err;// 全局错误信息变量
 // 错误处理函数
@@ -15,32 +16,24 @@ ErrorInfo err;// 全局错误信息变量
  * @param err 错误信息结构体指针
  * @note 任何错误都停机；STATE_SWITCH 只停机不修改错误状态
  */
-void LogError(const ErrorInfo* err)
+void printError(const ErrorInfo* err)
 {
     if (err == NULL) return; // 空指针保护
-
-    // ⚠️ 任何错误都必须立即停机
-    motorQuickStop();
-
     // 如果是状态切换错误，仅停机，不记录
     if (err->error_code == STATE_SWITCH)
     {
         return;
     }
-
-    // 若当前无错误，记录错误信息
-    if (g_measurement.device_status.error_code == NO_ERROR)
-    {
-        g_measurement.device_status.error_code = err->error_code;  // 保存错误码
-        g_measurement.device_status.zero_point_status = 1;         // 标记需回零点
-        // g_measurement.device_status.device_state = STATE_ERROR;  // 可选：切换状态为错误
-        // g_measurement.device_status.current_command = COMMAND_NONE; // 可选：清空当前命令
-    }
     // 打印错误信息
     printf("【故障】CODE: 0x%X | FILE: %s | LINE: %lu | FUNC: %s\r\n",
-           err->error_code, err->file, err->line, err->func);
+    		(unsigned int)err->error_code, err->file, err->line, err->func);
 }
+void HandleError(void)
+{
+    // ⚠️ 任何错误都必须立即停机
+    motorQuickStop();
 
+}
 //void LogError(const ErrorInfo* err) {
 //	motorQuickStop(); // 紧急停止电机
 //	if (g_measurement.device_status.error_code == NO_ERROR && g_measurement.device_status.error_code != STATE_SWITCH&&err->error_code!= STATE_SWITCH) {
