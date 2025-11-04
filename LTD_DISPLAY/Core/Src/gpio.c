@@ -49,6 +49,7 @@ void MX_GPIO_Init(void)
   __HAL_RCC_GPIOH_CLK_ENABLE();
   __HAL_RCC_GPIOA_CLK_ENABLE();
   __HAL_RCC_GPIOD_CLK_ENABLE();
+  __HAL_RCC_GPIOG_CLK_ENABLE();
   __HAL_RCC_GPIOC_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
@@ -56,6 +57,9 @@ void MX_GPIO_Init(void)
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(OLED_D_C_GPIO_Port, OLED_D_C_Pin, GPIO_PIN_RESET);
+
+  /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(MAIN_BOARD_485_SEL_GPIO_Port, MAIN_BOARD_485_SEL_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pins : KEY_DOWN_Pin KEY_SURE_Pin KEY_BACK_Pin KEY_UP_Pin */
   GPIO_InitStruct.Pin = KEY_DOWN_Pin|KEY_SURE_Pin|KEY_BACK_Pin|KEY_UP_Pin;
@@ -76,6 +80,13 @@ void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(OLED_D_C_GPIO_Port, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : MAIN_BOARD_485_SEL_Pin */
+  GPIO_InitStruct.Pin = MAIN_BOARD_485_SEL_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(MAIN_BOARD_485_SEL_GPIO_Port, &GPIO_InitStruct);
 
   /* EXTI interrupt init*/
   HAL_NVIC_SetPriority(EXTI1_IRQn, 2, 0);

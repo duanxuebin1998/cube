@@ -25,7 +25,7 @@
 
 /*HART 设备长地址*/
 /*目前是VEGA液位计地址，正常需要HCF认证*/
-#define	MANUFACTURER_ID	0X55	/*制造商ID号*/
+#define	MANUFACTURER_ID	0X05	/*制造商ID号*/
 #define	DEVICE_TYPE		0X55	/*产品设备类型ID，由厂商定义，HCF 登记*/
 #define	DEVICE_ID_1		0X55	/*设备ID，同种类型设备的序列号,每个设备都不一样*/
 #define	DEVICE_ID_2 	0X55
@@ -151,17 +151,7 @@ typedef union
 
 void HartInit(void);																			/*Hart初始化*/
 void HartParameterInit(void);																	/*Hart参数初始化*/
-u8 HartCommunicationProcess(u8* rcvbuff,u8* SendBuff,u8* Sendlen);														/*HART通信上位机指令包处理函数,处理不同指令并发送响应包。*/
-static int AnalyseRcvPackage(RCV_TYPE *RcvPackage,u8* HartCommand,u8* FlagofLongFrame);			/*hart接收解包、校验*/
-static void InitializeSndPackage(SND_TYPE *sendframe,u8 HartCommand);							/*设置长指令响应时发送数据包的定界符，地址，命令，通信状态，设备状态*/
-static u8 CalculateBCC(SND_TYPE *sendframe,u8 datalen);											/*计算发送包的BCC校验位*/
-static u32 SetFloatData(float Variable);														/*把FLOAT变量小端存储转化成大端存储*/
-static int ResponseCommand0(RCV_TYPE *revframe,SND_TYPE *sendframe);							/*响应指令0：读唯一标识*/
-static int ResponseCommand1(RCV_TYPE *revframe,SND_TYPE *sendframe);							/*响应指令1：读主变量*/
-static int ResponseCommand2(RCV_TYPE *revframe,SND_TYPE *sendframe);							/*响应指令2：读环路电流和量程百分比*/
-static int ResponseCommand3(RCV_TYPE *revframe,SND_TYPE *sendframe);							/*响应指令3：读动态变量和环路电流*/
-static int ResponseCommand6(RCV_TYPE *revframe,SND_TYPE *sendframe);							/*响应指令6：设置轮询地址*/
-static u8 ConvertToShortAddressResponsePacket(SND_TYPE *sendframe,u8 datalen,u8 HartCommand);	/*把长地址响应包转换成短地址响应包*/
-static u8 AddPreamble(SND_TYPE *sendframe,u8 datalen,u8 NumberOfPreambles);						/*在发送包数据前添加先导符0XFF*/
+u8 HartCommunicationProcess(u8* rcvbuff,u8* SendBuff,volatile u8* Sendlen);														/*HART通信上位机指令包处理函数,处理不同指令并发送响应包。*/
+
 #endif
 

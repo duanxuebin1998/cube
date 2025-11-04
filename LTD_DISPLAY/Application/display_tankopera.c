@@ -904,7 +904,6 @@ static void measuremenu(void)
 static void menu_cmdconfig_main(void)
 {
     static struct MenuData menu[] = {
-        {(uint8_t*)"进入调试模式",COM_NUM_SET_WORKPATTERN,ifsendcmd,COMMANE_NORW,(uint8_t*)"Go Into Debug"},
         {(uint8_t*)"上行",COM_NUM_RUNUP,inputcmdpara,COMMANE_NORW,(uint8_t*)"Move Up"},
         {(uint8_t*)"下行",COM_NUM_RUNDOWN,inputcmdpara,COMMANE_NORW,(uint8_t*)"Move Down"},
         {(uint8_t*)"置零点",COM_NUM_FORCE_ZERO,ifsendcmd,COMMANE_NORW,(uint8_t*)"MeasLevel(NoFit)"},

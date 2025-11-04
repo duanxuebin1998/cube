@@ -45,14 +45,17 @@ void MX_GPIO_Init(void)
   GPIO_InitTypeDef GPIO_InitStruct = {0};
 
   /* GPIO Ports Clock Enable */
+  __HAL_RCC_GPIOC_CLK_ENABLE();
   __HAL_RCC_GPIOF_CLK_ENABLE();
   __HAL_RCC_GPIOH_CLK_ENABLE();
-  __HAL_RCC_GPIOC_CLK_ENABLE();
   __HAL_RCC_GPIOA_CLK_ENABLE();
   __HAL_RCC_GPIOE_CLK_ENABLE();
   __HAL_RCC_GPIOB_CLK_ENABLE();
   __HAL_RCC_GPIOD_CLK_ENABLE();
   __HAL_RCC_GPIOG_CLK_ENABLE();
+
+  /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(CPU2_485_SEL_GPIO_Port, CPU2_485_SEL_Pin, GPIO_PIN_SET);
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(ENCODE_SPI5_CS_GPIO_Port, ENCODE_SPI5_CS_Pin, GPIO_PIN_RESET);
@@ -67,7 +70,17 @@ void MX_GPIO_Init(void)
   HAL_GPIO_WritePin(DRV_ENN_GPIO_Port, DRV_ENN_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(SENSOR_ENN_GPIO_Port, SENSOR_ENN_Pin, GPIO_PIN_SET);
+
+  /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOG, RELAY1_Pin|RELAY2_Pin|RELAY3_Pin|RELAY4_Pin, GPIO_PIN_RESET);
+
+  /*Configure GPIO pin : CPU2_485_SEL_Pin */
+  GPIO_InitStruct.Pin = CPU2_485_SEL_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(CPU2_485_SEL_GPIO_Port, &GPIO_InitStruct);
 
   /*Configure GPIO pin : ENCODE_SPI5_CS_Pin */
   GPIO_InitStruct.Pin = ENCODE_SPI5_CS_Pin;
@@ -97,6 +110,15 @@ void MX_GPIO_Init(void)
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(DRV_ENN_GPIO_Port, &GPIO_InitStruct);
 
+  /*Configure GPIO pins : SENSOR_ENN_Pin RELAY1_Pin RELAY2_Pin RELAY3_Pin
+                           RELAY4_Pin */
+  GPIO_InitStruct.Pin = SENSOR_ENN_Pin|RELAY1_Pin|RELAY2_Pin|RELAY3_Pin
+                          |RELAY4_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(GPIOG, &GPIO_InitStruct);
+
   /*Configure GPIO pins : RELAY1_NC_Pin RELAY1_NO_Pin RELAY3_NC_Pin RELAY3_NO_Pin */
   GPIO_InitStruct.Pin = RELAY1_NC_Pin|RELAY1_NO_Pin|RELAY3_NC_Pin|RELAY3_NO_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
@@ -114,13 +136,6 @@ void MX_GPIO_Init(void)
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(GPIOD, &GPIO_InitStruct);
-
-  /*Configure GPIO pins : RELAY1_Pin RELAY2_Pin RELAY3_Pin RELAY4_Pin */
-  GPIO_InitStruct.Pin = RELAY1_Pin|RELAY2_Pin|RELAY3_Pin|RELAY4_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(GPIOG, &GPIO_InitStruct);
 
   /*Configure GPIO pin : AD5421_FAULT_Pin */
   GPIO_InitStruct.Pin = AD5421_FAULT_Pin;

@@ -10,6 +10,8 @@
 #include "system_parameter.h"
 #include "measure.h"
 #include "encoder.h"
+#include "hart.h"
+#include "hostcommu.h"
 //测试用
 #include "sensor.h"
 #include <mb85rs2m.h>
@@ -25,8 +27,8 @@ void App_Init(void) {
 	motor_Init(); //电机初始化
 	HartInit(); // 初始化AD5421
 	init_device_params(); // 初始化设备参数
-	g_measurement.device_status.zero_point_status == 1; // 设置零点状态为需要回零点
 	g_deviceParams.command = CMD_NONE; // 清除命令
+	g_measurement.device_status.zero_point_status=1; // 设置零点状态为需要回零点
 	weight_init();
 	HostCommuInit(); // 初始化Modbus通信
 	//测试函数
@@ -58,7 +60,7 @@ void App_MainLoop(void) {
 			g_measurement.device_status.current_command =CMD_NONE; // 重置当前命令
 			//
 		}
-//		Sensor_Test(); // 传感器测试
+		Sensor_Test(); // 传感器测试
 ////		Test_FRAM_ReadWrite();
 //		DSMSendcommand3times(DSM_POWER, strlen(DSM_POWER));
 //		DSMSendcommand3times(DSM_SENSORGET, strlen(DSM_SENSORGET));
@@ -105,10 +107,4 @@ void Test_main(void) {
 //	motor_text();
 	Test_Params_Storage(); //测试参数存储
 	CRC32_HAL_Test(); //CRC校验测试
-	test_macro(); // 测试宏函数
 }
-int test_macro(void) {
-	CHECK_ERROR(0x10001); // 测试宏函数
-	fault_info_init(); // 初始化故障信息
-	return NO_ERROR; // 返回无错误状态
-} // 测试宏函数

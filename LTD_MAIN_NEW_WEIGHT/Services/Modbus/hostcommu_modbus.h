@@ -18,7 +18,7 @@ extern int SlaveAddress;
  * @return true 地址匹配（本机地址）
  * @return false 地址不匹配
  */
-bool SlaveCheckAddress(char const *revframe, int framelen);
+bool SlaveCheckAddress(uint8_t  const *revframe, int framelen);
 
 /**
  * @brief 设置Modbus从站地址
@@ -34,7 +34,7 @@ void SetSlaveaddress(int address);
  * @param sendframe 待发送的响应帧缓冲区
  * @return int 响应帧长度
  */
-int Response03Process(char *revframe, char *sendframe);
+int Response03Process(uint8_t  *revframe, uint8_t  *sendframe);
 
 /**
  * @brief 处理Modbus功能码04（读输入寄存器）请求
@@ -43,7 +43,7 @@ int Response03Process(char *revframe, char *sendframe);
  * @param sendframe 待发送的响应帧缓冲区
  * @return int 响应帧长度
  */
-int Response04Process(char *revframe, char *sendframe);
+int Response04Process(uint8_t  *revframe, uint8_t  *sendframe);
 
 /**
  * @brief 处理Modbus功能码05（写单个线圈）请求
@@ -52,7 +52,7 @@ int Response04Process(char *revframe, char *sendframe);
  * @param sendframe 待发送的响应帧缓冲区
  * @return int 响应帧长度
  */
-int Response05Process(char const *revframe, char *sendframe);
+int Response05Process(uint8_t  const *revframe, uint8_t  *sendframe);
 
 /**
  * @brief 处理Modbus功能码16（写多个寄存器）请求
@@ -61,7 +61,7 @@ int Response05Process(char const *revframe, char *sendframe);
  * @param sendframe 待发送的响应帧缓冲区
  * @return int 响应帧长度
  */
-int Response10Process(char const *revframe, char *sendframe);
+int Response10Process(uint8_t  const *revframe, uint8_t  *sendframe);
 
 /**
  * @brief 生成功能码错误响应（非法功能码）
@@ -70,7 +70,7 @@ int Response10Process(char const *revframe, char *sendframe);
  * @param framelength 返回的错误帧长度
  * @return true 成功生成错误响应
  */
-bool FunctionCheckIllPack(char *sendframe, int *framelength);
+bool FunctionCheckIllPack(uint8_t  *sendframe, int *framelength);
 
 /**
  * @brief 生成数据地址错误响应（非法数据地址）
@@ -79,7 +79,7 @@ bool FunctionCheckIllPack(char *sendframe, int *framelength);
  * @param framelength 返回的错误帧长度
  * @return true 成功生成错误响应
  */
-bool IllegalDataAddressPack(char *sendframe, int *framelength);
+bool IllegalDataAddressPack(uint8_t  *sendframe, int  *framelength);
 
 /**
  * @brief 更新接收参数状态（用于调试或状态跟踪）

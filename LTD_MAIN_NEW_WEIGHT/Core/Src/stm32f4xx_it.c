@@ -23,6 +23,8 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "weight.h"
+#include "hart.h"
+#include "hostcommu.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -366,8 +368,8 @@ void USART2_IRQHandler(void)
 			}
 			else
 			{
-				HAL_GPIO_WritePin(HART_RTS_GPIO_Port, HART_RTS_Pin, GPIO_PIN_RESET); //切换发送模式
-				HAL_UART_Transmit_DMA(&huart2, USART2_RX_BUF, USART2_RX_LEN);
+//				HAL_GPIO_WritePin(HART_RTS_GPIO_Port, HART_RTS_Pin, GPIO_PIN_RESET); //切换发送模式
+//				HAL_UART_Transmit_DMA(&huart2, USART2_RX_BUF, USART2_RX_LEN);
 				HAL_UART_Receive_DMA(&huart2, USART2_RX_BUF, USART2_RX_BUF_SIZE); // 重新启用DMA接收
 			}
 		}
@@ -443,7 +445,7 @@ void UART5_IRQHandler(void)
 			temp = __HAL_DMA_GET_COUNTER(&hdma_uart5_rx);  // 获取DMA中未传输的数据个数
 			UART5_RX_LEN = UART5_RX_BUF_SIZE - temp;  // 计算已经接收到的数据个数
 			HostCommuProcess(UART5_RX_BUF, UART5_RX_LEN);  // 处理接收到的数据
-			HAL_UART_Receive_DMA(&huart5, UART5_RX_BUF, UART5_RX_BUF_SIZE); // 重新启用DMA接收
+//			HAL_UART_Receive_DMA(&huart5, UART5_RX_BUF, UART5_RX_BUF_SIZE); // 重新启用DMA接收
 		}
 	}
   /* USER CODE END UART5_IRQn 1 */

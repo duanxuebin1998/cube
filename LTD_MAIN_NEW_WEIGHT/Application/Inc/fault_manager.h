@@ -114,7 +114,8 @@ typedef enum {
 	/* ==================== 其他类型错误 (0x00130000 - 0x0013FFFF) ==================== */
 	OTHER_UNKNOWN_ERROR = 0x00130001, // 未知故障
 	OTHER_ADDRESS_READ_ERROR = 0x00130002, // 地址读取错误
-	OTHER_POWER_FLUCTUATION = 0x00130003  // 电源波动异常
+	OTHER_POWER_FLUCTUATION = 0x00130003,  // 电源波动异常
+	OTHER_PERIPHERAL_CONFIG_ERROR = 0x00130004 // 外设配置错误
 
 } ErrorCode;
 
@@ -135,6 +136,7 @@ typedef enum {
 //
 //    /* 编码器类故障枚举 (0x00120000 - 0x0012FFFF) */
 //    ENCODER_TIMEOUT = 0X00120001,       // 通信超时
+
 //    ENCODER_PARITY_ERROR = 0X00120002,  // 偶校验失败
 //    ENCODER_DATA_LOST = 0X00120003,     // 通信失败
 //    ENCODER_POWERON_FAIL = 0X00120004,  // 上电初始化失败
@@ -212,75 +214,75 @@ typedef struct {
 	uint32_t error_code; // 错误码;
 } ErrorInfo;
 extern ErrorInfo err; // 全局错误信息变量
-//错误信息打印
+
 #define CHECK_ERROR(errorcode)                                                   \
     do {                                                                         \
-        /* 填充错误上下文 */                                                    \
-        err.file = GetShortFilename(__FILE__);                                   \
-        err.line = __LINE__;                                                     \
-        err.func = __func__;                                                     \
-                                                                                 \
-        /* Step 1: 优先检查全局设备错误状态 */                                  \
-        if (g_measurement.device_status.error_code != NO_ERROR) {          \
-            err.error_code = g_measurement.device_status.error_code;             \
-            LogError(&err);                                                      \
-            return err.error_code;                                               \
-        }                                                                        \
-                                                                                 \
-        /* Step 2: 检查函数返回错误码 */                                         \
+        /* Step 1: 优先检查函数返回错误码 */                                      \
         if ((errorcode) != NO_ERROR) {                                           \
             err.error_code = (errorcode);                                        \
-            LogError(&err);                                                      \
+            HandleError();                                                       \
             return err.error_code;                                               \
         }                                                                        \
                                                                                  \
-        /* Step 3: 检查是否有命令切换 */                                         \
+        /* Step 2: 检查全局设备错误状态 */                                        \
+        if (g_measurement.device_status.error_code != NO_ERROR) {                \
+            err.error_code = g_measurement.device_status.error_code;             \
+            HandleError();                                                       \
+            return err.error_code;                                               \
+        }                                                                        \
+                                                                                 \
+        /* Step 3: 检查是否有命令切换 */                                          \
         if (g_deviceParams.command != CMD_NONE) {                                \
             err.error_code = STATE_SWITCH;                                       \
+            HandleError();                                                       \
             return err.error_code;                                               \
         }                                                                        \
     } while (0)
 
-#define CHECK_COMMAND_SWITCH(ret)                  \
-    do {                                           \
-        if(g_deviceParams.command != CMD_NONE){    \
-        	printf("检测到命令切换请求，停止当前操作\r\n");\
-            return STATE_SWITCH;;                  \
-        }                                          \
-        if(ret == STATE_SWITCH){                   \
-            return STATE_SWITCH;;                  \
-        }                                          \
+
+#define RETURN_ERROR(errorcode)                                                  \
+    do {                                                                         \
+        if ((errorcode) != NO_ERROR) {                                           \
+            err.file       = GetShortFilename(__FILE__);                         \
+            err.line       = __LINE__;                                           \
+            err.func       = __func__;                                           \
+            err.error_code = (errorcode);                                        \
+                                                                                 \
+            HandleError();        /* 停机 / 报警 / 记录到全局状态等 */            \
+            printError(&err);     /* 串口/日志输出可读信息 */                     \
+                                                                                 \
+            return err.error_code;                                               \
+        }                                                                        \
     } while (0)
 
-//#define CHECK_ERROR(errorcode) \
-//	do \
-//	{\
-//		err.file = GetShortFilename(__FILE__);\
-//		err.line = __LINE__;\
-//		err.func = __func__; \
-//		if((g_measurement.device_status.error_code != NO_ERROR) \
-//		&&(g_measurement.device_status.error_code != STATE_SWITCH))\
-//		{	\
-//			err.error_code = (g_measurement.device_status.error_code);\
-//			LogError(&err);\
-//			return err.error_code;\
-//		}\
-//		else if ((errorcode) != NO_ERROR) \
-//		{\
-//			err.error_code = (errorcode); \
-//			LogError(&err); \
-//			return err.error_code;\
-//		}\
-//		if(g_deviceParams.command != CMD_NONE) \
-//		{	\
-//			err.error_code =  STATE_SWITCH;\
-//			return err.error_code;\
-//		}\
-//	} while(0)
-////设备报错或命令打断检测
+
+#define SET_ERROR(errorcode)                                                     \
+    do {                                                                         \
+        if (((errorcode) != STATE_SWITCH) && ((errorcode) != NO_ERROR)) {        \
+            HandleError();                                                       \
+            g_measurement.device_status.device_state       = STATE_ERROR;        \
+            g_measurement.device_status.error_code         = errorcode;          \
+            g_measurement.device_status.zero_point_status  = 1;                  \
+            return;                                                              \
+        }                                                                        \
+    } while (0)
+
+
+#define CHECK_COMMAND_SWITCH(ret)                                                \
+    do {                                                                         \
+        if (g_deviceParams.command != CMD_NONE) {                                \
+            printf("检测到命令切换请求，停止当前操作\r\n");                       \
+            return STATE_SWITCH;                                                 \
+        }                                                                        \
+        if ((ret) == STATE_SWITCH) {                                             \
+            return STATE_SWITCH;                                                 \
+        }                                                                        \
+    } while (0)
+
 
 void fault_info_init(void);
 uint32_t update_errorcode(uint8_t error_code);
-void LogError(const ErrorInfo *err);
+void HandleError(void);
+void printError(const ErrorInfo* err);
 const char* GetShortFilename(const char *fullpath);
 #endif /* INC_FAULT_MANAGER_H_ */

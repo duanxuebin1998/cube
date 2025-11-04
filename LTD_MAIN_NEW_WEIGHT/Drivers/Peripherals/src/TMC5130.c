@@ -194,17 +194,17 @@ uint32_t stpr_waitMove(TMC5130TypeDef *tmc5130) {
 
 			if (gstat & (1 << 1)) {
 				printf("驱动器因过热或短路检测被关闭\n");
-				CHECK_ERROR(MOTOR_OVERTEMPERATURE);
+				RETURN_ERROR(MOTOR_OVERTEMPERATURE);
 			}
 
 			if (gstat & (1 << 2)) {
 				printf("charge pump 欠压\n");
-				CHECK_ERROR(MOTOR_CHARGE_PUMP_UNDER_VOLTAGE);
+				RETURN_ERROR(MOTOR_CHARGE_PUMP_UNDER_VOLTAGE);
 			}
 
 			// 可以选择清除故障（可选）
 			stpr_writeInt(tmc5130, TMC5130_GSTAT, 0x07); // 清除所有状态位
-			CHECK_ERROR(MOTOR_UNKNOWN_FEEDBACK);
+			RETURN_ERROR(MOTOR_UNKNOWN_FEEDBACK);
 		}
 		HAL_Delay(50);
 	}

@@ -14,7 +14,7 @@
 #define MAXRCVLENGTH 256 // Modbus帧最大接收长度（RTU模式一般为256字节）
 
 // 发送缓冲区（静态分配）
-static char HCOM_SendBuff[HOSTCOMMU_SENDLENGTH]; // Modbus响应帧缓冲区
+static uint8_t  HCOM_SendBuff[HOSTCOMMU_SENDLENGTH]; // Modbus响应帧缓冲区
 static int HCOM_SendCount = 0;                   // 发送缓冲区当前数据长度
 
 /**
@@ -38,7 +38,7 @@ int HostCommuInit(void) {
  * @param rcvcount 接收到的数据长度
  * @param commu_num 通信通道号（用于多接口系统）
  */
-void HostCommuProcess(char *rcvbuff, int rcvcount) {
+void HostCommuProcess(uint8_t *rcvbuff, int rcvcount) {
 	int functioncode;    // Modbus功能码
 	int startaddress;    // 寄存器起始地址
 	int registeramount;  // 寄存器数量
@@ -142,7 +142,8 @@ void HostCommuProcess(char *rcvbuff, int rcvcount) {
 		}
 		printf("\r\n");
 #endif
-
+		//切换发送模式
+		RS485_SET_SEND_MODE();  // 切换到发送模式
 		HAL_UART_Transmit_DMA(&huart5, (uint8_t*)HCOM_SendBuff, HCOM_SendCount);  // 通过UART发送响应帧
 	}
 }

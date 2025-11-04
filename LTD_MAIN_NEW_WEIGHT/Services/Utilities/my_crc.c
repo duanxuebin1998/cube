@@ -58,7 +58,7 @@ uint16_t CRC16_Calculate(const uint8_t *data, uint32_t length) {
 }
 /*接收到的数据包进行CRC校验*/
 /* 接收到的数据包进行CRC校验 */
-bool SlaveCheckCRC(char const *revframe, int framelen) {
+bool SlaveCheckCRC(uint8_t const *revframe, int framelen) {
     unsigned char Hi, Lo;
     unsigned short crc;
 

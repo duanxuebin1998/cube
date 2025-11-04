@@ -17,6 +17,18 @@ History: 2022-03-16(初版)
 HartParametersTPYE HartParameters;/*全局变量：HART参数结构体*/
 float SetGlobalVariables = 1.0f;//TEXT
 
+static int AnalyseRcvPackage(RCV_TYPE *RcvPackage,u8* HartCommand,u8* FlagofLongFrame);			/*hart接收解包、校验*/
+static void InitializeSndPackage(SND_TYPE *sendframe,u8 HartCommand);							/*设置长指令响应时发送数据包的定界符，地址，命令，通信状态，设备状态*/
+static u8 CalculateBCC(SND_TYPE *sendframe,u8 datalen);											/*计算发送包的BCC校验位*/
+static u32 SetFloatData(float Variable);														/*把FLOAT变量小端存储转化成大端存储*/
+static int ResponseCommand0(RCV_TYPE *revframe,SND_TYPE *sendframe);							/*响应指令0：读唯一标识*/
+static int ResponseCommand1(RCV_TYPE *revframe,SND_TYPE *sendframe);							/*响应指令1：读主变量*/
+static int ResponseCommand2(RCV_TYPE *revframe,SND_TYPE *sendframe);							/*响应指令2：读环路电流和量程百分比*/
+static int ResponseCommand3(RCV_TYPE *revframe,SND_TYPE *sendframe);							/*响应指令3：读动态变量和环路电流*/
+static int ResponseCommand6(RCV_TYPE *revframe,SND_TYPE *sendframe);							/*响应指令6：设置轮询地址*/
+static u8 ConvertToShortAddressResponsePacket(SND_TYPE *sendframe,u8 datalen,u8 HartCommand);	/*把长地址响应包转换成短地址响应包*/
+static u8 AddPreamble(SND_TYPE *sendframe,u8 datalen,u8 NumberOfPreambles);						/*在发送包数据前添加先导符0XFF*/
+
 static inline void HART_RTS_LOW(void)
 {
     HAL_GPIO_WritePin(HART_RTS_GPIO_Port, HART_RTS_Pin, GPIO_PIN_RESET);
@@ -63,7 +75,7 @@ Input: RcvBuff - 接收包指针
        SendBuff - 发送包指针
 Return: ret - 错误代码
 *************************************************/
-u8 HartCommunicationProcess(u8* RcvBuff,u8* SendBuff,u8* Sendlen)
+u8 HartCommunicationProcess(u8* RcvBuff,u8* SendBuff,volatile u8* Sendlen)
 {
 	int ret;							/*故障代码返回*/
 	u8 HartCommand;						/*HART指令代码*/
