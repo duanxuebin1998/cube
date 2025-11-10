@@ -4,7 +4,6 @@
  *  Created on: Mar 5, 2025
  *      Author: 1
  */
-
 #ifndef INC_MEASURE_ZERO_H_
 #define INC_MEASURE_ZERO_H_
 extern int32_t zero_position ;

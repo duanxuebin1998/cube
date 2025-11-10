@@ -11,7 +11,7 @@
 #include "system_parameter.h"
 #include "dataanalysis_modbus.h"
 
-#define DEBUG_COMMUCPU2 0
+#define DEBUG_COMMUCPU2 1
 #define ADERSS 0X01
 
 
@@ -20,7 +20,7 @@ volatile bool wait_response = false;//主控板响应标志位
 /*保持寄存器*/
 //static const int HoldingregisterAddress = 0x00; //保持寄存器起始地址
 //static const int HoldingregisterAmount = HOLEREGISTER_STOP + 1; //保持寄存器总数
-static int HoldingRegisterArray[HOLEREGISTER_STOP] = { 0 }; //保持寄存器数组
+int HoldingRegisterArray[HOLEREGISTER_STOP] = { 0 }; //保持寄存器数组
 /*输入寄存器*/
 //static const int InputregisterAddress = 0x00; //输入寄存器起始地址
 //static const int InputRegisterAmount = INPUTREGISTER_AMOUNT; //输入寄存器总数
@@ -134,6 +134,14 @@ void CPU2_CombinatePackage_Send(uint8_t f_code,uint16_t startadd,uint16_t regist
         {
             uint16_t low_word  = regs[i + 1]; // 原本的高字
             uint16_t high_word = regs[i];     // 原本的低字
+                        // 高字后发（高字节→低字节）
+//            arr[len++] = (uint8_t)(high_word & 0xFF);
+//                        arr[len++] = (uint8_t)(high_word >> 8);
+//
+//                        // 低字先发（高字节→低字节）
+//                        arr[len++] = (uint8_t)(low_word & 0xFF);
+//                        arr[len++] = (uint8_t)(low_word >> 8);
+
 
             // 低字先发（高字节→低字节）
             arr[len++] = (uint8_t)(low_word >> 8);
@@ -187,6 +195,7 @@ void sendToCPU2(uint8_t*arr,uint16_t len,bool flag_fromhost)
 static void CPU2_Response03Process(char const *revframe)
 {
 	int i, j;
+	int byteamount;
 	memset(SlaveTempBuffer, 0, sizeof(SlaveTempBuffer));
 		for (i = 0, j = 0; i < RCV_registercnt; i++, j = j + 2) {
 			SlaveTempBuffer[i] = (revframe[j + 3] << 8) + revframe[j + 4];
@@ -195,6 +204,12 @@ static void CPU2_Response03Process(char const *revframe)
 		WriteDeviceParamsToHoldingRegisters(HoldingRegisterArray);
 		PresetRegister(false, SlaveTempBuffer);
 		/*更新对应参数,若需存储则写入铁电*/
+	    byteamount = revframe[2];
+	    if(byteamount != RCV_registercnt * 2)
+	        return;
+	    for(i = 0;i < byteamount;i++)
+	    	HoldingRegisterArray[(RCV_startaddress << 1) + i] = revframe[3 + i];
+		AnalysisHoldRegister();
 		ReadDeviceParamsFromHoldingRegisters(HoldingRegisterArray);
 }
 /*解析CPU2的响应包0x04功能码*/

@@ -20,7 +20,7 @@
 
 
 extern int SlaveAddress;
-extern int HoldingRegisterArray[HOLDREGISTERAMOUNT]; //保持寄存器数组
+extern int HoldingRegisterArray1[HOLDREGISTERAMOUNT]; //保持寄存器数组
 extern int InputRegisterArray[INPUTREGISTERAMOUNT];   //输入寄存器数组
 
 extern int MaxNum_Coil;            			//线圈最大有效值

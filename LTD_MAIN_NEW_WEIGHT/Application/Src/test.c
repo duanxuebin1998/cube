@@ -5,6 +5,7 @@
  *      Author: 1
  */
 
+#include <ltd_sensor_communication.h>
 #include "test.h"
 #include "measure.h"
 #include "motor_ctrl.h"
@@ -14,7 +15,6 @@
 #include "measure_tank_height.h"
 #include "weight.h"
 #include "system_parameter.h"
-
 //电机小步进上行测试
 void motor_step_up_text(void) {
 	int i = 0;
@@ -144,3 +144,59 @@ void motor_text(void) {
 		stpr_disableDriver(&stepper); //使能电机
 	}
 }
+#include <ltd_sensor_communication.h>
+#include <stdio.h>
+
+/**
+ * @brief  测试V2协议通讯与关键参数读取
+ * @note   可在初始化完成后调用，例如 main() 或 sensor init 后
+ */
+void DSM_V2_Test_AllParams(void)
+{
+    printf("\r\n===== DSM V2 通讯测试开始 =====\r\n");
+
+    // 1. 切换到液位模式
+    int ret = DSM_V2_SwitchToLevelMode();
+    if (ret == NO_ERROR)
+        printf("切换液位模式成功\r\n");
+    else {
+        printf("切换液位模式失败，错误码 %d\r\n", ret);
+        return; // 通讯异常，后面读也没意义
+    }
+
+    // 2. 定义变量
+    float ver = 0, temp = 0, rho = 0, mu = 0, nu = 0;
+    uint32_t freq = 0, sensor_id = 0;
+
+    // 3. 依次读取各参数
+    if (DSM_V2_Read_SoftwareVersion(&ver) == NO_ERROR)
+        printf("软件版本: %.3f\r\n", ver);
+    else printf("读取软件版本失败\r\n");
+
+    if (DSM_V2_Read_Temperature(&temp) == NO_ERROR)
+        printf("温度值: %.3f ℃\r\n", temp);
+    else printf("读取温度失败\r\n");
+
+    if (DSM_V2_Read_Density(&rho) == NO_ERROR)
+        printf("密度值: %.3f\r\n", rho);
+    else printf("读取密度失败\r\n");
+
+    if (DSM_V2_Read_DynamicViscosity(&mu) == NO_ERROR)
+        printf("动力粘度: %.3f\r\n", mu);
+    else printf("读取动力粘度失败\r\n");
+
+    if (DSM_V2_Read_KinematicViscosity(&nu) == NO_ERROR)
+        printf("运动粘度: %.3f\r\n", nu);
+    else printf("读取运动粘度失败\r\n");
+
+    if (DSM_V2_Read_LevelFrequency(&freq) == NO_ERROR)
+        printf("液位频率: %lu Hz\r\n", (unsigned long)freq);
+    else printf("读取液位频率失败\r\n");
+
+    if (DSM_V2_Read_SensorID(&sensor_id) == NO_ERROR)
+        printf("传感器号: %lu\r\n", (unsigned long)sensor_id);
+    else printf("读取传感器号失败\r\n");
+
+    printf("===== DSM V2 通讯测试结束 =====\r\n\r\n");
+}
+

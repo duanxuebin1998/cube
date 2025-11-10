@@ -180,7 +180,7 @@ uint32_t CheckWeightCollision(void)
     float cable_mm  = (float)g_measurement.debug_data.cable_length / 10.0f;
     float sensor_mm = (float)g_measurement.debug_data.sensor_position / 10.0f;
     float diff      = fabs(weight_parament.current_weight - weight_parament.stable_weight);
-    float threshold = weight_parament.full_weight * 0.5f; // 30%变化阈值
+    float threshold = weight_parament.full_weight * 0.5f;
 
     if ((diff > threshold) &&
         (g_measurement.debug_data.cable_length > 1000) &&

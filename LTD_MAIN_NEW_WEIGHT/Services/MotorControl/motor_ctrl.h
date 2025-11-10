@@ -27,6 +27,7 @@ uint32_t motorSlowStop(void);// 电机慢速停止
 void motor_text(void);
 void MotorLostStep_Init(void);// 丢步检测初始化
 uint32_t Motor_CheckLostStep_AutoTiming(int32_t currentPos);// 电机丢步检测
+uint32_t motorMoveToPositionOneShot(float target_mm);// 电机移动到指定位置（单次调用）
 //uint32_t stpr_wait_until_stop(TMC5130TypeDef *tmc5130);// 等待电机停止
 //motorMoveForward(int distance) // 前进指定距离
 //motorMoveBackward(int distance) // 后退指定距离

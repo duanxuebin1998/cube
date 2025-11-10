@@ -7,82 +7,176 @@
 
 int cnt_commutoCPU2 = COMMU_ERROR_MAX;
 
+static int ywj_hold_analysis_data(int startadd,int rgscnt);
 
+///* 另一套设备的保持寄存器映射（与 HOLD 枚举一一对应） */
+//struct HoldRegisterData holdValue[] = {
+///* 名称                默认 数据号                          起始地址                                        寄存器数 是否检 最小   最大    单位     小数 偏移 写权  类型      显示 隐藏  英文 */
+//{(uint8_t*)"设备指令",      0,  COM_NUM_DEVICEPARAM_COMMAND,   HOLDREGISTER_DEVICEPARAM_COMMAND,                2,     false,  0,     0,      NULL,    0,   0,   true, TYPE_INT,  8,   NULL, (uint8_t*)"Cmd"},
+//
+///* 基础参数 */
+//{(uint8_t*)"罐高",          0,  COM_NUM_DEVICEPARAM_TANKHEIGHT, HOLDREGISTER_DEVICEPARAM_TANKHEIGHT,             2,     false,  0,     0,      NULL,    1,   0,   true, TYPE_INT,  7,   NULL, (uint8_t*)"TankHeight"},
+//{(uint8_t*)"液位盲区",      0,  COM_NUM_DEVICEPARAM_BLINDZONE,  HOLDREGISTER_DEVICEPARAM_BLINDZONE,              2,     false,  0,     0,      NULL,    1,   0,   true, TYPE_INT,  6,   NULL, (uint8_t*)"BlindZone"},
+//{(uint8_t*)"水位盲区",      0,  COM_NUM_DEVICEPARAM_WATER_BLINDZONE, HOLDREGISTER_DEVICEPARAM_WATER_BLINDZONE,   2,     false,  0,     0,      NULL,    1,   0,   true, TYPE_INT,  6,   NULL, (uint8_t*)"WaterBlind"},
+//{(uint8_t*)"编码轮周长mm",  0,  COM_NUM_DEVICEPARAM_ENCODER_WHEEL_CIRCUMFERENCE_MM, HOLDREGISTER_DEVICEPARAM_ENCODER_WHEEL_CIRCUMFERENCE_MM, 2, false, 0, 0, NULL, 1, 0, true, TYPE_INT, 6, NULL, (uint8_t*)"EncWheelCirc"},
+//{(uint8_t*)"传感器类型",    0,  COM_NUM_DEVICEPARAM_SENSORTYPE, HOLDREGISTER_DEVICEPARAM_SENSORTYPE,            2,     false,  0,     0,      NULL,    0,   0,   false,TYPE_INT,  3,   NULL, (uint8_t*)"SensorType"},
+//{(uint8_t*)"传感器编号",    0,  COM_NUM_DEVICEPARAM_SENSORID,  HOLDREGISTER_DEVICEPARAM_SENSORID,               2,     false,  0,     0,      NULL,    0,   0,   false,TYPE_INT,  8,   NULL, (uint8_t*)"SensorID"},
+//{(uint8_t*)"软件版本",      0,  COM_NUM_DEVICEPARAM_SOFTWAREVERSION, HOLDREGISTER_DEVICEPARAM_SOFTWAREVERSION,   2,     false,  0,     0,      NULL,    3,   0,   false,TYPE_INT,  7,   NULL, (uint8_t*)"FWVersion"},
+//
+///* 称重参数 */
+//{(uint8_t*)"空桶重量",      0,  COM_NUM_DEVICEPARAM_EMPTY_WEIGHT, HOLDREGISTER_DEVICEPARAM_EMPTY_WEIGHT,         2,     false,  0,     0,      (uint8_t*)"kg", 2,   0,   true, TYPE_INT,  7,   NULL, (uint8_t*)"EmptyWt"},
+//{(uint8_t*)"满桶重量",      0,  COM_NUM_DEVICEPARAM_FULL_WEIGHT,  HOLDREGISTER_DEVICEPARAM_FULL_WEIGHT,          2,     false,  0,     0,      (uint8_t*)"kg", 2,   0,   true, TYPE_INT,  7,   NULL, (uint8_t*)"FullWt"},
+//{(uint8_t*)"上限比率",      0,  COM_NUM_DEVICEPARAM_WEIGHT_UPPER_LIMIT_RATIO, HOLDREGISTER_DEVICEPARAM_WEIGHT_UPPER_LIMIT_RATIO, 2, false, 0, 0, (uint8_t*)"%", 2, 0, true, TYPE_INT, 5, NULL, (uint8_t*)"UpperRatio"},
+//{(uint8_t*)"下限比率",      0,  COM_NUM_DEVICEPARAM_WEIGHT_LOWER_LIMIT_RATIO, HOLDREGISTER_DEVICEPARAM_WEIGHT_LOWER_LIMIT_RATIO, 2, false, 0, 0, (uint8_t*)"%", 2, 0, true, TYPE_INT, 5, NULL, (uint8_t*)"LowerRatio"},
+//{(uint8_t*)"空桶重量上限",  0,  COM_NUM_DEVICEPARAM_EMPTY_WEIGHT_UPPER_LIMIT, HOLDREGISTER_DEVICEPARAM_EMPTY_WEIGHT_UPPER_LIMIT, 2, false, 0, 0, (uint8_t*)"kg", 2, 0, true, TYPE_INT, 7, NULL, (uint8_t*)"EmptyWtHi"},
+//{(uint8_t*)"空桶重量下限",  0,  COM_NUM_DEVICEPARAM_EMPTY_WEIGHT_LOWER_LIMIT, HOLDREGISTER_DEVICEPARAM_EMPTY_WEIGHT_LOWER_LIMIT, 2, false, 0, 0, (uint8_t*)"kg", 2, 0, true, TYPE_INT, 7, NULL, (uint8_t*)"EmptyWtLo"},
+//{(uint8_t*)"满桶重量上限",  0,  COM_NUM_DEVICEPARAM_FULL_WEIGHT_UPPER_LIMIT, HOLDREGISTER_DEVICEPARAM_FULL_WEIGHT_UPPER_LIMIT,   2, false, 0, 0, (uint8_t*)"kg", 2, 0, true, TYPE_INT, 7, NULL, (uint8_t*)"FullWtHi"},
+//{(uint8_t*)"满桶重量下限",  0,  COM_NUM_DEVICEPARAM_FULL_WEIGHT_LOWER_LIMIT, HOLDREGISTER_DEVICEPARAM_FULL_WEIGHT_LOWER_LIMIT,   2, false, 0, 0, (uint8_t*)"kg", 2, 0, true, TYPE_INT, 7, NULL, (uint8_t*)"FullWtLo"},
+//{(uint8_t*)"找零下行距离",  0,  COM_NUM_DEVICEPARAM_FINDZERO_DOWN_DISTANCE, HOLDREGISTER_DEVICEPARAM_FINDZERO_DOWN_DISTANCE,     2, false, 0, 0, (uint8_t*)"mm", 1, 0, true, TYPE_INT, 6, NULL, (uint8_t*)"FindZeroDown"},
+//
+///* 指令参数 */
+//{(uint8_t*)"标定液位(油)",  0,  COM_NUM_CAL_OIL,   HOLDREGISTER_DEVICEPARAM_CALIBRATE_OIL_LEVEL,         2, false, 0, 0, (uint8_t*)"mm", 1, 0, true, TYPE_INT, 6, NULL, (uint8_t*)"CalOilLvl"},
+//{(uint8_t*)"标定液位(水)",  0,  COM_NUM_DEVICEPARAM_CALIBRATE_WATER_LEVEL, HOLDREGISTER_DEVICEPARAM_CALIBRATE_WATER_LEVEL,       2, false, 0, 0, (uint8_t*)"mm", 1, 0, true, TYPE_INT, 6, NULL, (uint8_t*)"CalWaterLvl"},
+//{(uint8_t*)"单点测量位置",  0,  COM_NUM_SINGLE_POINT,      HOLDREGISTER_DEVICEPARAM_SP_MEAS_POSITION,            2, false, 0, 0, (uint8_t*)"mm", 1, 0, true, TYPE_INT, 7, NULL, (uint8_t*)"SP_MeasPos"},
+//{(uint8_t*)"单点监测位置",  0,  COM_NUM_SP_TEST,   HOLDREGISTER_DEVICEPARAM_SP_MONITOR_POSITION,         2, false, 0, 0, (uint8_t*)"mm", 1, 0, true, TYPE_INT, 7, NULL, (uint8_t*)"SP_MonPos"},
+//{(uint8_t*)"分布测液位",    0,  COM_NUM_SPREADPOINTS, HOLDREGISTER_DEVICEPARAM_DENSITY_DISTRIBUTION_OIL_LEVEL, 2, false, 0, 0, (uint8_t*)"mm", 1, 0, true, TYPE_INT, 7, NULL, (uint8_t*)"DistLvl"},
+//{(uint8_t*)"电机指令距离",  0,  COM_NUM_RUNUP, HOLDREGISTER_DEVICEPARAM_MOTOR_COMMAND_DISTANCE,      2, false, 0, 0, (uint8_t*)"mm", 1, 0, true, TYPE_INT, 6, NULL, (uint8_t*)"MotorCmdDist"},
+//{(uint8_t*)"电机指令距离",  0,  COM_NUM_RUNDOWN, HOLDREGISTER_DEVICEPARAM_MOTOR_COMMAND_DISTANCE,      2, false, 0, 0, (uint8_t*)"mm", 1, 0, true, TYPE_INT, 6, NULL, (uint8_t*)"MotorCmdDist"},
+//
+///* 密度与温度修正（允许为负，给 1 位小数） */
+//{(uint8_t*)"密度修正",      0,  COM_NUM_DEVICEPARAM_DENSITYCORRECTION,      HOLDREGISTER_DEVICEPARAM_DENSITYCORRECTION,           2, false, -10000,10000, NULL, 1, 0, true, TYPE_INT, 5, NULL, (uint8_t*)"DensityCorr"},
+//{(uint8_t*)"温度修正",      0,  COM_NUM_DEVICEPARAM_TEMPERATURECORRECTION,  HOLDREGISTER_DEVICEPARAM_TEMPERATURECORRECTION,       2, false, -1000, 1000,  NULL, 1, 0, true, TYPE_INT, 4, NULL, (uint8_t*)"TempCorr"},
+//
+///* 分布测量参数（0/1/枚举/数量/距离） */
+//{(uint8_t*)"是否测罐底",    0,  COM_NUM_DEVICEPARAM_REQUIREBOTTOMMEASUREMENT, HOLDREGISTER_DEVICEPARAM_REQUIREBOTTOMMEASUREMENT,  2, false, 0, 1, NULL, 0, 0, true, TYPE_INT, 1, NULL, (uint8_t*)"NeedBottom"},
+//{(uint8_t*)"是否测水位",    0,  COM_NUM_DEVICEPARAM_REQUIREWATERMEASUREMENT,  HOLDREGISTER_DEVICEPARAM_REQUIREWATERMEASUREMENT,   2, false, 0, 1, NULL, 0, 0, true, TYPE_INT, 1, NULL, (uint8_t*)"NeedWater"},
+//{(uint8_t*)"是否测单点密度",0,  COM_NUM_DEVICEPARAM_REQUIRESINGLEPOINTDENSITY,HOLDREGISTER_DEVICEPARAM_REQUIRESINGLEPOINTDENSITY,2, false, 0, 1, NULL, 0, 0, true, TYPE_INT, 1, NULL, (uint8_t*)"NeedSingleDens"},
+//{(uint8_t*)"分布测顺序",    0,  COM_NUM_DEVICEPARAM_SPREADMEASUREMENTORDER,   HOLDREGISTER_DEVICEPARAM_SPREADMEASUREMENTORDER,     2, false, 0, 0, NULL, 0, 0, true, TYPE_INT, 1, NULL, (uint8_t*)"SpreadOrder"},
+//{(uint8_t*)"分布测模式",    0,  COM_NUM_DEVICEPARAM_SPREADMEASUREMENTMODE,    HOLDREGISTER_DEVICEPARAM_SPREADMEASUREMENTMODE,      2, false, 0, 0, NULL, 0, 0, true, TYPE_INT, 1, NULL, (uint8_t*)"SpreadMode"},
+//{(uint8_t*)"分布测点数",    0,  COM_NUM_DEVICEPARAM_SPREADMEASUREMENTCOUNT,   HOLDREGISTER_DEVICEPARAM_SPREADMEASUREMENTCOUNT,     2, false, 1, 99, NULL, 0, 0, true, TYPE_INT, 3, NULL, (uint8_t*)"SpreadCount"},
+//{(uint8_t*)"分布点间距",    0,  COM_NUM_DEVICEPARAM_SPREADMEASUREMENTDISTANCE,HOLDREGISTER_DEVICEPARAM_SPREADMEASUREMENTDISTANCE,  2, false, 0, 0, (uint8_t*)"mm", 1, 0, true, TYPE_INT, 5, NULL, (uint8_t*)"SpreadDist"},
+//{(uint8_t*)"顶点距液面",    0,  COM_NUM_DEVICEPARAM_SPREADTOPLIMIT,           HOLDREGISTER_DEVICEPARAM_SPREADTOPLIMIT,             2, false, 0, 0, (uint8_t*)"mm", 1, 0, true, TYPE_INT, 5, NULL, (uint8_t*)"Top2Level"},
+//{(uint8_t*)"底点距罐底",    0,  COM_NUM_DEVICEPARAM_SPREADBOTTOMLIMIT,        HOLDREGISTER_DEVICEPARAM_SPREADBOTTOMLIMIT,          2, false, 0, 0, (uint8_t*)"mm", 1, 0, true, TYPE_INT, 5, NULL, (uint8_t*)"Bot2Tank"},
+//{(uint8_t*)"分布点悬停(s)", 0,  COM_NUM_DEVICEPARAM_SPREAD_POINT_HOVER_TIME,  HOLDREGISTER_DEVICEPARAM_SPREAD_POINT_HOVER_TIME,    2, false, 0, 600,(uint8_t*)"s",  0, 0, true, TYPE_INT, 3, NULL, (uint8_t*)"PtHoverTime"},
+//
+///* 水位测量 */
+//{(uint8_t*)"水位修正值",    0,  COM_NUM_DEVICEPARAM_WATERLEVELCORRECTION,     HOLDREGISTER_DEVICEPARAM_WATERLEVELCORRECTION,       2, false,-1000,1000, NULL, 1, 0, true, TYPE_INT, 4, NULL, (uint8_t*)"WaterCorr"},
+//{(uint8_t*)"最大下行距离",  0,  COM_NUM_DEVICEPARAM_MAXDOWNDISTANCE,          HOLDREGISTER_DEVICEPARAM_MAXDOWNDISTANCE,            2, false, 0, 0, (uint8_t*)"mm", 1, 0, true, TYPE_INT, 5, NULL, (uint8_t*)"MaxDown"},
+//
+///* 实高测量 */
+//{(uint8_t*)"更新罐高标志",  0,  COM_NUM_DEVICEPARAM_REFRESHTANKHEIGHTFLAG,    HOLDREGISTER_DEVICEPARAM_REFRESHTANKHEIGHTFLAG,      2, false, 0, 1, NULL, 0, 0, true, TYPE_INT, 1, NULL, (uint8_t*)"UpdTankHeight"},
+//{(uint8_t*)"实高最大偏差",  0,  COM_NUM_DEVICEPARAM_MAXTANKHEIGHTDEVIATION,   HOLDREGISTER_DEVICEPARAM_MAXTANKHEIGHTDEVIATION,     2, false, 0, 0, NULL, 1, 0, true, TYPE_INT, 4, NULL, (uint8_t*)"MaxDev"},
+//{(uint8_t*)"初始罐高",      0,  COM_NUM_DEVICEPARAM_INITIALTANKHEIGHT,        HOLDREGISTER_DEVICEPARAM_INITIALTANKHEIGHT,          2, false, 0, 0, NULL, 1, 0, true, TYPE_INT, 7, NULL, (uint8_t*)"InitTankH"},
+//{(uint8_t*)"当前罐高",      0,  COM_NUM_DEVICEPARAM_CURRENTTANKHEIGHT,        HOLDREGISTER_DEVICEPARAM_CURRENTTANKHEIGHT,          2, false, 0, 0, NULL, 1, 0, false,TYPE_INT, 7, NULL, (uint8_t*)"CurrTankH"},
+//
+///* 液位测量 */
+//{(uint8_t*)"找油阈值",      0,  COM_NUM_DEVICEPARAM_OILLEVELTHRESHOLD,        HOLDREGISTER_DEVICEPARAM_OILLEVELTHRESHOLD,          2, false, 0, 0, NULL, 1, 0, true, TYPE_INT, 4, NULL, (uint8_t*)"OilLvlTh"},
+//{(uint8_t*)"液位测量方式",  0,  COM_NUM_DEVICEPARAM_LIQUIDLEVELMEASUREMENTMETHOD, HOLDREGISTER_DEVICEPARAM_LIQUIDLEVELMEASUREMENTMETHOD, 2, false, 0, 0, NULL, 0, 0, true, TYPE_INT, 1, NULL, (uint8_t*)"LvlMeasMode"},
+//
+///* 报警（DO） */
+//{(uint8_t*)"高液位报警(DO)",0,  COM_NUM_DEVICEPARAM_ALARM_HIGH_DO,            HOLDREGISTER_DEVICEPARAM_ALARM_HIGH_DO,              2, false, 0, 0, NULL, 1, 0, true, TYPE_INT, 4, NULL, (uint8_t*)"AlarmHiDO"},
+//{(uint8_t*)"低液位报警(DO)",0,  COM_NUM_DEVICEPARAM_ALARM_LOW_DO,             HOLDREGISTER_DEVICEPARAM_ALARM_LOW_DO,               2, false, 0, 0, NULL, 1, 0, true, TYPE_INT, 4, NULL, (uint8_t*)"AlarmLoDO"},
+//{(uint8_t*)"第三状态阈值",  0,  COM_NUM_DEVICEPARAM_THIRD_STATE_THRESHOLD,    HOLDREGISTER_DEVICEPARAM_THIRD_STATE_THRESHOLD,      2, false, 0, 0, NULL, 1, 0, true, TYPE_INT, 4, NULL, (uint8_t*)"ThirdStateTh"},
+//
+///* 4–20mA 输出与报警（AO）——mA 2 位小数 */
+//{(uint8_t*)"输出范围起点mA",0,  COM_NUM_DEVICEPARAM_CURRENT_RANGE_START_mA,   HOLDREGISTER_DEVICEPARAM_CURRENT_RANGE_START_mA,     2, false, 0, 3000,(uint8_t*)"mA",2, 0, true, TYPE_INT, 5, NULL, (uint8_t*)"RangeStart"},
+//{(uint8_t*)"输出范围终点mA",0,  COM_NUM_DEVICEPARAM_CURRENT_RANGE_END_mA,     HOLDREGISTER_DEVICEPARAM_CURRENT_RANGE_END_mA,       2, false, 0, 3000,(uint8_t*)"mA",2, 0, true, TYPE_INT, 5, NULL, (uint8_t*)"RangeEnd"},
+//{(uint8_t*)"高限报警(AO)",  0,  COM_NUM_DEVICEPARAM_ALARM_HIGH_AO,            HOLDREGISTER_DEVICEPARAM_ALARM_HIGH_AO,              2, false, 0, 3000,(uint8_t*)"mA",2, 0, true, TYPE_INT, 5, NULL, (uint8_t*)"AlarmHiAO"},
+//{(uint8_t*)"低限报警(AO)",  0,  COM_NUM_DEVICEPARAM_ALARM_LOW_AO,             HOLDREGISTER_DEVICEPARAM_ALARM_LOW_AO,               2, false, 0, 3000,(uint8_t*)"mA",2, 0, true, TYPE_INT, 5, NULL, (uint8_t*)"AlarmLoAO"},
+//{(uint8_t*)"初始电流mA",    0,  COM_NUM_DEVICEPARAM_INITIAL_CURRENT_mA,       HOLDREGISTER_DEVICEPARAM_INITIAL_CURRENT_mA,          2, false, 0, 3000,(uint8_t*)"mA",2, 0, true, TYPE_INT, 5, NULL, (uint8_t*)"InitCurrent"},
+//{(uint8_t*)"高位电流mA",    0,  COM_NUM_DEVICEPARAM_AO_HIGH_CURRENT_mA,       HOLDREGISTER_DEVICEPARAM_AO_HIGH_CURRENT_mA,         2, false, 0, 3000,(uint8_t*)"mA",2, 0, true, TYPE_INT, 5, NULL, (uint8_t*)"HighCurrent"},
+//{(uint8_t*)"低位电流mA",    0,  COM_NUM_DEVICEPARAM_AO_LOW_CURRENT_mA,        HOLDREGISTER_DEVICEPARAM_AO_LOW_CURRENT_mA,          2, false, 0, 3000,(uint8_t*)"mA",2, 0, true, TYPE_INT, 5, NULL, (uint8_t*)"LowCurrent"},
+//{(uint8_t*)"故障电流mA",    0,  COM_NUM_DEVICEPARAM_FAULT_CURRENT_mA,         HOLDREGISTER_DEVICEPARAM_FAULT_CURRENT_mA,           2, false, 0, 3000,(uint8_t*)"mA",2, 0, true, TYPE_INT, 5, NULL, (uint8_t*)"FaultCurrent"},
+//{(uint8_t*)"调试电流mA",    0,  COM_NUM_DEVICEPARAM_DEBUG_CURRENT_mA,         HOLDREGISTER_DEVICEPARAM_DEBUG_CURRENT_mA,           2, false, 0, 3000,(uint8_t*)"mA",2, 0, true, TYPE_INT, 5, NULL, (uint8_t*)"DebugCurrent"},
+//
+///* CRC —— 只读/只写由你的实现决定；通常外部不写 */
+//{(uint8_t*)"参数CRC32",     0,  COM_NUM_DEVICEPARAM_CRC,      HOLDREGISTER_DEVICEPARAM_CRC,                      2,     false,  0,     0,      NULL,    0,   0,   false,TYPE_INT,  8,   NULL, (uint8_t*)"ParamCRC"},
+//
+//};
+struct HoldRegisterData holdValue[] = {
+	/* 名称	默认	数据号	起始地址	寄存器数	是否检	最小	最大	单位	小数	偏移	写权	类型	显示	隐藏	英文 */
+	{(uint8_t*)"设备指令",	0,	COM_NUM_DEVICEPARAM_COMMAND,	HOLDREGISTER_DEVICEPARAM_COMMAND,	2,	false,	0,	0,	NULL,	0,	0,	true,	TYPE_INT,	8,	NULL,	(uint8_t*)"Cmd"},
 
-struct HoldRegisterData holdValue[] = {              /* 保持寄存器数据 */
-    /* 名称						数据	操作码						起始地址	寄存器数量	是否范围检查	最小值	最大值	单位	小数点个数	偏移量	写权限	数据类型	要显示的位数	隐藏信息数组	英文
- */
-	{(uint8_t*)"工作模式密码",	0,	COM_NUM_WORKPATTER_PASSWORD,	HOLDREGISTER_WORKPATTER_PASSWORD,	6,	false,	0,	0,	NULL,	0,	0,	true,	TYPE_INT,	6,	NULL,	(uint8_t*)"WorkModePwd"},
-	{(uint8_t*)"固定点测量位置",	0,	COM_NUM_SINGLE_POINT,	HOLDREGISTER_SP_POSITION,	2,	false,	0,	0,	NULL,	1,	0,	true,	TYPE_INT,	7,	NULL,	(uint8_t*)"FixPtMeasPos"},
-	{(uint8_t*)"固定点监测位置",	0,	COM_NUM_SP_TEST,	HOLDREGISTER_SPT_POSITION,	2,	false,	0,	0,	NULL,	1,	0,	true,	TYPE_INT,	7,	NULL,	(uint8_t*)"FixPtMonPos"},
-	{(uint8_t*)"密度分布测高度",	0,	COM_NUM_SPREADPOINTS,	HOLDREGISTER_SRREAD_POSITION,	2,	false,	0,	0,	NULL,	1,	0,	true,	TYPE_INT,	7,	NULL,	(uint8_t*)"DensityMeasHt"},
-	{(uint8_t*)"综合测是否测罐底",	0,	COM_NUM_SYNTHETIC_BOTTOM_FREE,	HOLDREGISTER_SYNTHETIC_BOTTOM_FREE,	1,	false,	0,	0,	NULL,	0,	0,	true,	TYPE_INT,	1,	ret_arr_word,	(uint8_t*)"IntgMeasTankBot"},
-	{(uint8_t*)"综合测是否测水位",	0,	COM_NUM_SYNTHETIC_WATER_FREE,	HOLDREGISTER_SYNTHETIC_WATER_FREE,	1,	false,	0,	0,	NULL,	0,	0,	true,	TYPE_INT,	1,	ret_arr_word,	(uint8_t*)"IntgMeasWaterLvl"},
-	{(uint8_t*)"综合测是否固定点",	0,	COM_NUM_SYNTHETIC_SINGLEPOINT_FREE,	HOLDREGISTER_SYNTHETIC_SINGLEPOINT_FREE,	1,	false,	0,	0,	NULL,	0,	0,	true,	TYPE_INT,	1,	ret_arr_word,	(uint8_t*)"IntgUseFixPt"},
-	{(uint8_t*)"分布测模式",	0,	COM_NUM_SPREAD_STATE_FREE,	HOLDREGISTER_SPREAD_STATE_FREE,	1,	false,	0,	0,	NULL,	0,	0,	true,	TYPE_INT,	1,	NULL,	(uint8_t*)"DistMeasMode"},
-	{(uint8_t*)"分布测测量点数",	0,	COM_NUM_SPREAD_NUM_FREE,	HOLDREGISTER_SPREAD_NUM_FREE,	1,	false,	0,	0,	NULL,	0,	0,	true,	TYPE_INT,	3,	NULL,	(uint8_t*)"DistMeasPts"},
-	{(uint8_t*)"分布测量密度点间距",	0,	COM_NUM_SPREAD_DISTANCE_FREE,	HOLDREGISTER_SPREAD_DISTANCE_FREE,	2,	false,	0,	0,	NULL,	1,	0,	true,	TYPE_INT,	5,	NULL,	(uint8_t*)"DistDensPtDist"},
-	{(uint8_t*)"顶密距液位",	0,	COM_NUM_SPREAD_TOPLIMIT_FREE,	HOLDREGISTER_SPREAD_TOPLIMIT_FREE,	2,	false,	0,	0,	NULL,	1,	0,	true,	TYPE_INT,	5,	NULL,	(uint8_t*)"TopDensToLvl"},
-	{(uint8_t*)"底密距罐底",	0,	COM_NUM_SPREAD_FLOORLIMIT_FREE,	HOLDREGISTER_SPREAD_FLOORLIMIT_FREE,	2,	false,	0,	0,	NULL,	1,	0,	true,	TYPE_INT,	5,	NULL,	(uint8_t*)"BotDensToBot"},
-	{(uint8_t*)"综合测单点位置",	0,	COM_NUM_SPSYNTHETIC_POSITION,	HOLDREGISTER_SPSYNTHETIC_POSITION,	2,	false,	0,	0,	NULL,	1,	0,	true,	TYPE_INT,	7,	NULL,	(uint8_t*)"IntgSinglePos"},
-	{(uint8_t*)"每米测方向",	0,	COM_NUM_MEASREMENT_METER,	HOLDREGISTER_MEASREMENT_METER,	1,	false,	0,	0,	NULL,	0,	0,	true,	TYPE_INT,	1,	NULL,	(uint8_t*)"MeterMeasDir"},
-	{(uint8_t*)"区间密度测量点数",	0,	COM_NUM_INTERVAL_POINT,	HOLDREGISTER_INTERVAL_POINT,	1,	false,	0,	0,	NULL,	0,	0,	true,	TYPE_INT,	3,	NULL,	(uint8_t*)"SectDensPts"},
-	{(uint8_t*)"区间密度测量方向",	0,	COM_NUM_INTERVAL_DIREDION,	HOLDREGISTER_INTERVAL_DIREDION,	1,	false,	0,	0,	NULL,	0,	0,	true,	TYPE_INT,	1,	NULL,	(uint8_t*)"SectDensDir"},
-	{(uint8_t*)"区间测量液位A",	0,	COM_NUM_INTERVAL_OIL_A,	HOLDREGISTER_INTERVAL_OIL_A,	2,	false,	0,	0,	NULL,	0,	0,	true,	TYPE_INT,	7,	NULL,	(uint8_t*)"SectMeasLvlA"},
-	{(uint8_t*)"区间测量液位B",	0,	COM_NUM_INTERVAL_OIL_B,	HOLDREGISTER_INTERVAL_OIL_B,	2,	false,	0,	0,	NULL,	0,	0,	true,	TYPE_INT,	7,	NULL,	(uint8_t*)"SectMeasLvlB"},
-																
-	{(uint8_t*)"罐高",	0,	COM_NUM_TANKHIGHT,	HOLDREGISTER_TANKHIGHT,	2,	false,	0,	0,	NULL,	1,	0,	true,	TYPE_INT,	7,	NULL,	(uint8_t*)"TankHeight"},
-	{(uint8_t*)"标定液位液位值",	0,	COM_NUM_CAL_OIL,	HOLDREGISTER_CALIBRATIONLIQUIDLEVEL,	2,	false,	0,	0,	NULL,	1,	0,	true,	TYPE_INT,	7,	NULL,	(uint8_t*)"CalibLvlVal"},
-	{(uint8_t*)"综合测量顺序",	0,	COM_NUM_SRREAD_MEASURETURN,	HOLDREGISTER_SRREAD_MEASURETURN,	1,	false,	0,	0,	NULL,	0,	0,	true,	TYPE_INT,	1,	NULL,	(uint8_t*)"IntgMeasOrder"},
-	{(uint8_t*)"综合测量分布模式",	0,	COM_NUM_SPREAD_STATE,	HOLDREGISTER_SPREAD_STATE,	1,	false,	0,	0,	NULL,	0,	0,	true,	TYPE_INT,	1,	NULL,	(uint8_t*)"IntgMeasDistMode"},
-	{(uint8_t*)"密度分布测量点数",	0,	COM_NUM_SPREAD_NUM,	HOLDREGISTER_SPREAD_NUM,	1,	false,	0,	0,	NULL,	0,	0,	true,	TYPE_INT,	3,	NULL,	(uint8_t*)"DensDistPts"},
-	{(uint8_t*)"密度点间距",	0,	COM_NUM_SPREAD_DISTANCE,	HOLDREGISTER_SPREAD_DISTANCE,	2,	false,	0,	0,	NULL,	1,	0,	true,	TYPE_INT,	5,	NULL,	(uint8_t*)"DensPtDist"},
-	{(uint8_t*)"顶密距液位",	0,	COM_NUM_SPREAD_TOPLIMIT,	HOLDREGISTER_SPREAD_TOPLIMIT,	2,	false,	0,	0,	NULL,	1,	0,	true,	TYPE_INT,	5,	NULL,	(uint8_t*)"TopDensToLvl"},
-	{(uint8_t*)"底密距罐底",	0,	COM_NUM_SPREAD_FLOORLIMIT,	HOLDREGISTER_SPREAD_FLOORLIMIT,	2,	false,	0,	0,	NULL,	1,	0,	true,	TYPE_INT,	5,	NULL,	(uint8_t*)"BotDensToBot"},
-	{(uint8_t*)"分层加测阈值点A",	0,	COM_NUM_THRESHOLD_A,	HOLDREGISTER_THRESHOLD_A,	1,	false,	0,	0,	NULL,	0,	0,	true,	TYPE_INT,	7,	NULL,	(uint8_t*)"LayerExtraThA"},
-	{(uint8_t*)"分层加测阈值点B",	0,	COM_NUM_THRESHOLD_B,	HOLDREGISTER_THRESHOLD_B,	1,	false,	0,	0,	NULL,	0,	0,	true,	TYPE_INT,	7,	NULL,	(uint8_t*)"LayerExtraThB"},
-	{(uint8_t*)"国标测点数阈值",	0,	COM_NUM_THRESHOLD_STANDARD,	HOLDREGISTER_THRESHOLD_STANDARD,	1,	false,	0,	0,	NULL,	0,	0,	true,	TYPE_INT,	7,	NULL,	(uint8_t*)"StdMeasPtsTh"},
-	{(uint8_t*)"水位测量方式",	0,	COM_NUM_WATER_IS_REAL_HIGH,	HOLDREGISTER_WATER_IS_REAL_HIGH,	1,	false,	0,	0,	NULL,	0,	0,	true,	TYPE_INT,	1,	NULL,	(uint8_t*)"WaterLvlMode"},
-	{(uint8_t*)"实高水位修正值",	0,	COM_NUM_REAL_WATER_LEVEL_CORRECT,	HOLDREGISTER_REAL_WATER_LEVEL_CORRECT,	1,	false,	0,	0,	NULL,	1,	-1000,	true,	TYPE_INT,	4,	NULL,	(uint8_t*)"ActHeightCorr"},
-	{(uint8_t*)"综合测是否更罐高",	0,	COM_NUM_IF_REFRESH_TANKHIGH,	HOLDREGISTER_IF_REFRESH_TANKHIGH,	1,	false,	0,	0,	NULL,	0,	0,	true,	TYPE_INT,	1,	NULL,	(uint8_t*)"UpdTankHeight"},
-	{(uint8_t*)"实高最大偏差阈值",	0,	COM_NUM_REAL_TANKHIGH_MAX_DIFF,	HOLDREGISTER_REAL_TANKHIGH_MAX_DIFF,	1,	false,	0,	0,	NULL,	1,	0,	true,	TYPE_INT,	4,	NULL,	(uint8_t*)"MaxDevThresh"},
-	{(uint8_t*)"液位测量方式",	0,	COM_NUM_LEVEL_MEASURE_METHOD,	HOLDREGISTER_LEVEL_MEASURE_METHOD,	1,	false,	0,	0,	NULL,	0,	0,	true,	TYPE_INT,	1,	NULL,	(uint8_t*)"LvlMeasMode"},
-	{(uint8_t*)"综合测单温度模式",	0,	COM_NUM_TEMPERATURE_MODE,	HOLDREGISTER_TEMPERATURE_MODE,	1,	false,	0,	0,	NULL,	0,	0,	true,	TYPE_INT,	1,	NULL,	(uint8_t*)"IntgSingleTempMode"},
-	{(uint8_t*)"单温度模式密度值",	0,	COM_NUM_TEMPERATURE_MODE_D,	HOLDREGISTER_TEMPERATURE_MODE_D,	1,	false,	0,	0,	NULL,	1,	0,	true,	TYPE_INT,	5,	NULL,	(uint8_t*)"SingleTempDensVal"},
-	{(uint8_t*)"水位与零点最小距",	0,	COM_NUM_WATER_ZERO_MIN_DISTANCE,	HOLDREGISTER_WATER_ZERO_MIN_DISTANCE,	1,	false,	0,	0,	NULL,	1,	0,	true,	TYPE_INT,	5,	NULL,	(uint8_t*)"MinLvlZeroDist"},
-	{(uint8_t*)"上电找液位",	0,	COM_NUM_IF_FINDOIL_POWERON,	HOLDREGISTER_IF_FINDOIL_POWERON,	1,	false,	0,	0,	NULL,	0,	0,	true,	TYPE_INT,	1,	NULL,	(uint8_t*)"AutoLvlSearch"},
-	{(uint8_t*)"测密前提出时间",	0,	COM_NUM_DENSITY_TIME,	HOLDREGISTER_DENSITY_TIME,	1,	false,	0,	0,	NULL,	0,	0,	true,	TYPE_INT,	2,	NULL,	(uint8_t*)"PreMeasDelay"},
-	{(uint8_t*)"运行距离",	0,	COM_NUM_RUNUP,	HOLDREGISTER_RUNTODISTANCE,	2,	false,	0,	0,	NULL,	0,	0,	true,	TYPE_INT,	7,	NULL,	(uint8_t*)"RunDistance"},
-	{(uint8_t*)"运行距离",	0,	COM_NUM_RUNDOWN,	HOLDREGISTER_RUNTODISTANCE,	2,	false,	0,	0,	NULL,	1,	0,	true,	TYPE_INT,	7,	NULL,	(uint8_t*)"RunDistance"},
-	{(uint8_t*)"零点编码器圈数",	0,	COM_NUM_ZEROCIRCLE,	HOLDREGISTER_ZEROCIRCLE,	1,	false,	0,	0,	NULL,	0,	-32768,	false,	TYPE_INT,	7,	NULL,	(uint8_t*)"ZeroEncTurns"},
-	{(uint8_t*)"零点编码器编码值",	0,	COM_NUM_ZEROANGLE,	HOLDREGISTER_ZEROANGLE,	1,	false,	0,	0,	NULL,	0,	0,	false,	TYPE_INT,	7,	NULL,	(uint8_t*)"ZeroEncVal"},
-	{(uint8_t*)"导轮周长",	0,	COM_NUM_GIRTH_USELESS,	HOLDREGISTER_GIRTH_USELESS,	1,	false,	0,	0,	NULL,	2,	0,	true,	TYPE_INT,	5,	NULL,	(uint8_t*)"PulleyCirc"},
-	{(uint8_t*)"减速比",	0,	COM_NUM_REDUCTION_RATIO,	HOLDREGISTER_REDUCTION_RATIO,	1,	false,	0,	0,	NULL,	0,	0,	false,	TYPE_INT,	2,	NULL,	(uint8_t*)"GearRatio"},
-	{(uint8_t*)"传感器类型",	0,	COM_NUM_TYPEOFSENSOR,	HOLDREGISTER_TYPEOFSENSOR,	1,	false,	0,	0,	NULL,	0,	0,	false,	TYPE_INT,	2,	NULL,	(uint8_t*)"SensorType"},
-	{(uint8_t*)"传感器头长度",	0,	COM_NUM_LENGTHOFSENSOR,	HOLDREGISTER_LENGTHOFSENSOR,	1,	false,	0,	0,	NULL,	1,	0,	true,	TYPE_INT,	4,	NULL,	(uint8_t*)"SensorHeadLen"},
-	{(uint8_t*)"盲区",	0,	COM_NUM_FADEZERO,	HOLDREGISTER_FADEZERO,	2,	false,	0,	0,	NULL,	1,	0,	true,	TYPE_INT,	5,	NULL,	(uint8_t*)"BlindZone"},
-	{(uint8_t*)"程序版本",	0,	COM_NUM_SOFTOFVERSION,	HOLDREGISTER_SOFTOFVERSION,	1,	false,	0,	0,	NULL,	3,	0,	false,	TYPE_INT,	7,	NULL,	(uint8_t*)"FWVersion"},
-	{(uint8_t*)"修正的高度",	0,	COM_NUM_CORRECTION_OIL,	HOLDREGISTER_CORRECTION_OIL,	2,	false,	0,	0,	NULL,	1,	0,	true,	TYPE_INT,	7,	NULL,	(uint8_t*)"CorrHeight"},
-	{(uint8_t*)"标定的高度",	0,	COM_NUM_CAL_OIL,	HOLDREGISTER_CALIBRATIONLIQUIDLEVEL,	2,	false,	0,	0,	NULL,	1,	0,	true,	TYPE_INT,	7,	NULL,	(uint8_t*)"CorrHeight"},
-	{(uint8_t*)"导轮周长",	0,	COM_NUM_GIRTH_YITI,	HOLDREGISTER_GIRTH_YITI,	2,	false,	0,	0,	NULL,	3,	0,	true,	TYPE_INT,	5,	NULL,	(uint8_t*)"PulleyCirc"},
-	{(uint8_t*)"液水传感距离差",	0,	COM_NUM_LEVELTOWATER_HIGH,	HOLDREGISTER_LEVELTOWATER_HIGH,	1,	false,	0,	0,	NULL,	1,	0,	true,	TYPE_INT,	4,	NULL,	(uint8_t*)"LiqWaterDistDiff"},
-	{(uint8_t*)"测罐底最大下行值",	0,	COM_NUM_MAXDOWN_DIS,	HOLDREGISTER_MAXDOWN_DIS,	1,	false,	0,	0,	NULL,	1,	0,	true,	TYPE_INT,	5,	NULL,	(uint8_t*)"MaxDownTankMeas"},
-	{(uint8_t*)"综合测是否测罐底",	0,	COM_NUM_SYNTHETIC_BOTTOM,	HOLDREGISTER_SYNTHETIC_BOTTOM,	1,	false,	0,	0,	NULL,	0,	0,	true,	TYPE_INT,	1,	NULL,	(uint8_t*)"IntgMeasTankBot"},
-	{(uint8_t*)"综合测是否测水位",	0,	COM_NUM_SYNTHETIC_WATER,	HOLDREGISTER_SYNTHETIC_WATER,	1,	false,	0,	0,	NULL,	0,	0,	true,	TYPE_INT,	1,	NULL,	(uint8_t*)"IntgMeasWaterLvl"},
-	{(uint8_t*)"综合测是否固定点",	0,	COM_NUM_SYNTHETIC_SINGLEPOINT,	HOLDREGISTER_SYNTHETIC_SINGLEPOINT,	1,	false,	0,	0,	NULL,	0,	0,	true,	TYPE_INT,	1,	NULL,	(uint8_t*)"IntgUseFixPt"},
-	{(uint8_t*)"温度有效位数",	0,	COM_NUM_NUMOFDECIMALS,	HOLDREGISTER_NUMOFDECIMALS,	1,	false,	0,	0,	NULL,	0,	0,	true,	TYPE_INT,	1,	NULL,	(uint8_t*)"TempValidDigits"},
-	{(uint8_t*)"磁通量T",	0,	COM_NUM_MAGNETIC_T,	HOLDREGISTER_TEMCORRECTCALUE,	1,	false,	0,	0,	NULL,	1,	-1000,	true,	TYPE_INT,	4,	NULL,	(uint8_t*)"MAGNETIC_T"},
-	{(uint8_t*)"磁通量D",	0,	COM_NUM_MAGNETIC_D,	HOLDREGISTER_DENSITYCORRECTCALUE,	1,	false,	0,	0,	NULL,	1,	-10000,	true,	TYPE_INT,	5,	NULL,	(uint8_t*)"MAGNETIC_D"},
-	{(uint8_t*)"传感器编号",	0,	COM_NUM_DEVICENUM,	HOLDREGISTER_DEVICENUM,	2,	false,	0,	0,	NULL,	0,	0,	false,	TYPE_INT,	7,	NULL,	(uint8_t*)"SensorID"},
-	{(uint8_t*)"综合测单点测位置",	0,	COM_NUM_OIL_MEASUR_POSITION,	HOLDREGISTER_OIL_MEASUR_POSITION,	2,	false,	0,	0,	NULL,	1,	0,	true,	TYPE_INT,	7,	NULL,	(uint8_t*)"IntgSinglePtPos"},
+/* 基础参数 */
+	{(uint8_t*)"罐高",	0,	COM_NUM_DEVICEPARAM_TANKHEIGHT,	HOLDREGISTER_DEVICEPARAM_TANKHEIGHT,	2,	false,	0,	0,	NULL,	1,	0,	true,	TYPE_INT,	7,	NULL,	(uint8_t*)"TankHeight"},
+	{(uint8_t*)"液位盲区",	0,	COM_NUM_DEVICEPARAM_BLINDZONE,	HOLDREGISTER_DEVICEPARAM_BLINDZONE,	2,	false,	0,	0,	NULL,	1,	0,	true,	TYPE_INT,	6,	NULL,	(uint8_t*)"BlindZone"},
+	{(uint8_t*)"水位盲区",	0,	COM_NUM_DEVICEPARAM_WATER_BLINDZONE,	HOLDREGISTER_DEVICEPARAM_WATER_BLINDZONE,	2,	false,	0,	0,	NULL,	1,	0,	true,	TYPE_INT,	6,	NULL,	(uint8_t*)"WaterBlind"},
+	{(uint8_t*)"编码轮周长mm",	0,	COM_NUM_DEVICEPARAM_ENCODER_WHEEL_CIRCUMFERENCE_MM,	HOLDREGISTER_DEVICEPARAM_ENCODER_WHEEL_CIRCUMFERENCE_MM,	2,	false,	0,	0,	NULL,	1,	0,	true,	TYPE_INT,	6,	NULL,	(uint8_t*)"EncWheelCirc"},
+	{(uint8_t*)"传感器类型",	0,	COM_NUM_DEVICEPARAM_SENSORTYPE,	HOLDREGISTER_DEVICEPARAM_SENSORTYPE,	2,	false,	0,	0,	NULL,	0,	0,	false,	TYPE_INT,	3,	NULL,	(uint8_t*)"SensorType"},
+	{(uint8_t*)"传感器编号",	0,	COM_NUM_DEVICEPARAM_SENSORID,	HOLDREGISTER_DEVICEPARAM_SENSORID,	2,	false,	0,	0,	NULL,	0,	0,	false,	TYPE_INT,	8,	NULL,	(uint8_t*)"SensorID"},
+	{(uint8_t*)"软件版本",	0,	COM_NUM_DEVICEPARAM_SOFTWAREVERSION,	HOLDREGISTER_DEVICEPARAM_SOFTWAREVERSION,	2,	false,	0,	0,	NULL,	3,	0,	false,	TYPE_INT,	7,	NULL,	(uint8_t*)"FWVersion"},
 
-    
-    
+/* 称重参数 */
+	{(uint8_t*)"空桶重量",	0,	COM_NUM_DEVICEPARAM_EMPTY_WEIGHT,	HOLDREGISTER_DEVICEPARAM_EMPTY_WEIGHT,	2,	false,	0,	0,	NULL,	0,	0,	true,	TYPE_INT,	7,	NULL,	(uint8_t*)"EmptyWt"},
+	{(uint8_t*)"满桶重量",	0,	COM_NUM_DEVICEPARAM_FULL_WEIGHT,	HOLDREGISTER_DEVICEPARAM_FULL_WEIGHT,	2,	false,	0,	0,	NULL,	0,	0,	true,	TYPE_INT,	7,	NULL,	(uint8_t*)"FullWt"},
+	{(uint8_t*)"上限比率",	0,	COM_NUM_DEVICEPARAM_WEIGHT_UPPER_LIMIT_RATIO,	HOLDREGISTER_DEVICEPARAM_WEIGHT_UPPER_LIMIT_RATIO,	2,	false,	0,	0,	(uint8_t*)"%",	0,	0,	true,	TYPE_INT,	5,	NULL,	(uint8_t*)"UpperRatio"},
+	{(uint8_t*)"下限比率",	0,	COM_NUM_DEVICEPARAM_WEIGHT_LOWER_LIMIT_RATIO,	HOLDREGISTER_DEVICEPARAM_WEIGHT_LOWER_LIMIT_RATIO,	2,	false,	0,	0,	(uint8_t*)"%",	0,	0,	true,	TYPE_INT,	5,	NULL,	(uint8_t*)"LowerRatio"},
+	{(uint8_t*)"空桶重量上限",	0,	COM_NUM_DEVICEPARAM_EMPTY_WEIGHT_UPPER_LIMIT,	HOLDREGISTER_DEVICEPARAM_EMPTY_WEIGHT_UPPER_LIMIT,	2,	false,	0,	0,	NULL,	0,	0,	true,	TYPE_INT,	7,	NULL,	(uint8_t*)"EmptyWtHi"},
+	{(uint8_t*)"空桶重量下限",	0,	COM_NUM_DEVICEPARAM_EMPTY_WEIGHT_LOWER_LIMIT,	HOLDREGISTER_DEVICEPARAM_EMPTY_WEIGHT_LOWER_LIMIT,	2,	false,	0,	0,	NULL,	0,	0,	true,	TYPE_INT,	7,	NULL,	(uint8_t*)"EmptyWtLo"},
+	{(uint8_t*)"满桶重量上限",	0,	COM_NUM_DEVICEPARAM_FULL_WEIGHT_UPPER_LIMIT,	HOLDREGISTER_DEVICEPARAM_FULL_WEIGHT_UPPER_LIMIT,	2,	false,	0,	0,	NULL,	0,	0,	true,	TYPE_INT,	7,	NULL,	(uint8_t*)"FullWtHi"},
+	{(uint8_t*)"满桶重量下限",	0,	COM_NUM_DEVICEPARAM_FULL_WEIGHT_LOWER_LIMIT,	HOLDREGISTER_DEVICEPARAM_FULL_WEIGHT_LOWER_LIMIT,	2,	false,	0,	0,	NULL,	0,	0,	true,	TYPE_INT,	7,	NULL,	(uint8_t*)"FullWtLo"},
+	{(uint8_t*)"找零下行距离",	0,	COM_NUM_DEVICEPARAM_FINDZERO_DOWN_DISTANCE,	HOLDREGISTER_DEVICEPARAM_FINDZERO_DOWN_DISTANCE,	2,	false,	0,	0,	(uint8_t*)"mm",	1,	0,	true,	TYPE_INT,	6,	NULL,	(uint8_t*)"FindZeroDown"},
+/* 指令参数 */
+	{(uint8_t*)"标定液位(油)",	0,	COM_NUM_CAL_OIL,	HOLDREGISTER_DEVICEPARAM_CALIBRATE_OIL_LEVEL,	2,	false,	0,	0,	(uint8_t*)"mm",	1,	0,	true,	TYPE_INT,	6,	NULL,	(uint8_t*)"CalOilLvl"},
+	{(uint8_t*)"标定液位(水)",	0,	COM_NUM_DEVICEPARAM_CALIBRATE_WATER_LEVEL,	HOLDREGISTER_DEVICEPARAM_CALIBRATE_WATER_LEVEL,	2,	false,	0,	0,	(uint8_t*)"mm",	1,	0,	true,	TYPE_INT,	6,	NULL,	(uint8_t*)"CalWaterLvl"},
+	{(uint8_t*)"单点测量位置",	0,	COM_NUM_SINGLE_POINT,	HOLDREGISTER_DEVICEPARAM_SP_MEAS_POSITION,	2,	false,	0,	0,	(uint8_t*)"mm",	1,	0,	true,	TYPE_INT,	7,	NULL,	(uint8_t*)"SP_MeasPos"},
+	{(uint8_t*)"单点监测位置",	0,	COM_NUM_SP_TEST,	HOLDREGISTER_DEVICEPARAM_SP_MONITOR_POSITION,	2,	false,	0,	0,	(uint8_t*)"mm",	1,	0,	true,	TYPE_INT,	7,	NULL,	(uint8_t*)"SP_MonPos"},
+	{(uint8_t*)"分布测液位",	0,	COM_NUM_SPREADPOINTS,	HOLDREGISTER_DEVICEPARAM_DENSITY_DISTRIBUTION_OIL_LEVEL,	2,	false,	0,	0,	(uint8_t*)"mm",	1,	0,	true,	TYPE_INT,	7,	NULL,	(uint8_t*)"DistLvl"},
+	{(uint8_t*)"电机上行距离",	0,	COM_NUM_RUNUP,	HOLDREGISTER_DEVICEPARAM_MOTOR_COMMAND_DISTANCE,	2,	false,	0,	0,	(uint8_t*)"mm",	1,	0,	true,	TYPE_INT,	6,	NULL,	(uint8_t*)"MotorUp"},
+	{(uint8_t*)"电机下行距离",	0,	COM_NUM_RUNDOWN,	HOLDREGISTER_DEVICEPARAM_MOTOR_COMMAND_DISTANCE,	2,	false,	0,	0,	(uint8_t*)"mm",	1,	0,	true,	TYPE_INT,	6,	NULL,	(uint8_t*)"MotorDown"},
+
+/* 修正参数 */
+	{(uint8_t*)"密度修正",	0,	COM_NUM_DEVICEPARAM_DENSITYCORRECTION,	HOLDREGISTER_DEVICEPARAM_DENSITYCORRECTION,	2,	false,	-10000,	10000,	NULL,	1,	0,	true,	TYPE_INT,	5,	NULL,	(uint8_t*)"DensityCorr"},
+	{(uint8_t*)"温度修正",	0,	COM_NUM_DEVICEPARAM_TEMPERATURECORRECTION,	HOLDREGISTER_DEVICEPARAM_TEMPERATURECORRECTION,	2,	false,	-1000,	1000,	NULL,	1,	0,	true,	TYPE_INT,	4,	NULL,	(uint8_t*)"TempCorr"},
+
+/* 分布测量参数 */
+	{(uint8_t*)"是否测罐底",	0,	COM_NUM_DEVICEPARAM_REQUIREBOTTOMMEASUREMENT,	HOLDREGISTER_DEVICEPARAM_REQUIREBOTTOMMEASUREMENT,	2,	false,	0,	1,	NULL,	0,	0,	true,	TYPE_INT,	1,	NULL,	(uint8_t*)"NeedBottom"},
+	{(uint8_t*)"是否测水位",	0,	COM_NUM_DEVICEPARAM_REQUIREWATERMEASUREMENT,	HOLDREGISTER_DEVICEPARAM_REQUIREWATERMEASUREMENT,	2,	false,	0,	1,	NULL,	0,	0,	true,	TYPE_INT,	1,	NULL,	(uint8_t*)"NeedWater"},
+	{(uint8_t*)"是否测单点密度",	0,	COM_NUM_DEVICEPARAM_REQUIRESINGLEPOINTDENSITY,	HOLDREGISTER_DEVICEPARAM_REQUIRESINGLEPOINTDENSITY,	2,	false,	0,	1,	NULL,	0,	0,	true,	TYPE_INT,	1,	NULL,	(uint8_t*)"NeedSingleDens"},
+	{(uint8_t*)"分布测顺序",	0,	COM_NUM_DEVICEPARAM_SPREADMEASUREMENTORDER,	HOLDREGISTER_DEVICEPARAM_SPREADMEASUREMENTORDER,	2,	false,	0,	0,	NULL,	0,	0,	true,	TYPE_INT,	1,	NULL,	(uint8_t*)"SpreadOrder"},
+	{(uint8_t*)"分布测模式",	0,	COM_NUM_DEVICEPARAM_SPREADMEASUREMENTMODE,	HOLDREGISTER_DEVICEPARAM_SPREADMEASUREMENTMODE,	2,	false,	0,	0,	NULL,	0,	0,	true,	TYPE_INT,	1,	NULL,	(uint8_t*)"SpreadMode"},
+	{(uint8_t*)"分布测点数",	0,	COM_NUM_DEVICEPARAM_SPREADMEASUREMENTCOUNT,	HOLDREGISTER_DEVICEPARAM_SPREADMEASUREMENTCOUNT,	2,	false,	1,	99,	NULL,	0,	0,	true,	TYPE_INT,	3,	NULL,	(uint8_t*)"SpreadCount"},
+	{(uint8_t*)"分布点间距",	0,	COM_NUM_DEVICEPARAM_SPREADMEASUREMENTDISTANCE,	HOLDREGISTER_DEVICEPARAM_SPREADMEASUREMENTDISTANCE,	2,	false,	0,	0,	(uint8_t*)"mm",	1,	0,	true,	TYPE_INT,	5,	NULL,	(uint8_t*)"SpreadDist"},
+	{(uint8_t*)"顶点距液面",	0,	COM_NUM_DEVICEPARAM_SPREADTOPLIMIT,	HOLDREGISTER_DEVICEPARAM_SPREADTOPLIMIT,	2,	false,	0,	0,	(uint8_t*)"mm",	1,	0,	true,	TYPE_INT,	5,	NULL,	(uint8_t*)"Top2Level"},
+	{(uint8_t*)"底点距罐底",	0,	COM_NUM_DEVICEPARAM_SPREADBOTTOMLIMIT,	HOLDREGISTER_DEVICEPARAM_SPREADBOTTOMLIMIT,	2,	false,	0,	0,	(uint8_t*)"mm",	1,	0,	true,	TYPE_INT,	5,	NULL,	(uint8_t*)"Bot2Tank"},
+	{(uint8_t*)"分布点悬停(s)",	0,	COM_NUM_DEVICEPARAM_SPREAD_POINT_HOVER_TIME,	HOLDREGISTER_DEVICEPARAM_SPREAD_POINT_HOVER_TIME,	2,	false,	0,	600,	(uint8_t*)"s",	0,	0,	true,	TYPE_INT,	3,	NULL,	(uint8_t*)"PtHoverTime"},
+
+/* 水位测量 */
+	{(uint8_t*)"水位修正值",	0,	COM_NUM_DEVICEPARAM_WATERLEVELCORRECTION,	HOLDREGISTER_DEVICEPARAM_WATERLEVELCORRECTION,	2,	false,	-1000,	1000,	NULL,	1,	0,	true,	TYPE_INT,	4,	NULL,	(uint8_t*)"WaterCorr"},
+	{(uint8_t*)"最大下行距离",	0,	COM_NUM_DEVICEPARAM_MAXDOWNDISTANCE,	HOLDREGISTER_DEVICEPARAM_MAXDOWNDISTANCE,	2,	false,	0,	0,	(uint8_t*)"mm",	1,	0,	true,	TYPE_INT,	5,	NULL,	(uint8_t*)"MaxDown"},
+
+/* 实高测量 */
+	{(uint8_t*)"更新罐高标志",	0,	COM_NUM_DEVICEPARAM_REFRESHTANKHEIGHTFLAG,	HOLDREGISTER_DEVICEPARAM_REFRESHTANKHEIGHTFLAG,	2,	false,	0,	1,	NULL,	0,	0,	true,	TYPE_INT,	1,	NULL,	(uint8_t*)"UpdTankHeight"},
+	{(uint8_t*)"实高最大偏差",	0,	COM_NUM_DEVICEPARAM_MAXTANKHEIGHTDEVIATION,	HOLDREGISTER_DEVICEPARAM_MAXTANKHEIGHTDEVIATION,	2,	false,	0,	0,	NULL,	1,	0,	true,	TYPE_INT,	4,	NULL,	(uint8_t*)"MaxDev"},
+	{(uint8_t*)"初始罐高",	0,	COM_NUM_DEVICEPARAM_INITIALTANKHEIGHT,	HOLDREGISTER_DEVICEPARAM_INITIALTANKHEIGHT,	2,	false,	0,	0,	NULL,	1,	0,	false,	TYPE_INT,	7,	NULL,	(uint8_t*)"InitTankH"},
+	{(uint8_t*)"当前罐高",	0,	COM_NUM_DEVICEPARAM_CURRENTTANKHEIGHT,	HOLDREGISTER_DEVICEPARAM_CURRENTTANKHEIGHT,	2,	false,	0,	0,	NULL,	1,	0,	false,	TYPE_INT,	7,	NULL,	(uint8_t*)"CurrTankH"},
+
+/* 液位测量 */
+	{(uint8_t*)"找油阈值",	0,	COM_NUM_DEVICEPARAM_OILLEVELTHRESHOLD,	HOLDREGISTER_DEVICEPARAM_OILLEVELTHRESHOLD,	2,	false,	0,	0,	NULL,	1,	0,	true,	TYPE_INT,	4,	NULL,	(uint8_t*)"OilLvlTh"},
+	{(uint8_t*)"液位测量方式",	0,	COM_NUM_DEVICEPARAM_LIQUIDLEVELMEASUREMENTMETHOD,	HOLDREGISTER_DEVICEPARAM_LIQUIDLEVELMEASUREMENTMETHOD,	2,	false,	0,	0,	NULL,	0,	0,	true,	TYPE_INT,	1,	NULL,	(uint8_t*)"LvlMeasMode"},
+
+/* 报警（DO） */
+	{(uint8_t*)"高液位报警(DO)",	0,	COM_NUM_DEVICEPARAM_ALARM_HIGH_DO,	HOLDREGISTER_DEVICEPARAM_ALARM_HIGH_DO,	2,	false,	0,	0,	NULL,	1,	0,	true,	TYPE_INT,	4,	NULL,	(uint8_t*)"AlarmHiDO"},
+	{(uint8_t*)"低液位报警(DO)",	0,	COM_NUM_DEVICEPARAM_ALARM_LOW_DO,	HOLDREGISTER_DEVICEPARAM_ALARM_LOW_DO,	2,	false,	0,	0,	NULL,	1,	0,	true,	TYPE_INT,	4,	NULL,	(uint8_t*)"AlarmLoDO"},
+	{(uint8_t*)"第三状态阈值",	0,	COM_NUM_DEVICEPARAM_THIRD_STATE_THRESHOLD,	HOLDREGISTER_DEVICEPARAM_THIRD_STATE_THRESHOLD,	2,	false,	0,	0,	NULL,	1,	0,	true,	TYPE_INT,	4,	NULL,	(uint8_t*)"ThirdStateTh"},
+
+/* 4–20mA 输出与报警（AO） */
+	{(uint8_t*)"输出范围起点mA",	0,	COM_NUM_DEVICEPARAM_CURRENT_RANGE_START_mA,	HOLDREGISTER_DEVICEPARAM_CURRENT_RANGE_START_mA,	2,	false,	0,	3000,	(uint8_t*)"mA",	2,	0,	true,	TYPE_INT,	5,	NULL,	(uint8_t*)"RangeStart"},
+	{(uint8_t*)"输出范围终点mA",	0,	COM_NUM_DEVICEPARAM_CURRENT_RANGE_END_mA,	HOLDREGISTER_DEVICEPARAM_CURRENT_RANGE_END_mA,	2,	false,	0,	3000,	(uint8_t*)"mA",	2,	0,	true,	TYPE_INT,	5,	NULL,	(uint8_t*)"RangeEnd"},
+	{(uint8_t*)"高限报警(AO)",	0,	COM_NUM_DEVICEPARAM_ALARM_HIGH_AO,	HOLDREGISTER_DEVICEPARAM_ALARM_HIGH_AO,	2,	false,	0,	3000,	(uint8_t*)"mA",	2,	0,	true,	TYPE_INT,	5,	NULL,	(uint8_t*)"AlarmHiAO"},
+	{(uint8_t*)"低限报警(AO)",	0,	COM_NUM_DEVICEPARAM_ALARM_LOW_AO,	HOLDREGISTER_DEVICEPARAM_ALARM_LOW_AO,	2,	false,	0,	3000,	(uint8_t*)"mA",	2,	0,	true,	TYPE_INT,	5,	NULL,	(uint8_t*)"AlarmLoAO"},
+	{(uint8_t*)"初始电流mA",	0,	COM_NUM_DEVICEPARAM_INITIAL_CURRENT_mA,	HOLDREGISTER_DEVICEPARAM_INITIAL_CURRENT_mA,	2,	false,	0,	3000,	(uint8_t*)"mA",	2,	0,	true,	TYPE_INT,	5,	NULL,	(uint8_t*)"InitCurrent"},
+	{(uint8_t*)"高位电流mA",	0,	COM_NUM_DEVICEPARAM_AO_HIGH_CURRENT_mA,	HOLDREGISTER_DEVICEPARAM_AO_HIGH_CURRENT_mA,	2,	false,	0,	3000,	(uint8_t*)"mA",	2,	0,	true,	TYPE_INT,	5,	NULL,	(uint8_t*)"HighCurrent"},
+	{(uint8_t*)"低位电流mA",	0,	COM_NUM_DEVICEPARAM_AO_LOW_CURRENT_mA,	HOLDREGISTER_DEVICEPARAM_AO_LOW_CURRENT_mA,	2,	false,	0,	3000,	(uint8_t*)"mA",	2,	0,	true,	TYPE_INT,	5,	NULL,	(uint8_t*)"LowCurrent"},
+	{(uint8_t*)"故障电流mA",	0,	COM_NUM_DEVICEPARAM_FAULT_CURRENT_mA,	HOLDREGISTER_DEVICEPARAM_FAULT_CURRENT_mA,	2,	false,	0,	3000,	(uint8_t*)"mA",	2,	0,	true,	TYPE_INT,	5,	NULL,	(uint8_t*)"FaultCurrent"},
+	{(uint8_t*)"调试电流mA",	0,	COM_NUM_DEVICEPARAM_DEBUG_CURRENT_mA,	HOLDREGISTER_DEVICEPARAM_DEBUG_CURRENT_mA,	2,	false,	0,	3000,	(uint8_t*)"mA",	2,	0,	true,	TYPE_INT,	5,	NULL,	(uint8_t*)"DebugCurrent"},
+
+/* CRC */
+	{(uint8_t*)"参数CRC32",	0,	COM_NUM_DEVICEPARAM_CRC,	HOLDREGISTER_DEVICEPARAM_CRC,	2,	false,	0,	0,	NULL,	0,	0,	false,	TYPE_INT,	8,	NULL,	(uint8_t*)"ParamCRC"},
 };
+
+
 static const int holdValueAmount = sizeof(holdValue) / sizeof(holdValue[0]);
-
-
-
 
 /* 根据操作获取当前保持寄存器具体信息的索引 */
 int getHoldValueNum(int operanum)
@@ -124,8 +218,51 @@ void InputValueInit(void)
 	g_measurement.single_point_monitoring.density = UNVALID_DENSITY;
 	g_measurement.single_point_monitoring.temperature = UNVALID_TEMPERATURE_WIRELESS;
 }
+/* 解析03功能码保持寄存器数据 */
+void AnalysisHoldRegister(void)
+{
+    int index = 0;
 
+    for(index = 0;index < holdValueAmount;index++)
+    {
+        if(holdValue[index].data_type == TYPE_INT)
+        {
+            holdValue[index].val = ywj_hold_analysis_data(holdValue[index].startadd,holdValue[index].rgstcnt);
+            holdValue[index].val += holdValue[index].offset;
+//            printf("Hold Reg %s: %d\n",holdValue[index].name,holdValue[index].val);
+        }
+        else if(holdValue[index].data_type == TYPE_FLOAT)
+        {
+            union utof tmp_f;
+            tmp_f.u = ywj_hold_analysis_data(holdValue[index].startadd,holdValue[index].rgstcnt);
+            tmp_f.f *= pow(10,holdValue[index].point);
+            holdValue[index].val = tmp_f.f;
+        }
+        else if(holdValue[index].data_type == TYPE_DOUBLE)
+        {
+            union utod tmp_d;
+            tmp_d.u[1] = ywj_hold_analysis_data(holdValue[index].startadd,holdValue[index].rgstcnt / 2);
+            tmp_d.u[0] = ywj_hold_analysis_data(holdValue[index].startadd + 2,holdValue[index].rgstcnt / 2);
+            tmp_d.d *= pow(10,holdValue[index].point);
+            holdValue[index].val = tmp_d.d;
+        }
+    }
+}
 
+/* 单个数据解析 - 保持寄存器 */
+static int ywj_hold_analysis_data(int startadd,int rgscnt)
+{
+    int value = 0;
+    int i;
 
+    startadd *= 2;
+    //解析数据
+    for(i = 0;i < rgscnt * 2;i++)
+    {
+        value <<= 8;
+        value += HoldingRegisterArray[startadd + i];
+    }
+    return value;
+}
 
 

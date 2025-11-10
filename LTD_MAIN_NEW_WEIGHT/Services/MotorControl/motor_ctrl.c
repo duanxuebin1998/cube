@@ -80,114 +80,103 @@ uint32_t motorMoveNoWait(float mm, int dir) {
 //}
 
 uint32_t motorMoveAndWaitUntilStop(float mm, int dir) {
-    uint32_t ret;
-    float startPos_mm;
-    float currentPos_mm;
-    float targetPos_mm;
-    float total_cmd_mm = mm;    // 总共期望走的距离 (正数)
-    float moved_mm;             // 已走的距离 (正数)
-    float remain_mm;            // 剩余还要走的距离 (正数)
-    uint8_t attempt = 0;
+	uint32_t ret;
+	float startPos_mm;
+	float currentPos_mm;
+	float targetPos_mm;
+	float total_cmd_mm = mm;    // 总共期望走的距离 (正数)
+	float moved_mm;             // 已走的距离 (正数)
+	float remain_mm;            // 剩余还要走的距离 (正数)
+	uint8_t attempt = 0;
 
-    // 记录运动开始时的绝对起点位置 (mm)
-    startPos_mm   = (float)g_measurement.debug_data.sensor_position / 10.0f;
-    targetPos_mm  = startPos_mm + (dir > 0 ? total_cmd_mm : -total_cmd_mm);
+	// 记录运动开始时的绝对起点位置 (mm)
+	startPos_mm = (float) g_measurement.debug_data.sensor_position / 10.0f;
+	targetPos_mm = startPos_mm + (dir > 0 ? total_cmd_mm : -total_cmd_mm);
 
-    // 剩余路程初始化为整段
-    remain_mm = total_cmd_mm;
+	// 剩余路程初始化为整段
+	remain_mm = total_cmd_mm;
 
-    while (attempt < MOTOR_MOVE_RETRY_MAX && remain_mm > 0.0f) {
+	while (attempt < MOTOR_MOVE_RETRY_MAX && remain_mm > 0.0f) {
 
-        attempt++;
+		attempt++;
 
-        // 下发当前这段需要走的距离（remain_mm，方向同 dir）
-        motorMoveNoWait(remain_mm, dir);
+		// 下发当前这段需要走的距离（remain_mm，方向同 dir）
+		motorMoveNoWait(remain_mm, dir);
 
-        // 给驱动一点时间起步，避免立即wait导致误判
-        HAL_Delay(1000);
+		// 给驱动一点时间起步，避免立即wait导致误判
+		HAL_Delay(1000);
 
-        // 阻塞等待步进电机完成当前 attempt 的运动
-        ret = stpr_wait_until_stop(&stepper);
+		// 阻塞等待步进电机完成当前 attempt 的运动
+		ret = stpr_wait_until_stop(&stepper);
 
-        // 读取当前位置，计算已走距离和剩余距离
-        currentPos_mm = (float)g_measurement.debug_data.sensor_position / 10.0f;
-        moved_mm      = fabsf(currentPos_mm - startPos_mm); // 从最初起点算累计位移
-        remain_mm     = total_cmd_mm - moved_mm;
-        if (remain_mm < 0.0f) {
-            // 过冲(overshoot)理论上不常见，但保护一下，避免负数导致再次下发
-            remain_mm = 0.0f;
-        }
+		// 读取当前位置，计算已走距离和剩余距离
+		currentPos_mm = (float) g_measurement.debug_data.sensor_position / 10.0f;
+		moved_mm = fabsf(currentPos_mm - startPos_mm); // 从最初起点算累计位移
+		remain_mm = total_cmd_mm - moved_mm;
+		if (remain_mm < 0.0f) {
+			// 过冲(overshoot)理论上不常见，但保护一下，避免负数导致再次下发
+			remain_mm = 0.0f;
+		}
 
-        if (ret == NO_ERROR) {
-            // 这一段走完时并未报错，可能已经到位，也可能还有剩余没走（比如速度过早停止？）
-            // 如果还剩距离没走，并且还没超出重试次数，我们会自然回到while顶部继续补跑
-            printf("电机段运行成功: attempt=%d, 累计位移=%.2f mm, 剩余=%.2f mm\r\n",
-                   attempt, moved_mm, remain_mm);
-            return NO_ERROR; // 成功走完，直接返回
-        } else {
-            // 这一段出现了故障，stpr_wait_until_stop() 已经让电机停下
-            printf("⚠️ 警告：电机在第%d次运行过程中异常停止，错误0x%X\r\n",
-                   attempt, (unsigned int)ret);
+		if (ret == NO_ERROR) {
+			// 这一段走完时并未报错，可能已经到位，也可能还有剩余没走（比如速度过早停止？）
+			// 如果还剩距离没走，并且还没超出重试次数，我们会自然回到while顶部继续补跑
+			printf("电机段运行成功: attempt=%d, 累计位移=%.2f mm, 剩余=%.2f mm\r\n", attempt, moved_mm, remain_mm);
+			break; // 成功走完，直接返回
+		} else {
+			// 这一段出现了故障，stpr_wait_until_stop() 已经让电机停下
+			printf("⚠️ 警告：电机在第%d次运行过程中异常停止，错误0x%X\r\n", attempt, (unsigned int) ret);
 
-            // 如果还有尝试机会，我们继续循环，会用剩余距离 remain_mm 再跑
-            if (attempt >= MOTOR_MOVE_RETRY_MAX) {
-                // 没有重试机会了，直接上报这个错误
-                CHECK_ERROR(ret); // 走你的统一故障处理机制
-                return ret;
-            } else {
-                // 还有重试机会：打印一下准备补偿
-                printf("尝试继续补偿剩余距离 %.2f mm (方向=%d)\r\n", remain_mm, dir);
-                HAL_Delay(200); // 小喘口气
-            }
-        }
+			// 如果还有尝试机会，我们继续循环，会用剩余距离 remain_mm 再跑
+			if (attempt >= MOTOR_MOVE_RETRY_MAX) {
+				// 没有重试机会了，直接上报这个错误
+				CHECK_ERROR(ret); // 走你的统一故障处理机制
+				return ret;
+			} else {
+				// 还有重试机会：打印一下准备补偿
+				printf("尝试继续补偿剩余距离 %.2f mm (方向=%d)\r\n", remain_mm, dir);
+				HAL_Delay(200); // 小喘口气
+			}
+		}
 
-        // while 会继续，直到 remain_mm == 0 或 attempt 用完
-    }
+		// while 会继续，直到 remain_mm == 0 或 attempt 用完
+	}
 
-    /************ 如果能到这里，说明： ************
-     * 1. 我们不是因为直接return错误出来
-     * 2. remain_mm == 0 (或非常接近0)，也就是“总路程走完了”
-     *    ——即使中间有过一两次故障，但补跑成功了
-     ************************************************/
+	/************ 如果能到这里，说明： ************
+	 * 1. 我们不是因为直接return错误出来
+	 * 2. remain_mm == 0 (或非常接近0)，也就是“总路程走完了”
+	 *    ——即使中间有过一两次故障，但补跑成功了
+	 ************************************************/
 
-    // 最终位置再读一次，进行丢步评估
-    currentPos_mm = (float)g_measurement.debug_data.sensor_position / 10.0f;
-    moved_mm      = fabsf(currentPos_mm - startPos_mm);
+	// 最终位置再读一次，进行丢步评估
+	currentPos_mm = (float) g_measurement.debug_data.sensor_position / 10.0f;
+	moved_mm = fabsf(currentPos_mm - startPos_mm);
 
-    // diff计算为百分比误差：
-    // diff = ((实际位移 - 期望位移)/期望位移) * 100%
-    // 注意：moved_mm 是累计实际移动，total_cmd_mm 是期望
-    float diff_pct = 100.0f * (moved_mm - total_cmd_mm) / total_cmd_mm;
+	// diff计算为百分比误差：
+	// diff = ((实际位移 - 期望位移)/期望位移) * 100%
+	// 注意：moved_mm 是累计实际移动，total_cmd_mm 是期望
+	float diff_pct = 100.0f * (moved_mm - total_cmd_mm) / total_cmd_mm;
 
-    // 丢步判断：
-    // 你原逻辑是：
-    // diff = 100 * (fabsf(actualPos - startPos) - mm) / mm;
-    // 并要求 diff > 70% && mm > 2.0  => 视为丢步
-    //
-    // 这表示：实际少走了 >=70%（即只走了不到30%）
-    // 我沿用同样的标准
-    if ((diff_pct < -70.0f) && (total_cmd_mm > 2.0f)) {
-        // 注意这里用 diff_pct < -70.0f 来等价“少走超过70%”
-        // 因为如果只走了很少，moved_mm << total_cmd_mm => diff_pct 是一个很大的负数
-        printf("⚠️ 警告：检测到电机可能丢步！\r\n");
-        printf("目标=%.2f mm, 实际=%.2f mm, 误差=%.2f %%\r\n",
-               total_cmd_mm,
-               moved_mm,
-               diff_pct);
-        return ENCODER_LOST_STEP;
-    } else {
-        printf("✅ 电机移动完成。\r\n");
-        printf("期望总位移=%.2f mm, 实际=%.2f mm, 偏差=%.2f %%\r\n",
-               total_cmd_mm,
-               moved_mm,
-               diff_pct);
-        printf("起点=%.2f mm, 目标位置=%.2f mm, 最终位置=%.2f mm\r\n",
-               startPos_mm,
-               targetPos_mm,
-               currentPos_mm);
-    }
+	// 丢步判断：
+	// 你原逻辑是：
+	// diff = 100 * (fabsf(actualPos - startPos) - mm) / mm;
+	// 并要求 diff > 70% && mm > 2.0  => 视为丢步
+	//
+	// 这表示：实际少走了 >=70%（即只走了不到30%）
+	// 我沿用同样的标准
+	if ((diff_pct < -70.0f) && (total_cmd_mm > 2.0f)) {
+		// 注意这里用 diff_pct < -70.0f 来等价“少走超过70%”
+		// 因为如果只走了很少，moved_mm << total_cmd_mm => diff_pct 是一个很大的负数
+		printf("⚠️ 警告：检测到电机可能丢步！\r\n");
+		printf("目标=%.2f mm, 实际=%.2f mm, 误差=%.2f %%\r\n", total_cmd_mm, moved_mm, diff_pct);
+		return ENCODER_LOST_STEP;
+	} else {
+		printf("✅ 电机移动完成。\r\n");
+		printf("期望总位移=%.2f mm, 实际=%.2f mm, 偏差=%.2f %%\r\n", total_cmd_mm, moved_mm, diff_pct);
+		printf("起点=%.2f mm, 目标位置=%.2f mm, 最终位置=%.2f mm\r\n", startPos_mm, targetPos_mm, currentPos_mm);
+	}
 
-    return NO_ERROR;
+	return NO_ERROR;
 }
 
 /**
@@ -314,7 +303,6 @@ static uint32_t stpr_wait_until_stop(TMC5130TypeDef *tmc5130) {
 	return NO_ERROR;
 }
 
-
 //电机紧急刹车
 uint32_t motorQuickStop(void) {
 //	printf("急刹前\t{传感器位置}%.1f\t{称重值}%d\r\n", (float)(g_measurement.debug_data.sensor_position)/10.0, weight_parament.current_weight);
@@ -400,4 +388,131 @@ uint32_t Motor_CheckLostStep_AutoTiming(int32_t currentPos) {
 	}
 
 	return NO_ERROR;
+}
+#include <math.h>
+#include <inttypes.h>
+
+// ===== 可调参数 =====
+#define EPS_MM                   0.20f    // 到位公差 (±)
+#define SAFETY_MARGIN_MM         2.00f    // 一次性下发时的冗余距离，保证一定会“碰到目标”
+#define NO_PROGRESS_WINDOW_MS    600      // 在此时间窗内若无进展则判失败
+
+// 错误码（按你项目替换）
+#ifndef NO_ERROR
+#define NO_ERROR               0
+#endif
+#ifndef MOTOR_TIMEOUT
+#define MOTOR_TIMEOUT          0x8101
+#endif
+#ifndef MOTOR_NO_PROGRESS
+#define MOTOR_NO_PROGRESS      0x8102
+#endif
+#ifndef MOTOR_NOT_IN_TOL
+#define MOTOR_NOT_IN_TOL       0x8103
+#endif
+
+// 读取位置快照（单位：mm）。如有需要可加临界区保护。
+static inline void snapshot_sensor_pos_mm(float *pos_mm) {
+	uint32_t pos_01mm = (uint32_t) g_measurement.debug_data.sensor_position; // 0.1mm
+	*pos_mm = (float) pos_01mm / 10.0f;
+}
+
+/**
+ * @brief 一次下发移动到绝对位置（阻塞），靠反馈提前停
+ * @param target_mm  目标位置（绝对 mm）
+ * @return           NO_ERROR / 错误码
+ */
+uint32_t motorMoveToPositionOneShot(float target_mm) {
+	uint32_t ret;
+	float start_mm, cur_mm, prev_mm;
+	for (int i = 0; i < 5; i++) {
+
+		snapshot_sensor_pos_mm(&start_mm);
+		printf("Motor move to position: start=%.3fmm, target=%.3fmm\r\n", start_mm, target_mm);
+		// 已在目标附近
+		float delta = target_mm - start_mm;
+		if (fabsf(delta) <= EPS_MM) {
+			printf("Already in position: cur=%.3fmm ~ target=%.3fmm (±%.2fmm)\r\n", start_mm, target_mm, EPS_MM);
+			return NO_ERROR;
+		}
+
+		int dir = (delta > 0.0f) ? +1 : -1;
+		float plan_mm = fabsf(delta);  // 略加冗余，确保能“碰到目标”
+		if (plan_mm < (EPS_MM * 2.0f))
+			plan_mm = (EPS_MM * 2.0f); // 最小下发距离
+
+		// 一次性下发运动命令
+//    motorMoveNoWait(plan_mm, dir);
+		ret = motorMoveAndWaitUntilStop(plan_mm, dir);
+		CHECK_ERROR(ret);
+	}
+//
+//    uint32_t t0 = HAL_GetTick();
+//    uint32_t last_progress_t = t0;
+//
+//    prev_mm = start_mm;
+//
+//    while (1) {
+//        HAL_Delay(POLL_INTERVAL_MS);
+//        snapshot_sensor_pos_mm(&cur_mm);
+//
+//        // 进展检测
+//        float seg = fabsf(cur_mm - prev_mm);
+//        if (seg >= MIN_PROGRESS_MM) {
+//            last_progress_t = HAL_GetTick();
+//            prev_mm = cur_mm;
+//        }
+//
+//        // 到位或越界判断
+//        float err = target_mm - cur_mm;          // 目标 - 当前
+//        int   sgn = (dir > 0) ? +1 : -1;         // 期望方向
+//        int   crossed = ((err * sgn) <= 0);      // 已经越过/到达目标（方向反号或为0）
+//
+//        if (fabsf(err) <= EPS_MM || crossed) {
+//            // 软停并等待真正停稳
+//        	motorSlowStop();
+//            (void)stpr_wait_until_stop(&stepper);
+//
+//            // 最终验证
+//            snapshot_sensor_pos_mm(&cur_mm);
+//            float final_err = target_mm - cur_mm;
+//            if (fabsf(final_err) <= EPS_MM) {
+//                printf("Reached: target=%.3f, final=%.3f, err=%.3f (±%.2f)\r\n",
+//                       target_mm, cur_mm, final_err, EPS_MM);
+//                return NO_ERROR;
+//            } else {
+//                printf("Stopped near target but out of tol: target=%.3f, final=%.3f, err=%.3f, tol=±%.2f\r\n",
+//                       target_mm, cur_mm, final_err, EPS_MM);
+//                return MOTOR_NOT_IN_TOL;
+//            }
+//        }
+//
+//        // 无进展保护
+//        if ((HAL_GetTick() - last_progress_t) > NO_PROGRESS_WINDOW_MS) {
+//        	motorSlowStop();
+//            (void)stpr_wait_until_stop(&stepper);
+//            printf("No progress: start=%.3f, cur=%.3f, target=%.3f\r\n",
+//                   start_mm, cur_mm, target_mm);
+//            return MOTOR_NO_PROGRESS;
+//        }
+//
+//        // 超时保护
+//        if ((HAL_GetTick() - t0) > MOVE_TIMEOUT_MS) {
+//        	motorSlowStop();
+//            (void)stpr_wait_until_stop(&stepper);
+//            printf("Timeout: start=%.3f, cur=%.3f, target=%.3f\r\n",
+//                   start_mm, cur_mm, target_mm);
+//            return MOTOR_TIMEOUT;
+//        }
+//    }
+}
+
+/**
+ * @brief 相对位移一次下发（阻塞），内部换算为绝对目标后调用
+ * @param mm   相对位移（正数=上行/正向，负数=下行/反向）
+ */
+uint32_t motorMoveRelativeOneShot(float mm) {
+	float cur;
+	snapshot_sensor_pos_mm(&cur);
+	return motorMoveToPositionOneShot(cur + mm);
 }

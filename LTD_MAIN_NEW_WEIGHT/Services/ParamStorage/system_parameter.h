@@ -15,7 +15,7 @@
 #include "encoder.h"
 #include <stdint.h>
 #include <stdbool.h>
-
+#include "sensor.h"
 /*无效值*/
 #define UNVALID_LEVEL 999999u // 液位无效值
 #define UNVALID_CURRENT 3.5
@@ -33,29 +33,28 @@
 /*测量命令*/
 /* 测量命令 */
 typedef enum {
-    CMD_NONE = 0,                  // 无命令
-    CMD_BACK_ZERO = 1,            	// 回零点
-    CMD_FIND_OIL = 2,              // 寻找液位
-    CMD_FIND_WATER = 3,            // 寻找水位
-    CMD_FIND_BOTTOM = 4,           // 寻找罐底
-    CMD_MEASURE_SINGLE = 5,        // 单点测量
-    CMD_MONITOR_SINGLE = 6,        // 单点监测
-    CMD_SYNTHETIC = 7,             // 综合指令
-    CMD_MEASURE_DISTRIBUTED = 8,   // 分布测量
-    CMD_MEASURE_DENSITY_METER = 9, // 密度每米测量
-    CMD_MEASURE_DENSITY_RANGE = 10,// 液位区间测量
-    CMD_CALIBRATE_ZERO = 11,       // 标定零点
-    CMD_CALIBRATE_OIL = 12,        // 标定液位
-    CMD_READ_PARAM = 13,           // 读取参数
-    CMD_MOVE_UP = 14,              // 上行
-    CMD_MOVE_DOWN = 15,            // 下行
+	CMD_NONE = 0,                  // 无命令
+	CMD_BACK_ZERO = 1,            	// 回零点
+	CMD_FIND_OIL = 2,              // 寻找液位
+	CMD_FIND_WATER = 3,            // 寻找水位
+	CMD_FIND_BOTTOM = 4,           // 寻找罐底
+	CMD_MEASURE_SINGLE = 5,        // 单点测量
+	CMD_MONITOR_SINGLE = 6,        // 单点监测
+	CMD_SYNTHETIC = 7,             // 综合指令
+	CMD_MEASURE_DISTRIBUTED = 8,   // 分布测量
+	CMD_MEASURE_DENSITY_METER = 9, // 密度每米测量
+	CMD_MEASURE_DENSITY_RANGE = 10, // 液位区间测量
+	CMD_CALIBRATE_ZERO = 11,       // 标定零点
+	CMD_CALIBRATE_OIL = 12,        // 标定液位
+	CMD_READ_PARAM = 13,           // 读取参数
+	CMD_MOVE_UP = 14,              // 上行
+	CMD_MOVE_DOWN = 15,            // 下行
 	CMD_SET_EMPTY_WEIGHT = 16,     // 设置空载称重
 	CMD_SET_FULL_WEIGHT = 17,
-    CMD_RESTORE_FACTORY = 18,      // 恢复出厂设置
+	CMD_RESTORE_FACTORY = 18,      // 恢复出厂设置
 	CMD_MAINTENANCE_MODE = 19,     // 维护模式
-    CMD_UNKNOWN = 20              // 未知指令
+	CMD_UNKNOWN = 20              // 未知指令
 } CommandType;
-
 
 /*设备状态*/
 typedef enum {
@@ -225,6 +224,7 @@ typedef struct {
 	uint32_t waterBlindZone;                // 水位盲区
 	uint32_t encoder_wheel_circumference_mm; // 编码轮周长
 	uint32_t sensorType;                     // 传感器类型
+	uint32_t sensorID;                     // 传感器编号
 	uint32_t softwareVersion;                // 软件版本
 
 	//称重参数
@@ -232,14 +232,24 @@ typedef struct {
 	uint32_t full_weight;			 //满载称重
 	uint32_t weight_upper_limit_ratio; // 称重检测上限比例
 	uint32_t weight_lower_limit_ratio; // 称重检测下限比例
-	//零点测量
-	//找到零点下行距离
+	uint32_t empty_weight_upper_limit;// 空载重量上限
+	uint32_t empty_weight_lower_limit;// 空载重量下限
+	uint32_t full_weight_upper_limit;// 满载重量上限
+	uint32_t full_weight_lower_limit;// 满载重量下限
 	uint32_t findZeroDownDistance; // 找零点下行距离
+
+	//指令参数
+	uint32_t calibrateOilLevel; // 标定液位值
+	uint32_t calibrateWaterLevel; // 水位标定值
+	uint32_t singlePointMeasurementPosition; // 单点测量位置
+	uint32_t singlePointMonitoringPosition; // 单点监测位置
+	uint32_t densityDistributionOilLevel; // 密度分布测量时的液位值
+	uint32_t motorCommandDistance; // 电机指令的运行距离
 
 	// 密度和温度测量参数
 	uint32_t densityCorrection;     // 密度修正值、磁通量D
 	uint32_t temperatureCorrection; // 温度修正值、磁通量T
-
+	//分布测量参数
 	uint32_t requireBottomMeasurement;  // 是否需要测量罐底
 	uint32_t requireWaterMeasurement;   // 是否需要测量水位
 	uint32_t requireSinglePointDensity; // 是否需要测量单点密度
@@ -253,7 +263,7 @@ typedef struct {
 
 	// 水位测量参数
 	uint32_t waterLevelCorrection; // 水位修正值
-	uint32_t maxDownDistance;      // 水位测量最大下行距离（盲区下行距离）
+	uint32_t maxDownDistance;      // 水位/罐底测量最大下行距离（盲区下行距离）
 
 	// 实高测量
 	uint32_t refreshTankHeightFlag;  // 是否更新液位罐高
@@ -267,6 +277,7 @@ typedef struct {
 	//报警
 	uint32_t AlarmHighDO;               // 高液位报警输出
 	uint32_t AlarmLowDO;                // 低液位报警输出
+	uint32_t ThirdStateThreshold;   // 第三状态阈值
 	//4-20mA输出
 	uint32_t CurrentRangeStart_mA;       // 电流量程起始值
 	uint32_t CurrentRangeEnd_mA;         // 电流量程结束值
@@ -277,7 +288,6 @@ typedef struct {
 	uint32_t AOLowCurrent_mA;           // AO低报电流值
 	uint32_t FaultCurrent_mA;          // 故障模式电流值
 	uint32_t DebugCurrent_mA;          // 调试模式电流值
-
 
 	uint32_t crc;                          // 新增CRC校验字段
 } DeviceParameters;
