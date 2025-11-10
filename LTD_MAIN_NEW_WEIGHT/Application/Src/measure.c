@@ -10,6 +10,7 @@
 #include "measure_zero.h"
 #include "measure_tank_height.h"
 #include "measure_oilLevel.h"
+#include "measure_density.h"
 #include "motor_ctrl.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -26,29 +27,37 @@ void ProcessMeasureCmd(CommandType command)
 		printf("执行寻找液位指令\n");
 		MeasureAndFollowOilLevel();
 		break;
-//	case CMD_FIND_WATER:
-//		printf("执行寻找水位指令\n");
+	case CMD_FIND_WATER:
+		printf("执行寻找水位指令\n");
+		printf("暂不持支持该指令\n");
 //		SearchWaterLevel();
-//		break;
+		break;
 	case CMD_FIND_BOTTOM:
 		printf("执行罐底测量指令\n");
 		MeasureBottom();
 		break;
 	case CMD_SET_EMPTY_WEIGHT:
 		printf("执行设置空载称重指令\n");
+		g_measurement.device_status.device_state = STATE_GET_EMPTYWEIGHT;
 		get_empty_weight();
+		g_measurement.device_status.device_state = STATE_GET_FULLWEIGHT_OVER;
 		break;
 	case CMD_SET_FULL_WEIGHT:
 		printf("执行设置满载称重指令\n");
+		g_measurement.device_status.device_state = STATE_GET_FULLWEIGHT;
 		get_full_weight();
+		g_measurement.device_status.device_state = STATE_GET_FULLWEIGHT_OVER;
 		break;
 	case CMD_MEASURE_SINGLE:
 		printf("执行单点测量指令\n");
-//		SinglePointMeasurement();
+		g_measurement.device_status.device_state = STATE_SINGLEPOINTING;
+		SinglePointMeasurement();
+		g_measurement.device_status.device_state = STATE_SINGLEPOINTOVER;
 		break;
 	case CMD_MONITOR_SINGLE:
 		printf("执行单点监测指令\n");
-//		SinglePointMonitoring();
+		g_measurement.device_status.device_state = STATE_RUNTOPOINTING;
+		SinglePointMonitoring();
 		break;
 //	case CMD_SYNTHETIC:
 //		printf("执行综合测量指令\n");
@@ -66,26 +75,34 @@ void ProcessMeasureCmd(CommandType command)
 //		printf("执行液位区间测量指令\n");
 //		DensityRangeMeasurement();
 //		break;
-//	case CMD_CALIBRATE_ZERO:
-//		printf("执行标定零点指令\n");
-//		CalibrateZeroPoint();
-//		break;
-//	case CMD_CALIBRATE_OIL:
-//		printf("执行标定液位指令\n");
-//		CalibrateOilLevel();
-//		break;
+	case CMD_CALIBRATE_ZERO:
+		printf("执行标定零点指令\n");
+		CalibrateZeroPoint();
+		break;
+	case CMD_CALIBRATE_OIL:
+		printf("执行标定液位指令\n");
+		CalibrateOilLevel();
+		break;
 //	case CMD_READ_PARAM:
 //		printf("执行读取参数指令\n");
 //		ReadDeviceParameters();
 //		break;
-//	case CMD_MOVE_UP:
-//		printf("电机上行操作\n");
-//		motorMoveNoWait(100, MOTOR_DIRECTION_UP);
-//		break;
-//	case CMD_MOVE_DOWN:
-//		printf("电机下行操作\n");
-//		motorMoveNoWait(100, MOTOR_DIRECTION_DOWN);
-//		break;
+	case CMD_MOVE_UP:
+		printf("电机上行操作\n");
+		g_measurement.device_status.device_state = STATE_RUNUPING;
+		motorMoveAndWaitUntilStop((float)g_deviceParams.motorCommandDistance/10.0, MOTOR_DIRECTION_UP);
+		g_measurement.device_status.device_state = STATE_RUNUPOVER;
+		break;
+	case CMD_MOVE_DOWN:
+		printf("电机下行操作\n");
+		g_measurement.device_status.device_state = STATE_RUNDOWNING;
+		motorMoveAndWaitUntilStop((float)g_deviceParams.motorCommandDistance/10.0, MOTOR_DIRECTION_DOWN);
+		g_measurement.device_status.device_state = STATE_RUNDOWNOVER;
+		break;
+	case CMD_RESTORE_FACTORY:
+		printf("恢复出厂设置\n");
+		RestoreFactoryParamsConfig(); //恢复出厂设置
+		break;
 	default:
 		printf("未知命令类型: %d\n", command);
 	}
@@ -255,6 +272,12 @@ void process_command(uint8_t *command) {
 		get_full_weight();
 
 	}
+	if (command[0] == 'Q') //获取满载称重
+	{
+		printf("恢复出场设置\n");
+	RestoreFactoryParamsConfig(); //恢复出厂设置
+
+	}
 }
 
 static int MeasureStart(void)
@@ -277,7 +300,19 @@ void MeasureZero(void)
 	g_measurement.device_status.device_state = STATE_STANDBY;
 	return;
 }
+//罐底零点主函数
+void CalibrateZeroPoint(void)
+{
+	int ret = 0;
+	MeasureStart();
+	g_measurement.device_status.device_state = STATE_FINDZEROING;
 
+	//开始回零点
+	ret = SearchZero();
+	SET_ERROR(ret);
+	g_measurement.device_status.device_state = STATE_FINDZEROOVER;
+	return;
+}
 /**
  * @brief 测量罐底高度的函数。
  *
@@ -309,6 +344,21 @@ void MeasureAndFollowOilLevel(void)
     MeasureStart();
 
 	g_measurement.device_status.device_state = STATE_FINDOIL;
+	//开始测量罐高
+	ret = SearchAndFollowOilLevel();
+	SET_ERROR(ret);
+
+	g_measurement.device_status.device_state = STATE_STANDBY;
+	return;
+}
+//标定液位
+
+void CalibrateOilLevel(void)
+{
+	int ret = 0;
+    MeasureStart();
+
+	g_measurement.device_status.device_state = STATE_CALIBRATIONOILING;
 	//开始测量罐高
 	ret = SearchAndFollowOilLevel();
 	SET_ERROR(ret);

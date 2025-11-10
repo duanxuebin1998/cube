@@ -105,7 +105,12 @@ uint32_t SearchAndFollowOilLevel(void)
         printf("液位流程\t液位搜索失败(尝试%d次)\r\n", try_times);
         CHECK_ERROR(ret);
     }
-
+    if(g_measurement.device_status.device_state == STATE_CALIBRATIONOILING)
+    {
+		printf("液位流程\t开始标定液位\r\n");
+		g_deviceParams.tankHeight = g_measurement.debug_data.cable_length+g_deviceParams.calibrateOilLevel;
+		printf("液位流程\t标定完成，罐高设置为：%ld mm\r\n", g_deviceParams.tankHeight);
+    }
     /*************** Step 3: 跟随液位 ***************/
     g_measurement.device_status.device_state = STATE_FLOWOIL; // 切换到液位跟随状态
     try_times = 0;

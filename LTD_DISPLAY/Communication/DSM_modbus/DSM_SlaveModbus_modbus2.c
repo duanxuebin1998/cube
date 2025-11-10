@@ -15,7 +15,7 @@
 
 extern struct MEASURE_DATA Measure_Data;
 int SlaveAddress = 0x01;							// 下位机地址
-int HoldingRegisterArray[HOLDREGISTERAMOUNT] = {0}; // 保持寄存器数组
+int HoldingRegisterArray1[HOLDREGISTERAMOUNT] = {0}; // 保持寄存器数组
 int InputRegisterArray[INPUTREGISTERAMOUNT] = {0};	// 输入寄存器数组
 int MaxNum_Coil;									// 线圈最大有效值
 int MaxNum_HoldingRegister;							// 保持寄存器最大有效值
@@ -226,7 +226,7 @@ int ReadOneHoldingRegister(unsigned int startaddress, unsigned int registeramoun
 	for (i = startaddress; i < range; i++)
 	{
 		temp <<= 16;
-		temp += HoldingRegisterArray[i];
+		temp += HoldingRegisterArray1[i];
 	}
 
 	return temp;
@@ -280,7 +280,7 @@ bool ReadHoldingRegister(unsigned int startaddress, unsigned int registeramount,
 
 	for (i = startaddress, j = 0; i < range; i++, j++)
 	{
-		registervalue[j] = HoldingRegisterArray[i];
+		registervalue[j] = HoldingRegisterArray1[i];
 	}
 
 	return true;
@@ -427,7 +427,7 @@ bool WriteOneHoldingRegister(unsigned int startaddress, unsigned int registeramo
 
 	for (i = range; i >= (int16_t)startaddress; i--)
 	{
-		HoldingRegisterArray[i] = registervalue % 0x10000;
+		HoldingRegisterArray1[i] = registervalue % 0x10000;
 		registervalue >>= 16;
 	}
 
@@ -481,7 +481,7 @@ bool WriteHoldingRegister(unsigned int startaddress, unsigned int registeramount
 
 	for (i = startaddress, j = 0; i < range; i++, j++)
 	{
-		HoldingRegisterArray[i] = registervalue[j];
+		HoldingRegisterArray1[i] = registervalue[j];
 	}
 
 	return true;

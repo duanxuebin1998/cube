@@ -28,7 +28,8 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "Display.h"
-
+#include "modbus_agreement.h"
+#include "system_parameter.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -122,6 +123,8 @@ int main(void)
 		}
 		else
 		{
+//			g_measurement.device_status.device_state =0; // 正常工作模式
+//			cnt_commutoCPU2 = 0;
 			PollingInputData(); // Polling for input data
 		}
 //		print_device_params();
