@@ -424,7 +424,7 @@ static inline void snapshot_sensor_pos_mm(float *pos_mm) {
  */
 uint32_t motorMoveToPositionOneShot(float target_mm) {
 	uint32_t ret;
-	float start_mm, cur_mm, prev_mm;
+	float start_mm;
 	for (int i = 0; i < 5; i++) {
 
 		snapshot_sensor_pos_mm(&start_mm);
@@ -441,70 +441,10 @@ uint32_t motorMoveToPositionOneShot(float target_mm) {
 		if (plan_mm < (EPS_MM * 2.0f))
 			plan_mm = (EPS_MM * 2.0f); // 最小下发距离
 
-		// 一次性下发运动命令
-//    motorMoveNoWait(plan_mm, dir);
 		ret = motorMoveAndWaitUntilStop(plan_mm, dir);
 		CHECK_ERROR(ret);
 	}
-//
-//    uint32_t t0 = HAL_GetTick();
-//    uint32_t last_progress_t = t0;
-//
-//    prev_mm = start_mm;
-//
-//    while (1) {
-//        HAL_Delay(POLL_INTERVAL_MS);
-//        snapshot_sensor_pos_mm(&cur_mm);
-//
-//        // 进展检测
-//        float seg = fabsf(cur_mm - prev_mm);
-//        if (seg >= MIN_PROGRESS_MM) {
-//            last_progress_t = HAL_GetTick();
-//            prev_mm = cur_mm;
-//        }
-//
-//        // 到位或越界判断
-//        float err = target_mm - cur_mm;          // 目标 - 当前
-//        int   sgn = (dir > 0) ? +1 : -1;         // 期望方向
-//        int   crossed = ((err * sgn) <= 0);      // 已经越过/到达目标（方向反号或为0）
-//
-//        if (fabsf(err) <= EPS_MM || crossed) {
-//            // 软停并等待真正停稳
-//        	motorSlowStop();
-//            (void)stpr_wait_until_stop(&stepper);
-//
-//            // 最终验证
-//            snapshot_sensor_pos_mm(&cur_mm);
-//            float final_err = target_mm - cur_mm;
-//            if (fabsf(final_err) <= EPS_MM) {
-//                printf("Reached: target=%.3f, final=%.3f, err=%.3f (±%.2f)\r\n",
-//                       target_mm, cur_mm, final_err, EPS_MM);
-//                return NO_ERROR;
-//            } else {
-//                printf("Stopped near target but out of tol: target=%.3f, final=%.3f, err=%.3f, tol=±%.2f\r\n",
-//                       target_mm, cur_mm, final_err, EPS_MM);
-//                return MOTOR_NOT_IN_TOL;
-//            }
-//        }
-//
-//        // 无进展保护
-//        if ((HAL_GetTick() - last_progress_t) > NO_PROGRESS_WINDOW_MS) {
-//        	motorSlowStop();
-//            (void)stpr_wait_until_stop(&stepper);
-//            printf("No progress: start=%.3f, cur=%.3f, target=%.3f\r\n",
-//                   start_mm, cur_mm, target_mm);
-//            return MOTOR_NO_PROGRESS;
-//        }
-//
-//        // 超时保护
-//        if ((HAL_GetTick() - t0) > MOVE_TIMEOUT_MS) {
-//        	motorSlowStop();
-//            (void)stpr_wait_until_stop(&stepper);
-//            printf("Timeout: start=%.3f, cur=%.3f, target=%.3f\r\n",
-//                   start_mm, cur_mm, target_mm);
-//            return MOTOR_TIMEOUT;
-//        }
-//    }
+	return NO_ERROR;
 }
 
 /**

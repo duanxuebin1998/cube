@@ -12,7 +12,9 @@ uint32_t SinglePointMeasurement() {
 	ret = motorMoveToPositionOneShot((float) g_deviceParams.singlePointMeasurementPosition / 10.0);
 //	CHECK_ERROR(ret);
 	g_measurement.device_status.device_state = STATE_SPTESTING;
+	EnableDensityMode();
 	while (1) {
+		DSM_V2_Test_AllParams();
 		Sensor_Test(); // 传感器测试
 		CHECK_COMMAND_SWITCH(ret);
 	}
@@ -20,10 +22,12 @@ uint32_t SinglePointMeasurement() {
 }
 uint32_t SinglePointMonitoring() {
 	uint32_t ret = 0;
-	ret = motorMoveToPositionOneShot((float) g_deviceParams.singlePointMeasurementPosition / 10.0);
+	ret = motorMoveToPositionOneShot((float) g_deviceParams.singlePointMonitoringPosition / 10.0);
 //	CHECK_ERROR(ret);
 	g_measurement.device_status.device_state = STATE_SPTESTING;
+	EnableDensityMode();
 	while (1) {
+		DSM_V2_Test_AllParams();
 		Sensor_Test(); // 传感器测试
 		CHECK_COMMAND_SWITCH(ret);
 	}

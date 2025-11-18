@@ -148,8 +148,8 @@ int SearchZero(void) {
 	} else {
 		set_encoder_zero();
 		printf("零点测量\t编码器零点设置成功\r\n");
-
-		ret = motorMoveAndWaitUntilStop(100, MOTOR_DIRECTION_DOWN);
+		printf("零点测量\t向下移动\t下行距离\t%ld\r\n", g_deviceParams.findZeroDownDistance/10);
+		ret = motorMoveAndWaitUntilStop((float)g_deviceParams.findZeroDownDistance/10.0, MOTOR_DIRECTION_DOWN);
 		CHECK_ERROR(ret);
 		printf("零点测量\t电机下行完成，流程结束\r\n");
 	}
