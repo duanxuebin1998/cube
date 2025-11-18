@@ -41,11 +41,11 @@ typedef struct
 	float capacitance;// 电容
 }DSMSENSOR_DATA;
 extern DSMSENSOR_DATA dsmsensor_data;
-int DSMSendcommand3times(uint8_t *pCommand, uint16_t commandLen);
+//int DSMSendcommand3times(uint8_t *pCommand, uint16_t commandLen);
 
-int EnableLevelMode(void);
-uint32_t DSM_Get_LevelMode_Frequence(volatile uint32_t *frequency);
-uint32_t DSM_Get_LevelMode_Frequence_Avg(volatile uint32_t *frequency);
+int DSM_EnableLevelMode(void);
+int DSM_EnableDensityMode(void);
+uint32_t Read_Level_Frequency(uint32_t *frequency_out);
 int Probe_EnableWaterSensor(void);
 int Read_Density_Temp(float *density, float *viscosity, float *temp);
 int Read_Density_SIL(float *density, float *viscosity, float *temp);// 读取超声小管的密度、温度

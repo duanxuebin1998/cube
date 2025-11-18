@@ -16,12 +16,11 @@
 #include <stdlib.h>
 #include "test.h"
 #include "sensor.h"
-void ProcessMeasureCmd(CommandType command)
-{
+void ProcessMeasureCmd(CommandType command) {
 	switch (command) {
 	case CMD_BACK_ZERO:
 		printf("执行回零点指令\n");
-		MeasureZero();//
+		MeasureZero(); //
 		break;
 	case CMD_FIND_OIL:
 		printf("执行寻找液位指令\n");
@@ -40,7 +39,7 @@ void ProcessMeasureCmd(CommandType command)
 		printf("执行设置空载称重指令\n");
 		g_measurement.device_status.device_state = STATE_GET_EMPTYWEIGHT;
 		get_empty_weight();
-		g_measurement.device_status.device_state = STATE_GET_FULLWEIGHT_OVER;
+		g_measurement.device_status.device_state = STATE_GET_EMPTYWEIGHT_OVER;
 		break;
 	case CMD_SET_FULL_WEIGHT:
 		printf("执行设置满载称重指令\n");
@@ -83,20 +82,20 @@ void ProcessMeasureCmd(CommandType command)
 		printf("执行标定液位指令\n");
 		CalibrateOilLevel();
 		break;
-//	case CMD_READ_PARAM:
-//		printf("执行读取参数指令\n");
-//		ReadDeviceParameters();
-//		break;
+	case CMD_CORRECT_OIL:
+		printf("执行修正液位指令\n");
+		CorrectOilLevel();
+		break;
 	case CMD_MOVE_UP:
 		printf("电机上行操作\n");
 		g_measurement.device_status.device_state = STATE_RUNUPING;
-		motorMoveAndWaitUntilStop((float)g_deviceParams.motorCommandDistance/10.0, MOTOR_DIRECTION_UP);
+		motorMoveAndWaitUntilStop((float) g_deviceParams.motorCommandDistance / 10.0, MOTOR_DIRECTION_UP);
 		g_measurement.device_status.device_state = STATE_RUNUPOVER;
 		break;
 	case CMD_MOVE_DOWN:
 		printf("电机下行操作\n");
 		g_measurement.device_status.device_state = STATE_RUNDOWNING;
-		motorMoveAndWaitUntilStop((float)g_deviceParams.motorCommandDistance/10.0, MOTOR_DIRECTION_DOWN);
+		motorMoveAndWaitUntilStop((float) g_deviceParams.motorCommandDistance / 10.0, MOTOR_DIRECTION_DOWN);
 		g_measurement.device_status.device_state = STATE_RUNDOWNOVER;
 		break;
 	case CMD_RESTORE_FACTORY:
@@ -153,10 +152,12 @@ void process_command(uint8_t *command) {
 			motorMoveNoWait((float) mm, MOTOR_DIRECTION_DOWN);  // 电机下行
 		}
 	}
-	if (command[0] == 'B') {//
+	if (command[0] == 'B') {  //
 		printf("motor text start\n");
 		printf("***编码值清零***\r\n");
 		g_encoder_count = 0; // 重置编码器计数
+		int mm = atoi((char*) &command[1]);  // 获取数字
+		printf("start up%d\n", mm);
 		while (1) {
 			stpr_enableDriver(&stepper);  //使能电机
 //						stpr_initStepper(&stepper, &hspi2, GPIOB, GPIO_PIN_12, 1, 18);
@@ -164,9 +165,8 @@ void process_command(uint8_t *command) {
 			motorMoveNoWait(200000, MOTOR_DIRECTION_DOWN);
 			HAL_Delay(1000);
 			printf("start down\n");
-			while (abs(g_encoder_count) < 20000) {
+			while (abs(g_encoder_count) < 43 * mm) {
 				printf("{encoder}%d\t{weight}%d\r\n", (int) g_encoder_count, weight_parament.current_weight);
-//				DSMSendcommand3times(DSM_POWER, strlen(DSM_POWER));
 				HAL_Delay(50);
 			}
 			printf("down over!\n");
@@ -174,7 +174,7 @@ void process_command(uint8_t *command) {
 			motorMoveNoWait(200000, MOTOR_DIRECTION_UP);
 			printf("start up to zero\n");
 			HAL_Delay(1000);
-			while (abs(g_encoder_count) >1000) {
+			while (abs(g_encoder_count) > 1000) {
 				printf("{encoder}%d\t{weight}%d\r\n", (int) g_encoder_count, weight_parament.current_weight);
 //				DSMSendcommand3times(DSM_POWER, strlen(DSM_POWER));
 				HAL_Delay(50);
@@ -261,36 +261,34 @@ void process_command(uint8_t *command) {
 		}
 	}
 	if (command[0] == 'O') //获取空载称重
-	{
+			{
 		printf("Get empty weight\n");
 		get_empty_weight();
 
 	}
 	if (command[0] == 'P') //获取满载称重
-	{
+			{
 		printf("Get full weight\n");
 		get_full_weight();
 
 	}
 	if (command[0] == 'Q') //获取满载称重
-	{
+			{
 		printf("恢复出场设置\n");
-	RestoreFactoryParamsConfig(); //恢复出厂设置
+		RestoreFactoryParamsConfig(); //恢复出厂设置
 
 	}
 }
 
-static int MeasureStart(void)
-{
-	fault_info_init();//故障初始化清零
-	g_measurement.device_status.error_code = NO_ERROR;//故障代码清零
+static int MeasureStart(void) {
+	fault_info_init(); //故障初始化清零
+	g_measurement.device_status.error_code = NO_ERROR; //故障代码清零
 	return NO_ERROR;
 }
 
 //罐底零点主函数
-void MeasureZero(void)
-{
-	int ret = 0;
+void MeasureZero(void) {
+	uint32_t ret = 0;
 	MeasureStart();
 	g_measurement.device_status.device_state = STATE_BACKZEROING;
 
@@ -301,9 +299,8 @@ void MeasureZero(void)
 	return;
 }
 //罐底零点主函数
-void CalibrateZeroPoint(void)
-{
-	int ret = 0;
+void CalibrateZeroPoint(void) {
+	uint32_t ret = 0;
 	MeasureStart();
 	g_measurement.device_status.device_state = STATE_FINDZEROING;
 
@@ -326,10 +323,9 @@ void CalibrateZeroPoint(void)
  *
  * @return 无返回值。
  */
-void MeasureBottom(void)
-{
-	int ret = 0;
-    MeasureStart();
+void MeasureBottom(void) {
+	uint32_t ret = 0;
+	MeasureStart();
 	g_measurement.device_status.device_state = STATE_FINDBOTTOM;
 	//开始测量罐高
 	ret = SearchBottom();
@@ -338,31 +334,46 @@ void MeasureBottom(void)
 	g_measurement.device_status.device_state = STATE_FINDBOTTOM_OVER;
 	return;
 }
-void MeasureAndFollowOilLevel(void)
-{
-	int ret = 0;
-    MeasureStart();
+void MeasureAndFollowOilLevel(void) {
+	uint32_t ret = 0;
+	MeasureStart();
 
 	g_measurement.device_status.device_state = STATE_FINDOIL;
 	//开始测量罐高
 	ret = SearchAndFollowOilLevel();
 	SET_ERROR(ret);
-
-	g_measurement.device_status.device_state = STATE_STANDBY;
 	return;
 }
-//标定液位
 
-void CalibrateOilLevel(void)
-{
-	int ret = 0;
-    MeasureStart();
+//标定液位
+void CalibrateOilLevel(void) {
+	uint32_t ret = 0;
+	MeasureStart();
 
 	g_measurement.device_status.device_state = STATE_CALIBRATIONOILING;
-	//开始测量罐高
+
 	ret = SearchAndFollowOilLevel();
 	SET_ERROR(ret);
-
-	g_measurement.device_status.device_state = STATE_STANDBY;
 	return;
 }
+void CorrectOilLevel(void) {
+	uint32_t ret = 0;
+
+	// 测量前准备
+	MeasureStart();
+
+	// 如果当前正在跟随液位，则直接执行修正
+	if (g_measurement.device_status.device_state == STATE_FLOWOIL) {
+		printf("当前处于液位跟随状态，执行液位修正操作\r\n");
+		CorrectOilLevelProcess();
+		//继续液位跟随
+		ret = FollowOilLevel();
+		SET_ERROR(ret);
+		return;
+	} else {
+		printf("当前未处于液位跟随状态，调用液位标定流程\r\n");
+		CalibrateOilLevel();
+		return;
+	}
+}
+

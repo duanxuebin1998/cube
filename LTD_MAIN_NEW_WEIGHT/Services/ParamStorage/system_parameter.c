@@ -75,23 +75,23 @@ void RestoreFactoryParamsConfig(void) {
 
 	/* —— 基础参数 —— */
 	g_deviceParams.tankHeight = 200000;					// 罐高：20000 mm（×10）
-	g_deviceParams.blindZone = 5000;					// 液位盲区：500 mm（×10）
-	g_deviceParams.waterBlindZone = 5000;				// 水位盲区：500 mm（×10）
+	g_deviceParams.blindZone = 3000;					// 液位盲区：500 mm（×10）
+	g_deviceParams.waterBlindZone = 100;				// 水位盲区：500 mm（×10）
 	g_deviceParams.encoder_wheel_circumference_mm = 95000;	// 编码轮周长：95 mm（×1000）
 	g_deviceParams.sensorType = DSM_SENSOR;						// 传感器类型
-	g_deviceParams.sensorID = 1924567;						// 传感器编号
-	g_deviceParams.softwareVersion = 0x0001001;			// 软件版本：1.001
+	g_deviceParams.sensorID = 1234567;						// 传感器编号
+	g_deviceParams.softwareVersion = 0x0001003;			// 软件版本：1.001
 
 	/* —— 称重参数 —— */
 	g_deviceParams.empty_weight = 0;					// 空载重量：kg×100
 	g_deviceParams.full_weight = 5000;						// 满载重量：kg×100
-	g_deviceParams.weight_upper_limit_ratio = 12000;	// 上限比例：120.00 %
-	g_deviceParams.weight_lower_limit_ratio = 8000;		// 下限比例：80.00 %
-	g_deviceParams.empty_weight_upper_limit = 0;		// 空载重量上限：kg×100
-	g_deviceParams.empty_weight_lower_limit = 0;		// 空载重量下限：kg×100
-	g_deviceParams.full_weight_upper_limit = 0;			// 满载重量上限：kg×100
-	g_deviceParams.full_weight_lower_limit = 0;			// 满载重量下限：kg×100
-	g_deviceParams.findZeroDownDistance = 5000;			// 找零点下行距离：500 mm（×10）
+	g_deviceParams.weight_upper_limit_ratio = 70;	// 上限比例：120.00 %
+	g_deviceParams.weight_lower_limit_ratio = 30;		// 下限比例：80.00 %
+	g_deviceParams.empty_weight_upper_limit = 2000;		// 空载重量上限
+	g_deviceParams.empty_weight_lower_limit = 0;		// 空载重量下限
+	g_deviceParams.full_weight_upper_limit = 30000;			// 满载重量上限
+	g_deviceParams.full_weight_lower_limit = 2000;			// 满载重量下限
+	g_deviceParams.findZeroDownDistance = 1000;			// 找零点下行距离：100 mm（×10）
 
 	/* —— 指令参数 —— */
 	g_deviceParams.calibrateOilLevel = 0;				// 标定液位(油)：mm（×10）
@@ -102,11 +102,11 @@ void RestoreFactoryParamsConfig(void) {
 	g_deviceParams.motorCommandDistance = 0;			// 电机指令运行距离：mm（×10）
 
 	/* —— 修正参数（密度/温度）—— */
-	g_deviceParams.densityCorrection = 0;				// 密度修正（‰），允许负值
-	g_deviceParams.temperatureCorrection = 0;			// 温度修正（‰），允许负值
+	g_deviceParams.densityCorrection = 0;				// 密度修正
+	g_deviceParams.temperatureCorrection = 0;			// 温度修正
 
 	/* —— 分布测量参数 —— */
-	g_deviceParams.requireBottomMeasurement = 0;		// 是否测罐底：0-否 1-是
+	g_deviceParams.requireBottomMeasurement = 1;		// 是否测罐底：0-否 1-是
 	g_deviceParams.requireWaterMeasurement = 0;			// 是否测水位：0-否 1-是
 	g_deviceParams.requireSinglePointDensity = 0;		// 是否测单点密度：0-否 1-是
 	g_deviceParams.spreadMeasurementOrder = 0;			// 测量顺序：0=由下向上

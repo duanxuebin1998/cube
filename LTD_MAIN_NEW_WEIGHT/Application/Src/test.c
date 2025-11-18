@@ -63,6 +63,7 @@ void motor_step_text(void) {
 	int32_t ticks = 4 * 32;
 	printf("motor STEP text start\n");
 	stpr_enableDriver(&stepper); //使能电机
+	printf("4步进测试\n");
 	printf("start down\n");
 	for (i = 0; i < 24000; i++) {
 		ticks = 4 * 32;
@@ -73,11 +74,6 @@ void motor_step_text(void) {
 		printf("%d\t", weight_parament.current_weight);
 		HAL_Delay(100);
 		printf("%d\r\n", weight_parament.current_weight);
-		if (Read_Density_Temp(&density, &viscosity, &temp) == 0) {
-			printf("密度: %.3f  粘度: %.3f  温度: %.3f ℃\r\n", density, viscosity, temp);
-		} else {
-			printf("读取密度/温度失败！\r\n");
-		}
 	}
 	printf("down over!\n");
 	printf("start up\n");
@@ -90,12 +86,58 @@ void motor_step_text(void) {
 		printf("%d\t", weight_parament.current_weight);
 		HAL_Delay(100);
 		printf("%d\r\n", weight_parament.current_weight);
-		if (Read_Density_Temp(&density, &viscosity, &temp) == 0) {
-			printf("密度: %.3f  粘度: %.3f  温度: %.3f ℃\r\n", density, viscosity, temp);
-		} else {
-			printf("读取密度/温度失败！\r\n");
-		}
+
 	}
+	printf("8步进测试\n");
+		printf("start down\n");
+		for (i = 0; i < 12000; i++) {
+			ticks = 8 * 32;
+			stpr_moveBy(&stepper, &ticks, velocity);
+			HAL_Delay(2000);
+			printf("%d\t{encoder}%d\t{weight}%d\t", i, (int) g_encoder_count, weight_parament.current_weight);
+			HAL_Delay(100);
+			printf("%d\t", weight_parament.current_weight);
+			HAL_Delay(100);
+			printf("%d\r\n", weight_parament.current_weight);
+		}
+		printf("down over!\n");
+		printf("start up\n");
+		for (i = 0; i < 12000; i++) {
+			ticks = -8 * 32;
+			stpr_moveBy(&stepper, &ticks, velocity);
+			HAL_Delay(2000);
+			printf("%d\t{encoder}%d\t{weight}%d\t", i, (int) g_encoder_count, weight_parament.current_weight);
+			HAL_Delay(100);
+			printf("%d\t", weight_parament.current_weight);
+			HAL_Delay(100);
+			printf("%d\r\n", weight_parament.current_weight);
+
+		}
+		printf("40步进测试\n");
+			printf("start down\n");
+			for (i = 0; i < 2400; i++) {
+				ticks = 40 * 32;
+				stpr_moveBy(&stepper, &ticks, velocity);
+				HAL_Delay(2000);
+				printf("%d\t{encoder}%d\t{weight}%d\t", i, (int) g_encoder_count, weight_parament.current_weight);
+				HAL_Delay(100);
+				printf("%d\t", weight_parament.current_weight);
+				HAL_Delay(100);
+				printf("%d\r\n", weight_parament.current_weight);
+			}
+			printf("down over!\n");
+			printf("start up\n");
+			for (i = 0; i < 2400; i++) {
+				ticks = -40 * 32;
+				stpr_moveBy(&stepper, &ticks, velocity);
+				HAL_Delay(2000);
+				printf("%d\t{encoder}%d\t{weight}%d\t", i, (int) g_encoder_count, weight_parament.current_weight);
+				HAL_Delay(100);
+				printf("%d\t", weight_parament.current_weight);
+				HAL_Delay(100);
+				printf("%d\r\n", weight_parament.current_weight);
+
+			}
 	stpr_disableDriver(&stepper); //使能电机
 	printf("motor text over\n");
 }
@@ -155,23 +197,23 @@ void DSM_V2_Test_AllParams(void)
 {
     printf("\r\n===== DSM V2 通讯测试开始 =====\r\n");
 
-    // 1. 切换到液位模式
-    int ret = DSM_V2_SwitchToLevelMode();
-    if (ret == NO_ERROR)
-        printf("切换液位模式成功\r\n");
-    else {
-        printf("切换液位模式失败，错误码 %d\r\n", ret);
-        return; // 通讯异常，后面读也没意义
-    }
+//    // 1. 切换到液位模式
+//    int ret = DSM_V2_SwitchToLevelMode();
+//    if (ret == NO_ERROR)
+//        printf("切换液位模式成功\r\n");
+//    else {
+//        printf("切换液位模式失败，错误码 %d\r\n", ret);
+//        return; // 通讯异常，后面读也没意义
+//    }
 
     // 2. 定义变量
     float ver = 0, temp = 0, rho = 0, mu = 0, nu = 0;
     uint32_t freq = 0, sensor_id = 0;
 
     // 3. 依次读取各参数
-    if (DSM_V2_Read_SoftwareVersion(&ver) == NO_ERROR)
-        printf("软件版本: %.3f\r\n", ver);
-    else printf("读取软件版本失败\r\n");
+//    if (DSM_V2_Read_SoftwareVersion(&ver) == NO_ERROR)
+//        printf("软件版本: %.3f\r\n", ver);
+//    else printf("读取软件版本失败\r\n");
 
     if (DSM_V2_Read_Temperature(&temp) == NO_ERROR)
         printf("温度值: %.3f ℃\r\n", temp);
@@ -188,14 +230,14 @@ void DSM_V2_Test_AllParams(void)
     if (DSM_V2_Read_KinematicViscosity(&nu) == NO_ERROR)
         printf("运动粘度: %.3f\r\n", nu);
     else printf("读取运动粘度失败\r\n");
-
-    if (DSM_V2_Read_LevelFrequency(&freq) == NO_ERROR)
-        printf("液位频率: %lu Hz\r\n", (unsigned long)freq);
-    else printf("读取液位频率失败\r\n");
-
-    if (DSM_V2_Read_SensorID(&sensor_id) == NO_ERROR)
-        printf("传感器号: %lu\r\n", (unsigned long)sensor_id);
-    else printf("读取传感器号失败\r\n");
+//
+//    if (DSM_V2_Read_LevelFrequency(&freq) == NO_ERROR)
+//        printf("液位频率: %lu Hz\r\n", (unsigned long)freq);
+//    else printf("读取液位频率失败\r\n");
+//
+//    if (DSM_V2_Read_SensorID(&sensor_id) == NO_ERROR)
+//        printf("传感器号: %lu\r\n", (unsigned long)sensor_id);
+//    else printf("读取传感器号失败\r\n");
 
     printf("===== DSM V2 通讯测试结束 =====\r\n\r\n");
 }

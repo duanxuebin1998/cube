@@ -47,7 +47,7 @@ typedef enum {
 
 	CMD_CALIBRATE_ZERO = 11,       // 标定零点
 	CMD_CALIBRATE_OIL = 12,        // 标定液位
-	CMD_READ_PARAM = 13,           // 读取参数
+	CMD_CORRECT_OIL = 13,           // 修正液位
 	CMD_MOVE_UP = 14,              // 上行
 	CMD_MOVE_DOWN = 15,            // 下行
 	CMD_SET_EMPTY_WEIGHT = 16,     // 设置空载称重

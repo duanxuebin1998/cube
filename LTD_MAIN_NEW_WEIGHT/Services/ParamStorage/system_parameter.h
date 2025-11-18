@@ -44,13 +44,14 @@ typedef enum {
 	CMD_MEASURE_DISTRIBUTED = 8,   // 分布测量
 	CMD_MEASURE_DENSITY_METER = 9, // 密度每米测量
 	CMD_MEASURE_DENSITY_RANGE = 10, // 液位区间测量
+
 	CMD_CALIBRATE_ZERO = 11,       // 标定零点
 	CMD_CALIBRATE_OIL = 12,        // 标定液位
-	CMD_READ_PARAM = 13,           // 读取参数
+	CMD_CORRECT_OIL = 13,           // 修正液位
 	CMD_MOVE_UP = 14,              // 上行
 	CMD_MOVE_DOWN = 15,            // 下行
 	CMD_SET_EMPTY_WEIGHT = 16,     // 设置空载称重
-	CMD_SET_FULL_WEIGHT = 17,
+	CMD_SET_FULL_WEIGHT = 17,		// 设置满载称重
 	CMD_RESTORE_FACTORY = 18,      // 恢复出厂设置
 	CMD_MAINTENANCE_MODE = 19,     // 维护模式
 	CMD_UNKNOWN = 20              // 未知指令

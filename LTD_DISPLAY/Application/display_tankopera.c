@@ -475,6 +475,20 @@ static bool inputvalue(uint8_t deci,uint8_t row,uint8_t line,uint8_t points,uint
         }
         else if(NowKeyPress == USE_KEY_BACK)
         {
+        	if((nowbit == (deci - 1))&& (sgl_val == 0))
+        	{
+        		nowbit = 8;
+				if(timeback != 0)
+				{
+					timeback = 0;
+					timesure = 1;
+					dtm_backtofunc()();
+					return false;
+				}
+				timeback++;
+				timesure--;
+        	}
+            //以上为新加的
             nowbit = deci - 1;
             sgl_val = 0;
             bit_0 = bit_1 = bit_2 = bit_3 = bit_4 = bit_5 = bit_6 = 0;
@@ -545,7 +559,15 @@ static bool inputvalue(uint8_t deci,uint8_t row,uint8_t line,uint8_t points,uint
     if(unit != NULL)
         OledDisplayLineWords(unit,line,row,0);
     DisplayLangaugeLineWords((uint8_t*)"确认",OLED_LINE8_8,OLED_ROW4_4,!(nowbit & 7),(uint8_t*)"Ok");
-    DisplayLangaugeLineWords((uint8_t*)"清零",OLED_LINE8_1,OLED_ROW4_4,0,(uint8_t*)"Zero out");
+	if((nowbit == (deci - 1))&& (sgl_val == 0))
+	{
+		DisplayLangaugeLineWords((uint8_t*)"返回",OLED_LINE8_1,OLED_ROW4_4,0,(uint8_t*)"Back");
+	}
+	else
+	{
+		DisplayLangaugeLineWords((uint8_t*)"清零",OLED_LINE8_1,OLED_ROW4_4,0,(uint8_t*)"Zero out");
+	}
+
     return false;
 }
 /* 是否下发指令或参数判断页 */
@@ -646,7 +668,8 @@ static pFunc_void dtm_backtofunc(void)
         p = menu_paraconfig;
     else if(now_Opera_Num == COM_NUM_PARA_LANG)
         p = mainmenu;
-    
+    else if(now_Opera_Num > COM_NUM_PASSWORD_START && now_Opera_Num < COM_NUM_PASSWORD_END)
+    	p = mainmenu;
     return p;
 }
 /* 返回按确认键后要跳转的函数指针 */
@@ -880,110 +903,6 @@ static void password_enter_para(void)
     now_Opera_Num = COM_NUM_PASSWORD_ENTER_PARA;
     inputcmdpara();
 }
-/* 主菜单 */
-static void mainmenu(void)
-{
-    static struct MenuData menu[] = {
-        {(uint8_t*)"测量命令",COM_NUM_NOOPERA,measuremenu,COMMANE_NORW,(uint8_t*)"MeasureCommend"},
-        {(uint8_t*)"参数配置",COM_NUM_NOOPERA,password_enter_para,COMMANE_NORW,(uint8_t*)"Para-config"},
-        {(uint8_t*)"调试指令",COM_NUM_NOOPERA,password_enter_cmd,COMMANE_NORW,(uint8_t*)"Debug Commend"},
-        {(uint8_t*)"语言",COM_NUM_PARA_LANG,setlanguage,COMMANE_NORW,(uint8_t*)"Language"},
-        {(uint8_t*)"退出",COM_NUM_NOOPERA,ifexittankopera,COMMANE_NORW,(uint8_t*)"Exit"},
-    };
-    int menulen = sizeof(menu) / sizeof(menu[0]);
-
-    flag_SendCommand = false;
-    all_screen(0x00);
-    func_index = KEYNUM_MAINMENU;
-    menuselect(menu,menulen);
-}
-/* 普通测量指令菜单 */
-static void measuremenu(void)
-{
-    static struct MenuData menu[] = {
-        {(uint8_t*)"回零点",COM_NUM_BACK_ZERO,ifsendcmd,COMMANE_NORW,(uint8_t*)"Return to Zero"},
-        {(uint8_t*)"液位跟随",COM_NUM_FIND_OIL,ifsendcmd,COMMANE_NORW,(uint8_t*)"Level Follow"},
-        {(uint8_t*)"密度分布测量",COM_NUM_SPREADPOINTS,ifsendcmd,COMMANE_NORW,(uint8_t*)"DT-M"},
-        {(uint8_t*)"固定点测量",COM_NUM_SINGLE_POINT,inputcmdpara,COMMANE_NORW,(uint8_t*)"DT-SinglePoint-M"},
-        {(uint8_t*)"固定点监测",COM_NUM_SP_TEST,inputcmdpara,COMMANE_NORW,(uint8_t*)"DT-National-M"},
-        {(uint8_t*)"水位测量",COM_NUM_FIND_WATER,ifsendcmd,COMMANE_NORW,(uint8_t*)"Water level-M"},
-        {(uint8_t*)"罐底测量",COM_NUM_FIND_BOTTOM,ifsendcmd,COMMANE_NORW,(uint8_t*)"Tank Bottom-M"},
-		{(uint8_t*)"测量参数",COM_NUM_NOOPERA,menu_basepara,COMMANE_NORW,(uint8_t*)"M-Parameters"},
-        {(uint8_t*)"退出",COM_NUM_NOOPERA,mainmenu,COMMANE_NORW,(uint8_t*)"Exit"},
-    };
-    int menulen = sizeof(menu) / sizeof(menu[0]);
-
-    all_screen(0x00);
-    func_index = KEYNUM_MEASURE_MAINMENU;
-    menuselect(menu,menulen);
-}
-/* 菜单 - 调试指令 */
-static void menu_cmdconfig_main(void)
-{
-    static struct MenuData menu[] = {
-        {(uint8_t*)"上行",COM_NUM_RUNUP,inputcmdpara,COMMANE_NORW,(uint8_t*)"Move Up"},
-        {(uint8_t*)"下行",COM_NUM_RUNDOWN,inputcmdpara,COMMANE_NORW,(uint8_t*)"Move Down"},
-		{(uint8_t*) "标定零点", COM_NUM_FIND_ZERO, ifsendcmd, COMMANE_NORW, (uint8_t*) "Calibrate Zero" },
-		{(uint8_t*)"液位修正",COM_NUM_CAL_OIL,inputcmdpara,COMMANE_NORW,(uint8_t*)"LevelCorrect"},
-        {(uint8_t*)"标定液位",COM_NUM_CAL_OIL,inputcmdpara,COMMANE_NORW,(uint8_t*)"LevelCalibrat"},
-		{(uint8_t*)"获取空载阈值",COM_NUM_SET_EMPTY_WEIGHT,ifsendcmd,COMMANE_NORW,(uint8_t*)"Set empty Weight"},
-		{(uint8_t*)"获取满载阈值",COM_NUM_SET_FULL_WEIGHT,ifsendcmd,COMMANE_NORW,(uint8_t*)"Set full Weight"},
-		{(uint8_t*)"恢复出厂设置",COM_NUM_RESTOR_EFACTORYSETTING,ifsendcmd,COMMANE_NORW,(uint8_t*)"RestoreFactory"},
-        {(uint8_t*)"退出",COM_NUM_NOOPERA,mainmenu,COMMANE_NORW,(uint8_t*)"Exit"},
-    };
-    int menulen = sizeof(menu) / sizeof(menu[0]);
-
-    all_screen(0x00);
-    func_index = KEYNUM_MENU_CMD_MAIN;
-	debugmode_back = 1;
-    menuselect(menu,menulen);
-}
-/* 参数配置菜单 */
-static void menu_paraconfig(void)
-{
-    static struct MenuData menu[] = {
-//        {(uint8_t*)"进入调试模式",COM_NUM_SET_WORKPATTERN,ifsendcmd,COMMANE_NORW,(uint8_t*)"Go Into Debug"},
-        {(uint8_t*)"基础参数",       COM_NUM_NOOPERA, menu_tankbasicpara,  COMMANE_NORW, (uint8_t*)"BasicPara"},
-        {(uint8_t*)"称重测量参数",   COM_NUM_NOOPERA, menu_weightpara,  COMMANE_NORW, (uint8_t*)"WeightPara"},
-        {(uint8_t*)"分布测量参数",   COM_NUM_NOOPERA, menu_spreadpara,     COMMANE_NORW, (uint8_t*)"SpreadPara"},
-        {(uint8_t*)"磁通量",       COM_NUM_NOOPERA, menu_correctionpara, COMMANE_NORW, (uint8_t*)"MAGNETIC"},
-        {(uint8_t*)"实高测量参数",   COM_NUM_NOOPERA, menu_realhighpara,   COMMANE_NORW, (uint8_t*)"RealHighPara"},
-		{(uint8_t*)"水位测量参数",       COM_NUM_NOOPERA, menu_waterlevelparams,      COMMANE_NORW, (uint8_t*)"DebugInfo"},
-		{(uint8_t*)"液位测量参数",       COM_NUM_NOOPERA, menu_liquidlevelparams,      COMMANE_NORW, (uint8_t*)"DebugInfo"},
-        {(uint8_t*)"继电器输出配置",       COM_NUM_NOOPERA, menu_alarmdoparams,      COMMANE_NORW, (uint8_t*)"DebugInfo"},
-		{(uint8_t*)"电流输出配置",       COM_NUM_NOOPERA, menu_aoparams,      COMMANE_NORW, (uint8_t*)"DebugInfo"},
-        {(uint8_t*)"退出",COM_NUM_NOOPERA,mainmenu,COMMANE_NORW,(uint8_t*)"Exit"},
-    };
-    int menulen = sizeof(menu) / sizeof(menu[0]);
-
-    all_screen(0x00);
-    func_index = KEYNUM_MENU_PARACFG_MAIN;
-	debugmode_back = 0;
-    menuselect(menu,menulen);
-}
-/* 菜单 - 基础参数 */
-static void menu_basepara(void)
-{
-    static struct MenuData menu[] = {
-//	{(uint8_t*)"分布测模式",	COM_NUM_SPREAD_STATE_FREE,	para_mainprocess,	COMMAND_READ,	(uint8_t*)"DistMeasMode"},
-//	{(uint8_t*)"分布测测量点数",	COM_NUM_SPREAD_NUM_FREE,	para_mainprocess,	COMMAND_READ,	(uint8_t*)"DistMeasPts"},
-//	{(uint8_t*)"分布测量密度点间距",	COM_NUM_SPREAD_DISTANCE_FREE,	para_mainprocess,	COMMAND_READ,	(uint8_t*)"DistDensPtDist"},
-//	{(uint8_t*)"顶密距液位",	COM_NUM_SPREAD_TOPLIMIT_FREE,	para_mainprocess,	COMMAND_READ,	(uint8_t*)"TopDensToLvl"},
-//	{(uint8_t*)"底密距罐底",	COM_NUM_SPREAD_FLOORLIMIT_FREE,	para_mainprocess,	COMMAND_READ,	(uint8_t*)"BotDensToBot"},
-//	{(uint8_t*)"综合测单点位置",	COM_NUM_SPSYNTHETIC_POSITION,	para_mainprocess,	COMMAND_READ,	(uint8_t*)"IntgSinglePos"},
-//	{(uint8_t*)"每米测方向",	COM_NUM_MEASREMENT_METER,	para_mainprocess,	COMMAND_READ,	(uint8_t*)"MeterMeasDir"},
-//	{(uint8_t*)"区间密度测量点数",	COM_NUM_INTERVAL_POINT,	para_mainprocess,	COMMAND_READ,	(uint8_t*)"SectDensPts"},
-//	{(uint8_t*)"区间密度测量方向",	COM_NUM_INTERVAL_DIREDION,	para_mainprocess,	COMMAND_READ,	(uint8_t*)"SectDensDir"},
-//	{(uint8_t*)"区间测量液位A",	COM_NUM_INTERVAL_OIL_A,	para_mainprocess,	COMMAND_READ,	(uint8_t*)"SectMeasLvlA"},
-//	{(uint8_t*)"区间测量液位B",	COM_NUM_INTERVAL_OIL_B,	para_mainprocess,	COMMAND_READ,	(uint8_t*)"SectMeasLvlB"},
-	{(uint8_t*)"退出",COM_NUM_NOOPERA,menu_paraconfig,COMMANE_NORW,(uint8_t*)"Exit"},
-    };
-    int menulen = sizeof(menu) / sizeof(menu[0]);
-
-    all_screen(0x00);
-    func_index = KEYNUM_MENU_PARACFG_BASE;
-    menuselect(menu,menulen);
-}
 /* 发送指令获取对应参数的数据 */
 static int get_para_data(void)
 {
@@ -1162,15 +1081,14 @@ static void cmd_onepara_process(void)
     int i;
     int arrlen = 8; //发送数组长度
     static uint8_t paraarr[8];
-    static const uint32_t onepara_cmd_map[][2] = {/* 操作码到指令地址映射*/
+    static uint32_t onepara_cmd_map[][2] = {/* 操作码到指令地址映射*/
     { COM_NUM_SINGLE_POINT,        CMD_MEASURE_SINGLE },  // 单点测量
     { COM_NUM_SP_TEST,             CMD_MONITOR_SINGLE },  // 单点监测
     { COM_NUM_SPREADPOINTS,        CMD_MEASURE_DISTRIBUTED },   // 分布测量
-
     { COM_NUM_CAL_OIL,             CMD_CALIBRATE_OIL },   // 液位标定
     { COM_NUM_RUNUP,               CMD_MOVE_UP },               // 向上运行
     { COM_NUM_RUNDOWN,             CMD_MOVE_DOWN },             // 向下运行
-    { COM_NUM_CORRECTION_OIL,      CMD_CALIBRATE_OIL },     // 修正液位
+    { COM_NUM_CORRECTION_OIL,      CMD_CORRECT_OIL },     // 修正液位
 
     };
     int mapamount = sizeof(onepara_cmd_map) / sizeof(onepara_cmd_map[0]);
@@ -1480,7 +1398,107 @@ void ClearPageNum(void)
     timesure = 0;
     timeback = 0;
 }
+/* 主菜单 */
+static void mainmenu(void)
+{
+    static struct MenuData menu[] = {
+        {(uint8_t*)"测量命令",COM_NUM_NOOPERA,measuremenu,COMMANE_NORW,(uint8_t*)"MeasureCommend"},
+        {(uint8_t*)"参数配置",COM_NUM_NOOPERA,password_enter_para,COMMANE_NORW,(uint8_t*)"Para-config"},
+        {(uint8_t*)"调试指令",COM_NUM_NOOPERA,password_enter_cmd,COMMANE_NORW,(uint8_t*)"Debug Commend"},
+        {(uint8_t*)"语言",COM_NUM_PARA_LANG,setlanguage,COMMANE_NORW,(uint8_t*)"Language"},
+        {(uint8_t*)"退出",COM_NUM_NOOPERA,ifexittankopera,COMMANE_NORW,(uint8_t*)"Exit"},
+    };
+    int menulen = sizeof(menu) / sizeof(menu[0]);
 
+    flag_SendCommand = false;
+    all_screen(0x00);
+    func_index = KEYNUM_MAINMENU;
+    menuselect(menu,menulen);
+}
+/* 普通测量指令菜单 */
+static void measuremenu(void)
+{
+    static struct MenuData menu[] = {
+        {(uint8_t*)"回零点",COM_NUM_BACK_ZERO,ifsendcmd,COMMANE_NORW,(uint8_t*)"Return to Zero"},
+        {(uint8_t*)"液位跟随",COM_NUM_FIND_OIL,ifsendcmd,COMMANE_NORW,(uint8_t*)"Level Follow"},
+        {(uint8_t*)"密度分布测量",COM_NUM_SPREADPOINTS,ifsendcmd,COMMANE_NORW,(uint8_t*)"DT-M"},
+        {(uint8_t*)"固定点测量",COM_NUM_SINGLE_POINT,inputcmdpara,COMMANE_NORW,(uint8_t*)"DT-SinglePoint-M"},
+        {(uint8_t*)"固定点监测",COM_NUM_SP_TEST,inputcmdpara,COMMANE_NORW,(uint8_t*)"DT-National-M"},
+        {(uint8_t*)"水位测量",COM_NUM_FIND_WATER,ifsendcmd,COMMANE_NORW,(uint8_t*)"Water level-M"},
+        {(uint8_t*)"罐底测量",COM_NUM_FIND_BOTTOM,ifsendcmd,COMMANE_NORW,(uint8_t*)"Tank Bottom-M"},
+        {(uint8_t*)"退出",COM_NUM_NOOPERA,mainmenu,COMMANE_NORW,(uint8_t*)"Exit"},
+    };
+    int menulen = sizeof(menu) / sizeof(menu[0]);
+
+    all_screen(0x00);
+    func_index = KEYNUM_MEASURE_MAINMENU;
+    menuselect(menu,menulen);
+}
+/* 菜单 - 基础参数 */
+static void menu_basepara(void)
+{
+    static struct MenuData menu[] = {
+//	{(uint8_t*)"分布测模式",	COM_NUM_SPREAD_STATE_FREE,	para_mainprocess,	COMMAND_READ,	(uint8_t*)"DistMeasMode"},
+//	{(uint8_t*)"分布测测量点数",	COM_NUM_SPREAD_NUM_FREE,	para_mainprocess,	COMMAND_READ,	(uint8_t*)"DistMeasPts"},
+//	{(uint8_t*)"分布测量密度点间距",	COM_NUM_SPREAD_DISTANCE_FREE,	para_mainprocess,	COMMAND_READ,	(uint8_t*)"DistDensPtDist"},
+//	{(uint8_t*)"顶密距液位",	COM_NUM_SPREAD_TOPLIMIT_FREE,	para_mainprocess,	COMMAND_READ,	(uint8_t*)"TopDensToLvl"},
+//	{(uint8_t*)"底密距罐底",	COM_NUM_SPREAD_FLOORLIMIT_FREE,	para_mainprocess,	COMMAND_READ,	(uint8_t*)"BotDensToBot"},
+//	{(uint8_t*)"综合测单点位置",	COM_NUM_SPSYNTHETIC_POSITION,	para_mainprocess,	COMMAND_READ,	(uint8_t*)"IntgSinglePos"},
+//	{(uint8_t*)"每米测方向",	COM_NUM_MEASREMENT_METER,	para_mainprocess,	COMMAND_READ,	(uint8_t*)"MeterMeasDir"},
+//	{(uint8_t*)"区间密度测量点数",	COM_NUM_INTERVAL_POINT,	para_mainprocess,	COMMAND_READ,	(uint8_t*)"SectDensPts"},
+//	{(uint8_t*)"区间密度测量方向",	COM_NUM_INTERVAL_DIREDION,	para_mainprocess,	COMMAND_READ,	(uint8_t*)"SectDensDir"},
+//	{(uint8_t*)"区间测量液位A",	COM_NUM_INTERVAL_OIL_A,	para_mainprocess,	COMMAND_READ,	(uint8_t*)"SectMeasLvlA"},
+//	{(uint8_t*)"区间测量液位B",	COM_NUM_INTERVAL_OIL_B,	para_mainprocess,	COMMAND_READ,	(uint8_t*)"SectMeasLvlB"},
+	{(uint8_t*)"退出",COM_NUM_NOOPERA,menu_paraconfig,COMMANE_NORW,(uint8_t*)"Exit"},
+    };
+    int menulen = sizeof(menu) / sizeof(menu[0]);
+
+    all_screen(0x00);
+    func_index = KEYNUM_MENU_PARACFG_BASE;
+    menuselect(menu,menulen);
+}
+/* 菜单 - 调试指令 */
+static void menu_cmdconfig_main(void)
+{
+    static struct MenuData menu[] = {
+        {(uint8_t*)"上行",COM_NUM_RUNUP,inputcmdpara,COMMANE_NORW,(uint8_t*)"Move Up"},
+        {(uint8_t*)"下行",COM_NUM_RUNDOWN,inputcmdpara,COMMANE_NORW,(uint8_t*)"Move Down"},
+		{(uint8_t*) "标定零点", COM_NUM_FIND_ZERO, ifsendcmd, COMMANE_NORW, (uint8_t*) "Calibrate Zero" },
+		{(uint8_t*)"液位修正",COM_NUM_CORRECTION_OIL,inputcmdpara,COMMANE_NORW,(uint8_t*)"LevelCorrect"},
+        {(uint8_t*)"标定液位",COM_NUM_CAL_OIL,inputcmdpara,COMMANE_NORW,(uint8_t*)"LevelCalibrat"},
+		{(uint8_t*)"恢复出厂设置",COM_NUM_RESTOR_EFACTORYSETTING,ifsendcmd,COMMANE_NORW,(uint8_t*)"RestoreFactory"},
+        {(uint8_t*)"退出",COM_NUM_NOOPERA,mainmenu,COMMANE_NORW,(uint8_t*)"Exit"},
+    };
+    int menulen = sizeof(menu) / sizeof(menu[0]);
+
+    all_screen(0x00);
+    func_index = KEYNUM_MENU_CMD_MAIN;
+	debugmode_back = 1;
+    menuselect(menu,menulen);
+}
+/* 参数配置菜单 */
+static void menu_paraconfig(void)
+{
+    static struct MenuData menu[] = {
+//        {(uint8_t*)"进入调试模式",COM_NUM_SET_WORKPATTERN,ifsendcmd,COMMANE_NORW,(uint8_t*)"Go Into Debug"},
+        {(uint8_t*)"基础参数",       COM_NUM_NOOPERA, menu_tankbasicpara,  COMMANE_NORW, (uint8_t*)"BasicPara"},
+        {(uint8_t*)"称重测量参数",   COM_NUM_NOOPERA, menu_weightpara,  COMMANE_NORW, (uint8_t*)"WeightPara"},
+        {(uint8_t*)"分布测量参数",   COM_NUM_NOOPERA, menu_spreadpara,     COMMANE_NORW, (uint8_t*)"SpreadPara"},
+        {(uint8_t*)"磁通量",       COM_NUM_NOOPERA, menu_correctionpara, COMMANE_NORW, (uint8_t*)"MAGNETIC"},
+        {(uint8_t*)"实高测量参数",   COM_NUM_NOOPERA, menu_realhighpara,   COMMANE_NORW, (uint8_t*)"RealHighPara"},
+		{(uint8_t*)"水位测量参数",       COM_NUM_NOOPERA, menu_waterlevelparams,      COMMANE_NORW, (uint8_t*)"DebugInfo"},
+		{(uint8_t*)"液位测量参数",       COM_NUM_NOOPERA, menu_liquidlevelparams,      COMMANE_NORW, (uint8_t*)"DebugInfo"},
+        {(uint8_t*)"继电器输出配置",       COM_NUM_NOOPERA, menu_alarmdoparams,      COMMANE_NORW, (uint8_t*)"DebugInfo"},
+		{(uint8_t*)"电流输出配置",       COM_NUM_NOOPERA, menu_aoparams,      COMMANE_NORW, (uint8_t*)"DebugInfo"},
+        {(uint8_t*)"退出",COM_NUM_NOOPERA,mainmenu,COMMANE_NORW,(uint8_t*)"Exit"},
+    };
+    int menulen = sizeof(menu) / sizeof(menu[0]);
+
+    all_screen(0x00);
+    func_index = KEYNUM_MENU_PARACFG_MAIN;
+	debugmode_back = 0;
+    menuselect(menu,menulen);
+}
 
 static void menu_tankbasicpara(void)
 {
@@ -1492,7 +1510,8 @@ static void menu_tankbasicpara(void)
         {(uint8_t*)"传感器类型",         COM_NUM_DEVICEPARAM_SENSORTYPE,               para_mainprocess, COMMANE_NORW, (uint8_t*)"SensorType"},
         {(uint8_t*)"传感器编号",         COM_NUM_DEVICEPARAM_SENSORID,                 para_mainprocess, COMMANE_NORW, (uint8_t*)"SensorID"},
         {(uint8_t*)"软件版本",           COM_NUM_DEVICEPARAM_SOFTWAREVERSION,          para_mainprocess, COMMANE_NORW, (uint8_t*)"FWVersion"},
-        {(uint8_t*)"退出",               COM_NUM_NOOPERA,                              menu_paraconfig,  COMMANE_NORW, (uint8_t*)"Exit"},
+		{(uint8_t*)"找零下行距离",           COM_NUM_DEVICEPARAM_FINDZERO_DOWN_DISTANCE,   para_mainprocess, COMMAND_READ, (uint8_t*)"FindZeroDown"},
+		{(uint8_t*)"退出",               COM_NUM_NOOPERA,                              menu_paraconfig,  COMMANE_NORW, (uint8_t*)"Exit"},
     };
     int menulen = sizeof(menu) / sizeof(menu[0]);
     all_screen(0x00);
@@ -1505,13 +1524,14 @@ static void menu_weightpara(void)
     static struct MenuData menu[] = {
         {(uint8_t*)"空载重量",               COM_NUM_DEVICEPARAM_EMPTY_WEIGHT,             para_mainprocess, COMMAND_READ, (uint8_t*)"EmptyWeight"},
         {(uint8_t*)"满载称重",               COM_NUM_DEVICEPARAM_FULL_WEIGHT,              para_mainprocess, COMMAND_READ, (uint8_t*)"FullWeight"},
-        {(uint8_t*)"称重上限比例(%)",       COM_NUM_DEVICEPARAM_WEIGHT_UPPER_LIMIT_RATIO, para_mainprocess, COMMAND_READ, (uint8_t*)"WeightUpperRatio"},
+		{(uint8_t*)"获取空载阈值",COM_NUM_SET_EMPTY_WEIGHT,ifsendcmd,COMMANE_NORW,(uint8_t*)"Set empty Weight"},
+		{(uint8_t*)"获取满载阈值",COM_NUM_SET_FULL_WEIGHT,ifsendcmd,COMMANE_NORW,(uint8_t*)"Set full Weight"},
+		{(uint8_t*)"称重上限比例(%)",       COM_NUM_DEVICEPARAM_WEIGHT_UPPER_LIMIT_RATIO, para_mainprocess, COMMAND_READ, (uint8_t*)"WeightUpperRatio"},
         {(uint8_t*)"称重下限比例(%)",       COM_NUM_DEVICEPARAM_WEIGHT_LOWER_LIMIT_RATIO, para_mainprocess, COMMAND_READ, (uint8_t*)"WeightLowerRatio"},
         {(uint8_t*)"空载称重上限",           COM_NUM_DEVICEPARAM_EMPTY_WEIGHT_UPPER_LIMIT, para_mainprocess, COMMAND_READ, (uint8_t*)"EmptyWtHi"},
         {(uint8_t*)"空载称重下限",           COM_NUM_DEVICEPARAM_EMPTY_WEIGHT_LOWER_LIMIT, para_mainprocess, COMMAND_READ, (uint8_t*)"EmptyWtLo"},
         {(uint8_t*)"满载称重上限",           COM_NUM_DEVICEPARAM_FULL_WEIGHT_UPPER_LIMIT,  para_mainprocess, COMMAND_READ, (uint8_t*)"FullWtHi"},
         {(uint8_t*)"满载称重下限",           COM_NUM_DEVICEPARAM_FULL_WEIGHT_LOWER_LIMIT,  para_mainprocess, COMMAND_READ, (uint8_t*)"FullWtLo"},
-        {(uint8_t*)"找零下行距离",           COM_NUM_DEVICEPARAM_FINDZERO_DOWN_DISTANCE,   para_mainprocess, COMMAND_READ, (uint8_t*)"FindZeroDown"},
         {(uint8_t*)"退出",                   COM_NUM_NOOPERA,                              menu_paraconfig,  COMMANE_NORW, (uint8_t*)"Exit"},
     };
     int menulen = sizeof(menu) / sizeof(menu[0]);
@@ -1532,7 +1552,7 @@ static void menu_spreadpara(void)
         {(uint8_t*)"测量间距",              COM_NUM_DEVICEPARAM_SPREADMEASUREMENTDISTANCE,     para_mainprocess, COMMAND_READ, (uint8_t*)"SpreadDistance"},
         {(uint8_t*)"上限距离(距液面)",      COM_NUM_DEVICEPARAM_SPREADTOPLIMIT,                para_mainprocess, COMMAND_READ, (uint8_t*)"SpreadTopLimit"},
         {(uint8_t*)"下限距离(距罐底)",      COM_NUM_DEVICEPARAM_SPREADBOTTOMLIMIT,             para_mainprocess, COMMAND_READ, (uint8_t*)"SpreadBottomLimit"},
-        {(uint8_t*)"首测点悬停时间",        COM_NUM_DEVICEPARAM_SPREAD_POINT_HOVER_TIME,       para_mainprocess, COMMAND_READ, (uint8_t*)"HoverTime"},
+        {(uint8_t*)"测量前悬停时间",        COM_NUM_DEVICEPARAM_SPREAD_POINT_HOVER_TIME,       para_mainprocess, COMMAND_READ, (uint8_t*)"HoverTime"},
 
         {(uint8_t*)"退出",                  COM_NUM_NOOPERA,                                   menu_paraconfig,  COMMANE_NORW, (uint8_t*)"Exit"},
     };

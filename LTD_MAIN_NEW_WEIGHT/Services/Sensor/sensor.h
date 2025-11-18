@@ -31,4 +31,8 @@ typedef enum {
 #define DSM_CMD_TIMEOUT 1000  //接收字节间超时时间
 #define RX_BUF_LEN 128
 
+uint32_t EnableDensityMode(void);
+uint32_t EnableLevelMode(void);
+uint32_t DSM_Get_LevelMode_Frequence(volatile uint32_t *frequency_out);
+uint32_t DSM_Get_LevelMode_Frequence_Avg(volatile uint32_t *frequency_out);
 #endif /* SENSOR_SENSOR_H_ */

@@ -18,7 +18,6 @@ static const uint16_t MAX_ANGLE = 4096;      // 最大角度值 (12位分辨率)
 
 static void WriteEncoderData(int32_t encoder_count, uint16_t prev_angle); // 写入编码计数和上次角度值到 FRAM
 static void ReadEncoderData(volatile int32_t *encoder_count, uint16_t *prev_angle);      // 从 FRAM 读取编码计数和上次角度值
-static int update_sensor_height_from_encoder(void); // 根据编码器脉冲值更新传感器高度测量
 // 在系统启动时初始化编码计数器
 void Initialize_Encoder(void) {
 
@@ -75,7 +74,7 @@ static void ReadEncoderData(volatile int32_t *encoder_count, uint16_t *prev_angl
  * 2. 计算当前位置高度
  * 3. 更新测量系统中的高度和编码值
  */
-static int update_sensor_height_from_encoder(void) {
+void update_sensor_height_from_encoder(void) {
 	// 更新调试信息：当前编码值取负（编码器方向取反）
 	g_measurement.debug_data.current_encoder_value = -g_encoder_count;
 	// 1. 计算转动的总圈数（含小数）
@@ -88,7 +87,7 @@ static int update_sensor_height_from_encoder(void) {
 	g_measurement.debug_data.cable_length = (int) cable_length; // 更新尺带长度
 	g_measurement.debug_data.sensor_position = (int) current_height;
 	// 返回传感器高度
-	return g_measurement.debug_data.sensor_position;
+	return;
 }
 //设置编码器零点
 void set_encoder_zero(void) {

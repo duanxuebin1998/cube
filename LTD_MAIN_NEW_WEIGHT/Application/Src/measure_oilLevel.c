@@ -37,114 +37,89 @@ uint32_t FollowOilLevel(void);
  *
  * @return uint32_t 错误代码（NO_ERROR表示成功）
  */
-uint32_t SearchAndFollowOilLevel(void)
-{
-    uint32_t ret;
-    uint8_t try_times;
+uint32_t SearchAndFollowOilLevel(void) {
+	uint32_t ret;
+	uint8_t try_times;
 
-    printf("液位流程\t开始执行\r\n");
+	printf("液位流程\t开始执行\r\n");
 
-    /*************** Step 1: 启用液位模式 ***************/
-    try_times = 0;
-    while (try_times < 3)
-    {
-        try_times++;
-        printf("液位流程\t启用液位模式第%d次尝试\r\n", try_times);
+	/*************** Step 1: 启用液位模式 ***************/
+	try_times = 0;
+	while (try_times < 3) {
+		try_times++;
+		printf("液位流程\t启用液位模式第%d次尝试\r\n", try_times);
 
-        ret = EnableLevelMode();
+		ret = EnableLevelMode();
 
-        if (ret == NO_ERROR)
-        {
-            printf("液位流程\t液位模式启用成功\r\n");
-            break;
-        }
-        else if (ret == STATE_SWITCH)
-        {
-            printf("液位流程\t检测到状态切换，中止液位模式启用\r\n");
-            break;
-        }
-        else
-        {
-            printf("液位流程\t启用液位模式失败，错误码:0x%lX\r\n", ret);
-            HAL_Delay(500);
-        }
-    }
-    if (ret != NO_ERROR)
-    {
-        printf("液位流程\t液位模式启用失败(尝试%d次)\r\n", try_times);
-        CHECK_ERROR(ret);
-    }
+		if (ret == NO_ERROR) {
+			printf("液位流程\t液位模式启用成功\r\n");
+			break;
+		} else if (ret == STATE_SWITCH) {
+			printf("液位流程\t检测到状态切换，中止液位模式启用\r\n");
+			break;
+		} else {
+			printf("液位流程\t启用液位模式失败，错误码:0x%lX\r\n", ret);
+			HAL_Delay(500);
+		}
+	}
+	if (ret != NO_ERROR) {
+		printf("液位流程\t液位模式启用失败(尝试%d次)\r\n", try_times);
+		CHECK_ERROR(ret);
+	}
 
-    /*************** Step 2: 搜索液位 ***************/
-    try_times = 0;
-    while (try_times < 3)
-    {
-        try_times++;
-        printf("液位流程\t液位搜索第%d次尝试\r\n", try_times);
+	/*************** Step 2: 搜索液位 ***************/
+	try_times = 0;
+	while (try_times < 3) {
+		try_times++;
+		printf("液位流程\t液位搜索第%d次尝试\r\n", try_times);
 
-        ret = SearchOilLevel();
+		ret = SearchOilLevel();
 
-        if (ret == NO_ERROR)
-        {
-            printf("液位流程\t液位搜索成功\r\n");
-            break;
-        }
-        else if (ret == STATE_SWITCH)
-        {
-            printf("液位流程\t检测到状态切换，中止液位搜索\r\n");
-            break;
-        }
-        else
-        {
-            printf("液位流程\t液位搜索失败，错误码:0x%lX\r\n", ret);
-            HAL_Delay(1000);
-        }
-    }
-    if (ret != NO_ERROR)
-    {
-        printf("液位流程\t液位搜索失败(尝试%d次)\r\n", try_times);
-        CHECK_ERROR(ret);
-    }
-    if(g_measurement.device_status.device_state == STATE_CALIBRATIONOILING)
-    {
-		printf("液位流程\t开始标定液位\r\n");
-		g_deviceParams.tankHeight = g_measurement.debug_data.cable_length+g_deviceParams.calibrateOilLevel;
-		printf("液位流程\t标定完成，罐高设置为：%ld mm\r\n", g_deviceParams.tankHeight);
-    }
-    /*************** Step 3: 跟随液位 ***************/
-    g_measurement.device_status.device_state = STATE_FLOWOIL; // 切换到液位跟随状态
-    try_times = 0;
-    while (try_times < 3)
-    {
-        try_times++;
-        printf("液位流程\t液位跟随第%d次尝试\r\n", try_times);
+		if (ret == NO_ERROR) {
+			printf("液位流程\t液位搜索成功\r\n");
+			break;
+		} else if (ret == STATE_SWITCH) {
+			printf("液位流程\t检测到状态切换，中止液位搜索\r\n");
+			break;
+		} else {
+			printf("液位流程\t液位搜索失败，错误码:0x%lX\r\n", ret);
+			HAL_Delay(1000);
+		}
+	}
+	if (ret != NO_ERROR) {
+		printf("液位流程\t液位搜索失败(尝试%d次)\r\n", try_times);
+		CHECK_ERROR(ret);
+	}
+	if (g_measurement.device_status.device_state == STATE_CALIBRATIONOILING) {
+		CorrectOilLevelProcess();
+	}
+	/*************** Step 3: 跟随液位 ***************/
+	g_measurement.device_status.device_state = STATE_FLOWOIL; // 切换到液位跟随状态
+	try_times = 0;
+	while (try_times < 3) {
+		try_times++;
+		printf("液位流程\t液位跟随第%d次尝试\r\n", try_times);
 
-        ret = FollowOilLevel();
+		ret = FollowOilLevel();
 
-        if (ret == NO_ERROR)
-        {
-            printf("液位流程\t液位跟随成功\r\n");
-            break;
-        }
-        else if (ret == STATE_SWITCH)
-        {
-            printf("液位流程\t检测到状态切换，中止液位跟随\r\n");
-            break;
-        }
-        else
-        {
-            printf("液位流程\t液位跟随失败，错误码:0x%lX\r\n", ret);
-            HAL_Delay(1000);
-        }
-    }
-    if (ret != NO_ERROR)
-    {
-        printf("液位流程\t液位跟随失败(尝试%d次)\r\n", try_times);
-        CHECK_ERROR(ret);
-    }
+		if (ret == NO_ERROR) {
+			printf("液位流程\t液位跟随成功\r\n");
+			break;
+		} else if (ret == STATE_SWITCH) {
+			printf("液位流程\t检测到状态切换，中止液位跟随\r\n");
+			break;
+		} else {
+			printf("液位流程\t液位跟随失败，错误码:0x%lX\r\n", ret);
+			HAL_Delay(1000);
+		}
+	}
+	if (ret != NO_ERROR) {
+		printf("液位流程\t液位跟随失败(尝试%d次)\r\n", try_times);
+		CHECK_ERROR(ret);
+	}
 
-    printf("液位流程\t全部完成\r\n");
-    return NO_ERROR;
+	printf("液位流程\t全部完成\r\n");
+	return NO_ERROR;
 }
 
 /*
@@ -155,7 +130,7 @@ uint32_t SearchAndFollowOilLevel(void)
 uint32_t SearchOilLevel(void) {
 	uint32_t ret;
 	int try_times = 0;
-	determine_level_status();//第一次读取可能错误，临时用
+	determine_level_status(); //第一次读取可能错误，临时用
 	fault_info_init();  // 清除故障信息
 	printf("液位测量\t开始\r\n");
 	if (g_measurement.device_status.zero_point_status == 1) {
@@ -167,7 +142,7 @@ uint32_t SearchOilLevel(void) {
 	printf("液位测量\t初始重量：%d\r\n", weight_parament.stable_weight);
 
 	/*************** 粗找阶段 - 带重试机制 ***************/
-	while (try_times < 3) {//这里重试没有起作用
+	while (try_times < 3) {  //这里重试没有起作用
 		try_times++;
 		printf("液位测量\t粗找液位第%d次尝试\r\n", try_times);
 		fault_info_init(); // 清除故障信息
@@ -185,8 +160,7 @@ uint32_t SearchOilLevel(void) {
 			ret = SearchAir();
 			CHECK_ERROR(ret); // 检查寻找空气是否成功
 			break;
-		}
-		else if (INAIR) {
+		} else if (INAIR) {
 			printf("液位测量\t传感器在空气中，向下寻找液位\r\n");
 			ret = SearchOil();
 			CHECK_ERROR(ret); // 检查寻找液位是否成功
@@ -200,7 +174,7 @@ uint32_t SearchOilLevel(void) {
 	printf("液位测量\t粗找液位完成\r\n");
 	/*************** 精找阶段  ***************/
 	// 精确找液位
-	g_measurement.oil_measurement.follow_frequency=  (g_measurement.oil_measurement.air_frequency + g_measurement.oil_measurement.oil_frequency) / 2.0;
+	g_measurement.oil_measurement.follow_frequency = (g_measurement.oil_measurement.air_frequency + g_measurement.oil_measurement.oil_frequency) / 2.0;
 	printf("液位测量\t目标频率：%ld Hz\r\n", g_measurement.oil_measurement.follow_frequency);
 
 	ret = SearchOilPrecise(100);  // 执行精确搜索
@@ -214,11 +188,9 @@ uint32_t SearchOilLevel(void) {
 	// 打印测量结果
 	printf("液位测量\t液位：%ld mm\r\n", g_measurement.oil_measurement.oil_level);
 
-
 	return NO_ERROR;  // 返回成功状态
 }
-uint32_t FollowOilLevel(void)
-{
+uint32_t FollowOilLevel(void) {
 	uint32_t ret;
 	// 切换到跟随状态
 	g_measurement.device_status.device_state = STATE_FLOWOIL;
@@ -229,7 +201,7 @@ uint32_t FollowOilLevel(void)
 
 		// 获取当前频率
 		ret = DSM_Get_LevelMode_Frequence(&g_measurement.oil_measurement.current_frequency);
-		CHECK_ERROR(ret);// 检查开启液位模式是否成功
+		CHECK_ERROR(ret);  // 检查开启液位模式是否成功
 		// 稳定性判断（频率波动在阈值内）
 		if (fabs(frequency_difference) < STABILITYTHRESHOLD) {
 			printf("液位稳定,电机不动作\r\n");
@@ -244,14 +216,12 @@ uint32_t FollowOilLevel(void)
 
 		// 更新位置和液位值
 		ret = determineTheSensorPositionAndUpdateTheLevelValue();
-		if (ret == MEASURE_DOWNLIMIT) {
+		if (ret == MEASUREMENT_OILLEVEL_LOW) {
 			// 处理盲区状态
 			ret = waitForTheLiquidLevelToExceedTheBlindZone();
-			CHECK_ERROR(ret);// 检查开启液位模式是否成功
-		}
-		else
-		{
-			CHECK_ERROR(ret);// 检查开启液位模式是否成功
+			CHECK_ERROR(ret);
+		} else {
+			CHECK_ERROR(ret);
 		}
 	}
 }
@@ -272,7 +242,7 @@ static int SearchOil() {
 	// 持续监控重量状态，直到检测到液位
 	while (determine_level_status() != OIL) {
 		// 实时输出编码器位置和重量值（用于调试）
-		printf("液位测量\t长距离寻找液位\t{传感器位置}%.1f\t{称重值}%d\r\n", (float)(g_measurement.debug_data.sensor_position)/10.0, weight_parament.current_weight);
+		printf("液位测量\t长距离寻找液位\t{传感器位置}%.1f\t{称重值}%d\r\n", (float) (g_measurement.debug_data.sensor_position) / 10.0, weight_parament.current_weight);
 		CHECK_ERROR(ret);
 		//丢步检测
 		ret = Motor_CheckLostStep_AutoTiming(g_measurement.debug_data.cable_length);
@@ -281,6 +251,12 @@ static int SearchOil() {
 		//称重检测
 		ret = CheckWeightCollision();
 		CHECK_ERROR(ret); // 检查碰撞检测是否成功
+
+		//盲区检测
+		if (g_measurement.debug_data.sensor_position < g_deviceParams.blindZone) {
+			printf("超声波找液位\t到达位置下限\r\n");
+			return MEASUREMENT_OILLEVEL_LOW;
+		}
 	}
 	ret = motorQuickStop(); // 到达零点后快速停止电机
 	CHECK_ERROR(ret); // 检查快速停止是否成功
@@ -310,7 +286,7 @@ static int SearchAir() {
 
 	while (determine_level_status() != AIR) {
 		// 实时输出编码器位置和重量值（用于调试）
-		printf("液位测量\t长距离寻找空气\t{传感器位置}%.1f\t{称重值}%d\r\n", (float)(g_measurement.debug_data.sensor_position)/10.0, weight_parament.current_weight);
+		printf("液位测量\t长距离寻找空气\t{传感器位置}%.1f\t{称重值}%d\r\n", (float) (g_measurement.debug_data.sensor_position) / 10.0, weight_parament.current_weight);
 		CHECK_ERROR(ret);
 		//丢步检测
 		ret = Motor_CheckLostStep_AutoTiming(g_measurement.debug_data.cable_length);
@@ -329,13 +305,11 @@ static int SearchAir() {
 	ret = DSM_Get_LevelMode_Frequence_Avg(&g_measurement.oil_measurement.air_frequency);
 	printf("液位测量\t空气中频率：%ld\r\n", g_measurement.oil_measurement.air_frequency);
 	CHECK_ERROR(ret);  // 检查获取空气中频率是否成功
-	ret = motorMoveAndWaitUntilStop(100.0, MOTOR_DIRECTION_DOWN);//返回
+	ret = motorMoveAndWaitUntilStop(100.0, MOTOR_DIRECTION_DOWN);  //返回
 	CHECK_ERROR(ret); // 检查下行是否成功
 
 	return NO_ERROR;
 }
-
-
 
 Level_StateTypeDef determine_level_status(void) {
 	int ret;
@@ -350,12 +324,11 @@ Level_StateTypeDef determine_level_status(void) {
 		return AIR; // 返回重量过大状态
 	}
 	// 判断是否低于下限阈值
-	else  {
+	else {
 		printf("传感器在油中\r\n");
 		return OIL; // 返回重量过小状态
 	}
 }
-
 
 /**
  * @func: SearchOilPrecise
@@ -439,7 +412,8 @@ static int SearchOilPrecise(float per_mm_Frequency) {
 		}
 
 		// 稳定性检测（连续稳定计数）
-		if ((abs(frequency_difference) <= STABILITYTHRESHOLD) && (g_measurement.oil_measurement.air_frequency - g_measurement.oil_measurement.current_frequency > 200)
+		if ((abs(frequency_difference) <= STABILITYTHRESHOLD)
+				&& (g_measurement.oil_measurement.air_frequency - g_measurement.oil_measurement.current_frequency > 200)
 				&& (g_measurement.oil_measurement.current_frequency - g_measurement.oil_measurement.oil_frequency > 200)) {
 			followTime++;
 			runlenth = 0;
@@ -470,7 +444,7 @@ static int SearchOilPrecise(float per_mm_Frequency) {
 
 		// 更新传感器位置及液位值
 		ret = determineTheSensorPositionAndUpdateTheLevelValue();
-		if (ret == MEASURE_DOWNLIMIT) {
+		if (ret == MEASUREMENT_OILLEVEL_LOW) {
 			// 处理液位过低（进入盲区）
 			ret = waitForTheLiquidLevelToExceedTheBlindZone();
 		}
@@ -501,7 +475,9 @@ static int determineTheSensorPositionAndUpdateTheLevelValue(void) {
 	// 判断是否需要更新液位值
 	// 条件1: 频率差在稳定阈值内（系统稳定）
 	// 条件2: 新旧液位值差异大于100（需要强制更新）
-	if ((abs(frequency_difference) < STABILITYTHRESHOLD) || (abs((int)oil_level - (int)g_measurement.oil_measurement.oil_level) > 100)) {
+	// 条件3：处在液位跟随状态
+	if (((abs(frequency_difference) < STABILITYTHRESHOLD) || (abs((int) oil_level - (int) g_measurement.oil_measurement.oil_level) > 100))
+			&& (g_measurement.device_status.device_state == STATE_FLOWOIL)) {
 		// 更新当前液位值
 		g_measurement.oil_measurement.oil_level = oil_level;
 		// 打印正常液位值信息
@@ -513,12 +489,12 @@ static int determineTheSensorPositionAndUpdateTheLevelValue(void) {
 
 	if (oil_level >= g_deviceParams.tankHeight) {
 		printf("超声波找液位\t到达位置上限\r\n");
-		return MEASURE_DOWNLIMIT;
+		return MEASUREMENT_OILLEVEL_HIGH;
 	}
 	// 步骤4: 检查油位是否低于0（超出下限）
-	else if (oil_level < 0) {
+	else if (oil_level < g_deviceParams.blindZone) {
 		printf("超声波找液位\t到达位置下限\r\n");
-		return -1;
+		return MEASUREMENT_OILLEVEL_LOW;
 	}
 	// 步骤5: 正常返回（无错误）
 	return NO_ERROR;
@@ -531,12 +507,13 @@ static int determineTheSensorPositionAndUpdateTheLevelValue(void) {
  */
 static int waitForTheLiquidLevelToExceedTheBlindZone(void) {
 	int32_t ret;
+	//运行到盲区
+
 	while (1) {
 		ret = DSM_Get_LevelMode_Frequence(&g_measurement.oil_measurement.current_frequency);
-		if (ret != NO_ERROR) {
-			return ret;
-		}
-		printf("盲区等待\t频率阈值\t%ld\t当前频率\t%ld\t阈值差\t%f\r\n", g_measurement.oil_measurement.follow_frequency, g_measurement.oil_measurement.current_frequency, frequency_difference);
+		CHECK_ERROR(ret);	// 检查开启液位模式是否成功
+		printf("盲区等待\t频率阈值\t%ld\t当前频率\t%ld\t阈值差\t%f\r\n", g_measurement.oil_measurement.follow_frequency, g_measurement.oil_measurement.current_frequency,
+				frequency_difference);
 		if (g_measurement.oil_measurement.current_frequency > g_measurement.oil_measurement.follow_frequency) {
 			break;
 		}
@@ -544,4 +521,10 @@ static int waitForTheLiquidLevelToExceedTheBlindZone(void) {
 		//打断监测
 	}
 	return NO_ERROR;
+}
+void CorrectOilLevelProcess(void) {
+	printf("液位流程\t开始标定液位\r\n");
+	g_deviceParams.tankHeight = g_measurement.debug_data.cable_length + g_deviceParams.calibrateOilLevel;
+	printf("液位流程\t标定完成，罐高设置为：%ld mm\r\n", g_deviceParams.tankHeight);
+	update_sensor_height_from_encoder();	//更新罐高数据
 }
