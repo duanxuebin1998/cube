@@ -252,78 +252,6 @@ uint32_t Read_Level_Frequency(uint32_t *frequency_out)
 }
 
 
-//// 读取液位跟随频率
-//uint32_t Read_Level_Frequency(volatile float *frequency) {
-//	uint32_t ret;
-//	char resp[RX_BUF_LEN];
-//	ret = UART6_SendWithRetry("Cb\r\n", resp, RX_BUF_LEN, 500);
-//	if (ret == NO_ERROR) {
-//		// 响应格式: E06.6379V
-//		printf("[UART6] 接收成功: %s\r\n", resp);
-//		if (1) {
-////			printf("电压数据: %s\r\n", atof(resp + 1));
-//			*frequency =  atof(resp + 1);
-//			return NO_ERROR;
-//		} else {
-//			printf("无效电压响应: %x\r\n", resp[0]);
-//		}
-//	}
-//	return SENSOR_COMM_TIMEOUT; // 错误
-//}
-//uint32_t DSM_Get_LevelMode_Frequence(volatile uint32_t *frequency) {
-//	uint32_t ret;
-//	if (*frequency < 0) {
-//		return SENSOR_COMM_TIMEOUT;
-//	}
-//	ret = Read_Level_Frequency((uint32_t) *frequency);
-//	printf("液位频率: %ld Hz\r\n", *frequency);
-//	return ret;
-//}
-///**
-// * @brief 获取液位跟随频率的平均值
-// *        共采样10次，每次间隔2秒，去掉两个最大值和两个最小值，
-// *        对中间6次结果求平均。
-// * @param frequency  输出平均频率值 (Hz)
-// * @return uint32_t  错误码，NO_ERROR 表示成功
-// */
-//uint32_t DSM_Get_LevelMode_Frequence_Avg(volatile uint32_t *frequency) {
-//	float values[10];
-//	float sum = 0.0f;
-//	uint32_t ret;
-//	// 采集10次数据
-//	for (int i = 0; i < 10; i++) {
-//		ret = Read_Level_Frequency(&values[i]);
-//		if (ret != NO_ERROR) {
-//			printf("读取液位频率失败，第%d次\r\n", i + 1);
-//			return ret;
-//		}
-//		printf("第%d次液位频率: %.2f Hz\r\n", i + 1, values[i]);
-//		HAL_Delay(2000); // 2秒间隔
-//	}
-//
-//	// 排序 (简单冒泡排序)
-//	for (int i = 0; i < 10 - 1; i++) {
-//		for (int j = 0; j < 10 - i - 1; j++) {
-//			if (values[j] > values[j + 1]) {
-//				float tmp = values[j];
-//				values[j] = values[j + 1];
-//				values[j + 1] = tmp;
-//			}
-//		}
-//	}
-//
-//	// 去掉两个最大和两个最小值，取中间6个
-//	for (int i = 2; i < 8; i++) {
-//		sum += values[i];
-//	}
-//
-//	float avg = sum / 6.0f;
-//	*frequency = (uint32_t) avg;
-//
-//	printf("液位频率平均值(去掉极值): %ld Hz\r\n", *frequency);
-//
-//	return NO_ERROR;
-//}
 
 // 读取密度、温度
 int Read_Density_Temp(float *density, float *viscosity, float *temp) {
@@ -396,87 +324,64 @@ static char CalculationBCC_DSM(char command[], int count) {
 	return bcc;
 }
 
-///**
-// * @func: int DSMSendcommand3times(char *command, unsigned int commandlen)
-// * @description: 向传感器连续发送三次指令
-// * @param {char} *command
-// * @param {unsigned int} commandlen
-// * @return { }
-// */
-//int DSMSendcommand3times(uint8_t *pCommand, uint16_t commandLen) {
-//	int retFlag = NO_ERROR;
-//	HAL_StatusTypeDef halStatus;
-//	uint8_t bcc = 0;
-//
-//	for (int attempt = 0; attempt < DSM_MAX_RETRY; attempt++) {
-//		// 错误退避策略
-//		if (retFlag == 0) {
-//			HAL_Delay(DSM_BCC_DELAY); //3-1
-//		}
-//
-//		// 预发送延时
-//		HAL_Delay(DSM_PRE_SEND_DELAY);
-//
-//		// 清空接收缓冲区（DMA版本需用HAL_UART_DMAStop）
-//		memset(DSMRcvBuffer, 0, sizeof(DSMRcvBuffer));
-//		DSMRcvLen = 0;
-//
-//		/* 发送阶段 */
-//		halStatus = HAL_UART_Transmit(&huart6, pCommand, commandLen,
-//		DSM_CMD_TIMEOUT);
-//		if (halStatus != HAL_OK) {
-//#ifdef DEBUG_DSM
-//			printf("DSM TX Error: %d\r\n", halStatus);
-//#endif
-//			retFlag = 0;
-//			continue;
-//		}
-//
-//#ifdef DEBUG_DSM
-//		printf("DSM:**snd:");
-//		printf("%s ", pCommand);
-//		printf("\r\n");
-//#endif
-//		/* 接收阶段（带超时机制） */
-//		uint32_t startTick = HAL_GetTick();
-//		while (HAL_GetTick() - startTick < DSM_CMD_TIMEOUT) {
-//			uint8_t byte;
-//			halStatus = HAL_UART_Receive(&huart6, &byte, 1, 1); // 1ms单字节接收
-//
-//			if (halStatus == HAL_OK) {
-//				if (DSMRcvLen < sizeof(DSMRcvBuffer) - 1) {
-//					DSMRcvBuffer[DSMRcvLen++] = byte;
-//					// 根据协议判断帧结束符（示例为0x0D）
-//					if (byte == 0x0A)
-//						break;
-//				}
-//			}
-//		}
-//#ifdef DEBUG_DSM
-//		printf("DSM:**rcv:");
-//		printf("%s ", DSMRcvBuffer);
-//		printf("\r\n");
-//#endif
-//
-//		/* 响应校验 */
-//		if (DSMRcvLen == 0) {
-//			printf("communication error\r\n");
-//			retFlag = SENSOR_COMM_TIMEOUT; //通信超时
-//			continue;
-//		}
-//		printf("communication success:%s\r\n", DSMRcvBuffer + 1);
-//		bcc = CalculationBCC_DSM(DSMRcvBuffer, (DSMRcvLen - 3));
-//		//		if (bcc == DSMRcvBuffer[DSMRcvLen - 3])
-//		// 改进校验：长度+头部+BCC校验
-//		if ((DSMRcvLen >= DSM_MIN_RESP_LEN) && (bcc == DSMRcvBuffer[DSMRcvLen - 3])) {
-//			return NO_ERROR; // 全校验通过
-//		} else {
-//			retFlag = SENSOR_BCC_ERROR; //校验失败
-//		}
-//	}
-//
-//	return retFlag;
-//}
+
+
+// 读取振动管编号（CN 指令）
+uint32_t Read_VibrationTube_ID(char *id_out, size_t id_out_size)
+{
+    if ((id_out == NULL) || (id_out_size == 0)) {
+        return PARAM_ADDRESS_OVERFLOW;
+    }
+
+    char resp[RX_BUF_LEN] = {0};
+
+    // 发送 CN 指令
+    uint32_t ret = UART6_SendWithRetry("CN\r\n", resp, RX_BUF_LEN, 500);
+    if (ret != 0) {
+        printf("[UART6] 发送 CN 指令或接收超时\r\n");
+        return SENSOR_COMM_TIMEOUT;
+    }
+
+    printf("[UART6] CN 响应: %s\r\n", resp);
+
+    // ---------- 解析响应 ----------
+    // 去掉前导空白
+    char *p = resp;
+    while (*p == ' ' || *p == '\t' || *p == '\r' || *p == '\n') {
+        p++;
+    }
+
+    // 按协议，一般以 'N' 开头，例如 N2009924H
+    if (*p != 'N') {
+        printf("振动管ID响应格式错误，未以 'N' 开头，原始: %s\r\n", resp);
+        return SENSOR_COMM_TIMEOUT;
+    }
+
+    // 找到行尾 / 结束符（遇到 CR/LF/* 就停）
+    char *end = p;
+    while (*end != '\0' && *end != '\r' && *end != '\n' && *end != '*') {
+        end++;
+    }
+
+    size_t id_len = (size_t)(end - p);
+    if (id_len == 0) {
+        printf("振动管ID长度为 0，原始: %s\r\n", resp);
+        return SENSOR_COMM_TIMEOUT;
+    }
+
+    // 拷贝到输出缓冲区，确保以 '\0' 结尾
+    if (id_len >= id_out_size) {
+        id_len = id_out_size - 1;   // 截断，避免越界
+    }
+    memcpy(id_out, p, id_len);
+    id_out[id_len] = '\0';
+
+    printf("振动管ID: %s\r\n", id_out);
+
+    return NO_ERROR;
+}
+
+
 
 // 读取超声小管的密度、温度
 int Read_Density_SIL(float *density, float *viscosity, float *temp) {

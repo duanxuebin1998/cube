@@ -169,7 +169,10 @@ void process_command(uint8_t *command) {
 				printf("{encoder}%d\t{weight}%d\r\n", (int) g_encoder_count, weight_parament.current_weight);
 				HAL_Delay(50);
 			}
+			motorSlowStop();
+			while (stpr_isMoving(&stepper));
 			printf("down over!\n");
+
 			HAL_Delay(1000);
 			motorMoveNoWait(200000, MOTOR_DIRECTION_UP);
 			printf("start up to zero\n");
@@ -179,7 +182,8 @@ void process_command(uint8_t *command) {
 //				DSMSendcommand3times(DSM_POWER, strlen(DSM_POWER));
 				HAL_Delay(50);
 			}
-			motorQuickStop();
+			motorSlowStop();
+			while (stpr_isMoving(&stepper));
 			printf("上行结束\n");
 			stpr_disableDriver(&stepper); //使能电机
 		}

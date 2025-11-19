@@ -11,6 +11,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include "measure_tank_height.h"
+#include <math.h>
+#include <inttypes.h>
+
+// ===== 可调参数 =====
+#define EPS_MM                   0.20f    // 到位公差 (±)
 #define VELOCITY_MAX 2
 //丢步检测参数
 #define LOST_STEP_WINDOW        3       // 检测窗口（3次）
@@ -27,7 +32,7 @@ static uint32_t last_check_tick = 0;
 static uint32_t last_alarm_tick = 0;
 uint32_t velocity = 1600 * VELOCITY_MAX * 32;
 
-static bool stpr_isMoving(TMC5130TypeDef *tmc5130);
+bool stpr_isMoving(TMC5130TypeDef *tmc5130);
 static uint32_t stpr_checkGstat(TMC5130TypeDef *tmc5130);
 static uint32_t stpr_wait_until_stop(TMC5130TypeDef *tmc5130);
 
@@ -230,7 +235,7 @@ void motorRun(float distance_mm,      		// 移动距离（毫米）
  * @param tmc5130 指向驱动器结构体
  * @return true 表示仍在运动；false 表示已停止
  */
-static bool stpr_isMoving(TMC5130TypeDef *tmc5130) {
+bool stpr_isMoving(TMC5130TypeDef *tmc5130) {
 	uint32_t rampstat = stpr_readInt(tmc5130, TMC5130_RAMPSTAT);
 	return ((rampstat & 0x400) != 0x400); // bit10=1 表示停止
 }
@@ -389,27 +394,6 @@ uint32_t Motor_CheckLostStep_AutoTiming(int32_t currentPos) {
 
 	return NO_ERROR;
 }
-#include <math.h>
-#include <inttypes.h>
-
-// ===== 可调参数 =====
-#define EPS_MM                   0.20f    // 到位公差 (±)
-#define SAFETY_MARGIN_MM         2.00f    // 一次性下发时的冗余距离，保证一定会“碰到目标”
-#define NO_PROGRESS_WINDOW_MS    600      // 在此时间窗内若无进展则判失败
-
-// 错误码（按你项目替换）
-#ifndef NO_ERROR
-#define NO_ERROR               0
-#endif
-#ifndef MOTOR_TIMEOUT
-#define MOTOR_TIMEOUT          0x8101
-#endif
-#ifndef MOTOR_NO_PROGRESS
-#define MOTOR_NO_PROGRESS      0x8102
-#endif
-#ifndef MOTOR_NOT_IN_TOL
-#define MOTOR_NOT_IN_TOL       0x8103
-#endif
 
 // 读取位置快照（单位：mm）。如有需要可加临界区保护。
 static inline void snapshot_sensor_pos_mm(float *pos_mm) {

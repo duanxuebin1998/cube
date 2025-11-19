@@ -39,7 +39,7 @@ void App_Init(void) {
 //	DSMSendcommand3times(DSM_GET_FREQUENCE_START, strlen(DSM_GET_FREQUENCE_START));
 	Probe_EnableWaterSensor();//开启液位模式
 //	DSM_V2_SwitchToLevelMode(); // 切换到液位模式
-	g_deviceParams.sensorType =DSM_SENSOR;
+	g_deviceParams.sensorType =LTD_SENSOR;
 
 }
 
