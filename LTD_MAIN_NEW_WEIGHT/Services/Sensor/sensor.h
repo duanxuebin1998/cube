@@ -33,6 +33,6 @@ typedef enum {
 
 uint32_t EnableDensityMode(void);
 uint32_t EnableLevelMode(void);
-uint32_t DSM_Get_LevelMode_Frequence(volatile uint32_t *frequency_out);
-uint32_t DSM_Get_LevelMode_Frequence_Avg(volatile uint32_t *frequency_out);
+uint32_t DSM_Get_LevelMode_Frequence(uint32_t *frequency_out);
+uint32_t DSM_Get_LevelMode_Frequence_Avg(uint32_t *frequency_out);
 #endif /* SENSOR_SENSOR_H_ */

@@ -48,7 +48,6 @@ typedef enum {
 	COM_NUM_NOPARACMD_START, /* 不带参线圈指令类 - 开始*/
 
 	COM_NUM_NOPARACMD_NORMAL_START, /* 指令 - 普通 - 开始 */
-	COM_NUM_SET_WORKPATTERN,	//	设置工作模式
 	COM_NUM_BACK_ZERO,	//	返回零点
 	COM_NUM_FIND_ZERO,	//	标定零点
 	COM_NUM_SPREADPOINTS_AI,	//	自动分布测量
@@ -64,8 +63,7 @@ typedef enum {
 	COM_NUM_NOPARACMD_NORMAL_STOP, /* 指令 - 普通 - 结束 */
 
 	COM_NUM_DEBUGCMD_START,	//调试模式指令
-//	COM_NUM_READPARAMETER,	//	读部件参数
-//	COM_NUM_FORCE_ZERO,	//	置零点
+
 	COM_NUM_DEBUGCMD_STOP,	//调试模式指令
 
 	COM_NUM_UNLOCK_START,
@@ -85,8 +83,6 @@ typedef enum {
 	COM_NUM_CAL_OIL,	//	液位标定
 	COM_NUM_RUNUP,	//	向上运行
 	COM_NUM_RUNDOWN,	//	向下运行
-	COM_NUM_SET_ZEROCIRCLE,	//	设置零点圈数
-	COM_NUM_SET_ZEROANGLE,	//	设置零点角度
 	COM_NUM_CORRECTION_OIL,	//	修正液位
 	COM_NUM_NOPARA_DEBUGCMD_END, /*调试模式带一个参数线圈指令类 - 结束*/
 

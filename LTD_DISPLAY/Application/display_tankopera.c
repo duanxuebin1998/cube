@@ -337,8 +337,6 @@ static uint8_t* dtm_operaname(int num)
     }
     else if(num > COM_NUM_PASSWORD_START && num < COM_NUM_PASSWORD_END)
         return returnWordType((uint8_t*)"密码",(uint8_t*)"Password");
-    else if(num == COM_NUM_SET_WORKPATTERN)
-        return returnWordType((uint8_t*)"进入调试模式",(uint8_t*)"Go into debug");
     else if(num > COM_NUM_PARA_LOCAL_START && num < COM_NUM_PARA_LOCAL_STOP)
     {//本机参数类
         return OperaNameArr_local[num - COM_NUM_PARA_LOCAL_START - 1][screen_parameter.language];
@@ -642,36 +640,142 @@ static void ifsendcmd(void)
     DisplayLangaugeLineWords((uint8_t*)"返回",OLED_LINE8_1,OLED_ROW4_4,timeback,(uint8_t*)"Back");
     DisplayLangaugeLineWords((uint8_t*)"确认",OLED_LINE8_8,OLED_ROW4_4,timesure,(uint8_t*)"Ok");
 }
-/* 返回按返回键后要跳转的函数指针 */
+/**
+ * @brief  返回“按返回键”后应该跳转到的菜单函数
+ *
+ * 根据 now_Opera_Num（当前操作的指令编号）判断属于哪一类：
+ *  - 普通不带参指令（回零、找油等） → 返回普通测量菜单 measuremenu
+ *  - 带参或参数调试类 → 返回参数配置菜单 menu_paraconfig
+ *  - 调试指令类 → 返回调试指令菜单 menu_cmdconfig_main
+ *  - 密度/温度修正类 → 返回磁通量参数菜单 menu_magnetic
+ *  - 屏幕显示类参数 → 返回界面显示菜单 menu_screen
+ *  - 数据源选择类参数 → 返回数据源菜单 menu_scr_source
+ *  - 语言或密码类 → 返回主菜单 mainmenu
+ *
+ * @return pFunc_void 返回应当跳转的菜单函数指针
+ */
 static pFunc_void dtm_backtofunc(void)
 {
-    pFunc_void p = errorprocess;
+    pFunc_void p = errorprocess;   // 默认跳转到错误处理页面
 
-    if(now_Opera_Num > COM_NUM_NOPARACMD_NORMAL_START && now_Opera_Num < COM_NUM_NOPARACMD_NORMAL_STOP)
+    /*--------------------------------------------------------------
+     * ① 普通不带参线圈指令
+     * 范围：COM_NUM_NOPARACMD_NORMAL_START ~ COM_NUM_NOPARACMD_NORMAL_STOP
+     * 包含：回零点、标定零点、找油、找水、罐底测量、综合测量……
+     * 返回主运行菜单 measuremenu
+     --------------------------------------------------------------*/
+    if (now_Opera_Num > COM_NUM_NOPARACMD_NORMAL_START &&
+        now_Opera_Num < COM_NUM_NOPARACMD_NORMAL_STOP)
+    {
         p = measuremenu;
-    else if(now_Opera_Num > COM_NUM_PARA_DEBUG_START && now_Opera_Num < COM_NUM_PARA_DEBUG_END)
+    }
+
+    /*--------------------------------------------------------------
+     * ② 参数调试类（基础参数、称重参数、分布参数、水位参数等）
+     * 范围：COM_NUM_PARA_DEBUG_START ~ COM_NUM_PARA_DEBUG_END
+     * 所有 CPU2 参数配置类
+     * 应返回参数配置主菜单 menu_paraconfig
+     --------------------------------------------------------------*/
+    else if (now_Opera_Num > COM_NUM_PARA_DEBUG_START &&
+             now_Opera_Num < COM_NUM_PARA_DEBUG_END)
+    {
         p = menu_paraconfig;
-    else if(now_Opera_Num == COM_NUM_SET_WORKPATTERN)
-        p = menu_paraconfig;
-    else if(now_Opera_Num > COM_NUM_DEBUGCMD_START && now_Opera_Num < COM_NUM_DEBUGCMD_STOP)
+    }
+
+    /*--------------------------------------------------------------
+     * ③ 调试模式的无参指令
+     * 范围：COM_NUM_DEBUGCMD_START ~ COM_NUM_DEBUGCMD_STOP
+     * 包含：查水位、查油、调试运动命令等
+     * 返回调试指令主菜单 menu_cmdconfig_main
+     --------------------------------------------------------------*/
+    else if (now_Opera_Num > COM_NUM_DEBUGCMD_START &&
+             now_Opera_Num < COM_NUM_DEBUGCMD_STOP)
+    {
         p = menu_cmdconfig_main;
-    else if((now_Opera_Num > COM_NUM_ONEPARACMD_START && now_Opera_Num < COM_NUM_ONEPARACMD_END)
-        || (now_Opera_Num > COM_NUM_ONEPARA_DEBUGCMD_START && now_Opera_Num < COM_NUM_NOPARA_DEBUGCMD_END))
+    }
+
+    /*--------------------------------------------------------------
+     * ④ 带一个参数的线圈指令（普通/调试）
+     * 范围：
+     *   - COM_NUM_ONEPARACMD_START ~ COM_NUM_ONEPARACMD_END
+     *   - COM_NUM_ONEPARA_DEBUGCMD_START ~ COM_NUM_NOPARA_DEBUGCMD_END
+     * 包含：单点测量、单点监测、分布测量、液位标定、上行下行、修正液位等
+     * 返回调试指令主菜单 menu_cmdconfig_main
+     --------------------------------------------------------------*/
+    else if ((now_Opera_Num > COM_NUM_ONEPARACMD_START &&
+              now_Opera_Num < COM_NUM_ONEPARACMD_END) ||
+             (now_Opera_Num > COM_NUM_ONEPARA_DEBUGCMD_START &&
+              now_Opera_Num < COM_NUM_NOPARA_DEBUGCMD_END))
+    {
         p = menu_cmdconfig_main;
-    else if(now_Opera_Num == COM_NUM_DEVICEPARAM_DENSITYCORRECTION || now_Opera_Num == COM_NUM_DEVICEPARAM_TEMPERATURECORRECTION)
+    }
+
+    /*--------------------------------------------------------------
+     * ⑤ 磁通量调试参数（密度修正 D、温度修正 T）
+     * 单独两个编号：COM_NUM_DEVICEPARAM_DENSITYCORRECTION、TEMPERATURECORRECTION
+     * 返回磁通量菜单 menu_magnetic
+     --------------------------------------------------------------*/
+    else if (now_Opera_Num == COM_NUM_DEVICEPARAM_DENSITYCORRECTION ||
+             now_Opera_Num == COM_NUM_DEVICEPARAM_TEMPERATURECORRECTION)
+    {
         p = menu_magnetic;
-    else if(now_Opera_Num > COM_NUM_SCREEN_STR && now_Opera_Num < COM_NUM_SCREEN_STP)
+    }
+
+    /*--------------------------------------------------------------
+     * ⑥ 界面显示类参数
+     * 范围：COM_NUM_SCREEN_STR ~ COM_NUM_SCREEN_STP
+     * 返回界面显示菜单 menu_screen
+     --------------------------------------------------------------*/
+    else if (now_Opera_Num > COM_NUM_SCREEN_STR &&
+             now_Opera_Num < COM_NUM_SCREEN_STP)
+    {
         p = menu_screen;
-    else if(now_Opera_Num > COM_NUM_SOURCE_START && now_Opera_Num < COM_NUM_SOURCE_STOP)
+    }
+
+    /*--------------------------------------------------------------
+     * ⑦ 数据源设置类参数
+     * 范围：COM_NUM_SOURCE_START ~ COM_NUM_SOURCE_STOP
+     * 返回数据源配置菜单 menu_scr_source
+     --------------------------------------------------------------*/
+    else if (now_Opera_Num > COM_NUM_SOURCE_START &&
+             now_Opera_Num < COM_NUM_SOURCE_STOP)
+    {
         p = menu_scr_source;
-    else if(now_Opera_Num > COM_NUM_PARA_DEBUG_START && now_Opera_Num < COM_NUM_PARA_DEBUG_END)
+    }
+
+    /*--------------------------------------------------------------
+     * ⑧ 参数调试类重复判断（确保覆盖）
+     --------------------------------------------------------------*/
+    else if (now_Opera_Num > COM_NUM_PARA_DEBUG_START &&
+             now_Opera_Num < COM_NUM_PARA_DEBUG_END)
+    {
         p = menu_paraconfig;
-    else if(now_Opera_Num == COM_NUM_PARA_LANG)
+    }
+
+    /*--------------------------------------------------------------
+     * ⑨ 语言选择
+     * 仅：COM_NUM_PARA_LANG
+     * 返回主菜单 mainmenu
+     --------------------------------------------------------------*/
+    else if (now_Opera_Num == COM_NUM_PARA_LANG)
+    {
         p = mainmenu;
-    else if(now_Opera_Num > COM_NUM_PASSWORD_START && now_Opera_Num < COM_NUM_PASSWORD_END)
-    	p = mainmenu;
+    }
+
+    /*--------------------------------------------------------------
+     * ⑩ 密码类
+     * 范围：COM_NUM_PASSWORD_START ~ COM_NUM_PASSWORD_END
+     * 返回主菜单 mainmenu
+     --------------------------------------------------------------*/
+    else if (now_Opera_Num > COM_NUM_PASSWORD_START &&
+             now_Opera_Num < COM_NUM_PASSWORD_END)
+    {
+        p = mainmenu;
+    }
+
     return p;
 }
+
 /* 返回按确认键后要跳转的函数指针 */
 static pFunc_void dtm_suretofunc(void)
 {
@@ -721,43 +825,7 @@ static const uint32_t nopara_cmd_map[][2] = {
             break;
         }
     }
-    if(now_Opera_Num == COM_NUM_SET_WORKPATTERN)//进入调试模式后返回的地方
-    {
-        //读状态，看是否成功进入调试模式
-        oled_clear();
-        DisplayLangaugeLineWords((uint8_t*)"正在进入调试模式",OLED_LINE8_1,OLED_ROW3_2,0,(uint8_t*)"Entering debug mode");
-        CPU2_CombinatePackage_Send(FUNCTIONCODE_READ_INPUTREGISTER,REG_DEVICE_STATUS_WORK_MODE,1,NULL);
-        HAL_Delay(150);
-        oled_clear();
-        if(g_measurement.device_status.work_mode == 1)//调试模式重新处理
-        {
-            DisplayLangaugeLineWords((uint8_t*)"成功!",OLED_LINE8_4,OLED_ROW3_2,0,(uint8_t*)"succeed!");
-            HAL_Delay(500);
-			if(debugmode_back == 0)
-			{
-				menu_paraconfig();
-			}
-			else
-			{
-				menu_cmdconfig_main();
-			}
-        }
-        else
-        {
-            DisplayLangaugeLineWords((uint8_t*)"失败!",OLED_LINE8_1,OLED_ROW4_2,0,(uint8_t*)"fail!");
-            DisplayLangaugeLineWords((uint8_t*)"请重新尝试!",OLED_LINE8_1,OLED_ROW4_3,0,(uint8_t*)"Please try again!");
-            HAL_Delay(800);
-			if(debugmode_back == 0)
-			{
-				menu_paraconfig();
-			}
-			else
-			{
-				menu_cmdconfig_main();
-			}
-        }
-    }
-    else if(now_Opera_Num == COM_NUM_RESTOR_EFACTORYSETTING )
+    if(now_Opera_Num == COM_NUM_RESTOR_EFACTORYSETTING )
     {//恢复出厂设置、恢复备份文件
         oled_clear();
         if((g_measurement.device_status.device_state != STATE_STANDBY) 
