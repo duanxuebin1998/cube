@@ -323,7 +323,7 @@ static uint8_t* dtm_operaname(int num)
     
     if(num > COM_NUM_NOPARACMD_NORMAL_START && num < COM_NUM_NOPARACMD_NORMAL_STOP)
     {//无参 - 普通 - 指令
-        return OperaNameArr_cmd[num - COM_NUM_NOPARACMD_NORMAL_START -2][screen_parameter.language];
+        return OperaNameArr_cmd[num - COM_NUM_NOPARACMD_NORMAL_START -1][screen_parameter.language];
     }
     else if((num > COM_NUM_PARA_DEBUG_START && num < COM_NUM_PARACONFIG_END)
         || (num > COM_NUM_ONEPARACMD_START && num < COM_NUM_NOPARA_DEBUGCMD_END))

@@ -23,6 +23,7 @@
 /* USER CODE BEGIN 0 */
 #include "stdio.h"
 #include "communicate.h"
+#include "DSM_communication.h"
 #define NOP() __asm volatile("nop")
 //#define UART1_TX_BUF_SIZE 16
 //uint8_t uart1_tx_buf[UART1_TX_BUF_SIZE];
@@ -71,11 +72,6 @@ PUTCHAR_PROTOTYPE {
 #endif
 
 void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart) {
-//	    if (huart->Instance == USART1) {
-//	        uart1_tx_tail = (uart1_tx_tail + huart->TxXferSize) % UART1_TX_BUF_SIZE;
-//	        uart1_tx_busy = 0;
-////	        UART1_StartTx();  // 看看还有没有数据要发
-//	    }
 	if (huart->Instance == USART6)  // 比较指针
 	{
 		//等待DMA完全发送完成
@@ -85,6 +81,7 @@ void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart) {
 		for (volatile uint32_t i = 0; i < 18000; i++) {
 			__NOP();
 		}
+		COM1_SET_RECV_MODE();  //切换接收模式
 		HAL_UART_Receive_DMA(&huart6, UART6_RX_BUF, UART6_RX_BUF_SIZE);
 
 	} else if (huart->Instance == USART2) {
@@ -95,27 +92,34 @@ void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart) {
 		for (volatile uint32_t i = 0; i < 18000; i++) {
 			__NOP();
 		}
+		COM2_SET_RECV_MODE();  //切换接收模式
 		HAL_UART_Receive_DMA(&huart2, UART2_RX_BUF, UART2_RX_BUF_SIZE);
-	}
-	else	if (huart->Instance == UART5) {
+	} else if (huart->Instance == USART3) {
+		//等待DMA完全发送完成
+		while (__HAL_UART_GET_FLAG(&huart3, UART_FLAG_TC) == RESET)
+			;
+		COM3_SET_RECV_MODE();  //切换接收模式
+		HAL_UART_Receive_DMA(&huart3, UART3_RX_BUF, UART3_RX_BUF_SIZE);
+	} else if (huart->Instance == UART5) {
 		//等待DMA完全发送完成
 		while (__HAL_UART_GET_FLAG(&huart5, UART_FLAG_TC) == RESET)
 			;
-		RS485_SET_RECV_MODE();//切换接收模式
+		RS485_SET_RECV_MODE();  //切换接收模式
 //		HAL_UART_Receive_DMA(&huart5, UART5_RX_BUF, UART5_RX_BUF_SIZE);
 	}
 }
-
+volatile uint8_t com2_rx_ready = 0;
 volatile uint8_t UART2_RX_LEN = 0;              // 接收一帧数据的长度
 uint8_t UART2_RX_BUF[UART2_RX_BUF_SIZE] = { 0 };   // 接收数据缓冲区
 
-volatile uint8_t uart3_rx_ready = 0;
+volatile uint8_t com3_rx_ready = 0;
 volatile uint8_t UART3_RX_LEN = 0;              // 接收一帧数据的长度
 uint8_t UART3_RX_BUF[UART3_RX_BUF_SIZE] = { 0 };   // 接收数据缓冲区
 
 volatile uint8_t UART5_RX_LEN = 0;              // 接收一帧数据的长度
 uint8_t UART5_RX_BUF[UART5_RX_BUF_SIZE] = { 0 };   // 接收数据缓冲区
 
+volatile uint8_t com1_rx_ready = 0;
 volatile uint8_t UART6_RX_LEN = 0;              // 接收一帧数据的长度
 uint8_t UART6_RX_BUF[UART6_RX_BUF_SIZE] = { 0 };   // 接收数据缓冲区
 /* USER CODE END 0 */
@@ -127,7 +131,7 @@ UART_HandleTypeDef huart3;
 UART_HandleTypeDef huart6;
 DMA_HandleTypeDef hdma_uart5_rx;
 DMA_HandleTypeDef hdma_uart5_tx;
-DMA_HandleTypeDef hdma_usart1_tx;
+DMA_HandleTypeDef hdma_usart1_rx;
 DMA_HandleTypeDef hdma_usart2_rx;
 DMA_HandleTypeDef hdma_usart2_tx;
 DMA_HandleTypeDef hdma_usart3_rx;
@@ -381,23 +385,23 @@ void HAL_UART_MspInit(UART_HandleTypeDef* uartHandle)
     HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
     /* USART1 DMA Init */
-    /* USART1_TX Init */
-    hdma_usart1_tx.Instance = DMA2_Stream7;
-    hdma_usart1_tx.Init.Channel = DMA_CHANNEL_4;
-    hdma_usart1_tx.Init.Direction = DMA_MEMORY_TO_PERIPH;
-    hdma_usart1_tx.Init.PeriphInc = DMA_PINC_DISABLE;
-    hdma_usart1_tx.Init.MemInc = DMA_MINC_ENABLE;
-    hdma_usart1_tx.Init.PeriphDataAlignment = DMA_PDATAALIGN_BYTE;
-    hdma_usart1_tx.Init.MemDataAlignment = DMA_MDATAALIGN_BYTE;
-    hdma_usart1_tx.Init.Mode = DMA_NORMAL;
-    hdma_usart1_tx.Init.Priority = DMA_PRIORITY_LOW;
-    hdma_usart1_tx.Init.FIFOMode = DMA_FIFOMODE_DISABLE;
-    if (HAL_DMA_Init(&hdma_usart1_tx) != HAL_OK)
+    /* USART1_RX Init */
+    hdma_usart1_rx.Instance = DMA2_Stream2;
+    hdma_usart1_rx.Init.Channel = DMA_CHANNEL_4;
+    hdma_usart1_rx.Init.Direction = DMA_PERIPH_TO_MEMORY;
+    hdma_usart1_rx.Init.PeriphInc = DMA_PINC_DISABLE;
+    hdma_usart1_rx.Init.MemInc = DMA_MINC_ENABLE;
+    hdma_usart1_rx.Init.PeriphDataAlignment = DMA_PDATAALIGN_BYTE;
+    hdma_usart1_rx.Init.MemDataAlignment = DMA_MDATAALIGN_BYTE;
+    hdma_usart1_rx.Init.Mode = DMA_NORMAL;
+    hdma_usart1_rx.Init.Priority = DMA_PRIORITY_LOW;
+    hdma_usart1_rx.Init.FIFOMode = DMA_FIFOMODE_DISABLE;
+    if (HAL_DMA_Init(&hdma_usart1_rx) != HAL_OK)
     {
       Error_Handler();
     }
 
-    __HAL_LINKDMA(uartHandle,hdmatx,hdma_usart1_tx);
+    __HAL_LINKDMA(uartHandle,hdmarx,hdma_usart1_rx);
 
     /* USART1 interrupt Init */
     HAL_NVIC_SetPriority(USART1_IRQn, 0, 0);
@@ -419,7 +423,7 @@ void HAL_UART_MspInit(UART_HandleTypeDef* uartHandle)
     PD5     ------> USART2_TX
     PD6     ------> USART2_RX
     */
-    GPIO_InitStruct.Pin = P20MA_485_2_USART2_TX_Pin|P20MA_485_2_USART2_RX_Pin;
+    GPIO_InitStruct.Pin = COM2_USART2_TX_Pin|COM2_USART2_RX_Pin;
     GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
     GPIO_InitStruct.Pull = GPIO_NOPULL;
     GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
@@ -483,7 +487,7 @@ void HAL_UART_MspInit(UART_HandleTypeDef* uartHandle)
     PD8     ------> USART3_TX
     PD9     ------> USART3_RX
     */
-    GPIO_InitStruct.Pin = _485_3_USART3_TX_Pin|_485_3_USART3_RX_Pin;
+    GPIO_InitStruct.Pin = COM3_USART3_TX_Pin|COM3_USART3_RX_Pin;
     GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
     GPIO_InitStruct.Pull = GPIO_NOPULL;
     GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
@@ -547,7 +551,7 @@ void HAL_UART_MspInit(UART_HandleTypeDef* uartHandle)
     PC6     ------> USART6_TX
     PC7     ------> USART6_RX
     */
-    GPIO_InitStruct.Pin = P20MA_485_1_USART6_TX_Pin|P20MA_485_1_USART6_RX_Pin;
+    GPIO_InitStruct.Pin = COM1_USART6_TX_Pin|COM1_USART6_RX_Pin;
     GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
     GPIO_InitStruct.Pull = GPIO_NOPULL;
     GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
@@ -644,7 +648,7 @@ void HAL_UART_MspDeInit(UART_HandleTypeDef* uartHandle)
     HAL_GPIO_DeInit(GPIOA, GPIO_PIN_9|GPIO_PIN_10);
 
     /* USART1 DMA DeInit */
-    HAL_DMA_DeInit(uartHandle->hdmatx);
+    HAL_DMA_DeInit(uartHandle->hdmarx);
 
     /* USART1 interrupt Deinit */
     HAL_NVIC_DisableIRQ(USART1_IRQn);
@@ -664,7 +668,7 @@ void HAL_UART_MspDeInit(UART_HandleTypeDef* uartHandle)
     PD5     ------> USART2_TX
     PD6     ------> USART2_RX
     */
-    HAL_GPIO_DeInit(GPIOD, P20MA_485_2_USART2_TX_Pin|P20MA_485_2_USART2_RX_Pin);
+    HAL_GPIO_DeInit(GPIOD, COM2_USART2_TX_Pin|COM2_USART2_RX_Pin);
 
     /* USART2 DMA DeInit */
     HAL_DMA_DeInit(uartHandle->hdmarx);
@@ -688,7 +692,7 @@ void HAL_UART_MspDeInit(UART_HandleTypeDef* uartHandle)
     PD8     ------> USART3_TX
     PD9     ------> USART3_RX
     */
-    HAL_GPIO_DeInit(GPIOD, _485_3_USART3_TX_Pin|_485_3_USART3_RX_Pin);
+    HAL_GPIO_DeInit(GPIOD, COM3_USART3_TX_Pin|COM3_USART3_RX_Pin);
 
     /* USART3 DMA DeInit */
     HAL_DMA_DeInit(uartHandle->hdmarx);
@@ -712,7 +716,7 @@ void HAL_UART_MspDeInit(UART_HandleTypeDef* uartHandle)
     PC6     ------> USART6_TX
     PC7     ------> USART6_RX
     */
-    HAL_GPIO_DeInit(GPIOC, P20MA_485_1_USART6_TX_Pin|P20MA_485_1_USART6_RX_Pin);
+    HAL_GPIO_DeInit(GPIOC, COM1_USART6_TX_Pin|COM1_USART6_RX_Pin);
 
     /* USART6 DMA DeInit */
     HAL_DMA_DeInit(uartHandle->hdmarx);

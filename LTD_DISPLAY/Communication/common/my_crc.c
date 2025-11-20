@@ -61,7 +61,6 @@ uint16_t CRC16_Calculate(const uint8_t *data, uint32_t length) {
 bool SlaveCheckCRC(char const *revframe, int framelen) {
     unsigned char Hi, Lo;
     unsigned short crc;
-
     // 修复类型不匹配问题
     crc = CRC16_Calculate((const unsigned char *)revframe, framelen - 2);
 

@@ -63,7 +63,7 @@ extern TIM_HandleTypeDef htim1;
 extern TIM_HandleTypeDef htim3;
 extern DMA_HandleTypeDef hdma_uart5_rx;
 extern DMA_HandleTypeDef hdma_uart5_tx;
-extern DMA_HandleTypeDef hdma_usart1_tx;
+extern DMA_HandleTypeDef hdma_usart1_rx;
 extern DMA_HandleTypeDef hdma_usart2_rx;
 extern DMA_HandleTypeDef hdma_usart2_tx;
 extern DMA_HandleTypeDef hdma_usart3_rx;
@@ -425,7 +425,8 @@ void USART2_IRQHandler(void)
 			HAL_UART_DMAStop(&huart2);  // 停止DMA接收
 			temp = __HAL_DMA_GET_COUNTER(&hdma_usart2_rx);  // 获取DMA中未传输的数据个数
 			UART2_RX_LEN = UART2_RX_BUF_SIZE - temp;  // 计算已经接收到的数据个数
-			HAL_UART_Transmit_DMA(&huart2, UART2_RX_BUF, UART2_RX_LEN);//返回接受到的包
+			com2_rx_ready = 1; // 标记接收完成
+//			HAL_UART_Transmit_DMA(&huart2, UART2_RX_BUF, UART2_RX_LEN);//返回接受到的包
 		}
 	}
   /* USER CODE END USART2_IRQn 1 */
@@ -451,7 +452,9 @@ void USART3_IRQHandler(void)
 			HAL_UART_DMAStop(&huart3);  // 停止DMA接收
 			temp = __HAL_DMA_GET_COUNTER(&hdma_usart3_rx);  // 获取DMA中未传输的数据个数
 			UART3_RX_LEN = UART3_RX_BUF_SIZE - temp;  // 计算已经接收到的数据个数
-			uart3_rx_ready = 1; // 标记接收完成
+			com3_rx_ready = 1; // 标记接收完成
+			COM3_SET_SEND_MODE();  // 切换到发送模式
+//			DSM_CommunicationProcess(UART3_RX_BUF, UART3_RX_LEN);  // 处理接收到的数据
 		}
 	}
   /* USER CODE END USART3_IRQn 1 */
@@ -512,6 +515,20 @@ void DMA2_Stream1_IRQHandler(void)
 }
 
 /**
+  * @brief This function handles DMA2 stream2 global interrupt.
+  */
+void DMA2_Stream2_IRQHandler(void)
+{
+  /* USER CODE BEGIN DMA2_Stream2_IRQn 0 */
+
+  /* USER CODE END DMA2_Stream2_IRQn 0 */
+  HAL_DMA_IRQHandler(&hdma_usart1_rx);
+  /* USER CODE BEGIN DMA2_Stream2_IRQn 1 */
+
+  /* USER CODE END DMA2_Stream2_IRQn 1 */
+}
+
+/**
   * @brief This function handles DMA2 stream6 global interrupt.
   */
 void DMA2_Stream6_IRQHandler(void)
@@ -523,20 +540,6 @@ void DMA2_Stream6_IRQHandler(void)
   /* USER CODE BEGIN DMA2_Stream6_IRQn 1 */
 
   /* USER CODE END DMA2_Stream6_IRQn 1 */
-}
-
-/**
-  * @brief This function handles DMA2 stream7 global interrupt.
-  */
-void DMA2_Stream7_IRQHandler(void)
-{
-  /* USER CODE BEGIN DMA2_Stream7_IRQn 0 */
-
-  /* USER CODE END DMA2_Stream7_IRQn 0 */
-  HAL_DMA_IRQHandler(&hdma_usart1_tx);
-  /* USER CODE BEGIN DMA2_Stream7_IRQn 1 */
-
-  /* USER CODE END DMA2_Stream7_IRQn 1 */
 }
 
 /**
@@ -558,6 +561,7 @@ void USART6_IRQHandler(void)
 			HAL_UART_DMAStop(&huart6);  // 停止DMA接收
 			temp = __HAL_DMA_GET_COUNTER(&hdma_usart6_rx);  // 获取DMA中未传输的数据个数
 			UART6_RX_LEN = UART6_RX_BUF_SIZE - temp;  // 计算已经接收到的数据个数
+			com1_rx_ready = 1; // 标记接收完成
 //			HAL_UART_Transmit_DMA(&huart6, UART6_RX_BUF, UART6_RX_LEN);//返回接受到的包
 		}
 
