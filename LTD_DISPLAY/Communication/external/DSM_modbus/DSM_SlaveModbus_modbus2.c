@@ -14,7 +14,6 @@
 #include "stateformodbus.h"
 
 extern struct MEASURE_DATA Measure_Data;
-int SlaveAddress = 0x01;							// 下位机地址
 int HoldingRegisterArray1[HOLDREGISTERAMOUNT] = {0}; // 保持寄存器数组
 int InputRegisterArray[INPUTREGISTERAMOUNT] = {0};	// 输入寄存器数组
 int MaxNum_Coil;									// 线圈最大有效值
@@ -37,27 +36,7 @@ const int SlaveBusy = 0X06;			 // 已定义异常码0x06
 
 int TempBuffer[1675]; // V1.116 dq2020.4.2
 
-/******************************************************
-函数功能： 设置下位机地址
 
-函 数 名： SetSlaveaddress
-参    数： int address   传入地址
-返 回 值： false  失败，地址超范围[1-247]
-		   true   成功
-******************************************************/
-bool SetSlaveaddress(int address)
-{
-	if ((address < 1) || (address > 247))
-	{
-		SlaveAddress = -1;
-		return false;
-	}
-	else
-	{
-		SlaveAddress = address;
-		return true;
-	}
-}
 /******************************************************
 函数功能： 获取功能码
 

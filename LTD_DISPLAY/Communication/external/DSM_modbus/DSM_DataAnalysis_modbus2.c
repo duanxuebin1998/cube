@@ -13,6 +13,7 @@
 #include <stdio.h>
 #include <string.h>
 #include "stateformodbus.h"
+#include "address.h"
 /*
  通讯的应用层，对数据进行接卸或者写入。
  */
@@ -21,7 +22,6 @@
 	#include "usart1.h"
 #endif
 
-extern int SlaveAddress;           //下位机地址
 
 /******************************************************
  函数功能： 设置输入寄存器初始值
@@ -144,7 +144,7 @@ void Input_Write(void) {
 			WriteOneInputRegister(INPUTREGISTER_SPREAD_WEIGHTDENSITY1 + 8 * i, 1, g_measurement.density_distribution.single_density_data[i].weight_density);
 		}
 
-		for (i = 0; i < g_measurement.density_distribution.measurement_points - 16; i++) {
+		for (i = 0; i < 100 - 16; i++) {
 			WriteOneInputRegister(INPUTREGISTER_SPREAD_TEMPERATURE17 + 8 * i, 1, g_measurement.density_distribution.single_density_data[i].temperature);
 			WriteOneInputRegister(INPUTREGISTER_SPREAD_DENSITY17 + 8 * i, 1, g_measurement.density_distribution.single_density_data[i].density);
 			WriteOneInputRegister(INPUTREGISTER_SPREAD_POSITION17 + 8 * i, 2, g_measurement.density_distribution.single_density_data[i].temperature_position);
@@ -170,7 +170,7 @@ void Input_Write(void) {
 	WriteOneInputRegister(INPUTREGISTER_SPREAD_NUMOFDENSITY_M, 1, g_measurement.density_distribution.measurement_points);								//分布测量密度点数
 	WriteOneInputRegister(INPUTREGISTER_LIQUIDLEVEL_M, 2, g_measurement.density_distribution.Density_oil_level);				//分布测量液位值
 
-	for (i = 0; i < g_measurement.density_distribution.measurement_points; i++) //V1.116 dq2020.4.2
+	for (i = 0; i < 100; i++) //V1.116 dq2020.4.2
 			{
 		WriteOneInputRegister(INPUTREGISTER_SPREAD_TEMPERATURE_M1 + 8 * i, 1, g_measurement.density_distribution.single_density_data[i].temperature);
 		WriteOneInputRegister(INPUTREGISTER_SPREAD_DENSITY_M1 + 8 * i, 1, g_measurement.density_distribution.single_density_data[i].density);
