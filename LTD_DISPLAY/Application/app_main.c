@@ -20,7 +20,6 @@ void App_MainLoop(void) {
 	uint32_t ret = 0;
 	volatile uint16_t send_len = 0;              // 接收一帧数据的长度
 	static uint8_t sendbuff[256] = { 0 };   // 接收数据缓冲区
-//	const char *msg = "UART Test Message\r\n";
 	if (com1_rx_ready == 1) { // 如果接收到数据
 		printf("com1_rx_ready == 1\r\n");
 		ret = modbus_rtu_process(UART6_RX_BUF, UART6_RX_LEN, sendbuff, &send_len);  // 处理接收到的数据
@@ -68,10 +67,11 @@ void App_MainLoop(void) {
 		}
 		com3_rx_ready = 0; // 重置标志
 	} else {
-
 //			g_measurement.device_status.device_state =0; // 正常工作模式
 //			cnt_commutoCPU2 = 0;
 		PollingInputData(); // Polling for input data
+
+	    printf("Density read from regs: %u\n", g_measurement.single_point_monitoring.density);
 	}
 //		print_device_params();
 //		HAL_Delay(1000); //

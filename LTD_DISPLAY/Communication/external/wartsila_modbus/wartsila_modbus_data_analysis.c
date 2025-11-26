@@ -85,8 +85,8 @@ static void DSMToWartsila(const MeasurementResult *DSM, wartsila_DeviceParameter
     WXL->position_mm = 1;
 
     // 分布测量
+    printf("分布测量起始点：%d\r\n",DSM->density_distribution.measurement_points);
     WXL->spread_point_count       = (uint16_t)DSM->density_distribution.measurement_points;
-    printf("赋值完成\r\n");
     WXL->spread_oillevel_mm       = (uint16_t)DSM->density_distribution.Density_oil_level;
     WXL->spread_unknown           = 0;
 
@@ -139,6 +139,7 @@ void DeviceParams_StoreToRegisters(uint16_t *reg)
 
     // ===== 分布测量 0x50 ~ 0x5D =====
     reg[0x0050] = wxl.spread_point_count;
+    printf("分布测量点数：%d\r\n",wxl.spread_point_count);
     reg[0x0051] = wxl.spread_oillevel_mm;
     reg[0x0052] = 1;
     reg[0x0053] = wxl.spread_unknown; // 保留

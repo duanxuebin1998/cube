@@ -1,6 +1,6 @@
 /*
  * @FilePath     : \KEILe:\03CodeRepository\DSM_MCB\HARDWARE\SENSOR\sensor.c
- * @Description  : ä¼ æ„Ÿå™¨é€šä¿¡ç›¸å…³å‡½æ•°
+ * @Description  : ´«¸ĞÆ÷Í¨ĞÅÏà¹Øº¯Êı
  * @Author       : Aubon
  * @Date         : 2024-02-23 10:20:27
  * @LastEditors  : Duan
@@ -11,136 +11,152 @@
 
 #include "sensor.h"
 /**
- * @brief è‡ªåŠ¨è¯†åˆ«ä¼ æ„Ÿå™¨ç±»å‹ï¼ˆDSM ä¸€ä»£ / DSM_V2 / SILï¼‰
+ * @brief ×Ô¶¯Ê¶±ğ´«¸ĞÆ÷ÀàĞÍ£¨DSM Ò»´ú / DSM_V2 / SIL£©
  *
- * @return uint32_t é”™è¯¯ç æˆ– NO_ERROR
+ * @return uint32_t ´íÎóÂë»ò NO_ERROR
  */
-uint32_t DetectSensorType(void)
-{
+uint32_t DetectSensorType(void) {
 
 }
 
 uint32_t EnableDensityMode(void) {
-    if (g_deviceParams.sensorType == DSM_SENSOR) {
-        return DSM_EnableDensityMode();
-    } else {
-        return DSM_V2_SwitchToDensityMode();
-    }
+	if (g_deviceParams.sensorType == DSM_SENSOR) {
+		return DSM_EnableDensityMode();
+	} else {
+		return DSM_V2_SwitchToDensityMode();
+	}
 }
 
 uint32_t EnableLevelMode(void) {
-    if (g_deviceParams.sensorType == DSM_SENSOR) {
-        return DSM_EnableLevelMode();
-    } else {
-        return DSM_V2_SwitchToLevelMode();
-    }
+	if (g_deviceParams.sensorType == DSM_SENSOR) {
+		return DSM_EnableLevelMode();
+	} else {
+		return DSM_V2_SwitchToLevelMode();
+	}
 }
 
-// è¯»å–ä¸€æ¬¡å¹¶ä»¥æ•´æ•° Hz è¿”å›
+// ¶ÁÈ¡Ò»´Î²¢ÒÔÕûÊı Hz ·µ»Ø£¬¶Áµ½0Ê±ÖØÊÔ×î¶à3´Î
 uint32_t DSM_Get_LevelMode_Frequence(uint32_t *frequency_out) {
     if (frequency_out == NULL) {
-        return PARAM_ADDRESS_OVERFLOW;   // æ¯” SENSOR_COMM_TIMEOUT æ›´åˆç†
+        return PARAM_ADDRESS_OVERFLOW;   // ±È SENSOR_COMM_TIMEOUT ¸üºÏÀí
     }
 
     uint32_t ret;
     uint32_t hz = 0;
+    const int MAX_RETRY = 100;
 
-    if (g_deviceParams.sensorType == DSM_SENSOR) {
-        ret = Read_Level_Frequency(&hz);
-    } else {
-        ret = DSM_V2_Read_LevelFrequency(&hz);
-    }
+    for (int attempt = 0; attempt < MAX_RETRY; attempt++) {
+        if (g_deviceParams.sensorType == DSM_SENSOR) {
+            ret = Read_Level_Frequency(&hz);
+        } else {
+            ret = DSM_V2_Read_LevelFrequency(&hz);
+        }
 
-    if (ret != NO_ERROR) {
-        return ret;
+        if (ret != NO_ERROR) {
+            return ret;  // ¶ÁÈ¡Ê§°ÜÖ±½Ó·µ»Ø´íÎóÂë
+        }
+
+        if (hz != 0) {
+            break;  // ³É¹¦¶ÁÈ¡·Ç0ÆµÂÊ
+        }
+
+        // hz == 0 Ê±µÈ´ıÒ»Ğ¡¶ÎÊ±¼äÔÙÖØÊÔ£¬±ÜÃâ×ÜÊÇÁ¢¼´ÖØÊÔ
+        HAL_Delay(500);
     }
 
     *frequency_out = hz;
 
-    printf("æ¶²ä½é¢‘ç‡: %lu Hz\r\n", (unsigned long)*frequency_out);
+    printf("ÒºÎ»ÆµÂÊ: %lu Hz\r\n", (unsigned long)*frequency_out);
+
+    // Èç¹ûÖØÊÔ3´ÎÈÔÎª0£¬¿É·µ»ØÌØÊâ´íÎóÂë£¬Ò²¿ÉÒÔ±£Áô0
+    if (hz == 0) {
+        printf(" ¾¯¸æ£ºÒºÎ»ÆµÂÊ¶ÁÈ¡Îª0£¡\r\n");
+        return SENSOR_COMM_TIMEOUT;  // ¿É¸ù¾İĞèÇó·µ»Ø´íÎóÂë
+    }
+
     return NO_ERROR;
 }
 
+
 /**
- * @brief è·å–æ¶²ä½è·Ÿéšé¢‘ç‡çš„å¹³å‡å€¼
- *        ï¼ˆ10 æ¬¡é‡‡æ ·ï¼Œ2s é—´éš”ï¼Œå» 2 å¤§ 2 å°ï¼Œå–ä¸­é—´ 6 æ¬¡å‡å€¼ï¼‰
+ * @brief »ñÈ¡ÒºÎ»¸úËæÆµÂÊµÄÆ½¾ùÖµ
+ *        £¨10 ´Î²ÉÑù£¬2s ¼ä¸ô£¬È¥ 2 ´ó 2 Ğ¡£¬È¡ÖĞ¼ä 6 ´Î¾ùÖµ£©
  */
 uint32_t DSM_Get_LevelMode_Frequence_Avg(uint32_t *frequency_out) {
-    if (frequency_out == NULL) {
-        return PARAM_ADDRESS_OVERFLOW;
-    }
+	if (frequency_out == NULL) {
+		return PARAM_ADDRESS_OVERFLOW;
+	}
 
-    uint32_t values[10];
-    uint32_t ret;
+	uint32_t values[10];
+	uint32_t ret;
 
-    for (int i = 0; i < 10; i++) {
-        ret = DSM_Get_LevelMode_Frequence(&values[i]);
-        if (ret != NO_ERROR) {
-            printf("è¯»å–æ¶²ä½é¢‘ç‡å¤±è´¥ï¼Œç¬¬ %d æ¬¡\r\n", i + 1);
-            return ret;
-        }
-        printf("ç¬¬ %d æ¬¡æ¶²ä½é¢‘ç‡: %lu Hz\r\n", i + 1, (unsigned long)values[i]);
-        HAL_Delay(2000); // 2 ç§’é—´éš”ï¼ˆæ ‡å®šåœºæ™¯å¯æ¥å—ï¼‰
-    }
+	for (int i = 0; i < 10; i++) {
+		ret = DSM_Get_LevelMode_Frequence(&values[i]);
+		if (ret != NO_ERROR) {
+			printf("¶ÁÈ¡ÒºÎ»ÆµÂÊÊ§°Ü£¬µÚ %d ´Î\r\n", i + 1);
+			return ret;
+		}
+		printf("µÚ %d ´ÎÒºÎ»ÆµÂÊ: %lu Hz\r\n", i + 1, (unsigned long) values[i]);
+		HAL_Delay(2000); // 2 Ãë¼ä¸ô£¨±ê¶¨³¡¾°¿É½ÓÊÜ£©
+	}
 
-    // å†’æ³¡æ’åºï¼ˆå‡åºï¼‰
-    for (int i = 0; i < 9; i++) {
-        for (int j = 0; j < 9 - i; j++) {
-            if (values[j] > values[j + 1]) {
-                uint32_t tmp = values[j];
-                values[j] = values[j + 1];
-                values[j + 1] = tmp;
-            }
-        }
-    }
+	// Ã°ÅİÅÅĞò£¨ÉıĞò£©
+	for (int i = 0; i < 9; i++) {
+		for (int j = 0; j < 9 - i; j++) {
+			if (values[j] > values[j + 1]) {
+				uint32_t tmp = values[j];
+				values[j] = values[j + 1];
+				values[j + 1] = tmp;
+			}
+		}
+	}
 
-    // å»æ‰ä¸¤ä¸ªæœ€å¤§ä¸ä¸¤ä¸ªæœ€å°
-    float sum = 0.0f;
-    for (int i = 2; i < 8; i++) {
-        sum += (float)values[i];
-    }
+	// È¥µôÁ½¸ö×î´óÓëÁ½¸ö×îĞ¡
+	float sum = 0.0f;
+	for (int i = 2; i < 8; i++) {
+		sum += (float) values[i];
+	}
 
-    float avg = sum / 6.0f;
-    uint32_t avg_u32 = (avg >= 0.0f) ? (uint32_t)(avg + 0.5f) : 0u;
-    *frequency_out = avg_u32;
+	float avg = sum / 6.0f;
+	uint32_t avg_u32 = (avg >= 0.0f) ? (uint32_t) (avg + 0.5f) : 0u;
+	*frequency_out = avg_u32;
 
-    printf("æ¶²ä½é¢‘ç‡å¹³å‡å€¼(å»æå€¼): %lu Hz\r\n", (unsigned long)*frequency_out);
-    return NO_ERROR;
+	printf("ÒºÎ»ÆµÂÊÆ½¾ùÖµ(È¥¼«Öµ): %lu Hz\r\n", (unsigned long) *frequency_out);
+	return NO_ERROR;
 }
 
 #define TEMP_TO_RAW(t)  ((uint32_t)((t) * 100.0f + 20000.0f))
 #define DENSITY_TO_RAW(d) ((uint32_t)((d) * 10.0f))
 
-uint32_t Read_Density(float *density, float *viscosity, float *temp) {
-    if (density == NULL || viscosity == NULL || temp == NULL) {
-        return PARAM_ADDRESS_OVERFLOW;
-    }
+uint32_t Read_Density(float *frequency, float *density, float *temp) {
+	if (frequency == NULL || temp == NULL || density == NULL) {
+		return PARAM_ADDRESS_OVERFLOW;
+	}
 
-    uint32_t ret;
-    if (g_deviceParams.sensorType == DSM_SENSOR) {
-        ret = Read_Density_Temp(density, viscosity, temp);
-    } else {
-        ret = Read_Density_SIL(density, viscosity, temp);
-    }
+	uint32_t ret;
+	if (g_deviceParams.sensorType == DSM_SENSOR) {
+		ret = DSM_Read_Frequency_Density_Temp(frequency, density, temp);
+	} else {
 
-    if (ret == NO_ERROR) {
-        printf("å¯†åº¦: %.2f  ç²˜åº¦: %.3f  æ¸©åº¦: %.3f â„ƒ\r\n",
-               *density, *viscosity, *temp);
+	}
+	if (ret == NO_ERROR) {
+		printf("ÃÜ¶È: %.2f  ÆµÂÊ: %.3f  ÎÂ¶È: %.3f ¡æ\r\n", *density, *frequency, *temp);
+		uint32_t density_raw = DENSITY_TO_RAW(*density);
+		uint32_t temp_raw = TEMP_TO_RAW(*temp);
+		uint32_t pos = g_measurement.debug_data.sensor_position;
 
-        uint32_t density_raw = DENSITY_TO_RAW(*density);
-        uint32_t temp_raw    = TEMP_TO_RAW(*temp);
-        uint32_t pos         = g_measurement.debug_data.sensor_position;
+		g_measurement.single_point_monitoring.density = density_raw;
+		g_measurement.single_point_monitoring.temperature = temp_raw;
+		g_measurement.single_point_monitoring.temperature_position = pos;
 
-        g_measurement.single_point_monitoring.density             = density_raw;
-        g_measurement.single_point_monitoring.temperature         = temp_raw;
-        g_measurement.single_point_monitoring.temperature_position = pos;
+		g_measurement.single_point_measurement.density = density_raw;
+		g_measurement.single_point_measurement.temperature = temp_raw;
+		g_measurement.single_point_measurement.temperature_position = pos;
+	}
 
-        g_measurement.single_point_measurement.density             = density_raw;
-        g_measurement.single_point_measurement.temperature         = temp_raw;
-        g_measurement.single_point_measurement.temperature_position = pos;
-    } else {
-        printf("è¯»å–å¯†åº¦/æ¸©åº¦å¤±è´¥ï¼\r\n");
-    }
+	else {
+		printf("¶ÁÈ¡ÃÜ¶È/ÎÂ¶ÈÊ§°Ü£¡\r\n");
+	}
 
-    return ret;
+	return ret;
 }

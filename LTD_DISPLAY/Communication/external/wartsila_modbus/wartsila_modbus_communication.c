@@ -140,6 +140,7 @@ ModbusResult modbus_rtu_process(const uint8_t* rx, uint16_t rx_len,
     switch (func) {
         case 0x03:
             // 读之前把设备测量值刷到寄存器
+//        	printf("分布测量起始点：%d\r\n",g_deviceParams..measurement_points);
             DeviceParams_StoreToRegisters(g_holding_regs);
             if (handle_0x03(addr, pdu, pdu_len, tx, tx_len)) return MODBUS_OK;
             break;
