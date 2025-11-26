@@ -40,7 +40,6 @@ void App_Init(void) {
 	Probe_EnableWaterSensor();//开启液位模式
 //	DSM_V2_SwitchToLevelMode(); // 切换到液位模式
 	g_deviceParams.sensorType =LTD_SENSOR;
-
 }
 
 // 主循环任务
@@ -69,7 +68,7 @@ void App_MainLoop(void) {
 //		DSMSendcommand3times(DSM_POWER, strlen(DSM_POWER));
 //		DSMSendcommand3times(DSM_SENSORGET, strlen(DSM_SENSORGET));
 //		Probe_EnableWaterSensor();
-		printf("{encoder}%d\r\n{weight}%d\r\n", (int) g_encoder_count, g_weight);
+//		printf("{encoder}%d\r\n{weight}%d\r\n", (int) g_encoder_count, g_weight);
 //		printf("位置%d", g_measurement.debug_data.sensor_position);
 //		HAL_GPIO_WritePin(HART_RTS_GPIO_Port, HART_RTS_Pin, GPIO_PIN_RESET);
 //		HAL_UART_Transmit_DMA(&huart2, "123456", 6);  // 通过UART发送响应

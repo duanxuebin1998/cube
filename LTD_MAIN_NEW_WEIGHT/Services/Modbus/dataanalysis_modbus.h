@@ -4,16 +4,16 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-#define RETURN_OK 0//è¿è¡Œæ­£å¸¸
-#define RETURN_EXEFAIL -1//å‘ç”Ÿæ•…éšœ
-#define RETURN_UNSUPPORTED -2//ä¸æ”¯æŒçš„æ“ä½œ
-#define RETURN_UNDEFADDRESS -3//éæ³•æ•°æ®åœ°å€
+#define RETURN_OK 0//ÔËĞĞÕı³£
+#define RETURN_EXEFAIL -1//·¢Éú¹ÊÕÏ
+#define RETURN_UNSUPPORTED -2//²»Ö§³ÖµÄ²Ù×÷
+#define RETURN_UNDEFADDRESS -3//·Ç·¨Êı¾İµØÖ·
 
 
 
-void WriteDeviceParamsToHoldingRegisters(int *p_holdregister);//å†™å…¥ä¿æŒå¯„å­˜å™¨
-void ReadDeviceParamsFromHoldingRegisters(int *p_inputregister);//ä»è¾“å…¥å¯„å­˜å™¨è¯»å–è®¾å¤‡å‚æ•°
-void write_measurement_result_to_IputerRegisters(uint16_t *regs); // å°†æµ‹é‡ç»“æœå†™å…¥è¾“å…¥å¯„å­˜å™¨æ•°ç»„
+void WriteDeviceParamsToHoldingRegisters(int *p_holdregister);//Ğ´Èë±£³Ö¼Ä´æÆ÷
+void ReadDeviceParamsFromHoldingRegisters(int *p_inputregister);//´ÓÊäÈë¼Ä´æÆ÷¶ÁÈ¡Éè±¸²ÎÊı
+void write_measurement_result_to_IputerRegisters(uint16_t *regs); // ½«²âÁ¿½á¹ûĞ´ÈëÊäÈë¼Ä´æÆ÷Êı×é
 
 
 

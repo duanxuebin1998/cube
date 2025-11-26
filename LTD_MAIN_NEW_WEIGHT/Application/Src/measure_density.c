@@ -15,7 +15,7 @@ uint32_t SinglePointMeasurement() {
 	EnableDensityMode();
 	while (1) {
 		DSM_V2_Test_AllParams();
-		Sensor_Test(); // ä¼ æ„Ÿå™¨æµ‹è¯•
+		Sensor_Test(); // ´«¸ÐÆ÷²âÊÔ
 		CHECK_COMMAND_SWITCH(ret);
 	}
 
@@ -28,7 +28,7 @@ uint32_t SinglePointMonitoring() {
 	EnableDensityMode();
 	while (1) {
 		DSM_V2_Test_AllParams();
-		Sensor_Test(); // ä¼ æ„Ÿå™¨æµ‹è¯•
+		Sensor_Test(); // ´«¸ÐÆ÷²âÊÔ
 		CHECK_COMMAND_SWITCH(ret);
 	}
 }

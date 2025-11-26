@@ -18,10 +18,10 @@
 
 void WriteDeviceParamsToHoldingRegisters(int *HoldingRegisterArray)
 {
-    // æŒ‡ä»¤
+    // Ö¸Áî
     WRITE_UINT32_TO_HOLDING(HOLDREGISTER_DEVICEPARAM_COMMAND, g_deviceParams.command);
 
-    // åŸºç¡€å‚æ•°
+    // »ù´¡²ÎÊı
     WRITE_UINT32_TO_HOLDING(HOLDREGISTER_DEVICEPARAM_TANKHEIGHT, g_deviceParams.tankHeight);
     WRITE_UINT32_TO_HOLDING(HOLDREGISTER_DEVICEPARAM_BLINDZONE, g_deviceParams.blindZone);
     WRITE_UINT32_TO_HOLDING(HOLDREGISTER_DEVICEPARAM_WATER_BLINDZONE, g_deviceParams.waterBlindZone);
@@ -30,7 +30,7 @@ void WriteDeviceParamsToHoldingRegisters(int *HoldingRegisterArray)
     WRITE_UINT32_TO_HOLDING(HOLDREGISTER_DEVICEPARAM_SENSORID, g_deviceParams.sensorID);
     WRITE_UINT32_TO_HOLDING(HOLDREGISTER_DEVICEPARAM_SOFTWAREVERSION, g_deviceParams.softwareVersion);
 
-    // ç§°é‡å‚æ•°
+    // ³ÆÖØ²ÎÊı
     WRITE_UINT32_TO_HOLDING(HOLDREGISTER_DEVICEPARAM_EMPTY_WEIGHT, g_deviceParams.empty_weight);
     WRITE_UINT32_TO_HOLDING(HOLDREGISTER_DEVICEPARAM_FULL_WEIGHT, g_deviceParams.full_weight);
     WRITE_UINT32_TO_HOLDING(HOLDREGISTER_DEVICEPARAM_WEIGHT_UPPER_LIMIT_RATIO, g_deviceParams.weight_upper_limit_ratio);
@@ -41,7 +41,7 @@ void WriteDeviceParamsToHoldingRegisters(int *HoldingRegisterArray)
     WRITE_UINT32_TO_HOLDING(HOLDREGISTER_DEVICEPARAM_FULL_WEIGHT_LOWER_LIMIT, g_deviceParams.full_weight_lower_limit);
     WRITE_UINT32_TO_HOLDING(HOLDREGISTER_DEVICEPARAM_FINDZERO_DOWN_DISTANCE, g_deviceParams.findZeroDownDistance);
 
-    // æŒ‡ä»¤å‚æ•°
+    // Ö¸Áî²ÎÊı
     WRITE_UINT32_TO_HOLDING(HOLDREGISTER_DEVICEPARAM_CALIBRATE_OIL_LEVEL, g_deviceParams.calibrateOilLevel);
     WRITE_UINT32_TO_HOLDING(HOLDREGISTER_DEVICEPARAM_CALIBRATE_WATER_LEVEL, g_deviceParams.calibrateWaterLevel);
     WRITE_UINT32_TO_HOLDING(HOLDREGISTER_DEVICEPARAM_SP_MEAS_POSITION, g_deviceParams.singlePointMeasurementPosition);
@@ -49,11 +49,11 @@ void WriteDeviceParamsToHoldingRegisters(int *HoldingRegisterArray)
     WRITE_UINT32_TO_HOLDING(HOLDREGISTER_DEVICEPARAM_DENSITY_DISTRIBUTION_OIL_LEVEL, g_deviceParams.densityDistributionOilLevel);
     WRITE_UINT32_TO_HOLDING(HOLDREGISTER_DEVICEPARAM_MOTOR_COMMAND_DISTANCE, g_deviceParams.motorCommandDistance);
 
-    // å¯†åº¦/æ¸©åº¦ä¿®æ­£
+    // ÃÜ¶È/ÎÂ¶ÈĞŞÕı
     WRITE_UINT32_TO_HOLDING(HOLDREGISTER_DEVICEPARAM_DENSITYCORRECTION, g_deviceParams.densityCorrection);
     WRITE_UINT32_TO_HOLDING(HOLDREGISTER_DEVICEPARAM_TEMPERATURECORRECTION, g_deviceParams.temperatureCorrection);
 
-    // åˆ†å¸ƒæµ‹é‡å‚æ•°
+    // ·Ö²¼²âÁ¿²ÎÊı
     WRITE_UINT32_TO_HOLDING(HOLDREGISTER_DEVICEPARAM_REQUIREBOTTOMMEASUREMENT, g_deviceParams.requireBottomMeasurement);
     WRITE_UINT32_TO_HOLDING(HOLDREGISTER_DEVICEPARAM_REQUIREWATERMEASUREMENT, g_deviceParams.requireWaterMeasurement);
     WRITE_UINT32_TO_HOLDING(HOLDREGISTER_DEVICEPARAM_REQUIRESINGLEPOINTDENSITY, g_deviceParams.requireSinglePointDensity);
@@ -65,26 +65,26 @@ void WriteDeviceParamsToHoldingRegisters(int *HoldingRegisterArray)
     WRITE_UINT32_TO_HOLDING(HOLDREGISTER_DEVICEPARAM_SPREADBOTTOMLIMIT, g_deviceParams.spreadBottomLimit);
     WRITE_UINT32_TO_HOLDING(HOLDREGISTER_DEVICEPARAM_SPREAD_POINT_HOVER_TIME, g_deviceParams.spreadPointHoverTime);
 
-    // æ°´ä½æµ‹é‡å‚æ•°
+    // Ë®Î»²âÁ¿²ÎÊı
     WRITE_UINT32_TO_HOLDING(HOLDREGISTER_DEVICEPARAM_WATERLEVELCORRECTION, g_deviceParams.waterLevelCorrection);
     WRITE_UINT32_TO_HOLDING(HOLDREGISTER_DEVICEPARAM_MAXDOWNDISTANCE, g_deviceParams.maxDownDistance);
 
-    // å®é«˜æµ‹é‡
+    // Êµ¸ß²âÁ¿
     WRITE_UINT32_TO_HOLDING(HOLDREGISTER_DEVICEPARAM_REFRESHTANKHEIGHTFLAG, g_deviceParams.refreshTankHeightFlag);
     WRITE_UINT32_TO_HOLDING(HOLDREGISTER_DEVICEPARAM_MAXTANKHEIGHTDEVIATION, g_deviceParams.maxTankHeightDeviation);
     WRITE_UINT32_TO_HOLDING(HOLDREGISTER_DEVICEPARAM_INITIALTANKHEIGHT, g_deviceParams.initialTankHeight);
     WRITE_UINT32_TO_HOLDING(HOLDREGISTER_DEVICEPARAM_CURRENTTANKHEIGHT, g_deviceParams.currentTankHeight);
 
-    // æ¶²ä½æµ‹é‡
+    // ÒºÎ»²âÁ¿
     WRITE_UINT32_TO_HOLDING(HOLDREGISTER_DEVICEPARAM_OILLEVELTHRESHOLD, g_deviceParams.oilLevelThreshold);
     WRITE_UINT32_TO_HOLDING(HOLDREGISTER_DEVICEPARAM_LIQUIDLEVELMEASUREMENTMETHOD, g_deviceParams.liquidLevelMeasurementMethod);
 
-    // æŠ¥è­¦ï¼ˆDOï¼‰
+    // ±¨¾¯£¨DO£©
     WRITE_UINT32_TO_HOLDING(HOLDREGISTER_DEVICEPARAM_ALARM_HIGH_DO, g_deviceParams.AlarmHighDO);
     WRITE_UINT32_TO_HOLDING(HOLDREGISTER_DEVICEPARAM_ALARM_LOW_DO, g_deviceParams.AlarmLowDO);
     WRITE_UINT32_TO_HOLDING(HOLDREGISTER_DEVICEPARAM_THIRD_STATE_THRESHOLD, g_deviceParams.ThirdStateThreshold);
 
-    // 4-20mAè¾“å‡ºï¼ˆAOï¼‰
+    // 4-20mAÊä³ö£¨AO£©
     WRITE_UINT32_TO_HOLDING(HOLDREGISTER_DEVICEPARAM_CURRENT_RANGE_START_mA, g_deviceParams.CurrentRangeStart_mA);
     WRITE_UINT32_TO_HOLDING(HOLDREGISTER_DEVICEPARAM_CURRENT_RANGE_END_mA, g_deviceParams.CurrentRangeEnd_mA);
     WRITE_UINT32_TO_HOLDING(HOLDREGISTER_DEVICEPARAM_ALARM_HIGH_AO, g_deviceParams.AlarmHighAO);
@@ -102,10 +102,10 @@ void WriteDeviceParamsToHoldingRegisters(int *HoldingRegisterArray)
 
 void ReadDeviceParamsFromHoldingRegisters(int *HoldingRegisterArray)
 {
-    // æŒ‡ä»¤
+    // Ö¸Áî
     READ_UINT32_FROM_HOLDING(HOLDREGISTER_DEVICEPARAM_COMMAND, g_deviceParams.command);
 
-    // åŸºç¡€å‚æ•°
+    // »ù´¡²ÎÊı
     READ_UINT32_FROM_HOLDING(HOLDREGISTER_DEVICEPARAM_TANKHEIGHT, g_deviceParams.tankHeight);
     READ_UINT32_FROM_HOLDING(HOLDREGISTER_DEVICEPARAM_BLINDZONE, g_deviceParams.blindZone);
     READ_UINT32_FROM_HOLDING(HOLDREGISTER_DEVICEPARAM_WATER_BLINDZONE, g_deviceParams.waterBlindZone);
@@ -114,7 +114,7 @@ void ReadDeviceParamsFromHoldingRegisters(int *HoldingRegisterArray)
     READ_UINT32_FROM_HOLDING(HOLDREGISTER_DEVICEPARAM_SENSORID, g_deviceParams.sensorID);
     READ_UINT32_FROM_HOLDING(HOLDREGISTER_DEVICEPARAM_SOFTWAREVERSION, g_deviceParams.softwareVersion);
 
-    // ç§°é‡å‚æ•°
+    // ³ÆÖØ²ÎÊı
     READ_UINT32_FROM_HOLDING(HOLDREGISTER_DEVICEPARAM_EMPTY_WEIGHT, g_deviceParams.empty_weight);
     READ_UINT32_FROM_HOLDING(HOLDREGISTER_DEVICEPARAM_FULL_WEIGHT, g_deviceParams.full_weight);
     READ_UINT32_FROM_HOLDING(HOLDREGISTER_DEVICEPARAM_WEIGHT_UPPER_LIMIT_RATIO, g_deviceParams.weight_upper_limit_ratio);
@@ -125,7 +125,7 @@ void ReadDeviceParamsFromHoldingRegisters(int *HoldingRegisterArray)
     READ_UINT32_FROM_HOLDING(HOLDREGISTER_DEVICEPARAM_FULL_WEIGHT_LOWER_LIMIT, g_deviceParams.full_weight_lower_limit);
     READ_UINT32_FROM_HOLDING(HOLDREGISTER_DEVICEPARAM_FINDZERO_DOWN_DISTANCE, g_deviceParams.findZeroDownDistance);
 
-    // æŒ‡ä»¤å‚æ•°
+    // Ö¸Áî²ÎÊı
     READ_UINT32_FROM_HOLDING(HOLDREGISTER_DEVICEPARAM_CALIBRATE_OIL_LEVEL, g_deviceParams.calibrateOilLevel);
     READ_UINT32_FROM_HOLDING(HOLDREGISTER_DEVICEPARAM_CALIBRATE_WATER_LEVEL, g_deviceParams.calibrateWaterLevel);
     READ_UINT32_FROM_HOLDING(HOLDREGISTER_DEVICEPARAM_SP_MEAS_POSITION, g_deviceParams.singlePointMeasurementPosition);
@@ -133,11 +133,11 @@ void ReadDeviceParamsFromHoldingRegisters(int *HoldingRegisterArray)
     READ_UINT32_FROM_HOLDING(HOLDREGISTER_DEVICEPARAM_DENSITY_DISTRIBUTION_OIL_LEVEL, g_deviceParams.densityDistributionOilLevel);
     READ_UINT32_FROM_HOLDING(HOLDREGISTER_DEVICEPARAM_MOTOR_COMMAND_DISTANCE, g_deviceParams.motorCommandDistance);
 
-    // å¯†åº¦ä¸æ¸©åº¦ä¿®æ­£
+    // ÃÜ¶ÈÓëÎÂ¶ÈĞŞÕı
     READ_UINT32_FROM_HOLDING(HOLDREGISTER_DEVICEPARAM_DENSITYCORRECTION, g_deviceParams.densityCorrection);
     READ_UINT32_FROM_HOLDING(HOLDREGISTER_DEVICEPARAM_TEMPERATURECORRECTION, g_deviceParams.temperatureCorrection);
 
-    // åˆ†å¸ƒæµ‹é‡å‚æ•°
+    // ·Ö²¼²âÁ¿²ÎÊı
     READ_UINT32_FROM_HOLDING(HOLDREGISTER_DEVICEPARAM_REQUIREBOTTOMMEASUREMENT, g_deviceParams.requireBottomMeasurement);
     READ_UINT32_FROM_HOLDING(HOLDREGISTER_DEVICEPARAM_REQUIREWATERMEASUREMENT, g_deviceParams.requireWaterMeasurement);
     READ_UINT32_FROM_HOLDING(HOLDREGISTER_DEVICEPARAM_REQUIRESINGLEPOINTDENSITY, g_deviceParams.requireSinglePointDensity);
@@ -149,26 +149,26 @@ void ReadDeviceParamsFromHoldingRegisters(int *HoldingRegisterArray)
     READ_UINT32_FROM_HOLDING(HOLDREGISTER_DEVICEPARAM_SPREADBOTTOMLIMIT, g_deviceParams.spreadBottomLimit);
     READ_UINT32_FROM_HOLDING(HOLDREGISTER_DEVICEPARAM_SPREAD_POINT_HOVER_TIME, g_deviceParams.spreadPointHoverTime);
 
-    // æ°´ä½æµ‹é‡å‚æ•°
+    // Ë®Î»²âÁ¿²ÎÊı
     READ_UINT32_FROM_HOLDING(HOLDREGISTER_DEVICEPARAM_WATERLEVELCORRECTION, g_deviceParams.waterLevelCorrection);
     READ_UINT32_FROM_HOLDING(HOLDREGISTER_DEVICEPARAM_MAXDOWNDISTANCE, g_deviceParams.maxDownDistance);
 
-    // å®é«˜æµ‹é‡
+    // Êµ¸ß²âÁ¿
     READ_UINT32_FROM_HOLDING(HOLDREGISTER_DEVICEPARAM_REFRESHTANKHEIGHTFLAG, g_deviceParams.refreshTankHeightFlag);
     READ_UINT32_FROM_HOLDING(HOLDREGISTER_DEVICEPARAM_MAXTANKHEIGHTDEVIATION, g_deviceParams.maxTankHeightDeviation);
     READ_UINT32_FROM_HOLDING(HOLDREGISTER_DEVICEPARAM_INITIALTANKHEIGHT, g_deviceParams.initialTankHeight);
     READ_UINT32_FROM_HOLDING(HOLDREGISTER_DEVICEPARAM_CURRENTTANKHEIGHT, g_deviceParams.currentTankHeight);
 
-    // æ¶²ä½æµ‹é‡
+    // ÒºÎ»²âÁ¿
     READ_UINT32_FROM_HOLDING(HOLDREGISTER_DEVICEPARAM_OILLEVELTHRESHOLD, g_deviceParams.oilLevelThreshold);
     READ_UINT32_FROM_HOLDING(HOLDREGISTER_DEVICEPARAM_LIQUIDLEVELMEASUREMENTMETHOD, g_deviceParams.liquidLevelMeasurementMethod);
 
-    // æŠ¥è­¦ï¼ˆDOï¼‰
+    // ±¨¾¯£¨DO£©
     READ_UINT32_FROM_HOLDING(HOLDREGISTER_DEVICEPARAM_ALARM_HIGH_DO, g_deviceParams.AlarmHighDO);
     READ_UINT32_FROM_HOLDING(HOLDREGISTER_DEVICEPARAM_ALARM_LOW_DO, g_deviceParams.AlarmLowDO);
     READ_UINT32_FROM_HOLDING(HOLDREGISTER_DEVICEPARAM_THIRD_STATE_THRESHOLD, g_deviceParams.ThirdStateThreshold);
 
-    // 4-20mAè¾“å‡ºï¼ˆAOï¼‰
+    // 4-20mAÊä³ö£¨AO£©
     READ_UINT32_FROM_HOLDING(HOLDREGISTER_DEVICEPARAM_CURRENT_RANGE_START_mA, g_deviceParams.CurrentRangeStart_mA);
     READ_UINT32_FROM_HOLDING(HOLDREGISTER_DEVICEPARAM_CURRENT_RANGE_END_mA, g_deviceParams.CurrentRangeEnd_mA);
     READ_UINT32_FROM_HOLDING(HOLDREGISTER_DEVICEPARAM_ALARM_HIGH_AO, g_deviceParams.AlarmHighAO);
@@ -184,33 +184,33 @@ void ReadDeviceParamsFromHoldingRegisters(int *HoldingRegisterArray)
 }
 
 
-/* å†™å…¥ uint32_t åˆ°å¯„å­˜å™¨æ•°ç»„ */
+/* Ğ´Èë uint32_t µ½¼Ä´æÆ÷Êı×é */
 static void write_u32_to_regs(uint16_t *regs, uint16_t addr, uint32_t value) {
     regs[addr]     = (uint16_t)((value >> 16) & 0xFFFF);
     regs[addr + 1] = (uint16_t)(value & 0xFFFF);
 }
 
-/* å†™å…¥ int32_t åˆ°å¯„å­˜å™¨æ•°ç»„ */
+/* Ğ´Èë int32_t µ½¼Ä´æÆ÷Êı×é */
 static void write_i32_to_regs(uint16_t *regs, uint16_t addr, int32_t value) {
     write_u32_to_regs(regs, addr, (uint32_t)value);
 }
 
-/* å†™å…¥ float åˆ°å¯„å­˜å™¨æ•°ç»„ï¼ˆIEEE754 æŒ‰ uint32_t æ–¹å¼å­˜ï¼‰ */
+/* Ğ´Èë float µ½¼Ä´æÆ÷Êı×é£¨IEEE754 °´ uint32_t ·½Ê½´æ£© */
 static void write_float_to_regs(uint16_t *regs, uint16_t addr, float value) {
     uint32_t temp;
     memcpy(&temp, &value, sizeof(float));
     write_u32_to_regs(regs, addr, temp);
 }
 
-/* å†™å…¥ uint8_t åˆ°å¯„å­˜å™¨æ•°ç»„ï¼ˆå  2 ä¸ªå¯„å­˜å™¨ï¼Œä½ 16 ä½å†™å€¼ï¼Œé«˜ 16 ä½æ¸…é›¶ï¼‰ */
+/* Ğ´Èë uint8_t µ½¼Ä´æÆ÷Êı×é£¨Õ¼ 2 ¸ö¼Ä´æÆ÷£¬µÍ 16 Î»Ğ´Öµ£¬¸ß 16 Î»ÇåÁã£© */
 static void write_u8_to_regs(uint16_t *regs, uint16_t addr, uint8_t value) {
-    regs[addr] = 0;           // é«˜ 16 ä½å ä½
-    regs[addr + 1] = value;   // ä½ 16 ä½å­˜å®é™…å€¼
+    regs[addr] = 0;           // ¸ß 16 Î»Õ¼Î»
+    regs[addr + 1] = value;   // µÍ 16 Î»´æÊµ¼ÊÖµ
 }
 
 /**
- * @brief å°†å…¨å±€æµ‹é‡ç»“æœå†™å…¥è¾“å…¥å¯„å­˜å™¨æ•°ç»„
- * @param regs è¾“å…¥å¯„å­˜å™¨æ•°ç»„ï¼ˆuint16_t æ•°ç»„ï¼‰
+ * @brief ½«È«¾Ö²âÁ¿½á¹ûĞ´ÈëÊäÈë¼Ä´æÆ÷Êı×é
+ * @param regs ÊäÈë¼Ä´æÆ÷Êı×é£¨uint16_t Êı×é£©
  */
 void write_measurement_result_to_IputerRegisters(uint16_t *regs)
 {
