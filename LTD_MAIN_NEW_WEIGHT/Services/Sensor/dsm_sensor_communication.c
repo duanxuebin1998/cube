@@ -276,22 +276,6 @@ int DSM_Read_Frequency_Density_Temp(float *frequency, float *density, float *tem
     return ret;
 }
 
-void Sensor_Test(void) {
-    float density, viscosity, temp;
-
-    // 读取密度、温度
-    if (Read_Density(&density, &viscosity, &temp) == 0) {
-        printf("密度: %.3f  粘度: %.3f  温度: %.3f ℃\r\n", density, viscosity, temp);
-        g_measurement.single_point_monitoring.density = density / 10.0f;
-        g_measurement.single_point_monitoring.temperature = temp;
-        g_measurement.single_point_monitoring.temperature_position = g_measurement.debug_data.sensor_position;
-        g_measurement.single_point_measurement.density = density / 10.0f;
-        g_measurement.single_point_measurement.temperature = temp;
-        g_measurement.single_point_measurement.temperature_position = g_measurement.debug_data.sensor_position;
-    } else {
-        printf("读取密度/温度失败！\r\n");
-    }
-}
 
 /**
  * @func: CalculationBCC_DSM

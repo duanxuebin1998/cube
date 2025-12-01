@@ -56,8 +56,8 @@ static uint8_t StockMap[] = "通讯尝试中液位跟随密度温℃版本水测
                             "球形蒸汽尺距离开手启闭短地址扫描路只能连台功打印容稍等几钟储管道径周期调低于盲报警语言发错"
                             "误础界面程序减比股长介信号后限例权屏幕维护视终继状态最探头浸小第悬停禁用弦工固产反先动当前"
                             "大英更传层滞域使磨结束针总阻六级内息命感顺有阈值角导本整";
-static const int StockmapLength = (sizeof(StockMap) - 1) / 2; /*索引数组总文字个数*/
-static const int wordbyte = 3;//一个汉字由几个字节组成
+static const int wordbyte      = 3; // UTF-8 下汉字 3 字节
+static const int StockmapLength = (sizeof(StockMap) - 1) / wordbyte;
 static uint8_t WordStock[255 * 28] =
 {
     0x47,0xF0,0x21,0x20,0x20,0xC0,0x07,0xF0,0x04,0x90,0xE4,0x90,0x27,0xF0,0x24,0x90,0x24,0x90,0x27,0xF0,0x24,0x90,0x24,0xB0,0x50,0x00,0x8F,0xF8,/*"通",0*/
@@ -847,7 +847,7 @@ static void oled_equipment(void)
     {
         row = ValidParaDisArr[Para_AveTemperature][PARA_X];
         line = DisplayLangaugeLineWords((u8*)"温度:",OLED_LINE8_1,row,0,(u8*)"Temp:");
-        OledValueDisplay(g_measurement.single_point_monitoring.temperature,line,row,0,1,(u8*)"℃");
+        OledValueDisplay(g_measurement.single_point_monitoring.temperature-20000,line,row,0,2,(u8*)"℃");
     }
  
     //位置
@@ -879,7 +879,7 @@ static void CalculateValidPara(void)
     /******计算总共有多少个有效参数需要显示******/
     ValidParaCnt = 0;
     //液位
-    if((g_measurement.oil_measurement.oil_level == UNVALID_LEVEL )||(g_measurement.oil_measurement.oil_level == 0 ))
+    if(g_measurement.device_status.device_state != STATE_FLOWOIL)
     {
         flagofoillevelvalid = false;
     }
@@ -898,7 +898,7 @@ static void CalculateValidPara(void)
     else
         ValidParaDisArr[Para_AveDensity][PARA_VALID] = false;
     //温度
-    if((g_measurement.single_point_monitoring.temperature > UNVALID_TEMPERATURE_WIRELESS )&&(g_measurement.single_point_monitoring.temperature <2000 ))
+    if((g_measurement.single_point_monitoring.temperature > 0 )&&(g_measurement.single_point_monitoring.temperature <40000 ))
     {
         ValidParaCnt++;
         ValidParaDisArr[Para_AveTemperature][PARA_NUM] = ValidParaCnt;
@@ -925,7 +925,16 @@ static void CalculateValidPara(void)
     }
     else
         ValidParaDisArr[Para_position][PARA_VALID] = false;
-  
+//    //称重
+//    if((g_measurement.debug_data..> 0 )&&(g_measurement.single_point_monitoring.temperature <40000 ))
+//    {
+//        ValidParaCnt++;
+//        ValidParaDisArr[Para_AveTemperature][PARA_NUM] = ValidParaCnt;
+//        ValidParaDisArr[Para_AveTemperature][PARA_VALID] = true;
+//    }
+//    else
+//        ValidParaDisArr[Para_AveTemperature][PARA_VALID] = false;
+//
     #if DEBUG_DISPLAY
     printf("ValidParaCnt = %d\n",ValidParaCnt);
     #endif

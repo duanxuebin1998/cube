@@ -92,113 +92,115 @@ void write_hanzi16(u8 x, u8 y, u8 *buf, u8 m, u8 endm, u8 select) {
 	}
 }
 /* 清屏 */
-//void all_screen(uint8_t m) {
-//	uint32_t j, i;
-//
-//	// 设置列窗口
-//	WriteCommand(0x15);
-//	WriteCommand(0x00); /* 左边界 0 */
-//	WriteCommand(0x3F); /* 右边界 127*/
-//	// 设置行窗口
-//	WriteCommand(0x75);
-//	WriteCommand(0x0C); /* 上边界 0*/
-//	WriteCommand(0x4b); /* 下边界 63*/
-//	// 设置 SEG 电流等级；
-//	WriteCommand(0x81);
-//	WriteCommand(0x20); /* 共 128 级 */
-//	// 设置 SEG 电流范围；
-//	WriteCommand(0x86);
-//	/* 84H=1/4，85H=1/2，86H=1 */
-//	// 设置逆转地图；
-//	WriteCommand(0xA0);
-//	WriteCommand(0x52);
-//	/* BIT-0=1 列窗口反向 ,BIT-1=1 高半字节在
-//	 前,BIT-2=1 COM 反向,BIT-6=0/1 EVEN/ODD */
-//	// 设置显示起始行;
-//	WriteCommand(0xA1);
-//	WriteCommand(0x0C); /* 0*/
-//	// 设置显示分支
-//	WriteCommand(0xA2);
-//	WriteCommand(0x4C); /* 0*/
-//	// 设置显示模式;
-//	WriteCommand(0xA4);
-//	/* A4H=正常显示,A5H=全显,A6H=关显示,A7H=反 显 */
-//	// 设置扫描行;
-//	WriteCommand(0xA8);
-//	WriteCommand(0x3F); /* 64*/
-//	// 设置 P1 P2 ;
-//	WriteCommand(0xB1);
-//	WriteCommand(0x04); /* 4 */
-//	WriteCommand(0x06 << 4); /* 6 */
-//	// 设置行周期;
-//	WriteCommand(0xB2);
-//	WriteCommand(0X46); /* 70*/
-//	// 设置 D 和 Fosc;
-//	WriteCommand(0xB3);
-//	WriteCommand(0x01);
-//	WriteCommand(0x04 << 4); /* Fosc=4 D=2 */
-//	// 设置 Vp2
-//	WriteCommand(0xBC);
-//	WriteCommand(0x00); /* 0.51 */
-//	// 设置 Vcomh
-//	WriteCommand(0xBE);
-//	WriteCommand(0x00); /* 0.51 */
-//	// 设置 Vsl
-//	WriteCommand(0xBF);
-//	WriteCommand(0x0E); /* 连接电容到 VSS */
-//	// 设置灰度;
-//	WriteCommand(0xB8);
-//	WriteCommand(0x07); /* L1[2:1] */
-//	WriteCommand(0x33);
-//	/* L3[6:4], L2[2:0] 0001 0001*/
-//	WriteCommand(0x33);
-//	/* L5[6:4], L4[2:0] 0010 0010*/
-//	WriteCommand(0x33);
-//	/* L7[6:4], L6[2:0] 0011 1011*/
-//	WriteCommand(0x33);
-//	/* L9[6:4], L8[2:0] 0100 0100*/
-//	WriteCommand(0x33);
-//	/* LB[6:4], LA[2:0] 0101 0101*/
-//	WriteCommand(0x33);
-//	/* LD[6:4], LC[2:0] 0110 0110*/
-//	WriteCommand(0x72);
-//
-//	for (j = 0; j < 80; j++) /* 80 row */
-//	{
-//		for (i = 0; i < 64; i++) /* 64*2=128 column  a nibble of command is a dot*/
-//		{
-//			WriteSingleData(m);
-//		}
-//	}
-//	// 显示开关;
-//	WriteCommand(0xAF); /* AF=ON, AE=Sleep Mode */
-//	// 设置 Vcc 来源;
-//	WriteCommand(0xAD);
-//	WriteCommand(0x02); /* 03=内部 02=外部 */
-//
-//}
-/* 清屏 */
-void all_screen(uint8_t m)
-{
-    uint32_t j,i;
+void all_screen(uint8_t m) {
+	uint32_t j, i;
+	HAL_GPIO_WritePin(OLED_NREST_GPIO_Port, OLED_NREST_Pin, GPIO_PIN_RESET); //复位引脚拉低
+	HAL_Delay(10); //延时100ms
+	HAL_GPIO_WritePin(OLED_NREST_GPIO_Port, OLED_NREST_Pin, GPIO_PIN_SET); //复位引脚拉高
+	// 设置列窗口
+	WriteCommand(0x15);
+	WriteCommand(0x00); /* 左边界 0 */
+	WriteCommand(0x3F); /* 右边界 127*/
+	// 设置行窗口
+	WriteCommand(0x75);
+	WriteCommand(0x0C); /* 上边界 0*/
+	WriteCommand(0x4b); /* 下边界 63*/
+	// 设置 SEG 电流等级；
+	WriteCommand(0x81);
+	WriteCommand(0x20); /* 共 128 级 */
+	// 设置 SEG 电流范围；
+	WriteCommand(0x86);
+	/* 84H=1/4，85H=1/2，86H=1 */
+	// 设置逆转地图；
+	WriteCommand(0xA0);
+	WriteCommand(0x52);
+	/* BIT-0=1 列窗口反向 ,BIT-1=1 高半字节在
+	 前,BIT-2=1 COM 反向,BIT-6=0/1 EVEN/ODD */
+	// 设置显示起始行;
+	WriteCommand(0xA1);
+	WriteCommand(0x0C); /* 0*/
+	// 设置显示分支
+	WriteCommand(0xA2);
+	WriteCommand(0x4C); /* 0*/
+	// 设置显示模式;
+	WriteCommand(0xA4);
+	/* A4H=正常显示,A5H=全显,A6H=关显示,A7H=反 显 */
+	// 设置扫描行;
+	WriteCommand(0xA8);
+	WriteCommand(0x3F); /* 64*/
+	// 设置 P1 P2 ;
+	WriteCommand(0xB1);
+	WriteCommand(0x04); /* 4 */
+	WriteCommand(0x06 << 4); /* 6 */
+	// 设置行周期;
+	WriteCommand(0xB2);
+	WriteCommand(0X46); /* 70*/
+	// 设置 D 和 Fosc;
+	WriteCommand(0xB3);
+	WriteCommand(0x01);
+	WriteCommand(0x04 << 4); /* Fosc=4 D=2 */
+	// 设置 Vp2
+	WriteCommand(0xBC);
+	WriteCommand(0x00); /* 0.51 */
+	// 设置 Vcomh
+	WriteCommand(0xBE);
+	WriteCommand(0x00); /* 0.51 */
+	// 设置 Vsl
+	WriteCommand(0xBF);
+	WriteCommand(0x0E); /* 连接电容到 VSS */
+	// 设置灰度;
+	WriteCommand(0xB8);
+	WriteCommand(0x07); /* L1[2:1] */
+	WriteCommand(0x33);
+	/* L3[6:4], L2[2:0] 0001 0001*/
+	WriteCommand(0x33);
+	/* L5[6:4], L4[2:0] 0010 0010*/
+	WriteCommand(0x33);
+	/* L7[6:4], L6[2:0] 0011 1011*/
+	WriteCommand(0x33);
+	/* L9[6:4], L8[2:0] 0100 0100*/
+	WriteCommand(0x33);
+	/* LB[6:4], LA[2:0] 0101 0101*/
+	WriteCommand(0x33);
+	/* LD[6:4], LC[2:0] 0110 0110*/
+	WriteCommand(0x72);
 
-    //Column Address
-    WriteCommand(0x15);     /* Set Column Address */
-    WriteCommand(0x00);     /* Start = 0 */
-    WriteCommand(0x3F);     /* End = 127 */
-    // Row Address
-    WriteCommand(0x75);     /* Set Row Address */
-    WriteCommand(0x00);     /* Start = 0 */
-    WriteCommand(0x50);     /* End = 80 */
-    for (j=0;j<80;j++)      /* 80 row */
-    {
-        for (i=0;i<64;i++)  /* 64*2=128 column  a nibble of command is a dot*/
-        {
-            WriteSingleData(m);
-        }
-    }
+	for (j = 0; j < 80; j++) /* 80 row */
+	{
+		for (i = 0; i < 64; i++) /* 64*2=128 column  a nibble of command is a dot*/
+		{
+			WriteSingleData(m);
+		}
+	}
+	// 显示开关;
+	WriteCommand(0xAF); /* AF=ON, AE=Sleep Mode */
+	// 设置 Vcc 来源;
+	WriteCommand(0xAD);
+	WriteCommand(0x02); /* 03=内部 02=外部 */
 
 }
+///* 清屏 */
+//void all_screen(uint8_t m)
+//{
+//    uint32_t j,i;
+//
+//    //Column Address
+//    WriteCommand(0x15);     /* Set Column Address */
+//    WriteCommand(0x00);     /* Start = 0 */
+//    WriteCommand(0x3F);     /* End = 127 */
+//    // Row Address
+//    WriteCommand(0x75);     /* Set Row Address */
+//    WriteCommand(0x00);     /* Start = 0 */
+//    WriteCommand(0x50);     /* End = 80 */
+//    for (j=0;j<80;j++)      /* 80 row */
+//    {
+//        for (i=0;i<64;i++)  /* 64*2=128 column  a nibble of command is a dot*/
+//        {
+//            WriteSingleData(m);
+//        }
+//    }
+//
+//}
 /* 清屏 - 局部范围内 */
 void CLS_scope(uint8_t row_start, uint8_t row_end, uint8_t column_start, uint8_t column_end) {
 	uint32_t j, i;

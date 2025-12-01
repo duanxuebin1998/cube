@@ -31,31 +31,65 @@
 #define MAX_MEASUREMENT_POINTS 100 // 密度分布测量最大点数
 
 /*测量命令*/
-/* 测量命令 */
 typedef enum {
-	CMD_NONE = 0,                  // 无命令
-	CMD_BACK_ZERO = 1,            	// 回零点
-	CMD_FIND_OIL = 2,              // 寻找液位
-	CMD_FIND_WATER = 3,            // 寻找水位
-	CMD_FIND_BOTTOM = 4,           // 寻找罐底
-	CMD_MEASURE_SINGLE = 5,        // 单点测量
-	CMD_MONITOR_SINGLE = 6,        // 单点监测
-	CMD_SYNTHETIC = 7,             // 综合指令
-	CMD_MEASURE_DISTRIBUTED = 8,   // 分布测量
-	CMD_MEASURE_DENSITY_METER = 9, // 密度每米测量
-	CMD_MEASURE_DENSITY_RANGE = 10, // 液位区间测量
 
-	CMD_CALIBRATE_ZERO = 11,       // 标定零点
-	CMD_CALIBRATE_OIL = 12,        // 标定液位
-	CMD_CORRECT_OIL = 13,           // 修正液位
-	CMD_MOVE_UP = 14,              // 上行
-	CMD_MOVE_DOWN = 15,            // 下行
-	CMD_SET_EMPTY_WEIGHT = 16,     // 设置空载称重
-	CMD_SET_FULL_WEIGHT = 17,		// 设置满载称重
-	CMD_RESTORE_FACTORY = 18,      // 恢复出厂设置
-	CMD_MAINTENANCE_MODE = 19,     // 维护模式
-	CMD_UNKNOWN = 20              // 未知指令
+    /* ======================= 基础 ======================= */
+    CMD_NONE                       = 0,    // 无命令
+
+
+    /* ======================= 普通指令（测量类 1~99） ======================= */
+
+    /* --- 基础测量动作 --- */
+    CMD_BACK_ZERO                  = 1,    // 回零点
+    CMD_FIND_OIL                   = 2,    // 寻找液位
+    CMD_FIND_WATER                 = 3,    // 寻找水位
+    CMD_FIND_BOTTOM                = 4,    // 寻找罐底
+
+    CMD_MEASURE_SINGLE             = 5,    // 单点测量
+    CMD_MONITOR_SINGLE             = 6,    // 单点监测
+    CMD_SYNTHETIC                  = 7,    // 综合测量
+
+    /* --- 密度分布测量（整个系列，与普通液位分布区分） --- */
+    CMD_MEASURE_DISTRIBUTED        = 10,   // 普通分布测量
+    CMD_GB_MEASURE_DISTRIBUTED     = 11,   // 国标分布测量
+
+    CMD_MEASURE_DENSITY_METER      = 12,   // 密度每米测量
+    CMD_MEASURE_DENSITY_RANGE      = 13,   // 区间密度测量
+    CMD_WARTSILA_DENSITY_RANGE     = 14,   // 瓦西莱密度区间测量
+
+    /* 普通指令预留 */
+    CMD_RESERVED_CMD1              = 20,
+    CMD_RESERVED_CMD2              = 21,
+    CMD_RESERVED_CMD3              = 22,
+
+
+    /* ======================= 调试指令（100~199） ======================= */
+
+    CMD_DEBUG_MODE                 = 100,  // 进入调试模式
+
+    CMD_CALIBRATE_ZERO             = 101,  // 标定零点
+    CMD_CALIBRATE_OIL              = 102,  // 标定液位
+    CMD_CORRECT_OIL                = 103,  // 修正液位
+
+    CMD_MOVE_UP                    = 104,  // 上行
+    CMD_MOVE_DOWN                  = 105,  // 下行
+
+    CMD_SET_EMPTY_WEIGHT           = 106,  // 设置空载称重
+    CMD_SET_FULL_WEIGHT            = 107,  // 设置满载称重
+    CMD_RESTORE_FACTORY            = 108,  // 恢复出厂设置
+    CMD_MAINTENANCE_MODE           = 109,  // 维护模式
+
+    /* 调试预留 */
+    CMD_RESERVED_CMD4              = 110,
+    CMD_RESERVED_CMD5              = 111,
+    CMD_RESERVED_CMD6              = 112,
+
+
+    /* ======================= 其他 ======================= */
+    CMD_UNKNOWN                    = 255   // 未知命令
+
 } CommandType;
+
 
 /*设备状态*/
 typedef enum {

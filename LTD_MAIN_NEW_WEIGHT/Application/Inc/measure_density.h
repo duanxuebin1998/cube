@@ -11,5 +11,5 @@
 #include "app_main.h"
 uint32_t SinglePointMeasurement();
 uint32_t SinglePointMonitoring();
-
+uint32_t SinglePoint_ReadSensor(DensityMeasurement *result);
 #endif /* INC_MEASURE_DENSITY_H_ */

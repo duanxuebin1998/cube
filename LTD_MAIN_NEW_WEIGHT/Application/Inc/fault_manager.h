@@ -100,7 +100,7 @@ typedef enum {
 	/* ==================== 参数/存储类错误 (0x00110000 - 0x0011FFFF) ==================== */
 	PARAM_EEPROM_FAIL = 0x00110001, // EEPROM写入失败
 	PARAM_UNINITIALIZED = 0x00110002, // 参数未初始化
-	PARAM_RANGE_ERROR = 0x00110003, // 参数范围错误
+	PARAM_RANGE_ERROR = 0x00110003, // 参数超限
 	PARAM_ADDRESS_OVERFLOW = 0x00110004, // 参数地址越界
 	PARAM_CRC_ERROR = 0x00110005, // 参数读取CRC校验错误
 

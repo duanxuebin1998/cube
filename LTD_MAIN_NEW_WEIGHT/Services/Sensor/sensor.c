@@ -16,7 +16,15 @@
  * @return uint32_t 错误码或 NO_ERROR
  */
 uint32_t DetectSensorType(void) {
-
+	float temp = 0.0f;
+	if (DSM_V2_Read_Temperature(&temp) == NO_ERROR) {
+		printf("温度值: %.3f ℃\r\n", temp);
+		g_deviceParams.sensorType =LTD_SENSOR;
+	} else
+	{
+		printf("读取温度失败,SIL传感器\r\n");
+		g_deviceParams.sensorType =LTD_SENSOR;
+	}
 }
 
 uint32_t EnableDensityMode(void) {
@@ -37,46 +45,47 @@ uint32_t EnableLevelMode(void) {
 
 // 读取一次并以整数 Hz 返回，读到0时重试最多3次
 uint32_t DSM_Get_LevelMode_Frequence(uint32_t *frequency_out) {
-    if (frequency_out == NULL) {
-        return PARAM_ADDRESS_OVERFLOW;   // 比 SENSOR_COMM_TIMEOUT 更合理
-    }
+	if (frequency_out == NULL) {
+		return PARAM_ADDRESS_OVERFLOW;   // 比 SENSOR_COMM_TIMEOUT 更合理
+	}
 
-    uint32_t ret;
-    uint32_t hz = 0;
-    const int MAX_RETRY = 100;
+	uint32_t ret;
+	uint32_t hz = 0;
+	const int MAX_RETRY = 100;
 
-    for (int attempt = 0; attempt < MAX_RETRY; attempt++) {
-        if (g_deviceParams.sensorType == DSM_SENSOR) {
-            ret = Read_Level_Frequency(&hz);
-        } else {
-            ret = DSM_V2_Read_LevelFrequency(&hz);
-        }
+	for (int attempt = 0; attempt < MAX_RETRY; attempt++) {
+		if (g_deviceParams.sensorType == DSM_SENSOR) {
+			ret = Read_Level_Frequency(&hz);
+		} else {
+			ret = DSM_V2_Read_LevelFrequency(&hz);
+		}
 
-        if (ret != NO_ERROR) {
-            return ret;  // 读取失败直接返回错误码
-        }
+		if (ret != NO_ERROR) {
+			return ret;  // 读取失败直接返回错误码
+		}
 
-        if (hz != 0) {
-            break;  // 成功读取非0频率
-        }
+		if (hz != 0 && hz < 6500) {
+			//停止电机
+//			motorQuickStop();
+			break;  // 成功读取非0频率
+		}
+//		motorQuickStop();
+		// hz == 0 时等待一小段时间再重试，避免总是立即重试
+		HAL_Delay(500);
+	}
 
-        // hz == 0 时等待一小段时间再重试，避免总是立即重试
-        HAL_Delay(500);
-    }
+	*frequency_out = hz;
 
-    *frequency_out = hz;
+	printf("液位频率: %lu Hz\r\n", (unsigned long) *frequency_out);
 
-    printf("液位频率: %lu Hz\r\n", (unsigned long)*frequency_out);
+	// 如果重试3次仍为0，可返回特殊错误码，也可以保留0
+	if (hz == 0) {
+		printf(" 警告：液位频率读取为0！\r\n");
+		return SONIC_FREQ_ABNORMAL;  // 可根据需求返回错误码
+	}
 
-    // 如果重试3次仍为0，可返回特殊错误码，也可以保留0
-    if (hz == 0) {
-        printf(" 警告：液位频率读取为0！\r\n");
-        return SENSOR_COMM_TIMEOUT;  // 可根据需求返回错误码
-    }
-
-    return NO_ERROR;
+	return NO_ERROR;
 }
-
 
 /**
  * @brief 获取液位跟随频率的平均值
@@ -125,21 +134,42 @@ uint32_t DSM_Get_LevelMode_Frequence_Avg(uint32_t *frequency_out) {
 	return NO_ERROR;
 }
 
-#define TEMP_TO_RAW(t)  ((uint32_t)((t) * 100.0f + 20000.0f))
-#define DENSITY_TO_RAW(d) ((uint32_t)((d) * 10.0f))
+uint32_t Read_Density_text(float *frequency, float *density, float *temp) {
+	if (frequency == NULL || temp == NULL || density == NULL) {
+		return PARAM_ADDRESS_OVERFLOW;
+	}
+	*frequency = 5500.123f;
+	*density = 800.5f;
+	*temp = -180.52f;
+	printf("密度: %.2f  频率: %.3f  温度: %.3f ℃\r\n", *density, *frequency, *temp);
 
+	return 0;
+}
 uint32_t Read_Density(float *frequency, float *density, float *temp) {
 	if (frequency == NULL || temp == NULL || density == NULL) {
 		return PARAM_ADDRESS_OVERFLOW;
 	}
-
-	uint32_t ret;
+	uint32_t hz;
+	uint32_t ret = NO_ERROR;
 	if (g_deviceParams.sensorType == DSM_SENSOR) {
 		ret = DSM_Read_Frequency_Density_Temp(frequency, density, temp);
 	} else {
+		if (DSM_V2_Read_Temperature(temp) == NO_ERROR) {
+			printf("温度值: %.3f ℃\r\n", *temp);
+		} else
+			printf("读取温度失败\r\n");
 
+		if (DSM_V2_Read_Density(density) == NO_ERROR) {
+			printf("密度值: %.3f\r\n", *density);
+		} else
+			printf("读取密度失败\r\n");
+		if (DSM_V2_Read_LevelFrequency(&hz) == NO_ERROR) {
+			printf("频率值: %d Hz\r\n", hz);
+		} else
+			printf("读取频率失败\r\n");
 	}
 	if (ret == NO_ERROR) {
+
 		printf("密度: %.2f  频率: %.3f  温度: %.3f ℃\r\n", *density, *frequency, *temp);
 		uint32_t density_raw = DENSITY_TO_RAW(*density);
 		uint32_t temp_raw = TEMP_TO_RAW(*temp);
@@ -160,3 +190,25 @@ uint32_t Read_Density(float *frequency, float *density, float *temp) {
 
 	return ret;
 }
+uint32_t Sensor_Test1(void) {
+	float frequency = 5500.123f;
+	float density = 800.5f;
+	float temp = -180.52f;
+
+	printf("密度: %.2f  频率: %.3f  温度: %.3f ℃\r\n", density, frequency, temp);
+
+	uint32_t density_raw = DENSITY_TO_RAW(density);
+	uint32_t temp_raw = TEMP_TO_RAW(temp);
+	uint32_t pos = g_measurement.debug_data.sensor_position;
+
+	g_measurement.single_point_monitoring.density = density_raw;
+	g_measurement.single_point_monitoring.temperature = temp_raw;
+	g_measurement.single_point_monitoring.temperature_position = pos;
+
+	g_measurement.single_point_measurement.density = density_raw;
+	g_measurement.single_point_measurement.temperature = temp_raw;
+	g_measurement.single_point_measurement.temperature_position = pos;
+
+	return NO_ERROR;
+}
+

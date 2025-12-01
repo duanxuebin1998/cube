@@ -31,8 +31,14 @@ typedef enum {
 #define DSM_CMD_TIMEOUT 1000  //接收字节间超时时间
 #define RX_BUF_LEN 128
 
+#define TEMP_TO_RAW(t)  ((uint32_t)((t) * 100.0f + 20000.0f)) //温度存储到寄存器
+#define DENSITY_TO_RAW(d) ((uint32_t)((d) * 10.0f))//密度存储到寄存器
+#define RAW_TO_TEMP(raw)    (((int32_t)(raw) - 20000) / 100.0f)
+#define RAW_TO_DENSITY(raw) ((raw) / 10.0f)
+uint32_t DetectSensorType(void);
 uint32_t EnableDensityMode(void);
 uint32_t EnableLevelMode(void);
 uint32_t DSM_Get_LevelMode_Frequence(uint32_t *frequency_out);
 uint32_t DSM_Get_LevelMode_Frequence_Avg(uint32_t *frequency_out);
+uint32_t Read_Density(float *frequency, float *density, float *temp);
 #endif /* SENSOR_SENSOR_H_ */

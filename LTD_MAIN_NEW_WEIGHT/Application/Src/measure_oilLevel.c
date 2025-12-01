@@ -40,34 +40,15 @@ uint32_t FollowOilLevel(void);
 uint32_t SearchAndFollowOilLevel(void) {
 	uint32_t ret;
 	uint8_t try_times;
-
-	printf("液位流程\t开始执行\r\n");
-
-	/*************** Step 1: 启用液位模式 ***************/
-	try_times = 0;
-	while (try_times < 3) {
-		try_times++;
-		printf("液位流程\t启用液位模式第%d次尝试\r\n", try_times);
-
-		ret = EnableLevelMode();
-
-		if (ret == NO_ERROR) {
-			printf("液位流程\t液位模式启用成功\r\n");
-			break;
-		} else if (ret == STATE_SWITCH) {
-			printf("液位流程\t检测到状态切换，中止液位模式启用\r\n");
-			break;
-		} else {
-			printf("液位流程\t启用液位模式失败，错误码:0x%lX\r\n", ret);
-			HAL_Delay(500);
-		}
+	printf("液位测量\t开始\r\n");
+	if (g_measurement.device_status.zero_point_status == 1) {
+		printf("液位测量\t设备需要回零点\r\n");
+		ret = SearchZero();  // 如果设备需要回零点，先执行回零点测量
+		CHECK_ERROR(ret);  // 检查回零点是否成功
+		printf("液位测量\t回零点完成\r\n");
 	}
-	if (ret != NO_ERROR) {
-		printf("液位流程\t液位模式启用失败(尝试%d次)\r\n", try_times);
-		CHECK_ERROR(ret);
-	}
-
-	/*************** Step 2: 搜索液位 ***************/
+	printf("液位测量\t初始重量：%d\r\n", weight_parament.stable_weight);
+	/*************** Step 1: 搜索液位 ***************/
 	try_times = 0;
 	while (try_times < 3) {
 		try_times++;
@@ -90,10 +71,11 @@ uint32_t SearchAndFollowOilLevel(void) {
 		printf("液位流程\t液位搜索失败(尝试%d次)\r\n", try_times);
 		CHECK_ERROR(ret);
 	}
+	// 修正液位位置
 	if (g_measurement.device_status.device_state == STATE_CALIBRATIONOILING) {
 		CorrectOilLevelProcess();
 	}
-	/*************** Step 3: 跟随液位 ***************/
+	/*************** Step 2: 跟随液位 ***************/
 	g_measurement.device_status.device_state = STATE_FLOWOIL; // 切换到液位跟随状态
 	try_times = 0;
 	while (try_times < 3) {
@@ -130,16 +112,32 @@ uint32_t SearchAndFollowOilLevel(void) {
 uint32_t SearchOilLevel(void) {
 	uint32_t ret;
 	int try_times = 0;
+	ret = EnableLevelMode();
 	determine_level_status(); //第一次读取可能错误，临时用
 	fault_info_init();  // 清除故障信息
-	printf("液位测量\t开始\r\n");
-	if (g_measurement.device_status.zero_point_status == 1) {
-		printf("液位测量\t设备需要回零点\r\n");
-		ret = SearchZero();  // 如果设备需要回零点，先执行回零点测量
-		CHECK_ERROR(ret);  // 检查回零点是否成功
-		printf("液位测量\t回零点完成\r\n");
+	/*************** Step 1: 启用液位模式 ***************/
+	try_times = 0;
+	while (try_times < 3) {
+		try_times++;
+		printf("液位流程\t启用液位模式第%d次尝试\r\n", try_times);
+
+		ret = EnableLevelMode();
+
+		if (ret == NO_ERROR) {
+			printf("液位流程\t液位模式启用成功\r\n");
+			break;
+		} else if (ret == STATE_SWITCH) {
+			printf("液位流程\t检测到状态切换，中止液位模式启用\r\n");
+			break;
+		} else {
+			printf("液位流程\t启用液位模式失败，错误码:0x%lX\r\n", ret);
+			HAL_Delay(500);
+		}
 	}
-	printf("液位测量\t初始重量：%d\r\n", weight_parament.stable_weight);
+	if (ret != NO_ERROR) {
+		printf("液位流程\t液位模式启用失败(尝试%d次)\r\n", try_times);
+		CHECK_ERROR(ret);
+	}
 
 	/*************** 粗找阶段 - 带重试机制 ***************/
 	while (try_times < 3) {  //这里重试没有起作用
@@ -185,6 +183,7 @@ uint32_t SearchOilLevel(void) {
 	/*************** 最终校验与记录 ***************/
 	// 记录最终液位位置
 	g_measurement.oil_measurement.oil_level = g_measurement.debug_data.sensor_position;  // 更新测量数据中的传感器位置
+	g_measurement.density_distribution.Density_oil_level = g_measurement.oil_measurement.oil_level;
 	// 打印测量结果
 	printf("液位测量\t液位：%ld mm\r\n", g_measurement.oil_measurement.oil_level);
 

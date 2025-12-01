@@ -62,10 +62,10 @@ void ProcessMeasureCmd(CommandType command) {
 //		printf("执行综合测量指令\n");
 //		SyntheticMeasurement();
 //		break;
-//	case CMD_MEASURE_DISTRIBUTED:
-//		printf("执行分布测量指令\n");
-//		DensityDistributionMeasurement();
-//		break;
+	case CMD_MEASURE_DISTRIBUTED:
+		printf("执行分布测量指令\n");
+		MeasureDensitySpread();
+		break;
 //	case CMD_MEASURE_DENSITY_METER:
 //		printf("执行密度每米测量指令\n");
 //		DensityMeterMeasurement();
@@ -218,8 +218,8 @@ void process_command(uint8_t *command) {
 		}
 	}
 	if (command[0] == 'I') {
-		printf("***零点测试单次测试***\r\n");
-		MeasureZero();
+		printf("执行回零点指令\n");
+		MeasureZero(); //
 
 	}
 	if (command[0] == 'J') {
@@ -280,6 +280,12 @@ void process_command(uint8_t *command) {
 			{
 		printf("恢复出场设置\n");
 		RestoreFactoryParamsConfig(); //恢复出厂设置
+
+	}
+	if (command[0] == 'R') //获取满载称重
+	{
+		printf("执行分布测量指令\n");
+		MeasureDensitySpread();
 
 	}
 }

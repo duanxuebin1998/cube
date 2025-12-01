@@ -28,10 +28,10 @@ static int timesure = 0;//按下确定键的次数
 static int timeback = 0;//按下返回键的次数
 static int debugmode_back = 0;//进入调试模式返回到哪个菜单
 
-static uint8_t* arr_powerontodo[][2] = {
-    {(uint8_t*)"上电后液位跟随",(uint8_t*)"Level Following"},
-    {(uint8_t*)"上电后待机",(uint8_t*)"Standby"},
-};
+//static uint8_t* arr_powerontodo[][2] = {
+//    {(uint8_t*)"上电后液位跟随",(uint8_t*)"Level Following"},
+//    {(uint8_t*)"上电后待机",(uint8_t*)"Standby"},
+//};
 static uint8_t* arr_densitydir[][2] = {
     {(uint8_t*)"向上",(uint8_t*)"UP"},
     {(uint8_t*)"向下",(uint8_t*)"DOWN"},
@@ -297,57 +297,152 @@ static void inputcmdpara(void)
 /* 返回操作名称的字符串地址 */
 static uint8_t* dtm_operaname(int num)
 {
-    //指令名称
-	static uint8_t* OperaNameArr_cmd[][2] = {
-		{(uint8_t*)"回零点",         (uint8_t*)"Return to Zero"},
-		{(uint8_t*)"标定零点",       (uint8_t*)"Zero Calibration"},
-		{(uint8_t*)"自动分布测量",   (uint8_t*)"Auto Spread-M"},
-		{(uint8_t*)"寻找液位",       (uint8_t*)"Find Oil Level"},
-		{(uint8_t*)"寻找水位",       (uint8_t*)"Find Water Level"},
-		{(uint8_t*)"寻找罐底",       (uint8_t*)"Find Tank Bottom"},
-		{(uint8_t*)"综合测量",       (uint8_t*)"Comprehensive-M"},
-		{(uint8_t*)"每米测量",       (uint8_t*)"DT-PerMeter-M"},
-		{(uint8_t*)"区间测量",       (uint8_t*)"Interval-M"},
-		{(uint8_t*)"获取空载阈值",    (uint8_t*)"Set empty Weight"},
-		{(uint8_t*)"获取满载阈值",    (uint8_t*)"Set full Weight"},
-		{(uint8_t*)"恢复出厂设置",    (uint8_t*)"Factory Reset"},
-	};
-    static uint8_t* OperaNameArr_local[][2] = {
-        {(uint8_t*)"设备地址",(uint8_t*)"DeviceAddress"},
-        {(uint8_t*)"屏幕程序版本",(uint8_t*)"Screen FW Ver"},
+    /* ① 普通无参测量指令（回零点 / 找油 / 找水 / 分布测量 / 区间测量 等） */
+    static uint8_t* OperaNameArr_normal_cmd[][2] = {
+        {(uint8_t*)"回零点",         (uint8_t*)"Return to Zero"},
+        {(uint8_t*)"标定零点",       (uint8_t*)"Zero Calibration"},
+        {(uint8_t*)"分布测量",       (uint8_t*)"Spread-M"},
+        {(uint8_t*)"寻找液位",       (uint8_t*)"Find Oil Level"},
+        {(uint8_t*)"寻找水位",       (uint8_t*)"Find Water Level"},
+        {(uint8_t*)"寻找罐底",       (uint8_t*)"Find Tank Bottom"},
+        {(uint8_t*)"综合测量",       (uint8_t*)"Comprehensive-M"},
+        {(uint8_t*)"每米测量",       (uint8_t*)"DT-PerMeter-M"},
+        {(uint8_t*)"区间测量",       (uint8_t*)"Interval-M"},
     };
-    static uint8_t* OperaNameArr_nopara_cmd[][2] = {
-		{(uint8_t*)"读部件参数",     (uint8_t*)"Read Parameters"},
-		{(uint8_t*)"置零点",         (uint8_t*)"Force Set Zero"},
-    };
-    
-    if(num > COM_NUM_NOPARACMD_NORMAL_START && num < COM_NUM_NOPARACMD_NORMAL_STOP)
-    {//无参 - 普通 - 指令
-        return OperaNameArr_cmd[num - COM_NUM_NOPARACMD_NORMAL_START -1][screen_parameter.language];
-    }
-    else if((num > COM_NUM_PARA_DEBUG_START && num < COM_NUM_PARACONFIG_END)
-        || (num > COM_NUM_ONEPARACMD_START && num < COM_NUM_NOPARA_DEBUGCMD_END))
-    {//参数类、带一参\两参指令中的参数
-        int index;
-        index = getHoldValueNum(now_Opera_Num);
-        if(screen_parameter.language == LANG_CHINESE)
-            return holdValue[index].name;
-        else if(screen_parameter.language == LANG_ENGLISH)
-            return holdValue[index].name_English;
-    }
-    else if(num > COM_NUM_PASSWORD_START && num < COM_NUM_PASSWORD_END)
-        return returnWordType((uint8_t*)"密码",(uint8_t*)"Password");
-    else if(num > COM_NUM_PARA_LOCAL_START && num < COM_NUM_PARA_LOCAL_STOP)
-    {//本机参数类
-        return OperaNameArr_local[num - COM_NUM_PARA_LOCAL_START - 1][screen_parameter.language];
-    }
-    else if(num > COM_NUM_DEBUGCMD_START && num < COM_NUM_DEBUGCMD_STOP)
-        return OperaNameArr_nopara_cmd[num - COM_NUM_DEBUGCMD_START - 1][screen_parameter.language];
-  
 
-    
-    return returnWordType((uint8_t*)"非法操作",(uint8_t*)"Invalid Operation");
-}static uint8_t* returnWordType(uint8_t* chinese,uint8_t* english)
+    /* ② 无参调试指令（空/满载阈值、恢复出厂设置） */
+    static uint8_t* OperaNameArr_debug_cmd[][2] = {
+        {(uint8_t*)"获取空载阈值",   (uint8_t*)"Set empty Weight"},
+        {(uint8_t*)"获取满载阈值",   (uint8_t*)"Set full Weight"},
+        {(uint8_t*)"恢复出厂设置",   (uint8_t*)"Factory Reset"},
+    };
+
+    /* ③ 本机参数名称 */
+    static uint8_t* OperaNameArr_local[][2] = {
+        {(uint8_t*)"设备地址",       (uint8_t*)"DeviceAddress"},
+        {(uint8_t*)"屏幕程序版本",   (uint8_t*)"Screen FW Ver"},
+    };
+
+    /* ④ 调试无参指令（如果后面还有“读部件参数/置零点”等，可以单独放这个数组） */
+    static uint8_t* OperaNameArr_nopara_cmd[][2] = {
+        {(uint8_t*)"读部件参数",     (uint8_t*)"Read Parameters"},
+        {(uint8_t*)"置零点",         (uint8_t*)"Force Set Zero"},
+    };
+
+    int idx;
+
+    /* ---------- A. 普通不带参指令：COM_NUM_BACK_ZERO ~ COM_NUM_INTERVAL_DENSITY ---------- */
+    if (num > COM_NUM_NOPARACMD_NORMAL_START &&
+        num < COM_NUM_NOPARACMD_NORMAL_STOP)
+    {
+        idx = num - COM_NUM_NOPARACMD_NORMAL_START - 1;    // 保证 BACK_ZERO 对应 idx=0
+        if (idx >= 0 && idx < (int)(sizeof(OperaNameArr_normal_cmd) / sizeof(OperaNameArr_normal_cmd[0])))
+        {
+            return OperaNameArr_normal_cmd[idx][screen_parameter.language];
+        }
+    }
+    /* ---------- B. 无参调试指令：COM_NUM_SET_EMPTY_WEIGHT / FULL / RESTORE_FACTORY ---------- */
+    else if (num > COM_NUM_DEBUGCMD_START &&
+             num < COM_NUM_DEBUGCMD_STOP)
+    {
+        idx = num - COM_NUM_DEBUGCMD_START - 1;     // SET_EMPTY_WEIGHT 对应 idx=0
+        if (idx >= 0 && idx < (int)(sizeof(OperaNameArr_debug_cmd) / sizeof(OperaNameArr_debug_cmd[0])))
+        {
+            return OperaNameArr_debug_cmd[idx][screen_parameter.language];
+        }
+    }
+    /* ---------- C. 参数类 & 带一参指令：用 holdValue 表里的中/英文名字 ---------- */
+    else if ((num > COM_NUM_PARA_DEBUG_START && num < COM_NUM_PARACONFIG_END) ||
+             (num > COM_NUM_ONEPARACMD_START && num < COM_NUM_NOPARA_DEBUGCMD_END))
+    {
+        int index = getHoldValueNum(num);   // 用传入的 num，而不是 now_Opera_Num
+        if (index >= 0) {
+            if (screen_parameter.language == LANGUAGE_CHINESE)
+                return holdValue[index].name;
+            else if (screen_parameter.language == LANGUAGE_ENGLISH)
+                return holdValue[index].name_English;
+        }
+    }
+    /* ---------- D. 密码类 ---------- */
+    else if (num > COM_NUM_PASSWORD_START && num < COM_NUM_PASSWORD_END)
+    {
+        return returnWordType((uint8_t*)"密码", (uint8_t*)"Password");
+    }
+    /* ---------- E. 本机参数类 ---------- */
+    else if (num > COM_NUM_PARA_LOCAL_START && num < COM_NUM_PARA_LOCAL_STOP)
+    {
+        idx = num - COM_NUM_PARA_LOCAL_START - 1;   // LEDVERSION 对应 idx=0
+        if (idx >= 0 && idx < (int)(sizeof(OperaNameArr_local) / sizeof(OperaNameArr_local[0])))
+            return OperaNameArr_local[idx][screen_parameter.language];
+    }
+    /* ---------- F. 其它无参调试指令（如果你还有“读部件参数/置零点”等枚举） ---------- */
+    else if (num > /* 这里换成对应的 START 宏 */ COM_NUM_UNLOCK_START &&
+             num < /* 这里换成对应的 STOP 宏  */ COM_NUM_UNLOCK_STOP)
+    {
+        idx = num - /*START*/ COM_NUM_UNLOCK_START - 1;
+        if (idx >= 0 && idx < (int)(sizeof(OperaNameArr_nopara_cmd) / sizeof(OperaNameArr_nopara_cmd[0])))
+            return OperaNameArr_nopara_cmd[idx][screen_parameter.language];
+    }
+
+    /* ---------- G. 兜底：非法操作 ---------- */
+    return returnWordType((uint8_t*)"非法操作", (uint8_t*)"Invalid Operation");
+}
+
+///* 返回操作名称的字符串地址 */
+//static uint8_t* dtm_operaname(int num)
+//{
+//    //指令名称
+//	static uint8_t* OperaNameArr_cmd[][2] = {
+//		{(uint8_t*)"回零点",         (uint8_t*)"Return to Zero"},
+//		{(uint8_t*)"标定零点",       (uint8_t*)"Zero Calibration"},
+//		{(uint8_t*)"分布测量",   	   (uint8_t*)" Spread-M"},
+//		{(uint8_t*)"寻找液位",       (uint8_t*)"Find Oil Level"},
+//		{(uint8_t*)"寻找水位",       (uint8_t*)"Find Water Level"},
+//		{(uint8_t*)"寻找罐底",       (uint8_t*)"Find Tank Bottom"},
+//		{(uint8_t*)"综合测量",       (uint8_t*)"Comprehensive-M"},
+//		{(uint8_t*)"每米测量",       (uint8_t*)"DT-PerMeter-M"},
+//		{(uint8_t*)"区间测量",       (uint8_t*)"Interval-M"},
+//		{(uint8_t*)"获取空载阈值",    (uint8_t*)"Set empty Weight"},
+//		{(uint8_t*)"获取满载阈值",    (uint8_t*)"Set full Weight"},
+//		{(uint8_t*)"恢复出厂设置",    (uint8_t*)"Factory Reset"},
+//	};
+//    static uint8_t* OperaNameArr_local[][2] = {
+//        {(uint8_t*)"设备地址",(uint8_t*)"DeviceAddress"},
+//        {(uint8_t*)"屏幕程序版本",(uint8_t*)"Screen FW Ver"},
+//    };
+//    static uint8_t* OperaNameArr_nopara_cmd[][2] = {
+//		{(uint8_t*)"读部件参数",     (uint8_t*)"Read Parameters"},
+//		{(uint8_t*)"置零点",         (uint8_t*)"Force Set Zero"},
+//    };
+//
+//    if(num > COM_NUM_NOPARACMD_NORMAL_START && num < COM_NUM_NOPARACMD_NORMAL_STOP)
+//    {//无参 - 普通 - 指令
+//        return OperaNameArr_cmd[num - COM_NUM_NOPARACMD_NORMAL_START -1][screen_parameter.language];
+//    }
+//    else if((num > COM_NUM_PARA_DEBUG_START && num < COM_NUM_PARACONFIG_END)
+//        || (num > COM_NUM_ONEPARACMD_START && num < COM_NUM_NOPARA_DEBUGCMD_END))
+//    {//参数类、带一参\两参指令中的参数
+//        int index;
+//        index = getHoldValueNum(now_Opera_Num);
+//        if(screen_parameter.language == LANG_CHINESE)
+//            return holdValue[index].name;
+//        else if(screen_parameter.language == LANG_ENGLISH)
+//            return holdValue[index].name_English;
+//    }
+//    else if(num > COM_NUM_PASSWORD_START && num < COM_NUM_PASSWORD_END)
+//        return returnWordType((uint8_t*)"密码",(uint8_t*)"Password");
+//    else if(num > COM_NUM_PARA_LOCAL_START && num < COM_NUM_PARA_LOCAL_STOP)
+//    {//本机参数类
+//        return OperaNameArr_local[num - COM_NUM_PARA_LOCAL_START - 1][screen_parameter.language];
+//    }
+//    else if(num > COM_NUM_DEBUGCMD_START && num < COM_NUM_DEBUGCMD_STOP)
+//        return OperaNameArr_nopara_cmd[num - COM_NUM_DEBUGCMD_START - 1][screen_parameter.language];
+//
+//
+//
+//    return returnWordType((uint8_t*)"非法操作",(uint8_t*)"Invalid Operation");
+//}
+static uint8_t* returnWordType(uint8_t* chinese,uint8_t* english)
 {
     if(screen_parameter.language == LANGUAGE_CHINESE)
         return chinese;
@@ -654,127 +749,311 @@ static void ifsendcmd(void)
  *
  * @return pFunc_void 返回应当跳转的菜单函数指针
  */
+/* 返回按返回键后要跳转的函数指针 */
 static pFunc_void dtm_backtofunc(void)
 {
-    pFunc_void p = errorprocess;   // 默认跳转到错误处理页面
+    pFunc_void p = errorprocess;   // 默认：异常时回错误页面
 
-    /*--------------------------------------------------------------
-     * ① 普通不带参线圈指令
-     * 范围：COM_NUM_NOPARACMD_NORMAL_START ~ COM_NUM_NOPARACMD_NORMAL_STOP
-     * 包含：回零点、标定零点、找油、找水、罐底测量、综合测量……
-     * 返回主运行菜单 measuremenu
-     --------------------------------------------------------------*/
-    if (now_Opera_Num > COM_NUM_NOPARACMD_NORMAL_START &&
-        now_Opera_Num < COM_NUM_NOPARACMD_NORMAL_STOP)
+    switch (now_Opera_Num)
     {
-        p = measuremenu;
-    }
+        /* ==================== 一、普通测量命令 ==================== */
+        case COM_NUM_BACK_ZERO:            // 回零点
+        case COM_NUM_FIND_OIL:             // 液位跟随 / 找油
+        case COM_NUM_SPREADPOINTS_AI:      // 密度分布测量
+        case COM_NUM_FIND_WATER:           // 水位测量
+        case COM_NUM_FIND_BOTTOM:          // 罐底测量
+        case COM_NUM_SYNTHETIC:            // 综合测量
+        case COM_NUM_METER_DENSITY:        // 每米测量
+        case COM_NUM_INTERVAL_DENSITY:     // 区间测量
+        case COM_NUM_SINGLE_POINT:         // 固定点测量（带参）
+        case COM_NUM_SP_TEST:              // 固定点监测（带参）
+            p = measuremenu;
+            break;
 
-    /*--------------------------------------------------------------
-     * ② 参数调试类（基础参数、称重参数、分布参数、水位参数等）
-     * 范围：COM_NUM_PARA_DEBUG_START ~ COM_NUM_PARA_DEBUG_END
-     * 所有 CPU2 参数配置类
-     * 应返回参数配置主菜单 menu_paraconfig
-     --------------------------------------------------------------*/
-    else if (now_Opera_Num > COM_NUM_PARA_DEBUG_START &&
-             now_Opera_Num < COM_NUM_PARA_DEBUG_END)
-    {
-        p = menu_paraconfig;
-    }
+        /* ==================== 二、调试指令类 ==================== */
+        // 出现在“调试指令”菜单里的那些
+        case COM_NUM_FIND_ZERO:            // 标定零点
+        case COM_NUM_RUNUP:                // 上行
+        case COM_NUM_RUNDOWN:              // 下行
+        case COM_NUM_CORRECTION_OIL:       // 液位修正
+        case COM_NUM_CAL_OIL:              // 标定液位
+        case COM_NUM_RESTOR_EFACTORYSETTING: // 恢复出厂设置
+            p = menu_cmdconfig_main;
+            break;
 
-    /*--------------------------------------------------------------
-     * ③ 调试模式的无参指令
-     * 范围：COM_NUM_DEBUGCMD_START ~ COM_NUM_DEBUGCMD_STOP
-     * 包含：查水位、查油、调试运动命令等
-     * 返回调试指令主菜单 menu_cmdconfig_main
-     --------------------------------------------------------------*/
-    else if (now_Opera_Num > COM_NUM_DEBUGCMD_START &&
-             now_Opera_Num < COM_NUM_DEBUGCMD_STOP)
-    {
-        p = menu_cmdconfig_main;
-    }
+        // “获取空/满载阈值”出现在称重参数菜单里，返回时更合理回称重参数菜单
+        case COM_NUM_SET_EMPTY_WEIGHT:
+        case COM_NUM_SET_FULL_WEIGHT:
+            p = menu_weightpara;
+            break;
 
-    /*--------------------------------------------------------------
-     * ④ 带一个参数的线圈指令（普通/调试）
-     * 范围：
-     *   - COM_NUM_ONEPARACMD_START ~ COM_NUM_ONEPARACMD_END
-     *   - COM_NUM_ONEPARA_DEBUGCMD_START ~ COM_NUM_NOPARA_DEBUGCMD_END
-     * 包含：单点测量、单点监测、分布测量、液位标定、上行下行、修正液位等
-     * 返回调试指令主菜单 menu_cmdconfig_main
-     --------------------------------------------------------------*/
-    else if ((now_Opera_Num > COM_NUM_ONEPARACMD_START &&
-              now_Opera_Num < COM_NUM_ONEPARACMD_END) ||
-             (now_Opera_Num > COM_NUM_ONEPARA_DEBUGCMD_START &&
-              now_Opera_Num < COM_NUM_NOPARA_DEBUGCMD_END))
-    {
-        p = menu_cmdconfig_main;
-    }
+        /* ==================== 三、本机参数 / 语言 / 密码 ==================== */
+        case COM_NUM_PARA_LOCAL_LEDVERSION:    // 屏幕程序版本
+        case COM_NUM_PARA_LANG:                // 语言
+        case COM_NUM_PASSWORD_ENTER_PARA:      // 进入参数配置的密码
+        case COM_NUM_PASSWORD_ENTER_CMD:       // 进入调试指令的密码
+            p = mainmenu;
+            break;
 
-    /*--------------------------------------------------------------
-     * ⑤ 磁通量调试参数（密度修正 D、温度修正 T）
-     * 单独两个编号：COM_NUM_DEVICEPARAM_DENSITYCORRECTION、TEMPERATURECORRECTION
-     * 返回磁通量菜单 menu_magnetic
-     --------------------------------------------------------------*/
-    else if (now_Opera_Num == COM_NUM_DEVICEPARAM_DENSITYCORRECTION ||
-             now_Opera_Num == COM_NUM_DEVICEPARAM_TEMPERATURECORRECTION)
-    {
-        p = menu_magnetic;
-    }
+        /* ==================== 四、界面显示 & 数据源 ==================== */
+        // 屏幕显示类参数 -> 回界面显示菜单
+        case COM_NUM_SCREEN_DECIMAL:
+        case COM_NUM_SCREEN_PASSWARD:
+        case COM_NUM_SCREEN_OFF:
+            p = menu_screen;
+            break;
 
-    /*--------------------------------------------------------------
-     * ⑥ 界面显示类参数
-     * 范围：COM_NUM_SCREEN_STR ~ COM_NUM_SCREEN_STP
-     * 返回界面显示菜单 menu_screen
-     --------------------------------------------------------------*/
-    else if (now_Opera_Num > COM_NUM_SCREEN_STR &&
-             now_Opera_Num < COM_NUM_SCREEN_STP)
-    {
-        p = menu_screen;
-    }
+        // 数据源相关 -> 回数据源菜单
+        case COM_NUM_SCREEN_SOURCE_OIL:
+        case COM_NUM_SCREEN_SOURCE_WATER:
+        case COM_NUM_SCREEN_SOURCE_D:
+        case COM_NUM_SCREEN_SOURCE_T:
+        case COM_NUM_SCREEN_INPUT_OIL:
+        case COM_NUM_SCREEN_INPUT_WATER:
+        case COM_NUM_SCREEN_INPUT_D:
+        case COM_NUM_SCREEN_INPUT_D_SWITCH:
+        case COM_NUM_SCREEN_INPUT_T:
+            p = menu_scr_source;
+            break;
 
-    /*--------------------------------------------------------------
-     * ⑦ 数据源设置类参数
-     * 范围：COM_NUM_SOURCE_START ~ COM_NUM_SOURCE_STOP
-     * 返回数据源配置菜单 menu_scr_source
-     --------------------------------------------------------------*/
-    else if (now_Opera_Num > COM_NUM_SOURCE_START &&
-             now_Opera_Num < COM_NUM_SOURCE_STOP)
-    {
-        p = menu_scr_source;
-    }
+        /* ==================== 五、CPU2 参数分组：基础参数 ==================== */
+        case COM_NUM_DEVICEPARAM_TANKHEIGHT:
+        case COM_NUM_DEVICEPARAM_BLINDZONE:
+        case COM_NUM_DEVICEPARAM_WATER_BLINDZONE:
+        case COM_NUM_DEVICEPARAM_ENCODER_WHEEL_CIRCUMFERENCE_MM:
+        case COM_NUM_DEVICEPARAM_SENSORTYPE:
+        case COM_NUM_DEVICEPARAM_SENSORID:
+        case COM_NUM_DEVICEPARAM_SOFTWAREVERSION:
+        case COM_NUM_DEVICEPARAM_FINDZERO_DOWN_DISTANCE:
+            p = menu_tankbasicpara;
+            break;
 
-    /*--------------------------------------------------------------
-     * ⑧ 参数调试类重复判断（确保覆盖）
-     --------------------------------------------------------------*/
-    else if (now_Opera_Num > COM_NUM_PARA_DEBUG_START &&
-             now_Opera_Num < COM_NUM_PARA_DEBUG_END)
-    {
-        p = menu_paraconfig;
-    }
+        /* ==================== 六、称重测量参数 ==================== */
+        case COM_NUM_DEVICEPARAM_EMPTY_WEIGHT:
+        case COM_NUM_DEVICEPARAM_FULL_WEIGHT:
+        case COM_NUM_DEVICEPARAM_WEIGHT_UPPER_LIMIT_RATIO:
+        case COM_NUM_DEVICEPARAM_WEIGHT_LOWER_LIMIT_RATIO:
+        case COM_NUM_DEVICEPARAM_EMPTY_WEIGHT_UPPER_LIMIT:
+        case COM_NUM_DEVICEPARAM_EMPTY_WEIGHT_LOWER_LIMIT:
+        case COM_NUM_DEVICEPARAM_FULL_WEIGHT_UPPER_LIMIT:
+        case COM_NUM_DEVICEPARAM_FULL_WEIGHT_LOWER_LIMIT:
+            p = menu_weightpara;
+            break;
 
-    /*--------------------------------------------------------------
-     * ⑨ 语言选择
-     * 仅：COM_NUM_PARA_LANG
-     * 返回主菜单 mainmenu
-     --------------------------------------------------------------*/
-    else if (now_Opera_Num == COM_NUM_PARA_LANG)
-    {
-        p = mainmenu;
-    }
+        /* ==================== 七、分布测量参数 ==================== */
+        case COM_NUM_DEVICEPARAM_REQUIREBOTTOMMEASUREMENT:
+        case COM_NUM_DEVICEPARAM_REQUIREWATERMEASUREMENT:
+        case COM_NUM_DEVICEPARAM_REQUIRESINGLEPOINTDENSITY:
+        case COM_NUM_DEVICEPARAM_SPREADMEASUREMENTORDER:
+        case COM_NUM_DEVICEPARAM_SPREADMEASUREMENTMODE:
+        case COM_NUM_DEVICEPARAM_SPREADMEASUREMENTCOUNT:
+        case COM_NUM_DEVICEPARAM_SPREADMEASUREMENTDISTANCE:
+        case COM_NUM_DEVICEPARAM_SPREADTOPLIMIT:
+        case COM_NUM_DEVICEPARAM_SPREADBOTTOMLIMIT:
+        case COM_NUM_DEVICEPARAM_SPREAD_POINT_HOVER_TIME:
+            p = menu_spreadpara;
+            break;
 
-    /*--------------------------------------------------------------
-     * ⑩ 密码类
-     * 范围：COM_NUM_PASSWORD_START ~ COM_NUM_PASSWORD_END
-     * 返回主菜单 mainmenu
-     --------------------------------------------------------------*/
-    else if (now_Opera_Num > COM_NUM_PASSWORD_START &&
-             now_Opera_Num < COM_NUM_PASSWORD_END)
-    {
-        p = mainmenu;
+        /* ==================== 八、密度 / 温度修正（磁通量） ==================== */
+        case COM_NUM_DEVICEPARAM_DENSITYCORRECTION:
+        case COM_NUM_DEVICEPARAM_TEMPERATURECORRECTION:
+            // 这里我按你当前菜单，把它们归到“磁通量”子菜单
+            p = menu_correctionpara;   // 如果你更喜欢老的 menu_magnetic，也可以改成 menu_magnetic
+            break;
+
+        /* ==================== 九、实高测量参数 ==================== */
+        case COM_NUM_DEVICEPARAM_REFRESHTANKHEIGHTFLAG:
+        case COM_NUM_DEVICEPARAM_MAXTANKHEIGHTDEVIATION:
+        case COM_NUM_DEVICEPARAM_INITIALTANKHEIGHT:
+        case COM_NUM_DEVICEPARAM_CURRENTTANKHEIGHT:
+            p = menu_realhighpara;
+            break;
+
+        /* ==================== 十、水位测量参数 ==================== */
+        case COM_NUM_DEVICEPARAM_WATERLEVELCORRECTION:
+        case COM_NUM_DEVICEPARAM_MAXDOWNDISTANCE:
+            p = menu_waterlevelparams;
+            break;
+
+        /* ==================== 十一、液位测量参数 ==================== */
+        case COM_NUM_DEVICEPARAM_OILLEVELTHRESHOLD:
+        case COM_NUM_DEVICEPARAM_LIQUIDLEVELMEASUREMENTMETHOD:
+            p = menu_liquidlevelparams;
+            break;
+
+        /* ==================== 十二、报警 DO 参数 ==================== */
+        case COM_NUM_DEVICEPARAM_ALARM_HIGH_DO:
+        case COM_NUM_DEVICEPARAM_ALARM_LOW_DO:
+        case COM_NUM_DEVICEPARAM_THIRD_STATE_THRESHOLD:
+            p = menu_alarmdoparams;
+            break;
+
+        /* ==================== 十三、4–20mA / AO 参数 ==================== */
+        case COM_NUM_DEVICEPARAM_CURRENT_RANGE_START_mA:
+        case COM_NUM_DEVICEPARAM_CURRENT_RANGE_END_mA:
+        case COM_NUM_DEVICEPARAM_ALARM_HIGH_AO:
+        case COM_NUM_DEVICEPARAM_ALARM_LOW_AO:
+        case COM_NUM_DEVICEPARAM_INITIAL_CURRENT_mA:
+        case COM_NUM_DEVICEPARAM_AO_HIGH_CURRENT_mA:
+        case COM_NUM_DEVICEPARAM_AO_LOW_CURRENT_mA:
+        case COM_NUM_DEVICEPARAM_FAULT_CURRENT_mA:
+        case COM_NUM_DEVICEPARAM_DEBUG_CURRENT_mA:
+            p = menu_aoparams;
+            break;
+
+        /* ==================== 其它情况：兜底处理 ==================== */
+        default:
+            // 1）所有未单独分类的 CPU2 参数，统一回参数配置主菜单
+            if (now_Opera_Num > COM_NUM_PARA_DEBUG_START &&
+                now_Opera_Num < COM_NUM_PARA_DEBUG_END)
+            {
+                p = menu_paraconfig;
+            }
+            // 2）其它本机参数，回主菜单
+            else if (now_Opera_Num > COM_NUM_PARA_LOCAL_START &&
+                     now_Opera_Num < COM_NUM_PARA_LOCAL_STOP)
+            {
+                p = mainmenu;
+            }
+            // 3）密码区没列到的，回主菜单
+            else if (now_Opera_Num > COM_NUM_PASSWORD_START &&
+                     now_Opera_Num < COM_NUM_PASSWORD_END)
+            {
+                p = mainmenu;
+            }
+            // 4）不带参指令没覆盖到的，默认回测量菜单
+            else if (now_Opera_Num > COM_NUM_NOPARACMD_START &&
+                     now_Opera_Num < COM_NUM_NOPARACMD_END)
+            {
+                p = measuremenu;
+            }
+            // 否则保留默认 errorprocess
+            break;
     }
 
     return p;
 }
+
+//static pFunc_void dtm_backtofunc(void)
+//{
+//    pFunc_void p = errorprocess;   // 默认跳转到错误处理页面
+//
+//    /*--------------------------------------------------------------
+//     * ① 普通不带参线圈指令
+//     * 范围：COM_NUM_NOPARACMD_NORMAL_START ~ COM_NUM_NOPARACMD_NORMAL_STOP
+//     * 包含：回零点、标定零点、找油、找水、罐底测量、综合测量……
+//     * 返回主运行菜单 measuremenu
+//     --------------------------------------------------------------*/
+//    if ((now_Opera_Num > COM_NUM_NOPARACMD_NORMAL_START &&now_Opera_Num < COM_NUM_NOPARACMD_NORMAL_STOP)
+//    	||(now_Opera_Num == COM_NUM_DEVICEPARAM_SP_MEAS_POSITION )||(now_Opera_Num == COM_NUM_DEVICEPARAM_SP_MONITOR_POSITION))
+//    {
+//        p = measuremenu;//测量命令
+//    }
+//
+//    /*--------------------------------------------------------------
+//     * ② 参数调试类（基础参数、称重参数、分布参数、水位参数等）
+//     * 范围：COM_NUM_PARA_DEBUG_START ~ COM_NUM_PARA_DEBUG_END
+//     * 所有 CPU2 参数配置类
+//     * 应返回参数配置主菜单 menu_paraconfig
+//     --------------------------------------------------------------*/
+//    else if (now_Opera_Num > COM_NUM_PARA_DEBUG_START && now_Opera_Num < COM_NUM_PARA_DEBUG_END)
+//    {
+//        p = menu_paraconfig;//参数设置
+//    }
+//
+//    /*--------------------------------------------------------------
+//     * ③ 调试模式的无参指令
+//     * 范围：COM_NUM_DEBUGCMD_START ~ COM_NUM_DEBUGCMD_STOP
+//     * 包含：查水位、查油、调试运动命令等
+//     * 返回调试指令主菜单 menu_cmdconfig_main
+//     --------------------------------------------------------------*/
+//    else if (now_Opera_Num > COM_NUM_DEBUGCMD_START &&
+//             now_Opera_Num < COM_NUM_DEBUGCMD_STOP)
+//    {
+//        p = menu_cmdconfig_main;//调试指令
+//    }
+//
+//    /*--------------------------------------------------------------
+//     * ④ 带一个参数的线圈指令（普通/调试）
+//     * 范围：
+//     *   - COM_NUM_ONEPARACMD_START ~ COM_NUM_ONEPARACMD_END
+//     *   - COM_NUM_ONEPARA_DEBUGCMD_START ~ COM_NUM_NOPARA_DEBUGCMD_END
+//     * 包含：单点测量、单点监测、分布测量、液位标定、上行下行、修正液位等
+//     * 返回调试指令主菜单 menu_cmdconfig_main
+//     --------------------------------------------------------------*/
+//    else if ((now_Opera_Num > COM_NUM_ONEPARACMD_START &&
+//              now_Opera_Num < COM_NUM_ONEPARACMD_END) ||
+//             (now_Opera_Num > COM_NUM_ONEPARA_DEBUGCMD_START &&
+//              now_Opera_Num < COM_NUM_NOPARA_DEBUGCMD_END))
+//    {
+//        p = menu_cmdconfig_main;
+//    }
+//
+//    /*--------------------------------------------------------------
+//     * ⑤ 磁通量调试参数（密度修正 D、温度修正 T）
+//     * 单独两个编号：COM_NUM_DEVICEPARAM_DENSITYCORRECTION、TEMPERATURECORRECTION
+//     * 返回磁通量菜单 menu_magnetic
+//     --------------------------------------------------------------*/
+//    else if (now_Opera_Num == COM_NUM_DEVICEPARAM_DENSITYCORRECTION ||
+//             now_Opera_Num == COM_NUM_DEVICEPARAM_TEMPERATURECORRECTION)
+//    {
+//        p = menu_magnetic;
+//    }
+//
+//    /*--------------------------------------------------------------
+//     * ⑥ 界面显示类参数
+//     * 范围：COM_NUM_SCREEN_STR ~ COM_NUM_SCREEN_STP
+//     * 返回界面显示菜单 menu_screen
+//     --------------------------------------------------------------*/
+//    else if (now_Opera_Num > COM_NUM_SCREEN_STR &&
+//             now_Opera_Num < COM_NUM_SCREEN_STP)
+//    {
+//        p = menu_screen;
+//    }
+//
+//    /*--------------------------------------------------------------
+//     * ⑦ 数据源设置类参数
+//     * 范围：COM_NUM_SOURCE_START ~ COM_NUM_SOURCE_STOP
+//     * 返回数据源配置菜单 menu_scr_source
+//     --------------------------------------------------------------*/
+//    else if (now_Opera_Num > COM_NUM_SOURCE_START &&
+//             now_Opera_Num < COM_NUM_SOURCE_STOP)
+//    {
+//        p = menu_scr_source;
+//    }
+//
+//    /*--------------------------------------------------------------
+//     * ⑧ 参数调试类重复判断（确保覆盖）
+//     --------------------------------------------------------------*/
+//    else if (now_Opera_Num > COM_NUM_PARA_DEBUG_START &&
+//             now_Opera_Num < COM_NUM_PARA_DEBUG_END)
+//    {
+//        p = menu_paraconfig;
+//    }
+//
+//    /*--------------------------------------------------------------
+//     * ⑨ 语言选择
+//     * 仅：COM_NUM_PARA_LANG
+//     * 返回主菜单 mainmenu
+//     --------------------------------------------------------------*/
+//    else if (now_Opera_Num == COM_NUM_PARA_LANG)
+//    {
+//        p = mainmenu;
+//    }
+//
+//    /*--------------------------------------------------------------
+//     * ⑩ 密码类
+//     * 范围：COM_NUM_PASSWORD_START ~ COM_NUM_PASSWORD_END
+//     * 返回主菜单 mainmenu
+//     --------------------------------------------------------------*/
+//    else if (now_Opera_Num > COM_NUM_PASSWORD_START &&
+//             now_Opera_Num < COM_NUM_PASSWORD_END)
+//    {
+//        p = mainmenu;
+//    }
+//
+//    return p;
+//}
 
 /* 返回按确认键后要跳转的函数指针 */
 static pFunc_void dtm_suretofunc(void)
@@ -797,20 +1076,20 @@ static pFunc_void dtm_suretofunc(void)
 /* 不带参线圈指令处理过程 */
 static void cmd_nopara_process(void)
 {
-static const uint32_t nopara_cmd_map[][2] = {
-    { COM_NUM_BACK_ZERO,           CMD_BACK_ZERO },           // 返回零点
-    { COM_NUM_FIND_ZERO,           CMD_CALIBRATE_ZERO },        // 标定零点
-    { COM_NUM_SPREADPOINTS_AI,     CMD_MEASURE_DISTRIBUTED },// 自动分布测量
-    { COM_NUM_FIND_OIL,            CMD_FIND_OIL },        // 寻找液位
-    { COM_NUM_FIND_WATER,          CMD_FIND_WATER },      // 寻找水位
-    { COM_NUM_FIND_BOTTOM,         CMD_FIND_BOTTOM },           // 寻找罐底
-    { COM_NUM_SYNTHETIC,           CMD_SYNTHETIC },     // 综合测量
-    { COM_NUM_METER_DENSITY,       CMD_MEASURE_DENSITY_METER }, // 每米测量
-    { COM_NUM_INTERVAL_DENSITY,    CMD_MEASURE_DENSITY_RANGE }, // 区间测量
-	{ COM_NUM_SET_EMPTY_WEIGHT, CMD_SET_EMPTY_WEIGHT },   // 获取空载阈值
-	{ COM_NUM_SET_FULL_WEIGHT, CMD_SET_FULL_WEIGHT },    // 获取满载阈值
-    { COM_NUM_RESTOR_EFACTORYSETTING, CMD_RESTORE_FACTORY },    // 恢复出厂设置
-};
+	static const uint32_t nopara_cmd_map[][2] = {
+		{ COM_NUM_BACK_ZERO,           CMD_BACK_ZERO },           // 返回零点
+		{ COM_NUM_FIND_ZERO,           CMD_CALIBRATE_ZERO },        // 标定零点
+		{ COM_NUM_SPREADPOINTS_AI,     CMD_MEASURE_DISTRIBUTED },// 自动分布测量
+		{ COM_NUM_FIND_OIL,            CMD_FIND_OIL },        // 寻找液位
+		{ COM_NUM_FIND_WATER,          CMD_FIND_WATER },      // 寻找水位
+		{ COM_NUM_FIND_BOTTOM,         CMD_FIND_BOTTOM },           // 寻找罐底
+		{ COM_NUM_SYNTHETIC,           CMD_SYNTHETIC },     // 综合测量
+		{ COM_NUM_METER_DENSITY,       CMD_MEASURE_DENSITY_METER }, // 每米测量
+		{ COM_NUM_INTERVAL_DENSITY,    CMD_MEASURE_DENSITY_RANGE }, // 区间测量
+		{ COM_NUM_SET_EMPTY_WEIGHT, CMD_SET_EMPTY_WEIGHT },   // 获取空载阈值
+		{ COM_NUM_SET_FULL_WEIGHT, CMD_SET_FULL_WEIGHT },    // 获取满载阈值
+		{ COM_NUM_RESTOR_EFACTORYSETTING, CMD_RESTORE_FACTORY },    // 恢复出厂设置
+	};
 
     int mapamount = sizeof(nopara_cmd_map) / sizeof(nopara_cmd_map[0]);
     int i;
@@ -1152,7 +1431,6 @@ static void cmd_onepara_process(void)
     static uint32_t onepara_cmd_map[][2] = {/* 操作码到指令地址映射*/
     { COM_NUM_SINGLE_POINT,        CMD_MEASURE_SINGLE },  // 单点测量
     { COM_NUM_SP_TEST,             CMD_MONITOR_SINGLE },  // 单点监测
-    { COM_NUM_SPREADPOINTS,        CMD_MEASURE_DISTRIBUTED },   // 分布测量
     { COM_NUM_CAL_OIL,             CMD_CALIBRATE_OIL },   // 液位标定
     { COM_NUM_RUNUP,               CMD_MOVE_UP },               // 向上运行
     { COM_NUM_RUNDOWN,             CMD_MOVE_DOWN },             // 向下运行
@@ -1489,7 +1767,7 @@ static void measuremenu(void)
     static struct MenuData menu[] = {
         {(uint8_t*)"回零点",COM_NUM_BACK_ZERO,ifsendcmd,COMMANE_NORW,(uint8_t*)"Return to Zero"},
         {(uint8_t*)"液位跟随",COM_NUM_FIND_OIL,ifsendcmd,COMMANE_NORW,(uint8_t*)"Level Follow"},
-        {(uint8_t*)"密度分布测量",COM_NUM_SPREADPOINTS,ifsendcmd,COMMANE_NORW,(uint8_t*)"DT-M"},
+        {(uint8_t*)"密度分布测量",COM_NUM_SPREADPOINTS_AI,ifsendcmd,COMMANE_NORW,(uint8_t*)"DT-M"},
         {(uint8_t*)"固定点测量",COM_NUM_SINGLE_POINT,inputcmdpara,COMMANE_NORW,(uint8_t*)"DT-SinglePoint-M"},
         {(uint8_t*)"固定点监测",COM_NUM_SP_TEST,inputcmdpara,COMMANE_NORW,(uint8_t*)"DT-National-M"},
         {(uint8_t*)"水位测量",COM_NUM_FIND_WATER,ifsendcmd,COMMANE_NORW,(uint8_t*)"Water level-M"},

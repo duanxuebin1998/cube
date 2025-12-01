@@ -12,102 +12,104 @@
 #include "encoder.h"
 #include "hart.h"
 #include "hostcommu.h"
-//æµ‹è¯•ç”¨
+//²âÊÔÓÃ
 #include "sensor.h"
 #include <mb85rs2m.h>
 #include "my_crc.h"
 #include "test.h"
 #include "motor_ctrl.h"
 #include "ad5421.h"
-void Test_main(void); // æµ‹è¯•å‡½æ•°å£°æ˜
-// åˆå§‹åŒ–å‡½æ•°
+void Test_main(void); // ²âÊÔº¯ÊıÉùÃ÷
+// ³õÊ¼»¯º¯Êı
 void App_Init(void) {
 	printf("LTD demo restart!\n");
-	Initialize_Encoder(); // åˆå§‹åŒ–ç¼–ç å™¨
-	motor_Init(); //ç”µæœºåˆå§‹åŒ–
-	HartInit(); // åˆå§‹åŒ–AD5421
-	init_device_params(); // åˆå§‹åŒ–è®¾å¤‡å‚æ•°
-	g_deviceParams.command = CMD_NONE; // æ¸…é™¤å‘½ä»¤
-	g_measurement.device_status.zero_point_status=1; // è®¾ç½®é›¶ç‚¹çŠ¶æ€ä¸ºéœ€è¦å›é›¶ç‚¹
+	Initialize_Encoder(); // ³õÊ¼»¯±àÂëÆ÷
+	motor_Init(); //µç»ú³õÊ¼»¯
+	HartInit(); // ³õÊ¼»¯AD5421
+	init_device_params(); // ³õÊ¼»¯Éè±¸²ÎÊı
+	g_deviceParams.command = CMD_NONE; // Çå³ıÃüÁî
+	g_measurement.device_status.zero_point_status=1; // ÉèÖÃÁãµã×´Ì¬ÎªĞèÒª»ØÁãµã
 	weight_init();
-	HostCommuInit(); // åˆå§‹åŒ–Modbusé€šä¿¡
-	//æµ‹è¯•å‡½æ•°
-//	Test_main(); // æµ‹è¯•å‡½æ•°
-	AD5421_SetCurrent(6.0); // è®¾ç½®åˆå§‹ç”µæµä¸º4mA
-	motor_Init(); //ç”µæœºåˆå§‹åŒ–
-	fault_info_init(); // åˆå§‹åŒ–æ•…éšœä¿¡æ¯
+	HostCommuInit(); // ³õÊ¼»¯ModbusÍ¨ĞÅ
+	//²âÊÔº¯Êı
+//	Test_main(); // ²âÊÔº¯Êı
+	AD5421_SetCurrent(6.0); // ÉèÖÃ³õÊ¼µçÁ÷Îª4mA
+	motor_Init(); //µç»ú³õÊ¼»¯
+	fault_info_init(); // ³õÊ¼»¯¹ÊÕÏĞÅÏ¢
 //	DSMSendcommand3times(DSM_GET_FREQUENCE_START, strlen(DSM_GET_FREQUENCE_START));
-	Probe_EnableWaterSensor();//å¼€å¯æ¶²ä½æ¨¡å¼
-//	DSM_V2_SwitchToLevelMode(); // åˆ‡æ¢åˆ°æ¶²ä½æ¨¡å¼
-	g_deviceParams.sensorType =LTD_SENSOR;
+	Probe_EnableWaterSensor();//¿ªÆôÒºÎ»Ä£Ê½
+//	DSM_V2_SwitchToLevelMode(); // ÇĞ»»µ½ÒºÎ»Ä£Ê½
+	DetectSensorType(); // ¼ì²â´«¸ĞÆ÷ÀàĞÍ
+
 }
 
-// ä¸»å¾ªç¯ä»»åŠ¡
+// Ö÷Ñ­»·ÈÎÎñ
 void App_MainLoop(void) {
 
 
 	while (1) {
-		// å¦‚æœæœ‰æ–°çš„å‘½ä»¤
+		// Èç¹ûÓĞĞÂµÄÃüÁî
 		if (new_command_ready) {
-			new_command_ready = 0;  // é‡ç½®æ ‡å¿—ï¼Œé¿å…é‡å¤å¤„ç†
+			new_command_ready = 0;  // ÖØÖÃ±êÖ¾£¬±ÜÃâÖØ¸´´¦Àí
 
-			// å¤„ç†æ¥æ”¶åˆ°çš„å‘½ä»¤
+			// ´¦Àí½ÓÊÕµ½µÄÃüÁî
 			process_command(received_buffer);
 		}
 		if (g_deviceParams.command != CMD_NONE) {
-			printf("å½“å‰å‘½ä»¤ï¼š%d\r\n", g_deviceParams.command);
-			g_measurement.device_status.current_command = g_deviceParams.command; // æ›´æ–°å½“å‰å‘½ä»¤
-			g_deviceParams.command = CMD_NONE; // æ¸…é™¤å‘½ä»¤
-			ProcessMeasureCmd(g_measurement.device_status.current_command); // å¤„ç†æµ‹é‡å‘½ä»¤
-			g_measurement.device_status.current_command =CMD_NONE; // é‡ç½®å½“å‰å‘½ä»¤
+			g_measurement.device_status.zero_point_status = 0; // ÖØÖÃÁãµã×´Ì¬£¬±íÊ¾²»ĞèÒª»ØÁãµã
+			printf("µ±Ç°ÃüÁî£º%d\r\n", g_deviceParams.command);
+			g_measurement.device_status.current_command = g_deviceParams.command; // ¸üĞÂµ±Ç°ÃüÁî
+			g_deviceParams.command = CMD_NONE; // Çå³ıÃüÁî
+			ProcessMeasureCmd(g_measurement.device_status.current_command); // ´¦Àí²âÁ¿ÃüÁî
+			g_measurement.device_status.current_command =CMD_NONE; // ÖØÖÃµ±Ç°ÃüÁî
 			//
 		}
-//		DSM_V2_Test_AllParams(); // äºŒä»£ä¼ æ„Ÿå™¨æµ‹è¯•å‡½æ•°
-//		Sensor_Test(); // ä¼ æ„Ÿå™¨æµ‹è¯•
+//		DSM_V2_Test_AllParams(); // ¶ş´ú´«¸ĞÆ÷²âÊÔº¯Êı
+//		Sensor_Test(); // ´«¸ĞÆ÷²âÊÔ
 //		Test_FRAM_ReadWrite();
 //		DSMSendcommand3times(DSM_POWER, strlen(DSM_POWER));
 //		DSMSendcommand3times(DSM_SENSORGET, strlen(DSM_SENSORGET));
 //		Probe_EnableWaterSensor();
 //		printf("{encoder}%d\r\n{weight}%d\r\n", (int) g_encoder_count, g_weight);
-//		printf("ä½ç½®%d", g_measurement.debug_data.sensor_position);
+//		printf("Î»ÖÃ%d", g_measurement.debug_data.sensor_position);
 //		HAL_GPIO_WritePin(HART_RTS_GPIO_Port, HART_RTS_Pin, GPIO_PIN_RESET);
-//		HAL_UART_Transmit_DMA(&huart2, "123456", 6);  // é€šè¿‡UARTå‘é€å“åº”
+//		HAL_UART_Transmit_DMA(&huart2, "123456", 6);  // Í¨¹ıUART·¢ËÍÏìÓ¦
 //		 DSM_Get_LevelMode_Frequence(&g_measurement.oil_measurement.current_frequency);
-		HAL_Delay(50); // å»¶æ—¶50ms
+		HAL_Delay(50); // ÑÓÊ±50ms
 	}
 //
 //	switch (g_measurement.device_status.current_command)
 //	{
-//	case COMMAND_FINDOIL_START:/*æ¶²ä½è·Ÿéš*/
+//	case COMMAND_FINDOIL_START:/*ÒºÎ»¸úËæ*/
 //	{
-//		printf("***æ¶²ä½è·Ÿéšå¼€å§‹***\r\n");
+//		printf("***ÒºÎ»¸úËæ¿ªÊ¼***\r\n");
 ////				MeasureOilFollow();
 //		break;
 //	}
-//	case COMMAND_FINDBOTTOM_START:/*ç½åº•æµ‹é‡*/
+//	case COMMAND_FINDBOTTOM_START:/*¹Şµ×²âÁ¿*/
 //	{
-//		printf("***ç½åº•æµ‹é‡å¼€å§‹***\r\n");
+//		printf("***¹Şµ×²âÁ¿¿ªÊ¼***\r\n");
 //		MeasureBottom();
-//		printf("***ç½åº•æµ‹é‡ç»“æŸ***\r\n");
+//		printf("***¹Şµ×²âÁ¿½áÊø***\r\n");
 //	}
-//	case COMMAND_BACKZERO_START:/*é›¶ç‚¹æµ‹é‡*/
+//	case COMMAND_BACKZERO_START:/*Áãµã²âÁ¿*/
 //	{
-//		printf("***å›é›¶ç‚¹å¼€å§‹***\r\n");
+//		printf("***»ØÁãµã¿ªÊ¼***\r\n");
 //		MeasureZero();
-//		printf("***å›é›¶ç‚¹ç»“æŸ***\r\n");
+//		printf("***»ØÁãµã½áÊø***\r\n");
 //		break;
 //	}
 //
 //	default:
-//		printf("æœªçŸ¥å‘½ä»¤\r\n");
+//		printf("Î´ÖªÃüÁî\r\n");
 //		break;
 //
 //	}
 }
-//æµ‹è¯•ä¸»å‡½æ•°
+//²âÊÔÖ÷º¯Êı
 void Test_main(void) {
-	Test_FRAM_ReadWrite(); //æµ‹è¯•FRAMè¯»å†™
+	Test_FRAM_ReadWrite(); //²âÊÔFRAM¶ÁĞ´
 //	motor_text();
-	Test_Params_Storage(); //æµ‹è¯•å‚æ•°å­˜å‚¨
-	CRC32_HAL_Test(); //CRCæ ¡éªŒæµ‹è¯•
+	Test_Params_Storage(); //²âÊÔ²ÎÊı´æ´¢
+	CRC32_HAL_Test(); //CRCĞ£Ñé²âÊÔ
 }
