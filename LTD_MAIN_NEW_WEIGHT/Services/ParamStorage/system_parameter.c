@@ -59,8 +59,8 @@ void init_device_params(void) {
     // 尝试加载参数
     if (!load_device_params()) {
         // 加载失败时初始化默认值
-        // memset((void* volatile)&g_deviceParams, 0, sizeof(DeviceParameters));
-        // RestoreFactoryParamsConfig(); //恢复出厂设置
+         memset((void* volatile)&g_deviceParams, 0, sizeof(DeviceParameters));
+         RestoreFactoryParamsConfig(); //恢复出厂设置
         // 置错误代码
         g_measurement.device_status.error_code = PARAM_UNINITIALIZED;
         printf("设备参数加载失败\n");

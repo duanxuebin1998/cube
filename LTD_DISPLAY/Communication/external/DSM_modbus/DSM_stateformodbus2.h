@@ -119,10 +119,11 @@
 #define COM_FIND_OIL 0x00011         // 寻找液位			 //
 #define COM_FIND_WATER 0x00012       // 寻找水位			 //
 #define COM_FIND_BOTTOM 0x00013      // 寻找罐底			 //
-#define COM_SYNTHETIC 0x00014        // 综合指令测量synthetic//2019.08.07V1.105
-#define COM_METER_DENSITY 0x00015    // 密度每米测量 V1.116 dq2020.4.2
-#define COM_INTERVAL_DENSITY 0x00016 // 区间密度测量 V1.116 dq2020.4.2
-#define ENDADDRESS1_COM 0x00016      // 工作模式线圈结束地址
+#define COM_SYNTHETIC 0x00014        // 综合指令测量
+#define COM_METER_DENSITY 0x00015    // 密度每米测量
+#define COM_INTERVAL_DENSITY 0x00016 // 区间密度测量
+#define COM_WARTSILA_DENSITY 0x00017 // 瓦西莱密度测量
+#define ENDADDRESS1_COM 0x00017      // 工作模式线圈结束地址
 
 // 本区段：11
 

@@ -14,10 +14,10 @@ char BLE_MAC[18] = "36:1D:1A:26:3B:38";
 
 void Init_MAC()
 {
-	strcpy(BLE_MAC, "36:1D:1A:26:3B:38");  // æ­£ç¡®æ–¹å¼
+	strcpy(BLE_MAC, "36:1D:1A:26:3B:38");  // ÕıÈ··½Ê½
 }
 
-// å‘é€ AT æŒ‡ä»¤
+// ·¢ËÍ AT Ö¸Áî
 void Send_AT_Command(char *cmd)
 {
 	HAL_UART_Transmit(CH9141_UART, (uint8_t*) cmd, strlen(cmd), 100);
@@ -25,41 +25,41 @@ void Send_AT_Command(char *cmd)
 	HAL_Delay(100);
 }
 
-// æ¥æ”¶æ¨¡å—è¿”å›çš„æ•°æ®
+// ½ÓÊÕÄ£¿é·µ»ØµÄÊı¾İ
 void Receive_Response(uint8_t *buffer, uint16_t size)
 {
 	memset(buffer, 0, size);
 	HAL_UART_Receive(CH9141_UART, buffer, size, 500);
 }
 
-// åˆå§‹åŒ– CH9141EVT
+// ³õÊ¼»¯ CH9141EVT
 void CH9141_Init()
 {
 	uint8_t rxBuffer[100];
 	char atCommand[50];
 
-	// 1. è¿›å…¥ AT æ¨¡å¼
+	// 1. ½øÈë AT Ä£Ê½
 	Send_AT_Command("AT");
 	Receive_Response(rxBuffer, sizeof(rxBuffer));
 
-	// 2. è®¾ç½® BLE ä¸ºä¸»æœºæ¨¡å¼
+	// 2. ÉèÖÃ BLE ÎªÖ÷»úÄ£Ê½
 	Send_AT_Command("AT+BLEMODE=1");
 	Receive_Response(rxBuffer, sizeof(rxBuffer));
 
-	// 3. å¤ä½æ¨¡å—
+	// 3. ¸´Î»Ä£¿é
 	Send_AT_Command("AT+RESET");
 	HAL_Delay(500);
 
-	// 4. å†æ¬¡è¿›å…¥ AT æ¨¡å¼
+	// 4. ÔÙ´Î½øÈë AT Ä£Ê½
 	Send_AT_Command("AT");
 	Receive_Response(rxBuffer, sizeof(rxBuffer));
 
-	// 5. è®¾ç½® MAC åœ°å€
+	// 5. ÉèÖÃ MAC µØÖ·
 	snprintf(atCommand, sizeof(atCommand), "AT+CONADD=%s,000000", BLE_MAC);
 	Send_AT_Command(atCommand);
 	Receive_Response(rxBuffer, sizeof(rxBuffer));
 
-	// 6. å†æ¬¡å¤ä½ï¼Œä½¿é…ç½®ç”Ÿæ•ˆ
+	// 6. ÔÙ´Î¸´Î»£¬Ê¹ÅäÖÃÉúĞ§
 	Send_AT_Command("AT+RESET");
 	HAL_Delay(500);
 }

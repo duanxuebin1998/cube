@@ -225,6 +225,7 @@ void CPU2_CombinatePackage_Send(uint8_t f_code,uint16_t startadd,uint16_t regist
         if (HAL_GetTick() - timeout > 1000) // 100ms超时
         {
             printf("Wait response timeout!\n");
+            wait_response = false;    // 防止一直 True
             return;
         }
     }

@@ -28,7 +28,13 @@
 #define OLED_LINE8_9    56
 #define OLED_LINE8_END  63
 
-
+typedef struct {
+	//波特率
+	//数据位
+	//校验
+	//停止位
+	//通信协议
+} COMM;//通信参数结构体
 struct ScreenPARA{
 	uint32_t flag;          // 标志字段，必须放第一位或者单独定义
     int decimalplaces; //小数点

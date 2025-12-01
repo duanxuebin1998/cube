@@ -47,7 +47,7 @@ int DSM_CommunicationProcess(unsigned char *rcvbuff, int rcvcount, uint8_t* tx, 
 #endif
 	int functioncode, ret;
 #if DEBUG_COMM
-	printf("CPU3com3_RCV %d : ", rcvcount);
+	printf("CPU3_RCV %d : ", rcvcount);
 	for (i = 0; i < rcvcount; i++)
 		printf("%02X ", rcvbuff[i]);
 	printf("\r\n");

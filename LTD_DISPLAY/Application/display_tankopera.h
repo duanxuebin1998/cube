@@ -57,13 +57,12 @@ typedef enum {
 	COM_NUM_SYNTHETIC,	//	综合测量
 	COM_NUM_METER_DENSITY,	//	每米测量
 	COM_NUM_INTERVAL_DENSITY,	//	区间测量
-	COM_NUM_SET_EMPTY_WEIGHT,//    设置空载称重
-	COM_NUM_SET_FULL_WEIGHT,    // 设置满载称重
-	COM_NUM_RESTOR_EFACTORYSETTING,   // 恢复出厂设置
 	COM_NUM_NOPARACMD_NORMAL_STOP, /* 指令 - 普通 - 结束 */
 
 	COM_NUM_DEBUGCMD_START,	//调试模式指令
-
+	COM_NUM_SET_EMPTY_WEIGHT,//    设置空载称重
+	COM_NUM_SET_FULL_WEIGHT,    // 设置满载称重
+	COM_NUM_RESTOR_EFACTORYSETTING,   // 恢复出厂设置
 	COM_NUM_DEBUGCMD_STOP,	//调试模式指令
 
 	COM_NUM_UNLOCK_START,
@@ -76,7 +75,6 @@ typedef enum {
 	COM_NUM_ONEPARACMD_START, /*工作模式带一个参数线圈指令类 - 开始*/
 	COM_NUM_SINGLE_POINT,        // 单点测量
 	COM_NUM_SP_TEST,           // 单点监测
-	COM_NUM_SPREADPOINTS,        // 分布测量
 	COM_NUM_ONEPARACMD_END, /*工作模式带一个参数线圈指令类 - 结束*/
 
 	COM_NUM_ONEPARA_DEBUGCMD_START, /*调试模式带一个参数线圈指令类 - 开始*/

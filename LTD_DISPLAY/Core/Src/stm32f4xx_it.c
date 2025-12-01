@@ -55,7 +55,34 @@
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+void Fault_Handler(const char *name)
+{
+    __disable_irq();  // 先关中断，防止再嵌套
 
+    // 1. 打印基本信息（串口正常时）
+    printf("\r\n=============================\r\n");
+    printf("  !!! %s OCCURRED !!!\r\n", name);
+    printf("  HFSR = 0x%08lX\r\n", SCB->HFSR);
+    printf("  CFSR = 0x%08lX\r\n", SCB->CFSR);
+    printf("  BFAR = 0x%08lX\r\n", SCB->BFAR);
+    printf("  MMFAR= 0x%08lX\r\n", SCB->MMFAR);
+    printf("=============================\r\n");
+
+    // 2. TODO: 写入 FRAM/Flash，记录错误信息，方便下次上电分析
+    // Fault_LogToFRAM(name, SCB->HFSR, SCB->CFSR, ...);
+
+    // 3. 点亮告警灯（按你实际硬件改）
+    // HAL_GPIO_WritePin(LED_ERR_GPIO_Port, LED_ERR_Pin, GPIO_PIN_SET);
+
+    // 4. 等待看门狗复位，或主动软复位
+    while (1)
+    {
+        // 如果启用了独立看门狗，就不要在这里喂狗，让它超时复位
+        // 如果没看门狗，也可以延时一会儿后软件复位：
+        // for (volatile uint32_t i = 0; i < 1000000; i++);
+         NVIC_SystemReset();
+    }
+}
 /* USER CODE END 0 */
 
 /* External variables --------------------------------------------------------*/
@@ -102,7 +129,7 @@ void NMI_Handler(void)
 void HardFault_Handler(void)
 {
   /* USER CODE BEGIN HardFault_IRQn 0 */
-
+	Fault_Handler("HardFault");
   /* USER CODE END HardFault_IRQn 0 */
   while (1)
   {
@@ -117,7 +144,7 @@ void HardFault_Handler(void)
 void MemManage_Handler(void)
 {
   /* USER CODE BEGIN MemoryManagement_IRQn 0 */
-
+	Fault_Handler("MemManageFault");
   /* USER CODE END MemoryManagement_IRQn 0 */
   while (1)
   {
@@ -132,7 +159,7 @@ void MemManage_Handler(void)
 void BusFault_Handler(void)
 {
   /* USER CODE BEGIN BusFault_IRQn 0 */
-
+	Fault_Handler("BusFault");
   /* USER CODE END BusFault_IRQn 0 */
   while (1)
   {
@@ -147,7 +174,7 @@ void BusFault_Handler(void)
 void UsageFault_Handler(void)
 {
   /* USER CODE BEGIN UsageFault_IRQn 0 */
-
+	Fault_Handler("UsageFault");
   /* USER CODE END UsageFault_IRQn 0 */
   while (1)
   {
@@ -453,7 +480,7 @@ void USART3_IRQHandler(void)
 			temp = __HAL_DMA_GET_COUNTER(&hdma_usart3_rx);  // 获取DMA中未传输的数据个数
 			UART3_RX_LEN = UART3_RX_BUF_SIZE - temp;  // 计算已经接收到的数据个数
 			com3_rx_ready = 1; // 标记接收完成
-			COM3_SET_SEND_MODE();  // 切换到发送模式
+//			COM3_SET_SEND_MODE();  // 切换到发送模式
 //			DSM_CommunicationProcess(UART3_RX_BUF, UART3_RX_LEN);  // 处理接收到的数据
 		}
 	}

@@ -707,6 +707,67 @@ int Response04(unsigned char *revframe, unsigned char *sendframe)
 
 	return (framelen + 2);
 }
+typedef struct {
+    uint16_t coil;   // 线圈起始地址（COM_xxx）
+    uint8_t  cmd;    // 内部命令（CMD_xxx）
+} CoilCmdMap;
+
+/* 线圈地址 -> 内部命令映射表 */
+static const CoilCmdMap g_coil_cmd_map[] = {
+    /* ========= 工作模式区 (0x000A ~ 0x0017) ========= */
+    { COM_SET_WORKPATTER,      CMD_UNKNOWN },                 // 只写工作模式，不直接触发动作
+
+    { COM_BACK_ZERO,           CMD_BACK_ZERO },               // 回零点
+    { COM_FIND_ZERO,           CMD_CALIBRATE_ZERO },          // 标定零点
+
+    { COM_SINGLE_POINT,        CMD_MEASURE_SINGLE },          // 单点测量
+    { COM_SP_TEST,             CMD_MONITOR_SINGLE },          // 单点监测
+
+    { COM_SPREADPOINTS,        CMD_MEASURE_DISTRIBUTED },     // 分布测量（带高度）
+    { COM_SPREADPOINTS_AI,     CMD_MEASURE_DISTRIBUTED },     // 自动分布测量（同一类命令）
+
+    { COM_FIND_OIL,            CMD_FIND_OIL },                // 寻找液位
+    { COM_FIND_WATER,          CMD_FIND_WATER },              // 寻找水位
+    { COM_FIND_BOTTOM,         CMD_FIND_BOTTOM },             // 寻找罐底
+
+    { COM_SYNTHETIC,           CMD_SYNTHETIC },               // 综合指令测量
+
+    { COM_METER_DENSITY,       CMD_MEASURE_DENSITY_METER },   // 密度每米测量
+    { COM_INTERVAL_DENSITY,    CMD_MEASURE_DENSITY_RANGE },   // 区间密度测量
+    { COM_WARTSILA_DENSITY,    CMD_MEASURE_DENSITY_RANGE },   // 瓦锡兰密度测量（暂归到区间密度）
+
+    /* ========= 调试模式区 (0x0100 ~ 0x0107) ========= */
+    { COM_CAL_OIL,             CMD_CALIBRATE_OIL },           // 液位标定
+    { COM_READPARAMETER,       CMD_MAINTENANCE_MODE },        // 读取当前参数/维护动作
+
+    { COM_RUNUP,               CMD_MOVE_UP },                 // 向上运行
+    { COM_RUNDOWN,             CMD_MOVE_DOWN },               // 向下运行
+
+    { COM_SET_ZEROCIRCLE,      CMD_UNKNOWN },          // 调整零点圈数
+    { COM_SET_ZEROANGLE,       CMD_UNKNOWN },          // 调整零点角度
+    { COM_CORRECTION_OIL,      CMD_CORRECT_OIL },             // 修正液位
+    { COM_FORCE_ZERO,          CMD_CALIBRATE_ZERO },          // 强制零点
+
+    /* ========= 解锁模式区 (0x0200 ~ 0x0202) ========= */
+    { COM_RESTOR_EFACTORYSETTING, CMD_RESTORE_FACTORY },      // 恢复出厂设置
+    { COM_BACKUP_FILE,         CMD_RESTORE_FACTORY },        // 恢复出厂设置
+    { COM_RESTORY_FILE,        CMD_RESTORE_FACTORY },        // 恢复出厂设置
+};
+
+/* 简单的数组长度宏 */
+#define ARRAY_SIZE(a) (sizeof(a) / sizeof((a)[0]))
+
+/* 线圈地址 -> CMD_ 指令 */
+uint8_t GetCmdFromCoil(uint16_t coil_addr)
+{
+    for (size_t i = 0; i < ARRAY_SIZE(g_coil_cmd_map); i++) {
+        if (g_coil_cmd_map[i].coil == coil_addr) {
+            return g_coil_cmd_map[i].cmd;
+        }
+    }
+    return CMD_UNKNOWN;
+}
+
 /******************************************************
 函数功能： 下位机响应0x05请求
 
@@ -759,14 +820,8 @@ int Response05(unsigned char *revframe, unsigned char *sendframe)
 	sendframe[framelen] = crc & 0xff;
 	sendframe[framelen + 1] = (crc >> 8) & 0xff;
 	printf("startaddress=%04X,coilvalue=%04X\r\n", startaddress, coilvalue);
-	if (startaddress == 0x000B) // 回零点
-		cmd = CMD_BACK_ZERO;
-	else if (startaddress == 0x0011) // 液位测量
-		cmd = CMD_FIND_OIL;
-	else if (startaddress == 0x0013) // 罐底测量
-		cmd = CMD_FIND_BOTTOM;
-	else
-		cmd = CMD_NONE;
+
+	cmd = GetCmdFromCoil(startaddress);
 	// 发送命令给主控单元
 	printf("cmd=%d\r\n", cmd);
 	CPU2_CombinatePackage_Send(FUNCTIONCODE_WRITE_MULREGISTER, HOLDREGISTER_DEVICEPARAM_COMMAND, 2, &cmd);

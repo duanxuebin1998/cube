@@ -159,7 +159,8 @@ uint32_t CheckWeightCollision(void)
         printf("¾àÀë¹Þµ×£º%.1f mm\r\n", sensor_mm);
         printf("Ã¤Çø¸ß¶È£º%ld mm\r\n", g_deviceParams.blindZone);
         printf("---------------------------------------------------\r\n");
-        return WEIGHT_COLLISION_DETECTED;
+//        return WEIGHT_COLLISION_DETECTED;
+        return NO_ERROR;
     }
     else
     {
