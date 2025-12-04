@@ -10,10 +10,11 @@
 #define RETURN_UNDEFADDRESS -3//非法数据地址
 
 
-
-void WriteDeviceParamsToHoldingRegisters(int *p_holdregister);//写入保持寄存器
-void ReadDeviceParamsFromHoldingRegisters(int *p_inputregister);//从输入寄存器读取设备参数
-void write_measurement_result_to_IputerRegisters(uint16_t *regs); // 将测量结果写入输入寄存器数组
+//void WriteDeviceParamsToHoldingRegisters(int *p_holdregister);//写入保持寄存器
+//void ReadDeviceParamsFromHoldingRegisters(int *p_inputregister);//从输入寄存器读取设备参数
+void WriteDeviceParamsToHoldingRegisters(uint16_t *HoldingRegisterArray);
+void ReadDeviceParamsFromHoldingRegisters(uint16_t *HoldingRegisterArray);
+void write_measurement_result_to_InputRegisters(uint16_t *regs); // 将测量结果写入输入寄存器数组
 
 
 

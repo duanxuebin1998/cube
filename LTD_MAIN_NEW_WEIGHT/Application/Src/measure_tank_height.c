@@ -275,8 +275,8 @@ static int SearchBottomRough() {
 	while (check_bottom_status() == NORMAL) {
 		// 实时输出编码器位置和重量值（用于调试）
 		printf("罐底测量\t长距离寻找罐底\t{传感器位置}%.1f\t{称重值}%d\r\n", (float)(g_measurement.debug_data.sensor_position)/10.0, weight_parament.current_weight);
-		ret = CheckWeightCollision();
-		CHECK_ERROR(ret); // 检查碰撞检测是否成功
+//		ret = CheckWeightCollision();
+//		CHECK_ERROR(ret); // 检查碰撞检测是否成功
 		ret = Motor_CheckLostStep_AutoTiming(g_measurement.debug_data.cable_length);
 		CHECK_ERROR(ret); // 检查丢步检测是否成功
 	}
@@ -339,8 +339,8 @@ static int SearchBottomPrecise() {
 			printf("罐底测量\tt精确寻找罐底未找到罐底\r\n");
 			RETURN_ERROR(MEASUREMENT_WEIGHT_DOWN_FAIL); // 如果编码器位置异常，返回错误
 		}
-		ret = CheckWeightCollision();
-		CHECK_ERROR(ret); // 检查碰撞检测是否成功
+//		ret = CheckWeightCollision();
+//		CHECK_ERROR(ret); // 检查碰撞检测是否成功
 		ret = Motor_CheckLostStep_AutoTiming(g_measurement.debug_data.cable_length);
 		CHECK_ERROR(ret); // 检查丢步检测是否成功
 	}

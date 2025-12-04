@@ -14,7 +14,6 @@ typedef enum {
 } Level_StateTypeDef;
 
 #define frequency_difference ((float)g_measurement.oil_measurement.current_frequency-(float)g_measurement.oil_measurement.follow_frequency)
-#define STABILITYTHRESHOLD  15.0
 #define OILWATERDETERMINATIONTHRESHOLD  5500
 #define INAIR   (g_measurement.oil_measurement.current_frequency > OILWATERDETERMINATIONTHRESHOLD)
 #define INOIL   (g_measurement.oil_measurement.current_frequency < OILWATERDETERMINATIONTHRESHOLD)

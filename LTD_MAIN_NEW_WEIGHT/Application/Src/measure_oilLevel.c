@@ -202,7 +202,7 @@ uint32_t FollowOilLevel(void) {
 		ret = DSM_Get_LevelMode_Frequence(&g_measurement.oil_measurement.current_frequency);
 		CHECK_ERROR(ret);  // 检查开启液位模式是否成功
 		// 稳定性判断（频率波动在阈值内）
-		if (fabs(frequency_difference) < STABILITYTHRESHOLD) {
+		if (fabs(frequency_difference) < g_deviceParams.oilLevelHysteresisThreshold) {
 			printf("液位稳定,电机不动作\r\n");
 			HAL_Delay(3000);  // 等待3秒
 		} else {
@@ -385,7 +385,7 @@ static int SearchOilPrecise(float per_mm_Frequency) {
 			lowerTime = 0;
 			runlenth = 4.0 * overTime + frequency_difference / per_mm_Frequency - 4.0;
 			dir = MOTOR_DIRECTION_DOWN;
-		} else if (frequency_difference > STABILITYTHRESHOLD) { // 可接受正偏差
+		} else if (frequency_difference > g_deviceParams.oilLevelThreshold) { // 可接受正偏差
 			// 标准向下移动
 			overTime = 0;
 			lowerTime = 0;
@@ -398,7 +398,7 @@ static int SearchOilPrecise(float per_mm_Frequency) {
 			overTime = 0;
 			runlenth = -(frequency_difference / per_mm_Frequency) + 4.0 * lowerTime - 4.0;
 			dir = MOTOR_DIRECTION_UP;
-		} else if (frequency_difference < -STABILITYTHRESHOLD) { // 可接受负偏差
+		} else if (frequency_difference < -g_deviceParams.oilLevelThreshold) { // 可接受负偏差
 			// 标准向上移动
 			overTime = 0;
 			lowerTime = 0;
@@ -411,7 +411,7 @@ static int SearchOilPrecise(float per_mm_Frequency) {
 		}
 
 		// 稳定性检测（连续稳定计数）
-		if ((abs(frequency_difference) <= STABILITYTHRESHOLD)
+		if ((abs(frequency_difference) <= g_deviceParams.oilLevelThreshold)
 				&& (g_measurement.oil_measurement.air_frequency - g_measurement.oil_measurement.current_frequency > 200)
 				&& (g_measurement.oil_measurement.current_frequency - g_measurement.oil_measurement.oil_frequency > 200)) {
 			followTime++;
@@ -475,7 +475,7 @@ static int determineTheSensorPositionAndUpdateTheLevelValue(void) {
 	// 条件1: 频率差在稳定阈值内（系统稳定）
 	// 条件2: 新旧液位值差异大于100（需要强制更新）
 	// 条件3：处在液位跟随状态
-	if (((abs(frequency_difference) < STABILITYTHRESHOLD) || (abs((int) oil_level - (int) g_measurement.oil_measurement.oil_level) > 100))
+	if (((abs(frequency_difference) < g_deviceParams.oilLevelThreshold) || (abs((int) oil_level - (int) g_measurement.oil_measurement.oil_level) > 100))
 			&& (g_measurement.device_status.device_state == STATE_FLOWOIL)) {
 		// 更新当前液位值
 		g_measurement.oil_measurement.oil_level = oil_level;

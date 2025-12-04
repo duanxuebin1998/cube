@@ -423,8 +423,6 @@ void stpr_initStepper(TMC5130TypeDef *tmc5130,
     // 清除 GSTAT 错误标志
     stpr_writeInt(tmc5130, TMC5130_GSTAT, 0x07);
 
-    // 初次调用等待函数，确保芯片状态稳定
-    stpr_waitMove(&stepper); //（可按需删除或调整）
 }
 
 /************************ StallGuard 回零（简单版本） ************************/

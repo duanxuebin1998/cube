@@ -9,7 +9,7 @@
 #include "DSM_SlaveModbus_modbus2.h"
 #include "my_crc.h"
 
-#define DEBUG_COMM 0
+#define DEBUG_COMM 1
 /**********************************************************************************************
  **函数名称：	CommunicationInit()
  **函数功能：	与上位机通信初始化:串口4初始化；DMA初始化；定时器2初始化；地址初始化并读取当前地址
@@ -52,15 +52,15 @@ int DSM_CommunicationProcess(unsigned char *rcvbuff, int rcvcount, uint8_t* tx, 
 		printf("%02X ", rcvbuff[i]);
 	printf("\r\n");
 #endif
-//	if (rcvcount <= 3) {
-//		printf("COMM:<=3\t");
-//
-//		for (i = 0; i < rcvcount; i++) {
-//			printf("0x%02X\t", rcvbuff[i]);
-//		}
-//		printf("\r\n");
-//		return;
-//	}
+	if (rcvcount <= 3) {
+		printf("COMM:<=3\t");
+
+		for (i = 0; i < rcvcount; i++) {
+			printf("0x%02X\t", rcvbuff[i]);
+		}
+		printf("\r\n");
+		return;
+	}
 	//校验地址
 	if (rcvbuff[0] != SlaveAddress && rcvbuff[0] != 0) {
 		return -1;

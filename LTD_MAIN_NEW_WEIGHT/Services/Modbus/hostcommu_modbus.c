@@ -22,7 +22,8 @@ static const int illegaldataaddress = 0x02; //非法数据地址
 /*保持寄存器*/
 static const int HoldingregisterAddress = 0x00; //保持寄存器起始地址
 static const int HoldingregisterAmount = HOLEREGISTER_STOP + 1; //保持寄存器总数
-static int HoldingRegisterArray[HOLEREGISTER_STOP] = { 0 }; //保持寄存器数组
+//static int HoldingRegisterArray[HOLEREGISTER_STOP] = { 0 }; //保持寄存器数组
+static uint16_t HoldingRegisterArray[HOLEREGISTER_STOP] = { 0 };/* 保持寄存器数组，1 个元素对应 1 个 16 位保持寄存器 */
 /*输入寄存器*/
 static const int InputregisterAddress = 0x00; //输入寄存器起始地址
 static const int InputRegisterAmount = INPUTREGISTER_AMOUNT; //输入寄存器总数
@@ -181,7 +182,7 @@ static int Compose03Package(uint8_t  *revframe, uint8_t  *sendframe) {
 int Response04Process(uint8_t  *revframe, uint8_t  *sendframe) {
 	int length;
 	/*重置输入寄存器*/
-	write_measurement_result_to_IputerRegisters(InputRegisterArray);
+	write_measurement_result_to_InputRegisters(InputRegisterArray);
 	/*组包*/
 	length = Compose04Package(revframe, sendframe);
 	return length;
@@ -213,30 +214,56 @@ static int ResponseException(int exception, uint8_t *sendframe) {
 	return framelen;
 }
 
-int Response10Process(uint8_t  const *revframe, uint8_t  *sendframe) {
-	int length;
-//	int ret;
-	/*重置保持寄存器*/
-	WriteDeviceParamsToHoldingRegisters(HoldingRegisterArray);
-	/*更新保持寄存器并组包*/
-	length = Compose10Package(revframe, sendframe);
-	printf("command: %u\n", g_deviceParams.command);
-	/*更新对应参数,若需存储则写入铁电*/
-	ReadDeviceParamsFromHoldingRegisters(HoldingRegisterArray);
-//	ret = ReadDeviceParamsFromHoldingRegisters(HoldingRegisterArray);
+/* 功能码 0x10：写多个保持寄存器处理 */
+int Response10Process(uint8_t const *revframe, uint8_t *sendframe)
+{
+    int length;
+    uint16_t startAddr;
+    uint16_t regCount;
+    int need_save = 0;
 
-//	if (ret != RETURN_OK) {
-//		memset(sendframe, 0, HOSTCOMMU_SENDLENGTH);
-//		if (ret == RETURN_EXEFAIL) {
-//			length = ResponseException(slavedevicefailure, sendframe);
-//		} else if (ret == RETURN_UNSUPPORTED) {
-//			length = ResponseException(illegaldatavalue, sendframe);
-//		}
-//	}
-	/* 存储参数 	*/
-	save_device_params(); // 保存设备参数到铁电
-	return length;
+    /* 解析起始地址和寄存器数量 */
+    startAddr = ((uint16_t)revframe[2] << 8) | revframe[3];
+    regCount  = ((uint16_t)revframe[4] << 8) | revframe[5];
+
+    /* 1. 先用当前设备参数填充保持寄存器数组，保证未被写到的寄存器保持最新值 */
+    WriteDeviceParamsToHoldingRegisters(HoldingRegisterArray);
+
+    /* 2. 处理主站写入，Compose10Package 内部应修改 HoldingRegisterArray 并组应答帧 */
+    length = Compose10Package(revframe, sendframe);
+
+    /* 3. 将 HoldingRegisterArray 中的数据重新读回到 g_deviceParams 中 */
+    ReadDeviceParamsFromHoldingRegisters(HoldingRegisterArray);
+
+    /* 打印最新的 command（这里已经是本次写操作更新后的值） */
+    printf("command: %lu\r\n", (unsigned long)g_deviceParams.command);
+
+    /* 4. 判断这次写操作是否需要存储到 FRAM
+     *    规则：只写 command（起始地址刚好是 COMMAND 且长度为 2 寄存器）不存储，
+     *          其它涉及参数区的写操作统一认为需要持久化。
+     */
+    if (!((startAddr == HOLDREGISTER_DEVICEPARAM_COMMAND) && (regCount == 2))) {
+        /* 只要写的范围落在参数持久化区域内，就认为需要保存 */
+        uint16_t persist_start = HOLDREGISTER_DEVICEPARAM_TANKHEIGHT;  /* 持久化起点：跳过 command */
+        uint16_t persist_end   = HOLDREGISTER_DEVICEPARAM_CRC + 1;     /* 持久化终点：到 CRC 结束 */
+
+        uint16_t write_start = startAddr;
+        uint16_t write_end   = startAddr + regCount;  /* 半开区间 [start, end) */
+
+        /* 区间有交集则需要保存 */
+        if ((write_end > persist_start) && (write_start < persist_end)) {
+            need_save = 1;
+        }
+    }
+
+    /* 5. 持久化参数到 FRAM（command 不参与 CRC） */
+    if (need_save) {
+        save_device_params();
+    }
+
+    return length;
 }
+
 
 /*更新保持寄存器,组织10响应包*/
 static int Compose10Package(uint8_t  const *revframe, uint8_t  *sendframe) {

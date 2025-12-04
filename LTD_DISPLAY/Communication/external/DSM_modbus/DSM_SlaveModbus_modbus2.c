@@ -582,7 +582,7 @@ int Response03(unsigned char *revframe, unsigned char *sendframe)
 	}
 
 
-	memset(TempBuffer, 0, 256);
+	memset(TempBuffer, 0, sizeof(TempBuffer));
 
 	if (flagofaddress)
 	{
@@ -904,8 +904,7 @@ int Response16(unsigned char *revframe, unsigned char *sendframe)
 
 	// printf("flagofaddress=%d\r\n",flagofaddress);
 	// registervalue = malloc(registeramount);
-	memset(TempBuffer, 0, 256);
-
+	memset(TempBuffer, 0, sizeof(TempBuffer));
 	for (i = 0, j = 0; i < registeramount; i++, j = j + 2)
 	{
 		TempBuffer[i] = ((revframe[j + 7] & 0x00ff) << 8) + revframe[j + 8];
