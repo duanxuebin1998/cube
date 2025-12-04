@@ -55,7 +55,7 @@ static uint8_t StockMap[] = "通讯尝试中液位跟随密度温℃版本水测
                             "环己氧基叔醚醛溶精制卤聚多元糠呋喃邻辛硫三偏硝盐氢钠仲石拱卧"
                             "球形蒸汽尺距离开手启闭短地址扫描路只能连台功打印容稍等几钟储管道径周期调低于盲报警语言发错"
                             "误础界面程序减比股长介信号后限例权屏幕维护视终继状态最探头浸小第悬停禁用弦工固产反先动当前"
-                            "大英更传层滞域使磨结束针总阻六级内息命感顺有阈值角导本整";
+                            "大英更传层滞域使磨结束针总阻六级内息命感顺有阈值角导本整瓦锡兰厚首";
 static const int wordbyte      = 3; // UTF-8 下汉字 3 字节
 static const int StockmapLength = (sizeof(StockMap) - 1) / wordbyte;
 static uint8_t WordStock[255 * 28] =
@@ -438,6 +438,11 @@ static uint8_t WordStock2[255 * 28] =
 	0x7F,0xE0,0x40,0x20,0x40,0x20,0x7F,0xE0,0x40,0x08,0x40,0x08,0x3F,0xF8,0x00,0x40,0x00,0x40,0xFF,0xF8,0x10,0x40,0x08,0x40,0x08,0x40,0x01,0xC0,/*"导",7*/
 	0x02,0x00,0x02,0x00,0x02,0x00,0xFF,0xF8,0x07,0x00,0x0A,0x80,0x0A,0x80,0x12,0x40,0x22,0x20,0x42,0x10,0x9F,0xC8,0x02,0x00,0x02,0x00,0x02,0x00,/*"本",8*/
 	0x10,0x80,0xFE,0x80,0x10,0xF8,0x7D,0x10,0x56,0xA0,0x7C,0x40,0x38,0xA0,0x55,0x18,0x90,0x00,0x7F,0xF0,0x02,0x00,0x13,0xE0,0x12,0x00,0xFF,0xF8,/*"整",0*/
+	0x00,0x00,0xFF,0xF0,0x10,0x00,0x10,0x00,0x1F,0x80,0x10,0x80,0x10,0x80,0x14,0x80,0x22,0x80,0x22,0x80,0x20,0x80,0x26,0x88,0x38,0x88,0x20,0x78,/*"瓦",0*/
+	0x20,0x00,0x23,0xF0,0x32,0x10,0x43,0xF0,0x82,0x10,0x73,0xF0,0x21,0x00,0x23,0xF8,0xF4,0xA8,0x29,0x28,0x22,0x48,0x34,0x88,0x21,0x08,0x00,0x30,/*"锡",1*/
+	0x20,0x20,0x10,0x40,0x08,0x80,0x7F,0xF0,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x3F,0xE0,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0xFF,0xF8,/*"兰",2*/
+	0x7F,0xF8,0x40,0x00,0x4F,0xF0,0x48,0x10,0x4F,0xF0,0x48,0x10,0x4F,0xF0,0x40,0x00,0x4F,0xE0,0x40,0x40,0x5F,0xF8,0x40,0x80,0x40,0x80,0x83,0x80,/*"厚",3*/
+	0x20,0x20,0x10,0x40,0xFF,0xF8,0x04,0x00,0x08,0x00,0x3F,0xE0,0x20,0x20,0x3F,0xE0,0x20,0x20,0x3F,0xE0,0x20,0x20,0x20,0x20,0x3F,0xE0,0x20,0x20,/*"首",4*/
 
 
 };
@@ -857,6 +862,12 @@ static void oled_equipment(void)
         line = DisplayLangaugeLineWords((u8*)"位置:",OLED_LINE8_1,row,0,(u8*)"Pos:");
         OledValueDisplay(g_measurement.debug_data.sensor_position,line,row,0,1,(u8*)"mm");
     }
+    //称重
+	if (ValidParaDisArr[Para_weight][PARA_VALID] == true && now_page == ValidParaDisArr[Para_weight][PARA_PAGE]) {
+		row = ValidParaDisArr[Para_weight][PARA_X];
+		line = DisplayLangaugeLineWords((u8*) "称重:", OLED_LINE8_1, row, 0, (u8*) "Weight:");
+		OledValueDisplay(g_measurement.debug_data.current_weight, line, row, 0, 0, (u8*) " ");
+	}
 }
 /* 显示多个汉字或字符 - 带中英文选择 */
 uint8_t DisplayLangaugeLineWords(uint8_t* name1,uint8_t line,uint8_t row,uint8_t shift,uint8_t* name2)
@@ -925,16 +936,16 @@ static void CalculateValidPara(void)
     }
     else
         ValidParaDisArr[Para_position][PARA_VALID] = false;
-//    //称重
-//    if((g_measurement.debug_data..> 0 )&&(g_measurement.single_point_monitoring.temperature <40000 ))
-//    {
-//        ValidParaCnt++;
-//        ValidParaDisArr[Para_AveTemperature][PARA_NUM] = ValidParaCnt;
-//        ValidParaDisArr[Para_AveTemperature][PARA_VALID] = true;
-//    }
-//    else
-//        ValidParaDisArr[Para_AveTemperature][PARA_VALID] = false;
-//
+    //称重
+    if(g_measurement.debug_data.current_weight> 0 )
+    {
+        ValidParaCnt++;
+        ValidParaDisArr[Para_weight][PARA_NUM] = ValidParaCnt;
+        ValidParaDisArr[Para_weight][PARA_VALID] = true;
+    }
+    else
+        ValidParaDisArr[Para_weight][PARA_VALID] = false;
+
     #if DEBUG_DISPLAY
     printf("ValidParaCnt = %d\n",ValidParaCnt);
     #endif
@@ -1027,61 +1038,75 @@ static void CalculateValidPara(void)
 //};
 
 static const EquipStateDisplay state_display_table[] = {
-    { STATE_STANDBY,                 "待机中",               "Standby" },
-    { STATE_INIT,                    "设备初始化",           "Initializing" },
-    { STATE_BACKZEROING,             "回零点中",             "Back to Zero" },
-    { STATE_FINDZEROING,             "标定零点中",           "Zero Calibration" },
-    { STATE_SINGLEPOINTING,          "单点测量中",           "Single Point-M" },
-    { STATE_RUNTOPOINTING,           "运行到测量点中",       "Run to Point" },
-    { STATE_SPREADPOINTING,          "分布测量中",           "Spread Point-M" },
-    { STATE_AI_SPREADPOINTING,       "无参分布测量中",       "AI Spread Point-M" },
-    { STATE_CALIBRATIONOILING,       "标定液位中",           "Calibrating Oil Level" },
-    { STATE_READPARAMETERING,        "读取参数中",           "Reading Parameters" },
-    { STATE_RUNUPING,                "向上运行中",           "Running Up" },
-    { STATE_RUNDOWNING,              "向下运行中",           "Running Down" },
-    { STATE_SETZEROCIRCLING,         "设置零点编码值中",     "Set Zero Circle" },
-    { STATE_SETZEROANGLING,          "设置零点角度中",       "Set Zero Angle" },
-    { STATE_EFACTORYSETTING_RESTORING,"恢复出厂设置中",      "Factory Resetting" },
-    { STATE_BACKUPING,               "备份配置文件中",       "Backing Up" },
-    { STATE_RESTORYING,              "恢复配置文件中",       "Restoring Config" },
-    { STATE_FINDOIL,                 "寻找液位中",           "Finding Oil Level" },
-    { STATE_FINDWATER,               "寻找水位中",           "Finding Water Level" },
-    { STATE_FINDBOTTOM,              "寻找罐底中",           "Finding Bottom" },
-    { STATE_FORCEZERO,               "设置电机零点中",       "Setting Motor Zero" },
-    { STATE_ONTANKOPRATIONING,       "罐上仪表操作中",       "On-Tank Operation" },
-    { STATE_SYNTHETICING,            "综合指令中",           "Synthetics Running" },
-    { STATE_METER_DENSITY,           "密度每米测量中",       "Meter Density Measuring" },
-    { STATE_INTERVAL_DENSITY,        "液位区间测量中",       "Interval Density Measuring" },
-    { STATE_GET_FULLWEIGHT,          "获取满载称重中",       "Getting Full Weight" },
-    { STATE_GET_EMPTYWEIGHT,         "获取空载称重中",       "Getting Empty Weight" },
+    { STATE_STANDBY,                 "待机中",                   "Standby" },
+    { STATE_INIT,                    "设备初始化",               "Initializing" },
+    { STATE_BACKZEROING,             "回零点中",                 "Back to Zero" },
+    { STATE_FINDZEROING,             "标定零点中",               "Zero Calibration" },
+    { STATE_SINGLEPOINTING,          "单点测量中",               "Single Point-M" },
+    { STATE_RUNTOPOINTING,           "运行到测量点中",           "Run to Point" },
+    { STATE_SPREADPOINTING,          "分布测量中",               "Spread Point-M" },
+    { STATE_AI_SPREADPOINTING,       "无参分布测量中",           "AI Spread Point-M" },
+    { STATE_CALIBRATIONOILING,       "标定液位中",               "Calibrating Oil Level" },
+    { STATE_READPARAMETERING,        "读取参数中",               "Reading Parameters" },
+    { STATE_RUNUPING,                "向上运行中",               "Running Up" },
+    { STATE_RUNDOWNING,              "向下运行中",               "Running Down" },
+    { STATE_SETZEROCIRCLING,         "设置零点编码值中",         "Set Zero Circle" },
+    { STATE_SETZEROANGLING,          "设置零点编码值中",         "Set Zero Angle" },
+    { STATE_EFACTORYSETTING_RESTORING,"恢复出厂设置中",         "Factory Resetting" },
+    { STATE_BACKUPING,               "备份配置文件中",           "Backing Up" },
+    { STATE_RESTORYING,              "恢复配置文件中",           "Restoring Config" },
+    { STATE_FINDOIL,                 "寻找液位中",               "Finding Oil Level" },
+    { STATE_FINDWATER,               "寻找水位中",               "Finding Water Level" },
+    { STATE_FINDBOTTOM,              "寻找罐底中",               "Finding Bottom" },
+    { STATE_FORCEZERO,               "设置电机零点中",           "Setting Motor Zero" },
+    { STATE_ONTANKOPRATIONING,       "罐上仪表操作中",           "On-Tank Operation" },
+    { STATE_SYNTHETICING,            "综合指令中",               "Synthetics Running" },
+    { STATE_METER_DENSITY,           "密度每米测量中",           "Meter Density Measuring" },
+    { STATE_INTERVAL_DENSITY,        "液位区间测量中",           "Interval Density Measuring" },
 
-    { STATE_FINDZEROOVER,            "标定零点完成",         "Zero Calibration Done" },
-    { STATE_SINGLEPOINTOVER,         "单点测量完成",         "Single Point Done" },
-    { STATE_SPTESTING,               "正在单点检测",         "Single Point Testing" },
-    { STATE_SPREADPOINTOVER,         "分布测量完成",         "Spread Measurement Done" },
-    { STATE_AI_SPREADPOINTOVER,      "无参分布测量完成",     "AI Spread Done" },
-    { STATE_FINDOILOVER,             "标定液位完成",         "Oil Calibration Done" },
-    { STATE_READPARAMETEROVER,       "读取参数完成",         "Read Parameter Done" },
-    { STATE_RUNUPOVER,               "向上运行完成",         "Run Up Done" },
-    { STATE_RUNDOWNOVER,             "向下运行完成",         "Run Down Done" },
-    { STATE_SETZEROCIRCLOVER,        "设置零点编码值完成",   "Zero Circle Done" },
-    { STATE_SETZEROANGLOVER,         "设置零点角度完成",     "Zero Angle Done" },
-    { STATE_EFACTORYSETTING_RESTOROVER,"恢复出厂设置完成",  "Factory Reset Done" },
-    { STATE_BACKUPOVER,              "备份配置文件完成",     "Backup Done" },
-    { STATE_RESTORYOVER,             "恢复配置文件完成",     "Restore Done" },
-    { STATE_FLOWOIL,                 "液位跟随中",           "Level Following" },
-    { STATE_FINDWATER_OVER,          "寻找水位完成",         "Water Level Done" },
-    { STATE_FINDBOTTOM_OVER,         "寻找罐底完成",         "Tank Bottom Done" },
-    { STATE_FORCEZERO_OVER,          "设置电机零点完成",     "Motor Zero Done" },
-    { STATE_ONTANKOPRATIONCOMPLATE,  "罐上仪表操作完成",     "Tank Operation Done" },
-    { STATE_SYNTHETICING_OVER,       "综合指令完成",         "Synthetics Done" },
-    { STATE_COM_METER_DENSITY_OVER,  "密度每米测量完成",     "Meter Density Done" },
-    { STATE_INTERVAL_DENSITY_OVER,   "液位区间测量完成",     "Interval Density Done" },
-    { STATE_GET_FULLWEIGHT_OVER,     "获取满载称重完成",     "Get Full Weight Done" },
-    { STATE_GET_EMPTYWEIGHT_OVER,    "获取空载称重完成",     "Get Empty Weight Done" },
+    /* LTD 新加运行中状态 */
+    { STATE_GET_FULLWEIGHT,          "获取满载称重中",           "Getting Full Weight" },
+    { STATE_GET_EMPTYWEIGHT,         "获取空载称重中",           "Getting Empty Weight" },
+    { STATE_MAINTENANCEMODE,         "维护模式中",               "Maintenance Mode" },
 
-    { STATE_ERROR,                   "故障",                 "Failure" }
+    /* 瓦西莱密度梯度测量 */
+    { STATE_WARTSILA_DENSITY_START,      "瓦西莱密度梯度开始",       "Wartsila Density Start" },
+    { STATE_WARTSILA_DENSITY_MEASURING,  "瓦西莱密度梯度测量中",     "Wartsila Density Measuring" },
+
+    /* ===== 完成态 ===== */
+    { STATE_FINDZEROOVER,            "标定零点完成",             "Zero Calibration Done" },
+    { STATE_SINGLEPOINTOVER,         "单点测量完成",             "Single Point Done" },
+    { STATE_SPTESTING,               "正在单点检测",             "Single Point Testing" },
+    { STATE_SPREADPOINTOVER,         "分布测量完成",             "Spread Measurement Done" },
+    { STATE_AI_SPREADPOINTOVER,      "无参分布测量完成",         "AI Spread Done" },
+    { STATE_FINDOILOVER,             "标定液位完成",             "Oil Calibration Done" },
+    { STATE_READPARAMETEROVER,       "读取参数完成",             "Read Parameter Done" },
+    { STATE_RUNUPOVER,               "向上运行完成",             "Run Up Done" },
+    { STATE_RUNDOWNOVER,             "向下运行完成",             "Run Down Done" },
+    { STATE_SETZEROCIRCLOVER,        "设置零点编码值完成",       "Zero Circle Done" },
+    { STATE_SETZEROANGLOVER,         "设置零点编码值完成",       "Zero Angle Done" },
+    { STATE_EFACTORYSETTING_RESTOROVER,"恢复出厂设置完成",      "Factory Reset Done" },
+    { STATE_BACKUPOVER,              "备份配置文件完成",         "Backup Done" },
+    { STATE_RESTORYOVER,             "恢复配置文件完成",         "Restore Done" },
+    { STATE_FLOWOIL,                 "液位跟随中",               "Level Following" },
+    { STATE_FINDWATER_OVER,          "寻找水位完成",             "Water Level Done" },
+    { STATE_FINDBOTTOM_OVER,         "寻找罐底完成",             "Tank Bottom Done" },
+    { STATE_FORCEZERO_OVER,          "设置电机零点完成",         "Motor Zero Done" },
+    { STATE_ONTANKOPRATIONCOMPLATE,  "罐上仪表操作完成",         "Tank Operation Done" },
+    { STATE_SYNTHETICING_OVER,       "综合指令完成",             "Synthetics Done" },
+    { STATE_COM_METER_DENSITY_OVER,  "密度每米测量完成",         "Meter Density Done" },
+    { STATE_INTERVAL_DENSITY_OVER,   "液位区间测量完成",         "Interval Density Done" },
+
+    /* 瓦西莱密度梯度完成态 */
+    { STATE_WARTSILA_DENSITY_OVER,   "瓦西莱密度梯度测量完成",   "Wartsila Density Done" },
+
+    /* LTD 新加完成状态 */
+    { STATE_GET_FULLWEIGHT_OVER,     "获取满载称重完成",         "Get Full Weight Done" },
+    { STATE_GET_EMPTYWEIGHT_OVER,    "获取空载称重完成",         "Get Empty Weight Done" },
+
+    { STATE_ERROR,                   "故障",                     "Failure" }
 };
+
 
 const char* GetStateString(uint16_t state, uint8_t lang)
 {

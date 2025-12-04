@@ -32,6 +32,7 @@ extern "C" {
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "system_parameter.h"
+#include "fault_manager.h"
 #include "usart.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -155,14 +156,14 @@ void Error_Handler(void);
 #define u32 uint32_t
 
 
-extern int16_t g_weight;//称重值
+extern int16_t g_weight;//绉伴����
 extern volatile int32_t g_encoder_count ;
 
-//usart1接收数据缓冲区
-// 存储接收到的数据
+//usart1�ユ�舵�版��缂��插��
+// 瀛��ㄦ�ユ�跺�扮���版��
 extern uint8_t received_buffer[64];
-extern uint16_t buffer_index;  // 当前接收的数据索引
-// 标志，表示有新命令待处理
+extern uint16_t buffer_index;  // 褰����ユ�剁���版��绱㈠�
+// ��蹇�锛�琛ㄧず���板�戒护寰�澶���
 extern volatile uint8_t new_command_ready;
 
 /* USER CODE END Private defines */

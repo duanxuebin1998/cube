@@ -16,6 +16,7 @@
 #include <stdlib.h>
 #include "AS5145.h"
 #include "measure_tank_height.h"
+#include "motor_ctrl.h"
 
 #define MAX_WEIGHT 20000 // 最大重量限制
 #define MIN_WEIGHT -2000 // 最小重量限制
@@ -136,43 +137,110 @@ Weight_StateTypeDef check_bottom_status(void)
     return state;
 }
 /**
- * @brief 称重碰撞检测函数（检测30%称重变化）
- * @return WEIGHT_COLLISION_DETECTED（1）表示检测到碰撞；NO_ERROR（0）表示正常
+ * @brief 称重碰撞检测（上行检测变重，下行检测变轻）
+ * @return WEIGHT_COLLISION_DETECTED 表示检测到碰撞；NO_ERROR 表示正常
  */
 uint32_t CheckWeightCollision(void)
 {
-    float cable_mm  = (float)g_measurement.debug_data.cable_length / 10.0f;
-    float sensor_mm = (float)g_measurement.debug_data.sensor_position / 10.0f;
-    float diff      = fabs(weight_parament.current_weight - weight_parament.stable_weight);
-    float threshold = weight_parament.full_weight * 0.5f;
+    int32_t cur_weight    = weight_parament.current_weight;
+    int32_t stable_weight = weight_parament.stable_weight;
+    int32_t full_weight   = weight_parament.full_weight;
 
-    if ((diff > threshold) &&
-        (g_measurement.debug_data.cable_length > 1000) &&
-        (g_measurement.debug_data.cable_length < bottom_value - g_deviceParams.blindZone))
+    /* 一个差值:
+     * diff > 0 表示变重
+     * diff < 0 表示变轻
+     */
+    int32_t diff = cur_weight - stable_weight;
+
+    /* 方向: 0 下行, 1 上行 */
+    uint32_t motor_dir = g_measurement.debug_data.motor_state;
+
+    /* 阈值 = 满载重量 * 比例 / 100，全部用整数计算 */
+    int32_t upper_threshold =
+        (int32_t)(((int64_t)full_weight * (int64_t)g_deviceParams.weight_upper_limit_ratio) / 100);
+
+    int32_t lower_threshold =
+        (int32_t)(((int64_t)full_weight * (int64_t)g_deviceParams.weight_lower_limit_ratio) / 100);
+
+    /* 打印用，毫米值可以少量使用 float */
+    float cable_mm  = g_measurement.debug_data.cable_length / 10.0f;
+    float sensor_mm = g_measurement.debug_data.sensor_position / 10.0f;
+
+    /* ==========================
+     *       上行: 检测变重
+     * ========================== */
+    if (motor_dir == MOTOR_DIRECTION_UP)
     {
-        printf("\r\n================= 碰撞检测报警 =================\r\n");
-        printf("称重状态：波动超限\r\n");
-        printf("当前重量：%d\r\n", weight_parament.current_weight);
-        printf("稳定重量：%d\r\n", weight_parament.stable_weight);
-        printf("重量差值：%.1f（阈值：%.1f）\r\n", diff, threshold);
-        printf("尺带长度：%.1f mm\r\n", cable_mm);
-        printf("距离罐底：%.1f mm\r\n", sensor_mm);
-        printf("盲区高度：%ld mm\r\n", g_deviceParams.blindZone);
-        printf("---------------------------------------------------\r\n");
-//        return WEIGHT_COLLISION_DETECTED;
+        /* 碰撞判定: 当前重量比稳定重量增加超过上限阈值 */
+        if (diff > upper_threshold)
+        {
+            printf("\r\n====== 称重碰撞报警(上行) ======\r\n");
+            printf("当前重量 : %ld\r\n", (long)cur_weight);
+            printf("稳定重量 : %ld\r\n", (long)stable_weight);
+            printf("重量增加 : %ld (阈值:%ld)\r\n", (long)diff, (long)upper_threshold);
+            printf("尺带长度 : %.1f mm\r\n", cable_mm);
+            printf("传感器位置 : %.1f mm\r\n", sensor_mm);
+            printf("================================\r\n");
+
+            return WEIGHT_COLLISION_DETECTED;
+        }
+
+        /* 正常情况下, 只打印和上行相关的信息 */
+        printf("称重正常(上行) | 当前:%ld 稳定:%ld 增加:%ld 上限阈值:%ld 满载:%ld\r\n",
+               (long)cur_weight,
+               (long)stable_weight,
+               (long)diff,
+               (long)upper_threshold,
+               (long)full_weight);
+
         return NO_ERROR;
     }
-    else
+
+    /* ==========================
+     *       下行: 检测变轻
+     * ========================== */
+    if (motor_dir == MOTOR_DIRECTION_DOWN)
     {
-        printf("称重检测：正常 | 当前:%d | 稳定:%d | 稳定:%d | 差值:%.1f | 阈值:%.1f | 状态:OK\r\n",
-               weight_parament.current_weight,
-               weight_parament.stable_weight,
-			   weight_parament.full_weight,
-               diff,
-               threshold);
+        /* 碰撞判定: 当前重量比稳定重量减小超过下限阈值
+         * diff 为负数, 所以比较 -diff 和阈值
+         */
+        if (-diff > lower_threshold)
+        {
+            printf("\r\n====== 称重碰撞报警(下行) ======\r\n");
+            printf("当前重量 : %ld\r\n", (long)cur_weight);
+            printf("稳定重量 : %ld\r\n", (long)stable_weight);
+            printf("重量减少 : %ld (阈值:%ld)\r\n", (long)(-diff), (long)lower_threshold);
+            printf("尺带长度 : %.1f mm\r\n", cable_mm);
+            printf("传感器位置 : %.1f mm\r\n", sensor_mm);
+            printf("================================\r\n");
+
+            return WEIGHT_COLLISION_DETECTED;
+        }
+
+        /* 正常情况下, 只打印和下行相关的信息 */
+        printf("称重正常(下行) | 当前:%ld 稳定:%ld 减少:%ld 下限阈值:%ld 满载:%ld\r\n",
+               (long)cur_weight,
+               (long)stable_weight,
+               (long)(-diff),
+               (long)lower_threshold,
+               (long)full_weight);
+
         return NO_ERROR;
     }
+
+    /* ==========================
+     *    其他情况: 电机停止或状态异常
+     * ========================== */
+    printf("称重检测: 电机未运动或方向无效 | motor_state=%lu 当前:%ld 稳定:%ld 满载:%ld\r\n",
+           (unsigned long)motor_dir,
+           (long)cur_weight,
+           (long)stable_weight,
+           (long)full_weight);
+
+    return WEIGHT_COLLISION_DETECTED;
 }
+
+
 
 
 /**
@@ -189,7 +257,7 @@ void Weight_Update(int32_t currWeight) {
 	lastTime = now;
 
 	weight_parament.stable_weight = weight_parament.stable_weight * 0.8f + currWeight * 0.2f;
-
+	g_measurement.debug_data.current_weight = currWeight; // 更新当前重量到调试数据
 	// 可选调试输出
 	// printf("稳态称重: %ld\n", weightFilter.stableWeight);
 

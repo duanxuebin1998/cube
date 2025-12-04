@@ -9,7 +9,8 @@
 #define INC_MEASURE_DENSITY_H_
 
 #include "app_main.h"
+void MeasureDensitySpread(void);
 uint32_t SinglePointMeasurement();
 uint32_t SinglePointMonitoring();
-uint32_t SinglePoint_ReadSensor(DensityMeasurement *result);
+uint32_t SinglePoint_ReadSensor(volatile DensityMeasurement *result);
 #endif /* INC_MEASURE_DENSITY_H_ */

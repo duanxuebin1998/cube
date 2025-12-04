@@ -11,6 +11,7 @@
 #include "my_crc.h"
 #include <string.h>
 #include "address.h"
+#include "communicate.h"
 
 static void modbus_on_holding_written(uint16_t start, uint16_t qty);
 // ================= 寄存器池 =================
@@ -32,7 +33,7 @@ static uint8_t build_exception(uint8_t addr, uint8_t func, uint8_t ex_code,
     tx[0] = addr;
     tx[1] = func | 0x80;
     tx[2] = ex_code; // 01:非法功能, 02:非法地址, 03:非法数据值, 04:从站故障
-    uint16_t crc = CRC16_Calculate(tx, 5);
+    uint16_t crc = CRC16_Calculate(tx, 3);
     tx[3] = (uint8_t)(crc & 0xFF);
     tx[4] = (uint8_t)(crc >> 8);
     *tx_len = 5;
@@ -202,26 +203,13 @@ static void modbus_on_holding_written(uint16_t start, uint16_t qty)
 void ForwardParamsToLowerDevice(void)
 {
     // 示例：根据 command 不同，打不同的下发帧
-//    switch (g_deviceParams.command) {
-//        case CMD_START_SPREAD_MEAS:
-//            // 使用 g_deviceParams.spreadBottomLimit / tankHeight /
-//            //      spreadMeasurementDistance / spreadTopLimit
-//            // 来组一帧给底层传感器
-//            Wartsila_SendSpreadConfig(
-//                g_deviceParams.spreadBottomLimit,
-//                g_deviceParams.tankHeight,
-//                g_deviceParams.spreadMeasurementDistance,
-//                g_deviceParams.spreadTopLimit
-//            );
-//            break;
-//
-//        case CMD_SINGLE_POINT:
-//            // 其它指令...
-//            break;
-//
-//        default:
-//            break;
-//    }
+	if (g_deviceParams.command != CMD_NONE) {
+		uint32_t cmd32 = (uint32_t)g_deviceParams.command;   // 如果原来是 uint16_t，也没问题
+		printf("接收到下发指令：%d\r\n", g_deviceParams.command);
+		/* 将 CMD_xxx 写入 HOLDREGISTER_DEVICEPARAM_COMMAND（2 个保持寄存器） */
+		CPU2_CombinatePackage_Send(FUNCTIONCODE_WRITE_MULREGISTER, HOLDREGISTER_DEVICEPARAM_COMMAND, 2, &cmd32 );
+	}
+
 }
 
 

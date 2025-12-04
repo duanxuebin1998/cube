@@ -32,7 +32,6 @@ static uint32_t last_check_tick = 0;
 static uint32_t last_alarm_tick = 0;
 uint32_t velocity = 1600 * VELOCITY_MAX * 32;
 
-bool stpr_isMoving(TMC5130TypeDef *tmc5130);
 static uint32_t stpr_checkGstat(TMC5130TypeDef *tmc5130);
 static uint32_t stpr_wait_until_stop(TMC5130TypeDef *tmc5130);
 
@@ -45,8 +44,9 @@ uint32_t motor_Init(void) {
 // 控制电机移动函数
 uint32_t motorMoveNoWait(float mm, int dir) {
     if (mm < 0) {
-        return NO_ERROR; // 距离必须为正值，直接返回
+        return MOTOR_STEP_ERROR; // 距离必须为正值，直接返回
     }
+    g_measurement.debug_data.motor_state = dir; // 记录最后一次移动距离
     printf("start move %.2fmm, dir %d\n", mm, dir);
     // 计算对应的步数
     int32_t ticks = (int32_t)((mm * 30 * 1600 * 32) / 600); // 转换为步数
@@ -148,33 +148,7 @@ uint32_t motorMoveAndWaitUntilStop(float mm, int dir) {
     return NO_ERROR;
 }
 
-/**
- * @brief 电机带回差补偿的移动函数
- *        上行：正常走
- *        下行：多走20mm，再往上走20mm克服回差
- * @param mm   目标移动距离 (mm)
- * @param dir  方向：0=下行，1=上行
- * @return uint32_t 错误码
- */
-uint32_t motorMoveWithBacklash(float mm, int dir) {
-    uint32_t ret;
 
-    if (dir == MOTOR_DIRECTION_UP) {
-        // 上行：正常走
-        ret = motorMoveAndWaitUntilStop(mm, dir);
-        CHECK_ERROR(ret);
-    } else {
-        // 下行：先比目标多走20mm
-        ret = motorMoveAndWaitUntilStop(mm + 20.0f, dir);
-        CHECK_ERROR(ret);
-
-        // 再往上走20mm，消除回差
-        ret = motorMoveAndWaitUntilStop(20.0f, 1);
-        CHECK_ERROR(ret);
-    }
-
-    return NO_ERROR;
-}
 
 uint32_t motorMove_up(void) {
     motorMoveNoWait(100000, MOTOR_DIRECTION_UP);

@@ -31,8 +31,6 @@ ModbusResult modbus_rtu_process(const uint8_t* rx_buf, uint16_t rx_len,
 // 保持寄存器池（16位寄存器数组）——由应用层可直接读写
 extern uint16_t g_holding_regs[HOLDREG_COUNT];
 
-// CRC16(Modbus) 计算（可单独复用）
-uint16_t modbus_crc16(const uint8_t* data, uint16_t len);
 
 
 #endif /* WARTSILA_MODBUS_WARTSILA_MODBUS_COMMUNICATION_H_ */

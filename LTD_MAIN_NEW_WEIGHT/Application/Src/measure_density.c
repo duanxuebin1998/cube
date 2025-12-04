@@ -6,6 +6,8 @@
  */
 
 #include "measure_density.h"
+#include "sensor.h"
+#include "measure_oilLevel.h"
 #include "motor_ctrl.h"
 #include <stdint.h>
 #include <string.h>
@@ -14,35 +16,49 @@
 #include "system_parameter.h"
 
 static uint32_t Density_SpreadMeasurement(DensityDistribution *dist);
+void Print_DensitySpreadResult(const DensityDistribution *dist);
 // 分布测量主函数
-void MeasureDensitySpread(void) {
-	uint32_t ret = 0;
-	// 设置设备状态：分布测量中
-	g_measurement.device_status.device_state = STATE_SPREADPOINTING;
+// 分布密度测量主流程
+void MeasureDensitySpread(void)
+{
+    uint32_t ret = 0;
+    DensityDistribution temp = {0};   // 本次测量结果临时缓存
 
-	ret = SearchOilLevel();
+    // 设置设备状态: 分布测量中
+    g_measurement.device_status.device_state = STATE_SPREADPOINTING;
 
-	if (ret != NO_ERROR) {
-		printf("液位流程\t液位搜索失败，错误码:0x%lX\r\n", ret);
-		return;
-	} else
-		printf("液位流程\t液位搜索成功\r\n");
-// 切换传感器到密度测量模式（如果你已经在其他地方统一处理，这行可以删掉）
-	EnableDensityMode();
+    // 1. 先搜索液位
+    ret = SearchOilLevel();
+    if (ret != NO_ERROR) {
+        printf("密度分布\t液位搜索失败, 错误码: 0x%08lX\r\n", ret);
+        SET_ERROR(ret);
+        g_measurement.device_status.device_state = STATE_SPREADPOINTOVER; // 或者 STATE_STANDBY
+        return;
+    }
+    printf("密度分布\t液位搜索成功\r\n");
 
-// 执行一次分布密度测量，结果写入 g_measurement 中的分布结构体
-	ret = Density_SpreadMeasurement(&g_measurement.density_distribution);
+    // 2. 切换到密度测量模式
+    EnableDensityMode();
 
-// 记录/上报错误码（和零点测量一样用 SET_ERROR）
-	SET_ERROR(ret);
+    // 3. 执行分布密度测量, 结果写入 temp
+    ret = Density_SpreadMeasurement(&temp);
+    if (ret != NO_ERROR) {
+        printf("密度分布\t测量失败, 错误码: 0x%08lX\r\n", ret);
+        SET_ERROR(ret);
+        g_measurement.device_status.device_state = STATE_SPREADPOINTOVER; // 或者错误状态
+        return;
+    }
 
-	HAL_Delay(1000);
-	Print_DensitySpreadResult(&g_measurement.density_distribution);
-// 测量结束，回到待机状态
-	g_measurement.device_status.device_state = STATE_SPREADPOINTOVER;
+    // 4. 测量成功, 写回全局结果
+    g_measurement.density_distribution = temp;
 
-	return;
+    // 5. 打印最终结果
+    Print_DensitySpreadResult(&g_measurement.density_distribution);
+
+    // 6. 测量结束, 状态切换为分布测量完成
+    g_measurement.device_status.device_state = STATE_SPREADPOINTOVER;
 }
+
 
 /**
  * @brief  进行一次密度分布测量
@@ -242,7 +258,7 @@ void Print_DensitySpreadResult(const DensityDistribution *dist) {
 
 #define SINGLE_POINT_TIMEOUT_ERR   ((uint32_t)-1)  // -1 错误码
 
-uint32_t SinglePoint_ReadSensor(DensityMeasurement *result) {
+uint32_t SinglePoint_ReadSensor(volatile DensityMeasurement *result) {
 	uint32_t ret = 0;
 
 	/* 稳定判定时间窗口：g_deviceParams.spreadPointHoverTime 秒 */

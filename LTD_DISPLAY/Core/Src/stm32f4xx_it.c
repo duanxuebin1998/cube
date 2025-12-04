@@ -55,6 +55,80 @@
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+#include "stm32f4xx.h"   // 换成你对应的芯片头文件
+#include <stdio.h>
+
+void Fault_HandlerEx(const char *name, uint32_t *stack_addr)
+{
+    // 进异常时硬件自动压栈的寄存器
+    uint32_t r0  = stack_addr[0];
+    uint32_t r1  = stack_addr[1];
+    uint32_t r2  = stack_addr[2];
+    uint32_t r3  = stack_addr[3];
+    uint32_t r12 = stack_addr[4];
+    uint32_t lr  = stack_addr[5];
+    uint32_t pc  = stack_addr[6];   // ★ 出错指令地址
+    uint32_t psr = stack_addr[7];
+
+    uint32_t msp = __get_MSP();
+    uint32_t psp = __get_PSP();
+
+    uint32_t cfsr  = SCB->CFSR;
+    uint32_t hfsr  = SCB->HFSR;
+    uint32_t mmfar = SCB->MMFAR;
+    uint32_t bfar  = SCB->BFAR;
+
+    __disable_irq();
+
+    printf("\r\n=============================\r\n");
+    printf("   !!! %s OCCURRED !!!\r\n", name);
+    printf("-----------------------------\r\n");
+    printf("  R0  = 0x%08lX\r\n", r0);
+    printf("  R1  = 0x%08lX\r\n", r1);
+    printf("  R2  = 0x%08lX\r\n", r2);
+    printf("  R3  = 0x%08lX\r\n", r3);
+    printf("  R12 = 0x%08lX\r\n", r12);
+    printf("  LR  = 0x%08lX\r\n", lr);
+    printf("  PC  = 0x%08lX  <-- 出错指令\r\n", pc);
+    printf("  xPSR= 0x%08lX\r\n", psr);
+    printf("  MSP = 0x%08lX\r\n", msp);
+    printf("  PSP = 0x%08lX\r\n", psp);
+    printf("-----------------------------\r\n");
+    printf("  HFSR = 0x%08lX\r\n", hfsr);
+    printf("  CFSR = 0x%08lX\r\n", cfsr);
+    printf("  MMFAR= 0x%08lX\r\n", mmfar);
+    printf("  BFAR = 0x%08lX\r\n", bfar);
+
+    // 简单解码 CFSR，辅助判断
+    uint8_t  mmfsr = (uint8_t)(cfsr & 0xFF);
+    uint8_t  bfsr  = (uint8_t)((cfsr >> 8) & 0xFF);
+    uint16_t ufsr  = (uint16_t)((cfsr >> 16) & 0xFFFF);
+
+    printf("------------- Decode CFSR --------------\r\n");
+    if (mmfsr) {
+        printf("  MemManage Fault: 0x%02X\r\n", mmfsr);
+    }
+    if (bfsr) {
+        printf("  Bus Fault     : 0x%02X\r\n", bfsr);
+        if (bfsr & (1 << 7)) {
+            printf("    -> BFAR valid, addr = 0x%08lX\r\n", bfar);
+        }
+    }
+    if (ufsr) {
+        printf("  Usage Fault   : 0x%04X\r\n", ufsr);
+        if (ufsr & (1 << 9)) {
+            printf("    -> DIVBYZERO: 除以 0 错误\r\n");
+        }
+        if (ufsr & (1 << 0)) {
+            printf("    -> UNDEFINSTR: 非法指令/跳飞\r\n");
+        }
+    }
+    printf("=========================================\r\n");
+
+    // 继续调用你原来的统一处理逻辑（打印 HFSR/CFSR + 卡死/复位）
+    Fault_Handler(name);
+}
+
 void Fault_Handler(const char *name)
 {
     __disable_irq();  // 先关中断，防止再嵌套
@@ -126,10 +200,21 @@ void NMI_Handler(void)
 /**
   * @brief This function handles Hard fault interrupt.
   */
+static const char HardFaultName[] = "HardFault";
+void HardFault_Handler(void) __attribute__((naked));
 void HardFault_Handler(void)
 {
   /* USER CODE BEGIN HardFault_IRQn 0 */
-	Fault_Handler("HardFault");
+    __asm volatile
+    (
+        "tst lr, #4                \n" // EXC_RETURN 的 bit2：0=MSP,1=PSP
+        "ite eq                    \n"
+        "mrseq r1, msp             \n" // r1 = stack_addr
+        "mrsne r1, psp             \n"
+        "ldr  r0, =HardFaultName   \n" // r0 = const char *name
+        "b    Fault_HandlerEx      \n" // 直接跳到 C 函数，不再返回
+    );
+//	Fault_Handler("HardFault");
   /* USER CODE END HardFault_IRQn 0 */
   while (1)
   {
@@ -452,7 +537,14 @@ void USART2_IRQHandler(void)
 			HAL_UART_DMAStop(&huart2);  // 停止DMA接收
 			temp = __HAL_DMA_GET_COUNTER(&hdma_usart2_rx);  // 获取DMA中未传输的数据个数
 			UART2_RX_LEN = UART2_RX_BUF_SIZE - temp;  // 计算已经接收到的数据个数
-			com2_rx_ready = 1; // 标记接收完成
+			if (UART2_RX_LEN > 0)
+			{
+				com2_rx_ready = 1; // 标记接收完成
+			}
+			else {
+				// 如果没有接收到数据，重新启用DMA接收
+				HAL_UART_Receive_DMA(&huart2, UART2_RX_BUF, UART2_RX_BUF_SIZE);
+			}
 //			HAL_UART_Transmit_DMA(&huart2, UART2_RX_BUF, UART2_RX_LEN);//返回接受到的包
 		}
 	}
@@ -479,7 +571,12 @@ void USART3_IRQHandler(void)
 			HAL_UART_DMAStop(&huart3);  // 停止DMA接收
 			temp = __HAL_DMA_GET_COUNTER(&hdma_usart3_rx);  // 获取DMA中未传输的数据个数
 			UART3_RX_LEN = UART3_RX_BUF_SIZE - temp;  // 计算已经接收到的数据个数
-			com3_rx_ready = 1; // 标记接收完成
+			if (UART3_RX_LEN > 0) {
+				com3_rx_ready = 1; // 标记接收完成
+			} else {
+				// 如果没有接收到数据，重新启用DMA接收
+				HAL_UART_Receive_DMA(&huart3, UART3_RX_BUF, UART3_RX_BUF_SIZE);
+			}
 //			COM3_SET_SEND_MODE();  // 切换到发送模式
 //			DSM_CommunicationProcess(UART3_RX_BUF, UART3_RX_LEN);  // 处理接收到的数据
 		}
@@ -588,7 +685,14 @@ void USART6_IRQHandler(void)
 			HAL_UART_DMAStop(&huart6);  // 停止DMA接收
 			temp = __HAL_DMA_GET_COUNTER(&hdma_usart6_rx);  // 获取DMA中未传输的数据个数
 			UART6_RX_LEN = UART6_RX_BUF_SIZE - temp;  // 计算已经接收到的数据个数
-			com1_rx_ready = 1; // 标记接收完成
+			if (UART6_RX_LEN > 0)
+			{
+				com1_rx_ready = 1; // 标记接收完成
+			}
+			else
+			{
+				HAL_UART_Receive_DMA(&huart6, UART6_RX_BUF, UART6_RX_BUF_SIZE); // 重新启用DMA接收
+			}
 //			HAL_UART_Transmit_DMA(&huart6, UART6_RX_BUF, UART6_RX_LEN);//返回接受到的包
 		}
 

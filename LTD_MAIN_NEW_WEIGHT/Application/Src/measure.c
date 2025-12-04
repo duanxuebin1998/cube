@@ -16,97 +16,254 @@
 #include <stdlib.h>
 #include "test.h"
 #include "sensor.h"
-void ProcessMeasureCmd(CommandType command) {
+
+static void CorrectOilLevel(void);
+static void EnterMaintenanceMode(void);
+
+void ProcessMeasureCmd(CommandType command)
+{
 	switch (command) {
+
+	/* ================== 普通测量指令 ================== */
+
+	case CMD_NONE:
+		printf("无命令，不执行操作\n");
+		break;
+
 	case CMD_BACK_ZERO:
 		printf("执行回零点指令\n");
-		MeasureZero(); //
+		MeasureZero();
 		break;
+
 	case CMD_FIND_OIL:
 		printf("执行寻找液位指令\n");
 		MeasureAndFollowOilLevel();
 		break;
+
 	case CMD_FIND_WATER:
-		printf("执行寻找水位指令\n");
-		printf("暂不持支持该指令\n");
-//		SearchWaterLevel();
+		printf("执行寻找水位指令，暂不支持该指令\n");
+		// SearchWaterLevel();
 		break;
+
 	case CMD_FIND_BOTTOM:
 		printf("执行罐底测量指令\n");
 		MeasureBottom();
 		break;
-	case CMD_SET_EMPTY_WEIGHT:
-		printf("执行设置空载称重指令\n");
-		g_measurement.device_status.device_state = STATE_GET_EMPTYWEIGHT;
-		get_empty_weight();
-		g_measurement.device_status.device_state = STATE_GET_EMPTYWEIGHT_OVER;
-		break;
-	case CMD_SET_FULL_WEIGHT:
-		printf("执行设置满载称重指令\n");
-		g_measurement.device_status.device_state = STATE_GET_FULLWEIGHT;
-		get_full_weight();
-		g_measurement.device_status.device_state = STATE_GET_FULLWEIGHT_OVER;
-		break;
+
 	case CMD_MEASURE_SINGLE:
 		printf("执行单点测量指令\n");
 		g_measurement.device_status.device_state = STATE_SINGLEPOINTING;
 		SinglePointMeasurement();
 		g_measurement.device_status.device_state = STATE_SINGLEPOINTOVER;
 		break;
+
 	case CMD_MONITOR_SINGLE:
 		printf("执行单点监测指令\n");
 		g_measurement.device_status.device_state = STATE_RUNTOPOINTING;
 		SinglePointMonitoring();
+		// 监测一般是持续过程，这里不立即切回“完成”状态
 		break;
-//	case CMD_SYNTHETIC:
-//		printf("执行综合测量指令\n");
-//		SyntheticMeasurement();
-//		break;
+
+	case CMD_SYNTHETIC:
+		printf("执行综合测量指令，暂不支持该指令\n");
+		// SyntheticMeasurement();
+		break;
+
+	/* 密度分布/区间测量系列，目前只有一个实现 */
 	case CMD_MEASURE_DISTRIBUTED:
 		printf("执行分布测量指令\n");
 		MeasureDensitySpread();
 		break;
-//	case CMD_MEASURE_DENSITY_METER:
-//		printf("执行密度每米测量指令\n");
-//		DensityMeterMeasurement();
-//		break;
-//	case CMD_MEASURE_DENSITY_RANGE:
-//		printf("执行液位区间测量指令\n");
-//		DensityRangeMeasurement();
-//		break;
+
+	case CMD_GB_MEASURE_DISTRIBUTED:
+		printf("执行国标分布测量指令，暂不支持该指令\n");
+		// GB_MeasureDensitySpread();
+		break;
+
+	case CMD_MEASURE_DENSITY_METER:
+		printf("执行密度每米测量指令，暂不支持该指令\n");
+		// DensityMeterMeasurement();
+		break;
+
+	case CMD_MEASURE_DENSITY_RANGE:
+		printf("执行液位区间密度测量指令，暂不支持该指令\n");
+		// DensityRangeMeasurement();
+		break;
+
+	case CMD_WARTSILA_DENSITY_RANGE:
+		printf("执行瓦西莱区间密度测量指令，暂不支持该指令\n");
+		// WartsilaDensityRangeMeasurement();
+		break;
+
+
+	/* ================== 调试 / 标定 / 系统类指令 ================== */
+
 	case CMD_CALIBRATE_ZERO:
 		printf("执行标定零点指令\n");
 		CalibrateZeroPoint();
 		break;
+
 	case CMD_CALIBRATE_OIL:
 		printf("执行标定液位指令\n");
 		CalibrateOilLevel();
 		break;
+
 	case CMD_CORRECT_OIL:
 		printf("执行修正液位指令\n");
 		CorrectOilLevel();
 		break;
+
 	case CMD_MOVE_UP:
 		printf("电机上行操作\n");
 		g_measurement.device_status.device_state = STATE_RUNUPING;
-		motorMoveAndWaitUntilStop((float) g_deviceParams.motorCommandDistance / 10.0, MOTOR_DIRECTION_UP);
+		motorMoveAndWaitUntilStop((float)g_deviceParams.motorCommandDistance / 10.0f,
+		                          MOTOR_DIRECTION_UP);
 		g_measurement.device_status.device_state = STATE_RUNUPOVER;
 		break;
+
 	case CMD_MOVE_DOWN:
 		printf("电机下行操作\n");
 		g_measurement.device_status.device_state = STATE_RUNDOWNING;
-		motorMoveAndWaitUntilStop((float) g_deviceParams.motorCommandDistance / 10.0, MOTOR_DIRECTION_DOWN);
+		motorMoveAndWaitUntilStop((float)g_deviceParams.motorCommandDistance / 10.0f,
+		                          MOTOR_DIRECTION_DOWN);
 		g_measurement.device_status.device_state = STATE_RUNDOWNOVER;
 		break;
-	case CMD_RESTORE_FACTORY:
-		printf("恢复出厂设置\n");
-		RestoreFactoryParamsConfig(); //恢复出厂设置
+
+	case CMD_SET_EMPTY_WEIGHT:
+		printf("执行设置空载称重指令\n");
+		g_measurement.device_status.device_state = STATE_GET_EMPTYWEIGHT;
+		get_empty_weight();
+		g_measurement.device_status.device_state = STATE_GET_EMPTYWEIGHT_OVER;
 		break;
+
+	case CMD_SET_FULL_WEIGHT:
+		printf("执行设置满载称重指令\n");
+		g_measurement.device_status.device_state = STATE_GET_FULLWEIGHT;
+		get_full_weight();
+		g_measurement.device_status.device_state = STATE_GET_FULLWEIGHT_OVER;
+		break;
+
+	case CMD_RESTORE_FACTORY:
+		printf("执行恢复出厂设置指令\n");
+		RestoreFactoryParamsConfig();
+		break;
+
+	case CMD_MAINTENANCE_MODE:
+		printf("执行维护模式指令，暂不支持该指令\n");
+		EnterMaintenanceMode();
+		break;
+
+	case CMD_DEBUG_MODE:
+		printf("执行调试模式指令，暂不在此处处理（由上层菜单/逻辑切换）\n");
+		break;
+
+
+	/* ================== 预留 / 未知 ================== */
+
+	case CMD_RESERVED_CMD1:
+	case CMD_RESERVED_CMD2:
+	case CMD_RESERVED_CMD3:
+	case CMD_RESERVED_CMD4:
+	case CMD_RESERVED_CMD5:
+	case CMD_RESERVED_CMD6:
+	case CMD_UNKNOWN:
 	default:
-		printf("未知命令类型: %d\n", command);
+		printf("暂不支持该指令: %d\n", command);
+		break;
 	}
 }
-// 处理接收到的命令
+
+//void ProcessMeasureCmd(CommandType command) {
+//	switch (command) {
+//	case CMD_BACK_ZERO:
+//		printf("执行回零点指令\n");
+//		MeasureZero(); //
+//		break;
+//	case CMD_FIND_OIL:
+//		printf("执行寻找液位指令\n");
+//		MeasureAndFollowOilLevel();
+//		break;
+//	case CMD_FIND_WATER:
+//		printf("执行寻找水位指令\n");
+//		printf("暂不持支持该指令\n");
+////		SearchWaterLevel();
+//		break;
+//	case CMD_FIND_BOTTOM:
+//		printf("执行罐底测量指令\n");
+//		MeasureBottom();
+//		break;
+//	case CMD_SET_EMPTY_WEIGHT:
+//		printf("执行设置空载称重指令\n");
+//		g_measurement.device_status.device_state = STATE_GET_EMPTYWEIGHT;
+//		get_empty_weight();
+//		g_measurement.device_status.device_state = STATE_GET_EMPTYWEIGHT_OVER;
+//		break;
+//	case CMD_SET_FULL_WEIGHT:
+//		printf("执行设置满载称重指令\n");
+//		g_measurement.device_status.device_state = STATE_GET_FULLWEIGHT;
+//		get_full_weight();
+//		g_measurement.device_status.device_state = STATE_GET_FULLWEIGHT_OVER;
+//		break;
+//	case CMD_MEASURE_SINGLE:
+//		printf("执行单点测量指令\n");
+//		g_measurement.device_status.device_state = STATE_SINGLEPOINTING;
+//		SinglePointMeasurement();
+//		g_measurement.device_status.device_state = STATE_SINGLEPOINTOVER;
+//		break;
+//	case CMD_MONITOR_SINGLE:
+//		printf("执行单点监测指令\n");
+//		g_measurement.device_status.device_state = STATE_RUNTOPOINTING;
+//		SinglePointMonitoring();
+//		break;
+////	case CMD_SYNTHETIC:
+////		printf("执行综合测量指令\n");
+////		SyntheticMeasurement();
+////		break;
+//	case CMD_MEASURE_DISTRIBUTED:
+//		printf("执行分布测量指令\n");
+//		MeasureDensitySpread();
+//		break;
+////	case CMD_MEASURE_DENSITY_METER:
+////		printf("执行密度每米测量指令\n");
+////		DensityMeterMeasurement();
+////		break;
+////	case CMD_MEASURE_DENSITY_RANGE:
+////		printf("执行液位区间测量指令\n");
+////		DensityRangeMeasurement();
+////		break;
+//	case CMD_CALIBRATE_ZERO:
+//		printf("执行标定零点指令\n");
+//		CalibrateZeroPoint();
+//		break;
+//	case CMD_CALIBRATE_OIL:
+//		printf("执行标定液位指令\n");
+//		CalibrateOilLevel();
+//		break;
+//	case CMD_CORRECT_OIL:
+//		printf("执行修正液位指令\n");
+//		CorrectOilLevel();
+//		break;
+//	case CMD_MOVE_UP:
+//		printf("电机上行操作\n");
+//		g_measurement.device_status.device_state = STATE_RUNUPING;
+//		motorMoveAndWaitUntilStop((float) g_deviceParams.motorCommandDistance / 10.0, MOTOR_DIRECTION_UP);
+//		g_measurement.device_status.device_state = STATE_RUNUPOVER;
+//		break;
+//	case CMD_MOVE_DOWN:
+//		printf("电机下行操作\n");
+//		g_measurement.device_status.device_state = STATE_RUNDOWNING;
+//		motorMoveAndWaitUntilStop((float) g_deviceParams.motorCommandDistance / 10.0, MOTOR_DIRECTION_DOWN);
+//		g_measurement.device_status.device_state = STATE_RUNDOWNOVER;
+//		break;
+//	case CMD_RESTORE_FACTORY:
+//		printf("恢复出厂设置\n");
+//		RestoreFactoryParamsConfig(); //恢复出厂设置
+//		break;
+//	default:
+//		printf("未知命令类型: %d\n", command);
+//	}
+//}
+//// 处理接收到的命令
 
 /**
  * @brief 处理接收到的命令并执行相应的操作。
@@ -366,7 +523,7 @@ void CalibrateOilLevel(void) {
 	SET_ERROR(ret);
 	return;
 }
-void CorrectOilLevel(void) {
+static void CorrectOilLevel(void) {
 	uint32_t ret = 0;
 
 	// 测量前准备
@@ -386,4 +543,11 @@ void CorrectOilLevel(void) {
 		return;
 	}
 }
-
+static void EnterMaintenanceMode(void)
+{
+	printf("Entering maintenance mode \n");
+	g_measurement.device_status.device_state = STATE_MAINTENANCEMODE;
+	while (1) {
+		CHECK_COMMAND_SWITCH_NO_RETURN();
+	}
+}

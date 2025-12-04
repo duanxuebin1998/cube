@@ -7,6 +7,7 @@
 
 
 #include "wartsila_density_measurement.h"
+
 #include "motor_ctrl.h"
 #include <stdint.h>
 #include <string.h>
@@ -21,21 +22,7 @@ void WartsilaDensitySpread(void) {
 	// 设置设备状态：分布测量中
 	g_measurement.device_status.device_state = STATE_SPREADPOINTING;
 
-	ret = Density_SpreadMeasurement(&g_measurement.density_distribution);
-
-	ret = SearchOilLevel();
-
-	if (ret != NO_ERROR) {
-		printf("液位流程\t液位搜索失败，错误码:0x%lX\r\n", ret);
-		return;
-	} else
-		printf("液位流程\t液位搜索成功\r\n");
-// 切换传感器到密度测量模式（如果你已经在其他地方统一处理，这行可以删掉）
-	EnableDensityMode();
-
-// 执行一次分布密度测量，结果写入 g_measurement 中的分布结构体
-	ret = Density_SpreadMeasurement(&g_measurement.density_distribution);
-
+	ret = Wartsila_Density_SpreadMeasurement(&g_measurement.density_distribution);
 // 记录/上报错误码（和零点测量一样用 SET_ERROR）
 	SET_ERROR(ret);
 
