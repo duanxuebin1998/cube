@@ -37,21 +37,27 @@ void App_MainLoop(void) {
 		} else {
 			if (send_len1 > 0) {
 				COM1_SET_SEND_MODE();  //切换发送模式
-                #if DEBUG_APP_MAIN
-			    printf("COM1 TX (%d): ", send_len1);
-			    for (int i = 0; i < send_len1; i++) {
-			        printf("%02X ", sendbuff1[i]);
-			    }
-			    printf("\r\n");
-			    #endif
+#if DEBUG_APP_MAIN
+				printf("COM1 TX (%d): ", send_len1);
+				for (int i = 0; i < send_len1; i++) {
+					printf("%02X ", sendbuff1[i]);
+				}
+				printf("\r\n");
+#endif
 				HAL_UART_Transmit_DMA(&huart6, sendbuff1, send_len1);  //返回接受到的包
 			}
 		}
 		com1_rx_ready = 0; // 重置标志
 	} else if (com2_rx_ready == 1) { // 如果接收到数据
-		printf("com2_rx_ready == 1\r\n");
-//		ret = modbus_rtu_process(UART2_RX_BUF, UART2_RX_LEN, sendbuff, &send_len);  // 处理接收到的数据
-		ret = DSM_CommunicationProcess(UART2_RX_BUF, UART2_RX_LEN, sendbuff2, &send_len2);  // 处理接收到的数据
+#if DEBUG_APP_MAIN
+		printf("COM2 RX (%d): ", UART2_RX_LEN);
+		for (int i = 0; i < UART2_RX_LEN; i++) {
+			printf("%02X ", UART2_RX_BUF[i]);
+		}
+		printf("\r\n");
+#endif
+		ret = modbus_rtu_process(UART2_RX_BUF, UART2_RX_LEN, sendbuff2, &send_len2);  // 处理接收到的数据
+//		ret = DSM_CommunicationProcess(UART2_RX_BUF, UART2_RX_LEN, sendbuff2, &send_len2);  // 处理接收到的数据
 		if (ret != 0) {
 			printf("com2 modbus_rtu_process ret=%ld\r\n", ret);
 			HAL_UART_Receive_DMA(&huart2, UART2_RX_BUF, UART2_RX_BUF_SIZE); // 重新启用DMA接收
@@ -59,13 +65,13 @@ void App_MainLoop(void) {
 		} else {
 			if (send_len2 > 0) {
 				COM2_SET_SEND_MODE();  //切换发送模式
-                #if DEBUG_APP_MAIN
+#if DEBUG_APP_MAIN
 				printf("COM2 TX (%d): ", send_len2);
 				for (int i = 0; i < send_len2; i++) {
 					printf("%02X ", sendbuff2[i]);
 				}
 				printf("\r\n");
-				#endif
+#endif
 				HAL_UART_Transmit_DMA(&huart2, sendbuff2, send_len2);  //返回接受到的包
 			}
 		}

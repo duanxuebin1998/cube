@@ -1070,8 +1070,8 @@ static const EquipStateDisplay state_display_table[] = {
     { STATE_MAINTENANCEMODE,         "维护模式中",               "Maintenance Mode" },
 
     /* 瓦西莱密度梯度测量 */
-    { STATE_WARTSILA_DENSITY_START,      "瓦西莱密度梯度开始",       "Wartsila Density Start" },
-    { STATE_WARTSILA_DENSITY_MEASURING,  "瓦西莱密度梯度测量中",     "Wartsila Density Measuring" },
+    { STATE_WARTSILA_DENSITY_START,      "LTD密度分布开始",       "Wartsila Density Start" },
+    { STATE_WARTSILA_DENSITY_MEASURING,  "LTD密度分布测量",     "Wartsila Density Measuring" },
 
     /* ===== 完成态 ===== */
     { STATE_FINDZEROOVER,            "标定零点完成",             "Zero Calibration Done" },
@@ -1098,7 +1098,7 @@ static const EquipStateDisplay state_display_table[] = {
     { STATE_INTERVAL_DENSITY_OVER,   "液位区间测量完成",         "Interval Density Done" },
 
     /* 瓦西莱密度梯度完成态 */
-    { STATE_WARTSILA_DENSITY_OVER,   "瓦西莱密度梯度测量完成",   "Wartsila Density Done" },
+    { STATE_WARTSILA_DENSITY_OVER,   "LTD密度分布完成",   "Wartsila Density Done" },
 
     /* LTD 新加完成状态 */
     { STATE_GET_FULLWEIGHT_OVER,     "获取满载称重完成",         "Get Full Weight Done" },

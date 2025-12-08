@@ -83,16 +83,21 @@ static uint8_t handle_0x10(uint8_t addr, const uint8_t* pdu, uint16_t pdu_len,
 
     uint16_t start = be16(&pdu[1]);
     uint16_t qty   = be16(&pdu[3]);
-    uint8_t  bytes = pdu[5];
+    uint8_t  bytes = pdu[5];//
 
     if (qty < 1 || qty > 0x007B) // 推荐单次最多123寄存器（字节数<=246）
+    {
+    	printf("qty=%d\r\n", qty);
         return build_exception(addr, 0x10, 0x03, tx, tx_len);
-
-    if (bytes != (uint8_t)(qty * 2))
+    }
+    if (bytes != (uint8_t)(qty)){
+    	printf("bytes=%d, qty*2=%d\r\n", bytes, qty*2);
         return build_exception(addr, 0x10, 0x03, tx, tx_len);
-
-    if (pdu_len != (uint16_t)(6 + bytes))
+    }
+    if (pdu_len != (uint16_t)(6 + 2*bytes)){
+    	printf("pdu_len=%d, 6+bytes=%d\r\n", pdu_len, 6+2*bytes);
         return build_exception(addr, 0x10, 0x03, tx, tx_len);
+    }
 
     if (start < HOLDREG_START_ADDR || (start + qty - 1) > HOLDREG_END_ADDR)
         return build_exception(addr, 0x10, 0x02, tx, tx_len);
