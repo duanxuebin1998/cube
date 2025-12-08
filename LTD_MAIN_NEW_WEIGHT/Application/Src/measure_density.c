@@ -32,8 +32,6 @@ void MeasureDensitySpread(void)
     if (ret != NO_ERROR) {
         printf("密度分布\t液位搜索失败, 错误码: 0x%08lX\r\n", ret);
         SET_ERROR(ret);
-        g_measurement.device_status.device_state = STATE_SPREADPOINTOVER; // 或者 STATE_STANDBY
-        return;
     }
     printf("密度分布\t液位搜索成功\r\n");
 
@@ -45,8 +43,6 @@ void MeasureDensitySpread(void)
     if (ret != NO_ERROR) {
         printf("密度分布\t测量失败, 错误码: 0x%08lX\r\n", ret);
         SET_ERROR(ret);
-        g_measurement.device_status.device_state = STATE_SPREADPOINTOVER; // 或者错误状态
-        return;
     }
 
     // 4. 测量成功, 写回全局结果
@@ -73,9 +69,9 @@ static uint32_t Density_SpreadMeasurement(DensityDistribution *dist) {
 	memset(dist, 0, sizeof(DensityDistribution));
 
 	uint32_t count = g_deviceParams.spreadMeasurementCount;      // 测量点数量
-	uint32_t distance = g_deviceParams.spreadMeasurementDistance;   // 点间距 (mm)
-	uint32_t top_limit = g_deviceParams.spreadTopLimit;              // 距液面的上限 (mm)
-	uint32_t bottom_lim = g_deviceParams.spreadBottomLimit;           // 距罐底的下限 (mm)
+	uint32_t distance = g_deviceParams.spreadMeasurementDistance/10;   // 点间距 (mm)
+	uint32_t top_limit = g_deviceParams.spreadTopLimit/10;              // 距液面的上限 (mm)
+	uint32_t bottom_lim = g_deviceParams.spreadBottomLimit/10;           // 距罐底的下限 (mm)
 	uint32_t order = g_deviceParams.spreadMeasurementOrder;      // 测量顺序
 	uint32_t hover_time = g_deviceParams.spreadPointHoverTime;        // 单点悬停时间 (ms)
 
@@ -260,7 +256,9 @@ void Print_DensitySpreadResult(const DensityDistribution *dist) {
 
 uint32_t SinglePoint_ReadSensor(volatile DensityMeasurement *result) {
 	uint32_t ret = 0;
-
+	//切换密度模式
+	ret = EnableDensityMode();
+	CHECK_ERROR(ret);
 	/* 稳定判定时间窗口：g_deviceParams.spreadPointHoverTime 秒 */
 	uint32_t hover_time_s = g_deviceParams.spreadPointHoverTime;  // 单位：秒
 	uint32_t stable_win_ms = hover_time_s * 1000U;
@@ -326,7 +324,7 @@ uint32_t SinglePoint_ReadSensor(volatile DensityMeasurement *result) {
 			float dt = fabsf(cur_temp - ref_temp);
 
 			/* 只要有一项超出阈值，就认为“不稳定”，重新计时和更新参考值 */
-			if (df > FREQ_EPS || dd > DENSITY_EPS || dt > TEMP_EPS) {
+			if (df > FREQ_EPS || dd > DENSITY_EPS || dt > TEMP_EPS ) {
 				ref_freq = cur_freq;
 				ref_density = cur_density;
 				ref_temp = cur_temp;

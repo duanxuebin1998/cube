@@ -32,7 +32,7 @@ static uint32_t last_check_tick = 0;
 static uint32_t last_alarm_tick = 0;
 uint32_t velocity = 1600 * VELOCITY_MAX * 32;
 
-static uint32_t stpr_checkGstat(TMC5130TypeDef *tmc5130);
+
 static uint32_t stpr_wait_until_stop(TMC5130TypeDef *tmc5130);
 
 uint32_t motor_Init(void) {
@@ -185,7 +185,7 @@ bool stpr_isMoving(TMC5130TypeDef *tmc5130) {
  * @param tmc5130 指向驱动器结构体
  * @return 错误码
  */
-static uint32_t stpr_checkGstat(TMC5130TypeDef *tmc5130) {
+uint32_t stpr_checkGstat(TMC5130TypeDef *tmc5130) {
     uint32_t gstat = stpr_readInt(tmc5130, TMC5130_GSTAT);
     uint32_t ret = NO_ERROR;
 
@@ -337,7 +337,7 @@ uint32_t Motor_CheckLostStep_AutoTiming(int32_t currentPos) {
 }
 
 // 读取位置快照（单位：mm）。如有需要可加临界区保护。
-static inline void snapshot_sensor_pos_mm(float *pos_mm) {
+ void snapshot_sensor_pos_mm(float *pos_mm) {
     uint32_t pos_01mm = (uint32_t)g_measurement.debug_data.sensor_position; // 0.1mm
     *pos_mm = (float)pos_01mm / 10.0f;
 }
@@ -350,7 +350,7 @@ static inline void snapshot_sensor_pos_mm(float *pos_mm) {
 uint32_t motorMoveToPositionOneShot(float target_mm) {
     uint32_t ret;
     float start_mm;
-    for (int i = 0; i < 5; i++) {
+    for (int i = 0; i < 10; i++) {
 
         snapshot_sensor_pos_mm(&start_mm);
         printf("Motor move to position: start=%.3fmm, target=%.3fmm\r\n",
@@ -364,7 +364,7 @@ uint32_t motorMoveToPositionOneShot(float target_mm) {
             return NO_ERROR;
         }
 
-        int dir = (delta > 0.0f) ? +1 : -1;
+        int dir = (delta > 0.0f) ? +1 : 0;
         float plan_mm = fabsf(delta);
         if (plan_mm < (EPS_MM * 2.0f))
             plan_mm = (EPS_MM * 2.0f); // 最小下发距离

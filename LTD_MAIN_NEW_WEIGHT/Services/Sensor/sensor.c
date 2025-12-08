@@ -23,7 +23,7 @@ uint32_t DetectSensorType(void) {
 	} else
 	{
 		printf("读取温度失败,SIL传感器\r\n");
-		g_deviceParams.sensorType =LTD_SENSOR;
+		g_deviceParams.sensorType =DSM_SENSOR;
 	}
 }
 
@@ -65,8 +65,6 @@ uint32_t DSM_Get_LevelMode_Frequence(uint32_t *frequency_out) {
 		}
 
 		if (hz != 0 && hz < 6500) {
-			//停止电机
-//			motorQuickStop();
 			break;  // 成功读取非0频率
 		}
 //		motorQuickStop();
@@ -163,7 +161,7 @@ uint32_t Read_Density(float *frequency, float *density, float *temp) {
 			printf("密度值: %.3f\r\n", *density);
 		} else
 			printf("读取密度失败\r\n");
-		if (DSM_V2_Read_LevelFrequency(&hz) == NO_ERROR) {
+		if (DSM_V2_Read_DensityFrequency(&hz) == NO_ERROR) {
 			printf("频率值: %d Hz\r\n", hz);
 		} else
 			printf("读取频率失败\r\n");

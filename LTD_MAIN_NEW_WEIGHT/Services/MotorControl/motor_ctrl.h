@@ -29,6 +29,7 @@ uint32_t motorMoveNoWait(float mm, int dir);// 电机移动不等待
 uint32_t motorMoveAndWaitUntilStop(float mm, int dir);// 电机移动并等待停止
 uint32_t motorMoveToPositionOneShot(float target_mm);// 电机移动到指定位置（单次调用）
 bool stpr_isMoving(TMC5130TypeDef *tmc5130);
-
+ void snapshot_sensor_pos_mm(float *pos_mm);
+ uint32_t stpr_checkGstat(TMC5130TypeDef *tmc5130);// 检查电机状态寄存器
 
 #endif /* INC_MOTOR_CTRL_H_ */

@@ -380,7 +380,7 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
     if (huart->Instance == USART2)
     {
         cnt = BUF_SIZE - __HAL_DMA_GET_COUNTER(&hdma_usart2_rx);
-        HAL_UART_Transmit(&huart3, usart2_rx_buffer, cnt, 0xffff);	//将接受到的数据再发回上位�???
+        HAL_UART_Transmit(&huart3, usart2_rx_buffer, cnt, 0xffff);	//将接受到的数据再发回上位
         //切频率
         if(usart2_rx_buffer[0] == '+')
         auto_change_out_frequence();
@@ -389,7 +389,7 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
     else if (huart->Instance == USART3)
     {
         cnt = BUF_SIZE - __HAL_DMA_GET_COUNTER(&hdma_usart3_rx);
-        HAL_UART_Transmit(&huart2, usart3_rx_buffer, cnt, 0xffff);	//将接受到的数据再发回上位�???
+        HAL_UART_Transmit(&huart2, usart3_rx_buffer, cnt, 0xffff);	//将接受到的数据再发回上位
         memset(usart3_rx_buffer, 0, cnt);
     }
 }

@@ -204,10 +204,10 @@ void RestoreFactoryParamsConfig(void)
     g_deviceParams.spreadPointHoverTime            = 10;   /* 首点悬停时间, 单位按实际定义 */
 
     /* Wartsila 密度区间测量参数 */
-    g_deviceParams.wartsila_upper_density_limit      = 380000;
-    g_deviceParams.wartsila_lower_density_limit      = 5000;
-    g_deviceParams.wartsila_density_interval         = 10000;
-    g_deviceParams.wartsila_max_height_above_surface = 2000; /* 0.1mm */
+    g_deviceParams.wartsila_upper_density_limit      = 38000;
+    g_deviceParams.wartsila_lower_density_limit      = 500;
+    g_deviceParams.wartsila_density_interval         = 1000;
+    g_deviceParams.wartsila_max_height_above_surface = 200; /* 0.1mm */
 
     /* 水位测量参数 */
     g_deviceParams.waterLevelCorrection           = 0;

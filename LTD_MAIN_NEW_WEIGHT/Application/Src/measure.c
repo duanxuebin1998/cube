@@ -11,6 +11,7 @@
 #include "measure_tank_height.h"
 #include "measure_oilLevel.h"
 #include "measure_density.h"
+#include "wartsila_density_measurement.h"
 #include "motor_ctrl.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -91,8 +92,8 @@ void ProcessMeasureCmd(CommandType command)
 		break;
 
 	case CMD_WARTSILA_DENSITY_RANGE:
-		printf("执行瓦西莱区间密度测量指令，暂不支持该指令\n");
-		// WartsilaDensityRangeMeasurement();
+		printf("执行瓦西莱区间密度测量指令\n");
+		WartsilaDensitySpread();
 		break;
 
 
@@ -447,7 +448,7 @@ void process_command(uint8_t *command) {
 	}
 }
 
-static int MeasureStart(void) {
+int MeasureStart(void) {
 	fault_info_init(); //故障初始化清零
 	g_measurement.device_status.error_code = NO_ERROR; //故障代码清零
 	return NO_ERROR;

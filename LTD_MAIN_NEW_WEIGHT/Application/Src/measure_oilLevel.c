@@ -146,9 +146,12 @@ uint32_t SearchOilLevel(void) {
 		fault_info_init(); // 清除故障信息
 		ret = DSM_Get_LevelMode_Frequence_Avg(&g_measurement.oil_measurement.current_frequency);
 		if (INOIL) {
-			//向下运行保证传感器全部在油
-			ret = motorMoveAndWaitUntilStop(100.0, MOTOR_DIRECTION_DOWN);
-			CHECK_ERROR(ret); // 检查下行是否成功
+			//如果当前传感器在盲区以上100mm
+			if (g_measurement.debug_data.sensor_position > (g_deviceParams.blindZone + 1000)) {
+				//向下运行保证传感器全部在油
+				ret = motorMoveAndWaitUntilStop(100.0, MOTOR_DIRECTION_DOWN);
+				CHECK_ERROR(ret); // 检查下行是否成功
+			}
 			//取油中频率
 			ret = DSM_Get_LevelMode_Frequence_Avg(&g_measurement.oil_measurement.oil_frequency);
 			printf("液位测量\t油中频率：%ld\r\n", g_measurement.oil_measurement.oil_frequency);
@@ -231,9 +234,9 @@ static int SearchOil() {
 	printf("液位测量\t初始重量：%d\r\n", weight_parament.stable_weight);
 
 	//向上运行保证传感器全部在空气
-	if (g_measurement.debug_data.cable_length > 2000) { // 如果尺带长度大于200mm，先将电机上行到安全位置
+	if (g_measurement.debug_data.cable_length > 1000) { // 如果尺带长度大于200mm，先将电机上行到安全位置
 		ret = motorMoveAndWaitUntilStop(100.0, MOTOR_DIRECTION_UP);
-		CHECK_ERROR(ret); // 检查下行是否成功
+		CHECK_ERROR(ret); // 检查上行是否成功
 	}
 	//长距离下行寻找油面
 	ret = motorMove_down();  // 启动电机向下运动
@@ -259,9 +262,11 @@ static int SearchOil() {
 	}
 	ret = motorQuickStop(); // 到达零点后快速停止电机
 	CHECK_ERROR(ret); // 检查快速停止是否成功
-	//向下运行保证传感器全部在油
-	ret = motorMoveAndWaitUntilStop(100.0, MOTOR_DIRECTION_DOWN);
-	CHECK_ERROR(ret); // 检查下行是否成功
+	if (g_measurement.debug_data.sensor_position > (g_deviceParams.blindZone + 1000)) {
+		//向下运行保证传感器全部在油
+		ret = motorMoveAndWaitUntilStop(100.0, MOTOR_DIRECTION_DOWN);
+		CHECK_ERROR(ret); // 检查下行是否成功
+	}
 	//取油中频率
 	ret = DSM_Get_LevelMode_Frequence_Avg(&g_measurement.oil_measurement.oil_frequency);
 	printf("液位测量\t油中频率：%ld\r\n", g_measurement.oil_measurement.oil_frequency);
@@ -298,14 +303,19 @@ static int SearchAir() {
 	ret = motorQuickStop(); // 到达零点后快速停止电机
 	CHECK_ERROR(ret); // 检查快速停止是否成功
 	//向上运行保证传感器全部在空气
-	ret = motorMoveAndWaitUntilStop(100.0, MOTOR_DIRECTION_UP);
-	CHECK_ERROR(ret); // 检查上行是否成功
+	if (g_measurement.debug_data.cable_length > 1000) { // 如果尺带长度大于200mm，先将电机上行到安全位置
+		ret = motorMoveAndWaitUntilStop(100.0, MOTOR_DIRECTION_UP);
+		CHECK_ERROR(ret); // 检查上行是否成功
+	}
 	//取空气中频率
 	ret = DSM_Get_LevelMode_Frequence_Avg(&g_measurement.oil_measurement.air_frequency);
 	printf("液位测量\t空气中频率：%ld\r\n", g_measurement.oil_measurement.air_frequency);
 	CHECK_ERROR(ret);  // 检查获取空气中频率是否成功
-	ret = motorMoveAndWaitUntilStop(100.0, MOTOR_DIRECTION_DOWN);  //返回
-	CHECK_ERROR(ret); // 检查下行是否成功
+	if (g_measurement.debug_data.sensor_position > (g_deviceParams.blindZone + 1000)) {
+		//向下运行保证传感器全部在油
+		ret = motorMoveAndWaitUntilStop(100.0, MOTOR_DIRECTION_DOWN);
+		CHECK_ERROR(ret); // 检查下行是否成功
+	}
 
 	return NO_ERROR;
 }
@@ -411,8 +421,7 @@ static int SearchOilPrecise(float per_mm_Frequency) {
 		}
 
 		// 稳定性检测（连续稳定计数）
-		if ((abs(frequency_difference) <= g_deviceParams.oilLevelThreshold)
-				&& (g_measurement.oil_measurement.air_frequency - g_measurement.oil_measurement.current_frequency > 200)
+		if ((abs(frequency_difference) <= g_deviceParams.oilLevelThreshold) && (g_measurement.oil_measurement.air_frequency - g_measurement.oil_measurement.current_frequency > 200)
 				&& (g_measurement.oil_measurement.current_frequency - g_measurement.oil_measurement.oil_frequency > 200)) {
 			followTime++;
 			runlenth = 0;
@@ -475,8 +484,7 @@ static int determineTheSensorPositionAndUpdateTheLevelValue(void) {
 	// 条件1: 频率差在稳定阈值内（系统稳定）
 	// 条件2: 新旧液位值差异大于100（需要强制更新）
 	// 条件3：处在液位跟随状态
-	if (((abs(frequency_difference) < g_deviceParams.oilLevelThreshold) || (abs((int) oil_level - (int) g_measurement.oil_measurement.oil_level) > 100))
-			&& (g_measurement.device_status.device_state == STATE_FLOWOIL)) {
+	if (((abs(frequency_difference) < g_deviceParams.oilLevelThreshold) || (abs((int) oil_level - (int) g_measurement.oil_measurement.oil_level) > 100)) && (g_measurement.device_status.device_state == STATE_FLOWOIL)) {
 		// 更新当前液位值
 		g_measurement.oil_measurement.oil_level = oil_level;
 		// 打印正常液位值信息
@@ -512,7 +520,7 @@ static int waitForTheLiquidLevelToExceedTheBlindZone(void) {
 		ret = DSM_Get_LevelMode_Frequence(&g_measurement.oil_measurement.current_frequency);
 		CHECK_ERROR(ret);	// 检查开启液位模式是否成功
 		printf("盲区等待\t频率阈值\t%ld\t当前频率\t%ld\t阈值差\t%f\r\n", g_measurement.oil_measurement.follow_frequency, g_measurement.oil_measurement.current_frequency,
-				frequency_difference);
+		frequency_difference);
 		if (g_measurement.oil_measurement.current_frequency > g_measurement.oil_measurement.follow_frequency) {
 			break;
 		}

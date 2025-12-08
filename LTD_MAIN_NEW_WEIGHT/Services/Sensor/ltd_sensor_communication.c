@@ -284,7 +284,23 @@ int DSM_V2_Read_LevelFrequency(uint32_t *freq_hz) {
 	}
 	return ret;
 }
-
+// R16 液位频率（整型）
+int DSM_V2_Read_DensityFrequency(uint32_t *freq_hz) {
+	if (!freq_hz)
+		return OTHER_PERIPHERAL_CONFIG_ERROR;
+	int32_t v = 0;
+	int ret = DSM_V2_Read_IntParam(0x04, &v);   // 参数码 0x04 = R04
+	if (ret == NO_ERROR) {
+		if (v < 0) {
+			v = -v;
+		}
+		if (v > 10000) {
+			v = v - 10000;
+		}
+		*freq_hz = (uint32_t) v;
+	}
+	return ret;
+}
 int DSM_V2_Read_SensorID(uint32_t *sensor_id) {
 	if (!sensor_id)
 		return OTHER_PERIPHERAL_CONFIG_ERROR;

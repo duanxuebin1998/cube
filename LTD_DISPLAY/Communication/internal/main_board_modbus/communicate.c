@@ -136,7 +136,7 @@ FUNCTIONCODE_READ_INPUTREGISTER, REG_DEVICE_STATUS_WORK_MODE, (uint16_t) (REG_SI
 
 /* 输入寄存器组 4：单点 / 分布测量结果 */
 {
-FUNCTIONCODE_READ_INPUTREGISTER, REG_SINGLE_POINT_MEAS_TEMP, (uint16_t) (REG_DENSITY_DIST_AVG_TEMP - REG_SINGLE_POINT_MEAS_TEMP) } };
+FUNCTIONCODE_READ_INPUTREGISTER, REG_SINGLE_POINT_MEAS_TEMP, (uint16_t) (REG_DENSITY_DIST_POINT_BASE - REG_SINGLE_POINT_MEAS_TEMP) } };
 
 #define POWERON_GROUP_COUNT  (sizeof(poweron_groups) / sizeof(poweron_groups[0]))
 
@@ -148,9 +148,9 @@ static const PollGroup runtime_groups[] = {
 {
 FUNCTIONCODE_READ_INPUTREGISTER, REG_DEVICE_STATUS_WORK_MODE, (uint16_t) (REG_SINGLE_POINT_MEAS_TEMP - REG_DEVICE_STATUS_WORK_MODE) },
 
-/* 输入寄存器组 2：单点 / 分布测量结果 */
+/* 输入寄存器组 2：单点 / 密度测量结果 */
 {
-FUNCTIONCODE_READ_INPUTREGISTER, REG_SINGLE_POINT_MEAS_TEMP, (uint16_t) (REG_DENSITY_DIST_AVG_TEMP - REG_SINGLE_POINT_MEAS_TEMP) } };
+FUNCTIONCODE_READ_INPUTREGISTER, REG_SINGLE_POINT_MEAS_TEMP, (uint16_t) (REG_DENSITY_DIST_POINT_BASE - REG_SINGLE_POINT_MEAS_TEMP) } };
 
 #define RUNTIME_GROUP_COUNT  (sizeof(runtime_groups) / sizeof(runtime_groups[0]))
 
@@ -174,6 +174,7 @@ void PollingInputData(void) {
 
 			if (poweron_index >= POWERON_GROUP_COUNT) {
 				poweron_done = true; /* 上电读取全部完成 */
+				print_device_params();
 			}
 		}
 		return; /* 上电阶段结束本次调用，不再发 runtime 组 */
@@ -196,6 +197,63 @@ void PollingInputData(void) {
 			runtime_index = 0;
 		}
 	}
+    // 特定设备状态下，优先按测点数读取分布测量点
+    if( (g_measurement.device_status.device_state == STATE_WARTSILA_DENSITY_OVER)
+    || (g_measurement.device_status.device_state == STATE_AI_SPREADPOINTOVER)) {
+        // 根据 REG_DENSITY_DIST_MEAS_POINTS 的值拉点数据
+        RequestDensityDistPoints_ByCount();
+        // 你可以在读完后置一个标志，避免每次都重复读
+        // g_measurement.flags.density_points_fetched = true;
+        return;
+    }
+}
+#define MAX_REGS_PER_READ  100   /* 单帧最多读多少寄存器，根据你从机限制调整 */
+
+/**
+ * @brief 根据测量点数量读取分布测量点的所有数据
+ *        调用前需要确保 g_measurement.density_distribution.measurement_points 已经正确更新。
+ */
+void RequestDensityDistPoints_ByCount(void)
+{
+    uint16_t points = (uint16_t)g_measurement.density_distribution.measurement_points;
+
+    if (points == 0) {
+        printf("分布测量点数为 0，不读取点数据。\n");
+        return;
+    }
+    if (points > MAX_MEASUREMENT_POINTS) {
+        printf("分布测量点数异常：%u > MAX_MEASUREMENT_POINTS=%u，裁剪。\n",
+               points, (unsigned)MAX_MEASUREMENT_POINTS);
+        points = MAX_MEASUREMENT_POINTS;
+    }
+
+    uint16_t start = REG_DENSITY_DIST_POINT_BASE;
+    uint32_t total_regs = (uint32_t)points * (uint32_t)REG_DENSITY_DIST_POINT_SIZE;
+
+    printf("准备读取分布测量点数据：点数=%u，每点寄存器=%u，总寄存器=%lu，起始地址=%u\n",
+           points,
+           (unsigned)REG_DENSITY_DIST_POINT_SIZE,
+           (unsigned long)total_regs,
+           (unsigned)start);
+
+    while (total_regs > 0) {
+        uint16_t this_len;
+
+        if (total_regs > MAX_REGS_PER_READ) {
+            this_len = MAX_REGS_PER_READ;
+        } else {
+            this_len = (uint16_t)total_regs;
+        }
+
+        /* 这里用读输入寄存器功能码（假设你把这些点映射到 04 号） */
+        CPU2_CombinatePackage_Send(FUNCTIONCODE_READ_INPUTREGISTER,
+                                   start,
+                                   this_len,
+                                   NULL);
+
+        start      += this_len;
+        total_regs -= this_len;
+    }
 }
 
 /*由屏幕向CPU2发送指令包*/
