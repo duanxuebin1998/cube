@@ -2,7 +2,7 @@
  * motor_ctrl.h
  *
  *  Created on: Jan 18, 2025
- *      Author: 1
+ *      Author: Duan Xuebin
  */
 
 #ifndef INC_MOTOR_CTRL_H_

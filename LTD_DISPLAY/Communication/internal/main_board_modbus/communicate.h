@@ -2,7 +2,7 @@
 #define __COMMU_H
 #include "stateformodbus.h"
 
-extern int HoldingRegisterArray[HOLEREGISTER_STOP]; //保持寄存器数组
+extern uint16_t HoldingRegisterArray[HOLEREGISTER_STOP]; //保持寄存器数组
 
 extern int count_com_CPU2;
 extern volatile bool wait_response;

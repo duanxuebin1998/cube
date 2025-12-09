@@ -2,7 +2,7 @@
  * fault_manager.c
  *
  *  Created on: Mar 13, 2025
- *      Author: 1
+ *      Author: Duan Xuebin
  */
 #include "fault_manager.h"
 #include "system_parameter.h"

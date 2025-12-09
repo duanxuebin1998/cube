@@ -2,7 +2,7 @@
  * encoder.h
  *
  *  Created on: Mar 21, 2025
- *      Author: 1
+ *      Author: Duan Xuebin
  */
 
 #ifndef ENCODER_ENCODER_H_

@@ -2,7 +2,7 @@
  * wartsila_density_measurement.h
  *
  *  Created on: 2025Äê12ÔÂ1ÈÕ
- *      Author: admin
+ *      Author: Duan Xuebin
  */
 
 #ifndef INC_WARTSILA_DENSITY_MEASUREMENT_H_

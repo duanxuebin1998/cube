@@ -11,7 +11,7 @@
 #include "system_parameter.h"
 #include "dataanalysis_modbus.h"
 
-#define DEBUG_COMMUCPU2 0
+#define DEBUG_COMMUCPU2 1
 #define ADERSS 0X01
 
 volatile bool wait_response = false; //主控板响应标志位
@@ -19,7 +19,7 @@ volatile bool wait_response = false; //主控板响应标志位
 /*保持寄存器*/
 //static const int HoldingregisterAddress = 0x00; //保持寄存器起始地址
 //static const int HoldingregisterAmount = HOLEREGISTER_STOP + 1; //保持寄存器总数
-int HoldingRegisterArray[HOLEREGISTER_STOP] = { 0 }; //保持寄存器数组
+uint16_t HoldingRegisterArray[HOLEREGISTER_STOP] = { 0 }; //保持寄存器数组
 /*输入寄存器*/
 //static const int InputregisterAddress = 0x00; //输入寄存器起始地址
 //static const int InputRegisterAmount = INPUTREGISTER_AMOUNT; //输入寄存器总数
@@ -66,13 +66,17 @@ void HostCommuProcess(uint8_t *rcv, int len) {
 	switch (RCV_functioncode) {
 	case FUNCTIONCODE_READ_HOLDREGISTER: {
 		CPU2_Response03Process(rcv);
-#if DEBUG_COMMUCPU2
+//#if DEBUG_COMMUCPU2
             printf("CPU3 Response03Process\r\n");
-//            print_device_params();
-#endif
+            print_device_params();
+//#endif
 		break;
 	}
 	case FUNCTIONCODE_READ_INPUTREGISTER: {
+#if DEBUG_COMMUCPU2
+            printf("CPU3 Response04Process\r\n");
+//            print_device_params();
+#endif
 		CPU2_Response04Process(rcv);
 		break;
 	}
@@ -123,20 +127,22 @@ typedef struct {
  */
 static const PollGroup poweron_groups[] = {
 /* 保持寄存器组 1：设备参数前半段 */
-{
-FUNCTIONCODE_READ_HOLDREGISTER, HOLDREGISTER_DEVICEPARAM_COMMAND, (uint16_t) (HOLDREGISTER_DEVICEPARAM_WATERLEVELCORRECTION - HOLDREGISTER_DEVICEPARAM_COMMAND) },
+{FUNCTIONCODE_READ_HOLDREGISTER, HOLDREGISTER_DEVICEPARAM_COMMAND, (uint16_t) (HOLDREGISTER_DEVICEPARAM_WATERLEVELCORRECTION - HOLDREGISTER_DEVICEPARAM_COMMAND) },
 
 /* 保持寄存器组 2：设备参数后半段 */
-{
-FUNCTIONCODE_READ_HOLDREGISTER, HOLDREGISTER_DEVICEPARAM_WATERLEVELCORRECTION, (uint16_t) (HOLEREGISTER_STOP - HOLDREGISTER_DEVICEPARAM_WATERLEVELCORRECTION) },
+{FUNCTIONCODE_READ_HOLDREGISTER, HOLDREGISTER_DEVICEPARAM_WATERLEVELCORRECTION, (uint16_t) (HOLEREGISTER_STOP - HOLDREGISTER_DEVICEPARAM_WATERLEVELCORRECTION) },
 
 /* 输入寄存器组 3：设备状态 */
-{
-FUNCTIONCODE_READ_INPUTREGISTER, REG_DEVICE_STATUS_WORK_MODE, (uint16_t) (REG_SINGLE_POINT_MEAS_TEMP - REG_DEVICE_STATUS_WORK_MODE) },
+{FUNCTIONCODE_READ_INPUTREGISTER, REG_DEVICE_STATUS_WORK_MODE, (uint16_t) (REG_SINGLE_POINT_MEAS_TEMP - REG_DEVICE_STATUS_WORK_MODE) },
 
 /* 输入寄存器组 4：单点 / 分布测量结果 */
-{
-FUNCTIONCODE_READ_INPUTREGISTER, REG_SINGLE_POINT_MEAS_TEMP, (uint16_t) (REG_DENSITY_DIST_POINT_BASE - REG_SINGLE_POINT_MEAS_TEMP) } };
+{FUNCTIONCODE_READ_INPUTREGISTER, REG_SINGLE_POINT_MEAS_TEMP, (uint16_t) (REG_DENSITY_DIST_POINT_BASE - REG_SINGLE_POINT_MEAS_TEMP) },
+/* 保持寄存器组 1：设备参数前半段 */
+{FUNCTIONCODE_READ_HOLDREGISTER, HOLDREGISTER_DEVICEPARAM_COMMAND, (uint16_t) (HOLDREGISTER_DEVICEPARAM_WATERLEVELCORRECTION - HOLDREGISTER_DEVICEPARAM_COMMAND) },
+
+/* 保持寄存器组 2：设备参数后半段 */
+{FUNCTIONCODE_READ_HOLDREGISTER, HOLDREGISTER_DEVICEPARAM_WATERLEVELCORRECTION, (uint16_t) (HOLEREGISTER_STOP - HOLDREGISTER_DEVICEPARAM_WATERLEVELCORRECTION) }
+};
 
 #define POWERON_GROUP_COUNT  (sizeof(poweron_groups) / sizeof(poweron_groups[0]))
 

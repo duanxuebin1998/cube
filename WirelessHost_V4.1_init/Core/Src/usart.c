@@ -376,22 +376,65 @@ void HAL_UART_MspDeInit(UART_HandleTypeDef* uartHandle)
 /* USER CODE BEGIN 1 */
 void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
 {
-	uint8_t cnt;
+    if (Size == 0) {
+        goto _restart;
+    }
+
     if (huart->Instance == USART2)
     {
-        cnt = BUF_SIZE - __HAL_DMA_GET_COUNTER(&hdma_usart2_rx);
-        HAL_UART_Transmit(&huart3, usart2_rx_buffer, cnt, 0xffff);	//将接受到的数据再发回上位
-        //切频率
-        if(usart2_rx_buffer[0] == '+')
-        auto_change_out_frequence();
-        memset(usart2_rx_buffer, 0, cnt);
+        // ===== 主机 → 本板 =====
+        // 1) 透传到 USART3
+        HAL_UART_Transmit(&huart3, usart2_rx_buffer, Size, 0xFFFF);
+
+        // 2) 按 8 字节拆帧，决定本机要不要响应
+        uint16_t offset = 0;
+        while (offset + 8 <= Size) {
+            Wireless_Handle_MasterFrame(&usart2_rx_buffer[offset]);
+            offset += 8;
+        }
+
+        // 3) 清空缓冲（可选）
+        memset(usart2_rx_buffer, 0, Size);
     }
     else if (huart->Instance == USART3)
     {
-        cnt = BUF_SIZE - __HAL_DMA_GET_COUNTER(&hdma_usart3_rx);
-        HAL_UART_Transmit(&huart2, usart3_rx_buffer, cnt, 0xffff);	//将接受到的数据再发回上位
-        memset(usart3_rx_buffer, 0, cnt);
+        // ===== 从机总线 → 本板 =====
+        // 只透传给主机，不解析、不响应
+        HAL_UART_Transmit(&huart2, usart3_rx_buffer, Size, 0xFFFF);
+        memset(usart3_rx_buffer, 0, Size);
+    }
+    else
+    {
+        // 其他串口不处理
+    }
+
+_restart:
+    // 重新开启空闲中断接收
+    if (huart->Instance == USART2) {
+        HAL_UARTEx_ReceiveToIdle_DMA(&huart2, usart2_rx_buffer, BUF_SIZE);
+    } else if (huart->Instance == USART3) {
+        HAL_UARTEx_ReceiveToIdle_DMA(&huart3, usart3_rx_buffer, BUF_SIZE);
     }
 }
+
+//void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
+//{
+//	uint8_t cnt;
+//    if (huart->Instance == USART2)
+//    {
+//        cnt = BUF_SIZE - __HAL_DMA_GET_COUNTER(&hdma_usart2_rx);
+//        HAL_UART_Transmit(&huart3, usart2_rx_buffer, cnt, 0xffff);	//将接受到的数据再发回上位
+//        //切频率
+////        if(usart2_rx_buffer[0] == '+')
+////        auto_change_out_frequence();
+//        memset(usart2_rx_buffer, 0, cnt);
+//    }
+//    else if (huart->Instance == USART3)
+//    {
+//        cnt = BUF_SIZE - __HAL_DMA_GET_COUNTER(&hdma_usart3_rx);
+//        HAL_UART_Transmit(&huart2, usart3_rx_buffer, cnt, 0xffff);	//将接受到的数据再发回上位
+//        memset(usart3_rx_buffer, 0, cnt);
+//    }
+//}
 
 /* USER CODE END 1 */

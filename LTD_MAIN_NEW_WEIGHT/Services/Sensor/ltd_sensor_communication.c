@@ -2,7 +2,7 @@
  * dsm_v2.c
  *
  *  Created on: Nov 10, 2025
- *      Author: admin
+ *      Author: Duan Xuebin
  */
 
 #include <ltd_sensor_communication.h>

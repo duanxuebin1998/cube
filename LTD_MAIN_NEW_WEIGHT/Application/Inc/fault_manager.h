@@ -2,7 +2,7 @@
  * fault_manager.h
  *
  *  Created on: Mar 13, 2025
- *      Author: 1
+ *      Author: Duan Xuebin
  */
 
 #ifndef INC_FAULT_MANAGER_H_

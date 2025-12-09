@@ -2,7 +2,7 @@
  * dsm_sensor_communication.c
  *
  *  Created on: Nov 10, 2025
- *      Author: admin
+ *      Author: Duan Xuebin
  */
 #include "dsm_sensor_communication.h"
 #include <stdio.h>

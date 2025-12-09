@@ -2,7 +2,7 @@
  * app_main.c
  *
  *  Created on: Mar 13, 2025
- *      Author: 1
+ *      Author: Duan Xuebin
  */
 
 #include "app_main.h"
@@ -36,11 +36,7 @@ void App_Init(void) {
 	AD5421_SetCurrent(6.0); // 设置初始电流为4mA
 	motor_Init(); //电机初始化
 	fault_info_init(); // 初始化故障信息
-//	DSMSendcommand3times(DSM_GET_FREQUENCE_START, strlen(DSM_GET_FREQUENCE_START));
-	Probe_EnableWaterSensor();//开启液位模式
-//	DSM_V2_SwitchToLevelMode(); // 切换到液位模式
 	DetectSensorType(); // 检测传感器类型
-
 }
 
 // 主循环任务
@@ -62,6 +58,8 @@ void App_MainLoop(void) {
 			g_deviceParams.command = CMD_NONE; // 清除命令
 			ProcessMeasureCmd(g_measurement.device_status.current_command); // 处理测量命令
 			g_measurement.device_status.current_command =CMD_NONE; // 重置当前命令
+			WIRELESS_PrintInfo(01); // 打印无线传感器信息
+			WIRELESS_PrintInfo(02); // 打印无线传感器信息
 			//
 		}
 //		DSM_V2_Test_AllParams(); // 二代传感器测试函数

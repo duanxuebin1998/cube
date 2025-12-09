@@ -2,7 +2,7 @@
  * crc.c
  *
  *  Created on: Mar 19, 2025
- *      Author: 1
+ *      Author: Duan Xuebin
  */
 #include <my_crc.h>
 #include "crc.h"

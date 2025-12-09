@@ -2,7 +2,7 @@
  * AS5145.h
  *
  * Created on: Dec 12, 2024
- * Author: 1
+ * Author: Duan Xuebin
  * Description: Header file for AS5145 SPI-based rotary encoder.
  */
 

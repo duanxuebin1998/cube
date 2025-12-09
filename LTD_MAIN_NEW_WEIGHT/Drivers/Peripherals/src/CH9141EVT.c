@@ -2,7 +2,7 @@
  * CH9141EVT.c
  *
  *  Created on: Mar 20, 2025
- *      Author: 1
+ *      Author: Duan Xuebin
  */
 
 #include "CH9141EVT.h"

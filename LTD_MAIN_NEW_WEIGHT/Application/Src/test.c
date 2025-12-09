@@ -2,7 +2,7 @@
  * test.c
  * 测试函数，用来临时测试某些功能
  *  Created on: Jul 22, 2025
- *      Author: 1
+ *      Author: Duan Xuebin
  */
 
 #include <ltd_sensor_communication.h>

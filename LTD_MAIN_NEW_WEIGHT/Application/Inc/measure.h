@@ -2,7 +2,7 @@
  * measure.h
  *
  *  Created on: Mar 20, 2025
- *      Author: 1
+ *      Author: Duan Xuebin
  */
 
 #ifndef INC_MEASURE_H_

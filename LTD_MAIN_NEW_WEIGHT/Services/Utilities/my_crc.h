@@ -2,7 +2,7 @@
  * crc.h
  *
  *  Created on: Mar 19, 2025
- *      Author: 1
+ *      Author: Duan Xuebin
  */
 
 #ifndef UTILITIES_MY_CRC_H_

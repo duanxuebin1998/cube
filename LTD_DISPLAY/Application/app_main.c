@@ -2,7 +2,7 @@
  * app_main.c
  *
  *  Created on: Nov 18, 2025
- *      Author: admin
+ *      Author: duan xuebin
  */
 #include "Display.h"
 #include "modbus_agreement.h"
@@ -16,6 +16,7 @@ void App_Init(void) {
 	DisplayInit(); // Initialize the OLED display
 	DisplayAubonLogo(); /* 刚上电显示AUBON LOGO */
 	DSM_CommunicationInit(); // 初始化通信模块
+	HAL_Delay(1000); //
 }
 
 void App_MainLoop(void) {

@@ -1,8 +1,8 @@
 /*
  * dsm_v2.h
- *
+ *	与LTD传感器通信
  *  Created on: Nov 10, 2025
- *      Author: admin
+ *      Author: Duan Xuebin
  */
 #ifndef DSM_V2_H
 #define DSM_V2_H
@@ -10,7 +10,7 @@
 #include <stdint.h>
 #include "main.h"
 #include "sensor.h"
-/*****************新通讯协议说明V3.0，2025.5.15***********
+/*****************通讯协议说明V3.0，2025.5.15***********
 一、协议包说明：
 通讯协议包长为8个字节，
 1.首字节为地址，保留，目前使用00

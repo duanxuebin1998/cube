@@ -2,7 +2,7 @@
  * wartsila_density_measurement.c
  * 瓦西莱密度梯度测量
  *  Created on: 2025年12月1日
- *      Author: admin
+ *      Author: Duan Xuebin
  */
 
 
