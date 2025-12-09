@@ -2,7 +2,7 @@
  * sensor.h
  *
  *  Created on: Mar 19, 2025
- *      Author: 1
+ *      Author: Duan Xuebin
  */
 
 #ifndef SENSOR_SENSOR_H_
@@ -32,4 +32,6 @@ uint32_t EnableLevelMode(void);
 uint32_t DSM_Get_LevelMode_Frequence(uint32_t *frequency_out);
 uint32_t DSM_Get_LevelMode_Frequence_Avg(uint32_t *frequency_out);
 uint32_t Read_Density(float *frequency, float *density, float *temp);
+
+uint32_t WIRELESS_PrintInfo(uint8_t addr);
 #endif /* SENSOR_SENSOR_H_ */

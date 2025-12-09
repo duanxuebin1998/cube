@@ -105,7 +105,35 @@ void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart) {
 		while (__HAL_UART_GET_FLAG(&huart5, UART_FLAG_TC) == RESET)
 			;
 		RS485_SET_RECV_MODE();  //切换接收模式
-//		HAL_UART_Receive_DMA(&huart5, UART5_RX_BUF, UART5_RX_BUF_SIZE);
+		__HAL_UART_CLEAR_IDLEFLAG(&huart5);  // 清除IDLE标志
+//	    // 1. 先关接收相关中断，避免在清标志的时候又进中断
+//	    __HAL_UART_DISABLE_IT(&huart5, UART_IT_RXNE);
+//	    __HAL_UART_DISABLE_IT(&huart5, UART_IT_IDLE);
+//	    __HAL_UART_DISABLE_IT(&huart5, UART_IT_ERR);   // ORE/FE/NE
+//
+//	    // 2. 清各种接收/错误标志
+//	    // 这个宏会通过读 SR+DR 清掉 PE/FE/NE/ORE/RXNE 等
+//	    __HAL_UART_CLEAR_PEFLAG(&huart5);
+//
+//	    // 如果你用 IDLE 中断来判一帧结束，也把 IDLE 清一下
+//	    __HAL_UART_CLEAR_IDLEFLAG(&huart5);
+//
+//	    // 保险起见，再把 FIFO 里可能残留的字节都读掉
+//	    volatile uint32_t tmp;
+//	    while (__HAL_UART_GET_FLAG(&huart5, UART_FLAG_RXNE) != RESET)
+//	    {
+//	        tmp = huart5.Instance->DR;
+//	    }
+//	    (void)tmp;
+//
+//	    // 3. 最后再打开你真正需要用的中断
+//	    // ---- 根据你现在的接收方式选： ----
+//	    // 如果是中断一个字节一个字节收，就开 RXNE：
+////	    __HAL_UART_ENABLE_IT(&huart5, UART_IT_RXNE);
+//
+//	    // 如果你是 DMA + IDLE 模式，就不要开 RXNE，只开 IDLE：
+//	     __HAL_UART_ENABLE_IT(&huart5, UART_IT_IDLE);
+		HAL_UART_Receive_DMA(&huart5, UART5_RX_BUF, UART5_RX_BUF_SIZE);
 	}
 }
 volatile uint8_t com2_rx_ready = 0;
@@ -164,7 +192,7 @@ void MX_UART5_Init(void)
   }
   /* USER CODE BEGIN UART5_Init 2 */
 	__HAL_UART_ENABLE_IT(&huart5, UART_IT_IDLE);
-	HAL_UART_Receive_DMA(&huart5, UART5_RX_BUF, UART5_RX_BUF_SIZE);
+//	HAL_UART_Receive_DMA(&huart5, UART5_RX_BUF, UART5_RX_BUF_SIZE);
   /* USER CODE END UART5_Init 2 */
 
 }

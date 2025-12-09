@@ -2,7 +2,7 @@
  * measure_zero.h
  *
  *  Created on: Mar 5, 2025
- *      Author: 1
+ *      Author: Duan Xuebin
  */
 #ifndef INC_MEASURE_ZERO_H_
 #define INC_MEASURE_ZERO_H_

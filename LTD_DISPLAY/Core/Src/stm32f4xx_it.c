@@ -617,8 +617,13 @@ void UART5_IRQHandler(void)
 			HAL_UART_DMAStop(&huart5);  // 停止DMA接收
 			temp = __HAL_DMA_GET_COUNTER(&hdma_uart5_rx);  // 获取DMA中未传输的数据个数
 			UART5_RX_LEN = UART5_RX_BUF_SIZE - temp;  // 计算已经接收到的数据个数
-			wait_response = false; // 接收完成，解除等待
-			HAL_UART_Receive_DMA(&huart5, UART5_RX_BUF, UART5_RX_BUF_SIZE); // 重新启用DMA接收
+			if (UART5_RX_LEN > 3) {
+				wait_response = false; // 接收完成，解除等待
+			}
+			else {
+				// 如果没有接收到数据，重新启用DMA接收
+				HAL_UART_Receive_DMA(&huart5, UART5_RX_BUF, UART5_RX_BUF_SIZE);
+			}
 		}
 	}
   /* USER CODE END UART5_IRQn 1 */

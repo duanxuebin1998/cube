@@ -2,7 +2,7 @@
  * weight.h
  *
  *  Created on: Jan 18, 2025
- *      Author: 1
+ *      Author: Duan Xuebin
  */
 
 #ifndef INC_WEIGHT_H_

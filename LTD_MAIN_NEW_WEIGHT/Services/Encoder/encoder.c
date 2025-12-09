@@ -2,7 +2,7 @@
  * encoder.c
  *
  *  Created on: Mar 21, 2025
- *      Author: 1
+ *      Author: Duan Xuebin
  */
 
 #include "AS5145.h"

@@ -14,7 +14,7 @@
 #include "stateformodbus.h"
 
 extern struct MEASURE_DATA Measure_Data;
-int HoldingRegisterArray1[HOLDREGISTERAMOUNT] = {0}; // 保持寄存器数组
+uint16_t HoldingRegisterArray1[HOLDREGISTERAMOUNT] = {0}; // 保持寄存器数组
 int InputRegisterArray[INPUTREGISTERAMOUNT] = {0};	// 输入寄存器数组
 int MaxNum_Coil;									// 线圈最大有效值
 int MaxNum_HoldingRegister;							// 保持寄存器最大有效值

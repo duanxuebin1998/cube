@@ -7,7 +7,7 @@
 
 int cnt_commutoCPU2 = COMMU_ERROR_MAX;
 
-static int ywj_hold_analysis_data(int startadd,int rgscnt);
+//static int ywj_hold_analysis_data(int startadd,int rgscnt);
 
 struct HoldRegisterData holdValue[] = {
 /* 名称 默认 数据号 起始地址 寄存器数 是否检 最小 最大 单位 小数 偏移 写权 类型 显示 隐藏 英文 */	/* 名称	默认	数据号	起始地址	寄存器数	是否检	最小	最大	单位	小数	偏移	写权	类型	显示	隐藏	英文 */
@@ -194,7 +194,7 @@ void AnalysisHoldRegister(void)
 }
 
 /* 单个数据解析 - 保持寄存器 */
-static int ywj_hold_analysis_data(int startadd,int rgscnt)
+int ywj_hold_analysis_data(int startadd,int rgscnt)
 {
     int value = 0;
     int i;

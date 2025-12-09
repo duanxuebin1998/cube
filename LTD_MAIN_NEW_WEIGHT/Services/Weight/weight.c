@@ -2,7 +2,7 @@
  * weight.c
  *
  *  Created on: Jan 18, 2025
- *      Author: 1
+ *      Author: Duan Xuebin
  *  该文件实现了重量传感器的相关操作，包括获取空载重量、获取稳定重量、判断重量状态等功能。
  */
 

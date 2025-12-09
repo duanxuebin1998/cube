@@ -19,12 +19,15 @@ uint32_t DetectSensorType(void) {
 	float temp = 0.0f;
 	if (DSM_V2_Read_Temperature(&temp) == NO_ERROR) {
 		printf("温度值: %.3f ℃\r\n", temp);
+		printf("读取温度成功,DSM_V2传感器\r\n");
 		g_deviceParams.sensorType =LTD_SENSOR;
 	} else
 	{
 		printf("读取温度失败,SIL传感器\r\n");
 		g_deviceParams.sensorType =DSM_SENSOR;
 	}
+	WIRELESS_PrintInfo(01); // 打印无线传感器信息
+	WIRELESS_PrintInfo(02); // 打印无线传感器信息)
 }
 
 uint32_t EnableDensityMode(void) {

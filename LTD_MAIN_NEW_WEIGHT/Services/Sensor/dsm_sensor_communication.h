@@ -2,7 +2,7 @@
  * dsm_sensor_communication.h
  *
  *  Created on: Nov 10, 2025
- *      Author: admin
+ *      Author: Duan Xuebin
  */
 
 #ifndef SENSOR_DSM_SENSOR_COMMUNICATION_H_

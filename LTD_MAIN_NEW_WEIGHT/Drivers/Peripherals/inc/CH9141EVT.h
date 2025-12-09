@@ -2,7 +2,7 @@
  * CH9141EVT.h
  *	Œﬁœﬂ¿∂—¿Õ∏¥´–æ∆¨≈‰÷√
  *  Created on: Mar 20, 2025
- *      Author: 1
+ *      Author: Duan Xuebin
  */
 
 #ifndef PERIPHERALS_INC_CH9141EVT_H_

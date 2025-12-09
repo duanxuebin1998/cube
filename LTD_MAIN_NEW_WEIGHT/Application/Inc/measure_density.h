@@ -2,7 +2,7 @@
  * measure_density.h
  *
  *  Created on: Nov 8, 2025
- *      Author: admin
+ *      Author: Duan Xuebin
  */
 
 #ifndef INC_MEASURE_DENSITY_H_
