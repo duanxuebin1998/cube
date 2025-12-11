@@ -9,12 +9,9 @@
 #define INC_MEASURE_H_
 
 #include "app_main.h"
+int MeasureStart(void);
 
 void ProcessMeasureCmd(CommandType command);
 void process_command(uint8_t *command); // 处理接收到的命令
-void MeasureZero(void);
-void MeasureBottom(void);
-void MeasureAndFollowOilLevel(void);
-void CalibrateZeroPoint(void);
-void CalibrateOilLevel(void);
+
 #endif /* INC_MEASURE_H_ */

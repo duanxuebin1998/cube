@@ -87,7 +87,7 @@ void App_MainLoop(void) {
 //	case COMMAND_FINDBOTTOM_START:/*罐底测量*/
 //	{
 //		printf("***罐底测量开始***\r\n");
-//		MeasureBottom();
+//		CMD_MeasureBottom();
 //		printf("***罐底测量结束***\r\n");
 //	}
 //	case COMMAND_BACKZERO_START:/*零点测量*/

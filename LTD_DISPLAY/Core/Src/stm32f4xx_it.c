@@ -26,6 +26,7 @@
 #include "display_tankopera.h"
 #include "communicate.h"
 #include "DSM_communication.h"
+#include "iwdg.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -157,11 +158,14 @@ void Fault_Handler(const char *name)
          NVIC_SystemReset();
     }
 }
+static const char HardFaultName[] = "HardFault";
+void HardFault_Handler(void) __attribute__((naked));
 /* USER CODE END 0 */
 
 /* External variables --------------------------------------------------------*/
 extern TIM_HandleTypeDef htim1;
 extern TIM_HandleTypeDef htim3;
+extern TIM_HandleTypeDef htim4;
 extern DMA_HandleTypeDef hdma_uart5_rx;
 extern DMA_HandleTypeDef hdma_uart5_tx;
 extern DMA_HandleTypeDef hdma_usart1_rx;
@@ -200,8 +204,6 @@ void NMI_Handler(void)
 /**
   * @brief This function handles Hard fault interrupt.
   */
-static const char HardFaultName[] = "HardFault";
-void HardFault_Handler(void) __attribute__((naked));
 void HardFault_Handler(void)
 {
   /* USER CODE BEGIN HardFault_IRQn 0 */
@@ -501,7 +503,22 @@ void TIM3_IRQHandler(void)
   HAL_TIM_IRQHandler(&htim3);
   /* USER CODE BEGIN TIM3_IRQn 1 */
 	RefreshScreen();  //刷新屏幕
+//	HAL_IWDG_Refresh(&hiwdg);
   /* USER CODE END TIM3_IRQn 1 */
+}
+
+/**
+  * @brief This function handles TIM4 global interrupt.
+  */
+void TIM4_IRQHandler(void)
+{
+  /* USER CODE BEGIN TIM4_IRQn 0 */
+
+  /* USER CODE END TIM4_IRQn 0 */
+  HAL_TIM_IRQHandler(&htim4);
+  /* USER CODE BEGIN TIM4_IRQn 1 */
+	HAL_IWDG_Refresh(&hiwdg);
+  /* USER CODE END TIM4_IRQn 1 */
 }
 
 /**

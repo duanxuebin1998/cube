@@ -1,6 +1,6 @@
 /*
  * system_parameter.c
- *
+ *  CPU2参数读取与管理
  *  Created on: Feb 27, 2025
  *      Author: 1
  */

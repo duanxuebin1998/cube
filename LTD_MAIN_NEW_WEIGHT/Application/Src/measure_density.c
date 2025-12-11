@@ -19,7 +19,7 @@ static uint32_t Density_SpreadMeasurement(DensityDistribution *dist);
 void Print_DensitySpreadResult(const DensityDistribution *dist);
 // 分布测量主函数
 // 分布密度测量主流程
-void MeasureDensitySpread(void)
+void CMD_MeasureDensitySpread(void)
 {
     uint32_t ret = 0;
     DensityDistribution temp = {0};   // 本次测量结果临时缓存
@@ -352,24 +352,28 @@ uint32_t SinglePoint_ReadSensor(volatile DensityMeasurement *result) {
 	}
 }
 
-uint32_t SinglePointMeasurement() {
+void CMD_SinglePointMeasurement() {
 	uint32_t ret = 0;
+	g_measurement.device_status.device_state = STATE_SINGLEPOINTING;
+	MeasureStart();
 	ret = motorMoveToPositionOneShot((float) g_deviceParams.singlePointMeasurementPosition / 10.0);
-	CHECK_ERROR(ret);
+	SET_ERROR(ret);
 	g_measurement.device_status.device_state = STATE_SPTESTING;
 	EnableDensityMode();
 	ret = SinglePoint_ReadSensor(&g_measurement.single_point_measurement);
-	CHECK_ERROR(ret);
-	return NO_ERROR;
+	SET_ERROR(ret);
+	g_measurement.device_status.device_state = STATE_SINGLEPOINTOVER;
+	return ;
 }
-uint32_t SinglePointMonitoring() {
+void CMD_SinglePointMonitoring() {
 	uint32_t ret = 0;
+	g_measurement.device_status.device_state = STATE_RUNTOPOINTING;
 	ret = motorMoveToPositionOneShot((float) g_deviceParams.singlePointMonitoringPosition / 10.0);
-	CHECK_ERROR(ret);
+	SET_ERROR(ret);
 	g_measurement.device_status.device_state = STATE_SPTESTING;
 	EnableDensityMode();
 	while (1) {
 		ret = SinglePoint_ReadSensor(&g_measurement.single_point_monitoring); // 传感器测试
-		CHECK_ERROR(ret);
+		SET_ERROR(ret);
 	}
 }
