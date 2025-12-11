@@ -59,7 +59,7 @@ int DSM_CommunicationProcess(unsigned char *rcvbuff, int rcvcount, uint8_t* tx, 
 			printf("0x%02X\t", rcvbuff[i]);
 		}
 		printf("\r\n");
-		return;
+		return 0;
 	}
 	//校验地址
 	if (rcvbuff[0] != SlaveAddress && rcvbuff[0] != 0) {

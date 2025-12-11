@@ -8,36 +8,9 @@
 
 #include "wartsila_density_measurement.h"
 
-#include "motor_ctrl.h"
-#include <stdint.h>
-#include <string.h>
-#include <stdio.h>
-#include <math.h>
-#include "system_parameter.h"
-#include "measure_oilLevel.h"
-#include "measure.h"
 
-static uint32_t Wartsila_Density_SpreadMeasurement(DensityDistribution *dist);
+
 uint32_t motorMoveUpToPositionOrAir(float target_mm, Level_StateTypeDef *final_state);
-// 分布测量主函数
-void WartsilaDensitySpread(void) {
-	uint32_t ret = 0;
-	// 设置设备状态：分布测量中
-	// 测量前准备
-	MeasureStart();
-	g_measurement.device_status.device_state = STATE_WARTSILA_DENSITY_START;
-
-	ret = Wartsila_Density_SpreadMeasurement(&g_measurement.density_distribution);
-// 记录/上报错误码（和零点测量一样用 SET_ERROR）
-	SET_ERROR(ret);
-
-	HAL_Delay(1000);
-	Print_DensitySpreadResult(&g_measurement.density_distribution);
-// 测量结束，回到待机状态
-	g_measurement.device_status.device_state = STATE_WARTSILA_DENSITY_OVER;
-
-	return;
-}
 
 /**
  * @brief  Wartsila 密度分布测量（从起始点向上，途中遇到空气或到达最高点停止）

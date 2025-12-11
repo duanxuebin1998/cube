@@ -8,7 +8,14 @@
 int cnt_commutoCPU2 = COMMU_ERROR_MAX;
 
 //static int ywj_hold_analysis_data(int startadd,int rgscnt);
-
+static uint8_t* arr_densitymode[][2] = {
+    {(uint8_t*)"分布测量",(uint8_t*)"Distribution"},
+    {(uint8_t*)"国标测量",(uint8_t*)"National Standard"},
+    {(uint8_t*)"每米测量",(uint8_t*)"Per Meter"},
+    {(uint8_t*)"固定点测量",(uint8_t*)"Fixed Point"},
+    {(uint8_t*)"区间测量",(uint8_t*)"Interval"},
+    {(uint8_t*)"非法配置",(uint8_t*)"Illegal CFG"},
+};
 struct HoldRegisterData holdValue[] = {
 /* 名称 默认 数据号 起始地址 寄存器数 是否检 最小 最大 单位 小数 偏移 写权 类型 显示 隐藏 英文 */	/* 名称	默认	数据号	起始地址	寄存器数	是否检	最小	最大	单位	小数	偏移	写权	类型	显示	隐藏	英文 */
 {(uint8_t*)"设备指令", 0, COM_NUM_DEVICEPARAM_COMMAND, HOLDREGISTER_DEVICEPARAM_COMMAND, 2, false, 0, 0, NULL, 0, 0, true, TYPE_INT, 8, NULL, (uint8_t*)"Cmd"},	{(uint8_t*)"设备指令",	0,	COM_NUM_DEVICEPARAM_COMMAND,	HOLDREGISTER_DEVICEPARAM_COMMAND,	2,	false,	0,	0,	NULL,	0,	0,	true,	TYPE_INT,	8,	NULL,	(uint8_t*)"Cmd"},
@@ -65,7 +72,7 @@ struct HoldRegisterData holdValue[] = {
 {(uint8_t*)"是否测水位", 0, COM_NUM_DEVICEPARAM_REQUIREWATERMEASUREMENT, HOLDREGISTER_DEVICEPARAM_REQUIREWATERMEASUREMENT, 2, false, 0, 1, NULL, 0, 0, true, TYPE_INT, 1, NULL, (uint8_t*)"NeedWater"},	{(uint8_t*)"是否测水位",	0,	COM_NUM_DEVICEPARAM_REQUIREWATERMEASUREMENT,	HOLDREGISTER_DEVICEPARAM_REQUIREWATERMEASUREMENT,	2,	false,	0,	1,	NULL,	0,	0,	true,	TYPE_INT,	1,	NULL,	(uint8_t*)"NeedWater"},
 {(uint8_t*)"是否测单点密度", 0, COM_NUM_DEVICEPARAM_REQUIRESINGLEPOINTDENSITY, HOLDREGISTER_DEVICEPARAM_REQUIRESINGLEPOINTDENSITY, 2, false, 0, 1, NULL, 0, 0, true, TYPE_INT, 1, NULL, (uint8_t*)"NeedSingleDens"},	{(uint8_t*)"是否测单点密度",	0,	COM_NUM_DEVICEPARAM_REQUIRESINGLEPOINTDENSITY,	HOLDREGISTER_DEVICEPARAM_REQUIRESINGLEPOINTDENSITY,	2,	false,	0,	1,	NULL,	0,	0,	true,	TYPE_INT,	1,	NULL,	(uint8_t*)"NeedSingleDens"},
 {(uint8_t*)"分布测顺序", 0, COM_NUM_DEVICEPARAM_SPREADMEASUREMENTORDER, HOLDREGISTER_DEVICEPARAM_SPREADMEASUREMENTORDER, 2, false, 0, 0, NULL, 0, 0, true, TYPE_INT, 1, NULL, (uint8_t*)"SpreadOrder"},	{(uint8_t*)"分布测顺序",	0,	COM_NUM_DEVICEPARAM_SPREADMEASUREMENTORDER,	HOLDREGISTER_DEVICEPARAM_SPREADMEASUREMENTORDER,	2,	false,	0,	0,	NULL,	0,	0,	true,	TYPE_INT,	1,	NULL,	(uint8_t*)"SpreadOrder"},
-{(uint8_t*)"分布测模式", 0, COM_NUM_DEVICEPARAM_SPREADMEASUREMENTMODE, HOLDREGISTER_DEVICEPARAM_SPREADMEASUREMENTMODE, 2, false, 0, 0, NULL, 0, 0, true, TYPE_INT, 1, NULL, (uint8_t*)"SpreadMode"},	{(uint8_t*)"分布测模式",	0,	COM_NUM_DEVICEPARAM_SPREADMEASUREMENTMODE,	HOLDREGISTER_DEVICEPARAM_SPREADMEASUREMENTMODE,	2,	false,	0,	0,	NULL,	0,	0,	true,	TYPE_INT,	1,	NULL,	(uint8_t*)"SpreadMode"},
+{(uint8_t*)"分布测模式", 0, COM_NUM_DEVICEPARAM_SPREADMEASUREMENTMODE, HOLDREGISTER_DEVICEPARAM_SPREADMEASUREMENTMODE, 2, false, 0, 0, NULL, 0, 0, true, TYPE_INT, 1, NULL, (uint8_t*)"SpreadMode"},	{(uint8_t*)"分布测模式",	0,	COM_NUM_DEVICEPARAM_SPREADMEASUREMENTMODE,	HOLDREGISTER_DEVICEPARAM_SPREADMEASUREMENTMODE,	2,	false,	0,	0,	NULL,	0,	0,	true,	TYPE_INT,	1,	arr_densitymode,	(uint8_t*)"SpreadMode"},
 {(uint8_t*)"分布测点数", 0, COM_NUM_DEVICEPARAM_SPREADMEASUREMENTCOUNT, HOLDREGISTER_DEVICEPARAM_SPREADMEASUREMENTCOUNT, 2, false, 1, 99, NULL, 0, 0, true, TYPE_INT, 3, NULL, (uint8_t*)"SpreadCount"},	{(uint8_t*)"分布测点数",	0,	COM_NUM_DEVICEPARAM_SPREADMEASUREMENTCOUNT,	HOLDREGISTER_DEVICEPARAM_SPREADMEASUREMENTCOUNT,	2,	false,	1,	99,	NULL,	0,	0,	true,	TYPE_INT,	3,	NULL,	(uint8_t*)"SpreadCount"},
 {(uint8_t*)"分布点间距", 0, COM_NUM_DEVICEPARAM_SPREADMEASUREMENTDISTANCE, HOLDREGISTER_DEVICEPARAM_SPREADMEASUREMENTDISTANCE, 2, false, 0, 0, (uint8_t*)"mm", 1, 0, true, TYPE_INT, 5, NULL, (uint8_t*)"SpreadDist"},	{(uint8_t*)"分布点间距",	0,	COM_NUM_DEVICEPARAM_SPREADMEASUREMENTDISTANCE,	HOLDREGISTER_DEVICEPARAM_SPREADMEASUREMENTDISTANCE,	2,	false,	0,	0,	(uint8_t*)"mm",	1,	0,	true,	TYPE_INT,	5,	NULL,	(uint8_t*)"SpreadDist"},
 {(uint8_t*)"顶点距液面", 0, COM_NUM_DEVICEPARAM_SPREADTOPLIMIT, HOLDREGISTER_DEVICEPARAM_SPREADTOPLIMIT, 2, false, 0, 0, (uint8_t*)"mm", 1, 0, true, TYPE_INT, 5, NULL, (uint8_t*)"Top2Level"},	{(uint8_t*)"顶点距液面",	0,	COM_NUM_DEVICEPARAM_SPREADTOPLIMIT,	HOLDREGISTER_DEVICEPARAM_SPREADTOPLIMIT,	2,	false,	0,	0,	(uint8_t*)"mm",	1,	0,	true,	TYPE_INT,	5,	NULL,	(uint8_t*)"Top2Level"},

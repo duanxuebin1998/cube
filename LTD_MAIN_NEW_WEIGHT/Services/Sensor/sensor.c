@@ -28,6 +28,7 @@ uint32_t DetectSensorType(void) {
 	}
 	WIRELESS_PrintInfo(01); // 打印无线传感器信息
 	WIRELESS_PrintInfo(02); // 打印无线传感器信息)
+	return NO_ERROR;
 }
 
 uint32_t EnableDensityMode(void) {
