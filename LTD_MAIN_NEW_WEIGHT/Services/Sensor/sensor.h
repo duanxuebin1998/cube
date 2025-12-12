@@ -27,10 +27,10 @@
 #define RX_BUF_LEN 128
 
 uint32_t DetectSensorType(void);
-uint32_t EnableDensityMode(void);
+//uint32_t EnableDensityMode(void);
 uint32_t EnableLevelMode(void);
-uint32_t DSM_Get_LevelMode_Frequence(uint32_t *frequency_out);
-uint32_t DSM_Get_LevelMode_Frequence_Avg(uint32_t *frequency_out);
+uint32_t DSM_Get_LevelMode_Frequence(volatile uint32_t *frequency_out);
+uint32_t DSM_Get_LevelMode_Frequence_Avg(volatile uint32_t *frequency_out);
 uint32_t Read_Density(float *frequency, float *density, float *temp);
 
 uint32_t WIRELESS_PrintInfo(uint8_t addr);

@@ -59,7 +59,7 @@ void motor_step_down_text(void) {
 //电机步进测试
 void motor_step_text(void) {
 	int i = 0;
-	float density, viscosity, temp;
+//	float density, viscosity, temp;
 	int32_t ticks = 4 * 32;
 	printf("motor STEP text start\n");
 	stpr_enableDriver(&stepper); //使能电机
@@ -206,7 +206,7 @@ void DSM_V2_Test_AllParams(void) {
 //    }
 
 	// 2. 定义变量
-	float ver = 0, temp = 0, rho = 0, mu = 0, nu = 0;
+	float temp = 0, rho = 0, mu = 0, nu = 0;
 	uint32_t freq = 0, sensor_id = 0;
 
 	// 3. 依次读取各参数
@@ -235,14 +235,14 @@ void DSM_V2_Test_AllParams(void) {
 		printf("运动粘度: %.3f\r\n", nu);
 	else
 		printf("读取运动粘度失败\r\n");
-//
-//    if (DSM_V2_Read_LevelFrequency(&freq) == NO_ERROR)
-//        printf("液位频率: %lu Hz\r\n", (unsigned long)freq);
-//    else printf("读取液位频率失败\r\n");
-//
-//    if (DSM_V2_Read_SensorID(&sensor_id) == NO_ERROR)
-//        printf("传感器号: %lu\r\n", (unsigned long)sensor_id);
-//    else printf("读取传感器号失败\r\n");
+
+    if (DSM_V2_Read_LevelFrequency(&freq) == NO_ERROR)
+        printf("液位频率: %lu Hz\r\n", (unsigned long)freq);
+    else printf("读取液位频率失败\r\n");
+
+    if (DSM_V2_Read_SensorID(&sensor_id) == NO_ERROR)
+        printf("传感器号: %lu\r\n", (unsigned long)sensor_id);
+    else printf("读取传感器号失败\r\n");
 
 	printf("===== DSM V2 通讯测试结束 =====\r\n\r\n");
 }

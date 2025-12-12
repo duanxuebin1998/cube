@@ -11,7 +11,6 @@
 #include "communicate.h"           /* COMx_SET_SEND_MODE / COMx_SET_RECV_MODE 等，如果需要 */
 #include "DSM_communication.h"     /* DSM_CommunicationProcess(...) */
 #include "wartsila_modbus_communication.h"  /* 你自己的 Wartsila 协议头文件 */
-#include "modbus_agreement.h"      /* 包含 modbus_rtu_process(...) 的头文件（如果不对请自行修改） */
 #include "system_parameter.h"      /* 内含 g_deviceParams，如果你用 DeviceParameters 做配置来源 */
 
 #include <string.h>

@@ -289,7 +289,7 @@ int DSM_V2_Read_DensityFrequency(uint32_t *freq_hz) {
 	if (!freq_hz)
 		return OTHER_PERIPHERAL_CONFIG_ERROR;
 	int32_t v = 0;
-	int ret = DSM_V2_Read_IntParam(0x04, &v);   // 参数码 0x04 = R04
+	int ret = DSM_V2_Read_IntParam(0x10, &v);   // 参数码 0x10 = R16
 	if (ret == NO_ERROR) {
 		if (v < 0) {
 			v = -v;
@@ -311,13 +311,3 @@ int DSM_V2_Read_SensorID(uint32_t *sensor_id) {
 	return ret;
 }
 
-// R16 频率寄存器（整型）
-int DSM_V2_Read_FrequencyRegister(uint32_t *freq_reg_value) {
-	if (!freq_reg_value)
-		return OTHER_PERIPHERAL_CONFIG_ERROR;
-	int32_t v = 0;
-	int ret = DSM_V2_Read_IntParam(0x10, &v);   // 16
-	if (ret == NO_ERROR)
-		*freq_reg_value = (uint32_t) v;
-	return ret;
-}

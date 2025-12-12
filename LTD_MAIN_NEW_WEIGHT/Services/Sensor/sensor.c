@@ -15,9 +15,12 @@
  *
  * @return uint32_t 错误码或 NO_ERROR
  */
+
 uint32_t DetectSensorType(void) {
+	uint32_t ret = NO_ERROR;
 	float temp = 0.0f;
-	if (DSM_V2_Read_Temperature(&temp) == NO_ERROR) {
+	ret = DSM_V2_Read_Temperature(&temp);
+	if (ret == NO_ERROR) {
 		printf("温度值: %.3f ℃\r\n", temp);
 		printf("读取温度成功,DSM_V2传感器\r\n");
 		g_deviceParams.sensorType =LTD_SENSOR;
@@ -26,11 +29,10 @@ uint32_t DetectSensorType(void) {
 		printf("读取温度失败,SIL传感器\r\n");
 		g_deviceParams.sensorType =DSM_SENSOR;
 	}
-	WIRELESS_PrintInfo(01); // 打印无线传感器信息
-	WIRELESS_PrintInfo(02); // 打印无线传感器信息)
-	return NO_ERROR;
+	ret = WIRELESS_PrintInfo(1); // 打印无线传感器信息
+	ret = WIRELESS_PrintInfo(2); // 打印无线传感器信息
+	return ret;
 }
-
 uint32_t EnableDensityMode(void) {
 	if (g_deviceParams.sensorType == DSM_SENSOR) {
 		return DSM_EnableDensityMode();
@@ -48,7 +50,7 @@ uint32_t EnableLevelMode(void) {
 }
 
 // 读取一次并以整数 Hz 返回，读到0时重试最多3次
-uint32_t DSM_Get_LevelMode_Frequence(uint32_t *frequency_out) {
+uint32_t DSM_Get_LevelMode_Frequence(volatile uint32_t *frequency_out) {
 	if (frequency_out == NULL) {
 		return PARAM_ADDRESS_OVERFLOW;   // 比 SENSOR_COMM_TIMEOUT 更合理
 	}
@@ -93,7 +95,7 @@ uint32_t DSM_Get_LevelMode_Frequence(uint32_t *frequency_out) {
  * @brief 获取液位跟随频率的平均值
  *        （10 次采样，2s 间隔，去 2 大 2 小，取中间 6 次均值）
  */
-uint32_t DSM_Get_LevelMode_Frequence_Avg(uint32_t *frequency_out) {
+uint32_t DSM_Get_LevelMode_Frequence_Avg(volatile uint32_t *frequency_out) {
 	if (frequency_out == NULL) {
 		return PARAM_ADDRESS_OVERFLOW;
 	}
@@ -166,7 +168,7 @@ uint32_t Read_Density(float *frequency, float *density, float *temp) {
 		} else
 			printf("读取密度失败\r\n");
 		if (DSM_V2_Read_DensityFrequency(&hz) == NO_ERROR) {
-			printf("频率值: %d Hz\r\n", hz);
+			printf("频率值: %lu Hz\r\n", hz);
 		} else
 			printf("读取频率失败\r\n");
 	}

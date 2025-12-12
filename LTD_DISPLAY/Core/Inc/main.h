@@ -101,6 +101,14 @@ void Error_Handler(void);
 #define MODE2_GPIO_Port GPIOG
 #define MODE3_Pin GPIO_PIN_7
 #define MODE3_GPIO_Port GPIOE
+#define FRAM_SPI4_CS_Pin GPIO_PIN_11
+#define FRAM_SPI4_CS_GPIO_Port GPIOE
+#define FRAM_SPI4_SCK_Pin GPIO_PIN_12
+#define FRAM_SPI4_SCK_GPIO_Port GPIOE
+#define FRAM_SPI4_MISO_Pin GPIO_PIN_13
+#define FRAM_SPI4_MISO_GPIO_Port GPIOE
+#define FRAM_SPI4_MOSI_Pin GPIO_PIN_14
+#define FRAM_SPI4_MOSI_GPIO_Port GPIOE
 #define COM3_SEL_Pin GPIO_PIN_12
 #define COM3_SEL_GPIO_Port GPIOB
 #define COM3_USART3_TX_Pin GPIO_PIN_8

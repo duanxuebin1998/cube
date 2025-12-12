@@ -90,7 +90,7 @@ static void DSMToWartsila(const MeasurementResult *DSM, wartsila_DeviceParameter
 
 	// 位置标志
 	WXL->position_mm = 1;
-	printf("分布测量上限: %d mm\r\n", g_deviceParams.wartsila_lower_density_limit);
+	printf("分布测量上限: %lu mm\r\n", g_deviceParams.wartsila_lower_density_limit);
 	WXL->spread_lowest_mm = g_deviceParams.wartsila_lower_density_limit;
 	WXL->spread_highest_mm = g_deviceParams.wartsila_upper_density_limit;
 	WXL->spread_interval_mm = g_deviceParams.wartsila_density_interval;
