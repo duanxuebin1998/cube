@@ -3,7 +3,6 @@
 #include "stdlib.h"
 #include "math.h"
 #include "exit.h"
-#include "modbus_agreement.h"
 #include "display_tankopera.h"
 #include "tim.h"
 #include "system_parameter.h"
@@ -1076,7 +1075,7 @@ static const EquipStateDisplay state_display_table[] = {
     /* ===== 完成态 ===== */
     { STATE_FINDZEROOVER,            "标定零点完成",             "Zero Calibration Done" },
     { STATE_SINGLEPOINTOVER,         "单点测量完成",             "Single Point Done" },
-    { STATE_SPTESTING,               "正在单点检测",             "Single Point Testing" },
+    { STATE_SPTESTING,               "正在单点密度测量",             "Single Point Testing" },
     { STATE_SPREADPOINTOVER,         "分布测量完成",             "Spread Measurement Done" },
     { STATE_AI_SPREADPOINTOVER,      "无参分布测量完成",         "AI Spread Done" },
     { STATE_FINDOILOVER,             "标定液位完成",             "Oil Calibration Done" },

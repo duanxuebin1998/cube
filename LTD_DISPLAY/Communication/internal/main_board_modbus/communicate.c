@@ -7,7 +7,6 @@
 #include <math.h>
 #include <stdlib.h>
 #include "my_crc.h"
-#include "modbus_agreement.h"
 #include "system_parameter.h"
 #include "dataanalysis_modbus.h"
 
@@ -17,12 +16,8 @@
 volatile bool wait_response = false; //主控板响应标志位
 
 /*保持寄存器*/
-//static const int HoldingregisterAddress = 0x00; //保持寄存器起始地址
-//static const int HoldingregisterAmount = HOLEREGISTER_STOP + 1; //保持寄存器总数
 uint16_t HoldingRegisterArray[HOLEREGISTER_STOP] = { 0 }; //保持寄存器数组
 /*输入寄存器*/
-//static const int InputregisterAddress = 0x00; //输入寄存器起始地址
-//static const int InputRegisterAmount = INPUTREGISTER_AMOUNT; //输入寄存器总数
 static uint16_t InputRegisterArray[INPUTREGISTER_AMOUNT] = { 0 };    //输入寄存器数组
 
 /*接收到的命令包数据暂存变量*/

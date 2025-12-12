@@ -8,14 +8,13 @@
 #include "spi.h"
 #include "DSM_communication.h"
 #include "DSM_DataAnalysis_modbus2.h"
-#include "DSM_system_parameter.h"
 #include <stdlib.h>
 #include <string.h>
 #include "stateformodbus.h"
 
 extern struct MEASURE_DATA Measure_Data;
-uint16_t HoldingRegisterArray1[HOLDREGISTERAMOUNT] = {0}; // 保持寄存器数组
-int InputRegisterArray[INPUTREGISTERAMOUNT] = {0};	// 输入寄存器数组
+uint16_t DSM_HoldingRegisterArray[HOLDREGISTERAMOUNT] = {0}; // 保持寄存器数组
+int DSM_InputRegisterArray[INPUTREGISTERAMOUNT] = {0};	// 输入寄存器数组
 int MaxNum_Coil;									// 线圈最大有效值
 int MaxNum_HoldingRegister;							// 保持寄存器最大有效值
 int MaxNum_InputRegister;							// 输入寄存器最大有效值
@@ -112,7 +111,7 @@ bool ReadInputRegister(unsigned int startaddress, unsigned int registeramount, i
 
 	for (i = startaddress, j = 0; i < range; i++, j++)
 	{
-		registervalue[j] = InputRegisterArray[i];
+		registervalue[j] = DSM_InputRegisterArray[i];
 	}
 
 	return true;
@@ -154,7 +153,7 @@ int ReadOneInputRegister(unsigned int startaddress, u8 registeramount)
 	for (i = startaddress; i < range; i++)
 	{
 		temp <<= 16;
-		temp += InputRegisterArray[i];
+		temp += DSM_InputRegisterArray[i];
 	}
 
 	return temp;
@@ -205,7 +204,7 @@ int ReadOneHoldingRegister(unsigned int startaddress, unsigned int registeramoun
 	for (i = startaddress; i < range; i++)
 	{
 		temp <<= 16;
-		temp += HoldingRegisterArray1[i];
+		temp += DSM_HoldingRegisterArray[i];
 	}
 
 	return temp;
@@ -259,7 +258,7 @@ bool ReadHoldingRegister(unsigned int startaddress, unsigned int registeramount,
 
 	for (i = startaddress, j = 0; i < range; i++, j++)
 	{
-		registervalue[j] = HoldingRegisterArray1[i];
+		registervalue[j] = DSM_HoldingRegisterArray[i];
 	}
 
 	return true;
@@ -305,7 +304,7 @@ bool WriteInputRegister(unsigned int startaddress, unsigned int registeramount, 
 
 	for (i = startaddress, j = 0; i < range; i++, j++)
 	{
-		InputRegisterArray[i] = registervalue[j];
+		DSM_InputRegisterArray[i] = registervalue[j];
 	}
 
 	return true;
@@ -355,7 +354,7 @@ bool WriteOneInputRegister(unsigned int startaddress, unsigned int registeramoun
 
 	for (i = range; i >= (int16_t)startaddress;i--)
 	{
-		InputRegisterArray[i] = registervalue % 0x10000;
+		DSM_InputRegisterArray[i] = registervalue % 0x10000;
 		registervalue >>= 16;
 	}
 
@@ -406,7 +405,7 @@ bool WriteOneHoldingRegister(unsigned int startaddress, unsigned int registeramo
 
 	for (i = range; i >= (int16_t)startaddress; i--)
 	{
-		HoldingRegisterArray1[i] = registervalue % 0x10000;
+		DSM_HoldingRegisterArray[i] = registervalue % 0x10000;
 		registervalue >>= 16;
 	}
 
@@ -460,7 +459,7 @@ bool WriteHoldingRegister(unsigned int startaddress, unsigned int registeramount
 
 	for (i = startaddress, j = 0; i < range; i++, j++)
 	{
-		HoldingRegisterArray1[i] = registervalue[j];
+		DSM_HoldingRegisterArray[i] = registervalue[j];
 	}
 
 	return true;
@@ -823,7 +822,7 @@ int Response05(unsigned char *revframe, unsigned char *sendframe)
 
 	cmd = GetCmdFromCoil(startaddress);
 	// 发送命令给主控单元
-	printf("cmd=%d\r\n", cmd);
+	printf("cmd=%lu\r\n", cmd);
 	CPU2_CombinatePackage_Send(FUNCTIONCODE_WRITE_MULREGISTER, HOLDREGISTER_DEVICEPARAM_COMMAND, 2, &cmd);
 	return (framelen + 2);
 }
@@ -919,9 +918,10 @@ int Response16(unsigned char *revframe, unsigned char *sendframe)
 	}
 	else
 	{
-		// 写保持寄存器
+		//写到本地保持寄存器数组
 		WriteHoldingRegister(startaddress, registeramount, TempBuffer);
-		ret = SystemParameterSave(startaddress, registeramount);
+		//解析保持寄存器到设备参数，并下发到CPU2
+		ret = UpdateDeviceParamsFromLegacyRegs(startaddress, registeramount);
 
 		if (ret == PARAMETER_ERROR) // 设置的数据错误
 		{

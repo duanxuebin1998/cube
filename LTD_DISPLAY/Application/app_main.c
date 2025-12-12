@@ -5,16 +5,18 @@
  *      Author: duan xuebin
  */
 #include "Display.h"
-#include "modbus_agreement.h"
 #include "system_parameter.h"
 #include "DSM_communication.h"
 #include "wartsila_modbus_communication.h"
+#include "cpu3_comm_display_params.h"
 
 #define DEBUG_APP_MAIN 1
 void App_Init(void) {
 	printf("LTD demo restart!\r\n");
 	DisplayInit(); // Initialize the OLED display
 	DisplayAubonLogo(); /* 刚上电显示AUBON LOGO */
+    Cpu3_Params_LoadFromFRAM();//从 FRAM 载入 Cpu3 通讯+显示参数（里面会自动回退默认并保存）
+    Cpu3_ReinitAllUarts();//根据参数重配 3 个串口
 	DSM_CommunicationInit(); // 初始化通信模块
 	HAL_Delay(1000); //
 }
@@ -89,9 +91,9 @@ void App_MainLoop(void) {
 		}
 		com3_rx_ready = 0; // 重置标志
 	} else {
-//			g_measurement.device_status.device_state =0; // 正常工作模式
-//			cnt_commutoCPU2 = 0;
-		PollingInputData(); // Polling for input data
+			g_measurement.device_status.device_state =0; // 正常工作模式
+			cnt_commutoCPU2 = 0;
+//		PollingInputData(); // Polling for input data
 		HAL_Delay(10); //
 //	    printf("Density read from regs: %u\n", g_measurement.single_point_monitoring.temperature);
 	}

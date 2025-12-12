@@ -11,6 +11,7 @@
 #ifndef _SYSTEM_PARAMETER_H
 #define _SYSTEM_PARAMETER_H
 
+#include "main.h"
 #include <stdint.h>
 #include <stdbool.h>
 /*无效值*/
@@ -25,6 +26,29 @@
 #define UNVALID_POSITION 0
 #define UNVALID_TEMPERATURE 0
 #define MAX_MEASUREMENT_POINTS 100 // 密度分布测量最大点数
+
+
+#define REPEATMAX 3//重复性测试次数
+#define COMMU_ERROR_MAX 10//通讯连续错误最多次数
+#define REALTEMPMAXSPOT 16//实时温度计最多测量点数
+/*液位盲区值*/
+#define OILLEVELDOWNLIMIT 100
+/*无效值*/
+#define UNVALID_LEVEL 999999u //液位无效值
+#define LEVEL_DOWNLIMIT 100u //盲区液位值
+#define UNVALID_TEMPERATURE_WIRELESS -2000//温度无效值
+#define UNVALID_DENSITY 0 //密度无效值
+#define LEVEL_DOWNLIMITWATER 0//水位无效值
+#define UNVALID_QUALITY 0//质量无效值
+#define UNVALID_VOLUME 0//体积无效值
+#define UNVALID_X 0//暂用于流速流量无效值
+
+/*报警状态*/
+#define ALARMSTATE_NONE 0
+#define ALARMSTATE_LOW 1
+#define ALARMSTATE_HIGH 2
+
+
 /**
  * @brief 系统错误码定义（2025-10修正版）
  * @note  错误码格式：0x00TT000N
@@ -344,7 +368,7 @@ typedef struct {
 } MeasurementResult;
 
 /* 设备参数结构体 */
-#pragma pack(push, 1) // 确保结构体紧凑对齐（防止编译器填充）
+//#pragma pack(push, 1) // 确保结构体紧凑对齐（防止编译器填充）
 typedef struct {
 	//指令
 	CommandType command; // 当前指令
@@ -446,19 +470,66 @@ typedef struct {
 	uint32_t magic; 					// 固定写 0x4C54444Du = 'LTDM'
 	uint32_t crc;                          // 新增CRC校验字段
 } DeviceParameters;
-#pragma pack(pop)
+//#pragma pack(pop)
 
 #define FRAM_PARAM_ADDRESS 0x0000 // 参数存储起始地址
 #define CRC_SEED 0xFFFFFFFF       // CRC初始值
 
+
+/* 保持寄存器数据结构 */
+struct HoldRegisterData {
+    uint8_t* name;
+    int val;
+    const int operanum;
+    const uint16_t startadd;
+    const uint8_t rgstcnt;
+    const bool flag_checkvalue;
+    const int valuemin;
+    const int valuemax;
+    uint8_t* unit;
+    const uint8_t point;
+    const int offset;
+    const bool authority_write;
+    int data_type;
+    int bits;
+    uint8_t *(*pword)();
+    uint8_t* name_English;
+};
+extern struct HoldRegisterData holdValue[];
+
+union utof
+{
+    float f;
+    u32 u;
+};
+
+union utod
+{
+    double d;
+    u32 u[2];
+};
+typedef enum{
+    TYPE_INT,
+    TYPE_FLOAT,
+    TYPE_DOUBLE,
+}DATA_TYPE;
+typedef enum{
+    LANG_CHINESE = 0,
+    LANG_ENGLISH,
+}LANG_NUM;
+typedef enum{/* 数据源取自 */
+    SOURCE_FROM_MEA,
+    SOURCE_FROM_INPUT,
+}SOURCE;
+
 /***************** 全局变量 ****************************/
 
+extern int cnt_commutoCPU2;
 extern volatile MeasurementResult g_measurement; // 测量结果
 extern volatile DeviceParameters g_deviceParams; // 设备参数
-
-void save_device_params(void); // 存储设备参数
-int load_device_params(void); // 加载设备参数
-void init_device_params(void); // 初始化设备参数
-void RestoreFactoryParamsConfig(void); //恢复出厂默认参数配置
+extern const int holdValueAmount;
+int getHoldValueNum(int operanum);
+void InputValueInit(void);
+void setEquipStateError(void);
 void print_device_params(void); // 打印设备参数
 #endif

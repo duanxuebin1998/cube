@@ -20,8 +20,8 @@
 
 
 extern int SlaveAddress;
-extern uint16_t HoldingRegisterArray1[HOLDREGISTERAMOUNT]; //保持寄存器数组
-extern int InputRegisterArray[INPUTREGISTERAMOUNT];   //输入寄存器数组
+extern uint16_t DSM_HoldingRegisterArray[HOLDREGISTERAMOUNT]; //保持寄存器数组
+extern int DSM_InputRegisterArray[INPUTREGISTERAMOUNT];   //输入寄存器数组
 
 extern int MaxNum_Coil;            			//线圈最大有效值
 extern int MaxNum_HoldingRegister; 			//保持寄存器最大有效值

@@ -7,7 +7,7 @@
 #include <ctype.h>
 #include <float.h>
 #include "system_parameter.h"
-#include "modbus_agreement.h"
+#include "communicate.h"
 /* ===================== 通用寄存器读写函数 ===================== */
 
 /* 写入 uint32_t 到寄存器数组（高 16 位在前，低 16 位在后） */
@@ -163,7 +163,55 @@ void WriteDeviceParamsToHoldingRegisters(uint16_t *HoldingRegisterArray) {
 	write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_CRC, g_deviceParams.crc);
 }
 
-extern int ywj_hold_analysis_data(int startadd,int rgscnt);
+/* 解析03功能码保持寄存器数据 */
+void AnalysisHoldRegister(void)
+{
+    int index = 0;
+
+    for(index = 0;index < holdValueAmount;index++)
+    {
+        if(holdValue[index].data_type == TYPE_INT)
+        {
+            holdValue[index].val = ywj_hold_analysis_data(holdValue[index].startadd,holdValue[index].rgstcnt);
+            holdValue[index].val += holdValue[index].offset;
+//            printf("Hold Reg %s: %d\n",holdValue[index].name,holdValue[index].val);
+        }
+        else if(holdValue[index].data_type == TYPE_FLOAT)
+        {
+            union utof tmp_f;
+            tmp_f.u = ywj_hold_analysis_data(holdValue[index].startadd,holdValue[index].rgstcnt);
+            tmp_f.f *= pow(10,holdValue[index].point);
+            holdValue[index].val = tmp_f.f;
+        }
+        else if(holdValue[index].data_type == TYPE_DOUBLE)
+        {
+            union utod tmp_d;
+            tmp_d.u[1] = ywj_hold_analysis_data(holdValue[index].startadd,holdValue[index].rgstcnt / 2);
+            tmp_d.u[0] = ywj_hold_analysis_data(holdValue[index].startadd + 2,holdValue[index].rgstcnt / 2);
+            tmp_d.d *= pow(10,holdValue[index].point);
+            holdValue[index].val = tmp_d.d;
+        }
+    }
+}
+
+/* 单个数据解析 - 保持寄存器 */
+int ywj_hold_analysis_data(int startadd,int rgscnt)
+{
+    int value = 0;
+    int i;
+
+//    startadd *= 2;
+    //解析数据
+    for(i = 0;i < rgscnt;i++)
+    {
+        value <<= 16;
+        value += HoldingRegisterArray[startadd + i];
+    }
+    return value;
+}
+
+
+
 /*----------------------------------------------------------------
  * 从保持寄存器数组读取数据到 g_deviceParams
  * HoldingRegisterArray: 外部保持寄存器缓存区, 元素类型为 uint16_t
@@ -183,9 +231,9 @@ void ReadDeviceParamsFromHoldingRegisters(uint16_t *HoldingRegisterArray) {
 
 	/* 基础参数 */
 	g_deviceParams.tankHeight = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_TANKHEIGHT);
-	printf("Read tankHeight: %u\n", g_deviceParams.tankHeight);
+	printf("Read tankHeight: %lu\n", g_deviceParams.tankHeight);
 	g_deviceParams.tankHeight = ywj_hold_analysis_data(HOLDREGISTER_DEVICEPARAM_TANKHEIGHT, 2);
-	printf("Read tankHeight: %u\n", g_deviceParams.tankHeight);
+	printf("Read tankHeight: %lu\n", g_deviceParams.tankHeight);
 	g_deviceParams.blindZone = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_BLINDZONE);
 	g_deviceParams.waterBlindZone = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_WATER_BLINDZONE);
 	g_deviceParams.encoder_wheel_circumference_mm = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_ENCODER_WHEEL_CIRCUMFERENCE_MM);

@@ -5,9 +5,9 @@
 #include "DSM_comm.h"
 #include "DSM_DataAnalysis_modbus2.h"
 #include "DSM_stateformodbus2.h"
-#include "DSM_system_parameter.h"
 #include "DSM_SlaveModbus_modbus2.h"
 #include "my_crc.h"
+#include "address.h"
 
 #define DEBUG_COMM 1
 /**********************************************************************************************
@@ -18,11 +18,6 @@
  **********************************************************************************************/
 int DSM_CommunicationInit(void) {
 	int LocalAddress = 129;
-//	uart4_init(36, 4800, 8, 2, 'N', 20);
-//	MYDMA2CH5_Config((u32)&UART4->DR); // 初始化DMA通道
-//	Timer2Init();					   // 初始化定时器2
-//	AddressInit();
-//	delay_ms(10);
 	LocalAddress = Get_Device_Address();
 	SetSlaveaddress(LocalAddress);
 //用于权限设置
@@ -45,7 +40,7 @@ int DSM_CommunicationProcess(unsigned char *rcvbuff, int rcvcount, uint8_t* tx, 
 #ifdef DEBUG_COMM
 	int i;
 #endif
-	int functioncode, ret;
+	int functioncode;
 #if DEBUG_COMM
 	printf("CPU3_RCV %d : ", rcvcount);
 	for (i = 0; i < rcvcount; i++)
