@@ -2,7 +2,7 @@
  * address.h
  *
  *  Created on: 2025年11月19日
- *      Author: admin
+ *      Author: Duan Xuebin
  */
 
 #ifndef DSM_MODBUS_ADDRESS_H_

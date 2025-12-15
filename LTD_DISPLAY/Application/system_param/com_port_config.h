@@ -2,7 +2,7 @@
  * com_port_config.h
  *
  *  Created on: 2025年12月11日
- *      Author: admin
+ *      Author: Duan Xuebin
  */
 
 #ifndef __COM_PORT_CONFIG_H__

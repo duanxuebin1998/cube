@@ -2,7 +2,7 @@
  * wartsila_register_map.h
  *
  *  Created on: 2025年11月20日
- *      Author: admin
+ *      Author: Duan Xuebin
  */
 
 #ifndef WARTSILA_MODBUS_WARTSILA_REGISTER_MAP_H_

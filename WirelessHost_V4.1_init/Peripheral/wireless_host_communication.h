@@ -2,7 +2,7 @@
  * wireless_host_communication.h
  *
  *  Created on: 2025年12月8日
- *      Author: admin
+ *      Author: Duan Xuebin
  */
 
 #ifndef WIRELESS_HOST_COMMUNICATION_H_

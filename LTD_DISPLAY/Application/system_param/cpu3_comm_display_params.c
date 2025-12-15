@@ -2,7 +2,7 @@
  * cpu3_comm_display_params.c
  *
  *  Created on: 2025年12月10日
- *      Author: admin
+ *      Author: Duan Xuebin
  */
 
 

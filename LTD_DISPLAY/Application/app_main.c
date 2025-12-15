@@ -83,17 +83,18 @@ void App_MainLoop(void) {
 		printf("com3_rx_ready == 1\r\n");
 		ret = DSM_CommunicationProcess(UART3_RX_BUF, UART3_RX_LEN, sendbuff3, &send_len3);  // 处理接收到的数据
 		if (ret != 0) {
-			HAL_UART_Receive_DMA(&huart3, UART3_RX_BUF, UART3_RX_BUF_SIZE); // 重新启用DMA接收
+			printf("com3_rx_error\r\n");
 			COM3_SET_RECV_MODE();  //切换接收模式
+			HAL_UART_Receive_DMA(&huart3, UART3_RX_BUF, UART3_RX_BUF_SIZE); // 重新启用DMA接收
 		} else {
 			COM3_SET_SEND_MODE();  //切换发送模式
 			HAL_UART_Transmit_DMA(&huart3, sendbuff3, send_len3);  //返回响应包
 		}
 		com3_rx_ready = 0; // 重置标志
 	} else {
-			g_measurement.device_status.device_state =0; // 正常工作模式
-			cnt_commutoCPU2 = 0;
-//		PollingInputData(); // Polling for input data
+//			g_measurement.device_status.device_state =0; // 正常工作模式
+//			cnt_commutoCPU2 = 0;
+		PollingInputData(); // Polling for input data
 		HAL_Delay(10); //
 //	    printf("Density read from regs: %u\n", g_measurement.single_point_monitoring.temperature);
 	}

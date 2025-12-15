@@ -2,7 +2,7 @@
  * wartsila_modbus_communication.h
  *
  *  Created on: Nov 15, 2025
- *      Author: admin
+ *      Author: Duan Xuebin
  */
 
 #ifndef WARTSILA_MODBUS_WARTSILA_MODBUS_COMMUNICATION_H_

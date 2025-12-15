@@ -2,7 +2,7 @@
  * wireless_host_communication.c
  *
  *  Created on: 2025年12月8日
- *      Author: admin
+ *      Author: Duan Xuebin
  */
 
 #include "wireless_host_communication.h"
