@@ -98,6 +98,10 @@ void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart) {
 		//等待DMA完全发送完成
 		while (__HAL_UART_GET_FLAG(&huart3, UART_FLAG_TC) == RESET)
 			;
+		//继续延时0.1ms，保证发送数据电平完全恢复空闲
+		for (volatile uint32_t i = 0; i < 18000; i++) {
+			__NOP();
+		}
 		COM3_SET_RECV_MODE();  //切换接收模式
 		HAL_UART_Receive_DMA(&huart3, UART3_RX_BUF, UART3_RX_BUF_SIZE);
 	} else if (huart->Instance == UART5) {

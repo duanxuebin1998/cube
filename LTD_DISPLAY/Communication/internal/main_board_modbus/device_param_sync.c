@@ -2,7 +2,7 @@
  * device_param_sync.c
  *
  *  Created on: 2025年12月12日
- *      Author: admin
+ *      Author: Duan Xuebin
  */
 
 
@@ -198,7 +198,7 @@ static void DeviceParams_SendHoldValueToCPU2(volatile struct HoldRegisterData *h
         return;
     }
 
-    // 你的 CPU2_CombinatePackage_Send 是按 32bit + word swap 来发的，
+    // CPU2_CombinatePackage_Send 是按 32bit + word swap 来发的，
     // 每个参数占两个寄存器，因此这里只支持 rgstcnt == 2 的情况。
     if (h->rgstcnt != 2) {
         // 如果以后有 1 寄存器参数，再单独处理
@@ -207,7 +207,7 @@ static void DeviceParams_SendHoldValueToCPU2(volatile struct HoldRegisterData *h
         return;
     }
 
-    // holdValue[i].val 就是与 CPU2 通信的“寄存器值”（你之前已经说明）
+    // holdValue[i].val 就是与 CPU2 通信的“寄存器值”（之前已经说明）
     int32_t val = h->val;
 
     // 直接把这个 32 位值作为 holddata 传给 CPU2_CombinatePackage_Send

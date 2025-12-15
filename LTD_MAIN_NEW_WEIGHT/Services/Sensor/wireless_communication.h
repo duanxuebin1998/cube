@@ -2,7 +2,7 @@
  * wireless_communication.h
  *
  *  Created on: 2025Äê12ÔÂ8ÈÕ
- *      Author: admin
+ *      Author: Duan Xuebin
  */
 
 #ifndef SENSOR_WIRELESS_COMMUNICATION_H_

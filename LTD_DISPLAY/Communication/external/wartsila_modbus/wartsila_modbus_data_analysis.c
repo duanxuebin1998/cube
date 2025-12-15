@@ -2,7 +2,7 @@
  * wartsila_modbus_data_analysis.c
  *
  *  Created on: 2025年11月20日
- *      Author: admin
+ *      Author: Duan Xuebin
  */
 #include "wartsila_modbus_data_analysis.h"
 #include "system_parameter.h"

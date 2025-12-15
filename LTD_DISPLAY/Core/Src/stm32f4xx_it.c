@@ -560,6 +560,7 @@ void USART2_IRQHandler(void)
 			}
 			else {
 				// 如果没有接收到数据，重新启用DMA接收
+				COM2_SET_RECV_MODE();  //切换接收模式
 				HAL_UART_Receive_DMA(&huart2, UART2_RX_BUF, UART2_RX_BUF_SIZE);
 			}
 //			HAL_UART_Transmit_DMA(&huart2, UART2_RX_BUF, UART2_RX_LEN);//返回接受到的包
@@ -592,6 +593,7 @@ void USART3_IRQHandler(void)
 				com3_rx_ready = 1; // 标记接收完成
 			} else {
 				// 如果没有接收到数据，重新启用DMA接收
+				COM3_SET_RECV_MODE();  //切换接收模式
 				HAL_UART_Receive_DMA(&huart3, UART3_RX_BUF, UART3_RX_BUF_SIZE);
 			}
 //			COM3_SET_SEND_MODE();  // 切换到发送模式
@@ -713,6 +715,7 @@ void USART6_IRQHandler(void)
 			}
 			else
 			{
+				COM1_SET_RECV_MODE();  //切换接收模式
 				HAL_UART_Receive_DMA(&huart6, UART6_RX_BUF, UART6_RX_BUF_SIZE); // 重新启用DMA接收
 			}
 //			HAL_UART_Transmit_DMA(&huart6, UART6_RX_BUF, UART6_RX_LEN);//返回接受到的包

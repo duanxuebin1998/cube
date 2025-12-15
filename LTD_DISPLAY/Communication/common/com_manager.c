@@ -2,7 +2,7 @@
  * com_manager.c
  *  串口配置 & 协议分发管理模块实现
  *  Created on: 2025年12月10日
- *      Author: admin
+ *      Author: Duan Xuebin
  */
 
 #include "com_manager.h"

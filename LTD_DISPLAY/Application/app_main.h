@@ -2,7 +2,7 @@
  * app_main.h
  *
  *  Created on: Nov 18, 2025
- *      Author: admin
+ *      Author: Duan Xuebin
  */
 
 #ifndef APP_MAIN_H_

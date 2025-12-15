@@ -2,7 +2,7 @@
  * wireless_communication.c
  *
  *  Created on: 2025Äê12ÔÂ8ÈÕ
- *      Author: admin
+ *      Author: Duan Xuebin
  */
 
 #include "ltd_sensor_communication.h"

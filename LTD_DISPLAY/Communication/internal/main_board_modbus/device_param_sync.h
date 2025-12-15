@@ -2,7 +2,7 @@
  * device_param_sync.h
  *
  *  Created on: 2025年12月12日
- *      Author: admin
+ *      Author: Duan Xuebin
  */
 
 #ifndef DEVICE_PARAM_SYNC_H

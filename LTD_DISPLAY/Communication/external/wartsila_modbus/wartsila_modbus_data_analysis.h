@@ -2,7 +2,7 @@
  * wartsila_modbus_data_analysis.h
  *
  *  Created on: 2025年11月20日
- *      Author: admin
+ *      Author: Duan Xuebin
  */
 
 #ifndef WARTSILA_MODBUS_WARTSILA_MODBUS_DATA_ANALYSIS_H_
