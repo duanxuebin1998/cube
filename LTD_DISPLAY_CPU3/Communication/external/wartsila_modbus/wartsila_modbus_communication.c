@@ -216,7 +216,10 @@ void ForwardParamsToLowerDevice(void)
 		g_deviceParams.command = CMD_NONE;
 		DeviceParams_StoreToRegisters(g_holding_regs);
 	}
-
+	CPU2_CombinatePackage_Send(FUNCTIONCODE_WRITE_MULREGISTER, HOLDREGISTER_DEVICEPARAM_WARTSILA_UPPER_DENSITY_LIMIT, 2, &g_deviceParams.wartsila_upper_density_limit );
+	CPU2_CombinatePackage_Send(FUNCTIONCODE_WRITE_MULREGISTER, HOLDREGISTER_DEVICEPARAM_WARTSILA_LOWER_DENSITY_LIMIT, 2, &g_deviceParams.wartsila_lower_density_limit );
+	CPU2_CombinatePackage_Send(FUNCTIONCODE_WRITE_MULREGISTER, HOLDREGISTER_DEVICEPARAM_WARTSILA_DENSITY_INTERVAL, 2, &g_deviceParams.wartsila_density_interval );
+	CPU2_CombinatePackage_Send(FUNCTIONCODE_WRITE_MULREGISTER, HOLDREGISTER_DEVICEPARAM_WARTSILA_MAX_HEIGHT_ABOVE_SURFACE, 2, &g_deviceParams.wartsila_max_height_above_surface );
 }
 
 

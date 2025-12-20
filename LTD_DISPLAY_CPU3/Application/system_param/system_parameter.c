@@ -17,7 +17,7 @@ volatile DeviceParameters g_deviceParams = { 0 }; // 设备参数
 
 //参数元数据
 struct ParameterMetadata param_meta[] = {
-	/* 名称	数值	 数据号	起始地址	寄存器数	是否检范围 	最小	最大	单位	小数	偏移	写权	类型	显示	隐藏	英文 */
+	/* 名称	数值	数据号	起始地址	寄存器数	是否检范围	最小	最大	单位	小数	偏移	写权	类型	显示	隐藏	英文 */
 	{(uint8_t*)"设备指令",	0,	COM_NUM_DEVICEPARAM_COMMAND,	HOLDREGISTER_DEVICEPARAM_COMMAND,	2,	false,	0,	0,	NULL,	0,	0,	true,	TYPE_INT,	8,	NULL,	(uint8_t*)"Cmd"},
 
 	/* 基础参数 */
@@ -118,7 +118,45 @@ struct ParameterMetadata param_meta[] = {
 	{(uint8_t*)"结构体大小",	0,	COM_NUM_DEVICEPARAM_STRUCT_SIZE,	HOLDREGISTER_DEVICEPARAM_STRUCT_SIZE,	2,	false,	0,	0,	NULL,	0,	0,	false,	TYPE_INT,	4,	NULL,	(uint8_t*)"StructSize"},
 	{(uint8_t*)"魔术字",	0,	COM_NUM_DEVICEPARAM_MAGIC,	HOLDREGISTER_DEVICEPARAM_MAGIC,	2,	false,	0,	0,	NULL,	0,	0,	false,	TYPE_INT,	8,	NULL,	(uint8_t*)"Magic"},
 	{(uint8_t*)"参数CRC32",	0,	COM_NUM_DEVICEPARAM_CRC,	HOLDREGISTER_DEVICEPARAM_CRC,	2,	false,	0,	0,	NULL,	0,	0,	false,	TYPE_INT,	8,	NULL,	(uint8_t*)"ParamCRC"},
+
+	/* ==================== CPU3 本机参数（独立寄存器段 0x0200 起） ==================== */
+	{(uint8_t*)"屏幕程序版本",	0,	COM_NUM_PARA_LOCAL_LEDVERSION,	HOLDREGISTER_CPU3_LED_VERSION,	2,	false,	0,	0,	NULL,	0,	0,	false,	TYPE_INT,	4,	NULL,	(uint8_t*)"LedVer"},
+	{(uint8_t*)"语言",	0,	COM_NUM_PARA_LANG,	HOLDREGISTER_CPU3_LANGUAGE,	2,	true,	0,	1,	NULL,	0,	0,	true,	TYPE_INT,	1,	NULL,	(uint8_t*)"Lang"},
+
+	{(uint8_t*)"液位数据源",	0,	COM_NUM_SCREEN_SOURCE_OIL,	HOLDREGISTER_CPU3_SRC_OIL,	2,	true,	0,	1,	NULL,	0,	0,	true,	TYPE_INT,	1,	NULL,	(uint8_t*)"SrcOil"},
+	{(uint8_t*)"水位数据源",	0,	COM_NUM_SCREEN_SOURCE_WATER,	HOLDREGISTER_CPU3_SRC_WATER,	2,	true,	0,	1,	NULL,	0,	0,	true,	TYPE_INT,	1,	NULL,	(uint8_t*)"SrcWater"},
+	{(uint8_t*)"密度数据源",	0,	COM_NUM_SCREEN_SOURCE_D,	HOLDREGISTER_CPU3_SRC_D,	2,	true,	0,	1,	NULL,	0,	0,	true,	TYPE_INT,	1,	NULL,	(uint8_t*)"SrcD"},
+	{(uint8_t*)"温度数据源",	0,	COM_NUM_SCREEN_SOURCE_T,	HOLDREGISTER_CPU3_SRC_T,	2,	true,	0,	1,	NULL,	0,	0,	true,	TYPE_INT,	1,	NULL,	(uint8_t*)"SrcT"},
+
+	{(uint8_t*)"液位手输值",	0,	COM_NUM_SCREEN_INPUT_OIL,	HOLDREGISTER_CPU3_IN_OIL,	2,	true,	-999999,	999999,	(uint8_t*)"mm",	1,	0,	true,	TYPE_INT,	7,	NULL,	(uint8_t*)"InOil"},
+	{(uint8_t*)"水位手输值",	0,	COM_NUM_SCREEN_INPUT_WATER,	HOLDREGISTER_CPU3_IN_WATER,	2,	true,	-999999,	999999,	(uint8_t*)"mm",	1,	0,	true,	TYPE_INT,	7,	NULL,	(uint8_t*)"InWater"},
+	{(uint8_t*)"密度手输值",	0,	COM_NUM_SCREEN_INPUT_D,	HOLDREGISTER_CPU3_IN_D,	2,	true,	0,	2000,	(uint8_t*)"kg/m3",	3,	0,	true,	TYPE_INT,	7,	NULL,	(uint8_t*)"InD"},
+	{(uint8_t*)"密度手输上传",	0,	COM_NUM_SCREEN_INPUT_D_SWITCH,	HOLDREGISTER_CPU3_IN_D_SW,	2,	true,	0,	1,	NULL,	0,	0,	true,	TYPE_INT,	1,	NULL,	(uint8_t*)"InDSw"},
+	{(uint8_t*)"温度手输值",	0,	COM_NUM_SCREEN_INPUT_T,	HOLDREGISTER_CPU3_IN_T,	2,	true,	-500,	2000,	(uint8_t*)"℃",	1,	0,	true,	TYPE_INT,	7,	NULL,	(uint8_t*)"InT"},
+
+	{(uint8_t*)"小数点位数",	0,	COM_NUM_SCREEN_DECIMAL,	HOLDREGISTER_CPU3_DECIMAL,	2,	true,	0,	4,	NULL,	0,	0,	true,	TYPE_INT,	1,	NULL,	(uint8_t*)"Decimal"},
+	{(uint8_t*)"屏幕密码",	0,	COM_NUM_SCREEN_PASSWARD,	HOLDREGISTER_CPU3_PASSWORD,	2,	true,	0,	9999,	NULL,	0,	0,	true,	TYPE_INT,	4,	NULL,	(uint8_t*)"ScrPwd"},
+	{(uint8_t*)"是否息屏",	0,	COM_NUM_SCREEN_OFF,	HOLDREGISTER_CPU3_OFF_TIME,	2,	true,	0,	1,	NULL,	0,	0,	true,	TYPE_INT,	1,	NULL,	(uint8_t*)"ScreenOff"},
+
+	{(uint8_t*)"COM1波特率",	0,	COM_NUM_CPU3_COM1_BAUDRATE,	HOLDREGISTER_CPU3_COM1_BAUD,	2,	true,	0,	5,	NULL,	0,	0,	true,	TYPE_INT,	1,	ret_arr_word,	(uint8_t*)"C1Baud"},
+	{(uint8_t*)"COM1数据位",	0,	COM_NUM_CPU3_COM1_DATABITS,	HOLDREGISTER_CPU3_COM1_DATABITS,	2,	true,	0,	1,	NULL,	0,	0,	true,	TYPE_INT,	1,	ret_arr_word,	(uint8_t*)"C1Data"},
+	{(uint8_t*)"COM1校验",	0,	COM_NUM_CPU3_COM1_PARITY,	HOLDREGISTER_CPU3_COM1_PARITY,	2,	true,	0,	2,	NULL,	0,	0,	true,	TYPE_INT,	1,	ret_arr_word,	(uint8_t*)"C1Parity"},
+	{(uint8_t*)"COM1停止位",	0,	COM_NUM_CPU3_COM1_STOPBITS,	HOLDREGISTER_CPU3_COM1_STOPBITS,	2,	true,	0,	1,	NULL,	0,	0,	true,	TYPE_INT,	1,	ret_arr_word,	(uint8_t*)"C1Stop"},
+	{(uint8_t*)"COM1协议",	0,	COM_NUM_CPU3_COM1_PROTOCOL,	HOLDREGISTER_CPU3_COM1_PROTO,	2,	true,	0,	4,	NULL,	0,	0,	true,	TYPE_INT,	1,	ret_arr_word,	(uint8_t*)"C1Proto"},
+
+	{(uint8_t*)"COM2波特率",	0,	COM_NUM_CPU3_COM2_BAUDRATE,	HOLDREGISTER_CPU3_COM2_BAUD,	2,	true,	0,	5,	NULL,	0,	0,	true,	TYPE_INT,	1,	ret_arr_word,	(uint8_t*)"C2Baud"},
+	{(uint8_t*)"COM2数据位",	0,	COM_NUM_CPU3_COM2_DATABITS,	HOLDREGISTER_CPU3_COM2_DATABITS,	2,	true,	0,	1,	NULL,	0,	0,	true,	TYPE_INT,	1,	ret_arr_word,	(uint8_t*)"C2Data"},
+	{(uint8_t*)"COM2校验",	0,	COM_NUM_CPU3_COM2_PARITY,	HOLDREGISTER_CPU3_COM2_PARITY,	2,	true,	0,	2,	NULL,	0,	0,	true,	TYPE_INT,	1,	ret_arr_word,	(uint8_t*)"C2Parity"},
+	{(uint8_t*)"COM2停止位",	0,	COM_NUM_CPU3_COM2_STOPBITS,	HOLDREGISTER_CPU3_COM2_STOPBITS,	2,	true,	0,	1,	NULL,	0,	0,	true,	TYPE_INT,	1,	ret_arr_word,	(uint8_t*)"C2Stop"},
+	{(uint8_t*)"COM2协议",	0,	COM_NUM_CPU3_COM2_PROTOCOL,	HOLDREGISTER_CPU3_COM2_PROTO,	2,	true,	0,	4,	NULL,	0,	0,	true,	TYPE_INT,	1,	ret_arr_word,	(uint8_t*)"C2Proto"},
+
+	{(uint8_t*)"COM3波特率",	0,	COM_NUM_CPU3_COM3_BAUDRATE,	HOLDREGISTER_CPU3_COM3_BAUD,	2,	true,	0,	5,	NULL,	0,	0,	true,	TYPE_INT,	1,	ret_arr_word,	(uint8_t*)"C3Baud"},
+	{(uint8_t*)"COM3数据位",	0,	COM_NUM_CPU3_COM3_DATABITS,	HOLDREGISTER_CPU3_COM3_DATABITS,	2,	true,	0,	1,	NULL,	0,	0,	true,	TYPE_INT,	1,	ret_arr_word,	(uint8_t*)"C3Data"},
+	{(uint8_t*)"COM3校验",	0,	COM_NUM_CPU3_COM3_PARITY,	HOLDREGISTER_CPU3_COM3_PARITY,	2,	true,	0,	2,	NULL,	0,	0,	true,	TYPE_INT,	1,	ret_arr_word,	(uint8_t*)"C3Parity"},
+	{(uint8_t*)"COM3停止位",	0,	COM_NUM_CPU3_COM3_STOPBITS,	HOLDREGISTER_CPU3_COM3_STOPBITS,	2,	true,	0,	1,	NULL,	0,	0,	true,	TYPE_INT,	1,	ret_arr_word,	(uint8_t*)"C3Stop"},
+	{(uint8_t*)"COM3协议",	0,	COM_NUM_CPU3_COM3_PROTOCOL,	HOLDREGISTER_CPU3_COM3_PROTO,	2,	true,	0,	4,	NULL,	0,	0,	true,	TYPE_INT,	1,	ret_arr_word,	(uint8_t*)"C3Proto"},
 };
+
 
 
 

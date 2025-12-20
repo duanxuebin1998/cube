@@ -138,7 +138,7 @@ float Read_Sensor_Voltage(void) {
             printf("无效电压响应: %x\r\n", resp[0]);
         }
     }
-    return -1.0f; // 错误
+    return SENSOR_COMM_TIMEOUT; // 错误
 }
 
 // 开启测水探针 (CL 命令)
@@ -152,7 +152,7 @@ int Probe_EnableWaterSensor(void) {
         // 协议约定：如果返回包含 "%" 或其他成功标识，就认为成功
         if (strstr(resp, "%") != NULL) {
             printf("[Probe] 测水探针开启成功！\r\n");
-            return 0;
+            return NO_ERROR;
         } else {
             printf("[Probe] 无效响应: %s\r\n", resp);
             return SENSOR_COMM_TIMEOUT; // 响应格式不对
@@ -210,7 +210,7 @@ int DSM_EnableDensityMode(void) {
 // 工具函数: 解析 "E06.6379V\r\n" 这类响应为浮点数
 static int parse_freq_response(const char *resp, float *out_hz)
 {
-    if (!resp || !out_hz) return -1;
+    if (!resp || !out_hz) return PARAM_ERROR;
 
     // 1) 跳过起始标志（例如 'E'）和前导空白
     const char *p = resp;
@@ -343,6 +343,67 @@ uint32_t Read_VibrationTube_ID(char *id_out, size_t id_out_size)
     id_out[id_len] = '\0';
 
     printf("振动管ID: %s\r\n", id_out);
+
+    return NO_ERROR;
+}
+/**
+ * @brief 读取电容值（Cl 指令）
+ * @param[out] cap_out  输出电容值（单位与 WaterSendPack 一致，通常是 pF 或等效单位）
+ * @return uint32_t 错误码（NO_ERROR 成功）
+ *
+ * 期望响应帧(11字节):
+ *   [0]  'D' 或 'E'
+ *   [1..7] 7位数字/小数点格式（sprintf: "%07.1f" 生成，实际包含小数点）
+ *   [8]  BCC（对 [0..7] 计算）
+ *   [9]  '\r'
+ *   [10] '\n'
+ */
+uint32_t Read_Water_Capacitance(float *cap_out)
+{
+    if (cap_out == NULL) {
+        return PARAM_ERROR;   // 你工程里若叫 PARAM_ADDRESS_OVERFLOW/PARAM_ERROR 请替换
+    }
+
+    char resp[RX_BUF_LEN] = {0};
+    uint32_t ret = UART6_SendWithRetry("Cl\r\n", resp, RX_BUF_LEN, 500);
+    if (ret != NO_ERROR) {
+        return ret;
+    }
+
+    /* 基本长度检查：WaterSendPack 固定 11 字节 */
+    size_t len = strlen(resp);
+    if (len < 11) {
+        /* 有些情况下 resp 里可能包含 '\0'（若你按字节收），建议你用 recvLen 更准；
+           在你现有 UART6_SendCommand 里目前没把 recvLen 返回出来，所以先用 strlen 做最低保障。 */
+        printf("[UART6] 电容响应长度异常: len=%u, resp=%s\r\n", (unsigned)len, resp);
+        return SENSOR_COMM_TIMEOUT; // 或 SENSOR_RESP_FORMAT_ERROR（更合理）
+    }
+
+    /* 格式检查：起始必须是 D 或 E，且以 \r\n 结束 */
+    if (!((resp[0] == 'D') || (resp[0] == 'E'))) {
+        printf("[UART6] 电容响应头错误: 0x%02X, resp=%s\r\n", (unsigned char)resp[0], resp);
+        return SENSOR_BCC_ERROR;
+    }
+    if (!(resp[9] == '\r' && resp[10] == '\n')) {
+        printf("[UART6] 电容响应结尾错误: [%02X %02X]\r\n", (unsigned char)resp[9], (unsigned char)resp[10]);
+        return SENSOR_BCC_ERROR;
+    }
+
+    /* BCC 校验：按你的 WaterSendPack，BCC 在 resp[8]，覆盖 resp[0..7] */
+    char bcc = CalculationBCC_DSM(resp, 8);
+    if (bcc != resp[8]) {
+        printf("[UART6] 电容 BCC 校验失败: cal=%02X rcv=%02X\r\n", (unsigned char)bcc, (unsigned char)resp[8]);
+        return SENSOR_BCC_ERROR;
+    }
+
+    /* 电压异常标志：resp[0]=='E' */
+    if (resp[0] == 'E') {
+        printf("[UART6] 电容响应提示：电压异常\r\n");
+//        return SENSOR_POWER_ABNORMAL;   // 建议新增错误码；若你已有对应错误码则替换
+    }
+
+    /* 解析数值：resp[1..7] 是数字/小数点字符串。直接 atof(resp+1) 即可 */
+    *cap_out = (float)atof(resp + 1);
 
     return NO_ERROR;
 }

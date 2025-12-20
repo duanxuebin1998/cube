@@ -9,6 +9,7 @@
 #include "my_crc.h"
 #include "system_parameter.h"
 #include "dataanalysis_modbus.h"
+#include "wartsila_modbus_communication.h"
 
 #define DEBUG_COMMUCPU2 1
 #define ADERSS 0X01
@@ -169,6 +170,7 @@ void PollingInputData(void) {
 
 			if (poweron_index >= POWERON_GROUP_COUNT) {
 				poweron_done = true; /* 上电读取全部完成 */
+				 DeviceParams_StoreToRegisters(g_holding_regs);/* 把读取到的设备参数存入瓦锡兰保持寄存器 */
 				print_device_params();
 			}
 		}

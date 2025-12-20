@@ -26,57 +26,8 @@ Cpu3CommAndDisplayParams g_cpu3_comm_display_params;
 
 /* ================= CPU3 本机参数描述表 ================= */
 
-typedef struct
-{
-    OperatingNumber opera_num;   /* 对应 COM_NUM_XXX */
-    uint8_t        *name;        /* 中文名称（一般不用，菜单里已有） */
-    int32_t         valuemin;    /* 最小值（= valuemax 时视为不校验） */
-    int32_t         valuemax;    /* 最大值 */
-    uint8_t         point;       /* 小数点位数 */
-    uint8_t         bits;        /* 显示位数 */
-    uint8_t        *unit;        /* 单位字符串，可为 NULL */
-} Cpu3LocalParamDesc;
 
-/* CPU3 本机参数元数据（只做范围/显示用，实际值在 g_cpu3_comm_display_params 里） */
-static const Cpu3LocalParamDesc cpu3_local_param_table[] =
-{
-    /* ---------- 屏幕/界面显示类 ---------- */
-    { COM_NUM_PARA_LANG,           (uint8_t*)"语言",         0,   1,    0, 1,  NULL },   /* 0:中文 1:英文 */
-    { COM_NUM_SCREEN_DECIMAL,      (uint8_t*)"小数点位数",   0,   4,    0, 1,  NULL },
-    { COM_NUM_SCREEN_PASSWARD,     (uint8_t*)"屏幕密码",     0, 9999,  0, 4,  NULL },
-    { COM_NUM_SCREEN_OFF,          (uint8_t*)"是否息屏",     0,   1,    0, 1,  NULL },
 
-    { COM_NUM_SCREEN_SOURCE_OIL,   (uint8_t*)"液位数据源",   0,   1,    0, 1,  NULL },   /* 0:设备 1:手输 */
-    { COM_NUM_SCREEN_SOURCE_WATER, (uint8_t*)"水位数据源",   0,   1,    0, 1,  NULL },
-    { COM_NUM_SCREEN_SOURCE_D,     (uint8_t*)"密度数据源",   0,   1,    0, 1,  NULL },
-    { COM_NUM_SCREEN_SOURCE_T,     (uint8_t*)"温度数据源",   0,   1,    0, 1,  NULL },
-
-    { COM_NUM_SCREEN_INPUT_OIL,    (uint8_t*)"液位手输值",   -999999, 999999, 1, 7, (uint8_t*)"mm" },
-    { COM_NUM_SCREEN_INPUT_WATER,  (uint8_t*)"水位手输值",   -999999, 999999, 1, 7, (uint8_t*)"mm" },
-    { COM_NUM_SCREEN_INPUT_D,      (uint8_t*)"密度手输值",   0, 2000,  3, 7, (uint8_t*)"kg/m3" },
-    { COM_NUM_SCREEN_INPUT_D_SWITCH,(uint8_t*)"密度手输上传", 0,   1,  0, 1,  NULL },
-    { COM_NUM_SCREEN_INPUT_T,      (uint8_t*)"温度手输值",   -500, 2000, 1, 7, (uint8_t*)"℃" },
-
-    /* ---------- CPU3 串口配置（值一般用枚举索引） ---------- */
-    /* 波特率用 0~N 索引映射到具体数值，由工具函数转换 */
-    { COM_NUM_CPU3_COM1_BAUDRATE,  (uint8_t*)"COM1波特率",   0,   5,    0, 1,  NULL },
-    { COM_NUM_CPU3_COM1_DATABITS,  (uint8_t*)"COM1数据位",   0,   1,    0, 1,  NULL },   /* 0:8 1:9 */
-    { COM_NUM_CPU3_COM1_PARITY,    (uint8_t*)"COM1校验",     0,   2,    0, 1,  NULL },   /* 0:N 1:E 2:O */
-    { COM_NUM_CPU3_COM1_STOPBITS,  (uint8_t*)"COM1停止位",   0,   1,    0, 1,  NULL },   /* 0:1 1:2 */
-    { COM_NUM_CPU3_COM1_PROTOCOL,  (uint8_t*)"COM1协议",     0,   4,    0, 1,  NULL },   /* 自己定义 */
-
-    { COM_NUM_CPU3_COM2_BAUDRATE,  (uint8_t*)"COM2波特率",   0,   5,    0, 1,  NULL },
-    { COM_NUM_CPU3_COM2_DATABITS,  (uint8_t*)"COM2数据位",   0,   1,    0, 1,  NULL },
-    { COM_NUM_CPU3_COM2_PARITY,    (uint8_t*)"COM2校验",     0,   2,    0, 1,  NULL },
-    { COM_NUM_CPU3_COM2_STOPBITS,  (uint8_t*)"COM2停止位",   0,   1,    0, 1,  NULL },
-    { COM_NUM_CPU3_COM2_PROTOCOL,  (uint8_t*)"COM2协议",     0,   4,    0, 1,  NULL },
-
-    { COM_NUM_CPU3_COM3_BAUDRATE,  (uint8_t*)"COM3波特率",   0,   5,    0, 1,  NULL },
-    { COM_NUM_CPU3_COM3_DATABITS,  (uint8_t*)"COM3数据位",   0,   1,    0, 1,  NULL },
-    { COM_NUM_CPU3_COM3_PARITY,    (uint8_t*)"COM3校验",     0,   2,    0, 1,  NULL },
-    { COM_NUM_CPU3_COM3_STOPBITS,  (uint8_t*)"COM3停止位",   0,   1,    0, 1,  NULL },
-    { COM_NUM_CPU3_COM3_PROTOCOL,  (uint8_t*)"COM3协议",     0,   4,    0, 1,  NULL },
-};
 
 #define CPU3_LOCAL_PARAM_COUNT (sizeof(cpu3_local_param_table) / sizeof(cpu3_local_param_table[0]))
 
@@ -92,33 +43,37 @@ bool Cpu3Local_IsParam(OperatingNumber opera)
 /* 波特率索引 -> 实际波特率 */
 static uint32_t Cpu3_BaudIndexToValue(int idx)
 {
-    switch (idx) {
-    case 0: return 4800;
-    case 1: return 9600;
-    case 2: return 19200;
-    case 3: return 38400;
-    case 4: return 57600;
-    case 5: return 115200;
-    default: return 9600;
-    }
+	switch (idx) {
+	case 0:	return 1200;
+	case 1:	return 2400;
+	case 2:	return 4800;
+	case 3:	return 9600;
+	case 4:	return 19200;
+	case 5:	return 38400;
+	case 6:	return 57600;
+	case 7:	return 115200;
+	default:	return 9600;
+	}
 }
 
 /* 实际波特率 -> 索引 */
 static int Cpu3_BaudValueToIndex(uint32_t baud)
 {
-    switch (baud) {
-    case 4800:   return 0;
-    case 9600:   return 1;
-    case 19200:  return 2;
-    case 38400:  return 3;
-    case 57600:  return 4;
-    case 115200: return 5;
-    default:     return 1; /* 默认 9600 */
-    }
+	switch (baud) {
+	case 1200:	return 0;
+	case 2400:	return 1;
+	case 4800:	return 2;
+	case 9600:	return 3;
+	case 19200:	return 4;
+	case 38400:	return 5;
+	case 57600:	return 6;
+	case 115200:	return 7;
+	default:	return 3;	/* 默认 9600 */
+	}
 }
 
 /* 读取 CPU3 本机参数当前值（统一入口） */
-static int32_t Cpu3Local_ReadValue(OperatingNumber opera)
+int32_t Cpu3Local_ReadValue(OperatingNumber opera)
 {
     switch (opera)
     {
@@ -206,7 +161,7 @@ static int32_t Cpu3Local_ReadValue(OperatingNumber opera)
 }
 
 /* 写 CPU3 本机参数（统一入口） */
-static void Cpu3Local_WriteValue(OperatingNumber opera, int32_t v)
+void Cpu3Local_WriteValue(OperatingNumber opera, int32_t v)
 {
     switch (opera)
     {
@@ -313,9 +268,13 @@ static void Cpu3Local_WriteValue(OperatingNumber opera, int32_t v)
 
     /* 这里可以顺手：重配串口 + 保存 FRAM */
     // Cpu3_Comm_ReInitAll();       // 你自己实现
-    // Cpu3_SaveParamsToFRAM();     // 你自己实现
+    Cpu3_Params_SaveToFRAM();     // 你自己实现
 }
 
+bool Cpu3Local_IsUartParam(OperatingNumber opera)
+{
+    return (opera >= COM_NUM_CPU3_COM1_BAUDRATE && opera <= COM_NUM_CPU3_COM3_PROTOCOL);
+}
 
 /* ================ 内部小工具：用一个 ComPortConfig 初始化一个 UART ================ */
 static void Cpu3_ReinitOneUart(UART_HandleTypeDef *huart, const ComPortConfig *cfg)
@@ -383,7 +342,7 @@ void Cpu3_Params_InitDefaults(void)
     g_cpu3_comm_display_params.com2.databits = 8;
     g_cpu3_comm_display_params.com2.parity   = COM_PARITY_NONE;
     g_cpu3_comm_display_params.com2.stopbits = COM_STOPBITS_1;
-    g_cpu3_comm_display_params.com2.protocol = COM_PROTO_MODBUS_RTU;
+    g_cpu3_comm_display_params.com2.protocol = COM_PROTO_WARTSILA;
 
     /* COM3 = USART3: 4800 8N2 Wartsila */
     g_cpu3_comm_display_params.com3.baudrate = 4800;

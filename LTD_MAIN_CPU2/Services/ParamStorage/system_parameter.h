@@ -107,7 +107,7 @@ typedef enum {
     PARAM_RANGE_ERROR = 0x00110003,              // 参数超限
     PARAM_ADDRESS_OVERFLOW = 0x00110004,         // 地址越界
     PARAM_CRC_ERROR = 0x00110005,                // 参数 CRC 错误
-
+	PARAM_ERROR = 0x00110006,                // 程序内参数调用错误
     /* ==================== 称重类故障 (0x00120000 - 0x0012FFFF) ==================== */
     WEIGHT_OUT_OF_RANGE = 0x00120001,            // 称重超上限
     WEIGHT_UNDER_RANGE = 0x00120002,             // 称重超下限
@@ -194,7 +194,7 @@ typedef enum {
 	STATE_SINGLEPOINTING = 0x0011,            // 单点测量中
 	STATE_RUNTOPOINTING = 0x0012,             // 运行到测量点中
 	STATE_SPREADPOINTING = 0x0013,            // 分布测量中
-	STATE_AI_SPREADPOINTING = 0x0014,         // 无参分布测量中
+	STATE_AI_SPREADPOINTING = 0x0014,         // 无参分布测量中//国标测
 	STATE_CALIBRATIONOILING = 0x0015,         // 标定液位
 	STATE_READPARAMETERING = 0x0016,          // 读取参数中
 	STATE_RUNUPING = 0x0017,                  // 向上运行中

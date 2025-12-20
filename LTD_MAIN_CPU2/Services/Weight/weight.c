@@ -105,10 +105,12 @@ Weight_StateTypeDef check_zero_point_status(void)
         state = NORMAL;
         result_str = "正常";
     }
-
+#ifdef WEIGHT_DEBUG
     printf("零点状态检测 | 当前:%d | 零点阈值:%d(+%d%%) | 结果:%s\r\n",
            current, upper_limit, ZERO_WEIGHT_THRESHOLD, result_str);
-
+#else
+    printf("\r\n");
+#endif
     return state;
 }
 
@@ -130,10 +132,12 @@ Weight_StateTypeDef check_bottom_status(void)
         state = NORMAL;
         result_str = "正常";
     }
-
+#ifdef WEIGHT_DEBUG
     printf("罐底状态检测 | 当前:%d | 罐底阈值:%d | 结果:%s\r\n",
            current, lower_limit, result_str);
-
+#else
+    printf("\r\n");
+#endif
     return state;
 }
 /**
@@ -202,13 +206,14 @@ uint32_t CheckWeightCollision(void)
         }
 
         /* 正常情况下, 只打印和上行相关的信息 */
+#ifdef WEIGHT_DEBUG
         printf("称重正常(上行) | 当前:%ld 稳定:%ld 增加:%ld 上限阈值:%ld 满载:%ld\r\n",
                (long)cur_weight,
                (long)stable_weight,
                (long)diff,
                (long)upper_threshold,
                (long)full_weight);
-
+#endif
         return NO_ERROR;
     }
 
@@ -244,7 +249,7 @@ uint32_t CheckWeightCollision(void)
 
             return WEIGHT_COLLISION_DETECTED;
         }
-
+#ifdef WEIGHT_DEBUG
         /* 正常情况下, 只打印和下行相关的信息 */
         printf("称重正常(下行) | 当前:%ld 稳定:%ld 减少:%ld 下限阈值:%ld 满载:%ld\r\n",
                (long)cur_weight,
@@ -252,7 +257,7 @@ uint32_t CheckWeightCollision(void)
                (long)(-diff),
                (long)lower_threshold,
                (long)full_weight);
-
+#endif
         return NO_ERROR;
     }
 

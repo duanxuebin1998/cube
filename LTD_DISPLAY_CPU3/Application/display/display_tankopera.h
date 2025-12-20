@@ -235,15 +235,13 @@ typedef enum {
     COM_NUM_CPU3_COM3_STOPBITS,
     COM_NUM_CPU3_COM3_PROTOCOL,
 
+	COM_NUM_PARA_LOCAL_STOP, /* 本机参数 - 结束 */
 
+	COM_NUM_PARACONFIG_END, /* 参数配置类 - 结束 */
 	COM_NUM_PASSWORD_START, /* 密码类 - 开始 */
 	COM_NUM_PASSWORD_ENTER_PARA,                //进入参数配置的密码
 	COM_NUM_PASSWORD_ENTER_CMD,                 //进入调试指令的密码
 	COM_NUM_PASSWORD_END, /* 密码类 - 结束 */
-
-	COM_NUM_PARA_LOCAL_STOP, /* 本机参数 - 结束 */
-	COM_NUM_PARACONFIG_END, /* 参数配置类 - 结束 */
-
 	COM_NUM_END,
 } OperatingNumber;
 

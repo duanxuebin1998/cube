@@ -16,11 +16,11 @@ extern "C" {
 
 /* 协议类型 */
 typedef enum {
-    COM_PROTO_NONE        = 0,
-    COM_PROTO_MODBUS_RTU  = 1,
-    COM_PROTO_DSM         = 2,
-    COM_PROTO_WARTSILA    = 3,
-    COM_PROTO_TRANSPARENT = 4,
+	COM_PROTO_DSM        = 0,
+	COM_PROTO_WARTSILA  = 1,
+    COM_PROTO_LTD         = 2,
+    COM_PROTO_1    = 3,
+    COM_PROTO_2 = 4,
 } ComProtocolType;
 
 /* 校验 */
