@@ -59,7 +59,7 @@ static void DSMToWartsila(const MeasurementResult *DSM, wartsila_DeviceParameter
 	memset(WXL, 0, sizeof(*WXL));
 
 	// 浮子位置
-	WXL->float_pos_mm = (int32_t) (DSM->debug_data.sensor_position);
+	WXL->float_pos_mm = (int32_t) ((DSM->debug_data.sensor_position)/10);
 	WXL->float_state = 0;
 
 	// 温度1（这里假设 DSM->single_point_monitoring.temperature 已经是 “×100 后的整型”，
@@ -85,7 +85,7 @@ static void DSMToWartsila(const MeasurementResult *DSM, wartsila_DeviceParameter
 	WXL->temp2_state = 0;
 
 	// 液位
-	WXL->liquid_level_mm = (int32_t) DSM->oil_measurement.oil_level;
+	WXL->liquid_level_mm = (int32_t) (DSM->oil_measurement.oil_level/10);
 	WXL->liquid_state = 0;
 
 	// 位置标志
@@ -98,12 +98,12 @@ static void DSMToWartsila(const MeasurementResult *DSM, wartsila_DeviceParameter
 	// 分布测量
 //	printf("分布测量起始点：%d\r\n", DSM->density_distribution.measurement_points);
 	WXL->spread_point_count = (uint16_t) DSM->density_distribution.measurement_points;
-	WXL->spread_oillevel_mm = (uint16_t) DSM->density_distribution.Density_oil_level;
+	WXL->spread_oillevel_mm = (uint16_t) (DSM->density_distribution.Density_oil_level/10);
 	WXL->spread_unknown = 0;
 
 	// 密度点 100 组
 	for (int i = 0; i < 100; ++i) {
-		WXL->dens_points[i].pos_mm = (int16_t) DSM->density_distribution.single_density_data[i].temperature_position;
+		WXL->dens_points[i].pos_mm = (int16_t) (DSM->density_distribution.single_density_data[i].temperature_position/10);
 		// 这里保持你当前的缩放方式：直接用 DSM 里的 density 值，不再额外 *10
 		WXL->dens_points[i].density_x10 = (int16_t) DSM->density_distribution.single_density_data[i].density;
 		// 温度同上，保持 ×100 的原始值

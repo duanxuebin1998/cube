@@ -17,6 +17,7 @@
 #include <math.h>
 #include "communicate.h"
 #include "system_parameter.h"
+#include "cpu3_comm_display_params.h"
 
 #define PASSWORD_ENTERMAIN		1009
 
@@ -79,6 +80,41 @@ static uint8_t *arr_Switch[][2] = {
 static uint8_t *arr_language[][2] = {
 	{ (uint8_t*)"中文", (uint8_t*)"Chinese" },
 	{ (uint8_t*)"英文", (uint8_t*)"English" },
+	{ (uint8_t*)"非法配置", (uint8_t*)"Illegal CFG" },
+};
+static uint8_t *arr_baudrate[][2] = {
+	{ (uint8_t*)"1200", (uint8_t*)"1200" },
+	{ (uint8_t*)"2400", (uint8_t*)"2400" },
+	{ (uint8_t*)"4800", (uint8_t*)"4800" },
+	{ (uint8_t*)"9600", (uint8_t*)"9600" },
+	{ (uint8_t*)"19200", (uint8_t*)"19200" },
+	{ (uint8_t*)"38400", (uint8_t*)"38400" },
+	{ (uint8_t*)"57600", (uint8_t*)"57600" },
+	{ (uint8_t*)"115200", (uint8_t*)"115200" },
+	{ (uint8_t*)"非法配置", (uint8_t*)"Illegal CFG" },
+};
+static uint8_t *arr_databits[][2] = {
+	{ (uint8_t*)"8位", (uint8_t*)"8 bits" },
+	{ (uint8_t*)"9位", (uint8_t*)"9 bits" },
+	{ (uint8_t*)"非法配置", (uint8_t*)"Illegal CFG" },
+};
+static uint8_t *arr_parity[][2] = {
+	{ (uint8_t*)"无校验", (uint8_t*)"NO parity" },
+	{ (uint8_t*)"偶校验", (uint8_t*)"Even parity" },
+	{ (uint8_t*)"奇校验", (uint8_t*)"Odd parity" },
+	{ (uint8_t*)"非法配置", (uint8_t*)"Illegal CFG" },
+};
+static uint8_t *arr_stopbits[][2] = {
+	{ (uint8_t*)"1位", (uint8_t*)"1 bits" },
+	{ (uint8_t*)"2位", (uint8_t*)"2 bits" },
+	{ (uint8_t*)"非法配置", (uint8_t*)"Illegal CFG" },
+};
+static uint8_t *arr_protocol[][2] = {
+	{ (uint8_t*)"计量仪协议", (uint8_t*)"DSM" },
+	{ (uint8_t*)"瓦锡兰协议", (uint8_t*)"Wartsila LTD" },
+	{ (uint8_t*)"LTD协议", (uint8_t*)"LTD" },
+	{ (uint8_t*)"预留1", (uint8_t*)"No Protocol" },
+	{ (uint8_t*)"预留2", (uint8_t*)"No Protocol" },
 	{ (uint8_t*)"非法配置", (uint8_t*)"Illegal CFG" },
 };
 
@@ -367,7 +403,7 @@ static uint8_t dtm_points(void)
 {
 	uint8_t p = 0;
 
-	if ((now_Opera_Num > COM_NUM_PARA_DEBUG_START && now_Opera_Num < COM_NUM_PARA_DEBUG_END)
+	if ((now_Opera_Num > COM_NUM_PARA_DEBUG_START && now_Opera_Num < COM_NUM_PARA_LOCAL_STOP)
 		|| (now_Opera_Num > COM_NUM_ONEPARACMD_START && now_Opera_Num < COM_NUM_NOPARA_DEBUGCMD_END)) {
 		int index = getHoldValueNum(now_Opera_Num);
 		p = param_meta[index].point;
@@ -429,7 +465,7 @@ static uint8_t *dtm_operaname(int num)
 		}
 	}
 	/* C) 参数类 & 带参指令: 使用 param_meta 表 */
-	else if ((num > COM_NUM_PARA_DEBUG_START && num < COM_NUM_PARA_DEBUG_END)
+	else if ((num > COM_NUM_PARA_DEBUG_START && num < COM_NUM_PARA_LOCAL_STOP)
 		|| (num > COM_NUM_ONEPARACMD_START && num < COM_NUM_NOPARA_DEBUGCMD_END)) {
 		int index = getHoldValueNum(num);
 		if (index >= 0) {
@@ -480,7 +516,7 @@ static uint8_t *dtm_unit(void)
 {
 	uint8_t *u = NULL;
 
-	if ((now_Opera_Num > COM_NUM_PARA_DEBUG_START && now_Opera_Num < COM_NUM_PARA_DEBUG_END)
+	if ((now_Opera_Num > COM_NUM_PARA_DEBUG_START && now_Opera_Num < COM_NUM_PARA_LOCAL_STOP)
 		|| (now_Opera_Num > COM_NUM_ONEPARACMD_START && now_Opera_Num < COM_NUM_NOPARA_DEBUGCMD_END)) {
 		int index = getHoldValueNum(now_Opera_Num);
 		u = param_meta[index].unit;
@@ -499,7 +535,7 @@ static uint8_t dtm_bits(void)
 {
 	uint8_t b = 6;
 
-	if ((now_Opera_Num > COM_NUM_PARA_DEBUG_START && now_Opera_Num < COM_NUM_PARA_DEBUG_END)
+	if ((now_Opera_Num > COM_NUM_PARA_DEBUG_START && now_Opera_Num < COM_NUM_PARA_LOCAL_STOP)
 		|| (now_Opera_Num > COM_NUM_ONEPARACMD_START && now_Opera_Num < COM_NUM_NOPARA_DEBUGCMD_END)) {
 		int index = getHoldValueNum(now_Opera_Num);
 		b = param_meta[index].bits;
@@ -678,7 +714,7 @@ static void ifsendcmd(void)
 		DisplayLangaugeLineWords((uint8_t*)"是否下发带参指令:", OLED_LINE8_1, OLED_ROW4_1, 0, (uint8_t*)"Issue IWP:");
 		OledDisplayLineWords(dtm_operaname(now_Opera_Num), OLED_LINE8_1, OLED_ROW4_2, 0);
 		OledValueDisplay(now_Para_CT.val, OLED_LINE8_3, OLED_ROW4_3, 0, now_Para_CT.points, now_Para_CT.unit);
-	} else if (now_Opera_Num > COM_NUM_PARA_DEBUG_START && now_Opera_Num < COM_NUM_PARA_DEBUG_END) {
+	} else if (now_Opera_Num > COM_NUM_PARA_DEBUG_START && now_Opera_Num < COM_NUM_PARA_LOCAL_STOP) {
 		DisplayLangaugeLineWords((uint8_t*)"是否下发参数:", OLED_LINE8_1, OLED_ROW4_1, 0, (uint8_t*)"Issue Para:");
 		OledDisplayLineWords(dtm_operaname(now_Opera_Num), OLED_LINE8_1, OLED_ROW4_2, 0);
 		if (now_Para_CT.bits <= 3) {
@@ -896,7 +932,7 @@ static pFunc_void dtm_backtofunc(void)
 		break;
 
 	default:
-		if (now_Opera_Num > COM_NUM_PARA_DEBUG_START && now_Opera_Num < COM_NUM_PARA_DEBUG_END) {
+		if (now_Opera_Num > COM_NUM_PARA_DEBUG_START && now_Opera_Num < COM_NUM_PARA_LOCAL_STOP) {
 			p = menu_paraconfig;
 		} else if (now_Opera_Num > COM_NUM_PARA_LOCAL_START && now_Opera_Num < COM_NUM_PARA_LOCAL_STOP) {
 			p = mainmenu;
@@ -918,7 +954,7 @@ static pFunc_void dtm_suretofunc(void)
 		return cmd_nopara_process;
 	} else if (now_Opera_Num > COM_NUM_ONEPARACMD_START && now_Opera_Num < COM_NUM_NOPARA_DEBUGCMD_END) {
 		return cmd_onepara_process;
-	} else if (now_Opera_Num > COM_NUM_PARA_DEBUG_START && now_Opera_Num < COM_NUM_PARA_DEBUG_END) {
+	} else if (now_Opera_Num > COM_NUM_PARA_DEBUG_START && now_Opera_Num < COM_NUM_PARA_LOCAL_STOP) {
 		return parascopecheck;
 	} else {
 		printf("非法指令\r\n");
@@ -1118,25 +1154,31 @@ static void password_enter_cmd(void)
 static int get_para_data(void)
 {
 	int index;
-
-	if (cnt_commutoCPU2 >= COMMU_ERROR_MAX) {
-		oled_clear();
-		DisplayLangaugeLineWords((uint8_t*)"与CPU2通讯故障!", OLED_LINE8_1, OLED_ROW3_2, 0, (uint8_t*)"Cpu2 CF!");
-		HAL_Delay(800);
-		return -1;
-	}
-
-	oled_clear();
-	DisplayLangaugeLineWords((uint8_t*)"正在读取参数", OLED_LINE8_1, OLED_ROW3_2, 0, (uint8_t*)"Reading Para");
-
 	index = getHoldValueNum(now_Opera_Num);
-	CPU2_CombinatePackage_Send(FUNCTIONCODE_READ_HOLDREGISTER,
-			param_meta[index].startadd,
-			param_meta[index].rgstcnt,
-			NULL);
-	HAL_Delay(150);
+	  // CPU3 本机参数：不走 CPU2 通讯，直接刷新 val
+	if (Cpu3Local_IsParam((OperatingNumber)now_Opera_Num)) {
+		param_meta[index].val = Cpu3Local_ReadValue((OperatingNumber)now_Opera_Num);
+		return 0;
+	}
+	else  // CPU2 参数
+	{
+		if (cnt_commutoCPU2 >= COMMU_ERROR_MAX) {
+			oled_clear();
+			DisplayLangaugeLineWords((uint8_t*)"与CPU2通讯故障!", OLED_LINE8_1, OLED_ROW3_2, 0, (uint8_t*)"Cpu2 CF!");
+			HAL_Delay(800);
+			return -1;
+		}
+		oled_clear();
+		DisplayLangaugeLineWords((uint8_t*)"正在读取参数", OLED_LINE8_1, OLED_ROW3_2, 0, (uint8_t*)"Reading Para");
 
-	return 0;
+		CPU2_CombinatePackage_Send(FUNCTIONCODE_READ_HOLDREGISTER,
+				param_meta[index].startadd,
+				param_meta[index].rgstcnt,
+				NULL);
+		HAL_Delay(150);
+
+		return 0;
+	}
 }
 
 /* 参数类处理入口 */
@@ -1209,16 +1251,30 @@ static void cmd_configpara_process(void)
 		}
 	}
 
-	CPU2_CombinatePackage_Send(FUNCTIONCODE_WRITE_MULREGISTER,
-			param_meta[index].startadd,
-			param_meta[index].rgstcnt,
-			paraarr);
+	//如果是本机参数
+	if(now_Opera_Num > COM_NUM_PARA_LOCAL_START && now_Opera_Num < COM_NUM_PARA_LOCAL_STOP)
+	{
+        /* CPU3 本机参数：本地写 + 保存FRAM + 必要时重配串口 */
+        Cpu3Local_WriteValue((OperatingNumber)now_Opera_Num, now_Para_CT.val);
 
-	CPU2_CombinatePackage_Send(FUNCTIONCODE_READ_HOLDREGISTER,
-			param_meta[index].startadd,
-			param_meta[index].rgstcnt,
-			NULL);
+        if (Cpu3Local_IsUartParam((OperatingNumber)now_Opera_Num)) {
+            Cpu3_ReinitAllUarts();
+        }
+        /* 刷新元数据值供显示 */
+        param_meta[index].val = Cpu3Local_ReadValue((OperatingNumber)now_Opera_Num);
+	}
+	else //下发给CPU2
+	{
+		CPU2_CombinatePackage_Send(FUNCTIONCODE_WRITE_MULREGISTER,
+				param_meta[index].startadd,
+				param_meta[index].rgstcnt,
+				paraarr);
 
+		CPU2_CombinatePackage_Send(FUNCTIONCODE_READ_HOLDREGISTER,
+				param_meta[index].startadd,
+				param_meta[index].rgstcnt,
+				NULL);
+	}
 	HAL_Delay(800);
 	displaypara();
 }
@@ -1381,6 +1437,46 @@ uint8_t *(*dtm_disarr(int *pindex, int *plen))[2]
 		p = arr_language;
 		break;
 	}
+	case COM_NUM_CPU3_COM1_BAUDRATE:
+	case COM_NUM_CPU3_COM2_BAUDRATE:
+	case COM_NUM_CPU3_COM3_BAUDRATE: {
+		index = param_meta[index].val;
+		len = (int)(sizeof(arr_baudrate) / sizeof(arr_baudrate[0]));
+		p = arr_baudrate;
+		break;
+	}
+	case COM_NUM_CPU3_COM1_DATABITS:
+	case COM_NUM_CPU3_COM2_DATABITS:
+	case COM_NUM_CPU3_COM3_DATABITS: {
+		index = param_meta[index].val;
+		len = (int)(sizeof(arr_databits) / sizeof(arr_databits[0]));
+		p = arr_databits;
+		break;
+	}
+	case COM_NUM_CPU3_COM1_PARITY:
+	case COM_NUM_CPU3_COM2_PARITY:
+	case COM_NUM_CPU3_COM3_PARITY:{
+		index = param_meta[index].val;
+		len = (int)(sizeof(arr_parity) / sizeof(arr_parity[0]));
+		p = arr_parity;
+		break;
+	}
+	case COM_NUM_CPU3_COM1_STOPBITS:
+	case COM_NUM_CPU3_COM2_STOPBITS:
+	case COM_NUM_CPU3_COM3_STOPBITS:{
+		index = param_meta[index].val;
+		len = (int)(sizeof(arr_stopbits) / sizeof(arr_stopbits[0]));
+		p = arr_stopbits;
+		break;
+	}
+	case COM_NUM_CPU3_COM1_PROTOCOL:
+	case COM_NUM_CPU3_COM2_PROTOCOL:
+	case COM_NUM_CPU3_COM3_PROTOCOL:{
+		index = param_meta[index].val;
+		len = (int)(sizeof(arr_protocol) / sizeof(arr_protocol[0]));
+		p = arr_protocol;
+		break;
+	}
 	default:
 		return NULL;
 	}
@@ -1389,6 +1485,7 @@ uint8_t *(*dtm_disarr(int *pindex, int *plen))[2]
 	*plen = len;
 	return p;
 }
+
 
 /* 显示要选择的信息 */
 static void selectparaword(void)
@@ -1400,7 +1497,7 @@ static void selectparaword(void)
 	func_index = KEYNUM_WORDSELECT;
 
 	parr = dtm_disarr(&index, &len);
-	operationselect(parr, len - 1);
+	operationselect(parr, len-1);
 }
 
 /* 隐藏信息含义选择栏 */

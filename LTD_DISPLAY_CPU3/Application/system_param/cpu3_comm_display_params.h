@@ -49,6 +49,11 @@ typedef struct
 /* 全局实例 */
 extern Cpu3CommAndDisplayParams g_cpu3_comm_display_params;
 bool Cpu3Local_IsParam(OperatingNumber opera);//判断当前参数是否为CPU3参数
+int32_t Cpu3Local_ReadValue(OperatingNumber opera);
+void    Cpu3Local_WriteValue(OperatingNumber opera, int32_t v);
+
+/* 可选：用于判断写入后是否需要重配串口 */
+bool Cpu3Local_IsUartParam(OperatingNumber opera);
 
 /* 初始化默认值（上电调用一次，或 FRAM 无效时用） */
 void Cpu3_Params_InitDefaults(void);

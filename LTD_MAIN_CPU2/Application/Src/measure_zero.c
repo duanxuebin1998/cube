@@ -151,6 +151,7 @@ int SearchZero(void) {
 	} else {
 		set_encoder_zero();
 		printf("零点测量\t编码器零点设置成功\r\n");
+		read_zero_capacitance();//读取零点电容值
 		ret = motorMoveNoWait(10, MOTOR_DIRECTION_DOWN);//脱离零点
 		CHECK_ERROR(ret);
 		HAL_Delay(3000);

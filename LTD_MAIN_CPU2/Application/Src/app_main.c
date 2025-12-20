@@ -38,7 +38,6 @@ void App_Init(void) {
 	fault_info_init(); // 初始化故障信息
 	DetectSensorType(); // 检测传感器类型
 }
-
 // 主循环任务
 void App_MainLoop(void) {
 
@@ -52,7 +51,7 @@ void App_MainLoop(void) {
 			process_command(received_buffer);
 		}
 		if (g_deviceParams.command != CMD_NONE) {
-			g_measurement.device_status.zero_point_status = 0; // 重置零点状态，表示不需要回零点
+//			g_measurement.device_status.zero_point_status = 0; // 重置零点状态，表示不需要回零点
 			printf("当前命令：%d\r\n", g_deviceParams.command);
 			g_measurement.device_status.current_command = g_deviceParams.command; // 更新当前命令
 			g_deviceParams.command = CMD_NONE; // 清除命令

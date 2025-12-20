@@ -17,6 +17,7 @@
 #include <stdlib.h>
 #include "test.h"
 #include "sensor.h"
+#include "measure_water_level.h"
 
 static void CMD_CorrectOilLevel(void);
 static void CMD_EnterMaintenanceMode(void);
@@ -25,6 +26,7 @@ static void CMD_SetFullWeight(void);
 static void CMD_SetEmptyWeight(void);
 static void CMD_MoveDown(void);
 static void CMD_MoveUp(void);
+static void CMD_MeasurWater(void);
 static void CMD_MeasureZero(void);
 static void CMD_MeasureBottom(void);
 static void CMD_MeasureAndFollowOilLevel(void);
@@ -54,8 +56,8 @@ void ProcessMeasureCmd(CommandType command)
 		break;
 
 	case CMD_FIND_WATER:
-		printf("执行寻找水位指令，暂不支持该指令\n");
-		// SearchWaterLevel();
+		printf("执行寻找水位指令\n");
+		CMD_MeasurWater();
 		break;
 
 	case CMD_FIND_BOTTOM:
@@ -354,6 +356,12 @@ void process_command(uint8_t *command) {
 		CMD_MeasureDensitySpread();
 
 	}
+	if (command[0] == 'W') //获取满载称重
+	{
+		printf("执行水位测量指令\n");
+        CMD_MeasurWater();
+
+	}
 }
 
 int MeasureStart(void) {
@@ -362,6 +370,18 @@ int MeasureStart(void) {
 	return NO_ERROR;
 }
 
+//测量水位主函数
+static void CMD_MeasurWater(void) {
+	uint32_t ret = 0;
+	MeasureStart();
+	g_measurement.device_status.device_state = STATE_FINDWATER;
+
+	//开始回零点
+	ret = SearchWaterLevel();
+	SET_ERROR(ret);
+	g_measurement.device_status.device_state = STATE_FINDWATER_OVER;
+	return;
+}
 //罐底零点主函数
 static void CMD_MeasureZero(void) {
 	uint32_t ret = 0;
