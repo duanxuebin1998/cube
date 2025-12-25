@@ -7,7 +7,7 @@
 #include <ctype.h>
 #include <float.h>
 #include "system_parameter.h"
-#include "communicate.h"
+#include "cpu2_communicate.h"
 /* ===================== 通用寄存器读写函数 ===================== */
 
 /* 写入 uint32_t 到寄存器数组（高 16 位在前，低 16 位在后） */

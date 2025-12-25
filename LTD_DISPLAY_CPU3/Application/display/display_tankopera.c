@@ -8,6 +8,7 @@
  *
  */
 
+#include "cpu2_communicate.h"
 #include "display_tankopera.h"
 #include "tim.h"
 #include "usart.h"
@@ -15,11 +16,11 @@
 #include "Display.h"
 #include "hgs.h"
 #include <math.h>
-#include "communicate.h"
 #include "system_parameter.h"
 #include "cpu3_comm_display_params.h"
 
 #define PASSWORD_ENTERMAIN		1009
+extern volatile uint8_t g_cpu3_uart_reinit_pending;// CPU3 串口重初始化标志
 
 typedef void (*pFunc_void)(void);
 
@@ -766,186 +767,469 @@ static void ifsendcmd(void)
 }
 
 /* 返回按返回键后要跳转的函数指针 */
+/* 返回按返回键后要跳转的函数指针 */
 static pFunc_void dtm_backtofunc(void)
 {
-	pFunc_void p = errorprocess;
+    pFunc_void p = errorprocess;
 
-	switch (now_Opera_Num) {
-	/* 普通测量命令 */
-	case COM_NUM_BACK_ZERO:
-	case COM_NUM_FIND_OIL:
-	case COM_NUM_SPREADPOINTS_AI:
-	case COM_NUM_FIND_WATER:
-	case COM_NUM_FIND_BOTTOM:
-	case COM_NUM_SYNTHETIC:
-	case COM_NUM_METER_DENSITY:
-	case COM_NUM_INTERVAL_DENSITY:
-	case COM_NUM_SINGLE_POINT:
-	case COM_NUM_SP_TEST:
-		p = measuremenu;
-		break;
+    switch (now_Opera_Num) {
 
-	/* 调试指令 */
-	case COM_NUM_FIND_ZERO:
-	case COM_NUM_RUNUP:
-	case COM_NUM_RUNDOWN:
-	case COM_NUM_CORRECTION_OIL:
-	case COM_NUM_CAL_OIL:
-	case COM_NUM_RESTOR_EFACTORYSETTING:
-		p = menu_cmdconfig_main;
-		break;
+    /* =========================
+     * 1) 不带参线圈指令：普通测量
+     * ========================= */
+    case COM_NUM_BACK_ZERO:
+    case COM_NUM_FIND_OIL:
+    case COM_NUM_SPREADPOINTS_AI:
+    case COM_NUM_FIND_WATER:
+    case COM_NUM_FIND_BOTTOM:
+    case COM_NUM_SYNTHETIC:
+    case COM_NUM_METER_DENSITY:
+    case COM_NUM_INTERVAL_DENSITY:
+    case COM_NUM_WARTSILA_DENSITY:     /* 新增：瓦锡兰区间密度 */
+        p = measuremenu;
+        break;
 
-	case COM_NUM_SET_EMPTY_WEIGHT:
-	case COM_NUM_SET_FULL_WEIGHT:
-		p = menu_weightpara;
-		break;
+    /* =========================
+     * 2) 带一个参数线圈指令：普通测量
+     * ========================= */
+    case COM_NUM_SINGLE_POINT:
+    case COM_NUM_SP_TEST:
+        p = measuremenu;
+        break;
 
-	/* 本机参数 / 语言 / 密码 */
-	case COM_NUM_PARA_LOCAL_LEDVERSION:
-	case COM_NUM_PARA_LANG:
-	case COM_NUM_PASSWORD_ENTER_PARA:
-	case COM_NUM_PASSWORD_ENTER_CMD:
-		p = mainmenu;
-		break;
+    /* =========================
+     * 3) 不带参线圈指令：调试模式
+     * ========================= */
+    case COM_NUM_FIND_ZERO:
+    case COM_NUM_RUNUP:
+    case COM_NUM_RUNDOWN:
+    case COM_NUM_CORRECTION_OIL:
+    case COM_NUM_CAL_OIL:
+    case COM_NUM_RESTOR_EFACTORYSETTING:
+    case COM_NUM_MAINTENANCE_MODE:     /* 新增：维护模式 */
+        p = menu_cmdconfig_main;
+        break;
 
-	/* 界面显示类 */
-	case COM_NUM_SCREEN_DECIMAL:
-	case COM_NUM_SCREEN_PASSWARD:
-	case COM_NUM_SCREEN_OFF:
-		p = menu_screen;
-		break;
+    /* =========================
+     * 4) 调试模式中与称重相关的指令（如果你希望回到称重菜单）
+     * ========================= */
+    case COM_NUM_SET_EMPTY_WEIGHT:
+    case COM_NUM_SET_FULL_WEIGHT:
+        p = menu_weightpara;
+        break;
 
-	/* 数据源类 */
-	case COM_NUM_SCREEN_SOURCE_OIL:
-	case COM_NUM_SCREEN_SOURCE_WATER:
-	case COM_NUM_SCREEN_SOURCE_D:
-	case COM_NUM_SCREEN_SOURCE_T:
-	case COM_NUM_SCREEN_INPUT_OIL:
-	case COM_NUM_SCREEN_INPUT_WATER:
-	case COM_NUM_SCREEN_INPUT_D:
-	case COM_NUM_SCREEN_INPUT_D_SWITCH:
-	case COM_NUM_SCREEN_INPUT_T:
-		p = menu_scr_source;
-		break;
+    /* =========================
+     * 5) 本机参数 / 语言 / 密码
+     * ========================= */
+    case COM_NUM_PARA_LOCAL_LEDVERSION:
+    case COM_NUM_PARA_LANG:
+    case COM_NUM_PASSWORD_ENTER_PARA:
+    case COM_NUM_PASSWORD_ENTER_CMD:
+        p = mainmenu;
+        break;
 
-	/* CPU3 通信配置参数 */
-	case COM_NUM_CPU3_COM1_BAUDRATE:
-	case COM_NUM_CPU3_COM1_DATABITS:
-	case COM_NUM_CPU3_COM1_PARITY:
-	case COM_NUM_CPU3_COM1_STOPBITS:
-	case COM_NUM_CPU3_COM1_PROTOCOL:
-	case COM_NUM_CPU3_COM2_BAUDRATE:
-	case COM_NUM_CPU3_COM2_DATABITS:
-	case COM_NUM_CPU3_COM2_PARITY:
-	case COM_NUM_CPU3_COM2_STOPBITS:
-	case COM_NUM_CPU3_COM2_PROTOCOL:
-	case COM_NUM_CPU3_COM3_BAUDRATE:
-	case COM_NUM_CPU3_COM3_DATABITS:
-	case COM_NUM_CPU3_COM3_PARITY:
-	case COM_NUM_CPU3_COM3_STOPBITS:
-	case COM_NUM_CPU3_COM3_PROTOCOL:
-		p = menu_cpu3_comm;
-		break;
+    /* =========================
+     * 6) 界面显示类
+     * ========================= */
+    case COM_NUM_SCREEN_DECIMAL:
+    case COM_NUM_SCREEN_PASSWARD:
+    case COM_NUM_SCREEN_OFF:
+        p = menu_screen;
+        break;
 
-	/* CPU2 参数分组: 基础参数 */
-	case COM_NUM_DEVICEPARAM_TANKHEIGHT:
-	case COM_NUM_DEVICEPARAM_BLINDZONE:
-	case COM_NUM_DEVICEPARAM_WATER_BLINDZONE:
-	case COM_NUM_DEVICEPARAM_ENCODER_WHEEL_CIRCUMFERENCE_MM:
-	case COM_NUM_DEVICEPARAM_SENSORTYPE:
-	case COM_NUM_DEVICEPARAM_SENSORID:
-	case COM_NUM_DEVICEPARAM_SOFTWAREVERSION:
-	case COM_NUM_DEVICEPARAM_FINDZERO_DOWN_DISTANCE:
-		p = menu_tankbasicpara;
-		break;
+    /* =========================
+     * 7) 数据源类
+     * ========================= */
+    case COM_NUM_SCREEN_SOURCE_OIL:
+    case COM_NUM_SCREEN_SOURCE_WATER:
+    case COM_NUM_SCREEN_SOURCE_D:
+    case COM_NUM_SCREEN_SOURCE_T:
+    case COM_NUM_SCREEN_INPUT_OIL:
+    case COM_NUM_SCREEN_INPUT_WATER:
+    case COM_NUM_SCREEN_INPUT_D:
+    case COM_NUM_SCREEN_INPUT_D_SWITCH:
+    case COM_NUM_SCREEN_INPUT_T:
+        p = menu_scr_source;
+        break;
 
-	/* 称重测量参数 */
-	case COM_NUM_DEVICEPARAM_EMPTY_WEIGHT:
-	case COM_NUM_DEVICEPARAM_FULL_WEIGHT:
-	case COM_NUM_DEVICEPARAM_WEIGHT_UPPER_LIMIT_RATIO:
-	case COM_NUM_DEVICEPARAM_WEIGHT_LOWER_LIMIT_RATIO:
-	case COM_NUM_DEVICEPARAM_EMPTY_WEIGHT_UPPER_LIMIT:
-	case COM_NUM_DEVICEPARAM_EMPTY_WEIGHT_LOWER_LIMIT:
-	case COM_NUM_DEVICEPARAM_FULL_WEIGHT_UPPER_LIMIT:
-	case COM_NUM_DEVICEPARAM_FULL_WEIGHT_LOWER_LIMIT:
-		p = menu_weightpara;
-		break;
+    /* =========================
+     * 8) CPU3 通信配置参数
+     * ========================= */
+    case COM_NUM_CPU3_COM1_BAUDRATE:
+    case COM_NUM_CPU3_COM1_DATABITS:
+    case COM_NUM_CPU3_COM1_PARITY:
+    case COM_NUM_CPU3_COM1_STOPBITS:
+    case COM_NUM_CPU3_COM1_PROTOCOL:
+    case COM_NUM_CPU3_COM2_BAUDRATE:
+    case COM_NUM_CPU3_COM2_DATABITS:
+    case COM_NUM_CPU3_COM2_PARITY:
+    case COM_NUM_CPU3_COM2_STOPBITS:
+    case COM_NUM_CPU3_COM2_PROTOCOL:
+    case COM_NUM_CPU3_COM3_BAUDRATE:
+    case COM_NUM_CPU3_COM3_DATABITS:
+    case COM_NUM_CPU3_COM3_PARITY:
+    case COM_NUM_CPU3_COM3_STOPBITS:
+    case COM_NUM_CPU3_COM3_PROTOCOL:
+        p = menu_cpu3_comm;
+        break;
 
-	/* 分布测量参数 */
-	case COM_NUM_DEVICEPARAM_REQUIREBOTTOMMEASUREMENT:
-	case COM_NUM_DEVICEPARAM_REQUIREWATERMEASUREMENT:
-	case COM_NUM_DEVICEPARAM_REQUIRESINGLEPOINTDENSITY:
-	case COM_NUM_DEVICEPARAM_SPREADMEASUREMENTORDER:
-	case COM_NUM_DEVICEPARAM_SPREADMEASUREMENTMODE:
-	case COM_NUM_DEVICEPARAM_SPREADMEASUREMENTCOUNT:
-	case COM_NUM_DEVICEPARAM_SPREADMEASUREMENTDISTANCE:
-	case COM_NUM_DEVICEPARAM_SPREADTOPLIMIT:
-	case COM_NUM_DEVICEPARAM_SPREADBOTTOMLIMIT:
-	case COM_NUM_DEVICEPARAM_SPREAD_POINT_HOVER_TIME:
-		p = menu_spreadpara;
-		break;
+    /* =========================
+     * 9) CPU2 参数分组：基础参数（含你新增的若干基础项）
+     * ========================= */
+    case COM_NUM_DEVICEPARAM_TANKHEIGHT:
+    case COM_NUM_DEVICEPARAM_BLINDZONE:
+    case COM_NUM_DEVICEPARAM_WATER_BLINDZONE:
+    case COM_NUM_DEVICEPARAM_ENCODER_WHEEL_CIRCUMFERENCE_MM:
+    case COM_NUM_DEVICEPARAM_MAX_MOTOR_SPEED:          /* 新增 */
+    case COM_NUM_DEVICEPARAM_SENSORTYPE:
+    case COM_NUM_DEVICEPARAM_SENSORID:
+    case COM_NUM_DEVICEPARAM_SENSOR_SOFTWARE_VERSION:  /* 新增 */
+    case COM_NUM_DEVICEPARAM_SOFTWAREVERSION:
+    case COM_NUM_DEVICEPARAM_POWER_ON_DEFAULT_COMMAND: /* 新增 */
+    case COM_NUM_DEVICEPARAM_FINDZERO_DOWN_DISTANCE:
+    case COM_NUM_DEVICEPARAM_FIRST_LOOP_CIRCUMFERENCE_MM: /* 新增 */
+    case COM_NUM_DEVICEPARAM_TAPE_THICKNESS_MM:           /* 新增 */
+        p = menu_tankbasicpara;
+        break;
 
-	/* 密度/温度修正 */
-	case COM_NUM_DEVICEPARAM_DENSITYCORRECTION:
-	case COM_NUM_DEVICEPARAM_TEMPERATURECORRECTION:
-		p = menu_correctionpara;
-		break;
+    /* =========================
+     * 10) 称重测量参数
+     * ========================= */
+    case COM_NUM_DEVICEPARAM_EMPTY_WEIGHT:
+    case COM_NUM_DEVICEPARAM_FULL_WEIGHT:
+    case COM_NUM_DEVICEPARAM_WEIGHT_UPPER_LIMIT_RATIO:
+    case COM_NUM_DEVICEPARAM_WEIGHT_LOWER_LIMIT_RATIO:
+    case COM_NUM_DEVICEPARAM_EMPTY_WEIGHT_UPPER_LIMIT:
+    case COM_NUM_DEVICEPARAM_EMPTY_WEIGHT_LOWER_LIMIT:
+    case COM_NUM_DEVICEPARAM_FULL_WEIGHT_UPPER_LIMIT:
+    case COM_NUM_DEVICEPARAM_FULL_WEIGHT_LOWER_LIMIT:
+        p = menu_weightpara;
+        break;
 
-	/* 实高测量参数 */
-	case COM_NUM_DEVICEPARAM_REFRESHTANKHEIGHTFLAG:
-	case COM_NUM_DEVICEPARAM_MAXTANKHEIGHTDEVIATION:
-	case COM_NUM_DEVICEPARAM_INITIALTANKHEIGHT:
-	case COM_NUM_DEVICEPARAM_CURRENTTANKHEIGHT:
-		p = menu_realhighpara;
-		break;
+    /* =========================
+     * 11) 指令参数（你枚举里新增了一大段，建议回到“测量菜单”或“参数配置菜单”
+     *     这里我按“测量相关参数”回到 measuremenu；如果你实际上是在参数配置界面修改，
+     *     更合理是回到 menu_paraconfig（看你的 UI 结构）
+     * ========================= */
+    case COM_NUM_DEVICEPARAM_CALIBRATE_OIL_LEVEL:
+    case COM_NUM_DEVICEPARAM_CALIBRATE_WATER_LEVEL:
+    case COM_NUM_DEVICEPARAM_SP_MEAS_POSITION:
+    case COM_NUM_DEVICEPARAM_SP_MONITOR_POSITION:
+    case COM_NUM_DEVICEPARAM_DENSITY_DISTRIBUTION_OIL_LEVEL:
+    case COM_NUM_DEVICEPARAM_MOTOR_COMMAND_DISTANCE:
+        p = measuremenu; /* 或者改成 menu_paraconfig / 具体子菜单 */
+        break;
 
-	/* 水位测量参数 */
-	case COM_NUM_DEVICEPARAM_WATERLEVELCORRECTION:
-	case COM_NUM_DEVICEPARAM_MAXDOWNDISTANCE:
-		p = menu_waterlevelparams;
-		break;
+    /* =========================
+     * 12) 分布测量参数
+     * ========================= */
+    case COM_NUM_DEVICEPARAM_REQUIREBOTTOMMEASUREMENT:
+    case COM_NUM_DEVICEPARAM_REQUIREWATERMEASUREMENT:
+    case COM_NUM_DEVICEPARAM_REQUIRESINGLEPOINTDENSITY:
+    case COM_NUM_DEVICEPARAM_SPREADMEASUREMENTORDER:
+    case COM_NUM_DEVICEPARAM_SPREADMEASUREMENTMODE:
+    case COM_NUM_DEVICEPARAM_SPREADMEASUREMENTCOUNT:
+    case COM_NUM_DEVICEPARAM_SPREADMEASUREMENTDISTANCE:
+    case COM_NUM_DEVICEPARAM_SPREADTOPLIMIT:
+    case COM_NUM_DEVICEPARAM_SPREADBOTTOMLIMIT:
+    case COM_NUM_DEVICEPARAM_SPREAD_POINT_HOVER_TIME:
+        p = menu_spreadpara;
+        break;
 
-	/* 液位测量参数 */
-	case COM_NUM_DEVICEPARAM_OILLEVELTHRESHOLD:
-	case COM_NUM_DEVICEPARAM_LIQUIDLEVELMEASUREMENTMETHOD:
-		p = menu_liquidlevelparams;
-		break;
+    /* =========================
+     * 13) 密度/温度修正
+     * ========================= */
+    case COM_NUM_DEVICEPARAM_DENSITYCORRECTION:
+    case COM_NUM_DEVICEPARAM_TEMPERATURECORRECTION:
+        p = menu_correctionpara;
+        break;
 
-	/* 报警 DO 参数 */
-	case COM_NUM_DEVICEPARAM_ALARM_HIGH_DO:
-	case COM_NUM_DEVICEPARAM_ALARM_LOW_DO:
-	case COM_NUM_DEVICEPARAM_THIRD_STATE_THRESHOLD:
-		p = menu_alarmdoparams;
-		break;
+    /* =========================
+     * 14) Wartsila 密度区间测量参数（新增）
+     * ========================= */
+    case COM_NUM_DEVICEPARAM_WARTSILA_UPPER_DENSITY_LIMIT:
+    case COM_NUM_DEVICEPARAM_WARTSILA_LOWER_DENSITY_LIMIT:
+    case COM_NUM_DEVICEPARAM_WARTSILA_DENSITY_INTERVAL:
+    case COM_NUM_DEVICEPARAM_WARTSILA_MAX_HEIGHT_ABOVE_SURFACE:
+        p = menu_spreadpara; /* 如果你有单独的 wartsila 参数菜单，建议换成那个 */
+        break;
 
-	/* AO 参数 */
-	case COM_NUM_DEVICEPARAM_CURRENT_RANGE_START_mA:
-	case COM_NUM_DEVICEPARAM_CURRENT_RANGE_END_mA:
-	case COM_NUM_DEVICEPARAM_ALARM_HIGH_AO:
-	case COM_NUM_DEVICEPARAM_ALARM_LOW_AO:
-	case COM_NUM_DEVICEPARAM_INITIAL_CURRENT_mA:
-	case COM_NUM_DEVICEPARAM_AO_HIGH_CURRENT_mA:
-	case COM_NUM_DEVICEPARAM_AO_LOW_CURRENT_mA:
-	case COM_NUM_DEVICEPARAM_FAULT_CURRENT_mA:
-	case COM_NUM_DEVICEPARAM_DEBUG_CURRENT_mA:
-		p = menu_aoparams;
-		break;
+    /* =========================
+     * 15) 实高测量参数
+     * ========================= */
+    case COM_NUM_DEVICEPARAM_REFRESHTANKHEIGHTFLAG:
+    case COM_NUM_DEVICEPARAM_MAXTANKHEIGHTDEVIATION:
+    case COM_NUM_DEVICEPARAM_INITIALTANKHEIGHT:
+    case COM_NUM_DEVICEPARAM_CURRENTTANKHEIGHT:
+        p = menu_realhighpara;
+        break;
 
-	default:
-		if (now_Opera_Num > COM_NUM_PARA_DEBUG_START && now_Opera_Num < COM_NUM_PARA_LOCAL_STOP) {
-			p = menu_paraconfig;
-		} else if (now_Opera_Num > COM_NUM_PARA_LOCAL_START && now_Opera_Num < COM_NUM_PARA_LOCAL_STOP) {
-			p = mainmenu;
-		} else if (now_Opera_Num > COM_NUM_PASSWORD_START && now_Opera_Num < COM_NUM_PASSWORD_END) {
-			p = mainmenu;
-		} else if (now_Opera_Num > COM_NUM_NOPARACMD_START && now_Opera_Num < COM_NUM_NOPARACMD_END) {
-			p = measuremenu;
-		}
-		break;
-	}
+    /* =========================
+     * 16) 水位测量参数
+     * ========================= */
+    case COM_NUM_DEVICEPARAM_WATERLEVELCORRECTION:
+    case COM_NUM_DEVICEPARAM_MAXDOWNDISTANCE:
+        p = menu_waterlevelparams;
+        break;
 
-	return p;
+    /* =========================
+     * 17) 液位测量参数（新增了 hysteresis）
+     * ========================= */
+    case COM_NUM_DEVICEPARAM_OILLEVELTHRESHOLD:
+    case COM_NUM_DEVICEPARAM_OILLEVEL_HYSTERESIS_THRESHOLD: /* 新增 */
+    case COM_NUM_DEVICEPARAM_LIQUIDLEVELMEASUREMENTMETHOD:
+        p = menu_liquidlevelparams;
+        break;
+
+    /* =========================
+     * 18) 报警 DO 参数
+     * ========================= */
+    case COM_NUM_DEVICEPARAM_ALARM_HIGH_DO:
+    case COM_NUM_DEVICEPARAM_ALARM_LOW_DO:
+    case COM_NUM_DEVICEPARAM_THIRD_STATE_THRESHOLD:
+        p = menu_alarmdoparams;
+        break;
+
+    /* =========================
+     * 19) AO 参数
+     * ========================= */
+    case COM_NUM_DEVICEPARAM_CURRENT_RANGE_START_mA:
+    case COM_NUM_DEVICEPARAM_CURRENT_RANGE_END_mA:
+    case COM_NUM_DEVICEPARAM_ALARM_HIGH_AO:
+    case COM_NUM_DEVICEPARAM_ALARM_LOW_AO:
+    case COM_NUM_DEVICEPARAM_INITIAL_CURRENT_mA:
+    case COM_NUM_DEVICEPARAM_AO_HIGH_CURRENT_mA:
+    case COM_NUM_DEVICEPARAM_AO_LOW_CURRENT_mA:
+    case COM_NUM_DEVICEPARAM_FAULT_CURRENT_mA:
+    case COM_NUM_DEVICEPARAM_DEBUG_CURRENT_mA:
+        p = menu_aoparams;
+        break;
+
+    /* =========================
+     * 20) 版本和校验信息（新增）
+     * ========================= */
+    case COM_NUM_DEVICEPARAM_PARAM_VERSION:
+    case COM_NUM_DEVICEPARAM_STRUCT_SIZE:
+    case COM_NUM_DEVICEPARAM_MAGIC:
+    case COM_NUM_DEVICEPARAM_CRC:
+        p = menu_tankbasicpara; /* 或者 menu_paraconfig，看你放在哪个菜单页 */
+        break;
+
+    default:
+        /* ==========
+         * 关键：范围兜底（修正原来错误的范围）
+         * ========== */
+
+        /* CPU2 参数段：COM_NUM_PARA_DEBUG_START ~ COM_NUM_PARA_DEBUG_END */
+        if (now_Opera_Num > COM_NUM_PARA_DEBUG_START && now_Opera_Num < COM_NUM_PARA_DEBUG_END) {
+            p = menu_paraconfig; /* 或者你希望统一回到参数配置主菜单 */
+        }
+        /* CPU3 本机参数段：COM_NUM_PARA_LOCAL_START ~ COM_NUM_PARA_LOCAL_STOP */
+        else if (now_Opera_Num > COM_NUM_PARA_LOCAL_START && now_Opera_Num < COM_NUM_PARA_LOCAL_STOP) {
+            p = mainmenu;
+        }
+        /* 密码段：COM_NUM_PASSWORD_START ~ COM_NUM_PASSWORD_END */
+        else if (now_Opera_Num > COM_NUM_PASSWORD_START && now_Opera_Num < COM_NUM_PASSWORD_END) {
+            p = mainmenu;
+        }
+        /* 无参线圈指令段：COM_NUM_NOPARACMD_START ~ COM_NUM_NOPARACMD_END */
+        else if (now_Opera_Num > COM_NUM_NOPARACMD_START && now_Opera_Num < COM_NUM_NOPARACMD_END) {
+            p = measuremenu;
+        }
+        /* 带一个参数线圈指令段：COM_NUM_ONEPARACMD_START ~ COM_NUM_ONEPARACMD_END */
+        else if (now_Opera_Num > COM_NUM_ONEPARACMD_START && now_Opera_Num < COM_NUM_ONEPARACMD_END) {
+            p = measuremenu;
+        }
+        /* 调试模式带参指令段：COM_NUM_ONEPARA_DEBUGCMD_START ~ COM_NUM_NOPARA_DEBUGCMD_END */
+        else if (now_Opera_Num > COM_NUM_ONEPARA_DEBUGCMD_START && now_Opera_Num < COM_NUM_NOPARA_DEBUGCMD_END) {
+            p = menu_cmdconfig_main;
+        }
+        break;
+    }
+
+    return p;
 }
+
+//static pFunc_void dtm_backtofunc(void)
+//{
+//	pFunc_void p = errorprocess;
+//
+//	switch (now_Opera_Num) {
+//	/* 普通测量命令 */
+//	case COM_NUM_BACK_ZERO:
+//	case COM_NUM_FIND_OIL:
+//	case COM_NUM_SPREADPOINTS_AI:
+//	case COM_NUM_FIND_WATER:
+//	case COM_NUM_FIND_BOTTOM:
+//	case COM_NUM_SYNTHETIC:
+//	case COM_NUM_METER_DENSITY:
+//	case COM_NUM_INTERVAL_DENSITY:
+//	case COM_NUM_SINGLE_POINT:
+//	case COM_NUM_SP_TEST:
+//		p = measuremenu;
+//		break;
+//
+//	/* 调试指令 */
+//	case COM_NUM_FIND_ZERO:
+//	case COM_NUM_RUNUP:
+//	case COM_NUM_RUNDOWN:
+//	case COM_NUM_CORRECTION_OIL:
+//	case COM_NUM_CAL_OIL:
+//	case COM_NUM_RESTOR_EFACTORYSETTING:
+//		p = menu_cmdconfig_main;
+//		break;
+//
+//	case COM_NUM_SET_EMPTY_WEIGHT:
+//	case COM_NUM_SET_FULL_WEIGHT:
+//		p = menu_weightpara;
+//		break;
+//
+//	/* 本机参数 / 语言 / 密码 */
+//	case COM_NUM_PARA_LOCAL_LEDVERSION:
+//	case COM_NUM_PARA_LANG:
+//	case COM_NUM_PASSWORD_ENTER_PARA:
+//	case COM_NUM_PASSWORD_ENTER_CMD:
+//		p = mainmenu;
+//		break;
+//
+//	/* 界面显示类 */
+//	case COM_NUM_SCREEN_DECIMAL:
+//	case COM_NUM_SCREEN_PASSWARD:
+//	case COM_NUM_SCREEN_OFF:
+//		p = menu_screen;
+//		break;
+//
+//	/* 数据源类 */
+//	case COM_NUM_SCREEN_SOURCE_OIL:
+//	case COM_NUM_SCREEN_SOURCE_WATER:
+//	case COM_NUM_SCREEN_SOURCE_D:
+//	case COM_NUM_SCREEN_SOURCE_T:
+//	case COM_NUM_SCREEN_INPUT_OIL:
+//	case COM_NUM_SCREEN_INPUT_WATER:
+//	case COM_NUM_SCREEN_INPUT_D:
+//	case COM_NUM_SCREEN_INPUT_D_SWITCH:
+//	case COM_NUM_SCREEN_INPUT_T:
+//		p = menu_scr_source;
+//		break;
+//
+//	/* CPU3 通信配置参数 */
+//	case COM_NUM_CPU3_COM1_BAUDRATE:
+//	case COM_NUM_CPU3_COM1_DATABITS:
+//	case COM_NUM_CPU3_COM1_PARITY:
+//	case COM_NUM_CPU3_COM1_STOPBITS:
+//	case COM_NUM_CPU3_COM1_PROTOCOL:
+//	case COM_NUM_CPU3_COM2_BAUDRATE:
+//	case COM_NUM_CPU3_COM2_DATABITS:
+//	case COM_NUM_CPU3_COM2_PARITY:
+//	case COM_NUM_CPU3_COM2_STOPBITS:
+//	case COM_NUM_CPU3_COM2_PROTOCOL:
+//	case COM_NUM_CPU3_COM3_BAUDRATE:
+//	case COM_NUM_CPU3_COM3_DATABITS:
+//	case COM_NUM_CPU3_COM3_PARITY:
+//	case COM_NUM_CPU3_COM3_STOPBITS:
+//	case COM_NUM_CPU3_COM3_PROTOCOL:
+//		p = menu_cpu3_comm;
+//		break;
+//
+//	/* CPU2 参数分组: 基础参数 */
+//	case COM_NUM_DEVICEPARAM_TANKHEIGHT:
+//	case COM_NUM_DEVICEPARAM_BLINDZONE:
+//	case COM_NUM_DEVICEPARAM_WATER_BLINDZONE:
+//	case COM_NUM_DEVICEPARAM_ENCODER_WHEEL_CIRCUMFERENCE_MM:
+//	case COM_NUM_DEVICEPARAM_SENSORTYPE:
+//	case COM_NUM_DEVICEPARAM_SENSORID:
+//	case COM_NUM_DEVICEPARAM_SOFTWAREVERSION:
+//	case COM_NUM_DEVICEPARAM_FINDZERO_DOWN_DISTANCE:
+//		p = menu_tankbasicpara;
+//		break;
+//
+//	/* 称重测量参数 */
+//	case COM_NUM_DEVICEPARAM_EMPTY_WEIGHT:
+//	case COM_NUM_DEVICEPARAM_FULL_WEIGHT:
+//	case COM_NUM_DEVICEPARAM_WEIGHT_UPPER_LIMIT_RATIO:
+//	case COM_NUM_DEVICEPARAM_WEIGHT_LOWER_LIMIT_RATIO:
+//	case COM_NUM_DEVICEPARAM_EMPTY_WEIGHT_UPPER_LIMIT:
+//	case COM_NUM_DEVICEPARAM_EMPTY_WEIGHT_LOWER_LIMIT:
+//	case COM_NUM_DEVICEPARAM_FULL_WEIGHT_UPPER_LIMIT:
+//	case COM_NUM_DEVICEPARAM_FULL_WEIGHT_LOWER_LIMIT:
+//		p = menu_weightpara;
+//		break;
+//
+//	/* 分布测量参数 */
+//	case COM_NUM_DEVICEPARAM_REQUIREBOTTOMMEASUREMENT:
+//	case COM_NUM_DEVICEPARAM_REQUIREWATERMEASUREMENT:
+//	case COM_NUM_DEVICEPARAM_REQUIRESINGLEPOINTDENSITY:
+//	case COM_NUM_DEVICEPARAM_SPREADMEASUREMENTORDER:
+//	case COM_NUM_DEVICEPARAM_SPREADMEASUREMENTMODE:
+//	case COM_NUM_DEVICEPARAM_SPREADMEASUREMENTCOUNT:
+//	case COM_NUM_DEVICEPARAM_SPREADMEASUREMENTDISTANCE:
+//	case COM_NUM_DEVICEPARAM_SPREADTOPLIMIT:
+//	case COM_NUM_DEVICEPARAM_SPREADBOTTOMLIMIT:
+//	case COM_NUM_DEVICEPARAM_SPREAD_POINT_HOVER_TIME:
+//		p = menu_spreadpara;
+//		break;
+//
+//	/* 密度/温度修正 */
+//	case COM_NUM_DEVICEPARAM_DENSITYCORRECTION:
+//	case COM_NUM_DEVICEPARAM_TEMPERATURECORRECTION:
+//		p = menu_correctionpara;
+//		break;
+//
+//	/* 实高测量参数 */
+//	case COM_NUM_DEVICEPARAM_REFRESHTANKHEIGHTFLAG:
+//	case COM_NUM_DEVICEPARAM_MAXTANKHEIGHTDEVIATION:
+//	case COM_NUM_DEVICEPARAM_INITIALTANKHEIGHT:
+//	case COM_NUM_DEVICEPARAM_CURRENTTANKHEIGHT:
+//		p = menu_realhighpara;
+//		break;
+//
+//	/* 水位测量参数 */
+//	case COM_NUM_DEVICEPARAM_WATERLEVELCORRECTION:
+//	case COM_NUM_DEVICEPARAM_MAXDOWNDISTANCE:
+//		p = menu_waterlevelparams;
+//		break;
+//
+//	/* 液位测量参数 */
+//	case COM_NUM_DEVICEPARAM_OILLEVELTHRESHOLD:
+//	case COM_NUM_DEVICEPARAM_LIQUIDLEVELMEASUREMENTMETHOD:
+//		p = menu_liquidlevelparams;
+//		break;
+//
+//	/* 报警 DO 参数 */
+//	case COM_NUM_DEVICEPARAM_ALARM_HIGH_DO:
+//	case COM_NUM_DEVICEPARAM_ALARM_LOW_DO:
+//	case COM_NUM_DEVICEPARAM_THIRD_STATE_THRESHOLD:
+//		p = menu_alarmdoparams;
+//		break;
+//
+//	/* AO 参数 */
+//	case COM_NUM_DEVICEPARAM_CURRENT_RANGE_START_mA:
+//	case COM_NUM_DEVICEPARAM_CURRENT_RANGE_END_mA:
+//	case COM_NUM_DEVICEPARAM_ALARM_HIGH_AO:
+//	case COM_NUM_DEVICEPARAM_ALARM_LOW_AO:
+//	case COM_NUM_DEVICEPARAM_INITIAL_CURRENT_mA:
+//	case COM_NUM_DEVICEPARAM_AO_HIGH_CURRENT_mA:
+//	case COM_NUM_DEVICEPARAM_AO_LOW_CURRENT_mA:
+//	case COM_NUM_DEVICEPARAM_FAULT_CURRENT_mA:
+//	case COM_NUM_DEVICEPARAM_DEBUG_CURRENT_mA:
+//		p = menu_aoparams;
+//		break;
+//
+//	default:
+//		if (now_Opera_Num > COM_NUM_PARA_DEBUG_START && now_Opera_Num < COM_NUM_PARA_LOCAL_STOP) {
+//			p = menu_paraconfig;
+//		} else if (now_Opera_Num > COM_NUM_PARA_LOCAL_START && now_Opera_Num < COM_NUM_PARA_LOCAL_STOP) {
+//			p = mainmenu;
+//		} else if (now_Opera_Num > COM_NUM_PASSWORD_START && now_Opera_Num < COM_NUM_PASSWORD_END) {
+//			p = mainmenu;
+//		} else if (now_Opera_Num > COM_NUM_NOPARACMD_START && now_Opera_Num < COM_NUM_NOPARACMD_END) {
+//			p = measuremenu;
+//		}
+//		break;
+//	}
+//
+//	return p;
+//}
 
 /* 返回按确认键后要跳转的函数指针 */
 static pFunc_void dtm_suretofunc(void)
@@ -1254,14 +1538,16 @@ static void cmd_configpara_process(void)
 	//如果是本机参数
 	if(now_Opera_Num > COM_NUM_PARA_LOCAL_START && now_Opera_Num < COM_NUM_PARA_LOCAL_STOP)
 	{
-        /* CPU3 本机参数：本地写 + 保存FRAM + 必要时重配串口 */
-        Cpu3Local_WriteValue((OperatingNumber)now_Opera_Num, now_Para_CT.val);
+	    /* CPU3 本机参数：本地写 + 保存FRAM */
+	    Cpu3Local_WriteValue((OperatingNumber)now_Opera_Num, now_Para_CT.val);
 
-        if (Cpu3Local_IsUartParam((OperatingNumber)now_Opera_Num)) {
-            Cpu3_ReinitAllUarts();
-        }
-        /* 刷新元数据值供显示 */
-        param_meta[index].val = Cpu3Local_ReadValue((OperatingNumber)now_Opera_Num);
+	    if (Cpu3Local_IsUartParam((OperatingNumber)now_Opera_Num)) {
+	        /* 不在 UI 线程里直接重配，避免与通信收发并发；交给主循环安全点处理 */
+	        g_cpu3_uart_reinit_pending = 1;
+	    }
+
+	    /* 刷新元数据值供显示 */
+	    param_meta[index].val = Cpu3Local_ReadValue((OperatingNumber)now_Opera_Num);
 	}
 	else //下发给CPU2
 	{
@@ -1632,9 +1918,6 @@ static void menu_cmdconfig_main(void)
 		{ (uint8_t*)"标定零点", COM_NUM_FIND_ZERO, ifsendcmd, COMMANE_NORW, (uint8_t*)"CalZero" },
 		{ (uint8_t*)"标定液位", COM_NUM_CAL_OIL, inputcmdpara, COMMANE_NORW, (uint8_t*)"CalOil" },
 		{ (uint8_t*)"修正液位", COM_NUM_CORRECTION_OIL, inputcmdpara, COMMANE_NORW, (uint8_t*)"CorrectOil" },
-
-		{ (uint8_t*)"设置空载称重", COM_NUM_SET_EMPTY_WEIGHT, inputcmdpara, COMMANE_NORW, (uint8_t*)"SetEmptyWt" },
-		{ (uint8_t*)"设置满载称重", COM_NUM_SET_FULL_WEIGHT, inputcmdpara, COMMANE_NORW, (uint8_t*)"SetFullWt" },
 
 		{ (uint8_t*)"恢复出厂设置", COM_NUM_RESTOR_EFACTORYSETTING, ifsendcmd, COMMANE_NORW, (uint8_t*)"RestoreFactory" },
 		{ (uint8_t*)"维护模式", COM_NUM_MAINTENANCE_MODE, ifsendcmd, COMMANE_NORW, (uint8_t*)"Maintenance" },

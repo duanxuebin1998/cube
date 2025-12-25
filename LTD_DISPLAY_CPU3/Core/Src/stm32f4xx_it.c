@@ -18,13 +18,13 @@
 /* USER CODE END Header */
 
 /* Includes ------------------------------------------------------------------*/
+#include "cpu2_communicate.h"
 #include "main.h"
 #include "stm32f4xx_it.h"
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "exit.h"
 #include "display_tankopera.h"
-#include "communicate.h"
 #include "DSM_communication.h"
 #include "iwdg.h"
 /* USER CODE END Includes */
@@ -160,6 +160,90 @@ void Fault_Handler(const char *name)
 }
 static const char HardFaultName[] = "HardFault";
 void HardFault_Handler(void) __attribute__((naked));
+
+/* ===================== 通用：DMA + IDLE 一帧接收处理 ===================== */
+static inline uint16_t uart_calc_dma_len(uint16_t buf_size, uint32_t dma_left)
+{
+    if (dma_left > buf_size) {
+        return 0;
+    }
+    return (uint16_t)(buf_size - (uint16_t)dma_left);
+}
+
+/* ready 模式：len>0 置位 ready；len==0 重启 DMA */
+static inline void uart_idle_rx_dma_ready(UART_HandleTypeDef *huart,
+                                         DMA_HandleTypeDef  *hdma_rx,
+                                         uint8_t            *rx_buf,
+                                         uint16_t            rx_buf_size,
+                                         volatile uint16_t  *rx_len,
+                                         volatile uint8_t   *rx_ready,
+                                         void (*set_recv_mode)(void))
+{
+    if ((__HAL_UART_GET_FLAG(huart, UART_FLAG_IDLE) == RESET) ||
+        (__HAL_UART_GET_IT_SOURCE(huart, UART_IT_IDLE) == RESET)) {
+        return;
+    }
+
+    /* 清 IDLE */
+    __HAL_UART_CLEAR_IDLEFLAG(huart);
+
+    /* 清错误标志，避免 ORE 导致后续异常 */
+    if (__HAL_UART_GET_FLAG(huart, UART_FLAG_ORE) != RESET) __HAL_UART_CLEAR_OREFLAG(huart);
+    if (__HAL_UART_GET_FLAG(huart, UART_FLAG_FE)  != RESET) __HAL_UART_CLEAR_FEFLAG(huart);
+    if (__HAL_UART_GET_FLAG(huart, UART_FLAG_NE)  != RESET) __HAL_UART_CLEAR_NEFLAG(huart);
+
+    /* Stop DMA, compute length */
+    HAL_UART_DMAStop(huart);
+    uint32_t left = __HAL_DMA_GET_COUNTER(hdma_rx);
+    uint16_t len  = uart_calc_dma_len(rx_buf_size, left);
+
+    if (len > 0) {
+        *rx_len   = len;
+        *rx_ready = 1;    /* 主循环处理后再重启 DMA（你当前架构） */
+    } else {
+        *rx_len = 0;
+        if (set_recv_mode) set_recv_mode();
+        HAL_UART_Receive_DMA(huart, rx_buf, rx_buf_size);
+    }
+}
+
+/* wait_response 模式：len>=min_len 解除等待；否则重启 DMA */
+static inline void uart_idle_rx_dma_wait(UART_HandleTypeDef *huart,
+                                        DMA_HandleTypeDef  *hdma_rx,
+                                        uint8_t            *rx_buf,
+                                        uint16_t            rx_buf_size,
+                                        volatile uint16_t  *rx_len,
+                                        volatile bool      *wait_response,
+                                        uint16_t            min_len,
+                                        void (*set_recv_mode)(void))
+{
+    if ((__HAL_UART_GET_FLAG(huart, UART_FLAG_IDLE) == RESET) ||
+        (__HAL_UART_GET_IT_SOURCE(huart, UART_IT_IDLE) == RESET)) {
+        return;
+    }
+
+    __HAL_UART_CLEAR_IDLEFLAG(huart);
+
+    if (__HAL_UART_GET_FLAG(huart, UART_FLAG_ORE) != RESET) __HAL_UART_CLEAR_OREFLAG(huart);
+    if (__HAL_UART_GET_FLAG(huart, UART_FLAG_FE)  != RESET) __HAL_UART_CLEAR_FEFLAG(huart);
+    if (__HAL_UART_GET_FLAG(huart, UART_FLAG_NE)  != RESET) __HAL_UART_CLEAR_NEFLAG(huart);
+
+    HAL_UART_DMAStop(huart);
+    uint32_t left = __HAL_DMA_GET_COUNTER(hdma_rx);
+    uint16_t len  = uart_calc_dma_len(rx_buf_size, left);
+
+    *rx_len = len;
+
+    if (len >= min_len) {
+        *wait_response = false; /* 接收完成，解除等待 */
+        /* 此时由你的上层逻辑决定何时重启 DMA */
+    } else {
+        if (set_recv_mode) set_recv_mode();
+        HAL_UART_Receive_DMA(huart, rx_buf, rx_buf_size);
+    }
+}
+
+
 /* USER CODE END 0 */
 
 /* External variables --------------------------------------------------------*/
@@ -541,31 +625,14 @@ void USART1_IRQHandler(void)
 void USART2_IRQHandler(void)
 {
   /* USER CODE BEGIN USART2_IRQn 0 */
-	uint32_t tmp_flag = 0;
-	uint32_t temp;
+    uart_idle_rx_dma_ready(&huart2, &hdma_usart2_rx,
+                           UART2_RX_BUF, UART2_RX_BUF_SIZE,
+                           &UART2_RX_LEN, &com2_rx_ready,
+                           COM2_RecvMode /* 你已有的 inline 包装函数 */);
   /* USER CODE END USART2_IRQn 0 */
   HAL_UART_IRQHandler(&huart2);
   /* USER CODE BEGIN USART2_IRQn 1 */
-	if (USART2 == huart2.Instance) {
-		tmp_flag = __HAL_UART_GET_FLAG(&huart2, UART_FLAG_IDLE);  // 获取IDLE标志位
 
-		if (tmp_flag != RESET) {  // 如果IDLE标志被置位
-			__HAL_UART_CLEAR_IDLEFLAG(&huart2);  // 清除IDLE标志
-			HAL_UART_DMAStop(&huart2);  // 停止DMA接收
-			temp = __HAL_DMA_GET_COUNTER(&hdma_usart2_rx);  // 获取DMA中未传输的数据个数
-			UART2_RX_LEN = UART2_RX_BUF_SIZE - temp;  // 计算已经接收到的数据个数
-			if (UART2_RX_LEN > 0)
-			{
-				com2_rx_ready = 1; // 标记接收完成
-			}
-			else {
-				// 如果没有接收到数据，重新启用DMA接收
-				COM2_SET_RECV_MODE();  //切换接收模式
-				HAL_UART_Receive_DMA(&huart2, UART2_RX_BUF, UART2_RX_BUF_SIZE);
-			}
-//			HAL_UART_Transmit_DMA(&huart2, UART2_RX_BUF, UART2_RX_LEN);//返回接受到的包
-		}
-	}
   /* USER CODE END USART2_IRQn 1 */
 }
 
@@ -575,31 +642,14 @@ void USART2_IRQHandler(void)
 void USART3_IRQHandler(void)
 {
   /* USER CODE BEGIN USART3_IRQn 0 */
-	uint32_t tmp_flag = 0;
-	uint32_t temp;
+    uart_idle_rx_dma_ready(&huart3, &hdma_usart3_rx,
+                           UART3_RX_BUF, UART3_RX_BUF_SIZE,
+                           &UART3_RX_LEN, &com3_rx_ready,
+                           COM3_RecvMode);
   /* USER CODE END USART3_IRQn 0 */
   HAL_UART_IRQHandler(&huart3);
   /* USER CODE BEGIN USART3_IRQn 1 */
-//  printf("USART3 RECEIVE %d bytes:", UART3_RX_LEN);
-	if (USART3 == huart3.Instance) {
-		tmp_flag = __HAL_UART_GET_FLAG(&huart3, UART_FLAG_IDLE);  // 获取IDLE标志位
 
-		if (tmp_flag != RESET) {  // 如果IDLE标志被置位
-			__HAL_UART_CLEAR_IDLEFLAG(&huart3);  // 清除IDLE标志
-			HAL_UART_DMAStop(&huart3);  // 停止DMA接收
-			temp = __HAL_DMA_GET_COUNTER(&hdma_usart3_rx);  // 获取DMA中未传输的数据个数
-			UART3_RX_LEN = UART3_RX_BUF_SIZE - temp;  // 计算已经接收到的数据个数
-			if (UART3_RX_LEN > 0) {
-				com3_rx_ready = 1; // 标记接收完成
-			} else {
-				// 如果没有接收到数据，重新启用DMA接收
-				COM3_SET_RECV_MODE();  //切换接收模式
-				HAL_UART_Receive_DMA(&huart3, UART3_RX_BUF, UART3_RX_BUF_SIZE);
-			}
-//			COM3_SET_SEND_MODE();  // 切换到发送模式
-//			DSM_CommunicationProcess(UART3_RX_BUF, UART3_RX_LEN);  // 处理接收到的数据
-		}
-	}
   /* USER CODE END USART3_IRQn 1 */
 }
 
@@ -623,28 +673,16 @@ void DMA1_Stream7_IRQHandler(void)
 void UART5_IRQHandler(void)
 {
   /* USER CODE BEGIN UART5_IRQn 0 */
-	uint32_t tmp_flag = 0;
-	uint32_t temp;
+    uart_idle_rx_dma_wait(&huart5, &hdma_uart5_rx,
+                          UART5_RX_BUF, UART5_RX_BUF_SIZE,
+                          &UART5_RX_LEN, &wait_response,
+                          4 /* min_len=4 等价于你原来的 >3 */,
+                          NULL /* 如 UART5 也需要方向切换，这里可传 RS485_SET_RECV_MODE 的包装函数 */);
+
   /* USER CODE END UART5_IRQn 0 */
   HAL_UART_IRQHandler(&huart5);
   /* USER CODE BEGIN UART5_IRQn 1 */
-	if (UART5 == huart5.Instance) {
-		tmp_flag = __HAL_UART_GET_FLAG(&huart5, UART_FLAG_IDLE);  // 获取IDLE标志位
 
-		if (tmp_flag != RESET) {  // 如果IDLE标志被置位
-			__HAL_UART_CLEAR_IDLEFLAG(&huart5);  // 清除IDLE标志
-			HAL_UART_DMAStop(&huart5);  // 停止DMA接收
-			temp = __HAL_DMA_GET_COUNTER(&hdma_uart5_rx);  // 获取DMA中未传输的数据个数
-			UART5_RX_LEN = UART5_RX_BUF_SIZE - temp;  // 计算已经接收到的数据个数
-			if (UART5_RX_LEN > 3) {
-				wait_response = false; // 接收完成，解除等待
-			}
-			else {
-				// 如果没有接收到数据，重新启用DMA接收
-				HAL_UART_Receive_DMA(&huart5, UART5_RX_BUF, UART5_RX_BUF_SIZE);
-			}
-		}
-	}
   /* USER CODE END UART5_IRQn 1 */
 }
 
@@ -696,32 +734,14 @@ void DMA2_Stream6_IRQHandler(void)
 void USART6_IRQHandler(void)
 {
   /* USER CODE BEGIN USART6_IRQn 0 */
-	uint32_t tmp_flag = 0;
-	uint32_t temp;
+    uart_idle_rx_dma_ready(&huart6, &hdma_usart6_rx,
+                           UART6_RX_BUF, UART6_RX_BUF_SIZE,
+                           &UART6_RX_LEN, &com1_rx_ready,
+                           COM1_RecvMode);
   /* USER CODE END USART6_IRQn 0 */
   HAL_UART_IRQHandler(&huart6);
   /* USER CODE BEGIN USART6_IRQn 1 */
-	if (USART6 == huart6.Instance) {
-		tmp_flag = __HAL_UART_GET_FLAG(&huart6, UART_FLAG_IDLE);  // 获取IDLE标志位
 
-		if (tmp_flag != RESET) {  // 如果IDLE标志被置位
-			__HAL_UART_CLEAR_IDLEFLAG(&huart6);  // 清除IDLE标志
-			HAL_UART_DMAStop(&huart6);  // 停止DMA接收
-			temp = __HAL_DMA_GET_COUNTER(&hdma_usart6_rx);  // 获取DMA中未传输的数据个数
-			UART6_RX_LEN = UART6_RX_BUF_SIZE - temp;  // 计算已经接收到的数据个数
-			if (UART6_RX_LEN > 0)
-			{
-				com1_rx_ready = 1; // 标记接收完成
-			}
-			else
-			{
-				COM1_SET_RECV_MODE();  //切换接收模式
-				HAL_UART_Receive_DMA(&huart6, UART6_RX_BUF, UART6_RX_BUF_SIZE); // 重新启用DMA接收
-			}
-//			HAL_UART_Transmit_DMA(&huart6, UART6_RX_BUF, UART6_RX_LEN);//返回接受到的包
-		}
-
-	}
   /* USER CODE END USART6_IRQn 1 */
 }
 

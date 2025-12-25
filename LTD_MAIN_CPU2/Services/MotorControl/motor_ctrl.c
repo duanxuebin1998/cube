@@ -47,7 +47,6 @@ uint32_t motorMoveNoWait(float mm, int dir) {
         return MOTOR_STEP_ERROR; // 距离必须为正值，直接返回
     }
     g_measurement.debug_data.motor_state = dir; // 记录最后一次移动距离
-    printf("start move %.2fmm, dir %d\n", mm, dir);
     // 计算对应的步数
     int32_t ticks = (int32_t)((mm * 30 * 1600 * 32) / 600); // 转换为步数
     if (dir == MOTOR_DIRECTION_UP) {
@@ -138,11 +137,11 @@ uint32_t motorMoveAndWaitUntilStop(float mm, int dir) {
                total_cmd_mm, moved_mm, diff_pct);
         return ENCODER_LOST_STEP;
     } else {
-        printf("电机移动完成。\r\n");
+        printf("电机移动完成。\t");
+        printf("起点=%.2f mm, 目标位置=%.2f mm, 最终位置=%.2f mm\t",
+                startPos_mm, targetPos_mm, currentPos_mm);
         printf("期望总位移=%.2f mm, 实际=%.2f mm, 偏差=%.2f %%\r\n",
                total_cmd_mm, moved_mm, diff_pct);
-        printf("起点=%.2f mm, 目标位置=%.2f mm, 最终位置=%.2f mm\r\n",
-               startPos_mm, targetPos_mm, currentPos_mm);
     }
 
     return NO_ERROR;
@@ -152,12 +151,14 @@ uint32_t motorMoveAndWaitUntilStop(float mm, int dir) {
 
 uint32_t motorMove_up(void) {
     motorMoveNoWait(100000, MOTOR_DIRECTION_UP);
+    printf("电机开始长距离上行\r\n");
     MotorLostStep_Init(); // 初始化丢步检测
     return NO_ERROR;
 }
 
 uint32_t motorMove_down(void) {
     motorMoveNoWait(100000, MOTOR_DIRECTION_DOWN);
+    printf("电机开始长距离下行\r\n");
     MotorLostStep_Init(); // 初始化丢步检测
     return NO_ERROR;
 }

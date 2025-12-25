@@ -32,6 +32,7 @@ static void CMD_MeasureBottom(void);
 static void CMD_MeasureAndFollowOilLevel(void);
 static void CMD_CalibrateZeroPoint(void);
 static void CMD_CalibrateOilLevel(void);
+static void CMD_SyntheticMeasurement(void);
 
 
 void ProcessMeasureCmd(CommandType command)
@@ -78,7 +79,7 @@ void ProcessMeasureCmd(CommandType command)
 
 	case CMD_SYNTHETIC:
 		printf("执行综合测量指令，暂不支持该指令\n");
-		// SyntheticMeasurement();
+		CMD_SyntheticMeasurement();
 		break;
 
 	/* 密度分布/区间测量系列，目前只有一个实现 */
@@ -380,6 +381,8 @@ static void CMD_MeasurWater(void) {
 	ret = SearchWaterLevel();
 	SET_ERROR(ret);
 	g_measurement.device_status.device_state = STATE_FINDWATER_OVER;
+	//开始水位跟随
+	ret = FollowWaterLevel();
 	return;
 }
 //罐底零点主函数
@@ -557,6 +560,37 @@ static void CMD_WartsilaDensitySpread(void) {
 	Print_DensitySpreadResult(&g_measurement.density_distribution);
 // 测量结束，状态切换为分布测量完成
 	g_measurement.device_status.device_state = STATE_WARTSILA_DENSITY_OVER;
+
+	return;
+}
+static void CMD_SyntheticMeasurement(void) {
+	uint32_t ret = 0;
+	DensityDistribution temp = {0};   // 本次测量结果临时缓存
+	// 设置设备状态：分布测量中
+	g_measurement.device_status.device_state = STATE_SYNTHETICING;
+
+    // 1. 先搜索液位
+    ret = SearchOilLevel();
+    if (ret != NO_ERROR) {
+        printf("密度分布\t液位搜索失败, 错误码: 0x%08lX\r\n", ret);
+        SET_ERROR(ret);
+    }
+    printf("密度分布\t液位搜索成功\r\n");
+
+    // 2. 切换到密度测量模式
+    EnableDensityMode();
+
+    // 3. 执行分布密度测量, 结果写入 temp
+    ret = Density_SpreadMeasurement(&temp);
+    if (ret != NO_ERROR) {
+        printf("密度分布\t测量失败, 错误码: 0x%08lX\r\n", ret);
+        SET_ERROR(ret);
+    }
+
+    // 4. 测量成功, 写回全局结果
+    g_measurement.density_distribution = temp;
+// 测量结束，状态切换为分布测量完成
+	g_measurement.device_status.device_state = STATE_SYNTHETICING_OVER;
 
 	return;
 }

@@ -54,7 +54,7 @@ static uint8_t StockMap[] = "通讯尝试中液位跟随密度温℃版本水测
                             "环己氧基叔醚醛溶精制卤聚多元糠呋喃邻辛硫三偏硝盐氢钠仲石拱卧"
                             "球形蒸汽尺距离开手启闭短地址扫描路只能连台功打印容稍等几钟储管道径周期调低于盲报警语言发错"
                             "误础界面程序减比股长介信号后限例权屏幕维护视终继状态最探头浸小第悬停禁用弦工固产反先动当前"
-                            "大英更传层滞域使磨结束针总阻六级内息命感顺有阈值角导本整瓦锡兰厚首波特率验位奇偶预留";
+                            "大英更传层滞域使磨结束针总阻六级内息命感顺有阈值角导本整瓦锡兰厚首波特率验位奇偶预留默";
 static const int wordbyte      = 3; // UTF-8 下汉字 3 字节
 static const int StockmapLength = (sizeof(StockMap) - 1) / wordbyte;
 static uint8_t WordStock[255 * 28] =
@@ -451,6 +451,8 @@ static uint8_t WordStock2[255 * 28] =
 	0x10,0x00,0x17,0xF0,0x24,0x90,0x27,0xF0,0x64,0x90,0xA7,0xF0,0x20,0x80,0x2F,0xF8,0x28,0x88,0x28,0xA8,0x2B,0xE8,0x28,0x08,0x28,0x08,0x28,0x38,/*"偶",6*/
 	0x00,0x00,0xFB,0xF8,0x08,0x40,0x50,0x80,0x21,0xF0,0xF9,0x10,0x29,0x50,0x21,0x50,0x21,0x50,0x21,0x50,0x21,0x50,0x20,0xA0,0x21,0x10,0xE2,0x10,/*"预",7*/
 	0x0C,0x00,0xF1,0xF8,0x80,0x88,0x90,0x88,0xA9,0x08,0xC2,0x30,0x00,0x00,0x7F,0xF0,0x42,0x10,0x42,0x10,0x7F,0xF0,0x42,0x10,0x42,0x10,0x7F,0xF0,/*"留",8*/
+	0x00,0x00,0xFE,0x20,0x92,0x30,0xD6,0x28,0xBA,0x20,0xFE,0xF8,0x10,0x20,0xFE,0x20,0x10,0x20,0x1E,0x20,0xF0,0x50,0x00,0x50,0xAA,0x90,0xAA,0x08,/*"默",0*/
+
 
 
 
@@ -1053,8 +1055,8 @@ static const EquipStateDisplay state_display_table[] = {
     { STATE_FINDZEROING,             "标定零点中",               "Zero Calibration" },
     { STATE_SINGLEPOINTING,          "单点测量中",               "Single Point-M" },
     { STATE_RUNTOPOINTING,           "运行到测量点中",           "Run to Point" },
+    { STATE_GB_SPREADPOINTING,       "国标分布测量中",           "GB Spread Point-M" },
     { STATE_SPREADPOINTING,          "分布测量中",               "Spread Point-M" },
-    { STATE_AI_SPREADPOINTING,       "无参分布测量中",           "AI Spread Point-M" },
     { STATE_CALIBRATIONOILING,       "标定液位中",               "Calibrating Oil Level" },
     { STATE_READPARAMETERING,        "读取参数中",               "Reading Parameters" },
     { STATE_RUNUPING,                "向上运行中",               "Running Up" },
@@ -1086,8 +1088,8 @@ static const EquipStateDisplay state_display_table[] = {
     { STATE_FINDZEROOVER,            "标定零点完成",             "Zero Calibration Done" },
     { STATE_SINGLEPOINTOVER,         "单点测量完成",             "Single Point Done" },
     { STATE_SPTESTING,               "正在单点密度测量",             "Single Point Testing" },
+    { STATE_GB_SPREADPOINTOVER,      "国标分布测量完成",         "AI Spread Done" },
     { STATE_SPREADPOINTOVER,         "分布测量完成",             "Spread Measurement Done" },
-    { STATE_AI_SPREADPOINTOVER,      "无参分布测量完成",         "AI Spread Done" },
     { STATE_FINDOILOVER,             "标定液位完成",             "Oil Calibration Done" },
     { STATE_READPARAMETEROVER,       "读取参数完成",             "Read Parameter Done" },
     { STATE_RUNUPOVER,               "向上运行完成",             "Run Up Done" },

@@ -203,8 +203,8 @@ typedef enum {
 	STATE_FINDZEROING = 0x0010,               // 标定零点中
 	STATE_SINGLEPOINTING = 0x0011,            // 单点测量中
 	STATE_RUNTOPOINTING = 0x0012,             // 运行到测量点中
-	STATE_SPREADPOINTING = 0x0013,            // 分布测量中
-	STATE_AI_SPREADPOINTING = 0x0014,         // 无参分布测量中
+	STATE_GB_SPREADPOINTING = 0x0013,            // 分布测量中
+	STATE_SPREADPOINTING = 0x0014,         // 无参分布测量中//国标测
 	STATE_CALIBRATIONOILING = 0x0015,         // 标定液位
 	STATE_READPARAMETERING = 0x0016,          // 读取参数中
 	STATE_RUNUPING = 0x0017,                  // 向上运行中
@@ -233,8 +233,8 @@ typedef enum {
 	STATE_FINDZEROOVER = 0x8010,               // 标定零点完成
 	STATE_SINGLEPOINTOVER = 0x8011,            // 单点测量完成
 	STATE_SPTESTING = 0x8012,                  // 正在单点检测
-	STATE_SPREADPOINTOVER = 0x8013,            // 分布测量完成
-	STATE_AI_SPREADPOINTOVER = 0x8014,         // 无参分布测量完成
+	STATE_GB_SPREADPOINTOVER = 0x8013,            // 分布测量完成
+	STATE_SPREADPOINTOVER = 0x8014,         // 无参分布测量完成
 	STATE_FINDOILOVER = 0x8015,                // 标定液位完成
 	STATE_READPARAMETEROVER = 0x8016,          // 读取参数完成
 	STATE_RUNUPOVER = 0x8017,                  // 向上运行完成

@@ -24,7 +24,7 @@ int DSM_CommunicationInit(void) {
 	MaxNum_Coil = ENDADDRESS1_COM;					   // 线圈工作模式有效值
 	MaxNum_HoldingRegister = ENDADDRESS1_HOLDREGISTER; // 保持寄存器工作模式有效值
 	MaxNum_InputRegister = ENDADDRESS2_INPUTREGISTER;  // 输入寄存器工作模式有效值
-	WriteOneInputRegister(INPUTREGISTER_SYSTEMSTATE, 1, DSM_STATE_INIT);
+	WriteOneInputRegister(INPUTREGISTER_SYSTEMSTATE, 1, STATE_INIT);
 #ifdef DEBUG_COMM
 	printf("Address = %d\r\n", LocalAddress);
 #endif
