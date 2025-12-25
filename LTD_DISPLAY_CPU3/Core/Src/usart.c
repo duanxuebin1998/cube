@@ -18,11 +18,11 @@
  */
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
+#include "cpu2_communicate.h"
 #include "usart.h"
 
 /* USER CODE BEGIN 0 */
 #include "stdio.h"
-#include "communicate.h"
 #include "DSM_communication.h"
 #define NOP() __asm volatile("nop")
 //#define UART1_TX_BUF_SIZE 16
@@ -71,75 +71,6 @@ PUTCHAR_PROTOTYPE {
 }
 #endif
 
-void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart) {
-	if (huart->Instance == USART6)  // 比较指针
-	{
-		//等待DMA完全发送完成
-		while (__HAL_UART_GET_FLAG(&huart6, UART_FLAG_TC) == RESET)
-			;
-		//继续延时0.1ms，保证发送数据电平完全恢复空闲
-		for (volatile uint32_t i = 0; i < 18000; i++) {
-			__NOP();
-		}
-		COM1_SET_RECV_MODE();  //切换接收模式
-		HAL_UART_Receive_DMA(&huart6, UART6_RX_BUF, UART6_RX_BUF_SIZE);
-
-	} else if (huart->Instance == USART2) {
-		//等待DMA完全发送完成
-		while (__HAL_UART_GET_FLAG(&huart2, UART_FLAG_TC) == RESET)
-			;
-		//继续延时0.1ms，保证发送数据电平完全恢复空闲
-		for (volatile uint32_t i = 0; i < 18000; i++) {
-			__NOP();
-		}
-		COM2_SET_RECV_MODE();  //切换接收模式
-		HAL_UART_Receive_DMA(&huart2, UART2_RX_BUF, UART2_RX_BUF_SIZE);
-	} else if (huart->Instance == USART3) {
-		//等待DMA完全发送完成
-		while (__HAL_UART_GET_FLAG(&huart3, UART_FLAG_TC) == RESET)
-			;
-		//继续延时0.1ms，保证发送数据电平完全恢复空闲
-		for (volatile uint32_t i = 0; i < 18000; i++) {
-			__NOP();
-		}
-		COM3_SET_RECV_MODE();  //切换接收模式
-		HAL_UART_Receive_DMA(&huart3, UART3_RX_BUF, UART3_RX_BUF_SIZE);
-	} else if (huart->Instance == UART5) {
-		//等待DMA完全发送完成
-		while (__HAL_UART_GET_FLAG(&huart5, UART_FLAG_TC) == RESET)
-			;
-		RS485_SET_RECV_MODE();  //切换接收模式
-		__HAL_UART_CLEAR_IDLEFLAG(&huart5);  // 清除IDLE标志
-//	    // 1. 先关接收相关中断，避免在清标志的时候又进中断
-//	    __HAL_UART_DISABLE_IT(&huart5, UART_IT_RXNE);
-//	    __HAL_UART_DISABLE_IT(&huart5, UART_IT_IDLE);
-//	    __HAL_UART_DISABLE_IT(&huart5, UART_IT_ERR);   // ORE/FE/NE
-//
-//	    // 2. 清各种接收/错误标志
-//	    // 这个宏会通过读 SR+DR 清掉 PE/FE/NE/ORE/RXNE 等
-//	    __HAL_UART_CLEAR_PEFLAG(&huart5);
-//
-//	    // 如果你用 IDLE 中断来判一帧结束，也把 IDLE 清一下
-//	    __HAL_UART_CLEAR_IDLEFLAG(&huart5);
-//
-//	    // 保险起见，再把 FIFO 里可能残留的字节都读掉
-//	    volatile uint32_t tmp;
-//	    while (__HAL_UART_GET_FLAG(&huart5, UART_FLAG_RXNE) != RESET)
-//	    {
-//	        tmp = huart5.Instance->DR;
-//	    }
-//	    (void)tmp;
-//
-//	    // 3. 最后再打开你真正需要用的中断
-//	    // ---- 根据你现在的接收方式选： ----
-//	    // 如果是中断一个字节一个字节收，就开 RXNE：
-////	    __HAL_UART_ENABLE_IT(&huart5, UART_IT_RXNE);
-//
-//	    // 如果你是 DMA + IDLE 模式，就不要开 RXNE，只开 IDLE：
-//	     __HAL_UART_ENABLE_IT(&huart5, UART_IT_IDLE);
-		HAL_UART_Receive_DMA(&huart5, UART5_RX_BUF, UART5_RX_BUF_SIZE);
-	}
-}
 volatile uint8_t com2_rx_ready = 0;
 volatile uint8_t UART2_RX_LEN = 0;              // 接收一帧数据的长度
 uint8_t UART2_RX_BUF[UART2_RX_BUF_SIZE] = { 0 };   // 接收数据缓冲区

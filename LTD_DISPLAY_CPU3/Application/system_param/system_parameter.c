@@ -6,7 +6,7 @@
  */
 #include "system_parameter.h"
 #include "display_tankopera.h"
-#include "communicate.h"
+#include "cpu2_communicate.h"
 #include <stdint.h>
 #include <string.h>
 #include <stdio.h>

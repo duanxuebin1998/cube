@@ -47,13 +47,13 @@ int UART6_SendCommand(const char *cmd, char *response, uint16_t maxLen, uint32_t
     char bcc;
     memset(response, 0, maxLen);
     uint16_t recvLen = 0;
-#ifdef DEBUG_UART6
+#if DEBUG_UART6
     printf("[UART6] Send: %s\n", cmd);
 #endif
 
     // 发送
     if (HAL_UART_Transmit(&huart6, (uint8_t*)cmd, strlen(cmd), 100) != HAL_OK) {
-#ifdef DEBUG_UART6
+#if DEBUG_UART6
         printf("[UART6] Transmit failed!\n");
 #endif
         return OTHER_PERIPHERAL_CONFIG_ERROR;
@@ -79,7 +79,7 @@ int UART6_SendCommand(const char *cmd, char *response, uint16_t maxLen, uint32_t
         printf("[UART6] 通信失败：无数据\r\n");
         return SENSOR_COMM_TIMEOUT;
     }
-#ifdef DEBUG_UART6
+#if DEBUG_UART6
     printf("[UART6] 接收成功，共 %d 字节\r\n", recvLen);
     printf("[UART6] 响应字符串: %s\r\n", response);
     printf("[UART6] 响应HEX: ");
@@ -92,12 +92,12 @@ int UART6_SendCommand(const char *cmd, char *response, uint16_t maxLen, uint32_t
     // 校验 BCC
     bcc = CalculationBCC_DSM(response, (recvLen - 3));
     if (bcc == response[recvLen - 3]) {
-#ifdef DEBUG_UART6
+#if DEBUG_UART6
         printf("DSM: rcv BCC校验通过!\r\n");
 #endif
         return NO_ERROR;
     } else {
-#ifdef DEBUG_UART6
+#if DEBUG_UART6
         printf("DSM: rcv BCC校验失败!\r\n");
 #endif
         return SENSOR_BCC_ERROR; // 校验失败
@@ -404,6 +404,8 @@ uint32_t Read_Water_Capacitance(float *cap_out)
 
     /* 解析数值：resp[1..7] 是数字/小数点字符串。直接 atof(resp+1) 即可 */
     *cap_out = (float)atof(resp + 1);
-
+	if (*cap_out < 1.0f) {
+		*cap_out = 99999.9;
+	}
     return NO_ERROR;
 }

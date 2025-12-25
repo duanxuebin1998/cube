@@ -1,4 +1,14 @@
 /*
+ * @FilePath     : \undefinedd:\CUBE\LTD_MAIN_CPU2\Application\Inc\measure_water_level.h
+ * @Description  : 
+ * @Author       : Aubon
+ * @Date         : 2025-12-19 15:55:33
+ * @LastEditors  : Duan
+ * @LastEditTime : 2025-12-24 08:46:18
+ * Copyright 2025 Aubon, All Rights Reserved. 
+ * 2025-12-19 15:55:33
+ */
+/*
  * measure_water_level.h
  *
  *  Created on: 2025年12月19日
@@ -18,9 +28,6 @@ uint32_t read_zero_capacitance(void);//获取零点电容值
 uint32_t read_oil_capacitance(void);//获取油区电容值
 uint32_t check_water_status(uint8_t *water_state);
 uint32_t SearchWaterLevel(void);
-
-#ifndef MEASUREMENT_WATER_DOWN_FAIL
-#define MEASUREMENT_WATER_DOWN_FAIL  (0xE201) // 示例：请替换为你的工程规范
-#endif
+uint32_t FollowWaterLevel(void);
 
 #endif /* INC_MEASURE_WATER_LEVEL_H_ */

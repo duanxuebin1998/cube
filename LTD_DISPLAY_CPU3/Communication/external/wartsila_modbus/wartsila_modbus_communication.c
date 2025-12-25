@@ -11,7 +11,7 @@
 #include "my_crc.h"
 #include <string.h>
 #include "address.h"
-#include "communicate.h"
+#include "cpu2_communicate.h"
 
 static void modbus_on_holding_written(uint16_t start, uint16_t qty);
 // ================= 寄存器池 =================

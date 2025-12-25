@@ -174,7 +174,13 @@ int UpdateDeviceParamsFromLegacyRegs(int startadd, int reamount)
         temp = ReadOneHoldingRegister(HOLDREGISTER_TANKHIGHT, 2);
         g_deviceParams.tankHeight = temp;
     }
-
+    /*************** 标定液位 -> g_deviceParams.calibrateOilLevel ****************/
+    if ((HOLDREGISTER_CALIBRATIONLIQUIDLEVEL >= startadd) &&
+        ((HOLDREGISTER_CALIBRATIONLIQUIDLEVEL + 1) <= end))
+    {
+        temp = ReadOneHoldingRegister(HOLDREGISTER_CALIBRATIONLIQUIDLEVEL, 2);
+        g_deviceParams.calibrateOilLevel = temp;
+    }
     /*************** 分布测量顺序 -> spreadMeasurementOrder ***********/
     if ((HOLDREGISTER_SRREAD_MEASURETURN >= startadd) &&
         (HOLDREGISTER_SRREAD_MEASURETURN <= end))

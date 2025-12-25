@@ -11,7 +11,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include "system_parameter.h"
-#include "communicate.h"
+#include "cpu2_communicate.h"
 #include "display_tankopera.h"
 
 #ifdef __cplusplus

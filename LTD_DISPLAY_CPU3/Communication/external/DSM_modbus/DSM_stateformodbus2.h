@@ -1643,20 +1643,20 @@
 #define HOLDREGISTER_SP_POSITION 0x0006                // 单点测量位置高度
 #define HOLDREGISTER_SPT_POSITION 0x0008               // 单点监测位置高度
 #define HOLDREGISTER_SRREAD_POSITION 0x000A            // 分布测量时液位高度
-#define HOLDREGISTER_SYNTHETIC_BOTTOM_FREE 0x000C      // 无需权限综合指令是否需要测罐底默认为0不测V1.105
-#define HOLDREGISTER_SYNTHETIC_WATER_FREE 0x000D       // 无需权限综合指令是否需要测水位默认为0不测V1.105
-#define HOLDREGISTER_SYNTHETIC_SINGLEPOINT_FREE 0x000E // 无需权限综合指令是否需要测单点密度默认为0不测V1.105
-#define HOLDREGISTER_SPREAD_DSM_STATE_FREE 0x000F          // 无需权限分布测量时测量模式V1.105
-#define HOLDREGISTER_SPREAD_NUM_FREE 0x0010            // 无需权限分布测量点数	V1.105
-#define HOLDREGISTER_SPREAD_DISTANCE_FREE 0x0011       // 无需权限分布测量点之间间距V1.105
-#define HOLDREGISTER_SPREAD_TOPLIMIT_FREE 0x0013       // 无需权限分布测量最高点距液面间距V1.105
-#define HOLDREGISTER_SPREAD_FLOORLIMIT_FREE 0x0015     // 无需权限分布测量最低点距罐底间距V1.105
-#define HOLDREGISTER_SPSYNTHETIC_POSITION 0x0017       // 综合指令固定点测量的位置V1.106
-#define HOLDREGISTER_MEASREMENT_METER 0x0019           // 无需分配权限每米测量时方向 V1.116 dq2020.4.2
-#define HOLDREGISTER_INTERVAL_POINT 0x001A             // 无需分配权限区间密度测量点数 V1.116 dq2020.4.2
-#define HOLDREGISTER_INTERVAL_DIREDION 0x001B          // 无需分配权限区间密度测量方向 V1.116 dq2020.4.2
-#define HOLDREGISTER_INTERVAL_OIL_A 0x001C             // 无需分配权限区间密度分布测量液位点A  V1.116 dq2020.4.2
-#define HOLDREGISTER_INTERVAL_OIL_B 0x001E             // 无需分配权限区间密度分布测量液位点B V1.116 dq2020.4.2
+#define HOLDREGISTER_SYNTHETIC_BOTTOM_FREE 0x000C      // 无需权限综合指令是否需要测罐底默认为0不测
+#define HOLDREGISTER_SYNTHETIC_WATER_FREE 0x000D       // 无需权限综合指令是否需要测水位默认为0不测
+#define HOLDREGISTER_SYNTHETIC_SINGLEPOINT_FREE 0x000E // 无需权限综合指令是否需要测单点密度默认为0不测
+#define HOLDREGISTER_SPREAD_DSM_STATE_FREE 0x000F      // 无需权限分布测量时测量模式
+#define HOLDREGISTER_SPREAD_NUM_FREE 0x0010            // 无需权限分布测量点数
+#define HOLDREGISTER_SPREAD_DISTANCE_FREE 0x0011       // 无需权限分布测量点之间间距
+#define HOLDREGISTER_SPREAD_TOPLIMIT_FREE 0x0013       // 无需权限分布测量最高点距液面间距
+#define HOLDREGISTER_SPREAD_FLOORLIMIT_FREE 0x0015     // 无需权限分布测量最低点距罐底间距
+#define HOLDREGISTER_SPSYNTHETIC_POSITION 0x0017       // 综合指令固定点测量的位置
+#define HOLDREGISTER_MEASREMENT_METER 0x0019           // 无需分配权限每米测量时方向
+#define HOLDREGISTER_INTERVAL_POINT 0x001A             // 无需分配权限区间密度测量点数
+#define HOLDREGISTER_INTERVAL_DIREDION 0x001B          // 无需分配权限区间密度测量方向
+#define HOLDREGISTER_INTERVAL_OIL_A 0x001C             // 无需分配权限区间密度分布测量液位点A
+#define HOLDREGISTER_INTERVAL_OIL_B 0x001E             // 无需分配权限区间密度分布测量液位点B
 #define HOLDREGISTER_D_CORRECTION_TEM1 0x0020          // 密度分段修正温度阈值1
 #define HOLDREGISTER_D_CORRECTION_TEM2 0x0021          // 密度分段修正温度阈值2
 #define HOLDREGISTER_D_CORRECTION_TEM3 0x0022          // 密度分段修正温度阈值3
@@ -1698,9 +1698,9 @@
 #define HOLDREGISTER_SPREAD_FIXEDDISTANCE 0x0112     // 固定间距分布测量的间距
 #define HOLDREGISTER_SPREAD_FIXEDTOP 0x0114          // 固定间距分布测量最高点距液面间距
 #define HOLDREGISTER_SPREAD_FIXEDBASE 0x0116         // 固定间距分布测量最低点距罐底间距
-#define HOLDREGISTER_THRESHOLD_A 0x0118              // 确定间距分层加测阈值点A V1.116 dq2020.4.2
-#define HOLDREGISTER_THRESHOLD_B 0x0119              // 确定间距分层加测阈值点B  V1.116 dq2020.4.2
-#define HOLDREGISTER_THRESHOLD_STANDARD 0x011A       // 国标密度测量显示点数阈值  V1.116 dq2020.4.2
+#define HOLDREGISTER_THRESHOLD_A 0x0118              // 确定间距分层加测阈值点A
+#define HOLDREGISTER_THRESHOLD_B 0x0119              // 确定间距分层加测阈值点B
+#define HOLDREGISTER_THRESHOLD_STANDARD 0x011A       // 国标密度测量显示点数阈值
 #define HOLDREGISTER_WATER_IS_REAL_HIGH 0x011B       /*水位是否为实高测量*/
 #define HOLDREGISTER_REAL_WATER_LEVEL_CORRECT 0x011C /*实高水位测量修正值*/
 #define HOLDREGISTER_IF_REFRESH_TANKHIGH 0x011D      /*测量是否更新罐高*/

@@ -5,10 +5,10 @@
  *      Author: Duan Xuebin
  */
 
+#include "cpu2_communicate.h"           /* COMx_SET_SEND_MODE / COMx_SET_RECV_MODE 等，如果需要 */
 #include "com_manager.h"
 
 #include "usart.h"                 /* huart2 / huart3 / huart6 & RX_BUF_SIZE 宏 */
-#include "communicate.h"           /* COMx_SET_SEND_MODE / COMx_SET_RECV_MODE 等，如果需要 */
 #include "DSM_communication.h"     /* DSM_CommunicationProcess(...) */
 #include "wartsila_modbus_communication.h"  /* 你自己的 Wartsila 协议头文件 */
 #include "system_parameter.h"      /* 内含 g_deviceParams，如果你用 DeviceParameters 做配置来源 */

@@ -15,7 +15,6 @@
 #include <math.h>
 #include "system_parameter.h"
 
-static uint32_t Density_SpreadMeasurement(DensityDistribution *dist);
 void Print_DensitySpreadResult(const DensityDistribution *dist);
 // 分布测量主函数
 // 分布密度测量主流程
@@ -61,7 +60,7 @@ void CMD_MeasureDensitySpread(void)
  * @param  dist   [out] 测量结果输出到 DensityDistribution
  * @return 错误码，NO_ERROR 表示成功
  */
-static uint32_t Density_SpreadMeasurement(DensityDistribution *dist) {
+uint32_t Density_SpreadMeasurement(DensityDistribution *dist) {
 	if (dist == NULL) {
 		return PARAM_ADDRESS_OVERFLOW;
 	}
