@@ -531,7 +531,7 @@ static int waitForTheLiquidLevelToExceedTheBlindZone(void) {
 }
 void CorrectOilLevelProcess(void) {
 	printf("液位流程\t开始标定液位\r\n");
-	g_deviceParams.tankHeight = g_measurement.debug_data.cable_length + g_deviceParams.calibrateOilLevel;
+	g_deviceParams.tankHeight = g_measurement.debug_data.cable_length + g_deviceParams.calibrateOilLevel+1;
 	printf("液位流程\t标定完成，罐高设置为：%ld mm\r\n", g_deviceParams.tankHeight);
 	update_sensor_height_from_encoder();	//更新罐高数据
 }

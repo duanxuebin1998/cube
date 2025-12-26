@@ -153,8 +153,7 @@ uint32_t Density_SpreadMeasurement(DensityDistribution *dist) {
 		if (hover_time > 0) {
 			HAL_Delay(hover_time);
 		}
-
-		ret = SinglePoint_ReadSensor(&g_measurement.density_distribution.single_density_data[valid_points]);
+		ret = SinglePoint_ReadSensor(&dist->single_density_data[valid_points]);
 //		ret = Read_Density(&freq, &density, &temp);
 		if (ret != NO_ERROR) {
 			printf("分布测量 读取密度失败: pos=%.2f, err=%lu\n", cur_pos, (unsigned long) ret);

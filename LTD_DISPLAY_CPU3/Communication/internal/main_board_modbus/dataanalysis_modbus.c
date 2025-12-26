@@ -231,9 +231,7 @@ void ReadDeviceParamsFromHoldingRegisters(uint16_t *HoldingRegisterArray) {
 
 	/* 基础参数 */
 	g_deviceParams.tankHeight = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_TANKHEIGHT);
-	printf("Read tankHeight: %lu\n", g_deviceParams.tankHeight);
 	g_deviceParams.tankHeight = ywj_hold_analysis_data(HOLDREGISTER_DEVICEPARAM_TANKHEIGHT, 2);
-	printf("Read tankHeight: %lu\n", g_deviceParams.tankHeight);
 	g_deviceParams.blindZone = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_BLINDZONE);
 	g_deviceParams.waterBlindZone = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_WATER_BLINDZONE);
 	g_deviceParams.encoder_wheel_circumference_mm = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_ENCODER_WHEEL_CIRCUMFERENCE_MM);

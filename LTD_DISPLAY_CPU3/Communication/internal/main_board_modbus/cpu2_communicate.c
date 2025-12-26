@@ -11,7 +11,7 @@
 #include "dataanalysis_modbus.h"
 #include "wartsila_modbus_communication.h"
 
-#define DEBUG_COMMUCPU2 1
+#define DEBUG_COMMUCPU2 0
 #define ADERSS 0X01
 
 volatile bool wait_response = false; //主控板响应标志位
@@ -41,11 +41,11 @@ void CommuToCPU2Init(void) {
 void HostCommuProcess(uint8_t *rcv, int len) {
 #if DEBUG_COMMUCPU2
     int i;
-    printf("CPU3com_RCV %d : ",len);
+    printf("RCV from CPU2 %d : ",len);
     for(i = 0;i < len;i++)
         printf("%02X ",rcv[i]);
     printf("\r\n");
-    #endif
+#endif
 	if (len <= 3)
 		return;
 	if (!SlaveCheckCRC(rcv, len)) {
@@ -62,10 +62,10 @@ void HostCommuProcess(uint8_t *rcv, int len) {
 	switch (RCV_functioncode) {
 	case FUNCTIONCODE_READ_HOLDREGISTER: {
 		CPU2_Response03Process(rcv);
-//#if DEBUG_COMMUCPU2
+#if DEBUG_COMMUCPU2
             printf("CPU3 Response03Process\r\n");
-            print_device_params();
-//#endif
+//            print_device_params();
+#endif
 		break;
 	}
 	case FUNCTIONCODE_READ_INPUTREGISTER: {
@@ -85,31 +85,7 @@ void HostCommuProcess(uint8_t *rcv, int len) {
 	}
 	}
 }
-///* 轮询输入寄存器数据 */
-//void PollingInputData(void)
-//{
-//    static bool flag_poweronread = false;
-//    CPU2_CombinatePackage_Send(FUNCTIONCODE_READ_HOLDREGISTER,HOLDREGISTER_DEVICEPARAM_COMMAND,HOLEREGISTER_STOP-HOLDREGISTER_DEVICEPARAM_COMMAND,NULL);
-////    print_device_params();
-//    HAL_Delay(100);
-//    CPU2_CombinatePackage_Send(FUNCTIONCODE_READ_INPUTREGISTER,REG_DEVICE_STATUS_WORK_MODE,REG_SINGLE_POINT_MEAS_TEMP-REG_DEVICE_STATUS_WORK_MODE,NULL);
-//    HAL_Delay(100);
-//    CPU2_CombinatePackage_Send(FUNCTIONCODE_READ_INPUTREGISTER,REG_SINGLE_POINT_MEAS_TEMP,REG_DENSITY_DIST_POINT_BASE-REG_SINGLE_POINT_MEAS_TEMP,NULL);
-//
-////    CPU2_CombinatePackage_Send(FUNCTIONCODE_READ_HOLDREGISTER,HOLDREGISTER_DEVICEPARAM_COMMAND,HOLEREGISTER_STOP,NULL);
-//
-//
-////    if(cnt_commutoCPU2 >= COMMU_ERROR_MAX)
-////        setEquipStateError();
-////    else
-////    {
-//        if(flag_poweronread == false)//第一次上电后读取一次
-//        {
-//
-//            flag_poweronread = true;
-//        }
-////    }
-//}
+
 typedef struct {
 	uint8_t func;     // 功能码：3 或 4
 	uint16_t start;   // 起始寄存器
@@ -146,7 +122,13 @@ FUNCTIONCODE_READ_INPUTREGISTER, REG_DEVICE_STATUS_WORK_MODE, (uint16_t) (REG_SI
 
 /* 输入寄存器组 2：单点 / 密度测量结果 */
 {
-FUNCTIONCODE_READ_INPUTREGISTER, REG_SINGLE_POINT_MEAS_TEMP, (uint16_t) (REG_DENSITY_DIST_POINT_BASE - REG_SINGLE_POINT_MEAS_TEMP) } };
+FUNCTIONCODE_READ_INPUTREGISTER, REG_SINGLE_POINT_MEAS_TEMP, (uint16_t) (REG_DENSITY_DIST_POINT_BASE - REG_SINGLE_POINT_MEAS_TEMP) } ,
+/* 保持寄存器组 3：设备参数前半段 */
+{FUNCTIONCODE_READ_HOLDREGISTER, HOLDREGISTER_DEVICEPARAM_COMMAND, (uint16_t) (HOLDREGISTER_DEVICEPARAM_WATERLEVELCORRECTION - HOLDREGISTER_DEVICEPARAM_COMMAND) },
+
+/* 保持寄存器组 4：设备参数后半段 */
+{FUNCTIONCODE_READ_HOLDREGISTER, HOLDREGISTER_DEVICEPARAM_WATERLEVELCORRECTION, (uint16_t) (HOLEREGISTER_STOP - HOLDREGISTER_DEVICEPARAM_WATERLEVELCORRECTION) }
+};
 
 #define RUNTIME_GROUP_COUNT  (sizeof(runtime_groups) / sizeof(runtime_groups[0]))
 
@@ -171,7 +153,7 @@ void PollingInputData(void) {
 			if (poweron_index >= POWERON_GROUP_COUNT) {
 				poweron_done = true; /* 上电读取全部完成 */
 				 DeviceParams_StoreToRegisters(g_holding_regs);/* 把读取到的设备参数存入瓦锡兰保持寄存器 */
-				print_device_params();
+//				print_device_params();
 			}
 		}
 		return; /* 上电阶段结束本次调用，不再发 runtime 组 */
@@ -286,7 +268,7 @@ void CPU2_CombinatePackage_Send(uint8_t f_code, uint16_t startadd, uint16_t regi
 	arr[len++] = crc & 0xff;
 	arr[len++] = crc >> 8;
 #if DEBUG_COMMUCPU2
-	printf("CPU2 send %d bytes:", len);
+	printf("send to CPU2 %d bytes:", len);
 #endif
 	sendToCPU2(arr, len, false);
 	//全局变量赋值，用于接收CPU2的响应包处理
@@ -320,27 +302,6 @@ void sendToCPU2(uint8_t *arr, uint16_t len, bool flag_fromhost) {
     }
     #endif
 }
-///*解析CPU2的响应包0x03功能码*/
-//static void CPU2_Response03Process(char const *revframe)
-//{
-//	int i, j;
-//	int byteamount;
-//	memset(SlaveTempBuffer, 0, sizeof(SlaveTempBuffer));
-//		for (i = 0, j = 0; i < RCV_registercnt; i++, j = j + 2) {
-//			SlaveTempBuffer[i] = (revframe[j + 3] << 8) + revframe[j + 4];
-//		}
-//		/*写保持寄存器*/
-//		WriteDeviceParamsToHoldingRegisters(HoldingRegisterArray);
-//		PresetRegister(false, SlaveTempBuffer);
-//		/*更新对应参数,若需存储则写入铁电*/
-//	    byteamount = revframe[2];
-//	    if(byteamount != RCV_registercnt * 2)
-//	        return;
-//	    for(i = 0;i < byteamount;i++)
-//	    	HoldingRegisterArray[(RCV_startaddress << 1) + i] = revframe[3 + i];
-//		AnalysisHoldRegister();
-//		ReadDeviceParamsFromHoldingRegisters(HoldingRegisterArray);
-//}
 /* 解析CPU2的响应包 0x03 功能码 */
 static void CPU2_Response03Process(uint8_t const *revframe) {
 	int i;
