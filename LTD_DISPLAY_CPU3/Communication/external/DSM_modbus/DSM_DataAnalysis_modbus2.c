@@ -28,8 +28,8 @@ char SoftOfversion6 = 'F'; // 版本号最低位
 void SystemParameterSet(void)
 {
 	/*无需权限读取的*/
-	WriteOneHoldingRegister(HOLDREGISTER_SP_POSITION, 1, 0);						 // 固定点监测测量位置V1.106
-	WriteOneHoldingRegister(HOLDREGISTER_SPT_POSITION, 1, 0);						 // 单点测量的测量位置V1.106
+	WriteOneHoldingRegister(HOLDREGISTER_SP_POSITION, 1,g_deviceParams.);						 // 固定点监测测量位置
+	WriteOneHoldingRegister(HOLDREGISTER_SPT_POSITION, 1, 0);						 // 单点测量的测量位置
 	WriteOneHoldingRegister(HOLDREGISTER_SYNTHETIC_BOTTOM_FREE, 1, g_deviceParams.requireBottomMeasurement);			 // 无需权限综合指令是否需要测罐底默认为0不测V1.105
 	WriteOneHoldingRegister(HOLDREGISTER_SYNTHETIC_WATER_FREE, 1, g_deviceParams.requireWaterMeasurement);			 // 无需权限综合指令是否需要测水位默认为0不测V1.105
 	WriteOneHoldingRegister(HOLDREGISTER_SYNTHETIC_SINGLEPOINT_FREE, 1, g_deviceParams.requireSinglePointDensity);	 // 无需权限综合指令是否需要测水位默认为0不测V1.105
@@ -38,7 +38,7 @@ void SystemParameterSet(void)
 	WriteOneHoldingRegister(HOLDREGISTER_SPREAD_DISTANCE_FREE, 2,g_deviceParams.spreadMeasurementDistance);						 // 无需权限分布测量点之间间距V1.105
 	WriteOneHoldingRegister(HOLDREGISTER_SPREAD_TOPLIMIT_FREE, 2, g_deviceParams.spreadTopLimit);						 // 无需权限分布测量最高点距液面间距V1.105
 	WriteOneHoldingRegister(HOLDREGISTER_SPREAD_FLOORLIMIT_FREE, 2, g_deviceParams.spreadBottomLimit);					 // 无需权限分布测量最低点距罐底间距V1.105
-	WriteOneHoldingRegister(HOLDREGISTER_SPSYNTHETIC_POSITION, 2, 0);		 // 无需权限综合指令单点测量的位置V1.106
+	WriteOneHoldingRegister(HOLDREGISTER_SPSYNTHETIC_POSITION, 2, 0);		 // 无需权限综合指令单点测量的位置
 	WriteOneHoldingRegister(HOLDREGISTER_MEASREMENT_METER, 1, g_deviceParams.spreadMeasurementOrder);						 // 密度每米测量方向
 	WriteOneHoldingRegister(HOLDREGISTER_INTERVAL_POINT, 1, g_deviceParams.spreadMeasurementCount);							 // 密度液位区间测量点数
 	WriteOneHoldingRegister(HOLDREGISTER_INTERVAL_DIREDION, 1, g_deviceParams.spreadMeasurementOrder);						 // 密度液位区间测量方向
@@ -98,12 +98,12 @@ void SystemParameterSet(void)
 	WriteOneHoldingRegister(HOLDREGISTER_TEMPERATURE_MODE, 1, 0);
 	WriteOneHoldingRegister(HOLDREGISTER_TEMPERATURE_MODE_D, 1, 0);
 
-	WriteOneHoldingRegister(HOLDREGISTER_REDUCTIONRATIO, 1,23);	  // 减速比
+	WriteOneHoldingRegister(HOLDREGISTER_REDUCTIONRATIO, 1,30);	  // 减速比
 	WriteOneHoldingRegister(HOLDREGISTER_TYPEOFSENSOR, 1, 0);		  // 传感器类型
 	WriteOneHoldingRegister(HOLDREGISTER_LENGTHOFSENSOR, 1, 0);	  // 传感器长度
 	WriteOneHoldingRegister(HOLDREGISTER_FADEZERO, 2, g_deviceParams.blindZone);				  // 盲区
 	WriteOneHoldingRegister(HOLDREGISTER_GIRTH_YITI, 2, g_deviceParams.encoder_wheel_circumference_mm);		 // 一体机导论周长
-	WriteOneHoldingRegister(HOLDREGISTER_LEVELTOWATER_HIGH, 1, 0); // 液位传感器到水位传感器距离
+	WriteOneHoldingRegister(HOLDREGISTER_LEVELTOWATER_HIGH, 1, 0); // 液位传感器到水位传感器距离/水位修正值
 	WriteOneHoldingRegister(HOLDREGISTER_MAXDOWN_DIS, 1, g_deviceParams.maxDownDistance);			  // 罐底/水位测量时的最大下行值
 
 	WriteOneHoldingRegister(HOLDREGISTER_TYPEOFEINDUCTION, 1, 0);			 // 霍尔器件类型
@@ -119,14 +119,14 @@ void SystemParameterSet(void)
 	WriteOneHoldingRegister(HOLDREGISTER_NUMOFSTABLEHITS, 1, 0);			  // 测量时数据稳定数
 	WriteOneHoldingRegister(HOLDREGISTER_NUMOFHITS, 1, 0);						  // 测量时总采样数
 
-	WriteOneHoldingRegister(HOLDREGISTER_SYNTHETIC_BOTTOM, 1, g_deviceParams.requireBottomMeasurement);		// 综合指令是否需要测罐底默认为0不测V1.105
-	WriteOneHoldingRegister(HOLDREGISTER_SYNTHETIC_WATER, 1, g_deviceParams.requireWaterMeasurement);			// 综合指令是否需要测水位默认为0不测V1.105
+	WriteOneHoldingRegister(HOLDREGISTER_SYNTHETIC_BOTTOM, 1, g_deviceParams.requireBottomMeasurement);		// 综合指令是否需要测罐底默认为0不测
+	WriteOneHoldingRegister(HOLDREGISTER_SYNTHETIC_WATER, 1, g_deviceParams.requireWaterMeasurement);			// 综合指令是否需要测水位默认为0不测
 	WriteOneHoldingRegister(HOLDREGISTER_SYNTHETIC_SINGLEPOINT, 1, g_deviceParams.requireSinglePointDensity); // 综合指令是否需要测单点密度
 
-	WriteOneHoldingRegister(HOLDREGISTER_NUMOFDECIMALS, 1, 0);		// 温度的有效点数默认是2位V1.105
-	WriteOneHoldingRegister(HOLDREGISTER_TEMCORRECTCALUE, 1, g_deviceParams.temperatureCorrection);		// 温度的修正系数 温度+(修正-1000)V1.105
-	WriteOneHoldingRegister(HOLDREGISTER_DENSITYCORRECTCALUE, 1, g_deviceParams.densityCorrection);		// 密度的修正系数 密度+(修正-10000)V1.105
-	WriteOneHoldingRegister(HOLDREGISTER_DEVICENUM, 2, 0);						// 传感器系数V1.105
+	WriteOneHoldingRegister(HOLDREGISTER_NUMOFDECIMALS, 1, 1);		// 温度的有效点数默认是2位
+	WriteOneHoldingRegister(HOLDREGISTER_TEMCORRECTCALUE, 1, g_deviceParams.temperatureCorrection);		// 温度的修正系数 温度+(修正-1000)
+	WriteOneHoldingRegister(HOLDREGISTER_DENSITYCORRECTCALUE, 1, g_deviceParams.densityCorrection);		// 密度的修正系数 密度+(修正-10000)
+	WriteOneHoldingRegister(HOLDREGISTER_DEVICENUM, 2, 0);						// 传感器系数
 	WriteOneHoldingRegister(HOLDREGISTER_OIL_MEASUR_POSITION, 2, 0); // 综合指令发油口密度测量位置
 
 	WriteOneHoldingRegister(HOLDREGISTER_WATER_ZERO_MIN_DISTANCE, 1, 0); // 水位与零点最小距离
@@ -166,7 +166,13 @@ int UpdateDeviceParamsFromLegacyRegs(int startadd, int reamount)
 {
     u32 temp;
     int end = startadd + reamount - 1;
-
+    /*************** 固定点测量位置 -> g_deviceParams.tankHeight ****************/
+    if ((HOLDREGISTER_TANKHIGHT >= startadd) &&
+        ((HOLDREGISTER_TANKHIGHT + 1) <= end))
+    {
+        temp = ReadOneHoldingRegister(HOLDREGISTER_TANKHIGHT, 2);
+        g_deviceParams.tankHeight = temp;
+    }
     /*************** 罐高 -> g_deviceParams.tankHeight ****************/
     if ((HOLDREGISTER_TANKHIGHT >= startadd) &&
         ((HOLDREGISTER_TANKHIGHT + 1) <= end))
@@ -174,11 +180,17 @@ int UpdateDeviceParamsFromLegacyRegs(int startadd, int reamount)
         temp = ReadOneHoldingRegister(HOLDREGISTER_TANKHIGHT, 2);
         g_deviceParams.tankHeight = temp;
     }
-    /*************** 标定液位 -> g_deviceParams.calibrateOilLevel ****************/
+    /*************** 标定液位/修正液位 -> g_deviceParams.calibrateOilLevel ****************/
     if ((HOLDREGISTER_CALIBRATIONLIQUIDLEVEL >= startadd) &&
         ((HOLDREGISTER_CALIBRATIONLIQUIDLEVEL + 1) <= end))
     {
         temp = ReadOneHoldingRegister(HOLDREGISTER_CALIBRATIONLIQUIDLEVEL, 2);
+        g_deviceParams.calibrateOilLevel = temp;
+    }
+    if ((HOLDREGISTER_CORRECTION_OIL >= startadd) &&
+        ((HOLDREGISTER_CORRECTION_OIL + 1) <= end))
+    {
+        temp = ReadOneHoldingRegister(HOLDREGISTER_CORRECTION_OIL, 2);
         g_deviceParams.calibrateOilLevel = temp;
     }
     /*************** 分布测量顺序 -> spreadMeasurementOrder ***********/
@@ -459,9 +471,9 @@ void Input_Write(void) {
 	WriteOneInputRegister(INPUTREGISTER_OILLEVEL, 2, g_measurement.oil_measurement.oil_level);			//液位值 赋值
 	WriteOneInputRegister(INPUTREGISTER_WATERLEVEL, 2, g_measurement.water_measurement.water_level);			//水位值 赋值
 	WriteOneInputRegister(INPUTREGISTER_BOTTOMHIGH, 2, g_measurement.height_measurement.current_real_height);			//罐底值 赋值
-	WriteOneInputRegister(INPUTREGISTER_REALTIMEPOSITION, 2, g_measurement.debug_data.sensor_position);			//传感器实饰恢帽 赋值
-	WriteOneInputRegister(INPUTREGISTER_VALUE_P1, 2, 0);			//液体压力值 赋值 孟
-	WriteOneInputRegister(INPUTREGISTER_VALUE_P3, 2, 0);			//传感器实饰恢帽 赋值
+	WriteOneInputRegister(INPUTREGISTER_REALTIMEPOSITION, 2, g_measurement.debug_data.sensor_position);			//传感器
+	WriteOneInputRegister(INPUTREGISTER_VALUE_P1, 2, 0);			//液体压力值
+	WriteOneInputRegister(INPUTREGISTER_VALUE_P3, 2, 0);			//传感值
 
 	if (g_measurement.density_distribution.measurement_points > 16) {
 		for (i = 0; i < 16; i++) {

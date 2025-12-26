@@ -81,12 +81,44 @@ uint32_t SearchWaterLevel(void)
     ret = check_water_status(&water_state);
     CHECK_ERROR(ret);
 
-    if (water_state != NORMAL) {
-        printf("水位测量\t设备需要回零点\r\n");
-        ret = SearchZero();
-        CHECK_ERROR(ret);
-        printf("水位测量\t回零点完成\r\n");
+    if (water_state != NORMAL)
+    {
+        /* 约定：sensor_position 单位为 0.1mm（从你打印 /10 推断） */
+        const int32_t ZERO_NEAR_TH   = 1000;   /* 100mm -> 1000(0.1mm) */
+        const float   UP_STEP_MM     = 100.0f; /* 每次上行 100mm */
+
+        printf("水位测量\t当前在水区，执行上行避让\r\n");
+
+        while (1)
+        {
+            /* 距离零点 <= 100mm：认为已到零点附近，仍在水里 -> 报错退出 */
+            if (g_measurement.debug_data.sensor_position <= ZERO_NEAR_TH)
+            {
+                printf("水位测量\t零点附近仍在水区，无法避让(pos=%.1fmm)\r\n",
+                       g_measurement.debug_data.sensor_position / 10.0f);
+                RETURN_ERROR(MEASUREMENT_WATERLEVEL_LOW);
+            }
+
+            /* 距离零点 > 100mm：上行 100mm */
+            ret = motorMoveAndWaitUntilStop(UP_STEP_MM, MOTOR_DIRECTION_UP);
+            CHECK_ERROR(ret);
+            printf("水位测量\t上行%.0fmm\r\n", (double)UP_STEP_MM);
+
+            /* 检测是否已提出水面 */
+            ret = check_water_status(&water_state);
+            CHECK_ERROR(ret);
+
+            if (water_state == NORMAL)
+            {
+                printf("水位测量\t已提出水面，继续测量\r\n");
+                break;
+            }
+
+            /* 仍在水里：继续上行，直到提出水面或到零点附近触发报错 */
+            CHECK_COMMAND_SWITCH(NO_ERROR);
+        }
     }
+
     /*************** 粗找阶段 - 带重试机制 ***************/
     try_times = 0;
     while (try_times < WATER_ROUGH_RETRY_MAX)
