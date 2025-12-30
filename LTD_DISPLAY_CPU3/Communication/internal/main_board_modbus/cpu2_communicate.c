@@ -178,7 +178,11 @@ void PollingInputData(void) {
 	}
     // 特定设备状态下，优先按测点数读取分布测量点
     if( (g_measurement.device_status.device_state == STATE_WARTSILA_DENSITY_OVER)
-    || (g_measurement.device_status.device_state == STATE_SPREADPOINTOVER)) {
+    || (g_measurement.device_status.device_state == STATE_SPREADPOINTOVER)
+	  || (g_measurement.device_status.device_state == STATE_GB_SPREADPOINTOVER)
+	  || (g_measurement.device_status.device_state == STATE_SYNTHETICING_OVER)
+	  || (g_measurement.device_status.device_state == STATE_COM_METER_DENSITY_OVER)
+	  || (g_measurement.device_status.device_state == STATE_INTERVAL_DENSITY_OVER)) {
         // 根据 REG_DENSITY_DIST_MEAS_POINTS 的值拉点数据
         RequestDensityDistPoints_ByCount();
         // 你可以在读完后置一个标志，避免每次都重复读

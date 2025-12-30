@@ -28,8 +28,8 @@ char SoftOfversion6 = 'F'; // 版本号最低位
 void SystemParameterSet(void)
 {
 	/*无需权限读取的*/
-	WriteOneHoldingRegister(HOLDREGISTER_SP_POSITION, 1,g_deviceParams.);						 // 固定点监测测量位置
-	WriteOneHoldingRegister(HOLDREGISTER_SPT_POSITION, 1, 0);						 // 单点测量的测量位置
+	WriteOneHoldingRegister(HOLDREGISTER_SP_POSITION, 1,g_deviceParams.singlePointMonitoringPosition);						 // 固定点监测测量位置
+	WriteOneHoldingRegister(HOLDREGISTER_SPT_POSITION, 1, g_deviceParams.singlePointMeasurementPosition);						 // 单点测量的测量位置
 	WriteOneHoldingRegister(HOLDREGISTER_SYNTHETIC_BOTTOM_FREE, 1, g_deviceParams.requireBottomMeasurement);			 // 无需权限综合指令是否需要测罐底默认为0不测V1.105
 	WriteOneHoldingRegister(HOLDREGISTER_SYNTHETIC_WATER_FREE, 1, g_deviceParams.requireWaterMeasurement);			 // 无需权限综合指令是否需要测水位默认为0不测V1.105
 	WriteOneHoldingRegister(HOLDREGISTER_SYNTHETIC_SINGLEPOINT_FREE, 1, g_deviceParams.requireSinglePointDensity);	 // 无需权限综合指令是否需要测水位默认为0不测V1.105
@@ -126,7 +126,7 @@ void SystemParameterSet(void)
 	WriteOneHoldingRegister(HOLDREGISTER_NUMOFDECIMALS, 1, 1);		// 温度的有效点数默认是2位
 	WriteOneHoldingRegister(HOLDREGISTER_TEMCORRECTCALUE, 1, g_deviceParams.temperatureCorrection);		// 温度的修正系数 温度+(修正-1000)
 	WriteOneHoldingRegister(HOLDREGISTER_DENSITYCORRECTCALUE, 1, g_deviceParams.densityCorrection);		// 密度的修正系数 密度+(修正-10000)
-	WriteOneHoldingRegister(HOLDREGISTER_DEVICENUM, 2, 0);						// 传感器系数
+	WriteOneHoldingRegister(HOLDREGISTER_DEVICENUM, 2, 0);						// 传感器系数zzzzzzzzzzzzzzzzzzzzzz
 	WriteOneHoldingRegister(HOLDREGISTER_OIL_MEASUR_POSITION, 2, 0); // 综合指令发油口密度测量位置
 
 	WriteOneHoldingRegister(HOLDREGISTER_WATER_ZERO_MIN_DISTANCE, 1, 0); // 水位与零点最小距离
@@ -167,11 +167,17 @@ int UpdateDeviceParamsFromLegacyRegs(int startadd, int reamount)
     u32 temp;
     int end = startadd + reamount - 1;
     /*************** 固定点测量位置 -> g_deviceParams.tankHeight ****************/
-    if ((HOLDREGISTER_TANKHIGHT >= startadd) &&
-        ((HOLDREGISTER_TANKHIGHT + 1) <= end))
+    if ((HOLDREGISTER_SP_POSITION >= startadd) &&
+        ((HOLDREGISTER_SP_POSITION + 1) <= end))
     {
-        temp = ReadOneHoldingRegister(HOLDREGISTER_TANKHIGHT, 2);
-        g_deviceParams.tankHeight = temp;
+        temp = ReadOneHoldingRegister(HOLDREGISTER_SP_POSITION, 2);
+        g_deviceParams.singlePointMeasurementPosition = temp;
+    }
+    if ((HOLDREGISTER_SPT_POSITION >= startadd) &&
+        ((HOLDREGISTER_SPT_POSITION + 1) <= end))
+    {
+        temp = ReadOneHoldingRegister(HOLDREGISTER_SPT_POSITION, 2);
+        g_deviceParams.singlePointMonitoringPosition = temp;
     }
     /*************** 罐高 -> g_deviceParams.tankHeight ****************/
     if ((HOLDREGISTER_TANKHIGHT >= startadd) &&

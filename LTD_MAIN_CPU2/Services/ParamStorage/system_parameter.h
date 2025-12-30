@@ -195,7 +195,7 @@ typedef enum {
 	STATE_SINGLEPOINTING = 0x0011,            // 单点测量中
 	STATE_RUNTOPOINTING = 0x0012,             // 运行到测量点中
 	STATE_GB_SPREADPOINTING = 0x0013,         // 国标分布测量中
-	STATE_SPREADPOINTING = 0x0014,            // 分布测量中国标测
+	STATE_SPREADPOINTING = 0x0014,            // 分布测量中
 	STATE_CALIBRATIONOILING = 0x0015,         // 标定液位
 	STATE_READPARAMETERING = 0x0016,          // 读取参数中
 	STATE_RUNUPING = 0x0017,                  // 向上运行中

@@ -85,30 +85,28 @@ void ProcessMeasureCmd(CommandType command)
 	/* 密度分布/区间测量系列，目前只有一个实现 */
 	case CMD_MEASURE_DISTRIBUTED:
 		printf("执行分布测量指令\n");
-		CMD_MeasureDensitySpread();
+		CMD_MeasureDensitySpread_Spread();
 		break;
 
 	case CMD_GB_MEASURE_DISTRIBUTED:
 		printf("执行国标分布测量指令，暂不支持该指令\n");
-		// GB_MeasureDensitySpread();
+		CMD_MeasureDensitySpread_GB();
 		break;
 
 	case CMD_MEASURE_DENSITY_METER:
 		printf("执行密度每米测量指令，暂不支持该指令\n");
-		// DensityMeterMeasurement();
+		CMD_MeasureDensitySpread_Meter();
 		break;
 
 	case CMD_MEASURE_DENSITY_RANGE:
 		printf("执行液位区间密度测量指令，暂不支持该指令\n");
-		// DensityRangeMeasurement();
+		CMD_MeasureDensitySpread_Interval();
 		break;
 
 	case CMD_WARTSILA_DENSITY_RANGE:
 		printf("执行瓦西莱区间密度测量指令\n");
 		CMD_WartsilaDensitySpread();
 		break;
-
-
 	/* ================== 调试 / 标定 / 系统类指令 ================== */
 
 	case CMD_CALIBRATE_ZERO:
@@ -354,7 +352,7 @@ void process_command(uint8_t *command) {
 	if (command[0] == 'R') //获取满载称重
 	{
 		printf("执行分布测量指令\n");
-		CMD_MeasureDensitySpread();
+		CMD_MeasureDensitySpread_Spread();
 
 	}
 	if (command[0] == 'W') //获取满载称重
@@ -581,14 +579,16 @@ static void CMD_SyntheticMeasurement(void) {
     EnableDensityMode();
 
     // 3. 执行分布密度测量, 结果写入 temp
-    ret = Density_SpreadMeasurement(&temp);
+    ret = Density_MeasureByMode_Exact(DENS_MODE_SPREAD, &temp);
     if (ret != NO_ERROR) {
-        printf("密度分布\t测量失败, 错误码: 0x%08lX\r\n", ret);
+        printf("普通分布测\t失败, err=0x%08lX\r\n", (unsigned long)ret);
         SET_ERROR(ret);
     }
 
+
     // 4. 测量成功, 写回全局结果
     g_measurement.density_distribution = temp;
+    Print_DensitySpreadResult(&g_measurement.density_distribution);
 // 测量结束，状态切换为分布测量完成
 	g_measurement.device_status.device_state = STATE_SYNTHETICING_OVER;
 
