@@ -17,7 +17,13 @@
 #include "motor_ctrl.h"
 // 全局变量：存储最终确定的罐底位置（编码器计数值）
 int32_t bottom_value = -100000000; // 初始值设为较大数值作为无效状态标识
+/* 全局/参数区：由寄存器或本机参数配置 */
+BottomDetectMode g_bottom_det_mode = BOTTOM_DET_BY_WEIGHT;
 
+/* 角度阈值：单位“度”，建议可配置 */
+float g_bottom_gyro_th_deg = 5.0f;
+
+static GyroZeroRef g_gyro_zero_ref = {0};
 // 函数原型声明
 static int SearchBottomRough();   // 粗略搜索罐底
 static int SearchBottomPrecise(); // 精确搜索罐底
@@ -262,3 +268,76 @@ static int SearchBottomPrecise() {
 	bottom_value = g_measurement.debug_data.cable_length;
 	return NO_ERROR;
 }
+uint32_t Bottom_SaveGyroZeroRef(void)
+{
+    float ax = 0.0f, ay = 0.0f;
+    uint32_t ret = Read_Gyro_Angle(&ax, &ay);   // 你前面已加的 Ch 指令函数
+    if (ret != NO_ERROR) {
+        g_gyro_zero_ref.valid = 0;
+        return ret;
+    }
+
+    g_gyro_zero_ref.x0_deg = ax;
+    g_gyro_zero_ref.y0_deg = ay;
+    g_gyro_zero_ref.valid  = 1;
+
+    printf("陀螺仪零点基准 | X0=%.2f | Y0=%.2f\r\n", ax, ay);
+    return NO_ERROR;
+}
+
+
+/**
+ * @brief 罐底状态检测（不锁存）
+ * @return BOTTOM（到达罐底）或 NORMAL（未到罐底）
+ */
+Weight_StateTypeDef check_bottom_status(void)
+{
+    /* -------- 方式1：称重阈值 -------- */
+    if (g_bottom_det_mode == BOTTOM_DET_BY_WEIGHT) {
+
+        int lower_limit = BOTTOM_WEIGHT_THRESHOLD;
+        int current     = weight_parament.current_weight;
+
+        Weight_StateTypeDef state =
+            (current < lower_limit) ? BOTTOM : NORMAL;
+
+        printf("罐底检测(称重) | 当前:%d | 阈值:%d | 状态:%s\r\n",
+               current,
+               lower_limit,
+               (state == BOTTOM) ? "到达罐底" : "正常");
+
+        return state;
+    }
+
+    /* -------- 方式2：陀螺仪角度变化（不锁存） -------- */
+    if (!g_gyro_zero_ref.valid) {
+        printf("罐底检测(陀螺仪) | 零点基准无效\r\n");
+        return NORMAL;
+    }
+
+    float ax = 0.0f, ay = 0.0f;
+    uint32_t ret = Read_Gyro_Angle(&ax, &ay);
+    if (ret != NO_ERROR) {
+        printf("罐底检测(陀螺仪) | 读取失败 ret=%lu\r\n",
+               (unsigned long)ret);
+        return NORMAL;
+    }
+
+    float dx = fabsf(ax - g_gyro_zero_ref.x0_deg);
+    float dy = fabsf(ay - g_gyro_zero_ref.y0_deg);
+    float dsum = dx + dy;
+
+    Weight_StateTypeDef state =
+        (dsum > g_bottom_gyro_th_deg) ? BOTTOM : NORMAL;
+
+    printf("罐底检测(陀螺仪) | X=%.2f Y=%.2f | X0=%.2f Y0=%.2f | "
+           "dX=%.2f dY=%.2f sum=%.2f | th=%.2f | 状态:%s\r\n",
+           ax, ay,
+           g_gyro_zero_ref.x0_deg, g_gyro_zero_ref.y0_deg,
+           dx, dy, dsum,
+           g_bottom_gyro_th_deg,
+           (state == BOTTOM) ? "到达罐底" : "正常");
+
+    return state;
+}
+

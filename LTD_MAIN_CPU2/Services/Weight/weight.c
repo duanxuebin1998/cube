@@ -111,28 +111,7 @@ Weight_StateTypeDef check_zero_point_status(void)
     return state;
 }
 
-/**
- * @brief 罐底状态检测
- * @return BOTTOM（到达罐底）或 NORMAL（未到罐底）
- */
-Weight_StateTypeDef check_bottom_status(void)
-{
-    int lower_limit = BOTTOM_WEIGHT_THRESHOLD;
-    int current     = weight_parament.current_weight;
-    const char *result_str;
-    Weight_StateTypeDef state;
 
-    if (current < lower_limit) {
-        state = BOTTOM;
-        result_str = "到达罐底";
-    } else {
-        state = NORMAL;
-        result_str = "正常";
-    }
-    printf("罐底状态检测 | 当前:%d | 罐底阈值:%d | 结果:%s\r\n",
-           current, lower_limit, result_str);
-    return state;
-}
 
 /**
  * @brief 称重统一碰撞/极限检测
@@ -164,7 +143,7 @@ uint32_t CheckWeightCollision(void)
         (int32_t)(((int64_t)full_weight * (int64_t)(100 + ZERO_WEIGHT_THRESHOLD)) / 100);
 
     /* 罐底阈值：绝对值阈值 */
-    int32_t bottom_limit = (int32_t)BOTTOM_WEIGHT_THRESHOLD;
+    int32_t bottom_limit = (int32_t)BOTTOM_WEIGHT_THRESHOLD-2000;
 
     float cable_mm  = g_measurement.debug_data.cable_length / 10.0f;
     float sensor_mm = g_measurement.debug_data.sensor_position / 10.0f;
