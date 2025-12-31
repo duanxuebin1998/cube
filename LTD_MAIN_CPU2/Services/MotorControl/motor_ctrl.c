@@ -16,7 +16,7 @@
 
 // ===== 可调参数 =====
 #define EPS_MM                   0.20f    // 到位公差 (±)
-#define VELOCITY_MAX 2
+#define VELOCITY_MAX 6
 // 丢步检测参数
 #define LOST_STEP_WINDOW        3       // 检测窗口（3次）
 #define LOST_STEP_THRESHOLD     2       // 3秒内总位移小于0.2mm判定丢步

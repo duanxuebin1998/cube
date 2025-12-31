@@ -448,7 +448,14 @@ static void CMD_CalibrateOilLevel(void) {
 	MeasureStart();
 
 	g_measurement.device_status.device_state = STATE_CALIBRATIONOILING;
-
+	//标定液位为0为实高标定液位
+	if(g_deviceParams.calibrateOilLevel == 0)
+	{
+		ret = SearchBottom();
+		SET_ERROR(ret);
+		save_device_params();//把修正后的罐高保存到参数
+		g_measurement.device_status.device_state = STATE_FINDOIL;
+	}
 	ret = SearchAndFollowOilLevel();
 	SET_ERROR(ret);
 	return;
