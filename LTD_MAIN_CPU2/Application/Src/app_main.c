@@ -37,6 +37,7 @@ void App_Init(void) {
 	motor_Init(); //电机初始化
 	fault_info_init(); // 初始化故障信息
 	DetectSensorType(); // 检测传感器类型
+	motor_text(); // 电机测试函数
 }
 // 主循环任务
 void App_MainLoop(void) {

@@ -21,7 +21,7 @@ int32_t bottom_value = -100000000; // 初始值设为较大数值作为无效状态标识
 BottomDetectMode g_bottom_det_mode = BOTTOM_DET_BY_WEIGHT;
 
 /* 角度阈值：单位“度”，建议可配置 */
-float g_bottom_gyro_th_deg = 5.0f;
+float g_bottom_gyro_th_deg = 15.0f;
 
 static GyroZeroRef g_gyro_zero_ref = {0};
 // 函数原型声明
@@ -174,7 +174,12 @@ uint32_t SearchBottom(void)
     /*************** 最终校验与记录 ***************/
     g_measurement.height_measurement.current_real_height = g_measurement.debug_data.cable_length;
     printf("罐底测量\t实高：%ld mm\r\n", g_measurement.debug_data.cable_length);
-
+    if(g_measurement.device_status.device_state == STATE_CALIBRATIONOILING)
+    {
+		g_deviceParams.tankHeight = g_measurement.debug_data.cable_length +  1;//TODO:这里的1应该改成液位传感器到底部距离差
+		printf("罐底测量\t标定完成，罐高设置为：%ld mm\r\n", g_deviceParams.tankHeight);
+		update_sensor_height_from_encoder();	//更新罐高数据
+    }
     // 电机上行，完成流程
     ret = motorMoveAndWaitUntilStop(100, MOTOR_DIRECTION_UP);
     CHECK_ERROR(ret);
@@ -196,7 +201,7 @@ static int SearchBottomRough() {
 	while (check_bottom_status() == NORMAL) {
 		ret = Motor_CheckLostStep_AutoTiming(g_measurement.debug_data.cable_length);
 		CHECK_ERROR(ret); // 检查丢步检测是否成功
-		printf("罐底测量\t长距离寻找罐底\t{传感器位置}%.1f\t", (float)(g_measurement.debug_data.sensor_position)/10.0);
+		printf("罐底测量\t长距离寻找罐底\t{传感器位置}%.1f\t称重\t= %ld\t", (float)(g_measurement.debug_data.sensor_position)/10.0,weight_parament.current_weight);
 	}
 	ret = motorQuickStop(); // 到达零点后快速停止电机
 	CHECK_ERROR(ret); // 检查快速停止是否成功
@@ -324,14 +329,15 @@ Weight_StateTypeDef check_bottom_status(void)
     }
 
     float dx = fabsf(ax - g_gyro_zero_ref.x0_deg);
-    float dy = fabsf(ay - g_gyro_zero_ref.y0_deg);
+    float dy = fabsf(fabsf(ay) - fabsf(g_gyro_zero_ref.y0_deg));
     float dsum = dx + dy;
 
     Weight_StateTypeDef state =
         (dsum > g_bottom_gyro_th_deg) ? BOTTOM : NORMAL;
 
-    printf("罐底检测(陀螺仪) | X=%.2f Y=%.2f | X0=%.2f Y0=%.2f | "
+    printf("罐底检测 (称重) %d (陀螺仪) | X=%.2f Y=%.2f | X0=%.2f Y0=%.2f | "
            "dX=%.2f dY=%.2f sum=%.2f | th=%.2f | 状态:%s\r\n",
+		   weight_parament.current_weight,
            ax, ay,
            g_gyro_zero_ref.x0_deg, g_gyro_zero_ref.y0_deg,
            dx, dy, dsum,

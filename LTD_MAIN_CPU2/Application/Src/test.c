@@ -169,21 +169,18 @@ void Test_Params_Storage(void) {
 void motor_text(void) {
 	printf("motor text start\n");
 	while (1) {
-		stpr_enableDriver(&stepper); //使能电机
-//		stpr_initStepper(&stepper, &hspi2, GPIOB, GPIO_PIN_12, 1, 18);
-		motorMoveNoWait(1000, MOTOR_DIRECTION_DOWN);
+		motorMoveNoWait(300, MOTOR_DIRECTION_DOWN);
 		HAL_Delay(1000);
 		printf("start down\n");
 		stpr_waitMove(&stepper);
 		printf("down over!\n");
-		HAL_Delay(1000);
-		stpr_moveTo(&stepper, 0, velocity);
+//		HAL_Delay(1000);
+		motorMoveNoWait(300, MOTOR_DIRECTION_UP);
 		printf("start up to zero\n");
 		HAL_Delay(1000);
 		stpr_waitMove(&stepper);
 		printf("上行结束\n");
-		HAL_Delay(1000);
-		stpr_disableDriver(&stepper); //使能电机
+//		HAL_Delay(1000);
 	}
 }
 #include <ltd_sensor_communication.h>
