@@ -108,6 +108,8 @@ int UART6_SendCommand(const char *cmd, char *response, uint16_t maxLen, uint32_t
 int UART6_SendWithRetry(const char *cmd, char *response, uint16_t maxLen, uint32_t timeout) {
     uint32_t ret;
     for (int i = 0; i < 3; i++) {
+//    	//延时3ms
+//    	HAL_Delay(3);
         ret = UART6_SendCommand(cmd, response, maxLen, timeout);
         if (ret == 0) {
             if (!IsErrorResponse(response)) {
@@ -128,7 +130,7 @@ int UART6_SendWithRetry(const char *cmd, char *response, uint16_t maxLen, uint32
 float Read_Sensor_Voltage(void) {
     uint32_t ret;
     char resp[RX_BUF_LEN];
-    ret = UART6_SendWithRetry("CK\r\n", resp, RX_BUF_LEN, 500);
+    ret = UART6_SendWithRetry("CK", resp, RX_BUF_LEN, 500);
     if (ret == NO_ERROR) {
         // 响应格式: E06.6379V
         printf("[UART6] 接收成功: %s\r\n", resp);
@@ -146,7 +148,7 @@ int Probe_EnableWaterSensor(void) {
     char resp[RX_BUF_LEN];
 
     // 发送命令 "CL\r\n" 并带 3 次重试
-    if (UART6_SendWithRetry("CL\r\n", resp, RX_BUF_LEN, 500) == 0) {
+    if (UART6_SendWithRetry("CL", resp, RX_BUF_LEN, 500) == 0) {
         printf("[Probe] 开启测水探针响应: %s\r\n", resp);
 
         // 协议约定：如果返回包含 "%" 或其他成功标识，就认为成功
@@ -168,7 +170,7 @@ int DSM_EnableLevelMode(void) {
     char resp[RX_BUF_LEN];
 
     // 发送命令 "CB\r\n" 并带 3 次重试
-    if (UART6_SendWithRetry("CB\r\n", resp, RX_BUF_LEN, 500) == 0) {
+    if (UART6_SendWithRetry("CB", resp, RX_BUF_LEN, 500) == 0) {
         printf("[液位模式] 开启液位模式响应: %s\r\n", resp);
 
         // 协议约定：如果返回包含 "%" 或其他成功标识，就认为成功
@@ -190,7 +192,7 @@ int DSM_EnableDensityMode(void) {
     char resp[RX_BUF_LEN];
 
     // 发送命令 "CD\r\n" 并带 3 次重试
-    if (UART6_SendWithRetry("CD\r\n", resp, RX_BUF_LEN, 500) == 0) {
+    if (UART6_SendWithRetry("CD", resp, RX_BUF_LEN, 500) == 0) {
         printf("[密度模式] 开启密度模式响应: %s\r\n", resp);
 
         // 协议约定：如果返回包含 "%" 或其他成功标识，就认为成功
@@ -235,7 +237,7 @@ uint32_t Read_Level_Frequency(uint32_t *frequency_out)
     if (!frequency_out) return SENSOR_COMM_TIMEOUT;
 
     char resp[RX_BUF_LEN] = {0};
-    uint32_t ret = UART6_SendWithRetry("Cb\r\n", resp, RX_BUF_LEN, 500);
+    uint32_t ret = UART6_SendWithRetry("Cb", resp, RX_BUF_LEN, 500);
     if (ret != 0) {
         return SENSOR_COMM_TIMEOUT;
     }
@@ -258,7 +260,7 @@ int DSM_Read_Frequency_Density_Temp(float *frequency, float *density, float *tem
     int ret = NO_ERROR;
     char resp[RX_BUF_LEN];
 
-    ret = UART6_SendWithRetry("Cd\r\n", resp, RX_BUF_LEN, 500);
+    ret = UART6_SendWithRetry("Cd", resp, RX_BUF_LEN, 500);
     if (ret == 0) {
         // 格式: F+0000.0D+000.00T+19.570P
         if ((resp[0] == 'E') || (resp[0] == 'F')) {
@@ -303,7 +305,7 @@ uint32_t Read_VibrationTube_ID(char *id_out, size_t id_out_size)
     char resp[RX_BUF_LEN] = {0};
 
     // 发送 CN 指令
-    uint32_t ret = UART6_SendWithRetry("CN\r\n", resp, RX_BUF_LEN, 500);
+    uint32_t ret = UART6_SendWithRetry("CN", resp, RX_BUF_LEN, 500);
     if (ret != 0) {
         printf("[UART6] 发送 CN 指令或接收超时\r\n");
         return SENSOR_COMM_TIMEOUT;
@@ -365,7 +367,7 @@ uint32_t Read_Water_Capacitance(float *cap_out)
     }
 
     char resp[RX_BUF_LEN] = {0};
-    uint32_t ret = UART6_SendWithRetry("Cl\r\n", resp, RX_BUF_LEN, 500);
+    uint32_t ret = UART6_SendWithRetry("Cl", resp, RX_BUF_LEN, 500);
     if (ret != NO_ERROR) {
         return ret;
     }
@@ -407,5 +409,72 @@ uint32_t Read_Water_Capacitance(float *cap_out)
 	if (*cap_out < 1.0f) {
 		*cap_out = 99999.9;
 	}
+    return NO_ERROR;
+}
+/* 解析形如 "+0040.1" 或 "-12.3" 的浮点数，p 会自动跳过到数字起始 */
+static int dsm_parse_float_after_tag(const char *tag_pos, float *out_val)
+{
+    if (!tag_pos || !out_val) return -1;
+
+    const char *p = tag_pos;
+
+    /* 跳过标签字符本身（例如 'A' 或 'B'） */
+    p++;
+
+    /* 跳过非数字/符号字符 */
+    while (*p && !isdigit((unsigned char)*p) && *p != '-' && *p != '+') {
+        p++;
+    }
+    if (!*p) return -2;
+
+    char *endp = NULL;
+    double v = strtod(p, &endp);
+    if (endp == p) return -3;
+
+    *out_val = (float)v;
+    return 0;
+}
+/**
+ * @brief 读取陀螺仪角度（Ch 指令）
+ * @param[out] angle_x_deg  X轴角度（A）
+ * @param[out] angle_y_deg  Y轴角度（B）
+ * @return uint32_t 错误码（NO_ERROR 成功）
+ *
+ * 期望响应示例：
+ *   A+0040.1B+0097.8+
+ * （实际帧尾通常还带 BCC + \r\n，你的 UART6_SendWithRetry 已做 BCC 校验）
+ */
+uint32_t Read_Gyro_Angle(float *angle_x_deg, float *angle_y_deg)
+{
+    if (!angle_x_deg || !angle_y_deg) {
+        return PARAM_ERROR;
+    }
+
+    char resp[RX_BUF_LEN] = {0};
+    uint32_t ret = UART6_SendWithRetry("Ch", resp, RX_BUF_LEN, 500);
+    if (ret != NO_ERROR) {
+        return ret;
+    }
+
+    /* 查找 A/B 标签 */
+    char *pA = strchr(resp, 'A');
+    char *pB = strchr(resp, 'B');
+    if (!pA || !pB) {
+        printf("[UART6] 陀螺仪响应格式错误: %s\r\n", resp);
+        return SENSOR_COMM_TIMEOUT; /* 或建议新增 SENSOR_RESP_FORMAT_ERROR */
+    }
+
+    float ax = 0.0f, ay = 0.0f;
+    int ea = dsm_parse_float_after_tag(pA, &ax);
+    int eb = dsm_parse_float_after_tag(pB, &ay);
+
+    if (ea != 0 || eb != 0) {
+        printf("[UART6] 陀螺仪角度解析失败: ea=%d eb=%d, resp=%s\r\n", ea, eb, resp);
+        return SENSOR_COMM_TIMEOUT; /* 或 SENSOR_RESP_FORMAT_ERROR */
+    }
+
+    *angle_x_deg = ax;
+    *angle_y_deg = ay;
+
     return NO_ERROR;
 }

@@ -49,4 +49,5 @@ uint32_t Read_Level_Frequency(uint32_t *frequency_out);
 int Probe_EnableWaterSensor(void);
 int DSM_Read_Frequency_Density_Temp(float *frequency,float *density, float *temp);
 uint32_t Read_Water_Capacitance(float *cap_out);
+uint32_t Read_Gyro_Angle(float *angle_x_deg, float *angle_y_deg);
 #endif /* SENSOR_DSM_SENSOR_COMMUNICATION_H_ */

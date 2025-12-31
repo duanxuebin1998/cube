@@ -150,14 +150,14 @@ uint32_t motorMoveAndWaitUntilStop(float mm, int dir) {
 
 
 uint32_t motorMove_up(void) {
-    motorMoveNoWait(100000, MOTOR_DIRECTION_UP);
+    motorMoveNoWait(1000000, MOTOR_DIRECTION_UP);
     printf("电机开始长距离上行\r\n");
     MotorLostStep_Init(); // 初始化丢步检测
     return NO_ERROR;
 }
 
 uint32_t motorMove_down(void) {
-    motorMoveNoWait(100000, MOTOR_DIRECTION_DOWN);
+    motorMoveNoWait(1000000, MOTOR_DIRECTION_DOWN);
     printf("电机开始长距离下行\r\n");
     MotorLostStep_Init(); // 初始化丢步检测
     return NO_ERROR;

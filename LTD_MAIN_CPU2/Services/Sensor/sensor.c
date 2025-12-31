@@ -10,6 +10,7 @@
  */
 
 #include "sensor.h"
+#include "measure_tank_height.h"
 /**
  * @brief 自动识别传感器类型（DSM 一代 / DSM_V2 / SIL）
  *
@@ -28,6 +29,7 @@ uint32_t DetectSensorType(void) {
 	{
 		printf("读取温度失败,SIL传感器\r\n");
 		g_deviceParams.sensorType =DSM_SENSOR;
+		g_bottom_det_mode = BOTTOM_DET_BY_GYRO;
 	}
 	ret = WIRELESS_PrintInfo(1); // 打印无线传感器信息
 	ret = WIRELESS_PrintInfo(2); // 打印无线传感器信息

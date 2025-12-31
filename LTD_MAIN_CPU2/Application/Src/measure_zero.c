@@ -12,6 +12,7 @@
 #include "measure_zero.h"
 #include "system_parameter.h"
 #include "motor_ctrl.h"
+#include "measure_tank_height.h"
 
 #define ZERO_SEARCH_RETRY_MAX  3  // 可通过宏配置最大重试次数
 
@@ -40,7 +41,7 @@ int SearchZero(void) {
 	fault_info_init(); // 清除故障信息
 	printf("零点测量\t开始\r\n");
 
-	if (weight_parament.stable_weight >weight_parament.full_weight+200) { // 如果当前超重
+	if (weight_parament.stable_weight >weight_parament.full_weight+2000) { // 如果当前超重
 		ret = motorMoveAndWaitUntilStop(100.0, MOTOR_DIRECTION_DOWN);
 		CHECK_ERROR(ret);
 		printf("零点测量\t脱离零点完成\r\n");
@@ -151,13 +152,17 @@ int SearchZero(void) {
 	} else {
 		set_encoder_zero();
 		printf("零点测量\t编码器零点设置成功\r\n");
-		read_zero_capacitance();//读取零点电容值
 		ret = motorMoveNoWait(10, MOTOR_DIRECTION_DOWN);//脱离零点
 		CHECK_ERROR(ret);
 		HAL_Delay(3000);
 		printf("零点测量\t向下移动\t下行距离\t%ld\r\n", g_deviceParams.findZeroDownDistance/10);
 		ret = motorMoveAndWaitUntilStop((float)g_deviceParams.findZeroDownDistance/10.0, MOTOR_DIRECTION_DOWN);
 		CHECK_ERROR(ret);
+		read_zero_capacitance();//读取零点电容值
+		if(g_bottom_det_mode == BOTTOM_DET_BY_GYRO)
+		{
+			Bottom_SaveGyroZeroRef();//保存陀螺仪零点参考
+		}
 		printf("零点测量\t电机下行完成，流程结束\r\n");
 	}
 
