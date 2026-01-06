@@ -291,8 +291,8 @@ uint32_t stpr_waitMove(TMC5130TypeDef *tmc5130)
     uint32_t ret;
     while ((stpr_readInt(tmc5130, TMC5130_RAMPSTAT) & 0x400) != 0x400) {
         // 在运动过程中周期性检查防撞（比如称重超限等）
-//        ret = CheckWeightCollision();    // 防撞检测
-//        CHECK_ERROR(ret);                // 若有错误直接返回
+        ret = CheckWeightCollision();    // 防撞检测
+        CHECK_ERROR(ret);                // 若有错误直接返回
 
         // 检查 TMC5130 全局状态
         uint32_t gstat = stpr_readInt(tmc5130, TMC5130_GSTAT);
@@ -391,11 +391,11 @@ void stpr_initStepper(TMC5130TypeDef *tmc5130,
     );
 
     // 基本加减速、速度参数（需根据实际机械系统调优）
-    stpr_writeInt(tmc5130, TMC5130_AMAX,   10 * 32);
-    stpr_writeInt(tmc5130, TMC5130_A1,     20 * 32);
+    stpr_writeInt(tmc5130, TMC5130_AMAX,   100 * 32);
+    stpr_writeInt(tmc5130, TMC5130_A1,     200 * 32);
     stpr_writeInt(tmc5130, TMC5130_V1,     800 * 32);
-    stpr_writeInt(tmc5130, TMC5130_D1,     20 * 32);
-    stpr_writeInt(tmc5130, DMAX,           10 * 32);
+    stpr_writeInt(tmc5130, TMC5130_D1,     200 * 32);
+    stpr_writeInt(tmc5130, DMAX,           100 * 32);
     stpr_writeInt(tmc5130, TMC5130_VSTOP,  0x0000000A);
     stpr_writeInt(tmc5130, TMC5130_VSTART, 0x00000005);
     stpr_writeInt(tmc5130, TMC5130_TZEROWAIT, 10000);

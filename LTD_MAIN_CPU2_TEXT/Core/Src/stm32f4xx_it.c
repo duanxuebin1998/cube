@@ -1,0 +1,500 @@
+/* USER CODE BEGIN Header */
+/**
+ ******************************************************************************
+ * @file    stm32f4xx_it.c
+ * @brief   Interrupt Service Routines.
+ ******************************************************************************
+ * @attention
+ *
+ * Copyright (c) 2025 STMicroelectronics.
+ * All rights reserved.
+ *
+ * This software is licensed under terms that can be found in the LICENSE file
+ * in the root directory of this software component.
+ * If no LICENSE file comes with this software, it is provided AS-IS.
+ *
+ ******************************************************************************
+ */
+/* USER CODE END Header */
+
+/* Includes ------------------------------------------------------------------*/
+#include "main.h"
+#include "stm32f4xx_it.h"
+/* Private includes ----------------------------------------------------------*/
+/* USER CODE BEGIN Includes */
+#include "weight.h"
+#include "hart.h"
+#include "hostcommu.h"
+#include "iwdg.h"
+/* USER CODE END Includes */
+
+/* Private typedef -----------------------------------------------------------*/
+/* USER CODE BEGIN TD */
+
+/* USER CODE END TD */
+
+/* Private define ------------------------------------------------------------*/
+/* USER CODE BEGIN PD */
+
+/* USER CODE END PD */
+
+/* Private macro -------------------------------------------------------------*/
+/* USER CODE BEGIN PM */
+
+/* USER CODE END PM */
+
+/* Private variables ---------------------------------------------------------*/
+/* USER CODE BEGIN PV */
+
+/* USER CODE END PV */
+
+/* Private function prototypes -----------------------------------------------*/
+/* USER CODE BEGIN PFP */
+
+/* USER CODE END PFP */
+
+/* Private user code ---------------------------------------------------------*/
+/* USER CODE BEGIN 0 */
+
+/* USER CODE END 0 */
+
+/* External variables --------------------------------------------------------*/
+extern DMA_HandleTypeDef hdma_spi5_rx;
+extern TIM_HandleTypeDef htim1;
+extern TIM_HandleTypeDef htim4;
+extern DMA_HandleTypeDef hdma_uart4_rx;
+extern DMA_HandleTypeDef hdma_uart5_rx;
+extern DMA_HandleTypeDef hdma_uart5_tx;
+extern DMA_HandleTypeDef hdma_usart1_rx;
+extern DMA_HandleTypeDef hdma_usart2_rx;
+extern DMA_HandleTypeDef hdma_usart2_tx;
+extern UART_HandleTypeDef huart4;
+extern UART_HandleTypeDef huart5;
+extern UART_HandleTypeDef huart1;
+extern UART_HandleTypeDef huart2;
+/* USER CODE BEGIN EV */
+//usart1接收数据缓冲区
+uint8_t received_buffer[64];
+uint16_t buffer_index = 0;  // 当前接收的数据索引
+// 标志，表示有新命令待处理
+volatile uint8_t new_command_ready = 0;
+/* USER CODE END EV */
+
+/******************************************************************************/
+/*           Cortex-M4 Processor Interruption and Exception Handlers          */
+/******************************************************************************/
+/**
+  * @brief This function handles Non maskable interrupt.
+  */
+void NMI_Handler(void)
+{
+  /* USER CODE BEGIN NonMaskableInt_IRQn 0 */
+
+  /* USER CODE END NonMaskableInt_IRQn 0 */
+  /* USER CODE BEGIN NonMaskableInt_IRQn 1 */
+	while (1) {
+	}
+  /* USER CODE END NonMaskableInt_IRQn 1 */
+}
+
+/**
+  * @brief This function handles Hard fault interrupt.
+  */
+void HardFault_Handler(void)
+{
+  /* USER CODE BEGIN HardFault_IRQn 0 */
+
+  /* USER CODE END HardFault_IRQn 0 */
+  while (1)
+  {
+    /* USER CODE BEGIN W1_HardFault_IRQn 0 */
+    /* USER CODE END W1_HardFault_IRQn 0 */
+  }
+}
+
+/**
+  * @brief This function handles Memory management fault.
+  */
+void MemManage_Handler(void)
+{
+  /* USER CODE BEGIN MemoryManagement_IRQn 0 */
+
+  /* USER CODE END MemoryManagement_IRQn 0 */
+  while (1)
+  {
+    /* USER CODE BEGIN W1_MemoryManagement_IRQn 0 */
+    /* USER CODE END W1_MemoryManagement_IRQn 0 */
+  }
+}
+
+/**
+  * @brief This function handles Pre-fetch fault, memory access fault.
+  */
+void BusFault_Handler(void)
+{
+  /* USER CODE BEGIN BusFault_IRQn 0 */
+
+  /* USER CODE END BusFault_IRQn 0 */
+  while (1)
+  {
+    /* USER CODE BEGIN W1_BusFault_IRQn 0 */
+    /* USER CODE END W1_BusFault_IRQn 0 */
+  }
+}
+
+/**
+  * @brief This function handles Undefined instruction or illegal state.
+  */
+void UsageFault_Handler(void)
+{
+  /* USER CODE BEGIN UsageFault_IRQn 0 */
+
+  /* USER CODE END UsageFault_IRQn 0 */
+  while (1)
+  {
+    /* USER CODE BEGIN W1_UsageFault_IRQn 0 */
+    /* USER CODE END W1_UsageFault_IRQn 0 */
+  }
+}
+
+/**
+  * @brief This function handles System service call via SWI instruction.
+  */
+void SVC_Handler(void)
+{
+  /* USER CODE BEGIN SVCall_IRQn 0 */
+
+  /* USER CODE END SVCall_IRQn 0 */
+  /* USER CODE BEGIN SVCall_IRQn 1 */
+
+  /* USER CODE END SVCall_IRQn 1 */
+}
+
+/**
+  * @brief This function handles Debug monitor.
+  */
+void DebugMon_Handler(void)
+{
+  /* USER CODE BEGIN DebugMonitor_IRQn 0 */
+
+  /* USER CODE END DebugMonitor_IRQn 0 */
+  /* USER CODE BEGIN DebugMonitor_IRQn 1 */
+
+  /* USER CODE END DebugMonitor_IRQn 1 */
+}
+
+/**
+  * @brief This function handles Pendable request for system service.
+  */
+void PendSV_Handler(void)
+{
+  /* USER CODE BEGIN PendSV_IRQn 0 */
+
+  /* USER CODE END PendSV_IRQn 0 */
+  /* USER CODE BEGIN PendSV_IRQn 1 */
+
+  /* USER CODE END PendSV_IRQn 1 */
+}
+
+/**
+  * @brief This function handles System tick timer.
+  */
+void SysTick_Handler(void)
+{
+  /* USER CODE BEGIN SysTick_IRQn 0 */
+
+  /* USER CODE END SysTick_IRQn 0 */
+  HAL_IncTick();
+  /* USER CODE BEGIN SysTick_IRQn 1 */
+
+  /* USER CODE END SysTick_IRQn 1 */
+}
+
+/******************************************************************************/
+/* STM32F4xx Peripheral Interrupt Handlers                                    */
+/* Add here the Interrupt Handlers for the used peripherals.                  */
+/* For the available peripheral interrupt handler names,                      */
+/* please refer to the startup file (startup_stm32f4xx.s).                    */
+/******************************************************************************/
+
+/**
+  * @brief This function handles DMA1 stream0 global interrupt.
+  */
+void DMA1_Stream0_IRQHandler(void)
+{
+  /* USER CODE BEGIN DMA1_Stream0_IRQn 0 */
+
+  /* USER CODE END DMA1_Stream0_IRQn 0 */
+  HAL_DMA_IRQHandler(&hdma_uart5_rx);
+  /* USER CODE BEGIN DMA1_Stream0_IRQn 1 */
+
+  /* USER CODE END DMA1_Stream0_IRQn 1 */
+}
+
+/**
+  * @brief This function handles DMA1 stream2 global interrupt.
+  */
+void DMA1_Stream2_IRQHandler(void)
+{
+  /* USER CODE BEGIN DMA1_Stream2_IRQn 0 */
+
+  /* USER CODE END DMA1_Stream2_IRQn 0 */
+  HAL_DMA_IRQHandler(&hdma_uart4_rx);
+  /* USER CODE BEGIN DMA1_Stream2_IRQn 1 */
+
+  /* USER CODE END DMA1_Stream2_IRQn 1 */
+}
+
+/**
+  * @brief This function handles DMA1 stream5 global interrupt.
+  */
+void DMA1_Stream5_IRQHandler(void)
+{
+  /* USER CODE BEGIN DMA1_Stream5_IRQn 0 */
+
+  /* USER CODE END DMA1_Stream5_IRQn 0 */
+  HAL_DMA_IRQHandler(&hdma_usart2_rx);
+  /* USER CODE BEGIN DMA1_Stream5_IRQn 1 */
+
+  /* USER CODE END DMA1_Stream5_IRQn 1 */
+}
+
+/**
+  * @brief This function handles DMA1 stream6 global interrupt.
+  */
+void DMA1_Stream6_IRQHandler(void)
+{
+  /* USER CODE BEGIN DMA1_Stream6_IRQn 0 */
+
+  /* USER CODE END DMA1_Stream6_IRQn 0 */
+  HAL_DMA_IRQHandler(&hdma_usart2_tx);
+  /* USER CODE BEGIN DMA1_Stream6_IRQn 1 */
+
+  /* USER CODE END DMA1_Stream6_IRQn 1 */
+}
+
+/**
+  * @brief This function handles TIM1 update interrupt and TIM10 global interrupt.
+  */
+void TIM1_UP_TIM10_IRQHandler(void)
+{
+  /* USER CODE BEGIN TIM1_UP_TIM10_IRQn 0 */
+
+  /* USER CODE END TIM1_UP_TIM10_IRQn 0 */
+  HAL_TIM_IRQHandler(&htim1);
+  /* USER CODE BEGIN TIM1_UP_TIM10_IRQn 1 */
+
+  /* USER CODE END TIM1_UP_TIM10_IRQn 1 */
+}
+
+/**
+  * @brief This function handles TIM4 global interrupt.
+  */
+void TIM4_IRQHandler(void)
+{
+  /* USER CODE BEGIN TIM4_IRQn 0 */
+
+  /* USER CODE END TIM4_IRQn 0 */
+  HAL_TIM_IRQHandler(&htim4);
+  /* USER CODE BEGIN TIM4_IRQn 1 */
+	HAL_IWDG_Refresh(&hiwdg);
+  /* USER CODE END TIM4_IRQn 1 */
+}
+
+/**
+  * @brief This function handles USART1 global interrupt.
+  */
+void USART1_IRQHandler(void)
+{
+  /* USER CODE BEGIN USART1_IRQn 0 */
+	uint32_t tmp_flag = 0;
+	uint32_t temp;
+	uint8_t received_data;
+  /* USER CODE END USART1_IRQn 0 */
+  HAL_UART_IRQHandler(&huart1);
+  /* USER CODE BEGIN USART1_IRQn 1 */
+	if (USART1 == huart1.Instance)  // 确保是USART1中断
+			{
+		tmp_flag = __HAL_UART_GET_FLAG(&huart1, UART_FLAG_IDLE);  // 获取IDLE标志位
+
+		if (tmp_flag != RESET)  // 如果IDLE标志被置位
+				{
+			__HAL_UART_CLEAR_IDLEFLAG(&huart1);  // 清除IDLE标志
+			HAL_UART_DMAStop(&huart1);  // 停止DMA接收
+
+			temp = __HAL_DMA_GET_COUNTER(&hdma_usart1_rx);  // 获取DMA中未传输的数据个数
+			USART1_RX_LEN = USART1_RX_BUF_SIZE - temp;  // 计算已经接收到的数据个数
+
+			// 将接收到的数据添加到接收缓冲区
+			printf("receive ");
+			for (int i = 0; i < USART1_RX_LEN; i++) {
+				received_data = USART1_RX_BUF[i];
+				printf("%x ", received_data);
+				// 判断是否遇到终止符 \r\n
+				if (received_data == '\n' && buffer_index > 0 && received_buffer[buffer_index - 1] == '\r') {
+					// 完整命令接收完毕，标记有新命令
+					new_command_ready = 1;
+					// 通过串口1重新发送接收到的所有数据
+//					HAL_UART_Transmit(&huart1, USART1_RX_BUF, USART1_RX_LEN, HAL_MAX_DELAY);  // 发送接收到的所有数据
+					buffer_index = 0;  // 清空接收缓冲区，准备接收下一条命令
+				} else {
+					// 存储接收到的数据
+					if (buffer_index < 64 - 1) {
+						received_buffer[buffer_index++] = received_data;
+					}
+				}
+			}
+			HAL_UART_Receive_DMA(&huart1, USART1_RX_BUF, USART1_RX_BUF_SIZE); // 重新启用DMA接收
+		}
+	}
+  /* USER CODE END USART1_IRQn 1 */
+}
+
+/**
+  * @brief This function handles USART2 global interrupt.
+  */
+void USART2_IRQHandler(void)
+{
+  /* USER CODE BEGIN USART2_IRQn 0 */
+	uint32_t tmp_flag = 0;
+	uint32_t temp;
+  /* USER CODE END USART2_IRQn 0 */
+  HAL_UART_IRQHandler(&huart2);
+  /* USER CODE BEGIN USART2_IRQn 1 */
+	if (USART2 == huart2.Instance)  // 确保是USART2中断
+			{
+		tmp_flag = __HAL_UART_GET_FLAG(&huart2, UART_FLAG_IDLE);  // 获取IDLE标志位
+
+		if (tmp_flag != RESET) {  // 如果IDLE标志被置位
+			__HAL_UART_CLEAR_IDLEFLAG(&huart2);  // 清除IDLE标志
+			HAL_UART_DMAStop(&huart2);  // 停止DMA接收
+			temp = __HAL_DMA_GET_COUNTER(&hdma_usart2_rx);  // 获取DMA中未传输的数据个数
+			USART2_RX_LEN = USART2_RX_BUF_SIZE - temp;  // 计算已经接收到的数据个数
+
+			HartCommunicationProcess(USART2_RX_BUF, USART2_TX_BUF, &USART2_TX_LEN); // 处理接收到的数据
+			if (USART2_TX_LEN > 0) {
+				HAL_GPIO_WritePin(HART_RTS_GPIO_Port, HART_RTS_Pin, GPIO_PIN_RESET); //切换发送模式
+//				int i;
+//				printf("SED %d:\t", USART2_TX_LEN);
+//				for (i = 0; i < USART2_TX_LEN; i++) {
+//					printf("%02X ", USART2_TX_BUF[i]);
+//				}
+//				printf("\n");
+				HAL_UART_Transmit_DMA(&huart2, USART2_TX_BUF, USART2_TX_LEN);
+			}
+			else
+			{
+//				HAL_GPIO_WritePin(HART_RTS_GPIO_Port, HART_RTS_Pin, GPIO_PIN_RESET); //切换发送模式
+//				HAL_UART_Transmit_DMA(&huart2, USART2_RX_BUF, USART2_RX_LEN);
+				HAL_UART_Receive_DMA(&huart2, USART2_RX_BUF, USART2_RX_BUF_SIZE); // 重新启用DMA接收
+			}
+		}
+	}
+  /* USER CODE END USART2_IRQn 1 */
+}
+
+/**
+  * @brief This function handles DMA1 stream7 global interrupt.
+  */
+void DMA1_Stream7_IRQHandler(void)
+{
+  /* USER CODE BEGIN DMA1_Stream7_IRQn 0 */
+
+  /* USER CODE END DMA1_Stream7_IRQn 0 */
+  HAL_DMA_IRQHandler(&hdma_uart5_tx);
+  /* USER CODE BEGIN DMA1_Stream7_IRQn 1 */
+
+  /* USER CODE END DMA1_Stream7_IRQn 1 */
+}
+
+/**
+  * @brief This function handles UART4 global interrupt.
+  */
+void UART4_IRQHandler(void)
+{
+  /* USER CODE BEGIN UART4_IRQn 0 */
+	uint32_t tmp_flag = 0;
+	uint32_t temp;
+	uint8_t high_byte; // FF
+	uint8_t low_byte;  // 69
+  /* USER CODE END UART4_IRQn 0 */
+  HAL_UART_IRQHandler(&huart4);
+  /* USER CODE BEGIN UART4_IRQn 1 */
+	if (UART4 == huart4.Instance) {
+		tmp_flag = __HAL_UART_GET_FLAG(&huart4, UART_FLAG_IDLE); //获取IDLE标志位
+
+		if ((tmp_flag != RESET)) //idle标志被置位
+		{
+			__HAL_UART_CLEAR_IDLEFLAG(&huart4); //清除标志位
+			HAL_UART_DMAStop(&huart4);
+			temp = __HAL_DMA_GET_COUNTER(&hdma_uart4_rx); // 获取DMA中未传输的数据个数
+			USART4_RX_LEN = USART4_RX_BUF_SIZE - temp; //总计数减去未传输的数据个数，得到已经接收的数据个数
+//  		printf("receive %x!\n",USART4_RX_BUF[0]);
+			high_byte = USART4_RX_BUF[19]; // FF
+			low_byte = USART4_RX_BUF[20];  // 69
+			g_weight = (high_byte << 8) | low_byte;
+			weight_parament.current_weight = weight_parament.empty_weight - g_weight;//更新当前称重值
+			Weight_Update(weight_parament.current_weight); // 稳定重量
+			HAL_UART_Receive_DMA(&huart4, USART4_RX_BUF, USART4_RX_BUF_SIZE); //重新打开DMA接收
+		}
+	}
+  /* USER CODE END UART4_IRQn 1 */
+}
+
+/**
+  * @brief This function handles UART5 global interrupt.
+  */
+void UART5_IRQHandler(void)
+{
+  /* USER CODE BEGIN UART5_IRQn 0 */
+	uint32_t tmp_flag = 0;
+	uint32_t temp;
+  /* USER CODE END UART5_IRQn 0 */
+  HAL_UART_IRQHandler(&huart5);
+  /* USER CODE BEGIN UART5_IRQn 1 */
+	if (UART5 == huart5.Instance) {
+		tmp_flag = __HAL_UART_GET_FLAG(&huart5, UART_FLAG_IDLE);  // 获取IDLE标志位
+
+		if (tmp_flag != RESET) {  // 如果IDLE标志被置位
+			__HAL_UART_CLEAR_IDLEFLAG(&huart5);  // 清除IDLE标志
+			HAL_UART_DMAStop(&huart5);  // 停止DMA接收
+			temp = __HAL_DMA_GET_COUNTER(&hdma_uart5_rx);  // 获取DMA中未传输的数据个数
+			UART5_RX_LEN = UART5_RX_BUF_SIZE - temp;  // 计算已经接收到的数据个数
+			HostCommuProcess(UART5_RX_BUF, UART5_RX_LEN);  // 处理接收到的数据
+//			HAL_UART_Receive_DMA(&huart5, UART5_RX_BUF, UART5_RX_BUF_SIZE); // 重新启用DMA接收
+		}
+	}
+  /* USER CODE END UART5_IRQn 1 */
+}
+
+/**
+  * @brief This function handles DMA2 stream2 global interrupt.
+  */
+void DMA2_Stream2_IRQHandler(void)
+{
+  /* USER CODE BEGIN DMA2_Stream2_IRQn 0 */
+
+  /* USER CODE END DMA2_Stream2_IRQn 0 */
+  HAL_DMA_IRQHandler(&hdma_usart1_rx);
+  /* USER CODE BEGIN DMA2_Stream2_IRQn 1 */
+
+  /* USER CODE END DMA2_Stream2_IRQn 1 */
+}
+
+/**
+  * @brief This function handles DMA2 stream3 global interrupt.
+  */
+void DMA2_Stream3_IRQHandler(void)
+{
+  /* USER CODE BEGIN DMA2_Stream3_IRQn 0 */
+
+  /* USER CODE END DMA2_Stream3_IRQn 0 */
+  HAL_DMA_IRQHandler(&hdma_spi5_rx);
+  /* USER CODE BEGIN DMA2_Stream3_IRQn 1 */
+
+  /* USER CODE END DMA2_Stream3_IRQn 1 */
+}
+
+/* USER CODE BEGIN 1 */
+
+/* USER CODE END 1 */

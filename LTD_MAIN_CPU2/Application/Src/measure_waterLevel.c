@@ -34,6 +34,17 @@
 #define WATER_VEL_MID                    (16 * 32 * 40)
 #define WATER_VEL_SLOW                   (16 * 32 * 2)
 
+
+
+#define WATER_FOLLOW_OFFSET            (5.0f)   /* 阈值 = air + 50 */
+#define WATER_FOLLOW_HYSTERESIS        (0.3f)    /* 滞回，防抖：可调 3~10 */
+#define WATER_FOLLOW_SAMPLE_MS         (500)     /* 采样周期 */
+#define WATER_FOLLOW_STEP_SMALL_MM     (0.2f)    /* 阈值附近小步 */
+#define WATER_FOLLOW_STEP_MED_MM       (5.0f)    /* 中等偏差 */
+#define WATER_FOLLOW_STEP_BIG_MM       (20.0f)    /* 大偏差/饱和时快速拉回 */
+#define WATER_CAP_SAT_LIMIT            (9999.0f)/* 认为“饱和/无穷大”的阈值，用于保护 */
+#define WATER_FOLLOW_LOST_DIFF_BIG       (2.5f)   /* 认为偏差很大 */
+#define WATER_FOLLOW_LOST_COUNT_MAX      (20)      /* 连续大偏差次数阈值：20次*500ms=10s */
 /* -------------------- 全局变量 -------------------- */
 /* 存储最终确定的水位位置（以 sensor_position 记录） */
 int32_t water_value = -100000000; // 初始值设为无效
@@ -368,7 +379,7 @@ uint32_t check_water_status(uint8_t *water_state)
     printf("Water capacitance = %.1f\r\n", cap);
     g_measurement.water_measurement.current_capacitance = cap;
 
-    if (cap > (g_measurement.water_measurement.zero_capacitance + 50.0f)) {
+    if (cap > (g_measurement.water_measurement.zero_capacitance + WATER_FOLLOW_OFFSET)) {
         *water_state = WATER;
     } else {
         *water_state = NORMAL;
@@ -377,15 +388,16 @@ uint32_t check_water_status(uint8_t *water_state)
     return NO_ERROR;
 }
 
-#define WATER_FOLLOW_OFFSET            (50.0f)   /* 阈值 = air + 50 */
-#define WATER_FOLLOW_HYSTERESIS        (5.0f)    /* 滞回，防抖：可调 3~10 */
-#define WATER_FOLLOW_SAMPLE_MS         (500)     /* 采样周期 */
-#define WATER_FOLLOW_STEP_SMALL_MM     (0.2f)    /* 阈值附近小步 */
-#define WATER_FOLLOW_STEP_MED_MM       (1.0f)    /* 中等偏差 */
-#define WATER_FOLLOW_STEP_BIG_MM       (5.0f)    /* 大偏差/饱和时快速拉回 */
-#define WATER_CAP_SAT_LIMIT            (9999.0f)/* 认为“饱和/无穷大”的阈值，用于保护 */
-#define WATER_FOLLOW_LOST_DIFF_BIG       (80.0f)   /* 认为偏差很大 */
-#define WATER_FOLLOW_LOST_COUNT_MAX      (20)      /* 连续大偏差次数阈值：20次*500ms=10s */
+
+//#define WATER_FOLLOW_OFFSET            (50.0f)   /* 阈值 = air + 50 */
+//#define WATER_FOLLOW_HYSTERESIS        (5.0f)    /* 滞回，防抖：可调 3~10 */
+//#define WATER_FOLLOW_SAMPLE_MS         (500)     /* 采样周期 */
+//#define WATER_FOLLOW_STEP_SMALL_MM     (0.2f)    /* 阈值附近小步 */
+//#define WATER_FOLLOW_STEP_MED_MM       (1.0f)    /* 中等偏差 */
+//#define WATER_FOLLOW_STEP_BIG_MM       (5.0f)    /* 大偏差/饱和时快速拉回 */
+//#define WATER_CAP_SAT_LIMIT            (9999.0f)/* 认为“饱和/无穷大”的阈值，用于保护 */
+//#define WATER_FOLLOW_LOST_DIFF_BIG       (80.0f)   /* 认为偏差很大 */
+//#define WATER_FOLLOW_LOST_COUNT_MAX      (20)      /* 连续大偏差次数阈值：20次*500ms=10s */
 
 uint32_t FollowWaterLevel(void)
 {
@@ -438,8 +450,8 @@ RESTART_FOLLOW:
             ret = motorMoveAndWaitUntilStop(step_mm, dir);
             CHECK_ERROR(ret);
 
-            ret = Motor_CheckLostStep_AutoTiming(g_measurement.debug_data.sensor_position);
-            CHECK_ERROR(ret);
+//            ret = Motor_CheckLostStep_AutoTiming(g_measurement.debug_data.sensor_position);
+//            CHECK_ERROR(ret);
 
             g_measurement.water_measurement.water_level = g_measurement.debug_data.sensor_position;
             water_value = g_measurement.debug_data.sensor_position;
@@ -489,9 +501,9 @@ RESTART_FOLLOW:
         }
 
         /* 步长选择 */
-        if (diff > 80.0f) {
+        if (diff > WATER_FOLLOW_LOST_DIFF_BIG) {
             step_mm = WATER_FOLLOW_STEP_BIG_MM;
-        } else if (diff > 30.0f) {
+        } else if (diff > 1.0f) {
             step_mm = WATER_FOLLOW_STEP_MED_MM;
         } else {
             step_mm = WATER_FOLLOW_STEP_SMALL_MM;
@@ -512,8 +524,8 @@ RESTART_FOLLOW:
         ret = motorMoveAndWaitUntilStop(step_mm, dir);
         CHECK_ERROR(ret);
 
-        ret = Motor_CheckLostStep_AutoTiming(g_measurement.debug_data.sensor_position);
-        CHECK_ERROR(ret);
+//        ret = Motor_CheckLostStep_AutoTiming(g_measurement.debug_data.sensor_position);
+//        CHECK_ERROR(ret);
 
         g_measurement.water_measurement.water_level = g_measurement.debug_data.sensor_position;
         water_value = g_measurement.debug_data.sensor_position;
