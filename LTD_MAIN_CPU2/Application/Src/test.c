@@ -168,6 +168,7 @@ void Test_Params_Storage(void) {
 }
 void motor_text(void) {
 	printf("motor text start\n");
+	motor_Init(); //电机初始化
 	while (1) {
 		motorMoveNoWait(300, MOTOR_DIRECTION_DOWN);
 		HAL_Delay(1000);
@@ -175,7 +176,7 @@ void motor_text(void) {
 		stpr_waitMove(&stepper);
 		printf("down over!\n");
 //		HAL_Delay(1000);
-		motorMoveNoWait(300, MOTOR_DIRECTION_UP);
+		stpr_moveTo(&stepper, 0, velocity); // 最大速度为 1600 * 2 * 32
 		printf("start up to zero\n");
 		HAL_Delay(1000);
 		stpr_waitMove(&stepper);
