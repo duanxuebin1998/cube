@@ -240,7 +240,7 @@ static uint32_t stpr_wait_until_stop(TMC5130TypeDef *tmc5130) {
             printf("TMC5130: µÈ´ýÍ£Ö¹³¬Ê±£¡\r\n");
             RETURN_ERROR(MOTOR_RUN_TIMEOUT);
         }
-
+        check_bottom_status();
         HAL_Delay(50);
     }
 
