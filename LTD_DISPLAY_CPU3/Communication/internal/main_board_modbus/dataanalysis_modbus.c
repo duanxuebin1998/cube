@@ -8,6 +8,8 @@
 #include <float.h>
 #include "system_parameter.h"
 #include "cpu2_communicate.h"
+#include "cpu3_comm_display_params.h"
+
 /* ===================== 通用寄存器读写函数 ===================== */
 
 /* 写入 uint32_t 到寄存器数组（高 16 位在前，低 16 位在后） */
@@ -170,6 +172,10 @@ void AnalysisHoldRegister(void)
 
     for(index = 0;index < param_metaAmount;index++)
     {
+        /* 关键：CPU3 本机参数不参与 CPU2 HOLD 轮询解析 */
+        if (Cpu3Local_IsParam(param_meta[index].operanum)) {
+            continue;
+        }
         if(param_meta[index].data_type == TYPE_INT)
         {
             param_meta[index].val = ywj_hold_analysis_data(param_meta[index].startadd,param_meta[index].rgstcnt);
