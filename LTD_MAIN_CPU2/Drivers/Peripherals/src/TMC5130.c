@@ -181,6 +181,7 @@ void stpr_left(TMC5130TypeDef *tmc5130, uint32_t velocity)
  */
 void stpr_stop(TMC5130TypeDef *tmc5130)
 {
+//	printf("stpr_stop\r\n");
     tmc5130_rotate(tmc5130, 0);
 }
 

@@ -226,7 +226,7 @@ typedef enum {
     STATE_SYNTHETICING = 0x0023,              // 综合指令中
 
     /* ===================== LTD / 新增测量中状态（顺延） ===================== */
-    STATE_FOLLOW_WATERING = 0x0024,            // 水位跟随中
+    STATE_FOLLOW_WATERING = 0x0024,            // 水位跟随寻找中
     STATE_METER_DENSITY = 0x0025,              // 密度每米测量中
     STATE_INTERVAL_DENSITY = 0x0026,           // 液位区间测量中
     STATE_GET_FULLWEIGHT = 0x0027,             // 获取满载称重中
@@ -263,7 +263,7 @@ typedef enum {
     STATE_SYNTHETICING_OVER = 0x8023,          // 综合指令完成
 
     /* ===================== LTD / 新增完成态 ===================== */
-    STATE_FOLLOW_WATER_OVER = 0x8024,           // 水位跟随完成
+    STATE_FOLLOW_WATER_OVER = 0x8024,           // 水位跟随寻找完成
     STATE_COM_METER_DENSITY_OVER = 0x8025,      // 密度每米测量完成
     STATE_INTERVAL_DENSITY_OVER = 0x8026,       // 液位区间测量完成
     STATE_GET_FULLWEIGHT_OVER = 0x8027,         // 获取满载称重完成
@@ -534,7 +534,7 @@ typedef struct {
     uint32_t calibrateWaterLevel;            // 水位标定值
     uint32_t singlePointMeasurementPosition; // 单点测量位置
     uint32_t singlePointMonitoringPosition;  // 单点监测位置
-    uint32_t densityDistributionOilLevel;    // 密度分布测量时的液位值
+    uint32_t densityDistributionOilLevel;    // 电机指令的运行位置
     uint32_t motorCommandDistance;           // 电机指令的运行距离
 
     uint32_t reserved28;                 // 预留

@@ -13,35 +13,78 @@ struct KeyMenu {
 	void (*execute_opera)();    //执行本次操作
 };
 extern struct KeyMenu keymenu[];
-/*菜单索引号*/
+
+/* 菜单索引号 */
 typedef enum {
-	KEYNUM_IF_ENTER_MAINMENU = 0,  // 是否进入主菜单
-	KEYNUM_MAINMENU = 1,  // 主菜单
-	KEYNUM_IF_EXIT_MAINMENU = 2,  // 是否退出主菜单
-	KEYNUM_MEASURE_MAINMENU = 3,  // 普通测量指令主菜单
-	KEYNUM_MENU_PARACFG_MAIN = 4,  // 参数配置主菜单
-	KEYNUM_WARTSILA_PARACFG_BASE = 5,  // 菜单 - 基础参数
-	KEYNUM_MENU_CMD_MAIN = 6,  // 菜单 - 维护调试指令
-	KEYNUM_IFSENDCMD = 7,  // 是否下发指令或参数
-	KEYNUM_INPUTCMDPARA = 8,  // 请输入参数值(带参指令中的)
-	KEYNUM_DISPLAY_PARA = 9,  // 参数显示(读写类参数中的)
-	KEYNUM_MAGNETIC = 10, // 菜单 - 磁通量参数
-	KEYNUM_WORDSELECT = 11, // 隐藏信息选择
-	KEYNUM_SCREEN = 12, // 菜单 - 界面显示类参数
-	KEYNUM_SOURCE = 13, // 菜单 - 数据源
-	KEYNUM_MENU_PARACFG_DEBUG_BASIC = 14, // 维护参数 - 基础参数
-	KEYNUM_MENU_PARACFG_DEBUG_SYNTH = 15, // 维护参数 - 综合测量参数
-	KEYNUM_MENU_PARACFG_DEBUG_SPREAD = 16, // 维护参数 - 分布测量参数
-	KEYNUM_MENU_PARACFG_DEBUG_CORRECT = 17, // 维护参数 - 修正参数
-	KEYNUM_MENU_PARACFG_DEBUG_REALHIGH = 18, // 维护参数 - 实高测量
-	KEYNUM_MENU_PARACFG_DEBUG_LIQUIDLEVEL,
-	KEYNUM_MENU_PARACFG_DEBUG_WATERLEVEL,
-	KEYNUM_MENU_PARACFG_DEBUG_ALARM_DO,
-	KEYNUM_MENU_PARACFG_DEBUG_AO,
-	KEYNUM_MENU_LANGUAGE , 		// 界面显示 - 语言
-	KEYNUM_MENU_CPU3_COMM,       // CPU3 通信参数菜单
-	KEYNUM_END
+
+    /* ===== 入口/主菜单/测量/维护 ===== */
+    KEYNUM_IF_ENTER_MAINMENU = 0,        // 是否进入主菜单
+    KEYNUM_MAINMENU,                     // 主菜单
+    KEYNUM_IF_EXIT_MAINMENU,             // 是否退出主菜单
+    KEYNUM_MEASURE_MAINMENU,             // 普通测量指令主菜单
+    KEYNUM_MENU_PARACFG_MAIN,            // 参数配置主菜单（新）
+    KEYNUM_MENU_CMD_MAIN,                // 维护/调试指令主菜单
+    KEYNUM_IFSENDCMD,                    // 是否下发指令或参数
+    KEYNUM_INPUTCMDPARA,                 // 输入参数值(带参指令)
+    KEYNUM_DISPLAY_PARA,                 // 参数显示(读写类参数)
+    KEYNUM_WORDSELECT,                   // 隐藏信息选择
+
+    /* ===== 界面显示类（如果你还有单独“语言”页） ===== */
+    KEYNUM_MENU_LANGUAGE,                // 显示设置 - 语言
+
+    /* ===== 参数配置（新分组页面） ===== */
+    KEYNUM_MENU_PARA_DEV_INFO,           // 设备信息参数
+    KEYNUM_MENU_PARA_MECH,               // 机械参数
+    KEYNUM_MENU_PARA_WEIGHT,             // 称重参数（如果你确实有此页）
+    KEYNUM_MENU_PARA_ZERO,               // 零点参数
+    KEYNUM_MENU_PARA_LIQUID,             // 液位参数（如果你确实有此页）
+    KEYNUM_MENU_PARA_WATER,              // 水位参数（如果你确实有此页）
+    KEYNUM_MENU_PARA_BOTTOM_TANKH,       // 罐底/罐高参数（如果你确实有此页）
+    KEYNUM_MENU_PARA_CORR,               // 修正参数（磁通量/温度/密度修正）
+    KEYNUM_MENU_PARA_POLICY,             // 策略/分布/区间参数
+    KEYNUM_MENU_PARA_WARTSILA,           // Wartsila 参数（如果你确实有此页）
+    KEYNUM_MENU_PARA_DO,                 // 报警 DO 参数（如果你确实有此页）
+    KEYNUM_MENU_PARA_AO,                 // AO 参数（如果你确实有此页）
+    KEYNUM_MENU_PARA_CAL_SP,             // 标定/单点参数
+    KEYNUM_MENU_PARA_PARAM_CHECK,        // 参数校验信息
+
+    /* ===== CPU3（拆分页面） ===== */
+    KEYNUM_MENU_CPU3_BASE,               // CPU3 - 基本参数
+    KEYNUM_MENU_CPU3_SOURCE,             // CPU3 - 数据源
+    KEYNUM_MENU_CPU3_INPUT,              // CPU3 - 手输值
+    KEYNUM_MENU_CPU3_SCREEN,             // CPU3 - 屏幕参数
+    KEYNUM_MENU_CPU3_COM1,               // CPU3 - COM1
+    KEYNUM_MENU_CPU3_COM2,               // CPU3 - COM2
+    KEYNUM_MENU_CPU3_COM3,               // CPU3 - COM3
+
+    KEYNUM_END
 } keymenuNumber;
+
+
+typedef enum {
+    MENU_GRP_DEV_INFO = 0,      // 传感器类型/编号/版本/软件版本/上电默认等
+    MENU_GRP_MECH,              // 编码轮周长/首圈周长/尺带厚度/电机速度等
+    MENU_GRP_WEIGHT,            // 空载/满载/上下限/比例
+    MENU_GRP_ZERO,              // 零点阈值/忽略区/最大偏差/找零下行距离
+    MENU_GRP_LIQUID,            // 罐高/液位距差/盲区/阈值/滞后/测量方式
+    MENU_GRP_WATER,             // 水罐高/水位距差/盲区/电容阈值/滞回/最大下行距离
+    MENU_GRP_BOTTOM_TANKH,      // 罐底模式/角度阈值/称重阈值/更新罐高标志/实高偏差/初始/当前
+    MENU_GRP_CORR,              // 密度修正/温度修正
+    MENU_GRP_POLICY,            // 是否测罐底/是否测水/是否测单点/顺序/模式/点数/间距/悬停/上下限
+    MENU_GRP_WARTSILA,          // Wartsila 上下限/步进/最高点距液面
+    MENU_GRP_DO_ALARM,          // DO 报警
+    MENU_GRP_AO,                // AO 输出/报警/故障电流/调试电流
+    MENU_GRP_CAL_SP,            // 标定液位(油/水)/单点位置/监测位置/分布液位/电机运行距离
+    MENU_GRP_PARAM_CHECK,       // ParamVer/StructSize/Magic/CRC
+    MENU_GRP_CPU3_BASE,         // LedVer/语言
+    MENU_GRP_CPU3_SOURCE,       // SrcOil/SrcWater/SrcD/SrcT
+    MENU_GRP_CPU3_INPUT,        // InOil/InWater/InD/InDSw/InT
+    MENU_GRP_CPU3_SCREEN,       // Decimal/密码/息屏
+    MENU_GRP_CPU3_COM1,
+    MENU_GRP_CPU3_COM2,
+    MENU_GRP_CPU3_COM3,
+} MenuGroup;
+
 /**
  * @brief CPU3 显示通信单元 操作码（OperatingNumber）
  *
@@ -75,20 +118,13 @@ typedef enum
     COM_NUM_FIND_WATER,              // 寻找水位（CMD_FIND_WATER）
     COM_NUM_FIND_BOTTOM,             // 寻找罐底（CMD_FIND_BOTTOM）
     COM_NUM_SYNTHETIC,               // 综合测量（CMD_SYNTHETIC）
-
-    COM_NUM_SPREADPOINTS_AI,         // 自动分布测量（CMD_MEASURE_DISTRIBUTED / 你现有映射）
+    COM_NUM_FOLLOW_WATER,            // 水位跟随（CMD_FOLLOW_WATER）
+    COM_NUM_SPREADPOINTS,         	 // 分布测量（CMD_MEASURE_DISTRIBUTED / 你现有映射）
+    COM_NUM_SPREADPOINTS_GB,         // 国标分布测量
     COM_NUM_METER_DENSITY,           // 密度每米测量（CMD_MEASURE_DENSITY_METER）
     COM_NUM_INTERVAL_DENSITY,        // 区间密度测量（CMD_MEASURE_DENSITY_RANGE）
     COM_NUM_WARTSILA_DENSITY,        // Wartsila 密度区间测量（CMD_WARTSILA_DENSITY_RANGE）
-
-    /* ---- 新增普通指令（按你需求补齐）---- */
-    COM_NUM_FOLLOW_WATER,            // 水位跟随（CMD_FOLLOW_WATER）
-    COM_NUM_RUN_TO_POSITION,         // 电机运行到指定位置（CMD_RUN_TO_POSITION）
-    COM_NUM_FORCE_RUNUP,             // 电机强制上行（CMD_FORCE_MOVE_UP）
-    COM_NUM_FORCE_RUNDOWN,           // 电机强制下行（CMD_FORCE_MOVE_DOWN）
-    COM_NUM_FORCE_LIFT_ZERO,         // 强制提零点（CMD_FORCE_LIFT_ZERO）
-    COM_NUM_CALIBRATE_WATER,         // 水位标定（CMD_CALIBRATE_WATER）
-    COM_NUM_READ_PART_PARAMS,        // 读取部件参数（CMD_READ_PART_PARAMS / READ_COMPONENT_PARAMS）
+	COM_NUM_READ_PART_PARAMS,        // 读取部件参数（CMD_READ_PART_PARAMS / READ_COMPONENT_PARAMS）
 
     COM_NUM_NOPARACMD_NORMAL_STOP,   // 普通无参测量指令 - 结束
 
@@ -96,6 +132,7 @@ typedef enum
     COM_NUM_DEBUGCMD_START,          // 调试模式无参指令 - 开始
 
     COM_NUM_FIND_ZERO,               // 标定零点（通常对应 CMD_CALIBRATE_ZERO 或旧流程）
+    COM_NUM_FORCE_LIFT_ZERO,         // 强制提零点（CMD_FORCE_LIFT_ZERO）
     COM_NUM_SET_EMPTY_WEIGHT,        // 设置空载称重
     COM_NUM_SET_FULL_WEIGHT,         // 设置满载称重
     COM_NUM_RESTOR_EFACTORYSETTING,  // 恢复出厂设置
@@ -112,6 +149,7 @@ typedef enum
 
     COM_NUM_SINGLE_POINT,            // 单点测量（CMD_MEASURE_SINGLE，参数：单点测量位置）
     COM_NUM_SP_TEST,                 // 单点监测（CMD_MONITOR_SINGLE，参数：单点监测位置）
+    COM_NUM_RUN_TO_POSITION,         // 电机运行到指定位置（CMD_RUN_TO_POSITION）
 
     COM_NUM_ONEPARACMD_END,          // 工作模式带参指令 - 结束
 
@@ -121,10 +159,12 @@ typedef enum
     COM_NUM_ONEPARA_DEBUGCMD_START,  // 调试模式带参指令 - 开始
 
     COM_NUM_CAL_OIL,                 // 液位标定（CMD_CALIBRATE_OIL，参数：标定值或位置）
+    COM_NUM_CORRECTION_OIL,          // 修正液位（CMD_CORRECT_OIL，参数：修正值）
+    COM_NUM_CALIBRATE_WATER,         // 水位标定（CMD_CALIBRATE_WATER）
     COM_NUM_RUNUP,                   // 向上运行（CMD_MOVE_UP，参数：距离）
     COM_NUM_RUNDOWN,                 // 向下运行（CMD_MOVE_DOWN，参数：距离）
-    COM_NUM_CORRECTION_OIL,          // 修正液位（CMD_CORRECT_OIL，参数：修正值）
-
+    COM_NUM_FORCE_RUNUP,             // 电机强制上行（CMD_FORCE_MOVE_UP）
+    COM_NUM_FORCE_RUNDOWN,           // 电机强制下行（CMD_FORCE_MOVE_DOWN）
     COM_NUM_NOPARA_DEBUGCMD_END,     // 调试模式带参指令 - 结束
 
     /* =======================================================================

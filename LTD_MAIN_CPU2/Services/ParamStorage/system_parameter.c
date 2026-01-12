@@ -120,7 +120,7 @@ int load_device_params(void)
 
     /* 上电时当前指令从默认指令恢复, 而不是沿用 FRAM 中旧的 command */
     g_deviceParams.command = g_deviceParams.powerOnDefaultCommand;
-
+    save_device_params();
     printf("设备参数加载成功\r\n");
     return 1;
 }
@@ -140,8 +140,6 @@ void init_device_params(void)
 
         printf("设备参数加载失败, 已恢复出厂设置\r\n");
     }
-
-    print_device_params();
 }
 
 /*========================= 恢复出厂参数 =========================*/
@@ -170,7 +168,7 @@ void RestoreFactoryParamsConfig(void)
     /* ---------------- 电机与编码器参数 ---------------- */
     g_deviceParams.encoder_wheel_circumference_mm = 95000;  /* 0.001mm */
     g_deviceParams.max_motor_speed                = 400;    /* r/s */
-    g_deviceParams.first_loop_circumference_mm    = 200000; /* 0.1mm */
+    g_deviceParams.first_loop_circumference_mm    = 6000; /* 0.1mm */
     g_deviceParams.tape_thickness_mm              = 200;    /* 0.001mm */
 
     /* ---------------- 称重参数 ---------------- */
@@ -188,7 +186,7 @@ void RestoreFactoryParamsConfig(void)
     /* ---------------- 零点测量 ---------------- */
     g_deviceParams.zero_weight_threshold_ratio = 50;   /* 按算法需要调整 */
     g_deviceParams.weight_ignore_zone          = 1000; /* 0.1mm => 100mm */
-    g_deviceParams.max_zero_deviation_distance = 200;  /* 0.1mm => 20mm */
+    g_deviceParams.max_zero_deviation_distance = 1000;  /* 零点区域最大偏差值 0.1mm => 20mm */
     g_deviceParams.findZeroDownDistance        = 1000; /* 0.1mm => 100mm */
 
     /* ---------------- 液位测量 ---------------- */
@@ -211,10 +209,10 @@ void RestoreFactoryParamsConfig(void)
 
     /* ---------------- 罐高/罐底测量 ---------------- */
     g_deviceParams.bottom_detect_mode      = 0;    /* 0=按项目定义 */
-    g_deviceParams.bottom_angle_threshold  = 0;    /* 建议明确单位/倍率 */
-    g_deviceParams.bottom_weight_threshold = 0;    /* 按现场经验再设默认 */
+    g_deviceParams.bottom_angle_threshold  = 12;    /* 单位(度）/倍率*1 */
+    g_deviceParams.bottom_weight_threshold = 2000;    /* 按现场经验再设默认 */
 
-    g_deviceParams.refreshTankHeightFlag   = 0;
+    g_deviceParams.refreshTankHeightFlag   = 0;  /* 不自动刷新 */
     g_deviceParams.maxTankHeightDeviation  = 100;  /* 0.1mm => 10mm */
     g_deviceParams.initialTankHeight       = 0;
     g_deviceParams.currentTankHeight       = 0;
@@ -224,14 +222,14 @@ void RestoreFactoryParamsConfig(void)
     g_deviceParams.temperatureCorrection   = 0;
 
     /* ---------------- 分布/区间测量参数 ---------------- */
-    g_deviceParams.requireBottomMeasurement    = 1;
+    g_deviceParams.requireBottomMeasurement    = 0;
     g_deviceParams.requireWaterMeasurement     = 0;
     g_deviceParams.requireSinglePointDensity   = 0;
 
     g_deviceParams.spreadMeasurementOrder      = 0;
     g_deviceParams.spreadMeasurementMode       = 0;
     g_deviceParams.spreadMeasurementCount      = 5;
-    g_deviceParams.spreadMeasurementDistance   = 1000; /* 0.1mm */
+    g_deviceParams.spreadMeasurementDistance   = 10000; /* 0.1mm */
     g_deviceParams.spreadTopLimit              = 300;  /* 0.1mm */
     g_deviceParams.spreadBottomLimit           = 300;  /* 0.1mm */
     g_deviceParams.spreadPointHoverTime        = 10;

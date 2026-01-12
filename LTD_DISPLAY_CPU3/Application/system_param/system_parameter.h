@@ -159,7 +159,6 @@ typedef enum {
     /* --- 密度分布测量（整个系列，与普通液位分布区分） --- */
     CMD_MEASURE_DISTRIBUTED        = 10,   // 普通分布测量
     CMD_GB_MEASURE_DISTRIBUTED     = 11,   // 国标分布测量
-
     CMD_MEASURE_DENSITY_METER      = 12,   // 密度每米测量
     CMD_MEASURE_DENSITY_RANGE      = 13,   // 区间密度测量
     CMD_WARTSILA_DENSITY_RANGE     = 14,   // 瓦西莱密度区间测量
@@ -234,7 +233,7 @@ typedef enum {
     STATE_SYNTHETICING = 0x0023,              // 综合指令中
 
     /* ===================== LTD / 新增测量中状态（顺延） ===================== */
-    STATE_FOLLOW_WATERING = 0x0024,            // 水位跟随中
+    STATE_FOLLOW_WATERING = 0x0024,            // 水位跟随寻找中
     STATE_METER_DENSITY = 0x0025,              // 密度每米测量中
     STATE_INTERVAL_DENSITY = 0x0026,           // 液位区间测量中
     STATE_GET_FULLWEIGHT = 0x0027,             // 获取满载称重中
@@ -607,7 +606,6 @@ typedef enum{/* 数据源取自 */
 }SOURCE;
 
 /***************** 全局变量 ****************************/
-
 extern int cnt_commutoCPU2;
 extern volatile MeasurementResult g_measurement; // 测量结果
 extern volatile DeviceParameters g_deviceParams; // 设备参数
