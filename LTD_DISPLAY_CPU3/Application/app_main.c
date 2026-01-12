@@ -309,7 +309,8 @@ void App_MainLoop(void)
     /* ========= 空闲才做轮询任务 ========= */
     if (!did_work) {
         PollingInputData();
-        HAL_Delay(10);
+//        PrintMeasurementResult();
+        HAL_Delay(10);;
     }
 }
 void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)

@@ -239,10 +239,11 @@ static int SearchOil() {
 		CHECK_ERROR(ret); // 检查上行是否成功
 	}
 	//长距离下行寻找油面
-	ret = motorMove_down();  // 启动电机向下运动
-	CHECK_ERROR(ret); // 检查上行是否成功
+	MotorLostStep_Init();// 重置丢步检测计数器
 	// 持续监控重量状态，直到检测到液位
 	while (determine_level_status() != OIL) {
+		ret = motorMove_down();  // 启动电机向下运动
+		CHECK_ERROR(ret); // 检查上行是否成功
 		// 实时输出编码器位置和重量值（用于调试）
 		printf("液位测量\t长距离寻找液位\t{传感器位置}%.1f\t{称重值}%d\r\n", (float) (g_measurement.debug_data.sensor_position) / 10.0, weight_parament.current_weight);
 		CHECK_ERROR(ret);
@@ -284,11 +285,11 @@ static int SearchAir() {
 //	uint32_t frequency;	//当前频率
 	printf("液位测量\t初始重量：%d\r\n", weight_parament.stable_weight);
 
-	ret = motorMove_up();  // 启动电机向下运动
-	CHECK_ERROR(ret); // 检查上行是否成功
 	// 持续监控重量状态，直到检测到液位
-
+    MotorLostStep_Init();// 重置丢步检测计数器
 	while (determine_level_status() != AIR) {
+		ret = motorMove_up();  // 启动电机向下运动
+		CHECK_ERROR(ret); // 检查上行是否成功
 		// 实时输出编码器位置和重量值（用于调试）
 		printf("液位测量\t长距离寻找空气\t{传感器位置}%.1f\t{称重值}%d\r\n", (float) (g_measurement.debug_data.sensor_position) / 10.0, weight_parament.current_weight);
 		CHECK_ERROR(ret);
@@ -298,7 +299,6 @@ static int SearchAir() {
 //		//称重检测
 		ret = CheckWeightCollision();
 		CHECK_ERROR(ret); // 检查碰撞检测是否成功
-
 	}
 	ret = motorQuickStop(); // 到达零点后快速停止电机
 	CHECK_ERROR(ret); // 检查快速停止是否成功

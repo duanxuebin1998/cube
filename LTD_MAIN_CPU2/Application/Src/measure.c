@@ -26,153 +26,200 @@ static void CMD_SetFullWeight(void);
 static void CMD_SetEmptyWeight(void);
 static void CMD_MoveDown(void);
 static void CMD_MoveUp(void);
+static void CMD_ForceMoveUp(void);
+static void CMD_ForceMoveDown(void);
+static void CMD_ForceLiftZero(void);
 static void CMD_MeasurWater(void);
+static void CMD_FollowWaterLevel(void);
 static void CMD_MeasureZero(void);
 static void CMD_MeasureBottom(void);
 static void CMD_MeasureAndFollowOilLevel(void);
 static void CMD_CalibrateZeroPoint(void);
 static void CMD_CalibrateOilLevel(void);
 static void CMD_SyntheticMeasurement(void);
-
+static void CMD_RunToPosition(void);
 
 void ProcessMeasureCmd(CommandType command)
 {
-	MeasureStart();//测量初始化
-	switch (command) {
+    MeasureStart(); // 测量初始化
 
-	/* ================== 普通测量指令 ================== */
+    switch (command) {
 
-	case CMD_NONE:
-		printf("无命令，不执行操作\n");
-		break;
+    /* ================== 普通测量指令 ================== */
 
-	case CMD_BACK_ZERO:
-		printf("执行回零点指令\n");
-		CMD_MeasureZero();
-		break;
+    case CMD_NONE:
+        printf("无命令，不执行操作\r\n");
+        break;
 
-	case CMD_FIND_OIL:
-		printf("执行寻找液位指令\n");
-		CMD_MeasureAndFollowOilLevel();
-		break;
+    case CMD_BACK_ZERO:
+        printf("执行回零点指令\r\n");
+        CMD_MeasureZero();
+        break;
 
-	case CMD_FIND_WATER:
-		printf("执行寻找水位指令\n");
-		CMD_MeasurWater();
-		break;
+    case CMD_FIND_OIL:
+        printf("执行寻找液位指令\r\n");
+        CMD_MeasureAndFollowOilLevel();
+        break;
 
-	case CMD_FIND_BOTTOM:
-		printf("执行罐底测量指令\n");
-		CMD_MeasureBottom();
-		break;
+    case CMD_FIND_WATER:
+        printf("执行寻找水位指令\r\n");
+        CMD_MeasurWater();
+        break;
 
-	case CMD_MEASURE_SINGLE:
-		printf("执行单点测量指令\n");
-		CMD_SinglePointMeasurement();
-		break;
+    case CMD_FIND_BOTTOM:
+        printf("执行罐底测量指令\r\n");
+        CMD_MeasureBottom();
+        break;
 
-	case CMD_MONITOR_SINGLE:
-		printf("执行单点监测指令\n");
-		CMD_SinglePointMonitoring();
-		// 监测一般是持续过程，这里不立即切回“完成”状态
-		break;
+    case CMD_MEASURE_SINGLE:
+        printf("执行单点测量指令\r\n");
+        CMD_SinglePointMeasurement();
+        break;
 
-	case CMD_SYNTHETIC:
-		printf("执行综合测量指令，暂不支持该指令\n");
-		CMD_SyntheticMeasurement();
-		break;
+    case CMD_MONITOR_SINGLE:
+        printf("执行单点监测指令\r\n");
+        CMD_SinglePointMonitoring();
+        /* 监测一般是持续过程，这里不立即切回“完成”状态 */
+        break;
 
-	/* 密度分布/区间测量系列，目前只有一个实现 */
-	case CMD_MEASURE_DISTRIBUTED:
-		printf("执行分布测量指令\n");
-		CMD_MeasureDensitySpread_Spread();
-		break;
+    case CMD_SYNTHETIC:
+        printf("执行综合测量指令\r\n");
+        CMD_SyntheticMeasurement();
+        break;
 
-	case CMD_GB_MEASURE_DISTRIBUTED:
-		printf("执行国标分布测量指令，暂不支持该指令\n");
-		CMD_MeasureDensitySpread_GB();
-		break;
+    /* --- 新增：水位跟随 --- */
+    case CMD_FOLLOW_WATER:
+        printf("执行水位跟随指令\r\n");
+        CMD_FollowWaterLevel();   /* 需要你提供/接入该实现函数 */
+        break;
 
-	case CMD_MEASURE_DENSITY_METER:
-		printf("执行密度每米测量指令，暂不支持该指令\n");
-		CMD_MeasureDensitySpread_Meter();
-		break;
+    /* --- 新增：运行到指定位置 --- */
+    case CMD_RUN_TO_POSITION:
+        printf("执行运行到指定位置指令\r\n");
+        CMD_RunToPosition();      /* 需要你提供/接入该实现函数 */
+        break;
 
-	case CMD_MEASURE_DENSITY_RANGE:
-		printf("执行液位区间密度测量指令，暂不支持该指令\n");
-		CMD_MeasureDensitySpread_Interval();
-		break;
+    /* --- 密度分布/区间测量系列 --- */
+    case CMD_MEASURE_DISTRIBUTED:
+        printf("执行分布测量指令\r\n");
+        CMD_MeasureDensitySpread_Spread();
+        break;
 
-	case CMD_WARTSILA_DENSITY_RANGE:
-		printf("执行瓦西莱区间密度测量指令\n");
-		CMD_WartsilaDensitySpread();
-		break;
-	/* ================== 调试 / 标定 / 系统类指令 ================== */
+    case CMD_GB_MEASURE_DISTRIBUTED:
+        printf("执行国标分布测量指令\r\n");
+        CMD_MeasureDensitySpread_GB();
+        break;
 
-	case CMD_CALIBRATE_ZERO:
-		printf("执行标定零点指令\n");
-		CMD_CalibrateZeroPoint();
-		break;
+    case CMD_MEASURE_DENSITY_METER:
+        printf("执行密度每米测量指令\r\n");
+        CMD_MeasureDensitySpread_Meter();
+        break;
 
-	case CMD_CALIBRATE_OIL:
-		printf("执行标定液位指令\n");
-		CMD_CalibrateOilLevel();
-		break;
+    case CMD_MEASURE_DENSITY_RANGE:
+        printf("执行液位区间密度测量指令\r\n");
+        CMD_MeasureDensitySpread_Interval();
+        break;
 
-	case CMD_CORRECT_OIL:
-		printf("执行修正液位指令\n");
-		CMD_CorrectOilLevel();
-		break;
+    case CMD_WARTSILA_DENSITY_RANGE:
+        printf("执行瓦西莱区间密度测量指令\r\n");
+        CMD_WartsilaDensitySpread();
+        break;
 
-	case CMD_MOVE_UP:
-		printf("电机上行操作\n");
+    /* --- 新增：读取部件参数 --- */
+    case CMD_READ_PART_PARAMS:
+        printf("执行读取部件参数指令\r\n");
+//        CMD_ReadPartParams();     /* 需要你提供/接入该实现函数 */
+        break;
+
+    /* ================== 调试 / 标定 / 系统类指令 ================== */
+
+    case CMD_CALIBRATE_ZERO:
+        printf("执行标定零点指令\r\n");
+        CMD_CalibrateZeroPoint();
+        break;
+
+    case CMD_CALIBRATE_OIL:
+        printf("执行标定液位指令\r\n");
+        CMD_CalibrateOilLevel();
+        break;
+
+    case CMD_CORRECT_OIL:
+        printf("执行修正液位指令\r\n");
+        CMD_CorrectOilLevel();
+        break;
+
+    /* --- 新增：水位标定 --- */
+    case CMD_CALIBRATE_WATER:
+        printf("执行水位标定指令\r\n");
+        CMD_CalibrateWaterLevel();
+        break;
+
+    case CMD_MOVE_UP:
+        printf("电机上行操作\r\n");
         CMD_MoveUp();
-		break;
+        break;
 
-	case CMD_MOVE_DOWN:
-		printf("电机下行操作\n");
-		CMD_MoveDown();
-		break;
+    case CMD_MOVE_DOWN:
+        printf("电机下行操作\r\n");
+        CMD_MoveDown();
+        break;
 
-	case CMD_SET_EMPTY_WEIGHT:
-		printf("执行设置空载称重指令\n");
-		CMD_SetEmptyWeight();
-		break;
+    /* --- 新增：强制运动类 --- */
+    case CMD_FORCE_MOVE_UP:
+        printf("电机强制上行操作\r\n");
+        CMD_ForceMoveUp();
+        break;
 
-	case CMD_SET_FULL_WEIGHT:
-		printf("执行设置满载称重指令\n");
-		CMD_SetFullWeight();
-		break;
+    case CMD_FORCE_MOVE_DOWN:
+        printf("电机强制下行操作\r\n");
+        CMD_ForceMoveDown();
+        break;
 
-	case CMD_RESTORE_FACTORY:
-		printf("执行恢复出厂设置指令\n");
-		RestoreFactoryParamsConfig();
-		break;
+    /* --- 新增：强制提零点 --- */
+    case CMD_FORCE_LIFT_ZERO:
+        printf("执行强制提零点指令\r\n");
+        CMD_ForceLiftZero();
+        break;
 
-	case CMD_MAINTENANCE_MODE:
-		printf("执行维护模式指令，暂不支持该指令\n");
-		CMD_EnterMaintenanceMode();
-		break;
+    case CMD_SET_EMPTY_WEIGHT:
+        printf("执行设置空载称重指令\r\n");
+        CMD_SetEmptyWeight();
+        break;
 
-	case CMD_DEBUG_MODE:
-		printf("执行调试模式指令，暂不在此处处理（由上层菜单/逻辑切换）\n");
-		break;
+    case CMD_SET_FULL_WEIGHT:
+        printf("执行设置满载称重指令\r\n");
+        CMD_SetFullWeight();
+        break;
 
+    case CMD_RESTORE_FACTORY:
+        printf("执行恢复出厂设置指令\r\n");
+        RestoreFactoryParamsConfig();
+        break;
 
-	/* ================== 预留 / 未知 ================== */
+    case CMD_MAINTENANCE_MODE:
+        printf("执行维护模式指令\r\n");
+        CMD_EnterMaintenanceMode();
+        break;
 
-	case CMD_RESERVED_CMD1:
-	case CMD_RESERVED_CMD2:
-	case CMD_RESERVED_CMD3:
-	case CMD_RESERVED_CMD4:
-	case CMD_RESERVED_CMD5:
-	case CMD_RESERVED_CMD6:
-	case CMD_UNKNOWN:
-	default:
-		printf("暂不支持该指令: %d\n", command);
-		break;
-	}
+    case CMD_DEBUG_MODE:
+        printf("执行调试模式指令，暂不在此处处理（由上层菜单/逻辑切换）\r\n");
+        break;
+
+    /* ================== 预留 / 未知 ================== */
+
+    case CMD_RESERVED_CMD1:
+    case CMD_RESERVED_CMD2:
+    case CMD_RESERVED_CMD3:
+    case CMD_RESERVED_CMD4:
+    case CMD_RESERVED_CMD5:
+    case CMD_RESERVED_CMD6:
+    case CMD_UNKNOWN:
+    default:
+        printf("暂不支持该指令: %d\r\n", (int)command);
+        break;
+    }
 }
+
 
 
 /**
@@ -379,10 +426,23 @@ static void CMD_MeasurWater(void) {
 	ret = SearchWaterLevel();
 	SET_ERROR(ret);
 	g_measurement.device_status.device_state = STATE_FINDWATER_OVER;
-	//开始水位跟随
-	ret = FollowWaterLevel();
 	return;
 }
+// 水位跟随主函数（命令入口）
+static void CMD_FollowWaterLevel(void)
+{
+    uint32_t ret = NO_ERROR;
+    MeasureStart();
+    g_measurement.device_status.device_state = STATE_FOLLOW_WATERING;
+	ret = SearchWaterLevel();
+	SET_ERROR(ret);
+    printf("水位跟随\t进入闭环跟随\r\n");
+    g_measurement.device_status.device_state = STATE_FOLLOW_WATER_OVER; // 你需要加这个状态
+    ret = FollowWaterLevel();
+    SET_ERROR(ret);
+}
+
+
 //罐底零点主函数
 static void CMD_MeasureZero(void) {
 	uint32_t ret = 0;
@@ -404,6 +464,7 @@ static void CMD_CalibrateZeroPoint(void) {
 	//开始回零点
 	ret = SearchZero();
 	SET_ERROR(ret);
+	CalibrateFirstLoopCircumference_OneTurnAtZero();
 	g_measurement.device_status.device_state = STATE_FINDZEROOVER;
 	return;
 }
@@ -522,6 +583,48 @@ static void CMD_MoveDown(void)
     g_measurement.device_status.device_state = STATE_RUNDOWNOVER;
     return;
 }
+// 电机强制上行指令（无检测）
+static void CMD_ForceMoveUp(void)
+{
+    printf("电机强制上行操作\r\n");
+    g_measurement.device_status.device_state = STATE_FORCE_RUNUPING;
+
+    motorMoveBlocking_NoDetect(
+        (float)g_deviceParams.motorCommandDistance / 10.0f,
+        MOTOR_DIRECTION_UP);
+
+    g_measurement.device_status.device_state = STATE_FORCE_RUNUP_OVER;
+    return;
+}
+
+// 电机强制下行指令（无检测）
+static void CMD_ForceMoveDown(void)
+{
+    printf("电机强制下行操作\r\n");
+    g_measurement.device_status.device_state = STATE_FORCE_RUNDOWNING;
+
+    motorMoveBlocking_NoDetect(
+        (float)g_deviceParams.motorCommandDistance / 10.0f,
+        MOTOR_DIRECTION_DOWN);
+
+    g_measurement.device_status.device_state = STATE_FORCE_RUNDOWN_OVER;
+    return;
+}
+
+// 强制提零点：长距离上行（无检测称重/丢步）
+static void CMD_ForceLiftZero(void)
+{
+    printf("强制提零点操作\r\n");
+    g_measurement.device_status.device_state = STATE_FORCE_LIFT_ZEROING;
+
+    /* 长距离上行：不检测称重/丢步，底层可被命令切换打断 */
+    motorMoveBlocking_NoDetect(
+        2000000.0f,  // 300m,
+        MOTOR_DIRECTION_UP);
+
+    g_measurement.device_status.device_state = STATE_FORCE_LIFT_ZERO_OVER;
+    return;
+}
 // 设置空载称重指令
 static void CMD_SetEmptyWeight(void)
 {
@@ -600,4 +703,46 @@ static void CMD_SyntheticMeasurement(void) {
 	g_measurement.device_status.device_state = STATE_SYNTHETICING_OVER;
 
 	return;
+}
+/**
+ * @brief 运行到指定绝对位置（mm）
+ * 依赖：
+ *  - MeasureStart()
+ *  - motorMoveToPositionOneShot(float target_mm)
+ *  - CHECK_COMMAND_SWITCH(x) / SET_ERROR(x)
+ *  - g_measurement.device_status.device_state
+ *  - 目标位置参数来源（见下方 get_target_mm()）
+ */
+static void CMD_RunToPosition(void)
+{
+    uint32_t ret = NO_ERROR;
+    float target_mm = 0.0f;
+
+    MeasureStart();
+    g_measurement.device_status.device_state = STATE_RUN_TO_POSITIONING;
+
+
+    target_mm = (float)g_deviceParams.densityDistributionOilLevel/10.0;
+    ret = motorMoveToPositionOneShot(target_mm);
+
+    /* motorMoveToPositionOneShot 里如果你也加了 CHECK_COMMAND_SWITCH，就能更快退出；
+       若没加，这里至少在调用前/后能响应一次切换。 */
+
+    if (ret == STATE_SWITCH) {
+        printf("运行到指定位置\t命令切换，中止\r\n");
+        /* 中止：通常不记为错误，回到待机或保持上层状态机处理 */
+        g_measurement.device_status.device_state = STATE_STANDBY;
+        return;
+    }
+
+    if (ret != NO_ERROR) {
+        printf("运行到指定位置\t失败 ret=0x%lX\r\n", ret);
+        SET_ERROR(ret);
+        g_measurement.device_status.device_state = STATE_ERROR;
+        return;
+    }
+
+    /* 3) 成功完成 */
+    printf("运行到指定位置\t完成\r\n");
+    g_measurement.device_status.device_state = STATE_RUN_TO_POSITION_OVER;
 }

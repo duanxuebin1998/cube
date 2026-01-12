@@ -195,10 +195,12 @@ uint32_t SearchBottom(void)
  */
 static int SearchBottomRough() {
 	uint32_t ret;
-	ret = motorMove_down();  // 启动电机向下运动
-	CHECK_ERROR(ret); // 检查上行是否成功
+	MotorLostStep_Init();// 重置丢步检测计数器
 	// 持续监控重量状态，直到检测到罐底
 	while (check_bottom_status() == NORMAL) {
+		ret = motorMove_down();  // 启动电机向下运动
+		CHECK_ERROR(ret); // 检查上行是否成功
+
 		ret = Motor_CheckLostStep_AutoTiming(g_measurement.debug_data.cable_length);
 		CHECK_ERROR(ret); // 检查丢步检测是否成功
 		printf("罐底测量\t长距离寻找罐底\t{传感器位置}%.1f\t称重\t= %ld\t", (float)(g_measurement.debug_data.sensor_position)/10.0,weight_parament.current_weight);
@@ -239,10 +241,13 @@ static int SearchBottomPrecise() {
         CHECK_ERROR(ret);
         printf("罐底测量\t上行完成\r\n");
     }
-	ret = motorMove_down();     // 启动电机向下运动
-	CHECK_ERROR(ret); // 检查上行是否成功
+    MotorLostStep_Init();// 重置丢步检测计数器
 	// 持续监控重量状态，直到检测到罐底
 	while (check_bottom_status() != BOTTOM) {
+
+		ret = motorMove_down();  // 启动电机向下运动
+		CHECK_ERROR(ret); // 检查上行是否成功
+
 		// 距离上次粗定位位置4096步时减速（约10cm）
 		if ((bottom_value-g_measurement.debug_data.cable_length  < 1000) && (v1flag == 0)) {
 			stpr_setVelocity(&stepper, 16 * 32 * 40); // 设置中等速度
@@ -290,60 +295,122 @@ uint32_t Bottom_SaveGyroZeroRef(void)
     return NO_ERROR;
 }
 
-
 /**
  * @brief 罐底状态检测（不锁存）
  * @return BOTTOM（到达罐底）或 NORMAL（未到罐底）
+ *
+ * 判定方式：
+ *  - g_deviceParams.bottom_detect_mode == 0 : 称重阈值
+ *  - g_deviceParams.bottom_detect_mode != 0 : 陀螺仪角度阈值
+ *
+ * 阈值来源：
+ *  - 称重阈值：g_deviceParams.bottom_weight_threshold
+ *  - 角度阈值：g_deviceParams.bottom_angle_threshold
  */
 Weight_StateTypeDef check_bottom_status(void)
 {
-    /* -------- 方式1：称重阈值 -------- */
-    if (g_bottom_det_mode == BOTTOM_DET_BY_WEIGHT) {
+	/* -------- 方式1：称重阈值（mode=0） -------- */
+	if (g_deviceParams.bottom_detect_mode == 0) {
 
-        int lower_limit = BOTTOM_WEIGHT_THRESHOLD;
-        int current     = weight_parament.current_weight;
+		int lower_limit = (int)g_deviceParams.bottom_weight_threshold;
+		int current = (int)weight_parament.current_weight;
 
-        Weight_StateTypeDef state =
-            (current < lower_limit) ? BOTTOM : NORMAL;
+		Weight_StateTypeDef state = (current < lower_limit) ? BOTTOM : NORMAL;
 
-        printf("罐底检测(称重) | 当前:%d | 阈值:%d | 状态:%s\r\n",
-               current,
-               lower_limit,
-               (state == BOTTOM) ? "到达罐底" : "正常");
+		printf("罐底检测(称重) | 当前:%d | 阈值:%d | 状态:%s\r\n",
+				current,
+				lower_limit,
+				(state == BOTTOM) ? "到达罐底" : "正常");
 
-        return state;
-    }
+		return state;
+	}
 
-    /* -------- 方式2：陀螺仪角度变化（不锁存） -------- */
-    if (!g_gyro_zero_ref.valid) {
-        printf("罐底检测(陀螺仪) | 零点基准无效\r\n");
-        return NORMAL;
-    }
+	/* -------- 方式2：陀螺仪角度变化（mode!=0，不锁存） -------- */
+	if (!g_gyro_zero_ref.valid) {
+		printf("罐底检测(陀螺仪) | 零点基准无效\r\n");
+//		return NORMAL;
+	}
 
-    float ax = 0.0f, ay = 0.0f;
-    uint32_t ret = Read_Gyro_Angle(&ax, &ay);
-    if (ret != NO_ERROR) {
-        printf("罐底检测(陀螺仪) | 读取失败 ret=%lu\r\n",
-               (unsigned long)ret);
-        return NORMAL;
-    }
+	float ax = 0.0f, ay = 0.0f;
+	uint32_t ret = Read_Gyro_Angle(&ax, &ay);
+	if (ret != NO_ERROR) {
+		printf("罐底检测(陀螺仪) | 读取失败 ret=%lu\r\n", (unsigned long)ret);
+		return NORMAL;
+	}
 
-    float dx = fabsf(ax - g_gyro_zero_ref.x0_deg);
-    float dy = fabsf(fabsf(ay) - fabsf(g_gyro_zero_ref.y0_deg));
-    float dsum = dx + dy;
+	float dx = fabsf(ax - g_gyro_zero_ref.x0_deg);
+	float dy = fabsf(fabsf(ay) - fabsf(g_gyro_zero_ref.y0_deg));
+	float dsum = dx + dy;
 
-    Weight_StateTypeDef state =
-        (dsum > g_bottom_gyro_th_deg) ? BOTTOM : NORMAL;
+	float th = (float)g_deviceParams.bottom_angle_threshold;
 
-    printf("罐底检测 (称重) %d (陀螺仪) | X=%.2f Y=%.2f | X0=%.2f Y0=%.2f | "
-           "dX=%.2f dY=%.2f sum=%.2f | th=%.2f | 状态:%s\r\n",
-		   weight_parament.current_weight,
-           ax, ay,
-           g_gyro_zero_ref.x0_deg, g_gyro_zero_ref.y0_deg,
-           dx, dy, dsum,
-           g_bottom_gyro_th_deg,
-           (state == BOTTOM) ? "到达罐底" : "正常");
+	Weight_StateTypeDef state = (dsum > th) ? BOTTOM : NORMAL;
 
-    return state;
+	printf("罐底检测(称重)%d (陀螺仪) | X=%.2f Y=%.2f | X0=%.2f Y0=%.2f | "
+		   "dX=%.2f dY=%.2f sum=%.2f | th=%.2f | 状态:%s\r\n",
+			(int)weight_parament.current_weight,
+			ax, ay,
+			g_gyro_zero_ref.x0_deg, g_gyro_zero_ref.y0_deg,
+			dx, dy, dsum,
+			th,
+			(state == BOTTOM) ? "到达罐底" : "正常");
+
+	return state;
 }
+
+///**
+// * @brief 罐底状态检测（不锁存）
+// * @return BOTTOM（到达罐底）或 NORMAL（未到罐底）
+// */
+//Weight_StateTypeDef check_bottom_status(void)
+//{
+//    /* -------- 方式1：称重阈值 -------- */
+//    if (g_bottom_det_mode == BOTTOM_DET_BY_WEIGHT) {
+//
+//        int lower_limit = BOTTOM_WEIGHT_THRESHOLD;
+//        int current     = weight_parament.current_weight;
+//
+//        Weight_StateTypeDef state =
+//            (current < lower_limit) ? BOTTOM : NORMAL;
+//
+//        printf("罐底检测(称重) | 当前:%d | 阈值:%d | 状态:%s\r\n",
+//               current,
+//               lower_limit,
+//               (state == BOTTOM) ? "到达罐底" : "正常");
+//
+//        return state;
+//    }
+//
+//    /* -------- 方式2：陀螺仪角度变化（不锁存） -------- */
+//    if (!g_gyro_zero_ref.valid) {
+//        printf("罐底检测(陀螺仪) | 零点基准无效\r\n");
+//        return NORMAL;
+//    }
+//
+//    float ax = 0.0f, ay = 0.0f;
+//    uint32_t ret = Read_Gyro_Angle(&ax, &ay);
+//    if (ret != NO_ERROR) {
+//        printf("罐底检测(陀螺仪) | 读取失败 ret=%lu\r\n",
+//               (unsigned long)ret);
+//        return NORMAL;
+//    }
+//
+//    float dx = fabsf(ax - g_gyro_zero_ref.x0_deg);
+//    float dy = fabsf(fabsf(ay) - fabsf(g_gyro_zero_ref.y0_deg));
+//    float dsum = dx + dy;
+//
+//    Weight_StateTypeDef state =
+//        (dsum > g_bottom_gyro_th_deg) ? BOTTOM : NORMAL;
+//
+//    printf("罐底检测 (称重) %d (陀螺仪) | X=%.2f Y=%.2f | X0=%.2f Y0=%.2f | "
+//           "dX=%.2f dY=%.2f sum=%.2f | th=%.2f | 状态:%s\r\n",
+//		   weight_parament.current_weight,
+//           ax, ay,
+//           g_gyro_zero_ref.x0_deg, g_gyro_zero_ref.y0_deg,
+//           dx, dy, dsum,
+//           g_bottom_gyro_th_deg,
+//           (state == BOTTOM) ? "到达罐底" : "正常");
+//
+//    return state;
+//}
 
