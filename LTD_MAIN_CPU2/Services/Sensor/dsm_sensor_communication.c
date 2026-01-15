@@ -475,6 +475,7 @@ uint32_t Read_Gyro_Angle(float *angle_x_deg, float *angle_y_deg)
 
     *angle_x_deg = ax;
     *angle_y_deg = ay;
-
+    g_measurement.debug_data.angle_x = ax*100;
+    g_measurement.debug_data.angle_y = ay*100;
     return NO_ERROR;
 }

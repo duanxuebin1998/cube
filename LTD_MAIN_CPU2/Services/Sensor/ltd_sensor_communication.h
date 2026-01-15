@@ -192,7 +192,7 @@ int DSM_V2_Read_IntParam  (uint8_t param, int32_t *out_value);
 // 参数读取
 int DSM_V2_Read_SoftwareVersion(float *v);        // R 00
 int DSM_V2_Read_LevelFrequency(uint32_t *freq_hz);   // R 04
-int DSM_V2_Read_DensityFrequency(uint32_t *freq_hz); // R 16 (0x10)
+int DSM_V2_Read_DensityFrequency(float *freq_hz,float *freq_45,float *freq_225) ; // R 17/18 (0x11/12)
 int DSM_V2_Read_Temperature    (float *t);        // R 06
 int DSM_V2_Read_Density        (float *rho);      // R 07
 int DSM_V2_Read_DynamicViscosity(float *mu);      // R 08 动力粘度

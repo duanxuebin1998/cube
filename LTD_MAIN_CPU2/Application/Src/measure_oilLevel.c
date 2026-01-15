@@ -41,7 +41,7 @@ uint32_t SearchAndFollowOilLevel(void) {
 	uint32_t ret;
 	uint8_t try_times;
 	printf("液位测量\t开始\r\n");
-	if (g_measurement.device_status.zero_point_status == 1) {
+	if ((g_measurement.device_status.zero_point_status == 1)&&(g_deviceParams.error_auto_back_zero==1)){
 		printf("液位测量\t设备需要回零点\r\n");
 		ret = SearchZero();  // 如果设备需要回零点，先执行回零点测量
 		CHECK_ERROR(ret);  // 检查回零点是否成功
@@ -366,7 +366,7 @@ static int SearchOilPrecise(float per_mm_Frequency) {
 	printf("进入频率跟随区间\r\n");
 
 	// 主跟随循环（需满足连续10次稳定）
-	while (followTime < 3) {
+	while (followTime < 10) {
 		// 延时保证传感器稳定性（总延时3秒）
 		HAL_Delay(1000);
 		HAL_Delay(1000);
@@ -388,7 +388,7 @@ static int SearchOilPrecise(float per_mm_Frequency) {
 		frequency_difference);
 
 		// 方向决策树（基于频率偏差）
-		if (frequency_difference > 1000 ||  // 超大正偏差
+		if (frequency_difference > 500 ||  // 超大正偏差
 				(g_measurement.oil_measurement.air_frequency - g_measurement.oil_measurement.current_frequency < 200)) { // 接近空气频率
 			// 向下加速移动（补偿步长）
 			overTime++;
@@ -401,7 +401,7 @@ static int SearchOilPrecise(float per_mm_Frequency) {
 			lowerTime = 0;
 			runlenth = frequency_difference / per_mm_Frequency;
 			dir = MOTOR_DIRECTION_DOWN;
-		} else if (frequency_difference < -1000 ||  // 超大负偏差
+		} else if (frequency_difference < -500 ||  // 超大负偏差
 				(g_measurement.oil_measurement.current_frequency - g_measurement.oil_measurement.oil_frequency < 200)) { // 接近油中频率
 			// 向上加速移动
 			lowerTime++;
@@ -494,7 +494,7 @@ static int determineTheSensorPositionAndUpdateTheLevelValue(void) {
 		printf("液位跟随\t动态液位值为%ld\r\n", g_measurement.debug_data.sensor_position);
 	}
 
-	if (oil_level >= g_deviceParams.tankHeight) {
+	if (oil_level >= g_deviceParams.tankHeight-1000) {
 		printf("超声波找液位\t到达位置上限\r\n");
 		return MEASUREMENT_OILLEVEL_HIGH;
 	}

@@ -33,26 +33,26 @@
 #define WATER_VEL_MID                    (16 * 32 * 40)
 #define WATER_VEL_SLOW                   (16 * 32 * 2)
 
-#define WATER_FOLLOW_OFFSET              (5.0f)     /* 阈值 = air + 50 */
-#define WATER_FOLLOW_HYSTERESIS          (0.3f)     /* 滞回，防抖：可调 3~10 */
-#define WATER_FOLLOW_SAMPLE_MS           (500)      /* 采样周期 */
-#define WATER_FOLLOW_STEP_SMALL_MM       (0.2f)     /* 阈值附近小步 */
-#define WATER_FOLLOW_STEP_MED_MM         (5.0f)     /* 中等偏差 */
-#define WATER_FOLLOW_STEP_BIG_MM         (20.0f)    /* 大偏差/饱和时快速拉回 */
-#define WATER_CAP_SAT_LIMIT              (9999.0f)  /* 认为“饱和/无穷大”的阈值，用于保护 */
-#define WATER_FOLLOW_LOST_DIFF_BIG       (2.5f)     /* 认为偏差很大 */
-#define WATER_FOLLOW_LOST_COUNT_MAX      (20)       /* 连续大偏差次数阈值：20次*500ms=10s */
+//#define WATER_FOLLOW_OFFSET              (5.0f)     /* 阈值 = air + 50 */
+//#define WATER_FOLLOW_HYSTERESIS          (0.3f)     /* 滞回，防抖：可调 3~10 */
+//#define WATER_FOLLOW_SAMPLE_MS           (500)      /* 采样周期 */
+//#define WATER_FOLLOW_STEP_SMALL_MM       (0.2f)     /* 阈值附近小步 */
+//#define WATER_FOLLOW_STEP_MED_MM         (5.0f)     /* 中等偏差 */
+//#define WATER_FOLLOW_STEP_BIG_MM         (20.0f)    /* 大偏差/饱和时快速拉回 */
+//#define WATER_CAP_SAT_LIMIT              (9999.0f)  /* 认为“饱和/无穷大”的阈值，用于保护 */
+//#define WATER_FOLLOW_LOST_DIFF_BIG       (2.5f)     /* 认为偏差很大 */
+//#define WATER_FOLLOW_LOST_COUNT_MAX      (20)       /* 连续大偏差次数阈值：20次*500ms=10s */
 
 
 //#define WATER_FOLLOW_OFFSET            (50.0f)   /* 阈值 = air + 50 */
 //#define WATER_FOLLOW_HYSTERESIS        (5.0f)    /* 滞回，防抖：可调 3~10 */
-//#define WATER_FOLLOW_SAMPLE_MS         (500)     /* 采样周期 */
-//#define WATER_FOLLOW_STEP_SMALL_MM     (0.2f)    /* 阈值附近小步 */
-//#define WATER_FOLLOW_STEP_MED_MM       (1.0f)    /* 中等偏差 */
-//#define WATER_FOLLOW_STEP_BIG_MM       (5.0f)    /* 大偏差/饱和时快速拉回 */
-//#define WATER_CAP_SAT_LIMIT            (9999.0f)/* 认为“饱和/无穷大”的阈值，用于保护 */
-//#define WATER_FOLLOW_LOST_DIFF_BIG       (80.0f)   /* 认为偏差很大 */
-//#define WATER_FOLLOW_LOST_COUNT_MAX      (20)      /* 连续大偏差次数阈值：20次*500ms=10s */
+#define WATER_FOLLOW_SAMPLE_MS         (500)     /* 采样周期 */
+#define WATER_FOLLOW_STEP_SMALL_MM     (0.2f)    /* 阈值附近小步 */
+#define WATER_FOLLOW_STEP_MED_MM       (1.0f)    /* 中等偏差 */
+#define WATER_FOLLOW_STEP_BIG_MM       (5.0f)    /* 大偏差/饱和时快速拉回 */
+#define WATER_CAP_SAT_LIMIT            (9999.0f)/* 认为“饱和/无穷大”的阈值，用于保护 */
+#define WATER_FOLLOW_LOST_DIFF_BIG       (80.0f)   /* 认为偏差很大 */
+#define WATER_FOLLOW_LOST_COUNT_MAX      (20)      /* 连续大偏差次数阈值：20次*500ms=10s */
 /* -------------------- 全局变量 -------------------- */
 /* 存储最终确定的水位位置（以 sensor_position 记录） */
 int32_t water_value = -100000000; // 初始值设为无效
@@ -77,8 +77,9 @@ uint32_t SearchWaterLevel(void)
     fault_info_init();
     printf("水位测量\t开始\r\n");
 
+
     /* -------------------- 零点检查 -------------------- */
-    if (g_measurement.device_status.zero_point_status == 1)
+    if ((g_measurement.device_status.zero_point_status == 1)&&(g_deviceParams.error_auto_back_zero==1))
     {
         printf("水位测量\t设备需要回零点\r\n");
         ret = SearchZero();
@@ -86,6 +87,17 @@ uint32_t SearchWaterLevel(void)
         printf("水位测量\t回零点完成\r\n");
     }
 
+    if (g_measurement.water_measurement.zero_capacitance == 0)
+    {
+        printf("水位测量\t获取零点电容值\r\n");
+        ret = SearchZero();
+        CHECK_ERROR(ret);
+        printf("水位测量\t回零点完成\r\n");
+    }
+    //打印零点电容值，水位电容阈值，水位滞后阈值
+    printf("水位测量\t零点电容值：%lu\r\n", g_measurement.water_measurement.zero_capacitance);
+    printf("水位测量\t水位电容阈值：%lu\r\n", g_deviceParams.water_cap_threshold);
+    printf("水位测量\t水位滞后阈值：%lu\r\n", g_deviceParams.water_cap_hysteresis);
     /* -------------------- 初始位置调整（避让） -------------------- */
     if (g_measurement.debug_data.cable_length > 2000)
     {
@@ -210,8 +222,7 @@ uint32_t SearchWaterLevel(void)
     }
 
     /*************** 最终记录 ***************/
-    g_measurement.water_measurement.water_level =
-        g_deviceParams.water_tank_height - g_measurement.debug_data.cable_length;
+    g_measurement.water_measurement.water_level = g_deviceParams.water_tank_height - g_measurement.debug_data.cable_length;
 
     printf("水位测量\t水位：%ld mm\r\n", g_measurement.water_measurement.water_level);
 
@@ -279,8 +290,6 @@ static int SearchWaterRough(void)
 static int SearchWaterPrecise(void)
 {
     uint32_t ret;
-    int      v1flag = 0;
-    int      v2flag = 0;
     uint8_t  water_state = NORMAL;
 
     if (g_measurement.debug_data.sensor_position > 2000)
@@ -303,24 +312,16 @@ static int SearchWaterPrecise(void)
             break;
         }
 
-        /* 接近粗定位点：第一次降速 */
-        if ((g_deviceParams.water_tank_height - g_measurement.debug_data.cable_length - water_value < WATER_V1_SLOWDOWN_TH) &&
-            (v1flag == 0))
-        {
-            stpr_setVelocity(&stepper, WATER_VEL_MID);
-            printf("水位测量\t速度变化：%d\r\n", 40);
-            v1flag = 1;
-        }
-
         /* 更接近：第二次降速 */
-        if ((g_deviceParams.water_tank_height - g_measurement.debug_data.cable_length - water_value < WATER_V2_SLOWDOWN_TH) &&
-            (v2flag == 0))
+        if (g_deviceParams.water_tank_height - g_measurement.debug_data.cable_length - water_value < WATER_V2_SLOWDOWN_TH)
         {
-            stpr_setVelocity(&stepper, WATER_VEL_SLOW);
-            printf("水位测量\t速度变化：%d\r\n", 2);
-            v2flag = 1;
+        	g_measurement.debug_data.motor_speed = 4;
         }
-
+        /* 接近粗定位点：第一次降速 */
+        else if (g_deviceParams.water_tank_height - g_measurement.debug_data.cable_length - water_value < WATER_V1_SLOWDOWN_TH)
+        {
+        	g_measurement.debug_data.motor_speed = 40;
+        }
         /* 走过头保护 */
 //        if (g_deviceParams.water_tank_height - g_measurement.debug_data.cable_length - water_value < WATER_OVERSHOOT_TH)
 //        {
@@ -331,8 +332,8 @@ static int SearchWaterPrecise(void)
         ret = Motor_CheckLostStep_AutoTiming(g_measurement.debug_data.sensor_position);
         CHECK_ERROR(ret);
 
-        printf("水位测量\t精确寻找水位\t{传感器位置}%.1f\t",
-               (float)(g_measurement.debug_data.sensor_position) / 10.0f);
+        printf("水位测量\t精确寻找水位\t{传感器位置}%.1f\t速度\t%d\t",
+               (float)(g_measurement.debug_data.sensor_position) / 10.0f,g_measurement.debug_data.motor_speed);
     }
 
     ret = motorQuickStop();
@@ -391,7 +392,7 @@ uint32_t check_water_status(uint8_t *water_state)
     printf("Water capacitance = %.1f\r\n", cap);
     g_measurement.water_measurement.current_capacitance = cap;
 
-    if (cap > (g_measurement.water_measurement.zero_capacitance + WATER_FOLLOW_OFFSET)) {
+    if (cap > (g_measurement.water_measurement.zero_capacitance + g_deviceParams.water_cap_threshold/1000.0f)) {
         *water_state = WATER;
     } else {
         *water_state = NORMAL;
@@ -415,8 +416,8 @@ uint32_t FollowWaterLevel(void)
 
 RESTART_FOLLOW:
     air_cap = g_measurement.water_measurement.zero_capacitance;
-    th      = air_cap + WATER_FOLLOW_OFFSET;
-    th_low  = th - WATER_FOLLOW_HYSTERESIS;
+    th      = air_cap + g_deviceParams.water_cap_threshold/1000.0f;
+    th_low  = th - g_deviceParams.water_cap_hysteresis/1000.0f;
 
     printf("水位跟随\t开始\r\n");
     printf("水位跟随\t空气电容=%.1f  目标阈值=%.1f  滞回下限=%.1f\r\n",
@@ -452,7 +453,7 @@ RESTART_FOLLOW:
             ret = motorMoveAndWaitUntilStop(step_mm, dir);
             CHECK_ERROR(ret);
 
-            g_measurement.water_measurement.water_level = g_measurement.debug_data.sensor_position;
+            g_measurement.water_measurement.water_level = g_deviceParams.water_tank_height - g_measurement.debug_data.cable_length;
             water_value = g_deviceParams.water_tank_height - g_measurement.debug_data.cable_length;
 
             /* 连续饱和/大偏差过久 -> 重新找水位 */
@@ -495,7 +496,7 @@ RESTART_FOLLOW:
 
             printf("水位跟随\t状态=稳定区(%.1f < cap < %.1f)，保持\r\n", th_low, th);
 
-            g_measurement.water_measurement.water_level = g_measurement.debug_data.sensor_position;
+            g_measurement.water_measurement.water_level = g_deviceParams.water_tank_height - g_measurement.debug_data.cable_length;
             water_value = g_deviceParams.water_tank_height - g_measurement.debug_data.cable_length;
 
             HAL_Delay(WATER_FOLLOW_SAMPLE_MS);
@@ -504,16 +505,16 @@ RESTART_FOLLOW:
         }
 
         /* 步长选择 */
-        if (diff > WATER_FOLLOW_LOST_DIFF_BIG) {
+        if (diff > 0.8*(g_deviceParams.water_cap_threshold/1000.0f)) {
             step_mm = WATER_FOLLOW_STEP_BIG_MM;
-        } else if (diff > 1.0f) {
+        } else if (diff > 0.3*(g_deviceParams.water_cap_threshold/1000.0f)) {
             step_mm = WATER_FOLLOW_STEP_MED_MM;
         } else {
             step_mm = WATER_FOLLOW_STEP_SMALL_MM;
         }
 
         /* 大偏差计数：只有在“确实大偏差”时计数，否则慢慢衰减/清零 */
-        if (diff >= WATER_FOLLOW_LOST_DIFF_BIG) {
+        if (diff >= g_deviceParams.water_cap_threshold/1000.0f) {
             lost_count++;
         } else {
             if (lost_count > 0) lost_count--;
@@ -527,11 +528,9 @@ RESTART_FOLLOW:
         ret = motorMoveAndWaitUntilStop(step_mm, dir);
         CHECK_ERROR(ret);
 
-        g_measurement.water_measurement.water_level =
-            g_deviceParams.water_tank_height - g_measurement.debug_data.cable_length;
+        g_measurement.water_measurement.water_level = g_deviceParams.water_tank_height - g_measurement.debug_data.cable_length;
 
-        water_value =
-            g_deviceParams.water_tank_height - g_measurement.debug_data.cable_length;
+        water_value = g_deviceParams.water_tank_height - g_measurement.debug_data.cable_length;
 
         printf("水位跟随\t完成移动 pos=%.1fmm\r\n",
                g_measurement.debug_data.sensor_position / 10.0f);
@@ -578,7 +577,7 @@ static uint32_t CorrectWaterTankHeightProcess(void)
     }
 
     g_deviceParams.water_tank_height = new_height;
-
+	g_measurement.water_measurement.water_level = g_deviceParams.water_tank_height - g_measurement.debug_data.cable_length;
     /* 标定完成后清零，防止重复触发 */
     g_deviceParams.calibrateWaterLevel = 0;
 

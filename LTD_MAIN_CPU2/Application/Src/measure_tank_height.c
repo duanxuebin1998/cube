@@ -45,7 +45,7 @@ uint32_t SearchBottom(void)
     printf("罐底测量\t开始\r\n");
 
     /* -------------------- 零点检查 -------------------- */
-    if (g_measurement.device_status.zero_point_status == 1)
+    if ((g_measurement.device_status.zero_point_status == 1)&&(g_deviceParams.error_auto_back_zero==1))
     {
         printf("罐底测量\t设备需要回零点\r\n");
         ret = SearchZero();       // 执行回零点测量
@@ -232,12 +232,10 @@ static int SearchBottomRough() {
  */
 static int SearchBottomPrecise() {
 	uint32_t ret;
-	int v1flag = 0;  // 第一速度切换标志
-	int v2flag = 0;  // 第二速度切换标志
 	printf("罐底测量\t稳定重量：%d\r\n", weight_parament.stable_weight);
     if (g_measurement.debug_data.cable_length > 2000)
     {
-        ret = motorMoveAndWaitUntilStop(100.0, MOTOR_DIRECTION_UP);
+        ret = motorMoveAndWaitUntilStop(200.0, MOTOR_DIRECTION_UP);
         CHECK_ERROR(ret);
         printf("罐底测量\t上行完成\r\n");
     }
@@ -248,29 +246,23 @@ static int SearchBottomPrecise() {
 		ret = motorMove_down();  // 启动电机向下运动
 		CHECK_ERROR(ret); // 检查上行是否成功
 
-		// 距离上次粗定位位置4096步时减速（约10cm）
-		if ((bottom_value-g_measurement.debug_data.cable_length  < 1000) && (v1flag == 0)) {
-			stpr_setVelocity(&stepper, 16 * 32 * 40); // 设置中等速度
-			printf("罐底测量\t速度变化：%d\r\n", 40); // 速度变化通知
-			v1flag = 1;  // 设置速度切换标志（只执行一次）
-		}
-
-		// 距离粗定位位置100步时再次减速（约2.3mm）
-		if ((bottom_value-g_measurement.debug_data.cable_length < 100) && (v2flag == 0)) {
-			stpr_setVelocity(&stepper, 16 * 32 * 2);  // 设置慢速
-			printf("罐底测量\t速度变化：%d\r\n", 2); // 速度变化通知
-			v2flag = 1;  // 设置速度切换标志（只执行一次）
-		}
-		// 距离粗定位位置100步时再次减速（约2.3mm）
 		if (bottom_value-g_measurement.debug_data.cable_length < -100)  {
 			printf("罐底测量\tt精确寻找罐底未找到罐底\r\n");
 			RETURN_ERROR(MEASUREMENT_WEIGHT_DOWN_FAIL); // 如果编码器位置异常，返回错误
 		}
-//		ret = CheckWeightCollision();
-//		CHECK_ERROR(ret); // 检查碰撞检测是否成功
+		else if (bottom_value-g_measurement.debug_data.cable_length < 100) {
+			g_measurement.debug_data.motor_speed = 10;
+		}
+		else if (bottom_value-g_measurement.debug_data.cable_length  < 300) {
+			g_measurement.debug_data.motor_speed = 40;
+		}
+		else if (bottom_value-g_measurement.debug_data.cable_length  < 3000)  {
+			g_measurement.debug_data.motor_speed = 100;
+		}
+
 		ret = Motor_CheckLostStep_AutoTiming(g_measurement.debug_data.cable_length);
 		CHECK_ERROR(ret); // 检查丢步检测是否成功
-		printf("罐底测量\t精确寻找罐底\t{传感器位置}%.1f\t", (float)(g_measurement.debug_data.sensor_position)/10.0);
+		printf("罐底测量\t精确寻找罐底\t{传感器位置}%.1f\t速度\t%d\t", (float)(g_measurement.debug_data.sensor_position)/10.0,g_measurement.debug_data.motor_speed);
 	}
 	ret = motorQuickStop();
 	CHECK_ERROR(ret); // 检查快速停止是否成功
@@ -309,6 +301,33 @@ uint32_t Bottom_SaveGyroZeroRef(void)
  */
 Weight_StateTypeDef check_bottom_status(void)
 {
+	int32_t cur_weight	= (int32_t)weight_parament.current_weight;
+	int32_t stable_weight	= (int32_t)weight_parament.stable_weight;
+	int32_t full_weight	= (int32_t)weight_parament.full_weight;
+
+	int32_t diff = cur_weight - stable_weight;
+
+	uint32_t motor_dir = (uint32_t)g_measurement.debug_data.motor_state;
+
+	/* 尺带长度/位置（debug_data: 0.1mm） */
+	float cable_mm	= g_measurement.debug_data.cable_length / 10.0f;
+	float sensor_mm	= g_measurement.debug_data.sensor_position / 10.0f;
+
+	/* ==========================
+	 *  保护：零点附近不做罐底检测
+	 * ========================== */
+	if (cable_mm < (float)g_deviceParams.weight_ignore_zone/10.0) {
+		printf("称重跳过 | 原因:零点保护 | dir=%lu cur=%ld stable=%ld diff=%+ld full=%ld cable=%.1f pos=%.1f | maxZeroDev=%lu\r\n",
+				(unsigned long)motor_dir,
+				(long)cur_weight,
+				(long)stable_weight,
+				(long)diff,
+				(long)full_weight,
+				cable_mm,
+				sensor_mm,
+				(unsigned long)g_deviceParams.weight_ignore_zone);
+		return NO_ERROR;
+	}
 	/* -------- 方式1：称重阈值（mode=0） -------- */
 	if (g_deviceParams.bottom_detect_mode == 0) {
 

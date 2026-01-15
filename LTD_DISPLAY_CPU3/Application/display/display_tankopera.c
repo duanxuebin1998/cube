@@ -118,7 +118,11 @@ static uint8_t *arr_protocol[][2] = {
 	{ (uint8_t*)"预留2", (uint8_t*)"No Protocol" },
 	{ (uint8_t*)"非法配置", (uint8_t*)"Illegal CFG" },
 };
-
+static uint8_t *arr_bottom[][2] = {
+	{ (uint8_t*)"称重", (uint8_t*)"weight" },
+	{ (uint8_t*)"角度", (uint8_t*)"angle" },
+	{ (uint8_t*)"非法配置", (uint8_t*)"Illegal CFG" },
+};
 /* =====================================================================
  * 静态函数声明
  *	按“模块职责”重新分类，便于快速定位
@@ -1006,9 +1010,16 @@ static void ifsendcmd(void)
 
 /* 返回按返回键后要跳转的函数指针 */
 /* 返回按返回键后要跳转的函数指针 */
+/* 返回按返回键后要跳转的函数指针 */
 static pFunc_void dtm_backtofunc(void)
 {
     pFunc_void p = errorprocess;
+
+    /* ---------- 0) 如果当前就在“语言菜单页”，返回主菜单 ---------- */
+    /* 说明：setlanguage() 那一页属于 KEYNUM_MENU_LANGUAGE，它不是参数分组页 */
+    if (func_index == KEYNUM_MENU_LANGUAGE) {
+        return mainmenu;
+    }
 
     /* ---------- 1) 纯指令类：回到指令入口 ---------- */
     switch (now_Opera_Num) {
@@ -1023,34 +1034,39 @@ static pFunc_void dtm_backtofunc(void)
     case COM_NUM_METER_DENSITY:
     case COM_NUM_INTERVAL_DENSITY:
     case COM_NUM_WARTSILA_DENSITY:
+    case COM_NUM_FOLLOW_WATER:
+    case COM_NUM_SPREADPOINTS_GB:
+    case COM_NUM_READ_PART_PARAMS:
         return measuremenu;
 
     /* 普通带参测量指令 */
     case COM_NUM_SINGLE_POINT:
     case COM_NUM_SP_TEST:
+    case COM_NUM_RUN_TO_POSITION:
         return measuremenu;
 
-    /* 调试无参/带参指令入口（你这里把上/下行、标定、修正等都放在调试菜单里） */
+    /* 调试无参/带参指令入口 */
     case COM_NUM_FIND_ZERO:
+    case COM_NUM_FORCE_LIFT_ZERO:
     case COM_NUM_RUNUP:
     case COM_NUM_RUNDOWN:
+    case COM_NUM_FORCE_RUNUP:
+    case COM_NUM_FORCE_RUNDOWN:
     case COM_NUM_CORRECTION_OIL:
     case COM_NUM_CAL_OIL:
+    case COM_NUM_CALIBRATE_WATER:
     case COM_NUM_RESTOR_EFACTORYSETTING:
     case COM_NUM_MAINTENANCE_MODE:
         return menu_cmdconfig_main;
 
-    /* 调试菜单里的“获取空载/满载阈值”也属于调试/参数行为，返回到称重分组更合理 */
+    /* 获取空载/满载称重：它们属于调试菜单项，返回也应回调试菜单 */
     case COM_NUM_SET_EMPTY_WEIGHT:
     case COM_NUM_SET_FULL_WEIGHT:
-        /* 新结构下不再返回旧 menu_weightpara，而是返回你保留的 menu_weight 分组页 */
-        return menu_weight;
+        return menu_cmdconfig_main;
 
-    /* 密码/本机参数入口：回到主菜单 */
+    /* 密码入口：回主菜单 */
     case COM_NUM_PASSWORD_ENTER_PARA:
     case COM_NUM_PASSWORD_ENTER_CMD:
-    case COM_NUM_PARA_LOCAL_LEDVERSION:
-    case COM_NUM_PARA_LANG:
         return mainmenu;
 
     default:
@@ -1058,12 +1074,8 @@ static pFunc_void dtm_backtofunc(void)
     }
 
     /* ---------- 2) 参数类：按分组映射回到对应分组菜单 ---------- */
-    /* 说明：
-     * - 这里不枚举每个 COM_NUM_DEVICEPARAM_xxx，而是使用 ParamGroupOf() 做统一路由。
-     * - 只要 ParamGroupOf() 覆盖正确，后续加参数无需再改 dtm_backtofunc。
-     */
-    if ((now_Opera_Num > COM_NUM_PARA_DEBUG_START && now_Opera_Num < COM_NUM_PARA_DEBUG_END)
-     || (now_Opera_Num > COM_NUM_PARA_LOCAL_START && now_Opera_Num < COM_NUM_PARA_LOCAL_STOP))
+    if ((now_Opera_Num > COM_NUM_PARA_DEBUG_START && now_Opera_Num < COM_NUM_PARA_DEBUG_END) ||
+        (now_Opera_Num > COM_NUM_PARA_LOCAL_START && now_Opera_Num < COM_NUM_PARA_LOCAL_STOP))
     {
         switch (ParamGroupOf(now_Opera_Num)) {
 
@@ -1093,29 +1105,22 @@ static pFunc_void dtm_backtofunc(void)
         case MENU_GRP_CPU3_COM3:     p = menu_cpu3_comm3;   break;
 
         default:
-            /* 未分类：统一回到“参数配置主菜单”避免卡死 */
             p = menu_paracfg_main;
             break;
         }
-
         return p;
     }
 
-    /* ---------- 3) 兜底范围：避免遗漏导致回到 errorprocess ---------- */
-
-    /* 无参测量指令段 */
+    /* ---------- 3) 兜底：按大区间返回 ---------- */
     if (now_Opera_Num > COM_NUM_NOPARACMD_START && now_Opera_Num < COM_NUM_NOPARACMD_END) {
         return measuremenu;
     }
-    /* 带参测量指令段 */
     if (now_Opera_Num > COM_NUM_ONEPARACMD_START && now_Opera_Num < COM_NUM_ONEPARACMD_END) {
         return measuremenu;
     }
-    /* 调试带参指令段 */
     if (now_Opera_Num > COM_NUM_ONEPARA_DEBUGCMD_START && now_Opera_Num < COM_NUM_NOPARA_DEBUGCMD_END) {
         return menu_cmdconfig_main;
     }
-    /* 密码段 */
     if (now_Opera_Num > COM_NUM_PASSWORD_START && now_Opera_Num < COM_NUM_PASSWORD_END) {
         return mainmenu;
     }
@@ -1219,14 +1224,14 @@ static void cmd_nopara_process(void)
     }
 
     /* 调试类命令：统一加权限/状态限制（你也可以只限制“危险指令”子集） */
-    if (is_debug_cmd((uint32_t)now_Opera_Num)) {
-        if (!debug_cmd_is_allowed()) {
-            oled_clear();
-            DisplayLangaugeLineWords((uint8_t*)"失败", OLED_LINE8_1, OLED_ROW4_2, 0, (uint8_t*)"Failed");
-            DisplayLangaugeLineWords((uint8_t*)"请先进入调试模式", OLED_LINE8_1, OLED_ROW4_3, 0, (uint8_t*)"Enter debug mode");
-            return;
-        }
-    }
+//    if (is_debug_cmd((uint32_t)now_Opera_Num)) {
+//        if (!debug_cmd_is_allowed()) {
+//            oled_clear();
+//            DisplayLangaugeLineWords((uint8_t*)"失败", OLED_LINE8_1, OLED_ROW4_2, 0, (uint8_t*)"Failed");
+//            DisplayLangaugeLineWords((uint8_t*)"请先进入调试模式", OLED_LINE8_1, OLED_ROW4_3, 0, (uint8_t*)"Enter debug mode");
+//            return;
+//        }
+//    }
 
     /* 下发命令 */
     send_cpu2_command(cmd);
@@ -1490,8 +1495,7 @@ static void parawritecheck(void)
 	if (index != -1
 		&& param_meta[index].authority_write
 		&& (g_measurement.device_status.device_state == STATE_STANDBY
-			|| g_measurement.device_status.device_state == STATE_ERROR
-			|| g_measurement.device_status.device_state == STATE_MAINTENANCEMODE)) {
+			|| g_measurement.device_status.device_state|0x8000 != 0)) {
 
 		if (param_meta[index].pword == NULL) {
 			inputcmdpara();
@@ -1866,6 +1870,12 @@ uint8_t *(*dtm_disarr(int *pindex, int *plen))[2]
 		index = param_meta[index].val;
 		len = (int)(sizeof(arr_protocol) / sizeof(arr_protocol[0]));
 		p = arr_protocol;
+		break;
+	}
+	case COM_NUM_DEVICEPARAM_BOTTOM_DETECT_MODE:{
+		index = param_meta[index].val;
+		len = (int)(sizeof(arr_bottom) / sizeof(arr_bottom[0]));
+		p = arr_bottom;
 		break;
 	}
 	default:
