@@ -164,7 +164,7 @@ uint32_t CheckWeightCollision(void)
 	/* ==========================
 	 *  保护：零点附近不做碰撞检测
 	 * ========================== */
-	if (cable_mm < (float)g_deviceParams.max_zero_deviation_distance/10.0) {
+	if (cable_mm < (float)g_deviceParams.weight_ignore_zone/10.0) {
 #ifdef WEIGHT_DEBUG
 		printf("称重跳过 | 原因:零点保护 | dir=%lu cur=%ld stable=%ld diff=%+ld full=%ld cable=%.1f pos=%.1f | maxZeroDev=%lu\r\n",
 				(unsigned long)motor_dir,
@@ -174,7 +174,7 @@ uint32_t CheckWeightCollision(void)
 				(long)full_weight,
 				cable_mm,
 				sensor_mm,
-				(unsigned long)g_deviceParams.max_zero_deviation_distance);
+				(unsigned long)g_deviceParams.weight_ignore_zone);
 #endif
 		return NO_ERROR;
 	}

@@ -252,7 +252,7 @@ typedef struct
  */
 void Motor_UpdateDrumState_FromXACTUAL(TMC5130TypeDef *tmc5130,
                                        MotorDrumState *out);
-
+void motorMoveBlocking_NoDetect(float mm, int dir);
 #ifdef __cplusplus
 }
 #endif

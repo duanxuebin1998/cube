@@ -34,6 +34,8 @@ enum{//用于记录每个参数显示在第几页第几行
     Para_alarm,
     Para_current,
     Para_weight,
+    Para_angle_x,   // 新增：陀螺仪 X 角度
+    Para_angle_y,   // 新增：陀螺仪 Y 角度
     Para_position,
     Para_wireless_t,
     Para_V,
@@ -907,6 +909,24 @@ static void oled_equipment(void)
 		line = DisplayLangaugeLineWords((u8*) "称重:", OLED_LINE8_1, row, 0, (u8*) "Weight:");
 		OledValueDisplay(g_measurement.debug_data.current_weight, line, row, 0, 0, (u8*) " ");
 	}
+    // 陀螺仪角度 X
+    if (ValidParaDisArr[Para_angle_x][PARA_VALID] == true &&
+        now_page == ValidParaDisArr[Para_angle_x][PARA_PAGE])
+    {
+        row = ValidParaDisArr[Para_angle_x][PARA_X];
+        line = DisplayLangaugeLineWords((u8*)"X角:", OLED_LINE8_1, row, 0, (u8*)"AngX:");
+        OledValueDisplay(g_measurement.debug_data.angle_x, line, row, 0, 2, (u8*)"°");
+    }
+
+    // 陀螺仪角度 Y
+    if (ValidParaDisArr[Para_angle_y][PARA_VALID] == true &&
+        now_page == ValidParaDisArr[Para_angle_y][PARA_PAGE])
+    {
+        row = ValidParaDisArr[Para_angle_y][PARA_X];
+        line = DisplayLangaugeLineWords((u8*)"Y角:", OLED_LINE8_1, row, 0, (u8*)"AngY:");
+        OledValueDisplay(g_measurement.debug_data.angle_y, line, row, 0, 2, (u8*)"°");
+    }
+
 }
 /* 显示多个汉字或字符 - 带中英文选择 */
 uint8_t DisplayLangaugeLineWords(uint8_t* name1,uint8_t line,uint8_t row,uint8_t shift,uint8_t* name2)
@@ -984,6 +1004,29 @@ static void CalculateValidPara(void)
     }
     else
         ValidParaDisArr[Para_weight][PARA_VALID] = false;
+    // 陀螺仪角度 X
+    if ((g_measurement.debug_data.angle_x >= -18000) &&
+        (g_measurement.debug_data.angle_x <=  18000))
+    {
+        ValidParaCnt++;
+        ValidParaDisArr[Para_angle_x][PARA_NUM] = ValidParaCnt;
+        ValidParaDisArr[Para_angle_x][PARA_VALID] = true;
+    }
+    else {
+        ValidParaDisArr[Para_angle_x][PARA_VALID] = false;
+    }
+
+    // 陀螺仪角度 Y
+    if ((g_measurement.debug_data.angle_y >= -18000) &&
+        (g_measurement.debug_data.angle_y <=  18000))
+    {
+        ValidParaCnt++;
+        ValidParaDisArr[Para_angle_y][PARA_NUM] = ValidParaCnt;
+        ValidParaDisArr[Para_angle_y][PARA_VALID] = true;
+    }
+    else {
+        ValidParaDisArr[Para_angle_y][PARA_VALID] = false;
+    }
 
     #if DEBUG_DISPLAY
     printf("ValidParaCnt = %d\n",ValidParaCnt);
@@ -1086,6 +1129,7 @@ static const EquipStateDisplay state_display_table[] = {
     { STATE_EFACTORYSETTING_RESTOROVER,"恢复出厂设置完成",      "Factory Reset Done" },
     { STATE_BACKUPOVER,              "备份配置文件完成",         "Backup Done" },
     { STATE_RESTORYOVER,             "恢复配置文件完成",         "Restore Done" },
+    { STATE_FLOWOIL,                 "液位跟随中",               "Level Following" },
 
     /* ===== LTD 新完成态 ===== */
     { STATE_FOLLOW_WATER_OVER,       "水位跟随中",             "Water Level Follow Done" },     /* NEW */

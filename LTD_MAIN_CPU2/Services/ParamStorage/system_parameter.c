@@ -203,8 +203,8 @@ void RestoreFactoryParamsConfig(void)
     g_deviceParams.water_level_sensor_distance_diff = 0;      /* 0.1mm */
     g_deviceParams.waterBlindZone                   = 100;    /* 0.1mm */
 
-    g_deviceParams.water_cap_threshold              = 0;      /* 建议明确倍率后再设默认 */
-    g_deviceParams.water_cap_hysteresis             = 0;      /* 建议明确倍率后再设默认 */
+    g_deviceParams.water_cap_threshold              = 50000;      /* 建议明确倍率后再设默认 */
+    g_deviceParams.water_cap_hysteresis             = 5000;      /* 建议明确倍率后再设默认 */
     g_deviceParams.maxDownDistance                  = 3000;   /* 0.1mm => 300mm */
 
     /* ---------------- 罐高/罐底测量 ---------------- */

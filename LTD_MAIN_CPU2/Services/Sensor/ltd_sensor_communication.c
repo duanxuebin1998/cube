@@ -7,6 +7,7 @@
 
 #include <ltd_sensor_communication.h>
 #include "sensor.h"
+ #include <math.h>
 
 #ifndef DSM_V2_MAX_RETRY
 #define DSM_V2_MAX_RETRY   3
@@ -285,19 +286,18 @@ int DSM_V2_Read_LevelFrequency(uint32_t *freq_hz) {
 	return ret;
 }
 // R16 液位频率（整型）
-int DSM_V2_Read_DensityFrequency(uint32_t *freq_hz) {
+int DSM_V2_Read_DensityFrequency(float *freq_hz,float *freq_45,float *freq_225) {
 	if (!freq_hz)
 		return OTHER_PERIPHERAL_CONFIG_ERROR;
-	int32_t v = 0;
-	int ret = DSM_V2_Read_IntParam(0x10, &v);   // 参数码 0x10 = R16
+	float v = 0;
+	int ret = DSM_V2_Read_FloatParam(0x11, &v);   // 参数码 0x11 = 45度扫频平方均值
 	if (ret == NO_ERROR) {
-		if (v < 0) {
-			v = -v;
-		}
-		if (v > 10000) {
-			v = v - 10000;
-		}
-		*freq_hz = (uint32_t) v;
+		*freq_hz = sqrt(1000000000000.0/(double) v);
+		*freq_45 =  v;
+	}
+	ret = DSM_V2_Read_FloatParam(0x12, &v);   // 参数码 0x12 = 22.5度扫频平方均值
+	if (ret == NO_ERROR) {
+		*freq_225 =  v;
 	}
 	return ret;
 }

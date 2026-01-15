@@ -38,6 +38,7 @@ static void CMD_CalibrateZeroPoint(void);
 static void CMD_CalibrateOilLevel(void);
 static void CMD_SyntheticMeasurement(void);
 static void CMD_RunToPosition(void);
+static void CMD_ReadPartParams(void);
 
 void ProcessMeasureCmd(CommandType command)
 {
@@ -90,13 +91,13 @@ void ProcessMeasureCmd(CommandType command)
     /* --- 新增：水位跟随 --- */
     case CMD_FOLLOW_WATER:
         printf("执行水位跟随指令\r\n");
-        CMD_FollowWaterLevel();   /* 需要你提供/接入该实现函数 */
+        CMD_FollowWaterLevel();
         break;
 
     /* --- 新增：运行到指定位置 --- */
     case CMD_RUN_TO_POSITION:
         printf("执行运行到指定位置指令\r\n");
-        CMD_RunToPosition();      /* 需要你提供/接入该实现函数 */
+        CMD_RunToPosition();
         break;
 
     /* --- 密度分布/区间测量系列 --- */
@@ -128,7 +129,7 @@ void ProcessMeasureCmd(CommandType command)
     /* --- 新增：读取部件参数 --- */
     case CMD_READ_PART_PARAMS:
         printf("执行读取部件参数指令\r\n");
-//        CMD_ReadPartParams();     /* 需要你提供/接入该实现函数 */
+        CMD_ReadPartParams();
         break;
 
     /* ================== 调试 / 标定 / 系统类指令 ================== */
@@ -411,6 +412,7 @@ void process_command(uint8_t *command) {
 }
 
 int MeasureStart(void) {
+	motor_Init(); //电机初始化
 	fault_info_init(); //故障初始化清零
 	g_measurement.device_status.error_code = NO_ERROR; //故障代码清零
 	return NO_ERROR;
@@ -588,11 +590,14 @@ static void CMD_ForceMoveUp(void)
 {
     printf("电机强制上行操作\r\n");
     g_measurement.device_status.device_state = STATE_FORCE_RUNUPING;
-
+	printf("强制上行距离: %.1f mm\r\n", (float) g_deviceParams.motorCommandDistance / 10.0f);
     motorMoveBlocking_NoDetect(
         (float)g_deviceParams.motorCommandDistance / 10.0f,
         MOTOR_DIRECTION_UP);
-
+    printf("电机强制上行操作完成\r\n");
+//    motorMoveAndWaitUntilStop(
+//            (float)g_deviceParams.motorCommandDistance / 10.0f,
+//            MOTOR_DIRECTION_UP);
     g_measurement.device_status.device_state = STATE_FORCE_RUNUP_OVER;
     return;
 }

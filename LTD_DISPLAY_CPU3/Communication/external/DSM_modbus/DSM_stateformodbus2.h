@@ -122,7 +122,7 @@
 #define COM_SYNTHETIC 0x00014        // 综合指令测量
 #define COM_METER_DENSITY 0x00015    // 密度每米测量
 #define COM_INTERVAL_DENSITY 0x00016 // 区间密度测量
-#define COM_WARTSILA_DENSITY 0x00017 // 瓦西莱密度测量
+#define COM_WATER_FOLLOW 0x00017 // 瓦西莱密度测量
 #define ENDADDRESS1_COM 0x00017      // 工作模式线圈结束地址
 
 // 本区段：11
