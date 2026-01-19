@@ -11,6 +11,63 @@
 #include <string.h>
 wartsila_DeviceParameters wartsila_deviceParams = { 0 };
 
+#include <stdint.h>
+
+static inline uint16_t WXL_STATE(uint8_t hi, uint8_t lo)
+{
+    return (uint16_t)(((uint16_t)hi << 8) | (uint16_t)lo);
+}
+
+/**
+ * @brief  澳邦 DeviceState -> Wartsila 设备工作状态（寄存器16bit，两字节复合码）
+ * @note   映射依据：你提供的“设备工作状态对应表”
+ *         0x00 44  固定点监测中（传感器不动）
+ *         0x0C 64  开始密度分布测量
+ *         0x0C 60  向上运行，密度分布测量中
+ *         0x28 40  密度分布测量完成（到空气、液位更新）
+ *         0x08 40  向下运动会固定点监测
+ *         0x08 64  接收到提浮子指令
+ *         0x08 60  提浮子，向上运行
+ */
+uint16_t AubonState_To_WartsilaWorkState(DeviceState s)
+{
+    switch (s)
+    {
+        /* 传感器不动，固定点监测中 */
+        case STATE_SPTESTING:
+            return WXL_STATE(0x00, 44);
+
+        /* 开始密度分布测量 */
+        case STATE_WARTSILA_DENSITY_START:
+            return WXL_STATE(0x0C, 64);
+
+        /* 向上运行，密度分布测量中 */
+        case STATE_WARTSILA_DENSITY_MEASURING:
+            return WXL_STATE(0x0C, 60);
+
+        /* 密度分布测量完成 */
+        case STATE_WARTSILA_DENSITY_OVER:
+            return WXL_STATE(0x28, 40);
+
+        /* 向下运动会固定点监测 */
+        case STATE_RUNTOPOINTING:
+            return WXL_STATE(0x08, 40);
+
+//        /* 接收到提浮子指令 */
+//        case STATE_BACKZEROING:
+//            return WXL_STATE(0x08, 64);
+
+        /* 提浮子，向上运行（你前面也说过这里等价“回零点中”） */
+        case STATE_BACKZEROING:
+            return WXL_STATE(0x08, 60);
+
+        default:
+            /* Wartsila 表里没给“故障码”，这里保守回到“不动监测”或你也可改成 0xFF FF */
+            return WXL_STATE(0x00, 00);
+    }
+}
+
+
 static void WartsilaToDSM(const wartsila_DeviceParameters *wxl, DeviceParameters *dsm) {
 
 	if (wxl->down_command != 0) {
@@ -73,7 +130,7 @@ static void DSMToWartsila(const MeasurementResult *DSM, wartsila_DeviceParameter
 
 	// 指令/状态
 	WXL->down_command = 0;
-	WXL->device_work_state = (uint16_t) DSM->device_status.device_state;
+	WXL->device_work_state = AubonState_To_WartsilaWorkState(DSM->device_status.device_state);
 
 	// 幅值/频率等
 	WXL->amplitude_unknown = 0x4896;
@@ -85,7 +142,8 @@ static void DSMToWartsila(const MeasurementResult *DSM, wartsila_DeviceParameter
 	WXL->temp2_state = 0;
 
 	// 液位
-	WXL->liquid_level_mm = (int32_t) (DSM->oil_measurement.oil_level/10);
+//	WXL->liquid_level_mm = (int32_t) (DSM->oil_measurement.oil_level/10);
+	WXL->liquid_level_mm = (uint16_t) (DSM->density_distribution.Density_oil_level/10);
 	WXL->liquid_state = 0;
 
 	// 位置标志

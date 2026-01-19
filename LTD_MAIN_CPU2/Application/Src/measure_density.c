@@ -938,7 +938,12 @@ uint32_t SinglePoint_ReadSensor(volatile DensityMeasurement *result)
             HAL_Delay(SAMPLE_INTERVAL_MS);
             continue;
         }
-
+        /* 密度为 0 表示未获取到有效密度：不参与稳定判定 */
+        if (fabsf(cur_density) < 1e-6f) {
+            printf("单点测量 密度未获取到(cur_density=0)，跳过本次判稳\r\n");
+            HAL_Delay(SAMPLE_INTERVAL_MS);
+            continue;
+        }
         CHECK_COMMAND_SWITCH(ret);
 
         printf("单点读数: f=%.3f Hz  dens=%.4f  temp=%.3f ℃\r\n", cur_freq, cur_density, cur_temp);

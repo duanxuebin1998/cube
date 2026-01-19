@@ -86,16 +86,20 @@ uint32_t SearchWaterLevel(void)
         CHECK_ERROR(ret);
         printf("水位测量\t回零点完成\r\n");
     }
-
     if (g_measurement.water_measurement.zero_capacitance == 0)
     {
-        printf("水位测量\t获取零点电容值\r\n");
-        ret = SearchZero();
-        CHECK_ERROR(ret);
-        printf("水位测量\t回零点完成\r\n");
+    	if(g_deviceParams.zero_cap==0){
+            printf("水位测量\t获取零点电容值\r\n");
+            ret = SearchZero();
+            CHECK_ERROR(ret);
+            printf("水位测量\t回零点完成\r\n");
+    	}
+    	else {
+			g_measurement.water_measurement.zero_capacitance = (float)g_deviceParams.zero_cap/10.0;
+		}
     }
     //打印零点电容值，水位电容阈值，水位滞后阈值
-    printf("水位测量\t零点电容值：%lu\r\n", g_measurement.water_measurement.zero_capacitance);
+    printf("水位测量\t零点电容值：%lu\r\n", g_deviceParams.zero_cap);
     printf("水位测量\t水位电容阈值：%lu\r\n", g_deviceParams.water_cap_threshold);
     printf("水位测量\t水位滞后阈值：%lu\r\n", g_deviceParams.water_cap_hysteresis);
     /* -------------------- 初始位置调整（避让） -------------------- */
@@ -352,10 +356,12 @@ uint32_t read_zero_capacitance(void)
     if (ret != NO_ERROR) {
         return ret;
     }
-
+    g_deviceParams.zero_cap = 10*cap;
     g_measurement.water_measurement.zero_capacitance = cap;
 
     printf(" Zero capacitance = %.1f\r\n", cap);
+    //参数存储
+    save_device_params();
     return NO_ERROR;
 }
 
@@ -594,23 +600,30 @@ static uint32_t CorrectWaterTankHeightProcess(void)
     uint32_t ret = NO_ERROR;
 
     MeasureStart();
-
-    g_measurement.device_status.device_state = STATE_CALIBRATE_WATERING;
-
-    /*
-     * 约定：
-     * g_deviceParams.calibrateWaterLevel != 0 代表“用户提供了真值水位高度”，可做一次点标定。
-     * 若 == 0：建议直接报参数错误（否则无法反推 water_tank_height）。
-     */
-    if (g_deviceParams.calibrateWaterLevel == 0) {
-        printf("水位标定\t未设置标定水位真值(calibrateWaterLevel=0)，无法标定\r\n");
-        RETURN_ERROR(PARAM_ERROR);
+    if(g_measurement.device_status.device_state ==STATE_FOLLOW_WATER_OVER)
+    {
+		printf("水位标定\t当前处于水位跟随状态\t直接修正液位\r\n");
+		g_measurement.device_status.device_state = STATE_CALIBRATE_WATERING;
     }
+    else
+	{
+    	g_measurement.device_status.device_state = STATE_CALIBRATE_WATERING;
+		printf("水位标定\t当前状态需要重修寻找水位\r\n");
 
-    /* 先找并精确定位水位界面 */
-    ret = SearchWaterLevel();
-    SET_ERROR(ret);
+		/*
+		 * 约定：
+		 * g_deviceParams.calibrateWaterLevel != 0 代表“用户提供了真值水位高度”，可做一次点标定。
+		 * 若 == 0：建议直接报参数错误（否则无法反推 water_tank_height）。
+		 */
+		if (g_deviceParams.calibrateWaterLevel == 0) {
+			printf("水位标定\t未设置标定水位真值(calibrateWaterLevel=0)，无法标定\r\n");
+			SET_ERROR(PARAM_ERROR);
+		}
 
+		/* 先找并精确定位水位界面 */
+		ret = SearchWaterLevel();
+		SET_ERROR(ret);
+	}
     /*
      * SearchWaterLevel() 成功后：
      * - 探头在水位界面附近

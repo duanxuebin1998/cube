@@ -342,6 +342,7 @@ void print_device_params(void)
     printf("  water_cap_threshold        : %lu\r\n", (unsigned long)params.water_cap_threshold);
     printf("  water_cap_hysteresis       : %lu\r\n", (unsigned long)params.water_cap_hysteresis);
     printf("  maxDownDistance(0.1mm)     : %lu\r\n", (unsigned long)params.maxDownDistance);
+    printf("  zero_point_capacitance     : %lu\r\n", (unsigned long)params.zero_cap);
 
     /* πﬁµ◊/πﬁ∏ﬂ */
     printf("[Bottom / Tank Height]\r\n");
@@ -537,4 +538,32 @@ void PrintMeasurementResult(const MeasurementResult *m)
     }
 
     printf("========================°æ¥Ú”°Ω· ¯°ø========================\r\n");
+}
+/**
+ * @brief ƒ¨»œ÷∏¡Ó -> ≤‚¡ø√¸¡Ó ”≥…‰
+ * @param def_cmd  DefaultCommandType
+ * @return         CommandType£®≤‚¡ø√¸¡Ó£©£ªŒﬁ∆•≈‰∑µªÿ CMD_UNKNOWN
+ */
+CommandType DefaultCmd_To_MeasureCmd(DefaultCommandType def_cmd)
+{
+    switch (def_cmd) {
+
+    case CMD_NONE_DEF:
+        return CMD_NONE;
+
+    case CMD_BACK_ZERO_DEF:
+        return CMD_BACK_ZERO;
+
+    case CMD_FIND_OIL_DEF:
+        return CMD_FIND_OIL;
+
+    case CMD_MONITOR_SINGLE_DEF:
+        return CMD_MONITOR_SINGLE;
+
+    case CMD_FOLLOW_WATER_DEF:
+        return CMD_FOLLOW_WATER;
+
+    default:
+        return CMD_NONE;
+    }
 }
