@@ -128,8 +128,8 @@ void WriteDeviceParamsToHoldingRegisters(uint16_t *HoldingRegisterArray)
     write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_WATER_CAP_THRESHOLD,              g_deviceParams.water_cap_threshold);
     write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_WATER_CAP_HYSTERESIS,             g_deviceParams.water_cap_hysteresis);
     write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_MAXDOWNDISTANCE,                  g_deviceParams.maxDownDistance);
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_ZERO_CAP,                         g_deviceParams.zero_cap);
 
-    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_RESERVED14, g_deviceParams.reserved14);
     write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_RESERVED15, g_deviceParams.reserved15);
 
     /* ===================== 罐高/罐底测量 ===================== */
@@ -302,8 +302,8 @@ void ReadDeviceParamsFromHoldingRegisters(uint16_t *HoldingRegisterArray)
     g_deviceParams.water_cap_threshold              = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_WATER_CAP_THRESHOLD);
     g_deviceParams.water_cap_hysteresis             = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_WATER_CAP_HYSTERESIS);
     g_deviceParams.maxDownDistance                  = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_MAXDOWNDISTANCE);
+    g_deviceParams.zero_cap                         = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_ZERO_CAP);
 
-    g_deviceParams.reserved14 = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_RESERVED14);
     g_deviceParams.reserved15 = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_RESERVED15);
 
     /* ===================== 罐高/罐底测量 ===================== */

@@ -458,7 +458,11 @@ uint32_t Read_Gyro_Angle(float *angle_x_deg, float *angle_y_deg)
 
     /* 查找 A/B 标签 */
     char *pA = strchr(resp, 'A');
+    if (!pA) {
+        pA = strchr(resp, 'E');   /* ★ 兼容 E 作为 X 轴标签 */
+    }
     char *pB = strchr(resp, 'B');
+
     if (!pA || !pB) {
         printf("[UART6] 陀螺仪响应格式错误: %s\r\n", resp);
         return SENSOR_COMM_TIMEOUT; /* 或建议新增 SENSOR_RESP_FORMAT_ERROR */
@@ -479,3 +483,4 @@ uint32_t Read_Gyro_Angle(float *angle_x_deg, float *angle_y_deg)
     g_measurement.debug_data.angle_y = ay*100;
     return NO_ERROR;
 }
+

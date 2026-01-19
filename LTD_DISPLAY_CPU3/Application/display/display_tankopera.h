@@ -243,8 +243,8 @@ typedef enum
     COM_NUM_DEVICEPARAM_WATER_CAP_THRESHOLD,            // 水位电容阈值
     COM_NUM_DEVICEPARAM_WATER_CAP_HYSTERESIS,           // 水位电容滞回
     COM_NUM_DEVICEPARAM_MAXDOWNDISTANCE,                // 最大下行距离
+    COM_NUM_DEVICEPARAM_ZERO_CAP,                     // 保留 14
 
-    COM_NUM_DEVICEPARAM_RESERVED14,                     // 保留 14
     COM_NUM_DEVICEPARAM_RESERVED15,                     // 保留 15
 
     /* ---------------- 罐底/罐高测量参数 ---------------- */

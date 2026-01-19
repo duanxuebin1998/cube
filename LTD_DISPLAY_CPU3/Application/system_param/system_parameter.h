@@ -205,6 +205,13 @@ typedef enum {
 
 } CommandType;
 
+typedef enum {
+    CMD_NONE_DEF                       = 0,    // 无命令
+    CMD_BACK_ZERO_DEF                  = 1,    // 回零点
+    CMD_FIND_OIL_DEF                   = 2,    // 寻找液位
+    CMD_MONITOR_SINGLE_DEF             = 3,    // 单点监测
+    CMD_FOLLOW_WATER_DEF               = 4,    // 水位跟随（新增）
+} DefaultCommandType;
 
 /*设备状态*/
 typedef enum {
@@ -466,7 +473,7 @@ typedef struct {
     uint32_t water_cap_hysteresis;              // 水位电容滞后阈值（建议明确倍率，如 x1000）
     uint32_t maxDownDistance;                   // 水位/罐底测量最大下行距离(0.1mm)
 
-    uint32_t reserved14;                 // 预留
+    uint32_t zero_cap;                 // 预留
     uint32_t reserved15;                 // 预留（新增）
 
     // ===================== 罐高/罐底测量 =====================

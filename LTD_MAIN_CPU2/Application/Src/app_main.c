@@ -42,7 +42,10 @@ void App_Init(void) {
 // 主循环任务
 void App_MainLoop(void) {
 
-
+	if (g_deviceParams.powerOnDefaultCommand != CMD_NONE) {
+		g_deviceParams.command = DefaultCmd_To_MeasureCmd(g_deviceParams.powerOnDefaultCommand); // 上电默认命令
+		printf("上电默认命令：%d\r\n", g_deviceParams.command);
+	}
 	while (1) {
 		// 如果有新的命令
 		if (new_command_ready) {

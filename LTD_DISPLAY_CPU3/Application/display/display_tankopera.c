@@ -123,6 +123,15 @@ static uint8_t *arr_bottom[][2] = {
 	{ (uint8_t*)"角度", (uint8_t*)"angle" },
 	{ (uint8_t*)"非法配置", (uint8_t*)"Illegal CFG" },
 };
+
+static uint8_t *default_cmmand[][2] = {
+	{ (uint8_t*)"无", (uint8_t*)"NONE" },
+	{ (uint8_t*)"回零点", (uint8_t*)"BACK ZERO" },
+	{ (uint8_t*)"寻找液位", (uint8_t*)"FIND OIL" },
+	{ (uint8_t*)"单点监测", (uint8_t*)"MONITOR SINGLE" },
+	{ (uint8_t*)"水位跟随", (uint8_t*)"FOLLOW WATER" },
+	{ (uint8_t*)"非法配置", (uint8_t*)"Illegal CFG" },
+};
 /* =====================================================================
  * 静态函数声明
  *	按“模块职责”重新分类，便于快速定位
@@ -1876,6 +1885,12 @@ uint8_t *(*dtm_disarr(int *pindex, int *plen))[2]
 		index = param_meta[index].val;
 		len = (int)(sizeof(arr_bottom) / sizeof(arr_bottom[0]));
 		p = arr_bottom;
+		break;
+	}
+	case COM_NUM_DEVICEPARAM_POWER_ON_DEFAULT_COMMAND:{
+		index = param_meta[index].val;
+		len = (int)(sizeof(default_cmmand) / sizeof(default_cmmand[0]));
+		p = default_cmmand;
 		break;
 	}
 	default:
