@@ -6,6 +6,8 @@
 #include "stateformodbus.h"
 #include <ctype.h>
 #include <float.h>
+#include "system_parameter.h"
+#include "encoder.h"
 
 /* ===================== Í¨ÓÃ¼Ä´æÆ÷¶ÁÐ´º¯Êý ===================== */
 
@@ -385,6 +387,8 @@ void ReadDeviceParamsFromHoldingRegisters(uint16_t *HoldingRegisterArray)
     g_deviceParams.struct_size   = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_STRUCT_SIZE);
     g_deviceParams.magic         = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_MAGIC);
     g_deviceParams.crc           = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_CRC);
+
+    //todo:
 }
 
 /* ===================== MeasurementResult <-> ÊäÈë¼Ä´æÆ÷Ó³Éä ===================== */

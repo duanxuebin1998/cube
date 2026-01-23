@@ -334,9 +334,6 @@ static void CPU2_Response03Process(uint8_t const *revframe) {
 	// 3. 更新 HoldingRegisterArray 里对应的寄存器（注意，这里是按“寄存器”写）
 	for (i = 0; i < RCV_registercnt; i++) {
 		HoldingRegisterArray[RCV_startaddress + i] = SlaveTempBuffer[i];
-		// 如果不需要 SlaveTempBuffer，也可以直接用 reg 写：
-		// HoldingRegisterArray[RCV_startaddress + i] =
-		//     ((uint16_t)revframe[3 + i * 2] << 8) | (uint16_t)revframe[3 + i * 2 + 1];
 	}
 
 	// 4. 解析保持寄存器并刷新 g_deviceParams
