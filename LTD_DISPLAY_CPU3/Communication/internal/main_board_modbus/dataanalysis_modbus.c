@@ -389,6 +389,9 @@ void ReadDeviceParamsFromHoldingRegisters(uint16_t *HoldingRegisterArray)
     g_deviceParams.struct_size   = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_STRUCT_SIZE);
     g_deviceParams.magic         = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_MAGIC);
     g_deviceParams.crc           = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_CRC);
+
+	update_sensor_height_from_encoder(); // 如果修改了罐高，需要更新传感器高度测量
+	save_device_params();//保存设备参数
 }
 
 /* ===================== MeasurementResult <-> 输入寄存器映射 ===================== */

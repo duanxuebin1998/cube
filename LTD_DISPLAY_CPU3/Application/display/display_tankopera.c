@@ -975,7 +975,7 @@ static void ifsendcmd(void)
 			OledValueDisplay(now_Para_CT.val, OLED_LINE8_3, OLED_ROW4_3, 0, now_Para_CT.points, now_Para_CT.unit);
 		}
 	} else if (now_Opera_Num > COM_NUM_PASSWORD_START && now_Opera_Num < COM_NUM_PASSWORD_END) {
-		if (now_Para_CT.val == screen_parameter.passward || now_Para_CT.val == FIXPASSWORD) {
+		if (now_Para_CT.val == g_cpu3_comm_display_params.screen_password || now_Para_CT.val == FIXPASSWORD) {
 			DisplayLangaugeLineWords((uint8_t*)"密码正确!", OLED_LINE8_1, OLED_ROW3_2, 0, (uint8_t*)"Password Correct");
 			HAL_Delay(100);
 			if (now_Opera_Num == COM_NUM_PASSWORD_ENTER_PARA) {
@@ -1995,7 +1995,7 @@ static void mainmenu(void)
 {
 	static struct MenuData menu[] = {
 		{ (uint8_t*)"测量命令", COM_NUM_NOOPERA, measuremenu, COMMANE_NORW, (uint8_t*)"MeasureCommend" },
-		{ (uint8_t*)"参数配置", COM_NUM_NOOPERA, menu_paracfg_main, COMMANE_NORW, (uint8_t*)"Para-config" },
+		{ (uint8_t*)"参数配置", COM_NUM_NOOPERA, password_enter_para, COMMANE_NORW, (uint8_t*)"Para-config" },
 		{ (uint8_t*)"调试指令", COM_NUM_NOOPERA, password_enter_cmd, COMMANE_NORW, (uint8_t*)"Debug Commend" },
 		{ (uint8_t*)"语言", COM_NUM_PARA_LANG, setlanguage, COMMANE_NORW, (uint8_t*)"Language" },
 		{ (uint8_t*)"退出", COM_NUM_NOOPERA, ifexittankopera, COMMANE_NORW, (uint8_t*)"Exit" },

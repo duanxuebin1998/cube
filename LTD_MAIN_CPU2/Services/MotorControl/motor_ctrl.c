@@ -11,19 +11,44 @@
  *
  * 关键口径（必须统一）：
  *  1) 方向：
- *     - MOTOR_DIRECTION_DOWN：下行放带，cable_length 增加
- *     - MOTOR_DIRECTION_UP  ：上行收带，cable_length 减少
+ *     - MOTOR_DIRECTION_DOWN：下行放带，cable_length 增加；sensor_position 减小（按你现场口径）
+ *     - MOTOR_DIRECTION_UP  ：上行收带，cable_length 减少；sensor_position 增大（按你现场口径）
  *  2) 单位：
  *     - cable_length：0.1mm
  *     - sensor_position：0.1mm
  *     - first_loop_circumference_mm：0.1mm
  *     - tape_thickness_mm：0.001mm
-3) 尺带模型（以最外层为基准，允许 L<0 表示缠带）：
-   - C0(mm)=first_loop_circumference_mm*0.1
-   - t(mm) =tape_thickness_mm*0.001
-   - 放带（n>=0）：L = C0*n - 2*pi*t*n^2        // 每圈半径减 2t
-   - 缠带（n<0）：L = -(C0*|n| + 2*pi*t*|n|^2)  // 每圈半径增 2t
-
+ *
+ * 3) 尺带模型（以最外层为基准，允许 L<0 表示缠带）：
+ *    - C0(mm)=first_loop_circumference_mm*0.1
+ *    - t(mm) =tape_thickness_mm*0.001
+ *    - 每放/缠 1 圈，半径变化 t（不是 2t）
+ *    - 放带（n>=0）：L = C0*n - pi*t*n^2        // 每圈半径减 t
+ *    - 缠带（n<0）：L = -(C0*|n| + pi*t*|n|^2)  // 每圈半径增 t
+ *
+ * 4) minR 截断（仅放带 L>=0 需要）：
+ *    - 当放带模型算到半径 < minR 时，不再继续减半径
+ *    - 之后按固定半径 minR（固定周长 Cmin=2*pi*minR）线性展开
+ *
+ *    放带分段：
+ *      设 n1 为达到 minR 的圈数阈值，L1 为对应长度
+ *      n <= n1：L = C0*n - pi*t*n^2
+ *      n >  n1：L = L1 + (n-n1)*Cmin
+ *
+ *    反解分段：
+ *      L <= L1：用二次反解（disc = C0^2 - 4*pi*t*L）
+ *      L >  L1：n = n1 + (L-L1)/Cmin
+ *
+ * 5) 反解公式（用于长度->圈数）：
+ *    - 放带（L>=0，且 L<=L1）：
+ *        L = C0*n - pi*t*n^2
+ *        disc = C0^2 - 4*pi*t*L
+ *        n = (C0 - sqrt(disc)) / (2*pi*t)
+ *    - 缠带（L<0）：
+ *        |L| = C0*m + pi*t*m^2
+ *        disc = C0^2 + 4*pi*t*|L|
+ *        m = (-C0 + sqrt(disc)) / (2*pi*t)
+ *        n = -m
  *
  * 命令切换打断策略：
  *  - 所有“阻塞等待/长循环”处均插入 CHECK_COMMAND_SWITCH... 宏
@@ -83,7 +108,7 @@
 #define TAPE_MIN_RADIUS_MM   (40.0)   /* 尺带最内圈半径40mm */
 #endif
 
-/* ===================== 命令切换打断（新增） ===================== */
+/* ===================== 命令切换打断 ===================== */
 
 /* 命令切换导致的中断错误码 */
 #ifndef COMMAND_SWITCH_ABORT
@@ -92,9 +117,6 @@
 
 /**
  * @brief 非 void 函数：检测命令切换 -> 停止电机 -> 返回 retcode
- *
- * 使用场景：
- *  - uint32_t 返回值函数（motorMoveAndWaitUntilStop / stpr_wait_until_stop 等）
  */
 #define CHECK_COMMAND_SWITCH_AND_STOP(retcode)                                    \
     do {                                                                          \
@@ -107,9 +129,6 @@
 
 /**
  * @brief void 函数：检测命令切换 -> 停止电机 -> return
- *
- * 使用场景：
- *  - void 返回值函数（motorMoveBlocking_NoDetect 等）
  */
 #define CHECK_COMMAND_SWITCH_AND_STOP_NO_RETURN()                                 \
     do {                                                                          \
@@ -132,26 +151,8 @@ static uint32_t last_alarm_tick = 0;
 /* 全局速度：由 Motor_UpdateVelocityFromParams() 根据参数动态更新 */
 uint32_t velocity = MOTOR_VELOCITY_BASE;  // 先给一个默认值，真正值在 Init/运行中更新
 
-/* 前置声明 */
-static uint32_t stpr_wait_until_stop(TMC5130TypeDef *tmc5130);
-
 /* ===================== 速度控制（由参数决定） ===================== */
-/**
- * @brief 根据 g_deviceParams.max_motor_speed 更新全局 velocity
- *
- * 参数说明：
- *  - g_deviceParams.max_motor_speed 为 100 倍缩放：
- *      100 -> 1.00 倍
- *      200 -> 2.00 倍
- *      150 -> 1.50 倍
- *
- * 计算：
- *  - velocity = MOTOR_VELOCITY_BASE * max_motor_speed / 100
- *
- * 保护：
- *  - ratio 过小会导致几乎不动；ratio 过大可能超过驱动/机构能力
- *  - 这里做了 min/max 钳位，你可按现场测试调节
- */
+
 static inline void Motor_UpdateVelocityFromParams(void)
 {
     int32_t ratio_x100 = (int32_t)g_measurement.debug_data.motor_speed;
@@ -175,72 +176,15 @@ static inline void Motor_UpdateVelocityFromParams(void)
 
 /* ===================== 方向统一工具 ===================== */
 
-/**
- * @brief 检查方向是否合法：只允许 UP/DOWN 两种方向
- */
 static inline int Motor_IsDirValid(int dir)
 {
     return (dir == MOTOR_DIRECTION_UP) || (dir == MOTOR_DIRECTION_DOWN);
 }
 
-/* ===================== 尺带/卷筒模型工具 ===================== */
-/*
- * 本段负责“长度 <-> 圈数 <-> ticks”的连续拟合换算。
- *
- * 1) 物理口径（必须统一）
- *    - 以最外层为基准：n=0, L=0
- *    - n>0：下行放带（payout），已放出长度 L>0
- *    - n<0：上行缠带（wind-up），表示缠回超过基准点，L<0
- *
- * 2) 参数单位
- *    - g_deviceParams.first_loop_circumference_mm：0.1mm（最外层周长）
- *    - g_deviceParams.tape_thickness_mm：0.001mm（尺带厚度）
- *    - 换算到模型使用的 mm：
- *        C0(mm) = first_loop_circumference_mm * 0.1
- *        t (mm) = tape_thickness_mm * 0.001
- *
- * 3) 放带/缠带几何模型（连续积分，不做离散求和）
- *    假设：每放/缠 1 圈，半径变化 2*t（t 为尺带厚度）
- *
- *    3.1 放带（n>=0）：半径逐圈减小
- *        r(n) = r0 - 2*t*n
- *        C(n) = 2*pi*r(n) = C0 - 4*pi*t*n
- *        dL/dn = C(n)
- *        => L(n) = ∫(0->n) (C0 - 4*pi*t*x) dx
- *               = C0*n - 2*pi*t*n^2
- *
- *    3.2 缠带（n<0）：半径逐圈增大（注意：二次项符号相反）
- *        令 m = |n| >= 0
- *        C(m) = C0 + 4*pi*t*m
- *        |L|(m) = ∫(0->m) (C0 + 4*pi*t*x) dx
- *               = C0*m + 2*pi*t*m^2
- *        => L(n<0) = -|L|(m)
- *
- * 4) minR 截断（防止厚度误差导致“越放越放不完/模型半径趋近 0”）
- *    - 当放带模型算到半径 < minR 时，不再继续减半径
- *    - 之后按固定半径 minR（固定周长 Cmin=2*pi*minR）线性展开
- *
- *    放带分段：
- *      设 n1 为达到 minR 的圈数阈值，L1 为对应长度
- *      n <= n1：L = C0*n - 2*pi*t*n^2
- *      n >  n1：L = L1 + (n-n1)*Cmin
- *
- *    反解分段：
- *      L <= L1：用二次反解（disc = C0^2 - 8*pi*t*L）
- *      L >  L1：n = n1 + (L-L1)/Cmin
- *
- *    注意：
- *      - minR 仅对“放带（L>=0）”需要；缠带半径是增大的，不会触发“半径过小”问题。
- */
+/* ===================== 尺带/卷筒模型工具（每圈半径变化=t） ===================== */
 
 /**
  * @brief 卷筒输出轴每转对应的 ticks（微步数）
- *
- * 计算来源：
- *  - 减速比：30
- *  - 电机每圈整步：1600
- *  - 微步细分：32
- *  => 输出轴每圈 ticks = 30 * 1600 * 32 = 1,536,000
  */
 static inline int32_t tape_ticks_per_rev(void)
 {
@@ -249,7 +193,6 @@ static inline int32_t tape_ticks_per_rev(void)
 
 /**
  * @brief 最外层周长 C0（单位：mm）
- *        参数存储单位为 0.1mm，这里换算为 mm
  */
 static inline double tape_C0_mm(void)
 {
@@ -258,7 +201,6 @@ static inline double tape_C0_mm(void)
 
 /**
  * @brief 尺带厚度 t（单位：mm）
- *        参数存储单位为 0.001mm，这里换算为 mm
  */
 static inline double tape_t_mm(void)
 {
@@ -266,16 +208,7 @@ static inline double tape_t_mm(void)
 }
 
 /**
- * @brief 计算放带进入“最小半径 minR”后的分段阈值
- *
- * 输出：
- *  - Cmin：minR 对应的最小周长（mm）
- *  - n1  ：放带圈数达到 minR 的阈值（>=0）
- *  - L1  ：放带长度达到 minR 的阈值（>=0）
- *
- * 边界：
- *  - t<=0 或 C0<=0：模型退化，不做分段（n1=L1=0，Cmin仍给出）
- *  - C0<=Cmin：从一开始就认为“半径已经 <=minR”，因此直接线性展开（n1=0，L1=0）
+ * @brief 计算放带进入“最小半径 minR”后的分段阈值（新模型）
  */
 static inline void tape_minR_threshold(double C0_mm, double t_mm,
                                        double *n1, double *L1, double *Cmin)
@@ -287,46 +220,30 @@ static inline void tape_minR_threshold(double C0_mm, double t_mm,
     if (L1)   *L1   = 0.0;
 
     if (C0_mm <= 0.0 || t_mm <= 0.0) {
-        /* 参数无效或厚度退化：不再计算二次阈值 */
         return;
     }
 
     if (C0_mm <= Cmin_local) {
-        /* 起点周长都不大于 Cmin：认为从 n=0 起就按 Cmin 线性展开 */
         return;
     }
 
-    /* 达到 minR 时：C(n)=C0-4*pi*t*n = Cmin  =>  n1=(C0-Cmin)/(4*pi*t) */
-    const double n1_local = (C0_mm - Cmin_local) / (4.0 * M_PI * t_mm);
+    /* 达到 minR 时：C(n)=C0-2*pi*t*n = Cmin  =>  n1=(C0-Cmin)/(2*pi*t) */
+    const double n1_local = (C0_mm - Cmin_local) / (2.0 * M_PI * t_mm);
 
     if (n1) {
         *n1 = (n1_local > 0.0) ? n1_local : 0.0;
     }
 
     if (L1) {
-        /* L1 = C0*n1 - 2*pi*t*n1^2 */
-        double L1_local = (C0_mm * n1_local) - (2.0 * M_PI * t_mm * n1_local * n1_local);
+        /* L1 = C0*n1 - pi*t*n1^2 */
+        double L1_local = (C0_mm * n1_local) - (1.0 * M_PI * t_mm * n1_local * n1_local);
         if (L1_local < 0.0) L1_local = 0.0;
         *L1 = L1_local;
     }
 }
 
 /**
- * @brief 有符号圈数 n -> 有符号长度 L（mm）
- *
- * 约定：
- *  - n >= 0：放带（payout），L >= 0
- *  - n <  0：缠带（wind-up），L <  0
- *
- * 放带（n>=0）：
- *  - 若未触及 minR：L = C0*n - 2*pi*t*n^2
- *  - 若触及 minR 后：L = L1 + (n-n1)*Cmin
- *
- * 缠带（n<0）：
- *  - m=|n|：|L| = C0*m + 2*pi*t*m^2  => L = -|L|
- *
- * 退化：
- *  - t<=0：认为周长不随圈数变化，L = C0*n（线性）
+ * @brief 有符号圈数 n -> 有符号长度 L（mm）（新模型）
  */
 static inline double tape_signed_length_from_turns(double n,
                                                    double C0_mm,
@@ -340,48 +257,26 @@ static inline double tape_signed_length_from_turns(double n,
     }
 
     if (n >= 0.0) {
-        /* 放带：带 minR 截断，避免半径继续减小导致模型异常 */
+        /* 放带：带 minR 截断 */
         double n1, L1, Cmin;
         tape_minR_threshold(C0_mm, t_mm, &n1, &L1, &Cmin);
 
         if (n <= n1) {
-            /* 二次区间 */
-            return (C0_mm * n) - (2.0 * M_PI * t_mm * n * n);
+            /* L = C0*n - pi*t*n^2 */
+            return (C0_mm * n) - (1.0 * M_PI * t_mm * n * n);
         } else {
-            /* 线性展开区间：按固定最小周长 Cmin */
+            /* 线性展开区间 */
             return L1 + (n - n1) * Cmin;
         }
     } else {
-        /* 缠带：半径增大，不需要 minR 截断 */
+        /* 缠带：|L| = C0*m + pi*t*m^2 */
         const double m = -n; /* m >= 0 */
-        return -((C0_mm * m) + (2.0 * M_PI * t_mm * m * m));
+        return -((C0_mm * m) + (1.0 * M_PI * t_mm * m * m));
     }
 }
 
 /**
- * @brief 有符号长度 L（mm） -> 有符号圈数 n
- *
- * 约定：
- *  - L >= 0：放带，返回 n >= 0
- *  - L <  0：缠带，返回 n <  0
- *
- * 放带反解（L>=0）：
- *  - 若 L <= L1（尚未触及 minR）：解二次方程
- *      L = C0*n - 2*pi*t*n^2
- *      => 2*pi*t*n^2 - C0*n + L = 0
- *      => n = (C0 - sqrt(C0^2 - 8*pi*t*L)) / (4*pi*t)
- *    取“减号”分支确保 L=0 -> n=0
- *
- *  - 若 L > L1（已触及 minR）：线性展开
- *      n = n1 + (L - L1)/Cmin
- *
- * 缠带反解（L<0）：
- *  - |L| = C0*m + 2*pi*t*m^2  (m>=0)
- *  - m = (-C0 + sqrt(C0^2 + 8*pi*t*|L|)) / (4*pi*t)
- *  - n = -m
- *
- * 退化：
- *  - t<=0：n = L / C0
+ * @brief 有符号长度 L（mm） -> 有符号圈数 n（新模型）
  */
 static inline double tape_turns_from_signed_length(double L_mm,
                                                    double C0_mm,
@@ -400,36 +295,38 @@ static inline double tape_turns_from_signed_length(double L_mm,
         tape_minR_threshold(C0_mm, t_mm, &n1, &L1, &Cmin);
 
         if (L_mm <= L1) {
-            /* 二次反解：disc = C0^2 - 8*pi*t*L */
-            const double disc = (C0_mm * C0_mm) - (8.0 * M_PI * t_mm * L_mm);
+            /* L = C0*n - pi*t*n^2
+             * => pi*t*n^2 - C0*n + L = 0
+             * disc = C0^2 - 4*pi*t*L
+             * n = (C0 - sqrt(disc)) / (2*pi*t)
+             */
+            const double disc = (C0_mm * C0_mm) - (4.0 * M_PI * t_mm * L_mm);
 
             if (disc <= 0.0) {
-                /*
-                 * 若因参数/误差导致 disc<0：
-                 * - 不再钳到“半径=0”的理论极限
-                 * - 而是钳到 n1（minR 阈值），保证放带可继续线性展开
-                 */
                 return n1;
             }
 
-            return (C0_mm - sqrt(disc)) / (4.0 * M_PI * t_mm);
+            return (C0_mm - sqrt(disc)) / (2.0 * M_PI * t_mm);
         } else {
             /* 线性展开区间 */
             return n1 + (L_mm - L1) / Cmin;
         }
     } else {
-        /* 缠带：|L| = C0*m + 2*pi*t*m^2 */
+        /* 缠带：|L| = C0*m + pi*t*m^2
+         * => pi*t*m^2 + C0*m - |L| = 0
+         * disc = C0^2 + 4*pi*t*|L|
+         * m = (-C0 + sqrt(disc)) / (2*pi*t)
+         * n = -m
+         */
         const double absL = -L_mm;
-        const double disc = (C0_mm * C0_mm) + (8.0 * M_PI * t_mm * absL);
+        const double disc = (C0_mm * C0_mm) + (4.0 * M_PI * t_mm * absL);
 
-        /* disc 理论上恒 > 0，这里保守保护 */
         if (disc <= 0.0) return 0.0;
 
-        const double m = (-C0_mm + sqrt(disc)) / (4.0 * M_PI * t_mm);
+        const double m = (-C0_mm + sqrt(disc)) / (2.0 * M_PI * t_mm);
         return -m;
     }
 }
-
 
 /**
  * @brief 四舍五入到 int64，避免 double->int 直接截断导致系统误差
@@ -441,10 +338,6 @@ static inline int64_t llround_safe(double x)
 
 /**
  * @brief 读取当前放带长度（单位：mm）
- *        来源：g_measurement.debug_data.cable_length（0.1mm）
- *
- * 说明：
- *  - 此量建议来自编码器/长度计算，代表更接近物理真实的长度
  */
 static inline double get_current_tape_length_mm(void)
 {
@@ -452,11 +345,7 @@ static inline double get_current_tape_length_mm(void)
 }
 
 /**
- * @brief 从 TMC5130_XACTUAL 计算卷筒总圈数、圈内角度、预测长度
- *
- * 注意：
- *  - XACTUAL 是驱动器内部位置，无法感知机械打滑
- *  - 回零后建议 stpr_setPos(&stepper,0) 将 XACTUAL 清零，保证“相对零点”的含义成立
+ * @brief 从 TMC5130_XACTUAL 计算卷筒总圈数、圈内角度、预测长度（新模型）
  */
 void Motor_UpdateDrumState_FromXACTUAL(TMC5130TypeDef *tmc5130,
                                       MotorDrumState *out)
@@ -469,7 +358,7 @@ void Motor_UpdateDrumState_FromXACTUAL(TMC5130TypeDef *tmc5130,
     /* 2) ticks -> 输出轴圈数（含小数） */
     const double turns = (double)motor_step / (double)tape_ticks_per_rev();
 
-    /* 3) 计算圈内角度（处理负数方向，归一到 [0,1)） */
+    /* 3) 圈内角度（归一到 [0,1)） */
     int32_t turns_int = (int32_t)floor(turns);
     double frac = turns - (double)turns_int;
     if (frac < 0.0) frac += 1.0;
@@ -477,20 +366,16 @@ void Motor_UpdateDrumState_FromXACTUAL(TMC5130TypeDef *tmc5130,
 
     const double angle_deg = frac * 360.0;
 
-    /* 4) 由 turns 预测长度（单位：mm）支持正负 turns */
+    /* 4) 由 turns 预测长度（单位：mm） */
     const double C0 = tape_C0_mm();
     const double t  = tape_t_mm();
 
     double L_mm;
     if (t > 0.0) {
-        /* 直接传入 turns（可正可负），由函数内部选择放带/缠带模型 */
         L_mm = tape_signed_length_from_turns(turns, C0, t);
     } else {
-        /* t<=0 退化线性 */
         L_mm = C0 * turns;
     }
-
-
 
     /* 5) 输出 */
     out->motor_step          = motor_step;
@@ -502,17 +387,15 @@ void Motor_UpdateDrumState_FromXACTUAL(TMC5130TypeDef *tmc5130,
 
 /* ===================== 初始化 ===================== */
 
-/**
- * @brief 电机初始化：初始化驱动、使能驱动
- */
 uint32_t motor_Init(void)
 {
-	g_measurement.debug_data.motor_speed = g_deviceParams.max_motor_speed;//恢复最大速度
-    /* 先根据参数更新速度 */
+    g_measurement.debug_data.motor_speed = g_deviceParams.max_motor_speed; // 恢复最大速度
+
     Motor_UpdateVelocityFromParams();
 
     stpr_initStepper(&stepper, &hspi2, GPIOB, GPIO_PIN_12, 1, 14);
     stpr_enableDriver(&stepper);
+
     printf("电机初始化 | max_motor_speed=%ld(×0.01) | velocity=%lu\r\n",
            (long)g_deviceParams.max_motor_speed, (unsigned long)velocity);
 
@@ -521,19 +404,12 @@ uint32_t motor_Init(void)
 
 /* ===================== 运动状态判断/芯片异常检查 ===================== */
 
-/**
- * @brief 判断电机是否仍在运动
- * @return true 仍运动；false 已停止
- */
 bool stpr_isMoving(TMC5130TypeDef *tmc5130)
 {
     uint32_t rampstat = stpr_readInt(tmc5130, TMC5130_RAMPSTAT);
     return ((rampstat & 0x400) != 0x400); // bit10=1 表示停止
 }
 
-/**
- * @brief 检查 TMC5130 的 GSTAT 状态寄存器并处理错误
- */
 uint32_t stpr_checkGstat(TMC5130TypeDef *tmc5130)
 {
     uint32_t gstat = stpr_readInt(tmc5130, TMC5130_GSTAT);
@@ -565,16 +441,6 @@ uint32_t stpr_checkGstat(TMC5130TypeDef *tmc5130)
 
 /* ===================== 可打断等待：通用等待封装（新增） ===================== */
 
-/**
- * @brief 等待电机停止（可被命令切换打断）
- *
- * 说明：
- *  - 不做碰撞/异常检测，仅做：运动状态轮询 + 命令切换打断
- *  - 用于“无检测阻塞等待”或替代 stpr_waitMove() 的库等待
- *
- * @param poll_ms 轮询周期（ms），建议 5~20ms
- * @return NO_ERROR / COMMAND_SWITCH_ABORT
- */
 static uint32_t motor_wait_stop_abortable(uint32_t poll_ms)
 {
     while (stpr_isMoving(&stepper)) {
@@ -586,19 +452,10 @@ static uint32_t motor_wait_stop_abortable(uint32_t poll_ms)
 
 /* ===================== ticks 运动封装（阻塞，可打断） ===================== */
 
-/**
- * @brief 按 ticks 运动并等待结束（可被命令切换打断）
- *
- * 重要说明：
- *  - ticks 正方向是否等于“下行放带”，需要你现场确认
- *  - 若确认方向相反，建议只在这里统一翻转 ticks（不要分散到各处）
- */
 uint32_t motorMoveWaitByTicks(int32_t ticks)
 {
-    /* 运行时更新速度 */
     Motor_UpdateVelocityFromParams();
 
-    /* 下发前先检查一次命令切换，避免刚切换仍下发运动 */
     CHECK_COMMAND_SWITCH_AND_STOP(COMMAND_SWITCH_ABORT);
 
     /* 若方向相反，仅需在此统一翻转 */
@@ -606,19 +463,11 @@ uint32_t motorMoveWaitByTicks(int32_t ticks)
 
     stpr_moveBy(&stepper, &ticks, velocity);
 
-    /* 等待完成（可打断） */
     return motor_wait_stop_abortable(10);
 }
 
 /* ===================== 精确长度换算下发（不等待） ===================== */
 
-/**
- * @brief 尺带机构：按“长度增量(mm)”精确换算 ticks 并下发（不等待）
- *
- * 注意：
- *  - 不等待、不检测
- *  - 仅负责换算与下发
- */
 uint32_t motorMoveNoWait(float move_mm, int dir)
 {
     Motor_UpdateVelocityFromParams();
@@ -664,8 +513,7 @@ uint32_t motorMoveNoWait(float move_mm, int dir)
     return NO_ERROR;
 }
 
-
-/* ===================== 第一圈周长标定（可打断） ===================== */
+/* ===================== 第一圈周长标定（可打断，新模型） ===================== */
 
 uint32_t CalibrateFirstLoopCircumference_OneTurnAtZero(void)
 {
@@ -679,7 +527,6 @@ uint32_t CalibrateFirstLoopCircumference_OneTurnAtZero(void)
         return PARAM_ERROR;
     }
 
-    /* 标定开始前检查命令切换 */
     CHECK_COMMAND_SWITCH_AND_STOP(COMMAND_SWITCH_ABORT);
 
     /* 1) 记录零点长度 */
@@ -691,9 +538,8 @@ uint32_t CalibrateFirstLoopCircumference_OneTurnAtZero(void)
         return ret;
     }
 
-    HAL_Delay(200); // 让采样稳定
+    HAL_Delay(200);
 
-    /* 标定过程中也允许打断 */
     CHECK_COMMAND_SWITCH_AND_STOP(COMMAND_SWITCH_ABORT);
 
     /* 3) 读取一圈后的长度 */
@@ -703,56 +549,87 @@ uint32_t CalibrateFirstLoopCircumference_OneTurnAtZero(void)
         return PARAM_ERROR;
     }
 
-    /* 4) 计算 C0（mm）并做范围校验：
-     * 你当前模型：每圈半径减 2t
-     * 第一圈放出长度：dL = C0 - 2*pi*t  =>  C0 = dL + 2*pi*t
-     */
-    const double C0 = dL + (2.0 * M_PI * t);
+    /* 新模型：第一圈放出长度：dL = C0 - pi*t  =>  C0 = dL + pi*t */
+    const double C0 = dL + (1.0 * M_PI * t);
 
     if (!(C0 > C0_MIN_MM && C0 < C0_MAX_MM)) {
         return PARAM_ERROR;
     }
 
-    /* 5) 写入参数（mm -> 0.1mm） */
     g_deviceParams.first_loop_circumference_mm = (int32_t)llround(C0 * 10.0);
-    //返回
-//    motor
+
     return NO_ERROR;
 }
 
 /* ===================== 带检测的等待停止（可打断，强制停机返回） ===================== */
 
-/**
- * @brief 等待电机停止（阻塞），期间检测碰撞与芯片异常，并支持命令切换打断
- */
-static uint32_t stpr_wait_until_stop(TMC5130TypeDef *tmc5130)
+static uint32_t stpr_wait_until_stop_with_target(TMC5130TypeDef *tmc5130,
+                                                float target_mm,
+                                                float eps_mm,
+                                                int dir)
 {
     uint32_t ret = NO_ERROR;
     uint32_t startTick = HAL_GetTick();
-    const uint32_t MAX_WAIT_MS = 60000 * 60; // 超时时间：60s*60（按需调整）
+    const uint32_t MAX_WAIT_MS = 60000 * 60;
 
     while (stpr_isMoving(tmc5130)) {
 
-        /* 0) 命令切换打断（最高优先级） */
         CHECK_COMMAND_SWITCH_AND_STOP(COMMAND_SWITCH_ABORT);
 
-        /* 1) 碰撞/极限检测 */
+        /* 1) 当前位置（mm） */
+        float cur_mm = (float)g_measurement.debug_data.sensor_position / 10.0f;
+
+        /* 2) 到位（容差）-> 立即停机并返回成功 */
+        if (fabsf(cur_mm - target_mm) <= eps_mm) {
+            stpr_stop(&stepper);
+            while (stpr_isMoving(tmc5130)) {
+                CHECK_COMMAND_SWITCH_AND_STOP(COMMAND_SWITCH_ABORT);
+                HAL_Delay(5);
+            }
+            return NO_ERROR;
+        }
+
+        /* 3) 越过目标也应停（结合方向口径）：
+         *    - 下行：cur 逐渐变小，越过目标意味着 cur <= target
+         *    - 上行：cur 逐渐变大，越过目标意味着 cur >= target
+         */
+        if (dir == MOTOR_DIRECTION_DOWN) {
+            if (cur_mm <= target_mm) {
+                stpr_stop(&stepper);
+                while (stpr_isMoving(tmc5130)) {
+                    CHECK_COMMAND_SWITCH_AND_STOP(COMMAND_SWITCH_ABORT);
+                    HAL_Delay(5);
+                }
+                return NO_ERROR;
+            }
+        } else {
+            if (cur_mm >= target_mm) {
+                stpr_stop(&stepper);
+                while (stpr_isMoving(tmc5130)) {
+                    CHECK_COMMAND_SWITCH_AND_STOP(COMMAND_SWITCH_ABORT);
+                    HAL_Delay(5);
+                }
+                return NO_ERROR;
+            }
+        }
+
+        /* 4) 碰撞/极限检测 */
         ret = CheckWeightCollision();
         CHECK_ERROR(ret);
 
-        /* 2) 芯片异常检测 */
+        /* 5) 芯片异常检测 */
         ret = stpr_checkGstat(tmc5130);
         CHECK_ERROR(ret);
 
-        /* 3) 超时保护 */
+        /* 6) 超时保护 */
         if (HAL_GetTick() - startTick > MAX_WAIT_MS) {
             printf("TMC5130: 等待停止超时！\r\n");
             RETURN_ERROR(MOTOR_RUN_TIMEOUT);
         }
+
         HAL_Delay(50);
     }
 
-    printf("TMC5130: 已停止。\r\n");
     return NO_ERROR;
 }
 
@@ -776,11 +653,11 @@ uint32_t motorMoveAndWaitUntilStop(float mm, int dir)
         return MOTOR_STEP_ERROR;
     }
 
-    /* 开始前检查命令切换 */
     CHECK_COMMAND_SWITCH_AND_STOP(COMMAND_SWITCH_ABORT);
 
     startPos_mm = (float)g_measurement.debug_data.sensor_position / 10.0f;
 
+    /* 你现场口径：下行 pos 变小，上行 pos 变大 */
     targetPos_mm = startPos_mm +
                    ((dir == MOTOR_DIRECTION_UP) ? total_cmd_mm : -total_cmd_mm);
 
@@ -790,31 +667,26 @@ uint32_t motorMoveAndWaitUntilStop(float mm, int dir)
 
         attempt++;
 
-        /* 每次下发前都允许打断 */
         CHECK_COMMAND_SWITCH_AND_STOP(COMMAND_SWITCH_ABORT);
 
         motorMoveNoWait(remain_mm, dir);
 
-        /* 起步延时期间也允许打断 */
-        for (int i = 0; i < 100; i++) {   // 100 * 10ms = 1000ms
+        for (int i = 0; i < 100; i++) {
             CHECK_COMMAND_SWITCH_AND_STOP(COMMAND_SWITCH_ABORT);
             HAL_Delay(10);
         }
 
-        ret = stpr_wait_until_stop(&stepper);
+        ret = stpr_wait_until_stop_with_target(&stepper, targetPos_mm, EPS_MM, dir);
 
-        /* wait 返回后再次检查（避免继续补偿） */
-        if (ret == COMMAND_SWITCH_ABORT) {
-            return ret;
-        }
+        if (ret == COMMAND_SWITCH_ABORT) return ret;
         CHECK_COMMAND_SWITCH_AND_STOP(COMMAND_SWITCH_ABORT);
 
         currentPos_mm = (float)g_measurement.debug_data.sensor_position / 10.0f;
+
         moved_mm = fabsf(currentPos_mm - startPos_mm);
-        remain_mm = total_cmd_mm - moved_mm;
-        if (remain_mm < 0.0f) {
-            remain_mm = 0.0f;
-        }
+
+        remain_mm = fabsf(targetPos_mm - currentPos_mm);
+        if (remain_mm < EPS_MM) remain_mm = 0.0f;
 
         if (ret == NO_ERROR) {
             printf("电机段运行成功: attempt=%d, 累计位移=%.2f mm, 剩余=%.2f mm\r\n",
@@ -843,8 +715,7 @@ uint32_t motorMoveAndWaitUntilStop(float mm, int dir)
                    remain_mm,
                    (dir == MOTOR_DIRECTION_DOWN) ? "下行" : "上行");
 
-            /* 补偿前延时也允许打断 */
-            for (int i = 0; i < 20; i++) {  // 20*10ms=200ms
+            for (int i = 0; i < 20; i++) {
                 CHECK_COMMAND_SWITCH_AND_STOP(COMMAND_SWITCH_ABORT);
                 HAL_Delay(10);
             }
@@ -854,7 +725,8 @@ uint32_t motorMoveAndWaitUntilStop(float mm, int dir)
     currentPos_mm = (float)g_measurement.debug_data.sensor_position / 10.0f;
     moved_mm = fabsf(currentPos_mm - startPos_mm);
 
-    float diff_pct = 100.0f * (moved_mm - total_cmd_mm) / total_cmd_mm;
+    /* 用 abs 计算误差百分比，避免方向口径导致的负值 */
+    float diff_pct = 100.0f * fabsf(moved_mm - total_cmd_mm) / total_cmd_mm;
 
     if ((diff_pct > 70.0f) && (total_cmd_mm > 3.0f)) {
         printf("警告：检测到电机可能丢步！\r\n");
@@ -872,11 +744,10 @@ uint32_t motorMoveAndWaitUntilStop(float mm, int dir)
     return NO_ERROR;
 }
 
-/* ===================== 长距离运行（不阻塞，不做等待；需要你上层自己控制停止） ===================== */
+/* ===================== 长距离运行（不阻塞，不做等待） ===================== */
 
 uint32_t motorMove_up(void)
 {
-    /* 下发前检查是否命令已切换（避免误启动） */
     CHECK_COMMAND_SWITCH_AND_STOP(COMMAND_SWITCH_ABORT);
 
     motorMoveNoWait(2000, MOTOR_DIRECTION_UP);
@@ -893,19 +764,12 @@ uint32_t motorMove_down(void)
 
 /* ===================== 运动辅助：位置快照与到位控制（可打断） ===================== */
 
-/**
- * @brief 读取当前位置快照（单位：mm）
- *        来源：sensor_position（0.1mm）
- */
 void snapshot_sensor_pos_mm(float *pos_mm)
 {
     uint32_t pos_01mm = (uint32_t)g_measurement.debug_data.sensor_position;
     *pos_mm = (float)pos_01mm / 10.0f;
 }
 
-/**
- * @brief 一次下发移动到绝对位置（阻塞，可打断）
- */
 uint32_t motorMoveToPositionOneShot(float target_mm)
 {
     uint32_t ret;
@@ -941,11 +805,6 @@ uint32_t motorMoveToPositionOneShot(float target_mm)
     return NO_ERROR;
 }
 
-/**
- * @brief 相对位移一次下发（阻塞，可打断）
- *
- * @param mm 正数表示下行（长度增加），负数表示上行（长度减少）
- */
 uint32_t motorMoveRelativeOneShot(float mm)
 {
     float cur_mm;
@@ -964,14 +823,14 @@ uint32_t motorQuickStop(void)
         HAL_Delay(4000);
         stpr_enableDriver(&stepper);
     }
-    g_measurement.debug_data.motor_speed = g_deviceParams.max_motor_speed;//恢复最大速度
+    g_measurement.debug_data.motor_speed = g_deviceParams.max_motor_speed;
     return NO_ERROR;
 }
 
 uint32_t motorSlowStop(void)
 {
     stpr_stop(&stepper);
-    g_measurement.debug_data.motor_speed = g_deviceParams.max_motor_speed;//恢复最大速度
+    g_measurement.debug_data.motor_speed = g_deviceParams.max_motor_speed;
     return NO_ERROR;
 }
 
@@ -1033,6 +892,7 @@ uint32_t Motor_CheckLostStep_AutoTiming(int32_t currentPos)
 
     return NO_ERROR;
 }
+
 /* ================== 无检测运行中：调试打印 ================== */
 
 #ifndef NODETECT_LOG_PERIOD_MS
@@ -1055,14 +915,11 @@ static void NoDetect_RuntimeLogUpdate(void)
 
     uint32_t now = HAL_GetTick();
 
-    /* 1) 位置/尺带/称重：优先轻量更新（通常是本地变量/ADC/编码器） */
-    g_measurement.debug_data.current_weight = weight_parament.current_weight; /* 或 Read_CurrentWeight_Adapter() */
-    g_measurement.debug_data.current_encoder_value = g_encoder_count;         /* 或 Read_CurrentEncoderValue_Adapter() */
-    /* cable_length 如果你是 0.1mm 存储，这里按你的口径更新 */
-    /* 例如：由编码器计算得到 0.1mm */
-    /* g_measurement.debug_data.cable_length = Calc_CableLength_Adapter(); */
+    /* 1) 位置/尺带/称重 */
+    g_measurement.debug_data.current_weight = weight_parament.current_weight;
+    g_measurement.debug_data.current_encoder_value = g_encoder_count;
 
-    /* 2) 陀螺仪：分频读取（UART6） */
+    /* 2) 陀螺仪 */
     if ((now - last_gyro_tick) >= NODETECT_GYRO_PERIOD_MS) {
         last_gyro_tick = now;
         float ax = 0.0f, ay = 0.0f;
@@ -1070,32 +927,26 @@ static void NoDetect_RuntimeLogUpdate(void)
         if (ret == NO_ERROR) {
             g_measurement.debug_data.angle_x = (int32_t)(ax * 100.0f);
             g_measurement.debug_data.angle_y = (int32_t)(ay * 100.0f);
-        } else {
-            /* 失败不刷 0，保留上一次值；必要时可额外打印一次异常 */
         }
     }
 
-    /* 3) 密度/温度/频率：分频读取（DSM/DSM_V2） */
+    /* 3) 密度/温度/频率 */
     if ((now - last_den_tick) >= NODETECT_DENS_PERIOD_MS) {
         last_den_tick = now;
         float f = 0.0f, d = 0.0f, t = 0.0f;
         uint32_t ret = Read_Density(&f, &d, &t);
+        (void)f; (void)d; (void)t;
         if (ret == NO_ERROR) {
-            /* Read_Density 内部你已写 debug_data.temperature/frequency */
-            /* 如果你还想保留密度原始值，可在 debug_data 里预留字段或用 single_point_monitoring 里的值 */
-        } else {
-            /* 同样建议保留上一次值 */
+            /* Read_Density 内部写 debug_data.temperature/frequency 等 */
         }
     }
 
-    /* 4) 节流打印：100ms 一行 */
+    /* 4) 节流打印 */
     if ((now - last_log_tick) < NODETECT_LOG_PERIOD_MS) {
         return;
     }
     last_log_tick = now;
 
-    /* 统一一行输出（你要求：称重/位置/尺带/陀螺仪XY/密度温度频率） */
-    /* 注意：密度 raw 在 single_point_monitoring 里（density/temperature），频率在 debug_data.frequency */
     printf("ND_RUN | 方向=%lu 称重=%lu 距离零点=%ld(0.1mm) 罐底距离=%ld "
            "| X轴（X100）=%ld Y轴（X100）=%ld | 密度=%lu 温度=%lu 频率=%lu\r\n",
            (unsigned long)g_measurement.debug_data.motor_state,
@@ -1107,20 +958,14 @@ static void NoDetect_RuntimeLogUpdate(void)
            (unsigned long)g_measurement.single_point_monitoring.density,
            (unsigned long)g_measurement.single_point_monitoring.temperature,
            (unsigned long)g_measurement.debug_data.frequency);
-
 }
+
 /* ===================== 无检测阻塞运动（可打断，void） ===================== */
 
-/**
- * @brief 无任何检测的电机运动（阻塞，可被命令切换打断）
- *
- * 注意：
- *  - 该函数为 void，打断时仅 stop 并 return
- *  - 仅用于调试/标定等可控场景
- */
 void motorMoveBlocking_NoDetect(float mm, int dir)
 {
-	printf("无检测阻塞运动：mm=%.2f, dir=%d\r\n", mm, dir);
+    printf("无检测阻塞运动：mm=%.2f, dir=%d\r\n", mm, dir);
+
     Motor_UpdateVelocityFromParams();
 
     if (mm <= 0.0f) return;
@@ -1152,14 +997,13 @@ void motorMoveBlocking_NoDetect(float mm, int dir)
 
     CHECK_COMMAND_SWITCH_AND_STOP_NO_RETURN();
     stpr_moveBy(&stepper, &ticks, velocity);
-    HAL_Delay(100); // 起步延时);
+    HAL_Delay(100);
+
     while (stpr_isMoving(&stepper)) {
         CHECK_COMMAND_SWITCH_AND_STOP_NO_RETURN();
         NoDetect_RuntimeLogUpdate();
     }
-
 }
-
 
 /* ===================== 预留接口 ===================== */
 
