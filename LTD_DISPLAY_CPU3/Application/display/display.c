@@ -725,11 +725,11 @@ void DisplayAubonLogo(void)
 {
     HAL_Delay(1000);
     HAL_Delay(1000);
-    oled_map_128_64(aubonlogo_128_64);
-    HAL_Delay(1000);
-    HAL_Delay(1000);
-    HAL_Delay(1000);
-    HAL_Delay(1000);
+//    oled_map_128_64(aubonlogo_128_64);
+//    HAL_Delay(1000);
+//    HAL_Delay(1000);
+//    HAL_Delay(1000);
+//    HAL_Delay(1000);
     RefreshScreen();//显示完logo后立刻刷新一下屏幕
 }
 /* 显示设备数据 */
