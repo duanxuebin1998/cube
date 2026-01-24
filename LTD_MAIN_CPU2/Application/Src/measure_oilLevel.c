@@ -20,6 +20,8 @@
 #include "sensor.h"
 #include "weight.h"
 #include "measure_zero.h"
+#include "system_parameter.h"
+#include "encoder.h"
 
 // 函数原型声明
 static int SearchOil();   // 粗略搜索液位

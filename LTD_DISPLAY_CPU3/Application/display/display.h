@@ -2,7 +2,7 @@
 #define __DISPLAY_H
 #include "main.h"
 
-#define CPU3VERSION 1002
+#define CPU3VERSION 1004
 
 #define CONVER_QUALITY_P 3//质量显示几位小数
 #define CONVER_VOLUME_P 3//体积显示几位小数

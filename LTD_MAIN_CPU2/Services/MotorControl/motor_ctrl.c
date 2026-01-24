@@ -920,15 +920,16 @@ static void NoDetect_RuntimeLogUpdate(void)
     g_measurement.debug_data.current_encoder_value = g_encoder_count;
 
     /* 2) ÍÓÂÝÒÇ */
-    if ((now - last_gyro_tick) >= NODETECT_GYRO_PERIOD_MS) {
-        last_gyro_tick = now;
-        float ax = 0.0f, ay = 0.0f;
-        uint32_t ret = Read_Gyro_Angle(&ax, &ay);
-        if (ret == NO_ERROR) {
-            g_measurement.debug_data.angle_x = (int32_t)(ax * 100.0f);
-            g_measurement.debug_data.angle_y = (int32_t)(ay * 100.0f);
-        }
-    }
+
+//    if ((now - last_gyro_tick) >= NODETECT_GYRO_PERIOD_MS) {
+//        last_gyro_tick = now;
+//        float ax = 0.0f, ay = 0.0f;
+//        uint32_t ret = Read_Gyro_Angle(&ax, &ay);
+//        if (ret == NO_ERROR) {
+//            g_measurement.debug_data.angle_x = (int32_t)(ax * 100.0f);
+//            g_measurement.debug_data.angle_y = (int32_t)(ay * 100.0f);
+//        }
+//    }
 
     /* 3) ÃÜ¶È/ÎÂ¶È/ÆµÂÊ */
     if ((now - last_den_tick) >= NODETECT_DENS_PERIOD_MS) {

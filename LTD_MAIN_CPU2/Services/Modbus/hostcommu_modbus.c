@@ -6,6 +6,7 @@
 #include "hostcommu.h"
 #include <string.h>
 #include <ctype.h>
+#include "system_parameter.h"
 
 /*´Ó»úµØÖ·*/
 int SlaveAddress = 1;
