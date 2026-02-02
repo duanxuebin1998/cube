@@ -557,7 +557,8 @@ uint32_t CalibrateFirstLoopCircumference_OneTurnAtZero(void)
     }
 
     g_deviceParams.first_loop_circumference_mm = (int32_t)llround(C0 * 10.0);
-
+    ret = motorMoveAndWaitUntilStop(dL, MOTOR_DIRECTION_UP); // 回到起点
+    CHECK_ERROR(ret);
     return NO_ERROR;
 }
 

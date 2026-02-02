@@ -115,9 +115,8 @@ void WriteDeviceParamsToHoldingRegisters(uint16_t *HoldingRegisterArray)
     write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_OILLEVELTHRESHOLD,           g_deviceParams.oilLevelThreshold);
     write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_OILLEVEL_HYSTERESIS_THRESHOLD,g_deviceParams.oilLevelHysteresisThreshold);
     write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_LIQUIDLEVELMEASUREMENTMETHOD,g_deviceParams.liquidLevelMeasurementMethod);
-
-    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_RESERVED12, g_deviceParams.reserved12);
-    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_RESERVED13, g_deviceParams.reserved13);
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_OILLEVEL_FREQUENCY, g_deviceParams.oilLevelFrequency);
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_OILLEVEL_DENSITY, g_deviceParams.oilLevelDensity);
 
     /* ===================== 水位测量参数 ===================== */
     write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_WATER_TANK_HEIGHT,                g_deviceParams.water_tank_height);
@@ -290,8 +289,8 @@ void ReadDeviceParamsFromHoldingRegisters(uint16_t *HoldingRegisterArray)
     g_deviceParams.oilLevelHysteresisThreshold = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_OILLEVEL_HYSTERESIS_THRESHOLD);
     g_deviceParams.liquidLevelMeasurementMethod= read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_LIQUIDLEVELMEASUREMENTMETHOD);
 
-    g_deviceParams.reserved12 = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_RESERVED12);
-    g_deviceParams.reserved13 = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_RESERVED13);
+    g_deviceParams.oilLevelFrequency = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_OILLEVEL_FREQUENCY);
+    g_deviceParams.oilLevelDensity = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_OILLEVEL_DENSITY);
 
     /* ===================== 水位测量参数 ===================== */
     g_deviceParams.water_tank_height                = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_WATER_TANK_HEIGHT);

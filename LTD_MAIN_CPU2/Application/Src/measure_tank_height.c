@@ -136,47 +136,13 @@ uint32_t SearchBottom(void)
         CHECK_ERROR(ret);
     }
 
-    /*************** 精找阶段2 - 带重试 ***************/
-//    printf("罐底测量\t电机上行完成，准备第二次精找\r\n");
-//
-//    try_times = 0;
-//    while (try_times < 3)
-//    {
-//        try_times++;
-//        printf("罐底测量\t第二次精找第%d次尝试\r\n", try_times);
-//
-//        ret = SearchBottomPrecise();
-//
-//        if (ret == STATE_SWITCH)
-//        {
-//            printf("罐底测量\t检测到命令切换，中止第二次精找\r\n");
-//            break;
-//        }
-//
-//        if (ret == NO_ERROR)
-//        {
-//            printf("罐底测量\t第二次精找完成\r\n");
-//            break;
-//        }
-//        else
-//        {
-//            printf("罐底测量\t第二次精找失败:0x%lX\r\n", ret);
-//            HAL_Delay(1000);
-//        }
-//    }
-//
-//    if (ret != NO_ERROR)
-//    {
-//        printf("罐底测量\t第二次精找失败(尝试%d次)\r\n", try_times);
-//        CHECK_ERROR(ret);
-//    }
-
     /*************** 最终校验与记录 ***************/
     g_measurement.height_measurement.current_real_height = g_measurement.debug_data.cable_length;
     printf("罐底测量\t实高：%ld mm\r\n", g_measurement.debug_data.cable_length);
     if(g_measurement.device_status.device_state == STATE_CALIBRATIONOILING)
     {
-		g_deviceParams.tankHeight = g_measurement.debug_data.cable_length +  1;//TODO:这里的1应该改成液位传感器到底部距离差
+    	g_measurement.height_measurement.calibrated_liquid_level = g_measurement.debug_data.cable_length;
+		g_deviceParams.tankHeight = g_measurement.debug_data.cable_length +  g_deviceParams.liquid_sensor_distance_diff;
 		printf("罐底测量\t标定完成，罐高设置为：%ld mm\r\n", g_deviceParams.tankHeight);
 		update_sensor_height_from_encoder();	//更新罐高数据
     }

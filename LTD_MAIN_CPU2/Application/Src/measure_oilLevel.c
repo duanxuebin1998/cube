@@ -177,7 +177,12 @@ uint32_t SearchOilLevel(void) {
 	printf("液位测量\t粗找液位完成\r\n");
 	/*************** 精找阶段  ***************/
 	// 精确找液位
-	g_measurement.oil_measurement.follow_frequency = (g_measurement.oil_measurement.air_frequency + g_measurement.oil_measurement.oil_frequency) / 2.0;
+	if (g_deviceParams.liquidLevelMeasurementMethod == 0) {
+		g_measurement.oil_measurement.follow_frequency = (g_measurement.oil_measurement.air_frequency + g_measurement.oil_measurement.oil_frequency) / 2.0;
+	}
+	else {
+		g_measurement.oil_measurement.follow_frequency = g_deviceParams.oilLevelFrequency;
+	}
 	printf("液位测量\t目标频率：%ld Hz\r\n", g_measurement.oil_measurement.follow_frequency);
 
 	ret = SearchOilPrecise(100);  // 执行精确搜索

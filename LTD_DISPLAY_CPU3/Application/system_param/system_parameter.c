@@ -65,9 +65,9 @@ struct ParameterMetadata param_meta[] = {
 {(uint8_t*)"液位盲区",	0,	COM_NUM_DEVICEPARAM_BLINDZONE,	HOLDREGISTER_DEVICEPARAM_BLINDZONE,	2,	false,	0,	0,	NULL,	1,	0,	true,	TYPE_INT,	6,	NULL,	(uint8_t*)"BlindZone"},
 {(uint8_t*)"找油阈值",	0,	COM_NUM_DEVICEPARAM_OILLEVELTHRESHOLD,	HOLDREGISTER_DEVICEPARAM_OILLEVELTHRESHOLD,	2,	false,	0,	0,	NULL,	1,	0,	true,	TYPE_INT,	4,	NULL,	(uint8_t*)"OilLvlTh"},
 {(uint8_t*)"滞后阈值",	0,	COM_NUM_DEVICEPARAM_OILLEVEL_HYSTERESIS_THRESHOLD,	HOLDREGISTER_DEVICEPARAM_OILLEVEL_HYSTERESIS_THRESHOLD,	2,	false,	0,	0,	NULL,	1,	0,	true,	TYPE_INT,	4,	NULL,	(uint8_t*)"HysTh"},
-{(uint8_t*)"液位测量方式",	0,	COM_NUM_DEVICEPARAM_LIQUIDLEVELMEASUREMENTMETHOD,	HOLDREGISTER_DEVICEPARAM_LIQUIDLEVELMEASUREMENTMETHOD,	2,	false,	0,	0,	NULL,	0,	0,	true,	TYPE_INT,	1,	NULL,	(uint8_t*)"LvlMeasMode"},
-{(uint8_t*)"保留12",	0,	COM_NUM_DEVICEPARAM_RESERVED12,	HOLDREGISTER_DEVICEPARAM_RESERVED12,	2,	false,	0,	0,	NULL,	0,	0,	false,	TYPE_INT,	8,	NULL,	(uint8_t*)"Rsv12"},
-{(uint8_t*)"保留13",	0,	COM_NUM_DEVICEPARAM_RESERVED13,	HOLDREGISTER_DEVICEPARAM_RESERVED13,	2,	false,	0,	0,	NULL,	0,	0,	false,	TYPE_INT,	8,	NULL,	(uint8_t*)"Rsv13"},
+{(uint8_t*)"液位测量方式",	0,	COM_NUM_DEVICEPARAM_LIQUIDLEVELMEASUREMENTMETHOD,	HOLDREGISTER_DEVICEPARAM_LIQUIDLEVELMEASUREMENTMETHOD,	2,	false,	0,	0,	NULL,	0,	0,	true,	TYPE_INT,	1,	ret_arr_word,	(uint8_t*)"LvlMeasMode"},
+{(uint8_t*)"液位跟随频率",	0,	COM_NUM_DEVICEPARAM_OILLEVEL_FREQUENCY,	HOLDREGISTER_DEVICEPARAM_OILLEVEL_FREQUENCY,	2,	false,	0,	0,	(uint8_t*)"HZ",	0,	0,	true,	TYPE_INT,	4,	NULL,	(uint8_t*)"FollowFreq"},
+{(uint8_t*)"液位跟随密度",	0,	COM_NUM_DEVICEPARAM_OILLEVEL_DENSITY,	HOLDREGISTER_DEVICEPARAM_OILLEVEL_DENSITY,	2,	false,	0,	0,	(uint8_t*)"kg/m3",	1,	0,	true,	TYPE_INT,	6,	NULL,	(uint8_t*)"FollowDens"},
 
 {(uint8_t*)"水位罐高",	0,	COM_NUM_DEVICEPARAM_WATER_TANK_HEIGHT,	HOLDREGISTER_DEVICEPARAM_WATER_TANK_HEIGHT,	2,	false,	0,	0,	NULL,	1,	0,	true,	TYPE_INT,	7,	NULL,	(uint8_t*)"WaterTankH"},
 {(uint8_t*)"水位探头距差",	0,	COM_NUM_DEVICEPARAM_WATER_LEVEL_SENSOR_DISTANCE_DIFF,	HOLDREGISTER_DEVICEPARAM_WATER_LEVEL_SENSOR_DISTANCE_DIFF,	2,	false,	-999999,	999999,	(uint8_t*)"mm",	1,	0,	true,	TYPE_INT,	7,	NULL,	(uint8_t*)"WaterSenDiff"},
@@ -201,6 +201,7 @@ struct ParameterMetadata param_meta[] = {
 
 
 
+
 const int param_metaAmount = sizeof(param_meta) / sizeof(param_meta[0]);
 
 /* 根据操作获取当前保持寄存器具体信息的索引 */
@@ -297,6 +298,8 @@ void print_device_params(void)
     printf("  oilLevelThreshold          : %lu\r\n", (unsigned long)params.oilLevelThreshold);
     printf("  oilLevelHysteresis         : %lu\r\n", (unsigned long)params.oilLevelHysteresisThreshold);
     printf("  liquidLevelMethod          : %lu\r\n", (unsigned long)params.liquidLevelMeasurementMethod);
+    printf("  oilLevelFrequency          : %lu\r\n", (unsigned long)params.oilLevelFrequency);
+    printf("  oilLevelDensity            : %lu\r\n", (unsigned long)params.oilLevelDensity);
 
     /* 水位 */
     printf("[Water Level]\r\n");

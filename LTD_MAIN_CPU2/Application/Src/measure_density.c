@@ -881,105 +881,206 @@ void Print_DensitySpreadResult(const DensityDistribution *dist)
     printf("=====================================\r\n\r\n");
 }
 
-/*
- * 单点稳定判定逻辑：
- *   - 循环读取 freq/density/temp
- *   - 若任一项相对参考值变化超过阈值，则更新参考值并重置稳定计时
- *   - 持续稳定超过 stable_win_ms 即判定稳定，并写入 result
+/**
+ * @brief 单点密度测量（带稳定判定与超时兜底）
  *
- * 超时策略：
- *   - 最大等待 5 分钟（300000ms）
+ * 【总体逻辑】
+ *  1) 周期性读取 频率 / 密度 / 温度
+ *  2) 仅当“密度为非零”时，才参与稳定判定
+ *  3) 若在稳定窗口内，三项数据变化均不超过阈值，则判定“数据稳定”
+ *  4) 若 5 分钟内始终未稳定：
+ *      - 若曾读到非零密度：取最后一次非零密度作为结果
+ *      - 若 5 分钟内从未读到非零密度：输出 0 作为结果
+ *
+ * 【关键口径】
+ *  - 密度 == 0：
+ *      - 不参与稳定判定
+ *      - 不能作为“稳定值”
+ *      - 但在“完全无有效密度”的异常场景下，可作为最终兜底输出
+ *
+ * @param[out] result  单点测量结果结构体（RAW 编码）
+ *
+ * @return NO_ERROR           成功（稳定或兜底）
+ *         其他错误码        模式切换/通信等异常
  */
 uint32_t SinglePoint_ReadSensor(volatile DensityMeasurement *result)
 {
     uint32_t ret = 0;
 
-    /* 切换密度模式（防御性调用） */
+    /* ---------- 切换到密度测量模式（防御性调用） ---------- */
     ret = EnableDensityMode();
     CHECK_ERROR(ret);
 
-    /* 稳定判定时间窗口：
-     *   - 参数 spreadPointHoverTime 在此处按“秒”解释
-     *   - stable_win_ms = hover_time_s * 1000
+    /* ---------- 稳定窗口时间配置 ----------
+     * spreadPointHoverTime：
+     *   - 单位：秒
+     *   - 表示需要“连续稳定”多久，才认为单点数据可靠
      */
-    uint32_t hover_time_s = g_deviceParams.spreadPointHoverTime;
+    uint32_t hover_time_s  = g_deviceParams.spreadPointHoverTime;
     uint32_t stable_win_ms = hover_time_s * 1000U;
 
+    /* 若参数未配置，使用默认 5 秒 */
     if (stable_win_ms == 0) {
-        stable_win_ms = 5000U; /* 默认 5s */
+        stable_win_ms = 5000U;
     }
 
+    /* ---------- 最大等待时间：5 分钟 ----------
+     * 防止传感器异常或工况不稳定导致死等
+     */
     const uint32_t MAX_WAIT_MS = 5U * 60U * 1000U;
 
-    const float FREQ_EPS    = 1.0f;
-    const float DENSITY_EPS = 0.1f;
-    const float TEMP_EPS    = 0.2f;
+    /* ---------- 稳定判定阈值 ----------
+     * 任一项超出阈值，均认为“不稳定”，需要重新计时
+     */
+    const float FREQ_EPS    = 1.0f;   // 频率变化阈值（Hz）
+    const float DENSITY_EPS = 0.1f;   // 密度变化阈值
+    const float TEMP_EPS    = 0.2f;   // 温度变化阈值（℃）
 
+    /* 采样周期 */
     const uint32_t SAMPLE_INTERVAL_MS = 200U;
 
-    uint32_t t_start = HAL_GetTick();
-    uint32_t stable_start = 0;
-    uint8_t first_sample = 1;
+    /* ---------- 时间与状态变量 ---------- */
+    uint32_t t_start      = HAL_GetTick();  // 整个流程起始时间
+    uint32_t stable_start = 0;              // 当前稳定窗口起始时间
+    uint8_t  first_sample = 1;              // 是否为首次有效样本
 
-    float ref_freq = 0.0f, ref_density = 0.0f, ref_temp = 0.0f;
-    float cur_freq = 0.0f, cur_density = 0.0f, cur_temp = 0.0f;
+    /* ---------- 参考值（用于稳定判定） ----------
+     * 仅在“非零密度样本”下才会更新
+     */
+    float ref_freq = 0.0f;
+    float ref_density = 0.0f;
+    float ref_temp = 0.0f;
+
+    /* 当前读取值 */
+    float cur_freq = 0.0f;
+    float cur_density = 0.0f;
+    float cur_temp = 0.0f;
+
+    /* ---------- 超时兜底用变量 ----------
+     * 用于记录“最后一次非零密度样本”
+     */
+    uint8_t have_last_nonzero = 0;
+    float last_freq_nz = 0.0f;
+    float last_density_nz = 0.0f;
+    float last_temp_nz = 0.0f;
 
     while (1) {
+
         uint32_t now = HAL_GetTick();
 
+        /* ======================================================
+         * 1) 超时兜底处理（5 分钟）
+         * ====================================================== */
         if (now - t_start >= MAX_WAIT_MS) {
-            printf("单点测量 5分钟内未得到稳定数据，超时退出。\r\n");
-            return DENSITY_UNSTABLE;
+
+            /* --- 情况 A：曾经读到过非零密度 --- */
+            if (have_last_nonzero) {
+
+                printf("单点测量 超时未稳定，取最后一次非零密度作为结果。\r\n");
+
+                result->density          = DENSITY_TO_RAW(last_density_nz);
+                result->temperature      = TEMP_TO_RAW(last_temp_nz);
+                result->standard_density = DENSITY_TO_RAW(last_density_nz);
+                result->weight_density   = DENSITY_TO_RAW(last_density_nz);
+
+            }
+            /* --- 情况 B：5 分钟内从未读到非零密度 --- */
+            else {
+
+                printf("单点测量 5分钟内未读到非零密度，输出0作为结果。\r\n");
+
+                /* 注意：
+                 * 这里的 0 仅用于流程兜底，不代表有效密度
+                 */
+                result->density          = 0;
+                result->standard_density = 0;
+                result->weight_density   = 0;
+
+                /* 温度可取最近一次值（即使为 0） */
+                result->temperature = TEMP_TO_RAW(cur_temp);
+            }
+
+            result->vcf20 = 1;
+            result->temperature_position = g_measurement.debug_data.sensor_position;
+
+            return NO_ERROR;
         }
 
+        /* ======================================================
+         * 2) 读取传感器
+         * ====================================================== */
         ret = Read_Density(&cur_freq, &cur_density, &cur_temp);
         if (ret != NO_ERROR) {
-            printf("读取密度/温度/频率失败：err=%lu\r\n", (unsigned long) ret);
+            printf("读取密度/温度/频率失败：err=%lu\r\n",
+                   (unsigned long)ret);
             HAL_Delay(SAMPLE_INTERVAL_MS);
             continue;
         }
-        /* 密度为 0 表示未获取到有效密度：不参与稳定判定 */
-        if (fabsf(cur_density) < 1e-6f) {
-            printf("单点测量 密度未获取到(cur_density=0)，跳过本次判稳\r\n");
-            HAL_Delay(SAMPLE_INTERVAL_MS);
-            continue;
-        }
+
         CHECK_COMMAND_SWITCH(ret);
 
-        printf("单点读数: f=%.3f Hz  dens=%.4f  temp=%.3f ℃\r\n", cur_freq, cur_density, cur_temp);
+        printf("单点读数: f=%.3f Hz  dens=%.4f  temp=%.3f ℃\r\n",
+               cur_freq, cur_density, cur_temp);
 
+        /* ======================================================
+         * 3) 密度为 0 的处理策略
+         * ======================================================
+         *  - 认为是“无效密度”
+         *  - 不参与稳定判定
+         *  - 不更新参考值
+         */
+        if (fabsf(cur_density) < 1e-6f) {
+            HAL_Delay(SAMPLE_INTERVAL_MS);
+            continue;
+        }
+
+        /* 记录最后一次“非零密度”样本（用于超时兜底） */
+        have_last_nonzero = 1;
+        last_freq_nz      = cur_freq;
+        last_density_nz   = cur_density;
+        last_temp_nz      = cur_temp;
+
+        /* ======================================================
+         * 4) 稳定判定逻辑（仅对非零密度生效）
+         * ====================================================== */
         if (first_sample) {
-            ref_freq = cur_freq;
+
+            /* 首次有效样本：直接作为参考值 */
+            ref_freq    = cur_freq;
             ref_density = cur_density;
-            ref_temp = cur_temp;
+            ref_temp    = cur_temp;
             stable_start = now;
             first_sample = 0;
-        } else {
-            float df = fabsf(cur_freq - ref_freq);
-            float dd = fabsf(cur_density - ref_density);
-            float dt = fabsf(cur_temp - ref_temp);
 
+        } else {
+
+            float df = fabsf(cur_freq    - ref_freq);
+            float dd = fabsf(cur_density - ref_density);
+            float dt = fabsf(cur_temp    - ref_temp);
+
+            /* 任一项超阈值，认为不稳定，重置参考值与计时 */
             if (df > FREQ_EPS || dd > DENSITY_EPS || dt > TEMP_EPS) {
-                ref_freq = cur_freq;
+                ref_freq    = cur_freq;
                 ref_density = cur_density;
-                ref_temp = cur_temp;
+                ref_temp    = cur_temp;
                 stable_start = now;
             }
         }
 
+        /* ======================================================
+         * 5) 稳定窗口满足：判定稳定
+         * ====================================================== */
         if (!first_sample && (now - stable_start >= stable_win_ms)) {
-            printf("单点测量 数据稳定，稳定窗口 = %lu ms\r\n", (unsigned long) stable_win_ms);
-            printf("稳定结果: f=%.3f Hz  dens=%.4f  temp=%.3f ℃\r\n", ref_freq, ref_density, ref_temp);
 
-            /* 写入稳定结果（RAW 编码） */
+            printf("单点测量 数据稳定，稳定窗口=%lu ms\r\n",
+                   (unsigned long)stable_win_ms);
+
             result->temperature_position = g_measurement.debug_data.sensor_position;
             result->density          = DENSITY_TO_RAW(ref_density);
             result->temperature      = TEMP_TO_RAW(ref_temp);
-
-            /* 以下字段目前与 density 同步；若工程实现了标密/VCF/计重密度计算，可在此替换 */
             result->standard_density = DENSITY_TO_RAW(ref_density);
-            result->vcf20            = 1;
             result->weight_density   = DENSITY_TO_RAW(ref_density);
+            result->vcf20            = 1;
 
             return NO_ERROR;
         }
@@ -987,6 +1088,8 @@ uint32_t SinglePoint_ReadSensor(volatile DensityMeasurement *result)
         HAL_Delay(SAMPLE_INTERVAL_MS);
     }
 }
+
+
 
 /* 单点测量命令：移动到指定高度 -> 单点稳定读取 */
 void CMD_SinglePointMeasurement(void)

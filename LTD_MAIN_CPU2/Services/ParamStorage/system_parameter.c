@@ -196,7 +196,9 @@ void RestoreFactoryParamsConfig(void)
 
     g_deviceParams.oilLevelThreshold           = 15;     /* 项目自定义倍率/单位 */
     g_deviceParams.oilLevelHysteresisThreshold = 20;     /* 项目自定义倍率/单位 */
-    g_deviceParams.liquidLevelMeasurementMethod= 0;
+    g_deviceParams.liquidLevelMeasurementMethod= 0;		/* 0 空气+液体频率/2 1：根据设置跟随频率跟随 2 根据设置密度跟随 3.根据振动管跟随 */
+    g_deviceParams.oilLevelFrequency          = 5500;      /* 液位跟随频率 */
+    g_deviceParams.oilLevelDensity            = 0;      /* 液位跟随密度 */
 
     /* ---------------- 水位测量参数 ---------------- */
     g_deviceParams.water_tank_height                = 200000; /* 0.1mm */
@@ -218,8 +220,8 @@ void RestoreFactoryParamsConfig(void)
     g_deviceParams.currentTankHeight       = 0;
 
     /* ---------------- 密度/温度修正 ---------------- */
-    g_deviceParams.densityCorrection       = 0;
-    g_deviceParams.temperatureCorrection   = 0;
+    g_deviceParams.densityCorrection       = 10000;
+    g_deviceParams.temperatureCorrection   = 1000;
 
     /* ---------------- 分布/区间测量参数 ---------------- */
     g_deviceParams.requireBottomMeasurement    = 0;
@@ -333,6 +335,8 @@ void print_device_params(void)
     printf("  oilLevelThreshold          : %lu\r\n", (unsigned long)params.oilLevelThreshold);
     printf("  oilLevelHysteresis         : %lu\r\n", (unsigned long)params.oilLevelHysteresisThreshold);
     printf("  liquidLevelMethod          : %lu\r\n", (unsigned long)params.liquidLevelMeasurementMethod);
+    printf("  oilLevelFrequency          : %lu\r\n", (unsigned long)params.oilLevelFrequency);
+    printf("  oilLevelDensity            : %lu\r\n", (unsigned long)params.oilLevelDensity);
 
     /* 水位 */
     printf("[Water Level]\r\n");

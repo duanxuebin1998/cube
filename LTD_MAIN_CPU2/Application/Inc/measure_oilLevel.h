@@ -14,9 +14,8 @@ typedef enum {
 } Level_StateTypeDef;
 
 #define frequency_difference ((float)g_measurement.oil_measurement.current_frequency-(float)g_measurement.oil_measurement.follow_frequency)
-#define OILWATERDETERMINATIONTHRESHOLD  5500
-#define INAIR   (g_measurement.oil_measurement.current_frequency > OILWATERDETERMINATIONTHRESHOLD)
-#define INOIL   (g_measurement.oil_measurement.current_frequency < OILWATERDETERMINATIONTHRESHOLD)
+#define INAIR   (g_measurement.oil_measurement.current_frequency > g_deviceParams.oilLevelFrequency)
+#define INOIL   (g_measurement.oil_measurement.current_frequency < g_deviceParams.oilLevelFrequency)
 #define MAX_TIMES_WHEN_FRE_FOLLOW				15 /*频率跟随时的最大加速次数*/
 
 
