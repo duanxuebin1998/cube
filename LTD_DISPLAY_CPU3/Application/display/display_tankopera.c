@@ -132,6 +132,15 @@ static uint8_t *default_cmmand[][2] = {
 	{ (uint8_t*)"水位跟随", (uint8_t*)"FOLLOW WATER" },
 	{ (uint8_t*)"非法配置", (uint8_t*)"Illegal CFG" },
 };
+
+static uint8_t *level_mode[][2] = {
+    { (uint8_t*)"相对频率",   (uint8_t*)"Rel Frequency" },
+    { (uint8_t*)"定频",       (uint8_t*)"Fixed Freq" },
+    { (uint8_t*)"密度找液位", (uint8_t*)"Density Level" },
+    { (uint8_t*)"超声",       (uint8_t*)"Ultrasonic" },
+    { (uint8_t*)"非法配置",   (uint8_t*)"Illegal CFG" },
+};
+
 /* =====================================================================
  * 静态函数声明
  *	按“模块职责”重新分类，便于快速定位
@@ -1893,6 +1902,12 @@ uint8_t *(*dtm_disarr(int *pindex, int *plen))[2]
 		p = default_cmmand;
 		break;
 	}
+	case COM_NUM_DEVICEPARAM_LIQUIDLEVELMEASUREMENTMETHOD:{
+		index = param_meta[index].val;
+		len = (int)(sizeof(level_mode) / sizeof(level_mode[0]));
+		p = level_mode;
+		break;
+	}
 	default:
 		return NULL;
 	}
@@ -2192,6 +2207,8 @@ static MenuGroup ParamGroupOf(int operaNum)
     case COM_NUM_DEVICEPARAM_OILLEVELTHRESHOLD:
     case COM_NUM_DEVICEPARAM_OILLEVEL_HYSTERESIS_THRESHOLD:
     case COM_NUM_DEVICEPARAM_LIQUIDLEVELMEASUREMENTMETHOD:
+    case COM_NUM_DEVICEPARAM_OILLEVEL_FREQUENCY:
+    case COM_NUM_DEVICEPARAM_OILLEVEL_DENSITY:
         return MENU_GRP_LIQUID;
 
     /* 水位 */

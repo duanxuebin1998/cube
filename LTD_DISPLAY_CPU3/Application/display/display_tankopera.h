@@ -232,9 +232,8 @@ typedef enum
     COM_NUM_DEVICEPARAM_OILLEVELTHRESHOLD,              // 液位阈值
     COM_NUM_DEVICEPARAM_OILLEVEL_HYSTERESIS_THRESHOLD,  // 液位滞回阈值
     COM_NUM_DEVICEPARAM_LIQUIDLEVELMEASUREMENTMETHOD,   // 液位测量方式
-
-    COM_NUM_DEVICEPARAM_RESERVED12,                     // 保留 12
-    COM_NUM_DEVICEPARAM_RESERVED13,                     // 保留 13
+    COM_NUM_DEVICEPARAM_OILLEVEL_FREQUENCY,             // 液位跟随频率值
+    COM_NUM_DEVICEPARAM_OILLEVEL_DENSITY,               // 液位跟随密度值
 
     /* ---------------- 水位测量参数 ---------------- */
     COM_NUM_DEVICEPARAM_WATER_TANK_HEIGHT,              // 水罐高/水参考高度

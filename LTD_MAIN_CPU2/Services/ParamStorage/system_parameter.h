@@ -451,10 +451,9 @@ typedef struct {
     uint32_t blindZone;                      // 液位盲区(0.1mm)
     uint32_t oilLevelThreshold;              // 液位跟随阈值
     uint32_t oilLevelHysteresisThreshold;    // 液位滞后阈值
-    uint32_t liquidLevelMeasurementMethod;   // 液位测量方式
-
-    uint32_t reserved12;                 // 预留
-    uint32_t reserved13;                 // 预留（新增）
+    uint32_t liquidLevelMeasurementMethod;   // 液位测量方式 0 空气+液体频率/2 1：根据设置跟随频率跟随 2 根据设置密度跟随
+    uint32_t oilLevelFrequency;                 // 液位跟随频率
+    uint32_t oilLevelDensity;                 // 液位跟随密度
 
     // ===================== 水位测量参数 =====================
     uint32_t water_tank_height;                 // 水位罐高(0.1mm)

@@ -194,7 +194,7 @@ void DeviceParams_StoreToRegisters(uint16_t *reg) {
 	reg[0x000A] = wxl.unknown_state_bit;
 
 	// 温度2，同样使用 (×100 - 20000) 方式
-	reg[0x000B] = (uint16_t)(wxl.temp2_c_x10 - 20000)/10;
+	reg[0x000B] = (uint16_t)((wxl.temp2_c_x10 - 20000)/10);
 	reg[0x000C] = wxl.temp2_state;
 
 	reg[0x000D] = (uint16_t) wxl.liquid_level_mm;

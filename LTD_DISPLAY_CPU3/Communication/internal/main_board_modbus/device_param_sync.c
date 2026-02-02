@@ -92,6 +92,10 @@ static volatile uint32_t* get_deviceparam_ptr_by_operanum(int operanum)
         return &g_deviceParams.oilLevelHysteresisThreshold;
     case COM_NUM_DEVICEPARAM_LIQUIDLEVELMEASUREMENTMETHOD:
         return &g_deviceParams.liquidLevelMeasurementMethod;
+    case COM_NUM_DEVICEPARAM_OILLEVEL_FREQUENCY:
+        return &g_deviceParams.oilLevelFrequency;
+    case COM_NUM_DEVICEPARAM_OILLEVEL_DENSITY:
+        return &g_deviceParams.oilLevelDensity;
 
     /* ===== 水位测量参数（新寄存器段） ===== */
     case COM_NUM_DEVICEPARAM_WATER_TANK_HEIGHT:

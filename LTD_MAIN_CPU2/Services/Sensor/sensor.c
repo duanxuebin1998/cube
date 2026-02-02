@@ -80,6 +80,13 @@ uint32_t DSM_Get_LevelMode_Frequence(volatile uint32_t *frequency_out) {
 		HAL_Delay(500);
 	}
 
+    /* 连续100次均为0：强制返回6600 */
+    if (hz == 0) {
+        hz = 6600;
+        printf("警告：液位频率连续%d次读取为0，强制置为%lu Hz\r\n",
+               MAX_RETRY, (unsigned long)hz);
+    }
+
 	*frequency_out = hz;
 
 	printf("液位频率: %lu Hz\r\n", (unsigned long) *frequency_out);
@@ -89,7 +96,6 @@ uint32_t DSM_Get_LevelMode_Frequence(volatile uint32_t *frequency_out) {
 		printf(" 警告：液位频率读取为0！\r\n");
 		return SONIC_FREQ_ABNORMAL;  // 可根据需求返回错误码
 	}
-
 	return NO_ERROR;
 }
 
@@ -151,6 +157,18 @@ uint32_t Read_Density_text(float *frequency, float *density, float *temp) {
 
 	return 0;
 }
+
+static void Apply_Fixed_DensityTemp_Correction(float *density, float *temp)
+{
+    if (density) {
+        *density = (*density) + ((float)g_deviceParams.densityCorrection-10000.0f) / 10.0f;
+    }
+
+    if (temp) {
+        *temp = (*temp) + ((float)g_deviceParams.temperatureCorrection-1000.0f)/ 10.0f;
+    }
+}
+
 uint32_t Read_Density(float *frequency, float *density, float *temp) {
 	if (frequency == NULL || temp == NULL || density == NULL) {
 		return PARAM_ADDRESS_OVERFLOW;
@@ -176,9 +194,20 @@ uint32_t Read_Density(float *frequency, float *density, float *temp) {
 	}
 	if (ret == NO_ERROR) {
 
-		printf("密度: %.2f  频率: %.3f  温度: %.3f ℃\r\n", *density, *frequency, *temp);
-		uint32_t density_raw = DENSITY_TO_RAW(*density);
-		uint32_t temp_raw = TEMP_TO_RAW(*temp);
+	    /* ===== 固定系数修正 ===== */
+	    float density_before = *density;
+	    float temp_before    = *temp;
+
+	    Apply_Fixed_DensityTemp_Correction(density, temp);//修正密度和温度
+
+	    printf("原始密度: %.3f  修正后密度: %.3f\r\n",
+	           density_before, *density);
+	    printf("原始温度: %.3f ℃  修正后温度: %.3f ℃\r\n",
+	           temp_before, *temp);
+	    printf("频率: %.3f Hz\r\n", *frequency);
+
+	    uint32_t density_raw = DENSITY_TO_RAW(*density);
+	    uint32_t temp_raw    = TEMP_TO_RAW(*temp);
 		uint32_t pos = g_measurement.debug_data.sensor_position;
 
 		g_measurement.single_point_monitoring.density = density_raw;
