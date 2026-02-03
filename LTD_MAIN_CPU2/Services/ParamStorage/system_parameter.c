@@ -113,6 +113,7 @@ int load_device_params(void)
                    (unsigned long)temp.crc);
             return 0;
         }
+
     }
 
     /* 校验成功, 拷贝到全局变量 */

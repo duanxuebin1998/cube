@@ -35,23 +35,23 @@ uint16_t AubonState_To_WartsilaWorkState(DeviceState s)
     {
         /* 传感器不动，固定点监测中 */
         case STATE_SPTESTING:
-            return WXL_STATE(0x00, 44);
+            return WXL_STATE(0x00, 0x44);
 
         /* 开始密度分布测量 */
         case STATE_WARTSILA_DENSITY_START:
-            return WXL_STATE(0x0C, 64);
+            return WXL_STATE(0x0C, 0x64);
 
         /* 向上运行，密度分布测量中 */
         case STATE_WARTSILA_DENSITY_MEASURING:
-            return WXL_STATE(0x0C, 60);
+            return WXL_STATE(0x0C, 0x60);
 
         /* 密度分布测量完成 */
         case STATE_WARTSILA_DENSITY_OVER:
-            return WXL_STATE(0x28, 40);
+            return WXL_STATE(0x0C, 0x60);
 
         /* 向下运动会固定点监测 */
         case STATE_RUNTOPOINTING:
-            return WXL_STATE(0x08, 40);
+            return WXL_STATE(0x08, 0x40);
 
 //        /* 接收到提浮子指令 */
 //        case STATE_BACKZEROING:
@@ -59,11 +59,14 @@ uint16_t AubonState_To_WartsilaWorkState(DeviceState s)
 
         /* 提浮子，向上运行（你前面也说过这里等价“回零点中”） */
         case STATE_BACKZEROING:
-            return WXL_STATE(0x08, 60);
-
+            return WXL_STATE(0x08, 0x60);
+        case STATE_STANDBY:
+            return WXL_STATE(0x20, 0x68);
+        case STATE_ERROR:
+            return WXL_STATE(0x08, 0x20);
         default:
             /* Wartsila 表里没给“故障码”，这里保守回到“不动监测”或你也可改成 0xFF FF */
-            return WXL_STATE(0x00, 00);
+            return WXL_STATE(0x20, 0x68);
     }
 }
 
@@ -147,7 +150,7 @@ static void DSMToWartsila(const MeasurementResult *DSM, wartsila_DeviceParameter
 	WXL->liquid_state = 0;
 
 	// 位置标志
-	WXL->position_mm = 1;
+	WXL->position_mm = 0;
 	printf("分布测量上限: %lu mm\r\n", g_deviceParams.wartsila_lower_density_limit);
 	WXL->spread_lowest_mm = g_deviceParams.wartsila_lower_density_limit;
 	WXL->spread_highest_mm = g_deviceParams.wartsila_upper_density_limit;
@@ -206,7 +209,7 @@ void DeviceParams_StoreToRegisters(uint16_t *reg) {
 	reg[0x0050] = wxl.spread_point_count;
 	printf("分布测量点数：%d\r\n", wxl.spread_point_count);
 	reg[0x0051] = wxl.spread_oillevel_mm;
-	reg[0x0052] = 1;
+	reg[0x0052] = 0;
 	reg[0x0053] = wxl.spread_unknown; // 保留
 
 	reg[0x005A] = wxl.spread_lowest_mm;

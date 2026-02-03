@@ -116,7 +116,7 @@ uint32_t Wartsila_Density_SpreadMeasurement(DensityDistribution *dist)
     /* 再读一次当前位置，作为正式起点 */
     snapshot_sensor_pos_mm(&cur_mm);
     printf("分布测量起点位置确认：%.3fmm\n", cur_mm);
-
+    g_measurement.device_status.device_state = STATE_WARTSILA_DENSITY_MEASURING;
     /* 起始点如果一开始就在空气中，可以直接结束（说明下面都是空气或空罐） */
     Level_StateTypeDef st0 = determine_level_status();
     if (st0 == AIR) {

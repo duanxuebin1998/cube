@@ -413,6 +413,7 @@ void process_command(uint8_t *command) {
 
 int MeasureStart(void) {
 	motor_Init(); //电机初始化
+	weight_init();
 	fault_info_init(); //故障初始化清零
 	g_measurement.device_status.error_code = NO_ERROR; //故障代码清零
 	return NO_ERROR;
@@ -663,7 +664,7 @@ static void CMD_SetFullWeight(void)
 static void CMD_WartsilaDensitySpread(void) {
 	uint32_t ret = 0;
 	// 设置设备状态：分布测量中
-	g_measurement.device_status.device_state = STATE_WARTSILA_DENSITY_START;
+	g_measurement.device_status.device_state = STATE_WARTSILA_DENSITY_MEASURING;
 
 	ret = Wartsila_Density_SpreadMeasurement(&g_measurement.density_distribution);
 // 记录/上报错误码（和零点测量一样用 SET_ERROR）
@@ -673,6 +674,17 @@ static void CMD_WartsilaDensitySpread(void) {
 	Print_DensitySpreadResult(&g_measurement.density_distribution);
 // 测量结束，状态切换为分布测量完成
 	g_measurement.device_status.device_state = STATE_WARTSILA_DENSITY_OVER;
+	//延时8S让CPU3读取分布测量结果
+	HAL_Delay(1000); // 延时1s
+	HAL_Delay(1000); // 延时1s
+	HAL_Delay(1000); // 延时1s
+	HAL_Delay(1000); // 延时1s
+	HAL_Delay(1000); // 延时1s
+	HAL_Delay(1000); // 延时1s
+	HAL_Delay(1000); // 延时1s
+	HAL_Delay(1000); // 延时1s
+	/* 单点监测命令：移动到监测高度 -> 循环单点稳定读取（直到命令切换） */
+	CMD_SinglePointMonitoring();
 
 	return;
 }

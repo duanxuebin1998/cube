@@ -20,9 +20,6 @@ int32_t bottom_value = -100000000; // 初始值设为较大数值作为无效状态标识
 /* 全局/参数区：由寄存器或本机参数配置 */
 BottomDetectMode g_bottom_det_mode = BOTTOM_DET_BY_WEIGHT;
 
-/* 角度阈值：单位“度”，建议可配置 */
-float g_bottom_gyro_th_deg = 15.0f;
-
 static GyroZeroRef g_gyro_zero_ref = {0};
 // 函数原型声明
 static int SearchBottomRough();   // 粗略搜索罐底
