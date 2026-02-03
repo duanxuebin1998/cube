@@ -729,7 +729,7 @@ uint32_t motorMoveAndWaitUntilStop(float mm, int dir)
     /* 用 abs 计算误差百分比，避免方向口径导致的负值 */
     float diff_pct = 100.0f * fabsf(moved_mm - total_cmd_mm) / total_cmd_mm;
 
-    if ((diff_pct > 70.0f) && (total_cmd_mm > 3.0f)) {
+    if ((diff_pct > 70.0f) && (total_cmd_mm > 5.0f)) {
         printf("警告：检测到电机可能丢步！\r\n");
         printf("目标=%.2f mm, 实际=%.2f mm, 误差=%.2f %%\r\n",
                total_cmd_mm, moved_mm, diff_pct);

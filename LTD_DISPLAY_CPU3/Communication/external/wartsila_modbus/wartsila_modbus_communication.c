@@ -53,6 +53,26 @@ static uint8_t handle_0x03(uint8_t addr, const uint8_t* pdu, uint16_t pdu_len,
     if (qty < 1 || qty > 0x007D) // Modbus建议单次最多125寄存器
         return build_exception(addr, 0x03, 0x03, tx, tx_len); // ILLEGAL DATA VALUE
 
+    // 如果遇到特殊包，返回定制的数据
+    if (start == 0x0672) {  // 特定地址处理
+        // 填充响应数据
+        tx[0] = addr;  // 从站地址
+        tx[1] = 0x03;  // 功能码
+        tx[2] = 0x28;  // 数据字节数（40字节）
+
+        // 填充定制的响应数据
+        memcpy(&tx[3], "REV. 4.1  28/07/2016REV. 4.00 10/11/2017 CC", 40);  // 定制返回的数据
+        // 计算 CRC 校验，包括地址、功能码、字节数和数据内容
+        uint16_t frame_len_wo_crc = 3 + 40;  // 3 是地址、功能码、字节数，40 是数据内容
+        uint16_t crc = CRC16_Calculate(tx, frame_len_wo_crc);  // 计算 CRC
+        tx[frame_len_wo_crc]     = (uint8_t)(crc & 0xFF);  // CRC 低字节
+        tx[frame_len_wo_crc + 1] = (uint8_t)(crc >> 8);    // CRC 高字节
+
+        *tx_len = frame_len_wo_crc + 2;  // 更新数据包长度（包括 CRC 校验的 2 字节）
+
+        return 1;  // 返回成功
+    }
+
     // 地址越界判断
     if (start < HOLDREG_START_ADDR || (start + qty - 1) > HOLDREG_END_ADDR)
         return build_exception(addr, 0x03, 0x02, tx, tx_len); // ILLEGAL DATA ADDRESS
@@ -187,28 +207,22 @@ static void modbus_on_holding_written(uint16_t start, uint16_t qty)
     int need_forward = 0;
 
     // 只关心 0x0006、0x005A~0x005D 这几个写寄存器
-    if (range_contains(start, qty, 0x0006)  ||
-        range_contains(start, qty, 0x005A) ||
+    if (range_contains(start, qty, 0x005A) ||
         range_contains(start, qty, 0x005B) ||
         range_contains(start, qty, 0x005C) ||
         range_contains(start, qty, 0x005D)) {
         need_forward = 1;
     }
 
-    if (!need_forward) {
-        return; // 其它地址的写操作，直接忽略
-    }
+//    if (!need_forward) {
+//        return; // 其它地址的写操作，直接忽略
+//    }
 
     // 1）先从 g_holding_regs 解析到 g_deviceParams
     DeviceParams_LoadFromRegisters(g_holding_regs);
 
-    // 2）再把这些参数按下级设备的协议发送出去
-    ForwardParamsToLowerDevice();
-}
-void ForwardParamsToLowerDevice(void)
-{
-    // 示例：根据 command 不同，打不同的下发帧
-	if (g_deviceParams.command != CMD_NONE) {
+    if(range_contains(start, qty, 0x0006))//指令单独处理
+	{
 		uint32_t cmd32 = (uint32_t)g_deviceParams.command;   // 如果原来是 uint16_t，也没问题
 		printf("接收到下发指令：%d\r\n", g_deviceParams.command);
 		/* 将 CMD_xxx 写入 HOLDREGISTER_DEVICEPARAM_COMMAND（2 个保持寄存器） */
@@ -216,6 +230,23 @@ void ForwardParamsToLowerDevice(void)
 		g_deviceParams.command = CMD_NONE;
 		DeviceParams_StoreToRegisters(g_holding_regs);
 	}
+    else//下发参数
+    {
+        // 2）再把这些参数按下级设备的协议发送出去
+        ForwardParamsToLowerDevice();
+    }
+}
+void ForwardParamsToLowerDevice(void)
+{
+//    // 示例：根据 command 不同，打不同的下发帧
+//	if (g_deviceParams.command != CMD_NONE) {
+//		uint32_t cmd32 = (uint32_t)g_deviceParams.command;   // 如果原来是 uint16_t，也没问题
+//		printf("接收到下发指令：%d\r\n", g_deviceParams.command);
+//		/* 将 CMD_xxx 写入 HOLDREGISTER_DEVICEPARAM_COMMAND（2 个保持寄存器） */
+//		CPU2_CombinatePackage_Send(FUNCTIONCODE_WRITE_MULREGISTER, HOLDREGISTER_DEVICEPARAM_COMMAND, 2, &cmd32 );
+//		g_deviceParams.command = CMD_NONE;
+//		DeviceParams_StoreToRegisters(g_holding_regs);
+//	}
 	CPU2_CombinatePackage_Send(FUNCTIONCODE_WRITE_MULREGISTER, HOLDREGISTER_DEVICEPARAM_WARTSILA_UPPER_DENSITY_LIMIT, 2, &g_deviceParams.wartsila_upper_density_limit );
 	CPU2_CombinatePackage_Send(FUNCTIONCODE_WRITE_MULREGISTER, HOLDREGISTER_DEVICEPARAM_WARTSILA_LOWER_DENSITY_LIMIT, 2, &g_deviceParams.wartsila_lower_density_limit );
 	CPU2_CombinatePackage_Send(FUNCTIONCODE_WRITE_MULREGISTER, HOLDREGISTER_DEVICEPARAM_WARTSILA_DENSITY_INTERVAL, 2, &g_deviceParams.wartsila_density_interval );

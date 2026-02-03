@@ -11,7 +11,7 @@
 #include "dataanalysis_modbus.h"
 #include "wartsila_modbus_communication.h"
 
-#define DEBUG_COMMUCPU2 1
+#define DEBUG_COMMUCPU2 0
 #define ADERSS 0X01
 
 volatile bool wait_response = false; //主控板响应标志位

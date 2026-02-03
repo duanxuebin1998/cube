@@ -160,7 +160,7 @@ uint32_t Read_Density_text(float *frequency, float *density, float *temp) {
 
 static void Apply_Fixed_DensityTemp_Correction(float *density, float *temp)
 {
-    if (density) {
+    if ((density)&&(*density>200.0)) {
         *density = (*density) + ((float)g_deviceParams.densityCorrection-10000.0f) / 10.0f;
     }
 
@@ -209,12 +209,17 @@ uint32_t Read_Density(float *frequency, float *density, float *temp) {
 	    uint32_t density_raw = DENSITY_TO_RAW(*density);
 	    uint32_t temp_raw    = TEMP_TO_RAW(*temp);
 		uint32_t pos = g_measurement.debug_data.sensor_position;
-
-		g_measurement.single_point_monitoring.density = density_raw;
+		if(*density != 0)
+		{
+			g_measurement.single_point_monitoring.density = density_raw;
+		}
 		g_measurement.single_point_monitoring.temperature = temp_raw;
 		g_measurement.single_point_monitoring.temperature_position = pos;
 
-		g_measurement.single_point_measurement.density = density_raw;
+		if(*density !=0)
+		{
+			g_measurement.single_point_measurement.density = density_raw;
+		}
 		g_measurement.single_point_measurement.temperature = temp_raw;
 		g_measurement.single_point_measurement.temperature_position = pos;
 
