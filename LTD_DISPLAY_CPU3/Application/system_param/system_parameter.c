@@ -70,13 +70,13 @@ struct ParameterMetadata param_meta[] = {
 {(uint8_t*)"液位跟随密度",	0,	COM_NUM_DEVICEPARAM_OILLEVEL_DENSITY,	HOLDREGISTER_DEVICEPARAM_OILLEVEL_DENSITY,	2,	false,	0,	0,	(uint8_t*)"kg/m3",	1,	0,	true,	TYPE_INT,	6,	NULL,	(uint8_t*)"FollowDens"},
 
 {(uint8_t*)"水位罐高",	0,	COM_NUM_DEVICEPARAM_WATER_TANK_HEIGHT,	HOLDREGISTER_DEVICEPARAM_WATER_TANK_HEIGHT,	2,	false,	0,	0,	NULL,	1,	0,	true,	TYPE_INT,	7,	NULL,	(uint8_t*)"WaterTankH"},
-{(uint8_t*)"水位探头距差",	0,	COM_NUM_DEVICEPARAM_WATER_LEVEL_SENSOR_DISTANCE_DIFF,	HOLDREGISTER_DEVICEPARAM_WATER_LEVEL_SENSOR_DISTANCE_DIFF,	2,	false,	-999999,	999999,	(uint8_t*)"mm",	1,	0,	true,	TYPE_INT,	7,	NULL,	(uint8_t*)"WaterSenDiff"},
+{(uint8_t*)"水位测量方式",	0,	COM_NUM_DEVICEPARAM_WATER_LEVEL_MODE,	HOLDREGISTER_DEVICEPARAM_WATER_LEVEL_MODE,	2,	false,	0,	0,	NULL,	0,	0,	true,	TYPE_INT,	1,	NULL,	(uint8_t*)"WaterSenDiff"},
 {(uint8_t*)"水位盲区",	0,	COM_NUM_DEVICEPARAM_WATER_BLINDZONE,	HOLDREGISTER_DEVICEPARAM_WATER_BLINDZONE,	2,	false,	0,	0,	NULL,	1,	0,	true,	TYPE_INT,	6,	NULL,	(uint8_t*)"WaterBlind"},
 {(uint8_t*)"水位电容阈值",	0,	COM_NUM_DEVICEPARAM_WATER_CAP_THRESHOLD,	HOLDREGISTER_DEVICEPARAM_WATER_CAP_THRESHOLD,	2,	false,	0,	0,	NULL,	3,	0,	true,	TYPE_INT,	6,	NULL,	(uint8_t*)"WaterCapTh"},
 {(uint8_t*)"水位电容滞回",	0,	COM_NUM_DEVICEPARAM_WATER_CAP_HYSTERESIS,	HOLDREGISTER_DEVICEPARAM_WATER_CAP_HYSTERESIS,	2,	false,	0,	0,	NULL,	3,	0,	true,	TYPE_INT,	6,	NULL,	(uint8_t*)"WaterCapHys"},
 {(uint8_t*)"最大下行距离",	0,	COM_NUM_DEVICEPARAM_MAXDOWNDISTANCE,	HOLDREGISTER_DEVICEPARAM_MAXDOWNDISTANCE,	2,	false,	0,	0,	(uint8_t*)"mm",	1,	0,	true,	TYPE_INT,	5,	NULL,	(uint8_t*)"MaxDown"},
-{(uint8_t*)"零点电容",	0,	COM_NUM_DEVICEPARAM_ZERO_CAP,	HOLDREGISTER_DEVICEPARAM_ZERO_CAP,	2,	false,	0,	0,	NULL,	1,	0,	false,	TYPE_INT,	4,	NULL,	(uint8_t*)"ZeroCap"},
-{(uint8_t*)"保留15",	0,	COM_NUM_DEVICEPARAM_RESERVED15,	HOLDREGISTER_DEVICEPARAM_RESERVED15,	2,	false,	0,	0,	NULL,	0,	0,	false,	TYPE_INT,	8,	NULL,	(uint8_t*)"Rsv15"},
+{(uint8_t*)"零点电容",	0,	COM_NUM_DEVICEPARAM_ZERO_CAP,	HOLDREGISTER_DEVICEPARAM_ZERO_CAP,	2,	false,	0,	0,	NULL,	1,	0,	true,	TYPE_INT,	4,	NULL,	(uint8_t*)"ZeroCap"},
+{(uint8_t*)"水位稳定阈值",	0,	COM_NUM_DEVICEPARAM_WATER_STABLE_THRESHOLD,	HOLDREGISTER_DEVICEPARAM_WATER_STABLE_THRESHOLD,	2,	false,	0,	0,	(uint8_t*)"mm",	1,	0,	true,	TYPE_INT,	4,	NULL,	(uint8_t*)"Rsv15"},
 
 {(uint8_t*)"罐底检测模式",	0,	COM_NUM_DEVICEPARAM_BOTTOM_DETECT_MODE,	HOLDREGISTER_DEVICEPARAM_BOTTOM_DETECT_MODE,	2,	true,	0,	3,	NULL,	0,	0,	true,	TYPE_INT,	1,	ret_arr_word,	(uint8_t*)"BottomMode"},
 {(uint8_t*)"罐底角度阈值",	0,	COM_NUM_DEVICEPARAM_BOTTOM_ANGLE_THRESHOLD,	HOLDREGISTER_DEVICEPARAM_BOTTOM_ANGLE_THRESHOLD,	2,	false,	0,	0,	NULL,	0,	0,	true,	TYPE_INT,	5,	NULL,	(uint8_t*)"BottomAngTh"},
@@ -304,11 +304,13 @@ void print_device_params(void)
     /* 水位 */
     printf("[Water Level]\r\n");
     printf("  water_tank_height(0.1mm)   : %lu\r\n", (unsigned long)params.water_tank_height);
-    printf("  water_sensor_diff(0.1mm)   : %lu\r\n", (unsigned long)params.water_level_sensor_distance_diff);
+    printf("  water_level_mode           : %lu\r\n", (unsigned long)params.water_level_mode);
     printf("  waterBlindZone(0.1mm)      : %lu\r\n", (unsigned long)params.waterBlindZone);
     printf("  water_cap_threshold        : %lu\r\n", (unsigned long)params.water_cap_threshold);
     printf("  water_cap_hysteresis       : %lu\r\n", (unsigned long)params.water_cap_hysteresis);
     printf("  maxDownDistance(0.1mm)     : %lu\r\n", (unsigned long)params.maxDownDistance);
+    printf("  waterLevel_zero_cap        : %lu\r\n", (unsigned long)params.zero_cap);
+    printf("  water_stable_threshold     : %lu\r\n", (unsigned long)params.water_stable_threshold);
 
     /* 罐底/罐高 */
     printf("[Bottom / Tank Height]\r\n");

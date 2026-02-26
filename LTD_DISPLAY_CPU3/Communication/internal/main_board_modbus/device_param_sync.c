@@ -100,8 +100,8 @@ static volatile uint32_t* get_deviceparam_ptr_by_operanum(int operanum)
     /* ===== 水位测量参数（新寄存器段） ===== */
     case COM_NUM_DEVICEPARAM_WATER_TANK_HEIGHT:
         return &g_deviceParams.water_tank_height;
-    case COM_NUM_DEVICEPARAM_WATER_LEVEL_SENSOR_DISTANCE_DIFF:
-        return &g_deviceParams.water_level_sensor_distance_diff;
+    case COM_NUM_DEVICEPARAM_WATER_LEVEL_MODE:
+        return &g_deviceParams.water_level_mode;
     case COM_NUM_DEVICEPARAM_WATER_BLINDZONE:
         return &g_deviceParams.waterBlindZone;
     case COM_NUM_DEVICEPARAM_WATER_CAP_THRESHOLD:
@@ -110,7 +110,10 @@ static volatile uint32_t* get_deviceparam_ptr_by_operanum(int operanum)
         return &g_deviceParams.water_cap_hysteresis;
     case COM_NUM_DEVICEPARAM_MAXDOWNDISTANCE:
         return &g_deviceParams.maxDownDistance;
-
+    case COM_NUM_DEVICEPARAM_ZERO_CAP:
+    	return &g_deviceParams.zero_cap;
+    case COM_NUM_DEVICEPARAM_WATER_STABLE_THRESHOLD:
+       	return &g_deviceParams.water_stable_threshold;
     /* ===== 罐高/罐底测量（新寄存器段） ===== */
     case COM_NUM_DEVICEPARAM_BOTTOM_DETECT_MODE:
         return &g_deviceParams.bottom_detect_mode;

@@ -393,7 +393,8 @@ uint32_t motor_Init(void)
 
     Motor_UpdateVelocityFromParams();
 
-    stpr_initStepper(&stepper, &hspi2, GPIOB, GPIO_PIN_12, 1, 14);
+//    stpr_initStepper(&stepper, &hspi2, GPIOB, GPIO_PIN_12, 1, 14);
+    stpr_initStepper(&stepper, &hspi2, GPIOB, GPIO_PIN_12, 1, 16);
     stpr_enableDriver(&stepper);
 
     printf("电机初始化 | max_motor_speed=%ld(×0.01) | velocity=%lu\r\n",
@@ -695,11 +696,11 @@ uint32_t motorMoveAndWaitUntilStop(float mm, int dir)
 
             MotorDrumState drum;
             Motor_UpdateDrumState_FromXACTUAL(&stepper, &drum);
-            printf("电机状态 | XACTUAL=%ld | 圈=%.4f | 角度=%.1f° | 预测长度=%.1fmm\r\n",
-                   (long)drum.motor_step,
-                   drum.turns_total,
-                   drum.angle_deg,
-                   drum.motor_distance_01mm / 10.0);
+//            printf("电机状态 | XACTUAL=%ld | 圈=%.4f | 角度=%.1f° | 预测长度=%.1fmm\r\n",
+//                   (long)drum.motor_step,
+//                   drum.turns_total,
+//                   drum.angle_deg,
+//                   drum.motor_distance_01mm / 10.0);
 
             break;
         } else {

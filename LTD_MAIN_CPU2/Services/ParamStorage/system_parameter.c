@@ -203,12 +203,13 @@ void RestoreFactoryParamsConfig(void)
 
     /* ---------------- 水位测量参数 ---------------- */
     g_deviceParams.water_tank_height                = 200000; /* 0.1mm */
-    g_deviceParams.water_level_sensor_distance_diff = 0;      /* 0.1mm */
+    g_deviceParams.water_level_mode                 = 0;      /* 0:慢速 */
     g_deviceParams.waterBlindZone                   = 100;    /* 0.1mm */
-
     g_deviceParams.water_cap_threshold              = 50000;      /* 建议明确倍率后再设默认 */
     g_deviceParams.water_cap_hysteresis             = 5000;      /* 建议明确倍率后再设默认 */
     g_deviceParams.maxDownDistance                  = 3000;   /* 0.1mm => 300mm */
+    g_deviceParams.zero_cap                         = 0;      /* 0.1pf */
+    g_deviceParams.water_stable_threshold           = 500;      /* 0.1mm */
 
     /* ---------------- 罐高/罐底测量 ---------------- */
     g_deviceParams.bottom_detect_mode      = 0;    /* 0=按项目定义 */
@@ -342,12 +343,14 @@ void print_device_params(void)
     /* 水位 */
     printf("[Water Level]\r\n");
     printf("  water_tank_height(0.1mm)   : %lu\r\n", (unsigned long)params.water_tank_height);
-    printf("  water_sensor_diff(0.1mm)   : %lu\r\n", (unsigned long)params.water_level_sensor_distance_diff);
+    printf("  water_level_mode           : %lu\r\n", (unsigned long)params.water_level_mode);
     printf("  waterBlindZone(0.1mm)      : %lu\r\n", (unsigned long)params.waterBlindZone);
     printf("  water_cap_threshold        : %lu\r\n", (unsigned long)params.water_cap_threshold);
     printf("  water_cap_hysteresis       : %lu\r\n", (unsigned long)params.water_cap_hysteresis);
     printf("  maxDownDistance(0.1mm)     : %lu\r\n", (unsigned long)params.maxDownDistance);
     printf("  zero_point_capacitance     : %lu\r\n", (unsigned long)params.zero_cap);
+    printf("  waterLevel_zero_cap        : %lu\r\n", (unsigned long)params.zero_cap);
+    printf("  water_stable_threshold     : %lu\r\n", (unsigned long)params.water_stable_threshold);
 
     /* 罐底/罐高 */
     printf("[Bottom / Tank Height]\r\n");

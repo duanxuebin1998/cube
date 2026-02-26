@@ -23,6 +23,7 @@ void Test_main(void); // 测试函数声明
 // 初始化函数
 void App_Init(void) {
 	printf("LTD demo restart!\n");
+	HAL_Delay(1000); // 延时1000ms
 	Initialize_Encoder(); // 初始化编码器
 	motor_Init(); //电机初始化
 	HartInit(); // 初始化AD5421

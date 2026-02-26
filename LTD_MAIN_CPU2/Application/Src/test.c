@@ -166,23 +166,84 @@ void Test_Params_Storage(void) {
 	g_deviceParams = original;
 	save_device_params(); //存储
 }
-void motor_text(void) {
-	printf("motor text start\n");
-	motor_Init(); //电机初始化
-	while (1) {
-		motorMoveNoWait(300, MOTOR_DIRECTION_DOWN);
-		HAL_Delay(1000);
-		printf("start down\n");
-		stpr_waitMove(&stepper);
-		printf("down over!\n");
-//		HAL_Delay(1000);
-		stpr_moveTo(&stepper, 0, velocity); // 最大速度为 1600 * 2 * 32
-		printf("start up to zero\n");
-		HAL_Delay(1000);
-		stpr_waitMove(&stepper);
-		printf("上行结束\n");
-//		HAL_Delay(1000);
-	}
+static void Sensor_CommCheckAndLog(const char *tag)
+{
+    float temp = 0.0f;
+    float frequency = 0.0f;
+    float density = 0.0f;
+    float hz_45 = 0.0f, hz_225 = 0.0f;
+
+    static uint32_t comm_fail_cnt = 0;
+    uint32_t ret;
+
+    /* 读温度 */
+    ret = DSM_V2_Read_Temperature(&temp);
+    if (ret == NO_ERROR) {
+        printf("[SENSOR][OK ] %s Temp=%.3f C\r\n", tag, temp);
+    } else {
+        comm_fail_cnt++;
+        printf("[SENSOR][ERR] %s Temp fail, ret=%lu, fail_cnt=%lu\r\n",
+               tag, (unsigned long)ret, (unsigned long)comm_fail_cnt);
+    }
+
+    /* 读密度 */
+    ret = DSM_V2_Read_Density(&density);
+    if (ret == NO_ERROR) {
+        printf("[SENSOR][OK ] %s Density=%.3f\r\n", tag, density);
+    } else {
+        comm_fail_cnt++;
+        printf("[SENSOR][ERR] %s Density fail, ret=%lu, fail_cnt=%lu\r\n",
+               tag, (unsigned long)ret, (unsigned long)comm_fail_cnt);
+    }
+
+    /* 读频率 + 扫频均值 */
+    ret = DSM_V2_Read_DensityFrequency(&frequency, &hz_45, &hz_225);
+    if (ret == NO_ERROR) {
+        printf("[SENSOR][OK ] %s F=%.1f Hz, Hz45=%.2f, Hz22.5=%.2f\r\n",
+               tag, frequency, hz_45, hz_225);
+    } else {
+        comm_fail_cnt++;
+        printf("[SENSOR][ERR] %s Freq fail, ret=%lu, fail_cnt=%lu\r\n",
+               tag, (unsigned long)ret, (unsigned long)comm_fail_cnt);
+    }
+}
+
+
+/* ========================= 主测试函数 ========================= */
+void motor_text(void)
+{
+    uint32_t loop_cnt = 0;
+
+    printf("motor text start\r\n");
+    motor_Init(); // 电机初始化
+
+    while (1) {
+        /* ---------- 下行 ---------- */
+        motorMoveNoWait(300, MOTOR_DIRECTION_DOWN);
+        HAL_Delay(1000);
+        printf("[LOOP %lu] start down\r\n", (unsigned long)(loop_cnt + 1));
+
+        stpr_waitMove(&stepper);
+        printf("[LOOP %lu] down over!\r\n", (unsigned long)(loop_cnt + 1));
+
+        /* 下行结束后：传感器通讯一次 */
+        Sensor_CommCheckAndLog("after DOWN");
+
+        /* ---------- 回零（上行到0） ---------- */
+        stpr_moveTo(&stepper, 0, velocity); // 最大速度为 1600 * 2 * 32
+        printf("[LOOP %lu] start up to zero\r\n", (unsigned long)(loop_cnt + 1));
+        HAL_Delay(1000);
+
+        stpr_waitMove(&stepper);
+        printf("[LOOP %lu] up over (to zero)\r\n", (unsigned long)(loop_cnt + 1));
+
+        /* 上行结束后：传感器通讯一次 */
+        Sensor_CommCheckAndLog("after UP");
+
+        /* 本轮完成计数（下+上算一轮） */
+        loop_cnt++;
+        printf("[LOOP %lu] cycle done\r\n", (unsigned long)loop_cnt);
+    }
 }
 #include <ltd_sensor_communication.h>
 #include <stdio.h>

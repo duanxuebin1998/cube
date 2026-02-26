@@ -270,35 +270,13 @@ void process_command(uint8_t *command) {
 	if (command[0] == 'B') {  //
 		printf("motor text start\n");
 		printf("***编码值清零***\r\n");
-		g_encoder_count = 0; // 重置编码器计数
 		int mm = atoi((char*) &command[1]);  // 获取数字
 		printf("start up%d\n", mm);
 		while (1) {
 			stpr_enableDriver(&stepper);  //使能电机
-//						stpr_initStepper(&stepper, &hspi2, GPIOB, GPIO_PIN_12, 1, 18);
-					//		stpr_moveTo(&stepper, -30 * 1600 * 32, 1600 * 2 * 32);
-			motorMoveNoWait(200000, MOTOR_DIRECTION_DOWN);
-			HAL_Delay(1000);
-			printf("start down\n");
-			while (abs(g_encoder_count) < 43 * mm) {
-				printf("{encoder}%d\t{weight}%d\r\n", (int) g_encoder_count, weight_parament.current_weight);
-				HAL_Delay(50);
-			}
-			motorSlowStop();
-			while (stpr_isMoving(&stepper));
-			printf("down over!\n");
-
-			HAL_Delay(1000);
-			motorMoveNoWait(200000, MOTOR_DIRECTION_UP);
+			motorMoveAndWaitUntilStop(mm, MOTOR_DIRECTION_DOWN);
 			printf("start up to zero\n");
-			HAL_Delay(1000);
-			while (abs(g_encoder_count) > 1000) {
-				printf("{encoder}%d\t{weight}%d\r\n", (int) g_encoder_count, weight_parament.current_weight);
-//				DSMSendcommand3times(DSM_POWER, strlen(DSM_POWER));
-				HAL_Delay(50);
-			}
-			motorSlowStop();
-			while (stpr_isMoving(&stepper));
+			motorMoveToPositionOneShot((g_deviceParams.tankHeight-g_deviceParams.findZeroDownDistance)/10.0);
 			printf("上行结束\n");
 			stpr_disableDriver(&stepper); //使能电机
 		}
@@ -425,9 +403,9 @@ static void CMD_MeasurWater(void) {
 	MeasureStart();
 	g_measurement.device_status.device_state = STATE_FINDWATER;
 
-	//开始回零点
 	ret = SearchWaterLevel();
 	SET_ERROR(ret);
+
 	g_measurement.device_status.device_state = STATE_FINDWATER_OVER;
 	return;
 }
@@ -437,12 +415,25 @@ static void CMD_FollowWaterLevel(void)
     uint32_t ret = NO_ERROR;
     MeasureStart();
     g_measurement.device_status.device_state = STATE_FOLLOW_WATERING;
-	ret = SearchWaterLevel();
-	SET_ERROR(ret);
+    //先确定水位
+	if (g_deviceParams.water_level_mode == 0) {
+		ret = SearchWaterLevel();
+		SET_ERROR(ret);
+	}
+	else{
+		ret = FindWaterLevel_FastByStateFlip_StableExit();
+		SET_ERROR(ret);
+	}
+	//再跟随水位
     printf("水位跟随\t进入闭环跟随\r\n");
     g_measurement.device_status.device_state = STATE_FOLLOW_WATER_OVER; // 你需要加这个状态
-    ret = FollowWaterLevel();
-    SET_ERROR(ret);
+	if (g_deviceParams.water_level_mode == 0) {
+		ret = FollowWaterLevel();
+		SET_ERROR(ret);
+	} else {
+		ret = FollowWaterLevel_fast();
+		SET_ERROR(ret);
+	}
 }
 
 

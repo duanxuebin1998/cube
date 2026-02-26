@@ -385,26 +385,479 @@ uint32_t check_water_status(uint8_t *water_state)
 {
     uint32_t ret;
     float    cap = 0.0f;
+    float    zero;
+    float    th;
 
     if (water_state == NULL) {
-        return PARAM_ERROR;   /* 或你工程里的参数错误码 */
+        return PARAM_ERROR;
     }
 
     ret = Read_Water_Capacitance(&cap);
     if (ret != NO_ERROR) {
-        return ret;           /* 只返回错误码 */
+        return ret;
     }
 
-    printf("Water capacitance = %.1f\r\n", cap);
-    g_measurement.water_measurement.current_capacitance = cap;
+    zero = g_measurement.water_measurement.zero_capacitance;
+    th   = zero + g_deviceParams.water_cap_threshold / 1000.0f;
 
-    if (cap > (g_measurement.water_measurement.zero_capacitance + g_deviceParams.water_cap_threshold/1000.0f)) {
+    /* 判定 */
+    if (cap > th) {
         *water_state = WATER;
     } else {
         *water_state = NORMAL;
     }
 
+    /* 单行、完整判定信息 */
+    printf("[WaterChk] cap=%.1f  zero=%.1f  th=%.1f  cap%sTH  -> %s\r\n",
+           cap,
+           zero,
+           th,
+           (cap > th) ? ">" : "<=",
+           (*water_state == WATER) ? "WATER" : "NORMAL");
+
+    g_measurement.water_measurement.current_capacitance = cap;
+
     return NO_ERROR;
+}
+
+/**
+ * @brief 根据当前设备状态更新水位值
+ *
+ * @note 仅在“已找到水位 / 水位跟随完成”等合法状态下才更新，
+ *       防止在无效阶段误更新 water_level
+ *
+ * @return 1 已更新水位
+ * @return 0 未更新（状态不允许）
+ */
+uint8_t UpdateWaterLevelIfValid(void)
+{
+    if (g_measurement.device_status.device_state == STATE_FINDWATER_OVER ||
+        g_measurement.device_status.device_state == STATE_FOLLOW_WATER_OVER)
+    {
+        g_measurement.water_measurement.water_level =
+            g_deviceParams.water_tank_height - g_measurement.debug_data.cable_length;
+
+        water_value = g_measurement.water_measurement.water_level; /* 可选：同步你的全局缓存 */
+
+        return 1;
+    }
+
+    return 0;
+}
+/**
+ * @brief 停机后对齐到目标水位附近（通过“目标水位 -> 目标缆长 -> 计算delta -> 精确移动”）
+ * @param[in] lvl_target_01mm   目标水位（0.1mm），例如 lvl_avg
+ * @return NO_ERROR / 错误码
+ */
+static uint32_t AlignToWaterLevel_01mm(int32_t lvl_target_01mm)
+{
+    uint32_t ret;
+
+    int32_t cable_now_01mm    = g_measurement.debug_data.cable_length; /* 0.1mm */
+    int32_t cable_target_01mm = g_deviceParams.water_tank_height - lvl_target_01mm; /* 0.1mm */
+    int32_t delta_01mm        = cable_target_01mm - cable_now_01mm; /* 0.1mm */
+
+    int32_t abs_delta_01mm = (delta_01mm >= 0) ? delta_01mm : -delta_01mm;
+
+    printf("快速跟随\t对齐: lvl_tgt=%.1fmm cable_now=%.1fmm cable_tgt=%.1fmm delta=%+.1fmm\r\n",
+           lvl_target_01mm / 10.0f,
+           cable_now_01mm / 10.0f,
+           cable_target_01mm / 10.0f,
+           delta_01mm / 10.0f);
+
+    uint32_t dir = (delta_01mm >= 0) ? MOTOR_DIRECTION_DOWN : MOTOR_DIRECTION_UP;
+    float move_mm = abs_delta_01mm / 10.0f;
+
+    printf("快速跟随\t对齐: dir=%s move=%.1fmm\r\n",
+           (dir == MOTOR_DIRECTION_DOWN) ? "DOWN" : "UP",
+           move_mm);
+
+    ret = motorMoveAndWaitUntilStop(move_mm, dir);
+    if (ret != NO_ERROR) return ret;
+
+    return NO_ERROR;
+}
+
+/**
+ * @brief 液面附近快速跟随（按“连续调用 motorMove_up/down 直到状态翻转”的结构）
+ *
+ * 逻辑：
+ *  - 若当前在水里(WATER)：持续上行直到变为 NORMAL（提出水面/到油里）
+ *  - 若当前不在水里(NORMAL)：持续下行直到变为 WATER（进入水里）
+ *  - 如此循环往复，实现“贴着液面”快速跟随
+ *
+ * 依赖：
+ *  - motorMove_up()/motorMove_down(): 每次调用推动继续运动（你现有粗找就是这样用的）
+ *  - check_water_status(): 返回 WATER / NORMAL
+ *  - Motor_CheckLostStep_AutoTiming(): 丢步检测（可选但建议保留）
+ * 退出条件：
+ *   连续 60s 内 water_level 波动（max-min）不超过 50mm -> 认为稳定找到水位，退出
+ */
+uint32_t FindWaterLevel_FastByStateFlip_StableExit(void)
+{
+    uint32_t ret;
+    uint8_t  water_state = NORMAL;
+
+    /* ===== 稳定判定参数 ===== */
+    const uint32_t STABLE_WIN_MS    = 60000u; /* 60s */
+
+    /* ===== 零点保护（沿用你之前逻辑，可按需删） ===== */
+    const int32_t ZERO_NEAR_TH = 1000; /* 100mm -> 1000(0.1mm) */
+
+    /* 稳定窗口统计量 */
+    uint32_t win_start_tick = HAL_GetTick();
+    int32_t  min_level =  2147483647;
+    int32_t  max_level = -2147483647;
+
+    /* -------------------- 零点检查 -------------------- */
+    if (g_measurement.water_measurement.zero_capacitance == 0)
+    {
+    	if(g_deviceParams.zero_cap==0){
+            printf("水位测量\t获取零点电容值\r\n");
+            ret = SearchZero();
+            CHECK_ERROR(ret);
+            printf("水位测量\t回零点完成\r\n");
+    	}
+    	else {
+			g_measurement.water_measurement.zero_capacitance = (float)g_deviceParams.zero_cap/10.0;
+		}
+    }
+    //打印零点电容值，水位电容阈值，水位滞后阈值
+    printf("水位测量\t零点电容值：%lu\r\n", g_deviceParams.zero_cap);
+    printf("水位测量\t水位电容阈值：%lu\r\n", g_deviceParams.water_cap_threshold);
+    printf("水位测量\t水位滞后阈值：%lu\r\n", g_deviceParams.water_cap_hysteresis);
+    printf("快速跟随\t开始(稳定判定：60s内波动<=50mm退出)\r\n");
+
+    /* 初始状态 */
+    ret = check_water_status(&water_state);
+    CHECK_ERROR(ret);
+
+    while (1)
+    {
+        /* ===================== 段 A：在水里 -> 连续上行直到出水(NORMAL) ===================== */
+        if (water_state == WATER)
+        {
+            printf("快速跟随\t当前=WATER -> 连续上行直到 NORMAL\r\n");
+            MotorLostStep_Init();
+
+            while (1)
+            {
+                if (g_measurement.debug_data.sensor_position <= ZERO_NEAR_TH)
+                {
+                    printf("快速跟随\t零点附近仍在水区，停止(pos=%.1fmm)\r\n",
+                           g_measurement.debug_data.sensor_position / 10.0f);
+                    RETURN_ERROR(MEASUREMENT_WATERLEVEL_LOW);
+                }
+
+                ret = motorMove_up();
+                CHECK_ERROR(ret);
+
+                ret = check_water_status(&water_state);
+                CHECK_ERROR(ret);
+
+                if (water_state == NORMAL) {
+                    break;
+                }
+
+                ret = Motor_CheckLostStep_AutoTiming(g_measurement.debug_data.sensor_position);
+                CHECK_ERROR(ret);
+
+                CHECK_COMMAND_SWITCH(NO_ERROR);
+            }
+        }
+        /* ===================== 段 B：不在水里 -> 连续下行直到进水(WATER) ===================== */
+        else
+        {
+            printf("快速跟随\t当前=NORMAL -> 连续下行直到 WATER\r\n");
+            MotorLostStep_Init();
+
+            while (1)
+            {
+                ret = motorMove_down();
+                CHECK_ERROR(ret);
+
+                ret = check_water_status(&water_state);
+                CHECK_ERROR(ret);
+
+                if (water_state == WATER) {
+                    break;
+                }
+
+                ret = Motor_CheckLostStep_AutoTiming(g_measurement.debug_data.sensor_position);
+                CHECK_ERROR(ret);
+
+                CHECK_COMMAND_SWITCH(NO_ERROR);
+            }
+        }
+
+        /* ===== 翻转结束：先计算“本次翻转水位样本” ===== */
+        int32_t lvl_flip = g_deviceParams.water_tank_height - g_measurement.debug_data.cable_length; /* 0.1mm */
+
+        /* 最近两次翻转缓存 */
+        static uint8_t have_last_flip = 0;
+        static int32_t last_flip_lvl  = 0;
+
+        /* 第一次翻转：只缓存，不更新水位/不判稳 */
+        if (!have_last_flip)
+        {
+            have_last_flip = 1;
+            last_flip_lvl  = lvl_flip;
+            win_start_tick = HAL_GetTick();//开始稳定判定计时
+            printf("快速跟随\tflip#1 lvl=%.1fmm -> 缓存(等待第二次翻转后才开始更新/判稳)\r\n",
+                   lvl_flip / 10.0f);
+
+            CHECK_COMMAND_SWITCH(NO_ERROR);
+            continue; /* 回到外层 while(1)，继续下一次翻转 */
+        }
+
+        /* 第二次及以后：用最近两次翻转的平均值作为“当前水位” */
+        int32_t lvl_avg;
+        {
+            /* 无偏平均：避免奇数和截断偏差 */
+            int32_t a = last_flip_lvl;
+            int32_t b = lvl_flip;
+            lvl_avg = (a / 2) + (b / 2) + ((a & 1) && (b & 1));  /* 两个都是奇数时补 1 */
+        }
+
+        /* 更新“对外水位值”（只在两次翻转后才更新） */
+        g_measurement.water_measurement.water_level = lvl_avg;
+        water_value = lvl_avg;
+
+        printf("快速跟随\tflip lvl1=%.1f  lvl2=%.1f  avg=%.1fmm\r\n",
+               last_flip_lvl / 10.0f,
+               lvl_flip      / 10.0f,
+               lvl_avg       / 10.0f);
+
+        /* 更新缓存：为下一次平均做准备 */
+        last_flip_lvl = lvl_flip;
+
+        /* ===== 稳定判定窗口统计（从第二次翻转开始） ===== */
+        {
+            int32_t lvl = lvl_avg; /* 0.1mm */
+
+            if (lvl < min_level) min_level = lvl;
+            if (lvl > max_level) max_level = lvl;
+
+            if ((max_level - min_level) > g_deviceParams.water_stable_threshold)
+            {
+                win_start_tick = HAL_GetTick();
+                min_level = lvl;
+                max_level = lvl;
+                printf("快速跟随\t波动超限 -> 重置稳定窗口(min=max=%.1fmm)\r\n", lvl / 10.0f);
+                //如果设备状态不是水位跟随状态，设置水位跟随状态
+				if (g_measurement.device_status.device_state != STATE_FOLLOW_WATERING) {
+					g_measurement.device_status.device_state = STATE_FOLLOW_WATERING;
+				}
+            }
+            else
+            {
+                uint32_t elapsed = HAL_GetTick() - win_start_tick;
+
+                printf("快速跟随\t稳定窗口：%lus  波动=%.1fmm(阈值%.1fmm)\r\n",
+                       (unsigned long)(elapsed / 1000u),
+                       (max_level - min_level) / 10.0f,
+                       g_deviceParams.water_stable_threshold / 10.0f);
+
+                if (elapsed >= STABLE_WIN_MS)
+                {
+                    printf("快速跟随\t稳定满足：连续60s内波动<=阈值 -> 退出\r\n");
+                    ret = motorQuickStop();
+                    CHECK_ERROR(ret);
+                    printf("快速跟随\t运行到水位附近\r\n");
+                    ret = AlignToWaterLevel_01mm(lvl_avg);
+                    CHECK_ERROR(ret);
+                    return NO_ERROR;
+                }
+            }
+        }
+
+        CHECK_COMMAND_SWITCH(NO_ERROR);
+    }
+}
+/**
+ * @brief 快速水位跟随（基于电容阈值 + 滞回 + 自恢复）
+ *
+ * 核心思想：
+ * 1. 以“空气电容 zero_capacitance”为基准，构造：
+ *      - 进入水区阈值 th
+ *      - 离开水区滞回阈值 th_low
+ * 2. 根据当前电容与阈值关系，判断“偏水 / 偏空气 / 稳定区”
+ * 3. 偏水则上行，偏空气则下行；稳定区不动作
+ * 4. 根据偏差大小选择不同步长（大 / 中 / 小）
+ * 5. 当出现“偏差很大但电容几乎不变化”的异常情况时，
+ *    累计 lost_count，超过阈值后触发重新找水位
+ *
+ * 特点：
+ * - 步进式运动（motorMoveAndWaitUntilStop）
+ * - 带滞回，避免界面抖动
+ * - 带自恢复机制，避免长期卡死在错误区域
+ */
+uint32_t FollowWaterLevel_fast(void)
+{
+    uint32_t ret;
+
+    /* -------------------- 电容相关变量 -------------------- */
+    float cap = 0.0f;         /* 当前读取到的水位电容值 */
+    float air_cap;            /* 空气中的基准电容（零点电容） */
+    float th;                 /* 水位判定上阈值（进入水区） */
+    float th_low;             /* 水位判定下阈值（离开水区，滞回） */
+
+    /* -------------------- 控制与计算变量 -------------------- */
+    float diff;               /* 当前电容偏差量（相对于阈值） */
+    float step_mm;            /* 本次运动步长（mm） */
+    uint32_t dir;             /* 本次运动方向（UP / DOWN） */
+
+    /* -------------------- 状态记忆与异常检测 -------------------- */
+    static float last_cap = 0.0f; /* 上一次电容值，用于判断电容是否“卡死” */
+    uint16_t lost_count = 0;      /* 连续异常计数器 */
+
+    /* -------------------- 阈值计算 --------------------
+     * 所有参数统一使用浮点计算，避免单位混乱
+     * water_cap_threshold / water_cap_hysteresis
+     * 在参数中以 ×1000 形式保存，这里统一还原
+     */
+    air_cap = g_measurement.water_measurement.zero_capacitance;
+    th_low      = air_cap + g_deviceParams.water_cap_threshold / 1000.0f - g_deviceParams.water_cap_hysteresis / 1000.0f;
+    th  = air_cap + g_deviceParams.water_cap_threshold / 1000.0f + g_deviceParams.water_cap_hysteresis / 1000.0f;
+
+    printf("水位跟随\t开始\r\n");
+    printf("水位跟随\t空气电容=%.1f  目标阈值上限=%.1f  滞回下限=%.1f\r\n",
+           air_cap, th, th_low);
+
+    /* ============================ 主循环 ============================ */
+    while (1)
+    {
+        /* ---------- 1. 读取当前水位电容 ---------- */
+        ret = Read_Water_Capacitance(&cap);
+        if (ret != NO_ERROR)
+        {
+            printf("水位跟随\t读取电容失败 ret=0x%lX\r\n", ret);
+            return ret;
+        }
+
+        /* 计算电容变化量（用于“是否卡死”判断） */
+        float cap_delta = fabsf(cap - last_cap);
+        last_cap = cap;
+
+        /* 保存到测量结构体，供其他模块/调试使用 */
+        g_measurement.water_measurement.current_capacitance = cap;
+
+        printf("水位跟随\tpos=%.1fmm  cap=%.1f\r\n",
+               g_measurement.debug_data.sensor_position / 10.0f,
+               cap);
+
+        /* ---------- 2. 基于双阈值 + 滞回的状态判断 ---------- */
+        if (cap >= th)
+        {
+            /* 电容高于上阈值：探头偏水 -> 需要上行 */
+            dir  = MOTOR_DIRECTION_UP;
+            diff = cap - th;
+            printf("水位跟随\t状态=偏水  diff=%.1f -> 上行\r\n", diff);
+        }
+        else if (cap <= th_low)
+        {
+            /* 电容低于滞回下限：探头偏空气 -> 需要下行 */
+            dir  = MOTOR_DIRECTION_DOWN;
+            diff = th_low - cap;
+            printf("水位跟随\t状态=偏空气 diff=%.1f -> 下行\r\n", diff);
+        }
+        else
+        {
+            /* ---------- 稳定区 ----------
+             * 电容位于 [th_low, th] 之间
+             * 认为已经贴近液面，不进行任何运动
+             */
+            if (lost_count != 0)
+            {
+                printf("水位跟随\t进入稳定区，lost清零(%u->0)\r\n", lost_count);
+                lost_count = 0;
+            }
+
+            printf("水位跟随\t状态=稳定区(%.1f < cap < %.1f)，保持\r\n",
+                   th_low, th);
+
+            /* 稳态下更新一次水位值 */
+            g_measurement.water_measurement.water_level =
+                g_deviceParams.water_tank_height - g_measurement.debug_data.cable_length;
+            water_value =
+                g_deviceParams.water_tank_height - g_measurement.debug_data.cable_length;
+
+            HAL_Delay(WATER_FOLLOW_SAMPLE_MS);
+            CHECK_COMMAND_SWITCH(NO_ERROR);
+            continue;
+        }
+
+        /* ---------- 3. 根据偏差大小选择运动步长 ----------
+         * 偏差越大，说明离目标液面越远，允许使用更大的步长
+         */
+        if (diff > 0.8f * (g_deviceParams.water_cap_threshold / 1000.0f))
+        {
+            step_mm = WATER_FOLLOW_STEP_BIG_MM;
+        }
+        else if (diff > 0.3f * (g_deviceParams.water_cap_threshold / 1000.0f))
+        {
+            step_mm = WATER_FOLLOW_STEP_MED_MM;
+        }
+        else
+        {
+            step_mm = WATER_FOLLOW_STEP_SMALL_MM;
+        }
+
+        printf("水位跟随\t执行移动 dir=%s  step=%.2fmm  lost=%u\r\n",
+               (dir == MOTOR_DIRECTION_UP) ? "UP" : "DOWN",
+               step_mm,
+               lost_count);
+
+        /* ---------- 4. 执行步进运动（阻塞等待完成） ---------- */
+        ret = motorMoveAndWaitUntilStop(step_mm, dir);
+        CHECK_ERROR(ret);
+
+        /* 运动完成后，按当前设备状态更新水位 */
+        UpdateWaterLevelIfValid();
+
+        printf("水位跟随\t完成移动 pos=%.1fmm\r\n",
+               g_measurement.debug_data.sensor_position / 10.0f);
+
+        /* ---------- 5. 异常判定：大偏差 + 电容几乎不变 ----------
+         *
+         * 含义：
+         * - diff 很大：理论上应该迅速变化
+         * - cap_delta 很小：实际几乎没变
+         * => 可能卡死 / 饱和 / 探头异常 / 运动无效
+         */
+        {
+            float th_span = (g_deviceParams.water_cap_threshold / 1000.0f);
+
+//            if ((diff > 0.8f * th_span) && (cap_delta < 1.0f))
+            if (diff > 0.8f * th_span)
+            {
+                if (lost_count < 0xFFFFu)
+                    lost_count++;
+            }
+            else
+            {
+                lost_count = 0;
+            }
+
+            printf("水位跟随\tlost判定 diff=%.1f th=%.1f capΔ=%.1f -> lost=%u\r\n",
+                   diff, th_span, cap_delta, lost_count);
+        }
+
+        /* ---------- 6. 连续异常过多：触发重新找水位 ---------- */
+        if (lost_count >= 5)
+        {
+            printf("水位跟随\t长时间大偏差，重新找水位\r\n");
+            ret = FindWaterLevel_FastByStateFlip_StableExit();
+            CHECK_ERROR(ret);
+
+            lost_count = 0;
+            printf("水位跟随\t重新找水位完成，恢复跟随\r\n");
+        }
+
+        /* ---------- 7. 采样周期延时 + 命令切换检测 ---------- */
+        HAL_Delay(WATER_FOLLOW_SAMPLE_MS);
+        CHECK_COMMAND_SWITCH(NO_ERROR);
+    }
 }
 
 uint32_t FollowWaterLevel(void)
