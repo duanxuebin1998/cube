@@ -457,14 +457,14 @@ typedef struct {
 
     // ===================== 水位测量参数 =====================
     uint32_t water_tank_height;                 // 水位罐高(0.1mm)
-    uint32_t water_level_sensor_distance_diff;  // 水位传感器距离差(0.1mm)
+    uint32_t water_level_mode;                  // 水位测量方式
     uint32_t waterBlindZone;                    // 水位盲区(0.1mm)
     uint32_t water_cap_threshold;               // 水位电容阈值（建议明确倍率，如 x1000）
     uint32_t water_cap_hysteresis;              // 水位电容滞后阈值（建议明确倍率，如 x1000）
     uint32_t maxDownDistance;                   // 水位/罐底测量最大下行距离(0.1mm)
 
     uint32_t zero_cap;                 // 预留
-    uint32_t reserved15;                 // 预留（新增）
+    uint32_t water_stable_threshold;                 // 预留（新增）
 
     // ===================== 罐高/罐底测量 =====================
     uint32_t bottom_detect_mode;          // 罐底测量模式

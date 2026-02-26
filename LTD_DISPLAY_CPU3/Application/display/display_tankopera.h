@@ -237,14 +237,13 @@ typedef enum
 
     /* ---------------- 水位测量参数 ---------------- */
     COM_NUM_DEVICEPARAM_WATER_TANK_HEIGHT,              // 水罐高/水参考高度
-    COM_NUM_DEVICEPARAM_WATER_LEVEL_SENSOR_DISTANCE_DIFF,// 水位传感器距离差/安装偏差
+    COM_NUM_DEVICEPARAM_WATER_LEVEL_MODE,// 水位传感器距离差/安装偏差
     COM_NUM_DEVICEPARAM_WATER_BLINDZONE,                // 水位盲区
     COM_NUM_DEVICEPARAM_WATER_CAP_THRESHOLD,            // 水位电容阈值
     COM_NUM_DEVICEPARAM_WATER_CAP_HYSTERESIS,           // 水位电容滞回
     COM_NUM_DEVICEPARAM_MAXDOWNDISTANCE,                // 最大下行距离
     COM_NUM_DEVICEPARAM_ZERO_CAP,                     // 保留 14
-
-    COM_NUM_DEVICEPARAM_RESERVED15,                     // 保留 15
+    COM_NUM_DEVICEPARAM_WATER_STABLE_THRESHOLD,                     // 保留 15
 
     /* ---------------- 罐底/罐高测量参数 ---------------- */
     COM_NUM_DEVICEPARAM_BOTTOM_DETECT_MODE,             // 罐底检测模式
