@@ -10,6 +10,7 @@
 #include "system_parameter.h"
 #include "dataanalysis_modbus.h"
 #include "wartsila_modbus_communication.h"
+#include "wartsila_modbus_data_analysis.h"
 
 #define DEBUG_COMMUCPU2 0
 #define ADERSS 0X01
@@ -32,6 +33,8 @@ static void CPU2_Response03Process(uint8_t const *revframe);
 static void CPU2_Response04Process(char const *revframe);
 static void CPU2_Response10Process(uint8_t *arr, uint16_t len);
 static void PresetRegister(bool registertype, int const *registervalue);
+
+static void RequestDensityDistPoints_ByCount(void);
 
 /*与CPU2通讯初始化*/
 void CommuToCPU2Init(void) {
@@ -196,7 +199,7 @@ void PollingInputData(void) {
  * @brief 根据测量点数量读取分布测量点的所有数据
  *        调用前需要确保 g_measurement.density_distribution.measurement_points 已经正确更新。
  */
-void RequestDensityDistPoints_ByCount(void)
+static void RequestDensityDistPoints_ByCount(void)
 {
     uint16_t points = (uint16_t)g_measurement.density_distribution.measurement_points;
 

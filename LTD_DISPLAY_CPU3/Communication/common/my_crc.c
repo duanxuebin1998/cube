@@ -7,7 +7,7 @@
 #include <my_crc.h>
 #include "crc.h"
 #include "stdio.h"
-
+#include <string.h>   // memcpy
 /******************************
  * CRC 高字节表
  *******************************/

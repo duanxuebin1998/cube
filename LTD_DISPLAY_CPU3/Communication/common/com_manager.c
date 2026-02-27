@@ -24,9 +24,9 @@ extern volatile uint8_t com1_rx_ready;
 extern volatile uint8_t com2_rx_ready;
 extern volatile uint8_t com3_rx_ready;
 
-extern volatile uint8_t UART2_RX_LEN;
-extern volatile uint8_t UART3_RX_LEN;
-extern volatile uint8_t UART6_RX_LEN;
+extern volatile uint16_t UART2_RX_LEN;
+extern volatile uint16_t UART3_RX_LEN;
+extern volatile uint16_t UART6_RX_LEN;
 
 extern uint8_t UART2_RX_BUF[UART2_RX_BUF_SIZE];
 extern uint8_t UART3_RX_BUF[UART3_RX_BUF_SIZE];
@@ -167,7 +167,7 @@ uint32_t COM_DispatchProtocol(ComPortIndex com,
     case COM_PROTO_WARTSILA:
         /* TODO: 根据你实际的 Wartsila 协议处理函数名修改 */
         /* 比如： return Wartsila_CommunicationProcess(rx, rx_len, tx, tx_len); */
-        return wartsila_modbus_process(rx, rx_len, tx, tx_len);  /* 如果函数名不对请自行改 */
+        return modbus_rtu_process(rx, rx_len, tx, tx_len);  /* 如果函数名不对请自行改 */
 
     case COM_PROTO_MODBUS_RTU:
         /* 你的 Modbus RTU 处理函数（需要在 modbus_agreement.h 中声明） */

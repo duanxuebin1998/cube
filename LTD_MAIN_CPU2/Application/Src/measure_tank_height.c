@@ -15,6 +15,8 @@
 #include <stdlib.h>
 #include "measure_zero.h"
 #include "motor_ctrl.h"
+#include "dsm_sensor_communication.h"
+#include "encoder.h"
 // 全局变量：存储最终确定的罐底位置（编码器计数值）
 int32_t bottom_value = -100000000; // 初始值设为较大数值作为无效状态标识
 /* 全局/参数区：由寄存器或本机参数配置 */

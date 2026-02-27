@@ -13,6 +13,8 @@
 #include "system_parameter.h"
 #include "motor_ctrl.h"
 #include "measure_tank_height.h"
+#include "measure_water_level.h"
+#include "encoder.h"
 
 #define ZERO_SEARCH_RETRY_MAX  3  // 可通过宏配置最大重试次数
 
