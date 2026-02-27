@@ -12,9 +12,10 @@
 #include "measure_water_level.h"
 #include <stdio.h>
 #include <stdlib.h>
-
+#include "measure.h"
 #include "motor_ctrl.h"
 #include "measure_zero.h"
+#include "dsm_sensor_communication.h"
 // TODO: 这里替换为你的水位检测头文件
 // #include "water.h"  // 提供 check_water_status()
 

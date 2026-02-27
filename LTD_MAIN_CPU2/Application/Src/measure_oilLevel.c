@@ -29,7 +29,6 @@ static int SearchAir(); // ¾«È·ËÑË÷ÒºÎ»
 static int SearchOilPrecise(float per_mm_Frequency);
 static int determineTheSensorPositionAndUpdateTheLevelValue(void);
 static int waitForTheLiquidLevelToExceedTheBlindZone(void);
-Level_StateTypeDef determine_level_status(void);
 uint32_t FollowOilLevel(void);
 
 /**

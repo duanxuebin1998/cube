@@ -1,5 +1,5 @@
 #include "DSM_SlaveModbus_modbus2.h"
-
+#include "cpu2_communicate.h"
 #include <stdlib.h>
 #include <string.h>
 #include "crc.h"

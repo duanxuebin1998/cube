@@ -19,6 +19,7 @@
 #include "system_parameter.h"
 #include "cpu3_comm_display_params.h"
 #include "system_parameter.h"
+#include <string.h>    // for memset, memcpy, strcmp, strlen...
 
 #define PASSWORD_ENTERMAIN		1009
 extern volatile uint8_t g_cpu3_uart_reinit_pending;// CPU3 串口重初始化标志
@@ -1314,8 +1315,7 @@ static void cmd_onepara_process(void)
     /* 2) 动态组织要下发的参数字节：rgstcnt 个寄存器 = rgstcnt*2 字节 */
     {
         int bytes = (int)param_meta[index].rgstcnt * 2;
-        /* 保护：避免 rgstcnt 异常导致栈爆或协议异常 */
-        if (bytes <= 0 || bytes > 64) { /* 64 可按你协议最大支持调整 */
+        if (bytes <= 0 || bytes > 64) {
             all_screen(0x00);
             DisplayLangaugeLineWords((uint8_t*)"参数长度异常！", OLED_LINE8_2, OLED_ROW3_2, 0, (uint8_t*)"Bad Para Len");
             HAL_Delay(800);
@@ -1323,21 +1323,28 @@ static void cmd_onepara_process(void)
             return;
         }
 
-        uint8_t paraarr[64]; /* 足够覆盖常见 1~16 寄存器 */
+        uint8_t paraarr[64];
         memset(paraarr, 0, sizeof(paraarr));
 
         all_screen(0x00);
         DisplayLangaugeLineWords((uint8_t*)"正在下发参数", OLED_LINE8_2, OLED_ROW3_2, 0, (uint8_t*)"Send Para");
 
-        /* 注意：这里保持你原先“小端拆字节”的方式 */
         for (i = 0; i < bytes; i++) {
-            paraarr[i] = (uint8_t)((now_Para_CT.val >> (8 * i)) & 0xFF);
+            paraarr[i] = (uint8_t)((now_Para_CT.val >> (8 * i)) & 0xFF);  /* 你原先的小端拆字节 */
+        }
+
+        /* 把 byte 流打包成 uint32_t 数组：每 4 字节一个 uint32_t（小端） */
+        uint32_t hold32[16];                 /* 64B => 16 个 uint32_t */
+        memset(hold32, 0, sizeof(hold32));
+
+        for (i = 0; i < bytes; i++) {
+            hold32[i >> 2] |= ((uint32_t)paraarr[i]) << (8u * (uint32_t)(i & 3));
         }
 
         CPU2_CombinatePackage_Send(FUNCTIONCODE_WRITE_MULREGISTER,
                                   param_meta[index].startadd,
                                   param_meta[index].rgstcnt,
-                                  paraarr);
+                                  hold32);
     }
 
     /* 3) 下发命令 */
@@ -1369,7 +1376,7 @@ static void cmd_onepara_process(void)
         CPU2_CombinatePackage_Send(FUNCTIONCODE_WRITE_MULREGISTER,
                                   HOLDREGISTER_DEVICEPARAM_COMMAND,
                                   2,
-                                  (uint8_t*)&cmd);
+                                  (uint32_t *)&cmd);
     }
 
     exitTankOpera();
@@ -1679,15 +1686,35 @@ static void cmd_configpara_process(void)
 	}
 	else //下发给CPU2
 	{
-		CPU2_CombinatePackage_Send(FUNCTIONCODE_WRITE_MULREGISTER,
-				param_meta[index].startadd,
-				param_meta[index].rgstcnt,
-				paraarr);
+	    uint16_t regs16[32]; /* rgstcnt 最大一般不会很大；32=最多64字节 */
+	    int rc = (int)param_meta[index].rgstcnt;
+	    int bytes = rc * 2;
 
-		CPU2_CombinatePackage_Send(FUNCTIONCODE_READ_HOLDREGISTER,
-				param_meta[index].startadd,
-				param_meta[index].rgstcnt,
-				NULL);
+	    memset(regs16, 0, sizeof(regs16));
+
+	    /* paraarr[] 当前的组织方式：
+	       - float/double 分支：你是按“高字节在前”的大端字节序写入 paraarr
+	       - int 分支：你是按小端（低字节在前）写入 paraarr
+	       为了不改变你现有逻辑，这里统一按 paraarr 的“字节顺序”去组 16-bit 寄存器：
+	       每个寄存器 = paraarr[2*i] 作为高字节，paraarr[2*i+1] 作为低字节（即网络序/寄存器序）
+	    */
+	    for (i = 0; i < rc; i++) {
+	        uint8_t hi = 0, lo = 0;
+	        int p = 2 * i;
+	        if (p < arrlen)     hi = paraarr[p];
+	        if (p + 1 < arrlen) lo = paraarr[p + 1];
+	        regs16[i] = ((uint16_t)hi << 8) | (uint16_t)lo;
+	    }
+
+	    CPU2_CombinatePackage_Send(FUNCTIONCODE_WRITE_MULREGISTER,
+	                              param_meta[index].startadd,
+	                              param_meta[index].rgstcnt,
+	                              (uint32_t *)regs16);
+
+	    CPU2_CombinatePackage_Send(FUNCTIONCODE_READ_HOLDREGISTER,
+	                              param_meta[index].startadd,
+	                              param_meta[index].rgstcnt,
+	                              NULL);
 	}
 	HAL_Delay(800);
 	displaypara();

@@ -14,6 +14,7 @@
 #include "cpu2_communicate.h"
 
 static void modbus_on_holding_written(uint16_t start, uint16_t qty);
+static void ForwardParamsToLowerDevice(void);
 // ================= 寄存器池 =================
 uint16_t g_holding_regs[HOLDREG_COUNT] = {0};   // 应用层可定期把你的参数写进/读出这个数组
 
@@ -236,7 +237,7 @@ static void modbus_on_holding_written(uint16_t start, uint16_t qty)
         ForwardParamsToLowerDevice();
     }
 }
-void ForwardParamsToLowerDevice(void)
+static void ForwardParamsToLowerDevice(void)
 {
 //    // 示例：根据 command 不同，打不同的下发帧
 //	if (g_deviceParams.command != CMD_NONE) {

@@ -11,6 +11,7 @@
 
 #include "sensor.h"
 #include "measure_tank_height.h"
+#include "measure.h"
 /**
  * @brief 自动识别传感器类型（DSM 一代 / DSM_V2 / SIL）
  *

@@ -46,21 +46,21 @@ extern UART_HandleTypeDef huart6;
 /* USART2 485接收缓冲区 */
 #define UART2_RX_BUF_SIZE 256
 extern volatile uint8_t com2_rx_ready ;
-extern volatile uint8_t UART2_RX_LEN;              // 接收一帧数据的长度
+extern volatile uint16_t UART2_RX_LEN;              // 接收一帧数据的长度
 extern uint8_t UART2_RX_BUF[UART2_RX_BUF_SIZE];   // 接收数据缓冲区
  /** USART3 485接收缓冲区 */
 #define UART3_RX_BUF_SIZE 512
 extern volatile uint8_t com3_rx_ready ;
-extern volatile uint8_t UART3_RX_LEN;              // 接收一帧数据的长度
+extern volatile uint16_t UART3_RX_LEN;              // 接收一帧数据的长度
 extern uint8_t UART3_RX_BUF[UART3_RX_BUF_SIZE];   // 接收数据缓冲区
 
 #define UART5_RX_BUF_SIZE 256
-extern volatile uint8_t UART5_RX_LEN;              // 接收一帧数据的长度
+extern volatile uint16_t UART5_RX_LEN;              // 接收一帧数据的长度
 extern uint8_t UART5_RX_BUF[UART5_RX_BUF_SIZE];   // 接收数据缓冲区
 
 #define UART6_RX_BUF_SIZE 256
 extern volatile uint8_t com1_rx_ready ;
-extern volatile uint8_t UART6_RX_LEN;              // 接收一帧数据的长度
+extern volatile uint16_t UART6_RX_LEN;              // 接收一帧数据的长度
 extern uint8_t UART6_RX_BUF[UART6_RX_BUF_SIZE];   // 接收数据缓冲区
 /* USER CODE END Private defines */
 

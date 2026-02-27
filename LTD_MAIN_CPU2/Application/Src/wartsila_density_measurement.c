@@ -7,8 +7,9 @@
 
 
 #include "wartsila_density_measurement.h"
-
-
+#include "measure_oilLevel.h"
+#include "ltd_sensor_communication.h"
+#include "measure_density.h"
 
 uint32_t motorMoveUpToPositionOrAir(float target_mm, Level_StateTypeDef *final_state);
 

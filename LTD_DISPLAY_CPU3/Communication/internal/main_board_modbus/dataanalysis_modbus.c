@@ -9,6 +9,9 @@
 #include "system_parameter.h"
 #include "cpu2_communicate.h"
 #include "cpu3_comm_display_params.h"
+#include <math.h>     // for pow()
+
+int ywj_hold_analysis_data(int startadd,int rgscnt);
 
 /* ===================== 通用寄存器读写函数 ===================== */
 

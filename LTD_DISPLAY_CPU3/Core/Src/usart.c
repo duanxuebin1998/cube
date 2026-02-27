@@ -72,18 +72,18 @@ PUTCHAR_PROTOTYPE {
 #endif
 
 volatile uint8_t com2_rx_ready = 0;
-volatile uint8_t UART2_RX_LEN = 0;              // 接收一帧数据的长度
+volatile uint16_t UART2_RX_LEN = 0;              // 接收一帧数据的长度
 uint8_t UART2_RX_BUF[UART2_RX_BUF_SIZE] = { 0 };   // 接收数据缓冲区
 
 volatile uint8_t com3_rx_ready = 0;
-volatile uint8_t UART3_RX_LEN = 0;              // 接收一帧数据的长度
+volatile uint16_t UART3_RX_LEN = 0;              // 接收一帧数据的长度
 uint8_t UART3_RX_BUF[UART3_RX_BUF_SIZE] = { 0 };   // 接收数据缓冲区
 
-volatile uint8_t UART5_RX_LEN = 0;              // 接收一帧数据的长度
+volatile uint16_t UART5_RX_LEN = 0;              // 接收一帧数据的长度
 uint8_t UART5_RX_BUF[UART5_RX_BUF_SIZE] = { 0 };   // 接收数据缓冲区
 
 volatile uint8_t com1_rx_ready = 0;
-volatile uint8_t UART6_RX_LEN = 0;              // 接收一帧数据的长度
+volatile uint16_t UART6_RX_LEN = 0;              // 接收一帧数据的长度
 uint8_t UART6_RX_BUF[UART6_RX_BUF_SIZE] = { 0 };   // 接收数据缓冲区
 /* USER CODE END 0 */
 
