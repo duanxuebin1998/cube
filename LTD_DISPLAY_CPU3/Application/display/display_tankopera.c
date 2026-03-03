@@ -1701,8 +1701,8 @@ static void cmd_configpara_process(void)
 	    for (i = 0; i < rc; i++) {
 	        uint8_t hi = 0, lo = 0;
 	        int p = 2 * i;
-	        if (p < arrlen)     hi = paraarr[p];
-	        if (p + 1 < arrlen) lo = paraarr[p + 1];
+	        if (p < arrlen)     hi = paraarr[p + 1];
+	        if (p + 1 < arrlen) lo = paraarr[p];
 	        regs16[i] = ((uint16_t)hi << 8) | (uint16_t)lo;
 	    }
 

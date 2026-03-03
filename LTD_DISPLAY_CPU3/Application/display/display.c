@@ -37,6 +37,7 @@ enum{//用于记录每个参数显示在第几页第几行
     Para_angle_x,   // 新增：陀螺仪 X 角度
     Para_angle_y,   // 新增：陀螺仪 Y 角度
     Para_position,
+	Para_tankheight, //新增：罐高
     Para_wireless_t,
     Para_V,
     Para_VMax,
@@ -931,7 +932,14 @@ static void oled_equipment(void)
         line = DisplayLangaugeLineWords((u8*)"Y角:", OLED_LINE8_1, row, 0, (u8*)"AngY:");
         OledValueDisplay(g_measurement.debug_data.angle_y, line, row, 0, 2, (u8*)"°");
     }
-
+    // 罐高显示
+    if (ValidParaDisArr[Para_tankheight][PARA_VALID] == true &&
+        now_page == ValidParaDisArr[Para_tankheight][PARA_PAGE])
+    {
+        row = ValidParaDisArr[Para_tankheight][PARA_X];
+        line = DisplayLangaugeLineWords((u8*)"罐高:", OLED_LINE8_1, row, 0, (u8*)"tankH:");
+        OledValueDisplay(g_measurement.height_measurement.current_real_height, line, row, 0, 1, (u8*)"mm");
+    }
 }
 /* 显示多个汉字或字符 - 带中英文选择 */
 uint8_t DisplayLangaugeLineWords(uint8_t* name1,uint8_t line,uint8_t row,uint8_t shift,uint8_t* name2)
@@ -1030,7 +1038,16 @@ static void CalculateValidPara(void)
     else {
         ValidParaDisArr[Para_angle_y][PARA_VALID] = false;
     }
-
+    // 罐高
+    if ((g_measurement.height_measurement.current_real_height != 0)&&(g_measurement.device_status.device_state == STATE_FINDBOTTOM_OVER))
+    {
+        ValidParaCnt++;
+        ValidParaDisArr[Para_tankheight][PARA_NUM] = ValidParaCnt;
+        ValidParaDisArr[Para_tankheight][PARA_VALID] = true;
+    }
+    else {
+        ValidParaDisArr[Para_tankheight][PARA_VALID] = false;
+    }
     #if DEBUG_DISPLAY
     printf("ValidParaCnt = %d\n",ValidParaCnt);
     #endif

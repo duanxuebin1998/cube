@@ -462,9 +462,8 @@ typedef struct {
     uint32_t water_cap_threshold;               // 水位电容阈值（建议明确倍率，如 x1000）
     uint32_t water_cap_hysteresis;              // 水位电容滞后阈值（建议明确倍率，如 x1000）
     uint32_t maxDownDistance;                   // 水位/罐底测量最大下行距离(0.1mm)
-
-    uint32_t zero_cap;                 // 预留
-    uint32_t water_stable_threshold;                 // 预留（新增）
+    uint32_t zero_cap;                          //零点电容值
+    uint32_t water_stable_threshold;            //水位稳定阈值
 
     // ===================== 罐高/罐底测量 =====================
     uint32_t bottom_detect_mode;          // 罐底测量模式
