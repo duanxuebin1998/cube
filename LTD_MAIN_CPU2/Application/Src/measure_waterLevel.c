@@ -509,7 +509,10 @@ uint32_t FindWaterLevel_FastByStateFlip_StableExit(void)
     uint32_t win_start_tick = HAL_GetTick();
     int32_t  min_level =  2147483647;
     int32_t  max_level = -2147483647;
-
+    /* 翻转缓存 */
+    static uint8_t have_last_flip = 0;
+    static int32_t last_flip_lvl  = 0;
+    have_last_flip = 0;//每次调用都重置，确保独立测量
     /* -------------------- 零点检查 -------------------- */
     if (g_measurement.water_measurement.zero_capacitance == 0)
     {
@@ -594,9 +597,6 @@ uint32_t FindWaterLevel_FastByStateFlip_StableExit(void)
         /* ===== 翻转结束：先计算“本次翻转水位样本” ===== */
         int32_t lvl_flip = g_deviceParams.water_tank_height - g_measurement.debug_data.cable_length; /* 0.1mm */
 
-        /* 最近两次翻转缓存 */
-        static uint8_t have_last_flip = 0;
-        static int32_t last_flip_lvl  = 0;
 
         /* 第一次翻转：只缓存，不更新水位/不判稳 */
         if (!have_last_flip)
