@@ -1,0 +1,22 @@
+{
+  "version": 6,
+  "cmakeMinimumRequired": { "major": 3, "minor": 20, "patch": 0 },
+  "configurePresets": [
+    {
+      "name": "cpu2-debug",
+      "displayName": "LTD_MAIN_CPU2 (Debug, Ninja, arm-none-eabi)",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/LTD_MAIN_CPU2",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/cmake/toolchain-arm-none-eabi.cmake"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "cpu2-debug",
+      "configurePreset": "cpu2-debug"
+    }
+  ]
+}
