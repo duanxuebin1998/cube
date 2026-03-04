@@ -1,3 +1,9 @@
 {
-    "cmake.sourceDirectory": "D:/CUBE/LTD_MAIN_CPU2"
+  "cmake.sourceDirectory": "${workspaceFolder}/LTD_MAIN_CPU2",
+  "cmake.buildDirectory": "${workspaceFolder}/build/LTD_MAIN_CPU2",
+  "cmake.generator": "Ninja",
+  "cmake.configureSettings": {
+    "CMAKE_TOOLCHAIN_FILE": "${workspaceFolder}/cmake/toolchain-arm-none-eabi.cmake",
+    "CMAKE_BUILD_TYPE": "Debug"
+  }
 }
