@@ -159,7 +159,7 @@ void Fault_Handler(const char *name)
          NVIC_SystemReset();
     }
 }
-static const char HardFaultName[] = "HardFault";
+const char HardFaultName[] = "HardFault";
 void HardFault_Handler(void) __attribute__((naked));
 
 /* ===================== 通用：DMA + IDLE 一帧接收处理 ===================== */
