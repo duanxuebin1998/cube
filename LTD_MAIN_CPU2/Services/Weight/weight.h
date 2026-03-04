@@ -8,7 +8,7 @@
 #ifndef INC_WEIGHT_H_
 #define INC_WEIGHT_H_
 
-#include "as5145.h"
+#include "AS5145.h"
 #include "system_parameter.h"
 //#include "motor_ctrl.h"
 
