@@ -1,4 +1,4 @@
-#include "Display.h"
+#include "display.h"
 #include "hgs.h"
 #include "stdlib.h"
 #include "math.h"

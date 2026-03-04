@@ -5,7 +5,7 @@
  *      Author: duan xuebin
  */
 #include "cpu2_communicate.h"
-#include "Display.h"
+#include "display.h"
 #include "system_parameter.h"
 #include "DSM_communication.h"
 #include "wartsila_modbus_communication.h"
