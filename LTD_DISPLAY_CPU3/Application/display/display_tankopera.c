@@ -13,7 +13,7 @@
 #include "tim.h"
 #include "usart.h"
 #include "exit.h"
-#include "Display.h"
+#include "display.h"
 #include "hgs.h"
 #include <math.h>
 #include "system_parameter.h"

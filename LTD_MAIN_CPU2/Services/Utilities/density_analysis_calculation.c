@@ -15,7 +15,7 @@
 *************************************************************/
 
 #include <math.h>
-#include "Density_analysis_calculation.h"
+#include "density_analysis_calculation.h"
 
 #define double_t double
 

@@ -27,7 +27,7 @@
 #include "display_tankopera.h"
 #include "DSM_communication.h"
 #include "iwdg.h"
-#include "Display.h"
+#include "display.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
