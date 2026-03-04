@@ -1,4 +1,4 @@
-name: Build LTD_MAIN_CPU2 (GCC+CMake+Ninja)
+name: Build Firmware (CPU2 + CPU3)
 
 on:
   push:
@@ -7,8 +7,12 @@ on:
     branches: ["MAIN", "main"]
 
 jobs:
-  build-cpu2:
+  build:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [cpu2-debug, cpu3-debug]
 
     steps:
       - name: Checkout
@@ -23,22 +27,16 @@ jobs:
           ninja --version
           arm-none-eabi-gcc --version
 
-      - name: Configure
+      - name: Configure (${{ matrix.target }})
         run: |
-          cmake -S LTD_MAIN_CPU2 -B build/LTD_MAIN_CPU2 -G Ninja \
-            -DCMAKE_TOOLCHAIN_FILE=cmake/toolchain-arm-none-eabi.cmake \
-            -DCMAKE_BUILD_TYPE=Debug
+          cmake --preset ${{ matrix.target }} --fresh
 
-      - name: Build
+      - name: Build (${{ matrix.target }})
         run: |
-          cmake --build build/LTD_MAIN_CPU2
+          cmake --build --preset ${{ matrix.target }}
 
-      - name: Upload artifacts
+      - name: Upload artifacts (${{ matrix.target }})
         uses: actions/upload-artifact@v4
         with:
-          name: LTD_MAIN_CPU2-artifacts
-          path: |
-            build/LTD_MAIN_CPU2/*.elf
-            build/LTD_MAIN_CPU2/*.hex
-            build/LTD_MAIN_CPU2/*.bin
-            build/LTD_MAIN_CPU2/*.map
+          name: ${{ matrix.target }}-artifacts
+          path: ${{ matrix.target == 'cpu2-debug' && 'build/LTD_MAIN_CPU2/LTD_MAIN_CPU2/*' || 'build/LTD_DISPLAY_CPU3/LTD_DISPLAY_CPU3/*' }}
