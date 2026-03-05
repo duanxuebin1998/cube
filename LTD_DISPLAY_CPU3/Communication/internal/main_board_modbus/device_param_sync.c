@@ -163,7 +163,7 @@ static volatile uint32_t* get_deviceparam_ptr_by_operanum(int operanum)
     case COM_NUM_DEVICEPARAM_INTERVAL_TOPLIMIT:
         return &g_deviceParams.intervalMeasurementTopLimit;
     case COM_NUM_DEVICEPARAM_INTERVAL_BOTTOMLIMIT:
-        return &g_deviceParams.intervalMeasurementTopLimit;
+        return &g_deviceParams.intervalMeasurementBottomLimit;
 
     /* ===== Wartsila 密度区间测量参数 ===== */
     case COM_NUM_DEVICEPARAM_WARTSILA_UPPER_DENSITY_LIMIT:
@@ -216,6 +216,18 @@ static volatile uint32_t* get_deviceparam_ptr_by_operanum(int operanum)
         return &g_deviceParams.densityDistributionOilLevel;
     case COM_NUM_DEVICEPARAM_MOTOR_COMMAND_DISTANCE:
         return &g_deviceParams.motorCommandDistance;
+    case COM_NUM_DEVICEPARAM_OILLEVEL_HYSTERESIS_TIME:
+        return &g_deviceParams.oilLevelHysteresisTime;
+    case COM_NUM_DEVICEPARAM_WATER_LEVEL_CORRECTION:
+        return &g_deviceParams.waterLevelCorrection;
+    case COM_NUM_DEVICEPARAM_LAST_OIL_CORRECTION_LEVEL:
+        return &g_deviceParams.lastOilCorrectionLevel;
+    case COM_NUM_DEVICEPARAM_TANK_GAS_PHASE_TEMPERATURE:
+        return &g_deviceParams.tankGasPhaseTemperature;
+    case COM_NUM_DEVICEPARAM_TAPE_EXPANSION_COEFFICIENT:
+        return &g_deviceParams.tapeExpansionCoefficient;
+    case COM_NUM_DEVICEPARAM_TAPE_CALIBRATION_TEMPERATURE:
+        return &g_deviceParams.tapeCalibrationTemperature;
 
     /* 兼容：旧调试指令仍然可能直接用这些 operanum 取指针 */
     case COM_NUM_CAL_OIL:

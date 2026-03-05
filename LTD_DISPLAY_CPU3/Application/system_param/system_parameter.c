@@ -68,6 +68,7 @@ struct ParameterMetadata param_meta[] = {
 {(uint8_t*)"液位测量方式",	0,	COM_NUM_DEVICEPARAM_LIQUIDLEVELMEASUREMENTMETHOD,	HOLDREGISTER_DEVICEPARAM_LIQUIDLEVELMEASUREMENTMETHOD,	2,	false,	0,	0,	NULL,	0,	0,	true,	TYPE_INT,	1,	ret_arr_word,	(uint8_t*)"LvlMeasMode"},
 {(uint8_t*)"液位跟随频率",	0,	COM_NUM_DEVICEPARAM_OILLEVEL_FREQUENCY,	HOLDREGISTER_DEVICEPARAM_OILLEVEL_FREQUENCY,	2,	false,	0,	0,	(uint8_t*)"HZ",	0,	0,	true,	TYPE_INT,	4,	NULL,	(uint8_t*)"FollowFreq"},
 {(uint8_t*)"液位跟随密度",	0,	COM_NUM_DEVICEPARAM_OILLEVEL_DENSITY,	HOLDREGISTER_DEVICEPARAM_OILLEVEL_DENSITY,	2,	false,	0,	0,	(uint8_t*)"kg/m3",	1,	0,	true,	TYPE_INT,	6,	NULL,	(uint8_t*)"FollowDens"},
+{(uint8_t*)"液位滞后时间",	0,	COM_NUM_DEVICEPARAM_OILLEVEL_HYSTERESIS_TIME,	HOLDREGISTER_DEVICEPARAM_OILLEVEL_HYSTERESIS_TIME,	2,	false,	0,	0,	(uint8_t*)"s",	0,	0,	true,	TYPE_INT,	5,	NULL,	(uint8_t*)"OilHysTime"},
 
 {(uint8_t*)"水位罐高",	0,	COM_NUM_DEVICEPARAM_WATER_TANK_HEIGHT,	HOLDREGISTER_DEVICEPARAM_WATER_TANK_HEIGHT,	2,	false,	0,	0,	NULL,	1,	0,	true,	TYPE_INT,	7,	NULL,	(uint8_t*)"WaterTankH"},
 {(uint8_t*)"水位测量方式",	0,	COM_NUM_DEVICEPARAM_WATER_LEVEL_MODE,	HOLDREGISTER_DEVICEPARAM_WATER_LEVEL_MODE,	2,	false,	0,	0,	NULL,	0,	0,	true,	TYPE_INT,	1,	NULL,	(uint8_t*)"WaterSenDiff"},
@@ -77,6 +78,7 @@ struct ParameterMetadata param_meta[] = {
 {(uint8_t*)"最大下行距离",	0,	COM_NUM_DEVICEPARAM_MAXDOWNDISTANCE,	HOLDREGISTER_DEVICEPARAM_MAXDOWNDISTANCE,	2,	false,	0,	0,	(uint8_t*)"mm",	1,	0,	true,	TYPE_INT,	5,	NULL,	(uint8_t*)"MaxDown"},
 {(uint8_t*)"零点电容",	0,	COM_NUM_DEVICEPARAM_ZERO_CAP,	HOLDREGISTER_DEVICEPARAM_ZERO_CAP,	2,	false,	0,	0,	NULL,	1,	0,	true,	TYPE_INT,	4,	NULL,	(uint8_t*)"ZeroCap"},
 {(uint8_t*)"水位稳定阈值",	0,	COM_NUM_DEVICEPARAM_WATER_STABLE_THRESHOLD,	HOLDREGISTER_DEVICEPARAM_WATER_STABLE_THRESHOLD,	2,	false,	0,	0,	(uint8_t*)"mm",	1,	0,	true,	TYPE_INT,	4,	NULL,	(uint8_t*)"Rsv15"},
+{(uint8_t*)"水位修正值",	0,	COM_NUM_DEVICEPARAM_WATER_LEVEL_CORRECTION,	HOLDREGISTER_DEVICEPARAM_WATER_LEVEL_CORRECTION,	2,	false,	0,	0,	(uint8_t*)"mm",	1,	0,	true,	TYPE_INT,	7,	NULL,	(uint8_t*)"WaterCorr"},
 
 {(uint8_t*)"罐底检测模式",	0,	COM_NUM_DEVICEPARAM_BOTTOM_DETECT_MODE,	HOLDREGISTER_DEVICEPARAM_BOTTOM_DETECT_MODE,	2,	true,	0,	3,	NULL,	0,	0,	true,	TYPE_INT,	1,	ret_arr_word,	(uint8_t*)"BottomMode"},
 {(uint8_t*)"罐底角度阈值",	0,	COM_NUM_DEVICEPARAM_BOTTOM_ANGLE_THRESHOLD,	HOLDREGISTER_DEVICEPARAM_BOTTOM_ANGLE_THRESHOLD,	2,	false,	0,	0,	NULL,	0,	0,	true,	TYPE_INT,	5,	NULL,	(uint8_t*)"BottomAngTh"},
@@ -141,6 +143,15 @@ struct ParameterMetadata param_meta[] = {
 {(uint8_t*)"电机上行距离",	0,	COM_NUM_DEVICEPARAM_MOTOR_COMMAND_DISTANCE,	HOLDREGISTER_DEVICEPARAM_MOTOR_COMMAND_DISTANCE,	2,	false,	0,	0,	(uint8_t*)"mm",	1,	0,	true,	TYPE_INT,	7,	NULL,	(uint8_t*)"MotorDist"},
 {(uint8_t*)"保留28",	0,	COM_NUM_DEVICEPARAM_RESERVED28,	HOLDREGISTER_DEVICEPARAM_RESERVED28,	2,	false,	0,	0,	NULL,	0,	0,	false,	TYPE_INT,	8,	NULL,	(uint8_t*)"Rsv28"},
 {(uint8_t*)"保留29",	0,	COM_NUM_DEVICEPARAM_RESERVED29,	HOLDREGISTER_DEVICEPARAM_RESERVED29,	2,	false,	0,	0,	NULL,	0,	0,	false,	TYPE_INT,	8,	NULL,	(uint8_t*)"Rsv29"},
+
+{(uint8_t*)"上次液位修正液位",	0,	COM_NUM_DEVICEPARAM_LAST_OIL_CORRECTION_LEVEL,	HOLDREGISTER_DEVICEPARAM_LAST_OIL_CORRECTION_LEVEL,	2,	false,	0,	0,	(uint8_t*)"mm",	1,	0,	true,	TYPE_INT,	7,	NULL,	(uint8_t*)"LastOilCorrLvl"},
+{(uint8_t*)"气相温度",	0,	COM_NUM_DEVICEPARAM_TANK_GAS_PHASE_TEMPERATURE,	HOLDREGISTER_DEVICEPARAM_TANK_GAS_PHASE_TEMPERATURE,	2,	false,	0,	0,	(uint8_t*)"C",	1,	0,	true,	TYPE_INT,	6,	NULL,	(uint8_t*)"GasTemp"},
+{(uint8_t*)"尺带膨胀系数",	0,	COM_NUM_DEVICEPARAM_TAPE_EXPANSION_COEFFICIENT,	HOLDREGISTER_DEVICEPARAM_TAPE_EXPANSION_COEFFICIENT,	2,	false,	0,	0,	NULL,	6,	0,	true,	TYPE_INT,	8,	NULL,	(uint8_t*)"TapeExpCoeff"},
+{(uint8_t*)"标定尺带温度",	0,	COM_NUM_DEVICEPARAM_TAPE_CALIBRATION_TEMPERATURE,	HOLDREGISTER_DEVICEPARAM_TAPE_CALIBRATION_TEMPERATURE,	2,	false,	0,	0,	(uint8_t*)"C",	1,	0,	true,	TYPE_INT,	6,	NULL,	(uint8_t*)"TapeCalTemp"},
+{(uint8_t*)"保留30",	0,	COM_NUM_DEVICEPARAM_RESERVED30,	HOLDREGISTER_DEVICEPARAM_RESERVED30,	2,	false,	0,	0,	NULL,	0,	0,	false,	TYPE_INT,	8,	NULL,	(uint8_t*)"Rsv30"},
+{(uint8_t*)"保留31",	0,	COM_NUM_DEVICEPARAM_RESERVED31,	HOLDREGISTER_DEVICEPARAM_RESERVED31,	2,	false,	0,	0,	NULL,	0,	0,	false,	TYPE_INT,	8,	NULL,	(uint8_t*)"Rsv31"},
+{(uint8_t*)"保留32",	0,	COM_NUM_DEVICEPARAM_RESERVED32,	HOLDREGISTER_DEVICEPARAM_RESERVED32,	2,	false,	0,	0,	NULL,	0,	0,	false,	TYPE_INT,	8,	NULL,	(uint8_t*)"Rsv32"},
+{(uint8_t*)"保留33",	0,	COM_NUM_DEVICEPARAM_RESERVED33,	HOLDREGISTER_DEVICEPARAM_RESERVED33,	2,	false,	0,	0,	NULL,	0,	0,	false,	TYPE_INT,	8,	NULL,	(uint8_t*)"Rsv33"},
 
 
 {(uint8_t*)"参数版本号",	0,	COM_NUM_DEVICEPARAM_PARAM_VERSION,	HOLDREGISTER_DEVICEPARAM_PARAM_VERSION,	2,	false,	0,	0,	NULL,	0,	0,	false,	TYPE_INT,	4,	NULL,	(uint8_t*)"ParamVer"},
@@ -300,6 +311,7 @@ void print_device_params(void)
     printf("  liquidLevelMethod          : %lu\r\n", (unsigned long)params.liquidLevelMeasurementMethod);
     printf("  oilLevelFrequency          : %lu\r\n", (unsigned long)params.oilLevelFrequency);
     printf("  oilLevelDensity            : %lu\r\n", (unsigned long)params.oilLevelDensity);
+    printf("  oilLevelHysteresisTime     : %lu\r\n", (unsigned long)params.oilLevelHysteresisTime);
 
     /* 水位 */
     printf("[Water Level]\r\n");
@@ -311,6 +323,7 @@ void print_device_params(void)
     printf("  maxDownDistance(0.1mm)     : %lu\r\n", (unsigned long)params.maxDownDistance);
     printf("  waterLevel_zero_cap        : %lu\r\n", (unsigned long)params.zero_cap);
     printf("  water_stable_threshold     : %lu\r\n", (unsigned long)params.water_stable_threshold);
+    printf("  waterLevelCorrection       : %lu\r\n", (unsigned long)params.waterLevelCorrection);
 
     /* 罐底/罐高 */
     printf("[Bottom / Tank Height]\r\n");
@@ -375,6 +388,12 @@ void print_device_params(void)
     printf("  singlePointMonitorPos      : %lu\r\n", (unsigned long)params.singlePointMonitoringPosition);
     printf("  densityDistributionOilLevel: %lu\r\n", (unsigned long)params.densityDistributionOilLevel);
     printf("  motorCommandDistance       : %lu\r\n", (unsigned long)params.motorCommandDistance);
+
+    printf("[Tape Compensation]\r\n");
+    printf("  lastOilCorrectionLevel     : %lu\r\n", (unsigned long)params.lastOilCorrectionLevel);
+    printf("  tankGasPhaseTemperature    : %lu\r\n", (unsigned long)params.tankGasPhaseTemperature);
+    printf("  tapeExpansionCoefficient   : %lu\r\n", (unsigned long)params.tapeExpansionCoefficient);
+    printf("  tapeCalibrationTemperature : %lu\r\n", (unsigned long)params.tapeCalibrationTemperature);
 
     /* 元信息/CRC */
     printf("[Meta]\r\n");
@@ -505,4 +524,3 @@ void PrintMeasurementResult(const MeasurementResult *m)
 
     printf("========================【打印结束】========================\r\n");
 }
-

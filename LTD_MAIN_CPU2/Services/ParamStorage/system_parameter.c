@@ -21,7 +21,7 @@ volatile MeasurementResult g_measurement = {0};   /* 测量结果 */
 volatile DeviceParameters  g_deviceParams = {0};  /* 设备参数 */
 
 /* 参数版本号和 magic 常量 */
-#define DEVICE_PARAM_VERSION   (1u)
+#define DEVICE_PARAM_VERSION   (2u)
 #define DEVICE_PARAM_MAGIC     (0x4C54444Du)  /* 'LTDM' */
 
 /*
@@ -128,21 +128,33 @@ int load_device_params(void)
 
 /*========================= 参数初始化 =========================*/
 
-/* 初始化设备参数模块 */
+/* 初始化设备参数模块：连续 3 次读取失败才恢复出厂 */
 void init_device_params(void)
 {
-    if (!load_device_params())
+    const int MAX_RETRY = 3;
+    int ok = 0;
+
+    for (int attempt = 1; attempt <= MAX_RETRY; attempt++)
     {
-        /* 如果加载失败, 恢复出厂参数并保存 */
+        if (load_device_params())
+        {
+            ok = 1;
+            break;
+        }
+        printf("设备参数加载失败: attempt=%d/%d\r\n", attempt, MAX_RETRY);
+        HAL_Delay(100);
+    }
+
+    if (!ok)
+    {
+        /* 连续失败 3 次 -> 恢复出厂参数并保存 */
         memset((void * volatile)&g_deviceParams, 0, sizeof(DeviceParameters));
-        RestoreFactoryParamsConfig(); /* 内部会调用 save_device_params */
+        RestoreFactoryParamsConfig(); /* 内部会调用 save_device_params() */
 
         g_measurement.device_status.error_code = PARAM_UNINITIALIZED;
-
-        printf("设备参数加载失败, 已恢复出厂设置\r\n");
+        printf("设备参数连续 %d 次加载失败, 已恢复出厂设置\r\n", MAX_RETRY);
     }
 }
-
 /*========================= 恢复出厂参数 =========================*/
 
 /*
@@ -271,6 +283,13 @@ void RestoreFactoryParamsConfig(void)
     g_deviceParams.densityDistributionOilLevel    = 0;
     g_deviceParams.motorCommandDistance           = 0;
 
+    g_deviceParams.oilLevelHysteresisTime         = 0;
+    g_deviceParams.waterLevelCorrection           = 0;
+    g_deviceParams.lastOilCorrectionLevel         = 0;
+    g_deviceParams.tankGasPhaseTemperature        = 0;
+    g_deviceParams.tapeExpansionCoefficient       = 0;
+    g_deviceParams.tapeCalibrationTemperature     = 0;
+
     /* ---------------- 元信息与校验字段 ---------------- */
     g_deviceParams.param_version = DEVICE_PARAM_VERSION;
     g_deviceParams.struct_size   = (uint32_t)sizeof(DeviceParameters);
@@ -339,6 +358,7 @@ void print_device_params(void)
     printf("  liquidLevelMethod          : %lu\r\n", (unsigned long)params.liquidLevelMeasurementMethod);
     printf("  oilLevelFrequency          : %lu\r\n", (unsigned long)params.oilLevelFrequency);
     printf("  oilLevelDensity            : %lu\r\n", (unsigned long)params.oilLevelDensity);
+    printf("  oilLevelHysteresisTime     : %lu\r\n", (unsigned long)params.oilLevelHysteresisTime);
 
     /* 水位 */
     printf("[Water Level]\r\n");
@@ -351,6 +371,7 @@ void print_device_params(void)
     printf("  zero_point_capacitance     : %lu\r\n", (unsigned long)params.zero_cap);
     printf("  waterLevel_zero_cap        : %lu\r\n", (unsigned long)params.zero_cap);
     printf("  water_stable_threshold     : %lu\r\n", (unsigned long)params.water_stable_threshold);
+    printf("  waterLevelCorrection       : %lu\r\n", (unsigned long)params.waterLevelCorrection);
 
     /* 罐底/罐高 */
     printf("[Bottom / Tank Height]\r\n");
@@ -415,6 +436,11 @@ void print_device_params(void)
     printf("  singlePointMonitorPos      : %lu\r\n", (unsigned long)params.singlePointMonitoringPosition);
     printf("  densityDistributionOilLevel: %lu\r\n", (unsigned long)params.densityDistributionOilLevel);
     printf("  motorCommandDistance       : %lu\r\n", (unsigned long)params.motorCommandDistance);
+    printf("[Tape Compensation]\r\n");
+    printf("  lastOilCorrectionLevel     : %lu\r\n", (unsigned long)params.lastOilCorrectionLevel);
+    printf("  tankGasPhaseTemperature    : %lu\r\n", (unsigned long)params.tankGasPhaseTemperature);
+    printf("  tapeExpansionCoefficient   : %lu\r\n", (unsigned long)params.tapeExpansionCoefficient);
+    printf("  tapeCalibrationTemperature : %lu\r\n", (unsigned long)params.tapeCalibrationTemperature);
 
     /* 元信息/CRC */
     printf("[Meta]\r\n");

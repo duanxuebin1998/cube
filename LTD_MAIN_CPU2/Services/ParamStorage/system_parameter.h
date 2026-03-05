@@ -452,8 +452,9 @@ typedef struct {
     uint32_t oilLevelThreshold;              // 液位跟随阈值
     uint32_t oilLevelHysteresisThreshold;    // 液位滞后阈值
     uint32_t liquidLevelMeasurementMethod;   // 液位测量方式 0 空气+液体频率/2 1：根据设置跟随频率跟随 2 根据设置密度跟随
-    uint32_t oilLevelFrequency;                 // 液位跟随频率
-    uint32_t oilLevelDensity;                 // 液位跟随密度
+    uint32_t oilLevelFrequency;              // 液位跟随频率
+    uint32_t oilLevelDensity;                // 液位跟随密度
+    uint32_t oilLevelHysteresisTime;         // oil level hysteresis time
 
     // ===================== 水位测量参数 =====================
     uint32_t water_tank_height;                 // 水位罐高(0.1mm)
@@ -464,6 +465,7 @@ typedef struct {
     uint32_t maxDownDistance;                   // 水位/罐底测量最大下行距离(0.1mm)
     uint32_t zero_cap;                          //零点电容值
     uint32_t water_stable_threshold;            //水位稳定阈值
+    uint32_t waterLevelCorrection;              // water level correction
 
     // ===================== 罐高/罐底测量 =====================
     uint32_t bottom_detect_mode;          // 罐底测量模式
@@ -542,6 +544,17 @@ typedef struct {
 
     uint32_t reserved28;                 // 预留
     uint32_t reserved29;                 // 预留（新增）
+
+    // ===================== Tape compensation =====================
+    uint32_t lastOilCorrectionLevel;     // level at last oil correction
+    uint32_t tankGasPhaseTemperature;    // tank gas phase temperature
+    uint32_t tapeExpansionCoefficient;   // tape expansion coefficient
+    uint32_t tapeCalibrationTemperature; // tape calibration temperature
+
+    uint32_t reserved30;                 // reserved
+    uint32_t reserved31;                 // reserved
+    uint32_t reserved32;                 // reserved
+    uint32_t reserved33;                 // reserved
 
     // ===================== 元信息与校验 =====================
     uint32_t param_version;              // 参数结构版本号
