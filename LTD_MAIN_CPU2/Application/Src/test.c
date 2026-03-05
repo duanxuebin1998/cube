@@ -15,6 +15,10 @@
 #include "measure_tank_height.h"
 #include "weight.h"
 #include "system_parameter.h"
+#include "sensor.h"
+#include <mb85rs2m.h>
+#include "my_crc.h"
+#include "ad5421.h"
 //电机小步进上行测试
 void motor_step_up_text(void) {
 	int i = 0;
@@ -304,5 +308,12 @@ void DSM_V2_Test_AllParams(void) {
     else printf("读取传感器号失败\r\n");
 
 	printf("===== DSM V2 通讯测试结束 =====\r\n\r\n");
+}
+//测试主函数
+void Test_main(void) {
+	Test_FRAM_ReadWrite(); //测试FRAM读写
+//	motor_text();
+	Test_Params_Storage(); //测试参数存储
+	CRC32_HAL_Test(); //CRC校验测试
 }
 

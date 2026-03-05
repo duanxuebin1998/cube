@@ -394,8 +394,8 @@ uint32_t motor_Init(void)
 
     Motor_UpdateVelocityFromParams();
 
-//    stpr_initStepper(&stepper, &hspi2, GPIOB, GPIO_PIN_12, 1, 14);
-    stpr_initStepper(&stepper, &hspi2, GPIOB, GPIO_PIN_12, 1, 16);
+    stpr_initStepper(&stepper, &hspi2, GPIOB, GPIO_PIN_12, 1, 14);
+//    stpr_initStepper(&stepper, &hspi2, GPIOB, GPIO_PIN_12, 1, 16);
     stpr_enableDriver(&stepper);
 
     printf("电机初始化 | max_motor_speed=%ld(×0.01) | velocity=%lu\r\n",

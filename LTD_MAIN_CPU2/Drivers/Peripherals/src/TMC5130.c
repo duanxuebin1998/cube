@@ -292,8 +292,8 @@ uint32_t stpr_waitMove(TMC5130TypeDef *tmc5130)
     uint32_t ret;
     while ((stpr_readInt(tmc5130, TMC5130_RAMPSTAT) & 0x400) != 0x400) {
         // 在运动过程中周期性检查防撞（比如称重超限等）
-//        ret = CheckWeightCollision();    // 防撞检测
-//        CHECK_ERROR(ret);                // 若有错误直接返回
+        ret = CheckWeightCollision();    // 防撞检测
+        CHECK_ERROR(ret);                // 若有错误直接返回
 
         // 检查 TMC5130 全局状态
         uint32_t gstat = stpr_readInt(tmc5130, TMC5130_GSTAT);
