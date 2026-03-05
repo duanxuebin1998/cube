@@ -235,6 +235,8 @@ typedef enum
     COM_NUM_DEVICEPARAM_OILLEVEL_FREQUENCY,             // 液位跟随频率值
     COM_NUM_DEVICEPARAM_OILLEVEL_DENSITY,               // 液位跟随密度值
 
+    COM_NUM_DEVICEPARAM_OILLEVEL_HYSTERESIS_TIME,      // 液位滞后时间
+
     /* ---------------- 水位测量参数 ---------------- */
     COM_NUM_DEVICEPARAM_WATER_TANK_HEIGHT,              // 水罐高/水参考高度
     COM_NUM_DEVICEPARAM_WATER_LEVEL_MODE,// 水位传感器距离差/安装偏差
@@ -244,6 +246,7 @@ typedef enum
     COM_NUM_DEVICEPARAM_MAXDOWNDISTANCE,                // 最大下行距离
     COM_NUM_DEVICEPARAM_ZERO_CAP,                     // 保留 14
     COM_NUM_DEVICEPARAM_WATER_STABLE_THRESHOLD,                     // 保留 15
+    COM_NUM_DEVICEPARAM_WATER_LEVEL_CORRECTION,        // 水位修正值
 
     /* ---------------- 罐底/罐高测量参数 ---------------- */
     COM_NUM_DEVICEPARAM_BOTTOM_DETECT_MODE,             // 罐底检测模式
@@ -322,6 +325,15 @@ typedef enum
 
     COM_NUM_DEVICEPARAM_RESERVED28,                     // 保留 28
     COM_NUM_DEVICEPARAM_RESERVED29,                     // 保留 29
+    COM_NUM_DEVICEPARAM_LAST_OIL_CORRECTION_LEVEL,     // 上次液位修正时液位值
+    COM_NUM_DEVICEPARAM_TANK_GAS_PHASE_TEMPERATURE,    // 储罐内气相温度
+    COM_NUM_DEVICEPARAM_TAPE_EXPANSION_COEFFICIENT,    // 尺带膨胀系数
+    COM_NUM_DEVICEPARAM_TAPE_CALIBRATION_TEMPERATURE,  // 标定尺带时温度
+
+    COM_NUM_DEVICEPARAM_RESERVED30,                     // 保留 30
+    COM_NUM_DEVICEPARAM_RESERVED31,                     // 保留 31
+    COM_NUM_DEVICEPARAM_RESERVED32,                     // 保留 32
+    COM_NUM_DEVICEPARAM_RESERVED33,                     // 保留 33
 
     /* ---------------- 元信息与校验 ---------------- */
     COM_NUM_DEVICEPARAM_PARAM_VERSION,                  // 参数版本号
@@ -423,4 +435,3 @@ uint8_t* ret_arr_word(void);
 void ClearPageNum(void);
 
 #endif
-

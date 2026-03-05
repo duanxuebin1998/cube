@@ -1,137 +1,253 @@
-# 仓库扫描报告（新人导览）
+# CUBE 仓库导览与新人上手指南
 
-## 1. 目录职责
-
-> 该仓库是多工程集合，主要围绕 STM32 固件，核心业务在 `LTD_MAIN_CPU2` 与 `LTD_DISPLAY_CPU3`。
-
-- `LTD_MAIN_CPU2/`
-  - **CPU2 主控板工程**：执行测量流程、设备参数管理、传感器/电机控制、主站 Modbus 对外通信。
-  - 典型分层：
-    - `Core/`：CubeMX 生成的启动与外设初始化。
-    - `Application/`：应用编排（`App_Init`、`App_MainLoop`、测量任务调度）。
-    - `Services/`：业务服务模块（Modbus、MotorControl、Sensor、ParamStorage 等）。
-    - `Drivers/Peripherals/`：具体器件驱动（TMC5130、AD5421、FRAM 等）。
-
-- `LTD_DISPLAY_CPU3/`
-  - **CPU3 显示/通讯板工程**：负责显示、串口协议适配、与 CPU2 的 Modbus 通信轮询、参数下发与回读。
-  - 结构上含：
-    - `Application/display/`：界面显示逻辑。
-    - `Communication/internal/main_board_modbus/`：与 CPU2 的内部 Modbus 通道。
-    - `Communication/external/*`：外部协议（DSM、Wartsila）适配。
-    - `Application/system_param/`：CPU3 本地参数 + FRAM 持久化 + 动态串口重配。
-
-- `LTD_MAIN_CPU2_TEXT/`
-  - 与 CPU2 主工程结构相近，通常用于文本/分支验证版本（与主线并行）。
-
-- `MOTOR_TMC5130/`, `STM32_TMC5130/`
-  - 电机/驱动芯片相关专项工程（TMC5130 验证与驱动实现）。
-
-- `measure_water/`, `WirelessHost_V4.1_init/`, `text/`
-  - 独立功能验证或历史阶段工程。
-
-- `old/`
-  - 历史版本归档，不建议作为当前开发入口。
+> 最后核对时间：2026-03-05  
+> 目标：帮助新同学在 1~2 天内建立“能编译、能跟流程、知道改哪里”的整体认知。
 
 ---
 
-## 2. 各 CPU 板通信关系（UART / RS485 / Modbus）
+## 1. 仓库定位
 
-## 2.1 CPU2（主控）侧
+该仓库是 **STM32 双板固件项目**，主线是两个工程：
 
-- CPU2 使用 `UART5` 作为 Modbus/RS485 通道：
-  - 串口初始化：`MX_UART5_Init()`，115200，DMA 收发。
-  - 发送完成回调中执行 RS485 方向切换（发完切回接收）。
-- Modbus 从站处理入口为 `HostCommuProcess()`：
-  - 校验地址、CRC。
-  - 支持功能码：03（读保持）、04（读输入）、10（写多寄存器）。
-  - 响应帧追加 CRC 后由 `huart5` DMA 发出。
+- `LTD_MAIN_CPU2/`：CPU2 主控测量板固件（测量流程、参数管理、设备控制、Modbus 从站）
+- `LTD_DISPLAY_CPU3/`：CPU3 显示通讯板固件（显示、外部协议适配、轮询 CPU2、参数下发）
 
-## 2.2 CPU3（显示板）侧
+顶层通过 CMake 管理目标选择，`CUBE_TARGET` 可选：
 
-- CPU3 同样使用 `UART5` 作为**与主板 CPU2 的内部链路**。
-- `cpu2_communicate.c` 中 `sendToCPU2()`：
-  - 置 RS485 发送方向。
-  - 经 `HAL_UART_Transmit_DMA(&huart5, ...)` 下发 Modbus 请求。
-  - 等待响应后调用 `HostCommuProcess(UART5_RX_BUF, UART5_RX_LEN)` 解析。
-- CPU3 与外部设备侧使用 3 路口：
-  - COM1 = USART6
-  - COM2 = USART2
-  - COM3 = USART3
-  - 由 `cpu3_comm_display_params` 中每口协议配置进行分发（DSM/Wartsila/LTD）。
-
-## 2.3 逻辑拓扑（简化）
-
-- 外部上位机/设备 ↔（COM1/2/3, RS485/UART）↔ **CPU3**
-- **CPU3** ↔（UART5 + RS485, Modbus RTU）↔ **CPU2**
-- **CPU2** ↔（SPI/UART/GPIO）↔ 传感器、电机驱动、FRAM、4-20mA 等外设
+- `LTD_MAIN_CPU2`
+- `LTD_DISPLAY_CPU3`
 
 ---
 
-## 3. 关键数据结构
+## 2. 当前仓库目录（以实际内容为准）
 
-## 3.1 `MeasurementResult`（测量结果聚合）
+根目录当前主要包含：
 
-定义于 `LTD_MAIN_CPU2/Services/ParamStorage/system_parameter.h`，是 CPU2 运行态测量结果总对象（全局 `g_measurement`）：
+- `LTD_MAIN_CPU2/`：CPU2 主工程
+- `LTD_DISPLAY_CPU3/`：CPU3 主工程
+- `docs/`：文档
+- `cmake/`：通用工具链配置
+- `tools/`：一键构建脚本
+- `old/`：历史归档
+- `WirelessHost_V4.1_init/`：历史/独立验证工程
+- `build/`：本地构建输出（可删除重建）
 
-- `device_status`：当前状态机状态、错误码、当前命令。
-- `debug_data`：编码器、位置、线缆、频率、温度、重量、姿态、电机状态等诊断数据。
-- `oil_measurement` / `water_measurement`：油位/水位结果。
-- `height_measurement`：实高相关值。
-- `single_point_measurement` / `single_point_monitoring`：单点测量/监测结果。
-- `density_distribution`：分布测量结果及多测点数组。
+说明：
 
-## 3.2 `DeviceParameters`（设备参数全集）
-
-同样定义于 `system_parameter.h`（全局 `g_deviceParams`，`#pragma pack(1)`），包含：
-
-- 控制入口：`command`、`powerOnDefaultCommand`。
-- 设备/传感器信息：`sensorType`、版本号等。
-- 机械与电机参数：轮周、速度、卷尺厚度等。
-- 测量算法参数：油位、水位、零点、分布测量、Wartsila 参数。
-- 输出参数：DO 阈值、4-20mA 量程与故障电流。
-- 校准/命令参数：校油位、校水位、单点位置、电机命令距离。
-- 元信息：`param_version`、`struct_size`、`magic`、`crc`（用于 FRAM 持久化校验）。
-
-> 对外协议本质是：通过寄存器读写把 `DeviceParameters` 与 `MeasurementResult` 在 CPU2/CPU3/上位机之间同步。
+- 历史版本文档里出现过的目录（如 `LTD_MAIN_CPU2_TEXT/`、`MOTOR_TMC5130/`、`measure_water/` 等）在当前仓库中已不存在或不在主线。
+- 新人开发入口请固定为 `LTD_MAIN_CPU2/` 与 `LTD_DISPLAY_CPU3/`。
 
 ---
 
-## 4. 启动流程（Reset → init → 任务调度）
+## 3. 系统架构与通信拓扑
 
-## 4.1 CPU2 启动主线
+### 3.1 双板职责
 
-1. **Reset/时钟与 HAL 初始化**（`main`）：
-   - `HAL_Init()` → `SystemClock_Config()`
-2. **外设初始化**：GPIO、DMA、ADC、DAC、多路 UART、SPI、TIM、CRC、IWDG。
-3. **应用初始化**：`App_Init()`
-   - 编码器、电机、HART、参数加载、称重、Modbus、故障信息、传感器类型识别。
-4. **任务调度**：`while(1) -> App_MainLoop()`
-   - 检查新命令（串口/协议侧触发）。
-   - 将命令映射为测量任务并调用 `ProcessMeasureCmd()`。
-   - 根据命令切换 `device_state` 并执行各测量子流程。
+- **CPU2（主控）**
+  - 执行测量命令与状态机
+  - 管理设备参数（FRAM 持久化）
+  - 控制传感器、电机、4-20mA、HART 等外设
+  - 对外暴露 Modbus 保持/输入寄存器
 
-## 4.2 CPU3 启动主线
+- **CPU3（显示通讯）**
+  - 处理屏幕与菜单
+  - 管理 COM1/COM2/COM3 的协议适配（DSM/Wartsila/LTD）
+  - 通过 UART5/RS485 轮询 CPU2（Modbus）
+  - 同步参数并展示测量结果
 
-1. `HAL_Init()` → `SystemClock_Config()`。
-2. 初始化 GPIO/DMA/UART/SPI/TIM/CRC/IWDG。
-3. `App_Init()`：
-   - 显示初始化与 LOGO。
-   - 从 FRAM 加载 CPU3 通讯显示参数。
-   - 按参数重配 COM1/2/3。
-   - 初始化外部协议栈（如 DSM）。
-4. `while(1) -> App_MainLoop()`：
-   - 处理 COM1/2/3 收包。
-   - 按端口协议分发并回包。
-   - 与 CPU2 进行轮询式 Modbus 数据同步。
-   - 在安全点应用 UART 动态重配。
+### 3.2 通信链路（简化）
+
+- 外部设备/上位机 ↔ CPU3（COM1/2/3，RS485/UART）
+- CPU3 ↔ CPU2（UART5 + RS485，Modbus RTU）
+- CPU2 ↔ 板载外设（SPI/UART/GPIO 等）
+
+### 3.3 Modbus 功能码
+
+CPU2 从站主路径支持：
+
+- `0x03` 读保持寄存器（参数）
+- `0x04` 读输入寄存器（测量结果/状态）
+- `0x10` 写多个保持寄存器（参数下发）
 
 ---
 
-## 5. 建议的阅读顺序（快速上手）
+## 4. 构建体系（必须先打通）
 
-1. `LTD_MAIN_CPU2/Core/Src/main.c`、`LTD_DISPLAY_CPU3/Core/Src/main.c`（总入口）
-2. 两侧 `Application/Src/app_main.c`（应用编排）
-3. `LTD_MAIN_CPU2/Application/Src/measure.c`（CPU2 任务分发核心）
-4. `LTD_MAIN_CPU2/Services/ParamStorage/system_parameter.h`（核心数据模型）
-5. `LTD_MAIN_CPU2/Services/Modbus/hostcommu.c` 与 `LTD_DISPLAY_CPU3/Communication/internal/main_board_modbus/cpu2_communicate.c`（双板通信主链路）
+### 4.1 工具链
+
+- `cmake >= 3.20`
+- `ninja`
+- `arm-none-eabi-*` 工具链（GCC）
+
+统一工具链文件：
+
+- `cmake/toolchain-arm-none-eabi.cmake`
+
+关键编译选项：
+
+- `-mcpu=cortex-m4 -mthumb -mfpu=fpv4-sp-d16 -mfloat-abi=hard`
+
+### 4.2 推荐构建方式（Preset）
+
+```bash
+cmake --preset cpu2-debug
+cmake --build --preset cpu2-debug
+
+cmake --preset cpu3-debug
+cmake --build --preset cpu3-debug
+```
+
+也可使用：
+
+- `tools/build_cpu2.sh`
+- `tools/build_cpu3.sh`
+
+---
+
+## 5. CPU2 代码主线（主控测量板）
+
+### 5.1 启动主流程
+
+1. `main()`：时钟与外设初始化
+2. `App_Init()`：业务初始化（编码器、电机、参数、通信等）
+3. `App_MainLoop()`：命令处理与测量调度
+
+### 5.2 核心模块分层
+
+- `Core/`：CubeMX 生成的硬件初始化与中断
+- `Application/`：应用调度（`app_main.c`、`measure.c`）
+- `Services/`
+  - `Modbus/`：协议处理与寄存器映射
+  - `ParamStorage/`：参数结构、FRAM 持久化、CRC
+  - `MotorControl/`、`Sensor/`、`Weight/` 等：业务服务
+- `Drivers/Peripherals/`：具体芯片驱动（TMC5130、AD5421、FRAM 等）
+
+### 5.3 串口收包进入业务路径
+
+- `UART5 IDLE + DMA` 收到一帧后进入 `HostCommuProcess()`（Modbus）
+- `USART1 IDLE + DMA` 触发文本命令接收，置位 `new_command_ready`
+- `App_MainLoop()` 中处理 `new_command_ready` 与 `g_deviceParams.command`
+
+---
+
+## 6. CPU3 代码主线（显示通讯板）
+
+### 6.1 启动主流程
+
+1. `main()`：时钟与外设初始化
+2. `App_Init()`：显示初始化、CPU3 本机参数加载、串口重配
+3. `App_MainLoop()`：COM1/2/3 分发处理 + 轮询 CPU2
+
+### 6.2 关键实现点
+
+- `Application/app_main.c`
+  - 协议分发入口（按每个 COM 口配置）
+  - 串口 busy/pending 发送控制
+  - 空闲时执行 `PollingInputData()` 轮询 CPU2
+- `Communication/internal/main_board_modbus/cpu2_communicate.c`
+  - 组包发送、等待响应、解析 CPU2 返回
+- `Application/system_param/cpu3_comm_display_params.c`
+  - CPU3 本地参数加载/保存 FRAM
+  - COM1/2/3 运行时重配（波特率、校验、协议）
+
+### 6.3 中断模型
+
+CPU3 使用统一的 `IDLE + DMA` 接收框架：
+
+- COM1/2/3：置 `comX_rx_ready`，主循环处理
+- UART5（到 CPU2）：根据 `wait_response` 机制接收应答
+
+---
+
+## 7. 跨板“数据契约”（最重要）
+
+### 7.1 两个核心结构
+
+- `DeviceParameters`：设备参数全集（控制、算法、输出、校验）
+- `MeasurementResult`：运行态结果全集（状态、调试、油水位、密度等）
+
+CPU2 全局对象：
+
+- `g_deviceParams`
+- `g_measurement`
+
+### 7.2 寄存器映射
+
+映射由以下文件共同定义：
+
+- `stateformodbus.h`：寄存器地址与布局
+- `dataanalysis_modbus.c`：
+  - 结构体 -> 寄存器
+  - 寄存器 -> 结构体
+
+修改任何参数/测量字段时，必须联动检查：
+
+1. 结构体定义
+2. 寄存器枚举/地址
+3. 读写映射代码
+4. CPU3 参数元数据（菜单、读写权限、显示）
+
+---
+
+## 8. 建议阅读顺序（新人 Day0）
+
+1. `LTD_MAIN_CPU2/Core/Src/main.c`
+2. `LTD_DISPLAY_CPU3/Core/Src/main.c`
+3. `LTD_MAIN_CPU2/Application/Src/app_main.c`
+4. `LTD_DISPLAY_CPU3/Application/app_main.c`
+5. `LTD_MAIN_CPU2/Application/Src/measure.c`
+6. `LTD_MAIN_CPU2/Services/ParamStorage/system_parameter.h`
+7. `LTD_MAIN_CPU2/Services/Modbus/stateformodbus.h`
+8. `LTD_MAIN_CPU2/Services/Modbus/dataanalysis_modbus.c`
+9. `LTD_MAIN_CPU2/Services/Modbus/hostcommu.c`
+10. `LTD_DISPLAY_CPU3/Communication/internal/main_board_modbus/cpu2_communicate.c`
+
+---
+
+## 9. 新人第一周建议（可执行）
+
+### Day 1：编译打通
+
+- 成功构建 `cpu2-debug` 和 `cpu3-debug`
+- 确认输出 `elf/hex/bin/map`
+
+### Day 2：跑通一条命令链路
+
+- 从 CPU3 下发一个简单写参数或命令
+- 跟到 CPU2 `HostCommuProcess()` 与 `ProcessMeasureCmd()`
+
+### Day 3：跑通一条参数链路
+
+- UI 改参数 -> CPU3 本地参数 -> 下发 CPU2 -> CPU2 持久化 FRAM
+
+### Day 4：理解中断与调度
+
+- 重点看 `IDLE + DMA + ready flag` 如何把数据从 ISR 交给主循环
+
+### Day 5：做一次“小闭环改动”
+
+- 新增或修改一个参数项，完整打通：
+  - 结构体
+  - 寄存器映射
+  - CPU3 参数元数据/显示
+  - 通信读写
+
+---
+
+## 10. 常见坑（提前规避）
+
+1. **只改结构体不改映射**：会导致寄存器错位、参数串位。  
+2. **忽略 CPU3 参数表**：UI 看起来改了，实际未同步/未下发。  
+3. **RS485 方向切换时机不对**：会造成偶发丢包。  
+4. **把历史目录当主线**：请以当前仓库实际目录和本文为准。  
+5. **把 `command` 当持久化参数长期保存**：CPU2 已有专门处理逻辑，注意不要破坏。
+
+---
+
+## 11. 相关文档
+
+- `docs/build_cpu2.md`
+- `docs/build_cpu3.md`
+
+建议新同学先看本导览，再看两份构建文档。
 
