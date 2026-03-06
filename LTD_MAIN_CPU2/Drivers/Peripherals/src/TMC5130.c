@@ -181,6 +181,7 @@ void stpr_left(TMC5130TypeDef *tmc5130, uint32_t velocity)
  */
 void stpr_stop(TMC5130TypeDef *tmc5130)
 {
+//	printf("stpr_stop\r\n");
     tmc5130_rotate(tmc5130, 0);
 }
 
@@ -391,11 +392,11 @@ void stpr_initStepper(TMC5130TypeDef *tmc5130,
     );
 
     // 基本加减速、速度参数（需根据实际机械系统调优）
-    stpr_writeInt(tmc5130, TMC5130_AMAX,   10 * 32);
-    stpr_writeInt(tmc5130, TMC5130_A1,     20 * 32);
+    stpr_writeInt(tmc5130, TMC5130_AMAX,   100 * 32);
+    stpr_writeInt(tmc5130, TMC5130_A1,     200 * 32);
     stpr_writeInt(tmc5130, TMC5130_V1,     800 * 32);
-    stpr_writeInt(tmc5130, TMC5130_D1,     20 * 32);
-    stpr_writeInt(tmc5130, DMAX,           10 * 32);
+    stpr_writeInt(tmc5130, TMC5130_D1,     200 * 32);
+    stpr_writeInt(tmc5130, DMAX,           100 * 32);
     stpr_writeInt(tmc5130, TMC5130_VSTOP,  0x0000000A);
     stpr_writeInt(tmc5130, TMC5130_VSTART, 0x00000005);
     stpr_writeInt(tmc5130, TMC5130_TZEROWAIT, 10000);

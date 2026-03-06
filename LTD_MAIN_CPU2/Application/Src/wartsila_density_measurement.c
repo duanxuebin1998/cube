@@ -7,8 +7,9 @@
 
 
 #include "wartsila_density_measurement.h"
-
-
+#include "measure_oilLevel.h"
+#include "ltd_sensor_communication.h"
+#include "measure_density.h"
 
 uint32_t motorMoveUpToPositionOrAir(float target_mm, Level_StateTypeDef *final_state);
 
@@ -116,7 +117,7 @@ uint32_t Wartsila_Density_SpreadMeasurement(DensityDistribution *dist)
     /* 再读一次当前位置，作为正式起点 */
     snapshot_sensor_pos_mm(&cur_mm);
     printf("分布测量起点位置确认：%.3fmm\n", cur_mm);
-
+    g_measurement.device_status.device_state = STATE_WARTSILA_DENSITY_MEASURING;
     /* 起始点如果一开始就在空气中，可以直接结束（说明下面都是空气或空罐） */
     Level_StateTypeDef st0 = determine_level_status();
     if (st0 == AIR) {
@@ -172,13 +173,13 @@ uint32_t Wartsila_Density_SpreadMeasurement(DensityDistribution *dist)
                    (unsigned long)(i + 1), cur_mm);
         }
         /* 在密度点采集前再次判断当前是否在油中
-                * 如果此时已经在空气中，则把当前位置当作液位值，结束分布测量
+                * 如果此时已经在空气中，则把当前位置-100mm当作液位值，结束分布测量
                 */
                {
                    Level_StateTypeDef st_cur = determine_level_status();
                    if (st_cur == AIR) {
                        if (!oil_level_found) {
-                           oil_level_mm    = cur_mm;
+                           oil_level_mm    = cur_mm-100.0f;
                            oil_level_found = true;
                        }
                        printf("分布测量：在采点位置检测到传感器在空气中，液位=%.3fmm，停止测量\n", oil_level_mm);
@@ -283,6 +284,7 @@ uint32_t Wartsila_Density_SpreadMeasurement(DensityDistribution *dist)
  */
 uint32_t motorMoveUpToPositionOrAir(float target_mm, Level_StateTypeDef *final_state)
 {
+	uint32_t hz = 0;
 	uint32_t ret = NO_ERROR;
     if (final_state) {
         *final_state = OIL;
@@ -318,6 +320,20 @@ uint32_t motorMoveUpToPositionOrAir(float target_mm, Level_StateTypeDef *final_s
     while (stpr_isMoving(&stepper)) {
 
         /* 1) 检测空气状态 */
+    	//如果传感器是LTD传感器
+		if (g_deviceParams.sensorType == LTD_SENSOR) {
+	    	ret = DSM_V2_Read_LevelFrequency(&hz);
+	    	if (ret != NO_ERROR) {
+	    		return ret;  // 读取失败直接返回错误码
+	    	}
+	    	if (hz == 0 || hz > g_deviceParams.oilLevelFrequency) {
+	    		 if (final_state) *final_state = AIR;//读到0或者异常频率认为是空气
+	            printf("motorMoveUpToPositionOrAir: 频率检测到到达液面，立即停止电机！\r\n");
+	            stpr_stop(&stepper);
+	    		break;  // 读到0也返回
+	    	}
+	    	 HAL_Delay(80);
+		}
         Level_StateTypeDef st = determine_level_status();
         if (final_state) *final_state = st;
 

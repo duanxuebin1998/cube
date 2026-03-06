@@ -15,13 +15,12 @@
 #include <stdlib.h>
 #include "measure_zero.h"
 #include "motor_ctrl.h"
+#include "dsm_sensor_communication.h"
+#include "encoder.h"
 // 全局变量：存储最终确定的罐底位置（编码器计数值）
 int32_t bottom_value = -100000000; // 初始值设为较大数值作为无效状态标识
 /* 全局/参数区：由寄存器或本机参数配置 */
 BottomDetectMode g_bottom_det_mode = BOTTOM_DET_BY_WEIGHT;
-
-/* 角度阈值：单位“度”，建议可配置 */
-float g_bottom_gyro_th_deg = 5.0f;
 
 static GyroZeroRef g_gyro_zero_ref = {0};
 // 函数原型声明
@@ -45,7 +44,7 @@ uint32_t SearchBottom(void)
     printf("罐底测量\t开始\r\n");
 
     /* -------------------- 零点检查 -------------------- */
-    if (g_measurement.device_status.zero_point_status == 1)
+    if ((g_measurement.device_status.zero_point_status == 1)&&(g_deviceParams.error_auto_back_zero==1))
     {
         printf("罐底测量\t设备需要回零点\r\n");
         ret = SearchZero();       // 执行回零点测量
@@ -136,45 +135,16 @@ uint32_t SearchBottom(void)
         CHECK_ERROR(ret);
     }
 
-    /*************** 精找阶段2 - 带重试 ***************/
-//    printf("罐底测量\t电机上行完成，准备第二次精找\r\n");
-//
-//    try_times = 0;
-//    while (try_times < 3)
-//    {
-//        try_times++;
-//        printf("罐底测量\t第二次精找第%d次尝试\r\n", try_times);
-//
-//        ret = SearchBottomPrecise();
-//
-//        if (ret == STATE_SWITCH)
-//        {
-//            printf("罐底测量\t检测到命令切换，中止第二次精找\r\n");
-//            break;
-//        }
-//
-//        if (ret == NO_ERROR)
-//        {
-//            printf("罐底测量\t第二次精找完成\r\n");
-//            break;
-//        }
-//        else
-//        {
-//            printf("罐底测量\t第二次精找失败:0x%lX\r\n", ret);
-//            HAL_Delay(1000);
-//        }
-//    }
-//
-//    if (ret != NO_ERROR)
-//    {
-//        printf("罐底测量\t第二次精找失败(尝试%d次)\r\n", try_times);
-//        CHECK_ERROR(ret);
-//    }
-
     /*************** 最终校验与记录 ***************/
     g_measurement.height_measurement.current_real_height = g_measurement.debug_data.cable_length;
     printf("罐底测量\t实高：%ld mm\r\n", g_measurement.debug_data.cable_length);
-
+    if(g_measurement.device_status.device_state == STATE_CALIBRATIONOILING)
+    {
+    	g_measurement.height_measurement.calibrated_liquid_level = g_measurement.debug_data.cable_length;
+		g_deviceParams.tankHeight = g_measurement.debug_data.cable_length +  g_deviceParams.liquid_sensor_distance_diff;
+		printf("罐底测量\t标定完成，罐高设置为：%ld mm\r\n", g_deviceParams.tankHeight);
+		update_sensor_height_from_encoder();	//更新罐高数据
+    }
     // 电机上行，完成流程
     ret = motorMoveAndWaitUntilStop(100, MOTOR_DIRECTION_UP);
     CHECK_ERROR(ret);
@@ -190,13 +160,15 @@ uint32_t SearchBottom(void)
  */
 static int SearchBottomRough() {
 	uint32_t ret;
-	ret = motorMove_down();  // 启动电机向下运动
-	CHECK_ERROR(ret); // 检查上行是否成功
+	MotorLostStep_Init();// 重置丢步检测计数器
 	// 持续监控重量状态，直到检测到罐底
 	while (check_bottom_status() == NORMAL) {
+		ret = motorMove_down();  // 启动电机向下运动
+		CHECK_ERROR(ret); // 检查上行是否成功
+
 		ret = Motor_CheckLostStep_AutoTiming(g_measurement.debug_data.cable_length);
 		CHECK_ERROR(ret); // 检查丢步检测是否成功
-		printf("罐底测量\t长距离寻找罐底\t{传感器位置}%.1f\t", (float)(g_measurement.debug_data.sensor_position)/10.0);
+		printf("罐底测量\t长距离寻找罐底\t{传感器位置}%.1f\t称重\t= %ld\t", (float)(g_measurement.debug_data.sensor_position)/10.0,weight_parament.current_weight);
 	}
 	ret = motorQuickStop(); // 到达零点后快速停止电机
 	CHECK_ERROR(ret); // 检查快速停止是否成功
@@ -225,42 +197,37 @@ static int SearchBottomRough() {
  */
 static int SearchBottomPrecise() {
 	uint32_t ret;
-	int v1flag = 0;  // 第一速度切换标志
-	int v2flag = 0;  // 第二速度切换标志
 	printf("罐底测量\t稳定重量：%d\r\n", weight_parament.stable_weight);
     if (g_measurement.debug_data.cable_length > 2000)
     {
-        ret = motorMoveAndWaitUntilStop(100.0, MOTOR_DIRECTION_UP);
+        ret = motorMoveAndWaitUntilStop(200.0, MOTOR_DIRECTION_UP);
         CHECK_ERROR(ret);
         printf("罐底测量\t上行完成\r\n");
     }
-	ret = motorMove_down();     // 启动电机向下运动
-	CHECK_ERROR(ret); // 检查上行是否成功
+    MotorLostStep_Init();// 重置丢步检测计数器
 	// 持续监控重量状态，直到检测到罐底
 	while (check_bottom_status() != BOTTOM) {
-		// 距离上次粗定位位置4096步时减速（约10cm）
-		if ((bottom_value-g_measurement.debug_data.cable_length  < 1000) && (v1flag == 0)) {
-			stpr_setVelocity(&stepper, 16 * 32 * 40); // 设置中等速度
-			printf("罐底测量\t速度变化：%d\r\n", 40); // 速度变化通知
-			v1flag = 1;  // 设置速度切换标志（只执行一次）
-		}
 
-		// 距离粗定位位置100步时再次减速（约2.3mm）
-		if ((bottom_value-g_measurement.debug_data.cable_length < 100) && (v2flag == 0)) {
-			stpr_setVelocity(&stepper, 16 * 32 * 2);  // 设置慢速
-			printf("罐底测量\t速度变化：%d\r\n", 2); // 速度变化通知
-			v2flag = 1;  // 设置速度切换标志（只执行一次）
-		}
-		// 距离粗定位位置100步时再次减速（约2.3mm）
+		ret = motorMove_down();  // 启动电机向下运动
+		CHECK_ERROR(ret); // 检查上行是否成功
+
 		if (bottom_value-g_measurement.debug_data.cable_length < -100)  {
 			printf("罐底测量\tt精确寻找罐底未找到罐底\r\n");
 			RETURN_ERROR(MEASUREMENT_WEIGHT_DOWN_FAIL); // 如果编码器位置异常，返回错误
 		}
-//		ret = CheckWeightCollision();
-//		CHECK_ERROR(ret); // 检查碰撞检测是否成功
+		else if (bottom_value-g_measurement.debug_data.cable_length < 100) {
+			g_measurement.debug_data.motor_speed = 10;
+		}
+		else if (bottom_value-g_measurement.debug_data.cable_length  < 300) {
+			g_measurement.debug_data.motor_speed = 40;
+		}
+		else if (bottom_value-g_measurement.debug_data.cable_length  < 3000)  {
+			g_measurement.debug_data.motor_speed = 100;
+		}
+
 		ret = Motor_CheckLostStep_AutoTiming(g_measurement.debug_data.cable_length);
 		CHECK_ERROR(ret); // 检查丢步检测是否成功
-		printf("罐底测量\t精确寻找罐底\t{传感器位置}%.1f\t", (float)(g_measurement.debug_data.sensor_position)/10.0);
+		printf("罐底测量\t精确寻找罐底\t{传感器位置}%.1f\t速度(0.01m/min)\t%lu\t", (float)(g_measurement.debug_data.sensor_position)/10.0f, (unsigned long)g_measurement.debug_data.motor_speed);
 	}
 	ret = motorQuickStop();
 	CHECK_ERROR(ret); // 检查快速停止是否成功
@@ -285,59 +252,93 @@ uint32_t Bottom_SaveGyroZeroRef(void)
     return NO_ERROR;
 }
 
-
 /**
  * @brief 罐底状态检测（不锁存）
  * @return BOTTOM（到达罐底）或 NORMAL（未到罐底）
+ *
+ * 判定方式：
+ *  - g_deviceParams.bottom_detect_mode == 0 : 称重阈值
+ *  - g_deviceParams.bottom_detect_mode != 0 : 陀螺仪角度阈值
+ *
+ * 阈值来源：
+ *  - 称重阈值：g_deviceParams.bottom_weight_threshold
+ *  - 角度阈值：g_deviceParams.bottom_angle_threshold
  */
 Weight_StateTypeDef check_bottom_status(void)
 {
-    /* -------- 方式1：称重阈值 -------- */
-    if (g_bottom_det_mode == BOTTOM_DET_BY_WEIGHT) {
+	int32_t cur_weight	= (int32_t)weight_parament.current_weight;
+	int32_t stable_weight	= (int32_t)weight_parament.stable_weight;
+	int32_t full_weight	= (int32_t)weight_parament.full_weight;
 
-        int lower_limit = BOTTOM_WEIGHT_THRESHOLD;
-        int current     = weight_parament.current_weight;
+	int32_t diff = cur_weight - stable_weight;
 
-        Weight_StateTypeDef state =
-            (current < lower_limit) ? BOTTOM : NORMAL;
+	uint32_t motor_dir = (uint32_t)g_measurement.debug_data.motor_state;
 
-        printf("罐底检测(称重) | 当前:%d | 阈值:%d | 状态:%s\r\n",
-               current,
-               lower_limit,
-               (state == BOTTOM) ? "到达罐底" : "正常");
+	/* 尺带长度/位置（debug_data: 0.1mm） */
+	float cable_mm	= g_measurement.debug_data.cable_length / 10.0f;
+	float sensor_mm	= g_measurement.debug_data.sensor_position / 10.0f;
 
-        return state;
-    }
+	/* ==========================
+	 *  保护：零点附近不做罐底检测
+	 * ========================== */
+	if (cable_mm < (float)g_deviceParams.weight_ignore_zone/10.0) {
+		printf("称重跳过 | 原因:零点保护 | dir=%lu cur=%ld stable=%ld diff=%+ld full=%ld cable=%.1f pos=%.1f | maxZeroDev=%lu\r\n",
+				(unsigned long)motor_dir,
+				(long)cur_weight,
+				(long)stable_weight,
+				(long)diff,
+				(long)full_weight,
+				cable_mm,
+				sensor_mm,
+				(unsigned long)g_deviceParams.weight_ignore_zone);
+		return NO_ERROR;
+	}
+	/* -------- 方式1：称重阈值（mode=0） -------- */
+	if (g_deviceParams.bottom_detect_mode == 0) {
 
-    /* -------- 方式2：陀螺仪角度变化（不锁存） -------- */
-    if (!g_gyro_zero_ref.valid) {
-        printf("罐底检测(陀螺仪) | 零点基准无效\r\n");
-        return NORMAL;
-    }
+		int lower_limit = (int)g_deviceParams.bottom_weight_threshold;
+		int current = (int)weight_parament.current_weight;
 
-    float ax = 0.0f, ay = 0.0f;
-    uint32_t ret = Read_Gyro_Angle(&ax, &ay);
-    if (ret != NO_ERROR) {
-        printf("罐底检测(陀螺仪) | 读取失败 ret=%lu\r\n",
-               (unsigned long)ret);
-        return NORMAL;
-    }
+		Weight_StateTypeDef state = (current < lower_limit) ? BOTTOM : NORMAL;
 
-    float dx = fabsf(ax - g_gyro_zero_ref.x0_deg);
-    float dy = fabsf(ay - g_gyro_zero_ref.y0_deg);
-    float dsum = dx + dy;
+		printf("罐底检测(称重) | 当前:%d | 阈值:%d | 状态:%s\r\n",
+				current,
+				lower_limit,
+				(state == BOTTOM) ? "到达罐底" : "正常");
 
-    Weight_StateTypeDef state =
-        (dsum > g_bottom_gyro_th_deg) ? BOTTOM : NORMAL;
+		return state;
+	}
 
-    printf("罐底检测(陀螺仪) | X=%.2f Y=%.2f | X0=%.2f Y0=%.2f | "
-           "dX=%.2f dY=%.2f sum=%.2f | th=%.2f | 状态:%s\r\n",
-           ax, ay,
-           g_gyro_zero_ref.x0_deg, g_gyro_zero_ref.y0_deg,
-           dx, dy, dsum,
-           g_bottom_gyro_th_deg,
-           (state == BOTTOM) ? "到达罐底" : "正常");
+	/* -------- 方式2：陀螺仪角度变化（mode!=0，不锁存） -------- */
+	if (!g_gyro_zero_ref.valid) {
+		printf("罐底检测(陀螺仪) | 零点基准无效\r\n");
+//		return NORMAL;
+	}
 
-    return state;
+	float ax = 0.0f, ay = 0.0f;
+	uint32_t ret = Read_Gyro_Angle(&ax, &ay);
+	if (ret != NO_ERROR) {
+		printf("罐底检测(陀螺仪) | 读取失败 ret=%lu\r\n", (unsigned long)ret);
+		return NORMAL;
+	}
+
+	float dx = fabsf(ax - g_gyro_zero_ref.x0_deg);
+	float dy = fabsf(fabsf(ay) - fabsf(g_gyro_zero_ref.y0_deg));
+	float dsum = dx + dy;
+
+	float th = (float)g_deviceParams.bottom_angle_threshold;
+
+	Weight_StateTypeDef state = (dsum > th) ? BOTTOM : NORMAL;
+
+	printf("罐底检测(称重)%d (陀螺仪) | X=%.2f Y=%.2f | X0=%.2f Y0=%.2f | "
+		   "dX=%.2f dY=%.2f sum=%.2f | th=%.2f | 状态:%s\r\n",
+			(int)weight_parament.current_weight,
+			ax, ay,
+			g_gyro_zero_ref.x0_deg, g_gyro_zero_ref.y0_deg,
+			dx, dy, dsum,
+			th,
+			(state == BOTTOM) ? "到达罐底" : "正常");
+
+	return state;
 }
 

@@ -8,11 +8,10 @@
 #ifndef INC_WEIGHT_H_
 #define INC_WEIGHT_H_
 
-#include "as5145.h"
+#include "AS5145.h"
 #include "system_parameter.h"
 //#include "motor_ctrl.h"
 
-#define ZERO_WEIGHT_THRESHOLD 70
 #define IMPACT_WEIGHT_THRESHOLD 4000.0
 typedef enum {
 	NORMAL, IMPACT, ZERO, BOTTOM

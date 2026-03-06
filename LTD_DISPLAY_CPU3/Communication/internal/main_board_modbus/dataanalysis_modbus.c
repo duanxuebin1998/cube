@@ -8,6 +8,11 @@
 #include <float.h>
 #include "system_parameter.h"
 #include "cpu2_communicate.h"
+#include "cpu3_comm_display_params.h"
+#include <math.h>     // for pow()
+
+int ywj_hold_analysis_data(int startadd,int rgscnt);
+
 /* ===================== 通用寄存器读写函数 ===================== */
 
 /* 写入 uint32_t 到寄存器数组（高 16 位在前，低 16 位在后） */
@@ -46,294 +51,373 @@ static inline float read_float_from_regs(const uint16_t *regs, uint16_t addr) {
 	return value;
 }
 
+
 /* ===================== 参数结构体 <-> 保持寄存器映射 ===================== */
 
 /*----------------------------------------------------------------
  * 将 g_deviceParams 写入保持寄存器数组
  * HoldingRegisterArray: 外部保持寄存器缓存区, 元素类型为 uint16_t
  *---------------------------------------------------------------*/
-void WriteDeviceParamsToHoldingRegisters(uint16_t *HoldingRegisterArray) {
-	if (HoldingRegisterArray == NULL) {
-		return;
-	}
-
-	/* 指令 */
-	write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_COMMAND, (uint32_t) g_deviceParams.command);
-
-	/* 基础参数 */
-	write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_TANKHEIGHT, g_deviceParams.tankHeight);
-	write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_BLINDZONE, g_deviceParams.blindZone);
-	write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_WATER_BLINDZONE, g_deviceParams.waterBlindZone);
-	write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_ENCODER_WHEEL_CIRCUMFERENCE_MM, g_deviceParams.encoder_wheel_circumference_mm);
-	write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_MAX_MOTOR_SPEED, g_deviceParams.max_motor_speed);
-	write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_SENSORTYPE, g_deviceParams.sensorType);
-	write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_SENSORID, g_deviceParams.sensorID);
-	write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_SENSOR_SOFTWARE_VERSION, g_deviceParams.sensorSoftwareVersion);
-	write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_SOFTWAREVERSION, g_deviceParams.softwareVersion);
-	write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_POWER_ON_DEFAULT_COMMAND, (uint32_t) g_deviceParams.powerOnDefaultCommand);
-	write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_FINDZERO_DOWN_DISTANCE, g_deviceParams.findZeroDownDistance);
-	write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_FIRST_LOOP_CIRCUMFERENCE_MM, g_deviceParams.first_loop_circumference_mm);
-	write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_TAPE_THICKNESS_MM, g_deviceParams.tape_thickness_mm);
-	write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_RESERVED1, g_deviceParams.reserved1);
-	write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_RESERVED2, g_deviceParams.reserved2);
-	write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_RESERVED3, g_deviceParams.reserved3);
-
-	/* 称重参数 */
-	write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_EMPTY_WEIGHT, g_deviceParams.empty_weight);
-	write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_FULL_WEIGHT, g_deviceParams.full_weight);
-	write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_WEIGHT_UPPER_LIMIT_RATIO, g_deviceParams.weight_upper_limit_ratio);
-	write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_WEIGHT_LOWER_LIMIT_RATIO, g_deviceParams.weight_lower_limit_ratio);
-	write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_EMPTY_WEIGHT_UPPER_LIMIT, g_deviceParams.empty_weight_upper_limit);
-	write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_EMPTY_WEIGHT_LOWER_LIMIT, g_deviceParams.empty_weight_lower_limit);
-	write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_FULL_WEIGHT_UPPER_LIMIT, g_deviceParams.full_weight_upper_limit);
-	write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_FULL_WEIGHT_LOWER_LIMIT, g_deviceParams.full_weight_lower_limit);
-	write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_RESERVED4, g_deviceParams.reserved4);
-	write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_RESERVED5, g_deviceParams.reserved5);
-
-	/* 指令参数 */
-	write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_CALIBRATE_OIL_LEVEL, g_deviceParams.calibrateOilLevel);
-	write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_CALIBRATE_WATER_LEVEL, g_deviceParams.calibrateWaterLevel);
-	write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_SP_MEAS_POSITION, g_deviceParams.singlePointMeasurementPosition);
-	write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_SP_MONITOR_POSITION, g_deviceParams.singlePointMonitoringPosition);
-	write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_DENSITY_DISTRIBUTION_OIL_LEVEL, g_deviceParams.densityDistributionOilLevel);
-	write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_MOTOR_COMMAND_DISTANCE, g_deviceParams.motorCommandDistance);
-	write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_RESERVED6, g_deviceParams.reserved6);
-	write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_RESERVED7, g_deviceParams.reserved7);
-
-	/* 密度与温度修正 */
-	write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_DENSITYCORRECTION, g_deviceParams.densityCorrection);
-	write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_TEMPERATURECORRECTION, g_deviceParams.temperatureCorrection);
-
-	/* 分布测量参数 */
-	write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_REQUIREBOTTOMMEASUREMENT, g_deviceParams.requireBottomMeasurement);
-	write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_REQUIREWATERMEASUREMENT, g_deviceParams.requireWaterMeasurement);
-	write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_REQUIRESINGLEPOINTDENSITY, g_deviceParams.requireSinglePointDensity);
-	write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_SPREADMEASUREMENTORDER, g_deviceParams.spreadMeasurementOrder);
-	write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_SPREADMEASUREMENTMODE, g_deviceParams.spreadMeasurementMode);
-	write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_SPREADMEASUREMENTCOUNT, g_deviceParams.spreadMeasurementCount);
-	write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_SPREADMEASUREMENTDISTANCE, g_deviceParams.spreadMeasurementDistance);
-	write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_SPREADTOPLIMIT, g_deviceParams.spreadTopLimit);
-	write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_SPREADBOTTOMLIMIT, g_deviceParams.spreadBottomLimit);
-	write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_SPREAD_POINT_HOVER_TIME, g_deviceParams.spreadPointHoverTime);
-	write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_RESERVED8, g_deviceParams.reserved8);
-	write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_RESERVED9, g_deviceParams.reserved9);
-
-	/* Wartsila 密度区间测量参数 */
-	write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_WARTSILA_UPPER_DENSITY_LIMIT, g_deviceParams.wartsila_upper_density_limit);
-	write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_WARTSILA_LOWER_DENSITY_LIMIT, g_deviceParams.wartsila_lower_density_limit);
-	write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_WARTSILA_DENSITY_INTERVAL, g_deviceParams.wartsila_density_interval);
-	write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_WARTSILA_MAX_HEIGHT_ABOVE_SURFACE, g_deviceParams.wartsila_max_height_above_surface);
-
-	/* 水位测量参数 */
-	write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_WATERLEVELCORRECTION, g_deviceParams.waterLevelCorrection);
-	write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_MAXDOWNDISTANCE, g_deviceParams.maxDownDistance);
-	write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_RESERVED10, g_deviceParams.reserved10);
-
-	/* 实高测量参数 */
-	write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_REFRESHTANKHEIGHTFLAG, g_deviceParams.refreshTankHeightFlag);
-	write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_MAXTANKHEIGHTDEVIATION, g_deviceParams.maxTankHeightDeviation);
-	write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_INITIALTANKHEIGHT, g_deviceParams.initialTankHeight);
-	write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_CURRENTTANKHEIGHT, g_deviceParams.currentTankHeight);
-
-	/* 液位测量参数 */
-	write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_OILLEVELTHRESHOLD, g_deviceParams.oilLevelThreshold);
-	write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_OILLEVEL_HYSTERESIS_THRESHOLD, g_deviceParams.oilLevelHysteresisThreshold);
-	write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_LIQUIDLEVELMEASUREMENTMETHOD, g_deviceParams.liquidLevelMeasurementMethod);
-
-	/* 报警 DO */
-	write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_ALARM_HIGH_DO, g_deviceParams.AlarmHighDO);
-	write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_ALARM_LOW_DO, g_deviceParams.AlarmLowDO);
-	write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_THIRD_STATE_THRESHOLD, g_deviceParams.ThirdStateThreshold);
-
-	/* 4-20mA 输出 AO */
-	write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_CURRENT_RANGE_START_mA, g_deviceParams.CurrentRangeStart_mA);
-	write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_CURRENT_RANGE_END_mA, g_deviceParams.CurrentRangeEnd_mA);
-	write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_ALARM_HIGH_AO, g_deviceParams.AlarmHighAO);
-	write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_ALARM_LOW_AO, g_deviceParams.AlarmLowAO);
-	write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_INITIAL_CURRENT_mA, g_deviceParams.InitialCurrent_mA);
-	write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_AO_HIGH_CURRENT_mA, g_deviceParams.AOHighCurrent_mA);
-	write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_AO_LOW_CURRENT_mA, g_deviceParams.AOLowCurrent_mA);
-	write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_FAULT_CURRENT_mA, g_deviceParams.FaultCurrent_mA);
-	write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_DEBUG_CURRENT_mA, g_deviceParams.DebugCurrent_mA);
-
-	/* 元信息和 CRC */
-	write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_PARAM_VERSION, g_deviceParams.param_version);
-	write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_STRUCT_SIZE, g_deviceParams.struct_size);
-	write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_MAGIC, g_deviceParams.magic);
-	write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_CRC, g_deviceParams.crc);
-}
-
-/* 解析03功能码保持寄存器数据 */
-void AnalysisHoldRegister(void)
+void WriteDeviceParamsToHoldingRegisters(uint16_t *HoldingRegisterArray)
 {
-    int index = 0;
-
-    for(index = 0;index < param_metaAmount;index++)
-    {
-        if(param_meta[index].data_type == TYPE_INT)
-        {
-            param_meta[index].val = ywj_hold_analysis_data(param_meta[index].startadd,param_meta[index].rgstcnt);
-            param_meta[index].val += param_meta[index].offset;
-//            printf("Hold Reg %s: %d\n",param_meta[index].name,param_meta[index].val);
-        }
-        else if(param_meta[index].data_type == TYPE_FLOAT)
-        {
-            union utof tmp_f;
-            tmp_f.u = ywj_hold_analysis_data(param_meta[index].startadd,param_meta[index].rgstcnt);
-            tmp_f.f *= pow(10,param_meta[index].point);
-            param_meta[index].val = tmp_f.f;
-        }
-        else if(param_meta[index].data_type == TYPE_DOUBLE)
-        {
-            union utod tmp_d;
-            tmp_d.u[1] = ywj_hold_analysis_data(param_meta[index].startadd,param_meta[index].rgstcnt / 2);
-            tmp_d.u[0] = ywj_hold_analysis_data(param_meta[index].startadd + 2,param_meta[index].rgstcnt / 2);
-            tmp_d.d *= pow(10,param_meta[index].point);
-            param_meta[index].val = tmp_d.d;
-        }
+    if (HoldingRegisterArray == NULL) {
+        return;
     }
+
+    /* 指令 */
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_COMMAND, (uint32_t)g_deviceParams.command);
+
+    /* ===================== 基础参数 ===================== */
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_SENSORTYPE,            g_deviceParams.sensorType);
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_SENSORID,              g_deviceParams.sensorID);
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_SENSOR_SOFTWARE_VERSION,g_deviceParams.sensorSoftwareVersion);
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_SOFTWAREVERSION,       g_deviceParams.softwareVersion);
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_POWER_ON_DEFAULT_COMMAND,(uint32_t)g_deviceParams.powerOnDefaultCommand);
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_ERROR_AUTO_BACK_ZERO,  g_deviceParams.error_auto_back_zero);
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_ERROR_STOP_MEASUREMENT,g_deviceParams.error_stop_measurement);
+
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_RESERVED1, g_deviceParams.reserved1);
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_RESERVED2, g_deviceParams.reserved2);
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_RESERVED3, g_deviceParams.reserved3);
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_RESERVED4, g_deviceParams.reserved4);
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_RESERVED5, g_deviceParams.reserved5);
+
+    /* ===================== 电机与编码器参数 ===================== */
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_ENCODER_WHEEL_CIRCUMFERENCE_MM, g_deviceParams.encoder_wheel_circumference_mm);
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_MAX_MOTOR_SPEED,                g_deviceParams.max_motor_speed);
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_FIRST_LOOP_CIRCUMFERENCE_MM,    g_deviceParams.first_loop_circumference_mm);
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_TAPE_THICKNESS_MM,              g_deviceParams.tape_thickness_mm);
+
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_RESERVED6, g_deviceParams.reserved6);
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_RESERVED7, g_deviceParams.reserved7);
+
+    /* ===================== 称重参数 ===================== */
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_EMPTY_WEIGHT,             g_deviceParams.empty_weight);
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_EMPTY_WEIGHT_UPPER_LIMIT, g_deviceParams.empty_weight_upper_limit);
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_EMPTY_WEIGHT_LOWER_LIMIT, g_deviceParams.empty_weight_lower_limit);
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_FULL_WEIGHT,              g_deviceParams.full_weight);
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_FULL_WEIGHT_UPPER_LIMIT,  g_deviceParams.full_weight_upper_limit);
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_FULL_WEIGHT_LOWER_LIMIT,  g_deviceParams.full_weight_lower_limit);
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_WEIGHT_UPPER_LIMIT_RATIO, g_deviceParams.weight_upper_limit_ratio);
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_WEIGHT_LOWER_LIMIT_RATIO, g_deviceParams.weight_lower_limit_ratio);
+
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_RESERVED8, g_deviceParams.reserved8);
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_RESERVED9, g_deviceParams.reserved9);
+
+    /* ===================== 零点测量 ===================== */
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_ZERO_WEIGHT_THRESHOLD_RATIO, g_deviceParams.zero_weight_threshold_ratio);
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_WEIGHT_IGNORE_ZONE,          g_deviceParams.weight_ignore_zone);
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_MAX_ZERO_DEVIATION_DISTANCE, g_deviceParams.max_zero_deviation_distance);
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_FINDZERO_DOWN_DISTANCE,      g_deviceParams.findZeroDownDistance);
+
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_RESERVED10, g_deviceParams.reserved10);
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_RESERVED11, g_deviceParams.reserved11);
+
+    /* ===================== 液位测量 ===================== */
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_TANKHEIGHT,                  g_deviceParams.tankHeight);
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_LIQUID_SENSOR_DISTANCE_DIFF, g_deviceParams.liquid_sensor_distance_diff);
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_BLINDZONE,                   g_deviceParams.blindZone);
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_OILLEVELTHRESHOLD,           g_deviceParams.oilLevelThreshold);
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_OILLEVEL_HYSTERESIS_THRESHOLD,g_deviceParams.oilLevelHysteresisThreshold);
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_LIQUIDLEVELMEASUREMENTMETHOD,g_deviceParams.liquidLevelMeasurementMethod);
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_OILLEVEL_FREQUENCY, g_deviceParams.oilLevelFrequency);
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_OILLEVEL_DENSITY, g_deviceParams.oilLevelDensity);
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_OILLEVEL_HYSTERESIS_TIME,    g_deviceParams.oilLevelHysteresisTime);
+
+    /* ===================== 水位测量参数 ===================== */
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_WATER_TANK_HEIGHT,                g_deviceParams.water_tank_height);
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_WATER_LEVEL_MODE,                 g_deviceParams.water_level_mode);
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_WATER_BLINDZONE,                  g_deviceParams.waterBlindZone);
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_WATER_CAP_THRESHOLD,              g_deviceParams.water_cap_threshold);
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_WATER_CAP_HYSTERESIS,             g_deviceParams.water_cap_hysteresis);
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_MAXDOWNDISTANCE,                  g_deviceParams.maxDownDistance);
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_ZERO_CAP,                         g_deviceParams.zero_cap);
+
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_WATER_STABLE_THRESHOLD, g_deviceParams.water_stable_threshold);
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_WATER_LEVEL_CORRECTION,      g_deviceParams.waterLevelCorrection);
+
+    /* ===================== 罐高/罐底测量 ===================== */
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_BOTTOM_DETECT_MODE,     g_deviceParams.bottom_detect_mode);
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_BOTTOM_ANGLE_THRESHOLD, g_deviceParams.bottom_angle_threshold);
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_BOTTOM_WEIGHT_THRESHOLD,g_deviceParams.bottom_weight_threshold);
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_REFRESH_TANKHEIGHT_FLAG,  g_deviceParams.refreshTankHeightFlag);
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_MAX_TANKHEIGHT_DEVIATION, g_deviceParams.maxTankHeightDeviation);
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_INITIAL_TANKHEIGHT,       g_deviceParams.initialTankHeight);
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_CURRENT_TANKHEIGHT,       g_deviceParams.currentTankHeight);
+
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_RESERVED16, g_deviceParams.reserved16);
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_RESERVED17, g_deviceParams.reserved17);
+
+    /* ===================== 密度和温度修正参数 ===================== */
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_DENSITYCORRECTION,     g_deviceParams.densityCorrection);
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_TEMPERATURECORRECTION, g_deviceParams.temperatureCorrection);
+
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_RESERVED18, g_deviceParams.reserved18);
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_RESERVED19, g_deviceParams.reserved19);
+
+    /* ===================== 分布/区间测量参数 ===================== */
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_REQUIREBOTTOMMEASUREMENT,    g_deviceParams.requireBottomMeasurement);
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_REQUIREWATERMEASUREMENT,     g_deviceParams.requireWaterMeasurement);
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_REQUIRESINGLEPOINTDENSITY,   g_deviceParams.requireSinglePointDensity);
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_SPREADMEASUREMENTORDER,      g_deviceParams.spreadMeasurementOrder);
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_SPREADMEASUREMENTMODE,       g_deviceParams.spreadMeasurementMode);
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_SPREADMEASUREMENTCOUNT,      g_deviceParams.spreadMeasurementCount);
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_SPREADMEASUREMENTDISTANCE,   g_deviceParams.spreadMeasurementDistance);
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_SPREADTOPLIMIT,              g_deviceParams.spreadTopLimit);
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_SPREADBOTTOMLIMIT,           g_deviceParams.spreadBottomLimit);
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_SPREAD_POINT_HOVER_TIME,     g_deviceParams.spreadPointHoverTime);
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_INTERVAL_TOPLIMIT,         g_deviceParams.intervalMeasurementTopLimit);
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_INTERVAL_BOTTOMLIMIT,      g_deviceParams.intervalMeasurementBottomLimit);
+
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_RESERVED20, g_deviceParams.reserved20);
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_RESERVED21, g_deviceParams.reserved21);
+
+    /* ===================== Wartsila 密度区间测量参数 ===================== */
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_WARTSILA_UPPER_DENSITY_LIMIT,       g_deviceParams.wartsila_upper_density_limit);
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_WARTSILA_LOWER_DENSITY_LIMIT,       g_deviceParams.wartsila_lower_density_limit);
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_WARTSILA_DENSITY_INTERVAL,          g_deviceParams.wartsila_density_interval);
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_WARTSILA_MAX_HEIGHT_ABOVE_SURFACE,  g_deviceParams.wartsila_max_height_above_surface);
+
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_RESERVED22, g_deviceParams.reserved22);
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_RESERVED23, g_deviceParams.reserved23);
+
+    /* ===================== 继电器报警输出 ===================== */
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_ALARM_HIGH_DO,         g_deviceParams.AlarmHighDO);
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_ALARM_LOW_DO,          g_deviceParams.AlarmLowDO);
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_THIRD_STATE_THRESHOLD, g_deviceParams.ThirdStateThreshold);
+
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_RESERVED24, g_deviceParams.reserved24);
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_RESERVED25, g_deviceParams.reserved25);
+
+    /* ===================== 4-20mA 输出 ===================== */
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_CURRENT_RANGE_START_mA, g_deviceParams.CurrentRangeStart_mA);
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_CURRENT_RANGE_END_mA,   g_deviceParams.CurrentRangeEnd_mA);
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_ALARM_HIGH_AO,          g_deviceParams.AlarmHighAO);
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_ALARM_LOW_AO,           g_deviceParams.AlarmLowAO);
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_INITIAL_CURRENT_mA,     g_deviceParams.InitialCurrent_mA);
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_AO_HIGH_CURRENT_mA,     g_deviceParams.AOHighCurrent_mA);
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_AO_LOW_CURRENT_mA,      g_deviceParams.AOLowCurrent_mA);
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_FAULT_CURRENT_mA,       g_deviceParams.FaultCurrent_mA);
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_DEBUG_CURRENT_mA,       g_deviceParams.DebugCurrent_mA);
+
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_RESERVED26, g_deviceParams.reserved26);
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_RESERVED27, g_deviceParams.reserved27);
+
+    /* ===================== 指令参数 ===================== */
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_CALIBRATE_OIL_LEVEL,    g_deviceParams.calibrateOilLevel);
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_CALIBRATE_WATER_LEVEL,  g_deviceParams.calibrateWaterLevel);
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_SP_MEAS_POSITION,       g_deviceParams.singlePointMeasurementPosition);
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_SP_MONITOR_POSITION,    g_deviceParams.singlePointMonitoringPosition);
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_DENSITY_DISTRIBUTION_OIL_LEVEL, g_deviceParams.densityDistributionOilLevel);
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_MOTOR_COMMAND_DISTANCE, g_deviceParams.motorCommandDistance);
+
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_RESERVED28, g_deviceParams.reserved28);
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_RESERVED29, g_deviceParams.reserved29);
+
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_LAST_OIL_CORRECTION_LEVEL,   g_deviceParams.lastOilCorrectionLevel);
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_TANK_GAS_PHASE_TEMPERATURE,  g_deviceParams.tankGasPhaseTemperature);
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_TAPE_EXPANSION_COEFFICIENT,  g_deviceParams.tapeExpansionCoefficient);
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_TAPE_CALIBRATION_TEMPERATURE,g_deviceParams.tapeCalibrationTemperature);
+
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_RESERVED30, g_deviceParams.reserved30);
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_RESERVED31, g_deviceParams.reserved31);
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_RESERVED32, g_deviceParams.reserved32);
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_RESERVED33, g_deviceParams.reserved33);
+
+    /* ===================== 元信息与校验 ===================== */
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_PARAM_VERSION, g_deviceParams.param_version);
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_STRUCT_SIZE,   g_deviceParams.struct_size);
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_MAGIC,         g_deviceParams.magic);
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_CRC,           g_deviceParams.crc);
 }
-
-/* 单个数据解析 - 保持寄存器 */
-int ywj_hold_analysis_data(int startadd,int rgscnt)
-{
-    int value = 0;
-    int i;
-
-//    startadd *= 2;
-    //解析数据
-    for(i = 0;i < rgscnt;i++)
-    {
-        value <<= 16;
-        value += HoldingRegisterArray[startadd + i];
-    }
-    return value;
-}
-
-
 
 /*----------------------------------------------------------------
  * 从保持寄存器数组读取数据到 g_deviceParams
  * HoldingRegisterArray: 外部保持寄存器缓存区, 元素类型为 uint16_t
  * 注意: command 一般由线圈或功能码触发, 这里按照保持寄存器映射也支持读回
  *---------------------------------------------------------------*/
-void ReadDeviceParamsFromHoldingRegisters(uint16_t *HoldingRegisterArray) {
-	if (HoldingRegisterArray == NULL) {
-		return;
-	}
+void ReadDeviceParamsFromHoldingRegisters(uint16_t *HoldingRegisterArray)
+{
+    if (HoldingRegisterArray == NULL) {
+        return;
+    }
 
-	const uint16_t *regs = (const uint16_t*) HoldingRegisterArray;
-	uint32_t tmp32;
+    const uint16_t *regs = (const uint16_t*)HoldingRegisterArray;
+    uint32_t tmp32;
 
-	/* 指令 */
-	tmp32 = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_COMMAND);
-	g_deviceParams.command = (CommandType) tmp32;
+    /* 指令 */
+    tmp32 = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_COMMAND);
+    g_deviceParams.command = (CommandType)tmp32;
 
-	/* 基础参数 */
-	g_deviceParams.tankHeight = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_TANKHEIGHT);
-	g_deviceParams.tankHeight = ywj_hold_analysis_data(HOLDREGISTER_DEVICEPARAM_TANKHEIGHT, 2);
-	g_deviceParams.blindZone = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_BLINDZONE);
-	g_deviceParams.waterBlindZone = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_WATER_BLINDZONE);
-	g_deviceParams.encoder_wheel_circumference_mm = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_ENCODER_WHEEL_CIRCUMFERENCE_MM);
-	g_deviceParams.max_motor_speed = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_MAX_MOTOR_SPEED);
-	g_deviceParams.sensorType = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_SENSORTYPE);
-	g_deviceParams.sensorID = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_SENSORID);
-	g_deviceParams.sensorSoftwareVersion = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_SENSOR_SOFTWARE_VERSION);
-	g_deviceParams.softwareVersion = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_SOFTWAREVERSION);
+    /* ===================== 基础参数 ===================== */
+    g_deviceParams.sensorType            = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_SENSORTYPE);
+    g_deviceParams.sensorID              = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_SENSORID);
+    g_deviceParams.sensorSoftwareVersion = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_SENSOR_SOFTWARE_VERSION);
+    g_deviceParams.softwareVersion       = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_SOFTWAREVERSION);
 
-	tmp32 = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_POWER_ON_DEFAULT_COMMAND);
-	g_deviceParams.powerOnDefaultCommand = (CommandType) tmp32;
+    tmp32 = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_POWER_ON_DEFAULT_COMMAND);
+    g_deviceParams.powerOnDefaultCommand = (CommandType)tmp32;
 
-	g_deviceParams.findZeroDownDistance = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_FINDZERO_DOWN_DISTANCE);
-	g_deviceParams.first_loop_circumference_mm = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_FIRST_LOOP_CIRCUMFERENCE_MM);
-	g_deviceParams.tape_thickness_mm = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_TAPE_THICKNESS_MM);
-	g_deviceParams.reserved1 = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_RESERVED1);
-	g_deviceParams.reserved2 = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_RESERVED2);
-	g_deviceParams.reserved3 = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_RESERVED3);
+    g_deviceParams.error_auto_back_zero   = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_ERROR_AUTO_BACK_ZERO);
+    g_deviceParams.error_stop_measurement = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_ERROR_STOP_MEASUREMENT);
 
-	/* 称重参数 */
-	g_deviceParams.empty_weight = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_EMPTY_WEIGHT);
-	g_deviceParams.full_weight = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_FULL_WEIGHT);
-	g_deviceParams.weight_upper_limit_ratio = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_WEIGHT_UPPER_LIMIT_RATIO);
-	g_deviceParams.weight_lower_limit_ratio = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_WEIGHT_LOWER_LIMIT_RATIO);
-	g_deviceParams.empty_weight_upper_limit = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_EMPTY_WEIGHT_UPPER_LIMIT);
-	g_deviceParams.empty_weight_lower_limit = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_EMPTY_WEIGHT_LOWER_LIMIT);
-	g_deviceParams.full_weight_upper_limit = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_FULL_WEIGHT_UPPER_LIMIT);
-	g_deviceParams.full_weight_lower_limit = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_FULL_WEIGHT_LOWER_LIMIT);
-	g_deviceParams.reserved4 = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_RESERVED4);
-	g_deviceParams.reserved5 = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_RESERVED5);
+    g_deviceParams.reserved1 = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_RESERVED1);
+    g_deviceParams.reserved2 = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_RESERVED2);
+    g_deviceParams.reserved3 = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_RESERVED3);
+    g_deviceParams.reserved4 = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_RESERVED4);
+    g_deviceParams.reserved5 = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_RESERVED5);
 
-	/* 指令参数 */
-	g_deviceParams.calibrateOilLevel = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_CALIBRATE_OIL_LEVEL);
-	g_deviceParams.calibrateWaterLevel = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_CALIBRATE_WATER_LEVEL);
-	g_deviceParams.singlePointMeasurementPosition = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_SP_MEAS_POSITION);
-	g_deviceParams.singlePointMonitoringPosition = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_SP_MONITOR_POSITION);
-	g_deviceParams.densityDistributionOilLevel = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_DENSITY_DISTRIBUTION_OIL_LEVEL);
-	g_deviceParams.motorCommandDistance = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_MOTOR_COMMAND_DISTANCE);
-	g_deviceParams.reserved6 = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_RESERVED6);
-	g_deviceParams.reserved7 = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_RESERVED7);
+    /* ===================== 电机与编码器参数 ===================== */
+    g_deviceParams.encoder_wheel_circumference_mm = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_ENCODER_WHEEL_CIRCUMFERENCE_MM);
+    g_deviceParams.max_motor_speed                = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_MAX_MOTOR_SPEED);
+    g_deviceParams.first_loop_circumference_mm    = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_FIRST_LOOP_CIRCUMFERENCE_MM);
+    g_deviceParams.tape_thickness_mm              = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_TAPE_THICKNESS_MM);
 
-	/* 密度与温度修正 */
-	g_deviceParams.densityCorrection = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_DENSITYCORRECTION);
-	g_deviceParams.temperatureCorrection = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_TEMPERATURECORRECTION);
+    g_deviceParams.reserved6 = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_RESERVED6);
+    g_deviceParams.reserved7 = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_RESERVED7);
 
-	/* 分布测量参数 */
-	g_deviceParams.requireBottomMeasurement = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_REQUIREBOTTOMMEASUREMENT);
-	g_deviceParams.requireWaterMeasurement = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_REQUIREWATERMEASUREMENT);
-	g_deviceParams.requireSinglePointDensity = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_REQUIRESINGLEPOINTDENSITY);
-	g_deviceParams.spreadMeasurementOrder = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_SPREADMEASUREMENTORDER);
-	g_deviceParams.spreadMeasurementMode = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_SPREADMEASUREMENTMODE);
-	g_deviceParams.spreadMeasurementCount = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_SPREADMEASUREMENTCOUNT);
-	g_deviceParams.spreadMeasurementDistance = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_SPREADMEASUREMENTDISTANCE);
-	g_deviceParams.spreadTopLimit = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_SPREADTOPLIMIT);
-	g_deviceParams.spreadBottomLimit = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_SPREADBOTTOMLIMIT);
-	g_deviceParams.spreadPointHoverTime = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_SPREAD_POINT_HOVER_TIME);
-	g_deviceParams.reserved8 = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_RESERVED8);
-	g_deviceParams.reserved9 = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_RESERVED9);
+    /* ===================== 称重参数 ===================== */
+    g_deviceParams.empty_weight             = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_EMPTY_WEIGHT);
+    g_deviceParams.empty_weight_upper_limit = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_EMPTY_WEIGHT_UPPER_LIMIT);
+    g_deviceParams.empty_weight_lower_limit = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_EMPTY_WEIGHT_LOWER_LIMIT);
+    g_deviceParams.full_weight              = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_FULL_WEIGHT);
+    g_deviceParams.full_weight_upper_limit  = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_FULL_WEIGHT_UPPER_LIMIT);
+    g_deviceParams.full_weight_lower_limit  = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_FULL_WEIGHT_LOWER_LIMIT);
+    g_deviceParams.weight_upper_limit_ratio = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_WEIGHT_UPPER_LIMIT_RATIO);
+    g_deviceParams.weight_lower_limit_ratio = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_WEIGHT_LOWER_LIMIT_RATIO);
 
-	/* Wartsila 密度区间测量参数 */
-	g_deviceParams.wartsila_upper_density_limit = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_WARTSILA_UPPER_DENSITY_LIMIT);
-	g_deviceParams.wartsila_lower_density_limit = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_WARTSILA_LOWER_DENSITY_LIMIT);
-	g_deviceParams.wartsila_density_interval = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_WARTSILA_DENSITY_INTERVAL);
-	g_deviceParams.wartsila_max_height_above_surface = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_WARTSILA_MAX_HEIGHT_ABOVE_SURFACE);
+    g_deviceParams.reserved8 = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_RESERVED8);
+    g_deviceParams.reserved9 = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_RESERVED9);
 
-	/* 水位测量参数 */
-	g_deviceParams.waterLevelCorrection = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_WATERLEVELCORRECTION);
-	g_deviceParams.maxDownDistance = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_MAXDOWNDISTANCE);
-	g_deviceParams.reserved10 = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_RESERVED10);
+    /* ===================== 零点测量 ===================== */
+    g_deviceParams.zero_weight_threshold_ratio = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_ZERO_WEIGHT_THRESHOLD_RATIO);
+    g_deviceParams.weight_ignore_zone          = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_WEIGHT_IGNORE_ZONE);
+    g_deviceParams.max_zero_deviation_distance = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_MAX_ZERO_DEVIATION_DISTANCE);
+    g_deviceParams.findZeroDownDistance        = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_FINDZERO_DOWN_DISTANCE);
 
-	/* 实高测量参数 */
-	g_deviceParams.refreshTankHeightFlag = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_REFRESHTANKHEIGHTFLAG);
-	g_deviceParams.maxTankHeightDeviation = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_MAXTANKHEIGHTDEVIATION);
-	g_deviceParams.initialTankHeight = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_INITIALTANKHEIGHT);
-	g_deviceParams.currentTankHeight = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_CURRENTTANKHEIGHT);
+    g_deviceParams.reserved10 = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_RESERVED10);
+    g_deviceParams.reserved11 = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_RESERVED11);
 
-	/* 液位测量参数 */
-	g_deviceParams.oilLevelThreshold = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_OILLEVELTHRESHOLD);
-	g_deviceParams.oilLevelHysteresisThreshold = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_OILLEVEL_HYSTERESIS_THRESHOLD);
-	g_deviceParams.liquidLevelMeasurementMethod = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_LIQUIDLEVELMEASUREMENTMETHOD);
+    /* ===================== 液位测量 ===================== */
+    g_deviceParams.tankHeight                  = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_TANKHEIGHT);
+    g_deviceParams.liquid_sensor_distance_diff = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_LIQUID_SENSOR_DISTANCE_DIFF);
+    g_deviceParams.blindZone                   = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_BLINDZONE);
+    g_deviceParams.oilLevelThreshold           = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_OILLEVELTHRESHOLD);
+    g_deviceParams.oilLevelHysteresisThreshold = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_OILLEVEL_HYSTERESIS_THRESHOLD);
+    g_deviceParams.liquidLevelMeasurementMethod= read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_LIQUIDLEVELMEASUREMENTMETHOD);
 
-	/* 报警 DO */
-	g_deviceParams.AlarmHighDO = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_ALARM_HIGH_DO);
-	g_deviceParams.AlarmLowDO = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_ALARM_LOW_DO);
-	g_deviceParams.ThirdStateThreshold = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_THIRD_STATE_THRESHOLD);
+    g_deviceParams.oilLevelFrequency = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_OILLEVEL_FREQUENCY);
+    g_deviceParams.oilLevelDensity = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_OILLEVEL_DENSITY);
 
-	/* 4-20mA 输出 AO */
-	g_deviceParams.CurrentRangeStart_mA = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_CURRENT_RANGE_START_mA);
-	g_deviceParams.CurrentRangeEnd_mA = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_CURRENT_RANGE_END_mA);
-	g_deviceParams.AlarmHighAO = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_ALARM_HIGH_AO);
-	g_deviceParams.AlarmLowAO = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_ALARM_LOW_AO);
-	g_deviceParams.InitialCurrent_mA = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_INITIAL_CURRENT_mA);
-	g_deviceParams.AOHighCurrent_mA = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_AO_HIGH_CURRENT_mA);
-	g_deviceParams.AOLowCurrent_mA = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_AO_LOW_CURRENT_mA);
-	g_deviceParams.FaultCurrent_mA = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_FAULT_CURRENT_mA);
-	g_deviceParams.DebugCurrent_mA = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_DEBUG_CURRENT_mA);
+    g_deviceParams.oilLevelHysteresisTime  = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_OILLEVEL_HYSTERESIS_TIME);
+    /* ===================== 水位测量参数 ===================== */
+    g_deviceParams.water_tank_height                = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_WATER_TANK_HEIGHT);
+    g_deviceParams.water_level_mode                 = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_WATER_LEVEL_MODE);
+    g_deviceParams.waterBlindZone                   = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_WATER_BLINDZONE);
+    g_deviceParams.water_cap_threshold              = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_WATER_CAP_THRESHOLD);
+    g_deviceParams.water_cap_hysteresis             = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_WATER_CAP_HYSTERESIS);
+    g_deviceParams.maxDownDistance                  = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_MAXDOWNDISTANCE);
+    g_deviceParams.zero_cap                         = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_ZERO_CAP);
 
-	/* 元信息和 CRC */
-	g_deviceParams.param_version = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_PARAM_VERSION);
-	g_deviceParams.struct_size = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_STRUCT_SIZE);
-	g_deviceParams.magic = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_MAGIC);
-	g_deviceParams.crc = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_CRC);
+    g_deviceParams.water_stable_threshold = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_WATER_STABLE_THRESHOLD);
+
+    g_deviceParams.waterLevelCorrection    = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_WATER_LEVEL_CORRECTION);
+    /* ===================== 罐高/罐底测量 ===================== */
+    g_deviceParams.bottom_detect_mode      = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_BOTTOM_DETECT_MODE);
+    g_deviceParams.bottom_angle_threshold  = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_BOTTOM_ANGLE_THRESHOLD);
+    g_deviceParams.bottom_weight_threshold = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_BOTTOM_WEIGHT_THRESHOLD);
+    g_deviceParams.refreshTankHeightFlag  = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_REFRESH_TANKHEIGHT_FLAG);
+    g_deviceParams.maxTankHeightDeviation = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_MAX_TANKHEIGHT_DEVIATION);
+    g_deviceParams.initialTankHeight      = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_INITIAL_TANKHEIGHT);
+    g_deviceParams.currentTankHeight      = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_CURRENT_TANKHEIGHT);
+
+    g_deviceParams.reserved16 = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_RESERVED16);
+    g_deviceParams.reserved17 = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_RESERVED17);
+
+    /* ===================== 密度和温度修正参数 ===================== */
+    g_deviceParams.densityCorrection     = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_DENSITYCORRECTION);
+    g_deviceParams.temperatureCorrection = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_TEMPERATURECORRECTION);
+
+    g_deviceParams.reserved18 = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_RESERVED18);
+    g_deviceParams.reserved19 = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_RESERVED19);
+
+    /* ===================== 分布/区间测量参数 ===================== */
+    g_deviceParams.requireBottomMeasurement       = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_REQUIREBOTTOMMEASUREMENT);
+    g_deviceParams.requireWaterMeasurement        = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_REQUIREWATERMEASUREMENT);
+    g_deviceParams.requireSinglePointDensity      = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_REQUIRESINGLEPOINTDENSITY);
+    g_deviceParams.spreadMeasurementOrder         = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_SPREADMEASUREMENTORDER);
+    g_deviceParams.spreadMeasurementMode          = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_SPREADMEASUREMENTMODE);
+    g_deviceParams.spreadMeasurementCount         = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_SPREADMEASUREMENTCOUNT);
+    g_deviceParams.spreadMeasurementDistance      = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_SPREADMEASUREMENTDISTANCE);
+    g_deviceParams.spreadTopLimit                 = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_SPREADTOPLIMIT);
+    g_deviceParams.spreadBottomLimit              = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_SPREADBOTTOMLIMIT);
+    g_deviceParams.spreadPointHoverTime           = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_SPREAD_POINT_HOVER_TIME);
+    g_deviceParams.intervalMeasurementTopLimit    = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_INTERVAL_TOPLIMIT);
+    g_deviceParams.intervalMeasurementBottomLimit = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_INTERVAL_BOTTOMLIMIT);
+
+    g_deviceParams.reserved20 = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_RESERVED20);
+    g_deviceParams.reserved21 = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_RESERVED21);
+
+    /* ===================== Wartsila 密度区间测量参数 ===================== */
+    g_deviceParams.wartsila_upper_density_limit      = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_WARTSILA_UPPER_DENSITY_LIMIT);
+    g_deviceParams.wartsila_lower_density_limit      = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_WARTSILA_LOWER_DENSITY_LIMIT);
+    g_deviceParams.wartsila_density_interval         = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_WARTSILA_DENSITY_INTERVAL);
+    g_deviceParams.wartsila_max_height_above_surface = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_WARTSILA_MAX_HEIGHT_ABOVE_SURFACE);
+
+    g_deviceParams.reserved22 = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_RESERVED22);
+    g_deviceParams.reserved23 = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_RESERVED23);
+
+    /* ===================== 继电器报警输出 ===================== */
+    g_deviceParams.AlarmHighDO        = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_ALARM_HIGH_DO);
+    g_deviceParams.AlarmLowDO         = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_ALARM_LOW_DO);
+    g_deviceParams.ThirdStateThreshold= read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_THIRD_STATE_THRESHOLD);
+
+    g_deviceParams.reserved24 = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_RESERVED24);
+    g_deviceParams.reserved25 = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_RESERVED25);
+
+    /* ===================== 4-20mA 输出 ===================== */
+    g_deviceParams.CurrentRangeStart_mA = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_CURRENT_RANGE_START_mA);
+    g_deviceParams.CurrentRangeEnd_mA   = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_CURRENT_RANGE_END_mA);
+    g_deviceParams.AlarmHighAO          = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_ALARM_HIGH_AO);
+    g_deviceParams.AlarmLowAO           = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_ALARM_LOW_AO);
+    g_deviceParams.InitialCurrent_mA    = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_INITIAL_CURRENT_mA);
+    g_deviceParams.AOHighCurrent_mA     = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_AO_HIGH_CURRENT_mA);
+    g_deviceParams.AOLowCurrent_mA      = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_AO_LOW_CURRENT_mA);
+    g_deviceParams.FaultCurrent_mA      = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_FAULT_CURRENT_mA);
+    g_deviceParams.DebugCurrent_mA      = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_DEBUG_CURRENT_mA);
+
+    g_deviceParams.reserved26 = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_RESERVED26);
+    g_deviceParams.reserved27 = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_RESERVED27);
+
+    /* ===================== 指令参数 ===================== */
+    g_deviceParams.calibrateOilLevel            = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_CALIBRATE_OIL_LEVEL);
+    g_deviceParams.calibrateWaterLevel          = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_CALIBRATE_WATER_LEVEL);
+    g_deviceParams.singlePointMeasurementPosition = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_SP_MEAS_POSITION);
+    g_deviceParams.singlePointMonitoringPosition  = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_SP_MONITOR_POSITION);
+    g_deviceParams.densityDistributionOilLevel    = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_DENSITY_DISTRIBUTION_OIL_LEVEL);
+    g_deviceParams.motorCommandDistance           = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_MOTOR_COMMAND_DISTANCE);
+
+    g_deviceParams.reserved28 = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_RESERVED28);
+    g_deviceParams.reserved29 = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_RESERVED29);
+
+    g_deviceParams.lastOilCorrectionLevel  = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_LAST_OIL_CORRECTION_LEVEL);
+    g_deviceParams.tankGasPhaseTemperature = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_TANK_GAS_PHASE_TEMPERATURE);
+    g_deviceParams.tapeExpansionCoefficient= read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_TAPE_EXPANSION_COEFFICIENT);
+    g_deviceParams.tapeCalibrationTemperature = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_TAPE_CALIBRATION_TEMPERATURE);
+
+    g_deviceParams.reserved30 = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_RESERVED30);
+    g_deviceParams.reserved31 = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_RESERVED31);
+    g_deviceParams.reserved32 = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_RESERVED32);
+    g_deviceParams.reserved33 = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_RESERVED33);
+
+    /* ===================== 元信息与校验 ===================== */
+    g_deviceParams.param_version = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_PARAM_VERSION);
+    g_deviceParams.struct_size   = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_STRUCT_SIZE);
+    g_deviceParams.magic         = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_MAGIC);
+    g_deviceParams.crc           = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_CRC);
+
+//	update_sensor_height_from_encoder(); // 如果修改了罐高，需要更新传感器高度测量
+//	save_device_params();//保存设备参数
 }
 
 /* ===================== MeasurementResult <-> 输入寄存器映射 ===================== */
@@ -363,6 +447,8 @@ void write_measurement_result_to_InputRegisters(uint16_t *regs) {
 	write_i32_to_regs(regs, REG_DEBUG_CURRENT_ENCODER, g_measurement.debug_data.current_encoder_value);
 	write_i32_to_regs(regs, REG_DEBUG_SENSOR_POSITION, g_measurement.debug_data.sensor_position);
 	write_i32_to_regs(regs, REG_DEBUG_CABLE_LENGTH, g_measurement.debug_data.cable_length);
+	write_i32_to_regs(regs, REG_DEBUG_MOTOR_STEP,     g_measurement.debug_data.motor_step);
+	write_i32_to_regs(regs, REG_DEBUG_MOTOR_DISTANCE, g_measurement.debug_data.motor_distance);
 
 	write_u32_to_regs(regs, REG_DEBUG_FREQUENCY, g_measurement.debug_data.frequency);
 	write_u32_to_regs(regs, REG_DEBUG_TEMPERATURE, g_measurement.debug_data.temperature);
@@ -460,6 +546,8 @@ void read_measurement_result_from_InputRegisters(uint16_t *regs) {
 	g_measurement.debug_data.current_encoder_value = read_i32_from_regs(cregs, REG_DEBUG_CURRENT_ENCODER);
 	g_measurement.debug_data.sensor_position = read_i32_from_regs(cregs, REG_DEBUG_SENSOR_POSITION);
 	g_measurement.debug_data.cable_length = read_i32_from_regs(cregs, REG_DEBUG_CABLE_LENGTH);
+	g_measurement.debug_data.motor_step     = read_i32_from_regs(cregs, REG_DEBUG_MOTOR_STEP);
+	g_measurement.debug_data.motor_distance = read_i32_from_regs(cregs, REG_DEBUG_MOTOR_DISTANCE);
 
 	g_measurement.debug_data.frequency = read_u32_from_regs(cregs, REG_DEBUG_FREQUENCY);
 	g_measurement.debug_data.temperature = read_u32_from_regs(cregs, REG_DEBUG_TEMPERATURE);
@@ -531,3 +619,56 @@ void read_measurement_result_from_InputRegisters(uint16_t *regs) {
 		g_measurement.density_distribution.single_density_data[i].weight_density = read_u32_from_regs(cregs, REG_DENSITY_POINT_WEIGHT_DENSITY(i));
 	}
 }
+
+/* 解析03功能码保持寄存器数据 */
+void AnalysisHoldRegister(void)
+{
+    int index = 0;
+
+    for(index = 0;index < param_metaAmount;index++)
+    {
+        /* 关键：CPU3 本机参数不参与 CPU2 HOLD 轮询解析 */
+        if (Cpu3Local_IsParam(param_meta[index].operanum)) {
+            continue;
+        }
+        if(param_meta[index].data_type == TYPE_INT)
+        {
+            param_meta[index].val = ywj_hold_analysis_data(param_meta[index].startadd,param_meta[index].rgstcnt);
+            param_meta[index].val += param_meta[index].offset;
+//            printf("Hold Reg %s: %d\n",param_meta[index].name,param_meta[index].val);
+        }
+        else if(param_meta[index].data_type == TYPE_FLOAT)
+        {
+            union utof tmp_f;
+            tmp_f.u = ywj_hold_analysis_data(param_meta[index].startadd,param_meta[index].rgstcnt);
+            tmp_f.f *= pow(10,param_meta[index].point);
+            param_meta[index].val = tmp_f.f;
+        }
+        else if(param_meta[index].data_type == TYPE_DOUBLE)
+        {
+            union utod tmp_d;
+            tmp_d.u[1] = ywj_hold_analysis_data(param_meta[index].startadd,param_meta[index].rgstcnt / 2);
+            tmp_d.u[0] = ywj_hold_analysis_data(param_meta[index].startadd + 2,param_meta[index].rgstcnt / 2);
+            tmp_d.d *= pow(10,param_meta[index].point);
+            param_meta[index].val = tmp_d.d;
+        }
+    }
+}
+
+/* 单个数据解析 - 保持寄存器 */
+int ywj_hold_analysis_data(int startadd,int rgscnt)
+{
+    int value = 0;
+    int i;
+
+//    startadd *= 2;
+    //解析数据
+    for(i = 0;i < rgscnt;i++)
+    {
+        value <<= 16;
+        value += HoldingRegisterArray[startadd + i];
+    }
+    return value;
+}
+
+

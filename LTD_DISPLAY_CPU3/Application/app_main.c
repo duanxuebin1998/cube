@@ -5,7 +5,7 @@
  *      Author: duan xuebin
  */
 #include "cpu2_communicate.h"
-#include "Display.h"
+#include "display.h"
 #include "system_parameter.h"
 #include "DSM_communication.h"
 #include "wartsila_modbus_communication.h"
@@ -309,7 +309,8 @@ void App_MainLoop(void)
     /* ========= 空闲才做轮询任务 ========= */
     if (!did_work) {
         PollingInputData();
-        HAL_Delay(10);
+//        PrintMeasurementResult();
+        HAL_Delay(10);;
     }
 }
 void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)

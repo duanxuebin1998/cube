@@ -10,6 +10,7 @@
 #include "system_parameter.h"
 #include "dataanalysis_modbus.h"
 #include "wartsila_modbus_communication.h"
+#include "wartsila_modbus_data_analysis.h"
 
 #define DEBUG_COMMUCPU2 0
 #define ADERSS 0X01
@@ -32,6 +33,8 @@ static void CPU2_Response03Process(uint8_t const *revframe);
 static void CPU2_Response04Process(char const *revframe);
 static void CPU2_Response10Process(uint8_t *arr, uint16_t len);
 static void PresetRegister(bool registertype, int const *registervalue);
+
+static void RequestDensityDistPoints_ByCount(void);
 
 /*与CPU2通讯初始化*/
 void CommuToCPU2Init(void) {
@@ -104,10 +107,10 @@ static const PollGroup poweron_groups[] = {
 /* 输入寄存器组 2：单点 / 分布测量结果 */
 {FUNCTIONCODE_READ_INPUTREGISTER, REG_SINGLE_POINT_MEAS_TEMP, (uint16_t) (REG_DENSITY_DIST_POINT_BASE - REG_SINGLE_POINT_MEAS_TEMP) },
 /* 保持寄存器组 3：设备参数前半段 */
-{FUNCTIONCODE_READ_HOLDREGISTER, HOLDREGISTER_DEVICEPARAM_COMMAND, (uint16_t) (HOLDREGISTER_DEVICEPARAM_WATERLEVELCORRECTION - HOLDREGISTER_DEVICEPARAM_COMMAND) },
+{FUNCTIONCODE_READ_HOLDREGISTER, HOLDREGISTER_DEVICEPARAM_COMMAND, (uint16_t) (HOLDREGISTER_DEVICEPARAM_RESERVED11 - HOLDREGISTER_DEVICEPARAM_COMMAND) },
 
 /* 保持寄存器组 4：设备参数后半段 */
-{FUNCTIONCODE_READ_HOLDREGISTER, HOLDREGISTER_DEVICEPARAM_WATERLEVELCORRECTION, (uint16_t) (HOLEREGISTER_STOP - HOLDREGISTER_DEVICEPARAM_WATERLEVELCORRECTION) }
+{FUNCTIONCODE_READ_HOLDREGISTER, HOLDREGISTER_DEVICEPARAM_RESERVED11, (uint16_t) (HOLDREGISTER_DEVICEPARAM_WARTSILA_MAX_HEIGHT_ABOVE_SURFACE - HOLDREGISTER_DEVICEPARAM_RESERVED11) }
 };
 
 #define POWERON_GROUP_COUNT  (sizeof(poweron_groups) / sizeof(poweron_groups[0]))
@@ -124,10 +127,10 @@ FUNCTIONCODE_READ_INPUTREGISTER, REG_DEVICE_STATUS_WORK_MODE, (uint16_t) (REG_SI
 {
 FUNCTIONCODE_READ_INPUTREGISTER, REG_SINGLE_POINT_MEAS_TEMP, (uint16_t) (REG_DENSITY_DIST_POINT_BASE - REG_SINGLE_POINT_MEAS_TEMP) } ,
 /* 保持寄存器组 3：设备参数前半段 */
-{FUNCTIONCODE_READ_HOLDREGISTER, HOLDREGISTER_DEVICEPARAM_COMMAND, (uint16_t) (HOLDREGISTER_DEVICEPARAM_WATERLEVELCORRECTION - HOLDREGISTER_DEVICEPARAM_COMMAND) },
+{FUNCTIONCODE_READ_HOLDREGISTER, HOLDREGISTER_DEVICEPARAM_COMMAND, (uint16_t) (HOLDREGISTER_DEVICEPARAM_RESERVED11 - HOLDREGISTER_DEVICEPARAM_COMMAND) },
 
 /* 保持寄存器组 4：设备参数后半段 */
-{FUNCTIONCODE_READ_HOLDREGISTER, HOLDREGISTER_DEVICEPARAM_WATERLEVELCORRECTION, (uint16_t) (HOLEREGISTER_STOP - HOLDREGISTER_DEVICEPARAM_WATERLEVELCORRECTION) }
+{FUNCTIONCODE_READ_HOLDREGISTER, HOLDREGISTER_DEVICEPARAM_RESERVED11, (uint16_t) (HOLDREGISTER_DEVICEPARAM_RESERVED22 - HOLDREGISTER_DEVICEPARAM_RESERVED11) }
 };
 
 #define RUNTIME_GROUP_COUNT  (sizeof(runtime_groups) / sizeof(runtime_groups[0]))
@@ -196,7 +199,7 @@ void PollingInputData(void) {
  * @brief 根据测量点数量读取分布测量点的所有数据
  *        调用前需要确保 g_measurement.density_distribution.measurement_points 已经正确更新。
  */
-void RequestDensityDistPoints_ByCount(void)
+static void RequestDensityDistPoints_ByCount(void)
 {
     uint16_t points = (uint16_t)g_measurement.density_distribution.measurement_points;
 
@@ -334,9 +337,6 @@ static void CPU2_Response03Process(uint8_t const *revframe) {
 	// 3. 更新 HoldingRegisterArray 里对应的寄存器（注意，这里是按“寄存器”写）
 	for (i = 0; i < RCV_registercnt; i++) {
 		HoldingRegisterArray[RCV_startaddress + i] = SlaveTempBuffer[i];
-		// 如果不需要 SlaveTempBuffer，也可以直接用 reg 写：
-		// HoldingRegisterArray[RCV_startaddress + i] =
-		//     ((uint16_t)revframe[3 + i * 2] << 8) | (uint16_t)revframe[3 + i * 2 + 1];
 	}
 
 	// 4. 解析保持寄存器并刷新 g_deviceParams

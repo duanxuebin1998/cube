@@ -6,6 +6,7 @@
 #include "hostcommu.h"
 #include <string.h>
 #include <ctype.h>
+#include "system_parameter.h"
 
 /*从机地址*/
 int SlaveAddress = 1;
@@ -237,14 +238,18 @@ int Response10Process(uint8_t const *revframe, uint8_t *sendframe)
 
     /* 打印最新的 command（这里已经是本次写操作更新后的值） */
     printf("command: %lu\r\n", (unsigned long)g_deviceParams.command);
-
+//    printf("0x10 write startAddr=%u regCount=%u, COMMAND=%u, TANKHEIGHT=%u, CRC=%u\r\n",
+//           startAddr, regCount,
+//           HOLDREGISTER_DEVICEPARAM_COMMAND,
+//           HOLDREGISTER_DEVICEPARAM_TANKHEIGHT,
+//           HOLDREGISTER_DEVICEPARAM_CRC);
     /* 4. 判断这次写操作是否需要存储到 FRAM
      *    规则：只写 command（起始地址刚好是 COMMAND 且长度为 2 寄存器）不存储，
      *          其它涉及参数区的写操作统一认为需要持久化。
      */
     if (!((startAddr == HOLDREGISTER_DEVICEPARAM_COMMAND) && (regCount == 2))) {
         /* 只要写的范围落在参数持久化区域内，就认为需要保存 */
-        uint16_t persist_start = HOLDREGISTER_DEVICEPARAM_TANKHEIGHT;  /* 持久化起点：跳过 command */
+        uint16_t persist_start = HOLDREGISTER_DEVICEPARAM_SENSORTYPE;  /* 持久化起点：跳过 command */
         uint16_t persist_end   = HOLDREGISTER_DEVICEPARAM_CRC + 1;     /* 持久化终点：到 CRC 结束 */
 
         uint16_t write_start = startAddr;

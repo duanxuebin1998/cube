@@ -107,7 +107,7 @@ int UART6_SendCommand(const char *cmd, char *response, uint16_t maxLen, uint32_t
 // 发送指令，带3次重试机制
 int UART6_SendWithRetry(const char *cmd, char *response, uint16_t maxLen, uint32_t timeout) {
     uint32_t ret;
-    for (int i = 0; i < 3; i++) {
+    for (int i = 0; i < 10; i++) {
 //    	//延时3ms
 //    	HAL_Delay(3);
         ret = UART6_SendCommand(cmd, response, maxLen, timeout);
@@ -372,31 +372,31 @@ uint32_t Read_Water_Capacitance(float *cap_out)
         return ret;
     }
 
-    /* 基本长度检查：WaterSendPack 固定 11 字节 */
-    size_t len = strlen(resp);
-    if (len < 11) {
-        /* 有些情况下 resp 里可能包含 '\0'（若你按字节收），建议你用 recvLen 更准；
-           在你现有 UART6_SendCommand 里目前没把 recvLen 返回出来，所以先用 strlen 做最低保障。 */
-        printf("[UART6] 电容响应长度异常: len=%u, resp=%s\r\n", (unsigned)len, resp);
-        return SENSOR_COMM_TIMEOUT; // 或 SENSOR_RESP_FORMAT_ERROR（更合理）
-    }
+//    /* 基本长度检查：WaterSendPack 固定 11 字节 */
+//    size_t len = strlen(resp);
+//    if (len < 11) {
+//        /* 有些情况下 resp 里可能包含 '\0'（若你按字节收），建议你用 recvLen 更准；
+//           在你现有 UART6_SendCommand 里目前没把 recvLen 返回出来，所以先用 strlen 做最低保障。 */
+//        printf("[UART6] 电容响应长度异常: len=%u, resp=%s\r\n", (unsigned)len, resp);
+//        return SENSOR_COMM_TIMEOUT; // 或 SENSOR_RESP_FORMAT_ERROR（更合理）
+//    }
 
     /* 格式检查：起始必须是 D 或 E，且以 \r\n 结束 */
     if (!((resp[0] == 'D') || (resp[0] == 'E'))) {
         printf("[UART6] 电容响应头错误: 0x%02X, resp=%s\r\n", (unsigned char)resp[0], resp);
         return SENSOR_BCC_ERROR;
     }
-    if (!(resp[9] == '\r' && resp[10] == '\n')) {
-        printf("[UART6] 电容响应结尾错误: [%02X %02X]\r\n", (unsigned char)resp[9], (unsigned char)resp[10]);
-        return SENSOR_BCC_ERROR;
-    }
+//    if (!(resp[9] == '\r' && resp[10] == '\n')) {
+//        printf("[UART6] 电容响应结尾错误: [%02X %02X]\r\n", (unsigned char)resp[9], (unsigned char)resp[10]);
+//        return SENSOR_BCC_ERROR;
+//    }
 
-    /* BCC 校验：按你的 WaterSendPack，BCC 在 resp[8]，覆盖 resp[0..7] */
-    char bcc = CalculationBCC_DSM(resp, 8);
-    if (bcc != resp[8]) {
-        printf("[UART6] 电容 BCC 校验失败: cal=%02X rcv=%02X\r\n", (unsigned char)bcc, (unsigned char)resp[8]);
-        return SENSOR_BCC_ERROR;
-    }
+//    /* BCC 校验：按你的 WaterSendPack，BCC 在 resp[8]，覆盖 resp[0..7] */
+//    char bcc = CalculationBCC_DSM(resp, 8);
+//    if (bcc != resp[8]) {
+//        printf("[UART6] 电容 BCC 校验失败: cal=%02X rcv=%02X\r\n", (unsigned char)bcc, (unsigned char)resp[8]);
+//        return SENSOR_BCC_ERROR;
+//    }
 
     /* 电压异常标志：resp[0]=='E' */
     if (resp[0] == 'E') {
@@ -406,7 +406,7 @@ uint32_t Read_Water_Capacitance(float *cap_out)
 
     /* 解析数值：resp[1..7] 是数字/小数点字符串。直接 atof(resp+1) 即可 */
     *cap_out = (float)atof(resp + 1);
-	if (*cap_out < 1.0f) {
+	if (*cap_out < 30.0f) {
 		*cap_out = 99999.9;
 	}
     return NO_ERROR;
@@ -458,7 +458,11 @@ uint32_t Read_Gyro_Angle(float *angle_x_deg, float *angle_y_deg)
 
     /* 查找 A/B 标签 */
     char *pA = strchr(resp, 'A');
+    if (!pA) {
+        pA = strchr(resp, 'E');   /* ★ 兼容 E 作为 X 轴标签 */
+    }
     char *pB = strchr(resp, 'B');
+
     if (!pA || !pB) {
         printf("[UART6] 陀螺仪响应格式错误: %s\r\n", resp);
         return SENSOR_COMM_TIMEOUT; /* 或建议新增 SENSOR_RESP_FORMAT_ERROR */
@@ -475,6 +479,8 @@ uint32_t Read_Gyro_Angle(float *angle_x_deg, float *angle_y_deg)
 
     *angle_x_deg = ax;
     *angle_y_deg = ay;
-
+    g_measurement.debug_data.angle_x = ax*100;
+    g_measurement.debug_data.angle_y = ay*100;
     return NO_ERROR;
 }
+

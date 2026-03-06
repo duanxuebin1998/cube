@@ -125,11 +125,11 @@ typedef enum {
 } ErrorCode;
 
 /*测量命令*/
+/*测量命令*/
 typedef enum {
 
     /* ======================= 基础 ======================= */
     CMD_NONE                       = 0,    // 无命令
-
 
     /* ======================= 普通指令（测量类 1~99） ======================= */
 
@@ -143,6 +143,10 @@ typedef enum {
     CMD_MONITOR_SINGLE             = 6,    // 单点监测
     CMD_SYNTHETIC                  = 7,    // 综合测量
 
+    /* --- 跟随 / 运动控制类（新增，建议 8~9 占位） --- */
+    CMD_FOLLOW_WATER               = 8,    // 水位跟随（新增）
+    CMD_RUN_TO_POSITION            = 9,    // 电机运行到指定位置（新增）
+
     /* --- 密度分布测量（整个系列，与普通液位分布区分） --- */
     CMD_MEASURE_DISTRIBUTED        = 10,   // 普通分布测量
     CMD_GB_MEASURE_DISTRIBUTED     = 11,   // 国标分布测量
@@ -151,13 +155,15 @@ typedef enum {
     CMD_MEASURE_DENSITY_RANGE      = 13,   // 区间密度测量
     CMD_WARTSILA_DENSITY_RANGE     = 14,   // 瓦西莱密度区间测量
 
+    /* --- 参数读取类（新增，放在 15，避免占用你后续密度扩展） --- */
+    CMD_READ_PART_PARAMS           = 15,   // 读取部件参数（新增）
+
     /* 普通指令预留 */
     CMD_RESERVED_CMD1              = 20,
     CMD_RESERVED_CMD2              = 21,
     CMD_RESERVED_CMD3              = 22,
 
-
-    /* ======================= 调试指令（100~199） ======================= */
+    /* ======================= 调试/强制指令（100~199） ======================= */
 
     CMD_DEBUG_MODE                 = 100,  // 进入调试模式
 
@@ -173,83 +179,110 @@ typedef enum {
     CMD_RESTORE_FACTORY            = 108,  // 恢复出厂设置
     CMD_MAINTENANCE_MODE           = 109,  // 维护模式
 
+    /* --- 强制运动 / 强制位置类（新增） --- */
+    CMD_FORCE_MOVE_UP              = 113,  // 电机强制上行（新增）
+    CMD_FORCE_MOVE_DOWN            = 114,  // 电机强制下行（新增）
+    CMD_FORCE_LIFT_ZERO            = 115,  // 强制提零点（新增）
+
+    /* --- 水位标定（新增，建议归类到标定类） --- */
+    CMD_CALIBRATE_WATER            = 116,  // 水位标定（新增）
+
     /* 调试预留 */
     CMD_RESERVED_CMD4              = 110,
     CMD_RESERVED_CMD5              = 111,
     CMD_RESERVED_CMD6              = 112,
 
-
     /* ======================= 其他 ======================= */
     CMD_UNKNOWN                    = 255   // 未知命令
 
 } CommandType;
+typedef enum {
+    CMD_NONE_DEF                       = 0,    // 无命令
+    CMD_BACK_ZERO_DEF                  = 1,    // 回零点
+    CMD_FIND_OIL_DEF                   = 2,    // 寻找液位
+    CMD_MONITOR_SINGLE_DEF             = 3,    // 单点监测
+    CMD_FOLLOW_WATER_DEF               = 4,    // 水位跟随（新增）
+} DefaultCommandType;
 
-
-/*设备状态*/
 /*设备状态*/
 typedef enum {
-	STATE_STANDBY = 0x0000,                   // 待机状态
-	STATE_INIT = 0x0001,                      // 初始化状态
-	STATE_BACKZEROING = 0x0002,               // 回零点中
-	STATE_FINDZEROING = 0x0010,               // 标定零点中
-	STATE_SINGLEPOINTING = 0x0011,            // 单点测量中
-	STATE_RUNTOPOINTING = 0x0012,             // 运行到测量点中
-	STATE_GB_SPREADPOINTING = 0x0013,         // 国标分布测量中
-	STATE_SPREADPOINTING = 0x0014,            // 分布测量中
-	STATE_CALIBRATIONOILING = 0x0015,         // 标定液位
-	STATE_READPARAMETERING = 0x0016,          // 读取参数中
-	STATE_RUNUPING = 0x0017,                  // 向上运行中
-	STATE_RUNDOWNING = 0x0018,                // 向下运行中
-	STATE_SETZEROCIRCLING = 0x0019,           // 设置零点编码值
-	STATE_SETZEROANGLING = 0x001A,            // 设置零点编码值
-	STATE_EFACTORYSETTING_RESTORING = 0x001B, // 恢复出厂设置中
-	STATE_BACKUPING = 0x001C,                 // 备份配置文件中
-	STATE_RESTORYING = 0x001D,                // 恢复配置文件中
-	STATE_FINDOIL = 0x001E,                   // 寻找液位中
-	STATE_FINDWATER = 0x001F,                 // 寻找水位中
-	STATE_FINDBOTTOM = 0x0020,                // 寻找罐底中
-	STATE_FORCEZERO = 0x0021,                 // 设置电机零点中
-	STATE_ONTANKOPRATIONING = 0x0022,         // 罐上仪表操作中
-	STATE_SYNTHETICING = 0x0023,              // 综合指令
-	STATE_METER_DENSITY = 0x0024,             // 密度每米测量中
-	STATE_INTERVAL_DENSITY = 0x0025,          // 液位区间测量中
+    STATE_STANDBY = 0x0000,                   // 待机状态
+    STATE_INIT = 0x0001,                      // 初始化状态
+    STATE_BACKZEROING = 0x0002,               // 回零点中
+    STATE_FINDZEROING = 0x0010,               // 标定零点中
+    STATE_SINGLEPOINTING = 0x0011,            // 单点测量中
+    STATE_RUNTOPOINTING = 0x0012,             // 运行到测量点中
+    STATE_GB_SPREADPOINTING = 0x0013,         // 国标分布测量中
+    STATE_SPREADPOINTING = 0x0014,            // 分布测量中
+    STATE_CALIBRATIONOILING = 0x0015,         // 标定液位
+    STATE_READPARAMETERING = 0x0016,          // 读取参数中
+    STATE_RUNUPING = 0x0017,                  // 向上运行中
+    STATE_RUNDOWNING = 0x0018,                // 向下运行中
+    STATE_SETZEROCIRCLING = 0x0019,           // 设置零点编码值
+    STATE_SETZEROANGLING = 0x001A,            // 设置零点编码值
+    STATE_EFACTORYSETTING_RESTORING = 0x001B, // 恢复出厂设置中
+    STATE_BACKUPING = 0x001C,                 // 备份配置文件中
+    STATE_RESTORYING = 0x001D,                // 恢复配置文件中
+    STATE_FINDOIL = 0x001E,                   // 寻找液位中
+    STATE_FINDWATER = 0x001F,                 // 寻找水位中
+    STATE_FINDBOTTOM = 0x0020,                // 寻找罐底中
+    STATE_FORCEZERO = 0x0021,                 // 设置电机零点中
+    STATE_ONTANKOPRATIONING = 0x0022,         // 罐上仪表操作中
+    STATE_SYNTHETICING = 0x0023,              // 综合指令中
 
-	//以下为LTD新加状态
-	STATE_GET_FULLWEIGHT = 0x0026,             // 获取满载称重中
-	STATE_GET_EMPTYWEIGHT = 0x0027,            // 获取空载称重中
-	STATE_MAINTENANCEMODE = 0x0028,          // 维护模式中
-    STATE_WARTSILA_DENSITY_START     = 0x0029,   // 瓦西莱密度梯度测量开始
-    STATE_WARTSILA_DENSITY_MEASURING = 0x002A,   // 瓦西莱密度梯度测量中
+    /* ===================== LTD / 新增测量中状态（顺延） ===================== */
+    STATE_FOLLOW_WATERING = 0x0024,            // 水位跟随寻找中
+    STATE_METER_DENSITY = 0x0025,              // 密度每米测量中
+    STATE_INTERVAL_DENSITY = 0x0026,           // 液位区间测量中
+    STATE_GET_FULLWEIGHT = 0x0027,             // 获取满载称重中
+    STATE_GET_EMPTYWEIGHT = 0x0028,            // 获取空载称重中
+    STATE_MAINTENANCEMODE = 0x0029,            // 维护模式中
+    STATE_WARTSILA_DENSITY_START = 0x002A,     // 瓦西莱密度梯度测量开始
+    STATE_WARTSILA_DENSITY_MEASURING = 0x002B, // 瓦西莱密度梯度测量中
+    STATE_RUN_TO_POSITIONING = 0x002C,         // 运行到指定位置中
+    STATE_FORCE_RUNUPING = 0x002D,             // 电机强制上行中
+    STATE_FORCE_RUNDOWNING = 0x002E,           // 电机强制下行中
+    STATE_FORCE_LIFT_ZEROING = 0x002F,         // 强制提零点中
+    STATE_CALIBRATE_WATERING = 0x0030,         // 水位标定中
 
-	STATE_FINDZEROOVER = 0x8010,               // 标定零点完成
-	STATE_SINGLEPOINTOVER = 0x8011,            // 单点测量完成
-	STATE_SPTESTING = 0x8012,                  // 正在单点检测
-	STATE_GB_SPREADPOINTOVER = 0x8013,         // 国标分布测量完成
-	STATE_SPREADPOINTOVER = 0x8014,            // 分布测量完成
-	STATE_FINDOILOVER = 0x8015,                // 标定液位完成
-	STATE_READPARAMETEROVER = 0x8016,          // 读取参数完成
-	STATE_RUNUPOVER = 0x8017,                  // 向上运行完成
-	STATE_RUNDOWNOVER = 0x8018,                // 向下运行完成
-	STATE_SETZEROCIRCLOVER = 0x8019,           // 设置零点编码值完成
-	STATE_SETZEROANGLOVER = 0x801A,            // 设置零点编码值完成
-	STATE_EFACTORYSETTING_RESTOROVER = 0x801B, // 恢复出厂设置完成
-	STATE_BACKUPOVER = 0x801C,                 // 备份配置文件完成
-	STATE_RESTORYOVER = 0x801D,                // 恢复配置文件完成
-	STATE_FLOWOIL = 0x801E,                    // 液位跟随中
-	STATE_FINDWATER_OVER = 0x801F,             // 寻找水位完成
-	STATE_FINDBOTTOM_OVER = 0x8020,            // 寻找罐底完成
-	STATE_FORCEZERO_OVER = 0x8021,             // 设置电机零点完成
-	STATE_ONTANKOPRATIONCOMPLATE = 0x8022,     // 罐上仪表操作完成
-	STATE_SYNTHETICING_OVER = 0x8023,          // 综合指令完成
-	STATE_COM_METER_DENSITY_OVER = 0x8024,     // 密度每米测量完成
-	STATE_INTERVAL_DENSITY_OVER = 0x8025,      // 液位区间测量完成
+    /* ===================== 完成态（0x80xx） ===================== */
+    STATE_FINDZEROOVER = 0x8010,               // 标定零点完成
+    STATE_SINGLEPOINTOVER = 0x8011,            // 单点测量完成
+    STATE_SPTESTING = 0x8012,                  // 正在单点检测
+    STATE_GB_SPREADPOINTOVER = 0x8013,         // 国标分布测量完成
+    STATE_SPREADPOINTOVER = 0x8014,            // 分布测量完成
+    STATE_FINDOILOVER = 0x8015,                // 标定液位完成
+    STATE_READPARAMETEROVER = 0x8016,          // 读取参数完成
+    STATE_RUNUPOVER = 0x8017,                  // 向上运行完成
+    STATE_RUNDOWNOVER = 0x8018,                // 向下运行完成
+    STATE_SETZEROCIRCLOVER = 0x8019,           // 设置零点编码值完成
+    STATE_SETZEROANGLOVER = 0x801A,            // 设置零点编码值完成
+    STATE_EFACTORYSETTING_RESTOROVER = 0x801B, // 恢复出厂设置完成
+    STATE_BACKUPOVER = 0x801C,                 // 备份配置文件完成
+    STATE_RESTORYOVER = 0x801D,                // 恢复配置文件完成
+    STATE_FLOWOIL = 0x801E,                    // 液位跟随中（旧逻辑）
+    STATE_FINDWATER_OVER = 0x801F,             // 寻找水位完成
+    STATE_FINDBOTTOM_OVER = 0x8020,            // 寻找罐底完成
+    STATE_FORCEZERO_OVER = 0x8021,             // 设置电机零点完成
+    STATE_ONTANKOPRATIONCOMPLATE = 0x8022,     // 罐上仪表操作完成
+    STATE_SYNTHETICING_OVER = 0x8023,          // 综合指令完成
 
-	//以下为LTD新加状态
-	STATE_GET_FULLWEIGHT_OVER = 0x8026,        // 获取满载称重完成
-	STATE_GET_EMPTYWEIGHT_OVER = 0x8027,       // 获取空载称重完成
-	STATE_WARTSILA_DENSITY_OVER      = 0x8029,   // 瓦西莱密度梯度测量完成
-	STATE_ERROR = 0xFFFF // 故障
+    /* ===================== LTD / 新增完成态 ===================== */
+    STATE_FOLLOW_WATER_OVER = 0x8024,           // 水位跟随寻找完成
+    STATE_COM_METER_DENSITY_OVER = 0x8025,      // 密度每米测量完成
+    STATE_INTERVAL_DENSITY_OVER = 0x8026,       // 液位区间测量完成
+    STATE_GET_FULLWEIGHT_OVER = 0x8027,         // 获取满载称重完成
+    STATE_GET_EMPTYWEIGHT_OVER = 0x8028,        // 获取空载称重完成
+    STATE_WARTSILA_DENSITY_OVER = 0x8029,       // 瓦西莱密度梯度测量完成
+    STATE_RUN_TO_POSITION_OVER = 0x802C,        // 运行到指定位置完成
+    STATE_FORCE_RUNUP_OVER = 0x802D,            // 强制上行完成
+    STATE_FORCE_RUNDOWN_OVER = 0x802E,          // 强制下行完成
+    STATE_FORCE_LIFT_ZERO_OVER = 0x802F,        // 强制提零点完成
+    STATE_CALIBRATE_WATER_OVER = 0x8030,        // 水位标定完成
+
+    STATE_ERROR = 0xFFFF                        // 故障
 } DeviceState;
+
 
 /* 设备状态结构体 */
 typedef struct {
@@ -295,6 +328,8 @@ typedef struct {
 	int32_t current_encoder_value; ///< 当前编码值
 	int32_t sensor_position;       ///< 传感器位置
 	int32_t cable_length;          ///< 尺带长度;
+	int32_t motor_step;            ///< 电机步进值
+	int32_t motor_distance;        ///< 电机距离值(单位: 0.1mm)
 
     /* 频率与温度、电压 */
 	uint32_t frequency;            ///< 当前频率
@@ -312,7 +347,7 @@ typedef struct {
     int32_t  angle_y;              ///< Y 轴角度
 
     /* 电机状态相关 */
-    uint32_t motor_speed;          ///< 电机速度（转/s）
+    uint32_t motor_speed;          ///< 电机速度（0.01m/min）
     uint32_t  motor_state;          ///< 电机状态: 0 停止, 1 上行, 2 下行
 } DebugData;
 
@@ -361,109 +396,178 @@ typedef struct {
 /* 设备参数结构体 */
 #pragma pack(push, 1) // 确保结构体紧凑对齐（防止编译器填充）
 typedef struct {
-	//指令
-	CommandType command; // 当前指令
-	// 基础参数
-	uint32_t tankHeight;                     // 罐高(单位: 0.1mm)
-	uint32_t blindZone;                      // 盲区(单位: 0.1mm)
-	uint32_t waterBlindZone;                // 水位盲区(单位: 0.1mm)
-	uint32_t encoder_wheel_circumference_mm; // 编码轮周长(单位: 0.001mm)
-	uint32_t max_motor_speed;               // 最大电机速度(单位: r/s)
-	uint32_t sensorType;                     // 传感器类型
-	uint32_t sensorID;                     // 传感器编号
-	uint32_t sensorSoftwareVersion;	//传感器软件版本
-	uint32_t softwareVersion;                // LTD软件版本
-	CommandType powerOnDefaultCommand; // 上电默认指令
-	uint32_t findZeroDownDistance; // 找零点下行距离(单位: 0.1mm)
-	uint32_t first_loop_circumference_mm;//尺带首圈周长(单位: 0.1mm)
-	uint32_t tape_thickness_mm;	//尺带厚度(单位: 0.001mm)
-	uint32_t reserved1;                     // 保留字段1
-	uint32_t reserved2;                     // 保留字段2
-	uint32_t reserved3;                     // 保留字段3
+    // 指令
+    CommandType command;                  // 当前指令
 
-	//称重参数
-	uint32_t empty_weight;        // 空载重量
-	uint32_t full_weight;			 //满载称重
-	uint32_t weight_upper_limit_ratio; // 称重检测上限比例
-	uint32_t weight_lower_limit_ratio; // 称重检测下限比例
-	uint32_t empty_weight_upper_limit; // 空载重量上限
-	uint32_t empty_weight_lower_limit; // 空载重量下限
-	uint32_t full_weight_upper_limit; // 满载重量上限
-	uint32_t full_weight_lower_limit; // 满载重量下限
-	uint32_t reserved4;                     // 保留字段4
-	uint32_t reserved5;                     // 保留字段5
-	//指令参数
-	uint32_t calibrateOilLevel; // 标定液位值
-	uint32_t calibrateWaterLevel; // 水位标定值
-	uint32_t singlePointMeasurementPosition; // 单点测量位置
-	uint32_t singlePointMonitoringPosition; // 单点监测位置
-	uint32_t densityDistributionOilLevel; // 密度分布测量时的液位值
-	uint32_t motorCommandDistance; // 电机指令的运行距离
-	uint32_t reserved6;                     // 保留字段6
-	uint32_t reserved7;                     // 保留字段7
+    // ===================== 基础参数 =====================
+    uint32_t sensorType;                  // 传感器类型
+    uint32_t sensorID;                    // 传感器编号
+    uint32_t sensorSoftwareVersion;       // 传感器软件版本
+    uint32_t softwareVersion;             // LTD 软件版本
+    CommandType powerOnDefaultCommand;    // 上电默认指令
+    uint32_t error_auto_back_zero;        // 错误自动回零标志(0/1)
+    uint32_t error_stop_measurement;      // 错误停止测量标志(0/1)
 
-	// 密度和温度测量参数
-	uint32_t densityCorrection;     // 密度修正值、磁通量D
-	uint32_t temperatureCorrection; // 温度修正值、磁通量T
+    uint32_t reserved1;                   // 预留
+    uint32_t reserved2;                   // 预留
+    uint32_t reserved3;                   // 预留
+    uint32_t reserved4;                   // 预留（新增）
+    uint32_t reserved5;                   // 预留（新增）
 
-	//分布测量参数
-	uint32_t requireBottomMeasurement;  // 是否需要测量罐底
-	uint32_t requireWaterMeasurement;   // 是否需要测量水位
-	uint32_t requireSinglePointDensity; // 是否需要测量单点密度
-	uint32_t spreadMeasurementOrder;    // 分布测量顺序
-	uint32_t spreadMeasurementMode;     // 分布测量模式
-	uint32_t spreadMeasurementCount;    // 分布测量数量
-	uint32_t spreadMeasurementDistance; // 分布测量间距
-	uint32_t spreadTopLimit;            // 分布测量上限（距液面）
-	uint32_t spreadBottomLimit;         // 分布测量下限（距罐底）
-	uint32_t spreadPointHoverTime; 		// 第一测量点悬停时间
-	uint32_t reserved8;                     // 保留字段8
-	uint32_t reserved9;                     // 保留字段9
-	//wartsila密度区间测量参数
-	uint32_t wartsila_upper_density_limit;  // 瓦西莱密度区间上限 (单位: kg/m3*0.1?)
-	uint32_t wartsila_lower_density_limit;  // 瓦西莱密度区间下限
-	uint32_t wartsila_density_interval;     // 密度步进
-	uint32_t wartsila_max_height_above_surface; // 最高测点距液面距离
-//	uint32_t wartsxila_measurement_points;   // 瓦西莱密度区间测量点数
+    // ===================== 电机与编码器参数 =====================
+    uint32_t encoder_wheel_circumference_mm; // 编码轮周长(0.001mm)
+    uint32_t max_motor_speed;                 // 最大电机速度(0.01m/min)
+    uint32_t first_loop_circumference_mm;     // 尺带首圈周长(0.1mm)
+    uint32_t tape_thickness_mm;               // 尺带厚度(0.001mm)
 
-	// 水位测量参数
-	uint32_t waterLevelCorrection; // 水位修正值
-	uint32_t maxDownDistance;      // 水位/罐底测量最大下行距离（盲区下行距离）
-	uint32_t reserved10;                     // 保留字段10
+    uint32_t reserved6;                   // 预留
+    uint32_t reserved7;                   // 预留（新增）
 
-	// 实高测量
-	uint32_t refreshTankHeightFlag;  // 是否更新液位罐高
-	uint32_t maxTankHeightDeviation; // 罐高最大变化范围
-	uint32_t initialTankHeight;      // 初始实高
-	uint32_t currentTankHeight;      // 当前实高
+    // ===================== 称重参数 =====================
+    uint32_t empty_weight;                // 空载重量
+    uint32_t empty_weight_upper_limit;    // 空载重量上限
+    uint32_t empty_weight_lower_limit;    // 空载重量下限
+    uint32_t full_weight;                 // 满载称重
+    uint32_t full_weight_upper_limit;     // 满载重量上限
+    uint32_t full_weight_lower_limit;     // 满载重量下限
+    uint32_t weight_upper_limit_ratio;    // 称重变化量检测上限比例
+    uint32_t weight_lower_limit_ratio;    // 称重变化量检测下限比例
 
-	// 液位测量
-	uint32_t oilLevelThreshold;            // 液位跟随阈值
-	uint32_t oilLevelHysteresisThreshold;// 液位滞后阈值
-	uint32_t liquidLevelMeasurementMethod; // 液位测量方式
-	//报警
-	uint32_t AlarmHighDO;               // 高液位报警输出
-	uint32_t AlarmLowDO;                // 低液位报警输出
-	uint32_t ThirdStateThreshold;   // 第三状态阈值
-	//4-20mA输出
-	uint32_t CurrentRangeStart_mA;       // 电流量程起始值
-	uint32_t CurrentRangeEnd_mA;         // 电流量程结束值
-	uint32_t AlarmHighAO;               // 高液位报警输出
-	uint32_t AlarmLowAO;                // 低液位报警输出
-	uint32_t InitialCurrent_mA;         // 初始化电流值
-	uint32_t AOHighCurrent_mA;          // AO高报电流值
-	uint32_t AOLowCurrent_mA;           // AO低报电流值
-	uint32_t FaultCurrent_mA;          // 故障模式电流值
-	uint32_t DebugCurrent_mA;          // 调试模式电流值
+    uint32_t reserved8;                   // 预留
+    uint32_t reserved9;                   // 预留（新增）
 
-	uint32_t param_version;    			// 参数结构版本号
-	uint32_t struct_size;      			// sizeof(DeviceParameters)，用于版本兼容校验
-	uint32_t magic; 					// 固定写 0x4C54444Du = 'LTDM'
-	uint32_t crc;                          // 新增CRC校验字段
+    // ===================== 零点测量 =====================
+    uint32_t zero_weight_threshold_ratio;     // 零点称重阈值比例
+    uint32_t weight_ignore_zone;              // 零点下称重不检测区域(建议 0.1mm)
+    uint32_t max_zero_deviation_distance;     // 零点最大偏差距离(建议 0.1mm)
+    uint32_t findZeroDownDistance;            // 找零点完成后下行距离(0.1mm)
+
+    uint32_t reserved10;                  // 预留
+    uint32_t reserved11;                  // 预留（新增）
+
+    // ===================== 液位测量 =====================
+    uint32_t tankHeight;                     // 液位罐高(0.1mm)
+    uint32_t liquid_sensor_distance_diff;    // 液位传感器距离差(0.1mm)
+    uint32_t blindZone;                      // 液位盲区(0.1mm)
+    uint32_t oilLevelThreshold;              // 液位跟随阈值
+    uint32_t oilLevelHysteresisThreshold;    // 液位滞后阈值
+    uint32_t liquidLevelMeasurementMethod;   // 液位测量方式 0 空气+液体频率/2 1：根据设置跟随频率跟随 2 根据设置密度跟随
+    uint32_t oilLevelFrequency;              // 液位跟随频率
+    uint32_t oilLevelDensity;                // 液位跟随密度
+    uint32_t oilLevelHysteresisTime;         // oil level hysteresis time
+
+    // ===================== 水位测量参数 =====================
+    uint32_t water_tank_height;                 // 水位罐高(0.1mm)
+    uint32_t water_level_mode;                  // 水位测量方式
+    uint32_t waterBlindZone;                    // 水位盲区(0.1mm)
+    uint32_t water_cap_threshold;               // 水位电容阈值（建议明确倍率，如 x1000）
+    uint32_t water_cap_hysteresis;              // 水位电容滞后阈值（建议明确倍率，如 x1000）
+    uint32_t maxDownDistance;                   // 水位/罐底测量最大下行距离(0.1mm)
+    uint32_t zero_cap;                          //零点电容值
+    uint32_t water_stable_threshold;            //水位稳定阈值
+    uint32_t waterLevelCorrection;              // water level correction
+
+    // ===================== 罐高/罐底测量 =====================
+    uint32_t bottom_detect_mode;          // 罐底测量模式
+    uint32_t bottom_angle_threshold;      // 罐底角度阈值（务必明确单位/倍率）
+    uint32_t bottom_weight_threshold;     // 罐底称重阈值
+    uint32_t refreshTankHeightFlag;       // 是否更新液位罐高
+    uint32_t maxTankHeightDeviation;      // 罐高最大变化范围
+    uint32_t initialTankHeight;           // 初始实高
+    uint32_t currentTankHeight;           // 当前实高
+
+    uint32_t reserved16;                 // 预留
+    uint32_t reserved17;                 // 预留（新增）
+
+    // ===================== 密度和温度修正参数 =====================
+    uint32_t densityCorrection;           // 密度修正值、磁通量D
+    uint32_t temperatureCorrection;       // 温度修正值、磁通量T
+
+    uint32_t reserved18;                 // 预留
+    uint32_t reserved19;                 // 预留（新增）
+
+    // ===================== 分布/区间测量参数 =====================
+    uint32_t requireBottomMeasurement;         // 是否需要测量罐底
+    uint32_t requireWaterMeasurement;          // 是否需要测量水位
+    uint32_t requireSinglePointDensity;        // 是否需要测量单点密度
+    uint32_t spreadMeasurementOrder;           // 分布测量顺序
+    uint32_t spreadMeasurementMode;            // 分布测量模式
+    uint32_t spreadMeasurementCount;           // 分布测量数量
+    uint32_t spreadMeasurementDistance;        // 分布测量间距
+    uint32_t spreadTopLimit;                   // 分布测量上限（距液面，0.1mm）
+    uint32_t spreadBottomLimit;                // 分布测量下限（距罐底，0.1mm）
+    uint32_t spreadPointHoverTime;             // 第一测量点悬停时间
+    uint32_t intervalMeasurementTopLimit;      // 区间测量上限（距液面，0.1mm）
+    uint32_t intervalMeasurementBottomLimit;   // 区间测量下限（距罐底，0.1mm）
+
+    uint32_t reserved20;                 // 预留
+    uint32_t reserved21;                 // 预留（新增）
+
+    // ===================== Wartsila 密度区间测量参数 =====================
+    uint32_t wartsila_upper_density_limit;        // 上限
+    uint32_t wartsila_lower_density_limit;        // 下限
+    uint32_t wartsila_density_interval;           // 步进
+    uint32_t wartsila_max_height_above_surface;   // 最高测点距液面距离(0.1mm 或按定义)
+
+    uint32_t reserved22;                 // 预留
+    uint32_t reserved23;                 // 预留（新增）
+
+    // ===================== 继电器报警输出 =====================
+    uint32_t AlarmHighDO;                // 高液位报警输出
+    uint32_t AlarmLowDO;                 // 低液位报警输出
+    uint32_t ThirdStateThreshold;        // 第三状态阈值
+
+    uint32_t reserved24;                 // 预留
+    uint32_t reserved25;                 // 预留（新增）
+
+    // ===================== 4-20mA 输出 =====================
+    uint32_t CurrentRangeStart_mA;       // 电流量程起始值
+    uint32_t CurrentRangeEnd_mA;         // 电流量程结束值
+    uint32_t AlarmHighAO;                // 高液位报警输出
+    uint32_t AlarmLowAO;                 // 低液位报警输出
+    uint32_t InitialCurrent_mA;          // 初始化电流值
+    uint32_t AOHighCurrent_mA;           // AO高报电流值
+    uint32_t AOLowCurrent_mA;            // AO低报电流值
+    uint32_t FaultCurrent_mA;            // 故障模式电流值
+    uint32_t DebugCurrent_mA;            // 调试模式电流值
+
+    uint32_t reserved26;                 // 预留
+    uint32_t reserved27;                 // 预留（新增）
+
+    // ===================== 指令参数 =====================
+    uint32_t calibrateOilLevel;              // 标定液位值
+    uint32_t calibrateWaterLevel;            // 水位标定值
+    uint32_t singlePointMeasurementPosition; // 单点测量位置
+    uint32_t singlePointMonitoringPosition;  // 单点监测位置
+    uint32_t densityDistributionOilLevel;    // 电机指令的运行位置
+    uint32_t motorCommandDistance;           // 电机指令的运行距离
+
+    uint32_t reserved28;                 // 预留
+    uint32_t reserved29;                 // 预留（新增）
+
+    // ===================== Tape compensation =====================
+    uint32_t lastOilCorrectionLevel;     // level at last oil correction
+    uint32_t tankGasPhaseTemperature;    // tank gas phase temperature
+    uint32_t tapeExpansionCoefficient;   // tape expansion coefficient
+    uint32_t tapeCalibrationTemperature; // tape calibration temperature
+
+    uint32_t reserved30;                 // reserved
+    uint32_t reserved31;                 // reserved
+    uint32_t reserved32;                 // reserved
+    uint32_t reserved33;                 // reserved
+
+    // ===================== 元信息与校验 =====================
+    uint32_t param_version;              // 参数结构版本号
+    uint32_t struct_size;                // sizeof(DeviceParameters)
+    uint32_t magic;                      // 0x4C54444D = 'LTDM'
+    uint32_t crc;                        // CRC32
 } DeviceParameters;
 #pragma pack(pop)
 
-#define FRAM_PARAM_ADDRESS 0x0000 // 参数存储起始地址
+#define FRAM_PARAM_A_ADDRESS 0x0000u
+#define FRAM_PARAM_SLOT_SIZE 0x0800u
+#define FRAM_PARAM_B_ADDRESS (FRAM_PARAM_A_ADDRESS + FRAM_PARAM_SLOT_SIZE)
+#define FRAM_PARAM_ADDRESS FRAM_PARAM_A_ADDRESS // 兼容旧代码
 #define CRC_SEED 0xFFFFFFFF       // CRC初始值
 
 /***************** 全局变量 ****************************/
@@ -476,4 +580,8 @@ int load_device_params(void); // 加载设备参数
 void init_device_params(void); // 初始化设备参数
 void RestoreFactoryParamsConfig(void); //恢复出厂默认参数配置
 void print_device_params(void); // 打印设备参数
+CommandType DefaultCmd_To_MeasureCmd(DefaultCommandType def_cmd);
+/* 调试打印接口 */
+void PrintDensity(const char *title, const DensityMeasurement *d); // 打印单个密度测点
+void PrintMeasurementResult(const MeasurementResult *m); // 打印完整测量结果
 #endif

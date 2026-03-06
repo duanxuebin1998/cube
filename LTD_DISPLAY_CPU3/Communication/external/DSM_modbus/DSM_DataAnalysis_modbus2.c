@@ -91,7 +91,6 @@ void SystemParameterSet(void)
 	// WriteOneHoldingRegister(HOLDREGISTER_GIRTH_USELESS,1,systemunion.systemparameter.Girth);				//导论周长
 
 	WriteOneHoldingRegister(HOLDREGISTER_WATER_IS_REAL_HIGH, 1, 0);
-	WriteOneHoldingRegister(HOLDREGISTER_REAL_WATER_LEVEL_CORRECT, 1, g_deviceParams.waterLevelCorrection);
 	WriteOneHoldingRegister(HOLDREGISTER_IF_REFRESH_TANKHIGH, 1, 0);
 	WriteOneHoldingRegister(HOLDREGISTER_REAL_TANKHIGH_MAX_DIFF, 1, 0);
 	WriteOneHoldingRegister(HOLDREGISTER_LEVEL_MEASURE_METHOD, 1, g_deviceParams.liquidLevelMeasurementMethod);
@@ -336,7 +335,7 @@ int UpdateDeviceParamsFromLegacyRegs(int startadd, int reamount)
         (HOLDREGISTER_REAL_WATER_LEVEL_CORRECT <= end))
     {
         temp = ReadOneHoldingRegister(HOLDREGISTER_REAL_WATER_LEVEL_CORRECT, 1);
-        g_deviceParams.waterLevelCorrection = (temp & 0xFFFF);
+//        g_deviceParams. = (temp & 0xFFFF);
     }
 
     /*************** 液位测量方式 -> liquidLevelMeasurementMethod *****/

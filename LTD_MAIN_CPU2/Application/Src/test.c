@@ -15,6 +15,12 @@
 #include "measure_tank_height.h"
 #include "weight.h"
 #include "system_parameter.h"
+#include "sensor.h"
+#include <mb85rs2m.h>
+#include "my_crc.h"
+#include "ad5421.h"
+#include "encoder.h"
+#include <stddef.h>
 //电机小步进上行测试
 void motor_step_up_text(void) {
 	int i = 0;
@@ -166,25 +172,166 @@ void Test_Params_Storage(void) {
 	g_deviceParams = original;
 	save_device_params(); //存储
 }
-void motor_text(void) {
-	printf("motor text start\n");
-	while (1) {
-		stpr_enableDriver(&stepper); //使能电机
-//		stpr_initStepper(&stepper, &hspi2, GPIOB, GPIO_PIN_12, 1, 18);
-		motorMoveNoWait(1000, MOTOR_DIRECTION_DOWN);
-		HAL_Delay(1000);
-		printf("start down\n");
-		stpr_waitMove(&stepper);
-		printf("down over!\n");
-		HAL_Delay(1000);
-		stpr_moveTo(&stepper, 0, velocity);
-		printf("start up to zero\n");
-		HAL_Delay(1000);
-		stpr_waitMove(&stepper);
-		printf("上行结束\n");
-		HAL_Delay(1000);
-		stpr_disableDriver(&stepper); //使能电机
-	}
+
+#define TEST_ENCODER_SLOT_SIZE  (0x40u)
+#define TEST_ENCODER_A_ADDRESS   FRAM_ANGLE_ADDRESS
+#define TEST_ENCODER_B_ADDRESS   (TEST_ENCODER_A_ADDRESS + TEST_ENCODER_SLOT_SIZE)
+
+void Test_ParamEncoder_AB_Backup(void)
+{
+    DeviceParameters param_backup = g_deviceParams;
+    uint8_t param_a_raw[sizeof(DeviceParameters)] = {0};
+    uint8_t param_b_raw[sizeof(DeviceParameters)] = {0};
+
+    uint8_t encoder_a_raw[TEST_ENCODER_SLOT_SIZE] = {0};
+    uint8_t encoder_b_raw[TEST_ENCODER_SLOT_SIZE] = {0};
+
+    const uint32_t param_magic_offset = (uint32_t)offsetof(DeviceParameters, magic);
+
+    ReadMultiData(param_a_raw, FRAM_PARAM_A_ADDRESS, sizeof(param_a_raw));
+    ReadMultiData(param_b_raw, FRAM_PARAM_B_ADDRESS, sizeof(param_b_raw));
+    ReadMultiData(encoder_a_raw, TEST_ENCODER_A_ADDRESS, TEST_ENCODER_SLOT_SIZE);
+    ReadMultiData(encoder_b_raw, TEST_ENCODER_B_ADDRESS, TEST_ENCODER_SLOT_SIZE);
+
+    printf("\r\n===== AB双备份回退测试开始 =====\r\n");
+
+    /* Case-1: 参数A损坏，读取应回退到B */
+    g_measurement.device_status.error_code = NO_ERROR;
+    WriteSingleData(0u, FRAM_PARAM_A_ADDRESS + param_magic_offset);
+
+    if (load_device_params()) {
+        printf("[PASS] 参数区: A损坏后已回退到B\r\n");
+    } else {
+        printf("[FAIL] 参数区: A损坏后未能回退到B\r\n");
+    }
+
+    /* Case-2: 参数A/B都损坏，读取应报错 */
+    g_measurement.device_status.error_code = NO_ERROR;
+    WriteSingleData(0u, FRAM_PARAM_A_ADDRESS + param_magic_offset);
+    WriteSingleData(0u, FRAM_PARAM_B_ADDRESS + param_magic_offset);
+
+    if ((!load_device_params()) && (g_measurement.device_status.error_code == PARAM_EEPROM_FAIL)) {
+        printf("[PASS] 参数区: A/B都损坏时已报错 PARAM_EEPROM_FAIL\r\n");
+    } else {
+        printf("[FAIL] 参数区: A/B都损坏时报错不符合预期, err=0x%08lX\r\n",
+               (unsigned long)g_measurement.device_status.error_code);
+    }
+
+    /* 恢复参数区并回写双分区 */
+    WriteMultiData(param_a_raw, FRAM_PARAM_A_ADDRESS, sizeof(param_a_raw));
+    WriteMultiData(param_b_raw, FRAM_PARAM_B_ADDRESS, sizeof(param_b_raw));
+    g_deviceParams = param_backup;
+    save_device_params();
+
+    /* Case-3: 编码A损坏，初始化应回退到B */
+    g_measurement.device_status.error_code = NO_ERROR;
+    WriteSingleData(0u, TEST_ENCODER_A_ADDRESS);
+    Initialize_Encoder();
+
+    if (g_measurement.device_status.error_code != ENCODER_POWERON_FAIL) {
+        printf("[PASS] 编码区: A损坏后已回退到B\r\n");
+    } else {
+        printf("[FAIL] 编码区: A损坏后未能回退到B\r\n");
+    }
+
+    /* Case-4: 编码A/B都损坏，应报错 */
+    g_measurement.device_status.error_code = NO_ERROR;
+    WriteSingleData(0u, TEST_ENCODER_A_ADDRESS);
+    WriteSingleData(0u, TEST_ENCODER_B_ADDRESS);
+    Initialize_Encoder();
+
+    if (g_measurement.device_status.error_code == ENCODER_POWERON_FAIL) {
+        printf("[PASS] 编码区: A/B都损坏时已报错 ENCODER_POWERON_FAIL\r\n");
+    } else {
+        printf("[FAIL] 编码区: A/B都损坏时报错不符合预期, err=0x%08lX\r\n",
+               (unsigned long)g_measurement.device_status.error_code);
+    }
+
+    /* 恢复编码区 */
+    WriteMultiData(encoder_a_raw, TEST_ENCODER_A_ADDRESS, TEST_ENCODER_SLOT_SIZE);
+    WriteMultiData(encoder_b_raw, TEST_ENCODER_B_ADDRESS, TEST_ENCODER_SLOT_SIZE);
+    Initialize_Encoder();
+
+    printf("===== AB双备份回退测试结束 =====\r\n\r\n");
+}
+static void Sensor_CommCheckAndLog(const char *tag)
+{
+    float temp = 0.0f;
+    float frequency = 0.0f;
+    float density = 0.0f;
+    float hz_45 = 0.0f, hz_225 = 0.0f;
+
+    static uint32_t comm_fail_cnt = 0;
+    uint32_t ret;
+
+    /* 读温度 */
+    ret = DSM_V2_Read_Temperature(&temp);
+    if (ret == NO_ERROR) {
+        printf("[SENSOR][OK ] %s Temp=%.3f C\r\n", tag, temp);
+    } else {
+        comm_fail_cnt++;
+        printf("[SENSOR][ERR] %s Temp fail, ret=%lu, fail_cnt=%lu\r\n",
+               tag, (unsigned long)ret, (unsigned long)comm_fail_cnt);
+    }
+
+    /* 读密度 */
+    ret = DSM_V2_Read_Density(&density);
+    if (ret == NO_ERROR) {
+        printf("[SENSOR][OK ] %s Density=%.3f\r\n", tag, density);
+    } else {
+        comm_fail_cnt++;
+        printf("[SENSOR][ERR] %s Density fail, ret=%lu, fail_cnt=%lu\r\n",
+               tag, (unsigned long)ret, (unsigned long)comm_fail_cnt);
+    }
+
+    /* 读频率 + 扫频均值 */
+    ret = DSM_V2_Read_DensityFrequency(&frequency, &hz_45, &hz_225);
+    if (ret == NO_ERROR) {
+        printf("[SENSOR][OK ] %s F=%.1f Hz, Hz45=%.2f, Hz22.5=%.2f\r\n",
+               tag, frequency, hz_45, hz_225);
+    } else {
+        comm_fail_cnt++;
+        printf("[SENSOR][ERR] %s Freq fail, ret=%lu, fail_cnt=%lu\r\n",
+               tag, (unsigned long)ret, (unsigned long)comm_fail_cnt);
+    }
+}
+
+
+/* ========================= 主测试函数 ========================= */
+void motor_text(void)
+{
+    uint32_t loop_cnt = 0;
+
+    printf("motor text start\r\n");
+    motor_Init(); // 电机初始化
+
+    while (1) {
+        /* ---------- 下行 ---------- */
+        motorMoveNoWait(300, MOTOR_DIRECTION_DOWN);
+        HAL_Delay(1000);
+        printf("[LOOP %lu] start down\r\n", (unsigned long)(loop_cnt + 1));
+
+        stpr_waitMove(&stepper);
+        printf("[LOOP %lu] down over!\r\n", (unsigned long)(loop_cnt + 1));
+
+        /* 下行结束后：传感器通讯一次 */
+        Sensor_CommCheckAndLog("after DOWN");
+
+        /* ---------- 回零（上行到0） ---------- */
+        stpr_moveTo(&stepper, 0, velocity); // 最大速度为 1600 * 2 * 32
+        printf("[LOOP %lu] start up to zero\r\n", (unsigned long)(loop_cnt + 1));
+        HAL_Delay(1000);
+
+        stpr_waitMove(&stepper);
+        printf("[LOOP %lu] up over (to zero)\r\n", (unsigned long)(loop_cnt + 1));
+
+        /* 上行结束后：传感器通讯一次 */
+        Sensor_CommCheckAndLog("after UP");
+
+        /* 本轮完成计数（下+上算一轮） */
+        loop_cnt++;
+        printf("[LOOP %lu] cycle done\r\n", (unsigned long)loop_cnt);
+    }
 }
 #include <ltd_sensor_communication.h>
 #include <stdio.h>
@@ -245,5 +392,12 @@ void DSM_V2_Test_AllParams(void) {
     else printf("读取传感器号失败\r\n");
 
 	printf("===== DSM V2 通讯测试结束 =====\r\n\r\n");
+}
+//测试主函数
+void Test_main(void) {
+	Test_FRAM_ReadWrite(); //测试FRAM读写
+//	motor_text();
+	Test_Params_Storage(); //测试参数存储
+	CRC32_HAL_Test(); //CRC校验测试
 }
 

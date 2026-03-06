@@ -1,0 +1,42 @@
+name: Build Firmware (CPU2 + CPU3)
+
+on:
+  push:
+    branches: ["MAIN", "main", "CMAKE", "MOTOR_TEXT"]
+  pull_request:
+    branches: ["MAIN", "main"]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [cpu2-debug, cpu3-debug]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install deps (CMake, Ninja, Arm GCC)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake ninja-build gcc-arm-none-eabi
+
+          cmake --version
+          ninja --version
+          arm-none-eabi-gcc --version
+
+      - name: Configure (${{ matrix.target }})
+        run: |
+          cmake --preset ${{ matrix.target }} --fresh
+
+      - name: Build (${{ matrix.target }})
+        run: |
+          cmake --build --preset ${{ matrix.target }}
+
+      - name: Upload artifacts (${{ matrix.target }})
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.target }}-artifacts
+          path: ${{ matrix.target == 'cpu2-debug' && 'build/LTD_MAIN_CPU2/LTD_MAIN_CPU2/*' || 'build/LTD_DISPLAY_CPU3/LTD_DISPLAY_CPU3/*' }}
