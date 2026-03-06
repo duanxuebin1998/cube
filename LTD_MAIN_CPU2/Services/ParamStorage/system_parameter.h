@@ -564,7 +564,10 @@ typedef struct {
 } DeviceParameters;
 #pragma pack(pop)
 
-#define FRAM_PARAM_ADDRESS 0x0000 // 参数存储起始地址
+#define FRAM_PARAM_A_ADDRESS 0x0000u
+#define FRAM_PARAM_SLOT_SIZE 0x0800u
+#define FRAM_PARAM_B_ADDRESS (FRAM_PARAM_A_ADDRESS + FRAM_PARAM_SLOT_SIZE)
+#define FRAM_PARAM_ADDRESS FRAM_PARAM_A_ADDRESS // 兼容旧代码
 #define CRC_SEED 0xFFFFFFFF       // CRC初始值
 
 /***************** 全局变量 ****************************/
@@ -578,4 +581,7 @@ void init_device_params(void); // 初始化设备参数
 void RestoreFactoryParamsConfig(void); //恢复出厂默认参数配置
 void print_device_params(void); // 打印设备参数
 CommandType DefaultCmd_To_MeasureCmd(DefaultCommandType def_cmd);
+/* 调试打印接口 */
+void PrintDensity(const char *title, const DensityMeasurement *d); // 打印单个密度测点
+void PrintMeasurementResult(const MeasurementResult *m); // 打印完整测量结果
 #endif
