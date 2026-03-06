@@ -19,6 +19,8 @@
 #include <mb85rs2m.h>
 #include "my_crc.h"
 #include "ad5421.h"
+#include "encoder.h"
+#include <stddef.h>
 //电机小步进上行测试
 void motor_step_up_text(void) {
 	int i = 0;
@@ -169,6 +171,88 @@ void Test_Params_Storage(void) {
 	// 恢复原始参数
 	g_deviceParams = original;
 	save_device_params(); //存储
+}
+
+#define TEST_ENCODER_SLOT_SIZE  (0x40u)
+#define TEST_ENCODER_A_ADDRESS   FRAM_ANGLE_ADDRESS
+#define TEST_ENCODER_B_ADDRESS   (TEST_ENCODER_A_ADDRESS + TEST_ENCODER_SLOT_SIZE)
+
+void Test_ParamEncoder_AB_Backup(void)
+{
+    DeviceParameters param_backup = g_deviceParams;
+    uint8_t param_a_raw[sizeof(DeviceParameters)] = {0};
+    uint8_t param_b_raw[sizeof(DeviceParameters)] = {0};
+
+    uint8_t encoder_a_raw[TEST_ENCODER_SLOT_SIZE] = {0};
+    uint8_t encoder_b_raw[TEST_ENCODER_SLOT_SIZE] = {0};
+
+    const uint32_t param_magic_offset = (uint32_t)offsetof(DeviceParameters, magic);
+
+    ReadMultiData(param_a_raw, FRAM_PARAM_A_ADDRESS, sizeof(param_a_raw));
+    ReadMultiData(param_b_raw, FRAM_PARAM_B_ADDRESS, sizeof(param_b_raw));
+    ReadMultiData(encoder_a_raw, TEST_ENCODER_A_ADDRESS, TEST_ENCODER_SLOT_SIZE);
+    ReadMultiData(encoder_b_raw, TEST_ENCODER_B_ADDRESS, TEST_ENCODER_SLOT_SIZE);
+
+    printf("\r\n===== AB双备份回退测试开始 =====\r\n");
+
+    /* Case-1: 参数A损坏，读取应回退到B */
+    g_measurement.device_status.error_code = NO_ERROR;
+    WriteSingleData(0u, FRAM_PARAM_A_ADDRESS + param_magic_offset);
+
+    if (load_device_params()) {
+        printf("[PASS] 参数区: A损坏后已回退到B\r\n");
+    } else {
+        printf("[FAIL] 参数区: A损坏后未能回退到B\r\n");
+    }
+
+    /* Case-2: 参数A/B都损坏，读取应报错 */
+    g_measurement.device_status.error_code = NO_ERROR;
+    WriteSingleData(0u, FRAM_PARAM_A_ADDRESS + param_magic_offset);
+    WriteSingleData(0u, FRAM_PARAM_B_ADDRESS + param_magic_offset);
+
+    if ((!load_device_params()) && (g_measurement.device_status.error_code == PARAM_EEPROM_FAIL)) {
+        printf("[PASS] 参数区: A/B都损坏时已报错 PARAM_EEPROM_FAIL\r\n");
+    } else {
+        printf("[FAIL] 参数区: A/B都损坏时报错不符合预期, err=0x%08lX\r\n",
+               (unsigned long)g_measurement.device_status.error_code);
+    }
+
+    /* 恢复参数区并回写双分区 */
+    WriteMultiData(param_a_raw, FRAM_PARAM_A_ADDRESS, sizeof(param_a_raw));
+    WriteMultiData(param_b_raw, FRAM_PARAM_B_ADDRESS, sizeof(param_b_raw));
+    g_deviceParams = param_backup;
+    save_device_params();
+
+    /* Case-3: 编码A损坏，初始化应回退到B */
+    g_measurement.device_status.error_code = NO_ERROR;
+    WriteSingleData(0u, TEST_ENCODER_A_ADDRESS);
+    Initialize_Encoder();
+
+    if (g_measurement.device_status.error_code != ENCODER_POWERON_FAIL) {
+        printf("[PASS] 编码区: A损坏后已回退到B\r\n");
+    } else {
+        printf("[FAIL] 编码区: A损坏后未能回退到B\r\n");
+    }
+
+    /* Case-4: 编码A/B都损坏，应报错 */
+    g_measurement.device_status.error_code = NO_ERROR;
+    WriteSingleData(0u, TEST_ENCODER_A_ADDRESS);
+    WriteSingleData(0u, TEST_ENCODER_B_ADDRESS);
+    Initialize_Encoder();
+
+    if (g_measurement.device_status.error_code == ENCODER_POWERON_FAIL) {
+        printf("[PASS] 编码区: A/B都损坏时已报错 ENCODER_POWERON_FAIL\r\n");
+    } else {
+        printf("[FAIL] 编码区: A/B都损坏时报错不符合预期, err=0x%08lX\r\n",
+               (unsigned long)g_measurement.device_status.error_code);
+    }
+
+    /* 恢复编码区 */
+    WriteMultiData(encoder_a_raw, TEST_ENCODER_A_ADDRESS, TEST_ENCODER_SLOT_SIZE);
+    WriteMultiData(encoder_b_raw, TEST_ENCODER_B_ADDRESS, TEST_ENCODER_SLOT_SIZE);
+    Initialize_Encoder();
+
+    printf("===== AB双备份回退测试结束 =====\r\n\r\n");
 }
 static void Sensor_CommCheckAndLog(const char *tag)
 {

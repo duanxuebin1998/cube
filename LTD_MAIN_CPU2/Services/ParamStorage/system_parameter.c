@@ -35,94 +35,129 @@ volatile DeviceParameters  g_deviceParams = {0};  /* 设备参数 */
 
 /*========================= 参数存储逻辑 =========================*/
 
-/* 保存设备参数到 FRAM */
+/* 根据持久化区计算参数CRC32（不含command和crc字段） */
+static uint32_t device_param_crc(const DeviceParameters *params)
+{
+    const uint8_t *crc_base = DEVICE_PARAM_PERSIST_START(params);
+    const uint32_t crc_size = (uint32_t)DEVICE_PARAM_PERSIST_LEN;
+    return CRC32_HAL((const uint8_t *)crc_base, crc_size);
+}
+
+/* 从指定分区读取并校验设备参数：返回1成功，0失败 */
+static int load_device_params_from_slot(uint32_t base_addr, DeviceParameters *out, const char *slot_name)
+{
+    DeviceParameters temp;
+
+    ReadMultiData((uint8_t *)&temp, (int)base_addr, sizeof(DeviceParameters));
+
+    if (temp.magic != DEVICE_PARAM_MAGIC)
+    {
+        printf("设备参数[%s] magic 不匹配: 0x%08lX\r\n", slot_name, (unsigned long)temp.magic);
+        return 0;
+    }
+
+    if (temp.struct_size != sizeof(DeviceParameters))
+    {
+        printf("设备参数[%s] struct_size 不匹配: FRAM=%lu, 当前=%lu\r\n",
+               slot_name,
+               (unsigned long)temp.struct_size,
+               (unsigned long)sizeof(DeviceParameters));
+        return 0;
+    }
+
+    if (temp.param_version != DEVICE_PARAM_VERSION)
+    {
+        printf("设备参数[%s] 版本不匹配: FRAM=%lu, 当前=%lu\r\n",
+               slot_name,
+               (unsigned long)temp.param_version,
+               (unsigned long)DEVICE_PARAM_VERSION);
+        return 0;
+    }
+
+    {
+        const uint32_t calc_crc = device_param_crc(&temp);
+        if (calc_crc != temp.crc)
+        {
+            printf("设备参数[%s] CRC 校验失败: calc=0x%08lX, FRAM=0x%08lX\r\n",
+                   slot_name,
+                   (unsigned long)calc_crc,
+                   (unsigned long)temp.crc);
+            return 0;
+        }
+    }
+
+    *out = temp;
+    return 1;
+}
+
+/* 保存设备参数到 FRAM A/B 分区 */
 void save_device_params(void)
 {
+    if (sizeof(DeviceParameters) > FRAM_PARAM_SLOT_SIZE)
+    {
+        printf("设备参数超出单分区容量: size=%lu, slot=%lu\r\n", (unsigned long)sizeof(DeviceParameters), (unsigned long)FRAM_PARAM_SLOT_SIZE);
+        g_measurement.device_status.error_code = PARAM_ADDRESS_OVERFLOW;
+        return;
+    }
+
     DeviceParameters params = g_deviceParams;
 
-    /* 元信息字段 */
     params.param_version = DEVICE_PARAM_VERSION;
     params.struct_size   = (uint32_t)sizeof(DeviceParameters);
     params.magic         = DEVICE_PARAM_MAGIC;
-
-    /* CRC 覆盖从 sensorType 起到 crc 之前的区域, 不包含 command 和 crc 自身 */
-    uint8_t  *crc_base = DEVICE_PARAM_PERSIST_START(&params);
-    uint32_t  crc_size = (uint32_t)DEVICE_PARAM_PERSIST_LEN;
-
-    params.crc = CRC32_HAL(crc_base, crc_size);
+    params.crc           = device_param_crc(&params);
 
     printf("保存设备参数: version=%lu, size=%lu, CRC=0x%08lX\r\n",
            (unsigned long)params.param_version,
            (unsigned long)params.struct_size,
            (unsigned long)params.crc);
 
-    /* 整块写入 FRAM, 包含 command 和所有字段 */
-    WriteMultiData((uint8_t *)&params, FRAM_PARAM_ADDRESS, sizeof(DeviceParameters));
+    WriteMultiData((uint8_t *)&params, (int)FRAM_PARAM_A_ADDRESS, sizeof(DeviceParameters));
+    WriteMultiData((uint8_t *)&params, (int)FRAM_PARAM_B_ADDRESS, sizeof(DeviceParameters));
 
-    printf("设备参数已保存到 FRAM\r\n");
+    printf("设备参数已保存到 FRAM A/B 分区\r\n");
 
     print_device_params();
 }
 
 /*========================= 参数加载逻辑 =========================*/
 
-/* 从 FRAM 加载设备参数, 返回 1 表示成功, 0 表示失败 */
+/* 从 FRAM A/B 分区加载设备参数, 返回 1 表示成功, 0 表示失败 */
 int load_device_params(void)
 {
     DeviceParameters temp;
+    int loaded_from_a = 0;
 
-    /* 从 FRAM 读取整块结构体 */
-    ReadMultiData((uint8_t *)&temp, FRAM_PARAM_ADDRESS, sizeof(DeviceParameters));
-
-    /* 检查 magic 字段 */
-    if (temp.magic != DEVICE_PARAM_MAGIC)
+    if (sizeof(DeviceParameters) > FRAM_PARAM_SLOT_SIZE)
     {
-        printf("设备参数 magic 不匹配, 读取到: 0x%08lX, 使用默认参数\r\n",
-               (unsigned long)temp.magic);
+        printf("设备参数超出单分区容量: size=%lu, slot=%lu\r\n", (unsigned long)sizeof(DeviceParameters), (unsigned long)FRAM_PARAM_SLOT_SIZE);
+        g_measurement.device_status.error_code = PARAM_ADDRESS_OVERFLOW;
         return 0;
     }
 
-    /* 检查结构体大小 */
-    if (temp.struct_size != sizeof(DeviceParameters))
+    if (load_device_params_from_slot(FRAM_PARAM_A_ADDRESS, &temp, "A"))
     {
-        printf("设备参数 struct_size 不匹配, FRAM=%lu, 当前=%lu, 使用默认参数\r\n",
-               (unsigned long)temp.struct_size,
-               (unsigned long)sizeof(DeviceParameters));
+        loaded_from_a = 1;
+    }
+    else if (load_device_params_from_slot(FRAM_PARAM_B_ADDRESS, &temp, "B"))
+    {
+        printf("设备参数 A 分区异常, 已回退到 B 分区\r\n");
+    }
+    else
+    {
+        printf("设备参数 A/B 分区均异常\r\n");
+        g_measurement.device_status.error_code = PARAM_EEPROM_FAIL;
         return 0;
     }
 
-    /* 检查版本号 */
-    if (temp.param_version != DEVICE_PARAM_VERSION)
-    {
-        printf("设备参数版本不匹配, FRAM=%lu, 当前=%lu, 使用默认参数\r\n",
-               (unsigned long)temp.param_version,
-               (unsigned long)DEVICE_PARAM_VERSION);
-        return 0;
-    }
-
-    /* 计算 CRC */
-    {
-        uint8_t *crc_base = DEVICE_PARAM_PERSIST_START(&temp);
-        uint32_t crc_size = (uint32_t)DEVICE_PARAM_PERSIST_LEN;
-        uint32_t calc_crc = CRC32_HAL(crc_base, crc_size);
-
-        if (calc_crc != temp.crc)
-        {
-            printf("设备参数 CRC 校验失败, 计算=0x%08lX, FRAM=0x%08lX\r\n",
-                   (unsigned long)calc_crc,
-                   (unsigned long)temp.crc);
-            return 0;
-        }
-
-    }
-
-    /* 校验成功, 拷贝到全局变量 */
     memcpy((void * volatile)&g_deviceParams, &temp, sizeof(DeviceParameters));
 
-    /* 上电时当前指令从默认指令恢复, 而不是沿用 FRAM 中旧的 command */
     g_deviceParams.command = g_deviceParams.powerOnDefaultCommand;
+
+    /* 回写双分区: 若本次来自 B，可自动修复 A */
     save_device_params();
-    printf("设备参数加载成功\r\n");
+
+    printf("设备参数加载成功 (source=%s)\r\n", loaded_from_a ? "A" : "B");
     return 1;
 }
 
@@ -151,7 +186,7 @@ void init_device_params(void)
         memset((void * volatile)&g_deviceParams, 0, sizeof(DeviceParameters));
         RestoreFactoryParamsConfig(); /* 内部会调用 save_device_params() */
 
-        g_measurement.device_status.error_code = PARAM_UNINITIALIZED;
+        g_measurement.device_status.error_code = PARAM_EEPROM_FAIL;
         printf("设备参数连续 %d 次加载失败, 已恢复出厂设置\r\n", MAX_RETRY);
     }
 }
@@ -455,6 +490,11 @@ void print_device_params(void)
 /*========================= 测量结果打印（可选） =========================*/
 /* 注: 该部分与参数结构无强耦合，仅保留你现有打印习惯；如果不需要可移除 */
 
+/**
+ * @brief 打印单个密度测点信息
+ * @param title 输出标题
+ * @param d     密度测点数据指针
+ */
 void PrintDensity(const char *title, const DensityMeasurement *d)
 {
     if (!d) return;
@@ -468,6 +508,10 @@ void PrintDensity(const char *title, const DensityMeasurement *d)
     printf("    温度位置: %lu\r\n", (unsigned long)d->temperature_position);
 }
 
+/**
+ * @brief 打印完整测量结果
+ * @param m 测量结果指针
+ */
 void PrintMeasurementResult(const MeasurementResult *m)
 {
     if (!m) return;
