@@ -227,7 +227,7 @@ static int SearchBottomPrecise() {
 
 		ret = Motor_CheckLostStep_AutoTiming(g_measurement.debug_data.cable_length);
 		CHECK_ERROR(ret); // 检查丢步检测是否成功
-		printf("罐底测量\t精确寻找罐底\t{传感器位置}%.1f\t速度\t%d\t", (float)(g_measurement.debug_data.sensor_position)/10.0,g_measurement.debug_data.motor_speed);
+		printf("罐底测量\t精确寻找罐底\t{传感器位置}%.1f\t速度(0.01m/min)\t%lu\t", (float)(g_measurement.debug_data.sensor_position)/10.0f, (unsigned long)g_measurement.debug_data.motor_speed);
 	}
 	ret = motorQuickStop();
 	CHECK_ERROR(ret); // 检查快速停止是否成功

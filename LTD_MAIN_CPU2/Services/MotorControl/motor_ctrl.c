@@ -78,12 +78,17 @@
 
 #define EPS_MM                   0.20f    // 到位公差(±mm)
 
-/* 丢步检测参数（单位见注释） */
-#define LOST_STEP_WINDOW         3        // 检测窗口（3次）
-#define LOST_STEP_THRESHOLD      2        // 3秒内总位移小于0.2mm判定丢步（单位：0.1mm）
-#define LOST_STEP_INTERVAL_MS    1000     // 每1秒检测一次
-#define LOST_STEP_SUPPRESS_MS    1000     // 报警后1秒内不重复报警
-#define MOTOR_MOVE_RETRY_MAX     3        // 最大重试次数，包含初次+补偿重跑
+#define LOST_STEP_WINDOW                 6       // 6个采样点 -> 覆盖最近5秒
+#define LOST_STEP_INTERVAL_MS            1000    // 每1秒采样一次
+#define LOST_STEP_SUPPRESS_MS            1000    // 报警抑制1秒
+
+/* 平均速度判定阈值：
+ * 最近5秒平均速度 < 设定速度的 20% -> 判定疑似丢步
+ */
+#define LOST_STEP_SPEED_RATIO_PERCENT    20U
+
+/* 额外绝对下限，避免低速档误判太苛刻（单位：mm/s） */
+#define LOST_STEP_MIN_AVG_SPEED_MM_S     0.5f
 
 /* 周长标定结果合理性范围（按机构实际可调整） */
 #ifndef C0_MIN_MM
@@ -93,15 +98,31 @@
 #define C0_MAX_MM (5000.0)
 #endif
 
-/* 速度基准：与原工程保持一致（1600 step/rev + 32 microstep） */
-#define MOTOR_VELOCITY_BASE     (1600UL * 32UL)
+/* 速度基准：仅作上电默认兜底，真正速度由线速度参数反算 */
+#define MOTOR_VELOCITY_BASE     (10000UL)
 
-/* 可选：给速度做上下限保护（按实际机构能力调整） */
-#ifndef MOTOR_SPEED_RATIO_MIN_X100
-#define MOTOR_SPEED_RATIO_MIN_X100   10     // 最小 0.10 倍（=10/100）
+/* 速度参数单位：0.01m/min（例如 150 表示 1.50m/min） */
+#ifndef MOTOR_LINEAR_SPEED_MIN_X100
+#define MOTOR_LINEAR_SPEED_MIN_X100   10U    // 最小 0.10 m/min
 #endif
-#ifndef MOTOR_SPEED_RATIO_MAX_X100
-#define MOTOR_SPEED_RATIO_MAX_X100   600    // 最大 6.00 倍（=600/100）
+#ifndef MOTOR_LINEAR_SPEED_MAX_X100
+#define MOTOR_LINEAR_SPEED_MAX_X100   600U   // 最大 6.00 m/min
+#endif
+
+/* TMC5130 内部时钟（很关键！若你板上用了外部时钟，请改成实际值） */
+#ifndef TMC5130_FCLK_HZ
+#define TMC5130_FCLK_HZ               (12000000.0)   // 12 MHz
+#endif
+
+/* 尺带线速度补偿：建议先关掉，先把基础速度跑准 */
+#ifndef MOTOR_LINEAR_SPEED_COMP_ENABLE
+#define MOTOR_LINEAR_SPEED_COMP_ENABLE       1      // 先关，调通后再开
+#endif
+#ifndef MOTOR_LINEAR_COMP_UPDATE_MS
+#define MOTOR_LINEAR_COMP_UPDATE_MS          200U
+#endif
+#ifndef MOTOR_LINEAR_COMP_APPLY_DELTA_X100
+#define MOTOR_LINEAR_COMP_APPLY_DELTA_X100   3U
 #endif
 
 /* 最小有效半径（mm）：半径小于该值后，按该半径线性展开 */
@@ -109,6 +130,7 @@
 #define TAPE_MIN_RADIUS_MM   (40.0)   /* 尺带最内圈半径40mm */
 #endif
 
+#define MOTOR_MOVE_RETRY_MAX 3       /* 电机移动重试次数上限 */
 /* ===================== 命令切换打断 ===================== */
 
 /* 命令切换导致的中断错误码 */
@@ -140,10 +162,16 @@
         }                                                                         \
     } while (0)
 
+/* 前置声明：线速度->VMAX 反算与运行中刷新 */
+static inline uint32_t Motor_ComputeUniformVelocityFromLength(double L_mm);
+static inline void Motor_RefreshVelocityDuringRun(TMC5130TypeDef *tmc5130,
+                                                  uint32_t *last_refresh_tick);
+
 /* ===================== 内部状态变量 ===================== */
 
 /* 丢步检测环形缓冲区：记录最近 3 次位置（单位：0.1mm） */
-static int pos_buf[LOST_STEP_WINDOW];
+static int32_t  pos_buf[LOST_STEP_WINDOW];
+static uint32_t tick_buf[LOST_STEP_WINDOW];
 static int write_idx = 0;
 static int samples = 0;
 static uint32_t last_check_tick = 0;
@@ -151,28 +179,66 @@ static uint32_t last_alarm_tick = 0;
 
 /* 全局速度：由 Motor_UpdateVelocityFromParams() 根据参数动态更新 */
 uint32_t velocity = MOTOR_VELOCITY_BASE;  // 先给一个默认值，真正值在 Init/运行中更新
+static uint32_t s_motor_applied_velocity = 0;
 
 /* ===================== 速度控制（由参数决定） ===================== */
 
-static inline void Motor_UpdateVelocityFromParams(void)
+static inline int32_t Motor_GetSpeedSetpointX100(void)
 {
-    int32_t ratio_x100 = (int32_t)g_measurement.debug_data.motor_speed;
+    int32_t speed_x100 = (int32_t)g_measurement.debug_data.motor_speed;
 
     /* 合理性钳位 */
-    if (ratio_x100 < MOTOR_SPEED_RATIO_MIN_X100) {
-        ratio_x100 = MOTOR_SPEED_RATIO_MIN_X100;
-    } else if (ratio_x100 > MOTOR_SPEED_RATIO_MAX_X100) {
-        ratio_x100 = MOTOR_SPEED_RATIO_MAX_X100;
+    if (speed_x100 < (int32_t)MOTOR_LINEAR_SPEED_MIN_X100) {
+        speed_x100 = (int32_t)MOTOR_LINEAR_SPEED_MIN_X100;
+    } else if (speed_x100 > (int32_t)MOTOR_LINEAR_SPEED_MAX_X100) {
+        speed_x100 = (int32_t)MOTOR_LINEAR_SPEED_MAX_X100;
     }
 
-    /* 四舍五入：+50 实现 /100 的四舍五入 */
-    uint64_t v = (uint64_t)MOTOR_VELOCITY_BASE * (uint64_t)ratio_x100 + 50ULL;
-    v /= 100ULL;
+    return speed_x100;
+}
 
-    /* 再做一次下限保护，避免 0 */
-    if (v < 1ULL) v = 1ULL;
+static inline float Motor_GetSpeedSetpoint_m_min(void)
+{
+    return (float)Motor_GetSpeedSetpointX100() / 100.0f;
+}
+static inline double TMC5130_VMAX_To_UstepsPerSec(uint32_t vmax)
+{
+    return ((double)vmax * TMC5130_FCLK_HZ) / 16777216.0;
+}
 
-    velocity = (uint32_t)v;
+static inline void Motor_UpdateVelocityFromParams(void)
+{
+    const double Lcur_mm = (double)g_measurement.debug_data.cable_length * 0.1;
+    velocity = Motor_ComputeUniformVelocityFromLength(Lcur_mm);
+
+    printf("SpeedInit | cable=%.1f mm | VMAX=%lu | eq_usteps/s=%.1f\r\n",
+           Lcur_mm,
+           (unsigned long)velocity,
+           TMC5130_VMAX_To_UstepsPerSec(velocity));
+}
+
+static inline uint32_t Motor_ClampVelocityU64(uint64_t v)
+{
+    if (v < 1ULL) {
+        return 1U;
+    }
+    if (v > (uint64_t)TMC5130_MAX_VELOCITY) {
+        return (uint32_t)TMC5130_MAX_VELOCITY;
+    }
+    return (uint32_t)v;
+}
+
+static inline uint32_t TMC5130_UstepsPerSec_To_VMAX(double usteps_per_s)
+{
+    /* TMC5130: usteps/s = VMAX * fCLK / 2^24
+       => VMAX = usteps/s * 2^24 / fCLK */
+    double vmax = usteps_per_s * 16777216.0 / TMC5130_FCLK_HZ;   /* 2^24 */
+
+    if (vmax < 1.0) {
+        vmax = 1.0;
+    }
+
+    return Motor_ClampVelocityU64((uint64_t)llround(vmax));
 }
 
 /* ===================== 方向统一工具 ===================== */
@@ -330,6 +396,141 @@ static inline double tape_turns_from_signed_length(double L_mm,
 }
 
 /**
+ * @brief 根据当前有符号长度 L 计算当前层周长 C(L)（单位：mm）
+ */
+static inline double tape_instant_circumference_mm_from_length(double L_mm)
+{
+    const double C0 = tape_C0_mm();
+    const double t  = tape_t_mm();
+
+    if (C0 <= 0.0) {
+        return 0.0;
+    }
+    if (t <= 0.0) {
+        return C0;
+    }
+
+    const double n = tape_turns_from_signed_length(L_mm, C0, t);
+
+    if (n >= 0.0) {
+        double n1, L1, Cmin;
+        tape_minR_threshold(C0, t, &n1, &L1, &Cmin);
+        if (n <= n1) {
+            const double C = C0 - (2.0 * M_PI * t * n);
+            return (C > 1e-6) ? C : 1e-6;
+        }
+        return (Cmin > 1e-6) ? Cmin : 1e-6;
+    }
+
+    /* 上行收带：每圈周长增加 */
+    const double C = C0 + (2.0 * M_PI * t * (-n));
+    return (C > 1e-6) ? C : 1e-6;
+}
+
+/**
+ * @brief 基于首圈周长做兜底反算（当当前周长不可用时）
+ *        返回值：TMC5130 VMAX寄存器值
+ */
+static inline uint32_t Motor_ComputeBaseVelocityFromParams(void)
+{
+    const int32_t speed_x100 = Motor_GetSpeedSetpointX100();
+    const double C0_mm = tape_C0_mm();
+    const double C_ref_mm = (C0_mm > 1e-6) ? C0_mm : (2.0 * M_PI * (double)TAPE_MIN_RADIUS_MM);
+    const double ticks_per_rev = (double)tape_ticks_per_rev();
+
+    /* 先算目标输出轴微步速度：usteps/s */
+    const double usteps_per_s = ((double)speed_x100 * ticks_per_rev) / (6.0 * C_ref_mm);
+
+    /* 再换成 TMC5130 VMAX */
+    return TMC5130_UstepsPerSec_To_VMAX(usteps_per_s);
+}
+
+/**
+ * @brief 按当前层周长直接反算 VMAX（目标线速度恒定）
+ *        speed_x100 单位：0.01m/min
+ *        返回值：TMC5130 VMAX寄存器值
+ */
+static inline uint32_t Motor_ComputeUniformVelocityFromLength(double L_mm)
+{
+    const int32_t speed_x100 = Motor_GetSpeedSetpointX100();
+    const double C_cur = tape_instant_circumference_mm_from_length(L_mm);
+
+    if (C_cur > 1e-6) {
+        const double ticks_per_rev = (double)tape_ticks_per_rev();
+
+        /* 目标输出轴微步速度：usteps/s
+           线速度(mm/s) = speed_x100 / 6
+           rev/s       = (speed_x100 / 6) / C_cur
+           usteps/s    = rev/s * ticks_per_rev
+                       = speed_x100 * ticks_per_rev / (6*C_cur) */
+        const double usteps_per_s =
+            ((double)speed_x100 * ticks_per_rev) / (6.0 * C_cur);
+
+        const uint32_t vmax = TMC5130_UstepsPerSec_To_VMAX(usteps_per_s);
+
+        printf("SpeedCalc | set=%.2f m/min | L=%.1f mm | C=%.2f mm | usteps/s=%.1f | VMAX=%lu\r\n",
+               speed_x100 / 100.0,
+               L_mm,
+               C_cur,
+               usteps_per_s,
+               (unsigned long)vmax);
+
+        return vmax;
+    }
+
+    return Motor_ComputeBaseVelocityFromParams();
+}
+
+static inline void Motor_RefreshVelocityDuringRun(TMC5130TypeDef *tmc5130,
+                                                  uint32_t *last_refresh_tick)
+{
+#if MOTOR_LINEAR_SPEED_COMP_ENABLE
+    if ((tmc5130 == NULL) || (last_refresh_tick == NULL)) {
+        return;
+    }
+
+    const uint32_t now_tick = HAL_GetTick();
+    if ((now_tick - *last_refresh_tick) < MOTOR_LINEAR_COMP_UPDATE_MS) {
+        return;
+    }
+
+    /* 优先用 XACTUAL 推当前长度，避免依赖外部变量刷新滞后 */
+    MotorDrumState drum;
+    Motor_UpdateDrumState_FromXACTUAL(tmc5130, &drum);
+    const double Lcur_mm = (double)drum.motor_distance_01mm * 0.1;
+
+    const uint32_t new_v = Motor_ComputeUniformVelocityFromLength(Lcur_mm);
+    const uint32_t old_v = (s_motor_applied_velocity != 0U) ? s_motor_applied_velocity : velocity;
+
+    uint32_t delta = (new_v >= old_v) ? (new_v - old_v) : (old_v - new_v);
+    uint32_t threshold = (old_v * MOTOR_LINEAR_COMP_APPLY_DELTA_X100 + 99U) / 100U;
+
+    if (threshold == 0U) {
+        threshold = 1U;
+    }
+
+    if (delta >= threshold) {
+        stpr_setVelocity(tmc5130, new_v);
+        s_motor_applied_velocity = new_v;
+        velocity = new_v;
+
+        printf("SpeedRefresh | L=%.1f mm | oldVMAX=%lu | newVMAX=%lu | old_usps=%.1f | new_usps=%.1f\r\n",
+               Lcur_mm,
+               (unsigned long)old_v,
+               (unsigned long)new_v,
+               TMC5130_VMAX_To_UstepsPerSec(old_v),
+               TMC5130_VMAX_To_UstepsPerSec(new_v));
+    }
+
+    *last_refresh_tick = now_tick;
+#else
+    (void)tmc5130;
+    (void)last_refresh_tick;
+#endif
+}
+
+
+/**
  * @brief 四舍五入到 int64，避免 double->int 直接截断导致系统误差
  */
 static inline int64_t llround_safe(double x)
@@ -393,14 +594,17 @@ uint32_t motor_Init(void)
     g_measurement.debug_data.motor_speed = g_deviceParams.max_motor_speed; // 恢复最大速度
 
     Motor_UpdateVelocityFromParams();
+    s_motor_applied_velocity = velocity;
 
     stpr_initStepper(&stepper, &hspi2, GPIOB, GPIO_PIN_12, 1, 14);
 //    stpr_initStepper(&stepper, &hspi2, GPIOB, GPIO_PIN_12, 1, 16);
     stpr_enableDriver(&stepper);
 
-    printf("电机初始化 | max_motor_speed=%ld(×0.01) | velocity=%lu\r\n",
-           (long)g_deviceParams.max_motor_speed, (unsigned long)velocity);
-
+    printf("电机初始化 | speed_set=%.2f m/min | cable=%.1f mm | VMAX=%lu | eq_usteps/s=%.1f\r\n",
+           g_deviceParams.max_motor_speed / 100.0,
+           g_measurement.debug_data.cable_length / 10.0,
+           (unsigned long)velocity,
+           TMC5130_VMAX_To_UstepsPerSec(velocity));
     return NO_ERROR;
 }
 
@@ -445,8 +649,11 @@ uint32_t stpr_checkGstat(TMC5130TypeDef *tmc5130)
 
 static uint32_t motor_wait_stop_abortable(uint32_t poll_ms)
 {
+    uint32_t last_vel_refresh_tick = HAL_GetTick();
+
     while (stpr_isMoving(&stepper)) {
         CHECK_COMMAND_SWITCH_AND_STOP(COMMAND_SWITCH_ABORT);
+        Motor_RefreshVelocityDuringRun(&stepper, &last_vel_refresh_tick);
         HAL_Delay(poll_ms);
     }
     return NO_ERROR;
@@ -463,6 +670,7 @@ uint32_t motorMoveWaitByTicks(int32_t ticks)
     /* 若方向相反，仅需在此统一翻转 */
     /* ticks = -ticks; */
 
+    s_motor_applied_velocity = velocity;
     stpr_moveBy(&stepper, &ticks, velocity);
 
     return motor_wait_stop_abortable(10);
@@ -472,8 +680,6 @@ uint32_t motorMoveWaitByTicks(int32_t ticks)
 
 uint32_t motorMoveNoWait(float move_mm, int dir)
 {
-    Motor_UpdateVelocityFromParams();
-
     if (move_mm < 0.0f) return MOTOR_STEP_ERROR;
     if (move_mm == 0.0f) return NO_ERROR;
     if (!Motor_IsDirValid(dir)) return MOTOR_STEP_ERROR;
@@ -482,6 +688,8 @@ uint32_t motorMoveNoWait(float move_mm, int dir)
 
     /* 1) 当前“相对基准点”的有符号长度（mm，可正可负） */
     const double Lcur_mm = (double)g_measurement.debug_data.cable_length * 0.1;
+    velocity = Motor_ComputeUniformVelocityFromLength(Lcur_mm);
+    s_motor_applied_velocity = velocity;
 
     /* 2) 目标有符号长度（mm） */
     double dL_mm = (double)move_mm;
@@ -573,11 +781,13 @@ static uint32_t stpr_wait_until_stop_with_target(TMC5130TypeDef *tmc5130,
 {
     uint32_t ret = NO_ERROR;
     uint32_t startTick = HAL_GetTick();
+    uint32_t last_vel_refresh_tick = startTick;
     const uint32_t MAX_WAIT_MS = 60000 * 60;
 
     while (stpr_isMoving(tmc5130)) {
 
         CHECK_COMMAND_SWITCH_AND_STOP(COMMAND_SWITCH_ABORT);
+        Motor_RefreshVelocityDuringRun(tmc5130, &last_vel_refresh_tick);
 
         /* 1) 当前位置（mm） */
         float cur_mm = (float)g_measurement.debug_data.sensor_position / 10.0f;
@@ -674,8 +884,10 @@ uint32_t motorMoveAndWaitUntilStop(float mm, int dir)
 
         motorMoveNoWait(remain_mm, dir);
 
+        uint32_t prewait_vel_refresh_tick = HAL_GetTick();
         for (int i = 0; i < 100; i++) {
             CHECK_COMMAND_SWITCH_AND_STOP(COMMAND_SWITCH_ABORT);
+            Motor_RefreshVelocityDuringRun(&stepper, &prewait_vel_refresh_tick);
             HAL_Delay(10);
         }
 
@@ -827,6 +1039,7 @@ uint32_t motorQuickStop(void)
         stpr_enableDriver(&stepper);
     }
     g_measurement.debug_data.motor_speed = g_deviceParams.max_motor_speed;
+    s_motor_applied_velocity = 0;
     return NO_ERROR;
 }
 
@@ -834,6 +1047,7 @@ uint32_t motorSlowStop(void)
 {
     stpr_stop(&stepper);
     g_measurement.debug_data.motor_speed = g_deviceParams.max_motor_speed;
+    s_motor_applied_velocity = 0;
     return NO_ERROR;
 }
 
@@ -845,8 +1059,10 @@ void MotorLostStep_Init(void)
     samples = 0;
     last_check_tick = 0;
     last_alarm_tick = 0;
+
     for (int i = 0; i < LOST_STEP_WINDOW; i++) {
-        pos_buf[i] = 0;
+        pos_buf[i]  = 0;
+        tick_buf[i] = 0;
     }
 }
 
@@ -854,43 +1070,94 @@ uint32_t Motor_CheckLostStep_AutoTiming(int32_t currentPos)
 {
     uint32_t now = HAL_GetTick();
 
-    if (now - last_check_tick < LOST_STEP_INTERVAL_MS)
+    /* 每1秒检查一次 */
+    if ((now - last_check_tick) < LOST_STEP_INTERVAL_MS) {
         return NO_ERROR;
+    }
 
     last_check_tick = now;
 
-    pos_buf[write_idx] = currentPos;
+    /* 写入当前位置和时间戳 */
+    pos_buf[write_idx]  = currentPos;   /* 单位：0.1mm */
+    tick_buf[write_idx] = now;          /* 单位：ms */
     write_idx = (write_idx + 1) % LOST_STEP_WINDOW;
-    if (samples < LOST_STEP_WINDOW)
+
+    if (samples < LOST_STEP_WINDOW) {
         samples++;
-
-    if (samples < LOST_STEP_WINDOW)
-        return NO_ERROR;
-
-    int total_movement = 0;
-    int oldest_idx = write_idx;
-
-    for (int k = 0; k < LOST_STEP_WINDOW - 1; k++) {
-        int idx_a = (oldest_idx + k) % LOST_STEP_WINDOW;
-        int idx_b = (oldest_idx + k + 1) % LOST_STEP_WINDOW;
-        total_movement += abs(pos_buf[idx_b] - pos_buf[idx_a]);
     }
 
-    if ((total_movement < LOST_STEP_THRESHOLD) &&
-        (g_measurement.debug_data.cable_length > 1000) &&
+    /* 样本不足，先不判定 */
+    if (samples < LOST_STEP_WINDOW) {
+        return NO_ERROR;
+    }
+
+    /* oldest_idx 指向最旧样本 */
+    int oldest_idx = write_idx;
+    int newest_idx = (write_idx + LOST_STEP_WINDOW - 1) % LOST_STEP_WINDOW;
+
+    int32_t pos_old = pos_buf[oldest_idx];
+    int32_t pos_new = pos_buf[newest_idx];
+    uint32_t tick_old = tick_buf[oldest_idx];
+    uint32_t tick_new = tick_buf[newest_idx];
+
+    if (tick_new <= tick_old) {
+        return NO_ERROR;
+    }
+
+    /* 最近5秒总位移（绝对值），单位：0.1mm */
+    int32_t delta_pos_01mm = pos_new - pos_old;
+    if (delta_pos_01mm < 0) {
+        delta_pos_01mm = -delta_pos_01mm;
+    }
+
+    /* 时间差，单位：s */
+    float dt_s = (float)(tick_new - tick_old) / 1000.0f;
+    if (dt_s < 0.001f) {
+        return NO_ERROR;
+    }
+
+    /* 平均速度，单位：mm/s */
+    float avg_speed_mm_s = ((float)delta_pos_01mm / 10.0f) / dt_s;
+
+    /* 设定速度，单位：mm/s
+       motor_speed单位=0.01m/min
+       => mm/s = x100 / 6
+     */
+    float set_speed_m_min = Motor_GetSpeedSetpoint_m_min();
+    float set_speed_mm_s  = set_speed_m_min * 1000.0f / 60.0f;
+    /* 速度阈值 = max(设定速度的20%, 绝对下限0.5mm/s) */
+    float speed_threshold_mm_s =
+        set_speed_mm_s * ((float)LOST_STEP_SPEED_RATIO_PERCENT / 100.0f);
+
+    if (speed_threshold_mm_s < LOST_STEP_MIN_AVG_SPEED_MM_S) {
+        speed_threshold_mm_s = LOST_STEP_MIN_AVG_SPEED_MM_S;
+    }
+
+    /* 中间区域才启用丢步判定，避免靠近零点/罐底误判 */
+    if ((g_measurement.debug_data.cable_length > 1000) &&
         (g_measurement.debug_data.cable_length < bottom_value - 1000)) {
 
-        if (now - last_alarm_tick >= LOST_STEP_SUPPRESS_MS) {
-            last_alarm_tick = now;
-            printf("电机丢步报警：3秒内总移动 %.3f mm < %.3f mm\r\n",
-                   (float)total_movement / 10.0f,
-                   (float)LOST_STEP_THRESHOLD / 10.0f);
-            return ENCODER_LOST_STEP;
+        if (avg_speed_mm_s < speed_threshold_mm_s) {
+            if ((now - last_alarm_tick) >= LOST_STEP_SUPPRESS_MS) {
+                last_alarm_tick = now;
+
+                printf("电机丢步报警 | 当前位置=%.1f mm | 最近%.1f s平均速度=%.3f mm/s < 阈值=%.3f mm/s | 设定=%.3f mm/s\r\n",
+                       (float)currentPos / 10.0f,
+                       dt_s,
+                       avg_speed_mm_s,
+                       speed_threshold_mm_s,
+                       set_speed_mm_s);
+
+                return ENCODER_LOST_STEP;
+            }
+        } else {
+            printf("丢步检测正常 | 当前位置=%.1f mm | 最近%.1f s平均速度=%.3f mm/s | 阈值=%.3f mm/s | 设定=%.3f mm/s\r\n",
+                   (float)currentPos / 10.0f,
+                   dt_s,
+                   avg_speed_mm_s,
+                   speed_threshold_mm_s,
+                   set_speed_mm_s);
         }
-    } else {
-        printf("丢步检测：电机运行正常 | 当前位置=%.1f mm | 3秒总移动=%.3f mm\r\n",
-               (float)currentPos / 10.0f,
-               (float)total_movement / 10.0f);
     }
 
     return NO_ERROR;
@@ -970,8 +1237,6 @@ void motorMoveBlocking_NoDetect(float mm, int dir)
 {
     printf("无检测阻塞运动：mm=%.2f, dir=%d\r\n", mm, dir);
 
-    Motor_UpdateVelocityFromParams();
-
     if (mm <= 0.0f) return;
     if (!Motor_IsDirValid(dir)) return;
 
@@ -983,6 +1248,8 @@ void motorMoveBlocking_NoDetect(float mm, int dir)
 
     /* 当前有符号长度 */
     const double Lcur_mm = (double)g_measurement.debug_data.cable_length * 0.1;
+    velocity = Motor_ComputeUniformVelocityFromLength(Lcur_mm);
+    s_motor_applied_velocity = velocity;
 
     /* 目标有符号长度 */
     double dL = (double)mm;
@@ -1003,8 +1270,10 @@ void motorMoveBlocking_NoDetect(float mm, int dir)
     stpr_moveBy(&stepper, &ticks, velocity);
     HAL_Delay(100);
 
+    uint32_t last_vel_refresh_tick = HAL_GetTick();
     while (stpr_isMoving(&stepper)) {
         CHECK_COMMAND_SWITCH_AND_STOP_NO_RETURN();
+        Motor_RefreshVelocityDuringRun(&stepper, &last_vel_refresh_tick);
         NoDetect_RuntimeLogUpdate();
     }
 }

@@ -215,7 +215,7 @@ void RestoreFactoryParamsConfig(void)
 
     /* ---------------- 电机与编码器参数 ---------------- */
     g_deviceParams.encoder_wheel_circumference_mm = 95000;  /* 0.001mm */
-    g_deviceParams.max_motor_speed                = 400;    /* r/s */
+    g_deviceParams.max_motor_speed                = 400;    /* 0.01m/min */
     g_deviceParams.first_loop_circumference_mm    = 6000; /* 0.1mm */
     g_deviceParams.tape_thickness_mm              = 200;    /* 0.001mm */
 
@@ -361,7 +361,7 @@ void print_device_params(void)
     /* 电机与编码器 */
     printf("[Motor / Encoder]\r\n");
     printf("  encoder_circ(0.001mm)      : %lu\r\n", (unsigned long)params.encoder_wheel_circumference_mm);
-    printf("  max_motor_speed(r/s)       : %lu\r\n", (unsigned long)params.max_motor_speed);
+    printf("  max_motor_speed(0.01m/min): %lu\r\n", (unsigned long)params.max_motor_speed);
     printf("  first_loop_circ(0.1mm)     : %lu\r\n", (unsigned long)params.first_loop_circumference_mm);
     printf("  tape_thickness(0.001mm)    : %lu\r\n", (unsigned long)params.tape_thickness_mm);
 
@@ -548,7 +548,7 @@ void PrintMeasurementResult(const MeasurementResult *m)
     printf("  X角度: %ld\r\n", (long)m->debug_data.angle_x);
     printf("  Y角度: %ld\r\n", (long)m->debug_data.angle_y);
 
-    printf("  电机速度: %lu\r\n", (unsigned long)m->debug_data.motor_speed);
+    printf("  电机速度(0.01m/min): %lu\r\n", (unsigned long)m->debug_data.motor_speed);
     printf("  电机状态: %lu (%s)\r\n",
            (unsigned long)m->debug_data.motor_state,
            (m->debug_data.motor_state == 0) ? "停止" :

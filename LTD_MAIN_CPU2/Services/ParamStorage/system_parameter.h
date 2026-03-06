@@ -347,7 +347,7 @@ typedef struct {
     int32_t  angle_y;              ///< Y 轴角度
 
     /* 电机状态相关 */
-    uint32_t motor_speed;          ///< 电机速度（转/s）
+    uint32_t motor_speed;          ///< 电机速度（0.01m/min）
     uint32_t  motor_state;          ///< 电机状态: 0 停止, 1 上行, 2 下行
 } DebugData;
 
@@ -416,7 +416,7 @@ typedef struct {
 
     // ===================== 电机与编码器参数 =====================
     uint32_t encoder_wheel_circumference_mm; // 编码轮周长(0.001mm)
-    uint32_t max_motor_speed;                 // 最大电机速度(r/s)
+    uint32_t max_motor_speed;                 // 最大电机速度(0.01m/min)
     uint32_t first_loop_circumference_mm;     // 尺带首圈周长(0.1mm)
     uint32_t tape_thickness_mm;               // 尺带厚度(0.001mm)
 
