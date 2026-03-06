@@ -349,8 +349,7 @@ static int SearchWaterPrecise(void)
         ret = Motor_CheckLostStep_AutoTiming(g_measurement.debug_data.sensor_position);
         CHECK_ERROR(ret);
 
-        printf("水位测量\t精确寻找水位\t{传感器位置}%.1f\t速度\t%d\t",
-               (float)(g_measurement.debug_data.sensor_position) / 10.0f,g_measurement.debug_data.motor_speed);
+        printf("水位测量\t精确寻找水位\t{传感器位置}%.1f\t速度(0.01m/min)\t%lu\t", (float)(g_measurement.debug_data.sensor_position) / 10.0f, (unsigned long)g_measurement.debug_data.motor_speed);
     }
 
     ret = motorQuickStop();

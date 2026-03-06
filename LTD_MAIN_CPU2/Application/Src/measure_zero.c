@@ -240,7 +240,7 @@ static int SearchZeroPrecise() {
 		ret = Motor_CheckLostStep_AutoTiming(g_measurement.debug_data.cable_length);
 		CHECK_ERROR(ret); // 检查丢步检测是否成功
 
-		printf("零点测量\t精确寻找零点\t{传感器位置}%.1f\t速度\t%d\t", (float) (g_measurement.debug_data.sensor_position) / 10.0,g_measurement.debug_data.motor_speed);
+		printf("零点测量\t精确寻找零点\t{传感器位置}%.1f\t速度(0.01m/min)\t%lu\t", (float)(g_measurement.debug_data.sensor_position) / 10.0f, (unsigned long)g_measurement.debug_data.motor_speed);
 	}
 	printf("精找零点完成\t尺带长度\t%ld\r\n", g_measurement.debug_data.cable_length);
 	zero_position = g_measurement.debug_data.cable_length;
