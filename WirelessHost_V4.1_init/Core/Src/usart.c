@@ -23,6 +23,7 @@
 
 /* USER CODE BEGIN 0 */
 
+#include "wireless_host_communication.h"
 uint8_t usart2_rx_buffer[BUF_SIZE];  // 创建接收缓存,大小为BUF_SIZE
 uint8_t usart3_rx_buffer[BUF_SIZE];  // 创建接收缓存,大小为BUF_SIZE
 /* USER CODE END 0 */
