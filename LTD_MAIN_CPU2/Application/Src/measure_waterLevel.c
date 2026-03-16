@@ -15,7 +15,7 @@
 #include "measure.h"
 #include "motor_ctrl.h"
 #include "measure_zero.h"
-#include "dsm_sensor_communication.h"
+#include "sensor.h"
 // TODO: 这里替换为你的水位检测头文件
 // #include "water.h"  // 提供 check_water_status()
 
@@ -365,7 +365,7 @@ uint32_t read_zero_capacitance(void)
     uint32_t ret;
     float    cap = 0.0f;
 
-    ret = Read_Water_Capacitance(&cap);
+    ret = Sensor_ReadWaterCapacitance(&cap);
     if (ret != NO_ERROR) {
         return ret;
     }
@@ -383,7 +383,7 @@ uint32_t read_oil_capacitance(void)
     uint32_t ret;
     float    cap = 0.0f;
 
-    ret = Read_Water_Capacitance(&cap);
+    ret = Sensor_ReadWaterCapacitance(&cap);
     if (ret != NO_ERROR) {
         return ret;
     }
@@ -405,7 +405,7 @@ uint32_t check_water_status(uint8_t *water_state)
         return PARAM_ERROR;
     }
 
-    ret = Read_Water_Capacitance(&cap);
+    ret = Sensor_ReadWaterCapacitance(&cap);
     if (ret != NO_ERROR) {
         return ret;
     }
@@ -738,7 +738,7 @@ uint32_t FollowWaterLevel_fast(void)
     while (1)
     {
         /* ---------- 1. 读取当前水位电容 ---------- */
-        ret = Read_Water_Capacitance(&cap);
+        ret = Sensor_ReadWaterCapacitance(&cap);
         if (ret != NO_ERROR)
         {
             printf("水位跟随\t读取电容失败 ret=0x%lX\r\n", ret);
@@ -895,7 +895,7 @@ RESTART_FOLLOW:
     while (1)
     {
         /* 读取电容 */
-        ret = Read_Water_Capacitance(&cap);
+        ret = Sensor_ReadWaterCapacitance(&cap);
         if (ret != NO_ERROR) {
             printf("水位跟随\t读取电容失败 ret=0x%lX\r\n", ret);
             return ret;

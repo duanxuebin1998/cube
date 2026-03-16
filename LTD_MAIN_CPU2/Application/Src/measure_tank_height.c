@@ -15,7 +15,7 @@
 #include <stdlib.h>
 #include "measure_zero.h"
 #include "motor_ctrl.h"
-#include "dsm_sensor_communication.h"
+#include "sensor.h"
 #include "encoder.h"
 // 全局变量：存储最终确定的罐底位置（编码器计数值）
 int32_t bottom_value = -100000000; // 初始值设为较大数值作为无效状态标识
@@ -240,7 +240,7 @@ static int SearchBottomPrecise() {
 uint32_t Bottom_SaveGyroZeroRef(void)
 {
     float ax = 0.0f, ay = 0.0f;
-    uint32_t ret = Read_Gyro_Angle(&ax, &ay);   // 你前面已加的 Ch 指令函数
+    uint32_t ret = Sensor_ReadGyroAngle(&ax, &ay);   // 统一经过链路诊断封装
     if (ret != NO_ERROR) {
         g_gyro_zero_ref.valid = 0;
         return ret;
@@ -318,7 +318,7 @@ Weight_StateTypeDef check_bottom_status(void)
 	}
 
 	float ax = 0.0f, ay = 0.0f;
-	uint32_t ret = Read_Gyro_Angle(&ax, &ay);
+	uint32_t ret = Sensor_ReadGyroAngle(&ax, &ay);
 	if (ret != NO_ERROR) {
 		printf("罐底检测(陀螺仪) | 读取失败 ret=%lu\r\n", (unsigned long)ret);
 		return NORMAL;
