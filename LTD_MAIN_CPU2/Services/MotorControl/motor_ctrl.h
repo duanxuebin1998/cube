@@ -43,8 +43,8 @@ extern "C" {
  *    - 非阻塞型接口：函数返回时电机可能仍在运行，因此不会自动恢复
  *
  * 3) 推荐优先使用的上层接口：
- *    - 按距离阻塞移动：motorMoveAndWaitUntilStop()
- *    - 按绝对位置移动：motorMoveToPositionOneShot()
+ *    - 按距离阻塞移动：motorMoveAndWaitUntilStopWithSpeed()
+ *    - 按绝对位置移动：motorMoveToPositionOneShotWithSpeed()
  *    - 按条件停止：motorMoveUntilCondition()
  *    - 直接改速：motorSetSpeed()
  */
@@ -103,109 +103,74 @@ uint32_t motorSlowStop(void);
 /* ===================== 运动控制接口 ===================== */
 
 /**
- * @brief 电机长距离上行（测试/调试用）：下发一个很大的上行距离（不等待）
+ * @brief 长距离上行命令（非阻塞）
  *
- * 用法：
- *  - 常用于“粗找”流程，每次调用推动继续上行
- *  - 使用当前已生效速度
- *  - 返回时电机通常仍在运行
- *  - 若需要等待停止，请不要用这个接口
- *
- * @return NO_ERROR 或错误码
- */
-uint32_t motorMove_up(void);
-
-/**
- * @brief 电机长距离上行（测试/调试用），并为本次下发指定速度
- *
- * 用法：
+ * 说明：
+ *  - 主要用于粗找、调试或手动连续上行
+ *  - 函数返回时电机通常仍在运行
  *  - speed_x100 单位为 0.01m/min
- *  - 这是非阻塞接口，不会自动恢复默认速度
+ *  - 非阻塞接口不会自动恢复默认速度
+ *
+ * @param speed_x100 本次命令使用的速度；通常传 motorGetDefaultSpeedX100()
+ * @return NO_ERROR 或错误码
  */
 uint32_t motorMove_upWithSpeed(uint32_t speed_x100);
 
 /**
- * @brief 电机长距离下行（测试/调试用）：下发一个很大的下行距离（不等待）
+ * @brief 长距离下行命令（非阻塞）
  *
- * 用法：
- *  - 常用于“粗找”流程，每次调用推动继续下行
- *  - 使用当前已生效速度
- *  - 返回时电机通常仍在运行
- *  - 若需要等待停止，请不要用这个接口
- *
- * @return NO_ERROR 或错误码
- */
-uint32_t motorMove_down(void);
-
-/**
- * @brief 电机长距离下行（测试/调试用），并为本次下发指定速度
- *
- * 用法：
+ * 说明：
+ *  - 主要用于粗找、调试或手动连续下行
+ *  - 函数返回时电机通常仍在运行
  *  - speed_x100 单位为 0.01m/min
- *  - 这是非阻塞接口，不会自动恢复默认速度
+ *  - 非阻塞接口不会自动恢复默认速度
+ *
+ * @param speed_x100 本次命令使用的速度；通常传 motorGetDefaultSpeedX100()
+ * @return NO_ERROR 或错误码
  */
 uint32_t motorMove_downWithSpeed(uint32_t speed_x100);
 
 /**
- * @brief 精确长度换算下发（不等待）
- *
- * 输入：
- *  - mm：移动距离（单位：mm，必须 >=0）
- *  - dir：MOTOR_DIRECTION_UP / MOTOR_DIRECTION_DOWN
+ * @brief 按距离下发运动命令（非阻塞）
  *
  * 说明：
- *  - 本函数内部会读取当前 cable_length（物理长度基准）
- *  - 结合卷筒模型计算应走 ticks，并调用 stpr_moveBy() 下发
- *  - 本函数不等待停止；需要上层调用 wait 或监测
- *  - 是最基础的“发运动命令”接口
+ *  - mm 为移动距离，单位 mm，必须 >= 0
+ *  - dir 为 MOTOR_DIRECTION_UP 或 MOTOR_DIRECTION_DOWN
+ *  - 内部会读取当前 cable_length，并结合卷筒模型换算成 ticks 下发
+ *  - 适合“发出命令后由上层自己等待或监控”的场景
+ *  - 非阻塞接口不会自动恢复默认速度
  *
+ * @param mm 移动距离，单位 mm
+ * @param dir 方向
+ * @param speed_x100 本次命令使用的速度；通常传 motorGetDefaultSpeedX100()
  * @return NO_ERROR 或错误码
- */
-uint32_t motorMoveNoWait(float mm, int dir);
-
-/**
- * @brief 精确长度换算下发（不等待），并为本次下发指定速度
- *
- * 用法：
- *  - 本函数会先切换到指定速度，再下发运动
- *  - 因为不等待结束，所以不会自动恢复默认速度
  */
 uint32_t motorMoveNoWaitWithSpeed(float mm, int dir, uint32_t speed_x100);
 
 /**
- * @brief 电机移动并等待停止（阻塞）
+ * @brief 按距离运动并等待停止（阻塞）
  *
  * 说明：
- *  - 内部会调用 motorMoveNoWait() 下发
- *  - 阻塞等待期间执行碰撞检测、驱动异常检测等
- *  - 允许补偿重试（按 motor_ctrl.c 的重试策略）
- *  - 是目前最推荐的按距离主入口
+ *  - 是当前最推荐的按距离移动主入口
+ *  - 内部会调用 motorMoveNoWaitWithSpeed() 下发
+ *  - 等待期间保留碰撞检测、驱动异常检测、速度补偿和补偿重试
+ *  - 阻塞接口结束后会自动恢复到 g_deviceParams.max_motor_speed
  *
- * @param mm  移动距离（mm，必须 >=0）
- * @param dir 方向（MOTOR_DIRECTION_UP / MOTOR_DIRECTION_DOWN）
+ * @param mm 移动距离，单位 mm
+ * @param dir 方向
+ * @param speed_x100 本次命令临时使用的速度；通常传 motorGetDefaultSpeedX100()
  * @return NO_ERROR 或错误码
- */
-uint32_t motorMoveAndWaitUntilStop(float mm, int dir);
-
-/**
- * @brief 电机移动并等待停止（阻塞），并为本次命令临时指定速度
- *
- * 用法：
- *  - speed_x100 单位为 0.01m/min
- *  - 命令开始前切到该速度
- *  - 命令结束后自动恢复到 g_deviceParams.max_motor_speed
  */
 uint32_t motorMoveAndWaitUntilStopWithSpeed(float mm, int dir, uint32_t speed_x100);
 
 /**
- * @brief 设置电机速度设定值，可在运行前或运行中调整
+ * @brief 设置当前速度设定值
  *
  * 说明：
  *  - speed_x100 单位为 0.01m/min，100 表示 1.00m/min
- *  - 内部会自动限制到有效范围，超出范围将被钳制到最小/最大值
- *  - 若当前未运行，则仅更新后续运动使用的速度设定值
- *  - 若当前正在运行，则会立即重算 VMAX 并写入 TMC5130
- *  - 该接口属于“持久改速”，不会自动恢复
+ *  - 若电机空闲，只更新后续运动使用的速度设定
+ *  - 若电机正在运行，会立即重算 VMAX 并写入驱动
+ *  - 这是“持久改速”接口，不会自动恢复
  *
  * @param speed_x100 目标速度，单位 0.01m/min
  * @return NO_ERROR 或错误码
@@ -213,86 +178,79 @@ uint32_t motorMoveAndWaitUntilStopWithSpeed(float mm, int dir, uint32_t speed_x1
 uint32_t motorSetSpeed(uint32_t speed_x100);
 
 /**
- * @brief 按 ticks 运动并等待结束（阻塞）
+ * @brief 获取默认最高速度
  *
  * 说明：
- *  - ticks 为 TMC5130 的位置增量（microstep）
- *  - ticks 的正方向是否等于“下行放带”，建议通过 Motor_DebugCheckTicksDirection() 确认一次
- *  - 若发现正方向相反，建议只在 motorMoveWaitByTicks() 的实现中统一翻转
- *  - 常用于标定和底层调试
+ *  - 返回值直接来自 g_deviceParams.max_motor_speed
+ *  - 推荐业务层默认传这个值，保持“按参数最大速度运行”的统一口径
  *
- * @param ticks 运动步数（可正可负）
- * @return NO_ERROR 或错误码
+ * @return speed_x100，单位 0.01m/min
  */
-uint32_t motorMoveWaitByTicks(int32_t ticks);
+uint32_t motorGetDefaultSpeedX100(void);
 
 /**
- * @brief 按 ticks 运动并等待结束（阻塞），并为本次命令临时指定速度
+ * @brief 按 ticks 运动并等待停止（阻塞）
  *
- * 用法：
- *  - 命令开始前切到该速度
- *  - 命令结束后自动恢复到 g_deviceParams.max_motor_speed
+ * 说明：
+ *  - ticks 为 TMC5130 的位置增量，单位 microstep
+ *  - 常用于标定、调试或需要直接控制步数的场景
+ *  - 若正方向与“下行放带”口径不一致，应只在本实现内部统一翻转
+ *  - 阻塞接口结束后会自动恢复到 g_deviceParams.max_motor_speed
+ *
+ * @param ticks 运动步数，可正可负
+ * @param speed_x100 本次命令临时使用的速度
+ * @return NO_ERROR 或错误码
  */
 uint32_t motorMoveWaitByTicksWithSpeed(int32_t ticks, uint32_t speed_x100);
 
 /**
- * @brief 移动到绝对目标位置（阻塞，单次调用）
+ * @brief 移动到绝对位置（阻塞）
  *
  * 说明：
- *  - target_mm 为绝对位置（mm）
- *  - 内部会根据当前位置与目标位置计算方向与距离，调用 motorMoveAndWaitUntilStop()
- *  - 适合业务层“跑到绝对位置”
+ *  - target_mm 为目标绝对位置，单位 mm
+ *  - 内部会先计算当前位置、方向和距离，再调用 motorMoveAndWaitUntilStopWithSpeed()
+ *  - 阻塞接口结束后会自动恢复到 g_deviceParams.max_motor_speed
  *
- * @param target_mm 目标绝对位置（mm）
+ * @param target_mm 目标绝对位置，单位 mm
+ * @param speed_x100 本次命令临时使用的速度
  * @return NO_ERROR 或错误码
- */
-uint32_t motorMoveToPositionOneShot(float target_mm);
-
-/**
- * @brief 移动到绝对目标位置（阻塞），并为本次命令临时指定速度
- *
- * 用法：
- *  - 命令开始前切到该速度
- *  - 命令结束后自动恢复到 g_deviceParams.max_motor_speed
  */
 uint32_t motorMoveToPositionOneShotWithSpeed(float target_mm, uint32_t speed_x100);
 
 /**
- * @brief 相对位移一次下发（阻塞）
+ * @brief 相对位移一次到位（阻塞）
  *
  * 说明：
- *  - mm 正负含义需与你工程“位置坐标定义”一致
- *  - 建议与 motor_ctrl.c 内实现保持口径一致（例如正数=下行，负数=上行）
- *  - 适合做相对补偿和微调
+ *  - mm 为相对位移，单位 mm
+ *  - 正负方向语义以 motor_ctrl.c 当前实现口径为准
+ *  - 适合相对补偿和小范围微调
+ *  - 阻塞接口结束后会自动恢复到 g_deviceParams.max_motor_speed
  *
- * @param mm 相对位移（mm）
+ * @param mm 相对位移，单位 mm
+ * @param speed_x100 本次命令临时使用的速度
  * @return NO_ERROR 或错误码
- */
-uint32_t motorMoveRelativeOneShot(float mm);
-
-/**
- * @brief 相对位移一次下发（阻塞），并为本次命令临时指定速度
- *
- * 用法：
- *  - 命令开始前切到该速度
- *  - 命令结束后自动恢复到 g_deviceParams.max_motor_speed
  */
 uint32_t motorMoveRelativeOneShotWithSpeed(float mm, uint32_t speed_x100);
 
 /**
- * @brief 电机运行直到满足用户条件或触发保护停止
+ * @brief 持续运行直到满足条件或触发保护停止
  *
- * 用法：
- *  - 按 max_mm 和 dir 先下发一段“足够长”的运动
+ * 说明：
+ *  - 先按 max_mm 和 dir 下发一段足够长的运动
  *  - 运行中周期性调用 condition_fn(user_ctx)
- *  - 当回调返回 true 时，立即停止并返回
- *  - 期间仍执行速度补偿、碰撞检测、驱动异常检测、超时保护
- *  - 若运动自然结束但条件未满足，则返回 NO_ERROR，同时 *condition_met = false
+ *  - 回调返回 true 时立即停机，并按“条件满足”返回
+ *  - 若触发碰撞、驱动异常、超时等保护，则按错误码返回
+ *  - 命令结束后会自动恢复到 g_deviceParams.max_motor_speed
  *
- * 速度语义：
- *  - speed_x100 = 0：沿用当前速度
- *  - speed_x100 > 0：本次命令临时使用该速度
- *  - 命令结束后自动恢复到 g_deviceParams.max_motor_speed
+ * @param max_mm 最大允许运动距离，单位 mm
+ * @param dir 方向
+ * @param speed_x100 本次命令临时使用的速度
+ * @param poll_ms 条件轮询周期；传 0 使用默认值
+ * @param timeout_ms 总超时；传 0 使用默认值
+ * @param condition_fn 条件回调，返回 true 表示应立即停止
+ * @param user_ctx 传给回调的用户上下文
+ * @param condition_met 输出参数；返回 true 表示因条件满足而停止
+ * @return NO_ERROR 或错误码
  */
 uint32_t motorMoveUntilCondition(float max_mm,
                                  int dir,
@@ -409,8 +367,6 @@ void Motor_UpdateDrumState_FromXACTUAL(TMC5130TypeDef *tmc5130,
  *  - 不做碰撞检测/丢步检测，只做基础运动与运行日志
  *  - 更适合调试期或维护模式，不建议直接用于关键测量流程
  */
-void motorMoveBlocking_NoDetect(float mm, int dir);
-
 /**
  * @brief 无检测阻塞运动（调试/维护用），并为本次命令临时指定速度
  *

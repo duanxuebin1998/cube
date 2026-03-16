@@ -551,6 +551,9 @@ static inline void Motor_RefreshVelocityDuringRun(TMC5130TypeDef *tmc5130,
 
 static inline uint32_t Motor_ApplyOptionalSpeed(uint32_t speed_x100)
 {
+    /* 约定：
+     * speed_x100 == 0 表示“调用方不想改速度，只沿用当前设定值”。
+     * 这样老接口和新接口可以共用一套实现，而不会强制改写速度状态。 */
     if (speed_x100 == 0U) {
         return NO_ERROR;
     }
@@ -559,13 +562,26 @@ static inline uint32_t Motor_ApplyOptionalSpeed(uint32_t speed_x100)
 
 static inline uint32_t Motor_GetDefaultSpeedSetpointX100(void)
 {
+    /* “默认恢复速度”统一取设备参数中的最大速度。
+     * 后续如果要把“恢复默认速度”改成别的策略，只需要改这里。 */
     return Motor_ClampSpeedSetpointX100(g_deviceParams.max_motor_speed);
+}
+
+uint32_t motorGetDefaultSpeedX100(void)
+{
+    return Motor_GetDefaultSpeedSetpointX100();
 }
 
 static inline uint32_t Motor_BeginTemporarySpeed(uint32_t speed_x100,
                                                  bool *restore_needed,
                                                  uint32_t *restore_speed_x100)
 {
+    /* 这组 Begin/End helper 专门服务“阻塞型命令的临时速度”：
+     * - Begin: 命令开始前切到临时速度，并记录结束后要恢复的默认速度
+     * - End  : 命令结束时恢复默认速度
+     *
+     * 注意：
+     * speed_x100 == 0 时，不做速度切换，也就不需要恢复。 */
     if (restore_needed) {
         *restore_needed = false;
     }
@@ -587,6 +603,7 @@ static inline uint32_t Motor_BeginTemporarySpeed(uint32_t speed_x100,
 static inline uint32_t Motor_EndTemporarySpeed(bool restore_needed,
                                                uint32_t restore_speed_x100)
 {
+    /* 只有 Begin 确认本次命令确实切换过速度，这里才执行恢复。 */
     if (!restore_needed) {
         return NO_ERROR;
     }
@@ -600,6 +617,8 @@ uint32_t motorSetSpeed(uint32_t speed_x100)
     bool is_running = false;
     double Lcur_mm = (double)g_measurement.debug_data.cable_length * 0.1;
 
+    /* 先更新“设定速度”本身。
+     * 后续所有速度换算都以 debug_data.motor_speed 作为源头。 */
     g_measurement.debug_data.motor_speed = clamped_speed;
 
     if (s_motor_initialized) {
@@ -607,15 +626,19 @@ uint32_t motorSetSpeed(uint32_t speed_x100)
     }
 
     if (is_running) {
+        /* 电机正在跑时，优先用 XACTUAL 推当前卷筒长度。
+         * 这样可以避免外部 cable_length 刷新滞后导致本次改速不准。 */
         MotorDrumState drum;
         Motor_UpdateDrumState_FromXACTUAL(&stepper, &drum);
         Lcur_mm = (double)drum.motor_distance_01mm * 0.1;
     }
 
+    /* 把“线速度设定”转换成当前卷径下的 TMC5130 VMAX。 */
     velocity = Motor_ComputeUniformVelocityFromLength(Lcur_mm);
     s_motor_applied_velocity = velocity;
 
     if (is_running) {
+        /* 运行中改速：立即写入驱动，让本次运动立刻生效。 */
         stpr_setVelocity(&stepper, velocity);
         printf("SpeedSet | running | req=%.2f m/min | set=%.2f m/min | L=%.1f mm | VMAX=%lu | eq_usteps/s=%.1f\r\n",
                requested_speed / 100.0,
@@ -624,6 +647,7 @@ uint32_t motorSetSpeed(uint32_t speed_x100)
                (unsigned long)velocity,
                TMC5130_VMAX_To_UstepsPerSec(velocity));
     } else {
+        /* 未运行时只更新内部速度状态，供下一次运动使用。 */
         printf("SpeedSet | idle | req=%.2f m/min | set=%.2f m/min | baseL=%.1f mm | nextVMAX=%lu | eq_usteps/s=%.1f\r\n",
                requested_speed / 100.0,
                clamped_speed / 100.0,
@@ -773,11 +797,6 @@ static uint32_t motor_wait_stop_abortable(uint32_t poll_ms)
 
 /* ===================== ticks 运动封装（阻塞，可打断） ===================== */
 
-uint32_t motorMoveWaitByTicks(int32_t ticks)
-{
-    return motorMoveWaitByTicksWithSpeed(ticks, 0U);
-}
-
 uint32_t motorMoveWaitByTicksWithSpeed(int32_t ticks, uint32_t speed_x100)
 {
     uint32_t ret = NO_ERROR;
@@ -788,6 +807,8 @@ uint32_t motorMoveWaitByTicksWithSpeed(int32_t ticks, uint32_t speed_x100)
     ret = Motor_BeginTemporarySpeed(speed_x100, &restore_needed, &restore_speed_x100);
     CHECK_ERROR(ret);
 
+    /* ticks 运动虽然不走“长度->圈数->ticks”的路径，
+     * 但仍然要基于当前卷径刷新 VMAX，保证速度口径一致。 */
     Motor_UpdateVelocityFromParams();
 
     if (Motor_StopIfCommandSwitchRequested()) {
@@ -813,11 +834,6 @@ uint32_t motorMoveWaitByTicksWithSpeed(int32_t ticks, uint32_t speed_x100)
 }
 
 /* ===================== 精确长度换算下发（不等待） ===================== */
-
-uint32_t motorMoveNoWait(float move_mm, int dir)
-{
-    return motorMoveNoWaitWithSpeed(move_mm, dir, 0U);
-}
 
 uint32_t motorMoveNoWaitWithSpeed(float move_mm, int dir, uint32_t speed_x100)
 {
@@ -887,7 +903,7 @@ uint32_t CalibrateFirstLoopCircumference_OneTurnAtZero(void)
     const double L0 = get_current_tape_length_mm();
 
     /* 2) 下行一圈并等待停止（可打断） */
-    uint32_t ret = motorMoveWaitByTicks(one_rev_ticks);
+    uint32_t ret = motorMoveWaitByTicksWithSpeed(one_rev_ticks, motorGetDefaultSpeedX100());
     if (ret != NO_ERROR) {
         return ret;
     }
@@ -911,7 +927,7 @@ uint32_t CalibrateFirstLoopCircumference_OneTurnAtZero(void)
     }
 
     g_deviceParams.first_loop_circumference_mm = (int32_t)llround(C0 * 10.0);
-    ret = motorMoveAndWaitUntilStop(dL, MOTOR_DIRECTION_UP); // 回到起点
+    ret = motorMoveAndWaitUntilStopWithSpeed(dL, MOTOR_DIRECTION_UP, motorGetDefaultSpeedX100()); // 回到起点
     CHECK_ERROR(ret);
     return NO_ERROR;
 }
@@ -992,11 +1008,6 @@ static uint32_t stpr_wait_until_stop_with_target(TMC5130TypeDef *tmc5130,
 
 /* ===================== 高层运动：分段+等待+保护（可打断） ===================== */
 
-uint32_t motorMoveAndWaitUntilStop(float mm, int dir)
-{
-    return motorMoveAndWaitUntilStopWithSpeed(mm, dir, 0U);
-}
-
 uint32_t motorMoveAndWaitUntilStopWithSpeed(float mm, int dir, uint32_t speed_x100)
 {
     uint32_t ret = NO_ERROR;
@@ -1018,6 +1029,8 @@ uint32_t motorMoveAndWaitUntilStopWithSpeed(float mm, int dir, uint32_t speed_x1
         return MOTOR_STEP_ERROR;
     }
 
+    /* 阻塞型接口支持“本次命令临时速度”：
+     * 开始前切到 speed_x100，结束后恢复到默认最大速度。 */
     ret = Motor_BeginTemporarySpeed(speed_x100, &restore_needed, &restore_speed_x100);
     CHECK_ERROR(ret);
 
@@ -1045,9 +1058,12 @@ uint32_t motorMoveAndWaitUntilStopWithSpeed(float mm, int dir, uint32_t speed_x1
             return COMMAND_SWITCH_ABORT;
         }
 
+        /* 分段重试时不再重复切换速度，避免每一段都触发“恢复默认速度”。 */
         ret = motorMoveNoWaitWithSpeed(remain_mm, dir, 0U);
         CHECK_ERROR(ret);
 
+        /* 下发后先进入一个短暂的“启动观察窗口”，
+         * 期间持续做速度补偿，让起步阶段也尽快贴合目标线速度。 */
         uint32_t prewait_vel_refresh_tick = HAL_GetTick();
         for (int i = 0; i < 100; i++) {
             if (Motor_StopIfCommandSwitchRequested()) {
@@ -1141,6 +1157,7 @@ uint32_t motorMoveAndWaitUntilStopWithSpeed(float mm, int dir, uint32_t speed_x1
         ret = NO_ERROR;
     }
 
+    /* 只有主命令整体结束后，才恢复默认速度。 */
     restore_ret = Motor_EndTemporarySpeed(restore_needed, restore_speed_x100);
     if (ret != NO_ERROR) {
         return ret;
@@ -1151,11 +1168,6 @@ uint32_t motorMoveAndWaitUntilStopWithSpeed(float mm, int dir, uint32_t speed_x1
 
 /* ===================== 长距离运行（不阻塞，不做等待） ===================== */
 
-uint32_t motorMove_up(void)
-{
-    return motorMove_upWithSpeed(0U);
-}
-
 uint32_t motorMove_upWithSpeed(uint32_t speed_x100)
 {
     CHECK_COMMAND_SWITCH_AND_STOP(COMMAND_SWITCH_ABORT);
@@ -1163,11 +1175,6 @@ uint32_t motorMove_upWithSpeed(uint32_t speed_x100)
     uint32_t ret = motorMoveNoWaitWithSpeed(2000, MOTOR_DIRECTION_UP, speed_x100);
     CHECK_ERROR(ret);
     return NO_ERROR;
-}
-
-uint32_t motorMove_down(void)
-{
-    return motorMove_downWithSpeed(0U);
 }
 
 uint32_t motorMove_downWithSpeed(uint32_t speed_x100)
@@ -1187,11 +1194,6 @@ void snapshot_sensor_pos_mm(float *pos_mm)
     *pos_mm = (float)pos_01mm / 10.0f;
 }
 
-uint32_t motorMoveToPositionOneShot(float target_mm)
-{
-    return motorMoveToPositionOneShotWithSpeed(target_mm, 0U);
-}
-
 uint32_t motorMoveToPositionOneShotWithSpeed(float target_mm, uint32_t speed_x100)
 {
     uint32_t ret = NO_ERROR;
@@ -1203,6 +1205,8 @@ uint32_t motorMoveToPositionOneShotWithSpeed(float target_mm, uint32_t speed_x10
     ret = Motor_BeginTemporarySpeed(speed_x100, &restore_needed, &restore_speed_x100);
     CHECK_ERROR(ret);
 
+    /* 绝对位置运动用“小步逼近”的方式做，
+     * 每一轮都重新读取当前位置，降低位置更新滞后带来的影响。 */
     for (int i = 0; i < 10; i++) {
 
         if (Motor_StopIfCommandSwitchRequested()) {
@@ -1243,11 +1247,6 @@ uint32_t motorMoveToPositionOneShotWithSpeed(float target_mm, uint32_t speed_x10
     return restore_ret;
 }
 
-uint32_t motorMoveRelativeOneShot(float mm)
-{
-    return motorMoveRelativeOneShotWithSpeed(mm, 0U);
-}
-
 uint32_t motorMoveRelativeOneShotWithSpeed(float mm, uint32_t speed_x100)
 {
     float cur_mm;
@@ -1273,6 +1272,7 @@ uint32_t motorMoveUntilCondition(float max_mm,
     uint32_t start_tick;
     uint32_t last_vel_refresh_tick;
 
+    /* 输出参数默认置 false，避免调用方读取到旧值。 */
     if (condition_met) {
         *condition_met = false;
     }
@@ -1281,6 +1281,7 @@ uint32_t motorMoveUntilCondition(float max_mm,
         return PARAM_ERROR;
     }
 
+    /* 若进入函数时条件已经满足，直接返回成功，不再额外运动。 */
     if (condition_fn(user_ctx)) {
         if (condition_met) {
             *condition_met = true;
@@ -1304,6 +1305,8 @@ uint32_t motorMoveUntilCondition(float max_mm,
         return COMMAND_SWITCH_ABORT;
     }
 
+    /* 先按“最大允许距离”发一段运动命令，
+     * 真正的停止时机由下面的条件检测和保护逻辑共同决定。 */
     ret = motorMoveNoWaitWithSpeed(max_mm, dir, 0U);
     if (ret != NO_ERROR) {
         restore_ret = Motor_EndTemporarySpeed(restore_needed, restore_speed_x100);
@@ -1321,8 +1324,11 @@ uint32_t motorMoveUntilCondition(float max_mm,
             return COMMAND_SWITCH_ABORT;
         }
 
+        /* 运行中持续按当前卷径补偿速度，保证“线速度”尽量稳定。 */
         Motor_RefreshVelocityDuringRun(&stepper, &last_vel_refresh_tick);
 
+        /* 用户条件优先级最高。
+         * 一旦条件满足，立即停机并以“正常到达条件”返回。 */
         if (condition_fn(user_ctx)) {
             stpr_stop(&stepper);
             while (stpr_isMoving(&stepper)) {
@@ -1332,6 +1338,7 @@ uint32_t motorMoveUntilCondition(float max_mm,
             break;
         }
 
+        /* 条件未满足时，仍要继续执行通用保护。 */
         ret = CheckWeightCollision();
         if (ret != NO_ERROR) {
             stpr_stop(&stepper);
@@ -1366,6 +1373,8 @@ uint32_t motorMoveUntilCondition(float max_mm,
         *condition_met = met;
     }
 
+    /* ret==NO_ERROR 但 met==false，说明：
+     * 电机已经自然停下，但并不是因为条件回调触发。 */
     if ((ret == NO_ERROR) && (!met)) {
         printf("motorMoveUntilCondition: 运动结束，但条件未满足 | max_mm=%.2f | dir=%d\r\n",
                max_mm, dir);
@@ -1580,11 +1589,6 @@ static void NoDetect_RuntimeLogUpdate(void)
 
 /* ===================== 无检测阻塞运动（可打断，void） ===================== */
 
-void motorMoveBlocking_NoDetect(float mm, int dir)
-{
-    motorMoveBlocking_NoDetectWithSpeed(mm, dir, 0U);
-}
-
 void motorMoveBlocking_NoDetectWithSpeed(float mm, int dir, uint32_t speed_x100)
 {
     uint32_t restore_speed_x100 = 0U;
@@ -1594,6 +1598,8 @@ void motorMoveBlocking_NoDetectWithSpeed(float mm, int dir, uint32_t speed_x100)
     if (mm <= 0.0f) return;
     if (!Motor_IsDirValid(dir)) return;
 
+    /* 该接口是“无检测”版本，只保留基础运动和日志。
+     * 但为了让语义一致，临时速度恢复策略仍然与其他阻塞接口保持一致。 */
     ret = Motor_BeginTemporarySpeed(speed_x100, &restore_needed, &restore_speed_x100);
     if (ret != NO_ERROR) {
         printf("无检测阻塞运动：速度设置失败 ret=0x%08lX\r\n", (unsigned long)ret);

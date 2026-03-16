@@ -44,7 +44,7 @@ int SearchZero(void) {
 	printf("零点测量\t开始\r\n");
 
 	if (weight_parament.stable_weight >weight_parament.full_weight+2000) { // 如果当前超重
-		ret = motorMoveAndWaitUntilStop(100.0, MOTOR_DIRECTION_DOWN);
+		ret = motorMoveAndWaitUntilStopWithSpeed(100.0, MOTOR_DIRECTION_DOWN, motorGetDefaultSpeedX100());
 		CHECK_ERROR(ret);
 		printf("零点测量\t脱离零点完成\r\n");
 	}
@@ -68,7 +68,7 @@ int SearchZero(void) {
 				printf("零点测量\t粗找零点失败(尝试%d次)\r\n", try_times);
 				CHECK_ERROR(ret);
 			}
-			ret = motorMoveAndWaitUntilStop(100.0, MOTOR_DIRECTION_DOWN);
+			ret = motorMoveAndWaitUntilStopWithSpeed(100.0, MOTOR_DIRECTION_DOWN, motorGetDefaultSpeedX100());
 			CHECK_ERROR(ret);
 			continue;
 		}
@@ -80,7 +80,7 @@ int SearchZero(void) {
 
 		if (ret != NO_ERROR) {
 			printf("零点测量\t粗找失败[%d]:0x%X\r\n", try_times, (unsigned int) ret);
-			ret = motorMoveAndWaitUntilStop(100.0, MOTOR_DIRECTION_DOWN);
+			ret = motorMoveAndWaitUntilStopWithSpeed(100.0, MOTOR_DIRECTION_DOWN, motorGetDefaultSpeedX100());
 			CHECK_ERROR(ret);
 			continue;
 		}
@@ -93,7 +93,7 @@ int SearchZero(void) {
 	printf("零点测量\t粗找零点完成\t位置%ld\r\n", zero_position);
 
 	/*************** 精找阶段 - 第一次精确找零点 ***************/
-	ret = motorMoveAndWaitUntilStop(200.0, MOTOR_DIRECTION_DOWN);
+	ret = motorMoveAndWaitUntilStopWithSpeed(200.0, MOTOR_DIRECTION_DOWN, motorGetDefaultSpeedX100());
 	CHECK_ERROR(ret);
 
 	try_times = 0;
@@ -108,7 +108,7 @@ int SearchZero(void) {
 		} else {
 			printf("零点测量\t第一次精找失败[%d]:0x%X\r\n", try_times, (unsigned int) ret);
 			if (try_times < ZERO_SEARCH_RETRY_MAX) {
-				ret = motorMoveAndWaitUntilStop(100.0, MOTOR_DIRECTION_DOWN);
+				ret = motorMoveAndWaitUntilStopWithSpeed(100.0, MOTOR_DIRECTION_DOWN, motorGetDefaultSpeedX100());
 				CHECK_ERROR(ret);
 				HAL_Delay(1000);
 			}
@@ -117,7 +117,7 @@ int SearchZero(void) {
 	CHECK_ERROR(ret);
 
 //	/*************** 精找阶段 - 第二次精确找零点 ***************/
-//	ret = motorMoveAndWaitUntilStop(100.0, MOTOR_DIRECTION_DOWN);
+//	ret = motorMoveAndWaitUntilStopWithSpeed(100.0, MOTOR_DIRECTION_DOWN, motorGetDefaultSpeedX100());
 //	CHECK_ERROR(ret);
 //	printf("零点测量\t电机下行完成，准备第二次精找\r\n");
 //
@@ -133,7 +133,7 @@ int SearchZero(void) {
 //		} else {
 //			printf("零点测量\t第二次精找失败[%d]:0x%X\r\n", try_times, (unsigned int) ret);
 //			if (try_times < ZERO_SEARCH_RETRY_MAX) {
-//				ret = motorMoveAndWaitUntilStop(50.0, MOTOR_DIRECTION_DOWN);
+//				ret = motorMoveAndWaitUntilStopWithSpeed(50.0, MOTOR_DIRECTION_DOWN, motorGetDefaultSpeedX100());
 //				CHECK_ERROR(ret);
 //				HAL_Delay(1000);
 //			}
@@ -151,11 +151,11 @@ int SearchZero(void) {
 	} else {
 		set_encoder_zero();
 		printf("零点测量\t编码器零点设置成功\r\n");
-		ret = motorMoveNoWait(10, MOTOR_DIRECTION_DOWN);//脱离零点
+		ret = motorMoveNoWaitWithSpeed(10, MOTOR_DIRECTION_DOWN, motorGetDefaultSpeedX100());//脱离零点
 		CHECK_ERROR(ret);
 		HAL_Delay(3000);
 		printf("零点测量\t向下移动\t下行距离\t%ld\r\n", g_deviceParams.findZeroDownDistance/10);
-		ret = motorMoveAndWaitUntilStop((float)g_deviceParams.findZeroDownDistance/10.0, MOTOR_DIRECTION_DOWN);
+		ret = motorMoveAndWaitUntilStopWithSpeed((float)g_deviceParams.findZeroDownDistance/10.0, MOTOR_DIRECTION_DOWN, motorGetDefaultSpeedX100());
 		CHECK_ERROR(ret);
 		read_zero_capacitance();//读取零点电容值
 		if(g_bottom_det_mode == BOTTOM_DET_BY_GYRO)
@@ -178,22 +178,24 @@ int SearchZero(void) {
  */
 static int SearchZeroRough() {
 	uint32_t ret;
+    uint32_t speed_x100;
 
 	// 循环直到重量状态为ZERO
     MotorLostStep_Init();// 重置丢步检测计数器
 	while (check_zero_point_status() != ZERO) {
-		// 距离零点1000mm以内，速度降为100
-		if ((g_measurement.debug_data.cable_length - zero_position) < 3000) {
-			motorSetSpeed(100);
-		}
-		ret = motorMove_up();  // 启动电机向下运动
+        speed_x100 = motorGetDefaultSpeedX100();
+        if ((g_measurement.debug_data.cable_length - zero_position) < 3000) {
+            speed_x100 = 100;
+        }
+
+		ret = motorMove_upWithSpeed(speed_x100);  // 启动电机向下运动
 		CHECK_ERROR(ret); // 检查上行是否成功
 		//丢步检测
 		ret = Motor_CheckLostStep_AutoTiming(g_measurement.debug_data.cable_length);
 		CHECK_ERROR(ret); // 检查丢步检测是否成功
 		// 实时打印编码器和重量信息
 		printf("零点测量\t长距离寻找零点\t{传感器位置}%.1f\t", (float) (g_measurement.debug_data.sensor_position) / 10.0);
-		ret = motorMove_up(); // 电机上行
+		ret = motorMove_upWithSpeed(speed_x100); // 电机上行
 		CHECK_ERROR(ret); // 检查上行是否成功
 	}
 	zero_position = g_measurement.debug_data.cable_length;
@@ -210,9 +212,18 @@ static int SearchZeroRough() {
  */
 static int SearchZeroPrecise() {
 	uint32_t ret;
+    uint32_t speed_x100;
     MotorLostStep_Init();// 重置丢步检测计数器
 	while (check_zero_point_status() != ZERO) {
-		ret = motorMove_up();  // 启动电机向下运动
+        speed_x100 = motorGetDefaultSpeedX100();
+        if ((g_measurement.debug_data.cable_length - zero_position) < 300) {
+            speed_x100 = 40;
+        }
+        else if ((g_measurement.debug_data.cable_length - zero_position) < 3000) {
+            speed_x100 = 100;
+        }
+
+		ret = motorMove_upWithSpeed(speed_x100);  // 启动电机向下运动
 		CHECK_ERROR(ret); // 检查上行是否成功
 
 		if (g_measurement.debug_data.cable_length < (zero_position - 100)) {
@@ -220,22 +231,6 @@ static int SearchZeroPrecise() {
 			ret = motorQuickStop(); // 到达零点后快速停止电机
 			CHECK_ERROR(ret); // 检查快速停止是否成功
 			RETURN_ERROR(MEASUREMENT_WEIGHT_UP_FAIL); // 检查快速停止是否成功
-		}
-//		else if ((g_measurement.debug_data.cable_length - zero_position) < 100) {
-//
-//			printf("零点位置%ld\t尺带长度%ld\t", zero_position, g_measurement.debug_data.cable_length);
-//			g_measurement.debug_data.motor_speed = 10;
-//			printf("速度调整\t{Velocity}%d\r\n", 10);
-//		}
-		else if ((g_measurement.debug_data.cable_length - zero_position) < 300) {
-//			printf("零点位置%ld\t尺带长度%ld\t", zero_position, g_measurement.debug_data.cable_length);
-			motorSetSpeed(40);
-//			printf("速度调整\t{Velocity}%d\r\n", 40);
-		}
-		else if ((g_measurement.debug_data.cable_length - zero_position) < 3000) {
-//			printf("零点位置%ld\t尺带长度%ld\t", zero_position, g_measurement.debug_data.cable_length);
-			motorSetSpeed(100);
-//			printf("速度调整\t{Velocity}%d\r\n", 100);
 		}
 		ret = Motor_CheckLostStep_AutoTiming(g_measurement.debug_data.cable_length);
 		CHECK_ERROR(ret); // 检查丢步检测是否成功

@@ -307,7 +307,7 @@ void motor_text(void)
 
     while (1) {
         /* ---------- ÏÂÐÐ ---------- */
-        motorMoveNoWait(300, MOTOR_DIRECTION_DOWN);
+        motorMoveNoWaitWithSpeed(300, MOTOR_DIRECTION_DOWN, motorGetDefaultSpeedX100());
         HAL_Delay(1000);
         printf("[LOOP %lu] start down\r\n", (unsigned long)(loop_cnt + 1));
 

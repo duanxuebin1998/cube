@@ -108,7 +108,7 @@ uint32_t Wartsila_Density_SpreadMeasurement(DensityDistribution *dist)
     } else if (cur_mm > (float)start_pos_mm + 0.05f) {
         /* 当前在起始点上方：直接用绝对位置函数下行，不需要检测空气 */
         printf("当前位置高于起始点，从 %.3fmm 下行到 %lumm\n", cur_mm, (unsigned long)start_pos_mm);
-        ret = motorMoveToPositionOneShot((float)start_pos_mm);
+        ret = motorMoveToPositionOneShotWithSpeed((float)start_pos_mm, motorGetDefaultSpeedX100());
         CHECK_ERROR(ret);
     } else {
         printf("当前位置已经在起始点附近，无需调整位置。\n");
@@ -165,7 +165,7 @@ uint32_t Wartsila_Density_SpreadMeasurement(DensityDistribution *dist)
             }
 
             printf("精确寻找密度点位...\r\n");
-            ret = motorMoveToPositionOneShot((float)target_mm);
+            ret = motorMoveToPositionOneShotWithSpeed((float)target_mm, motorGetDefaultSpeedX100());
             CHECK_ERROR(ret);
             snapshot_sensor_pos_mm(&cur_mm);
 
@@ -310,7 +310,7 @@ uint32_t motorMoveUpToPositionOrAir(float target_mm, Level_StateTypeDef *final_s
     /* 下发上行运动指令（长度设为足够大） */
     float max_move = target_mm - cur_mm;   // 理论需要跑的距离
 
-    ret = motorMoveNoWait(3*max_move, MOTOR_DIRECTION_UP);//走三倍距离保证一定会跑到
+    ret = motorMoveNoWaitWithSpeed(3*max_move, MOTOR_DIRECTION_UP, motorGetDefaultSpeedX100());//走三倍距离保证一定会跑到
     CHECK_ERROR(ret);
 
     /* 进入循环检测：空气 + 到位 + 安全检查 */
