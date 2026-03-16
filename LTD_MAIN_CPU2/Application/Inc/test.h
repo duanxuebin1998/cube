@@ -16,4 +16,5 @@ void Test_Params_Storage(void); // 测试参数存储
 void Test_ParamEncoder_AB_Backup(void); // A/B双备份回退测试（参数+编码值）
 void DSM_V2_Test_AllParams(void) ;// DSM V2 演示函数
 void Test_main(void) ; // 测试主函数
+void motor_text(void); // 电机测试
 #endif /* INC_TEST_H_ */
