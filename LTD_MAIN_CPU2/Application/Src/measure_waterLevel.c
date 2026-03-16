@@ -332,12 +332,12 @@ static int SearchWaterPrecise(void)
         /* 更接近：第二次降速 */
         if (g_deviceParams.water_tank_height - g_measurement.debug_data.cable_length - water_value < WATER_V2_SLOWDOWN_TH)
         {
-        	g_measurement.debug_data.motor_speed = 4;
+        	motorSetSpeed(4);
         }
         /* 接近粗定位点：第一次降速 */
         else if (g_deviceParams.water_tank_height - g_measurement.debug_data.cable_length - water_value < WATER_V1_SLOWDOWN_TH)
         {
-        	g_measurement.debug_data.motor_speed = 40;
+        	motorSetSpeed(40);
         }
         /* 走过头保护 */
 //        if (g_deviceParams.water_tank_height - g_measurement.debug_data.cable_length - water_value < WATER_OVERSHOOT_TH)

@@ -216,13 +216,13 @@ static int SearchBottomPrecise() {
 			RETURN_ERROR(MEASUREMENT_WEIGHT_DOWN_FAIL); // 如果编码器位置异常，返回错误
 		}
 		else if (bottom_value-g_measurement.debug_data.cable_length < 100) {
-			g_measurement.debug_data.motor_speed = 10;
+			motorSetSpeed(10);
 		}
 		else if (bottom_value-g_measurement.debug_data.cable_length  < 300) {
-			g_measurement.debug_data.motor_speed = 40;
+			motorSetSpeed(40);
 		}
 		else if (bottom_value-g_measurement.debug_data.cable_length  < 3000)  {
-			g_measurement.debug_data.motor_speed = 100;
+			motorSetSpeed(100);
 		}
 
 		ret = Motor_CheckLostStep_AutoTiming(g_measurement.debug_data.cable_length);

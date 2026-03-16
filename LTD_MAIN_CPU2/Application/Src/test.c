@@ -315,7 +315,7 @@ void motor_text(void)
         printf("[LOOP %lu] down over!\r\n", (unsigned long)(loop_cnt + 1));
 
         /* 下行结束后：传感器通讯一次 */
-        Sensor_CommCheckAndLog("after DOWN");
+//        Sensor_CommCheckAndLog("after DOWN");
 
         /* ---------- 回零（上行到0） ---------- */
         stpr_moveTo(&stepper, 0, velocity); // 最大速度为 1600 * 2 * 32
@@ -326,7 +326,7 @@ void motor_text(void)
         printf("[LOOP %lu] up over (to zero)\r\n", (unsigned long)(loop_cnt + 1));
 
         /* 上行结束后：传感器通讯一次 */
-        Sensor_CommCheckAndLog("after UP");
+//        Sensor_CommCheckAndLog("after UP");
 
         /* 本轮完成计数（下+上算一轮） */
         loop_cnt++;

@@ -184,7 +184,7 @@ static int SearchZeroRough() {
 	while (check_zero_point_status() != ZERO) {
 		// 距离零点1000mm以内，速度降为100
 		if ((g_measurement.debug_data.cable_length - zero_position) < 3000) {
-			g_measurement.debug_data.motor_speed = 100;
+			motorSetSpeed(100);
 		}
 		ret = motorMove_up();  // 启动电机向下运动
 		CHECK_ERROR(ret); // 检查上行是否成功
@@ -229,12 +229,12 @@ static int SearchZeroPrecise() {
 //		}
 		else if ((g_measurement.debug_data.cable_length - zero_position) < 300) {
 //			printf("零点位置%ld\t尺带长度%ld\t", zero_position, g_measurement.debug_data.cable_length);
-			g_measurement.debug_data.motor_speed = 40;
+			motorSetSpeed(40);
 //			printf("速度调整\t{Velocity}%d\r\n", 40);
 		}
 		else if ((g_measurement.debug_data.cable_length - zero_position) < 3000) {
 //			printf("零点位置%ld\t尺带长度%ld\t", zero_position, g_measurement.debug_data.cable_length);
-			g_measurement.debug_data.motor_speed = 100;
+			motorSetSpeed(100);
 //			printf("速度调整\t{Velocity}%d\r\n", 100);
 		}
 		ret = Motor_CheckLostStep_AutoTiming(g_measurement.debug_data.cable_length);

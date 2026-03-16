@@ -8,6 +8,7 @@
 #include <float.h>
 #include "system_parameter.h"
 #include "encoder.h"
+#include "motor_ctrl.h"
 
 /* ===================== 通用寄存器读写函数 ===================== */
 
@@ -558,7 +559,7 @@ void read_measurement_result_from_InputRegisters(uint16_t *regs) {
 	g_measurement.debug_data.angle_y = read_i32_from_regs(cregs, REG_DEBUG_ANGLE_Y);
 
 	/* 电机状态 */
-	g_measurement.debug_data.motor_speed = read_u32_from_regs(cregs, REG_DEBUG_MOTOR_SPEED);
+	(void)motorSetSpeed(read_u32_from_regs(cregs, REG_DEBUG_MOTOR_SPEED));
 	g_measurement.debug_data.motor_state = read_u32_from_regs(cregs, REG_DEBUG_MOTOR_STATE);
 
 	/* ==== OilMeasurement ==== */
