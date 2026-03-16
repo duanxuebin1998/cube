@@ -12,6 +12,143 @@
 #include "sensor.h"
 #include "measure_tank_height.h"
 #include "measure.h"
+
+#define WIRELESS_HOST_ADDR 1U
+#define WIRELESS_SLAVE_ADDR 2U
+
+static const char *Sensor_CommErrorToText(uint32_t err)
+{
+    switch (err) {
+    case NO_ERROR:
+        return "正常";
+    case SENSOR_DEVICE_COMM_TIMEOUT:
+        return "通信无响应";
+    case SENSOR_RESP_FORMAT_ERROR:
+        return "响应格式错误";
+    case SENSOR_DEVICE_REPORTED_ERROR:
+        return "设备返回错误";
+    case SENSOR_BCC_ERROR:
+        return "校验错误";
+    default:
+        return "通信异常";
+    }
+}
+
+static uint32_t Sensor_MapWirelessProbeError(uint32_t ret, uint32_t timeout_code)
+{
+    if (ret == NO_ERROR) {
+        return NO_ERROR;
+    }
+    if (ret == SENSOR_DEVICE_COMM_TIMEOUT) {
+        return timeout_code;
+    }
+    return ret;
+}
+
+static uint32_t Sensor_SelectProbeError(uint32_t ltd_ret, uint32_t dsm_ret)
+{
+    if ((ltd_ret != NO_ERROR) && (ltd_ret != SENSOR_DEVICE_COMM_TIMEOUT)) {
+        return ltd_ret;
+    }
+    if ((dsm_ret != NO_ERROR) && (dsm_ret != SENSOR_DEVICE_COMM_TIMEOUT)) {
+        return dsm_ret;
+    }
+    if ((ltd_ret == SENSOR_DEVICE_COMM_TIMEOUT) || (dsm_ret == SENSOR_DEVICE_COMM_TIMEOUT)) {
+        return SENSOR_DEVICE_COMM_TIMEOUT;
+    }
+    if (ltd_ret != NO_ERROR) {
+        return ltd_ret;
+    }
+    return dsm_ret;
+}
+
+static void Sensor_SetCommDetectError(uint32_t err)
+{
+    if ((err != NO_ERROR) && (err != STATE_SWITCH)) {
+        g_measurement.device_status.error_code = err;
+    }
+}
+
+static uint32_t Sensor_DiagnoseCommTimeout(uint32_t ret, const char *context)
+{
+    uint32_t host_ret;
+    uint32_t slave_ret;
+    uint32_t diag_ret;
+
+    if (ret != SENSOR_DEVICE_COMM_TIMEOUT) {
+        return ret;
+    }
+
+    printf("%s通信无响应，开始诊断无线链路\r\n", (context != NULL) ? context : "传感器");
+
+    host_ret = WIRELESS_PrintInfo(WIRELESS_HOST_ADDR);
+    slave_ret = WIRELESS_PrintInfo(WIRELESS_SLAVE_ADDR);
+
+    diag_ret = Sensor_MapWirelessProbeError(host_ret, WIRELESS_HOST_COMM_TIMEOUT);
+    if (diag_ret != NO_ERROR) {
+        printf("诊断结果：无线主机%s ret=0x%08lX\r\n",
+               Sensor_CommErrorToText(diag_ret),
+               (unsigned long)diag_ret);
+        return diag_ret;
+    }
+
+    diag_ret = Sensor_MapWirelessProbeError(slave_ret, WIRELESS_SLAVE_COMM_TIMEOUT);
+    if (diag_ret != NO_ERROR) {
+        printf("诊断结果：无线从机%s ret=0x%08lX\r\n",
+               Sensor_CommErrorToText(diag_ret),
+               (unsigned long)diag_ret);
+        return diag_ret;
+    }
+
+    printf("诊断结果：无线主机和无线从机通信正常，判定传感器通信无响应\r\n");
+    return SENSOR_DEVICE_COMM_TIMEOUT;
+}
+
+static uint32_t Sensor_ProbeWirelessLink(void)
+{
+    uint32_t ret;
+
+    ret = WIRELESS_PrintInfo(WIRELESS_HOST_ADDR);
+    if (ret != NO_ERROR) {
+        ret = Sensor_MapWirelessProbeError(ret, WIRELESS_HOST_COMM_TIMEOUT);
+        printf("无线主机探测失败：%s ret=0x%08lX\r\n",
+               Sensor_CommErrorToText(ret),
+               (unsigned long)ret);
+        return ret;
+    }
+
+    ret = WIRELESS_PrintInfo(WIRELESS_SLAVE_ADDR);
+    if (ret != NO_ERROR) {
+        ret = Sensor_MapWirelessProbeError(ret, WIRELESS_SLAVE_COMM_TIMEOUT);
+        printf("无线从机探测失败：%s ret=0x%08lX\r\n",
+               Sensor_CommErrorToText(ret),
+               (unsigned long)ret);
+        return ret;
+    }
+
+    return NO_ERROR;
+}
+
+static uint32_t Sensor_ProbeLtdSensor(float *temp_out)
+{
+    float temp = 0.0f;
+    uint32_t ret = DSM_V2_Read_Temperature(&temp);
+
+    if ((ret == NO_ERROR) && (temp_out != NULL)) {
+        *temp_out = temp;
+    }
+    return ret;
+}
+
+static uint32_t Sensor_ProbeDsmSensor(void)
+{
+    return DSM_EnableDensityMode();
+}
+
+static int Sensor_SupportsAuxDsmChannels(void)
+{
+    return (g_deviceParams.sensorType == DSM_SENSOR);
+}
 /**
  * @brief 自动识别传感器类型（DSM 一代 / DSM_V2 / SIL）
  *
@@ -20,42 +157,79 @@
 
 uint32_t DetectSensorType(void) {
 	uint32_t ret = NO_ERROR;
+	uint32_t ltd_ret;
+	uint32_t dsm_ret;
 	float temp = 0.0f;
-	ret = DSM_V2_Read_Temperature(&temp);
-	if (ret == NO_ERROR) {
-		printf("温度值: %.3f ℃\r\n", temp);
-		printf("读取温度成功,DSM_V2传感器\r\n");
-		g_deviceParams.sensorType =LTD_SENSOR;
-	} else
-	{
-		printf("读取温度失败,SIL传感器\r\n");
-		g_deviceParams.sensorType =DSM_SENSOR;
-		g_bottom_det_mode = BOTTOM_DET_BY_GYRO;
+
+	printf("========== 传感器识别开始 ==========\r\n");
+	printf("[1/3] 检查无线链路\r\n");
+
+	ret = Sensor_ProbeWirelessLink();
+	if (ret != NO_ERROR) {
+		printf("识别失败：无线链路异常 ret=0x%08lX\r\n", (unsigned long)ret);
+		Sensor_SetCommDetectError(ret);
+		return ret;
 	}
-	ret = WIRELESS_PrintInfo(1); // 打印无线传感器信息
-	ret = WIRELESS_PrintInfo(2); // 打印无线传感器信息
+	printf("无线链路正常\r\n");
+
+	printf("[2/3] 尝试LTD协议\r\n");
+	ltd_ret = Sensor_ProbeLtdSensor(&temp);
+	if (ltd_ret == NO_ERROR) {
+		g_deviceParams.sensorType = LTD_SENSOR;
+		g_bottom_det_mode = BOTTOM_DET_BY_WEIGHT;
+		printf("识别成功：LTD传感器 | 温度=%.3f ℃\r\n", temp);
+		printf("====================================\r\n");
+		return NO_ERROR;
+	}
+
+	printf("LTD协议探测失败：%s ret=0x%08lX\r\n",
+           Sensor_CommErrorToText(ltd_ret),
+           (unsigned long)ltd_ret);
+
+	printf("[3/3] 尝试DSM协议\r\n");
+	dsm_ret = Sensor_ProbeDsmSensor();
+	if (dsm_ret == NO_ERROR) {
+		g_deviceParams.sensorType = DSM_SENSOR;
+		printf("识别成功：DSM传感器 | 密度模式握手成功\r\n");
+		printf("====================================\r\n");
+		return NO_ERROR;
+	}
+
+	printf("DSM协议探测失败：%s ret=0x%08lX\r\n",
+           Sensor_CommErrorToText(dsm_ret),
+           (unsigned long)dsm_ret);
+
+	ret = Sensor_SelectProbeError(ltd_ret, dsm_ret);
+
+	printf("识别失败：无线链路正常，但无法识别传感器 ret=0x%08lX\r\n", (unsigned long)ret);
+	printf("====================================\r\n");
+	Sensor_SetCommDetectError(ret);
 	return ret;
 }
 uint32_t EnableDensityMode(void) {
+	uint32_t ret;
 	if (g_deviceParams.sensorType == DSM_SENSOR) {
-		return DSM_EnableDensityMode();
+		ret = DSM_EnableDensityMode();
 	} else {
-		return DSM_V2_SwitchToDensityMode();
+		ret = DSM_V2_SwitchToDensityMode();
 	}
+	return Sensor_DiagnoseCommTimeout(ret, "切换密度模式");
 }
 
 uint32_t EnableLevelMode(void) {
+	uint32_t ret;
 	if (g_deviceParams.sensorType == DSM_SENSOR) {
-		return DSM_EnableLevelMode();
+		ret = DSM_EnableLevelMode();
 	} else {
-		return DSM_V2_SwitchToLevelMode();
+		ret = DSM_V2_SwitchToLevelMode();
 	}
+	return Sensor_DiagnoseCommTimeout(ret, "切换液位模式");
 }
 
 // 读取一次并以整数 Hz 返回，读到0时重试最多3次
 uint32_t DSM_Get_LevelMode_Frequence(volatile uint32_t *frequency_out) {
 	if (frequency_out == NULL) {
-		return PARAM_ADDRESS_OVERFLOW;   // 比 SENSOR_COMM_TIMEOUT 更合理
+		return PARAM_ADDRESS_OVERFLOW;   // 比设备通信错误更合理
 	}
 
 	uint32_t ret;
@@ -70,7 +244,7 @@ uint32_t DSM_Get_LevelMode_Frequence(volatile uint32_t *frequency_out) {
 		}
 
 		if (ret != NO_ERROR) {
-			return ret;  // 读取失败直接返回错误码
+			return Sensor_DiagnoseCommTimeout(ret, "读取液位频率");  // 读取失败直接返回错误码
 		}
 
 		if (hz != 0 && hz < 6500) {
@@ -179,20 +353,30 @@ uint32_t Read_Density(float *frequency, float *density, float *temp) {
 	if (g_deviceParams.sensorType == DSM_SENSOR) {
 		ret = DSM_Read_Frequency_Density_Temp(frequency, density, temp);
 	} else {
-		if (DSM_V2_Read_Temperature(temp) == NO_ERROR) {
+		ret = DSM_V2_Read_Temperature(temp);
+		if (ret == NO_ERROR) {
 			printf("温度值: %.3f ℃\r\n", *temp);
-		} else
+		} else {
 			printf("读取温度失败\r\n");
+			return Sensor_DiagnoseCommTimeout(ret, "读取LTD温度");
+		}
 
-		if (DSM_V2_Read_Density(density) == NO_ERROR) {
+		ret = DSM_V2_Read_Density(density);
+		if (ret == NO_ERROR) {
 			printf("密度值: %.3f\r\n", *density);
-		} else
+		} else {
 			printf("读取密度失败\r\n");
-		if (DSM_V2_Read_DensityFrequency(frequency,&hz_45,&hz_225) == NO_ERROR) {
+			return Sensor_DiagnoseCommTimeout(ret, "读取LTD密度");
+		}
+		ret = DSM_V2_Read_DensityFrequency(frequency,&hz_45,&hz_225);
+		if (ret == NO_ERROR) {
 			printf("频率值: %.1f Hz\r\n45度扫频周期平方均值:  %.2f Hz\r\n22.5度扫频周期平方均值: %.2f Hz\r\n", *frequency,hz_45,hz_225);
-		} else
+		} else {
 			printf("读取频率失败\r\n");
+			return Sensor_DiagnoseCommTimeout(ret, "读取LTD频率");
+		}
 	}
+	ret = Sensor_DiagnoseCommTimeout(ret, "读取密度");
 	if (ret == NO_ERROR) {
 
 	    /* ===== 固定系数修正 ===== */
@@ -234,6 +418,28 @@ uint32_t Read_Density(float *frequency, float *density, float *temp) {
 	}
 
 	return ret;
+}
+
+uint32_t Sensor_ReadWaterCapacitance(float *cap_out)
+{
+    if (!Sensor_SupportsAuxDsmChannels()) {
+        printf("当前传感器类型不支持读取水位电容\r\n");
+        return PARAM_ERROR;
+    }
+
+    uint32_t ret = Read_Water_Capacitance(cap_out);
+    return Sensor_DiagnoseCommTimeout(ret, "读取水位电容");
+}
+
+uint32_t Sensor_ReadGyroAngle(float *angle_x_deg, float *angle_y_deg)
+{
+    if (!Sensor_SupportsAuxDsmChannels()) {
+        printf("当前传感器类型不支持读取姿态角\r\n");
+        return PARAM_ERROR;
+    }
+
+    uint32_t ret = Read_Gyro_Angle(angle_x_deg, angle_y_deg);
+    return Sensor_DiagnoseCommTimeout(ret, "读取陀螺仪");
 }
 uint32_t Sensor_Test1(void) {
 	float frequency = 5500.123f;
@@ -347,15 +553,21 @@ static uint32_t Read_WeightParam_Adapter(void)
     g_measurement.debug_data.weight_param   = Read_WeightParam_Adapter();
 
     /* ---------- 4) 姿态角（陀螺仪） ---------- */
-    ret = Read_Gyro_Angle(&ax, &ay);
-    if (ret != NO_ERROR) {
-        printf("读取部件参数\t陀螺仪读取失败 ret=0x%08lX\r\n", (unsigned long)ret);
-        SET_ERROR(ret);
-        /* 不 return：允许其它模块继续更新 */
+    if (Sensor_SupportsAuxDsmChannels()) {
+        ret = Sensor_ReadGyroAngle(&ax, &ay);
+        if (ret != NO_ERROR) {
+            printf("读取部件参数\t陀螺仪读取失败 ret=0x%08lX\r\n", (unsigned long)ret);
+            SET_ERROR(ret);
+            /* 不 return：允许其它模块继续更新 */
+        } else {
+            /* 你 Read_Gyro_Angle() 里已经写了 debug_data.angle_x/y，这里再确保一遍 */
+            g_measurement.debug_data.angle_x = (int32_t)(ax * 100.0f);
+            g_measurement.debug_data.angle_y = (int32_t)(ay * 100.0f);
+        }
     } else {
-        /* 你 Read_Gyro_Angle() 里已经写了 debug_data.angle_x/y，这里再确保一遍 */
-        g_measurement.debug_data.angle_x = (int32_t)(ax * 100.0f);
-        g_measurement.debug_data.angle_y = (int32_t)(ay * 100.0f);
+        g_measurement.debug_data.angle_x = 0;
+        g_measurement.debug_data.angle_y = 0;
+        printf("读取部件参数\t当前传感器类型不支持姿态角读取，已跳过\r\n");
     }
 
     /* ---------- 5) 密度/温度/频率 ---------- */
@@ -370,14 +582,19 @@ static uint32_t Read_WeightParam_Adapter(void)
     }
 
     /* ---------- 6) 水位电容/电压 ---------- */
-    ret = Read_Water_Capacitance(&cap);
-    if (ret != NO_ERROR) {
-        printf("读取部件参数\t水位电容读取失败 ret=0x%08lX\r\n", (unsigned long)ret);
-        SET_ERROR(ret);
+    if (Sensor_SupportsAuxDsmChannels()) {
+        ret = Sensor_ReadWaterCapacitance(&cap);
+        if (ret != NO_ERROR) {
+            printf("读取部件参数\t水位电容读取失败 ret=0x%08lX\r\n", (unsigned long)ret);
+            SET_ERROR(ret);
+        } else {
+            /* 水位电容值/电压值：你结构体写 uint32_t，这里约定 ×10 或 ×100 以保留小数
+               若你工程已有“水位电容原始值”的标定口径，请按你的口径替换 */
+            g_measurement.debug_data.water_level_voltage = (uint32_t)(cap * 10.0f); /* 例如：0.1单位 */
+        }
     } else {
-        /* 水位电容值/电压值：你结构体写 uint32_t，这里约定 ×10 或 ×100 以保留小数
-           若你工程已有“水位电容原始值”的标定口径，请按你的口径替换 */
-        g_measurement.debug_data.water_level_voltage = (uint32_t)(cap * 10.0f); /* 例如：0.1单位 */
+        g_measurement.debug_data.water_level_voltage = 0;
+        printf("读取部件参数\t当前传感器类型不支持水位电容读取，已跳过\r\n");
     }
 
     /* ---------- 7) 预留接口：后续新增部件参数统一挂这里 ---------- */

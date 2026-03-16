@@ -78,7 +78,7 @@ typedef enum {
     /* ==================== 13 传感器类故障 (0x000D0000 - 0x000DFFFF) ==================== */
     SENSOR_BCC_ERROR = 0x000D0001,               // 数据校验错误
     SONIC_FREQ_ABNORMAL = 0x000D0002,            // 震动管频率异常
-    SENSOR_COMM_TIMEOUT = 0x000D0003,            // 传感器通信超时
+	SENSOR_DEVICE_COMM_TIMEOUT = 0x000D0003,     // 设备通信超时（按上下文映射为主机/从机/传感器）
     DENSITY_INVALID = 0x000D0004,                // 密度值异常
     SENSOR_TEMPERATURE_ERROR = 0x000D0005,       // 温度异常
     SENSOR_VOLTAGE_ERROR = 0x000D0006,           // 电压异常
@@ -86,8 +86,11 @@ typedef enum {
     SLIPRING_BCC_ERROR = 0x000D0008,             // 无线滑环校验错误
     SLIPRING_PACKET_LOSS = 0x000D0009,           // 数据包丢失
     SLIPRING_SIGNAL_WEAK = 0x000D000A,           // 信号强度不足
-
-	DENSITY_UNSTABLE = 0x000D000C,                // 密度值不稳定
+    SENSOR_RESP_FORMAT_ERROR = 0x000D000B,       // 传感器响应格式错误
+	DENSITY_UNSTABLE = 0x000D000C,               // 密度值不稳定
+    SENSOR_DEVICE_REPORTED_ERROR = 0x000D000D,   // 传感器返回设备内部错误
+    WIRELESS_HOST_COMM_TIMEOUT = 0x000D0010,     // 与无线主机通信无响应
+    WIRELESS_SLAVE_COMM_TIMEOUT = 0x000D0011,    // 与无线从机通信无响应
     /* ==================== 测量过程故障 (0x000F0000 - 0x000FFFFF) ==================== */
     MEASUREMENT_POSITION_ERROR = 0x000F0001,     // 位置测量错误
     MEASUREMENT_TIMEOUT = 0x000F0002,            // 测量超时

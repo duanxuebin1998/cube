@@ -84,9 +84,13 @@ static int DSM_V2_Transceive(const uint8_t tx[8], uint8_t rx[8]) {
 	}
 	if (got < 8) {
 #ifdef DEBUG_DSM
-		printf("V2 RX timeout, got %d bytes\r\n", got);
+		if (got == 0) {
+			printf("V2 RX timeout, got 0 bytes\r\n");
+		} else {
+			printf("V2 RX length error, got %d bytes\r\n", got);
+		}
 #endif
-		return SENSOR_COMM_TIMEOUT;
+		return (got == 0) ? SENSOR_DEVICE_COMM_TIMEOUT : SENSOR_RESP_FORMAT_ERROR;
 	}
 
 #ifdef DEBUG_DSM
@@ -114,19 +118,19 @@ static int DSM_V2_CheckReply(const uint8_t tx[8], const uint8_t rx[8]) {
 #ifdef DEBUG_DSM
 		printf("V2 RX func mismatch: expect %02X, got %02X\r\n", expect_func, rx[1]);
 #endif
-		return SENSOR_COMM_TIMEOUT;
+		return SENSOR_RESP_FORMAT_ERROR;
 	}
 	if (rx[6] == 0xFF) {
 #ifdef DEBUG_DSM
 		printf("V2 RX indicates FAIL (param=FF)\r\n");
 #endif
-		return OTHER_PERIPHERAL_CONFIG_ERROR;
+		return SENSOR_DEVICE_REPORTED_ERROR;
 	}
 	if (rx[6] != expect_param) {
 #ifdef DEBUG_DSM
 		printf("V2 RX param mismatch: expect %02X, got %02X\r\n", expect_param, rx[6]);
 #endif
-		return OTHER_PERIPHERAL_CONFIG_ERROR;
+		return SENSOR_RESP_FORMAT_ERROR;
 	}
 	return NO_ERROR;
 }
