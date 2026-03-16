@@ -70,7 +70,7 @@ uint32_t SearchWaterLevel(void);
  */
 uint32_t FollowWaterLevel(void);
 /**
- * @brief 液面附近快速跟随（按“连续调用 motorMove_up/down 直到状态翻转”的结构）
+ * @brief 液面附近快速跟随（按“连续调用 motorMove_upWithSpeed/motorMove_downWithSpeed 直到状态翻转”的结构）
  *
  * 逻辑：
  *  - 若当前在水里(WATER)：持续上行直到变为 NORMAL（提出水面/到油里）
@@ -78,7 +78,7 @@ uint32_t FollowWaterLevel(void);
  *  - 如此循环往复，实现“贴着液面”快速跟随
  *
  * 依赖：
- *  - motorMove_up()/motorMove_down(): 每次调用推动继续运动（你现有粗找就是这样用的）
+ *  - motorMove_upWithSpeed()/motorMove_downWithSpeed(): 每次调用推动继续运动（你现有粗找就是这样用的）
  *  - check_water_status(): 返回 WATER / NORMAL
  *  - Motor_CheckLostStep_AutoTiming(): 丢步检测（可选但建议保留）
  * 退出条件：
@@ -99,7 +99,7 @@ uint32_t FindWaterLevel_FastByStateFlip_StableExit(void);
  *    累计 lost_count，超过阈值后触发重新找水位
  *
  * 特点：
- * - 步进式运动（motorMoveAndWaitUntilStop）
+ * - 步进式运动（motorMoveAndWaitUntilStopWithSpeed）
  * - 带滞回，避免界面抖动
  * - 带自恢复机制，避免长期卡死在错误区域
  */

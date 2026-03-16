@@ -260,11 +260,11 @@ void process_command(uint8_t *command) {
 		} else if (command[1] == '+') {
 			int mm = atoi((char*) &command[2]);  // 获取数字
 			printf("start up%d\n", mm);
-			motorMoveNoWait((float) mm, MOTOR_DIRECTION_UP);  // 电机上行
+			motorMoveNoWaitWithSpeed((float) mm, MOTOR_DIRECTION_UP, motorGetDefaultSpeedX100());  // 电机上行
 		} else if (command[1] == '-') {
 			int mm = atoi((char*) &command[2]);  // 获取数字
 			printf("start down%d\n", mm);
-			motorMoveNoWait((float) mm, MOTOR_DIRECTION_DOWN);  // 电机下行
+			motorMoveNoWaitWithSpeed((float) mm, MOTOR_DIRECTION_DOWN, motorGetDefaultSpeedX100());  // 电机下行
 		}
 	}
 	if (command[0] == 'B') {  //
@@ -274,9 +274,9 @@ void process_command(uint8_t *command) {
 		printf("start up%d\n", mm);
 		while (1) {
 			stpr_enableDriver(&stepper);  //使能电机
-			motorMoveAndWaitUntilStop(mm, MOTOR_DIRECTION_DOWN);
+			motorMoveAndWaitUntilStopWithSpeed(mm, MOTOR_DIRECTION_DOWN, motorGetDefaultSpeedX100());
 			printf("start up to zero\n");
-			motorMoveToPositionOneShot((g_deviceParams.tankHeight-g_deviceParams.findZeroDownDistance)/10.0);
+			motorMoveToPositionOneShotWithSpeed((g_deviceParams.tankHeight-g_deviceParams.findZeroDownDistance)/10.0, motorGetDefaultSpeedX100());
 			printf("上行结束\n");
 			stpr_disableDriver(&stepper); //使能电机
 		}
@@ -330,7 +330,7 @@ void process_command(uint8_t *command) {
 	if (command[0] == 'M') {
 		printf("***电机高温测试***\r\n");
 		while (1) {
-			motorMoveNoWait(100000, MOTOR_DIRECTION_DOWN);
+			motorMoveNoWaitWithSpeed(100000, MOTOR_DIRECTION_DOWN, motorGetDefaultSpeedX100());
 			HAL_Delay(1000);
 			stpr_waitMove(&stepper);
 		}
@@ -342,13 +342,13 @@ void process_command(uint8_t *command) {
 			stpr_enableDriver(&stepper);  //使能电机
 //						stpr_initStepper(&stepper, &hspi2, GPIOB, GPIO_PIN_12, 1, 18);
 					//		stpr_moveTo(&stepper, -30 * 1600 * 32, 1600 * 2 * 32);
-			motorMoveNoWait(300, MOTOR_DIRECTION_DOWN);
+			motorMoveNoWaitWithSpeed(300, MOTOR_DIRECTION_DOWN, motorGetDefaultSpeedX100());
 			HAL_Delay(1000);
 			printf("start down\n");
 			HAL_Delay(1000);
 			printf("down over!\n");
 			stpr_waitMove(&stepper);
-			motorMoveNoWait(300, MOTOR_DIRECTION_UP);
+			motorMoveNoWaitWithSpeed(300, MOTOR_DIRECTION_UP, motorGetDefaultSpeedX100());
 			printf("start up to zero\n");
 			HAL_Delay(1000);
 			stpr_waitMove(&stepper);
@@ -551,9 +551,10 @@ static void CMD_MoveUp(void)
     printf("电机上行操作\n");
     g_measurement.device_status.device_state = STATE_RUNUPING;
 
-    ret = motorMoveAndWaitUntilStop(
+    ret = motorMoveAndWaitUntilStopWithSpeed(
             (float)g_deviceParams.motorCommandDistance / 10.0f,
-            MOTOR_DIRECTION_UP);
+            MOTOR_DIRECTION_UP,
+            motorGetDefaultSpeedX100());
 
     SET_ERROR(ret);
 
@@ -568,9 +569,10 @@ static void CMD_MoveDown(void)
     printf("电机下行操作\n");
     g_measurement.device_status.device_state = STATE_RUNDOWNING;
 
-    ret = motorMoveAndWaitUntilStop(
+    ret = motorMoveAndWaitUntilStopWithSpeed(
             (float)g_deviceParams.motorCommandDistance / 10.0f,
-            MOTOR_DIRECTION_DOWN);
+            MOTOR_DIRECTION_DOWN,
+            motorGetDefaultSpeedX100());
 
     SET_ERROR(ret);
 
@@ -583,11 +585,12 @@ static void CMD_ForceMoveUp(void)
     printf("电机强制上行操作\r\n");
     g_measurement.device_status.device_state = STATE_FORCE_RUNUPING;
 	printf("强制上行距离: %.1f mm\r\n", (float) g_deviceParams.motorCommandDistance / 10.0f);
-    motorMoveBlocking_NoDetect(
+    motorMoveBlocking_NoDetectWithSpeed(
         (float)g_deviceParams.motorCommandDistance / 10.0f,
-        MOTOR_DIRECTION_UP);
+        MOTOR_DIRECTION_UP,
+        motorGetDefaultSpeedX100());
     printf("电机强制上行操作完成\r\n");
-//    motorMoveAndWaitUntilStop(
+//    motorMoveAndWaitUntilStopWithSpeed(
 //            (float)g_deviceParams.motorCommandDistance / 10.0f,
 //            MOTOR_DIRECTION_UP);
     g_measurement.device_status.device_state = STATE_FORCE_RUNUP_OVER;
@@ -600,9 +603,10 @@ static void CMD_ForceMoveDown(void)
     printf("电机强制下行操作\r\n");
     g_measurement.device_status.device_state = STATE_FORCE_RUNDOWNING;
 
-    motorMoveBlocking_NoDetect(
+    motorMoveBlocking_NoDetectWithSpeed(
         (float)g_deviceParams.motorCommandDistance / 10.0f,
-        MOTOR_DIRECTION_DOWN);
+        MOTOR_DIRECTION_DOWN,
+        motorGetDefaultSpeedX100());
 
     g_measurement.device_status.device_state = STATE_FORCE_RUNDOWN_OVER;
     return;
@@ -615,9 +619,10 @@ static void CMD_ForceLiftZero(void)
     g_measurement.device_status.device_state = STATE_FORCE_LIFT_ZEROING;
 
     /* 长距离上行：不检测称重/丢步，底层可被命令切换打断 */
-    motorMoveBlocking_NoDetect(
+    motorMoveBlocking_NoDetectWithSpeed(
         2000000.0f,  // 300m,
-        MOTOR_DIRECTION_UP);
+        MOTOR_DIRECTION_UP,
+        motorGetDefaultSpeedX100());
 
     g_measurement.device_status.device_state = STATE_FORCE_LIFT_ZERO_OVER;
     return;
@@ -716,7 +721,7 @@ static void CMD_SyntheticMeasurement(void) {
  * @brief 运行到指定绝对位置（mm）
  * 依赖：
  *  - MeasureStart()
- *  - motorMoveToPositionOneShot(float target_mm)
+ *  - motorMoveToPositionOneShotWithSpeed(float target_mm, uint32_t speed_x100)
  *  - CHECK_COMMAND_SWITCH(x) / SET_ERROR(x)
  *  - g_measurement.device_status.device_state
  *  - 目标位置参数来源（见下方 get_target_mm()）
@@ -731,9 +736,9 @@ static void CMD_RunToPosition(void)
 
 
     target_mm = (float)g_deviceParams.densityDistributionOilLevel/10.0;
-    ret = motorMoveToPositionOneShot(target_mm);
+    ret = motorMoveToPositionOneShotWithSpeed(target_mm, motorGetDefaultSpeedX100());
 
-    /* motorMoveToPositionOneShot 里如果你也加了 CHECK_COMMAND_SWITCH，就能更快退出；
+    /* motorMoveToPositionOneShotWithSpeed 里如果你也加了 CHECK_COMMAND_SWITCH，就能更快退出；
        若没加，这里至少在调用前/后能响应一次切换。 */
 
     if (ret == STATE_SWITCH) {

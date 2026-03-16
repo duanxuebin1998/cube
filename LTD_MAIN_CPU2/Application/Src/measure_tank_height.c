@@ -55,7 +55,7 @@ uint32_t SearchBottom(void)
     /* -------------------- 初始位置调整 -------------------- */
     if (g_measurement.debug_data.cable_length > 2000)
     {
-        ret = motorMoveAndWaitUntilStop(100.0, MOTOR_DIRECTION_UP);
+        ret = motorMoveAndWaitUntilStopWithSpeed(100.0, MOTOR_DIRECTION_UP, motorGetDefaultSpeedX100());
         CHECK_ERROR(ret);
         printf("罐底测量\t上行完成\r\n");
     }
@@ -146,7 +146,7 @@ uint32_t SearchBottom(void)
 		update_sensor_height_from_encoder();	//更新罐高数据
     }
     // 电机上行，完成流程
-    ret = motorMoveAndWaitUntilStop(100, MOTOR_DIRECTION_UP);
+    ret = motorMoveAndWaitUntilStopWithSpeed(100, MOTOR_DIRECTION_UP, motorGetDefaultSpeedX100());
     CHECK_ERROR(ret);
     printf("罐底测量\t电机上行完成，流程结束\r\n");
 
@@ -163,7 +163,7 @@ static int SearchBottomRough() {
 	MotorLostStep_Init();// 重置丢步检测计数器
 	// 持续监控重量状态，直到检测到罐底
 	while (check_bottom_status() == NORMAL) {
-		ret = motorMove_down();  // 启动电机向下运动
+		ret = motorMove_downWithSpeed(motorGetDefaultSpeedX100());  // 启动电机向下运动
 		CHECK_ERROR(ret); // 检查上行是否成功
 
 		ret = Motor_CheckLostStep_AutoTiming(g_measurement.debug_data.cable_length);
@@ -183,7 +183,7 @@ static int SearchBottomRough() {
 	}
 	else {
 		printf("罐底测量\t粗找罐底未成功，尝试再次粗找\r\n");
-		ret = motorMoveAndWaitUntilStop(100.0, MOTOR_DIRECTION_UP);
+		ret = motorMoveAndWaitUntilStopWithSpeed(100.0, MOTOR_DIRECTION_UP, motorGetDefaultSpeedX100());
 		CHECK_ERROR(ret);  // 检查上行是否成功
 		printf("罐底测量\t上行100mm\r\n");
 		return MEASUREMENT_WEIGHT_DOWN_FAIL;
@@ -197,32 +197,34 @@ static int SearchBottomRough() {
  */
 static int SearchBottomPrecise() {
 	uint32_t ret;
+    uint32_t speed_x100;
 	printf("罐底测量\t稳定重量：%d\r\n", weight_parament.stable_weight);
     if (g_measurement.debug_data.cable_length > 2000)
     {
-        ret = motorMoveAndWaitUntilStop(200.0, MOTOR_DIRECTION_UP);
+        ret = motorMoveAndWaitUntilStopWithSpeed(200.0, MOTOR_DIRECTION_UP, motorGetDefaultSpeedX100());
         CHECK_ERROR(ret);
         printf("罐底测量\t上行完成\r\n");
     }
     MotorLostStep_Init();// 重置丢步检测计数器
 	// 持续监控重量状态，直到检测到罐底
 	while (check_bottom_status() != BOTTOM) {
+        speed_x100 = motorGetDefaultSpeedX100();
+        if (bottom_value-g_measurement.debug_data.cable_length < 100) {
+            speed_x100 = 10;
+        }
+        else if (bottom_value-g_measurement.debug_data.cable_length  < 300) {
+            speed_x100 = 40;
+        }
+        else if (bottom_value-g_measurement.debug_data.cable_length  < 3000)  {
+            speed_x100 = 100;
+        }
 
-		ret = motorMove_down();  // 启动电机向下运动
+		ret = motorMove_downWithSpeed(speed_x100);  // 启动电机向下运动
 		CHECK_ERROR(ret); // 检查上行是否成功
 
 		if (bottom_value-g_measurement.debug_data.cable_length < -100)  {
 			printf("罐底测量\tt精确寻找罐底未找到罐底\r\n");
 			RETURN_ERROR(MEASUREMENT_WEIGHT_DOWN_FAIL); // 如果编码器位置异常，返回错误
-		}
-		else if (bottom_value-g_measurement.debug_data.cable_length < 100) {
-			motorSetSpeed(10);
-		}
-		else if (bottom_value-g_measurement.debug_data.cable_length  < 300) {
-			motorSetSpeed(40);
-		}
-		else if (bottom_value-g_measurement.debug_data.cable_length  < 3000)  {
-			motorSetSpeed(100);
 		}
 
 		ret = Motor_CheckLostStep_AutoTiming(g_measurement.debug_data.cable_length);

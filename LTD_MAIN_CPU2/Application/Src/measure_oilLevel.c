@@ -150,7 +150,7 @@ uint32_t SearchOilLevel(void) {
 			//如果当前传感器在盲区以上100mm
 			if (g_measurement.debug_data.sensor_position > (g_deviceParams.blindZone + 1000)) {
 				//向下运行保证传感器全部在油
-				ret = motorMoveAndWaitUntilStop(100.0, MOTOR_DIRECTION_DOWN);
+				ret = motorMoveAndWaitUntilStopWithSpeed(100.0, MOTOR_DIRECTION_DOWN, motorGetDefaultSpeedX100());
 				CHECK_ERROR(ret); // 检查下行是否成功
 			}
 			//取油中频率
@@ -241,14 +241,14 @@ static int SearchOil() {
 
 	//向上运行保证传感器全部在空气
 	if (g_measurement.debug_data.cable_length > 1000) { // 如果尺带长度大于200mm，先将电机上行到安全位置
-		ret = motorMoveAndWaitUntilStop(100.0, MOTOR_DIRECTION_UP);
+		ret = motorMoveAndWaitUntilStopWithSpeed(100.0, MOTOR_DIRECTION_UP, motorGetDefaultSpeedX100());
 		CHECK_ERROR(ret); // 检查上行是否成功
 	}
 	//长距离下行寻找油面
 	MotorLostStep_Init();// 重置丢步检测计数器
 	// 持续监控重量状态，直到检测到液位
 	while (determine_level_status() != OIL) {
-		ret = motorMove_down();  // 启动电机向下运动
+		ret = motorMove_downWithSpeed(motorGetDefaultSpeedX100());  // 启动电机向下运动
 		CHECK_ERROR(ret); // 检查上行是否成功
 		// 实时输出编码器位置和重量值（用于调试）
 		printf("液位测量\t长距离寻找液位\t{传感器位置}%.1f\t{称重值}%d\r\n", (float) (g_measurement.debug_data.sensor_position) / 10.0, weight_parament.current_weight);
@@ -271,7 +271,7 @@ static int SearchOil() {
 	CHECK_ERROR(ret); // 检查快速停止是否成功
 	if (g_measurement.debug_data.sensor_position > (g_deviceParams.blindZone + 1000)) {
 		//向下运行保证传感器全部在油
-		ret = motorMoveAndWaitUntilStop(100.0, MOTOR_DIRECTION_DOWN);
+		ret = motorMoveAndWaitUntilStopWithSpeed(100.0, MOTOR_DIRECTION_DOWN, motorGetDefaultSpeedX100());
 		CHECK_ERROR(ret); // 检查下行是否成功
 	}
 	//取油中频率
@@ -294,7 +294,7 @@ static int SearchAir() {
 	// 持续监控重量状态，直到检测到液位
     MotorLostStep_Init();// 重置丢步检测计数器
 	while (determine_level_status() != AIR) {
-		ret = motorMove_up();  // 启动电机向下运动
+		ret = motorMove_upWithSpeed(motorGetDefaultSpeedX100());  // 启动电机向下运动
 		CHECK_ERROR(ret); // 检查上行是否成功
 		// 实时输出编码器位置和重量值（用于调试）
 		printf("液位测量\t长距离寻找空气\t{传感器位置}%.1f\t{称重值}%d\r\n", (float) (g_measurement.debug_data.sensor_position) / 10.0, weight_parament.current_weight);
@@ -310,7 +310,7 @@ static int SearchAir() {
 	CHECK_ERROR(ret); // 检查快速停止是否成功
 	//向上运行保证传感器全部在空气
 	if (g_measurement.debug_data.cable_length > 1000) { // 如果尺带长度大于200mm，先将电机上行到安全位置
-		ret = motorMoveAndWaitUntilStop(100.0, MOTOR_DIRECTION_UP);
+		ret = motorMoveAndWaitUntilStopWithSpeed(100.0, MOTOR_DIRECTION_UP, motorGetDefaultSpeedX100());
 		CHECK_ERROR(ret); // 检查上行是否成功
 	}
 	//取空气中频率
@@ -319,7 +319,7 @@ static int SearchAir() {
 	CHECK_ERROR(ret);  // 检查获取空气中频率是否成功
 	if (g_measurement.debug_data.sensor_position > (g_deviceParams.blindZone + 1000)) {
 		//向下运行保证传感器全部在油
-		ret = motorMoveAndWaitUntilStop(100.0, MOTOR_DIRECTION_DOWN);
+		ret = motorMoveAndWaitUntilStopWithSpeed(100.0, MOTOR_DIRECTION_DOWN, motorGetDefaultSpeedX100());
 		CHECK_ERROR(ret); // 检查下行是否成功
 	}
 
@@ -445,7 +445,7 @@ static int SearchOilPrecise(float per_mm_Frequency) {
 				runlenth = 0.1;
 			printf("频率跟随\t电机移动\t距离%f\t方向%s\r\n", runlenth, (dir == MOTOR_DIRECTION_UP) ? "上" : "下");
 			// 执行电机移动（带丢步检测）
-			ret = motorMoveAndWaitUntilStop(runlenth, dir);
+			ret = motorMoveAndWaitUntilStopWithSpeed(runlenth, dir, motorGetDefaultSpeedX100());
 			if (NO_ERROR != ret)
 				return ret;
 		}

@@ -12,7 +12,7 @@
  *   A. 搜索液位（SearchOilLevel）
  *   B. 切换到密度测量模式（EnableDensityMode）
  *   C. 按模式生成取点数组（单位：0.1mm）
- *   D. 按点位依次移动并单点测量（motorMoveToPositionOneShot + SinglePoint_ReadSensor）
+ *   D. 按点位依次移动并单点测量（motorMoveToPositionOneShotWithSpeed + SinglePoint_ReadSensor）
  *   E. 计算平均值并输出（Print_DensitySpreadResult）
  *   F. 国标模式额外执行“按标密差值阈值过滤点，并重算平均值”
  *
@@ -23,7 +23,7 @@
  * 外部依赖（工程需提供）：
  *   - SearchOilLevel()
  *   - EnableDensityMode()
- *   - motorMoveToPositionOneShot(float pos_mm)
+ *   - motorMoveToPositionOneShotWithSpeed(float pos_mm, uint32_t speed_x100)
  *   - SinglePoint_ReadSensor(volatile DensityMeasurement *result)
  *   - g_measurement / g_deviceParams
  *   - DensityDistribution / DensityMeasurement
@@ -97,7 +97,7 @@ static uint32_t Density_RunPoints01mm(const int32_t *p01,
         float pos_mm = (float)p01[i] / 10.0f;
         printf("分布测量 移动到位置 %.1f mm\r\n", pos_mm);
 
-        uint32_t ret = motorMoveToPositionOneShot(pos_mm);
+        uint32_t ret = motorMoveToPositionOneShotWithSpeed(pos_mm, motorGetDefaultSpeedX100());
         if (ret != NO_ERROR) {
             printf("分布测量 电机移动失败: pos=%.1fmm err=%lu\r\n", pos_mm, (unsigned long)ret);
             return ret;
@@ -1099,7 +1099,8 @@ void CMD_SinglePointMeasurement(void)
 
     MeasureStart();
 
-    ret = motorMoveToPositionOneShot((float)g_deviceParams.singlePointMeasurementPosition / 10.0f);
+    ret = motorMoveToPositionOneShotWithSpeed((float)g_deviceParams.singlePointMeasurementPosition / 10.0f,
+                                              motorGetDefaultSpeedX100());
     SET_ERROR(ret);
 
     g_measurement.device_status.device_state = STATE_SPTESTING;
@@ -1118,7 +1119,8 @@ void CMD_SinglePointMonitoring(void)
     uint32_t ret = 0;
     g_measurement.device_status.device_state = STATE_RUNTOPOINTING;
 
-    ret = motorMoveToPositionOneShot((float)g_deviceParams.singlePointMonitoringPosition / 10.0f);
+    ret = motorMoveToPositionOneShotWithSpeed((float)g_deviceParams.singlePointMonitoringPosition / 10.0f,
+                                              motorGetDefaultSpeedX100());
     SET_ERROR(ret);
 
     g_measurement.device_status.device_state = STATE_SPTESTING;
