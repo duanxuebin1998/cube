@@ -1306,7 +1306,7 @@ static void cmd_onepara_process(void)
     index = getHoldValueNum(now_Opera_Num);
     if (index < 0) {
         all_screen(0x00);
-        DisplayLangaugeLineWords((uint8_t*)"非法参数！", OLED_LINE8_2, OLED_ROW3_2, 0, (uint8_t*)"Invalid Para");
+        DisplayLangaugeLineWords((uint8_t*)"非法参数!", OLED_LINE8_2, OLED_ROW3_2, 0, (uint8_t*)"Invalid Para");
         HAL_Delay(800);
         exitTankOpera();
         return;
@@ -1317,7 +1317,7 @@ static void cmd_onepara_process(void)
         int bytes = (int)param_meta[index].rgstcnt * 2;
         if (bytes <= 0 || bytes > 64) {
             all_screen(0x00);
-            DisplayLangaugeLineWords((uint8_t*)"参数长度异常！", OLED_LINE8_2, OLED_ROW3_2, 0, (uint8_t*)"Bad Para Len");
+            DisplayLangaugeLineWords((uint8_t*)"参数长度异常!", OLED_LINE8_2, OLED_ROW3_2, 0, (uint8_t*)"Bad Para Len");
             HAL_Delay(800);
             exitTankOpera();
             return;
@@ -1366,7 +1366,7 @@ static void cmd_onepara_process(void)
         if (!found) {
             /* 参数写了，但没有对应命令：给出明确提示 */
             all_screen(0x00);
-            DisplayLangaugeLineWords((uint8_t*)"指令未定义！", OLED_LINE8_2, OLED_ROW3_2, 0, (uint8_t*)"Cmd Undefined");
+            DisplayLangaugeLineWords((uint8_t*)"指令未定义!", OLED_LINE8_2, OLED_ROW3_2, 0, (uint8_t*)"Cmd Undefined");
             HAL_Delay(800);
             exitTankOpera();
             return;
@@ -1439,7 +1439,7 @@ static void cmd_onepara_process(void)
 static void errorprocess(void)
 {
 	all_screen(0x00);
-	DisplayLangaugeLineWords((uint8_t*)"非法操作！", OLED_LINE8_1, OLED_ROW4_2, 0, (uint8_t*)"Illegal operation");
+	DisplayLangaugeLineWords((uint8_t*)"非法操作!", OLED_LINE8_1, OLED_ROW4_2, 0, (uint8_t*)"Illegal operation");
 	DisplayLangaugeLineWords((uint8_t*)"1s后退出屏幕操作", OLED_LINE8_1, OLED_ROW4_3, 0, (uint8_t*)"Exit after 1 second");
 	HAL_Delay(1000);
 	exitTankOpera();
@@ -1529,7 +1529,7 @@ static void parawritecheck(void)
 		}
 	} else {
 		all_screen(0x00);
-		DisplayLangaugeLineWords((uint8_t*)"无修改权限！", OLED_LINE8_2, OLED_ROW3_2, 0, (uint8_t*)"No permission");
+		DisplayLangaugeLineWords((uint8_t*)"无修改权限!", OLED_LINE8_2, OLED_ROW3_2, 0, (uint8_t*)"No permission");
 		HAL_Delay(800);
 		displaypara();
 	}
@@ -1618,13 +1618,13 @@ static void parascopecheck(void)
 	index = getHoldValueNum(now_Opera_Num);
 	if (index == -1) {
 		all_screen(0x00);
-		DisplayLangaugeLineWords((uint8_t*)"非法参数！", OLED_LINE8_2, OLED_ROW3_2, 0, (uint8_t*)"Invalid Para");
+		DisplayLangaugeLineWords((uint8_t*)"非法参数!", OLED_LINE8_2, OLED_ROW3_2, 0, (uint8_t*)"Invalid Para");
 		HAL_Delay(800);
 		displaypara();
 	} else if (param_meta[index].flag_checkvalue) {
 		if (now_Para_CT.val < param_meta[index].valuemin || now_Para_CT.val > param_meta[index].valuemax) {
 			all_screen(0x00);
-			DisplayLangaugeLineWords((uint8_t*)"数值超范围！", OLED_LINE8_2, OLED_ROW3_2, 0, (uint8_t*)"Value out of Range");
+			DisplayLangaugeLineWords((uint8_t*)"数值超范围!", OLED_LINE8_2, OLED_ROW3_2, 0, (uint8_t*)"Value out of Range");
 			HAL_Delay(800);
 			displaypara();
 		} else {

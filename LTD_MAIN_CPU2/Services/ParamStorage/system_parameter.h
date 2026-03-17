@@ -297,6 +297,7 @@ typedef struct {
 
 	/*---- 标志位 ----*/
 	uint32_t zero_point_status; // 零点状态（0-正常 1-需要回零）
+	uint32_t parameter_update_flag; // parameter update flag
 } DeviceStatus;
 
 // 单点密度数据
@@ -578,7 +579,9 @@ typedef struct {
 extern volatile MeasurementResult g_measurement; // 测量结果
 extern volatile DeviceParameters g_deviceParams; // 设备参数
 
-void save_device_params(void); // 存储设备参数
+void save_device_params(void); // Save device parameters to FRAM immediately
+void request_device_params_save(void); // Queue one deferred save request
+void process_device_params_deferred_tasks(void); // Run deferred save tasks in the main loop
 int load_device_params(void); // 加载设备参数
 void init_device_params(void); // 初始化设备参数
 void RestoreFactoryParamsConfig(void); //恢复出厂默认参数配置

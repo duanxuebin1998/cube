@@ -929,6 +929,10 @@ uint32_t CalibrateFirstLoopCircumference_OneTurnAtZero(void)
     g_deviceParams.first_loop_circumference_mm = (int32_t)llround(C0 * 10.0);
     ret = motorMoveAndWaitUntilStopWithSpeed(dL, MOTOR_DIRECTION_UP, motorGetDefaultSpeedX100()); // 回到起点
     CHECK_ERROR(ret);
+    /* 首圈周长标定直接修改了系统参数 first_loop_circumference_mm。
+     * 这个值会影响后续的尺带长度换算，所以标定成功后必须立即保存，
+     * 同时通过 parameter_update_flag 通知 CPU3 刷新参数缓存。 */
+    save_device_params();
     return NO_ERROR;
 }
 

@@ -42,7 +42,7 @@ uint8_t USART2_TX_BUF[USART2_RX_BUF_SIZE] = { 0 };   // 发送数据缓冲区
 volatile uint8_t USART4_RX_LEN = 0;              // 接收一帧数据的长度
 uint8_t USART4_RX_BUF[USART4_RX_BUF_SIZE] = { 0 };   // 接收数据缓冲区
 
-volatile uint8_t UART5_RX_LEN = 0;              // 接收一帧数据的长度
+volatile uint16_t UART5_RX_LEN = 0;              // 接收一帧数据的长度
 uint8_t UART5_RX_BUF[UART5_RX_BUF_SIZE] = { 0 };   // 接收数据缓冲区
 
 void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart) {

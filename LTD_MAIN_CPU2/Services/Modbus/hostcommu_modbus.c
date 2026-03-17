@@ -263,7 +263,7 @@ int Response10Process(uint8_t const *revframe, uint8_t *sendframe)
 
     /* 5. 持久化参数到 FRAM（command 不参与 CRC） */
     if (need_save) {
-        save_device_params();
+        request_device_params_save();
     }
 
     return length;

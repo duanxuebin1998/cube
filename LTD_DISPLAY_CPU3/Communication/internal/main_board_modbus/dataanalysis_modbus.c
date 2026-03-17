@@ -442,6 +442,7 @@ void write_measurement_result_to_InputRegisters(uint16_t *regs) {
 
 	/* zero_point_status 在地址宏里已经按 REG_SIZE_U32 计算，必须用 u32 写 */
 	write_u32_to_regs(regs, REG_DEVICE_STATUS_ZERO_POINT_STATUS, (uint32_t) g_measurement.device_status.zero_point_status);
+	write_u32_to_regs(regs, REG_DEVICE_STATUS_PARAM_UPDATE_FLAG, g_measurement.device_status.parameter_update_flag);
 
 	/* ==== DebugData ==== */
 	write_i32_to_regs(regs, REG_DEBUG_CURRENT_ENCODER, g_measurement.debug_data.current_encoder_value);
@@ -541,6 +542,7 @@ void read_measurement_result_from_InputRegisters(uint16_t *regs) {
 	g_measurement.device_status.current_command = (CommandType) read_u32_from_regs(cregs, REG_DEVICE_STATUS_CURRENT_COMMAND);
 	/* zero_point_status 映射为 uint32，占 2 个寄存器，直接按 u32 读 */
 	g_measurement.device_status.zero_point_status = read_u32_from_regs(cregs, REG_DEVICE_STATUS_ZERO_POINT_STATUS);
+	g_measurement.device_status.parameter_update_flag = read_u32_from_regs(cregs, REG_DEVICE_STATUS_PARAM_UPDATE_FLAG);
 
 	/* ==== DebugData ==== */
 	g_measurement.debug_data.current_encoder_value = read_i32_from_regs(cregs, REG_DEBUG_CURRENT_ENCODER);

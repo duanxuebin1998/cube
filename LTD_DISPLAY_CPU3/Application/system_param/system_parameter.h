@@ -303,6 +303,7 @@ typedef struct {
 
 	/*---- 标志位 ----*/
 	uint32_t zero_point_status; // 零点状态（0-正常 1-需要回零）
+	uint32_t parameter_update_flag; // 参数更新标志位，CPU2 变更系统参数时递增或翻转
 } DeviceStatus;
 
 // 单点密度数据
