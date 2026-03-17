@@ -392,18 +392,60 @@ typedef struct
     uint32_t                 crc;
 } Cpu3ParamStorage;
 
+/* 把当前 CPU3 本机参数组织成可直接落 FRAM 的镜像结构。
+ * 这样保存前后的比较、CRC 计算、真正写入，三者都使用同一份数据组织方式，
+ * 避免“比较的是一套数据、写入的是另一套数据”导致的误判。 */
+static void Cpu3_Params_BuildStorage(Cpu3ParamStorage *stor)
+{
+    stor->magic    = CPU3_PARAM_MAGIC;
+    stor->version  = CPU3_PARAM_VERSION;
+    stor->reserved = 0;
+    stor->params   = g_cpu3_comm_display_params;
+
+    /* 计算 CRC：不包含最后的 crc 字段本身 */
+    {
+        uint32_t crc_len = sizeof(Cpu3ParamStorage) - sizeof(stor->crc);
+        stor->crc = CRC32_HAL((uint8_t*)stor, crc_len);
+    }
+}
+
+/* 判断 FRAM 里现有的 CPU3 参数镜像是否有效。
+ * 只有 magic/version/CRC 同时成立，才允许把它当成“可信旧值”参与判重；
+ * 否则宁可重写一次，也不能基于脏数据跳过保存。 */
+static bool Cpu3_Params_StorageValid(const Cpu3ParamStorage *stor)
+{
+    uint32_t crc_len;
+    uint32_t crc_calc;
+
+    if ((stor->magic != CPU3_PARAM_MAGIC) || (stor->version != CPU3_PARAM_VERSION)) {
+        return false;
+    }
+
+    crc_len = sizeof(Cpu3ParamStorage) - sizeof(stor->crc);
+    crc_calc = CRC32_HAL((uint8_t*)stor, crc_len);
+    return crc_calc == stor->crc;
+}
+
 void Cpu3_Params_SaveToFRAM(void)
 {
     Cpu3ParamStorage stor;
+    Cpu3ParamStorage current;
 
-    stor.magic   = CPU3_PARAM_MAGIC;
-    stor.version = CPU3_PARAM_VERSION;
-    stor.reserved = 0;
-    stor.params  = g_cpu3_comm_display_params;
+    /* 先构造“准备写入 FRAM 的目标镜像”，后续判重和真实写入都基于它。 */
+    Cpu3_Params_BuildStorage(&stor);
 
-    /* 计算 CRC：不包含最后的 crc 字段本身 */
-    uint32_t crc_len = sizeof(Cpu3ParamStorage) - sizeof(stor.crc);
-    stor.crc = CRC32_HAL((uint8_t*)&stor, crc_len);
+    /* 读出现有 FRAM 内容用于判重。
+     * 如果现有内容有效且参数区完全一致，则说明这次只是重复保存同样的值，
+     * 直接跳过写入，减少 FRAM 总线访问和不必要的持久化动作。 */
+    memset(&current, 0, sizeof(current));
+    ReadMultiData((uint8_t*)&current, FRAM_CPU3_PARAM_ADDRESS, sizeof(Cpu3ParamStorage));
+
+    if (Cpu3_Params_StorageValid(&current)
+        && memcmp(&current.params, &stor.params, sizeof(stor.params)) == 0)
+    {
+        printf("Cpu3 params unchanged, skip save.\r\n");
+        return;
+    }
 
     WriteMultiData((uint8_t*)&stor, FRAM_CPU3_PARAM_ADDRESS, sizeof(Cpu3ParamStorage));
 

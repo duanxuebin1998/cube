@@ -181,6 +181,9 @@ static uint32_t cpu3_port_process(uint8_t port_idx,
 
 void App_Init(void) {
 	printf("LTD demo restart!\r\n");
+	/* Force UART5 RS485 direction back to RX after CubeMX init. */
+	RS485_SET_RECV_MODE();
+	__HAL_UART_CLEAR_IDLEFLAG(&huart5);
 	DisplayInit(); // Initialize the OLED display
 	DisplayAubonLogo(); /* 刚上电显示AUBON LOGO */
     Cpu3_Params_LoadFromFRAM();//从 FRAM 载入 Cpu3 通讯+显示参数（里面会自动回退默认并保存）

@@ -17,6 +17,13 @@
 static uint8_t  HCOM_SendBuff[HOSTCOMMU_SENDLENGTH]; // Modbus响应帧缓冲区
 static int HCOM_SendCount = 0;                   // 发送缓冲区当前数据长度
 
+static void HostCommuResumeRxDMA(void) {
+	/* UART5 IDLE IRQ stops RX DMA first; restore RX here for bad frames or TX start failures. */
+	RS485_SET_RECV_MODE();
+	__HAL_UART_CLEAR_IDLEFLAG(&huart5);
+	HAL_UART_Receive_DMA(&huart5, UART5_RX_BUF, UART5_RX_BUF_SIZE);
+}
+
 /**
  * @brief Modbus从站初始化函数
  *
@@ -60,6 +67,7 @@ void HostCommuProcess(uint8_t *rcvbuff, int rcvcount) {
 #if DEBUG_HOSTCOMMU
 		printf("HOSTCOMM:length %d error\r\n", rcvcount);
 #endif
+		HostCommuResumeRxDMA();
 	}
 	// 检查2: 目标地址校验
 	else if (SlaveCheckAddress(rcvbuff, rcvcount) == false) {
@@ -67,6 +75,7 @@ void HostCommuProcess(uint8_t *rcvbuff, int rcvcount) {
 #if DEBUG_HOSTCOMMU
 		printf("HOSTCOMM:Address %d error\r\n", rcvbuff[0]);
 #endif
+		HostCommuResumeRxDMA();
 	}
 	// 检查3: CRC校验
 	else if (SlaveCheckCRC(rcvbuff, rcvcount) == false) {
@@ -80,6 +89,7 @@ void HostCommuProcess(uint8_t *rcvbuff, int rcvcount) {
 			}
 			printf("\n");
 		}
+		HostCommuResumeRxDMA();
 	}
 	// 处理有效请求
 	else {
@@ -144,6 +154,9 @@ void HostCommuProcess(uint8_t *rcvbuff, int rcvcount) {
 #endif
 		//切换发送模式
 		RS485_SET_SEND_MODE();  // 切换到发送模式
-		HAL_UART_Transmit_DMA(&huart5, (uint8_t*)HCOM_SendBuff, HCOM_SendCount);  // 通过UART发送响应帧
+		if (HAL_UART_Transmit_DMA(&huart5, (uint8_t*)HCOM_SendBuff, HCOM_SendCount) != HAL_OK) {  // send response
+			/* If TX DMA does not start, TxCpltCallback will not run, so force the bus back to RX here. */
+			HostCommuResumeRxDMA();
+		}
 	}
 }

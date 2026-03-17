@@ -19,6 +19,7 @@
 
 volatile MeasurementResult g_measurement = {0};   /* 测量结果 */
 volatile DeviceParameters  g_deviceParams = {0};  /* 设备参数 */
+static volatile uint8_t g_device_params_save_pending = 0; /* Deferred save request flag */
 
 /* 参数版本号和 magic 常量 */
 #define DEVICE_PARAM_VERSION   (2u)
@@ -43,8 +44,14 @@ static uint32_t device_param_crc(const DeviceParameters *params)
     return CRC32_HAL((const uint8_t *)crc_base, crc_size);
 }
 
-/* 从指定分区读取并校验设备参数：返回1成功，0失败 */
-static int load_device_params_from_slot(uint32_t base_addr, DeviceParameters *out, const char *slot_name)
+/* 内部通用读取接口：
+ * 1. 统一对 FRAM 槽位做 magic/version/CRC 校验；
+ * 2. verbose=0 时用于静默判重，避免因为每次保存前判重而打大量日志；
+ * 3. verbose=1 时用于正常加载诊断，保留详细失败原因。 */
+static int load_device_params_from_slot_impl(uint32_t base_addr,
+                                             DeviceParameters *out,
+                                             const char *slot_name,
+                                             int verbose)
 {
     DeviceParameters temp;
 
@@ -52,25 +59,31 @@ static int load_device_params_from_slot(uint32_t base_addr, DeviceParameters *ou
 
     if (temp.magic != DEVICE_PARAM_MAGIC)
     {
-        printf("设备参数[%s] magic 不匹配: 0x%08lX\r\n", slot_name, (unsigned long)temp.magic);
+        if (verbose) {
+            printf("Param[%s] magic mismatch: 0x%08lX\r\n", slot_name, (unsigned long)temp.magic);
+        }
         return 0;
     }
 
     if (temp.struct_size != sizeof(DeviceParameters))
     {
-        printf("设备参数[%s] struct_size 不匹配: FRAM=%lu, 当前=%lu\r\n",
-               slot_name,
-               (unsigned long)temp.struct_size,
-               (unsigned long)sizeof(DeviceParameters));
+        if (verbose) {
+            printf("Param[%s] struct_size mismatch: FRAM=%lu, CUR=%lu\r\n",
+                   slot_name,
+                   (unsigned long)temp.struct_size,
+                   (unsigned long)sizeof(DeviceParameters));
+        }
         return 0;
     }
 
     if (temp.param_version != DEVICE_PARAM_VERSION)
     {
-        printf("设备参数[%s] 版本不匹配: FRAM=%lu, 当前=%lu\r\n",
-               slot_name,
-               (unsigned long)temp.param_version,
-               (unsigned long)DEVICE_PARAM_VERSION);
+        if (verbose) {
+            printf("Param[%s] version mismatch: FRAM=%lu, CUR=%lu\r\n",
+                   slot_name,
+                   (unsigned long)temp.param_version,
+                   (unsigned long)DEVICE_PARAM_VERSION);
+        }
         return 0;
     }
 
@@ -78,10 +91,12 @@ static int load_device_params_from_slot(uint32_t base_addr, DeviceParameters *ou
         const uint32_t calc_crc = device_param_crc(&temp);
         if (calc_crc != temp.crc)
         {
-            printf("设备参数[%s] CRC 校验失败: calc=0x%08lX, FRAM=0x%08lX\r\n",
-                   slot_name,
-                   (unsigned long)calc_crc,
-                   (unsigned long)temp.crc);
+            if (verbose) {
+                printf("Param[%s] CRC mismatch: calc=0x%08lX, FRAM=0x%08lX\r\n",
+                       slot_name,
+                       (unsigned long)calc_crc,
+                       (unsigned long)temp.crc);
+            }
             return 0;
         }
     }
@@ -90,24 +105,73 @@ static int load_device_params_from_slot(uint32_t base_addr, DeviceParameters *ou
     return 1;
 }
 
-/* 保存设备参数到 FRAM A/B 分区 */
-void save_device_params(void)
+/* 把当前内存里的 g_deviceParams 整理成“准备写入 FRAM 的完整镜像”。
+ * 这一步会顺手补齐 version/size/magic/crc，
+ * 保证后面的“判断是否需要保存”与“真正写入的内容”完全一致。 */
+static void build_saved_device_params(DeviceParameters *out)
 {
+    *out = g_deviceParams;
+    out->param_version = DEVICE_PARAM_VERSION;
+    out->struct_size   = (uint32_t)sizeof(DeviceParameters);
+    out->magic         = DEVICE_PARAM_MAGIC;
+    out->crc           = device_param_crc(out);
+}
+
+/* 只比较持久化参数区（sensorType ~ crc 之前）。
+ * command 属于运行态指令，不应该因为它的变化就触发整个参数区重写。 */
+static int device_param_persist_equal(const DeviceParameters *lhs, const DeviceParameters *rhs)
+{
+    return memcmp(DEVICE_PARAM_PERSIST_START(lhs),
+                  DEVICE_PARAM_PERSIST_START(rhs),
+                  DEVICE_PARAM_PERSIST_LEN) == 0;
+}
+
+/* 统一的参数保存入口：
+ * mark_updated=1：说明这是一次“真正的参数变更”，需要递增 parameter_update_flag，
+ *                 让 CPU3 在后续轮询中检测到并补读保持寄存器。
+ * force_write=1：忽略判重，强制回写 FRAM，主要用于 A/B 分区自修复这种场景。 */
+static void save_device_params_internal(int mark_updated, int force_write)
+{
+    DeviceParameters params;
+    DeviceParameters slot_a;
+    DeviceParameters slot_b;
+    int slot_a_valid;
+    int slot_b_valid;
+
     if (sizeof(DeviceParameters) > FRAM_PARAM_SLOT_SIZE)
     {
-        printf("设备参数超出单分区容量: size=%lu, slot=%lu\r\n", (unsigned long)sizeof(DeviceParameters), (unsigned long)FRAM_PARAM_SLOT_SIZE);
+        printf("Param size overflow: size=%lu, slot=%lu\r\n",
+               (unsigned long)sizeof(DeviceParameters),
+               (unsigned long)FRAM_PARAM_SLOT_SIZE);
         g_measurement.device_status.error_code = PARAM_ADDRESS_OVERFLOW;
         return;
     }
 
-    DeviceParameters params = g_deviceParams;
+    build_saved_device_params(&params);
 
-    params.param_version = DEVICE_PARAM_VERSION;
-    params.struct_size   = (uint32_t)sizeof(DeviceParameters);
-    params.magic         = DEVICE_PARAM_MAGIC;
-    params.crc           = device_param_crc(&params);
+    slot_a_valid = load_device_params_from_slot_impl(FRAM_PARAM_A_ADDRESS, &slot_a, "A", 0);
+    slot_b_valid = load_device_params_from_slot_impl(FRAM_PARAM_B_ADDRESS, &slot_b, "B", 0);
 
-    printf("保存设备参数: version=%lu, size=%lu, CRC=0x%08lX\r\n",
+    /* 仅当 A/B 两份 FRAM 都有效，且持久化区和本次待保存内容完全一致时，
+     * 才真正跳过写入。
+     * 只要 A/B 有一份异常或内容不一致，就仍然要重写，避免错过自修复机会。 */
+    if (!force_write
+        && slot_a_valid
+        && slot_b_valid
+        && device_param_persist_equal(&slot_a, &params)
+        && device_param_persist_equal(&slot_b, &params))
+    {
+        printf("Device params unchanged, skip save\r\n");
+        return;
+    }
+
+    /* 只有“参数真的发生改变”时才递增更新标志。
+     * 如果因为判重被跳过或仅仅是分区自修复，都不应该触发 CPU3 再次补读。 */
+    if (mark_updated) {
+        g_measurement.device_status.parameter_update_flag++;
+    }
+
+    printf("Save device params: version=%lu, size=%lu, CRC=0x%08lX\r\n",
            (unsigned long)params.param_version,
            (unsigned long)params.struct_size,
            (unsigned long)params.crc);
@@ -115,14 +179,47 @@ void save_device_params(void)
     WriteMultiData((uint8_t *)&params, (int)FRAM_PARAM_A_ADDRESS, sizeof(DeviceParameters));
     WriteMultiData((uint8_t *)&params, (int)FRAM_PARAM_B_ADDRESS, sizeof(DeviceParameters));
 
-    printf("设备参数已保存到 FRAM A/B 分区\r\n");
+    printf("Device params saved to FRAM A/B\r\n");
 
     print_device_params();
 }
 
-/*========================= 参数加载逻辑 =========================*/
+/* 从指定分区读取并校验设备参数：返回1成功，0失败 */
+static int load_device_params_from_slot(uint32_t base_addr, DeviceParameters *out, const char *slot_name)
+{
+    return load_device_params_from_slot_impl(base_addr, out, slot_name, 1);
+}
 
-/* 从 FRAM A/B 分区加载设备参数, 返回 1 表示成功, 0 表示失败 */
+/* 对外的默认保存入口：
+ * 表示“用户或业务逻辑确实修改了系统参数”，
+ * 因此需要同时进行判重 + 必要时写 FRAM + 递增参数更新标志。 */
+void save_device_params(void)
+{
+    save_device_params_internal(1, 0);
+}
+
+/* Called from the Modbus write path after a 0x10 parameter update.
+ * This function only sets a pending flag. The actual FRAM write is moved
+ * to the main loop so the UART interrupt path stays short. */
+void request_device_params_save(void)
+{
+    g_device_params_save_pending = 1;
+}
+
+/* Handle deferred tasks in the main loop.
+ * For now this only flushes pending parameter saves, but more deferred
+ * work can be merged here later if needed. */
+void process_device_params_deferred_tasks(void)
+{
+    if (!g_device_params_save_pending)
+    {
+        return;
+    }
+
+    g_device_params_save_pending = 0;
+    save_device_params_internal(1, 0);
+}
+
 int load_device_params(void)
 {
     DeviceParameters temp;
@@ -154,8 +251,13 @@ int load_device_params(void)
 
     g_deviceParams.command = g_deviceParams.powerOnDefaultCommand;
 
-    /* 回写双分区: 若本次来自 B，可自动修复 A */
-    save_device_params();
+    /* 上电时如果 A 分区损坏、但 B 分区有效，
+     * 这里只做“存储介质自修复”，不视为用户修改参数，
+     * 所以不递增 parameter_update_flag，避免 CPU3 在上电后被平白触发一次“参数变更”。 */
+    /* repair A from B without bumping update flag */
+    if (!loaded_from_a) {
+        save_device_params_internal(0, 1);
+    }
 
     printf("设备参数加载成功 (source=%s)\r\n", loaded_from_a ? "A" : "B");
     return 1;

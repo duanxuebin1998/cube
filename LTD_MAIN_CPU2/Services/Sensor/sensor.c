@@ -176,6 +176,10 @@ uint32_t DetectSensorType(void) {
 	ltd_ret = Sensor_ProbeLtdSensor(&temp);
 	if (ltd_ret == NO_ERROR) {
 		g_deviceParams.sensorType = LTD_SENSOR;
+		/* 传感器类型属于系统参数，这里是运行期自动识别场景，
+		 * 如果不立即保存，CPU3 后续就看不到这次变更，
+		 * 下次重启也会丢掉新的 sensorType。 */
+		save_device_params();
 		g_bottom_det_mode = BOTTOM_DET_BY_WEIGHT;
 		printf("识别成功：LTD传感器 | 温度=%.3f ℃\r\n", temp);
 		printf("====================================\r\n");
@@ -190,6 +194,9 @@ uint32_t DetectSensorType(void) {
 	dsm_ret = Sensor_ProbeDsmSensor();
 	if (dsm_ret == NO_ERROR) {
 		g_deviceParams.sensorType = DSM_SENSOR;
+		/* 同上：DSM 识别成功后也要立即落盘，
+		 * 这样才能触发 parameter_update_flag，让 CPU3 补读最新的系统参数。 */
+		save_device_params();
 		printf("识别成功：DSM传感器 | 密度模式握手成功\r\n");
 		printf("====================================\r\n");
 		return NO_ERROR;

@@ -4,7 +4,7 @@
  * @Author       : Aubon
  * @Date         : 2026-02-03 14:06:14
  * @LastEditors  : Duan Xuebin
- * @LastEditTime : 2026-03-04 16:44:13
+ * @LastEditTime : 2026-03-17 11:34:14
  * Copyright 2026 Aubon, All Rights Reserved. 
  * 2026-02-03 14:06:14
  */
@@ -71,5 +71,6 @@ void App_MainLoop(void) {
 //		printf("位置%d", g_measurement.debug_data.sensor_position);
 //		HAL_GPIO_WritePin(HART_RTS_GPIO_Port, HART_RTS_Pin, GPIO_PIN_RESET);
 //		HAL_UART_Transmit_DMA(&huart2, "123456", 6);  // 通过UART发送响应
+	process_device_params_deferred_tasks();
 	HAL_Delay(50); // 延时50ms
 }
