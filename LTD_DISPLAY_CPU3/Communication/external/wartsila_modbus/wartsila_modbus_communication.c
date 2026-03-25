@@ -205,7 +205,7 @@ static inline int range_contains(uint16_t start, uint16_t qty, uint16_t addr)
 // 把写入的寄存器转成设备参数并“往下发”
 static void modbus_on_holding_written(uint16_t start, uint16_t qty)
 {
-    int need_forward = 0;
+    int __attribute__((unused)) need_forward = 0;
 
     // 只关心 0x0006、0x005A~0x005D 这几个写寄存器
     if (range_contains(start, qty, 0x005A) ||
@@ -239,6 +239,10 @@ static void modbus_on_holding_written(uint16_t start, uint16_t qty)
 }
 static void ForwardParamsToLowerDevice(void)
 {
+	uint32_t upper_density_limit = g_deviceParams.wartsila_upper_density_limit;
+	uint32_t lower_density_limit = g_deviceParams.wartsila_lower_density_limit;
+	uint32_t density_interval = g_deviceParams.wartsila_density_interval;
+	uint32_t max_height_above_surface = g_deviceParams.wartsila_max_height_above_surface;
 //    // 示例：根据 command 不同，打不同的下发帧
 //	if (g_deviceParams.command != CMD_NONE) {
 //		uint32_t cmd32 = (uint32_t)g_deviceParams.command;   // 如果原来是 uint16_t，也没问题
@@ -248,10 +252,10 @@ static void ForwardParamsToLowerDevice(void)
 //		g_deviceParams.command = CMD_NONE;
 //		DeviceParams_StoreToRegisters(g_holding_regs);
 //	}
-	CPU2_CombinatePackage_Send(FUNCTIONCODE_WRITE_MULREGISTER, HOLDREGISTER_DEVICEPARAM_WARTSILA_UPPER_DENSITY_LIMIT, 2, &g_deviceParams.wartsila_upper_density_limit );
-	CPU2_CombinatePackage_Send(FUNCTIONCODE_WRITE_MULREGISTER, HOLDREGISTER_DEVICEPARAM_WARTSILA_LOWER_DENSITY_LIMIT, 2, &g_deviceParams.wartsila_lower_density_limit );
-	CPU2_CombinatePackage_Send(FUNCTIONCODE_WRITE_MULREGISTER, HOLDREGISTER_DEVICEPARAM_WARTSILA_DENSITY_INTERVAL, 2, &g_deviceParams.wartsila_density_interval );
-	CPU2_CombinatePackage_Send(FUNCTIONCODE_WRITE_MULREGISTER, HOLDREGISTER_DEVICEPARAM_WARTSILA_MAX_HEIGHT_ABOVE_SURFACE, 2, &g_deviceParams.wartsila_max_height_above_surface );
+	CPU2_CombinatePackage_Send(FUNCTIONCODE_WRITE_MULREGISTER, HOLDREGISTER_DEVICEPARAM_WARTSILA_UPPER_DENSITY_LIMIT, 2, &upper_density_limit);
+	CPU2_CombinatePackage_Send(FUNCTIONCODE_WRITE_MULREGISTER, HOLDREGISTER_DEVICEPARAM_WARTSILA_LOWER_DENSITY_LIMIT, 2, &lower_density_limit);
+	CPU2_CombinatePackage_Send(FUNCTIONCODE_WRITE_MULREGISTER, HOLDREGISTER_DEVICEPARAM_WARTSILA_DENSITY_INTERVAL, 2, &density_interval);
+	CPU2_CombinatePackage_Send(FUNCTIONCODE_WRITE_MULREGISTER, HOLDREGISTER_DEVICEPARAM_WARTSILA_MAX_HEIGHT_ABOVE_SURFACE, 2, &max_height_above_surface);
 }
 
 

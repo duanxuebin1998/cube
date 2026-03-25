@@ -58,11 +58,11 @@ uint16_t CRC16_Calculate(const uint8_t *data, uint32_t length) {
 }
 /*接收到的数据包进行CRC校验*/
 /* 接收到的数据包进行CRC校验 */
-bool SlaveCheckCRC(char const *revframe, int framelen) {
+bool SlaveCheckCRC(uint8_t const *revframe, int framelen) {
     unsigned char Hi, Lo;
     unsigned short crc;
     // 修复类型不匹配问题
-    crc = CRC16_Calculate((const unsigned char *)revframe, framelen - 2);
+    crc = CRC16_Calculate(revframe, framelen - 2);
 
     Lo = crc & 0x00ff;
     Hi = crc >> 8;
@@ -70,8 +70,8 @@ bool SlaveCheckCRC(char const *revframe, int framelen) {
     if ((Hi != revframe[framelen - 1]) || (Lo != revframe[framelen - 2])) {
         printf("CRC Error: Calc Hi=%02x, Lo=%02x | Frame Hi=%02x, Lo=%02x\r\n",
               Hi, Lo,
-              (unsigned char)revframe[framelen - 1],
-              (unsigned char)revframe[framelen - 2]);
+              revframe[framelen - 1],
+              revframe[framelen - 2]);
         return false;
     }
     return true;

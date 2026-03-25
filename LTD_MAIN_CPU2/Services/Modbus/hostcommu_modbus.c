@@ -40,7 +40,7 @@ static bool JudgeFunctioncode(void);
 static bool JudgeStartAddress(void);
 static void ReadRegister(bool registertype, int *registervalue); //¶Á¼Ä´æÆ÷
 static void PresetRegister(bool registertype, int const *registervalue); //Ð´¼Ä´æÆ÷
-static int ResponseException(int exception, uint8_t  *sendframe);
+static int __attribute__((unused)) ResponseException(int exception, uint8_t  *sendframe);
 static int Compose03Package(uint8_t  *revframe, uint8_t  *sendframe);
 static int Compose04Package(uint8_t  *revframe, uint8_t  *sendframe);
 static int Compose10Package(uint8_t  const *revframe, uint8_t  *sendframe);
@@ -206,7 +206,7 @@ static int Compose04Package(uint8_t  *revframe, uint8_t  *sendframe) {
 	return sendlength;
 }
 
-static int ResponseException(int exception, uint8_t *sendframe) {
+static int __attribute__((unused)) ResponseException(int exception, uint8_t *sendframe) {
 	int framelen;
 	sendframe[0] = SlaveAddress;
 	sendframe[1] = RCV_functioncode + 0x80;

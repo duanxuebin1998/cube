@@ -594,7 +594,7 @@ void CMD_MeasureDensitySpread_Spread(void)
     }
 
     g_measurement.density_distribution = temp;
-    Print_DensitySpreadResult(&g_measurement.density_distribution);
+    Print_DensitySpreadResult(&temp);
 
     g_measurement.device_status.device_state = STATE_SPREADPOINTOVER;
 }
@@ -613,7 +613,7 @@ void CMD_MeasureDensitySpread_GB(void)
     }
 
     g_measurement.density_distribution = temp;
-    Print_DensitySpreadResult(&g_measurement.density_distribution);
+    Print_DensitySpreadResult(&temp);
 
     g_measurement.device_status.device_state = STATE_GB_SPREADPOINTOVER;
 }
@@ -632,7 +632,7 @@ void CMD_MeasureDensitySpread_Meter(void)
     }
 
     g_measurement.density_distribution = temp;
-    Print_DensitySpreadResult(&g_measurement.density_distribution);
+    Print_DensitySpreadResult(&temp);
 
     g_measurement.device_status.device_state = STATE_COM_METER_DENSITY_OVER;
 }
@@ -651,7 +651,7 @@ void CMD_MeasureDensitySpread_Interval(void)
     }
 
     g_measurement.density_distribution = temp;
-    Print_DensitySpreadResult(&g_measurement.density_distribution);
+    Print_DensitySpreadResult(&temp);
 
     g_measurement.device_status.device_state = STATE_INTERVAL_DENSITY_OVER;
 }
@@ -960,7 +960,6 @@ uint32_t SinglePoint_ReadSensor(volatile DensityMeasurement *result)
      * 用于记录“最后一次非零密度样本”
      */
     uint8_t have_last_nonzero = 0;
-    float last_freq_nz = 0.0f;
     float last_density_nz = 0.0f;
     float last_temp_nz = 0.0f;
 
@@ -1036,7 +1035,6 @@ uint32_t SinglePoint_ReadSensor(volatile DensityMeasurement *result)
 
         /* 记录最后一次“非零密度”样本（用于超时兜底） */
         have_last_nonzero = 1;
-        last_freq_nz      = cur_freq;
         last_density_nz   = cur_density;
         last_temp_nz      = cur_temp;
 

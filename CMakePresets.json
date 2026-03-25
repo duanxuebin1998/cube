@@ -26,7 +26,7 @@
       "name": "cpu2-debug",
       "displayName": "LTD_MAIN_CPU2 (Debug, Ninja, arm-none-eabi)",
       "inherits": "debug-base",
-      "binaryDir": "${sourceDir}/build/LTD_MAIN_CPU2",
+      "binaryDir": "${sourceDir}/build/presets/LTD_MAIN_CPU2",
       "cacheVariables": {
         "CUBE_TARGET": "LTD_MAIN_CPU2"
       }
@@ -35,7 +35,7 @@
       "name": "cpu3-debug",
       "displayName": "LTD_DISPLAY_CPU3 (Debug, Ninja, arm-none-eabi)",
       "inherits": "debug-base",
-      "binaryDir": "${sourceDir}/build/LTD_DISPLAY_CPU3",
+      "binaryDir": "${sourceDir}/build/presets/LTD_DISPLAY_CPU3",
       "cacheVariables": {
         "CUBE_TARGET": "LTD_DISPLAY_CPU3"
       }

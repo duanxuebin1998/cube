@@ -20,6 +20,19 @@ cmake -S LTD_DISPLAY_CPU3 -B build/LTD_DISPLAY_CPU3 -G Ninja \
 cmake --build build/LTD_DISPLAY_CPU3
 ```
 
+## Preset build
+If you want to use the repository-root preset, run:
+
+```bash
+cmake --preset cpu3-debug
+cmake --build --preset cpu3-debug
+```
+
+Notes:
+- `build/LTD_DISPLAY_CPU3/` is reserved for the standalone subproject build above.
+- `build/presets/LTD_DISPLAY_CPU3/` is reserved for the repository-root preset flow.
+- Do not reuse one build directory across those two source layouts, or CMake will report a source mismatch.
+
 ## Source collection scope
 `LTD_DISPLAY_CPU3/CMakeLists.txt` currently compiles:
 - `Core/Src/*.c`
@@ -29,11 +42,13 @@ cmake --build build/LTD_DISPLAY_CPU3
 - `Core/Startup/startup_stm32f429zgtx.s`
 
 ## Build outputs
-After build, `build/LTD_DISPLAY_CPU3/` will contain:
+After the standalone build, `build/LTD_DISPLAY_CPU3/` will contain:
 - `LTD_DISPLAY_CPU3.elf`
 - `LTD_DISPLAY_CPU3.hex`
 - `LTD_DISPLAY_CPU3.bin`
 - `LTD_DISPLAY_CPU3.map`
+
+Preset artifacts are generated under `build/presets/LTD_DISPLAY_CPU3/`.
 
 ## One-command build
 ```bash

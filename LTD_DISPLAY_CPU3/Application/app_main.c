@@ -122,7 +122,7 @@ typedef struct {
 static uint32_t proto_dsm_process(const uint8_t* rx, uint16_t rx_len,
                                  uint8_t* tx, uint16_t* tx_len)
 {
-    return DSM_CommunicationProcess(rx, rx_len, tx, tx_len);
+    return DSM_CommunicationProcess((unsigned char *)rx, rx_len, tx, tx_len);
 }
 
 static uint32_t proto_wartsila_process(const uint8_t* rx, uint16_t rx_len,

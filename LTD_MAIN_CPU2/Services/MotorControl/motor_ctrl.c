@@ -488,12 +488,12 @@ static inline uint32_t Motor_ComputeUniformVelocityFromLength(double L_mm)
 
         const uint32_t vmax = TMC5130_UstepsPerSec_To_VMAX(usteps_per_s);
 
-        printf("SpeedCalc | set=%.2f m/min | L=%.1f mm | C=%.2f mm | usteps/s=%.1f | VMAX=%lu\r\n",
-               speed_x100 / 100.0,
-               L_mm,
-               C_cur,
-               usteps_per_s,
-               (unsigned long)vmax);
+//        printf("SpeedCalc | set=%.2f m/min | L=%.1f mm | C=%.2f mm | usteps/s=%.1f | VMAX=%lu\r\n",
+//               speed_x100 / 100.0,
+//               L_mm,
+//               C_cur,
+//               usteps_per_s,
+//               (unsigned long)vmax);
 
         return vmax;
     }
@@ -612,7 +612,6 @@ static inline uint32_t Motor_EndTemporarySpeed(bool restore_needed,
 
 uint32_t motorSetSpeed(uint32_t speed_x100)
 {
-    const uint32_t requested_speed = speed_x100;
     const uint32_t clamped_speed = Motor_ClampSpeedSetpointX100(speed_x100);
     bool is_running = false;
     double Lcur_mm = (double)g_measurement.debug_data.cable_length * 0.1;
@@ -640,20 +639,20 @@ uint32_t motorSetSpeed(uint32_t speed_x100)
     if (is_running) {
         /* 运行中改速：立即写入驱动，让本次运动立刻生效。 */
         stpr_setVelocity(&stepper, velocity);
-        printf("SpeedSet | running | req=%.2f m/min | set=%.2f m/min | L=%.1f mm | VMAX=%lu | eq_usteps/s=%.1f\r\n",
-               requested_speed / 100.0,
-               clamped_speed / 100.0,
-               Lcur_mm,
-               (unsigned long)velocity,
-               TMC5130_VMAX_To_UstepsPerSec(velocity));
+//        printf("SpeedSet | running | req=%.2f m/min | set=%.2f m/min | L=%.1f mm | VMAX=%lu | eq_usteps/s=%.1f\r\n",
+//               requested_speed / 100.0,
+//               clamped_speed / 100.0,
+//               Lcur_mm,
+//               (unsigned long)velocity,
+//               TMC5130_VMAX_To_UstepsPerSec(velocity));
     } else {
         /* 未运行时只更新内部速度状态，供下一次运动使用。 */
-        printf("SpeedSet | idle | req=%.2f m/min | set=%.2f m/min | baseL=%.1f mm | nextVMAX=%lu | eq_usteps/s=%.1f\r\n",
-               requested_speed / 100.0,
-               clamped_speed / 100.0,
-               Lcur_mm,
-               (unsigned long)velocity,
-               TMC5130_VMAX_To_UstepsPerSec(velocity));
+//        printf("SpeedSet | idle | req=%.2f m/min | set=%.2f m/min | baseL=%.1f mm | nextVMAX=%lu | eq_usteps/s=%.1f\r\n",
+//               requested_speed / 100.0,
+//               clamped_speed / 100.0,
+//               Lcur_mm,
+//               (unsigned long)velocity,
+//               TMC5130_VMAX_To_UstepsPerSec(velocity));
     }
 
     return NO_ERROR;
@@ -1540,7 +1539,6 @@ uint32_t Motor_CheckLostStep_AutoTiming(int32_t currentPos)
 static void NoDetect_RuntimeLogUpdate(void)
 {
     static uint32_t last_log_tick  = 0;
-    static uint32_t last_gyro_tick = 0;
     static uint32_t last_den_tick  = 0;
 
     uint32_t now = HAL_GetTick();

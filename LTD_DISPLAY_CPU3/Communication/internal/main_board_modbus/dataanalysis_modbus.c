@@ -513,7 +513,7 @@ void write_measurement_result_to_InputRegisters(uint16_t *regs) {
 
 	/* ==== Density Distribution Points ==== */
 	for (int i = 0; i < MAX_MEASUREMENT_POINTS; i++) {
-		const DensityMeasurement *p = &g_measurement.density_distribution.single_density_data[i];
+		const volatile DensityMeasurement *p = &g_measurement.density_distribution.single_density_data[i];
 
 		write_u32_to_regs(regs, REG_DENSITY_POINT_TEMP(i), p->temperature);
 		write_u32_to_regs(regs, REG_DENSITY_POINT_DENSITY(i), p->density);

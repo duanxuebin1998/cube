@@ -38,7 +38,7 @@ static void CMD_CalibrateZeroPoint(void);
 static void CMD_CalibrateOilLevel(void);
 static void CMD_SyntheticMeasurement(void);
 static void CMD_RunToPosition(void);
-static void CMD_ReadPartParams(void);
+void CMD_ReadPartParams(void);
 
 void ProcessMeasureCmd(CommandType command)
 {
@@ -659,15 +659,17 @@ static void CMD_SetFullWeight(void)
 }
 static void CMD_WartsilaDensitySpread(void) {
 	uint32_t ret = 0;
+	DensityDistribution temp = {0};
 	// 设置设备状态：分布测量中
 	g_measurement.device_status.device_state = STATE_WARTSILA_DENSITY_MEASURING;
 
-	ret = Wartsila_Density_SpreadMeasurement(&g_measurement.density_distribution);
+	ret = Wartsila_Density_SpreadMeasurement(&temp);
 // 记录/上报错误码（和零点测量一样用 SET_ERROR）
 	SET_ERROR(ret);
+	g_measurement.density_distribution = temp;
 
 	HAL_Delay(1000);
-	Print_DensitySpreadResult(&g_measurement.density_distribution);
+	Print_DensitySpreadResult(&temp);
 // 测量结束，状态切换为分布测量完成
 	g_measurement.device_status.device_state = STATE_WARTSILA_DENSITY_OVER;
 	//延时8S让CPU3读取分布测量结果
@@ -711,7 +713,7 @@ static void CMD_SyntheticMeasurement(void) {
 
     // 4. 测量成功, 写回全局结果
     g_measurement.density_distribution = temp;
-    Print_DensitySpreadResult(&g_measurement.density_distribution);
+    Print_DensitySpreadResult(&temp);
 // 测量结束，状态切换为分布测量完成
 	g_measurement.device_status.device_state = STATE_SYNTHETICING_OVER;
 
