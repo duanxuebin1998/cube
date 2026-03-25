@@ -71,7 +71,7 @@ uint16_t AubonState_To_WartsilaWorkState(DeviceState s)
 }
 
 
-static void WartsilaToDSM(const wartsila_DeviceParameters *wxl, DeviceParameters *dsm) {
+static void WartsilaToDSM(const wartsila_DeviceParameters *wxl, volatile DeviceParameters *dsm) {
 
 	if (wxl->down_command != 0) {
 		switch (wxl->down_command) {
@@ -110,7 +110,7 @@ void DeviceParams_LoadFromRegisters(uint16_t *reg) {
 
 	WartsilaToDSM(&wartsila_deviceParams, &g_deviceParams);
 }
-static void DSMToWartsila(const MeasurementResult *DSM, wartsila_DeviceParameters *WXL) {
+static void DSMToWartsila(const volatile MeasurementResult *DSM, wartsila_DeviceParameters *WXL) {
 	if ((DSM == NULL) || (WXL == NULL)) {
 		return;
 	}

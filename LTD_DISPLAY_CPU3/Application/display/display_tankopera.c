@@ -1167,13 +1167,13 @@ typedef struct {
     uint32_t cmd;
 } NoParaCmdMap_t;
 
-static uint8_t is_debug_cmd(uint32_t opera)
+static uint8_t __attribute__((unused)) is_debug_cmd(uint32_t opera)
 {
     return (opera > COM_NUM_DEBUGCMD_START) && (opera < COM_NUM_DEBUGCMD_STOP);
 }
 
 /* 统一的“调试指令允许条件”判定（按你现有逻辑扩展） */
-static uint8_t debug_cmd_is_allowed(void)
+static uint8_t __attribute__((unused)) debug_cmd_is_allowed(void)
 {
     uint32_t st = g_measurement.device_status.device_state;
 
@@ -1520,7 +1520,7 @@ static void parawritecheck(void)
 	if (index != -1
 		&& param_meta[index].authority_write
 		&& (g_measurement.device_status.device_state == STATE_STANDBY
-			|| g_measurement.device_status.device_state|0x8000 != 0)) {
+			|| ((g_measurement.device_status.device_state & 0x8000U) != 0U))) {
 
 		if (param_meta[index].pword == NULL) {
 			inputcmdpara();
@@ -1688,7 +1688,7 @@ static void cmd_configpara_process(void)
 	{
 	    uint16_t regs16[32]; /* rgstcnt 最大一般不会很大；32=最多64字节 */
 	    int rc = (int)param_meta[index].rgstcnt;
-	    int bytes = rc * 2;
+	    
 
 	    memset(regs16, 0, sizeof(regs16));
 

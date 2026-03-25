@@ -21,7 +21,7 @@ static uint8_t Calculate_Even_Parity(uint32_t data);
 static SSI_Data_t Parse_SSI_Data(const uint8_t *rxData);
 static void Print_SSI_Error(const SSI_Data_t *data);
 static bool Check_SSI_Error_Condition(SSI_Data_t *data);
-static void Handle_SSI_Error(SSI_Data_t *data);
+static void __attribute__((unused)) Handle_SSI_Error(SSI_Data_t *data);
 static void Report_Fatal_Error(SSI_Data_t *err_data);
 static void Stop_Encoder_Collection_TIM(void);
 static void Start_Read_SSI_Data(void);
@@ -114,7 +114,7 @@ static bool Check_SSI_Error_Condition(SSI_Data_t *data) {
  * @brief 处理SSI数据错误
  * @param data 出现错误的数据结构体
  */
-static void Handle_SSI_Error(SSI_Data_t *data) {
+static void __attribute__((unused)) Handle_SSI_Error(SSI_Data_t *data) {
 	if (ssi_state.fatal_error)
 		return;
 

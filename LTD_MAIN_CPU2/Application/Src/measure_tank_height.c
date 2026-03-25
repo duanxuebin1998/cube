@@ -168,7 +168,7 @@ static int SearchBottomRough() {
 
 		ret = Motor_CheckLostStep_AutoTiming(g_measurement.debug_data.cable_length);
 		CHECK_ERROR(ret); // 检查丢步检测是否成功
-		printf("罐底测量\t长距离寻找罐底\t{传感器位置}%.1f\t称重\t= %ld\t", (float)(g_measurement.debug_data.sensor_position)/10.0,weight_parament.current_weight);
+		printf("罐底测量\t长距离寻找罐底\t{传感器位置}%.1f\t称重\t= %d\t", (float)(g_measurement.debug_data.sensor_position)/10.0,weight_parament.current_weight);
 	}
 	ret = motorQuickStop(); // 到达零点后快速停止电机
 	CHECK_ERROR(ret); // 检查快速停止是否成功

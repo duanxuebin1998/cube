@@ -22,6 +22,19 @@ cmake -S LTD_MAIN_CPU2 -B build/LTD_MAIN_CPU2 -G Ninja \
 cmake --build build/LTD_MAIN_CPU2
 ```
 
+## Preset 构建
+如果使用仓库根目录的 preset，请执行：
+
+```bash
+cmake --preset cpu2-debug
+cmake --build --preset cpu2-debug
+```
+
+说明：
+- `build/LTD_MAIN_CPU2/` 仅用于上面的“子工程手动构建”。
+- `build/presets/LTD_MAIN_CPU2/` 仅用于根目录 preset。
+- 不要让两种 source layout 复用同一个 build 目录，否则 CMake 会报 source mismatch。
+
 ## 源码收集范围
 `LTD_MAIN_CPU2/CMakeLists.txt` 当前会编译：
 - `Core/Src/*.c`
@@ -31,11 +44,13 @@ cmake --build build/LTD_MAIN_CPU2
 - `Drivers/Peripherals/src/*.c`（补齐 TMC5130 与 FRAM 驱动符号，解决 `stpr_* / stepper / WriteMultiData / ReadMultiData` 链接错误）
 - `Core/Startup/startup_stm32f429zgtx.s`
 ## 产物
-构建完成后，`build/LTD_MAIN_CPU2/` 下会生成：
+手动构建完成后，`build/LTD_MAIN_CPU2/` 下会生成：
 - `LTD_MAIN_CPU2.elf`
 - `LTD_MAIN_CPU2.hex`
 - `LTD_MAIN_CPU2.bin`
 - `LTD_MAIN_CPU2.map`
+
+Preset 构建完成后，对应产物位于 `build/presets/LTD_MAIN_CPU2/`。
 
 ## 一键构建脚本
 可直接运行：

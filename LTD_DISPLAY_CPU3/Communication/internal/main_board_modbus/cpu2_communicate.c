@@ -30,7 +30,7 @@ static int SlaveTempBuffer[INPUTREGISTER_AMOUNT];
 
 //static void CPU2_Response03Process(char const *revframe);
 static void CPU2_Response03Process(uint8_t const *revframe);
-static void CPU2_Response04Process(char const *revframe);
+static void CPU2_Response04Process(uint8_t const *revframe);
 static void CPU2_Response10Process(uint8_t *arr, uint16_t len);
 static void PresetRegister(bool registertype, int const *registervalue);
 
@@ -396,7 +396,7 @@ static void CPU2_Response03Process(uint8_t const *revframe) {
 }
 
 /*解析CPU2的响应包0x04功能码*/
-static void CPU2_Response04Process(char const *revframe) {
+static void CPU2_Response04Process(uint8_t const *revframe) {
 	int i, j;
 	memset(SlaveTempBuffer, 0, sizeof(SlaveTempBuffer));
 	for (i = 0, j = 0; i < RCV_registercnt; i++, j = j + 2) {

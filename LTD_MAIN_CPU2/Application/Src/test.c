@@ -254,7 +254,7 @@ void Test_ParamEncoder_AB_Backup(void)
 
     printf("===== AB双备份回退测试结束 =====\r\n\r\n");
 }
-static void Sensor_CommCheckAndLog(const char *tag)
+static void __attribute__((unused)) Sensor_CommCheckAndLog(const char *tag)
 {
     float temp = 0.0f;
     float frequency = 0.0f;
@@ -301,7 +301,7 @@ static void Sensor_CommCheckAndLog(const char *tag)
 void motor_text(void)
 {
     uint32_t loop_cnt = 0;
-
+    MeasureStart();
     printf("motor text start\r\n");
     motor_Init(); // 电机初始化
 
