@@ -319,7 +319,7 @@ typedef struct {
 	uint32_t average_vcf20;                                         ///< 体积修正系数 (VCF20)
 	uint32_t average_weight_density;                                ///< 计重密度
 	uint32_t measurement_points;                                    ///< 实际测量点数
-	uint32_t Density_oil_level;                                     // 密度分布测量时的液位值
+	uint32_t Density_oil_level;                                     // 密度分布测量时的液位值(0.1mm)
 	DensityMeasurement single_density_data[MAX_MEASUREMENT_POINTS]; // 100个点的密度测量数据
 
 } DensityDistribution;
@@ -578,6 +578,22 @@ typedef struct {
 
 extern volatile MeasurementResult g_measurement; // 测量结果
 extern volatile DeviceParameters g_deviceParams; // 设备参数
+static inline bool HasEffectiveCommandSwitchRequest(void)
+{
+    CommandType pending_command = g_deviceParams.command;
+    CommandType current_command = g_measurement.device_status.current_command;
+
+    if (pending_command == CMD_NONE) {
+        return false;
+    }
+
+    if ((current_command != CMD_NONE) && (pending_command == current_command)) {
+        g_deviceParams.command = CMD_NONE;
+        return false;
+    }
+
+    return true;
+}
 
 void save_device_params(void); // Save device parameters to FRAM immediately
 void request_device_params_save(void); // Queue one deferred save request

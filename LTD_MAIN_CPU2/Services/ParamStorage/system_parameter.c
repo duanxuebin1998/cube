@@ -700,8 +700,10 @@ void PrintMeasurementResult(const MeasurementResult *m)
     printf("  平均温度: %lu\r\n",     (unsigned long)m->density_distribution.average_temperature);
     printf("  平均密度: %lu\r\n",     (unsigned long)m->density_distribution.average_density);
     printf("  平均计重密度: %lu\r\n", (unsigned long)m->density_distribution.average_weight_density);
-    printf("  测量点数: %lu\r\n",     (unsigned long)m->density_distribution.measurement_points);
-    printf("  测量时液位: %lu mm\r\n",(unsigned long)m->density_distribution.Density_oil_level);
+    printf("  测量点数: %lu\r\n",         (unsigned long)m->density_distribution.measurement_points);
+    printf("  测量时液位(0.1mm): %lu\r\n",(unsigned long)m->density_distribution.Density_oil_level);
+    printf("  测量时液位(实际): %.1f mm\r\n",
+           (double)m->density_distribution.Density_oil_level / 10.0);
 
     printf("  --- 单点数据（仅打印前10个）---\r\n");
     for (uint32_t i = 0; i < 10 && i < m->density_distribution.measurement_points; i++)
