@@ -49,8 +49,8 @@
 //#define WATER_FOLLOW_HYSTERESIS        (5.0f)    /* 滞回，防抖：可调 3~10 */
 #define WATER_FOLLOW_SAMPLE_MS         (500)     /* 采样周期 */
 #define WATER_FOLLOW_STEP_SMALL_MM     (0.2f)    /* 阈值附近小步 */
-#define WATER_FOLLOW_STEP_MED_MM       (1.0f)    /* 中等偏差 */
-#define WATER_FOLLOW_STEP_BIG_MM       (5.0f)    /* 大偏差/饱和时快速拉回 */
+#define WATER_FOLLOW_STEP_MED_MM       (3.0f)    /* 中等偏差 */
+#define WATER_FOLLOW_STEP_BIG_MM       (10.0f)    /* 大偏差/饱和时快速拉回 */
 #define WATER_CAP_SAT_LIMIT            (9999.0f)/* 认为“饱和/无穷大”的阈值，用于保护 */
 #define WATER_FOLLOW_LOST_DIFF_BIG       (80.0f)   /* 认为偏差很大 */
 #define WATER_FOLLOW_LOST_COUNT_MAX      (20)      /* 连续大偏差次数阈值：20次*500ms=10s */
@@ -500,16 +500,17 @@ static uint32_t AlignToWaterLevel_01mm(int32_t lvl_target_01mm)
  *  - motorMove_upWithSpeed()/motorMove_downWithSpeed(): 每次调用推动继续运动（你现有粗找就是这样用的）
  *  - check_water_status(): 返回 WATER / NORMAL
  *  - Motor_CheckLostStep_AutoTiming(): 丢步检测（可选但建议保留）
+ * @param stable_win_ms 稳定判定窗口时长（ms）
  * 退出条件：
- *   连续 60s 内 water_level 波动（max-min）不超过 50mm -> 认为稳定找到水位，退出
+ *   连续 stable_win_ms 内 water_level 波动（max-min）不超过阈值 -> 认为稳定找到水位，退出
  */
-uint32_t FindWaterLevel_FastByStateFlip_StableExit(void)
+uint32_t FindWaterLevel_FastByStateFlip_StableExit(uint32_t stable_win_ms)
 {
     uint32_t ret;
     uint8_t  water_state = NORMAL;
 
     /* ===== 稳定判定参数 ===== */
-    const uint32_t STABLE_WIN_MS    = 60000u; /* 60s */
+    const uint32_t stable_window_ms = stable_win_ms;
 
     /* ===== 零点保护（沿用你之前逻辑，可按需删） ===== */
     const int32_t ZERO_NEAR_TH = 1000; /* 100mm -> 1000(0.1mm) */
@@ -539,7 +540,10 @@ uint32_t FindWaterLevel_FastByStateFlip_StableExit(void)
     printf("水位测量\t零点电容值：%lu\r\n", g_deviceParams.zero_cap);
     printf("水位测量\t水位电容阈值：%lu\r\n", g_deviceParams.water_cap_threshold);
     printf("水位测量\t水位滞后阈值：%lu\r\n", g_deviceParams.water_cap_hysteresis);
-    printf("快速跟随\t开始(稳定判定：60s内波动<=50mm退出)\r\n");
+    printf("快速跟随\t开始(稳定判定：%lu.%03lus内波动<=%.1fmm退出)\r\n",
+           (unsigned long)(stable_window_ms / 1000u),
+           (unsigned long)(stable_window_ms % 1000u),
+           g_deviceParams.water_stable_threshold / 10.0f);
 
     /* 初始状态 */
     ret = check_water_status(&water_state);
@@ -668,9 +672,11 @@ uint32_t FindWaterLevel_FastByStateFlip_StableExit(void)
                        (max_level - min_level) / 10.0f,
                        g_deviceParams.water_stable_threshold / 10.0f);
 
-                if (elapsed >= STABLE_WIN_MS)
+                if (elapsed >= stable_window_ms)
                 {
-                    printf("快速跟随\t稳定满足：连续60s内波动<=阈值 -> 退出\r\n");
+                    printf("快速跟随\t稳定满足：连续%lu.%03lus内波动<=阈值 -> 退出\r\n",
+                           (unsigned long)(stable_window_ms / 1000u),
+                           (unsigned long)(stable_window_ms % 1000u));
                     ret = motorQuickStop();
                     CHECK_ERROR(ret);
                     printf("快速跟随\t运行到水位附近\r\n");
@@ -857,7 +863,7 @@ uint32_t FollowWaterLevel_fast(void)
         if (lost_count >= 5)
         {
             printf("水位跟随\t长时间大偏差，重新找水位\r\n");
-            ret = FindWaterLevel_FastByStateFlip_StableExit();
+            ret = FindWaterLevel_FastByStateFlip_StableExit(WATER_STABLE_WINDOW_DEFAULT_MS);
             CHECK_ERROR(ret);
 
             lost_count = 0;

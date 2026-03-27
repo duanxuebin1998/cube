@@ -85,7 +85,7 @@ extern ErrorInfo err; // 全局错误信息变量
         }                                                                        \
                                                                                  \
         /* Step 3: 检查是否有命令切换 */                                          \
-        if (g_deviceParams.command != CMD_NONE) {                                \
+        if (HasEffectiveCommandSwitchRequest()) {                                \
             err.error_code = STATE_SWITCH;                                       \
             HandleError();                                                       \
             return err.error_code;                                               \
@@ -123,7 +123,7 @@ extern ErrorInfo err; // 全局错误信息变量
 
 #define CHECK_COMMAND_SWITCH(ret)                                                \
     do {                                                                         \
-        if (g_deviceParams.command != CMD_NONE) {                                \
+        if (HasEffectiveCommandSwitchRequest()) {                                \
             printf("检测到命令切换请求，停止当前操作\r\n");                       \
             return STATE_SWITCH;                                                 \
         }                                                                        \
@@ -134,7 +134,7 @@ extern ErrorInfo err; // 全局错误信息变量
 
 #define CHECK_COMMAND_SWITCH_NO_RETURN()                                          \
     do {                                                                         \
-        if (g_deviceParams.command != CMD_NONE) {                                \
+        if (HasEffectiveCommandSwitchRequest()) {                                \
             printf("检测到命令切换请求，停止当前操作\r\n");                   		    \
             return ;                                                 \
         }                                                                        \

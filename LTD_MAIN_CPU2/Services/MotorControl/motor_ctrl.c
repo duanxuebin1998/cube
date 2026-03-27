@@ -7,7 +7,7 @@
  * 说明：
  *  - 本文件用于尺带机构的步进电机控制（TMC5130）
  *  - 支持：精确长度换算下发、阻塞等待、碰撞/异常检测、丢步检测、卷筒圈数/角度计算、第一圈周长标定
- *  - 支持：命令切换打断（运行中检测 g_deviceParams.command != CMD_NONE 时立即停机并返回）
+ *  - 支持：命令切换打断（运行中检测 HasEffectiveCommandSwitchRequest() 时立即停机并返回）
  *
  * 关键口径（必须统一）：
  *  1) 方向：
@@ -150,7 +150,7 @@
  */
 #define CHECK_COMMAND_SWITCH_AND_STOP(retcode)                                    \
     do {                                                                          \
-        if (g_deviceParams.command != CMD_NONE) {                                 \
+        if (HasEffectiveCommandSwitchRequest()) {                                 \
             printf("检测到命令切换请求，停止当前操作\r\n");                       \
             stpr_stop(&stepper);                                                  \
             return (retcode);                                                     \
@@ -162,7 +162,7 @@
  */
 #define CHECK_COMMAND_SWITCH_AND_STOP_NO_RETURN()                                 \
     do {                                                                          \
-        if (g_deviceParams.command != CMD_NONE) {                                 \
+        if (HasEffectiveCommandSwitchRequest()) {                                 \
             printf("检测到命令切换请求，停止当前操作\r\n");                       \
             stpr_stop(&stepper);                                                  \
             return;                                                               \
@@ -260,7 +260,7 @@ static inline int Motor_IsDirValid(int dir)
 
 static inline bool Motor_StopIfCommandSwitchRequested(void)
 {
-    if (g_deviceParams.command != CMD_NONE) {
+    if (HasEffectiveCommandSwitchRequest()) {
         printf("检测到命令切换请求，停止当前操作\r\n");
         stpr_stop(&stepper);
         return true;

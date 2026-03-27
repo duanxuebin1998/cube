@@ -455,7 +455,7 @@ uint32_t Read_Water_Capacitance(float *cap_out)
     /* 电压异常标志：resp[0]=='E' */
     if (resp[0] == 'E') {
         printf("[UART6] 电容响应提示：电压异常\r\n");
-        return SENSOR_VOLTAGE_ERROR;
+        // return SENSOR_VOLTAGE_ERROR;
     }
 
     /* 解析数值：resp[1..7] 是数字/小数点字符串。直接 atof(resp+1) 即可 */
