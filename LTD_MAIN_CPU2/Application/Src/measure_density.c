@@ -12,7 +12,7 @@
  *   A. 搜索液位（SearchOilLevel）
  *   B. 切换到密度测量模式（EnableDensityMode）
  *   C. 按模式生成取点数组（单位：0.1mm）
- *   D. 按点位依次移动并单点测量（motorMoveToPositionOneShot + SinglePoint_ReadSensor）
+ *   D. 按点位依次移动并单点测量（motorMoveToPositionOneShotWithSpeed + SinglePoint_ReadSensor）
  *   E. 计算平均值并输出（Print_DensitySpreadResult）
  *   F. 国标模式额外执行“按标密差值阈值过滤点，并重算平均值”
  *
@@ -23,7 +23,7 @@
  * 外部依赖（工程需提供）：
  *   - SearchOilLevel()
  *   - EnableDensityMode()
- *   - motorMoveToPositionOneShot(float pos_mm)
+ *   - motorMoveToPositionOneShotWithSpeed(float pos_mm, uint32_t speed_x100)
  *   - SinglePoint_ReadSensor(volatile DensityMeasurement *result)
  *   - g_measurement / g_deviceParams
  *   - DensityDistribution / DensityMeasurement
@@ -97,7 +97,7 @@ static uint32_t Density_RunPoints01mm(const int32_t *p01,
         float pos_mm = (float)p01[i] / 10.0f;
         printf("分布测量 移动到位置 %.1f mm\r\n", pos_mm);
 
-        uint32_t ret = motorMoveToPositionOneShot(pos_mm);
+        uint32_t ret = motorMoveToPositionOneShotWithSpeed(pos_mm, motorGetDefaultSpeedX100());
         if (ret != NO_ERROR) {
             printf("分布测量 电机移动失败: pos=%.1fmm err=%lu\r\n", pos_mm, (unsigned long)ret);
             return ret;
@@ -118,7 +118,7 @@ static uint32_t Density_RunPoints01mm(const int32_t *p01,
         valid++;
 
         /* 命令切换退出：用于上位机/按键打断当前过程 */
-        if (g_deviceParams.command != CMD_NONE) {
+        if (HasEffectiveCommandSwitchRequest()) {
             printf("检测到命令切换请求，停止当前分布测量\r\n");
             break;
         }
@@ -133,7 +133,7 @@ static uint32_t Density_RunPoints01mm(const int32_t *p01,
 
     /* 平均值（RAW 平均） */
     dist->measurement_points = valid;
-    dist->Density_oil_level  = (uint32_t)((oil_level_01mm + 5) / 10); /* mm 四舍五入 */
+    dist->Density_oil_level  = (uint32_t)oil_level_01mm; /* 0.1mm */
 
     dist->average_temperature = (uint32_t)(sum_temp_raw / valid);
     dist->average_density     = (uint32_t)(sum_dens_raw / valid);
@@ -443,19 +443,26 @@ static uint32_t BuildPoints_Meter_Exact(int32_t oil_level_01mm,
  *   - 端点合法性：high_b < high_a，high_a < tankHeight，high_b >= blindZone
  *   - c_num>=3 时：等差取点，最后一点评端点
  */
-static uint32_t BuildPoints_Interval_Exact(int32_t *out_p01, uint32_t *out_n)
+static uint32_t BuildPoints_Interval_Exact(int32_t oil_level_01mm,
+                                           int32_t *out_p01,
+                                           uint32_t *out_n)
 {
     if (!out_p01 || !out_n) return PARAM_ADDRESS_OVERFLOW;
 
-    uint32_t high_min, high_a, high_b;
+    uint32_t high_min;
+    int32_t  high_a, high_b;
     uint32_t dis;
     int c_num;
     int8_t i;
 
     high_min = (uint32_t)g_deviceParams.blindZone;
 
-    high_a = g_deviceParams.wartsila_upper_density_limit;
-    high_b = g_deviceParams.wartsila_lower_density_limit;
+    /* 区间测参数：
+     *   - 上限：距液面的距离（0.1mm） => 绝对点位 = oil_level - topLimit
+     *   - 下限：距罐底的距离（0.1mm） => 绝对点位 = bottomLimit
+     */
+    high_a = oil_level_01mm - (int32_t)g_deviceParams.intervalMeasurementTopLimit;
+    high_b = (int32_t)g_deviceParams.intervalMeasurementBottomLimit;
 
     if (high_b >= high_a) return PARAM_RANGE_ERROR;
 
@@ -463,42 +470,44 @@ static uint32_t BuildPoints_Interval_Exact(int32_t *out_p01, uint32_t *out_n)
     if (c_num <= 0) return PARAM_RANGE_ERROR;
     if (c_num > (int)MAX_MEASUREMENT_POINTS) c_num = MAX_MEASUREMENT_POINTS;
 
-    if (high_a >= g_deviceParams.tankHeight) {
+    if (high_a >= (int32_t)g_deviceParams.tankHeight) {
         return PARAM_RANGE_ERROR;
-    } else if (high_b < high_min) {
+    } else if (high_b < (int32_t)high_min) {
+        return PARAM_RANGE_ERROR;
+    } else if (high_a <= 0) {
         return PARAM_RANGE_ERROR;
     }
 
     if (c_num == 1) {
-        out_p01[0] = (g_deviceParams.spreadMeasurementOrder == 0) ? (int32_t)high_a : (int32_t)high_b;
+        out_p01[0] = (g_deviceParams.spreadMeasurementOrder == 0) ? high_a : high_b;
         *out_n = 1;
         return NO_ERROR;
     }
 
     if (c_num == 2) {
         if (g_deviceParams.spreadMeasurementOrder == 0) {
-            out_p01[0] = (int32_t)high_a;
-            out_p01[1] = (int32_t)high_b;
+            out_p01[0] = high_a;
+            out_p01[1] = high_b;
         } else {
-            out_p01[0] = (int32_t)high_b;
-            out_p01[1] = (int32_t)high_a;
+            out_p01[0] = high_b;
+            out_p01[1] = high_a;
         }
         *out_n = 2;
         return NO_ERROR;
     }
 
-    dis = (uint32_t)(i32_abs((int32_t)high_a - (int32_t)high_b) / (uint32_t)(c_num - 1));
+    dis = (uint32_t)(i32_abs(high_a - high_b) / (uint32_t)(c_num - 1));
 
     if (g_deviceParams.spreadMeasurementOrder == 0) {
         for (i = 0; i < c_num; i++) {
-            out_p01[i] = (int32_t)(high_a - dis * (uint32_t)i);
+            out_p01[i] = high_a - (int32_t)(dis * (uint32_t)i);
         }
-        out_p01[c_num - 1] = (int32_t)high_b;
+        out_p01[c_num - 1] = high_b;
     } else {
         for (i = 0; i < c_num; i++) {
-            out_p01[i] = (int32_t)(high_b + dis * (uint32_t)i);
+            out_p01[i] = high_b + (int32_t)(dis * (uint32_t)i);
         }
-        out_p01[c_num - 1] = (int32_t)high_a;
+        out_p01[c_num - 1] = high_a;
     }
 
     *out_n = (uint32_t)c_num;
@@ -548,7 +557,7 @@ uint32_t Density_MeasureByMode_Exact(DensitySpreadModeId mode, DensityDistributi
         PrintPoints01mm("每米测", points01, n);
     }
     else if (mode == DENS_MODE_INTERVAL) {
-        ret = BuildPoints_Interval_Exact(points01, &n);
+        ret = BuildPoints_Interval_Exact(oil_level_01mm, points01, &n);
         if (ret != NO_ERROR) return ret;
         PrintPoints01mm("区间测", points01, n);
     }
@@ -594,7 +603,7 @@ void CMD_MeasureDensitySpread_Spread(void)
     }
 
     g_measurement.density_distribution = temp;
-    Print_DensitySpreadResult(&g_measurement.density_distribution);
+    Print_DensitySpreadResult(&temp);
 
     g_measurement.device_status.device_state = STATE_SPREADPOINTOVER;
 }
@@ -613,7 +622,7 @@ void CMD_MeasureDensitySpread_GB(void)
     }
 
     g_measurement.density_distribution = temp;
-    Print_DensitySpreadResult(&g_measurement.density_distribution);
+    Print_DensitySpreadResult(&temp);
 
     g_measurement.device_status.device_state = STATE_GB_SPREADPOINTOVER;
 }
@@ -632,7 +641,7 @@ void CMD_MeasureDensitySpread_Meter(void)
     }
 
     g_measurement.density_distribution = temp;
-    Print_DensitySpreadResult(&g_measurement.density_distribution);
+    Print_DensitySpreadResult(&temp);
 
     g_measurement.device_status.device_state = STATE_COM_METER_DENSITY_OVER;
 }
@@ -651,7 +660,7 @@ void CMD_MeasureDensitySpread_Interval(void)
     }
 
     g_measurement.density_distribution = temp;
-    Print_DensitySpreadResult(&g_measurement.density_distribution);
+    Print_DensitySpreadResult(&temp);
 
     g_measurement.device_status.device_state = STATE_INTERVAL_DENSITY_OVER;
 }
@@ -834,8 +843,10 @@ void Print_DensitySpreadResult(const DensityDistribution *dist)
 
     printf("\r\n========== 密度分布测量结果 ==========\r\n");
 
-    printf("测量点数量         : %lu\r\n", (unsigned long) dist->measurement_points);
-    printf("测量油位/罐高 (mm) : %lu\r\n", (unsigned long) dist->Density_oil_level);
+    printf("测量点数量             : %lu\r\n", (unsigned long) dist->measurement_points);
+    printf("测量油位/罐高(0.1mm)   : %lu  =>  实际: %.1f mm\r\n",
+           (unsigned long) dist->Density_oil_level,
+           (double) dist->Density_oil_level / 10.0);
 
     /* average_* 为 RAW（编码值） */
     printf("平均温度 RAW       : %lu  =>  实际: %.2f ℃\r\n",
@@ -881,100 +892,204 @@ void Print_DensitySpreadResult(const DensityDistribution *dist)
     printf("=====================================\r\n\r\n");
 }
 
-/*
- * 单点稳定判定逻辑：
- *   - 循环读取 freq/density/temp
- *   - 若任一项相对参考值变化超过阈值，则更新参考值并重置稳定计时
- *   - 持续稳定超过 stable_win_ms 即判定稳定，并写入 result
+/**
+ * @brief 单点密度测量（带稳定判定与超时兜底）
  *
- * 超时策略：
- *   - 最大等待 5 分钟（300000ms）
+ * 【总体逻辑】
+ *  1) 周期性读取 频率 / 密度 / 温度
+ *  2) 仅当“密度为非零”时，才参与稳定判定
+ *  3) 若在稳定窗口内，三项数据变化均不超过阈值，则判定“数据稳定”
+ *  4) 若 5 分钟内始终未稳定：
+ *      - 若曾读到非零密度：取最后一次非零密度作为结果
+ *      - 若 5 分钟内从未读到非零密度：输出 0 作为结果
+ *
+ * 【关键口径】
+ *  - 密度 == 0：
+ *      - 不参与稳定判定
+ *      - 不能作为“稳定值”
+ *      - 但在“完全无有效密度”的异常场景下，可作为最终兜底输出
+ *
+ * @param[out] result  单点测量结果结构体（RAW 编码）
+ *
+ * @return NO_ERROR           成功（稳定或兜底）
+ *         其他错误码        模式切换/通信等异常
  */
 uint32_t SinglePoint_ReadSensor(volatile DensityMeasurement *result)
 {
     uint32_t ret = 0;
 
-    /* 切换密度模式（防御性调用） */
+    /* ---------- 切换到密度测量模式（防御性调用） ---------- */
     ret = EnableDensityMode();
     CHECK_ERROR(ret);
 
-    /* 稳定判定时间窗口：
-     *   - 参数 spreadPointHoverTime 在此处按“秒”解释
-     *   - stable_win_ms = hover_time_s * 1000
+    /* ---------- 稳定窗口时间配置 ----------
+     * spreadPointHoverTime：
+     *   - 单位：秒
+     *   - 表示需要“连续稳定”多久，才认为单点数据可靠
      */
-    uint32_t hover_time_s = g_deviceParams.spreadPointHoverTime;
+    uint32_t hover_time_s  = g_deviceParams.spreadPointHoverTime;
     uint32_t stable_win_ms = hover_time_s * 1000U;
 
+    /* 若参数未配置，使用默认 5 秒 */
     if (stable_win_ms == 0) {
-        stable_win_ms = 5000U; /* 默认 5s */
+        stable_win_ms = 5000U;
     }
 
+    /* ---------- 最大等待时间：5 分钟 ----------
+     * 防止传感器异常或工况不稳定导致死等
+     */
     const uint32_t MAX_WAIT_MS = 5U * 60U * 1000U;
 
-    const float FREQ_EPS    = 1.0f;
-    const float DENSITY_EPS = 0.1f;
-    const float TEMP_EPS    = 0.2f;
+    /* ---------- 稳定判定阈值 ----------
+     * 任一项超出阈值，均认为“不稳定”，需要重新计时
+     */
+    const float FREQ_EPS    = 1.0f;   // 频率变化阈值（Hz）
+    const float DENSITY_EPS = 0.1f;   // 密度变化阈值
+    const float TEMP_EPS    = 0.2f;   // 温度变化阈值（℃）
 
+    /* 采样周期 */
     const uint32_t SAMPLE_INTERVAL_MS = 200U;
 
-    uint32_t t_start = HAL_GetTick();
-    uint32_t stable_start = 0;
-    uint8_t first_sample = 1;
+    /* ---------- 时间与状态变量 ---------- */
+    uint32_t t_start      = HAL_GetTick();  // 整个流程起始时间
+    uint32_t stable_start = 0;              // 当前稳定窗口起始时间
+    uint8_t  first_sample = 1;              // 是否为首次有效样本
 
-    float ref_freq = 0.0f, ref_density = 0.0f, ref_temp = 0.0f;
-    float cur_freq = 0.0f, cur_density = 0.0f, cur_temp = 0.0f;
+    /* ---------- 参考值（用于稳定判定） ----------
+     * 仅在“非零密度样本”下才会更新
+     */
+    float ref_freq = 0.0f;
+    float ref_density = 0.0f;
+    float ref_temp = 0.0f;
+
+    /* 当前读取值 */
+    float cur_freq = 0.0f;
+    float cur_density = 0.0f;
+    float cur_temp = 0.0f;
+
+    /* ---------- 超时兜底用变量 ----------
+     * 用于记录“最后一次非零密度样本”
+     */
+    uint8_t have_last_nonzero = 0;
+    float last_density_nz = 0.0f;
+    float last_temp_nz = 0.0f;
 
     while (1) {
+
         uint32_t now = HAL_GetTick();
 
+        /* ======================================================
+         * 1) 超时兜底处理（5 分钟）
+         * ====================================================== */
         if (now - t_start >= MAX_WAIT_MS) {
-            printf("单点测量 5分钟内未得到稳定数据，超时退出。\r\n");
-            return DENSITY_UNSTABLE;
+
+            /* --- 情况 A：曾经读到过非零密度 --- */
+            if (have_last_nonzero) {
+
+                printf("单点测量 超时未稳定，取最后一次非零密度作为结果。\r\n");
+
+                result->density          = DENSITY_TO_RAW(last_density_nz);
+                result->temperature      = TEMP_TO_RAW(last_temp_nz);
+                result->standard_density = DENSITY_TO_RAW(last_density_nz);
+                result->weight_density   = DENSITY_TO_RAW(last_density_nz);
+
+            }
+            /* --- 情况 B：5 分钟内从未读到非零密度 --- */
+            else {
+
+                printf("单点测量 5分钟内未读到非零密度，输出0作为结果。\r\n");
+
+                /* 注意：
+                 * 这里的 0 仅用于流程兜底，不代表有效密度
+                 */
+                result->density          = 0;
+                result->standard_density = 0;
+                result->weight_density   = 0;
+
+                /* 温度可取最近一次值（即使为 0） */
+                result->temperature = TEMP_TO_RAW(cur_temp);
+            }
+
+            result->vcf20 = 1;
+            result->temperature_position = g_measurement.debug_data.sensor_position;
+
+            return NO_ERROR;
         }
 
+        /* ======================================================
+         * 2) 读取传感器
+         * ====================================================== */
         ret = Read_Density(&cur_freq, &cur_density, &cur_temp);
         if (ret != NO_ERROR) {
-            printf("读取密度/温度/频率失败：err=%lu\r\n", (unsigned long) ret);
+            printf("读取密度/温度/频率失败：err=%lu\r\n",
+                   (unsigned long)ret);
             HAL_Delay(SAMPLE_INTERVAL_MS);
             continue;
         }
 
         CHECK_COMMAND_SWITCH(ret);
 
-        printf("单点读数: f=%.3f Hz  dens=%.4f  temp=%.3f ℃\r\n", cur_freq, cur_density, cur_temp);
+        printf("单点读数: f=%.3f Hz  dens=%.4f  temp=%.3f ℃\r\n",
+               cur_freq, cur_density, cur_temp);
 
+        /* ======================================================
+         * 3) 密度为 0 的处理策略
+         * ======================================================
+         *  - 认为是“无效密度”
+         *  - 不参与稳定判定
+         *  - 不更新参考值
+         */
+        if (fabsf(cur_density) < 1e-6f) {
+            HAL_Delay(SAMPLE_INTERVAL_MS);
+            continue;
+        }
+
+        /* 记录最后一次“非零密度”样本（用于超时兜底） */
+        have_last_nonzero = 1;
+        last_density_nz   = cur_density;
+        last_temp_nz      = cur_temp;
+
+        /* ======================================================
+         * 4) 稳定判定逻辑（仅对非零密度生效）
+         * ====================================================== */
         if (first_sample) {
-            ref_freq = cur_freq;
+
+            /* 首次有效样本：直接作为参考值 */
+            ref_freq    = cur_freq;
             ref_density = cur_density;
-            ref_temp = cur_temp;
+            ref_temp    = cur_temp;
             stable_start = now;
             first_sample = 0;
-        } else {
-            float df = fabsf(cur_freq - ref_freq);
-            float dd = fabsf(cur_density - ref_density);
-            float dt = fabsf(cur_temp - ref_temp);
 
+        } else {
+
+            float df = fabsf(cur_freq    - ref_freq);
+            float dd = fabsf(cur_density - ref_density);
+            float dt = fabsf(cur_temp    - ref_temp);
+
+            /* 任一项超阈值，认为不稳定，重置参考值与计时 */
             if (df > FREQ_EPS || dd > DENSITY_EPS || dt > TEMP_EPS) {
-                ref_freq = cur_freq;
+                ref_freq    = cur_freq;
                 ref_density = cur_density;
-                ref_temp = cur_temp;
+                ref_temp    = cur_temp;
                 stable_start = now;
             }
         }
 
+        /* ======================================================
+         * 5) 稳定窗口满足：判定稳定
+         * ====================================================== */
         if (!first_sample && (now - stable_start >= stable_win_ms)) {
-            printf("单点测量 数据稳定，稳定窗口 = %lu ms\r\n", (unsigned long) stable_win_ms);
-            printf("稳定结果: f=%.3f Hz  dens=%.4f  temp=%.3f ℃\r\n", ref_freq, ref_density, ref_temp);
 
-            /* 写入稳定结果（RAW 编码） */
+            printf("单点测量 数据稳定，稳定窗口=%lu ms\r\n",
+                   (unsigned long)stable_win_ms);
+
             result->temperature_position = g_measurement.debug_data.sensor_position;
             result->density          = DENSITY_TO_RAW(ref_density);
             result->temperature      = TEMP_TO_RAW(ref_temp);
-
-            /* 以下字段目前与 density 同步；若工程实现了标密/VCF/计重密度计算，可在此替换 */
             result->standard_density = DENSITY_TO_RAW(ref_density);
-            result->vcf20            = 1;
             result->weight_density   = DENSITY_TO_RAW(ref_density);
+            result->vcf20            = 1;
 
             return NO_ERROR;
         }
@@ -982,6 +1097,8 @@ uint32_t SinglePoint_ReadSensor(volatile DensityMeasurement *result)
         HAL_Delay(SAMPLE_INTERVAL_MS);
     }
 }
+
+
 
 /* 单点测量命令：移动到指定高度 -> 单点稳定读取 */
 void CMD_SinglePointMeasurement(void)
@@ -991,7 +1108,8 @@ void CMD_SinglePointMeasurement(void)
 
     MeasureStart();
 
-    ret = motorMoveToPositionOneShot((float)g_deviceParams.singlePointMeasurementPosition / 10.0f);
+    ret = motorMoveToPositionOneShotWithSpeed((float)g_deviceParams.singlePointMeasurementPosition / 10.0f,
+                                              motorGetDefaultSpeedX100());
     SET_ERROR(ret);
 
     g_measurement.device_status.device_state = STATE_SPTESTING;
@@ -1010,7 +1128,8 @@ void CMD_SinglePointMonitoring(void)
     uint32_t ret = 0;
     g_measurement.device_status.device_state = STATE_RUNTOPOINTING;
 
-    ret = motorMoveToPositionOneShot((float)g_deviceParams.singlePointMonitoringPosition / 10.0f);
+    ret = motorMoveToPositionOneShotWithSpeed((float)g_deviceParams.singlePointMonitoringPosition / 10.0f,
+                                              motorGetDefaultSpeedX100());
     SET_ERROR(ret);
 
     g_measurement.device_status.device_state = STATE_SPTESTING;
@@ -1021,7 +1140,7 @@ void CMD_SinglePointMonitoring(void)
         ret = SinglePoint_ReadSensor(&g_measurement.single_point_monitoring);
         SET_ERROR(ret);
 
-        if (g_deviceParams.command != CMD_NONE) {
+        if (HasEffectiveCommandSwitchRequest()) {
             printf("检测到命令切换请求，停止当前操作\r\n");
             return;
         }

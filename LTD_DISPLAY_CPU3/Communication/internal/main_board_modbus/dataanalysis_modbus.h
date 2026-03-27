@@ -9,7 +9,7 @@
 #define RETURN_UNSUPPORTED -2//不支持的操作
 #define RETURN_UNDEFADDRESS -3//非法数据地址
 
-
+void AnalysisHoldRegister(void);//解析保持寄存器数据
 
 void WriteDeviceParamsToHoldingRegisters(uint16_t *HoldingRegisterArray);//写入保持寄存器
 void ReadDeviceParamsFromHoldingRegisters(uint16_t *HoldingRegisterArray);//从输入寄存器读取设备参数

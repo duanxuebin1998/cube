@@ -24,9 +24,9 @@ extern volatile uint8_t com1_rx_ready;
 extern volatile uint8_t com2_rx_ready;
 extern volatile uint8_t com3_rx_ready;
 
-extern volatile uint8_t UART2_RX_LEN;
-extern volatile uint8_t UART3_RX_LEN;
-extern volatile uint8_t UART6_RX_LEN;
+extern volatile uint16_t UART2_RX_LEN;
+extern volatile uint16_t UART3_RX_LEN;
+extern volatile uint16_t UART6_RX_LEN;
 
 extern uint8_t UART2_RX_BUF[UART2_RX_BUF_SIZE];
 extern uint8_t UART3_RX_BUF[UART3_RX_BUF_SIZE];
@@ -72,7 +72,7 @@ static UART_HandleTypeDef * COM_GetUartHandle(ComPortIndex com);
 static void COM_EnableRxDMAAndIdle(ComPortIndex com);
 
 /* 将“枚举值/代码”转换为具体波特率，可根据你寄存器的定义修改 */
-static uint32_t COM_BaudCodeToValue(uint8_t code);
+static uint32_t __attribute__((unused)) COM_BaudCodeToValue(uint8_t code);
 
 /* 从 g_deviceParams 中把串口相关配置读到 g_com_config[] */
 /* !!! TODO: 这里需要你根据 DeviceParameters 里实际字段名修改 !!! */
@@ -162,12 +162,12 @@ uint32_t COM_DispatchProtocol(ComPortIndex com,
     switch (cfg->protocol) {
     case COM_PROTO_DSM:
         /* 你的 DSM 协议处理函数 */
-        return DSM_CommunicationProcess(rx, rx_len, tx, tx_len);
+        return DSM_CommunicationProcess((unsigned char *)rx, rx_len, tx, tx_len);
 
     case COM_PROTO_WARTSILA:
         /* TODO: 根据你实际的 Wartsila 协议处理函数名修改 */
         /* 比如： return Wartsila_CommunicationProcess(rx, rx_len, tx, tx_len); */
-        return wartsila_modbus_process(rx, rx_len, tx, tx_len);  /* 如果函数名不对请自行改 */
+        return modbus_rtu_process(rx, rx_len, tx, tx_len);  /* 如果函数名不对请自行改 */
 
     case COM_PROTO_MODBUS_RTU:
         /* 你的 Modbus RTU 处理函数（需要在 modbus_agreement.h 中声明） */
@@ -233,7 +233,7 @@ static void COM_EnableRxDMAAndIdle(ComPortIndex com)
 }
 
 /* 波特率码 -> 实际波特率，供 DeviceParameters 映射使用 */
-static uint32_t COM_BaudCodeToValue(uint8_t code)
+static uint32_t __attribute__((unused)) COM_BaudCodeToValue(uint8_t code)
 {
     switch (code) {
     case 0:  return 4800;
@@ -244,4 +244,9 @@ static uint32_t COM_BaudCodeToValue(uint8_t code)
     case 5:  return 115200;
     default: return 4800;
     }
+}
+
+static void COM_LoadConfigFromDeviceParams(void)
+{
+    (void)g_deviceParams;
 }

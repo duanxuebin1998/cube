@@ -45,6 +45,7 @@ extern DSMSENSOR_DATA dsmsensor_data;
 
 int DSM_EnableLevelMode(void);
 int DSM_EnableDensityMode(void);
+uint32_t Read_Sensor_Voltage(float *voltage_out);
 uint32_t Read_Level_Frequency(uint32_t *frequency_out);
 int Probe_EnableWaterSensor(void);
 int DSM_Read_Frequency_Density_Temp(float *frequency,float *density, float *temp);

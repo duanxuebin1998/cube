@@ -5,7 +5,7 @@
  *      Author: duan xuebin
  */
 #include "cpu2_communicate.h"
-#include "Display.h"
+#include "display.h"
 #include "system_parameter.h"
 #include "DSM_communication.h"
 #include "wartsila_modbus_communication.h"
@@ -122,7 +122,7 @@ typedef struct {
 static uint32_t proto_dsm_process(const uint8_t* rx, uint16_t rx_len,
                                  uint8_t* tx, uint16_t* tx_len)
 {
-    return DSM_CommunicationProcess(rx, rx_len, tx, tx_len);
+    return DSM_CommunicationProcess((unsigned char *)rx, rx_len, tx, tx_len);
 }
 
 static uint32_t proto_wartsila_process(const uint8_t* rx, uint16_t rx_len,
@@ -181,6 +181,9 @@ static uint32_t cpu3_port_process(uint8_t port_idx,
 
 void App_Init(void) {
 	printf("LTD demo restart!\r\n");
+	/* Force UART5 RS485 direction back to RX after CubeMX init. */
+	RS485_SET_RECV_MODE();
+	__HAL_UART_CLEAR_IDLEFLAG(&huart5);
 	DisplayInit(); // Initialize the OLED display
 	DisplayAubonLogo(); /* 刚上电显示AUBON LOGO */
     Cpu3_Params_LoadFromFRAM();//从 FRAM 载入 Cpu3 通讯+显示参数（里面会自动回退默认并保存）
@@ -309,7 +312,8 @@ void App_MainLoop(void)
     /* ========= 空闲才做轮询任务 ========= */
     if (!did_work) {
         PollingInputData();
-        HAL_Delay(10);
+//        PrintMeasurementResult();
+        HAL_Delay(10);;
     }
 }
 void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)

@@ -13,6 +13,8 @@
 #include "system_parameter.h"
 #include "motor_ctrl.h"
 #include "measure_tank_height.h"
+#include "measure_water_level.h"
+#include "encoder.h"
 
 #define ZERO_SEARCH_RETRY_MAX  3  // 可通过宏配置最大重试次数
 
@@ -42,7 +44,7 @@ int SearchZero(void) {
 	printf("零点测量\t开始\r\n");
 
 	if (weight_parament.stable_weight >weight_parament.full_weight+2000) { // 如果当前超重
-		ret = motorMoveAndWaitUntilStop(100.0, MOTOR_DIRECTION_DOWN);
+		ret = motorMoveAndWaitUntilStopWithSpeed(100.0, MOTOR_DIRECTION_DOWN, motorGetDefaultSpeedX100());
 		CHECK_ERROR(ret);
 		printf("零点测量\t脱离零点完成\r\n");
 	}
@@ -59,14 +61,14 @@ int SearchZero(void) {
 		ret = SearchZeroRough();
 		CHECK_COMMAND_SWITCH(ret);
 
-		if ((abs(g_measurement.debug_data.cable_length) > 100) && (g_measurement.device_status.device_state != STATE_FINDZEROING)) {
+		if ((abs(g_measurement.debug_data.cable_length) > g_deviceParams.max_zero_deviation_distance) && (g_measurement.device_status.device_state != STATE_FINDZEROING)) {
 			printf("零点测量\tt零点偏差超过阈值\r\n");
 			ret = MEASUREMENT_ZERO_OUT_OF_RANGE;
 			if (try_times >= ZERO_SEARCH_RETRY_MAX) {
 				printf("零点测量\t粗找零点失败(尝试%d次)\r\n", try_times);
 				CHECK_ERROR(ret);
 			}
-			ret = motorMoveAndWaitUntilStop(100.0, MOTOR_DIRECTION_DOWN);
+			ret = motorMoveAndWaitUntilStopWithSpeed(100.0, MOTOR_DIRECTION_DOWN, motorGetDefaultSpeedX100());
 			CHECK_ERROR(ret);
 			continue;
 		}
@@ -78,7 +80,7 @@ int SearchZero(void) {
 
 		if (ret != NO_ERROR) {
 			printf("零点测量\t粗找失败[%d]:0x%X\r\n", try_times, (unsigned int) ret);
-			ret = motorMoveAndWaitUntilStop(100.0, MOTOR_DIRECTION_DOWN);
+			ret = motorMoveAndWaitUntilStopWithSpeed(100.0, MOTOR_DIRECTION_DOWN, motorGetDefaultSpeedX100());
 			CHECK_ERROR(ret);
 			continue;
 		}
@@ -91,10 +93,7 @@ int SearchZero(void) {
 	printf("零点测量\t粗找零点完成\t位置%ld\r\n", zero_position);
 
 	/*************** 精找阶段 - 第一次精确找零点 ***************/
-	ret = motorMoveNoWait(10, MOTOR_DIRECTION_DOWN);//脱离零点
-		CHECK_ERROR(ret);
-		HAL_Delay(3000);
-	ret = motorMoveAndWaitUntilStop(200.0, MOTOR_DIRECTION_DOWN);
+	ret = motorMoveAndWaitUntilStopWithSpeed(200.0, MOTOR_DIRECTION_DOWN, motorGetDefaultSpeedX100());
 	CHECK_ERROR(ret);
 
 	try_times = 0;
@@ -109,7 +108,7 @@ int SearchZero(void) {
 		} else {
 			printf("零点测量\t第一次精找失败[%d]:0x%X\r\n", try_times, (unsigned int) ret);
 			if (try_times < ZERO_SEARCH_RETRY_MAX) {
-				ret = motorMoveAndWaitUntilStop(100.0, MOTOR_DIRECTION_DOWN);
+				ret = motorMoveAndWaitUntilStopWithSpeed(100.0, MOTOR_DIRECTION_DOWN, motorGetDefaultSpeedX100());
 				CHECK_ERROR(ret);
 				HAL_Delay(1000);
 			}
@@ -118,7 +117,7 @@ int SearchZero(void) {
 	CHECK_ERROR(ret);
 
 //	/*************** 精找阶段 - 第二次精确找零点 ***************/
-//	ret = motorMoveAndWaitUntilStop(100.0, MOTOR_DIRECTION_DOWN);
+//	ret = motorMoveAndWaitUntilStopWithSpeed(100.0, MOTOR_DIRECTION_DOWN, motorGetDefaultSpeedX100());
 //	CHECK_ERROR(ret);
 //	printf("零点测量\t电机下行完成，准备第二次精找\r\n");
 //
@@ -134,7 +133,7 @@ int SearchZero(void) {
 //		} else {
 //			printf("零点测量\t第二次精找失败[%d]:0x%X\r\n", try_times, (unsigned int) ret);
 //			if (try_times < ZERO_SEARCH_RETRY_MAX) {
-//				ret = motorMoveAndWaitUntilStop(50.0, MOTOR_DIRECTION_DOWN);
+//				ret = motorMoveAndWaitUntilStopWithSpeed(50.0, MOTOR_DIRECTION_DOWN, motorGetDefaultSpeedX100());
 //				CHECK_ERROR(ret);
 //				HAL_Delay(1000);
 //			}
@@ -146,17 +145,17 @@ int SearchZero(void) {
 	printf("零点测量完成 \t当前编码值\t %ld\r\n", g_encoder_count);
 	printf("{zero_value}%ld mm\r\n", g_measurement.debug_data.cable_length);
 
-	if ((abs(g_measurement.debug_data.cable_length) > 100) && (g_measurement.device_status.device_state != STATE_FINDZEROING)) {
+	if ((abs(g_measurement.debug_data.cable_length) > g_deviceParams.max_zero_deviation_distance) && (g_measurement.device_status.device_state != STATE_FINDZEROING)) {
 		printf("零点测量\t编码值异常，可能需要重新校准\r\n");
 		RETURN_ERROR(MEASUREMENT_ZERO_OUT_OF_RANGE);
 	} else {
 		set_encoder_zero();
 		printf("零点测量\t编码器零点设置成功\r\n");
-		ret = motorMoveNoWait(10, MOTOR_DIRECTION_DOWN);//脱离零点
+		ret = motorMoveNoWaitWithSpeed(10, MOTOR_DIRECTION_DOWN, motorGetDefaultSpeedX100());//脱离零点
 		CHECK_ERROR(ret);
 		HAL_Delay(3000);
 		printf("零点测量\t向下移动\t下行距离\t%ld\r\n", g_deviceParams.findZeroDownDistance/10);
-		ret = motorMoveAndWaitUntilStop((float)g_deviceParams.findZeroDownDistance/10.0, MOTOR_DIRECTION_DOWN);
+		ret = motorMoveAndWaitUntilStopWithSpeed((float)g_deviceParams.findZeroDownDistance/10.0, MOTOR_DIRECTION_DOWN, motorGetDefaultSpeedX100());
 		CHECK_ERROR(ret);
 		read_zero_capacitance();//读取零点电容值
 		if(g_bottom_det_mode == BOTTOM_DET_BY_GYRO)
@@ -179,15 +178,25 @@ int SearchZero(void) {
  */
 static int SearchZeroRough() {
 	uint32_t ret;
-	ret = motorMove_up(); // 电机上行
-	CHECK_ERROR(ret); // 检查上行是否成功
+    uint32_t speed_x100;
+
 	// 循环直到重量状态为ZERO
+    MotorLostStep_Init();// 重置丢步检测计数器
 	while (check_zero_point_status() != ZERO) {
+        speed_x100 = motorGetDefaultSpeedX100();
+        if ((g_measurement.debug_data.cable_length - zero_position) < 3000) {
+            speed_x100 = 100;
+        }
+
+		ret = motorMove_upWithSpeed(speed_x100);  // 启动电机向下运动
+		CHECK_ERROR(ret); // 检查上行是否成功
 		//丢步检测
 		ret = Motor_CheckLostStep_AutoTiming(g_measurement.debug_data.cable_length);
 		CHECK_ERROR(ret); // 检查丢步检测是否成功
 		// 实时打印编码器和重量信息
 		printf("零点测量\t长距离寻找零点\t{传感器位置}%.1f\t", (float) (g_measurement.debug_data.sensor_position) / 10.0);
+		ret = motorMove_upWithSpeed(speed_x100); // 电机上行
+		CHECK_ERROR(ret); // 检查上行是否成功
 	}
 	zero_position = g_measurement.debug_data.cable_length;
 	ret = motorQuickStop(); // 到达零点后快速停止电机
@@ -203,27 +212,20 @@ static int SearchZeroRough() {
  */
 static int SearchZeroPrecise() {
 	uint32_t ret;
-	int v1flag = 0; // 速度调整标志1
-	int v2flag = 0; // 速度调整标志2
-	// motorMove_up()：电机上行
-	ret = motorMove_up();
-	CHECK_ERROR(ret); // 检查上行是否成功
+    uint32_t speed_x100;
+    MotorLostStep_Init();// 重置丢步检测计数器
 	while (check_zero_point_status() != ZERO) {
-		// 距离零点4096以内，速度降为40
-		if (((g_measurement.debug_data.cable_length - zero_position) < 1000) && (v1flag == 0)) {
-			printf("零点位置%ld\t尺带长度%ld\t", zero_position, g_measurement.debug_data.cable_length);
-			stpr_setVelocity(&stepper, 16 * 32 * 40);
-			printf("速度调整\t{Velocity}%d\r\n", 40);
-			v1flag = 1;
-		}
-		// 距离零点100以内，速度降为2
-		if (((g_measurement.debug_data.cable_length - zero_position) < 100) && (v2flag == 0)) {
+        speed_x100 = motorGetDefaultSpeedX100();
+        if ((g_measurement.debug_data.cable_length - zero_position) < 300) {
+            speed_x100 = 40;
+        }
+        else if ((g_measurement.debug_data.cable_length - zero_position) < 3000) {
+            speed_x100 = 100;
+        }
 
-			printf("零点位置%ld\t尺带长度%ld\t", zero_position, g_measurement.debug_data.cable_length);
-			stpr_setVelocity(&stepper, 16 * 32 * 2);
-			printf("速度调整\t{Velocity}%d\r\n", 2);
-			v2flag = 1;
-		}
+		ret = motorMove_upWithSpeed(speed_x100);  // 启动电机向下运动
+		CHECK_ERROR(ret); // 检查上行是否成功
+
 		if (g_measurement.debug_data.cable_length < (zero_position - 100)) {
 			printf("精找零点超出范围\t尺带长度\t%ld\r\n", g_measurement.debug_data.cable_length);
 			ret = motorQuickStop(); // 到达零点后快速停止电机
@@ -233,15 +235,15 @@ static int SearchZeroPrecise() {
 		ret = Motor_CheckLostStep_AutoTiming(g_measurement.debug_data.cable_length);
 		CHECK_ERROR(ret); // 检查丢步检测是否成功
 
-		printf("零点测量\t精确寻找零点\t{传感器位置}%.1f\t", (float) (g_measurement.debug_data.sensor_position) / 10.0);
+		printf("零点测量\t精确寻找零点\t{传感器位置}%.1f\t速度(0.01m/min)\t%lu\t", (float)(g_measurement.debug_data.sensor_position) / 10.0f, (unsigned long)g_measurement.debug_data.motor_speed);
 	}
 	printf("精找零点完成\t尺带长度\t%ld\r\n", g_measurement.debug_data.cable_length);
 	zero_position = g_measurement.debug_data.cable_length;
 	ret = motorQuickStop(); // 到达零点后快速停止电机
 	CHECK_ERROR(ret); // 检查快速停止是否成功
 
-	if ((abs(g_measurement.debug_data.cable_length) > 100) && (g_measurement.device_status.device_state != STATE_FINDZEROING)) {
-		printf("零点测量\t零点偏差超过阈值\r\n");
+	if ((abs(g_measurement.debug_data.cable_length) > g_deviceParams.max_zero_deviation_distance) && (g_measurement.device_status.device_state != STATE_FINDZEROING)) {
+		printf("零点测量\t零点偏差超过阈值\r\n");//TODO：需要把阈值打印出来
 		ret = MEASUREMENT_ZERO_OUT_OF_RANGE;
 		CHECK_ERROR(ret);
 	}

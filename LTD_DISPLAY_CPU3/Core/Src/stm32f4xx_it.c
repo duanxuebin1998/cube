@@ -27,6 +27,7 @@
 #include "display_tankopera.h"
 #include "DSM_communication.h"
 #include "iwdg.h"
+#include "display.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -58,7 +59,7 @@
 /* USER CODE BEGIN 0 */
 #include "stm32f4xx.h"   // 换成你对应的芯片头文件
 #include <stdio.h>
-
+void Fault_Handler(const char *name); // 声明你原来的统一处理函数
 void Fault_HandlerEx(const char *name, uint32_t *stack_addr)
 {
     // 进异常时硬件自动压栈的寄存器
@@ -158,7 +159,7 @@ void Fault_Handler(const char *name)
          NVIC_SystemReset();
     }
 }
-static const char HardFaultName[] = "HardFault";
+const char HardFaultName[] = "HardFault";
 void HardFault_Handler(void) __attribute__((naked));
 
 /* ===================== 通用：DMA + IDLE 一帧接收处理 ===================== */

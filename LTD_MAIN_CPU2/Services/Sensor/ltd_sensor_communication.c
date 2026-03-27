@@ -7,6 +7,7 @@
 
 #include <ltd_sensor_communication.h>
 #include "sensor.h"
+ #include <math.h>
 
 #ifndef DSM_V2_MAX_RETRY
 #define DSM_V2_MAX_RETRY   3
@@ -83,9 +84,13 @@ static int DSM_V2_Transceive(const uint8_t tx[8], uint8_t rx[8]) {
 	}
 	if (got < 8) {
 #ifdef DEBUG_DSM
-		printf("V2 RX timeout, got %d bytes\r\n", got);
+		if (got == 0) {
+			printf("V2 RX timeout, got 0 bytes\r\n");
+		} else {
+			printf("V2 RX length error, got %d bytes\r\n", got);
+		}
 #endif
-		return SENSOR_COMM_TIMEOUT;
+		return (got == 0) ? SENSOR_DEVICE_COMM_TIMEOUT : SENSOR_RESP_FORMAT_ERROR;
 	}
 
 #ifdef DEBUG_DSM
@@ -113,19 +118,19 @@ static int DSM_V2_CheckReply(const uint8_t tx[8], const uint8_t rx[8]) {
 #ifdef DEBUG_DSM
 		printf("V2 RX func mismatch: expect %02X, got %02X\r\n", expect_func, rx[1]);
 #endif
-		return SENSOR_COMM_TIMEOUT;
+		return SENSOR_RESP_FORMAT_ERROR;
 	}
 	if (rx[6] == 0xFF) {
 #ifdef DEBUG_DSM
 		printf("V2 RX indicates FAIL (param=FF)\r\n");
 #endif
-		return OTHER_PERIPHERAL_CONFIG_ERROR;
+		return SENSOR_DEVICE_REPORTED_ERROR;
 	}
 	if (rx[6] != expect_param) {
 #ifdef DEBUG_DSM
 		printf("V2 RX param mismatch: expect %02X, got %02X\r\n", expect_param, rx[6]);
 #endif
-		return OTHER_PERIPHERAL_CONFIG_ERROR;
+		return SENSOR_RESP_FORMAT_ERROR;
 	}
 	return NO_ERROR;
 }
@@ -285,19 +290,18 @@ int DSM_V2_Read_LevelFrequency(uint32_t *freq_hz) {
 	return ret;
 }
 // R16 液位频率（整型）
-int DSM_V2_Read_DensityFrequency(uint32_t *freq_hz) {
+int DSM_V2_Read_DensityFrequency(float *freq_hz,float *freq_45,float *freq_225) {
 	if (!freq_hz)
 		return OTHER_PERIPHERAL_CONFIG_ERROR;
-	int32_t v = 0;
-	int ret = DSM_V2_Read_IntParam(0x10, &v);   // 参数码 0x10 = R16
+	float v = 0;
+	int ret = DSM_V2_Read_FloatParam(0x11, &v);   // 参数码 0x11 = 45度扫频平方均值
 	if (ret == NO_ERROR) {
-		if (v < 0) {
-			v = -v;
-		}
-		if (v > 10000) {
-			v = v - 10000;
-		}
-		*freq_hz = (uint32_t) v;
+		*freq_hz = sqrt(1000000000000.0/(double) v);
+		*freq_45 =  v;
+	}
+	ret = DSM_V2_Read_FloatParam(0x12, &v);   // 参数码 0x12 = 22.5度扫频平方均值
+	if (ret == NO_ERROR) {
+		*freq_225 =  v;
 	}
 	return ret;
 }

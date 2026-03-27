@@ -1,5 +1,5 @@
 #include "DSM_SlaveModbus_modbus2.h"
-
+#include "cpu2_communicate.h"
 #include <stdlib.h>
 #include <string.h>
 #include "crc.h"
@@ -733,7 +733,7 @@ static const CoilCmdMap g_coil_cmd_map[] = {
 
     { COM_METER_DENSITY,       CMD_MEASURE_DENSITY_METER },   // 密度每米测量
     { COM_INTERVAL_DENSITY,    CMD_MEASURE_DENSITY_RANGE },   // 区间密度测量
-    { COM_WARTSILA_DENSITY,    CMD_MEASURE_DENSITY_RANGE },   // 瓦锡兰密度测量（暂归到区间密度）
+    { COM_WATER_FOLLOW,    CMD_FOLLOW_WATER },   //水位跟随
 
     /* ========= 调试模式区 (0x0100 ~ 0x0107) ========= */
     { COM_CAL_OIL,             CMD_CALIBRATE_OIL },           // 液位标定

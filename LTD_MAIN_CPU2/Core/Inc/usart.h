@@ -1,10 +1,10 @@
 /*
- * @FilePath     : \undefinedd:\CUBE\LTD_MAIN_CPU2\Core\Inc\usart.h
+ * @FilePath     : \CUBE\LTD_MAIN_CPU2\Core\Inc\usart.h
  * @Description  : 
  * @Author       : Aubon
  * @Date         : 2025-12-16 16:01:19
- * @LastEditors  : Duan
- * @LastEditTime : 2025-12-19 10:09:54
+ * @LastEditors  : Duan Xuebin
+ * @LastEditTime : 2026-03-17 11:34:22
  * Copyright 2025 Aubon, All Rights Reserved. 
  * 2025-12-16 16:01:19
  */
@@ -58,22 +58,22 @@ extern UART_HandleTypeDef huart6;
 
 /* USER CODE BEGIN Private defines */
 #define USART1_RX_BUF_SIZE 512
-extern volatile uint8_t USART1_RX_LEN;              // ����һ֡���ݵĳ���
-extern uint8_t USART1_RX_BUF[USART1_RX_BUF_SIZE];   // �������ݻ�����
+extern volatile uint8_t USART1_RX_LEN;              // 接收一帧数据的长度
+extern uint8_t USART1_RX_BUF[USART1_RX_BUF_SIZE];   // 接收数据缓冲区
 
 #define USART2_RX_BUF_SIZE 512
-extern volatile uint8_t USART2_RX_LEN;              // ����һ֡���ݵĳ���
-extern volatile uint8_t USART2_TX_LEN;              // ����һ֡���ݵĳ���
-extern uint8_t USART2_RX_BUF[USART2_RX_BUF_SIZE];   // �������ݻ�����
-extern uint8_t USART2_TX_BUF[USART2_RX_BUF_SIZE];   // �������ݻ�����
+extern volatile uint8_t USART2_RX_LEN;              // 接收一帧数据的长度
+extern volatile uint8_t USART2_TX_LEN;              // 发送一帧数据的长度
+extern uint8_t USART2_RX_BUF[USART2_RX_BUF_SIZE];   // 接收数据缓冲区
+extern uint8_t USART2_TX_BUF[USART2_RX_BUF_SIZE];   // 发送数据缓冲区
 
 #define USART4_RX_BUF_SIZE 512
-extern volatile uint8_t USART4_RX_LEN;              // ����һ֡���ݵĳ���
-extern uint8_t USART4_RX_BUF[USART4_RX_BUF_SIZE];   // �������ݻ�����
+extern volatile uint8_t USART4_RX_LEN;              // 接收一帧数据的长度
+extern uint8_t USART4_RX_BUF[USART4_RX_BUF_SIZE];   // 接收数据缓冲区
 
 #define UART5_RX_BUF_SIZE 512
-extern volatile uint8_t UART5_RX_LEN;              // ����һ֡���ݵĳ���
-extern uint8_t UART5_RX_BUF[UART5_RX_BUF_SIZE];   // �������ݻ�����
+extern volatile uint16_t UART5_RX_LEN;              // 接收一帧数据的长度
+extern uint8_t UART5_RX_BUF[UART5_RX_BUF_SIZE];     // 接收数据缓冲区
 /* USER CODE END Private defines */
 
 void MX_UART4_Init(void);

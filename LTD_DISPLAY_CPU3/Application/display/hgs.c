@@ -1,4 +1,4 @@
-#include "Hgs.h"
+#include "hgs.h"
 #include "stdlib.h"
 #include "math.h"
 #include "spi.h"

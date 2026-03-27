@@ -41,6 +41,7 @@ int DSM_CommunicationProcess(unsigned char *rcvbuff, int rcvcount, uint8_t* tx, 
 	int i;
 #endif
 	int functioncode;
+	unsigned short crc;
 #if DEBUG_COMM
 	printf("CPU3_RCV %d : ", rcvcount);
 	for (i = 0; i < rcvcount; i++)
@@ -69,6 +70,9 @@ int DSM_CommunicationProcess(unsigned char *rcvbuff, int rcvcount, uint8_t* tx, 
 		tx[1] = 0x80 + functioncode;
 		tx[2] = 0x01; // 非法功能码
 		// 缺少CRC校验
+		crc = CRC16_Calculate(tx, 3);
+		tx[3] = crc & 0xff;
+		tx[4] = (crc >> 8) & 0xff;
 		*tx_len = 5;
 	} else {
 		switch (functioncode) {

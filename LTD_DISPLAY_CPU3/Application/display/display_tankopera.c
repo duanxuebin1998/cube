@@ -13,11 +13,13 @@
 #include "tim.h"
 #include "usart.h"
 #include "exit.h"
-#include "Display.h"
+#include "display.h"
 #include "hgs.h"
 #include <math.h>
 #include "system_parameter.h"
 #include "cpu3_comm_display_params.h"
+#include "system_parameter.h"
+#include <string.h>    // for memset, memcpy, strcmp, strlen...
 
 #define PASSWORD_ENTERMAIN		1009
 extern volatile uint8_t g_cpu3_uart_reinit_pending;// CPU3 串口重初始化标志
@@ -117,6 +119,28 @@ static uint8_t *arr_protocol[][2] = {
 	{ (uint8_t*)"预留2", (uint8_t*)"No Protocol" },
 	{ (uint8_t*)"非法配置", (uint8_t*)"Illegal CFG" },
 };
+static uint8_t *arr_bottom[][2] = {
+	{ (uint8_t*)"称重", (uint8_t*)"weight" },
+	{ (uint8_t*)"角度", (uint8_t*)"angle" },
+	{ (uint8_t*)"非法配置", (uint8_t*)"Illegal CFG" },
+};
+
+static uint8_t *default_cmmand[][2] = {
+	{ (uint8_t*)"无", (uint8_t*)"NONE" },
+	{ (uint8_t*)"回零点", (uint8_t*)"BACK ZERO" },
+	{ (uint8_t*)"寻找液位", (uint8_t*)"FIND OIL" },
+	{ (uint8_t*)"单点监测", (uint8_t*)"MONITOR SINGLE" },
+	{ (uint8_t*)"水位跟随", (uint8_t*)"FOLLOW WATER" },
+	{ (uint8_t*)"非法配置", (uint8_t*)"Illegal CFG" },
+};
+
+static uint8_t *level_mode[][2] = {
+    { (uint8_t*)"相对频率",   (uint8_t*)"Rel Frequency" },
+    { (uint8_t*)"定频",       (uint8_t*)"Fixed Freq" },
+    { (uint8_t*)"密度找液位", (uint8_t*)"Density Level" },
+    { (uint8_t*)"超声",       (uint8_t*)"Ultrasonic" },
+    { (uint8_t*)"非法配置",   (uint8_t*)"Illegal CFG" },
+};
 
 /* =====================================================================
  * 静态函数声明
@@ -128,26 +152,57 @@ static uint8_t *arr_protocol[][2] = {
  */
 static void mainmenu(void);				/* 主菜单 */
 static void measuremenu(void);			/* 测量命令菜单 */
-static void menu_paraconfig(void);		/* 参数配置主菜单 */
+//static void menu_paraconfig(void);		/* 参数配置主菜单 */
 static void menu_cmdconfig_main(void);	/* 调试指令主菜单 */
 
 /* ---------- 2) 参数分组子菜单(参数页面) ----------
  *	各参数分类页面，仅负责“列出参数项 + 跳转到参数读写流程”
  */
-static void menu_tankbasicpara(void);	/* 基础参数 */
-static void menu_weightpara(void);		/* 称重/载荷相关参数 */
-static void menu_spreadpara(void);		/* 分布测量参数 */
-static void menu_correctionpara(void);	/* 密度/温度修正参数 */
-static void menu_realhighpara(void);	/* 实高测量参数 */
-static void menu_liquidlevelparams(void);/* 液位测量参数 */
-static void menu_waterlevelparams(void);/* 水位测量参数 */
-static void menu_alarmdoparams(void);	/* 继电器/DO 报警参数 */
-static void menu_aoparams(void);		/* 4-20mA/AO 输出参数 */
-static void menu_wartsilapara(void);	/* 瓦锡兰参数组 */
-static void menu_screen(void);			/* 屏幕/显示相关菜单 */
-static void menu_scr_source(void);		/* 数据源菜单 */
-static void menu_cpu3_comm(void);		/* CPU3 串口通信配置菜单 */
-static void menu_magnetic(void);		/* 磁通量/修正相关菜单(旧菜单或兼容入口) */
+//static void menu_tankbasicpara(void);	/* 基础参数 */
+//static void menu_weightpara(void);		/* 称重/载荷相关参数 */
+//static void menu_spreadpara(void);		/* 分布测量参数 */
+//static void menu_correctionpara(void);	/* 密度/温度修正参数 */
+//static void menu_realhighpara(void);	/* 实高测量参数 */
+//static void menu_liquidlevelparams(void);/* 液位测量参数 */
+//static void menu_waterlevelparams(void);/* 水位测量参数 */
+//static void menu_alarmdoparams(void);	/* 继电器/DO 报警参数 */
+//static void menu_aoparams(void);		/* 4-20mA/AO 输出参数 */
+//static void menu_wartsilapara(void);	/* 瓦锡兰参数组 */
+//static void menu_screen(void);			/* 屏幕/显示相关菜单 */
+//static void menu_scr_source(void);		/* 数据源菜单 */
+//static void menu_cpu3_comm(void);		/* CPU3 串口通信配置菜单 */
+//static void menu_magnetic(void);		/* 磁通量/修正相关菜单(旧菜单或兼容入口) */
+static MenuGroup ParamGroupOf(int operaNum);/* 根据操作码获取参数分组枚举 */
+static void menu_dev_info(void);
+static void menu_mech(void);
+static void menu_weight(void);
+static void menu_zero(void);
+
+static void menu_liquid(void);
+static void menu_water(void) ;
+static void menu_bottom_tankh(void);
+
+static void menu_correct(void);
+static void menu_policy(void)  ;
+static void menu_wartsila(void)  ;
+
+static void menu_do_alarm(void)  ;
+static void menu_ao(void)      ;
+static void menu_cal_sp(void)     ;
+
+static void menu_param_check(void) ;
+
+/* CPU3：同理，分组页 = 参数列表页 */
+static void menu_cpu3_base(void)   ;
+static void menu_cpu3_source(void);
+static void menu_cpu3_input(void)  ;
+static void menu_cpu3_screen(void)  ;
+static void menu_cpu3_comm1(void)   ;
+static void menu_cpu3_comm2(void)   ;
+static void menu_cpu3_comm3(void)  ;
+
+static void menu_paracfg_main(void);
+
 /* ---------- 3) 通用菜单渲染/选择器 ----------
  *	分页、上下移动、确认/返回等统一菜单交互
  */
@@ -215,84 +270,168 @@ static void errorprocess(void);			/* 非法操作提示并退出/返回 */
 
 
 /* ==============================
- * 按键菜单映射表
+ * 按键菜单映射表（下标必须与 KEYNUM_* 完全一致）
  * ============================== */
-struct KeyMenu keymenu[128] = {
-	/* 0 - 是否进入罐上操作 */
-	{ exitTankOpera, NULL, NULL, mainmenu, USE_KEY_BACK | USE_KEY_SURE, ifentermainmenu },
+struct KeyMenu keymenu[KEYNUM_END] = {
 
-	/* 1 - 主菜单 */
-	{ ifexittankopera, mainmenu, mainmenu, mainmenu, USE_KEY_BACK | USE_KEY_UP | USE_KEY_DOWN | USE_KEY_SURE, mainmenu },
+    /* 0 - 是否进入罐上操作 */
+    [KEYNUM_IF_ENTER_MAINMENU] =
+        { exitTankOpera, NULL, NULL, mainmenu,
+          USE_KEY_BACK | USE_KEY_SURE, ifentermainmenu },
 
-	/* 2 - 是否退出罐上操作 */
-	{ mainmenu, NULL, NULL, exitTankOpera, USE_KEY_BACK | USE_KEY_SURE, ifexittankopera },
+    /* 1 - 主菜单 */
+    [KEYNUM_MAINMENU] =
+        { ifexittankopera, mainmenu, mainmenu, mainmenu,
+          USE_KEY_BACK | USE_KEY_UP | USE_KEY_DOWN | USE_KEY_SURE, mainmenu },
 
-	/* 3 - 普通测量指令主菜单 */
-	{ measuremenu, measuremenu, measuremenu, measuremenu, USE_KEY_BACK | USE_KEY_UP | USE_KEY_DOWN | USE_KEY_SURE, measuremenu },
+    /* 2 - 是否退出罐上操作 */
+    [KEYNUM_IF_EXIT_MAINMENU] =
+        { mainmenu, NULL, NULL, exitTankOpera,
+          USE_KEY_BACK | USE_KEY_SURE, ifexittankopera },
 
-	/* 4 - 参数配置主菜单 */
-	{ menu_paraconfig, menu_paraconfig, menu_paraconfig, menu_paraconfig, USE_KEY_BACK | USE_KEY_UP | USE_KEY_DOWN | USE_KEY_SURE, menu_paraconfig },
+    /* 3 - 普通测量指令主菜单 */
+    [KEYNUM_MEASURE_MAINMENU] =
+        { measuremenu, measuremenu, measuremenu, measuremenu,
+          USE_KEY_BACK | USE_KEY_UP | USE_KEY_DOWN | USE_KEY_SURE, measuremenu },
 
-	/* 5 - 菜单 - 基础参数(这里你原来写的是 wartsila 菜单, 保持不改功能) */
-	{ menu_wartsilapara, menu_wartsilapara, menu_wartsilapara, menu_wartsilapara, USE_KEY_BACK | USE_KEY_UP | USE_KEY_DOWN | USE_KEY_SURE, menu_wartsilapara },
+    /* 4 - 参数配置主菜单（新） */
+    [KEYNUM_MENU_PARACFG_MAIN] =
+        { menu_paracfg_main, menu_paracfg_main, menu_paracfg_main, menu_paracfg_main,
+          USE_KEY_BACK | USE_KEY_UP | USE_KEY_DOWN | USE_KEY_SURE, menu_paracfg_main },
 
-	/* 6 - 菜单 - 维护调试指令 */
-	{ menu_cmdconfig_main, menu_cmdconfig_main, menu_cmdconfig_main, menu_cmdconfig_main, USE_KEY_BACK | USE_KEY_UP | USE_KEY_DOWN | USE_KEY_SURE, menu_cmdconfig_main },
+    /* 5 - 维护/调试指令主菜单 */
+    [KEYNUM_MENU_CMD_MAIN] =
+        { menu_cmdconfig_main, menu_cmdconfig_main, menu_cmdconfig_main, menu_cmdconfig_main,
+          USE_KEY_BACK | USE_KEY_UP | USE_KEY_DOWN | USE_KEY_SURE, menu_cmdconfig_main },
 
-	/* 7 - 是否下发指令或参数 */
-	{ ifsendcmd, NULL, NULL, ifsendcmd, USE_KEY_BACK | USE_KEY_SURE, ifsendcmd },
+    /* 6 - 是否下发指令或参数 */
+    [KEYNUM_IFSENDCMD] =
+        { ifsendcmd, NULL, NULL, ifsendcmd,
+          USE_KEY_BACK | USE_KEY_SURE, ifsendcmd },
 
-	/* 8 - 请输入参数值(带参指令中的) */
-	{ inputcmdpara, inputcmdpara, inputcmdpara, inputcmdpara, USE_KEY_BACK | USE_KEY_UP | USE_KEY_DOWN | USE_KEY_SURE, inputcmdpara },
+    /* 7 - 输入参数值(带参指令中的) */
+    [KEYNUM_INPUTCMDPARA] =
+        { inputcmdpara, inputcmdpara, inputcmdpara, inputcmdpara,
+          USE_KEY_BACK | USE_KEY_UP | USE_KEY_DOWN | USE_KEY_SURE, inputcmdpara },
 
-	/* 9 - 参数显示(读写类参数中的) */
-	{ displaypara, NULL, NULL, displaypara, USE_KEY_BACK | USE_KEY_SURE, displaypara },
+    /* 8 - 参数显示(读写类参数中的) */
+    [KEYNUM_DISPLAY_PARA] =
+        { displaypara, NULL, NULL, displaypara,
+          USE_KEY_BACK | USE_KEY_SURE, displaypara },
 
-	/* 10 - 菜单 - 磁通量参数 */
-	{ menu_magnetic, menu_magnetic, menu_magnetic, menu_magnetic, USE_KEY_BACK | USE_KEY_UP | USE_KEY_DOWN | USE_KEY_SURE, menu_magnetic },
+    /* 9 - 隐藏信息选择 */
+    [KEYNUM_WORDSELECT] =
+        { selectparaword, selectparaword, selectparaword, selectparaword,
+          USE_KEY_BACK | USE_KEY_UP | USE_KEY_DOWN | USE_KEY_SURE, selectparaword },
 
-	/* 11 - 隐藏信息选择 */
-	{ selectparaword, selectparaword, selectparaword, selectparaword, USE_KEY_BACK | USE_KEY_UP | USE_KEY_DOWN | USE_KEY_SURE, selectparaword },
+    /* 10 - 显示设置 - 语言 */
+    [KEYNUM_MENU_LANGUAGE] =
+        { setlanguage, setlanguage, setlanguage, setlanguage,
+          USE_KEY_BACK | USE_KEY_UP | USE_KEY_DOWN | USE_KEY_SURE, setlanguage },
 
-	/* 12 - 菜单 - 界面显示类参数 */
-	{ menu_screen, menu_screen, menu_screen, menu_screen, USE_KEY_BACK | USE_KEY_UP | USE_KEY_DOWN | USE_KEY_SURE, menu_screen },
+    /* ===== 参数配置（新分组页面） ===== */
 
-	/* 13 - 菜单 - 数据源 */
-	{ menu_scr_source, menu_scr_source, menu_scr_source, menu_scr_source, USE_KEY_BACK | USE_KEY_UP | USE_KEY_DOWN | USE_KEY_SURE, menu_scr_source },
+    /* 11 - 设备信息参数 */
+    [KEYNUM_MENU_PARA_DEV_INFO] =
+        { menu_dev_info, menu_dev_info, menu_dev_info, menu_dev_info,
+          USE_KEY_BACK | USE_KEY_UP | USE_KEY_DOWN | USE_KEY_SURE, menu_dev_info },
 
-	/* 14 - 维护参数 - 基础参数 */
-	{ menu_tankbasicpara, menu_tankbasicpara, menu_tankbasicpara, menu_tankbasicpara, USE_KEY_BACK | USE_KEY_UP | USE_KEY_DOWN | USE_KEY_SURE, menu_tankbasicpara },
+    /* 12 - 机械参数 */
+    [KEYNUM_MENU_PARA_MECH] =
+        { menu_mech, menu_mech, menu_mech, menu_mech,
+          USE_KEY_BACK | USE_KEY_UP | USE_KEY_DOWN | USE_KEY_SURE, menu_mech },
 
-	/* 15 - 维护参数 - 综合测量参数(称重) */
-	{ menu_weightpara, menu_weightpara, menu_weightpara, menu_weightpara, USE_KEY_BACK | USE_KEY_UP | USE_KEY_DOWN | USE_KEY_SURE, menu_weightpara },
+    /* 13 - 称重参数（如果暂无此页，用 menu_dev_info 占位也行） */
+    [KEYNUM_MENU_PARA_WEIGHT] =
+        { menu_weight, menu_weight, menu_weight, menu_weight,
+          USE_KEY_BACK | USE_KEY_UP | USE_KEY_DOWN | USE_KEY_SURE, menu_weight },
 
-	/* 16 - 维护参数 - 分布测量参数 */
-	{ menu_spreadpara, menu_spreadpara, menu_spreadpara, menu_spreadpara, USE_KEY_BACK | USE_KEY_UP | USE_KEY_DOWN | USE_KEY_SURE, menu_spreadpara },
+    /* 14 - 零点参数 */
+    [KEYNUM_MENU_PARA_ZERO] =
+        { menu_zero, menu_zero, menu_zero, menu_zero,
+          USE_KEY_BACK | USE_KEY_UP | USE_KEY_DOWN | USE_KEY_SURE, menu_zero },
 
-	/* 17 - 维护参数 - 修正参数 */
-	{ menu_correctionpara, menu_correctionpara, menu_correctionpara, menu_correctionpara, USE_KEY_BACK | USE_KEY_UP | USE_KEY_DOWN | USE_KEY_SURE, menu_correctionpara },
+    /* 15 - 液位参数 */
+    [KEYNUM_MENU_PARA_LIQUID] =
+        { menu_liquid, menu_liquid, menu_liquid, menu_liquid,
+          USE_KEY_BACK | USE_KEY_UP | USE_KEY_DOWN | USE_KEY_SURE, menu_liquid },
 
-	/* 18 - 维护参数 - 实高测量 */
-	{ menu_realhighpara, menu_realhighpara, menu_realhighpara, menu_realhighpara, USE_KEY_BACK | USE_KEY_UP | USE_KEY_DOWN | USE_KEY_SURE, menu_realhighpara },
+    /* 16 - 水位参数 */
+    [KEYNUM_MENU_PARA_WATER] =
+        { menu_water, menu_water, menu_water, menu_water,
+          USE_KEY_BACK | USE_KEY_UP | USE_KEY_DOWN | USE_KEY_SURE, menu_water },
 
-	/* 19 - 维护参数 - 液位测量参数 */
-	{ menu_liquidlevelparams, menu_liquidlevelparams, menu_liquidlevelparams, menu_liquidlevelparams, USE_KEY_BACK | USE_KEY_UP | USE_KEY_DOWN | USE_KEY_SURE, menu_liquidlevelparams },
+    /* 17 - 罐底/罐高参数 */
+    [KEYNUM_MENU_PARA_BOTTOM_TANKH] =
+        { menu_bottom_tankh, menu_bottom_tankh, menu_bottom_tankh, menu_bottom_tankh,
+          USE_KEY_BACK | USE_KEY_UP | USE_KEY_DOWN | USE_KEY_SURE, menu_bottom_tankh },
 
-	/* 20 - 维护参数 - 水位测量参数 */
-	{ menu_waterlevelparams, menu_waterlevelparams, menu_waterlevelparams, menu_waterlevelparams, USE_KEY_BACK | USE_KEY_UP | USE_KEY_DOWN | USE_KEY_SURE, menu_waterlevelparams },
+    /* 18 - 修正参数 */
+    [KEYNUM_MENU_PARA_CORR] =
+        { menu_correct, menu_correct, menu_correct, menu_correct,
+          USE_KEY_BACK | USE_KEY_UP | USE_KEY_DOWN | USE_KEY_SURE, menu_correct },
 
-	/* 21 - 维护参数 - 报警(DO) */
-	{ menu_alarmdoparams, menu_alarmdoparams, menu_alarmdoparams, menu_alarmdoparams, USE_KEY_BACK | USE_KEY_UP | USE_KEY_DOWN | USE_KEY_SURE, menu_alarmdoparams },
+    /* 19 - 策略/分布/区间参数 */
+    [KEYNUM_MENU_PARA_POLICY] =
+        { menu_policy, menu_policy, menu_policy, menu_policy,
+          USE_KEY_BACK | USE_KEY_UP | USE_KEY_DOWN | USE_KEY_SURE, menu_policy },
 
-	/* 22 - 维护参数 - 4-20mA(AO) */
-	{ menu_aoparams, menu_aoparams, menu_aoparams, menu_aoparams, USE_KEY_BACK | USE_KEY_UP | USE_KEY_DOWN | USE_KEY_SURE, menu_aoparams },
+    /* 20 - Wartsila 参数 */
+    [KEYNUM_MENU_PARA_WARTSILA] =
+        { menu_wartsila, menu_wartsila, menu_wartsila, menu_wartsila,
+          USE_KEY_BACK | USE_KEY_UP | USE_KEY_DOWN | USE_KEY_SURE, menu_wartsila },
 
-	/* 23 - 显示设置 - 语言 */
-	{ setlanguage, setlanguage, setlanguage, setlanguage, USE_KEY_BACK | USE_KEY_UP | USE_KEY_DOWN | USE_KEY_SURE, setlanguage },
+    /* 21 - 报警 DO 参数 */
+    [KEYNUM_MENU_PARA_DO] =
+        { menu_do_alarm, menu_do_alarm, menu_do_alarm, menu_do_alarm,
+          USE_KEY_BACK | USE_KEY_UP | USE_KEY_DOWN | USE_KEY_SURE, menu_do_alarm },
 
-	/* 24 - CPU3 通信参数菜单 */
-	{ menu_cpu3_comm, menu_cpu3_comm, menu_cpu3_comm, menu_cpu3_comm, USE_KEY_BACK | USE_KEY_UP | USE_KEY_DOWN | USE_KEY_SURE, menu_cpu3_comm },
+    /* 22 - AO 参数 */
+    [KEYNUM_MENU_PARA_AO] =
+        { menu_ao, menu_ao, menu_ao, menu_ao,
+          USE_KEY_BACK | USE_KEY_UP | USE_KEY_DOWN | USE_KEY_SURE, menu_ao },
+
+    /* 23 - 标定/单点参数 */
+    [KEYNUM_MENU_PARA_CAL_SP] =
+        { menu_cal_sp, menu_cal_sp, menu_cal_sp, menu_cal_sp,
+          USE_KEY_BACK | USE_KEY_UP | USE_KEY_DOWN | USE_KEY_SURE, menu_cal_sp },
+
+    /* 24 - 参数校验信息 */
+    [KEYNUM_MENU_PARA_PARAM_CHECK] =
+        { menu_param_check, menu_param_check, menu_param_check, menu_param_check,
+          USE_KEY_BACK | USE_KEY_UP | USE_KEY_DOWN | USE_KEY_SURE, menu_param_check },
+
+    /* ===== CPU3（拆分页面） ===== */
+
+    [KEYNUM_MENU_CPU3_BASE] =
+        { menu_cpu3_base, menu_cpu3_base, menu_cpu3_base, menu_cpu3_base,
+          USE_KEY_BACK | USE_KEY_UP | USE_KEY_DOWN | USE_KEY_SURE, menu_cpu3_base },
+
+    [KEYNUM_MENU_CPU3_SOURCE] =
+        { menu_cpu3_source, menu_cpu3_source, menu_cpu3_source, menu_cpu3_source,
+          USE_KEY_BACK | USE_KEY_UP | USE_KEY_DOWN | USE_KEY_SURE, menu_cpu3_source },
+
+    [KEYNUM_MENU_CPU3_INPUT] =
+        { menu_cpu3_input, menu_cpu3_input, menu_cpu3_input, menu_cpu3_input,
+          USE_KEY_BACK | USE_KEY_UP | USE_KEY_DOWN | USE_KEY_SURE, menu_cpu3_input },
+
+    [KEYNUM_MENU_CPU3_SCREEN] =
+        { menu_cpu3_screen, menu_cpu3_screen, menu_cpu3_screen, menu_cpu3_screen,
+          USE_KEY_BACK | USE_KEY_UP | USE_KEY_DOWN | USE_KEY_SURE, menu_cpu3_screen },
+
+    [KEYNUM_MENU_CPU3_COM1] =
+        { menu_cpu3_comm1, menu_cpu3_comm1, menu_cpu3_comm1, menu_cpu3_comm1,
+          USE_KEY_BACK | USE_KEY_UP | USE_KEY_DOWN | USE_KEY_SURE, menu_cpu3_comm1 },
+
+    [KEYNUM_MENU_CPU3_COM2] =
+        { menu_cpu3_comm2, menu_cpu3_comm2, menu_cpu3_comm2, menu_cpu3_comm2,
+          USE_KEY_BACK | USE_KEY_UP | USE_KEY_DOWN | USE_KEY_SURE, menu_cpu3_comm2 },
+
+    [KEYNUM_MENU_CPU3_COM3] =
+        { menu_cpu3_comm3, menu_cpu3_comm3, menu_cpu3_comm3, menu_cpu3_comm3,
+          USE_KEY_BACK | USE_KEY_UP | USE_KEY_DOWN | USE_KEY_SURE, menu_cpu3_comm3 },
 };
+
 
 /* ==============================
  * 按键操作处理
@@ -416,80 +555,203 @@ static uint8_t dtm_points(void)
 
 	return p;
 }
+typedef struct {
+    int opera;
+    uint8_t *name_cn;
+    uint8_t *name_en;
+} OperaNameMap_t;
 
-/* 返回操作名称 */
 static uint8_t *dtm_operaname(int num)
 {
-	/* 1) 普通无参测量指令 */
-	static uint8_t *OperaNameArr_normal_cmd[][2] = {
-		{ (uint8_t*)"回零点", (uint8_t*)"Return to Zero" },
-		{ (uint8_t*)"标定零点", (uint8_t*)"Zero Calibration" },
-		{ (uint8_t*)"分布测量", (uint8_t*)"Spread-M" },
-		{ (uint8_t*)"寻找液位", (uint8_t*)"Find Oil Level" },
-		{ (uint8_t*)"寻找水位", (uint8_t*)"Find Water Level" },
-		{ (uint8_t*)"寻找罐底", (uint8_t*)"Find Tank Bottom" },
-		{ (uint8_t*)"综合测量", (uint8_t*)"Comprehensive-M" },
-		{ (uint8_t*)"每米测量", (uint8_t*)"DT-PerMeter-M" },
-		{ (uint8_t*)"区间测量", (uint8_t*)"Interval-M" },
-		{ (uint8_t*)"瓦锡兰区间密度", (uint8_t*)"Wartsila Interval-M" },
-	};
+    /* 1) 普通无参测量指令（显式映射，避免依赖枚举连续性） */
+    static const OperaNameMap_t normal_cmd_map[] = {
+        { COM_NUM_BACK_ZERO,           (uint8_t*)"回零点",         (uint8_t*)"Return to Zero" },
+        { COM_NUM_FIND_OIL,            (uint8_t*)"寻找液位",       (uint8_t*)"Find Oil Level" },
+        { COM_NUM_FIND_WATER,          (uint8_t*)"寻找水位",       (uint8_t*)"Find Water Level" },
+        { COM_NUM_FIND_BOTTOM,         (uint8_t*)"寻找罐底",       (uint8_t*)"Find Tank Bottom" },
+        { COM_NUM_SYNTHETIC,           (uint8_t*)"综合测量",       (uint8_t*)"Comprehensive-M" },
 
-	/* 2) 无参调试指令 */
-	static uint8_t *OperaNameArr_debug_cmd[][2] = {
-		{ (uint8_t*)"设置空载称重", (uint8_t*)"Set Empty Weight" },
-		{ (uint8_t*)"设置满载称重", (uint8_t*)"Set Full Weight" },
-		{ (uint8_t*)"恢复出厂设置", (uint8_t*)"Factory Reset" },
-		{ (uint8_t*)"维护模式", (uint8_t*)"Maintenance Mode" },
-	};
+        { COM_NUM_FOLLOW_WATER,        (uint8_t*)"水位跟随",       (uint8_t*)"Water Follow" },
+        { COM_NUM_SPREADPOINTS,        (uint8_t*)"分布测量",       (uint8_t*)"Spread-M" },
+        { COM_NUM_SPREADPOINTS_GB,     (uint8_t*)"国标分布测量",   (uint8_t*)"GB Spread-M" },
 
-	/* 3) 本机参数名称 */
-	static uint8_t *OperaNameArr_local[][2] = {
-		{ (uint8_t*)"设备地址", (uint8_t*)"DeviceAddress" },
-		{ (uint8_t*)"屏幕程序版本", (uint8_t*)"Screen FW Ver" },
-	};
+        { COM_NUM_METER_DENSITY,       (uint8_t*)"每米测量",       (uint8_t*)"DT-PerMeter-M" },
+        { COM_NUM_INTERVAL_DENSITY,    (uint8_t*)"区间测量",       (uint8_t*)"Interval-M" },
+        { COM_NUM_WARTSILA_DENSITY,    (uint8_t*)"瓦锡兰区间密度", (uint8_t*)"Wartsila Interval-M" },
 
-	int idx;
+        { COM_NUM_READ_PART_PARAMS,    (uint8_t*)"读取部件参数",   (uint8_t*)"Read Component Params" },
+    };
 
-	/* A) 普通不带参指令 */
-	if (num > COM_NUM_NOPARACMD_NORMAL_START && num < COM_NUM_NOPARACMD_NORMAL_STOP) {
-		idx = num - COM_NUM_NOPARACMD_NORMAL_START - 1;
-		if (idx >= 0 && idx < (int)(sizeof(OperaNameArr_normal_cmd) / sizeof(OperaNameArr_normal_cmd[0]))) {
-			return OperaNameArr_normal_cmd[idx][screen_parameter.language];
-		}
-	}
-	/* B) 无参调试指令 */
-	else if (num > COM_NUM_DEBUGCMD_START && num < COM_NUM_DEBUGCMD_STOP) {
-		idx = num - COM_NUM_DEBUGCMD_START - 1;
-		if (idx >= 0 && idx < (int)(sizeof(OperaNameArr_debug_cmd) / sizeof(OperaNameArr_debug_cmd[0]))) {
-			return OperaNameArr_debug_cmd[idx][screen_parameter.language];
-		}
-	}
-	/* C) 参数类 & 带参指令: 使用 param_meta 表 */
-	else if ((num > COM_NUM_PARA_DEBUG_START && num < COM_NUM_PARA_LOCAL_STOP)
-		|| (num > COM_NUM_ONEPARACMD_START && num < COM_NUM_NOPARA_DEBUGCMD_END)) {
-		int index = getHoldValueNum(num);
-		if (index >= 0) {
-			if (screen_parameter.language == LANGUAGE_CHINESE) {
-				return param_meta[index].name;
-			} else if (screen_parameter.language == LANGUAGE_ENGLISH) {
-				return param_meta[index].name_English;
-			}
-		}
-	}
-	/* D) 密码类 */
-	else if (num > COM_NUM_PASSWORD_START && num < COM_NUM_PASSWORD_END) {
-		return returnWordType((uint8_t*)"密码", (uint8_t*)"Password");
-	}
-	/* E) 本机参数类 */
-	else if (num > COM_NUM_PARA_LOCAL_START && num < COM_NUM_PARA_LOCAL_STOP) {
-		idx = num - COM_NUM_PARA_LOCAL_START - 1;
-		if (idx >= 0 && idx < (int)(sizeof(OperaNameArr_local) / sizeof(OperaNameArr_local[0]))) {
-			return OperaNameArr_local[idx][screen_parameter.language];
-		}
-	}
+    /* 2) 无参调试指令（显式映射） */
+    static const OperaNameMap_t debug_cmd_map[] = {
+        { COM_NUM_FIND_ZERO,           (uint8_t*)"标定零点",       (uint8_t*)"Zero Calibration" },
+        { COM_NUM_FORCE_LIFT_ZERO,     (uint8_t*)"强制提零点",     (uint8_t*)"Force Lift Zero" },
 
-	return returnWordType((uint8_t*)"非法操作", (uint8_t*)"Invalid Operation");
+        { COM_NUM_SET_EMPTY_WEIGHT,    (uint8_t*)"设置空载称重",   (uint8_t*)"Set Empty Weight" },
+        { COM_NUM_SET_FULL_WEIGHT,     (uint8_t*)"设置满载称重",   (uint8_t*)"Set Full Weight" },
+        { COM_NUM_RESTOR_EFACTORYSETTING,(uint8_t*)"恢复出厂设置", (uint8_t*)"Factory Reset" },
+        { COM_NUM_MAINTENANCE_MODE,    (uint8_t*)"维护模式",       (uint8_t*)"Maintenance Mode" },
+    };
+
+    /* 3) CPU3 本机“固定项”名称（如果你仍然需要这种非 param_meta 的本机项） */
+    static const OperaNameMap_t local_fixed_map[] = {
+        /* 你原来写了“设备地址/屏幕程序版本”，但新枚举里未看到“设备地址”对应项
+           如果你有对应的 COM_NUM_xxx，就填进去；没有就先注释掉。
+         */
+        /* { COM_NUM_PARA_LOCAL_DEVICEADDR, (uint8_t*)"设备地址", (uint8_t*)"Device Address" }, */
+        { COM_NUM_PARA_LOCAL_LEDVERSION,  (uint8_t*)"屏幕程序版本", (uint8_t*)"Screen FW Ver" },
+        { COM_NUM_PARA_LANG,              (uint8_t*)"语言",         (uint8_t*)"Language" },
+    };
+
+    /* ---------- A) 普通无参测量指令 ---------- */
+    if (num > COM_NUM_NOPARACMD_NORMAL_START && num < COM_NUM_NOPARACMD_NORMAL_STOP) {
+        for (int i = 0; i < (int)(sizeof(normal_cmd_map)/sizeof(normal_cmd_map[0])); i++) {
+            if (num == normal_cmd_map[i].opera) {
+                return (screen_parameter.language == LANGUAGE_CHINESE)
+                        ? normal_cmd_map[i].name_cn
+                        : normal_cmd_map[i].name_en;
+            }
+        }
+        return returnWordType((uint8_t*)"未知指令", (uint8_t*)"Unknown Command");
+    }
+
+    /* ---------- B) 无参调试指令 ---------- */
+    if (num > COM_NUM_DEBUGCMD_START && num < COM_NUM_DEBUGCMD_STOP) {
+        for (int i = 0; i < (int)(sizeof(debug_cmd_map)/sizeof(debug_cmd_map[0])); i++) {
+            if (num == debug_cmd_map[i].opera) {
+                return (screen_parameter.language == LANGUAGE_CHINESE)
+                        ? debug_cmd_map[i].name_cn
+                        : debug_cmd_map[i].name_en;
+            }
+        }
+        return returnWordType((uint8_t*)"未知调试指令", (uint8_t*)"Unknown Debug Cmd");
+    }
+
+    /* ---------- C) 参数类 & 带参指令：统一走 param_meta ---------- */
+    /* 注意：你原逻辑里的区间判断有两个隐患：
+       1) (num > COM_NUM_PARA_DEBUG_START && num < COM_NUM_PARA_LOCAL_STOP) 已经覆盖了 CPU2+CPU3 参数
+       2) (num > COM_NUM_ONEPARACMD_START && num < COM_NUM_NOPARA_DEBUGCMD_END) 这个 stop 名字本身不一致，建议你修成 ONEPARA_DEBUGCMD_END/STOP
+       这里我保留你的区间语义，但把条件拆清晰一点。
+     */
+    if ( (num > COM_NUM_PARA_DEBUG_START && num < COM_NUM_PARA_LOCAL_STOP) ||
+         (num > COM_NUM_ONEPARACMD_START && num < COM_NUM_ONEPARACMD_END) ||
+         (num > COM_NUM_ONEPARA_DEBUGCMD_START && num < COM_NUM_NOPARA_DEBUGCMD_END) )
+    {
+        int index = getHoldValueNum(num);
+        if (index >= 0) {
+            if (screen_parameter.language == LANGUAGE_CHINESE) {
+                return param_meta[index].name;
+            } else {
+                return param_meta[index].name_English;
+            }
+        }
+        return returnWordType((uint8_t*)"参数未定义", (uint8_t*)"Param Undefined");
+    }
+
+    /* ---------- D) 密码类 ---------- */
+    if (num > COM_NUM_PASSWORD_START && num < COM_NUM_PASSWORD_END) {
+        return returnWordType((uint8_t*)"密码", (uint8_t*)"Password");
+    }
+
+    /* ---------- E) CPU3 本机参数固定项（兜底） ---------- */
+    if (num > COM_NUM_PARA_LOCAL_START && num < COM_NUM_PARA_LOCAL_STOP) {
+        for (int i = 0; i < (int)(sizeof(local_fixed_map)/sizeof(local_fixed_map[0])); i++) {
+            if (num == local_fixed_map[i].opera) {
+                return (screen_parameter.language == LANGUAGE_CHINESE)
+                        ? local_fixed_map[i].name_cn
+                        : local_fixed_map[i].name_en;
+            }
+        }
+
+        /* 如果你 CPU3 本机参数也已经纳入 param_meta，那么这里也可以再尝试一次 param_meta */
+        {
+            int index = getHoldValueNum(num);
+            if (index >= 0) {
+                return (screen_parameter.language == LANGUAGE_CHINESE)
+                        ? param_meta[index].name
+                        : param_meta[index].name_English;
+            }
+        }
+
+        return returnWordType((uint8_t*)"本机参数未知", (uint8_t*)"Unknown Local Param");
+    }
+
+    return returnWordType((uint8_t*)"非法操作", (uint8_t*)"Invalid Operation");
 }
+
+///* 返回操作名称 */
+//static uint8_t *dtm_operaname(int num)
+//{
+//	/* 1) 普通无参测量指令 */
+//	static uint8_t *OperaNameArr_normal_cmd[][2] = {
+//		{ (uint8_t*)"回零点", (uint8_t*)"Return to Zero" },
+//		{ (uint8_t*)"标定零点", (uint8_t*)"Zero Calibration" },
+//		{ (uint8_t*)"分布测量", (uint8_t*)"Spread-M" },
+//		{ (uint8_t*)"寻找液位", (uint8_t*)"Find Oil Level" },
+//		{ (uint8_t*)"寻找水位", (uint8_t*)"Find Water Level" },
+//		{ (uint8_t*)"寻找罐底", (uint8_t*)"Find Tank Bottom" },
+//		{ (uint8_t*)"综合测量", (uint8_t*)"Comprehensive-M" },
+//		{ (uint8_t*)"每米测量", (uint8_t*)"DT-PerMeter-M" },
+//		{ (uint8_t*)"区间测量", (uint8_t*)"Interval-M" },
+//		{ (uint8_t*)"瓦锡兰区间密度", (uint8_t*)"Wartsila Interval-M" },
+//	};
+//
+//	/* 2) 无参调试指令 */
+//	static uint8_t *OperaNameArr_debug_cmd[][2] = {
+//		{ (uint8_t*)"设置空载称重", (uint8_t*)"Set Empty Weight" },
+//		{ (uint8_t*)"设置满载称重", (uint8_t*)"Set Full Weight" },
+//		{ (uint8_t*)"恢复出厂设置", (uint8_t*)"Factory Reset" },
+//		{ (uint8_t*)"维护模式", (uint8_t*)"Maintenance Mode" },
+//	};
+//
+//	/* 3) 本机参数名称 */
+//	static uint8_t *OperaNameArr_local[][2] = {
+//		{ (uint8_t*)"设备地址", (uint8_t*)"DeviceAddress" },
+//		{ (uint8_t*)"屏幕程序版本", (uint8_t*)"Screen FW Ver" },
+//	};
+//
+//	int idx;
+//
+//	/* A) 普通不带参指令 */
+//	if (num > COM_NUM_NOPARACMD_NORMAL_START && num < COM_NUM_NOPARACMD_NORMAL_STOP) {
+//		idx = num - COM_NUM_NOPARACMD_NORMAL_START - 1;
+//		if (idx >= 0 && idx < (int)(sizeof(OperaNameArr_normal_cmd) / sizeof(OperaNameArr_normal_cmd[0]))) {
+//			return OperaNameArr_normal_cmd[idx][screen_parameter.language];
+//		}
+//	}
+//	/* B) 无参调试指令 */
+//	else if (num > COM_NUM_DEBUGCMD_START && num < COM_NUM_DEBUGCMD_STOP) {
+//		idx = num - COM_NUM_DEBUGCMD_START - 1;
+//		if (idx >= 0 && idx < (int)(sizeof(OperaNameArr_debug_cmd) / sizeof(OperaNameArr_debug_cmd[0]))) {
+//			return OperaNameArr_debug_cmd[idx][screen_parameter.language];
+//		}
+//	}
+//	/* C) 参数类 & 带参指令: 使用 param_meta 表 */
+//	else if ((num > COM_NUM_PARA_DEBUG_START && num < COM_NUM_PARA_LOCAL_STOP)
+//		|| (num > COM_NUM_ONEPARACMD_START && num < COM_NUM_NOPARA_DEBUGCMD_END)) {
+//		int index = getHoldValueNum(num);
+//		if (index >= 0) {
+//			if (screen_parameter.language == LANGUAGE_CHINESE) {
+//				return param_meta[index].name;
+//			} else if (screen_parameter.language == LANGUAGE_ENGLISH) {
+//				return param_meta[index].name_English;
+//			}
+//		}
+//	}
+//	/* D) 密码类 */
+//	else if (num > COM_NUM_PASSWORD_START && num < COM_NUM_PASSWORD_END) {
+//		return returnWordType((uint8_t*)"密码", (uint8_t*)"Password");
+//	}
+//	/* E) 本机参数类 */
+//	else if (num > COM_NUM_PARA_LOCAL_START && num < COM_NUM_PARA_LOCAL_STOP) {
+//		idx = num - COM_NUM_PARA_LOCAL_START - 1;
+//		if (idx >= 0 && idx < (int)(sizeof(OperaNameArr_local) / sizeof(OperaNameArr_local[0]))) {
+//			return OperaNameArr_local[idx][screen_parameter.language];
+//		}
+//	}
+//
+//	return returnWordType((uint8_t*)"非法操作", (uint8_t*)"Invalid Operation");
+//}
 
 static uint8_t *returnWordType(uint8_t *chinese, uint8_t *english)
 {
@@ -723,11 +985,11 @@ static void ifsendcmd(void)
 			OledValueDisplay(now_Para_CT.val, OLED_LINE8_3, OLED_ROW4_3, 0, now_Para_CT.points, now_Para_CT.unit);
 		}
 	} else if (now_Opera_Num > COM_NUM_PASSWORD_START && now_Opera_Num < COM_NUM_PASSWORD_END) {
-		if (now_Para_CT.val == screen_parameter.passward || now_Para_CT.val == FIXPASSWORD) {
+		if (now_Para_CT.val == g_cpu3_comm_display_params.screen_password || now_Para_CT.val == FIXPASSWORD) {
 			DisplayLangaugeLineWords((uint8_t*)"密码正确!", OLED_LINE8_1, OLED_ROW3_2, 0, (uint8_t*)"Password Correct");
 			HAL_Delay(100);
 			if (now_Opera_Num == COM_NUM_PASSWORD_ENTER_PARA) {
-				menu_paraconfig();
+				menu_paracfg_main();
 			} else if (now_Opera_Num == COM_NUM_PASSWORD_ENTER_CMD) {
 				menu_cmdconfig_main();
 			}
@@ -767,287 +1029,124 @@ static void ifsendcmd(void)
 
 /* 返回按返回键后要跳转的函数指针 */
 /* 返回按返回键后要跳转的函数指针 */
+/* 返回按返回键后要跳转的函数指针 */
 static pFunc_void dtm_backtofunc(void)
 {
     pFunc_void p = errorprocess;
 
+    /* ---------- 0) 如果当前就在“语言菜单页”，返回主菜单 ---------- */
+    /* 说明：setlanguage() 那一页属于 KEYNUM_MENU_LANGUAGE，它不是参数分组页 */
+    if (func_index == KEYNUM_MENU_LANGUAGE) {
+        return mainmenu;
+    }
+
+    /* ---------- 1) 纯指令类：回到指令入口 ---------- */
     switch (now_Opera_Num) {
 
-    /* =========================
-     * 1) 不带参线圈指令：普通测量
-     * ========================= */
+    /* 普通无参测量指令 */
     case COM_NUM_BACK_ZERO:
     case COM_NUM_FIND_OIL:
-    case COM_NUM_SPREADPOINTS_AI:
+    case COM_NUM_SPREADPOINTS:
     case COM_NUM_FIND_WATER:
     case COM_NUM_FIND_BOTTOM:
     case COM_NUM_SYNTHETIC:
     case COM_NUM_METER_DENSITY:
     case COM_NUM_INTERVAL_DENSITY:
-    case COM_NUM_WARTSILA_DENSITY:     /* 新增：瓦锡兰区间密度 */
-        p = measuremenu;
-        break;
+    case COM_NUM_WARTSILA_DENSITY:
+    case COM_NUM_FOLLOW_WATER:
+    case COM_NUM_SPREADPOINTS_GB:
+    case COM_NUM_READ_PART_PARAMS:
+        return measuremenu;
 
-    /* =========================
-     * 2) 带一个参数线圈指令：普通测量
-     * ========================= */
+    /* 普通带参测量指令 */
     case COM_NUM_SINGLE_POINT:
     case COM_NUM_SP_TEST:
-        p = measuremenu;
-        break;
+    case COM_NUM_RUN_TO_POSITION:
+        return measuremenu;
 
-    /* =========================
-     * 3) 不带参线圈指令：调试模式
-     * ========================= */
+    /* 调试无参/带参指令入口 */
     case COM_NUM_FIND_ZERO:
+    case COM_NUM_FORCE_LIFT_ZERO:
     case COM_NUM_RUNUP:
     case COM_NUM_RUNDOWN:
+    case COM_NUM_FORCE_RUNUP:
+    case COM_NUM_FORCE_RUNDOWN:
     case COM_NUM_CORRECTION_OIL:
     case COM_NUM_CAL_OIL:
+    case COM_NUM_CALIBRATE_WATER:
     case COM_NUM_RESTOR_EFACTORYSETTING:
-    case COM_NUM_MAINTENANCE_MODE:     /* 新增：维护模式 */
-        p = menu_cmdconfig_main;
-        break;
+    case COM_NUM_MAINTENANCE_MODE:
+        return menu_cmdconfig_main;
 
-    /* =========================
-     * 4) 调试模式中与称重相关的指令（如果你希望回到称重菜单）
-     * ========================= */
+    /* 获取空载/满载称重：它们属于调试菜单项，返回也应回调试菜单 */
     case COM_NUM_SET_EMPTY_WEIGHT:
     case COM_NUM_SET_FULL_WEIGHT:
-        p = menu_weightpara;
-        break;
+        return menu_cmdconfig_main;
 
-    /* =========================
-     * 5) 本机参数 / 语言 / 密码
-     * ========================= */
-    case COM_NUM_PARA_LOCAL_LEDVERSION:
-    case COM_NUM_PARA_LANG:
+    /* 密码入口：回主菜单 */
     case COM_NUM_PASSWORD_ENTER_PARA:
     case COM_NUM_PASSWORD_ENTER_CMD:
-        p = mainmenu;
-        break;
-
-    /* =========================
-     * 6) 界面显示类
-     * ========================= */
-    case COM_NUM_SCREEN_DECIMAL:
-    case COM_NUM_SCREEN_PASSWARD:
-    case COM_NUM_SCREEN_OFF:
-        p = menu_screen;
-        break;
-
-    /* =========================
-     * 7) 数据源类
-     * ========================= */
-    case COM_NUM_SCREEN_SOURCE_OIL:
-    case COM_NUM_SCREEN_SOURCE_WATER:
-    case COM_NUM_SCREEN_SOURCE_D:
-    case COM_NUM_SCREEN_SOURCE_T:
-    case COM_NUM_SCREEN_INPUT_OIL:
-    case COM_NUM_SCREEN_INPUT_WATER:
-    case COM_NUM_SCREEN_INPUT_D:
-    case COM_NUM_SCREEN_INPUT_D_SWITCH:
-    case COM_NUM_SCREEN_INPUT_T:
-        p = menu_scr_source;
-        break;
-
-    /* =========================
-     * 8) CPU3 通信配置参数
-     * ========================= */
-    case COM_NUM_CPU3_COM1_BAUDRATE:
-    case COM_NUM_CPU3_COM1_DATABITS:
-    case COM_NUM_CPU3_COM1_PARITY:
-    case COM_NUM_CPU3_COM1_STOPBITS:
-    case COM_NUM_CPU3_COM1_PROTOCOL:
-    case COM_NUM_CPU3_COM2_BAUDRATE:
-    case COM_NUM_CPU3_COM2_DATABITS:
-    case COM_NUM_CPU3_COM2_PARITY:
-    case COM_NUM_CPU3_COM2_STOPBITS:
-    case COM_NUM_CPU3_COM2_PROTOCOL:
-    case COM_NUM_CPU3_COM3_BAUDRATE:
-    case COM_NUM_CPU3_COM3_DATABITS:
-    case COM_NUM_CPU3_COM3_PARITY:
-    case COM_NUM_CPU3_COM3_STOPBITS:
-    case COM_NUM_CPU3_COM3_PROTOCOL:
-        p = menu_cpu3_comm;
-        break;
-
-    /* =========================
-     * 9) CPU2 参数分组：基础参数（含你新增的若干基础项）
-     * ========================= */
-    case COM_NUM_DEVICEPARAM_TANKHEIGHT:
-    case COM_NUM_DEVICEPARAM_BLINDZONE:
-    case COM_NUM_DEVICEPARAM_WATER_BLINDZONE:
-    case COM_NUM_DEVICEPARAM_ENCODER_WHEEL_CIRCUMFERENCE_MM:
-    case COM_NUM_DEVICEPARAM_MAX_MOTOR_SPEED:          /* 新增 */
-    case COM_NUM_DEVICEPARAM_SENSORTYPE:
-    case COM_NUM_DEVICEPARAM_SENSORID:
-    case COM_NUM_DEVICEPARAM_SENSOR_SOFTWARE_VERSION:  /* 新增 */
-    case COM_NUM_DEVICEPARAM_SOFTWAREVERSION:
-    case COM_NUM_DEVICEPARAM_POWER_ON_DEFAULT_COMMAND: /* 新增 */
-    case COM_NUM_DEVICEPARAM_FINDZERO_DOWN_DISTANCE:
-    case COM_NUM_DEVICEPARAM_FIRST_LOOP_CIRCUMFERENCE_MM: /* 新增 */
-    case COM_NUM_DEVICEPARAM_TAPE_THICKNESS_MM:           /* 新增 */
-        p = menu_tankbasicpara;
-        break;
-
-    /* =========================
-     * 10) 称重测量参数
-     * ========================= */
-    case COM_NUM_DEVICEPARAM_EMPTY_WEIGHT:
-    case COM_NUM_DEVICEPARAM_FULL_WEIGHT:
-    case COM_NUM_DEVICEPARAM_WEIGHT_UPPER_LIMIT_RATIO:
-    case COM_NUM_DEVICEPARAM_WEIGHT_LOWER_LIMIT_RATIO:
-    case COM_NUM_DEVICEPARAM_EMPTY_WEIGHT_UPPER_LIMIT:
-    case COM_NUM_DEVICEPARAM_EMPTY_WEIGHT_LOWER_LIMIT:
-    case COM_NUM_DEVICEPARAM_FULL_WEIGHT_UPPER_LIMIT:
-    case COM_NUM_DEVICEPARAM_FULL_WEIGHT_LOWER_LIMIT:
-        p = menu_weightpara;
-        break;
-
-    /* =========================
-     * 11) 指令参数（你枚举里新增了一大段，建议回到“测量菜单”或“参数配置菜单”
-     *     这里我按“测量相关参数”回到 measuremenu；如果你实际上是在参数配置界面修改，
-     *     更合理是回到 menu_paraconfig（看你的 UI 结构）
-     * ========================= */
-    case COM_NUM_DEVICEPARAM_CALIBRATE_OIL_LEVEL:
-    case COM_NUM_DEVICEPARAM_CALIBRATE_WATER_LEVEL:
-    case COM_NUM_DEVICEPARAM_SP_MEAS_POSITION:
-    case COM_NUM_DEVICEPARAM_SP_MONITOR_POSITION:
-    case COM_NUM_DEVICEPARAM_DENSITY_DISTRIBUTION_OIL_LEVEL:
-    case COM_NUM_DEVICEPARAM_MOTOR_COMMAND_DISTANCE:
-        p = measuremenu; /* 或者改成 menu_paraconfig / 具体子菜单 */
-        break;
-
-    /* =========================
-     * 12) 分布测量参数
-     * ========================= */
-    case COM_NUM_DEVICEPARAM_REQUIREBOTTOMMEASUREMENT:
-    case COM_NUM_DEVICEPARAM_REQUIREWATERMEASUREMENT:
-    case COM_NUM_DEVICEPARAM_REQUIRESINGLEPOINTDENSITY:
-    case COM_NUM_DEVICEPARAM_SPREADMEASUREMENTORDER:
-    case COM_NUM_DEVICEPARAM_SPREADMEASUREMENTMODE:
-    case COM_NUM_DEVICEPARAM_SPREADMEASUREMENTCOUNT:
-    case COM_NUM_DEVICEPARAM_SPREADMEASUREMENTDISTANCE:
-    case COM_NUM_DEVICEPARAM_SPREADTOPLIMIT:
-    case COM_NUM_DEVICEPARAM_SPREADBOTTOMLIMIT:
-    case COM_NUM_DEVICEPARAM_SPREAD_POINT_HOVER_TIME:
-        p = menu_spreadpara;
-        break;
-
-    /* =========================
-     * 13) 密度/温度修正
-     * ========================= */
-    case COM_NUM_DEVICEPARAM_DENSITYCORRECTION:
-    case COM_NUM_DEVICEPARAM_TEMPERATURECORRECTION:
-        p = menu_correctionpara;
-        break;
-
-    /* =========================
-     * 14) Wartsila 密度区间测量参数（新增）
-     * ========================= */
-    case COM_NUM_DEVICEPARAM_WARTSILA_UPPER_DENSITY_LIMIT:
-    case COM_NUM_DEVICEPARAM_WARTSILA_LOWER_DENSITY_LIMIT:
-    case COM_NUM_DEVICEPARAM_WARTSILA_DENSITY_INTERVAL:
-    case COM_NUM_DEVICEPARAM_WARTSILA_MAX_HEIGHT_ABOVE_SURFACE:
-        p = menu_spreadpara; /* 如果你有单独的 wartsila 参数菜单，建议换成那个 */
-        break;
-
-    /* =========================
-     * 15) 实高测量参数
-     * ========================= */
-    case COM_NUM_DEVICEPARAM_REFRESHTANKHEIGHTFLAG:
-    case COM_NUM_DEVICEPARAM_MAXTANKHEIGHTDEVIATION:
-    case COM_NUM_DEVICEPARAM_INITIALTANKHEIGHT:
-    case COM_NUM_DEVICEPARAM_CURRENTTANKHEIGHT:
-        p = menu_realhighpara;
-        break;
-
-    /* =========================
-     * 16) 水位测量参数
-     * ========================= */
-    case COM_NUM_DEVICEPARAM_WATERLEVELCORRECTION:
-    case COM_NUM_DEVICEPARAM_MAXDOWNDISTANCE:
-        p = menu_waterlevelparams;
-        break;
-
-    /* =========================
-     * 17) 液位测量参数（新增了 hysteresis）
-     * ========================= */
-    case COM_NUM_DEVICEPARAM_OILLEVELTHRESHOLD:
-    case COM_NUM_DEVICEPARAM_OILLEVEL_HYSTERESIS_THRESHOLD: /* 新增 */
-    case COM_NUM_DEVICEPARAM_LIQUIDLEVELMEASUREMENTMETHOD:
-        p = menu_liquidlevelparams;
-        break;
-
-    /* =========================
-     * 18) 报警 DO 参数
-     * ========================= */
-    case COM_NUM_DEVICEPARAM_ALARM_HIGH_DO:
-    case COM_NUM_DEVICEPARAM_ALARM_LOW_DO:
-    case COM_NUM_DEVICEPARAM_THIRD_STATE_THRESHOLD:
-        p = menu_alarmdoparams;
-        break;
-
-    /* =========================
-     * 19) AO 参数
-     * ========================= */
-    case COM_NUM_DEVICEPARAM_CURRENT_RANGE_START_mA:
-    case COM_NUM_DEVICEPARAM_CURRENT_RANGE_END_mA:
-    case COM_NUM_DEVICEPARAM_ALARM_HIGH_AO:
-    case COM_NUM_DEVICEPARAM_ALARM_LOW_AO:
-    case COM_NUM_DEVICEPARAM_INITIAL_CURRENT_mA:
-    case COM_NUM_DEVICEPARAM_AO_HIGH_CURRENT_mA:
-    case COM_NUM_DEVICEPARAM_AO_LOW_CURRENT_mA:
-    case COM_NUM_DEVICEPARAM_FAULT_CURRENT_mA:
-    case COM_NUM_DEVICEPARAM_DEBUG_CURRENT_mA:
-        p = menu_aoparams;
-        break;
-
-    /* =========================
-     * 20) 版本和校验信息（新增）
-     * ========================= */
-    case COM_NUM_DEVICEPARAM_PARAM_VERSION:
-    case COM_NUM_DEVICEPARAM_STRUCT_SIZE:
-    case COM_NUM_DEVICEPARAM_MAGIC:
-    case COM_NUM_DEVICEPARAM_CRC:
-        p = menu_tankbasicpara; /* 或者 menu_paraconfig，看你放在哪个菜单页 */
-        break;
+        return mainmenu;
 
     default:
-        /* ==========
-         * 关键：范围兜底（修正原来错误的范围）
-         * ========== */
-
-        /* CPU2 参数段：COM_NUM_PARA_DEBUG_START ~ COM_NUM_PARA_DEBUG_END */
-        if (now_Opera_Num > COM_NUM_PARA_DEBUG_START && now_Opera_Num < COM_NUM_PARA_DEBUG_END) {
-            p = menu_paraconfig; /* 或者你希望统一回到参数配置主菜单 */
-        }
-        /* CPU3 本机参数段：COM_NUM_PARA_LOCAL_START ~ COM_NUM_PARA_LOCAL_STOP */
-        else if (now_Opera_Num > COM_NUM_PARA_LOCAL_START && now_Opera_Num < COM_NUM_PARA_LOCAL_STOP) {
-            p = mainmenu;
-        }
-        /* 密码段：COM_NUM_PASSWORD_START ~ COM_NUM_PASSWORD_END */
-        else if (now_Opera_Num > COM_NUM_PASSWORD_START && now_Opera_Num < COM_NUM_PASSWORD_END) {
-            p = mainmenu;
-        }
-        /* 无参线圈指令段：COM_NUM_NOPARACMD_START ~ COM_NUM_NOPARACMD_END */
-        else if (now_Opera_Num > COM_NUM_NOPARACMD_START && now_Opera_Num < COM_NUM_NOPARACMD_END) {
-            p = measuremenu;
-        }
-        /* 带一个参数线圈指令段：COM_NUM_ONEPARACMD_START ~ COM_NUM_ONEPARACMD_END */
-        else if (now_Opera_Num > COM_NUM_ONEPARACMD_START && now_Opera_Num < COM_NUM_ONEPARACMD_END) {
-            p = measuremenu;
-        }
-        /* 调试模式带参指令段：COM_NUM_ONEPARA_DEBUGCMD_START ~ COM_NUM_NOPARA_DEBUGCMD_END */
-        else if (now_Opera_Num > COM_NUM_ONEPARA_DEBUGCMD_START && now_Opera_Num < COM_NUM_NOPARA_DEBUGCMD_END) {
-            p = menu_cmdconfig_main;
-        }
         break;
+    }
+
+    /* ---------- 2) 参数类：按分组映射回到对应分组菜单 ---------- */
+    if ((now_Opera_Num > COM_NUM_PARA_DEBUG_START && now_Opera_Num < COM_NUM_PARA_DEBUG_END) ||
+        (now_Opera_Num > COM_NUM_PARA_LOCAL_START && now_Opera_Num < COM_NUM_PARA_LOCAL_STOP))
+    {
+        switch (ParamGroupOf(now_Opera_Num)) {
+
+        /* CPU2 分组 */
+        case MENU_GRP_DEV_INFO:      p = menu_dev_info;     break;
+        case MENU_GRP_MECH:          p = menu_mech;         break;
+        case MENU_GRP_WEIGHT:        p = menu_weight;       break;
+        case MENU_GRP_ZERO:          p = menu_zero;         break;
+        case MENU_GRP_LIQUID:        p = menu_liquid;       break;
+        case MENU_GRP_WATER:         p = menu_water;        break;
+        case MENU_GRP_BOTTOM_TANKH:  p = menu_bottom_tankh; break;
+        case MENU_GRP_CORR:          p = menu_correct;      break;
+        case MENU_GRP_POLICY:        p = menu_policy;       break;
+        case MENU_GRP_WARTSILA:      p = menu_wartsila;     break;
+        case MENU_GRP_DO_ALARM:      p = menu_do_alarm;     break;
+        case MENU_GRP_AO:            p = menu_ao;           break;
+        case MENU_GRP_CAL_SP:        p = menu_cal_sp;       break;
+        case MENU_GRP_PARAM_CHECK:   p = menu_param_check;  break;
+
+        /* CPU3 分组 */
+        case MENU_GRP_CPU3_BASE:     p = menu_cpu3_base;    break;
+        case MENU_GRP_CPU3_SOURCE:   p = menu_cpu3_source;  break;
+        case MENU_GRP_CPU3_INPUT:    p = menu_cpu3_input;   break;
+        case MENU_GRP_CPU3_SCREEN:   p = menu_cpu3_screen;  break;
+        case MENU_GRP_CPU3_COM1:     p = menu_cpu3_comm1;   break;
+        case MENU_GRP_CPU3_COM2:     p = menu_cpu3_comm2;   break;
+        case MENU_GRP_CPU3_COM3:     p = menu_cpu3_comm3;   break;
+
+        default:
+            p = menu_paracfg_main;
+            break;
+        }
+        return p;
+    }
+
+    /* ---------- 3) 兜底：按大区间返回 ---------- */
+    if (now_Opera_Num > COM_NUM_NOPARACMD_START && now_Opera_Num < COM_NUM_NOPARACMD_END) {
+        return measuremenu;
+    }
+    if (now_Opera_Num > COM_NUM_ONEPARACMD_START && now_Opera_Num < COM_NUM_ONEPARACMD_END) {
+        return measuremenu;
+    }
+    if (now_Opera_Num > COM_NUM_ONEPARA_DEBUGCMD_START && now_Opera_Num < COM_NUM_NOPARA_DEBUGCMD_END) {
+        return menu_cmdconfig_main;
+    }
+    if (now_Opera_Num > COM_NUM_PASSWORD_START && now_Opera_Num < COM_NUM_PASSWORD_END) {
+        return mainmenu;
     }
 
     return p;
 }
+
 
 /* 返回按确认键后要跳转的函数指针 */
 static pFunc_void dtm_suretofunc(void)
@@ -1063,65 +1162,284 @@ static pFunc_void dtm_suretofunc(void)
 		return errorprocess;
 	}
 }
+typedef struct {
+    uint32_t opera;
+    uint32_t cmd;
+} NoParaCmdMap_t;
+
+static uint8_t __attribute__((unused)) is_debug_cmd(uint32_t opera)
+{
+    return (opera > COM_NUM_DEBUGCMD_START) && (opera < COM_NUM_DEBUGCMD_STOP);
+}
+
+/* 统一的“调试指令允许条件”判定（按你现有逻辑扩展） */
+static uint8_t __attribute__((unused)) debug_cmd_is_allowed(void)
+{
+    uint32_t st = g_measurement.device_status.device_state;
+
+    /* 你当前对恢复出厂的限制：允许 STANDBY / ERROR / MAINTENANCEMODE
+       这里建议把调试类都统一到同一套口径，避免口径不一致 */
+    if ((st == STATE_STANDBY) || (st == STATE_ERROR) || (st == STATE_MAINTENANCEMODE)) {
+        return 1;
+    }
+    return 0;
+}
+
+static void send_cpu2_command(uint32_t cmd)
+{
+    /* 写 2 个寄存器：如果你的协议定义就是“command 占 32bit”，这里保持 2 不动 */
+    CPU2_CombinatePackage_Send(FUNCTIONCODE_WRITE_MULREGISTER,
+                              HOLDREGISTER_DEVICEPARAM_COMMAND,
+                              2,
+                              &cmd);
+}
 
 /* 不带参线圈指令处理过程 */
 static void cmd_nopara_process(void)
 {
-	static const uint32_t nopara_cmd_map[][2] = {
-		{ COM_NUM_BACK_ZERO, CMD_BACK_ZERO },
-		{ COM_NUM_FIND_ZERO, CMD_CALIBRATE_ZERO },
-		{ COM_NUM_SPREADPOINTS_AI, CMD_MEASURE_DISTRIBUTED },
-		{ COM_NUM_FIND_OIL, CMD_FIND_OIL },
-		{ COM_NUM_FIND_WATER, CMD_FIND_WATER },
-		{ COM_NUM_FIND_BOTTOM, CMD_FIND_BOTTOM },
-		{ COM_NUM_SYNTHETIC, CMD_SYNTHETIC },
-		{ COM_NUM_METER_DENSITY, CMD_MEASURE_DENSITY_METER },
-		{ COM_NUM_INTERVAL_DENSITY, CMD_MEASURE_DENSITY_RANGE },
-		{ COM_NUM_WARTSILA_DENSITY, CMD_WARTSILA_DENSITY_RANGE },
+    static const NoParaCmdMap_t map[] = {
+        /* -------- 普通模式：无参测量类 -------- */
+        { COM_NUM_BACK_ZERO,          CMD_BACK_ZERO },
+        { COM_NUM_FIND_OIL,           CMD_FIND_OIL },
+        { COM_NUM_FIND_WATER,         CMD_FIND_WATER },
+        { COM_NUM_FIND_BOTTOM,        CMD_FIND_BOTTOM },
+        { COM_NUM_SYNTHETIC,          CMD_SYNTHETIC },
 
-		{ COM_NUM_SET_EMPTY_WEIGHT, CMD_SET_EMPTY_WEIGHT },
-		{ COM_NUM_SET_FULL_WEIGHT, CMD_SET_FULL_WEIGHT },
-		{ COM_NUM_RESTOR_EFACTORYSETTING, CMD_RESTORE_FACTORY },
-		{ COM_NUM_MAINTENANCE_MODE, CMD_MAINTENANCE_MODE },
-	};
+        { COM_NUM_FOLLOW_WATER,       CMD_FOLLOW_WATER },              /* 新增 */
+        { COM_NUM_SPREADPOINTS,       CMD_MEASURE_DISTRIBUTED },
+        { COM_NUM_SPREADPOINTS_GB,    CMD_GB_MEASURE_DISTRIBUTED },     /* 新增 */
 
-	int mapamount = (int)(sizeof(nopara_cmd_map) / sizeof(nopara_cmd_map[0]));
-	int i;
+        { COM_NUM_METER_DENSITY,      CMD_MEASURE_DENSITY_METER },
+        { COM_NUM_INTERVAL_DENSITY,   CMD_MEASURE_DENSITY_RANGE },
+        { COM_NUM_WARTSILA_DENSITY,   CMD_WARTSILA_DENSITY_RANGE },
 
-	for (i = 0; i < mapamount; i++) {
-		if (now_Opera_Num == (int)nopara_cmd_map[i][0]) {
-			CPU2_CombinatePackage_Send(FUNCTIONCODE_WRITE_MULREGISTER,
-					HOLDREGISTER_DEVICEPARAM_COMMAND, 2,
-					(uint32_t*)&nopara_cmd_map[i][1]);
-			break;
-		}
-	}
+        { COM_NUM_READ_PART_PARAMS,   CMD_READ_PART_PARAMS },          /* 新增 */
 
-	if (now_Opera_Num == COM_NUM_RESTOR_EFACTORYSETTING) {
-		oled_clear();
-		if ((g_measurement.device_status.device_state != STATE_STANDBY)
-			&& (g_measurement.device_status.device_state != STATE_ERROR)
-			&& (g_measurement.device_status.device_state != STATE_MAINTENANCEMODE)) {
-			DisplayLangaugeLineWords((uint8_t*)"失败", OLED_LINE8_1, OLED_ROW4_2, 0, (uint8_t*)"Failed to set");
-			DisplayLangaugeLineWords((uint8_t*)"请先进入调试模式", OLED_LINE8_1, OLED_ROW4_3, 0, (uint8_t*)"Enter debug mode");
-		} else {
-			DisplayLangaugeLineWords((uint8_t*)"正在恢复出厂设置", OLED_LINE8_1, OLED_ROW4_2, 0, (uint8_t*)"Factory Settings");
-			HAL_Delay(800);
-			exitTankOpera();
-		}
-	} else if (now_Opera_Num == COM_NUM_MAINTENANCE_MODE) {
-		oled_clear();
-		DisplayLangaugeLineWords((uint8_t*)"已进入维护模式", OLED_LINE8_1, OLED_ROW4_2, 0, (uint8_t*)"Maintenance Mode");
-	} else {
-		exitTankOpera();
-	}
+        /* -------- 调试模式：无参指令 -------- */
+        { COM_NUM_FIND_ZERO,          CMD_CALIBRATE_ZERO },
+        { COM_NUM_FORCE_LIFT_ZERO,    CMD_FORCE_LIFT_ZERO },           /* 新增 */
+
+        { COM_NUM_SET_EMPTY_WEIGHT,   CMD_SET_EMPTY_WEIGHT },
+        { COM_NUM_SET_FULL_WEIGHT,    CMD_SET_FULL_WEIGHT },
+        { COM_NUM_RESTOR_EFACTORYSETTING, CMD_RESTORE_FACTORY },
+        { COM_NUM_MAINTENANCE_MODE,   CMD_MAINTENANCE_MODE },
+    };
+
+    uint32_t cmd = CMD_UNKNOWN;
+    int found = 0;
+
+    for (int i = 0; i < (int)(sizeof(map) / sizeof(map[0])); i++) {
+        if (now_Opera_Num == (int)map[i].opera) {
+            cmd = map[i].cmd;
+            found = 1;
+            break;
+        }
+    }
+
+    /* 未找到映射：直接退出，避免下发错误命令 */
+    if (!found) {
+        exitTankOpera();
+        return;
+    }
+
+    /* 调试类命令：统一加权限/状态限制（你也可以只限制“危险指令”子集） */
+//    if (is_debug_cmd((uint32_t)now_Opera_Num)) {
+//        if (!debug_cmd_is_allowed()) {
+//            oled_clear();
+//            DisplayLangaugeLineWords((uint8_t*)"失败", OLED_LINE8_1, OLED_ROW4_2, 0, (uint8_t*)"Failed");
+//            DisplayLangaugeLineWords((uint8_t*)"请先进入调试模式", OLED_LINE8_1, OLED_ROW4_3, 0, (uint8_t*)"Enter debug mode");
+//            return;
+//        }
+//    }
+
+    /* 下发命令 */
+    send_cpu2_command(cmd);
+
+    /* ---------- UI 反馈与退出策略（保留你现有行为） ---------- */
+    if (now_Opera_Num == COM_NUM_RESTOR_EFACTORYSETTING) {
+        oled_clear();
+        DisplayLangaugeLineWords((uint8_t*)"正在恢复出厂设置", OLED_LINE8_1, OLED_ROW4_2, 0, (uint8_t*)"Factory Settings");
+        HAL_Delay(800);
+        exitTankOpera();
+    } else if (now_Opera_Num == COM_NUM_MAINTENANCE_MODE) {
+        oled_clear();
+        DisplayLangaugeLineWords((uint8_t*)"已进入维护模式", OLED_LINE8_1, OLED_ROW4_2, 0, (uint8_t*)"Maintenance Mode");
+    } else {
+        exitTankOpera();
+    }
 }
+
+/* 带一参线圈指令处理过程（适配新指令） */
+static void cmd_onepara_process(void)
+{
+    int index;
+    int i;
+
+    typedef struct {
+        int opera;
+        uint32_t cmd;
+    } OneParaCmdMap_t;
+
+    /* 新版：带参指令映射 */
+    static const OneParaCmdMap_t onepara_cmd_map[] = {
+        /* 工作模式：带参 */
+        { COM_NUM_SINGLE_POINT,      CMD_MEASURE_SINGLE },
+        { COM_NUM_SP_TEST,           CMD_MONITOR_SINGLE },
+        { COM_NUM_RUN_TO_POSITION,   CMD_RUN_TO_POSITION },   /* 新增：运行到指定位置 */
+
+        /* 调试模式：带参 */
+        { COM_NUM_CAL_OIL,           CMD_CALIBRATE_OIL },
+        { COM_NUM_CORRECTION_OIL,    CMD_CORRECT_OIL },
+
+        { COM_NUM_CALIBRATE_WATER,   CMD_CALIBRATE_WATER },   /* 新增：水位标定 */
+
+        { COM_NUM_RUNUP,             CMD_MOVE_UP },
+        { COM_NUM_RUNDOWN,           CMD_MOVE_DOWN },
+
+        { COM_NUM_FORCE_RUNUP,       CMD_FORCE_MOVE_UP },     /* 新增：强制上行 */
+        { COM_NUM_FORCE_RUNDOWN,     CMD_FORCE_MOVE_DOWN },   /* 新增：强制下行 */
+    };
+
+    const int mapamount = (int)(sizeof(onepara_cmd_map) / sizeof(onepara_cmd_map[0]));
+
+    /* 1) 找到该操作对应的“参数寄存器元数据” */
+    index = getHoldValueNum(now_Opera_Num);
+    if (index < 0) {
+        all_screen(0x00);
+        DisplayLangaugeLineWords((uint8_t*)"非法参数!", OLED_LINE8_2, OLED_ROW3_2, 0, (uint8_t*)"Invalid Para");
+        HAL_Delay(800);
+        exitTankOpera();
+        return;
+    }
+
+    /* 2) 动态组织要下发的参数字节：rgstcnt 个寄存器 = rgstcnt*2 字节 */
+    {
+        int bytes = (int)param_meta[index].rgstcnt * 2;
+        if (bytes <= 0 || bytes > 64) {
+            all_screen(0x00);
+            DisplayLangaugeLineWords((uint8_t*)"参数长度异常!", OLED_LINE8_2, OLED_ROW3_2, 0, (uint8_t*)"Bad Para Len");
+            HAL_Delay(800);
+            exitTankOpera();
+            return;
+        }
+
+        uint8_t paraarr[64];
+        memset(paraarr, 0, sizeof(paraarr));
+
+        all_screen(0x00);
+        DisplayLangaugeLineWords((uint8_t*)"正在下发参数", OLED_LINE8_2, OLED_ROW3_2, 0, (uint8_t*)"Send Para");
+
+        for (i = 0; i < bytes; i++) {
+            paraarr[i] = (uint8_t)((now_Para_CT.val >> (8 * i)) & 0xFF);  /* 你原先的小端拆字节 */
+        }
+
+        /* 把 byte 流打包成 uint32_t 数组：每 4 字节一个 uint32_t（小端） */
+        uint32_t hold32[16];                 /* 64B => 16 个 uint32_t */
+        memset(hold32, 0, sizeof(hold32));
+
+        for (i = 0; i < bytes; i++) {
+            hold32[i >> 2] |= ((uint32_t)paraarr[i]) << (8u * (uint32_t)(i & 3));
+        }
+
+        CPU2_CombinatePackage_Send(FUNCTIONCODE_WRITE_MULREGISTER,
+                                  param_meta[index].startadd,
+                                  param_meta[index].rgstcnt,
+                                  hold32);
+    }
+
+    /* 3) 下发命令 */
+    all_screen(0x00);
+    DisplayLangaugeLineWords((uint8_t*)"正在下发指令", OLED_LINE8_2, OLED_ROW3_3, 0, (uint8_t*)"Send Command");
+
+    {
+        int found = 0;
+        uint32_t cmd = CMD_NONE;
+
+        for (i = 0; i < mapamount; i++) {
+            if (now_Opera_Num == onepara_cmd_map[i].opera) {
+                cmd = onepara_cmd_map[i].cmd;
+                found = 1;
+                break;
+            }
+        }
+
+        if (!found) {
+            /* 参数写了，但没有对应命令：给出明确提示 */
+            all_screen(0x00);
+            DisplayLangaugeLineWords((uint8_t*)"指令未定义!", OLED_LINE8_2, OLED_ROW3_2, 0, (uint8_t*)"Cmd Undefined");
+            HAL_Delay(800);
+            exitTankOpera();
+            return;
+        }
+
+        /* 2 个寄存器写入：把 cmd 作为 32bit 写入 command 寄存器 */
+        CPU2_CombinatePackage_Send(FUNCTIONCODE_WRITE_MULREGISTER,
+                                  HOLDREGISTER_DEVICEPARAM_COMMAND,
+                                  2,
+                                  (uint32_t *)&cmd);
+    }
+
+    exitTankOpera();
+}
+//
+///* 不带参线圈指令处理过程 */
+//static void cmd_nopara_process(void)
+//{
+//	static const uint32_t nopara_cmd_map[][2] = {
+//		{ COM_NUM_BACK_ZERO, CMD_BACK_ZERO },
+//		{ COM_NUM_FIND_ZERO, CMD_CALIBRATE_ZERO },
+//		{ COM_NUM_SPREADPOINTS, CMD_MEASURE_DISTRIBUTED },
+//		{ COM_NUM_FIND_OIL, CMD_FIND_OIL },
+//		{ COM_NUM_FIND_WATER, CMD_FIND_WATER },
+//		{ COM_NUM_FIND_BOTTOM, CMD_FIND_BOTTOM },
+//		{ COM_NUM_SYNTHETIC, CMD_SYNTHETIC },
+//		{ COM_NUM_METER_DENSITY, CMD_MEASURE_DENSITY_METER },
+//		{ COM_NUM_INTERVAL_DENSITY, CMD_MEASURE_DENSITY_RANGE },
+//		{ COM_NUM_WARTSILA_DENSITY, CMD_WARTSILA_DENSITY_RANGE },
+//
+//		{ COM_NUM_SET_EMPTY_WEIGHT, CMD_SET_EMPTY_WEIGHT },
+//		{ COM_NUM_SET_FULL_WEIGHT, CMD_SET_FULL_WEIGHT },
+//		{ COM_NUM_RESTOR_EFACTORYSETTING, CMD_RESTORE_FACTORY },
+//		{ COM_NUM_MAINTENANCE_MODE, CMD_MAINTENANCE_MODE },
+//	};
+//
+//	int mapamount = (int)(sizeof(nopara_cmd_map) / sizeof(nopara_cmd_map[0]));
+//	int i;
+//
+//	for (i = 0; i < mapamount; i++) {
+//		if (now_Opera_Num == (int)nopara_cmd_map[i][0]) {
+//			CPU2_CombinatePackage_Send(FUNCTIONCODE_WRITE_MULREGISTER,
+//					HOLDREGISTER_DEVICEPARAM_COMMAND, 2,
+//					(uint32_t*)&nopara_cmd_map[i][1]);
+//			break;
+//		}
+//	}
+//
+//	if (now_Opera_Num == COM_NUM_RESTOR_EFACTORYSETTING) {
+//		oled_clear();
+//		if ((g_measurement.device_status.device_state != STATE_STANDBY)
+//			&& (g_measurement.device_status.device_state != STATE_ERROR)
+//			&& (g_measurement.device_status.device_state != STATE_MAINTENANCEMODE)) {
+//			DisplayLangaugeLineWords((uint8_t*)"失败", OLED_LINE8_1, OLED_ROW4_2, 0, (uint8_t*)"Failed to set");
+//			DisplayLangaugeLineWords((uint8_t*)"请先进入调试模式", OLED_LINE8_1, OLED_ROW4_3, 0, (uint8_t*)"Enter debug mode");
+//		} else {
+//			DisplayLangaugeLineWords((uint8_t*)"正在恢复出厂设置", OLED_LINE8_1, OLED_ROW4_2, 0, (uint8_t*)"Factory Settings");
+//			HAL_Delay(800);
+//			exitTankOpera();
+//		}
+//	} else if (now_Opera_Num == COM_NUM_MAINTENANCE_MODE) {
+//		oled_clear();
+//		DisplayLangaugeLineWords((uint8_t*)"已进入维护模式", OLED_LINE8_1, OLED_ROW4_2, 0, (uint8_t*)"Maintenance Mode");
+//	} else {
+//		exitTankOpera();
+//	}
+//}
 
 /* 非法操作处理 */
 static void errorprocess(void)
 {
 	all_screen(0x00);
-	DisplayLangaugeLineWords((uint8_t*)"非法操作！", OLED_LINE8_1, OLED_ROW4_2, 0, (uint8_t*)"Illegal operation");
+	DisplayLangaugeLineWords((uint8_t*)"非法操作!", OLED_LINE8_1, OLED_ROW4_2, 0, (uint8_t*)"Illegal operation");
 	DisplayLangaugeLineWords((uint8_t*)"1s后退出屏幕操作", OLED_LINE8_1, OLED_ROW4_3, 0, (uint8_t*)"Exit after 1 second");
 	HAL_Delay(1000);
 	exitTankOpera();
@@ -1202,8 +1520,7 @@ static void parawritecheck(void)
 	if (index != -1
 		&& param_meta[index].authority_write
 		&& (g_measurement.device_status.device_state == STATE_STANDBY
-			|| g_measurement.device_status.device_state == STATE_ERROR
-			|| g_measurement.device_status.device_state == STATE_MAINTENANCEMODE)) {
+			|| ((g_measurement.device_status.device_state & 0x8000U) != 0U))) {
 
 		if (param_meta[index].pword == NULL) {
 			inputcmdpara();
@@ -1212,7 +1529,7 @@ static void parawritecheck(void)
 		}
 	} else {
 		all_screen(0x00);
-		DisplayLangaugeLineWords((uint8_t*)"无修改权限！", OLED_LINE8_2, OLED_ROW3_2, 0, (uint8_t*)"No permission");
+		DisplayLangaugeLineWords((uint8_t*)"无修改权限!", OLED_LINE8_2, OLED_ROW3_2, 0, (uint8_t*)"No permission");
 		HAL_Delay(800);
 		displaypara();
 	}
@@ -1301,13 +1618,13 @@ static void parascopecheck(void)
 	index = getHoldValueNum(now_Opera_Num);
 	if (index == -1) {
 		all_screen(0x00);
-		DisplayLangaugeLineWords((uint8_t*)"非法参数！", OLED_LINE8_2, OLED_ROW3_2, 0, (uint8_t*)"Invalid Para");
+		DisplayLangaugeLineWords((uint8_t*)"非法参数!", OLED_LINE8_2, OLED_ROW3_2, 0, (uint8_t*)"Invalid Para");
 		HAL_Delay(800);
 		displaypara();
 	} else if (param_meta[index].flag_checkvalue) {
 		if (now_Para_CT.val < param_meta[index].valuemin || now_Para_CT.val > param_meta[index].valuemax) {
 			all_screen(0x00);
-			DisplayLangaugeLineWords((uint8_t*)"数值超范围！", OLED_LINE8_2, OLED_ROW3_2, 0, (uint8_t*)"Value out of Range");
+			DisplayLangaugeLineWords((uint8_t*)"数值超范围!", OLED_LINE8_2, OLED_ROW3_2, 0, (uint8_t*)"Value out of Range");
 			HAL_Delay(800);
 			displaypara();
 		} else {
@@ -1369,15 +1686,35 @@ static void cmd_configpara_process(void)
 	}
 	else //下发给CPU2
 	{
-		CPU2_CombinatePackage_Send(FUNCTIONCODE_WRITE_MULREGISTER,
-				param_meta[index].startadd,
-				param_meta[index].rgstcnt,
-				paraarr);
+	    uint16_t regs16[32]; /* rgstcnt 最大一般不会很大；32=最多64字节 */
+	    int rc = (int)param_meta[index].rgstcnt;
+	    
 
-		CPU2_CombinatePackage_Send(FUNCTIONCODE_READ_HOLDREGISTER,
-				param_meta[index].startadd,
-				param_meta[index].rgstcnt,
-				NULL);
+	    memset(regs16, 0, sizeof(regs16));
+
+	    /* paraarr[] 当前的组织方式：
+	       - float/double 分支：你是按“高字节在前”的大端字节序写入 paraarr
+	       - int 分支：你是按小端（低字节在前）写入 paraarr
+	       为了不改变你现有逻辑，这里统一按 paraarr 的“字节顺序”去组 16-bit 寄存器：
+	       每个寄存器 = paraarr[2*i] 作为高字节，paraarr[2*i+1] 作为低字节（即网络序/寄存器序）
+	    */
+	    for (i = 0; i < rc; i++) {
+	        uint8_t hi = 0, lo = 0;
+	        int p = 2 * i;
+	        if (p < arrlen)     hi = paraarr[p + 1];
+	        if (p + 1 < arrlen) lo = paraarr[p];
+	        regs16[i] = ((uint16_t)hi << 8) | (uint16_t)lo;
+	    }
+
+	    CPU2_CombinatePackage_Send(FUNCTIONCODE_WRITE_MULREGISTER,
+	                              param_meta[index].startadd,
+	                              param_meta[index].rgstcnt,
+	                              (uint32_t *)regs16);
+
+	    CPU2_CombinatePackage_Send(FUNCTIONCODE_READ_HOLDREGISTER,
+	                              param_meta[index].startadd,
+	                              param_meta[index].rgstcnt,
+	                              NULL);
 	}
 	HAL_Delay(800);
 	displaypara();
@@ -1516,7 +1853,6 @@ uint8_t *(*dtm_disarr(int *pindex, int *plen))[2]
 	case COM_NUM_DEVICEPARAM_REQUIREBOTTOMMEASUREMENT:
 	case COM_NUM_DEVICEPARAM_REQUIREWATERMEASUREMENT:
 	case COM_NUM_DEVICEPARAM_REQUIRESINGLEPOINTDENSITY:
-	case COM_NUM_DEVICEPARAM_REFRESHTANKHEIGHTFLAG:
 	case COM_NUM_SCREEN_OFF: {
 		index = param_meta[index].val;
 		len = (int)(sizeof(arr_IF) / sizeof(arr_IF[0]));
@@ -1579,6 +1915,24 @@ uint8_t *(*dtm_disarr(int *pindex, int *plen))[2]
 		index = param_meta[index].val;
 		len = (int)(sizeof(arr_protocol) / sizeof(arr_protocol[0]));
 		p = arr_protocol;
+		break;
+	}
+	case COM_NUM_DEVICEPARAM_BOTTOM_DETECT_MODE:{
+		index = param_meta[index].val;
+		len = (int)(sizeof(arr_bottom) / sizeof(arr_bottom[0]));
+		p = arr_bottom;
+		break;
+	}
+	case COM_NUM_DEVICEPARAM_POWER_ON_DEFAULT_COMMAND:{
+		index = param_meta[index].val;
+		len = (int)(sizeof(default_cmmand) / sizeof(default_cmmand[0]));
+		p = default_cmmand;
+		break;
+	}
+	case COM_NUM_DEVICEPARAM_LIQUIDLEVELMEASUREMENTMETHOD:{
+		index = param_meta[index].val;
+		len = (int)(sizeof(level_mode) / sizeof(level_mode[0]));
+		p = level_mode;
 		break;
 	}
 	default:
@@ -1695,382 +2049,87 @@ static void mainmenu(void)
 	func_index = KEYNUM_MAINMENU;
 	menuselect(menu, menulen);
 }
-
 /* 普通测量指令菜单 */
 static void measuremenu(void)
 {
-	static struct MenuData menu[] = {
-		{ (uint8_t*)"回零点", COM_NUM_BACK_ZERO, ifsendcmd, COMMANE_NORW, (uint8_t*)"BackZero" },
-		{ (uint8_t*)"寻找液位", COM_NUM_FIND_OIL, ifsendcmd, COMMANE_NORW, (uint8_t*)"FindOil" },
-		{ (uint8_t*)"寻找水位", COM_NUM_FIND_WATER, ifsendcmd, COMMANE_NORW, (uint8_t*)"FindWater" },
-		{ (uint8_t*)"寻找罐底", COM_NUM_FIND_BOTTOM, ifsendcmd, COMMANE_NORW, (uint8_t*)"FindBottom" },
+    static struct MenuData menu[] = {
 
-		{ (uint8_t*)"单点测量", COM_NUM_SINGLE_POINT, inputcmdpara, COMMANE_NORW, (uint8_t*)"SingleMeasure" },
-		{ (uint8_t*)"单点监测", COM_NUM_SP_TEST, inputcmdpara, COMMANE_NORW, (uint8_t*)"SingleMonitor" },
-		{ (uint8_t*)"综合测量", COM_NUM_SYNTHETIC, ifsendcmd, COMMANE_NORW, (uint8_t*)"Synthetic" },
+        /* ===== 基础动作 ===== */
+        { (uint8_t*)"提零点",     COM_NUM_BACK_ZERO,     ifsendcmd,   COMMANE_NORW, (uint8_t*)"BackZero"   },
+        { (uint8_t*)"液位测量",   COM_NUM_FIND_OIL,      ifsendcmd,   COMMANE_NORW, (uint8_t*)"FindOil"    },
+        { (uint8_t*)"水位单次测量",   COM_NUM_FIND_WATER,    ifsendcmd,   COMMANE_NORW, (uint8_t*)"FindWater"  },
+        { (uint8_t*)"罐高测量",   COM_NUM_FIND_BOTTOM,   ifsendcmd,   COMMANE_NORW, (uint8_t*)"FindBottom" },
 
-		{ (uint8_t*)"分布测量", COM_NUM_SPREADPOINTS_AI, ifsendcmd, COMMANE_NORW, (uint8_t*)"DistMeasure" },
-		{ (uint8_t*)"国标分布测量", COM_NUM_SPREADPOINTS_AI, ifsendcmd, COMMANE_NORW, (uint8_t*)"GB_DistMeasure" },
+        /* ===== 单点/监测/综合 ===== */
+        { (uint8_t*)"密度单点测量",   COM_NUM_SINGLE_POINT,  inputcmdpara,COMMANE_NORW, (uint8_t*)"SingleMeasure" },
+        { (uint8_t*)"密度单点监测",   COM_NUM_SP_TEST,       inputcmdpara,COMMANE_NORW, (uint8_t*)"SingleMonitor" },
+        { (uint8_t*)"综合测量",   COM_NUM_SYNTHETIC,     ifsendcmd,   COMMANE_NORW, (uint8_t*)"Synthetic"     },
 
-		{ (uint8_t*)"密度每米测量", COM_NUM_METER_DENSITY, ifsendcmd, COMMANE_NORW, (uint8_t*)"MeterDensity" },
-		{ (uint8_t*)"区间密度测量", COM_NUM_INTERVAL_DENSITY, ifsendcmd, COMMANE_NORW, (uint8_t*)"RangeDensity" },
-		{ (uint8_t*)"瓦锡兰区间密度", COM_NUM_WARTSILA_DENSITY, ifsendcmd, COMMANE_NORW, (uint8_t*)"WartsilaRange" },
+        /* ===== 跟随/运动控制（新增）===== */
+        { (uint8_t*)"水位跟随",   COM_NUM_FOLLOW_WATER,  ifsendcmd,   COMMANE_NORW, (uint8_t*)"FollowWater"   },
+        { (uint8_t*)"浮子运行到高度", COM_NUM_RUN_TO_POSITION,inputcmdpara,COMMANE_NORW, (uint8_t*)"RunToPos"      },
 
-		{ (uint8_t*)"退出", COM_NUM_NOOPERA, mainmenu, COMMANE_NORW, (uint8_t*)"Exit" },
-	};
+        /* ===== 分布/密度系列 ===== */
+        { (uint8_t*)"分布测量",     COM_NUM_SPREADPOINTS,     ifsendcmd, COMMANE_NORW, (uint8_t*)"DistMeasure"     },
+        { (uint8_t*)"国标分布测量", COM_NUM_SPREADPOINTS_GB,  ifsendcmd, COMMANE_NORW, (uint8_t*)"GB_DistMeasure"  },
 
-	int menulen = (int)(sizeof(menu) / sizeof(menu[0]));
+        { (uint8_t*)"密度每米测量", COM_NUM_METER_DENSITY,    ifsendcmd, COMMANE_NORW, (uint8_t*)"MeterDensity"    },
+        { (uint8_t*)"区间密度测量", COM_NUM_INTERVAL_DENSITY, ifsendcmd, COMMANE_NORW, (uint8_t*)"RangeDensity"    },
+        { (uint8_t*)"瓦锡兰区间密度", COM_NUM_WARTSILA_DENSITY, ifsendcmd, COMMANE_NORW, (uint8_t*)"WartsilaRange"  },
 
-	all_screen(0x00);
-	func_index = KEYNUM_MEASURE_MAINMENU;
-	menuselect(menu, menulen);
+        /* ===== 读取类（新增）===== */
+        { (uint8_t*)"读取部件参数", COM_NUM_READ_PART_PARAMS, ifsendcmd, COMMANE_NORW, (uint8_t*)"ReadPartParams" },
+
+        /* ===== 退出 ===== */
+        { (uint8_t*)"退出", COM_NUM_NOOPERA, mainmenu, COMMANE_NORW, (uint8_t*)"Exit" },
+    };
+
+    int menulen = (int)(sizeof(menu) / sizeof(menu[0]));
+
+    all_screen(0x00);
+    func_index = KEYNUM_MEASURE_MAINMENU;
+    menuselect(menu, menulen);
 }
+
 
 /* 菜单 - 调试指令 */
 static void menu_cmdconfig_main(void)
 {
-	static struct MenuData menu[] = {
-		{ (uint8_t*)"上行", COM_NUM_RUNUP, inputcmdpara, COMMANE_NORW, (uint8_t*)"MoveUp" },
-		{ (uint8_t*)"下行", COM_NUM_RUNDOWN, inputcmdpara, COMMANE_NORW, (uint8_t*)"MoveDown" },
+    static struct MenuData menu[] = {
 
-		{ (uint8_t*)"标定零点", COM_NUM_FIND_ZERO, ifsendcmd, COMMANE_NORW, (uint8_t*)"CalZero" },
-		{ (uint8_t*)"标定液位", COM_NUM_CAL_OIL, inputcmdpara, COMMANE_NORW, (uint8_t*)"CalOil" },
-		{ (uint8_t*)"修正液位", COM_NUM_CORRECTION_OIL, inputcmdpara, COMMANE_NORW, (uint8_t*)"CorrectOil" },
+        /* ===== 运动控制 ===== */
+        { (uint8_t*)"上行",       COM_NUM_RUNUP,        inputcmdpara, COMMANE_NORW, (uint8_t*)"MoveUp"       },
+        { (uint8_t*)"下行",       COM_NUM_RUNDOWN,      inputcmdpara, COMMANE_NORW, (uint8_t*)"MoveDown"     },
+        { (uint8_t*)"强制上行",   COM_NUM_FORCE_RUNUP,  inputcmdpara, COMMANE_NORW, (uint8_t*)"ForceMoveUp"  },
+        { (uint8_t*)"强制下行",   COM_NUM_FORCE_RUNDOWN,inputcmdpara, COMMANE_NORW, (uint8_t*)"ForceMoveDown"},
+        { (uint8_t*)"强制提零点", COM_NUM_FORCE_LIFT_ZERO, ifsendcmd, COMMANE_NORW, (uint8_t*)"ForceLiftZero"},
 
-		{ (uint8_t*)"恢复出厂设置", COM_NUM_RESTOR_EFACTORYSETTING, ifsendcmd, COMMANE_NORW, (uint8_t*)"RestoreFactory" },
-		{ (uint8_t*)"维护模式", COM_NUM_MAINTENANCE_MODE, ifsendcmd, COMMANE_NORW, (uint8_t*)"Maintenance" },
+        /* ===== 标定/修正 ===== */
+        { (uint8_t*)"标定零点",   COM_NUM_FIND_ZERO,    ifsendcmd,    COMMANE_NORW, (uint8_t*)"CalZero"      },
+        { (uint8_t*)"标定液位", COM_NUM_CAL_OIL,     inputcmdpara, COMMANE_NORW, (uint8_t*)"CalOil"       },
+        { (uint8_t*)"修正液位",   COM_NUM_CORRECTION_OIL,inputcmdpara, COMMANE_NORW, (uint8_t*)"CorrectOil"   },
+        { (uint8_t*)"标定水位",   COM_NUM_CALIBRATE_WATER, inputcmdpara, COMMANE_NORW, (uint8_t*)"CalWater"    },
 
-		{ (uint8_t*)"退出", COM_NUM_NOOPERA, mainmenu, COMMANE_NORW, (uint8_t*)"Exit" },
-	};
+        /* ===== 称重相关 ===== */
+        { (uint8_t*)"获取空载称重", COM_NUM_SET_EMPTY_WEIGHT, ifsendcmd, COMMANE_NORW, (uint8_t*)"SetEmptyWeight" },
+        { (uint8_t*)"获取满载称重", COM_NUM_SET_FULL_WEIGHT,  ifsendcmd, COMMANE_NORW, (uint8_t*)"SetFullWeight"  },
 
-	int menulen = (int)(sizeof(menu) / sizeof(menu[0]));
+        /* ===== 系统/维护 ===== */
+        { (uint8_t*)"恢复出厂设置", COM_NUM_RESTOR_EFACTORYSETTING, ifsendcmd, COMMANE_NORW, (uint8_t*)"RestoreFactory" },
+        { (uint8_t*)"进入维护模式",     COM_NUM_MAINTENANCE_MODE,       ifsendcmd, COMMANE_NORW, (uint8_t*)"Maintenance"    },
 
-	all_screen(0x00);
-	func_index = KEYNUM_MENU_CMD_MAIN;
-	debugmode_back = 1;
-	menuselect(menu, menulen);
+        /* ===== 退出 ===== */
+        { (uint8_t*)"退出", COM_NUM_NOOPERA, mainmenu, COMMANE_NORW, (uint8_t*)"Exit" },
+    };
+
+    int menulen = (int)(sizeof(menu) / sizeof(menu[0]));
+
+    all_screen(0x00);
+    func_index = KEYNUM_MENU_CMD_MAIN;
+    debugmode_back = 1;
+    menuselect(menu, menulen);
 }
 
-/* 参数配置菜单 */
-static void menu_paraconfig(void)
-{
-	static struct MenuData menu[] = {
-		{ (uint8_t*)"基础参数", COM_NUM_NOOPERA, menu_tankbasicpara, COMMANE_NORW, (uint8_t*)"BasicPara" },
-		{ (uint8_t*)"称重测量参数", COM_NUM_NOOPERA, menu_weightpara, COMMANE_NORW, (uint8_t*)"WeightPara" },
-		{ (uint8_t*)"分布测量参数", COM_NUM_NOOPERA, menu_spreadpara, COMMANE_NORW, (uint8_t*)"SpreadPara" },
-		{ (uint8_t*)"瓦锡兰分布测参数", COM_NUM_NOOPERA, menu_wartsilapara, COMMANE_NORW, (uint8_t*)"WartsilaPara" },
-		{ (uint8_t*)"磁通量", COM_NUM_NOOPERA, menu_correctionpara, COMMANE_NORW, (uint8_t*)"MAGNETIC" },
-		{ (uint8_t*)"实高测量参数", COM_NUM_NOOPERA, menu_realhighpara, COMMANE_NORW, (uint8_t*)"RealHighPara" },
-		{ (uint8_t*)"水位测量参数", COM_NUM_NOOPERA, menu_waterlevelparams, COMMANE_NORW, (uint8_t*)"DebugInfo" },
-		{ (uint8_t*)"液位测量参数", COM_NUM_NOOPERA, menu_liquidlevelparams, COMMANE_NORW, (uint8_t*)"DebugInfo" },
-		{ (uint8_t*)"继电器输出配置", COM_NUM_NOOPERA, menu_alarmdoparams, COMMANE_NORW, (uint8_t*)"DebugInfo" },
-		{ (uint8_t*)"电流输出配置", COM_NUM_NOOPERA, menu_aoparams, COMMANE_NORW, (uint8_t*)"DebugInfo" },
-		{ (uint8_t*)"界面显示参数", COM_NUM_NOOPERA, menu_screen, COMMANE_NORW, (uint8_t*)"ScreenPara" },
-		{ (uint8_t*)"CPU3通信配置", COM_NUM_NOOPERA, menu_cpu3_comm, COMMANE_NORW, (uint8_t*)"CPU3Comm" },
-
-		{ (uint8_t*)"退出", COM_NUM_NOOPERA, mainmenu, COMMANE_NORW, (uint8_t*)"Exit" },
-	};
-
-	int menulen = (int)(sizeof(menu) / sizeof(menu[0]));
-
-	all_screen(0x00);
-	func_index = KEYNUM_MENU_PARACFG_MAIN;
-	debugmode_back = 0;
-	menuselect(menu, menulen);
-}
-
-/* 基础参数菜单 */
-static void menu_tankbasicpara(void)
-{
-	static struct MenuData menu[] = {
-		{ (uint8_t*)"罐高", COM_NUM_DEVICEPARAM_TANKHEIGHT, para_mainprocess, COMMAND_READ, (uint8_t*)"TankHeight" },
-		{ (uint8_t*)"液位盲区", COM_NUM_DEVICEPARAM_BLINDZONE, para_mainprocess, COMMAND_READ, (uint8_t*)"BlindZone" },
-		{ (uint8_t*)"水位盲区", COM_NUM_DEVICEPARAM_WATER_BLINDZONE, para_mainprocess, COMMAND_READ, (uint8_t*)"WaterBlind" },
-
-		{ (uint8_t*)"编码轮周长", COM_NUM_DEVICEPARAM_ENCODER_WHEEL_CIRCUMFERENCE_MM, para_mainprocess, COMMAND_READ, (uint8_t*)"EncWheelCirc" },
-		{ (uint8_t*)"首圈周长", COM_NUM_DEVICEPARAM_FIRST_LOOP_CIRCUMFERENCE_MM, para_mainprocess, COMMAND_READ, (uint8_t*)"FirstLoopCirc" },
-		{ (uint8_t*)"尺带厚度", COM_NUM_DEVICEPARAM_TAPE_THICKNESS_MM, para_mainprocess, COMMAND_READ, (uint8_t*)"TapeThick" },
-		{ (uint8_t*)"电机最大速度", COM_NUM_DEVICEPARAM_MAX_MOTOR_SPEED, para_mainprocess, COMMAND_READ, (uint8_t*)"MaxMotorSpd" },
-
-		{ (uint8_t*)"传感器类型", COM_NUM_DEVICEPARAM_SENSORTYPE, para_mainprocess, COMMANE_NORW, (uint8_t*)"SensorType" },
-		{ (uint8_t*)"传感器编号", COM_NUM_DEVICEPARAM_SENSORID, para_mainprocess, COMMANE_NORW, (uint8_t*)"SensorID" },
-		{ (uint8_t*)"传感器软件版本", COM_NUM_DEVICEPARAM_SENSOR_SOFTWARE_VERSION, para_mainprocess, COMMANE_NORW, (uint8_t*)"SenSWVer" },
-		{ (uint8_t*)"LTD软件版本", COM_NUM_DEVICEPARAM_SOFTWAREVERSION, para_mainprocess, COMMANE_NORW, (uint8_t*)"FWVersion" },
-
-		{ (uint8_t*)"上电默认指令", COM_NUM_DEVICEPARAM_POWER_ON_DEFAULT_COMMAND, para_mainprocess, COMMAND_READ, (uint8_t*)"PwrOnCmd" },
-		{ (uint8_t*)"找零下行距离", COM_NUM_DEVICEPARAM_FINDZERO_DOWN_DISTANCE, para_mainprocess, COMMAND_READ, (uint8_t*)"FindZeroDown" },
-
-		{ (uint8_t*)"退出", COM_NUM_NOOPERA, menu_paraconfig, COMMANE_NORW, (uint8_t*)"Exit" },
-	};
-
-	int menulen = (int)(sizeof(menu) / sizeof(menu[0]));
-
-	all_screen(0x00);
-	func_index = KEYNUM_MENU_PARACFG_DEBUG_BASIC;
-	menuselect(menu, menulen);
-}
-
-/* 称重参数菜单 */
-static void menu_weightpara(void)
-{
-	static struct MenuData menu[] = {
-		{ (uint8_t*)"空载重量", COM_NUM_DEVICEPARAM_EMPTY_WEIGHT, para_mainprocess, COMMAND_READ, (uint8_t*)"EmptyWeight" },
-		{ (uint8_t*)"满载称重", COM_NUM_DEVICEPARAM_FULL_WEIGHT, para_mainprocess, COMMAND_READ, (uint8_t*)"FullWeight" },
-		{ (uint8_t*)"获取空载阈值", COM_NUM_SET_EMPTY_WEIGHT, ifsendcmd, COMMANE_NORW, (uint8_t*)"Set empty Weight" },
-		{ (uint8_t*)"获取满载阈值", COM_NUM_SET_FULL_WEIGHT, ifsendcmd, COMMANE_NORW, (uint8_t*)"Set full Weight" },
-		{ (uint8_t*)"称重上限比例(%)", COM_NUM_DEVICEPARAM_WEIGHT_UPPER_LIMIT_RATIO, para_mainprocess, COMMAND_READ, (uint8_t*)"WeightUpperRatio" },
-		{ (uint8_t*)"称重下限比例(%)", COM_NUM_DEVICEPARAM_WEIGHT_LOWER_LIMIT_RATIO, para_mainprocess, COMMAND_READ, (uint8_t*)"WeightLowerRatio" },
-		{ (uint8_t*)"空载称重上限", COM_NUM_DEVICEPARAM_EMPTY_WEIGHT_UPPER_LIMIT, para_mainprocess, COMMAND_READ, (uint8_t*)"EmptyWtHi" },
-		{ (uint8_t*)"空载称重下限", COM_NUM_DEVICEPARAM_EMPTY_WEIGHT_LOWER_LIMIT, para_mainprocess, COMMAND_READ, (uint8_t*)"EmptyWtLo" },
-		{ (uint8_t*)"满载称重上限", COM_NUM_DEVICEPARAM_FULL_WEIGHT_UPPER_LIMIT, para_mainprocess, COMMAND_READ, (uint8_t*)"FullWtHi" },
-		{ (uint8_t*)"满载称重下限", COM_NUM_DEVICEPARAM_FULL_WEIGHT_LOWER_LIMIT, para_mainprocess, COMMAND_READ, (uint8_t*)"FullWtLo" },
-		{ (uint8_t*)"退出", COM_NUM_NOOPERA, menu_paraconfig, COMMANE_NORW, (uint8_t*)"Exit" },
-	};
-
-	int menulen = (int)(sizeof(menu) / sizeof(menu[0]));
-
-	all_screen(0x00);
-	func_index = KEYNUM_MENU_PARACFG_DEBUG_SYNTH;
-	menuselect(menu, menulen);
-}
-
-/* 修正参数菜单 */
-static void menu_correctionpara(void)
-{
-	static struct MenuData menu[] = {
-		{ (uint8_t*)"磁通量T", COM_NUM_DEVICEPARAM_TEMPERATURECORRECTION, para_mainprocess, COMMAND_READ, (uint8_t*)"MAGNETIC_T" },
-		{ (uint8_t*)"磁通量D", COM_NUM_DEVICEPARAM_DENSITYCORRECTION, para_mainprocess, COMMAND_READ, (uint8_t*)"MAGNETIC_D" },
-		{ (uint8_t*)"退出", COM_NUM_NOOPERA, menu_paraconfig, COMMANE_NORW, (uint8_t*)"Exit" },
-	};
-
-	int menulen = (int)(sizeof(menu) / sizeof(menu[0]));
-
-	all_screen(0x00);
-	func_index = KEYNUM_MENU_PARACFG_DEBUG_CORRECT;
-	menuselect(menu, menulen);
-}
-
-/* 分布测量参数菜单 */
-static void menu_spreadpara(void)
-{
-	static struct MenuData menu[] = {
-		{ (uint8_t*)"测量罐底(0否1是)", COM_NUM_DEVICEPARAM_REQUIREBOTTOMMEASUREMENT, para_mainprocess, COMMAND_READ, (uint8_t*)"ReqBottomMeas" },
-		{ (uint8_t*)"测量水位(0否1是)", COM_NUM_DEVICEPARAM_REQUIREWATERMEASUREMENT, para_mainprocess, COMMAND_READ, (uint8_t*)"ReqWaterMeas" },
-		{ (uint8_t*)"测单点密度(0否1是)", COM_NUM_DEVICEPARAM_REQUIRESINGLEPOINTDENSITY, para_mainprocess, COMMAND_READ, (uint8_t*)"ReqSingleDensity" },
-		{ (uint8_t*)"测量顺序", COM_NUM_DEVICEPARAM_SPREADMEASUREMENTORDER, para_mainprocess, COMMAND_READ, (uint8_t*)"SpreadOrder" },
-		{ (uint8_t*)"测量模式", COM_NUM_DEVICEPARAM_SPREADMEASUREMENTMODE, para_mainprocess, COMMAND_READ, (uint8_t*)"SpreadMode" },
-		{ (uint8_t*)"测量数量", COM_NUM_DEVICEPARAM_SPREADMEASUREMENTCOUNT, para_mainprocess, COMMAND_READ, (uint8_t*)"SpreadCount" },
-		{ (uint8_t*)"测量间距", COM_NUM_DEVICEPARAM_SPREADMEASUREMENTDISTANCE, para_mainprocess, COMMAND_READ, (uint8_t*)"SpreadDistance" },
-		{ (uint8_t*)"上限距离(距液面)", COM_NUM_DEVICEPARAM_SPREADTOPLIMIT, para_mainprocess, COMMAND_READ, (uint8_t*)"SpreadTopLimit" },
-		{ (uint8_t*)"下限距离(距罐底)", COM_NUM_DEVICEPARAM_SPREADBOTTOMLIMIT, para_mainprocess, COMMAND_READ, (uint8_t*)"SpreadBottomLimit" },
-		{ (uint8_t*)"测量前悬停时间", COM_NUM_DEVICEPARAM_SPREAD_POINT_HOVER_TIME, para_mainprocess, COMMAND_READ, (uint8_t*)"HoverTime" },
-		{ (uint8_t*)"退出", COM_NUM_NOOPERA, menu_paraconfig, COMMANE_NORW, (uint8_t*)"Exit" },
-	};
-
-	int menulen = (int)(sizeof(menu) / sizeof(menu[0]));
-
-	all_screen(0x00);
-	func_index = KEYNUM_MENU_PARACFG_DEBUG_SPREAD;
-	menuselect(menu, menulen);
-}
-
-/* 瓦锡兰参数菜单 */
-static void menu_wartsilapara(void)
-{
-	static struct MenuData menu[] = {
-		{ (uint8_t*)"密度上限", COM_NUM_DEVICEPARAM_WARTSILA_UPPER_DENSITY_LIMIT, para_mainprocess, COMMAND_READ, (uint8_t*)"WUpperDen" },
-		{ (uint8_t*)"密度下限", COM_NUM_DEVICEPARAM_WARTSILA_LOWER_DENSITY_LIMIT, para_mainprocess, COMMAND_READ, (uint8_t*)"WLowerDen" },
-		{ (uint8_t*)"密度步进", COM_NUM_DEVICEPARAM_WARTSILA_DENSITY_INTERVAL, para_mainprocess, COMMAND_READ, (uint8_t*)"WDenStep" },
-		{ (uint8_t*)"最高测点距液面", COM_NUM_DEVICEPARAM_WARTSILA_MAX_HEIGHT_ABOVE_SURFACE, para_mainprocess, COMMAND_READ, (uint8_t*)"WMaxHgt" },
-		{ (uint8_t*)"退出", COM_NUM_NOOPERA, menu_paraconfig, COMMANE_NORW, (uint8_t*)"Exit" },
-	};
-
-	int menulen = (int)(sizeof(menu) / sizeof(menu[0]));
-
-	all_screen(0x00);
-	func_index = KEYNUM_WARTSILA_PARACFG_BASE;
-	menuselect(menu, menulen);
-}
-
-/* 水位测量参数 */
-static void menu_waterlevelparams(void)
-{
-	static struct MenuData menu[] = {
-		{ (uint8_t*)"水位修正值", COM_NUM_DEVICEPARAM_WATERLEVELCORRECTION, para_mainprocess, COMMAND_READ, (uint8_t*)"WaterLevelCorr" },
-		{ (uint8_t*)"最大下行距离", COM_NUM_DEVICEPARAM_MAXDOWNDISTANCE, para_mainprocess, COMMAND_READ, (uint8_t*)"MaxDownDist" },
-		{ (uint8_t*)"退出", COM_NUM_NOOPERA, menu_paraconfig, COMMANE_NORW, (uint8_t*)"Exit" },
-	};
-
-	int menulen = (int)(sizeof(menu) / sizeof(menu[0]));
-
-	all_screen(0x00);
-	func_index = KEYNUM_MENU_PARACFG_DEBUG_WATERLEVEL;
-	menuselect(menu, menulen);
-}
-
-/* 磁通量菜单(旧, 保留) */
-static void menu_magnetic(void)
-{
-	static struct MenuData menu[] = {
-		{ (uint8_t*)"磁通量D", COM_NUM_DEVICEPARAM_DENSITYCORRECTION, para_mainprocess, COMMAND_READ, (uint8_t*)"Flux D" },
-		{ (uint8_t*)"磁通量T", COM_NUM_DEVICEPARAM_TEMPERATURECORRECTION, para_mainprocess, COMMAND_READ, (uint8_t*)"Flux T" },
-		{ (uint8_t*)"退出", COM_NUM_NOOPERA, menu_paraconfig, COMMANE_NORW, (uint8_t*)"Exit" },
-	};
-
-	int menulen = (int)(sizeof(menu) / sizeof(menu[0]));
-
-	all_screen(0x00);
-	func_index = KEYNUM_MAGNETIC;
-	menuselect(menu, menulen);
-}
-
-/* 实高测量参数 */
-static void menu_realhighpara(void)
-{
-	static struct MenuData menu[] = {
-		{ (uint8_t*)"更新罐高(0否1是)", COM_NUM_DEVICEPARAM_REFRESHTANKHEIGHTFLAG, para_mainprocess, COMMAND_READ, (uint8_t*)"RefreshTankH" },
-		{ (uint8_t*)"罐高最大偏差", COM_NUM_DEVICEPARAM_MAXTANKHEIGHTDEVIATION, para_mainprocess, COMMAND_READ, (uint8_t*)"MaxTankDev" },
-		{ (uint8_t*)"初始实高", COM_NUM_DEVICEPARAM_INITIALTANKHEIGHT, para_mainprocess, COMMAND_READ, (uint8_t*)"InitTankH" },
-		{ (uint8_t*)"当前实高", COM_NUM_DEVICEPARAM_CURRENTTANKHEIGHT, para_mainprocess, COMMAND_READ, (uint8_t*)"CurrTankH" },
-		{ (uint8_t*)"退出", COM_NUM_NOOPERA, menu_paraconfig, COMMANE_NORW, (uint8_t*)"Exit" },
-	};
-
-	int menulen = (int)(sizeof(menu) / sizeof(menu[0]));
-
-	all_screen(0x00);
-	func_index = KEYNUM_MENU_PARACFG_DEBUG_REALHIGH;
-	menuselect(menu, menulen);
-}
-
-/* 液位测量参数 */
-static void menu_liquidlevelparams(void)
-{
-	static struct MenuData menu[] = {
-		{ (uint8_t*)"找油阈值", COM_NUM_DEVICEPARAM_OILLEVELTHRESHOLD, para_mainprocess, COMMAND_READ, (uint8_t*)"OilLvlTh" },
-		{ (uint8_t*)"滞后阈值", COM_NUM_DEVICEPARAM_OILLEVEL_HYSTERESIS_THRESHOLD, para_mainprocess, COMMAND_READ, (uint8_t*)"HysTh" },
-		{ (uint8_t*)"液位测量方式", COM_NUM_DEVICEPARAM_LIQUIDLEVELMEASUREMENTMETHOD, para_mainprocess, COMMAND_READ, (uint8_t*)"LvlMeasMode" },
-		{ (uint8_t*)"退出", COM_NUM_NOOPERA, menu_paraconfig, COMMANE_NORW, (uint8_t*)"Exit" },
-	};
-
-	int menulen = (int)(sizeof(menu) / sizeof(menu[0]));
-
-	all_screen(0x00);
-	func_index = KEYNUM_MENU_PARACFG_DEBUG_LIQUIDLEVEL;
-	menuselect(menu, menulen);
-}
-
-/* 报警 DO 参数 */
-static void menu_alarmdoparams(void)
-{
-	static struct MenuData menu[] = {
-		{ (uint8_t*)"高液位报警(DO)", COM_NUM_DEVICEPARAM_ALARM_HIGH_DO, para_mainprocess, COMMAND_READ, (uint8_t*)"AlarmHiDO" },
-		{ (uint8_t*)"低液位报警(DO)", COM_NUM_DEVICEPARAM_ALARM_LOW_DO, para_mainprocess, COMMAND_READ, (uint8_t*)"AlarmLoDO" },
-		{ (uint8_t*)"第三状态阈值", COM_NUM_DEVICEPARAM_THIRD_STATE_THRESHOLD, para_mainprocess, COMMAND_READ, (uint8_t*)"ThirdStateTh" },
-		{ (uint8_t*)"退出", COM_NUM_NOOPERA, menu_paraconfig, COMMANE_NORW, (uint8_t*)"Exit" },
-	};
-
-	int menulen = (int)(sizeof(menu) / sizeof(menu[0]));
-
-	all_screen(0x00);
-	func_index = KEYNUM_MENU_PARACFG_DEBUG_ALARM_DO;
-	menuselect(menu, menulen);
-}
-
-/* 4-20mA 输出/AO 参数 */
-static void menu_aoparams(void)
-{
-	static struct MenuData menu[] = {
-		{ (uint8_t*)"输出范围起点(mA)", COM_NUM_DEVICEPARAM_CURRENT_RANGE_START_mA, para_mainprocess, COMMAND_READ, (uint8_t*)"RangeStart" },
-		{ (uint8_t*)"输出范围终点(mA)", COM_NUM_DEVICEPARAM_CURRENT_RANGE_END_mA, para_mainprocess, COMMAND_READ, (uint8_t*)"RangeEnd" },
-		{ (uint8_t*)"高限报警(AO)", COM_NUM_DEVICEPARAM_ALARM_HIGH_AO, para_mainprocess, COMMAND_READ, (uint8_t*)"AlarmHiAO" },
-		{ (uint8_t*)"低限报警(AO)", COM_NUM_DEVICEPARAM_ALARM_LOW_AO, para_mainprocess, COMMAND_READ, (uint8_t*)"AlarmLoAO" },
-		{ (uint8_t*)"初始电流(mA)", COM_NUM_DEVICEPARAM_INITIAL_CURRENT_mA, para_mainprocess, COMMAND_READ, (uint8_t*)"InitCurrent" },
-		{ (uint8_t*)"高位电流(mA)", COM_NUM_DEVICEPARAM_AO_HIGH_CURRENT_mA, para_mainprocess, COMMAND_READ, (uint8_t*)"HighCurrent" },
-		{ (uint8_t*)"低位电流(mA)", COM_NUM_DEVICEPARAM_AO_LOW_CURRENT_mA, para_mainprocess, COMMAND_READ, (uint8_t*)"LowCurrent" },
-		{ (uint8_t*)"故障电流(mA)", COM_NUM_DEVICEPARAM_FAULT_CURRENT_mA, para_mainprocess, COMMAND_READ, (uint8_t*)"FaultCurrent" },
-		{ (uint8_t*)"调试电流(mA)", COM_NUM_DEVICEPARAM_DEBUG_CURRENT_mA, para_mainprocess, COMMAND_READ, (uint8_t*)"DebugCurrent" },
-		{ (uint8_t*)"退出", COM_NUM_NOOPERA, menu_paraconfig, COMMANE_NORW, (uint8_t*)"Exit" },
-	};
-
-	int menulen = (int)(sizeof(menu) / sizeof(menu[0]));
-
-	all_screen(0x00);
-	func_index = KEYNUM_MENU_PARACFG_DEBUG_AO;
-	menuselect(menu, menulen);
-}
-
-/* 界面显示类参数 */
-static void menu_screen(void)
-{
-	static struct MenuData menu[] = {
-		{ (uint8_t*)"小数点位数", COM_NUM_SCREEN_DECIMAL, para_mainprocess, COMMAND_READ, (uint8_t*)"DecimalPlaces" },
-		{ (uint8_t*)"屏幕密码", COM_NUM_SCREEN_PASSWARD, para_mainprocess, COMMAND_READ, (uint8_t*)"Password" },
-		{ (uint8_t*)"是否息屏", COM_NUM_SCREEN_OFF, para_mainprocess, COMMAND_READ, (uint8_t*)"Screen Off" },
-		{ (uint8_t*)"数据源", COM_NUM_NOOPERA, menu_scr_source, COMMAND_READ, (uint8_t*)"Data Source" },
-		{ (uint8_t*)"退出", COM_NUM_NOOPERA, menu_paraconfig, COMMANE_NORW, (uint8_t*)"Exit" },
-	};
-
-	int menulen = (int)(sizeof(menu) / sizeof(menu[0]));
-
-	all_screen(0x00);
-	func_index = KEYNUM_SCREEN;
-	menuselect(menu, menulen);
-}
-
-/* 数据源菜单 */
-static void menu_scr_source(void)
-{
-	static struct MenuData menu[] = {
-		{ (uint8_t*)"液位数据源", COM_NUM_SCREEN_SOURCE_OIL, para_mainprocess, COMMAND_READ, (uint8_t*)"Level Source" },
-		{ (uint8_t*)"液位手工输入值", COM_NUM_SCREEN_INPUT_OIL, para_mainprocess, COMMAND_READ, (uint8_t*)"LevelInputVal" },
-		{ (uint8_t*)"水位数据源", COM_NUM_SCREEN_SOURCE_WATER, para_mainprocess, COMMAND_READ, (uint8_t*)"Water Source" },
-		{ (uint8_t*)"水位手工输入值", COM_NUM_SCREEN_INPUT_WATER, para_mainprocess, COMMAND_READ, (uint8_t*)"WaterInputVal" },
-		{ (uint8_t*)"密度数据源", COM_NUM_SCREEN_SOURCE_D, para_mainprocess, COMMAND_READ, (uint8_t*)"Densi Source" },
-		{ (uint8_t*)"密度手工输入值", COM_NUM_SCREEN_INPUT_D, para_mainprocess, COMMAND_READ, (uint8_t*)"DensiInputVal" },
-		{ (uint8_t*)"密度手输值上传开关", COM_NUM_SCREEN_INPUT_D_SWITCH, para_mainprocess, COMMAND_READ, (uint8_t*)"DensiSwitch" },
-		{ (uint8_t*)"温度数据源", COM_NUM_SCREEN_SOURCE_T, para_mainprocess, COMMAND_READ, (uint8_t*)"Temp Source" },
-		{ (uint8_t*)"温度手工输入值", COM_NUM_SCREEN_INPUT_T, para_mainprocess, COMMAND_READ, (uint8_t*)"TempInputVal" },
-		{ (uint8_t*)"退出", COM_NUM_NOOPERA, menu_screen, COMMANE_NORW, (uint8_t*)"Exit" },
-	};
-
-	int menulen = (int)(sizeof(menu) / sizeof(menu[0]));
-
-	all_screen(0x00);
-	func_index = KEYNUM_SOURCE;
-	menuselect(menu, menulen);
-}
-
-/* CPU3 通信配置菜单 */
-static void menu_cpu3_comm(void)
-{
-	static struct MenuData menu[] = {
-		{ (uint8_t*)"COM1波特率", COM_NUM_CPU3_COM1_BAUDRATE, para_mainprocess, COMMAND_READ, (uint8_t*)"COM1 Baud" },
-		{ (uint8_t*)"COM1数据位", COM_NUM_CPU3_COM1_DATABITS, para_mainprocess, COMMAND_READ, (uint8_t*)"COM1 Databits" },
-		{ (uint8_t*)"COM1校验", COM_NUM_CPU3_COM1_PARITY, para_mainprocess, COMMAND_READ, (uint8_t*)"COM1 Parity" },
-		{ (uint8_t*)"COM1停止位", COM_NUM_CPU3_COM1_STOPBITS, para_mainprocess, COMMAND_READ, (uint8_t*)"COM1 StopBits" },
-		{ (uint8_t*)"COM1协议", COM_NUM_CPU3_COM1_PROTOCOL, para_mainprocess, COMMAND_READ, (uint8_t*)"COM1 Proto" },
-
-		{ (uint8_t*)"COM2波特率", COM_NUM_CPU3_COM2_BAUDRATE, para_mainprocess, COMMAND_READ, (uint8_t*)"COM2 Baud" },
-		{ (uint8_t*)"COM2数据位", COM_NUM_CPU3_COM2_DATABITS, para_mainprocess, COMMAND_READ, (uint8_t*)"COM2 Databits" },
-		{ (uint8_t*)"COM2校验", COM_NUM_CPU3_COM2_PARITY, para_mainprocess, COMMAND_READ, (uint8_t*)"COM2 Parity" },
-		{ (uint8_t*)"COM2停止位", COM_NUM_CPU3_COM2_STOPBITS, para_mainprocess, COMMAND_READ, (uint8_t*)"COM2 StopBits" },
-		{ (uint8_t*)"COM2协议", COM_NUM_CPU3_COM2_PROTOCOL, para_mainprocess, COMMAND_READ, (uint8_t*)"COM2 Proto" },
-
-		{ (uint8_t*)"COM3波特率", COM_NUM_CPU3_COM3_BAUDRATE, para_mainprocess, COMMAND_READ, (uint8_t*)"COM3 Baud" },
-		{ (uint8_t*)"COM3数据位", COM_NUM_CPU3_COM3_DATABITS, para_mainprocess, COMMAND_READ, (uint8_t*)"COM3 Databits" },
-		{ (uint8_t*)"COM3校验", COM_NUM_CPU3_COM3_PARITY, para_mainprocess, COMMAND_READ, (uint8_t*)"COM3 Parity" },
-		{ (uint8_t*)"COM3停止位", COM_NUM_CPU3_COM3_STOPBITS, para_mainprocess, COMMAND_READ, (uint8_t*)"COM3 StopBits" },
-		{ (uint8_t*)"COM3协议", COM_NUM_CPU3_COM3_PROTOCOL, para_mainprocess, COMMAND_READ, (uint8_t*)"COM3 Proto" },
-
-		{ (uint8_t*)"退出", COM_NUM_NOOPERA, menu_paraconfig, COMMANE_NORW, (uint8_t*)"Exit" },
-	};
-
-	int menulen = (int)(sizeof(menu) / sizeof(menu[0]));
-
-	all_screen(0x00);
-	func_index = KEYNUM_MENU_CPU3_COMM;
-	menuselect(menu, menulen);
-}
 
 /* 设置语言 */
 static void setlanguage(void)
@@ -2100,57 +2159,7 @@ static void setenglish(void)
 	mainmenu();
 }
 
-/* 带一参线圈指令处理过程 */
-static void cmd_onepara_process(void)
-{
-	int index;
-	int i;
-	int arrlen = 8;
-	static uint8_t paraarr[8];
 
-	static uint32_t onepara_cmd_map[][2] = {
-		{ COM_NUM_SINGLE_POINT, CMD_MEASURE_SINGLE },
-		{ COM_NUM_SP_TEST, CMD_MONITOR_SINGLE },
-		{ COM_NUM_CAL_OIL, CMD_CALIBRATE_OIL },
-		{ COM_NUM_RUNUP, CMD_MOVE_UP },
-		{ COM_NUM_RUNDOWN, CMD_MOVE_DOWN },
-		{ COM_NUM_CORRECTION_OIL, CMD_CORRECT_OIL },
-	};
-
-	int mapamount = (int)(sizeof(onepara_cmd_map) / sizeof(onepara_cmd_map[0]));
-
-	index = getHoldValueNum(now_Opera_Num);
-	if (index == -1) {
-		all_screen(0x00);
-		DisplayLangaugeLineWords((uint8_t*)"非法参数！", OLED_LINE8_2, OLED_ROW3_2, 0, (uint8_t*)"Invalid Para");
-		HAL_Delay(800);
-	} else {
-		all_screen(0x00);
-		DisplayLangaugeLineWords((uint8_t*)"正在下发参数", OLED_LINE8_2, OLED_ROW3_2, 0, (uint8_t*)"Send Para");
-
-		for (i = 0; i < param_meta[index].rgstcnt * 2 && i < arrlen; i++) {
-			paraarr[i] = (uint8_t)((now_Para_CT.val >> (8 * i)) & 0xFF);
-		}
-
-		CPU2_CombinatePackage_Send(FUNCTIONCODE_WRITE_MULREGISTER,
-				param_meta[index].startadd,
-				param_meta[index].rgstcnt,
-				paraarr);
-
-		DisplayLangaugeLineWords((uint8_t*)"正在下发指令", OLED_LINE8_2, OLED_ROW3_3, 0, (uint8_t*)"Send Command");
-
-		for (i = 0; i < mapamount; i++) {
-			if (now_Opera_Num == (int)onepara_cmd_map[i][0]) {
-				CPU2_CombinatePackage_Send(FUNCTIONCODE_WRITE_MULREGISTER,
-						HOLDREGISTER_DEVICEPARAM_COMMAND, 2,
-						&onepara_cmd_map[i][1]);
-				break;
-			}
-		}
-	}
-
-	exitTankOpera();
-}
 
 /* 退出罐上操作 */
 void exitTankOpera(void)
@@ -2164,4 +2173,319 @@ void exitTankOpera(void)
 	DisplayLangaugeLineWords((uint8_t*)"正在退出罐上操作",
 			OLED_LINE8_1, OLED_ROW3_2, 0,
 			(uint8_t*)"Exit operation");
+}
+
+
+
+/* -------------------- 可选：过滤“保留项” --------------------
+ * 说明：
+ * - 如果你的字符串是 GBK： "保留" 通常 2 个汉字 4 字节；UTF-8 是 6 字节
+ * - 为避免编码差异，这里用 strncmp("保留",2) 做弱判断；若你发现无效，按编码改成 memcmp。
+ */
+static int is_reserved_cn(const uint8_t *name)
+{
+    if (name == NULL) return 0;
+    return (strncmp((const char*)name, "保留", 2) == 0);
+}
+
+/* -------------------- 分组映射（只维护这个即可） -------------------- */
+static MenuGroup ParamGroupOf(int operaNum)
+{
+    switch (operaNum) {
+    /* 设备信息 */
+    case COM_NUM_DEVICEPARAM_SENSORTYPE:
+    case COM_NUM_DEVICEPARAM_SENSORID:
+    case COM_NUM_DEVICEPARAM_SENSOR_SOFTWARE_VERSION:
+    case COM_NUM_DEVICEPARAM_SOFTWAREVERSION:
+    case COM_NUM_DEVICEPARAM_POWER_ON_DEFAULT_COMMAND:
+    case COM_NUM_DEVICEPARAM_ERROR_AUTO_BACK_ZERO:
+    case COM_NUM_DEVICEPARAM_ERROR_STOP_MEASUREMENT:
+        return MENU_GRP_DEV_INFO;
+
+    /* 机械/电机/编码器 */
+    case COM_NUM_DEVICEPARAM_ENCODER_WHEEL_CIRCUMFERENCE_MM:
+    case COM_NUM_DEVICEPARAM_MAX_MOTOR_SPEED:
+    case COM_NUM_DEVICEPARAM_FIRST_LOOP_CIRCUMFERENCE_MM:
+    case COM_NUM_DEVICEPARAM_TAPE_THICKNESS_MM:
+        return MENU_GRP_MECH;
+
+    /* 称重 */
+    case COM_NUM_DEVICEPARAM_EMPTY_WEIGHT:
+    case COM_NUM_DEVICEPARAM_EMPTY_WEIGHT_UPPER_LIMIT:
+    case COM_NUM_DEVICEPARAM_EMPTY_WEIGHT_LOWER_LIMIT:
+    case COM_NUM_DEVICEPARAM_FULL_WEIGHT:
+    case COM_NUM_DEVICEPARAM_FULL_WEIGHT_UPPER_LIMIT:
+    case COM_NUM_DEVICEPARAM_FULL_WEIGHT_LOWER_LIMIT:
+    case COM_NUM_DEVICEPARAM_WEIGHT_UPPER_LIMIT_RATIO:
+    case COM_NUM_DEVICEPARAM_WEIGHT_LOWER_LIMIT_RATIO:
+        return MENU_GRP_WEIGHT;
+
+    /* 零点 */
+    case COM_NUM_DEVICEPARAM_ZERO_WEIGHT_THRESHOLD_RATIO:
+    case COM_NUM_DEVICEPARAM_WEIGHT_IGNORE_ZONE:
+    case COM_NUM_DEVICEPARAM_MAX_ZERO_DEVIATION_DISTANCE:
+    case COM_NUM_DEVICEPARAM_FINDZERO_DOWN_DISTANCE:
+        return MENU_GRP_ZERO;
+
+    /* 液位 */
+    case COM_NUM_DEVICEPARAM_TANKHEIGHT:
+    case COM_NUM_DEVICEPARAM_LIQUID_SENSOR_DISTANCE_DIFF:
+    case COM_NUM_DEVICEPARAM_BLINDZONE:
+    case COM_NUM_DEVICEPARAM_OILLEVELTHRESHOLD:
+    case COM_NUM_DEVICEPARAM_OILLEVEL_HYSTERESIS_THRESHOLD:
+    case COM_NUM_DEVICEPARAM_LIQUIDLEVELMEASUREMENTMETHOD:
+    case COM_NUM_DEVICEPARAM_OILLEVEL_FREQUENCY:
+    case COM_NUM_DEVICEPARAM_OILLEVEL_DENSITY:
+    case COM_NUM_DEVICEPARAM_OILLEVEL_HYSTERESIS_TIME:
+        return MENU_GRP_LIQUID;
+
+    /* 水位 */
+    case COM_NUM_DEVICEPARAM_WATER_TANK_HEIGHT:
+    case COM_NUM_DEVICEPARAM_WATER_LEVEL_MODE:
+    case COM_NUM_DEVICEPARAM_WATER_BLINDZONE:
+    case COM_NUM_DEVICEPARAM_WATER_CAP_THRESHOLD:
+    case COM_NUM_DEVICEPARAM_WATER_CAP_HYSTERESIS:
+    case COM_NUM_DEVICEPARAM_MAXDOWNDISTANCE:
+    case COM_NUM_DEVICEPARAM_ZERO_CAP:
+    case COM_NUM_DEVICEPARAM_WATER_STABLE_THRESHOLD:
+    case COM_NUM_DEVICEPARAM_WATER_LEVEL_CORRECTION:
+        return MENU_GRP_WATER;
+
+    /* 罐底/罐高 */
+    case COM_NUM_DEVICEPARAM_BOTTOM_DETECT_MODE:
+    case COM_NUM_DEVICEPARAM_BOTTOM_ANGLE_THRESHOLD:
+    case COM_NUM_DEVICEPARAM_BOTTOM_WEIGHT_THRESHOLD:
+    case COM_NUM_DEVICEPARAM_REFRESH_TANKHEIGHT_FLAG:
+    case COM_NUM_DEVICEPARAM_MAX_TANKHEIGHT_DEVIATION:
+    case COM_NUM_DEVICEPARAM_INITIAL_TANKHEIGHT:
+    case COM_NUM_DEVICEPARAM_CURRENT_TANKHEIGHT:
+        return MENU_GRP_BOTTOM_TANKH;
+
+    /* 修正 */
+    case COM_NUM_DEVICEPARAM_DENSITYCORRECTION:
+    case COM_NUM_DEVICEPARAM_TEMPERATURECORRECTION:
+    case COM_NUM_DEVICEPARAM_LAST_OIL_CORRECTION_LEVEL:
+    case COM_NUM_DEVICEPARAM_TANK_GAS_PHASE_TEMPERATURE:
+    case COM_NUM_DEVICEPARAM_TAPE_EXPANSION_COEFFICIENT:
+    case COM_NUM_DEVICEPARAM_TAPE_CALIBRATION_TEMPERATURE:
+        return MENU_GRP_CORR;
+
+    /* 策略/分布/区间 */
+    case COM_NUM_DEVICEPARAM_REQUIREBOTTOMMEASUREMENT:
+    case COM_NUM_DEVICEPARAM_REQUIREWATERMEASUREMENT:
+    case COM_NUM_DEVICEPARAM_REQUIRESINGLEPOINTDENSITY:
+    case COM_NUM_DEVICEPARAM_SPREADMEASUREMENTORDER:
+    case COM_NUM_DEVICEPARAM_SPREADMEASUREMENTMODE:
+    case COM_NUM_DEVICEPARAM_SPREADMEASUREMENTCOUNT:
+    case COM_NUM_DEVICEPARAM_SPREADMEASUREMENTDISTANCE:
+    case COM_NUM_DEVICEPARAM_SPREADTOPLIMIT:
+    case COM_NUM_DEVICEPARAM_SPREADBOTTOMLIMIT:
+    case COM_NUM_DEVICEPARAM_SPREAD_POINT_HOVER_TIME:
+    case COM_NUM_DEVICEPARAM_INTERVAL_TOPLIMIT:
+    case COM_NUM_DEVICEPARAM_INTERVAL_BOTTOMLIMIT:
+        return MENU_GRP_POLICY;
+
+    /* Wartsila */
+    case COM_NUM_DEVICEPARAM_WARTSILA_UPPER_DENSITY_LIMIT:
+    case COM_NUM_DEVICEPARAM_WARTSILA_LOWER_DENSITY_LIMIT:
+    case COM_NUM_DEVICEPARAM_WARTSILA_DENSITY_INTERVAL:
+    case COM_NUM_DEVICEPARAM_WARTSILA_MAX_HEIGHT_ABOVE_SURFACE:
+        return MENU_GRP_WARTSILA;
+
+    /* DO */
+    case COM_NUM_DEVICEPARAM_ALARM_HIGH_DO:
+    case COM_NUM_DEVICEPARAM_ALARM_LOW_DO:
+    case COM_NUM_DEVICEPARAM_THIRD_STATE_THRESHOLD:
+        return MENU_GRP_DO_ALARM;
+
+    /* AO */
+    case COM_NUM_DEVICEPARAM_CURRENT_RANGE_START_mA:
+    case COM_NUM_DEVICEPARAM_CURRENT_RANGE_END_mA:
+    case COM_NUM_DEVICEPARAM_ALARM_HIGH_AO:
+    case COM_NUM_DEVICEPARAM_ALARM_LOW_AO:
+    case COM_NUM_DEVICEPARAM_INITIAL_CURRENT_mA:
+    case COM_NUM_DEVICEPARAM_AO_HIGH_CURRENT_mA:
+    case COM_NUM_DEVICEPARAM_AO_LOW_CURRENT_mA:
+    case COM_NUM_DEVICEPARAM_FAULT_CURRENT_mA:
+    case COM_NUM_DEVICEPARAM_DEBUG_CURRENT_mA:
+        return MENU_GRP_AO;
+
+    /* 标定/单点/位置 */
+    case COM_NUM_CAL_OIL:
+    case COM_NUM_CALIBRATE_WATER:
+    case COM_NUM_SINGLE_POINT:
+    case COM_NUM_SP_TEST:
+    case COM_NUM_DEVICEPARAM_DENSITY_DISTRIBUTION_OIL_LEVEL:
+    case COM_NUM_DEVICEPARAM_MOTOR_COMMAND_DISTANCE:
+        return MENU_GRP_CAL_SP;
+
+    /* 校验信息 */
+    case COM_NUM_DEVICEPARAM_PARAM_VERSION:
+    case COM_NUM_DEVICEPARAM_STRUCT_SIZE:
+    case COM_NUM_DEVICEPARAM_MAGIC:
+    case COM_NUM_DEVICEPARAM_CRC:
+        return MENU_GRP_PARAM_CHECK;
+
+    /* CPU3 本机参数 */
+    case COM_NUM_PARA_LOCAL_LEDVERSION:
+    case COM_NUM_PARA_LANG:
+        return MENU_GRP_CPU3_BASE;
+
+    case COM_NUM_SCREEN_SOURCE_OIL:
+    case COM_NUM_SCREEN_SOURCE_WATER:
+    case COM_NUM_SCREEN_SOURCE_D:
+    case COM_NUM_SCREEN_SOURCE_T:
+        return MENU_GRP_CPU3_SOURCE;
+
+    case COM_NUM_SCREEN_INPUT_OIL:
+    case COM_NUM_SCREEN_INPUT_WATER:
+    case COM_NUM_SCREEN_INPUT_D:
+    case COM_NUM_SCREEN_INPUT_D_SWITCH:
+    case COM_NUM_SCREEN_INPUT_T:
+        return MENU_GRP_CPU3_INPUT;
+
+    case COM_NUM_SCREEN_DECIMAL:
+    case COM_NUM_SCREEN_PASSWARD:
+    case COM_NUM_SCREEN_OFF:
+        return MENU_GRP_CPU3_SCREEN;
+
+    case COM_NUM_CPU3_COM1_BAUDRATE:
+    case COM_NUM_CPU3_COM1_DATABITS:
+    case COM_NUM_CPU3_COM1_PARITY:
+    case COM_NUM_CPU3_COM1_STOPBITS:
+    case COM_NUM_CPU3_COM1_PROTOCOL:
+        return MENU_GRP_CPU3_COM1;
+
+    case COM_NUM_CPU3_COM2_BAUDRATE:
+    case COM_NUM_CPU3_COM2_DATABITS:
+    case COM_NUM_CPU3_COM2_PARITY:
+    case COM_NUM_CPU3_COM2_STOPBITS:
+    case COM_NUM_CPU3_COM2_PROTOCOL:
+        return MENU_GRP_CPU3_COM2;
+
+    case COM_NUM_CPU3_COM3_BAUDRATE:
+    case COM_NUM_CPU3_COM3_DATABITS:
+    case COM_NUM_CPU3_COM3_PARITY:
+    case COM_NUM_CPU3_COM3_STOPBITS:
+    case COM_NUM_CPU3_COM3_PROTOCOL:
+        return MENU_GRP_CPU3_COM3;
+
+    default:
+        /* 未分类项：避免丢失，统一放到“校验信息”或“基础信息”都可以 */
+        return MENU_GRP_DEV_INFO;
+    }
+}
+
+/* -------------------- 自动生成菜单列表 -------------------- */
+#define AUTO_MENU_MAX_ITEMS  90
+
+static void menu_build_by_group(MenuGroup grp, int key_index, void (*backFunc)(void))
+{
+    static struct MenuData menu[AUTO_MENU_MAX_ITEMS + 1];
+    int menulen = 0;
+
+    for (int i = 0; i < (int)param_metaAmount; i++) {
+
+        const struct ParameterMetadata *m = &param_meta[i];
+
+        /* 分组过滤 */
+        if (ParamGroupOf(m->operanum) != grp) continue;
+
+        /* 不展示“设备指令寄存器” */
+        if (m->operanum == COM_NUM_DEVICEPARAM_COMMAND) continue;
+
+        /* 过滤保留项 */
+        if (is_reserved_cn(m->name)) continue;
+
+        if (menulen >= AUTO_MENU_MAX_ITEMS) break;
+
+        menu[menulen].operaName  = m->name;
+        menu[menulen].operaNum   = m->operanum;
+        menu[menulen].sureopera  = para_mainprocess;
+
+        /* 关键：用你的 authority_write 来决定读/写 */
+        menu[menulen].rorw = (m->authority_write) ? COMMAND_WRITE : COMMAND_READ;
+
+        /* 英文名称 */
+        menu[menulen].operaName2 = m->name_English;
+        menulen++;
+    }
+
+    /* 返回项 */
+    menu[menulen].operaName  = (uint8_t*)"返回";
+    menu[menulen].operaNum   = COM_NUM_NOOPERA;
+    menu[menulen].sureopera  = backFunc;
+    menu[menulen].rorw       = COMMANE_NORW;
+    menu[menulen].operaName2 = (uint8_t*)"Back";
+    menulen++;
+
+    all_screen(0x00);
+    func_index = key_index;
+    menuselect(menu, menulen);
+}
+
+/* CPU2：分组页 = 参数列表页（取消 DEBUG 容器页） */
+static void menu_dev_info(void)     { menu_build_by_group(MENU_GRP_DEV_INFO,     KEYNUM_MENU_PARA_DEV_INFO,     menu_paracfg_main); }
+static void menu_mech(void)         { menu_build_by_group(MENU_GRP_MECH,         KEYNUM_MENU_PARA_MECH,         menu_paracfg_main); }
+static void menu_weight(void)       { menu_build_by_group(MENU_GRP_WEIGHT,       KEYNUM_MENU_PARA_WEIGHT,       menu_paracfg_main); }
+static void menu_zero(void)         { menu_build_by_group(MENU_GRP_ZERO,         KEYNUM_MENU_PARA_ZERO,         menu_paracfg_main); }
+
+static void menu_liquid(void)       { menu_build_by_group(MENU_GRP_LIQUID,       KEYNUM_MENU_PARA_LIQUID,       menu_paracfg_main); }
+static void menu_water(void)        { menu_build_by_group(MENU_GRP_WATER,        KEYNUM_MENU_PARA_WATER,        menu_paracfg_main); }
+static void menu_bottom_tankh(void) { menu_build_by_group(MENU_GRP_BOTTOM_TANKH, KEYNUM_MENU_PARA_BOTTOM_TANKH, menu_paracfg_main); }
+
+static void menu_correct(void)      { menu_build_by_group(MENU_GRP_CORR,         KEYNUM_MENU_PARA_CORR,         menu_paracfg_main); }
+static void menu_policy(void)       { menu_build_by_group(MENU_GRP_POLICY,       KEYNUM_MENU_PARA_POLICY,       menu_paracfg_main); }
+static void menu_wartsila(void)     { menu_build_by_group(MENU_GRP_WARTSILA,     KEYNUM_MENU_PARA_WARTSILA,     menu_paracfg_main); }
+
+static void menu_do_alarm(void)     { menu_build_by_group(MENU_GRP_DO_ALARM,     KEYNUM_MENU_PARA_DO,           menu_paracfg_main); }
+static void menu_ao(void)           { menu_build_by_group(MENU_GRP_AO,           KEYNUM_MENU_PARA_AO,           menu_paracfg_main); }
+static void menu_cal_sp(void)       { menu_build_by_group(MENU_GRP_CAL_SP,       KEYNUM_MENU_PARA_CAL_SP,       menu_paracfg_main); }
+
+static void menu_param_check(void)  { menu_build_by_group(MENU_GRP_PARAM_CHECK, KEYNUM_MENU_PARA_PARAM_CHECK,  menu_paracfg_main); }
+
+/* CPU3：同理，分组页 = 参数列表页 */
+static void menu_cpu3_base(void)    { menu_build_by_group(MENU_GRP_CPU3_BASE,   KEYNUM_MENU_CPU3_BASE,   menu_paracfg_main); }
+static void menu_cpu3_source(void)  { menu_build_by_group(MENU_GRP_CPU3_SOURCE, KEYNUM_MENU_CPU3_SOURCE, menu_paracfg_main); }
+static void menu_cpu3_input(void)   { menu_build_by_group(MENU_GRP_CPU3_INPUT,  KEYNUM_MENU_CPU3_INPUT,  menu_paracfg_main); }
+static void menu_cpu3_screen(void)  { menu_build_by_group(MENU_GRP_CPU3_SCREEN, KEYNUM_MENU_CPU3_SCREEN, menu_paracfg_main); }
+static void menu_cpu3_comm1(void)   { menu_build_by_group(MENU_GRP_CPU3_COM1,   KEYNUM_MENU_CPU3_COM1,   menu_paracfg_main); }
+static void menu_cpu3_comm2(void)   { menu_build_by_group(MENU_GRP_CPU3_COM2,   KEYNUM_MENU_CPU3_COM2,   menu_paracfg_main); }
+static void menu_cpu3_comm3(void)   { menu_build_by_group(MENU_GRP_CPU3_COM3,   KEYNUM_MENU_CPU3_COM3,   menu_paracfg_main); }
+
+static void menu_paracfg_main(void)
+{
+    static struct MenuData menu[] = {
+        {(uint8_t*)"基础信息",      0, menu_dev_info,     COMMANE_NORW, (uint8_t*)"Info"},
+        {(uint8_t*)"电机与编码参数",      0, menu_mech,         COMMANE_NORW, (uint8_t*)"Mechanism"},
+        {(uint8_t*)"称重参数",      0, menu_weight,       COMMANE_NORW, (uint8_t*)"Weight"},
+        {(uint8_t*)"零点参数",      0, menu_zero,         COMMANE_NORW, (uint8_t*)"Zero"},
+
+        {(uint8_t*)"液位参数",      0, menu_liquid,       COMMANE_NORW, (uint8_t*)"Level"},
+        {(uint8_t*)"水位参数",      0, menu_water,        COMMANE_NORW, (uint8_t*)"Water"},
+        {(uint8_t*)"罐高参数",     0, menu_bottom_tankh, COMMANE_NORW, (uint8_t*)"Bottom/TankH"},
+
+        {(uint8_t*)"磁通量参数",      0, menu_correct,      COMMANE_NORW, (uint8_t*)"Correction"},
+        {(uint8_t*)"密度测量参数",0, menu_policy,       COMMANE_NORW, (uint8_t*)"Policy"},
+        {(uint8_t*)"Wartsila参数",  0, menu_wartsila,     COMMANE_NORW, (uint8_t*)"Wartsila"},
+
+        {(uint8_t*)"DO报警",        0, menu_do_alarm,     COMMANE_NORW, (uint8_t*)"DO Alarm"},
+        {(uint8_t*)"AO输出",        0, menu_ao,           COMMANE_NORW, (uint8_t*)"AO"},
+//        {(uint8_t*)"标定/单点",     0, menu_cal_sp,       COMMANE_NORW, (uint8_t*)"Cal/SP"},
+        {(uint8_t*)"校验信息",      0, menu_param_check,  COMMANE_NORW, (uint8_t*)"Check"},
+
+        {(uint8_t*)"CPU3版本信息",     0, menu_cpu3_base,    COMMANE_NORW, (uint8_t*)"CPU3 Base"},
+        {(uint8_t*)"数据源设置",   0, menu_cpu3_source,  COMMANE_NORW, (uint8_t*)"CPU3 Source"},
+        {(uint8_t*)"数据源手输值",   0, menu_cpu3_input,   COMMANE_NORW, (uint8_t*)"CPU3 Input"},
+        {(uint8_t*)"显示设置",     0, menu_cpu3_screen,  COMMANE_NORW, (uint8_t*)"CPU3 Screen"},
+        {(uint8_t*)"COM1配置",     0, menu_cpu3_comm1,   COMMANE_NORW, (uint8_t*)"CPU3 COM1"},
+        {(uint8_t*)"COM2配置",     0, menu_cpu3_comm2,   COMMANE_NORW, (uint8_t*)"CPU3 COM2"},
+        {(uint8_t*)"COM3配置",     0, menu_cpu3_comm3,   COMMANE_NORW, (uint8_t*)"CPU3 COM3"},
+
+        {(uint8_t*)"返回主菜单",    COM_NUM_NOOPERA, mainmenu, COMMANE_NORW, (uint8_t*)"Back"},
+    };
+
+    all_screen(0x00);
+    func_index = KEYNUM_MENU_PARACFG_MAIN;
+    menuselect(menu, (int)(sizeof(menu)/sizeof(menu[0])));
 }
