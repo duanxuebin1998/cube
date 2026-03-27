@@ -118,7 +118,7 @@ static uint32_t Density_RunPoints01mm(const int32_t *p01,
         valid++;
 
         /* 命令切换退出：用于上位机/按键打断当前过程 */
-        if (g_deviceParams.command != CMD_NONE) {
+        if (HasEffectiveCommandSwitchRequest()) {
             printf("检测到命令切换请求，停止当前分布测量\r\n");
             break;
         }
@@ -133,7 +133,7 @@ static uint32_t Density_RunPoints01mm(const int32_t *p01,
 
     /* 平均值（RAW 平均） */
     dist->measurement_points = valid;
-    dist->Density_oil_level  = (uint32_t)((oil_level_01mm + 5) / 10); /* mm 四舍五入 */
+    dist->Density_oil_level  = (uint32_t)oil_level_01mm; /* 0.1mm */
 
     dist->average_temperature = (uint32_t)(sum_temp_raw / valid);
     dist->average_density     = (uint32_t)(sum_dens_raw / valid);
@@ -443,19 +443,26 @@ static uint32_t BuildPoints_Meter_Exact(int32_t oil_level_01mm,
  *   - 端点合法性：high_b < high_a，high_a < tankHeight，high_b >= blindZone
  *   - c_num>=3 时：等差取点，最后一点评端点
  */
-static uint32_t BuildPoints_Interval_Exact(int32_t *out_p01, uint32_t *out_n)
+static uint32_t BuildPoints_Interval_Exact(int32_t oil_level_01mm,
+                                           int32_t *out_p01,
+                                           uint32_t *out_n)
 {
     if (!out_p01 || !out_n) return PARAM_ADDRESS_OVERFLOW;
 
-    uint32_t high_min, high_a, high_b;
+    uint32_t high_min;
+    int32_t  high_a, high_b;
     uint32_t dis;
     int c_num;
     int8_t i;
 
     high_min = (uint32_t)g_deviceParams.blindZone;
 
-    high_a = g_deviceParams.wartsila_upper_density_limit;
-    high_b = g_deviceParams.wartsila_lower_density_limit;
+    /* 区间测参数：
+     *   - 上限：距液面的距离（0.1mm） => 绝对点位 = oil_level - topLimit
+     *   - 下限：距罐底的距离（0.1mm） => 绝对点位 = bottomLimit
+     */
+    high_a = oil_level_01mm - (int32_t)g_deviceParams.intervalMeasurementTopLimit;
+    high_b = (int32_t)g_deviceParams.intervalMeasurementBottomLimit;
 
     if (high_b >= high_a) return PARAM_RANGE_ERROR;
 
@@ -463,42 +470,44 @@ static uint32_t BuildPoints_Interval_Exact(int32_t *out_p01, uint32_t *out_n)
     if (c_num <= 0) return PARAM_RANGE_ERROR;
     if (c_num > (int)MAX_MEASUREMENT_POINTS) c_num = MAX_MEASUREMENT_POINTS;
 
-    if (high_a >= g_deviceParams.tankHeight) {
+    if (high_a >= (int32_t)g_deviceParams.tankHeight) {
         return PARAM_RANGE_ERROR;
-    } else if (high_b < high_min) {
+    } else if (high_b < (int32_t)high_min) {
+        return PARAM_RANGE_ERROR;
+    } else if (high_a <= 0) {
         return PARAM_RANGE_ERROR;
     }
 
     if (c_num == 1) {
-        out_p01[0] = (g_deviceParams.spreadMeasurementOrder == 0) ? (int32_t)high_a : (int32_t)high_b;
+        out_p01[0] = (g_deviceParams.spreadMeasurementOrder == 0) ? high_a : high_b;
         *out_n = 1;
         return NO_ERROR;
     }
 
     if (c_num == 2) {
         if (g_deviceParams.spreadMeasurementOrder == 0) {
-            out_p01[0] = (int32_t)high_a;
-            out_p01[1] = (int32_t)high_b;
+            out_p01[0] = high_a;
+            out_p01[1] = high_b;
         } else {
-            out_p01[0] = (int32_t)high_b;
-            out_p01[1] = (int32_t)high_a;
+            out_p01[0] = high_b;
+            out_p01[1] = high_a;
         }
         *out_n = 2;
         return NO_ERROR;
     }
 
-    dis = (uint32_t)(i32_abs((int32_t)high_a - (int32_t)high_b) / (uint32_t)(c_num - 1));
+    dis = (uint32_t)(i32_abs(high_a - high_b) / (uint32_t)(c_num - 1));
 
     if (g_deviceParams.spreadMeasurementOrder == 0) {
         for (i = 0; i < c_num; i++) {
-            out_p01[i] = (int32_t)(high_a - dis * (uint32_t)i);
+            out_p01[i] = high_a - (int32_t)(dis * (uint32_t)i);
         }
-        out_p01[c_num - 1] = (int32_t)high_b;
+        out_p01[c_num - 1] = high_b;
     } else {
         for (i = 0; i < c_num; i++) {
-            out_p01[i] = (int32_t)(high_b + dis * (uint32_t)i);
+            out_p01[i] = high_b + (int32_t)(dis * (uint32_t)i);
         }
-        out_p01[c_num - 1] = (int32_t)high_a;
+        out_p01[c_num - 1] = high_a;
     }
 
     *out_n = (uint32_t)c_num;
@@ -548,7 +557,7 @@ uint32_t Density_MeasureByMode_Exact(DensitySpreadModeId mode, DensityDistributi
         PrintPoints01mm("每米测", points01, n);
     }
     else if (mode == DENS_MODE_INTERVAL) {
-        ret = BuildPoints_Interval_Exact(points01, &n);
+        ret = BuildPoints_Interval_Exact(oil_level_01mm, points01, &n);
         if (ret != NO_ERROR) return ret;
         PrintPoints01mm("区间测", points01, n);
     }
@@ -834,8 +843,10 @@ void Print_DensitySpreadResult(const DensityDistribution *dist)
 
     printf("\r\n========== 密度分布测量结果 ==========\r\n");
 
-    printf("测量点数量         : %lu\r\n", (unsigned long) dist->measurement_points);
-    printf("测量油位/罐高 (mm) : %lu\r\n", (unsigned long) dist->Density_oil_level);
+    printf("测量点数量             : %lu\r\n", (unsigned long) dist->measurement_points);
+    printf("测量油位/罐高(0.1mm)   : %lu  =>  实际: %.1f mm\r\n",
+           (unsigned long) dist->Density_oil_level,
+           (double) dist->Density_oil_level / 10.0);
 
     /* average_* 为 RAW（编码值） */
     printf("平均温度 RAW       : %lu  =>  实际: %.2f ℃\r\n",
@@ -1129,7 +1140,7 @@ void CMD_SinglePointMonitoring(void)
         ret = SinglePoint_ReadSensor(&g_measurement.single_point_monitoring);
         SET_ERROR(ret);
 
-        if (g_deviceParams.command != CMD_NONE) {
+        if (HasEffectiveCommandSwitchRequest()) {
             printf("检测到命令切换请求，停止当前操作\r\n");
             return;
         }
