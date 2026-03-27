@@ -421,7 +421,7 @@ static void CMD_FollowWaterLevel(void)
 		SET_ERROR(ret);
 	}
 	else{
-		ret = FindWaterLevel_FastByStateFlip_StableExit();
+		ret = FindWaterLevel_FastByStateFlip_StableExit(0);
 		SET_ERROR(ret);
 	}
 	//ÔÙ¸úËæË®Î»

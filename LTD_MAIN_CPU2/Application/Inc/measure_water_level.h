@@ -1,10 +1,10 @@
 /*
- * @FilePath     : \undefinedd:\CUBE\LTD_MAIN_CPU2\Application\Inc\measure_water_level.h
+ * @FilePath     : \CUBE\LTD_MAIN_CPU2\Application\Inc\measure_water_level.h
  * @Description  :
  * @Author       : Aubon
  * @Date         : 2025-12-19 15:55:33
- * @LastEditors  : Duan
- * @LastEditTime : 2025-12-26 09:16:22
+ * @LastEditors  : Duan Xuebin
+ * @LastEditTime : 2026-03-26 13:42:14
  * Copyright 2025 Aubon, All Rights Reserved.
  * 2025-12-19 15:55:33
  */
@@ -33,6 +33,8 @@ extern "C" {
 #ifndef WATER
 #define WATER  1
 #endif
+
+#define WATER_STABLE_WINDOW_DEFAULT_MS (30000u)
 
 /* -------------------- 对外变量 -------------------- */
 /* water_value 的物理意义以 .c 内实现为准（当前实现为：水位高度/或位置的缓存值） */
@@ -81,10 +83,11 @@ uint32_t FollowWaterLevel(void);
  *  - motorMove_upWithSpeed()/motorMove_downWithSpeed(): 每次调用推动继续运动（你现有粗找就是这样用的）
  *  - check_water_status(): 返回 WATER / NORMAL
  *  - Motor_CheckLostStep_AutoTiming(): 丢步检测（可选但建议保留）
+ * @param stable_win_ms 稳定判定窗口时长（ms）
  * 退出条件：
- *   连续 60s 内 water_level 波动（max-min）不超过 50mm -> 认为稳定找到水位，退出
+ *   连续 stable_win_ms 内 water_level 波动（max-min）不超过阈值 -> 认为稳定找到水位，退出
  */
-uint32_t FindWaterLevel_FastByStateFlip_StableExit(void);
+uint32_t FindWaterLevel_FastByStateFlip_StableExit(uint32_t stable_win_ms);
 /**
  * @brief 快速水位跟随（基于电容阈值 + 滞回 + 自恢复）
  *
