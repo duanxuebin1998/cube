@@ -414,7 +414,7 @@ static void CMD_FollowWaterLevel(void)
 {
     uint32_t ret = NO_ERROR;
     MeasureStart();
-    g_measurement.device_status.device_state = STATE_FOLLOW_WATERING;
+    g_measurement.device_status.device_state = STATE_FOLLOW_WATER_POINT_SEARCHING;
     //先确定水位
 	if (g_deviceParams.water_level_mode == 0) {
 		ret = SearchWaterLevel();
@@ -426,7 +426,6 @@ static void CMD_FollowWaterLevel(void)
 	}
 	//再跟随水位
     printf("水位跟随\t进入闭环跟随\r\n");
-    g_measurement.device_status.device_state = STATE_FOLLOW_WATER_OVER; // 你需要加这个状态
 	if (g_deviceParams.water_level_mode == 0) {
 		ret = FollowWaterLevel();
 		SET_ERROR(ret);

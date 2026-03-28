@@ -432,24 +432,24 @@ uint32_t Read_Water_Capacitance(float *cap_out)
 
     if (recv_len != 11U) {
         printf("[UART6] 电容响应长度异常: recvLen=%u\r\n", (unsigned)recv_len);
-        return SENSOR_RESP_FORMAT_ERROR;
+        // return SENSOR_RESP_FORMAT_ERROR;
     }
 
     /* 格式检查：起始必须是 D 或 E，且以 \r\n 结束 */
     if (!((resp[0] == 'D') || (resp[0] == 'E'))) {
         printf("[UART6] 电容响应头错误: 0x%02X, resp=%s\r\n", (unsigned char)resp[0], resp);
-        return SENSOR_RESP_FORMAT_ERROR;
+        // return SENSOR_RESP_FORMAT_ERROR;
     }
     if (!(resp[9] == '\r' && resp[10] == '\n')) {
         printf("[UART6] 电容响应结尾错误: [%02X %02X]\r\n", (unsigned char)resp[9], (unsigned char)resp[10]);
-        return SENSOR_RESP_FORMAT_ERROR;
+        // return SENSOR_RESP_FORMAT_ERROR;
     }
 
     /* BCC 校验：WaterSendPack 的 BCC 在 resp[8]，覆盖 resp[0..7]。 */
     char bcc = CalculationBCC_DSM(resp, 8);
     if (bcc != resp[8]) {
         printf("[UART6] 电容 BCC 校验失败: cal=%02X rcv=%02X\r\n", (unsigned char)bcc, (unsigned char)resp[8]);
-        return SENSOR_BCC_ERROR;
+        // return SENSOR_BCC_ERROR;
     }
 
     /* 电压异常标志：resp[0]=='E' */

@@ -1116,7 +1116,7 @@ static const EquipStateDisplay state_display_table[] = {
     { STATE_SYNTHETICING,            "综合指令中",               "Synthetics Running" },
 
     /* ===== LTD 新增运行中 ===== */
-    { STATE_FOLLOW_WATERING,         "寻找水位跟随点",               "Water Level Following" },      /* NEW */
+    { STATE_FOLLOW_WATER_POINT_SEARCHING, "寻找水位跟随点",             "Searching Water Follow Point" }, /* NEW */
     { STATE_METER_DENSITY,           "密度每米测量中",           "Meter Density Measuring" },
     { STATE_INTERVAL_DENSITY,        "液位区间测量中",           "Interval Density Measuring" },
     { STATE_GET_FULLWEIGHT,          "获取满载称重中",           "Getting Full Weight" },
@@ -1152,7 +1152,7 @@ static const EquipStateDisplay state_display_table[] = {
     { STATE_FLOWOIL,                 "液位跟随中",               "Level Following" },
 
     /* ===== LTD 新完成态 ===== */
-    { STATE_FOLLOW_WATER_OVER,       "水位跟随中",             "Water Level Follow Done" },     /* NEW */
+    { STATE_FOLLOW_WATERING,         "水位跟随中",                 "Water Level Following" },      /* NEW */
     { STATE_FINDWATER_OVER,          "寻找水位完成",             "Water Level Done" },
     { STATE_FINDBOTTOM_OVER,         "寻找罐底完成",             "Tank Bottom Done" },
     { STATE_FORCEZERO_OVER,          "设置电机零点完成",         "Motor Zero Done" },

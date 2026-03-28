@@ -240,7 +240,7 @@ typedef enum {
     STATE_SYNTHETICING = 0x0023,              // 综合指令中
 
     /* ===================== LTD / 新增测量中状态（顺延） ===================== */
-    STATE_FOLLOW_WATERING = 0x0024,            // 水位跟随寻找中
+    STATE_FOLLOW_WATER_POINT_SEARCHING = 0x0024, // 寻找水位跟随点中
     STATE_METER_DENSITY = 0x0025,              // 密度每米测量中
     STATE_INTERVAL_DENSITY = 0x0026,           // 液位区间测量中
     STATE_GET_FULLWEIGHT = 0x0027,             // 获取满载称重中
@@ -277,7 +277,7 @@ typedef enum {
     STATE_SYNTHETICING_OVER = 0x8023,          // 综合指令完成
 
     /* ===================== LTD / 新增完成态 ===================== */
-    STATE_FOLLOW_WATER_OVER = 0x8024,           // 水位跟随完成
+    STATE_FOLLOW_WATERING = 0x8024,            // 水位跟随中（沿用0x80xx状态码）
     STATE_COM_METER_DENSITY_OVER = 0x8025,      // 密度每米测量完成
     STATE_INTERVAL_DENSITY_OVER = 0x8026,       // 液位区间测量完成
     STATE_GET_FULLWEIGHT_OVER = 0x8027,         // 获取满载称重完成
