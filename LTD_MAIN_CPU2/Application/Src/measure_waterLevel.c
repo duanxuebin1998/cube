@@ -67,11 +67,26 @@ static inline float WaterCapRawToFloat(uint32_t raw)
     return raw / 1000.0f;
 }
 
+static inline void WaterLevelSetAndLog(int32_t lvl)
+{
+    int32_t old_lvl = g_measurement.water_measurement.water_level;
+
+    g_measurement.water_measurement.water_level = lvl;
+    water_value = lvl;
+
+    if (old_lvl != lvl)
+    {
+        printf("水位更新\t旧值=%.1fmm 新值=%.1fmm 缆长=%.1fmm\r\n",
+               old_lvl / 10.0f,
+               lvl / 10.0f,
+               g_measurement.debug_data.cable_length / 10.0f);
+    }
+}
+
 static inline void WaterLevelSyncFromCable(void)
 {
     int32_t lvl = g_deviceParams.water_tank_height - g_measurement.debug_data.cable_length;
-    g_measurement.water_measurement.water_level = lvl;
-    water_value = lvl;
+    WaterLevelSetAndLog(lvl);
 }
 
 /**
@@ -239,7 +254,7 @@ uint32_t SearchWaterLevel(void)
     }
 
     /*************** 最终记录 ***************/
-    g_measurement.water_measurement.water_level = g_deviceParams.water_tank_height - g_measurement.debug_data.cable_length;
+    WaterLevelSyncFromCable();
 
     printf("水位测量\t水位：%ld mm\r\n", g_measurement.water_measurement.water_level);
 
@@ -445,7 +460,7 @@ uint32_t check_water_status(uint8_t *water_state)
 uint8_t UpdateWaterLevelIfValid(void)
 {
     if (g_measurement.device_status.device_state == STATE_FINDWATER_OVER ||
-        g_measurement.device_status.device_state == STATE_FOLLOW_WATER_OVER)
+                g_measurement.device_status.device_state == STATE_FOLLOW_WATERING)
     {
         WaterLevelSyncFromCable();
 
@@ -559,7 +574,7 @@ uint32_t FindWaterLevel_FastByStateFlip_StableExit(uint32_t stable_win_ms)
 
             while (1)
             {
-                if (g_measurement.debug_data.sensor_position <= ZERO_NEAR_TH)
+                if (g_measurement.debug_data.cable_length <= ZERO_NEAR_TH)
                 {
                     printf("快速跟随\t零点附近仍在水区，停止(pos=%.1fmm)\r\n",
                            g_measurement.debug_data.sensor_position / 10.0f);
@@ -634,8 +649,7 @@ uint32_t FindWaterLevel_FastByStateFlip_StableExit(uint32_t stable_win_ms)
         }
 
         /* 更新“对外水位值”（只在两次翻转后才更新） */
-        g_measurement.water_measurement.water_level = lvl_avg;
-        water_value = lvl_avg;
+        WaterLevelSetAndLog(lvl_avg);
 
         printf("快速跟随\tflip lvl1=%.1f  lvl2=%.1f  avg=%.1fmm\r\n",
                last_flip_lvl / 10.0f,
@@ -659,7 +673,7 @@ uint32_t FindWaterLevel_FastByStateFlip_StableExit(uint32_t stable_win_ms)
                 max_level = lvl;
                 printf("快速跟随\t波动超限 -> 重置稳定窗口(min=max=%.1fmm)\r\n", lvl / 10.0f);
                 //如果设备状态不是水位跟随状态，设置水位跟随状态
-				if (g_measurement.device_status.device_state != STATE_FOLLOW_WATERING) {
+				if (g_measurement.device_status.device_state != STATE_FOLLOW_WATER_POINT_SEARCHING) {
 					g_measurement.device_status.device_state = STATE_FOLLOW_WATERING;
 				}
             }
@@ -708,7 +722,20 @@ uint32_t FindWaterLevel_FastByStateFlip_StableExit(uint32_t stable_win_ms)
  * - 带滞回，避免界面抖动
  * - 带自恢复机制，避免长期卡死在错误区域
  */
-uint32_t FollowWaterLevel_fast(void)
+typedef enum {
+    WATER_RECOVER_BY_SEARCH = 0,
+    WATER_RECOVER_BY_STATE_FLIP = 1,
+} WaterRecoverStrategy;
+
+static uint32_t WaterRecoverAfterLost(WaterRecoverStrategy strategy)
+{
+    if (strategy == WATER_RECOVER_BY_SEARCH) {
+        return SearchWaterLevel();
+    }
+
+    return FindWaterLevel_FastByStateFlip_StableExit(WATER_STABLE_WINDOW_DEFAULT_MS);
+}
+static uint32_t FollowWaterLevelCore(WaterRecoverStrategy recover_strategy)
 {
     uint32_t ret;
 
@@ -792,11 +819,13 @@ uint32_t FollowWaterLevel_fast(void)
             printf("水位跟随\t状态=稳定区(%.1f < cap < %.1f)，保持\r\n",
                    th_low, th);
 
+            if (g_measurement.device_status.device_state != STATE_FOLLOW_WATERING)
+            {
+                g_measurement.device_status.device_state = STATE_FOLLOW_WATERING;
+            }
+
             /* 稳态下更新一次水位值 */
-            g_measurement.water_measurement.water_level =
-                g_deviceParams.water_tank_height - g_measurement.debug_data.cable_length;
-            water_value =
-                g_deviceParams.water_tank_height - g_measurement.debug_data.cable_length;
+            WaterLevelSyncFromCable();
 
             HAL_Delay(WATER_FOLLOW_SAMPLE_MS);
             CHECK_COMMAND_SWITCH(NO_ERROR);
@@ -863,7 +892,7 @@ uint32_t FollowWaterLevel_fast(void)
         if (lost_count >= 5)
         {
             printf("水位跟随\t长时间大偏差，重新找水位\r\n");
-            ret = FindWaterLevel_FastByStateFlip_StableExit(WATER_STABLE_WINDOW_DEFAULT_MS);
+            ret = WaterRecoverAfterLost(recover_strategy);
             CHECK_ERROR(ret);
 
             lost_count = 0;
@@ -876,153 +905,14 @@ uint32_t FollowWaterLevel_fast(void)
     }
 }
 
+uint32_t FollowWaterLevel_fast(void)
+{
+    return FollowWaterLevelCore(WATER_RECOVER_BY_STATE_FLIP);
+}
+
 uint32_t FollowWaterLevel(void)
 {
-    uint32_t ret;
-    float    cap = 0.0f;
-    float    air_cap;
-    float    th;
-    float    th_low;
-    float    diff;
-    float    step_mm;
-    uint32_t dir;
-
-    uint16_t lost_count = 0;   /* 连续大偏差计数 */
-
-RESTART_FOLLOW:
-    air_cap = g_measurement.water_measurement.zero_capacitance;
-    th      = air_cap + WaterCapRawToFloat(g_deviceParams.water_cap_threshold);
-    th_low  = th - WaterCapRawToFloat(g_deviceParams.water_cap_hysteresis);
-
-    printf("水位跟随\t开始\r\n");
-    printf("水位跟随\t空气电容=%.1f  目标阈值=%.1f  滞回下限=%.1f\r\n",
-           air_cap, th, th_low);
-
-    while (1)
-    {
-        /* 读取电容 */
-        ret = Sensor_ReadWaterCapacitance(&cap);
-        if (ret != NO_ERROR) {
-            printf("水位跟随\t读取电容失败 ret=0x%lX\r\n", ret);
-            return ret;
-        }
-
-        g_measurement.water_measurement.current_capacitance = cap;
-
-        printf("水位跟随\tpos=%.1fmm  cap=%.1f\r\n",
-               g_measurement.debug_data.sensor_position / 10.0f,
-               cap);
-
-        /* 饱和保护：饱和也算“跟不上”，累计 lost_count */
-        if (cap > WATER_CAP_SAT_LIMIT)
-        {
-            lost_count++;
-            printf("水位跟随\t电容饱和(cap=%.1f) lost=%u\r\n", cap, lost_count);
-
-            /* 饱和时先强制上行拉回 */
-            dir     = MOTOR_DIRECTION_UP;
-            step_mm = WATER_FOLLOW_STEP_BIG_MM;
-
-            printf("水位跟随\t执行移动 dir=UP  step=%.2fmm\r\n", step_mm);
-
-            ret = motorMoveAndWaitUntilStopWithSpeed(step_mm, dir, motorGetDefaultSpeedX100());
-            CHECK_ERROR(ret);
-
-            WaterLevelSyncFromCable();
-
-            /* 连续饱和/大偏差过久 -> 重新找水位 */
-            if (lost_count >= WATER_FOLLOW_LOST_COUNT_MAX)
-            {
-                printf("水位跟随\t长时间饱和/大偏差，重新找水位\r\n");
-                ret = SearchWaterLevel();
-                CHECK_ERROR(ret);
-
-                lost_count = 0;
-                printf("水位跟随\t重新找水位完成，恢复跟随\r\n");
-                goto RESTART_FOLLOW;
-            }
-
-            HAL_Delay(WATER_FOLLOW_SAMPLE_MS);
-            CHECK_COMMAND_SWITCH(NO_ERROR);
-            continue;
-        }
-
-        /* 两态 + 滞回判断 */
-        if (cap >= th)
-        {
-            dir  = MOTOR_DIRECTION_UP;
-            diff = cap - th;
-            printf("水位跟随\t状态=偏水  diff=%.1f -> 上行\r\n", diff);
-        }
-        else if (cap <= th_low)
-        {
-            dir  = MOTOR_DIRECTION_DOWN;
-            diff = th_low - cap;
-            printf("水位跟随\t状态=偏空气 diff=%.1f -> 下行\r\n", diff);
-        }
-        else
-        {
-            /* 稳定区：清零 lost_count */
-            if (lost_count != 0) {
-                printf("水位跟随\t进入稳定区，lost清零(%u->0)\r\n", lost_count);
-                lost_count = 0;
-            }
-
-            printf("水位跟随\t状态=稳定区(%.1f < cap < %.1f)，保持\r\n", th_low, th);
-
-            WaterLevelSyncFromCable();
-
-            HAL_Delay(WATER_FOLLOW_SAMPLE_MS);
-            CHECK_COMMAND_SWITCH(NO_ERROR);
-            continue;
-        }
-
-        /* 步长选择 */
-        if (diff > 0.8f * WaterCapRawToFloat(g_deviceParams.water_cap_threshold)) {
-            step_mm = WATER_FOLLOW_STEP_BIG_MM;
-        } else if (diff > 0.3f * WaterCapRawToFloat(g_deviceParams.water_cap_threshold)) {
-            step_mm = WATER_FOLLOW_STEP_MED_MM;
-        } else {
-            step_mm = WATER_FOLLOW_STEP_SMALL_MM;
-        }
-
-        /* 大偏差计数：只有在“确实大偏差”时计数，否则慢慢衰减/清零 */
-        if (diff >= WaterCapRawToFloat(g_deviceParams.water_cap_threshold)) {
-            lost_count++;
-        } else {
-            if (lost_count > 0) lost_count--;
-        }
-
-        printf("水位跟随\t执行移动 dir=%s  step=%.2fmm  lost=%u\r\n",
-               (dir == MOTOR_DIRECTION_UP) ? "UP" : "DOWN",
-               step_mm,
-               lost_count);
-
-        ret = motorMoveAndWaitUntilStopWithSpeed(step_mm, dir, motorGetDefaultSpeedX100());
-        CHECK_ERROR(ret);
-
-        WaterLevelSyncFromCable();
-
-        printf("水位跟随\t完成移动 pos=%.1fmm\r\n",
-               g_measurement.debug_data.sensor_position / 10.0f);
-
-        /* 连续大偏差过久 -> 重新找水位 */
-        if (lost_count >= WATER_FOLLOW_LOST_COUNT_MAX)
-        {
-            printf("水位跟随\t长时间大偏差，重新找水位\r\n");
-            ret = SearchWaterLevel();
-            CHECK_ERROR(ret);
-
-            lost_count = 0;
-            printf("水位跟随\t重新找水位完成，恢复跟随\r\n");
-            goto RESTART_FOLLOW;
-        }
-
-        HAL_Delay(WATER_FOLLOW_SAMPLE_MS);
-
-        /* 状态切换退出 */
-        CHECK_COMMAND_SWITCH(NO_ERROR);
-    }
+    return FollowWaterLevelCore(WATER_RECOVER_BY_SEARCH);
 }
 
 #define WATER_TANK_HEIGHT_EPSILON   (1)   /* 0.1mm，避免边界抖动，可按需保留 */
@@ -1048,7 +938,7 @@ static uint32_t CorrectWaterTankHeightProcess(void)
     }
 
     g_deviceParams.water_tank_height = new_height;
-	g_measurement.water_measurement.water_level = g_deviceParams.water_tank_height - g_measurement.debug_data.cable_length;
+	WaterLevelSyncFromCable();
     /* 标定完成后清零，防止重复触发 */
     g_deviceParams.calibrateWaterLevel = 0;
 
@@ -1065,7 +955,7 @@ static uint32_t CorrectWaterTankHeightProcess(void)
     uint32_t ret = NO_ERROR;
 
     MeasureStart();
-    if(g_measurement.device_status.device_state ==STATE_FOLLOW_WATER_OVER)
+    if(g_measurement.device_status.device_state ==STATE_FOLLOW_WATERING)
     {
 		printf("水位标定\t当前处于水位跟随状态\t直接修正液位\r\n");
 		g_measurement.device_status.device_state = STATE_CALIBRATE_WATERING;

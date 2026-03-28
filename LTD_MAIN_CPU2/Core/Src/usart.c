@@ -45,6 +45,28 @@ uint8_t USART4_RX_BUF[USART4_RX_BUF_SIZE] = { 0 };   // 接收数据缓冲区
 volatile uint16_t UART5_RX_LEN = 0;              // 接收一帧数据的长度
 uint8_t UART5_RX_BUF[UART5_RX_BUF_SIZE] = { 0 };   // 接收数据缓冲区
 
+/**
+ * @brief UART发送完成回调函数
+ *
+ * 该函数在UART DMA发送完成后被HAL库调用，用于处理USART2和UART5的发送完成事件。
+ * 主要功能包括等待传输完成标志、延时保证信号稳定、切换到接收模式并启动DMA接收。
+ *
+ * @param huart UART句柄指针，指向触发回调的UART外设
+ *
+ * @note USART2处理流程：
+ *       - 等待传输完成标志（UART_FLAG_TC）
+ *       - 延时约0.1ms（180000次空操作）确保电平恢复空闲状态
+ *       - 通过HART_RTS引脚切换到接收模式（GPIO_PIN_SET）
+ *       - 启动DMA接收数据到USART2_RX_BUF
+ *
+ * @note UART5处理流程：
+ *       - 等待传输完成标志（UART_FLAG_TC）
+ *       - 通过RS485_SET_RECV_MODE()切换到接收模式
+ *       - 启动DMA接收数据到UART5_RX_BUF
+ *
+ * @warning 该函数使用忙等待循环（while和for循环），会阻塞CPU执行
+ * @warning USART2的延时循环使用180000次空操作，实际延时时间取决于CPU时钟频率
+ */
 void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart) {
 	if (huart->Instance == USART2) {
 		//等待DMA完全发送完成
