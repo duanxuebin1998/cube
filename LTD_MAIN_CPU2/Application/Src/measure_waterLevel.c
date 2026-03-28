@@ -673,7 +673,7 @@ uint32_t FindWaterLevel_FastByStateFlip_StableExit(uint32_t stable_win_ms)
                 max_level = lvl;
                 printf("快速跟随\t波动超限 -> 重置稳定窗口(min=max=%.1fmm)\r\n", lvl / 10.0f);
                 //如果设备状态不是水位跟随状态，设置水位跟随状态
-				if (g_measurement.device_status.device_state != STATE_FOLLOW_WATER_POINT_SEARCHING) {
+				if (g_measurement.device_status.device_state != STATE_FOLLOW_WATERING) {
 					g_measurement.device_status.device_state = STATE_FOLLOW_WATERING;
 				}
             }
@@ -953,27 +953,30 @@ static uint32_t CorrectWaterTankHeightProcess(void)
  void CMD_CalibrateWaterLevel(void)
 {
     uint32_t ret = NO_ERROR;
+    uint8_t  resume_follow = 0;
 
     MeasureStart();
-    if(g_measurement.device_status.device_state ==STATE_FOLLOW_WATERING)
+
+    resume_follow = (g_measurement.device_status.device_state == STATE_FOLLOW_WATERING);
+
+    /*
+     * 无论当前是否处于跟随态，水位标定都依赖用户给出的真值。
+     * 若真值为 0，则无法反推 water_tank_height。
+     */
+    if (g_deviceParams.calibrateWaterLevel == 0) {
+        printf("水位标定\t未设置标定水位真值(calibrateWaterLevel=0)，无法标定\r\n");
+        SET_ERROR(PARAM_ERROR);
+    }
+
+    g_measurement.device_status.device_state = STATE_CALIBRATE_WATERING;
+
+    if (resume_follow)
     {
-		printf("水位标定\t当前处于水位跟随状态\t直接修正液位\r\n");
-		g_measurement.device_status.device_state = STATE_CALIBRATE_WATERING;
+		printf("水位标定\t当前处于水位跟随状态\t修正后继续跟随\r\n");
     }
     else
 	{
-    	g_measurement.device_status.device_state = STATE_CALIBRATE_WATERING;
-		printf("水位标定\t当前状态需要重修寻找水位\r\n");
-
-		/*
-		 * 约定：
-		 * g_deviceParams.calibrateWaterLevel != 0 代表“用户提供了真值水位高度”，可做一次点标定。
-		 * 若 == 0：建议直接报参数错误（否则无法反推 water_tank_height）。
-		 */
-		if (g_deviceParams.calibrateWaterLevel == 0) {
-			printf("水位标定\t未设置标定水位真值(calibrateWaterLevel=0)，无法标定\r\n");
-			SET_ERROR(PARAM_ERROR);
-		}
+		printf("水位标定\t当前状态需要重新寻找水位\r\n");
 
 		/* 先找并精确定位水位界面 */
 		ret = SearchWaterLevel();
@@ -987,10 +990,22 @@ static uint32_t CorrectWaterTankHeightProcess(void)
     ret = CorrectWaterTankHeightProcess();
     SET_ERROR(ret);
 
+    if (resume_follow)
+    {
+        printf("水位标定\t修正完成，恢复水位跟随\r\n");
+        g_measurement.device_status.device_state = STATE_FOLLOW_WATERING;
+
+        if (g_deviceParams.water_level_mode == 0) {
+            ret = FollowWaterLevel();
+        } else {
+            ret = FollowWaterLevel_fast();
+        }
+        SET_ERROR(ret);
+        return;
+    }
+
     g_measurement.device_status.device_state = STATE_CALIBRATE_WATER_OVER;
 
     return;
 }
-
-
 

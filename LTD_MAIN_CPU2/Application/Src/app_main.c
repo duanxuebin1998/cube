@@ -4,7 +4,7 @@
  * @Author       : Aubon
  * @Date         : 2026-02-03 14:06:14
  * @LastEditors  : Duan Xuebin
- * @LastEditTime : 2026-03-17 11:34:14
+ * @LastEditTime : 2026-03-28 13:24:54
  * Copyright 2026 Aubon, All Rights Reserved. 
  * 2026-02-03 14:06:14
  */
@@ -52,7 +52,6 @@ void App_Init(void) {
 	HAL_Delay(1000); // 延时1000ms
 	init_device_params(); // 初始化设备参数
 	Initialize_Encoder(); // 初始化编码器
-	motor_Init(); //电机初始化
 	HartInit(); // 初始化AD5421
 	weight_init();
 	HostCommuInit(); // 初始化Modbus通信

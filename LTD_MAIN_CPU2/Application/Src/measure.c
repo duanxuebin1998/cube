@@ -680,9 +680,8 @@ static void CMD_WartsilaDensitySpread(void) {
 	HAL_Delay(1000); // 延时1s
 	HAL_Delay(1000); // 延时1s
 	HAL_Delay(1000); // 延时1s
-	/* 单点监测命令：移动到监测高度 -> 循环单点稳定读取（直到命令切换） */
-	CMD_SinglePointMonitoring();
-
+    
+    g_deviceParams.command = CMD_MONITOR_SINGLE; // 切回单点监测状态，继续监测当前液位/密度
 	return;
 }
 static void CMD_SyntheticMeasurement(void) {
