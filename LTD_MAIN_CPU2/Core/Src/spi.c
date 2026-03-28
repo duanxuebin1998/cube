@@ -251,12 +251,19 @@ void HAL_SPI_MspInit(SPI_HandleTypeDef* spiHandle)
     PF7     ------> SPI5_SCK
     PF8     ------> SPI5_MISO
     */
-    GPIO_InitStruct.Pin = ENCODE_SPI5_SCK_Pin|ENCODE_SPI5_MISO_Pin;
+    GPIO_InitStruct.Pin = ENCODE_SPI5_SCK_Pin;
     GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
     GPIO_InitStruct.Pull = GPIO_NOPULL;
     GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
     GPIO_InitStruct.Alternate = GPIO_AF5_SPI5;
-    HAL_GPIO_Init(GPIOF, &GPIO_InitStruct);
+    HAL_GPIO_Init(ENCODE_SPI5_SCK_GPIO_Port, &GPIO_InitStruct);
+
+    GPIO_InitStruct.Pin = ENCODE_SPI5_MISO_Pin;
+    GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
+    GPIO_InitStruct.Pull = GPIO_PULLDOWN;
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
+    GPIO_InitStruct.Alternate = GPIO_AF5_SPI5;
+    HAL_GPIO_Init(ENCODE_SPI5_MISO_GPIO_Port, &GPIO_InitStruct);
 
     /* SPI5 DMA Init */
     /* SPI5_RX Init */

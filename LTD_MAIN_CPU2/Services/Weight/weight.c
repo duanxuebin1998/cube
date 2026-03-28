@@ -22,13 +22,23 @@
 #define MIN_WEIGHT -2000 // 最小重量限制
 #define MAX_EMPTY_WEIGHT 20000 // 最大重量限制
 // 采样和更新周期定义
-#define WEIGHT_SAMPLE_INTERVAL 200    // 每200ms采样一次
+#define WEIGHT_SAMPLE_INTERVAL 200
+#define WEIGHT_FILTER_OLD_FACTOR 8
+#define WEIGHT_FILTER_NEW_FACTOR 2
+#define WEIGHT_FILTER_DIVISOR    (WEIGHT_FILTER_OLD_FACTOR + WEIGHT_FILTER_NEW_FACTOR)
+#define WEIGHT_COMM_TIMEOUT_MS 1000U
 
 // 全局变量，存储当前称重传感器的原始重量值
 int16_t g_weight;
 
 // 全局结构体，存储称重相关参数（空载、稳定、当前重量等）
 Weight_ParamentTypeDef weight_parament = { 0 };
+static uint32_t s_weight_last_rx_tick = 0U;
+static uint8_t s_weight_timeout_reported = 0U;
+
+static uint8_t Weight_IsCommErrorCode(uint32_t error_code) {
+	return (error_code == WEIGHT_COMM_TIMEOUT);
+}
 
 //初始化称重
 uint32_t weight_init() {
@@ -36,7 +46,40 @@ uint32_t weight_init() {
 	weight_parament.full_weight = g_deviceParams.full_weight;           // 从设备参数中获取满载重量
 	printf("empty_weight\t%d\r\n", weight_parament.empty_weight); // 打印空载重量
 	printf("full_weight\t%d\r\n", weight_parament.full_weight); // 打印满载重量
+	s_weight_last_rx_tick = HAL_GetTick();
+	s_weight_timeout_reported = 0U;
 	return NO_ERROR;
+}
+
+void Weight_MarkFrameReceived(void) {
+	uint32_t now = HAL_GetTick();
+	s_weight_last_rx_tick = now;
+	s_weight_timeout_reported = 0U;
+	if (Weight_IsCommErrorCode(g_measurement.device_status.error_code)) {
+		printf("称重通信恢复\r\n");
+		g_measurement.device_status.error_code = NO_ERROR;
+	}
+}
+
+uint32_t Weight_CheckCommunicationTimeout(void) {
+	uint32_t now = HAL_GetTick();
+	uint32_t error_code = g_measurement.device_status.error_code;
+
+	if ((error_code != NO_ERROR) && (error_code != STATE_SWITCH) && (!Weight_IsCommErrorCode(error_code))) {
+		return error_code;
+	}
+
+	if ((now - s_weight_last_rx_tick) < WEIGHT_COMM_TIMEOUT_MS) {
+		return NO_ERROR;
+	}
+
+	if (!s_weight_timeout_reported) {
+		printf("称重通信超时：1秒内未收到称重传感器数据\r\n");
+		s_weight_timeout_reported = 1U;
+	}
+
+	g_measurement.device_status.error_code = WEIGHT_COMM_TIMEOUT;
+	return WEIGHT_COMM_TIMEOUT;
 }
 
 /**
@@ -49,7 +92,7 @@ uint32_t get_empty_weight(void) {
 	HAL_Delay(5000); // 等待5秒，确保重量稳定
 	weight_parament.empty_weight = g_weight; // 记录空载重量
 	printf("空载称重值获取成功\t空载称重：\t%d\r\n", weight_parament.empty_weight); // 打印空载重量
-	if (abs(weight_parament.empty_weight > MAX_EMPTY_WEIGHT)) { // 检查空载重量是否在合理范围内
+	if (abs(weight_parament.empty_weight) > MAX_EMPTY_WEIGHT) { // 检查空载重量是否在合理范围内
 		printf("空载称重值异常，请检查传感器或重新校准\r\n");
 		RETURN_ERROR(WEIGHT_DRIFT_ERROR); // 如果空载重量不在合理范围内，打印错误信息并返回
 	} else {
@@ -149,6 +192,11 @@ Weight_StateTypeDef check_zero_point_status(void)
  */
 uint32_t CheckWeightCollision(void)
 {
+	uint32_t comm_ret = Weight_CheckCommunicationTimeout();
+	if (comm_ret != NO_ERROR) {
+		return comm_ret;
+	}
+
 	int32_t cur_weight	= (int32_t)weight_parament.current_weight;
 	int32_t stable_weight	= (int32_t)weight_parament.stable_weight;
 	int32_t full_weight	= (int32_t)weight_parament.full_weight;
@@ -492,19 +540,28 @@ uint32_t CheckWeightCollision(void)
 
 
 /**
- * @brief 称重稳态更新（整数版，无浮点）
- * @param currWeight 当前称重原始值（例如ADC或整数克重）
- * @return 稳态称重值（整数）
+ * @brief 称重稳态更新（整数一阶低通）
+ * @param currWeight 当前称重实时值
+ *
+ * 公式：stable = stable * 0.8 + curr * 0.2
+ * 为避免浮点运算，按 8:2 的整数权重实现。
  */
 void Weight_Update(int32_t currWeight) {
 	static uint32_t lastTime = 0;
 	uint32_t now = HAL_GetTick();
+	int64_t filtered_sum;
 
 	if (now - lastTime < WEIGHT_SAMPLE_INTERVAL)
 		return;  // 每200ms更新一次
 	lastTime = now;
 
-	weight_parament.stable_weight = weight_parament.stable_weight * 0.8f + currWeight * 0.2f;
+	filtered_sum = (int64_t)weight_parament.stable_weight * WEIGHT_FILTER_OLD_FACTOR +
+			(int64_t)currWeight * WEIGHT_FILTER_NEW_FACTOR;
+	if (filtered_sum >= 0) {
+		weight_parament.stable_weight = (int32_t)((filtered_sum + (WEIGHT_FILTER_DIVISOR / 2)) / WEIGHT_FILTER_DIVISOR);
+	} else {
+		weight_parament.stable_weight = (int32_t)((filtered_sum - (WEIGHT_FILTER_DIVISOR / 2)) / WEIGHT_FILTER_DIVISOR);
+	}
 	g_measurement.debug_data.current_weight = currWeight; // 更新当前重量到调试数据
 	// 可选调试输出
 	// printf("稳态称重: %ld\n", weightFilter.stableWeight);

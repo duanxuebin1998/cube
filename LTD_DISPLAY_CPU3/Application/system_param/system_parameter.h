@@ -125,6 +125,7 @@ typedef enum {
     WEIGHT_COLLISION_DETECTED = 0x00120003,      // 检测到碰撞
     WEIGHT_DRIFT_ERROR = 0x00120004,             // 称重漂移异常
     WEIGHT_SENSOR_SATURATION = 0x00120005,       // 传感器饱和
+    WEIGHT_COMM_TIMEOUT = 0x00120006,            // 称重传感器通信超时
 
     /* ==================== 其他错误 (0x00130000 - 0x0013FFFF) ==================== */
     OTHER_UNKNOWN_ERROR = 0x00130001,            // 未知故障

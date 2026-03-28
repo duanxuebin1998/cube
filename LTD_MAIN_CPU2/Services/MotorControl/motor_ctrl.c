@@ -1545,7 +1545,7 @@ static void NoDetect_RuntimeLogUpdate(void)
 
     /* 1) Î»ÖÃ/³ß´ø/³ÆÖØ */
     g_measurement.debug_data.current_weight = weight_parament.current_weight;
-    g_measurement.debug_data.current_encoder_value = g_encoder_count;
+    g_measurement.debug_data.current_encoder_value = -g_encoder_count;
 
     /* 2) ÍÓÂİÒÇ */
 

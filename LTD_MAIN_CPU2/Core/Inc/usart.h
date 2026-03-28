@@ -1,13 +1,3 @@
-/*
- * @FilePath     : \CUBE\LTD_MAIN_CPU2\Core\Inc\usart.h
- * @Description  : 
- * @Author       : Aubon
- * @Date         : 2025-12-16 16:01:19
- * @LastEditors  : Duan Xuebin
- * @LastEditTime : 2026-03-17 11:34:22
- * Copyright 2025 Aubon, All Rights Reserved. 
- * 2025-12-16 16:01:19
- */
 /* USER CODE BEGIN Header */
 /**
   ******************************************************************************
