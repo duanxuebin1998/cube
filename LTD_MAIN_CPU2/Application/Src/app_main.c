@@ -20,15 +20,40 @@
 #include "test.h"
 #include "ad5421.h"
 #include "sensor.h"
+static uint8_t App_HandleIdleGlobalError(void) {
+	uint32_t error_code = g_measurement.device_status.error_code;
+	if ((g_deviceParams.command == CMD_NONE) &&
+		(g_measurement.device_status.current_command == CMD_NONE) &&
+		(error_code != NO_ERROR) &&
+		(error_code != STATE_SWITCH)) {
+		if (g_measurement.device_status.device_state != STATE_ERROR) {
+			printf("待机检测到全局错误: 0x%08lX\r\n", (unsigned long) error_code);
+		}
+		HandleError();
+		g_measurement.device_status.device_state = STATE_ERROR;
+		g_measurement.device_status.zero_point_status = 1;
+		g_deviceParams.command = CMD_NONE;
+		g_measurement.device_status.current_command = CMD_NONE;
+		return 1;
+	}
 
+	if ((g_measurement.device_status.device_state == STATE_ERROR) &&
+		(g_deviceParams.command == CMD_NONE) &&
+		(g_measurement.device_status.current_command == CMD_NONE) &&
+		(error_code == NO_ERROR)) {
+		g_measurement.device_status.device_state = STATE_STANDBY;
+	}
+
+	return 0;
+}
 // 初始化函数
 void App_Init(void) {
 	printf("LTD restart!\n");
 	HAL_Delay(1000); // 延时1000ms
+	init_device_params(); // 初始化设备参数
 	Initialize_Encoder(); // 初始化编码器
 	motor_Init(); //电机初始化
 	HartInit(); // 初始化AD5421
-	init_device_params(); // 初始化设备参数
 	weight_init();
 	HostCommuInit(); // 初始化Modbus通信
 	AD5421_SetCurrent(6.0); // 设置初始电流为4mA
@@ -47,6 +72,12 @@ void App_Init(void) {
 }
 // 主循环任务
 void App_MainLoop(void) {
+	(void)Weight_CheckCommunicationTimeout();
+	if (App_HandleIdleGlobalError()) {
+		process_device_params_deferred_tasks();
+		HAL_Delay(50); // 延时50ms
+		return;
+	}
 	// 如果有新的命令
 	if (new_command_ready) {
 		new_command_ready = 0;  // 重置标志，避免重复处理

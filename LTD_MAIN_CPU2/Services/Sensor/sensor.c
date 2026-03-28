@@ -476,7 +476,7 @@ uint32_t Sensor_Test1(void) {
 static int32_t Read_CurrentEncoderValue_Adapter(void)
 {
     /* 你现在很多地方用 g_encoder_count；若你的“实际编码器”不同，替换这里 */
-    return (int32_t)g_encoder_count;
+    return -(int32_t)g_encoder_count;
 }
 
 /* 2) 传感器位置/尺带长度：如果你已有统一换算函数，直接调用它

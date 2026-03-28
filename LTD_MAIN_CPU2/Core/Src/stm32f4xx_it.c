@@ -36,6 +36,9 @@
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
 
+#define UART4_WEIGHT_HIGH_IDX  19u
+#define UART4_WEIGHT_LOW_IDX   20u
+
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -55,6 +58,23 @@
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+
+static void UART4_UpdateWeightFromFrame(uint16_t rx_len)
+{
+	uint8_t high_byte;
+	uint8_t low_byte;
+
+	if (rx_len <= UART4_WEIGHT_LOW_IDX) {
+		return;
+	}
+
+	high_byte = USART4_RX_BUF[UART4_WEIGHT_HIGH_IDX];
+	low_byte = USART4_RX_BUF[UART4_WEIGHT_LOW_IDX];
+	g_weight = (int16_t)((high_byte << 8) | low_byte);
+	weight_parament.current_weight = weight_parament.empty_weight - g_weight;
+	Weight_Update(weight_parament.current_weight);
+	Weight_MarkFrameReceived();
+}
 
 /* USER CODE END 0 */
 
@@ -415,8 +435,6 @@ void UART4_IRQHandler(void)
   /* USER CODE BEGIN UART4_IRQn 0 */
 	uint32_t tmp_flag = 0;
 	uint32_t temp;
-	uint8_t high_byte; // FF
-	uint8_t low_byte;  // 69
   /* USER CODE END UART4_IRQn 0 */
   HAL_UART_IRQHandler(&huart4);
   /* USER CODE BEGIN UART4_IRQn 1 */
@@ -430,11 +448,7 @@ void UART4_IRQHandler(void)
 			temp = __HAL_DMA_GET_COUNTER(&hdma_uart4_rx); // 获取DMA中未传输的数据个数
 			USART4_RX_LEN = USART4_RX_BUF_SIZE - temp; //总计数减去未传输的数据个数，得到已经接收的数据个数
 //  		printf("receive %x!\n",USART4_RX_BUF[0]);
-			high_byte = USART4_RX_BUF[19]; // FF
-			low_byte = USART4_RX_BUF[20];  // 69
-			g_weight = (high_byte << 8) | low_byte;
-			weight_parament.current_weight = weight_parament.empty_weight - g_weight;//更新当前称重值
-			Weight_Update(weight_parament.current_weight); // 稳定重量
+			UART4_UpdateWeightFromFrame(USART4_RX_LEN);
 			HAL_UART_Receive_DMA(&huart4, USART4_RX_BUF, USART4_RX_BUF_SIZE); //重新打开DMA接收
 		}
 	}

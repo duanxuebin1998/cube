@@ -35,4 +35,6 @@ Weight_StateTypeDef check_zero_point_status(void);
 Weight_StateTypeDef check_bottom_status(void);
 uint32_t CheckWeightCollision(void);
 void Weight_Update(int32_t currWeight);
+void Weight_MarkFrameReceived(void);
+uint32_t Weight_CheckCommunicationTimeout(void);
 #endif /* INC_WEIGHT_H_ */
