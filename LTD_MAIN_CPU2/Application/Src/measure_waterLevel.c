@@ -54,6 +54,7 @@
 #define WATER_CAP_SAT_LIMIT            (9999.0f)/* 认为“饱和/无穷大”的阈值，用于保护 */
 #define WATER_FOLLOW_LOST_DIFF_BIG       (80.0f)   /* 认为偏差很大 */
 #define WATER_FOLLOW_LOST_COUNT_MAX      (20)      /* 连续大偏差次数阈值：20次*500ms=10s */
+#define WATER_FOLLOW_ENTER_TIMEOUT_MS    (60000u)  /* 长时间未进入稳定区，也认为已进入跟随态 */
 /* -------------------- 全局变量 -------------------- */
 /* 存储最终确定的水位位置（以 sensor_position 记录） */
 int32_t water_value = -100000000; // 初始值设为无效
@@ -753,6 +754,8 @@ static uint32_t FollowWaterLevelCore(WaterRecoverStrategy recover_strategy)
     /* -------------------- 状态记忆与异常检测 -------------------- */
     static float last_cap = 0.0f; /* 上一次电容值，用于判断电容是否“卡死” */
     uint16_t lost_count = 0;      /* 连续异常计数器 */
+    uint32_t follow_enter_tick = HAL_GetTick();
+    const uint32_t follow_enter_timeout_ms = WATER_FOLLOW_ENTER_TIMEOUT_MS;
 
     /* -------------------- 阈值计算 --------------------
      * 所有参数统一使用浮点计算，避免单位混乱
@@ -856,6 +859,15 @@ static uint32_t FollowWaterLevelCore(WaterRecoverStrategy recover_strategy)
         /* ---------- 4. 执行步进运动（阻塞等待完成） ---------- */
         ret = motorMoveAndWaitUntilStopWithSpeed(step_mm, dir, motorGetDefaultSpeedX100());
         CHECK_ERROR(ret);
+
+        if ((g_measurement.device_status.device_state != STATE_FOLLOW_WATERING) &&
+            ((HAL_GetTick() - follow_enter_tick) >= follow_enter_timeout_ms))
+        {
+            g_measurement.device_status.device_state = STATE_FOLLOW_WATERING;
+            printf("水位跟随\t连续调节%lu.%03lus仍未进入稳定区，置为跟随态\r\n",
+                   (unsigned long)((HAL_GetTick() - follow_enter_tick) / 1000u),
+                   (unsigned long)((HAL_GetTick() - follow_enter_tick) % 1000u));
+        }
 
         /* 运动完成后，按当前设备状态更新水位 */
         UpdateWaterLevelIfValid();
