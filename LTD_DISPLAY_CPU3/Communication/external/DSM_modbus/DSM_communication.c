@@ -9,7 +9,7 @@
 #include "my_crc.h"
 #include "address.h"
 
-#define DEBUG_COMM 1
+#define DEBUG_COMM 0
 /**********************************************************************************************
  **函数名称：	CommunicationInit()
  **函数功能：	与上位机通信初始化:串口4初始化；DMA初始化；定时器2初始化；地址初始化并读取当前地址
@@ -76,6 +76,11 @@ int DSM_CommunicationProcess(unsigned char *rcvbuff, int rcvcount, uint8_t* tx, 
 		*tx_len = 5;
 	} else {
 		switch (functioncode) {
+		case FUNCTIONCODE_READ_COIL: {
+			*tx_len = Response01(rcvbuff, tx);
+			break;
+		}
+
 		case FUNCTIONCODE_READ_HOLDREGISTER: {
 			SystemParameterSet(); // 更新参数,每一个保持寄存器必须写入，否则读出来会不变；
 			*tx_len = Response03(rcvbuff, tx);

@@ -20,13 +20,38 @@
 // 全局变量：存储最终确定的罐底位置（编码器计数值）
 int32_t bottom_value = -100000000; // 初始值设为较大数值作为无效状态标识
 /* 全局/参数区：由寄存器或本机参数配置 */
-BottomDetectMode g_bottom_det_mode = BOTTOM_DET_BY_WEIGHT;
 
 static GyroZeroRef g_gyro_zero_ref = {0};
 // 函数原型声明
 static int SearchBottomRough();   // 粗略搜索罐底
 static int SearchBottomPrecise(); // 精确搜索罐底
+static int32_t GetRealHeightCalibrationOffset(void);
+static uint32_t ApplyRealHeightCalibration(uint32_t raw_real_height);
 
+static int32_t GetRealHeightCalibrationOffset(void)
+{
+    if ((g_deviceParams.initialTankHeight == 0U) ||
+        (g_deviceParams.currentTankHeight == 0U))
+    {
+        return 0;
+    }
+
+    return (int32_t)g_deviceParams.currentTankHeight -
+           (int32_t)g_deviceParams.initialTankHeight;
+}
+
+static uint32_t ApplyRealHeightCalibration(uint32_t raw_real_height)
+{
+    int32_t corrected_real_height =
+            (int32_t)raw_real_height + GetRealHeightCalibrationOffset();
+
+    if (corrected_real_height < 0)
+    {
+        corrected_real_height = 0;
+    }
+
+    return (uint32_t)corrected_real_height;
+}
 
 /**
  * @brief 罐底测量函数 - 执行完整的罐底搜索流程
@@ -136,14 +161,24 @@ uint32_t SearchBottom(void)
     }
 
     /*************** 最终校验与记录 ***************/
-    g_measurement.height_measurement.current_real_height = g_measurement.debug_data.cable_length;
-    printf("罐底测量\t实高：%ld mm\r\n", g_measurement.debug_data.cable_length);
-    if(g_measurement.device_status.device_state == STATE_CALIBRATIONOILING)
     {
-    	g_measurement.height_measurement.calibrated_liquid_level = g_measurement.debug_data.cable_length;
-		g_deviceParams.tankHeight = g_measurement.debug_data.cable_length +  g_deviceParams.liquid_sensor_distance_diff;
-		printf("罐底测量\t标定完成，罐高设置为：%ld mm\r\n", g_deviceParams.tankHeight);
-		update_sensor_height_from_encoder();	//更新罐高数据
+        uint32_t raw_real_height =
+                (bottom_value > 0) ? (uint32_t)bottom_value
+                                   : g_measurement.debug_data.cable_length;
+        uint32_t corrected_real_height =
+                ApplyRealHeightCalibration(raw_real_height);
+
+        g_measurement.height_measurement.current_real_height = corrected_real_height;
+        printf("罐底测量\t原始实高：%lu mm\t校正后实高：%lu mm\r\n",
+               (unsigned long)raw_real_height,
+               (unsigned long)corrected_real_height);
+        if(g_measurement.device_status.device_state == STATE_CALIBRATIONOILING)
+        {
+        	g_measurement.height_measurement.calibrated_liquid_level = raw_real_height;
+			g_deviceParams.tankHeight = raw_real_height +  g_deviceParams.liquid_sensor_distance_diff;
+			printf("罐底测量\t标定完成，罐高设置为：%ld mm\r\n", g_deviceParams.tankHeight);
+			update_sensor_height_from_encoder();	//更新罐高数据
+        }
     }
     // 电机上行，完成流程
     ret = motorMoveAndWaitUntilStopWithSpeed(100, MOTOR_DIRECTION_UP, motorGetDefaultSpeedX100());

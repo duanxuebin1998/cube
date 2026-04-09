@@ -1,10 +1,10 @@
 /*
- * @FilePath     : \KEILe:\03CodeRepository\DSM_MCB -V1.198旧版本升级\A.c
+ * @FilePath     : \CUBE\LTD_MAIN_CPU2\Services\ParamStorage\system_parameter.h
  * @Description  :
  * @Author       : Aubon
  * @Date         : 2025-07-15 11:01:57
- * @LastEditors  : Duan
- * @LastEditTime : 2025-07-15 11:02:02
+ * @LastEditors  : Duan Xuebin
+ * @LastEditTime : 2026-04-09 15:02:21
  * Copyright 2025 Aubon, All Rights Reserved.
  * 2025-07-15 11:01:57
  */
@@ -192,7 +192,7 @@ typedef enum {
     CMD_CALIBRATE_WATER            = 116,  // 水位标定（新增）
 
     /* 调试预留 */
-    CMD_RESERVED_CMD4              = 110,
+    CMD_CALIBRATE_TANKHEIGHT       = 110,  // 罐高标定
     CMD_RESERVED_CMD5              = 111,
     CMD_RESERVED_CMD6              = 112,
 
@@ -248,6 +248,7 @@ typedef enum {
     STATE_FORCE_RUNDOWNING = 0x002E,           // 电机强制下行中
     STATE_FORCE_LIFT_ZEROING = 0x002F,         // 强制提零点中
     STATE_CALIBRATE_WATERING = 0x0030,         // 水位标定中
+    STATE_CALIBRATE_TANKHEIGHTING = 0x0031,     // 罐高标定中
 
     /* ===================== 完成态（0x80xx） ===================== */
     STATE_FINDZEROOVER = 0x8010,               // 标定零点完成
@@ -283,6 +284,7 @@ typedef enum {
     STATE_FORCE_RUNDOWN_OVER = 0x802E,          // 强制下行完成
     STATE_FORCE_LIFT_ZERO_OVER = 0x802F,        // 强制提零点完成
     STATE_CALIBRATE_WATER_OVER = 0x8030,        // 水位标定完成
+    STATE_CALIBRATE_TANKHEIGHT_OVER = 0x8031,   // 罐高标定完成
 
     STATE_ERROR = 0xFFFF                        // 故障
 } DeviceState;
@@ -470,7 +472,7 @@ typedef struct {
     uint32_t maxDownDistance;                   // 水位/罐底测量最大下行距离(0.1mm)
     uint32_t zero_cap;                          //零点电容值
     uint32_t water_stable_threshold;            //水位稳定阈值
-    uint32_t waterLevelCorrection;              // water level correction
+    uint32_t waterLevelCorrection;              // 水位修正值
 
     // ===================== 罐高/罐底测量 =====================
     uint32_t bottom_detect_mode;          // 罐底测量模式
@@ -542,6 +544,7 @@ typedef struct {
     // ===================== 指令参数 =====================
     uint32_t calibrateOilLevel;              // 标定液位值
     uint32_t calibrateWaterLevel;            // 水位标定值
+    uint32_t calibrateTankHeight;           // 罐高标定值
     uint32_t singlePointMeasurementPosition; // 单点测量位置
     uint32_t singlePointMonitoringPosition;  // 单点监测位置
     uint32_t densityDistributionOilLevel;    // 电机指令的运行位置
@@ -579,6 +582,19 @@ typedef struct {
 
 extern volatile MeasurementResult g_measurement; // 测量结果
 extern volatile DeviceParameters g_deviceParams; // 设备参数
+/* 仅对白名单命令开放“自身打断自身”，其他命令仍保持重复下发无效。 */
+static inline bool IsSelfInterruptibleCommand(CommandType cmd)
+{
+    switch (cmd) {
+    case CMD_CALIBRATE_OIL:
+    case CMD_CORRECT_OIL:
+    case CMD_CALIBRATE_WATER:
+    case CMD_MONITOR_SINGLE:
+        return true;
+    default:
+        return false;
+    }
+}
 static inline bool HasEffectiveCommandSwitchRequest(void)
 {
     CommandType pending_command = g_deviceParams.command;
@@ -589,8 +605,10 @@ static inline bool HasEffectiveCommandSwitchRequest(void)
     }
 
     if ((current_command != CMD_NONE) && (pending_command == current_command)) {
-        g_deviceParams.command = CMD_NONE;
-        return false;
+        if (!IsSelfInterruptibleCommand(current_command)) {
+            g_deviceParams.command = CMD_NONE;
+            return false;
+        }
     }
 
     return true;

@@ -1292,6 +1292,7 @@ static void cmd_onepara_process(void)
         { COM_NUM_CORRECTION_OIL,    CMD_CORRECT_OIL },
 
         { COM_NUM_CALIBRATE_WATER,   CMD_CALIBRATE_WATER },   /* 新增：水位标定 */
+        { COM_NUM_CALIBRATE_TANKHEIGHT, CMD_CALIBRATE_TANKHEIGHT }, /* 新增：罐高标定 */
 
         { COM_NUM_RUNUP,             CMD_MOVE_UP },
         { COM_NUM_RUNDOWN,           CMD_MOVE_DOWN },
@@ -2109,6 +2110,7 @@ static void menu_cmdconfig_main(void)
         { (uint8_t*)"标定液位", COM_NUM_CAL_OIL,     inputcmdpara, COMMANE_NORW, (uint8_t*)"CalOil"       },
         { (uint8_t*)"修正液位",   COM_NUM_CORRECTION_OIL,inputcmdpara, COMMANE_NORW, (uint8_t*)"CorrectOil"   },
         { (uint8_t*)"标定水位",   COM_NUM_CALIBRATE_WATER, inputcmdpara, COMMANE_NORW, (uint8_t*)"CalWater"    },
+        { (uint8_t*)"标定罐高",   COM_NUM_CALIBRATE_TANKHEIGHT, inputcmdpara, COMMANE_NORW, (uint8_t*)"CalTankH" },
 
         /* ===== 称重相关 ===== */
         { (uint8_t*)"获取空载称重", COM_NUM_SET_EMPTY_WEIGHT, ifsendcmd, COMMANE_NORW, (uint8_t*)"SetEmptyWeight" },
@@ -2313,6 +2315,7 @@ static MenuGroup ParamGroupOf(int operaNum)
     /* 标定/单点/位置 */
     case COM_NUM_CAL_OIL:
     case COM_NUM_CALIBRATE_WATER:
+    case COM_NUM_CALIBRATE_TANKHEIGHT:
     case COM_NUM_SINGLE_POINT:
     case COM_NUM_SP_TEST:
     case COM_NUM_DEVICEPARAM_DENSITY_DISTRIBUTION_OIL_LEVEL:

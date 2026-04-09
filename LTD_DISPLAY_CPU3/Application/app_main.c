@@ -434,6 +434,11 @@ void App_MainLoop(void)
 #if DEBUG_APP_MAIN
         printf("com3_rx_ready == 1\r\n");
 #endif
+#if DEBUG_APP_MAIN
+        printf("COM3 RX (%d): ", UART3_RX_LEN);
+        for (int i = 0; i < UART3_RX_LEN; i++) printf("%02X ", UART3_RX_BUF[i]);
+        printf("\r\n");
+#endif
         ret = cpu3_port_process(3, UART3_RX_BUF, UART3_RX_LEN, sendbuff3, &send_len);
 
         if (ret != 0) {
@@ -443,6 +448,11 @@ void App_MainLoop(void)
             HAL_UART_Receive_DMA(&huart3, UART3_RX_BUF, UART3_RX_BUF_SIZE);
         } else {
             if (send_len > 0) {
+#if DEBUG_APP_MAIN
+                printf("COM3 TX (%d): ", send_len);
+                for (int i = 0; i < send_len; i++) printf("%02X ", sendbuff3[i]);
+                printf("\r\n");
+#endif
                 uart_try_send_or_queue(&huart3,
                                       &g_tx_busy_com3,
                                       sendbuff3, send_len,

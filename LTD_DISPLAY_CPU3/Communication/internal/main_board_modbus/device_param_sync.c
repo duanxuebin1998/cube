@@ -208,6 +208,8 @@ static volatile uint32_t* get_deviceparam_ptr_by_operanum(int operanum)
         return &g_deviceParams.calibrateOilLevel;
     case COM_NUM_DEVICEPARAM_CALIBRATE_WATER_LEVEL:
         return &g_deviceParams.calibrateWaterLevel;
+    case COM_NUM_DEVICEPARAM_CALIBRATE_TANK_HEIGHT:
+        return &g_deviceParams.calibrateTankHeight;
     case COM_NUM_DEVICEPARAM_SP_MEAS_POSITION:
         return &g_deviceParams.singlePointMeasurementPosition;
     case COM_NUM_DEVICEPARAM_SP_MONITOR_POSITION:
@@ -219,7 +221,8 @@ static volatile uint32_t* get_deviceparam_ptr_by_operanum(int operanum)
     case COM_NUM_DEVICEPARAM_OILLEVEL_HYSTERESIS_TIME:
         return &g_deviceParams.oilLevelHysteresisTime;
     case COM_NUM_DEVICEPARAM_WATER_LEVEL_CORRECTION:
-        return &g_deviceParams.waterLevelCorrection;
+        /* 当前项目约定：水位修正与水位标定共用 calibrateWaterLevel。 */
+        return &g_deviceParams.calibrateWaterLevel;
     case COM_NUM_DEVICEPARAM_LAST_OIL_CORRECTION_LEVEL:
         return &g_deviceParams.lastOilCorrectionLevel;
     case COM_NUM_DEVICEPARAM_TANK_GAS_PHASE_TEMPERATURE:
@@ -231,7 +234,12 @@ static volatile uint32_t* get_deviceparam_ptr_by_operanum(int operanum)
 
     /* 兼容：旧调试指令仍然可能直接用这些 operanum 取指针 */
     case COM_NUM_CAL_OIL:
+    case COM_NUM_CORRECTION_OIL:
         return &g_deviceParams.calibrateOilLevel;
+    case COM_NUM_CALIBRATE_WATER:
+        return &g_deviceParams.calibrateWaterLevel;
+    case COM_NUM_CALIBRATE_TANKHEIGHT:
+        return &g_deviceParams.calibrateTankHeight;
     case COM_NUM_SINGLE_POINT:
         return &g_deviceParams.singlePointMeasurementPosition;
     case COM_NUM_SP_TEST:

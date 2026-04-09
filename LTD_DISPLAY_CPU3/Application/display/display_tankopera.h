@@ -161,6 +161,7 @@ typedef enum
     COM_NUM_CAL_OIL,                 // 液位标定（CMD_CALIBRATE_OIL，参数：标定值或位置）
     COM_NUM_CORRECTION_OIL,          // 修正液位（CMD_CORRECT_OIL，参数：修正值）
     COM_NUM_CALIBRATE_WATER,         // 水位标定（CMD_CALIBRATE_WATER）
+    COM_NUM_CALIBRATE_TANKHEIGHT,    // 罐高标定（CMD_CALIBRATE_TANKHEIGHT）
     COM_NUM_RUNUP,                   // 向上运行（CMD_MOVE_UP，参数：距离）
     COM_NUM_RUNDOWN,                 // 向下运行（CMD_MOVE_DOWN，参数：距离）
     COM_NUM_FORCE_RUNUP,             // 电机强制上行（CMD_FORCE_MOVE_UP）
@@ -318,6 +319,7 @@ typedef enum
     /* ---------------- 指令参数（用于带参命令） ---------------- */
     COM_NUM_DEVICEPARAM_CALIBRATE_OIL_LEVEL,            // 液位标定值
     COM_NUM_DEVICEPARAM_CALIBRATE_WATER_LEVEL,          // 水位标定值
+    COM_NUM_DEVICEPARAM_CALIBRATE_TANK_HEIGHT,          // 罐高标定值
     COM_NUM_DEVICEPARAM_SP_MEAS_POSITION,               // 单点测量位置
     COM_NUM_DEVICEPARAM_SP_MONITOR_POSITION,            // 单点监测位置
     COM_NUM_DEVICEPARAM_DENSITY_DISTRIBUTION_OIL_LEVEL, // 密度分布测量液位

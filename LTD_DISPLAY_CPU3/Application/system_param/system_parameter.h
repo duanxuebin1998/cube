@@ -197,7 +197,7 @@ typedef enum {
     CMD_CALIBRATE_WATER            = 116,  // 水位标定（新增）
 
     /* 调试预留 */
-    CMD_RESERVED_CMD4              = 110,
+    CMD_CALIBRATE_TANKHEIGHT       = 110,  // 罐高标定
     CMD_RESERVED_CMD5              = 111,
     CMD_RESERVED_CMD6              = 112,
 
@@ -254,6 +254,7 @@ typedef enum {
     STATE_FORCE_RUNDOWNING = 0x002E,           // 电机强制下行中
     STATE_FORCE_LIFT_ZEROING = 0x002F,         // 强制提零点中
     STATE_CALIBRATE_WATERING = 0x0030,         // 水位标定中
+    STATE_CALIBRATE_TANKHEIGHTING = 0x0031,     // 罐高标定中
 
     /* ===================== 完成态（0x80xx） ===================== */
     STATE_FINDZEROOVER = 0x8010,               // 标定零点完成
@@ -289,6 +290,7 @@ typedef enum {
     STATE_FORCE_RUNDOWN_OVER = 0x802E,          // 强制下行完成
     STATE_FORCE_LIFT_ZERO_OVER = 0x802F,        // 强制提零点完成
     STATE_CALIBRATE_WATER_OVER = 0x8030,        // 水位标定完成
+    STATE_CALIBRATE_TANKHEIGHT_OVER = 0x8031,   // 罐高标定完成
 
     STATE_ERROR = 0xFFFF                        // 故障
 } DeviceState;
@@ -549,6 +551,7 @@ typedef struct {
     // ===================== 指令参数 =====================
     uint32_t calibrateOilLevel;              // 标定液位值
     uint32_t calibrateWaterLevel;            // 水位标定值
+    uint32_t calibrateTankHeight;           // 罐高标定值
     uint32_t singlePointMeasurementPosition; // 单点测量位置
     uint32_t singlePointMonitoringPosition;  // 单点监测位置
     uint32_t densityDistributionOilLevel;    // 密度分布测量时的液位值

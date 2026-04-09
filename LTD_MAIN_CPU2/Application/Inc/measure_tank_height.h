@@ -26,7 +26,6 @@ typedef struct {
 } GyroZeroRef;
 
 extern int32_t bottom_value;
-extern BottomDetectMode g_bottom_det_mode;
 uint32_t SearchBottom(void);
 uint32_t Bottom_SaveGyroZeroRef(void);// 保存陀螺仪零点基准
 #endif /* INC_MEASURE_TANK_HEIGHT_H_ */

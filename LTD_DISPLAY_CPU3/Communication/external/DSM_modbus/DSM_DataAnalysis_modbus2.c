@@ -146,6 +146,12 @@ void SystemParameterSet(void)
 	WriteOneHoldingRegister(HOLDREGISTER_K18 + 2, 2, 0);					 // K18_L
 	WriteOneHoldingRegister(HOLDREGISTER_K19, 2, 0);						 // K19_H
 	WriteOneHoldingRegister(HOLDREGISTER_K19 + 2, 2, 0);					 // K19_L
+
+	/* V1.225：0x0006/0x0008 需分别回读单点测量位置、单点监测位置。 */
+	WriteOneHoldingRegister(HOLDREGISTER_SP_POSITION, 1, g_deviceParams.singlePointMeasurementPosition);
+	WriteOneHoldingRegister(HOLDREGISTER_SPT_POSITION, 1, g_deviceParams.singlePointMonitoringPosition);
+	WriteOneHoldingRegister(HOLDREGISTER_CALIBRATE_WATER_LEVEL, 2, g_deviceParams.calibrateWaterLevel);
+	WriteOneHoldingRegister(HOLDREGISTER_CALIBRATE_TANK_HEIGHT, 2, g_deviceParams.calibrateTankHeight);
 }
 
 /**
@@ -197,6 +203,18 @@ int UpdateDeviceParamsFromLegacyRegs(int startadd, int reamount)
     {
         temp = ReadOneHoldingRegister(HOLDREGISTER_CORRECTION_OIL, 2);
         g_deviceParams.calibrateOilLevel = temp;
+    }
+    if ((HOLDREGISTER_CALIBRATE_WATER_LEVEL >= startadd) &&
+        ((HOLDREGISTER_CALIBRATE_WATER_LEVEL + 1) <= end))
+    {
+        temp = ReadOneHoldingRegister(HOLDREGISTER_CALIBRATE_WATER_LEVEL, 2);
+        g_deviceParams.calibrateWaterLevel = temp;
+    }
+    if ((HOLDREGISTER_CALIBRATE_TANK_HEIGHT >= startadd) &&
+        ((HOLDREGISTER_CALIBRATE_TANK_HEIGHT + 1) <= end))
+    {
+        temp = ReadOneHoldingRegister(HOLDREGISTER_CALIBRATE_TANK_HEIGHT, 2);
+        g_deviceParams.calibrateTankHeight = temp;
     }
     /*************** 分布测量顺序 -> spreadMeasurementOrder ***********/
     if ((HOLDREGISTER_SRREAD_MEASURETURN >= startadd) &&
@@ -330,12 +348,12 @@ int UpdateDeviceParamsFromLegacyRegs(int startadd, int reamount)
         g_deviceParams.spreadBottomLimit = temp;
     }
 
-    /*************** 水位修正 -> waterLevelCorrection *****************/
+    /*************** 水位修正（当前约定复用标定水位值） *****************/
     if ((HOLDREGISTER_REAL_WATER_LEVEL_CORRECT >= startadd) &&
         (HOLDREGISTER_REAL_WATER_LEVEL_CORRECT <= end))
     {
         temp = ReadOneHoldingRegister(HOLDREGISTER_REAL_WATER_LEVEL_CORRECT, 1);
-//        g_deviceParams. = (temp & 0xFFFF);
+        g_deviceParams.calibrateWaterLevel = (temp & 0xFFFF);
     }
 
     /*************** 液位测量方式 -> liquidLevelMeasurementMethod *****/
@@ -447,6 +465,7 @@ int UpdateDeviceParamsFromLegacyRegs(int startadd, int reamount)
  ******************************************************/
 void Input_Write(void) {
 	int i;
+	int point_index;
 	WriteOneInputRegister(INPUTREGISTER_PATTERNOFWORK, 1, 1);				 					//工作模式固定为调试模式
 	WriteOneInputRegister(INPUTREGISTER_SYSTEMSTATE, 1, g_measurement.device_status.device_state);									//工作状态
 	WriteOneInputRegister(INPUTREGISTER_ERRORNUM, 2, g_measurement.device_status.error_code);
@@ -491,12 +510,13 @@ void Input_Write(void) {
 		}
 
 		for (i = 0; i < 100 - 16; i++) {
-			WriteOneInputRegister(INPUTREGISTER_SPREAD_TEMPERATURE17 + 8 * i, 1, g_measurement.density_distribution.single_density_data[i].temperature);
-			WriteOneInputRegister(INPUTREGISTER_SPREAD_DENSITY17 + 8 * i, 1, g_measurement.density_distribution.single_density_data[i].density);
-			WriteOneInputRegister(INPUTREGISTER_SPREAD_POSITION17 + 8 * i, 2, g_measurement.density_distribution.single_density_data[i].temperature_position);
-			WriteOneInputRegister(INPUTREGISTER_SPREAD_STANDARDDENSITY17 + 8 * i, 1, g_measurement.density_distribution.single_density_data[i].standard_density);
-			WriteOneInputRegister(INPUTREGISTER_SPREAD_VCF17 + 8 * i, 2, g_measurement.density_distribution.single_density_data[i].vcf20);
-			WriteOneInputRegister(INPUTREGISTER_SPREAD_WEIGHTDENSITY17 + 8 * i, 1, g_measurement.density_distribution.single_density_data[i].weight_density);
+			point_index = i + 16;
+			WriteOneInputRegister(INPUTREGISTER_SPREAD_TEMPERATURE17 + 8 * i, 1, g_measurement.density_distribution.single_density_data[point_index].temperature);
+			WriteOneInputRegister(INPUTREGISTER_SPREAD_DENSITY17 + 8 * i, 1, g_measurement.density_distribution.single_density_data[point_index].density);
+			WriteOneInputRegister(INPUTREGISTER_SPREAD_POSITION17 + 8 * i, 2, g_measurement.density_distribution.single_density_data[point_index].temperature_position);
+			WriteOneInputRegister(INPUTREGISTER_SPREAD_STANDARDDENSITY17 + 8 * i, 1, g_measurement.density_distribution.single_density_data[point_index].standard_density);
+			WriteOneInputRegister(INPUTREGISTER_SPREAD_VCF17 + 8 * i, 2, g_measurement.density_distribution.single_density_data[point_index].vcf20);
+			WriteOneInputRegister(INPUTREGISTER_SPREAD_WEIGHTDENSITY17 + 8 * i, 1, g_measurement.density_distribution.single_density_data[point_index].weight_density);
 		}
 	} else {
 		for (i = 0; i < g_measurement.density_distribution.measurement_points; i++) {
@@ -539,6 +559,15 @@ void Input_Write(void) {
 	WriteOneInputRegister(INPUTREGISTER_SENSORX_ANGLE, 1, 0);								//传感器X角度
 	WriteOneInputRegister(INPUTREGISTER_SENSORY_ANGLE, 1, 0);								//传感器Y角度
 	WriteOneInputRegister(INPUTREGISTER_WARTER_VOLTAGE, 1, g_measurement.debug_data.water_level_voltage);							//水位传感器电压
+	/* V1.225 DSM 调试区修正：0x0104/0x0105 为 X/Y 角度，0x010B 为幅值，0x010C/0x010D 为水位电压，0x010E~0x0111 预留。 */
+	WriteOneInputRegister(INPUTREGISTER_CIRCLE, 1, g_measurement.debug_data.angle_x);
+	WriteOneInputRegister(INPUTREGISTER_ANGLE, 1, g_measurement.debug_data.angle_y);
+	WriteOneInputRegister(INPUTREGISTER_STATEOFEINDUCTION, 1, g_measurement.debug_data.current_amplitude);
+	WriteOneInputRegister(INPUTREGISTER_FREQUENCEINAIR, 2, g_measurement.debug_data.water_level_voltage);
+	WriteOneInputRegister(INPUTREGISTER_AMPLITUDE, 1, 0);
+	WriteOneInputRegister(INPUTREGISTER_SENSORX_ANGLE, 1, 0);
+	WriteOneInputRegister(INPUTREGISTER_SENSORY_ANGLE, 1, 0);
+	WriteOneInputRegister(INPUTREGISTER_WARTER_VOLTAGE, 1, 0);
 	WriteOneInputRegister(INPUTREGISTER_REAL_TANKHIGH_ORIGIN, 2, g_measurement.height_measurement.calibrated_liquid_level);
 	WriteOneInputRegister(INPUTREGISTER_REAL_TANKHIGH_NOW, 2,  g_measurement.height_measurement.current_real_height);
 }

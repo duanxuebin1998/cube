@@ -31,6 +31,7 @@ extern int MaxNum_InputRegister;   			//输入寄存器最大有效值
 bool SetSlaveaddress(int address);
 bool GetFunctioncode(unsigned char *revframe, int *funcode);
 
+int Response01(unsigned char *revframe, unsigned char* sendframe);
 int Response03(unsigned char *revframe, unsigned char* sendframe);
 int Response04(unsigned char *revframe, unsigned char* sendframe);
 int Response05(unsigned char *revframe, unsigned char* sendframe);

@@ -67,27 +67,39 @@ uint32_t check_water_status(uint8_t *water_state);
 uint32_t SearchWaterLevel(void);
 
 /**
+ * @brief 水位传感器剖面测试
+ *
+ * 流程：
+ * 1. 先执行一次 SearchWaterLevel()，定位当前水位界面
+ * 2. 上行 50mm 作为测试起点
+ * 3. 以 0.1mm 步进先下行 100mm，记录每个点位的位置和电容值
+ * 4. 再以 0.1mm 步进上行 100mm，记录每个点位的位置和电容值
+ * 5. 最后统一打印上行、下行两段扫描结果
+ *
+ * @return 错误码（NO_ERROR 表示成功）
+ */
+uint32_t WaterSensorCapacitanceProfileTest(void);
+
+/**
  * @brief 水位跟随（持续监控电容并控制电机微调）
  * @return 错误码（NO_ERROR 表示成功）
  */
 uint32_t FollowWaterLevel(void);
+
 /**
- * @brief 液面附近快速跟随（按“连续调用 motorMove_upWithSpeed/motorMove_downWithSpeed 直到状态翻转”的结构）
+ * @brief 快速找跟随点（基于状态翻转）
  *
- * 逻辑：
- *  - 若当前在水里(WATER)：持续上行直到变为 NORMAL（提出水面/到油里）
- *  - 若当前不在水里(NORMAL)：持续下行直到变为 WATER（进入水里）
- *  - 如此循环往复，实现“贴着液面”快速跟随
+ * 流程：
+ * 1. 根据当前 WATER / NORMAL 状态决定上行或下行方向
+ * 2. 每次检测到状态翻转时，记录一次翻转位置
+ * 3. 从第二次翻转开始，用最近两次翻转位置的平均值估计当前液面
+ * 4. 当估计值在 stable_win_ms 窗口内波动足够小时，认为快速找点完成
  *
- * 依赖：
- *  - motorMove_upWithSpeed()/motorMove_downWithSpeed(): 每次调用推动继续运动（你现有粗找就是这样用的）
- *  - check_water_status(): 返回 WATER / NORMAL
- *  - Motor_CheckLostStep_AutoTiming(): 丢步检测（可选但建议保留）
  * @param stable_win_ms 稳定判定窗口时长（ms）
- * 退出条件：
- *   连续 stable_win_ms 内 water_level 波动（max-min）不超过阈值 -> 认为稳定找到水位，退出
+ * @return 错误码（NO_ERROR 表示成功）
  */
 uint32_t FindWaterLevel_FastByStateFlip_StableExit(uint32_t stable_win_ms);
+
 /**
  * @brief 快速水位跟随（基于电容阈值 + 滞回 + 自恢复）
  *
@@ -107,13 +119,13 @@ uint32_t FindWaterLevel_FastByStateFlip_StableExit(uint32_t stable_win_ms);
  * - 带自恢复机制，避免长期卡死在错误区域
  */
 uint32_t FollowWaterLevel_fast(void);
+
 /**
  * @brief 水位标定：基于当前水位位置 + 真值(g_deviceParams.calibrateWaterLevel) 修正 water_tank_height
  * @note  需要在 .c 中提供实现；若未启用标定，可不实现此函数
  * @return 错误码（NO_ERROR 表示成功）
  */
 void CMD_CalibrateWaterLevel(void);
-
 #ifdef __cplusplus
 }
 #endif

@@ -55,13 +55,34 @@
 #define WATER_FOLLOW_LOST_DIFF_BIG       (80.0f)   /* 认为偏差很大 */
 #define WATER_FOLLOW_LOST_COUNT_MAX      (20)      /* 连续大偏差次数阈值：20次*500ms=10s */
 #define WATER_FOLLOW_ENTER_TIMEOUT_MS    (60000u)  /* 长时间未进入稳定区，也认为已进入跟随态 */
+
+#define WATER_SENSOR_TEST_PRE_UP_MM      (50.0f)   /* 找到水位后，先上行 5cm 再开始扫描 */
+#define WATER_SENSOR_TEST_SCAN_STEP_MM   (0.1f)    /* 扫描步距 0.1mm */
+#define WATER_SENSOR_TEST_SCAN_MM        (100.0f)  /* 单向扫描总长度 10cm */
+#define WATER_SENSOR_TEST_POINT_COUNT    (1000u)   /* 10cm / 0.1mm = 1000 个采样点 */
 /* -------------------- 全局变量 -------------------- */
 /* 存储最终确定的水位位置（以 sensor_position 记录） */
 int32_t water_value = -100000000; // 初始值设为无效
 
 /* -------------------- 函数原型 -------------------- */
+typedef struct {
+    int32_t position_01mm;
+    float capacitance;
+} WaterSensorTestPoint;
+
+static WaterSensorTestPoint g_water_sensor_test_up_points[WATER_SENSOR_TEST_POINT_COUNT];
+static WaterSensorTestPoint g_water_sensor_test_down_points[WATER_SENSOR_TEST_POINT_COUNT];
+
 static int SearchWaterRough(void);
 static int SearchWaterPrecise(void);
+static uint32_t WaterSensorTestScanDirection(const char *phase_name,
+                                             uint32_t dir,
+                                             WaterSensorTestPoint *points,
+                                             uint16_t point_count);
+static void WaterSensorTestPrintResults(const char *phase_name,
+                                        const WaterSensorTestPoint *points,
+                                        uint16_t point_count,
+                                        int32_t water_pos_01mm);
 
 static inline float WaterCapRawToFloat(uint32_t raw)
 {
@@ -90,10 +111,72 @@ static inline void WaterLevelSyncFromCable(void)
     WaterLevelSetAndLog(lvl);
 }
 
+static uint32_t WaterSensorTestScanDirection(const char *phase_name,
+                                             uint32_t dir,
+                                             WaterSensorTestPoint *points,
+                                             uint16_t point_count)
+{
+    uint32_t ret;
+    uint16_t i;
+
+    printf("水位传感器测试\t%s开始，共%u点\r\n", phase_name, (unsigned int)point_count);
+
+    for (i = 0; i < point_count; ++i)
+    {
+        ret = motorMoveAndWaitUntilStopWithSpeed(WATER_SENSOR_TEST_SCAN_STEP_MM, dir, motorGetDefaultSpeedX100());
+        CHECK_COMMAND_SWITCH(ret);
+        CHECK_ERROR(ret);
+
+        ret = Sensor_ReadWaterCapacitance(&points[i].capacitance);
+        CHECK_COMMAND_SWITCH(ret);
+        CHECK_ERROR(ret);
+
+        points[i].position_01mm = g_measurement.debug_data.sensor_position;
+        g_measurement.water_measurement.current_capacitance = points[i].capacitance;
+
+        printf("水位传感器测试\t%s[%04u/%04u] 位置=%.1fmm 电容值=%.1f\r\n",
+               phase_name,
+               (unsigned int)(i + 1u),
+               (unsigned int)point_count,
+               points[i].position_01mm / 10.0f,
+               points[i].capacitance);
+    }
+
+    return NO_ERROR;
+}
+
+static void WaterSensorTestPrintResults(const char *phase_name,
+                                        const WaterSensorTestPoint *points,
+                                        uint16_t point_count,
+                                        int32_t water_pos_01mm)
+{
+    uint16_t i;
+
+    printf("水位传感器测试\t%s结果开始\r\n", phase_name);
+    for (i = 0; i < point_count; ++i)
+    {
+        printf("水位传感器测试\t%s[%04u] pos=%.1fmm delta=%+.1fmm cap=%.1f\r\n",
+               phase_name,
+               (unsigned int)(i + 1u),
+               points[i].position_01mm / 10.0f,
+               (points[i].position_01mm - water_pos_01mm) / 10.0f,
+               points[i].capacitance);
+    }
+    printf("水位传感器测试\t%s结果结束\r\n", phase_name);
+}
 /**
- * @brief 水位测量函数 - 执行完整的水位搜索流程
- *        包含：粗找水位（3次重试） + 精找水位（3次重试）
- *        状态切换时不重试
+ * @brief 水位测量函数 - 执行完整的慢速找水流程
+ *
+ * 流程梳理：
+ * 1. 先确保零点状态和 zero_capacitance 可用；必要时先回零点并读取空气区电容
+ * 2. 若当前探头已经在水区，则先上行避让，保证后续是从空气区往下找水
+ * 3. 进入粗找：持续下探，首次检测到 WATER 后急停，等待 3s 再复判
+ * 4. 粗找成功后记录一个粗略水位，再进入精找：先上提 100mm，再降速下探做精定位
+ * 5. 精找成功后，统一用 water_tank_height - cable_length 回写最终水位
+ *
+ * 说明：
+ * - 本函数负责“找到一个可靠水位点”，不负责长期闭环跟随
+ * - 状态切换（STATE_SWITCH）时不做本步骤内重试，由上层状态机决定后续动作
  *
  * @return uint32_t 错误代码（NO_ERROR表示成功）
  */
@@ -259,6 +342,61 @@ uint32_t SearchWaterLevel(void)
 
     printf("水位测量\t水位：%ld mm\r\n", g_measurement.water_measurement.water_level);
 
+    return NO_ERROR;
+}
+
+uint32_t WaterSensorCapacitanceProfileTest(void)
+{
+    uint32_t ret;
+    int32_t water_pos_01mm;
+
+    printf("水位传感器测试\t开始\r\n");
+
+    ret = SearchWaterLevel();
+    CHECK_COMMAND_SWITCH(ret);
+    CHECK_ERROR(ret);
+
+    water_pos_01mm = g_measurement.debug_data.sensor_position;
+    printf("水位传感器测试\t找到水位 pos=%.1fmm water_level=%.1fmm\r\n",
+           water_pos_01mm / 10.0f,
+           g_measurement.water_measurement.water_level / 10.0f);
+
+    ret = motorMoveAndWaitUntilStopWithSpeed(WATER_SENSOR_TEST_PRE_UP_MM,
+                                             MOTOR_DIRECTION_UP,
+                                             motorGetDefaultSpeedX100());
+    CHECK_COMMAND_SWITCH(ret);
+    CHECK_ERROR(ret);
+
+    printf("水位传感器测试\t上行避让%.1fmm后开始扫描，当前pos=%.1fmm\r\n",
+           (double)WATER_SENSOR_TEST_PRE_UP_MM,
+           g_measurement.debug_data.sensor_position / 10.0f);
+
+    ret = WaterSensorTestScanDirection("下行扫描",
+                                       MOTOR_DIRECTION_DOWN,
+                                       g_water_sensor_test_down_points,
+                                       WATER_SENSOR_TEST_POINT_COUNT);
+    CHECK_COMMAND_SWITCH(ret);
+    CHECK_ERROR(ret);
+
+    ret = WaterSensorTestScanDirection("上行扫描",
+                                       MOTOR_DIRECTION_UP,
+                                       g_water_sensor_test_up_points,
+                                       WATER_SENSOR_TEST_POINT_COUNT);
+    CHECK_COMMAND_SWITCH(ret);
+    CHECK_ERROR(ret);
+
+    printf("水位传感器测试\t扫描完成，开始打印结果\r\n");
+    WaterSensorTestPrintResults("下行扫描",
+                                g_water_sensor_test_down_points,
+                                WATER_SENSOR_TEST_POINT_COUNT,
+                                water_pos_01mm);
+    WaterSensorTestPrintResults("上行扫描",
+                                g_water_sensor_test_up_points,
+                                WATER_SENSOR_TEST_POINT_COUNT,
+                                water_pos_01mm);
+
+    printf("水位传感器测试\t结束 当前pos=%.1fmm\r\n",
+           g_measurement.debug_data.sensor_position / 10.0f);
     return NO_ERROR;
 }
 
@@ -505,17 +643,25 @@ static uint32_t AlignToWaterLevel_01mm(int32_t lvl_target_01mm)
 }
 
 /**
- * @brief 液面附近快速跟随（按“连续调用 motorMove_upWithSpeed/motorMove_downWithSpeed 直到状态翻转”的结构）
+ * @brief 快速找跟随点（基于“状态翻转 + 窗口判稳”）
  *
- * 逻辑：
- *  - 若当前在水里(WATER)：持续上行直到变为 NORMAL（提出水面/到油里）
- *  - 若当前不在水里(NORMAL)：持续下行直到变为 WATER（进入水里）
- *  - 如此循环往复，实现“贴着液面”快速跟随
+ * 流程梳理：
+ * 1. 先读取当前是 WATER 还是 NORMAL
+ * 2. 若当前在水里，则连续上行直到提出水面；若当前不在水里，则连续下行直到进入水里
+ * 3. 每发生一次 WATER/NORMAL 翻转，就记录一次翻转水位
+ * 4. 从第二次翻转开始，用最近两次翻转位置的平均值作为当前液面估计值
+ * 5. 若连续 stable_win_ms 内该估计值波动不超过阈值，则认为“快速找点完成”，停机并对齐到目标水位附近
+ *
+ * 说明：
+ * - 这个函数的职责是“给 FollowWaterLevelCore 找一个初始跟随点”
+ * - 它本身不是长期跟随主循环；退出后由上层立即转入闭环跟随
+ * - 当前上层快速模式传入 stable_win_ms=0，因此只要求形成可用跟随点，不在这里长期等待
  *
  * 依赖：
  *  - motorMove_upWithSpeed()/motorMove_downWithSpeed(): 每次调用推动继续运动（你现有粗找就是这样用的）
  *  - check_water_status(): 返回 WATER / NORMAL
  *  - Motor_CheckLostStep_AutoTiming(): 丢步检测（可选但建议保留）
+ *
  * @param stable_win_ms 稳定判定窗口时长（ms）
  * 退出条件：
  *   连续 stable_win_ms 内 water_level 波动（max-min）不超过阈值 -> 认为稳定找到水位，退出
@@ -740,6 +886,16 @@ static uint32_t FollowWaterLevelCore(WaterRecoverStrategy recover_strategy)
 {
     uint32_t ret;
 
+    /*
+     * 闭环跟随主循环说明：
+     * 1. 周期性读取当前水电容，并按 air_cap/th/th_low 判断“偏水 / 偏空气 / 稳定区”
+     * 2. 偏水就上行，偏空气就下行，稳定区则保持不动
+     * 3. 每次动作都是“小步进 + 重新测量”，所以这是一个持续运行的闭环调节过程
+     * 4. 一旦进入稳定区，会立即置 STATE_FOLLOW_WATERING，并按当前位置同步 water_level
+     * 5. 若长时间一直在调节但还没进入稳定区，超过 WATER_FOLLOW_ENTER_TIMEOUT_MS 后也置 STATE_FOLLOW_WATERING
+     * 6. 若连续多次判断为“大偏差”，说明可能跟不上液面或测量异常，此时触发重新找水位
+     */
+
     /* -------------------- 电容相关变量 -------------------- */
     float cap = 0.0f;         /* 当前读取到的水位电容值 */
     float air_cap;            /* 空气中的基准电容（零点电容） */
@@ -842,7 +998,7 @@ static uint32_t FollowWaterLevelCore(WaterRecoverStrategy recover_strategy)
         {
             step_mm = WATER_FOLLOW_STEP_BIG_MM;
         }
-        else if (diff > 0.3f * WaterCapRawToFloat(g_deviceParams.water_cap_threshold))
+        else if (diff > 0.1f * WaterCapRawToFloat(g_deviceParams.water_cap_threshold))
         {
             step_mm = WATER_FOLLOW_STEP_MED_MM;
         }
@@ -860,6 +1016,12 @@ static uint32_t FollowWaterLevelCore(WaterRecoverStrategy recover_strategy)
         ret = motorMoveAndWaitUntilStopWithSpeed(step_mm, dir, motorGetDefaultSpeedX100());
         CHECK_ERROR(ret);
 
+        /*
+         * 这里补一个“长时间仍未进入稳定区”的兜底：
+         * - 适用于液面持续缓慢变化、系统始终在跟着调节的场景
+         * - 此时虽然还没进入稳定区，但业务上已经属于“水位跟随中”
+         * - 置位后，UpdateWaterLevelIfValid() 才会开始持续回写 water_level
+         */
         if ((g_measurement.device_status.device_state != STATE_FOLLOW_WATERING) &&
             ((HAL_GetTick() - follow_enter_tick) >= follow_enter_timeout_ms))
         {
