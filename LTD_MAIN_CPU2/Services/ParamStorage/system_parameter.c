@@ -415,6 +415,7 @@ void RestoreFactoryParamsConfig(void)
     /* ---------------- Ö¸Áî²ÎÊý ---------------- */
     g_deviceParams.calibrateOilLevel              = 0;
     g_deviceParams.calibrateWaterLevel            = 0;
+    g_deviceParams.calibrateTankHeight           = 0;
     g_deviceParams.singlePointMeasurementPosition = 0;
     g_deviceParams.singlePointMonitoringPosition  = 0;
     g_deviceParams.densityDistributionOilLevel    = 0;

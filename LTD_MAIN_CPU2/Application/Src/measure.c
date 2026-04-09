@@ -17,9 +17,45 @@
 #include <stdlib.h>
 #include "test.h"
 #include "sensor.h"
+#include "encoder.h"
 #include "measure_water_level.h"
 
 static void CMD_CorrectOilLevel(void);
+/* 标定罐高：先测出原始实高，再用标定罐高值修正“当前实高”显示链路。 */
+static void CMD_CalibrateTankHeight(void)
+{
+    uint32_t ret = 0;
+    uint32_t raw_real_height;
+
+    MeasureStart();
+
+    if (g_deviceParams.calibrateTankHeight == 0) {
+        printf("标定罐高值为0，无法执行罐高标定\r\n");
+        SET_ERROR(PARAM_ERROR);
+    }
+
+    g_measurement.device_status.device_state = STATE_CALIBRATE_TANKHEIGHTING;
+
+    ret = SearchBottom();
+    SET_ERROR(ret);
+
+    raw_real_height = (bottom_value > 0) ? (uint32_t)bottom_value
+                                         : g_measurement.debug_data.cable_length;
+    if (raw_real_height == 0U) {
+        printf("原始实高为0，无法执行实高校正\r\n");
+        SET_ERROR(PARAM_ERROR);
+    }
+
+    g_deviceParams.initialTankHeight = raw_real_height;
+    g_deviceParams.currentTankHeight = g_deviceParams.calibrateTankHeight;
+    g_measurement.height_measurement.current_real_height =
+            g_deviceParams.currentTankHeight;
+    g_deviceParams.calibrateTankHeight = 0;
+    save_device_params();
+
+    g_measurement.device_status.device_state = STATE_CALIBRATE_TANKHEIGHT_OVER;
+}
+
 static void CMD_EnterMaintenanceMode(void);
 static void CMD_WartsilaDensitySpread(void);
 static void CMD_SetFullWeight(void);
@@ -155,6 +191,11 @@ void ProcessMeasureCmd(CommandType command)
         CMD_CalibrateWaterLevel();
         break;
 
+    case CMD_CALIBRATE_TANKHEIGHT:
+        printf("执行标定罐高指令\r\n");
+        CMD_CalibrateTankHeight();
+        break;
+
     case CMD_MOVE_UP:
         printf("电机上行操作\r\n");
         CMD_MoveUp();
@@ -211,7 +252,6 @@ void ProcessMeasureCmd(CommandType command)
     case CMD_RESERVED_CMD1:
     case CMD_RESERVED_CMD2:
     case CMD_RESERVED_CMD3:
-    case CMD_RESERVED_CMD4:
     case CMD_RESERVED_CMD5:
     case CMD_RESERVED_CMD6:
     case CMD_UNKNOWN:
@@ -501,18 +541,29 @@ static void CMD_CalibrateOilLevel(void) {
 	uint32_t ret = 0;
 	MeasureStart();
 
-	g_measurement.device_status.device_state = STATE_CALIBRATIONOILING;
-	//标定液位为0为实高标定液位
-	if(g_deviceParams.calibrateOilLevel == 0)
-	{
-		ret = SearchBottom();
+    if (g_measurement.device_status.device_state == STATE_FLOWOIL) {
+		printf("当前处于液位跟随状态，执行液位修正操作\r\n");
+		CorrectOilLevelProcess();
+		//继续液位跟随
+		ret = FollowOilLevel();
 		SET_ERROR(ret);
-		save_device_params();//把修正后的罐高保存到参数
-		g_measurement.device_status.device_state = STATE_FINDOIL;
-	}
-	ret = SearchAndFollowOilLevel();
-	SET_ERROR(ret);
-	return;
+		return;
+	} 
+    else
+    {
+        g_measurement.device_status.device_state = STATE_CALIBRATIONOILING;
+        //标定液位为0为实高标定液位
+        if(g_deviceParams.calibrateOilLevel == 0)
+        {
+            ret = SearchBottom();
+            SET_ERROR(ret);
+            save_device_params();//把修正后的罐高保存到参数
+            g_measurement.device_status.device_state = STATE_FINDOIL;
+        }
+        ret = SearchAndFollowOilLevel();
+        SET_ERROR(ret);
+        return;
+    }
 }
 static void CMD_CorrectOilLevel(void) {
 	uint32_t ret = 0;

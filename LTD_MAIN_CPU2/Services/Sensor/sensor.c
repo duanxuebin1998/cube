@@ -180,7 +180,6 @@ uint32_t DetectSensorType(void) {
 		 * 如果不立即保存，CPU3 后续就看不到这次变更，
 		 * 下次重启也会丢掉新的 sensorType。 */
 		save_device_params();
-		g_bottom_det_mode = BOTTOM_DET_BY_WEIGHT;
 		printf("识别成功：LTD传感器 | 温度=%.3f ℃\r\n", temp);
 		printf("====================================\r\n");
 		return NO_ERROR;

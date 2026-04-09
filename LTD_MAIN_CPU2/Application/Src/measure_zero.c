@@ -158,7 +158,7 @@ int SearchZero(void) {
 		ret = motorMoveAndWaitUntilStopWithSpeed((float)g_deviceParams.findZeroDownDistance/10.0, MOTOR_DIRECTION_DOWN, motorGetDefaultSpeedX100());
 		CHECK_ERROR(ret);
 		read_zero_capacitance();//读取零点电容值
-		if(g_bottom_det_mode == BOTTOM_DET_BY_GYRO)
+		if(g_deviceParams.bottom_detect_mode == BOTTOM_DET_BY_GYRO)
 		{
 			Bottom_SaveGyroZeroRef();//保存陀螺仪零点参考
 		}

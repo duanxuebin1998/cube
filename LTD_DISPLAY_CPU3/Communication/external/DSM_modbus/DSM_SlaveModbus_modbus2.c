@@ -19,6 +19,7 @@ int MaxNum_Coil;									// 线圈最大有效值
 int MaxNum_HoldingRegister;							// 保持寄存器最大有效值
 int MaxNum_InputRegister;							// 输入寄存器最大有效值
 
+const int readcoilfuncode = 0x01;				// 读线圈功能码
 const int readholdingregisterfuncode = 0x03;	// 读保持寄存器功能码
 const int readinputregisterfuncode = 0x04;		// 读输入寄存器功能码
 const int presetsinglecoilfuncode = 0x05;		// 写单个线圈功能码
@@ -51,7 +52,7 @@ bool GetFunctioncode(unsigned char *revframe, int *funcode)
 {
 	*funcode = revframe[1];
 
-	if ((*funcode != readholdingregisterfuncode) && (*funcode != readinputregisterfuncode) && (*funcode != presetsinglecoilfuncode) && (*funcode != presetmultipleregisterfuncode))
+	if ((*funcode != readcoilfuncode) && (*funcode != readholdingregisterfuncode) && (*funcode != readinputregisterfuncode) && (*funcode != presetsinglecoilfuncode) && (*funcode != presetmultipleregisterfuncode))
 	{
 		return false;
 	}
@@ -59,6 +60,47 @@ bool GetFunctioncode(unsigned char *revframe, int *funcode)
 	{
 		return true;
 	}
+}
+
+/* 兼容上位机读线圈请求：按协议格式正常响应，线圈值统一返回 0。 */
+int Response01(unsigned char *revframe, unsigned char *sendframe)
+{
+	unsigned int startaddress;
+	unsigned int coilamount;
+	unsigned int endaddress;
+	unsigned int bytecount;
+	unsigned short crc;
+	int framelen;
+	unsigned int i;
+
+	startaddress = ((revframe[2] & 0x00ff) << 8) + revframe[3];
+	coilamount = ((revframe[4] & 0x00ff) << 8) + revframe[5];
+
+	if ((coilamount == 0U) || (coilamount > 2000U))
+	{
+		return ResponseException(readcoilfuncode, EXCEPTIONCODE_ERRORDATA, sendframe);
+	}
+
+	endaddress = startaddress + coilamount - 1U;
+	if ((startaddress > (unsigned int)MaxNum_Coil) || (endaddress > (unsigned int)MaxNum_Coil))
+	{
+		return ResponseException(readcoilfuncode, EXCEPTIONCODE_ERRORADDRESS, sendframe);
+	}
+
+	bytecount = (coilamount + 7U) / 8U;
+	sendframe[0] = SlaveAddress;
+	sendframe[1] = readcoilfuncode;
+	sendframe[2] = (unsigned char)bytecount;
+	for (i = 0; i < bytecount; i++)
+	{
+		sendframe[3 + i] = 0x00;
+	}
+
+	framelen = 3 + (int)bytecount;
+	crc = CRC16_Calculate(sendframe, framelen);
+	sendframe[framelen] = crc & 0xff;
+	sendframe[framelen + 1] = (crc >> 8) & 0xff;
+	return framelen + 2;
 }
 
 
@@ -746,6 +788,8 @@ static const CoilCmdMap g_coil_cmd_map[] = {
     { COM_SET_ZEROANGLE,       CMD_UNKNOWN },          // 调整零点角度
     { COM_CORRECTION_OIL,      CMD_CORRECT_OIL },             // 修正液位
     { COM_FORCE_ZERO,          CMD_CALIBRATE_ZERO },          // 强制零点
+    { COM_CAL_WATER,           CMD_CALIBRATE_WATER },         // 水位标定
+    { COM_CALIBRATE_TANKHEIGHT, CMD_CALIBRATE_TANKHEIGHT },   // 罐高标定
 
     /* ========= 解锁模式区 (0x0200 ~ 0x0202) ========= */
     { COM_RESTOR_EFACTORYSETTING, CMD_RESTORE_FACTORY },      // 恢复出厂设置
@@ -755,6 +799,17 @@ static const CoilCmdMap g_coil_cmd_map[] = {
 
 /* 简单的数组长度宏 */
 #define ARRAY_SIZE(a) (sizeof(a) / sizeof((a)[0]))
+
+/* 仅允许协议表中已定义的线圈地址通过 0x05 写单线圈。 */
+static bool IsSupportedCoilAddress(uint16_t coil_addr)
+{
+    for (size_t i = 0; i < ARRAY_SIZE(g_coil_cmd_map); i++) {
+        if (g_coil_cmd_map[i].coil == coil_addr) {
+            return true;
+        }
+    }
+    return false;
+}
 
 /* 线圈地址 -> CMD_ 指令 */
 uint8_t GetCmdFromCoil(uint16_t coil_addr)
@@ -787,7 +842,7 @@ int Response05(unsigned char *revframe, unsigned char *sendframe)
 	startaddress = ((revframe[2] & 0x00ff) << 8) + revframe[3];
 	coilvalue = ((revframe[4] & 0x00ff) << 8) + revframe[5];
 
-	if ((startaddress > MaxNum_Coil) || (startaddress < STARTADDRESS1_COM) || ((startaddress > ENDADDRESS1_COM) && (startaddress < STARTADDRESS2_COM)) || ((startaddress > ENDADDRESS2_COM) && (startaddress < STARTADDRESS3_COM)) || (startaddress > ENDADDRESS3_COM))
+	if (!IsSupportedCoilAddress((uint16_t)startaddress))
 	{
 		sendframe[0] = SlaveAddress;
 		sendframe[1] = 0x80 + presetsinglecoilfuncode;

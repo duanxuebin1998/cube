@@ -1,4 +1,4 @@
-#include "display.h"
+﻿#include "display.h"
 #include "hgs.h"
 #include "stdlib.h"
 #include "math.h"
@@ -34,6 +34,7 @@ enum{//用于记录每个参数显示在第几页第几行
     Para_alarm,
     Para_current,
     Para_weight,
+    Para_sensor_value, // sensor value
     Para_angle_x,   // 新增：陀螺仪 X 角度
     Para_angle_y,   // 新增：陀螺仪 Y 角度
     Para_position,
@@ -47,6 +48,53 @@ enum{//用于记录每个参数显示在第几页第几行
 };
 static int ValidParaDisArr[Para_Amount][4] = {0};
 
+static bool IsBottomAngleDisplayEnabled(void)
+{
+    return (g_deviceParams.bottom_detect_mode != 0U);
+}
+
+static bool IsOilLevelSensorState(DeviceState state)
+{
+    switch (state)
+    {
+    case STATE_FINDOIL:
+    case STATE_CALIBRATIONOILING:
+    case STATE_FLOWOIL:
+        return true;
+    default:
+        return false;
+    }
+}
+
+static bool IsWaterLevelSensorState(DeviceState state)
+{
+    switch (state)
+    {
+    case STATE_FINDWATER:
+    case STATE_FOLLOW_WATER_POINT_SEARCHING:
+    case STATE_FOLLOW_WATERING:
+    case STATE_CALIBRATE_WATERING:
+        return true;
+    default:
+        return false;
+    }
+}
+
+static bool IsRealHeightDisplayState(DeviceState state)
+{
+    return (state == STATE_FINDBOTTOM_OVER) ||
+           (state == STATE_CALIBRATE_TANKHEIGHT_OVER);
+}
+
+static int GetOilSensorFrequencyForDisplay(void)
+{
+    if (g_measurement.oil_measurement.current_frequency != 0U)
+    {
+        return (int)g_measurement.oil_measurement.current_frequency;
+    }
+
+    return (int)g_measurement.debug_data.frequency;
+}
 
 /*字库索引数组*/
 static uint8_t StockMap[] = "通讯尝试中液位跟随密度温℃版本水测量完成寻找标定零点校正获取称重步进未知无线提浮子至置阈值"
@@ -915,6 +963,23 @@ static void oled_equipment(void)
 		line = DisplayLangaugeLineWords((u8*) "称重:", OLED_LINE8_1, row, 0, (u8*) "Weight:");
 		OledValueDisplay(g_measurement.debug_data.current_weight, line, row, 0, 0, (u8*) " ");
 	}
+    // sensor value
+    if (ValidParaDisArr[Para_sensor_value][PARA_VALID] == true &&
+        now_page == ValidParaDisArr[Para_sensor_value][PARA_PAGE])
+    {
+        row = ValidParaDisArr[Para_sensor_value][PARA_X];
+        if (IsOilLevelSensorState(g_measurement.device_status.device_state))
+        {
+            line = DisplayLangaugeLineWords((u8*)"??:", OLED_LINE8_1, row, 0, (u8*)"Freq:");
+            OledValueDisplay(GetOilSensorFrequencyForDisplay(), line, row, 0, 0, (u8*)"Hz");
+        }
+        else
+        {
+            line = DisplayLangaugeLineWords((u8*)"??:", OLED_LINE8_1, row, 0, (u8*)"Cap:");
+            OledValueDisplay((int)(g_measurement.water_measurement.current_capacitance * 10.0f),
+                             line, row, 0, 1, NULL);
+        }
+    }
     // 陀螺仪角度 X
     if (ValidParaDisArr[Para_angle_x][PARA_VALID] == true &&
         now_page == ValidParaDisArr[Para_angle_x][PARA_PAGE])
@@ -1017,8 +1082,25 @@ static void CalculateValidPara(void)
     }
     else
         ValidParaDisArr[Para_weight][PARA_VALID] = false;
+    // sensor value
+    if (IsOilLevelSensorState(g_measurement.device_status.device_state) &&
+        (GetOilSensorFrequencyForDisplay() > 0))
+    {
+        ValidParaCnt++;
+        ValidParaDisArr[Para_sensor_value][PARA_NUM] = ValidParaCnt;
+        ValidParaDisArr[Para_sensor_value][PARA_VALID] = true;
+    }
+    else if (IsWaterLevelSensorState(g_measurement.device_status.device_state) &&
+             (g_measurement.water_measurement.current_capacitance > 0.0f))
+    {
+        ValidParaCnt++;
+        ValidParaDisArr[Para_sensor_value][PARA_NUM] = ValidParaCnt;
+        ValidParaDisArr[Para_sensor_value][PARA_VALID] = true;
+    }
+    else
+        ValidParaDisArr[Para_sensor_value][PARA_VALID] = false;
     // 陀螺仪角度 X
-    if (g_measurement.debug_data.angle_x != 0)
+    if (IsBottomAngleDisplayEnabled() && (g_measurement.debug_data.angle_x != 0))
     {
         ValidParaCnt++;
         ValidParaDisArr[Para_angle_x][PARA_NUM] = ValidParaCnt;
@@ -1029,7 +1111,7 @@ static void CalculateValidPara(void)
     }
 
     // 陀螺仪角度 Y
-    if (g_measurement.debug_data.angle_y != 0)
+    if (IsBottomAngleDisplayEnabled() && (g_measurement.debug_data.angle_y != 0))
     {
         ValidParaCnt++;
         ValidParaDisArr[Para_angle_y][PARA_NUM] = ValidParaCnt;
@@ -1039,7 +1121,8 @@ static void CalculateValidPara(void)
         ValidParaDisArr[Para_angle_y][PARA_VALID] = false;
     }
     // 罐高
-    if ((g_measurement.height_measurement.current_real_height != 0)&&(g_measurement.device_status.device_state == STATE_FINDBOTTOM_OVER))
+    if ((g_measurement.height_measurement.current_real_height != 0) &&
+        IsRealHeightDisplayState(g_measurement.device_status.device_state))
     {
         ValidParaCnt++;
         ValidParaDisArr[Para_tankheight][PARA_NUM] = ValidParaCnt;
@@ -1129,6 +1212,7 @@ static const EquipStateDisplay state_display_table[] = {
     { STATE_FORCE_RUNDOWNING,        "电机强制下行中",           "Force Running Down" },          /* NEW */
     { STATE_FORCE_LIFT_ZEROING,      "强制提零点中",             "Force Lift Zero" },             /* NEW */
     { STATE_CALIBRATE_WATERING,      "水位标定中",               "Calibrating Water Level" },     /* NEW */
+    { STATE_CALIBRATE_TANKHEIGHTING, "罐高标定中",               "Calibrating Tank Height" },     /* NEW */
 
     /* ===== 瓦西莱密度 ===== */
     { STATE_WARTSILA_DENSITY_START,      "LTD密度分布开始",       "Wartsila Density Start" },
@@ -1166,6 +1250,7 @@ static const EquipStateDisplay state_display_table[] = {
     { STATE_FORCE_RUNDOWN_OVER,      "强制下行完成",             "Force Run Down Done" },          /* NEW */
     { STATE_FORCE_LIFT_ZERO_OVER,    "强制提零点完成",           "Force Lift Zero Done" },         /* NEW */
     { STATE_CALIBRATE_WATER_OVER,    "水位标定完成",             "Water Calibration Done" },       /* NEW */
+    { STATE_CALIBRATE_TANKHEIGHT_OVER,"罐高标定完成",             "Tank Height Calibration Done" }, /* NEW */
 
     { STATE_WARTSILA_DENSITY_OVER,   "LTD密度分布完成",          "Wartsila Density Done" },
 

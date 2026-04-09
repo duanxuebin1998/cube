@@ -137,8 +137,9 @@ struct ParameterMetadata param_meta[] = {
 
 {(uint8_t*)"标定液位值",	0,	COM_NUM_DEVICEPARAM_CALIBRATE_OIL_LEVEL,	HOLDREGISTER_DEVICEPARAM_CALIBRATE_OIL_LEVEL,	2,	false,	0,	0,	(uint8_t*)"mm",	1,	0,	true,	TYPE_INT,	6,	NULL,	(uint8_t*)"CalOilLvl"},
 {(uint8_t*)"标定水位值",	0,	COM_NUM_DEVICEPARAM_CALIBRATE_WATER_LEVEL,	HOLDREGISTER_DEVICEPARAM_CALIBRATE_WATER_LEVEL,	2,	false,	0,	0,	(uint8_t*)"mm",	1,	0,	true,	TYPE_INT,	6,	NULL,	(uint8_t*)"CalWaterLvl"},
+{(uint8_t*)"标定罐高值",	0,	COM_NUM_DEVICEPARAM_CALIBRATE_TANK_HEIGHT,	HOLDREGISTER_DEVICEPARAM_CALIBRATE_TANK_HEIGHT,	2,	false,	0,	0,	(uint8_t*)"mm",	1,	0,	true,	TYPE_INT,	6,	NULL,	(uint8_t*)"CalTankH"},
 {(uint8_t*)"单点测量位置",	0,	COM_NUM_DEVICEPARAM_SP_MEAS_POSITION,	HOLDREGISTER_DEVICEPARAM_SP_MEAS_POSITION,	2,	false,	0,	0,	(uint8_t*)"mm",	1,	0,	true,	TYPE_INT,	7,	NULL,	(uint8_t*)"SP_MeasPos"},
-{(uint8_t*)"单点监测位置",	0,	COM_NUM_DEVICEPARAM_SP_MEAS_POSITION,	HOLDREGISTER_DEVICEPARAM_SP_MONITOR_POSITION,	2,	false,	0,	0,	(uint8_t*)"mm",	1,	0,	true,	TYPE_INT,	7,	NULL,	(uint8_t*)"SP_MonPos"},
+{(uint8_t*)"单点监测位置",	0,	COM_NUM_DEVICEPARAM_SP_MONITOR_POSITION,	HOLDREGISTER_DEVICEPARAM_SP_MONITOR_POSITION,	2,	false,	0,	0,	(uint8_t*)"mm",	1,	0,	true,	TYPE_INT,	7,	NULL,	(uint8_t*)"SP_MonPos"},
 {(uint8_t*)"电机运行位置",	0,	COM_NUM_DEVICEPARAM_DENSITY_DISTRIBUTION_OIL_LEVEL,	HOLDREGISTER_DEVICEPARAM_DENSITY_DISTRIBUTION_OIL_LEVEL,	2,	false,	0,	0,	(uint8_t*)"mm",	1,	0,	true,	TYPE_INT,	7,	NULL,	(uint8_t*)"DistOilLvl"},
 {(uint8_t*)"电机上行距离",	0,	COM_NUM_DEVICEPARAM_MOTOR_COMMAND_DISTANCE,	HOLDREGISTER_DEVICEPARAM_MOTOR_COMMAND_DISTANCE,	2,	false,	0,	0,	(uint8_t*)"mm",	1,	0,	true,	TYPE_INT,	7,	NULL,	(uint8_t*)"MotorDist"},
 {(uint8_t*)"保留28",	0,	COM_NUM_DEVICEPARAM_RESERVED28,	HOLDREGISTER_DEVICEPARAM_RESERVED28,	2,	false,	0,	0,	NULL,	0,	0,	false,	TYPE_INT,	8,	NULL,	(uint8_t*)"Rsv28"},
@@ -164,6 +165,7 @@ struct ParameterMetadata param_meta[] = {
 {(uint8_t*)"标定液位值",	0,	COM_NUM_CAL_OIL,	HOLDREGISTER_DEVICEPARAM_CALIBRATE_OIL_LEVEL,	2,	false,	0,	0,	(uint8_t*)"mm",	1,	0,	true,	TYPE_INT,	7,	NULL,	(uint8_t*)"CalOilLvl"},
 {(uint8_t*)"修正液位值",	0,	COM_NUM_CORRECTION_OIL,	HOLDREGISTER_DEVICEPARAM_CALIBRATE_OIL_LEVEL,	2,	false,	0,	0,	(uint8_t*)"mm",	1,	0,	true,	TYPE_INT,	7,	NULL,	(uint8_t*)"CalOilLvl"},
 {(uint8_t*)"标定水位值",	0,	COM_NUM_CALIBRATE_WATER,	HOLDREGISTER_DEVICEPARAM_CALIBRATE_WATER_LEVEL,	2,	false,	0,	0,	(uint8_t*)"mm",	1,	0,	true,	TYPE_INT,	7,	NULL,	(uint8_t*)"CalWaterLvl"},
+{(uint8_t*)"标定罐高值",	0,	COM_NUM_CALIBRATE_TANKHEIGHT,	HOLDREGISTER_DEVICEPARAM_CALIBRATE_TANK_HEIGHT,	2,	false,	0,	0,	(uint8_t*)"mm",	1,	0,	true,	TYPE_INT,	7,	NULL,	(uint8_t*)"CalTankH"},
 {(uint8_t*)"单点测量位置",	0,	COM_NUM_SINGLE_POINT,	HOLDREGISTER_DEVICEPARAM_SP_MEAS_POSITION,	2,	false,	0,	0,	(uint8_t*)"mm",	1,	0,	true,	TYPE_INT,	7,	NULL,	(uint8_t*)"SP_MeasPos"},
 {(uint8_t*)"单点监测位置",	0,	COM_NUM_SP_TEST,	HOLDREGISTER_DEVICEPARAM_SP_MONITOR_POSITION,	2,	false,	0,	0,	(uint8_t*)"mm",	1,	0,	true,	TYPE_INT,	7,	NULL,	(uint8_t*)"SP_MonPos"},
 {(uint8_t*)"电机运行位置",	0,	COM_NUM_RUN_TO_POSITION,	HOLDREGISTER_DEVICEPARAM_DENSITY_DISTRIBUTION_OIL_LEVEL,	2,	false,	0,	0,	(uint8_t*)"mm",	1,	0,	true,	TYPE_INT,	7,	NULL,	(uint8_t*)"DistOilLvl"},

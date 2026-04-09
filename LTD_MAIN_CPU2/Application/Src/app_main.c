@@ -72,11 +72,6 @@ void App_Init(void) {
 // 主循环任务
 void App_MainLoop(void) {
 	(void)Weight_CheckCommunicationTimeout();
-	if (App_HandleIdleGlobalError()) {
-		process_device_params_deferred_tasks();
-		HAL_Delay(50); // 延时50ms
-		return;
-	}
 	// 如果有新的命令
 	if (new_command_ready) {
 		new_command_ready = 0;  // 重置标志，避免重复处理
@@ -94,6 +89,16 @@ void App_MainLoop(void) {
 		WIRELESS_PrintInfo(02); // 打印无线传感器信息
 		//
 	}
+	/*
+	 * 允许在错误态下优先处理新命令。
+	 * 这样外部下发的恢复/重新测量命令可以进入 MeasureStart() 清错，
+	 * 避免空闲错误门控把所有后续命令都提前拦截掉。
+	 */
+	if (App_HandleIdleGlobalError()) {
+		process_device_params_deferred_tasks();
+		HAL_Delay(50); // 延时50ms
+		return;
+	}
 //		DSM_V2_Test_AllParams(); // 二代传感器测试函数
 //		Sensor_Test(); // 传感器测试
 //		Test_FRAM_ReadWrite();
@@ -101,6 +106,6 @@ void App_MainLoop(void) {
 //		printf("位置%d", g_measurement.debug_data.sensor_position);
 //		HAL_GPIO_WritePin(HART_RTS_GPIO_Port, HART_RTS_Pin, GPIO_PIN_RESET);
 //		HAL_UART_Transmit_DMA(&huart2, "123456", 6);  // 通过UART发送响应
-	process_device_params_deferred_tasks();
+	process_device_params_deferred_tasks();//保存设备参数
 	HAL_Delay(50); // 延时50ms
 }
