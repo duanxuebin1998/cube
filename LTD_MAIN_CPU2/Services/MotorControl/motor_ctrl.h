@@ -100,6 +100,12 @@ uint32_t motorQuickStop(void);
  */
 uint32_t motorSlowStop(void);
 
+/**
+ * @brief ??????/?????????
+ * @return 0 ??, 1 ??, 2 ??
+ */
+uint32_t motorGetDisplayState(void);
+
 /* ===================== 运动控制接口 ===================== */
 
 /**

@@ -10,7 +10,7 @@
  #include <math.h>
 
 #ifndef DSM_V2_MAX_RETRY
-#define DSM_V2_MAX_RETRY   3
+#define DSM_V2_MAX_RETRY   SENSOR_COMM_MAX_RETRY
 #endif
 #ifndef DSM_V2_RX_TIMEOUT
 #define DSM_V2_RX_TIMEOUT  DSM_CMD_TIMEOUT

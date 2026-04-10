@@ -464,7 +464,7 @@ void write_measurement_result_to_InputRegisters(uint16_t *regs) {
 
 	/* 电机状态相关 */
 	write_u32_to_regs(regs, REG_DEBUG_MOTOR_SPEED, g_measurement.debug_data.motor_speed);
-	write_u32_to_regs(regs, REG_DEBUG_MOTOR_STATE, g_measurement.debug_data.motor_state);
+	write_u32_to_regs(regs, REG_DEBUG_MOTOR_STATE, motorGetDisplayState());
 
 	/* ==== OilMeasurement ==== */
 	write_u32_to_regs(regs, REG_OIL_MEASUREMENT_OIL_LEVEL, g_measurement.oil_measurement.oil_level);

@@ -96,6 +96,28 @@ static int GetOilSensorFrequencyForDisplay(void)
     return (int)g_measurement.debug_data.frequency;
 }
 
+static const uint8_t MotorRunIcon16Stock[] = {
+    0x02,0x00,0x07,0x00,0x0F,0x80,0x1A,0xC0,0x02,0x00,0x02,0x00,0x02,0x00,
+    0x02,0x00,0x02,0x00,0x02,0x00,0x02,0x00,0x00,0x00,0x00,0x00,0x00,0x00,/* up */
+    0x00,0x00,0x00,0x00,0x00,0x00,0x02,0x00,0x02,0x00,0x02,0x00,0x02,0x00,
+    0x02,0x00,0x02,0x00,0x02,0x00,0x1A,0xC0,0x0F,0x80,0x07,0x00,0x02,0x00,/* down */
+    0x00,0x00,0x00,0x00,0x1F,0xC0,0x1F,0xC0,0x1F,0xC0,0x1F,0xC0,0x1F,0xC0,
+    0x1F,0xC0,0x1F,0xC0,0x1F,0xC0,0x1F,0xC0,0x00,0x00,0x00,0x00,0x00,0x00,/* stop */
+};
+
+static uint8_t GetMotorRunIconIndex(void)
+{
+    switch (g_measurement.debug_data.motor_state)
+    {
+    case 1U:
+        return 0U;
+    case 2U:
+        return 1U;
+    default:
+        return 2U;
+    }
+}
+
 /*字库索引数组*/
 static uint8_t StockMap[] = "通讯尝试中液位跟随密度温℃版本水测量完成寻找标定零点校正获取称重步进未知无线提浮子至置阈值"
                             "向下运行上故障设备初始化罐底综合国满载空仪表配模式检修读实时区间每米自带宽拟静止电压效流速"
@@ -970,12 +992,12 @@ static void oled_equipment(void)
         row = ValidParaDisArr[Para_sensor_value][PARA_X];
         if (IsOilLevelSensorState(g_measurement.device_status.device_state))
         {
-            line = DisplayLangaugeLineWords((u8*)"??:", OLED_LINE8_1, row, 0, (u8*)"Freq:");
+            line = DisplayLangaugeLineWords((u8*)"频率:", OLED_LINE8_1, row, 0, (u8*)"Freq:");
             OledValueDisplay(GetOilSensorFrequencyForDisplay(), line, row, 0, 0, (u8*)"Hz");
         }
         else
         {
-            line = DisplayLangaugeLineWords((u8*)"??:", OLED_LINE8_1, row, 0, (u8*)"Cap:");
+            line = DisplayLangaugeLineWords((u8*)"电容:", OLED_LINE8_1, row, 0, (u8*)"Cap:");
             OledValueDisplay((int)(g_measurement.water_measurement.current_capacitance * 10.0f),
                              line, row, 0, 1, NULL);
         }
@@ -1289,6 +1311,12 @@ static void DIS_Equipment(void)
 		snprintf(err_text, sizeof(err_text), "%d-%d", err_type, err_pos);
 		line = OledDisplayLineWords((uint8_t*)err_text, line, row, 0);
     }
+
+    {
+        uint8_t motor_icon_index = GetMotorRunIconIndex();
+        write_hanzi16(OLED_LINE8_9, row, (uint8_t*)MotorRunIcon16Stock,
+                      motor_icon_index, motor_icon_index + 1U, 0);
+    }
 }
 
 
@@ -1315,5 +1343,4 @@ static void SetScreenOff( void )
 {
     flag_bright = false;
 }
-
 
