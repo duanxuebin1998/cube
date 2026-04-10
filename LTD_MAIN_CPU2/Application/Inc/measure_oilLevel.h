@@ -18,7 +18,8 @@ typedef enum {
 #define INOIL   (g_measurement.oil_measurement.current_frequency < g_deviceParams.oilLevelFrequency)
 #define MAX_TIMES_WHEN_FRE_FOLLOW				15 /*频率跟随时的最大加速次数*/
 
-Level_StateTypeDef determine_level_status(void);
+uint32_t determine_level_status(Level_StateTypeDef *state_out);
+uint32_t determine_level_status_motion(Level_StateTypeDef *state_out);
 uint32_t SearchOilLevel(void); //寻找油面但不跟随
 uint32_t FollowOilLevel(void); //在油面附近跟随油面
 uint32_t SearchAndFollowOilLevel(void); //寻找并跟随油面

@@ -119,7 +119,9 @@ uint32_t Wartsila_Density_SpreadMeasurement(DensityDistribution *dist)
     printf("分布测量起点位置确认：%.3fmm\n", cur_mm);
     g_measurement.device_status.device_state = STATE_WARTSILA_DENSITY_MEASURING;
     /* 起始点如果一开始就在空气中，可以直接结束（说明下面都是空气或空罐） */
-    Level_StateTypeDef st0 = determine_level_status();
+    Level_StateTypeDef st0 = OIL;
+    ret = determine_level_status(&st0);
+    CHECK_ERROR(ret);
     if (st0 == AIR) {
         printf("起始点位置传感器在空气中，本次分布测量取消\n");
         return OTHER_UNKNOWN_ERROR;
@@ -176,7 +178,9 @@ uint32_t Wartsila_Density_SpreadMeasurement(DensityDistribution *dist)
                 * 如果此时已经在空气中，则把当前位置-100mm当作液位值，结束分布测量
                 */
                {
-                   Level_StateTypeDef st_cur = determine_level_status();
+                   Level_StateTypeDef st_cur = OIL;
+                   ret = determine_level_status(&st_cur);
+                   CHECK_ERROR(ret);
                    if (st_cur == AIR) {
                        if (!oil_level_found) {
                            oil_level_mm    = cur_mm-100.0f;
@@ -305,8 +309,7 @@ uint32_t motorMoveUpToPositionOrAir(float target_mm, Level_StateTypeDef *final_s
     //切换频率模式
     ret = EnableLevelMode();
     CHECK_ERROR(ret);
-    printf("motorMoveUpToPositionOrAir: 切换到液位测量模式，等待5秒...\r\n");
-    HAL_Delay(5000);
+    printf("motorMoveUpToPositionOrAir: 液位测量模式已稳定，开始上行检测。\r\n");
     /* 下发上行运动指令（长度设为足够大） */
     float max_move = target_mm - cur_mm;   // 理论需要跑的距离
 
@@ -321,6 +324,9 @@ uint32_t motorMoveUpToPositionOrAir(float target_mm, Level_StateTypeDef *final_s
 
         /* 1) 检测空气状态 */
     	//如果传感器是LTD传感器
+        /* 这里处于电机运动监测环节，只允许做轻量频率读取；
+           不走 DSM_Get_LevelMode_Frequence() 的重恢复逻辑，
+           否则异常时会停电机、重切模式并等待，破坏当前运动流程。 */
 		if (g_deviceParams.sensorType == LTD_SENSOR) {
 	    	ret = DSM_V2_Read_LevelFrequency(&hz);
 	    	if (ret != NO_ERROR) {
@@ -330,16 +336,20 @@ uint32_t motorMoveUpToPositionOrAir(float target_mm, Level_StateTypeDef *final_s
 	    		 if (final_state) *final_state = AIR;//读到0或者异常频率认为是空气
 	            printf("motorMoveUpToPositionOrAir: 频率检测到到达液面，立即停止电机！\r\n");
 	            stpr_stop(&stepper);
+            g_measurement.debug_data.motor_state = 0U;
 	    		break;  // 读到0也返回
 	    	}
 	    	 HAL_Delay(80);
 		}
-        Level_StateTypeDef st = determine_level_status();
+        Level_StateTypeDef st = OIL;
+        ret = determine_level_status_motion(&st);
+        CHECK_ERROR(ret);
         if (final_state) *final_state = st;
 
         if (st == AIR) {
             printf("motorMoveUpToPositionOrAir: 检测到进入空气，立即停止电机！\r\n");
             stpr_stop(&stepper);
+            g_measurement.debug_data.motor_state = 0U;
             break;
         }
 
@@ -349,6 +359,7 @@ uint32_t motorMoveUpToPositionOrAir(float target_mm, Level_StateTypeDef *final_s
         if (cur_mm >= target_mm - 0.05f) {   // 加一点浮动允许
             printf("motorMoveUpToPositionOrAir: 已到达目标位置 %.3fmm\r\n", cur_mm);
             stpr_stop(&stepper);
+            g_measurement.debug_data.motor_state = 0U;
             break;
         }
 

@@ -1,10 +1,10 @@
 /*
- * @FilePath     : \KEILe:\03CodeRepository\DSM_MCB\HARDWARE\SENSOR\sensor.c
+ * @FilePath     : \CUBE\LTD_MAIN_CPU2\Services\Sensor\sensor.c
  * @Description  : 传感器通信相关函数
  * @Author       : Aubon
  * @Date         : 2024-02-23 10:20:27
- * @LastEditors  : Duan
- * @LastEditTime : 2024-11-15 15:36:58
+ * @LastEditors  : Duan Xuebin
+ * @LastEditTime : 2026-04-10 11:22:59
  * Copyright 2024 Aubon, All Rights Reserved.
  * 2024-02-23 10:20:27
  */
@@ -12,6 +12,7 @@
 #include "sensor.h"
 #include "measure_tank_height.h"
 #include "measure.h"
+#include "motor_ctrl.h"
 
 #define WIRELESS_HOST_ADDR 1U
 #define WIRELESS_SLAVE_ADDR 2U
@@ -224,15 +225,31 @@ uint32_t EnableDensityMode(void) {
 
 uint32_t EnableLevelMode(void) {
 	uint32_t ret;
+
+	ret = motorQuickStop();
+	if (ret != NO_ERROR) {
+		printf("切换液位模式前停止电机失败 ret=0x%08lX\r\n", (unsigned long)ret);
+		return ret;
+	}
+
 	if (g_deviceParams.sensorType == DSM_SENSOR) {
 		ret = DSM_EnableLevelMode();
 	} else {
 		ret = DSM_V2_SwitchToLevelMode();
 	}
-	return Sensor_DiagnoseCommTimeout(ret, "切换液位模式");
+	ret = Sensor_DiagnoseCommTimeout(ret, "切换液位模式");
+	if (ret == NO_ERROR) {
+		printf("切换液位模式成功，等待%lu ms稳定\r\n", (unsigned long)SENSOR_LEVEL_MODE_SETTLE_MS);
+		HAL_Delay(SENSOR_LEVEL_MODE_SETTLE_MS);
+	}
+	return ret;
 }
 
-// 读取一次并以整数 Hz 返回，读到0时重试最多3次
+// 读取一次并以整数 Hz 返回。
+// 这里的循环是业务层“等待有效频率”，不是底层串口通信重试；
+// 真正的通信重试统一收敛在各协议层，默认都是 SENSOR_COMM_MAX_RETRY 次。
+// 如果频率连续 3 次为 0 或大于 6500Hz，则重新切换一次液位模式后再继续读取；
+// 若多轮恢复后仍无有效频率，则返回 SONIC_FREQ_ABNORMAL。
 uint32_t DSM_Get_LevelMode_Frequence(volatile uint32_t *frequency_out) {
 	if (frequency_out == NULL) {
 		return PARAM_ADDRESS_OVERFLOW;   // 比设备通信错误更合理
@@ -240,46 +257,53 @@ uint32_t DSM_Get_LevelMode_Frequence(volatile uint32_t *frequency_out) {
 
 	uint32_t ret;
 	uint32_t hz = 0;
-	const int MAX_RETRY = 100;
+	const int MAX_INVALID_FREQ_RETRY = 3;
+	const int MAX_MODE_SWITCH_RECOVERY = 3;
+	int mode_switch_recovery_count = 0;
 
-	for (int attempt = 0; attempt < MAX_RETRY; attempt++) {
-		if (g_deviceParams.sensorType == DSM_SENSOR) {
-			ret = Read_Level_Frequency(&hz);
-		} else {
-			ret = DSM_V2_Read_LevelFrequency(&hz);
+	while (1) {
+		for (int attempt = 0; attempt < MAX_INVALID_FREQ_RETRY; attempt++) {
+			if (g_deviceParams.sensorType == DSM_SENSOR) {
+				ret = Read_Level_Frequency(&hz);
+			} else {
+				ret = DSM_V2_Read_LevelFrequency(&hz);
+			}
+
+			if (ret != NO_ERROR) {
+				return Sensor_DiagnoseCommTimeout(ret, "读取液位频率");  // 读取失败直接返回错误码
+			}
+
+			if (hz != 0 && hz <= 6500) {
+				*frequency_out = hz;
+				printf("液位频率: %lu Hz\r\n", (unsigned long)*frequency_out);
+				return NO_ERROR;
+			}
+
+			printf("警告：液位频率异常，第 %d/%d 次 | hz=%lu\r\n",
+			       attempt + 1,
+			       MAX_INVALID_FREQ_RETRY,
+			       (unsigned long)hz);
+			HAL_Delay(1000);
 		}
 
+		if (mode_switch_recovery_count >= MAX_MODE_SWITCH_RECOVERY) {
+			printf("警告：液位频率经过%d轮模式恢复后仍异常，最后一次raw=%lu\r\n",
+			       MAX_MODE_SWITCH_RECOVERY,
+			       (unsigned long)hz);
+			return SONIC_FREQ_ABNORMAL;
+		}
+
+		mode_switch_recovery_count++;
+		printf("警告：液位频率连续%d次异常，执行第%d/%d轮液位模式恢复\r\n",
+		       MAX_INVALID_FREQ_RETRY,
+		       mode_switch_recovery_count,
+		       MAX_MODE_SWITCH_RECOVERY);
+		ret = EnableLevelMode();
 		if (ret != NO_ERROR) {
-			return Sensor_DiagnoseCommTimeout(ret, "读取液位频率");  // 读取失败直接返回错误码
+			return ret;
 		}
-
-		if (hz != 0 && hz < 6500) {
-			break;  // 成功读取非0频率
-		}
-//		motorQuickStop();
-		// hz == 0 时等待一小段时间再重试，避免总是立即重试
-		HAL_Delay(500);
 	}
-
-    /* 连续100次均为0：强制返回6600 */
-    if (hz == 0) {
-        hz = 6600;
-        printf("警告：液位频率连续%d次读取为0，强制置为%lu Hz\r\n",
-               MAX_RETRY, (unsigned long)hz);
-    }
-
-	*frequency_out = hz;
-
-	printf("液位频率: %lu Hz\r\n", (unsigned long) *frequency_out);
-
-	// 如果重试3次仍为0，可返回特殊错误码，也可以保留0
-	if (hz == 0) {
-		printf(" 警告：液位频率读取为0！\r\n");
-		return SONIC_FREQ_ABNORMAL;  // 可根据需求返回错误码
-	}
-	return NO_ERROR;
 }
-
 /**
  * @brief 获取液位跟随频率的平均值
  *        （10 次采样，2s 间隔，去 2 大 2 小，取中间 6 次均值）

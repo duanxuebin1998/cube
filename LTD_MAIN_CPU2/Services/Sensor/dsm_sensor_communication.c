@@ -58,7 +58,7 @@ int IsErrorResponse(const char *resp) {
     return 0; // 正常
 }
 
-#define DSM_UART_MAX_RETRY 10
+#define DSM_UART_MAX_RETRY SENSOR_COMM_MAX_RETRY
 
 // 串口发送并接收（带调试打印）
 static int UART6_SendCommand(const char *cmd,
@@ -298,7 +298,7 @@ uint32_t Read_Level_Frequency(uint32_t *frequency_out)
 
     float hz = 0.0f;
     int perr = parse_freq_response(resp, &hz);
-    if ((perr != 0) || (hz == 0.0f)) {
+    if (perr != 0) {
         printf("无效频率响应，解析失败: err=%d, 原始: %s\r\n", perr, resp);
         return SENSOR_RESP_FORMAT_ERROR;
     }

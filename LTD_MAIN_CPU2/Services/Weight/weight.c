@@ -230,7 +230,7 @@ uint32_t CheckWeightCollision(void)
 	/* ==========================
 	 *    电机状态检查
 	 * ========================== */
-	if ((motor_dir != MOTOR_DIRECTION_UP) && (motor_dir != MOTOR_DIRECTION_DOWN)) {
+	if ((motor_dir != 1U) && (motor_dir != 2U)) {
 #ifdef WEIGHT_DEBUG
 		printf("称重检测 | dir=%lu(无效) cur=%ld stable=%ld diff=%+ld full=%ld cable=%.1f pos=%.1f\r\n",
 				(unsigned long)motor_dir,
@@ -263,7 +263,7 @@ uint32_t CheckWeightCollision(void)
 	/* ==========================
 	 *       上行检测
 	 * ========================== */
-	if (motor_dir == MOTOR_DIRECTION_UP) {
+	if (motor_dir == 1U) {
 
 		/* 1) 零点阈值 */
 		if (cur_weight > zero_limit) {

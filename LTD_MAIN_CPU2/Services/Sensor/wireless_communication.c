@@ -14,7 +14,7 @@
 #include "sensor.h"
 
 #ifndef WIRELESS_MAX_RETRY
-#define WIRELESS_MAX_RETRY   3
+#define WIRELESS_MAX_RETRY   SENSOR_COMM_MAX_RETRY
 #endif
 
 #ifndef WIRELESS_RX_TIMEOUT
