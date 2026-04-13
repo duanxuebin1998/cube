@@ -20,6 +20,11 @@
 volatile MeasurementResult g_measurement = {0};   /* 测量结果 */
 volatile DeviceParameters  g_deviceParams = {0};  /* 设备参数 */
 static volatile uint8_t g_device_params_save_pending = 0; /* Deferred save request flag */
+static volatile uint32_t g_device_params_save_request_tick = 0; /* Last deferred save request tick */
+
+#ifndef DEVICE_PARAMS_SAVE_DEBOUNCE_MS
+#define DEVICE_PARAMS_SAVE_DEBOUNCE_MS 100u
+#endif
 
 /* 参数版本号和 magic 常量 */
 #define DEVICE_PARAM_VERSION   (2u)
@@ -204,6 +209,7 @@ void save_device_params(void)
 void request_device_params_save(void)
 {
     g_device_params_save_pending = 1;
+    g_device_params_save_request_tick = HAL_GetTick();
 }
 
 /* Handle deferred tasks in the main loop.
@@ -211,7 +217,15 @@ void request_device_params_save(void)
  * work can be merged here later if needed. */
 void process_device_params_deferred_tasks(void)
 {
+    uint32_t now;
+
     if (!g_device_params_save_pending)
+    {
+        return;
+    }
+
+    now = HAL_GetTick();
+    if ((now - g_device_params_save_request_tick) < DEVICE_PARAMS_SAVE_DEBOUNCE_MS)
     {
         return;
     }
@@ -219,7 +233,6 @@ void process_device_params_deferred_tasks(void)
     g_device_params_save_pending = 0;
     save_device_params_internal(1, 0);
 }
-
 int load_device_params(void)
 {
     DeviceParameters temp;
