@@ -288,147 +288,231 @@ void ProcessMeasureCmd(CommandType command)
  *       - 'N': 电机简单测试模式（循环上下移动）
  *       - 'O': 获取空载称重
  */
-void process_command(uint8_t *command) {
-	printf("Command received\n");
-//	stpr_initStepper(&stepper, &hspi2, GPIOB, GPIO_PIN_12, 1, 18);
-//	stpr_enableDriver(&stepper);
-	if (command[0] == 'A') {
-		// 处理命令
-		if (command[1] == '0') {
-			// 刹车操作
-			motorQuickStop();
-		} else if (command[1] == '+') {
-			int mm = atoi((char*) &command[2]);  // 获取数字
-			printf("start up%d\n", mm);
-			motorMoveNoWaitWithSpeed((float) mm, MOTOR_DIRECTION_UP, motorGetDefaultSpeedX100());  // 电机上行
-		} else if (command[1] == '-') {
-			int mm = atoi((char*) &command[2]);  // 获取数字
-			printf("start down%d\n", mm);
-			motorMoveNoWaitWithSpeed((float) mm, MOTOR_DIRECTION_DOWN, motorGetDefaultSpeedX100());  // 电机下行
-		}
-	}
-	if (command[0] == 'B') {  //
-		printf("motor text start\n");
-		printf("***编码值清零***\r\n");
-		int mm = atoi((char*) &command[1]);  // 获取数字
-		printf("start up%d\n", mm);
-		while (1) {
-			stpr_enableDriver(&stepper);  //使能电机
-			motorMoveAndWaitUntilStopWithSpeed(mm, MOTOR_DIRECTION_DOWN, motorGetDefaultSpeedX100());
-			printf("start up to zero\n");
-			motorMoveToPositionOneShotWithSpeed((g_deviceParams.tankHeight-g_deviceParams.findZeroDownDistance)/10.0, motorGetDefaultSpeedX100());
-			printf("上行结束\n");
-			stpr_disableDriver(&stepper); //使能电机
-		}
-	}
-	if (command[0] == 'C') {
-		printf("***电机4步进分辨率测试***\r\n");
-		motor_step_text();
-	}
-	if (command[0] == 'D') {
-		printf("***电机4步进下行触底测试***\r\n");
-		motor_step_down_text();
-	}
-	if (command[0] == 'E') {
-		printf("***电机4步进上行碰零点测试***\r\n");
-		motor_step_up_text();
-	}
-	if (command[0] == 'F') {
-		printf("***罐底测量重复性测试***\r\n");
-		while (1) {
-			SearchBottom();
-		}
-	}
-	if (command[0] == 'G') {
-		printf("***罐底测量单次测试***\r\n");
-		SearchBottom();
-	}
-	if (command[0] == 'H') {
-		printf("***零点/罐底测量重复性测试***\r\n");
-		while (1) {
-			CMD_MeasureZero();
-			SearchBottom();
-		}
-	}
-	if (command[0] == 'I') {
-		printf("执行回零点指令\n");
-		CMD_MeasureZero(); //
+static uint8_t ProcessCommandSwitchRequested(void)
+{
+    if (!HasEffectiveCommandSwitchRequest()) {
+        return 0;
+    }
 
-	}
-	if (command[0] == 'J') {
-		printf("***液位测量重复性测试***\r\n");
-
-	}
-	if (command[0] == 'K') {
-		printf("***液位测量单次测试***\r\n");
-
-	}
-	if (command[0] == 'L') {
-		printf("***编码值清零***\r\n");
-		g_encoder_count = 0; // 重置编码器计数
-	}
-	if (command[0] == 'M') {
-		printf("***电机高温测试***\r\n");
-		while (1) {
-			motorMoveNoWaitWithSpeed(100000, MOTOR_DIRECTION_DOWN, motorGetDefaultSpeedX100());
-			HAL_Delay(1000);
-			stpr_waitMove(&stepper);
-		}
-
-	}
-	if (command[0] == 'N') {
-		printf("motor text start\n");
-		while (1) {
-			stpr_enableDriver(&stepper);  //使能电机
-//						stpr_initStepper(&stepper, &hspi2, GPIOB, GPIO_PIN_12, 1, 18);
-					//		stpr_moveTo(&stepper, -30 * 1600 * 32, 1600 * 2 * 32);
-			motorMoveNoWaitWithSpeed(300, MOTOR_DIRECTION_DOWN, motorGetDefaultSpeedX100());
-			HAL_Delay(1000);
-			printf("start down\n");
-			HAL_Delay(1000);
-			printf("down over!\n");
-			stpr_waitMove(&stepper);
-			motorMoveNoWaitWithSpeed(300, MOTOR_DIRECTION_UP, motorGetDefaultSpeedX100());
-			printf("start up to zero\n");
-			HAL_Delay(1000);
-			stpr_waitMove(&stepper);
-			printf("上行结束\n");
-			HAL_Delay(1000);
-			stpr_disableDriver(&stepper); //使能电机
-		}
-	}
-	if (command[0] == 'O') //获取空载称重
-			{
-		printf("Get empty weight\n");
-		get_empty_weight();
-
-	}
-	if (command[0] == 'P') //获取满载称重
-			{
-		printf("Get full weight\n");
-		get_full_weight();
-
-	}
-	if (command[0] == 'Q') //获取满载称重
-			{
-		printf("恢复出场设置\n");
-		RestoreFactoryParamsConfig(); //恢复出厂设置
-
-	}
-	if (command[0] == 'R') //获取满载称重
-	{
-		printf("执行分布测量指令\n");
-		CMD_MeasureDensitySpread_Spread();
-
-	}
-	if (command[0] == 'W') //获取满载称重
-	{
-		printf("执行水位测量指令\n");
-        CMD_MeasurWater();
-
-	}
+    printf("检测到命令切换请求，停止当前串口命令\r\n");
+    return 1;
 }
 
+void process_command(uint8_t *command) {
+    uint32_t ret = NO_ERROR;
+
+    printf("Command received\n");
+    if ((command == NULL) || (command[0] == '\0')) {
+        printf("空串口命令，忽略\r\n");
+        return;
+    }
+
+    if (command[0] == 'A') {
+        if (command[1] == '0') {
+            motorQuickStop();
+        } else if (command[1] == '+') {
+            int mm = atoi((char*) &command[2]);
+            printf("start up%d\n", mm);
+            motorMoveNoWaitWithSpeed((float) mm, MOTOR_DIRECTION_UP, motorGetDefaultSpeedX100());
+        } else if (command[1] == '-') {
+            int mm = atoi((char*) &command[2]);
+            printf("start down%d\n", mm);
+            motorMoveNoWaitWithSpeed((float) mm, MOTOR_DIRECTION_DOWN, motorGetDefaultSpeedX100());
+        }
+        return;
+    }
+
+    if (command[0] == 'B') {
+        int mm = atoi((char*) &command[1]);
+        printf("motor text start\n");
+        printf("***编码值清零***\r\n");
+        printf("start up%d\n", mm);
+        while (1) {
+            if (ProcessCommandSwitchRequested()) {
+                motorQuickStop();
+                stpr_disableDriver(&stepper);
+                return;
+            }
+            stpr_enableDriver(&stepper);
+            ret = motorMoveAndWaitUntilStopWithSpeed(mm, MOTOR_DIRECTION_DOWN, motorGetDefaultSpeedX100());
+            if ((ret == STATE_SWITCH) || ProcessCommandSwitchRequested()) {
+                motorQuickStop();
+                stpr_disableDriver(&stepper);
+                return;
+            }
+            printf("start up to zero\n");
+            ret = motorMoveToPositionOneShotWithSpeed((g_deviceParams.tankHeight - g_deviceParams.findZeroDownDistance) / 10.0f,
+                                                      motorGetDefaultSpeedX100());
+            if ((ret == STATE_SWITCH) || ProcessCommandSwitchRequested()) {
+                motorQuickStop();
+                stpr_disableDriver(&stepper);
+                return;
+            }
+            printf("上行结束\n");
+            stpr_disableDriver(&stepper);
+        }
+    }
+
+    if (command[0] == 'C') {
+        printf("***电机4步进分辨率测试***\r\n");
+        motor_step_text();
+        return;
+    }
+    if (command[0] == 'D') {
+        printf("***电机4步进下行触底测试***\r\n");
+        motor_step_down_text();
+        return;
+    }
+    if (command[0] == 'E') {
+        printf("***电机4步进上行碰零点测试***\r\n");
+        motor_step_up_text();
+        return;
+    }
+    if (command[0] == 'F') {
+        printf("***罐底测量重复性测试***\r\n");
+        while (1) {
+            if (ProcessCommandSwitchRequested()) {
+                return;
+            }
+            ret = SearchBottom();
+            if ((ret == STATE_SWITCH) || ProcessCommandSwitchRequested()) {
+                return;
+            }
+        }
+    }
+    if (command[0] == 'G') {
+        printf("***罐底测量单次测试***\r\n");
+        SearchBottom();
+        return;
+    }
+    if (command[0] == 'H') {
+        printf("***零点/罐底测量重复性测试***\r\n");
+        while (1) {
+            if (ProcessCommandSwitchRequested()) {
+                return;
+            }
+            CMD_MeasureZero();
+            if (ProcessCommandSwitchRequested()) {
+                return;
+            }
+            ret = SearchBottom();
+            if ((ret == STATE_SWITCH) || ProcessCommandSwitchRequested()) {
+                return;
+            }
+        }
+    }
+    if (command[0] == 'I') {
+        printf("执行回零点指令\n");
+        CMD_MeasureZero();
+        return;
+    }
+    if (command[0] == 'J') {
+        printf("***液位测量重复性测试***\r\n");
+        return;
+    }
+    if (command[0] == 'K') {
+        printf("***液位测量单次测试***\r\n");
+        return;
+    }
+    if (command[0] == 'L') {
+        printf("***编码值清零***\r\n");
+        g_encoder_count = 0;
+        return;
+    }
+    if (command[0] == 'M') {
+        printf("***电机高温测试***\r\n");
+        while (1) {
+            if (ProcessCommandSwitchRequested()) {
+                motorQuickStop();
+                return;
+            }
+            ret = motorMoveNoWaitWithSpeed(100000, MOTOR_DIRECTION_DOWN, motorGetDefaultSpeedX100());
+            if ((ret == STATE_SWITCH) || ProcessCommandSwitchRequested()) {
+                motorQuickStop();
+                return;
+            }
+            HAL_Delay(1000);
+            if (ProcessCommandSwitchRequested()) {
+                motorQuickStop();
+                return;
+            }
+            ret = stpr_waitMove(&stepper);
+            if ((ret == STATE_SWITCH) || ProcessCommandSwitchRequested()) {
+                motorQuickStop();
+                return;
+            }
+        }
+    }
+    if (command[0] == 'N') {
+        printf("motor text start\n");
+        while (1) {
+            if (ProcessCommandSwitchRequested()) {
+                motorQuickStop();
+                stpr_disableDriver(&stepper);
+                return;
+            }
+            stpr_enableDriver(&stepper);
+            ret = motorMoveNoWaitWithSpeed(300, MOTOR_DIRECTION_DOWN, motorGetDefaultSpeedX100());
+            if ((ret == STATE_SWITCH) || ProcessCommandSwitchRequested()) {
+                motorQuickStop();
+                stpr_disableDriver(&stepper);
+                return;
+            }
+            HAL_Delay(1000);
+            printf("start down\n");
+            HAL_Delay(1000);
+            printf("down over!\n");
+            ret = stpr_waitMove(&stepper);
+            if ((ret == STATE_SWITCH) || ProcessCommandSwitchRequested()) {
+                motorQuickStop();
+                stpr_disableDriver(&stepper);
+                return;
+            }
+            ret = motorMoveNoWaitWithSpeed(300, MOTOR_DIRECTION_UP, motorGetDefaultSpeedX100());
+            if ((ret == STATE_SWITCH) || ProcessCommandSwitchRequested()) {
+                motorQuickStop();
+                stpr_disableDriver(&stepper);
+                return;
+            }
+            printf("start up to zero\n");
+            HAL_Delay(1000);
+            ret = stpr_waitMove(&stepper);
+            if ((ret == STATE_SWITCH) || ProcessCommandSwitchRequested()) {
+                motorQuickStop();
+                stpr_disableDriver(&stepper);
+                return;
+            }
+            printf("上行结束\n");
+            HAL_Delay(1000);
+            stpr_disableDriver(&stepper);
+        }
+    }
+    if (command[0] == 'O') {
+        printf("Get empty weight\n");
+        get_empty_weight();
+        return;
+    }
+    if (command[0] == 'P') {
+        printf("Get full weight\n");
+        get_full_weight();
+        return;
+    }
+    if (command[0] == 'Q') {
+        printf("恢复出场设置\n");
+        RestoreFactoryParamsConfig();
+        return;
+    }
+    if (command[0] == 'R') {
+        printf("执行分布测量指令\n");
+        CMD_MeasureDensitySpread_Spread();
+        return;
+    }
+    if (command[0] == 'W') {
+        printf("执行水位测量指令\n");
+        CMD_MeasurWater();
+        return;
+    }
+}
 int MeasureStart(void) {
 	motor_Init(); //电机初始化
 	weight_init();

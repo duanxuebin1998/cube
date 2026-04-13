@@ -582,6 +582,7 @@ typedef struct {
 
 extern volatile MeasurementResult g_measurement; // 测量结果
 extern volatile DeviceParameters g_deviceParams; // 设备参数
+extern volatile uint8_t new_command_ready;       // 串口原始命令就绪标志
 /* 仅对白名单命令开放“自身打断自身”，其他命令仍保持重复下发无效。 */
 static inline bool IsSelfInterruptibleCommand(CommandType cmd)
 {
@@ -600,20 +601,25 @@ static inline bool HasEffectiveCommandSwitchRequest(void)
     CommandType pending_command = g_deviceParams.command;
     CommandType current_command = g_measurement.device_status.current_command;
 
-    if (pending_command == CMD_NONE) {
-        return false;
-    }
-
-    if ((current_command != CMD_NONE) && (pending_command == current_command)) {
-        if (!IsSelfInterruptibleCommand(current_command)) {
-            g_deviceParams.command = CMD_NONE;
-            return false;
+    if (pending_command != CMD_NONE) {
+        if ((current_command != CMD_NONE) && (pending_command == current_command)) {
+            if (!IsSelfInterruptibleCommand(current_command)) {
+                g_deviceParams.command = CMD_NONE;
+                return false;
+            }
         }
+
+        return true;
     }
 
-    return true;
-}
+    /* 原始串口命令同样视为有效切换请求。
+     * 这样长时间运行的调试命令也能被新的串口/正式指令打断。 */
+    if (new_command_ready != 0U) {
+        return true;
+    }
 
+    return false;
+}
 void save_device_params(void); // Save device parameters to FRAM immediately
 void request_device_params_save(void); // Queue one deferred save request
 void process_device_params_deferred_tasks(void); // Run deferred save tasks in the main loop
