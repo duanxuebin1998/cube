@@ -291,6 +291,12 @@ uint32_t stpr_waitMove(TMC5130TypeDef *tmc5130)
 {
     uint32_t ret;
     while ((stpr_readInt(tmc5130, TMC5130_RAMPSTAT) & 0x400) != 0x400) {
+        if (HasEffectiveCommandSwitchRequest()) {
+            printf("检测到命令切换请求，停止当前等待运动\r\n");
+            motorQuickStop();
+            return STATE_SWITCH;
+        }
+
         // 在运动过程中周期性检查防撞（比如称重超限等）
         ret = CheckWeightCollision();    // 防撞检测
         CHECK_ERROR(ret);                // 若有错误直接返回
@@ -323,7 +329,6 @@ uint32_t stpr_waitMove(TMC5130TypeDef *tmc5130)
     }
     return NO_ERROR; // 正常结束运动
 }
-
 /************************ 电流 / 速度 / 初始化 ************************/
 
 /**

@@ -21,133 +21,245 @@
 #include "ad5421.h"
 #include "encoder.h"
 #include <stddef.h>
+static uint8_t Test_ShouldAbortForCommandSwitch(void)
+{
+    if (!HasEffectiveCommandSwitchRequest()) {
+        return 0;
+    }
+
+    printf("检测到命令切换请求，停止当前串口测试\r\n");
+    motorQuickStop();
+    stpr_disableDriver(&stepper);
+    return 1;
+}
+
 //电机小步进上行测试
 void motor_step_up_text(void) {
-	int i = 0;
-	int32_t ticks = 4 * 32;
-	printf("motor STEP text start\n");
-	stpr_enableDriver(&stepper); //使能电机
-	printf("start up\n");
-	for (i = 0; i < 24000; i++) {
-		ticks = -4 * 32;
-		stpr_moveBy(&stepper, &ticks, velocity);
-		HAL_Delay(2000);
-		printf("%d\t{传感器位置}%.1f\t{称重值}%d\r\n", i, (float) (g_measurement.debug_data.sensor_position) / 10.0, weight_parament.current_weight);
-		HAL_Delay(100);
-		printf("%d\t", weight_parament.current_weight);
-		HAL_Delay(100);
-		printf("%d\r\n", weight_parament.current_weight);
-	}
-	stpr_disableDriver(&stepper); //使能电机
-	printf("motor text over\n");
+    int i = 0;
+    int32_t ticks = 4 * 32;
+    printf("motor STEP text start\n");
+    stpr_enableDriver(&stepper);
+    printf("start up\n");
+    for (i = 0; i < 24000; i++) {
+        if (Test_ShouldAbortForCommandSwitch()) {
+            return;
+        }
+        ticks = -4 * 32;
+        stpr_moveBy(&stepper, &ticks, velocity);
+        HAL_Delay(2000);
+        if (Test_ShouldAbortForCommandSwitch()) {
+            return;
+        }
+        printf("%d\t{传感器位置}%.1f\t{称重值}%d\r\n", i, (float)(g_measurement.debug_data.sensor_position) / 10.0f, weight_parament.current_weight);
+        HAL_Delay(100);
+        if (Test_ShouldAbortForCommandSwitch()) {
+            return;
+        }
+        printf("%d\t", weight_parament.current_weight);
+        HAL_Delay(100);
+        if (Test_ShouldAbortForCommandSwitch()) {
+            return;
+        }
+        printf("%d\r\n", weight_parament.current_weight);
+    }
+    stpr_disableDriver(&stepper);
+    printf("motor text over\n");
 }
+
 //电机小步进下行测试
 void motor_step_down_text(void) {
-	int i = 0;
-	int32_t ticks = 4 * 32;
-	printf("motor STEP text start\n");
-	stpr_enableDriver(&stepper); //使能电机
-	printf("start down\n");
-	for (i = 0; i < 24000; i++) {
-		ticks = 4 * 32;
-		stpr_moveBy(&stepper, &ticks, velocity);
-		HAL_Delay(2000);
-		printf("%d\t{传感器位置}%.1f\t{称重值}%d\r\n", i, (float) (g_measurement.debug_data.sensor_position) / 10.0, weight_parament.current_weight);
-		HAL_Delay(100);
-		printf("%d\t", weight_parament.current_weight);
-		HAL_Delay(100);
-		printf("%d\r\n", weight_parament.current_weight);
-	}
-	printf("down over!\n");
-	stpr_disableDriver(&stepper); //使能电机
-	printf("motor text over\n");
+    int i = 0;
+    int32_t ticks = 4 * 32;
+    printf("motor STEP text start\n");
+    stpr_enableDriver(&stepper);
+    printf("start down\n");
+    for (i = 0; i < 24000; i++) {
+        if (Test_ShouldAbortForCommandSwitch()) {
+            return;
+        }
+        ticks = 4 * 32;
+        stpr_moveBy(&stepper, &ticks, velocity);
+        HAL_Delay(2000);
+        if (Test_ShouldAbortForCommandSwitch()) {
+            return;
+        }
+        printf("%d\t{传感器位置}%.1f\t{称重值}%d\r\n", i, (float)(g_measurement.debug_data.sensor_position) / 10.0f, weight_parament.current_weight);
+        HAL_Delay(100);
+        if (Test_ShouldAbortForCommandSwitch()) {
+            return;
+        }
+        printf("%d\t", weight_parament.current_weight);
+        HAL_Delay(100);
+        if (Test_ShouldAbortForCommandSwitch()) {
+            return;
+        }
+        printf("%d\r\n", weight_parament.current_weight);
+    }
+    printf("down over!\n");
+    stpr_disableDriver(&stepper);
+    printf("motor text over\n");
 }
+
 //电机步进测试
 void motor_step_text(void) {
-	int i = 0;
-//	float density, viscosity, temp;
-	int32_t ticks = 4 * 32;
-	printf("motor STEP text start\n");
-	stpr_enableDriver(&stepper); //使能电机
-	printf("4步进测试\n");
-	printf("start down\n");
-	for (i = 0; i < 24000; i++) {
-		ticks = 4 * 32;
-		stpr_moveBy(&stepper, &ticks, velocity);
-		HAL_Delay(2000);
-		printf("%d\t{encoder}%d\t{weight}%d\t", i, (int) g_encoder_count, weight_parament.current_weight);
-		HAL_Delay(100);
-		printf("%d\t", weight_parament.current_weight);
-		HAL_Delay(100);
-		printf("%d\r\n", weight_parament.current_weight);
-	}
-	printf("down over!\n");
-	printf("start up\n");
-	for (i = 0; i < 24000; i++) {
-		ticks = -4 * 32;
-		stpr_moveBy(&stepper, &ticks, velocity);
-		HAL_Delay(2000);
-		printf("%d\t{encoder}%d\t{weight}%d\t", i, (int) g_encoder_count, weight_parament.current_weight);
-		HAL_Delay(100);
-		printf("%d\t", weight_parament.current_weight);
-		HAL_Delay(100);
-		printf("%d\r\n", weight_parament.current_weight);
+    int i = 0;
+    int32_t ticks = 4 * 32;
+    printf("motor STEP text start\n");
+    stpr_enableDriver(&stepper);
 
-	}
-	printf("8步进测试\n");
-	printf("start down\n");
-	for (i = 0; i < 12000; i++) {
-		ticks = 8 * 32;
-		stpr_moveBy(&stepper, &ticks, velocity);
-		HAL_Delay(2000);
-		printf("%d\t{encoder}%d\t{weight}%d\t", i, (int) g_encoder_count, weight_parament.current_weight);
-		HAL_Delay(100);
-		printf("%d\t", weight_parament.current_weight);
-		HAL_Delay(100);
-		printf("%d\r\n", weight_parament.current_weight);
-	}
-	printf("down over!\n");
-	printf("start up\n");
-	for (i = 0; i < 12000; i++) {
-		ticks = -8 * 32;
-		stpr_moveBy(&stepper, &ticks, velocity);
-		HAL_Delay(2000);
-		printf("%d\t{encoder}%d\t{weight}%d\t", i, (int) g_encoder_count, weight_parament.current_weight);
-		HAL_Delay(100);
-		printf("%d\t", weight_parament.current_weight);
-		HAL_Delay(100);
-		printf("%d\r\n", weight_parament.current_weight);
+    printf("4步进测试\n");
+    printf("start down\n");
+    for (i = 0; i < 24000; i++) {
+        if (Test_ShouldAbortForCommandSwitch()) {
+            return;
+        }
+        ticks = 4 * 32;
+        stpr_moveBy(&stepper, &ticks, velocity);
+        HAL_Delay(2000);
+        if (Test_ShouldAbortForCommandSwitch()) {
+            return;
+        }
+        printf("%d\t{encoder}%d\t{weight}%d\t", i, (int)g_encoder_count, weight_parament.current_weight);
+        HAL_Delay(100);
+        if (Test_ShouldAbortForCommandSwitch()) {
+            return;
+        }
+        printf("%d\t", weight_parament.current_weight);
+        HAL_Delay(100);
+        if (Test_ShouldAbortForCommandSwitch()) {
+            return;
+        }
+        printf("%d\r\n", weight_parament.current_weight);
+    }
 
-	}
-	printf("40步进测试\n");
-	printf("start down\n");
-	for (i = 0; i < 2400; i++) {
-		ticks = 40 * 32;
-		stpr_moveBy(&stepper, &ticks, velocity);
-		HAL_Delay(2000);
-		printf("%d\t{encoder}%d\t{weight}%d\t", i, (int) g_encoder_count, weight_parament.current_weight);
-		HAL_Delay(100);
-		printf("%d\t", weight_parament.current_weight);
-		HAL_Delay(100);
-		printf("%d\r\n", weight_parament.current_weight);
-	}
-	printf("down over!\n");
-	printf("start up\n");
-	for (i = 0; i < 2400; i++) {
-		ticks = -40 * 32;
-		stpr_moveBy(&stepper, &ticks, velocity);
-		HAL_Delay(2000);
-		printf("%d\t{encoder}%d\t{weight}%d\t", i, (int) g_encoder_count, weight_parament.current_weight);
-		HAL_Delay(100);
-		printf("%d\t", weight_parament.current_weight);
-		HAL_Delay(100);
-		printf("%d\r\n", weight_parament.current_weight);
+    printf("down over!\n");
+    printf("start up\n");
+    for (i = 0; i < 24000; i++) {
+        if (Test_ShouldAbortForCommandSwitch()) {
+            return;
+        }
+        ticks = -4 * 32;
+        stpr_moveBy(&stepper, &ticks, velocity);
+        HAL_Delay(2000);
+        if (Test_ShouldAbortForCommandSwitch()) {
+            return;
+        }
+        printf("%d\t{encoder}%d\t{weight}%d\t", i, (int)g_encoder_count, weight_parament.current_weight);
+        HAL_Delay(100);
+        if (Test_ShouldAbortForCommandSwitch()) {
+            return;
+        }
+        printf("%d\t", weight_parament.current_weight);
+        HAL_Delay(100);
+        if (Test_ShouldAbortForCommandSwitch()) {
+            return;
+        }
+        printf("%d\r\n", weight_parament.current_weight);
+    }
 
-	}
-	stpr_disableDriver(&stepper); //使能电机
-	printf("motor text over\n");
+    printf("8步进测试\n");
+    printf("start down\n");
+    for (i = 0; i < 12000; i++) {
+        if (Test_ShouldAbortForCommandSwitch()) {
+            return;
+        }
+        ticks = 8 * 32;
+        stpr_moveBy(&stepper, &ticks, velocity);
+        HAL_Delay(2000);
+        if (Test_ShouldAbortForCommandSwitch()) {
+            return;
+        }
+        printf("%d\t{encoder}%d\t{weight}%d\t", i, (int)g_encoder_count, weight_parament.current_weight);
+        HAL_Delay(100);
+        if (Test_ShouldAbortForCommandSwitch()) {
+            return;
+        }
+        printf("%d\t", weight_parament.current_weight);
+        HAL_Delay(100);
+        if (Test_ShouldAbortForCommandSwitch()) {
+            return;
+        }
+        printf("%d\r\n", weight_parament.current_weight);
+    }
+
+    printf("down over!\n");
+    printf("start up\n");
+    for (i = 0; i < 12000; i++) {
+        if (Test_ShouldAbortForCommandSwitch()) {
+            return;
+        }
+        ticks = -8 * 32;
+        stpr_moveBy(&stepper, &ticks, velocity);
+        HAL_Delay(2000);
+        if (Test_ShouldAbortForCommandSwitch()) {
+            return;
+        }
+        printf("%d\t{encoder}%d\t{weight}%d\t", i, (int)g_encoder_count, weight_parament.current_weight);
+        HAL_Delay(100);
+        if (Test_ShouldAbortForCommandSwitch()) {
+            return;
+        }
+        printf("%d\t", weight_parament.current_weight);
+        HAL_Delay(100);
+        if (Test_ShouldAbortForCommandSwitch()) {
+            return;
+        }
+        printf("%d\r\n", weight_parament.current_weight);
+    }
+
+    printf("40步进测试\n");
+    printf("start down\n");
+    for (i = 0; i < 2400; i++) {
+        if (Test_ShouldAbortForCommandSwitch()) {
+            return;
+        }
+        ticks = 40 * 32;
+        stpr_moveBy(&stepper, &ticks, velocity);
+        HAL_Delay(2000);
+        if (Test_ShouldAbortForCommandSwitch()) {
+            return;
+        }
+        printf("%d\t{encoder}%d\t{weight}%d\t", i, (int)g_encoder_count, weight_parament.current_weight);
+        HAL_Delay(100);
+        if (Test_ShouldAbortForCommandSwitch()) {
+            return;
+        }
+        printf("%d\t", weight_parament.current_weight);
+        HAL_Delay(100);
+        if (Test_ShouldAbortForCommandSwitch()) {
+            return;
+        }
+        printf("%d\r\n", weight_parament.current_weight);
+    }
+
+    printf("down over!\n");
+    printf("start up\n");
+    for (i = 0; i < 2400; i++) {
+        if (Test_ShouldAbortForCommandSwitch()) {
+            return;
+        }
+        ticks = -40 * 32;
+        stpr_moveBy(&stepper, &ticks, velocity);
+        HAL_Delay(2000);
+        if (Test_ShouldAbortForCommandSwitch()) {
+            return;
+        }
+        printf("%d\t{encoder}%d\t{weight}%d\t", i, (int)g_encoder_count, weight_parament.current_weight);
+        HAL_Delay(100);
+        if (Test_ShouldAbortForCommandSwitch()) {
+            return;
+        }
+        printf("%d\t", weight_parament.current_weight);
+        HAL_Delay(100);
+        if (Test_ShouldAbortForCommandSwitch()) {
+            return;
+        }
+        printf("%d\r\n", weight_parament.current_weight);
+    }
+
+    stpr_disableDriver(&stepper);
+    printf("motor text over\n");
 }
-
 ///*********************** 测试函数 ***********************/
 void Test_Params_Storage(void) {
 	// 备份原始参数
