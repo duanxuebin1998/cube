@@ -505,6 +505,181 @@ void DSM_V2_Test_AllParams(void) {
 
 	printf("===== DSM V2 通讯测试结束 =====\r\n\r\n");
 }
+static uint8_t Demo_SinglePointDisplay_ShouldAbort(void)
+{
+    if (!HasEffectiveCommandSwitchRequest()) {
+        return 0;
+    }
+
+    printf("单点展示检测到新命令，退出当前演示\r\n");
+    g_measurement.device_status.device_state = STATE_STANDBY;
+    g_measurement.debug_data.motor_state = 0U;
+    return 1;
+}
+
+static void Demo_SinglePointDisplay_UpdateResult(volatile DensityMeasurement *result,
+                                                 uint32_t temperature_raw,
+                                                 uint32_t density_raw,
+                                                 uint32_t pos_01mm,
+                                                 uint32_t standard_density_raw,
+                                                 uint32_t vcf20_raw,
+                                                 uint32_t weight_density_raw)
+{
+    if (result == NULL) {
+        return;
+    }
+
+    result->temperature = temperature_raw;
+    result->density = density_raw;
+    result->temperature_position = pos_01mm;
+    result->standard_density = standard_density_raw;
+    result->vcf20 = vcf20_raw;
+    result->weight_density = weight_density_raw;
+}
+
+void Demo_SinglePointDisplayMock(void)
+{
+    static const int16_t temp_wave_x100[]    = { 0, 6, 12, 18, 24, 18, 12, 6, 0, -4, -8, -4 };
+    static const int16_t density_wave_x10[]  = { 0, 1, 2, 3, 2, 1, 0, -1, -2, -1, 0, 1 };
+    static const int16_t pos_wave_01mm[]     = { 0, 2, 4, 6, 8, 6, 4, 2, 0, -2, -4, -2 };
+    const uint32_t wave_count = (uint32_t)(sizeof(temp_wave_x100) / sizeof(temp_wave_x100[0]));
+    uint32_t target_pos_01mm;
+    uint32_t tank_height_01mm;
+    uint32_t start_pos_01mm;
+    uint32_t current_pos_01mm;
+    uint32_t cable_01mm;
+    uint32_t i;
+
+    target_pos_01mm = g_deviceParams.singlePointMeasurementPosition;
+    if (target_pos_01mm == 0U) {
+        if (g_measurement.debug_data.sensor_position > 0) {
+            target_pos_01mm = (uint32_t)g_measurement.debug_data.sensor_position;
+        } else if (g_deviceParams.tankHeight > 0U) {
+            target_pos_01mm = g_deviceParams.tankHeight / 2U;
+        } else {
+            target_pos_01mm = 15000U;
+        }
+    }
+
+    tank_height_01mm = g_deviceParams.tankHeight;
+    if ((tank_height_01mm == 0U) || (tank_height_01mm <= target_pos_01mm)) {
+        tank_height_01mm = target_pos_01mm + 12000U;
+    }
+
+    start_pos_01mm = (target_pos_01mm > 3000U) ? (target_pos_01mm - 3000U) : 0U;
+    current_pos_01mm = start_pos_01mm;
+
+    printf("\r\n===== 单点测量展示模式开始 =====\r\n");
+    printf("展示说明: 不读真实传感器、不驱动电机，只刷新单点测量显示字段\r\n");
+    printf("停止方式: 下发任意新命令即可退出展示\r\n");
+
+    g_measurement.device_status.zero_point_status = 0U;
+    g_measurement.device_status.error_code = NO_ERROR;
+    g_measurement.device_status.device_state = STATE_RUNTOPOINTING;
+    g_measurement.debug_data.motor_state = 2U;
+    g_measurement.debug_data.motor_speed = 120U;
+
+    for (i = 0U; i < 6U; i++) {
+        if (Demo_SinglePointDisplay_ShouldAbort()) {
+            return;
+        }
+
+        current_pos_01mm = start_pos_01mm +
+                (uint32_t)(((uint64_t)(target_pos_01mm - start_pos_01mm) * (uint64_t)(i + 1U)) / 6U);
+        cable_01mm = (tank_height_01mm > current_pos_01mm) ? (tank_height_01mm - current_pos_01mm) : 0U;
+
+        g_measurement.device_status.device_state = STATE_RUNTOPOINTING;
+        g_measurement.debug_data.sensor_position = (int32_t)current_pos_01mm;
+        g_measurement.debug_data.cable_length = (int32_t)cable_01mm;
+        g_measurement.debug_data.motor_distance = (int32_t)cable_01mm;
+        g_measurement.debug_data.temperature = 22580U;
+        g_measurement.debug_data.frequency = 121300U + i * 20U;
+        g_measurement.debug_data.air_frequency = 121900U;
+        g_measurement.debug_data.current_amplitude = 88U + i;
+        g_measurement.debug_data.current_weight = 3200U + i * 10U;
+
+        Demo_SinglePointDisplay_UpdateResult(&g_measurement.single_point_measurement,
+                                             22580U,
+                                             8348U,
+                                             current_pos_01mm,
+                                             8338U,
+                                             9997U,
+                                             8342U);
+        Demo_SinglePointDisplay_UpdateResult(&g_measurement.single_point_monitoring,
+                                             22580U,
+                                             8348U,
+                                             current_pos_01mm,
+                                             8338U,
+                                             9997U,
+                                             8342U);
+
+        printf("单点展示\t运行到测量点 [%lu/6] pos=%.1fmm\r\n",
+               (unsigned long)(i + 1U),
+               current_pos_01mm / 10.0f);
+        HAL_Delay(500);
+    }
+
+    printf("单点展示\t已到达展示点，开始刷新虚拟温度/密度\r\n");
+
+    for (i = 0U;; i++) {
+        uint32_t idx = i % wave_count;
+        uint32_t temperature_raw;
+        uint32_t density_raw;
+        uint32_t standard_density_raw;
+        uint32_t weight_density_raw;
+        uint32_t vcf20_raw;
+
+        if (Demo_SinglePointDisplay_ShouldAbort()) {
+            return;
+        }
+
+        current_pos_01mm = (uint32_t)((int32_t)target_pos_01mm + pos_wave_01mm[idx]);
+        cable_01mm = (tank_height_01mm > current_pos_01mm) ? (tank_height_01mm - current_pos_01mm) : 0U;
+
+        temperature_raw = (uint32_t)(20000 + 2650 + temp_wave_x100[idx]);
+        density_raw = (uint32_t)(8350 + density_wave_x10[idx]);
+        standard_density_raw = density_raw - 8U;
+        weight_density_raw = density_raw - 4U;
+        vcf20_raw = 9995U + (idx % 6U);
+
+        g_measurement.device_status.device_state = STATE_SINGLEPOINTING;
+        g_measurement.debug_data.motor_state = 0U;
+        g_measurement.debug_data.motor_speed = 0U;
+        g_measurement.debug_data.sensor_position = (int32_t)current_pos_01mm;
+        g_measurement.debug_data.cable_length = (int32_t)cable_01mm;
+        g_measurement.debug_data.motor_distance = (int32_t)cable_01mm;
+        g_measurement.debug_data.temperature = temperature_raw;
+        g_measurement.debug_data.frequency = 121500U + idx * 15U;
+        g_measurement.debug_data.air_frequency = 121980U;
+        g_measurement.debug_data.current_amplitude = 96U + (idx % 5U);
+        g_measurement.debug_data.current_weight = 3280U + (idx % 4U) * 8U;
+
+        Demo_SinglePointDisplay_UpdateResult(&g_measurement.single_point_measurement,
+                                             temperature_raw,
+                                             density_raw,
+                                             current_pos_01mm,
+                                             standard_density_raw,
+                                             vcf20_raw,
+                                             weight_density_raw);
+        Demo_SinglePointDisplay_UpdateResult(&g_measurement.single_point_monitoring,
+                                             temperature_raw,
+                                             density_raw,
+                                             current_pos_01mm,
+                                             standard_density_raw,
+                                             vcf20_raw,
+                                             weight_density_raw);
+
+        printf("单点展示\t状态=固定点测量中 pos=%.1fmm temp=%.2fC density=%.1f std=%.1f vcf20=%lu weight_density=%.1f\r\n",
+               current_pos_01mm / 10.0f,
+               RAW_TO_TEMP(temperature_raw),
+               RAW_TO_DENSITY(density_raw),
+               RAW_TO_DENSITY(standard_density_raw),
+               (unsigned long)vcf20_raw,
+               RAW_TO_DENSITY(weight_density_raw));
+
+        HAL_Delay(500);
+    }
+}
 //测试主函数
 void Test_main(void) {
 	Test_FRAM_ReadWrite(); //测试FRAM读写
