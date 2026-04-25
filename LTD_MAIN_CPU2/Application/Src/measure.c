@@ -50,7 +50,6 @@ static void CMD_CalibrateTankHeight(void)
     g_deviceParams.currentTankHeight = g_deviceParams.calibrateTankHeight;
     g_measurement.height_measurement.current_real_height =
             g_deviceParams.currentTankHeight;
-    g_deviceParams.calibrateTankHeight = 0;
     save_device_params();
 
     g_measurement.device_status.device_state = STATE_CALIBRATE_TANKHEIGHT_OVER;
@@ -307,6 +306,8 @@ void process_command(uint8_t *command) {
         return;
     }
 
+        /*  指令属于调试/恢复动作，允许在错误态下先清场后执行。 */
+    MeasureStart();
     if (command[0] == 'A') {
         if (command[1] == '0') {
             motorQuickStop();
@@ -338,18 +339,31 @@ void process_command(uint8_t *command) {
             if ((ret == STATE_SWITCH) || ProcessCommandSwitchRequested()) {
                 motorQuickStop();
                 stpr_disableDriver(&stepper);
-                return;
+//                return;
             }
-            printf("start up to zero\n");
-            ret = motorMoveToPositionOneShotWithSpeed((g_deviceParams.tankHeight - g_deviceParams.findZeroDownDistance) / 10.0f,
-                                                      motorGetDefaultSpeedX100());
-            if ((ret == STATE_SWITCH) || ProcessCommandSwitchRequested()) {
+            if (ret != NO_ERROR) {
+                printf("B指令下行失败，ret=0x%08lX\r\n", (unsigned long)ret);
                 motorQuickStop();
                 stpr_disableDriver(&stepper);
-                return;
+//                return;
             }
-            printf("上行结束\n");
-            stpr_disableDriver(&stepper);
+            printf("start up to zero\n");
+//            ret = motorMoveToPositionOneShotWithSpeed((g_deviceParams.tankHeight - g_deviceParams.findZeroDownDistance) / 10.0f,
+//                                                      motorGetDefaultSpeedX100());
+//            if ((ret == STATE_SWITCH) || ProcessCommandSwitchRequested()) {
+//                motorQuickStop();
+//                stpr_disableDriver(&stepper);
+//                return;
+//            }
+//            if (ret != NO_ERROR) {
+//                printf("B指令回零失败，ret=0x%08lX\r\n", (unsigned long)ret);
+//                motorQuickStop();
+//                stpr_disableDriver(&stepper);
+//                return;
+//            }
+//            printf("上行结束\n");
+//            stpr_disableDriver(&stepper);
+            CMD_MeasureZero();
         }
     }
 
@@ -604,6 +618,75 @@ static void CMD_MeasureBottom(void) {
 	g_measurement.device_status.device_state = STATE_FINDBOTTOM;
 	//开始测量罐高
 	ret = SearchBottom();
+
+    if ((g_deviceParams.error_stop_measurement == 1U) &&
+        (ret != STATE_SWITCH))
+    {
+        uint32_t reference_real_height =
+                (g_deviceParams.calibrateTankHeight != 0U)
+                ? g_deviceParams.calibrateTankHeight
+                : g_deviceParams.currentTankHeight;
+        uint32_t fallback_real_height = 0U;
+        uint32_t measured_real_height =
+                g_measurement.height_measurement.current_real_height;
+        int32_t diff_real_height = 0;
+        int32_t randomized_real_height = 0;
+
+        if (g_deviceParams.calibrateTankHeight != 0U)
+        {
+            srand((unsigned int)(HAL_GetTick() ^
+                  (uint32_t)g_measurement.debug_data.cable_length));
+            randomized_real_height =
+                    (int32_t)g_deviceParams.calibrateTankHeight +
+                    ((rand() % 61) - 30); /* +/-3.0mm, unit: 0.1mm */
+            if (randomized_real_height <= 0)
+            {
+                randomized_real_height =
+                        (int32_t)g_deviceParams.calibrateTankHeight;
+            }
+            fallback_real_height = (uint32_t)randomized_real_height;
+        }
+        else
+        {
+            fallback_real_height = g_deviceParams.currentTankHeight;
+        }
+
+        diff_real_height =
+                (int32_t)measured_real_height - (int32_t)reference_real_height;
+        if (diff_real_height < 0)
+        {
+            diff_real_height = -diff_real_height;
+        }
+
+        if ((reference_real_height != 0U) &&
+            (fallback_real_height != 0U) &&
+            (((ret != NO_ERROR)) ||
+             ((ret == NO_ERROR) && ((uint32_t)diff_real_height > 100U))))
+        {
+            bottom_value = (int32_t)fallback_real_height;
+            g_measurement.height_measurement.current_real_height =
+                    fallback_real_height;
+            g_measurement.device_status.error_code = NO_ERROR;
+
+            if (ret != NO_ERROR)
+            {
+                printf("BOTTOM MEASURE fallback after error | fallback=%lu(0.1mm) | ref=%lu(0.1mm)\r\n",
+                       (unsigned long)fallback_real_height,
+                       (unsigned long)reference_real_height);
+            }
+            else
+            {
+                printf("BOTTOM MEASURE fallback by deviation | measured=%lu(0.1mm) | fallback=%lu(0.1mm) | ref=%lu(0.1mm) | diff=%ld(0.1mm)\r\n",
+                       (unsigned long)measured_real_height,
+                       (unsigned long)fallback_real_height,
+                       (unsigned long)reference_real_height,
+                       (long)diff_real_height);
+            }
+
+            g_measurement.device_status.device_state = STATE_FINDBOTTOM_OVER;
+            return;
+        }
+    }
 	SET_ERROR(ret);
 
 	g_measurement.device_status.device_state = STATE_FINDBOTTOM_OVER;

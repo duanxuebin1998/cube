@@ -22,12 +22,18 @@ int32_t bottom_value = -100000000; // 初始值设为较大数值作为无效状态标识
 /* 全局/参数区：由寄存器或本机参数配置 */
 
 static GyroZeroRef g_gyro_zero_ref = {0};
+
+#define BOTTOM_GYRO_REF_SAMPLE_COUNT      5U
+#define BOTTOM_GYRO_REF_SAMPLE_DELAY_MS 300U
+#define BOTTOM_GYRO_REF_MAX_SPREAD_DEG  2.0f
+#define BOTTOM_GYRO_REF_SAFE_LIFT_MM   100.0f
 // 函数原型声明
 static int SearchBottomRough();   // 粗略搜索罐底
 static int SearchBottomPrecise(); // 精确搜索罐底
 static int32_t GetRealHeightCalibrationOffset(void);
 static uint32_t ApplyRealHeightCalibration(uint32_t raw_real_height);
-
+static uint32_t CaptureGyroZeroRefAverage(const char *tag, uint8_t allow_first_sample_fallback);
+static uint32_t EnsureGyroZeroRefForBottomMeasurement(void);
 static int32_t GetRealHeightCalibrationOffset(void)
 {
     if ((g_deviceParams.initialTankHeight == 0U) ||
@@ -85,6 +91,9 @@ uint32_t SearchBottom(void)
         printf("罐底测量\t上行完成\r\n");
     }
 
+    ret = EnsureGyroZeroRefForBottomMeasurement();
+    CHECK_ERROR(ret);
+
     printf("罐底测量\t初始重量：%d\r\n", weight_parament.stable_weight);
 
     /*************** 粗找阶段 - 带重试机制 ***************/
@@ -127,7 +136,6 @@ uint32_t SearchBottom(void)
     printf("罐底测量\t粗找罐底完成：实高：%ld mm\r\n", bottom_value);
 
     /*************** 精找阶段1 - 带重试 ***************/
-
     try_times = 0;
     while (try_times < 3)
     {
@@ -160,6 +168,39 @@ uint32_t SearchBottom(void)
         CHECK_ERROR(ret);
     }
 
+    /*************** 精找阶段2 - 带重试 ***************/
+    try_times = 0;
+    while (try_times < 3)
+    {
+        try_times++;
+        printf("罐底测量\t第二次精找第%d次尝试\r\n", try_times);
+
+        ret = SearchBottomPrecise();
+
+        if (ret == STATE_SWITCH)
+        {
+            printf("罐底测量\t检测到命令切换，中止第二次精找\r\n");
+            break;
+        }
+
+        if (ret == NO_ERROR)
+        {
+            printf("罐底测量\t第二次精找完成\r\n");
+            break;
+        }
+        else
+        {
+            printf("罐底测量\t第二次精找失败:0x%lX\r\n", ret);
+            HAL_Delay(1000);
+        }
+    }
+
+    if (ret != NO_ERROR)
+    {
+        printf("罐底测量\t第二次精找失败(尝试%d次)\r\n", try_times);
+        CHECK_ERROR(ret);
+    }
+
     /*************** 最终校验与记录 ***************/
     {
         uint32_t raw_real_height =
@@ -174,10 +215,10 @@ uint32_t SearchBottom(void)
                (unsigned long)corrected_real_height);
         if(g_measurement.device_status.device_state == STATE_CALIBRATIONOILING)
         {
-        	g_measurement.height_measurement.calibrated_liquid_level = raw_real_height;
-			g_deviceParams.tankHeight = raw_real_height +  g_deviceParams.liquid_sensor_distance_diff;
-			printf("罐底测量\t标定完成，罐高设置为：%ld mm\r\n", g_deviceParams.tankHeight);
-			update_sensor_height_from_encoder();	//更新罐高数据
+            g_measurement.height_measurement.calibrated_liquid_level = raw_real_height;
+            g_deviceParams.tankHeight = raw_real_height +  g_deviceParams.liquid_sensor_distance_diff;
+            printf("罐底测量\t标定完成，罐高设置为：%ld mm\r\n", g_deviceParams.tankHeight);
+            update_sensor_height_from_encoder();    //更新罐高数据
         }
     }
     // 电机上行，完成流程
@@ -187,7 +228,6 @@ uint32_t SearchBottom(void)
 
     return NO_ERROR;
 }
-
 /**
  * @brief 粗略搜索罐底 - 快速下探直到检测到罐底
  *
@@ -257,7 +297,7 @@ static int SearchBottomPrecise() {
 		ret = motorMove_downWithSpeed(speed_x100);  // 启动电机向下运动
 		CHECK_ERROR(ret); // 检查上行是否成功
 
-		if (bottom_value-g_measurement.debug_data.cable_length < -100)  {
+		if (bottom_value-g_measurement.debug_data.cable_length < -1000)  {
 			printf("罐底测量\tt精确寻找罐底未找到罐底\r\n");
 			RETURN_ERROR(MEASUREMENT_WEIGHT_DOWN_FAIL); // 如果编码器位置异常，返回错误
 		}
@@ -272,23 +312,122 @@ static int SearchBottomPrecise() {
 	bottom_value = g_measurement.debug_data.cable_length;
 	return NO_ERROR;
 }
-uint32_t Bottom_SaveGyroZeroRef(void)
+static uint32_t CaptureGyroZeroRefAverage(const char *tag, uint8_t allow_first_sample_fallback)
 {
+    uint32_t ret;
     float ax = 0.0f, ay = 0.0f;
-    uint32_t ret = Sensor_ReadGyroAngle(&ax, &ay);   // 统一经过链路诊断封装
-    if (ret != NO_ERROR) {
-        g_gyro_zero_ref.valid = 0;
-        return ret;
+    float first_x = 0.0f, first_y = 0.0f;
+    float sum_x = 0.0f, sum_y = 0.0f;
+    float min_x = 0.0f, max_x = 0.0f;
+    float min_y = 0.0f, max_y = 0.0f;
+
+    for (uint32_t i = 0; i < BOTTOM_GYRO_REF_SAMPLE_COUNT; i++) {
+        ret = Sensor_ReadGyroAngle(&ax, &ay);
+        if (ret != NO_ERROR) {
+            g_gyro_zero_ref.valid = 0;
+            return ret;
+        }
+
+        if (i == 0U) {
+            first_x = ax;
+            first_y = ay;
+            min_x = max_x = ax;
+            min_y = max_y = ay;
+        } else {
+            if (ax < min_x) min_x = ax;
+            if (ax > max_x) max_x = ax;
+            if (ay < min_y) min_y = ay;
+            if (ay > max_y) max_y = ay;
+        }
+
+        sum_x += ax;
+        sum_y += ay;
+        printf("%s陀螺仪基准采样[%lu/%lu] | X=%.2f | Y=%.2f\r\n",
+               tag,
+               (unsigned long)(i + 1U),
+               (unsigned long)BOTTOM_GYRO_REF_SAMPLE_COUNT,
+               ax,
+               ay);
+
+        if ((i + 1U) < BOTTOM_GYRO_REF_SAMPLE_COUNT) {
+            HAL_Delay(BOTTOM_GYRO_REF_SAMPLE_DELAY_MS);
+        }
     }
 
-    g_gyro_zero_ref.x0_deg = ax;
-    g_gyro_zero_ref.y0_deg = ay;
+    if (((max_x - min_x) > BOTTOM_GYRO_REF_MAX_SPREAD_DEG) ||
+        ((max_y - min_y) > BOTTOM_GYRO_REF_MAX_SPREAD_DEG)) {
+        if (allow_first_sample_fallback) {
+            g_gyro_zero_ref.x0_deg = first_x;
+            g_gyro_zero_ref.y0_deg = first_y;
+            g_gyro_zero_ref.valid  = 1;
+            printf("%s陀螺仪基准采样不稳定 | dX=%.2f | dY=%.2f | 阈值=%.2f | 回退第一组 | X0=%.2f | Y0=%.2f\r\n",
+                   tag,
+                   max_x - min_x,
+                   max_y - min_y,
+                   BOTTOM_GYRO_REF_MAX_SPREAD_DEG,
+                   g_gyro_zero_ref.x0_deg,
+                   g_gyro_zero_ref.y0_deg);
+            return NO_ERROR;
+        }
+
+        g_gyro_zero_ref.valid = 0;
+        printf("%s陀螺仪基准不稳定 | dX=%.2f | dY=%.2f | 阈值=%.2f\r\n",
+               tag,
+               max_x - min_x,
+               max_y - min_y,
+               BOTTOM_GYRO_REF_MAX_SPREAD_DEG);
+        return MEASUREMENT_ZERO_REPEAT_FAIL;
+    }
+
+    g_gyro_zero_ref.x0_deg = sum_x / (float)BOTTOM_GYRO_REF_SAMPLE_COUNT;
+    g_gyro_zero_ref.y0_deg = sum_y / (float)BOTTOM_GYRO_REF_SAMPLE_COUNT;
     g_gyro_zero_ref.valid  = 1;
 
-    printf("陀螺仪零点基准 | X0=%.2f | Y0=%.2f\r\n", ax, ay);
+    printf("%s陀螺仪基准建立完成 | X0=%.2f | Y0=%.2f\r\n",
+           tag,
+           g_gyro_zero_ref.x0_deg,
+           g_gyro_zero_ref.y0_deg);
     return NO_ERROR;
 }
 
+static uint32_t EnsureGyroZeroRefForBottomMeasurement(void)
+{
+    uint32_t ret;
+
+    if (g_deviceParams.bottom_detect_mode != BOTTOM_DET_BY_GYRO) {
+        return NO_ERROR;
+    }
+
+    if (g_gyro_zero_ref.valid) {
+        return NO_ERROR;
+    }
+
+    printf("罐底测量\t角度找底基准无效，尝试在当前位置建立基准\r\n");
+    ret = motorQuickStop();
+    if (ret != NO_ERROR) {
+        return ret;
+    }
+
+    if (g_measurement.debug_data.cable_length > 1000) {
+        ret = motorMoveAndWaitUntilStopWithSpeed(BOTTOM_GYRO_REF_SAFE_LIFT_MM, MOTOR_DIRECTION_UP, motorGetDefaultSpeedX100());
+        if (ret != NO_ERROR) {
+            return ret;
+        }
+        printf("罐底测量\t非回零基准采集前上行%.1fmm\r\n", (double)BOTTOM_GYRO_REF_SAFE_LIFT_MM);
+    }
+
+    HAL_Delay(1000);
+    ret = CaptureGyroZeroRefAverage("非回零", 1U);
+    if (ret != NO_ERROR) {
+        printf("罐底测量\t非回零建立角度基准失败:0x%lX\r\n", (unsigned long)ret);
+    }
+    return ret;
+}
+
+uint32_t Bottom_SaveGyroZeroRef(void)
+{
+    return CaptureGyroZeroRefAverage("零点", 0U);
+}
 /**
  * @brief 罐底状态检测（不锁存）
  * @return BOTTOM（到达罐底）或 NORMAL（未到罐底）
@@ -348,8 +487,8 @@ Weight_StateTypeDef check_bottom_status(void)
 
 	/* -------- 方式2：陀螺仪角度变化（mode!=0，不锁存） -------- */
 	if (!g_gyro_zero_ref.valid) {
-		printf("罐底检测(陀螺仪) | 零点基准无效\r\n");
-//		return NORMAL;
+		printf("罐底检测(陀螺仪) | 角度基准无效，跳过本次判定\r\n");
+		return NORMAL;
 	}
 
 	float ax = 0.0f, ay = 0.0f;
@@ -378,4 +517,3 @@ Weight_StateTypeDef check_bottom_status(void)
 
 	return state;
 }
-

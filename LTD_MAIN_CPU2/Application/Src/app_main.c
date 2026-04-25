@@ -4,7 +4,7 @@
  * @Author       : Aubon
  * @Date         : 2026-02-03 14:06:14
  * @LastEditors  : Duan Xuebin
- * @LastEditTime : 2026-03-28 13:24:54
+ * @LastEditTime : 2026-04-10 17:33:12
  * Copyright 2026 Aubon, All Rights Reserved. 
  * 2026-02-03 14:06:14
  */
@@ -20,6 +20,16 @@
 #include "test.h"
 #include "ad5421.h"
 #include "sensor.h"
+
+
+/*
+ * 空闲态错误兜底：
+ * 1. 只有在“没有待执行命令、也没有正在执行命令”时，才根据全局 error_code 挂错误态。
+ * 2. 一旦挂错，统一执行停机，并把 zero_point_status 置为 1，提示后续流程需要重新回零。
+ * 3. 如果当前已经在 STATE_ERROR，但 error_code 已经被清掉，则自动恢复到待机态。
+ *
+ * 这个函数不负责拦截新命令；新命令优先，由主循环前面的命令分支先处理。
+ */
 static uint8_t App_HandleIdleGlobalError(void) {
 	uint32_t error_code = g_measurement.device_status.error_code;
 	if ((g_deviceParams.command == CMD_NONE) &&
@@ -70,35 +80,58 @@ void App_Init(void) {
 //	motor_text(); //电机测试
 }
 // 主循环任务
+/*
+ * 主循环本身不直接做测量，它更像一个“调度器”。
+ * 每轮循环只做一件最高优先级的事，优先级从高到低如下：
+ * 1. 接收侧刚送进来的原始命令（new_command_ready）
+ * 2. 已经挂到 g_deviceParams.command 的正式命令
+ * 3. 系统完全空闲时的错误兜底
+ * 4. 本轮尾声的参数延迟保存和统一节拍延时
+ *
+ * 这样设计的目的，是避免“错误态”或“后台任务”抢在新命令前面执行，
+ * 从而把恢复动作、重试动作、强制运动动作卡死。
+ */
 void App_MainLoop(void) {
+	/* 后台轻量检查：这里只做一次快速轮询，不在主循环里展开复杂处理。 */
 	(void)Weight_CheckCommunicationTimeout();
-	// 如果有新的命令
-	if (new_command_ready) {
-		new_command_ready = 0;  // 重置标志，避免重复处理
 
-		// 处理接收到的命令
+	/* 第一优先级：处理刚收到的原始命令。
+	 * 这一层通常来自调试口/串口缓存，process_command() 会把字符命令翻译成具体动作，
+	 * 必要时再写入 g_deviceParams.command。 */
+	if (new_command_ready) {
+		new_command_ready = 0;  // 本轮已经接管这条新命令，先清标志避免重复处理
 		process_command(received_buffer);
 	}
-	if (g_deviceParams.command != CMD_NONE) {
+	/* 第二优先级：执行已经挂起的正式命令。
+	 * 这类命令通常来自上位机、参数区或其他控制入口，是系统真正的业务入口。 */
+	else if (g_deviceParams.command != CMD_NONE) {
+
+		/* current_command 表示“当前正在执行的命令”，用于状态显示和命令切换判断。 */
 		printf("当前命令：%d\r\n", g_deviceParams.command);
-		g_measurement.device_status.current_command = g_deviceParams.command; // 更新当前命令
-		g_deviceParams.command = CMD_NONE; // 清除命令
-		ProcessMeasureCmd(g_measurement.device_status.current_command); // 处理测量命令
-		g_measurement.device_status.current_command =CMD_NONE; // 重置当前命令
-		WIRELESS_PrintInfo(01); // 打印无线传感器信息
-		WIRELESS_PrintInfo(02); // 打印无线传感器信息
-		//
-	}
-	/*
-	 * 允许在错误态下优先处理新命令。
-	 * 这样外部下发的恢复/重新测量命令可以进入 MeasureStart() 清错，
-	 * 避免空闲错误门控把所有后续命令都提前拦截掉。
-	 */
-	if (App_HandleIdleGlobalError()) {
+		g_measurement.device_status.current_command = g_deviceParams.command;
+		g_deviceParams.command = CMD_NONE; // 取走后立即清空，避免下轮重复执行
+
+		/* 统一命令分发入口：后续会进入 measure.c，根据命令类型执行具体业务流程。 */
+		ProcessMeasureCmd(g_measurement.device_status.current_command);
+
+		/* 命令执行完成后清掉 current_command，表示系统重新回到“无命令执行中”。 */
+		g_measurement.device_status.current_command =CMD_NONE;
+
+		/* 执行完命令后顺手刷新两路无线信息，方便调试时观察两只无线端状态。 */
+		WIRELESS_PrintInfo(01);
+		WIRELESS_PrintInfo(02);
+
+		/* 如果命令执行过程中触发了“延迟保存参数”，这里顺手处理一次。 */
 		process_device_params_deferred_tasks();
-		HAL_Delay(50); // 延时50ms
+	}
+	/* 第三优先级：只有在完全空闲时，才做错误态兜底。
+	 * 也就是说：没有新原始命令、没有挂起正式命令时，才允许系统把自己挂到 STATE_ERROR。 */
+	else if (App_HandleIdleGlobalError()) {
+		process_device_params_deferred_tasks();
+		HAL_Delay(50); // 出错分支也保持和主循环一致的节拍
 		return;
 	}
+
 //		DSM_V2_Test_AllParams(); // 二代传感器测试函数
 //		Sensor_Test(); // 传感器测试
 //		Test_FRAM_ReadWrite();
@@ -106,6 +139,7 @@ void App_MainLoop(void) {
 //		printf("位置%d", g_measurement.debug_data.sensor_position);
 //		HAL_GPIO_WritePin(HART_RTS_GPIO_Port, HART_RTS_Pin, GPIO_PIN_RESET);
 //		HAL_UART_Transmit_DMA(&huart2, "123456", 6);  // 通过UART发送响应
-	process_device_params_deferred_tasks();//保存设备参数
+
+	/* 本轮尾声：无论本轮是否空闲，只要没提前 return，就统一走一次节拍延时。 */
 	HAL_Delay(50); // 延时50ms
 }
