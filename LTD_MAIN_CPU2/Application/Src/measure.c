@@ -526,6 +526,11 @@ void process_command(uint8_t *command) {
         CMD_MeasurWater();
         return;
     }
+    if (command[0] == 'X') {
+        printf("执行单点测量展示指令\n");
+        Demo_SinglePointDisplayMock();
+        return;
+    }
 }
 int MeasureStart(void) {
 	motor_Init(); //电机初始化
