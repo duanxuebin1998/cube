@@ -994,7 +994,7 @@ static uint32_t FollowWaterLevelCore(WaterRecoverStrategy recover_strategy)
         /* ---------- 3. 根据偏差大小选择运动步长 ----------
          * 偏差越大，说明离目标液面越远，允许使用更大的步长
          */
-        if (diff > 0.8f * WaterCapRawToFloat(g_deviceParams.water_cap_threshold))
+        if (diff > 0.6f * WaterCapRawToFloat(g_deviceParams.water_cap_threshold))
         {
             step_mm = WATER_FOLLOW_STEP_BIG_MM;
         }
@@ -1048,7 +1048,7 @@ static uint32_t FollowWaterLevelCore(WaterRecoverStrategy recover_strategy)
             float th_span = WaterCapRawToFloat(g_deviceParams.water_cap_threshold);
 
 //            if ((diff > 0.8f * th_span) && (cap_delta < 1.0f))
-            if (diff > 0.8f * th_span)
+            if (diff > 0.6f * th_span)
             {
                 if (lost_count < 0xFFFFu)
                     lost_count++;
