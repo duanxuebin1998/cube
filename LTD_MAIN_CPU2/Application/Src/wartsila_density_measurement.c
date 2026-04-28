@@ -336,8 +336,8 @@ uint32_t motorMoveUpToPositionOrAir(float target_mm, Level_StateTypeDef *final_s
 	    	if (hz == 0 || hz > g_deviceParams.oilLevelFrequency) {
 	    		 if (final_state) *final_state = AIR;//读到0或者异常频率认为是空气
 	            printf("上行到目标或空气：频率检测到到达液面，立即停止电机！\r\n");
-	            stpr_stop(&stepper);
-            g_measurement.debug_data.motor_state = 0U;
+	            ret = motorSlowStop();
+	            CHECK_ERROR(ret);
 	    		break;  // 读到0也返回
 	    	}
 	    	 HAL_Delay(80);
@@ -349,8 +349,8 @@ uint32_t motorMoveUpToPositionOrAir(float target_mm, Level_StateTypeDef *final_s
 
         if (st == AIR) {
             printf("上行到目标或空气：检测到进入空气，立即停止电机！\r\n");
-            stpr_stop(&stepper);
-            g_measurement.debug_data.motor_state = 0U;
+            ret = motorSlowStop();
+            CHECK_ERROR(ret);
             break;
         }
 
@@ -359,8 +359,8 @@ uint32_t motorMoveUpToPositionOrAir(float target_mm, Level_StateTypeDef *final_s
 
         if (cur_mm >= target_mm - 0.05f) {   // 加一点浮动允许
             printf("上行到目标或空气：已到达目标位置 %.3fmm\r\n", cur_mm);
-            stpr_stop(&stepper);
-            g_measurement.debug_data.motor_state = 0U;
+            ret = motorSlowStop();
+            CHECK_ERROR(ret);
             break;
         }
 

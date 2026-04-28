@@ -191,6 +191,8 @@ static int32_t Motor_ReadEncoderLengthForFit(void);
 static bool Motor_TryUpdateDrumState_FromXACTUAL(TMC5130TypeDef *tmc5130, MotorDrumState *out);
 static void Motor_TapeFitAutoSample(void);
 static void Motor_TapeFitLocalRange(double *q_min, double *q_max);
+static bool Motor_TryReadMovingState(TMC5130TypeDef *tmc5130, bool *is_moving);
+static uint32_t Motor_InferDisplayStateFromDriver(TMC5130TypeDef *tmc5130);
 /* ===================== 内部状态变量 ===================== */
 
 /* 丢步检测环形缓冲区：记录最近 3 次位置（单位：0.1mm） */
@@ -379,6 +381,14 @@ static inline uint32_t Motor_ClampSpeedSetpointX100(uint32_t speed_x100)
     return speed_x100;
 }
 
+static inline uint32_t Motor_ClampCurrentSetting(uint32_t current)
+{
+    if ((current < MOTOR_CURRENT_MIN) || (current > MOTOR_CURRENT_MAX)) {
+        return MOTOR_CURRENT_DEFAULT;
+    }
+    return current;
+}
+
 static inline int32_t Motor_GetSpeedSetpointX100(void)
 {
     return (int32_t)Motor_ClampSpeedSetpointX100(g_measurement.debug_data.motor_speed);
@@ -437,9 +447,15 @@ static inline int Motor_IsDirValid(int dir)
 
 static inline void Motor_StopAndMarkStopped(void)
 {
+    bool is_moving = true;
+
     stpr_stop(&stepper);
-    g_measurement.debug_data.motor_state = 0U;
     Motor_SyncDebugDrumState(&stepper);
+
+    /* 停止命令只是开始减速，只有驱动确认 vzero 后才显示静止。 */
+    if (Motor_TryReadMovingState(&stepper, &is_moving) && (!is_moving)) {
+        g_measurement.debug_data.motor_state = 0U;
+    }
 }
 
 static inline bool Motor_StopIfCommandSwitchRequested(void)
@@ -450,6 +466,56 @@ static inline bool Motor_StopIfCommandSwitchRequested(void)
         return true;
     }
     return false;
+}
+static bool Motor_TryReadMovingState(TMC5130TypeDef *tmc5130, bool *is_moving)
+{
+    int32_t rampstat = 0;
+
+    if ((tmc5130 == NULL) || (is_moving == NULL)) {
+        return false;
+    }
+
+    if (!stpr_tryReadInt(tmc5130, TMC5130_RAMPSTAT, &rampstat)) {
+        return false;
+    }
+
+    /* RAMPSTAT.bit10(vzero)=1 表示速度已经为 0，用它校正显示状态，避免软件缓存滞留。 */
+    *is_moving = (((uint32_t)rampstat & 0x400U) != 0x400U);
+    return true;
+}
+
+static uint32_t Motor_InferDisplayStateFromDriver(TMC5130TypeDef *tmc5130)
+{
+    int32_t vactual = 0;
+    int32_t xactual = 0;
+    int32_t xtarget = 0;
+
+    if (tmc5130 == NULL) {
+        return 0U;
+    }
+
+    /* TMC5130_VACTUAL 为有符号速度；本工程正向 ticks 对应下行放带。 */
+    if (stpr_tryReadInt(tmc5130, TMC5130_VACTUAL, &vactual)) {
+        if (vactual > 0) {
+            return 2U;
+        }
+        if (vactual < 0) {
+            return 1U;
+        }
+    }
+
+    /* 低速或刚启动时 VACTUAL 可能暂为 0，退回用目标位置差判断方向。 */
+    if (stpr_tryReadInt(tmc5130, TMC5130_XACTUAL, &xactual) &&
+        stpr_tryReadInt(tmc5130, TMC5130_XTARGET, &xtarget)) {
+        if (xtarget > xactual) {
+            return 2U;
+        }
+        if (xtarget < xactual) {
+            return 1U;
+        }
+    }
+
+    return 0U;
 }
 
 /* ===================== 尺带/卷筒模型工具（每圈半径变化=t） ===================== */
@@ -840,11 +906,32 @@ uint32_t motorSetSpeed(uint32_t speed_x100)
 //               (unsigned long)velocity,
 //               TMC5130_VMAX_To_UstepsPerSec(velocity));
     }
-
-    g_measurement.debug_data.motor_state = 0U;
+    if (is_running) {
+        uint32_t inferred_state = Motor_InferDisplayStateFromDriver(&stepper);
+        if (((g_measurement.debug_data.motor_state != 1U) &&
+             (g_measurement.debug_data.motor_state != 2U)) &&
+            ((inferred_state == 1U) || (inferred_state == 2U))) {
+            g_measurement.debug_data.motor_state = inferred_state;
+        }
+    } else {
+        g_measurement.debug_data.motor_state = 0U;
+    }
     return NO_ERROR;
 }
 
+uint32_t motorSetCurrent(uint32_t current)
+{
+    const uint32_t clamped_current = Motor_ClampCurrentSetting(current);
+
+    g_deviceParams.motor_current = clamped_current;
+
+    if (s_motor_initialized) {
+        /* 电流参数写入后立即更新 TMC5130，避免必须重启才生效。 */
+        stpr_setCurrent(&stepper, (uint8_t)clamped_current);
+    }
+
+    return NO_ERROR;
+}
 
 /**
  * @brief 四舍五入到 int64，避免 double->int 直接截断导致系统误差
@@ -1502,6 +1589,7 @@ void motorPollRuntimePosition(void)
 {
     static uint32_t s_last_runtime_poll_tick = 0U;
     const uint32_t now = HAL_GetTick();
+    bool is_moving = false;
 
     if (!s_motor_initialized) {
         return;
@@ -1511,8 +1599,30 @@ void motorPollRuntimePosition(void)
     }
     s_last_runtime_poll_tick = now;
 
-    if (!stpr_isMoving(&stepper)) {
+    if (!Motor_TryReadMovingState(&stepper, &is_moving)) {
+        uint32_t inferred_state = Motor_InferDisplayStateFromDriver(&stepper);
+        if ((inferred_state == 1U) || (inferred_state == 2U)) {
+            g_measurement.debug_data.motor_state = inferred_state;
+            Motor_SyncDebugDrumState(&stepper);
+        }
         return;
+    }
+
+    if (!is_moving) {
+        if ((g_measurement.debug_data.motor_state == 1U) ||
+            (g_measurement.debug_data.motor_state == 2U)) {
+            g_measurement.debug_data.motor_state = 0U;
+            Motor_SyncDebugDrumState(&stepper);
+        }
+        return;
+    }
+
+    if ((g_measurement.debug_data.motor_state != 1U) &&
+        (g_measurement.debug_data.motor_state != 2U)) {
+        uint32_t inferred_state = Motor_InferDisplayStateFromDriver(&stepper);
+        if ((inferred_state == 1U) || (inferred_state == 2U)) {
+            g_measurement.debug_data.motor_state = inferred_state;
+        }
     }
     Motor_SyncDebugDrumState(&stepper);
 }
@@ -2211,11 +2321,10 @@ static void Motor_RestorePositionSourceFromParams(void)
 
 uint32_t motor_Init(void)
 {
-    uint32_t motor_current = g_deviceParams.motor_current;
+    uint32_t motor_current = Motor_ClampCurrentSetting(g_deviceParams.motor_current);
 
-    if ((motor_current < MOTOR_CURRENT_MIN) || (motor_current > MOTOR_CURRENT_MAX)) {
-        motor_current = MOTOR_CURRENT_DEFAULT;
-    }
+    /* 规范化后的电流回写到参数区，保证显示、保存和驱动寄存器一致。 */
+    g_deviceParams.motor_current = motor_current;
 
     if (g_measurement.debug_data.motor_speed == 0U) {
         g_measurement.debug_data.motor_speed = g_deviceParams.max_motor_speed;
@@ -2239,6 +2348,7 @@ uint32_t motor_Init(void)
         motorPrintPositionCompare();
     } else {
         stpr_enableDriver(&stepper);
+        (void)motorSetCurrent(motor_current);
     }
 
     Motor_SyncDebugDrumState(&stepper);
@@ -3094,8 +3204,36 @@ uint32_t motorSlowStop(void)
 uint32_t motorGetDisplayState(void)
 {
     uint32_t motor_state = g_measurement.debug_data.motor_state;
+    bool is_moving = false;
+
+    if (!s_motor_initialized) {
+        return ((motor_state == 1U) || (motor_state == 2U)) ? motor_state : 0U;
+    }
+
+    if (!Motor_TryReadMovingState(&stepper, &is_moving)) {
+        uint32_t inferred_state = Motor_InferDisplayStateFromDriver(&stepper);
+        if ((inferred_state == 1U) || (inferred_state == 2U)) {
+            g_measurement.debug_data.motor_state = inferred_state;
+            return inferred_state;
+        }
+        return ((motor_state == 1U) || (motor_state == 2U)) ? motor_state : 0U;
+    }
+
+    if (!is_moving) {
+        if ((motor_state == 1U) || (motor_state == 2U)) {
+            g_measurement.debug_data.motor_state = 0U;
+            Motor_SyncDebugDrumState(&stepper);
+        }
+        return 0U;
+    }
 
     if ((motor_state == 1U) || (motor_state == 2U)) {
+        return motor_state;
+    }
+
+    motor_state = Motor_InferDisplayStateFromDriver(&stepper);
+    if ((motor_state == 1U) || (motor_state == 2U)) {
+        g_measurement.debug_data.motor_state = motor_state;
         return motor_state;
     }
 

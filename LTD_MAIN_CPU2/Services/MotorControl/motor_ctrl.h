@@ -315,6 +315,18 @@ uint32_t motorMoveAndWaitUntilStopWithSpeed(float mm, int dir, uint32_t speed_x1
 uint32_t motorSetSpeed(uint32_t speed_x100);
 
 /**
+ * @brief 设置电机运行电流并立即写入驱动
+ *
+ * 说明：
+ *  - current 为 TMC5130 IRUN 编码值，合法范围由 MOTOR_CURRENT_MIN/MAX 限定
+ *  - 若电机已初始化，立即写 IHOLD_IRUN；若未初始化，仅更新参数，初始化时生效
+ *
+ * @param current 目标运行电流编码值
+ * @return NO_ERROR 或错误码
+ */
+uint32_t motorSetCurrent(uint32_t current);
+
+/**
  * @brief 获取默认最高速度
  *
  * 说明：
