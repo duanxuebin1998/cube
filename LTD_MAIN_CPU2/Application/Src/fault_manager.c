@@ -28,7 +28,7 @@ void printError(const ErrorInfo* err)
     }
 
     // 打印错误信息
-    printf("[故障] CODE: 0x%X | FILE: %s | LINE: %lu | FUNC: %s\r\n",
+    printf("[故障] 代码: 0x%X | 文件: %s | 行号: %lu | 函数: %s\r\n",
            (unsigned int)err->error_code, err->file, err->line, err->func);
 }
 
@@ -38,12 +38,12 @@ void printError(const ErrorInfo* err)
  */
 void HandleError(void)
 {
-    motorQuickStop();
+    motorSlowStop();
 }
 
 /* 旧的错误记录函数示例（保留注释备查）
 void LogError(const ErrorInfo* err) {
-    motorQuickStop(); // 紧急停止电机
+    motorSlowStop(); // 慢速停止电机
     if (g_measurement.device_status.error_code == NO_ERROR &&
         g_measurement.device_status.error_code != STATE_SWITCH &&
         err->error_code != STATE_SWITCH) {
@@ -51,7 +51,7 @@ void LogError(const ErrorInfo* err) {
         g_measurement.device_status.error_code = err->error_code; // 更新错误码
         g_measurement.device_status.zero_point_status = 1;        // 设置零点状态为需要回零点
 
-        printf("故障 CODE: 0x%X | FILE: %s | LINE: %lu | FUNC: %s \r\n",
+        printf("故障 代码: 0x%X | 文件: %s | 行号: %lu | 函数: %s \r\n",
                err->error_code, err->file, err->line, err->func);
     }
 }
@@ -78,7 +78,7 @@ volatile FaultInfo g_faultInfo = { .severity = FAULT_SEVERITY_NONE };
  * @brief 故障信息初始化函数（系统启动时调用）
  */
 void fault_info_init(void) {
-    motorQuickStop(); // 初始化时确保电机停止
+    motorSlowStop(); // 初始化时确保电机停止
     g_measurement.device_status.error_code = NO_ERROR; // 清除设备状态错误码
 }
 

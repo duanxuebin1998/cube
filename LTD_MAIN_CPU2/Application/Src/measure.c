@@ -69,6 +69,7 @@ static void CMD_FollowWaterLevel(void);
 static void CMD_MeasureZero(void);
 static void CMD_MeasureBottom(void);
 static void CMD_MeasureAndFollowOilLevel(void);
+static uint32_t EnsureMotorPositionSourceBeforeFollow(const char *follow_name);
 static void CMD_CalibrateZeroPoint(void);
 static void CMD_CalibrateOilLevel(void);
 static void CMD_SyntheticMeasurement(void);
@@ -268,24 +269,49 @@ void ProcessMeasureCmd(CommandType command)
  * 该函数根据传入的命令字符数组执行不同的电机控制操作，包括刹车、上下移动、编码器清零、测试模式等。
  *
  * @param command 指向命令字符数组的指针，命令格式为单个字符后跟可选参数。
- * @note 命令格式说明：
- *       - 'A0': 刹车操作
- *       - 'A+<数字>': 电机上行指定距离
- *       - 'A-<数字>': 电机下行指定距离
- *       - 'B': 进入编码器测试模式（循环上下移动并打印编码器值）
- *       - 'C': 电机步进分辨率测试
- *       - 'D': 电机下行触底测试
- *       - 'E': 电机上行碰零点测试
- *       - 'F': 罐底测量重复性测试
- *       - 'G': 罐底测量单次测试
- *       - 'H': 零点/罐底测量重复性测试
- *       - 'I': 零点单次测试
- *       - 'J': 液位测量重复性测试
- *       - 'K': 液位测量单次测试
- *       - 'L': 编码器值清零
- *       - 'M': 电机高温测试
- *       - 'N': 电机简单测试模式（循环上下移动）
- *       - 'O': 获取空载称重
+ * @note 串口调试命令协议：
+ *       通用格式：ASCII 字符串，command[0] 为主命令，部分命令使用 command[1] 作为子命令。
+ *       距离参数默认按 mm 解析，例如 A+100 表示上行 100mm。
+ *
+ *       基础命令：
+ *       - A0：快速停止电机
+ *       - A+<mm>：电机上行指定距离
+ *       - A-<mm>：电机下行指定距离
+ *       - B<mm>：编码器/回零循环测试，下行指定距离后执行回零流程
+ *       - C：电机步进分辨率测试
+ *       - D：电机下行触底测试
+ *       - E：电机上行碰零点测试
+ *       - F：罐底测量重复性测试
+ *       - G：罐底测量单次测试
+ *       - H：零点/罐底重复性测试
+ *       - I：回零点单次测试
+ *       - J：液位测量重复性测试入口
+ *       - K：液位测量单次测试入口
+ *       - L：编码器和电机基准同时清零
+ *       - M：电机高温循环测试
+ *       - N：电机简单循环测试，300mm 下行/上行循环
+ *       - O：获取空载称重
+ *       - P：获取满载称重
+ *       - Q：恢复出厂设置
+ *       - R：分布测量
+ *       - W：水位测量
+ *       - X：单点测量展示
+ *
+ *       TFIT 卷筒拟合命令：
+ *       - T1：开始全局自动采样，以原零点为基准
+ *       - T2：开始局部自动采样，以当前位置作为新的 0 圈起点
+ *       - T0：停止自动采样
+ *       - TA：手动添加当前样本
+ *       - TS：打印拟合状态
+ *       - TR：全局拟合求解
+ *       - TV：局部拟合求解
+ *       - TP：只应用拟合出的厚度 t
+ *       - TU：同时应用拟合出的 C0 和厚度 t
+ *
+ *       位置源切换命令：
+ *       - YM：切换到电机记步，以当前编码轮尺带长度为基准，自动下行一周标定局部周长后返回
+ *       - YE：切回编码轮记步，后续 cable_length/sensor_position 由编码轮刷新
+ *       - YS：打印记步模式、局部周长、XACTUAL、基准、电机计算位置、编码轮位置和差值
  */
 static uint8_t ProcessCommandSwitchRequested(void)
 {
@@ -300,7 +326,7 @@ static uint8_t ProcessCommandSwitchRequested(void)
 void process_command(uint8_t *command) {
     uint32_t ret = NO_ERROR;
 
-    printf("Command received\n");
+    printf("收到命令\n");
     if ((command == NULL) || (command[0] == '\0')) {
         printf("空串口命令，忽略\r\n");
         return;
@@ -310,14 +336,14 @@ void process_command(uint8_t *command) {
     MeasureStart();
     if (command[0] == 'A') {
         if (command[1] == '0') {
-            motorQuickStop();
+            motorSlowStop();
         } else if (command[1] == '+') {
             int mm = atoi((char*) &command[2]);
-            printf("start up%d\n", mm);
+            printf("开始上行%d\n", mm);
             motorMoveNoWaitWithSpeed((float) mm, MOTOR_DIRECTION_UP, motorGetDefaultSpeedX100());
         } else if (command[1] == '-') {
             int mm = atoi((char*) &command[2]);
-            printf("start down%d\n", mm);
+            printf("开始下行%d\n", mm);
             motorMoveNoWaitWithSpeed((float) mm, MOTOR_DIRECTION_DOWN, motorGetDefaultSpeedX100());
         }
         return;
@@ -325,39 +351,36 @@ void process_command(uint8_t *command) {
 
     if (command[0] == 'B') {
         int mm = atoi((char*) &command[1]);
-        printf("motor text start\n");
+        printf("电机测试开始\n");
         printf("***编码值清零***\r\n");
-        printf("start up%d\n", mm);
+        printf("开始上行%d\n", mm);
         while (1) {
             if (ProcessCommandSwitchRequested()) {
-                motorQuickStop();
-                stpr_disableDriver(&stepper);
+                motorSlowStop();
                 return;
             }
             stpr_enableDriver(&stepper);
             ret = motorMoveAndWaitUntilStopWithSpeed(mm, MOTOR_DIRECTION_DOWN, motorGetDefaultSpeedX100());
             if ((ret == STATE_SWITCH) || ProcessCommandSwitchRequested()) {
-                motorQuickStop();
-                stpr_disableDriver(&stepper);
+                motorSlowStop();
 //                return;
             }
             if (ret != NO_ERROR) {
-                printf("B指令下行失败，ret=0x%08lX\r\n", (unsigned long)ret);
-                motorQuickStop();
-                stpr_disableDriver(&stepper);
+                printf("B指令下行失败，错误码=0x%08lX\r\n", (unsigned long)ret);
+                motorSlowStop();
 //                return;
             }
-            printf("start up to zero\n");
+            printf("开始上行回零\n");
 //            ret = motorMoveToPositionOneShotWithSpeed((g_deviceParams.tankHeight - g_deviceParams.findZeroDownDistance) / 10.0f,
 //                                                      motorGetDefaultSpeedX100());
 //            if ((ret == STATE_SWITCH) || ProcessCommandSwitchRequested()) {
-//                motorQuickStop();
+//                motorSlowStop();
 //                stpr_disableDriver(&stepper);
 //                return;
 //            }
 //            if (ret != NO_ERROR) {
-//                printf("B指令回零失败，ret=0x%08lX\r\n", (unsigned long)ret);
-//                motorQuickStop();
+//                printf("B指令回零失败，错误码=0x%08lX\r\n", (unsigned long)ret);
+//                motorSlowStop();
 //                stpr_disableDriver(&stepper);
 //                return;
 //            }
@@ -422,78 +445,85 @@ void process_command(uint8_t *command) {
     }
     if (command[0] == 'J') {
         printf("***液位测量重复性测试***\r\n");
-        return;
+        while (1) {
+            if (ProcessCommandSwitchRequested()) {
+                motorSlowStop();
+                return;
+            }
+            CMD_MeasureAndFollowOilLevel();
+            if (ProcessCommandSwitchRequested()) {
+                motorSlowStop();
+                return;
+            }
+        }
     }
     if (command[0] == 'K') {
         printf("***液位测量单次测试***\r\n");
+        CMD_MeasureAndFollowOilLevel();
         return;
     }
     if (command[0] == 'L') {
         printf("***编码值清零***\r\n");
-        g_encoder_count = 0;
+        set_encoder_zero();
+        motorResetDrumReferenceToZero();
         return;
     }
     if (command[0] == 'M') {
         printf("***电机高温测试***\r\n");
         while (1) {
             if (ProcessCommandSwitchRequested()) {
-                motorQuickStop();
+                motorSlowStop();
                 return;
             }
             ret = motorMoveNoWaitWithSpeed(100000, MOTOR_DIRECTION_DOWN, motorGetDefaultSpeedX100());
             if ((ret == STATE_SWITCH) || ProcessCommandSwitchRequested()) {
-                motorQuickStop();
+                motorSlowStop();
                 return;
             }
             HAL_Delay(1000);
             if (ProcessCommandSwitchRequested()) {
-                motorQuickStop();
+                motorSlowStop();
                 return;
             }
             ret = stpr_waitMove(&stepper);
             if ((ret == STATE_SWITCH) || ProcessCommandSwitchRequested()) {
-                motorQuickStop();
+                motorSlowStop();
                 return;
             }
         }
     }
     if (command[0] == 'N') {
-        printf("motor text start\n");
+        printf("电机测试开始\n");
         while (1) {
             if (ProcessCommandSwitchRequested()) {
-                motorQuickStop();
-                stpr_disableDriver(&stepper);
+                motorSlowStop();
                 return;
             }
             stpr_enableDriver(&stepper);
             ret = motorMoveNoWaitWithSpeed(300, MOTOR_DIRECTION_DOWN, motorGetDefaultSpeedX100());
             if ((ret == STATE_SWITCH) || ProcessCommandSwitchRequested()) {
-                motorQuickStop();
-                stpr_disableDriver(&stepper);
+                motorSlowStop();
                 return;
             }
             HAL_Delay(1000);
-            printf("start down\n");
+            printf("开始下行\n");
             HAL_Delay(1000);
-            printf("down over!\n");
+            printf("下行完成！\n");
             ret = stpr_waitMove(&stepper);
             if ((ret == STATE_SWITCH) || ProcessCommandSwitchRequested()) {
-                motorQuickStop();
-                stpr_disableDriver(&stepper);
+                motorSlowStop();
                 return;
             }
             ret = motorMoveNoWaitWithSpeed(300, MOTOR_DIRECTION_UP, motorGetDefaultSpeedX100());
             if ((ret == STATE_SWITCH) || ProcessCommandSwitchRequested()) {
-                motorQuickStop();
-                stpr_disableDriver(&stepper);
+                motorSlowStop();
                 return;
             }
-            printf("start up to zero\n");
+            printf("开始上行回零\n");
             HAL_Delay(1000);
             ret = stpr_waitMove(&stepper);
             if ((ret == STATE_SWITCH) || ProcessCommandSwitchRequested()) {
-                motorQuickStop();
-                stpr_disableDriver(&stepper);
+                motorSlowStop();
                 return;
             }
             printf("上行结束\n");
@@ -502,12 +532,12 @@ void process_command(uint8_t *command) {
         }
     }
     if (command[0] == 'O') {
-        printf("Get empty weight\n");
+        printf("获取空载重量\n");
         get_empty_weight();
         return;
     }
     if (command[0] == 'P') {
-        printf("Get full weight\n");
+        printf("获取满载重量\n");
         get_full_weight();
         return;
     }
@@ -520,6 +550,95 @@ void process_command(uint8_t *command) {
         printf("执行分布测量指令\n");
         CMD_MeasureDensitySpread_Spread();
         return;
+    }
+    /* TFIT：卷筒参数拟合调试命令。
+     * 推荐流程：T1 开始采样 -> 运行电机 -> TS/TR 查看或求解 -> TP/TU 应用参数。 */
+    if (command[0] == 'T') {
+        switch (command[1]) {
+        case '1':
+            /* 开始自动采样 */
+            motorTapeFitStart();
+            return;
+        case '2':
+            /* 局部 TFIT：把当前位置作为新的 0 圈起点 */
+            motorTapeFitStartLocalOrigin();
+            return;
+        case '0':
+            /* 停止自动采样 */
+            motorTapeFitStop();
+            return;
+        case 'A':
+            /* 手动添加样本 */
+            motorTapeFitAddCurrentSample();
+            return;
+        case 'S':
+            /* 打印拟合状态 */
+            motorTapeFitPrintStatus();
+            return;
+        case 'R':
+            /* 求解拟合参数 */
+            ret = motorTapeFitSolve();
+            if (ret != NO_ERROR) {
+                printf("TFIT拟合失败，错误码=0x%08lX\r\n", (unsigned long)ret);
+            }
+            return;
+        case 'V':
+            /* 局部 TFIT：用当前位置起点采样求解局部厚度/周长 */
+            ret = motorTapeFitSolveLocalOrigin();
+            if (ret != NO_ERROR) {
+                printf("TFIT局部拟合失败，错误码=0x%08lX\r\n", (unsigned long)ret);
+            }
+            return;
+        case 'P':
+            /* 仅应用拟合出的厚度 t */
+            ret = motorTapeFitApply(false, true);
+            if (ret != NO_ERROR) {
+                printf("TFIT应用尺带厚度失败，错误码=0x%08lX\r\n", (unsigned long)ret);
+            }
+            return;
+        case 'U':
+            /* 同时应用拟合出的 C0 和 t */
+            ret = motorTapeFitApply(true, true);
+            if (ret != NO_ERROR) {
+                printf("TFIT应用C0+t失败，错误码=0x%08lX\r\n", (unsigned long)ret);
+            }
+            return;
+        default:
+            printf("TFIT命令: T1全局开始, T2局部开始, T0停止, TA采样, TS状态, TR全局求解, TV局部求解, TP应用t, TU应用C0+t\r\n");
+            return;
+        }
+    }
+    /* Y：位置源手动切换调试命令。
+     * YM：以当前编码轮尺带长度为基准，切换到电机记步；切换过程会下行一周标定局部周长再返回。
+     * YE：切回编码轮记步，后续 cable_length / sensor_position 重新由编码轮刷新。
+     * YS：打印当前记步模式，以及电机尺带和编码轮尺带参考值。 */
+    if (command[0] == 'Y') {
+        switch (command[1]) {
+        case 'M':
+            printf("位置源切换：编码轮 -> 电机记步\r\n");
+            ret = motorSwitchPositionSourceToMotor();
+            if (ret != NO_ERROR) {
+                printf("切换电机记步失败，错误码=0x%08lX\r\n", (unsigned long)ret);
+            } else {
+                printf("切换电机记步完成\r\n");
+            }
+            return;
+        case 'E':
+            printf("位置源切换：电机记步 -> 编码轮\r\n");
+            ret = motorSwitchPositionSourceToEncoder();
+            if (ret != NO_ERROR) {
+                printf("切换编码轮记步失败，错误码=0x%08lX\r\n", (unsigned long)ret);
+            } else {
+                printf("切换编码轮记步完成\r\n");
+            }
+            return;
+        case 'S':
+            motorPrintPositionCompare();
+            return;
+        default:
+            printf("Y命令: YM切换电机记步, YE切换编码轮记步, YS显示位置源\r\n");
+            return;
+        }
     }
     if (command[0] == 'W') {
         printf("执行水位测量指令\n");
@@ -541,6 +660,26 @@ int MeasureStart(void) {
 }
 
 //测量水位主函数
+/* 跟随类命令进入闭环前，位置基准必须先统一到电机记步。
+ * 切换后不直接沿用旧的液位/水位点，而是让原有搜索流程重新定位后再跟随。 */
+static uint32_t EnsureMotorPositionSourceBeforeFollow(const char *follow_name)
+{
+    uint32_t ret;
+
+    if (motorIsPositionSourceMotor()) {
+        return NO_ERROR;
+    }
+
+    printf("%s\t当前位置源为编码器，切换到电机记步后重新搜索\r\n", follow_name);
+    ret = motorSwitchPositionSourceToMotor();
+    if (ret != NO_ERROR) {
+        printf("%s\t切换电机记步失败，错误码:0x%08lX\r\n", follow_name, (unsigned long)ret);
+        return ret;
+    }
+
+    return NO_ERROR;
+}
+
 static void CMD_MeasurWater(void) {
 	uint32_t ret = 0;
 	MeasureStart();
@@ -558,28 +697,42 @@ static void CMD_FollowWaterLevel(void)
     uint32_t ret = NO_ERROR;
     MeasureStart();
     g_measurement.device_status.device_state = STATE_FOLLOW_WATER_POINT_SEARCHING;
-    //先确定水位
-	if (g_deviceParams.water_level_mode == 0) {
-		ret = SearchWaterLevel();
-		SET_ERROR(ret);
-	}
-	else{
-		ret = FindWaterLevel_FastByStateFlip_StableExit(0);
-		SET_ERROR(ret);
-	}
-	//再跟随水位
-    printf("水位跟随\t进入闭环跟随\r\n");
-	if (g_deviceParams.water_level_mode == 0) {
-		ret = FollowWaterLevel();
-		SET_ERROR(ret);
-	} else {
-		ret = FollowWaterLevel_fast();
-		SET_ERROR(ret);
-	}
+
+    // 先按当前记步来源找一次水位，保证切换基准前的位置是最新水位点。
+    if (g_deviceParams.water_level_mode == 0) {
+        ret = SearchWaterLevel();
+        SET_ERROR(ret);
+    } else {
+        ret = FindWaterLevel_FastByStateFlip_StableExit(0);
+        SET_ERROR(ret);
+    }
+
+    if (!motorIsPositionSourceMotor()) {
+        ret = EnsureMotorPositionSourceBeforeFollow("水位跟随");
+        SET_ERROR(ret);
+
+        g_measurement.device_status.device_state = STATE_FOLLOW_WATER_POINT_SEARCHING;
+        // 切到电机记步后重新找水位，后续闭环跟随以电机位置为基准。
+        if (g_deviceParams.water_level_mode == 0) {
+            ret = SearchWaterLevel();
+            SET_ERROR(ret);
+        } else {
+            ret = FindWaterLevel_FastByStateFlip_StableExit(0);
+            SET_ERROR(ret);
+        }
+    }
+
+    // 再跟随水位
+    printf("水位跟随	进入闭环跟随\r\n");
+    if (g_deviceParams.water_level_mode == 0) {
+        ret = FollowWaterLevel();
+        SET_ERROR(ret);
+    } else {
+        ret = FollowWaterLevel_fast();
+        SET_ERROR(ret);
+    }
 }
 
-
-//罐底零点主函数
 static void CMD_MeasureZero(void) {
 	uint32_t ret = 0;
 	MeasureStart();
@@ -593,16 +746,20 @@ static void CMD_MeasureZero(void) {
 }
 //罐底零点主函数
 static void CMD_CalibrateZeroPoint(void) {
-	uint32_t ret = 0;
-	MeasureStart();
-	g_measurement.device_status.device_state = STATE_FINDZEROING;
+    uint32_t ret = 0;
+    MeasureStart();
+    g_measurement.device_status.device_state = STATE_FINDZEROING;
 
-	//开始回零点
-	ret = SearchZero();
-	SET_ERROR(ret);
-	CalibrateFirstLoopCircumference_OneTurnAtZero();
-	g_measurement.device_status.device_state = STATE_FINDZEROOVER;
-	return;
+    //开始回零点
+    ret = SearchZero();
+    SET_ERROR(ret);
+    ret = CalibrateFirstLoopCircumference_OneTurnAtZero();
+    if (ret != NO_ERROR) {
+        printf("标定零点\t首圈周长标定失败 错误码=0x%08lX\r\n", (unsigned long)ret);
+        SET_ERROR(ret);
+    }
+    g_measurement.device_status.device_state = STATE_FINDZEROOVER;
+    return;
 }
 /**
  * @brief 测量罐底高度的函数。
@@ -675,13 +832,13 @@ static void CMD_MeasureBottom(void) {
 
             if (ret != NO_ERROR)
             {
-                printf("BOTTOM MEASURE fallback after error | fallback=%lu(0.1mm) | ref=%lu(0.1mm)\r\n",
+                printf("罐底测量出错后回退 | 回退=%lu(0.1mm) | 参考=%lu(0.1mm)\r\n",
                        (unsigned long)fallback_real_height,
                        (unsigned long)reference_real_height);
             }
             else
             {
-                printf("BOTTOM MEASURE fallback by deviation | measured=%lu(0.1mm) | fallback=%lu(0.1mm) | ref=%lu(0.1mm) | diff=%ld(0.1mm)\r\n",
+                printf("罐底测量偏差回退 | 测量=%lu(0.1mm) | 回退=%lu(0.1mm) | 参考=%lu(0.1mm) | 差值=%ld(0.1mm)\r\n",
                        (unsigned long)measured_real_height,
                        (unsigned long)fallback_real_height,
                        (unsigned long)reference_real_height,
@@ -698,14 +855,36 @@ static void CMD_MeasureBottom(void) {
 	return;
 }
 static void CMD_MeasureAndFollowOilLevel(void) {
-	uint32_t ret = 0;
-	MeasureStart();
+    uint32_t ret = 0;
+    MeasureStart();
 
-	g_measurement.device_status.device_state = STATE_FINDOIL;
-	//开始测量罐高
-	ret = SearchAndFollowOilLevel();
-	SET_ERROR(ret);
-	return;
+    g_measurement.device_status.device_state = STATE_FINDOIL;
+    if ((g_measurement.device_status.zero_point_status == 1) &&
+        (g_deviceParams.error_auto_back_zero == 1)) {
+        printf("液位测量	设备需要回零点\r\n");
+        ret = SearchZero();
+        SET_ERROR(ret);
+        printf("液位测量	回零点完成\r\n");
+    }
+
+    // 先按当前记步来源找一次液位，随后再决定是否切到电机记步。
+    ret = SearchOilLevel();
+    SET_ERROR(ret);
+
+    if (!motorIsPositionSourceMotor()) {
+        ret = EnsureMotorPositionSourceBeforeFollow("液位跟随");
+        SET_ERROR(ret);
+
+        g_measurement.device_status.device_state = STATE_FINDOIL;
+        // 切到电机记步后重新找液位，后续闭环跟随以电机位置为基准。
+        ret = SearchOilLevel();
+        SET_ERROR(ret);
+    }
+
+    g_measurement.device_status.device_state = STATE_FLOWOIL;
+    ret = FollowOilLevel();
+    SET_ERROR(ret);
+    return;
 }
 
 //标定液位
@@ -759,7 +938,7 @@ static void CMD_CorrectOilLevel(void) {
 }
 static void CMD_EnterMaintenanceMode(void)
 {
-	printf("Entering maintenance mode \n");
+	printf("进入维护模式\n");
 	g_measurement.device_status.device_state = STATE_MAINTENANCEMODE;
 	while (1) {
 		CHECK_COMMAND_SWITCH_NO_RETURN();
@@ -927,7 +1106,7 @@ static void CMD_SyntheticMeasurement(void) {
     // 3. 执行分布密度测量, 结果写入 temp
     ret = Density_MeasureByMode_Exact(DENS_MODE_SPREAD, &temp);
     if (ret != NO_ERROR) {
-        printf("普通分布测\t失败, err=0x%08lX\r\n", (unsigned long)ret);
+        printf("普通分布测\t失败，错误码=0x%08lX\r\n", (unsigned long)ret);
         SET_ERROR(ret);
     }
 
@@ -972,7 +1151,7 @@ static void CMD_RunToPosition(void)
     }
 
     if (ret != NO_ERROR) {
-        printf("运行到指定位置\t失败 ret=0x%lX\r\n", ret);
+        printf("运行到指定位置\t失败 错误码=0x%lX\r\n", ret);
         SET_ERROR(ret);
         g_measurement.device_status.device_state = STATE_ERROR;
         return;

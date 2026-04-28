@@ -62,6 +62,7 @@ typedef enum {
     MOTOR_CHARGE_PUMP_UNDER_VOLTAGE = 0x000B0007,// 电荷泵欠压
     MOTOR_OVERTEMPERATURE = 0x000B0008,          // 电机过温
     MOTOR_RUN_TIMEOUT = 0x000B0009,              // 电机运行超时
+    MOTOR_TMC_COMM_ERROR = 0x000B000A,           // TMC5130寄存器通信异常
 
     /* ==================== 12 编码器类故障 (0x000C0000 - 0x000CFFFF) ==================== */
     ENCODER_TIMEOUT = 0x000C0001,                // 编码器通信超时
@@ -104,6 +105,9 @@ typedef enum {
     MEASUREMENT_WEIGHT_UP_FAIL = 0x000F000B,     // 上行寻重失败
 	MEASUREMENT_WATERLEVEL_LOW = 0x000F000C,       // 下行未找到水位
     MEASUREMENT_OVERSPEED = 0x000F000F,          // 液位变化过快
+    MEASUREMENT_DENSITY_NO_VALID_POINT = 0x000F0010, // 密度测量无有效测点
+    MEASUREMENT_DENSITY_SURFACE_NOTFOUND = 0x000F0011, // 密度测量未找到油面
+    MEASUREMENT_DENSITY_RANGE_INVALID = 0x000F0012, // 密度测量范围异常
 
     /* ==================== 参数存储类故障 (0x00110000 - 0x0011FFFF) ==================== */
     PARAM_EEPROM_FAIL = 0x00110001,              // EEPROM 写入失败
@@ -419,16 +423,15 @@ typedef struct {
     uint32_t reserved2;                   // 预留
     uint32_t reserved3;                   // 预留
     uint32_t reserved4;                   // 预留（新增）
-    uint32_t reserved5;                   // 预留（新增）
 
     // ===================== 电机与编码器参数 =====================
+    uint32_t motor_current;              // 电机运行电流(1~31，异常恢复为16)
     uint32_t encoder_wheel_circumference_mm; // 编码轮周长(0.001mm)
     uint32_t max_motor_speed;                 // 最大电机速度(0.01m/min)
     uint32_t first_loop_circumference_mm;     // 尺带首圈周长(0.1mm)
     uint32_t tape_thickness_mm;               // 尺带厚度(0.001mm)
-
-    uint32_t reserved6;                   // 预留
-    uint32_t reserved7;                   // 预留（新增）
+    uint32_t position_count_mode;          // 当前记步模式(0=编码轮,1=电机步进)
+    uint32_t motor_count_first_loop_circumference_mm; // 电机记步局部首圈周长(0.001mm)
 
     // ===================== 称重参数 =====================
     uint32_t empty_weight;                // 空载重量
@@ -577,6 +580,14 @@ typedef struct {
 #define FRAM_PARAM_B_ADDRESS (FRAM_PARAM_A_ADDRESS + FRAM_PARAM_SLOT_SIZE)
 #define FRAM_PARAM_ADDRESS FRAM_PARAM_A_ADDRESS // 兼容旧代码
 #define CRC_SEED 0xFFFFFFFF       // CRC初始值
+
+/* 位置记步来源：0 使用编码轮，1 使用 TMC5130 XACTUAL 电机步进。 */
+#define POSITION_COUNT_MODE_ENCODER 0u
+#define POSITION_COUNT_MODE_MOTOR   1u
+/* TMC5130 电机运行电流编码值，异常值恢复为 16。 */
+#define MOTOR_CURRENT_DEFAULT       16u
+#define MOTOR_CURRENT_MIN           1u
+#define MOTOR_CURRENT_MAX           31u
 
 /***************** 全局变量 ****************************/
 

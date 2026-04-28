@@ -21,6 +21,10 @@
 #include "ad5421.h"
 #include "sensor.h"
 
+static uint8_t App_IsEncoderErrorCode(uint32_t error_code) {
+	return (error_code >= ENCODER_TIMEOUT) && (error_code <= ENCODER_OCF_INCOMPLETE);
+}
+
 
 /*
  * 空闲态错误兜底：
@@ -32,6 +36,14 @@
  */
 static uint8_t App_HandleIdleGlobalError(void) {
 	uint32_t error_code = g_measurement.device_status.error_code;
+
+	/* 电机记步源模式下，编码器只作为后台采集对象。
+	 * 编码器悬空或 SSI 异常不能再把整机打进错误态。 */
+	if (motorIsPositionSourceMotor() && App_IsEncoderErrorCode(error_code)) {
+		g_measurement.device_status.error_code = NO_ERROR;
+		error_code = NO_ERROR;
+	}
+
 	if ((g_deviceParams.command == CMD_NONE) &&
 		(g_measurement.device_status.current_command == CMD_NONE) &&
 		(error_code != NO_ERROR) &&
@@ -58,7 +70,7 @@ static uint8_t App_HandleIdleGlobalError(void) {
 }
 // 初始化函数
 void App_Init(void) {
-	printf("LTD restart!\n");
+	printf("LTD重启！\n");
 	HAL_Delay(1000); // 延时1000ms
 	init_device_params(); // 初始化设备参数
 	Initialize_Encoder(); // 初始化编码器
@@ -78,6 +90,7 @@ void App_Init(void) {
 	//测试函数
 //	Test_main(); // 测试函数
 //	motor_text(); //电机测试
+//	motorSwitchPositionSourceToMotor();//切换成电机记步测试
 }
 // 主循环任务
 /*
@@ -92,7 +105,19 @@ void App_Init(void) {
  * 从而把恢复动作、重试动作、强制运动动作卡死。
  */
 void App_MainLoop(void) {
+
+	/*测试指令*/
+	//		DSM_V2_Test_AllParams(); // 二代传感器测试函数
+	//		Sensor_Test(); // 传感器测试
+	//		Test_FRAM_ReadWrite();
+//			printf("{encoder}%d\r\n{weight}%d\r\n", (int) g_encoder_count, g_weight);
+	//		printf("位置%d", g_measurement.debug_data.sensor_position);
+	//		HAL_GPIO_WritePin(HART_RTS_GPIO_Port, HART_RTS_Pin, GPIO_PIN_RESET);
+	//		HAL_UART_Transmit_DMA(&huart2, "123456", 6);  // 通过UART发送响应
+
+
 	/* 后台轻量检查：这里只做一次快速轮询，不在主循环里展开复杂处理。 */
+	motorPollRuntimePosition();
 	(void)Weight_CheckCommunicationTimeout();
 
 	/* 第一优先级：处理刚收到的原始命令。
@@ -132,14 +157,7 @@ void App_MainLoop(void) {
 		return;
 	}
 
-//		DSM_V2_Test_AllParams(); // 二代传感器测试函数
-//		Sensor_Test(); // 传感器测试
-//		Test_FRAM_ReadWrite();
-//		printf("{encoder}%d\r\n{weight}%d\r\n", (int) g_encoder_count, g_weight);
-//		printf("位置%d", g_measurement.debug_data.sensor_position);
-//		HAL_GPIO_WritePin(HART_RTS_GPIO_Port, HART_RTS_Pin, GPIO_PIN_RESET);
-//		HAL_UART_Transmit_DMA(&huart2, "123456", 6);  // 通过UART发送响应
-
 	/* 本轮尾声：无论本轮是否空闲，只要没提前 return，就统一走一次节拍延时。 */
+	process_device_params_deferred_tasks();
 	HAL_Delay(50); // 延时50ms
 }

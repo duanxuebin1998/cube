@@ -69,7 +69,7 @@ bool SlaveCheckCRC(uint8_t const *revframe, int framelen) {
     Hi = crc >> 8;
 
     if ((Hi != revframe[framelen - 1]) || (Lo != revframe[framelen - 2])) {
-        printf("CRC Error: Calc Hi=%02x, Lo=%02x | Frame Hi=%02x, Lo=%02x\r\n",
+        printf("CRC错误: 计算高字节=%02x, 低字节=%02x | 帧高字节=%02x, 低字节=%02x\r\n",
               Hi, Lo,
               (unsigned char)revframe[framelen - 1],
               (unsigned char)revframe[framelen - 2]);
@@ -126,7 +126,7 @@ void CRC32_HAL_Test(void) {
 			printf("PASS\r\n");
 			++ok;
 		} else {
-			printf("FAIL\r\n");
+			printf("失败\r\n");
 		}
 	}
 

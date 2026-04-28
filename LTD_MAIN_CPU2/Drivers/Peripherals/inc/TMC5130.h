@@ -3,6 +3,7 @@
 #define TMC_IC_TMC5130_H_
 
 #include "main.h"
+#include <stdbool.h>
 
 #include "TMC5130_Constants.h"
 #include "TMC5130_Pins.h"
@@ -261,11 +262,12 @@ void 		stpr_disableDriver	(TMC5130TypeDef *tmc5130);
 void 		stpr_enableDriver	(TMC5130TypeDef *tmc5130);
 void 		stpr_writeInt		(TMC5130TypeDef *tmc5130, uint8_t address, int32_t value);
 int32_t 	stpr_readInt		(TMC5130TypeDef *tmc5130, uint8_t address);
+bool        stpr_tryReadInt    (TMC5130TypeDef *tmc5130, uint8_t address, int32_t *value);
 void 		stpr_right			(TMC5130TypeDef *tmc5130, uint32_t velocity);
 void 		stpr_left			(TMC5130TypeDef *tmc5130, uint32_t velocity);
 void 		stpr_stop			(TMC5130TypeDef *tmc5130);
 void 		stpr_moveTo			(TMC5130TypeDef *tmc5130, int32_t position, uint32_t velocityMax);
-void 		stpr_moveBy			(TMC5130TypeDef *tmc5130, int32_t *ticks, uint32_t velocityMax);
+uint32_t 	stpr_moveBy			(TMC5130TypeDef *tmc5130, int32_t *ticks, uint32_t velocityMax);
 void 		stpr_moveAngle		(TMC5130TypeDef *tmc5130, float angle, uint32_t velocityMax);
 void 		stpr_setPos			(TMC5130TypeDef *tmc5130, int32_t position);
 int32_t 	stpr_getPos			(TMC5130TypeDef *tmc5130);

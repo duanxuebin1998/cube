@@ -1,6 +1,7 @@
 #include "TMC5130.h"
 
 #include "assert.h"
+#include <stdbool.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include "spi.h"
@@ -31,6 +32,7 @@ TMC5130TypeDef stepper = {
 };
 
 // => SPI 底层封装
+static bool tmc5130_tryReadArray(TMC5130TypeDef *tmc5130, uint8_t *data, size_t length, uint32_t *value);
 uint32_t tmc5130_readArray(TMC5130TypeDef *tmc5130, uint8_t *data, size_t length);
 void     tmc5130_writeArray(TMC5130TypeDef *tmc5130, uint8_t *data, size_t length);
 // <= SPI 底层封装
@@ -49,21 +51,42 @@ void     tmc5130_writeArray(TMC5130TypeDef *tmc5130, uint8_t *data, size_t lengt
  * @param  length   发送/接收长度，一般为 5
  * @retval 组合后的 32bit 数据（rxBuff[1..4]）
  */
-uint32_t tmc5130_readArray(TMC5130TypeDef *tmc5130, uint8_t *data, size_t length)
+static bool tmc5130_tryReadArray(TMC5130TypeDef *tmc5130,
+                                 uint8_t *data,
+                                 size_t length,
+                                 uint32_t *value)
 {
     uint8_t rxBuff[5] = { 0, 0, 0, 0, 0 };
+    HAL_StatusTypeDef status;
 
-    // 片选拉低，开始 SPI 通信
+    if ((tmc5130 == NULL) || (data == NULL) || (value == NULL) ||
+        (length == 0U) || (length > sizeof(rxBuff))) {
+        return false;
+    }
+
+    // 片选拉低，开始 SPI 通信；无论收发是否成功，退出前都恢复片选高电平
     HAL_GPIO_WritePin(tmc5130->cs_port, tmc5130->cs_pin, GPIO_PIN_RESET);
-    HAL_Delay(10); // 预留一点片选建立时间（可视实际情况适当减小）
-
-    HAL_SPI_TransmitReceive(tmc5130->spi, data, rxBuff, length, HAL_MAX_DELAY);
-
-    HAL_Delay(10); // 预留一点结束时间
+    status = HAL_SPI_TransmitReceive(tmc5130->spi, data, rxBuff, length, HAL_MAX_DELAY);
     HAL_GPIO_WritePin(tmc5130->cs_port, tmc5130->cs_pin, GPIO_PIN_SET);
 
+    if (status != HAL_OK) {
+        return false;
+    }
+
     // TMC5130 数据在 rxBuff[1..4]，按大端组合为 32 位
-    return ((rxBuff[1] << 24) | (rxBuff[2] << 16) | (rxBuff[3] << 8) | rxBuff[4]);
+    *value = (((uint32_t)rxBuff[1] << 24) |
+              ((uint32_t)rxBuff[2] << 16) |
+              ((uint32_t)rxBuff[3] << 8) |
+              ((uint32_t)rxBuff[4]));
+    return true;
+}
+
+uint32_t tmc5130_readArray(TMC5130TypeDef *tmc5130, uint8_t *data, size_t length)
+{
+    uint32_t value = 0U;
+
+    (void)tmc5130_tryReadArray(tmc5130, data, length, &value);
+    return value;
 }
 
 /**
@@ -76,11 +99,8 @@ uint32_t tmc5130_readArray(TMC5130TypeDef *tmc5130, uint8_t *data, size_t length
 void tmc5130_writeArray(TMC5130TypeDef *tmc5130, uint8_t *data, size_t length)
 {
     HAL_GPIO_WritePin(tmc5130->cs_port, tmc5130->cs_pin, GPIO_PIN_RESET);
-    HAL_Delay(10);
 
     HAL_SPI_Transmit(tmc5130->spi, data, length, HAL_MAX_DELAY);
-
-    HAL_Delay(10);
     HAL_GPIO_WritePin(tmc5130->cs_port, tmc5130->cs_pin, GPIO_PIN_SET);
 }
 
@@ -127,18 +147,37 @@ void stpr_writeInt(TMC5130TypeDef *tmc5130, uint8_t address, int32_t value)
  * @param  address 寄存器地址
  * @retval 寄存器 32bit 数据
  */
-int32_t stpr_readInt(TMC5130TypeDef *tmc5130, uint8_t address)
+bool stpr_tryReadInt(TMC5130TypeDef *tmc5130, uint8_t address, int32_t *value)
 {
     uint8_t  data[5] = { 0, 0, 0, 0, 0 };
-    uint32_t dummy   = 0;
+    uint32_t raw = 0U;
+
+    if (value == NULL) {
+        return false;
+    }
 
     data[0] = address;
-    dummy   = tmc5130_readArray(tmc5130, data, 5); // 第一次触发读取（数据无效）
+    if (!tmc5130_tryReadArray(tmc5130, data, 5, &raw)) { // 第一次触发读取（数据无效）
+        return false;
+    }
 
     data[0] = address;
-    dummy   = tmc5130_readArray(tmc5130, data, 5); // 第二次才是真正数据
+    if (!tmc5130_tryReadArray(tmc5130, data, 5, &raw)) { // 第二次才是真正数据
+        return false;
+    }
 
-    return dummy;
+    *value = (int32_t)raw;
+    return true;
+}
+
+int32_t stpr_readInt(TMC5130TypeDef *tmc5130, uint8_t address)
+{
+    int32_t value = 0;
+
+    if (!stpr_tryReadInt(tmc5130, address, &value)) {
+        return 0;
+    }
+    return value;
 }
 
 /************************ 速度 / 位置控制接口 ************************/
@@ -201,6 +240,7 @@ void stpr_moveTo(TMC5130TypeDef *tmc5130, int32_t position, uint32_t velocityMax
 
     // 设置目标位置
     stpr_writeInt(tmc5130, TMC5130_XTARGET, position);
+    motorPersistRegistersFromDriver();
 }
 
 /**
@@ -210,13 +250,31 @@ void stpr_moveTo(TMC5130TypeDef *tmc5130, int32_t position, uint32_t velocityMax
  * @param  ticks       [入/出] 相对位移 / 计算后的绝对目标位置
  * @param  velocityMax 最大速度
  */
-void stpr_moveBy(TMC5130TypeDef *tmc5130, int32_t *ticks, uint32_t velocityMax)
+uint32_t stpr_moveBy(TMC5130TypeDef *tmc5130, int32_t *ticks, uint32_t velocityMax)
 {
-    // 读取当前位置，并加上相对移动量
-    *ticks += stpr_readInt(tmc5130, TMC5130_XACTUAL);
+    int32_t xactual;
+    int64_t target;
 
-    // 按绝对位置移动
+    if ((tmc5130 == NULL) || (ticks == NULL)) {
+        return PARAM_ADDRESS_OVERFLOW;
+    }
+
+    /* 相对位移必须建立在可信的 XACTUAL 上；读失败时不能把当前位置当 0。 */
+    if (!stpr_tryReadInt(tmc5130, TMC5130_XACTUAL, &xactual)) {
+        return MOTOR_TMC_COMM_ERROR;
+    }
+    target = (int64_t)xactual + (int64_t)(*ticks);
+    if ((target > (int64_t)INT32_MAX) || (target < (int64_t)INT32_MIN)) {
+        printf("stpr_moveBy溢出: XACTUAL=%ld, 增量=%ld, 目标=%lld\r\n",
+               (long)xactual,
+               (long)(*ticks),
+               (long long)target);
+        return PARAM_RANGE_ERROR;
+    }
+
+    *ticks = (int32_t)target;
     stpr_moveTo(tmc5130, *ticks, velocityMax);
+    return NO_ERROR;
 }
 
 /**
@@ -235,6 +293,7 @@ void stpr_moveAngle(TMC5130TypeDef *tmc5130, float angle, uint32_t velocityMax)
     stpr_writeInt(tmc5130, TMC5130_RAMPMODE, TMC5130_MODE_POSITION);
     stpr_writeInt(tmc5130, TMC5130_VMAX, velocityMax);
     stpr_writeInt(tmc5130, TMC5130_XTARGET, position);
+    motorPersistRegistersFromDriver();
 }
 
 /**
@@ -272,6 +331,7 @@ void stpr_setPos(TMC5130TypeDef *tmc5130, int32_t position)
 {
     stpr_writeInt(tmc5130, TMC5130_XTARGET, position);
     stpr_writeInt(tmc5130, TMC5130_XACTUAL, position);
+    motorPersistRegistersFromDriver();
 }
 
 /************************ 运动等待与故障检测 ************************/
@@ -290,10 +350,23 @@ void stpr_setPos(TMC5130TypeDef *tmc5130, int32_t position)
 uint32_t stpr_waitMove(TMC5130TypeDef *tmc5130)
 {
     uint32_t ret;
-    while ((stpr_readInt(tmc5130, TMC5130_RAMPSTAT) & 0x400) != 0x400) {
+    int32_t rampstat;
+    int32_t gstat;
+
+    while (1) {
+        /* RAMPSTAT.vzero=1 表示斜坡发生器速度已经为 0。
+         * SPI 读取失败时不能继续等待，否则兼容版 stpr_readInt() 的 0 会让这里无限循环。 */
+        if (!stpr_tryReadInt(tmc5130, TMC5130_RAMPSTAT, &rampstat)) {
+            motorSlowStop();
+            return MOTOR_TMC_COMM_ERROR;
+        }
+        if ((rampstat & 0x400) == 0x400) {
+            break;
+        }
+
         if (HasEffectiveCommandSwitchRequest()) {
             printf("检测到命令切换请求，停止当前等待运动\r\n");
-            motorQuickStop();
+            motorSlowStop();
             return STATE_SWITCH;
         }
 
@@ -301,8 +374,11 @@ uint32_t stpr_waitMove(TMC5130TypeDef *tmc5130)
         ret = CheckWeightCollision();    // 防撞检测
         CHECK_ERROR(ret);                // 若有错误直接返回
 
-        // 检查 TMC5130 全局状态
-        uint32_t gstat = stpr_readInt(tmc5130, TMC5130_GSTAT);
+        // 检查 TMC5130 全局状态；读取失败时停止运动并把错误交给上层处理
+        if (!stpr_tryReadInt(tmc5130, TMC5130_GSTAT, &gstat)) {
+            motorSlowStop();
+            return MOTOR_TMC_COMM_ERROR;
+        }
         if (gstat) {
             // 逐位判断具体错误
             if (gstat & (1 << 0)) {
@@ -317,7 +393,7 @@ uint32_t stpr_waitMove(TMC5130TypeDef *tmc5130)
             }
 
             if (gstat & (1 << 2)) {
-                printf("检测到 charge pump 欠压（GSTAT[2]）\n");
+                printf("检测到 充电泵欠压（GSTAT[2]）\n");
                 RETURN_ERROR(MOTOR_CHARGE_PUMP_UNDER_VOLTAGE);
             }
 
@@ -325,8 +401,10 @@ uint32_t stpr_waitMove(TMC5130TypeDef *tmc5130)
             stpr_writeInt(tmc5130, TMC5130_GSTAT, 0x07); // 清除所有标志
             RETURN_ERROR(MOTOR_UNKNOWN_FEEDBACK);
         }
+        motorPollRuntimePosition();
         HAL_Delay(50);
     }
+    motorRefreshDebugDrumState();
     return NO_ERROR; // 正常结束运动
 }
 /************************ 电流 / 速度 / 初始化 ************************/
@@ -338,8 +416,9 @@ uint32_t stpr_waitMove(TMC5130TypeDef *tmc5130)
  */
 void stpr_setCurrent(TMC5130TypeDef *tmc5130, uint8_t current)
 {
-    // IHOLD_IRUN: IHOLD=6, IRUN=current, IHOLDDELAY=6
-    stpr_writeInt(tmc5130, TMC5130_IHOLD_IRUN, (current << 8) | 0x0007006);
+    // IHOLD_IRUN: IHOLD=6, IRUN=current, IHOLDDELAY=7
+    stpr_writeInt(tmc5130, TMC5130_IHOLD_IRUN,
+                  SET_IHOLD(6) | SET_IRUN(current) | SET_IHOLDDELAY(7));
 }
 
 /**
@@ -397,11 +476,11 @@ void stpr_initStepper(TMC5130TypeDef *tmc5130,
     );
 
     // 基本加减速、速度参数（需根据实际机械系统调优）
-    stpr_writeInt(tmc5130, TMC5130_AMAX,   100 * 32);
-    stpr_writeInt(tmc5130, TMC5130_A1,     200 * 32);
+    stpr_writeInt(tmc5130, TMC5130_AMAX,    20 * 32);
+    stpr_writeInt(tmc5130, TMC5130_A1,      10 * 32);
     stpr_writeInt(tmc5130, TMC5130_V1,     800 * 32);
-    stpr_writeInt(tmc5130, TMC5130_D1,     200 * 32);
-    stpr_writeInt(tmc5130, DMAX,           100 * 32);
+    stpr_writeInt(tmc5130, TMC5130_D1,      10 * 32);
+    stpr_writeInt(tmc5130, DMAX,            20 * 32);
     stpr_writeInt(tmc5130, TMC5130_VSTOP,  0x0000000A);
     stpr_writeInt(tmc5130, TMC5130_VSTART, 0x00000005);
     stpr_writeInt(tmc5130, TMC5130_TZEROWAIT, 10000);
@@ -468,9 +547,17 @@ void stpr_home(TMC5130TypeDef *tmc5130, uint16_t homing_speed, uint8_t stallguar
 
     HAL_Delay(20);
 
-    // 等待运动结束（RAMPSTAT.vzero == 1）
-    while ((stpr_readInt(tmc5130, TMC5130_RAMPSTAT) & 0x400) != 0x400)
-        ;
+    // 等待运动结束（RAMPSTAT.vzero == 1）；读失败时停止并退出，避免 SPI 异常导致死等。
+    while (1) {
+        int32_t rampstat = 0;
+        if (!stpr_tryReadInt(tmc5130, TMC5130_RAMPSTAT, &rampstat)) {
+            motorSlowStop();
+            return;
+        }
+        if ((rampstat & 0x400) == 0x400) {
+            break;
+        }
+    }
 
     // 到达端点后：切换回位置模式，清除开关配置，位置归零
     stpr_writeInt(tmc5130, TMC5130_RAMPMODE, TMC5130_MODE_HOLD);
@@ -482,6 +569,7 @@ void stpr_home(TMC5130TypeDef *tmc5130, uint16_t homing_speed, uint8_t stallguar
     // 归零位置
     stpr_writeInt(tmc5130, TMC5130_XACTUAL, 0x0);
     stpr_writeInt(tmc5130, TMC5130_XTARGET, 0x0);
+    motorPersistRegistersFromDriver();
 
     HAL_Delay(200);
 }

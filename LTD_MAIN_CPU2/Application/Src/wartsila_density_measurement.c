@@ -55,11 +55,11 @@ uint32_t Wartsila_Density_SpreadMeasurement(DensityDistribution *dist)
     uint32_t min_gap_surface = g_deviceParams.wartsila_max_height_above_surface; /* 最高点距油面最小距离 */
 
     if (step_mm == 0) {
-        printf("分布测量参数错误：step_mm=0\n");
+        printf("分布测量参数错误：步长=0\n");
         return PARAM_RANGE_ERROR;
     }
     if (end_pos_mm <= start_pos_mm) {
-        printf("分布测量参数错误：end_pos_mm<=start_pos_mm (%lu <= %lu)\n",
+        printf("分布测量参数错误：结束位置<=起始位置 (%lu <= %lu)\n",
                (unsigned long)end_pos_mm, (unsigned long)start_pos_mm);
         return PARAM_RANGE_ERROR;
     }
@@ -103,7 +103,7 @@ uint32_t Wartsila_Density_SpreadMeasurement(DensityDistribution *dist)
             /* 理论上起始点以下不应该是空气，这里认为异常 */
             snapshot_sensor_pos_mm(&cur_mm);
             printf("到起始点之前已经进入空气，位置=%.3fmm，本次分布测量取消\n", cur_mm);
-            return OTHER_UNKNOWN_ERROR;
+            return MEASUREMENT_DENSITY_RANGE_INVALID;
         }
     } else if (cur_mm > (float)start_pos_mm + 0.05f) {
         /* 当前在起始点上方：直接用绝对位置函数下行，不需要检测空气 */
@@ -124,7 +124,7 @@ uint32_t Wartsila_Density_SpreadMeasurement(DensityDistribution *dist)
     CHECK_ERROR(ret);
     if (st0 == AIR) {
         printf("起始点位置传感器在空气中，本次分布测量取消\n");
-        return OTHER_UNKNOWN_ERROR;
+        return MEASUREMENT_DENSITY_RANGE_INVALID;
     }
 
     /* 循环向上采点 */
@@ -203,7 +203,7 @@ uint32_t Wartsila_Density_SpreadMeasurement(DensityDistribution *dist)
         DensityMeasurement *pt = &dist->single_density_data[valid_points];
         ret = SinglePoint_ReadSensor(pt);
         if (ret != NO_ERROR) {
-            printf("读取单点密度失败 pos=%.3fmm err=%lu\n", cur_mm, (unsigned long)ret);
+            printf("读取单点密度失败 位置=%.3fmm 错误=%lu\n", cur_mm, (unsigned long)ret);
             return ret;
         }
 
@@ -215,7 +215,7 @@ uint32_t Wartsila_Density_SpreadMeasurement(DensityDistribution *dist)
         valid_points++;
         last_pos_mm = cur_mm;
 
-        printf("分布测量 点%lu：pos=%.3fmm dens=%lu temp=%lu\n",
+        printf("分布测量 点%lu：位置=%.3fmm 密度=%lu 温度=%lu\n",
                (unsigned long)valid_points,
                cur_mm,
                (unsigned long)pt->density,
@@ -225,12 +225,12 @@ uint32_t Wartsila_Density_SpreadMeasurement(DensityDistribution *dist)
     /* 如果整个扫描过程中都没有检测到空气，则认为没有找到油面，报错 */
     if (!oil_level_found) {
         printf("分布测量执行到最高点仍未检测到空气，未找到液位，测量失败\n");
-        return OTHER_UNKNOWN_ERROR;
+        return MEASUREMENT_DENSITY_SURFACE_NOTFOUND;
     }
 
     if (valid_points == 0) {
         printf("本次分布测量没有得到任何有效测点\n");
-        return OTHER_UNKNOWN_ERROR;
+        return MEASUREMENT_DENSITY_SURFACE_NOTFOUND;
     }
 
     /* 最高测点距离油面的判断：过近则舍弃最高点
@@ -254,7 +254,7 @@ uint32_t Wartsila_Density_SpreadMeasurement(DensityDistribution *dist)
 
     if (valid_points == 0) {
         printf("舍弃最高点后无有效测点\n");
-        return OTHER_UNKNOWN_ERROR;
+        return MEASUREMENT_DENSITY_NO_VALID_POINT;
     }
 
     /* 统计平均值（原始单位，做简单四舍五入） */
@@ -266,7 +266,7 @@ uint32_t Wartsila_Density_SpreadMeasurement(DensityDistribution *dist)
     dist->average_weight_density   = dist->average_density;
     dist->average_vcf20            = 0;
 
-    printf("分布测量完成：有效点数=%lu, 液位=%.1fmm, AvgDensity=%lu(%.3f), AvgTemp=%lu(%.2f)\n",
+    printf("分布测量完成：有效点数=%lu, 液位=%.1fmm, 平均密度=%lu(%.3f), 平均温度=%lu(%.2f)\n",
            (unsigned long)valid_points,
            oil_level_mm,
            (unsigned long)dist->average_density,
@@ -298,7 +298,7 @@ uint32_t motorMoveUpToPositionOrAir(float target_mm, Level_StateTypeDef *final_s
     float cur_mm;
     snapshot_sensor_pos_mm(&cur_mm);
 
-    printf("motorMoveUpToPositionOrAir: 当前=%.3fmm, 目标=%.3fmm\r\n",
+    printf("上行到目标或空气：当前=%.3fmm, 目标=%.3fmm\r\n",
            cur_mm, target_mm);
 
     /* 如果当前就超过目标，不需要移动 */
@@ -309,7 +309,7 @@ uint32_t motorMoveUpToPositionOrAir(float target_mm, Level_StateTypeDef *final_s
     //切换频率模式
     ret = EnableLevelMode();
     CHECK_ERROR(ret);
-    printf("motorMoveUpToPositionOrAir: 液位测量模式已稳定，开始上行检测。\r\n");
+    printf("上行到目标或空气：液位测量模式已稳定，开始上行检测。\r\n");
     /* 下发上行运动指令（长度设为足够大） */
     float max_move = target_mm - cur_mm;   // 理论需要跑的距离
 
@@ -330,11 +330,12 @@ uint32_t motorMoveUpToPositionOrAir(float target_mm, Level_StateTypeDef *final_s
 		if (g_deviceParams.sensorType == LTD_SENSOR) {
 	    	ret = DSM_V2_Read_LevelFrequency(&hz);
 	    	if (ret != NO_ERROR) {
-	    		return ret;  // 读取失败直接返回错误码
+				(void)motorSlowStop();
+				return ret;  // 读取失败前先停止电机
 	    	}
 	    	if (hz == 0 || hz > g_deviceParams.oilLevelFrequency) {
 	    		 if (final_state) *final_state = AIR;//读到0或者异常频率认为是空气
-	            printf("motorMoveUpToPositionOrAir: 频率检测到到达液面，立即停止电机！\r\n");
+	            printf("上行到目标或空气：频率检测到到达液面，立即停止电机！\r\n");
 	            stpr_stop(&stepper);
             g_measurement.debug_data.motor_state = 0U;
 	    		break;  // 读到0也返回
@@ -347,7 +348,7 @@ uint32_t motorMoveUpToPositionOrAir(float target_mm, Level_StateTypeDef *final_s
         if (final_state) *final_state = st;
 
         if (st == AIR) {
-            printf("motorMoveUpToPositionOrAir: 检测到进入空气，立即停止电机！\r\n");
+            printf("上行到目标或空气：检测到进入空气，立即停止电机！\r\n");
             stpr_stop(&stepper);
             g_measurement.debug_data.motor_state = 0U;
             break;
@@ -357,7 +358,7 @@ uint32_t motorMoveUpToPositionOrAir(float target_mm, Level_StateTypeDef *final_s
         snapshot_sensor_pos_mm(&cur_mm);
 
         if (cur_mm >= target_mm - 0.05f) {   // 加一点浮动允许
-            printf("motorMoveUpToPositionOrAir: 已到达目标位置 %.3fmm\r\n", cur_mm);
+            printf("上行到目标或空气：已到达目标位置 %.3fmm\r\n", cur_mm);
             stpr_stop(&stepper);
             g_measurement.debug_data.motor_state = 0U;
             break;
@@ -372,7 +373,7 @@ uint32_t motorMoveUpToPositionOrAir(float target_mm, Level_StateTypeDef *final_s
 
         /* 4) 超时保护 */
         if (HAL_GetTick() - start_tick > MAX_WAIT_MS) {
-            printf("motorMoveUpToPositionOrAir: 运行超时！\r\n");
+            printf("上行到目标或空气：运行超时！\r\n");
             RETURN_ERROR(MOTOR_RUN_TIMEOUT);
         }
 
@@ -381,7 +382,7 @@ uint32_t motorMoveUpToPositionOrAir(float target_mm, Level_StateTypeDef *final_s
 
     /* 结束后，再读一次最终位置 */
     snapshot_sensor_pos_mm(&cur_mm);
-    printf("motorMoveUpToPositionOrAir 结束：最终位置 %.3fmm\r\n", cur_mm);
+    printf("上行到目标或空气结束：最终位置 %.3fmm\r\n", cur_mm);
 
     return NO_ERROR;
 }

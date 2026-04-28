@@ -30,7 +30,46 @@ static int SearchOilPrecise(float per_mm_Frequency);
 static int determineTheSensorPositionAndUpdateTheLevelValue(void);
 static int waitForTheLiquidLevelToExceedTheBlindZone(void);
 static uint32_t determine_level_status_internal(Level_StateTypeDef *state_out, uint8_t allow_mode_recovery);
+static uint32_t OilLevel_StopBeforeReturn(uint32_t error_code, const char *reason);
+static void OilLevel_PrintFollowPositionInfo(void);
 uint32_t FollowOilLevel(void);
+
+/**
+ * @brief 液位流程故障退出前统一停止电机，避免非阻塞搜索动作继续运行。
+ */
+static uint32_t OilLevel_StopBeforeReturn(uint32_t error_code, const char *reason)
+{
+    uint32_t stop_ret;
+
+    if (error_code == NO_ERROR) {
+        return NO_ERROR;
+    }
+
+    stop_ret = motorSlowStop();
+    printf("液位流程\t%s，退出前停止电机 错误码=0x%08lX 停止结果=0x%08lX\r\n",
+           (reason != NULL) ? reason : "故障退出",
+           (unsigned long)error_code,
+           (unsigned long)stop_ret);
+
+    return error_code;
+}
+/* 液位跟随打印液位值时，同时输出当前记步来源和两套尺带长度，便于现场比对。 */
+static void OilLevel_PrintFollowPositionInfo(void)
+{
+    double motor_cable_mm;
+    const double encoder_cable_mm = (double)encoder_get_cable_length_01mm() / 10.0;
+
+    if (motorIsPositionSourceMotor()) {
+        motor_cable_mm = (double)g_measurement.debug_data.cable_length / 10.0;
+    } else {
+        motor_cable_mm = (double)g_measurement.debug_data.motor_distance / 10.0;
+    }
+
+    printf("\t{编码模式}%s\t{电机记步尺带长度}%.1f\t{编码记步尺带长度}%.1f",
+           motorIsPositionSourceMotor() ? "电机记步" : "编码轮记步",
+           motor_cable_mm,
+           encoder_cable_mm);
+}
 
 /**
  * @brief 液位测量与跟随主流程
@@ -86,6 +125,7 @@ uint32_t SearchAndFollowOilLevel(void) {
 			break;
 		} else {
 			printf("液位流程\t液位搜索失败，错误码:0x%lX\r\n", ret);
+			(void)motorSlowStop();
 			HAL_Delay(1000);
 		}
 	}
@@ -155,6 +195,7 @@ uint32_t SearchAndFollowOilLevel(void) {
  */
 uint32_t SearchOilLevel(void) {
     uint32_t ret;
+    uint32_t last_coarse_ret = MEASUREMENT_OILLEVEL_NOTFOUND;
     int mode_try_times = 0;
     int coarse_try_times = 0;
     fault_info_init();  // 清除故障信息
@@ -187,6 +228,12 @@ uint32_t SearchOilLevel(void) {
         printf("液位测量\t粗找液位第%d次尝试\r\n", coarse_try_times);
         fault_info_init(); // 清除故障信息
         ret = DSM_Get_LevelMode_Frequence_Avg(&g_measurement.oil_measurement.current_frequency);
+        if (ret != NO_ERROR) {
+            last_coarse_ret = ret;
+            printf("液位测量\t粗找频率读取失败[%d]:0x%lX\r\n", coarse_try_times, ret);
+            HAL_Delay(500);
+            continue;
+        }
         if (INOIL) {
             //如果当前传感器在盲区以上100mm
             if (g_measurement.debug_data.sensor_position > (g_deviceParams.blindZone + 1000)) {
@@ -212,7 +259,7 @@ uint32_t SearchOilLevel(void) {
     }
     if (coarse_try_times >= 3) {
         printf("液位测量\t粗找液位失败(尝试%d次)\r\n", coarse_try_times);
-        RETURN_ERROR(MEASUREMENT_WEIGHT_DOWN_FAIL);
+        RETURN_ERROR(last_coarse_ret);
     }
     printf("液位测量\t粗找液位完成\r\n");
     /*************** 精找阶段  ***************/
@@ -274,7 +321,7 @@ uint32_t FollowOilLevel(void) {
 			printf("识别到液位变动\t");
 			ret = SearchOilPrecise(100);
 			if (ret != NO_ERROR)
-				return ret;
+				return OilLevel_StopBeforeReturn((uint32_t)ret, "液位流程故障");
 		}
 
 		// 更新位置和液位值
@@ -296,7 +343,7 @@ uint32_t FollowOilLevel(void) {
  * 该函数通过电机控制传感器移动，完成油液液位的测量。主要流程包括：
  * 1. 若尺带长度较长，先将电机上行到安全位置确保传感器在空气中。
  * 2. 长距离下行寻找油面，实时监控重量状态、检测丢步和碰撞。
- * 3. 检测到液位后快速停止电机。
+ * 3. 检测到液位后慢速停止电机。
  * 4. 若传感器未完全浸入油中，继续下行确保传感器全部在油中。
  * 5. 获取油中频率值。
  * 6. 调用 SearchAir() 向上寻找空气以完成测量。
@@ -342,7 +389,7 @@ static int SearchOil() {
 		ret = motorMove_downWithSpeed(motorGetDefaultSpeedX100());  // 启动电机向下运动
 		CHECK_ERROR(ret); // 检查上行是否成功
 		// 实时输出编码器位置和重量值（用于调试）
-		printf("液位测量\t长距离寻找液位\t{传感器位置}%.1f\t{称重值}%d\r\n", (float) (g_measurement.debug_data.sensor_position) / 10.0, weight_parament.current_weight);
+		printf("液位测量\t长距离寻找液位\t{传感器位置}%.1f", (float) (g_measurement.debug_data.sensor_position) / 10.0); motorPrintPositionRefs(); printf("\t{称重值}%d\r\n", weight_parament.current_weight);
 		CHECK_ERROR(ret);
 		//丢步检测
 		ret = Motor_CheckLostStep_AutoTiming(g_measurement.debug_data.cable_length);
@@ -355,11 +402,11 @@ static int SearchOil() {
 		//盲区检测
 		if (g_measurement.debug_data.sensor_position < g_deviceParams.blindZone) {
 			printf("超声波找液位\t到达位置下限\r\n");
-			return MEASUREMENT_OILLEVEL_LOW;
+			return OilLevel_StopBeforeReturn(MEASUREMENT_OILLEVEL_LOW, "到达液位下限");
 		}
 	}
-	ret = motorQuickStop(); // 到达零点后快速停止电机
-	CHECK_ERROR(ret); // 检查快速停止是否成功
+	ret = motorSlowStop(); // 到达零点后慢速停止电机
+	CHECK_ERROR(ret); // 检查慢速停止是否成功
 	if (g_measurement.debug_data.sensor_position > (g_deviceParams.blindZone + 1000)) {
 		//向下运行保证传感器全部在油
 		ret = motorMoveAndWaitUntilStopWithSpeed(100.0, MOTOR_DIRECTION_DOWN, motorGetDefaultSpeedX100());
@@ -381,7 +428,7 @@ static int SearchOil() {
  * @brief 搜索空气中的零点位置并获取空气中频率值
  *
  * 该函数通过控制电机上行，持续监控重量状态，直到检测到液位（从油中进入空气）。
- * 到达零点后，快速停止电机，并确保传感器全部位于空气中，然后获取空气中频率值。
+ * 到达零点后，慢速停止电机，并确保传感器全部位于空气中，然后获取空气中频率值。
  * 如果传感器位置超出盲区范围，还会将传感器下移至油中进行后续操作。
  *
  * @return int 返回状态码：
@@ -393,7 +440,7 @@ static int SearchOil() {
  *       - motorMove_upWithSpeed(): 以指定速度控制电机上行
  *       - Motor_CheckLostStep_AutoTiming(): 自动定时检测电机丢步
  *       - CheckWeightCollision(): 检测称重碰撞
- *       - motorQuickStop(): 快速停止电机
+ *       - motorSlowStop(): 慢速停止电机
  *       - motorMoveAndWaitUntilStopWithSpeed(): 移动电机并等待停止
  *       - DSM_Get_LevelMode_Frequence_Avg(): 获取平均频率值
  *
@@ -419,7 +466,7 @@ static int SearchAir() {
 		ret = motorMove_upWithSpeed(motorGetDefaultSpeedX100());  // 启动电机向下运动
 		CHECK_ERROR(ret); // 检查上行是否成功
 		// 实时输出编码器位置和重量值（用于调试）
-		printf("液位测量\t长距离寻找空气\t{传感器位置}%.1f\t{称重值}%d\r\n", (float) (g_measurement.debug_data.sensor_position) / 10.0, weight_parament.current_weight);
+		printf("液位测量\t长距离寻找空气\t{传感器位置}%.1f", (float) (g_measurement.debug_data.sensor_position) / 10.0); motorPrintPositionRefs(); printf("\t{称重值}%d\r\n", weight_parament.current_weight);
 		CHECK_ERROR(ret);
 		//丢步检测
 		ret = Motor_CheckLostStep_AutoTiming(g_measurement.debug_data.cable_length);
@@ -428,8 +475,8 @@ static int SearchAir() {
 		ret = CheckWeightCollision();
 		CHECK_ERROR(ret); // 检查碰撞检测是否成功
 	}
-	ret = motorQuickStop(); // 到达零点后快速停止电机
-	CHECK_ERROR(ret); // 检查快速停止是否成功
+	ret = motorSlowStop(); // 到达零点后慢速停止电机
+	CHECK_ERROR(ret); // 检查慢速停止是否成功
 	//向上运行保证传感器全部在空气
 	if (g_measurement.debug_data.cable_length > 1000) { // 如果尺带长度大于200mm，先将电机上行到安全位置
 		ret = motorMoveAndWaitUntilStopWithSpeed(100.0, MOTOR_DIRECTION_UP, motorGetDefaultSpeedX100());
@@ -481,7 +528,7 @@ static uint32_t determine_level_status_internal(Level_StateTypeDef *state_out, u
 
     CHECK_COMMAND_SWITCH(ret);
     if (ret != NO_ERROR) {
-        return ret;
+        return OilLevel_StopBeforeReturn((uint32_t)ret, "液位流程故障");
     }
 
     if (!allow_mode_recovery) {
@@ -541,7 +588,7 @@ static int SearchOilPrecise(float per_mm_Frequency) {
 		// 获取当前传感器频率
 		ret = DSM_Get_LevelMode_Frequence(&g_measurement.oil_measurement.current_frequency);
 		if (ret != NO_ERROR)
-			return ret;
+			return OilLevel_StopBeforeReturn((uint32_t)ret, "液位流程故障");
 
 		// 死循环保护（>100次循环退出）
 		if (loopTime++ > 100) {
@@ -608,13 +655,13 @@ static int SearchOilPrecise(float per_mm_Frequency) {
 			// 执行电机移动（带丢步检测）
 			ret = motorMoveAndWaitUntilStopWithSpeed(runlenth, dir, motorGetDefaultSpeedX100());
 			if (NO_ERROR != ret)
-				return ret;
+				return OilLevel_StopBeforeReturn((uint32_t)ret, "液位流程故障");
 		}
 
 		// 超限保护（连续多次加速仍无法跟踪）
 		if (overTime > MAX_TIMES_WHEN_FRE_FOLLOW || lowerTime > MAX_TIMES_WHEN_FRE_FOLLOW) {
 			printf("探头频率异常\r\n");
-			return MEASUREMENT_OVERSPEED;
+			return OilLevel_StopBeforeReturn(MEASUREMENT_OVERSPEED, "探头频率异常");
 		}
 
 		// 更新传感器位置及液位值
@@ -625,7 +672,7 @@ static int SearchOilPrecise(float per_mm_Frequency) {
 			CHECK_COMMAND_SWITCH(ret);
 		}
 		if (ret != NO_ERROR)
-			return ret;
+			return OilLevel_StopBeforeReturn((uint32_t)ret, "液位流程故障");
 	}
 	return NO_ERROR;  // 成功定位液位界面
 }
@@ -657,20 +704,22 @@ static int determineTheSensorPositionAndUpdateTheLevelValue(void) {
 		// 更新当前液位值
 		g_measurement.oil_measurement.oil_level = oil_level;
 		// 打印正常液位值信息
-		printf("液位跟随\t液位值为%ld\r\n", g_measurement.oil_measurement.oil_level);
+		printf("液位跟随\t液位值为%ld", g_measurement.oil_measurement.oil_level);
+		OilLevel_PrintFollowPositionInfo();
+		printf("\r\n");
 	} else {
 		// 系统不稳定时仅打印动态液位值（不更新测量值）
-		printf("液位跟随\t动态液位值为%ld\r\n", g_measurement.debug_data.sensor_position);
+		printf("液位跟随\t动态液位值为%.1f", (float)g_measurement.debug_data.sensor_position / 10.0f); motorPrintPositionRefs(); printf("\r\n");
 	}
 
 	if (oil_level >= g_deviceParams.tankHeight-1000) {
 		printf("超声波找液位\t到达位置上限\r\n");
-		return MEASUREMENT_OILLEVEL_HIGH;
+		return OilLevel_StopBeforeReturn(MEASUREMENT_OILLEVEL_HIGH, "到达液位上限");
 	}
 	// 步骤4: 检查油位是否低于0（超出下限）
 	else if (oil_level < g_deviceParams.blindZone) {
 		printf("超声波找液位\t到达位置下限\r\n");
-		return MEASUREMENT_OILLEVEL_LOW;
+		return OilLevel_StopBeforeReturn(MEASUREMENT_OILLEVEL_LOW, "到达液位下限");
 	}
 	// 步骤5: 正常返回（无错误）
 	return NO_ERROR;

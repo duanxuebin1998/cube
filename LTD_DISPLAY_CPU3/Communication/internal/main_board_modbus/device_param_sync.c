@@ -40,6 +40,8 @@ static volatile uint32_t* get_deviceparam_ptr_by_operanum(int operanum)
         return &g_deviceParams.error_stop_measurement;
 
     /* ===== 电机与编码器参数 ===== */
+    case COM_NUM_DEVICEPARAM_MOTOR_CURRENT:
+        return &g_deviceParams.motor_current;
     case COM_NUM_DEVICEPARAM_ENCODER_WHEEL_CIRCUMFERENCE_MM:
         return &g_deviceParams.encoder_wheel_circumference_mm;
     case COM_NUM_DEVICEPARAM_MAX_MOTOR_SPEED:
@@ -48,6 +50,10 @@ static volatile uint32_t* get_deviceparam_ptr_by_operanum(int operanum)
         return &g_deviceParams.first_loop_circumference_mm;
     case COM_NUM_DEVICEPARAM_TAPE_THICKNESS_MM:
         return &g_deviceParams.tape_thickness_mm;
+    case COM_NUM_DEVICEPARAM_POSITION_COUNT_MODE:
+        return &g_deviceParams.position_count_mode;
+    case COM_NUM_DEVICEPARAM_MOTOR_COUNT_FIRST_LOOP_CIRC:
+        return &g_deviceParams.motor_count_first_loop_circumference_mm;
 
     /* ===== 称重参数 ===== */
     case COM_NUM_DEVICEPARAM_EMPTY_WEIGHT:
@@ -276,7 +282,7 @@ static void DeviceParams_SendHoldValueToCPU2(volatile struct ParameterMetadata *
     // 每个参数占两个寄存器，因此这里只支持 rgstcnt == 2 的情况。
     if (h->rgstcnt != 2) {
         // 如果以后有 1 寄存器参数，再单独处理
-        printf("DeviceParam warn: %s rgstcnt=%u not supported by sync\n",
+        printf("设备参数警告: %s 寄存器数=%u 暂不支持同步\n",
                h->name ? (char*)h->name : "noname", h->rgstcnt);
         return;
     }
@@ -313,7 +319,7 @@ static void DeviceParams_SyncOneHold(volatile struct ParameterMetadata *h)
         return;
     }
 
-    printf("DeviceParam diff: %s, CPU2=%d, LOCAL=%ld -> update & send\r\n",
+    printf("设备参数差异: %s, CPU2=%d, 本地=%ld -> 更新并发送\r\n",
            h->name ? (char*)h->name : "noname",
            h->val, dev_val);
 
@@ -324,17 +330,29 @@ static void DeviceParams_SyncOneHold(volatile struct ParameterMetadata *h)
     DeviceParams_SendHoldValueToCPU2(h);
 }
 
+/* 批量同步通常由外部协议写入旧寄存器后触发。
+ * 位置源模式和电机局部周长可能由 CPU2 在 YM 切换/标定流程中自动更新，
+ * 如果 CPU3 本地缓存尚未补读完成，批量同步会把旧值覆盖回 CPU2。
+ * 因此这两个字段不参与批量同步；菜单单项读写仍然直接走对应保持寄存器。 */
+static bool DeviceParams_ShouldSkipBulkSync(int operanum)
+{
+    return (operanum == COM_NUM_DEVICEPARAM_POSITION_COUNT_MODE) ||
+           (operanum == COM_NUM_DEVICEPARAM_MOTOR_COUNT_FIRST_LOOP_CIRC);
+}
+
 /* ==================== 对外接口 ==================== */
 
 /* 同步所有 DeviceParameters → CPU2 */
 void DeviceParams_SyncAllToCPU2(void)
 {
     for (uint32_t i = 0; i < param_metaAmount; ++i) {
-    	//需要判定一下是否是CPU2的可写参数
+        if (DeviceParams_ShouldSkipBulkSync(param_meta[i].operanum)) {
+            continue;
+        }
+        //需要判定一下是否是CPU2的可写参数
         DeviceParams_SyncOneHold(&param_meta[i]);
     }
 }
-
 /* 只同步一个 operanum 对应的参数 */
 void DeviceParams_SyncOneToCPU2(int operanum)
 {

@@ -23,6 +23,7 @@
 #include "stdio.h"
 #include "encoder.h"
 #include "system_parameter.h"
+#include "motor_ctrl.h"
 
 #define SSI_FRAME_LENGTH     4u
 #define SSI_RETRY_LIMIT      3u
@@ -183,7 +184,9 @@ static void Recover_SSI_Bus(void) {
  * @brief  统一 SSI 错误处理：有限重试，超限后只上报一次，但持续保持通信
  */
 static void Handle_SSI_Error(const SSI_Data_t *data) {
-    g_measurement.device_status.error_code = Get_SSI_Error_Code(data);
+    if (!motorIsPositionSourceMotor()) {
+        g_measurement.device_status.error_code = Get_SSI_Error_Code(data);
+    }
 
     if (++ssi_state.retry_count <= SSI_RETRY_LIMIT) {
         (void)Start_Read_SSI_Data();
@@ -192,7 +195,9 @@ static void Handle_SSI_Error(const SSI_Data_t *data) {
 
     if (!ssi_state.error_reported) {
         ssi_state.error_reported = true;
-        Report_SSI_PersistentError(data);
+        if (!motorIsPositionSourceMotor()) {
+            Report_SSI_PersistentError(data);
+        }
     }
 }
 
@@ -217,8 +222,10 @@ static HAL_StatusTypeDef Start_Read_SSI_Data(void) {
     if (HAL_SPI_GetState(&SSI) != HAL_SPI_STATE_READY) {
         Recover_SSI_Bus();
         if (HAL_SPI_GetState(&SSI) != HAL_SPI_STATE_READY) {
-            g_measurement.device_status.error_code = ENCODER_TIMEOUT;
-            printf("SPI not ready, current state: %d\n", HAL_SPI_GetState(&SSI));
+            if (!motorIsPositionSourceMotor()) {
+                g_measurement.device_status.error_code = ENCODER_TIMEOUT;
+                printf("SPI未就绪，当前状态: %d\n", HAL_SPI_GetState(&SSI));
+            }
             return HAL_BUSY;
         }
     } else if (SSI.hdmarx != NULL) {
@@ -230,9 +237,11 @@ static HAL_StatusTypeDef Start_Read_SSI_Data(void) {
     status = HAL_SPI_Receive_DMA(&SSI, rxData, SSI_FRAME_LENGTH);
     if (status != HAL_OK) {
         Recover_SSI_Bus();
-        g_measurement.device_status.error_code = ENCODER_TIMEOUT;
-        printf("SPI ErrorCode: 0x%08lX\n", SSI.ErrorCode);
-        printf("SPI DMA 启动失败, 错误码: %d\n", status);
+        if (!motorIsPositionSourceMotor()) {
+            g_measurement.device_status.error_code = ENCODER_TIMEOUT;
+            printf("SPI错误码: 0x%08lX\n", SSI.ErrorCode);
+            printf("SPI DMA 启动失败, 错误码: %d\n", status);
+        }
     }
 
     return status;
@@ -282,9 +291,9 @@ HAL_StatusTypeDef Start_Encoder_Collection_TIM(void) {
     {
         HAL_StatusTypeDef status = HAL_TIM_Base_Start_IT(&ENCODER_TIM_HANDLE);
         if (status != HAL_OK) {
-            printf("error: encoder timer fail (code: %d)\n", status);
+            printf("错误: 编码器定时器启动失败(代码: %d)\n", status);
         } else {
-            printf("encoder timer start\n");
+            printf("编码器定时器已启动\n");
         }
         return status;
     }
