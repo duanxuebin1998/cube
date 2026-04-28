@@ -193,16 +193,16 @@ typedef enum
     COM_NUM_DEVICEPARAM_RESERVED2,                      // 保留 2
     COM_NUM_DEVICEPARAM_RESERVED3,                      // 保留 3
     COM_NUM_DEVICEPARAM_RESERVED4,                      // 保留 4
-    COM_NUM_DEVICEPARAM_RESERVED5,                      // 保留 5
 
     /* ---------------- 电机与编码器参数 ---------------- */
+    COM_NUM_DEVICEPARAM_MOTOR_CURRENT,                  // 电机运行电流
     COM_NUM_DEVICEPARAM_ENCODER_WHEEL_CIRCUMFERENCE_MM, // 编码轮周长
     COM_NUM_DEVICEPARAM_MAX_MOTOR_SPEED,                // 最大电机速度
     COM_NUM_DEVICEPARAM_FIRST_LOOP_CIRCUMFERENCE_MM,    // 尺带首圈周长
     COM_NUM_DEVICEPARAM_TAPE_THICKNESS_MM,              // 尺带厚度
 
-    COM_NUM_DEVICEPARAM_RESERVED6,                      // 保留 6
-    COM_NUM_DEVICEPARAM_RESERVED7,                      // 保留 7
+    COM_NUM_DEVICEPARAM_POSITION_COUNT_MODE,           // 当前记步模式
+    COM_NUM_DEVICEPARAM_MOTOR_COUNT_FIRST_LOOP_CIRC,    // 电机记步局部首圈周长
 
     /* ---------------- 称重参数 ---------------- */
     COM_NUM_DEVICEPARAM_EMPTY_WEIGHT,                   // 空载重量

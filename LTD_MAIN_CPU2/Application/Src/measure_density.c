@@ -63,7 +63,7 @@ static inline int32_t i32_abs(int32_t x) { return (x >= 0) ? x : -x; }
 
 static void PrintPoints01mm(const char *tag, const int32_t *p01, uint32_t n)
 {
-    printf("%s 取点 n=%lu: ", tag, (unsigned long)n);
+    printf("%s 取点 点数=%lu: ", tag, (unsigned long)n);
     for (uint32_t i = 0; i < n; i++) {
         printf("%ld(%.1fmm) ", (long)p01[i], (double)p01[i] / 10.0);
     }
@@ -99,7 +99,7 @@ static uint32_t Density_RunPoints01mm(const int32_t *p01,
 
         uint32_t ret = motorMoveToPositionOneShotWithSpeed(pos_mm, motorGetDefaultSpeedX100());
         if (ret != NO_ERROR) {
-            printf("分布测量 电机移动失败: pos=%.1fmm err=%lu\r\n", pos_mm, (unsigned long)ret);
+            printf("分布测量 电机移动失败: 位置=%.1fmm 错误=%lu\r\n", pos_mm, (unsigned long)ret);
             return ret;
         }
 
@@ -109,7 +109,7 @@ static uint32_t Density_RunPoints01mm(const int32_t *p01,
 
         ret = SinglePoint_ReadSensor(&dist->single_density_data[valid]);
         if (ret != NO_ERROR) {
-            printf("分布测量 单点读取失败: pos=%.1fmm err=%lu\r\n", pos_mm, (unsigned long)ret);
+            printf("分布测量 单点读取失败: 位置=%.1fmm 错误=%lu\r\n", pos_mm, (unsigned long)ret);
             return ret;
         }
 
@@ -128,7 +128,7 @@ static uint32_t Density_RunPoints01mm(const int32_t *p01,
 
     if (valid == 0) {
         printf("分布测量 未得到任何有效测点\r\n");
-        return OTHER_UNKNOWN_ERROR;
+        return MEASUREMENT_DENSITY_NO_VALID_POINT;
     }
 
     /* 平均值（RAW 平均） */
@@ -527,7 +527,7 @@ uint32_t Density_MeasureByMode_Exact(DensitySpreadModeId mode, DensityDistributi
     /* 1) 先液位搜索 */
     ret = SearchOilLevel();
     if (ret != NO_ERROR) {
-        printf("密度测量\t液位搜索失败, err=0x%08lX\r\n", (unsigned long)ret);
+        printf("密度测量\t液位搜索失败，错误=0x%08lX\r\n", (unsigned long)ret);
         return ret;
     }
 
@@ -598,7 +598,7 @@ void CMD_MeasureDensitySpread_Spread(void)
 
     ret = Density_MeasureByMode_Exact(DENS_MODE_SPREAD, &temp);
     if (ret != NO_ERROR) {
-        printf("普通分布测\t失败, err=0x%08lX\r\n", (unsigned long)ret);
+        printf("普通分布测\t失败，错误=0x%08lX\r\n", (unsigned long)ret);
         SET_ERROR(ret);
     }
 
@@ -617,7 +617,7 @@ void CMD_MeasureDensitySpread_GB(void)
 
     ret = Density_MeasureByMode_Exact(DENS_MODE_GB, &temp);
     if (ret != NO_ERROR) {
-        printf("国标测\t失败, err=0x%08lX\r\n", (unsigned long)ret);
+        printf("国标测\t失败，错误=0x%08lX\r\n", (unsigned long)ret);
         SET_ERROR(ret);
     }
 
@@ -636,7 +636,7 @@ void CMD_MeasureDensitySpread_Meter(void)
 
     ret = Density_MeasureByMode_Exact(DENS_MODE_METER, &temp);
     if (ret != NO_ERROR) {
-        printf("每米测\t失败, err=0x%08lX\r\n", (unsigned long)ret);
+        printf("每米测\t失败，错误=0x%08lX\r\n", (unsigned long)ret);
         SET_ERROR(ret);
     }
 
@@ -655,7 +655,7 @@ void CMD_MeasureDensitySpread_Interval(void)
 
     ret = Density_MeasureByMode_Exact(DENS_MODE_INTERVAL, &temp);
     if (ret != NO_ERROR) {
-        printf("区间测\t失败, err=0x%08lX\r\n", (unsigned long)ret);
+        printf("区间测\t失败，错误=0x%08lX\r\n", (unsigned long)ret);
         SET_ERROR(ret);
     }
 
@@ -849,26 +849,26 @@ void Print_DensitySpreadResult(const DensityDistribution *dist)
            (double) dist->Density_oil_level / 10.0);
 
     /* average_* 为 RAW（编码值） */
-    printf("平均温度 RAW       : %lu  =>  实际: %.2f ℃\r\n",
+    printf("平均温度 原始值    : %lu  =>  实际: %.2f ℃\r\n",
            (unsigned long) dist->average_temperature,
            RAW_TO_TEMP(dist->average_temperature));
 
-    printf("平均密度 RAW       : %lu  =>  实际: %.1f\r\n",
+    printf("平均密度 原始值    : %lu  =>  实际: %.1f\r\n",
            (unsigned long) dist->average_density,
            RAW_TO_DENSITY(dist->average_density));
 
-    printf("标准密度 RAW       : %lu  =>  实际: %.1f\r\n",
+    printf("标准密度 原始值    : %lu  =>  实际: %.1f\r\n",
            (unsigned long) dist->average_standard_density,
            RAW_TO_DENSITY(dist->average_standard_density));
 
-    printf("VCF20 RAW          : %lu\r\n", (unsigned long) dist->average_vcf20);
+    printf("VCF20 原始值       : %lu\r\n", (unsigned long) dist->average_vcf20);
 
-    printf("计重密度 RAW       : %lu  =>  实际: %.1f\r\n",
+    printf("计重密度 原始值    : %lu  =>  实际: %.1f\r\n",
            (unsigned long) dist->average_weight_density,
            RAW_TO_DENSITY(dist->average_weight_density));
 
     printf("\r\n------ 单点数据列表 ------\r\n");
-    printf("序号  位置(mm)  密度RAW  密度(实测)  温度RAW   温度(℃)\r\n");
+    printf("序号  位置(mm)  密度原始值  密度(实测)  温度原始值   温度(℃)\r\n");
 
     uint32_t n = dist->measurement_points;
     if (n > MAX_MEASUREMENT_POINTS) n = MAX_MEASUREMENT_POINTS;
@@ -1021,7 +1021,7 @@ uint32_t SinglePoint_ReadSensor(volatile DensityMeasurement *result)
          * ====================================================== */
         ret = Read_Density(&cur_freq, &cur_density, &cur_temp);
         if (ret != NO_ERROR) {
-            printf("读取密度/温度/频率失败：err=%lu\r\n",
+            printf("读取密度/温度/频率失败：错误码=%lu\r\n",
                    (unsigned long)ret);
             HAL_Delay(SAMPLE_INTERVAL_MS);
             continue;
@@ -1029,7 +1029,7 @@ uint32_t SinglePoint_ReadSensor(volatile DensityMeasurement *result)
 
         CHECK_COMMAND_SWITCH(ret);
 
-        printf("单点读数: f=%.3f Hz  dens=%.4f  temp=%.3f ℃\r\n",
+        printf("单点读数: 频率=%.3f Hz  密度=%.4f  温度=%.3f ℃\r\n",
                cur_freq, cur_density, cur_temp);
 
         /* ======================================================

@@ -101,10 +101,141 @@ uint32_t motorQuickStop(void);
 uint32_t motorSlowStop(void);
 
 /**
- * @brief ??????/?????????
- * @return 0 ??, 1 ??, 2 ??
+ * @brief 获取电机显示状态
+ * @return 0 停止，1 上行，2 下行
  */
 uint32_t motorGetDisplayState(void);
+
+/* ===================== 调试 / 持久化 / TFIT ===================== */
+
+/**
+ * @brief 从 TMC5130 刷新调试用卷筒状态
+ *
+ * 说明：
+ *  - 读取 XACTUAL 并更新 motor_step / motor_distance
+ *  - 读取调试参数前调用，可保证电机侧数据及时刷新
+ */
+void motorRefreshDebugDrumState(void);
+void motorPrintPositionRefs(void);
+void motorPrintPositionCompare(void);
+
+/**
+ * @brief 电机运行期位置轮询
+ *
+ * 说明：
+ *  - 电机运动中按固定周期读取 XACTUAL
+ *  - 更新 motor_step / motor_distance
+ *  - 电机位置源模式下同步更新 cable_length / sensor_position
+ *  - 可在主循环和等待循环中反复调用，内部自带节流
+ */
+void motorPollRuntimePosition(void);
+void motorApplyPositionSourceParamsFromDeviceParams(void);
+
+/**
+ * @brief 将电机卷筒参考点重置为零
+ *
+ * 说明：
+ *  - 同时清零 XACTUAL 和 XTARGET
+ *  - 通常在编码器零点设置成功后调用
+ */
+void motorResetDrumReferenceToZero(void);
+
+/**
+ * @brief 手动切换为外部编码器位置源
+ *
+ * 说明：
+ *  - 切回后，整机 cable_length / sensor_position 由外部编码器刷新
+ *  - 此函数只做手动切换，不自动判断编码器是否恢复
+ */
+uint32_t motorSwitchPositionSourceToEncoder(void);
+
+/**
+ * @brief 手动切换为电机步进位置源
+ *
+ * 说明：
+ *  - 切换瞬间以当前外部编码器的 cable_length 为基准
+ *  - 后续仅用 XACTUAL 相对切换点的步进增量推算整机位置，避免切换瞬间跳变
+ *  - 切换过程会自动下行一周测量当前位置局部周长，再返回切换前位置
+ */
+uint32_t motorSwitchPositionSourceToMotor(void);
+
+/**
+ * @brief 当前整机位置源是否为电机步进
+ * @return true 电机步进源，false 外部编码器源
+ */
+bool motorIsPositionSourceMotor(void);
+
+/**
+ * @brief 用编码器差分校正当前局部尺带周长
+ *
+ * 说明:
+ *  - 需要先切换到电机步进位置源
+ *  - 调用时编码器读数必须仍然可信，且已经走过足够步进增量
+ *  - 只更新电机源的局部周长，不修改系统全局参数
+ */
+uint32_t motorCalibrateCurrentTapeCircumference(void);
+
+/**
+ * @brief 强制保存当前 XACTUAL / XTARGET 到 FRAM
+ *
+ * 说明：
+ *  - 供 TMC5130 底层驱动在目标位置变化后调用
+ *  - 正常运行中也会按位置变化自动保存
+ */
+void motorPersistRegistersFromDriver(void);
+
+/**
+ * @brief 开始 TFIT 采样
+ *
+ * 说明：
+ *  - 清空旧样本并开启自动采样
+ *  - 样本用于拟合首圈周长和尺带厚度
+ */
+void motorTapeFitStart(void);
+
+/**
+ * @brief 开始局部 TFIT 采样，当前位置作为新的 0 圈
+ *
+ * Notes:
+ *  - Records current XACTUAL and encoder length as local origin.
+ *  - Local solving uses relative turns and relative length.
+ */
+void motorTapeFitStartLocalOrigin(void);
+
+/**
+ * @brief 停止 TFIT 自动采样
+ */
+void motorTapeFitStop(void);
+
+/**
+ * @brief 手动添加当前 TFIT 样本
+ */
+void motorTapeFitAddCurrentSample(void);
+
+/**
+ * @brief 打印当前 TFIT 采样和拟合状态
+ */
+void motorTapeFitPrintStatus(void);
+
+/**
+ * @brief 根据已采集样本求解 TFIT 参数
+ * @return NO_ERROR 或错误码
+ */
+uint32_t motorTapeFitSolve(void);
+
+/**
+ * @brief 使用局部 TFIT 采样求解当前位置附近的参数
+ * @return NO_ERROR or error code
+ */
+uint32_t motorTapeFitSolveLocalOrigin(void);
+
+/**
+ * @brief 应用已求解的 TFIT 参数
+ * @param apply_c0 是否应用首圈周长 C0
+ * @param apply_t  是否应用尺带厚度 t
+ * @return NO_ERROR 或错误码
+ */
+uint32_t motorTapeFitApply(bool apply_c0, bool apply_t);
 
 /* ===================== 运动控制接口 ===================== */
 

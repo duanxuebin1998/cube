@@ -125,9 +125,11 @@ extern ErrorInfo err; // 全局错误信息变量
     do {                                                                         \
         if (HasEffectiveCommandSwitchRequest()) {                                \
             printf("检测到命令切换请求，停止当前操作\r\n");                       \
+            HandleError();                                                       \
             return STATE_SWITCH;                                                 \
         }                                                                        \
         if ((ret) == STATE_SWITCH) {                                             \
+            HandleError();                                                       \
             return STATE_SWITCH;                                                 \
         }                                                                        \
     } while (0)

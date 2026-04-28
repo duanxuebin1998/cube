@@ -102,7 +102,7 @@ static void UART6_DrainRX_UntilIdle(uint32_t idle_ms) {
  */
 static uint32_t WIRELESS_Transceive(const uint8_t tx[8], uint8_t rx[8]) {
 #ifdef DEBUG_WIRELESS
-    printf("WIRELESS TX: ");
+    printf("无线发送: ");
     for (int i = 0; i < 8; i++) {
         printf("%02X ", tx[i]);
     }
@@ -113,7 +113,7 @@ static uint32_t WIRELESS_Transceive(const uint8_t tx[8], uint8_t rx[8]) {
 
     if (HAL_UART_Transmit(&huart6, (uint8_t*)tx, 8, DSM_CMD_TIMEOUT) != HAL_OK) {
 #ifdef DEBUG_WIRELESS
-        printf("WIRELESS TX failed\r\n");
+        printf("无线发送失败\r\n");
 #endif
         return OTHER_PERIPHERAL_CONFIG_ERROR;
     }
@@ -129,16 +129,16 @@ static uint32_t WIRELESS_Transceive(const uint8_t tx[8], uint8_t rx[8]) {
     if (got < 8) {
 #ifdef DEBUG_WIRELESS
         if (got == 0) {
-            printf("WIRELESS RX timeout, got 0 bytes\r\n");
+            printf("无线接收超时，收到0字节\r\n");
         } else {
-            printf("WIRELESS RX length error, got %d bytes\r\n", got);
+            printf("无线接收长度异常，收到%d字节\r\n", got);
         }
 #endif
         return (got == 0) ? SENSOR_DEVICE_COMM_TIMEOUT : SENSOR_RESP_FORMAT_ERROR;
     }
 
 #ifdef DEBUG_WIRELESS
-    printf("WIRELESS RX: ");
+    printf("无线接收: ");
     for (int i = 0; i < 8; i++) {
         printf("%02X ", rx[i]);
     }
@@ -147,7 +147,7 @@ static uint32_t WIRELESS_Transceive(const uint8_t tx[8], uint8_t rx[8]) {
 
     if (WIRELESS_CalcSum(rx) != rx[7]) {
 #ifdef DEBUG_WIRELESS
-        printf("WIRELESS RX checksum error: calc=%02X, rx=%02X\r\n",
+        printf("无线接收校验错误: 计算=%02X, 接收=%02X\r\n",
                WIRELESS_CalcSum(rx), rx[7]);
 #endif
         return SENSOR_BCC_ERROR;
@@ -172,7 +172,7 @@ static uint32_t WIRELESS_CheckReply(const uint8_t tx[8], const uint8_t rx[8]) {
 
     if (rx[0] != expect_addr) {
 #ifdef DEBUG_WIRELESS
-        printf("WIRELESS RX addr mismatch: expect %02X, got %02X\r\n",
+        printf("无线接收地址不匹配: 期望=%02X, 实际=%02X\r\n",
                expect_addr, rx[0]);
 #endif
         return SENSOR_RESP_FORMAT_ERROR;
@@ -180,7 +180,7 @@ static uint32_t WIRELESS_CheckReply(const uint8_t tx[8], const uint8_t rx[8]) {
 
     if (rx[1] != expect_func) {
 #ifdef DEBUG_WIRELESS
-        printf("WIRELESS RX func mismatch: expect %02X, got %02X\r\n",
+        printf("无线接收功能码不匹配: 期望=%02X, 实际=%02X\r\n",
                expect_func, rx[1]);
 #endif
         return SENSOR_RESP_FORMAT_ERROR;
@@ -188,14 +188,14 @@ static uint32_t WIRELESS_CheckReply(const uint8_t tx[8], const uint8_t rx[8]) {
 
     if (rx[6] == 0xFF) {
 #ifdef DEBUG_WIRELESS
-        printf("WIRELESS RX indicates FAIL (param=FF)\r\n");
+        printf("无线接收返回失败(参数=FF)\r\n");
 #endif
         return SENSOR_DEVICE_REPORTED_ERROR;
     }
 
     if (rx[6] != expect_param) {
 #ifdef DEBUG_WIRELESS
-        printf("WIRELESS RX param mismatch: expect %02X, got %02X\r\n",
+        printf("无线接收参数不匹配: 期望=%02X, 实际=%02X\r\n",
                expect_param, rx[6]);
 #endif
         return SENSOR_RESP_FORMAT_ERROR;
@@ -238,7 +238,7 @@ static inline float WIRELESS_ParseFloat_LE(const uint8_t *d) {
 uint32_t WIRELESS_Read_FloatParam(uint8_t addr, uint8_t param, float *out_value)
 {
     if (!out_value) {
-        return OTHER_PERIPHERAL_CONFIG_ERROR;
+        return PARAM_ADDRESS_OVERFLOW;
     }
 
     uint8_t tx[8], rx[8];
@@ -260,7 +260,7 @@ uint32_t WIRELESS_Read_FloatParam(uint8_t addr, uint8_t param, float *out_value)
             float v = WIRELESS_ParseFloat_LE(rx + 2);
             *out_value = v;
 #ifdef DEBUG_WIRELESS
-            printf("[WIRELESS addr=%02X] Read Float R %u: %f\r\n",
+            printf("[无线 地址=%02X] 读取浮点寄存器 R%u: %f\r\n",
                    (unsigned)addr, (unsigned)param, (double)v);
 #endif
             return NO_ERROR;
@@ -280,7 +280,7 @@ uint32_t WIRELESS_Read_FloatParam(uint8_t addr, uint8_t param, float *out_value)
 uint32_t WIRELESS_Read_IntParam(uint8_t addr, uint8_t param, int32_t *out_value)
 {
     if (!out_value) {
-        return OTHER_PERIPHERAL_CONFIG_ERROR;
+        return PARAM_ADDRESS_OVERFLOW;
     }
 
     uint8_t tx[8], rx[8];
@@ -302,7 +302,7 @@ uint32_t WIRELESS_Read_IntParam(uint8_t addr, uint8_t param, int32_t *out_value)
             int32_t v = WIRELESS_ParseInt32_LE(rx + 2);
             *out_value = v;
 #ifdef DEBUG_WIRELESS
-            printf("[WIRELESS addr=%02X] Read Int R %u: %ld (0x%08lX)\r\n",
+            printf("[无线 地址=%02X] 读取整数寄存器 R%u: %ld (0x%08lX)\r\n",
                    (unsigned)addr, (unsigned)param, (long)v, (unsigned long)v);
 #endif
             return NO_ERROR;
@@ -351,17 +351,17 @@ uint32_t WIRELESS_PrintInfo(uint8_t addr)
 
     uint32_t ret_ver = WIRELESS_Read_SoftwareVersion(addr, &ver);
     if (ret_ver != NO_ERROR) {
-        printf("%s: 软件版本读取失败(err=%ld)\r\n", role, ret_ver);
+        printf("%s: 软件版本读取失败(错误码=%ld)\r\n", role, ret_ver);
         return ret_ver;
     }
 
     uint32_t ret_volt = WIRELESS_Read_Voltage(addr, &volt);
     if (ret_volt != NO_ERROR) {
-        printf("%s: 电压读取失败(err=%ld)\r\n", role, ret_volt);
+        printf("%s: 电压读取失败(错误码=%ld)\r\n", role, ret_volt);
         return ret_volt;
     }
 
-    printf("%s OK | Ver=%.3f | Volt=%.3f V\r\n",
+    printf("%s 正常 | 版本=%.3f | 电压=%.3f V\r\n",
            role,
            (double)ver,
            (double)volt);

@@ -28,8 +28,7 @@ static uint8_t Test_ShouldAbortForCommandSwitch(void)
     }
 
     printf("检测到命令切换请求，停止当前串口测试\r\n");
-    motorQuickStop();
-    stpr_disableDriver(&stepper);
+    motorSlowStop();
     return 1;
 }
 
@@ -50,7 +49,7 @@ void motor_step_up_text(void) {
         if (Test_ShouldAbortForCommandSwitch()) {
             return;
         }
-        printf("%d\t{传感器位置}%.1f\t{称重值}%d\r\n", i, (float)(g_measurement.debug_data.sensor_position) / 10.0f, weight_parament.current_weight);
+        printf("%d\t{传感器位置}%.1f", i, (float)(g_measurement.debug_data.sensor_position) / 10.0f); motorPrintPositionRefs(); printf("\t{称重值}%d\r\n", weight_parament.current_weight);
         HAL_Delay(100);
         if (Test_ShouldAbortForCommandSwitch()) {
             return;
@@ -83,7 +82,7 @@ void motor_step_down_text(void) {
         if (Test_ShouldAbortForCommandSwitch()) {
             return;
         }
-        printf("%d\t{传感器位置}%.1f\t{称重值}%d\r\n", i, (float)(g_measurement.debug_data.sensor_position) / 10.0f, weight_parament.current_weight);
+        printf("%d\t{传感器位置}%.1f", i, (float)(g_measurement.debug_data.sensor_position) / 10.0f); motorPrintPositionRefs(); printf("\t{称重值}%d\r\n", weight_parament.current_weight);
         HAL_Delay(100);
         if (Test_ShouldAbortForCommandSwitch()) {
             return;
@@ -312,9 +311,9 @@ void Test_ParamEncoder_AB_Backup(void)
     WriteSingleData(0u, FRAM_PARAM_A_ADDRESS + param_magic_offset);
 
     if (load_device_params()) {
-        printf("[PASS] 参数区: A损坏后已回退到B\r\n");
+        printf("[通过] 参数区: A损坏后已回退到B\r\n");
     } else {
-        printf("[FAIL] 参数区: A损坏后未能回退到B\r\n");
+        printf("[失败] 参数区: A损坏后未能回退到B\r\n");
     }
 
     /* Case-2: 参数A/B都损坏，读取应报错 */
@@ -323,9 +322,9 @@ void Test_ParamEncoder_AB_Backup(void)
     WriteSingleData(0u, FRAM_PARAM_B_ADDRESS + param_magic_offset);
 
     if ((!load_device_params()) && (g_measurement.device_status.error_code == PARAM_EEPROM_FAIL)) {
-        printf("[PASS] 参数区: A/B都损坏时已报错 PARAM_EEPROM_FAIL\r\n");
+        printf("[通过] 参数区: A/B都损坏时已报错 PARAM_EEPROM_FAIL\r\n");
     } else {
-        printf("[FAIL] 参数区: A/B都损坏时报错不符合预期, err=0x%08lX\r\n",
+        printf("[失败] 参数区: A/B都损坏时报错不符合预期, 错误码=0x%08lX\r\n",
                (unsigned long)g_measurement.device_status.error_code);
     }
 
@@ -341,9 +340,9 @@ void Test_ParamEncoder_AB_Backup(void)
     Initialize_Encoder();
 
     if (g_measurement.device_status.error_code != ENCODER_POWERON_FAIL) {
-        printf("[PASS] 编码区: A损坏后已回退到B\r\n");
+        printf("[通过] 编码区: A损坏后已回退到B\r\n");
     } else {
-        printf("[FAIL] 编码区: A损坏后未能回退到B\r\n");
+        printf("[失败] 编码区: A损坏后未能回退到B\r\n");
     }
 
     /* Case-4: 编码A/B都损坏，应报错 */
@@ -353,9 +352,9 @@ void Test_ParamEncoder_AB_Backup(void)
     Initialize_Encoder();
 
     if (g_measurement.device_status.error_code == ENCODER_POWERON_FAIL) {
-        printf("[PASS] 编码区: A/B都损坏时已报错 ENCODER_POWERON_FAIL\r\n");
+        printf("[通过] 编码区: A/B都损坏时已报错 ENCODER_POWERON_FAIL\r\n");
     } else {
-        printf("[FAIL] 编码区: A/B都损坏时报错不符合预期, err=0x%08lX\r\n",
+        printf("[失败] 编码区: A/B都损坏时报错不符合预期, 错误码=0x%08lX\r\n",
                (unsigned long)g_measurement.device_status.error_code);
     }
 
@@ -379,31 +378,31 @@ static void __attribute__((unused)) Sensor_CommCheckAndLog(const char *tag)
     /* 读温度 */
     ret = DSM_V2_Read_Temperature(&temp);
     if (ret == NO_ERROR) {
-        printf("[SENSOR][OK ] %s Temp=%.3f C\r\n", tag, temp);
+        printf("[传感器][正常] %s 温度=%.3f C\r\n", tag, temp);
     } else {
         comm_fail_cnt++;
-        printf("[SENSOR][ERR] %s Temp fail, ret=%lu, fail_cnt=%lu\r\n",
+        printf("[传感器][错误] %s 温度读取失败，错误码=%lu，失败次数=%lu\r\n",
                tag, (unsigned long)ret, (unsigned long)comm_fail_cnt);
     }
 
     /* 读密度 */
     ret = DSM_V2_Read_Density(&density);
     if (ret == NO_ERROR) {
-        printf("[SENSOR][OK ] %s Density=%.3f\r\n", tag, density);
+        printf("[传感器][正常] %s 密度=%.3f\r\n", tag, density);
     } else {
         comm_fail_cnt++;
-        printf("[SENSOR][ERR] %s Density fail, ret=%lu, fail_cnt=%lu\r\n",
+        printf("[传感器][错误] %s 密度读取失败，错误码=%lu，失败次数=%lu\r\n",
                tag, (unsigned long)ret, (unsigned long)comm_fail_cnt);
     }
 
     /* 读频率 + 扫频均值 */
     ret = DSM_V2_Read_DensityFrequency(&frequency, &hz_45, &hz_225);
     if (ret == NO_ERROR) {
-        printf("[SENSOR][OK ] %s F=%.1f Hz, Hz45=%.2f, Hz22.5=%.2f\r\n",
+        printf("[传感器][正常] %s 频率=%.1f Hz, 45度频率=%.2f, 22.5度频率=%.2f\r\n",
                tag, frequency, hz_45, hz_225);
     } else {
         comm_fail_cnt++;
-        printf("[SENSOR][ERR] %s Freq fail, ret=%lu, fail_cnt=%lu\r\n",
+        printf("[传感器][错误] %s 频率读取失败，错误码=%lu，失败次数=%lu\r\n",
                tag, (unsigned long)ret, (unsigned long)comm_fail_cnt);
     }
 }
@@ -613,7 +612,7 @@ void Demo_SinglePointDisplayMock(void)
                                              9997U,
                                              8342U);
 
-        printf("单点展示\t运行到测量点 [%lu/6] pos=%.1fmm\r\n",
+        printf("单点展示\t运行到测量点 [%lu/6] 位置=%.1fmm\r\n",
                (unsigned long)(i + 1U),
                current_pos_01mm / 10.0f);
         HAL_Delay(500);
@@ -669,7 +668,7 @@ void Demo_SinglePointDisplayMock(void)
                                              vcf20_raw,
                                              weight_density_raw);
 
-        printf("单点展示\t状态=固定点测量中 pos=%.1fmm temp=%.2fC density=%.1f std=%.1f vcf20=%lu weight_density=%.1f\r\n",
+        printf("单点展示\t状态=固定点测量中 位置=%.1fmm 温度=%.2fC 密度=%.1f 标密=%.1f VCF20=%lu 重量密度=%.1f\r\n",
                current_pos_01mm / 10.0f,
                RAW_TO_TEMP(temperature_raw),
                RAW_TO_DENSITY(density_raw),

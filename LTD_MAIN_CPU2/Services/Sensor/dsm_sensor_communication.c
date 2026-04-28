@@ -70,7 +70,7 @@ static int UART6_SendCommand(const char *cmd,
     memset(response, 0, maxLen);
     uint16_t recvLen = 0;
 #if DEBUG_UART6
-    printf("[UART6] Send: %s\n", cmd);
+    printf("[UART6] 发送: %s\n", cmd);
 #endif
 
     UART6_DrainRX_UntilIdle(5);
@@ -78,7 +78,7 @@ static int UART6_SendCommand(const char *cmd,
     // 发送
     if (HAL_UART_Transmit(&huart6, (uint8_t*)cmd, strlen(cmd), 100) != HAL_OK) {
 #if DEBUG_UART6
-        printf("[UART6] Transmit failed!\n");
+        printf("[UART6] 发送失败！\n");
 #endif
         return OTHER_PERIPHERAL_CONFIG_ERROR;
     }
@@ -108,7 +108,7 @@ static int UART6_SendCommand(const char *cmd,
         return SENSOR_DEVICE_COMM_TIMEOUT;
     }
     if (recvLen < 3) {
-        printf("[UART6] 响应长度异常：recvLen=%u\r\n", (unsigned)recvLen);
+        printf("[UART6] 响应长度异常：接收长度=%u\r\n", (unsigned)recvLen);
         return SENSOR_RESP_FORMAT_ERROR;
     }
 #if DEBUG_UART6
@@ -125,12 +125,12 @@ static int UART6_SendCommand(const char *cmd,
     bcc = CalculationBCC_DSM(response, (recvLen - 3));
     if (bcc == response[recvLen - 3]) {
 #if DEBUG_UART6
-        printf("DSM: rcv BCC校验通过!\r\n");
+        printf("DSM: 接收BCC校验通过！\r\n");
 #endif
         return NO_ERROR;
     } else {
 #if DEBUG_UART6
-        printf("DSM: rcv BCC校验失败!\r\n");
+        printf("DSM: 接收BCC校验失败！\r\n");
 #endif
         return SENSOR_BCC_ERROR; // 校验失败
     }
@@ -171,7 +171,7 @@ uint32_t Read_Sensor_Voltage(float *voltage_out) {
     char resp[RX_BUF_LEN];
 
     if (voltage_out == NULL) {
-        return PARAM_ERROR;
+        return PARAM_ADDRESS_OVERFLOW;
     }
 
     ret = UART6_SendWithRetry("CK", resp, RX_BUF_LEN, NULL, 500);
@@ -197,18 +197,18 @@ int Probe_EnableWaterSensor(void) {
     // 发送命令 "CL\r\n" 并带 3 次重试
     ret = UART6_SendWithRetry("CL", resp, RX_BUF_LEN, NULL, 500);
     if (ret == NO_ERROR) {
-        printf("[Probe] 开启测水探针响应: %s\r\n", resp);
+        printf("[探针] 开启测水探针响应: %s\r\n", resp);
 
         // 协议约定：如果返回包含 "%" 或其他成功标识，就认为成功
         if (strstr(resp, "%") != NULL) {
-            printf("[Probe] 测水探针开启成功！\r\n");
+            printf("[探针] 测水探针开启成功！\r\n");
             return NO_ERROR;
         } else {
-            printf("[Probe] 无效响应: %s\r\n", resp);
+            printf("[探针] 无效响应: %s\r\n", resp);
             return SENSOR_RESP_FORMAT_ERROR;
         }
     } else {
-        printf("[Probe] 测水探针开启失败！\r\n");
+        printf("[探针] 测水探针开启失败！\r\n");
         return ret;
     }
 }
@@ -264,7 +264,7 @@ int DSM_EnableDensityMode(void) {
 // 工具函数: 解析 "E06.6379V\r\n" 这类响应为浮点数
 static int parse_freq_response(const char *resp, float *out_hz)
 {
-    if (!resp || !out_hz) return PARAM_ERROR;
+    if (!resp || !out_hz) return PARAM_ADDRESS_OVERFLOW;
 
     // 1) 跳过起始标志（例如 'E'）和前导空白
     const char *p = resp;
@@ -286,7 +286,7 @@ static int parse_freq_response(const char *resp, float *out_hz)
 // 读取液位跟随频率（单次）
 uint32_t Read_Level_Frequency(uint32_t *frequency_out)
 {
-    if (!frequency_out) return PARAM_ERROR;
+    if (!frequency_out) return PARAM_ADDRESS_OVERFLOW;
 
     char resp[RX_BUF_LEN] = {0};
     uint32_t ret = UART6_SendWithRetry("Cb", resp, RX_BUF_LEN, NULL, 500);
@@ -299,7 +299,7 @@ uint32_t Read_Level_Frequency(uint32_t *frequency_out)
     float hz = 0.0f;
     int perr = parse_freq_response(resp, &hz);
     if (perr != 0) {
-        printf("无效频率响应，解析失败: err=%d, 原始: %s\r\n", perr, resp);
+        printf("无效频率响应，解析失败: 错误=%d, 原始: %s\r\n", perr, resp);
         return SENSOR_RESP_FORMAT_ERROR;
     }
 
@@ -310,7 +310,7 @@ uint32_t Read_Level_Frequency(uint32_t *frequency_out)
 // 读取密度、温度
 int DSM_Read_Frequency_Density_Temp(float *frequency, float *density, float *temp) {
     if (!frequency || !density || !temp) {
-        return PARAM_ERROR;
+        return PARAM_ADDRESS_OVERFLOW;
     }
 
     int ret = NO_ERROR;
@@ -420,7 +420,7 @@ uint32_t Read_VibrationTube_ID(char *id_out, size_t id_out_size)
 uint32_t Read_Water_Capacitance(float *cap_out)
 {
     if (cap_out == NULL) {
-        return PARAM_ERROR;   // 你工程里若叫 PARAM_ADDRESS_OVERFLOW/PARAM_ERROR 请替换
+        return PARAM_ADDRESS_OVERFLOW;   // 你工程里若叫 PARAM_ADDRESS_OVERFLOW/PARAM_ERROR 请替换
     }
 
     char resp[RX_BUF_LEN] = {0};
@@ -431,13 +431,13 @@ uint32_t Read_Water_Capacitance(float *cap_out)
     }
 
     if (recv_len != 11U) {
-        printf("[UART6] 电容响应长度异常: recvLen=%u\r\n", (unsigned)recv_len);
+        printf("[UART6] 电容响应长度异常: 接收长度=%u\r\n", (unsigned)recv_len);
         // return SENSOR_RESP_FORMAT_ERROR;
     }
 
     /* 格式检查：起始必须是 D 或 E，且以 \r\n 结束 */
     if (!((resp[0] == 'D') || (resp[0] == 'E'))) {
-        printf("[UART6] 电容响应头错误: 0x%02X, resp=%s\r\n", (unsigned char)resp[0], resp);
+        printf("[UART6] 电容响应头错误: 0x%02X, 响应=%s\r\n", (unsigned char)resp[0], resp);
         // return SENSOR_RESP_FORMAT_ERROR;
     }
     if (!(resp[9] == '\r' && resp[10] == '\n')) {
@@ -448,7 +448,7 @@ uint32_t Read_Water_Capacitance(float *cap_out)
     /* BCC 校验：WaterSendPack 的 BCC 在 resp[8]，覆盖 resp[0..7]。 */
     char bcc = CalculationBCC_DSM(resp, 8);
     if (bcc != resp[8]) {
-        printf("[UART6] 电容 BCC 校验失败: cal=%02X rcv=%02X\r\n", (unsigned char)bcc, (unsigned char)resp[8]);
+        printf("[UART6] 电容 BCC 校验失败: 计算=%02X 接收=%02X\r\n", (unsigned char)bcc, (unsigned char)resp[8]);
         // return SENSOR_BCC_ERROR;
     }
 
@@ -501,7 +501,7 @@ static int dsm_parse_float_after_tag(const char *tag_pos, float *out_val)
 uint32_t Read_Gyro_Angle(float *angle_x_deg, float *angle_y_deg)
 {
     if (!angle_x_deg || !angle_y_deg) {
-        return PARAM_ERROR;
+        return PARAM_ADDRESS_OVERFLOW;
     }
 
     char resp[RX_BUF_LEN] = {0};
@@ -527,7 +527,7 @@ uint32_t Read_Gyro_Angle(float *angle_x_deg, float *angle_y_deg)
     int eb = dsm_parse_float_after_tag(pB, &ay);
 
     if (ea != 0 || eb != 0) {
-        printf("[UART6] 陀螺仪角度解析失败: ea=%d eb=%d, resp=%s\r\n", ea, eb, resp);
+        printf("[UART6] 陀螺仪角度解析失败: A轴错误=%d B轴错误=%d, 响应=%s\r\n", ea, eb, resp);
         return SENSOR_RESP_FORMAT_ERROR;
     }
 

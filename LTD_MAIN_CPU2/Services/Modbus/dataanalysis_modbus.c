@@ -23,6 +23,13 @@ static inline uint32_t read_u32_from_regs(const uint16_t *regs, uint16_t addr) {
 	return ((uint32_t) regs[addr] << 16) | (uint32_t) regs[addr + 1];
 }
 
+/* 保护电机运行电流，避免 0 或越界值被保存并用于初始化 TMC5130。 */
+static inline uint32_t normalize_motor_current(uint32_t value) {
+    if ((value < MOTOR_CURRENT_MIN) || (value > MOTOR_CURRENT_MAX)) {
+        return MOTOR_CURRENT_DEFAULT;
+    }
+    return value;
+}
 /* 写入 int32_t 到寄存器数组 */
 static inline void write_i32_to_regs(uint16_t *regs, uint16_t addr, int32_t value) {
 	write_u32_to_regs(regs, addr, (uint32_t) value);
@@ -76,7 +83,7 @@ void WriteDeviceParamsToHoldingRegisters(uint16_t *HoldingRegisterArray)
     write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_RESERVED2, g_deviceParams.reserved2);
     write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_RESERVED3, g_deviceParams.reserved3);
     write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_RESERVED4, g_deviceParams.reserved4);
-    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_RESERVED5, g_deviceParams.reserved5);
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_MOTOR_CURRENT, g_deviceParams.motor_current);
 
     /* ===================== 电机与编码器参数 ===================== */
     write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_ENCODER_WHEEL_CIRCUMFERENCE_MM, g_deviceParams.encoder_wheel_circumference_mm);
@@ -84,8 +91,8 @@ void WriteDeviceParamsToHoldingRegisters(uint16_t *HoldingRegisterArray)
     write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_FIRST_LOOP_CIRCUMFERENCE_MM,    g_deviceParams.first_loop_circumference_mm);
     write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_TAPE_THICKNESS_MM,              g_deviceParams.tape_thickness_mm);
 
-    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_RESERVED6, g_deviceParams.reserved6);
-    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_RESERVED7, g_deviceParams.reserved7);
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_POSITION_COUNT_MODE, g_deviceParams.position_count_mode);
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_MOTOR_COUNT_FIRST_LOOP_CIRC, g_deviceParams.motor_count_first_loop_circumference_mm);
 
     /* ===================== 称重参数 ===================== */
     write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_EMPTY_WEIGHT,             g_deviceParams.empty_weight);
@@ -262,7 +269,7 @@ void ReadDeviceParamsFromHoldingRegisters(uint16_t *HoldingRegisterArray)
     g_deviceParams.reserved2 = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_RESERVED2);
     g_deviceParams.reserved3 = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_RESERVED3);
     g_deviceParams.reserved4 = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_RESERVED4);
-    g_deviceParams.reserved5 = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_RESERVED5);
+    g_deviceParams.motor_current = normalize_motor_current(read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_MOTOR_CURRENT));
 
     /* ===================== 电机与编码器参数 ===================== */
     g_deviceParams.encoder_wheel_circumference_mm = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_ENCODER_WHEEL_CIRCUMFERENCE_MM);
@@ -270,8 +277,8 @@ void ReadDeviceParamsFromHoldingRegisters(uint16_t *HoldingRegisterArray)
     g_deviceParams.first_loop_circumference_mm    = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_FIRST_LOOP_CIRCUMFERENCE_MM);
     g_deviceParams.tape_thickness_mm              = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_TAPE_THICKNESS_MM);
 
-    g_deviceParams.reserved6 = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_RESERVED6);
-    g_deviceParams.reserved7 = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_RESERVED7);
+    g_deviceParams.position_count_mode = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_POSITION_COUNT_MODE);
+    g_deviceParams.motor_count_first_loop_circumference_mm = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_MOTOR_COUNT_FIRST_LOOP_CIRC);
 
     /* ===================== 称重参数 ===================== */
     g_deviceParams.empty_weight             = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_EMPTY_WEIGHT);
@@ -413,6 +420,8 @@ void ReadDeviceParamsFromHoldingRegisters(uint16_t *HoldingRegisterArray)
     g_deviceParams.struct_size   = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_STRUCT_SIZE);
     g_deviceParams.magic         = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_MAGIC);
     g_deviceParams.crc           = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_CRC);
+
+    motorApplyPositionSourceParamsFromDeviceParams();
 
     //todo:
 }

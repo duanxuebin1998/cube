@@ -1512,6 +1512,19 @@ static void displaypara(void)
 	DisplayLangaugeLineWords((uint8_t*)"修改", OLED_LINE8_7, OLED_ROW4_4, timesure, (uint8_t*)"Alter");
 }
 
+/* 判断当前设备状态是否允许修改参数 */
+static bool state_allows_param_write(DeviceState state)
+{
+	/* 这些状态虽然使用 0x80xx 编码，但属于长期运行态，不应按“完成态”放行修改参数。 */
+	if (state == STATE_FLOWOIL
+		|| state == STATE_FOLLOW_WATERING
+		|| state == STATE_SPTESTING) {
+		return false;
+	}
+
+	return (state == STATE_STANDBY) || ((state & 0x8000U) != 0U);
+}
+
 /* 写权限范围检查 */
 static void parawritecheck(void)
 {
@@ -1520,8 +1533,7 @@ static void parawritecheck(void)
 	index = getHoldValueNum(now_Opera_Num);
 	if (index != -1
 		&& param_meta[index].authority_write
-		&& (g_measurement.device_status.device_state == STATE_STANDBY
-			|| ((g_measurement.device_status.device_state & 0x8000U) != 0U))) {
+		&& state_allows_param_write(g_measurement.device_status.device_state)) {
 
 		if (param_meta[index].pword == NULL) {
 			inputcmdpara();
@@ -2205,10 +2217,13 @@ static MenuGroup ParamGroupOf(int operaNum)
         return MENU_GRP_DEV_INFO;
 
     /* 机械/电机/编码器 */
+    case COM_NUM_DEVICEPARAM_MOTOR_CURRENT:
     case COM_NUM_DEVICEPARAM_ENCODER_WHEEL_CIRCUMFERENCE_MM:
     case COM_NUM_DEVICEPARAM_MAX_MOTOR_SPEED:
     case COM_NUM_DEVICEPARAM_FIRST_LOOP_CIRCUMFERENCE_MM:
     case COM_NUM_DEVICEPARAM_TAPE_THICKNESS_MM:
+    case COM_NUM_DEVICEPARAM_POSITION_COUNT_MODE:
+    case COM_NUM_DEVICEPARAM_MOTOR_COUNT_FIRST_LOOP_CIRC:
         return MENU_GRP_MECH;
 
     /* 称重 */

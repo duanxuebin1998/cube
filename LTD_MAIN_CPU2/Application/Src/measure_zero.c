@@ -25,6 +25,13 @@ int32_t zero_position;
 static int SearchZeroRough();
 static int SearchZeroPrecise();
 
+/* 编码轮记步时，零点位置本身由编码值刷新；此时不再用零点差距触发报警。 */
+static uint8_t Zero_ShouldCheckDeviation(void)
+{
+	return motorIsPositionSourceMotor() &&
+	       (g_measurement.device_status.device_state != STATE_FINDZEROING);
+}
+
 /**
  * @brief 主零点搜索流程
  *        先进行多次粗略找零点，成功后再进行两次精确找零点（均带可配置重试机制）
@@ -61,7 +68,7 @@ int SearchZero(void) {
 		ret = SearchZeroRough();
 		CHECK_COMMAND_SWITCH(ret);
 
-		if ((abs(g_measurement.debug_data.cable_length) > g_deviceParams.max_zero_deviation_distance) && (g_measurement.device_status.device_state != STATE_FINDZEROING)) {
+		if ((abs(g_measurement.debug_data.cable_length) > g_deviceParams.max_zero_deviation_distance) && Zero_ShouldCheckDeviation()) {
 			printf("零点测量\tt零点偏差超过阈值\r\n");
 			ret = MEASUREMENT_ZERO_OUT_OF_RANGE;
 			if (try_times >= ZERO_SEARCH_RETRY_MAX) {
@@ -143,13 +150,14 @@ int SearchZero(void) {
 
 	/*************** 最终校验与记录 ***************/
 	printf("零点测量完成 \t当前编码值\t %ld\r\n", g_encoder_count);
-	printf("{zero_value}%ld mm\r\n", g_measurement.debug_data.cable_length);
+	printf("{zero_value}%ld mm", g_measurement.debug_data.cable_length); motorPrintPositionRefs(); printf("\r\n");
 
-	if ((abs(g_measurement.debug_data.cable_length) > g_deviceParams.max_zero_deviation_distance) && (g_measurement.device_status.device_state != STATE_FINDZEROING)) {
+	if ((abs(g_measurement.debug_data.cable_length) > g_deviceParams.max_zero_deviation_distance) && Zero_ShouldCheckDeviation()) {
 		printf("零点测量\t编码值异常，可能需要重新校准\r\n");
 		RETURN_ERROR(MEASUREMENT_ZERO_OUT_OF_RANGE);
 	} else {
 		set_encoder_zero();
+		motorResetDrumReferenceToZero();
 		printf("零点测量\t编码器零点设置成功\r\n");
 		ret = motorMoveNoWaitWithSpeed(10, MOTOR_DIRECTION_DOWN, motorGetDefaultSpeedX100());//脱离零点
 		CHECK_ERROR(ret);
@@ -161,6 +169,12 @@ int SearchZero(void) {
 		if(g_deviceParams.bottom_detect_mode == BOTTOM_DET_BY_GYRO)
 		{
 			Bottom_SaveGyroZeroRef();//保存陀螺仪零点参考
+		}
+		/* 只有“标定零点”流程才强制恢复编码轮记步。
+		 * 普通回零点只重建零点基准，不改变当前记步模式；如果回零前已经是电机记步，回零后继续保持电机记步。 */
+		if (g_measurement.device_status.device_state == STATE_FINDZEROING) {
+			ret = motorSwitchPositionSourceToEncoder();
+			CHECK_ERROR(ret);
 		}
 		printf("零点测量\t电机下行完成，流程结束\r\n");
 	}
@@ -194,7 +208,7 @@ static int SearchZeroRough() {
 		ret = Motor_CheckLostStep_AutoTiming(g_measurement.debug_data.cable_length);
 		CHECK_ERROR(ret); // 检查丢步检测是否成功
 		// 实时打印编码器和重量信息
-		printf("零点测量\t长距离寻找零点\t{传感器位置}%.1f\t", (float) (g_measurement.debug_data.sensor_position) / 10.0);
+		printf("零点测量\t长距离寻找零点\t{传感器位置}%.1f", (float) (g_measurement.debug_data.sensor_position) / 10.0); motorPrintPositionRefs(); printf("\t");
 		ret = motorMove_upWithSpeed(speed_x100); // 电机上行
 		CHECK_ERROR(ret); // 检查上行是否成功
 	}
@@ -226,8 +240,9 @@ static int SearchZeroPrecise() {
 		ret = motorMove_upWithSpeed(speed_x100);  // 启动电机向下运动
 		CHECK_ERROR(ret); // 检查上行是否成功
 
-		if (g_measurement.debug_data.cable_length < (zero_position - 100)) {
-			printf("精找零点超出范围\t尺带长度\t%ld\r\n", g_measurement.debug_data.cable_length);
+		if ((g_measurement.debug_data.cable_length < (zero_position - (int32_t)g_deviceParams.max_zero_deviation_distance)) &&
+            Zero_ShouldCheckDeviation()) {
+			printf("精找零点超出范围\t尺带长度\t%ld", g_measurement.debug_data.cable_length); motorPrintPositionRefs(); printf("\r\n");
 			ret = motorQuickStop(); // 到达零点后快速停止电机
 			CHECK_ERROR(ret); // 检查快速停止是否成功
 			RETURN_ERROR(MEASUREMENT_WEIGHT_UP_FAIL); // 检查快速停止是否成功
@@ -235,14 +250,14 @@ static int SearchZeroPrecise() {
 		ret = Motor_CheckLostStep_AutoTiming(g_measurement.debug_data.cable_length);
 		CHECK_ERROR(ret); // 检查丢步检测是否成功
 
-		printf("零点测量\t精确寻找零点\t{传感器位置}%.1f\t速度(0.01m/min)\t%lu\t", (float)(g_measurement.debug_data.sensor_position) / 10.0f, (unsigned long)g_measurement.debug_data.motor_speed);
+		printf("零点测量\t精确寻找零点\t{传感器位置}%.1f", (float)(g_measurement.debug_data.sensor_position) / 10.0f); motorPrintPositionRefs(); printf("\t速度(0.01m/min)\t%lu\t", (unsigned long)g_measurement.debug_data.motor_speed);
 	}
-	printf("精找零点完成\t尺带长度\t%ld\r\n", g_measurement.debug_data.cable_length);
+	printf("精找零点完成\t尺带长度\t%ld", g_measurement.debug_data.cable_length); motorPrintPositionRefs(); printf("\r\n");
 	zero_position = g_measurement.debug_data.cable_length;
 	ret = motorQuickStop(); // 到达零点后快速停止电机
 	CHECK_ERROR(ret); // 检查快速停止是否成功
 
-	if ((abs(g_measurement.debug_data.cable_length) > g_deviceParams.max_zero_deviation_distance) && (g_measurement.device_status.device_state != STATE_FINDZEROING)) {
+	if ((abs(g_measurement.debug_data.cable_length) > g_deviceParams.max_zero_deviation_distance) && Zero_ShouldCheckDeviation()) {
 		printf("零点测量\t零点偏差超过阈值\r\n");//TODO：需要把阈值打印出来
 		ret = MEASUREMENT_ZERO_OUT_OF_RANGE;
 		CHECK_ERROR(ret);

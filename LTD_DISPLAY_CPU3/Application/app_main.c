@@ -319,7 +319,7 @@ static uint32_t cpu3_port_process(uint8_t port_idx,
 
 
 void App_Init(void) {
-	printf("LTD demo restart!\r\n");
+	printf("LTD显示端重启！\r\n");
 	/* Force UART5 RS485 direction back to RX after CubeMX init. */
 	RS485_SET_RECV_MODE();
 	__HAL_UART_CLEAR_IDLEFLAG(&huart5);
@@ -349,19 +349,19 @@ void App_MainLoop(void)
         did_work = 1;
 
 #if DEBUG_APP_MAIN
-        printf("com1_rx_ready == 1\r\n");
+        printf("COM1接收就绪\r\n");
 #endif
         ret = cpu3_port_process(1, UART6_RX_BUF, UART6_RX_LEN, sendbuff1, &send_len);
 
         if (ret != 0) {
-            printf("com1 process ret=%lu\r\n", (unsigned long)ret);
+            printf("COM1处理结果=%lu\r\n", (unsigned long)ret);
 
             COM1_RecvMode();
             HAL_UART_Receive_DMA(&huart6, UART6_RX_BUF, UART6_RX_BUF_SIZE);
         } else {
             if (send_len > 0) {
 #if DEBUG_APP_MAIN
-                printf("COM1 TX (%d): ", send_len);
+                printf("COM1发送(%d): ", send_len);
                 for (int i = 0; i < send_len; i++) printf("%02X ", sendbuff1[i]);
                 printf("\r\n");
 #endif
@@ -391,21 +391,21 @@ void App_MainLoop(void)
         did_work = 1;
 
 #if DEBUG_APP_MAIN
-        printf("COM2 RX (%d): ", UART2_RX_LEN);
+        printf("COM2接收(%d): ", UART2_RX_LEN);
         for (int i = 0; i < UART2_RX_LEN; i++) printf("%02X ", UART2_RX_BUF[i]);
         printf("\r\n");
 #endif
         ret = cpu3_port_process(2, UART2_RX_BUF, UART2_RX_LEN, sendbuff2, &send_len);
 
         if (ret != 0) {
-            printf("com2 process ret=%lu\r\n", (unsigned long)ret);
+            printf("COM2处理结果=%lu\r\n", (unsigned long)ret);
 
             COM2_RecvMode();
             HAL_UART_Receive_DMA(&huart2, UART2_RX_BUF, UART2_RX_BUF_SIZE);
         } else {
             if (send_len > 0) {
 #if DEBUG_APP_MAIN
-                printf("COM2 TX (%d): ", send_len);
+                printf("COM2发送(%d): ", send_len);
                 for (int i = 0; i < send_len; i++) printf("%02X ", sendbuff2[i]);
                 printf("\r\n");
 #endif
@@ -432,24 +432,24 @@ void App_MainLoop(void)
         did_work = 1;
 
 #if DEBUG_APP_MAIN
-        printf("com3_rx_ready == 1\r\n");
+        printf("COM3接收就绪\r\n");
 #endif
 #if DEBUG_APP_MAIN
-        printf("COM3 RX (%d): ", UART3_RX_LEN);
+        printf("COM3接收(%d): ", UART3_RX_LEN);
         for (int i = 0; i < UART3_RX_LEN; i++) printf("%02X ", UART3_RX_BUF[i]);
         printf("\r\n");
 #endif
         ret = cpu3_port_process(3, UART3_RX_BUF, UART3_RX_LEN, sendbuff3, &send_len);
 
         if (ret != 0) {
-            printf("com3 process ret=%lu\r\n", (unsigned long)ret);
+            printf("COM3处理结果=%lu\r\n", (unsigned long)ret);
 
             COM3_RecvMode();
             HAL_UART_Receive_DMA(&huart3, UART3_RX_BUF, UART3_RX_BUF_SIZE);
         } else {
             if (send_len > 0) {
 #if DEBUG_APP_MAIN
-                printf("COM3 TX (%d): ", send_len);
+                printf("COM3发送(%d): ", send_len);
                 for (int i = 0; i < send_len; i++) printf("%02X ", sendbuff3[i]);
                 printf("\r\n");
 #endif

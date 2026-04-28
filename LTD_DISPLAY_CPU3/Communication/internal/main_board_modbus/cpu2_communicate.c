@@ -44,7 +44,7 @@ void CommuToCPU2Init(void) {
 void HostCommuProcess(uint8_t *rcv, int len) {
 #if DEBUG_COMMUCPU2
     int i;
-    printf("RCV from CPU2 %d : ",len);
+    printf("收到CPU2数据 %d 字节: ",len);
     for(i = 0;i < len;i++)
         printf("%02X ",rcv[i]);
     printf("\r\n");
@@ -52,12 +52,12 @@ void HostCommuProcess(uint8_t *rcv, int len) {
 	if (len <= 3)
 		return;
 	if (!SlaveCheckCRC(rcv, len)) {
-		printf("CPU3 CRC ERROR");
+		printf("CPU3 CRC校验错误");
 		return;
 	}
 	/* 解析数据 */
 	if (rcv[0] != ADERSS) {
-		printf("CPU3 Address Error");
+		printf("CPU3地址错误");
 		return;
 	}
 	RCV_functioncode = rcv[1];
@@ -66,14 +66,14 @@ void HostCommuProcess(uint8_t *rcv, int len) {
 	case FUNCTIONCODE_READ_HOLDREGISTER: {
 		CPU2_Response03Process(rcv);
 #if DEBUG_COMMUCPU2
-            printf("CPU3 Response03Process\r\n");
+            printf("CPU3处理03响应\r\n");
 //            print_device_params();
 #endif
 		break;
 	}
 	case FUNCTIONCODE_READ_INPUTREGISTER: {
 #if DEBUG_COMMUCPU2
-            printf("CPU3 Response04Process\r\n");
+            printf("CPU3处理04响应\r\n");
 //            print_device_params();
 #endif
 		CPU2_Response04Process(rcv);
@@ -315,7 +315,7 @@ void CPU2_CombinatePackage_Send(uint8_t f_code, uint16_t startadd, uint16_t regi
 	arr[len++] = crc & 0xff;
 	arr[len++] = crc >> 8;
 #if DEBUG_COMMUCPU2
-	printf("send to CPU2 %d bytes:", len);
+	printf("发送到CPU2 %d 字节:", len);
 #endif
 	if (!sendToCPU2(arr, len, false)) {
 		return;
@@ -329,7 +329,7 @@ void CPU2_CombinatePackage_Send(uint8_t f_code, uint16_t startadd, uint16_t regi
 	while (wait_response) {
 		if (HAL_GetTick() - timeout > 1000) // 100ms超时
 				{
-			printf("Wait response timeout!\n");
+			printf("等待响应超时！\n");
 			wait_response = false;    // 防止一直 True
 			return;
 		}

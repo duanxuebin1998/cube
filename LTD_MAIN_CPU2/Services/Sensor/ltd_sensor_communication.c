@@ -63,7 +63,7 @@ static void UART6_DrainRX_UntilIdle(uint32_t idle_ms) {
 
 static int DSM_V2_Transceive(const uint8_t tx[8], uint8_t rx[8]) {
 #ifdef DEBUG_DSM
-	printf("V2 TX: ");
+	printf("V2发送: ");
 	for (int i = 0; i < 8; i++)
 		printf("%02X ", tx[i]);
 	printf("\r\n");
@@ -71,7 +71,7 @@ static int DSM_V2_Transceive(const uint8_t tx[8], uint8_t rx[8]) {
 	UART6_DrainRX_UntilIdle(5); // 发前清空残留数据
 	if (HAL_UART_Transmit(&huart6, (uint8_t*) tx, 8, DSM_CMD_TIMEOUT) != HAL_OK) {
 #ifdef DEBUG_DSM
-		printf("V2 TX failed\r\n");
+		printf("V2发送失败\r\n");
 #endif
 		return OTHER_PERIPHERAL_CONFIG_ERROR;
 	}
@@ -85,16 +85,16 @@ static int DSM_V2_Transceive(const uint8_t tx[8], uint8_t rx[8]) {
 	if (got < 8) {
 #ifdef DEBUG_DSM
 		if (got == 0) {
-			printf("V2 RX timeout, got 0 bytes\r\n");
+			printf("V2接收超时，收到0字节\r\n");
 		} else {
-			printf("V2 RX length error, got %d bytes\r\n", got);
+			printf("V2接收长度异常，收到%d字节\r\n", got);
 		}
 #endif
 		return (got == 0) ? SENSOR_DEVICE_COMM_TIMEOUT : SENSOR_RESP_FORMAT_ERROR;
 	}
 
 #ifdef DEBUG_DSM
-	printf("V2 RX: ");
+	printf("V2接收: ");
 	for (int i = 0; i < 8; i++)
 		printf("%02X ", rx[i]);
 	printf("\r\n");
@@ -102,7 +102,7 @@ static int DSM_V2_Transceive(const uint8_t tx[8], uint8_t rx[8]) {
 
 	if (DSM_V2_CalcSum(rx) != rx[7]) {
 #ifdef DEBUG_DSM
-		printf("V2 RX checksum error: calc=%02X, rx=%02X\r\n", DSM_V2_CalcSum(rx), rx[7]);
+		printf("V2接收校验错误: 计算=%02X, 接收=%02X\r\n", DSM_V2_CalcSum(rx), rx[7]);
 #endif
 		return SENSOR_BCC_ERROR;
 	}
@@ -116,19 +116,19 @@ static int DSM_V2_CheckReply(const uint8_t tx[8], const uint8_t rx[8]) {
 
 	if (rx[1] != expect_func) {
 #ifdef DEBUG_DSM
-		printf("V2 RX func mismatch: expect %02X, got %02X\r\n", expect_func, rx[1]);
+		printf("V2接收功能码不匹配: 期望=%02X, 实际=%02X\r\n", expect_func, rx[1]);
 #endif
 		return SENSOR_RESP_FORMAT_ERROR;
 	}
 	if (rx[6] == 0xFF) {
 #ifdef DEBUG_DSM
-		printf("V2 RX indicates FAIL (param=FF)\r\n");
+		printf("V2接收返回失败(参数=FF)\r\n");
 #endif
 		return SENSOR_DEVICE_REPORTED_ERROR;
 	}
 	if (rx[6] != expect_param) {
 #ifdef DEBUG_DSM
-		printf("V2 RX param mismatch: expect %02X, got %02X\r\n", expect_param, rx[6]);
+		printf("V2接收参数不匹配: 期望=%02X, 实际=%02X\r\n", expect_param, rx[6]);
 #endif
 		return SENSOR_RESP_FORMAT_ERROR;
 	}
@@ -166,7 +166,7 @@ int DSM_V2_SwitchMode(dsm_v2_mode_t mode) {
 		ret = DSM_V2_CheckReply(tx, rx);
 		if (ret == NO_ERROR) {
 #ifdef DEBUG_DSM
-			printf("[V2] switch mode '%c' OK\r\n", (char) mode);
+			printf("[V2] 切换模式'%c'成功\r\n", (char) mode);
 #endif
 			return NO_ERROR;
 		}
@@ -174,7 +174,7 @@ int DSM_V2_SwitchMode(dsm_v2_mode_t mode) {
 		HAL_Delay(DSM_BCC_DELAY);
 	}
 #ifdef DEBUG_DSM
-	printf("[V2] switch mode '%c' FAIL, err=%d\r\n", (char) mode, last_err);
+	printf("[V2] 切换模式'%c'失败, 错误码=%d\r\n", (char) mode, last_err);
 #endif
 	return last_err;
 }
@@ -188,7 +188,7 @@ int DSM_V2_SwitchToDensityMode(void) {
 // === 对外：通用读取 ===
 int DSM_V2_Read_FloatParam(uint8_t param, float *out_value) {
 	if (!out_value)
-		return OTHER_PERIPHERAL_CONFIG_ERROR;
+		return PARAM_ADDRESS_OVERFLOW;
 
 	uint8_t tx[8], rx[8];
 	int last_err = OTHER_PERIPHERAL_CONFIG_ERROR;
@@ -208,7 +208,7 @@ int DSM_V2_Read_FloatParam(uint8_t param, float *out_value) {
 			float v = DSM_V2_ParseFloat_LE(rx + 2);
 			*out_value = v;
 #ifdef DEBUG_DSM
-			printf("[V2] Read Float R %u: %f\r\n", (unsigned) param, (double) v);
+			printf("[V2] 读取浮点寄存器 R%u: %f\r\n", (unsigned) param, (double) v);
 #endif
 			return NO_ERROR;
 		}
@@ -220,7 +220,7 @@ int DSM_V2_Read_FloatParam(uint8_t param, float *out_value) {
 
 int DSM_V2_Read_IntParam(uint8_t param, int32_t *out_value) {
 	if (!out_value)
-		return OTHER_PERIPHERAL_CONFIG_ERROR;
+		return PARAM_ADDRESS_OVERFLOW;
 
 	uint8_t tx[8], rx[8];
 	int last_err = OTHER_PERIPHERAL_CONFIG_ERROR;
@@ -240,7 +240,7 @@ int DSM_V2_Read_IntParam(uint8_t param, int32_t *out_value) {
 			int32_t v = DSM_V2_ParseInt32_LE(rx + 2);
 			*out_value = v;
 #ifdef DEBUG_DSM
-			printf("[V2] Read Int R %u: %ld (0x%08lX)\r\n", (unsigned) param, (long) v, (unsigned long) v);
+			printf("[V2] 读取整数寄存器 R%u: %ld (0x%08lX)\r\n", (unsigned) param, (long) v, (unsigned long) v);
 #endif
 			return NO_ERROR;
 		}
@@ -275,7 +275,7 @@ int DSM_V2_Read_MeanSquare22p5(float *msq22p5) {
 // R04 液位频率（整型）
 int DSM_V2_Read_LevelFrequency(uint32_t *freq_hz) {
 	if (!freq_hz)
-		return OTHER_PERIPHERAL_CONFIG_ERROR;
+		return PARAM_ADDRESS_OVERFLOW;
 	int32_t v = 0;
 	int ret = DSM_V2_Read_IntParam(0x04, &v);   // 参数码 0x04 = R04
 	if (ret == NO_ERROR) {
@@ -292,7 +292,7 @@ int DSM_V2_Read_LevelFrequency(uint32_t *freq_hz) {
 // R16 液位频率（整型）
 int DSM_V2_Read_DensityFrequency(float *freq_hz,float *freq_45,float *freq_225) {
 	if (!freq_hz)
-		return OTHER_PERIPHERAL_CONFIG_ERROR;
+		return PARAM_ADDRESS_OVERFLOW;
 	float v = 0;
 	int ret = DSM_V2_Read_FloatParam(0x11, &v);   // 参数码 0x11 = 45度扫频平方均值
 	if (ret == NO_ERROR) {
@@ -307,7 +307,7 @@ int DSM_V2_Read_DensityFrequency(float *freq_hz,float *freq_45,float *freq_225) 
 }
 int DSM_V2_Read_SensorID(uint32_t *sensor_id) {
 	if (!sensor_id)
-		return OTHER_PERIPHERAL_CONFIG_ERROR;
+		return PARAM_ADDRESS_OVERFLOW;
 	int32_t v = 0;
 	int ret = DSM_V2_Read_IntParam(0x16, &v); // 22
 	if (ret == NO_ERROR)

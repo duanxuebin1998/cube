@@ -54,7 +54,7 @@ void HostCommuProcess(uint8_t *rcvbuff, int rcvcount) {
 	// 调试输出：打印接收到的原始帧数据（仅在调试模式启用时）
 #if DEBUG_HOSTCOMMU
 	int i;
-	printf("HostRcv %d:\t", rcvcount);
+	printf("主机接收 %d 字节:\t", rcvcount);
 	for (i = 0; i < rcvcount; i++) {
 		printf("%02X ", rcvbuff[i]);
 	}
@@ -65,7 +65,7 @@ void HostCommuProcess(uint8_t *rcvbuff, int rcvcount) {
 	if ((rcvcount <= 3) || (rcvcount >= MAXRCVLENGTH)) {
 		// 帧长度过短或过长都不合法
 #if DEBUG_HOSTCOMMU
-		printf("HOSTCOMM:length %d error\r\n", rcvcount);
+		printf("主机通信: 长度%d错误\r\n", rcvcount);
 #endif
 		HostCommuResumeRxDMA();
 	}
@@ -73,17 +73,17 @@ void HostCommuProcess(uint8_t *rcvbuff, int rcvcount) {
 	else if (SlaveCheckAddress(rcvbuff, rcvcount) == false) {
 		// 地址不匹配，不是发给本机的请求
 #if DEBUG_HOSTCOMMU
-		printf("HOSTCOMM:Address %d error\r\n", rcvbuff[0]);
+		printf("主机通信: 地址%d错误\r\n", rcvbuff[0]);
 #endif
 		HostCommuResumeRxDMA();
 	}
 	// 检查3: CRC校验
 	else if (SlaveCheckCRC(rcvbuff, rcvcount) == false) {
 		// CRC校验失败，打印错误信息和接收到的原始数据
-		printf("CRC-err -  HostRcv %d:\t", rcvcount);
+		printf("CRC错误 - 主机接收 %d 字节:\t", rcvcount);
 		{
 			int i;
-			printf("HostRcv %d:\t", rcvcount);
+			printf("主机接收 %d 字节:\t", rcvcount);
 			for (i = 0; i < rcvcount; i++) {
 				printf("%x\t", rcvbuff[i]);
 			}
@@ -112,14 +112,14 @@ void HostCommuProcess(uint8_t *rcvbuff, int rcvcount) {
 		if (FunctionCheckIllPack(HCOM_SendBuff, &HCOM_SendCount) == false) {
 			// 非支持的功能码
 #if DEBUG_HOSTCOMMU
-			printf("HOSTCOMM:Function %d error\r\n", functioncode);
+			printf("主机通信: 功能码%d错误\r\n", functioncode);
 #endif
 		}
 		// 检查5: 数据地址合法性
 		else if (IllegalDataAddressPack(HCOM_SendBuff, &HCOM_SendCount) == false) {
 			// 请求的寄存器地址或数量超出范围
 #if DEBUG_HOSTCOMMU
-			printf("HOSTCOMM:Startadd %d regiscnt %d error\r\n", startaddress, registeramount);
+			printf("主机通信: 起始地址%d 寄存器数%d错误\r\n", startaddress, registeramount);
 #endif
 		}
 		// 处理支持的合法请求
@@ -146,7 +146,7 @@ void HostCommuProcess(uint8_t *rcvbuff, int rcvcount) {
 		HCOM_SendBuff[HCOM_SendCount + 1] = crc >> 8;   // CRC高字节
 		HCOM_SendCount += 2;
 #if DEBUG_HOSTCOMMU
-		printf("HOSTCOMM: send %d bytes:", HCOM_SendCount);
+		printf("主机通信: 发送%d字节:", HCOM_SendCount);
 		for (int i = 0; i < HCOM_SendCount; i++) {
 			printf(" %02X", (unsigned char) HCOM_SendBuff[i]);
 		}

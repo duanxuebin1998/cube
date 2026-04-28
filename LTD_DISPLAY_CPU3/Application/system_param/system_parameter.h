@@ -425,16 +425,16 @@ typedef struct {
     uint32_t reserved2;                   // 预留
     uint32_t reserved3;                   // 预留
     uint32_t reserved4;                   // 预留（新增）
-    uint32_t reserved5;                   // 预留（新增）
 
     // ===================== 电机与编码器参数 =====================
+    uint32_t motor_current;               // 电机运行电流(1~31，异常恢复为16)
     uint32_t encoder_wheel_circumference_mm; // 编码轮周长(0.001mm)
     uint32_t max_motor_speed;                 // max motor speed (0.01m/min)
     uint32_t first_loop_circumference_mm;     // 尺带首圈周长(0.1mm)
     uint32_t tape_thickness_mm;               // 尺带厚度(0.001mm)
 
-    uint32_t reserved6;                   // 预留
-    uint32_t reserved7;                   // 预留（新增）
+    uint32_t position_count_mode;          // 当前记步模式(0=编码轮,1=电机步进)
+    uint32_t motor_count_first_loop_circumference_mm; // 电机记步局部首圈周长(0.001mm)
 
     // ===================== 称重参数 =====================
     uint32_t empty_weight;                // 空载重量
@@ -628,6 +628,15 @@ typedef enum{/* 数据源取自 */
     SOURCE_FROM_MEA,
     SOURCE_FROM_INPUT,
 }SOURCE;
+
+/* 位置记步来源：0 使用编码轮，1 使用 TMC5130 XACTUAL 电机步进。 */
+#define POSITION_COUNT_MODE_ENCODER 0u
+#define POSITION_COUNT_MODE_MOTOR   1u
+
+/* 电机运行电流配置，范围对应 TMC5130 IRUN。 */
+#define MOTOR_CURRENT_DEFAULT       16u
+#define MOTOR_CURRENT_MIN           1u
+#define MOTOR_CURRENT_MAX           31u
 
 /***************** 全局变量 ****************************/
 extern int cnt_commutoCPU2;

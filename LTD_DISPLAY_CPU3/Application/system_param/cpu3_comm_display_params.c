@@ -443,13 +443,13 @@ void Cpu3_Params_SaveToFRAM(void)
     if (Cpu3_Params_StorageValid(&current)
         && memcmp(&current.params, &stor.params, sizeof(stor.params)) == 0)
     {
-        printf("Cpu3 params unchanged, skip save.\r\n");
+        printf("CPU3参数未变化，跳过保存。\r\n");
         return;
     }
 
     WriteMultiData((uint8_t*)&stor, FRAM_CPU3_PARAM_ADDRESS, sizeof(Cpu3ParamStorage));
 
-    printf("Cpu3 params saved to FRAM. CRC=0x%08lX\r\n", (unsigned long)stor.crc);
+    printf("CPU3参数已保存到FRAM，CRC=0x%08lX\r\n", (unsigned long)stor.crc);
 }
 
 void Cpu3_Params_LoadFromFRAM(void)
@@ -463,7 +463,7 @@ void Cpu3_Params_LoadFromFRAM(void)
 
     /* 检查 magic & version */
     if ((stor.magic != CPU3_PARAM_MAGIC) || (stor.version != CPU3_PARAM_VERSION)) {
-        printf("Cpu3 FRAM params invalid magic/version. Use defaults.\r\n");
+        printf("CPU3 FRAM参数魔术字/版本无效，使用默认值。\r\n");
         use_default = 1;
     } else {
         /* 校验 CRC */
@@ -471,7 +471,7 @@ void Cpu3_Params_LoadFromFRAM(void)
         uint32_t crc_calc = CRC32_HAL((uint8_t*)&stor, crc_len);
 
         if (crc_calc != stor.crc) {
-            printf("Cpu3 FRAM params CRC mismatch. FRAM=0x%08lX, CALC=0x%08lX\r\n",
+            printf("CPU3 FRAM参数CRC不匹配，FRAM=0x%08lX，计算=0x%08lX\r\n",
                    (unsigned long)stor.crc, (unsigned long)crc_calc);
             use_default = 1;
         }
@@ -484,7 +484,7 @@ void Cpu3_Params_LoadFromFRAM(void)
     } else {
         /* 正常加载 */
         g_cpu3_comm_display_params = stor.params;
-        printf("Cpu3 params loaded from FRAM. CRC=0x%08lX\r\n", (unsigned long)stor.crc);
+        printf("CPU3参数已从FRAM加载，CRC=0x%08lX\r\n", (unsigned long)stor.crc);
     }
 }
 

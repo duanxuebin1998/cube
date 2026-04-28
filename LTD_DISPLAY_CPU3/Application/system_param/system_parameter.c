@@ -33,14 +33,14 @@ struct ParameterMetadata param_meta[] = {
 {(uint8_t*)"保留2",	0,	COM_NUM_DEVICEPARAM_RESERVED2,	HOLDREGISTER_DEVICEPARAM_RESERVED2,	2,	false,	0,	0,	NULL,	0,	0,	false,	TYPE_INT,	8,	NULL,	(uint8_t*)"Rsv2"},
 {(uint8_t*)"保留3",	0,	COM_NUM_DEVICEPARAM_RESERVED3,	HOLDREGISTER_DEVICEPARAM_RESERVED3,	2,	false,	0,	0,	NULL,	0,	0,	false,	TYPE_INT,	8,	NULL,	(uint8_t*)"Rsv3"},
 {(uint8_t*)"保留4",	0,	COM_NUM_DEVICEPARAM_RESERVED4,	HOLDREGISTER_DEVICEPARAM_RESERVED4,	2,	false,	0,	0,	NULL,	0,	0,	false,	TYPE_INT,	8,	NULL,	(uint8_t*)"Rsv4"},
-{(uint8_t*)"保留5",	0,	COM_NUM_DEVICEPARAM_RESERVED5,	HOLDREGISTER_DEVICEPARAM_RESERVED5,	2,	false,	0,	0,	NULL,	0,	0,	false,	TYPE_INT,	8,	NULL,	(uint8_t*)"Rsv5"},
 
+{(uint8_t*)"电机运行电流", 0, COM_NUM_DEVICEPARAM_MOTOR_CURRENT, HOLDREGISTER_DEVICEPARAM_MOTOR_CURRENT, 2, true, 1, 31, NULL, 0, 0, true, TYPE_INT, 2, NULL, (uint8_t*)"MotorCur"},
 {(uint8_t*)"编码轮周长mm",	0,	COM_NUM_DEVICEPARAM_ENCODER_WHEEL_CIRCUMFERENCE_MM,	HOLDREGISTER_DEVICEPARAM_ENCODER_WHEEL_CIRCUMFERENCE_MM,	2,	false,	0,	0,	NULL,	3,	0,	true,	TYPE_INT,	7,	NULL,	(uint8_t*)"EncWheelCirc"},
 {(uint8_t*)"电机最大速度",	0,	COM_NUM_DEVICEPARAM_MAX_MOTOR_SPEED,	HOLDREGISTER_DEVICEPARAM_MAX_MOTOR_SPEED,	2,	false,	0,	0,	NULL,	2,	0,	true,	TYPE_INT,	3,	NULL,	(uint8_t*)"MaxMotorSpd"},
 {(uint8_t*)"首圈周长mm",	0,	COM_NUM_DEVICEPARAM_FIRST_LOOP_CIRCUMFERENCE_MM,	HOLDREGISTER_DEVICEPARAM_FIRST_LOOP_CIRCUMFERENCE_MM,	2,	false,	0,	0,	NULL,	1,	0,	true,	TYPE_INT,	5,	NULL,	(uint8_t*)"FirstLoop"},
 {(uint8_t*)"尺带厚度mm",	0,	COM_NUM_DEVICEPARAM_TAPE_THICKNESS_MM,	HOLDREGISTER_DEVICEPARAM_TAPE_THICKNESS_MM,	2,	false,	0,	0,	NULL,	3,	0,	true,	TYPE_INT,	6,	NULL,	(uint8_t*)"TapeThick"},
-{(uint8_t*)"保留6",	0,	COM_NUM_DEVICEPARAM_RESERVED6,	HOLDREGISTER_DEVICEPARAM_RESERVED6,	2,	false,	0,	0,	NULL,	0,	0,	false,	TYPE_INT,	8,	NULL,	(uint8_t*)"Rsv6"},
-{(uint8_t*)"保留7",	0,	COM_NUM_DEVICEPARAM_RESERVED7,	HOLDREGISTER_DEVICEPARAM_RESERVED7,	2,	false,	0,	0,	NULL,	0,	0,	false,	TYPE_INT,	8,	NULL,	(uint8_t*)"Rsv7"},
+{(uint8_t*)"记步模式",	0,	COM_NUM_DEVICEPARAM_POSITION_COUNT_MODE,	HOLDREGISTER_DEVICEPARAM_POSITION_COUNT_MODE,	2,	true,	0,	1,	NULL,	0,	0,	true,	TYPE_INT,	1,	NULL,	(uint8_t*)"CntMode"},
+{(uint8_t*)"电机局部周长",	0,	COM_NUM_DEVICEPARAM_MOTOR_COUNT_FIRST_LOOP_CIRC,	HOLDREGISTER_DEVICEPARAM_MOTOR_COUNT_FIRST_LOOP_CIRC,	2,	true,	50000,	5000000,	(uint8_t*)"mm",	3,	0,	true,	TYPE_INT,	7,	NULL,	(uint8_t*)"MotorCirc"},
 
 {(uint8_t*)"空载重量",	0,	COM_NUM_DEVICEPARAM_EMPTY_WEIGHT,	HOLDREGISTER_DEVICEPARAM_EMPTY_WEIGHT,	2,	false,	0,	0,	NULL,	0,	0,	true,	TYPE_INT,	7,	NULL,	(uint8_t*)"EmptyWt"},
 {(uint8_t*)"空载重量上限",	0,	COM_NUM_DEVICEPARAM_EMPTY_WEIGHT_UPPER_LIMIT,	HOLDREGISTER_DEVICEPARAM_EMPTY_WEIGHT_UPPER_LIMIT,	2,	false,	0,	0,	NULL,	0,	0,	true,	TYPE_INT,	7,	NULL,	(uint8_t*)"EmptyWtHi"},
@@ -262,149 +262,154 @@ void print_device_params(void)
     DeviceParameters params;
     memcpy(&params, (void *)&g_deviceParams, sizeof(DeviceParameters));
 
-    printf("========== Device Parameters ==========\r\n");
+    printf("\r\n========================================\r\n");
+    printf("              设备参数\r\n");
+    printf("========================================\r\n");
 
     /* 指令 */
-    printf("[Command]\r\n");
-    printf("  command                    : %u\r\n", (unsigned)params.command);
-    printf("  powerOnDefaultCommand      : %u\r\n", (unsigned)params.powerOnDefaultCommand);
+    printf("\r\n-- 指令 --\r\n");
+    printf("  %-32s : %u\r\n", "当前指令", (unsigned)params.command);
+    printf("  %-32s : %u\r\n", "上电默认指令", (unsigned)params.powerOnDefaultCommand);
 
     /* 基础参数 */
-    printf("[Basic]\r\n");
-    printf("  sensorType                 : %lu\r\n", (unsigned long)params.sensorType);
-    printf("  sensorID                   : %lu\r\n", (unsigned long)params.sensorID);
-    printf("  sensorSoftwareVersion      : 0x%08lX\r\n", (unsigned long)params.sensorSoftwareVersion);
-    printf("  softwareVersion            : 0x%08lX\r\n", (unsigned long)params.softwareVersion);
-    printf("  error_auto_back_zero       : %lu\r\n", (unsigned long)params.error_auto_back_zero);
-    printf("  error_stop_measurement     : %lu\r\n", (unsigned long)params.error_stop_measurement);
+    printf("\r\n-- 基础参数 --\r\n");
+    printf("  %-32s : %lu\r\n", "传感器类型", (unsigned long)params.sensorType);
+    printf("  %-32s : %lu\r\n", "传感器编号", (unsigned long)params.sensorID);
+    printf("  %-32s : 0x%08lX\r\n", "传感器软件版本", (unsigned long)params.sensorSoftwareVersion);
+    printf("  %-32s : 0x%08lX\r\n", "软件版本", (unsigned long)params.softwareVersion);
+    printf("  %-32s : %lu\r\n", "故障自动回零", (unsigned long)params.error_auto_back_zero);
+    printf("  %-32s : %lu\r\n", "故障停止测量", (unsigned long)params.error_stop_measurement);
 
     /* 电机与编码器 */
-    printf("[Motor / Encoder]\r\n");
-    printf("  encoder_circ(0.001mm)      : %lu\r\n", (unsigned long)params.encoder_wheel_circumference_mm);
-    printf("  max_motor_speed(0.01m/min): %lu\r\n", (unsigned long)params.max_motor_speed);
-    printf("  first_loop_circ(0.1mm)     : %lu\r\n", (unsigned long)params.first_loop_circumference_mm);
-    printf("  tape_thickness(0.001mm)    : %lu\r\n", (unsigned long)params.tape_thickness_mm);
+    printf("\r\n-- 电机与编码器 --\r\n");
+    printf("  %-32s : %lu\r\n", "编码轮周长(0.001mm)", (unsigned long)params.encoder_wheel_circumference_mm);
+    printf("  %-32s : %lu\r\n", "电机运行电流(IRUN)", (unsigned long)params.motor_current);
+    printf("  %-32s : %lu\r\n", "电机最大速度(0.01m/min)", (unsigned long)params.max_motor_speed);
+    printf("  %-32s : %lu\r\n", "首圈周长(0.1mm)", (unsigned long)params.first_loop_circumference_mm);
+    printf("  %-32s : %lu\r\n", "尺带厚度(0.001mm)", (unsigned long)params.tape_thickness_mm);
+    printf("  %-32s : %lu\r\n", "记步模式", (unsigned long)params.position_count_mode);
+    printf("  %-32s : %lu\r\n", "电机局部周长(0.001mm)", (unsigned long)params.motor_count_first_loop_circumference_mm);
 
     /* 称重 */
-    printf("[Weight]\r\n");
-    printf("  empty_weight               : %lu\r\n", (unsigned long)params.empty_weight);
-    printf("  empty_weight_upper_limit   : %lu\r\n", (unsigned long)params.empty_weight_upper_limit);
-    printf("  empty_weight_lower_limit   : %lu\r\n", (unsigned long)params.empty_weight_lower_limit);
-    printf("  full_weight                : %lu\r\n", (unsigned long)params.full_weight);
-    printf("  full_weight_upper_limit    : %lu\r\n", (unsigned long)params.full_weight_upper_limit);
-    printf("  full_weight_lower_limit    : %lu\r\n", (unsigned long)params.full_weight_lower_limit);
-    printf("  weight_upper_limit_ratio   : %lu\r\n", (unsigned long)params.weight_upper_limit_ratio);
-    printf("  weight_lower_limit_ratio   : %lu\r\n", (unsigned long)params.weight_lower_limit_ratio);
+    printf("\r\n-- 称重参数 --\r\n");
+    printf("  %-32s : %lu\r\n", "空载重量", (unsigned long)params.empty_weight);
+    printf("  %-32s : %lu\r\n", "空载重量上限", (unsigned long)params.empty_weight_upper_limit);
+    printf("  %-32s : %lu\r\n", "空载重量下限", (unsigned long)params.empty_weight_lower_limit);
+    printf("  %-32s : %lu\r\n", "满载重量", (unsigned long)params.full_weight);
+    printf("  %-32s : %lu\r\n", "满载重量上限", (unsigned long)params.full_weight_upper_limit);
+    printf("  %-32s : %lu\r\n", "满载重量下限", (unsigned long)params.full_weight_lower_limit);
+    printf("  %-32s : %lu\r\n", "碰撞上限比率", (unsigned long)params.weight_upper_limit_ratio);
+    printf("  %-32s : %lu\r\n", "碰撞下限比率", (unsigned long)params.weight_lower_limit_ratio);
 
     /* 零点 */
-    printf("[Zero]\r\n");
-    printf("  zero_weight_threshold_ratio: %lu\r\n", (unsigned long)params.zero_weight_threshold_ratio);
-    printf("  weight_ignore_zone(0.1mm)  : %lu\r\n", (unsigned long)params.weight_ignore_zone);
-    printf("  max_zero_deviation(0.1mm)  : %lu\r\n", (unsigned long)params.max_zero_deviation_distance);
-    printf("  findZeroDownDistance(0.1mm): %lu\r\n", (unsigned long)params.findZeroDownDistance);
+    printf("\r\n-- 零点参数 --\r\n");
+    printf("  %-32s : %lu\r\n", "零点阈值比例", (unsigned long)params.zero_weight_threshold_ratio);
+    printf("  %-32s : %lu\r\n", "称重忽略区(0.1mm)", (unsigned long)params.weight_ignore_zone);
+    printf("  %-32s : %lu\r\n", "零点最大偏差(0.1mm)", (unsigned long)params.max_zero_deviation_distance);
+    printf("  %-32s : %lu\r\n", "找零下行距离(0.1mm)", (unsigned long)params.findZeroDownDistance);
 
     /* 液位 */
-    printf("[Oil Level]\r\n");
-    printf("  tankHeight(0.1mm)          : %lu\r\n", (unsigned long)params.tankHeight);
-    printf("  liquid_sensor_diff(0.1mm)  : %lu\r\n", (unsigned long)params.liquid_sensor_distance_diff);
-    printf("  blindZone(0.1mm)           : %lu\r\n", (unsigned long)params.blindZone);
-    printf("  oilLevelThreshold          : %lu\r\n", (unsigned long)params.oilLevelThreshold);
-    printf("  oilLevelHysteresis         : %lu\r\n", (unsigned long)params.oilLevelHysteresisThreshold);
-    printf("  liquidLevelMethod          : %lu\r\n", (unsigned long)params.liquidLevelMeasurementMethod);
-    printf("  oilLevelFrequency          : %lu\r\n", (unsigned long)params.oilLevelFrequency);
-    printf("  oilLevelDensity            : %lu\r\n", (unsigned long)params.oilLevelDensity);
-    printf("  oilLevelHysteresisTime     : %lu\r\n", (unsigned long)params.oilLevelHysteresisTime);
+    printf("\r\n-- 液位参数 --\r\n");
+    printf("  %-32s : %lu\r\n", "液位罐高(0.1mm)", (unsigned long)params.tankHeight);
+    printf("  %-32s : %lu\r\n", "液位探头距差(0.1mm)", (unsigned long)params.liquid_sensor_distance_diff);
+    printf("  %-32s : %lu\r\n", "液位盲区(0.1mm)", (unsigned long)params.blindZone);
+    printf("  %-32s : %lu\r\n", "找油阈值", (unsigned long)params.oilLevelThreshold);
+    printf("  %-32s : %lu\r\n", "液位滞后阈值", (unsigned long)params.oilLevelHysteresisThreshold);
+    printf("  %-32s : %lu\r\n", "液位测量方式", (unsigned long)params.liquidLevelMeasurementMethod);
+    printf("  %-32s : %lu\r\n", "液位跟随频率", (unsigned long)params.oilLevelFrequency);
+    printf("  %-32s : %lu\r\n", "液位跟随密度", (unsigned long)params.oilLevelDensity);
+    printf("  %-32s : %lu\r\n", "液位滞后时间", (unsigned long)params.oilLevelHysteresisTime);
 
     /* 水位 */
-    printf("[Water Level]\r\n");
-    printf("  water_tank_height(0.1mm)   : %lu\r\n", (unsigned long)params.water_tank_height);
-    printf("  water_level_mode           : %lu\r\n", (unsigned long)params.water_level_mode);
-    printf("  waterBlindZone(0.1mm)      : %lu\r\n", (unsigned long)params.waterBlindZone);
-    printf("  water_cap_threshold        : %lu\r\n", (unsigned long)params.water_cap_threshold);
-    printf("  water_cap_hysteresis       : %lu\r\n", (unsigned long)params.water_cap_hysteresis);
-    printf("  maxDownDistance(0.1mm)     : %lu\r\n", (unsigned long)params.maxDownDistance);
-    printf("  waterLevel_zero_cap        : %lu\r\n", (unsigned long)params.zero_cap);
-    printf("  water_stable_threshold     : %lu\r\n", (unsigned long)params.water_stable_threshold);
-    printf("  waterLevelCorrection       : %lu\r\n", (unsigned long)params.waterLevelCorrection);
+    printf("\r\n-- 水位参数 --\r\n");
+    printf("  %-32s : %lu\r\n", "水位罐高(0.1mm)", (unsigned long)params.water_tank_height);
+    printf("  %-32s : %lu\r\n", "水位测量方式", (unsigned long)params.water_level_mode);
+    printf("  %-32s : %lu\r\n", "水位盲区(0.1mm)", (unsigned long)params.waterBlindZone);
+    printf("  %-32s : %lu\r\n", "水位电容阈值", (unsigned long)params.water_cap_threshold);
+    printf("  %-32s : %lu\r\n", "水位电容滞回", (unsigned long)params.water_cap_hysteresis);
+    printf("  %-32s : %lu\r\n", "最大下行距离(0.1mm)", (unsigned long)params.maxDownDistance);
+    printf("  %-32s : %lu\r\n", "水位零点电容", (unsigned long)params.zero_cap);
+    printf("  %-32s : %lu\r\n", "水位稳定阈值", (unsigned long)params.water_stable_threshold);
+    printf("  %-32s : %lu\r\n", "水位修正值", (unsigned long)params.waterLevelCorrection);
 
     /* 罐底/罐高 */
-    printf("[Bottom / Tank Height]\r\n");
-    printf("  bottom_detect_mode         : %lu\r\n", (unsigned long)params.bottom_detect_mode);
-    printf("  bottom_angle_threshold     : %lu\r\n", (unsigned long)params.bottom_angle_threshold);
-    printf("  bottom_weight_threshold    : %lu\r\n", (unsigned long)params.bottom_weight_threshold);
-    printf("  refreshTankHeightFlag      : %lu\r\n", (unsigned long)params.refreshTankHeightFlag);
-    printf("  maxTankHeightDeviation     : %lu\r\n", (unsigned long)params.maxTankHeightDeviation);
-    printf("  initialTankHeight          : %lu\r\n", (unsigned long)params.initialTankHeight);
-    printf("  currentTankHeight          : %lu\r\n", (unsigned long)params.currentTankHeight);
+    printf("\r\n-- 罐底/罐高参数 --\r\n");
+    printf("  %-32s : %lu\r\n", "罐底检测模式", (unsigned long)params.bottom_detect_mode);
+    printf("  %-32s : %lu\r\n", "罐底角度阈值", (unsigned long)params.bottom_angle_threshold);
+    printf("  %-32s : %lu\r\n", "罐底称重阈值", (unsigned long)params.bottom_weight_threshold);
+    printf("  %-32s : %lu\r\n", "更新罐高标志", (unsigned long)params.refreshTankHeightFlag);
+    printf("  %-32s : %lu\r\n", "实高最大偏差", (unsigned long)params.maxTankHeightDeviation);
+    printf("  %-32s : %lu\r\n", "初始罐高", (unsigned long)params.initialTankHeight);
+    printf("  %-32s : %lu\r\n", "当前罐高", (unsigned long)params.currentTankHeight);
 
     /* 修正 */
-    printf("[Correction]\r\n");
-    printf("  densityCorrection          : %lu\r\n", (unsigned long)params.densityCorrection);
-    printf("  temperatureCorrection      : %lu\r\n", (unsigned long)params.temperatureCorrection);
+    printf("\r\n-- 修正参数 --\r\n");
+    printf("  %-32s : %lu\r\n", "密度修正值", (unsigned long)params.densityCorrection);
+    printf("  %-32s : %lu\r\n", "温度修正值", (unsigned long)params.temperatureCorrection);
 
     /* 分布/区间 */
-    printf("[Spread / Interval]\r\n");
-    printf("  requireBottomMeasurement   : %lu\r\n", (unsigned long)params.requireBottomMeasurement);
-    printf("  requireWaterMeasurement    : %lu\r\n", (unsigned long)params.requireWaterMeasurement);
-    printf("  requireSinglePointDensity  : %lu\r\n", (unsigned long)params.requireSinglePointDensity);
-    printf("  spreadMeasurementOrder     : %lu\r\n", (unsigned long)params.spreadMeasurementOrder);
-    printf("  spreadMeasurementMode      : %lu\r\n", (unsigned long)params.spreadMeasurementMode);
-    printf("  spreadMeasurementCount     : %lu\r\n", (unsigned long)params.spreadMeasurementCount);
-    printf("  spreadMeasurementDistance  : %lu\r\n", (unsigned long)params.spreadMeasurementDistance);
-    printf("  spreadTopLimit(0.1mm)      : %lu\r\n", (unsigned long)params.spreadTopLimit);
-    printf("  spreadBottomLimit(0.1mm)   : %lu\r\n", (unsigned long)params.spreadBottomLimit);
-    printf("  spreadPointHoverTime       : %lu\r\n", (unsigned long)params.spreadPointHoverTime);
-    printf("  intervalTopLimit(0.1mm)    : %lu\r\n", (unsigned long)params.intervalMeasurementTopLimit);
-    printf("  intervalBottomLimit(0.1mm) : %lu\r\n", (unsigned long)params.intervalMeasurementBottomLimit);
+    printf("\r\n-- 分布/区间参数 --\r\n");
+    printf("  %-32s : %lu\r\n", "是否测罐底", (unsigned long)params.requireBottomMeasurement);
+    printf("  %-32s : %lu\r\n", "是否测水位", (unsigned long)params.requireWaterMeasurement);
+    printf("  %-32s : %lu\r\n", "是否测单点密度", (unsigned long)params.requireSinglePointDensity);
+    printf("  %-32s : %lu\r\n", "分布测顺序", (unsigned long)params.spreadMeasurementOrder);
+    printf("  %-32s : %lu\r\n", "分布测模式", (unsigned long)params.spreadMeasurementMode);
+    printf("  %-32s : %lu\r\n", "分布测点数", (unsigned long)params.spreadMeasurementCount);
+    printf("  %-32s : %lu\r\n", "分布点间距", (unsigned long)params.spreadMeasurementDistance);
+    printf("  %-32s : %lu\r\n", "顶点距液面(0.1mm)", (unsigned long)params.spreadTopLimit);
+    printf("  %-32s : %lu\r\n", "底点距罐底(0.1mm)", (unsigned long)params.spreadBottomLimit);
+    printf("  %-32s : %lu\r\n", "分布点悬停时间", (unsigned long)params.spreadPointHoverTime);
+    printf("  %-32s : %lu\r\n", "区间测量上限(0.1mm)", (unsigned long)params.intervalMeasurementTopLimit);
+    printf("  %-32s : %lu\r\n", "区间测量下限(0.1mm)", (unsigned long)params.intervalMeasurementBottomLimit);
 
     /* Wartsila */
-    printf("[Wartsila]\r\n");
-    printf("  upper_density_limit        : %lu\r\n", (unsigned long)params.wartsila_upper_density_limit);
-    printf("  lower_density_limit        : %lu\r\n", (unsigned long)params.wartsila_lower_density_limit);
-    printf("  density_interval           : %lu\r\n", (unsigned long)params.wartsila_density_interval);
-    printf("  max_height_above_surface   : %lu\r\n", (unsigned long)params.wartsila_max_height_above_surface);
+    printf("\r\n-- 瓦锡兰参数 --\r\n");
+    printf("  %-32s : %lu\r\n", "密度点上限", (unsigned long)params.wartsila_upper_density_limit);
+    printf("  %-32s : %lu\r\n", "密度点下限", (unsigned long)params.wartsila_lower_density_limit);
+    printf("  %-32s : %lu\r\n", "密度点间距", (unsigned long)params.wartsila_density_interval);
+    printf("  %-32s : %lu\r\n", "最高点距液面", (unsigned long)params.wartsila_max_height_above_surface);
 
     /* DO */
-    printf("[Alarm DO]\r\n");
-    printf("  AlarmHighDO                : %lu\r\n", (unsigned long)params.AlarmHighDO);
-    printf("  AlarmLowDO                 : %lu\r\n", (unsigned long)params.AlarmLowDO);
-    printf("  ThirdStateThreshold        : %lu\r\n", (unsigned long)params.ThirdStateThreshold);
+    printf("\r\n-- 报警DO参数 --\r\n");
+    printf("  %-32s : %lu\r\n", "高液位报警DO", (unsigned long)params.AlarmHighDO);
+    printf("  %-32s : %lu\r\n", "低液位报警DO", (unsigned long)params.AlarmLowDO);
+    printf("  %-32s : %lu\r\n", "第三状态阈值", (unsigned long)params.ThirdStateThreshold);
 
     /* AO */
-    printf("[4-20mA / AO]\r\n");
-    printf("  CurrentRangeStart_mA       : %lu\r\n", (unsigned long)params.CurrentRangeStart_mA);
-    printf("  CurrentRangeEnd_mA         : %lu\r\n", (unsigned long)params.CurrentRangeEnd_mA);
-    printf("  AlarmHighAO                : %lu\r\n", (unsigned long)params.AlarmHighAO);
-    printf("  AlarmLowAO                 : %lu\r\n", (unsigned long)params.AlarmLowAO);
-    printf("  InitialCurrent_mA          : %lu\r\n", (unsigned long)params.InitialCurrent_mA);
-    printf("  AOHighCurrent_mA           : %lu\r\n", (unsigned long)params.AOHighCurrent_mA);
-    printf("  AOLowCurrent_mA            : %lu\r\n", (unsigned long)params.AOLowCurrent_mA);
-    printf("  FaultCurrent_mA            : %lu\r\n", (unsigned long)params.FaultCurrent_mA);
-    printf("  DebugCurrent_mA            : %lu\r\n", (unsigned long)params.DebugCurrent_mA);
+    printf("\r\n-- 4-20mA/AO参数 --\r\n");
+    printf("  %-32s : %lu\r\n", "输出范围起点mA", (unsigned long)params.CurrentRangeStart_mA);
+    printf("  %-32s : %lu\r\n", "输出范围终点mA", (unsigned long)params.CurrentRangeEnd_mA);
+    printf("  %-32s : %lu\r\n", "高限报警AO", (unsigned long)params.AlarmHighAO);
+    printf("  %-32s : %lu\r\n", "低限报警AO", (unsigned long)params.AlarmLowAO);
+    printf("  %-32s : %lu\r\n", "初始电流mA", (unsigned long)params.InitialCurrent_mA);
+    printf("  %-32s : %lu\r\n", "高位电流mA", (unsigned long)params.AOHighCurrent_mA);
+    printf("  %-32s : %lu\r\n", "低位电流mA", (unsigned long)params.AOLowCurrent_mA);
+    printf("  %-32s : %lu\r\n", "故障电流mA", (unsigned long)params.FaultCurrent_mA);
+    printf("  %-32s : %lu\r\n", "调试电流mA", (unsigned long)params.DebugCurrent_mA);
 
     /* 指令参数 */
-    printf("[Command Params]\r\n");
-    printf("  calibrateOilLevel          : %lu\r\n", (unsigned long)params.calibrateOilLevel);
-    printf("  calibrateWaterLevel        : %lu\r\n", (unsigned long)params.calibrateWaterLevel);
-    printf("  singlePointMeasurePos      : %lu\r\n", (unsigned long)params.singlePointMeasurementPosition);
-    printf("  singlePointMonitorPos      : %lu\r\n", (unsigned long)params.singlePointMonitoringPosition);
-    printf("  densityDistributionOilLevel: %lu\r\n", (unsigned long)params.densityDistributionOilLevel);
-    printf("  motorCommandDistance       : %lu\r\n", (unsigned long)params.motorCommandDistance);
+    printf("\r\n-- 指令参数 --\r\n");
+    printf("  %-32s : %lu\r\n", "标定液位值", (unsigned long)params.calibrateOilLevel);
+    printf("  %-32s : %lu\r\n", "标定水位值", (unsigned long)params.calibrateWaterLevel);
+    printf("  %-32s : %lu\r\n", "单点测量位置", (unsigned long)params.singlePointMeasurementPosition);
+    printf("  %-32s : %lu\r\n", "单点监测位置", (unsigned long)params.singlePointMonitoringPosition);
+    printf("  %-32s : %lu\r\n", "密度分布测量液位", (unsigned long)params.densityDistributionOilLevel);
+    printf("  %-32s : %lu\r\n", "电机指令距离", (unsigned long)params.motorCommandDistance);
 
-    printf("[Tape Compensation]\r\n");
-    printf("  lastOilCorrectionLevel     : %lu\r\n", (unsigned long)params.lastOilCorrectionLevel);
-    printf("  tankGasPhaseTemperature    : %lu\r\n", (unsigned long)params.tankGasPhaseTemperature);
-    printf("  tapeExpansionCoefficient   : %lu\r\n", (unsigned long)params.tapeExpansionCoefficient);
-    printf("  tapeCalibrationTemperature : %lu\r\n", (unsigned long)params.tapeCalibrationTemperature);
+    printf("\r\n-- 尺带补偿参数 --\r\n");
+    printf("  %-32s : %lu\r\n", "上次液位修正液位", (unsigned long)params.lastOilCorrectionLevel);
+    printf("  %-32s : %lu\r\n", "气相温度", (unsigned long)params.tankGasPhaseTemperature);
+    printf("  %-32s : %lu\r\n", "尺带伸缩率", (unsigned long)params.tapeExpansionCoefficient);
+    printf("  %-32s : %lu\r\n", "尺带标定温度", (unsigned long)params.tapeCalibrationTemperature);
 
     /* 元信息/CRC */
-    printf("[Meta]\r\n");
-    printf("  param_version              : %lu\r\n", (unsigned long)params.param_version);
-    printf("  struct_size                : %lu\r\n", (unsigned long)params.struct_size);
-    printf("  magic                      : 0x%08lX\r\n", (unsigned long)params.magic);
-    printf("  crc                        : 0x%08lX\r\n", (unsigned long)params.crc);
+    printf("\r\n-- 元信息/CRC --\r\n");
+    printf("  %-32s : %lu\r\n", "参数版本号", (unsigned long)params.param_version);
+    printf("  %-32s : %lu\r\n", "结构体大小", (unsigned long)params.struct_size);
+    printf("  %-32s : 0x%08lX\r\n", "魔术字", (unsigned long)params.magic);
+    printf("  %-32s : 0x%08lX\r\n", "参数CRC32", (unsigned long)params.crc);
 
-    printf("======================================\r\n");
+    printf("========================================\r\n");
 }
 /*========================= 测量结果打印（可选） =========================*/
 /* 注: 该部分与参数结构无强耦合，仅保留你现有打印习惯；如果不需要可移除 */
@@ -438,7 +443,7 @@ void PrintMeasurementResult(const MeasurementResult *m)
     printf("--------------------------------------------------------------\r\n");
 
     /* 2. 调试数据 */
-    printf("【调试数据 DebugData】\r\n");
+    printf("【调试数据】\r\n");
     printf("  编码值: %ld\r\n",        (long)m->debug_data.current_encoder_value);
     printf("  传感器位置: %ld mm\r\n", (long)m->debug_data.sensor_position);
     printf("  尺带长度: %ld mm\r\n",   (long)m->debug_data.cable_length);
@@ -457,7 +462,7 @@ void PrintMeasurementResult(const MeasurementResult *m)
     printf("  X角度: %ld\r\n", (long)m->debug_data.angle_x);
     printf("  Y角度: %ld\r\n", (long)m->debug_data.angle_y);
 
-    printf("  motor_speed(0.01m/min): %lu\r\n", (unsigned long)m->debug_data.motor_speed);
+    printf("  电机速度(0.01m/min): %lu\r\n", (unsigned long)m->debug_data.motor_speed);
     printf("  电机状态: %lu (%s)\r\n",
            (unsigned long)m->debug_data.motor_state,
            (m->debug_data.motor_state == 0) ? "停止" :
@@ -467,7 +472,7 @@ void PrintMeasurementResult(const MeasurementResult *m)
     printf("--------------------------------------------------------------\r\n");
 
     /* 3. 液位测量 */
-    printf("【液位测量 OilMeasurement】\r\n");
+    printf("【液位测量】\r\n");
     printf("  跟随液位: %lu mm\r\n",   (unsigned long)m->oil_measurement.oil_level);
     printf("  空气频率: %lu Hz\r\n",   (unsigned long)m->oil_measurement.air_frequency);
     printf("  油中频率: %lu Hz\r\n",   (unsigned long)m->oil_measurement.oil_frequency);
@@ -477,7 +482,7 @@ void PrintMeasurementResult(const MeasurementResult *m)
     printf("--------------------------------------------------------------\r\n");
 
     /* 4. 水位测量 */
-    printf("【水位测量 WaterMeasurement】\r\n");
+    printf("【水位测量】\r\n");
     printf("  水位值: %lu mm\r\n", (unsigned long)m->water_measurement.water_level);
     printf("  零点电容: %.3f\r\n",(float) m->water_measurement.zero_capacitance);
     printf("  油区电容: %.3f\r\n",(float) m->water_measurement.oil_capacitance);
@@ -486,24 +491,24 @@ void PrintMeasurementResult(const MeasurementResult *m)
     printf("--------------------------------------------------------------\r\n");
 
     /* 5. 实高测量 */
-    printf("【实高测量 ActualHeight】\r\n");
+    printf("【实高测量】\r\n");
     printf("  标定液位实高: %lu mm\r\n", (unsigned long)m->height_measurement.calibrated_liquid_level);
     printf("  当前实高: %lu mm\r\n",     (unsigned long)m->height_measurement.current_real_height);
 
     printf("--------------------------------------------------------------\r\n");
 
     /* 6. 单点密度测量 */
-    printf("【单点密度测量 SinglePoint】\r\n");
+    printf("【单点密度测量】\r\n");
     PrintDensity("单点测量", &m->single_point_measurement);
 
     /* 7. 单点监测 */
-    printf("【单点监测 SinglePoint Monitoring】\r\n");
+    printf("【单点监测】\r\n");
     PrintDensity("单点监测", &m->single_point_monitoring);
 
     printf("--------------------------------------------------------------\r\n");
 
     /* 8. 密度分布（概要） */
-    printf("【密度分布 DensityDistribution】\r\n");
+    printf("【密度分布】\r\n");
     printf("  平均温度: %lu\r\n",     (unsigned long)m->density_distribution.average_temperature);
     printf("  平均密度: %lu\r\n",     (unsigned long)m->density_distribution.average_density);
     printf("  平均计重密度: %lu\r\n", (unsigned long)m->density_distribution.average_weight_density);
