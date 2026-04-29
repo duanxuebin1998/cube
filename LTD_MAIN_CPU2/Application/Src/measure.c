@@ -78,7 +78,11 @@ void CMD_ReadPartParams(void);
 
 void ProcessMeasureCmd(CommandType command)
 {
-    MeasureStart(); // 测量初始化
+    uint32_t start_ret = (uint32_t)MeasureStart(); // 测量初始化
+    if (start_ret != NO_ERROR) {
+        printf("测量启动失败，电机初始化错误码=0x%08lX\r\n", (unsigned long)start_ret);
+        SET_ERROR(start_ret);
+    }
 
     switch (command) {
 
@@ -312,6 +316,7 @@ void ProcessMeasureCmd(CommandType command)
  *       - YM：切换到电机记步，以当前编码轮尺带长度为基准，自动下行一周标定局部周长后返回
  *       - YE：切回编码轮记步，后续 cable_length/sensor_position 由编码轮刷新
  *       - YS：打印记步模式、局部周长、XACTUAL、基准、电机计算位置、编码轮位置和差值
+ *       - YC：电机记步诊断，额外打印 XTARGET/VACTUAL/RAMPSTAT/GSTAT 和显示状态校验
  */
 static uint8_t ProcessCommandSwitchRequested(void)
 {
@@ -333,18 +338,28 @@ void process_command(uint8_t *command) {
     }
 
         /*  指令属于调试/恢复动作，允许在错误态下先清场后执行。 */
-    MeasureStart();
+    ret = (uint32_t)MeasureStart();
+    if (ret != NO_ERROR) {
+        printf("串口命令启动失败，电机初始化错误码=0x%08lX\r\n", (unsigned long)ret);
+        return;
+    }
     if (command[0] == 'A') {
         if (command[1] == '0') {
-            motorSlowStop();
+            MotorCtrl_SlowStop();
         } else if (command[1] == '+') {
             int mm = atoi((char*) &command[2]);
             printf("开始上行%d\n", mm);
-            motorMoveNoWaitWithSpeed((float) mm, MOTOR_DIRECTION_UP, motorGetDefaultSpeedX100());
+            ret = MotorCtrl_MoveNoWait((float) mm, MOTOR_DIRECTION_UP, MotorCtrl_GetDefaultSpeedX100());
+            if (ret != NO_ERROR) {
+                printf("串口上行下发失败，错误码=0x%08lX\r\n", (unsigned long)ret);
+            }
         } else if (command[1] == '-') {
             int mm = atoi((char*) &command[2]);
             printf("开始下行%d\n", mm);
-            motorMoveNoWaitWithSpeed((float) mm, MOTOR_DIRECTION_DOWN, motorGetDefaultSpeedX100());
+            ret = MotorCtrl_MoveNoWait((float) mm, MOTOR_DIRECTION_DOWN, MotorCtrl_GetDefaultSpeedX100());
+            if (ret != NO_ERROR) {
+                printf("串口下行下发失败，错误码=0x%08lX\r\n", (unsigned long)ret);
+            }
         }
         return;
     }
@@ -356,31 +371,31 @@ void process_command(uint8_t *command) {
         printf("开始上行%d\n", mm);
         while (1) {
             if (ProcessCommandSwitchRequested()) {
-                motorSlowStop();
+                MotorCtrl_SlowStop();
                 return;
             }
             stpr_enableDriver(&stepper);
-            ret = motorMoveAndWaitUntilStopWithSpeed(mm, MOTOR_DIRECTION_DOWN, motorGetDefaultSpeedX100());
+            ret = MotorCtrl_MoveAndWait(mm, MOTOR_DIRECTION_DOWN, MotorCtrl_GetDefaultSpeedX100());
             if ((ret == STATE_SWITCH) || ProcessCommandSwitchRequested()) {
-                motorSlowStop();
+                MotorCtrl_SlowStop();
 //                return;
             }
             if (ret != NO_ERROR) {
                 printf("B指令下行失败，错误码=0x%08lX\r\n", (unsigned long)ret);
-                motorSlowStop();
+                MotorCtrl_SlowStop();
 //                return;
             }
             printf("开始上行回零\n");
-//            ret = motorMoveToPositionOneShotWithSpeed((g_deviceParams.tankHeight - g_deviceParams.findZeroDownDistance) / 10.0f,
-//                                                      motorGetDefaultSpeedX100());
+//            ret = MotorCtrl_MoveToPosition((g_deviceParams.tankHeight - g_deviceParams.findZeroDownDistance) / 10.0f,
+//                                                      MotorCtrl_GetDefaultSpeedX100());
 //            if ((ret == STATE_SWITCH) || ProcessCommandSwitchRequested()) {
-//                motorSlowStop();
+//                MotorCtrl_SlowStop();
 //                stpr_disableDriver(&stepper);
 //                return;
 //            }
 //            if (ret != NO_ERROR) {
 //                printf("B指令回零失败，错误码=0x%08lX\r\n", (unsigned long)ret);
-//                motorSlowStop();
+//                MotorCtrl_SlowStop();
 //                stpr_disableDriver(&stepper);
 //                return;
 //            }
@@ -447,12 +462,12 @@ void process_command(uint8_t *command) {
         printf("***液位测量重复性测试***\r\n");
         while (1) {
             if (ProcessCommandSwitchRequested()) {
-                motorSlowStop();
+                MotorCtrl_SlowStop();
                 return;
             }
             CMD_MeasureAndFollowOilLevel();
             if (ProcessCommandSwitchRequested()) {
-                motorSlowStop();
+                MotorCtrl_SlowStop();
                 return;
             }
         }
@@ -465,29 +480,29 @@ void process_command(uint8_t *command) {
     if (command[0] == 'L') {
         printf("***编码值清零***\r\n");
         set_encoder_zero();
-        motorResetDrumReferenceToZero();
+        /* 手动清编码器零点不清电机记步基准，避免电机记步位置口径被重置。 */
         return;
     }
     if (command[0] == 'M') {
         printf("***电机高温测试***\r\n");
         while (1) {
             if (ProcessCommandSwitchRequested()) {
-                motorSlowStop();
+                MotorCtrl_SlowStop();
                 return;
             }
-            ret = motorMoveNoWaitWithSpeed(100000, MOTOR_DIRECTION_DOWN, motorGetDefaultSpeedX100());
+            ret = MotorCtrl_MoveNoWait(100000, MOTOR_DIRECTION_DOWN, MotorCtrl_GetDefaultSpeedX100());
             if ((ret == STATE_SWITCH) || ProcessCommandSwitchRequested()) {
-                motorSlowStop();
+                MotorCtrl_SlowStop();
                 return;
             }
             HAL_Delay(1000);
             if (ProcessCommandSwitchRequested()) {
-                motorSlowStop();
+                MotorCtrl_SlowStop();
                 return;
             }
             ret = stpr_waitMove(&stepper);
             if ((ret == STATE_SWITCH) || ProcessCommandSwitchRequested()) {
-                motorSlowStop();
+                MotorCtrl_SlowStop();
                 return;
             }
         }
@@ -496,13 +511,13 @@ void process_command(uint8_t *command) {
         printf("电机测试开始\n");
         while (1) {
             if (ProcessCommandSwitchRequested()) {
-                motorSlowStop();
+                MotorCtrl_SlowStop();
                 return;
             }
             stpr_enableDriver(&stepper);
-            ret = motorMoveNoWaitWithSpeed(300, MOTOR_DIRECTION_DOWN, motorGetDefaultSpeedX100());
+            ret = MotorCtrl_MoveNoWait(300, MOTOR_DIRECTION_DOWN, MotorCtrl_GetDefaultSpeedX100());
             if ((ret == STATE_SWITCH) || ProcessCommandSwitchRequested()) {
-                motorSlowStop();
+                MotorCtrl_SlowStop();
                 return;
             }
             HAL_Delay(1000);
@@ -511,19 +526,19 @@ void process_command(uint8_t *command) {
             printf("下行完成！\n");
             ret = stpr_waitMove(&stepper);
             if ((ret == STATE_SWITCH) || ProcessCommandSwitchRequested()) {
-                motorSlowStop();
+                MotorCtrl_SlowStop();
                 return;
             }
-            ret = motorMoveNoWaitWithSpeed(300, MOTOR_DIRECTION_UP, motorGetDefaultSpeedX100());
+            ret = MotorCtrl_MoveNoWait(300, MOTOR_DIRECTION_UP, MotorCtrl_GetDefaultSpeedX100());
             if ((ret == STATE_SWITCH) || ProcessCommandSwitchRequested()) {
-                motorSlowStop();
+                MotorCtrl_SlowStop();
                 return;
             }
             printf("开始上行回零\n");
             HAL_Delay(1000);
             ret = stpr_waitMove(&stepper);
             if ((ret == STATE_SWITCH) || ProcessCommandSwitchRequested()) {
-                motorSlowStop();
+                MotorCtrl_SlowStop();
                 return;
             }
             printf("上行结束\n");
@@ -557,48 +572,48 @@ void process_command(uint8_t *command) {
         switch (command[1]) {
         case '1':
             /* 开始自动采样 */
-            motorTapeFitStart();
+            MotorCtrl_TapeFitStart();
             return;
         case '2':
             /* 局部 TFIT：把当前位置作为新的 0 圈起点 */
-            motorTapeFitStartLocalOrigin();
+            MotorCtrl_TapeFitStartLocalOrigin();
             return;
         case '0':
             /* 停止自动采样 */
-            motorTapeFitStop();
+            MotorCtrl_TapeFitStop();
             return;
         case 'A':
             /* 手动添加样本 */
-            motorTapeFitAddCurrentSample();
+            MotorCtrl_TapeFitAddCurrentSample();
             return;
         case 'S':
             /* 打印拟合状态 */
-            motorTapeFitPrintStatus();
+            MotorCtrl_TapeFitPrintStatus();
             return;
         case 'R':
             /* 求解拟合参数 */
-            ret = motorTapeFitSolve();
+            ret = MotorCtrl_TapeFitSolve();
             if (ret != NO_ERROR) {
                 printf("TFIT拟合失败，错误码=0x%08lX\r\n", (unsigned long)ret);
             }
             return;
         case 'V':
             /* 局部 TFIT：用当前位置起点采样求解局部厚度/周长 */
-            ret = motorTapeFitSolveLocalOrigin();
+            ret = MotorCtrl_TapeFitSolveLocalOrigin();
             if (ret != NO_ERROR) {
                 printf("TFIT局部拟合失败，错误码=0x%08lX\r\n", (unsigned long)ret);
             }
             return;
         case 'P':
             /* 仅应用拟合出的厚度 t */
-            ret = motorTapeFitApply(false, true);
+            ret = MotorCtrl_TapeFitApply(false, true);
             if (ret != NO_ERROR) {
                 printf("TFIT应用尺带厚度失败，错误码=0x%08lX\r\n", (unsigned long)ret);
             }
             return;
         case 'U':
             /* 同时应用拟合出的 C0 和 t */
-            ret = motorTapeFitApply(true, true);
+            ret = MotorCtrl_TapeFitApply(true, true);
             if (ret != NO_ERROR) {
                 printf("TFIT应用C0+t失败，错误码=0x%08lX\r\n", (unsigned long)ret);
             }
@@ -611,12 +626,13 @@ void process_command(uint8_t *command) {
     /* Y：位置源手动切换调试命令。
      * YM：以当前编码轮尺带长度为基准，切换到电机记步；切换过程会下行一周标定局部周长再返回。
      * YE：切回编码轮记步，后续 cable_length / sensor_position 重新由编码轮刷新。
-     * YS：打印当前记步模式，以及电机尺带和编码轮尺带参考值。 */
+     * YS：打印当前记步模式，以及电机尺带和编码轮尺带参考值。
+     * YC：电机记步诊断，统一打印基准、局部周长、寄存器和状态校验。 */
     if (command[0] == 'Y') {
         switch (command[1]) {
         case 'M':
             printf("位置源切换：编码轮 -> 电机记步\r\n");
-            ret = motorSwitchPositionSourceToMotor();
+            ret = MotorCtrl_SwitchPositionSourceToMotor();
             if (ret != NO_ERROR) {
                 printf("切换电机记步失败，错误码=0x%08lX\r\n", (unsigned long)ret);
             } else {
@@ -625,7 +641,7 @@ void process_command(uint8_t *command) {
             return;
         case 'E':
             printf("位置源切换：电机记步 -> 编码轮\r\n");
-            ret = motorSwitchPositionSourceToEncoder();
+            ret = MotorCtrl_SwitchPositionSourceToEncoder();
             if (ret != NO_ERROR) {
                 printf("切换编码轮记步失败，错误码=0x%08lX\r\n", (unsigned long)ret);
             } else {
@@ -633,10 +649,13 @@ void process_command(uint8_t *command) {
             }
             return;
         case 'S':
-            motorPrintPositionCompare();
+            MotorCtrl_PrintPositionCompare();
+            return;
+        case 'C':
+            MotorCtrl_PrintMotorCountStatus();
             return;
         default:
-            printf("Y命令: YM切换电机记步, YE切换编码轮记步, YS显示位置源\r\n");
+            printf("Y命令: YM切换电机记步, YE切换编码轮记步, YS显示位置源, YC电机记步诊断\r\n");
             return;
         }
     }
@@ -652,7 +671,11 @@ void process_command(uint8_t *command) {
     }
 }
 int MeasureStart(void) {
-	motor_Init(); //电机初始化
+    uint32_t ret = MotorCtrl_Init(); //电机初始化
+    if (ret != NO_ERROR) {
+        printf("电机初始化失败，错误码=0x%08lX\r\n", (unsigned long)ret);
+        return (int)ret;
+    }
 	weight_init();
 	fault_info_init(); //故障初始化清零
 	g_measurement.device_status.error_code = NO_ERROR; //故障代码清零
@@ -666,12 +689,12 @@ static uint32_t EnsureMotorPositionSourceBeforeFollow(const char *follow_name)
 {
     uint32_t ret;
 
-    if (motorIsPositionSourceMotor()) {
+    if (MotorCtrl_IsPositionSourceMotor()) {
         return NO_ERROR;
     }
 
     printf("%s\t当前位置源为编码器，切换到电机记步后重新搜索\r\n", follow_name);
-    ret = motorSwitchPositionSourceToMotor();
+    ret = MotorCtrl_SwitchPositionSourceToMotor();
     if (ret != NO_ERROR) {
         printf("%s\t切换电机记步失败，错误码:0x%08lX\r\n", follow_name, (unsigned long)ret);
         return ret;
@@ -707,7 +730,7 @@ static void CMD_FollowWaterLevel(void)
         SET_ERROR(ret);
     }
 
-    if (!motorIsPositionSourceMotor()) {
+    if (!MotorCtrl_IsPositionSourceMotor()) {
         ret = EnsureMotorPositionSourceBeforeFollow("水位跟随");
         SET_ERROR(ret);
 
@@ -753,7 +776,7 @@ static void CMD_CalibrateZeroPoint(void) {
     //开始回零点
     ret = SearchZero();
     SET_ERROR(ret);
-    ret = CalibrateFirstLoopCircumference_OneTurnAtZero();
+    ret = MotorCtrl_CalibrateFirstLoopCircumferenceAtZero();
     if (ret != NO_ERROR) {
         printf("标定零点\t首圈周长标定失败 错误码=0x%08lX\r\n", (unsigned long)ret);
         SET_ERROR(ret);
@@ -871,7 +894,7 @@ static void CMD_MeasureAndFollowOilLevel(void) {
     ret = SearchOilLevel();
     SET_ERROR(ret);
 
-    if (!motorIsPositionSourceMotor()) {
+    if (!MotorCtrl_IsPositionSourceMotor()) {
         ret = EnsureMotorPositionSourceBeforeFollow("液位跟随");
         SET_ERROR(ret);
 
@@ -952,10 +975,10 @@ static void CMD_MoveUp(void)
     printf("电机上行操作\n");
     g_measurement.device_status.device_state = STATE_RUNUPING;
 
-    ret = motorMoveAndWaitUntilStopWithSpeed(
+    ret = MotorCtrl_MoveAndWait(
             (float)g_deviceParams.motorCommandDistance / 10.0f,
             MOTOR_DIRECTION_UP,
-            motorGetDefaultSpeedX100());
+            MotorCtrl_GetDefaultSpeedX100());
 
     SET_ERROR(ret);
 
@@ -970,10 +993,10 @@ static void CMD_MoveDown(void)
     printf("电机下行操作\n");
     g_measurement.device_status.device_state = STATE_RUNDOWNING;
 
-    ret = motorMoveAndWaitUntilStopWithSpeed(
+    ret = MotorCtrl_MoveAndWait(
             (float)g_deviceParams.motorCommandDistance / 10.0f,
             MOTOR_DIRECTION_DOWN,
-            motorGetDefaultSpeedX100());
+            MotorCtrl_GetDefaultSpeedX100());
 
     SET_ERROR(ret);
 
@@ -986,12 +1009,12 @@ static void CMD_ForceMoveUp(void)
     printf("电机强制上行操作\r\n");
     g_measurement.device_status.device_state = STATE_FORCE_RUNUPING;
 	printf("强制上行距离: %.1f mm\r\n", (float) g_deviceParams.motorCommandDistance / 10.0f);
-    motorMoveBlocking_NoDetectWithSpeed(
+    MotorCtrl_MoveBlockingNoDetect(
         (float)g_deviceParams.motorCommandDistance / 10.0f,
         MOTOR_DIRECTION_UP,
-        motorGetDefaultSpeedX100());
+        MotorCtrl_GetDefaultSpeedX100());
     printf("电机强制上行操作完成\r\n");
-//    motorMoveAndWaitUntilStopWithSpeed(
+//    MotorCtrl_MoveAndWait(
 //            (float)g_deviceParams.motorCommandDistance / 10.0f,
 //            MOTOR_DIRECTION_UP);
     g_measurement.device_status.device_state = STATE_FORCE_RUNUP_OVER;
@@ -1004,10 +1027,10 @@ static void CMD_ForceMoveDown(void)
     printf("电机强制下行操作\r\n");
     g_measurement.device_status.device_state = STATE_FORCE_RUNDOWNING;
 
-    motorMoveBlocking_NoDetectWithSpeed(
+    MotorCtrl_MoveBlockingNoDetect(
         (float)g_deviceParams.motorCommandDistance / 10.0f,
         MOTOR_DIRECTION_DOWN,
-        motorGetDefaultSpeedX100());
+        MotorCtrl_GetDefaultSpeedX100());
 
     g_measurement.device_status.device_state = STATE_FORCE_RUNDOWN_OVER;
     return;
@@ -1020,10 +1043,10 @@ static void CMD_ForceLiftZero(void)
     g_measurement.device_status.device_state = STATE_FORCE_LIFT_ZEROING;
 
     /* 长距离上行：不检测称重/丢步，底层可被命令切换打断 */
-    motorMoveBlocking_NoDetectWithSpeed(
+    MotorCtrl_MoveBlockingNoDetect(
         2000000.0f,  // 300m,
         MOTOR_DIRECTION_UP,
-        motorGetDefaultSpeedX100());
+        MotorCtrl_GetDefaultSpeedX100());
 
     g_measurement.device_status.device_state = STATE_FORCE_LIFT_ZERO_OVER;
     return;
@@ -1123,7 +1146,7 @@ static void CMD_SyntheticMeasurement(void) {
  * @brief 运行到指定绝对位置（mm）
  * 依赖：
  *  - MeasureStart()
- *  - motorMoveToPositionOneShotWithSpeed(float target_mm, uint32_t speed_x100)
+ *  - MotorCtrl_MoveToPosition(float target_mm, uint32_t speed_x100)
  *  - CHECK_COMMAND_SWITCH(x) / SET_ERROR(x)
  *  - g_measurement.device_status.device_state
  *  - 目标位置参数来源（见下方 get_target_mm()）
@@ -1138,9 +1161,9 @@ static void CMD_RunToPosition(void)
 
 
     target_mm = (float)g_deviceParams.densityDistributionOilLevel/10.0;
-    ret = motorMoveToPositionOneShotWithSpeed(target_mm, motorGetDefaultSpeedX100());
+    ret = MotorCtrl_MoveToPosition(target_mm, MotorCtrl_GetDefaultSpeedX100());
 
-    /* motorMoveToPositionOneShotWithSpeed 里如果你也加了 CHECK_COMMAND_SWITCH，就能更快退出；
+    /* MotorCtrl_MoveToPosition 里如果你也加了 CHECK_COMMAND_SWITCH，就能更快退出；
        若没加，这里至少在调用前/后能响应一次切换。 */
 
     if (ret == STATE_SWITCH) {

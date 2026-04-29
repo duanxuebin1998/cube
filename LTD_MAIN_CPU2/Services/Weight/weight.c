@@ -43,7 +43,7 @@ static uint8_t Weight_IsCommErrorCode(uint32_t error_code) {
 static void Weight_PrintCableRefs(float cable_mm)
 {
 	printf("尺带长度 : %.1f mm", cable_mm);
-	motorPrintPositionRefs();
+	MotorCtrl_PrintPositionRefs();
 	printf("\r\n");
 }
 
@@ -228,7 +228,7 @@ uint32_t CheckWeightCollision(void)
 				(long)diff,
 				(long)full_weight,
 				cable_mm);
-		motorPrintPositionRefs();
+		MotorCtrl_PrintPositionRefs();
 		printf(" 传感器位置=%.1f | 零点保护区=%lu\r\n",
 				sensor_mm,
 				(unsigned long)g_deviceParams.weight_ignore_zone);
@@ -248,7 +248,7 @@ uint32_t CheckWeightCollision(void)
 				(long)diff,
 				(long)full_weight,
 				cable_mm);
-		motorPrintPositionRefs();
+		MotorCtrl_PrintPositionRefs();
 		printf(" 传感器位置=%.1f\r\n",
 				sensor_mm);
 #endif
@@ -324,7 +324,7 @@ uint32_t CheckWeightCollision(void)
 				(long)upper_threshold,
 				(long)full_weight,
 				cable_mm);
-		motorPrintPositionRefs();
+		MotorCtrl_PrintPositionRefs();
 		printf(" | 位置:%.1fmm\r\n",
 				sensor_mm);
 #endif
@@ -379,7 +379,7 @@ uint32_t CheckWeightCollision(void)
 				(long)lower_threshold,
 				(long)full_weight,
 				cable_mm);
-		motorPrintPositionRefs();
+		MotorCtrl_PrintPositionRefs();
 		printf(" | 位置:%.1fmm | 罐底模式=%lu\r\n",
 				sensor_mm,
 				(unsigned long)g_deviceParams.bottom_detect_mode);

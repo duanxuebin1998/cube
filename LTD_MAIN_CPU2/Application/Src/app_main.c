@@ -39,7 +39,7 @@ static uint8_t App_HandleIdleGlobalError(void) {
 
 	/* 电机记步源模式下，编码器只作为后台采集对象。
 	 * 编码器悬空或 SSI 异常不能再把整机打进错误态。 */
-	if (motorIsPositionSourceMotor() && App_IsEncoderErrorCode(error_code)) {
+	if (MotorCtrl_IsPositionSourceMotor() && App_IsEncoderErrorCode(error_code)) {
 		g_measurement.device_status.error_code = NO_ERROR;
 		error_code = NO_ERROR;
 	}
@@ -78,7 +78,7 @@ void App_Init(void) {
 	weight_init();
 	HostCommuInit(); // 初始化Modbus通信
 	AD5421_SetCurrent(6.0); // 设置初始电流为4mA
-	motor_Init(); //电机初始化
+	MotorCtrl_Init(); //电机初始化
 	fault_info_init(); // 初始化故障信息
 	DetectSensorType(); // 检测传感器类型
 	g_deviceParams.command = CMD_NONE; // 清除命令
@@ -90,7 +90,7 @@ void App_Init(void) {
 	//测试函数
 //	Test_main(); // 测试函数
 //	motor_text(); //电机测试
-//	motorSwitchPositionSourceToMotor();//切换成电机记步测试
+//	MotorCtrl_SwitchPositionSourceToMotor();//切换成电机记步测试
 }
 // 主循环任务
 /*
@@ -117,7 +117,7 @@ void App_MainLoop(void) {
 
 
 	/* 后台轻量检查：这里只做一次快速轮询，不在主循环里展开复杂处理。 */
-	motorPollRuntimePosition();
+	MotorCtrl_PollRuntimePosition();
 	(void)Weight_CheckCommunicationTimeout();
 
 	/* 第一优先级：处理刚收到的原始命令。

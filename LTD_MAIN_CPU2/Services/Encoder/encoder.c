@@ -161,7 +161,7 @@ static void update_sensor_height_from_encoder_impl(bool force_position_update)
 
     // 更新调试信息：当前编码值取负（编码器方向取反）
     g_measurement.debug_data.current_encoder_value = -g_encoder_count;
-    if ((!force_position_update) && motorIsPositionSourceMotor()) {
+    if ((!force_position_update) && MotorCtrl_IsPositionSourceMotor()) {
         return;
     }
 

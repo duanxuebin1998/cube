@@ -424,10 +424,10 @@ void ReadDeviceParamsFromHoldingRegisters(uint16_t *HoldingRegisterArray)
     g_deviceParams.crc           = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_CRC);
 
     if (g_deviceParams.motor_current != previous_motor_current) {
-        (void)motorSetCurrent(g_deviceParams.motor_current);
+        (void)MotorCtrl_SetCurrent(g_deviceParams.motor_current);
     }
 
-    motorApplyPositionSourceParamsFromDeviceParams();
+    MotorCtrl_ApplyPositionSourceParams();
 
     //todo:
 }
@@ -479,7 +479,7 @@ void write_measurement_result_to_InputRegisters(uint16_t *regs) {
 
 	/* 电机状态相关 */
 	write_u32_to_regs(regs, REG_DEBUG_MOTOR_SPEED, g_measurement.debug_data.motor_speed);
-	write_u32_to_regs(regs, REG_DEBUG_MOTOR_STATE, motorGetDisplayState());
+	write_u32_to_regs(regs, REG_DEBUG_MOTOR_STATE, MotorCtrl_GetDisplayState());
 
 	/* ==== OilMeasurement ==== */
 	write_u32_to_regs(regs, REG_OIL_MEASUREMENT_OIL_LEVEL, g_measurement.oil_measurement.oil_level);
@@ -578,7 +578,7 @@ void read_measurement_result_from_InputRegisters(uint16_t *regs) {
 	g_measurement.debug_data.angle_y = read_i32_from_regs(cregs, REG_DEBUG_ANGLE_Y);
 
 	/* 电机状态 */
-	(void)motorSetSpeed(read_u32_from_regs(cregs, REG_DEBUG_MOTOR_SPEED));
+	(void)MotorCtrl_SetSpeed(read_u32_from_regs(cregs, REG_DEBUG_MOTOR_SPEED));
 	g_measurement.debug_data.motor_state = read_u32_from_regs(cregs, REG_DEBUG_MOTOR_STATE);
 
 	/* ==== OilMeasurement ==== */

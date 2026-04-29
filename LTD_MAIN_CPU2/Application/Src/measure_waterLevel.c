@@ -123,7 +123,7 @@ static uint32_t WaterSensorTestScanDirection(const char *phase_name,
 
     for (i = 0; i < point_count; ++i)
     {
-        ret = motorMoveAndWaitUntilStopWithSpeed(WATER_SENSOR_TEST_SCAN_STEP_MM, dir, motorGetDefaultSpeedX100());
+        ret = MotorCtrl_MoveAndWait(WATER_SENSOR_TEST_SCAN_STEP_MM, dir, MotorCtrl_GetDefaultSpeedX100());
         CHECK_COMMAND_SWITCH(ret);
         CHECK_ERROR(ret);
 
@@ -218,12 +218,12 @@ uint32_t SearchWaterLevel(void)
     /* -------------------- 初始位置调整（避让） -------------------- */
     if (g_measurement.debug_data.cable_length > 2000)
     {
-        ret = motorMoveAndWaitUntilStopWithSpeed(WATER_INIT_UP_MM, MOTOR_DIRECTION_UP, motorGetDefaultSpeedX100());
+        ret = MotorCtrl_MoveAndWait(WATER_INIT_UP_MM, MOTOR_DIRECTION_UP, MotorCtrl_GetDefaultSpeedX100());
         CHECK_ERROR(ret);
         printf("水位测量\t上行完成\r\n");
     }
 
-    printf("水位测量\t初始位置：%.1f", g_measurement.debug_data.sensor_position / 10.0f); motorPrintPositionRefs(); printf("\r\n");
+    printf("水位测量\t初始位置：%.1f", g_measurement.debug_data.sensor_position / 10.0f); MotorCtrl_PrintPositionRefs(); printf("\r\n");
 
     ret = check_water_status(&water_state);
     CHECK_ERROR(ret);
@@ -241,13 +241,13 @@ uint32_t SearchWaterLevel(void)
             /* 距离零点 <= 100mm：认为已到零点附近，仍在水里 -> 报错退出 */
             if (g_measurement.debug_data.sensor_position <= ZERO_NEAR_TH)
             {
-                printf("水位测量\t零点附近仍在水区，无法避让(位置=%.1fmm)", g_measurement.debug_data.sensor_position / 10.0f); motorPrintPositionRefs(); printf("\r\n");
+                printf("水位测量\t零点附近仍在水区，无法避让(位置=%.1fmm)", g_measurement.debug_data.sensor_position / 10.0f); MotorCtrl_PrintPositionRefs(); printf("\r\n");
 
                 RETURN_ERROR(MEASUREMENT_WATERLEVEL_LOW);
             }
 
             /* 距离零点 > 100mm：上行 100mm */
-            ret = motorMoveAndWaitUntilStopWithSpeed(UP_STEP_MM, MOTOR_DIRECTION_UP, motorGetDefaultSpeedX100());
+            ret = MotorCtrl_MoveAndWait(UP_STEP_MM, MOTOR_DIRECTION_UP, MotorCtrl_GetDefaultSpeedX100());
             CHECK_ERROR(ret);
             printf("水位测量\t上行%.0fmm\r\n", (double)UP_STEP_MM);
 
@@ -363,9 +363,9 @@ uint32_t WaterSensorCapacitanceProfileTest(void)
            water_pos_01mm / 10.0f,
            g_measurement.water_measurement.water_level / 10.0f);
 
-    ret = motorMoveAndWaitUntilStopWithSpeed(WATER_SENSOR_TEST_PRE_UP_MM,
+    ret = MotorCtrl_MoveAndWait(WATER_SENSOR_TEST_PRE_UP_MM,
                                              MOTOR_DIRECTION_UP,
-                                             motorGetDefaultSpeedX100());
+                                             MotorCtrl_GetDefaultSpeedX100());
     CHECK_COMMAND_SWITCH(ret);
     CHECK_ERROR(ret);
 
@@ -407,11 +407,11 @@ static int SearchWaterRough(void)
     uint32_t ret;
     uint8_t  water_state = NORMAL;
 
-    MotorLostStep_Init();// 重置丢步检测计数器
+    MotorCtrl_LostStepInit();// 重置丢步检测计数器
     /* 持续下探直到检测到 WATER */
     while (1)
     {
-    	ret = motorMove_downWithSpeed(motorGetDefaultSpeedX100());  // 启动电机向下运动
+	ret = MotorCtrl_MoveDown(MotorCtrl_GetDefaultSpeedX100());  // 启动电机向下运动
     	CHECK_ERROR(ret); // 检查上行是否成功
 
         ret = check_water_status(&water_state);
@@ -421,19 +421,19 @@ static int SearchWaterRough(void)
             break;
         }
 
-        ret = Motor_CheckLostStep_AutoTiming(g_measurement.debug_data.sensor_position);
+        ret = MotorCtrl_CheckLostStepAutoTiming(g_measurement.debug_data.sensor_position);
         CHECK_ERROR(ret);
 
-        printf("水位测量\t长距离寻找水位\t{传感器位置}%.1f", (float)(g_measurement.debug_data.sensor_position) / 10.0f); motorPrintPositionRefs(); printf("\t");
+        printf("水位测量\t长距离寻找水位\t{传感器位置}%.1f", (float)(g_measurement.debug_data.sensor_position) / 10.0f); MotorCtrl_PrintPositionRefs(); printf("\t");
 
     }
 
-    ret = motorSlowStop();
+    ret = MotorCtrl_SlowStop();
     CHECK_ERROR(ret);
 
     HAL_Delay(WATER_ROUGH_CONFIRM_DELAY_MS);
 
-    printf("水位测量\t确认粗找水位位置\t{传感器位置}%.1f", (float)(g_measurement.debug_data.sensor_position) / 10.0f); motorPrintPositionRefs(); printf("\t");
+    printf("水位测量\t确认粗找水位位置\t{传感器位置}%.1f", (float)(g_measurement.debug_data.sensor_position) / 10.0f); MotorCtrl_PrintPositionRefs(); printf("\t");
 
 
     /* 停稳后再读一次，确认状态 */
@@ -449,7 +449,7 @@ static int SearchWaterRough(void)
     {
         printf("水位测量\t粗找水位未成功，准备回退重试\r\n");
 
-        ret = motorMoveAndWaitUntilStopWithSpeed(WATER_FAIL_RECOVER_UP_MM, MOTOR_DIRECTION_UP, motorGetDefaultSpeedX100());
+        ret = MotorCtrl_MoveAndWait(WATER_FAIL_RECOVER_UP_MM, MOTOR_DIRECTION_UP, MotorCtrl_GetDefaultSpeedX100());
         CHECK_ERROR(ret);
 
         printf("水位测量\t上行%.0fmm\r\n", (double)WATER_FAIL_RECOVER_UP_MM);
@@ -468,15 +468,15 @@ static int SearchWaterPrecise(void)
 
     if (g_measurement.debug_data.sensor_position > 2000)
     {
-        ret = motorMoveAndWaitUntilStopWithSpeed(WATER_INIT_UP_MM, MOTOR_DIRECTION_UP, motorGetDefaultSpeedX100());
+        ret = MotorCtrl_MoveAndWait(WATER_INIT_UP_MM, MOTOR_DIRECTION_UP, MotorCtrl_GetDefaultSpeedX100());
         CHECK_ERROR(ret);
         printf("水位测量\t上行完成\r\n");
     }
 
-    MotorLostStep_Init();// 重置丢步检测计数器
+    MotorCtrl_LostStepInit();// 重置丢步检测计数器
     while (1)
     {
-        speed_x100 = motorGetDefaultSpeedX100();
+        speed_x100 = MotorCtrl_GetDefaultSpeedX100();
         if (g_deviceParams.water_tank_height - g_measurement.debug_data.cable_length - water_value < WATER_V2_SLOWDOWN_TH)
         {
             speed_x100 = 4;
@@ -486,7 +486,7 @@ static int SearchWaterPrecise(void)
             speed_x100 = 40;
         }
 
-    	ret = motorMove_downWithSpeed(speed_x100);  // 启动电机向下运动
+	ret = MotorCtrl_MoveDown(speed_x100);  // 启动电机向下运动
     	CHECK_ERROR(ret); // 检查上行是否成功
 
         ret = check_water_status(&water_state);
@@ -503,13 +503,13 @@ static int SearchWaterPrecise(void)
 //            RETURN_ERROR(MEASUREMENT_WATERLEVEL_LOW);
 //        }
 
-        ret = Motor_CheckLostStep_AutoTiming(g_measurement.debug_data.sensor_position);
+        ret = MotorCtrl_CheckLostStepAutoTiming(g_measurement.debug_data.sensor_position);
         CHECK_ERROR(ret);
 
-        printf("水位测量\t精确寻找水位\t{传感器位置}%.1f", (float)(g_measurement.debug_data.sensor_position) / 10.0f); motorPrintPositionRefs(); printf("\t速度(0.01m/min)\t%lu\t", (unsigned long)g_measurement.debug_data.motor_speed);
+        printf("水位测量\t精确寻找水位\t{传感器位置}%.1f", (float)(g_measurement.debug_data.sensor_position) / 10.0f); MotorCtrl_PrintPositionRefs(); printf("\t速度(0.01m/min)\t%lu\t", (unsigned long)g_measurement.debug_data.motor_speed);
     }
 
-    ret = motorSlowStop();
+    ret = MotorCtrl_SlowStop();
     CHECK_ERROR(ret);
 
     water_value = g_deviceParams.water_tank_height - g_measurement.debug_data.cable_length;
@@ -638,7 +638,7 @@ static uint32_t AlignToWaterLevel_01mm(int32_t lvl_target_01mm)
            (dir == MOTOR_DIRECTION_DOWN) ? "DOWN" : "UP",
            move_mm);
 
-    ret = motorMoveAndWaitUntilStopWithSpeed(move_mm, dir, motorGetDefaultSpeedX100());
+    ret = MotorCtrl_MoveAndWait(move_mm, dir, MotorCtrl_GetDefaultSpeedX100());
     if (ret != NO_ERROR) return ret;
 
     return NO_ERROR;
@@ -660,9 +660,9 @@ static uint32_t AlignToWaterLevel_01mm(int32_t lvl_target_01mm)
  * - 当前上层快速模式传入 stable_win_ms=0，因此只要求形成可用跟随点，不在这里长期等待
  *
  * 依赖：
- *  - motorMove_upWithSpeed()/motorMove_downWithSpeed(): 每次调用推动继续运动（你现有粗找就是这样用的）
+ *  - MotorCtrl_MoveUp()/MotorCtrl_MoveDown(): 每次调用推动继续运动（你现有粗找就是这样用的）
  *  - check_water_status(): 返回 WATER / NORMAL
- *  - Motor_CheckLostStep_AutoTiming(): 丢步检测（可选但建议保留）
+ *  - MotorCtrl_CheckLostStepAutoTiming(): 丢步检测（可选但建议保留）
  *
  * @param stable_win_ms 稳定判定窗口时长（ms）
  * 退出条件：
@@ -719,7 +719,7 @@ uint32_t FindWaterLevel_FastByStateFlip_StableExit(uint32_t stable_win_ms)
         if (water_state == WATER)
         {
             printf("快速跟随\t当前=水区 -> 连续上行直到空气区\r\n");
-            MotorLostStep_Init();
+            MotorCtrl_LostStepInit();
 
             while (1)
             {
@@ -730,7 +730,7 @@ uint32_t FindWaterLevel_FastByStateFlip_StableExit(uint32_t stable_win_ms)
                     RETURN_ERROR(MEASUREMENT_WATERLEVEL_LOW);
                 }
 
-                ret = motorMove_upWithSpeed(motorGetDefaultSpeedX100());
+                ret = MotorCtrl_MoveUp(MotorCtrl_GetDefaultSpeedX100());
                 CHECK_ERROR(ret);
 
                 ret = check_water_status(&water_state);
@@ -740,7 +740,7 @@ uint32_t FindWaterLevel_FastByStateFlip_StableExit(uint32_t stable_win_ms)
                     break;
                 }
 
-                ret = Motor_CheckLostStep_AutoTiming(g_measurement.debug_data.sensor_position);
+                ret = MotorCtrl_CheckLostStepAutoTiming(g_measurement.debug_data.sensor_position);
                 CHECK_ERROR(ret);
 
                 CHECK_COMMAND_SWITCH(NO_ERROR);
@@ -750,11 +750,11 @@ uint32_t FindWaterLevel_FastByStateFlip_StableExit(uint32_t stable_win_ms)
         else
         {
             printf("快速跟随\t当前=空气区 -> 连续下行直到水区\r\n");
-            MotorLostStep_Init();
+            MotorCtrl_LostStepInit();
 
             while (1)
             {
-                ret = motorMove_downWithSpeed(motorGetDefaultSpeedX100());
+                ret = MotorCtrl_MoveDown(MotorCtrl_GetDefaultSpeedX100());
                 CHECK_ERROR(ret);
 
                 ret = check_water_status(&water_state);
@@ -764,7 +764,7 @@ uint32_t FindWaterLevel_FastByStateFlip_StableExit(uint32_t stable_win_ms)
                     break;
                 }
 
-                ret = Motor_CheckLostStep_AutoTiming(g_measurement.debug_data.sensor_position);
+                ret = MotorCtrl_CheckLostStepAutoTiming(g_measurement.debug_data.sensor_position);
                 CHECK_ERROR(ret);
 
                 CHECK_COMMAND_SWITCH(NO_ERROR);
@@ -840,7 +840,7 @@ uint32_t FindWaterLevel_FastByStateFlip_StableExit(uint32_t stable_win_ms)
                     printf("快速跟随\t稳定满足：连续%lu.%03lus内波动<=阈值 -> 退出\r\n",
                            (unsigned long)(stable_window_ms / 1000u),
                            (unsigned long)(stable_window_ms % 1000u));
-                    ret = motorSlowStop();
+                    ret = MotorCtrl_SlowStop();
                     CHECK_ERROR(ret);
                     printf("快速跟随\t运行到水位附近\r\n");
                     ret = AlignToWaterLevel_01mm(lvl_avg);
@@ -867,7 +867,7 @@ uint32_t FindWaterLevel_FastByStateFlip_StableExit(uint32_t stable_win_ms)
  *    累计 lost_count，超过阈值后触发重新找水位
  *
  * 特点：
- * - 步进式运动（motorMoveAndWaitUntilStopWithSpeed）
+ * - 步进式运动（MotorCtrl_MoveAndWait）
  * - 带滞回，避免界面抖动
  * - 带自恢复机制，避免长期卡死在错误区域
  */
@@ -946,7 +946,7 @@ static uint32_t FollowWaterLevelCore(WaterRecoverStrategy recover_strategy)
         /* 保存到测量结构体，供其他模块/调试使用 */
         g_measurement.water_measurement.current_capacitance = cap;
 
-        printf("水位跟随\t位置=%.1fmm", g_measurement.debug_data.sensor_position / 10.0f); motorPrintPositionRefs(); printf("  电容=%.1f\r\n", cap);
+        printf("水位跟随\t位置=%.1fmm", g_measurement.debug_data.sensor_position / 10.0f); MotorCtrl_PrintPositionRefs(); printf("  电容=%.1f\r\n", cap);
 
 
 
@@ -1015,7 +1015,7 @@ static uint32_t FollowWaterLevelCore(WaterRecoverStrategy recover_strategy)
                lost_count);
 
         /* ---------- 4. 执行步进运动（阻塞等待完成） ---------- */
-        ret = motorMoveAndWaitUntilStopWithSpeed(step_mm, dir, motorGetDefaultSpeedX100());
+        ret = MotorCtrl_MoveAndWait(step_mm, dir, MotorCtrl_GetDefaultSpeedX100());
         CHECK_ERROR(ret);
 
         /*
@@ -1036,7 +1036,7 @@ static uint32_t FollowWaterLevelCore(WaterRecoverStrategy recover_strategy)
         /* 运动完成后，按当前设备状态更新水位 */
         UpdateWaterLevelIfValid();
 
-        printf("水位跟随\t完成移动 位置=%.1fmm", g_measurement.debug_data.sensor_position / 10.0f); motorPrintPositionRefs(); printf("\r\n");
+        printf("水位跟随\t完成移动 位置=%.1fmm", g_measurement.debug_data.sensor_position / 10.0f); MotorCtrl_PrintPositionRefs(); printf("\r\n");
 
 
         /* ---------- 5. 异常判定：大偏差 + 电容几乎不变 ----------

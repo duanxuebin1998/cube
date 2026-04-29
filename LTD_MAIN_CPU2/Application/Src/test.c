@@ -28,7 +28,7 @@ static uint8_t Test_ShouldAbortForCommandSwitch(void)
     }
 
     printf("检测到命令切换请求，停止当前串口测试\r\n");
-    motorSlowStop();
+    MotorCtrl_SlowStop();
     return 1;
 }
 
@@ -49,7 +49,7 @@ void motor_step_up_text(void) {
         if (Test_ShouldAbortForCommandSwitch()) {
             return;
         }
-        printf("%d\t{传感器位置}%.1f", i, (float)(g_measurement.debug_data.sensor_position) / 10.0f); motorPrintPositionRefs(); printf("\t{称重值}%d\r\n", weight_parament.current_weight);
+        printf("%d\t{传感器位置}%.1f", i, (float)(g_measurement.debug_data.sensor_position) / 10.0f); MotorCtrl_PrintPositionRefs(); printf("\t{称重值}%d\r\n", weight_parament.current_weight);
         HAL_Delay(100);
         if (Test_ShouldAbortForCommandSwitch()) {
             return;
@@ -82,7 +82,7 @@ void motor_step_down_text(void) {
         if (Test_ShouldAbortForCommandSwitch()) {
             return;
         }
-        printf("%d\t{传感器位置}%.1f", i, (float)(g_measurement.debug_data.sensor_position) / 10.0f); motorPrintPositionRefs(); printf("\t{称重值}%d\r\n", weight_parament.current_weight);
+        printf("%d\t{传感器位置}%.1f", i, (float)(g_measurement.debug_data.sensor_position) / 10.0f); MotorCtrl_PrintPositionRefs(); printf("\t{称重值}%d\r\n", weight_parament.current_weight);
         HAL_Delay(100);
         if (Test_ShouldAbortForCommandSwitch()) {
             return;
@@ -414,11 +414,11 @@ void motor_text(void)
     uint32_t loop_cnt = 0;
     MeasureStart();
     printf("motor text start\r\n");
-    motor_Init(); // 电机初始化
+    MotorCtrl_Init(); // 电机初始化
 
     while (1) {
         /* ---------- 下行 ---------- */
-        motorMoveNoWaitWithSpeed(300, MOTOR_DIRECTION_DOWN, motorGetDefaultSpeedX100());
+        MotorCtrl_MoveNoWait(300, MOTOR_DIRECTION_DOWN, MotorCtrl_GetDefaultSpeedX100());
         HAL_Delay(1000);
         printf("[LOOP %lu] start down\r\n", (unsigned long)(loop_cnt + 1));
 
