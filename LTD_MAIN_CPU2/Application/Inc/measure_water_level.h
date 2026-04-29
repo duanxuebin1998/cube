@@ -114,7 +114,7 @@ uint32_t FindWaterLevel_FastByStateFlip_StableExit(uint32_t stable_win_ms);
  *    累计 lost_count，超过阈值后触发重新找水位
  *
  * 特点：
- * - 步进式运动（motorMoveAndWaitUntilStopWithSpeed）
+ * - 步进式运动（MotorCtrl_MoveAndWait）
  * - 带滞回，避免界面抖动
  * - 带自恢复机制，避免长期卡死在错误区域
  */

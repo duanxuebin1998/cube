@@ -89,7 +89,7 @@ uint32_t Wartsila_Density_SpreadMeasurement(DensityDistribution *dist)
 
     /* 先移动到起始点高度 */
     float cur_mm = 0.0f;
-    snapshot_sensor_pos_mm(&cur_mm);
+    MotorCtrl_SnapshotSensorPositionMm(&cur_mm);
 
     uint32_t ret = NO_ERROR;
 
@@ -101,21 +101,21 @@ uint32_t Wartsila_Density_SpreadMeasurement(DensityDistribution *dist)
         CHECK_ERROR(ret);
         if (st == AIR) {
             /* 理论上起始点以下不应该是空气，这里认为异常 */
-            snapshot_sensor_pos_mm(&cur_mm);
+            MotorCtrl_SnapshotSensorPositionMm(&cur_mm);
             printf("到起始点之前已经进入空气，位置=%.3fmm，本次分布测量取消\n", cur_mm);
             return MEASUREMENT_DENSITY_RANGE_INVALID;
         }
     } else if (cur_mm > (float)start_pos_mm + 0.05f) {
         /* 当前在起始点上方：直接用绝对位置函数下行，不需要检测空气 */
         printf("当前位置高于起始点，从 %.3fmm 下行到 %lumm\n", cur_mm, (unsigned long)start_pos_mm);
-        ret = motorMoveToPositionOneShotWithSpeed((float)start_pos_mm, motorGetDefaultSpeedX100());
+        ret = MotorCtrl_MoveToPosition((float)start_pos_mm, MotorCtrl_GetDefaultSpeedX100());
         CHECK_ERROR(ret);
     } else {
         printf("当前位置已经在起始点附近，无需调整位置。\n");
     }
 
     /* 再读一次当前位置，作为正式起点 */
-    snapshot_sensor_pos_mm(&cur_mm);
+    MotorCtrl_SnapshotSensorPositionMm(&cur_mm);
     printf("分布测量起点位置确认：%.3fmm\n", cur_mm);
     g_measurement.device_status.device_state = STATE_WARTSILA_DENSITY_MEASURING;
     /* 起始点如果一开始就在空气中，可以直接结束（说明下面都是空气或空罐） */
@@ -156,7 +156,7 @@ uint32_t Wartsila_Density_SpreadMeasurement(DensityDistribution *dist)
             CHECK_ERROR(ret);
 
             /* motorMoveUpToPositionOrAir 结束后，再读一次实际位置 */
-            snapshot_sensor_pos_mm(&cur_mm);
+            MotorCtrl_SnapshotSensorPositionMm(&cur_mm);
 
             if (st == AIR) {
                 /* 在从上一个点到 target_mm 的过程中，已经提出油面 */
@@ -167,9 +167,9 @@ uint32_t Wartsila_Density_SpreadMeasurement(DensityDistribution *dist)
             }
 
             printf("精确寻找密度点位...\r\n");
-            ret = motorMoveToPositionOneShotWithSpeed((float)target_mm, motorGetDefaultSpeedX100());
+            ret = MotorCtrl_MoveToPosition((float)target_mm, MotorCtrl_GetDefaultSpeedX100());
             CHECK_ERROR(ret);
-            snapshot_sensor_pos_mm(&cur_mm);
+            MotorCtrl_SnapshotSensorPositionMm(&cur_mm);
 
             printf("分布测量 到达第%lu个点实际位置 %.3fmm\n",
                    (unsigned long)(i + 1), cur_mm);
@@ -296,7 +296,7 @@ uint32_t motorMoveUpToPositionOrAir(float target_mm, Level_StateTypeDef *final_s
 
     /* 读取当前高度（mm） */
     float cur_mm;
-    snapshot_sensor_pos_mm(&cur_mm);
+    MotorCtrl_SnapshotSensorPositionMm(&cur_mm);
 
     printf("上行到目标或空气：当前=%.3fmm, 目标=%.3fmm\r\n",
            cur_mm, target_mm);
@@ -313,14 +313,14 @@ uint32_t motorMoveUpToPositionOrAir(float target_mm, Level_StateTypeDef *final_s
     /* 下发上行运动指令（长度设为足够大） */
     float max_move = target_mm - cur_mm;   // 理论需要跑的距离
 
-    ret = motorMoveNoWaitWithSpeed(3*max_move, MOTOR_DIRECTION_UP, motorGetDefaultSpeedX100());//走三倍距离保证一定会跑到
+    ret = MotorCtrl_MoveNoWait(3*max_move, MOTOR_DIRECTION_UP, MotorCtrl_GetDefaultSpeedX100());//走三倍距离保证一定会跑到
     CHECK_ERROR(ret);
 
     /* 进入循环检测：空气 + 到位 + 安全检查 */
     uint32_t start_tick = HAL_GetTick();
     const uint32_t MAX_WAIT_MS = 60*60000;    // 最长等待 60s*60 =1小时，防止死循环
 
-    while (stpr_isMoving(&stepper)) {
+    while (MotorCtrl_IsDriverMoving(&stepper)) {
 
         /* 1) 检测空气状态 */
     	//如果传感器是LTD传感器
@@ -330,13 +330,13 @@ uint32_t motorMoveUpToPositionOrAir(float target_mm, Level_StateTypeDef *final_s
 		if (g_deviceParams.sensorType == LTD_SENSOR) {
 	    	ret = DSM_V2_Read_LevelFrequency(&hz);
 	    	if (ret != NO_ERROR) {
-				(void)motorSlowStop();
+				(void)MotorCtrl_SlowStop();
 				return ret;  // 读取失败前先停止电机
 	    	}
 	    	if (hz == 0 || hz > g_deviceParams.oilLevelFrequency) {
 	    		 if (final_state) *final_state = AIR;//读到0或者异常频率认为是空气
 	            printf("上行到目标或空气：频率检测到到达液面，立即停止电机！\r\n");
-	            ret = motorSlowStop();
+	            ret = MotorCtrl_SlowStop();
 	            CHECK_ERROR(ret);
 	    		break;  // 读到0也返回
 	    	}
@@ -349,17 +349,17 @@ uint32_t motorMoveUpToPositionOrAir(float target_mm, Level_StateTypeDef *final_s
 
         if (st == AIR) {
             printf("上行到目标或空气：检测到进入空气，立即停止电机！\r\n");
-            ret = motorSlowStop();
+            ret = MotorCtrl_SlowStop();
             CHECK_ERROR(ret);
             break;
         }
 
         /* 2) 检测当前位置是否已经到达目标点 */
-        snapshot_sensor_pos_mm(&cur_mm);
+        MotorCtrl_SnapshotSensorPositionMm(&cur_mm);
 
         if (cur_mm >= target_mm - 0.05f) {   // 加一点浮动允许
             printf("上行到目标或空气：已到达目标位置 %.3fmm\r\n", cur_mm);
-            ret = motorSlowStop();
+            ret = MotorCtrl_SlowStop();
             CHECK_ERROR(ret);
             break;
         }
@@ -368,7 +368,7 @@ uint32_t motorMoveUpToPositionOrAir(float target_mm, Level_StateTypeDef *final_s
         ret = CheckWeightCollision();
         CHECK_ERROR(ret);
 
-        ret = stpr_checkGstat(&stepper);//电机状态检测
+        ret = MotorCtrl_CheckDriverGstat(&stepper);//电机状态检测
         CHECK_ERROR(ret);
 
         /* 4) 超时保护 */
@@ -381,7 +381,7 @@ uint32_t motorMoveUpToPositionOrAir(float target_mm, Level_StateTypeDef *final_s
     }
 
     /* 结束后，再读一次最终位置 */
-    snapshot_sensor_pos_mm(&cur_mm);
+    MotorCtrl_SnapshotSensorPositionMm(&cur_mm);
     printf("上行到目标或空气结束：最终位置 %.3fmm\r\n", cur_mm);
 
     return NO_ERROR;

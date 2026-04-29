@@ -226,7 +226,7 @@ uint32_t EnableDensityMode(void) {
 uint32_t EnableLevelMode(void) {
 	uint32_t ret;
 
-	ret = motorSlowStop();
+	ret = MotorCtrl_SlowStop();
 	if (ret != NO_ERROR) {
 		printf("切换液位模式前停止电机失败 错误码=0x%08lX\r\n", (unsigned long)ret);
 		return ret;
@@ -568,7 +568,7 @@ static uint32_t Read_WeightParam_Adapter(void)
     g_measurement.device_status.device_state = STATE_READPARAMETERING;
 
     /* ---------- 1) 位置类：编码器/位置/尺带长度/步进/距离 ---------- */
-    motorRefreshDebugDrumState();
+    MotorCtrl_RefreshDebugDrumState();
     g_measurement.debug_data.current_encoder_value = Read_CurrentEncoderValue_Adapter();
     g_measurement.debug_data.sensor_position       = Calc_SensorPosition_Adapter();
     g_measurement.debug_data.cable_length          = Calc_CableLength_Adapter();

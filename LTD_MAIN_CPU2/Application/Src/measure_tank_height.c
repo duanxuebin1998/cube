@@ -86,7 +86,7 @@ uint32_t SearchBottom(void)
     /* -------------------- 初始位置调整 -------------------- */
     if (g_measurement.debug_data.cable_length > 2000)
     {
-        ret = motorMoveAndWaitUntilStopWithSpeed(100.0, MOTOR_DIRECTION_UP, motorGetDefaultSpeedX100());
+        ret = MotorCtrl_MoveAndWait(100.0, MOTOR_DIRECTION_UP, MotorCtrl_GetDefaultSpeedX100());
         CHECK_ERROR(ret);
         printf("罐底测量\t上行完成\r\n");
     }
@@ -133,7 +133,7 @@ uint32_t SearchBottom(void)
         RETURN_ERROR(MEASUREMENT_WEIGHT_DOWN_FAIL);
     }
 
-    printf("罐底测量\t粗找罐底完成：实高：%ld mm", bottom_value); motorPrintPositionRefs(); printf("\r\n");
+    printf("罐底测量\t粗找罐底完成：实高：%ld mm", bottom_value); MotorCtrl_PrintPositionRefs(); printf("\r\n");
 
     /*************** 精找阶段1 - 带重试 ***************/
     try_times = 0;
@@ -212,7 +212,7 @@ uint32_t SearchBottom(void)
         g_measurement.height_measurement.current_real_height = corrected_real_height;
         printf("罐底测量\t原始实高：%lu mm\t校正后实高：%lu mm",
                (unsigned long)raw_real_height,
-               (unsigned long)corrected_real_height); motorPrintPositionRefs(); printf("\r\n");
+               (unsigned long)corrected_real_height); MotorCtrl_PrintPositionRefs(); printf("\r\n");
         if(g_measurement.device_status.device_state == STATE_CALIBRATIONOILING)
         {
             g_measurement.height_measurement.calibrated_liquid_level = raw_real_height;
@@ -222,7 +222,7 @@ uint32_t SearchBottom(void)
         }
     }
     // 电机上行，完成流程
-    ret = motorMoveAndWaitUntilStopWithSpeed(100, MOTOR_DIRECTION_UP, motorGetDefaultSpeedX100());
+    ret = MotorCtrl_MoveAndWait(100, MOTOR_DIRECTION_UP, MotorCtrl_GetDefaultSpeedX100());
     CHECK_ERROR(ret);
     printf("罐底测量\t电机上行完成，流程结束\r\n");
 
@@ -235,21 +235,21 @@ uint32_t SearchBottom(void)
  */
 static int SearchBottomRough() {
 	uint32_t ret;
-	MotorLostStep_Init();// 重置丢步检测计数器
+	MotorCtrl_LostStepInit();// 重置丢步检测计数器
 	// 持续监控重量状态，直到检测到罐底
 	while (check_bottom_status() == NORMAL) {
-		ret = motorMove_downWithSpeed(motorGetDefaultSpeedX100());  // 启动电机向下运动
+		ret = MotorCtrl_MoveDown(MotorCtrl_GetDefaultSpeedX100());  // 启动电机向下运动
 		CHECK_ERROR(ret); // 检查上行是否成功
 
-		ret = Motor_CheckLostStep_AutoTiming(g_measurement.debug_data.cable_length);
+		ret = MotorCtrl_CheckLostStepAutoTiming(g_measurement.debug_data.cable_length);
 		CHECK_ERROR(ret); // 检查丢步检测是否成功
-		printf("罐底测量\t长距离寻找罐底\t{传感器位置}%.1f", (float)(g_measurement.debug_data.sensor_position)/10.0); motorPrintPositionRefs(); printf("\t{称重值}%d\t", weight_parament.current_weight);
+		printf("罐底测量\t长距离寻找罐底\t{传感器位置}%.1f", (float)(g_measurement.debug_data.sensor_position)/10.0); MotorCtrl_PrintPositionRefs(); printf("\t{称重值}%d\t", weight_parament.current_weight);
 	}
-	ret = motorQuickStop(); // 到达零点后快速停止电机
+	ret = MotorCtrl_QuickStop(); // 到达零点后快速停止电机
 	CHECK_ERROR(ret); // 检查快速停止是否成功
 	HAL_Delay(3000); // 短暂等待
 	// 优化：检查是否真正到达零点
-	printf("罐底测量\t确认粗找罐底位置\t{传感器位置}%.1f", (float)(g_measurement.debug_data.sensor_position)/10.0); motorPrintPositionRefs(); printf("\t");
+	printf("罐底测量\t确认粗找罐底位置\t{传感器位置}%.1f", (float)(g_measurement.debug_data.sensor_position)/10.0); MotorCtrl_PrintPositionRefs(); printf("\t");
 	if (check_bottom_status() == BOTTOM)
 	{
 		// 记录首次检测到的罐底位置
@@ -258,7 +258,7 @@ static int SearchBottomRough() {
 	}
 	else {
 		printf("罐底测量\t粗找罐底未成功，尝试再次粗找\r\n");
-		ret = motorMoveAndWaitUntilStopWithSpeed(100.0, MOTOR_DIRECTION_UP, motorGetDefaultSpeedX100());
+		ret = MotorCtrl_MoveAndWait(100.0, MOTOR_DIRECTION_UP, MotorCtrl_GetDefaultSpeedX100());
 		CHECK_ERROR(ret);  // 检查上行是否成功
 		printf("罐底测量\t上行100mm\r\n");
 		return MEASUREMENT_WEIGHT_DOWN_FAIL;
@@ -276,14 +276,14 @@ static int SearchBottomPrecise() {
 	printf("罐底测量\t稳定重量：%d\r\n", weight_parament.stable_weight);
     if (g_measurement.debug_data.cable_length > 2000)
     {
-        ret = motorMoveAndWaitUntilStopWithSpeed(200.0, MOTOR_DIRECTION_UP, motorGetDefaultSpeedX100());
+        ret = MotorCtrl_MoveAndWait(200.0, MOTOR_DIRECTION_UP, MotorCtrl_GetDefaultSpeedX100());
         CHECK_ERROR(ret);
         printf("罐底测量\t上行完成\r\n");
     }
-    MotorLostStep_Init();// 重置丢步检测计数器
+    MotorCtrl_LostStepInit();// 重置丢步检测计数器
 	// 持续监控重量状态，直到检测到罐底
 	while (check_bottom_status() != BOTTOM) {
-        speed_x100 = motorGetDefaultSpeedX100();
+        speed_x100 = MotorCtrl_GetDefaultSpeedX100();
         if (bottom_value-g_measurement.debug_data.cable_length < 100) {
             speed_x100 = 10;
         }
@@ -294,7 +294,7 @@ static int SearchBottomPrecise() {
             speed_x100 = 100;
         }
 
-		ret = motorMove_downWithSpeed(speed_x100);  // 启动电机向下运动
+		ret = MotorCtrl_MoveDown(speed_x100);  // 启动电机向下运动
 		CHECK_ERROR(ret); // 检查上行是否成功
 
 		if (bottom_value-g_measurement.debug_data.cable_length < -1000)  {
@@ -302,11 +302,11 @@ static int SearchBottomPrecise() {
 			RETURN_ERROR(MEASUREMENT_WEIGHT_DOWN_FAIL); // 如果编码器位置异常，返回错误
 		}
 
-		ret = Motor_CheckLostStep_AutoTiming(g_measurement.debug_data.cable_length);
+		ret = MotorCtrl_CheckLostStepAutoTiming(g_measurement.debug_data.cable_length);
 		CHECK_ERROR(ret); // 检查丢步检测是否成功
-		printf("罐底测量\t精确寻找罐底\t{传感器位置}%.1f", (float)(g_measurement.debug_data.sensor_position)/10.0f); motorPrintPositionRefs(); printf("\t速度(0.01m/min)\t%lu\t", (unsigned long)g_measurement.debug_data.motor_speed);
+		printf("罐底测量\t精确寻找罐底\t{传感器位置}%.1f", (float)(g_measurement.debug_data.sensor_position)/10.0f); MotorCtrl_PrintPositionRefs(); printf("\t速度(0.01m/min)\t%lu\t", (unsigned long)g_measurement.debug_data.motor_speed);
 	}
-	ret = motorQuickStop();
+	ret = MotorCtrl_QuickStop();
 	CHECK_ERROR(ret); // 检查快速停止是否成功
 	// 更新罐底位置并停止电机
 	bottom_value = g_measurement.debug_data.cable_length;
@@ -403,13 +403,13 @@ static uint32_t EnsureGyroZeroRefForBottomMeasurement(void)
     }
 
     printf("罐底测量\t角度找底基准无效，尝试在当前位置建立基准\r\n");
-    ret = motorSlowStop();
+    ret = MotorCtrl_SlowStop();
     if (ret != NO_ERROR) {
         return ret;
     }
 
     if (g_measurement.debug_data.cable_length > 1000) {
-        ret = motorMoveAndWaitUntilStopWithSpeed(BOTTOM_GYRO_REF_SAFE_LIFT_MM, MOTOR_DIRECTION_UP, motorGetDefaultSpeedX100());
+        ret = MotorCtrl_MoveAndWait(BOTTOM_GYRO_REF_SAFE_LIFT_MM, MOTOR_DIRECTION_UP, MotorCtrl_GetDefaultSpeedX100());
         if (ret != NO_ERROR) {
             return ret;
         }
@@ -465,7 +465,7 @@ Weight_StateTypeDef check_bottom_status(void)
 				(long)diff,
 				(long)full_weight,
 				cable_mm);
-		motorPrintPositionRefs();
+		MotorCtrl_PrintPositionRefs();
 		printf(" 传感器位置=%.1f | 零点保护区=%lu\r\n",
 				sensor_mm,
 				(unsigned long)g_deviceParams.weight_ignore_zone);
@@ -484,7 +484,7 @@ Weight_StateTypeDef check_bottom_status(void)
 				lower_limit,
 				(state == BOTTOM) ? "到达罐底" : "正常",
 				cable_mm);
-		motorPrintPositionRefs();
+		MotorCtrl_PrintPositionRefs();
 		printf("\r\n");
 
 		return state;
@@ -520,7 +520,7 @@ Weight_StateTypeDef check_bottom_status(void)
 			th,
 			(state == BOTTOM) ? "到达罐底" : "正常",
 			cable_mm);
-	motorPrintPositionRefs();
+	MotorCtrl_PrintPositionRefs();
 	printf("\r\n");
 
 	return state;

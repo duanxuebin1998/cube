@@ -38,12 +38,12 @@ void printError(const ErrorInfo* err)
  */
 void HandleError(void)
 {
-    motorSlowStop();
+    MotorCtrl_SlowStop();
 }
 
 /* 旧的错误记录函数示例（保留注释备查）
 void LogError(const ErrorInfo* err) {
-    motorSlowStop(); // 慢速停止电机
+    MotorCtrl_SlowStop(); // 慢速停止电机
     if (g_measurement.device_status.error_code == NO_ERROR &&
         g_measurement.device_status.error_code != STATE_SWITCH &&
         err->error_code != STATE_SWITCH) {
@@ -78,7 +78,7 @@ volatile FaultInfo g_faultInfo = { .severity = FAULT_SEVERITY_NONE };
  * @brief 故障信息初始化函数（系统启动时调用）
  */
 void fault_info_init(void) {
-    motorSlowStop(); // 初始化时确保电机停止
+    MotorCtrl_SlowStop(); // 初始化时确保电机停止
     g_measurement.device_status.error_code = NO_ERROR; // 清除设备状态错误码
 }
 

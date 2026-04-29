@@ -184,7 +184,7 @@ static void Recover_SSI_Bus(void) {
  * @brief  统一 SSI 错误处理：有限重试，超限后只上报一次，但持续保持通信
  */
 static void Handle_SSI_Error(const SSI_Data_t *data) {
-    if (!motorIsPositionSourceMotor()) {
+    if (!MotorCtrl_IsPositionSourceMotor()) {
         g_measurement.device_status.error_code = Get_SSI_Error_Code(data);
     }
 
@@ -195,7 +195,7 @@ static void Handle_SSI_Error(const SSI_Data_t *data) {
 
     if (!ssi_state.error_reported) {
         ssi_state.error_reported = true;
-        if (!motorIsPositionSourceMotor()) {
+        if (!MotorCtrl_IsPositionSourceMotor()) {
             Report_SSI_PersistentError(data);
         }
     }
@@ -222,7 +222,7 @@ static HAL_StatusTypeDef Start_Read_SSI_Data(void) {
     if (HAL_SPI_GetState(&SSI) != HAL_SPI_STATE_READY) {
         Recover_SSI_Bus();
         if (HAL_SPI_GetState(&SSI) != HAL_SPI_STATE_READY) {
-            if (!motorIsPositionSourceMotor()) {
+            if (!MotorCtrl_IsPositionSourceMotor()) {
                 g_measurement.device_status.error_code = ENCODER_TIMEOUT;
                 printf("SPI未就绪，当前状态: %d\n", HAL_SPI_GetState(&SSI));
             }
@@ -237,7 +237,7 @@ static HAL_StatusTypeDef Start_Read_SSI_Data(void) {
     status = HAL_SPI_Receive_DMA(&SSI, rxData, SSI_FRAME_LENGTH);
     if (status != HAL_OK) {
         Recover_SSI_Bus();
-        if (!motorIsPositionSourceMotor()) {
+        if (!MotorCtrl_IsPositionSourceMotor()) {
             g_measurement.device_status.error_code = ENCODER_TIMEOUT;
             printf("SPI错误码: 0x%08lX\n", SSI.ErrorCode);
             printf("SPI DMA 启动失败, 错误码: %d\n", status);
