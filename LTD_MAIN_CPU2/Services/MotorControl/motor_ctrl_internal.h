@@ -366,7 +366,7 @@ int32_t MotorPosition_ReadEncoderLengthForFit(void);
  * 恢复 XACTUAL/XTARGET，并缓存电机记步基准供位置源恢复使用。
  * @param tmc5130 TMC5130 设备对象。
  */
-void MotorPosition_RestorePersistedRegisters(TMC5130TypeDef *tmc5130);
+uint32_t MotorPosition_RestorePersistedRegisters(TMC5130TypeDef *tmc5130);
 
 /**
  * @brief 同步调试区中的卷筒步数和模型长度。

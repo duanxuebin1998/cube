@@ -196,6 +196,11 @@ static void save_device_params_internal(int mark_updated, int force_write)
     }
 
     build_saved_device_params(&params);
+    /* 保存镜像里的元信息也回填到全局参数，避免后续参数打印显示旧 CRC。 */
+    g_deviceParams.param_version = params.param_version;
+    g_deviceParams.struct_size = params.struct_size;
+    g_deviceParams.magic = params.magic;
+    g_deviceParams.crc = params.crc;
 
     slot_a_valid = load_device_params_from_slot_impl(FRAM_PARAM_A_ADDRESS, &slot_a, "A", 0);
     slot_b_valid = load_device_params_from_slot_impl(FRAM_PARAM_B_ADDRESS, &slot_b, "B", 0);

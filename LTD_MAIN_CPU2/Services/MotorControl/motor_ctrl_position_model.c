@@ -205,14 +205,14 @@ void MotorCtrl_PrintPositionCompare(void)
     int32_t encoder_position_01mm;
     int32_t length_diff_01mm;
     int32_t position_diff_01mm;
-    double local_circumference_mm;
     double delta_turns;
+    double local_circumference_mm;
     bool xactual_ok;
 
-    local_circumference_mm = MotorPosition_GetLocalCircumferenceFromParams();
     encoder_length_01mm = encoder_get_cable_length_01mm();
     encoder_position_01mm = encoder_get_sensor_position_01mm();
     xactual_ok = MotorPosition_TryUpdateDrumStateFromXactual(&stepper, &drum);
+    local_circumference_mm = MotorPosition_GetLocalCircumferenceFromParams();
 
     printf("电机/编码位置对比 | 模式=%lu(%s) | 局部周长原始值=%lu(0.001mm) | 局部周长=%.3fmm\r\n",
            (unsigned long)g_deviceParams.position_count_mode,
@@ -236,7 +236,7 @@ void MotorCtrl_PrintPositionCompare(void)
                   (double)MotorPosition_TapeTicksPerRev();
 
     /* 电机源位置按“切换时编码轮尺带长度 + XACTUAL 相对变化量”计算。
-     * 这样即使电机模型长度和编码轮长度存在偏差，切换瞬间也不会跳变。 */
+     * 有有效局部周长时沿用电机记步局部线性换算；否则回退到卷径模型。 */
     if (local_circumference_mm > 1e-6) {
         const double motor_length_mm = ((double)s_motor_position.count_base_length_01mm * 0.1) +
                                        (delta_turns * local_circumference_mm);
@@ -603,14 +603,9 @@ void MotorCtrl_PersistRegistersFromDriver(void)
     MotorPosition_MaybePersistRegisters(&stepper, true);
 }
 
-/**
- * @brief 标定零点专用的电机坐标和记步基准清理。
- *
- * 普通回零不能调用该函数；只有重新标定零点时才清零 XACTUAL/XTARGET 和旧基准。
- */
 void MotorCtrl_ResetDrumReferenceForZeroCalibration(void)
 {
-    /* 普通回零会继续保持电机记步，不能清这些基准；只有标定零点切回编码轮前才清除。 */
+    /* 回零成功后统一切回编码轮记步，因此这里清除电机记步坐标、基准和旧局部周长。 */
     s_motor_position.count_base_step = 0;
     s_motor_position.count_base_length_01mm = 0;
     s_motor_position.count_base_turns = 0.0;
@@ -838,13 +833,13 @@ int32_t MotorPosition_ReadEncoderLengthForFit(void)
  * 恢复 XACTUAL/XTARGET，并缓存电机记步基准供位置源恢复使用。
  * @param tmc5130 TMC5130 设备对象。
  */
-void MotorPosition_RestorePersistedRegisters(TMC5130TypeDef *tmc5130)
+uint32_t MotorPosition_RestorePersistedRegisters(TMC5130TypeDef *tmc5130)
 {
     int32_t xactual = 0;
     int32_t base_length_01mm = 0;
     int32_t base_step = 0;
     if ((tmc5130 == NULL) || (!s_motor_driver.initialized)) {
-        return;
+        return PARAM_ADDRESS_OVERFLOW;
     }
     if (MotorPosition_ReadPersistAB(&xactual, &base_length_01mm, &base_step)) {
         if ((!stpr_writeInt(tmc5130, TMC5130_RAMPMODE, TMC5130_MODE_HOLD)) ||
@@ -854,7 +849,7 @@ void MotorPosition_RestorePersistedRegisters(TMC5130TypeDef *tmc5130)
             s_motor_restored_base_step = 0;
             s_motor_restored_base_valid = false;
             printf("电机持久化恢复失败：TMC5130寄存器写入失败\r\n");
-            return;
+            return MOTOR_TMC_COMM_ERROR;
         }
         s_motor_restored_base_length_01mm = base_length_01mm;
         s_motor_restored_base_step = base_step;
@@ -865,13 +860,14 @@ void MotorPosition_RestorePersistedRegisters(TMC5130TypeDef *tmc5130)
                (long)xactual,
                (double)base_length_01mm * 0.1,
                (long)base_step);
-        return;
+        return NO_ERROR;
     }
     s_motor_restored_base_length_01mm = 0;
     s_motor_restored_base_step = 0;
     s_motor_restored_base_valid = false;
     MotorPosition_StorePersistSnapshot(0);
     printf("电机持久化: A/B槽均无效，复位为零\r\n");
+    return NO_ERROR;
 }
 
 /**
@@ -909,8 +905,8 @@ void MotorPosition_UpdatePositionFromMotorSource(const MotorDrumState *drum)
     double delta_turns;
     double turns;
     double length_mm;
-    int32_t length_01mm;
     double local_circumference_mm;
+    int32_t length_01mm;
 
     if ((drum == NULL) ||
         (g_deviceParams.position_count_mode != POSITION_COUNT_MODE_MOTOR)) {

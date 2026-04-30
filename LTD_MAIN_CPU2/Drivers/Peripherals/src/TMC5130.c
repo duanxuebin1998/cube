@@ -25,6 +25,9 @@
 #ifndef TMC5130_XACTUAL_READ_TOLERANCE_TICKS
 #define TMC5130_XACTUAL_READ_TOLERANCE_TICKS  (8192L)
 #endif
+#ifndef TMC5130_INIT_WRITE_RETRY_MAX
+#define TMC5130_INIT_WRITE_RETRY_MAX          (3U)
+#endif
 
 #define TMC5130_REQUIRE_WRITE(handle, address, value)            \
     do {                                                         \
@@ -180,12 +183,21 @@ static void tmc5130_initWrite(TMC5130TypeDef *tmc5130,
                               int32_t value,
                               uint32_t *failed_count)
 {
-    if (!stpr_writeInt(tmc5130, address, value)) {
-        if (failed_count != NULL) {
-            (*failed_count)++;
+    for (uint32_t attempt = 1U; attempt <= TMC5130_INIT_WRITE_RETRY_MAX; ++attempt) {
+        if (stpr_writeInt(tmc5130, address, value)) {
+            return;
         }
-        printf("TMC5130初始化写寄存器失败 | reg=0x%02X\r\n", (unsigned int)address);
+
+        /* 初始化阶段出现 HAL_BUSY/瞬态干扰时，短延时后重试，避免一次失败直接误判。 */
+        HAL_Delay(1U);
     }
+
+    if (failed_count != NULL) {
+        (*failed_count)++;
+    }
+    printf("TMC5130初始化写寄存器失败 | reg=0x%02X | retry=%u\r\n",
+           (unsigned int)address,
+           (unsigned int)TMC5130_INIT_WRITE_RETRY_MAX);
 }
 
 /**
@@ -631,8 +643,10 @@ uint32_t stpr_initStepper(TMC5130TypeDef *tmc5130,
     TMC5130_INIT_WRITE(tmc5130, TMC5130_GSTAT, 0x07);
 
     if (init_write_failed_count != 0U) {
-        printf("TMC5130初始化警告 | 写失败次数=%lu，继续使能驱动并允许后续运动命令自行校验\r\n",
+        printf("TMC5130初始化失败 | 写失败次数=%lu，已停止初始化流程\r\n",
                (unsigned long)init_write_failed_count);
+#undef TMC5130_INIT_WRITE
+        return MOTOR_TMC_COMM_ERROR;
     }
 
 #undef TMC5130_INIT_WRITE

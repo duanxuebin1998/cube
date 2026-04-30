@@ -142,6 +142,44 @@ uint32_t MotorCtrl_MoveByTicksAndWait(int32_t ticks, uint32_t speed_x100)
     }
 
     ret = MotorMotion_WaitStopAbortable(10);
+    if (ret == NO_ERROR) {
+        uint32_t settle_start_tick = HAL_GetTick();
+        uint32_t last_vel_refresh_tick = settle_start_tick;
+        const int32_t target_ticks = ticks;
+        const int32_t target_tolerance_ticks = 1024;
+
+        /* YM 局部周长标定依赖下行一圈后的编码轮长度。
+         * 仅看 RAMPSTAT.vzero 可能过早返回，这里再确认 XACTUAL 已到 XTARGET 附近。 */
+        while (1) {
+            int32_t xactual_now = 0;
+            int32_t diff_ticks;
+
+            CHECK_COMMAND_SWITCH_AND_STOP(COMMAND_SWITCH_ABORT);
+            if (!stpr_tryReadInt(&stepper, TMC5130_XACTUAL, &xactual_now)) {
+                ret = MOTOR_TMC_COMM_ERROR;
+                break;
+            }
+
+            diff_ticks = xactual_now - target_ticks;
+            if (diff_ticks < 0) {
+                diff_ticks = -diff_ticks;
+            }
+            if (diff_ticks <= target_tolerance_ticks) {
+                break;
+            }
+            if ((HAL_GetTick() - settle_start_tick) > MOTOR_STOP_WAIT_TIMEOUT_MS) {
+                printf("ticks运动等待到位超时 | XACTUAL=%ld | target=%ld | diff=%ld\r\n",
+                       (long)xactual_now,
+                       (long)target_ticks,
+                       (long)diff_ticks);
+                ret = MOTOR_RUN_TIMEOUT;
+                break;
+            }
+            MotorDriver_RefreshVelocityDuringRun(&stepper, &last_vel_refresh_tick);
+            MotorPosition_SyncDebugDrumState(&stepper);
+            HAL_Delay(10U);
+        }
+    }
 
     restore_ret = MotorDriver_EndTemporarySpeed(restore_needed, restore_speed_x100);
     if (ret != NO_ERROR) {
@@ -643,7 +681,6 @@ uint32_t MotorCtrl_GetDisplayState(void)
     if (!is_moving) {
         if ((motor_state == 1U) || (motor_state == 2U)) {
             g_measurement.debug_data.motor_state = 0U;
-            MotorPosition_SyncDebugDrumState(&stepper);
         }
         return 0U;
     }

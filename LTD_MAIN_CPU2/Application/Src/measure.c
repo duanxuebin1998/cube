@@ -671,13 +671,13 @@ void process_command(uint8_t *command) {
     }
 }
 int MeasureStart(void) {
+	fault_info_init(); //故障初始化清零
     uint32_t ret = MotorCtrl_Init(); //电机初始化
     if (ret != NO_ERROR) {
         printf("电机初始化失败，错误码=0x%08lX\r\n", (unsigned long)ret);
         return (int)ret;
     }
 	weight_init();
-	fault_info_init(); //故障初始化清零
 	g_measurement.device_status.error_code = NO_ERROR; //故障代码清零
 	return NO_ERROR;
 }
