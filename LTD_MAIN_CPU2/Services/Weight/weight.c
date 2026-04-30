@@ -51,8 +51,6 @@ static void Weight_PrintCableRefs(float cable_mm)
 uint32_t weight_init() {
 	weight_parament.empty_weight = g_deviceParams.empty_weight;           // 从设备参数中获取空载重量
 	weight_parament.full_weight = g_deviceParams.full_weight;           // 从设备参数中获取满载重量
-	printf("空载重量\t%d\r\n", weight_parament.empty_weight); // 打印空载重量
-	printf("满载重量\t%d\r\n", weight_parament.full_weight); // 打印满载重量
 	s_weight_last_rx_tick = HAL_GetTick();
 	s_weight_timeout_reported = 0U;
 	return NO_ERROR;

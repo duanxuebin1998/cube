@@ -103,10 +103,10 @@ void MotorCtrl_PersistRegistersFromDriver(void);
 void MotorCtrl_ApplyPositionSourceParams(void);
 
 /**
- * @brief 标定零点专用的电机基准清理
+ * @brief 回零成功后的电机记步基准清理
  *
  * 清零 XACTUAL/XTARGET、清除电机记步切换基准和旧局部周长。
- * 普通回零不能调用该接口，否则会破坏电机记步的当前位置口径。
+ * 普通回零和标定零点都会调用，随后统一切回编码轮记步。
  */
 void MotorCtrl_ResetDrumReferenceForZeroCalibration(void);
 

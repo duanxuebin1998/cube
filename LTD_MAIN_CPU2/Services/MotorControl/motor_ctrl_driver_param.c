@@ -14,6 +14,8 @@
 static uint32_t MotorDriver_ClampSpeedSetpointX100(uint32_t speed_x100);
 static uint32_t MotorDriver_ClampCurrentSetting(uint32_t current);
 static double MotorDriver_VmaxToUstepsPerSec(uint32_t vmax);
+static double MotorDriver_VmaxToOutputRevPerSec(uint32_t vmax);
+static double MotorDriver_VmaxToMotorRevPerSec(uint32_t vmax);
 static uint32_t MotorDriver_ClampVelocityU64(uint64_t v);
 static uint32_t MotorDriver_UstepsPerSecToVmax(double usteps_per_s);
 static uint32_t MotorDriver_ComputeBaseVelocityFromParams(void);
@@ -25,6 +27,8 @@ static int32_t MotorDriver_GetSpeedSetpointX100(void);
 static uint32_t MotorDriver_ClampSpeedSetpointX100(uint32_t speed_x100);
 static uint32_t MotorDriver_ClampCurrentSetting(uint32_t current);
 static double MotorDriver_VmaxToUstepsPerSec(uint32_t vmax);
+static double MotorDriver_VmaxToOutputRevPerSec(uint32_t vmax);
+static double MotorDriver_VmaxToMotorRevPerSec(uint32_t vmax);
 static uint32_t MotorDriver_ClampVelocityU64(uint64_t v);
 static uint32_t MotorDriver_UstepsPerSecToVmax(double usteps_per_s);
 static uint32_t MotorDriver_ComputeBaseVelocityFromParams(void);
@@ -167,16 +171,37 @@ uint32_t MotorCtrl_Init(void)
 //      stpr_initStepper(&stepper, &hspi2, GPIOB, GPIO_PIN_12, 1, 16);
         stpr_enableDriver(&stepper);
         s_motor_driver.initialized = true;
-        MotorPosition_RestorePersistedRegisters(&stepper);
+        ret = MotorPosition_RestorePersistedRegisters(&stepper);
+        if (ret != NO_ERROR) {
+            s_motor_driver.initialized = false;
+            return ret;
+        }
         MotorPosition_RestorePositionSourceFromParams();
+
+        /* stpr_initStepper() 只写基础斜坡参数，不写当前业务速度对应的 VMAX。
+         * 初始化完成后必须把本次计算出的 velocity 下发到 TMC5130，否则驱动会沿用旧 VMAX。 */
+        ret = stpr_setVelocity(&stepper, velocity);
+        if (ret != NO_ERROR) {
+            s_motor_driver.initialized = false;
+            stpr_disableDriver(&stepper);
+            return ret;
+        }
+        s_motor_driver.applied_velocity = velocity;
+
         /* 上电读取 DeviceParameters 和电机 FRAM 记录后，立即打印一次电机/编码轮位置对比。
          * 用于确认 XACTUAL、记步模式、局部周长、切换基准和编码轮位置是否一致。 */
         MotorCtrl_PrintPositionCompare();
     } else {
+        uint32_t ret;
+
         stpr_enableDriver(&stepper);
         (void)MotorCtrl_SetCurrent(motor_current);
-    }
 
+        /* 已初始化路径也要刷新 VMAX，确保参数修改后重新初始化能实时生效。 */
+        ret = stpr_setVelocity(&stepper, velocity);
+        CHECK_ERROR(ret);
+        s_motor_driver.applied_velocity = velocity;
+    }
     MotorPosition_SyncDebugDrumState(&stepper);
 
     printf("电机初始化 | 设定速度=%.2f m/min | 尺带长度=%.1f mm | VMAX=%lu | 等效微步/s=%.1f\r\n",
@@ -195,8 +220,39 @@ uint32_t MotorCtrl_Init(void)
  */
 bool MotorCtrl_IsDriverMoving(TMC5130TypeDef *tmc5130)
 {
-    uint32_t rampstat = stpr_readInt(tmc5130, TMC5130_RAMPSTAT);
-    return ((rampstat & 0x400) != 0x400); // bit10=1 表示停止
+    int32_t rampstat = 0;
+    int32_t rampstat_confirm = 0;
+    int32_t vactual = 0;
+
+    if (tmc5130 == NULL) {
+        return false;
+    }
+
+    if (!stpr_tryReadInt(tmc5130, TMC5130_RAMPSTAT, &rampstat)) {
+        return false;
+    }
+
+    /* bit10(vzero)=0 表示斜坡发生器仍有速度，直接判定为运动中。 */
+    if (((uint32_t)rampstat & 0x400U) != 0x400U) {
+        return true;
+    }
+
+    /* 换向过程中速度会短暂过零，RAMPSTAT.vzero 可能瞬间置位。
+     * 首次读到停止候选时延时后再确认一次，避免把换向过零误判成运动完成。 */
+    HAL_Delay(5U);
+    if (!stpr_tryReadInt(tmc5130, TMC5130_RAMPSTAT, &rampstat_confirm)) {
+        return false;
+    }
+    if (((uint32_t)rampstat_confirm & 0x400U) != 0x400U) {
+        return true;
+    }
+
+    /* 若状态位连续显示 vzero，但实际速度寄存器仍非 0，仍按运动中处理。 */
+    if (stpr_tryReadInt(tmc5130, TMC5130_VACTUAL, &vactual) && (vactual != 0)) {
+        return true;
+    }
+
+    return false;
 }
 
 /**
@@ -259,9 +315,13 @@ void MotorDriver_UpdateVelocityFromParams(void)
     const double Lcur_mm = (double)g_measurement.debug_data.cable_length * 0.1;
     velocity = MotorDriver_ComputeUniformVelocityFromLength(Lcur_mm);
 
-    printf("速度初始化 | 尺带长度=%.1f mm | VMAX=%lu | 等效微步/s=%.1f\r\n",
+    printf("速度初始化 | 线速度=%.2f m/min | 尺带长度=%.1f mm | 周长=%.1f mm | VMAX=%lu | 输出轴=%.3f r/s | 电机=%.3f r/s | 等效微步/s=%.1f\r\n",
+           (double)MotorDriver_GetSpeedSetpointX100() / 100.0,
            Lcur_mm,
+           MotorPosition_TapeInstantCircumferenceFromLength(Lcur_mm),
            (unsigned long)velocity,
+           MotorDriver_VmaxToOutputRevPerSec(velocity),
+           MotorDriver_VmaxToMotorRevPerSec(velocity),
            MotorDriver_VmaxToUstepsPerSec(velocity));
 }
 
@@ -286,15 +346,29 @@ void MotorDriver_StopAndMarkStopped(void)
 {
     uint32_t ret;
     bool is_moving = true;
+    uint32_t start_tick;
 
     ret = stpr_stop(&stepper);
     if (ret != NO_ERROR) {
         printf("电机停止命令写入失败，错误码=0x%08lX\r\n", (unsigned long)ret);
+        return;
     }
+
+    /* 命令切换时不能只下发停止就返回，否则下一条命令会在电机减速过程中被读取执行。 */
+    start_tick = HAL_GetTick();
+    while (MotorDriver_TryReadMovingState(&stepper, &is_moving) && is_moving) {
+        MotorPosition_SyncDebugDrumState(&stepper);
+        if ((HAL_GetTick() - start_tick) > MOTOR_STOP_WAIT_TIMEOUT_MS) {
+            printf("电机停止等待超时，继续退出当前操作\r\n");
+            break;
+        }
+        HAL_Delay(10U);
+    }
+
     MotorPosition_SyncDebugDrumState(&stepper);
 
     /* 停止命令只是开始减速，只有驱动确认 vzero 后才显示静止。 */
-    if (MotorDriver_TryReadMovingState(&stepper, &is_moving) && (!is_moving)) {
+    if (!is_moving) {
         g_measurement.debug_data.motor_state = 0U;
     }
 }
@@ -391,13 +465,6 @@ uint32_t MotorDriver_ComputeUniformVelocityFromLength(double L_mm)
 {
     const int32_t speed_x100 = MotorDriver_GetSpeedSetpointX100();
     double C_cur = MotorPosition_TapeInstantCircumferenceFromLength(L_mm);
-    double local_circumference_mm = MotorPosition_GetLocalCircumferenceFromParams();
-
-    if ((g_deviceParams.position_count_mode == POSITION_COUNT_MODE_MOTOR) &&
-        (local_circumference_mm > 1e-6)) {
-        C_cur = local_circumference_mm;
-    }
-
     if (C_cur > 1e-6) {
         const double ticks_per_rev = (double)MotorPosition_TapeTicksPerRev();
 
@@ -464,10 +531,16 @@ void MotorDriver_RefreshVelocityDuringRun(TMC5130TypeDef *tmc5130,
         s_motor_driver.applied_velocity = new_v;
         velocity = new_v;
 
-        printf("速度刷新 | 尺带长度=%.1f mm | 旧VMAX=%lu | 新VMAX=%lu | 旧微步/s=%.1f | 新微步/s=%.1f\r\n",
+        printf("速度刷新 | 线速度=%.2f m/min | 尺带长度=%.1f mm | 周长=%.1f mm | 旧VMAX=%lu | 新VMAX=%lu | 输出轴=%.3f->%.3f r/s | 电机=%.3f->%.3f r/s | 微步/s=%.1f->%.1f\r\n",
+               (double)MotorDriver_GetSpeedSetpointX100() / 100.0,
                Lcur_mm,
+               MotorPosition_TapeInstantCircumferenceFromLength(Lcur_mm),
                (unsigned long)old_v,
                (unsigned long)new_v,
+               MotorDriver_VmaxToOutputRevPerSec(old_v),
+               MotorDriver_VmaxToOutputRevPerSec(new_v),
+               MotorDriver_VmaxToMotorRevPerSec(old_v),
+               MotorDriver_VmaxToMotorRevPerSec(new_v),
                MotorDriver_VmaxToUstepsPerSec(old_v),
                MotorDriver_VmaxToUstepsPerSec(new_v));
     }
@@ -604,6 +677,20 @@ static uint32_t MotorDriver_ClampCurrentSetting(uint32_t current)
 static double MotorDriver_VmaxToUstepsPerSec(uint32_t vmax)
 {
     return ((double)vmax * TMC5130_FCLK_HZ) / 16777216.0;
+}
+
+static double MotorDriver_VmaxToOutputRevPerSec(uint32_t vmax)
+{
+    const double ticks_per_rev = (double)MotorPosition_TapeTicksPerRev();
+    if (ticks_per_rev <= 1e-6) {
+        return 0.0;
+    }
+    return MotorDriver_VmaxToUstepsPerSec(vmax) / ticks_per_rev;
+}
+
+static double MotorDriver_VmaxToMotorRevPerSec(uint32_t vmax)
+{
+    return MotorDriver_VmaxToUstepsPerSec(vmax) / (1600.0 * 32.0);
 }
 
 /**
