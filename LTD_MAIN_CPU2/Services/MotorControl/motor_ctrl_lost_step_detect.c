@@ -12,6 +12,8 @@
 
 /* 丢步检测环形缓冲区：记录最近位置采样，单位 0.1mm。 */
 static int32_t pos_buf[LOST_STEP_WINDOW];
+static int32_t motor_pos_buf[LOST_STEP_WINDOW];
+static int32_t encoder_pos_buf[LOST_STEP_WINDOW];
 static uint32_t tick_buf[LOST_STEP_WINDOW];
 static int write_idx = 0;
 static int samples = 0;
@@ -25,6 +27,12 @@ static uint32_t last_alarm_tick = 0;
 #endif
 #ifndef NODETECT_DENS_PERIOD_MS
 #define NODETECT_DENS_PERIOD_MS       500u   /* 密度读取周期：500ms */
+#endif
+#ifndef LOST_STEP_MIN_MOTOR_DELTA_01MM
+#define LOST_STEP_MIN_MOTOR_DELTA_01MM 50    /* 电机窗口内至少移动5mm，才判定编码轮未跟随 */
+#endif
+#ifndef LOST_STEP_ENCODER_FOLLOW_RATIO_PERCENT
+#define LOST_STEP_ENCODER_FOLLOW_RATIO_PERCENT 20U /* 编码轮位移低于电机位移20%，认为未跟随 */
 #endif
 
 /* ===================== 对外接口 ===================== */
@@ -43,6 +51,8 @@ void MotorCtrl_LostStepInit(void)
 
     for (int i = 0; i < LOST_STEP_WINDOW; i++) {
         pos_buf[i]  = 0;
+        motor_pos_buf[i] = 0;
+        encoder_pos_buf[i] = 0;
         tick_buf[i] = 0;
     }
 }
@@ -65,8 +75,12 @@ uint32_t MotorCtrl_CheckLostStepAutoTiming(int32_t currentPos)
 
     last_check_tick = now;
 
+    MotorCtrl_RefreshDebugDrumState();
+
     /* 写入当前位置和时间戳 */
     pos_buf[write_idx]  = currentPos;   /* 单位：0.1mm */
+    motor_pos_buf[write_idx] = g_measurement.debug_data.motor_distance;
+    encoder_pos_buf[write_idx] = encoder_get_cable_length_01mm();
     tick_buf[write_idx] = now;          /* 单位：ms */
     write_idx = (write_idx + 1) % LOST_STEP_WINDOW;
 
@@ -85,6 +99,10 @@ uint32_t MotorCtrl_CheckLostStepAutoTiming(int32_t currentPos)
 
     int32_t pos_old = pos_buf[oldest_idx];
     int32_t pos_new = pos_buf[newest_idx];
+    int32_t motor_old = motor_pos_buf[oldest_idx];
+    int32_t motor_new = motor_pos_buf[newest_idx];
+    int32_t encoder_old = encoder_pos_buf[oldest_idx];
+    int32_t encoder_new = encoder_pos_buf[newest_idx];
     uint32_t tick_old = tick_buf[oldest_idx];
     uint32_t tick_new = tick_buf[newest_idx];
 
@@ -96,6 +114,14 @@ uint32_t MotorCtrl_CheckLostStepAutoTiming(int32_t currentPos)
     int32_t delta_pos_01mm = pos_new - pos_old;
     if (delta_pos_01mm < 0) {
         delta_pos_01mm = -delta_pos_01mm;
+    }
+    int32_t motor_delta_01mm = motor_new - motor_old;
+    if (motor_delta_01mm < 0) {
+        motor_delta_01mm = -motor_delta_01mm;
+    }
+    int32_t encoder_delta_01mm = encoder_new - encoder_old;
+    if (encoder_delta_01mm < 0) {
+        encoder_delta_01mm = -encoder_delta_01mm;
     }
 
     /* 时间差，单位：s */
@@ -121,6 +147,28 @@ uint32_t MotorCtrl_CheckLostStepAutoTiming(int32_t currentPos)
         speed_threshold_mm_s = LOST_STEP_MIN_AVG_SPEED_MM_S;
     }
 
+
+    /* 编码轮跟随性检查：电机明显运动但编码轮基本不动时，直接判定异常。
+     * 该检查不依赖罐底位置，避免粗找阶段 bottom_value 尚未建立导致漏判。 */
+    if (motor_delta_01mm >= LOST_STEP_MIN_MOTOR_DELTA_01MM) {
+        int32_t encoder_min_delta_01mm =
+            (motor_delta_01mm * (int32_t)LOST_STEP_ENCODER_FOLLOW_RATIO_PERCENT) / 100;
+        if (encoder_min_delta_01mm < 10) {
+            encoder_min_delta_01mm = 10;
+        }
+
+        if (encoder_delta_01mm < encoder_min_delta_01mm) {
+            if ((now - last_alarm_tick) >= LOST_STEP_SUPPRESS_MS) {
+                last_alarm_tick = now;
+                printf("编码轮未跟随报警 | 最近%.1f s电机尺带变化=%.1fmm | 编码轮尺带变化=%.1fmm | 最小跟随=%.1fmm\r\n",
+                       dt_s,
+                       (double)motor_delta_01mm * 0.1,
+                       (double)encoder_delta_01mm * 0.1,
+                       (double)encoder_min_delta_01mm * 0.1);
+                return ENCODER_LOST_STEP;
+            }
+        }
+    }
     /* 中间区域才启用丢步判定，避免靠近零点/罐底误判 */
     if ((g_measurement.debug_data.cable_length > 1000) &&
         (g_measurement.debug_data.cable_length < bottom_value - 1000)) {

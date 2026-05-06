@@ -34,6 +34,38 @@ static int32_t GetRealHeightCalibrationOffset(void);
 static uint32_t ApplyRealHeightCalibration(uint32_t raw_real_height);
 static uint32_t CaptureGyroZeroRefAverage(const char *tag, uint8_t allow_first_sample_fallback);
 static uint32_t EnsureGyroZeroRefForBottomMeasurement(void);
+static uint32_t BuildTankHeightFromCableLength(uint32_t cable_length_01mm)
+{
+    int64_t tank_height_01mm = (int64_t)cable_length_01mm +
+                               (int64_t)(int32_t)g_deviceParams.liquid_sensor_distance_diff;
+
+    if (tank_height_01mm < 0) {
+        tank_height_01mm = 0;
+    }
+
+    if (tank_height_01mm > (int64_t)UINT32_MAX) {
+        tank_height_01mm = (int64_t)UINT32_MAX;
+    }
+
+    return (uint32_t)tank_height_01mm;
+}
+
+static uint32_t BuildBottomCableLengthFromTankHeight(uint32_t tank_height_01mm)
+{
+    int64_t cable_length_01mm = (int64_t)tank_height_01mm -
+                                (int64_t)(int32_t)g_deviceParams.liquid_sensor_distance_diff;
+
+    if (cable_length_01mm < 0) {
+        cable_length_01mm = 0;
+    }
+
+    if (cable_length_01mm > (int64_t)UINT32_MAX) {
+        cable_length_01mm = (int64_t)UINT32_MAX;
+    }
+
+    return (uint32_t)cable_length_01mm;
+}
+static void ApplyBottomEncoderCorrection(void);
 static int32_t GetRealHeightCalibrationOffset(void)
 {
     if ((g_deviceParams.initialTankHeight == 0U) ||
@@ -59,6 +91,37 @@ static uint32_t ApplyRealHeightCalibration(uint32_t raw_real_height)
     return (uint32_t)corrected_real_height;
 }
 
+static void ApplyBottomEncoderCorrection(void)
+{
+    int32_t old_encoder_count;
+    int32_t old_cable_length;
+    int32_t target_cable_length;
+
+    printf("罐底编码器修正开关=%lu\r\n", (unsigned long)g_deviceParams.bottom_encoder_correction_enable);
+
+    if (g_deviceParams.bottom_encoder_correction_enable != BOTTOM_ENCODER_CORRECTION_ENABLE) {
+        return;
+    }
+
+    if (g_deviceParams.tankHeight == 0U) {
+        printf("罐底编码器修正跳过：罐高为0，不修改编码值\r\n");
+        return;
+    }
+
+    old_encoder_count = g_encoder_count;
+    old_cable_length = encoder_get_cable_length_01mm();
+    target_cable_length = (int32_t)BuildBottomCableLengthFromTankHeight(g_deviceParams.tankHeight);
+
+    /* 罐底测量完成时探头位于罐底；不修改罐高，只把编码器当前尺带长度修正到罐高扣除探头距差后的值。 */
+    encoder_set_cable_length_01mm(target_cable_length);
+
+    printf("罐底编码器修正完成 | 原编码=%ld | 新编码=%ld | 原尺带=%.1fmm | 目标尺带=%.1fmm | 罐高保持=%.1fmm\r\n",
+           (long)old_encoder_count,
+           (long)g_encoder_count,
+           (double)old_cable_length * 0.1,
+           (double)target_cable_length * 0.1,
+           (double)g_deviceParams.tankHeight * 0.1);
+}
 /**
  * @brief 罐底测量函数 - 执行完整的罐底搜索流程
  *        包含：粗找罐底（3次重试） + 两次精找（各3次重试）
@@ -96,7 +159,7 @@ uint32_t SearchBottom(void)
 
     printf("罐底测量\t初始重量：%d\r\n", weight_parament.stable_weight);
 
-    /*************** 粗找阶段 - 带重试机制 ***************/
+    /*************** Rough bottom search retry ***************/
     try_times = 0;
     while (try_times < 3)
     {
@@ -135,7 +198,7 @@ uint32_t SearchBottom(void)
 
     printf("罐底测量\t粗找罐底完成：实高：%ld mm", bottom_value); MotorCtrl_PrintPositionRefs(); printf("\r\n");
 
-    /*************** 精找阶段1 - 带重试 ***************/
+    /*************** First precise bottom search retry ***************/
     try_times = 0;
     while (try_times < 3)
     {
@@ -168,7 +231,7 @@ uint32_t SearchBottom(void)
         CHECK_ERROR(ret);
     }
 
-    /*************** 精找阶段2 - 带重试 ***************/
+    /*************** Second precise bottom search retry ***************/
     try_times = 0;
     while (try_times < 3)
     {
@@ -201,27 +264,32 @@ uint32_t SearchBottom(void)
         CHECK_ERROR(ret);
     }
 
-    /*************** 最终校验与记录 ***************/
+    /*************** Tank height record ***************/
     {
-        uint32_t raw_real_height =
+        uint32_t bottom_cable_length =
                 (bottom_value > 0) ? (uint32_t)bottom_value
                                    : g_measurement.debug_data.cable_length;
+        uint32_t raw_real_height = BuildTankHeightFromCableLength(bottom_cable_length);
         uint32_t corrected_real_height =
                 ApplyRealHeightCalibration(raw_real_height);
 
         g_measurement.height_measurement.current_real_height = corrected_real_height;
-        printf("罐底测量\t原始实高：%lu mm\t校正后实高：%lu mm",
+        printf("罐底测量\t尺带长度=%lu(0.1mm)\t探头距差=%ld(0.1mm)\t原始罐高=%lu(0.1mm)\t修正罐高=%lu(0.1mm)",
+               (unsigned long)bottom_cable_length,
+               (long)(int32_t)g_deviceParams.liquid_sensor_distance_diff,
                (unsigned long)raw_real_height,
                (unsigned long)corrected_real_height); MotorCtrl_PrintPositionRefs(); printf("\r\n");
         if(g_measurement.device_status.device_state == STATE_CALIBRATIONOILING)
         {
             g_measurement.height_measurement.calibrated_liquid_level = raw_real_height;
-            g_deviceParams.tankHeight = raw_real_height +  g_deviceParams.liquid_sensor_distance_diff;
-            printf("罐底测量\t标定完成，罐高设置为：%ld mm\r\n", g_deviceParams.tankHeight);
-            update_sensor_height_from_encoder();    //更新罐高数据
+            g_deviceParams.tankHeight = raw_real_height;
+            printf("罐底测量\t罐高标定完成，罐高=%ld(0.1mm)\r\n", g_deviceParams.tankHeight);
+            update_sensor_height_from_encoder();    // update position after tank height change
         }
     }
     // 电机上行，完成流程
+    ApplyBottomEncoderCorrection();
+
     ret = MotorCtrl_MoveAndWait(100, MOTOR_DIRECTION_UP, MotorCtrl_GetDefaultSpeedX100());
     CHECK_ERROR(ret);
     printf("罐底测量\t电机上行完成，流程结束\r\n");
@@ -243,13 +311,13 @@ static int SearchBottomRough() {
 
 		ret = MotorCtrl_CheckLostStepAutoTiming(g_measurement.debug_data.cable_length);
 		CHECK_ERROR(ret); // 检查丢步检测是否成功
-		printf("罐底测量\t长距离寻找罐底\t{传感器位置}%.1f", (float)(g_measurement.debug_data.sensor_position)/10.0); MotorCtrl_PrintPositionRefs(); printf("\t{称重值}%d\t", weight_parament.current_weight);
+		printf("罐底测量\t长距离寻找罐底\t{传感器位置}%.1f", (float)(g_measurement.debug_data.sensor_position)/10.0); MotorCtrl_PrintPositionRefs(); printf("\t{称重值}%d\r\n", weight_parament.current_weight);
 	}
 	ret = MotorCtrl_QuickStop(); // 到达零点后快速停止电机
 	CHECK_ERROR(ret); // 检查快速停止是否成功
 	HAL_Delay(3000); // 短暂等待
 	// 优化：检查是否真正到达零点
-	printf("罐底测量\t确认粗找罐底位置\t{传感器位置}%.1f", (float)(g_measurement.debug_data.sensor_position)/10.0); MotorCtrl_PrintPositionRefs(); printf("\t");
+	printf("罐底测量\t确认粗找罐底位置\t{传感器位置}%.1f", (float)(g_measurement.debug_data.sensor_position)/10.0); MotorCtrl_PrintPositionRefs(); printf("\r\n");
 	if (check_bottom_status() == BOTTOM)
 	{
 		// 记录首次检测到的罐底位置
@@ -304,7 +372,7 @@ static int SearchBottomPrecise() {
 
 		ret = MotorCtrl_CheckLostStepAutoTiming(g_measurement.debug_data.cable_length);
 		CHECK_ERROR(ret); // 检查丢步检测是否成功
-		printf("罐底测量\t精确寻找罐底\t{传感器位置}%.1f", (float)(g_measurement.debug_data.sensor_position)/10.0f); MotorCtrl_PrintPositionRefs(); printf("\t速度(0.01m/min)\t%lu\t", (unsigned long)g_measurement.debug_data.motor_speed);
+		printf("罐底测量\t精确寻找罐底\t{传感器位置}%.1f", (float)(g_measurement.debug_data.sensor_position)/10.0f); MotorCtrl_PrintPositionRefs(); printf("\t速度(0.01m/min)\t%lu\r\n", (unsigned long)g_measurement.debug_data.motor_speed);
 	}
 	ret = MotorCtrl_QuickStop();
 	CHECK_ERROR(ret); // 检查快速停止是否成功

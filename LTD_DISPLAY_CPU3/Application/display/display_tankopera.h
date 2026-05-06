@@ -192,7 +192,7 @@ typedef enum
     COM_NUM_DEVICEPARAM_RESERVED1,                      // 保留 1
     COM_NUM_DEVICEPARAM_RESERVED2,                      // 保留 2
     COM_NUM_DEVICEPARAM_RESERVED3,                      // 保留 3
-    COM_NUM_DEVICEPARAM_RESERVED4,                      // 保留 4
+    COM_NUM_DEVICEPARAM_POSITION_SOURCE_AUTO_SWITCH,    // 位置源自动切换
 
     /* ---------------- 电机与编码器参数 ---------------- */
     COM_NUM_DEVICEPARAM_MOTOR_CURRENT,                  // 电机运行电流
@@ -258,7 +258,7 @@ typedef enum
     COM_NUM_DEVICEPARAM_INITIAL_TANKHEIGHT,             // 初始罐高
     COM_NUM_DEVICEPARAM_CURRENT_TANKHEIGHT,             // 当前罐高
 
-    COM_NUM_DEVICEPARAM_RESERVED16,                     // 保留 16
+    COM_NUM_DEVICEPARAM_BOTTOM_ENCODER_CORRECTION_ENABLE,// 罐底后编码器修正
     COM_NUM_DEVICEPARAM_RESERVED17,                     // 保留 17
 
     /* ---------------- 密度与温度修正 ---------------- */

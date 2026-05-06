@@ -422,7 +422,7 @@ typedef struct {
     uint32_t reserved1;                   // 预留
     uint32_t reserved2;                   // 预留
     uint32_t reserved3;                   // 预留
-    uint32_t reserved4;                   // 预留（新增）
+    uint32_t position_source_auto_switch;       // 位置源自动切换(0=不切换,1=自动切换)
 
     // ===================== 电机与编码器参数 =====================
     uint32_t motor_current;              // 电机运行电流(1~31，异常恢复为16)
@@ -485,8 +485,7 @@ typedef struct {
     uint32_t maxTankHeightDeviation;      // 罐高最大变化范围
     uint32_t initialTankHeight;           // 初始实高
     uint32_t currentTankHeight;           // 当前实高
-
-    uint32_t reserved16;                 // 预留
+    uint32_t bottom_encoder_correction_enable; // 罐底测量完成后修正编码器(0=不修正,1=修正)
     uint32_t reserved17;                 // 预留（新增）
 
     // ===================== 密度和温度修正参数 =====================
@@ -584,6 +583,12 @@ typedef struct {
 /* 位置记步来源：0 使用编码轮，1 使用 TMC5130 XACTUAL 电机步进。 */
 #define POSITION_COUNT_MODE_ENCODER 0u
 #define POSITION_COUNT_MODE_MOTOR   1u
+/* 流程是否允许自动切换位置源：0=不切换，1=自动切换。 */
+#define POSITION_SOURCE_AUTO_SWITCH_DISABLE 0u
+#define POSITION_SOURCE_AUTO_SWITCH_ENABLE  1u
+/* 罐底测量完成后是否修正编码器当前值：0=不修正，1=修正。 */
+#define BOTTOM_ENCODER_CORRECTION_DISABLE 0u
+#define BOTTOM_ENCODER_CORRECTION_ENABLE  1u
 /* TMC5130 电机运行电流编码值，异常值恢复为 16。 */
 #define MOTOR_CURRENT_DEFAULT       16u
 #define MOTOR_CURRENT_MIN           1u

@@ -69,7 +69,7 @@ static void CMD_FollowWaterLevel(void);
 static void CMD_MeasureZero(void);
 static void CMD_MeasureBottom(void);
 static void CMD_MeasureAndFollowOilLevel(void);
-static uint32_t EnsureMotorPositionSourceBeforeFollow(const char *follow_name);
+static uint32_t EnsureMotorPositionSourceBeforeFollow(const char *follow_name, uint8_t *switched_to_motor);
 static void CMD_CalibrateZeroPoint(void);
 static void CMD_CalibrateOilLevel(void);
 static void CMD_SyntheticMeasurement(void);
@@ -683,13 +683,22 @@ int MeasureStart(void) {
 }
 
 //测量水位主函数
-/* 跟随类命令进入闭环前，位置基准必须先统一到电机记步。
- * 切换后不直接沿用旧的液位/水位点，而是让原有搜索流程重新定位后再跟随。 */
-static uint32_t EnsureMotorPositionSourceBeforeFollow(const char *follow_name)
+/* 跟随类命令进入闭环前，如果参数允许且当前位置源为编码器，则切到电机记步。
+ * 发生切换后不直接沿用旧的液位/水位点，而是重新定位后再跟随。 */
+static uint32_t EnsureMotorPositionSourceBeforeFollow(const char *follow_name, uint8_t *switched_to_motor)
 {
     uint32_t ret;
 
+    if (switched_to_motor != NULL) {
+        *switched_to_motor = 0U;
+    }
+
     if (MotorCtrl_IsPositionSourceMotor()) {
+        return NO_ERROR;
+    }
+
+    if (g_deviceParams.position_source_auto_switch != POSITION_SOURCE_AUTO_SWITCH_ENABLE) {
+        printf("%s\t当前位置源为编码器，按参数禁止自动切换电机记步\r\n", follow_name);
         return NO_ERROR;
     }
 
@@ -698,6 +707,10 @@ static uint32_t EnsureMotorPositionSourceBeforeFollow(const char *follow_name)
     if (ret != NO_ERROR) {
         printf("%s\t切换电机记步失败，错误码:0x%08lX\r\n", follow_name, (unsigned long)ret);
         return ret;
+    }
+
+    if (switched_to_motor != NULL) {
+        *switched_to_motor = 1U;
     }
 
     return NO_ERROR;
@@ -731,17 +744,20 @@ static void CMD_FollowWaterLevel(void)
     }
 
     if (!MotorCtrl_IsPositionSourceMotor()) {
-        ret = EnsureMotorPositionSourceBeforeFollow("水位跟随");
+        uint8_t switched_to_motor = 0U;
+        ret = EnsureMotorPositionSourceBeforeFollow("水位跟随", &switched_to_motor);
         SET_ERROR(ret);
 
-        g_measurement.device_status.device_state = STATE_FOLLOW_WATER_POINT_SEARCHING;
-        // 切到电机记步后重新找水位，后续闭环跟随以电机位置为基准。
-        if (g_deviceParams.water_level_mode == 0) {
-            ret = SearchWaterLevel();
-            SET_ERROR(ret);
-        } else {
-            ret = FindWaterLevel_FastByStateFlip_StableExit(0);
-            SET_ERROR(ret);
+        if (switched_to_motor) {
+            g_measurement.device_status.device_state = STATE_FOLLOW_WATER_POINT_SEARCHING;
+            // 切到电机记步后重新找水位，后续闭环跟随以电机位置为基准。
+            if (g_deviceParams.water_level_mode == 0) {
+                ret = SearchWaterLevel();
+                SET_ERROR(ret);
+            } else {
+                ret = FindWaterLevel_FastByStateFlip_StableExit(0);
+                SET_ERROR(ret);
+            }
         }
     }
 
@@ -895,13 +911,16 @@ static void CMD_MeasureAndFollowOilLevel(void) {
     SET_ERROR(ret);
 
     if (!MotorCtrl_IsPositionSourceMotor()) {
-        ret = EnsureMotorPositionSourceBeforeFollow("液位跟随");
+        uint8_t switched_to_motor = 0U;
+        ret = EnsureMotorPositionSourceBeforeFollow("液位跟随", &switched_to_motor);
         SET_ERROR(ret);
 
-        g_measurement.device_status.device_state = STATE_FINDOIL;
-        // 切到电机记步后重新找液位，后续闭环跟随以电机位置为基准。
-        ret = SearchOilLevel();
-        SET_ERROR(ret);
+        if (switched_to_motor) {
+            g_measurement.device_status.device_state = STATE_FINDOIL;
+            // 切到电机记步后重新找液位，后续闭环跟随以电机位置为基准。
+            ret = SearchOilLevel();
+            SET_ERROR(ret);
+        }
     }
 
     g_measurement.device_status.device_state = STATE_FLOWOIL;
@@ -1105,7 +1124,8 @@ static void CMD_WartsilaDensitySpread(void) {
 	HAL_Delay(1000); // 延时1s
 	HAL_Delay(1000); // 延时1s
 	HAL_Delay(1000); // 延时1s
-    
+    ret = SearchBottom();
+    SET_ERROR(ret);
     g_deviceParams.command = CMD_MONITOR_SINGLE; // 切回单点监测状态，继续监测当前液位/密度
 	return;
 }

@@ -137,9 +137,13 @@ int SearchZero(void) {
 	} else {
 		set_encoder_zero();
 		MotorCtrl_ResetDrumReferenceForZeroCalibration();
-		ret = MotorCtrl_SwitchPositionSourceToEncoder();
-		CHECK_ERROR(ret);
-		printf("零点测量    编码器零点设置成功，已清除电机记步并切回编码轮记步\r\n");
+		if (g_deviceParams.position_source_auto_switch == POSITION_SOURCE_AUTO_SWITCH_ENABLE) {
+			ret = MotorCtrl_SwitchPositionSourceToEncoder();
+			CHECK_ERROR(ret);
+			printf("零点测量    编码器零点设置成功，已清除电机记步并切回编码轮记步\r\n");
+		} else {
+			printf("零点测量    编码器零点设置成功，按参数保持当前记步模式\r\n");
+		}
 		ret = MotorCtrl_MoveNoWait(10, MOTOR_DIRECTION_DOWN, MotorCtrl_GetDefaultSpeedX100());//脱离零点
 		CHECK_ERROR(ret);
 		HAL_Delay(3000);
