@@ -32,7 +32,7 @@ struct ParameterMetadata param_meta[] = {
 {(uint8_t*)"保留1",	0,	COM_NUM_DEVICEPARAM_RESERVED1,	HOLDREGISTER_DEVICEPARAM_RESERVED1,	2,	false,	0,	0,	NULL,	0,	0,	false,	TYPE_INT,	8,	NULL,	(uint8_t*)"Rsv1"},
 {(uint8_t*)"保留2",	0,	COM_NUM_DEVICEPARAM_RESERVED2,	HOLDREGISTER_DEVICEPARAM_RESERVED2,	2,	false,	0,	0,	NULL,	0,	0,	false,	TYPE_INT,	8,	NULL,	(uint8_t*)"Rsv2"},
 {(uint8_t*)"保留3",	0,	COM_NUM_DEVICEPARAM_RESERVED3,	HOLDREGISTER_DEVICEPARAM_RESERVED3,	2,	false,	0,	0,	NULL,	0,	0,	false,	TYPE_INT,	8,	NULL,	(uint8_t*)"Rsv3"},
-{(uint8_t*)"保留4",	0,	COM_NUM_DEVICEPARAM_RESERVED4,	HOLDREGISTER_DEVICEPARAM_RESERVED4,	2,	false,	0,	0,	NULL,	0,	0,	false,	TYPE_INT,	8,	NULL,	(uint8_t*)"Rsv4"},
+{(uint8_t*)"位置源自动切换",	0,	COM_NUM_DEVICEPARAM_POSITION_SOURCE_AUTO_SWITCH,	HOLDREGISTER_DEVICEPARAM_POSITION_SOURCE_AUTO_SWITCH,	2,	true,	0,	1,	NULL,	0,	0,	true,	TYPE_INT,	1,	NULL,	(uint8_t*)"PosAutoSw"},
 
 {(uint8_t*)"电机运行电流", 0, COM_NUM_DEVICEPARAM_MOTOR_CURRENT, HOLDREGISTER_DEVICEPARAM_MOTOR_CURRENT, 2, true, 1, 31, NULL, 0, 0, true, TYPE_INT, 2, NULL, (uint8_t*)"MotorCur"},
 {(uint8_t*)"编码轮周长mm",	0,	COM_NUM_DEVICEPARAM_ENCODER_WHEEL_CIRCUMFERENCE_MM,	HOLDREGISTER_DEVICEPARAM_ENCODER_WHEEL_CIRCUMFERENCE_MM,	2,	false,	0,	0,	NULL,	3,	0,	true,	TYPE_INT,	7,	NULL,	(uint8_t*)"EncWheelCirc"},
@@ -87,7 +87,7 @@ struct ParameterMetadata param_meta[] = {
 {(uint8_t*)"实高最大偏差",	0,	COM_NUM_DEVICEPARAM_MAX_TANKHEIGHT_DEVIATION,	HOLDREGISTER_DEVICEPARAM_MAX_TANKHEIGHT_DEVIATION,	2,	false,	0,	0,	NULL,	1,	0,	true,	TYPE_INT,	4,	NULL,	(uint8_t*)"MaxDev"},
 {(uint8_t*)"初始罐高",	0,	COM_NUM_DEVICEPARAM_INITIAL_TANKHEIGHT,	HOLDREGISTER_DEVICEPARAM_INITIAL_TANKHEIGHT,	2,	false,	0,	0,	NULL,	1,	0,	false,	TYPE_INT,	7,	NULL,	(uint8_t*)"InitTankH"},
 {(uint8_t*)"当前罐高",	0,	COM_NUM_DEVICEPARAM_CURRENT_TANKHEIGHT,	HOLDREGISTER_DEVICEPARAM_CURRENT_TANKHEIGHT,	2,	false,	0,	0,	NULL,	1,	0,	false,	TYPE_INT,	7,	NULL,	(uint8_t*)"CurrTankH"},
-{(uint8_t*)"保留16",	0,	COM_NUM_DEVICEPARAM_RESERVED16,	HOLDREGISTER_DEVICEPARAM_RESERVED16,	2,	false,	0,	0,	NULL,	0,	0,	false,	TYPE_INT,	8,	NULL,	(uint8_t*)"Rsv16"},
+{(uint8_t*)"罐底后编码器修正",	0,	COM_NUM_DEVICEPARAM_BOTTOM_ENCODER_CORRECTION_ENABLE,	HOLDREGISTER_DEVICEPARAM_BOTTOM_ENCODER_CORRECTION_ENABLE,	2,	true,	0,	1,	NULL,	0,	0,	true,	TYPE_INT,	1,	NULL,	(uint8_t*)"BotEncFix"},
 {(uint8_t*)"保留17",	0,	COM_NUM_DEVICEPARAM_RESERVED17,	HOLDREGISTER_DEVICEPARAM_RESERVED17,	2,	false,	0,	0,	NULL,	0,	0,	false,	TYPE_INT,	8,	NULL,	(uint8_t*)"Rsv17"},
 
 {(uint8_t*)"磁通量D",	0,	COM_NUM_DEVICEPARAM_DENSITYCORRECTION,	HOLDREGISTER_DEVICEPARAM_DENSITYCORRECTION,	2,	false,	-10000,	10000,	NULL,	1,	-10000,	true,	TYPE_INT,	5,	NULL,	(uint8_t*)"DensityCorr"},
@@ -279,6 +279,7 @@ void print_device_params(void)
     printf("  %-32s : 0x%08lX\r\n", "软件版本", (unsigned long)params.softwareVersion);
     printf("  %-32s : %lu\r\n", "故障自动回零", (unsigned long)params.error_auto_back_zero);
     printf("  %-32s : %lu\r\n", "故障停止测量", (unsigned long)params.error_stop_measurement);
+    printf("  %-32s : %lu\r\n", "位置源自动切换", (unsigned long)params.position_source_auto_switch);
 
     /* 电机与编码器 */
     printf("\r\n-- 电机与编码器 --\r\n");
@@ -341,6 +342,7 @@ void print_device_params(void)
     printf("  %-32s : %lu\r\n", "实高最大偏差", (unsigned long)params.maxTankHeightDeviation);
     printf("  %-32s : %lu\r\n", "初始罐高", (unsigned long)params.initialTankHeight);
     printf("  %-32s : %lu\r\n", "当前罐高", (unsigned long)params.currentTankHeight);
+    printf("  %-32s : %lu\r\n", "罐底后编码器修正", (unsigned long)params.bottom_encoder_correction_enable);
 
     /* 修正 */
     printf("\r\n-- 修正参数 --\r\n");

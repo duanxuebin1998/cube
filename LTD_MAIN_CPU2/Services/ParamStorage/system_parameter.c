@@ -76,6 +76,18 @@ static int normalize_device_params_runtime(void)
         changed = 1;
     }
 
+    if ((g_deviceParams.position_source_auto_switch != POSITION_SOURCE_AUTO_SWITCH_DISABLE) &&
+        (g_deviceParams.position_source_auto_switch != POSITION_SOURCE_AUTO_SWITCH_ENABLE)) {
+        g_deviceParams.position_source_auto_switch = POSITION_SOURCE_AUTO_SWITCH_ENABLE;
+        changed = 1;
+    }
+
+    if ((g_deviceParams.bottom_encoder_correction_enable != BOTTOM_ENCODER_CORRECTION_DISABLE) &&
+        (g_deviceParams.bottom_encoder_correction_enable != BOTTOM_ENCODER_CORRECTION_ENABLE)) {
+        g_deviceParams.bottom_encoder_correction_enable = BOTTOM_ENCODER_CORRECTION_DISABLE;
+        changed = 1;
+    }
+
     if ((g_deviceParams.motor_current < MOTOR_CURRENT_MIN) ||
         (g_deviceParams.motor_current > MOTOR_CURRENT_MAX)) {
         g_deviceParams.motor_current = MOTOR_CURRENT_DEFAULT;
@@ -380,6 +392,7 @@ void RestoreFactoryParamsConfig(void)
     g_deviceParams.softwareVersion       = 0x00010001;
     g_deviceParams.error_auto_back_zero  = 1;   /* 默认: 报错回零 */
     g_deviceParams.error_stop_measurement= 1;   /* 默认: 报错停止测量 */
+    g_deviceParams.position_source_auto_switch = POSITION_SOURCE_AUTO_SWITCH_ENABLE; /* 默认: 允许流程自动切换位置源 */
 
     /* ---------------- 电机与编码器参数 ---------------- */
     g_deviceParams.encoder_wheel_circumference_mm = 95000;  /* 0.001mm */
@@ -439,6 +452,7 @@ void RestoreFactoryParamsConfig(void)
     g_deviceParams.maxTankHeightDeviation  = 100;  /* 0.1mm => 10mm */
     g_deviceParams.initialTankHeight       = 0;
     g_deviceParams.currentTankHeight       = 0;
+    g_deviceParams.bottom_encoder_correction_enable = BOTTOM_ENCODER_CORRECTION_DISABLE; /* 默认: 罐底测量后不修正编码器 */
 
     /* ---------------- 密度/温度修正 ---------------- */
     g_deviceParams.densityCorrection       = 10000;
@@ -532,6 +546,7 @@ void print_device_params(void)
     printf("  %-32s : 0x%08lX\r\n", "软件版本", (unsigned long)params.softwareVersion);
     printf("  %-32s : %lu\r\n", "故障自动回零", (unsigned long)params.error_auto_back_zero);
     printf("  %-32s : %lu\r\n", "故障停止测量", (unsigned long)params.error_stop_measurement);
+    printf("  %-32s : %lu\r\n", "位置源自动切换", (unsigned long)params.position_source_auto_switch);
 
     /* 电机与编码器 */
     printf("\r\n-- 电机与编码器 --\r\n");
@@ -595,6 +610,7 @@ void print_device_params(void)
     printf("  %-32s : %lu\r\n", "实高最大偏差", (unsigned long)params.maxTankHeightDeviation);
     printf("  %-32s : %lu\r\n", "初始罐高", (unsigned long)params.initialTankHeight);
     printf("  %-32s : %lu\r\n", "当前罐高", (unsigned long)params.currentTankHeight);
+    printf("  %-32s : %lu\r\n", "罐底后编码器修正", (unsigned long)params.bottom_encoder_correction_enable);
 
     /* 修正 */
     printf("\r\n-- 修正参数 --\r\n");

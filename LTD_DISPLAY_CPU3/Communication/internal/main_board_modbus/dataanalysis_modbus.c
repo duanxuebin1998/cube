@@ -79,7 +79,7 @@ void WriteDeviceParamsToHoldingRegisters(uint16_t *HoldingRegisterArray)
     write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_RESERVED1, g_deviceParams.reserved1);
     write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_RESERVED2, g_deviceParams.reserved2);
     write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_RESERVED3, g_deviceParams.reserved3);
-    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_RESERVED4, g_deviceParams.reserved4);
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_POSITION_SOURCE_AUTO_SWITCH, g_deviceParams.position_source_auto_switch);
     write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_MOTOR_CURRENT, g_deviceParams.motor_current);
 
     /* ===================== 电机与编码器参数 ===================== */
@@ -145,7 +145,7 @@ void WriteDeviceParamsToHoldingRegisters(uint16_t *HoldingRegisterArray)
     write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_INITIAL_TANKHEIGHT,       g_deviceParams.initialTankHeight);
     write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_CURRENT_TANKHEIGHT,       g_deviceParams.currentTankHeight);
 
-    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_RESERVED16, g_deviceParams.reserved16);
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_BOTTOM_ENCODER_CORRECTION_ENABLE, g_deviceParams.bottom_encoder_correction_enable);
     write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_RESERVED17, g_deviceParams.reserved17);
 
     /* ===================== 密度和温度修正参数 ===================== */
@@ -265,7 +265,7 @@ void ReadDeviceParamsFromHoldingRegisters(uint16_t *HoldingRegisterArray)
     g_deviceParams.reserved1 = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_RESERVED1);
     g_deviceParams.reserved2 = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_RESERVED2);
     g_deviceParams.reserved3 = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_RESERVED3);
-    g_deviceParams.reserved4 = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_RESERVED4);
+    g_deviceParams.position_source_auto_switch = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_POSITION_SOURCE_AUTO_SWITCH);
     g_deviceParams.motor_current = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_MOTOR_CURRENT);
 
     /* ===================== 电机与编码器参数 ===================== */
@@ -332,7 +332,7 @@ void ReadDeviceParamsFromHoldingRegisters(uint16_t *HoldingRegisterArray)
     g_deviceParams.initialTankHeight      = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_INITIAL_TANKHEIGHT);
     g_deviceParams.currentTankHeight      = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_CURRENT_TANKHEIGHT);
 
-    g_deviceParams.reserved16 = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_RESERVED16);
+    g_deviceParams.bottom_encoder_correction_enable = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_BOTTOM_ENCODER_CORRECTION_ENABLE);
     g_deviceParams.reserved17 = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_RESERVED17);
 
     /* ===================== 密度和温度修正参数 ===================== */

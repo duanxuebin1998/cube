@@ -38,6 +38,8 @@ static volatile uint32_t* get_deviceparam_ptr_by_operanum(int operanum)
         return &g_deviceParams.error_auto_back_zero;
     case COM_NUM_DEVICEPARAM_ERROR_STOP_MEASUREMENT:
         return &g_deviceParams.error_stop_measurement;
+    case COM_NUM_DEVICEPARAM_POSITION_SOURCE_AUTO_SWITCH:
+        return &g_deviceParams.position_source_auto_switch;
 
     /* ===== 电机与编码器参数 ===== */
     case COM_NUM_DEVICEPARAM_MOTOR_CURRENT:
@@ -136,6 +138,8 @@ static volatile uint32_t* get_deviceparam_ptr_by_operanum(int operanum)
         return &g_deviceParams.initialTankHeight;
     case COM_NUM_DEVICEPARAM_CURRENT_TANKHEIGHT:
         return &g_deviceParams.currentTankHeight;
+    case COM_NUM_DEVICEPARAM_BOTTOM_ENCODER_CORRECTION_ENABLE:
+        return &g_deviceParams.bottom_encoder_correction_enable;
 
     /* ===== 密度与温度修正 ===== */
     case COM_NUM_DEVICEPARAM_DENSITYCORRECTION:

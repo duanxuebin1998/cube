@@ -211,3 +211,32 @@ void set_encoder_zero(void)
     update_sensor_height_from_encoder();
     printf("编码器零点设置为 %ld\r\n", (long)g_encoder_count);
 }
+void encoder_set_cable_length_01mm(int32_t cable_length_01mm)
+{
+    double encoder_value;
+    int32_t new_count;
+
+    if (cable_length_01mm < 0) {
+        cable_length_01mm = 0;
+    }
+
+    if (g_deviceParams.encoder_wheel_circumference_mm == 0U) {
+        printf("编码器修正失败：编码轮周长为0\r\n");
+        return;
+    }
+
+    /* cable_length 单位为0.1mm，encoder_wheel_circumference_mm 单位为0.001mm。 */
+    encoder_value = ((double)cable_length_01mm * 100.0 * (double)MAX_ANGLE) /
+                    (double)g_deviceParams.encoder_wheel_circumference_mm;
+    new_count = -(int32_t)(encoder_value + 0.5);
+
+    printf("编码器修正 | 目标尺带长度=%ld(0.1mm) | 原计数=%ld | 新计数=%ld\r\n",
+           (long)cable_length_01mm,
+           (long)g_encoder_count,
+           (long)new_count);
+
+    g_encoder_count = new_count;
+    g_encoder_saved = new_count;
+    WriteEncoderDataAB(g_encoder_count, prev_angle);
+    update_sensor_height_from_encoder_force();
+}
