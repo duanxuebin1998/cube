@@ -899,8 +899,8 @@ static uint32_t MotorMotion_WaitUntilStopWithTarget(TMC5130TypeDef *tmc5130,
         CHECK_ERROR(ret);
 
         /* 5) 芯片异常检测 */
-        ret = MotorCtrl_CheckDriverGstat(tmc5130);
-        CHECK_ERROR(ret);
+       ret = MotorCtrl_CheckDriverGstat(tmc5130);
+       CHECK_ERROR(ret);
 
         /* 6) 超时保护 */
         if (HAL_GetTick() - startTick > MAX_WAIT_MS) {

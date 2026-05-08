@@ -73,6 +73,9 @@ uint32_t stpr_setPos(TMC5130TypeDef *tmc5130, int32_t position);
 /** 阻塞等待当前运动结束，同时检查驱动基础故障。 */
 uint32_t stpr_waitMove(TMC5130TypeDef *tmc5130);
 
+/** 检查并解析 TMC5130 GSTAT/DRV_STATUS 驱动异常。 */
+uint32_t stpr_checkDriverStatus(TMC5130TypeDef *tmc5130);
+
 /* ---------- 参数即时更新 ---------- */
 
 /** 设置运行电流 IRUN，保持 IHOLD/IHOLDDELAY 为统一默认值。 */

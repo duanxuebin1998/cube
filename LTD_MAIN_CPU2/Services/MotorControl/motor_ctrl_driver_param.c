@@ -256,38 +256,15 @@ bool MotorCtrl_IsDriverMoving(TMC5130TypeDef *tmc5130)
 }
 
 /**
- * @brief 检查 TMC5130 GSTAT 驱动状态并转换为系统错误码。
+ * @brief 检查 TMC5130 GSTAT/DRV_STATUS 驱动状态并转换为系统错误码。
  *
  * @param tmc5130 TMC5130 设备对象。
  * @return NO_ERROR 或对应驱动故障错误码。
  */
 uint32_t MotorCtrl_CheckDriverGstat(TMC5130TypeDef *tmc5130)
 {
-    uint32_t gstat = stpr_readInt(tmc5130, TMC5130_GSTAT);
-    uint32_t ret = NO_ERROR;
-
-    if (gstat == 0)
-        return NO_ERROR;
-
-    if (gstat & (1 << 0)) {
-        printf("TMC5130: 芯片复位检测到（bit0=1）\r\n");
-    }
-    if (gstat & (1 << 1)) {
-        printf("TMC5130: 驱动器因过热或短路被关闭\r\n");
-        ret = MOTOR_OVERTEMPERATURE;
-    }
-    if (gstat & (1 << 2)) {
-        printf("TMC5130: 充电泵欠压\r\n");
-        ret = MOTOR_CHARGE_PUMP_UNDER_VOLTAGE;
-    }
-
-    /* 写 1 清除状态位 */
-    if (!stpr_writeInt(tmc5130, TMC5130_GSTAT, 0x07)) {
-        return MOTOR_TMC_COMM_ERROR;
-    }
-
-    if (ret != NO_ERROR)
-        CHECK_ERROR(ret);
+    uint32_t ret = stpr_checkDriverStatus(tmc5130);
+    CHECK_ERROR(ret);
 
     return ret;
 }

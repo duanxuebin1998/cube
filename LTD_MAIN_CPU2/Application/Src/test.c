@@ -409,37 +409,115 @@ static void __attribute__((unused)) Sensor_CommCheckAndLog(const char *tag)
 
 
 /* ========================= 主测试函数 ========================= */
-void motor_text(void)
+void motor_text(float run_distance_mm, uint8_t enable_sensor_comm)
 {
     uint32_t loop_cnt = 0;
-    MeasureStart();
-    printf("motor text start\r\n");
-    MotorCtrl_Init(); // 电机初始化
+    uint32_t ret;
+    uint32_t speed = MotorCtrl_GetDefaultSpeedX100();
+
+    if (run_distance_mm <= 0.0f) {
+        printf("motor_text参数错误，运行距离=%.2fmm\r\n", run_distance_mm);
+        return;
+    }
+
+    ret = (uint32_t)MeasureStart();
+    if (ret != NO_ERROR) {
+        printf("motor_text初始化失败，错误码=0x%08lX\r\n", (unsigned long)ret);
+        return;
+    }
+
+    printf("motor text start | distance=%.2fmm | sensor_comm=%u\r\n",
+           run_distance_mm,
+           (unsigned int)enable_sensor_comm);
+
+    ret = MotorCtrl_Init(); // 电机初始化，保持与原测试入口一致
+    if (ret != NO_ERROR) {
+        printf("motor_text电机初始化失败，错误码=0x%08lX\r\n", (unsigned long)ret);
+        return;
+    }
+
+    ret = stpr_setPos(&stepper, 0); // 将当前位置定义为本轮测试零点，上行回 0 会回到这里
+    if (ret != NO_ERROR) {
+        printf("motor_text设置测试零点失败，错误码=0x%08lX\r\n", (unsigned long)ret);
+        return;
+    }
 
     while (1) {
-        /* ---------- 下行 ---------- */
-        MotorCtrl_MoveNoWait(300, MOTOR_DIRECTION_DOWN, MotorCtrl_GetDefaultSpeedX100());
-        HAL_Delay(1000);
-        printf("[LOOP %lu] start down\r\n", (unsigned long)(loop_cnt + 1));
+        if (Test_ShouldAbortForCommandSwitch()) {
+            stpr_disableDriver(&stepper);
+            return;
+        }
 
-        stpr_waitMove(&stepper);
+        /* ---------- 下行 ---------- */
+        stpr_enableDriver(&stepper);
+        ret = MotorCtrl_MoveNoWait(run_distance_mm, MOTOR_DIRECTION_DOWN, speed);
+        if ((ret == STATE_SWITCH) || Test_ShouldAbortForCommandSwitch()) {
+            stpr_disableDriver(&stepper);
+            return;
+        }
+        if (ret != NO_ERROR) {
+            printf("[LOOP %lu] down command failed, error=0x%08lX\r\n",
+                   (unsigned long)(loop_cnt + 1), (unsigned long)ret);
+            MotorCtrl_SlowStop();
+            stpr_disableDriver(&stepper);
+            return;
+        }
+
+        printf("[LOOP %lu] start down\r\n", (unsigned long)(loop_cnt + 1));
+        ret = stpr_waitMove(&stepper);
+        if ((ret == STATE_SWITCH) || Test_ShouldAbortForCommandSwitch()) {
+            stpr_disableDriver(&stepper);
+            return;
+        }
+        if (ret != NO_ERROR) {
+            printf("[LOOP %lu] down failed, error=0x%08lX\r\n",
+                   (unsigned long)(loop_cnt + 1), (unsigned long)ret);
+            stpr_disableDriver(&stepper);
+            return;
+        }
         printf("[LOOP %lu] down over!\r\n", (unsigned long)(loop_cnt + 1));
 
-        /* 下行结束后：传感器通讯一次 */
-//        Sensor_CommCheckAndLog("after DOWN");
+        if (enable_sensor_comm != 0U) {
+            Sensor_CommCheckAndLog("after DOWN");
+        }
 
-        /* ---------- 回零（上行到0） ---------- */
-        stpr_moveTo(&stepper, 0, velocity); // 最大速度为 1600 * 2 * 32
+        if (Test_ShouldAbortForCommandSwitch()) {
+            stpr_disableDriver(&stepper);
+            return;
+        }
+
+        /* ---------- 回零（上行到本轮测试零点） ---------- */
+        ret = stpr_moveTo(&stepper, 0, velocity);
+        if ((ret == STATE_SWITCH) || Test_ShouldAbortForCommandSwitch()) {
+            stpr_disableDriver(&stepper);
+            return;
+        }
+        if (ret != NO_ERROR) {
+            printf("[LOOP %lu] up command failed, error=0x%08lX\r\n",
+                   (unsigned long)(loop_cnt + 1), (unsigned long)ret);
+            MotorCtrl_SlowStop();
+            stpr_disableDriver(&stepper);
+            return;
+        }
+
         printf("[LOOP %lu] start up to zero\r\n", (unsigned long)(loop_cnt + 1));
-        HAL_Delay(1000);
-
-        stpr_waitMove(&stepper);
+        ret = stpr_waitMove(&stepper);
+        if ((ret == STATE_SWITCH) || Test_ShouldAbortForCommandSwitch()) {
+            stpr_disableDriver(&stepper);
+            return;
+        }
+        if (ret != NO_ERROR) {
+            printf("[LOOP %lu] up failed, error=0x%08lX\r\n",
+                   (unsigned long)(loop_cnt + 1), (unsigned long)ret);
+            stpr_disableDriver(&stepper);
+            return;
+        }
         printf("[LOOP %lu] up over (to zero)\r\n", (unsigned long)(loop_cnt + 1));
 
-        /* 上行结束后：传感器通讯一次 */
-//        Sensor_CommCheckAndLog("after UP");
+        if (enable_sensor_comm != 0U) {
+            Sensor_CommCheckAndLog("after UP");
+        }
 
-        /* 本轮完成计数（下+上算一轮） */
         loop_cnt++;
         printf("[LOOP %lu] cycle done\r\n", (unsigned long)loop_cnt);
     }
@@ -682,7 +760,7 @@ void Demo_SinglePointDisplayMock(void)
 //测试主函数
 void Test_main(void) {
 	Test_FRAM_ReadWrite(); //测试FRAM读写
-//	motor_text();
+//	motor_text(300.0f, 0U);
 	Test_Params_Storage(); //测试参数存储
 	CRC32_HAL_Test(); //CRC校验测试
 }
