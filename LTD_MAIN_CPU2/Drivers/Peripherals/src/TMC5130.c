@@ -11,7 +11,7 @@
 #include "motor_ctrl.h" // 电机控制上层接口
 
 /* 保持电流固定为同一口径，运行时修改 motor_current 只改变 IRUN。 */
-#define TMC5130_MOTOR_IHOLD_VALUE       (5U)
+#define TMC5130_MOTOR_IHOLD_VALUE       (4U)
 #define TMC5130_MOTOR_IHOLDDELAY_VALUE  (7U)
 
 #define TMC5130_BYTE(value, n)           (((value) >> ((n) << 3)) & 0xFF)
@@ -20,7 +20,9 @@
 #define TMC5130_SET_IHOLDDELAY(a)        (((a) & 0x0F) << 16)
 #define TMC5130_IHOLD_IRUN_FIELD_MASK     (0x000F1F1FU)
 #ifndef TMC5130_SPI_CS_DELAY_CYCLES
-#define TMC5130_SPI_CS_DELAY_CYCLES      (64U)
+/* CS 保护延时：手册的最小时序是 ns 级，但现场在电机运动时出现过读帧错位/非法 GSTAT。
+ * 这里保留更大的高/低电平间隔，用来提高片选重新同步和抗干扰裕量。 */
+#define TMC5130_SPI_CS_DELAY_CYCLES      (512U)
 #endif
 #ifndef TMC5130_XACTUAL_READ_TOLERANCE_TICKS
 #define TMC5130_XACTUAL_READ_TOLERANCE_TICKS  (8192L)
@@ -28,6 +30,14 @@
 #ifndef TMC5130_INIT_WRITE_RETRY_MAX
 #define TMC5130_INIT_WRITE_RETRY_MAX          (3U)
 #endif
+#ifndef TMC5130_WAIT_POS_TOLERANCE_TICKS
+/* waitMove 退出前会比较 XACTUAL 与 XTARGET。该容差用于吸收细分步误差、
+ * 停止瞬间寄存器刷新延迟，以及位置读数的正常抖动，避免等不到完全相等。 */
+#define TMC5130_WAIT_POS_TOLERANCE_TICKS     (1024L)
+#endif
+/* GSTAT 按手册只有 bit0(reset)、bit1(drv_err)、bit2(uv_cp) 有效。
+ * 高位非 0 不是新增故障位，而是 SPI 读数不可信，应按通信异常处理。 */
+#define TMC5130_GSTAT_VALID_MASK              (0x07UL)
 
 #define TMC5130_REQUIRE_WRITE(handle, address, value)            \
     do {                                                         \
@@ -36,6 +46,75 @@
         }                                                        \
     } while (0)
 
+#define TMC5130_DRVSTATUS_SG_RESULT_MASK   (0x000003FFUL)
+#define TMC5130_DRVSTATUS_FSACTIVE         (1UL << 15)
+#define TMC5130_DRVSTATUS_CS_ACTUAL_MASK   (0x001F0000UL)
+#define TMC5130_DRVSTATUS_STALLGUARD       (1UL << 24)
+#define TMC5130_DRVSTATUS_OT               (1UL << 25)
+#define TMC5130_DRVSTATUS_OTPW             (1UL << 26)
+#define TMC5130_DRVSTATUS_S2GA             (1UL << 27)
+#define TMC5130_DRVSTATUS_S2GB             (1UL << 28)
+#define TMC5130_DRVSTATUS_OLA              (1UL << 29)
+#define TMC5130_DRVSTATUS_OLB              (1UL << 30)
+#define TMC5130_DRVSTATUS_STST             (1UL << 31)
+
+static uint32_t tmc5130_decodeDrvStatus(uint32_t drvstatus)
+{
+    uint32_t ret = NO_ERROR;
+    uint32_t cs_actual = (drvstatus & TMC5130_DRVSTATUS_CS_ACTUAL_MASK) >> 16;
+    uint32_t sg_result = drvstatus & TMC5130_DRVSTATUS_SG_RESULT_MASK;
+
+    printf("TMC5130 DRV_STATUS 解析 | SG_RESULT=%lu | CS_ACTUAL=%lu",
+           (unsigned long)sg_result, (unsigned long)cs_actual);
+    if (drvstatus & TMC5130_DRVSTATUS_FSACTIVE) {
+        printf(" | fsactive");
+    }
+    if (drvstatus & TMC5130_DRVSTATUS_STST) {
+        printf(" | standstill");
+    }
+    printf("\r\n");
+
+    if (drvstatus & TMC5130_DRVSTATUS_STALLGUARD) {
+        printf("TMC5130 StallGuard 触发（DRV_STATUS[24]）\r\n");
+        ret = MOTOR_ALARM_TRIGGERED;
+    }
+    if (drvstatus & TMC5130_DRVSTATUS_OT) {
+        printf("TMC5130 过温关断（DRV_STATUS[25]=ot）\r\n");
+        ret = MOTOR_OVERTEMPERATURE;
+    }
+    if (drvstatus & TMC5130_DRVSTATUS_OTPW) {
+        printf("TMC5130 过温预警（DRV_STATUS[26]=otpw）\r\n");
+        if (ret == NO_ERROR) {
+            ret = MOTOR_OVERTEMPERATURE;
+        }
+    }
+    if (drvstatus & TMC5130_DRVSTATUS_S2GA) {
+        printf("TMC5130 A 相对地短路（DRV_STATUS[27]=s2ga）\r\n");
+        if (ret == NO_ERROR) {
+            ret = MOTOR_ALARM_TRIGGERED;
+        }
+    }
+    if (drvstatus & TMC5130_DRVSTATUS_S2GB) {
+        printf("TMC5130 B 相对地短路（DRV_STATUS[28]=s2gb）\r\n");
+        if (ret == NO_ERROR) {
+            ret = MOTOR_ALARM_TRIGGERED;
+        }
+    }
+    if (drvstatus & TMC5130_DRVSTATUS_OLA) {
+        printf("TMC5130 A 相开路/断线（DRV_STATUS[29]=ola）\r\n");
+        if (ret == NO_ERROR) {
+            ret = MOTOR_ALARM_TRIGGERED;
+        }
+    }
+    if (drvstatus & TMC5130_DRVSTATUS_OLB) {
+        printf("TMC5130 B 相开路/断线（DRV_STATUS[30]=olb）\r\n");
+        if (ret == NO_ERROR) {
+            ret = MOTOR_ALARM_TRIGGERED;
+        }
+    }
+
+    return ret;
+}
 // 全局步进电机驱动句柄（默认配置）
 // 注意：这里只是给出一个全局默认实例，实际项目中也可以在别处重新初始化
 TMC5130TypeDef stepper = {
@@ -62,6 +141,8 @@ static void tmc5130_initWrite(TMC5130TypeDef *tmc5130,
 // <= SPI 底层封装
 
 static void tmc5130_delayCsGuard(void)
+/* 这里使用 NOP 而不是 HAL_Delay，避免把每次 5 字节 SPI 访问扩大到 ms 级。
+ * 延时会同时用于 CS 拉低前、拉低后和拉高后，确保每帧边界留出恢复时间。 */
 {
     for (uint32_t i = 0; i < TMC5130_SPI_CS_DELAY_CYCLES; ++i) {
         __NOP();
@@ -429,9 +510,108 @@ uint32_t stpr_setPos(TMC5130TypeDef *tmc5130, int32_t position)
 }
 
 /************************ 运动等待与故障检测 ************************/
+/**
+ * @brief 检查并解析 TMC5130 驱动异常状态。
+ *
+ * 该函数复用 stpr_waitMove() 的 GSTAT/DRV_STATUS 判定口径：
+ * - GSTAT 非法高位只打印并丢弃，避免把 SPI 错帧误判为真实故障；
+ * - drv_err 会继续读取 DRV_STATUS，细分过温、短路、开路、StallGuard；
+ * - uv_cp 和 reset 会清除 GSTAT 后返回对应错误。
+ *
+ * @param tmc5130 TMC5130 设备对象。
+ * @return NO_ERROR 或对应电机故障错误码。
+ */
+uint32_t stpr_checkDriverStatus(TMC5130TypeDef *tmc5130)
+{
+    int32_t gstat;
+    uint32_t gstat_raw;
+    int32_t drvstatus = 0;
+    bool drvstatus_ok;
+    bool reset_flag;
+    bool driver_error;
+    bool charge_pump_uv;
+
+    if (!stpr_tryReadInt(tmc5130, TMC5130_GSTAT, &gstat)) {
+        return MOTOR_TMC_COMM_ERROR;
+    }
+    if (gstat == 0) {
+        return NO_ERROR;
+    }
+
+    gstat_raw = (uint32_t)gstat;
+
+    /* GSTAT 只有低 3 位有效。高位非 0 说明本次 SPI 读数不可信。
+     * GSTAT 可能具有读后变化/读清行为，因此非法值只打印并丢弃，不复读、不清标志、不停机。 */
+    if ((gstat_raw & ~TMC5130_GSTAT_VALID_MASK) != 0UL) {
+        // printf("TMC5130 GSTAT读数非法，已丢弃 | GSTAT=0x%08lX | invalid=0x%08lX\r\n",
+        //        (unsigned long)gstat_raw,
+        //        (unsigned long)(gstat_raw & ~TMC5130_GSTAT_VALID_MASK));
+        return NO_ERROR;
+    }
+
+    /* 走到这里说明 GSTAT 编码合法，可以按低 3 位拆分真实标志。 */
+    reset_flag = ((gstat_raw & (1UL << 0)) != 0UL);
+    driver_error = ((gstat_raw & (1UL << 1)) != 0UL);
+    charge_pump_uv = ((gstat_raw & (1UL << 2)) != 0UL);
+
+    /* DRV_STATUS 只在 GSTAT 合法时读取。若 GSTAT 本身非法，就不继续解析详情，避免用坏帧推导假故障。 */
+    drvstatus_ok = stpr_tryReadInt(tmc5130, TMC5130_DRVSTATUS, &drvstatus);
+
+    printf("TMC5130 GSTAT=0x%08lX", (unsigned long)gstat_raw);
+    if (drvstatus_ok) {
+        printf(" | DRVSTATUS=0x%08lX", (unsigned long)drvstatus);
+    } else {
+        printf(" | DRVSTATUS=read_failed");
+    }
+    printf("\r\n");
+
+    /* reset 标志表示 TMC5130 发生过复位。运动过程中复位会丢失配置/状态，
+     * 不能像空闲初始化那样清除后继续跑，必须交给上层重新初始化。 */
+    if (reset_flag) {
+        printf("TMC5130 芯片复位标志（GSTAT[0]），运动过程中复位按通信/供电异常处理\r\n");
+    }
+
+    if (driver_error) {
+        uint32_t driver_ret;
+
+        /* drv_err 只是总故障入口，真正原因要看 DRV_STATUS：过温、短路、开路、StallGuard 等。
+         * 如果连 DRV_STATUS 都读不到，优先按通信异常处理，而不是猜测驱动故障类型。 */
+        if (!drvstatus_ok) {
+            return MOTOR_TMC_COMM_ERROR;
+        }
+
+        driver_ret = tmc5130_decodeDrvStatus((uint32_t)drvstatus);
+        printf("检测到驱动器错误（GSTAT[1]）\r\n");
+        if (!stpr_writeInt(tmc5130, TMC5130_GSTAT, 0x07)) { // 清除所有 GSTAT 标志位
+            return MOTOR_TMC_COMM_ERROR;
+        }
+        if (driver_ret == NO_ERROR) {
+            driver_ret = MOTOR_UNKNOWN_FEEDBACK;
+        }
+        return driver_ret;
+    }
+
+    if (charge_pump_uv) {
+        /* 充电泵欠压会影响高边驱动能力，继续运动风险较高，返回错误交给上层停机。 */
+        printf("检测到充电泵欠压（GSTAT[2]）\r\n");
+        if (!stpr_writeInt(tmc5130, TMC5130_GSTAT, 0x07)) { // 清除所有 GSTAT 标志位
+            return MOTOR_TMC_COMM_ERROR;
+        }
+        return MOTOR_CHARGE_PUMP_UNDER_VOLTAGE;
+    }
+
+    if (reset_flag) {
+        if (!stpr_writeInt(tmc5130, TMC5130_GSTAT, 0x07)) { // 清除复位标志，便于后续重新初始化观察
+            return MOTOR_TMC_COMM_ERROR;
+        }
+        return MOTOR_TMC_COMM_ERROR;
+    }
+
+    return NO_ERROR;
+}
 
 /**
- * @brief  阻塞等待当前运动完成（RAMPSTAT.vzero == 1）
+ * @brief  阻塞等待当前位置运动完成（RAMPSTAT.pos_reached && vzero）
  *         在等待过程中会检测称重/碰撞与 TMC5130 内部故障，
  *         一旦出错立即返回错误码。
  *
@@ -445,19 +625,37 @@ uint32_t stpr_waitMove(TMC5130TypeDef *tmc5130)
 {
     uint32_t ret;
     int32_t rampstat;
-    int32_t gstat;
 
     while (1) {
-        /* RAMPSTAT.vzero=1 表示斜坡发生器速度已经为 0。
-         * SPI 读取失败时不能继续等待，否则兼容版 stpr_readInt() 的 0 会让这里无限循环。 */
+        /* RAMPSTAT.vzero 只表示当前速度为 0，刚下发命令或换向减速时也可能短暂为 0。
+         * 等待位置运动完成必须同时满足 POSREACHED 和 VZERO，并在退出前核对 XACTUAL/XTARGET。 */
         if (!stpr_tryReadInt(tmc5130, TMC5130_RAMPSTAT, &rampstat)) {
             MotorCtrl_SlowStop();
             return MOTOR_TMC_COMM_ERROR;
         }
-        if ((rampstat & 0x400) == 0x400) {
-            break;
-        }
+        if (((rampstat & TMC5130_RS_POSREACHED) != 0) &&
+            ((rampstat & TMC5130_RS_VZERO) != 0)) {
+            int32_t xactual = 0;
+            int32_t xtarget = 0;
 
+            /* POSREACHED 来自驱动内部状态，XACTUAL/XTARGET 是退出前的二次确认。
+             * 任何一个位置寄存器读失败，都说明当前无法可靠判断运动完成，必须按通信异常停机。 */
+            if (!stpr_tryReadInt(tmc5130, TMC5130_XACTUAL, &xactual) ||
+                !stpr_tryReadInt(tmc5130, TMC5130_XTARGET, &xtarget)) {
+                MotorCtrl_SlowStop();
+                return MOTOR_TMC_COMM_ERROR;
+            }
+            if (tmc5130_isCloseInt32(xactual, xtarget, TMC5130_WAIT_POS_TOLERANCE_TICKS)) {
+                break;
+            }
+
+            /* 如果状态位声称已到位，但实际位置差超过容差，继续等待并打印诊断。
+             * 这通常指向位置读数异常、目标刚刷新、或驱动状态与位置寄存器不同步。 */
+            printf("TMC5130 waitMove未到目标但状态已到位 | RAMPSTAT=0x%08lX | XACTUAL=%ld | XTARGET=%ld\r\n",
+                   (unsigned long)((uint32_t)rampstat),
+                   (long)xactual,
+                   (long)xtarget);
+        }
         if (HasEffectiveCommandSwitchRequest()) {
             printf("检测到命令切换请求，停止当前等待运动\r\n");
             MotorCtrl_SlowStop();
@@ -465,39 +663,17 @@ uint32_t stpr_waitMove(TMC5130TypeDef *tmc5130)
         }
 
         // 在运动过程中周期性检查防撞（比如称重超限等）
-        ret = CheckWeightCollision();    // 防撞检测
-        CHECK_ERROR(ret);                // 若有错误直接返回
-
-        // 检查 TMC5130 全局状态；读取失败时停止运动并把错误交给上层处理
-        if (!stpr_tryReadInt(tmc5130, TMC5130_GSTAT, &gstat)) {
+        ret = CheckWeightCollision();
+        if (ret != NO_ERROR) {
             MotorCtrl_SlowStop();
-            return MOTOR_TMC_COMM_ERROR;
+            RETURN_ERROR(ret);
         }
-        if (gstat) {
-            // 逐位判断具体错误
-            if (gstat & (1 << 0)) {
-                printf("检测到 TMC5130 过驱或短路故障（GSTAT[0]）\n");
-                if (!stpr_writeInt(tmc5130, TMC5130_GSTAT, 0x07)) { // 清除所有 GSTAT 标志位
-                    return MOTOR_TMC_COMM_ERROR;
-                }
-                continue; // 清除后继续观察
-            }
 
-            if (gstat & (1 << 1)) {
-                printf("检测到驱动芯片过温（GSTAT[1]）\n");
-                RETURN_ERROR(MOTOR_OVERTEMPERATURE);
-            }
-
-            if (gstat & (1 << 2)) {
-                printf("检测到 充电泵欠压（GSTAT[2]）\n");
-                RETURN_ERROR(MOTOR_CHARGE_PUMP_UNDER_VOLTAGE);
-            }
-
-            // 其他错误情况
-            if (!stpr_writeInt(tmc5130, TMC5130_GSTAT, 0x07)) { // 清除所有标志
-                return MOTOR_TMC_COMM_ERROR;
-            }
-            RETURN_ERROR(MOTOR_UNKNOWN_FEEDBACK);
+        // 检查 TMC5130 全局状态；读取失败或检测到真实故障时停止运动并把错误交给上层处理
+        ret = stpr_checkDriverStatus(tmc5130);
+        if (ret != NO_ERROR) {
+            MotorCtrl_SlowStop();
+            RETURN_ERROR(ret);
         }
         MotorCtrl_PollRuntimePosition();
         HAL_Delay(50);
@@ -595,7 +771,7 @@ uint32_t stpr_initStepper(TMC5130TypeDef *tmc5130,
     // TMC5130_INIT_WRITE(tmc5130, TMC5130_GCONF, (dir << 4));
 
     // 空闲功耗降低时间
-    TMC5130_INIT_WRITE(tmc5130, TMC5130_TPOWERDOWN, 0x0000000A); // TPOWERDOWN = 10
+    TMC5130_INIT_WRITE(tmc5130, TMC5130_TPOWERDOWN, 0x00000002); // 停稳后更快进入保持电流
 
     // 斩波器配置 CHOPCONF
     TMC5130_INIT_WRITE(

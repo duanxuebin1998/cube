@@ -89,7 +89,7 @@ void App_Init(void) {
 	}
 	//测试函数
 //	Test_main(); // 测试函数
-//	motor_text(); //电机测试
+//	motor_text(300.0f, 0U); //电机测试
 //	MotorCtrl_SwitchPositionSourceToMotor();//切换成电机记步测试
 }
 // 主循环任务

@@ -184,7 +184,7 @@ void MotorCtrl_MoveBlockingNoDetect(float mm, int dir, uint32_t speed_x100);
 /** 基于 TMC5130_RAMPSTAT 判断电机是否仍在运动。 */
 bool MotorCtrl_IsDriverMoving(TMC5130TypeDef *tmc5130);
 
-/** 检查并处理 TMC5130 GSTAT 驱动异常。 */
+/** 检查并处理 TMC5130 GSTAT/DRV_STATUS 驱动异常。 */
 uint32_t MotorCtrl_CheckDriverGstat(TMC5130TypeDef *tmc5130);
 
 /** 每次新的运动阶段开始前初始化丢步检测状态。 */

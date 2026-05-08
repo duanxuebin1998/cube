@@ -366,45 +366,28 @@ void process_command(uint8_t *command) {
 
     if (command[0] == 'B') {
         int mm = atoi((char*) &command[1]);
-        printf("电机测试开始\n");
-        printf("***编码值清零***\r\n");
-        printf("开始上行%d\n", mm);
-        while (1) {
-            if (ProcessCommandSwitchRequested()) {
-                MotorCtrl_SlowStop();
-                return;
-            }
-            stpr_enableDriver(&stepper);
-            ret = MotorCtrl_MoveAndWait(mm, MOTOR_DIRECTION_DOWN, MotorCtrl_GetDefaultSpeedX100());
-            if ((ret == STATE_SWITCH) || ProcessCommandSwitchRequested()) {
-                MotorCtrl_SlowStop();
-//                return;
-            }
-            if (ret != NO_ERROR) {
-                printf("B指令下行失败，错误码=0x%08lX\r\n", (unsigned long)ret);
-                MotorCtrl_SlowStop();
-//                return;
-            }
-            printf("开始上行回零\n");
-//            ret = MotorCtrl_MoveToPosition((g_deviceParams.tankHeight - g_deviceParams.findZeroDownDistance) / 10.0f,
-//                                                      MotorCtrl_GetDefaultSpeedX100());
-//            if ((ret == STATE_SWITCH) || ProcessCommandSwitchRequested()) {
-//                MotorCtrl_SlowStop();
-//                stpr_disableDriver(&stepper);
-//                return;
-//            }
-//            if (ret != NO_ERROR) {
-//                printf("B指令回零失败，错误码=0x%08lX\r\n", (unsigned long)ret);
-//                MotorCtrl_SlowStop();
-//                stpr_disableDriver(&stepper);
-//                return;
-//            }
-//            printf("上行结束\n");
-//            stpr_disableDriver(&stepper);
-            CMD_MeasureZero();
-        }
-    }
+        uint8_t enable_sensor_comm = 0U;
 
+        /* B100：只做电机往返；B100S 或 B100,1：往返后增加传感器通信检查。 */
+        for (uint32_t i = 1U; command[i] != '\0'; ++i) {
+            if ((command[i] == 'S') ||
+                ((command[i] == ',') && (command[i + 1U] == '1'))) {
+                enable_sensor_comm = 1U;
+                break;
+            }
+        }
+
+        if (mm <= 0) {
+            printf("B指令距离无效：%dmm\r\n", mm);
+            return;
+        }
+
+        printf("B指令电机测试开始 | distance=%dmm | sensor_comm=%u\r\n",
+               mm,
+               (unsigned int)enable_sensor_comm);
+        motor_text((float)mm, enable_sensor_comm);
+        return;
+    }
     if (command[0] == 'C') {
         printf("***电机4步进分辨率测试***\r\n");
         motor_step_text();
