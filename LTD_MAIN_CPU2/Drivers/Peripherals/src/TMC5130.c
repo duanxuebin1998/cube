@@ -134,19 +134,47 @@ static bool tmc5130_isCloseInt32(int32_t a, int32_t b, int32_t tolerance);
 static uint32_t tmc5130_buildCurrentSetting(uint8_t current);
 static void tmc5130_logCurrentSetting(uint32_t setting);
 static void tmc5130_delayCsGuard(void);
+static bool tmc5130_enterSpiAccess(void);
+static void tmc5130_leaveSpiAccess(void);
 static void tmc5130_initWrite(TMC5130TypeDef *tmc5130,
                               uint8_t address,
                               int32_t value,
                               uint32_t *failed_count);
 // <= SPI 底层封装
 
+static volatile uint8_t s_tmc5130_spi_busy = 0U;
+
 static void tmc5130_delayCsGuard(void)
 /* 这里使用 NOP 而不是 HAL_Delay，避免把每次 5 字节 SPI 访问扩大到 ms 级。
  * 延时会同时用于 CS 拉低前、拉低后和拉高后，确保每帧边界留出恢复时间。 */
 {
-    for (uint32_t i = 0; i < TMC5130_SPI_CS_DELAY_CYCLES; ++i) {
+    for (volatile uint32_t i = 0; i < TMC5130_SPI_CS_DELAY_CYCLES; ++i) {
         __NOP();
     }
+}
+
+static bool tmc5130_enterSpiAccess(void)
+{
+    uint32_t primask = __get_PRIMASK();
+
+    __disable_irq();
+    if (s_tmc5130_spi_busy != 0U) {
+        __set_PRIMASK(primask);
+        return false;
+    }
+
+    s_tmc5130_spi_busy = 1U;
+    __set_PRIMASK(primask);
+    return true;
+}
+
+static void tmc5130_leaveSpiAccess(void)
+{
+    uint32_t primask = __get_PRIMASK();
+
+    __disable_irq();
+    s_tmc5130_spi_busy = 0U;
+    __set_PRIMASK(primask);
 }
 
 /************************ SPI 读写封装 ************************/
@@ -175,6 +203,9 @@ static bool tmc5130_tryReadArray(TMC5130TypeDef *tmc5130,
         (length == 0U) || (length > sizeof(rxBuff))) {
         return false;
     }
+    if (!tmc5130_enterSpiAccess()) {
+        return false;
+    }
 
     /* TMC5130 的 SPI 帧以 CS 上升沿结束、下一次下降沿重新对齐。
      * 连续读 XACTUAL 时如果 CS 高电平保持太短，现场会出现状态字 0x21 混入数据区，
@@ -185,6 +216,7 @@ static bool tmc5130_tryReadArray(TMC5130TypeDef *tmc5130,
     status = HAL_SPI_TransmitReceive(tmc5130->spi, data, rxBuff, length, HAL_MAX_DELAY);
     HAL_GPIO_WritePin(tmc5130->cs_port, tmc5130->cs_pin, GPIO_PIN_SET);
     tmc5130_delayCsGuard();
+    tmc5130_leaveSpiAccess();
 
     if (status != HAL_OK) {
         return false;
@@ -214,6 +246,9 @@ static bool tmc5130_writeArray(TMC5130TypeDef *tmc5130, uint8_t *data, size_t le
         (length == 0U)) {
         return false;
     }
+    if (!tmc5130_enterSpiAccess()) {
+        return false;
+    }
 
     tmc5130_delayCsGuard();
     HAL_GPIO_WritePin(tmc5130->cs_port, tmc5130->cs_pin, GPIO_PIN_RESET);
@@ -221,6 +256,7 @@ static bool tmc5130_writeArray(TMC5130TypeDef *tmc5130, uint8_t *data, size_t le
     status = HAL_SPI_Transmit(tmc5130->spi, data, length, HAL_MAX_DELAY);
     HAL_GPIO_WritePin(tmc5130->cs_port, tmc5130->cs_pin, GPIO_PIN_SET);
     tmc5130_delayCsGuard();
+    tmc5130_leaveSpiAccess();
 
     return (status == HAL_OK);
 }
@@ -543,9 +579,9 @@ uint32_t stpr_checkDriverStatus(TMC5130TypeDef *tmc5130)
     /* GSTAT 只有低 3 位有效。高位非 0 说明本次 SPI 读数不可信。
      * GSTAT 可能具有读后变化/读清行为，因此非法值只打印并丢弃，不复读、不清标志、不停机。 */
     if ((gstat_raw & ~TMC5130_GSTAT_VALID_MASK) != 0UL) {
-        // printf("TMC5130 GSTAT读数非法，已丢弃 | GSTAT=0x%08lX | invalid=0x%08lX\r\n",
-        //        (unsigned long)gstat_raw,
-        //        (unsigned long)(gstat_raw & ~TMC5130_GSTAT_VALID_MASK));
+        printf("TMC5130 GSTAT读数非法，已丢弃 | GSTAT=0x%08lX | invalid=0x%08lX\r\n",
+               (unsigned long)gstat_raw,
+               (unsigned long)(gstat_raw & ~TMC5130_GSTAT_VALID_MASK));
         return NO_ERROR;
     }
 

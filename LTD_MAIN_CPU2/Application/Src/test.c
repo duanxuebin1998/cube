@@ -757,6 +757,88 @@ void Demo_SinglePointDisplayMock(void)
         HAL_Delay(500);
     }
 }
+static uint8_t Test_TMC5130_IsValidGstat(uint32_t gstat)
+{
+    return ((gstat & ~0x07UL) == 0UL);
+}
+
+/**
+ * @brief TMC5130 静态 SPI 通信测试。
+ *
+ * 不启动电机，只重复读取 GSTAT/DRV_STATUS/IOIN/IFCNT，用于判断静止状态下
+ * SPI 是否仍有 0xFFFFFFFF、0x00FFFFFF、0x00000100 等非法读数。
+ */
+void Test_TMC5130_SPI_Static(void)
+{
+    const uint32_t loops = 2000U;
+    const uint32_t delay_ms = 10U;
+    uint32_t gstat_ok = 0U;
+    uint32_t gstat_invalid = 0U;
+    uint32_t gstat_read_fail = 0U;
+    uint32_t drv_read_fail = 0U;
+    uint32_t ioin_read_fail = 0U;
+    uint32_t ifcnt_read_fail = 0U;
+    int32_t gstat = 0;
+    int32_t drvstatus = 0;
+    int32_t ioin = 0;
+    int32_t ifcnt = 0;
+
+    printf("TMC5130 SPI静态测试开始 | loops=%lu | delay=%lums\r\n",
+           (unsigned long)loops,
+           (unsigned long)delay_ms);
+    printf("测试期间不下发运动命令，只读取寄存器；如静止也大量非法，优先检查CS/MISO/供电/复位。\r\n");
+
+    for (uint32_t i = 1U; i <= loops; ++i) {
+        if (Test_ShouldAbortForCommandSwitch()) {
+            break;
+        }
+
+        if (!stpr_tryReadInt(&stepper, TMC5130_GSTAT, &gstat)) {
+            gstat_read_fail++;
+            printf("[TMC SPI %lu] GSTAT读取失败\r\n", (unsigned long)i);
+        } else if (!Test_TMC5130_IsValidGstat((uint32_t)gstat)) {
+            gstat_invalid++;
+            printf("[TMC SPI %lu] GSTAT非法=0x%08lX invalid=0x%08lX\r\n",
+                   (unsigned long)i,
+                   (unsigned long)((uint32_t)gstat),
+                   (unsigned long)(((uint32_t)gstat) & ~0x07UL));
+        } else {
+            gstat_ok++;
+        }
+
+        if (!stpr_tryReadInt(&stepper, TMC5130_DRVSTATUS, &drvstatus)) {
+            drv_read_fail++;
+        }
+        if (!stpr_tryReadInt(&stepper, TMC5130_IOIN, &ioin)) {
+            ioin_read_fail++;
+        }
+        if (!stpr_tryReadInt(&stepper, TMC5130_IFCNT, &ifcnt)) {
+            ifcnt_read_fail++;
+        }
+
+        if ((i == 1U) || ((i % 100U) == 0U)) {
+            printf("[TMC SPI %lu] GSTAT=0x%08lX DRV=0x%08lX IOIN=0x%08lX IFCNT=%ld | ok=%lu invalid=%lu fail=%lu\r\n",
+                   (unsigned long)i,
+                   (unsigned long)((uint32_t)gstat),
+                   (unsigned long)((uint32_t)drvstatus),
+                   (unsigned long)((uint32_t)ioin),
+                   (long)ifcnt,
+                   (unsigned long)gstat_ok,
+                   (unsigned long)gstat_invalid,
+                   (unsigned long)gstat_read_fail);
+        }
+
+        HAL_Delay(delay_ms);
+    }
+
+    printf("TMC5130 SPI静态测试结束 | GSTAT ok=%lu invalid=%lu read_fail=%lu | DRV_fail=%lu IOIN_fail=%lu IFCNT_fail=%lu\r\n",
+           (unsigned long)gstat_ok,
+           (unsigned long)gstat_invalid,
+           (unsigned long)gstat_read_fail,
+           (unsigned long)drv_read_fail,
+           (unsigned long)ioin_read_fail,
+           (unsigned long)ifcnt_read_fail);
+}
 //测试主函数
 void Test_main(void) {
 	Test_FRAM_ReadWrite(); //测试FRAM读写

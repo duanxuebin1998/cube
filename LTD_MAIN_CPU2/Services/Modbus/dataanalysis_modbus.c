@@ -479,7 +479,9 @@ void write_measurement_result_to_InputRegisters(uint16_t *regs) {
 
 	/* 电机状态相关 */
 	write_u32_to_regs(regs, REG_DEBUG_MOTOR_SPEED, g_measurement.debug_data.motor_speed);
-	write_u32_to_regs(regs, REG_DEBUG_MOTOR_STATE, MotorCtrl_GetDisplayState());
+	/* Modbus读输入寄存器可能发生在UART5中断上下文，不能在这里实时读取TMC5130。
+	 * 电机状态由主循环MotorCtrl_PollRuntimePosition()统一刷新，这里只上报缓存值。 */
+	write_u32_to_regs(regs, REG_DEBUG_MOTOR_STATE, g_measurement.debug_data.motor_state);
 
 	/* ==== OilMeasurement ==== */
 	write_u32_to_regs(regs, REG_OIL_MEASUREMENT_OIL_LEVEL, g_measurement.oil_measurement.oil_level);
