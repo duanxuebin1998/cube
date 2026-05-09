@@ -14,6 +14,8 @@
 
 #define DEBUG_APP_MAIN 0
 
+#define CPU2_POLL_IDLE_DELAY_MS 10u /* CPU2 idle polling period, 10Hz */
+
 
 /* ====== 可调：TX 完成后额外延时（用于 RS485 电平恢复）====== */
 #ifndef UART_TX_POST_DELAY_LOOP
@@ -474,7 +476,7 @@ void App_MainLoop(void)
     if (!did_work) {
         PollingInputData();
 //        PrintMeasurementResult();
-        HAL_Delay(10);;
+        HAL_Delay(CPU2_POLL_IDLE_DELAY_MS);
     }
 }
 /**

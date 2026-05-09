@@ -637,8 +637,11 @@ void process_command(uint8_t *command) {
         case 'C':
             MotorCtrl_PrintMotorCountStatus();
             return;
+        case 'T':
+            Test_TMC5130_SPI_Static();
+            return;
         default:
-            printf("Y命令: YM切换电机记步, YE切换编码轮记步, YS显示位置源, YC电机记步诊断\r\n");
+            printf("Y命令: YM切换电机记步, YE切换编码轮记步, YS显示位置源, YC电机记步诊断, YT静态SPI测试\r\n");
             return;
         }
     }
