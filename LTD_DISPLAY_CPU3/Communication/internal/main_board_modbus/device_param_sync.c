@@ -122,6 +122,8 @@ static volatile uint32_t* get_deviceparam_ptr_by_operanum(int operanum)
     	return &g_deviceParams.zero_cap;
     case COM_NUM_DEVICEPARAM_WATER_STABLE_THRESHOLD:
        	return &g_deviceParams.water_stable_threshold;
+    case COM_NUM_DEVICEPARAM_WATER_CHANGE_MONITOR_THRESHOLD:
+        return &g_deviceParams.water_change_monitor_threshold;
     /* ===== 罐高/罐底测量（新寄存器段） ===== */
     case COM_NUM_DEVICEPARAM_BOTTOM_DETECT_MODE:
         return &g_deviceParams.bottom_detect_mode;
@@ -184,6 +186,8 @@ static volatile uint32_t* get_deviceparam_ptr_by_operanum(int operanum)
         return &g_deviceParams.wartsila_density_interval;
     case COM_NUM_DEVICEPARAM_WARTSILA_MAX_HEIGHT_ABOVE_SURFACE:
         return &g_deviceParams.wartsila_max_height_above_surface;
+    case COM_NUM_DEVICEPARAM_WARTSILA_BOTTOM_DETECT_INTERVAL:
+        return &g_deviceParams.wartsila_bottom_detect_interval;
 
     /* ===== 报警 DO ===== */
     case COM_NUM_DEVICEPARAM_ALARM_HIGH_DO:

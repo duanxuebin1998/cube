@@ -73,8 +73,8 @@ struct ParameterMetadata param_meta[] = {
 {(uint8_t*)"水位罐高",	0,	COM_NUM_DEVICEPARAM_WATER_TANK_HEIGHT,	HOLDREGISTER_DEVICEPARAM_WATER_TANK_HEIGHT,	2,	false,	0,	0,	NULL,	1,	0,	true,	TYPE_INT,	7,	NULL,	(uint8_t*)"WaterTankH"},
 {(uint8_t*)"水位测量方式",	0,	COM_NUM_DEVICEPARAM_WATER_LEVEL_MODE,	HOLDREGISTER_DEVICEPARAM_WATER_LEVEL_MODE,	2,	false,	0,	0,	NULL,	0,	0,	true,	TYPE_INT,	1,	NULL,	(uint8_t*)"WaterSenDiff"},
 {(uint8_t*)"水位盲区",	0,	COM_NUM_DEVICEPARAM_WATER_BLINDZONE,	HOLDREGISTER_DEVICEPARAM_WATER_BLINDZONE,	2,	false,	0,	0,	NULL,	1,	0,	true,	TYPE_INT,	6,	NULL,	(uint8_t*)"WaterBlind"},
-{(uint8_t*)"水位电容阈值",	0,	COM_NUM_DEVICEPARAM_WATER_CAP_THRESHOLD,	HOLDREGISTER_DEVICEPARAM_WATER_CAP_THRESHOLD,	2,	false,	0,	0,	NULL,	3,	0,	true,	TYPE_INT,	6,	NULL,	(uint8_t*)"WaterCapTh"},
-{(uint8_t*)"水位电容滞回",	0,	COM_NUM_DEVICEPARAM_WATER_CAP_HYSTERESIS,	HOLDREGISTER_DEVICEPARAM_WATER_CAP_HYSTERESIS,	2,	false,	0,	0,	NULL,	3,	0,	true,	TYPE_INT,	6,	NULL,	(uint8_t*)"WaterCapHys"},
+{(uint8_t*)"水位跟随电容阈值",	0,	COM_NUM_DEVICEPARAM_WATER_CAP_THRESHOLD,	HOLDREGISTER_DEVICEPARAM_WATER_CAP_THRESHOLD,	2,	false,	0,	0,	NULL,	3,	0,	true,	TYPE_INT,	6,	NULL,	(uint8_t*)"WaterCapTh"},
+{(uint8_t*)"水位滞后电容阈值",	0,	COM_NUM_DEVICEPARAM_WATER_CAP_HYSTERESIS,	HOLDREGISTER_DEVICEPARAM_WATER_CAP_HYSTERESIS,	2,	false,	0,	0,	NULL,	3,	0,	true,	TYPE_INT,	6,	NULL,	(uint8_t*)"WaterCapHys"},
 {(uint8_t*)"最大下行距离",	0,	COM_NUM_DEVICEPARAM_MAXDOWNDISTANCE,	HOLDREGISTER_DEVICEPARAM_MAXDOWNDISTANCE,	2,	false,	0,	0,	(uint8_t*)"mm",	1,	0,	true,	TYPE_INT,	5,	NULL,	(uint8_t*)"MaxDown"},
 {(uint8_t*)"零点电容",	0,	COM_NUM_DEVICEPARAM_ZERO_CAP,	HOLDREGISTER_DEVICEPARAM_ZERO_CAP,	2,	false,	0,	0,	NULL,	1,	0,	true,	TYPE_INT,	4,	NULL,	(uint8_t*)"ZeroCap"},
 {(uint8_t*)"水位稳定阈值",	0,	COM_NUM_DEVICEPARAM_WATER_STABLE_THRESHOLD,	HOLDREGISTER_DEVICEPARAM_WATER_STABLE_THRESHOLD,	2,	false,	0,	0,	(uint8_t*)"mm",	1,	0,	true,	TYPE_INT,	4,	NULL,	(uint8_t*)"Rsv15"},
@@ -88,7 +88,7 @@ struct ParameterMetadata param_meta[] = {
 {(uint8_t*)"初始罐高",	0,	COM_NUM_DEVICEPARAM_INITIAL_TANKHEIGHT,	HOLDREGISTER_DEVICEPARAM_INITIAL_TANKHEIGHT,	2,	false,	0,	0,	NULL,	1,	0,	false,	TYPE_INT,	7,	NULL,	(uint8_t*)"InitTankH"},
 {(uint8_t*)"当前罐高",	0,	COM_NUM_DEVICEPARAM_CURRENT_TANKHEIGHT,	HOLDREGISTER_DEVICEPARAM_CURRENT_TANKHEIGHT,	2,	false,	0,	0,	NULL,	1,	0,	false,	TYPE_INT,	7,	NULL,	(uint8_t*)"CurrTankH"},
 {(uint8_t*)"罐底后编码器修正",	0,	COM_NUM_DEVICEPARAM_BOTTOM_ENCODER_CORRECTION_ENABLE,	HOLDREGISTER_DEVICEPARAM_BOTTOM_ENCODER_CORRECTION_ENABLE,	2,	true,	0,	1,	NULL,	0,	0,	true,	TYPE_INT,	1,	NULL,	(uint8_t*)"BotEncFix"},
-{(uint8_t*)"保留17",	0,	COM_NUM_DEVICEPARAM_RESERVED17,	HOLDREGISTER_DEVICEPARAM_RESERVED17,	2,	false,	0,	0,	NULL,	0,	0,	false,	TYPE_INT,	8,	NULL,	(uint8_t*)"Rsv17"},
+{(uint8_t*)"水位寻找电容阈值", 0, COM_NUM_DEVICEPARAM_WATER_CHANGE_MONITOR_THRESHOLD, HOLDREGISTER_DEVICEPARAM_WATER_CHANGE_MONITOR_THRESHOLD, 2, false, 0, 0, NULL, 3, 0, true, TYPE_INT, 6, NULL, (uint8_t*)"WaterMon"},
 
 {(uint8_t*)"磁通量D",	0,	COM_NUM_DEVICEPARAM_DENSITYCORRECTION,	HOLDREGISTER_DEVICEPARAM_DENSITYCORRECTION,	2,	false,	-10000,	10000,	NULL,	1,	-10000,	true,	TYPE_INT,	5,	NULL,	(uint8_t*)"DensityCorr"},
 {(uint8_t*)"磁通量T",	0,	COM_NUM_DEVICEPARAM_TEMPERATURECORRECTION,	HOLDREGISTER_DEVICEPARAM_TEMPERATURECORRECTION,	2,	false,	-1000,	1000,	NULL,	1,	-1000,	true,	TYPE_INT,	4,	NULL,	(uint8_t*)"TempCorr"},
@@ -114,7 +114,7 @@ struct ParameterMetadata param_meta[] = {
 {(uint8_t*)"密度点下限",	0,	COM_NUM_DEVICEPARAM_WARTSILA_LOWER_DENSITY_LIMIT,	HOLDREGISTER_DEVICEPARAM_WARTSILA_LOWER_DENSITY_LIMIT,	2,	false,	0,	0,	(uint8_t*)"mm",	0,	0,	true,	TYPE_INT,	7,	NULL,	(uint8_t*)"WLowerDen"},
 {(uint8_t*)"密度点间距",	0,	COM_NUM_DEVICEPARAM_WARTSILA_DENSITY_INTERVAL,	HOLDREGISTER_DEVICEPARAM_WARTSILA_DENSITY_INTERVAL,	2,	false,	0,	0,	(uint8_t*)"mm",	0,	0,	true,	TYPE_INT,	6,	NULL,	(uint8_t*)"WDenStep"},
 {(uint8_t*)"最高点距液面",	0,	COM_NUM_DEVICEPARAM_WARTSILA_MAX_HEIGHT_ABOVE_SURFACE,	HOLDREGISTER_DEVICEPARAM_WARTSILA_MAX_HEIGHT_ABOVE_SURFACE,	2,	false,	0,	0,	(uint8_t*)"mm",	0,	0,	true,	TYPE_INT,	6,	NULL,	(uint8_t*)"WMaxHeight"},
-{(uint8_t*)"保留22",	0,	COM_NUM_DEVICEPARAM_RESERVED22,	HOLDREGISTER_DEVICEPARAM_RESERVED22,	2,	false,	0,	0,	NULL,	0,	0,	false,	TYPE_INT,	8,	NULL,	(uint8_t*)"Rsv22"},
+{(uint8_t*)"瓦锡兰探底频率",	0,	COM_NUM_DEVICEPARAM_WARTSILA_BOTTOM_DETECT_INTERVAL,	HOLDREGISTER_DEVICEPARAM_WARTSILA_BOTTOM_DETECT_INTERVAL,	2,	true,	0,	100,	NULL,	0,	0,	true,	TYPE_INT,	3,	NULL,	(uint8_t*)"WBotFreq"},
 {(uint8_t*)"保留23",	0,	COM_NUM_DEVICEPARAM_RESERVED23,	HOLDREGISTER_DEVICEPARAM_RESERVED23,	2,	false,	0,	0,	NULL,	0,	0,	false,	TYPE_INT,	8,	NULL,	(uint8_t*)"Rsv23"},
 
 {(uint8_t*)"高液位报警(DO)",	0,	COM_NUM_DEVICEPARAM_ALARM_HIGH_DO,	HOLDREGISTER_DEVICEPARAM_ALARM_HIGH_DO,	2,	false,	0,	0,	NULL,	1,	0,	true,	TYPE_INT,	4,	NULL,	(uint8_t*)"AlarmHiDO"},
@@ -331,6 +331,7 @@ void print_device_params(void)
     printf("  %-32s : %lu\r\n", "最大下行距离(0.1mm)", (unsigned long)params.maxDownDistance);
     printf("  %-32s : %lu\r\n", "水位零点电容", (unsigned long)params.zero_cap);
     printf("  %-32s : %lu\r\n", "水位稳定阈值", (unsigned long)params.water_stable_threshold);
+    printf("  %-32s : %lu\r\n", "水位寻找电容阈值", (unsigned long)params.water_change_monitor_threshold);
     printf("  %-32s : %lu\r\n", "水位修正值", (unsigned long)params.waterLevelCorrection);
 
     /* 罐底/罐高 */
@@ -370,6 +371,7 @@ void print_device_params(void)
     printf("  %-32s : %lu\r\n", "密度点下限", (unsigned long)params.wartsila_lower_density_limit);
     printf("  %-32s : %lu\r\n", "密度点间距", (unsigned long)params.wartsila_density_interval);
     printf("  %-32s : %lu\r\n", "最高点距液面", (unsigned long)params.wartsila_max_height_above_surface);
+    printf("  %-32s : %lu\r\n", "瓦锡兰探底频率", (unsigned long)params.wartsila_bottom_detect_interval);
 
     /* DO */
     printf("\r\n-- 报警DO参数 --\r\n");

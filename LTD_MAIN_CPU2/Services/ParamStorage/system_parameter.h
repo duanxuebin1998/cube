@@ -486,7 +486,7 @@ typedef struct {
     uint32_t initialTankHeight;           // 初始实高
     uint32_t currentTankHeight;           // 当前实高
     uint32_t bottom_encoder_correction_enable; // 罐底测量完成后修正编码器(0=不修正,1=修正)
-    uint32_t reserved17;                 // 预留（新增）
+    uint32_t water_change_monitor_threshold;  // 水位寻找电容阈值(x1000)，稳定监测中偏离目标超过该值后返回跟随
 
     // ===================== 密度和温度修正参数 =====================
     uint32_t densityCorrection;           // 密度修正值、磁通量D
@@ -518,7 +518,7 @@ typedef struct {
     uint32_t wartsila_density_interval;           // 步进
     uint32_t wartsila_max_height_above_surface;   // 最高测点距液面距离(0.1mm 或按定义)
 
-    uint32_t reserved22;                 // 预留
+    uint32_t wartsila_bottom_detect_interval; // 瓦锡兰测量后探底频率：0不探底，N表示每N次测量后探底一次，范围0~100
     uint32_t reserved23;                 // 预留（新增）
 
     // ===================== 继电器报警输出 =====================

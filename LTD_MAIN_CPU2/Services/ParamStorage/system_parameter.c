@@ -101,6 +101,18 @@ static int normalize_device_params_runtime(void)
         changed = 1;
     }
 
+    /* 旧版本该位置为 reserved17，可能读到 0；这里补默认值，避免监测阈值过小。 */
+    if (g_deviceParams.water_change_monitor_threshold == 0U) {
+        g_deviceParams.water_change_monitor_threshold = 80000U;
+        changed = 1;
+    }
+
+    /* 瓦锡兰探底频率范围为0~100，旧 reserved22 脏值按默认每次探底处理。 */
+    if (g_deviceParams.wartsila_bottom_detect_interval > 100U) {
+        g_deviceParams.wartsila_bottom_detect_interval = 1U;
+        changed = 1;
+    }
+
     return changed;
 }
 
@@ -442,6 +454,7 @@ void RestoreFactoryParamsConfig(void)
     g_deviceParams.maxDownDistance                  = 3000;   /* 0.1mm => 300mm */
     g_deviceParams.zero_cap                         = 0;      /* 0.1pf */
     g_deviceParams.water_stable_threshold                      = 500;      /* 0.1mm */
+    g_deviceParams.water_change_monitor_threshold  = 80000;  /* 水位寻找电容阈值，x1000，80.0pF */
 
     /* ---------------- 罐高/罐底测量 ---------------- */
     g_deviceParams.bottom_detect_mode      = 0;    /* 0=按项目定义 */
@@ -479,6 +492,7 @@ void RestoreFactoryParamsConfig(void)
     g_deviceParams.wartsila_lower_density_limit      = 500;
     g_deviceParams.wartsila_density_interval         = 1000;
     g_deviceParams.wartsila_max_height_above_surface = 200; /* 0.1mm 或按定义 */
+    g_deviceParams.wartsila_bottom_detect_interval  = 1;   /* 瓦锡兰测量后探底频率：0不探底，N表示每N次测量后探底一次 */
 
     /* ---------------- 继电器报警输出 ---------------- */
     g_deviceParams.AlarmHighDO         = 0;
@@ -599,6 +613,7 @@ void print_device_params(void)
     printf("  %-32s : %lu\r\n", "零点电容", (unsigned long)params.zero_cap);
     printf("  %-32s : %lu\r\n", "水位零点电容", (unsigned long)params.zero_cap);
     printf("  %-32s : %lu\r\n", "水位稳定阈值", (unsigned long)params.water_stable_threshold);
+    printf("  %-32s : %lu\r\n", "水位寻找电容阈值", (unsigned long)params.water_change_monitor_threshold);
     printf("  %-32s : %lu\r\n", "水位修正值", (unsigned long)params.waterLevelCorrection);
 
     /* 罐底/罐高 */
@@ -638,6 +653,7 @@ void print_device_params(void)
     printf("  %-32s : %lu\r\n", "密度点下限", (unsigned long)params.wartsila_lower_density_limit);
     printf("  %-32s : %lu\r\n", "密度点间距", (unsigned long)params.wartsila_density_interval);
     printf("  %-32s : %lu\r\n", "最高点距液面", (unsigned long)params.wartsila_max_height_above_surface);
+    printf("  %-32s : %lu\r\n", "瓦锡兰探底频率", (unsigned long)params.wartsila_bottom_detect_interval);
 
     /* DO */
     printf("\r\n-- 报警DO参数 --\r\n");
