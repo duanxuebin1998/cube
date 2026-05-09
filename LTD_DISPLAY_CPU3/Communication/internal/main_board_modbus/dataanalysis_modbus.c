@@ -146,7 +146,7 @@ void WriteDeviceParamsToHoldingRegisters(uint16_t *HoldingRegisterArray)
     write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_CURRENT_TANKHEIGHT,       g_deviceParams.currentTankHeight);
 
     write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_BOTTOM_ENCODER_CORRECTION_ENABLE, g_deviceParams.bottom_encoder_correction_enable);
-    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_RESERVED17, g_deviceParams.reserved17);
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_WATER_CHANGE_MONITOR_THRESHOLD, g_deviceParams.water_change_monitor_threshold);
 
     /* ===================== 密度和温度修正参数 ===================== */
     write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_DENSITYCORRECTION,     g_deviceParams.densityCorrection);
@@ -178,7 +178,7 @@ void WriteDeviceParamsToHoldingRegisters(uint16_t *HoldingRegisterArray)
     write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_WARTSILA_DENSITY_INTERVAL,          g_deviceParams.wartsila_density_interval);
     write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_WARTSILA_MAX_HEIGHT_ABOVE_SURFACE,  g_deviceParams.wartsila_max_height_above_surface);
 
-    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_RESERVED22, g_deviceParams.reserved22);
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_WARTSILA_BOTTOM_DETECT_INTERVAL, g_deviceParams.wartsila_bottom_detect_interval);
     write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_RESERVED23, g_deviceParams.reserved23);
 
     /* ===================== 继电器报警输出 ===================== */
@@ -333,7 +333,7 @@ void ReadDeviceParamsFromHoldingRegisters(uint16_t *HoldingRegisterArray)
     g_deviceParams.currentTankHeight      = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_CURRENT_TANKHEIGHT);
 
     g_deviceParams.bottom_encoder_correction_enable = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_BOTTOM_ENCODER_CORRECTION_ENABLE);
-    g_deviceParams.reserved17 = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_RESERVED17);
+    g_deviceParams.water_change_monitor_threshold = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_WATER_CHANGE_MONITOR_THRESHOLD);
 
     /* ===================== 密度和温度修正参数 ===================== */
     g_deviceParams.densityCorrection     = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_DENSITYCORRECTION);
@@ -365,7 +365,7 @@ void ReadDeviceParamsFromHoldingRegisters(uint16_t *HoldingRegisterArray)
     g_deviceParams.wartsila_density_interval         = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_WARTSILA_DENSITY_INTERVAL);
     g_deviceParams.wartsila_max_height_above_surface = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_WARTSILA_MAX_HEIGHT_ABOVE_SURFACE);
 
-    g_deviceParams.reserved22 = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_RESERVED22);
+    g_deviceParams.wartsila_bottom_detect_interval = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_WARTSILA_BOTTOM_DETECT_INTERVAL);
     g_deviceParams.reserved23 = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_RESERVED23);
 
     /* ===================== 继电器报警输出 ===================== */

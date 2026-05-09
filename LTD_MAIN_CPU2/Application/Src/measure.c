@@ -1087,7 +1087,9 @@ static void CMD_SetFullWeight(void)
     return;
 }
 static void CMD_WartsilaDensitySpread(void) {
+	static uint32_t bottom_detect_count = 0; /* 瓦锡兰测量后探底计数，仅运行期累计 */
 	uint32_t ret = 0;
+	uint32_t bottom_detect_interval = g_deviceParams.wartsila_bottom_detect_interval; /* 本次瓦锡兰测量后的探底频率参数快照 */
 	DensityDistribution temp = {0};
 	// 设置设备状态：分布测量中
 	g_measurement.device_status.device_state = STATE_WARTSILA_DENSITY_MEASURING;
@@ -1110,8 +1112,20 @@ static void CMD_WartsilaDensitySpread(void) {
 	HAL_Delay(1000); // 延时1s
 	HAL_Delay(1000); // 延时1s
 	HAL_Delay(1000); // 延时1s
-    ret = SearchBottom();
-    SET_ERROR(ret);
+    /* 按参数控制瓦锡兰测量后的探底频率：0不探底，N表示每N次测量后探底一次，最大100。 */
+    if (bottom_detect_interval > 100U) {
+        bottom_detect_interval = 1U;
+    }
+    if (bottom_detect_interval > 0U) {
+        bottom_detect_count++;
+        if (bottom_detect_count >= bottom_detect_interval) {
+            bottom_detect_count = 0U;
+            ret = SearchBottom();
+            SET_ERROR(ret);
+        }
+    } else {
+        bottom_detect_count = 0U;
+    }
     g_deviceParams.command = CMD_MONITOR_SINGLE; // 切回单点监测状态，继续监测当前液位/密度
 	return;
 }

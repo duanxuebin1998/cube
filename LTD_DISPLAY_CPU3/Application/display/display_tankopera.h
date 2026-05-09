@@ -259,7 +259,7 @@ typedef enum
     COM_NUM_DEVICEPARAM_CURRENT_TANKHEIGHT,             // 当前罐高
 
     COM_NUM_DEVICEPARAM_BOTTOM_ENCODER_CORRECTION_ENABLE,// 罐底后编码器修正
-    COM_NUM_DEVICEPARAM_RESERVED17,                     // 保留 17
+    COM_NUM_DEVICEPARAM_WATER_CHANGE_MONITOR_THRESHOLD,        // ????????
 
     /* ---------------- 密度与温度修正 ---------------- */
     COM_NUM_DEVICEPARAM_DENSITYCORRECTION,              // 密度修正
@@ -291,7 +291,7 @@ typedef enum
     COM_NUM_DEVICEPARAM_WARTSILA_DENSITY_INTERVAL,      // Wartsila 密度步进
     COM_NUM_DEVICEPARAM_WARTSILA_MAX_HEIGHT_ABOVE_SURFACE,// 最高测点距液面
 
-    COM_NUM_DEVICEPARAM_RESERVED22,                     // 保留 22
+    COM_NUM_DEVICEPARAM_WARTSILA_BOTTOM_DETECT_INTERVAL,// 瓦锡兰测量后探底频率：0不探底，N表示每N次测量后探底一次，范围0~100
     COM_NUM_DEVICEPARAM_RESERVED23,                     // 保留 23
 
     /* ---------------- 继电器报警 DO ---------------- */
