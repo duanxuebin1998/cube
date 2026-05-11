@@ -12,6 +12,7 @@
 #include "mb85rs2m.h"     // WriteMultiData / ReadMultiData
 #include "my_crc.h"
 #include "display_tankopera.h"
+#include "app_version.h"
 /* 这些在 usart.c 里定义 */
 extern UART_HandleTypeDef huart2;
 extern UART_HandleTypeDef huart3;
@@ -30,6 +31,17 @@ Cpu3CommAndDisplayParams g_cpu3_comm_display_params;
 
 
 #define CPU3_LOCAL_PARAM_COUNT (sizeof(cpu3_local_param_table) / sizeof(cpu3_local_param_table[0]))
+
+/* CPU3版本跟随当前显示板固件，避免被FRAM旧参数覆盖。 */
+static bool Cpu3_ApplyFirmwareVersionRuntime(void)
+{
+    if (g_cpu3_comm_display_params.local_led_version == CPU3_APP_VERSION_U32) {
+        return false;
+    }
+
+    g_cpu3_comm_display_params.local_led_version = CPU3_APP_VERSION_U32;
+    return true;
+}
 
 
 /* 判断当前操作是否 CPU3 本机参数 */
@@ -78,6 +90,9 @@ int32_t Cpu3Local_ReadValue(OperatingNumber opera)
     switch (opera)
     {
     /* 界面显示类 / 基本信息 */
+    case COM_NUM_PARA_LOCAL_LEDVERSION:
+        return (int32_t)g_cpu3_comm_display_params.local_led_version;
+
     case COM_NUM_PARA_LANG:
         return g_cpu3_comm_display_params.language;
 
@@ -316,7 +331,7 @@ void Cpu3_Params_InitDefaults(void)
     memset(&g_cpu3_comm_display_params, 0, sizeof(g_cpu3_comm_display_params));
 
     /* 屏幕基本信息 */
-    g_cpu3_comm_display_params.local_led_version = 0x0100;
+    g_cpu3_comm_display_params.local_led_version = CPU3_APP_VERSION_U32;
     g_cpu3_comm_display_params.language          = 0;
 
     /* 数据源默认 */
@@ -381,7 +396,7 @@ void Cpu3_ReinitAllUarts(void)
  */
 
 #define CPU3_PARAM_MAGIC   0x43505533UL   // 'CPU3'
-#define CPU3_PARAM_VERSION 0x0001U
+#define CPU3_PARAM_VERSION 0x0002U
 
 typedef struct
 {
@@ -400,6 +415,7 @@ static void Cpu3_Params_BuildStorage(Cpu3ParamStorage *stor)
     stor->magic    = CPU3_PARAM_MAGIC;
     stor->version  = CPU3_PARAM_VERSION;
     stor->reserved = 0;
+    Cpu3_ApplyFirmwareVersionRuntime();
     stor->params   = g_cpu3_comm_display_params;
 
     /* 计算 CRC：不包含最后的 crc 字段本身 */
@@ -484,6 +500,9 @@ void Cpu3_Params_LoadFromFRAM(void)
     } else {
         /* 正常加载 */
         g_cpu3_comm_display_params = stor.params;
+        if (Cpu3_ApplyFirmwareVersionRuntime()) {
+            Cpu3_Params_SaveToFRAM();
+        }
         printf("CPU3参数已从FRAM加载，CRC=0x%08lX\r\n", (unsigned long)stor.crc);
     }
 }

@@ -919,7 +919,7 @@ TFIT 命令：
 代码整理过程中已执行并通过：
 
 - `cmake --build D:\CUBE\build\LTD_MAIN_CPU2`
-- `cmake --build D:\CUBE\build\presets\LTD_DISPLAY_CPU3`
+- `cmake --build D:\CUBE\build\LTD_DISPLAY_CPU3`
 
 文档整理本身没有再次修改 C 源码，也没有重新运行构建。
 

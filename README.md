@@ -87,14 +87,18 @@ CPU2 从站主路径支持：
 
 - `-mcpu=cortex-m4 -mthumb -mfpu=fpv4-sp-d16 -mfloat-abi=hard`
 
-### 4.2 推荐构建方式（Preset）
+### 4.2 推荐构建方式
 
 ```bash
-cmake --preset cpu2-debug
-cmake --build --preset cpu2-debug
+cmake -S LTD_MAIN_CPU2 -B build/LTD_MAIN_CPU2 -G Ninja \
+  -DCMAKE_TOOLCHAIN_FILE=cmake/toolchain-arm-none-eabi.cmake \
+  -DCMAKE_BUILD_TYPE=Debug
+cmake --build build/LTD_MAIN_CPU2
 
-cmake --preset cpu3-debug
-cmake --build --preset cpu3-debug
+cmake -S LTD_DISPLAY_CPU3 -B build/LTD_DISPLAY_CPU3 -G Ninja \
+  -DCMAKE_TOOLCHAIN_FILE=cmake/toolchain-arm-none-eabi.cmake \
+  -DCMAKE_BUILD_TYPE=Debug
+cmake --build build/LTD_DISPLAY_CPU3
 ```
 
 也可使用：

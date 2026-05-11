@@ -24,7 +24,7 @@ struct ParameterMetadata param_meta[] = {
 {(uint8_t*)"传感器类型",	0,	COM_NUM_DEVICEPARAM_SENSORTYPE,	HOLDREGISTER_DEVICEPARAM_SENSORTYPE,	2,	false,	0,	0,	NULL,	0,	0,	false,	TYPE_INT,	3,	NULL,	(uint8_t*)"SensorType"},
 {(uint8_t*)"传感器编号",	0,	COM_NUM_DEVICEPARAM_SENSORID,	HOLDREGISTER_DEVICEPARAM_SENSORID,	2,	false,	0,	0,	NULL,	0,	0,	false,	TYPE_INT,	8,	NULL,	(uint8_t*)"SensorID"},
 {(uint8_t*)"传感器软件版本",	0,	COM_NUM_DEVICEPARAM_SENSOR_SOFTWARE_VERSION,	HOLDREGISTER_DEVICEPARAM_SENSOR_SOFTWARE_VERSION,	2,	false,	0,	0,	NULL,	3,	0,	false,	TYPE_INT,	4,	NULL,	(uint8_t*)"SenSWVer"},
-{(uint8_t*)"软件版本",	0,	COM_NUM_DEVICEPARAM_SOFTWAREVERSION,	HOLDREGISTER_DEVICEPARAM_SOFTWAREVERSION,	2,	false,	0,	0,	NULL,	3,	0,	false,	TYPE_INT,	7,	NULL,	(uint8_t*)"FWVersion"},
+{(uint8_t*)"CPU2程序版本",	0,	COM_NUM_DEVICEPARAM_SOFTWAREVERSION,	HOLDREGISTER_DEVICEPARAM_SOFTWAREVERSION,	2,	false,	0,	0,	NULL,	3,	0,	false,	TYPE_INT,	7,	NULL,	(uint8_t*)"CPU2FWVer"},
 {(uint8_t*)"上电默认指令",	0,	COM_NUM_DEVICEPARAM_POWER_ON_DEFAULT_COMMAND,	HOLDREGISTER_DEVICEPARAM_POWER_ON_DEFAULT_COMMAND,	2,	false,	0,	0,	NULL,	0,	0,	true,	TYPE_INT,	3,	ret_arr_word,	(uint8_t*)"PwrOnCmd"},
 {(uint8_t*)"故障自动回零",	0,	COM_NUM_DEVICEPARAM_ERROR_AUTO_BACK_ZERO,	HOLDREGISTER_DEVICEPARAM_ERROR_AUTO_BACK_ZERO,	2,	true,	0,	1,	NULL,	0,	0,	true,	TYPE_INT,	1,	NULL,	(uint8_t*)"ErrAutoBackZero"},
 {(uint8_t*)"故障停止测量",	0,	COM_NUM_DEVICEPARAM_ERROR_STOP_MEASUREMENT,	HOLDREGISTER_DEVICEPARAM_ERROR_STOP_MEASUREMENT,	2,	true,	0,	1,	NULL,	0,	0,	true,	TYPE_INT,	1,	NULL,	(uint8_t*)"ErrStopMeas"},
@@ -175,7 +175,7 @@ struct ParameterMetadata param_meta[] = {
 {(uint8_t*)"电机下行距离",	0,	COM_NUM_FORCE_RUNDOWN,	HOLDREGISTER_DEVICEPARAM_MOTOR_COMMAND_DISTANCE,	2,	false,	0,	0,	(uint8_t*)"mm",	1,	0,	true,	TYPE_INT,	7,	NULL,	(uint8_t*)"MotorDist"},
 
 /* ==================== CPU3 本机参数（保持你原来的寄存器宏）==================== */
-{(uint8_t*)"屏幕程序版本",	0,	COM_NUM_PARA_LOCAL_LEDVERSION,	HOLDREGISTER_CPU3_LED_VERSION,	2,	false,	0,	0,	NULL,	0,	0,	false,	TYPE_INT,	4,	NULL,	(uint8_t*)"LedVer"},
+{(uint8_t*)"CPU3程序版本",	0,	COM_NUM_PARA_LOCAL_LEDVERSION,	HOLDREGISTER_CPU3_LED_VERSION,	2,	false,	0,	0,	NULL,	0,	0,	false,	TYPE_INT,	4,	NULL,	(uint8_t*)"CPU3FWVer"},
 {(uint8_t*)"语言",	0,	COM_NUM_PARA_LANG,	HOLDREGISTER_CPU3_LANGUAGE,	2,	true,	0,	1,	NULL,	0,	0,	true,	TYPE_INT,	1,	NULL,	(uint8_t*)"Lang"},
 
 {(uint8_t*)"液位数据源",	0,	COM_NUM_SCREEN_SOURCE_OIL,	HOLDREGISTER_CPU3_SRC_OIL,	2,	true,	0,	1,	NULL,	0,	0,	true,	TYPE_INT,	1,	NULL,	(uint8_t*)"SrcOil"},
@@ -276,7 +276,7 @@ void print_device_params(void)
     printf("  %-32s : %lu\r\n", "传感器类型", (unsigned long)params.sensorType);
     printf("  %-32s : %lu\r\n", "传感器编号", (unsigned long)params.sensorID);
     printf("  %-32s : 0x%08lX\r\n", "传感器软件版本", (unsigned long)params.sensorSoftwareVersion);
-    printf("  %-32s : 0x%08lX\r\n", "软件版本", (unsigned long)params.softwareVersion);
+    printf("  %-32s : 0x%08lX\r\n", "CPU2程序版本", (unsigned long)params.softwareVersion);
     printf("  %-32s : %lu\r\n", "故障自动回零", (unsigned long)params.error_auto_back_zero);
     printf("  %-32s : %lu\r\n", "故障停止测量", (unsigned long)params.error_stop_measurement);
     printf("  %-32s : %lu\r\n", "位置源自动切换", (unsigned long)params.position_source_auto_switch);

@@ -16,8 +16,10 @@
 #include "display.h"
 #include "hgs.h"
 #include <math.h>
+#include <stdio.h>
 #include "system_parameter.h"
 #include "cpu3_comm_display_params.h"
+#include "app_version.h"
 #include "system_parameter.h"
 #include <string.h>    // for memset, memcpy, strcmp, strlen...
 
@@ -599,7 +601,7 @@ static uint8_t *dtm_operaname(int num)
            如果你有对应的 COM_NUM_xxx，就填进去；没有就先注释掉。
          */
         /* { COM_NUM_PARA_LOCAL_DEVICEADDR, (uint8_t*)"设备地址", (uint8_t*)"Device Address" }, */
-        { COM_NUM_PARA_LOCAL_LEDVERSION,  (uint8_t*)"屏幕程序版本", (uint8_t*)"Screen FW Ver" },
+        { COM_NUM_PARA_LOCAL_LEDVERSION,  (uint8_t*)"CPU3程序版本", (uint8_t*)"CPU3 FW Ver" },
         { COM_NUM_PARA_LANG,              (uint8_t*)"语言",         (uint8_t*)"Language" },
     };
 
@@ -1446,6 +1448,26 @@ static void errorprocess(void)
 	exitTankOpera();
 }
 
+/* 将0xMMmmppbb版本编码显示为V主.次.修订.构建。 */
+static void format_version_u32(uint32_t version, char *buf, size_t buf_size)
+{
+	snprintf(buf, buf_size, "V%lu.%lu.%lu.%lu",
+			(unsigned long)((version >> 24) & 0xFFU),
+			(unsigned long)((version >> 16) & 0xFFU),
+			(unsigned long)((version >> 8) & 0xFFU),
+			(unsigned long)(version & 0xFFU));
+}
+
+/* CPU2/CPU3以major.minor作为兼容契约，patch/build不影响兼容判断。 */
+static bool is_cpu2_version_compatible(uint32_t cpu2_version)
+{
+	uint32_t major = (cpu2_version >> 24) & 0xFFU;
+	uint32_t minor = (cpu2_version >> 16) & 0xFFU;
+
+	return (major == CPU3_REQUIRED_CPU2_PROTOCOL_MAJOR)
+		&& (minor == CPU3_REQUIRED_CPU2_PROTOCOL_MINOR);
+}
+
 /* 显示参数内容 */
 static void displaypara(void)
 {
@@ -1459,11 +1481,20 @@ static void displaypara(void)
 
 	/* 本机参数 */
 	if (now_Opera_Num == COM_NUM_PARA_LOCAL_LEDVERSION) {
-		OledValueDisplay(CPU3VERSION, OLED_LINE8_4, OLED_ROW3_2, 0, 0, NULL);
+		OledDisplayLineWords((uint8_t*)CPU3_APP_VERSION_STRING, OLED_LINE8_4, OLED_ROW3_2, 0);
 	} else {
 		index = getHoldValueNum(now_Opera_Num);
 		if (index == -1) {
 			DisplayLangaugeLineWords((uint8_t*)"非法操作", OLED_LINE8_1, OLED_ROW3_2, 0, (uint8_t*)"Illegal operation");
+		} else if (now_Opera_Num == COM_NUM_DEVICEPARAM_SOFTWAREVERSION) {
+			char version_text[16];
+			uint32_t cpu2_version = (uint32_t)param_meta[index].val;
+
+			format_version_u32(cpu2_version, version_text, sizeof(version_text));
+			OledDisplayLineWords((uint8_t*)version_text, OLED_LINE8_4, OLED_ROW3_2, 0);
+			if (!is_cpu2_version_compatible(cpu2_version)) {
+				DisplayLangaugeLineWords((uint8_t*)"版本不匹配", OLED_LINE8_3, OLED_ROW4_3, 0, (uint8_t*)"Version mismatch");
+			}
 		} else {
 			if (param_meta[index].pword == NULL) {
 				bits = dtm_bits();
