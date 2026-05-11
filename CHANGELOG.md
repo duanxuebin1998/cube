@@ -1,4 +1,4 @@
-# 升级日志
+﻿# 升级日志
 
 记录 CPU2/CPU3 固件版本变更。使用 `tools/bump_version.py` 升级版本时会自动追加记录；提交前应补充到与 Git 提交信息同等详细。
 
@@ -40,3 +40,25 @@
 - `cmake --build build\LTD_MAIN_CPU2`
 - `cmake --build build\LTD_DISPLAY_CPU3`
 - `git diff --cached --check`
+
+## 2026-05-11
+
+版本：
+- CPU2: V1.1.0.0 -> V1.2.0.0
+- CPU3: 未变化，保持 V1.1.0.0
+
+兼容性：
+- 本次仅新增 CPU2 串口 B 类测试指令，不修改 Modbus、参数存储布局或 CPU2/CPU3 共享数据结构。
+- CPU2 兼容协议 minor 升至 2；CPU3 未同步升级时，版本兼容检查可能提示 CPU2/CPU3 minor 不一致。
+
+本次修改：
+- 保留 `B<mm>` 原有电机模型往返测试行为。
+- 新增 `BE<mm>` 编码器反馈往返测试，参数单位为 mm，运行中按编码器计数判断目标位置。
+- `BE` 测试使用启动时编码器位置作为固定原点，每轮下行到固定目标、上行回固定原点，避免目标随循环累计漂移。
+- `BE` 过程日志同时打印编码值和相对原点的 mm，便于现场比对距离误差。
+- 串口接收 `\r\n` 完整命令时清除 `\r`，避免短命令解析到上一条长命令残留后缀。
+
+验证：
+- `cmake --build build\LTD_MAIN_CPU2`
+- `git diff --check`
+- `py tools\check_version_bumped.py`

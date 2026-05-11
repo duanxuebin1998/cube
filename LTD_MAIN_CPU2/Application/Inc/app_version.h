@@ -5,7 +5,7 @@
 
 /* CPU2主控板固件版本号：主版本.次版本.修订号.构建号 */
 #define CPU2_APP_VERSION_MAJOR      1u
-#define CPU2_APP_VERSION_MINOR      1u
+#define CPU2_APP_VERSION_MINOR      2u
 #define CPU2_APP_VERSION_PATCH      0u
 #define CPU2_APP_VERSION_BUILD      0u
 /* 32位版本编码：0xMMmmppbb，例如 V1.2.3 build 4 = 0x01020304 */
@@ -15,7 +15,7 @@
      ((uint32_t)CPU2_APP_VERSION_PATCH << 8)  | \
      ((uint32_t)CPU2_APP_VERSION_BUILD))
 
-#define CPU2_APP_VERSION_STRING "V1.1.0.0"
+#define CPU2_APP_VERSION_STRING "V1.2.0.0"
 /* CPU2/CPU3兼容契约：major.minor相同视为协议兼容。 */
 #define CPU2_COMPAT_PROTOCOL_MAJOR CPU2_APP_VERSION_MAJOR
 #define CPU2_COMPAT_PROTOCOL_MINOR CPU2_APP_VERSION_MINOR

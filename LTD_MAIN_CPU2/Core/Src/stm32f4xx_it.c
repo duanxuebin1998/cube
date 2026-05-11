@@ -352,6 +352,7 @@ void USART1_IRQHandler(void)
 				printf("%x ", received_data);
 				// 判断是否遇到终止符 \r\n
 				if (received_data == '\n' && buffer_index > 0 && received_buffer[buffer_index - 1] == '\r') {
+					received_buffer[buffer_index - 1] = '\0';
 					// 完整命令接收完毕，标记有新命令
 					new_command_ready = 1;
 					// 通过串口1重新发送接收到的所有数据

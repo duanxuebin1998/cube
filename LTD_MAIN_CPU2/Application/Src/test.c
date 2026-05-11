@@ -21,6 +21,12 @@
 #include "ad5421.h"
 #include "encoder.h"
 #include <stddef.h>
+#define MOTOR_TEXT_ENCODER_MAX_ANGLE             4096.0f
+#define MOTOR_TEXT_ENCODER_GUARD_MIN_MM          10.0f
+#define MOTOR_TEXT_ENCODER_GUARD_MARGIN_MM       5.0f
+#define MOTOR_TEXT_ENCODER_GUARD_SCALE           1.20f
+#define MOTOR_TEXT_ENCODER_POLL_MS               20U
+#define MOTOR_TEXT_ENCODER_START_GRACE_MS        500U
 static uint8_t Test_ShouldAbortForCommandSwitch(void)
 {
     if (!HasEffectiveCommandSwitchRequest()) {
@@ -30,6 +36,124 @@ static uint8_t Test_ShouldAbortForCommandSwitch(void)
     printf("检测到命令切换请求，停止当前串口测试\r\n");
     MotorCtrl_SlowStop();
     return 1;
+}
+
+static int32_t Test_GetEncoderValue(void)
+{
+    update_sensor_height_from_encoder();
+    return -g_encoder_count;
+}
+
+static uint8_t Test_EncoderTargetReached(int32_t current, int32_t target, int dir)
+{
+    if (dir == MOTOR_DIRECTION_DOWN) {
+        return (current >= target) ? 1U : 0U;
+    }
+
+    return (current <= target) ? 1U : 0U;
+}
+
+static int32_t Test_EncoderDistanceMmToCount(float distance_mm)
+{
+    float encoder_count;
+
+    if ((distance_mm <= 0.0f) || (g_deviceParams.encoder_wheel_circumference_mm == 0U)) {
+        return 0;
+    }
+
+    encoder_count = (distance_mm * MOTOR_TEXT_ENCODER_MAX_ANGLE * 1000.0f) /
+                    (float)g_deviceParams.encoder_wheel_circumference_mm;
+    if (encoder_count < 1.0f) {
+        return 1;
+    }
+
+    return (int32_t)(encoder_count + 0.5f);
+}
+
+static float Test_EncoderDistanceToGuardMm(float distance_mm)
+{
+    float guard_mm;
+
+    if (distance_mm <= 0.0f) {
+        return 0.0f;
+    }
+
+    guard_mm = distance_mm * MOTOR_TEXT_ENCODER_GUARD_SCALE +
+               MOTOR_TEXT_ENCODER_GUARD_MARGIN_MM;
+
+    if (guard_mm < MOTOR_TEXT_ENCODER_GUARD_MIN_MM) {
+        guard_mm = MOTOR_TEXT_ENCODER_GUARD_MIN_MM;
+    }
+
+    return guard_mm;
+}
+
+static float Test_EncoderCountToDistanceMm(int32_t encoder_count)
+{
+    if (g_deviceParams.encoder_wheel_circumference_mm == 0U) {
+        return 0.0f;
+    }
+
+    return ((float)encoder_count * (float)g_deviceParams.encoder_wheel_circumference_mm) /
+           (MOTOR_TEXT_ENCODER_MAX_ANGLE * 1000.0f);
+}
+
+static uint32_t Test_MoveUntilEncoderTarget(int32_t target_encoder,
+                                            int32_t origin_encoder,
+                                            int dir,
+                                            float guard_mm,
+                                            uint32_t speed,
+                                            const char *phase_name)
+{
+    uint32_t ret;
+    uint32_t start_tick;
+    int32_t current_encoder;
+
+    ret = MotorCtrl_MoveNoWait(guard_mm, dir, speed);
+    if (ret != NO_ERROR) {
+        printf("%s encoder move command failed, error=0x%08lX\r\n",
+               phase_name, (unsigned long)ret);
+        return ret;
+    }
+
+    start_tick = HAL_GetTick();
+    while (1) {
+        if (Test_ShouldAbortForCommandSwitch()) {
+            return STATE_SWITCH;
+        }
+
+        MotorCtrl_PollRuntimePosition();
+        current_encoder = Test_GetEncoderValue();
+
+        if (Test_EncoderTargetReached(current_encoder, target_encoder, dir)) {
+            ret = MotorCtrl_SlowStop();
+            if (ret != NO_ERROR) {
+                printf("%s encoder stop failed, error=0x%08lX\r\n",
+                       phase_name, (unsigned long)ret);
+                return ret;
+            }
+            printf("%s encoder target reached | current=%ld(%.2fmm) | target=%ld(%.2fmm)\r\n",
+                   phase_name,
+                   (long)current_encoder,
+                   Test_EncoderCountToDistanceMm(current_encoder - origin_encoder),
+                   (long)target_encoder,
+                   Test_EncoderCountToDistanceMm(target_encoder - origin_encoder));
+            return NO_ERROR;
+        }
+
+        if (((HAL_GetTick() - start_tick) > MOTOR_TEXT_ENCODER_START_GRACE_MS) &&
+            (MotorCtrl_GetDisplayState() == 0U)) {
+            printf("%s motor stopped before encoder target | current=%ld(%.2fmm) | target=%ld(%.2fmm)\r\n",
+                   phase_name,
+                   (long)current_encoder,
+                   Test_EncoderCountToDistanceMm(current_encoder - origin_encoder),
+                   (long)target_encoder,
+                   Test_EncoderCountToDistanceMm(target_encoder - origin_encoder));
+            return MOTOR_STEP_ERROR;
+        }
+
+        HAL_Delay(MOTOR_TEXT_ENCODER_POLL_MS);
+    }
 }
 
 //电机小步进上行测试
@@ -520,6 +644,124 @@ void motor_text(float run_distance_mm, uint8_t enable_sensor_comm)
 
         loop_cnt++;
         printf("[LOOP %lu] cycle done\r\n", (unsigned long)loop_cnt);
+    }
+}
+
+void motor_text_encoder(float run_distance_mm, uint8_t enable_sensor_comm)
+{
+    uint32_t loop_cnt = 0;
+    uint32_t ret;
+    uint32_t speed = MotorCtrl_GetDefaultSpeedX100();
+    float guard_mm;
+    int32_t run_encoder_count;
+    int32_t origin_encoder;
+    int32_t current_encoder;
+    int32_t down_target_encoder;
+
+    if (run_distance_mm <= 0.0f) {
+        printf("motor_text_encoder invalid distance=%.2fmm\r\n", run_distance_mm);
+        return;
+    }
+
+    run_encoder_count = Test_EncoderDistanceMmToCount(run_distance_mm);
+    guard_mm = Test_EncoderDistanceToGuardMm(run_distance_mm);
+    if ((run_encoder_count <= 0) || (guard_mm <= 0.0f)) {
+        printf("motor_text_encoder invalid encoder wheel circumference=%lu, distance=%.2fmm\r\n",
+               (unsigned long)g_deviceParams.encoder_wheel_circumference_mm,
+               run_distance_mm);
+        return;
+    }
+
+    ret = (uint32_t)MeasureStart();
+    if (ret != NO_ERROR) {
+        printf("motor_text_encoder init failed, error=0x%08lX\r\n", (unsigned long)ret);
+        return;
+    }
+
+    ret = MotorCtrl_Init();
+    if (ret != NO_ERROR) {
+        printf("motor_text_encoder motor init failed, error=0x%08lX\r\n", (unsigned long)ret);
+        return;
+    }
+
+    origin_encoder = Test_GetEncoderValue();
+    down_target_encoder = origin_encoder + run_encoder_count;
+
+    printf("motor encoder text start | distance=%.2fmm | origin=%ld(0.00mm) | down_target=%ld(%.2fmm) | encoder_delta=%ld(%.2fmm) | guard=%.2fmm | sensor_comm=%u\r\n",
+           run_distance_mm,
+           (long)origin_encoder,
+           (long)down_target_encoder,
+           Test_EncoderCountToDistanceMm(down_target_encoder - origin_encoder),
+           (long)run_encoder_count,
+           Test_EncoderCountToDistanceMm(run_encoder_count),
+           guard_mm,
+           (unsigned int)enable_sensor_comm);
+
+    while (1) {
+        if (Test_ShouldAbortForCommandSwitch()) {
+            stpr_disableDriver(&stepper);
+            return;
+        }
+
+        current_encoder = Test_GetEncoderValue();
+
+        stpr_enableDriver(&stepper);
+        printf("[LOOP %lu] encoder down start | current=%ld(%.2fmm) | origin=%ld(0.00mm) | target=%ld(%.2fmm)\r\n",
+               (unsigned long)(loop_cnt + 1U),
+               (long)current_encoder,
+               Test_EncoderCountToDistanceMm(current_encoder - origin_encoder),
+               (long)origin_encoder,
+               (long)down_target_encoder,
+               Test_EncoderCountToDistanceMm(down_target_encoder - origin_encoder));
+
+        ret = Test_MoveUntilEncoderTarget(down_target_encoder,
+                                          origin_encoder,
+                                          MOTOR_DIRECTION_DOWN,
+                                          guard_mm,
+                                          speed,
+                                          "DOWN");
+        if (ret != NO_ERROR) {
+            stpr_disableDriver(&stepper);
+            return;
+        }
+
+        if (enable_sensor_comm != 0U) {
+            Sensor_CommCheckAndLog("after ENCODER DOWN");
+        }
+
+        if (Test_ShouldAbortForCommandSwitch()) {
+            stpr_disableDriver(&stepper);
+            return;
+        }
+
+        current_encoder = Test_GetEncoderValue();
+        printf("[LOOP %lu] encoder up start | current=%ld(%.2fmm) | target=%ld(0.00mm)\r\n",
+               (unsigned long)(loop_cnt + 1U),
+               (long)current_encoder,
+               Test_EncoderCountToDistanceMm(current_encoder - origin_encoder),
+               (long)origin_encoder);
+
+        ret = Test_MoveUntilEncoderTarget(origin_encoder,
+                                          origin_encoder,
+                                          MOTOR_DIRECTION_UP,
+                                          guard_mm,
+                                          speed,
+                                          "UP");
+        if (ret != NO_ERROR) {
+            stpr_disableDriver(&stepper);
+            return;
+        }
+
+        if (enable_sensor_comm != 0U) {
+            Sensor_CommCheckAndLog("after ENCODER UP");
+        }
+
+        loop_cnt++;
+        current_encoder = Test_GetEncoderValue();
+        printf("[LOOP %lu] encoder cycle done | current=%ld(%.2fmm)\r\n",
+               (unsigned long)loop_cnt,
+               (long)current_encoder,
+               Test_EncoderCountToDistanceMm(current_encoder - origin_encoder));
     }
 }
 #include <ltd_sensor_communication.h>
