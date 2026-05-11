@@ -314,25 +314,29 @@ uint32_t FollowOilLevel(void) {
 		CHECK_ERROR(ret);  // 检查开启液位模式是否成功
 		// 稳定性判断（频率波动在阈值内）
 		if (fabs(frequency_difference) < g_deviceParams.oilLevelHysteresisThreshold) {
-			printf("液位稳定,电机不动作\r\n");
+			// 液位稳定时电机不动作，直接打印寄存器中保存的液位值
+			printf("液位稳定,电机不动作\t");
+			printf("液位跟随\t液位值为%ld (0.1mm)", g_measurement.oil_measurement.oil_level);
 			HAL_Delay(3000);  // 等待3秒
 		} else {
 			// 检测到液位变动，重新跟踪
 			printf("识别到液位变动\t");
+			g_measurement.device_status.device_state = STATE_FINDOIL;
 			ret = SearchOilPrecise(100);
-			if (ret != NO_ERROR)
+			if (ret != NO_ERROR) {
 				return OilLevel_StopBeforeReturn((uint32_t)ret, "液位流程故障");
-		}
-
-		// 更新位置和液位值
-		ret = determineTheSensorPositionAndUpdateTheLevelValue();
-		if (ret == MEASUREMENT_OILLEVEL_LOW) {
-			// 处理盲区状态
-			ret = waitForTheLiquidLevelToExceedTheBlindZone();
-			CHECK_COMMAND_SWITCH(ret);
-			CHECK_ERROR(ret);
-		} else {
-			CHECK_ERROR(ret);
+			} else {
+				g_measurement.device_status.device_state = STATE_FLOWOIL;
+				ret = determineTheSensorPositionAndUpdateTheLevelValue();
+				if (ret == MEASUREMENT_OILLEVEL_LOW) {
+					// 处理盲区状态
+					ret = waitForTheLiquidLevelToExceedTheBlindZone();
+					CHECK_COMMAND_SWITCH(ret);
+					CHECK_ERROR(ret);
+				} else {
+					CHECK_ERROR(ret);
+				}
+			}
 		}
 	}
 }
@@ -704,7 +708,7 @@ static int determineTheSensorPositionAndUpdateTheLevelValue(void) {
 		// 更新当前液位值
 		g_measurement.oil_measurement.oil_level = oil_level;
 		// 打印正常液位值信息
-		printf("液位跟随\t液位值为%ld", g_measurement.oil_measurement.oil_level);
+		printf("液位跟随\t液位值为%ld (0.1mm)", g_measurement.oil_measurement.oil_level);
 		OilLevel_PrintFollowPositionInfo();
 		printf("\r\n");
 	} else {

@@ -16,6 +16,8 @@
 
 #define WIRELESS_HOST_ADDR 1U
 #define WIRELESS_SLAVE_ADDR 2U
+#define SENSOR_LEVEL_FREQ_RECOVERY_LIFT_MM 1.0f
+#define SENSOR_DENSITY_MODE_SETTLE_MS 3000U
 
 static const char *Sensor_CommErrorToText(uint32_t err)
 {
@@ -248,8 +250,64 @@ uint32_t EnableLevelMode(void) {
 // 读取一次并以整数 Hz 返回。
 // 这里的循环是业务层“等待有效频率”，不是底层串口通信重试；
 // 真正的通信重试统一收敛在各协议层，默认都是 SENSOR_COMM_MAX_RETRY 次。
-// 如果频率连续 3 次为 0 或大于 6500Hz，则重新切换一次液位模式后再继续读取；
+// 如果频率连续 3 次为 0 或大于 6500Hz，且电机静止，则上行 1mm 后切密度/液位模式恢复；
 // 若多轮恢复后仍无有效频率，则返回 SONIC_FREQ_ABNORMAL。
+
+static uint8_t Sensor_IsMotorStopped(void)
+{
+	uint32_t motor_state = MotorCtrl_GetDisplayState();
+
+	if ((motor_state == 1U) || (motor_state == 2U)) {
+		return 0U;
+	}
+
+	return MotorCtrl_IsDriverMoving(&stepper) ? 0U : 1U;
+}
+
+static uint32_t Sensor_RecoverLevelFrequencyWhenStopped(void)
+{
+	uint32_t ret;
+
+	if (!Sensor_IsMotorStopped()) {
+		printf("液位频率连续异常，但电机仍在运行\r\n");
+		ret = EnableLevelMode();
+		if (ret != NO_ERROR) {
+			printf("液位频率恢复：切回液位模式失败 错误码=0x%08lX\r\n", (unsigned long)ret);
+			return ret;
+		}
+		return NO_ERROR;
+	}
+
+	printf("液位频率连续异常，电机静止，先上行%.1fmm再重置传感器模式\r\n",
+	       (double)SENSOR_LEVEL_FREQ_RECOVERY_LIFT_MM);
+	ret = MotorCtrl_MoveAndWait(SENSOR_LEVEL_FREQ_RECOVERY_LIFT_MM,
+	                            MOTOR_DIRECTION_UP,
+	                            MotorCtrl_GetDefaultSpeedX100());
+	if (ret != NO_ERROR) {
+		printf("液位频率恢复：上行%.1fmm失败 错误码=0x%08lX\r\n",
+		       (double)SENSOR_LEVEL_FREQ_RECOVERY_LIFT_MM,
+		       (unsigned long)ret);
+		return ret;
+	}
+
+	ret = EnableDensityMode();
+	if (ret != NO_ERROR) {
+		printf("液位频率恢复：切换密度模式失败 错误码=0x%08lX\r\n", (unsigned long)ret);
+		return ret;
+	}
+
+	printf("液位频率恢复：密度模式等待%lu ms\r\n", (unsigned long)SENSOR_DENSITY_MODE_SETTLE_MS);
+	HAL_Delay(SENSOR_DENSITY_MODE_SETTLE_MS);
+
+	ret = EnableLevelMode();
+	if (ret != NO_ERROR) {
+		printf("液位频率恢复：切回液位模式失败 错误码=0x%08lX\r\n", (unsigned long)ret);
+		return ret;
+	}
+
+	return NO_ERROR;
+}
+
 uint32_t DSM_Get_LevelMode_Frequence(volatile uint32_t *frequency_out) {
 	if (frequency_out == NULL) {
 		return PARAM_ADDRESS_OVERFLOW;   // 比设备通信错误更合理
@@ -298,7 +356,7 @@ uint32_t DSM_Get_LevelMode_Frequence(volatile uint32_t *frequency_out) {
 		       MAX_INVALID_FREQ_RETRY,
 		       mode_switch_recovery_count,
 		       MAX_MODE_SWITCH_RECOVERY);
-		ret = EnableLevelMode();
+		ret = Sensor_RecoverLevelFrequencyWhenStopped();
 		if (ret != NO_ERROR) {
 			return ret;
 		}
