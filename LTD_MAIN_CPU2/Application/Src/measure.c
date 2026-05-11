@@ -281,7 +281,8 @@ void ProcessMeasureCmd(CommandType command)
  *       - A0：快速停止电机
  *       - A+<mm>：电机上行指定距离
  *       - A-<mm>：电机下行指定距离
- *       - B<mm>：编码器/回零循环测试，下行指定距离后执行回零流程
+ *       - B<mm>: motor-model round-trip test
+ *       - BE<mm>: encoder-based round-trip test, parameter unit is mm
  *       - C：电机步进分辨率测试
  *       - D：电机下行触底测试
  *       - E：电机上行碰零点测试
@@ -365,11 +366,12 @@ void process_command(uint8_t *command) {
     }
 
     if (command[0] == 'B') {
-        int mm = atoi((char*) &command[1]);
+        const uint8_t use_encoder_count = (command[1] == 'E') ? 1U : 0U;
+        int value = atoi((char*) &command[use_encoder_count ? 2U : 1U]);
         uint8_t enable_sensor_comm = 0U;
 
-        /* B100：只做电机往返；B100S 或 B100,1：往返后增加传感器通信检查。 */
-        for (uint32_t i = 1U; command[i] != '\0'; ++i) {
+        /* B100: motor model distance in mm; BE100: encoder-based distance in mm. */
+        for (uint32_t i = use_encoder_count ? 2U : 1U; command[i] != '\0'; ++i) {
             if ((command[i] == 'S') ||
                 ((command[i] == ',') && (command[i + 1U] == '1'))) {
                 enable_sensor_comm = 1U;
@@ -377,15 +379,26 @@ void process_command(uint8_t *command) {
             }
         }
 
-        if (mm <= 0) {
-            printf("B指令距离无效：%dmm\r\n", mm);
+        if (value <= 0) {
+            if (use_encoder_count) {
+                printf("BE command distance invalid: %dmm\r\n", value);
+            } else {
+                printf("B command distance invalid: %dmm\r\n", value);
+            }
             return;
         }
 
-        printf("B指令电机测试开始 | distance=%dmm | sensor_comm=%u\r\n",
-               mm,
-               (unsigned int)enable_sensor_comm);
-        motor_text((float)mm, enable_sensor_comm);
+        if (use_encoder_count) {
+            printf("BE command encoder test start | distance=%dmm | sensor_comm=%u\r\n",
+                   value,
+                   (unsigned int)enable_sensor_comm);
+            motor_text_encoder((float)value, enable_sensor_comm);
+        } else {
+            printf("B command motor test start | distance=%dmm | sensor_comm=%u\r\n",
+                   value,
+                   (unsigned int)enable_sensor_comm);
+            motor_text((float)value, enable_sensor_comm);
+        }
         return;
     }
     if (command[0] == 'C') {
