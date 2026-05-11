@@ -471,7 +471,7 @@ typedef struct {
     uint32_t water_level_mode;                  // 水位测量方式
     uint32_t waterBlindZone;                    // 水位盲区(0.1mm)
     uint32_t water_cap_threshold;               // 水位电容阈值（建议明确倍率，如 x1000）
-    uint32_t water_cap_hysteresis;              // 水位电容滞后阈值（建议明确倍率，如 x1000）
+    uint32_t water_find_cap_threshold;              // 水位寻找电容阈值（建议明确倍率，如 x1000）
     uint32_t maxDownDistance;                   // 水位/罐底测量最大下行距离(0.1mm)
     uint32_t zero_cap;                          //零点电容值
     uint32_t water_stable_threshold;            //水位稳定阈值
@@ -486,7 +486,7 @@ typedef struct {
     uint32_t initialTankHeight;           // 初始实高
     uint32_t currentTankHeight;           // 当前实高
     uint32_t bottom_encoder_correction_enable; // 罐底测量完成后修正编码器(0=不修正,1=修正)
-    uint32_t water_change_monitor_threshold;  // 水位寻找电容阈值(x1000)，稳定监测中偏离目标超过该值后返回跟随
+    uint32_t water_lag_cap_threshold;  // 水位滞后电容阈值(x1000)，稳定监测中偏离目标超过该值后返回跟随
 
     // ===================== 密度和温度修正参数 =====================
     uint32_t densityCorrection;           // 密度修正值、磁通量D
