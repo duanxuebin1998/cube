@@ -1,0 +1,33 @@
+#ifndef APP_VERSION_H
+#define APP_VERSION_H
+
+#include <stdint.h>
+
+/* CPU3显示板固件版本号：主版本.次版本.修订号.构建号 */
+#define CPU3_APP_VERSION_MAJOR      1u
+#define CPU3_APP_VERSION_MINOR      1u
+#define CPU3_APP_VERSION_PATCH      0u
+#define CPU3_APP_VERSION_BUILD      0u
+/* 32位版本编码：0xMMmmppbb，例如 V1.2.3 build 4 = 0x01020304 */
+#define CPU3_APP_VERSION_U32 \
+    (((uint32_t)CPU3_APP_VERSION_MAJOR << 24) | \
+     ((uint32_t)CPU3_APP_VERSION_MINOR << 16) | \
+     ((uint32_t)CPU3_APP_VERSION_PATCH << 8)  | \
+     ((uint32_t)CPU3_APP_VERSION_BUILD))
+
+#define CPU3_APP_VERSION_STRING "V1.1.0.0"
+/* CPU2/CPU3兼容契约：major.minor相同视为协议兼容。 */
+#define CPU3_COMPAT_PROTOCOL_MAJOR CPU3_APP_VERSION_MAJOR
+#define CPU3_COMPAT_PROTOCOL_MINOR CPU3_APP_VERSION_MINOR
+
+#define CPU3_REQUIRED_CPU2_PROTOCOL_MAJOR CPU3_COMPAT_PROTOCOL_MAJOR
+#define CPU3_REQUIRED_CPU2_PROTOCOL_MINOR CPU3_COMPAT_PROTOCOL_MINOR
+
+/* 兼容现有数字显示路径：V1.000 */
+#define CPU3_APP_VERSION_DISPLAY_VALUE \
+    ((int)(CPU3_APP_VERSION_MAJOR * 1000u + \
+           CPU3_APP_VERSION_MINOR * 100u + \
+           CPU3_APP_VERSION_PATCH * 10u + \
+           CPU3_APP_VERSION_BUILD))
+
+#endif /* APP_VERSION_H */

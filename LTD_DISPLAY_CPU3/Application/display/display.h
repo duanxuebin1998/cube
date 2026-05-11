@@ -1,8 +1,9 @@
 #ifndef __DISPLAY_H
 #define __DISPLAY_H
 #include "main.h"
+#include "app_version.h"
 
-#define CPU3VERSION 1004
+#define CPU3VERSION CPU3_APP_VERSION_DISPLAY_VALUE
 
 #define CONVER_QUALITY_P 3//质量显示几位小数
 #define CONVER_VOLUME_P 3//体积显示几位小数

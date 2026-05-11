@@ -10,6 +10,7 @@
  */
 
 #include "system_parameter.h"
+#include "app_version.h"
 #include "mb85rs2m.h"
 #include "my_crc.h"
 #include <stdint.h>
@@ -63,6 +64,16 @@ static uint32_t device_params_default_motor_local_circ_001mm(void)
     return value;
 }
 
+/* 软件版本跟随当前固件，避免被 FRAM 里的旧参数覆盖。 */
+static int apply_firmware_version_runtime(void)
+{
+    if (g_deviceParams.softwareVersion == CPU2_APP_VERSION_U32) {
+        return 0;
+    }
+
+    g_deviceParams.softwareVersion = CPU2_APP_VERSION_U32;
+    return 1;
+}
 /* 修正新增参数的非法值。
  * reserved6/reserved7 复用为position_count_mode和motor_count_first_loop_circumference_mm后，旧 FRAM 里可能残留任意非 0 值。
  * 这里既修正 RAM，又把是否修正返回给 load_device_params()，由加载流程决定是否写回 FRAM。 */
@@ -182,6 +193,7 @@ static int load_device_params_from_slot_impl(uint32_t base_addr,
  * 保证后面的“判断是否需要保存”与“真正写入的内容”完全一致。 */
 static void build_saved_device_params(DeviceParameters *out)
 {
+    apply_firmware_version_runtime();
     *out = g_deviceParams;
     out->param_version = DEVICE_PARAM_VERSION;
     out->struct_size   = (uint32_t)sizeof(DeviceParameters);
@@ -337,6 +349,7 @@ int load_device_params(void)
 
     g_deviceParams.command = g_deviceParams.powerOnDefaultCommand;
     params_normalized = normalize_device_params_runtime();
+    params_normalized |= apply_firmware_version_runtime();
 
     /* 上电时如果 A 分区损坏、但 B 分区有效，
      * 这里只做“存储介质自修复”，不视为用户修改参数，
@@ -401,7 +414,7 @@ void RestoreFactoryParamsConfig(void)
     g_deviceParams.sensorType            = DSM_SENSOR;
     g_deviceParams.sensorID              = 1234567;
     g_deviceParams.sensorSoftwareVersion = 0x00010001;
-    g_deviceParams.softwareVersion       = 0x00010001;
+    g_deviceParams.softwareVersion       = CPU2_APP_VERSION_U32;
     g_deviceParams.error_auto_back_zero  = 1;   /* 默认: 报错回零 */
     g_deviceParams.error_stop_measurement= 1;   /* 默认: 报错停止测量 */
     g_deviceParams.position_source_auto_switch = POSITION_SOURCE_AUTO_SWITCH_ENABLE; /* 默认: 允许流程自动切换位置源 */
@@ -558,6 +571,11 @@ void print_device_params(void)
     printf("  %-32s : %lu\r\n", "传感器编号", (unsigned long)params.sensorID);
     printf("  %-32s : 0x%08lX\r\n", "传感器软件版本", (unsigned long)params.sensorSoftwareVersion);
     printf("  %-32s : 0x%08lX\r\n", "软件版本", (unsigned long)params.softwareVersion);
+    printf("  %-32s : V%lu.%lu.%lu.%lu\r\n", "软件版本文本",
+           (unsigned long)((params.softwareVersion >> 24) & 0xFFU),
+           (unsigned long)((params.softwareVersion >> 16) & 0xFFU),
+           (unsigned long)((params.softwareVersion >> 8) & 0xFFU),
+           (unsigned long)(params.softwareVersion & 0xFFU));
     printf("  %-32s : %lu\r\n", "故障自动回零", (unsigned long)params.error_auto_back_zero);
     printf("  %-32s : %lu\r\n", "故障停止测量", (unsigned long)params.error_stop_measurement);
     printf("  %-32s : %lu\r\n", "位置源自动切换", (unsigned long)params.position_source_auto_switch);

@@ -17,7 +17,7 @@ extern "C" {
 typedef struct
 {
     /* ---------- 屏幕 / 基本信息 ---------- */
-    uint16_t local_led_version;      // 屏幕程序版本
+    uint32_t local_led_version;      // CPU3程序版本
     uint8_t  language;               // 语言：0=中文 1=英文
 
 

@@ -800,7 +800,7 @@ void EquipFirstPower(void)
     oled_clear();
     DisplayLangaugeLineWords((uint8_t*)"通讯尝试中...",0,OLED_ROW4_1,0,(u8*)"Communicate Attempt...");
     line = DisplayLangaugeLineWords((uint8_t*)"版本:",0,OLED_ROW4_2,0,(u8*)"Version:");
-    OledValueDisplay(CPU3VERSION,line,OLED_ROW4_2,0,3,NULL);
+    OledDisplayLineWords((uint8_t*)CPU3_APP_VERSION_STRING,line,OLED_ROW4_2,0);
 }
 /* 刚上电时显示logo */
 void DisplayAubonLogo(void)
