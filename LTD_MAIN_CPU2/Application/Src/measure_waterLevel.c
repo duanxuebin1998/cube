@@ -54,7 +54,7 @@
 #define WATER_CAP_SAT_LIMIT            (9999.0f)/* 认为“饱和/无穷大”的阈值，用于保护 */
 #define WATER_FOLLOW_LOST_DIFF_BIG       (80.0f)   /* 认为偏差很大 */
 #define WATER_FOLLOW_LOST_COUNT_MAX      (20)      /* 连续大偏差次数阈值：20次*500ms=10s */
-#define WATER_FOLLOW_ENTER_TIMEOUT_MS    (60000u)  /* 长时间未进入稳定区，也认为已进入跟随态 */
+#define WATER_FOLLOW_ENTER_TIMEOUT_MS    (180000u)  /* 长时间未进入稳定区，也认为已进入跟随态 */
 #define WATER_FOLLOW_STABLE_MONITOR_COUNT (5u)  /* 连续稳定采样次数，达到后进入水位变化监测循环 */
 
 #define WATER_SENSOR_TEST_PRE_UP_MM      (50.0f)   /* 找到水位后，先上行 5cm 再开始扫描 */
@@ -215,7 +215,7 @@ uint32_t SearchWaterLevel(void)
     //打印零点电容值，水位电容阈值，水位滞后阈值
     printf("水位测量\t零点电容值：%lu\r\n", g_deviceParams.zero_cap);
     printf("水位测量\t水位电容阈值：%lu\r\n", g_deviceParams.water_cap_threshold);
-    printf("水位测量\t水位滞后阈值：%lu\r\n", g_deviceParams.water_cap_hysteresis);
+    printf("水位测量\t水位寻找电容阈值：%lu\r\n", g_deviceParams.water_find_cap_threshold);
     /* -------------------- 初始位置调整（避让） -------------------- */
     if (g_measurement.debug_data.cable_length > 2000)
     {
@@ -705,7 +705,7 @@ uint32_t FindWaterLevel_FastByStateFlip_StableExit(uint32_t stable_win_ms)
     //打印零点电容值，水位电容阈值，水位滞后阈值
     printf("水位测量\t零点电容值：%lu\r\n", g_deviceParams.zero_cap);
     printf("水位测量\t水位电容阈值：%lu\r\n", g_deviceParams.water_cap_threshold);
-    printf("水位测量\t水位滞后阈值：%lu\r\n", g_deviceParams.water_cap_hysteresis);
+    printf("水位测量\t水位寻找电容阈值：%lu\r\n", g_deviceParams.water_find_cap_threshold);
     printf("快速跟随\t开始(稳定判定：%lu.%03lus内波动<=%.1fmm退出)\r\n",
            (unsigned long)(stable_window_ms / 1000u),
            (unsigned long)(stable_window_ms % 1000u),
@@ -891,7 +891,7 @@ static uint32_t WaterRecoverAfterLost(WaterRecoverStrategy strategy)
  * @brief 水位稳定后的变化监测循环。
  *
  * 连续多次处于稳定区后进入本函数，不主动调整电机，只周期性读取水位电容。
- * 当电容偏离跟随目标值超过 water_change_monitor_threshold 时，认为水位发生变化，
+ * 当电容偏离跟随目标值超过 water_lag_cap_threshold 时，认为水位发生变化，
  * 退出本循环并返回原闭环跟随流程，由原逻辑重新判断偏水/偏空气并调整。
  */
 static uint32_t MonitorWaterFollowChange(float target_cap)
@@ -899,15 +899,12 @@ static uint32_t MonitorWaterFollowChange(float target_cap)
     uint32_t ret;
     float cap = 0.0f;
     float diff;
-    /* 水位寻找电容阈值：稳定监测中偏离目标超过该值后返回跟随循环。 */
-    float monitor_diff = WaterCapRawToFloat(g_deviceParams.water_change_monitor_threshold);
+    /* 水位滞后电容阈值：稳定监测中偏离目标超过该值后返回跟随循环。 */
+    float monitor_diff = WaterCapRawToFloat(g_deviceParams.water_lag_cap_threshold);
 
-    /* 连续稳定后进入监测循环，此时才确认水位已经跟上并置跟随态。 */
-    if (g_measurement.device_status.device_state != STATE_FOLLOW_WATERING)
-    {
-        g_measurement.device_status.device_state = STATE_FOLLOW_WATERING;
-        printf("水位跟随\t进入稳定监测，置为水位跟随状态\r\n");
-    }
+    /* 连续稳定或超时兜底进入监测循环时，统一在这里确认跟随态。 */
+    g_measurement.device_status.device_state = STATE_FOLLOW_WATERING;
+    printf("水位跟随\t进入稳定监测，置为水位跟随状态\r\n");
     /* 刚进入稳定监测时锁定一次当前水位，后续监测只打印该水位值。 */
     WaterLevelSyncFromCable();
 
@@ -946,8 +943,8 @@ static uint32_t FollowWaterLevelCore(WaterRecoverStrategy recover_strategy)
      * 1. 周期性读取当前水电容，并按 air_cap/th/th_low 判断“偏水 / 偏空气 / 稳定区”
      * 2. 偏水就上行，偏空气就下行，稳定区则保持不动
      * 3. 每次动作都是“小步进 + 重新测量”，所以这是一个持续运行的闭环调节过程
-     * 4. 一旦进入稳定区，会立即置 STATE_FOLLOW_WATERING，并按当前位置同步 water_level
-     * 5. 若长时间一直在调节但还没进入稳定区，超过 WATER_FOLLOW_ENTER_TIMEOUT_MS 后也置 STATE_FOLLOW_WATERING
+     * 4. 连续稳定或调节超时后进入稳定监测循环，并在监测循环入口置 STATE_FOLLOW_WATERING
+     * 5. 若长时间一直在调节但还没进入稳定区，超过 WATER_FOLLOW_ENTER_TIMEOUT_MS 后强制进入稳定监测
      * 6. 若连续多次判断为“大偏差”，说明可能跟不上液面或测量异常，此时触发重新找水位
      */
 
@@ -975,12 +972,12 @@ static uint32_t FollowWaterLevelCore(WaterRecoverStrategy recover_strategy)
      * 所有参数统一使用浮点计算，避免单位混乱
      * 三个电容阈值分工：
      * water_cap_threshold：确定水位跟随目标电容；
-     * water_cap_hysteresis：目标上下范围内认为已经跟上；
-     * water_change_monitor_threshold：稳定监测中判断水位变化。
+     * water_find_cap_threshold：目标上下范围内认为已经跟上；
+     * water_lag_cap_threshold：稳定监测中判断水位变化。
      */
     air_cap = g_measurement.water_measurement.zero_capacitance;
     target_cap = air_cap + WaterCapRawToFloat(g_deviceParams.water_cap_threshold);
-    follow_band = WaterCapRawToFloat(g_deviceParams.water_cap_hysteresis);
+    follow_band = WaterCapRawToFloat(g_deviceParams.water_find_cap_threshold);
     th_low = target_cap - follow_band;
     th = target_cap + follow_band;
 
@@ -1045,8 +1042,8 @@ static uint32_t FollowWaterLevelCore(WaterRecoverStrategy recover_strategy)
             printf("水位跟随\t状态=稳定区(%.1f < 电容 < %.1f)，保持\r\n",
                    th_low, th);
 
-            /* 稳态下同步并打印当前水位值。 */
-            WaterLevelSyncFromCable();
+            /* 稳定区只打印当前水位值，不在这里刷新水位。 */
+            // WaterLevelSyncFromCable();
             printf("水位跟随\t稳定区 当前水位=%.1fmm\r\n",
                    g_measurement.water_measurement.water_level / 10.0f);
 
@@ -1095,8 +1092,7 @@ static uint32_t FollowWaterLevelCore(WaterRecoverStrategy recover_strategy)
          * 长时间未进入稳定区时，也统一进入稳定监测循环。
          * 状态只在 MonitorWaterFollowChange() 入口处置位，避免多个入口直接改跟随状态。
          */
-        if ((g_measurement.device_status.device_state != STATE_FOLLOW_WATERING) &&
-            ((HAL_GetTick() - follow_enter_tick) >= follow_enter_timeout_ms))
+        if ((HAL_GetTick() - follow_enter_tick) >= follow_enter_timeout_ms)
         {
             printf("水位跟随\t连续调节%lu.%03lus仍未进入稳定区，进入稳定监测\r\n",
                    (unsigned long)((HAL_GetTick() - follow_enter_tick) / 1000u),
@@ -1104,11 +1100,12 @@ static uint32_t FollowWaterLevelCore(WaterRecoverStrategy recover_strategy)
             ret = MonitorWaterFollowChange(target_cap);
             CHECK_COMMAND_SWITCH(ret);
             CHECK_ERROR(ret);
+            follow_enter_tick = HAL_GetTick();
             continue;
         }
 
-        /* 运动完成后，按当前设备状态更新并打印水位。 */
-        UpdateWaterLevelIfValid();
+        /* 运动完成后只打印当前水位值，不在这里刷新水位。 */
+        // UpdateWaterLevelIfValid();
 
         printf("水位跟随\t完成移动 位置=%.1fmm", g_measurement.debug_data.sensor_position / 10.0f); MotorCtrl_PrintPositionRefs();
         printf("  当前水位=%.1fmm\r\n", g_measurement.water_measurement.water_level / 10.0f);

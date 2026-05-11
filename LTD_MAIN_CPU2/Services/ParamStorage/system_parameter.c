@@ -102,8 +102,8 @@ static int normalize_device_params_runtime(void)
     }
 
     /* 旧版本该位置为 reserved17，可能读到 0；这里补默认值，避免监测阈值过小。 */
-    if (g_deviceParams.water_change_monitor_threshold == 0U) {
-        g_deviceParams.water_change_monitor_threshold = 80000U;
+    if (g_deviceParams.water_lag_cap_threshold == 0U) {
+        g_deviceParams.water_lag_cap_threshold = 80000U;
         changed = 1;
     }
 
@@ -450,11 +450,11 @@ void RestoreFactoryParamsConfig(void)
     g_deviceParams.water_level_mode                      = 0;      /* 0:慢速 */
     g_deviceParams.waterBlindZone                   = 100;    /* 0.1mm */
     g_deviceParams.water_cap_threshold                      = 50000;      /* 建议明确倍率后再设默认 */
-    g_deviceParams.water_cap_hysteresis                      = 5000;      /* 建议明确倍率后再设默认 */
+    g_deviceParams.water_find_cap_threshold                      = 5000;      /* 水位寻找电容阈值，x1000，5.0pF */
     g_deviceParams.maxDownDistance                  = 3000;   /* 0.1mm => 300mm */
     g_deviceParams.zero_cap                         = 0;      /* 0.1pf */
     g_deviceParams.water_stable_threshold                      = 500;      /* 0.1mm */
-    g_deviceParams.water_change_monitor_threshold  = 80000;  /* 水位寻找电容阈值，x1000，80.0pF */
+    g_deviceParams.water_lag_cap_threshold  = 80000;  /* 水位滞后电容阈值，x1000，80.0pF */
 
     /* ---------------- 罐高/罐底测量 ---------------- */
     g_deviceParams.bottom_detect_mode      = 0;    /* 0=按项目定义 */
@@ -608,12 +608,12 @@ void print_device_params(void)
     printf("  %-32s : %lu\r\n", "水位测量方式", (unsigned long)params.water_level_mode);
     printf("  %-32s : %lu\r\n", "水位盲区(0.1mm)", (unsigned long)params.waterBlindZone);
     printf("  %-32s : %lu\r\n", "水位电容阈值", (unsigned long)params.water_cap_threshold);
-    printf("  %-32s : %lu\r\n", "水位电容滞回", (unsigned long)params.water_cap_hysteresis);
+    printf("  %-32s : %lu\r\n", "水位寻找电容阈值", (unsigned long)params.water_find_cap_threshold);
     printf("  %-32s : %lu\r\n", "最大下行距离(0.1mm)", (unsigned long)params.maxDownDistance);
     printf("  %-32s : %lu\r\n", "零点电容", (unsigned long)params.zero_cap);
     printf("  %-32s : %lu\r\n", "水位零点电容", (unsigned long)params.zero_cap);
     printf("  %-32s : %lu\r\n", "水位稳定阈值", (unsigned long)params.water_stable_threshold);
-    printf("  %-32s : %lu\r\n", "水位寻找电容阈值", (unsigned long)params.water_change_monitor_threshold);
+    printf("  %-32s : %lu\r\n", "水位滞后电容阈值", (unsigned long)params.water_lag_cap_threshold);
     printf("  %-32s : %lu\r\n", "水位修正值", (unsigned long)params.waterLevelCorrection);
 
     /* 罐底/罐高 */

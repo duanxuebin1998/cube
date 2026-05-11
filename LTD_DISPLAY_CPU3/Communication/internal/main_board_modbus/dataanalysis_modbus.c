@@ -129,7 +129,7 @@ void WriteDeviceParamsToHoldingRegisters(uint16_t *HoldingRegisterArray)
     write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_WATER_LEVEL_MODE,                 g_deviceParams.water_level_mode);
     write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_WATER_BLINDZONE,                  g_deviceParams.waterBlindZone);
     write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_WATER_CAP_THRESHOLD,              g_deviceParams.water_cap_threshold);
-    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_WATER_CAP_HYSTERESIS,             g_deviceParams.water_cap_hysteresis);
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_WATER_FIND_CAP_THRESHOLD,             g_deviceParams.water_find_cap_threshold);
     write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_MAXDOWNDISTANCE,                  g_deviceParams.maxDownDistance);
     write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_ZERO_CAP,                         g_deviceParams.zero_cap);
 
@@ -146,7 +146,7 @@ void WriteDeviceParamsToHoldingRegisters(uint16_t *HoldingRegisterArray)
     write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_CURRENT_TANKHEIGHT,       g_deviceParams.currentTankHeight);
 
     write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_BOTTOM_ENCODER_CORRECTION_ENABLE, g_deviceParams.bottom_encoder_correction_enable);
-    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_WATER_CHANGE_MONITOR_THRESHOLD, g_deviceParams.water_change_monitor_threshold);
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_WATER_LAG_CAP_THRESHOLD, g_deviceParams.water_lag_cap_threshold);
 
     /* ===================== 密度和温度修正参数 ===================== */
     write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_DENSITYCORRECTION,     g_deviceParams.densityCorrection);
@@ -316,7 +316,7 @@ void ReadDeviceParamsFromHoldingRegisters(uint16_t *HoldingRegisterArray)
     g_deviceParams.water_level_mode                 = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_WATER_LEVEL_MODE);
     g_deviceParams.waterBlindZone                   = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_WATER_BLINDZONE);
     g_deviceParams.water_cap_threshold              = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_WATER_CAP_THRESHOLD);
-    g_deviceParams.water_cap_hysteresis             = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_WATER_CAP_HYSTERESIS);
+    g_deviceParams.water_find_cap_threshold             = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_WATER_FIND_CAP_THRESHOLD);
     g_deviceParams.maxDownDistance                  = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_MAXDOWNDISTANCE);
     g_deviceParams.zero_cap                         = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_ZERO_CAP);
 
@@ -333,7 +333,7 @@ void ReadDeviceParamsFromHoldingRegisters(uint16_t *HoldingRegisterArray)
     g_deviceParams.currentTankHeight      = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_CURRENT_TANKHEIGHT);
 
     g_deviceParams.bottom_encoder_correction_enable = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_BOTTOM_ENCODER_CORRECTION_ENABLE);
-    g_deviceParams.water_change_monitor_threshold = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_WATER_CHANGE_MONITOR_THRESHOLD);
+    g_deviceParams.water_lag_cap_threshold = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_WATER_LAG_CAP_THRESHOLD);
 
     /* ===================== 密度和温度修正参数 ===================== */
     g_deviceParams.densityCorrection     = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_DENSITYCORRECTION);

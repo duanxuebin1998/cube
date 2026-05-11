@@ -114,16 +114,16 @@ static volatile uint32_t* get_deviceparam_ptr_by_operanum(int operanum)
         return &g_deviceParams.waterBlindZone;
     case COM_NUM_DEVICEPARAM_WATER_CAP_THRESHOLD:
         return &g_deviceParams.water_cap_threshold;
-    case COM_NUM_DEVICEPARAM_WATER_CAP_HYSTERESIS:
-        return &g_deviceParams.water_cap_hysteresis;
+    case COM_NUM_DEVICEPARAM_WATER_FIND_CAP_THRESHOLD:
+        return &g_deviceParams.water_find_cap_threshold;
     case COM_NUM_DEVICEPARAM_MAXDOWNDISTANCE:
         return &g_deviceParams.maxDownDistance;
     case COM_NUM_DEVICEPARAM_ZERO_CAP:
     	return &g_deviceParams.zero_cap;
     case COM_NUM_DEVICEPARAM_WATER_STABLE_THRESHOLD:
        	return &g_deviceParams.water_stable_threshold;
-    case COM_NUM_DEVICEPARAM_WATER_CHANGE_MONITOR_THRESHOLD:
-        return &g_deviceParams.water_change_monitor_threshold;
+    case COM_NUM_DEVICEPARAM_WATER_LAG_CAP_THRESHOLD:
+        return &g_deviceParams.water_lag_cap_threshold;
     /* ===== 罐高/罐底测量（新寄存器段） ===== */
     case COM_NUM_DEVICEPARAM_BOTTOM_DETECT_MODE:
         return &g_deviceParams.bottom_detect_mode;

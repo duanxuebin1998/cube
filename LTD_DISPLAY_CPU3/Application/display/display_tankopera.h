@@ -243,7 +243,7 @@ typedef enum
     COM_NUM_DEVICEPARAM_WATER_LEVEL_MODE,// 水位传感器距离差/安装偏差
     COM_NUM_DEVICEPARAM_WATER_BLINDZONE,                // 水位盲区
     COM_NUM_DEVICEPARAM_WATER_CAP_THRESHOLD,            // 水位电容阈值
-    COM_NUM_DEVICEPARAM_WATER_CAP_HYSTERESIS,           // 水位电容滞回
+    COM_NUM_DEVICEPARAM_WATER_FIND_CAP_THRESHOLD,           // 水位寻找电容阈值
     COM_NUM_DEVICEPARAM_MAXDOWNDISTANCE,                // 最大下行距离
     COM_NUM_DEVICEPARAM_ZERO_CAP,                     // 保留 14
     COM_NUM_DEVICEPARAM_WATER_STABLE_THRESHOLD,                     // 保留 15
@@ -259,7 +259,7 @@ typedef enum
     COM_NUM_DEVICEPARAM_CURRENT_TANKHEIGHT,             // 当前罐高
 
     COM_NUM_DEVICEPARAM_BOTTOM_ENCODER_CORRECTION_ENABLE,// 罐底后编码器修正
-    COM_NUM_DEVICEPARAM_WATER_CHANGE_MONITOR_THRESHOLD,        // ????????
+    COM_NUM_DEVICEPARAM_WATER_LAG_CAP_THRESHOLD, // 水位滞后电容阈值
 
     /* ---------------- 密度与温度修正 ---------------- */
     COM_NUM_DEVICEPARAM_DENSITYCORRECTION,              // 密度修正

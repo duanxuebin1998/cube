@@ -184,7 +184,7 @@ void MotorCtrl_PrintPositionRefs(void)
     }
     encoder_cable_mm = (double)encoder_get_cable_length_01mm() / 10.0;
 
-    printf("\t{编码模式}%s\t{电机尺带}%.1f\t{编码轮尺带}%.1f",
+    printf("\t{编码模式}%s\t{电机尺带}\t%.1f\t{编码轮尺带}\t%.1f",
            MotorCtrl_IsPositionSourceMotor() ? "电机记步" : "编码轮记步",
            motor_cable_mm,
            encoder_cable_mm);
