@@ -25,6 +25,186 @@ static uint8_t App_IsEncoderErrorCode(uint32_t error_code) {
 	return (error_code >= ENCODER_TIMEOUT) && (error_code <= ENCODER_OCF_INCOMPLETE);
 }
 
+#define APP_AUTO_RECOVERY_INTERVAL_MS 1000U
+
+typedef struct {
+    uint8_t active;
+    CommandType command;
+    uint32_t error_code;
+    DeviceState device_state;
+    uint32_t zero_point_status;
+    uint32_t last_check_tick;
+} AppAutoRecoveryContext;
+
+static AppAutoRecoveryContext s_auto_recovery = {
+    .active = 0U,
+    .command = CMD_NONE,
+    .error_code = NO_ERROR,
+    .device_state = STATE_ERROR,
+    .zero_point_status = 0U,
+    .last_check_tick = 0U,
+};
+
+static uint8_t App_IsAutoRecoverMeasureCommand(CommandType command) {
+    switch (command) {
+    case CMD_BACK_ZERO:
+    case CMD_FIND_OIL:
+    case CMD_FIND_WATER:
+    case CMD_FIND_BOTTOM:
+    case CMD_MEASURE_SINGLE:
+    case CMD_MONITOR_SINGLE:
+    case CMD_SYNTHETIC:
+    case CMD_FOLLOW_WATER:
+    case CMD_RUN_TO_POSITION:
+    case CMD_MEASURE_DISTRIBUTED:
+    case CMD_GB_MEASURE_DISTRIBUTED:
+    case CMD_MEASURE_DENSITY_METER:
+    case CMD_MEASURE_DENSITY_RANGE:
+    case CMD_WARTSILA_DENSITY_RANGE:
+    case CMD_CALIBRATE_ZERO:
+    case CMD_CALIBRATE_OIL:
+    case CMD_CORRECT_OIL:
+    case CMD_CALIBRATE_WATER:
+    case CMD_CALIBRATE_TANKHEIGHT:
+        return 1U;
+    default:
+        return 0U;
+    }
+}
+
+static void App_ClearAutoRecoveryContext(void) {
+    s_auto_recovery.active = 0U;
+    s_auto_recovery.command = CMD_NONE;
+    s_auto_recovery.error_code = NO_ERROR;
+    s_auto_recovery.device_state = STATE_ERROR;
+    s_auto_recovery.zero_point_status = 0U;
+    s_auto_recovery.last_check_tick = 0U;
+}
+
+static void App_CancelAutoRecovery(const char *reason) {
+    if (!s_auto_recovery.active) {
+        return;
+    }
+
+    printf("自动恢复被新命令打断，原命令=%d 原错误=0x%08lX 原因=%s\r\n",
+           (int)s_auto_recovery.command,
+           (unsigned long)s_auto_recovery.error_code,
+           (reason != NULL) ? reason : "new command");
+    App_ClearAutoRecoveryContext();
+}
+
+static void App_RestoreAutoRecoveryErrorStatus(void) {
+    if (!s_auto_recovery.active) {
+        return;
+    }
+
+    g_measurement.device_status.device_state = s_auto_recovery.device_state;
+    g_measurement.device_status.error_code = s_auto_recovery.error_code;
+    g_measurement.device_status.zero_point_status = s_auto_recovery.zero_point_status;
+    g_measurement.device_status.current_command = CMD_NONE;
+}
+
+static void App_StartAutoRecovery(CommandType command, uint32_t error_code) {
+    if ((error_code == NO_ERROR) || (error_code == STATE_SWITCH)) {
+        return;
+    }
+
+    if (!App_IsAutoRecoverMeasureCommand(command)) {
+        return;
+    }
+
+    if (g_measurement.device_status.device_state != STATE_ERROR) {
+        HandleError();
+        g_measurement.device_status.device_state = STATE_ERROR;
+        g_measurement.device_status.zero_point_status = 1U;
+    }
+
+    s_auto_recovery.active = 1U;
+    s_auto_recovery.command = command;
+    s_auto_recovery.error_code = error_code;
+    s_auto_recovery.device_state = g_measurement.device_status.device_state;
+    s_auto_recovery.zero_point_status = g_measurement.device_status.zero_point_status;
+    s_auto_recovery.last_check_tick = HAL_GetTick();
+
+    printf("测量命令异常，进入自动恢复：命令=%d 错误=0x%08lX\r\n",
+           (int)command,
+           (unsigned long)error_code);
+    App_RestoreAutoRecoveryErrorStatus();
+}
+
+static void App_UpdateAutoRecoveryAfterCommand(CommandType command) {
+    uint32_t error_code = g_measurement.device_status.error_code;
+
+    if ((error_code != NO_ERROR) && (error_code != STATE_SWITCH)) {
+        App_StartAutoRecovery(command, error_code);
+        return;
+    }
+
+    if (s_auto_recovery.active && (s_auto_recovery.command == command)) {
+        App_ClearAutoRecoveryContext();
+    }
+}
+
+static void App_ExecuteMeasureCommand(CommandType command) {
+    printf("当前命令：%d\r\n", command);
+    g_measurement.device_status.current_command = command;
+
+    /* 统一命令分发入口：后续会进入 measure.c，根据命令类型执行具体业务流程。 */
+    ProcessMeasureCmd(command);
+    App_UpdateAutoRecoveryAfterCommand(command);
+
+    /* 命令执行完成后清掉 current_command，表示系统重新回到“无命令执行中”。 */
+    g_measurement.device_status.current_command = CMD_NONE;
+
+    /* 执行完命令后顺手刷新两路无线信息，方便调试时观察两只无线端状态。 */
+    WIRELESS_PrintInfo(01);
+    WIRELESS_PrintInfo(02);
+
+    /* 如果命令执行过程中触发了“延迟保存参数”，这里顺手处理一次。 */
+    process_device_params_deferred_tasks();
+}
+
+static uint8_t App_HandleAutoRecovery(void) {
+    uint32_t now;
+    uint32_t check_ret;
+    CommandType retry_command;
+
+    if (!s_auto_recovery.active) {
+        return 0U;
+    }
+
+    App_RestoreAutoRecoveryErrorStatus();
+
+    now = HAL_GetTick();
+    if ((uint32_t)(now - s_auto_recovery.last_check_tick) < APP_AUTO_RECOVERY_INTERVAL_MS) {
+        return 1U;
+    }
+    s_auto_recovery.last_check_tick = now;
+
+    printf("自动恢复检查部件参数：命令=%d 原错误=0x%08lX\r\n",
+           (int)s_auto_recovery.command,
+           (unsigned long)s_auto_recovery.error_code);
+
+    check_ret = Sensor_CheckAllPartParams();
+    if ((check_ret == STATE_SWITCH) || HasEffectiveCommandSwitchRequest()) {
+        App_CancelAutoRecovery("command switch");
+        return 1U;
+    }
+    if (check_ret != NO_ERROR) {
+        printf("自动恢复检查仍异常：0x%08lX，保持原错误状态\r\n", (unsigned long)check_ret);
+        App_RestoreAutoRecoveryErrorStatus();
+        return 1U;
+    }
+
+    retry_command = s_auto_recovery.command;
+    printf("自动恢复检查通过，重新执行完整测量命令：%d\r\n", (int)retry_command);
+    App_ClearAutoRecoveryContext();
+    g_measurement.device_status.error_code = NO_ERROR;
+
+    App_ExecuteMeasureCommand(retry_command);
+    return 1U;
+}
+
 
 /*
  * 空闲态错误兜底：
@@ -98,8 +278,9 @@ void App_Init(void) {
  * 每轮循环只做一件最高优先级的事，优先级从高到低如下：
  * 1. 接收侧刚送进来的原始命令（new_command_ready）
  * 2. 已经挂到 g_deviceParams.command 的正式命令
- * 3. 系统完全空闲时的错误兜底
- * 4. 本轮尾声的参数延迟保存和统一节拍延时
+ * 3. 测量命令失败后的自动恢复检查
+ * 4. 系统完全空闲时的错误兜底
+ * 5. 本轮尾声的参数延迟保存和统一节拍延时
  *
  * 这样设计的目的，是避免“错误态”或“后台任务”抢在新命令前面执行，
  * 从而把恢复动作、重试动作、强制运动动作卡死。
@@ -124,33 +305,28 @@ void App_MainLoop(void) {
 	 * 这一层通常来自调试口/串口缓存，process_command() 会把字符命令翻译成具体动作，
 	 * 必要时再写入 g_deviceParams.command。 */
 	if (new_command_ready) {
+		App_CancelAutoRecovery("serial command");
 		new_command_ready = 0;  // 本轮已经接管这条新命令，先清标志避免重复处理
 		process_command(received_buffer);
 	}
 	/* 第二优先级：执行已经挂起的正式命令。
 	 * 这类命令通常来自上位机、参数区或其他控制入口，是系统真正的业务入口。 */
-	else if (g_deviceParams.command != CMD_NONE) {
+    else if (g_deviceParams.command != CMD_NONE) {
+        CommandType command = g_deviceParams.command;
 
-		/* current_command 表示“当前正在执行的命令”，用于状态显示和命令切换判断。 */
-		printf("当前命令：%d\r\n", g_deviceParams.command);
-		g_measurement.device_status.current_command = g_deviceParams.command;
-		g_deviceParams.command = CMD_NONE; // 取走后立即清空，避免下轮重复执行
-
-		/* 统一命令分发入口：后续会进入 measure.c，根据命令类型执行具体业务流程。 */
-		ProcessMeasureCmd(g_measurement.device_status.current_command);
-
-		/* 命令执行完成后清掉 current_command，表示系统重新回到“无命令执行中”。 */
-		g_measurement.device_status.current_command =CMD_NONE;
-
-		/* 执行完命令后顺手刷新两路无线信息，方便调试时观察两只无线端状态。 */
-		WIRELESS_PrintInfo(01);
-		WIRELESS_PrintInfo(02);
-
-		/* 如果命令执行过程中触发了“延迟保存参数”，这里顺手处理一次。 */
-		process_device_params_deferred_tasks();
-	}
-	/* 第三优先级：只有在完全空闲时，才做错误态兜底。
-	 * 也就是说：没有新原始命令、没有挂起正式命令时，才允许系统把自己挂到 STATE_ERROR。 */
+        App_CancelAutoRecovery("formal command");
+        g_deviceParams.command = CMD_NONE; // 取走后立即清空，避免下轮重复执行
+        App_ExecuteMeasureCommand(command);
+    }
+    /* 第三优先级：自动恢复期间保持原错误状态，每 1 秒检查一次部件参数。
+     * 新命令在前两个分支已经先行处理，可以打断恢复。 */
+    else if (App_HandleAutoRecovery()) {
+        process_device_params_deferred_tasks();
+        HAL_Delay(50);
+        return;
+    }
+	/* 第四优先级：没有新命令且没有自动恢复动作时，才做错误态兜底。
+	 * 也就是说：自动恢复会先保持原错误状态，空闲兜底只处理未纳入恢复流程的全局错误。 */
 	else if (App_HandleIdleGlobalError()) {
 		process_device_params_deferred_tasks();
 		HAL_Delay(50); // 出错分支也保持和主循环一致的节拍

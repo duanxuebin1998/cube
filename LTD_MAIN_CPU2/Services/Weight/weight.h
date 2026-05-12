@@ -37,4 +37,5 @@ uint32_t CheckWeightCollision(void);
 void Weight_Update(int32_t currWeight);
 void Weight_MarkFrameReceived(void);
 uint32_t Weight_CheckCommunicationTimeout(void);
+uint32_t Weight_CheckOwnCommunicationTimeout(void);
 #endif /* INC_WEIGHT_H_ */

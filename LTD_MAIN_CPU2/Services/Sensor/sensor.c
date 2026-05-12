@@ -4,12 +4,13 @@
  * @Author       : Aubon
  * @Date         : 2024-02-23 10:20:27
  * @LastEditors  : Duan Xuebin
- * @LastEditTime : 2026-04-10 11:22:59
+ * @LastEditTime : 2026-05-12 11:06:48
  * Copyright 2024 Aubon, All Rights Reserved.
  * 2024-02-23 10:20:27
  */
 
 #include "sensor.h"
+#include "AS5145.h"
 #include "measure_tank_height.h"
 #include "measure.h"
 #include "motor_ctrl.h"
@@ -614,7 +615,7 @@ static uint32_t Read_WeightParam_Adapter(void)
 }
 
 /* ================== CMD：读取部件参数 ================== */
- void CMD_ReadPartParams(void)
+static uint32_t Sensor_ReadPartParamsInternal(uint8_t update_command_state)
 {
     uint32_t ret = NO_ERROR;
 
@@ -622,11 +623,37 @@ static uint32_t Read_WeightParam_Adapter(void)
     float freq = 0.0f, dens = 0.0f, temp = 0.0f;
     float cap = 0.0f;
 
-    MeasureStart();
-    g_measurement.device_status.device_state = STATE_READPARAMETERING;
+    if (update_command_state) {
+        ret = (uint32_t)MeasureStart();
+        if (ret != NO_ERROR) {
+            printf("Read part params init failed, error=0x%08lX\r\n", (unsigned long)ret);
+            return ret;
+        }
+        g_measurement.device_status.device_state = STATE_READPARAMETERING;
+    } else if (HasEffectiveCommandSwitchRequest()) {
+        return STATE_SWITCH;
+    }
 
     /* ---------- 1) 位置类：编码器/位置/尺带长度/步进/距离 ---------- */
+    ret = stpr_checkDriverStatus(&stepper);
+    if (ret != NO_ERROR) {
+        printf("读取部件参数	电机驱动状态异常 错误码=0x%08lX\r\n", (unsigned long)ret);
+        return ret;
+    }
+
     MotorCtrl_RefreshDebugDrumState();
+    if ((!update_command_state) && HasEffectiveCommandSwitchRequest()) {
+        return STATE_SWITCH;
+    }
+
+    if (!MotorCtrl_IsPositionSourceMotor()) {
+        ret = AS5145_GetLastError();
+        if (ret != NO_ERROR) {
+            printf("读取部件参数	编码器通信异常 错误码=0x%08lX\r\n", (unsigned long)ret);
+            return ret;
+        }
+    }
+
     g_measurement.debug_data.current_encoder_value = Read_CurrentEncoderValue_Adapter();
     g_measurement.debug_data.sensor_position       = Calc_SensorPosition_Adapter();
     g_measurement.debug_data.cable_length          = Calc_CableLength_Adapter();
@@ -638,16 +665,26 @@ static uint32_t Read_WeightParam_Adapter(void)
     g_measurement.debug_data.motor_state = Read_MotorState_Adapter();
 
     /* ---------- 3) 称重类 ---------- */
+    ret = Weight_CheckOwnCommunicationTimeout();
+
+    if (ret != NO_ERROR) {
+        printf("读取部件参数	称重通信异常 错误码=0x%08lX\r\n", (unsigned long)ret);
+        return ret;
+    }
+
     g_measurement.debug_data.current_weight = Read_CurrentWeight_Adapter();
     g_measurement.debug_data.weight_param   = Read_WeightParam_Adapter();
 
     /* ---------- 4) 姿态角（陀螺仪） ---------- */
+    if ((!update_command_state) && HasEffectiveCommandSwitchRequest()) {
+        return STATE_SWITCH;
+    }
+
     if (Sensor_SupportsAuxDsmChannels()) {
         ret = Sensor_ReadGyroAngle(&ax, &ay);
         if (ret != NO_ERROR) {
             printf("读取部件参数\t陀螺仪读取失败 错误码=0x%08lX\r\n", (unsigned long)ret);
-            SET_ERROR(ret);
-            /* 不 return：允许其它模块继续更新 */
+            return ret;
         } else {
             /* 你 Read_Gyro_Angle() 里已经写了 debug_data.angle_x/y，这里再确保一遍 */
             g_measurement.debug_data.angle_x = (int32_t)(ax * 100.0f);
@@ -660,10 +697,14 @@ static uint32_t Read_WeightParam_Adapter(void)
     }
 
     /* ---------- 5) 密度/温度/频率 ---------- */
+    if ((!update_command_state) && HasEffectiveCommandSwitchRequest()) {
+        return STATE_SWITCH;
+    }
+
     ret = Read_Density(&freq, &dens, &temp);
     if (ret != NO_ERROR) {
         printf("读取部件参数\t密度/温度/频率读取失败 错误码=0x%08lX\r\n", (unsigned long)ret);
-        SET_ERROR(ret);
+        return ret;
     } else {
         /* 你 Read_Density() 里已写 debug_data.temperature/frequency，这里保证一致 */
         g_measurement.debug_data.frequency    = (uint32_t)freq;   /* 若你要保留小数频率，可改成 ×100 或另存 */
@@ -671,11 +712,15 @@ static uint32_t Read_WeightParam_Adapter(void)
     }
 
     /* ---------- 6) 水位电容/电压 ---------- */
+    if ((!update_command_state) && HasEffectiveCommandSwitchRequest()) {
+        return STATE_SWITCH;
+    }
+
     if (Sensor_SupportsAuxDsmChannels()) {
         ret = Sensor_ReadWaterCapacitance(&cap);
         if (ret != NO_ERROR) {
             printf("读取部件参数\t水位电容读取失败 错误码=0x%08lX\r\n", (unsigned long)ret);
-            SET_ERROR(ret);
+            return ret;
         } else {
             /* 水位电容值/电压值：你结构体写 uint32_t，这里约定 ×10 或 ×100 以保留小数
                若你工程已有“水位电容原始值”的标定口径，请按你的口径替换 */
@@ -711,5 +756,21 @@ static uint32_t Read_WeightParam_Adapter(void)
            (unsigned long)g_measurement.debug_data.motor_speed,
            (unsigned long)g_measurement.debug_data.motor_state);
 
-    g_measurement.device_status.device_state = STATE_READPARAMETEROVER;
+    if (update_command_state) {
+        g_measurement.device_status.device_state = STATE_READPARAMETEROVER;
+    }
+
+    return NO_ERROR;
+}
+
+uint32_t Sensor_CheckAllPartParams(void)
+{
+    return Sensor_ReadPartParamsInternal(0U);
+}
+
+void CMD_ReadPartParams(void)
+{
+    uint32_t ret = Sensor_ReadPartParamsInternal(1U);
+
+    SET_ERROR(ret);
 }

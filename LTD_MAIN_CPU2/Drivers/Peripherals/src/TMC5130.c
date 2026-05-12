@@ -568,6 +568,7 @@ uint32_t stpr_checkDriverStatus(TMC5130TypeDef *tmc5130)
     bool charge_pump_uv;
 
     if (!stpr_tryReadInt(tmc5130, TMC5130_GSTAT, &gstat)) {
+        MotorCtrl_InvalidateDriverInit();
         return MOTOR_TMC_COMM_ERROR;
     }
     if (gstat == 0) {
@@ -613,17 +614,20 @@ uint32_t stpr_checkDriverStatus(TMC5130TypeDef *tmc5130)
         /* drv_err 只是总故障入口，真正原因要看 DRV_STATUS：过温、短路、开路、StallGuard 等。
          * 如果连 DRV_STATUS 都读不到，优先按通信异常处理，而不是猜测驱动故障类型。 */
         if (!drvstatus_ok) {
+            MotorCtrl_InvalidateDriverInit();
             return MOTOR_TMC_COMM_ERROR;
         }
 
         driver_ret = tmc5130_decodeDrvStatus((uint32_t)drvstatus);
         printf("检测到驱动器错误（GSTAT[1]）\r\n");
         if (!stpr_writeInt(tmc5130, TMC5130_GSTAT, 0x07)) { // 清除所有 GSTAT 标志位
+            MotorCtrl_InvalidateDriverInit();
             return MOTOR_TMC_COMM_ERROR;
         }
         if (driver_ret == NO_ERROR) {
             driver_ret = MOTOR_UNKNOWN_FEEDBACK;
         }
+        MotorCtrl_InvalidateDriverInit();
         return driver_ret;
     }
 
@@ -631,15 +635,19 @@ uint32_t stpr_checkDriverStatus(TMC5130TypeDef *tmc5130)
         /* 充电泵欠压会影响高边驱动能力，继续运动风险较高，返回错误交给上层停机。 */
         printf("检测到充电泵欠压（GSTAT[2]）\r\n");
         if (!stpr_writeInt(tmc5130, TMC5130_GSTAT, 0x07)) { // 清除所有 GSTAT 标志位
+            MotorCtrl_InvalidateDriverInit();
             return MOTOR_TMC_COMM_ERROR;
         }
+        MotorCtrl_InvalidateDriverInit();
         return MOTOR_CHARGE_PUMP_UNDER_VOLTAGE;
     }
 
     if (reset_flag) {
         if (!stpr_writeInt(tmc5130, TMC5130_GSTAT, 0x07)) { // 清除复位标志，便于后续重新初始化观察
+            MotorCtrl_InvalidateDriverInit();
             return MOTOR_TMC_COMM_ERROR;
         }
+        MotorCtrl_InvalidateDriverInit();
         return MOTOR_TMC_COMM_ERROR;
     }
 

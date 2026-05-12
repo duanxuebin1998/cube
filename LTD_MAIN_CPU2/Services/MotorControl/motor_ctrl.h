@@ -59,6 +59,9 @@ typedef struct
 /** 初始化 TMC5130、恢复电机位置持久化数据并使能驱动。 */
 uint32_t MotorCtrl_Init(void);
 
+/** 标记 TMC5130 需要重新完整初始化，用于驱动复位/通信异常后的恢复。 */
+void MotorCtrl_InvalidateDriverInit(void);
+
 /** 急停：立即停机，短暂关闭驱动后重新使能。 */
 uint32_t MotorCtrl_QuickStop(void);
 

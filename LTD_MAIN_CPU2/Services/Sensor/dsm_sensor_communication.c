@@ -5,6 +5,7 @@
  *      Author: Duan Xuebin
  */
 #include "dsm_sensor_communication.h"
+#include "system_parameter.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -88,6 +89,10 @@ static int UART6_SendCommand(const char *cmd,
     while (HAL_GetTick() - startTick < timeout) {
         uint8_t byte;
 
+        if (HasEffectiveCommandSwitchRequest()) {
+            return STATE_SWITCH;
+        }
+
         if (HAL_UART_Receive(&huart6, &byte, 1, 1) == HAL_OK) {
             if (recvLen < RX_BUF_LEN - 1) {
                 response[recvLen++] = byte;
@@ -145,8 +150,12 @@ static int UART6_SendWithRetry(const char *cmd,
     uint32_t ret;
     uint16_t recvLen = 0;
     for (int i = 0; i < DSM_UART_MAX_RETRY; i++) {
-//    	//ÑÓÊ±3ms
-//    	HAL_Delay(3);
+        if (HasEffectiveCommandSwitchRequest()) {
+            return STATE_SWITCH;
+        }
+        if (i > 0) {
+            HAL_Delay(DSM_PRE_SEND_DELAY);
+        }
         ret = UART6_SendCommand(cmd, response, maxLen, &recvLen, timeout);
         if (ret == 0) {
             if (!IsErrorResponse(response)) {
