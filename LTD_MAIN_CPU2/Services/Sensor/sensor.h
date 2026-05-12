@@ -19,8 +19,8 @@
 #define DEBUG_DSM
 #define DEBUG_UART6 0
 
-#define SENSOR_COMM_MAX_RETRY 3              // 协议层统一通信重试次数
-#define SENSOR_COMM_RETRY_DELAY_MS 5         // 两次通信尝试之间的延时
+#define SENSOR_COMM_MAX_RETRY 10             // 协议层统一通信重试次数
+#define SENSOR_COMM_RETRY_DELAY_MS 300       // 两次通信尝试之间的延时
 #define SENSOR_COMM_ERROR_RETRY_DELAY_MS 300 // 校验/设备错误后的退避延时
 #define SENSOR_LEVEL_MODE_SETTLE_MS 10000     // 切换液位模式后的稳定等待时间
 
@@ -39,6 +39,7 @@ uint32_t DSM_Get_LevelMode_Frequence_Avg(volatile uint32_t *frequency_out);
 uint32_t Read_Density(float *frequency, float *density, float *temp);
 uint32_t Sensor_ReadWaterCapacitance(float *cap_out);
 uint32_t Sensor_ReadGyroAngle(float *angle_x_deg, float *angle_y_deg);
+uint32_t Sensor_CheckAllPartParams(void);
 
 uint32_t WIRELESS_PrintInfo(uint8_t addr);
 #endif /* SENSOR_SENSOR_H_ */

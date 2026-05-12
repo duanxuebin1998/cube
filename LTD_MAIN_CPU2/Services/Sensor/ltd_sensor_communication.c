@@ -6,6 +6,7 @@
  */
 
 #include <ltd_sensor_communication.h>
+#include "system_parameter.h"
 #include "sensor.h"
  #include <math.h>
 
@@ -79,6 +80,9 @@ static int DSM_V2_Transceive(const uint8_t tx[8], uint8_t rx[8]) {
 	uint32_t start = HAL_GetTick();
 	int got = 0;
 	while ((HAL_GetTick() - start) < DSM_V2_RX_TIMEOUT && got < 8) {
+		if (HasEffectiveCommandSwitchRequest()) {
+			return STATE_SWITCH;
+		}
 		if (HAL_UART_Receive(&huart6, &rx[got], 1, 1) == HAL_OK)
 			got++;
 	}
@@ -156,6 +160,9 @@ int DSM_V2_SwitchMode(dsm_v2_mode_t mode) {
 	DSM_V2_MakeFrame(tx, (uint8_t) mode, 0x00000000u, (uint8_t) mode); // param ±ØÐëÎª 0x00
 
 	for (int attempt = 0; attempt < DSM_V2_MAX_RETRY; ++attempt) {
+		if (HasEffectiveCommandSwitchRequest()) {
+			return STATE_SWITCH;
+		}
 		HAL_Delay(DSM_PRE_SEND_DELAY);
 		int ret = DSM_V2_Transceive(tx, rx);
 		if (ret != NO_ERROR) {
@@ -196,6 +203,9 @@ int DSM_V2_Read_FloatParam(uint8_t param, float *out_value) {
 	DSM_V2_MakeFrame(tx, (uint8_t) DSM_V2_FUNC_R, 0x00000000u, param);
 
 	for (int attempt = 0; attempt < DSM_V2_MAX_RETRY; ++attempt) {
+		if (HasEffectiveCommandSwitchRequest()) {
+			return STATE_SWITCH;
+		}
 		HAL_Delay(DSM_PRE_SEND_DELAY);
 		int ret = DSM_V2_Transceive(tx, rx);
 		if (ret != NO_ERROR) {
@@ -228,6 +238,9 @@ int DSM_V2_Read_IntParam(uint8_t param, int32_t *out_value) {
 	DSM_V2_MakeFrame(tx, (uint8_t) DSM_V2_FUNC_R, 0x00000000u, param);
 
 	for (int attempt = 0; attempt < DSM_V2_MAX_RETRY; ++attempt) {
+		if (HasEffectiveCommandSwitchRequest()) {
+			return STATE_SWITCH;
+		}
 		HAL_Delay(DSM_PRE_SEND_DELAY);
 		int ret = DSM_V2_Transceive(tx, rx);
 		if (ret != NO_ERROR) {

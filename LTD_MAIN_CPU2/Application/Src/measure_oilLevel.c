@@ -461,6 +461,7 @@ static int SearchAir() {
 
 	// 持续监控重量状态，直到检测到液位
     MotorCtrl_LostStepInit();// 重置丢步检测计数器
+    //TODO：电机可能存在上行停止重新加速
     while (1) {
         ret = determine_level_status_motion(&level_state);
         CHECK_ERROR(ret);

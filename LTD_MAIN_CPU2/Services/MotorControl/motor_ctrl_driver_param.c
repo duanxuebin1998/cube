@@ -46,6 +46,12 @@ uint32_t MotorCtrl_GetDefaultSpeedX100(void)
     return MotorDriver_GetDefaultSpeedSetpointX100();
 }
 
+void MotorCtrl_InvalidateDriverInit(void)
+{
+    s_motor_driver.initialized = false;
+    s_motor_driver.applied_velocity = 0U;
+}
+
 /**
  * @brief 持久设置电机速度参数。
  *

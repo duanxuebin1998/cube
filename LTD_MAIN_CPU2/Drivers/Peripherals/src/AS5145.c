@@ -38,6 +38,7 @@ typedef struct {
 } SSI_State;
 
 static SSI_State ssi_state = { .retry_count = 0, .error_reported = false };
+static volatile uint32_t ssi_last_error_code = NO_ERROR;
 static uint8_t rxData[10] = { 0 };
 
 static uint8_t Calculate_Even_Parity(uint32_t data);
@@ -110,6 +111,7 @@ static SSI_Data_t Process_SSI_Frame(uint8_t *rx_data, GPIO_TypeDef *cs_port, uin
     } else {
         ssi_state.retry_count = 0;
         ssi_state.error_reported = false;
+        ssi_last_error_code = NO_ERROR;
 
         if (Is_Encoder_Error_Code(g_measurement.device_status.error_code)) {
             g_measurement.device_status.error_code = NO_ERROR;
@@ -184,8 +186,11 @@ static void Recover_SSI_Bus(void) {
  * @brief  统一 SSI 错误处理：有限重试，超限后只上报一次，但持续保持通信
  */
 static void Handle_SSI_Error(const SSI_Data_t *data) {
+    uint32_t err = Get_SSI_Error_Code(data);
+
+    ssi_last_error_code = err;
     if (!MotorCtrl_IsPositionSourceMotor()) {
-        g_measurement.device_status.error_code = Get_SSI_Error_Code(data);
+        g_measurement.device_status.error_code = err;
     }
 
     if (++ssi_state.retry_count <= SSI_RETRY_LIMIT) {
@@ -223,6 +228,7 @@ static HAL_StatusTypeDef Start_Read_SSI_Data(void) {
         Recover_SSI_Bus();
         if (HAL_SPI_GetState(&SSI) != HAL_SPI_STATE_READY) {
             if (!MotorCtrl_IsPositionSourceMotor()) {
+                ssi_last_error_code = ENCODER_TIMEOUT;
                 g_measurement.device_status.error_code = ENCODER_TIMEOUT;
                 printf("SPI未就绪，当前状态: %d\n", HAL_SPI_GetState(&SSI));
             }
@@ -238,6 +244,7 @@ static HAL_StatusTypeDef Start_Read_SSI_Data(void) {
     if (status != HAL_OK) {
         Recover_SSI_Bus();
         if (!MotorCtrl_IsPositionSourceMotor()) {
+            ssi_last_error_code = ENCODER_TIMEOUT;
             g_measurement.device_status.error_code = ENCODER_TIMEOUT;
             printf("SPI错误码: 0x%08lX\n", SSI.ErrorCode);
             printf("SPI DMA 启动失败, 错误码: %d\n", status);
@@ -245,6 +252,10 @@ static HAL_StatusTypeDef Start_Read_SSI_Data(void) {
     }
 
     return status;
+}
+
+uint32_t AS5145_GetLastError(void) {
+    return ssi_last_error_code;
 }
 
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {

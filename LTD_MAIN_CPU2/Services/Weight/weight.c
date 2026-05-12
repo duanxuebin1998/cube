@@ -66,11 +66,15 @@ void Weight_MarkFrameReceived(void) {
 	}
 }
 
-uint32_t Weight_CheckCommunicationTimeout(void) {
+static uint32_t Weight_CheckCommunicationTimeoutInternal(uint8_t keep_global_error)
+{
 	uint32_t now = HAL_GetTick();
 	uint32_t error_code = g_measurement.device_status.error_code;
 
-	if ((error_code != NO_ERROR) && (error_code != STATE_SWITCH) && (!Weight_IsCommErrorCode(error_code))) {
+	if (keep_global_error &&
+		(error_code != NO_ERROR) &&
+		(error_code != STATE_SWITCH) &&
+		(!Weight_IsCommErrorCode(error_code))) {
 		return error_code;
 	}
 
@@ -85,6 +89,16 @@ uint32_t Weight_CheckCommunicationTimeout(void) {
 
 	g_measurement.device_status.error_code = WEIGHT_COMM_TIMEOUT;
 	return WEIGHT_COMM_TIMEOUT;
+}
+
+uint32_t Weight_CheckCommunicationTimeout(void)
+{
+	return Weight_CheckCommunicationTimeoutInternal(1U);
+}
+
+uint32_t Weight_CheckOwnCommunicationTimeout(void)
+{
+	return Weight_CheckCommunicationTimeoutInternal(0U);
 }
 
 /**

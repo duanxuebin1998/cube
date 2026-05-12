@@ -11,6 +11,7 @@
  */
 
 #include "ltd_sensor_communication.h"
+#include "system_parameter.h"
 #include "sensor.h"
 
 #ifndef WIRELESS_MAX_RETRY
@@ -121,6 +122,9 @@ static uint32_t WIRELESS_Transceive(const uint8_t tx[8], uint8_t rx[8]) {
     uint32_t start = HAL_GetTick();
     int got = 0;
     while ((HAL_GetTick() - start) < WIRELESS_RX_TIMEOUT && got < 8) {
+        if (HasEffectiveCommandSwitchRequest()) {
+            return STATE_SWITCH;
+        }
         if (HAL_UART_Receive(&huart6, &rx[got], 1, 1) == HAL_OK) {
             got++;
         }
@@ -247,6 +251,9 @@ uint32_t WIRELESS_Read_FloatParam(uint8_t addr, uint8_t param, float *out_value)
     WIRELESS_MakeFrame(tx, addr, (uint8_t)WIRELESS_FUNC_R, 0x00000000u, param);
 
     for (int attempt = 0; attempt < WIRELESS_MAX_RETRY; ++attempt) {
+        if (HasEffectiveCommandSwitchRequest()) {
+            return STATE_SWITCH;
+        }
         HAL_Delay(DSM_PRE_SEND_DELAY);
 
         int ret = WIRELESS_Transceive(tx, rx);
@@ -289,6 +296,9 @@ uint32_t WIRELESS_Read_IntParam(uint8_t addr, uint8_t param, int32_t *out_value)
     WIRELESS_MakeFrame(tx, addr, (uint8_t)WIRELESS_FUNC_R, 0x00000000u, param);
 
     for (int attempt = 0; attempt < WIRELESS_MAX_RETRY; ++attempt) {
+        if (HasEffectiveCommandSwitchRequest()) {
+            return STATE_SWITCH;
+        }
         HAL_Delay(DSM_PRE_SEND_DELAY);
 
         int ret = WIRELESS_Transceive(tx, rx);

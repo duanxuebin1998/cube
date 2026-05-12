@@ -40,5 +40,6 @@ extern SPI_HandleTypeDef SSI;
 extern TIM_HandleTypeDef ENCODER_TIM_HANDLE;
 
 HAL_StatusTypeDef Start_Encoder_Collection_TIM(void);
+uint32_t AS5145_GetLastError(void);
 
 #endif /* AS5145_H_ */
