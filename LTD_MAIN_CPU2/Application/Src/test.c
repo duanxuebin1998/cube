@@ -448,7 +448,7 @@ void Test_ParamEncoder_AB_Backup(void)
     if ((!load_device_params()) && (g_measurement.device_status.error_code == PARAM_EEPROM_FAIL)) {
         printf("[通过] 参数区: A/B都损坏时已报错 PARAM_EEPROM_FAIL\r\n");
     } else {
-        printf("[失败] 参数区: A/B都损坏时报错不符合预期, 错误码=0x%08lX\r\n",
+        printf("[失败] 参数区: A/B都损坏时报错不符合预期, 错误码：0x%08lX\r\n",
                (unsigned long)g_measurement.device_status.error_code);
     }
 
@@ -478,7 +478,7 @@ void Test_ParamEncoder_AB_Backup(void)
     if (g_measurement.device_status.error_code == ENCODER_POWERON_FAIL) {
         printf("[通过] 编码区: A/B都损坏时已报错 ENCODER_POWERON_FAIL\r\n");
     } else {
-        printf("[失败] 编码区: A/B都损坏时报错不符合预期, 错误码=0x%08lX\r\n",
+        printf("[失败] 编码区: A/B都损坏时报错不符合预期, 错误码：0x%08lX\r\n",
                (unsigned long)g_measurement.device_status.error_code);
     }
 
@@ -505,7 +505,7 @@ static void __attribute__((unused)) Sensor_CommCheckAndLog(const char *tag)
         printf("[传感器][正常] %s 温度=%.3f C\r\n", tag, temp);
     } else {
         comm_fail_cnt++;
-        printf("[传感器][错误] %s 温度读取失败，错误码=%lu，失败次数=%lu\r\n",
+        printf("[传感器][异常] %s 温度读取失败，错误码：%lu，失败次数：%lu\r\n",
                tag, (unsigned long)ret, (unsigned long)comm_fail_cnt);
     }
 
@@ -515,7 +515,7 @@ static void __attribute__((unused)) Sensor_CommCheckAndLog(const char *tag)
         printf("[传感器][正常] %s 密度=%.3f\r\n", tag, density);
     } else {
         comm_fail_cnt++;
-        printf("[传感器][错误] %s 密度读取失败，错误码=%lu，失败次数=%lu\r\n",
+        printf("[传感器][异常] %s 密度读取失败，错误码：%lu，失败次数：%lu\r\n",
                tag, (unsigned long)ret, (unsigned long)comm_fail_cnt);
     }
 
@@ -526,7 +526,7 @@ static void __attribute__((unused)) Sensor_CommCheckAndLog(const char *tag)
                tag, frequency, hz_45, hz_225);
     } else {
         comm_fail_cnt++;
-        printf("[传感器][错误] %s 频率读取失败，错误码=%lu，失败次数=%lu\r\n",
+        printf("[传感器][异常] %s 频率读取失败，错误码：%lu，失败次数：%lu\r\n",
                tag, (unsigned long)ret, (unsigned long)comm_fail_cnt);
     }
 }
@@ -540,13 +540,13 @@ void motor_text(float run_distance_mm, uint8_t enable_sensor_comm)
     uint32_t speed = MotorCtrl_GetDefaultSpeedX100();
 
     if (run_distance_mm <= 0.0f) {
-        printf("motor_text参数错误，运行距离=%.2fmm\r\n", run_distance_mm);
+        printf("motor_text参数异常，运行距离=%.2fmm\r\n", run_distance_mm);
         return;
     }
 
     ret = (uint32_t)MeasureStart();
     if (ret != NO_ERROR) {
-        printf("motor_text初始化失败，错误码=0x%08lX\r\n", (unsigned long)ret);
+        printf("motor_text初始化失败，错误码：0x%08lX\r\n", (unsigned long)ret);
         return;
     }
 
@@ -556,13 +556,13 @@ void motor_text(float run_distance_mm, uint8_t enable_sensor_comm)
 
     ret = MotorCtrl_Init(); // 电机初始化，保持与原测试入口一致
     if (ret != NO_ERROR) {
-        printf("motor_text电机初始化失败，错误码=0x%08lX\r\n", (unsigned long)ret);
+        printf("motor_text电机初始化失败，错误码：0x%08lX\r\n", (unsigned long)ret);
         return;
     }
 
     ret = stpr_setPos(&stepper, 0); // 将当前位置定义为本轮测试零点，上行回 0 会回到这里
     if (ret != NO_ERROR) {
-        printf("motor_text设置测试零点失败，错误码=0x%08lX\r\n", (unsigned long)ret);
+        printf("motor_text设置测试零点失败，错误码：0x%08lX\r\n", (unsigned long)ret);
         return;
     }
 

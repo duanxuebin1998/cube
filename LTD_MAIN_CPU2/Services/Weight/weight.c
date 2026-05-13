@@ -17,6 +17,7 @@
 #include "AS5145.h"
 #include "measure_tank_height.h"
 #include "motor_ctrl.h"
+#include "error_log.h"
 #define WEIGHT_DEBUG
 #define MAX_WEIGHT 20000 // 最大重量限制
 #define MIN_WEIGHT -2000 // 最小重量限制
@@ -61,7 +62,12 @@ void Weight_MarkFrameReceived(void) {
 	s_weight_last_rx_tick = now;
 	s_weight_timeout_reported = 0U;
 	if (Weight_IsCommErrorCode(g_measurement.device_status.error_code)) {
-		printf("称重通信恢复\r\n");
+		// 错误	阶段：重试成功	模块：称重	操作：读取整数参数	原因：称重通信恢复	尝试：1U/1U
+		ErrorLog_Recover(ERROR_LOG_MODULE_WEIGHT,
+		                 ERROR_LOG_OP_READ_INT_PARAM,
+		                 ERROR_LOG_REASON_WEIGHT_RECOVER,
+		                 1U,
+		                 1U);
 		g_measurement.device_status.error_code = NO_ERROR;
 	}
 }
@@ -83,8 +89,15 @@ static uint32_t Weight_CheckCommunicationTimeoutInternal(uint8_t keep_global_err
 	}
 
 	if (!s_weight_timeout_reported) {
-		printf("称重通信超时：1秒内未收到称重传感器数据\r\n");
 		s_weight_timeout_reported = 1U;
+		// 错误	阶段：错误报警	模块：称重	操作：读取整数参数	原因：称重通信超时	处理：继续尝试
+		ErrorLog_Warn(ERROR_LOG_MODULE_WEIGHT,
+		              ERROR_LOG_OP_READ_INT_PARAM,
+		              ERROR_LOG_REASON_WEIGHT_TIMEOUT,
+		              ERROR_LOG_ACTION_CONTINUE);
+		printf("称重通信超时 | 超时阈值=%lums | 距上次接收=%lums\r\n",
+		       (unsigned long)WEIGHT_COMM_TIMEOUT_MS,
+		       (unsigned long)(now - s_weight_last_rx_tick));
 	}
 
 	g_measurement.device_status.error_code = WEIGHT_COMM_TIMEOUT;
@@ -227,13 +240,14 @@ uint32_t CheckWeightCollision(void)
 	/* 尺带长度/位置（debug_data: 0.1mm） */
 	float cable_mm	= g_measurement.debug_data.cable_length / 10.0f;
 	float sensor_mm	= g_measurement.debug_data.sensor_position / 10.0f;
+	char detail[192];
 
 	/* ==========================
 	 *  保护：零点附近不做碰撞检测
 	 * ========================== */
 	if (cable_mm < (float)g_deviceParams.weight_ignore_zone/10.0) {
 #ifdef WEIGHT_DEBUG
-		printf("称重跳过 | 原因:零点保护 | 方向=%lu 当前重量=%ld 稳定重量=%ld 差值=%+ld 满载重量=%ld 尺带长度=%.1f",
+		printf("称重跳过 | 原因:零点保护 | 方向：%lu 当前重量=%ld 稳定重量=%ld 差值：%+ld 满载重量=%ld 尺带长度：%.1f",
 				(unsigned long)motor_dir,
 				(long)cur_weight,
 				(long)stable_weight,
@@ -253,7 +267,7 @@ uint32_t CheckWeightCollision(void)
 	 * ========================== */
 	if ((motor_dir != 1U) && (motor_dir != 2U)) {
 #ifdef WEIGHT_DEBUG
-		printf("称重检测 | 方向=%lu(无效) 当前重量=%ld 稳定重量=%ld 差值=%+ld 满载重量=%ld 尺带长度=%.1f",
+		printf("称重检测 | 方向：%lu(无效) 当前重量=%ld 稳定重量=%ld 差值：%+ld 满载重量=%ld 尺带长度：%.1f",
 				(unsigned long)motor_dir,
 				(long)cur_weight,
 				(long)stable_weight,
@@ -305,6 +319,24 @@ uint32_t CheckWeightCollision(void)
 			Weight_PrintCableRefs(cable_mm);
 			printf("传感器位置 : %.1f mm\r\n", sensor_mm);
 			printf("================================\r\n");
+            snprintf(detail, sizeof(detail),
+                     "方向：%lu,当前：%ld,稳定：%ld,差值：%ld,零点：%ld,上限：%ld,触底：%ld,下限：%ld,尺带：%.1f,传感器：%.1f",
+                     (unsigned long)motor_dir,
+                     (long)cur_weight,
+                     (long)stable_weight,
+                     (long)diff,
+                     (long)zero_limit,
+                     (long)upper_threshold,
+                     (long)bottom_limit,
+                     (long)lower_threshold,
+                     (double)cable_mm,
+                     (double)sensor_mm);
+            // 错误	阶段：错误报警	模块：称重	操作：称重碰撞检查	原因：碰撞检测	处理：停止电机	详情：detail
+            ErrorLog_WarnDetail(ERROR_LOG_MODULE_WEIGHT,
+                                ERROR_LOG_OP_WEIGHT_COLLISION,
+                                ERROR_LOG_REASON_COLLISION,
+                                ERROR_LOG_ACTION_STOP_MOTOR,
+                                detail);
 			return WEIGHT_COLLISION_DETECTED;
 		}
 
@@ -324,6 +356,24 @@ uint32_t CheckWeightCollision(void)
 			Weight_PrintCableRefs(cable_mm);
 			printf("传感器位置 : %.1f mm\r\n", sensor_mm);
 			printf("================================\r\n");
+            snprintf(detail, sizeof(detail),
+                     "方向：%lu,当前：%ld,稳定：%ld,差值：%ld,零点：%ld,上限：%ld,触底：%ld,下限：%ld,尺带：%.1f,传感器：%.1f",
+                     (unsigned long)motor_dir,
+                     (long)cur_weight,
+                     (long)stable_weight,
+                     (long)diff,
+                     (long)zero_limit,
+                     (long)upper_threshold,
+                     (long)bottom_limit,
+                     (long)lower_threshold,
+                     (double)cable_mm,
+                     (double)sensor_mm);
+            // 错误	阶段：错误报警	模块：称重	操作：称重碰撞检查	原因：碰撞检测	处理：停止电机	详情：detail
+            ErrorLog_WarnDetail(ERROR_LOG_MODULE_WEIGHT,
+                                ERROR_LOG_OP_WEIGHT_COLLISION,
+                                ERROR_LOG_REASON_COLLISION,
+                                ERROR_LOG_ACTION_STOP_MOTOR,
+                                detail);
 			return WEIGHT_COLLISION_DETECTED;
 		}
 
@@ -362,6 +412,24 @@ uint32_t CheckWeightCollision(void)
 				Weight_PrintCableRefs(cable_mm);
 				printf("传感器位置 : %.1f mm\r\n", sensor_mm);
 				printf("================================\r\n");
+            snprintf(detail, sizeof(detail),
+                     "方向：%lu,当前：%ld,稳定：%ld,差值：%ld,零点：%ld,上限：%ld,触底：%ld,下限：%ld,尺带：%.1f,传感器：%.1f",
+                     (unsigned long)motor_dir,
+                     (long)cur_weight,
+                     (long)stable_weight,
+                     (long)diff,
+                     (long)zero_limit,
+                     (long)upper_threshold,
+                     (long)bottom_limit,
+                     (long)lower_threshold,
+                     (double)cable_mm,
+                     (double)sensor_mm);
+            // 错误	阶段：错误报警	模块：称重	操作：称重碰撞检查	原因：碰撞检测	处理：停止电机	详情：detail
+            ErrorLog_WarnDetail(ERROR_LOG_MODULE_WEIGHT,
+                                ERROR_LOG_OP_WEIGHT_COLLISION,
+                                ERROR_LOG_REASON_COLLISION,
+                                ERROR_LOG_ACTION_STOP_MOTOR,
+                                detail);
 				return WEIGHT_COLLISION_DETECTED;
 			}
 		}
@@ -379,6 +447,24 @@ uint32_t CheckWeightCollision(void)
 			Weight_PrintCableRefs(cable_mm);
 			printf("传感器位置 : %.1f mm\r\n", sensor_mm);
 			printf("================================\r\n");
+            snprintf(detail, sizeof(detail),
+                     "方向：%lu,当前：%ld,稳定：%ld,差值：%ld,零点：%ld,上限：%ld,触底：%ld,下限：%ld,尺带：%.1f,传感器：%.1f",
+                     (unsigned long)motor_dir,
+                     (long)cur_weight,
+                     (long)stable_weight,
+                     (long)diff,
+                     (long)zero_limit,
+                     (long)upper_threshold,
+                     (long)bottom_limit,
+                     (long)lower_threshold,
+                     (double)cable_mm,
+                     (double)sensor_mm);
+            // 错误	阶段：错误报警	模块：称重	操作：称重碰撞检查	原因：碰撞检测	处理：停止电机	详情：detail
+            ErrorLog_WarnDetail(ERROR_LOG_MODULE_WEIGHT,
+                                ERROR_LOG_OP_WEIGHT_COLLISION,
+                                ERROR_LOG_REASON_COLLISION,
+                                ERROR_LOG_ACTION_STOP_MOTOR,
+                                detail);
 			return WEIGHT_COLLISION_DETECTED;
 		}
 
@@ -443,7 +529,7 @@ uint32_t CheckWeightCollision(void)
 //    {
 //#ifdef WEIGHT_DEBUG
 //        /* 正常时一行输出（这里属于“非检测态”提示） */
-//        printf("称重检测 | dir=%lu(无效) cur=%ld stable=%ld diff=%ld full=%ld cable=%.1f 传感器位置=%.1f\r\n",
+//        printf("称重检测 | 方向：%lu(无效) 当前：%ld 稳定：%ld 差值：%ld 满载=%ld 尺带：%.1f 传感器位置=%.1f\r\n",
 //               (unsigned long)motor_dir,
 //               (long)cur_weight,
 //               (long)stable_weight,

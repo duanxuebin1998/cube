@@ -10,6 +10,7 @@
  */
 
 #include "sensor.h"
+#include "error_log.h"
 #include "AS5145.h"
 #include "measure_tank_height.h"
 #include "measure.h"
@@ -20,23 +21,6 @@
 #define SENSOR_LEVEL_FREQ_RECOVERY_LIFT_MM 1.0f
 #define SENSOR_DENSITY_MODE_SETTLE_MS 3000U
 
-static const char *Sensor_CommErrorToText(uint32_t err)
-{
-    switch (err) {
-    case NO_ERROR:
-        return "正常";
-    case SENSOR_DEVICE_COMM_TIMEOUT:
-        return "通信无响应";
-    case SENSOR_RESP_FORMAT_ERROR:
-        return "响应格式错误";
-    case SENSOR_DEVICE_REPORTED_ERROR:
-        return "设备返回错误";
-    case SENSOR_BCC_ERROR:
-        return "校验错误";
-    default:
-        return "通信异常";
-    }
-}
 
 static uint32_t Sensor_MapWirelessProbeError(uint32_t ret, uint32_t timeout_code)
 {
@@ -78,33 +62,43 @@ static uint32_t Sensor_DiagnoseCommTimeout(uint32_t ret, const char *context)
     uint32_t host_ret;
     uint32_t slave_ret;
     uint32_t diag_ret;
+    char detail[48];
 
     if (ret != SENSOR_DEVICE_COMM_TIMEOUT) {
         return ret;
     }
-
-    printf("%s通信无响应，开始诊断无线链路\r\n", (context != NULL) ? context : "传感器");
+    // 错误	阶段：错误报警	模块：传感器	操作：通信诊断	原因：ErrorLog_GetReasonByCode(ret)	处理：继续尝试
+    ErrorLog_Warn(ERROR_LOG_MODULE_SENSOR,
+                  ERROR_LOG_OP_COMM_DIAG,
+                  ErrorLog_GetReasonByCode(ret),
+                  ERROR_LOG_ACTION_CONTINUE);
 
     host_ret = WIRELESS_PrintInfo(WIRELESS_HOST_ADDR);
     slave_ret = WIRELESS_PrintInfo(WIRELESS_SLAVE_ADDR);
 
     diag_ret = Sensor_MapWirelessProbeError(host_ret, WIRELESS_HOST_COMM_TIMEOUT);
     if (diag_ret != NO_ERROR) {
-        printf("诊断结果：无线主机%s 错误码=0x%08lX\r\n",
-               Sensor_CommErrorToText(diag_ret),
-               (unsigned long)diag_ret);
+        snprintf(detail, sizeof(detail), "节点：主机,地址：%u", (unsigned)WIRELESS_HOST_ADDR);
+        // 错误	阶段：错误报警	模块：滑环通信	操作：链路诊断	原因：ErrorLog_GetReasonByCode(diag_ret)	处理：继续尝试	详情：detail
+        ErrorLog_WarnDetail(ERROR_LOG_MODULE_SLIPRING_COMM,
+                            "链路诊断",
+                            ErrorLog_GetReasonByCode(diag_ret),
+                            ERROR_LOG_ACTION_CONTINUE,
+                            detail);
         return diag_ret;
     }
 
     diag_ret = Sensor_MapWirelessProbeError(slave_ret, WIRELESS_SLAVE_COMM_TIMEOUT);
     if (diag_ret != NO_ERROR) {
-        printf("诊断结果：无线从机%s 错误码=0x%08lX\r\n",
-               Sensor_CommErrorToText(diag_ret),
-               (unsigned long)diag_ret);
+        snprintf(detail, sizeof(detail), "节点：从机,地址：%u", (unsigned)WIRELESS_SLAVE_ADDR);
+        // 错误	阶段：错误报警	模块：滑环通信	操作：链路诊断	原因：ErrorLog_GetReasonByCode(diag_ret)	处理：继续尝试	详情：detail
+        ErrorLog_WarnDetail(ERROR_LOG_MODULE_SLIPRING_COMM,
+                            "链路诊断",
+                            ErrorLog_GetReasonByCode(diag_ret),
+                            ERROR_LOG_ACTION_CONTINUE,
+                            detail);
         return diag_ret;
     }
-
-    printf("诊断结果：无线主机和无线从机通信正常，判定传感器通信无响应\r\n");
     return SENSOR_DEVICE_COMM_TIMEOUT;
 }
 
@@ -115,18 +109,12 @@ static uint32_t Sensor_ProbeWirelessLink(void)
     ret = WIRELESS_PrintInfo(WIRELESS_HOST_ADDR);
     if (ret != NO_ERROR) {
         ret = Sensor_MapWirelessProbeError(ret, WIRELESS_HOST_COMM_TIMEOUT);
-        printf("无线主机探测失败：%s 错误码=0x%08lX\r\n",
-               Sensor_CommErrorToText(ret),
-               (unsigned long)ret);
         return ret;
     }
 
     ret = WIRELESS_PrintInfo(WIRELESS_SLAVE_ADDR);
     if (ret != NO_ERROR) {
         ret = Sensor_MapWirelessProbeError(ret, WIRELESS_SLAVE_COMM_TIMEOUT);
-        printf("无线从机探测失败：%s 错误码=0x%08lX\r\n",
-               Sensor_CommErrorToText(ret),
-               (unsigned long)ret);
         return ret;
     }
 
@@ -170,7 +158,6 @@ uint32_t DetectSensorType(void) {
 
 	ret = Sensor_ProbeWirelessLink();
 	if (ret != NO_ERROR) {
-		printf("识别失败：无线链路异常 错误码=0x%08lX\r\n", (unsigned long)ret);
 		Sensor_SetCommDetectError(ret);
 		return ret;
 	}
@@ -189,11 +176,11 @@ uint32_t DetectSensorType(void) {
 		return NO_ERROR;
 	}
 
-	printf("LTD协议探测失败：%s 错误码=0x%08lX\r\n",
-           Sensor_CommErrorToText(ltd_ret),
-           (unsigned long)ltd_ret);
-
-	printf("[3/3] 尝试DSM协议\r\n");
+	// 错误	阶段：错误报警	模块：传感器	操作：通信诊断	原因：ErrorLog_GetReasonByCode(ltd_ret)	处理：继续尝试
+	ErrorLog_Warn(ERROR_LOG_MODULE_SENSOR,
+	              ERROR_LOG_OP_COMM_DIAG,
+	              ErrorLog_GetReasonByCode(ltd_ret),
+	              ERROR_LOG_ACTION_CONTINUE);
 	dsm_ret = Sensor_ProbeDsmSensor();
 	if (dsm_ret == NO_ERROR) {
 		g_deviceParams.sensorType = DSM_SENSOR;
@@ -205,14 +192,12 @@ uint32_t DetectSensorType(void) {
 		return NO_ERROR;
 	}
 
-	printf("DSM协议探测失败：%s 错误码=0x%08lX\r\n",
-           Sensor_CommErrorToText(dsm_ret),
-           (unsigned long)dsm_ret);
-
+	// 错误	阶段：错误报警	模块：传感器	操作：通信诊断	原因：ErrorLog_GetReasonByCode(dsm_ret)	处理：继续尝试
+	ErrorLog_Warn(ERROR_LOG_MODULE_SENSOR,
+	              ERROR_LOG_OP_COMM_DIAG,
+	              ErrorLog_GetReasonByCode(dsm_ret),
+	              ERROR_LOG_ACTION_CONTINUE);
 	ret = Sensor_SelectProbeError(ltd_ret, dsm_ret);
-
-	printf("识别失败：无线链路正常，但无法识别传感器 错误码=0x%08lX\r\n", (unsigned long)ret);
-	printf("====================================\r\n");
 	Sensor_SetCommDetectError(ret);
 	return ret;
 }
@@ -231,7 +216,6 @@ uint32_t EnableLevelMode(void) {
 
 	ret = MotorCtrl_SlowStop();
 	if (ret != NO_ERROR) {
-		printf("切换液位模式前停止电机失败 错误码=0x%08lX\r\n", (unsigned long)ret);
 		return ret;
 	}
 
@@ -250,7 +234,7 @@ uint32_t EnableLevelMode(void) {
 
 // 读取一次并以整数 Hz 返回。
 // 这里的循环是业务层“等待有效频率”，不是底层串口通信重试；
-// 真正的通信重试统一收敛在各协议层，默认都是 SENSOR_COMM_MAX_RETRY 次。
+// 真正的通信重试统一收敛在各协议层，所有 UART6 传感器/无线协议统一使用 UART6_COMM_MAX_RETRY。
 // 如果频率连续 3 次为 0 或大于 6500Hz，且电机静止，则上行 1mm 后切密度/液位模式恢复；
 // 若多轮恢复后仍无有效频率，则返回 SONIC_FREQ_ABNORMAL。
 
@@ -270,39 +254,29 @@ static uint32_t Sensor_RecoverLevelFrequencyWhenStopped(void)
 	uint32_t ret;
 
 	if (!Sensor_IsMotorStopped()) {
-		printf("液位频率连续异常，但电机仍在运行\r\n");
 		ret = EnableLevelMode();
 		if (ret != NO_ERROR) {
-			printf("液位频率恢复：切回液位模式失败 错误码=0x%08lX\r\n", (unsigned long)ret);
 			return ret;
 		}
 		return NO_ERROR;
 	}
 
-	printf("液位频率连续异常，电机静止，先上行%.1fmm再重置传感器模式\r\n",
-	       (double)SENSOR_LEVEL_FREQ_RECOVERY_LIFT_MM);
 	ret = MotorCtrl_MoveAndWait(SENSOR_LEVEL_FREQ_RECOVERY_LIFT_MM,
 	                            MOTOR_DIRECTION_UP,
 	                            MotorCtrl_GetDefaultSpeedX100());
 	if (ret != NO_ERROR) {
-		printf("液位频率恢复：上行%.1fmm失败 错误码=0x%08lX\r\n",
-		       (double)SENSOR_LEVEL_FREQ_RECOVERY_LIFT_MM,
-		       (unsigned long)ret);
 		return ret;
 	}
 
 	ret = EnableDensityMode();
 	if (ret != NO_ERROR) {
-		printf("液位频率恢复：切换密度模式失败 错误码=0x%08lX\r\n", (unsigned long)ret);
 		return ret;
 	}
 
-	printf("液位频率恢复：密度模式等待%lu ms\r\n", (unsigned long)SENSOR_DENSITY_MODE_SETTLE_MS);
 	HAL_Delay(SENSOR_DENSITY_MODE_SETTLE_MS);
 
 	ret = EnableLevelMode();
 	if (ret != NO_ERROR) {
-		printf("液位频率恢复：切回液位模式失败 错误码=0x%08lX\r\n", (unsigned long)ret);
 		return ret;
 	}
 
@@ -338,29 +312,38 @@ uint32_t DSM_Get_LevelMode_Frequence(volatile uint32_t *frequency_out) {
 				return NO_ERROR;
 			}
 
-			printf("警告：液位频率异常，第 %d/%d 次 | 频率=%lu\r\n",
-			       attempt + 1,
-			       MAX_INVALID_FREQ_RETRY,
-			       (unsigned long)hz);
+            // 错误	阶段：错误重试	模块：传感器	操作：读取液位频率	原因：ErrorLog_GetCodeName(SONIC_FREQ_ABNORMAL)	尝试：(attempt + 1)/MAX_INVALID_FREQ_RETRY	错误码：SONIC_FREQ_ABNORMAL	错误名：ErrorLog_GetCodeName(SONIC_FREQ_ABNORMAL)
+            ErrorLog_Retry(ERROR_LOG_MODULE_SENSOR,
+                           ERROR_LOG_OP_READ_LEVEL_FREQ,
+                           ErrorLog_GetCodeName(SONIC_FREQ_ABNORMAL),
+                           (uint32_t)(attempt + 1),
+                           MAX_INVALID_FREQ_RETRY,
+                           SONIC_FREQ_ABNORMAL);
 			HAL_Delay(1000);
 		}
 
 		if (mode_switch_recovery_count >= MAX_MODE_SWITCH_RECOVERY) {
-			printf("警告：液位频率经过%d轮模式恢复后仍异常，最后一次原始值=%lu\r\n",
-			       MAX_MODE_SWITCH_RECOVERY,
-			       (unsigned long)hz);
 			return SONIC_FREQ_ABNORMAL;
 		}
 
 		mode_switch_recovery_count++;
-		printf("警告：液位频率连续%d次异常，执行第%d/%d轮液位模式恢复\r\n",
-		       MAX_INVALID_FREQ_RETRY,
-		       mode_switch_recovery_count,
-		       MAX_MODE_SWITCH_RECOVERY);
+        // 错误	阶段：错误重试	模块：传感器	操作：切换模式	原因：ErrorLog_GetCodeName(SONIC_FREQ_ABNORMAL)	尝试：mode_switch_recovery_count/MAX_MODE_SWITCH_RECOVERY	错误码：SONIC_FREQ_ABNORMAL	错误名：ErrorLog_GetCodeName(SONIC_FREQ_ABNORMAL)
+        ErrorLog_Retry(ERROR_LOG_MODULE_SENSOR,
+                       ERROR_LOG_OP_SWITCH_MODE,
+                       ErrorLog_GetCodeName(SONIC_FREQ_ABNORMAL),
+                       (uint32_t)mode_switch_recovery_count,
+                       MAX_MODE_SWITCH_RECOVERY,
+                       SONIC_FREQ_ABNORMAL);
 		ret = Sensor_RecoverLevelFrequencyWhenStopped();
 		if (ret != NO_ERROR) {
 			return ret;
 		}
+        // 错误	阶段：重试成功	模块：传感器	操作：切换模式	原因：ErrorLog_GetCodeName(SONIC_FREQ_ABNORMAL)	尝试：mode_switch_recovery_count/MAX_MODE_SWITCH_RECOVERY
+        ErrorLog_Recover(ERROR_LOG_MODULE_SENSOR,
+                         ERROR_LOG_OP_SWITCH_MODE,
+                         ErrorLog_GetCodeName(SONIC_FREQ_ABNORMAL),
+                         (uint32_t)mode_switch_recovery_count,
+                         MAX_MODE_SWITCH_RECOVERY);
 	}
 }
 /**
@@ -378,7 +361,6 @@ uint32_t DSM_Get_LevelMode_Frequence_Avg(volatile uint32_t *frequency_out) {
 	for (int i = 0; i < 10; i++) {
 		ret = DSM_Get_LevelMode_Frequence(&values[i]);
 		if (ret != NO_ERROR) {
-			printf("读取液位频率失败，第 %d 次\r\n", i + 1);
 			return ret;
 		}
 		printf("第 %d 次液位频率: %lu Hz\r\n", i + 1, (unsigned long) values[i]);
@@ -446,7 +428,6 @@ uint32_t Read_Density(float *frequency, float *density, float *temp) {
 		if (ret == NO_ERROR) {
 			printf("温度值: %.3f ℃\r\n", *temp);
 		} else {
-			printf("读取温度失败\r\n");
 			return Sensor_DiagnoseCommTimeout(ret, "读取LTD温度");
 		}
 
@@ -454,14 +435,12 @@ uint32_t Read_Density(float *frequency, float *density, float *temp) {
 		if (ret == NO_ERROR) {
 			printf("密度值: %.3f\r\n", *density);
 		} else {
-			printf("读取密度失败\r\n");
 			return Sensor_DiagnoseCommTimeout(ret, "读取LTD密度");
 		}
 		ret = DSM_V2_Read_DensityFrequency(frequency,&hz_45,&hz_225);
 		if (ret == NO_ERROR) {
 			printf("频率值: %.1f Hz\r\n45度扫频周期平方均值:  %.2f Hz\r\n22.5度扫频周期平方均值: %.2f Hz\r\n", *frequency,hz_45,hz_225);
 		} else {
-			printf("读取频率失败\r\n");
 			return Sensor_DiagnoseCommTimeout(ret, "读取LTD频率");
 		}
 	}
@@ -500,10 +479,6 @@ uint32_t Read_Density(float *frequency, float *density, float *temp) {
 		//调试信息赋值
 	    g_measurement.debug_data.temperature = temp_raw;
 	    g_measurement.debug_data.frequency = *frequency;
-	}
-
-	else {
-		printf("读取密度/温度失败！\r\n");
 	}
 
 	return ret;
@@ -626,7 +601,6 @@ static uint32_t Sensor_ReadPartParamsInternal(uint8_t update_command_state)
     if (update_command_state) {
         ret = (uint32_t)MeasureStart();
         if (ret != NO_ERROR) {
-            printf("Read part params init failed, error=0x%08lX\r\n", (unsigned long)ret);
             return ret;
         }
         g_measurement.device_status.device_state = STATE_READPARAMETERING;
@@ -637,7 +611,6 @@ static uint32_t Sensor_ReadPartParamsInternal(uint8_t update_command_state)
     /* ---------- 1) 位置类：编码器/位置/尺带长度/步进/距离 ---------- */
     ret = stpr_checkDriverStatus(&stepper);
     if (ret != NO_ERROR) {
-        printf("读取部件参数	电机驱动状态异常 错误码=0x%08lX\r\n", (unsigned long)ret);
         return ret;
     }
 
@@ -649,7 +622,6 @@ static uint32_t Sensor_ReadPartParamsInternal(uint8_t update_command_state)
     if (!MotorCtrl_IsPositionSourceMotor()) {
         ret = AS5145_GetLastError();
         if (ret != NO_ERROR) {
-            printf("读取部件参数	编码器通信异常 错误码=0x%08lX\r\n", (unsigned long)ret);
             return ret;
         }
     }
@@ -668,7 +640,6 @@ static uint32_t Sensor_ReadPartParamsInternal(uint8_t update_command_state)
     ret = Weight_CheckOwnCommunicationTimeout();
 
     if (ret != NO_ERROR) {
-        printf("读取部件参数	称重通信异常 错误码=0x%08lX\r\n", (unsigned long)ret);
         return ret;
     }
 
@@ -683,7 +654,6 @@ static uint32_t Sensor_ReadPartParamsInternal(uint8_t update_command_state)
     if (Sensor_SupportsAuxDsmChannels()) {
         ret = Sensor_ReadGyroAngle(&ax, &ay);
         if (ret != NO_ERROR) {
-            printf("读取部件参数\t陀螺仪读取失败 错误码=0x%08lX\r\n", (unsigned long)ret);
             return ret;
         } else {
             /* 你 Read_Gyro_Angle() 里已经写了 debug_data.angle_x/y，这里再确保一遍 */
@@ -703,7 +673,6 @@ static uint32_t Sensor_ReadPartParamsInternal(uint8_t update_command_state)
 
     ret = Read_Density(&freq, &dens, &temp);
     if (ret != NO_ERROR) {
-        printf("读取部件参数\t密度/温度/频率读取失败 错误码=0x%08lX\r\n", (unsigned long)ret);
         return ret;
     } else {
         /* 你 Read_Density() 里已写 debug_data.temperature/frequency，这里保证一致 */
@@ -719,7 +688,6 @@ static uint32_t Sensor_ReadPartParamsInternal(uint8_t update_command_state)
     if (Sensor_SupportsAuxDsmChannels()) {
         ret = Sensor_ReadWaterCapacitance(&cap);
         if (ret != NO_ERROR) {
-            printf("读取部件参数\t水位电容读取失败 错误码=0x%08lX\r\n", (unsigned long)ret);
             return ret;
         } else {
             /* 水位电容值/电压值：你结构体写 uint32_t，这里约定 ×10 或 ×100 以保留小数

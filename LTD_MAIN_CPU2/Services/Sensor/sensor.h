@@ -19,12 +19,13 @@
 #define DEBUG_DSM
 #define DEBUG_UART6 0
 
-#define SENSOR_COMM_MAX_RETRY 10             // 协议层统一通信重试次数
+#define SENSOR_COMM_MAX_RETRY 10             // 协议层默认通信重试次数
+#define UART6_COMM_MAX_RETRY 3U             // UART6 传感器/无线链路统一通信重试次数
 #define SENSOR_COMM_RETRY_DELAY_MS 300       // 两次通信尝试之间的延时
 #define SENSOR_COMM_ERROR_RETRY_DELAY_MS 300 // 校验/设备错误后的退避延时
 #define SENSOR_LEVEL_MODE_SETTLE_MS 10000     // 切换液位模式后的稳定等待时间
 
-#define DSM_MAX_RETRY SENSOR_COMM_MAX_RETRY
+#define DSM_MAX_RETRY UART6_COMM_MAX_RETRY
 #define DSM_BCC_DELAY SENSOR_COMM_ERROR_RETRY_DELAY_MS
 #define DSM_PRE_SEND_DELAY SENSOR_COMM_RETRY_DELAY_MS
 #define DSM_MIN_RESP_LEN 3//接收数据最小长度

@@ -15,6 +15,7 @@
 #include "measure_tank_height.h"
 #include "measure_water_level.h"
 #include "encoder.h"
+#include "error_log.h"
 
 #define ZERO_SEARCH_RETRY_MAX  3  // 可通过宏配置最大重试次数
 #define ZERO_ROUGH_SLOW_DISTANCE_01MM     2000  // 粗找零点提前 200mm 降到低速
@@ -70,7 +71,6 @@ int SearchZero(void) {
     while (try_times < ZERO_SEARCH_RETRY_MAX) {
         try_times++;
         fault_info_init();
-        printf("零点测量    粗找零点第%d次尝试\r\n", try_times);
 
         ret = SearchZeroRough();
         CHECK_COMMAND_SWITCH(ret);
@@ -86,11 +86,16 @@ int SearchZero(void) {
             rough_ok = 1;
             break;
         } else {
-            printf("零点测量    粗找失败[%d]:0x%X\r\n", try_times, (unsigned int) ret);
+            // 错误	阶段：错误重试	模块：测量	操作：粗找零点	原因：搜索失败	尝试：try_times/ZERO_SEARCH_RETRY_MAX	错误码：ret	错误名：ErrorLog_GetCodeName(ret)
+            ErrorLog_Retry(ERROR_LOG_MODULE_MEASURE,
+                           ERROR_LOG_OP_SEARCH_ZERO_ROUGH,
+                           ERROR_LOG_REASON_SEARCH_FAIL,
+                           (uint32_t)try_times,
+                           (uint32_t)ZERO_SEARCH_RETRY_MAX,
+                           ret);
         }
 
         if (try_times >= ZERO_SEARCH_RETRY_MAX) {
-            printf("零点测量    粗找零点失败(尝试%d次) | last_error=0x%X\r\n", try_times, (unsigned int)ret);
             CHECK_ERROR(ret);
             break;
         }
@@ -101,7 +106,14 @@ int SearchZero(void) {
     if (!rough_ok) {
         RETURN_ERROR(ret);
     }
-	printf("零点测量    粗找零点完成    位置%ld\r\n", zero_position);
+	if (try_times > 1U) {
+		// 错误	阶段：重试成功	模块：测量	操作：粗找零点	原因：恢复成功	尝试：try_times/ZERO_SEARCH_RETRY_MAX
+		ErrorLog_Recover(ERROR_LOG_MODULE_MEASURE,
+		                 ERROR_LOG_OP_SEARCH_ZERO_ROUGH,
+		                 ERROR_LOG_REASON_RECOVER_OK,
+		                 (uint32_t)try_times,
+		                 (uint32_t)ZERO_SEARCH_RETRY_MAX);
+	}
 
 	/*************** 精找阶段 - 第一次精确找零点 ***************/
 	ret = MotorCtrl_MoveAndWait(200.0, MOTOR_DIRECTION_DOWN, MotorCtrl_GetDefaultSpeedX100());
@@ -110,14 +122,26 @@ int SearchZero(void) {
 	try_times = 0;
 	while (try_times < ZERO_SEARCH_RETRY_MAX) {
 		try_times++;
-		printf("零点测量    第一次精找第%d次尝试\r\n", try_times);
 		ret = SearchZeroPrecise();
 
 		if (ret == NO_ERROR) {
-			printf("零点测量    第一次精找完成    位置%ld\r\n", zero_position);
+			if (try_times > 1U) {
+				// 错误	阶段：重试成功	模块：测量	操作：精找零点	原因：恢复成功	尝试：try_times/ZERO_SEARCH_RETRY_MAX
+				ErrorLog_Recover(ERROR_LOG_MODULE_MEASURE,
+				                 ERROR_LOG_OP_SEARCH_ZERO_PRECISE,
+				                 ERROR_LOG_REASON_RECOVER_OK,
+				                 (uint32_t)try_times,
+				                 (uint32_t)ZERO_SEARCH_RETRY_MAX);
+			}
 			break;
 		} else {
-			printf("零点测量    第一次精找失败[%d]:0x%X\r\n", try_times, (unsigned int) ret);
+			// 错误	阶段：错误重试	模块：测量	操作：精找零点	原因：搜索失败	尝试：try_times/ZERO_SEARCH_RETRY_MAX	错误码：ret	错误名：ErrorLog_GetCodeName(ret)
+			ErrorLog_Retry(ERROR_LOG_MODULE_MEASURE,
+			               ERROR_LOG_OP_SEARCH_ZERO_PRECISE,
+			               ERROR_LOG_REASON_SEARCH_FAIL,
+			               (uint32_t)try_times,
+			               (uint32_t)ZERO_SEARCH_RETRY_MAX,
+			               ret);
 			if (try_times < ZERO_SEARCH_RETRY_MAX) {
 				ret = MotorCtrl_MoveAndWait(100.0, MOTOR_DIRECTION_DOWN, MotorCtrl_GetDefaultSpeedX100());
 				CHECK_ERROR(ret);
@@ -132,11 +156,11 @@ int SearchZero(void) {
 	printf("{zero_value}%ld mm", g_measurement.debug_data.cable_length); MotorCtrl_PrintPositionRefs(); printf("\r\n");
 
 	if ((abs(g_measurement.debug_data.cable_length) > g_deviceParams.max_zero_deviation_distance) && Zero_ShouldCheckDeviation()) {
-		printf("零点测量    编码值异常，可能需要重新校准\r\n");
 		RETURN_ERROR(MEASUREMENT_ZERO_OUT_OF_RANGE);
 	} else {
 		set_encoder_zero();
-		MotorCtrl_ResetDrumReferenceForZeroCalibration();
+		ret = MotorCtrl_ResetDrumReferenceForZeroCalibration();
+		CHECK_ERROR(ret);
 		if (g_deviceParams.position_source_auto_switch == POSITION_SOURCE_AUTO_SWITCH_ENABLE) {
 			ret = MotorCtrl_SwitchPositionSourceToEncoder();
 			CHECK_ERROR(ret);
@@ -150,10 +174,12 @@ int SearchZero(void) {
 		printf("零点测量    向下移动    下行距离    %ld\r\n", g_deviceParams.findZeroDownDistance/10);
 		ret = MotorCtrl_MoveAndWait((float)g_deviceParams.findZeroDownDistance/10.0, MOTOR_DIRECTION_DOWN, MotorCtrl_GetDefaultSpeedX100());
 		CHECK_ERROR(ret);
-		read_zero_capacitance();//读取零点电容值
+		ret = read_zero_capacitance();//读取零点电容值
+		CHECK_ERROR(ret);
 		if(g_deviceParams.bottom_detect_mode == BOTTOM_DET_BY_GYRO)
 		{
-			Bottom_SaveGyroZeroRef();//保存陀螺仪零点参考
+			ret = Bottom_SaveGyroZeroRef();//保存陀螺仪零点参考
+			CHECK_ERROR(ret);
 		}
 		printf("零点测量    电机下行完成，流程结束\r\n");
 	}
@@ -186,7 +212,7 @@ static int SearchZeroRough() {
             speed_x100 = ZERO_ROUGH_SLOW_SPEED_X100;
         }
         if (speed_x100 != last_speed_x100) {
-            printf("零点测量    粗找速度切换 | 距零点=%.1fmm | speed=%.2f m/min\r\n",
+            printf("零点测量    粗找速度切换 | 距零点：%.1fmm | speed=%.2f m/min\r\n",
                    (double)distance_to_zero_01mm / 10.0,
                    (double)speed_x100 / 100.0);
             last_speed_x100 = speed_x100;
@@ -198,7 +224,7 @@ static int SearchZeroRough() {
         ret = MotorCtrl_CheckLostStepAutoTiming(g_measurement.debug_data.cable_length);
         CHECK_ERROR(ret);
         // 实时打印编码器和重量信息
-        printf("零点测量    长距离寻找零点    {传感器位置}%.1f", (float) (g_measurement.debug_data.sensor_position) / 10.0); MotorCtrl_PrintPositionRefs(); printf("    距零点=%.1fmm    速度(0.01m/min)=%lu    ", (double)distance_to_zero_01mm / 10.0, (unsigned long)speed_x100);
+        printf("零点测量    长距离寻找零点    {传感器位置}%.1f", (float) (g_measurement.debug_data.sensor_position) / 10.0); MotorCtrl_PrintPositionRefs(); printf("    距零点：%.1fmm    速度(0.01m/min)=%lu    ", (double)distance_to_zero_01mm / 10.0, (unsigned long)speed_x100);
     }
     zero_position = g_measurement.debug_data.cable_length;
     ret = MotorCtrl_QuickStop(); // 到达零点后快速停止电机

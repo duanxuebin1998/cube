@@ -32,7 +32,7 @@ uint32_t get_empty_weight(void);
 uint32_t get_full_weight(void);
 //Weight_StateTypeDef determine_weight_status(void);
 Weight_StateTypeDef check_zero_point_status(void);
-Weight_StateTypeDef check_bottom_status(void);
+uint32_t check_bottom_status(Weight_StateTypeDef *status); /* 检测罐底状态，返回错误码并通过参数输出 NORMAL/BOTTOM */
 uint32_t CheckWeightCollision(void);
 void Weight_Update(int32_t currWeight);
 void Weight_MarkFrameReceived(void);

@@ -219,13 +219,13 @@ void MotorCtrl_PrintPositionCompare(void)
            MotorCtrl_IsPositionSourceMotor() ? "电机记步" : "编码轮记步",
            (unsigned long)g_deviceParams.motor_count_first_loop_circumference_mm,
            local_circumference_mm);
-    printf("电机/编码基准 | 基准步数=%ld | 基准长度=%.1fmm | 基准圈数=%.6f\r\n",
+    printf("电机/编码基准 | 基准步数=%ld | 基准长度：%.1fmm | 基准圈数=%.6f\r\n",
            (long)s_motor_position.count_base_step,
            (double)s_motor_position.count_base_length_01mm * 0.1,
            s_motor_position.count_base_turns);
 
     if (!xactual_ok) {
-        printf("电机/编码位置对比 | XACTUAL读取失败，保留旧电机位置缓存 | 编码轮长度=%.1fmm | 编码轮位置=%.1fmm\r\n",
+        printf("电机/编码位置对比 | XACTUAL读取失败，保留旧电机位置缓存 | 编码轮长度：%.1fmm | 编码轮位置=%.1fmm\r\n",
                (double)encoder_length_01mm * 0.1,
                (double)encoder_position_01mm * 0.1);
         return;
@@ -262,16 +262,16 @@ void MotorCtrl_PrintPositionCompare(void)
     g_measurement.debug_data.motor_step = drum.motor_step;
     g_measurement.debug_data.motor_distance = drum.motor_distance_01mm;
 
-    printf("电机寄存器 | XACTUAL=%ld | 模型长度=%.1fmm | 圈数=%.6f | 角度=%.2f度\r\n",
+    printf("电机寄存器 | XACTUAL=%ld | 模型长度：%.1fmm | 圈数=%.6f | 角度=%.2f度\r\n",
            (long)xactual,
            (double)drum.motor_distance_01mm * 0.1,
            drum.turns_total,
            drum.angle_deg);
-    printf("位置计算 | 电机长度=%.1fmm | 编码轮长度=%.1fmm | 差值=%.1fmm\r\n",
+    printf("位置计算 | 电机长度：%.1fmm | 编码轮长度：%.1fmm | 差值：%.1fmm\r\n",
            (double)motor_source_length_01mm * 0.1,
            (double)encoder_length_01mm * 0.1,
            (double)length_diff_01mm * 0.1);
-    printf("位置计算 | 电机位置=%.1fmm | 编码轮位置=%.1fmm | 差值=%.1fmm\r\n",
+    printf("位置计算 | 电机位置=%.1fmm | 编码轮位置=%.1fmm | 差值：%.1fmm\r\n",
            (double)motor_source_position_01mm * 0.1,
            (double)encoder_position_01mm * 0.1,
            (double)position_diff_01mm * 0.1);
@@ -462,7 +462,7 @@ uint32_t MotorCtrl_SwitchPositionSourceToMotor(void)
     MotorPosition_UpdatePositionFromMotorSource(&drum);
 
     /* 切换后自动下行一周，用编码轮真实长度变化标定当前位置局部周长。 */
-    printf("当前位置周长标定开始 | 基准编码值=%ld | 基准长度=%.1fmm | 一圈步数=%ld | 原局部周长=%.3fmm\r\n",
+    printf("当前位置周长标定开始 | 基准编码值=%ld | 基准长度：%.1fmm | 一圈步数=%ld | 原局部周长=%.3fmm\r\n",
            (long)base_encoder_count,
            base_length_mm,
            (long)one_rev_ticks,
@@ -479,7 +479,7 @@ uint32_t MotorCtrl_SwitchPositionSourceToMotor(void)
     if (measured_circumference_mm < 0.0) {
         measured_circumference_mm = -measured_circumference_mm;
     }
-    printf("当前位置周长标定采样 | 基准编码值=%ld | 当前编码值=%ld | 编码差值=%ld | 基准长度=%.1fmm | 实测长度=%.1fmm | 实测周长=%.3fmm\r\n",
+    printf("当前位置周长标定采样 | 基准编码值=%ld | 当前编码值=%ld | 编码差值：%ld | 基准长度：%.1fmm | 实测长度：%.1fmm | 实测周长=%.3fmm\r\n",
            (long)base_encoder_count,
            (long)measured_encoder_count,
            (long)delta_encoder_count,
@@ -493,7 +493,7 @@ uint32_t MotorCtrl_SwitchPositionSourceToMotor(void)
         measured_circumference_valid = true;
     } else {
         calibration_ret = (measured_circumference_mm < C0_MIN_MM) ? ENCODER_LOST_STEP : ENCODER_DIFF_EXCESS;
-        printf("当前位置周长标定失败 | 测得周长=%.3fmm | 范围=(%.1f, %.1f) | 错误码=0x%08lX\r\n",
+        printf("当前位置周长标定失败 | 测得周长=%.3fmm | 范围=(%.1f, %.1f) | 错误码：0x%08lX\r\n",
                measured_circumference_mm,
                (double)C0_MIN_MM,
                (double)C0_MAX_MM,
@@ -521,7 +521,7 @@ uint32_t MotorCtrl_SwitchPositionSourceToMotor(void)
      * 直接保存切换基准和当前位置，避免再次 SPI 读取失败时静默跳过电机 FRAM 保存。 */
     MotorPosition_StorePersistSnapshot(drum.motor_step);
 
-    printf("编码切换到电机步进模式 | 切换时尺带长度=%.1fmm | 切换时电机步进XACTUAL=%ld | 切换时的周长=%.3fmm | 实测周长=%.3fmm | 来源=%s\r\n",
+    printf("编码切换到电机步进模式 | 切换时尺带长度：%.1fmm | 切换时电机步进XACTUAL=%ld | 切换时的周长=%.3fmm | 实测周长=%.3fmm | 来源=%s\r\n",
            (double)s_motor_position.count_base_length_01mm * 0.1,
            (long)s_motor_position.count_base_step,
            MotorPosition_GetLocalCircumferenceFromParams(),
@@ -603,13 +603,15 @@ void MotorCtrl_PersistRegistersFromDriver(void)
     MotorPosition_MaybePersistRegisters(&stepper, true);
 }
 
-void MotorCtrl_ResetDrumReferenceForZeroCalibration(void)
+uint32_t MotorCtrl_ResetDrumReferenceForZeroCalibration(void)
 {
     /* 回零成功后统一切回编码轮记步，因此这里清除电机记步坐标、基准和旧局部周长。 */
     s_motor_position.count_base_step = 0;
     s_motor_position.count_base_length_01mm = 0;
     s_motor_position.count_base_turns = 0.0;
-    (void)MotorPosition_SetLocalCircumferenceToParams(MotorPosition_TapeC0Mm());
+    if (!MotorPosition_SetLocalCircumferenceToParams(MotorPosition_TapeC0Mm())) {
+        return PARAM_ERROR;
+    }
 
     if (MotorPosition_IsEncoderErrorCode(g_measurement.device_status.error_code)) {
         g_measurement.device_status.error_code = NO_ERROR;
@@ -618,18 +620,19 @@ void MotorCtrl_ResetDrumReferenceForZeroCalibration(void)
     if (!s_motor_driver.initialized) {
         g_measurement.debug_data.motor_step = 0;
         g_measurement.debug_data.motor_distance = 0;
-        return;
+        return NO_ERROR;
     }
     {
         uint32_t ret = stpr_setPos(&stepper, 0);
         if (ret != NO_ERROR) {
-            printf("标定零点清除电机坐标失败，错误码=0x%08lX\r\n", (unsigned long)ret);
-            return;
+            printf("标定零点清除电机坐标失败，错误码：0x%08lX\r\n", (unsigned long)ret);
+            return ret;
         }
     }
     MotorPosition_SyncDebugDrumState(&stepper);
     MotorPosition_SavePositionSourceParams(true);
     MotorPosition_MaybePersistRegisters(&stepper, true);
+    return NO_ERROR;
 }
 
 /* ===================== 内部跨文件接口 ===================== */
@@ -856,7 +859,7 @@ uint32_t MotorPosition_RestorePersistedRegisters(TMC5130TypeDef *tmc5130)
         s_motor_restored_base_valid = true;
         MotorPosition_WritePersistAB(xactual, base_length_01mm, base_step);
         s_motor_saved_xactual = xactual;
-        printf("电机持久化已恢复: XACTUAL=%ld, 基准长度=%.1fmm, 基准步数=%ld\r\n",
+        printf("电机持久化已恢复: XACTUAL=%ld, 基准长度：%.1fmm, 基准步数=%ld\r\n",
                (long)xactual,
                (double)base_length_01mm * 0.1,
                (long)base_step);
@@ -983,7 +986,7 @@ void MotorPosition_RestorePositionSourceFromParams(void)
             MotorPosition_TapeC0Mm(),
             MotorPosition_TapeThicknessMm());
         MotorPosition_UpdatePositionFromMotorSource(&drum);
-        printf("位置来源已恢复为电机记步 | 基准长度=%.1fmm | XACTUAL=%ld | 局部周长=%.3fmm\r\n",
+        printf("位置来源已恢复为电机记步 | 基准长度：%.1fmm | XACTUAL=%ld | 局部周长=%.3fmm\r\n",
                (double)s_motor_position.count_base_length_01mm * 0.1,
                (long)s_motor_position.count_base_step,
                MotorPosition_GetLocalCircumferenceFromParams());
@@ -1003,7 +1006,7 @@ void MotorPosition_RestorePositionSourceFromParams(void)
             s_motor_position.count_base_turns = 0.0;
         }
         update_sensor_height_from_encoder();
-        printf("位置来源已恢复为编码轮 | 保存的电机基准长度=%.1fmm | 保存的电机基准步数=%ld\r\n",
+        printf("位置来源已恢复为编码轮 | 保存的电机基准长度：%.1fmm | 保存的电机基准步数=%ld\r\n",
                (double)s_motor_position.count_base_length_01mm * 0.1,
                (long)s_motor_position.count_base_step);
     }
@@ -1405,7 +1408,7 @@ static int MotorPosition_ReadPersistFromSlot(uint32_t base_addr,
     MotorPersistRecord rec;
     ReadMultiData((uint8_t *)&rec, (int)base_addr, sizeof(rec));
     if (rec.magic != MOTOR_STORE_MAGIC) {
-        printf("电机持久化[%s]魔术字错误: 0x%08lX\r\n", slot_name, (unsigned long)rec.magic);
+        printf("电机持久化[%s]魔术字异常: 0x%08lX\r\n", slot_name, (unsigned long)rec.magic);
         return 0;
     }
 
@@ -1419,7 +1422,7 @@ static int MotorPosition_ReadPersistFromSlot(uint32_t base_addr,
         *base_step = rec.base_step;
         return 1;
     }
-    printf("电机持久化[%s]版本错误: %lu\r\n", slot_name, (unsigned long)rec.version);
+    printf("电机持久化[%s]版本异常: %lu\r\n", slot_name, (unsigned long)rec.version);
     return 0;
 }
 
@@ -1525,6 +1528,6 @@ static uint32_t MotorPosition_RollbackPositionSourceSwitch(uint32_t ret,
         update_sensor_height_from_encoder();
     }
 
-    printf("位置来源切换到电机记步失败，已回滚 | 错误码=0x%08lX\r\n", (unsigned long)ret);
+    printf("位置来源切换到电机记步失败，已回滚 | 错误码：0x%08lX\r\n", (unsigned long)ret);
     return ret;
 }

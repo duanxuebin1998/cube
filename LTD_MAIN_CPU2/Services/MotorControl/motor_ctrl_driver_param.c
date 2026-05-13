@@ -1,4 +1,5 @@
 #include "motor_ctrl_internal.h"
+#include "error_log.h"
 
 /**
  * @file motor_ctrl_driver_param.c
@@ -210,7 +211,7 @@ uint32_t MotorCtrl_Init(void)
     }
     MotorPosition_SyncDebugDrumState(&stepper);
 
-    printf("电机初始化 | 设定速度=%.2f m/min | 尺带长度=%.1f mm | VMAX=%lu | 等效微步/s=%.1f\r\n",
+    printf("电机初始化 | 设定速度=%.2f m/min | 尺带长度：%.1f mm | VMAX=%lu | 等效微步/s=%.1f\r\n",
            g_deviceParams.max_motor_speed / 100.0,
            g_measurement.debug_data.cable_length / 10.0,
            (unsigned long)velocity,
@@ -270,7 +271,9 @@ bool MotorCtrl_IsDriverMoving(TMC5130TypeDef *tmc5130)
 uint32_t MotorCtrl_CheckDriverGstat(TMC5130TypeDef *tmc5130)
 {
     uint32_t ret = stpr_checkDriverStatus(tmc5130);
-    CHECK_ERROR(ret);
+    if (ret != NO_ERROR) {
+        CHECK_ERROR(ret);
+    }
 
     return ret;
 }
@@ -298,7 +301,7 @@ void MotorDriver_UpdateVelocityFromParams(void)
     const double Lcur_mm = (double)g_measurement.debug_data.cable_length * 0.1;
     velocity = MotorDriver_ComputeUniformVelocityFromLength(Lcur_mm);
 
-    printf("速度初始化 | 线速度=%.2f m/min | 尺带长度=%.1f mm | 周长=%.1f mm | VMAX=%lu | 输出轴=%.3f r/s | 电机=%.3f r/s | 等效微步/s=%.1f\r\n",
+    printf("速度初始化 | 线速度=%.2f m/min | 尺带长度：%.1f mm | 周长=%.1f mm | VMAX=%lu | 输出轴=%.3f r/s | 电机=%.3f r/s | 等效微步/s=%.1f\r\n",
            (double)MotorDriver_GetSpeedSetpointX100() / 100.0,
            Lcur_mm,
            MotorPosition_TapeInstantCircumferenceFromLength(Lcur_mm),
@@ -325,7 +328,7 @@ int MotorDriver_IsDirValid(int dir)
  * 该函数用于命令切换、异常保护和主动停止场景。停止命令只表示开始减速，
  * 最终显示状态仍会结合驱动 vzero / rampstat 判断。
  */
-void MotorDriver_StopAndMarkStopped(void)
+uint32_t MotorDriver_StopAndMarkStopped(void)
 {
     uint32_t ret;
     bool is_moving = true;
@@ -333,17 +336,24 @@ void MotorDriver_StopAndMarkStopped(void)
 
     ret = stpr_stop(&stepper);
     if (ret != NO_ERROR) {
-        printf("电机停止命令写入失败，错误码=0x%08lX\r\n", (unsigned long)ret);
-        return;
+        printf("电机停止命令写入失败，错误码：0x%08lX\r\n", (unsigned long)ret);
+        return ret;
     }
 
     /* 命令切换时不能只下发停止就返回，否则下一条命令会在电机减速过程中被读取执行。 */
     start_tick = HAL_GetTick();
-    while (MotorDriver_TryReadMovingState(&stepper, &is_moving) && is_moving) {
+    while (1) {
+        if (!MotorDriver_TryReadMovingState(&stepper, &is_moving)) {
+            printf("电机停止状态读取失败，错误码：0x%08lX\r\n", (unsigned long)MOTOR_TMC_COMM_ERROR);
+            return MOTOR_TMC_COMM_ERROR;
+        }
+        if (!is_moving) {
+            break;
+        }
         MotorPosition_SyncDebugDrumState(&stepper);
         if ((HAL_GetTick() - start_tick) > MOTOR_STOP_WAIT_TIMEOUT_MS) {
-            printf("电机停止等待超时，继续退出当前操作\r\n");
-            break;
+            printf("电机停止等待超时，错误码：0x%08lX\r\n", (unsigned long)MOTOR_RUN_TIMEOUT);
+            return MOTOR_RUN_TIMEOUT;
         }
         HAL_Delay(10U);
     }
@@ -354,21 +364,27 @@ void MotorDriver_StopAndMarkStopped(void)
     if (!is_moving) {
         g_measurement.debug_data.motor_state = 0U;
     }
+    return NO_ERROR;
 }
 
 /**
  * @brief 检查是否有有效命令切换请求，并在需要时停止电机。
  *
- * @return 已检测到命令切换并停止返回 true；否则返回 false。
+ * @return 无命令切换返回 NO_ERROR；命令切换且停止成功返回 STATE_SWITCH；停止失败返回实际错误码。
  */
-bool MotorDriver_StopIfCommandSwitchRequested(void)
+uint32_t MotorDriver_StopIfCommandSwitchRequested(void)
 {
+    uint32_t ret;
+
     if (HasEffectiveCommandSwitchRequest()) {
         printf("检测到命令切换请求，停止当前操作\r\n");
-        MotorDriver_StopAndMarkStopped();
-        return true;
+        ret = MotorDriver_StopAndMarkStopped();
+        if (ret != NO_ERROR) {
+            return ret;
+        }
+        return COMMAND_SWITCH_ABORT;
     }
-    return false;
+    return NO_ERROR;
 }
 
 /**
@@ -506,7 +522,7 @@ void MotorDriver_RefreshVelocityDuringRun(TMC5130TypeDef *tmc5130,
     if (delta >= threshold) {
         uint32_t ret = stpr_setVelocity(tmc5130, new_v);
         if (ret != NO_ERROR) {
-            printf("速度刷新失败 | 错误码=0x%08lX | 目标VMAX=%lu\r\n",
+            printf("速度刷新失败 | 错误码：0x%08lX | 目标VMAX=%lu\r\n",
                    (unsigned long)ret,
                    (unsigned long)new_v);
             return;
@@ -514,7 +530,7 @@ void MotorDriver_RefreshVelocityDuringRun(TMC5130TypeDef *tmc5130,
         s_motor_driver.applied_velocity = new_v;
         velocity = new_v;
 
-        printf("速度刷新 | 线速度=%.2f m/min | 尺带长度=%.1f mm | 周长=%.1f mm | 旧VMAX=%lu | 新VMAX=%lu | 输出轴=%.3f->%.3f r/s | 电机=%.3f->%.3f r/s | 微步/s=%.1f->%.1f\r\n",
+        printf("速度刷新 | 线速度=%.2f m/min | 尺带长度：%.1f mm | 周长=%.1f mm | 旧VMAX=%lu | 新VMAX=%lu | 输出轴=%.3f->%.3f r/s | 电机=%.3f->%.3f r/s | 微步/s=%.1f->%.1f\r\n",
                (double)MotorDriver_GetSpeedSetpointX100() / 100.0,
                Lcur_mm,
                MotorPosition_TapeInstantCircumferenceFromLength(Lcur_mm),

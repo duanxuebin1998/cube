@@ -55,11 +55,11 @@ uint32_t Wartsila_Density_SpreadMeasurement(DensityDistribution *dist)
     uint32_t min_gap_surface = g_deviceParams.wartsila_max_height_above_surface; /* 最高点距油面最小距离 */
 
     if (step_mm == 0) {
-        printf("分布测量参数错误：步长=0\n");
+        printf("分布测量参数异常：步长=0\n");
         return PARAM_RANGE_ERROR;
     }
     if (end_pos_mm <= start_pos_mm) {
-        printf("分布测量参数错误：结束位置<=起始位置 (%lu <= %lu)\n",
+        printf("分布测量参数异常：结束位置<=起始位置 (%lu <= %lu)\n",
                (unsigned long)end_pos_mm, (unsigned long)start_pos_mm);
         return PARAM_RANGE_ERROR;
     }
@@ -72,7 +72,7 @@ uint32_t Wartsila_Density_SpreadMeasurement(DensityDistribution *dist)
     float range_mm = (float)(end_pos_mm - start_pos_mm);
     uint32_t max_points_by_range = (uint32_t)(range_mm / (float)step_mm) + 1U;
     if (max_points_by_range == 0) {
-        printf("分布测量错误：高度范围过小，无法布点\n");
+        printf("分布测量异常：高度范围过小，无法布点\n");
         return PARAM_RANGE_ERROR;
     }
     if (max_points_by_range > MAX_MEASUREMENT_POINTS) {
@@ -203,7 +203,7 @@ uint32_t Wartsila_Density_SpreadMeasurement(DensityDistribution *dist)
         DensityMeasurement *pt = &dist->single_density_data[valid_points];
         ret = SinglePoint_ReadSensor(pt);
         if (ret != NO_ERROR) {
-            printf("读取单点密度失败 位置=%.3fmm 错误=%lu\n", cur_mm, (unsigned long)ret);
+            printf("读取单点密度失败 位置=%.3fmm 错误码=%lu\n", cur_mm, (unsigned long)ret);
             return ret;
         }
 
@@ -298,7 +298,7 @@ uint32_t motorMoveUpToPositionOrAir(float target_mm, Level_StateTypeDef *final_s
     float cur_mm;
     MotorCtrl_SnapshotSensorPositionMm(&cur_mm);
 
-    printf("上行到目标或空气：当前=%.3fmm, 目标=%.3fmm\r\n",
+    printf("上行到目标或空气：当前：%.3fmm, 目标：%.3fmm\r\n",
            cur_mm, target_mm);
 
     /* 如果当前就超过目标，不需要移动 */

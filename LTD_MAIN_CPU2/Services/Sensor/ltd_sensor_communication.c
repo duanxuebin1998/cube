@@ -8,10 +8,11 @@
 #include <ltd_sensor_communication.h>
 #include "system_parameter.h"
 #include "sensor.h"
+#include "error_log.h"
  #include <math.h>
 
 #ifndef DSM_V2_MAX_RETRY
-#define DSM_V2_MAX_RETRY   SENSOR_COMM_MAX_RETRY
+#define DSM_V2_MAX_RETRY   UART6_COMM_MAX_RETRY
 #endif
 #ifndef DSM_V2_RX_TIMEOUT
 #define DSM_V2_RX_TIMEOUT  DSM_CMD_TIMEOUT
@@ -72,7 +73,6 @@ static int DSM_V2_Transceive(const uint8_t tx[8], uint8_t rx[8]) {
 	UART6_DrainRX_UntilIdle(5); // 发前清空残留数据
 	if (HAL_UART_Transmit(&huart6, (uint8_t*) tx, 8, DSM_CMD_TIMEOUT) != HAL_OK) {
 #ifdef DEBUG_DSM
-		printf("V2发送失败\r\n");
 #endif
 		return OTHER_PERIPHERAL_CONFIG_ERROR;
 	}
@@ -89,9 +89,7 @@ static int DSM_V2_Transceive(const uint8_t tx[8], uint8_t rx[8]) {
 	if (got < 8) {
 #ifdef DEBUG_DSM
 		if (got == 0) {
-			printf("V2接收超时，收到0字节\r\n");
 		} else {
-			printf("V2接收长度异常，收到%d字节\r\n", got);
 		}
 #endif
 		return (got == 0) ? SENSOR_DEVICE_COMM_TIMEOUT : SENSOR_RESP_FORMAT_ERROR;
@@ -106,7 +104,6 @@ static int DSM_V2_Transceive(const uint8_t tx[8], uint8_t rx[8]) {
 
 	if (DSM_V2_CalcSum(rx) != rx[7]) {
 #ifdef DEBUG_DSM
-		printf("V2接收校验错误: 计算=%02X, 接收=%02X\r\n", DSM_V2_CalcSum(rx), rx[7]);
 #endif
 		return SENSOR_BCC_ERROR;
 	}
@@ -120,19 +117,18 @@ static int DSM_V2_CheckReply(const uint8_t tx[8], const uint8_t rx[8]) {
 
 	if (rx[1] != expect_func) {
 #ifdef DEBUG_DSM
-		printf("V2接收功能码不匹配: 期望=%02X, 实际=%02X\r\n", expect_func, rx[1]);
+		printf("V2接收功能码不匹配: 期望：%02X, 实际=%02X\r\n", expect_func, rx[1]);
 #endif
 		return SENSOR_RESP_FORMAT_ERROR;
 	}
 	if (rx[6] == 0xFF) {
 #ifdef DEBUG_DSM
-		printf("V2接收返回失败(参数=FF)\r\n");
 #endif
 		return SENSOR_DEVICE_REPORTED_ERROR;
 	}
 	if (rx[6] != expect_param) {
 #ifdef DEBUG_DSM
-		printf("V2接收参数不匹配: 期望=%02X, 实际=%02X\r\n", expect_param, rx[6]);
+		printf("V2接收参数不匹配: 期望：%02X, 实际=%02X\r\n", expect_param, rx[6]);
 #endif
 		return SENSOR_RESP_FORMAT_ERROR;
 	}
@@ -167,21 +163,43 @@ int DSM_V2_SwitchMode(dsm_v2_mode_t mode) {
 		int ret = DSM_V2_Transceive(tx, rx);
 		if (ret != NO_ERROR) {
 			last_err = ret;
+			// 错误	阶段：错误重试	模块：传感器	操作：切换模式	原因：ErrorLog_GetReasonByCode((uint32_t)ret)	尝试：(attempt + 1)/DSM_V2_MAX_RETRY	错误码：ret	错误名：ErrorLog_GetCodeName(ret)
+			ErrorLog_Retry(ERROR_LOG_MODULE_SENSOR,
+			               ERROR_LOG_OP_SWITCH_MODE,
+			               ErrorLog_GetReasonByCode((uint32_t)ret),
+			               (uint32_t)(attempt + 1),
+			               DSM_V2_MAX_RETRY,
+			               (uint32_t)ret);
 			continue;
 		}
 
 		ret = DSM_V2_CheckReply(tx, rx);
 		if (ret == NO_ERROR) {
+			if (attempt > 0) {
+				// 错误	阶段：重试成功	模块：传感器	操作：切换模式	原因：通信失败	尝试：(attempt + 1)/DSM_V2_MAX_RETRY
+				ErrorLog_Recover(ERROR_LOG_MODULE_SENSOR,
+				                 ERROR_LOG_OP_SWITCH_MODE,
+				                 ERROR_LOG_REASON_COMM_FAIL,
+				                 (uint32_t)(attempt + 1),
+				                 DSM_V2_MAX_RETRY);
+			}
 #ifdef DEBUG_DSM
 			printf("[V2] 切换模式'%c'成功\r\n", (char) mode);
 #endif
 			return NO_ERROR;
 		}
 		last_err = ret;
+		// 错误	阶段：错误重试	模块：传感器	操作：切换模式	原因：ErrorLog_GetReasonByCode((uint32_t)ret)	尝试：(attempt + 1)/DSM_V2_MAX_RETRY	错误码：ret	错误名：ErrorLog_GetCodeName(ret)
+		ErrorLog_Retry(ERROR_LOG_MODULE_SENSOR,
+		               ERROR_LOG_OP_SWITCH_MODE,
+		               ErrorLog_GetReasonByCode((uint32_t)ret),
+		               (uint32_t)(attempt + 1),
+		               DSM_V2_MAX_RETRY,
+		               (uint32_t)ret);
 		HAL_Delay(DSM_BCC_DELAY);
 	}
 #ifdef DEBUG_DSM
-	printf("[V2] 切换模式'%c'失败, 错误码=%d\r\n", (char) mode, last_err);
+	printf("[V2] 切换模式'%c'失败, 错误码：%d\r\n", (char) mode, last_err);
 #endif
 	return last_err;
 }
@@ -210,6 +228,13 @@ int DSM_V2_Read_FloatParam(uint8_t param, float *out_value) {
 		int ret = DSM_V2_Transceive(tx, rx);
 		if (ret != NO_ERROR) {
 			last_err = ret;
+			// 错误	阶段：错误重试	模块：传感器	操作：读取浮点参数	原因：ErrorLog_GetReasonByCode((uint32_t)ret)	尝试：(attempt + 1)/DSM_V2_MAX_RETRY	错误码：ret	错误名：ErrorLog_GetCodeName(ret)
+			ErrorLog_Retry(ERROR_LOG_MODULE_SENSOR,
+			               ERROR_LOG_OP_READ_FLOAT_PARAM,
+			               ErrorLog_GetReasonByCode((uint32_t)ret),
+			               (uint32_t)(attempt + 1),
+			               DSM_V2_MAX_RETRY,
+			               (uint32_t)ret);
 			continue;
 		}
 
@@ -217,12 +242,27 @@ int DSM_V2_Read_FloatParam(uint8_t param, float *out_value) {
 		if (ret == NO_ERROR) {
 			float v = DSM_V2_ParseFloat_LE(rx + 2);
 			*out_value = v;
+            if (attempt > 0) {
+                // 错误	阶段：重试成功	模块：传感器	操作：读取浮点参数	原因：通信失败	尝试：(attempt + 1)/DSM_V2_MAX_RETRY
+                ErrorLog_Recover(ERROR_LOG_MODULE_SENSOR,
+                                 ERROR_LOG_OP_READ_FLOAT_PARAM,
+                                 ERROR_LOG_REASON_COMM_FAIL,
+                                 (uint32_t)(attempt + 1),
+                                 DSM_V2_MAX_RETRY);
+            }
 #ifdef DEBUG_DSM
 			printf("[V2] 读取浮点寄存器 R%u: %f\r\n", (unsigned) param, (double) v);
 #endif
 			return NO_ERROR;
 		}
 		last_err = ret;
+		// 错误	阶段：错误重试	模块：传感器	操作：读取浮点参数	原因：ErrorLog_GetReasonByCode((uint32_t)ret)	尝试：(attempt + 1)/DSM_V2_MAX_RETRY	错误码：ret	错误名：ErrorLog_GetCodeName(ret)
+		ErrorLog_Retry(ERROR_LOG_MODULE_SENSOR,
+		               ERROR_LOG_OP_READ_FLOAT_PARAM,
+		               ErrorLog_GetReasonByCode((uint32_t)ret),
+		               (uint32_t)(attempt + 1),
+		               DSM_V2_MAX_RETRY,
+		               (uint32_t)ret);
 		HAL_Delay(DSM_BCC_DELAY);
 	}
 	return last_err;
@@ -245,6 +285,13 @@ int DSM_V2_Read_IntParam(uint8_t param, int32_t *out_value) {
 		int ret = DSM_V2_Transceive(tx, rx);
 		if (ret != NO_ERROR) {
 			last_err = ret;
+			// 错误	阶段：错误重试	模块：传感器	操作：读取整数参数	原因：ErrorLog_GetReasonByCode((uint32_t)ret)	尝试：(attempt + 1)/DSM_V2_MAX_RETRY	错误码：ret	错误名：ErrorLog_GetCodeName(ret)
+			ErrorLog_Retry(ERROR_LOG_MODULE_SENSOR,
+			               ERROR_LOG_OP_READ_INT_PARAM,
+			               ErrorLog_GetReasonByCode((uint32_t)ret),
+			               (uint32_t)(attempt + 1),
+			               DSM_V2_MAX_RETRY,
+			               (uint32_t)ret);
 			continue;
 		}
 
@@ -252,12 +299,27 @@ int DSM_V2_Read_IntParam(uint8_t param, int32_t *out_value) {
 		if (ret == NO_ERROR) {
 			int32_t v = DSM_V2_ParseInt32_LE(rx + 2);
 			*out_value = v;
+            if (attempt > 0) {
+                // 错误	阶段：重试成功	模块：传感器	操作：读取整数参数	原因：通信失败	尝试：(attempt + 1)/DSM_V2_MAX_RETRY
+                ErrorLog_Recover(ERROR_LOG_MODULE_SENSOR,
+                                 ERROR_LOG_OP_READ_INT_PARAM,
+                                 ERROR_LOG_REASON_COMM_FAIL,
+                                 (uint32_t)(attempt + 1),
+                                 DSM_V2_MAX_RETRY);
+            }
 #ifdef DEBUG_DSM
 			printf("[V2] 读取整数寄存器 R%u: %ld (0x%08lX)\r\n", (unsigned) param, (long) v, (unsigned long) v);
 #endif
 			return NO_ERROR;
 		}
 		last_err = ret;
+		// 错误	阶段：错误重试	模块：传感器	操作：读取整数参数	原因：ErrorLog_GetReasonByCode((uint32_t)ret)	尝试：(attempt + 1)/DSM_V2_MAX_RETRY	错误码：ret	错误名：ErrorLog_GetCodeName(ret)
+		ErrorLog_Retry(ERROR_LOG_MODULE_SENSOR,
+		               ERROR_LOG_OP_READ_INT_PARAM,
+		               ErrorLog_GetReasonByCode((uint32_t)ret),
+		               (uint32_t)(attempt + 1),
+		               DSM_V2_MAX_RETRY,
+		               (uint32_t)ret);
 		HAL_Delay(DSM_BCC_DELAY);
 	}
 	return last_err;

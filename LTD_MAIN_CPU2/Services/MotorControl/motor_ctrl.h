@@ -111,7 +111,7 @@ void MotorCtrl_ApplyPositionSourceParams(void);
  * 清零 XACTUAL/XTARGET、清除电机记步切换基准和旧局部周长。
  * 普通回零和标定零点都会调用，随后统一切回编码轮记步。
  */
-void MotorCtrl_ResetDrumReferenceForZeroCalibration(void);
+uint32_t MotorCtrl_ResetDrumReferenceForZeroCalibration(void);
 
 /** 切换为编码轮记步，后续 cable_length/sensor_position 由外部编码器刷新。 */
 uint32_t MotorCtrl_SwitchPositionSourceToEncoder(void);
@@ -180,7 +180,7 @@ uint32_t MotorCtrl_MoveByTicksAndWait(int32_t ticks, uint32_t speed_x100);
 uint32_t MotorCtrl_MoveToPosition(float target_mm, uint32_t speed_x100);
 
 /** 无检测阻塞运动，调试/维护用，不建议用于关键测量流程。 */
-void MotorCtrl_MoveBlockingNoDetect(float mm, int dir, uint32_t speed_x100);
+uint32_t MotorCtrl_MoveBlockingNoDetect(float mm, int dir, uint32_t speed_x100);
 
 /* ===================== 驱动状态 / 故障检测 ===================== */
 
