@@ -9,6 +9,8 @@
 
 int HostCommuInit(void);
 void HostCommuProcess(uint8_t *rcvbuff, int rcvcount);
+/* 在主循环中输出 HostCommuProcess 延后的异常日志，避免中断里直接打印。 */
+void HostCommu_ProcessDeferredLogs(void);
 
 #endif	  
 

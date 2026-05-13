@@ -22,6 +22,7 @@
 #include "measure_zero.h"
 #include "system_parameter.h"
 #include "encoder.h"
+#include "error_log.h"
 
 // 函数原型声明
 static int SearchOil();   // 粗略搜索液位
@@ -39,17 +40,10 @@ uint32_t FollowOilLevel(void);
  */
 static uint32_t OilLevel_StopBeforeReturn(uint32_t error_code, const char *reason)
 {
-    uint32_t stop_ret;
-
     if (error_code == NO_ERROR) {
         return NO_ERROR;
     }
-
-    stop_ret = MotorCtrl_SlowStop();
-    printf("液位流程\t%s，退出前停止电机 错误码=0x%08lX 停止结果=0x%08lX\r\n",
-           (reason != NULL) ? reason : "故障退出",
-           (unsigned long)error_code,
-           (unsigned long)stop_ret);
+    (void)MotorCtrl_SlowStop();
 
     return error_code;
 }
@@ -113,24 +107,39 @@ uint32_t SearchAndFollowOilLevel(void) {
 	try_times = 0;
 	while (try_times < 3) {
 		try_times++;
-		printf("液位流程\t液位搜索第%d次尝试\r\n", try_times);
 
 		ret = SearchOilLevel();
 
 		if (ret == NO_ERROR) {
-			printf("液位流程\t液位搜索成功\r\n");
+			if (try_times > 1U) {
+				// 错误	阶段：重试成功	模块：测量	操作：搜索液位	原因：恢复成功	尝试：try_times/3U
+				ErrorLog_Recover(ERROR_LOG_MODULE_MEASURE,
+				                 ERROR_LOG_OP_SEARCH_OIL_LEVEL,
+				                 ERROR_LOG_REASON_RECOVER_OK,
+				                 try_times,
+				                 3U);
+			}
 			break;
 		} else if (ret == STATE_SWITCH) {
-			printf("液位流程\t检测到状态切换，中止液位搜索\r\n");
+			// 错误	阶段：错误报警	模块：测量	操作：搜索液位	原因：命令切换	处理：停止测量
+			ErrorLog_Warn(ERROR_LOG_MODULE_MEASURE,
+			              ERROR_LOG_OP_SEARCH_OIL_LEVEL,
+			              ERROR_LOG_REASON_COMMAND_SWITCH,
+			              ERROR_LOG_ACTION_STOP_MEASURE);
 			break;
 		} else {
-			printf("液位流程\t液位搜索失败，错误码:0x%lX\r\n", ret);
+			// 错误	阶段：错误重试	模块：测量	操作：搜索液位	原因：搜索失败	尝试：try_times/3U	错误码：ret	错误名：ErrorLog_GetCodeName(ret)
+			ErrorLog_Retry(ERROR_LOG_MODULE_MEASURE,
+			               ERROR_LOG_OP_SEARCH_OIL_LEVEL,
+			               ERROR_LOG_REASON_SEARCH_FAIL,
+			               try_times,
+			               3U,
+			               ret);
 			(void)MotorCtrl_SlowStop();
 			HAL_Delay(1000);
 		}
 	}
 	if (ret != NO_ERROR) {
-		printf("液位流程\t液位搜索失败(尝试%d次)\r\n", try_times);
 		CHECK_ERROR(ret);
 	}
 	// 修正液位位置
@@ -142,23 +151,38 @@ uint32_t SearchAndFollowOilLevel(void) {
 	try_times = 0;
 	while (try_times < 3) {
 		try_times++;
-		printf("液位流程\t液位跟随第%d次尝试\r\n", try_times);
 
 		ret = FollowOilLevel();
 
 		if (ret == NO_ERROR) {
-			printf("液位流程\t液位跟随成功\r\n");
+			if (try_times > 1U) {
+				// 错误	阶段：重试成功	模块：测量	操作：跟随液位	原因：恢复成功	尝试：try_times/3U
+				ErrorLog_Recover(ERROR_LOG_MODULE_MEASURE,
+				                 ERROR_LOG_OP_FOLLOW_OIL_LEVEL,
+				                 ERROR_LOG_REASON_RECOVER_OK,
+				                 try_times,
+				                 3U);
+			}
 			break;
 		} else if (ret == STATE_SWITCH) {
-			printf("液位流程\t检测到状态切换，中止液位跟随\r\n");
+			// 错误	阶段：错误报警	模块：测量	操作：跟随液位	原因：命令切换	处理：停止测量
+			ErrorLog_Warn(ERROR_LOG_MODULE_MEASURE,
+			              ERROR_LOG_OP_FOLLOW_OIL_LEVEL,
+			              ERROR_LOG_REASON_COMMAND_SWITCH,
+			              ERROR_LOG_ACTION_STOP_MEASURE);
 			break;
 		} else {
-			printf("液位流程\t液位跟随失败，错误码:0x%lX\r\n", ret);
+			// 错误	阶段：错误重试	模块：测量	操作：跟随液位	原因：跟随失败	尝试：try_times/3U	错误码：ret	错误名：ErrorLog_GetCodeName(ret)
+			ErrorLog_Retry(ERROR_LOG_MODULE_MEASURE,
+			               ERROR_LOG_OP_FOLLOW_OIL_LEVEL,
+			               ERROR_LOG_REASON_FOLLOW_FAIL,
+			               try_times,
+			               3U,
+			               ret);
 			HAL_Delay(1000);
 		}
 	}
 	if (ret != NO_ERROR) {
-		printf("液位流程\t液位跟随失败(尝试%d次)\r\n", try_times);
 		CHECK_ERROR(ret);
 	}
 
@@ -196,41 +220,62 @@ uint32_t SearchAndFollowOilLevel(void) {
 uint32_t SearchOilLevel(void) {
     uint32_t ret;
     uint32_t last_coarse_ret = MEASUREMENT_OILLEVEL_NOTFOUND;
+    uint8_t coarse_found = 0U;
     int mode_try_times = 0;
     int coarse_try_times = 0;
     fault_info_init();  // 清除故障信息
     /*************** Step 1: 启用液位模式 ***************/
     while (mode_try_times < 3) {
         mode_try_times++;
-        printf("液位流程\t启用液位模式第%d次尝试\r\n", mode_try_times);
 
         ret = EnableLevelMode();
 
         if (ret == NO_ERROR) {
-            printf("液位流程\t液位模式启用成功\r\n");
+            if (mode_try_times > 1) {
+                // 错误	阶段：重试成功	模块：传感器	操作：启用液位模式	原因：恢复成功	尝试：mode_try_times/3U
+                ErrorLog_Recover(ERROR_LOG_MODULE_SENSOR,
+                                 ERROR_LOG_OP_ENABLE_LEVEL_MODE,
+                                 ERROR_LOG_REASON_RECOVER_OK,
+                                 (uint32_t)mode_try_times,
+                                 3U);
+            }
             break;
         } else if (ret == STATE_SWITCH) {
-            printf("液位流程\t检测到状态切换，中止液位模式启用\r\n");
+            // 错误	阶段：错误报警	模块：传感器	操作：启用液位模式	原因：命令切换	处理：停止测量
+            ErrorLog_Warn(ERROR_LOG_MODULE_SENSOR,
+                          ERROR_LOG_OP_ENABLE_LEVEL_MODE,
+                          ERROR_LOG_REASON_COMMAND_SWITCH,
+                          ERROR_LOG_ACTION_STOP_MEASURE);
             break;
         } else {
-            printf("液位流程\t启用液位模式失败，错误码:0x%lX\r\n", ret);
+            // 错误	阶段：错误重试	模块：传感器	操作：启用液位模式	原因：模式启用失败	尝试：mode_try_times/3U	错误码：ret	错误名：ErrorLog_GetCodeName(ret)
+            ErrorLog_Retry(ERROR_LOG_MODULE_SENSOR,
+                           ERROR_LOG_OP_ENABLE_LEVEL_MODE,
+                           ERROR_LOG_REASON_MODE_FAIL,
+                           (uint32_t)mode_try_times,
+                           3U,
+                           ret);
             HAL_Delay(500);
         }
     }
     if (ret != NO_ERROR) {
-        printf("液位流程\t液位模式启用失败(尝试%d次)\r\n", mode_try_times);
         CHECK_ERROR(ret);
     }
 
     /*************** 粗找阶段 - 带重试机制 ***************/
     while (coarse_try_times < 3) {  //这里重试没有起作用
         coarse_try_times++;
-        printf("液位测量\t粗找液位第%d次尝试\r\n", coarse_try_times);
         fault_info_init(); // 清除故障信息
         ret = DSM_Get_LevelMode_Frequence_Avg(&g_measurement.oil_measurement.current_frequency);
         if (ret != NO_ERROR) {
             last_coarse_ret = ret;
-            printf("液位测量\t粗找频率读取失败[%d]:0x%lX\r\n", coarse_try_times, ret);
+            // 错误	阶段：错误重试	模块：传感器	操作：读取液位频率	原因：ErrorLog_GetReasonByCode(ret)	尝试：coarse_try_times/3U	错误码：ret	错误名：ErrorLog_GetCodeName(ret)
+            ErrorLog_Retry(ERROR_LOG_MODULE_SENSOR,
+                           ERROR_LOG_OP_READ_LEVEL_FREQ,
+                           ErrorLog_GetReasonByCode(ret),
+                           (uint32_t)coarse_try_times,
+                           3U,
+                           ret);
             HAL_Delay(500);
             continue;
         }
@@ -249,17 +294,26 @@ uint32_t SearchOilLevel(void) {
             printf("液位测量\t传感器已在液位中，向上寻找空气\r\n");
             ret = SearchAir();
             CHECK_ERROR(ret); // 检查寻找空气是否成功
+            coarse_found = 1U;
             break;
         } else if (INAIR) {
             printf("液位测量\t传感器在空气中，向下寻找液位\r\n");
             ret = SearchOil();
             CHECK_ERROR(ret); // 检查寻找液位是否成功
+            coarse_found = 1U;
             break;
         }
     }
-    if (coarse_try_times >= 3) {
-        printf("液位测量\t粗找液位失败(尝试%d次)\r\n", coarse_try_times);
+    if (coarse_found == 0U) {
         RETURN_ERROR(last_coarse_ret);
+    }
+    if (coarse_try_times > 1) {
+        // 错误	阶段：重试成功	模块：测量	操作：搜索液位	原因：恢复成功	尝试：coarse_try_times/3U
+        ErrorLog_Recover(ERROR_LOG_MODULE_MEASURE,
+                         ERROR_LOG_OP_SEARCH_OIL_LEVEL,
+                         ERROR_LOG_REASON_RECOVER_OK,
+                         (uint32_t)coarse_try_times,
+                         3U);
     }
     printf("液位测量\t粗找液位完成\r\n");
     /*************** 精找阶段  ***************/
@@ -274,7 +328,6 @@ uint32_t SearchOilLevel(void) {
 
     ret = SearchOilPrecise(100);  // 执行精确搜索
     if (ret != NO_ERROR) {
-        printf("液位测量\t精找失败:0x%lX\r\n", ret);
         CHECK_ERROR(ret);
     }
     /*************** 最终校验与记录 ***************/
@@ -665,7 +718,6 @@ static int SearchOilPrecise(float per_mm_Frequency) {
 
 		// 超限保护（连续多次加速仍无法跟踪）
 		if (overTime > MAX_TIMES_WHEN_FRE_FOLLOW || lowerTime > MAX_TIMES_WHEN_FRE_FOLLOW) {
-			printf("探头频率异常\r\n");
 			return OilLevel_StopBeforeReturn(MEASUREMENT_OVERSPEED, "探头频率异常");
 		}
 

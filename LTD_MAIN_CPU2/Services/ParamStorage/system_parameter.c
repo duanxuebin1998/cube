@@ -10,6 +10,7 @@
  */
 
 #include "system_parameter.h"
+#include "error_log.h"
 #include "app_version.h"
 #include "mb85rs2m.h"
 #include "my_crc.h"
@@ -137,6 +138,7 @@ static int load_device_params_from_slot_impl(uint32_t base_addr,
                                              int verbose)
 {
     DeviceParameters temp;
+    char detail[128];
 
     ReadMultiData((uint8_t *)&temp, (int)base_addr, sizeof(DeviceParameters));
 
@@ -145,16 +147,42 @@ static int load_device_params_from_slot_impl(uint32_t base_addr,
         if (verbose) {
             printf("参数[%s]魔术字不匹配: 0x%08lX\r\n", slot_name, (unsigned long)temp.magic);
         }
+        if (verbose) {
+            snprintf(detail, sizeof(detail),
+                     "分区：%s,魔术字：0x%08lX,期望：0x%08lX",
+                     slot_name,
+                     (unsigned long)temp.magic,
+                     (unsigned long)DEVICE_PARAM_MAGIC);
+            // 错误	阶段：错误报警	模块：参数	操作：参数校验	原因：魔术字不匹配	处理：继续尝试	详情：detail
+            ErrorLog_WarnDetail(ERROR_LOG_MODULE_PARAM,
+                                ERROR_LOG_OP_PARAM_VALIDATE,
+                                ERROR_LOG_REASON_PARAM_MAGIC,
+                                ERROR_LOG_ACTION_CONTINUE,
+                                detail);
+        }
         return 0;
     }
 
     if (temp.struct_size != sizeof(DeviceParameters))
     {
         if (verbose) {
-            printf("参数[%s]结构体大小不匹配: FRAM=%lu, 当前=%lu\r\n",
+            printf("参数[%s]结构体大小不匹配: FRAM=%lu, 当前：%lu\r\n",
                    slot_name,
                    (unsigned long)temp.struct_size,
                    (unsigned long)sizeof(DeviceParameters));
+        }
+        if (verbose) {
+            snprintf(detail, sizeof(detail),
+                     "分区：%s,FRAM大小：%lu,当前大小：%lu",
+                     slot_name,
+                     (unsigned long)temp.struct_size,
+                     (unsigned long)sizeof(DeviceParameters));
+            // 错误	阶段：错误报警	模块：参数	操作：参数校验	原因：结构体大小不匹配	处理：继续尝试	详情：detail
+            ErrorLog_WarnDetail(ERROR_LOG_MODULE_PARAM,
+                                ERROR_LOG_OP_PARAM_VALIDATE,
+                                ERROR_LOG_REASON_PARAM_SIZE,
+                                ERROR_LOG_ACTION_CONTINUE,
+                                detail);
         }
         return 0;
     }
@@ -162,10 +190,23 @@ static int load_device_params_from_slot_impl(uint32_t base_addr,
     if (temp.param_version != DEVICE_PARAM_VERSION)
     {
         if (verbose) {
-            printf("参数[%s]版本不匹配: FRAM=%lu, 当前=%lu\r\n",
+            printf("参数[%s]版本不匹配: FRAM=%lu, 当前：%lu\r\n",
                    slot_name,
                    (unsigned long)temp.param_version,
                    (unsigned long)DEVICE_PARAM_VERSION);
+        }
+        if (verbose) {
+            snprintf(detail, sizeof(detail),
+                     "分区：%s,FRAM版本：%lu,当前版本：%lu",
+                     slot_name,
+                     (unsigned long)temp.param_version,
+                     (unsigned long)DEVICE_PARAM_VERSION);
+            // 错误	阶段：错误报警	模块：参数	操作：参数校验	原因：版本不匹配	处理：继续尝试	详情：detail
+            ErrorLog_WarnDetail(ERROR_LOG_MODULE_PARAM,
+                                ERROR_LOG_OP_PARAM_VALIDATE,
+                                ERROR_LOG_REASON_PARAM_VERSION,
+                                ERROR_LOG_ACTION_CONTINUE,
+                                detail);
         }
         return 0;
     }
@@ -179,6 +220,19 @@ static int load_device_params_from_slot_impl(uint32_t base_addr,
                        slot_name,
                        (unsigned long)calc_crc,
                        (unsigned long)temp.crc);
+            }
+            if (verbose) {
+                snprintf(detail, sizeof(detail),
+                         "分区：%s,计算CRC：0x%08lX,FRAMCRC：0x%08lX",
+                         slot_name,
+                         (unsigned long)calc_crc,
+                         (unsigned long)temp.crc);
+                // 错误	阶段：错误报警	模块：参数	操作：参数校验	原因：CRC不匹配	处理：继续尝试	详情：detail
+                ErrorLog_WarnDetail(ERROR_LOG_MODULE_PARAM,
+                                    ERROR_LOG_OP_PARAM_VALIDATE,
+                                    ERROR_LOG_REASON_PARAM_CRC,
+                                    ERROR_LOG_ACTION_CONTINUE,
+                                    detail);
             }
             return 0;
         }
@@ -224,7 +278,7 @@ static void save_device_params_internal(int mark_updated, int force_write)
 
     if (sizeof(DeviceParameters) > FRAM_PARAM_SLOT_SIZE)
     {
-        printf("参数大小超出分区容量: 大小=%lu, 分区=%lu\r\n",
+        printf("参数大小超出分区容量: 大小=%lu, 分区：%lu\r\n",
                (unsigned long)sizeof(DeviceParameters),
                (unsigned long)FRAM_PARAM_SLOT_SIZE);
         g_measurement.device_status.error_code = PARAM_ADDRESS_OVERFLOW;
@@ -260,7 +314,7 @@ static void save_device_params_internal(int mark_updated, int force_write)
         g_measurement.device_status.parameter_update_flag++;
     }
 
-    printf("保存设备参数: 版本=%lu, 大小=%lu, CRC=0x%08lX\r\n",
+    printf("保存设备参数: 版本：%lu, 大小=%lu, CRC=0x%08lX\r\n",
            (unsigned long)params.param_version,
            (unsigned long)params.struct_size,
            (unsigned long)params.crc);
@@ -325,7 +379,7 @@ int load_device_params(void)
 
     if (sizeof(DeviceParameters) > FRAM_PARAM_SLOT_SIZE)
     {
-        printf("设备参数超出单分区容量: 大小=%lu, 分区=%lu\r\n", (unsigned long)sizeof(DeviceParameters), (unsigned long)FRAM_PARAM_SLOT_SIZE);
+        printf("设备参数超出单分区容量: 大小=%lu, 分区：%lu\r\n", (unsigned long)sizeof(DeviceParameters), (unsigned long)FRAM_PARAM_SLOT_SIZE);
         g_measurement.device_status.error_code = PARAM_ADDRESS_OVERFLOW;
         return 0;
     }
@@ -336,11 +390,15 @@ int load_device_params(void)
     }
     else if (load_device_params_from_slot(FRAM_PARAM_B_ADDRESS, &temp, "B"))
     {
-        printf("设备参数 A 分区异常, 已回退到 B 分区\r\n");
+        // 错误	阶段：重试成功	模块：参数	操作：FRAM参数分区回退	原因：A分区异常，使用B分区	尝试：1U/1U
+        ErrorLog_Recover(ERROR_LOG_MODULE_PARAM,
+                         ERROR_LOG_OP_FRAM_FALLBACK,
+                         ERROR_LOG_REASON_FRAM_FALLBACK,
+                         1U,
+                         1U);
     }
     else
     {
-        printf("设备参数 A/B 分区均异常\r\n");
         g_measurement.device_status.error_code = PARAM_EEPROM_FAIL;
         return 0;
     }
@@ -381,7 +439,13 @@ void init_device_params(void)
             print_device_params();
             break;
         }
-        printf("设备参数加载失败: 尝试=%d/%d\r\n", attempt, MAX_RETRY);
+        // 错误	阶段：错误重试	模块：参数	操作：FRAM参数分区回退	原因：FRAM参数分区异常	尝试：attempt/MAX_RETRY	错误码：PARAM_EEPROM_FAIL	错误名：ErrorLog_GetCodeName(PARAM_EEPROM_FAIL)
+        ErrorLog_Retry(ERROR_LOG_MODULE_PARAM,
+                       ERROR_LOG_OP_FRAM_FALLBACK,
+                       ERROR_LOG_REASON_FRAM_ERROR,
+                       (uint32_t)attempt,
+                       (uint32_t)MAX_RETRY,
+                       PARAM_EEPROM_FAIL);
         HAL_Delay(100);
     }
 
@@ -392,7 +456,11 @@ void init_device_params(void)
         RestoreFactoryParamsConfig(); /* 内部会调用 save_device_params() */
 
         g_measurement.device_status.error_code = PARAM_EEPROM_FAIL;
-        printf("设备参数连续 %d 次加载失败, 已恢复出厂设置\r\n", MAX_RETRY);
+        // 错误	阶段：错误报警	模块：参数	操作：FRAM参数分区回退	原因：FRAM参数分区异常	处理：使用默认参数
+        ErrorLog_Warn(ERROR_LOG_MODULE_PARAM,
+                      ERROR_LOG_OP_FRAM_FALLBACK,
+                      ERROR_LOG_REASON_FRAM_ERROR,
+                      ERROR_LOG_ACTION_USE_DEFAULT_PARAM);
     }
 }
 /*========================= 恢复出厂参数 =========================*/

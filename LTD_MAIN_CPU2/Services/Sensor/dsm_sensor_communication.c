@@ -5,6 +5,7 @@
  *      Author: Duan Xuebin
  */
 #include "dsm_sensor_communication.h"
+#include "error_log.h"
 #include "system_parameter.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -59,7 +60,7 @@ int IsErrorResponse(const char *resp) {
     return 0; // 正常
 }
 
-#define DSM_UART_MAX_RETRY SENSOR_COMM_MAX_RETRY
+#define DSM_UART_MAX_RETRY UART6_COMM_MAX_RETRY
 
 // 串口发送并接收（带调试打印）
 static int UART6_SendCommand(const char *cmd,
@@ -109,11 +110,9 @@ static int UART6_SendCommand(const char *cmd,
 
     /* 响应校验 */
     if (recvLen == 0) {
-        printf("[UART6] 通信失败：无数据\r\n");
         return SENSOR_DEVICE_COMM_TIMEOUT;
     }
     if (recvLen < 3) {
-        printf("[UART6] 响应长度异常：接收长度=%u\r\n", (unsigned)recvLen);
         return SENSOR_RESP_FORMAT_ERROR;
     }
 #if DEBUG_UART6
@@ -134,9 +133,6 @@ static int UART6_SendCommand(const char *cmd,
 #endif
         return NO_ERROR;
     } else {
-#if DEBUG_UART6
-        printf("DSM: 接收BCC校验失败！\r\n");
-#endif
         return SENSOR_BCC_ERROR; // 校验失败
     }
 }
@@ -147,7 +143,7 @@ static int UART6_SendWithRetry(const char *cmd,
                                uint16_t maxLen,
                                uint16_t *recv_len_out,
                                uint32_t timeout) {
-    uint32_t ret;
+    uint32_t ret = SENSOR_DEVICE_COMM_TIMEOUT;
     uint16_t recvLen = 0;
     for (int i = 0; i < DSM_UART_MAX_RETRY; i++) {
         if (HasEffectiveCommandSwitchRequest()) {
@@ -162,13 +158,33 @@ static int UART6_SendWithRetry(const char *cmd,
                 if (recv_len_out != NULL) {
                     *recv_len_out = recvLen;
                 }
+                if (i > 0) {
+                    // 错误	阶段：重试成功	模块：传感器	操作：读取液位	原因：通信失败	尝试：(i + 1)/DSM_UART_MAX_RETRY
+                    ErrorLog_Recover(ERROR_LOG_MODULE_SENSOR,
+                                     ERROR_LOG_OP_READ_LEVEL,
+                                     ERROR_LOG_REASON_COMM_FAIL,
+                                     (uint32_t)(i + 1),
+                                     DSM_UART_MAX_RETRY);
+                }
                 return NO_ERROR; // 成功且不是错误码
             } else {
-                printf("[UART6] 接收到设备错误响应，重试 %d/%d\r\n", i + 1, DSM_UART_MAX_RETRY);
+                // 错误	阶段：错误重试	模块：传感器	操作：读取液位	原因：设备返回错误	尝试：(i + 1)/DSM_UART_MAX_RETRY	错误码：SENSOR_DEVICE_REPORTED_ERROR	错误名：ErrorLog_GetCodeName(SENSOR_DEVICE_REPORTED_ERROR)
+                ErrorLog_Retry(ERROR_LOG_MODULE_SENSOR,
+                               ERROR_LOG_OP_READ_LEVEL,
+                               ERROR_LOG_REASON_DEVICE_ERROR,
+                               (uint32_t)(i + 1),
+                               DSM_UART_MAX_RETRY,
+                               SENSOR_DEVICE_REPORTED_ERROR);
                 ret = SENSOR_DEVICE_REPORTED_ERROR;
             }
         } else {
-            printf("[UART6] 通信失败，重试 %d/%d\r\n", i + 1, DSM_UART_MAX_RETRY);
+            // 错误	阶段：错误重试	模块：传感器	操作：读取液位	原因：ErrorLog_GetReasonByCode(ret)	尝试：(i + 1)/DSM_UART_MAX_RETRY	错误码：ret	错误名：ErrorLog_GetCodeName(ret)
+            ErrorLog_Retry(ERROR_LOG_MODULE_SENSOR,
+                           ERROR_LOG_OP_READ_LEVEL,
+                           ErrorLog_GetReasonByCode(ret),
+                           (uint32_t)(i + 1),
+                           DSM_UART_MAX_RETRY,
+                           ret);
         }
     }
     return ret;
@@ -217,7 +233,6 @@ int Probe_EnableWaterSensor(void) {
             return SENSOR_RESP_FORMAT_ERROR;
         }
     } else {
-        printf("[探针] 测水探针开启失败！\r\n");
         return ret;
     }
 }
@@ -241,7 +256,6 @@ int DSM_EnableLevelMode(void) {
             return SENSOR_RESP_FORMAT_ERROR;
         }
     } else {
-        printf("[液位模式] 开启失败！\r\n");
         return ret;
     }
 }
@@ -265,7 +279,6 @@ int DSM_EnableDensityMode(void) {
             return SENSOR_RESP_FORMAT_ERROR;
         }
     } else {
-        printf("[密度模式] 开启失败！\r\n");
         return ret;
     }
 }
@@ -308,7 +321,6 @@ uint32_t Read_Level_Frequency(uint32_t *frequency_out)
     float hz = 0.0f;
     int perr = parse_freq_response(resp, &hz);
     if (perr != 0) {
-        printf("无效频率响应，解析失败: 错误=%d, 原始: %s\r\n", perr, resp);
         return SENSOR_RESP_FORMAT_ERROR;
     }
 
@@ -373,7 +385,6 @@ uint32_t Read_VibrationTube_ID(char *id_out, size_t id_out_size)
     // 发送 CN 指令
     uint32_t ret = UART6_SendWithRetry("CN", resp, RX_BUF_LEN, NULL, 500);
     if (ret != NO_ERROR) {
-        printf("[UART6] 发送 CN 指令或接收超时\r\n");
         return ret;
     }
 
@@ -387,7 +398,6 @@ uint32_t Read_VibrationTube_ID(char *id_out, size_t id_out_size)
 
     // 按协议，一般以 'N' 开头，例如 N2009924H
     if (*p != 'N') {
-        printf("振动管ID响应格式错误，未以 'N' 开头，原始: %s\r\n", resp);
         return SENSOR_RESP_FORMAT_ERROR;
     }
 
@@ -440,30 +450,25 @@ uint32_t Read_Water_Capacitance(float *cap_out)
     }
 
     if (recv_len != 11U) {
-        printf("[UART6] 电容响应长度异常: 接收长度=%u\r\n", (unsigned)recv_len);
         // return SENSOR_RESP_FORMAT_ERROR;
     }
 
     /* 格式检查：起始必须是 D 或 E，且以 \r\n 结束 */
     if (!((resp[0] == 'D') || (resp[0] == 'E'))) {
-        printf("[UART6] 电容响应头错误: 0x%02X, 响应=%s\r\n", (unsigned char)resp[0], resp);
         // return SENSOR_RESP_FORMAT_ERROR;
     }
     if (!(resp[9] == '\r' && resp[10] == '\n')) {
-        printf("[UART6] 电容响应结尾错误: [%02X %02X]\r\n", (unsigned char)resp[9], (unsigned char)resp[10]);
         // return SENSOR_RESP_FORMAT_ERROR;
     }
 
     /* BCC 校验：WaterSendPack 的 BCC 在 resp[8]，覆盖 resp[0..7]。 */
     char bcc = CalculationBCC_DSM(resp, 8);
     if (bcc != resp[8]) {
-        printf("[UART6] 电容 BCC 校验失败: 计算=%02X 接收=%02X\r\n", (unsigned char)bcc, (unsigned char)resp[8]);
         // return SENSOR_BCC_ERROR;
     }
 
     /* 电压异常标志：resp[0]=='E' */
     if (resp[0] == 'E') {
-        printf("[UART6] 电容响应提示：电压异常\r\n");
         // return SENSOR_VOLTAGE_ERROR;
     }
 
@@ -527,7 +532,6 @@ uint32_t Read_Gyro_Angle(float *angle_x_deg, float *angle_y_deg)
     char *pB = strchr(resp, 'B');
 
     if (!pA || !pB) {
-        printf("[UART6] 陀螺仪响应格式错误: %s\r\n", resp);
         return SENSOR_RESP_FORMAT_ERROR;
     }
 
@@ -536,7 +540,6 @@ uint32_t Read_Gyro_Angle(float *angle_x_deg, float *angle_y_deg)
     int eb = dsm_parse_float_after_tag(pB, &ay);
 
     if (ea != 0 || eb != 0) {
-        printf("[UART6] 陀螺仪角度解析失败: A轴错误=%d B轴错误=%d, 响应=%s\r\n", ea, eb, resp);
         return SENSOR_RESP_FORMAT_ERROR;
     }
 

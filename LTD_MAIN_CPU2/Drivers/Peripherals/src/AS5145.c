@@ -23,6 +23,7 @@
 #include "stdio.h"
 #include "encoder.h"
 #include "system_parameter.h"
+#include "error_log.h"
 #include "motor_ctrl.h"
 
 #define SSI_FRAME_LENGTH     4u
@@ -194,6 +195,13 @@ static void Handle_SSI_Error(const SSI_Data_t *data) {
     }
 
     if (++ssi_state.retry_count <= SSI_RETRY_LIMIT) {
+        // ´íÎó	½×¶Î£º´íÎóÖØÊÔ	Ä£¿é£º±àÂëÆ÷	²Ù×÷£ºÍ¨ÐÅÕï¶Ï	Ô­Òò£ºErrorLog_GetReasonByCode(err)	³¢ÊÔ£ºssi_state.retry_count/SSI_RETRY_LIMIT	´íÎóÂë£ºerr	´íÎóÃû£ºErrorLog_GetCodeName(err)
+        ErrorLog_Retry(ERROR_LOG_MODULE_ENCODER,
+                       ERROR_LOG_OP_COMM_DIAG,
+                       ErrorLog_GetReasonByCode(err),
+                       (uint32_t)ssi_state.retry_count,
+                       SSI_RETRY_LIMIT,
+                       err);
         (void)Start_Read_SSI_Data();
         return;
     }
@@ -302,7 +310,7 @@ HAL_StatusTypeDef Start_Encoder_Collection_TIM(void) {
     {
         HAL_StatusTypeDef status = HAL_TIM_Base_Start_IT(&ENCODER_TIM_HANDLE);
         if (status != HAL_OK) {
-            printf("´íÎó: ±àÂëÆ÷¶¨Ê±Æ÷Æô¶¯Ê§°Ü(´úÂë: %d)\n", status);
+            printf("Òì³£: ±àÂëÆ÷¶¨Ê±Æ÷Æô¶¯Ê§°Ü(´úÂë: %d)\n", status);
         } else {
             printf("±àÂëÆ÷¶¨Ê±Æ÷ÒÑÆô¶¯\n");
         }

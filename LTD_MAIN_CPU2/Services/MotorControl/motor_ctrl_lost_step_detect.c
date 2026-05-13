@@ -185,7 +185,7 @@ uint32_t MotorCtrl_CheckLostStepAutoTiming(int32_t currentPos)
                        set_speed_mm_s);
 
                 if (MotorCtrl_IsPositionSourceMotor()) {
-                    printf("当前为电机步进位置源，忽略编码器丢步错误\r\n");
+                    printf("当前为电机步进位置源，忽略编码器丢步异常\r\n");
                     return NO_ERROR;
                 }
                 return ENCODER_LOST_STEP;
@@ -250,7 +250,7 @@ void MotorLostStep_NoDetectRuntimeLogUpdate(void)
     }
     last_log_tick = now;
 
-    printf("无检测运行 | 方向=%lu 称重=%lu 距离零点=%ld(0.1mm) 罐底距离=%ld "
+    printf("无检测运行 | 方向：%lu 称重=%lu 距离零点：%ld(0.1mm) 罐底距离=%ld "
            "| X轴（X100）=%ld Y轴（X100）=%ld | 密度=%lu 温度=%lu 频率=%lu\r\n",
            (unsigned long)g_measurement.debug_data.motor_state,
            (unsigned long)g_measurement.debug_data.current_weight,

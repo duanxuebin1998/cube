@@ -13,9 +13,10 @@
 #include "ltd_sensor_communication.h"
 #include "system_parameter.h"
 #include "sensor.h"
+#include "error_log.h"
 
 #ifndef WIRELESS_MAX_RETRY
-#define WIRELESS_MAX_RETRY   SENSOR_COMM_MAX_RETRY
+#define WIRELESS_MAX_RETRY   UART6_COMM_MAX_RETRY
 #endif
 
 #ifndef WIRELESS_RX_TIMEOUT
@@ -72,7 +73,7 @@ static inline void WIRELESS_MakeFrame(uint8_t out[8],
  * 发命令前清空 UART6 接收缓存中的残留数据。
  *
  * 由于 huart6 会被无线节点参数访问和传感器透传链路复用，
- * 如果上一次通信残留半包/错包，下一次固定 8 字节回复很容易错位。
+ * 如果上一次通信残留半包/误包，下一次固定 8 字节回复很容易误位。
  * 这里通过“持续读取直到空闲 idle_ms”为止”的方式做一个轻量 flush。
  */
 static void UART6_DrainRX_UntilIdle(uint32_t idle_ms) {
@@ -114,7 +115,6 @@ static uint32_t WIRELESS_Transceive(const uint8_t tx[8], uint8_t rx[8]) {
 
     if (HAL_UART_Transmit(&huart6, (uint8_t*)tx, 8, DSM_CMD_TIMEOUT) != HAL_OK) {
 #ifdef DEBUG_WIRELESS
-        printf("无线发送失败\r\n");
 #endif
         return OTHER_PERIPHERAL_CONFIG_ERROR;
     }
@@ -133,9 +133,7 @@ static uint32_t WIRELESS_Transceive(const uint8_t tx[8], uint8_t rx[8]) {
     if (got < 8) {
 #ifdef DEBUG_WIRELESS
         if (got == 0) {
-            printf("无线接收超时，收到0字节\r\n");
         } else {
-            printf("无线接收长度异常，收到%d字节\r\n", got);
         }
 #endif
         return (got == 0) ? SENSOR_DEVICE_COMM_TIMEOUT : SENSOR_RESP_FORMAT_ERROR;
@@ -151,8 +149,6 @@ static uint32_t WIRELESS_Transceive(const uint8_t tx[8], uint8_t rx[8]) {
 
     if (WIRELESS_CalcSum(rx) != rx[7]) {
 #ifdef DEBUG_WIRELESS
-        printf("无线接收校验错误: 计算=%02X, 接收=%02X\r\n",
-               WIRELESS_CalcSum(rx), rx[7]);
 #endif
         return SENSOR_BCC_ERROR;
     }
@@ -176,7 +172,7 @@ static uint32_t WIRELESS_CheckReply(const uint8_t tx[8], const uint8_t rx[8]) {
 
     if (rx[0] != expect_addr) {
 #ifdef DEBUG_WIRELESS
-        printf("无线接收地址不匹配: 期望=%02X, 实际=%02X\r\n",
+        printf("无线接收地址不匹配: 期望：%02X, 实际=%02X\r\n",
                expect_addr, rx[0]);
 #endif
         return SENSOR_RESP_FORMAT_ERROR;
@@ -184,7 +180,7 @@ static uint32_t WIRELESS_CheckReply(const uint8_t tx[8], const uint8_t rx[8]) {
 
     if (rx[1] != expect_func) {
 #ifdef DEBUG_WIRELESS
-        printf("无线接收功能码不匹配: 期望=%02X, 实际=%02X\r\n",
+        printf("无线接收功能码不匹配: 期望：%02X, 实际=%02X\r\n",
                expect_func, rx[1]);
 #endif
         return SENSOR_RESP_FORMAT_ERROR;
@@ -192,14 +188,13 @@ static uint32_t WIRELESS_CheckReply(const uint8_t tx[8], const uint8_t rx[8]) {
 
     if (rx[6] == 0xFF) {
 #ifdef DEBUG_WIRELESS
-        printf("无线接收返回失败(参数=FF)\r\n");
 #endif
         return SENSOR_DEVICE_REPORTED_ERROR;
     }
 
     if (rx[6] != expect_param) {
 #ifdef DEBUG_WIRELESS
-        printf("无线接收参数不匹配: 期望=%02X, 实际=%02X\r\n",
+        printf("无线接收参数不匹配: 期望：%02X, 实际=%02X\r\n",
                expect_param, rx[6]);
 #endif
         return SENSOR_RESP_FORMAT_ERROR;
@@ -247,8 +242,10 @@ uint32_t WIRELESS_Read_FloatParam(uint8_t addr, uint8_t param, float *out_value)
 
     uint8_t tx[8], rx[8];
     int last_err = OTHER_PERIPHERAL_CONFIG_ERROR;
+    char detail[64];
 
     WIRELESS_MakeFrame(tx, addr, (uint8_t)WIRELESS_FUNC_R, 0x00000000u, param);
+    snprintf(detail, sizeof(detail), "地址：%u,功能：R,参数：0x%02X", (unsigned)addr, (unsigned)param);
 
     for (int attempt = 0; attempt < WIRELESS_MAX_RETRY; ++attempt) {
         if (HasEffectiveCommandSwitchRequest()) {
@@ -259,6 +256,14 @@ uint32_t WIRELESS_Read_FloatParam(uint8_t addr, uint8_t param, float *out_value)
         int ret = WIRELESS_Transceive(tx, rx);
         if (ret != NO_ERROR) {
             last_err = ret;
+            // 错误	阶段：错误重试	模块：滑环通信	操作：读取浮点参数	原因：ErrorLog_GetReasonByCode((uint32_t)ret)	尝试：(attempt + 1)/WIRELESS_MAX_RETRY	错误码：ret	错误名：ErrorLog_GetCodeName(ret)	详情：detail
+            ErrorLog_RetryDetail(ERROR_LOG_MODULE_SLIPRING_COMM,
+                                 ERROR_LOG_OP_READ_FLOAT_PARAM,
+                                 ErrorLog_GetReasonByCode((uint32_t)ret),
+                                 (uint32_t)(attempt + 1),
+                                 WIRELESS_MAX_RETRY,
+                                 (uint32_t)ret,
+                                 detail);
             continue;
         }
 
@@ -266,14 +271,31 @@ uint32_t WIRELESS_Read_FloatParam(uint8_t addr, uint8_t param, float *out_value)
         if (ret == NO_ERROR) {
             float v = WIRELESS_ParseFloat_LE(rx + 2);
             *out_value = v;
+            if (attempt > 0) {
+                // 错误	阶段：重试成功	模块：滑环通信	操作：读取浮点参数	原因：ErrorLog_GetReasonByCode((uint32_t)last_err)	尝试：(attempt + 1)/WIRELESS_MAX_RETRY	详情：detail
+                ErrorLog_RecoverDetail(ERROR_LOG_MODULE_SLIPRING_COMM,
+                                       ERROR_LOG_OP_READ_FLOAT_PARAM,
+                                       ErrorLog_GetReasonByCode((uint32_t)last_err),
+                                       (uint32_t)(attempt + 1),
+                                       WIRELESS_MAX_RETRY,
+                                       detail);
+            }
 #ifdef DEBUG_WIRELESS
-            printf("[无线 地址=%02X] 读取浮点寄存器 R%u: %f\r\n",
+            printf("[无线 地址：%02X] 读取浮点寄存器 R%u: %f\r\n",
                    (unsigned)addr, (unsigned)param, (double)v);
 #endif
             return NO_ERROR;
         }
 
         last_err = ret;
+        // 错误	阶段：错误重试	模块：滑环通信	操作：读取浮点参数	原因：ErrorLog_GetReasonByCode((uint32_t)ret)	尝试：(attempt + 1)/WIRELESS_MAX_RETRY	错误码：ret	错误名：ErrorLog_GetCodeName(ret)	详情：detail
+        ErrorLog_RetryDetail(ERROR_LOG_MODULE_SLIPRING_COMM,
+                             ERROR_LOG_OP_READ_FLOAT_PARAM,
+                             ErrorLog_GetReasonByCode((uint32_t)ret),
+                             (uint32_t)(attempt + 1),
+                             WIRELESS_MAX_RETRY,
+                             (uint32_t)ret,
+                             detail);
         HAL_Delay(DSM_BCC_DELAY);
     }
 
@@ -292,8 +314,10 @@ uint32_t WIRELESS_Read_IntParam(uint8_t addr, uint8_t param, int32_t *out_value)
 
     uint8_t tx[8], rx[8];
     int last_err = OTHER_PERIPHERAL_CONFIG_ERROR;
+    char detail[64];
 
     WIRELESS_MakeFrame(tx, addr, (uint8_t)WIRELESS_FUNC_R, 0x00000000u, param);
+    snprintf(detail, sizeof(detail), "地址：%u,功能：R,参数：0x%02X", (unsigned)addr, (unsigned)param);
 
     for (int attempt = 0; attempt < WIRELESS_MAX_RETRY; ++attempt) {
         if (HasEffectiveCommandSwitchRequest()) {
@@ -304,6 +328,14 @@ uint32_t WIRELESS_Read_IntParam(uint8_t addr, uint8_t param, int32_t *out_value)
         int ret = WIRELESS_Transceive(tx, rx);
         if (ret != NO_ERROR) {
             last_err = ret;
+            // 错误	阶段：错误重试	模块：滑环通信	操作：读取整数参数	原因：ErrorLog_GetReasonByCode((uint32_t)ret)	尝试：(attempt + 1)/WIRELESS_MAX_RETRY	错误码：ret	错误名：ErrorLog_GetCodeName(ret)	详情：detail
+            ErrorLog_RetryDetail(ERROR_LOG_MODULE_SLIPRING_COMM,
+                                 ERROR_LOG_OP_READ_INT_PARAM,
+                                 ErrorLog_GetReasonByCode((uint32_t)ret),
+                                 (uint32_t)(attempt + 1),
+                                 WIRELESS_MAX_RETRY,
+                                 (uint32_t)ret,
+                                 detail);
             continue;
         }
 
@@ -311,14 +343,31 @@ uint32_t WIRELESS_Read_IntParam(uint8_t addr, uint8_t param, int32_t *out_value)
         if (ret == NO_ERROR) {
             int32_t v = WIRELESS_ParseInt32_LE(rx + 2);
             *out_value = v;
+            if (attempt > 0) {
+                // 错误	阶段：重试成功	模块：滑环通信	操作：读取整数参数	原因：ErrorLog_GetReasonByCode((uint32_t)last_err)	尝试：(attempt + 1)/WIRELESS_MAX_RETRY	详情：detail
+                ErrorLog_RecoverDetail(ERROR_LOG_MODULE_SLIPRING_COMM,
+                                       ERROR_LOG_OP_READ_INT_PARAM,
+                                       ErrorLog_GetReasonByCode((uint32_t)last_err),
+                                       (uint32_t)(attempt + 1),
+                                       WIRELESS_MAX_RETRY,
+                                       detail);
+            }
 #ifdef DEBUG_WIRELESS
-            printf("[无线 地址=%02X] 读取整数寄存器 R%u: %ld (0x%08lX)\r\n",
+            printf("[无线 地址：%02X] 读取整数寄存器 R%u: %ld (0x%08lX)\r\n",
                    (unsigned)addr, (unsigned)param, (long)v, (unsigned long)v);
 #endif
             return NO_ERROR;
         }
 
         last_err = ret;
+        // 错误	阶段：错误重试	模块：滑环通信	操作：读取整数参数	原因：ErrorLog_GetReasonByCode((uint32_t)ret)	尝试：(attempt + 1)/WIRELESS_MAX_RETRY	错误码：ret	错误名：ErrorLog_GetCodeName(ret)	详情：detail
+        ErrorLog_RetryDetail(ERROR_LOG_MODULE_SLIPRING_COMM,
+                             ERROR_LOG_OP_READ_INT_PARAM,
+                             ErrorLog_GetReasonByCode((uint32_t)ret),
+                             (uint32_t)(attempt + 1),
+                             WIRELESS_MAX_RETRY,
+                             (uint32_t)ret,
+                             detail);
         HAL_Delay(DSM_BCC_DELAY);
     }
 
@@ -343,7 +392,7 @@ uint32_t WIRELESS_Read_Voltage(uint8_t addr, float *v)
  * 输出策略采用单行摘要，便于在识别阶段快速阅读：
  *   无线主机 OK | Ver=1.230 | Volt=24.500 V
  *
- * 失败时直接打印失败原因并返回错误码。
+ * 失败时直接打印失败原因并错误码。
  */
 uint32_t WIRELESS_PrintInfo(uint8_t addr)
 {
@@ -361,17 +410,17 @@ uint32_t WIRELESS_PrintInfo(uint8_t addr)
 
     uint32_t ret_ver = WIRELESS_Read_SoftwareVersion(addr, &ver);
     if (ret_ver != NO_ERROR) {
-        printf("%s: 软件版本读取失败(错误码=%ld)\r\n", role, ret_ver);
+        printf("%s: 软件版本读取失败 | 错误码：0x%08lX\r\n", role, (unsigned long)ret_ver);
         return ret_ver;
     }
 
     uint32_t ret_volt = WIRELESS_Read_Voltage(addr, &volt);
     if (ret_volt != NO_ERROR) {
-        printf("%s: 电压读取失败(错误码=%ld)\r\n", role, ret_volt);
+        printf("%s: 电压读取失败 | 错误码：0x%08lX\r\n", role, (unsigned long)ret_volt);
         return ret_volt;
     }
 
-    printf("%s 正常 | 版本=%.3f | 电压=%.3f V\r\n",
+    printf("%s 正常 | 版本：%.3f | 电压：%.3f V\r\n",
            role,
            (double)ver,
            (double)volt);

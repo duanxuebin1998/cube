@@ -4,7 +4,7 @@
  * @Author       : Aubon
  * @Date         : 2026-02-03 14:06:14
  * @LastEditors  : Duan Xuebin
- * @LastEditTime : 2026-05-08 14:54:24
+ * @LastEditTime : 2026-05-13 15:17:02
  * Copyright 2026 Aubon, All Rights Reserved. 
  * 2026-02-03 14:06:14
  */
@@ -20,7 +20,11 @@
 #include "test.h"
 #include "ad5421.h"
 #include "sensor.h"
+#include "error_log.h"
 
+/**
+ * @brief 判断错误码是否属于编码器故障范围。
+ */
 static uint8_t App_IsEncoderErrorCode(uint32_t error_code) {
 	return (error_code >= ENCODER_TIMEOUT) && (error_code <= ENCODER_OCF_INCOMPLETE);
 }
@@ -45,6 +49,9 @@ static AppAutoRecoveryContext s_auto_recovery = {
     .last_check_tick = 0U,
 };
 
+/**
+ * @brief 判断命令失败后是否允许进入自动恢复流程。
+ */
 static uint8_t App_IsAutoRecoverMeasureCommand(CommandType command) {
     switch (command) {
     case CMD_BACK_ZERO:
@@ -72,6 +79,9 @@ static uint8_t App_IsAutoRecoverMeasureCommand(CommandType command) {
     }
 }
 
+/**
+ * @brief 清空自动恢复上下文，表示当前没有待恢复的测量命令。
+ */
 static void App_ClearAutoRecoveryContext(void) {
     s_auto_recovery.active = 0U;
     s_auto_recovery.command = CMD_NONE;
@@ -81,18 +91,25 @@ static void App_ClearAutoRecoveryContext(void) {
     s_auto_recovery.last_check_tick = 0U;
 }
 
+/**
+ * @brief 因新命令或命令切换取消自动恢复。
+ * @note reason 仅用于调用侧表达语义，现场日志统一按命令切换输出。
+ */
 static void App_CancelAutoRecovery(const char *reason) {
     if (!s_auto_recovery.active) {
         return;
     }
-
-    printf("自动恢复被新命令打断，原命令=%d 原错误=0x%08lX 原因=%s\r\n",
-           (int)s_auto_recovery.command,
-           (unsigned long)s_auto_recovery.error_code,
-           (reason != NULL) ? reason : "new command");
+    // 错误	阶段：错误报警	模块：系统	操作：自动恢复	原因：命令切换	处理：停止测量
+    ErrorLog_Warn(ERROR_LOG_MODULE_SYSTEM,
+                  ERROR_LOG_OP_AUTO_RECOVER,
+                  ERROR_LOG_REASON_COMMAND_SWITCH,
+                  ERROR_LOG_ACTION_STOP_MEASURE);
     App_ClearAutoRecoveryContext();
 }
 
+/**
+ * @brief 自动恢复等待期间恢复原错误状态，避免空闲兜底提前清理上下文。
+ */
 static void App_RestoreAutoRecoveryErrorStatus(void) {
     if (!s_auto_recovery.active) {
         return;
@@ -104,6 +121,10 @@ static void App_RestoreAutoRecoveryErrorStatus(void) {
     g_measurement.device_status.current_command = CMD_NONE;
 }
 
+/**
+ * @brief 测量命令失败后记录自动恢复上下文。
+ * @note 这里只进入恢复等待，不立即重跑命令；恢复检查由主循环周期执行。
+ */
 static void App_StartAutoRecovery(CommandType command, uint32_t error_code) {
     if ((error_code == NO_ERROR) || (error_code == STATE_SWITCH)) {
         return;
@@ -125,13 +146,17 @@ static void App_StartAutoRecovery(CommandType command, uint32_t error_code) {
     s_auto_recovery.device_state = g_measurement.device_status.device_state;
     s_auto_recovery.zero_point_status = g_measurement.device_status.zero_point_status;
     s_auto_recovery.last_check_tick = HAL_GetTick();
-
-    printf("测量命令异常，进入自动恢复：命令=%d 错误=0x%08lX\r\n",
-           (int)command,
-           (unsigned long)error_code);
+    // 错误	阶段：错误报警	模块：系统	操作：自动恢复	原因：进入自动恢复	处理：继续尝试
+    ErrorLog_Warn(ERROR_LOG_MODULE_SYSTEM,
+                  ERROR_LOG_OP_AUTO_RECOVER,
+                  ERROR_LOG_REASON_AUTO_RECOVER_START,
+                  ERROR_LOG_ACTION_CONTINUE);
     App_RestoreAutoRecoveryErrorStatus();
 }
 
+/**
+ * @brief 命令执行结束后根据错误状态更新自动恢复流程。
+ */
 static void App_UpdateAutoRecoveryAfterCommand(CommandType command) {
     uint32_t error_code = g_measurement.device_status.error_code;
 
@@ -145,6 +170,9 @@ static void App_UpdateAutoRecoveryAfterCommand(CommandType command) {
     }
 }
 
+/**
+ * @brief 执行正式测量命令并处理命令后的恢复、调试刷新和延迟保存。
+ */
 static void App_ExecuteMeasureCommand(CommandType command) {
     printf("当前命令：%d\r\n", command);
     g_measurement.device_status.current_command = command;
@@ -156,14 +184,18 @@ static void App_ExecuteMeasureCommand(CommandType command) {
     /* 命令执行完成后清掉 current_command，表示系统重新回到“无命令执行中”。 */
     g_measurement.device_status.current_command = CMD_NONE;
 
-    /* 执行完命令后顺手刷新两路无线信息，方便调试时观察两只无线端状态。 */
-    WIRELESS_PrintInfo(01);
-    WIRELESS_PrintInfo(02);
+    // /* 执行完命令后顺手刷新两路无线信息，方便调试时观察两只无线端状态。 */
+    // WIRELESS_PrintInfo(01);
+    // WIRELESS_PrintInfo(02);
 
     /* 如果命令执行过程中触发了“延迟保存参数”，这里顺手处理一次。 */
     process_device_params_deferred_tasks();
 }
 
+/**
+ * @brief 自动恢复轮询处理。
+ * @return 1 表示本轮主循环已处理自动恢复；0 表示没有自动恢复任务。
+ */
 static uint8_t App_HandleAutoRecovery(void) {
     uint32_t now;
     uint32_t check_ret;
@@ -180,24 +212,30 @@ static uint8_t App_HandleAutoRecovery(void) {
         return 1U;
     }
     s_auto_recovery.last_check_tick = now;
-
-    printf("自动恢复检查部件参数：命令=%d 原错误=0x%08lX\r\n",
-           (int)s_auto_recovery.command,
-           (unsigned long)s_auto_recovery.error_code);
-
     check_ret = Sensor_CheckAllPartParams();
     if ((check_ret == STATE_SWITCH) || HasEffectiveCommandSwitchRequest()) {
         App_CancelAutoRecovery("command switch");
         return 1U;
     }
     if (check_ret != NO_ERROR) {
-        printf("自动恢复检查仍异常：0x%08lX，保持原错误状态\r\n", (unsigned long)check_ret);
+        // 错误	阶段：错误重试	模块：系统	操作：自动恢复	原因：自动恢复失败	尝试：1U/1U	错误码：check_ret	错误名：ErrorLog_GetCodeName(check_ret)
+        ErrorLog_Retry(ERROR_LOG_MODULE_SYSTEM,
+                       ERROR_LOG_OP_AUTO_RECOVER,
+                       ERROR_LOG_REASON_AUTO_RECOVER_FAIL,
+                       1U,
+                       1U,
+                       check_ret);
         App_RestoreAutoRecoveryErrorStatus();
         return 1U;
     }
 
     retry_command = s_auto_recovery.command;
-    printf("自动恢复检查通过，重新执行完整测量命令：%d\r\n", (int)retry_command);
+    // 错误	阶段：重试成功	模块：系统	操作：自动恢复	原因：恢复成功	尝试：1U/1U
+    ErrorLog_Recover(ERROR_LOG_MODULE_SYSTEM,
+                     ERROR_LOG_OP_AUTO_RECOVER,
+                     ERROR_LOG_REASON_RECOVER_OK,
+                     1U,
+                     1U);
     App_ClearAutoRecoveryContext();
     g_measurement.device_status.error_code = NO_ERROR;
 
@@ -206,13 +244,9 @@ static uint8_t App_HandleAutoRecovery(void) {
 }
 
 
-/*
- * 空闲态错误兜底：
- * 1. 只有在“没有待执行命令、也没有正在执行命令”时，才根据全局 error_code 挂错误态。
- * 2. 一旦挂错，统一执行停机，并把 zero_point_status 置为 1，提示后续流程需要重新回零。
- * 3. 如果当前已经在 STATE_ERROR，但 error_code 已经被清掉，则自动恢复到待机态。
- *
- * 这个函数不负责拦截新命令；新命令优先，由主循环前面的命令分支先处理。
+/**
+ * @brief 主循环空闲时处理全局错误兜底。
+ * @note 只有在没有待执行命令、也没有正在执行命令时，才根据全局 error_code 挂错误态；新命令优先由主循环前面的命令分支处理。
  */
 static uint8_t App_HandleIdleGlobalError(void) {
 	uint32_t error_code = g_measurement.device_status.error_code;
@@ -229,11 +263,15 @@ static uint8_t App_HandleIdleGlobalError(void) {
 		(error_code != NO_ERROR) &&
 		(error_code != STATE_SWITCH)) {
 		if (g_measurement.device_status.device_state != STATE_ERROR) {
-			printf("待机检测到全局错误: 0x%08lX\r\n", (unsigned long) error_code);
+            FaultManager_SetErrorState(error_code,
+                                       GetShortFilename(__FILE__),
+                                       __LINE__,
+                                       __func__);
+		} else {
+			HandleError();
+			g_measurement.device_status.device_state = STATE_ERROR;
+			g_measurement.device_status.zero_point_status = 1;
 		}
-		HandleError();
-		g_measurement.device_status.device_state = STATE_ERROR;
-		g_measurement.device_status.zero_point_status = 1;
 		g_deviceParams.command = CMD_NONE;
 		g_measurement.device_status.current_command = CMD_NONE;
 		return 1;
@@ -300,6 +338,7 @@ void App_MainLoop(void) {
 	/* 后台轻量检查：这里只做一次快速轮询，不在主循环里展开复杂处理。 */
 	MotorCtrl_PollRuntimePosition();
 	(void)Weight_CheckCommunicationTimeout();
+	HostCommu_ProcessDeferredLogs();
 
 	/* 第一优先级：处理刚收到的原始命令。
 	 * 这一层通常来自调试口/串口缓存，process_command() 会把字符命令翻译成具体动作，

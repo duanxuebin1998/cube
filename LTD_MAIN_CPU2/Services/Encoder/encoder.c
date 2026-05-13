@@ -47,12 +47,12 @@ static int ReadEncoderDataFromSlot(uint32_t base_addr, int32_t *encoder_count, u
     ReadMultiData((uint8_t *)&rec, (int)base_addr, sizeof(rec));
 
     if (rec.magic != ENCODER_STORE_MAGIC) {
-        printf("编码值[%s] magic 错误: 0x%08lX\r\n", slot_name, (unsigned long)rec.magic);
+        printf("编码值[%s] magic 异常: 0x%08lX\r\n", slot_name, (unsigned long)rec.magic);
         return 0;
     }
 
     if (rec.version != ENCODER_STORE_VERSION) {
-        printf("编码值[%s] version 错误: %lu\r\n", slot_name, (unsigned long)rec.version);
+        printf("编码值[%s] version 异常: %lu\r\n", slot_name, (unsigned long)rec.version);
         return 0;
     }
 
@@ -230,7 +230,7 @@ void encoder_set_cable_length_01mm(int32_t cable_length_01mm)
                     (double)g_deviceParams.encoder_wheel_circumference_mm;
     new_count = -(int32_t)(encoder_value + 0.5);
 
-    printf("编码器修正 | 目标尺带长度=%ld(0.1mm) | 原计数=%ld | 新计数=%ld\r\n",
+    printf("编码器修正 | 目标尺带长度：%ld(0.1mm) | 原计数=%ld | 新计数=%ld\r\n",
            (long)cable_length_01mm,
            (long)g_encoder_count,
            (long)new_count);

@@ -19,6 +19,7 @@
 #include "sensor.h"
 #include "encoder.h"
 #include "measure_water_level.h"
+#include "error_log.h"
 
 static void CMD_CorrectOilLevel(void);
 /* 标定罐高：先测出原始实高，再用标定罐高值修正“当前实高”显示链路。 */
@@ -80,7 +81,7 @@ void ProcessMeasureCmd(CommandType command)
 {
     uint32_t start_ret = (uint32_t)MeasureStart(); // 测量初始化
     if (start_ret != NO_ERROR) {
-        printf("测量启动失败，电机初始化错误码=0x%08lX\r\n", (unsigned long)start_ret);
+        printf("测量启动失败，电机初始化错误码：0x%08lX\r\n", (unsigned long)start_ret);
         SET_ERROR(start_ret);
     }
 
@@ -266,7 +267,6 @@ void ProcessMeasureCmd(CommandType command)
 }
 
 
-
 /**
  * @brief 处理接收到的命令并执行相应的操作。
  *
@@ -329,6 +329,23 @@ static uint8_t ProcessCommandSwitchRequested(void)
     return 1;
 }
 
+/**
+ * @brief 记录串口调试命令失败告警。
+ * @note 串口调试命令只做现场提示，不在这里设置最终错误状态。
+ */
+static void ProcessCommand_WarnFailure(const char *operation, uint32_t error_code)
+{
+    if ((error_code == NO_ERROR) || (error_code == STATE_SWITCH)) {
+        return;
+    }
+
+    // 错误	阶段：错误报警	模块：通信	操作：operation	原因：ErrorLog_GetReasonByCode(error_code)	处理：仅记录
+    ErrorLog_Warn(ERROR_LOG_MODULE_COMM,
+                  operation,
+                  ErrorLog_GetReasonByCode(error_code),
+                  "仅记录");
+}
+
 void process_command(uint8_t *command) {
     uint32_t ret = NO_ERROR;
 
@@ -341,7 +358,7 @@ void process_command(uint8_t *command) {
         /*  指令属于调试/恢复动作，允许在错误态下先清场后执行。 */
     ret = (uint32_t)MeasureStart();
     if (ret != NO_ERROR) {
-        printf("串口命令启动失败，电机初始化错误码=0x%08lX\r\n", (unsigned long)ret);
+        printf("串口命令启动失败，电机初始化错误码：0x%08lX\r\n", (unsigned long)ret);
         return;
     }
     if (command[0] == 'A') {
@@ -352,14 +369,16 @@ void process_command(uint8_t *command) {
             printf("开始上行%d\n", mm);
             ret = MotorCtrl_MoveNoWait((float) mm, MOTOR_DIRECTION_UP, MotorCtrl_GetDefaultSpeedX100());
             if (ret != NO_ERROR) {
-                printf("串口上行下发失败，错误码=0x%08lX\r\n", (unsigned long)ret);
+                printf("串口上行下发失败，错误码：0x%08lX\r\n", (unsigned long)ret);
+                ProcessCommand_WarnFailure("串口上行", ret);
             }
         } else if (command[1] == '-') {
             int mm = atoi((char*) &command[2]);
             printf("开始下行%d\n", mm);
             ret = MotorCtrl_MoveNoWait((float) mm, MOTOR_DIRECTION_DOWN, MotorCtrl_GetDefaultSpeedX100());
             if (ret != NO_ERROR) {
-                printf("串口下行下发失败，错误码=0x%08lX\r\n", (unsigned long)ret);
+                printf("串口下行下发失败，错误码：0x%08lX\r\n", (unsigned long)ret);
+                ProcessCommand_WarnFailure("串口下行", ret);
             }
         }
         return;
@@ -590,28 +609,32 @@ void process_command(uint8_t *command) {
             /* 求解拟合参数 */
             ret = MotorCtrl_TapeFitSolve();
             if (ret != NO_ERROR) {
-                printf("TFIT拟合失败，错误码=0x%08lX\r\n", (unsigned long)ret);
+                printf("TFIT拟合失败，错误码：0x%08lX\r\n", (unsigned long)ret);
+                ProcessCommand_WarnFailure("TFIT拟合", ret);
             }
             return;
         case 'V':
             /* 局部 TFIT：用当前位置起点采样求解局部厚度/周长 */
             ret = MotorCtrl_TapeFitSolveLocalOrigin();
             if (ret != NO_ERROR) {
-                printf("TFIT局部拟合失败，错误码=0x%08lX\r\n", (unsigned long)ret);
+                printf("TFIT局部拟合失败，错误码：0x%08lX\r\n", (unsigned long)ret);
+                ProcessCommand_WarnFailure("TFIT局部拟合", ret);
             }
             return;
         case 'P':
             /* 仅应用拟合出的厚度 t */
             ret = MotorCtrl_TapeFitApply(false, true);
             if (ret != NO_ERROR) {
-                printf("TFIT应用尺带厚度失败，错误码=0x%08lX\r\n", (unsigned long)ret);
+                printf("TFIT应用尺带厚度失败，错误码：0x%08lX\r\n", (unsigned long)ret);
+                ProcessCommand_WarnFailure("TFIT应用尺带厚度", ret);
             }
             return;
         case 'U':
             /* 同时应用拟合出的 C0 和 t */
             ret = MotorCtrl_TapeFitApply(true, true);
             if (ret != NO_ERROR) {
-                printf("TFIT应用C0+t失败，错误码=0x%08lX\r\n", (unsigned long)ret);
+                printf("TFIT应用C0+t失败，错误码：0x%08lX\r\n", (unsigned long)ret);
+                ProcessCommand_WarnFailure("TFIT应用C0+t", ret);
             }
             return;
         default:
@@ -630,7 +653,8 @@ void process_command(uint8_t *command) {
             printf("位置源切换：编码轮 -> 电机记步\r\n");
             ret = MotorCtrl_SwitchPositionSourceToMotor();
             if (ret != NO_ERROR) {
-                printf("切换电机记步失败，错误码=0x%08lX\r\n", (unsigned long)ret);
+                printf("切换电机记步失败，错误码：0x%08lX\r\n", (unsigned long)ret);
+                ProcessCommand_WarnFailure("切换电机记步", ret);
             } else {
                 printf("切换电机记步完成\r\n");
             }
@@ -639,7 +663,8 @@ void process_command(uint8_t *command) {
             printf("位置源切换：电机记步 -> 编码轮\r\n");
             ret = MotorCtrl_SwitchPositionSourceToEncoder();
             if (ret != NO_ERROR) {
-                printf("切换编码轮记步失败，错误码=0x%08lX\r\n", (unsigned long)ret);
+                printf("切换编码轮记步失败，错误码：0x%08lX\r\n", (unsigned long)ret);
+                ProcessCommand_WarnFailure("切换编码轮记步", ret);
             } else {
                 printf("切换编码轮记步完成\r\n");
             }
@@ -673,7 +698,7 @@ int MeasureStart(void) {
 	fault_info_init(); //故障初始化清零
     uint32_t ret = MotorCtrl_Init(); //电机初始化
     if (ret != NO_ERROR) {
-        printf("电机初始化失败，错误码=0x%08lX\r\n", (unsigned long)ret);
+        printf("电机初始化失败，错误码：0x%08lX\r\n", (unsigned long)ret);
         return (int)ret;
     }
 	weight_init();
@@ -793,7 +818,7 @@ static void CMD_CalibrateZeroPoint(void) {
     SET_ERROR(ret);
     ret = MotorCtrl_CalibrateFirstLoopCircumferenceAtZero();
     if (ret != NO_ERROR) {
-        printf("标定零点\t首圈周长标定失败 错误码=0x%08lX\r\n", (unsigned long)ret);
+        printf("标定零点\t首圈周长标定失败 错误码：0x%08lX\r\n", (unsigned long)ret);
         SET_ERROR(ret);
     }
     g_measurement.device_status.device_state = STATE_FINDZEROOVER;
@@ -870,13 +895,23 @@ static void CMD_MeasureBottom(void) {
 
             if (ret != NO_ERROR)
             {
+                // 错误	阶段：错误报警	模块：测量	操作：精找罐底	原因：ErrorLog_GetReasonByCode(ret)	处理：使用回退值
+                ErrorLog_Warn(ERROR_LOG_MODULE_MEASURE,
+                              ERROR_LOG_OP_SEARCH_BOTTOM_PRECISE,
+                              ErrorLog_GetReasonByCode(ret),
+                              "使用回退值");
                 printf("罐底测量出错后回退 | 回退=%lu(0.1mm) | 参考=%lu(0.1mm)\r\n",
                        (unsigned long)fallback_real_height,
                        (unsigned long)reference_real_height);
             }
             else
             {
-                printf("罐底测量偏差回退 | 测量=%lu(0.1mm) | 回退=%lu(0.1mm) | 参考=%lu(0.1mm) | 差值=%ld(0.1mm)\r\n",
+                // 错误	阶段：错误报警	模块：测量	操作：精找罐底	原因：位置异常	处理：使用回退值
+                ErrorLog_Warn(ERROR_LOG_MODULE_MEASURE,
+                              ERROR_LOG_OP_SEARCH_BOTTOM_PRECISE,
+                              ERROR_LOG_REASON_POSITION_ERROR,
+                              "使用回退值");
+                printf("罐底测量偏差回退 | 测量=%lu(0.1mm) | 回退=%lu(0.1mm) | 参考=%lu(0.1mm) | 差值：%ld(0.1mm)\r\n",
                        (unsigned long)measured_real_height,
                        (unsigned long)fallback_real_height,
                        (unsigned long)reference_real_height,
@@ -1024,13 +1059,19 @@ static void CMD_MoveDown(void)
 // 电机强制上行指令（无检测）
 static void CMD_ForceMoveUp(void)
 {
+    uint32_t ret;
+
     printf("电机强制上行操作\r\n");
     g_measurement.device_status.device_state = STATE_FORCE_RUNUPING;
-	printf("强制上行距离: %.1f mm\r\n", (float) g_deviceParams.motorCommandDistance / 10.0f);
-    MotorCtrl_MoveBlockingNoDetect(
+    printf("强制上行距离: %.1f mm\r\n", (float) g_deviceParams.motorCommandDistance / 10.0f);
+    ret = MotorCtrl_MoveBlockingNoDetect(
         (float)g_deviceParams.motorCommandDistance / 10.0f,
         MOTOR_DIRECTION_UP,
         MotorCtrl_GetDefaultSpeedX100());
+    if (ret == STATE_SWITCH) {
+        return;
+    }
+    SET_ERROR(ret);
     printf("电机强制上行操作完成\r\n");
 //    MotorCtrl_MoveAndWait(
 //            (float)g_deviceParams.motorCommandDistance / 10.0f,
@@ -1042,13 +1083,19 @@ static void CMD_ForceMoveUp(void)
 // 电机强制下行指令（无检测）
 static void CMD_ForceMoveDown(void)
 {
+    uint32_t ret;
+
     printf("电机强制下行操作\r\n");
     g_measurement.device_status.device_state = STATE_FORCE_RUNDOWNING;
 
-    MotorCtrl_MoveBlockingNoDetect(
+    ret = MotorCtrl_MoveBlockingNoDetect(
         (float)g_deviceParams.motorCommandDistance / 10.0f,
         MOTOR_DIRECTION_DOWN,
         MotorCtrl_GetDefaultSpeedX100());
+    if (ret == STATE_SWITCH) {
+        return;
+    }
+    SET_ERROR(ret);
 
     g_measurement.device_status.device_state = STATE_FORCE_RUNDOWN_OVER;
     return;
@@ -1057,14 +1104,20 @@ static void CMD_ForceMoveDown(void)
 // 强制提零点：长距离上行（无检测称重/丢步）
 static void CMD_ForceLiftZero(void)
 {
+    uint32_t ret;
+
     printf("强制提零点操作\r\n");
     g_measurement.device_status.device_state = STATE_FORCE_LIFT_ZEROING;
 
     /* 长距离上行：不检测称重/丢步，底层可被命令切换打断 */
-    MotorCtrl_MoveBlockingNoDetect(
+    ret = MotorCtrl_MoveBlockingNoDetect(
         2000000.0f,  // 300m,
         MOTOR_DIRECTION_UP,
         MotorCtrl_GetDefaultSpeedX100());
+    if (ret == STATE_SWITCH) {
+        return;
+    }
+    SET_ERROR(ret);
 
     g_measurement.device_status.device_state = STATE_FORCE_LIFT_ZERO_OVER;
     return;
@@ -1162,7 +1215,7 @@ static void CMD_SyntheticMeasurement(void) {
     // 3. 执行分布密度测量, 结果写入 temp
     ret = Density_MeasureByMode_Exact(DENS_MODE_SPREAD, &temp);
     if (ret != NO_ERROR) {
-        printf("普通分布测\t失败，错误码=0x%08lX\r\n", (unsigned long)ret);
+        printf("普通分布测\t失败，错误码：0x%08lX\r\n", (unsigned long)ret);
         SET_ERROR(ret);
     }
 
@@ -1207,7 +1260,7 @@ static void CMD_RunToPosition(void)
     }
 
     if (ret != NO_ERROR) {
-        printf("运行到指定位置\t失败 错误码=0x%lX\r\n", ret);
+        printf("运行到指定位置\t失败 错误码：0x%lX\r\n", ret);
         SET_ERROR(ret);
         g_measurement.device_status.device_state = STATE_ERROR;
         return;

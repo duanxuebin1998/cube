@@ -42,6 +42,7 @@
 #include "measure_oilLevel.h"
 #include "motor_ctrl.h"
 #include "system_parameter.h"
+#include "error_log.h"
 #include "measure.h"
 #include <stdint.h>
 #include <string.h>
@@ -99,7 +100,7 @@ static uint32_t Density_RunPoints01mm(const int32_t *p01,
 
         uint32_t ret = MotorCtrl_MoveToPosition(pos_mm, MotorCtrl_GetDefaultSpeedX100());
         if (ret != NO_ERROR) {
-            printf("分布测量 电机移动失败: 位置=%.1fmm 错误=%lu\r\n", pos_mm, (unsigned long)ret);
+            printf("分布测量 电机移动失败: 位置=%.1fmm 错误码=%lu\r\n", pos_mm, (unsigned long)ret);
             return ret;
         }
 
@@ -109,7 +110,7 @@ static uint32_t Density_RunPoints01mm(const int32_t *p01,
 
         ret = SinglePoint_ReadSensor(&dist->single_density_data[valid]);
         if (ret != NO_ERROR) {
-            printf("分布测量 单点读取失败: 位置=%.1fmm 错误=%lu\r\n", pos_mm, (unsigned long)ret);
+            printf("分布测量 单点读取失败: 位置=%.1fmm 错误码=%lu\r\n", pos_mm, (unsigned long)ret);
             return ret;
         }
 
@@ -527,7 +528,7 @@ uint32_t Density_MeasureByMode_Exact(DensitySpreadModeId mode, DensityDistributi
     /* 1) 先液位搜索 */
     ret = SearchOilLevel();
     if (ret != NO_ERROR) {
-        printf("密度测量\t液位搜索失败，错误=0x%08lX\r\n", (unsigned long)ret);
+        printf("密度测量\t液位搜索失败，错误码=0x%08lX\r\n", (unsigned long)ret);
         return ret;
     }
 
@@ -598,7 +599,7 @@ void CMD_MeasureDensitySpread_Spread(void)
 
     ret = Density_MeasureByMode_Exact(DENS_MODE_SPREAD, &temp);
     if (ret != NO_ERROR) {
-        printf("普通分布测\t失败，错误=0x%08lX\r\n", (unsigned long)ret);
+        printf("普通分布测\t失败，错误码=0x%08lX\r\n", (unsigned long)ret);
         SET_ERROR(ret);
     }
 
@@ -617,7 +618,7 @@ void CMD_MeasureDensitySpread_GB(void)
 
     ret = Density_MeasureByMode_Exact(DENS_MODE_GB, &temp);
     if (ret != NO_ERROR) {
-        printf("国标测\t失败，错误=0x%08lX\r\n", (unsigned long)ret);
+        printf("国标测\t失败，错误码=0x%08lX\r\n", (unsigned long)ret);
         SET_ERROR(ret);
     }
 
@@ -636,7 +637,7 @@ void CMD_MeasureDensitySpread_Meter(void)
 
     ret = Density_MeasureByMode_Exact(DENS_MODE_METER, &temp);
     if (ret != NO_ERROR) {
-        printf("每米测\t失败，错误=0x%08lX\r\n", (unsigned long)ret);
+        printf("每米测\t失败，错误码=0x%08lX\r\n", (unsigned long)ret);
         SET_ERROR(ret);
     }
 
@@ -655,7 +656,7 @@ void CMD_MeasureDensitySpread_Interval(void)
 
     ret = Density_MeasureByMode_Exact(DENS_MODE_INTERVAL, &temp);
     if (ret != NO_ERROR) {
-        printf("区间测\t失败，错误=0x%08lX\r\n", (unsigned long)ret);
+        printf("区间测\t失败，错误码=0x%08lX\r\n", (unsigned long)ret);
         SET_ERROR(ret);
     }
 
@@ -949,6 +950,9 @@ uint32_t SinglePoint_ReadSensor(volatile DensityMeasurement *result)
 
     /* 采样周期 */
     const uint32_t SAMPLE_INTERVAL_MS = 200U;
+    const uint32_t density_sample_retry_max = MAX_WAIT_MS / SAMPLE_INTERVAL_MS;
+    uint32_t density_read_retry_count = 0U;
+    uint32_t density_zero_retry_count = 0U;
 
     /* ---------- 时间与状态变量 ---------- */
     uint32_t t_start      = HAL_GetTick();  // 整个流程起始时间
@@ -1021,11 +1025,30 @@ uint32_t SinglePoint_ReadSensor(volatile DensityMeasurement *result)
          * ====================================================== */
         ret = Read_Density(&cur_freq, &cur_density, &cur_temp);
         if (ret != NO_ERROR) {
-            printf("读取密度/温度/频率失败：错误码=%lu\r\n",
-                   (unsigned long)ret);
+            density_read_retry_count++;
+            if ((density_read_retry_count == 1U) ||
+                ((density_read_retry_count % 5U) == 0U) ||
+                (density_read_retry_count >= density_sample_retry_max)) {
+                // 错误	阶段：错误重试	模块：传感器	操作：读取浮点参数	原因：ErrorLog_GetReasonByCode(ret)	尝试：density_read_retry_count/density_sample_retry_max	错误码：ret	错误名：ErrorLog_GetCodeName(ret)
+                ErrorLog_Retry(ERROR_LOG_MODULE_SENSOR,
+                               ERROR_LOG_OP_READ_FLOAT_PARAM,
+                               ErrorLog_GetReasonByCode(ret),
+                               density_read_retry_count,
+                               density_sample_retry_max,
+                               ret);
+            }
             HAL_Delay(SAMPLE_INTERVAL_MS);
             continue;
         }
+        if (density_read_retry_count > 0U) {
+            // 错误	阶段：重试成功	模块：传感器	操作：读取浮点参数	原因：恢复成功	尝试：(density_read_retry_count + 1U)/density_sample_retry_max
+            ErrorLog_Recover(ERROR_LOG_MODULE_SENSOR,
+                             ERROR_LOG_OP_READ_FLOAT_PARAM,
+                             ERROR_LOG_REASON_RECOVER_OK,
+                             density_read_retry_count + 1U,
+                             density_sample_retry_max);
+        }
+        density_read_retry_count = 0U;
 
         CHECK_COMMAND_SWITCH(ret);
 
@@ -1040,9 +1063,30 @@ uint32_t SinglePoint_ReadSensor(volatile DensityMeasurement *result)
          *  - 不更新参考值
          */
         if (fabsf(cur_density) < 1e-6f) {
+            density_zero_retry_count++;
+            if ((density_zero_retry_count == 1U) ||
+                ((density_zero_retry_count % 5U) == 0U) ||
+                (density_zero_retry_count >= density_sample_retry_max)) {
+                // 错误	阶段：错误重试	模块：传感器	操作：读取浮点参数	原因：ErrorLog_GetReasonByCode(DENSITY_INVALID)	尝试：density_zero_retry_count/density_sample_retry_max	错误码：DENSITY_INVALID	错误名：ErrorLog_GetCodeName(DENSITY_INVALID)
+                ErrorLog_Retry(ERROR_LOG_MODULE_SENSOR,
+                               ERROR_LOG_OP_READ_FLOAT_PARAM,
+                               ErrorLog_GetReasonByCode(DENSITY_INVALID),
+                               density_zero_retry_count,
+                               density_sample_retry_max,
+                               DENSITY_INVALID);
+            }
             HAL_Delay(SAMPLE_INTERVAL_MS);
             continue;
         }
+        if (density_zero_retry_count > 0U) {
+            // 错误	阶段：重试成功	模块：传感器	操作：读取浮点参数	原因：密度值异常	尝试：(density_zero_retry_count + 1U)/density_sample_retry_max
+            ErrorLog_Recover(ERROR_LOG_MODULE_SENSOR,
+                             ERROR_LOG_OP_READ_FLOAT_PARAM,
+                             ErrorLog_GetReasonByCode(DENSITY_INVALID),
+                             density_zero_retry_count + 1U,
+                             density_sample_retry_max);
+        }
+        density_zero_retry_count = 0U;
 
         /* 记录最后一次“非零密度”样本（用于超时兜底） */
         have_last_nonzero = 1;

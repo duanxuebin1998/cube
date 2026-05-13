@@ -10,6 +10,7 @@
 
 #include <stdint.h>   // 处理 uint8_t, uint32_t 等类型
 #include <string.h>   // 处理 memset、memcpy 等函数
+#include "error_log.h"
 
 //#define ERROR_PRINT(msg)  printf("ERROR: %s | FILE: %s | LINE: %d\r\n", msg, __FILE__, __LINE__)
 
@@ -68,20 +69,34 @@ typedef struct {
 } ErrorInfo;
 extern ErrorInfo err; // 全局错误信息变量
 
+void FaultManager_ReportErrorExit(uint32_t error_code);
+uint32_t FaultManager_HandleCheckError(uint32_t error_code,
+                                       const char *file,
+                                       uint32_t line,
+                                       const char *func);
+void FaultManager_SetErrorState(uint32_t error_code,
+                                const char *file,
+                                uint32_t line,
+                                const char *func);
+
 #define CHECK_ERROR(errorcode)                                                   \
     do {                                                                         \
         /* Step 1: 优先检查函数返回错误码 */                                      \
-        if ((errorcode) != NO_ERROR) {                                           \
-            err.error_code = (errorcode);                                        \
-            HandleError();                                                       \
-            return err.error_code;                                               \
+        uint32_t check_error_code = (uint32_t)(errorcode);                       \
+        if (check_error_code != NO_ERROR) {                                      \
+            return FaultManager_HandleCheckError(check_error_code,               \
+                                                 GetShortFilename(__FILE__),     \
+                                                 __LINE__,                       \
+                                                 __func__);                      \
         }                                                                        \
                                                                                  \
         /* Step 2: 检查全局设备错误状态 */                                        \
         if (g_measurement.device_status.error_code != NO_ERROR) {                \
-            err.error_code = g_measurement.device_status.error_code;             \
-            HandleError();                                                       \
-            return err.error_code;                                               \
+            return FaultManager_HandleCheckError(                                \
+                g_measurement.device_status.error_code,                          \
+                GetShortFilename(__FILE__),                                      \
+                __LINE__,                                                        \
+                __func__);                                                       \
         }                                                                        \
                                                                                  \
         /* Step 3: 检查是否有命令切换 */                                          \
@@ -111,11 +126,12 @@ extern ErrorInfo err; // 全局错误信息变量
 
 #define SET_ERROR(errorcode)                                                     \
     do {                                                                         \
-        if (((errorcode) != STATE_SWITCH) && ((errorcode) != NO_ERROR)) {        \
-            HandleError();                                                       \
-            g_measurement.device_status.device_state       = STATE_ERROR;        \
-            g_measurement.device_status.error_code         = errorcode;          \
-            g_measurement.device_status.zero_point_status  = 1;                  \
+        uint32_t set_error_code = (uint32_t)(errorcode);                         \
+        if ((set_error_code != STATE_SWITCH) && (set_error_code != NO_ERROR)) {  \
+            FaultManager_SetErrorState(set_error_code,                           \
+                                       GetShortFilename(__FILE__),               \
+                                       __LINE__,                                 \
+                                       __func__);                                \
             return;                                                              \
         }                                                                        \
     } while (0)

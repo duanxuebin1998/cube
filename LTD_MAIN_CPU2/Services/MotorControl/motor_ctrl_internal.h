@@ -99,12 +99,16 @@ extern "C" {
 #define MOTOR_TAPE_FIT_MAX_SAMPLES          (256)
 #define MOTOR_TAPE_FIT_AUTO_DELTA_TICKS     (1536000 / 4)
 
-/* 非 void 函数：检测命令切换 -> 停止电机 -> 返回 retcode。 */
+/* 非 void 函数：检测命令切换 -> 停止电机；停止失败返回实际错误码，停止成功返回 retcode。 */
 #define CHECK_COMMAND_SWITCH_AND_STOP(retcode)                                    \
     do {                                                                          \
         if (HasEffectiveCommandSwitchRequest()) {                                 \
+            uint32_t stop_ret;                                                    \
             printf("检测到命令切换请求，停止当前操作\r\n");                       \
-            MotorDriver_StopAndMarkStopped();                                     \
+            stop_ret = MotorDriver_StopAndMarkStopped();                          \
+            if (stop_ret != NO_ERROR) {                                           \
+                return stop_ret;                                                  \
+            }                                                                     \
             return (retcode);                                                     \
         }                                                                         \
     } while (0)
@@ -114,7 +118,7 @@ extern "C" {
     do {                                                                          \
         if (HasEffectiveCommandSwitchRequest()) {                                 \
             printf("检测到命令切换请求，停止当前操作\r\n");                       \
-            MotorDriver_StopAndMarkStopped();                                     \
+            (void)MotorDriver_StopAndMarkStopped();                               \
             return;                                                               \
         }                                                                         \
     } while (0)
@@ -192,15 +196,16 @@ int MotorDriver_IsDirValid(int dir);
  *
  * 该函数用于命令切换、异常保护和主动停止场景。停止命令只表示开始减速，
  * 最终显示状态仍会结合驱动 vzero / rampstat 判断。
+ * @return 停止命令和等待停稳成功返回 NO_ERROR，否则返回实际错误码。
  */
-void MotorDriver_StopAndMarkStopped(void);
+uint32_t MotorDriver_StopAndMarkStopped(void);
 
 /**
  * @brief 检查是否有有效命令切换请求，并在需要时停止电机。
  *
- * @return 已检测到命令切换并停止返回 true；否则返回 false。
+ * @return 无命令切换返回 NO_ERROR；命令切换且停止成功返回 STATE_SWITCH；停止失败返回实际错误码。
  */
-bool MotorDriver_StopIfCommandSwitchRequested(void);
+uint32_t MotorDriver_StopIfCommandSwitchRequested(void);
 
 /**
  * @brief 从 TMC5130 读取当前运动状态。

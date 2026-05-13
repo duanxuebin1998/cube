@@ -16,6 +16,7 @@
 #include "motor_ctrl.h"
 #include "measure_zero.h"
 #include "sensor.h"
+#include "error_log.h"
 // TODO: 这里替换为你的水位检测头文件
 // #include "water.h"  // 提供 check_water_status()
 
@@ -272,14 +273,17 @@ uint32_t SearchWaterLevel(void)
     while (try_times < WATER_ROUGH_RETRY_MAX)
     {
         try_times++;
-        printf("水位测量\t粗找水位第%d次尝试\r\n", try_times);
 
         fault_info_init();
         ret = SearchWaterRough();
 
         if (ret == STATE_SWITCH)
         {
-            printf("水位测量\t检测到命令切换，中止粗找\r\n");
+            // 错误	阶段：错误报警	模块：测量	操作：粗找水位	原因：命令切换	处理：停止测量
+            ErrorLog_Warn(ERROR_LOG_MODULE_MEASURE,
+                          ERROR_LOG_OP_SEARCH_WATER_ROUGH,
+                          ERROR_LOG_REASON_COMMAND_SWITCH,
+                          ERROR_LOG_ACTION_STOP_MEASURE);
             break;
         }
 
@@ -287,21 +291,34 @@ uint32_t SearchWaterLevel(void)
 
         if (ret != NO_ERROR)
         {
-            printf("水位测量\t粗找失败[%d]:0x%lX\r\n", try_times, ret);
+            // 错误	阶段：错误重试	模块：测量	操作：粗找水位	原因：搜索失败	尝试：try_times/WATER_ROUGH_RETRY_MAX	错误码：ret	错误名：ErrorLog_GetCodeName(ret)
+            ErrorLog_Retry(ERROR_LOG_MODULE_MEASURE,
+                           ERROR_LOG_OP_SEARCH_WATER_ROUGH,
+                           ERROR_LOG_REASON_SEARCH_FAIL,
+                           (uint32_t)try_times,
+                           (uint32_t)WATER_ROUGH_RETRY_MAX,
+                           ret);
             last_rough_ret = ret;
             HAL_Delay(1000);
             continue;
         }
         else
         {
-            printf("水位测量\t粗找水位成功\r\n");
+            if (try_times > 1U)
+            {
+                // 错误	阶段：重试成功	模块：测量	操作：粗找水位	原因：恢复成功	尝试：try_times/WATER_ROUGH_RETRY_MAX
+                ErrorLog_Recover(ERROR_LOG_MODULE_MEASURE,
+                                 ERROR_LOG_OP_SEARCH_WATER_ROUGH,
+                                 ERROR_LOG_REASON_RECOVER_OK,
+                                 (uint32_t)try_times,
+                                 (uint32_t)WATER_ROUGH_RETRY_MAX);
+            }
             break;
         }
     }
 
     if (ret != NO_ERROR)
     {
-        printf("水位测量\t粗找水位失败(尝试%d次)\r\n", try_times);
         RETURN_ERROR(last_rough_ret);
     }
 
@@ -312,31 +329,47 @@ uint32_t SearchWaterLevel(void)
     while (try_times < WATER_PRECISE_RETRY_MAX)
     {
         try_times++;
-        printf("水位测量\t精找水位第%d次尝试\r\n", try_times);
 
         ret = SearchWaterPrecise();
 
         if (ret == STATE_SWITCH)
         {
-            printf("水位测量\t检测到命令切换，中止精找\r\n");
+            // 错误	阶段：错误报警	模块：测量	操作：精找水位	原因：命令切换	处理：停止测量
+            ErrorLog_Warn(ERROR_LOG_MODULE_MEASURE,
+                          ERROR_LOG_OP_SEARCH_WATER_PRECISE,
+                          ERROR_LOG_REASON_COMMAND_SWITCH,
+                          ERROR_LOG_ACTION_STOP_MEASURE);
             break;
         }
 
         if (ret == NO_ERROR)
         {
-            printf("水位测量\t精找完成\r\n");
+            if (try_times > 1U)
+            {
+                // 错误	阶段：重试成功	模块：测量	操作：精找水位	原因：恢复成功	尝试：try_times/WATER_PRECISE_RETRY_MAX
+                ErrorLog_Recover(ERROR_LOG_MODULE_MEASURE,
+                                 ERROR_LOG_OP_SEARCH_WATER_PRECISE,
+                                 ERROR_LOG_REASON_RECOVER_OK,
+                                 (uint32_t)try_times,
+                                 (uint32_t)WATER_PRECISE_RETRY_MAX);
+            }
             break;
         }
         else
         {
-            printf("水位测量\t精找失败:0x%lX\r\n", ret);
+            // 错误	阶段：错误重试	模块：测量	操作：精找水位	原因：搜索失败	尝试：try_times/WATER_PRECISE_RETRY_MAX	错误码：ret	错误名：ErrorLog_GetCodeName(ret)
+            ErrorLog_Retry(ERROR_LOG_MODULE_MEASURE,
+                           ERROR_LOG_OP_SEARCH_WATER_PRECISE,
+                           ERROR_LOG_REASON_SEARCH_FAIL,
+                           (uint32_t)try_times,
+                           (uint32_t)WATER_PRECISE_RETRY_MAX,
+                           ret);
             HAL_Delay(1000);
         }
     }
 
     if (ret != NO_ERROR)
     {
-        printf("水位测量\t精找失败(尝试%d次)\r\n", try_times);
         CHECK_ERROR(ret);
     }
 
@@ -448,7 +481,6 @@ static int SearchWaterRough(void)
     }
     else
     {
-        printf("水位测量\t粗找水位未成功，准备回退重试\r\n");
 
         ret = MotorCtrl_MoveAndWait(WATER_FAIL_RECOVER_UP_MM, MOTOR_DIRECTION_UP, MotorCtrl_GetDefaultSpeedX100());
         CHECK_ERROR(ret);
@@ -578,7 +610,7 @@ uint32_t check_water_status(uint8_t *water_state)
     }
 
     /* 单行、完整判定信息 */
-    printf("[水位检查] 电容=%.1f  零点=%.1f  阈值=%.1f  电容%s阈值  -> %s\r\n",
+    printf("[水位检查] 电容=%.1f  零点：%.1f  阈值=%.1f  电容%s阈值  -> %s\r\n",
            cap,
            zero,
            th,
@@ -627,7 +659,7 @@ static uint32_t AlignToWaterLevel_01mm(int32_t lvl_target_01mm)
 
     int32_t abs_delta_01mm = (delta_01mm >= 0) ? delta_01mm : -delta_01mm;
 
-    printf("快速跟随\t对齐: 目标液位=%.1fmm 当前缆长=%.1fmm 目标缆长=%.1fmm 差值=%+.1fmm\r\n",
+    printf("快速跟随\t对齐: 目标液位=%.1fmm 当前缆长=%.1fmm 目标缆长=%.1fmm 差值：%+.1fmm\r\n",
            lvl_target_01mm / 10.0f,
            cable_now_01mm / 10.0f,
            cable_target_01mm / 10.0f,
@@ -636,7 +668,7 @@ static uint32_t AlignToWaterLevel_01mm(int32_t lvl_target_01mm)
     uint32_t dir = (delta_01mm >= 0) ? MOTOR_DIRECTION_DOWN : MOTOR_DIRECTION_UP;
     float move_mm = abs_delta_01mm / 10.0f;
 
-    printf("快速跟随\t对齐: 方向=%s 移动=%.1fmm\r\n",
+    printf("快速跟随\t对齐: 方向：%s 移动=%.1fmm\r\n",
            (dir == MOTOR_DIRECTION_DOWN) ? "DOWN" : "UP",
            move_mm);
 
@@ -720,7 +752,7 @@ uint32_t FindWaterLevel_FastByStateFlip_StableExit(uint32_t stable_win_ms)
         /* ===================== 段 A：在水里 -> 连续上行直到出水(NORMAL) ===================== */
         if (water_state == WATER)
         {
-            printf("快速跟随\t当前=水区 -> 连续上行直到空气区\r\n");
+            printf("快速跟随\t当前：水区 -> 连续上行直到空气区\r\n");
             MotorCtrl_LostStepInit();
 
             while (1)
@@ -751,7 +783,7 @@ uint32_t FindWaterLevel_FastByStateFlip_StableExit(uint32_t stable_win_ms)
         /* ===================== 段 B：不在水里 -> 连续下行直到进水(WATER) ===================== */
         else
         {
-            printf("快速跟随\t当前=空气区 -> 连续下行直到水区\r\n");
+            printf("快速跟随\t当前：空气区 -> 连续下行直到水区\r\n");
             MotorCtrl_LostStepInit();
 
             while (1)
@@ -917,7 +949,7 @@ static uint32_t MonitorWaterFollowChange(float target_cap)
         /* 用当前电容与跟随目标电容的差值判断水位是否已经变化。 */
         diff = fabsf(cap - target_cap);
 
-        printf("水位跟随\t稳定监测 电容=%.1f 目标=%.1f 偏差=%.1f 阈值=%.1f\r\n",
+        printf("水位跟随\t稳定监测 电容=%.1f 目标：%.1f 偏差=%.1f 阈值=%.1f\r\n",
                cap, target_cap, diff, monitor_diff);
 
         if (diff > monitor_diff)
@@ -982,7 +1014,7 @@ static uint32_t FollowWaterLevelCore(WaterRecoverStrategy recover_strategy)
     th = target_cap + follow_band;
 
     printf("水位跟随\t开始\r\n");
-    printf("水位跟随\t空气电容=%.1f  目标阈值上限=%.1f  滞回下限=%.1f\r\n",
+    printf("水位跟随\t空气电容=%.1f  目标阈值上限：%.1f  滞回下限：%.1f\r\n",
            air_cap, th, th_low);
 
     /* ============================ 主循环 ============================ */
@@ -992,7 +1024,7 @@ static uint32_t FollowWaterLevelCore(WaterRecoverStrategy recover_strategy)
         ret = Sensor_ReadWaterCapacitance(&cap);
         if (ret != NO_ERROR)
         {
-            printf("水位跟随\t读取电容失败 错误=0x%lX\r\n", ret);
+            printf("水位跟随\t读取电容失败 错误码=0x%lX\r\n", ret);
             return ret;
         }
 
@@ -1013,14 +1045,14 @@ static uint32_t FollowWaterLevelCore(WaterRecoverStrategy recover_strategy)
             /* 电容高于上阈值：探头偏水 -> 需要上行 */
             dir  = MOTOR_DIRECTION_UP;
             diff = cap - th;
-            printf("水位跟随\t状态=偏水  差值=%.1f -> 上行\r\n", diff);
+            printf("水位跟随\t状态=偏水  差值：%.1f -> 上行\r\n", diff);
         }
         else if (cap <= th_low)
         {
             /* 电容低于滞回下限：探头偏空气 -> 需要下行 */
             dir  = MOTOR_DIRECTION_DOWN;
             diff = th_low - cap;
-            printf("水位跟随\t状态=偏空气 差值=%.1f -> 下行\r\n", diff);
+            printf("水位跟随\t状态=偏空气 差值：%.1f -> 下行\r\n", diff);
         }
         else
         {
@@ -1079,7 +1111,7 @@ static uint32_t FollowWaterLevelCore(WaterRecoverStrategy recover_strategy)
             step_mm = WATER_FOLLOW_STEP_SMALL_MM;
         }
 
-        printf("水位跟随\t执行移动 方向=%s  步长=%.2fmm  丢失计数=%u\r\n",
+        printf("水位跟随\t执行移动 方向：%s  步长=%.2fmm  丢失计数=%u\r\n",
                (dir == MOTOR_DIRECTION_UP) ? "UP" : "DOWN",
                step_mm,
                lost_count);
@@ -1132,7 +1164,7 @@ static uint32_t FollowWaterLevelCore(WaterRecoverStrategy recover_strategy)
                 lost_count = 0;
             }
 
-            printf("水位跟随\t丢失判定 差值=%.1f 阈值=%.1f 电容变化=%.1f -> 丢失计数=%u\r\n",
+            printf("水位跟随\t丢失判定 差值：%.1f 阈值=%.1f 电容变化=%.1f -> 丢失计数=%u\r\n",
                    diff, th_span, cap_delta, lost_count);
         }
 

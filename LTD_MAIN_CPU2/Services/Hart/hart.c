@@ -87,7 +87,7 @@ u8 HartCommunicationProcess(u8* RcvBuff,u8* SendBuff,volatile u8* Sendlen)
 	ret = AnalyseRcvPackage(RcvPackage,&HartCommand,&FlagofLongFrame);/*hart接收解包、校验，读取指令代码*/
 	if(ret!=0)
 	{	
-		printf("接受包错误： %d\r\n",ret );	/*打印接收包错误代码*/
+		printf("接收包异常： %d\r\n",ret );	/*打印接收包返回代码*/
 		int i;
 		printf("Rcv %d:\t", USART2_RX_LEN);
 		for (i = 0; i < USART2_RX_LEN; i++) {

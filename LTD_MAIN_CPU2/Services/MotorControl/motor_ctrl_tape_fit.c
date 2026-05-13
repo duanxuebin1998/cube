@@ -82,7 +82,7 @@ void MotorCtrl_TapeFitStartLocalOrigin(void)
     g_measurement.debug_data.motor_step = drum.motor_step;
     g_measurement.debug_data.motor_distance = drum.motor_distance_01mm;
 
-    printf("TFIT局部开始: 原点步数=%ld, 原点长度=%.1f mm\r\n",
+    printf("TFIT局部开始: 原点步数=%ld, 原点长度：%.1f mm\r\n",
            (long)s_motor_tape_fit_origin_step,
            (double)s_motor_tape_fit_origin_length_01mm * 0.1);
     (void)MotorTapeFit_CaptureCurrentSample(true);
@@ -147,7 +147,7 @@ uint32_t MotorCtrl_TapeFitSolve(void)
     uint16_t i;
     (void)MotorTapeFit_CaptureCurrentSample(true);
     if (s_motor_tape_fit_count < 6U) {
-        printf("TFIT求解失败: 至少需要6个采样点, 当前=%u\r\n",
+        printf("TFIT求解失败: 至少需要6个采样点, 当前：%u\r\n",
                (unsigned)s_motor_tape_fit_count);
         return PARAM_ERROR;
     }
@@ -250,7 +250,7 @@ uint32_t MotorCtrl_TapeFitSolveLocalOrigin(void)
 
     (void)MotorTapeFit_CaptureCurrentSample(true);
     if (s_motor_tape_fit_count < 6U) {
-        printf("TFIT局部求解失败: 至少需要6个采样点, 当前=%u\r\n",
+        printf("TFIT局部求解失败: 至少需要6个采样点, 当前：%u\r\n",
                (unsigned)s_motor_tape_fit_count);
         return PARAM_ERROR;
     }

@@ -1,4 +1,5 @@
 #include "motor_ctrl_internal.h"
+#include "error_log.h"
 
 /**
  * @file motor_ctrl_motion_api.c
@@ -49,6 +50,7 @@ uint32_t MotorCtrl_MoveByTicksAndWait(int32_t ticks, uint32_t speed_x100)
     int32_t rampmode_after = 0;
     int32_t rampstat_after = 0;
     int32_t gstat_after = 0;
+    char detail[128];
 //    int32_t delta_ticks = ticks;
 
     ret = MotorDriver_BeginTemporarySpeed(speed_x100, &restore_needed, &restore_speed_x100);
@@ -58,10 +60,13 @@ uint32_t MotorCtrl_MoveByTicksAndWait(int32_t ticks, uint32_t speed_x100)
      * 但仍然要基于当前卷径刷新 VMAX，保证速度口径一致。 */
     MotorDriver_UpdateVelocityFromParams();
 
-    if (MotorDriver_StopIfCommandSwitchRequested()) {
+    ret = MotorDriver_StopIfCommandSwitchRequested();
+    if (ret != NO_ERROR) {
         restore_ret = MotorDriver_EndTemporarySpeed(restore_needed, restore_speed_x100);
-        (void)restore_ret;
-        return COMMAND_SWITCH_ABORT;
+        if (restore_ret != NO_ERROR) {
+            return restore_ret;
+        }
+        return ret;
     }
 
     /* 若方向相反，仅需在此统一翻转 */
@@ -70,10 +75,17 @@ uint32_t MotorCtrl_MoveByTicksAndWait(int32_t ticks, uint32_t speed_x100)
     if (!stpr_tryReadInt(&stepper, TMC5130_XACTUAL, &xactual_before)) {
         restore_ret = MotorDriver_EndTemporarySpeed(restore_needed, restore_speed_x100);
         (void)restore_ret;
-        printf("步进运动失败 | 下发前XACTUAL读取失败 | 增量=%ld\r\n", (long)ticks);
+        snprintf(detail, sizeof(detail), "增量：%ld", (long)ticks);
+        // 错误	阶段：错误报警	模块：电机	操作：步进运动	原因：通信失败	处理：停止电机	详情：detail
+        ErrorLog_WarnDetail(ERROR_LOG_MODULE_MOTOR,
+                            ERROR_LOG_OP_STEP_MOTION,
+                            ERROR_LOG_REASON_COMM_FAIL,
+                            ERROR_LOG_ACTION_STOP_MOTOR,
+                            detail);
+        printf("步进运动失败 | 下发前XACTUAL读取失败 | 增量：%ld\r\n", (long)ticks);
         return MOTOR_TMC_COMM_ERROR;
     }
-//    printf("ticks运动下发 | 增量=%ld | XACTUAL_before=%ld | VMAX=%lu | speed=%.2fm/min\r\n",
+//    printf("ticks运动下发 | 增量：%ld | XACTUAL_before=%ld | VMAX=%lu | speed=%.2fm/min\r\n",
 //           (long)delta_ticks,
 //           (long)xactual_before,
 //           (unsigned long)velocity,
@@ -96,7 +108,7 @@ uint32_t MotorCtrl_MoveByTicksAndWait(int32_t ticks, uint32_t speed_x100)
     (void)stpr_tryReadInt(&stepper, TMC5130_RAMPMODE, &rampmode_after);
     (void)stpr_tryReadInt(&stepper, TMC5130_RAMPSTAT, &rampstat_after);
     (void)stpr_tryReadInt(&stepper, TMC5130_GSTAT, &gstat_after);
-//    printf("ticks运动读回 | target=%ld | XACTUAL=%ld | XTARGET=%ld | VMAX=%ld | RAMPMODE=%ld | RAMPSTAT=0x%08lX | GSTAT=0x%08lX\r\n",
+//    printf("ticks运动读回 | 目标位置：%ld | 实际位置：%ld | 目标寄存器：%ld | 最大速度=%ld | 斜坡模式=%ld | 斜坡状态：0x%08lX | 全局状态：0x%08lX\r\n",
 //           (long)ticks,
 //           (long)xactual_before,
 //           (long)xtarget_after,
@@ -109,10 +121,13 @@ uint32_t MotorCtrl_MoveByTicksAndWait(int32_t ticks, uint32_t speed_x100)
         uint32_t last_vel_refresh_tick = start_wait_tick;
         bool position_changed = false;
         do {
-            if (MotorDriver_StopIfCommandSwitchRequested()) {
+            ret = MotorDriver_StopIfCommandSwitchRequested();
+            if (ret != NO_ERROR) {
                 restore_ret = MotorDriver_EndTemporarySpeed(restore_needed, restore_speed_x100);
-                (void)restore_ret;
-                return COMMAND_SWITCH_ABORT;
+                if (restore_ret != NO_ERROR) {
+                    return restore_ret;
+                }
+                return ret;
             }
             MotorDriver_RefreshVelocityDuringRun(&stepper, &last_vel_refresh_tick);
             MotorPosition_SyncDebugDrumState(&stepper);
@@ -130,7 +145,21 @@ uint32_t MotorCtrl_MoveByTicksAndWait(int32_t ticks, uint32_t speed_x100)
             (void)stpr_tryReadInt(&stepper, TMC5130_GSTAT, &gstat_after);
             restore_ret = MotorDriver_EndTemporarySpeed(restore_needed, restore_speed_x100);
             (void)restore_ret;
-            printf("步进运动失败 | 500ms内XACTUAL未变化 | 变化前=%ld | 变化后=%ld | 目标=%ld | XTARGET=%ld | RAMPSTAT=0x%08lX | GSTAT=0x%08lX\r\n",
+            snprintf(detail, sizeof(detail),
+                     "变化前：%ld,变化后：%ld,目标：%ld,目标寄存器：%ld,斜坡状态：0x%08lX,全局状态：0x%08lX",
+                     (long)xactual_before,
+                     (long)xactual_after,
+                     (long)ticks,
+                     (long)xtarget_after,
+                     (unsigned long)rampstat_after,
+                     (unsigned long)gstat_after);
+            // 错误	阶段：错误报警	模块：电机	操作：步进运动	原因：ErrorLog_GetReasonByCode(MOTOR_STEP_ERROR)	处理：停止电机	详情：detail
+            ErrorLog_WarnDetail(ERROR_LOG_MODULE_MOTOR,
+                                ERROR_LOG_OP_STEP_MOTION,
+                                ErrorLog_GetReasonByCode(MOTOR_STEP_ERROR),
+                                ERROR_LOG_ACTION_STOP_MOTOR,
+                                detail);
+            printf("步进运动失败 | 500ms内XACTUAL未变化 | 变化前：%ld | 变化后：%ld | 目标：%ld | XTARGET=%ld | RAMPSTAT=0x%08lX | GSTAT=0x%08lX\r\n",
                    (long)xactual_before,
                    (long)xactual_after,
                    (long)ticks,
@@ -156,6 +185,15 @@ uint32_t MotorCtrl_MoveByTicksAndWait(int32_t ticks, uint32_t speed_x100)
 
             CHECK_COMMAND_SWITCH_AND_STOP(COMMAND_SWITCH_ABORT);
             if (!stpr_tryReadInt(&stepper, TMC5130_XACTUAL, &xactual_now)) {
+                snprintf(detail, sizeof(detail),
+                         "寄存器：XACTUAL,目标位置：%ld",
+                         (long)target_ticks);
+                // 错误	阶段：错误报警	模块：电机	操作：等待电机停止	原因：通信失败	处理：停止电机	详情：detail
+                ErrorLog_WarnDetail(ERROR_LOG_MODULE_MOTOR,
+                                    ERROR_LOG_OP_WAIT_STOP,
+                                    ERROR_LOG_REASON_COMM_FAIL,
+                                    ERROR_LOG_ACTION_STOP_MOTOR,
+                                    detail);
                 ret = MOTOR_TMC_COMM_ERROR;
                 break;
             }
@@ -168,7 +206,19 @@ uint32_t MotorCtrl_MoveByTicksAndWait(int32_t ticks, uint32_t speed_x100)
                 break;
             }
             if ((HAL_GetTick() - settle_start_tick) > MOTOR_STOP_WAIT_TIMEOUT_MS) {
-                printf("ticks运动等待到位超时 | XACTUAL=%ld | target=%ld | diff=%ld\r\n",
+                snprintf(detail, sizeof(detail),
+                         "实际位置：%ld,目标位置：%ld,差值：%ld,超时：%lums",
+                         (long)xactual_now,
+                         (long)target_ticks,
+                         (long)diff_ticks,
+                         (unsigned long)MOTOR_STOP_WAIT_TIMEOUT_MS);
+                // 错误	阶段：错误报警	模块：电机	操作：等待电机停止	原因：ErrorLog_GetReasonByCode(MOTOR_RUN_TIMEOUT)	处理：停止电机	详情：detail
+                ErrorLog_WarnDetail(ERROR_LOG_MODULE_MOTOR,
+                                    ERROR_LOG_OP_WAIT_STOP,
+                                    ErrorLog_GetReasonByCode(MOTOR_RUN_TIMEOUT),
+                                    ERROR_LOG_ACTION_STOP_MOTOR,
+                                    detail);
+                printf("ticks运动等待到位超时 | 实际位置：%ld | 目标位置：%ld | 差值：%ld\r\n",
                        (long)xactual_now,
                        (long)target_ticks,
                        (long)diff_ticks);
@@ -287,7 +337,7 @@ uint32_t MotorCtrl_CalibrateFirstLoopCircumferenceAtZero(void)
     /* 2) 下行一圈并等待停止（可打断） */
     uint32_t ret = MotorCtrl_MoveByTicksAndWait(one_rev_ticks, MotorCtrl_GetDefaultSpeedX100());
     if (ret != NO_ERROR) {
-        printf("首圈周长标定失败 | 下行一圈失败 错误码=0x%08lX\r\n", (unsigned long)ret);
+        printf("首圈周长标定失败 | 下行一圈失败 错误码：0x%08lX\r\n", (unsigned long)ret);
         return ret;
     }
 
@@ -298,7 +348,7 @@ uint32_t MotorCtrl_CalibrateFirstLoopCircumferenceAtZero(void)
     /* 3) 读取一圈后的长度 */
     const double L1 = MotorPosition_GetCurrentTapeLengthMm();
     const double dL = L1 - L0;
-    printf("首圈周长标定采样 | 起点长度=%.1fmm | 终点长度=%.1fmm | 长度差=%.1fmm | 步数=%ld\r\n",
+    printf("首圈周长标定采样 | 起点长度：%.1fmm | 终点长度：%.1fmm | 长度差=%.1fmm | 步数=%ld\r\n",
            L0, L1, dL, (long)one_rev_ticks);
     if (dL <= 0.0) {
         printf("首圈周长标定失败 | 一圈后尺带长度未增加 长度差=%.1fmm\r\n", dL);
@@ -326,7 +376,7 @@ uint32_t MotorCtrl_CalibrateFirstLoopCircumferenceAtZero(void)
     (void)MotorPosition_SetLocalCircumferenceToParams(C0);
     ret = MotorCtrl_MoveAndWait(dL, MOTOR_DIRECTION_UP, MotorCtrl_GetDefaultSpeedX100()); // 回到起点
     if (ret != NO_ERROR) {
-        printf("首圈周长标定失败 | 回到起点失败 错误码=0x%08lX\r\n", (unsigned long)ret);
+        printf("首圈周长标定失败 | 回到起点失败 错误码：0x%08lX\r\n", (unsigned long)ret);
         return ret;
     }
     /* 首圈周长标定直接修改了系统参数 first_loop_circumference_mm。
@@ -373,10 +423,13 @@ uint32_t MotorCtrl_MoveAndWait(float mm, int dir, uint32_t speed_x100)
     ret = MotorDriver_BeginTemporarySpeed(speed_x100, &restore_needed, &restore_speed_x100);
     CHECK_ERROR(ret);
 
-    if (MotorDriver_StopIfCommandSwitchRequested()) {
+    ret = MotorDriver_StopIfCommandSwitchRequested();
+    if (ret != NO_ERROR) {
         restore_ret = MotorDriver_EndTemporarySpeed(restore_needed, restore_speed_x100);
-        (void)restore_ret;
-        return COMMAND_SWITCH_ABORT;
+        if (restore_ret != NO_ERROR) {
+            return restore_ret;
+        }
+        return ret;
     }
 
     startPos_mm = (float)g_measurement.debug_data.sensor_position / 10.0f;
@@ -391,10 +444,13 @@ uint32_t MotorCtrl_MoveAndWait(float mm, int dir, uint32_t speed_x100)
 
         attempt++;
 
-        if (MotorDriver_StopIfCommandSwitchRequested()) {
+        ret = MotorDriver_StopIfCommandSwitchRequested();
+        if (ret != NO_ERROR) {
             restore_ret = MotorDriver_EndTemporarySpeed(restore_needed, restore_speed_x100);
-            (void)restore_ret;
-            return COMMAND_SWITCH_ABORT;
+            if (restore_ret != NO_ERROR) {
+                return restore_ret;
+            }
+            return ret;
         }
 
         /* 分段重试时不再重复切换速度，避免每一段都触发“恢复默认速度”。 */
@@ -405,10 +461,13 @@ uint32_t MotorCtrl_MoveAndWait(float mm, int dir, uint32_t speed_x100)
          * 期间持续做速度补偿，让起步阶段也尽快贴合目标线速度。 */
         uint32_t prewait_vel_refresh_tick = HAL_GetTick();
         for (int i = 0; i < 100; i++) {
-            if (MotorDriver_StopIfCommandSwitchRequested()) {
+            ret = MotorDriver_StopIfCommandSwitchRequested();
+            if (ret != NO_ERROR) {
                 restore_ret = MotorDriver_EndTemporarySpeed(restore_needed, restore_speed_x100);
-                (void)restore_ret;
-                return COMMAND_SWITCH_ABORT;
+                if (restore_ret != NO_ERROR) {
+                    return restore_ret;
+                }
+                return ret;
             }
             MotorDriver_RefreshVelocityDuringRun(&stepper, &prewait_vel_refresh_tick);
             MotorCtrl_PollRuntimePosition();
@@ -419,13 +478,18 @@ uint32_t MotorCtrl_MoveAndWait(float mm, int dir, uint32_t speed_x100)
 
         if (ret == COMMAND_SWITCH_ABORT) {
             restore_ret = MotorDriver_EndTemporarySpeed(restore_needed, restore_speed_x100);
-            (void)restore_ret;
+            if (restore_ret != NO_ERROR) {
+                return restore_ret;
+            }
             return ret;
         }
-        if (MotorDriver_StopIfCommandSwitchRequested()) {
+        ret = MotorDriver_StopIfCommandSwitchRequested();
+        if (ret != NO_ERROR) {
             restore_ret = MotorDriver_EndTemporarySpeed(restore_needed, restore_speed_x100);
-            (void)restore_ret;
-            return COMMAND_SWITCH_ABORT;
+            if (restore_ret != NO_ERROR) {
+                return restore_ret;
+            }
+            return ret;
         }
 
         currentPos_mm = (float)g_measurement.debug_data.sensor_position / 10.0f;
@@ -436,12 +500,18 @@ uint32_t MotorCtrl_MoveAndWait(float mm, int dir, uint32_t speed_x100)
         if (remain_mm < EPS_MM) remain_mm = 0.0f;
 
         if (ret == NO_ERROR) {
-            printf("电机段运行成功: 尝试次数=%d, 累计位移=%.2f mm, 剩余=%.2f mm\r\n",
-                   attempt, moved_mm, remain_mm);
+            if (attempt > 1U) {
+                // 错误	阶段：重试成功	模块：电机	操作：步进运动	原因：恢复成功	尝试：attempt/MOTOR_MOVE_RETRY_MAX
+                ErrorLog_Recover(ERROR_LOG_MODULE_MOTOR,
+                                 ERROR_LOG_OP_STEP_MOTION,
+                                 ERROR_LOG_REASON_RECOVER_OK,
+                                 (uint32_t)attempt,
+                                 MOTOR_MOVE_RETRY_MAX);
+            }
 
             MotorDrumState drum;
             MotorCtrl_UpdateDrumStateFromXActual(&stepper, &drum);
-//            printf("电机状态 | XACTUAL=%ld | 圈=%.4f | 角度=%.1f° | 预测长度=%.1fmm\r\n",
+//            printf("电机状态 | XACTUAL=%ld | 圈=%.4f | 角度=%.1f° | 预测长度：%.1fmm\r\n",
 //                   (long)drum.motor_step,
 //                   drum.turns_total,
 //                   drum.angle_deg,
@@ -449,9 +519,6 @@ uint32_t MotorCtrl_MoveAndWait(float mm, int dir, uint32_t speed_x100)
 
             break;
         } else {
-
-            printf("警告：电机在第%d次运行过程中异常停止，错误0x%X\r\n",
-                   attempt, (unsigned int)ret);
 
             if (attempt >= MOTOR_MOVE_RETRY_MAX) {
                 restore_ret = MotorDriver_EndTemporarySpeed(restore_needed, restore_speed_x100);
@@ -462,15 +529,22 @@ uint32_t MotorCtrl_MoveAndWait(float mm, int dir, uint32_t speed_x100)
                 return ret;
             }
 
-            printf("尝试继续补偿剩余距离 %.2f mm (方向=%s)\r\n",
-                   remain_mm,
-                   (dir == MOTOR_DIRECTION_DOWN) ? "下行" : "上行");
+            // 错误	阶段：错误重试	模块：电机	操作：步进运动	原因：ErrorLog_GetReasonByCode(ret)	尝试：attempt/MOTOR_MOVE_RETRY_MAX	错误码：ret	错误名：ErrorLog_GetCodeName(ret)
+            ErrorLog_Retry(ERROR_LOG_MODULE_MOTOR,
+                           ERROR_LOG_OP_STEP_MOTION,
+                           ErrorLog_GetReasonByCode(ret),
+                           (uint32_t)attempt,
+                           MOTOR_MOVE_RETRY_MAX,
+                           ret);
 
             for (int i = 0; i < 20; i++) {
-                if (MotorDriver_StopIfCommandSwitchRequested()) {
+                ret = MotorDriver_StopIfCommandSwitchRequested();
+                if (ret != NO_ERROR) {
                     restore_ret = MotorDriver_EndTemporarySpeed(restore_needed, restore_speed_x100);
-                    (void)restore_ret;
-                    return COMMAND_SWITCH_ABORT;
+                    if (restore_ret != NO_ERROR) {
+                        return restore_ret;
+                    }
+                    return ret;
                 }
                 HAL_Delay(10);
             }
@@ -485,19 +559,19 @@ uint32_t MotorCtrl_MoveAndWait(float mm, int dir, uint32_t speed_x100)
 
     if ((diff_pct > 70.0f) && (total_cmd_mm > 5.0f)) {
         printf("警告：检测到电机可能丢步！\r\n");
-        printf("目标=%.2f mm, 实际=%.2f mm, 误差=%.2f %%\r\n",
+        printf("目标：%.2f mm, 实际=%.2f mm, 误差=%.2f %%\r\n",
                total_cmd_mm, moved_mm, diff_pct);
         if (MotorCtrl_IsPositionSourceMotor()) {
-            printf("当前为电机步进位置源，忽略编码器丢步错误\r\n");
+            printf("当前为电机步进位置源，忽略编码器丢步异常\r\n");
             ret = NO_ERROR;
         } else {
             ret = ENCODER_LOST_STEP;
         }
     } else {
         printf("电机移动完成。\t");
-        printf("起点=%.2f mm, 目标=%.2f mm, 最终=%.2f mm\t",
+        printf("起点=%.2f mm, 目标：%.2f mm, 最终=%.2f mm\t",
                startPos_mm, targetPos_mm, currentPos_mm);
-        printf("期望=%.2f mm, 实际=%.2f mm, 偏差=%.2f %%\r\n",
+        printf("期望：%.2f mm, 实际=%.2f mm, 偏差=%.2f %%\r\n",
                total_cmd_mm, moved_mm, diff_pct);
         ret = NO_ERROR;
     }
@@ -577,19 +651,22 @@ uint32_t MotorCtrl_MoveToPosition(float target_mm, uint32_t speed_x100)
      * 每一轮都重新读取当前位置，降低位置更新滞后带来的影响。 */
     for (int i = 0; i < 10; i++) {
 
-        if (MotorDriver_StopIfCommandSwitchRequested()) {
+        ret = MotorDriver_StopIfCommandSwitchRequested();
+        if (ret != NO_ERROR) {
             restore_ret = MotorDriver_EndTemporarySpeed(restore_needed, restore_speed_x100);
-            (void)restore_ret;
-            return COMMAND_SWITCH_ABORT;
+            if (restore_ret != NO_ERROR) {
+                return restore_ret;
+            }
+            return ret;
         }
 
         MotorCtrl_SnapshotSensorPositionMm(&cur_mm);
-        printf("运动到位置 | 当前=%.3fmm | 目标=%.3fmm\r\n", cur_mm, target_mm);
+        printf("运动到位置 | 当前：%.3fmm | 目标：%.3fmm\r\n", cur_mm, target_mm);
 
         float delta = target_mm - cur_mm;
 
         if (fabsf(delta) <= EPS_MM) {
-            printf("到位 | 当前=%.3fmm ≈ 目标=%.3fmm (±%.2fmm)\r\n",
+            printf("到位 | 当前：%.3fmm ≈ 目标：%.3fmm (±%.2fmm)\r\n",
                    cur_mm, target_mm, EPS_MM);
             restore_ret = MotorDriver_EndTemporarySpeed(restore_needed, restore_speed_x100);
             CHECK_ERROR(restore_ret);
@@ -605,7 +682,9 @@ uint32_t MotorCtrl_MoveToPosition(float target_mm, uint32_t speed_x100)
         ret = MotorCtrl_MoveAndWait(plan_mm, dir, 0U);
         if (ret != NO_ERROR) {
             restore_ret = MotorDriver_EndTemporarySpeed(restore_needed, restore_speed_x100);
-            (void)restore_ret;
+            if (restore_ret != NO_ERROR) {
+                return restore_ret;
+            }
             return ret; // 含 COMMAND_SWITCH_ABORT
         }
     }
@@ -623,12 +702,18 @@ uint32_t MotorCtrl_MoveToPosition(float target_mm, uint32_t speed_x100)
  */
 uint32_t MotorCtrl_QuickStop(void)
 {
-    if (MotorCtrl_IsDriverMoving(&stepper)) {
-        MotorDriver_StopAndMarkStopped();
-        stpr_disableDriver(&stepper);
-        HAL_Delay(4000);
-        stpr_enableDriver(&stepper);
+    uint32_t ret;
+
+    /* 急停必须主动尝试下发停止命令，避免驱动状态读取失败时跳过停机。 */
+    ret = MotorDriver_StopAndMarkStopped();
+    if (ret != NO_ERROR) {
+        return ret;
     }
+
+    stpr_disableDriver(&stepper);
+    HAL_Delay(4000);
+    stpr_enableDriver(&stepper);
+
     MotorPosition_SyncDebugDrumState(&stepper);
     g_measurement.debug_data.motor_state = 0U;
     return MotorCtrl_SetSpeed(g_deviceParams.max_motor_speed);
@@ -643,7 +728,10 @@ uint32_t MotorCtrl_SlowStop(void)
 {
     uint32_t ret;
 
-    MotorDriver_StopAndMarkStopped();
+    ret = MotorDriver_StopAndMarkStopped();
+    if (ret != NO_ERROR) {
+        return ret;
+    }
 
     /* 慢停后必须等 RAMPSTAT.vzero 确认停稳，再恢复软件速度设定。
      * 否则 TMC5130 仍处于速度模式时写回 VMAX，可能导致电机继续运行。 */
@@ -706,24 +794,24 @@ uint32_t MotorCtrl_GetDisplayState(void)
  * @param dir 运动方向。
  * @param speed_x100 本次运动速度，0 表示使用默认速度。
  */
-void MotorCtrl_MoveBlockingNoDetect(float mm, int dir, uint32_t speed_x100)
+uint32_t MotorCtrl_MoveBlockingNoDetect(float mm, int dir, uint32_t speed_x100)
 {
     uint32_t restore_speed_x100 = 0U;
     bool restore_needed = false;
     uint32_t ret;
 
-    if (mm <= 0.0f) return;
-    if (!MotorDriver_IsDirValid(dir)) return;
+    if (mm <= 0.0f) return PARAM_ERROR;
+    if (!MotorDriver_IsDirValid(dir)) return PARAM_ERROR;
 
     /* 该接口是“无检测”版本，只保留基础运动和日志。
      * 但为了让语义一致，临时速度恢复策略仍然与其他阻塞接口保持一致。 */
     ret = MotorDriver_BeginTemporarySpeed(speed_x100, &restore_needed, &restore_speed_x100);
     if (ret != NO_ERROR) {
-        printf("无检测阻塞运动：速度设置失败 错误码=0x%08lX\r\n", (unsigned long)ret);
-        return;
+        printf("无检测阻塞运动：速度设置失败 错误码：0x%08lX\r\n", (unsigned long)ret);
+        return ret;
     }
 
-    printf("无检测阻塞运动：距离=%.2f, 方向=%d\r\n", mm, dir);
+    printf("无检测阻塞运动：距离=%.2f, 方向：%d\r\n", mm, dir);
 
     g_measurement.debug_data.motor_state = (dir == MOTOR_DIRECTION_UP) ? 1U : 2U;
     MotorPosition_SyncDebugDrumState(&stepper);
@@ -737,9 +825,10 @@ void MotorCtrl_MoveBlockingNoDetect(float mm, int dir, uint32_t speed_x100)
     if ((!use_local_circ) && (C0 <= 0.0)) {
         ret = MotorDriver_EndTemporarySpeed(restore_needed, restore_speed_x100);
         if (ret != NO_ERROR) {
-            printf("无检测阻塞运动：恢复默认速度失败 错误码=0x%08lX\r\n", (unsigned long)ret);
+            printf("无检测阻塞运动：恢复默认速度失败 错误码：0x%08lX\r\n", (unsigned long)ret);
+            return ret;
         }
-        return;
+        return PARAM_ERROR;
     }
 
     /* 当前有符号长度 */
@@ -768,30 +857,36 @@ void MotorCtrl_MoveBlockingNoDetect(float mm, int dir, uint32_t speed_x100)
     if (ticks64 < (int64_t)INT32_MIN) ticks64 = (int64_t)INT32_MIN;
     int32_t ticks = (int32_t)ticks64;
 
-    if (MotorDriver_StopIfCommandSwitchRequested()) {
+    ret = MotorDriver_StopIfCommandSwitchRequested();
+    if (ret != NO_ERROR) {
+        uint32_t stop_ret = ret;
         ret = MotorDriver_EndTemporarySpeed(restore_needed, restore_speed_x100);
         if (ret != NO_ERROR) {
-            printf("无检测阻塞运动：恢复默认速度失败 错误码=0x%08lX\r\n", (unsigned long)ret);
+            printf("无检测阻塞运动：恢复默认速度失败 错误码：0x%08lX\r\n", (unsigned long)ret);
+            return ret;
         }
-        return;
+        return stop_ret;
     }
     ret = stpr_moveBy(&stepper, &ticks, velocity);
     if (ret != NO_ERROR) {
-        printf("无检测阻塞运动：目标位置越界 错误码=0x%08lX\r\n", (unsigned long)ret);
+        printf("无检测阻塞运动：目标位置越界 错误码：0x%08lX\r\n", (unsigned long)ret);
         (void)MotorDriver_EndTemporarySpeed(restore_needed, restore_speed_x100);
-        return;
+        return ret;
     }
     MotorPosition_SyncDebugDrumState(&stepper);
     HAL_Delay(100);
 
     uint32_t last_vel_refresh_tick = HAL_GetTick();
     while (MotorCtrl_IsDriverMoving(&stepper)) {
-        if (MotorDriver_StopIfCommandSwitchRequested()) {
+        ret = MotorDriver_StopIfCommandSwitchRequested();
+        if (ret != NO_ERROR) {
+            uint32_t stop_ret = ret;
             ret = MotorDriver_EndTemporarySpeed(restore_needed, restore_speed_x100);
             if (ret != NO_ERROR) {
-                printf("无检测阻塞运动：恢复默认速度失败 错误码=0x%08lX\r\n", (unsigned long)ret);
+                printf("无检测阻塞运动：恢复默认速度失败 错误码：0x%08lX\r\n", (unsigned long)ret);
+                return ret;
             }
-            return;
+            return stop_ret;
         }
         MotorDriver_RefreshVelocityDuringRun(&stepper, &last_vel_refresh_tick);
         MotorPosition_SyncDebugDrumState(&stepper);
@@ -803,8 +898,11 @@ void MotorCtrl_MoveBlockingNoDetect(float mm, int dir, uint32_t speed_x100)
 
     ret = MotorDriver_EndTemporarySpeed(restore_needed, restore_speed_x100);
     if (ret != NO_ERROR) {
-        printf("无检测阻塞运动：恢复默认速度失败 错误码=0x%08lX\r\n", (unsigned long)ret);
+        printf("无检测阻塞运动：恢复默认速度失败 错误码：0x%08lX\r\n", (unsigned long)ret);
+        return ret;
     }
+
+    return NO_ERROR;
 }
 
 /* ===================== 私有函数实现 ===================== */
@@ -850,6 +948,7 @@ static uint32_t MotorMotion_WaitUntilStopWithTarget(TMC5130TypeDef *tmc5130,
     uint32_t startTick = HAL_GetTick();
     uint32_t last_vel_refresh_tick = startTick;
     const uint32_t MAX_WAIT_MS = 60000 * 60;
+    char detail[96];
 
     while (MotorCtrl_IsDriverMoving(tmc5130)) {
 
@@ -862,7 +961,10 @@ static uint32_t MotorMotion_WaitUntilStopWithTarget(TMC5130TypeDef *tmc5130,
 
         /* 2) 到位（容差）-> 立即停机并返回成功 */
         if (fabsf(cur_mm - target_mm) <= eps_mm) {
-            MotorDriver_StopAndMarkStopped();
+            ret = MotorDriver_StopAndMarkStopped();
+            if (ret != NO_ERROR) {
+                return ret;
+            }
             while (MotorCtrl_IsDriverMoving(tmc5130)) {
                 CHECK_COMMAND_SWITCH_AND_STOP(COMMAND_SWITCH_ABORT);
                 HAL_Delay(5);
@@ -876,7 +978,10 @@ static uint32_t MotorMotion_WaitUntilStopWithTarget(TMC5130TypeDef *tmc5130,
          */
         if (dir == MOTOR_DIRECTION_DOWN) {
             if (cur_mm <= target_mm) {
-                MotorDriver_StopAndMarkStopped();
+                ret = MotorDriver_StopAndMarkStopped();
+                if (ret != NO_ERROR) {
+                    return ret;
+                }
                 while (MotorCtrl_IsDriverMoving(tmc5130)) {
                     CHECK_COMMAND_SWITCH_AND_STOP(COMMAND_SWITCH_ABORT);
                     HAL_Delay(5);
@@ -885,7 +990,10 @@ static uint32_t MotorMotion_WaitUntilStopWithTarget(TMC5130TypeDef *tmc5130,
             }
         } else {
             if (cur_mm >= target_mm) {
-                MotorDriver_StopAndMarkStopped();
+                ret = MotorDriver_StopAndMarkStopped();
+                if (ret != NO_ERROR) {
+                    return ret;
+                }
                 while (MotorCtrl_IsDriverMoving(tmc5130)) {
                     CHECK_COMMAND_SWITCH_AND_STOP(COMMAND_SWITCH_ABORT);
                     HAL_Delay(5);
@@ -904,7 +1012,21 @@ static uint32_t MotorMotion_WaitUntilStopWithTarget(TMC5130TypeDef *tmc5130,
 
         /* 6) 超时保护 */
         if (HAL_GetTick() - startTick > MAX_WAIT_MS) {
-            printf("TMC5130: 等待停止超时！\r\n");
+            snprintf(detail, sizeof(detail),
+                     "当前位置=%.2f,目标位置：%.2f,超时：%lums",
+                     (double)cur_mm,
+                     (double)target_mm,
+                     (unsigned long)MAX_WAIT_MS);
+            // 错误	阶段：错误报警	模块：电机	操作：等待电机停止	原因：ErrorLog_GetReasonByCode(MOTOR_RUN_TIMEOUT)	处理：停止电机	详情：detail
+            ErrorLog_WarnDetail(ERROR_LOG_MODULE_MOTOR,
+                                ERROR_LOG_OP_WAIT_STOP,
+                                ErrorLog_GetReasonByCode(MOTOR_RUN_TIMEOUT),
+                                ERROR_LOG_ACTION_STOP_MOTOR,
+                                detail);
+            printf("TMC5130等待停止超时 | 当前位置=%.2fmm | 目标位置：%.2fmm | 超时：%lums\r\n",
+                   (double)cur_mm,
+                   (double)target_mm,
+                   (unsigned long)MAX_WAIT_MS);
             RETURN_ERROR(MOTOR_RUN_TIMEOUT);
         }
 
@@ -926,6 +1048,7 @@ static uint32_t MotorMotion_WaitStoppedAfterStopCommand(uint32_t timeout_ms)
 {
     uint32_t start_tick = HAL_GetTick();
     int32_t rampstat = 0;
+    char detail[80];
 
     if (timeout_ms == 0U) {
         timeout_ms = MOTOR_STOP_WAIT_TIMEOUT_MS;
@@ -933,6 +1056,13 @@ static uint32_t MotorMotion_WaitStoppedAfterStopCommand(uint32_t timeout_ms)
 
     while (1) {
         if (!stpr_tryReadInt(&stepper, TMC5130_RAMPSTAT, &rampstat)) {
+            snprintf(detail, sizeof(detail), "寄存器：RAMPSTAT");
+            // 错误	阶段：错误报警	模块：电机	操作：等待电机停止	原因：通信失败	处理：停止电机	详情：detail
+            ErrorLog_WarnDetail(ERROR_LOG_MODULE_MOTOR,
+                                ERROR_LOG_OP_WAIT_STOP,
+                                ERROR_LOG_REASON_COMM_FAIL,
+                                ERROR_LOG_ACTION_STOP_MOTOR,
+                                detail);
             printf("电机停止等待失败：RAMPSTAT读取失败\r\n");
             return MOTOR_TMC_COMM_ERROR;
         }
@@ -944,6 +1074,16 @@ static uint32_t MotorMotion_WaitStoppedAfterStopCommand(uint32_t timeout_ms)
         }
 
         if ((HAL_GetTick() - start_tick) > timeout_ms) {
+            snprintf(detail, sizeof(detail),
+                     "斜坡状态：0x%08lX,超时：%lums",
+                     (unsigned long)rampstat,
+                     (unsigned long)timeout_ms);
+            // 错误	阶段：错误报警	模块：电机	操作：等待电机停止	原因：ErrorLog_GetReasonByCode(MOTOR_RUN_TIMEOUT)	处理：停止电机	详情：detail
+            ErrorLog_WarnDetail(ERROR_LOG_MODULE_MOTOR,
+                                ERROR_LOG_OP_WAIT_STOP,
+                                ErrorLog_GetReasonByCode(MOTOR_RUN_TIMEOUT),
+                                ERROR_LOG_ACTION_STOP_MOTOR,
+                                detail);
             printf("电机停止等待超时：RAMPSTAT=0x%08lX\r\n", (unsigned long)rampstat);
             return MOTOR_RUN_TIMEOUT;
         }
