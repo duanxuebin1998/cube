@@ -20,154 +20,13 @@
 #include "test.h"
 #include "ad5421.h"
 #include "sensor.h"
-#include "error_log.h"
+#include "fault_recovery.h"
 
 /**
  * @brief 判断错误码是否属于编码器故障范围。
  */
 static uint8_t App_IsEncoderErrorCode(uint32_t error_code) {
 	return (error_code >= ENCODER_TIMEOUT) && (error_code <= ENCODER_OCF_INCOMPLETE);
-}
-
-#define APP_AUTO_RECOVERY_INTERVAL_MS 1000U
-
-typedef struct {
-    uint8_t active;
-    CommandType command;
-    uint32_t error_code;
-    DeviceState device_state;
-    uint32_t zero_point_status;
-    uint32_t last_check_tick;
-} AppAutoRecoveryContext;
-
-static AppAutoRecoveryContext s_auto_recovery = {
-    .active = 0U,
-    .command = CMD_NONE,
-    .error_code = NO_ERROR,
-    .device_state = STATE_ERROR,
-    .zero_point_status = 0U,
-    .last_check_tick = 0U,
-};
-
-/**
- * @brief 判断命令失败后是否允许进入自动恢复流程。
- */
-static uint8_t App_IsAutoRecoverMeasureCommand(CommandType command) {
-    switch (command) {
-    case CMD_BACK_ZERO:
-    case CMD_FIND_OIL:
-    case CMD_FIND_WATER:
-    case CMD_FIND_BOTTOM:
-    case CMD_MEASURE_SINGLE:
-    case CMD_MONITOR_SINGLE:
-    case CMD_SYNTHETIC:
-    case CMD_FOLLOW_WATER:
-    case CMD_RUN_TO_POSITION:
-    case CMD_MEASURE_DISTRIBUTED:
-    case CMD_GB_MEASURE_DISTRIBUTED:
-    case CMD_MEASURE_DENSITY_METER:
-    case CMD_MEASURE_DENSITY_RANGE:
-    case CMD_WARTSILA_DENSITY_RANGE:
-    case CMD_CALIBRATE_ZERO:
-    case CMD_CALIBRATE_OIL:
-    case CMD_CORRECT_OIL:
-    case CMD_CALIBRATE_WATER:
-    case CMD_CALIBRATE_TANKHEIGHT:
-        return 1U;
-    default:
-        return 0U;
-    }
-}
-
-/**
- * @brief 清空自动恢复上下文，表示当前没有待恢复的测量命令。
- */
-static void App_ClearAutoRecoveryContext(void) {
-    s_auto_recovery.active = 0U;
-    s_auto_recovery.command = CMD_NONE;
-    s_auto_recovery.error_code = NO_ERROR;
-    s_auto_recovery.device_state = STATE_ERROR;
-    s_auto_recovery.zero_point_status = 0U;
-    s_auto_recovery.last_check_tick = 0U;
-}
-
-/**
- * @brief 因新命令或命令切换取消自动恢复。
- * @note reason 仅用于调用侧表达语义，现场日志统一按命令切换输出。
- */
-static void App_CancelAutoRecovery(const char *reason) {
-    if (!s_auto_recovery.active) {
-        return;
-    }
-    // 错误	阶段：错误报警	模块：系统	操作：自动恢复	原因：命令切换	处理：停止测量
-    ErrorLog_Warn(ERROR_LOG_MODULE_SYSTEM,
-                  ERROR_LOG_OP_AUTO_RECOVER,
-                  ERROR_LOG_REASON_COMMAND_SWITCH,
-                  ERROR_LOG_ACTION_STOP_MEASURE);
-    App_ClearAutoRecoveryContext();
-}
-
-/**
- * @brief 自动恢复等待期间恢复原错误状态，避免空闲兜底提前清理上下文。
- */
-static void App_RestoreAutoRecoveryErrorStatus(void) {
-    if (!s_auto_recovery.active) {
-        return;
-    }
-
-    g_measurement.device_status.device_state = s_auto_recovery.device_state;
-    g_measurement.device_status.error_code = s_auto_recovery.error_code;
-    g_measurement.device_status.zero_point_status = s_auto_recovery.zero_point_status;
-    g_measurement.device_status.current_command = CMD_NONE;
-}
-
-/**
- * @brief 测量命令失败后记录自动恢复上下文。
- * @note 这里只进入恢复等待，不立即重跑命令；恢复检查由主循环周期执行。
- */
-static void App_StartAutoRecovery(CommandType command, uint32_t error_code) {
-    if ((error_code == NO_ERROR) || (error_code == STATE_SWITCH)) {
-        return;
-    }
-
-    if (!App_IsAutoRecoverMeasureCommand(command)) {
-        return;
-    }
-
-    if (g_measurement.device_status.device_state != STATE_ERROR) {
-        HandleError();
-        g_measurement.device_status.device_state = STATE_ERROR;
-        g_measurement.device_status.zero_point_status = 1U;
-    }
-
-    s_auto_recovery.active = 1U;
-    s_auto_recovery.command = command;
-    s_auto_recovery.error_code = error_code;
-    s_auto_recovery.device_state = g_measurement.device_status.device_state;
-    s_auto_recovery.zero_point_status = g_measurement.device_status.zero_point_status;
-    s_auto_recovery.last_check_tick = HAL_GetTick();
-    // 错误	阶段：错误报警	模块：系统	操作：自动恢复	原因：进入自动恢复	处理：继续尝试
-    ErrorLog_Warn(ERROR_LOG_MODULE_SYSTEM,
-                  ERROR_LOG_OP_AUTO_RECOVER,
-                  ERROR_LOG_REASON_AUTO_RECOVER_START,
-                  ERROR_LOG_ACTION_CONTINUE);
-    App_RestoreAutoRecoveryErrorStatus();
-}
-
-/**
- * @brief 命令执行结束后根据错误状态更新自动恢复流程。
- */
-static void App_UpdateAutoRecoveryAfterCommand(CommandType command) {
-    uint32_t error_code = g_measurement.device_status.error_code;
-
-    if ((error_code != NO_ERROR) && (error_code != STATE_SWITCH)) {
-        App_StartAutoRecovery(command, error_code);
-        return;
-    }
-
-    if (s_auto_recovery.active && (s_auto_recovery.command == command)) {
-        App_ClearAutoRecoveryContext();
-    }
 }
 
 /**
@@ -179,70 +38,15 @@ static void App_ExecuteMeasureCommand(CommandType command) {
 
     /* 统一命令分发入口：后续会进入 measure.c，根据命令类型执行具体业务流程。 */
     ProcessMeasureCmd(command);
-    App_UpdateAutoRecoveryAfterCommand(command);
+    /* 命令结束后只更新恢复上下文，不在这里嵌套重跑命令。 */
+    FaultRecovery_UpdateAfterCommand(command);
 
     /* 命令执行完成后清掉 current_command，表示系统重新回到“无命令执行中”。 */
     g_measurement.device_status.current_command = CMD_NONE;
 
-    // /* 执行完命令后顺手刷新两路无线信息，方便调试时观察两只无线端状态。 */
-    // WIRELESS_PrintInfo(01);
-    // WIRELESS_PrintInfo(02);
-
     /* 如果命令执行过程中触发了“延迟保存参数”，这里顺手处理一次。 */
     process_device_params_deferred_tasks();
 }
-
-/**
- * @brief 自动恢复轮询处理。
- * @return 1 表示本轮主循环已处理自动恢复；0 表示没有自动恢复任务。
- */
-static uint8_t App_HandleAutoRecovery(void) {
-    uint32_t now;
-    uint32_t check_ret;
-    CommandType retry_command;
-
-    if (!s_auto_recovery.active) {
-        return 0U;
-    }
-
-    App_RestoreAutoRecoveryErrorStatus();
-
-    now = HAL_GetTick();
-    if ((uint32_t)(now - s_auto_recovery.last_check_tick) < APP_AUTO_RECOVERY_INTERVAL_MS) {
-        return 1U;
-    }
-    s_auto_recovery.last_check_tick = now;
-    check_ret = Sensor_CheckAllPartParams();
-    if ((check_ret == STATE_SWITCH) || HasEffectiveCommandSwitchRequest()) {
-        App_CancelAutoRecovery("command switch");
-        return 1U;
-    }
-    if (check_ret != NO_ERROR) {
-        // 错误	阶段：错误重试	模块：系统	操作：自动恢复	原因：自动恢复失败	尝试：1U/1U	错误码：check_ret	错误名：ErrorLog_GetCodeName(check_ret)
-        ErrorLog_Retry(ERROR_LOG_MODULE_SYSTEM,
-                       ERROR_LOG_OP_AUTO_RECOVER,
-                       ERROR_LOG_REASON_AUTO_RECOVER_FAIL,
-                       1U,
-                       1U,
-                       check_ret);
-        App_RestoreAutoRecoveryErrorStatus();
-        return 1U;
-    }
-
-    retry_command = s_auto_recovery.command;
-    // 错误	阶段：重试成功	模块：系统	操作：自动恢复	原因：恢复成功	尝试：1U/1U
-    ErrorLog_Recover(ERROR_LOG_MODULE_SYSTEM,
-                     ERROR_LOG_OP_AUTO_RECOVER,
-                     ERROR_LOG_REASON_RECOVER_OK,
-                     1U,
-                     1U);
-    App_ClearAutoRecoveryContext();
-    g_measurement.device_status.error_code = NO_ERROR;
-
-    App_ExecuteMeasureCommand(retry_command);
-    return 1U;
-}
-
 
 /**
  * @brief 主循环空闲时处理全局错误兜底。
@@ -336,7 +140,7 @@ void App_MainLoop(void) {
 
 
 	/* 后台轻量检查：这里只做一次快速轮询，不在主循环里展开复杂处理。 */
-	MotorCtrl_PollRuntimePosition();
+	(void)MotorCtrl_PollRuntimePosition();
 	(void)Weight_CheckCommunicationTimeout();
 	HostCommu_ProcessDeferredLogs();
 
@@ -344,7 +148,8 @@ void App_MainLoop(void) {
 	 * 这一层通常来自调试口/串口缓存，process_command() 会把字符命令翻译成具体动作，
 	 * 必要时再写入 g_deviceParams.command。 */
 	if (new_command_ready) {
-		App_CancelAutoRecovery("serial command");
+		/* 新串口命令优先级最高，先取消等待中的自动恢复，避免恢复命令和新命令竞争。 */
+		FaultRecovery_Cancel("serial command");
 		new_command_ready = 0;  // 本轮已经接管这条新命令，先清标志避免重复处理
 		process_command(received_buffer);
 	}
@@ -353,25 +158,33 @@ void App_MainLoop(void) {
     else if (g_deviceParams.command != CMD_NONE) {
         CommandType command = g_deviceParams.command;
 
-        App_CancelAutoRecovery("formal command");
+        /* 参数命令同样打断自动恢复，主循环本轮只执行最新命令。 */
+        FaultRecovery_Cancel("formal command");
         g_deviceParams.command = CMD_NONE; // 取走后立即清空，避免下轮重复执行
         App_ExecuteMeasureCommand(command);
     }
     /* 第三优先级：自动恢复期间保持原错误状态，每 1 秒检查一次部件参数。
-     * 新命令在前两个分支已经先行处理，可以打断恢复。 */
-    else if (App_HandleAutoRecovery()) {
-        process_device_params_deferred_tasks();
-        HAL_Delay(50);
-        return;
-    }
-	/* 第四优先级：没有新命令且没有自动恢复动作时，才做错误态兜底。
-	 * 也就是说：自动恢复会先保持原错误状态，空闲兜底只处理未纳入恢复流程的全局错误。 */
-	else if (App_HandleIdleGlobalError()) {
-		process_device_params_deferred_tasks();
-		HAL_Delay(50); // 出错分支也保持和主循环一致的节拍
-		return;
-	}
+     * 恢复模块只返回是否需要重跑命令，真正执行仍留在主循环。 */
+    else {
+        FaultRecoveryResult recovery = FaultRecovery_Poll();
+        if (recovery.handled) {
+            /* 恢复模块只返回是否需要重跑命令，真正命令分发仍由主循环统一执行。 */
+            if (recovery.should_retry_command) {
+                App_ExecuteMeasureCommand(recovery.retry_command);
+            }
+            process_device_params_deferred_tasks();
+            HAL_Delay(50);
+            return;
+        }
 
+        /* 第四优先级：没有新命令且没有自动恢复动作时，才做错误态兜底。
+         * 也就是说：自动恢复会先保持原错误状态，空闲兜底只处理未纳入恢复流程的全局错误。 */
+        if (App_HandleIdleGlobalError()) {
+            process_device_params_deferred_tasks();
+            HAL_Delay(50); // 出错分支也保持和主循环一致的节拍
+            return;
+        }
+    }
 	/* 本轮尾声：无论本轮是否空闲，只要没提前 return，就统一走一次节拍延时。 */
 	process_device_params_deferred_tasks();
 	HAL_Delay(50); // 延时50ms

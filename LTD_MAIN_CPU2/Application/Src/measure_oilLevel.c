@@ -23,6 +23,7 @@
 #include "system_parameter.h"
 #include "encoder.h"
 #include "error_log.h"
+#include "abortable_delay.h"
 
 // 函数原型声明
 static int SearchOil();   // 粗略搜索液位
@@ -64,6 +65,7 @@ static void OilLevel_PrintFollowPositionInfo(void)
            motor_cable_mm,
            encoder_cable_mm);
 }
+
 
 /**
  * @brief 液位测量与跟随主流程
@@ -121,12 +123,8 @@ uint32_t SearchAndFollowOilLevel(void) {
 			}
 			break;
 		} else if (ret == STATE_SWITCH) {
-			// 错误	阶段：错误报警	模块：测量	操作：搜索液位	原因：命令切换	处理：停止测量
-			ErrorLog_Warn(ERROR_LOG_MODULE_MEASURE,
-			              ERROR_LOG_OP_SEARCH_OIL_LEVEL,
-			              ERROR_LOG_REASON_COMMAND_SWITCH,
-			              ERROR_LOG_ACTION_STOP_MEASURE);
-			break;
+			/* 命令切换是正常打断，直接向上透传，不参与故障重试。 */
+			return STATE_SWITCH;
 		} else {
 			// 错误	阶段：错误重试	模块：测量	操作：搜索液位	原因：搜索失败	尝试：try_times/3U	错误码：ret	错误名：ErrorLog_GetCodeName(ret)
 			ErrorLog_Retry(ERROR_LOG_MODULE_MEASURE,
@@ -165,12 +163,8 @@ uint32_t SearchAndFollowOilLevel(void) {
 			}
 			break;
 		} else if (ret == STATE_SWITCH) {
-			// 错误	阶段：错误报警	模块：测量	操作：跟随液位	原因：命令切换	处理：停止测量
-			ErrorLog_Warn(ERROR_LOG_MODULE_MEASURE,
-			              ERROR_LOG_OP_FOLLOW_OIL_LEVEL,
-			              ERROR_LOG_REASON_COMMAND_SWITCH,
-			              ERROR_LOG_ACTION_STOP_MEASURE);
-			break;
+			/* 命令切换是正常打断，直接向上透传，不参与故障重试。 */
+			return STATE_SWITCH;
 		} else {
 			// 错误	阶段：错误重试	模块：测量	操作：跟随液位	原因：跟随失败	尝试：try_times/3U	错误码：ret	错误名：ErrorLog_GetCodeName(ret)
 			ErrorLog_Retry(ERROR_LOG_MODULE_MEASURE,
@@ -241,13 +235,9 @@ uint32_t SearchOilLevel(void) {
             }
             break;
         } else if (ret == STATE_SWITCH) {
-            // 错误	阶段：错误报警	模块：传感器	操作：启用液位模式	原因：命令切换	处理：停止测量
-            ErrorLog_Warn(ERROR_LOG_MODULE_SENSOR,
-                          ERROR_LOG_OP_ENABLE_LEVEL_MODE,
-                          ERROR_LOG_REASON_COMMAND_SWITCH,
-                          ERROR_LOG_ACTION_STOP_MEASURE);
-            break;
-        } else {
+			/* 命令切换是正常打断，直接向上透传，不参与故障重试。 */
+			return STATE_SWITCH;
+		} else {
             // 错误	阶段：错误重试	模块：传感器	操作：启用液位模式	原因：模式启用失败	尝试：mode_try_times/3U	错误码：ret	错误名：ErrorLog_GetCodeName(ret)
             ErrorLog_Retry(ERROR_LOG_MODULE_SENSOR,
                            ERROR_LOG_OP_ENABLE_LEVEL_MODE,
@@ -267,6 +257,10 @@ uint32_t SearchOilLevel(void) {
         coarse_try_times++;
         fault_info_init(); // 清除故障信息
         ret = DSM_Get_LevelMode_Frequence_Avg(&g_measurement.oil_measurement.current_frequency);
+        if (ret == STATE_SWITCH) {
+            /* 命令切换是正常打断，直接向上透传，不参与故障重试。 */
+            return STATE_SWITCH;
+        }
         if (ret != NO_ERROR) {
             last_coarse_ret = ret;
             // 错误	阶段：错误重试	模块：传感器	操作：读取液位频率	原因：ErrorLog_GetReasonByCode(ret)	尝试：coarse_try_times/3U	错误码：ret	错误名：ErrorLog_GetCodeName(ret)
@@ -370,7 +364,8 @@ uint32_t FollowOilLevel(void) {
 			// 液位稳定时电机不动作，直接打印寄存器中保存的液位值
 			printf("液位稳定,电机不动作\t");
 			printf("液位跟随\t液位值为%ld (0.1mm)", g_measurement.oil_measurement.oil_level);
-			HAL_Delay(3000);  // 等待3秒
+			ret = (int)AbortableDelay_CommandSwitch(3000U, 100U);
+			CHECK_COMMAND_SWITCH(ret);
 		} else {
 			// 检测到液位变动，重新跟踪
 			printf("识别到液位变动\t");
@@ -640,8 +635,11 @@ static int SearchOilPrecise(float per_mm_Frequency) {
 	// 主跟随循环（需满足连续10次稳定）
 	while (followTime < 10) {
 		// 延时保证传感器稳定性（总延时3秒）
-		HAL_Delay(1000);
-		HAL_Delay(1000);
+		ret = (int)AbortableDelay_CommandSwitch(2000U, 100U);
+		if (ret == STATE_SWITCH) {
+			/* 命令切换是正常打断，直接向上透传，不参与故障重试。 */
+			return STATE_SWITCH;
+		}
 
 		// 获取当前传感器频率
 		ret = DSM_Get_LevelMode_Frequence(&g_measurement.oil_measurement.current_frequency);
@@ -794,6 +792,7 @@ static int waitForTheLiquidLevelToExceedTheBlindZone(void) {
     while (1) {
         if (HasEffectiveCommandSwitchRequest()) {
             printf("盲区等待\t检测到状态切换，退出等待\r\n");
+            /* 命令切换是正常打断，直接向上透传，不参与故障重试。 */
             return STATE_SWITCH;
         }
         ret = DSM_Get_LevelMode_Frequence(&g_measurement.oil_measurement.current_frequency);
@@ -807,6 +806,7 @@ static int waitForTheLiquidLevelToExceedTheBlindZone(void) {
         HAL_Delay(1000);
         if (HasEffectiveCommandSwitchRequest()) {
             printf("盲区等待\t检测到状态切换，退出等待\r\n");
+            /* 命令切换是正常打断，直接向上透传，不参与故障重试。 */
             return STATE_SWITCH;
         }
         //打断监测

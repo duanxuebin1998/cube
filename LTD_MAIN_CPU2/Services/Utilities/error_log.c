@@ -40,21 +40,22 @@ static void ErrorLog_MarkRecentReport(uint32_t code)
 }
 
 /**
- * @brief 取走最近一次最终报错标记。
+ * @brief 判断最近一次最终报错标记。
  * @return 1 表示指定错误码刚刚已经打印过；0 表示需要继续打印。
  */
 uint8_t ErrorLog_TakeRecentReport(uint32_t code)
 {
-    uint8_t matched = 0U;
+    if (s_error_log_recent_report_valid == 0U) {
+        return 0U;
+    }
 
-    if ((s_error_log_recent_report_valid != 0U) &&
-        (s_error_log_recent_report_code == code) &&
+    if ((s_error_log_recent_report_code == code) &&
         ((HAL_GetTick() - s_error_log_recent_report_tick) <= ERROR_LOG_RECENT_REPORT_WINDOW_MS)) {
-        matched = 1U;
+        return 1U;
     }
 
     s_error_log_recent_report_valid = 0U;
-    return matched;
+    return 0U;
 }
 
 /**
@@ -423,6 +424,11 @@ void ErrorLog_RetryDetail(const char *module,
                           uint32_t code,
                           const char *detail)
 {
+    /* 正常结果和命令切换都不是故障，避免进入“错误”打印链路。 */
+    if ((code == NO_ERROR) || (code == STATE_SWITCH)) {
+        return;
+    }
+
     if (ErrorLog_ShouldPrintRetry(attempt, max) == 0U) {
         return;
     }
@@ -513,6 +519,11 @@ void ErrorLog_ReportDetail(const char *module,
                            const char *action,
                            const char *detail)
 {
+    /* 正常结果和命令切换都不是故障，避免进入“错误”打印链路。 */
+    if ((code == NO_ERROR) || (code == STATE_SWITCH)) {
+        return;
+    }
+
     ErrorLog_MarkRecentReport(code);
 
     if (detail != NULL) {

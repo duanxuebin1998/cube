@@ -279,12 +279,8 @@ uint32_t SearchWaterLevel(void)
 
         if (ret == STATE_SWITCH)
         {
-            // 错误	阶段：错误报警	模块：测量	操作：粗找水位	原因：命令切换	处理：停止测量
-            ErrorLog_Warn(ERROR_LOG_MODULE_MEASURE,
-                          ERROR_LOG_OP_SEARCH_WATER_ROUGH,
-                          ERROR_LOG_REASON_COMMAND_SWITCH,
-                          ERROR_LOG_ACTION_STOP_MEASURE);
-            break;
+            /* 命令切换是正常打断，直接向上透传，不参与故障重试。 */
+            return STATE_SWITCH;
         }
 
         CHECK_COMMAND_SWITCH(ret);
@@ -334,12 +330,8 @@ uint32_t SearchWaterLevel(void)
 
         if (ret == STATE_SWITCH)
         {
-            // 错误	阶段：错误报警	模块：测量	操作：精找水位	原因：命令切换	处理：停止测量
-            ErrorLog_Warn(ERROR_LOG_MODULE_MEASURE,
-                          ERROR_LOG_OP_SEARCH_WATER_PRECISE,
-                          ERROR_LOG_REASON_COMMAND_SWITCH,
-                          ERROR_LOG_ACTION_STOP_MEASURE);
-            break;
+            /* 命令切换是正常打断，直接向上透传，不参与故障重试。 */
+            return STATE_SWITCH;
         }
 
         if (ret == NO_ERROR)

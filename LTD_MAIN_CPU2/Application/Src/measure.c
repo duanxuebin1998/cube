@@ -20,6 +20,7 @@
 #include "encoder.h"
 #include "measure_water_level.h"
 #include "error_log.h"
+#include "abortable_delay.h"
 
 static void CMD_CorrectOilLevel(void);
 /* 标定罐高：先测出原始实高，再用标定罐高值修正“当前实高”显示链路。 */
@@ -55,6 +56,7 @@ static void CMD_CalibrateTankHeight(void)
 
     g_measurement.device_status.device_state = STATE_CALIBRATE_TANKHEIGHT_OVER;
 }
+
 
 static void CMD_EnterMaintenanceMode(void);
 static void CMD_WartsilaDensitySpread(void);
@@ -346,6 +348,46 @@ static void ProcessCommand_WarnFailure(const char *operation, uint32_t error_cod
                   "仅记录");
 }
 
+/**
+ * @brief 将串口单字母正式业务命令映射到统一 CommandType。
+ * @note 这些命令必须走主循环的正式入口，才能统一维护 current_command、命令切换和故障恢复。
+ */
+static uint8_t ProcessCommand_MapFormalCommand(uint8_t command_char, CommandType *formal_command)
+{
+    if (formal_command == NULL) {
+        return 0U;
+    }
+
+    switch (command_char) {
+    case 'I':
+        *formal_command = CMD_BACK_ZERO;
+        return 1U;
+    case 'G':
+        *formal_command = CMD_FIND_BOTTOM;
+        return 1U;
+    case 'K':
+        *formal_command = CMD_FIND_OIL;
+        return 1U;
+    case 'R':
+        *formal_command = CMD_MEASURE_DISTRIBUTED;
+        return 1U;
+    case 'W':
+        *formal_command = CMD_FIND_WATER;
+        return 1U;
+    case 'O':
+        *formal_command = CMD_SET_EMPTY_WEIGHT;
+        return 1U;
+    case 'P':
+        *formal_command = CMD_SET_FULL_WEIGHT;
+        return 1U;
+    case 'Q':
+        *formal_command = CMD_RESTORE_FACTORY;
+        return 1U;
+    default:
+        return 0U;
+    }
+}
+
 void process_command(uint8_t *command) {
     uint32_t ret = NO_ERROR;
 
@@ -354,8 +396,15 @@ void process_command(uint8_t *command) {
         printf("空串口命令，忽略\r\n");
         return;
     }
+    CommandType formal_command = CMD_NONE;
+    if (ProcessCommand_MapFormalCommand(command[0], &formal_command)) {
+        /* 串口正式业务命令只挂到主循环执行，避免绕过 current_command 和自动恢复调度。 */
+        g_deviceParams.command = formal_command;
+        printf("串口正式命令已转主循环执行 | command=%lu\r\n", (unsigned long)formal_command);
+        return;
+    }
 
-        /*  指令属于调试/恢复动作，允许在错误态下先清场后执行。 */
+    /* 其余串口指令属于调试/恢复动作，允许在错误态下先清场后执行。 */
     ret = (uint32_t)MeasureStart();
     if (ret != NO_ERROR) {
         printf("串口命令启动失败，电机初始化错误码：0x%08lX\r\n", (unsigned long)ret);
@@ -447,11 +496,6 @@ void process_command(uint8_t *command) {
             }
         }
     }
-    if (command[0] == 'G') {
-        printf("***罐底测量单次测试***\r\n");
-        SearchBottom();
-        return;
-    }
     if (command[0] == 'H') {
         printf("***零点/罐底测量重复性测试***\r\n");
         while (1) {
@@ -468,11 +512,6 @@ void process_command(uint8_t *command) {
             }
         }
     }
-    if (command[0] == 'I') {
-        printf("执行回零点指令\n");
-        CMD_MeasureZero();
-        return;
-    }
     if (command[0] == 'J') {
         printf("***液位测量重复性测试***\r\n");
         while (1) {
@@ -486,11 +525,6 @@ void process_command(uint8_t *command) {
                 return;
             }
         }
-    }
-    if (command[0] == 'K') {
-        printf("***液位测量单次测试***\r\n");
-        CMD_MeasureAndFollowOilLevel();
-        return;
     }
     if (command[0] == 'L') {
         printf("***编码值清零***\r\n");
@@ -560,26 +594,6 @@ void process_command(uint8_t *command) {
             HAL_Delay(1000);
             stpr_disableDriver(&stepper);
         }
-    }
-    if (command[0] == 'O') {
-        printf("获取空载重量\n");
-        get_empty_weight();
-        return;
-    }
-    if (command[0] == 'P') {
-        printf("获取满载重量\n");
-        get_full_weight();
-        return;
-    }
-    if (command[0] == 'Q') {
-        printf("恢复出场设置\n");
-        RestoreFactoryParamsConfig();
-        return;
-    }
-    if (command[0] == 'R') {
-        printf("执行分布测量指令\n");
-        CMD_MeasureDensitySpread_Spread();
-        return;
     }
     /* TFIT：卷筒参数拟合调试命令。
      * 推荐流程：T1 开始采样 -> 运行电机 -> TS/TR 查看或求解 -> TP/TU 应用参数。 */
@@ -682,11 +696,6 @@ void process_command(uint8_t *command) {
             printf("Y命令: YM切换电机记步, YE切换编码轮记步, YS显示位置源, YC电机记步诊断, YT静态SPI测试\r\n");
             return;
         }
-    }
-    if (command[0] == 'W') {
-        printf("执行水位测量指令\n");
-        CMD_MeasurWater();
-        return;
     }
     if (command[0] == 'X') {
         printf("执行单点测量展示指令\n");
@@ -1165,19 +1174,16 @@ static void CMD_WartsilaDensitySpread(void) {
 	SET_ERROR(ret);
 	g_measurement.density_distribution = temp;
 
-	HAL_Delay(1000);
+	if (AbortableDelay_CommandSwitch(1000U, 100U) == STATE_SWITCH) {
+		return;
+	}
 	Print_DensitySpreadResult(&temp);
 // 测量结束，状态切换为分布测量完成
 	g_measurement.device_status.device_state = STATE_WARTSILA_DENSITY_OVER;
 	//延时8S让CPU3读取分布测量结果
-	HAL_Delay(1000); // 延时1s
-	HAL_Delay(1000); // 延时1s
-	HAL_Delay(1000); // 延时1s
-	HAL_Delay(1000); // 延时1s
-	HAL_Delay(1000); // 延时1s
-	HAL_Delay(1000); // 延时1s
-	HAL_Delay(1000); // 延时1s
-	HAL_Delay(1000); // 延时1s
+	if (AbortableDelay_CommandSwitch(8000U, 100U) == STATE_SWITCH) {
+		return;
+	}
     /* 按参数控制瓦锡兰测量后的探底频率：0不探底，N表示每N次测量后探底一次，最大100。 */
     if (bottom_detect_interval > 100U) {
         bottom_detect_interval = 1U;

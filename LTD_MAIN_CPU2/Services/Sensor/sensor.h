@@ -43,4 +43,6 @@ uint32_t Sensor_ReadGyroAngle(float *angle_x_deg, float *angle_y_deg);
 uint32_t Sensor_CheckAllPartParams(void);
 
 uint32_t WIRELESS_PrintInfo(uint8_t addr);
+/** 轻量无线链路探测：只做一次最小读请求，命令切换时返回 STATE_SWITCH，不打印节点信息。 */
+uint32_t WIRELESS_ProbeNode(uint8_t addr);
 #endif /* SENSOR_SENSOR_H_ */

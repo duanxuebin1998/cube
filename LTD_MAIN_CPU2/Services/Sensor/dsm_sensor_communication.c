@@ -153,6 +153,10 @@ static int UART6_SendWithRetry(const char *cmd,
             HAL_Delay(DSM_PRE_SEND_DELAY);
         }
         ret = UART6_SendCommand(cmd, response, maxLen, &recvLen, timeout);
+        if (ret == STATE_SWITCH) {
+            /* 命令切换是正常打断，直接向上透传，不进入 DSM 通信重试日志。 */
+            return STATE_SWITCH;
+        }
         if (ret == 0) {
             if (!IsErrorResponse(response)) {
                 if (recv_len_out != NULL) {

@@ -43,6 +43,7 @@
 #include "motor_ctrl.h"
 #include "system_parameter.h"
 #include "error_log.h"
+#include "abortable_delay.h"
 #include "measure.h"
 #include <stdint.h>
 #include <string.h>
@@ -99,16 +100,28 @@ static uint32_t Density_RunPoints01mm(const int32_t *p01,
         printf("分布测量 移动到位置 %.1f mm\r\n", pos_mm);
 
         uint32_t ret = MotorCtrl_MoveToPosition(pos_mm, MotorCtrl_GetDefaultSpeedX100());
+        if (ret == STATE_SWITCH) {
+            /* 命令切换是正常打断，直接向上透传，不参与故障重试。 */
+            return STATE_SWITCH;
+        }
         if (ret != NO_ERROR) {
             printf("分布测量 电机移动失败: 位置=%.1fmm 错误码=%lu\r\n", pos_mm, (unsigned long)ret);
             return ret;
         }
 
         if (hover_ms > 0) {
-            HAL_Delay(hover_ms);
+            ret = AbortableDelay_CommandSwitch(hover_ms, 100U);
+            if (ret == STATE_SWITCH) {
+                /* 命令切换是正常打断，直接向上透传，不参与故障重试。 */
+                return STATE_SWITCH;
+            }
         }
 
         ret = SinglePoint_ReadSensor(&dist->single_density_data[valid]);
+        if (ret == STATE_SWITCH) {
+            /* 命令切换是正常打断，直接向上透传，不参与故障重试。 */
+            return STATE_SWITCH;
+        }
         if (ret != NO_ERROR) {
             printf("分布测量 单点读取失败: 位置=%.1fmm 错误码=%lu\r\n", pos_mm, (unsigned long)ret);
             return ret;
@@ -598,6 +611,10 @@ void CMD_MeasureDensitySpread_Spread(void)
     g_measurement.device_status.device_state = STATE_SPREADPOINTING;
 
     ret = Density_MeasureByMode_Exact(DENS_MODE_SPREAD, &temp);
+    /* STATE_SWITCH 是命令切换的正常退出，不进入错误重试或报警。 */
+    if (ret == STATE_SWITCH) {
+        return;
+    }
     if (ret != NO_ERROR) {
         printf("普通分布测\t失败，错误码=0x%08lX\r\n", (unsigned long)ret);
         SET_ERROR(ret);
@@ -617,6 +634,10 @@ void CMD_MeasureDensitySpread_GB(void)
     g_measurement.device_status.device_state = STATE_GB_SPREADPOINTING;
 
     ret = Density_MeasureByMode_Exact(DENS_MODE_GB, &temp);
+    /* STATE_SWITCH 是命令切换的正常退出，不进入错误重试或报警。 */
+    if (ret == STATE_SWITCH) {
+        return;
+    }
     if (ret != NO_ERROR) {
         printf("国标测\t失败，错误码=0x%08lX\r\n", (unsigned long)ret);
         SET_ERROR(ret);
@@ -636,6 +657,10 @@ void CMD_MeasureDensitySpread_Meter(void)
     g_measurement.device_status.device_state = STATE_METER_DENSITY;
 
     ret = Density_MeasureByMode_Exact(DENS_MODE_METER, &temp);
+    /* STATE_SWITCH 是命令切换的正常退出，不进入错误重试或报警。 */
+    if (ret == STATE_SWITCH) {
+        return;
+    }
     if (ret != NO_ERROR) {
         printf("每米测\t失败，错误码=0x%08lX\r\n", (unsigned long)ret);
         SET_ERROR(ret);
@@ -655,6 +680,10 @@ void CMD_MeasureDensitySpread_Interval(void)
     g_measurement.device_status.device_state = STATE_INTERVAL_DENSITY;
 
     ret = Density_MeasureByMode_Exact(DENS_MODE_INTERVAL, &temp);
+    /* STATE_SWITCH 是命令切换的正常退出，不进入错误重试或报警。 */
+    if (ret == STATE_SWITCH) {
+        return;
+    }
     if (ret != NO_ERROR) {
         printf("区间测\t失败，错误码=0x%08lX\r\n", (unsigned long)ret);
         SET_ERROR(ret);
@@ -980,6 +1009,11 @@ uint32_t SinglePoint_ReadSensor(volatile DensityMeasurement *result)
 
     while (1) {
 
+        /* 固定点监测会长期调用本函数；每轮采样前先检查命令切换，避免传感器异常时卡在内部循环。 */
+        if (HasEffectiveCommandSwitchRequest()) {
+            return STATE_SWITCH;
+        }
+
         uint32_t now = HAL_GetTick();
 
         /* ======================================================
@@ -1024,21 +1058,22 @@ uint32_t SinglePoint_ReadSensor(volatile DensityMeasurement *result)
          * 2) 读取传感器
          * ====================================================== */
         ret = Read_Density(&cur_freq, &cur_density, &cur_temp);
+        if (ret == STATE_SWITCH) {
+            /* 命令切换是正常打断，直接向上透传，不参与故障重试。 */
+            return STATE_SWITCH;
+        }
         if (ret != NO_ERROR) {
             density_read_retry_count++;
-            if ((density_read_retry_count == 1U) ||
-                ((density_read_retry_count % 5U) == 0U) ||
-                (density_read_retry_count >= density_sample_retry_max)) {
-                // 错误	阶段：错误重试	模块：传感器	操作：读取浮点参数	原因：ErrorLog_GetReasonByCode(ret)	尝试：density_read_retry_count/density_sample_retry_max	错误码：ret	错误名：ErrorLog_GetCodeName(ret)
-                ErrorLog_Retry(ERROR_LOG_MODULE_SENSOR,
-                               ERROR_LOG_OP_READ_FLOAT_PARAM,
-                               ErrorLog_GetReasonByCode(ret),
-                               density_read_retry_count,
-                               density_sample_retry_max,
-                               ret);
-            }
-            HAL_Delay(SAMPLE_INTERVAL_MS);
-            continue;
+            // 错误	阶段：错误重试	模块：传感器	操作：读取浮点参数	原因：ErrorLog_GetReasonByCode(ret)	尝试：1U/1U	错误码：ret	错误名：ErrorLog_GetCodeName(ret)
+            ErrorLog_Retry(ERROR_LOG_MODULE_SENSOR,
+                           ERROR_LOG_OP_READ_FLOAT_PARAM,
+                           ErrorLog_GetReasonByCode(ret),
+                           1U,
+                           1U,
+                           ret);
+            /* Read_Density() 底层已经完成协议重试和链路诊断；这里必须向上返回错误码，
+             * 让固定点监测外层 SET_ERROR(ret) 置错误状态，而不是在内部循环吞掉故障。 */
+            return ret;
         }
         if (density_read_retry_count > 0U) {
             // 错误	阶段：重试成功	模块：传感器	操作：读取浮点参数	原因：恢复成功	尝试：(density_read_retry_count + 1U)/density_sample_retry_max
@@ -1075,7 +1110,11 @@ uint32_t SinglePoint_ReadSensor(volatile DensityMeasurement *result)
                                density_sample_retry_max,
                                DENSITY_INVALID);
             }
-            HAL_Delay(SAMPLE_INTERVAL_MS);
+            /* 密度为 0 时会持续重试；这里同样使用可打断延时响应退出命令。 */
+            ret = AbortableDelay_CommandSwitch(SAMPLE_INTERVAL_MS, 50U);
+            if (ret != NO_ERROR) {
+                return ret;
+            }
             continue;
         }
         if (density_zero_retry_count > 0U) {
@@ -1138,7 +1177,11 @@ uint32_t SinglePoint_ReadSensor(volatile DensityMeasurement *result)
             return NO_ERROR;
         }
 
-        HAL_Delay(SAMPLE_INTERVAL_MS);
+        /* 普通采样间隔也要可打断，固定点监测才能在稳定等待期间退出。 */
+        ret = AbortableDelay_CommandSwitch(SAMPLE_INTERVAL_MS, 50U);
+        if (ret != NO_ERROR) {
+            return ret;
+        }
     }
 }
 

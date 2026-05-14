@@ -9,15 +9,6 @@
  * 过程中处理命令切换、撞底、驱动异常、丢步检测和运行期位置刷新。
  */
 
-/* ===================== 私有类型/状态 ===================== */
-
-static uint32_t MotorMotion_WaitStopAbortable(uint32_t poll_ms);
-static uint32_t MotorMotion_WaitUntilStopWithTarget(TMC5130TypeDef *tmc5130,
-                                                float target_mm,
-                                                float eps_mm,
-                                                int dir);
-static uint32_t MotorMotion_WaitStoppedAfterStopCommand(uint32_t timeout_ms);
-
 /* ===================== 私有函数声明 ===================== */
 
 static uint32_t MotorMotion_WaitStopAbortable(uint32_t poll_ms);
@@ -62,11 +53,8 @@ uint32_t MotorCtrl_MoveByTicksAndWait(int32_t ticks, uint32_t speed_x100)
 
     ret = MotorDriver_StopIfCommandSwitchRequested();
     if (ret != NO_ERROR) {
-        restore_ret = MotorDriver_EndTemporarySpeed(restore_needed, restore_speed_x100);
-        if (restore_ret != NO_ERROR) {
-            return restore_ret;
-        }
-        return ret;
+        /* 提前退出前先恢复临时速度，避免下一条命令沿用本次速度。 */
+        return MotorDriver_ReturnAfterTemporarySpeed(ret, restore_needed, restore_speed_x100);
     }
 
     /* 若方向相反，仅需在此统一翻转 */
@@ -93,11 +81,8 @@ uint32_t MotorCtrl_MoveByTicksAndWait(int32_t ticks, uint32_t speed_x100)
     s_motor_driver.applied_velocity = velocity;
     ret = stpr_moveBy(&stepper, &ticks, velocity);
     if (ret != NO_ERROR) {
-        restore_ret = MotorDriver_EndTemporarySpeed(restore_needed, restore_speed_x100);
-        if (restore_ret != NO_ERROR) {
-            return restore_ret;
-        }
-        return ret;
+        /* 提前退出前先恢复临时速度，避免下一条命令沿用本次速度。 */
+        return MotorDriver_ReturnAfterTemporarySpeed(ret, restore_needed, restore_speed_x100);
     }
 
     /* TMC5130 写入 XTARGET 后，不能只看 RAMPSTAT.vzero。
@@ -123,14 +108,15 @@ uint32_t MotorCtrl_MoveByTicksAndWait(int32_t ticks, uint32_t speed_x100)
         do {
             ret = MotorDriver_StopIfCommandSwitchRequested();
             if (ret != NO_ERROR) {
-                restore_ret = MotorDriver_EndTemporarySpeed(restore_needed, restore_speed_x100);
-                if (restore_ret != NO_ERROR) {
-                    return restore_ret;
-                }
-                return ret;
+                /* 提前退出前先恢复临时速度，避免下一条命令沿用本次速度。 */
+                return MotorDriver_ReturnAfterTemporarySpeed(ret, restore_needed, restore_speed_x100);
             }
             MotorDriver_RefreshVelocityDuringRun(&stepper, &last_vel_refresh_tick);
-            MotorPosition_SyncDebugDrumState(&stepper);
+            ret = MotorDriver_SyncPositionOrCheckHealth(&stepper);
+            if (ret != NO_ERROR) {
+                /* 提前退出前先恢复临时速度，避免下一条命令沿用本次速度。 */
+                return MotorDriver_ReturnAfterTemporarySpeed(ret, restore_needed, restore_speed_x100);
+            }
             if (stpr_tryReadInt(&stepper, TMC5130_XACTUAL, &xactual_after) &&
                 (xactual_after != xactual_before)) {
                 position_changed = true;
@@ -226,7 +212,10 @@ uint32_t MotorCtrl_MoveByTicksAndWait(int32_t ticks, uint32_t speed_x100)
                 break;
             }
             MotorDriver_RefreshVelocityDuringRun(&stepper, &last_vel_refresh_tick);
-            MotorPosition_SyncDebugDrumState(&stepper);
+            ret = MotorDriver_SyncPositionOrCheckHealth(&stepper);
+            if (ret != NO_ERROR) {
+                break;
+            }
             HAL_Delay(10U);
         }
     }
@@ -254,11 +243,16 @@ uint32_t MotorCtrl_MoveNoWait(float move_mm, int dir, uint32_t speed_x100)
     if (move_mm == 0.0f) return NO_ERROR;
     if (!MotorDriver_IsDirValid(dir)) return PARAM_ERROR;
 
-    uint32_t ret = MotorDriver_ApplyOptionalSpeed(speed_x100);
+    /* 下发运动前先确认 TMC5130 配置和 24V 功率级，避免未上电仍开始规划运动。 */
+    uint32_t ret = MotorDriver_CheckHealth(MOTOR_DRIVER_HEALTH_BEFORE_MOTION);
+    CHECK_ERROR(ret);
+
+    ret = MotorDriver_ApplyOptionalSpeed(speed_x100);
     CHECK_ERROR(ret);
 
     g_measurement.debug_data.motor_state = (dir == MOTOR_DIRECTION_UP) ? 1U : 2U;
-    MotorPosition_SyncDebugDrumState(&stepper);
+    ret = MotorDriver_SyncPositionOrCheckHealth(&stepper);
+    CHECK_ERROR(ret);
 
     /* 1) 当前“相对基准点”的有符号长度（mm，可正可负） */
     const double Lcur_mm = (double)g_measurement.debug_data.cable_length * 0.1;
@@ -304,7 +298,8 @@ uint32_t MotorCtrl_MoveNoWait(float move_mm, int dir, uint32_t speed_x100)
     if (ret != NO_ERROR) {
         return ret;
     }
-    MotorPosition_SyncDebugDrumState(&stepper);
+    ret = MotorDriver_SyncPositionOrCheckHealth(&stepper);
+    CHECK_ERROR(ret);
 
     return NO_ERROR;
 }
@@ -425,11 +420,8 @@ uint32_t MotorCtrl_MoveAndWait(float mm, int dir, uint32_t speed_x100)
 
     ret = MotorDriver_StopIfCommandSwitchRequested();
     if (ret != NO_ERROR) {
-        restore_ret = MotorDriver_EndTemporarySpeed(restore_needed, restore_speed_x100);
-        if (restore_ret != NO_ERROR) {
-            return restore_ret;
-        }
-        return ret;
+        /* 提前退出前先恢复临时速度，避免下一条命令沿用本次速度。 */
+        return MotorDriver_ReturnAfterTemporarySpeed(ret, restore_needed, restore_speed_x100);
     }
 
     startPos_mm = (float)g_measurement.debug_data.sensor_position / 10.0f;
@@ -446,11 +438,8 @@ uint32_t MotorCtrl_MoveAndWait(float mm, int dir, uint32_t speed_x100)
 
         ret = MotorDriver_StopIfCommandSwitchRequested();
         if (ret != NO_ERROR) {
-            restore_ret = MotorDriver_EndTemporarySpeed(restore_needed, restore_speed_x100);
-            if (restore_ret != NO_ERROR) {
-                return restore_ret;
-            }
-            return ret;
+            /* 提前退出前先恢复临时速度，避免下一条命令沿用本次速度。 */
+            return MotorDriver_ReturnAfterTemporarySpeed(ret, restore_needed, restore_speed_x100);
         }
 
         /* 分段重试时不再重复切换速度，避免每一段都触发“恢复默认速度”。 */
@@ -463,33 +452,25 @@ uint32_t MotorCtrl_MoveAndWait(float mm, int dir, uint32_t speed_x100)
         for (int i = 0; i < 100; i++) {
             ret = MotorDriver_StopIfCommandSwitchRequested();
             if (ret != NO_ERROR) {
-                restore_ret = MotorDriver_EndTemporarySpeed(restore_needed, restore_speed_x100);
-                if (restore_ret != NO_ERROR) {
-                    return restore_ret;
-                }
-                return ret;
+                /* 提前退出前先恢复临时速度，避免下一条命令沿用本次速度。 */
+                return MotorDriver_ReturnAfterTemporarySpeed(ret, restore_needed, restore_speed_x100);
             }
             MotorDriver_RefreshVelocityDuringRun(&stepper, &prewait_vel_refresh_tick);
-            MotorCtrl_PollRuntimePosition();
+            ret = MotorCtrl_PollRuntimePosition();
+            CHECK_ERROR(ret);
             HAL_Delay(10);
         }
 
         ret = MotorMotion_WaitUntilStopWithTarget(&stepper, targetPos_mm, EPS_MM, dir);
 
-        if (ret == COMMAND_SWITCH_ABORT) {
-            restore_ret = MotorDriver_EndTemporarySpeed(restore_needed, restore_speed_x100);
-            if (restore_ret != NO_ERROR) {
-                return restore_ret;
-            }
-            return ret;
+        if (ret != NO_ERROR) {
+            /* 提前退出前先恢复临时速度，避免下一条命令沿用本次速度。 */
+            return MotorDriver_ReturnAfterTemporarySpeed(ret, restore_needed, restore_speed_x100);
         }
         ret = MotorDriver_StopIfCommandSwitchRequested();
         if (ret != NO_ERROR) {
-            restore_ret = MotorDriver_EndTemporarySpeed(restore_needed, restore_speed_x100);
-            if (restore_ret != NO_ERROR) {
-                return restore_ret;
-            }
-            return ret;
+            /* 提前退出前先恢复临时速度，避免下一条命令沿用本次速度。 */
+            return MotorDriver_ReturnAfterTemporarySpeed(ret, restore_needed, restore_speed_x100);
         }
 
         currentPos_mm = (float)g_measurement.debug_data.sensor_position / 10.0f;
@@ -540,11 +521,8 @@ uint32_t MotorCtrl_MoveAndWait(float mm, int dir, uint32_t speed_x100)
             for (int i = 0; i < 20; i++) {
                 ret = MotorDriver_StopIfCommandSwitchRequested();
                 if (ret != NO_ERROR) {
-                    restore_ret = MotorDriver_EndTemporarySpeed(restore_needed, restore_speed_x100);
-                    if (restore_ret != NO_ERROR) {
-                        return restore_ret;
-                    }
-                    return ret;
+                    /* 提前退出前先恢复临时速度，避免下一条命令沿用本次速度。 */
+                    return MotorDriver_ReturnAfterTemporarySpeed(ret, restore_needed, restore_speed_x100);
                 }
                 HAL_Delay(10);
             }
@@ -576,7 +554,7 @@ uint32_t MotorCtrl_MoveAndWait(float mm, int dir, uint32_t speed_x100)
         ret = NO_ERROR;
     }
 
-    MotorPosition_SyncDebugDrumState(&stepper);
+    ret = MotorDriver_SyncPositionOrCheckHealth(&stepper);
 
     /* 只有主命令整体结束后，才恢复默认速度。 */
     restore_ret = MotorDriver_EndTemporarySpeed(restore_needed, restore_speed_x100);
@@ -639,7 +617,6 @@ void MotorCtrl_SnapshotSensorPositionMm(float *pos_mm)
 uint32_t MotorCtrl_MoveToPosition(float target_mm, uint32_t speed_x100)
 {
     uint32_t ret = NO_ERROR;
-    uint32_t restore_ret = NO_ERROR;
     uint32_t restore_speed_x100 = 0U;
     bool restore_needed = false;
     float cur_mm;
@@ -653,11 +630,8 @@ uint32_t MotorCtrl_MoveToPosition(float target_mm, uint32_t speed_x100)
 
         ret = MotorDriver_StopIfCommandSwitchRequested();
         if (ret != NO_ERROR) {
-            restore_ret = MotorDriver_EndTemporarySpeed(restore_needed, restore_speed_x100);
-            if (restore_ret != NO_ERROR) {
-                return restore_ret;
-            }
-            return ret;
+            /* 提前退出前先恢复临时速度，避免下一条命令沿用本次速度。 */
+            return MotorDriver_ReturnAfterTemporarySpeed(ret, restore_needed, restore_speed_x100);
         }
 
         MotorCtrl_SnapshotSensorPositionMm(&cur_mm);
@@ -668,9 +642,7 @@ uint32_t MotorCtrl_MoveToPosition(float target_mm, uint32_t speed_x100)
         if (fabsf(delta) <= EPS_MM) {
             printf("到位 | 当前：%.3fmm ≈ 目标：%.3fmm (±%.2fmm)\r\n",
                    cur_mm, target_mm, EPS_MM);
-            restore_ret = MotorDriver_EndTemporarySpeed(restore_needed, restore_speed_x100);
-            CHECK_ERROR(restore_ret);
-            return restore_ret;
+            return MotorDriver_ReturnAfterTemporarySpeed(NO_ERROR, restore_needed, restore_speed_x100);
         }
 
         int dir = (delta > 0.0f) ? MOTOR_DIRECTION_UP : MOTOR_DIRECTION_DOWN;
@@ -681,17 +653,12 @@ uint32_t MotorCtrl_MoveToPosition(float target_mm, uint32_t speed_x100)
         }
         ret = MotorCtrl_MoveAndWait(plan_mm, dir, 0U);
         if (ret != NO_ERROR) {
-            restore_ret = MotorDriver_EndTemporarySpeed(restore_needed, restore_speed_x100);
-            if (restore_ret != NO_ERROR) {
-                return restore_ret;
-            }
-            return ret; // 含 COMMAND_SWITCH_ABORT
+            /* 提前退出前先恢复临时速度，避免下一条命令沿用本次速度。 */
+            return MotorDriver_ReturnAfterTemporarySpeed(ret, restore_needed, restore_speed_x100); // 含 COMMAND_SWITCH_ABORT
         }
     }
 
-    restore_ret = MotorDriver_EndTemporarySpeed(restore_needed, restore_speed_x100);
-    CHECK_ERROR(restore_ret);
-    return restore_ret;
+    return MotorDriver_ReturnAfterTemporarySpeed(NO_ERROR, restore_needed, restore_speed_x100);
 }
 
 /**
@@ -803,6 +770,12 @@ uint32_t MotorCtrl_MoveBlockingNoDetect(float mm, int dir, uint32_t speed_x100)
     if (mm <= 0.0f) return PARAM_ERROR;
     if (!MotorDriver_IsDirValid(dir)) return PARAM_ERROR;
 
+    /* 无检测运动也必须先确认驱动健康，否则会掩盖 24V 断电故障。 */
+    ret = MotorDriver_CheckHealth(MOTOR_DRIVER_HEALTH_BEFORE_MOTION);
+    if (ret != NO_ERROR) {
+        return ret;
+    }
+
     /* 该接口是“无检测”版本，只保留基础运动和日志。
      * 但为了让语义一致，临时速度恢复策略仍然与其他阻塞接口保持一致。 */
     ret = MotorDriver_BeginTemporarySpeed(speed_x100, &restore_needed, &restore_speed_x100);
@@ -814,7 +787,11 @@ uint32_t MotorCtrl_MoveBlockingNoDetect(float mm, int dir, uint32_t speed_x100)
     printf("无检测阻塞运动：距离=%.2f, 方向：%d\r\n", mm, dir);
 
     g_measurement.debug_data.motor_state = (dir == MOTOR_DIRECTION_UP) ? 1U : 2U;
-    MotorPosition_SyncDebugDrumState(&stepper);
+    ret = MotorDriver_SyncPositionOrCheckHealth(&stepper);
+    if (ret != NO_ERROR) {
+        /* 提前退出前先恢复临时速度，避免下一条命令沿用本次速度。 */
+        return MotorDriver_ReturnAfterTemporarySpeed(ret, restore_needed, restore_speed_x100);
+    }
 
     const double C0 = MotorPosition_TapeC0Mm();
     const double t  = MotorPosition_TapeThicknessMm();
@@ -859,13 +836,8 @@ uint32_t MotorCtrl_MoveBlockingNoDetect(float mm, int dir, uint32_t speed_x100)
 
     ret = MotorDriver_StopIfCommandSwitchRequested();
     if (ret != NO_ERROR) {
-        uint32_t stop_ret = ret;
-        ret = MotorDriver_EndTemporarySpeed(restore_needed, restore_speed_x100);
-        if (ret != NO_ERROR) {
-            printf("无检测阻塞运动：恢复默认速度失败 错误码：0x%08lX\r\n", (unsigned long)ret);
-            return ret;
-        }
-        return stop_ret;
+        /* 提前退出前先恢复临时速度，避免下一条命令沿用本次速度。 */
+        return MotorDriver_ReturnAfterTemporarySpeed(ret, restore_needed, restore_speed_x100);
     }
     ret = stpr_moveBy(&stepper, &ticks, velocity);
     if (ret != NO_ERROR) {
@@ -873,28 +845,35 @@ uint32_t MotorCtrl_MoveBlockingNoDetect(float mm, int dir, uint32_t speed_x100)
         (void)MotorDriver_EndTemporarySpeed(restore_needed, restore_speed_x100);
         return ret;
     }
-    MotorPosition_SyncDebugDrumState(&stepper);
+    ret = MotorDriver_SyncPositionOrCheckHealth(&stepper);
+    if (ret != NO_ERROR) {
+        /* 提前退出前先恢复临时速度，避免下一条命令沿用本次速度。 */
+        return MotorDriver_ReturnAfterTemporarySpeed(ret, restore_needed, restore_speed_x100);
+    }
     HAL_Delay(100);
 
     uint32_t last_vel_refresh_tick = HAL_GetTick();
     while (MotorCtrl_IsDriverMoving(&stepper)) {
         ret = MotorDriver_StopIfCommandSwitchRequested();
         if (ret != NO_ERROR) {
-            uint32_t stop_ret = ret;
-            ret = MotorDriver_EndTemporarySpeed(restore_needed, restore_speed_x100);
-            if (ret != NO_ERROR) {
-                printf("无检测阻塞运动：恢复默认速度失败 错误码：0x%08lX\r\n", (unsigned long)ret);
-                return ret;
-            }
-            return stop_ret;
+            /* 提前退出前先恢复临时速度，避免下一条命令沿用本次速度。 */
+            return MotorDriver_ReturnAfterTemporarySpeed(ret, restore_needed, restore_speed_x100);
         }
         MotorDriver_RefreshVelocityDuringRun(&stepper, &last_vel_refresh_tick);
-        MotorPosition_SyncDebugDrumState(&stepper);
+        ret = MotorDriver_SyncPositionOrCheckHealth(&stepper);
+        if (ret != NO_ERROR) {
+            /* 提前退出前先恢复临时速度，避免下一条命令沿用本次速度。 */
+            return MotorDriver_ReturnAfterTemporarySpeed(ret, restore_needed, restore_speed_x100);
+        }
         MotorLostStep_NoDetectRuntimeLogUpdate();
     }
 
     g_measurement.debug_data.motor_state = 0U;
-    MotorPosition_SyncDebugDrumState(&stepper);
+    ret = MotorDriver_SyncPositionOrCheckHealth(&stepper);
+    if (ret != NO_ERROR) {
+        /* 提前退出前先恢复临时速度，避免下一条命令沿用本次速度。 */
+        return MotorDriver_ReturnAfterTemporarySpeed(ret, restore_needed, restore_speed_x100);
+    }
 
     ret = MotorDriver_EndTemporarySpeed(restore_needed, restore_speed_x100);
     if (ret != NO_ERROR) {
@@ -916,15 +895,22 @@ uint32_t MotorCtrl_MoveBlockingNoDetect(float mm, int dir, uint32_t speed_x100)
  */
 static uint32_t MotorMotion_WaitStopAbortable(uint32_t poll_ms)
 {
+    uint32_t ret;
     uint32_t last_vel_refresh_tick = HAL_GetTick();
 
     while (MotorCtrl_IsDriverMoving(&stepper)) {
         CHECK_COMMAND_SWITCH_AND_STOP(COMMAND_SWITCH_ABORT);
         MotorDriver_RefreshVelocityDuringRun(&stepper, &last_vel_refresh_tick);
-        MotorPosition_SyncDebugDrumState(&stepper);
+        ret = MotorDriver_SyncPositionOrCheckHealth(&stepper);
+        if (ret != NO_ERROR) {
+            return ret;
+        }
         HAL_Delay(poll_ms);
     }
-    MotorPosition_SyncDebugDrumState(&stepper);
+    ret = MotorDriver_SyncPositionOrCheckHealth(&stepper);
+    if (ret != NO_ERROR) {
+        return ret;
+    }
     g_measurement.debug_data.motor_state = 0U;
     return NO_ERROR;
 }
@@ -954,7 +940,9 @@ static uint32_t MotorMotion_WaitUntilStopWithTarget(TMC5130TypeDef *tmc5130,
 
         CHECK_COMMAND_SWITCH_AND_STOP(COMMAND_SWITCH_ABORT);
         MotorDriver_RefreshVelocityDuringRun(tmc5130, &last_vel_refresh_tick);
-        MotorPosition_SyncDebugDrumState(tmc5130);
+        /* 每轮等待都刷新位置并检查驱动健康，覆盖运行中 24V 断电。 */
+        ret = MotorDriver_SyncPositionOrCheckHealth(tmc5130);
+        CHECK_ERROR(ret);
 
         /* 1) 当前位置（mm） */
         float cur_mm = (float)g_measurement.debug_data.sensor_position / 10.0f;
@@ -967,6 +955,8 @@ static uint32_t MotorMotion_WaitUntilStopWithTarget(TMC5130TypeDef *tmc5130,
             }
             while (MotorCtrl_IsDriverMoving(tmc5130)) {
                 CHECK_COMMAND_SWITCH_AND_STOP(COMMAND_SWITCH_ABORT);
+                ret = MotorDriver_SyncPositionOrCheckHealth(tmc5130);
+                CHECK_ERROR(ret);
                 HAL_Delay(5);
             }
             return NO_ERROR;
@@ -984,6 +974,8 @@ static uint32_t MotorMotion_WaitUntilStopWithTarget(TMC5130TypeDef *tmc5130,
                 }
                 while (MotorCtrl_IsDriverMoving(tmc5130)) {
                     CHECK_COMMAND_SWITCH_AND_STOP(COMMAND_SWITCH_ABORT);
+                    ret = MotorDriver_SyncPositionOrCheckHealth(tmc5130);
+                    CHECK_ERROR(ret);
                     HAL_Delay(5);
                 }
                 return NO_ERROR;
@@ -996,6 +988,8 @@ static uint32_t MotorMotion_WaitUntilStopWithTarget(TMC5130TypeDef *tmc5130,
                 }
                 while (MotorCtrl_IsDriverMoving(tmc5130)) {
                     CHECK_COMMAND_SWITCH_AND_STOP(COMMAND_SWITCH_ABORT);
+                    ret = MotorDriver_SyncPositionOrCheckHealth(tmc5130);
+                    CHECK_ERROR(ret);
                     HAL_Delay(5);
                 }
                 return NO_ERROR;
@@ -1006,9 +1000,9 @@ static uint32_t MotorMotion_WaitUntilStopWithTarget(TMC5130TypeDef *tmc5130,
         ret = CheckWeightCollision();
         CHECK_ERROR(ret);
 
-        /* 5) 芯片异常检测 */
-       ret = MotorCtrl_CheckDriverGstat(tmc5130);
-       CHECK_ERROR(ret);
+        /* 5) 驱动健康检测：统一检查 GSTAT/DRV_STATUS、配置和功率级状态。 */
+        ret = MotorDriver_CheckHealth(MOTOR_DRIVER_HEALTH_RUNNING);
+        CHECK_ERROR(ret);
 
         /* 6) 超时保护 */
         if (HAL_GetTick() - startTick > MAX_WAIT_MS) {
@@ -1033,7 +1027,8 @@ static uint32_t MotorMotion_WaitUntilStopWithTarget(TMC5130TypeDef *tmc5130,
         HAL_Delay(50);
     }
 
-    MotorPosition_SyncDebugDrumState(tmc5130);
+    ret = MotorDriver_SyncPositionOrCheckHealth(tmc5130);
+    CHECK_ERROR(ret);
     return NO_ERROR;
 }
 
@@ -1046,6 +1041,7 @@ static uint32_t MotorMotion_WaitUntilStopWithTarget(TMC5130TypeDef *tmc5130,
  */
 static uint32_t MotorMotion_WaitStoppedAfterStopCommand(uint32_t timeout_ms)
 {
+    uint32_t ret;
     uint32_t start_tick = HAL_GetTick();
     int32_t rampstat = 0;
     char detail[80];
@@ -1068,7 +1064,10 @@ static uint32_t MotorMotion_WaitStoppedAfterStopCommand(uint32_t timeout_ms)
         }
 
         if ((rampstat & 0x400) == 0x400) {
-            MotorPosition_SyncDebugDrumState(&stepper);
+            ret = MotorDriver_SyncPositionOrCheckHealth(&stepper);
+            if (ret != NO_ERROR) {
+                return ret;
+            }
             g_measurement.debug_data.motor_state = 0U;
             return NO_ERROR;
         }

@@ -59,10 +59,20 @@
 #define TMC5130_DRVSTATUS_OLB              (1UL << 30)
 #define TMC5130_DRVSTATUS_STST             (1UL << 31)
 
+/**
+ * @brief 从 DRV_STATUS 中提取实际电流档 CS_ACTUAL。
+ *
+ * 该值用于判断驱动功率级是否真正建立电流；只做位解析，不访问硬件、不打印日志。
+ */
+static uint32_t tmc5130_drvStatusCurrent(uint32_t drvstatus)
+{
+    return (drvstatus & TMC5130_DRVSTATUS_CS_ACTUAL_MASK) >> 16;
+}
+
 static uint32_t tmc5130_decodeDrvStatus(uint32_t drvstatus)
 {
     uint32_t ret = NO_ERROR;
-    uint32_t cs_actual = (drvstatus & TMC5130_DRVSTATUS_CS_ACTUAL_MASK) >> 16;
+    uint32_t cs_actual = tmc5130_drvStatusCurrent(drvstatus);
     uint32_t sg_result = drvstatus & TMC5130_DRVSTATUS_SG_RESULT_MASK;
 
     printf("TMC5130 DRV_STATUS 解析 | SG_RESULT=%lu | CS_ACTUAL=%lu",
@@ -584,10 +594,11 @@ uint32_t stpr_setPos(TMC5130TypeDef *tmc5130, int32_t position)
 /**
  * @brief 检查并解析 TMC5130 驱动异常状态。
  *
- * 该函数复用 stpr_waitMove() 的 GSTAT/DRV_STATUS 判定口径：
+ * 该函数只解析 GSTAT/DRV_STATUS 故障位，不检查 CS_ACTUAL 功率级。
  * - GSTAT 非法高位只打印并丢弃，避免把 SPI 错帧误判为真实故障；
  * - drv_err 会继续读取 DRV_STATUS，细分过温、短路、开路、StallGuard；
  * - uv_cp 和 reset 会清除 GSTAT 后返回对应错误。
+ * 功率级是否建立统一由 stpr_checkDriverPowerReady() 或 MotorDriver_CheckHealth() 追加检查。
  *
  * @param tmc5130 TMC5130 设备对象。
  * @return NO_ERROR 或对应电机故障错误码。
@@ -608,6 +619,33 @@ uint32_t stpr_checkDriverStatus(TMC5130TypeDef *tmc5130)
         return MOTOR_TMC_COMM_ERROR;
     }
     if (gstat == 0) {
+        int32_t chopconf = 0;
+
+        /* GSTAT/RAMPSTAT 可能读成 0；再读 CHOPCONF 用于识别“读得通但配置全丢”的掉电场景。 */
+        if (!stpr_tryReadInt(tmc5130, TMC5130_CHOPCONF, &chopconf)) {
+            snprintf(detail, sizeof(detail), "全局状态：0x00000000,斩波配置：读取失败");
+            // 错误	阶段：错误报警	模块：电机	操作：驱动状态检查	原因：通信失败	处理：停止电机	详情：detail
+            ErrorLog_WarnDetail(ERROR_LOG_MODULE_MOTOR,
+                                ERROR_LOG_OP_DRIVER_CHECK,
+                                ERROR_LOG_REASON_COMM_FAIL,
+                                ERROR_LOG_ACTION_STOP_MOTOR,
+                                detail);
+            MotorCtrl_InvalidateDriverInit();
+            return MOTOR_TMC_COMM_ERROR;
+        }
+        if (chopconf == 0) {
+            /* CHOPCONF 正常配置不应为 0；为 0 时不能再把 GSTAT=0 当作健康状态。 */
+            printf("TMC5130配置丢失或驱动掉电 | GSTAT=0x00000000 | CHOPCONF=0x00000000\r\n");
+            snprintf(detail, sizeof(detail), "全局状态：0x00000000,斩波配置：0x00000000");
+            // 错误	阶段：错误报警	模块：电机	操作：驱动状态检查	原因：通信失败	处理：停止电机	详情：detail
+            ErrorLog_WarnDetail(ERROR_LOG_MODULE_MOTOR,
+                                ERROR_LOG_OP_DRIVER_CHECK,
+                                ERROR_LOG_REASON_COMM_FAIL,
+                                ERROR_LOG_ACTION_STOP_MOTOR,
+                                detail);
+            MotorCtrl_InvalidateDriverInit();
+            return MOTOR_TMC_COMM_ERROR;
+        }
         return NO_ERROR;
     }
 
@@ -740,16 +778,52 @@ uint32_t stpr_checkDriverStatus(TMC5130TypeDef *tmc5130)
 }
 
 /**
- * @brief  阻塞等待当前位置运动完成（RAMPSTAT.pos_reached && vzero）
- *         在等待过程中会检测称重/碰撞与 TMC5130 内部故障，
- *         一旦出错立即返回错误码。
+ * @brief 检查 TMC5130 驱动功率级是否已经建立实际电流。
  *
- * @retval NO_ERROR                       正常完成
- *         MOTOR_OVERTEMPERATURE          驱动过温
- *         MOTOR_CHARGE_PUMP_UNDER_VOLTAGE 充电泵欠压
- *         MOTOR_UNKNOWN_FEEDBACK         其他未知故障
- *         以及传感器防撞返回的错误码等
+ * SPI 和配置寄存器正常不代表电机 24V 已经上电。使能后 CS_ACTUAL 仍为 0 时，
+ * 说明实际电流没有建立，按电机被禁止/功率级不可用处理。
+ * 该函数会读取寄存器并打印错误报警，只能在任务上下文调用，不能放入中断链路。
+ * @return NO_ERROR 表示功率级已建立，否则返回具体电机错误码。
  */
+uint32_t stpr_checkDriverPowerReady(TMC5130TypeDef *tmc5130)
+{
+    int32_t drvstatus = 0;
+    uint32_t cs_actual;
+    char detail[128];
+
+    /* 读取 DRV_STATUS 是功率级判断的依据，失败时按通信异常处理并失效初始化标记。 */
+    if (!stpr_tryReadInt(tmc5130, TMC5130_DRVSTATUS, &drvstatus)) {
+        snprintf(detail, sizeof(detail), "驱动状态：读取失败");
+        // 错误	阶段：错误报警	模块：电机	操作：驱动状态检查	原因：通信失败	处理：停止电机	详情：detail
+        ErrorLog_WarnDetail(ERROR_LOG_MODULE_MOTOR,
+                            ERROR_LOG_OP_DRIVER_CHECK,
+                            ERROR_LOG_REASON_COMM_FAIL,
+                            ERROR_LOG_ACTION_STOP_MOTOR,
+                            detail);
+        MotorCtrl_InvalidateDriverInit();
+        return MOTOR_TMC_COMM_ERROR;
+    }
+
+    cs_actual = tmc5130_drvStatusCurrent((uint32_t)drvstatus);
+    /* SPI 能读通但 CS_ACTUAL 为 0，说明功率级没有真正建立电流，多数对应 24V 未上电。 */
+    if (cs_actual == 0U) {
+        printf("TMC5130驱动电流未建立 | DRV_STATUS=0x%08lX | CS_ACTUAL=0\r\n",
+               (unsigned long)((uint32_t)drvstatus));
+        snprintf(detail, sizeof(detail), "驱动状态：0x%08lX,实际电流档：0",
+                 (unsigned long)((uint32_t)drvstatus));
+        // 错误	阶段：错误报警	模块：电机	操作：驱动状态检查	原因：电机被禁止	处理：停止电机	详情：detail
+        ErrorLog_WarnDetail(ERROR_LOG_MODULE_MOTOR,
+                            ERROR_LOG_OP_DRIVER_CHECK,
+                            ErrorLog_GetReasonByCode(MOTOR_DISABLED),
+                            ERROR_LOG_ACTION_STOP_MOTOR,
+                            detail);
+        MotorCtrl_InvalidateDriverInit();
+        return MOTOR_DISABLED;
+    }
+
+    return NO_ERROR;
+}
+
 uint32_t stpr_waitMove(TMC5130TypeDef *tmc5130)
 {
     uint32_t ret;
@@ -804,7 +878,20 @@ uint32_t stpr_waitMove(TMC5130TypeDef *tmc5130)
             MotorCtrl_SlowStop();
             RETURN_ERROR(ret);
         }
-        MotorCtrl_PollRuntimePosition();
+
+        /* stpr_waitMove() 是底层直接调用点，不能依赖 MotorDriver_CheckHealth() 追加功率级检查；
+         * 这里单独确认 CS_ACTUAL，避免 24V 未上电时仍按普通等待继续运行。 */
+        ret = stpr_checkDriverPowerReady(tmc5130);
+        if (ret != NO_ERROR) {
+            MotorCtrl_SlowStop();
+            RETURN_ERROR(ret);
+        }
+
+        ret = MotorCtrl_PollRuntimePosition();
+        if (ret != NO_ERROR) {
+            MotorCtrl_SlowStop();
+            RETURN_ERROR(ret);
+        }
         HAL_Delay(50);
     }
     MotorCtrl_RefreshDebugDrumState();

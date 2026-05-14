@@ -59,4 +59,6 @@ uint32_t WIRELESS_Read_IntParam  (uint8_t addr,uint8_t param, int32_t *out_value
 
 uint32_t WIRELESS_Read_SoftwareVersion(uint8_t addr,float *v) ;// 软件版本
 uint32_t WIRELESS_Read_Voltage(uint8_t addr,float *v) ;// 电压
+/** 轻量无线链路探测：只做一次最小读请求，命令切换时返回 STATE_SWITCH，不打印节点信息。 */
+uint32_t WIRELESS_ProbeNode(uint8_t addr);
 #endif /* SENSOR_WIRELESS_COMMUNICATION_H_ */

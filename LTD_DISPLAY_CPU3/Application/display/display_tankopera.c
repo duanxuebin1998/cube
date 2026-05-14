@@ -1458,14 +1458,13 @@ static void format_version_u32(uint32_t version, char *buf, size_t buf_size)
 			(unsigned long)(version & 0xFFU));
 }
 
-/* CPU2/CPU3以major.minor作为兼容契约，patch/build不影响兼容判断。 */
+/* 当前屏幕只用 CPU2 固件主版本判断兼容性。
+ * minor/patch/build 只表示各 CPU 独立固件迭代，不能因为 CPU2 内部修复就提示协议不匹配。 */
 static bool is_cpu2_version_compatible(uint32_t cpu2_version)
 {
 	uint32_t major = (cpu2_version >> 24) & 0xFFU;
-	uint32_t minor = (cpu2_version >> 16) & 0xFFU;
 
-	return (major == CPU3_REQUIRED_CPU2_PROTOCOL_MAJOR)
-		&& (minor == CPU3_REQUIRED_CPU2_PROTOCOL_MINOR);
+	return (major == CPU3_REQUIRED_CPU2_PROTOCOL_MAJOR);
 }
 
 /* 显示参数内容 */
