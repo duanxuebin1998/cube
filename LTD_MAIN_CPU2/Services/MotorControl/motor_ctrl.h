@@ -78,7 +78,7 @@ uint32_t MotorCtrl_GetDisplayState(void);
  * 当位置源为电机记步时，同时刷新 cable_length/sensor_position。
  * 可在主循环和等待循环中高频调用，函数内部自带节流。
  */
-void MotorCtrl_PollRuntimePosition(void);
+uint32_t MotorCtrl_PollRuntimePosition(void);
 
 /** 强制读取 XACTUAL 并刷新调试用卷筒状态。 */
 void MotorCtrl_RefreshDebugDrumState(void);
@@ -187,8 +187,8 @@ uint32_t MotorCtrl_MoveBlockingNoDetect(float mm, int dir, uint32_t speed_x100);
 /** 基于 TMC5130_RAMPSTAT 判断电机是否仍在运动。 */
 bool MotorCtrl_IsDriverMoving(TMC5130TypeDef *tmc5130);
 
-/** 检查并处理 TMC5130 GSTAT/DRV_STATUS 驱动异常。 */
-uint32_t MotorCtrl_CheckDriverGstat(TMC5130TypeDef *tmc5130);
+/** 兼容旧命名的驱动健康检查：实际检查 GSTAT/DRV_STATUS、配置和功率级。 */
+uint32_t MotorCtrl_CheckDriverGstat(void);
 
 /** 每次新的运动阶段开始前初始化丢步检测状态。 */
 void MotorCtrl_LostStepInit(void);

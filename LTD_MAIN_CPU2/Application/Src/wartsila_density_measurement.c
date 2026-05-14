@@ -368,7 +368,7 @@ uint32_t motorMoveUpToPositionOrAir(float target_mm, Level_StateTypeDef *final_s
         ret = CheckWeightCollision();
         CHECK_ERROR(ret);
 
-        ret = MotorCtrl_CheckDriverGstat(&stepper);//电机状态检测
+        ret = MotorCtrl_CheckDriverGstat();//电机状态检测
         CHECK_ERROR(ret);
 
         /* 4) 超时保护 */

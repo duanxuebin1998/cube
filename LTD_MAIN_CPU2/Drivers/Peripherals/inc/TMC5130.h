@@ -73,8 +73,16 @@ uint32_t stpr_setPos(TMC5130TypeDef *tmc5130, int32_t position);
 /** 阻塞等待当前运动结束，同时检查驱动基础故障。 */
 uint32_t stpr_waitMove(TMC5130TypeDef *tmc5130);
 
-/** 检查并解析 TMC5130 GSTAT/DRV_STATUS 驱动异常。 */
+/** 检查并解析 TMC5130 GSTAT/DRV_STATUS 驱动异常，不检查 CS_ACTUAL 功率级。 */
 uint32_t stpr_checkDriverStatus(TMC5130TypeDef *tmc5130);
+
+/**
+ * @brief 检查驱动功率级是否已经建立实际电流。
+ *
+ * 用于初始化和运动前/运动中的健康检查；会读取 DRV_STATUS 并可能打印错误，
+ * 因此只允许在任务上下文调用。
+ */
+uint32_t stpr_checkDriverPowerReady(TMC5130TypeDef *tmc5130);
 
 /* ---------- 参数即时更新 ---------- */
 

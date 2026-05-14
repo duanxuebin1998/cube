@@ -10,18 +10,6 @@
  * 停止命令和显示状态推断等基础能力。
  */
 
-/* ===================== 私有类型/状态 ===================== */
-
-static uint32_t MotorDriver_ClampSpeedSetpointX100(uint32_t speed_x100);
-static uint32_t MotorDriver_ClampCurrentSetting(uint32_t current);
-static double MotorDriver_VmaxToUstepsPerSec(uint32_t vmax);
-static double MotorDriver_VmaxToOutputRevPerSec(uint32_t vmax);
-static double MotorDriver_VmaxToMotorRevPerSec(uint32_t vmax);
-static uint32_t MotorDriver_ClampVelocityU64(uint64_t v);
-static uint32_t MotorDriver_UstepsPerSecToVmax(double usteps_per_s);
-static uint32_t MotorDriver_ComputeBaseVelocityFromParams(void);
-static uint32_t MotorDriver_GetDefaultSpeedSetpointX100(void);
-
 /* ===================== 私有函数声明 ===================== */
 
 static int32_t MotorDriver_GetSpeedSetpointX100(void);
@@ -34,6 +22,7 @@ static uint32_t MotorDriver_ClampVelocityU64(uint64_t v);
 static uint32_t MotorDriver_UstepsPerSecToVmax(double usteps_per_s);
 static uint32_t MotorDriver_ComputeBaseVelocityFromParams(void);
 static uint32_t MotorDriver_GetDefaultSpeedSetpointX100(void);
+static uint32_t MotorDriver_ClearInitResetFlag(void);
 
 /* ===================== 对外接口 ===================== */
 
@@ -51,6 +40,78 @@ void MotorCtrl_InvalidateDriverInit(void)
 {
     s_motor_driver.initialized = false;
     s_motor_driver.applied_velocity = 0U;
+}
+
+/**
+ * @brief 初始化检查前清除 TMC5130 上电复位标志。
+ *
+ * 断开再恢复电机 24V 后，TMC5130 可能只留下 GSTAT[0] reset 标志。
+ * 初始化阶段已经准备重新下发配置，这个纯 reset 标志不应阻断第一次初始化；
+ * 若同时存在 drv_err 或 uv_cp，则仍交给运行期状态检查按真实故障处理。
+ * @return NO_ERROR 表示无需处理或清除成功，否则返回通信错误码。
+ */
+static uint32_t MotorDriver_ClearInitResetFlag(void)
+{
+    int32_t gstat = 0;
+    uint32_t gstat_raw;
+
+    /* 先读取 GSTAT，判断是否只有 reset 标志；读取失败说明 SPI/芯片不可用。 */
+    if (!stpr_tryReadInt(&stepper, TMC5130_GSTAT, &gstat)) {
+        return MOTOR_TMC_COMM_ERROR;
+    }
+
+    gstat_raw = (uint32_t)gstat;
+    /* 只处理纯 reset 标志；如果还带欠压或 drv_err，保留给后续健康检查归因。 */
+    if (gstat_raw != 0x00000001UL) {
+        return NO_ERROR;
+    }
+
+    printf("TMC5130初始化检测到芯片复位标志，清除后继续初始化 | GSTAT=0x%08lX\r\n",
+           (unsigned long)gstat_raw);
+    /* 写 1 清 reset 位，避免第一次上电恢复被历史复位标志阻断。 */
+    if (!stpr_writeInt(&stepper, TMC5130_GSTAT, 0x01)) {
+        return MOTOR_TMC_COMM_ERROR;
+    }
+
+    return NO_ERROR;
+}
+
+/**
+ * @brief 统一检查 TMC5130 通信、配置、故障标志和功率级状态。
+ *
+ * 不同模式只影响未初始化时的返回语义；GSTAT/DRV_STATUS 故障位先由
+ * stpr_checkDriverStatus() 解析，随后统一追加 stpr_checkDriverPowerReady()，
+ * 避免业务路径重复读取功率级状态。
+ */
+uint32_t MotorDriver_CheckHealth(MotorDriverHealthMode mode)
+{
+    uint32_t ret;
+
+    /* 运行期/运动前发现驱动未初始化，直接按电机不可用处理，不继续读寄存器。 */
+    if (!s_motor_driver.initialized && (mode != MOTOR_DRIVER_HEALTH_INIT_CHECK)) {
+        return MOTOR_DISABLED;
+    }
+
+    if (mode == MOTOR_DRIVER_HEALTH_INIT_CHECK) {
+        /* 初始化阶段允许清除纯 reset 标志；欠压和驱动错误仍由后续状态检查处理。 */
+        ret = MotorDriver_ClearInitResetFlag();
+        if (ret != NO_ERROR) {
+            return ret;
+        }
+    }
+
+    /* 先解析 GSTAT/DRV_STATUS 的真实故障位，再追加功率级电流建立检查。 */
+    ret = stpr_checkDriverStatus(&stepper);
+    if (ret != NO_ERROR) {
+        return ret;
+    }
+
+    ret = stpr_checkDriverPowerReady(&stepper);
+    if (ret != NO_ERROR) {
+        return ret;
+    }
+
+    return NO_ERROR;
 }
 
 /**
@@ -171,13 +232,27 @@ uint32_t MotorCtrl_Init(void)
 
     MotorDriver_UpdateVelocityFromParams();
     s_motor_driver.applied_velocity = velocity;
+    if (s_motor_driver.initialized) {
+        /* 初始化入口被重复调用时先做一次轻量探测，若运行期配置丢失可在后续分支重下发。 */
+        (void)MotorDriver_CheckHealth(MOTOR_DRIVER_HEALTH_RUNNING);
+    }
 
+    /* MotorCtrl_Init() 可能用于自动恢复，返回值只代表本次初始化结果，
+     * 不能通过 CHECK_ERROR() 再读取历史全局错误码。 */
     if (!s_motor_driver.initialized) {
         uint32_t ret = stpr_initStepper(&stepper, &hspi2, GPIOB, GPIO_PIN_12, 1, (uint8_t)motor_current);
-        CHECK_ERROR(ret);
+        if (ret != NO_ERROR) {
+            return ret;
+        }
 //      stpr_initStepper(&stepper, &hspi2, GPIOB, GPIO_PIN_12, 1, 16);
         stpr_enableDriver(&stepper);
         s_motor_driver.initialized = true;
+        /* 使能后立即确认 24V 功率级和配置寄存器，避免未上电时仍显示初始化成功。 */
+        ret = MotorDriver_CheckHealth(MOTOR_DRIVER_HEALTH_INIT_CHECK);
+        if (ret != NO_ERROR) {
+            s_motor_driver.initialized = false;
+            return ret;
+        }
         ret = MotorPosition_RestorePersistedRegisters(&stepper);
         if (ret != NO_ERROR) {
             s_motor_driver.initialized = false;
@@ -202,11 +277,21 @@ uint32_t MotorCtrl_Init(void)
         uint32_t ret;
 
         stpr_enableDriver(&stepper);
-        (void)MotorCtrl_SetCurrent(motor_current);
+        ret = MotorCtrl_SetCurrent(motor_current);
+        if (ret != NO_ERROR) {
+            return ret;
+        }
+        /* 已初始化路径同样要确认驱动供电，覆盖运行中 24V 断电后再恢复的场景。 */
+        ret = MotorDriver_CheckHealth(MOTOR_DRIVER_HEALTH_INIT_CHECK);
+        if (ret != NO_ERROR) {
+            return ret;
+        }
 
         /* 已初始化路径也要刷新 VMAX，确保参数修改后重新初始化能实时生效。 */
         ret = stpr_setVelocity(&stepper, velocity);
-        CHECK_ERROR(ret);
+        if (ret != NO_ERROR) {
+            return ret;
+        }
         s_motor_driver.applied_velocity = velocity;
     }
     MotorPosition_SyncDebugDrumState(&stepper);
@@ -263,21 +348,16 @@ bool MotorCtrl_IsDriverMoving(TMC5130TypeDef *tmc5130)
 }
 
 /**
- * @brief 检查 TMC5130 GSTAT/DRV_STATUS 驱动状态并转换为系统错误码。
+ * @brief 对外兼容的 TMC5130 驱动健康检查入口。
  *
- * @param tmc5130 TMC5130 设备对象。
+ * 历史接口名保留为 Gstat，但当前系统只有一个全局 stepper，
+ * 实际会统一检查 GSTAT/DRV_STATUS、配置寄存器和功率级状态。
  * @return NO_ERROR 或对应驱动故障错误码。
  */
-uint32_t MotorCtrl_CheckDriverGstat(TMC5130TypeDef *tmc5130)
+uint32_t MotorCtrl_CheckDriverGstat(void)
 {
-    uint32_t ret = stpr_checkDriverStatus(tmc5130);
-    if (ret != NO_ERROR) {
-        CHECK_ERROR(ret);
-    }
-
-    return ret;
+    return MotorDriver_CheckHealth(MOTOR_DRIVER_HEALTH_RUNNING);
 }
-
 /* ===================== 内部跨文件接口 ===================== */
 
 /**
@@ -350,7 +430,10 @@ uint32_t MotorDriver_StopAndMarkStopped(void)
         if (!is_moving) {
             break;
         }
-        MotorPosition_SyncDebugDrumState(&stepper);
+        ret = MotorDriver_SyncPositionOrCheckHealth(&stepper);
+        if (ret != NO_ERROR) {
+            return ret;
+        }
         if ((HAL_GetTick() - start_tick) > MOTOR_STOP_WAIT_TIMEOUT_MS) {
             printf("电机停止等待超时，错误码：0x%08lX\r\n", (unsigned long)MOTOR_RUN_TIMEOUT);
             return MOTOR_RUN_TIMEOUT;
@@ -358,7 +441,10 @@ uint32_t MotorDriver_StopAndMarkStopped(void)
         HAL_Delay(10U);
     }
 
-    MotorPosition_SyncDebugDrumState(&stepper);
+    ret = MotorDriver_SyncPositionOrCheckHealth(&stepper);
+    if (ret != NO_ERROR) {
+        return ret;
+    }
 
     /* 停止命令只是开始减速，只有驱动确认 vzero 后才显示静止。 */
     if (!is_moving) {
@@ -621,6 +707,47 @@ uint32_t MotorDriver_EndTemporarySpeed(bool restore_needed,
         return NO_ERROR;
     }
     return MotorCtrl_SetSpeed(restore_speed_x100);
+}
+
+/**
+ * @brief 恢复临时速度后按统一优先级返回运动结果。
+ *
+ * 阻塞型运动退出前调用该函数，先尽量把软件速度恢复到进入运动前的值。
+ * 若原运动已经返回故障或 STATE_SWITCH，则原始返回值更能代表退出原因，不能被恢复速度失败覆盖；
+ * 只有原运动成功时，恢复速度失败才作为最终错误返回。
+ */
+uint32_t MotorDriver_ReturnAfterTemporarySpeed(uint32_t ret,
+                                                       bool restore_needed,
+                                                       uint32_t restore_speed_x100)
+{
+    uint32_t restore_ret;
+
+    /* 先执行恢复，避免临时速度泄漏到下一条命令；返回值优先级在下面统一判断。 */
+    restore_ret = MotorDriver_EndTemporarySpeed(restore_needed, restore_speed_x100);
+
+    /* 命令切换和真实运动故障必须原样向上传递，避免被恢复速度时的通信失败改写原因。 */
+    if (ret != NO_ERROR) {
+        return ret;
+    }
+
+    /* 原运动成功时，恢复失败才是本次接口最终需要暴露的错误。 */
+    return restore_ret;
+}
+
+/**
+ * @brief 同步 XACTUAL 到调试位置，失败时用统一健康检查归因。
+ *
+ * 该函数用于运行期轮询和停机收尾；同步失败不立即按普通读数丢弃处理，
+ * 而是继续检查 TMC5130 配置、GSTAT 和功率级，便于识别 24V 断电或复位。
+ */
+uint32_t MotorDriver_SyncPositionOrCheckHealth(TMC5130TypeDef *tmc5130)
+{
+    /* XACTUAL 正常时只刷新模型；同步失败时再读健康状态，区分 SPI 抖动和驱动掉电。 */
+    if (MotorPosition_SyncDebugDrumState(tmc5130)) {
+        return NO_ERROR;
+    }
+
+    return MotorDriver_CheckHealth(MOTOR_DRIVER_HEALTH_RUNNING);
 }
 
 /* ===================== 私有函数实现 ===================== */

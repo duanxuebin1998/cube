@@ -20,35 +20,6 @@ static bool s_motor_restored_base_valid = false;
 /* XACTUAL 单次读取可能因为 SPI 帧错位出现 0 或极大跳变。
  * 这里用很宽的阈值只拦截明显不可能的单帧异常，真实大位移会通过二次读取确认。 */
 #define MOTOR_XACTUAL_SUSPECT_JUMP_TICKS   (MotorPosition_TapeTicksPerRev() * 2L)
-static uint32_t MotorPosition_EncodeLocalCircumferenceParam(double circumference_mm);
-static double MotorPosition_DecodeLocalCircumferenceParam(void);
-static void MotorPosition_TapeMinRadiusThreshold(double C0_mm, double t_mm,
-                                double *n1, double *L1, double *Cmin);
-static double MotorPosition_TapeSignedLengthFromTurns(double n,
-                                            double C0_mm,
-                                            double t_mm);
-static int64_t MotorPosition_PersistDeltaTicksForLength(int32_t xactual);
-static void MotorPosition_BuildDrumStateFromStep(int32_t motor_step, MotorDrumState *out);
-static uint32_t MotorPosition_PersistRecordCrc(const MotorPersistRecord *record);
-static int MotorPosition_ReadPersistFromSlot(uint32_t base_addr,
-                                     int32_t *xactual,
-                                     int32_t *base_length_01mm,
-                                     int32_t *base_step,
-                                     const char *slot_name);
-static void MotorPosition_WritePersistAB(int32_t xactual,
-                                 int32_t base_length_01mm,
-                                 int32_t base_step);
-static int MotorPosition_ReadPersistAB(int32_t *xactual,
-                               int32_t *base_length_01mm,
-                               int32_t *base_step);
-static void MotorPosition_StorePersistSnapshot(int32_t xactual);
-static uint32_t MotorPosition_RollbackPositionSourceSwitch(uint32_t ret,
-                                                   uint32_t old_mode,
-                                                   uint32_t old_local_circ_param,
-                                                   int32_t old_base_step,
-                                                   int32_t old_base_length_01mm,
-                                                   double old_base_turns,
-                                                   uint32_t old_error_code);
 
 /* ===================== 私有函数声明 ===================== */
 
@@ -328,36 +299,45 @@ void MotorCtrl_PrintMotorCountStatus(void)
  *
  * 运动中定期读取 XACTUAL，刷新调试状态，并在电机记步模式下刷新业务位置。
  */
-void MotorCtrl_PollRuntimePosition(void)
+uint32_t MotorCtrl_PollRuntimePosition(void)
 {
     static uint32_t s_last_runtime_poll_tick = 0U;
     const uint32_t now = HAL_GetTick();
     bool is_moving = false;
+    uint32_t ret;
 
+    /* 后台轮询只处理已初始化驱动，空闲未初始化不作为故障上报。 */
     if (!s_motor_driver.initialized) {
-        return;
+        return NO_ERROR;
     }
     if ((now - s_last_runtime_poll_tick) < 50U) {
-        return;
+        return NO_ERROR;
     }
     s_last_runtime_poll_tick = now;
 
     if (!MotorDriver_TryReadMovingState(&stepper, &is_moving)) {
+        /* RAMPSTAT 读取失败时先用位置变化推断显示状态，随后同步失败再交给健康检查归因。 */
         uint32_t inferred_state = MotorDriver_InferDisplayStateFromDriver(&stepper);
         if ((inferred_state == 1U) || (inferred_state == 2U)) {
             g_measurement.debug_data.motor_state = inferred_state;
-            MotorPosition_SyncDebugDrumState(&stepper);
+            ret = MotorDriver_SyncPositionOrCheckHealth(&stepper);
+            if (ret != NO_ERROR) {
+                return ret;
+            }
         }
-        return;
+        return NO_ERROR;
     }
 
     if (!is_moving) {
         if ((g_measurement.debug_data.motor_state == 1U) ||
             (g_measurement.debug_data.motor_state == 2U)) {
             g_measurement.debug_data.motor_state = 0U;
-            MotorPosition_SyncDebugDrumState(&stepper);
+            ret = MotorDriver_SyncPositionOrCheckHealth(&stepper);
+            if (ret != NO_ERROR) {
+                return ret;
+            }
         }
-        return;
+        return NO_ERROR;
     }
 
     if ((g_measurement.debug_data.motor_state != 1U) &&
@@ -367,7 +347,12 @@ void MotorCtrl_PollRuntimePosition(void)
             g_measurement.debug_data.motor_state = inferred_state;
         }
     }
-    MotorPosition_SyncDebugDrumState(&stepper);
+
+    ret = MotorDriver_SyncPositionOrCheckHealth(&stepper);
+    if (ret != NO_ERROR) {
+        return ret;
+    }
+    return NO_ERROR;
 }
 
 /**
@@ -878,16 +863,17 @@ uint32_t MotorPosition_RestorePersistedRegisters(TMC5130TypeDef *tmc5130)
  *
  * @param tmc5130 TMC5130 设备对象。
  */
-void MotorPosition_SyncDebugDrumState(TMC5130TypeDef *tmc5130)
+bool MotorPosition_SyncDebugDrumState(TMC5130TypeDef *tmc5130)
 {
     MotorDrumState drum;
 
     if ((tmc5130 == NULL) || (!s_motor_driver.initialized)) {
-        return;
+        return false;
     }
 
     if (!MotorPosition_TryUpdateDrumStateFromXactual(tmc5130, &drum)) {
-        return;
+        /* 返回 false 交给调用方继续检查驱动健康，避免在模型层直接打印错误。 */
+        return false;
     }
     g_measurement.debug_data.motor_step = drum.motor_step;
     g_measurement.debug_data.motor_distance = drum.motor_distance_01mm;
@@ -895,6 +881,7 @@ void MotorPosition_SyncDebugDrumState(TMC5130TypeDef *tmc5130)
     /* 同步电机位置时顺带尝试 TFIT 自动采样；内部会判断是否启用和步进间隔。 */
     MotorTapeFit_AutoSample();
     MotorPosition_MaybePersistRegisters(tmc5130, false);
+    return true;
 }
 
 /**

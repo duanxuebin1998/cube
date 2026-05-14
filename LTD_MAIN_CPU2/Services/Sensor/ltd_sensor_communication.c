@@ -81,6 +81,7 @@ static int DSM_V2_Transceive(const uint8_t tx[8], uint8_t rx[8]) {
 	int got = 0;
 	while ((HAL_GetTick() - start) < DSM_V2_RX_TIMEOUT && got < 8) {
 		if (HasEffectiveCommandSwitchRequest()) {
+			/* 命令切换是正常打断，直接向上透传，不参与故障重试。 */
 			return STATE_SWITCH;
 		}
 		if (HAL_UART_Receive(&huart6, &rx[got], 1, 1) == HAL_OK)
@@ -157,10 +158,15 @@ int DSM_V2_SwitchMode(dsm_v2_mode_t mode) {
 
 	for (int attempt = 0; attempt < DSM_V2_MAX_RETRY; ++attempt) {
 		if (HasEffectiveCommandSwitchRequest()) {
+			/* 命令切换是正常打断，直接向上透传，不参与故障重试。 */
 			return STATE_SWITCH;
 		}
 		HAL_Delay(DSM_PRE_SEND_DELAY);
 		int ret = DSM_V2_Transceive(tx, rx);
+		if (ret == STATE_SWITCH) {
+			/* 命令切换是正常打断，直接向上透传，不参与故障重试。 */
+			return STATE_SWITCH;
+		}
 		if (ret != NO_ERROR) {
 			last_err = ret;
 			// 错误	阶段：错误重试	模块：传感器	操作：切换模式	原因：ErrorLog_GetReasonByCode((uint32_t)ret)	尝试：(attempt + 1)/DSM_V2_MAX_RETRY	错误码：ret	错误名：ErrorLog_GetCodeName(ret)
@@ -174,6 +180,10 @@ int DSM_V2_SwitchMode(dsm_v2_mode_t mode) {
 		}
 
 		ret = DSM_V2_CheckReply(tx, rx);
+		if (ret == STATE_SWITCH) {
+			/* 命令切换是正常打断，直接向上透传，不参与故障重试。 */
+			return STATE_SWITCH;
+		}
 		if (ret == NO_ERROR) {
 			if (attempt > 0) {
 				// 错误	阶段：重试成功	模块：传感器	操作：切换模式	原因：通信失败	尝试：(attempt + 1)/DSM_V2_MAX_RETRY
@@ -222,10 +232,15 @@ int DSM_V2_Read_FloatParam(uint8_t param, float *out_value) {
 
 	for (int attempt = 0; attempt < DSM_V2_MAX_RETRY; ++attempt) {
 		if (HasEffectiveCommandSwitchRequest()) {
+			/* 命令切换是正常打断，直接向上透传，不参与故障重试。 */
 			return STATE_SWITCH;
 		}
 		HAL_Delay(DSM_PRE_SEND_DELAY);
 		int ret = DSM_V2_Transceive(tx, rx);
+		if (ret == STATE_SWITCH) {
+			/* 命令切换是正常打断，直接向上透传，不参与故障重试。 */
+			return STATE_SWITCH;
+		}
 		if (ret != NO_ERROR) {
 			last_err = ret;
 			// 错误	阶段：错误重试	模块：传感器	操作：读取浮点参数	原因：ErrorLog_GetReasonByCode((uint32_t)ret)	尝试：(attempt + 1)/DSM_V2_MAX_RETRY	错误码：ret	错误名：ErrorLog_GetCodeName(ret)
@@ -239,6 +254,10 @@ int DSM_V2_Read_FloatParam(uint8_t param, float *out_value) {
 		}
 
 		ret = DSM_V2_CheckReply(tx, rx);
+		if (ret == STATE_SWITCH) {
+			/* 命令切换是正常打断，直接向上透传，不参与故障重试。 */
+			return STATE_SWITCH;
+		}
 		if (ret == NO_ERROR) {
 			float v = DSM_V2_ParseFloat_LE(rx + 2);
 			*out_value = v;
@@ -279,10 +298,15 @@ int DSM_V2_Read_IntParam(uint8_t param, int32_t *out_value) {
 
 	for (int attempt = 0; attempt < DSM_V2_MAX_RETRY; ++attempt) {
 		if (HasEffectiveCommandSwitchRequest()) {
+			/* 命令切换是正常打断，直接向上透传，不参与故障重试。 */
 			return STATE_SWITCH;
 		}
 		HAL_Delay(DSM_PRE_SEND_DELAY);
 		int ret = DSM_V2_Transceive(tx, rx);
+		if (ret == STATE_SWITCH) {
+			/* 命令切换是正常打断，直接向上透传，不参与故障重试。 */
+			return STATE_SWITCH;
+		}
 		if (ret != NO_ERROR) {
 			last_err = ret;
 			// 错误	阶段：错误重试	模块：传感器	操作：读取整数参数	原因：ErrorLog_GetReasonByCode((uint32_t)ret)	尝试：(attempt + 1)/DSM_V2_MAX_RETRY	错误码：ret	错误名：ErrorLog_GetCodeName(ret)
@@ -296,6 +320,10 @@ int DSM_V2_Read_IntParam(uint8_t param, int32_t *out_value) {
 		}
 
 		ret = DSM_V2_CheckReply(tx, rx);
+		if (ret == STATE_SWITCH) {
+			/* 命令切换是正常打断，直接向上透传，不参与故障重试。 */
+			return STATE_SWITCH;
+		}
 		if (ret == NO_ERROR) {
 			int32_t v = DSM_V2_ParseInt32_LE(rx + 2);
 			*out_value = v;

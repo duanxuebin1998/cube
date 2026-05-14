@@ -696,7 +696,6 @@ void print_device_params(void)
     printf("  %-32s : %lu\r\n", "水位电容阈值", (unsigned long)params.water_cap_threshold);
     printf("  %-32s : %lu\r\n", "水位寻找电容阈值", (unsigned long)params.water_find_cap_threshold);
     printf("  %-32s : %lu\r\n", "最大下行距离(0.1mm)", (unsigned long)params.maxDownDistance);
-    printf("  %-32s : %lu\r\n", "零点电容", (unsigned long)params.zero_cap);
     printf("  %-32s : %lu\r\n", "水位零点电容", (unsigned long)params.zero_cap);
     printf("  %-32s : %lu\r\n", "水位稳定阈值", (unsigned long)params.water_stable_threshold);
     printf("  %-32s : %lu\r\n", "水位滞后电容阈值", (unsigned long)params.water_lag_cap_threshold);

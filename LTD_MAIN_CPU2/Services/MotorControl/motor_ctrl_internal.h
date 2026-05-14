@@ -166,6 +166,12 @@ typedef struct {
 
 extern MotorDriverRuntime s_motor_driver;
 extern MotorPositionRuntime s_motor_position;
+
+typedef enum {
+    MOTOR_DRIVER_HEALTH_INIT_CHECK = 0, /* 初始化期检查：允许处理纯 reset 残留，但欠压/配置丢失仍报错。 */
+    MOTOR_DRIVER_HEALTH_BEFORE_MOTION,  /* 运动前检查：驱动必须已初始化、配置存在、功率级已建立。 */
+    MOTOR_DRIVER_HEALTH_RUNNING         /* 运行期检查：复位、欠压、配置丢失都按故障停机。 */
+} MotorDriverHealthMode;
 /* ===================== 内部跨文件函数 ===================== */
 
 /**
@@ -182,6 +188,13 @@ float MotorDriver_GetSpeedSetpointMMin(void);
  * 调用方如果需要立即生效，应继续写入 TMC5130 VMAX。
  */
 void MotorDriver_UpdateVelocityFromParams(void);
+
+/**
+ * @brief 统一检查 TMC5130 通信、配置、故障标志和功率级状态。
+ *
+ * 返回错误时会清除驱动初始化标记，调用方应停止当前运动流程。
+ */
+uint32_t MotorDriver_CheckHealth(MotorDriverHealthMode mode);
 
 /**
  * @brief 判断业务方向参数是否合法。
@@ -276,6 +289,24 @@ uint32_t MotorDriver_BeginTemporarySpeed(uint32_t speed_x100,
  */
 uint32_t MotorDriver_EndTemporarySpeed(bool restore_needed,
                                                uint32_t restore_speed_x100);
+
+/**
+ * @brief 恢复临时速度后按统一优先级返回运动结果。
+ *
+ * 结束运动流程时统一调用：先恢复临时速度，若原运动已经失败或被 STATE_SWITCH 打断，
+ * 返回原始结果；只有原运动成功时，才把恢复速度失败作为最终错误返回。
+ */
+uint32_t MotorDriver_ReturnAfterTemporarySpeed(uint32_t ret,
+                                                       bool restore_needed,
+                                                       uint32_t restore_speed_x100);
+
+/**
+ * @brief 同步调试位置，失败时转入统一 TMC 健康检查。
+ *
+ * 用于运行期轮询和停机收尾；同步失败但健康检查未发现故障时仍返回 NO_ERROR，
+ * 保持原有流程语义。该函数会访问 TMC5130，不允许在中断上下文调用。
+ */
+uint32_t MotorDriver_SyncPositionOrCheckHealth(TMC5130TypeDef *tmc5130);
 
 /**
  * @brief 无检测运动过程中的周期性调试日志。
@@ -378,7 +409,7 @@ uint32_t MotorPosition_RestorePersistedRegisters(TMC5130TypeDef *tmc5130);
  *
  * @param tmc5130 TMC5130 设备对象。
  */
-void MotorPosition_SyncDebugDrumState(TMC5130TypeDef *tmc5130);
+bool MotorPosition_SyncDebugDrumState(TMC5130TypeDef *tmc5130);
 
 /**
  * @brief 在电机记步模式下用电机模型刷新业务位置。

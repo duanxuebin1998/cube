@@ -15,6 +15,7 @@
 #include "measure_tank_height.h"
 #include "measure.h"
 #include "motor_ctrl.h"
+#include "abortable_delay.h"
 
 #define WIRELESS_HOST_ADDR 1U
 #define WIRELESS_SLAVE_ADDR 2U
@@ -22,6 +23,11 @@
 #define SENSOR_DENSITY_MODE_SETTLE_MS 3000U
 
 
+/**
+ * @brief 把轻量无线探测错误映射成对应节点错误码。
+ *
+ * 仅用于通信超时后的链路归因，不打印日志；STATE_SWITCH 等非超时返回值保持原样向上传递。
+ */
 static uint32_t Sensor_MapWirelessProbeError(uint32_t ret, uint32_t timeout_code)
 {
     if (ret == NO_ERROR) {
@@ -33,6 +39,11 @@ static uint32_t Sensor_MapWirelessProbeError(uint32_t ret, uint32_t timeout_code
     return ret;
 }
 
+/**
+ * @brief 在 LTD 和 DSM 探测结果中选择最终识别错误。
+ *
+ * 优先保留协议格式、校验等具体错误；只有两路都是无响应时才归并为传感器通信超时。
+ */
 static uint32_t Sensor_SelectProbeError(uint32_t ltd_ret, uint32_t dsm_ret)
 {
     if ((ltd_ret != NO_ERROR) && (ltd_ret != SENSOR_DEVICE_COMM_TIMEOUT)) {
@@ -50,6 +61,11 @@ static uint32_t Sensor_SelectProbeError(uint32_t ltd_ret, uint32_t dsm_ret)
     return dsm_ret;
 }
 
+/**
+ * @brief 记录传感器识别阶段的最终错误。
+ *
+ * NO_ERROR 和 STATE_SWITCH 都不是故障，不写入全局 error_code，避免命令切换被误报。
+ */
 static void Sensor_SetCommDetectError(uint32_t err)
 {
     if ((err != NO_ERROR) && (err != STATE_SWITCH)) {
@@ -57,28 +73,40 @@ static void Sensor_SetCommDetectError(uint32_t err)
     }
 }
 
+
+/**
+ * @brief 在传感器无响应后执行滑环/无线链路诊断。
+ *
+ * 该函数只在普通任务上下文调用，允许打印错误报警；诊断过程中若收到命令切换，
+ * 立即返回 STATE_SWITCH，不把切换动作当作通信故障。
+ */
 static uint32_t Sensor_DiagnoseCommTimeout(uint32_t ret, const char *context)
 {
     uint32_t host_ret;
     uint32_t slave_ret;
     uint32_t diag_ret;
-    char detail[48];
+    const char *op_context = (context != NULL) ? context : "未知操作";
+    char detail[96];
 
     if (ret != SENSOR_DEVICE_COMM_TIMEOUT) {
         return ret;
     }
-    // 错误	阶段：错误报警	模块：传感器	操作：通信诊断	原因：ErrorLog_GetReasonByCode(ret)	处理：继续尝试
-    ErrorLog_Warn(ERROR_LOG_MODULE_SENSOR,
-                  ERROR_LOG_OP_COMM_DIAG,
-                  ErrorLog_GetReasonByCode(ret),
-                  ERROR_LOG_ACTION_CONTINUE);
 
-    host_ret = WIRELESS_PrintInfo(WIRELESS_HOST_ADDR);
-    slave_ret = WIRELESS_PrintInfo(WIRELESS_SLAVE_ADDR);
+    snprintf(detail, sizeof(detail), "原操作：%s", op_context);
+    // 错误	阶段：错误报警	模块：传感器	操作：通信诊断	原因：ErrorLog_GetReasonByCode(ret)	处理：继续尝试	详情：detail
+    ErrorLog_WarnDetail(ERROR_LOG_MODULE_SENSOR,
+                        ERROR_LOG_OP_COMM_DIAG,
+                        ErrorLog_GetReasonByCode(ret),
+                        ERROR_LOG_ACTION_CONTINUE,
+                        detail);
 
+    host_ret = WIRELESS_ProbeNode(WIRELESS_HOST_ADDR);
+    if (host_ret == STATE_SWITCH) {
+        return STATE_SWITCH;
+    }
     diag_ret = Sensor_MapWirelessProbeError(host_ret, WIRELESS_HOST_COMM_TIMEOUT);
     if (diag_ret != NO_ERROR) {
-        snprintf(detail, sizeof(detail), "节点：主机,地址：%u", (unsigned)WIRELESS_HOST_ADDR);
+        snprintf(detail, sizeof(detail), "原操作：%s,节点：主机,地址：%u", op_context, (unsigned)WIRELESS_HOST_ADDR);
         // 错误	阶段：错误报警	模块：滑环通信	操作：链路诊断	原因：ErrorLog_GetReasonByCode(diag_ret)	处理：继续尝试	详情：detail
         ErrorLog_WarnDetail(ERROR_LOG_MODULE_SLIPRING_COMM,
                             "链路诊断",
@@ -88,9 +116,13 @@ static uint32_t Sensor_DiagnoseCommTimeout(uint32_t ret, const char *context)
         return diag_ret;
     }
 
+    slave_ret = WIRELESS_ProbeNode(WIRELESS_SLAVE_ADDR);
+    if (slave_ret == STATE_SWITCH) {
+        return STATE_SWITCH;
+    }
     diag_ret = Sensor_MapWirelessProbeError(slave_ret, WIRELESS_SLAVE_COMM_TIMEOUT);
     if (diag_ret != NO_ERROR) {
-        snprintf(detail, sizeof(detail), "节点：从机,地址：%u", (unsigned)WIRELESS_SLAVE_ADDR);
+        snprintf(detail, sizeof(detail), "原操作：%s,节点：从机,地址：%u", op_context, (unsigned)WIRELESS_SLAVE_ADDR);
         // 错误	阶段：错误报警	模块：滑环通信	操作：链路诊断	原因：ErrorLog_GetReasonByCode(diag_ret)	处理：继续尝试	详情：detail
         ErrorLog_WarnDetail(ERROR_LOG_MODULE_SLIPRING_COMM,
                             "链路诊断",
@@ -102,6 +134,11 @@ static uint32_t Sensor_DiagnoseCommTimeout(uint32_t ret, const char *context)
     return SENSOR_DEVICE_COMM_TIMEOUT;
 }
 
+/**
+ * @brief 识别传感器前检查主机和从机无线链路。
+ *
+ * 用完整信息读取确认链路是否可用，失败时映射为主机或从机通信超时，便于现场定位。
+ */
 static uint32_t Sensor_ProbeWirelessLink(void)
 {
     uint32_t ret;
@@ -121,6 +158,11 @@ static uint32_t Sensor_ProbeWirelessLink(void)
     return NO_ERROR;
 }
 
+/**
+ * @brief 用温度读数探测 LTD 传感器。
+ *
+ * 识别阶段只做一次最小读数，成功时回填温度用于后续判断；错误码原样返回。
+ */
 static uint32_t Sensor_ProbeLtdSensor(float *temp_out)
 {
     float temp = 0.0f;
@@ -132,6 +174,11 @@ static uint32_t Sensor_ProbeLtdSensor(float *temp_out)
     return ret;
 }
 
+/**
+ * @brief 用密度模式切换探测 DSM 传感器。
+ *
+ * 该探测会触发传感器模式命令，只在识别流程中调用，不用于运行期轮询。
+ */
 static uint32_t Sensor_ProbeDsmSensor(void)
 {
     return DSM_EnableDensityMode();
@@ -227,7 +274,7 @@ uint32_t EnableLevelMode(void) {
 	ret = Sensor_DiagnoseCommTimeout(ret, "切换液位模式");
 	if (ret == NO_ERROR) {
 		printf("切换液位模式成功，等待%lu ms稳定\r\n", (unsigned long)SENSOR_LEVEL_MODE_SETTLE_MS);
-		HAL_Delay(SENSOR_LEVEL_MODE_SETTLE_MS);
+		ret = AbortableDelay_CommandSwitch(SENSOR_LEVEL_MODE_SETTLE_MS, 100U);
 	}
 	return ret;
 }
@@ -238,6 +285,11 @@ uint32_t EnableLevelMode(void) {
 // 如果频率连续 3 次为 0 或大于 6500Hz，且电机静止，则上行 1mm 后切密度/液位模式恢复；
 // 若多轮恢复后仍无有效频率，则返回 SONIC_FREQ_ABNORMAL。
 
+/**
+ * @brief 判断电机是否已经停止，供液位频率恢复动作使用。
+ *
+ * 先看上层显示状态，再读取驱动运动状态；该函数会访问 TMC5130，不允许在中断中调用。
+ */
 static uint8_t Sensor_IsMotorStopped(void)
 {
 	uint32_t motor_state = MotorCtrl_GetDisplayState();
@@ -249,6 +301,12 @@ static uint8_t Sensor_IsMotorStopped(void)
 	return MotorCtrl_IsDriverMoving(&stepper) ? 0U : 1U;
 }
 
+/**
+ * @brief 电机停止时尝试恢复液位频率有效读数。
+ *
+ * 仅在频率连续异常且电机静止时执行：微动上行后切密度/液位模式重新稳定；
+ * 等待过程使用可打断延时，命令切换时直接返回 STATE_SWITCH。
+ */
 static uint32_t Sensor_RecoverLevelFrequencyWhenStopped(void)
 {
 	uint32_t ret;
@@ -273,7 +331,10 @@ static uint32_t Sensor_RecoverLevelFrequencyWhenStopped(void)
 		return ret;
 	}
 
-	HAL_Delay(SENSOR_DENSITY_MODE_SETTLE_MS);
+	ret = AbortableDelay_CommandSwitch(SENSOR_DENSITY_MODE_SETTLE_MS, 100U);
+	if (ret != NO_ERROR) {
+		return ret;
+	}
 
 	ret = EnableLevelMode();
 	if (ret != NO_ERROR) {
@@ -319,7 +380,10 @@ uint32_t DSM_Get_LevelMode_Frequence(volatile uint32_t *frequency_out) {
                            (uint32_t)(attempt + 1),
                            MAX_INVALID_FREQ_RETRY,
                            SONIC_FREQ_ABNORMAL);
-			HAL_Delay(1000);
+			ret = AbortableDelay_CommandSwitch(1000U, 100U);
+			if (ret != NO_ERROR) {
+				return ret;
+			}
 		}
 
 		if (mode_switch_recovery_count >= MAX_MODE_SWITCH_RECOVERY) {
@@ -364,7 +428,10 @@ uint32_t DSM_Get_LevelMode_Frequence_Avg(volatile uint32_t *frequency_out) {
 			return ret;
 		}
 		printf("第 %d 次液位频率: %lu Hz\r\n", i + 1, (unsigned long) values[i]);
-		HAL_Delay(2000); // 2 秒间隔（标定场景可接受）
+		ret = AbortableDelay_CommandSwitch(2000U, 100U); // 2 秒间隔，可被命令切换打断
+		if (ret != NO_ERROR) {
+			return ret;
+		}
 	}
 
 	// 冒泡排序（升序）
@@ -590,6 +657,12 @@ static uint32_t Read_WeightParam_Adapter(void)
 }
 
 /* ================== CMD：读取部件参数 ================== */
+/**
+ * @brief 读取部件参数的共用实现。
+ *
+ * 命令入口调用时会进入读取状态；自动恢复检查调用时不改命令状态，
+ * 但仍会先检查电机驱动健康，避免 24V 断电后继续报告无效位置。
+ */
 static uint32_t Sensor_ReadPartParamsInternal(uint8_t update_command_state)
 {
     uint32_t ret = NO_ERROR;
@@ -609,7 +682,7 @@ static uint32_t Sensor_ReadPartParamsInternal(uint8_t update_command_state)
     }
 
     /* ---------- 1) 位置类：编码器/位置/尺带长度/步进/距离 ---------- */
-    ret = stpr_checkDriverStatus(&stepper);
+    ret = MotorCtrl_CheckDriverGstat();
     if (ret != NO_ERROR) {
         return ret;
     }

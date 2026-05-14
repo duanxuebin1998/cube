@@ -20,14 +20,6 @@ static bool s_motor_tape_fit_result_is_local = false;
 static bool s_motor_tape_fit_local_origin_valid = false;
 static int32_t s_motor_tape_fit_origin_step = 0;
 static int32_t s_motor_tape_fit_origin_length_01mm = 0;
-static void MotorTapeFit_ResetState(bool clear_samples);
-static int MotorTapeFit_StoreSample(int32_t motor_step,
-                                    int32_t encoder_length_01mm,
-                                    bool force);
-static int MotorTapeFit_CaptureCurrentSample(bool force);
-static int MotorTapeFit_SolveLinear3x3(double m[3][4], double out[3]);
-static void MotorTapeFit_Range(double *n_min, double *n_max);
-static void MotorTapeFit_LocalRange(double *q_min, double *q_max);
 
 /* ===================== Ë½ÓÐº¯ÊýÉùÃ÷ ===================== */
 

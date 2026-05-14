@@ -123,6 +123,7 @@ static uint32_t WIRELESS_Transceive(const uint8_t tx[8], uint8_t rx[8]) {
     int got = 0;
     while ((HAL_GetTick() - start) < WIRELESS_RX_TIMEOUT && got < 8) {
         if (HasEffectiveCommandSwitchRequest()) {
+            /* 命令切换是正常打断，直接向上透传，不参与故障重试。 */
             return STATE_SWITCH;
         }
         if (HAL_UART_Receive(&huart6, &rx[got], 1, 1) == HAL_OK) {
@@ -249,11 +250,16 @@ uint32_t WIRELESS_Read_FloatParam(uint8_t addr, uint8_t param, float *out_value)
 
     for (int attempt = 0; attempt < WIRELESS_MAX_RETRY; ++attempt) {
         if (HasEffectiveCommandSwitchRequest()) {
+            /* 命令切换是正常打断，直接向上透传，不参与故障重试。 */
             return STATE_SWITCH;
         }
         HAL_Delay(DSM_PRE_SEND_DELAY);
 
         int ret = WIRELESS_Transceive(tx, rx);
+        if (ret == STATE_SWITCH) {
+            /* 命令切换是正常打断，直接向上透传，不参与故障重试。 */
+            return STATE_SWITCH;
+        }
         if (ret != NO_ERROR) {
             last_err = ret;
             // 错误	阶段：错误重试	模块：滑环通信	操作：读取浮点参数	原因：ErrorLog_GetReasonByCode((uint32_t)ret)	尝试：(attempt + 1)/WIRELESS_MAX_RETRY	错误码：ret	错误名：ErrorLog_GetCodeName(ret)	详情：detail
@@ -268,6 +274,10 @@ uint32_t WIRELESS_Read_FloatParam(uint8_t addr, uint8_t param, float *out_value)
         }
 
         ret = WIRELESS_CheckReply(tx, rx);
+        if (ret == STATE_SWITCH) {
+            /* 命令切换是正常打断，直接向上透传，不参与故障重试。 */
+            return STATE_SWITCH;
+        }
         if (ret == NO_ERROR) {
             float v = WIRELESS_ParseFloat_LE(rx + 2);
             *out_value = v;
@@ -321,11 +331,16 @@ uint32_t WIRELESS_Read_IntParam(uint8_t addr, uint8_t param, int32_t *out_value)
 
     for (int attempt = 0; attempt < WIRELESS_MAX_RETRY; ++attempt) {
         if (HasEffectiveCommandSwitchRequest()) {
+            /* 命令切换是正常打断，直接向上透传，不参与故障重试。 */
             return STATE_SWITCH;
         }
         HAL_Delay(DSM_PRE_SEND_DELAY);
 
         int ret = WIRELESS_Transceive(tx, rx);
+        if (ret == STATE_SWITCH) {
+            /* 命令切换是正常打断，直接向上透传，不参与故障重试。 */
+            return STATE_SWITCH;
+        }
         if (ret != NO_ERROR) {
             last_err = ret;
             // 错误	阶段：错误重试	模块：滑环通信	操作：读取整数参数	原因：ErrorLog_GetReasonByCode((uint32_t)ret)	尝试：(attempt + 1)/WIRELESS_MAX_RETRY	错误码：ret	错误名：ErrorLog_GetCodeName(ret)	详情：detail
@@ -340,6 +355,10 @@ uint32_t WIRELESS_Read_IntParam(uint8_t addr, uint8_t param, int32_t *out_value)
         }
 
         ret = WIRELESS_CheckReply(tx, rx);
+        if (ret == STATE_SWITCH) {
+            /* 命令切换是正常打断，直接向上透传，不参与故障重试。 */
+            return STATE_SWITCH;
+        }
         if (ret == NO_ERROR) {
             int32_t v = WIRELESS_ParseInt32_LE(rx + 2);
             *out_value = v;
@@ -384,6 +403,32 @@ uint32_t WIRELESS_Read_SoftwareVersion(uint8_t addr, float *v)
 uint32_t WIRELESS_Read_Voltage(uint8_t addr, float *v)
 {
     return WIRELESS_Read_FloatParam(addr, 0x01, v);
+}
+
+/*
+ * 轻量探测无线节点是否能应答。
+ * 该函数用于传感器通信超时后的链路归因，只做一次最小读请求，
+ * 不打印节点信息，也不走读取参数接口的重试日志。
+ */
+uint32_t WIRELESS_ProbeNode(uint8_t addr)
+{
+    uint8_t tx[8], rx[8];
+    uint32_t ret;
+
+    if (HasEffectiveCommandSwitchRequest()) {
+        /* 命令切换是正常打断，直接向上透传，不参与故障重试。 */
+        return STATE_SWITCH;
+    }
+
+    WIRELESS_MakeFrame(tx, addr, (uint8_t)WIRELESS_FUNC_R, 0x00000000u, 0x01U);
+    HAL_Delay(DSM_PRE_SEND_DELAY);
+
+    ret = WIRELESS_Transceive(tx, rx);
+    if (ret != NO_ERROR) {
+        return ret;
+    }
+
+    return WIRELESS_CheckReply(tx, rx);
 }
 
 /*

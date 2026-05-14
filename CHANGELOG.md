@@ -1,4 +1,4 @@
-﻿# 升级日志
+# 升级日志
 
 记录 CPU2/CPU3 固件版本变更。使用 `tools/bump_version.py` 升级版本时会自动追加记录；提交前应补充到与 Git 提交信息同等详细。
 
@@ -132,3 +132,32 @@
 - `git diff --check`
 - `cmake --build build\LTD_MAIN_CPU2`
 - `py tools\check_version_bumped.py`
+
+## 2026-05-14
+
+版本：
+- CPU2: V1.4.0.0 -> V1.4.1.0
+- CPU3: V1.1.0.0 -> V1.1.1.0
+
+兼容性：
+- 本次不修改 Modbus 寄存器映射、参数存储布局、命令枚举数值或 CPU2/CPU3 共享字段含义。
+- CPU2/CPU3 固件版本继续独立递增；CPU3 显示 CPU2 程序版本时仅按主版本判断兼容，minor/patch/build 不再触发版本不匹配提示。
+
+本次修改：
+- 新增长等待公共入口 `AbortableDelay_CommandSwitch()`，让固定点监测、液位/密度模式稳定等待、称重稳定等待等流程可响应命令切换。
+- 调整 `STATE_SWITCH` 日志语义，命令切换不再作为错误重试或最终报错打印。
+- 将串口 `I/G/K/R/W/O/P/Q` 正式业务命令统一映射到 `CommandType`，交给主循环正式入口执行，避免绕过 `current_command` 和自动恢复。
+- 增强 TMC5130 健康检查，识别 `CHOPCONF=0` 配置丢失、充电泵欠压、功率级电流未建立和运行期 XACTUAL 异常。
+- 抽出 `MotorDriver_SyncPositionOrCheckHealth()` 和 `MotorDriver_ReturnAfterTemporarySpeed()`，收敛运动等待和临时速度恢复中的重复错误处理。
+- 将自动恢复状态机拆分为 `fault_recovery.c/.h`，主循环只负责调度和重跑命令，恢复模块不直接调用测量命令。
+- 保持找零点粗找原有重试/退让语义，仅修正粗找失败时错误码被“零点偏差超限”覆盖的问题。
+- 新增传感器通信失败后的轻量滑环探测，区分传感器、滑环主机和滑环从机无响应。
+- 修正固定点监测中密度读取失败后不置错误状态的问题。
+- 更新《电机24V断电与命令切换改动整理》文档，整理最终方案、验证清单和后续建议。
+
+验证：
+- `cmake --build build\LTD_MAIN_CPU2`
+- `cmake --build build\LTD_DISPLAY_CPU3`
+- `py tools\check_version_bumped.py`
+- `git diff --check`
+- `git diff --cached --check`

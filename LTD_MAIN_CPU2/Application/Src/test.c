@@ -122,7 +122,10 @@ static uint32_t Test_MoveUntilEncoderTarget(int32_t target_encoder,
             return STATE_SWITCH;
         }
 
-        MotorCtrl_PollRuntimePosition();
+        ret = MotorCtrl_PollRuntimePosition();
+        if (ret != NO_ERROR) {
+            return ret;
+        }
         current_encoder = Test_GetEncoderValue();
 
         if (Test_EncoderTargetReached(current_encoder, target_encoder, dir)) {
@@ -1020,10 +1023,15 @@ void Test_TMC5130_SPI_Static(void)
     uint32_t drv_read_fail = 0U;
     uint32_t ioin_read_fail = 0U;
     uint32_t ifcnt_read_fail = 0U;
+    uint32_t chopconf_zero = 0U;      /* CHOPCONF 为 0 的次数，用于判断配置丢失/24V 掉电。 */
+    uint32_t chopconf_read_fail = 0U; /* CHOPCONF 读取失败次数，用于区分总线失败和配置清零。 */
+    uint32_t xactual_read_fail = 0U;  /* XACTUAL 读取失败次数，用于定位运行期位置读数异常。 */
     int32_t gstat = 0;
     int32_t drvstatus = 0;
     int32_t ioin = 0;
     int32_t ifcnt = 0;
+    int32_t chopconf = 0;
+    int32_t xactual = 0;
 
     printf("TMC5130 SPI静态测试开始 | loops=%lu | delay=%lums\r\n",
            (unsigned long)loops,
@@ -1057,29 +1065,45 @@ void Test_TMC5130_SPI_Static(void)
         if (!stpr_tryReadInt(&stepper, TMC5130_IFCNT, &ifcnt)) {
             ifcnt_read_fail++;
         }
+        /* 静态测试同时读取 CHOPCONF，验证 SPI 正常时配置是否被 24V 掉电清零。 */
+        if (!stpr_tryReadInt(&stepper, TMC5130_CHOPCONF, &chopconf)) {
+            chopconf_read_fail++;
+        } else if (chopconf == 0) {
+            chopconf_zero++;
+        }
+        /* XACTUAL 单独统计失败次数，便于和运行期“疑似 SPI 全 0”日志对照。 */
+        if (!stpr_tryReadInt(&stepper, TMC5130_XACTUAL, &xactual)) {
+            xactual_read_fail++;
+        }
 
         if ((i == 1U) || ((i % 100U) == 0U)) {
-            printf("[TMC SPI %lu] GSTAT=0x%08lX DRV=0x%08lX IOIN=0x%08lX IFCNT=%ld | ok=%lu invalid=%lu fail=%lu\r\n",
+            printf("[TMC SPI %lu] GSTAT=0x%08lX DRV=0x%08lX IOIN=0x%08lX IFCNT=%ld CHOP=0x%08lX XACTUAL=%ld | ok=%lu invalid=%lu fail=%lu cfg0=%lu\r\n",
                    (unsigned long)i,
                    (unsigned long)((uint32_t)gstat),
                    (unsigned long)((uint32_t)drvstatus),
                    (unsigned long)((uint32_t)ioin),
                    (long)ifcnt,
+                   (unsigned long)((uint32_t)chopconf),
+                   (long)xactual,
                    (unsigned long)gstat_ok,
                    (unsigned long)gstat_invalid,
-                   (unsigned long)gstat_read_fail);
+                   (unsigned long)gstat_read_fail,
+                   (unsigned long)chopconf_zero);
         }
 
         HAL_Delay(delay_ms);
     }
 
-    printf("TMC5130 SPI静态测试结束 | GSTAT ok=%lu invalid=%lu read_fail=%lu | DRV_fail=%lu IOIN_fail=%lu IFCNT_fail=%lu\r\n",
+    printf("TMC5130 SPI静态测试结束 | GSTAT ok=%lu invalid=%lu read_fail=%lu | DRV_fail=%lu IOIN_fail=%lu IFCNT_fail=%lu CHOP_zero=%lu CHOP_fail=%lu XACTUAL_fail=%lu\r\n",
            (unsigned long)gstat_ok,
            (unsigned long)gstat_invalid,
            (unsigned long)gstat_read_fail,
            (unsigned long)drv_read_fail,
            (unsigned long)ioin_read_fail,
-           (unsigned long)ifcnt_read_fail);
+           (unsigned long)ifcnt_read_fail,
+           (unsigned long)chopconf_zero,
+           (unsigned long)chopconf_read_fail,
+           (unsigned long)xactual_read_fail);
 }
 //测试主函数
 void Test_main(void) {

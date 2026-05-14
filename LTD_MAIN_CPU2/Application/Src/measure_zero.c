@@ -75,25 +75,28 @@ int SearchZero(void) {
         ret = SearchZeroRough();
         CHECK_COMMAND_SWITCH(ret);
 
-        if ((abs(g_measurement.debug_data.cable_length) > g_deviceParams.max_zero_deviation_distance) && Zero_ShouldCheckDeviation()) {
-            printf("零点测量    粗找后零点偏差超过阈值 | cable=%ld | limit=%lu\r\n",
-                   (long)g_measurement.debug_data.cable_length,
-                   (unsigned long)g_deviceParams.max_zero_deviation_distance);
-            ret = MEASUREMENT_ZERO_OUT_OF_RANGE;
-        } else if (ret == NO_ERROR) {
-            /* SearchZeroRough() 已经在检测到 ZERO 后停机；粗找只负责进入零点区域，
-             * 后续精找会再次确认，不再用 3 秒后的称重波动否定本次粗找。 */
-            rough_ok = 1;
-            break;
-        } else {
-            // 错误	阶段：错误重试	模块：测量	操作：粗找零点	原因：搜索失败	尝试：try_times/ZERO_SEARCH_RETRY_MAX	错误码：ret	错误名：ErrorLog_GetCodeName(ret)
-            ErrorLog_Retry(ERROR_LOG_MODULE_MEASURE,
-                           ERROR_LOG_OP_SEARCH_ZERO_ROUGH,
-                           ERROR_LOG_REASON_SEARCH_FAIL,
-                           (uint32_t)try_times,
-                           (uint32_t)ZERO_SEARCH_RETRY_MAX,
-                           ret);
+        if (ret == NO_ERROR) {
+            if ((abs(g_measurement.debug_data.cable_length) > g_deviceParams.max_zero_deviation_distance) && Zero_ShouldCheckDeviation()) {
+                printf("零点测量    粗找后零点偏差超过阈值 | cable=%ld | limit=%lu\r\n",
+                       (long)g_measurement.debug_data.cable_length,
+                       (unsigned long)g_deviceParams.max_zero_deviation_distance);
+                ret = MEASUREMENT_ZERO_OUT_OF_RANGE;
+            } else {
+                /* SearchZeroRough() 已经在检测到 ZERO 后停机；粗找只负责进入零点区域，
+                 * 后续精找会再次确认，不再用 3 秒后的称重波动否定本次粗找。 */
+                rough_ok = 1;
+                break;
+            }
         }
+
+        /* 保持原有粗找重试语义：粗找失败或偏差超限都先记录重试，再执行一次退让动作。 */
+        // 错误	阶段：错误重试	模块：测量	操作：粗找零点	原因：搜索失败	尝试：try_times/ZERO_SEARCH_RETRY_MAX	错误码：ret	错误名：ErrorLog_GetCodeName(ret)
+        ErrorLog_Retry(ERROR_LOG_MODULE_MEASURE,
+                       ERROR_LOG_OP_SEARCH_ZERO_ROUGH,
+                       ERROR_LOG_REASON_SEARCH_FAIL,
+                       (uint32_t)try_times,
+                       (uint32_t)ZERO_SEARCH_RETRY_MAX,
+                       ret);
 
         if (try_times >= ZERO_SEARCH_RETRY_MAX) {
             CHECK_ERROR(ret);
@@ -133,6 +136,8 @@ int SearchZero(void) {
 				                 (uint32_t)try_times,
 				                 (uint32_t)ZERO_SEARCH_RETRY_MAX);
 			}
+			break;
+		} else if (ret == STATE_SWITCH) {
 			break;
 		} else {
 			// 错误	阶段：错误重试	模块：测量	操作：精找零点	原因：搜索失败	尝试：try_times/ZERO_SEARCH_RETRY_MAX	错误码：ret	错误名：ErrorLog_GetCodeName(ret)
@@ -204,7 +209,8 @@ static int SearchZeroRough() {
     // 循环直到重量状态为ZERO
     MotorCtrl_LostStepInit();// 重置丢步检测计数器
     while (check_zero_point_status() != ZERO) {
-        MotorCtrl_PollRuntimePosition();
+        ret = MotorCtrl_PollRuntimePosition(); /* 循环中同步运行期位置，同时识别 TMC 掉电或配置丢失。 */
+        CHECK_ERROR(ret);
         speed_x100 = MotorCtrl_GetDefaultSpeedX100();
         distance_to_zero_01mm = abs(g_measurement.debug_data.cable_length);
         /* 靠近零点时降低粗找速度，减少撞零点后的惯性冲击。 */
@@ -243,6 +249,8 @@ static int SearchZeroPrecise() {
     uint32_t speed_x100;
     MotorCtrl_LostStepInit();// 重置丢步检测计数器
 	while (check_zero_point_status() != ZERO) {
+        ret = MotorCtrl_PollRuntimePosition(); /* 循环中同步运行期位置，同时识别 TMC 掉电或配置丢失。 */
+        CHECK_ERROR(ret);
         speed_x100 = MotorCtrl_GetDefaultSpeedX100();
         if ((g_measurement.debug_data.cable_length - zero_position) < ZERO_PRECISE_SLOW_DISTANCE_01MM) {
             speed_x100 = 40;

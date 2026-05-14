@@ -18,6 +18,8 @@
 #include "measure_tank_height.h"
 #include "motor_ctrl.h"
 #include "error_log.h"
+#include "system_parameter.h"
+#include "abortable_delay.h"
 #define WEIGHT_DEBUG
 #define MAX_WEIGHT 20000 // 最大重量限制
 #define MIN_WEIGHT -2000 // 最小重量限制
@@ -114,6 +116,7 @@ uint32_t Weight_CheckOwnCommunicationTimeout(void)
 	return Weight_CheckCommunicationTimeoutInternal(0U);
 }
 
+
 /**
  * @brief 获取空载重量
  *        延时5秒后，将当前重量值记录为空载重量
@@ -121,7 +124,10 @@ uint32_t Weight_CheckOwnCommunicationTimeout(void)
  */
 uint32_t get_empty_weight(void) {
 	printf("正在获取空载称重值...\r\n"); // 打印获取空载重量信息
-	HAL_Delay(5000); // 等待5秒，确保重量稳定
+	uint32_t wait_ret = AbortableDelay_CommandSwitch(5000U, 100U); // 等待5秒，确保重量稳定
+	if (wait_ret != NO_ERROR) {
+		return wait_ret;
+	}
 	weight_parament.empty_weight = g_weight; // 记录空载重量
 	printf("空载称重值获取成功\t空载称重：\t%d\r\n", weight_parament.empty_weight); // 打印空载重量
 	if (abs(weight_parament.empty_weight) > MAX_EMPTY_WEIGHT) { // 检查空载重量是否在合理范围内
@@ -141,7 +147,10 @@ uint32_t get_empty_weight(void) {
  */
 uint32_t get_full_weight(void) {
 	printf("正在等待称重值稳定...\r\n"); // 打印等待信息
-	HAL_Delay(5000); // 等待5秒，确保重量稳定
+	uint32_t wait_ret = AbortableDelay_CommandSwitch(5000U, 100U); // 等待5秒，确保重量稳定
+	if (wait_ret != NO_ERROR) {
+		return wait_ret;
+	}
 
 	weight_parament.full_weight = weight_parament.current_weight; // 计算满载重量
 
