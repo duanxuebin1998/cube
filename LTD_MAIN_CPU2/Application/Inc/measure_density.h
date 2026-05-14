@@ -13,7 +13,7 @@
 
 /* 单次测量最多点数 */
 #ifndef MAX_MEASUREMENT_POINTS
-#define MAX_MEASUREMENT_POINTS  100
+#define MAX_MEASUREMENT_POINTS  200
 #endif
 
 /* 国标分段阈值（单位：0.1mm） */

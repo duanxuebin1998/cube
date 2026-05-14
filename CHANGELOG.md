@@ -161,3 +161,27 @@
 - `py tools\check_version_bumped.py`
 - `git diff --check`
 - `git diff --cached --check`
+
+## 2026-05-14
+
+版本：
+- CPU2: V1.4.1.0 -> V1.5.0.0
+- CPU3: V1.1.1.0 -> V1.2.0.0
+
+兼容性：
+- 本次扩展 CPU2/CPU3 共享密度分布测量点数组和内部输入寄存器范围，两侧需要同步升级。
+- 外部 Wärtsilä 密度点寄存器由 100 点扩展到 200 点，前 100 点地址保持不变，新增点位向后追加。
+- 原 `reserved1` 预留位正式替换为 CPU2/CPU3 协议版本字段；CPU2 启动后写入当前协议，旧 CPU2 默认协议版本为 0，当前 200 点协议版本为 1。
+
+本次修改：
+- 将 CPU2 密度分布测量最大点数 `MAX_MEASUREMENT_POINTS` 从 100 提高到 200。
+- 将 CPU3 同步缓存和内部主板通信的密度分布点数组从 100 点提高到 200。
+- 将 CPU3 “分布测点数”参数输入上限从 99 提高到 200，避免界面或参数校验挡住新增点数。
+- 将 CPU3 Wärtsilä 外部 Modbus 密度点数量 `REG_DENSITY_POINT_COUNT` 从 100 提高到 200。
+- 新增 CPU2/CPU3 协议版本文档，CPU3 显示 CPU2 固件版本时只做显示，设备状态页统一提示协议是否匹配；只有两侧协议版本相同才兼容，避免 CPU2 V1.4.1.0 被误判为支持 200 点。
+
+验证：
+- `cmake --build build\LTD_MAIN_CPU2`
+- `cmake --build build\LTD_DISPLAY_CPU3`
+- `git diff --check`
+- `py tools\check_version_bumped.py` 当前未暂存文件，脚本提示无暂存内容可检查；提交前暂存后需再执行一次。

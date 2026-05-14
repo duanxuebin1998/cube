@@ -75,6 +75,19 @@ static int apply_firmware_version_runtime(void)
     g_deviceParams.softwareVersion = CPU2_APP_VERSION_U32;
     return 1;
 }
+/* 协议版本固定由当前固件维护。
+ * 旧程序没有该语义，原reserved1位置默认为0；新程序统一写入当前协议，供CPU3判断共享数据能力。 */
+static int apply_protocol_version_runtime(void)
+{
+    /* CPU2不和CPU3协商协议，只发布自身当前协议；存储值正确时不重复写入。 */
+    if (g_deviceParams.protocolVersion == DEVICE_PROTOCOL_VERSION) {
+        return 0;
+    }
+
+    /* 旧存储或异常写入导致协议不一致时，启动阶段恢复为CPU2当前协议。 */
+    g_deviceParams.protocolVersion = DEVICE_PROTOCOL_VERSION;
+    return 1;
+}
 /* 修正新增参数的非法值。
  * reserved6/reserved7 复用为position_count_mode和motor_count_first_loop_circumference_mm后，旧 FRAM 里可能残留任意非 0 值。
  * 这里既修正 RAM，又把是否修正返回给 load_device_params()，由加载流程决定是否写回 FRAM。 */
@@ -248,6 +261,7 @@ static int load_device_params_from_slot_impl(uint32_t base_addr,
 static void build_saved_device_params(DeviceParameters *out)
 {
     apply_firmware_version_runtime();
+    apply_protocol_version_runtime();
     *out = g_deviceParams;
     out->param_version = DEVICE_PARAM_VERSION;
     out->struct_size   = (uint32_t)sizeof(DeviceParameters);
@@ -408,6 +422,7 @@ int load_device_params(void)
     g_deviceParams.command = g_deviceParams.powerOnDefaultCommand;
     params_normalized = normalize_device_params_runtime();
     params_normalized |= apply_firmware_version_runtime();
+    params_normalized |= apply_protocol_version_runtime();
 
     /* 上电时如果 A 分区损坏、但 B 分区有效，
      * 这里只做“存储介质自修复”，不视为用户修改参数，
@@ -483,6 +498,7 @@ void RestoreFactoryParamsConfig(void)
     g_deviceParams.sensorID              = 1234567;
     g_deviceParams.sensorSoftwareVersion = 0x00010001;
     g_deviceParams.softwareVersion       = CPU2_APP_VERSION_U32;
+    g_deviceParams.protocolVersion      = DEVICE_PROTOCOL_VERSION;
     g_deviceParams.error_auto_back_zero  = 1;   /* 默认: 报错回零 */
     g_deviceParams.error_stop_measurement= 1;   /* 默认: 报错停止测量 */
     g_deviceParams.position_source_auto_switch = POSITION_SOURCE_AUTO_SWITCH_ENABLE; /* 默认: 允许流程自动切换位置源 */
@@ -644,6 +660,7 @@ void print_device_params(void)
            (unsigned long)((params.softwareVersion >> 16) & 0xFFU),
            (unsigned long)((params.softwareVersion >> 8) & 0xFFU),
            (unsigned long)(params.softwareVersion & 0xFFU));
+    printf("  %-32s : %lu\r\n", "协议版本", (unsigned long)params.protocolVersion);
     printf("  %-32s : %lu\r\n", "故障自动回零", (unsigned long)params.error_auto_back_zero);
     printf("  %-32s : %lu\r\n", "故障停止测量", (unsigned long)params.error_stop_measurement);
     printf("  %-32s : %lu\r\n", "位置源自动切换", (unsigned long)params.position_source_auto_switch);

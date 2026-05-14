@@ -1458,15 +1458,6 @@ static void format_version_u32(uint32_t version, char *buf, size_t buf_size)
 			(unsigned long)(version & 0xFFU));
 }
 
-/* 当前屏幕只用 CPU2 固件主版本判断兼容性。
- * minor/patch/build 只表示各 CPU 独立固件迭代，不能因为 CPU2 内部修复就提示协议不匹配。 */
-static bool is_cpu2_version_compatible(uint32_t cpu2_version)
-{
-	uint32_t major = (cpu2_version >> 24) & 0xFFU;
-
-	return (major == CPU3_REQUIRED_CPU2_PROTOCOL_MAJOR);
-}
-
 /* 显示参数内容 */
 static void displaypara(void)
 {
@@ -1489,11 +1480,9 @@ static void displaypara(void)
 			char version_text[16];
 			uint32_t cpu2_version = (uint32_t)param_meta[index].val;
 
+			/* 固件版本只显示，不再在参数页承载协议兼容提示；协议状态在设备状态页统一提示。 */
 			format_version_u32(cpu2_version, version_text, sizeof(version_text));
 			OledDisplayLineWords((uint8_t*)version_text, OLED_LINE8_4, OLED_ROW3_2, 0);
-			if (!is_cpu2_version_compatible(cpu2_version)) {
-				DisplayLangaugeLineWords((uint8_t*)"版本不匹配", OLED_LINE8_3, OLED_ROW4_3, 0, (uint8_t*)"Version mismatch");
-			}
 		} else {
 			if (param_meta[index].pword == NULL) {
 				bits = dtm_bits();

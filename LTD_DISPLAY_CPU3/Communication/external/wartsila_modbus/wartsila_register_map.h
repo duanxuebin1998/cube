@@ -75,7 +75,7 @@
 
 #define REG_DENSITY_POINT_BASE         0x0064     // 密度点1起始地址
 #define REG_DENSITY_POINT_STRIDE       6          // 每点占 6 个寄存器
-#define REG_DENSITY_POINT_COUNT        100        // 总共 100 个点
+#define REG_DENSITY_POINT_COUNT        200        // 总共 200 个点
 
 // i = 0..REG_DENSITY_POINT_COUNT-1  对应 点1..点N
 #define REG_DENS_PT_POS(i)   (uint16_t)(REG_DENSITY_POINT_BASE + (i) * REG_DENSITY_POINT_STRIDE + 0)
