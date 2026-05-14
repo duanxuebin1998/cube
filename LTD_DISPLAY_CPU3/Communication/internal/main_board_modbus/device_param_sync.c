@@ -32,12 +32,12 @@ static volatile uint32_t* get_deviceparam_ptr_by_operanum(int operanum)
         return &g_deviceParams.softwareVersion;
     case COM_NUM_DEVICEPARAM_POWER_ON_DEFAULT_COMMAND:
         return (volatile uint32_t*)&g_deviceParams.powerOnDefaultCommand;
-
-    /* 新增：错误策略（若 DeviceParameters 尚未加字段，请先在结构体中补充） */
     case COM_NUM_DEVICEPARAM_ERROR_AUTO_BACK_ZERO:
         return &g_deviceParams.error_auto_back_zero;
     case COM_NUM_DEVICEPARAM_ERROR_STOP_MEASUREMENT:
         return &g_deviceParams.error_stop_measurement;
+    case COM_NUM_DEVICEPARAM_PROTOCOL_VERSION:
+        return &g_deviceParams.protocolVersion;
     case COM_NUM_DEVICEPARAM_POSITION_SOURCE_AUTO_SWITCH:
         return &g_deviceParams.position_source_auto_switch;
 

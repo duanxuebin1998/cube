@@ -29,7 +29,7 @@ struct ParameterMetadata param_meta[] = {
 {(uint8_t*)"故障自动回零",	0,	COM_NUM_DEVICEPARAM_ERROR_AUTO_BACK_ZERO,	HOLDREGISTER_DEVICEPARAM_ERROR_AUTO_BACK_ZERO,	2,	true,	0,	1,	NULL,	0,	0,	true,	TYPE_INT,	1,	NULL,	(uint8_t*)"ErrAutoBackZero"},
 {(uint8_t*)"故障停止测量",	0,	COM_NUM_DEVICEPARAM_ERROR_STOP_MEASUREMENT,	HOLDREGISTER_DEVICEPARAM_ERROR_STOP_MEASUREMENT,	2,	true,	0,	1,	NULL,	0,	0,	true,	TYPE_INT,	1,	NULL,	(uint8_t*)"ErrStopMeas"},
 
-{(uint8_t*)"保留1",	0,	COM_NUM_DEVICEPARAM_RESERVED1,	HOLDREGISTER_DEVICEPARAM_RESERVED1,	2,	false,	0,	0,	NULL,	0,	0,	false,	TYPE_INT,	8,	NULL,	(uint8_t*)"Rsv1"},
+{(uint8_t*)"协议版本",	0,	COM_NUM_DEVICEPARAM_PROTOCOL_VERSION,	HOLDREGISTER_DEVICEPARAM_PROTOCOL_VERSION,	2,	false,	0,	0,	NULL,	0,	0,	false,	TYPE_INT,	3,	NULL,	(uint8_t*)"ProtoVer"},
 {(uint8_t*)"保留2",	0,	COM_NUM_DEVICEPARAM_RESERVED2,	HOLDREGISTER_DEVICEPARAM_RESERVED2,	2,	false,	0,	0,	NULL,	0,	0,	false,	TYPE_INT,	8,	NULL,	(uint8_t*)"Rsv2"},
 {(uint8_t*)"保留3",	0,	COM_NUM_DEVICEPARAM_RESERVED3,	HOLDREGISTER_DEVICEPARAM_RESERVED3,	2,	false,	0,	0,	NULL,	0,	0,	false,	TYPE_INT,	8,	NULL,	(uint8_t*)"Rsv3"},
 {(uint8_t*)"位置源自动切换",	0,	COM_NUM_DEVICEPARAM_POSITION_SOURCE_AUTO_SWITCH,	HOLDREGISTER_DEVICEPARAM_POSITION_SOURCE_AUTO_SWITCH,	2,	true,	0,	1,	NULL,	0,	0,	true,	TYPE_INT,	1,	NULL,	(uint8_t*)"PosAutoSw"},
@@ -100,7 +100,7 @@ struct ParameterMetadata param_meta[] = {
 {(uint8_t*)"是否测单点密度",	0,	COM_NUM_DEVICEPARAM_REQUIRESINGLEPOINTDENSITY,	HOLDREGISTER_DEVICEPARAM_REQUIRESINGLEPOINTDENSITY,	2,	true,	0,	1,	NULL,	0,	0,	true,	TYPE_INT,	1,	NULL,	(uint8_t*)"NeedSingleDens"},
 {(uint8_t*)"分布测顺序",	0,	COM_NUM_DEVICEPARAM_SPREADMEASUREMENTORDER,	HOLDREGISTER_DEVICEPARAM_SPREADMEASUREMENTORDER,	2,	false,	0,	0,	NULL,	0,	0,	true,	TYPE_INT,	1,	NULL,	(uint8_t*)"SpreadOrder"},
 {(uint8_t*)"分布测模式",	0,	COM_NUM_DEVICEPARAM_SPREADMEASUREMENTMODE,	HOLDREGISTER_DEVICEPARAM_SPREADMEASUREMENTMODE,	2,	false,	0,	0,	NULL,	0,	0,	true,	TYPE_INT,	1,	NULL,	(uint8_t*)"SpreadMode"},
-{(uint8_t*)"分布测点数",	0,	COM_NUM_DEVICEPARAM_SPREADMEASUREMENTCOUNT,	HOLDREGISTER_DEVICEPARAM_SPREADMEASUREMENTCOUNT,	2,	true,	1,	99,	NULL,	0,	0,	true,	TYPE_INT,	3,	NULL,	(uint8_t*)"SpreadCount"},
+{(uint8_t*)"分布测点数",	0,	COM_NUM_DEVICEPARAM_SPREADMEASUREMENTCOUNT,	HOLDREGISTER_DEVICEPARAM_SPREADMEASUREMENTCOUNT,	2,	true,	1,	200,	NULL,	0,	0,	true,	TYPE_INT,	3,	NULL,	(uint8_t*)"SpreadCount"},
 {(uint8_t*)"分布点间距",	0,	COM_NUM_DEVICEPARAM_SPREADMEASUREMENTDISTANCE,	HOLDREGISTER_DEVICEPARAM_SPREADMEASUREMENTDISTANCE,	2,	false,	0,	0,	(uint8_t*)"mm",	1,	0,	true,	TYPE_INT,	7,	NULL,	(uint8_t*)"SpreadDist"},
 {(uint8_t*)"顶点距液面",	0,	COM_NUM_DEVICEPARAM_SPREADTOPLIMIT,	HOLDREGISTER_DEVICEPARAM_SPREADTOPLIMIT,	2,	false,	0,	0,	(uint8_t*)"mm",	1,	0,	true,	TYPE_INT,	7,	NULL,	(uint8_t*)"Top2Level"},
 {(uint8_t*)"底点距罐底",	0,	COM_NUM_DEVICEPARAM_SPREADBOTTOMLIMIT,	HOLDREGISTER_DEVICEPARAM_SPREADBOTTOMLIMIT,	2,	false,	0,	0,	(uint8_t*)"mm",	1,	0,	true,	TYPE_INT,	7,	NULL,	(uint8_t*)"Bot2Tank"},
@@ -277,6 +277,7 @@ void print_device_params(void)
     printf("  %-32s : %lu\r\n", "传感器编号", (unsigned long)params.sensorID);
     printf("  %-32s : 0x%08lX\r\n", "传感器软件版本", (unsigned long)params.sensorSoftwareVersion);
     printf("  %-32s : 0x%08lX\r\n", "CPU2程序版本", (unsigned long)params.softwareVersion);
+    printf("  %-32s : %lu\r\n", "协议版本", (unsigned long)params.protocolVersion);
     printf("  %-32s : %lu\r\n", "故障自动回零", (unsigned long)params.error_auto_back_zero);
     printf("  %-32s : %lu\r\n", "故障停止测量", (unsigned long)params.error_stop_measurement);
     printf("  %-32s : %lu\r\n", "位置源自动切换", (unsigned long)params.position_source_auto_switch);

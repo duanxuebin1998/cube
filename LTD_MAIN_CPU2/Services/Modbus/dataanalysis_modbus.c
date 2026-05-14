@@ -79,7 +79,9 @@ void WriteDeviceParamsToHoldingRegisters(uint16_t *HoldingRegisterArray)
     write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_ERROR_AUTO_BACK_ZERO,  g_deviceParams.error_auto_back_zero);
     write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_ERROR_STOP_MEASUREMENT,g_deviceParams.error_stop_measurement);
 
-    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_RESERVED1, g_deviceParams.reserved1);
+    /* 协议版本是CPU2发布给CPU3的本机能力常量，不接受外部值覆盖。 */
+    g_deviceParams.protocolVersion = DEVICE_PROTOCOL_VERSION;
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_PROTOCOL_VERSION, g_deviceParams.protocolVersion);
     write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_RESERVED2, g_deviceParams.reserved2);
     write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_RESERVED3, g_deviceParams.reserved3);
     write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_POSITION_SOURCE_AUTO_SWITCH, g_deviceParams.position_source_auto_switch);
@@ -266,7 +268,8 @@ void ReadDeviceParamsFromHoldingRegisters(uint16_t *HoldingRegisterArray)
     g_deviceParams.error_auto_back_zero   = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_ERROR_AUTO_BACK_ZERO);
     g_deviceParams.error_stop_measurement = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_ERROR_STOP_MEASUREMENT);
 
-    g_deviceParams.reserved1 = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_RESERVED1);
+    /* 协议版本由CPU2固件决定；即使寄存器缓存被写错，也立即恢复为当前协议。 */
+    g_deviceParams.protocolVersion = DEVICE_PROTOCOL_VERSION;
     g_deviceParams.reserved2 = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_RESERVED2);
     g_deviceParams.reserved3 = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_RESERVED3);
     g_deviceParams.position_source_auto_switch = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_POSITION_SOURCE_AUTO_SWITCH);

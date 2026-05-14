@@ -25,7 +25,8 @@
 #define UNVALID_TOV 0                      // 体积无效值
 #define UNVALID_GSW 0                      // 质量无效值
 
-#define MAX_MEASUREMENT_POINTS 100 // 密度分布测量最大点数
+#define MAX_MEASUREMENT_POINTS 200 // 密度分布测量最大点数
+#define DEVICE_PROTOCOL_VERSION 1u // CPU2/CPU3共享协议版本；旧程序未写入时默认为0
 
 // 模式枚举
 typedef enum {
@@ -327,7 +328,7 @@ typedef struct {
 	uint32_t average_weight_density;                                ///< 计重密度
 	uint32_t measurement_points;                                    ///< 实际测量点数
 	uint32_t Density_oil_level;                                     // 密度分布测量时的液位值(0.1mm)
-	DensityMeasurement single_density_data[MAX_MEASUREMENT_POINTS]; // 100个点的密度测量数据
+	DensityMeasurement single_density_data[MAX_MEASUREMENT_POINTS]; // 200个点的密度测量数据
 
 } DensityDistribution;
 
@@ -419,12 +420,12 @@ typedef struct {
     uint32_t error_auto_back_zero;        // 错误自动回零标志(0/1)
     uint32_t error_stop_measurement;      // 错误停止测量标志(0/1)
 
-    uint32_t reserved1;                   // 预留
+    uint32_t protocolVersion;             // CPU2/CPU3共享协议版本，旧程序该字段默认为0
     uint32_t reserved2;                   // 预留
     uint32_t reserved3;                   // 预留
-    uint32_t position_source_auto_switch;       // 位置源自动切换(0=不切换,1=自动切换)
 
     // ===================== 电机与编码器参数 =====================
+    uint32_t position_source_auto_switch;       // 位置源自动切换(0=不切换,1=自动切换)
     uint32_t motor_current;              // 电机运行电流(1~31，异常恢复为16)
     uint32_t encoder_wheel_circumference_mm; // 编码轮周长(0.001mm)
     uint32_t max_motor_speed;                 // 最大电机速度(0.01m/min)
