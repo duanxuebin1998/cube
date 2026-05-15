@@ -179,12 +179,21 @@ int SearchZero(void) {
 		printf("零点测量    向下移动    下行距离    %ld\r\n", g_deviceParams.findZeroDownDistance/10);
 		ret = MotorCtrl_MoveAndWait((float)g_deviceParams.findZeroDownDistance/10.0, MOTOR_DIRECTION_DOWN, MotorCtrl_GetDefaultSpeedX100());
 		CHECK_ERROR(ret);
-		ret = read_zero_capacitance();//读取零点电容值
-		CHECK_ERROR(ret);
-		if(g_deviceParams.bottom_detect_mode == BOTTOM_DET_BY_GYRO)
-		{
-			ret = Bottom_SaveGyroZeroRef();//保存陀螺仪零点参考
+		if (g_deviceParams.sensorType == DSM_SENSOR) {
+			/* 零点电容只是一代 DSM 水位通道的空气基准，LTD/V2 不支持时不能阻断回零点。 */
+			ret = read_zero_capacitance();//读取零点电容值
 			CHECK_ERROR(ret);
+		} else {
+			printf("零点测量    当前传感器类型不支持零点电容读取，已跳过\r\n");
+		}
+		if (g_deviceParams.bottom_detect_mode == BOTTOM_DET_BY_GYRO) {
+			if (g_deviceParams.sensorType == DSM_SENSOR) {
+				/* 陀螺仪基准只对 DSM 一代辅助通道有效，LTD/V2 回零点不因该通道缺失失败。 */
+				ret = Bottom_SaveGyroZeroRef();//保存陀螺仪零点参考
+				CHECK_ERROR(ret);
+			} else {
+				printf("零点测量    当前传感器类型不支持陀螺仪基准读取，已跳过\r\n");
+			}
 		}
 		printf("零点测量    电机下行完成，流程结束\r\n");
 	}

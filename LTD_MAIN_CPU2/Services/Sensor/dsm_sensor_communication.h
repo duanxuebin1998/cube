@@ -8,6 +8,7 @@
 #ifndef SENSOR_DSM_SENSOR_COMMUNICATION_H_
 #define SENSOR_DSM_SENSOR_COMMUNICATION_H_
 
+#include <stddef.h>
 #include "sensor.h"
 
 #define DSM_WATER_CAP "Cl"		 // 读取测水电容数据
@@ -49,6 +50,7 @@ uint32_t Read_Sensor_Voltage(float *voltage_out);
 uint32_t Read_Level_Frequency(uint32_t *frequency_out);
 int Probe_EnableWaterSensor(void);
 int DSM_Read_Frequency_Density_Temp(float *frequency,float *density, float *temp);
+uint32_t Read_VibrationTube_ID(char *id_out, size_t id_out_size);
 uint32_t Read_Water_Capacitance(float *cap_out);
 uint32_t Read_Gyro_Angle(float *angle_x_deg, float *angle_y_deg);
 #endif /* SENSOR_DSM_SENSOR_COMMUNICATION_H_ */

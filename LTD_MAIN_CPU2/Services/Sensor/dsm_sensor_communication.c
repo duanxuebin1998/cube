@@ -10,6 +10,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdbool.h>
 #include <ctype.h>
 #include <math.h>
 #include <inttypes.h>
@@ -61,6 +62,248 @@ int IsErrorResponse(const char *resp) {
 }
 
 #define DSM_UART_MAX_RETRY UART6_COMM_MAX_RETRY
+static uint32_t s_uart6_last_error = HAL_UART_ERROR_NONE;
+static uint8_t s_uart6_dma_rx_buf[RX_BUF_LEN];
+
+/**
+ * @brief 停止 UART6 单次 DMA 接收并清理硬件错误状态。
+ *
+ * DSM 文本协议每次命令只等待一帧应答，退出等待前必须停止 DMA，避免下一次命令接收沿用旧 DMA 状态。
+ */
+static void UART6_StopDmaReceive(void)
+{
+    (void)HAL_UART_DMAStop(&huart6);
+    __HAL_UART_CLEAR_OREFLAG(&huart6);
+    huart6.ErrorCode = HAL_UART_ERROR_NONE;
+}
+
+/**
+ * @brief 读取当前 UART6 DMA 已接收字节数。
+ *
+ * DMA 计数器表示剩余空间，这里转换为已收长度；若句柄异常则返回 0，交给上层按超时处理。
+ */
+static uint16_t UART6_GetDmaReceivedLength(uint16_t rx_len)
+{
+    uint16_t remain;
+
+    if (huart6.hdmarx == NULL) {
+        return 0U;
+    }
+    remain = (uint16_t)__HAL_DMA_GET_COUNTER(huart6.hdmarx);
+    if (remain > rx_len) {
+        return 0U;
+    }
+    return (uint16_t)(rx_len - remain);
+}
+
+/**
+ * @brief 等待 UART6 DMA 发送完成。
+ *
+ * 接收 DMA 已提前启动，发送阶段只等待 TX 状态回到 READY；若命令切换或超时，停止 DMA 并向上返回对应状态。
+ */
+static uint32_t UART6_WaitTransmitDmaDone(uint32_t timeout)
+{
+    uint32_t startTick = HAL_GetTick();
+
+    while ((HAL_GetTick() - startTick) < timeout) {
+        if (HasEffectiveCommandSwitchRequest()) {
+            UART6_StopDmaReceive();
+            return STATE_SWITCH;
+        }
+        if (huart6.gState == HAL_UART_STATE_READY) {
+            return NO_ERROR;
+        }
+        if (huart6.ErrorCode != HAL_UART_ERROR_NONE) {
+            s_uart6_last_error = huart6.ErrorCode;
+            UART6_StopDmaReceive();
+            return OTHER_PERIPHERAL_CONFIG_ERROR;
+        }
+        HAL_Delay(1);
+    }
+
+    UART6_StopDmaReceive();
+    return SENSOR_DEVICE_COMM_TIMEOUT;
+}
+
+/**
+ * @brief 启动 DSM 文本应答的 UART6 DMA 接收。
+ *
+ * 该函数只启动接收 DMA，不等待帧完成；调用方会先发送命令，再进入终止符等待阶段。
+ */
+static uint32_t UART6_StartTextReceiveDma(uint16_t maxLen, uint16_t *dma_len_out)
+{
+    uint16_t dma_len;
+
+    if ((dma_len_out == NULL) || (maxLen < 2U)) {
+        return SENSOR_RESP_FORMAT_ERROR;
+    }
+
+    dma_len = (uint16_t)(maxLen - 1U);
+    if (dma_len > (uint16_t)sizeof(s_uart6_dma_rx_buf)) {
+        dma_len = (uint16_t)sizeof(s_uart6_dma_rx_buf);
+    }
+    memset(s_uart6_dma_rx_buf, 0, sizeof(s_uart6_dma_rx_buf));
+    *dma_len_out = dma_len;
+
+    UART6_StopDmaReceive();
+    if (HAL_UART_Receive_DMA(&huart6, s_uart6_dma_rx_buf, dma_len) != HAL_OK) {
+        UART6_StopDmaReceive();
+        return OTHER_PERIPHERAL_CONFIG_ERROR;
+    }
+    return NO_ERROR;
+}
+
+/**
+ * @brief 等待 DSM 文本应答帧接收完成。
+ *
+ * 接收 DMA 在发送前已经启动；这里持续扫描 DMA 缓冲区，遇到换行终止符后复制完整帧给调用方。
+ */
+static uint32_t UART6_WaitTextReceiveDma(char *response,
+                                         uint16_t dma_len,
+                                         uint16_t *recv_len_out,
+                                         uint32_t timeout)
+{
+    uint32_t startTick;
+
+    if ((response == NULL) || (dma_len == 0U)) {
+        return SENSOR_RESP_FORMAT_ERROR;
+    }
+
+    startTick = HAL_GetTick();
+    while ((HAL_GetTick() - startTick) < timeout) {
+        uint16_t recvLen = UART6_GetDmaReceivedLength(dma_len);
+
+        if (HasEffectiveCommandSwitchRequest()) {
+            UART6_StopDmaReceive();
+            return STATE_SWITCH;
+        }
+
+        if (huart6.ErrorCode != HAL_UART_ERROR_NONE) {
+            s_uart6_last_error = huart6.ErrorCode;
+            UART6_StopDmaReceive();
+            return SENSOR_RESP_FORMAT_ERROR;
+        }
+
+        for (uint16_t i = 0U; i < recvLen; i++) {
+            if (s_uart6_dma_rx_buf[i] == 0x0AU) {
+                uint16_t frameLen = (uint16_t)(i + 1U);
+                memcpy(response, s_uart6_dma_rx_buf, frameLen);
+                response[frameLen] = '\0';
+                if (recv_len_out != NULL) {
+                    *recv_len_out = frameLen;
+                }
+                UART6_StopDmaReceive();
+                return NO_ERROR;
+            }
+        }
+
+        if (recvLen >= dma_len) {
+            memcpy(response, s_uart6_dma_rx_buf, recvLen);
+            response[recvLen] = '\0';
+            if (recv_len_out != NULL) {
+                *recv_len_out = recvLen;
+            }
+            UART6_StopDmaReceive();
+            return SENSOR_RESP_FORMAT_ERROR;
+        }
+        HAL_Delay(1);
+    }
+
+    {
+        uint16_t recvLen = UART6_GetDmaReceivedLength(dma_len);
+        if (recvLen > 0U) {
+            memcpy(response, s_uart6_dma_rx_buf, recvLen);
+            response[recvLen] = '\0';
+        }
+        if (recv_len_out != NULL) {
+            *recv_len_out = recvLen;
+        }
+        UART6_StopDmaReceive();
+        return (recvLen == 0U) ? SENSOR_DEVICE_COMM_TIMEOUT : SENSOR_RESP_FORMAT_ERROR;
+    }
+}
+/**
+ * @brief 取走并清理 UART6 硬件错误标志。
+ *
+ * HAL_UART_Receive 超时本身不算故障；只有 ErrorCode 非空时才表示 ORE/FE/NE 等硬件异常。
+ * 这里记录最近一次硬件错误，随后清 ORE 和 ErrorCode，避免错误标志挂住后续收包。
+ */
+static uint32_t UART6_TakeHardwareError(void)
+{
+    uint32_t error = huart6.ErrorCode;
+
+    if (error != HAL_UART_ERROR_NONE) {
+        __HAL_UART_CLEAR_OREFLAG(&huart6);
+        s_uart6_last_error = error;
+        huart6.ErrorCode = HAL_UART_ERROR_NONE;
+    }
+    return error;
+}
+
+/**
+ * @brief 生成 UART6 异常重试日志详情。
+ *
+ * 详情中保留命令、实际接收长度、UART 硬件错误标志和原始 HEX，便于现场区分超时、短帧、BCC 错误和硬件溢出。
+ */
+static void UART6_FormatHexDetail(const char *prefix,
+                                  const char *cmd,
+                                  const char *response,
+                                  uint16_t recv_len,
+                                  uint32_t uart_error,
+                                  char *detail,
+                                  size_t detail_size)
+{
+    int used;
+    uint16_t i;
+
+    if ((detail == NULL) || (detail_size == 0U)) {
+        return;
+    }
+
+    used = snprintf(detail, detail_size,
+                    "%s,cmd=%s,len=%u,uart=0x%08lX,hex=",
+                    (prefix != NULL) ? prefix : "UART6",
+                    (cmd != NULL) ? cmd : "",
+                    (unsigned int)recv_len,
+                    (unsigned long)uart_error);
+    if (used < 0) {
+        detail[0] = '\0';
+        return;
+    }
+    if ((size_t)used >= detail_size) {
+        detail[detail_size - 1U] = '\0';
+        return;
+    }
+
+    for (i = 0; (i < recv_len) && ((size_t)used + 4U < detail_size); i++) {
+        used += snprintf(&detail[used],
+                         detail_size - (size_t)used,
+                         "%02X ",
+                         (unsigned int)(uint8_t)response[i]);
+    }
+}
+
+/**
+ * @brief 检查 WaterSendPack 中 7 字节数值字段是否只包含数字和最多一个小数点。
+ *
+ * 该检查用于阻止短帧或错位帧绕过 BCC 后被 atof() 当成有效电容值。
+ */
+static bool DSM_IsSevenDigitValue(const char *value)
+{
+    uint8_t dot_count = 0U;
+
+    if (value == NULL) {
+        return false;
+    }
+    for (uint8_t i = 0U; i < 7U; i++) {
+        if (value[i] == '.') {
+            dot_count++;
+        } else if (!isdigit((unsigned char)value[i])) {
+            return false;
+        }
+    }
+    return dot_count <= 1U;
+}
 
 // 串口发送并接收（带调试打印）
 static int UART6_SendCommand(const char *cmd,
@@ -69,46 +312,62 @@ static int UART6_SendCommand(const char *cmd,
                              uint16_t *recv_len_out,
                              uint32_t timeout) {
     char bcc;
+    uint32_t uart_error;
     memset(response, 0, maxLen);
     uint16_t recvLen = 0;
 #if DEBUG_UART6
     printf("[UART6] 发送: %s\n", cmd);
 #endif
 
+    s_uart6_last_error = HAL_UART_ERROR_NONE;
     UART6_DrainRX_UntilIdle(5);
 
-    // 发送
-    if (HAL_UART_Transmit(&huart6, (uint8_t*)cmd, strlen(cmd), 100) != HAL_OK) {
+    /* 先启动接收 DMA，再启动发送 DMA，避免从机快速回包时丢掉应答开头。 */
+    uint16_t dma_len = 0U;
+    uint32_t rx_ret = UART6_StartTextReceiveDma(maxLen, &dma_len);
+    if (rx_ret != NO_ERROR) {
+        if (recv_len_out != NULL) {
+            *recv_len_out = 0U;
+        }
+        return (int)rx_ret;
+    }
+
+    if (HAL_UART_Transmit_DMA(&huart6, (uint8_t*)cmd, (uint16_t)strlen(cmd)) != HAL_OK) {
 #if DEBUG_UART6
         printf("[UART6] 发送失败！\n");
 #endif
+        UART6_StopDmaReceive();
+        if (recv_len_out != NULL) {
+            *recv_len_out = 0U;
+        }
         return OTHER_PERIPHERAL_CONFIG_ERROR;
     }
 
-    /* 接收阶段（带超时机制） */
-    uint32_t startTick = HAL_GetTick();
-    while (HAL_GetTick() - startTick < timeout) {
-        uint8_t byte;
-
-        if (HasEffectiveCommandSwitchRequest()) {
-            return STATE_SWITCH;
+    rx_ret = UART6_WaitTransmitDmaDone(100);
+    if (rx_ret != NO_ERROR) {
+        if (recv_len_out != NULL) {
+            *recv_len_out = 0U;
         }
-
-        if (HAL_UART_Receive(&huart6, &byte, 1, 1) == HAL_OK) {
-            if (recvLen < RX_BUF_LEN - 1) {
-                response[recvLen++] = byte;
-                // 根据协议判断帧结束符（示例为 0x0A 换行）
-                if (byte == 0x0A)
-                    break;
-            }
-        }
+        return (int)rx_ret;
     }
 
+    /* 接收 DMA 已在发送前启动，这里只等待换行终止符确认帧边界。 */
+    rx_ret = UART6_WaitTextReceiveDma(response, dma_len, &recvLen, timeout);
+    if (rx_ret != NO_ERROR) {
+        if (recv_len_out != NULL) {
+            *recv_len_out = recvLen;
+        }
+        return (int)rx_ret;
+    }
     if (recv_len_out != NULL) {
         *recv_len_out = recvLen;
     }
 
-    /* 响应校验 */
+    /* 响应校验前再取一次硬件错误，避免最后一字节后留下 ORE/FE/NE 却继续解析。 */
+    uart_error = UART6_TakeHardwareError();
+    if (uart_error != HAL_UART_ERROR_NONE) {
+        return SENSOR_RESP_FORMAT_ERROR;
+    }
     if (recvLen == 0) {
         return SENSOR_DEVICE_COMM_TIMEOUT;
     }
@@ -145,6 +404,7 @@ static int UART6_SendWithRetry(const char *cmd,
                                uint32_t timeout) {
     uint32_t ret = SENSOR_DEVICE_COMM_TIMEOUT;
     uint16_t recvLen = 0;
+    char detail[160];
     for (int i = 0; i < DSM_UART_MAX_RETRY; i++) {
         if (HasEffectiveCommandSwitchRequest()) {
             return STATE_SWITCH;
@@ -182,13 +442,22 @@ static int UART6_SendWithRetry(const char *cmd,
                 ret = SENSOR_DEVICE_REPORTED_ERROR;
             }
         } else {
+            /* 重试日志带上原始帧和 UART 错误标志，现场可直接判断失败类型。 */
+            UART6_FormatHexDetail(ErrorLog_GetReasonByCode(ret),
+                                  cmd,
+                                  response,
+                                  recvLen,
+                                  s_uart6_last_error,
+                                  detail,
+                                  sizeof(detail));
             // 错误	阶段：错误重试	模块：传感器	操作：读取液位	原因：ErrorLog_GetReasonByCode(ret)	尝试：(i + 1)/DSM_UART_MAX_RETRY	错误码：ret	错误名：ErrorLog_GetCodeName(ret)
-            ErrorLog_Retry(ERROR_LOG_MODULE_SENSOR,
-                           ERROR_LOG_OP_READ_LEVEL,
-                           ErrorLog_GetReasonByCode(ret),
-                           (uint32_t)(i + 1),
-                           DSM_UART_MAX_RETRY,
-                           ret);
+            ErrorLog_RetryDetail(ERROR_LOG_MODULE_SENSOR,
+                                 ERROR_LOG_OP_READ_LEVEL,
+                                 ErrorLog_GetReasonByCode(ret),
+                                 (uint32_t)(i + 1),
+                                 DSM_UART_MAX_RETRY,
+                                 ret,
+                                 detail);
         }
     }
     return ret;
@@ -428,6 +697,7 @@ uint32_t Read_VibrationTube_ID(char *id_out, size_t id_out_size)
 
     return NO_ERROR;
 }
+
 /**
  * @brief 读取电容值（Cl 指令）
  * @param[out] cap_out  输出电容值（单位与 WaterSendPack 一致，通常是 pF 或等效单位）
@@ -454,26 +724,29 @@ uint32_t Read_Water_Capacitance(float *cap_out)
     }
 
     if (recv_len != 11U) {
-        // return SENSOR_RESP_FORMAT_ERROR;
+        return SENSOR_RESP_FORMAT_ERROR;
     }
 
     /* 格式检查：起始必须是 D 或 E，且以 \r\n 结束 */
     if (!((resp[0] == 'D') || (resp[0] == 'E'))) {
-        // return SENSOR_RESP_FORMAT_ERROR;
+        return SENSOR_RESP_FORMAT_ERROR;
     }
     if (!(resp[9] == '\r' && resp[10] == '\n')) {
-        // return SENSOR_RESP_FORMAT_ERROR;
+        return SENSOR_RESP_FORMAT_ERROR;
+    }
+    if (!DSM_IsSevenDigitValue(&resp[1])) {
+        return SENSOR_RESP_FORMAT_ERROR;
     }
 
     /* BCC 校验：WaterSendPack 的 BCC 在 resp[8]，覆盖 resp[0..7]。 */
     char bcc = CalculationBCC_DSM(resp, 8);
     if (bcc != resp[8]) {
-        // return SENSOR_BCC_ERROR;
+        return SENSOR_BCC_ERROR;
     }
 
     /* 电压异常标志：resp[0]=='E' */
     if (resp[0] == 'E') {
-        // return SENSOR_VOLTAGE_ERROR;
+        return SENSOR_DEVICE_REPORTED_ERROR;
     }
 
     /* 解析数值：resp[1..7] 是数字/小数点字符串。直接 atof(resp+1) 即可 */
@@ -506,6 +779,7 @@ static int dsm_parse_float_after_tag(const char *tag_pos, float *out_val)
     *out_val = (float)v;
     return 0;
 }
+
 /**
  * @brief 读取陀螺仪角度（Ch 指令）
  * @param[out] angle_x_deg  X轴角度（A）

@@ -159,31 +159,82 @@ static uint32_t Sensor_ProbeWirelessLink(void)
 }
 
 /**
- * @brief 用温度读数探测 LTD 传感器。
+ * @brief 解析 DSM 一代字符串编号中的数字部分。
  *
- * 识别阶段只做一次最小读数，成功时回填温度用于后续判断；错误码原样返回。
+ * CN 指令返回通常形如 N2009924H，系统参数只能保存 uint32_t，因此这里只提取连续数字并保存为传感器编号。
  */
-static uint32_t Sensor_ProbeLtdSensor(float *temp_out)
+static uint32_t Sensor_ParseDsmTextId(const char *id_text, uint32_t *sensor_id_out)
 {
-    float temp = 0.0f;
-    uint32_t ret = DSM_V2_Read_Temperature(&temp);
+    uint32_t value = 0U;
+    uint8_t has_digit = 0U;
 
-    if ((ret == NO_ERROR) && (temp_out != NULL)) {
-        *temp_out = temp;
+    if ((id_text == NULL) || (sensor_id_out == NULL)) {
+        return PARAM_ADDRESS_OVERFLOW;
+    }
+
+    while (*id_text != '\0') {
+        if ((*id_text >= '0') && (*id_text <= '9')) {
+            value = (value * 10U) + (uint32_t)(*id_text - '0');
+            has_digit = 1U;
+        }
+        id_text++;
+    }
+
+    if (has_digit == 0U) {
+        return SENSOR_RESP_FORMAT_ERROR;
+    }
+
+    *sensor_id_out = value;
+    return NO_ERROR;
+}
+
+/**
+ * @brief 用传感器编号读数探测 LTD/V2 传感器。
+ *
+ * 识别阶段直接读取编号，成功时回填 sensorID，避免后续再额外发一次编号读取命令。
+ */
+static uint32_t Sensor_ProbeLtdSensor(uint32_t *sensor_id_out)
+{
+    uint32_t sensor_id = 0U;
+    uint32_t ret = DSM_V2_Read_SensorID(&sensor_id);
+
+    if ((ret == NO_ERROR) && (sensor_id_out != NULL)) {
+        *sensor_id_out = sensor_id;
     }
     return ret;
 }
 
 /**
- * @brief 用密度模式切换探测 DSM 传感器。
+ * @brief 用振动管编号探测 DSM 一代传感器。
  *
- * 该探测会触发传感器模式命令，只在识别流程中调用，不用于运行期轮询。
+ * CN 编号读取用于识别协议并保存编号；识别成功后仍切到密度模式，保持初始化后的运行模式语义不变。
  */
-static uint32_t Sensor_ProbeDsmSensor(void)
+static uint32_t Sensor_ProbeDsmSensor(uint32_t *sensor_id_out)
 {
-    return DSM_EnableDensityMode();
-}
+    char id_text[RCVBUFFLEN] = {0};
+    uint32_t sensor_id = 0U;
+    uint32_t ret;
 
+    ret = Read_VibrationTube_ID(id_text, sizeof(id_text));
+    if (ret != NO_ERROR) {
+        return ret;
+    }
+
+    ret = Sensor_ParseDsmTextId(id_text, &sensor_id);
+    if (ret != NO_ERROR) {
+        return ret;
+    }
+
+    ret = DSM_EnableDensityMode();
+    if (ret != NO_ERROR) {
+        return ret;
+    }
+
+    if (sensor_id_out != NULL) {
+        *sensor_id_out = sensor_id;
+    }
+    return NO_ERROR;
+}
 static int Sensor_SupportsAuxDsmChannels(void)
 {
     return (g_deviceParams.sensorType == DSM_SENSOR);
@@ -198,7 +249,7 @@ uint32_t DetectSensorType(void) {
 	uint32_t ret = NO_ERROR;
 	uint32_t ltd_ret;
 	uint32_t dsm_ret;
-	float temp = 0.0f;
+	uint32_t sensor_id = 0U;
 
 	printf("========== 传感器识别开始 ==========\r\n");
 	printf("[1/3] 检查无线链路\r\n");
@@ -211,14 +262,15 @@ uint32_t DetectSensorType(void) {
 	printf("无线链路正常\r\n");
 
 	printf("[2/3] 尝试LTD协议\r\n");
-	ltd_ret = Sensor_ProbeLtdSensor(&temp);
+	ltd_ret = Sensor_ProbeLtdSensor(&sensor_id);
 	if (ltd_ret == NO_ERROR) {
 		g_deviceParams.sensorType = LTD_SENSOR;
+		g_deviceParams.sensorID = sensor_id;
 		/* 传感器类型属于系统参数，这里是运行期自动识别场景，
 		 * 如果不立即保存，CPU3 后续就看不到这次变更，
 		 * 下次重启也会丢掉新的 sensorType。 */
 		save_device_params();
-		printf("识别成功：LTD传感器 | 温度=%.3f ℃\r\n", temp);
+		printf("识别成功：LTD传感器 | 编号=%lu\r\n", (unsigned long)sensor_id);
 		printf("====================================\r\n");
 		return NO_ERROR;
 	}
@@ -228,13 +280,14 @@ uint32_t DetectSensorType(void) {
 	              ERROR_LOG_OP_COMM_DIAG,
 	              ErrorLog_GetReasonByCode(ltd_ret),
 	              ERROR_LOG_ACTION_CONTINUE);
-	dsm_ret = Sensor_ProbeDsmSensor();
+	dsm_ret = Sensor_ProbeDsmSensor(&sensor_id);
 	if (dsm_ret == NO_ERROR) {
 		g_deviceParams.sensorType = DSM_SENSOR;
+		g_deviceParams.sensorID = sensor_id;
 		/* 同上：DSM 识别成功后也要立即落盘，
 		 * 这样才能触发 parameter_update_flag，让 CPU3 补读最新的系统参数。 */
 		save_device_params();
-		printf("识别成功：DSM传感器 | 密度模式握手成功\r\n");
+		printf("识别成功：DSM传感器 | 编号=%lu | 密度模式握手成功\r\n", (unsigned long)sensor_id);
 		printf("====================================\r\n");
 		return NO_ERROR;
 	}

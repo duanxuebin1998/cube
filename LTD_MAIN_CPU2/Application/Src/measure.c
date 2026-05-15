@@ -303,6 +303,7 @@ void ProcessMeasureCmd(CommandType command)
  *       - R：分布测量
  *       - W：水位测量
  *       - X：单点测量展示
+ *       - SC：传感器与无线通信综合测试
  *
  *       TFIT 卷筒拟合命令：
  *       - T1：开始全局自动采样，以原零点为基准
@@ -401,6 +402,13 @@ void process_command(uint8_t *command) {
         /* 串口正式业务命令只挂到主循环执行，避免绕过 current_command 和自动恢复调度。 */
         g_deviceParams.command = formal_command;
         printf("串口正式命令已转主循环执行 | command=%lu\r\n", (unsigned long)formal_command);
+        return;
+    }
+
+    if ((command[0] == 'S') && (command[1] == 'C') && (command[2] == '\0')) {
+        /* 通信测试不依赖电机初始化，放在 MeasureStart 前便于排查传感器和无线链路。 */
+        printf("执行传感器与无线通信综合测试指令\r\n");
+        SensorWireless_CommTest();
         return;
     }
 

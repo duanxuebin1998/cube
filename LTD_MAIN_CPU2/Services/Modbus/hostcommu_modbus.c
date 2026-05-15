@@ -236,8 +236,7 @@ int Response10Process(uint8_t const *revframe, uint8_t *sendframe)
     /* 3. 将 HoldingRegisterArray 中的数据重新读回到 g_deviceParams 中 */
     ReadDeviceParamsFromHoldingRegisters(HoldingRegisterArray);
 
-    /* 打印最新的 command（这里已经是本次写操作更新后的值） */
-    printf("command: %lu\r\n", (unsigned long)g_deviceParams.command);
+
 //    printf("0x10 write startAddr=%u regCount=%u, COMMAND=%u, TANKHEIGHT=%u, CRC=%u\r\n",
 //           startAddr, regCount,
 //           HOLDREGISTER_DEVICEPARAM_COMMAND,
@@ -308,7 +307,10 @@ static void PresetRegister(bool registertype, int const *registervalue) {
 	} else {
 		for (i = RCV_startaddress, j = 0; i < range; i++, j++) {
 			HoldingRegisterArray[i] = registervalue[j];
+            /* 该函数可能在 UART5 中断路径执行，逐寄存器打印只能在调试宏下开启。 */
+#if DEBUG_HOSTCOMMU_MODBUS
 			printf("HoldingRegisterArray[%d] = %d\n", i, HoldingRegisterArray[i]);
+#endif
 		}
 	}
 }
