@@ -1,4 +1,4 @@
-﻿#include "display.h"
+#include "display.h"
 #include "hgs.h"
 #include "stdlib.h"
 #include "math.h"
@@ -22,7 +22,9 @@ static bool FlagofTotalTwoRow = false;      //标志位 - 总共要显示的内�
 #define PARA_NUM 2
 #define PARA_VALID 3
 enum{//用于记录每个参数显示在第几页第几行
-    Para_AveDensity = 0,
+    Para_ErrorReason = 0,
+    Para_ErrorReasonMore,
+    Para_AveDensity,
     Para_AveTemperature,
     Para_Waterlevel,
     Para_Pressure,
@@ -87,6 +89,255 @@ static bool IsCpu2ProtocolCompatible(void)
     return (g_deviceParams.protocolVersion == DEVICE_PROTOCOL_VERSION);
 }
 
+static const char *Display_GetErrorReasonByCode(uint32_t code)
+{
+    switch (code) {
+    case MOTOR_FAIL_SETTING:
+        return "电机参数设置失败";
+    case MOTOR_UNKNOWN_FEEDBACK:
+        return "电机反馈未知";
+    case MOTOR_RESET_FAIL:
+        return "电机复位未完成";
+    case MOTOR_DISABLED:
+        return "电机已被禁用";
+    case MOTOR_ALARM_TRIGGERED:
+        return "电机驱动报警";
+    case MOTOR_STEP_ERROR:
+        return "电机步进数错误";
+    case MOTOR_CHARGE_PUMP_UNDER_VOLTAGE:
+        return "电荷泵电压过低";
+    case MOTOR_OVERTEMPERATURE:
+        return "电机驱动过温";
+    case MOTOR_RUN_TIMEOUT:
+        return "电机运行超时未停";
+    case MOTOR_TMC_COMM_ERROR:
+        return "TMC寄存器通信失败";
+    case ENCODER_TIMEOUT:
+        return "编码器通信无响应";
+    case ENCODER_PARITY_ERROR:
+        return "编码器校验位错误";
+    case ENCODER_LOST_STEP:
+        return "编码器检测到丢步";
+    case ENCODER_INVALID_DATA:
+        return "编码器多次无效数据";
+    case ENCODER_POWERON_FAIL:
+        return "编码器初始化失败";
+    case ENCODER_POWERON_CHANGE:
+        return "编码器上电变化";
+    case ENCODER_CORDIC_OVERFLOW:
+        return "编码器计算溢出";
+    case ENCODER_LINEARITY_WARNING:
+        return "编码器线性报警";
+    case ENCODER_DIFF_EXCESS:
+        return "编码器差值过大";
+    case ENCODER_OCF_INCOMPLETE:
+        return "编码器状态未完成";
+    case SENSOR_BCC_ERROR:
+        return "传感器数据校验失败";
+    case SONIC_FREQ_ABNORMAL:
+        return "声波频率异常";
+    case SENSOR_DEVICE_COMM_TIMEOUT:
+        return "传感器通信无响应";
+    case DENSITY_INVALID:
+        return "密度值异常无效";
+    case SENSOR_TEMPERATURE_ERROR:
+        return "传感器温度异常";
+    case SENSOR_VOLTAGE_ERROR:
+        return "传感器电压异常";
+    case SLIPRING_COMM_FAIL:
+        return "滑环通信失败";
+    case SLIPRING_BCC_ERROR:
+        return "滑环数据校验失败";
+    case SLIPRING_PACKET_LOSS:
+        return "滑环数据包丢失";
+    case SLIPRING_SIGNAL_WEAK:
+        return "信号弱";
+    case SENSOR_RESP_FORMAT_ERROR:
+        return "响应格式错误";
+    case DENSITY_UNSTABLE:
+        return "密度不稳定";
+    case SENSOR_DEVICE_REPORTED_ERROR:
+        return "传感器设备内部错误";
+    case WIRELESS_HOST_COMM_TIMEOUT:
+        return "滑环主机无响应";
+    case WIRELESS_SLAVE_COMM_TIMEOUT:
+        return "滑环从机无响应";
+    case MEASUREMENT_POSITION_ERROR:
+        return "位置测量值异常";
+    case MEASUREMENT_TIMEOUT:
+        return "测量流程超时";
+    case MEASUREMENT_ZERO_OUT_OF_RANGE:
+        return "零点超出范围";
+    case MEASUREMENT_ZERO_REPEAT_FAIL:
+        return "零点重复性差";
+    case MEASUREMENT_HEIGHT_DEVIATION:
+        return "实高偏差过大";
+    case MEASUREMENT_OILLEVEL_HIGH:
+        return "液位超过罐高";
+    case MEASUREMENT_OILLEVEL_LOW:
+        return "下行未找到液位";
+    case MEASUREMENT_OILLEVEL_NOTFOUND:
+        return "上行未找到液位";
+    case MEASUREMENT_WEIGHT_DOWN_FAIL:
+        return "下行寻重失败";
+    case MEASUREMENT_WEIGHT_UP_FAIL:
+        return "上行寻重失败";
+    case MEASUREMENT_WATERLEVEL_LOW:
+        return "下行未找到水位";
+    case MEASUREMENT_OVERSPEED:
+        return "液位变化过快";
+    case MEASUREMENT_DENSITY_NO_VALID_POINT:
+        return "密度测量无有效点";
+    case MEASUREMENT_DENSITY_SURFACE_NOTFOUND:
+        return "密度测量未找到油面";
+    case MEASUREMENT_DENSITY_RANGE_INVALID:
+        return "密度范围异常";
+    case PARAM_EEPROM_FAIL:
+        return "参数存储读写失败";
+    case PARAM_UNINITIALIZED:
+        return "参数未初始化";
+    case PARAM_RANGE_ERROR:
+        return "参数超出范围";
+    case PARAM_ADDRESS_OVERFLOW:
+        return "参数地址越界";
+    case PARAM_CRC_ERROR:
+        return "参数CRC校验失败";
+    case PARAM_ERROR:
+        return "程序参数调用错误";
+    case WEIGHT_OUT_OF_RANGE:
+        return "称重超过上限";
+    case WEIGHT_UNDER_RANGE:
+        return "称重低于下限";
+    case WEIGHT_COLLISION_DETECTED:
+        return "称重检测到碰撞";
+    case WEIGHT_DRIFT_ERROR:
+        return "称重数据漂移异常";
+    case WEIGHT_SENSOR_SATURATION:
+        return "称重传感器饱和";
+    case WEIGHT_COMM_TIMEOUT:
+        return "称重通信无响应";
+    case OTHER_UNKNOWN_ERROR:
+        return "未知故障";
+    case OTHER_ADDRESS_READ_ERROR:
+        return "地址读取错误";
+    case OTHER_POWER_FLUCTUATION:
+        return "电源波动异常";
+    case OTHER_PERIPHERAL_CONFIG_ERROR:
+        return "外设配置错误";
+    default:
+        break;
+    }
+
+    switch (code & 0xFFFF0000UL) {
+    case 0x000B0000UL:
+        return "电机故障";
+    case 0x000C0000UL:
+        return "编码器故障";
+    case 0x000D0000UL:
+        return "传感器故障";
+    case 0x000F0000UL:
+        return "测量故障";
+    case 0x00110000UL:
+        return "参数故障";
+    case 0x00120000UL:
+        return "称重故障";
+    case 0x00130000UL:
+        return "系统故障";
+    default:
+        return "未知原因";
+    }
+}
+
+static uint8_t Display_GetTextWidth(const char *text, uint8_t byte_limit)
+{
+    uint8_t width = 0U;
+    uint8_t index = 0U;
+
+    if (text == NULL) {
+        return 0U;
+    }
+
+    while ((text[index] != '\0') && (index < byte_limit)) {
+        if (((uint8_t)text[index]) < 128U) {
+            width = (uint8_t)(width + 4U);
+            index++;
+        } else {
+            width = (uint8_t)(width + 7U);
+            index = (uint8_t)(index + 3U);
+        }
+    }
+
+    return width;
+}
+
+static uint8_t Display_GetFitTextBytes(const char *text, uint8_t start_x)
+{
+    uint8_t width = start_x;
+    uint8_t index = 0U;
+
+    if (text == NULL) {
+        return 0U;
+    }
+
+    while (text[index] != '\0') {
+        uint8_t char_width;
+        uint8_t char_bytes;
+
+        if (((uint8_t)text[index]) < 128U) {
+            char_width = 4U;
+            char_bytes = 1U;
+        } else {
+            char_width = 7U;
+            char_bytes = 3U;
+        }
+
+        if ((uint8_t)(width + char_width) > OLED_LINE8_END) {
+            break;
+        }
+
+        width = (uint8_t)(width + char_width);
+        index = (uint8_t)(index + char_bytes);
+    }
+
+    return index;
+}
+
+static bool Display_IsErrorReasonNeedTwoRows(void)
+{
+    const char *reason = Display_GetErrorReasonByCode(g_measurement.device_status.error_code);
+    uint8_t prefix_width = Display_GetTextWidth("故障:", 7U);
+    uint8_t first_bytes = Display_GetFitTextBytes(reason, prefix_width);
+
+    return (reason[first_bytes] != '\0');
+}
+
+static void Display_ErrorReasonLine(uint8_t row)
+{
+    char first_line[32];
+    const char *reason = Display_GetErrorReasonByCode(g_measurement.device_status.error_code);
+    uint8_t line = OledDisplayLineWords((u8*)"故障:", OLED_LINE8_1, row, 0);
+    uint8_t first_bytes = Display_GetFitTextBytes(reason, line);
+    uint8_t i;
+
+    for (i = 0U; (i < first_bytes) && (i < (sizeof(first_line) - 1U)); i++) {
+        first_line[i] = reason[i];
+    }
+    first_line[i] = '\0';
+
+    OledDisplayLineWords((u8*)first_line, line, row, 0);
+}
+
+static void Display_ErrorReasonMoreLine(uint8_t row)
+{
+    const char *reason = Display_GetErrorReasonByCode(g_measurement.device_status.error_code);
+    uint8_t prefix_width = Display_GetTextWidth("故障:", 7U);
+    uint8_t first_bytes = Display_GetFitTextBytes(reason, prefix_width);
+
+    if (reason[first_bytes] != '\0') {
+        OledDisplayLineWords((u8*)&reason[first_bytes], OLED_LINE8_1, row, 0);
+    }
+}
+
 static bool IsRealHeightDisplayState(DeviceState state)
 {
     return (state == STATE_FINDBOTTOM_OVER) ||
@@ -136,7 +387,8 @@ static uint8_t StockMap[] = "通讯尝试中液位跟随密度温℃版本水测
                             "球形蒸汽尺距离开手启闭短地址扫描路只能连台功打印容稍等几钟储管道径周期调低于盲报警语言发错"
                             "误础界面程序减比股长介信号后限例权屏幕维护视终继状态最探头浸小第悬停禁用弦工固产反先动当前"
                             "大英更传层滞域使磨结束针总阻六级内息命感顺有阈值角导本整瓦锡兰厚首波特率验位奇偶预留默强差"
-							"义已碰撞寄存次菜忽略志构魔术望全过收为裁剪准除以跳飞频声稳记局切匹";
+							"义已碰撞寄存次菜忽略志构魔术望全过收为裁剪准除以跳飞频声稳记局切匹"
+                            "馈被荷泵欠驱丢溢性弱响应格快越漂移饱和系统因";
 static const int wordbyte      = 3; // UTF-8 下汉字 3 字节
 static const int StockmapLength = (sizeof(StockMap) - 1) / wordbyte;
 static uint8_t WordStock[255 * 28] =
@@ -575,7 +827,28 @@ static uint8_t WordStock2[255 * 28] =
 
 
 
-
+    0x40,0x80,0x47,0xF0,0x44,0x90,0x77,0xF0,0x90,0x80,0x2F,0xF8,0x40,0x00,0x47,0xF0,0x44,0x10,0x44,0x90,0x44,0x90,0x51,0x40,0x62,0x20,0x44,0x10,/*"馈",0*/
+    0x40,0x40,0x20,0x40,0x03,0xF8,0xF2,0x48,0x12,0x50,0x22,0x40,0x2B,0xF0,0x72,0x90,0xAA,0x90,0x22,0x90,0x22,0xA0,0x22,0x40,0x24,0xA0,0x29,0x18,/*"被",1*/
+    0x10,0x40,0xFF,0xF8,0x10,0x40,0x00,0x00,0x17,0xF8,0x20,0x10,0x60,0x10,0xA7,0xD0,0x24,0x50,0x24,0x50,0x27,0xD0,0x24,0x10,0x20,0x10,0x20,0x70,/*"荷",2*/
+    0x00,0x00,0xFF,0xF8,0x08,0x00,0x1F,0xE0,0x30,0x20,0x50,0x20,0x9F,0xE0,0x00,0x00,0x02,0x10,0x7B,0x60,0x0A,0x80,0x12,0x40,0x22,0x20,0xCE,0x18,/*"泵",3*/
+    0x10,0x00,0x10,0x00,0x10,0x00,0x3F,0xF0,0x20,0x10,0x42,0x20,0x82,0x40,0x02,0x00,0x05,0x00,0x05,0x00,0x08,0x80,0x10,0x40,0x20,0x20,0xC0,0x18,/*"欠",4*/
+    0x00,0x00,0xF9,0xF8,0x09,0x00,0x49,0x00,0x49,0x90,0x49,0x50,0x49,0x50,0x7D,0x20,0x05,0x20,0x05,0x50,0x35,0x50,0xC5,0x90,0x05,0x00,0x19,0xF8,/*"驱",5*/
+    0x00,0xF0,0x7F,0x00,0x02,0x00,0x02,0x00,0x7F,0xF0,0x02,0x00,0x02,0x00,0x02,0x00,0xFF,0xF8,0x08,0x00,0x10,0x40,0x20,0x20,0x7F,0xF0,0x00,0x10,/*"丢",6*/
+    0x04,0x10,0x42,0x20,0x20,0x00,0x0F,0xF8,0x80,0x00,0x42,0x20,0x04,0x10,0x28,0x08,0x27,0xF0,0x45,0x50,0x45,0x50,0x85,0x50,0x85,0x50,0x0F,0xF8,/*"溢",7*/
+    0x20,0x40,0x20,0x40,0x22,0x40,0x32,0x40,0xAB,0xF8,0xA2,0x40,0xA4,0x40,0x20,0x40,0x23,0xF0,0x20,0x40,0x20,0x40,0x20,0x40,0x20,0x40,0x27,0xF8,/*"性",8*/
+    0x00,0x00,0x7D,0xF8,0x04,0x08,0x04,0x08,0x7D,0xF8,0x41,0x00,0x41,0x00,0x7D,0xF8,0x04,0x08,0x25,0x08,0x14,0xA8,0x24,0x48,0x45,0x88,0x18,0x30,/*"弱",9*/
+    0x00,0x80,0x00,0x80,0xF1,0x00,0x97,0xF8,0x94,0x08,0x94,0x08,0x95,0xE8,0x95,0x28,0x95,0x28,0xF5,0x28,0x95,0xE8,0x04,0x08,0x04,0x08,0x04,0x38,/*"响",10*/
+    0x02,0x00,0x01,0x00,0x7F,0xF8,0x40,0x00,0x42,0x00,0x41,0x10,0x40,0x90,0x50,0x90,0x48,0x10,0x44,0x20,0x44,0x20,0x40,0x40,0x40,0x80,0x9F,0xF8,/*"应",11*/
+    0x21,0x00,0x21,0x00,0x21,0xE0,0xFA,0x20,0x25,0x40,0x20,0x80,0x71,0x40,0x6A,0x20,0xA4,0x18,0x23,0xE0,0x22,0x20,0x22,0x20,0x23,0xE0,0x22,0x20,/*"格",12*/
+    0x21,0x00,0x21,0x00,0x27,0xF0,0x31,0x10,0xA9,0x10,0xA1,0x10,0xA1,0x10,0x2F,0xF8,0x21,0x40,0x21,0x40,0x22,0x20,0x22,0x20,0x24,0x10,0x28,0x08,/*"快",13*/
+    0x10,0x50,0x10,0x48,0x10,0x40,0x7B,0xF8,0x12,0x40,0x12,0x50,0xFA,0x50,0x12,0x20,0x13,0x28,0x5A,0x68,0x50,0x98,0x51,0x08,0xB0,0x00,0x8F,0xF8,/*"越",14*/
+    0x00,0x00,0x47,0xF8,0x21,0x20,0x17,0xF8,0x05,0x28,0x87,0xF8,0x40,0x00,0x13,0xF0,0x10,0x00,0x27,0xF8,0x20,0x40,0x42,0x50,0x44,0x48,0x09,0xC8,/*"漂",15*/
+    0x00,0x80,0x18,0x80,0xE1,0xE0,0x22,0x20,0x25,0x40,0xF8,0x80,0x21,0x20,0x36,0x40,0x68,0xF8,0x61,0x10,0xA6,0xA0,0x20,0x40,0x21,0x80,0x26,0x00,/*"移",16*/
+    0x21,0x00,0x21,0x00,0x3B,0xF0,0x4A,0x10,0x54,0x10,0x8B,0xD0,0x22,0x50,0x22,0x50,0x23,0xD0,0x22,0x10,0x22,0x60,0x2A,0x08,0x32,0x08,0x21,0xF8,/*"饱",17*/
+    0x0C,0x00,0x70,0x00,0x11,0xF8,0x11,0x08,0xFD,0x08,0x11,0x08,0x31,0x08,0x39,0x08,0x55,0x08,0x51,0x08,0x91,0xF8,0x11,0x08,0x10,0x00,0x10,0x00,/*"和",18*/
+    0x01,0xE0,0x7E,0x00,0x04,0x00,0x08,0x40,0x10,0x80,0x3F,0x00,0x04,0x40,0x18,0x20,0x7F,0xF0,0x02,0x10,0x12,0x40,0x22,0x20,0x42,0x10,0x0E,0x00,/*"系",19*/
+    0x21,0x00,0x20,0x80,0x40,0x00,0x97,0xF8,0xF1,0x00,0x21,0x20,0x42,0x10,0x87,0xF0,0xF1,0x50,0x01,0x40,0x02,0x40,0x32,0x48,0xC4,0x48,0x08,0x38,/*"统",20*/
+    0x7F,0xF8,0x40,0x08,0x42,0x08,0x42,0x08,0x5F,0xE8,0x42,0x08,0x42,0x08,0x45,0x08,0x44,0x88,0x48,0x48,0x50,0x48,0x40,0x08,0x7F,0xF8,0x40,0x08,/*"因",21*/
 };
 static uint8_t NumberStock[] = {
 
@@ -948,6 +1221,19 @@ static void oled_equipment(void)
     CalculateValidPara();
     //显示当前设备状态
     DIS_Equipment();
+    //故障原因
+    if (ValidParaDisArr[Para_ErrorReason][PARA_VALID] == true &&
+        now_page == ValidParaDisArr[Para_ErrorReason][PARA_PAGE])
+    {
+        row = ValidParaDisArr[Para_ErrorReason][PARA_X];
+        Display_ErrorReasonLine(row);
+    }
+    if (ValidParaDisArr[Para_ErrorReasonMore][PARA_VALID] == true &&
+        now_page == ValidParaDisArr[Para_ErrorReasonMore][PARA_PAGE])
+    {
+        row = ValidParaDisArr[Para_ErrorReasonMore][PARA_X];
+        Display_ErrorReasonMoreLine(row);
+    }
     //液位
     if(flagofoillevelvalid == true)
     {
@@ -1062,6 +1348,25 @@ static void CalculateValidPara(void)
     
     /******计算总共有多少个有效参数需要显示******/
     ValidParaCnt = 0;
+    //故障原因只在故障态显示，状态栏仍保留原来的错误代码。
+    if ((g_measurement.device_status.device_state == STATE_ERROR) &&
+        (g_measurement.device_status.error_code != NO_ERROR))
+    {
+        ValidParaCnt++;
+        ValidParaDisArr[Para_ErrorReason][PARA_NUM] = ValidParaCnt;
+        ValidParaDisArr[Para_ErrorReason][PARA_VALID] = true;
+        if (Display_IsErrorReasonNeedTwoRows()) {
+            ValidParaCnt++;
+            ValidParaDisArr[Para_ErrorReasonMore][PARA_NUM] = ValidParaCnt;
+            ValidParaDisArr[Para_ErrorReasonMore][PARA_VALID] = true;
+        } else {
+            ValidParaDisArr[Para_ErrorReasonMore][PARA_VALID] = false;
+        }
+    }
+    else {
+        ValidParaDisArr[Para_ErrorReason][PARA_VALID] = false;
+        ValidParaDisArr[Para_ErrorReasonMore][PARA_VALID] = false;
+    }
     //液位
     if(g_measurement.device_status.device_state != STATE_FLOWOIL)
     {
