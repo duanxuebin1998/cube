@@ -17,6 +17,7 @@ static bool flag_bright = false;            //亮屏标志位
 static int PageAmount = 0;                  //总共显示几页
 static bool flagofoillevelvalid = false;    //是否显示液位
 static bool FlagofTotalTwoRow = false;      //标志位 - 总共要显示的内容只有两行
+static void DIS_Equipment(void);
 #define PARA_X 0
 #define PARA_PAGE 1
 #define PARA_NUM 2
@@ -336,6 +337,22 @@ static void Display_ErrorReasonMoreLine(uint8_t row)
     if (reason[first_bytes] != '\0') {
         OledDisplayLineWords((u8*)&reason[first_bytes], OLED_LINE8_1, row, 0);
     }
+}
+
+void Display_ShowErrorReasonPage(void)
+{
+    oled_clear();
+    FlagofTotalTwoRow = false;
+    DIS_Equipment();
+
+    if (g_measurement.device_status.error_code != NO_ERROR) {
+        Display_ErrorReasonLine(OLED_ROW4_2);
+        if (Display_IsErrorReasonNeedTwoRows()) {
+            Display_ErrorReasonMoreLine(OLED_ROW4_3);
+        }
+    }
+
+    DisplayLangaugeLineWords((uint8_t*)"返回", OLED_LINE8_1, OLED_ROW4_4, 0, (uint8_t*)"Back");
 }
 
 static bool IsRealHeightDisplayState(DeviceState state)
@@ -1221,19 +1238,6 @@ static void oled_equipment(void)
     CalculateValidPara();
     //显示当前设备状态
     DIS_Equipment();
-    //故障原因
-    if (ValidParaDisArr[Para_ErrorReason][PARA_VALID] == true &&
-        now_page == ValidParaDisArr[Para_ErrorReason][PARA_PAGE])
-    {
-        row = ValidParaDisArr[Para_ErrorReason][PARA_X];
-        Display_ErrorReasonLine(row);
-    }
-    if (ValidParaDisArr[Para_ErrorReasonMore][PARA_VALID] == true &&
-        now_page == ValidParaDisArr[Para_ErrorReasonMore][PARA_PAGE])
-    {
-        row = ValidParaDisArr[Para_ErrorReasonMore][PARA_X];
-        Display_ErrorReasonMoreLine(row);
-    }
     //液位
     if(flagofoillevelvalid == true)
     {
@@ -1348,25 +1352,8 @@ static void CalculateValidPara(void)
     
     /******计算总共有多少个有效参数需要显示******/
     ValidParaCnt = 0;
-    //故障原因只在故障态显示，状态栏仍保留原来的错误代码。
-    if ((g_measurement.device_status.device_state == STATE_ERROR) &&
-        (g_measurement.device_status.error_code != NO_ERROR))
-    {
-        ValidParaCnt++;
-        ValidParaDisArr[Para_ErrorReason][PARA_NUM] = ValidParaCnt;
-        ValidParaDisArr[Para_ErrorReason][PARA_VALID] = true;
-        if (Display_IsErrorReasonNeedTwoRows()) {
-            ValidParaCnt++;
-            ValidParaDisArr[Para_ErrorReasonMore][PARA_NUM] = ValidParaCnt;
-            ValidParaDisArr[Para_ErrorReasonMore][PARA_VALID] = true;
-        } else {
-            ValidParaDisArr[Para_ErrorReasonMore][PARA_VALID] = false;
-        }
-    }
-    else {
-        ValidParaDisArr[Para_ErrorReason][PARA_VALID] = false;
-        ValidParaDisArr[Para_ErrorReasonMore][PARA_VALID] = false;
-    }
+    ValidParaDisArr[Para_ErrorReason][PARA_VALID] = false;
+    ValidParaDisArr[Para_ErrorReasonMore][PARA_VALID] = false;
     //液位
     if(g_measurement.device_status.device_state != STATE_FLOWOIL)
     {

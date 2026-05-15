@@ -13,6 +13,8 @@ struct KeyMenu {
 	void (*execute_opera)();    //执行本次操作
 };
 extern struct KeyMenu keymenu[];
+void Display_RequestCancelMeasurement(void);
+void Display_EnterCancelMeasurementConfirm(void);
 
 /* 菜单索引号 */
 typedef enum {
@@ -56,6 +58,8 @@ typedef enum {
     KEYNUM_MENU_CPU3_COM1,               // CPU3 - COM1
     KEYNUM_MENU_CPU3_COM2,               // CPU3 - COM2
     KEYNUM_MENU_CPU3_COM3,               // CPU3 - COM3
+    KEYNUM_IF_CANCEL_MEASUREMENT,        // 是否取消当前测量
+    KEYNUM_ERROR_REASON,                 // 故障原因查看页
 
     KEYNUM_END
 } keymenuNumber;

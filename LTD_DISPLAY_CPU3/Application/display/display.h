@@ -62,6 +62,7 @@ void DisplayInit(void);
 uint8_t OledDisplayLineWords(uint8_t* data,uint8_t x,uint8_t y,uint8_t shift);
 uint8_t DisplayLangaugeLineWords(uint8_t* name1,uint8_t line,uint8_t row,uint8_t shift,uint8_t* name2);
 void RefreshScreen(void);
+void Display_ShowErrorReasonPage(void);
 uint8_t OledDisplayOneNmb(int c,uint8_t row,uint8_t line,uint8_t shift);
 uint8_t OledValueDisplay(int value,uint8_t line,uint8_t row,uint8_t shift,uint8_t points,uint8_t* unit);
 void DisplayAubonLogo(void);

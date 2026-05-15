@@ -552,24 +552,44 @@ void TIM1_UP_TIM10_IRQHandler(void)
   HAL_TIM_IRQHandler(&htim1);
   /* USER CODE BEGIN TIM1_UP_TIM10_IRQn 1 */
 
-	// 读取按键状态（低电平为按下，根据电路决定）
-	GPIO_PinState state = HAL_GPIO_ReadPin(KEY_SURE_GPIO_Port, KEY_SURE_Pin);
+	GPIO_PinState state = GPIO_PIN_SET;
+	uint8_t long_press_key = button_long_press_key;
+
+	if (long_press_key == LONG_PRESS_KEY_SURE) {
+		state = HAL_GPIO_ReadPin(KEY_SURE_GPIO_Port, KEY_SURE_Pin);
+	} else if (long_press_key == LONG_PRESS_KEY_BACK) {
+		state = HAL_GPIO_ReadPin(KEY_BACK_GPIO_Port, KEY_BACK_Pin);
+	} else {
+		button_press_counter = 0;
+		HAL_TIM_Base_Stop_IT(&htim1);
+		return;
+	}
 
 	if (state == GPIO_PIN_RESET) {
 		button_press_counter++;
 
 		if (button_press_counter >= REQUIRED_PRESS_COUNT) {
 			button_press_counter = 0;  // 清零防止重复触发
-			FlagofTankOpera = true;
-			useKey();
+			button_long_press_key = LONG_PRESS_KEY_NONE;
 			HAL_TIM_Base_Stop_IT(&htim1);
-			keymenu[KEYNUM_IF_ENTER_MAINMENU].execute_opera();
+
+			if (long_press_key == LONG_PRESS_KEY_SURE) {
+				FlagofTankOpera = true;
+				useKey();
+				keymenu[KEYNUM_IF_ENTER_MAINMENU].execute_opera();
+			} else {
+				/* 与长按确认进菜单一致：先进入确认页，确认键再执行对应动作。 */
+				Display_EnterCancelMeasurementConfirm();
+			}
 		} else {
 			HAL_TIM_Base_Start_IT(&htim1);
 		}
 	} else {
 		// 一旦松开就清零
-		FlagofTankOpera = false;
+		if (long_press_key == LONG_PRESS_KEY_SURE) {
+			FlagofTankOpera = false;
+		}
+		button_long_press_key = LONG_PRESS_KEY_NONE;
 		button_press_counter = 0;
 		HAL_TIM_Base_Stop_IT(&htim1);
 	}

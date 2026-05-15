@@ -3,6 +3,7 @@
 #include "display.h"
 #include "tim.h"
 volatile uint8_t button_press_counter = 0;
+volatile uint8_t button_long_press_key = LONG_PRESS_KEY_NONE;
 bool FlagofTankOpera = false; //罐上操作标志位
 
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
@@ -14,8 +15,14 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
 		printf("b");
 		if (HAL_GPIO_ReadPin(KEY_BACK_GPIO_Port, KEY_BACK_Pin) == GPIO_PIN_RESET) {
 			printf("b");
-			if (FlagofTankOpera == true)
+			if (FlagofTankOpera == true) {
 				KeyProcess(USE_KEY_BACK);
+			} else {
+				/* 状态显示界面长按返回键用于请求取消当前测量。 */
+				button_press_counter = 0;
+				button_long_press_key = LONG_PRESS_KEY_BACK;
+				HAL_TIM_Base_Start_IT(&htim1);
+			}
 		}
 		break;
 	}
@@ -42,6 +49,8 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
 				KeyProcess(USE_KEY_SURE);
 			else {
 //				__HAL_TIM_SET_COUNTER(&htim1, 0);
+				button_press_counter = 0;
+				button_long_press_key = LONG_PRESS_KEY_SURE;
 				HAL_TIM_Base_Start_IT(&htim1); //解锁
 			}
 		}
