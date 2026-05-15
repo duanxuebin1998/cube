@@ -28,6 +28,9 @@ static GyroZeroRef g_gyro_zero_ref = {0};
 #define BOTTOM_GYRO_REF_SAMPLE_DELAY_MS 300U
 #define BOTTOM_GYRO_REF_MAX_SPREAD_DEG  2.0f
 #define BOTTOM_GYRO_REF_SAFE_LIFT_MM   100.0f
+#define BOTTOM_RELEASE_BEFORE_ROUGH_STEP_MM 100.0f
+#define BOTTOM_RELEASE_BEFORE_ROUGH_MAX_MM 1000.0f
+#define BOTTOM_RELEASE_BEFORE_ROUGH_DELAY_MS 500U
 // 函数原型声明
 static int SearchBottomRough();   // 粗略搜索罐底
 static int SearchBottomPrecise(); // 精确搜索罐底
@@ -35,6 +38,7 @@ static int32_t GetRealHeightCalibrationOffset(void);
 static uint32_t ApplyRealHeightCalibration(uint32_t raw_real_height);
 static uint32_t CaptureGyroZeroRefAverage(const char *tag, uint8_t allow_first_sample_fallback);
 static uint32_t EnsureGyroZeroRefForBottomMeasurement(void);
+static uint32_t EnsureBottomReleasedBeforeRoughSearch(void);
 static uint32_t BuildTankHeightFromCableLength(uint32_t cable_length_01mm)
 {
     int64_t tank_height_01mm = (int64_t)cable_length_01mm +
@@ -190,6 +194,9 @@ uint32_t SearchBottom(void)
     CHECK_ERROR(ret);
 
     printf("罐底测量\t初始重量：%d\r\n", weight_parament.stable_weight);
+
+    ret = EnsureBottomReleasedBeforeRoughSearch();
+    CHECK_ERROR(ret);
 
     /*************** Rough bottom search retry ***************/
     try_times = 0;
@@ -410,6 +417,49 @@ static int SearchBottomRough() {
 }
 
 /**
+ * @brief 粗找前确认探头已经离开罐底。
+ *
+ * 如果进入找底流程时已经触底，先分段上行并复查触底状态，确保粗找从 NORMAL 状态开始。
+ * 上行动作只用于离底，不做称重碰撞检测；超过最大离底距离仍触底则返回找底失败。
+ */
+static uint32_t EnsureBottomReleasedBeforeRoughSearch(void)
+{
+    uint32_t ret;
+    float lifted_mm = 0.0f;
+    Weight_StateTypeDef bottom_status = NORMAL;
+
+    while (lifted_mm <= BOTTOM_RELEASE_BEFORE_ROUGH_MAX_MM) {
+        ret = check_bottom_status(&bottom_status);
+        if (ret != NO_ERROR) {
+            return ret;
+        }
+
+        if (bottom_status == NORMAL) {
+            if (lifted_mm > 0.0f) {
+                printf("罐底测量\t粗找前离底完成，上行%.1fmm\r\n", (double)lifted_mm);
+            }
+            return NO_ERROR;
+        }
+
+        if ((lifted_mm + BOTTOM_RELEASE_BEFORE_ROUGH_STEP_MM) > BOTTOM_RELEASE_BEFORE_ROUGH_MAX_MM) {
+            break;
+        }
+
+        printf("罐底测量\t粗找前已触底，上行%.1fmm后复查\r\n", (double)BOTTOM_RELEASE_BEFORE_ROUGH_STEP_MM);
+        ret = MotorCtrl_MoveBlockingNoDetect(BOTTOM_RELEASE_BEFORE_ROUGH_STEP_MM,
+                                             MOTOR_DIRECTION_UP,
+                                             MotorCtrl_GetDefaultSpeedX100());
+        if (ret != NO_ERROR) {
+            return ret;
+        }
+        lifted_mm += BOTTOM_RELEASE_BEFORE_ROUGH_STEP_MM;
+        HAL_Delay(BOTTOM_RELEASE_BEFORE_ROUGH_DELAY_MS);
+    }
+
+    printf("罐底测量\t粗找前离底失败，累计上行%.1fmm后仍触底\r\n", (double)lifted_mm);
+    return MEASUREMENT_WEIGHT_DOWN_FAIL;
+}
+/**
  * @brief 精确搜索罐底 - 使用变速策略精确定位罐底
  *
  * @return int 错误代码（NO_ERROR表示成功）
@@ -421,7 +471,7 @@ static int SearchBottomPrecise() {
     printf("罐底测量\t稳定重量：%d\r\n", weight_parament.stable_weight);
     if (g_measurement.debug_data.cable_length > 2000)
     {
-        ret = MotorCtrl_MoveAndWait(200.0, MOTOR_DIRECTION_UP, MotorCtrl_GetDefaultSpeedX100());
+        ret = MotorCtrl_MoveBlockingNoDetect(200.0, MOTOR_DIRECTION_UP, MotorCtrl_GetDefaultSpeedX100());
         CHECK_ERROR(ret);
         printf("罐底测量\t上行完成\r\n");
     }
