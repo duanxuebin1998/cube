@@ -75,6 +75,7 @@ typedef enum {
     MOTOR_CHARGE_PUMP_UNDER_VOLTAGE = 0x000B0007,// 电荷泵欠压
     MOTOR_OVERTEMPERATURE = 0x000B0008,          // 电机过温
     MOTOR_RUN_TIMEOUT = 0x000B0009,              // 电机运行超时
+    MOTOR_TMC_COMM_ERROR = 0x000B000A,           // TMC5130寄存器通信异常
 
     /* ==================== 12 编码器类故障 (0x000C0000 - 0x000CFFFF) ==================== */
     ENCODER_TIMEOUT = 0x000C0001,                // 编码器通信超时
@@ -91,7 +92,8 @@ typedef enum {
     /* ==================== 13 传感器类故障 (0x000D0000 - 0x000DFFFF) ==================== */
     SENSOR_BCC_ERROR = 0x000D0001,               // 数据校验错误
     SONIC_FREQ_ABNORMAL = 0x000D0002,            // 震动管频率异常
-    SENSOR_COMM_TIMEOUT = 0x000D0003,            // 传感器通信超时
+    SENSOR_DEVICE_COMM_TIMEOUT = 0x000D0003,     // 设备通信超时
+    SENSOR_COMM_TIMEOUT = SENSOR_DEVICE_COMM_TIMEOUT,
     DENSITY_INVALID = 0x000D0004,                // 密度值异常
     SENSOR_TEMPERATURE_ERROR = 0x000D0005,       // 温度异常
     SENSOR_VOLTAGE_ERROR = 0x000D0006,           // 电压异常
@@ -99,6 +101,11 @@ typedef enum {
     SLIPRING_BCC_ERROR = 0x000D0008,             // 无线滑环校验错误
     SLIPRING_PACKET_LOSS = 0x000D0009,           // 数据包丢失
     SLIPRING_SIGNAL_WEAK = 0x000D000A,           // 信号强度不足
+    SENSOR_RESP_FORMAT_ERROR = 0x000D000B,       // 传感器响应格式错误
+    DENSITY_UNSTABLE = 0x000D000C,               // 密度值不稳定
+    SENSOR_DEVICE_REPORTED_ERROR = 0x000D000D,   // 传感器设备内部错误
+    WIRELESS_HOST_COMM_TIMEOUT = 0x000D0010,     // 与无线主机通信无响应
+    WIRELESS_SLAVE_COMM_TIMEOUT = 0x000D0011,    // 与无线从机通信无响应
 
     /* ==================== 测量过程故障 (0x000F0000 - 0x000FFFFF) ==================== */
     MEASUREMENT_POSITION_ERROR = 0x000F0001,     // 位置测量错误
@@ -111,7 +118,11 @@ typedef enum {
     MEASUREMENT_OILLEVEL_NOTFOUND = 0x000F0009,  // 上行未找到液位
     MEASUREMENT_WEIGHT_DOWN_FAIL = 0x000F000A,   // 下行寻重失败
     MEASUREMENT_WEIGHT_UP_FAIL = 0x000F000B,     // 上行寻重失败
+    MEASUREMENT_WATERLEVEL_LOW = 0x000F000C,     // 下行未找到水位
     MEASUREMENT_OVERSPEED = 0x000F000F,          // 液位变化过快
+    MEASUREMENT_DENSITY_NO_VALID_POINT = 0x000F0010, // 密度测量无有效测点
+    MEASUREMENT_DENSITY_SURFACE_NOTFOUND = 0x000F0011, // 密度测量未找到油面
+    MEASUREMENT_DENSITY_RANGE_INVALID = 0x000F0012, // 密度测量范围异常
 
     /* ==================== 参数存储类故障 (0x00110000 - 0x0011FFFF) ==================== */
     PARAM_EEPROM_FAIL = 0x00110001,              // EEPROM 写入失败
@@ -119,6 +130,7 @@ typedef enum {
     PARAM_RANGE_ERROR = 0x00110003,              // 参数超限
     PARAM_ADDRESS_OVERFLOW = 0x00110004,         // 地址越界
     PARAM_CRC_ERROR = 0x00110005,                // 参数 CRC 错误
+    PARAM_ERROR = 0x00110006,                    // 程序内参数调用错误
 
     /* ==================== 称重类故障 (0x00120000 - 0x0012FFFF) ==================== */
     WEIGHT_OUT_OF_RANGE = 0x00120001,            // 称重超上限

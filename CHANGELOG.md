@@ -185,3 +185,27 @@
 - `cmake --build build\LTD_DISPLAY_CPU3`
 - `git diff --check`
 - `py tools\check_version_bumped.py` 当前未暂存文件，脚本提示无暂存内容可检查；提交前暂存后需再执行一次。
+
+## 2026-05-15
+
+版本：
+- CPU2: 未变化，保持 V1.5.0.0
+- CPU3: V1.2.0.0 -> V1.3.0.0
+
+兼容性：
+- 本次仅修改 CPU3 本地显示逻辑和 CPU3 本地错误码枚举补齐，不新增 Modbus 寄存器，不改变 `REG_DEVICE_STATUS_ERROR_CODE` 含义。
+- CPU2/CPU3 共享协议版本不变，CPU3 继续用现有 32 位错误码在本地解释故障原因。
+
+本次修改：
+- CPU3 设备状态栏保持原有故障代码显示，不把故障原因拼入状态栏。
+- CPU3 设备详情分页在故障态新增一行中文故障原因，按 `device_status.error_code` 显示短文本原因。
+- CPU3 中文故障原因一行显示不下时自动占用下一详情行继续显示，后续详情项随分页顺延。
+- CPU3 故障原因文案改为更贴近现场含义的描述，例如通信无响应、寄存器通信失败、测量流程超时等。
+- CPU3 显示字库补充故障原因所需汉字，避免中文原因出现空字。
+- 补齐 CPU3 缺失的 CPU2 错误码定义，覆盖电机、传感器、滑环、测量、参数等新增错误码。
+
+验证：
+- `cmake -S LTD_DISPLAY_CPU3 -B build/LTD_DISPLAY_CPU3 -G Ninja "-DCMAKE_TOOLCHAIN_FILE=D:/CUBE/cmake/toolchain-arm-none-eabi.cmake" -DCMAKE_BUILD_TYPE=Debug`
+- `cmake --build build\LTD_DISPLAY_CPU3`
+- `git diff --check`
+- `py tools\check_version_bumped.py` 当前未暂存文件，脚本提示无暂存内容可检查；提交前暂存后需再执行一次。
