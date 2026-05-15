@@ -188,6 +188,8 @@ static volatile uint32_t* get_deviceparam_ptr_by_operanum(int operanum)
         return &g_deviceParams.wartsila_max_height_above_surface;
     case COM_NUM_DEVICEPARAM_WARTSILA_BOTTOM_DETECT_INTERVAL:
         return &g_deviceParams.wartsila_bottom_detect_interval;
+    case COM_NUM_DEVICEPARAM_BOTTOM_ENCODER_CORRECTION_TANK_HEIGHT:
+        return &g_deviceParams.bottom_encoder_correction_tank_height;
 
     /* ===== 报警 DO ===== */
     case COM_NUM_DEVICEPARAM_ALARM_HIGH_DO:

@@ -296,7 +296,7 @@ typedef enum
     COM_NUM_DEVICEPARAM_WARTSILA_MAX_HEIGHT_ABOVE_SURFACE,// 最高测点距液面
 
     COM_NUM_DEVICEPARAM_WARTSILA_BOTTOM_DETECT_INTERVAL,// 瓦锡兰测量后探底频率：0不探底，N表示每N次测量后探底一次，范围0~100
-    COM_NUM_DEVICEPARAM_RESERVED23,                     // 保留 23
+    COM_NUM_DEVICEPARAM_BOTTOM_ENCODER_CORRECTION_TANK_HEIGHT, // 探底修正罐高
 
     /* ---------------- 继电器报警 DO ---------------- */
     COM_NUM_DEVICEPARAM_ALARM_HIGH_DO,                  // 高报警 DO

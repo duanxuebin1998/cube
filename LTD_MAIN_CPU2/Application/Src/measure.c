@@ -1197,6 +1197,22 @@ static void CMD_SetFullWeight(void)
     g_measurement.device_status.device_state = STATE_GET_FULLWEIGHT_OVER;
     return;
 }
+static uint32_t Wartsila_MoveToMonitorPositionOnly(void)
+{
+    uint32_t ret;
+    float target_mm = (float)g_deviceParams.singlePointMonitoringPosition / 10.0f;
+
+    g_measurement.device_status.device_state = STATE_RUNTOPOINTING;
+    printf("ÍßÎýÀ¼²âºóÌ½µ×\tÏÈ»Ø¹Ì¶¨µã¼à²âÎ»ÖÃ£º%.1fmm£¬½öÒÆ¶¯²»¶ÁÃÜ¶È\r\n", (double)target_mm);
+
+    ret = MotorCtrl_MoveToPosition(target_mm, MotorCtrl_GetDefaultSpeedX100());
+    if (ret != NO_ERROR) {
+        printf("ÍßÎýÀ¼²âºóÌ½µ×\t»Ø¹Ì¶¨µã¼à²âÎ»ÖÃÊ§°Ü£º0x%08lX£¬Ìø¹ýÌ½µ×ÇÒ²»ÖÃ´íÎó×´Ì¬\r\n", (unsigned long)ret);
+    }
+
+    return ret;
+}
+
 static void CMD_WartsilaDensitySpread(void) {
 	static uint32_t bottom_detect_count = 0; /* ÍßÎýÀ¼²âÁ¿ºóÌ½µ×¼ÆÊý£¬½öÔËÐÐÆÚÀÛ¼Æ */
 	uint32_t ret = 0;
@@ -1228,8 +1244,24 @@ static void CMD_WartsilaDensitySpread(void) {
         bottom_detect_count++;
         if (bottom_detect_count >= bottom_detect_interval) {
             bottom_detect_count = 0U;
+            ret = Wartsila_MoveToMonitorPositionOnly();
+            if (ret == STATE_SWITCH) {
+                return;
+            }
+            if (ret != NO_ERROR) {
+                g_deviceParams.command = CMD_MONITOR_SINGLE;
+                return;
+            }
+
             ret = SearchBottom();
-            SET_ERROR(ret);
+            if (ret == STATE_SWITCH) {
+                return;
+            }
+            if (ret != NO_ERROR) {
+                printf("ÍßÎýÀ¼²âºóÌ½µ×\t¹Þµ×²âÁ¿Ê§°Ü£º0x%08lX£¬ÍË³öÇÒ²»ÖÃ´íÎó×´Ì¬\r\n", (unsigned long)ret);
+                g_deviceParams.command = CMD_MONITOR_SINGLE;
+                return;
+            }
         }
     } else {
         bottom_detect_count = 0U;

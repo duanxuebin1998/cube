@@ -258,3 +258,30 @@
 - `cmake --build build\LTD_DISPLAY_CPU3`
 - `git diff --check`
 - `py tools\check_version_bumped.py` 当前未暂存文件，脚本提示无暂存内容可检查；提交前暂存后需再执行一次。
+
+## 2026-05-15
+
+版本：
+- CPU2: V1.6.0.0 -> V1.7.0.0
+- CPU3: V1.4.0.0 -> V1.5.0.0
+
+协议版本/兼容性：
+- CPU2/CPU3 共享协议版本从 2 升至 3。
+- 原 `reserved23` 正式替换为“探底修正罐高”，保持寄存器地址不移动，旧协议存储升级时默认清零并沿用液位罐高。
+- 旧 CPU2/CPU3 与协议 3 固件混用时，共享参数含义不完整，应按协议版本不匹配处理。
+
+本次修改：
+- 新增“探底修正罐高”参数，用于罐底测量完成后的编码器修正；参数为 0 时兼容旧逻辑，继续使用液位罐高。
+- 瓦锡兰分布测量完成并达到测后探底频率后，先移动到固定点监测位置，且只移动不读取密度。
+- 瓦锡兰测后固定点移动或后续探底失败时，退出后续流程并切回单点监测，不通过 `SET_ERROR` 置错误状态。
+- 罐底测量实高与编码器修正目标罐高的偏差大于实高最大偏差时，跳过编码器修正。
+- CPU3 同步新增参数表、菜单分组、内部 Modbus 读写和参数同步映射。
+
+验证：
+- `cmake -S LTD_MAIN_CPU2 -B build/LTD_MAIN_CPU2 -G Ninja "-DCMAKE_TOOLCHAIN_FILE=D:/CUBE/cmake/toolchain-arm-none-eabi.cmake" -DCMAKE_BUILD_TYPE=Debug`
+- `cmake -S LTD_DISPLAY_CPU3 -B build/LTD_DISPLAY_CPU3 -G Ninja "-DCMAKE_TOOLCHAIN_FILE=D:/CUBE/cmake/toolchain-arm-none-eabi.cmake" -DCMAKE_BUILD_TYPE=Debug`
+- `cmake --build build\LTD_MAIN_CPU2`
+- `cmake --build build\LTD_DISPLAY_CPU3`
+- `py tools\check_version_bumped.py`
+- `git diff --check`
+- `py LTD_DISPLAY_CPU3\font_check.py`

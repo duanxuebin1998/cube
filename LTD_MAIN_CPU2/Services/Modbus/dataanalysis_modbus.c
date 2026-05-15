@@ -184,7 +184,7 @@ void WriteDeviceParamsToHoldingRegisters(uint16_t *HoldingRegisterArray)
     write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_WARTSILA_MAX_HEIGHT_ABOVE_SURFACE,  g_deviceParams.wartsila_max_height_above_surface);
 
     write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_WARTSILA_BOTTOM_DETECT_INTERVAL, g_deviceParams.wartsila_bottom_detect_interval);
-    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_RESERVED23, g_deviceParams.reserved23);
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_BOTTOM_ENCODER_CORRECTION_TANK_HEIGHT, g_deviceParams.bottom_encoder_correction_tank_height);
 
     /* ===================== 继电器报警输出 ===================== */
     write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_ALARM_HIGH_DO,         g_deviceParams.AlarmHighDO);
@@ -374,7 +374,7 @@ void ReadDeviceParamsFromHoldingRegisters(uint16_t *HoldingRegisterArray)
     g_deviceParams.wartsila_max_height_above_surface = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_WARTSILA_MAX_HEIGHT_ABOVE_SURFACE);
 
     g_deviceParams.wartsila_bottom_detect_interval = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_WARTSILA_BOTTOM_DETECT_INTERVAL);
-    g_deviceParams.reserved23 = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_RESERVED23);
+    g_deviceParams.bottom_encoder_correction_tank_height = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_BOTTOM_ENCODER_CORRECTION_TANK_HEIGHT);
 
     /* ===================== 继电器报警输出 ===================== */
     g_deviceParams.AlarmHighDO        = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_ALARM_HIGH_DO);

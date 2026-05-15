@@ -26,7 +26,7 @@
 #define UNVALID_POSITION 0
 #define UNVALID_TEMPERATURE 0
 #define MAX_MEASUREMENT_POINTS 200 // 密度分布测量最大点数
-#define DEVICE_PROTOCOL_VERSION 2u // CPU2/CPU3共享协议版本；旧程序未写入时默认为0
+#define DEVICE_PROTOCOL_VERSION 3u // CPU2/CPU3共享协议版本；旧程序未写入时默认为0
 
 
 #define REPEATMAX 3//重复性测试次数
@@ -537,7 +537,7 @@ typedef struct {
     uint32_t wartsila_max_height_above_surface;   // 最高测点距液面距离(0.1mm 或按定义)
 
     uint32_t wartsila_bottom_detect_interval; // 瓦锡兰测量后探底频率：0不探底，N表示每N次测量后探底一次，范围0~100
-    uint32_t reserved23;                 // 预留（新增）
+    uint32_t bottom_encoder_correction_tank_height; // 探底修正罐高，仅用于罐底后编码器修正，0表示沿用液位罐高
 
     // ===================== 继电器报警输出 =====================
     uint32_t AlarmHighDO;                // 高液位报警输出

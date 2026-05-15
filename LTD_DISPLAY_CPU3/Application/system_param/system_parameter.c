@@ -115,7 +115,7 @@ struct ParameterMetadata param_meta[] = {
 {(uint8_t*)"密度点间距",	0,	COM_NUM_DEVICEPARAM_WARTSILA_DENSITY_INTERVAL,	HOLDREGISTER_DEVICEPARAM_WARTSILA_DENSITY_INTERVAL,	2,	false,	0,	0,	(uint8_t*)"mm",	0,	0,	true,	TYPE_INT,	6,	NULL,	(uint8_t*)"WDenStep"},
 {(uint8_t*)"最高点距液面",	0,	COM_NUM_DEVICEPARAM_WARTSILA_MAX_HEIGHT_ABOVE_SURFACE,	HOLDREGISTER_DEVICEPARAM_WARTSILA_MAX_HEIGHT_ABOVE_SURFACE,	2,	false,	0,	0,	(uint8_t*)"mm",	0,	0,	true,	TYPE_INT,	6,	NULL,	(uint8_t*)"WMaxHeight"},
 {(uint8_t*)"瓦锡兰探底频率",	0,	COM_NUM_DEVICEPARAM_WARTSILA_BOTTOM_DETECT_INTERVAL,	HOLDREGISTER_DEVICEPARAM_WARTSILA_BOTTOM_DETECT_INTERVAL,	2,	true,	0,	100,	NULL,	0,	0,	true,	TYPE_INT,	3,	NULL,	(uint8_t*)"WBotFreq"},
-{(uint8_t*)"保留23",	0,	COM_NUM_DEVICEPARAM_RESERVED23,	HOLDREGISTER_DEVICEPARAM_RESERVED23,	2,	false,	0,	0,	NULL,	0,	0,	false,	TYPE_INT,	8,	NULL,	(uint8_t*)"Rsv23"},
+{(uint8_t*)"探底修正罐高",	0,	COM_NUM_DEVICEPARAM_BOTTOM_ENCODER_CORRECTION_TANK_HEIGHT,	HOLDREGISTER_DEVICEPARAM_BOTTOM_ENCODER_CORRECTION_TANK_HEIGHT,	2,	false,	0,	0,	(uint8_t*)"mm",	1,	0,	true,	TYPE_INT,	7,	NULL,	(uint8_t*)"BotFixH"},
 
 {(uint8_t*)"高液位报警(DO)",	0,	COM_NUM_DEVICEPARAM_ALARM_HIGH_DO,	HOLDREGISTER_DEVICEPARAM_ALARM_HIGH_DO,	2,	false,	0,	0,	NULL,	1,	0,	true,	TYPE_INT,	4,	NULL,	(uint8_t*)"AlarmHiDO"},
 {(uint8_t*)"低液位报警(DO)",	0,	COM_NUM_DEVICEPARAM_ALARM_LOW_DO,	HOLDREGISTER_DEVICEPARAM_ALARM_LOW_DO,	2,	false,	0,	0,	NULL,	1,	0,	true,	TYPE_INT,	4,	NULL,	(uint8_t*)"AlarmLoDO"},
@@ -373,6 +373,7 @@ void print_device_params(void)
     printf("  %-32s : %lu\r\n", "密度点间距", (unsigned long)params.wartsila_density_interval);
     printf("  %-32s : %lu\r\n", "最高点距液面", (unsigned long)params.wartsila_max_height_above_surface);
     printf("  %-32s : %lu\r\n", "瓦锡兰探底频率", (unsigned long)params.wartsila_bottom_detect_interval);
+    printf("  %-32s : %lu\r\n", "探底修正罐高", (unsigned long)params.bottom_encoder_correction_tank_height);
 
     /* DO */
     printf("\r\n-- 报警DO参数 --\r\n");
