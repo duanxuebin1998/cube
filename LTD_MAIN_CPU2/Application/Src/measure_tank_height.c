@@ -66,6 +66,19 @@ static uint32_t BuildBottomCableLengthFromTankHeight(uint32_t tank_height_01mm)
     return (uint32_t)cable_length_01mm;
 }
 static void ApplyBottomEncoderCorrection(void);
+static uint32_t GetBottomEncoderCorrectionTankHeight(void)
+{
+    if (g_deviceParams.bottom_encoder_correction_tank_height != 0U) {
+        return g_deviceParams.bottom_encoder_correction_tank_height;
+    }
+
+    return g_deviceParams.tankHeight;
+}
+
+static uint32_t CalcAbsU32Diff(uint32_t a, uint32_t b)
+{
+    return (a >= b) ? (a - b) : (b - a);
+}
 static int32_t GetRealHeightCalibrationOffset(void)
 {
     if ((g_deviceParams.initialTankHeight == 0U) ||
@@ -96,6 +109,9 @@ static void ApplyBottomEncoderCorrection(void)
     int32_t old_encoder_count;
     int32_t old_cable_length;
     int32_t target_cable_length;
+    uint32_t correction_tank_height;
+    uint32_t measured_real_height;
+    uint32_t real_height_deviation;
 
     printf("罐底编码器修正开关=%lu\r\n", (unsigned long)g_deviceParams.bottom_encoder_correction_enable);
 
@@ -103,24 +119,40 @@ static void ApplyBottomEncoderCorrection(void)
         return;
     }
 
-    if (g_deviceParams.tankHeight == 0U) {
-        printf("罐底编码器修正跳过：罐高为0，不修改编码值\r\n");
+    correction_tank_height = GetBottomEncoderCorrectionTankHeight();
+    if (correction_tank_height == 0U) {
+        printf("罐底编码器修正跳过：目标罐高为0，不修改编码值\r\n");
+        return;
+    }
+
+    measured_real_height = g_measurement.height_measurement.current_real_height;
+    real_height_deviation = CalcAbsU32Diff(measured_real_height, correction_tank_height);
+    if ((g_deviceParams.maxTankHeightDeviation != 0U) &&
+        (real_height_deviation > g_deviceParams.maxTankHeightDeviation)) {
+        printf("罐底编码器修正跳过：实高偏差超限 | 测量实高=%.1fmm | 目标罐高=%.1fmm | 偏差=%.1fmm | 最大允许=%.1fmm\r\n",
+               (double)measured_real_height * 0.1,
+               (double)correction_tank_height * 0.1,
+               (double)real_height_deviation * 0.1,
+               (double)g_deviceParams.maxTankHeightDeviation * 0.1);
         return;
     }
 
     old_encoder_count = g_encoder_count;
     old_cable_length = encoder_get_cable_length_01mm();
-    target_cable_length = (int32_t)BuildBottomCableLengthFromTankHeight(g_deviceParams.tankHeight);
+    target_cable_length = (int32_t)BuildBottomCableLengthFromTankHeight(correction_tank_height);
 
     /* 罐底测量完成时探头位于罐底；不修改罐高，只把编码器当前尺带长度修正到罐高扣除探头距差后的值。 */
     encoder_set_cable_length_01mm(target_cable_length);
 
-    printf("罐底编码器修正完成 | 原编码=%ld | 新编码=%ld | 原尺带：%.1fmm | 目标尺带：%.1fmm | 罐高保持=%.1fmm\r\n",
+    printf("罐底编码器修正完成 | 原编码=%ld | 新编码=%ld | 原尺带：%.1fmm | 目标尺带：%.1fmm | 液位罐高=%.1fmm | 修正罐高=%.1fmm | 采用罐高=%.1fmm | 实高偏差=%.1fmm\r\n",
            (long)old_encoder_count,
            (long)g_encoder_count,
            (double)old_cable_length * 0.1,
            (double)target_cable_length * 0.1,
-           (double)g_deviceParams.tankHeight * 0.1);
+           (double)g_deviceParams.tankHeight * 0.1,
+           (double)g_deviceParams.bottom_encoder_correction_tank_height * 0.1,
+           (double)correction_tank_height * 0.1,
+           (double)real_height_deviation * 0.1);
 }
 /**
  * @brief 罐底测量函数 - 执行完整的罐底搜索流程

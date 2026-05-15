@@ -85,6 +85,7 @@ static int apply_protocol_version_runtime(void)
     }
 
     /* 旧存储或异常写入导致协议不一致时，启动阶段恢复为CPU2当前协议。 */
+    g_deviceParams.bottom_encoder_correction_tank_height = 0U;
     g_deviceParams.protocolVersion = DEVICE_PROTOCOL_VERSION;
     return 1;
 }
@@ -590,6 +591,7 @@ void RestoreFactoryParamsConfig(void)
     g_deviceParams.wartsila_density_interval         = 1000;
     g_deviceParams.wartsila_max_height_above_surface = 200; /* 0.1mm 或按定义 */
     g_deviceParams.wartsila_bottom_detect_interval  = 1;   /* 瓦锡兰测量后探底频率：0不探底，N表示每N次测量后探底一次 */
+    g_deviceParams.bottom_encoder_correction_tank_height = 0; /* 0: 编码器修正沿用液位罐高 */
 
     /* ---------------- 继电器报警输出 ---------------- */
     g_deviceParams.AlarmHighDO         = 0;
@@ -756,6 +758,7 @@ void print_device_params(void)
     printf("  %-32s : %lu\r\n", "密度点间距", (unsigned long)params.wartsila_density_interval);
     printf("  %-32s : %lu\r\n", "最高点距液面", (unsigned long)params.wartsila_max_height_above_surface);
     printf("  %-32s : %lu\r\n", "瓦锡兰探底频率", (unsigned long)params.wartsila_bottom_detect_interval);
+    printf("  %-32s : %lu\r\n", "探底修正罐高", (unsigned long)params.bottom_encoder_correction_tank_height);
 
     /* DO */
     printf("\r\n-- 报警DO参数 --\r\n");
