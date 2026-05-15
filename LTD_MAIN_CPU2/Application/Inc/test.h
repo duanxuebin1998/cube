@@ -17,6 +17,7 @@ void motor_step_text(void); // 电机步进测试
 void Test_Params_Storage(void); // 测试参数存储
 void Test_ParamEncoder_AB_Backup(void); // A/B双备份回退测试（参数+编码值）
 void DSM_V2_Test_AllParams(void) ;// DSM V2 演示函数
+void SensorWireless_CommTest(void); // 传感器与无线通信综合测试
 void Test_main(void) ; // 测试主函数
 void motor_text(float run_distance_mm, uint8_t enable_sensor_comm); // 电机测试
 void motor_text_encoder(float run_distance_mm, uint8_t enable_sensor_comm); // encoder-based mm motor test

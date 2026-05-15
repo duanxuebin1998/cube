@@ -63,6 +63,137 @@ static void UART6_DrainRX_UntilIdle(uint32_t idle_ms) {
     // 读SR/DR清RXNE的老派做法（F4上清ORE通常需要读SR后读DR，HAL宏已封装）
 }
 
+static uint8_t s_dsm_v2_dma_rx_buf[8];
+
+/**
+ * @brief 停止 UART6 DMA 接收并清理固定 8 字节协议的硬件错误状态。
+ *
+ * LTD/V2 传感器是一问一答固定帧，任何提前返回都必须停止 DMA，避免下次收发继续占用 UART6。
+ */
+static void DSM_V2_StopDmaReceive(void)
+{
+    (void)HAL_UART_DMAStop(&huart6);
+    __HAL_UART_CLEAR_OREFLAG(&huart6);
+    huart6.ErrorCode = HAL_UART_ERROR_NONE;
+}
+
+/**
+ * @brief 获取 UART6 DMA 当前已收到的字节数。
+ *
+ * 固定 8 字节协议只关心是否收满 8 字节；句柄异常时返回 0，由上层按通信超时处理。
+ */
+static uint16_t DSM_V2_GetDmaReceivedLength(uint16_t rx_len)
+{
+    uint16_t remain;
+
+    if (huart6.hdmarx == NULL) {
+        return 0U;
+    }
+    remain = (uint16_t)__HAL_DMA_GET_COUNTER(huart6.hdmarx);
+    if (remain > rx_len) {
+        return 0U;
+    }
+    return (uint16_t)(rx_len - remain);
+}
+
+/**
+ * @brief 等待 LTD/V2 的 UART6 DMA 发送完成。
+ *
+ * 接收 DMA 已提前启动，发送阶段只等待 TX 状态回到 READY；异常退出时停止 DMA，避免占用后续收发。
+ */
+static uint32_t DSM_V2_WaitTransmitDmaDone(uint32_t timeout)
+{
+    uint32_t startTick = HAL_GetTick();
+
+    while ((HAL_GetTick() - startTick) < timeout) {
+        if (HasEffectiveCommandSwitchRequest()) {
+            DSM_V2_StopDmaReceive();
+            return STATE_SWITCH;
+        }
+        if (huart6.gState == HAL_UART_STATE_READY) {
+            return NO_ERROR;
+        }
+        if (huart6.ErrorCode != HAL_UART_ERROR_NONE) {
+            DSM_V2_StopDmaReceive();
+            return OTHER_PERIPHERAL_CONFIG_ERROR;
+        }
+        HAL_Delay(1);
+    }
+
+    DSM_V2_StopDmaReceive();
+    return SENSOR_DEVICE_COMM_TIMEOUT;
+}
+
+/**
+ * @brief 启动 LTD/V2 固定 8 字节应答的 UART6 DMA 接收。
+ *
+ * 该函数只负责提前打开接收窗口，避免发送完成后再启动 DMA 导致快速回包丢头。
+ */
+static uint32_t DSM_V2_StartFixedReceiveDma(uint8_t rx[8])
+{
+    const uint16_t expect_len = 8U;
+
+    if (rx == NULL) {
+        return SENSOR_RESP_FORMAT_ERROR;
+    }
+    for (uint16_t i = 0U; i < expect_len; i++) {
+        s_dsm_v2_dma_rx_buf[i] = 0U;
+        rx[i] = 0U;
+    }
+
+    DSM_V2_StopDmaReceive();
+    if (HAL_UART_Receive_DMA(&huart6, s_dsm_v2_dma_rx_buf, expect_len) != HAL_OK) {
+        DSM_V2_StopDmaReceive();
+        return OTHER_PERIPHERAL_CONFIG_ERROR;
+    }
+    return NO_ERROR;
+}
+
+/**
+ * @brief 等待 LTD/V2 固定 8 字节应答接收完成。
+ *
+ * 该函数只判断是否收满一帧和是否出现 UART 硬件错误，求和校验与功能码校验仍由调用方完成。
+ */
+static uint32_t DSM_V2_WaitFixedReceiveDma(uint8_t rx[8], uint32_t timeout)
+{
+    const uint16_t expect_len = 8U;
+    uint32_t startTick;
+
+    if (rx == NULL) {
+        return SENSOR_RESP_FORMAT_ERROR;
+    }
+
+    startTick = HAL_GetTick();
+    while ((HAL_GetTick() - startTick) < timeout) {
+        uint16_t got = DSM_V2_GetDmaReceivedLength(expect_len);
+
+        if (HasEffectiveCommandSwitchRequest()) {
+            DSM_V2_StopDmaReceive();
+            return STATE_SWITCH;
+        }
+        if (huart6.ErrorCode != HAL_UART_ERROR_NONE) {
+            DSM_V2_StopDmaReceive();
+            return SENSOR_RESP_FORMAT_ERROR;
+        }
+        if (got >= expect_len) {
+            for (uint16_t i = 0U; i < expect_len; i++) {
+                rx[i] = s_dsm_v2_dma_rx_buf[i];
+            }
+            DSM_V2_StopDmaReceive();
+            return NO_ERROR;
+        }
+        HAL_Delay(1);
+    }
+
+    {
+        uint16_t got = DSM_V2_GetDmaReceivedLength(expect_len);
+        for (uint16_t i = 0U; (i < got) && (i < expect_len); i++) {
+            rx[i] = s_dsm_v2_dma_rx_buf[i];
+        }
+        DSM_V2_StopDmaReceive();
+        return (got == 0U) ? SENSOR_DEVICE_COMM_TIMEOUT : SENSOR_RESP_FORMAT_ERROR;
+    }
+}
 static int DSM_V2_Transceive(const uint8_t tx[8], uint8_t rx[8]) {
 #ifdef DEBUG_DSM
 	printf("V2发送: ");
@@ -71,31 +202,27 @@ static int DSM_V2_Transceive(const uint8_t tx[8], uint8_t rx[8]) {
 	printf("\r\n");
 #endif
 	UART6_DrainRX_UntilIdle(5); // 发前清空残留数据
-	if (HAL_UART_Transmit(&huart6, (uint8_t*) tx, 8, DSM_CMD_TIMEOUT) != HAL_OK) {
+	uint32_t rx_ret = DSM_V2_StartFixedReceiveDma(rx);
+	if (rx_ret != NO_ERROR) {
+		return (int)rx_ret;
+	}
+
+	if (HAL_UART_Transmit_DMA(&huart6, (uint8_t*) tx, 8) != HAL_OK) {
 #ifdef DEBUG_DSM
 #endif
+		DSM_V2_StopDmaReceive();
 		return OTHER_PERIPHERAL_CONFIG_ERROR;
 	}
 
-	uint32_t start = HAL_GetTick();
-	int got = 0;
-	while ((HAL_GetTick() - start) < DSM_V2_RX_TIMEOUT && got < 8) {
-		if (HasEffectiveCommandSwitchRequest()) {
-			/* 命令切换是正常打断，直接向上透传，不参与故障重试。 */
-			return STATE_SWITCH;
-		}
-		if (HAL_UART_Receive(&huart6, &rx[got], 1, 1) == HAL_OK)
-			got++;
-	}
-	if (got < 8) {
-#ifdef DEBUG_DSM
-		if (got == 0) {
-		} else {
-		}
-#endif
-		return (got == 0) ? SENSOR_DEVICE_COMM_TIMEOUT : SENSOR_RESP_FORMAT_ERROR;
+	rx_ret = DSM_V2_WaitTransmitDmaDone(DSM_CMD_TIMEOUT);
+	if (rx_ret != NO_ERROR) {
+		return (int)rx_ret;
 	}
 
+	rx_ret = DSM_V2_WaitFixedReceiveDma(rx, DSM_V2_RX_TIMEOUT);
+	if (rx_ret != NO_ERROR) {
+		return (int)rx_ret;
+	}
 #ifdef DEBUG_DSM
 	printf("V2接收: ");
 	for (int i = 0; i < 8; i++)

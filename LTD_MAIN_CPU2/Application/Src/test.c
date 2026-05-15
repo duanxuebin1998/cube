@@ -27,6 +27,8 @@
 #define MOTOR_TEXT_ENCODER_GUARD_SCALE           1.20f
 #define MOTOR_TEXT_ENCODER_POLL_MS               20U
 #define MOTOR_TEXT_ENCODER_START_GRACE_MS        500U
+#define COMM_TEST_WIRELESS_HOST_ADDR              1U
+#define COMM_TEST_WIRELESS_SLAVE_ADDR             2U
 static uint8_t Test_ShouldAbortForCommandSwitch(void)
 {
     if (!HasEffectiveCommandSwitchRequest()) {
@@ -36,6 +38,37 @@ static uint8_t Test_ShouldAbortForCommandSwitch(void)
     printf("检测到命令切换请求，停止当前串口测试\r\n");
     MotorCtrl_SlowStop();
     return 1;
+}
+/**
+ * @brief  记录单项通信测试结果
+ * @note   仅用于手动测试日志汇总，不改变业务错误状态。
+ */
+static uint8_t Test_CommRecordResult(const char *name, uint32_t ret, uint32_t *ok_count, uint32_t *fail_count)
+{
+    if (ret == NO_ERROR) {
+        (*ok_count)++;
+        printf("[OK] %s\r\n", name);
+        return 1U;
+    }
+
+    (*fail_count)++;
+    printf("[FAIL] %s，错误码=0x%08lX\r\n", name, (unsigned long)ret);
+    return 0U;
+}
+
+/**
+ * @brief  检查手动通信测试是否需要中止
+ * @note   串口调试过程中收到新的有效命令时退出，避免测试函数长时间占用设备。
+ */
+static uint8_t Test_CommShouldStop(uint32_t *fail_count)
+{
+    if (Test_ShouldAbortForCommandSwitch()) {
+        (*fail_count)++;
+        printf("通信测试被命令切换打断\r\n");
+        return 1U;
+    }
+
+    return 0U;
 }
 
 static int32_t Test_GetEncoderValue(void)
@@ -826,6 +859,132 @@ void DSM_V2_Test_AllParams(void) {
     else printf("读取传感器号失败\r\n");
 
 	printf("===== DSM V2 通讯测试结束 =====\r\n\r\n");
+}
+/**
+ * @brief  传感器与无线链路综合通信测试
+ * @note   手动调试入口，建议在系统初始化完成后临时调用；函数会执行传感器识别，
+ *         并刷新 g_deviceParams.sensorType/sensorID，正式流程中不要周期性调用。
+ */
+void SensorWireless_CommTest(void)
+{
+    uint32_t ok_count = 0U;
+    uint32_t fail_count = 0U;
+    uint32_t ret;
+    float voltage = 0.0f;
+    float temp = 0.0f;
+    float density = 0.0f;
+    float frequency = 0.0f;
+    uint32_t level_freq = 0U;
+    uint32_t sensor_id = 0U;
+    char id_text[RCVBUFFLEN] = {0};
+
+    printf("\r\n===== 传感器与无线通信测试开始 =====\r\n");
+
+    ret = WIRELESS_ProbeNode(COMM_TEST_WIRELESS_HOST_ADDR);
+    if (Test_CommRecordResult("无线主机链路探测", ret, &ok_count, &fail_count)) {
+        if (Test_CommShouldStop(&fail_count)) {
+            return;
+        }
+        ret = WIRELESS_PrintInfo(COMM_TEST_WIRELESS_HOST_ADDR);
+        (void)Test_CommRecordResult("读取无线主机信息", ret, &ok_count, &fail_count);
+    }
+
+    if (Test_CommShouldStop(&fail_count)) {
+        return;
+    }
+
+    ret = WIRELESS_ProbeNode(COMM_TEST_WIRELESS_SLAVE_ADDR);
+    if (Test_CommRecordResult("无线从机链路探测", ret, &ok_count, &fail_count)) {
+        if (Test_CommShouldStop(&fail_count)) {
+            return;
+        }
+        ret = WIRELESS_PrintInfo(COMM_TEST_WIRELESS_SLAVE_ADDR);
+        (void)Test_CommRecordResult("读取无线从机信息", ret, &ok_count, &fail_count);
+    }
+
+    if (Test_CommShouldStop(&fail_count)) {
+        return;
+    }
+
+    ret = DetectSensorType();
+    if (!Test_CommRecordResult("传感器协议识别", ret, &ok_count, &fail_count)) {
+        printf("协议识别失败，跳过传感器参数读取\r\n");
+        printf("===== 通信测试结束，成功=%lu 失败=%lu =====\r\n\r\n",
+               (unsigned long)ok_count,
+               (unsigned long)fail_count);
+        return;
+    }
+
+    printf("识别结果: sensorType=%lu sensorID=%lu\r\n",
+           (unsigned long)g_deviceParams.sensorType,
+           (unsigned long)g_deviceParams.sensorID);
+
+    if (g_deviceParams.sensorType == DSM_SENSOR) {
+        ret = Read_VibrationTube_ID(id_text, sizeof(id_text));
+        if (Test_CommRecordResult("DSM一代读取振动管编号", ret, &ok_count, &fail_count)) {
+            printf("DSM一代振动管编号: %s\r\n", id_text);
+        }
+
+        if (Test_CommShouldStop(&fail_count)) {
+            return;
+        }
+
+        ret = DSM_EnableDensityMode();
+        if (Test_CommRecordResult("DSM一代切换密度模式", (uint32_t)ret, &ok_count, &fail_count)) {
+            ret = (uint32_t)DSM_Read_Frequency_Density_Temp(&frequency, &density, &temp);
+            if (Test_CommRecordResult("DSM一代读取频率/密度/温度", ret, &ok_count, &fail_count)) {
+                printf("DSM一代密度数据: 频率=%.3f Hz 密度=%.3f 温度=%.3f\r\n", frequency, density, temp);
+            }
+        }
+
+        if (Test_CommShouldStop(&fail_count)) {
+            return;
+        }
+
+        ret = (uint32_t)DSM_EnableLevelMode();
+        if (Test_CommRecordResult("DSM一代切换液位模式", ret, &ok_count, &fail_count)) {
+            ret = Read_Level_Frequency(&level_freq);
+            if (Test_CommRecordResult("DSM一代读取液位频率", ret, &ok_count, &fail_count)) {
+                printf("DSM一代液位频率: %lu Hz\r\n", (unsigned long)level_freq);
+            }
+        }
+
+        ret = Read_Sensor_Voltage(&voltage);
+        if (Test_CommRecordResult("DSM一代读取供电电压", ret, &ok_count, &fail_count)) {
+            printf("DSM一代供电电压: %.3f V\r\n", voltage);
+        }
+    } else if (g_deviceParams.sensorType == LTD_SENSOR) {
+        ret = (uint32_t)DSM_V2_Read_SensorID(&sensor_id);
+        if (Test_CommRecordResult("LTD/V2读取传感器编号", ret, &ok_count, &fail_count)) {
+            printf("LTD/V2传感器编号: %lu\r\n", (unsigned long)sensor_id);
+        }
+
+        if (Test_CommShouldStop(&fail_count)) {
+            return;
+        }
+
+        ret = (uint32_t)DSM_V2_Read_Temperature(&temp);
+        if (Test_CommRecordResult("LTD/V2读取温度", ret, &ok_count, &fail_count)) {
+            printf("LTD/V2温度: %.3f ℃\r\n", temp);
+        }
+
+        ret = (uint32_t)DSM_V2_Read_Density(&density);
+        if (Test_CommRecordResult("LTD/V2读取密度", ret, &ok_count, &fail_count)) {
+            printf("LTD/V2密度: %.3f\r\n", density);
+        }
+
+        ret = (uint32_t)DSM_V2_Read_LevelFrequency(&level_freq);
+        if (Test_CommRecordResult("LTD/V2读取液位频率", ret, &ok_count, &fail_count)) {
+            printf("LTD/V2液位频率: %lu Hz\r\n", (unsigned long)level_freq);
+        }
+    } else {
+        fail_count++;
+        printf("未知传感器类型: %lu\r\n", (unsigned long)g_deviceParams.sensorType);
+    }
+
+    printf("===== 通信测试结束，成功=%lu 失败=%lu =====\r\n\r\n",
+           (unsigned long)ok_count,
+           (unsigned long)fail_count);
 }
 static uint8_t Demo_SinglePointDisplay_ShouldAbort(void)
 {

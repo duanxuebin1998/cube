@@ -31,63 +31,63 @@ PUTCHAR_PROTOTYPE {
 }
 #endif
 
-volatile uint8_t USART1_RX_LEN = 0;              // ����һ֡���ݵĳ���
-uint8_t USART1_RX_BUF[USART1_RX_BUF_SIZE] = { 0 };   // �������ݻ�����
+volatile uint8_t USART1_RX_LEN = 0;              // 接收一帧数据的长度
+uint8_t USART1_RX_BUF[USART1_RX_BUF_SIZE] = { 0 };   // 接收数据缓冲区
 
-volatile uint8_t USART2_RX_LEN = 0;              // ����һ֡���ݵĳ���
-volatile uint8_t USART2_TX_LEN = 0;              // ����һ֡���ݵĳ���
-uint8_t USART2_RX_BUF[USART2_RX_BUF_SIZE] = { 0 };   // �������ݻ�����
-uint8_t USART2_TX_BUF[USART2_RX_BUF_SIZE] = { 0 };   // �������ݻ�����
+volatile uint8_t USART2_RX_LEN = 0;              // 接收一帧数据的长度
+volatile uint8_t USART2_TX_LEN = 0;              // 接收一帧数据的长度
+uint8_t USART2_RX_BUF[USART2_RX_BUF_SIZE] = { 0 };   // 接收数据缓冲区
+uint8_t USART2_TX_BUF[USART2_RX_BUF_SIZE] = { 0 };   // 发送数据缓冲区
 
-volatile uint8_t USART4_RX_LEN = 0;              // ����һ֡���ݵĳ���
-uint8_t USART4_RX_BUF[USART4_RX_BUF_SIZE] = { 0 };   // �������ݻ�����
+volatile uint8_t USART4_RX_LEN = 0;              // 接收一帧数据的长度
+uint8_t USART4_RX_BUF[USART4_RX_BUF_SIZE] = { 0 };   // 接收数据缓冲区
 
-volatile uint16_t UART5_RX_LEN = 0;              // ����һ֡���ݵĳ���
-uint8_t UART5_RX_BUF[UART5_RX_BUF_SIZE] = { 0 };   // �������ݻ�����
+volatile uint16_t UART5_RX_LEN = 0;              // 接收一帧数据的长度
+uint8_t UART5_RX_BUF[UART5_RX_BUF_SIZE] = { 0 };   // 接收数据缓冲区
 
 /**
- * @brief UART������ɻص�����
+ * @brief UART发送完成回调函数
  *
- * �ú�����UART DMA������ɺ�HAL����ã����ڴ���USART2��UART5�ķ�������¼���
- * ��Ҫ���ܰ����ȴ�������ɱ�־����ʱ��֤�ź��ȶ����л�������ģʽ������DMA���ա�
+ * 该函数在UART DMA发送完成后被HAL库调用，用于处理USART2和UART5的发送完成事件。
+ * 主要功能包括等待传输完成标志、延时保证信号稳定、切换到接收模式并启动DMA接收。
  *
- * @param huart UART���ָ�룬ָ�򴥷��ص���UART����
+ * @param huart UART句柄指针，指向触发回调的UART外设
  *
- * @note USART2�������̣�
- *       - �ȴ�������ɱ�־��UART_FLAG_TC��
- *       - ��ʱԼ0.1ms��180000�οղ�����ȷ����ƽ�ָ�����״̬
- *       - ͨ��HART_RTS�����л�������ģʽ��GPIO_PIN_SET��
- *       - ����DMA�������ݵ�USART2_RX_BUF
+ * @note USART2处理流程：
+ *       - 等待传输完成标志（UART_FLAG_TC）
+ *       - 延时约0.1ms（180000次空操作）确保电平恢复空闲状态
+ *       - 通过HART_RTS引脚切换到接收模式（GPIO_PIN_SET）
+ *       - 启动DMA接收数据到USART2_RX_BUF
  *
- * @note UART5�������̣�
- *       - �ȴ�������ɱ�־��UART_FLAG_TC��
- *       - ͨ��RS485_SET_RECV_MODE()�л�������ģʽ
- *       - ����DMA�������ݵ�UART5_RX_BUF
+ * @note UART5处理流程：
+ *       - 等待传输完成标志（UART_FLAG_TC）
+ *       - 通过RS485_SET_RECV_MODE()切换到接收模式
+ *       - 启动DMA接收数据到UART5_RX_BUF
  *
- * @warning �ú���ʹ��æ�ȴ�ѭ����while��forѭ������������CPUִ��
- * @warning USART2����ʱѭ��ʹ��180000�οղ�����ʵ����ʱʱ��ȡ����CPUʱ��Ƶ��
+ * @warning 该函数使用忙等待循环（while和for循环），会阻塞CPU执行
+ * @warning USART2的延时循环使用180000次空操作，实际延时时间取决于CPU时钟频率
  */
 void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart) {
 	if (huart->Instance == USART2) {
-		//�ȴ�DMA��ȫ�������
+		//等待DMA完全发送完成
 		while (__HAL_UART_GET_FLAG(&huart2, UART_FLAG_TC) == RESET)
 			;
-		//������ʱ0.1ms����֤�������ݵ�ƽ��ȫ�ָ�����
+		//继续延时0.1ms，保证发送数据电平完全恢复空闲
 		for (volatile uint32_t i = 0; i < 180000; i++) {
 			__NOP();
 		}
-		HAL_GPIO_WritePin(HART_RTS_GPIO_Port, HART_RTS_Pin, GPIO_PIN_SET);   //�л�����ģʽ
+		HAL_GPIO_WritePin(HART_RTS_GPIO_Port, HART_RTS_Pin, GPIO_PIN_SET);   //切换接收模式
 		HAL_UART_Receive_DMA(&huart2, USART2_RX_BUF, USART2_RX_BUF_SIZE);
 	}
 	if (huart->Instance == UART5) {
-		//�ȴ�DMA��ȫ�������
+		//等待DMA完全发送完成
 		while (__HAL_UART_GET_FLAG(&huart5, UART_FLAG_TC) == RESET)
 			;
-//		//������ʱ0.1ms����֤�������ݵ�ƽ��ȫ�ָ�����
+//		//继续延时0.1ms，保证发送数据电平完全恢复空闲
 //		for (volatile uint32_t i = 0; i < 180000; i++) {
 //			__NOP();
 //		}
-		RS485_SET_RECV_MODE();//�л�����ģʽ
+		RS485_SET_RECV_MODE();//切换接收模式
 		HAL_UART_Receive_DMA(&huart5, UART5_RX_BUF, UART5_RX_BUF_SIZE);
 	}
 }
@@ -107,6 +107,8 @@ DMA_HandleTypeDef hdma_uart5_tx;
 DMA_HandleTypeDef hdma_usart1_rx;
 DMA_HandleTypeDef hdma_usart2_rx;
 DMA_HandleTypeDef hdma_usart2_tx;
+DMA_HandleTypeDef hdma_usart6_tx;
+DMA_HandleTypeDef hdma_usart6_rx;
 
 /* UART4 init function */
 void MX_UART4_Init(void)
@@ -613,6 +615,47 @@ void HAL_UART_MspInit(UART_HandleTypeDef* uartHandle)
     GPIO_InitStruct.Alternate = GPIO_AF8_USART6;
     HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
 
+    /* USART6 DMA Init */
+    /* USART6_TX Init */
+    hdma_usart6_tx.Instance = DMA2_Stream6;
+    hdma_usart6_tx.Init.Channel = DMA_CHANNEL_5;
+    hdma_usart6_tx.Init.Direction = DMA_MEMORY_TO_PERIPH;
+    hdma_usart6_tx.Init.PeriphInc = DMA_PINC_DISABLE;
+    hdma_usart6_tx.Init.MemInc = DMA_MINC_ENABLE;
+    hdma_usart6_tx.Init.PeriphDataAlignment = DMA_PDATAALIGN_BYTE;
+    hdma_usart6_tx.Init.MemDataAlignment = DMA_MDATAALIGN_BYTE;
+    hdma_usart6_tx.Init.Mode = DMA_NORMAL;
+    hdma_usart6_tx.Init.Priority = DMA_PRIORITY_LOW;
+    hdma_usart6_tx.Init.FIFOMode = DMA_FIFOMODE_DISABLE;
+    if (HAL_DMA_Init(&hdma_usart6_tx) != HAL_OK)
+    {
+      Error_Handler();
+    }
+
+    __HAL_LINKDMA(uartHandle,hdmatx,hdma_usart6_tx);
+
+    /* USART6_RX Init */
+    hdma_usart6_rx.Instance = DMA2_Stream1;
+    hdma_usart6_rx.Init.Channel = DMA_CHANNEL_5;
+    hdma_usart6_rx.Init.Direction = DMA_PERIPH_TO_MEMORY;
+    hdma_usart6_rx.Init.PeriphInc = DMA_PINC_DISABLE;
+    hdma_usart6_rx.Init.MemInc = DMA_MINC_ENABLE;
+    hdma_usart6_rx.Init.PeriphDataAlignment = DMA_PDATAALIGN_BYTE;
+    hdma_usart6_rx.Init.MemDataAlignment = DMA_MDATAALIGN_BYTE;
+    hdma_usart6_rx.Init.Mode = DMA_NORMAL;
+    hdma_usart6_rx.Init.Priority = DMA_PRIORITY_LOW;
+    hdma_usart6_rx.Init.FIFOMode = DMA_FIFOMODE_DISABLE;
+    if (HAL_DMA_Init(&hdma_usart6_rx) != HAL_OK)
+    {
+      Error_Handler();
+    }
+
+    __HAL_LINKDMA(uartHandle,hdmarx,hdma_usart6_rx);
+
+    /* USART6 interrupt Init */
+    HAL_NVIC_SetPriority(USART6_IRQn, 0, 0);
+    HAL_NVIC_EnableIRQ(USART6_IRQn);
+
   /* USER CODE BEGIN USART6_MspInit 1 */
 
   /* USER CODE END USART6_MspInit 1 */
@@ -767,6 +810,13 @@ void HAL_UART_MspDeInit(UART_HandleTypeDef* uartHandle)
     PC7     ------> USART6_RX
     */
     HAL_GPIO_DeInit(GPIOC, SENSOR_TXD6_Pin|SENSOR_RXD6_Pin);
+
+    /* USART6 DMA DeInit */
+    HAL_DMA_DeInit(uartHandle->hdmatx);
+    HAL_DMA_DeInit(uartHandle->hdmarx);
+
+    /* USART6 interrupt Deinit */
+    HAL_NVIC_DisableIRQ(USART6_IRQn);
 
   /* USER CODE BEGIN USART6_MspDeInit 1 */
 

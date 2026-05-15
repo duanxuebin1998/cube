@@ -92,15 +92,141 @@ static void UART6_DrainRX_UntilIdle(uint32_t idle_ms) {
     __HAL_UART_CLEAR_OREFLAG(&huart6);
 }
 
+static uint8_t s_wireless_dma_rx_buf[8];
+
+/**
+ * @brief 停止 UART6 DMA 接收并清理无线 8 字节协议的硬件错误状态。
+ *
+ * 无线设备参数读取与传感器共用 UART6，提前退出时必须释放 DMA，防止影响后续透传链路。
+ */
+static void WIRELESS_StopDmaReceive(void)
+{
+    (void)HAL_UART_DMAStop(&huart6);
+    __HAL_UART_CLEAR_OREFLAG(&huart6);
+    huart6.ErrorCode = HAL_UART_ERROR_NONE;
+}
+
+/**
+ * @brief 获取 UART6 DMA 当前已收到的无线应答长度。
+ *
+ * DMA 计数器为剩余字节数，这里换算成已收长度；句柄异常时返回 0，由等待逻辑走超时分支。
+ */
+static uint16_t WIRELESS_GetDmaReceivedLength(uint16_t rx_len)
+{
+    uint16_t remain;
+
+    if (huart6.hdmarx == NULL) {
+        return 0U;
+    }
+    remain = (uint16_t)__HAL_DMA_GET_COUNTER(huart6.hdmarx);
+    if (remain > rx_len) {
+        return 0U;
+    }
+    return (uint16_t)(rx_len - remain);
+}
+
+/**
+ * @brief 等待无线链路 UART6 DMA 发送完成。
+ *
+ * 接收 DMA 已提前启动，发送阶段只等待 TX 状态回到 READY；异常退出时释放 DMA，避免影响传感器透传链路。
+ */
+static uint32_t WIRELESS_WaitTransmitDmaDone(uint32_t timeout)
+{
+    uint32_t startTick = HAL_GetTick();
+
+    while ((HAL_GetTick() - startTick) < timeout) {
+        if (HasEffectiveCommandSwitchRequest()) {
+            WIRELESS_StopDmaReceive();
+            return STATE_SWITCH;
+        }
+        if (huart6.gState == HAL_UART_STATE_READY) {
+            return NO_ERROR;
+        }
+        if (huart6.ErrorCode != HAL_UART_ERROR_NONE) {
+            WIRELESS_StopDmaReceive();
+            return OTHER_PERIPHERAL_CONFIG_ERROR;
+        }
+        HAL_Delay(1);
+    }
+
+    WIRELESS_StopDmaReceive();
+    return SENSOR_DEVICE_COMM_TIMEOUT;
+}
+
+/**
+ * @brief 启动无线设备固定 8 字节应答的 UART6 DMA 接收。
+ *
+ * 先打开接收窗口再发送命令，避免无线设备快速回包时丢掉应答帧头。
+ */
+static uint32_t WIRELESS_StartFixedReceiveDma(uint8_t rx[8])
+{
+    const uint16_t expect_len = 8U;
+
+    if (rx == NULL) {
+        return SENSOR_RESP_FORMAT_ERROR;
+    }
+    for (uint16_t i = 0U; i < expect_len; i++) {
+        s_wireless_dma_rx_buf[i] = 0U;
+        rx[i] = 0U;
+    }
+
+    WIRELESS_StopDmaReceive();
+    if (HAL_UART_Receive_DMA(&huart6, s_wireless_dma_rx_buf, expect_len) != HAL_OK) {
+        WIRELESS_StopDmaReceive();
+        return OTHER_PERIPHERAL_CONFIG_ERROR;
+    }
+    return NO_ERROR;
+}
+
+/**
+ * @brief 等待无线设备固定 8 字节应答接收完成。
+ *
+ * 本函数只负责帧长度和 UART 硬件错误判断，校验和、地址、功能码和参数码仍由原有逻辑检查。
+ */
+static uint32_t WIRELESS_WaitFixedReceiveDma(uint8_t rx[8], uint32_t timeout)
+{
+    const uint16_t expect_len = 8U;
+    uint32_t startTick;
+
+    if (rx == NULL) {
+        return SENSOR_RESP_FORMAT_ERROR;
+    }
+
+    startTick = HAL_GetTick();
+    while ((HAL_GetTick() - startTick) < timeout) {
+        uint16_t got = WIRELESS_GetDmaReceivedLength(expect_len);
+
+        if (HasEffectiveCommandSwitchRequest()) {
+            WIRELESS_StopDmaReceive();
+            return STATE_SWITCH;
+        }
+        if (huart6.ErrorCode != HAL_UART_ERROR_NONE) {
+            WIRELESS_StopDmaReceive();
+            return SENSOR_RESP_FORMAT_ERROR;
+        }
+        if (got >= expect_len) {
+            for (uint16_t i = 0U; i < expect_len; i++) {
+                rx[i] = s_wireless_dma_rx_buf[i];
+            }
+            WIRELESS_StopDmaReceive();
+            return NO_ERROR;
+        }
+        HAL_Delay(1);
+    }
+
+    {
+        uint16_t got = WIRELESS_GetDmaReceivedLength(expect_len);
+        for (uint16_t i = 0U; (i < got) && (i < expect_len); i++) {
+            rx[i] = s_wireless_dma_rx_buf[i];
+        }
+        WIRELESS_StopDmaReceive();
+        return (got == 0U) ? SENSOR_DEVICE_COMM_TIMEOUT : SENSOR_RESP_FORMAT_ERROR;
+    }
+}
 /*
- * 完成一次完整的 8->8 收发。
+ * 完成一次完整的无线 8->8 收发。
  *
- * 该函数只负责：
- * 1. 发出完整 8 字节命令
- * 2. 收到完整 8 字节应答
- * 3. 检查应答的求和校验
- *
- * 更高层的“地址/功能码/参数码是否匹配”由 WIRELESS_CheckReply() 负责。
+ * DMA 接收只负责凑满 8 字节，后续校验和、地址、功能码和参数码检查仍保持原有职责分层。
  */
 static uint32_t WIRELESS_Transceive(const uint8_t tx[8], uint8_t rx[8]) {
 #ifdef DEBUG_WIRELESS
@@ -113,33 +239,27 @@ static uint32_t WIRELESS_Transceive(const uint8_t tx[8], uint8_t rx[8]) {
 
     UART6_DrainRX_UntilIdle(5);
 
-    if (HAL_UART_Transmit(&huart6, (uint8_t*)tx, 8, DSM_CMD_TIMEOUT) != HAL_OK) {
+    uint32_t rx_ret = WIRELESS_StartFixedReceiveDma(rx);
+    if (rx_ret != NO_ERROR) {
+        return rx_ret;
+    }
+
+    if (HAL_UART_Transmit_DMA(&huart6, (uint8_t*)tx, 8) != HAL_OK) {
 #ifdef DEBUG_WIRELESS
 #endif
+        WIRELESS_StopDmaReceive();
         return OTHER_PERIPHERAL_CONFIG_ERROR;
     }
 
-    uint32_t start = HAL_GetTick();
-    int got = 0;
-    while ((HAL_GetTick() - start) < WIRELESS_RX_TIMEOUT && got < 8) {
-        if (HasEffectiveCommandSwitchRequest()) {
-            /* 命令切换是正常打断，直接向上透传，不参与故障重试。 */
-            return STATE_SWITCH;
-        }
-        if (HAL_UART_Receive(&huart6, &rx[got], 1, 1) == HAL_OK) {
-            got++;
-        }
+    rx_ret = WIRELESS_WaitTransmitDmaDone(DSM_CMD_TIMEOUT);
+    if (rx_ret != NO_ERROR) {
+        return rx_ret;
     }
 
-    if (got < 8) {
-#ifdef DEBUG_WIRELESS
-        if (got == 0) {
-        } else {
-        }
-#endif
-        return (got == 0) ? SENSOR_DEVICE_COMM_TIMEOUT : SENSOR_RESP_FORMAT_ERROR;
+    rx_ret = WIRELESS_WaitFixedReceiveDma(rx, WIRELESS_RX_TIMEOUT);
+    if (rx_ret != NO_ERROR) {
+        return rx_ret;
     }
-
 #ifdef DEBUG_WIRELESS
     printf("无线接收: ");
     for (int i = 0; i < 8; i++) {
