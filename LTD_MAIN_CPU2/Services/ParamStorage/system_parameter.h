@@ -26,7 +26,7 @@
 #define UNVALID_GSW 0                      // 质量无效值
 
 #define MAX_MEASUREMENT_POINTS 200 // 密度分布测量最大点数
-#define DEVICE_PROTOCOL_VERSION 1u // CPU2/CPU3共享协议版本；旧程序未写入时默认为0
+#define DEVICE_PROTOCOL_VERSION 2u // CPU2/CPU3共享协议版本；旧程序未写入时默认为0
 
 // 模式枚举
 typedef enum {
@@ -166,6 +166,7 @@ typedef enum {
 
     /* --- 参数读取类（新增，放在 15，避免占用你后续密度扩展） --- */
     CMD_READ_PART_PARAMS           = 15,   // 读取部件参数（新增）
+    CMD_CANCEL_MEASUREMENT         = 16,   // 取消当前测量并进入待机
 
     /* 普通指令预留 */
     CMD_RESERVED_CMD1              = 20,

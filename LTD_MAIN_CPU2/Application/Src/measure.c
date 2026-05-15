@@ -21,8 +21,10 @@
 #include "measure_water_level.h"
 #include "error_log.h"
 #include "abortable_delay.h"
+#include "fault_recovery.h"
 
 static void CMD_CorrectOilLevel(void);
+static void CMD_CancelMeasurement(void);
 /* 标定罐高：先测出原始实高，再用标定罐高值修正“当前实高”显示链路。 */
 static void CMD_CalibrateTankHeight(void)
 {
@@ -81,6 +83,11 @@ void CMD_ReadPartParams(void);
 
 void ProcessMeasureCmd(CommandType command)
 {
+    if (command == CMD_CANCEL_MEASUREMENT) {
+        CMD_CancelMeasurement();
+        return;
+    }
+
     uint32_t start_ret = (uint32_t)MeasureStart(); // 测量初始化
     if (start_ret != NO_ERROR) {
         printf("测量启动失败，电机初始化错误码：0x%08lX\r\n", (unsigned long)start_ret);
@@ -269,6 +276,27 @@ void ProcessMeasureCmd(CommandType command)
 }
 
 
+
+static void CMD_CancelMeasurement(void)
+{
+    uint32_t stop_ret;
+
+    printf("执行取消当前测量指令\r\n");
+    FaultRecovery_Cancel("cancel measurement");
+
+    /* 用户主动取消不是故障：清掉当前命令和错误码，再把状态切到待机。 */
+    g_deviceParams.command = CMD_NONE;
+    g_measurement.device_status.current_command = CMD_NONE;
+    g_measurement.device_status.error_code = NO_ERROR;
+
+    stop_ret = MotorCtrl_SlowStop();
+    if ((stop_ret != NO_ERROR) && (stop_ret != STATE_SWITCH)) {
+        printf("取消测量\t停止电机返回：0x%08lX\r\n", (unsigned long)stop_ret);
+    }
+
+    g_measurement.device_status.device_state = STATE_STANDBY;
+    printf("取消测量\t设备已进入待机\r\n");
+}
 /**
  * @brief 处理接收到的命令并执行相应的操作。
  *

@@ -257,6 +257,8 @@ static void password_enter_para(void);	/* 进入参数配置前输入密码 */
 static void password_enter_cmd(void);	/* 进入调试指令前输入密码 */
 static void ifentermainmenu(void);		/* 是否进入罐上操作 */
 static void ifexittankopera(void);		/* 是否退出罐上操作 */
+static void ifcancelmeasurement(void);  /* 是否取消当前测量 */
+static void confirm_cancel_measurement(void); /* 确认取消当前测量 */
 
 /* ---------- 9) 语言设置 ----------
  *	语言菜单与设置项
@@ -432,6 +434,16 @@ struct KeyMenu keymenu[KEYNUM_END] = {
     [KEYNUM_MENU_CPU3_COM3] =
         { menu_cpu3_comm3, menu_cpu3_comm3, menu_cpu3_comm3, menu_cpu3_comm3,
           USE_KEY_BACK | USE_KEY_UP | USE_KEY_DOWN | USE_KEY_SURE, menu_cpu3_comm3 },
+
+    /* 状态显示界面长按返回后的取消测量确认页 */
+    [KEYNUM_IF_CANCEL_MEASUREMENT] =
+        { exitTankOpera, NULL, NULL, confirm_cancel_measurement,
+          USE_KEY_BACK | USE_KEY_SURE, ifcancelmeasurement },
+
+    /* 故障状态长按返回后的故障原因查看页 */
+    [KEYNUM_ERROR_REASON] =
+        { exitTankOpera, NULL, NULL, exitTankOpera,
+          USE_KEY_BACK | USE_KEY_SURE, Display_ShowErrorReasonPage },
 };
 
 
@@ -1196,6 +1208,57 @@ static void send_cpu2_command(uint32_t cmd)
                               &cmd);
 }
 
+static uint8_t display_state_can_cancel_measurement(DeviceState state)
+{
+    if ((state == STATE_STANDBY) ||
+        (state == STATE_ERROR) ||
+        (state == STATE_MAINTENANCEMODE)) {
+        return 0;
+    }
+
+    if ((g_measurement.device_status.current_command != CMD_NONE) ||
+        ((state >= STATE_BACKZEROING) && (state <= STATE_CALIBRATE_TANKHEIGHTING)) ||
+        (state == STATE_FLOWOIL) ||
+        (state == STATE_FOLLOW_WATERING)) {
+        return 1;
+    }
+
+    return 0;
+}
+
+void Display_RequestCancelMeasurement(void)
+{
+    DeviceState state = g_measurement.device_status.device_state;
+
+    /* 只在确实有测量/运动过程时下发取消命令，避免待机页误触发。 */
+    if (!display_state_can_cancel_measurement(state)) {
+        return;
+    }
+
+    send_cpu2_command(CMD_CANCEL_MEASUREMENT);
+}
+
+void Display_EnterCancelMeasurementConfirm(void)
+{
+    DeviceState state = g_measurement.device_status.device_state;
+
+    if ((state == STATE_ERROR) && (g_measurement.device_status.error_code != NO_ERROR)) {
+        FlagofTankOpera = true;
+        useKey();
+        keymenu[KEYNUM_ERROR_REASON].execute_opera();
+        return;
+    }
+
+    if (!display_state_can_cancel_measurement(state)) {
+        FlagofTankOpera = false;
+        return;
+    }
+
+    FlagofTankOpera = true;
+    useKey();
+    keymenu[KEYNUM_IF_CANCEL_MEASUREMENT].execute_opera();
+}
+
 /* 不带参线圈指令处理过程 */
 static void cmd_nopara_process(void)
 {
@@ -1585,6 +1648,23 @@ static void ifexittankopera(void)
 	DisplayLangaugeLineWords((uint8_t*)"是否退出罐上操作?", OLED_LINE8_1, OLED_ROW4_1, 0, (uint8_t*)"Exit operation?");
 	DisplayLangaugeLineWords((uint8_t*)"返回", OLED_LINE8_1, OLED_ROW4_4, 0, (uint8_t*)"Back");
 	DisplayLangaugeLineWords((uint8_t*)"确认", OLED_LINE8_8, OLED_ROW4_4, 0, (uint8_t*)"Ok");
+}
+
+/* 是否取消当前测量 */
+static void ifcancelmeasurement(void)
+{
+	all_screen(0x00);
+	func_index = KEYNUM_IF_CANCEL_MEASUREMENT;
+	DisplayLangaugeLineWords((uint8_t*)"是否停止测量?", OLED_LINE8_1, OLED_ROW4_1, 0, (uint8_t*)"Cancel measure?");
+	DisplayLangaugeLineWords((uint8_t*)"返回", OLED_LINE8_1, OLED_ROW4_4, 0, (uint8_t*)"Back");
+	DisplayLangaugeLineWords((uint8_t*)"确认", OLED_LINE8_8, OLED_ROW4_4, 0, (uint8_t*)"Ok");
+}
+
+/* 确认取消测量：确认键触发后直接下发CPU2取消测量命令。 */
+static void confirm_cancel_measurement(void)
+{
+	Display_RequestCancelMeasurement();
+	exitTankOpera();
 }
 
 /* 进入参数配置前的密码输入操作页 */
