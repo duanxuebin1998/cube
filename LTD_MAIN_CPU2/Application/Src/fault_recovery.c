@@ -8,6 +8,7 @@
 #include "error_log.h"
 
 #define FAULT_RECOVERY_INTERVAL_MS 1000U
+#define FAULT_RECOVERY_MAX_MEASURE_RETRY 3U
 
 typedef struct {
     uint8_t active;               /* 是否存在待恢复命令；为 0 时主循环不进入恢复轮询。 */
@@ -16,6 +17,8 @@ typedef struct {
     DeviceState device_state;     /* 进入恢复时的设备状态，等待期反复恢复，避免空闲兜底清掉错误态。 */
     uint32_t zero_point_status;   /* 进入恢复时的零点状态，等待期保持给 CPU3/显示侧读取。 */
     uint32_t last_check_tick;     /* 上次恢复检查时刻，用于 1 秒节流，避免连续刷通信和日志。 */
+    uint32_t command_retry_count; /* 已经由自动恢复触发的业务命令重跑次数。 */
+    uint8_t awaiting_retry_result;/* 已触发重跑后置 1，等待命令结果决定清理或继续恢复。 */
 } FaultRecoveryContext;
 
 static FaultRecoveryContext s_fault_recovery = {
@@ -25,6 +28,8 @@ static FaultRecoveryContext s_fault_recovery = {
     .device_state = STATE_ERROR,
     .zero_point_status = 0U,
     .last_check_tick = 0U,
+    .command_retry_count = 0U,
+    .awaiting_retry_result = 0U,
 };
 
 /**
@@ -97,6 +102,8 @@ static void FaultRecovery_ClearContext(void)
     s_fault_recovery.device_state = STATE_ERROR;   /* 保持默认错误态，下一次启动恢复会重新覆盖。 */
     s_fault_recovery.zero_point_status = 0U;       /* 清除恢复期保持给显示侧的零点状态。 */
     s_fault_recovery.last_check_tick = 0U;         /* 清除节流时间，下一次启动时重新计时。 */
+    s_fault_recovery.command_retry_count = 0U;     /* 清除自动重跑计数，新命令重新计算。 */
+    s_fault_recovery.awaiting_retry_result = 0U;   /* 清除等待重跑结果标志。 */
 }
 
 /**
@@ -139,6 +146,36 @@ static void FaultRecovery_RecordFailure(uint32_t error_code)
 }
 
 /**
+ * @brief 自动恢复重跑测量次数达到上限后停止继续重跑。
+ *
+ * 读取部件参数可以持续用于恢复确认，但真正业务测量不能无限次重入；
+ * 达到上限后保留最后一次错误状态，交给空闲错误兜底和显示侧处理。
+ * @param error_code 最后一次业务测量失败的错误码。
+ */
+static void FaultRecovery_StopAfterMaxRetry(uint32_t error_code)
+{
+    if ((error_code == NO_ERROR) || (error_code == STATE_SWITCH)) {
+        error_code = s_fault_recovery.error_code;
+    }
+
+    g_measurement.device_status.device_state = STATE_ERROR;
+    g_measurement.device_status.error_code = error_code;
+    g_measurement.device_status.zero_point_status = 1U;
+    g_measurement.device_status.current_command = CMD_NONE;
+
+    printf("自动恢复\t测量重跑次数达到上限%lu次，停止自动重跑，错误码=0x%08lX\r\n",
+           (unsigned long)FAULT_RECOVERY_MAX_MEASURE_RETRY,
+           (unsigned long)error_code);
+
+    // 错误	阶段：错误报警	模块：系统	操作：自动恢复	原因：自动恢复失败	处理：停止测量
+    ErrorLog_Warn(ERROR_LOG_MODULE_SYSTEM,
+                  ERROR_LOG_OP_AUTO_RECOVER,
+                  ERROR_LOG_REASON_AUTO_RECOVER_FAIL,
+                  ERROR_LOG_ACTION_STOP_MEASURE);
+    FaultRecovery_ClearContext();
+}
+
+/**
  * @brief 测量命令失败后启动自动恢复等待。
  *
  * 这里只保存失败命令和错误上下文，不立即执行恢复动作，避免在命令收尾过程中嵌套重跑业务。
@@ -147,12 +184,18 @@ static void FaultRecovery_RecordFailure(uint32_t error_code)
  */
 static void FaultRecovery_Start(CommandType command, uint32_t error_code)
 {
+    uint32_t retry_count = 0U;
+
     if ((error_code == NO_ERROR) || (error_code == STATE_SWITCH)) {
         return;
     }
 
     if (!FaultRecovery_IsRecoverableCommand(command)) {
         return;
+    }
+
+    if (s_fault_recovery.active && (s_fault_recovery.command == command)) {
+        retry_count = s_fault_recovery.command_retry_count;
     }
 
     if (g_measurement.device_status.device_state != STATE_ERROR) {
@@ -168,6 +211,8 @@ static void FaultRecovery_Start(CommandType command, uint32_t error_code)
     s_fault_recovery.device_state = g_measurement.device_status.device_state; /* 保存当前错误态，等待期反复恢复。 */
     s_fault_recovery.zero_point_status = g_measurement.device_status.zero_point_status; /* 保存显示侧需要看到的零点状态。 */
     s_fault_recovery.last_check_tick = HAL_GetTick();                         /* 从启动恢复时开始计 1 秒检查间隔。 */
+    s_fault_recovery.command_retry_count = retry_count;                       /* 同一命令多轮恢复时保留已重跑次数。 */
+    s_fault_recovery.awaiting_retry_result = 0U;                              /* 重新进入恢复等待，还没有触发下一次重跑。 */
 
     // 错误	阶段：错误报警	模块：系统	操作：自动恢复	原因：进入自动恢复	处理：继续尝试
     ErrorLog_Warn(ERROR_LOG_MODULE_SYSTEM,
@@ -180,6 +225,25 @@ static void FaultRecovery_Start(CommandType command, uint32_t error_code)
 void FaultRecovery_UpdateAfterCommand(CommandType command)
 {
     uint32_t error_code = g_measurement.device_status.error_code;
+
+    if (s_fault_recovery.active &&
+        s_fault_recovery.awaiting_retry_result &&
+        (s_fault_recovery.command == command)) {
+        s_fault_recovery.awaiting_retry_result = 0U;
+
+        if ((error_code == NO_ERROR) || (error_code == STATE_SWITCH)) {
+            FaultRecovery_ClearContext();
+            return;
+        }
+
+        if (s_fault_recovery.command_retry_count >= FAULT_RECOVERY_MAX_MEASURE_RETRY) {
+            FaultRecovery_StopAfterMaxRetry(error_code);
+            return;
+        }
+
+        FaultRecovery_Start(command, error_code);
+        return;
+    }
 
     /* 命令结束后仍有真实错误码，才进入恢复等待；命令切换不算故障。 */
     if ((error_code != NO_ERROR) && (error_code != STATE_SWITCH)) {
@@ -268,16 +332,22 @@ FaultRecoveryResult FaultRecovery_Poll(void)
         return result;
     }
 
+    if (s_fault_recovery.command_retry_count >= FAULT_RECOVERY_MAX_MEASURE_RETRY) {
+        FaultRecovery_StopAfterMaxRetry(s_fault_recovery.error_code);
+        return result;
+    }
+
+    s_fault_recovery.command_retry_count++;    /* 只统计真正进入业务测量的自动重跑次数，不限制部件参数读取。 */
+    s_fault_recovery.awaiting_retry_result = 1U; /* 保持上下文，等重跑命令结束后判断成功或继续恢复。 */
     result.should_retry_command = 1U;          /* 恢复确认成功，通知主循环重跑原命令。 */
     result.retry_command = s_fault_recovery.command; /* 恢复模块不直接执行业务，只返回需要重跑的命令。 */
 
-    // 错误	阶段：重试成功	模块：系统	操作：自动恢复	原因：恢复成功	尝试：1U/1U
+    // 错误	阶段：重试成功	模块：系统	操作：自动恢复	原因：恢复成功	尝试：s_fault_recovery.command_retry_count/FAULT_RECOVERY_MAX_MEASURE_RETRY
     ErrorLog_Recover(ERROR_LOG_MODULE_SYSTEM,
                      ERROR_LOG_OP_AUTO_RECOVER,
                      ERROR_LOG_REASON_RECOVER_OK,
-                     1U,
-                     1U);
-    FaultRecovery_ClearContext();                  /* 清掉上下文，避免重跑成功后继续恢复。 */
+                     s_fault_recovery.command_retry_count,
+                     FAULT_RECOVERY_MAX_MEASURE_RETRY);
     g_measurement.device_status.error_code = NO_ERROR; /* 恢复成功后清除全局错误码。 */
     return result;
 }
