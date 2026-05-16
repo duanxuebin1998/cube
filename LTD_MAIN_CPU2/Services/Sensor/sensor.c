@@ -311,6 +311,17 @@ uint32_t EnableDensityMode(void) {
 	return Sensor_DiagnoseCommTimeout(ret, "切换密度模式");
 }
 
+static uint32_t Sensor_PrepareLtdDensityModeForPartParams(void)
+{
+	uint32_t ret = EnableDensityMode();
+	if (ret != NO_ERROR) {
+		return ret;
+	}
+	printf("读取部件参数\tLTD已切换密度模式，等待%lu ms稳定\r\n",
+	       (unsigned long)SENSOR_DENSITY_MODE_SETTLE_MS);
+	return AbortableDelay_CommandSwitch(SENSOR_DENSITY_MODE_SETTLE_MS, 50U);
+}
+
 uint32_t EnableLevelMode(void) {
 	uint32_t ret;
 
@@ -719,6 +730,7 @@ static uint32_t Read_WeightParam_Adapter(void)
 static uint32_t Sensor_ReadPartParamsInternal(uint8_t update_command_state)
 {
     uint32_t ret = NO_ERROR;
+    uint8_t is_ltd_sensor = (g_deviceParams.sensorType != DSM_SENSOR) ? 1U : 0U;
 
     float ax = 0.0f, ay = 0.0f;
     float freq = 0.0f, dens = 0.0f, temp = 0.0f;
@@ -797,9 +809,29 @@ static uint32_t Sensor_ReadPartParamsInternal(uint8_t update_command_state)
         return STATE_SWITCH;
     }
 
-    ret = Read_Density(&freq, &dens, &temp);
+    if (is_ltd_sensor) {
+        ret = Sensor_PrepareLtdDensityModeForPartParams();
+        if (ret == STATE_SWITCH) {
+            return STATE_SWITCH;
+        }
+    }
+
+    if (ret == NO_ERROR) {
+        ret = Read_Density(&freq, &dens, &temp);
+        if (ret == STATE_SWITCH) {
+            return STATE_SWITCH;
+        }
+    }
+
     if (ret != NO_ERROR) {
-        return ret;
+        if (is_ltd_sensor) {
+            g_measurement.debug_data.frequency = 0U;
+            printf("读取部件参数\tLTD密度/频率暂未读到，按部分成功处理，其他部件参数保留有效。错误码=0x%08lX\r\n",
+                   (unsigned long)ret);
+            ret = NO_ERROR;
+        } else {
+            return ret;
+        }
     } else {
         /* 你 Read_Density() 里已写 debug_data.temperature/frequency，这里保证一致 */
         g_measurement.debug_data.frequency    = (uint32_t)freq;   /* 若你要保留小数频率，可改成 ×100 或另存 */

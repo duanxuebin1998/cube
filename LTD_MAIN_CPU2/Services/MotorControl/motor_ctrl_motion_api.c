@@ -20,6 +20,28 @@ static uint32_t MotorMotion_WaitStoppedAfterStopCommand(uint32_t timeout_ms);
 
 /* ===================== 对外接口 ===================== */
 
+const char *MotorCtrl_DirectionText(int dir)
+{
+    if (dir == MOTOR_DIRECTION_UP) {
+        return "上行";
+    }
+    if (dir == MOTOR_DIRECTION_DOWN) {
+        return "下行";
+    }
+    return "未知";
+}
+
+const char *MotorCtrl_DisplayStateText(uint32_t display_state)
+{
+    if (display_state == 1U) {
+        return "上行";
+    }
+    if (display_state == 2U) {
+        return "下行";
+    }
+    return "静止";
+}
+
 /**
  * @brief 按相对 ticks 移动并等待停止。
  *
@@ -646,6 +668,8 @@ uint32_t MotorCtrl_MoveToPosition(float target_mm, uint32_t speed_x100)
         }
 
         int dir = (delta > 0.0f) ? MOTOR_DIRECTION_UP : MOTOR_DIRECTION_DOWN;
+        printf("运动到位置 | 方向：%s | 剩余距离：%.3fmm\r\n",
+               MotorCtrl_DirectionText(dir), fabsf(delta));
 
         float plan_mm = fabsf(delta);
         if (plan_mm < (EPS_MM * 2.0f)) {
@@ -784,7 +808,7 @@ uint32_t MotorCtrl_MoveBlockingNoDetect(float mm, int dir, uint32_t speed_x100)
         return ret;
     }
 
-    printf("无检测阻塞运动：距离=%.2f, 方向：%d\r\n", mm, dir);
+    printf("无检测阻塞运动：距离=%.2f, 方向：%s\r\n", mm, MotorCtrl_DirectionText(dir));
 
     g_measurement.debug_data.motor_state = (dir == MOTOR_DIRECTION_UP) ? 1U : 2U;
     ret = MotorDriver_SyncPositionOrCheckHealth(&stepper);

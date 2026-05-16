@@ -71,6 +71,12 @@ uint32_t MotorCtrl_SlowStop(void);
 /** 获取当前显示用电机状态：0 停止，1 上行，2 下行。 */
 uint32_t MotorCtrl_GetDisplayState(void);
 
+/** 将业务方向转换为统一中文文本，避免日志各处手写方向导致口径相反。 */
+const char *MotorCtrl_DirectionText(int dir);
+
+/** 将显示状态转换为统一中文文本：0 静止，1 上行，2 下行。 */
+const char *MotorCtrl_DisplayStateText(uint32_t display_state);
+
 /**
  * @brief 运行期位置轮询
  *

@@ -185,7 +185,7 @@ uint32_t SearchBottom(void)
     /* -------------------- 初始位置调整 -------------------- */
     if (g_measurement.debug_data.cable_length > 2000)
     {
-        ret = MotorCtrl_MoveAndWait(100.0, MOTOR_DIRECTION_UP, MotorCtrl_GetDefaultSpeedX100());
+        ret = MotorCtrl_MoveBlockingNoDetect(100.0, MOTOR_DIRECTION_UP, MotorCtrl_GetDefaultSpeedX100());
         CHECK_ERROR(ret);
         printf("罐底测量\t上行完成\r\n");
     }
@@ -365,7 +365,7 @@ uint32_t SearchBottom(void)
     // 电机上行，完成流程
     ApplyBottomEncoderCorrection();
 
-    ret = MotorCtrl_MoveAndWait(100, MOTOR_DIRECTION_UP, MotorCtrl_GetDefaultSpeedX100());
+    ret = MotorCtrl_MoveBlockingNoDetect(100.0, MOTOR_DIRECTION_UP, MotorCtrl_GetDefaultSpeedX100());
     CHECK_ERROR(ret);
     printf("罐底测量\t电机上行完成，流程结束\r\n");
 
@@ -409,7 +409,7 @@ static int SearchBottomRough() {
         return NO_ERROR;
     }
     else {
-        ret = MotorCtrl_MoveAndWait(100.0, MOTOR_DIRECTION_UP, MotorCtrl_GetDefaultSpeedX100());
+        ret = MotorCtrl_MoveBlockingNoDetect(100.0, MOTOR_DIRECTION_UP, MotorCtrl_GetDefaultSpeedX100());
         CHECK_ERROR(ret);  // 检查上行是否成功
         printf("罐底测量\t上行100mm\r\n");
         return MEASUREMENT_WEIGHT_DOWN_FAIL;
@@ -610,7 +610,7 @@ static uint32_t EnsureGyroZeroRefForBottomMeasurement(void)
     }
 
     if (g_measurement.debug_data.cable_length > 1000) {
-        ret = MotorCtrl_MoveAndWait(BOTTOM_GYRO_REF_SAFE_LIFT_MM, MOTOR_DIRECTION_UP, MotorCtrl_GetDefaultSpeedX100());
+        ret = MotorCtrl_MoveBlockingNoDetect(BOTTOM_GYRO_REF_SAFE_LIFT_MM, MOTOR_DIRECTION_UP, MotorCtrl_GetDefaultSpeedX100());
         if (ret != NO_ERROR) {
             return ret;
         }

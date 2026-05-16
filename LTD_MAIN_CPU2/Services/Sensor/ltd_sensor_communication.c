@@ -241,7 +241,8 @@ static int DSM_V2_Transceive(const uint8_t tx[8], uint8_t rx[8]) {
 // === 内部：校验功能码/参数码 ===
 static int DSM_V2_CheckReply(const uint8_t tx[8], const uint8_t rx[8]) {
 	uint8_t expect_func = tx[1] | 0x80; // 从机高位置1
-	uint8_t expect_param = tx[6];        // 设置模式时固定 0x00
+	uint8_t expect_param = ((tx[1] == (uint8_t)DSM_V2_MODE_LEVEL) ||
+	                        (tx[1] == (uint8_t)DSM_V2_MODE_DENSITY)) ? 0x00U : tx[6];
 
 	if (rx[1] != expect_func) {
 #ifdef DEBUG_DSM
@@ -249,10 +250,10 @@ static int DSM_V2_CheckReply(const uint8_t tx[8], const uint8_t rx[8]) {
 #endif
 		return SENSOR_RESP_FORMAT_ERROR;
 	}
-	if (rx[6] == 0xFF) {
-#ifdef DEBUG_DSM
-#endif
-		return SENSOR_DEVICE_REPORTED_ERROR;
+	if (rx[6] == 0xFFU) {
+		printf("V2应答参数为0xFF，仅记录原始帧，不置错误：%02X %02X %02X %02X %02X %02X %02X %02X\r\n",
+		       rx[0], rx[1], rx[2], rx[3], rx[4], rx[5], rx[6], rx[7]);
+		return NO_ERROR;
 	}
 	if (rx[6] != expect_param) {
 #ifdef DEBUG_DSM
@@ -281,7 +282,7 @@ int DSM_V2_SwitchMode(dsm_v2_mode_t mode) {
 	uint8_t tx[8], rx[8];
 	int last_err = OTHER_PERIPHERAL_CONFIG_ERROR;
 
-	DSM_V2_MakeFrame(tx, (uint8_t) mode, 0x00000000u, (uint8_t) mode); // param 必须为 0x00
+	DSM_V2_MakeFrame(tx, (uint8_t) mode, 0x00000000u, 0x00U); // 模式切换帧参数码固定为 0x00
 
 	for (int attempt = 0; attempt < DSM_V2_MAX_RETRY; ++attempt) {
 		if (HasEffectiveCommandSwitchRequest()) {
@@ -521,17 +522,25 @@ int DSM_V2_Read_LevelFrequency(uint32_t *freq_hz) {
 }
 // R16 液位频率（整型）
 int DSM_V2_Read_DensityFrequency(float *freq_hz,float *freq_45,float *freq_225) {
-	if (!freq_hz)
+	if (!freq_hz || !freq_45 || !freq_225)
 		return PARAM_ADDRESS_OVERFLOW;
 	float v = 0;
 	int ret = DSM_V2_Read_FloatParam(0x11, &v);   // 参数码 0x11 = 45度扫频平方均值
 	if (ret == NO_ERROR) {
-		*freq_hz = sqrt(1000000000000.0/(double) v);
-		*freq_45 =  v;
+		*freq_45 = v;
+		if (v > 0.0f) {
+			*freq_hz = (float)sqrt(1000000000000.0/(double) v);
+		} else {
+			*freq_hz = 0.0f;
+			printf("LTD频率周期平方均值为0，等待稳定/未测到\r\n");
+		}
 	}
 	ret = DSM_V2_Read_FloatParam(0x12, &v);   // 参数码 0x12 = 22.5度扫频平方均值
 	if (ret == NO_ERROR) {
 		*freq_225 =  v;
+		if (v <= 0.0f) {
+			printf("LTD 22.5度扫频周期平方均值为0，等待稳定/未测到\r\n");
+		}
 	}
 	return ret;
 }

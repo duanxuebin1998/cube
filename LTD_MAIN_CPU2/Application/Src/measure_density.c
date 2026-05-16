@@ -948,8 +948,15 @@ uint32_t SinglePoint_ReadSensor(volatile DensityMeasurement *result)
 {
     uint32_t ret = 0;
 
+    if (HasEffectiveCommandSwitchRequest()) {
+        return STATE_SWITCH;
+    }
+
     /* ---------- 切换到密度测量模式（防御性调用） ---------- */
     ret = EnableDensityMode();
+    if (ret == STATE_SWITCH) {
+        return STATE_SWITCH;
+    }
     CHECK_ERROR(ret);
 
     /* ---------- 稳定窗口时间配置 ----------
@@ -1087,7 +1094,8 @@ uint32_t SinglePoint_ReadSensor(volatile DensityMeasurement *result)
 
         CHECK_COMMAND_SWITCH(ret);
 
-        printf("单点读数: 频率=%.3f Hz  密度=%.4f  温度=%.3f ℃\r\n",
+        printf("单点读数: 位置=%.1fmm  频率=%.3f Hz  密度=%.4f  温度=%.3f ℃\r\n",
+               (double)g_measurement.debug_data.sensor_position / 10.0,
                cur_freq, cur_density, cur_temp);
 
         /* ======================================================
@@ -1100,15 +1108,9 @@ uint32_t SinglePoint_ReadSensor(volatile DensityMeasurement *result)
         if (fabsf(cur_density) < 1e-6f) {
             density_zero_retry_count++;
             if ((density_zero_retry_count == 1U) ||
-                ((density_zero_retry_count % 5U) == 0U) ||
-                (density_zero_retry_count >= density_sample_retry_max)) {
-                // 错误	阶段：错误重试	模块：传感器	操作：读取浮点参数	原因：ErrorLog_GetReasonByCode(DENSITY_INVALID)	尝试：density_zero_retry_count/density_sample_retry_max	错误码：DENSITY_INVALID	错误名：ErrorLog_GetCodeName(DENSITY_INVALID)
-                ErrorLog_Retry(ERROR_LOG_MODULE_SENSOR,
-                               ERROR_LOG_OP_READ_FLOAT_PARAM,
-                               ErrorLog_GetReasonByCode(DENSITY_INVALID),
-                               density_zero_retry_count,
-                               density_sample_retry_max,
-                               DENSITY_INVALID);
+                ((density_zero_retry_count % 5U) == 0U)) {
+                printf("单点读数: 密度为0，等待稳定/未测到，已等待约%lu ms\r\n",
+                       (unsigned long)(density_zero_retry_count * SAMPLE_INTERVAL_MS));
             }
             /* 密度为 0 时会持续重试；这里同样使用可打断延时响应退出命令。 */
             ret = AbortableDelay_CommandSwitch(SAMPLE_INTERVAL_MS, 50U);
@@ -1118,12 +1120,8 @@ uint32_t SinglePoint_ReadSensor(volatile DensityMeasurement *result)
             continue;
         }
         if (density_zero_retry_count > 0U) {
-            // 错误	阶段：重试成功	模块：传感器	操作：读取浮点参数	原因：密度值异常	尝试：(density_zero_retry_count + 1U)/density_sample_retry_max
-            ErrorLog_Recover(ERROR_LOG_MODULE_SENSOR,
-                             ERROR_LOG_OP_READ_FLOAT_PARAM,
-                             ErrorLog_GetReasonByCode(DENSITY_INVALID),
-                             density_zero_retry_count + 1U,
-                             density_sample_retry_max);
+            printf("单点读数: 密度已恢复为非零，等待稳定次数=%lu\r\n",
+                   (unsigned long)density_zero_retry_count);
         }
         density_zero_retry_count = 0U;
 
@@ -1164,7 +1162,8 @@ uint32_t SinglePoint_ReadSensor(volatile DensityMeasurement *result)
          * ====================================================== */
         if (!first_sample && (now - stable_start >= stable_win_ms)) {
 
-            printf("单点测量 数据稳定，稳定窗口=%lu ms\r\n",
+            printf("单点测量 数据稳定，位置=%.1fmm，稳定窗口=%lu ms\r\n",
+                   (double)g_measurement.debug_data.sensor_position / 10.0,
                    (unsigned long)stable_win_ms);
 
             result->temperature_position = g_measurement.debug_data.sensor_position;
@@ -1215,21 +1214,39 @@ void CMD_SinglePointMonitoring(void)
     uint32_t ret = 0;
     g_measurement.device_status.device_state = STATE_RUNTOPOINTING;
 
+    if (HasEffectiveCommandSwitchRequest()) {
+        printf("检测到命令切换请求，停止固定点监测移动\r\n");
+        return;
+    }
+
     ret = MotorCtrl_MoveToPosition((float)g_deviceParams.singlePointMonitoringPosition / 10.0f,
                                               MotorCtrl_GetDefaultSpeedX100());
+    if (ret == STATE_SWITCH) {
+        printf("固定点监测移动阶段检测到命令切换请求，退出\r\n");
+        return;
+    }
     SET_ERROR(ret);
 
     g_measurement.device_status.device_state = STATE_SPTESTING;
 
-    EnableDensityMode();
+    ret = EnableDensityMode();
+    if (ret == STATE_SWITCH) {
+        printf("固定点监测切换密度模式时检测到命令切换请求，退出\r\n");
+        return;
+    }
+    SET_ERROR(ret);
 
     while (1) {
-        ret = SinglePoint_ReadSensor(&g_measurement.single_point_monitoring);
-        SET_ERROR(ret);
-
         if (HasEffectiveCommandSwitchRequest()) {
             printf("检测到命令切换请求，停止当前操作\r\n");
             return;
         }
+
+        ret = SinglePoint_ReadSensor(&g_measurement.single_point_monitoring);
+        if (ret == STATE_SWITCH) {
+            printf("固定点监测读数阶段检测到命令切换请求，退出\r\n");
+            return;
+        }
+        SET_ERROR(ret);
     }
 }
