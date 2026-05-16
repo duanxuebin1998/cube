@@ -51,8 +51,21 @@ const char *error_codes[] = {
 };
 #define ERROR_CODES_COUNT (sizeof(error_codes)/sizeof(error_codes[0]))
 
+static void DSM_LogLowVoltageFrame(const char *resp)
+{
+    if ((resp != NULL) && ((resp[0] == 'E') || (resp[0] == 'e'))) {
+        printf("DSM传感器电压过低\r\n");
+    }
+}
+
 // 检查返回是否为错误码
 int IsErrorResponse(const char *resp) {
+    if (resp == NULL) {
+        return 0;
+    }
+    if ((resp[0] == 'E') || (resp[0] == 'e')) {
+        return 0; // DSM首字母E/e只表示传感器电压过低，不作为设备错误处理
+    }
     for (int i = 0; i < ERROR_CODES_COUNT; i++) {
         if (strstr(resp, error_codes[i]) != NULL) {
             return 1; // 是错误码
@@ -418,6 +431,7 @@ static int UART6_SendWithRetry(const char *cmd,
             return STATE_SWITCH;
         }
         if (ret == 0) {
+            DSM_LogLowVoltageFrame(response);
             if (!IsErrorResponse(response)) {
                 if (recv_len_out != NULL) {
                     *recv_len_out = recvLen;
@@ -743,11 +757,7 @@ uint32_t Read_Water_Capacitance(float *cap_out)
     if (bcc != resp[8]) {
         return SENSOR_BCC_ERROR;
     }
-
-    /* 电压异常标志：resp[0]=='E' */
-    if (resp[0] == 'E') {
-        return SENSOR_DEVICE_REPORTED_ERROR;
-    }
+    /* resp[0]=='E' 只提示传感器电压过低，不影响水位电容值解析。 */
 
     /* 解析数值：resp[1..7] 是数字/小数点字符串。直接 atof(resp+1) 即可 */
     *cap_out = (float)atof(resp + 1);

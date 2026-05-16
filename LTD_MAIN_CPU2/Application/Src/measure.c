@@ -1215,6 +1215,7 @@ static uint32_t Wartsila_MoveToMonitorPositionOnly(void)
 
 static void CMD_WartsilaDensitySpread(void) {
 	static uint32_t bottom_detect_count = 0; /* 瓦锡兰测量后探底计数，仅运行期累计 */
+	static uint32_t wartsila_measure_total_count = 0; /* 瓦锡兰分布测量完成次数，仅运行期累计 */
 	uint32_t ret = 0;
 	uint32_t bottom_detect_interval = g_deviceParams.wartsila_bottom_detect_interval; /* 本次瓦锡兰测量后的探底频率参数快照 */
 	DensityDistribution temp = {0};
@@ -1232,17 +1233,34 @@ static void CMD_WartsilaDensitySpread(void) {
 	Print_DensitySpreadResult(&temp);
 // 测量结束，状态切换为分布测量完成
 	g_measurement.device_status.device_state = STATE_WARTSILA_DENSITY_OVER;
-	//延时8S让CPU3读取分布测量结果
-	if (AbortableDelay_CommandSwitch(8000U, 100U) == STATE_SWITCH) {
-		return;
+	printf("瓦锡兰分布测量结果保留8秒，原因：等待CPU3读取结果，期间可切换命令退出\r\n");
+	for (uint32_t remain_s = 8U; remain_s > 0U; remain_s--) {
+		printf("瓦锡兰分布测量结果保留倒计时：%lu秒\r\n", (unsigned long)remain_s);
+		if (AbortableDelay_CommandSwitch(1000U, 100U) == STATE_SWITCH) {
+			return;
+		}
 	}
+    wartsila_measure_total_count++;
     /* 按参数控制瓦锡兰测量后的探底频率：0不探底，N表示每N次测量后探底一次，最大100。 */
     if (bottom_detect_interval > 100U) {
+        printf("瓦锡兰测后探底\t探底频次参数=%lu 超出上限100，按每1次执行\r\n",
+               (unsigned long)bottom_detect_interval);
         bottom_detect_interval = 1U;
     }
+
     if (bottom_detect_interval > 0U) {
-        bottom_detect_count++;
-        if (bottom_detect_count >= bottom_detect_interval) {
+        uint32_t current_cycle_count = bottom_detect_count + 1U;
+        bool will_search_bottom = (current_cycle_count >= bottom_detect_interval);
+
+        printf("瓦锡兰测后探底\t测量总次数=%lu | 探底频次=每%lu次 | 当前周期第%lu/%lu次 | 本次%s探底\r\n",
+               (unsigned long)wartsila_measure_total_count,
+               (unsigned long)bottom_detect_interval,
+               (unsigned long)current_cycle_count,
+               (unsigned long)bottom_detect_interval,
+               will_search_bottom ? "执行" : "不执行");
+
+        bottom_detect_count = current_cycle_count;
+        if (will_search_bottom) {
             bottom_detect_count = 0U;
             ret = Wartsila_MoveToMonitorPositionOnly();
             if (ret == STATE_SWITCH) {
@@ -1265,6 +1283,8 @@ static void CMD_WartsilaDensitySpread(void) {
         }
     } else {
         bottom_detect_count = 0U;
+        printf("瓦锡兰测后探底\t测量总次数=%lu | 探底频次=0，不探底\r\n",
+               (unsigned long)wartsila_measure_total_count);
     }
     g_deviceParams.command = CMD_MONITOR_SINGLE; // 切回单点监测状态，继续监测当前液位/密度
 	return;

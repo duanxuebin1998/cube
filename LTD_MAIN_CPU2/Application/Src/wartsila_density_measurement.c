@@ -10,8 +10,13 @@
 #include "measure_oilLevel.h"
 #include "ltd_sensor_communication.h"
 #include "measure_density.h"
+#include "abortable_delay.h"
 
 uint32_t motorMoveUpToPositionOrAir(float target_mm, Level_StateTypeDef *final_state);
+
+#define WARTSILA_POINT_POSITION_TOLERANCE_MM 1.0f
+#define WARTSILA_POINT_POSITION_RETRY_MAX    1U
+
 
 /**
  * @brief  Wartsila 密度分布测量（从起始点向上，途中遇到空气或到达最高点停止）
@@ -137,9 +142,8 @@ uint32_t Wartsila_Density_SpreadMeasurement(DensityDistribution *dist)
 
     for (uint32_t i = 0; i < max_points_by_range; i++) {
 
-        /* 第一个点：已经在起始点，不再移动；后续点：上行到新目标 */
         if (i == 0) {
-            printf("分布测量 第1个点：位置=%.3fmm\n", cur_mm);
+            printf("分布测量 首点精确定位：目标首点=%.3fmm\n", target_mm);
         } else {
             target_mm += (float)step_mm;
             if (target_mm > (float)end_pos_mm + 0.01f) {
@@ -149,7 +153,7 @@ uint32_t Wartsila_Density_SpreadMeasurement(DensityDistribution *dist)
             }
 
             printf("分布测量 上行到第%lu个点目标位置 %.3fmm\n",
-                   (unsigned long)(i + 1), target_mm);
+                   (unsigned long)(i + 1U), target_mm);
 
             Level_StateTypeDef st = OIL;
             ret = motorMoveUpToPositionOrAir(target_mm, &st);
@@ -165,14 +169,47 @@ uint32_t Wartsila_Density_SpreadMeasurement(DensityDistribution *dist)
                 printf("在上行过程中检测到空气，认为液位位置=%.3fmm，停止分布测量\n", oil_level_mm);
                 break;  /* 不再继续向上，也不采当前点密度 */
             }
+        }
 
-            printf("精确寻找密度点位...\r\n");
-            ret = MotorCtrl_MoveToPosition((float)target_mm, MotorCtrl_GetDefaultSpeedX100());
+        printf("精确寻找密度点位...\r\n");
+        bool point_position_ok = false;
+        for (uint32_t attempt = 0U; attempt <= WARTSILA_POINT_POSITION_RETRY_MAX; attempt++) {
+            if (attempt > 0U) {
+                printf("分布测量 第%lu个点偏差超限，使用原有位置函数重试精确定位\n",
+                       (unsigned long)(i + 1U));
+            }
+
+            ret = MotorCtrl_MoveToPosition(target_mm, MotorCtrl_GetDefaultSpeedX100());
+            if (ret == STATE_SWITCH) {
+                return STATE_SWITCH;
+            }
             CHECK_ERROR(ret);
-            MotorCtrl_SnapshotSensorPositionMm(&cur_mm);
 
-            printf("分布测量 到达第%lu个点实际位置 %.3fmm\n",
-                   (unsigned long)(i + 1), cur_mm);
+            MotorCtrl_SnapshotSensorPositionMm(&cur_mm);
+            float deviation_mm = cur_mm - target_mm;
+            float abs_deviation_mm = (deviation_mm >= 0.0f) ? deviation_mm : -deviation_mm;
+
+            if (i == 0) {
+                printf("分布测量 首点定位：目标首点=%.3fmm 实际首点=%.3fmm 偏差=%.3fmm\n",
+                       target_mm, cur_mm, deviation_mm);
+            } else {
+                printf("分布测量 第%lu个点定位：目标=%.3fmm 实际=%.3fmm 偏差=%.3fmm\n",
+                       (unsigned long)(i + 1U), target_mm, cur_mm, deviation_mm);
+            }
+
+            if (abs_deviation_mm <= WARTSILA_POINT_POSITION_TOLERANCE_MM) {
+                point_position_ok = true;
+                break;
+            }
+        }
+
+        if (!point_position_ok) {
+            printf("分布测量 第%lu个点定位失败：目标=%.3fmm 实际=%.3fmm 偏差超出%.3fmm\n",
+                   (unsigned long)(i + 1U),
+                   target_mm,
+                   cur_mm,
+                   WARTSILA_POINT_POSITION_TOLERANCE_MM);
+            return MEASUREMENT_POSITION_ERROR;
         }
         /* 在密度点采集前再次判断当前是否在油中
                 * 如果此时已经在空气中，则把当前位置-100mm当作液位值，结束分布测量
@@ -192,7 +229,10 @@ uint32_t Wartsila_Density_SpreadMeasurement(DensityDistribution *dist)
                }
         /* 当前位置在油中，采集一个密度点 */
         if (g_deviceParams.spreadPointHoverTime > 0) {
-            HAL_Delay(g_deviceParams.spreadPointHoverTime);
+            ret = AbortableDelay_CommandSwitch(g_deviceParams.spreadPointHoverTime, 50U);
+            if (ret != NO_ERROR) {
+                return ret;
+            }
         }
 
         if (valid_points >= MAX_MEASUREMENT_POINTS) {
