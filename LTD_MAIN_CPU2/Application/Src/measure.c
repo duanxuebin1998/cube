@@ -1199,17 +1199,26 @@ static void CMD_SetFullWeight(void)
 }
 static uint32_t Wartsila_MoveToMonitorPositionOnly(void)
 {
-    uint32_t ret;
+    uint32_t ret = NO_ERROR;
+    const uint32_t max_attempts = 3U;
     float target_mm = (float)g_deviceParams.singlePointMonitoringPosition / 10.0f;
 
     g_measurement.device_status.device_state = STATE_RUNTOPOINTING;
     printf("瓦锡兰测后探底\t先回固定点监测位置：%.1fmm，仅移动不读密度\r\n", (double)target_mm);
 
-    ret = MotorCtrl_MoveToPosition(target_mm, MotorCtrl_GetDefaultSpeedX100());
-    if (ret != NO_ERROR) {
-        printf("瓦锡兰测后探底\t回固定点监测位置失败：0x%08lX，跳过探底且不置错误状态\r\n", (unsigned long)ret);
+    for (uint32_t attempt = 1U; attempt <= max_attempts; attempt++) {
+        ret = MotorCtrl_MoveToPosition(target_mm, MotorCtrl_GetDefaultSpeedX100());
+        if ((ret == NO_ERROR) || (ret == STATE_SWITCH)) {
+            return ret;
+        }
+
+        printf("瓦锡兰测后探底\t回固定点监测位置失败：0x%08lX，尝试：%lu/%lu\r\n",
+               (unsigned long)ret,
+               (unsigned long)attempt,
+               (unsigned long)max_attempts);
     }
 
+    printf("瓦锡兰测后探底\t回固定点监测位置重试失败，跳过探底且不置错误状态\r\n");
     return ret;
 }
 

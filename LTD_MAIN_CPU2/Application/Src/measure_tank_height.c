@@ -39,8 +39,12 @@ static uint32_t ApplyRealHeightCalibration(uint32_t raw_real_height);
 static uint32_t CaptureGyroZeroRefAverage(const char *tag, uint8_t allow_first_sample_fallback);
 static uint32_t EnsureGyroZeroRefForBottomMeasurement(void);
 static uint32_t EnsureBottomReleasedBeforeRoughSearch(void);
-static uint32_t BuildTankHeightFromCableLength(uint32_t cable_length_01mm)
+static uint32_t BuildTankHeightFromCableLength(int32_t cable_length_01mm)
 {
+    if (cable_length_01mm < 0) {
+        cable_length_01mm = 0;
+    }
+
     int64_t tank_height_01mm = (int64_t)cable_length_01mm +
                                (int64_t)(int32_t)g_deviceParams.liquid_sensor_distance_diff;
 
@@ -341,10 +345,16 @@ uint32_t SearchBottom(void)
 
     /*************** Tank height record ***************/
     {
-        uint32_t bottom_cable_length =
-                (bottom_value > 0) ? (uint32_t)bottom_value
+        int32_t bottom_cable_length_s =
+                (bottom_value > 0) ? bottom_value
                                    : g_measurement.debug_data.cable_length;
-        uint32_t raw_real_height = BuildTankHeightFromCableLength(bottom_cable_length);
+        if (bottom_cable_length_s < 0) {
+            printf("罐底测量\t尺带长度异常：%ld(0.1mm)，按0处理\r\n",
+                   (long)bottom_cable_length_s);
+            bottom_cable_length_s = 0;
+        }
+        uint32_t bottom_cable_length = (uint32_t)bottom_cable_length_s;
+        uint32_t raw_real_height = BuildTankHeightFromCableLength(bottom_cable_length_s);
         uint32_t corrected_real_height =
                 ApplyRealHeightCalibration(raw_real_height);
 
@@ -359,7 +369,7 @@ uint32_t SearchBottom(void)
             g_measurement.height_measurement.calibrated_liquid_level = raw_real_height;
             g_deviceParams.tankHeight = raw_real_height;
             printf("罐底测量\t罐高标定完成，罐高=%ld(0.1mm)\r\n", g_deviceParams.tankHeight);
-            update_sensor_height_from_encoder();    // update position after tank height change
+            MotorCtrl_RefreshPositionFromActiveSource();    // 罐高变化后按当前记步源刷新当前位置
         }
     }
     // 电机上行，完成流程

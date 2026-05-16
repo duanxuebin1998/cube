@@ -22,6 +22,8 @@
 #define SENSOR_LEVEL_FREQ_RECOVERY_LIFT_MM 1.0f
 #define SENSOR_DENSITY_MODE_SETTLE_MS 3000U
 
+static uint32_t Sensor_PositionToU01mmClamped(void);
+
 
 /**
  * @brief 把轻量无线探测错误映射成对应节点错误码。
@@ -592,7 +594,7 @@ uint32_t Read_Density(float *frequency, float *density, float *temp) {
 
 	    uint32_t density_raw = DENSITY_TO_RAW(*density);
 	    uint32_t temp_raw    = TEMP_TO_RAW(*temp);
-		uint32_t pos = g_measurement.debug_data.sensor_position;
+		uint32_t pos = Sensor_PositionToU01mmClamped();
 		if(*density != 0)
 		{
 			g_measurement.single_point_monitoring.density = density_raw;
@@ -615,6 +617,19 @@ uint32_t Read_Density(float *frequency, float *density, float *temp) {
 	return ret;
 }
 
+/**
+ * @brief 将当前传感器位置写入无符号结果字段前钳位，避免负位置变成超大数。
+ */
+static uint32_t Sensor_PositionToU01mmClamped(void)
+{
+    int32_t pos_s = g_measurement.debug_data.sensor_position;
+
+    if (pos_s <= 0) {
+        return 0U;
+    }
+
+    return (uint32_t)pos_s;
+}
 uint32_t Sensor_ReadWaterCapacitance(float *cap_out)
 {
     if (!Sensor_SupportsAuxDsmChannels()) {
@@ -645,7 +660,7 @@ uint32_t Sensor_Test1(void) {
 
 	uint32_t density_raw = DENSITY_TO_RAW(density);
 	uint32_t temp_raw = TEMP_TO_RAW(temp);
-	uint32_t pos = g_measurement.debug_data.sensor_position;
+	uint32_t pos = Sensor_PositionToU01mmClamped();
 
 	g_measurement.single_point_monitoring.density = density_raw;
 	g_measurement.single_point_monitoring.temperature = temp_raw;

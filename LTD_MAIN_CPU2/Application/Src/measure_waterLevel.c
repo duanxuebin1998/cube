@@ -91,25 +91,70 @@ static inline float WaterCapRawToFloat(uint32_t raw)
     return raw / 1000.0f;
 }
 
+/**
+ * @brief 用有符号计算当前水位，避免 water_tank_height 与负尺带长度混算成无符号大数。
+ */
+static inline int32_t WaterLevelCalcFromCable(void)
+{
+    int64_t lvl = (int64_t)g_deviceParams.water_tank_height -
+                  (int64_t)g_measurement.debug_data.cable_length;
+
+    if (lvl > (int64_t)INT32_MAX) {
+        return INT32_MAX;
+    }
+    if (lvl < (int64_t)INT32_MIN) {
+        return INT32_MIN;
+    }
+
+    return (int32_t)lvl;
+}
+
+/**
+ * @brief 用有符号计算目标水位对应的尺带长度，供水位跟随移动距离使用。
+ */
+static inline int32_t WaterCableTargetFromLevel(int32_t lvl_target_01mm)
+{
+    int64_t cable_target = (int64_t)g_deviceParams.water_tank_height -
+                           (int64_t)lvl_target_01mm;
+
+    if (cable_target > (int64_t)INT32_MAX) {
+        return INT32_MAX;
+    }
+    if (cable_target < (int64_t)INT32_MIN) {
+        return INT32_MIN;
+    }
+
+    return (int32_t)cable_target;
+}
+static inline uint32_t WaterLevelClampForReport(int32_t lvl)
+{
+    return (lvl > 0) ? (uint32_t)lvl : 0U;
+}
+
 static inline void WaterLevelSetAndLog(int32_t lvl)
 {
-    int32_t old_lvl = g_measurement.water_measurement.water_level;
+    uint32_t old_lvl = g_measurement.water_measurement.water_level;
+    uint32_t report_lvl = WaterLevelClampForReport(lvl);
 
-    g_measurement.water_measurement.water_level = lvl;
+    g_measurement.water_measurement.water_level = report_lvl;
     water_value = lvl;
 
-    if (old_lvl != lvl)
+    if (lvl < 0) {
+        printf("水位更新\t计算水位为负：%ld(0.1mm)，按0上报\r\n", (long)lvl);
+    }
+
+    if (old_lvl != report_lvl)
     {
         printf("水位更新\t旧值=%.1fmm 新值=%.1fmm 缆长=%.1fmm\r\n",
                old_lvl / 10.0f,
-               lvl / 10.0f,
+               report_lvl / 10.0f,
                g_measurement.debug_data.cable_length / 10.0f);
     }
 }
 
 static inline void WaterLevelSyncFromCable(void)
 {
-    int32_t lvl = g_deviceParams.water_tank_height - g_measurement.debug_data.cable_length;
+    int32_t lvl = WaterLevelCalcFromCable();
     WaterLevelSetAndLog(lvl);
 }
 
@@ -468,7 +513,7 @@ static int SearchWaterRough(void)
 
     if (water_state == WATER)
     {
-        water_value = g_deviceParams.water_tank_height - g_measurement.debug_data.cable_length;
+        water_value = WaterLevelCalcFromCable();
         return NO_ERROR;
     }
     else
@@ -502,11 +547,11 @@ static int SearchWaterPrecise(void)
     while (1)
     {
         speed_x100 = MotorCtrl_GetDefaultSpeedX100();
-        if (g_deviceParams.water_tank_height - g_measurement.debug_data.cable_length - water_value < WATER_V2_SLOWDOWN_TH)
+        if ((WaterLevelCalcFromCable() - water_value) < WATER_V2_SLOWDOWN_TH)
         {
             speed_x100 = 4;
         }
-        else if (g_deviceParams.water_tank_height - g_measurement.debug_data.cable_length - water_value < WATER_V1_SLOWDOWN_TH)
+        else if ((WaterLevelCalcFromCable() - water_value) < WATER_V1_SLOWDOWN_TH)
         {
             speed_x100 = 40;
         }
@@ -537,7 +582,7 @@ static int SearchWaterPrecise(void)
     ret = MotorCtrl_SlowStop();
     CHECK_ERROR(ret);
 
-    water_value = g_deviceParams.water_tank_height - g_measurement.debug_data.cable_length;
+    water_value = WaterLevelCalcFromCable();
     return NO_ERROR;
 }
 
@@ -646,7 +691,7 @@ static uint32_t AlignToWaterLevel_01mm(int32_t lvl_target_01mm)
     uint32_t ret;
 
     int32_t cable_now_01mm    = g_measurement.debug_data.cable_length; /* 0.1mm */
-    int32_t cable_target_01mm = g_deviceParams.water_tank_height - lvl_target_01mm; /* 0.1mm */
+    int32_t cable_target_01mm = WaterCableTargetFromLevel(lvl_target_01mm); /* 0.1mm */
     int32_t delta_01mm        = cable_target_01mm - cable_now_01mm; /* 0.1mm */
 
     int32_t abs_delta_01mm = (delta_01mm >= 0) ? delta_01mm : -delta_01mm;
@@ -798,7 +843,7 @@ uint32_t FindWaterLevel_FastByStateFlip_StableExit(uint32_t stable_win_ms)
         }
 
         /* ===== 翻转结束：先计算“本次翻转水位样本” ===== */
-        int32_t lvl_flip = g_deviceParams.water_tank_height - g_measurement.debug_data.cable_length; /* 0.1mm */
+        int32_t lvl_flip = WaterLevelCalcFromCable(); /* 0.1mm */
 
 
         /* 第一次翻转：只缓存，不更新水位/不判稳 */

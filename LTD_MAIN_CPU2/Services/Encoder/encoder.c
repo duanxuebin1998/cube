@@ -238,5 +238,5 @@ void encoder_set_cable_length_01mm(int32_t cable_length_01mm)
     g_encoder_count = new_count;
     g_encoder_saved = new_count;
     WriteEncoderDataAB(g_encoder_count, prev_angle);
-    update_sensor_height_from_encoder_force();
+    update_sensor_height_from_encoder();
 }
