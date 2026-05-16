@@ -33,6 +33,9 @@ static int determineTheSensorPositionAndUpdateTheLevelValue(void);
 static int waitForTheLiquidLevelToExceedTheBlindZone(void);
 static uint32_t determine_level_status_internal(Level_StateTypeDef *state_out, uint8_t allow_mode_recovery);
 static uint32_t OilLevel_StopBeforeReturn(uint32_t error_code, const char *reason);
+static uint32_t OilLevel_ClampLevelForReport(int32_t oil_level, const char *reason);
+static void OilLevel_SyncCurrentPositionToResult(const char *reason);
+
 static void OilLevel_PrintFollowPositionInfo(void);
 uint32_t FollowOilLevel(void);
 
@@ -48,6 +51,42 @@ static uint32_t OilLevel_StopBeforeReturn(uint32_t error_code, const char *reaso
 
     return error_code;
 }
+
+/**
+ * @brief 液位结果字段是无符号，上报前负位置统一按0处理。
+ */
+static uint32_t OilLevel_ClampLevelForReport(int32_t oil_level, const char *reason)
+{
+    const char *tag = (reason != NULL) ? reason : "液位";
+
+    if (oil_level < 0) {
+        printf("液位流程\t%s位置为负：%ld(0.1mm)，按0上报\r\n", tag, (long)oil_level);
+        return 0U;
+    }
+
+    return (uint32_t)oil_level;
+}
+/**
+ * @brief 将当前传感器位置立即同步到液位测量结果和密度分布液位缓存。
+ */
+static void OilLevel_SyncCurrentPositionToResult(const char *reason)
+{
+    int32_t oil_level = g_measurement.debug_data.sensor_position;
+    const char *tag = (reason != NULL) ? reason : "同步";
+
+    if (oil_level < 0) {
+        printf("液位流程\t%s后液位位置为负：%ld(0.1mm)，按0上报\r\n", tag, (long)oil_level);
+        oil_level = 0;
+    }
+
+    g_measurement.oil_measurement.oil_level = (uint32_t)oil_level;
+    g_measurement.density_distribution.Density_oil_level = g_measurement.oil_measurement.oil_level;
+
+    printf("液位流程\t%s后同步液位：%lu(0.1mm)\r\n",
+           tag,
+           (unsigned long)g_measurement.oil_measurement.oil_level);
+}
+
 /* 液位跟随打印液位值时，同时输出当前记步来源和两套尺带长度，便于现场比对。 */
 static void OilLevel_PrintFollowPositionInfo(void)
 {
@@ -326,10 +365,11 @@ uint32_t SearchOilLevel(void) {
     }
     /*************** 最终校验与记录 ***************/
     // 记录最终液位位置
-    g_measurement.oil_measurement.oil_level = g_measurement.debug_data.sensor_position;  // 更新测量数据中的传感器位置
+    g_measurement.oil_measurement.oil_level =
+            OilLevel_ClampLevelForReport(g_measurement.debug_data.sensor_position, "液位测量");
     g_measurement.density_distribution.Density_oil_level = g_measurement.oil_measurement.oil_level;
     // 打印测量结果
-    printf("液位测量\t液位：%ld mm\r\n", g_measurement.oil_measurement.oil_level);
+    printf("液位测量\t液位：%lu(0.1mm)\r\n", (unsigned long)g_measurement.oil_measurement.oil_level);
 
     return NO_ERROR;  // 返回成功状态
 }
@@ -757,9 +797,9 @@ static int determineTheSensorPositionAndUpdateTheLevelValue(void) {
 	// if (((abs(frequency_difference) < g_deviceParams.oilLevelThreshold) || (abs((int) oil_level - (int) g_measurement.oil_measurement.oil_level) > 100)) && (g_measurement.device_status.device_state == STATE_FLOWOIL)) {
 	if  (g_measurement.device_status.device_state == STATE_FLOWOIL) {
 		// 更新当前液位值
-		g_measurement.oil_measurement.oil_level = oil_level;
+		g_measurement.oil_measurement.oil_level = OilLevel_ClampLevelForReport(oil_level, "液位跟随");
 		// 打印正常液位值信息
-		printf("液位跟随\t液位值为%ld (0.1mm)", g_measurement.oil_measurement.oil_level);
+		printf("液位跟随\t液位值为%lu (0.1mm)", (unsigned long)g_measurement.oil_measurement.oil_level);
 		OilLevel_PrintFollowPositionInfo();
 		printf("\r\n");
 	} else {
@@ -767,12 +807,16 @@ static int determineTheSensorPositionAndUpdateTheLevelValue(void) {
 		printf("液位跟随\t动态液位值为%.1f", (float)g_measurement.debug_data.sensor_position / 10.0f); MotorCtrl_PrintPositionRefs(); printf("\r\n");
 	}
 
-	if (oil_level >= g_deviceParams.tankHeight-1000) {
+    int64_t oil_level_s64 = (int64_t)oil_level;
+    int64_t upper_limit_01mm = (int64_t)g_deviceParams.tankHeight - 1000;
+
+	if (((int64_t)g_deviceParams.tankHeight > 1000) &&
+        (oil_level_s64 >= upper_limit_01mm)) {
 		printf("超声波找液位\t到达位置上限\r\n");
 		return OilLevel_StopBeforeReturn(MEASUREMENT_OILLEVEL_HIGH, "到达液位上限");
 	}
-	// 步骤4: 检查油位是否低于0（超出下限）
-	else if (oil_level < g_deviceParams.blindZone) {
+	// 步骤4: 负位置允许作为正常结果，上报时按0；非负且低于盲区才按下限处理。
+	else if ((oil_level_s64 >= 0) && (oil_level_s64 < (int64_t)g_deviceParams.blindZone)) {
 		printf("超声波找液位\t到达位置下限\r\n");
 		return OilLevel_StopBeforeReturn(MEASUREMENT_OILLEVEL_LOW, "到达液位下限");
 	}
@@ -823,7 +867,7 @@ static int waitForTheLiquidLevelToExceedTheBlindZone(void) {
  * - 保存设备参数
  *
  * @note 函数内部会调用以下辅助函数：
- *       - update_sensor_height_from_encoder(): 从编码器更新罐高数据
+ *       - MotorCtrl_RefreshPositionFromActiveSource(): 按当前记步源刷新当前位置
  *       - save_device_params(): 保存设备参数
  *
  * @note 输出信息包括：
@@ -831,10 +875,19 @@ static int waitForTheLiquidLevelToExceedTheBlindZone(void) {
  *       - 标定完成后的罐体高度值
  */
 void CorrectOilLevelProcess(void) {
-	printf("液位流程\t开始标定液位\r\n");
-	g_deviceParams.tankHeight = g_measurement.debug_data.cable_length + g_deviceParams.calibrateOilLevel+1;
-	g_deviceParams.calibrateOilLevel = 0; //标定完成后清零
-	printf("液位流程\t标定完成，罐高设置为：%ld mm\r\n", g_deviceParams.tankHeight);
-	update_sensor_height_from_encoder();	//更新罐高数据
-	save_device_params();//保存参数
+    printf("液位流程\t开始标定液位\r\n");
+    int64_t tank_height = (int64_t)g_measurement.debug_data.cable_length +
+                          (int64_t)g_deviceParams.calibrateOilLevel + 1;
+
+    if ((tank_height < 0) || (tank_height > (int64_t)UINT32_MAX)) {
+        printf("液位流程\t修正后罐高非法：%ld(0.1mm)，取消修正，保留原罐高和修正参数\r\n",
+               (long)tank_height);
+        return;
+    }
+    g_deviceParams.tankHeight = (uint32_t)tank_height;
+    g_deviceParams.calibrateOilLevel = 0; //标定完成后清零
+    printf("液位流程\t标定完成，罐高设置为：%lu(0.1mm)\r\n", (unsigned long)g_deviceParams.tankHeight);
+    MotorCtrl_RefreshPositionFromActiveSource();  //修正罐高后按当前记步源刷新当前位置
+    OilLevel_SyncCurrentPositionToResult("液位修正");
+    save_device_params();//保存参数
 }

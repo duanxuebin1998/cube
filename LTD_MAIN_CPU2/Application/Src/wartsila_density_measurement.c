@@ -17,6 +17,21 @@ uint32_t motorMoveUpToPositionOrAir(float target_mm, Level_StateTypeDef *final_s
 #define WARTSILA_POINT_POSITION_TOLERANCE_MM 1.0f
 #define WARTSILA_POINT_POSITION_RETRY_MAX    1U
 
+/**
+ * @brief 将 mm 位置转换为 0.1mm 无符号结果，负位置按 0 上报，超范围按上限上报。
+ */
+static uint32_t PositionMm_ToU01mmClamped(float pos_mm)
+{
+    if (pos_mm <= 0.0f) {
+        return 0U;
+    }
+    if (pos_mm >= 429496729.0f) {
+        return UINT32_MAX;
+    }
+
+    return (uint32_t)(pos_mm * 10.0f + 0.5f);
+}
+
 
 /**
  * @brief  Wartsila 密度分布测量（从起始点向上，途中遇到空气或到达最高点停止）
@@ -248,7 +263,7 @@ uint32_t Wartsila_Density_SpreadMeasurement(DensityDistribution *dist)
         }
 
         /* 在单点结构里记录位置，单位：0.1mm */
-        pt->temperature_position = (uint32_t)(cur_mm * 10.0f + 0.5f);
+        pt->temperature_position = PositionMm_ToU01mmClamped(cur_mm);
 
         sum_temp    += pt->temperature;
         sum_density += pt->density;
@@ -299,7 +314,7 @@ uint32_t Wartsila_Density_SpreadMeasurement(DensityDistribution *dist)
 
     /* 统计平均值（原始单位，做简单四舍五入） */
     dist->measurement_points       = valid_points;
-    dist->Density_oil_level        = (uint32_t)(oil_level_mm * 10.0f + 0.5f);  /* 0.1mm 单位 */
+    dist->Density_oil_level        = PositionMm_ToU01mmClamped(oil_level_mm);  /* 0.1mm 单位 */
     dist->average_temperature      = (sum_temp    + valid_points / 2) / valid_points;
     dist->average_density          = (sum_density + valid_points / 2) / valid_points;
     dist->average_standard_density = dist->average_density;

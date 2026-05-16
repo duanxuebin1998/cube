@@ -135,6 +135,21 @@ void MotorCtrl_RefreshDebugDrumState(void)
 }
 
 /**
+ * @brief 按当前记步源强制刷新业务位置。
+ *
+ * 电机记步模式下读取 TMC5130 XACTUAL 并刷新 cable_length/sensor_position；
+ * 编码轮记步模式下按编码轮重新计算当前位置。
+ */
+void MotorCtrl_RefreshPositionFromActiveSource(void)
+{
+    if (MotorCtrl_IsPositionSourceMotor()) {
+        (void)MotorPosition_SyncDebugDrumState(&stepper);
+    } else {
+        update_sensor_height_from_encoder_force();
+    }
+}
+
+/**
  * @brief 打印当前编码轮/电机位置参考信息。
  *
  * 用于现场快速确认记步模式、编码轮长度、电机模型长度和局部周长。
@@ -538,7 +553,9 @@ uint32_t MotorCtrl_CalibrateCurrentTapeCircumference(void)
         return PARAM_ERROR;
     }
 
-    update_sensor_height_from_encoder_force();
+    /* 校准只需要编码轮长度作为参考，电机记步模式下不能覆盖业务 sensor_position。 */
+    update_sensor_height_from_encoder();
+    encoder_length_mm = (double)encoder_get_cable_length_01mm() * 0.1;
     MotorCtrl_UpdateDrumStateFromXActual(&stepper, &drum);
 
     delta_step = (int64_t)drum.motor_step -
@@ -549,7 +566,6 @@ uint32_t MotorCtrl_CalibrateCurrentTapeCircumference(void)
     }
 
     delta_turns = (double)delta_step / (double)MotorPosition_TapeTicksPerRev();
-    encoder_length_mm = (double)g_measurement.debug_data.cable_length * 0.1;
     delta_length_mm = encoder_length_mm -
                       ((double)s_motor_position.count_base_length_01mm * 0.1);
     if (((delta_length_mm > 0.0) && (delta_turns < 0.0)) ||

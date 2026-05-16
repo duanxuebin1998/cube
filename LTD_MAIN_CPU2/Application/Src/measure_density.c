@@ -63,6 +63,26 @@ static void GB_FilterPoints_ByDensity20(DensityDistribution *dist,
 static inline int32_t i32_max(int32_t a, int32_t b) { return (a > b) ? a : b; }
 static inline int32_t i32_abs(int32_t x) { return (x >= 0) ? x : -x; }
 
+/**
+ * @brief 测量结果里的位置字段是无符号，上报前负位置统一按0处理。
+ */
+static uint32_t Density_ValueToU01mmClamped(int32_t value_01mm, const char *tag)
+{
+    if (value_01mm < 0) {
+        printf("密度测量\t%s为负：%ld(0.1mm)，按0上报\r\n",
+               (tag != NULL) ? tag : "位置",
+               (long)value_01mm);
+        return 0U;
+    }
+
+    return (uint32_t)value_01mm;
+}
+
+static uint32_t Density_CurrentPositionToU01mmClamped(void)
+{
+    return Density_ValueToU01mmClamped(g_measurement.debug_data.sensor_position, "测点位置");
+}
+
 static void PrintPoints01mm(const char *tag, const int32_t *p01, uint32_t n)
 {
     printf("%s 取点 点数=%lu: ", tag, (unsigned long)n);
@@ -147,7 +167,7 @@ static uint32_t Density_RunPoints01mm(const int32_t *p01,
 
     /* 平均值（RAW 平均） */
     dist->measurement_points = valid;
-    dist->Density_oil_level  = (uint32_t)oil_level_01mm; /* 0.1mm */
+    dist->Density_oil_level  = Density_ValueToU01mmClamped(oil_level_01mm, "分布测量液位"); /* 0.1mm */
 
     dist->average_temperature = (uint32_t)(sum_temp_raw / valid);
     dist->average_density     = (uint32_t)(sum_dens_raw / valid);
@@ -1056,7 +1076,7 @@ uint32_t SinglePoint_ReadSensor(volatile DensityMeasurement *result)
             }
 
             result->vcf20 = 1;
-            result->temperature_position = g_measurement.debug_data.sensor_position;
+            result->temperature_position = Density_CurrentPositionToU01mmClamped();
 
             return NO_ERROR;
         }
@@ -1166,7 +1186,7 @@ uint32_t SinglePoint_ReadSensor(volatile DensityMeasurement *result)
                    (double)g_measurement.debug_data.sensor_position / 10.0,
                    (unsigned long)stable_win_ms);
 
-            result->temperature_position = g_measurement.debug_data.sensor_position;
+            result->temperature_position = Density_CurrentPositionToU01mmClamped();
             result->density          = DENSITY_TO_RAW(ref_density);
             result->temperature      = TEMP_TO_RAW(ref_temp);
             result->standard_density = DENSITY_TO_RAW(ref_density);

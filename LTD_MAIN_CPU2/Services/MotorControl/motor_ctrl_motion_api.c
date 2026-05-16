@@ -624,7 +624,11 @@ uint32_t MotorCtrl_MoveDown(uint32_t speed_x100)
  */
 void MotorCtrl_SnapshotSensorPositionMm(float *pos_mm)
 {
-    uint32_t pos_01mm = (uint32_t)g_measurement.debug_data.sensor_position;
+    if (pos_mm == NULL) {
+        return;
+    }
+
+    int32_t pos_01mm = g_measurement.debug_data.sensor_position;
     *pos_mm = (float)pos_01mm / 10.0f;
 }
 
@@ -658,6 +662,24 @@ uint32_t MotorCtrl_MoveToPosition(float target_mm, uint32_t speed_x100)
 
         MotorCtrl_SnapshotSensorPositionMm(&cur_mm);
         printf("运动到位置 | 当前：%.3fmm | 目标：%.3fmm\r\n", cur_mm, target_mm);
+
+        /* 负位置是允许的；这里只拦截明显超出罐高量级的异常快照。
+         * tankHeight 为 0 或异常时使用 500m 兜底，避免未标定时把上限压到 1000mm。 */
+        float guard_tank_height_mm = (float)g_deviceParams.tankHeight / 10.0f;
+        if ((guard_tank_height_mm <= 0.0f) || (guard_tank_height_mm > 500000.0f)) {
+            guard_tank_height_mm = 500000.0f;
+        }
+        float min_valid_mm = -guard_tank_height_mm - 1000.0f;
+        float max_valid_mm = guard_tank_height_mm + 1000.0f;
+        if ((cur_mm < min_valid_mm) || (cur_mm > max_valid_mm)) {
+            printf("运动到位置 | 当前快照异常：%.3fmm，允许范围=%.3f~%.3fmm，取消移动\r\n",
+                   cur_mm,
+                   min_valid_mm,
+                   max_valid_mm);
+            return MotorDriver_ReturnAfterTemporarySpeed(MEASUREMENT_POSITION_ERROR,
+                                                         restore_needed,
+                                                         restore_speed_x100);
+        }
 
         float delta = target_mm - cur_mm;
 

@@ -89,6 +89,9 @@ uint32_t MotorCtrl_PollRuntimePosition(void);
 /** 强制读取 XACTUAL 并刷新调试用卷筒状态。 */
 void MotorCtrl_RefreshDebugDrumState(void);
 
+/** 按当前记步源强制刷新业务位置：电机记步读 XACTUAL，编码轮记步按编码轮刷新。 */
+void MotorCtrl_RefreshPositionFromActiveSource(void);
+
 /** 打印当前编码轮/电机位置参考，供现场排查位置源差异。 */
 void MotorCtrl_PrintPositionRefs(void);
 
