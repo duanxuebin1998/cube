@@ -250,8 +250,8 @@ CPU2 全局对象：
 
 ## 11. 相关文档
 
-- `docs/build_cpu2.md`
-- `docs/build_cpu3.md`
+- `docs/00_构建与版本/CPU2构建说明.md`
+- `docs/00_构建与版本/CPU3构建说明.md`
 
 建议新同学先看本导览，再看两份构建文档。
 
