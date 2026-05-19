@@ -339,3 +339,28 @@
 - `cmake --build build\LTD_MAIN_CPU2`
 - `py tools\check_version_bumped.py`
 - `git diff --check`
+
+## 2026-05-19
+
+版本：
+- CPU2: V1.7.2.0 -> V1.7.3.0
+- CPU3: 未变化，保持 V1.5.0.0
+
+协议版本/兼容性：
+- 本次仅修改 CPU2 罐底测量保护和称重碰撞判定逻辑。
+- 不修改 CPU2/CPU3 共享协议、寄存器映射、命令码或参数布局，`DEVICE_PROTOCOL_VERSION` 不变。
+- `maxDownDistance` 继续沿用原参数含义，不新增参数，不改变已有参数地址。
+
+本次修改：
+- 罐底粗找和精找每轮下行前增加最大尺带长度保护，限制值为 `tankHeight + maxDownDistance`。
+- 当尺带长度超过最大允许位置且仍未识别到罐底时，立即快速停机并返回 `MEASUREMENT_WEIGHT_DOWN_FAIL`，避免罐底测量无限下行。
+- 罐底粗找和精找在传感器位置低于 1m 时，将下行速度上限压到 0.50m/min，并打印传感器位置、原速度和实际下发速度。
+- 回零/标零上行时，称重超过零点阈值视为正常到零点信号，不再被通用防撞逻辑抢先误报 18-3。
+- 新增《罐底测量下行保护改动说明》文档，记录问题背景、修改点、现场日志和验证建议。
+
+验证：
+- `cmake -S LTD_MAIN_CPU2 -B build/LTD_MAIN_CPU2 -G Ninja "-DCMAKE_TOOLCHAIN_FILE=D:/CUBE_temp_bottom_zero_commit/cmake/toolchain-arm-none-eabi.cmake" -DCMAKE_BUILD_TYPE=Debug`
+- `cmake --build build\LTD_MAIN_CPU2`
+- `py tools\check_version_bumped.py`
+- `git diff --check`
+- `git diff --cached --check`

@@ -31,6 +31,8 @@ static GyroZeroRef g_gyro_zero_ref = {0};
 #define BOTTOM_RELEASE_BEFORE_ROUGH_STEP_MM 100.0f
 #define BOTTOM_RELEASE_BEFORE_ROUGH_MAX_MM 1000.0f
 #define BOTTOM_RELEASE_BEFORE_ROUGH_DELAY_MS 500U
+#define BOTTOM_NEAR_SENSOR_POSITION_01MM 10000  /* 1m，单位0.1mm */
+#define BOTTOM_NEAR_SPEED_X100           50U    /* 0.50m/min */
 // 函数原型声明
 static int SearchBottomRough();   // 粗略搜索罐底
 static int SearchBottomPrecise(); // 精确搜索罐底
@@ -39,6 +41,52 @@ static uint32_t ApplyRealHeightCalibration(uint32_t raw_real_height);
 static uint32_t CaptureGyroZeroRefAverage(const char *tag, uint8_t allow_first_sample_fallback);
 static uint32_t EnsureGyroZeroRefForBottomMeasurement(void);
 static uint32_t EnsureBottomReleasedBeforeRoughSearch(void);
+static uint32_t Bottom_GetMaxCableLength01mm(void);
+static uint32_t Bottom_CheckMaxCableLength(void);
+static uint32_t Bottom_ApplyNearSensorSpeedLimit(uint32_t speed_x100);
+static uint32_t BuildTankHeightFromCableLength(int32_t cable_length_01mm);
+static uint32_t Bottom_GetMaxCableLength01mm(void)
+{
+    uint64_t max_cable_length = (uint64_t)g_deviceParams.tankHeight +
+                                (uint64_t)g_deviceParams.maxDownDistance;
+
+    if (max_cable_length > (uint64_t)UINT32_MAX) {
+        return UINT32_MAX;
+    }
+
+    return (uint32_t)max_cable_length;
+}
+
+static uint32_t Bottom_CheckMaxCableLength(void)
+{
+    uint32_t max_cable_length = Bottom_GetMaxCableLength01mm();
+    int32_t cable_length = g_measurement.debug_data.cable_length;
+
+    if ((cable_length > 0) && ((uint32_t)cable_length > max_cable_length)) {
+        printf("罐底测量\t超过最大下行位置仍未识别到罐底 | 尺带=%.1fmm | 上限=%.1fmm | 罐高=%.1fmm | 最大下行=%.1fmm\r\n",
+               (double)cable_length * 0.1,
+               (double)max_cable_length * 0.1,
+               (double)g_deviceParams.tankHeight * 0.1,
+               (double)g_deviceParams.maxDownDistance * 0.1);
+        return MEASUREMENT_WEIGHT_DOWN_FAIL;
+    }
+
+    return NO_ERROR;
+}
+
+static uint32_t Bottom_ApplyNearSensorSpeedLimit(uint32_t speed_x100)
+{
+    if ((g_measurement.debug_data.sensor_position < BOTTOM_NEAR_SENSOR_POSITION_01MM) &&
+        (speed_x100 > BOTTOM_NEAR_SPEED_X100)) {
+        printf("罐底测量\t传感器位置低于1m，降速到0.50m/min | 传感器位置=%.1fmm | 原速度=%.2fm/min\r\n",
+               (double)g_measurement.debug_data.sensor_position * 0.1,
+               (double)speed_x100 / 100.0);
+        return BOTTOM_NEAR_SPEED_X100;
+    }
+
+    return speed_x100;
+}
+
 static uint32_t BuildTankHeightFromCableLength(int32_t cable_length_01mm)
 {
     if (cable_length_01mm < 0) {
@@ -398,12 +446,19 @@ static int SearchBottomRough() {
             break;
         }
 
-        ret = MotorCtrl_MoveDown(MotorCtrl_GetDefaultSpeedX100());  // 启动电机向下运动
+        ret = Bottom_CheckMaxCableLength();
+        if (ret != NO_ERROR) {
+            (void)MotorCtrl_QuickStop();
+            RETURN_ERROR(ret);
+        }
+
+        uint32_t speed_x100 = Bottom_ApplyNearSensorSpeedLimit(MotorCtrl_GetDefaultSpeedX100());
+        ret = MotorCtrl_MoveDown(speed_x100);  // 启动电机向下运动
         CHECK_ERROR(ret); // 检查下行是否成功
 
         ret = MotorCtrl_CheckLostStepAutoTiming(g_measurement.debug_data.cable_length);
         CHECK_ERROR(ret); // 检查丢步检测是否成功
-        printf("罐底测量\t长距离寻找罐底\t{传感器位置}%.1f", (float)(g_measurement.debug_data.sensor_position)/10.0); MotorCtrl_PrintPositionRefs(); printf("\t{称重值}%d\r\n", weight_parament.current_weight);
+        printf("罐底测量\t长距离寻找罐底\t{传感器位置}%.1f", (float)(g_measurement.debug_data.sensor_position)/10.0); MotorCtrl_PrintPositionRefs(); printf("\t{称重值}%d\t速度(0.01m/min)%lu\r\n", weight_parament.current_weight, (unsigned long)speed_x100);
     }
     ret = MotorCtrl_QuickStop(); // 到达罐底后快速停止电机
     CHECK_ERROR(ret); // 检查快速停止是否成功
@@ -494,6 +549,12 @@ static int SearchBottomPrecise() {
             break;
         }
 
+        ret = Bottom_CheckMaxCableLength();
+        if (ret != NO_ERROR) {
+            (void)MotorCtrl_QuickStop();
+            RETURN_ERROR(ret);
+        }
+
         speed_x100 = MotorCtrl_GetDefaultSpeedX100();
         if (bottom_value-g_measurement.debug_data.cable_length < 100) {
             speed_x100 = 10;
@@ -505,6 +566,7 @@ static int SearchBottomPrecise() {
             speed_x100 = 100;
         }
 
+        speed_x100 = Bottom_ApplyNearSensorSpeedLimit(speed_x100);
         ret = MotorCtrl_MoveDown(speed_x100);  // 启动电机向下运动
         CHECK_ERROR(ret); // 检查下行是否成功
 
