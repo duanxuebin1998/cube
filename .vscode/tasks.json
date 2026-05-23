@@ -1,0 +1,114 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "CPU2: 配置CMake",
+      "type": "shell",
+      "command": "cmake",
+      "args": [
+        "-S",
+        "${workspaceFolder}\\LTD_MAIN_CPU2",
+        "-B",
+        "${workspaceFolder}\\build\\LTD_MAIN_CPU2",
+        "-G",
+        "Ninja",
+        "-DCMAKE_TOOLCHAIN_FILE=${workspaceFolder}\\cmake\\toolchain-arm-none-eabi.cmake",
+        "-DCMAKE_BUILD_TYPE=Debug"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "CPU2: 编译",
+      "type": "shell",
+      "command": "cmake",
+      "args": [
+        "--build",
+        "${workspaceFolder}\\build\\LTD_MAIN_CPU2"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "problemMatcher": [
+        "$gcc"
+      ]
+    },
+    {
+      "label": "CPU2: STLINK检测",
+      "type": "process",
+      "command": "C:\\Program Files (x86)\\STMicroelectronics\\STM32 ST-LINK Utility\\ST-LINK Utility\\ST-LINK_CLI.exe",
+      "args": [
+        "-List"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "CPU2: STLINK下载",
+      "type": "process",
+      "command": "C:\\Program Files (x86)\\STMicroelectronics\\STM32 ST-LINK Utility\\ST-LINK Utility\\ST-LINK_CLI.exe",
+      "args": [
+        "-c",
+        "SWD",
+        "-P",
+        "${workspaceFolder}\\build\\LTD_MAIN_CPU2\\LTD_MAIN_CPU2.hex",
+        "-V",
+        "after_programming",
+        "-Rst",
+        "-Run",
+        "-NoPrompt"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "CPU2: STLINK下载(复位连接)",
+      "type": "process",
+      "command": "C:\\Program Files (x86)\\STMicroelectronics\\STM32 ST-LINK Utility\\ST-LINK Utility\\ST-LINK_CLI.exe",
+      "args": [
+        "-c",
+        "SWD",
+        "UR",
+        "-P",
+        "${workspaceFolder}\\build\\LTD_MAIN_CPU2\\LTD_MAIN_CPU2.hex",
+        "-V",
+        "after_programming",
+        "-Rst",
+        "-Run",
+        "-NoPrompt"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "CPU2: 编译并下载",
+      "dependsOrder": "sequence",
+      "dependsOn": [
+        "CPU2: 编译",
+        "CPU2: STLINK下载"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "CPU2: 编译并下载(复位连接)",
+      "dependsOrder": "sequence",
+      "dependsOn": [
+        "CPU2: 编译",
+        "CPU2: STLINK下载(复位连接)"
+      ],
+      "problemMatcher": []
+    }
+  ]
+}
