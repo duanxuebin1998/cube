@@ -51,7 +51,7 @@
 
 - **CPU3（显示通讯）**
   - 处理屏幕与菜单
-  - 管理 COM1/COM2/COM3 的协议适配（DSM/Wartsila/LTD）
+  - 管理 COM1/COM2/COM3 的协议适配（DSM/Wartsila/LTD/SI7000）
   - 通过 UART5/RS485 轮询 CPU2（Modbus）
   - 同步参数并展示测量结果
 
@@ -252,6 +252,7 @@ CPU2 全局对象：
 
 - `docs/00_构建与版本/CPU2构建说明.md`
 - `docs/00_构建与版本/CPU3构建说明.md`
+- `docs/01_协议与寄存器/SI7000协议适配/README.md`
 
 建议新同学先看本导览，再看两份构建文档。
 

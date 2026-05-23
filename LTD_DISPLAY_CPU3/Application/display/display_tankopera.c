@@ -119,6 +119,7 @@ static uint8_t *arr_protocol[][2] = {
 	{ (uint8_t*)"LTD协议", (uint8_t*)"LTD" },
 	{ (uint8_t*)"预留1", (uint8_t*)"No Protocol" },
 	{ (uint8_t*)"预留2", (uint8_t*)"No Protocol" },
+	{ (uint8_t*)"SI7000协议", (uint8_t*)"SI7000" }, /* 显示侧只暴露协议选择，具体串口参数由配置归一化自动处理。 */
 	{ (uint8_t*)"非法配置", (uint8_t*)"Illegal CFG" },
 };
 static uint8_t *arr_bottom[][2] = {
