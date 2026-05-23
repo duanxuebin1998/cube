@@ -748,6 +748,17 @@ int MeasureStart(void) {
     }
 	weight_init();
 	g_measurement.device_status.error_code = NO_ERROR; //故障代码清零
+    /*
+     * 外部协议适配辅助状态随新测量命令重新计算，避免上一次流程残留。
+     * 这些状态只给 CPU3/SI7000 做协议转换，不参与原测量流程控制。
+     */
+    g_measurement.oil_measurement.probe_at_liquid_level = 0U;
+    g_measurement.oil_measurement.liquid_stable = 0U;
+    g_measurement.density_distribution.profile_blocked_by_process = 0U;
+    g_measurement.device_status.manual_alarm_inhibit = 0U;
+    g_measurement.oil_measurement.manual_level_update_inhibit = 0U;
+    g_measurement.density_distribution.profile_temp_deviation_alarm = 0U;
+    g_measurement.density_distribution.profile_density_deviation_alarm = 0U;
 	return NO_ERROR;
 }
 
@@ -963,11 +974,17 @@ static void CMD_MeasureBottom(void) {
                        (long)diff_real_height);
             }
 
+            /* 探底成功后置位罐底参考有效，CPU3 可据此点亮 SI7000 Bottom Reference 位。 */
+            g_measurement.height_measurement.bottom_reference_valid = 1U;
             g_measurement.device_status.device_state = STATE_FINDBOTTOM_OVER;
             return;
         }
     }
 	SET_ERROR(ret);
+    if (ret == NO_ERROR) {
+        /* 普通探底路径成功时同样刷新协议辅助状态，保持与快速返回路径一致。 */
+        g_measurement.height_measurement.bottom_reference_valid = 1U;
+    }
 
 	g_measurement.device_status.device_state = STATE_FINDBOTTOM_OVER;
 	return;
@@ -1020,7 +1037,7 @@ static void CMD_CalibrateOilLevel(void) {
 		ret = FollowOilLevel();
 		SET_ERROR(ret);
 		return;
-	} 
+	}
     else
     {
         g_measurement.device_status.device_state = STATE_CALIBRATIONOILING;
@@ -1059,11 +1076,20 @@ static void CMD_CorrectOilLevel(void) {
 }
 static void CMD_EnterMaintenanceMode(void)
 {
-	printf("进入维护模式\n");
-	g_measurement.device_status.device_state = STATE_MAINTENANCEMODE;
-	while (1) {
-		CHECK_COMMAND_SWITCH_NO_RETURN();
-	}
+    printf("进入维护模式\n");
+    /* 维护模式是 SI7000 Manual/Stop 的保守映射，手动期间抑制自动报警和液位自动更新。 */
+    g_measurement.device_status.manual_alarm_inhibit = 1U;
+    g_measurement.oil_measurement.manual_level_update_inhibit = 1U;
+    g_measurement.device_status.device_state = STATE_MAINTENANCEMODE;
+    while (1) {
+        if (HasEffectiveCommandSwitchRequest()) {
+            printf("检测到命令切换请求，停止当前操作\r\n");
+            /* 命令切换退出时必须清除抑制位，避免 CPU3 长时间保持 SI7000 手动抑制状态。 */
+            g_measurement.device_status.manual_alarm_inhibit = 0U;
+            g_measurement.oil_measurement.manual_level_update_inhibit = 0U;
+            return;
+        }
+    }
 }
 // 电机上行指令
 static void CMD_MoveUp(void)
@@ -1071,6 +1097,9 @@ static void CMD_MoveUp(void)
     uint32_t ret = 0;
 
     printf("电机上行操作\n");
+    /* 手动上行由外部协议触发时，不应被自动报警/液位跟随逻辑误判为自动测量动作。 */
+    g_measurement.device_status.manual_alarm_inhibit = 1U;
+    g_measurement.oil_measurement.manual_level_update_inhibit = 1U;
     g_measurement.device_status.device_state = STATE_RUNUPING;
 
     ret = MotorCtrl_MoveAndWait(
@@ -1078,8 +1107,19 @@ static void CMD_MoveUp(void)
             MOTOR_DIRECTION_UP,
             MotorCtrl_GetDefaultSpeedX100());
 
-    SET_ERROR(ret);
+    if (ret == STATE_SWITCH) {
+        g_measurement.device_status.manual_alarm_inhibit = 0U;
+        g_measurement.oil_measurement.manual_level_update_inhibit = 0U;
+        return;
+    }
+    if (ret != NO_ERROR) {
+        g_measurement.device_status.manual_alarm_inhibit = 0U;
+        g_measurement.oil_measurement.manual_level_update_inhibit = 0U;
+        SET_ERROR(ret);
+    }
 
+    g_measurement.device_status.manual_alarm_inhibit = 0U;
+    g_measurement.oil_measurement.manual_level_update_inhibit = 0U;
     g_measurement.device_status.device_state = STATE_RUNUPOVER;
     return;
 }
@@ -1089,6 +1129,9 @@ static void CMD_MoveDown(void)
     uint32_t ret = 0;
 
     printf("电机下行操作\n");
+    /* 手动下行同样设置抑制位，CPU3 据此把 SI7000 报警/液位更新状态与自动测量隔离。 */
+    g_measurement.device_status.manual_alarm_inhibit = 1U;
+    g_measurement.oil_measurement.manual_level_update_inhibit = 1U;
     g_measurement.device_status.device_state = STATE_RUNDOWNING;
 
     ret = MotorCtrl_MoveAndWait(
@@ -1096,8 +1139,19 @@ static void CMD_MoveDown(void)
             MOTOR_DIRECTION_DOWN,
             MotorCtrl_GetDefaultSpeedX100());
 
-    SET_ERROR(ret);
+    if (ret == STATE_SWITCH) {
+        g_measurement.device_status.manual_alarm_inhibit = 0U;
+        g_measurement.oil_measurement.manual_level_update_inhibit = 0U;
+        return;
+    }
+    if (ret != NO_ERROR) {
+        g_measurement.device_status.manual_alarm_inhibit = 0U;
+        g_measurement.oil_measurement.manual_level_update_inhibit = 0U;
+        SET_ERROR(ret);
+    }
 
+    g_measurement.device_status.manual_alarm_inhibit = 0U;
+    g_measurement.oil_measurement.manual_level_update_inhibit = 0U;
     g_measurement.device_status.device_state = STATE_RUNDOWNOVER;
     return;
 }
@@ -1107,6 +1161,9 @@ static void CMD_ForceMoveUp(void)
     uint32_t ret;
 
     printf("电机强制上行操作\r\n");
+    /* 强制运行无检测，必须显式告诉 CPU3 当前液位/报警状态不应作为自动流程结果。 */
+    g_measurement.device_status.manual_alarm_inhibit = 1U;
+    g_measurement.oil_measurement.manual_level_update_inhibit = 1U;
     g_measurement.device_status.device_state = STATE_FORCE_RUNUPING;
     printf("强制上行距离: %.1f mm\r\n", (float) g_deviceParams.motorCommandDistance / 10.0f);
     ret = MotorCtrl_MoveBlockingNoDetect(
@@ -1114,10 +1171,18 @@ static void CMD_ForceMoveUp(void)
         MOTOR_DIRECTION_UP,
         MotorCtrl_GetDefaultSpeedX100());
     if (ret == STATE_SWITCH) {
+        g_measurement.device_status.manual_alarm_inhibit = 0U;
+        g_measurement.oil_measurement.manual_level_update_inhibit = 0U;
         return;
     }
-    SET_ERROR(ret);
+    if (ret != NO_ERROR) {
+        g_measurement.device_status.manual_alarm_inhibit = 0U;
+        g_measurement.oil_measurement.manual_level_update_inhibit = 0U;
+        SET_ERROR(ret);
+    }
     printf("电机强制上行操作完成\r\n");
+    g_measurement.device_status.manual_alarm_inhibit = 0U;
+    g_measurement.oil_measurement.manual_level_update_inhibit = 0U;
 //    MotorCtrl_MoveAndWait(
 //            (float)g_deviceParams.motorCommandDistance / 10.0f,
 //            MOTOR_DIRECTION_UP);
@@ -1131,6 +1196,9 @@ static void CMD_ForceMoveDown(void)
     uint32_t ret;
 
     printf("电机强制下行操作\r\n");
+    /* 强制下行属于手动动作，协议辅助状态只反映抑制语义，不改变原电机控制流程。 */
+    g_measurement.device_status.manual_alarm_inhibit = 1U;
+    g_measurement.oil_measurement.manual_level_update_inhibit = 1U;
     g_measurement.device_status.device_state = STATE_FORCE_RUNDOWNING;
 
     ret = MotorCtrl_MoveBlockingNoDetect(
@@ -1138,15 +1206,23 @@ static void CMD_ForceMoveDown(void)
         MOTOR_DIRECTION_DOWN,
         MotorCtrl_GetDefaultSpeedX100());
     if (ret == STATE_SWITCH) {
+        g_measurement.device_status.manual_alarm_inhibit = 0U;
+        g_measurement.oil_measurement.manual_level_update_inhibit = 0U;
         return;
     }
-    SET_ERROR(ret);
+    if (ret != NO_ERROR) {
+        g_measurement.device_status.manual_alarm_inhibit = 0U;
+        g_measurement.oil_measurement.manual_level_update_inhibit = 0U;
+        SET_ERROR(ret);
+    }
 
+    g_measurement.device_status.manual_alarm_inhibit = 0U;
+    g_measurement.oil_measurement.manual_level_update_inhibit = 0U;
     g_measurement.device_status.device_state = STATE_FORCE_RUNDOWN_OVER;
     return;
 }
 
-// 强制提零点：长距离上行（无检测称重/丢步）
+// 强制回零点：只控制电机上行，无检测重量/液位等
 static void CMD_ForceLiftZero(void)
 {
     uint32_t ret;

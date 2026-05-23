@@ -19,7 +19,7 @@
 | 1 | V1.5.0.0 | V1.2.0.0 | 200 | 原 `reserved1` 正式替换为协议版本，密度分布测量、内部输入寄存器和 Wärtsilä 外部密度点扩展到 200 点。 |
 | 2 | V1.6.0.0 | V1.4.0.0 | 200 | 新增 `CMD_CANCEL_MEASUREMENT = 16`，用于 CPU3 状态显示界面长按返回键取消当前测量并让 CPU2 进入待机。 |
 | 3 | V1.7.0.0 | V1.5.0.0 | 200 | 原 `reserved23` 正式替换为探底修正罐高，用于罐底测量后编码器修正；瓦锡兰分布测后探底前先回固定点监测位置。 |
-| 4 | V1.8.0.0 | V1.6.0.0 | 200 | 新增 `ProtocolAssistStatus` 共享状态区，用于 CPU3 外部协议转换层获取探底参考、液位到达、profile 完成和 profile 偏差报警等通用状态。 |
+| 4 | V1.8.0.0 | V1.6.0.0 | 200 | 将 SI7000 所需补充状态融合进既有测量结构，并通过共享输入寄存器发布给 CPU3 外部协议转换层。 |
 
 ## 兼容判断规则
 
@@ -71,13 +71,45 @@
 ### 协议版本 4
 
 关联改动：
-- 在 CPU2/CPU3 `MeasurementResult` 中新增 `ProtocolAssistStatus`。
+- 将 SI7000 所需补充状态按业务含义融合到 CPU2/CPU3 既有测量结构：`DeviceStatus`、`OilMeasurement`、`ActualHeightMeasurement` 和 `DensityDistribution`。
 - CPU2 发布探底参考有效、探头位于液位、液位稳定、profile 完成锁存、profile 完成计数、profile 被工况阻止、装卸液状态、手动报警抑制、手动液位更新抑制、profile 温度偏差报警、profile 密度偏差报警。
 - CPU3 读取该状态区后供外部协议转换层使用，SI7000 地址、线圈、缩放和异常响应只存在于 CPU3 外部协议模块，避免外部协议直接反推或污染 CPU2 内部流程状态。
+- 没有新增独立 `ProtocolAssistStatus` 结构，避免在 `MeasurementResult` 里再维护一套外部协议专用镜像；所有字段都落在原业务结构尾部，并由 CPU2/CPU3 两侧同名结构同步。
+
+新增共享字段明细：
+
+| 所属结构 | 新增字段 | 共享寄存器 | 语义 |
+| --- | --- | --- | --- |
+| `DeviceStatus` | `loading_unloading_active` | `REG_DEVICE_STATUS_LOADING_UNLOADING_ACTIVE` | 当前是否处于装卸液过程，供外部协议判断工况。 |
+| `DeviceStatus` | `manual_alarm_inhibit` | `REG_DEVICE_STATUS_MANUAL_ALARM_INHIBIT` | 手动/强制动作期间抑制自动报警语义，避免 CPU3 将手动过程误判为自动测量结果。 |
+| `OilMeasurement` | `probe_at_liquid_level` | `REG_OIL_MEASUREMENT_PROBE_AT_LIQUID_LEVEL` | 找液位成功后置位，SI7000 可映射为 Probe At Liquid Level。 |
+| `OilMeasurement` | `liquid_stable` | `REG_OIL_MEASUREMENT_LIQUID_STABLE` | 找液位成功后置位，表示当前液位结果可认为稳定。 |
+| `OilMeasurement` | `manual_level_update_inhibit` | `REG_OIL_MEASUREMENT_MANUAL_LEVEL_UPDATE_INHIBIT` | 手动/强制动作期间抑制液位自动更新语义。 |
+| `ActualHeightMeasurement` | `bottom_reference_valid` | `REG_HEIGHT_MEASUREMENT_BOTTOM_REFERENCE_VALID` | 探底成功或使用有效回退罐高后置位，SI7000 可映射为 Bottom Reference。 |
+| `DensityDistribution` | `profile_complete_latched` | `REG_DENSITY_DIST_PROFILE_COMPLETE_LATCHED` | 分布测量成功后锁存完成状态，失败或命令切换不置位。 |
+| `DensityDistribution` | `profile_complete_counter` | `REG_DENSITY_DIST_PROFILE_COMPLETE_COUNTER` | 每次 profile 成功完成后递增，CPU3 用计数变化锁存 SI7000 profile 时间戳。 |
+| `DensityDistribution` | `profile_blocked_by_process` | `REG_DENSITY_DIST_PROFILE_BLOCKED_BY_PROCESS` | profile 被当前工况阻止时置位，供 CPU3 转换为外部协议互锁/阻止状态。 |
+| `DensityDistribution` | `profile_temp_deviation_alarm` | `REG_DENSITY_DIST_PROFILE_TEMP_DEVIATION_ALARM` | 分布温度偏差报警状态。 |
+| `DensityDistribution` | `profile_density_deviation_alarm` | `REG_DENSITY_DIST_PROFILE_DENSITY_DEVIATION_ALARM` | 分布密度偏差报警状态。 |
+
+寄存器布局影响：
+- `DeviceStatus` 尾部新增 2 个 `uint32_t`，`REG_DEBUG_BASE` 随之顺延。
+- `OilMeasurement` 尾部新增 3 个 `uint32_t`，`REG_WATER_MEASUREMENT_WATER_LEVEL` 随之顺延。
+- `ActualHeightMeasurement` 尾部新增 1 个 `uint32_t`，`REG_SINGLE_POINT_MEAS_TEMP` 随之顺延。
+- `DensityDistribution` 在 `REG_DENSITY_DIST_OIL_LEVEL` 后新增 5 个 `uint32_t`，`REG_DENSITY_DIST_POINT_BASE` 随之顺延。
+- CPU2 与 CPU3 的结构字段顺序、寄存器宏表达式和读写打包顺序必须完全一致，否则后续寄存器会错位。
 
 兼容影响：
-- CPU2/CPU3 必须同为协议版本 4 才能正确同步新增状态区。
+- CPU2/CPU3 必须同为协议版本 4 才能正确同步融合后的 SI7000 状态字段。
 - 旧 CPU3 不识别新增状态寄存器，不能完整支持 SI7000 的离散输入状态映射。
+- 旧 CPU2 不发布这些新增状态字段，CPU3 V1.6.0.0 不能依赖旧协议数据生成完整 SI7000 状态。
+- 由于多个分组尾部寄存器顺延，协议版本 4 与协议版本 3 不能混用；必须依赖 `DEVICE_PROTOCOL_VERSION` 严格相等检查拦截。
+
+验证结果：
+- `py tools\check_si7000_protocol_contract.py`：确认 CPU2/CPU3 的结构字段、寄存器宏和读写打包顺序一致。
+- `py tools\check_si7000_modbus_frames.py`：确认 SI7000 外部地址常量和 golden frame 一致。
+- `py tools\check_version_bumped.py`：确认 CPU2 V1.8.0.0、CPU3 V1.6.0.0 已匹配本次协议升级。
+- `cmake --build build\LTD_MAIN_CPU2`、`cmake --build build\LTD_DISPLAY_CPU3`：两端构建通过。
 
 ## 后续维护要求
 

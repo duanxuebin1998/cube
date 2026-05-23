@@ -256,6 +256,9 @@ uint32_t SearchOilLevel(void) {
     uint8_t coarse_found = 0U;
     int mode_try_times = 0;
     int coarse_try_times = 0;
+    /* 找液位开始时先清除液位命中/稳定状态，防止 CPU3 读到上一轮结果。 */
+    g_measurement.oil_measurement.probe_at_liquid_level = 0;
+    g_measurement.oil_measurement.liquid_stable = 0;
     fault_info_init();  // 清除故障信息
     /*************** Step 1: 启用液位模式 ***************/
     while (mode_try_times < 3) {
@@ -371,6 +374,9 @@ uint32_t SearchOilLevel(void) {
     // 打印测量结果
     printf("液位测量\t液位：%lu(0.1mm)\r\n", (unsigned long)g_measurement.oil_measurement.oil_level);
 
+    /* 成功找到液位后才置位 SI7000 的 Probe At Liquid Level 和液体稳定状态。 */
+    g_measurement.oil_measurement.probe_at_liquid_level = 1;
+    g_measurement.oil_measurement.liquid_stable = 1;
     return NO_ERROR;  // 返回成功状态
 }
 /**
@@ -812,11 +818,17 @@ static int determineTheSensorPositionAndUpdateTheLevelValue(void) {
 
 	if (((int64_t)g_deviceParams.tankHeight > 1000) &&
         (oil_level_s64 >= upper_limit_01mm)) {
+		/* 到达上下限不是有效液位点，必须清除给外部协议看的命中状态。 */
+		g_measurement.oil_measurement.probe_at_liquid_level = 0;
+		g_measurement.oil_measurement.liquid_stable = 0;
 		printf("超声波找液位\t到达位置上限\r\n");
 		return OilLevel_StopBeforeReturn(MEASUREMENT_OILLEVEL_HIGH, "到达液位上限");
 	}
 	// 步骤4: 负位置允许作为正常结果，上报时按0；非负且低于盲区才按下限处理。
 	else if ((oil_level_s64 >= 0) && (oil_level_s64 < (int64_t)g_deviceParams.blindZone)) {
+		/* 盲区内位置不作为 SI7000 的有效液位命中，避免 PLC 误判液位稳定。 */
+		g_measurement.oil_measurement.probe_at_liquid_level = 0;
+		g_measurement.oil_measurement.liquid_stable = 0;
 		printf("超声波找液位\t到达位置下限\r\n");
 		return OilLevel_StopBeforeReturn(MEASUREMENT_OILLEVEL_LOW, "到达液位下限");
 	}
@@ -832,6 +844,9 @@ static int determineTheSensorPositionAndUpdateTheLevelValue(void) {
 static int waitForTheLiquidLevelToExceedTheBlindZone(void) {
     int32_t ret;
     //运行到盲区
+    /* 等待脱离盲区期间液位尚未确认，外部协议侧保持未命中/不稳定。 */
+    g_measurement.oil_measurement.probe_at_liquid_level = 0;
+    g_measurement.oil_measurement.liquid_stable = 0;
 
     while (1) {
         if (HasEffectiveCommandSwitchRequest()) {

@@ -326,7 +326,7 @@
 - 液位修正计算出的罐高为负或超出 `uint32_t` 范围时，取消本次修正，保留原罐高和修正参数，避免误覆盖有效罐高。
 - 新增按当前记步源刷新业务位置的接口；罐高变化、编码器修正和电机局部周长标定路径避免在电机记步模式下用编码轮覆盖 `sensor_position`。
 - 瓦锡兰测后需要探底时，探底前回固定点监测位置最多尝试 3 次；三次失败后跳过探底并切回固定点监测，不置错误状态。
-- 合并“液位修正后液位值不刷新改进方案”和“有符号位置转无符号风险检查”两个新增 md 到 `docs/测试记录/26.05.16_CPU2_V1.7.2.0液位同步负位置钳位与瓦锡兰回位整改记录.md`。
+- 合并“液位修正后液位值不刷新改进方案”和“有符号位置转无符号风险检查”两个新增 md 到 `docs/05_测试记录/26.05.16_CPU2_V1.7.2.0液位同步负位置钳位与瓦锡兰回位整改记录.md`。
 - 新增 `26.05.16_CPU2_V1.7.1.2详细改动方案.md/.pdf`，并更新 `LNG计量仪屏幕菜单.docx`，补齐暂存区内实际包含的文档变更。
 
 当前仍存在的风险：
@@ -364,3 +364,39 @@
 - `py tools\check_version_bumped.py`
 - `git diff --check`
 - `git diff --cached --check`
+
+## 2026-05-16
+
+版本：
+- CPU2: V1.7.3.0 -> V1.8.0.0
+- CPU3: V1.5.0.0 -> V1.6.0.0
+
+兼容性：
+- 本次将 SI7000 所需补充状态融合进 CPU2/CPU3 既有测量结构，`DEVICE_PROTOCOL_VERSION` 从 3 升级到 4。
+- CPU2/CPU3 必须同为协议版本 4，CPU3 才能完整获得外部协议转换所需的 profile 完成、探底参考、液位到达和偏差报警状态。
+
+本次修改：
+- 合并 `wip/si7000-protocol-assist` 中的外部协议辅助状态、CPU2 测量状态维护、CPU3 外部 SI7000 Modbus 从站基础实现和协议映射文档。
+- 收紧 CPU2/CPU3 职责边界：CPU2 只保留通用业务状态和命令，SI7000 地址、线圈、缩放、影子寄存器和异常响应集中在 CPU3 转换层。
+- CPU3 主分发路径和 `com_manager` 兼容路径统一调用 `si7000_modbus_process_for_dispatch()`，避免异常响应帧处理语义重复。
+- CPU3 新增 SI7000 协议选择项，并接入 COM1/COM2/COM3 协议分发。
+- CPU3 新增本地 RTC 时钟接口，SI7000 `30011-30013` 返回当前时分秒，profile 完成计数变化时锁存 `30007-30010` 月日时分。
+- SI7000 `FC05` 写线圈增加模式/动作影子区互斥，避免连续写入后读回多个互斥命令位。
+- SI7000 `FC05` 对协议保留线圈写入返回非法地址，避免 PLC 误写保留位时收到成功 echo。
+- SI7000 profile 时间戳在 RTC 暂不可读时允许后续读寄存器继续尝试锁存，避免偶发初始化窗口丢失时间戳。
+- SI7000 `FC06` 对自动 profile 使能、小时、分钟做基础值域检查，非法值返回 Modbus 异常而不进入影子寄存器。
+- SI7000 `FC06` 对 `40004-40009` 保留寄存器写入返回非法地址，读取仍保持 0。
+- SI7000 profile 点阵只输出 `Number Of Points` 范围内的有效测点，范围外保持 0，避免 PLC 读到旧 profile 残留数据。
+- SI7000 输入寄存器按协议单位输出位置、液位、温度和密度；密度由内部 `kg/m3 x10` 转为协议 `kg/m3 x100`，超出 16 位时钳位。
+- SI7000 `10012` 和阈值报警位由 `40011`、`40014-40021` 影子寄存器合成，阈值为 0 时视为未启用。
+- 修正 CPU3 串口有校验位时的 WordLength 配置，支持 SI7000 要求的 9600 8O1，并在 SI7000 协议选中后自动锁定端口配置。
+- 更新 SI7000 执行计划、兼容映射表、CPU2 暂存区逐文件改动整理和 CPU2/CPU3 协议变更记录。
+
+验证：
+- `git diff --check`
+- `cmake -S LTD_MAIN_CPU2 -B build/LTD_MAIN_CPU2 -G Ninja "-DCMAKE_TOOLCHAIN_FILE=D:/CUBE/cmake/toolchain-arm-none-eabi.cmake" -DCMAKE_BUILD_TYPE=Debug`
+- `cmake --build build\LTD_MAIN_CPU2`
+- `cmake --build build\LTD_DISPLAY_CPU3`
+- `py tools\check_si7000_modbus_frames.py`
+- `py tools\check_si7000_protocol_contract.py`
+- `py tools\check_version_bumped.py`
