@@ -17,8 +17,8 @@ void Init_MAC()
 	strcpy(BLE_MAC, "36:1D:1A:26:3B:38");  // 正确方式
 }
 
-// 发送 AT 指令
-void Send_AT_Command(char *cmd)
+// 发送 AT 指令，cmd 不包含结尾 CRLF，本函数统一追加
+void Send_AT_Command(const char *cmd)
 {
 	HAL_UART_Transmit(CH9141_UART, (uint8_t*) cmd, strlen(cmd), 100);
 	HAL_UART_Transmit(CH9141_UART, (uint8_t*) "\r\n", 2, 100);
@@ -38,8 +38,8 @@ void CH9141_Init()
 	uint8_t rxBuffer[100];
 	char atCommand[50];
 
-	// 1. 进入 AT 模式
-	Send_AT_Command("AT");
+	// 1. 进入软件 AT 模式，CH9141K 协议入口命令为 AT...
+	Send_AT_Command("AT...");
 	Receive_Response(rxBuffer, sizeof(rxBuffer));
 
 	// 2. 设置 BLE 为主机模式
@@ -50,8 +50,8 @@ void CH9141_Init()
 	Send_AT_Command("AT+RESET");
 	HAL_Delay(500);
 
-	// 4. 再次进入 AT 模式
-	Send_AT_Command("AT");
+	// 4. 再次进入软件 AT 模式，CH9141K 协议入口命令为 AT...
+	Send_AT_Command("AT...");
 	Receive_Response(rxBuffer, sizeof(rxBuffer));
 
 	// 5. 设置 MAC 地址

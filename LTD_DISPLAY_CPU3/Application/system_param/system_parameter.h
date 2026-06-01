@@ -26,7 +26,7 @@
 #define UNVALID_POSITION 0
 #define UNVALID_TEMPERATURE 0
 #define MAX_MEASUREMENT_POINTS 200 // 密度分布测量最大点数
-#define DEVICE_PROTOCOL_VERSION 4u // CPU2/CPU3共享协议版本；旧程序未写入时默认为0
+#define DEVICE_PROTOCOL_VERSION 5u // CPU2/CPU3共享协议版本；旧程序未写入时默认为0
 
 
 #define REPEATMAX 3//重复性测试次数
@@ -209,6 +209,7 @@ typedef enum {
 
     /* --- 水位标定（新增，建议归类到标定类） --- */
     CMD_CALIBRATE_WATER            = 116,  // 水位标定（新增）
+    CMD_PAIR_NEAREST_WIRELESS_SLIPRING = 117, // 匹配最近无线滑环
 
     /* 调试预留 */
     CMD_CALIBRATE_TANKHEIGHT       = 110,  // 罐高标定
@@ -269,6 +270,7 @@ typedef enum {
     STATE_FORCE_LIFT_ZEROING = 0x002F,         // 强制提零点中
     STATE_CALIBRATE_WATERING = 0x0030,         // 水位标定中
     STATE_CALIBRATE_TANKHEIGHTING = 0x0031,     // 罐高标定中
+    STATE_WIRELESS_PAIRING = 0x0032,            // 无线滑环匹配中
 
     /* ===================== 完成态（0x80xx） ===================== */
     STATE_FINDZEROOVER = 0x8010,               // 标定零点完成
@@ -305,6 +307,7 @@ typedef enum {
     STATE_FORCE_LIFT_ZERO_OVER = 0x802F,        // 强制提零点完成
     STATE_CALIBRATE_WATER_OVER = 0x8030,        // 水位标定完成
     STATE_CALIBRATE_TANKHEIGHT_OVER = 0x8031,   // 罐高标定完成
+    STATE_WIRELESS_PAIRING_OVER = 0x8032,       // 无线滑环匹配完成
 
     STATE_ERROR = 0xFFFF                        // 故障
 } DeviceState;
@@ -419,6 +422,23 @@ typedef struct {
 	float current_capacitance;
 } WaterMeasurement;
 
+typedef enum {
+    WIRELESS_PAIRING_RESULT_NONE = 0U,      // 未执行或无结果
+    WIRELESS_PAIRING_RESULT_RUNNING = 1U,   // 正在匹配
+    WIRELESS_PAIRING_RESULT_SUCCESS = 2U,   // 匹配成功
+    WIRELESS_PAIRING_RESULT_FAILED = 3U     // 匹配失败
+} WirelessPairingResult;
+
+typedef struct {
+    uint32_t result;                         // 无线滑环匹配结果
+    uint32_t mac_valid;                      // MAC 是否有效
+    uint32_t mac_high;                       // AA:BB
+    uint32_t mac_mid;                        // CC:DD
+    uint32_t mac_low;                        // EE:FF
+    uint32_t error_code;                     // 失败时的 CPU2 错误码
+    uint32_t update_counter;                 // CPU2 每次状态变化递增
+} WirelessPairingStatus;
+
 /* 测量结果结构体，输入寄存器 */
 typedef struct {
 	DeviceStatus device_status;                  ///< 设备状态
@@ -429,6 +449,7 @@ typedef struct {
 	DensityMeasurement single_point_measurement; ///< 单点测量数据
 	DensityMeasurement single_point_monitoring;  ///< 单点监测数据
 	DensityDistribution density_distribution;    ///< 密度分布测量数据
+	WirelessPairingStatus wireless_pairing_status; ///< 无线滑环匹配状态
 
 } MeasurementResult;
 

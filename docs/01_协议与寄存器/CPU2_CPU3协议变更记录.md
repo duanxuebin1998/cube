@@ -7,7 +7,7 @@
 - 字段位置：`HOLDREGISTER_DEVICEPARAM_PROTOCOL_VERSION`
 - 当前语义：CPU2/CPU3 共享协议版本
 - 旧程序语义：保留字段，默认值为 `0`
-- 当前程序语义：协议版本 `4`
+- 当前程序语义：协议版本 `5`
 
 该字段由原 `reserved1` 预留位正式替换而来，寄存器地址不移动，不新增存储字段。
 
@@ -20,6 +20,7 @@
 | 2 | V1.6.0.0 | V1.4.0.0 | 200 | 新增 `CMD_CANCEL_MEASUREMENT = 16`，用于 CPU3 状态显示界面长按返回键取消当前测量并让 CPU2 进入待机。 |
 | 3 | V1.7.0.0 | V1.5.0.0 | 200 | 原 `reserved23` 正式替换为探底修正罐高，用于罐底测量后编码器修正；瓦锡兰分布测后探底前先回固定点监测位置。 |
 | 4 | V1.8.0.0 | V1.6.0.0 | 200 | 将 SI7000 所需补充状态融合进既有测量结构，并通过共享输入寄存器发布给 CPU3 外部协议转换层。 |
+| 5 | V1.9.0.0 | V1.7.0.0 | 200 | 新增 `CMD_PAIR_NEAREST_WIRELESS_SLIPRING = 117`，用于 CPU3 菜单或共享命令通道触发 CPU2 执行无线滑环 RSSI 最近匹配；新增无线滑环匹配中/完成设备状态；输入寄存器末尾追加无线滑环匹配结果和从机 MAC 状态。 |
 
 ## 兼容判断规则
 
@@ -71,7 +72,7 @@
 ### 协议版本 4
 
 关联改动：
-- 将 SI7000 所需补充状态按业务含义融合到 CPU2/CPU3 既有测量结构：`DeviceStatus`、`OilMeasurement`、`ActualHeightMeasurement` 和 `DensityDistribution`。
+<- 将 SI7000 所需补充状态按业务含义融合到 CPU2/CPU3 既有测量结构：`DeviceStatus`、`OilMeasurement`、`ActualHeightMeasurement` 和 `DensityDistribution`。
 - CPU2 发布探底参考有效、探头位于液位、液位稳定、profile 完成锁存、profile 完成计数、profile 被工况阻止、装卸液状态、手动报警抑制、手动液位更新抑制、profile 温度偏差报警、profile 密度偏差报警。
 - CPU3 读取该状态区后供外部协议转换层使用，SI7000 地址、线圈、缩放和异常响应只存在于 CPU3 外部协议模块，避免外部协议直接反推或污染 CPU2 内部流程状态。
 - 没有新增独立 `ProtocolAssistStatus` 结构，避免在 `MeasurementResult` 里再维护一套外部协议专用镜像；所有字段都落在原业务结构尾部，并由 CPU2/CPU3 两侧同名结构同步。
@@ -110,6 +111,27 @@
 - `py tools\check_si7000_modbus_frames.py`：确认 SI7000 外部地址常量和 golden frame 一致。
 - `py tools\check_version_bumped.py`：确认 CPU2 V1.8.0.0、CPU3 V1.6.0.0 已匹配本次协议升级。
 - `cmake --build build\LTD_MAIN_CPU2`、`cmake --build build\LTD_DISPLAY_CPU3`：两端构建通过。
+### 协议版本 5
+
+关联改动：
+- 新增共享命令 `CMD_PAIR_NEAREST_WIRELESS_SLIPRING = 117`，CPU2 与 CPU3 的 `CommandType` 枚举保持一致。
+- CPU3 维护/调试菜单新增“匹配无线滑环”无参入口，通过现有 `command` 保持寄存器写入 CPU2。
+- CPU2 收到该命令后不执行电机 `MeasureStart()` 初始化，直接复用 `WirelessPairing_RunByRssi()` 执行 CH9141K 扫描、RSSI 最近候选选择、连接、默认连接保存、模块复位和主/从节点透传探测。
+- 保留 CPU2 调试串口 `SPR`，正式命令与调试命令复用同一 RSSI 匹配流程。
+- `DeviceState` 新增 `STATE_WIRELESS_PAIRING = 0x0032` 和 `STATE_WIRELESS_PAIRING_OVER = 0x8032`，用于 CPU3 设备状态页显示无线滑环匹配中和匹配完成。
+- 在输入寄存器末尾追加 `WirelessPairingStatus`，不移动协议版本 4 既有输入寄存器地址。字段包括：
+  - `result`：`0` 未执行或无结果，`1` 正在匹配，`2` 匹配成功，`3` 匹配失败。
+  - `mac_valid`：成功 MAC 是否有效。
+  - `mac_high` / `mac_mid` / `mac_low`：分别保存 `AA:BB`、`CC:DD`、`EE:FF` 三段 MAC。
+  - `error_code`：匹配失败时的 CPU2 错误码。
+  - `update_counter`：CPU2 每次匹配状态变化时递增，CPU3 用于识别新结果。
+- CPU3 收到完成设备状态和成功结果后，在设备状态页显示两行从机 MAC；匹配失败时 CPU2 将 `device_status.device_state` 置为 `STATE_ERROR` 并写入 `device_status.error_code`，CPU3 按现有故障页显示错误码。该 MAC 状态为运行态共享数据，不写入 FRAM 参数。
+
+兼容影响：
+- CPU2/CPU3 必须同为协议版本 5 才能通过 CPU3 菜单触发无线滑环最近匹配并正确读取 MAC 状态。
+- 协议版本 4 仅包含 SI7000 辅助状态，不包含命令 117 和 `WirelessPairingStatus`；CPU3 V1.7.0.0 不应与协议版本 4 的 CPU2 混用。
+- 旧 CPU3 不提供该菜单入口，但不影响 CPU2 新版本通过调试串口 `SPR` 执行匹配。
+- 旧协议 CPU3 不知道追加的 `WirelessPairingStatus` 字段；协议版本不匹配时不应继续解释匹配结果。
 
 ## 后续维护要求
 

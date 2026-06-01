@@ -50,6 +50,17 @@
 #include <stdio.h>
 #include <math.h>
 
+/* 样机固定点监测开关：1=不读真实传感器，直接刷新虚拟温度/密度；0=恢复真实传感器流程。 */
+#ifndef ENABLE_SINGLE_POINT_MONITORING_PROTOTYPE
+#define ENABLE_SINGLE_POINT_MONITORING_PROTOTYPE 1U
+#endif
+
+#define SINGLE_POINT_MONITORING_PROTO_PERIOD_MS      500U
+#define SINGLE_POINT_MONITORING_PROTO_BASE_TEMP_RAW  22650U  /* 26.50℃：TEMP_TO_RAW(26.50) */
+#define SINGLE_POINT_MONITORING_PROTO_BASE_DENS_RAW  9995U   /* 999.5kg/m3：水密度样机值，DENSITY_TO_RAW(999.5) */
+#define SINGLE_POINT_MONITORING_PROTO_BASE_FREQ_HZ   121500U
+#define SINGLE_POINT_MONITORING_PROTO_BASE_VCF20     9995U
+
 /* ===================== 前置声明 ===================== */
 void Print_DensitySpreadResult(const DensityDistribution *dist);
 
@@ -82,6 +93,85 @@ static uint32_t Density_CurrentPositionToU01mmClamped(void)
 {
     return Density_ValueToU01mmClamped(g_measurement.debug_data.sensor_position, "测点位置");
 }
+
+#if ENABLE_SINGLE_POINT_MONITORING_PROTOTYPE
+/**
+ * @brief 写入固定点监测样机虚拟数据。
+ *
+ * 只更新 CPU3/上位机读取的测量结果和调试字段，不访问传感器串口，适合无传感器样机演示。
+ */
+static void SinglePointMonitoringPrototype_WriteSample(uint32_t sample_index)
+{
+    static const int16_t temp_wave_x100[] = { 0, 6, 12, 18, 24, 18, 12, 6, 0, -4, -8, -4 };
+    static const int16_t pos_wave_01mm[]  = { 0, 1, 2, 3, 2, 1, 0, -1, -2, -1, 0, 1 };
+    const uint32_t wave_count = (uint32_t)(sizeof(temp_wave_x100) / sizeof(temp_wave_x100[0]));
+    uint32_t idx = sample_index % wave_count;
+    uint32_t base_pos_01mm = g_deviceParams.singlePointMonitoringPosition;
+    int32_t current_pos_01mm = (int32_t)base_pos_01mm + (int32_t)pos_wave_01mm[idx];
+    uint32_t position_raw = Density_ValueToU01mmClamped(current_pos_01mm, "固定点监测样机位置");
+    uint32_t temperature_raw = (uint32_t)((int32_t)SINGLE_POINT_MONITORING_PROTO_BASE_TEMP_RAW + temp_wave_x100[idx]);
+    uint32_t density_raw = SINGLE_POINT_MONITORING_PROTO_BASE_DENS_RAW;
+    /* 样机要求固定展示水密度，三类密度保持一致，避免误读为真实油品修正值。 */
+    uint32_t standard_density_raw = density_raw;
+    uint32_t weight_density_raw = density_raw;
+    uint32_t vcf20_raw = SINGLE_POINT_MONITORING_PROTO_BASE_VCF20 + (idx % 6U);
+
+    g_measurement.single_point_monitoring.temperature = temperature_raw;
+    g_measurement.single_point_monitoring.density = density_raw;
+    g_measurement.single_point_monitoring.temperature_position = position_raw;
+    g_measurement.single_point_monitoring.standard_density = standard_density_raw;
+    g_measurement.single_point_monitoring.vcf20 = vcf20_raw;
+    g_measurement.single_point_monitoring.weight_density = weight_density_raw;
+
+    g_measurement.debug_data.sensor_position = (int32_t)position_raw;
+    g_measurement.debug_data.motor_distance = (int32_t)position_raw;
+    g_measurement.debug_data.temperature = temperature_raw;
+    g_measurement.debug_data.frequency = SINGLE_POINT_MONITORING_PROTO_BASE_FREQ_HZ + idx * 15U;
+    g_measurement.debug_data.current_amplitude = 96U + (idx % 5U);
+    g_measurement.debug_data.motor_state = 0U;
+    g_measurement.debug_data.motor_speed = 0U;
+
+    printf("固定点监测样机\t位置=%.1fmm\t温度=%.2f℃\t密度=%.1f\t标密=%.1f\tVCF20=%lu\t计重密度=%.1f\r\n",
+           (double)position_raw / 10.0,
+           RAW_TO_TEMP(temperature_raw),
+           RAW_TO_DENSITY(density_raw),
+           RAW_TO_DENSITY(standard_density_raw),
+           (unsigned long)vcf20_raw,
+           RAW_TO_DENSITY(weight_density_raw));
+}
+
+/**
+ * @brief 固定点监测样机循环。
+ *
+ * 宏启用时替代真实传感器读取；循环期间只响应命令切换，不做 UART6 传感器通信。
+ */
+static uint32_t SinglePointMonitoringPrototype_Run(void)
+{
+    uint32_t sample_index = 0U;
+
+    printf("固定点监测样机模式已启用\t宏=ENABLE_SINGLE_POINT_MONITORING_PROTOTYPE\t周期=%lu ms\r\n",
+           (unsigned long)SINGLE_POINT_MONITORING_PROTO_PERIOD_MS);
+    printf("固定点监测样机模式\t不切换密度模式，不读取传感器，只刷新单点监测虚拟温度/密度\r\n");
+
+    while (1) {
+        uint32_t ret;
+
+        if (HasEffectiveCommandSwitchRequest()) {
+            return STATE_SWITCH;
+        }
+
+        g_measurement.device_status.device_state = STATE_SPTESTING;
+        g_measurement.device_status.error_code = NO_ERROR;
+        SinglePointMonitoringPrototype_WriteSample(sample_index);
+        sample_index++;
+
+        ret = AbortableDelay_CommandSwitch(SINGLE_POINT_MONITORING_PROTO_PERIOD_MS, 50U);
+        if (ret != NO_ERROR) {
+            return ret;
+        }
+    }
+}
+#endif
 
 static void PrintPoints01mm(const char *tag, const int32_t *p01, uint32_t n)
 {
@@ -1293,6 +1383,14 @@ void CMD_SinglePointMonitoring(void)
 
     g_measurement.device_status.device_state = STATE_SPTESTING;
 
+#if ENABLE_SINGLE_POINT_MONITORING_PROTOTYPE
+    ret = SinglePointMonitoringPrototype_Run();
+    if (ret == STATE_SWITCH) {
+        printf("固定点监测样机模式检测到命令切换请求，退出\r\n");
+        return;
+    }
+    SET_ERROR(ret);
+#else
     ret = EnableDensityMode();
     if (ret == STATE_SWITCH) {
         printf("固定点监测切换密度模式时检测到命令切换请求，退出\r\n");
@@ -1313,4 +1411,5 @@ void CMD_SinglePointMonitoring(void)
         }
         SET_ERROR(ret);
     }
+#endif
 }

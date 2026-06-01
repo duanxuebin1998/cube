@@ -365,7 +365,7 @@
 - `git diff --check`
 - `git diff --cached --check`
 
-## 2026-05-16 - 适配 SI7000 协议和共享协议版本 4
+<## 2026-05-16 - 适配 SI7000 协议和共享协议版本 4
 
 版本：
 - CPU2: V1.7.3.0 -> V1.8.0.0
@@ -429,3 +429,49 @@
 - `cmake --build build\LTD_MAIN_CPU2`
 - 已用 GBK/936 解码检查 `measure.c`、`test.c` 无替换字符。
 - 待硬件现场验证：B/BE 连续往返、没插称重时 BE 仍持续运行、S 后缀通信打印不置错、运动停稳后再下发下一段。
+
+## 2026-05-23
+
+版本：
+- CPU2: V1.8.1.0 -> V1.9.0.0
+- CPU3: V1.6.0.0 -> V1.7.0.0
+
+协议版本/兼容性：
+- 无线滑环分支中的 `V1.8.0.0` / CPU3 `V1.6.0.0` 是阶段性开发口径；合并到 MAIN 后，因 MAIN 已使用协议版本 4，最终以协议版本 5、CPU3 V1.7.0.0 发布。
+- 新增 CPU2/CPU3 共享命令 `CMD_PAIR_NEAREST_WIRELESS_SLIPRING = 117`，并在输入寄存器末尾追加无线滑环匹配结果状态，协议版本从 4 升级到 5。
+- CPU2 V1.9.0.0 与 CPU3 V1.7.0.0 配套使用；旧 CPU2 不识别命令 117，协议版本不匹配时应按状态页提示处理。
+- 不新增保持寄存器地址，不改变 `command` 寄存器宽度；MAC 仅作为运行态输入寄存器状态发布，不新增无线滑环 MAC/RSSI/名称持久化参数。
+
+本次修改：
+- 新增 `ch9141_at.c/.h`，封装 UART6 AT 指令收发、空闲等待、响应收集以及 `OK`、`ERR`、`LINK OK`、`PAIR ERR`、`SCAN END`、RSSI 上报判定。
+- 新增 `wireless_pairing.c/.h`，实现 CH9141K 主机模式确认、扫描候选解析、RSSI 近距离选择、名称字段选择、连接、默认连接保存和当前连接状态查询。
+- 新增串口调试命令 `SPS`、`SPR`、`SPN=<name>`、`SPC`：分别用于扫描打印、RSSI 近距离匹配、按扫描名称匹配、读取当前连接状态。
+- 修正 CH9141K 软件 AT 入口为 `AT...`，修正旧 `CH9141EVT.c` 初始化路径裸 `AT`，并修正 RSSI 异步等待、`BLEMODE?` 主机模式判断、扫描 MAC 边界解析和 UART6 残留污染问题。
+- `SPR` 只在最强 RSSI 不低于 `-55 dB` 且多候选时领先第二名不少于 `8 dB` 时自动匹配；`SPN=<name>` 只接受显式名称字段，避免误配。
+- 新增固定点监测样机宏 `ENABLE_SINGLE_POINT_MONITORING_PROTOTYPE`，默认启用；固定点监测移动到设定位置后使用虚拟温度和 `999.5kg/m3` 水密度，不访问真实密度传感器。
+- 增强 `BE<mm>` 编码器闭环往返测试日志，并将 `BE/B` 的 `S` 通信检查改为按 `g_deviceParams.sensorType` 分支，避免向 DSM 一代误发 LTD/V2 参数帧。
+- 统一 `process_command()` 串口调试提示为中文字段格式，便于现场日志检索。
+- CPU2 新增正式命令入口，收到命令 117 时跳过电机 `MeasureStart()` 初始化，直接复用 `WirelessPairing_RunByRssi()` 执行 CH9141K RSSI 最近匹配。
+- CPU2/CPU3 新增设备状态 `STATE_WIRELESS_PAIRING = 0x0032` 和 `STATE_WIRELESS_PAIRING_OVER = 0x8032`，用于正式发布无线滑环匹配中和匹配完成。
+- CPU2 在匹配开始、成功、失败时发布 `WirelessPairingStatus`，包含结果码、MAC 是否有效、`AA:BB`/`CC:DD`/`EE:FF` 三段 MAC、失败错误码和更新计数。
+- CPU3 维护/调试菜单新增“匹配无线滑环”无参菜单项，并通过现有 `send_cpu2_command()` 写入 CPU2 `command` 寄存器。
+- CPU3 新增菜单操作码使用显式值 `1000`，不插入既有连续枚举区间，避免改变已有菜单和参数操作码数值。
+- CPU3 正常轮询新增的 `WirelessPairingStatus` 输入寄存器区间，避免匹配结果和 MAC 状态未刷新。
+- CPU3 下发匹配命令后退出罐上操作覆盖页；收到匹配中/完成设备状态后由普通设备状态页显示“无线滑环匹配中/完成”，完成状态下显示两行 MAC。
+- 匹配失败时 CPU2 将 `device_status.error_code` 置为失败错误码，并将 `device_status.device_state` 置为 `STATE_ERROR`，CPU3 按现有故障页显示错误码。
+- 同步 CPU2/CPU3 `CommandType` 枚举和 `DEVICE_PROTOCOL_VERSION`，保持命令码一致。
+- 更新《无线滑环最近匹配正式命令需求》和 CPU2/CPU3 协议变更记录，明确触发状态、兼容影响、非目标和验收标准。
+
+验证：
+- `cmake -S LTD_MAIN_CPU2 -B build/LTD_MAIN_CPU2 -G Ninja "-DCMAKE_TOOLCHAIN_FILE=cmake/toolchain-arm-none-eabi.cmake" -DCMAKE_BUILD_TYPE=Debug`
+- `cmake --build build\LTD_MAIN_CPU2`
+- `ENABLE_SINGLE_POINT_MONITORING_PROTOTYPE=0U` 临时编译通过，恢复 `1U` 后最终编译通过。
+- `BE/B` 的 `S` 通信检查按传感器类型分流后，`cmake --build build\LTD_MAIN_CPU2` 通过。
+- `cmake -S LTD_DISPLAY_CPU3 -B build/LTD_DISPLAY_CPU3 -G Ninja "-DCMAKE_TOOLCHAIN_FILE=cmake/toolchain-arm-none-eabi.cmake" -DCMAKE_BUILD_TYPE=Debug`
+- `cmake --build build\LTD_DISPLAY_CPU3`
+- `py LTD_DISPLAY_CPU3\font_check.py`
+- `py tools\check_version_bumped.py`
+- `git diff --check`（仅提示 Git 下次触碰部分 LF 文件时会转换为 CRLF，未发现空白错误）
+- `git diff --cached --check`
+- CPU2 GBK 源码抽检通过，未发现替换字符或 `??`
+- 待台架验证：CPU3 菜单触发最近匹配、单从机匹配成功后显示从机 MAC、多从机 RSSI 差值不足拒绝并显示失败错误码、匹配后主/从节点透传探测、断电重启自动连接；`SPS` 扫描输出、`SPR` 单近距离从机匹配、多候选拒绝、`SPN=<name>` 名称字段匹配、`SPC` 已连接/未连接状态查询；固定点样机模式下显示虚拟温度和 `999.5kg/m3` 水密度且不访问真实传感器；`BE<mm>` 停止时输出完整退出原因。
