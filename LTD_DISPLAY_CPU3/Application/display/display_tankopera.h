@@ -141,8 +141,9 @@ typedef enum
     COM_NUM_SET_FULL_WEIGHT,         // 设置满载称重
     COM_NUM_RESTOR_EFACTORYSETTING,  // 恢复出厂设置
     COM_NUM_MAINTENANCE_MODE,        // 维护模式
+    COM_NUM_PAIR_NEAREST_WIRELESS_SLIPRING = 1000, // 匹配最近无线滑环；显式编号，不改变既有连续操作码
 
-    COM_NUM_DEBUGCMD_STOP,           // 调试模式无参指令 - 结束
+    COM_NUM_DEBUGCMD_STOP = COM_NUM_MAINTENANCE_MODE + 1, // 调试模式无参指令 - 结束
 
     COM_NUM_NOPARACMD_END,           // 不带参指令类 - 结束
 

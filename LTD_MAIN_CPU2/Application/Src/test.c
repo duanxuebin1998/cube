@@ -20,6 +20,7 @@
 #include "my_crc.h"
 #include "ad5421.h"
 #include "encoder.h"
+#include "error_log.h"
 #include <stddef.h>
 #define MOTOR_TEXT_ENCODER_MAX_ANGLE             4096.0f
 #define MOTOR_TEXT_ENCODER_GUARD_MIN_MM          10.0f
@@ -29,15 +30,51 @@
 #define MOTOR_TEXT_ENCODER_START_GRACE_MS        500U
 #define COMM_TEST_WIRELESS_HOST_ADDR              1U
 #define COMM_TEST_WIRELESS_SLAVE_ADDR             2U
-static uint8_t Test_ShouldAbortForCommandSwitch(void)
+
+/**
+ * @brief 打印串口测试被命令切换打断时的上下文。
+ *
+ * BE/B 等串口测试不是正式业务命令，不会占用 current_command；如果 CPU3/Modbus 写入
+ * g_deviceParams.command，或者调试口收到新的完整命令，就会被判定为命令切换。这里把触发
+ * 条件打印出来，便于区分“外部打断”和“电机/编码器自身故障”。
+ */
+static void Test_PrintCommandSwitchContext(const char *phase_name)
 {
+    printf("串口测试命令切换退出\t阶段=%s\t待执行命令=%lu\t当前命令=%lu\t新串口命令=%u\t设备状态=%lu\t错误码=0x%08lX\r\n",
+           (phase_name != NULL) ? phase_name : "未知阶段",
+           (unsigned long)g_deviceParams.command,
+           (unsigned long)g_measurement.device_status.current_command,
+           (unsigned int)new_command_ready,
+           (unsigned long)g_measurement.device_status.device_state,
+           (unsigned long)g_measurement.device_status.error_code);
+}
+
+/**
+ * @brief 检查串口测试是否需要被新命令打断。
+ *
+ * 命令切换属于人工/上位机主动打断，不按故障处理；这里先打印完整上下文，再停止电机返回。
+ */
+static uint8_t Test_ShouldAbortForCommandSwitchAt(const char *phase_name)
+{
+    uint32_t stop_ret;
+
     if (!HasEffectiveCommandSwitchRequest()) {
         return 0;
     }
 
-    printf("检测到命令切换请求，停止当前串口测试\r\n");
-    MotorCtrl_SlowStop();
+    Test_PrintCommandSwitchContext(phase_name);
+    stop_ret = MotorCtrl_SlowStop();
+    if ((stop_ret != NO_ERROR) && (stop_ret != STATE_SWITCH)) {
+        printf("串口测试命令切换停止电机失败\t错误码=0x%08lX\t错误名=%s\r\n",
+               (unsigned long)stop_ret,
+               ErrorLog_GetCodeName(stop_ret));
+    }
     return 1;
+}
+
+static uint8_t Test_ShouldAbortForCommandSwitch(void)
+{
+    return Test_ShouldAbortForCommandSwitchAt("通用串口测试");
 }
 /**
  * @brief  记录单项通信测试结果
@@ -131,6 +168,35 @@ static float Test_EncoderCountToDistanceMm(int32_t encoder_count)
            (MOTOR_TEXT_ENCODER_MAX_ANGLE * 1000.0f);
 }
 
+/**
+ * @brief 打印 BE 编码器闭环测试的退出原因。
+ *
+ * 该日志只用于串口调试定位，不修改全局错误状态；调用点需要传入当前编码器值、目标编码器值
+ * 和本轮原点，现场可直接判断是编码器未变化、方向相反、命令切换，还是电机/TMC 返回错误。
+ */
+static void Test_PrintEncoderExit(const char *phase_name,
+                                  const char *reason,
+                                  uint32_t ret,
+                                  int32_t current_encoder,
+                                  int32_t target_encoder,
+                                  int32_t origin_encoder)
+{
+    printf("BE编码器测试退出\t阶段=%s\t原因=%s\t错误码=0x%08lX\t错误名=%s\t当前编码=%ld(%.2fmm)\t目标编码=%ld(%.2fmm)\t原点编码=%ld\t电机状态=%lu\t待执行命令=%lu\t当前命令=%lu\t新串口命令=%u\r\n",
+           (phase_name != NULL) ? phase_name : "未知阶段",
+           (reason != NULL) ? reason : "未知原因",
+           (unsigned long)ret,
+           ErrorLog_GetCodeName(ret),
+           (long)current_encoder,
+           Test_EncoderCountToDistanceMm(current_encoder - origin_encoder),
+           (long)target_encoder,
+           Test_EncoderCountToDistanceMm(target_encoder - origin_encoder),
+           (long)origin_encoder,
+           (unsigned long)MotorCtrl_GetDisplayState(),
+           (unsigned long)g_deviceParams.command,
+           (unsigned long)g_measurement.device_status.current_command,
+           (unsigned int)new_command_ready);
+}
+
 static uint32_t Test_MoveUntilEncoderTarget(int32_t target_encoder,
                                             int32_t origin_encoder,
                                             int dir,
@@ -144,19 +210,48 @@ static uint32_t Test_MoveUntilEncoderTarget(int32_t target_encoder,
 
     ret = MotorCtrl_MoveNoWait(guard_mm, dir, speed);
     if (ret != NO_ERROR) {
-        printf("%s encoder move command failed, error=0x%08lX\r\n",
-               phase_name, (unsigned long)ret);
+        current_encoder = Test_GetEncoderValue();
+        Test_PrintEncoderExit(phase_name,
+                              "运动命令下发失败",
+                              ret,
+                              current_encoder,
+                              target_encoder,
+                              origin_encoder);
         return ret;
     }
 
+    current_encoder = Test_GetEncoderValue();
+    printf("BE编码器测试运动已下发\t阶段=%s\t保护距离=%.2fmm\t速度=%lu\t当前编码=%ld(%.2fmm)\t目标编码=%ld(%.2fmm)\r\n",
+           phase_name,
+           guard_mm,
+           (unsigned long)speed,
+           (long)current_encoder,
+           Test_EncoderCountToDistanceMm(current_encoder - origin_encoder),
+           (long)target_encoder,
+           Test_EncoderCountToDistanceMm(target_encoder - origin_encoder));
+
     start_tick = HAL_GetTick();
     while (1) {
-        if (Test_ShouldAbortForCommandSwitch()) {
+        if (Test_ShouldAbortForCommandSwitchAt(phase_name)) {
+            current_encoder = Test_GetEncoderValue();
+            Test_PrintEncoderExit(phase_name,
+                                  "命令切换打断",
+                                  STATE_SWITCH,
+                                  current_encoder,
+                                  target_encoder,
+                                  origin_encoder);
             return STATE_SWITCH;
         }
 
         ret = MotorCtrl_PollRuntimePosition();
         if (ret != NO_ERROR) {
+            current_encoder = Test_GetEncoderValue();
+            Test_PrintEncoderExit(phase_name,
+                                  "运行期位置轮询失败",
+                                  ret,
+                                  current_encoder,
+                                  target_encoder,
+                                  origin_encoder);
             return ret;
         }
         current_encoder = Test_GetEncoderValue();
@@ -164,8 +259,12 @@ static uint32_t Test_MoveUntilEncoderTarget(int32_t target_encoder,
         if (Test_EncoderTargetReached(current_encoder, target_encoder, dir)) {
             ret = MotorCtrl_SlowStop();
             if (ret != NO_ERROR) {
-                printf("%s encoder stop failed, error=0x%08lX\r\n",
-                       phase_name, (unsigned long)ret);
+                Test_PrintEncoderExit(phase_name,
+                                      "到达编码器目标后停止失败",
+                                      ret,
+                                      current_encoder,
+                                      target_encoder,
+                                      origin_encoder);
                 return ret;
             }
             printf("%s encoder target reached | current=%ld(%.2fmm) | target=%ld(%.2fmm)\r\n",
@@ -179,12 +278,12 @@ static uint32_t Test_MoveUntilEncoderTarget(int32_t target_encoder,
 
         if (((HAL_GetTick() - start_tick) > MOTOR_TEXT_ENCODER_START_GRACE_MS) &&
             (MotorCtrl_GetDisplayState() == 0U)) {
-            printf("%s motor stopped before encoder target | current=%ld(%.2fmm) | target=%ld(%.2fmm)\r\n",
-                   phase_name,
-                   (long)current_encoder,
-                   Test_EncoderCountToDistanceMm(current_encoder - origin_encoder),
-                   (long)target_encoder,
-                   Test_EncoderCountToDistanceMm(target_encoder - origin_encoder));
+            Test_PrintEncoderExit(phase_name,
+                                  "电机已停止但编码器未到目标",
+                                  MOTOR_STEP_ERROR,
+                                  current_encoder,
+                                  target_encoder,
+                                  origin_encoder);
             return MOTOR_STEP_ERROR;
         }
 
@@ -702,9 +801,11 @@ void motor_text_encoder(float run_distance_mm, uint8_t enable_sensor_comm)
     run_encoder_count = Test_EncoderDistanceMmToCount(run_distance_mm);
     guard_mm = Test_EncoderDistanceToGuardMm(run_distance_mm);
     if ((run_encoder_count <= 0) || (guard_mm <= 0.0f)) {
-        printf("motor_text_encoder invalid encoder wheel circumference=%lu, distance=%.2fmm\r\n",
+        printf("BE编码器测试参数无效\t编码轮周长=%lu(0.001mm)\t距离=%.2fmm\t编码增量=%ld\t保护距离=%.2fmm\r\n",
                (unsigned long)g_deviceParams.encoder_wheel_circumference_mm,
-               run_distance_mm);
+               run_distance_mm,
+               (long)run_encoder_count,
+               guard_mm);
         return;
     }
 
@@ -734,7 +835,14 @@ void motor_text_encoder(float run_distance_mm, uint8_t enable_sensor_comm)
            (unsigned int)enable_sensor_comm);
 
     while (1) {
-        if (Test_ShouldAbortForCommandSwitch()) {
+        if (Test_ShouldAbortForCommandSwitchAt("BE循环开始")) {
+            current_encoder = Test_GetEncoderValue();
+            Test_PrintEncoderExit("BE循环开始",
+                                  "命令切换打断",
+                                  STATE_SWITCH,
+                                  current_encoder,
+                                  down_target_encoder,
+                                  origin_encoder);
             stpr_disableDriver(&stepper);
             return;
         }
@@ -757,6 +865,13 @@ void motor_text_encoder(float run_distance_mm, uint8_t enable_sensor_comm)
                                           speed,
                                           "DOWN");
         if (ret != NO_ERROR) {
+            current_encoder = Test_GetEncoderValue();
+            Test_PrintEncoderExit("DOWN",
+                                  "下行阶段退出",
+                                  ret,
+                                  current_encoder,
+                                  down_target_encoder,
+                                  origin_encoder);
             stpr_disableDriver(&stepper);
             return;
         }
@@ -765,7 +880,14 @@ void motor_text_encoder(float run_distance_mm, uint8_t enable_sensor_comm)
             Sensor_CommCheckAndLog("after ENCODER DOWN");
         }
 
-        if (Test_ShouldAbortForCommandSwitch()) {
+        if (Test_ShouldAbortForCommandSwitchAt("BE下行后检查")) {
+            current_encoder = Test_GetEncoderValue();
+            Test_PrintEncoderExit("DOWN后检查",
+                                  "命令切换打断",
+                                  STATE_SWITCH,
+                                  current_encoder,
+                                  down_target_encoder,
+                                  origin_encoder);
             stpr_disableDriver(&stepper);
             return;
         }
@@ -784,6 +906,13 @@ void motor_text_encoder(float run_distance_mm, uint8_t enable_sensor_comm)
                                           speed,
                                           "UP");
         if (ret != NO_ERROR) {
+            current_encoder = Test_GetEncoderValue();
+            Test_PrintEncoderExit("UP",
+                                  "上行阶段退出",
+                                  ret,
+                                  current_encoder,
+                                  origin_encoder,
+                                  origin_encoder);
             stpr_disableDriver(&stepper);
             return;
         }
