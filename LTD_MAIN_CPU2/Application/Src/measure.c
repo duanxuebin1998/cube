@@ -440,35 +440,6 @@ void process_command(uint8_t *command) {
         return;
     }
 
-    /* 其余串口指令属于调试/恢复动作，允许在错误态下先清场后执行。 */
-    ret = (uint32_t)MeasureStart();
-    if (ret != NO_ERROR) {
-        printf("串口命令启动失败，电机初始化错误码：0x%08lX\r\n", (unsigned long)ret);
-        return;
-    }
-    if (command[0] == 'A') {
-        if (command[1] == '0') {
-            MotorCtrl_SlowStop();
-        } else if (command[1] == '+') {
-            int mm = atoi((char*) &command[2]);
-            printf("开始上行%d\n", mm);
-            ret = MotorCtrl_MoveNoWait((float) mm, MOTOR_DIRECTION_UP, MotorCtrl_GetDefaultSpeedX100());
-            if (ret != NO_ERROR) {
-                printf("串口上行下发失败，错误码：0x%08lX\r\n", (unsigned long)ret);
-                ProcessCommand_WarnFailure("串口上行", ret);
-            }
-        } else if (command[1] == '-') {
-            int mm = atoi((char*) &command[2]);
-            printf("开始下行%d\n", mm);
-            ret = MotorCtrl_MoveNoWait((float) mm, MOTOR_DIRECTION_DOWN, MotorCtrl_GetDefaultSpeedX100());
-            if (ret != NO_ERROR) {
-                printf("串口下行下发失败，错误码：0x%08lX\r\n", (unsigned long)ret);
-                ProcessCommand_WarnFailure("串口下行", ret);
-            }
-        }
-        return;
-    }
-
     if (command[0] == 'B') {
         const uint8_t use_encoder_count = (command[1] == 'E') ? 1U : 0U;
         int value = atoi((char*) &command[use_encoder_count ? 2U : 1U]);
@@ -505,6 +476,35 @@ void process_command(uint8_t *command) {
         }
         return;
     }
+    /* 其余串口指令属于调试/恢复动作，允许在错误态下先清场后执行。 */
+    ret = (uint32_t)MeasureStart();
+    if (ret != NO_ERROR) {
+        printf("串口命令启动失败，电机初始化错误码：0x%08lX\r\n", (unsigned long)ret);
+        return;
+    }
+    if (command[0] == 'A') {
+        if (command[1] == '0') {
+            MotorCtrl_SlowStop();
+        } else if (command[1] == '+') {
+            int mm = atoi((char*) &command[2]);
+            printf("开始上行%d\n", mm);
+            ret = MotorCtrl_MoveNoWait((float) mm, MOTOR_DIRECTION_UP, MotorCtrl_GetDefaultSpeedX100());
+            if (ret != NO_ERROR) {
+                printf("串口上行下发失败，错误码：0x%08lX\r\n", (unsigned long)ret);
+                ProcessCommand_WarnFailure("串口上行", ret);
+            }
+        } else if (command[1] == '-') {
+            int mm = atoi((char*) &command[2]);
+            printf("开始下行%d\n", mm);
+            ret = MotorCtrl_MoveNoWait((float) mm, MOTOR_DIRECTION_DOWN, MotorCtrl_GetDefaultSpeedX100());
+            if (ret != NO_ERROR) {
+                printf("串口下行下发失败，错误码：0x%08lX\r\n", (unsigned long)ret);
+                ProcessCommand_WarnFailure("串口下行", ret);
+            }
+        }
+        return;
+    }
+
     if (command[0] == 'C') {
         printf("***电机4步进分辨率测试***\r\n");
         motor_step_text();

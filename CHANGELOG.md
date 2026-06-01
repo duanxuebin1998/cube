@@ -400,3 +400,32 @@
 - `py tools\check_si7000_modbus_frames.py`
 - `py tools\check_si7000_protocol_contract.py`
 - `py tools\check_version_bumped.py`
+
+## 2026-05-23
+
+版本：
+- CPU2: V1.8.0.0 -> V1.8.1.0
+- CPU3: 未变化，保持 V1.6.0.0
+
+协议版本/兼容性：
+- 本次仅调整 CPU2 串口 B/BE 调试指令执行流程，不修改 Modbus、SI7000、CPU2/CPU3 共享寄存器映射、参数存储布局或协议版本。
+- B/BE 属于现场调试入口，兼容既有命令格式：`B<mm>`、`BE<mm>`、`S` 后缀和 `,1` 后缀仍可使用。
+
+本次修改：
+- `process_command()` 中 B/BE 分支前置到通用 `MeasureStart()` 之前，避免 B/BE 被测量初始化、称重、电机健康检查或历史错误码拦截。
+- B/BE 新增专用低检测执行路径：初始化阶段只尽量写 TMC5130 基础配置，运动阶段直接写 `RAMPMODE`、`VMAX`、`XTARGET`，不再调用 `MotorCtrl_Init()`、`MotorCtrl_MoveNoWait()` 或 `stpr_waitMove()`。
+- B 指令只负责按电机模型下发往返运动；运行期下发失败、停止状态读取失败等只打印并重试，不检测编码器、称重、过热等业务错误。
+- B/BE 电机运行函数改为直接写 TMC5130 `RAMPMODE`、`VMAX`、`XTARGET` 等寄存器，不再根据 `stpr_moveBy()`、`stpr_moveTo()`、`stpr_setVelocity()`、`stpr_setPos()` 返回错误码决定流程。
+- BE 指令进入后固定记录起始编码点和下行目标点，循环过程中不重新计算；下行结束后记录上行起点，上行始终回到最初起始点。
+- BE 单段运动下发后，只按固定编码目标或 `RAMPSTAT.VZERO` 电机停转结束本阶段；不再读取编码器错误码或其它全局错误码。
+- 电机停转判断改为二次确认：第一次读到 `RAMPSTAT.VZERO` 后延时 200ms，再次读取仍为 `VZERO` 才认为停稳，避免换向瞬间速度为 0 被误判。
+- BE 不重复调用编码器采集定时器启动函数，编码器定时器仍由上电初始化负责，避免把“已启动”误打印成启动失败。
+- S 后缀通信检查和 `SC` 通信测试的传感器参数读取都改为按 `sensorType` 区分 DSM 一代和 LTD/V2 传感器，每次只发一次读命令；DSM 一代只读频率/密度/温度，LTD/V2 只读密度，不切液位模式、不读液位频率。S 后缀调用前后保存并恢复 `device_state` 和 `error_code`，不参与退出条件或错误状态。
+- 每段运动后统一只等待 `TMC5130_RAMPSTAT.VZERO`，速度归零后才下发下一段运动，避免电机拟合目标不准导致等待不到 `POSREACHED`。
+- 新增《串口 B / BE 指令详细执行过程》HTML 文档和本版本改动与测试方案，便于现场按最终流程复核。
+
+验证：
+- `git diff --check`
+- `cmake --build build\LTD_MAIN_CPU2`
+- 已用 GBK/936 解码检查 `measure.c`、`test.c` 无替换字符。
+- 待硬件现场验证：B/BE 连续往返、没插称重时 BE 仍持续运行、S 后缀通信打印不置错、运动停稳后再下发下一段。
