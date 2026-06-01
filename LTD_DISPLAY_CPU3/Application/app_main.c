@@ -10,6 +10,8 @@
 #include "DSM_communication.h"
 #include "wartsila_modbus_communication.h"
 #include "cpu3_comm_display_params.h"
+#include "cpu3_clock.h"
+#include "si7000_modbus_slave.h"
 #include <string.h>
 
 #define DEBUG_APP_MAIN 0
@@ -272,6 +274,17 @@ static uint32_t proto_wartsila_process(const uint8_t* rx, uint16_t rx_len,
     return modbus_rtu_process(rx, rx_len, tx, tx_len);
 }
 
+/*
+ * 处理 SI7000 外部协议帧。
+ * 主循环只转交完整 RTU 帧，地址表、状态翻译和 CRC 回包都由 SI7000 模块负责。
+ */
+static uint32_t proto_si7000_process(const uint8_t* rx, uint16_t rx_len,
+                                     uint8_t* tx, uint16_t* tx_len)
+{
+    /* SI7000 的具体地址映射在独立模块内完成，主分发层只负责转交完整 RTU 帧。 */
+    return si7000_modbus_process_for_dispatch(rx, rx_len, tx, tx_len);
+}
+
 /* 未实现的协议：安全兜底，不回包 */
 static uint32_t proto_no_reply(const uint8_t* rx, uint16_t rx_len,
                                uint8_t* tx, uint16_t* tx_len)
@@ -285,6 +298,7 @@ static uint32_t proto_no_reply(const uint8_t* rx, uint16_t rx_len,
 static const ComProtocolHandler g_handlers[] = {
     [COM_PROTO_DSM]      = { proto_dsm_process,      NULL },
     [COM_PROTO_WARTSILA] = { proto_wartsila_process, NULL },
+    [COM_PROTO_SI7000]   = { proto_si7000_process,   NULL },
     [COM_PROTO_LTD]      = { proto_no_reply,         NULL },  // 先占位
 };
 
@@ -327,6 +341,8 @@ void App_Init(void) {
 	__HAL_UART_CLEAR_IDLEFLAG(&huart5);
 	DisplayInit(); // Initialize the OLED display
 	DisplayAubonLogo(); /* 刚上电显示AUBON LOGO */
+    /* RTC 先初始化，保证后续 SI7000 读当前时间或 profile 时间戳时有合法兜底值。 */
+    Cpu3Clock_Init();
     Cpu3_Params_LoadFromFRAM();//从 FRAM 载入 Cpu3 通讯+显示参数（里面会自动回退默认并保存）
     Cpu3_ReinitAllUarts();//根据参数重配 3 个串口
 	DSM_CommunicationInit(); // 初始化通信模块

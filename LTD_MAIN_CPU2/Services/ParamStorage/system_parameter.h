@@ -26,7 +26,7 @@
 #define UNVALID_GSW 0                      // 质量无效值
 
 #define MAX_MEASUREMENT_POINTS 200 // 密度分布测量最大点数
-#define DEVICE_PROTOCOL_VERSION 3u // CPU2/CPU3共享协议版本；旧程序未写入时默认为0
+#define DEVICE_PROTOCOL_VERSION 4u // CPU2/CPU3共享协议版本；旧程序未写入时默认为0
 
 // 模式枚举
 typedef enum {
@@ -307,8 +307,9 @@ typedef struct {
 	/*---- 标志位 ----*/
 	uint32_t zero_point_status; // 零点状态（0-正常 1-需要回零）
 	uint32_t parameter_update_flag; // parameter update flag
+    uint32_t loading_unloading_active;        ///< 装卸液过程标志，供 CPU3/SI7000 判断工况
+    uint32_t manual_alarm_inhibit;            ///< 手动/强制动作期间报警抑制，避免误判为自动测量报警
 } DeviceStatus;
-
 // 单点密度数据
 typedef struct {
 	uint32_t temperature;          ///< 温度
@@ -329,6 +330,11 @@ typedef struct {
 	uint32_t average_weight_density;                                ///< 计重密度
 	uint32_t measurement_points;                                    ///< 实际测量点数
 	uint32_t Density_oil_level;                                     // 密度分布测量时的液位值(0.1mm)
+    uint32_t profile_complete_latched;        ///< 分布测量完成锁存，失败或命令切换不置位
+    uint32_t profile_complete_counter;        ///< 分布测量完成计数，CPU3 用于锁存 profile 时间戳
+    uint32_t profile_blocked_by_process;      ///< 分布测量被当前工况阻止标志
+    uint32_t profile_temp_deviation_alarm;    ///< 分布温度偏差报警状态
+    uint32_t profile_density_deviation_alarm; ///< 分布密度偏差报警状态
 	DensityMeasurement single_density_data[MAX_MEASUREMENT_POINTS]; // 200个点的密度测量数据
 
 } DensityDistribution;
@@ -371,6 +377,7 @@ typedef struct {
 typedef struct {
 	uint32_t calibrated_liquid_level; ///< 标定液位时实高
 	uint32_t current_real_height;     ///< 当前实高
+    uint32_t bottom_reference_valid;  ///< 探底参考位置是否有效，供 CPU3 映射 SI7000 Bottom Reference
 } ActualHeightMeasurement;
 
 /**
@@ -382,6 +389,9 @@ typedef struct {
 	uint32_t oil_frequency;		//油中频率
 	uint32_t follow_frequency;		//液位跟随频率
 	uint32_t current_frequency;	//当前频率
+    uint32_t probe_at_liquid_level;       ///< 探头是否位于液位点，找液位成功后置位
+    uint32_t liquid_stable;               ///< 液体稳定标志，找液位成功后置位
+    uint32_t manual_level_update_inhibit; ///< 手动/强制动作期间液位自动更新抑制
 } OilMeasurement;
 
 /**
@@ -393,6 +403,7 @@ typedef struct {
 	float oil_capacitance;
 	float current_capacitance;
 } WaterMeasurement;
+
 /* 测量结果结构体，输入寄存器 */
 typedef struct {
 	DeviceStatus device_status;                  ///< 设备状态

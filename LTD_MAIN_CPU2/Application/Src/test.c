@@ -9,6 +9,7 @@
 #include "test.h"
 #include "measure.h"
 #include "motor_ctrl.h"
+#include "motor_ctrl_internal.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include "system_parameter.h"
@@ -27,8 +28,14 @@
 #define MOTOR_TEXT_ENCODER_GUARD_SCALE           1.20f
 #define MOTOR_TEXT_ENCODER_POLL_MS               20U
 #define MOTOR_TEXT_ENCODER_START_GRACE_MS        500U
+#define MOTOR_TEXT_RETRY_DELAY_MS                200U
+#define MOTOR_TEXT_STOP_POLL_MS                  20U
+#define MOTOR_TEXT_RETRY_LOG_INTERVAL_MS         1000U
+#define MOTOR_TEXT_STOP_SETTLE_MS                50U
+#define MOTOR_TEXT_STOP_CONFIRM_MS               200U
 #define COMM_TEST_WIRELESS_HOST_ADDR              1U
 #define COMM_TEST_WIRELESS_SLAVE_ADDR             2U
+static int32_t s_motor_text_raw_target = 0;
 static uint8_t Test_ShouldAbortForCommandSwitch(void)
 {
     if (!HasEffectiveCommandSwitchRequest()) {
@@ -38,6 +45,315 @@ static uint8_t Test_ShouldAbortForCommandSwitch(void)
     printf("检测到命令切换请求，停止当前串口测试\r\n");
     MotorCtrl_SlowStop();
     return 1;
+}
+
+/**
+ * @brief B/BE测试专用：清掉底层函数写入的全局错误态。
+ * @note  只在串口调试任务上下文调用，不在中断中调用。
+ */
+static void Test_MotorTextClearIgnoredError(void)
+{
+    g_measurement.device_status.error_code = NO_ERROR;
+    if (g_measurement.device_status.device_state == STATE_ERROR) {
+        g_measurement.device_status.device_state = STATE_STANDBY;
+    }
+}
+
+/**
+ * @brief B/BE测试专用命令切换检查，只停止并退出当前测试，不把错误码带给业务状态机。
+ * @note  只在任务上下文调用；不会解析称重、电机驱动故障或其它业务错误。
+ */
+static uint8_t Test_ShouldAbortForCommandSwitchNoError(void)
+{
+    if (!HasEffectiveCommandSwitchRequest()) {
+        return 0U;
+    }
+
+    printf("B/BE检测到命令切换请求，停止当前串口测试\r\n");
+    (void)stpr_stop(&stepper);
+    g_measurement.debug_data.motor_state = 0U;
+    stpr_disableDriver(&stepper);
+    Test_MotorTextClearIgnoredError();
+    return 1U;
+}
+
+static uint32_t Test_MotorTextMotorCurrentNoCheck(void)
+{
+    if ((g_deviceParams.motor_current < MOTOR_CURRENT_MIN) ||
+        (g_deviceParams.motor_current > MOTOR_CURRENT_MAX)) {
+        return MOTOR_CURRENT_DEFAULT;
+    }
+
+    return g_deviceParams.motor_current;
+}
+
+/**
+ * @brief B/BE测试专用TMC5130原始初始化，只下发基础配置，不读取、不判断任何错误码。
+ * @note  该入口只保证尽量把配置写下去；即使底层写失败，也由后续运动循环继续写寄存器。
+ */
+static void Test_MotorTextRawInit(void)
+{
+    uint32_t motor_current = Test_MotorTextMotorCurrentNoCheck();
+
+    if (g_measurement.debug_data.motor_speed == 0U) {
+        g_measurement.debug_data.motor_speed = g_deviceParams.max_motor_speed;
+    }
+
+    MotorDriver_UpdateVelocityFromParams();
+    (void)stpr_initStepper(&stepper, &hspi2, GPIOB, GPIO_PIN_12, 1U, (uint8_t)motor_current);
+    stpr_enableDriver(&stepper);
+    s_motor_driver.initialized = true;
+    s_motor_driver.applied_velocity = velocity;
+    (void)stpr_writeInt(&stepper, TMC5130_VMAX, (int32_t)velocity);
+    Test_MotorTextClearIgnoredError();
+}
+
+/**
+ * @brief B/BE测试专用准备流程，只响应命令切换，不因任何错误码退出。
+ */
+static uint8_t Test_MotorTextPrepareNoExit(const char *name)
+{
+    (void)name;
+    if (Test_ShouldAbortForCommandSwitchNoError()) {
+        return 0U;
+    }
+    Test_MotorTextRawInit();
+    return 1U;
+}
+/**
+ * @brief 将B/BE测试距离换算为TMC5130 ticks，复用现有卷筒模型但不做故障检查。
+ * @note  只做参数和数学换算，不访问硬件，不上报错误状态。
+ */
+static uint32_t Test_MotorTextDistanceToTicksNoCheck(float move_mm, int dir, int32_t *ticks_out)
+{
+    double Lcur_mm;
+    double dL_mm;
+    double Ltar_mm;
+    int64_t ticks64;
+    double local_circumference_mm;
+    bool use_local_circ;
+
+    if (ticks_out == NULL) {
+        return PARAM_ADDRESS_OVERFLOW;
+    }
+    if (move_mm < 0.0f) {
+        return PARAM_ERROR;
+    }
+    if (!MotorDriver_IsDirValid(dir)) {
+        return PARAM_ERROR;
+    }
+    if (move_mm == 0.0f) {
+        *ticks_out = 0;
+        return NO_ERROR;
+    }
+
+    Lcur_mm = (double)g_measurement.debug_data.cable_length * 0.1;
+    velocity = MotorDriver_ComputeUniformVelocityFromLength(Lcur_mm);
+    s_motor_driver.applied_velocity = velocity;
+
+    dL_mm = (double)move_mm;
+    if (dir == MOTOR_DIRECTION_UP) {
+        dL_mm = -dL_mm;
+    }
+    Ltar_mm = Lcur_mm + dL_mm;
+
+    local_circumference_mm = MotorPosition_GetLocalCircumferenceFromParams();
+    use_local_circ = ((g_deviceParams.position_count_mode == POSITION_COUNT_MODE_MOTOR) &&
+                      (local_circumference_mm > 1e-6));
+    if (use_local_circ) {
+        ticks64 = MotorPosition_RoundToInt64((dL_mm / local_circumference_mm) *
+                                             (double)MotorPosition_TapeTicksPerRev());
+    } else {
+        const double C0 = MotorPosition_TapeC0Mm();
+        const double t = MotorPosition_TapeThicknessMm();
+        double ncur;
+        double ntar;
+        if (C0 <= 0.0) {
+            return PARAM_ERROR;
+        }
+        ncur = MotorPosition_TapeTurnsFromSignedLength(Lcur_mm, C0, t);
+        ntar = MotorPosition_TapeTurnsFromSignedLength(Ltar_mm, C0, t);
+        ticks64 = MotorPosition_RoundToInt64((ntar - ncur) *
+                                             (double)MotorPosition_TapeTicksPerRev());
+    }
+
+    if (ticks64 > (int64_t)INT32_MAX) {
+        ticks64 = (int64_t)INT32_MAX;
+    }
+    if (ticks64 < (int64_t)INT32_MIN) {
+        ticks64 = (int64_t)INT32_MIN;
+    }
+
+    *ticks_out = (int32_t)ticks64;
+    return NO_ERROR;
+}
+
+/**
+ * @brief B/BE测试专用相对运动下发，直接写TMC5130寄存器，不返回、不判断错误码。
+ * @note  目标位置用本地累计值维护，避免依赖 XACTUAL 读取结果。
+ */
+static void Test_MotorTextMoveByNoCheck(float move_mm, int dir)
+{
+    int32_t ticks = 0;
+
+    (void)Test_MotorTextDistanceToTicksNoCheck(move_mm, dir, &ticks);
+    s_motor_text_raw_target += ticks;
+    velocity = MotorDriver_ComputeUniformVelocityFromLength((double)g_measurement.debug_data.cable_length * 0.1);
+    s_motor_driver.applied_velocity = velocity;
+
+    stpr_enableDriver(&stepper);
+    g_measurement.debug_data.motor_state = (dir == MOTOR_DIRECTION_UP) ? 1U : 2U;
+    (void)stpr_writeInt(&stepper, TMC5130_RAMPMODE, TMC5130_MODE_POSITION);
+    (void)stpr_writeInt(&stepper, TMC5130_VMAX, (int32_t)velocity);
+    (void)stpr_writeInt(&stepper, TMC5130_XTARGET, s_motor_text_raw_target);
+    Test_MotorTextClearIgnoredError();
+}
+
+/**
+ * @brief B指令回零专用绝对运动下发，直接写目标位置，不读取、不判断错误状态。
+ */
+static void Test_MotorTextMoveToNoCheck(int32_t target, int dir)
+{
+    velocity = MotorDriver_ComputeUniformVelocityFromLength((double)g_measurement.debug_data.cable_length * 0.1);
+    s_motor_driver.applied_velocity = velocity;
+    s_motor_text_raw_target = target;
+
+    stpr_enableDriver(&stepper);
+    g_measurement.debug_data.motor_state = (dir == MOTOR_DIRECTION_UP) ? 1U : 2U;
+    (void)stpr_writeInt(&stepper, TMC5130_RAMPMODE, TMC5130_MODE_POSITION);
+    (void)stpr_writeInt(&stepper, TMC5130_VMAX, (int32_t)velocity);
+    (void)stpr_writeInt(&stepper, TMC5130_XTARGET, target);
+    Test_MotorTextClearIgnoredError();
+}
+/**
+ * @brief 用RAMPSTAT.VZERO判断电机是否停稳，不解析驱动故障位。
+ * @note  known=0表示本次通信读失败，调用方按继续等待或重试处理。
+ */
+static uint8_t Test_MotorTextIsStoppedNoError(uint8_t *known)
+{
+    int32_t rampstat = 0;
+
+    if (known != NULL) {
+        *known = 0U;
+    }
+    if (!stpr_tryReadInt(&stepper, TMC5130_RAMPSTAT, &rampstat)) {
+        Test_MotorTextClearIgnoredError();
+        return 0U;
+    }
+
+    if (known != NULL) {
+        *known = 1U;
+    }
+    return ((rampstat & TMC5130_RS_VZERO) != 0) ? 1U : 0U;
+}
+
+/**
+ * @brief B/BE测试专用停稳二次确认，避免换向瞬间 VZERO 误判。
+ * @note  第一次读到 VZERO 后延时，再二次读取 VZERO；期间只响应命令切换。
+ */
+static uint8_t Test_MotorTextConfirmStoppedNoError(const char *phase_name, uint8_t *known)
+{
+    uint8_t first_known = 0U;
+    uint8_t second_known = 0U;
+
+    if (known != NULL) {
+        *known = 0U;
+    }
+
+    if (Test_MotorTextIsStoppedNoError(&first_known) == 0U) {
+        if (known != NULL) {
+            *known = first_known;
+        }
+        return 0U;
+    }
+
+    HAL_Delay(MOTOR_TEXT_STOP_CONFIRM_MS);
+    if (Test_ShouldAbortForCommandSwitchNoError()) {
+        return 0U;
+    }
+
+    if (Test_MotorTextIsStoppedNoError(&second_known) == 0U) {
+        if (known != NULL) {
+            *known = second_known;
+        }
+        return 0U;
+    }
+
+    (void)phase_name;
+    if (known != NULL) {
+        *known = 1U;
+    }
+    return 1U;
+}
+/**
+ * @brief 等待电机停稳，只看RAMPSTAT.VZERO，不检测称重/过热等错误。
+ * @note  只在任务上下文调用；通信读失败会继续等待并周期打印。
+ */
+static uint8_t Test_WaitMotorStoppedNoErrorCheck(const char *phase_name)
+{
+    uint32_t start_tick = HAL_GetTick();
+    uint32_t last_log_tick = 0U;
+    const char *name = (phase_name != NULL) ? phase_name : "B/BE";
+
+    while (1) {
+        uint8_t known = 0U;
+        uint32_t now;
+
+        if (Test_ShouldAbortForCommandSwitchNoError()) {
+            return 0U;
+        }
+
+        now = HAL_GetTick();
+        if ((Test_MotorTextConfirmStoppedNoError(name, &known) != 0U) &&
+            ((now - start_tick) >= MOTOR_TEXT_STOP_SETTLE_MS)) {
+            g_measurement.debug_data.motor_state = 0U;
+            Test_MotorTextClearIgnoredError();
+            return 1U;
+        }
+
+        if ((known == 0U) &&
+            ((last_log_tick == 0U) ||
+             ((now - last_log_tick) >= MOTOR_TEXT_RETRY_LOG_INTERVAL_MS))) {
+            printf("%s wait stop read RAMPSTAT failed, keep waiting\r\n", name);
+            last_log_tick = now;
+        }
+
+        Test_MotorTextClearIgnoredError();
+        HAL_Delay(MOTOR_TEXT_STOP_POLL_MS);
+    }
+}
+
+/**
+ * @brief B指令单段运动执行器，不检测任何错误码，只负责下发运动并等待停转。
+ * @note  只响应新串口命令切换；其它错误状态会被清掉，不参与流程判断。
+ */
+static uint8_t Test_MotorTextRunMoveStageNoExit(const char *phase_name,
+                                                uint32_t loop_index,
+                                                uint8_t move_to_zero,
+                                                float move_mm,
+                                                int dir)
+{
+    if (Test_ShouldAbortForCommandSwitchNoError()) {
+        return 0U;
+    }
+
+    if (move_to_zero != 0U) {
+        Test_MotorTextMoveToNoCheck(0, dir);
+    } else {
+        Test_MotorTextMoveByNoCheck(move_mm, dir);
+    }
+
+    printf("[LOOP %lu] %s start\r\n",
+           (unsigned long)(loop_index + 1U),
+           phase_name);
+    if (Test_WaitMotorStoppedNoErrorCheck(phase_name) == 0U) {
+        return 0U;
+    }
+    printf("[LOOP %lu] %s over\r\n",
+           (unsigned long)(loop_index + 1U),
+           phase_name);
+    Test_MotorTextClearIgnoredError();
+    return 1U;
 }
 /**
  * @brief  记录单项通信测试结果
@@ -135,63 +451,60 @@ static uint32_t Test_MoveUntilEncoderTarget(int32_t target_encoder,
                                             int32_t origin_encoder,
                                             int dir,
                                             float guard_mm,
-                                            uint32_t speed,
                                             const char *phase_name)
 {
-    uint32_t ret;
+    const char *name = (phase_name != NULL) ? phase_name : "BE";
     uint32_t start_tick;
-    int32_t current_encoder;
 
-    ret = MotorCtrl_MoveNoWait(guard_mm, dir, speed);
-    if (ret != NO_ERROR) {
-        printf("%s encoder move command failed, error=0x%08lX\r\n",
-               phase_name, (unsigned long)ret);
-        return ret;
+    if (Test_ShouldAbortForCommandSwitchNoError()) {
+        return STATE_SWITCH;
     }
 
+    Test_MotorTextMoveByNoCheck(guard_mm, dir);
+    printf("%s encoder guard move issued | guard=%.2fmm\r\n", name, guard_mm);
     start_tick = HAL_GetTick();
+
     while (1) {
-        if (Test_ShouldAbortForCommandSwitch()) {
+        int32_t current_encoder;
+        uint8_t stopped_known = 0U;
+
+        if (Test_ShouldAbortForCommandSwitchNoError()) {
             return STATE_SWITCH;
         }
 
-        ret = MotorCtrl_PollRuntimePosition();
-        if (ret != NO_ERROR) {
-            return ret;
-        }
         current_encoder = Test_GetEncoderValue();
-
         if (Test_EncoderTargetReached(current_encoder, target_encoder, dir)) {
-            ret = MotorCtrl_SlowStop();
-            if (ret != NO_ERROR) {
-                printf("%s encoder stop failed, error=0x%08lX\r\n",
-                       phase_name, (unsigned long)ret);
-                return ret;
+            (void)stpr_writeInt(&stepper, TMC5130_VMAX, 0);
+            if (Test_WaitMotorStoppedNoErrorCheck(name) == 0U) {
+                return STATE_SWITCH;
             }
             printf("%s encoder target reached | current=%ld(%.2fmm) | target=%ld(%.2fmm)\r\n",
-                   phase_name,
+                   name,
                    (long)current_encoder,
                    Test_EncoderCountToDistanceMm(current_encoder - origin_encoder),
                    (long)target_encoder,
                    Test_EncoderCountToDistanceMm(target_encoder - origin_encoder));
+            Test_MotorTextClearIgnoredError();
             return NO_ERROR;
         }
 
         if (((HAL_GetTick() - start_tick) > MOTOR_TEXT_ENCODER_START_GRACE_MS) &&
-            (MotorCtrl_GetDisplayState() == 0U)) {
-            printf("%s motor stopped before encoder target | current=%ld(%.2fmm) | target=%ld(%.2fmm)\r\n",
-                   phase_name,
+            (Test_MotorTextConfirmStoppedNoError(name, &stopped_known) != 0U)) {
+            printf("%s motor stopped | current=%ld(%.2fmm) | target=%ld(%.2fmm), phase done\r\n",
+                   name,
                    (long)current_encoder,
                    Test_EncoderCountToDistanceMm(current_encoder - origin_encoder),
                    (long)target_encoder,
                    Test_EncoderCountToDistanceMm(target_encoder - origin_encoder));
-            return MOTOR_STEP_ERROR;
+            Test_MotorTextClearIgnoredError();
+            return NO_ERROR;
         }
 
+        (void)stopped_known;
+        Test_MotorTextClearIgnoredError();
         HAL_Delay(MOTOR_TEXT_ENCODER_POLL_MS);
     }
 }
-
 //电机小步进上行测试
 void motor_step_up_text(void) {
     int i = 0;
@@ -525,173 +838,158 @@ void Test_ParamEncoder_AB_Backup(void)
 
     printf("===== AB双备份回退测试结束 =====\r\n\r\n");
 }
+static void Test_SensorCommPrintResult(const char *tag,
+                                       const char *name,
+                                       uint32_t ret,
+                                       uint32_t *fail_count)
+{
+    if (ret == NO_ERROR) {
+        printf("[传感器][正常] %s %s\r\n", tag, name);
+        return;
+    }
+
+    if (fail_count != NULL) {
+        (*fail_count)++;
+        printf("[传感器][异常] %s %s失败，错误码：%lu，失败次数：%lu\r\n",
+               tag,
+               name,
+               (unsigned long)ret,
+               (unsigned long)(*fail_count));
+    } else {
+        printf("[传感器][异常] %s %s失败，错误码：%lu\r\n",
+               tag,
+               name,
+               (unsigned long)ret);
+    }
+}
+
 static void __attribute__((unused)) Sensor_CommCheckAndLog(const char *tag)
 {
     float temp = 0.0f;
     float frequency = 0.0f;
     float density = 0.0f;
-    float hz_45 = 0.0f, hz_225 = 0.0f;
-
-    static uint32_t comm_fail_cnt = 0;
+    static uint32_t comm_fail_cnt = 0U;
     uint32_t ret;
 
-    /* 读温度 */
-    ret = DSM_V2_Read_Temperature(&temp);
-    if (ret == NO_ERROR) {
-        printf("[传感器][正常] %s 温度=%.3f C\r\n", tag, temp);
-    } else {
-        comm_fail_cnt++;
-        printf("[传感器][异常] %s 温度读取失败，错误码：%lu，失败次数：%lu\r\n",
-               tag, (unsigned long)ret, (unsigned long)comm_fail_cnt);
+    if (g_deviceParams.sensorType == DSM_SENSOR) {
+        printf("[传感器] %s 类型=DSM一代(%lu)，单次通信=读取频率/密度/温度\r\n",
+               tag,
+               (unsigned long)g_deviceParams.sensorType);
+
+        ret = (uint32_t)DSM_Read_Frequency_Density_Temp(&frequency, &density, &temp);
+        Test_SensorCommPrintResult(tag, "DSM一代读取频率/密度/温度", ret, &comm_fail_cnt);
+        if (ret == NO_ERROR) {
+            printf("[传感器][正常] %s DSM一代 频率=%.3f Hz 密度=%.3f 温度=%.3f C\r\n",
+                   tag,
+                   frequency,
+                   density,
+                   temp);
+        }
+        return;
     }
 
-    /* 读密度 */
-    ret = DSM_V2_Read_Density(&density);
-    if (ret == NO_ERROR) {
-        printf("[传感器][正常] %s 密度=%.3f\r\n", tag, density);
-    } else {
-        comm_fail_cnt++;
-        printf("[传感器][异常] %s 密度读取失败，错误码：%lu，失败次数：%lu\r\n",
-               tag, (unsigned long)ret, (unsigned long)comm_fail_cnt);
+    if (g_deviceParams.sensorType == LTD_SENSOR) {
+        printf("[传感器] %s 类型=LTD/V2(%lu)，单次通信=读取密度\r\n",
+               tag,
+               (unsigned long)g_deviceParams.sensorType);
+
+        ret = (uint32_t)DSM_V2_Read_Density(&density);
+        Test_SensorCommPrintResult(tag, "LTD/V2读取密度", ret, &comm_fail_cnt);
+        if (ret == NO_ERROR) {
+            printf("[传感器][正常] %s LTD/V2 密度=%.3f\r\n", tag, density);
+        }
+        return;
     }
 
-    /* 读频率 + 扫频均值 */
-    ret = DSM_V2_Read_DensityFrequency(&frequency, &hz_45, &hz_225);
-    if (ret == NO_ERROR) {
-        printf("[传感器][正常] %s 频率=%.1f Hz, 45度频率=%.2f, 22.5度频率=%.2f\r\n",
-               tag, frequency, hz_45, hz_225);
-    } else {
-        comm_fail_cnt++;
-        printf("[传感器][异常] %s 频率读取失败，错误码：%lu，失败次数：%lu\r\n",
-               tag, (unsigned long)ret, (unsigned long)comm_fail_cnt);
-    }
+    comm_fail_cnt++;
+    printf("[传感器][异常] %s 未知传感器类型：%lu，失败次数：%lu\r\n",
+           tag,
+           (unsigned long)g_deviceParams.sensorType,
+           (unsigned long)comm_fail_cnt);
+}
+/**
+ * @brief S后缀通信检查只打印通信结果，不改变B/BE退出条件和全局错误态。
+ * @note  只在任务上下文调用；保留进入前的device_state和error_code。
+ */
+static void Test_SensorCommCheckAndPrintOnly(const char *tag)
+{
+    DeviceState saved_state = g_measurement.device_status.device_state;
+    uint32_t saved_error = g_measurement.device_status.error_code;
+
+    Sensor_CommCheckAndLog(tag);
+
+    g_measurement.device_status.device_state = saved_state;
+    g_measurement.device_status.error_code = saved_error;
 }
 
 
 /* ========================= 主测试函数 ========================= */
 void motor_text(float run_distance_mm, uint8_t enable_sensor_comm)
 {
-    uint32_t loop_cnt = 0;
-    uint32_t ret;
-    uint32_t speed = MotorCtrl_GetDefaultSpeedX100();
+    uint32_t loop_cnt = 0U;
 
     if (run_distance_mm <= 0.0f) {
         printf("motor_text参数异常，运行距离=%.2fmm\r\n", run_distance_mm);
         return;
     }
 
-    ret = (uint32_t)MeasureStart();
-    if (ret != NO_ERROR) {
-        printf("motor_text初始化失败，错误码：0x%08lX\r\n", (unsigned long)ret);
-        return;
-    }
-
+    s_motor_text_raw_target = 0;
+    Test_MotorTextClearIgnoredError();
     printf("motor text start | distance=%.2fmm | sensor_comm=%u\r\n",
            run_distance_mm,
            (unsigned int)enable_sensor_comm);
 
-    ret = MotorCtrl_Init(); // 电机初始化，保持与原测试入口一致
-    if (ret != NO_ERROR) {
-        printf("motor_text电机初始化失败，错误码：0x%08lX\r\n", (unsigned long)ret);
+    if (Test_MotorTextPrepareNoExit("B") == 0U) {
         return;
     }
 
-    ret = stpr_setPos(&stepper, 0); // 将当前位置定义为本轮测试零点，上行回 0 会回到这里
-    if (ret != NO_ERROR) {
-        printf("motor_text设置测试零点失败，错误码：0x%08lX\r\n", (unsigned long)ret);
-        return;
-    }
-
+    s_motor_text_raw_target = 0;
+    (void)stpr_writeInt(&stepper, TMC5130_RAMPMODE, TMC5130_MODE_POSITION);
+    (void)stpr_writeInt(&stepper, TMC5130_XACTUAL, 0);
+    (void)stpr_writeInt(&stepper, TMC5130_XTARGET, 0);
+    Test_MotorTextClearIgnoredError();
     while (1) {
-        if (Test_ShouldAbortForCommandSwitch()) {
+        if (Test_ShouldAbortForCommandSwitchNoError()) {
             stpr_disableDriver(&stepper);
             return;
         }
 
-        /* ---------- 下行 ---------- */
-        stpr_enableDriver(&stepper);
-        ret = MotorCtrl_MoveNoWait(run_distance_mm, MOTOR_DIRECTION_DOWN, speed);
-        if ((ret == STATE_SWITCH) || Test_ShouldAbortForCommandSwitch()) {
+        if (Test_MotorTextRunMoveStageNoExit("B DOWN", loop_cnt, 0U,
+                                            run_distance_mm, MOTOR_DIRECTION_DOWN) == 0U) {
             stpr_disableDriver(&stepper);
             return;
         }
-        if (ret != NO_ERROR) {
-            printf("[LOOP %lu] down command failed, error=0x%08lX\r\n",
-                   (unsigned long)(loop_cnt + 1), (unsigned long)ret);
-            MotorCtrl_SlowStop();
-            stpr_disableDriver(&stepper);
-            return;
-        }
-
-        printf("[LOOP %lu] start down\r\n", (unsigned long)(loop_cnt + 1));
-        ret = stpr_waitMove(&stepper);
-        if ((ret == STATE_SWITCH) || Test_ShouldAbortForCommandSwitch()) {
-            stpr_disableDriver(&stepper);
-            return;
-        }
-        if (ret != NO_ERROR) {
-            printf("[LOOP %lu] down failed, error=0x%08lX\r\n",
-                   (unsigned long)(loop_cnt + 1), (unsigned long)ret);
-            stpr_disableDriver(&stepper);
-            return;
-        }
-        printf("[LOOP %lu] down over!\r\n", (unsigned long)(loop_cnt + 1));
-
-        if (enable_sensor_comm != 0U) {
-            Sensor_CommCheckAndLog("after DOWN");
-        }
-
-        if (Test_ShouldAbortForCommandSwitch()) {
-            stpr_disableDriver(&stepper);
-            return;
-        }
-
-        /* ---------- 回零（上行到本轮测试零点） ---------- */
-        ret = stpr_moveTo(&stepper, 0, velocity);
-        if ((ret == STATE_SWITCH) || Test_ShouldAbortForCommandSwitch()) {
-            stpr_disableDriver(&stepper);
-            return;
-        }
-        if (ret != NO_ERROR) {
-            printf("[LOOP %lu] up command failed, error=0x%08lX\r\n",
-                   (unsigned long)(loop_cnt + 1), (unsigned long)ret);
-            MotorCtrl_SlowStop();
-            stpr_disableDriver(&stepper);
-            return;
-        }
-
-        printf("[LOOP %lu] start up to zero\r\n", (unsigned long)(loop_cnt + 1));
-        ret = stpr_waitMove(&stepper);
-        if ((ret == STATE_SWITCH) || Test_ShouldAbortForCommandSwitch()) {
-            stpr_disableDriver(&stepper);
-            return;
-        }
-        if (ret != NO_ERROR) {
-            printf("[LOOP %lu] up failed, error=0x%08lX\r\n",
-                   (unsigned long)(loop_cnt + 1), (unsigned long)ret);
-            stpr_disableDriver(&stepper);
-            return;
-        }
-        printf("[LOOP %lu] up over (to zero)\r\n", (unsigned long)(loop_cnt + 1));
 
         if (enable_sensor_comm != 0U) {
-            Sensor_CommCheckAndLog("after UP");
+            Test_SensorCommCheckAndPrintOnly("after DOWN");
+            Test_MotorTextClearIgnoredError();
+        }
+
+        if (Test_MotorTextRunMoveStageNoExit("B UP", loop_cnt, 1U,
+                                            0.0f, MOTOR_DIRECTION_UP) == 0U) {
+            stpr_disableDriver(&stepper);
+            return;
+        }
+
+        if (enable_sensor_comm != 0U) {
+            Test_SensorCommCheckAndPrintOnly("after UP");
+            Test_MotorTextClearIgnoredError();
         }
 
         loop_cnt++;
-        printf("[LOOP %lu] cycle done\r\n", (unsigned long)loop_cnt);
+        printf("[LOOP %lu] B cycle done\r\n", (unsigned long)loop_cnt);
     }
 }
 
 void motor_text_encoder(float run_distance_mm, uint8_t enable_sensor_comm)
 {
-    uint32_t loop_cnt = 0;
+    uint32_t loop_cnt = 0U;
     uint32_t ret;
-    uint32_t speed = MotorCtrl_GetDefaultSpeedX100();
     float guard_mm;
     int32_t run_encoder_count;
     int32_t origin_encoder;
     int32_t current_encoder;
+    int32_t up_origin_encoder;
     int32_t down_target_encoder;
 
     if (run_distance_mm <= 0.0f) {
@@ -708,15 +1006,9 @@ void motor_text_encoder(float run_distance_mm, uint8_t enable_sensor_comm)
         return;
     }
 
-    ret = (uint32_t)MeasureStart();
-    if (ret != NO_ERROR) {
-        printf("motor_text_encoder init failed, error=0x%08lX\r\n", (unsigned long)ret);
-        return;
-    }
-
-    ret = MotorCtrl_Init();
-    if (ret != NO_ERROR) {
-        printf("motor_text_encoder motor init failed, error=0x%08lX\r\n", (unsigned long)ret);
+    s_motor_text_raw_target = 0;
+    Test_MotorTextClearIgnoredError();
+    if (Test_MotorTextPrepareNoExit("BE") == 0U) {
         return;
     }
 
@@ -734,14 +1026,12 @@ void motor_text_encoder(float run_distance_mm, uint8_t enable_sensor_comm)
            (unsigned int)enable_sensor_comm);
 
     while (1) {
-        if (Test_ShouldAbortForCommandSwitch()) {
+        if (Test_ShouldAbortForCommandSwitchNoError()) {
             stpr_disableDriver(&stepper);
             return;
         }
 
         current_encoder = Test_GetEncoderValue();
-
-        stpr_enableDriver(&stepper);
         printf("[LOOP %lu] encoder down start | current=%ld(%.2fmm) | origin=%ld(0.00mm) | target=%ld(%.2fmm)\r\n",
                (unsigned long)(loop_cnt + 1U),
                (long)current_encoder,
@@ -754,42 +1044,53 @@ void motor_text_encoder(float run_distance_mm, uint8_t enable_sensor_comm)
                                           origin_encoder,
                                           MOTOR_DIRECTION_DOWN,
                                           guard_mm,
-                                          speed,
                                           "DOWN");
-        if (ret != NO_ERROR) {
+        if (ret == STATE_SWITCH) {
             stpr_disableDriver(&stepper);
             return;
         }
+
+        up_origin_encoder = Test_GetEncoderValue();
+        printf("[LOOP %lu] encoder down phase done | up_origin=%ld(%.2fmm) | fixed_origin=%ld(0.00mm) | fixed_down_target=%ld(%.2fmm)\r\n",
+               (unsigned long)(loop_cnt + 1U),
+               (long)up_origin_encoder,
+               Test_EncoderCountToDistanceMm(up_origin_encoder - origin_encoder),
+               (long)origin_encoder,
+               (long)down_target_encoder,
+               Test_EncoderCountToDistanceMm(down_target_encoder - origin_encoder));
 
         if (enable_sensor_comm != 0U) {
-            Sensor_CommCheckAndLog("after ENCODER DOWN");
+            Test_SensorCommCheckAndPrintOnly("after ENCODER DOWN");
+            Test_MotorTextClearIgnoredError();
         }
 
-        if (Test_ShouldAbortForCommandSwitch()) {
+        if (Test_ShouldAbortForCommandSwitchNoError()) {
             stpr_disableDriver(&stepper);
             return;
         }
 
-        current_encoder = Test_GetEncoderValue();
-        printf("[LOOP %lu] encoder up start | current=%ld(%.2fmm) | target=%ld(0.00mm)\r\n",
+        current_encoder = up_origin_encoder;
+        printf("[LOOP %lu] encoder up start | up_origin=%ld(%.2fmm) | target_origin=%ld(0.00mm) | fixed_down_target=%ld(%.2fmm)\r\n",
                (unsigned long)(loop_cnt + 1U),
                (long)current_encoder,
                Test_EncoderCountToDistanceMm(current_encoder - origin_encoder),
-               (long)origin_encoder);
+               (long)origin_encoder,
+               (long)down_target_encoder,
+               Test_EncoderCountToDistanceMm(down_target_encoder - origin_encoder));
 
         ret = Test_MoveUntilEncoderTarget(origin_encoder,
                                           origin_encoder,
                                           MOTOR_DIRECTION_UP,
                                           guard_mm,
-                                          speed,
                                           "UP");
-        if (ret != NO_ERROR) {
+        if (ret == STATE_SWITCH) {
             stpr_disableDriver(&stepper);
             return;
         }
 
         if (enable_sensor_comm != 0U) {
-            Sensor_CommCheckAndLog("after ENCODER UP");
+            Test_SensorCommCheckAndPrintOnly("after ENCODER UP");
+            Test_MotorTextClearIgnoredError();
         }
 
         loop_cnt++;
@@ -798,6 +1099,7 @@ void motor_text_encoder(float run_distance_mm, uint8_t enable_sensor_comm)
                (unsigned long)loop_cnt,
                (long)current_encoder,
                Test_EncoderCountToDistanceMm(current_encoder - origin_encoder));
+        Test_MotorTextClearIgnoredError();
     }
 }
 #include <ltd_sensor_communication.h>
@@ -870,13 +1172,9 @@ void SensorWireless_CommTest(void)
     uint32_t ok_count = 0U;
     uint32_t fail_count = 0U;
     uint32_t ret;
-    float voltage = 0.0f;
     float temp = 0.0f;
     float density = 0.0f;
     float frequency = 0.0f;
-    uint32_t level_freq = 0U;
-    uint32_t sensor_id = 0U;
-    char id_text[RCVBUFFLEN] = {0};
 
     printf("\r\n===== 传感器与无线通信测试开始 =====\r\n");
 
@@ -920,68 +1218,19 @@ void SensorWireless_CommTest(void)
            (unsigned long)g_deviceParams.sensorID);
 
     if (g_deviceParams.sensorType == DSM_SENSOR) {
-        ret = Read_VibrationTube_ID(id_text, sizeof(id_text));
-        if (Test_CommRecordResult("DSM一代读取振动管编号", ret, &ok_count, &fail_count)) {
-            printf("DSM一代振动管编号: %s\r\n", id_text);
-        }
-
-        if (Test_CommShouldStop(&fail_count)) {
-            return;
-        }
-
-        ret = DSM_EnableDensityMode();
-        if (Test_CommRecordResult("DSM一代切换密度模式", (uint32_t)ret, &ok_count, &fail_count)) {
-            ret = (uint32_t)DSM_Read_Frequency_Density_Temp(&frequency, &density, &temp);
-            if (Test_CommRecordResult("DSM一代读取频率/密度/温度", ret, &ok_count, &fail_count)) {
-                printf("DSM一代密度数据: 频率=%.3f Hz 密度=%.3f 温度=%.3f\r\n", frequency, density, temp);
-            }
-        }
-
-        if (Test_CommShouldStop(&fail_count)) {
-            return;
-        }
-
-        ret = (uint32_t)DSM_EnableLevelMode();
-        if (Test_CommRecordResult("DSM一代切换液位模式", ret, &ok_count, &fail_count)) {
-            ret = Read_Level_Frequency(&level_freq);
-            if (Test_CommRecordResult("DSM一代读取液位频率", ret, &ok_count, &fail_count)) {
-                printf("DSM一代液位频率: %lu Hz\r\n", (unsigned long)level_freq);
-            }
-        }
-
-        ret = Read_Sensor_Voltage(&voltage);
-        if (Test_CommRecordResult("DSM一代读取供电电压", ret, &ok_count, &fail_count)) {
-            printf("DSM一代供电电压: %.3f V\r\n", voltage);
+        ret = (uint32_t)DSM_Read_Frequency_Density_Temp(&frequency, &density, &temp);
+        if (Test_CommRecordResult("DSM一代单次读取频率/密度/温度", ret, &ok_count, &fail_count)) {
+            printf("DSM一代密度数据: 频率=%.3f Hz 密度=%.3f 温度=%.3f\r\n", frequency, density, temp);
         }
     } else if (g_deviceParams.sensorType == LTD_SENSOR) {
-        ret = (uint32_t)DSM_V2_Read_SensorID(&sensor_id);
-        if (Test_CommRecordResult("LTD/V2读取传感器编号", ret, &ok_count, &fail_count)) {
-            printf("LTD/V2传感器编号: %lu\r\n", (unsigned long)sensor_id);
-        }
-
-        if (Test_CommShouldStop(&fail_count)) {
-            return;
-        }
-
-        ret = (uint32_t)DSM_V2_Read_Temperature(&temp);
-        if (Test_CommRecordResult("LTD/V2读取温度", ret, &ok_count, &fail_count)) {
-            printf("LTD/V2温度: %.3f ℃\r\n", temp);
-        }
-
         ret = (uint32_t)DSM_V2_Read_Density(&density);
-        if (Test_CommRecordResult("LTD/V2读取密度", ret, &ok_count, &fail_count)) {
+        if (Test_CommRecordResult("LTD/V2单次读取密度", ret, &ok_count, &fail_count)) {
             printf("LTD/V2密度: %.3f\r\n", density);
-        }
-
-        ret = (uint32_t)DSM_V2_Read_LevelFrequency(&level_freq);
-        if (Test_CommRecordResult("LTD/V2读取液位频率", ret, &ok_count, &fail_count)) {
-            printf("LTD/V2液位频率: %lu Hz\r\n", (unsigned long)level_freq);
         }
     } else {
         fail_count++;
         printf("未知传感器类型: %lu\r\n", (unsigned long)g_deviceParams.sensorType);
     }
-
     printf("===== 通信测试结束，成功=%lu 失败=%lu =====\r\n\r\n",
            (unsigned long)ok_count,
            (unsigned long)fail_count);

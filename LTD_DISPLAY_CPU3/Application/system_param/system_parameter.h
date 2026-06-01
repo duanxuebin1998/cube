@@ -26,7 +26,7 @@
 #define UNVALID_POSITION 0
 #define UNVALID_TEMPERATURE 0
 #define MAX_MEASUREMENT_POINTS 200 // 密度分布测量最大点数
-#define DEVICE_PROTOCOL_VERSION 3u // CPU2/CPU3共享协议版本；旧程序未写入时默认为0
+#define DEVICE_PROTOCOL_VERSION 4u // CPU2/CPU3共享协议版本；旧程序未写入时默认为0
 
 
 #define REPEATMAX 3//重复性测试次数
@@ -321,6 +321,8 @@ typedef struct {
 	/*---- 标志位 ----*/
 	uint32_t zero_point_status; // 零点状态（0-正常 1-需要回零）
 	uint32_t parameter_update_flag; // 参数更新标志位，CPU2 变更系统参数时递增或翻转
+    uint32_t loading_unloading_active;        ///< 当前是否处于装卸液过程
+    uint32_t manual_alarm_inhibit;            ///< 手动运行期间报警抑制
 } DeviceStatus;
 
 // 单点密度数据
@@ -343,6 +345,11 @@ typedef struct {
 	uint32_t average_weight_density;                                ///< 计重密度
 	uint32_t measurement_points;                                    ///< 实际测量点数
 	uint32_t Density_oil_level;                                     // 密度分布测量时的液位值
+    uint32_t profile_complete_latched;        ///< 分布测量完成锁存
+    uint32_t profile_complete_counter;        ///< 分布测量完成计数
+    uint32_t profile_blocked_by_process;      ///< 分布测量是否被工况阻止
+    uint32_t profile_temp_deviation_alarm;    ///< 分布温度偏差报警
+    uint32_t profile_density_deviation_alarm; ///< 分布密度偏差报警
 	DensityMeasurement single_density_data[MAX_MEASUREMENT_POINTS]; // 200个点的密度测量数据
 
 } DensityDistribution;
@@ -385,6 +392,7 @@ typedef struct {
 typedef struct {
 	uint32_t calibrated_liquid_level; ///< 标定液位时实高
 	uint32_t current_real_height;     ///< 当前实高
+    uint32_t bottom_reference_valid;  ///< 罐底参考位置是否有效
 } ActualHeightMeasurement;
 
 /**
@@ -396,6 +404,9 @@ typedef struct {
 	uint32_t oil_frequency;		//油中频率
 	uint32_t follow_frequency;		//液位跟随频率
 	uint32_t current_frequency;	//当前频率
+    uint32_t probe_at_liquid_level;       ///< 探头当前是否位于液位点
+    uint32_t liquid_stable;               ///< 液体是否稳定
+    uint32_t manual_level_update_inhibit; ///< 手动运行期间液位更新抑制
 } OilMeasurement;
 
 /**
@@ -407,6 +418,7 @@ typedef struct {
 	float oil_capacitance;
 	float current_capacitance;
 } WaterMeasurement;
+
 /* 测量结果结构体，输入寄存器 */
 typedef struct {
 	DeviceStatus device_status;                  ///< 设备状态
