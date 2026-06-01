@@ -2,7 +2,7 @@
 
 记录 CPU2/CPU3 固件版本变更。使用 `tools/bump_version.py` 升级版本时会自动追加记录；提交前应补充到与 Git 提交信息同等详细。
 
-## 2026-05-11
+## 2026-05-11 - 引入 CPU2/CPU3 版本与兼容契约
 
 版本：
 - CPU2: 初始版本 -> V1.0.0.0
@@ -13,7 +13,7 @@
 - 引入 CPU2/CPU3 兼容契约。
 - 引入自动升级日志。
 
-## 2026-05-11
+## 2026-05-11 - CPU3 显示 CPU2 版本并提示兼容性
 
 版本：
 - CPU2: V1.0.0.0 -> V1.1.0.0
@@ -41,7 +41,7 @@
 - `cmake --build build\LTD_DISPLAY_CPU3`
 - `git diff --cached --check`
 
-## 2026-05-11
+## 2026-05-11 - 新增 CPU2 串口 B 类测试指令
 
 版本：
 - CPU2: V1.1.0.0 -> V1.2.0.0
@@ -63,7 +63,7 @@
 - `git diff --check`
 - `py tools\check_version_bumped.py`
 
-## 2026-05-11
+## 2026-05-11 - 优化液位跟随和频率异常恢复
 
 版本：
 - CPU2: V1.2.0.0 -> V1.2.1.0
@@ -85,7 +85,7 @@
 - `cmake --build build\LTD_MAIN_CPU2`
 - `py tools\check_version_bumped.py`
 
-## 2026-05-12
+## 2026-05-12 - 完善测量异常自动恢复和驱动重初始化
 
 版本：
 - CPU2: V1.2.1.0 -> V1.3.0.0
@@ -108,7 +108,7 @@
 - `cmake --build build\LTD_MAIN_CPU2`
 - `py tools\check_version_bumped.py`
 
-## 2026-05-13
+## 2026-05-13 - 完善错误日志和故障状态传递
 
 版本：
 - CPU2: V1.3.0.0 -> V1.4.0.0
@@ -133,7 +133,7 @@
 - `cmake --build build\LTD_MAIN_CPU2`
 - `py tools\check_version_bumped.py`
 
-## 2026-05-14
+## 2026-05-14 - 调整版本兼容检查和协议版本规则
 
 版本：
 - CPU2: V1.4.0.0 -> V1.4.1.0
@@ -162,7 +162,7 @@
 - `git diff --check`
 - `git diff --cached --check`
 
-## 2026-05-14
+## 2026-05-14 - 扩展密度分布测量点和瓦锡兰寄存器
 
 版本：
 - CPU2: V1.4.1.0 -> V1.5.0.0
@@ -186,7 +186,7 @@
 - `git diff --check`
 - `py tools\check_version_bumped.py` 当前未暂存文件，脚本提示无暂存内容可检查；提交前暂存后需再执行一次。
 
-## 2026-05-15
+## 2026-05-15 - 补齐 CPU3 本地错误码显示
 
 版本：
 - CPU2: 未变化，保持 V1.5.0.0
@@ -210,7 +210,7 @@
 - `git diff --check`
 - `py tools\check_version_bumped.py` 当前未暂存文件，脚本提示无暂存内容可检查；提交前暂存后需再执行一次。
 
-## 2026-05-15
+## 2026-05-15 - 修复 UART 和传感器通信异常处理
 
 - CPU2: V1.5.0.0 -> V1.5.1.0 (patch)
 
@@ -234,7 +234,7 @@
 - `cmake --build build\LTD_MAIN_CPU2`
 - `git diff --check`
 
-## 2026-05-15
+## 2026-05-15 - 增加取消测量命令和命令切换保护
 
 - CPU2: V1.5.1.0 -> V1.6.0.0 (minor)
 - CPU3: V1.3.0.0 -> V1.4.0.0 (minor)
@@ -259,7 +259,7 @@
 - `git diff --check`
 - `py tools\check_version_bumped.py` 当前未暂存文件，脚本提示无暂存内容可检查；提交前暂存后需再执行一次。
 
-## 2026-05-15
+## 2026-05-15 - 增加探底修正罐高和电机记步诊断
 
 版本：
 - CPU2: V1.6.0.0 -> V1.7.0.0
@@ -286,12 +286,12 @@
 - `git diff --check`
 - `py LTD_DISPLAY_CPU3\font_check.py`
 
-## 2026-05-15
+## 2026-05-15 - 增加罐底离底确认
 
 - CPU2: V1.7.0.0 -> V1.7.1.0 (patch)
 - 说明：粗找罐底前增加离底确认，精找罐底离底上行改为无称重检测，避免已触底状态直接误判完成或误触发称重碰撞报错
 
-## 2026-05-15
+## 2026-05-15 - 限制自动恢复重跑次数
 
 - CPU2: V1.7.1.0 -> V1.7.1.1 (build)
 - 兼容性：不改变 CPU2/CPU3 共享协议，不影响读取部件参数命令。
@@ -302,12 +302,12 @@
 - 验证：
   - `cmake --build build\LTD_MAIN_CPU2`
 
-## 2026-05-16
+## 2026-05-16 - 修复 LTD 模式切换和瓦锡兰分布测量流程
 
 - CPU2: V1.7.1.1 -> V1.7.1.2 (build)
 - 说明：修复LTD/V2模式切换和部件参数读取误报13-13；DSM首字母E/e仅提示传感器电压过低；优化固定点监测退出、瓦锡兰分布测首点定位和测后探底日志；找罐底固定距离上行改为无检测上行，避免脱离罐底时误报称重错误；更新LTD故障代码表和测试记录。
 
-## 2026-05-16
+## 2026-05-16 - 完善液位同步负位置钳位和瓦锡兰回位
 
 版本：
 - CPU2: V1.7.1.2 -> V1.7.2.0
@@ -326,7 +326,7 @@
 - 液位修正计算出的罐高为负或超出 `uint32_t` 范围时，取消本次修正，保留原罐高和修正参数，避免误覆盖有效罐高。
 - 新增按当前记步源刷新业务位置的接口；罐高变化、编码器修正和电机局部周长标定路径避免在电机记步模式下用编码轮覆盖 `sensor_position`。
 - 瓦锡兰测后需要探底时，探底前回固定点监测位置最多尝试 3 次；三次失败后跳过探底并切回固定点监测，不置错误状态。
-- 合并“液位修正后液位值不刷新改进方案”和“有符号位置转无符号风险检查”两个新增 md 到 `docs/测试记录/26.05.16_CPU2_V1.7.2.0液位同步负位置钳位与瓦锡兰回位整改记录.md`。
+- 合并“液位修正后液位值不刷新改进方案”和“有符号位置转无符号风险检查”两个新增 md 到 `docs/05_测试记录/26.05.16_CPU2_V1.7.2.0液位同步负位置钳位与瓦锡兰回位整改记录.md`。
 - 新增 `26.05.16_CPU2_V1.7.1.2详细改动方案.md/.pdf`，并更新 `LNG计量仪屏幕菜单.docx`，补齐暂存区内实际包含的文档变更。
 
 当前仍存在的风险：
@@ -339,3 +339,93 @@
 - `cmake --build build\LTD_MAIN_CPU2`
 - `py tools\check_version_bumped.py`
 - `git diff --check`
+
+## 2026-05-19 - 增加罐底下行保护和回零称重判定
+
+版本：
+- CPU2: V1.7.2.0 -> V1.7.3.0
+- CPU3: 未变化，保持 V1.5.0.0
+
+协议版本/兼容性：
+- 本次仅修改 CPU2 罐底测量保护和称重碰撞判定逻辑。
+- 不修改 CPU2/CPU3 共享协议、寄存器映射、命令码或参数布局，`DEVICE_PROTOCOL_VERSION` 不变。
+- `maxDownDistance` 继续沿用原参数含义，不新增参数，不改变已有参数地址。
+
+本次修改：
+- 罐底粗找和精找每轮下行前增加最大尺带长度保护，限制值为 `tankHeight + maxDownDistance`。
+- 当尺带长度超过最大允许位置且仍未识别到罐底时，立即快速停机并返回 `MEASUREMENT_WEIGHT_DOWN_FAIL`，避免罐底测量无限下行。
+- 罐底粗找和精找在传感器位置低于 1m 时，将下行速度上限压到 0.50m/min，并打印传感器位置、原速度和实际下发速度。
+- 回零/标零上行时，称重超过零点阈值视为正常到零点信号，不再被通用防撞逻辑抢先误报 18-3。
+- 新增《罐底测量下行保护改动说明》文档，记录问题背景、修改点、现场日志和验证建议。
+
+验证：
+- `cmake -S LTD_MAIN_CPU2 -B build/LTD_MAIN_CPU2 -G Ninja "-DCMAKE_TOOLCHAIN_FILE=D:/CUBE_temp_bottom_zero_commit/cmake/toolchain-arm-none-eabi.cmake" -DCMAKE_BUILD_TYPE=Debug`
+- `cmake --build build\LTD_MAIN_CPU2`
+- `py tools\check_version_bumped.py`
+- `git diff --check`
+- `git diff --cached --check`
+
+## 2026-05-16 - 适配 SI7000 协议和共享协议版本 4
+
+版本：
+- CPU2: V1.7.3.0 -> V1.8.0.0
+- CPU3: V1.5.0.0 -> V1.6.0.0
+
+兼容性：
+- 本次将 SI7000 所需补充状态融合进 CPU2/CPU3 既有测量结构，`DEVICE_PROTOCOL_VERSION` 从 3 升级到 4。
+- CPU2/CPU3 必须同为协议版本 4，CPU3 才能完整获得外部协议转换所需的 profile 完成、探底参考、液位到达和偏差报警状态。
+
+本次修改：
+- 合并 `wip/si7000-protocol-assist` 中的外部协议辅助状态、CPU2 测量状态维护、CPU3 外部 SI7000 Modbus 从站基础实现和协议映射文档。
+- 收紧 CPU2/CPU3 职责边界：CPU2 只保留通用业务状态和命令，SI7000 地址、线圈、缩放、影子寄存器和异常响应集中在 CPU3 转换层。
+- CPU3 主分发路径和 `com_manager` 兼容路径统一调用 `si7000_modbus_process_for_dispatch()`，避免异常响应帧处理语义重复。
+- CPU3 新增 SI7000 协议选择项，并接入 COM1/COM2/COM3 协议分发。
+- CPU3 新增本地 RTC 时钟接口，SI7000 `30011-30013` 返回当前时分秒，profile 完成计数变化时锁存 `30007-30010` 月日时分。
+- SI7000 `FC05` 写线圈增加模式/动作影子区互斥，避免连续写入后读回多个互斥命令位。
+- SI7000 `FC05` 对协议保留线圈写入返回非法地址，避免 PLC 误写保留位时收到成功 echo。
+- SI7000 profile 时间戳在 RTC 暂不可读时允许后续读寄存器继续尝试锁存，避免偶发初始化窗口丢失时间戳。
+- SI7000 `FC06` 对自动 profile 使能、小时、分钟做基础值域检查，非法值返回 Modbus 异常而不进入影子寄存器。
+- SI7000 `FC06` 对 `40004-40009` 保留寄存器写入返回非法地址，读取仍保持 0。
+- SI7000 profile 点阵只输出 `Number Of Points` 范围内的有效测点，范围外保持 0，避免 PLC 读到旧 profile 残留数据。
+- SI7000 输入寄存器按协议单位输出位置、液位、温度和密度；密度由内部 `kg/m3 x10` 转为协议 `kg/m3 x100`，超出 16 位时钳位。
+- SI7000 `10012` 和阈值报警位由 `40011`、`40014-40021` 影子寄存器合成，阈值为 0 时视为未启用。
+- 修正 CPU3 串口有校验位时的 WordLength 配置，支持 SI7000 要求的 9600 8O1，并在 SI7000 协议选中后自动锁定端口配置。
+- 更新 SI7000 执行计划、兼容映射表、CPU2 暂存区逐文件改动整理和 CPU2/CPU3 协议变更记录。
+
+验证：
+- `git diff --check`
+- `cmake -S LTD_MAIN_CPU2 -B build/LTD_MAIN_CPU2 -G Ninja "-DCMAKE_TOOLCHAIN_FILE=D:/CUBE/cmake/toolchain-arm-none-eabi.cmake" -DCMAKE_BUILD_TYPE=Debug`
+- `cmake --build build\LTD_MAIN_CPU2`
+- `cmake --build build\LTD_DISPLAY_CPU3`
+- `py tools\check_si7000_modbus_frames.py`
+- `py tools\check_si7000_protocol_contract.py`
+- `py tools\check_version_bumped.py`
+
+## 2026-05-23 - 调整串口 B/BE 低检测执行流程
+
+版本：
+- CPU2: V1.8.0.0 -> V1.8.1.0
+- CPU3: 未变化，保持 V1.6.0.0
+
+协议版本/兼容性：
+- 本次仅调整 CPU2 串口 B/BE 调试指令执行流程，不修改 Modbus、SI7000、CPU2/CPU3 共享寄存器映射、参数存储布局或协议版本。
+- B/BE 属于现场调试入口，兼容既有命令格式：`B<mm>`、`BE<mm>`、`S` 后缀和 `,1` 后缀仍可使用。
+
+本次修改：
+- `process_command()` 中 B/BE 分支前置到通用 `MeasureStart()` 之前，避免 B/BE 被测量初始化、称重、电机健康检查或历史错误码拦截。
+- B/BE 新增专用低检测执行路径：初始化阶段只尽量写 TMC5130 基础配置，运动阶段直接写 `RAMPMODE`、`VMAX`、`XTARGET`，不再调用 `MotorCtrl_Init()`、`MotorCtrl_MoveNoWait()` 或 `stpr_waitMove()`。
+- B 指令只负责按电机模型下发往返运动；运行期下发失败、停止状态读取失败等只打印并重试，不检测编码器、称重、过热等业务错误。
+- B/BE 电机运行函数改为直接写 TMC5130 `RAMPMODE`、`VMAX`、`XTARGET` 等寄存器，不再根据 `stpr_moveBy()`、`stpr_moveTo()`、`stpr_setVelocity()`、`stpr_setPos()` 返回错误码决定流程。
+- BE 指令进入后固定记录起始编码点和下行目标点，循环过程中不重新计算；下行结束后记录上行起点，上行始终回到最初起始点。
+- BE 单段运动下发后，只按固定编码目标或 `RAMPSTAT.VZERO` 电机停转结束本阶段；不再读取编码器错误码或其它全局错误码。
+- 电机停转判断改为二次确认：第一次读到 `RAMPSTAT.VZERO` 后延时 200ms，再次读取仍为 `VZERO` 才认为停稳，避免换向瞬间速度为 0 被误判。
+- BE 不重复调用编码器采集定时器启动函数，编码器定时器仍由上电初始化负责，避免把“已启动”误打印成启动失败。
+- S 后缀通信检查和 `SC` 通信测试的传感器参数读取都改为按 `sensorType` 区分 DSM 一代和 LTD/V2 传感器，每次只发一次读命令；DSM 一代只读频率/密度/温度，LTD/V2 只读密度，不切液位模式、不读液位频率。S 后缀调用前后保存并恢复 `device_state` 和 `error_code`，不参与退出条件或错误状态。
+- 每段运动后统一只等待 `TMC5130_RAMPSTAT.VZERO`，速度归零后才下发下一段运动，避免电机拟合目标不准导致等待不到 `POSREACHED`。
+- 新增《串口 B / BE 指令详细执行过程》HTML 文档和本版本改动与测试方案，便于现场按最终流程复核。
+
+验证：
+- `git diff --check`
+- `cmake --build build\LTD_MAIN_CPU2`
+- 已用 GBK/936 解码检查 `measure.c`、`test.c` 无替换字符。
+- 待硬件现场验证：B/BE 连续往返、没插称重时 BE 仍持续运行、S 后缀通信打印不置错、运动停稳后再下发下一段。

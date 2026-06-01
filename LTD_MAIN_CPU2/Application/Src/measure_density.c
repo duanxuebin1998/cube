@@ -628,6 +628,12 @@ void CMD_MeasureDensitySpread_Spread(void)
     uint32_t ret = 0;
     DensityDistribution temp = {0};
 
+    /* 分布测量开始前清除完成锁存和偏差报警，CPU3 只对本轮 profile 结果开放。 */
+    g_measurement.density_distribution.profile_complete_latched = 0;
+    g_measurement.density_distribution.profile_blocked_by_process = 0;
+    g_measurement.density_distribution.profile_temp_deviation_alarm = 0;
+    g_measurement.density_distribution.profile_density_deviation_alarm = 0;
+
     g_measurement.device_status.device_state = STATE_SPREADPOINTING;
 
     ret = Density_MeasureByMode_Exact(DENS_MODE_SPREAD, &temp);
@@ -640,8 +646,13 @@ void CMD_MeasureDensitySpread_Spread(void)
         SET_ERROR(ret);
     }
 
+    uint32_t previous_profile_complete_counter = g_measurement.density_distribution.profile_complete_counter;
     g_measurement.density_distribution = temp;
     Print_DensitySpreadResult(&temp);
+
+    /* 完成后锁存分布测量结果，CPU3 用计数变化生成 SI7000 profile 时间戳。 */
+    g_measurement.density_distribution.profile_complete_latched = 1;
+    g_measurement.density_distribution.profile_complete_counter = previous_profile_complete_counter + 1U;
 
     g_measurement.device_status.device_state = STATE_SPREADPOINTOVER;
 }
@@ -650,6 +661,12 @@ void CMD_MeasureDensitySpread_GB(void)
 {
     uint32_t ret = 0;
     DensityDistribution temp = {0};
+
+    /* 分布测量开始前清除完成锁存和偏差报警，CPU3 只对本轮 profile 结果开放。 */
+    g_measurement.density_distribution.profile_complete_latched = 0;
+    g_measurement.density_distribution.profile_blocked_by_process = 0;
+    g_measurement.density_distribution.profile_temp_deviation_alarm = 0;
+    g_measurement.density_distribution.profile_density_deviation_alarm = 0;
 
     g_measurement.device_status.device_state = STATE_GB_SPREADPOINTING;
 
@@ -663,8 +680,13 @@ void CMD_MeasureDensitySpread_GB(void)
         SET_ERROR(ret);
     }
 
+    uint32_t previous_profile_complete_counter = g_measurement.density_distribution.profile_complete_counter;
     g_measurement.density_distribution = temp;
     Print_DensitySpreadResult(&temp);
+
+    /* 完成后锁存分布测量结果，CPU3 用计数变化生成 SI7000 profile 时间戳。 */
+    g_measurement.density_distribution.profile_complete_latched = 1;
+    g_measurement.density_distribution.profile_complete_counter = previous_profile_complete_counter + 1U;
 
     g_measurement.device_status.device_state = STATE_GB_SPREADPOINTOVER;
 }
@@ -673,6 +695,12 @@ void CMD_MeasureDensitySpread_Meter(void)
 {
     uint32_t ret = 0;
     DensityDistribution temp = {0};
+
+    /* 分布测量开始前清除完成锁存和偏差报警，CPU3 只对本轮 profile 结果开放。 */
+    g_measurement.density_distribution.profile_complete_latched = 0;
+    g_measurement.density_distribution.profile_blocked_by_process = 0;
+    g_measurement.density_distribution.profile_temp_deviation_alarm = 0;
+    g_measurement.density_distribution.profile_density_deviation_alarm = 0;
 
     g_measurement.device_status.device_state = STATE_METER_DENSITY;
 
@@ -686,8 +714,13 @@ void CMD_MeasureDensitySpread_Meter(void)
         SET_ERROR(ret);
     }
 
+    uint32_t previous_profile_complete_counter = g_measurement.density_distribution.profile_complete_counter;
     g_measurement.density_distribution = temp;
     Print_DensitySpreadResult(&temp);
+
+    /* 完成后锁存分布测量结果，CPU3 用计数变化生成 SI7000 profile 时间戳。 */
+    g_measurement.density_distribution.profile_complete_latched = 1;
+    g_measurement.density_distribution.profile_complete_counter = previous_profile_complete_counter + 1U;
 
     g_measurement.device_status.device_state = STATE_COM_METER_DENSITY_OVER;
 }
@@ -696,6 +729,12 @@ void CMD_MeasureDensitySpread_Interval(void)
 {
     uint32_t ret = 0;
     DensityDistribution temp = {0};
+
+    /* 分布测量开始前清除完成锁存和偏差报警，CPU3 只对本轮 profile 结果开放。 */
+    g_measurement.density_distribution.profile_complete_latched = 0;
+    g_measurement.density_distribution.profile_blocked_by_process = 0;
+    g_measurement.density_distribution.profile_temp_deviation_alarm = 0;
+    g_measurement.density_distribution.profile_density_deviation_alarm = 0;
 
     g_measurement.device_status.device_state = STATE_INTERVAL_DENSITY;
 
@@ -709,8 +748,13 @@ void CMD_MeasureDensitySpread_Interval(void)
         SET_ERROR(ret);
     }
 
+    uint32_t previous_profile_complete_counter = g_measurement.density_distribution.profile_complete_counter;
     g_measurement.density_distribution = temp;
     Print_DensitySpreadResult(&temp);
+
+    /* 完成后锁存分布测量结果，CPU3 用计数变化生成 SI7000 profile 时间戳。 */
+    g_measurement.density_distribution.profile_complete_latched = 1;
+    g_measurement.density_distribution.profile_complete_counter = previous_profile_complete_counter + 1U;
 
     g_measurement.device_status.device_state = STATE_INTERVAL_DENSITY_OVER;
 }

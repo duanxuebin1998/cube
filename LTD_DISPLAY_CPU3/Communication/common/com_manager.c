@@ -11,6 +11,7 @@
 #include "usart.h"                 /* huart2 / huart3 / huart6 & RX_BUF_SIZE 宏 */
 #include "DSM_communication.h"     /* DSM_CommunicationProcess(...) */
 #include "wartsila_modbus_communication.h"  /* 你自己的 Wartsila 协议头文件 */
+#include "si7000_modbus_slave.h"
 #include "system_parameter.h"      /* 内含 g_deviceParams，如果你用 DeviceParameters 做配置来源 */
 
 #include <string.h>
@@ -35,32 +36,32 @@ extern uint8_t UART6_RX_BUF[UART6_RX_BUF_SIZE];
 /* 你的全局设备参数结构体（system_parameter.c 里定义） */
 extern volatile DeviceParameters g_deviceParams;
 
-/* === 全局 COM 配置数组（默认值可按需要修改） === */
-ComConfig g_com_config[COM_PORT_NUM] =
+/* === 兼容管理器本地配置数组（主路径使用 CPU3 本机参数） === */
+ComManagerConfig g_com_manager_config[COM_PORT_NUM] =
 {
     /* COM_PORT1 -> USART6 (COM1) 默认 4800, 8N1, DSM 协议 */
     {
         .baudrate = 4800,
         .databits = 8,
-        .parity   = COM_PARITY_NONE,
-        .stopbits = COM_STOPBITS_1,
-        .protocol = COM_PROTO_DSM,
+        .parity   = COM_MANAGER_PARITY_NONE,
+        .stopbits = COM_MANAGER_STOPBITS_1,
+        .protocol = COM_MANAGER_PROTO_DSM,
     },
     /* COM_PORT2 -> USART2 (COM2) 默认 4800, 8N1, Modbus RTU */
     {
         .baudrate = 4800,
         .databits = 8,
-        .parity   = COM_PARITY_NONE,
-        .stopbits = COM_STOPBITS_1,
-        .protocol = COM_PROTO_MODBUS_RTU,
+        .parity   = COM_MANAGER_PARITY_NONE,
+        .stopbits = COM_MANAGER_STOPBITS_1,
+        .protocol = COM_MANAGER_PROTO_MODBUS_RTU,
     },
     /* COM_PORT3 -> USART3 (COM3) 默认 4800, 8N2, Wartsila */
     {
         .baudrate = 4800,
         .databits = 8,
-        .parity   = COM_PARITY_NONE,
-        .stopbits = COM_STOPBITS_2,
-        .protocol = COM_PROTO_WARTSILA,
+        .parity   = COM_MANAGER_PARITY_NONE,
+        .stopbits = COM_MANAGER_STOPBITS_2,
+        .protocol = COM_MANAGER_PROTO_WARTSILA,
     },
 };
 
@@ -74,7 +75,7 @@ static void COM_EnableRxDMAAndIdle(ComPortIndex com);
 /* 将“枚举值/代码”转换为具体波特率，可根据你寄存器的定义修改 */
 static uint32_t __attribute__((unused)) COM_BaudCodeToValue(uint8_t code);
 
-/* 从 g_deviceParams 中把串口相关配置读到 g_com_config[] */
+/* 从 g_deviceParams 中把串口相关配置读到 g_com_manager_config[] */
 /* !!! TODO: 这里需要你根据 DeviceParameters 里实际字段名修改 !!! */
 static void COM_LoadConfigFromDeviceParams(void);
 
@@ -84,7 +85,7 @@ static void COM_LoadConfigFromDeviceParams(void);
 
 void COM_InitAllFromParams(void)
 {
-    /* 1. 从 g_deviceParams 里加载配置到 g_com_config[] */
+    /* 1. 从 g_deviceParams 里加载配置到 g_com_manager_config[] */
     COM_LoadConfigFromDeviceParams();
 
     /* 2. 根据配置重新初始化各个 COM 口 */
@@ -100,32 +101,37 @@ void COM_ApplyConfigToUart(ComPortIndex com)
         return;
     }
 
-    ComConfig *cfg = &g_com_config[com];
+    ComManagerConfig *cfg = &g_com_manager_config[com];
 
     /* 先 DeInit 再重新 Init，保证参数全生效 */
     HAL_UART_DeInit(huart);
 
     huart->Init.BaudRate = cfg->baudrate;
-    huart->Init.WordLength = (cfg->databits == 9) ? UART_WORDLENGTH_9B : UART_WORDLENGTH_8B;
+    /*
+     * HAL 中“8 数据位 + 校验位”需要配置为 9B，否则硬件会少发一个数据位。
+     * SI7000 使用 8O1，这里必须跟 CPU3 本机参数重配逻辑保持一致。
+     */
+    huart->Init.WordLength =
+        ((cfg->databits == 9) || (cfg->parity != COM_MANAGER_PARITY_NONE)) ? UART_WORDLENGTH_9B : UART_WORDLENGTH_8B;
 
     switch (cfg->parity) {
-    case COM_PARITY_EVEN:
+    case COM_MANAGER_PARITY_EVEN:
         huart->Init.Parity = UART_PARITY_EVEN;
         break;
-    case COM_PARITY_ODD:
+    case COM_MANAGER_PARITY_ODD:
         huart->Init.Parity = UART_PARITY_ODD;
         break;
-    case COM_PARITY_NONE:
+    case COM_MANAGER_PARITY_NONE:
     default:
         huart->Init.Parity = UART_PARITY_NONE;
         break;
     }
 
     switch (cfg->stopbits) {
-    case COM_STOPBITS_2:
+    case COM_MANAGER_STOPBITS_2:
         huart->Init.StopBits = UART_STOPBITS_2;
         break;
-    case COM_STOPBITS_1:
+    case COM_MANAGER_STOPBITS_1:
     default:
         huart->Init.StopBits = UART_STOPBITS_1;
         break;
@@ -151,7 +157,7 @@ uint32_t COM_DispatchProtocol(ComPortIndex com,
                               const uint8_t *rx, uint16_t rx_len,
                               uint8_t *tx, uint16_t *tx_len)
 {
-    ComConfig *cfg = &g_com_config[com];
+    ComManagerConfig *cfg = &g_com_manager_config[com];
 
     if ((rx == NULL) || (tx == NULL) || (tx_len == NULL)) {
         return (uint32_t)(-1);
@@ -160,26 +166,30 @@ uint32_t COM_DispatchProtocol(ComPortIndex com,
     *tx_len = 0;   /* 先清零 */
 
     switch (cfg->protocol) {
-    case COM_PROTO_DSM:
+    case COM_MANAGER_PROTO_DSM:
         /* 你的 DSM 协议处理函数 */
         return DSM_CommunicationProcess((unsigned char *)rx, rx_len, tx, tx_len);
 
-    case COM_PROTO_WARTSILA:
+    case COM_MANAGER_PROTO_WARTSILA:
         /* TODO: 根据你实际的 Wartsila 协议处理函数名修改 */
         /* 比如： return Wartsila_CommunicationProcess(rx, rx_len, tx, tx_len); */
         return modbus_rtu_process(rx, rx_len, tx, tx_len);  /* 如果函数名不对请自行改 */
 
-    case COM_PROTO_MODBUS_RTU:
+    case COM_MANAGER_PROTO_MODBUS_RTU:
         /* 你的 Modbus RTU 处理函数（需要在 modbus_agreement.h 中声明） */
         return modbus_rtu_process(rx, rx_len, tx, tx_len);
 
-    case COM_PROTO_TRANSPARENT:
+    case COM_MANAGER_PROTO_SI7000:
+        /* SI7000 作为外部 PLC 兼容协议，直接走 CPU3 本机 Modbus 从站转换层。 */
+        return si7000_modbus_process_for_dispatch(rx, rx_len, tx, tx_len);
+
+    case COM_MANAGER_PROTO_TRANSPARENT:
         /* 透传：简单回环（可改成转发到另一个 COM 口） */
         memcpy(tx, rx, rx_len);
         *tx_len = rx_len;
         return 0;
 
-    case COM_PROTO_NONE:
+    case COM_MANAGER_PROTO_NONE:
     default:
         /* 不处理，直接丢弃 */
         *tx_len = 0;

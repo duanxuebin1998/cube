@@ -39,6 +39,14 @@ Weight_ParamentTypeDef weight_parament = { 0 };
 static uint32_t s_weight_last_rx_tick = 0U;
 static uint8_t s_weight_timeout_reported = 0U;
 
+static uint8_t Weight_IsZeroSearchState(void)
+{
+    DeviceState state = g_measurement.device_status.device_state;
+
+    return (state == STATE_BACKZEROING) ||
+           (state == STATE_FINDZEROING);
+}
+
 static uint8_t Weight_IsCommErrorCode(uint32_t error_code) {
 	return (error_code == WEIGHT_COMM_TIMEOUT);
 }
@@ -313,6 +321,10 @@ uint32_t CheckWeightCollision(void)
 
 		/* 1) 零点阈值 */
 		if (cur_weight > zero_limit) {
+			if (Weight_IsZeroSearchState()) {
+				/* 回零/标零上行时，超过零点阈值是正常到零点信号，不能被通用防撞抢先报 18-3。 */
+				return NO_ERROR;
+			}
 			printf("\r\n====== 称重碰撞报警(上行) ======\r\n");
 			printf("原因: 超过零点阈值(认为已到零点)\r\n");
 			printf("当前重量 : %ld\r\n", (long)cur_weight);

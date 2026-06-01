@@ -17,48 +17,49 @@ typedef enum {
     COM_PORT_NUM
 } ComPortIndex;
 
-/* === 协议类型（可在保持寄存器里配置） === */
+/* === 兼容管理器协议类型：避免与 CPU3 本机参数 ComProtocolType 混用 === */
 typedef enum {
-    COM_PROTO_NONE        = 0,   /* 不处理 */
-    COM_PROTO_MODBUS_RTU  = 1,   /* 标准 Modbus RTU 协议 */
-    COM_PROTO_DSM         = 2,   /* 你的 DSM 协议 */
-    COM_PROTO_WARTSILA    = 3,   /* Wartsila 协议 */
-    COM_PROTO_TRANSPARENT = 4,   /* 透传 / 回环 */
-} ComProtocolType;
+    COM_MANAGER_PROTO_NONE        = 0,   /* 不处理 */
+    COM_MANAGER_PROTO_MODBUS_RTU  = 1,   /* 标准 Modbus RTU 协议 */
+    COM_MANAGER_PROTO_DSM         = 2,   /* DSM 协议 */
+    COM_MANAGER_PROTO_WARTSILA    = 3,   /* Wartsila 协议 */
+    COM_MANAGER_PROTO_TRANSPARENT = 4,   /* 透传 / 回环 */
+    COM_MANAGER_PROTO_SI7000      = 5,   /* SI7000 PLC 兼容 Modbus RTU 协议；选择后串口参数会自动收敛为 9600 8O1 */
+} ComManagerProtocolType;
 
 /* === 校验、停止位类型（与 HAL 的配置做简单映射） === */
 typedef enum {
-    COM_PARITY_NONE = 0,
-    COM_PARITY_EVEN = 1,
-    COM_PARITY_ODD  = 2,
-} ComParityType;
+    COM_MANAGER_PARITY_NONE = 0,
+    COM_MANAGER_PARITY_EVEN = 1,
+    COM_MANAGER_PARITY_ODD  = 2,
+} ComManagerParityType;
 
 typedef enum {
-    COM_STOPBITS_1 = 0,
-    COM_STOPBITS_2 = 1,
-} ComStopBitsType;
+    COM_MANAGER_STOPBITS_1 = 0,
+    COM_MANAGER_STOPBITS_2 = 1,
+} ComManagerStopBitsType;
 
 /* === COM 口配置结构体 === */
 typedef struct {
-    uint32_t        baudrate;   /* 波特率：4800/9600/115200 等 */
-    uint8_t         databits;   /* 数据位：一般为 8 或 9 */
-    ComParityType   parity;     /* 校验位 */
-    ComStopBitsType stopbits;   /* 停止位 */
-    ComProtocolType protocol;   /* 当前协议类型 */
-} ComConfig;
+    uint32_t                baudrate;   /* 波特率：4800/9600/115200 等 */
+    uint8_t                 databits;   /* 数据位：一般为 8 或 9 */
+    ComManagerParityType    parity;     /* 校验位 */
+    ComManagerStopBitsType  stopbits;   /* 停止位 */
+    ComManagerProtocolType  protocol;   /* 当前协议类型 */
+} ComManagerConfig;
 
 /* 全局配置数组：索引为 ComPortIndex */
-extern ComConfig g_com_config[COM_PORT_NUM];
+extern ComManagerConfig g_com_manager_config[COM_PORT_NUM];
 
 /**
  * @brief  从 DeviceParameters / FRAM 等全局参数加载串口配置，并应用到所有 COM 口
- *         - 内部包含：读取参数 -> 填充 g_com_config[] -> 调用 COM_ApplyConfigToUart()
+ *         - 内部包含：读取参数 -> 填充 g_com_manager_config[] -> 调用 COM_ApplyConfigToUart()
  *         - 需要在参数加载完成后调用（例如系统上电初始化阶段）
  */
 void COM_InitAllFromParams(void);
 
 /**
- * @brief  按照 g_com_config[com] 对应的配置，重新初始化某一个 COM 口的 UART
+ * @brief  按照 g_com_manager_config[com] 对应的配置，重新初始化某一个 COM 口的 UART
  *         - 内部会调用 HAL_UART_DeInit + HAL_UART_Init
  *         - 并重新开启 IDLE 中断 + DMA 接收
  * @param  com: COM_PORT1 / COM_PORT2 / COM_PORT3

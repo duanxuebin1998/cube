@@ -84,6 +84,81 @@ static int Cpu3_BaudValueToIndex(uint32_t baud)
 	}
 }
 
+/*
+ * 归一化协议枚举值。
+ * FRAM 旧值或菜单异常值可能落入未定义范围，必须先收敛再作为协议分发表索引。
+ */
+static ComProtocolType Cpu3_NormalizeProtocol(int32_t protocol)
+{
+    /* 防止 FRAM 旧值或菜单越界值落入未定义协议，避免后续用非法枚举做数组索引。 */
+    if ((protocol < COM_PROTO_DSM) || (protocol > COM_PROTO_SI7000)) {
+        return COM_PROTO_DSM;
+    }
+
+    return (ComProtocolType)protocol;
+}
+
+/*
+ * 将单个串口配置收敛为 SI7000 要求的 9600 8O1。
+ * 返回值表示配置是否被修正，调用方据此决定是否回写 FRAM。
+ */
+static uint8_t Cpu3_ApplySi7000SerialProfile(ComPortConfig *cfg)
+{
+    uint8_t changed = 0U;
+
+    if (cfg == NULL) {
+        return 0U;
+    }
+
+    if (cfg->protocol != Cpu3_NormalizeProtocol(cfg->protocol)) {
+        cfg->protocol = Cpu3_NormalizeProtocol(cfg->protocol);
+        changed = 1U;
+    }
+
+    if (cfg->protocol != COM_PROTO_SI7000) {
+        return changed;
+    }
+
+    /*
+     * SI7000 官方 Modbus 资料要求 9600 8O1。
+     * 用户只需要选择协议，底层串口参数自动收敛，避免菜单组合出 PLC 不兼容配置。
+     */
+    if (cfg->baudrate != 9600U) {
+        cfg->baudrate = 9600U;
+        changed = 1U;
+    }
+    if (cfg->databits != 8U) {
+        cfg->databits = 8U;
+        changed = 1U;
+    }
+    if (cfg->parity != COM_PARITY_ODD) {
+        cfg->parity = COM_PARITY_ODD;
+        changed = 1U;
+    }
+    if (cfg->stopbits != COM_STOPBITS_1) {
+        cfg->stopbits = COM_STOPBITS_1;
+        changed = 1U;
+    }
+
+    return changed;
+}
+
+/*
+ * 对三个外部串口统一执行协议相关参数归一化。
+ * 该函数不直接重启 UART，只修正参数结构，避免和通信收发并发。
+ */
+static uint8_t Cpu3_NormalizeAllPortProfiles(void)
+{
+    uint8_t changed = 0U;
+
+    /* 三个外部口共用同一套协议收敛规则，后续新增端口时只在这里补入口。 */
+    changed |= Cpu3_ApplySi7000SerialProfile(&g_cpu3_comm_display_params.com1);
+    changed |= Cpu3_ApplySi7000SerialProfile(&g_cpu3_comm_display_params.com2);
+    changed |= Cpu3_ApplySi7000SerialProfile(&g_cpu3_comm_display_params.com3);
+
+    return changed;
+}
+
 /* 读取 CPU3 本机参数当前值（统一入口） */
 int32_t Cpu3Local_ReadValue(OperatingNumber opera)
 {
@@ -240,7 +315,7 @@ void Cpu3Local_WriteValue(OperatingNumber opera, int32_t v)
         g_cpu3_comm_display_params.com1.stopbits = (ComStopBitsType)v;
         break;
     case COM_NUM_CPU3_COM1_PROTOCOL:
-        g_cpu3_comm_display_params.com1.protocol = (ComProtocolType)v;
+        g_cpu3_comm_display_params.com1.protocol = Cpu3_NormalizeProtocol(v);
         break;
 
     /* COM2 */
@@ -257,7 +332,7 @@ void Cpu3Local_WriteValue(OperatingNumber opera, int32_t v)
         g_cpu3_comm_display_params.com2.stopbits = (ComStopBitsType)v;
         break;
     case COM_NUM_CPU3_COM2_PROTOCOL:
-        g_cpu3_comm_display_params.com2.protocol = (ComProtocolType)v;
+        g_cpu3_comm_display_params.com2.protocol = Cpu3_NormalizeProtocol(v);
         break;
 
     /* COM3 */
@@ -274,11 +349,16 @@ void Cpu3Local_WriteValue(OperatingNumber opera, int32_t v)
         g_cpu3_comm_display_params.com3.stopbits = (ComStopBitsType)v;
         break;
     case COM_NUM_CPU3_COM3_PROTOCOL:
-        g_cpu3_comm_display_params.com3.protocol = (ComProtocolType)v;
+        g_cpu3_comm_display_params.com3.protocol = Cpu3_NormalizeProtocol(v);
         break;
 
     default:
         break;
+    }
+
+    if (Cpu3Local_IsUartParam(opera)) {
+        /* 写任一串口字段后统一归一化，确保先选协议或后改波特率都能收敛到 SI7000 配置。 */
+        Cpu3_NormalizeAllPortProfiles();
     }
 
     /* 这里可以顺手：重配串口 + 保存 FRAM */
@@ -299,7 +379,12 @@ static void Cpu3_ReinitOneUart(UART_HandleTypeDef *huart, const ComPortConfig *c
     HAL_UART_DeInit(huart);
 
     huart->Init.BaudRate = cfg->baudrate;
-    huart->Init.WordLength = (cfg->databits == 9) ? UART_WORDLENGTH_9B : UART_WORDLENGTH_8B;
+    /*
+     * STM32 HAL 的有校验 8 数据位需要配置 9B，最高位由硬件作为校验位发送。
+     * 如果仍配置 8B，SI7000 的 8O1 会实际变成 7O1。
+     */
+    huart->Init.WordLength =
+        ((cfg->databits == 9) || (cfg->parity != COM_PARITY_NONE)) ? UART_WORDLENGTH_9B : UART_WORDLENGTH_8B;
 
     /* 校验 */
     switch (cfg->parity) {
@@ -499,8 +584,17 @@ void Cpu3_Params_LoadFromFRAM(void)
         Cpu3_Params_SaveToFRAM();
     } else {
         /* 正常加载 */
+        uint8_t need_save = 0U;
+
         g_cpu3_comm_display_params = stor.params;
         if (Cpu3_ApplyFirmwareVersionRuntime()) {
+            need_save = 1U;
+        }
+        if (Cpu3_NormalizeAllPortProfiles() != 0U) {
+            /* 旧 FRAM 参数加载后也要补齐 SI7000 串口要求，并回写一次，避免每次开机重复修正。 */
+            need_save = 1U;
+        }
+        if (need_save != 0U) {
             Cpu3_Params_SaveToFRAM();
         }
         printf("CPU3参数已从FRAM加载，CRC=0x%08lX\r\n", (unsigned long)stor.crc);

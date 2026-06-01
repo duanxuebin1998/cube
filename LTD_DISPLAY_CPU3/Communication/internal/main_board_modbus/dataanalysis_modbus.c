@@ -488,6 +488,22 @@ void write_measurement_result_to_InputRegisters(uint16_t *regs) {
 	write_u32_to_regs(regs, REG_HEIGHT_MEASUREMENT_CAL_LIQUID_LEVEL, g_measurement.height_measurement.calibrated_liquid_level);
 	write_u32_to_regs(regs, REG_HEIGHT_MEASUREMENT_CURRENT_REAL, g_measurement.height_measurement.current_real_height);
 
+	/* ==== SI7000 shared status ====
+	 * CPU3 通过这组共享寄存器获取 CPU2 的协议辅助状态，再映射成 SI7000 离散输入/输入寄存器。
+	 * 读写顺序必须与 CPU2 侧保持一致，协议契约脚本会检查这段顺序。
+	 */
+	write_u32_to_regs(regs, REG_HEIGHT_MEASUREMENT_BOTTOM_REFERENCE_VALID, g_measurement.height_measurement.bottom_reference_valid);
+	write_u32_to_regs(regs, REG_OIL_MEASUREMENT_PROBE_AT_LIQUID_LEVEL, g_measurement.oil_measurement.probe_at_liquid_level);
+	write_u32_to_regs(regs, REG_OIL_MEASUREMENT_LIQUID_STABLE, g_measurement.oil_measurement.liquid_stable);
+	write_u32_to_regs(regs, REG_DENSITY_DIST_PROFILE_COMPLETE_LATCHED, g_measurement.density_distribution.profile_complete_latched);
+	write_u32_to_regs(regs, REG_DENSITY_DIST_PROFILE_COMPLETE_COUNTER, g_measurement.density_distribution.profile_complete_counter);
+	write_u32_to_regs(regs, REG_DENSITY_DIST_PROFILE_BLOCKED_BY_PROCESS, g_measurement.density_distribution.profile_blocked_by_process);
+	write_u32_to_regs(regs, REG_DEVICE_STATUS_LOADING_UNLOADING_ACTIVE, g_measurement.device_status.loading_unloading_active);
+	write_u32_to_regs(regs, REG_DEVICE_STATUS_MANUAL_ALARM_INHIBIT, g_measurement.device_status.manual_alarm_inhibit);
+	write_u32_to_regs(regs, REG_OIL_MEASUREMENT_MANUAL_LEVEL_UPDATE_INHIBIT, g_measurement.oil_measurement.manual_level_update_inhibit);
+	write_u32_to_regs(regs, REG_DENSITY_DIST_PROFILE_TEMP_DEVIATION_ALARM, g_measurement.density_distribution.profile_temp_deviation_alarm);
+	write_u32_to_regs(regs, REG_DENSITY_DIST_PROFILE_DENSITY_DEVIATION_ALARM, g_measurement.density_distribution.profile_density_deviation_alarm);
+
 	/* ==== Single Point Measurement ==== */
 	write_u32_to_regs(regs, REG_SINGLE_POINT_MEAS_TEMP, g_measurement.single_point_measurement.temperature);
 	write_u32_to_regs(regs, REG_SINGLE_POINT_MEAS_DENSITY, g_measurement.single_point_measurement.density);
@@ -587,6 +603,21 @@ void read_measurement_result_from_InputRegisters(uint16_t *regs) {
 	/* ==== 实高测量 ==== */
 	g_measurement.height_measurement.calibrated_liquid_level = read_u32_from_regs(cregs, REG_HEIGHT_MEASUREMENT_CAL_LIQUID_LEVEL);
 	g_measurement.height_measurement.current_real_height = read_u32_from_regs(cregs, REG_HEIGHT_MEASUREMENT_CURRENT_REAL);
+
+	/* ==== SI7000 shared status ====
+	 * 该段从 CPU2 输入寄存器恢复到 CPU3 本地 g_measurement，供外部协议模块统一读取。
+	 */
+	g_measurement.height_measurement.bottom_reference_valid = read_u32_from_regs(cregs, REG_HEIGHT_MEASUREMENT_BOTTOM_REFERENCE_VALID);
+	g_measurement.oil_measurement.probe_at_liquid_level = read_u32_from_regs(cregs, REG_OIL_MEASUREMENT_PROBE_AT_LIQUID_LEVEL);
+	g_measurement.oil_measurement.liquid_stable = read_u32_from_regs(cregs, REG_OIL_MEASUREMENT_LIQUID_STABLE);
+	g_measurement.density_distribution.profile_complete_latched = read_u32_from_regs(cregs, REG_DENSITY_DIST_PROFILE_COMPLETE_LATCHED);
+	g_measurement.density_distribution.profile_complete_counter = read_u32_from_regs(cregs, REG_DENSITY_DIST_PROFILE_COMPLETE_COUNTER);
+	g_measurement.density_distribution.profile_blocked_by_process = read_u32_from_regs(cregs, REG_DENSITY_DIST_PROFILE_BLOCKED_BY_PROCESS);
+	g_measurement.device_status.loading_unloading_active = read_u32_from_regs(cregs, REG_DEVICE_STATUS_LOADING_UNLOADING_ACTIVE);
+	g_measurement.device_status.manual_alarm_inhibit = read_u32_from_regs(cregs, REG_DEVICE_STATUS_MANUAL_ALARM_INHIBIT);
+	g_measurement.oil_measurement.manual_level_update_inhibit = read_u32_from_regs(cregs, REG_OIL_MEASUREMENT_MANUAL_LEVEL_UPDATE_INHIBIT);
+	g_measurement.density_distribution.profile_temp_deviation_alarm = read_u32_from_regs(cregs, REG_DENSITY_DIST_PROFILE_TEMP_DEVIATION_ALARM);
+	g_measurement.density_distribution.profile_density_deviation_alarm = read_u32_from_regs(cregs, REG_DENSITY_DIST_PROFILE_DENSITY_DEVIATION_ALARM);
 
 	/* ==== 单点密度测量 ==== */
 	g_measurement.single_point_measurement.temperature = read_u32_from_regs(cregs, REG_SINGLE_POINT_MEAS_TEMP);
