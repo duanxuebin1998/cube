@@ -109,6 +109,111 @@
         "CPU2: STLINK下载(复位连接)"
       ],
       "problemMatcher": []
+    },
+    {
+      "label": "CPU3: 配置CMake",
+      "type": "shell",
+      "command": "cmake",
+      "args": [
+        "-S",
+        "${workspaceFolder}\\LTD_DISPLAY_CPU3",
+        "-B",
+        "${workspaceFolder}\\build\\LTD_DISPLAY_CPU3",
+        "-G",
+        "Ninja",
+        "-DCMAKE_TOOLCHAIN_FILE=${workspaceFolder}\\cmake\\toolchain-arm-none-eabi.cmake",
+        "-DCMAKE_BUILD_TYPE=Debug"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "CPU3: 编译",
+      "type": "shell",
+      "command": "cmake",
+      "args": [
+        "--build",
+        "${workspaceFolder}\\build\\LTD_DISPLAY_CPU3"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": [
+        "$gcc"
+      ]
+    },
+    {
+      "label": "CPU3: STLINK检测",
+      "type": "process",
+      "command": "C:\\Program Files (x86)\\STMicroelectronics\\STM32 ST-LINK Utility\\ST-LINK Utility\\ST-LINK_CLI.exe",
+      "args": [
+        "-List"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "CPU3: STLINK下载",
+      "type": "process",
+      "command": "C:\\Program Files (x86)\\STMicroelectronics\\STM32 ST-LINK Utility\\ST-LINK Utility\\ST-LINK_CLI.exe",
+      "args": [
+        "-c",
+        "SWD",
+        "-P",
+        "${workspaceFolder}\\build\\LTD_DISPLAY_CPU3\\LTD_DISPLAY_CPU3.hex",
+        "-V",
+        "after_programming",
+        "-Rst",
+        "-Run",
+        "-NoPrompt"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "CPU3: STLINK下载(复位连接)",
+      "type": "process",
+      "command": "C:\\Program Files (x86)\\STMicroelectronics\\STM32 ST-LINK Utility\\ST-LINK Utility\\ST-LINK_CLI.exe",
+      "args": [
+        "-c",
+        "SWD",
+        "UR",
+        "-P",
+        "${workspaceFolder}\\build\\LTD_DISPLAY_CPU3\\LTD_DISPLAY_CPU3.hex",
+        "-V",
+        "after_programming",
+        "-Rst",
+        "-Run",
+        "-NoPrompt"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "CPU3: 编译并下载",
+      "dependsOrder": "sequence",
+      "dependsOn": [
+        "CPU3: 编译",
+        "CPU3: STLINK下载"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "CPU3: 编译并下载(复位连接)",
+      "dependsOrder": "sequence",
+      "dependsOn": [
+        "CPU3: 编译",
+        "CPU3: STLINK下载(复位连接)"
+      ],
+      "problemMatcher": []
     }
   ]
 }

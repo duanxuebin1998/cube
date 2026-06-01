@@ -6,6 +6,7 @@
 #include "display_tankopera.h"
 #include "tim.h"
 #include "system_parameter.h"
+#include <stdio.h>
 
 #define DEBUG_DISPLAY 0
 
@@ -1204,6 +1205,24 @@ void DisplayInit(void)
     InputValueInit();
 }
 
+static void Display_FormatWirelessPairingMac(const volatile WirelessPairingStatus *status,
+                                             char line1[9],
+                                             char line2[9])
+{
+    uint32_t mac_high = status->mac_high;
+    uint32_t mac_mid = status->mac_mid;
+    uint32_t mac_low = status->mac_low;
+
+    snprintf(line1, 9, "%02lX:%02lX:%02lX",
+             (unsigned long)((mac_high >> 8) & 0xFFU),
+             (unsigned long)(mac_high & 0xFFU),
+             (unsigned long)((mac_mid >> 8) & 0xFFU));
+    snprintf(line2, 9, "%02lX:%02lX:%02lX",
+             (unsigned long)(mac_mid & 0xFFU),
+             (unsigned long)((mac_low >> 8) & 0xFFU),
+             (unsigned long)(mac_low & 0xFFU));
+}
+
 /* 刷新屏幕 */
 void RefreshScreen(void)
 {
@@ -1238,6 +1257,28 @@ static void oled_equipment(void)
     CalculateValidPara();
     //显示当前设备状态
     DIS_Equipment();
+
+    if (g_measurement.device_status.device_state == STATE_WIRELESS_PAIRING) {
+        return;
+    }
+
+    if (g_measurement.device_status.device_state == STATE_WIRELESS_PAIRING_OVER) {
+        const volatile WirelessPairingStatus *status = &g_measurement.wireless_pairing_status;
+
+        if ((status->result == WIRELESS_PAIRING_RESULT_SUCCESS) && (status->mac_valid != 0U)) {
+            char mac_line1[9];
+            char mac_line2[9];
+
+            Display_FormatWirelessPairingMac(status, mac_line1, mac_line2);
+            OledDisplayLineWords((uint8_t*)"MAC:", OLED_LINE8_1, OLED_ROW4_2, 0);
+            OledDisplayLineWords((uint8_t*)mac_line1, OLED_LINE8_2, OLED_ROW4_3, 0);
+            OledDisplayLineWords((uint8_t*)mac_line2, OLED_LINE8_2, OLED_ROW4_4, 0);
+        } else {
+            OledDisplayLineWords((uint8_t*)"MAC N/A", OLED_LINE8_2, OLED_ROW4_2, 0);
+        }
+        return;
+    }
+
     //液位
     if(flagofoillevelvalid == true)
     {
@@ -1541,6 +1582,7 @@ static const EquipStateDisplay state_display_table[] = {
     { STATE_FORCE_LIFT_ZEROING,      "强制提零点中",             "Force Lift Zero" },             /* NEW */
     { STATE_CALIBRATE_WATERING,      "水位标定中",               "Calibrating Water Level" },     /* NEW */
     { STATE_CALIBRATE_TANKHEIGHTING, "罐高标定中",               "Calibrating Tank Height" },     /* NEW */
+    { STATE_WIRELESS_PAIRING,        "无线滑环匹配中",           "Wireless Pairing" },
 
     /* ===== 瓦西莱密度 ===== */
     { STATE_WARTSILA_DENSITY_START,      "LTD密度分布开始",       "Wartsila Density Start" },
@@ -1579,6 +1621,7 @@ static const EquipStateDisplay state_display_table[] = {
     { STATE_FORCE_LIFT_ZERO_OVER,    "强制提零点完成",           "Force Lift Zero Done" },         /* NEW */
     { STATE_CALIBRATE_WATER_OVER,    "水位标定完成",             "Water Calibration Done" },       /* NEW */
     { STATE_CALIBRATE_TANKHEIGHT_OVER,"罐高标定完成",             "Tank Height Calibration Done" }, /* NEW */
+    { STATE_WIRELESS_PAIRING_OVER,   "无线滑环匹配完成",         "Wireless Pair Done" },
 
     { STATE_WARTSILA_DENSITY_OVER,   "LTD密度分布完成",          "Wartsila Density Done" },
 
