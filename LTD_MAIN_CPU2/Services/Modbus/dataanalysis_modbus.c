@@ -555,6 +555,15 @@ void write_measurement_result_to_InputRegisters(uint16_t *regs) {
 		write_u32_to_regs(regs, REG_DENSITY_POINT_VCF20(i), p->vcf20);
 		write_u32_to_regs(regs, REG_DENSITY_POINT_WEIGHT_DENSITY(i), p->weight_density);
 	}
+
+	/* ==== ÎÞÏß»¬»·Æ¥Åä×´Ì¬ ==== */
+	write_u32_to_regs(regs, REG_WIRELESS_PAIRING_RESULT, g_measurement.wireless_pairing_status.result);
+	write_u32_to_regs(regs, REG_WIRELESS_PAIRING_MAC_VALID, g_measurement.wireless_pairing_status.mac_valid);
+	write_u32_to_regs(regs, REG_WIRELESS_PAIRING_MAC_HIGH, g_measurement.wireless_pairing_status.mac_high);
+	write_u32_to_regs(regs, REG_WIRELESS_PAIRING_MAC_MID, g_measurement.wireless_pairing_status.mac_mid);
+	write_u32_to_regs(regs, REG_WIRELESS_PAIRING_MAC_LOW, g_measurement.wireless_pairing_status.mac_low);
+	write_u32_to_regs(regs, REG_WIRELESS_PAIRING_ERROR_CODE, g_measurement.wireless_pairing_status.error_code);
+	write_u32_to_regs(regs, REG_WIRELESS_PAIRING_UPDATE_COUNTER, g_measurement.wireless_pairing_status.update_counter);
 }
 
 /**
@@ -668,4 +677,13 @@ void read_measurement_result_from_InputRegisters(uint16_t *regs) {
 		g_measurement.density_distribution.single_density_data[i].vcf20 = read_u32_from_regs(cregs, REG_DENSITY_POINT_VCF20(i));
 		g_measurement.density_distribution.single_density_data[i].weight_density = read_u32_from_regs(cregs, REG_DENSITY_POINT_WEIGHT_DENSITY(i));
 	}
+
+	/* ==== ÎÞÏß»¬»·Æ¥Åä×´Ì¬ ==== */
+	g_measurement.wireless_pairing_status.result = read_u32_from_regs(cregs, REG_WIRELESS_PAIRING_RESULT);
+	g_measurement.wireless_pairing_status.mac_valid = read_u32_from_regs(cregs, REG_WIRELESS_PAIRING_MAC_VALID);
+	g_measurement.wireless_pairing_status.mac_high = read_u32_from_regs(cregs, REG_WIRELESS_PAIRING_MAC_HIGH);
+	g_measurement.wireless_pairing_status.mac_mid = read_u32_from_regs(cregs, REG_WIRELESS_PAIRING_MAC_MID);
+	g_measurement.wireless_pairing_status.mac_low = read_u32_from_regs(cregs, REG_WIRELESS_PAIRING_MAC_LOW);
+	g_measurement.wireless_pairing_status.error_code = read_u32_from_regs(cregs, REG_WIRELESS_PAIRING_ERROR_CODE);
+	g_measurement.wireless_pairing_status.update_counter = read_u32_from_regs(cregs, REG_WIRELESS_PAIRING_UPDATE_COUNTER);
 }

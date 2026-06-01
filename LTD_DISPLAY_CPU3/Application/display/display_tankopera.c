@@ -606,6 +606,7 @@ static uint8_t *dtm_operaname(int num)
         { COM_NUM_SET_FULL_WEIGHT,     (uint8_t*)"设置满载称重",   (uint8_t*)"Set Full Weight" },
         { COM_NUM_RESTOR_EFACTORYSETTING,(uint8_t*)"恢复出厂设置", (uint8_t*)"Factory Reset" },
         { COM_NUM_MAINTENANCE_MODE,    (uint8_t*)"维护模式",       (uint8_t*)"Maintenance Mode" },
+        { COM_NUM_PAIR_NEAREST_WIRELESS_SLIPRING, (uint8_t*)"匹配无线滑环", (uint8_t*)"Pair Wireless" },
     };
 
     /* 3) CPU3 本机“固定项”名称（如果你仍然需要这种非 param_meta 的本机项） */
@@ -631,7 +632,8 @@ static uint8_t *dtm_operaname(int num)
     }
 
     /* ---------- B) 无参调试指令 ---------- */
-    if (num > COM_NUM_DEBUGCMD_START && num < COM_NUM_DEBUGCMD_STOP) {
+    if ((num > COM_NUM_DEBUGCMD_START && num < COM_NUM_DEBUGCMD_STOP) ||
+        (num == COM_NUM_PAIR_NEAREST_WIRELESS_SLIPRING)) {
         for (int i = 0; i < (int)(sizeof(debug_cmd_map)/sizeof(debug_cmd_map[0])); i++) {
             if (num == debug_cmd_map[i].opera) {
                 return (screen_parameter.language == LANGUAGE_CHINESE)
@@ -984,7 +986,8 @@ static void ifsendcmd(void)
 	all_screen(0x00);
 	func_index = KEYNUM_IFSENDCMD;
 
-	if (now_Opera_Num > COM_NUM_NOPARACMD_START && now_Opera_Num < COM_NUM_NOPARACMD_END) {
+	if ((now_Opera_Num > COM_NUM_NOPARACMD_START && now_Opera_Num < COM_NUM_NOPARACMD_END) ||
+        (now_Opera_Num == COM_NUM_PAIR_NEAREST_WIRELESS_SLIPRING)) {
 		DisplayLangaugeLineWords((uint8_t*)"是否下发指令:", OLED_LINE8_1, OLED_ROW4_1, 0, (uint8_t*)"Issue instruct:");
 		OledDisplayLineWords(dtm_operaname(now_Opera_Num), OLED_LINE8_1, OLED_ROW3_2, 0);
 	} else if (now_Opera_Num > COM_NUM_ONEPARACMD_START && now_Opera_Num < COM_NUM_NOPARA_DEBUGCMD_END) {
@@ -1091,6 +1094,7 @@ static pFunc_void dtm_backtofunc(void)
     case COM_NUM_CALIBRATE_WATER:
     case COM_NUM_RESTOR_EFACTORYSETTING:
     case COM_NUM_MAINTENANCE_MODE:
+    case COM_NUM_PAIR_NEAREST_WIRELESS_SLIPRING:
         return menu_cmdconfig_main;
 
     /* 获取空载/满载称重：它们属于调试菜单项，返回也应回调试菜单 */
@@ -1166,7 +1170,8 @@ static pFunc_void dtm_backtofunc(void)
 /* 返回按确认键后要跳转的函数指针 */
 static pFunc_void dtm_suretofunc(void)
 {
-	if (now_Opera_Num > COM_NUM_NOPARACMD_START && now_Opera_Num < COM_NUM_NOPARACMD_END) {
+	if ((now_Opera_Num > COM_NUM_NOPARACMD_START && now_Opera_Num < COM_NUM_NOPARACMD_END) ||
+        (now_Opera_Num == COM_NUM_PAIR_NEAREST_WIRELESS_SLIPRING)) {
 		return cmd_nopara_process;
 	} else if (now_Opera_Num > COM_NUM_ONEPARACMD_START && now_Opera_Num < COM_NUM_NOPARA_DEBUGCMD_END) {
 		return cmd_onepara_process;
@@ -1184,7 +1189,8 @@ typedef struct {
 
 static uint8_t __attribute__((unused)) is_debug_cmd(uint32_t opera)
 {
-    return (opera > COM_NUM_DEBUGCMD_START) && (opera < COM_NUM_DEBUGCMD_STOP);
+    return ((opera > COM_NUM_DEBUGCMD_START) && (opera < COM_NUM_DEBUGCMD_STOP)) ||
+           (opera == COM_NUM_PAIR_NEAREST_WIRELESS_SLIPRING);
 }
 
 /* 统一的“调试指令允许条件”判定（按你现有逻辑扩展） */
@@ -1289,6 +1295,7 @@ static void cmd_nopara_process(void)
         { COM_NUM_SET_FULL_WEIGHT,    CMD_SET_FULL_WEIGHT },
         { COM_NUM_RESTOR_EFACTORYSETTING, CMD_RESTORE_FACTORY },
         { COM_NUM_MAINTENANCE_MODE,   CMD_MAINTENANCE_MODE },
+        { COM_NUM_PAIR_NEAREST_WIRELESS_SLIPRING, CMD_PAIR_NEAREST_WIRELESS_SLIPRING },
     };
 
     uint32_t cmd = CMD_UNKNOWN;
@@ -1330,6 +1337,10 @@ static void cmd_nopara_process(void)
     } else if (now_Opera_Num == COM_NUM_MAINTENANCE_MODE) {
         oled_clear();
         DisplayLangaugeLineWords((uint8_t*)"已进入维护模式", OLED_LINE8_1, OLED_ROW4_2, 0, (uint8_t*)"Maintenance Mode");
+    } else if (now_Opera_Num == COM_NUM_PAIR_NEAREST_WIRELESS_SLIPRING) {
+        FlagofTankOpera = false;
+        HAL_TIM_Base_Stop_IT(&htim1);
+        ClearPageNum();
     } else {
         exitTankOpera();
     }
@@ -2231,6 +2242,7 @@ static void menu_cmdconfig_main(void)
         /* ===== 系统/维护 ===== */
         { (uint8_t*)"恢复出厂设置", COM_NUM_RESTOR_EFACTORYSETTING, ifsendcmd, COMMANE_NORW, (uint8_t*)"RestoreFactory" },
         { (uint8_t*)"进入维护模式",     COM_NUM_MAINTENANCE_MODE,       ifsendcmd, COMMANE_NORW, (uint8_t*)"Maintenance"    },
+        { (uint8_t*)"匹配无线滑环", COM_NUM_PAIR_NEAREST_WIRELESS_SLIPRING, ifsendcmd, COMMANE_NORW, (uint8_t*)"PairWireless" },
 
         /* ===== 退出 ===== */
         { (uint8_t*)"退出", COM_NUM_NOOPERA, mainmenu, COMMANE_NORW, (uint8_t*)"Exit" },
