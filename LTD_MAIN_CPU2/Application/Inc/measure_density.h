@@ -60,6 +60,7 @@ void Print_DensitySpreadResult(const DensityDistribution *dist);
 uint32_t SinglePoint_ReadSensor(volatile DensityMeasurement *result);
 
 uint32_t Density_MeasureByMode_Exact(DensitySpreadModeId mode, DensityDistribution *out_dist);
+uint32_t SinglePoint_CheckTargetPosition(const char *scene, uint32_t target_01mm);
 void CMD_SinglePointMeasurement();
 void CMD_SinglePointMonitoring();
 

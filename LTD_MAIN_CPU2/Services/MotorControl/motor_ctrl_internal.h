@@ -155,6 +155,8 @@ typedef struct {
 typedef struct {
     uint32_t applied_velocity;  /* 最近一次写入/准备写入 TMC5130 的 VMAX。 */
     bool initialized;           /* TMC5130 驱动是否已经完成初始化。 */
+    bool motion_command_active; /* 已下发且尚未收尾的运动命令，决定 motor_state 能否保持上/下行。 */
+    bool motion_wait_active;    /* 阻塞运动等待收尾时，后台轮询不得提前把 motor_state 清零。 */
 } MotorDriverRuntime;
 
 /* 位置运行态：保存电机记步模式的切换基准。 */
