@@ -36,6 +36,53 @@ const int SlaveBusy = 0X06;			 // 已定义异常码0x06
 
 int TempBuffer[1675]; // V1.116 dq2020.4.2
 
+static uint8_t s_dsm_self_check_placeholder_step = 0U;
+
+/*
+ * 函数功能：判断保持寄存器访问是否落在 DSM V1.228 第6段占位区。
+ * 说明：本次确认第6段只需要能响应并返回0，不落本地参数、不下发 CPU2。
+ */
+static bool IsHoldingRegisterZeroSegment(unsigned int startaddress, unsigned int registeramount)
+{
+	if (registeramount == 0U)
+	{
+		return false;
+	}
+	return (startaddress >= STARTADDRESS6_HOLDREGISTER) &&
+		   (startaddress <= ENDADDRESS6_HOLDREGISTER) &&
+		   (registeramount <= (ENDADDRESS6_HOLDREGISTER - startaddress + 1U));
+}
+
+/*
+ * 函数功能：记录一次 DSM 自检占位请求。
+ * 说明：当前不扩展 CPU2 共享命令，只在后续输入寄存器读取时输出一轮自检状态。
+ */
+void DSM_RequestSelfCheckPlaceholder(void)
+{
+	s_dsm_self_check_placeholder_step = 1U;
+}
+
+/*
+ * 函数功能：消费 DSM 自检占位状态。
+ * 说明：第一次返回自检中，第二次返回自检完成，再恢复为真实内部状态翻译。
+ */
+uint16_t DSM_ConsumeSelfCheckPlaceholderState(void)
+{
+	if (s_dsm_self_check_placeholder_step == 1U)
+	{
+		s_dsm_self_check_placeholder_step = 2U;
+		return 0x0027U;
+	}
+
+	if (s_dsm_self_check_placeholder_step == 2U)
+	{
+		s_dsm_self_check_placeholder_step = 0U;
+		return 0x8027U;
+	}
+
+	return 0U;
+}
+
 
 /******************************************************
 函数功能： 获取功能码
@@ -215,6 +262,11 @@ int ReadOneHoldingRegister(unsigned int startaddress, unsigned int registeramoun
 	int range;
 	int i, temp = 0;
 
+	if (IsHoldingRegisterZeroSegment(startaddress, registeramount))
+	{
+		return 0;
+	}
+
 	switch ((startaddress & 0x380))
 	{
 	case 0x000:
@@ -238,7 +290,7 @@ int ReadOneHoldingRegister(unsigned int startaddress, unsigned int registeramoun
 		break;
 
 	default:
-		break;
+		return 0;
 	}
 
 	range = startaddress + registeramount;
@@ -270,6 +322,15 @@ bool ReadHoldingRegister(unsigned int startaddress, unsigned int registeramount,
 	int i;
 	int j;
 
+	if (IsHoldingRegisterZeroSegment(startaddress, registeramount))
+	{
+		for (j = 0; j < (int)registeramount; j++)
+		{
+			registervalue[j] = 0;
+		}
+		return true;
+	}
+
 	switch ((startaddress & 0x380))
 	{
 	case 0x000:
@@ -293,7 +354,7 @@ bool ReadHoldingRegister(unsigned int startaddress, unsigned int registeramount,
 		break;
 
 	default:
-		break;
+		return false;
 	}
 
 	range = startaddress + registeramount;
@@ -417,6 +478,11 @@ bool WriteOneHoldingRegister(unsigned int startaddress, unsigned int registeramo
 	int range;
 	int16_t i;
 
+	if (IsHoldingRegisterZeroSegment(startaddress, registeramount))
+	{
+		return true;
+	}
+
 	switch ((startaddress & 0x380))
 	{
 	case 0x000:
@@ -440,7 +506,7 @@ bool WriteOneHoldingRegister(unsigned int startaddress, unsigned int registeramo
 		break;
 
 	default:
-		break;
+		return false;
 	}
 
 	range = startaddress + registeramount - 1;
@@ -470,6 +536,11 @@ bool WriteHoldingRegister(unsigned int startaddress, unsigned int registeramount
 	int i;
 	int j;
 	int range;
+
+	if (IsHoldingRegisterZeroSegment(startaddress, registeramount))
+	{
+		return true;
+	}
 
 	switch ((startaddress & 0x380))
 	{
@@ -582,6 +653,10 @@ int Response03(unsigned char *revframe, unsigned char *sendframe)
 	functioncode = revframe[1];
 	startaddress = ((revframe[2] & 0x00ff) << 8) + revframe[3];
 	registeramount = ((revframe[4] & 0x00ff) << 8) + revframe[5];
+	if ((registeramount <= 0) || (registeramount > 125))
+	{
+		return ResponseException(functioncode, EXCEPTIONCODE_ERRORDATA, sendframe);
+	}
 	endaddress = startaddress + registeramount - 1;
 	flagofaddress = false;
 
@@ -613,6 +688,12 @@ int Response03(unsigned char *revframe, unsigned char *sendframe)
 
 	case 0x280:
 		if ((startaddress > ENDADDRESS5_HOLDREGISTER) || (registeramount <= 0) || (endaddress > ENDADDRESS5_HOLDREGISTER))
+			flagofaddress = true;
+
+		break;
+
+	case 0x300:
+		if (!IsHoldingRegisterZeroSegment((unsigned int)startaddress, (unsigned int)registeramount))
 			flagofaddress = true;
 
 		break;
@@ -680,6 +761,10 @@ int Response04(unsigned char *revframe, unsigned char *sendframe)
 	functioncode = revframe[1];
 	startaddress = ((revframe[2] & 0x00ff) << 8) + revframe[3];
 	registeramount = ((revframe[4] & 0x00ff) << 8) + revframe[5];
+	if ((registeramount <= 0) || (registeramount > 125))
+	{
+		return ResponseException(functioncode, EXCEPTIONCODE_ERRORDATA, sendframe);
+	}
 	endaddress = startaddress + registeramount - 1;
 	//	Input_Write();//提到前面
 	flagofaddress = false;
@@ -748,78 +833,75 @@ int Response04(unsigned char *revframe, unsigned char *sendframe)
 
 	return (framelen + 2);
 }
+typedef enum {
+	COIL_ACTION_SEND_CMD,
+	COIL_ACTION_NOOP_OK,
+	COIL_ACTION_INVALID_CMD,
+	COIL_ACTION_SELF_CHECK_PLACEHOLDER,
+} CoilActionType;
+
 typedef struct {
-    uint16_t coil;   // 线圈起始地址（COM_xxx）
-    uint8_t  cmd;    // 内部命令（CMD_xxx）
+    uint16_t coil;          // 线圈起始地址（COM_xxx）
+    uint8_t  cmd;           // 内部命令（CMD_xxx）
+	CoilActionType action; // DSM确认口径：下发、占位成功或返回无效指令
 } CoilCmdMap;
 
 /* 线圈地址 -> 内部命令映射表 */
 static const CoilCmdMap g_coil_cmd_map[] = {
     /* ========= 工作模式区 (0x000A ~ 0x0017) ========= */
-    { COM_SET_WORKPATTER,      CMD_UNKNOWN },                 // 只写工作模式，不直接触发动作
+    { COM_SET_WORKPATTER,      CMD_UNKNOWN, COIL_ACTION_NOOP_OK },                 // 只写工作模式，不直接触发动作
 
-    { COM_BACK_ZERO,           CMD_BACK_ZERO },               // 回零点
-    { COM_FIND_ZERO,           CMD_CALIBRATE_ZERO },          // 标定零点
+    { COM_BACK_ZERO,           CMD_BACK_ZERO, COIL_ACTION_SEND_CMD },               // 回零点
+    { COM_FIND_ZERO,           CMD_BACK_ZERO, COIL_ACTION_SEND_CMD },               // 确认口径：0x000C 也执行回零点
 
-    { COM_SINGLE_POINT,        CMD_MEASURE_SINGLE },          // 单点测量
-    { COM_SP_TEST,             CMD_MONITOR_SINGLE },          // 单点监测
+    { COM_SINGLE_POINT,        CMD_MEASURE_SINGLE, COIL_ACTION_SEND_CMD },          // 单点测量
+    { COM_SP_TEST,             CMD_MONITOR_SINGLE, COIL_ACTION_SEND_CMD },          // 单点监测
 
-    { COM_SPREADPOINTS,        CMD_MEASURE_DISTRIBUTED },     // 分布测量（带高度）
-    { COM_SPREADPOINTS_AI,     CMD_MEASURE_DISTRIBUTED },     // 自动分布测量（同一类命令）
+    { COM_SPREADPOINTS,        CMD_MEASURE_DISTRIBUTED, COIL_ACTION_SEND_CMD },     // 分布测量（带高度）
+    { COM_SPREADPOINTS_AI,     CMD_MEASURE_DISTRIBUTED, COIL_ACTION_SEND_CMD },     // 自动分布测量（同一类命令）
 
-    { COM_FIND_OIL,            CMD_FIND_OIL },                // 寻找液位
-    { COM_FIND_WATER,          CMD_FIND_WATER },              // 寻找水位
-    { COM_FIND_BOTTOM,         CMD_FIND_BOTTOM },             // 寻找罐底
+    { COM_FIND_OIL,            CMD_FIND_OIL, COIL_ACTION_SEND_CMD },                // 寻找液位
+    { COM_FIND_WATER,          CMD_FIND_WATER, COIL_ACTION_SEND_CMD },              // 寻找水位
+    { COM_FIND_BOTTOM,         CMD_FIND_BOTTOM, COIL_ACTION_SEND_CMD },             // 寻找罐底
 
-    { COM_SYNTHETIC,           CMD_SYNTHETIC },               // 综合指令测量
+    { COM_SYNTHETIC,           CMD_SYNTHETIC, COIL_ACTION_SEND_CMD },               // 综合指令测量
 
-    { COM_METER_DENSITY,       CMD_MEASURE_DENSITY_METER },   // 密度每米测量
-    { COM_INTERVAL_DENSITY,    CMD_MEASURE_DENSITY_RANGE },   // 区间密度测量
-    { COM_WATER_FOLLOW,    CMD_FOLLOW_WATER },   //水位跟随
+    { COM_METER_DENSITY,       CMD_MEASURE_DENSITY_METER, COIL_ACTION_SEND_CMD },   // 密度每米测量
+    { COM_INTERVAL_DENSITY,    CMD_MEASURE_DENSITY_RANGE, COIL_ACTION_SEND_CMD },   // 区间密度测量
+    { COM_WATER_FOLLOW,        CMD_FOLLOW_WATER, COIL_ACTION_SEND_CMD },            // 水位跟随兼容
 
     /* ========= 调试模式区 (0x0100 ~ 0x0107) ========= */
-    { COM_CAL_OIL,             CMD_CALIBRATE_OIL },           // 液位标定
-    { COM_READPARAMETER,       CMD_MAINTENANCE_MODE },        // 读取当前参数/维护动作
+    { COM_CAL_OIL,             CMD_CALIBRATE_OIL, COIL_ACTION_SEND_CMD },           // 液位标定
+    { COM_READPARAMETER,       CMD_MAINTENANCE_MODE, COIL_ACTION_SEND_CMD },        // 读取当前参数/维护动作
 
-    { COM_RUNUP,               CMD_MOVE_UP },                 // 向上运行
-    { COM_RUNDOWN,             CMD_MOVE_DOWN },               // 向下运行
+    { COM_RUNUP,               CMD_MOVE_UP, COIL_ACTION_SEND_CMD },                 // 向上运行
+    { COM_RUNDOWN,             CMD_MOVE_DOWN, COIL_ACTION_SEND_CMD },               // 向下运行
 
-    { COM_SET_ZEROCIRCLE,      CMD_UNKNOWN },          // 调整零点圈数
-    { COM_SET_ZEROANGLE,       CMD_UNKNOWN },          // 调整零点角度
-    { COM_CORRECTION_OIL,      CMD_CORRECT_OIL },             // 修正液位
-    { COM_FORCE_ZERO,          CMD_CALIBRATE_ZERO },          // 强制零点
-    { COM_CAL_WATER,           CMD_CALIBRATE_WATER },         // 水位标定
-    { COM_CALIBRATE_TANKHEIGHT, CMD_CALIBRATE_TANKHEIGHT },   // 罐高标定
+    { COM_SET_ZEROCIRCLE,      CMD_UNKNOWN, COIL_ACTION_INVALID_CMD },              // DSM V1.228 按无效指令处理
+    { COM_SET_ZEROANGLE,       CMD_UNKNOWN, COIL_ACTION_INVALID_CMD },              // DSM V1.228 按无效指令处理
+    { COM_CORRECTION_OIL,      CMD_CORRECT_OIL, COIL_ACTION_SEND_CMD },             // 修正液位
+    { COM_FORCE_ZERO,          CMD_CALIBRATE_ZERO, COIL_ACTION_SEND_CMD },          // 确认口径：保持原有映射
+    { COM_CAL_WATER,           CMD_CALIBRATE_WATER, COIL_ACTION_SEND_CMD },         // 水位标定
+    { COM_SELF_CHECK,          CMD_UNKNOWN, COIL_ACTION_SELF_CHECK_PLACEHOLDER },    // 自检占位，不扩展CPU2协议
+    { COM_CALIBRATE_TANKHEIGHT, CMD_CALIBRATE_TANKHEIGHT, COIL_ACTION_SEND_CMD },   // 罐高标定
 
     /* ========= 解锁模式区 (0x0200 ~ 0x0202) ========= */
-    { COM_RESTOR_EFACTORYSETTING, CMD_RESTORE_FACTORY },      // 恢复出厂设置
-    { COM_BACKUP_FILE,         CMD_RESTORE_FACTORY },        // 恢复出厂设置
-    { COM_RESTORY_FILE,        CMD_RESTORE_FACTORY },        // 恢复出厂设置
+    { COM_RESTOR_EFACTORYSETTING, CMD_RESTORE_FACTORY, COIL_ACTION_SEND_CMD },      // 恢复出厂设置
+    { COM_BACKUP_FILE,         CMD_UNKNOWN, COIL_ACTION_NOOP_OK },                  // 备份文件占位，不恢复出厂
+    { COM_RESTORY_FILE,        CMD_UNKNOWN, COIL_ACTION_INVALID_CMD },              // DSM V1.228 按无效指令处理
 };
 
 /* 简单的数组长度宏 */
 #define ARRAY_SIZE(a) (sizeof(a) / sizeof((a)[0]))
 
-/* 仅允许协议表中已定义的线圈地址通过 0x05 写单线圈。 */
-static bool IsSupportedCoilAddress(uint16_t coil_addr)
+static const CoilCmdMap *FindCoilCmdMap(uint16_t coil_addr)
 {
     for (size_t i = 0; i < ARRAY_SIZE(g_coil_cmd_map); i++) {
         if (g_coil_cmd_map[i].coil == coil_addr) {
-            return true;
+            return &g_coil_cmd_map[i];
         }
     }
-    return false;
-}
-
-/* 线圈地址 -> CMD_ 指令 */
-uint8_t GetCmdFromCoil(uint16_t coil_addr)
-{
-    for (size_t i = 0; i < ARRAY_SIZE(g_coil_cmd_map); i++) {
-        if (g_coil_cmd_map[i].coil == coil_addr) {
-            return g_coil_cmd_map[i].cmd;
-        }
-    }
-    return CMD_UNKNOWN;
+    return NULL;
 }
 
 /******************************************************
@@ -834,33 +916,42 @@ uint8_t GetCmdFromCoil(uint16_t coil_addr)
 ******************************************************/
 int Response05(unsigned char *revframe, unsigned char *sendframe)
 {
-	uint32_t cmd = 1;
+	uint32_t cmd = CMD_UNKNOWN;
 	int startaddress;
 	int coilvalue;
 	int framelen = 0;
+	bool should_send_cmd = false;
+	const CoilCmdMap *coil_map;
 	unsigned short crc;
 	startaddress = ((revframe[2] & 0x00ff) << 8) + revframe[3];
 	coilvalue = ((revframe[4] & 0x00ff) << 8) + revframe[5];
+	coil_map = FindCoilCmdMap((uint16_t)startaddress);
 
-	if (!IsSupportedCoilAddress((uint16_t)startaddress))
+	if (coil_map == NULL)
 	{
 		sendframe[0] = SlaveAddress;
 		sendframe[1] = 0x80 + presetsinglecoilfuncode;
 		sendframe[2] = 0x02; // 非法数据地址
 		framelen = 3;
 	}
-	else if ((coilvalue != 0x00) && (coilvalue != 0xff00))
+	else if ((coilvalue != 0x0000) && (coilvalue != 0xff00))
 	{
 		sendframe[0] = SlaveAddress;
 		sendframe[1] = 0x80 + presetsinglecoilfuncode;
 		sendframe[2] = 0x03; // 超出自定义范围
 		framelen = 3;
 	}
+	else if (coil_map->action == COIL_ACTION_INVALID_CMD)
+	{
+		sendframe[0] = SlaveAddress;
+		sendframe[1] = 0x80 + presetsinglecoilfuncode;
+		sendframe[2] = EXCEPTIONCODE_ERRORDATA; // 已定义地址，但按确认口径属于无效命令
+		framelen = 3;
+	}
 	else
 	{
 		// 写线圈
 //		PresetCoil(startaddress, coilvalue);
-		//改成获取功能码
 		sendframe[0] = SlaveAddress;
 		sendframe[1] = presetsinglecoilfuncode;
 		sendframe[2] = revframe[2];
@@ -868,6 +959,19 @@ int Response05(unsigned char *revframe, unsigned char *sendframe)
 		sendframe[4] = revframe[4];
 		sendframe[5] = revframe[5];
 		framelen = 6;
+
+		if (coilvalue == 0xff00)
+		{
+			if (coil_map->action == COIL_ACTION_SEND_CMD)
+			{
+				cmd = coil_map->cmd;
+				should_send_cmd = (cmd != CMD_UNKNOWN);
+			}
+			else if (coil_map->action == COIL_ACTION_SELF_CHECK_PLACEHOLDER)
+			{
+				DSM_RequestSelfCheckPlaceholder();
+			}
+		}
 	}
 
 	crc = CRC16_Calculate(sendframe, framelen);
@@ -875,10 +979,12 @@ int Response05(unsigned char *revframe, unsigned char *sendframe)
 	sendframe[framelen + 1] = (crc >> 8) & 0xff;
 	printf("startaddress=%04X,coilvalue=%04X\r\n", startaddress, coilvalue);
 
-	cmd = GetCmdFromCoil(startaddress);
-	// 发送命令给主控单元
-	printf("cmd=%lu\r\n", cmd);
-	CPU2_CombinatePackage_Send(FUNCTIONCODE_WRITE_MULREGISTER, HOLDREGISTER_DEVICEPARAM_COMMAND, 2, &cmd);
+	if (should_send_cmd)
+	{
+		// 只有合法动作线圈写入 0xFF00 时才下发 CPU2，避免异常帧或 0x0000 误动作。
+		printf("cmd=%lu\r\n", cmd);
+		CPU2_CombinatePackage_Send(FUNCTIONCODE_WRITE_MULREGISTER, HOLDREGISTER_DEVICEPARAM_COMMAND, 2, &cmd);
+	}
 	return (framelen + 2);
 }
 /******************************************************
@@ -910,6 +1016,10 @@ int Response16(unsigned char *revframe, unsigned char *sendframe)
 	functioncode = revframe[1];
 	startaddress = ((revframe[2] & 0x00ff) << 8) + revframe[3];
 	registeramount = ((revframe[4] & 0x00ff) << 8) + revframe[5];
+	if ((registeramount <= 0) || (registeramount > 123) || (revframe[6] != (unsigned char)(registeramount * 2)))
+	{
+		return ResponseException(functioncode, EXCEPTIONCODE_ERRORDATA, sendframe);
+	}
 	endaddress = startaddress + registeramount - 1;
 	stdHi = revframe[2];
 	stdLo = revframe[3];
@@ -949,6 +1059,12 @@ int Response16(unsigned char *revframe, unsigned char *sendframe)
 
 		break;
 
+	case 0x300:
+		if (!IsHoldingRegisterZeroSegment((unsigned int)startaddress, (unsigned int)registeramount))
+			flagofaddress = true;
+
+		break;
+
 	default:
 		flagofaddress = true;
 		break;
@@ -973,10 +1089,20 @@ int Response16(unsigned char *revframe, unsigned char *sendframe)
 	}
 	else
 	{
-		//写到本地保持寄存器数组
-		WriteHoldingRegister(startaddress, registeramount, TempBuffer);
-		//解析保持寄存器到设备参数，并下发到CPU2
-		ret = UpdateDeviceParamsFromLegacyRegs(startaddress, registeramount);
+		if (!WriteHoldingRegister(startaddress, registeramount, TempBuffer))
+		{
+			ret = PARAMETER_ERROR;
+		}
+		else if (IsHoldingRegisterZeroSegment((unsigned int)startaddress, (unsigned int)registeramount))
+		{
+			/* 第6段当前只做协议占位：写请求回成功，但不落参数、不下发CPU2。 */
+			ret = 0;
+		}
+		else
+		{
+			//解析保持寄存器到设备参数，并下发到CPU2
+			ret = UpdateDeviceParamsFromLegacyRegs(startaddress, registeramount);
+		}
 
 		if (ret == PARAMETER_ERROR) // 设置的数据错误
 		{
