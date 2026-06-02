@@ -18,6 +18,8 @@ uint32_t velocity = MOTOR_VELOCITY_BASE;
 MotorDriverRuntime s_motor_driver = {
     .applied_velocity = 0U,
     .initialized = false,
+    .motion_command_active = false,
+    .motion_wait_active = false,
 };
 
 /* 位置运行态：集中保存电机记步基准。 */

@@ -1319,6 +1319,11 @@ static uint32_t Wartsila_MoveToMonitorPositionOnly(void)
     g_measurement.device_status.device_state = STATE_RUNTOPOINTING;
     printf("瓦锡兰测后探底\t先回固定点监测位置：%.1fmm，仅移动不读密度\r\n", (double)target_mm);
 
+    ret = SinglePoint_CheckTargetPosition("瓦锡兰测后回固定点", g_deviceParams.singlePointMonitoringPosition);
+    if (ret != NO_ERROR) {
+        return ret;
+    }
+
     for (uint32_t attempt = 1U; attempt <= max_attempts; attempt++) {
         ret = MotorCtrl_MoveToPosition(target_mm, MotorCtrl_GetDefaultSpeedX100());
         if ((ret == NO_ERROR) || (ret == STATE_SWITCH)) {
@@ -1387,6 +1392,9 @@ static void CMD_WartsilaDensitySpread(void) {
             ret = Wartsila_MoveToMonitorPositionOnly();
             if (ret == STATE_SWITCH) {
                 return;
+            }
+            if (ret == PARAM_RANGE_ERROR) {
+                SET_ERROR(ret);
             }
             if (ret != NO_ERROR) {
                 g_deviceParams.command = CMD_MONITOR_SINGLE;

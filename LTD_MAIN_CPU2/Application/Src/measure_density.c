@@ -94,6 +94,60 @@ static uint32_t Density_CurrentPositionToU01mmClamped(void)
     return Density_ValueToU01mmClamped(g_measurement.debug_data.sensor_position, "测点位置");
 }
 
+/*
+ * 打印单点类目标位置超限原因。报错前一次性输出目标、边界、当前位置和错误码，便于现场判断参数还是位置异常。
+ */
+static void SinglePoint_PrintTargetRangeError(const char *scene,
+                                              const char *reason,
+                                              uint32_t target_01mm,
+                                              uint32_t top_limit_01mm,
+                                              uint32_t bottom_limit_01mm)
+{
+    const char *safe_scene = (scene != NULL) ? scene : "单点位置";
+
+    printf("%s\t目标位置参数超限\t原因:%s\t目标=%.1fmm\t零点=%.1fmm\t罐底盲区=%.1fmm\t当前位置=%.1fmm\t尺带=%.1fmm\t错误码=0x%08lX\r\n",
+           safe_scene,
+           (reason != NULL) ? reason : "未知",
+           (double)target_01mm / 10.0,
+           (double)top_limit_01mm / 10.0,
+           (double)bottom_limit_01mm / 10.0,
+           (double)g_measurement.debug_data.sensor_position / 10.0,
+           (double)g_measurement.debug_data.cable_length / 10.0,
+           (unsigned long)PARAM_RANGE_ERROR);
+}
+
+/*
+ * Check single-point target before any motor movement.
+ * Valid single-point positions must stay between the tank bottom blind zone
+ * and the zero point, both in 0.1mm units.
+ */
+uint32_t SinglePoint_CheckTargetPosition(const char *scene, uint32_t target_01mm)
+{
+    uint32_t top_limit_01mm = g_deviceParams.tankHeight;
+    uint32_t bottom_limit_01mm = g_deviceParams.blindZone;
+
+    if (top_limit_01mm == 0U) {
+        SinglePoint_PrintTargetRangeError(scene, "罐高为0", target_01mm, top_limit_01mm, bottom_limit_01mm);
+        return PARAM_RANGE_ERROR;
+    }
+
+    if (bottom_limit_01mm > top_limit_01mm) {
+        SinglePoint_PrintTargetRangeError(scene, "罐底盲区大于零点", target_01mm, top_limit_01mm, bottom_limit_01mm);
+        return PARAM_RANGE_ERROR;
+    }
+
+    if (target_01mm > top_limit_01mm) {
+        SinglePoint_PrintTargetRangeError(scene, "目标超过零点", target_01mm, top_limit_01mm, bottom_limit_01mm);
+        return PARAM_RANGE_ERROR;
+    }
+
+    if (target_01mm < bottom_limit_01mm) {
+        SinglePoint_PrintTargetRangeError(scene, "目标进入罐底盲区", target_01mm, top_limit_01mm, bottom_limit_01mm);
+        return PARAM_RANGE_ERROR;
+    }
+
+    return NO_ERROR;
+}
 #if ENABLE_SINGLE_POINT_MONITORING_PROTOTYPE
 /**
  * @brief 写入固定点监测样机虚拟数据。
@@ -1348,6 +1402,9 @@ void CMD_SinglePointMeasurement(void)
 
     MeasureStart();
 
+    ret = SinglePoint_CheckTargetPosition("单点测量", g_deviceParams.singlePointMeasurementPosition);
+    SET_ERROR(ret);
+
     ret = MotorCtrl_MoveToPosition((float)g_deviceParams.singlePointMeasurementPosition / 10.0f,
                                               MotorCtrl_GetDefaultSpeedX100());
     SET_ERROR(ret);
@@ -1372,6 +1429,9 @@ void CMD_SinglePointMonitoring(void)
         printf("检测到命令切换请求，停止固定点监测移动\r\n");
         return;
     }
+
+    ret = SinglePoint_CheckTargetPosition("固定点监测", g_deviceParams.singlePointMonitoringPosition);
+    SET_ERROR(ret);
 
     ret = MotorCtrl_MoveToPosition((float)g_deviceParams.singlePointMonitoringPosition / 10.0f,
                                               MotorCtrl_GetDefaultSpeedX100());

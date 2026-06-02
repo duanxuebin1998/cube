@@ -40,6 +40,8 @@ void MotorCtrl_InvalidateDriverInit(void)
 {
     s_motor_driver.initialized = false;
     s_motor_driver.applied_velocity = 0U;
+    s_motor_driver.motion_command_active = false;
+    s_motor_driver.motion_wait_active = false;
 }
 
 /**
@@ -172,14 +174,18 @@ uint32_t MotorCtrl_SetSpeed(uint32_t speed_x100)
 //               (unsigned long)velocity,
 //               MotorDriver_VmaxToUstepsPerSec(velocity));
     }
-    if (is_running) {
+    if (is_running && s_motor_driver.motion_command_active) {
         uint32_t inferred_state = MotorDriver_InferDisplayStateFromDriver(&stepper);
         if (((g_measurement.debug_data.motor_state != 1U) &&
              (g_measurement.debug_data.motor_state != 2U)) &&
             ((inferred_state == 1U) || (inferred_state == 2U))) {
             g_measurement.debug_data.motor_state = inferred_state;
         }
-    } else {
+    } else if (!s_motor_driver.motion_wait_active) {
+        if (!is_running) {
+            s_motor_driver.motion_command_active = false;
+            s_motor_driver.motion_wait_active = false;
+        }
         g_measurement.debug_data.motor_state = 0U;
     }
     return NO_ERROR;
@@ -448,6 +454,8 @@ uint32_t MotorDriver_StopAndMarkStopped(void)
 
     /* 停止命令只是开始减速，只有驱动确认 vzero 后才显示静止。 */
     if (!is_moving) {
+        s_motor_driver.motion_command_active = false;
+        s_motor_driver.motion_wait_active = false;
         g_measurement.debug_data.motor_state = 0U;
     }
     return NO_ERROR;
