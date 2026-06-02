@@ -47,6 +47,8 @@ bool WriteOneHoldingRegister(unsigned int startaddress, unsigned int registeramo
 int ReadOneHoldingRegister(unsigned int startaddress, unsigned int registeramount);
 int ReadOneInputRegister(unsigned int startaddress, u8 registeramount);
 
+void DSM_RequestSelfCheckPlaceholder(void);
+uint16_t DSM_ConsumeSelfCheckPlaceholderState(void);
 int ResponseException(unsigned int functioncode, unsigned int exception, unsigned char *sendframe);
 #endif
 

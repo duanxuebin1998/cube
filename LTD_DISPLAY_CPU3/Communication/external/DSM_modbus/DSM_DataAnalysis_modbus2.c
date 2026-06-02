@@ -1,6 +1,7 @@
 #include "DSM_DataAnalysis_modbus2.h"
 #include <stdlib.h>
 #include <stdio.h>
+#include <stdint.h>
 #include <string.h>
 #include "DSM_comm.h"
 #include "spi.h"
@@ -454,6 +455,42 @@ int UpdateDeviceParamsFromLegacyRegs(int startadd, int reamount)
     return 0;
 }
 
+/*
+ * 函数功能：把二代计量仪内部状态翻译为 DSM V1.228 对外状态。
+ * 说明：只影响外部输入寄存器0x0001，不修改 CPU2/CPU3 共享协议和内部状态机。
+ */
+static uint16_t DSM_TranslateDeviceState(uint16_t internal_state)
+{
+    uint16_t placeholder_state = DSM_ConsumeSelfCheckPlaceholderState();
+
+    if (placeholder_state != 0U)
+    {
+        return placeholder_state;
+    }
+
+    switch (internal_state)
+    {
+    case STATE_METER_DENSITY:
+        return 0x0024U;
+    case STATE_COM_METER_DENSITY_OVER:
+        return 0x8024U;
+    case STATE_INTERVAL_DENSITY:
+        return 0x0025U;
+    case STATE_INTERVAL_DENSITY_OVER:
+        return 0x8025U;
+    case STATE_CALIBRATE_WATERING:
+        return 0x0026U;
+    case STATE_CALIBRATE_WATER_OVER:
+        return 0x8026U;
+    case STATE_CALIBRATE_TANKHEIGHTING:
+        return 0x0028U;
+    case STATE_CALIBRATE_TANKHEIGHT_OVER:
+        return 0x8028U;
+    default:
+        return internal_state;
+    }
+}
+
 
 /******************************************************
  函数功能： 设置寄存器赋值
@@ -467,7 +504,7 @@ void Input_Write(void) {
 	int i;
 	int point_index;
 	WriteOneInputRegister(INPUTREGISTER_PATTERNOFWORK, 1, 1);				 					//工作模式固定为调试模式
-	WriteOneInputRegister(INPUTREGISTER_SYSTEMSTATE, 1, g_measurement.device_status.device_state);									//工作状态
+	WriteOneInputRegister(INPUTREGISTER_SYSTEMSTATE, 1, DSM_TranslateDeviceState((uint16_t)g_measurement.device_status.device_state));	//工作状态按 DSM V1.228 对外翻译
 	WriteOneInputRegister(INPUTREGISTER_ERRORNUM, 2, g_measurement.device_status.error_code);
 	//故障代码
 	WriteOneInputRegister(INPUTREGISTER_SP_TEMPERATURE, 1, g_measurement.single_point_measurement.temperature);									//单点测量温度

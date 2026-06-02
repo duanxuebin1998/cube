@@ -22,7 +22,7 @@ int DSM_CommunicationInit(void) {
 	SetSlaveaddress(LocalAddress);
 //用于权限设置
 	MaxNum_Coil = ENDADDRESS3_COM;					   // 线圈工作模式有效值
-	MaxNum_HoldingRegister = ENDADDRESS5_HOLDREGISTER; // 保持寄存器工作模式有效值
+	MaxNum_HoldingRegister = ENDADDRESS6_HOLDREGISTER; // 保持寄存器工作模式有效值
 	MaxNum_InputRegister = ENDADDRESS5_INPUTREGISTER;  // 输入寄存器工作模式有效值
 	WriteOneInputRegister(INPUTREGISTER_SYSTEMSTATE, 1, STATE_INIT);
 #ifdef DEBUG_COMM
