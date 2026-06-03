@@ -26,7 +26,9 @@
 #define UNVALID_GSW 0                      // 质量无效值
 
 #define MAX_MEASUREMENT_POINTS 200 // 密度分布测量最大点数
-#define DEVICE_PROTOCOL_VERSION 5u // CPU2/CPU3共享协议版本；旧程序未写入时默认为0
+#define DEVICE_PROTOCOL_VERSION 6u // CPU2/CPU3共享协议版本；旧程序未写入时默认为0
+#define FAULT_AUTO_RECOVERY_RETRY_DEFAULT 3u
+#define FAULT_AUTO_RECOVERY_RETRY_MAX 10u
 
 // 模式枚举
 typedef enum {
@@ -257,6 +259,7 @@ typedef enum {
     STATE_CALIBRATE_WATERING = 0x0030,         // 水位标定中
     STATE_CALIBRATE_TANKHEIGHTING = 0x0031,     // 罐高标定中
     STATE_WIRELESS_PAIRING = 0x0032,             // 无线滑环匹配中
+    STATE_DEBUG_MODE = 0x0033,                   // 调试模式中
 
     /* ===================== 完成态（0x80xx） ===================== */
     STATE_FINDZEROOVER = 0x8010,               // 标定零点完成
@@ -454,7 +457,7 @@ typedef struct {
     uint32_t error_stop_measurement;      // 错误停止测量标志(0/1)
 
     uint32_t protocolVersion;             // CPU2/CPU3共享协议版本，旧程序该字段默认为0
-    uint32_t reserved2;                   // 预留
+    uint32_t fault_auto_recovery_retry_limit; // 故障自动恢复重跑上限：0关闭，1~10为最多重跑次数
     uint32_t reserved3;                   // 预留
 
     // ===================== 电机与编码器参数 =====================
@@ -468,7 +471,7 @@ typedef struct {
     uint32_t motor_count_first_loop_circumference_mm; // 电机记步局部首圈周长(0.001mm)
 
     // ===================== 称重参数 =====================
-    uint32_t empty_weight;                // 空载重量
+    int32_t empty_weight;                // 空载重量
     uint32_t empty_weight_upper_limit;    // 空载重量上限
     uint32_t empty_weight_lower_limit;    // 空载重量下限
     uint32_t full_weight;                 // 满载称重

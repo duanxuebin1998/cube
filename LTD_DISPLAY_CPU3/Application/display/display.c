@@ -1583,6 +1583,7 @@ static const EquipStateDisplay state_display_table[] = {
     { STATE_CALIBRATE_WATERING,      "水位标定中",               "Calibrating Water Level" },     /* NEW */
     { STATE_CALIBRATE_TANKHEIGHTING, "罐高标定中",               "Calibrating Tank Height" },     /* NEW */
     { STATE_WIRELESS_PAIRING,        "无线滑环匹配中",           "Wireless Pairing" },
+    { STATE_DEBUG_MODE,              "调试模式中",               "Debug Mode" },
 
     /* ===== 瓦西莱密度 ===== */
     { STATE_WARTSILA_DENSITY_START,      "LTD密度分布开始",       "Wartsila Density Start" },

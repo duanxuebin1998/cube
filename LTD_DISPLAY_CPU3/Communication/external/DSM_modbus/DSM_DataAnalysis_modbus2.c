@@ -486,6 +486,8 @@ static uint16_t DSM_TranslateDeviceState(uint16_t internal_state)
         return 0x0028U;
     case STATE_CALIBRATE_TANKHEIGHT_OVER:
         return 0x8028U;
+    case STATE_DEBUG_MODE:
+        return (uint16_t)STATE_MAINTENANCEMODE;
     default:
         return internal_state;
     }

@@ -17,6 +17,10 @@ static uint32_t MotorMotion_WaitUntilStopWithTarget(TMC5130TypeDef *tmc5130,
                                                 float eps_mm,
                                                 int dir);
 static uint32_t MotorMotion_WaitStoppedAfterStopCommand(uint32_t timeout_ms);
+static uint32_t MotorMotion_MoveBlockingNoDetectInternal(float mm,
+                                                         int dir,
+                                                         uint32_t speed_x100,
+                                                         bool ignore_encoder_ready);
 
 /* ===================== 对外接口 ===================== */
 
@@ -71,6 +75,10 @@ uint32_t MotorCtrl_MoveByTicksAndWait(int32_t ticks, uint32_t speed_x100)
     if (requested_ticks == 0) {
         return NO_ERROR;
     }
+
+    /* 写 VMAX/XTARGET 前先确认驱动和位置源就绪，避免重启盲区继续运动。 */
+    ret = MotorDriver_CheckMotionReady();
+    CHECK_ERROR(ret);
 
     ret = MotorDriver_BeginTemporarySpeed(speed_x100, &restore_needed, &restore_speed_x100);
     CHECK_ERROR(ret);
@@ -277,8 +285,12 @@ uint32_t MotorCtrl_MoveNoWait(float move_mm, int dir, uint32_t speed_x100)
     if (move_mm == 0.0f) return NO_ERROR;
     if (!MotorDriver_IsDirValid(dir)) return PARAM_ERROR;
 
+    /* 非阻塞入口返回后电机会继续跑，因此必须在下发目标前完成就绪门控。 */
+    uint32_t ret = MotorDriver_CheckMotionReady();
+    CHECK_ERROR(ret);
+
     /* 下发运动前先确认 TMC5130 配置和 24V 功率级，避免未上电仍开始规划运动。 */
-    uint32_t ret = MotorDriver_CheckHealth(MOTOR_DRIVER_HEALTH_BEFORE_MOTION);
+    ret = MotorDriver_CheckHealth(MOTOR_DRIVER_HEALTH_BEFORE_MOTION);
     CHECK_ERROR(ret);
 
     ret = MotorDriver_ApplyOptionalSpeed(speed_x100);
@@ -451,6 +463,11 @@ uint32_t MotorCtrl_MoveAndWait(float mm, int dir, uint32_t speed_x100)
     if (!MotorDriver_IsDirValid(dir)) {
         return PARAM_ERROR;
     }
+
+    /* 阻塞运动虽然后续会轮询保护，但首帧位置不可用时不能先下发运动。 */
+    ret = MotorDriver_CheckMotionReady();
+    CHECK_ERROR(ret);
+
     const uint32_t command_display_state = (dir == MOTOR_DIRECTION_UP) ? 1U : 2U;
 
     /* 阻塞型接口支持“本次命令临时速度”：
@@ -676,6 +693,10 @@ uint32_t MotorCtrl_MoveToPosition(float target_mm, uint32_t speed_x100)
     bool restore_needed = false;
     float cur_mm;
 
+    /* 绝对位置运动依赖当前位置快照，位置源未就绪时直接拦截。 */
+    ret = MotorDriver_CheckMotionReady();
+    CHECK_ERROR(ret);
+
     ret = MotorDriver_BeginTemporarySpeed(speed_x100, &restore_needed, &restore_speed_x100);
     CHECK_ERROR(ret);
 
@@ -760,7 +781,7 @@ uint32_t MotorCtrl_QuickStop(void)
     s_motor_driver.motion_command_active = false;
     s_motor_driver.motion_wait_active = false;
     g_measurement.debug_data.motor_state = 0U;
-    return MotorCtrl_SetSpeed(g_deviceParams.max_motor_speed);
+    return MotorDriver_SetSpeedQuiet(g_deviceParams.max_motor_speed);
 }
 /**
  * @brief 慢停电机并等待斜坡减速结束。
@@ -784,7 +805,7 @@ uint32_t MotorCtrl_SlowStop(void)
         return ret;
     }
 
-    return MotorCtrl_SetSpeed(g_deviceParams.max_motor_speed);
+    return MotorDriver_SetSpeedQuiet(g_deviceParams.max_motor_speed);
 }
 
 /**
@@ -856,12 +877,38 @@ uint32_t MotorCtrl_GetDisplayState(void)
  */
 uint32_t MotorCtrl_MoveBlockingNoDetect(float mm, int dir, uint32_t speed_x100)
 {
+    return MotorMotion_MoveBlockingNoDetectInternal(mm, dir, speed_x100, false);
+}
+
+/**
+ * @brief 强制调试无检测阻塞运动。
+ *
+ * 只绕过编码器首帧门控，仍保留上电安全停机、驱动初始化和 TMC 健康检查。
+ * 仅供人工强制上/下行等调试命令使用，正常测量流程不能调用。
+ */
+uint32_t MotorCtrl_MoveBlockingNoDetectForceDebug(float mm, int dir, uint32_t speed_x100)
+{
+    return MotorMotion_MoveBlockingNoDetectInternal(mm, dir, speed_x100, true);
+}
+
+static uint32_t MotorMotion_MoveBlockingNoDetectInternal(float mm,
+                                                         int dir,
+                                                         uint32_t speed_x100,
+                                                         bool ignore_encoder_ready)
+{
     uint32_t restore_speed_x100 = 0U;
     bool restore_needed = false;
     uint32_t ret;
 
     if (mm <= 0.0f) return PARAM_ERROR;
     if (!MotorDriver_IsDirValid(dir)) return PARAM_ERROR;
+
+    /* 无检测只跳过撞底/丢步检测；强制调试入口才允许额外绕过编码器首帧。 */
+    ret = ignore_encoder_ready ? MotorDriver_CheckMotionReadyForceDebug()
+                               : MotorDriver_CheckMotionReady();
+    if (ret != NO_ERROR) {
+        return ret;
+    }
 
     /* 无检测运动也必须先确认驱动健康，否则会掩盖 24V 断电故障。 */
     ret = MotorDriver_CheckHealth(MOTOR_DRIVER_HEALTH_BEFORE_MOTION);

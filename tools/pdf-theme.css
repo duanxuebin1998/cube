@@ -1,0 +1,194 @@
+:root {
+  color-scheme: light;
+  --text: #1f2937;
+  --muted: #667085;
+  --border: #d7dde8;
+  --soft-border: #e7ebf2;
+  --accent: #0f5e9c;
+  --accent-soft: #e8f2fb;
+  --surface: #f6f8fb;
+  --code-bg: #f5f7fa;
+}
+
+@page {
+  size: A4;
+  margin: 9mm 9mm 10mm 9mm;
+}
+
+html {
+  background: #ffffff;
+}
+
+body {
+  margin: 0;
+  color: var(--text);
+  font-family: "Microsoft YaHei", "Segoe UI", Arial, sans-serif;
+  font-size: 10.4pt;
+  line-height: 1.62;
+  letter-spacing: 0;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+
+body > *:first-child {
+  margin-top: 0;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  color: #111827;
+  font-weight: 700;
+  line-height: 1.28;
+  break-after: avoid;
+}
+
+h1 {
+  margin: 0 0 12mm;
+  padding: 0 0 5mm;
+  color: #0b3558;
+  font-size: 23pt;
+  border-bottom: 2px solid var(--accent);
+}
+
+h2 {
+  margin: 9mm 0 3.8mm;
+  padding-left: 3.4mm;
+  font-size: 15pt;
+  border-left: 4px solid var(--accent);
+}
+
+h3 {
+  margin: 6.5mm 0 2.8mm;
+  color: #18364f;
+  font-size: 12.2pt;
+}
+
+h4 {
+  margin: 5mm 0 2mm;
+  font-size: 10.8pt;
+}
+
+p {
+  margin: 0 0 3.2mm;
+}
+
+a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+ul,
+ol {
+  margin: 2.5mm 0 4mm 6mm;
+  padding-left: 5mm;
+}
+
+li {
+  margin: 1.3mm 0;
+}
+
+li > p {
+  margin: 0.8mm 0;
+}
+
+blockquote {
+  margin: 4mm 0;
+  padding: 2.5mm 4mm;
+  color: #394150;
+  background: var(--accent-soft);
+  border-left: 4px solid var(--accent);
+}
+
+hr {
+  height: 1px;
+  margin: 7mm 0;
+  background: var(--soft-border);
+  border: 0;
+}
+
+table {
+  width: 100%;
+  margin: 4.5mm 0 6mm;
+  border-collapse: collapse;
+  table-layout: auto;
+  font-size: 9.1pt;
+  break-inside: auto;
+}
+
+thead {
+  display: table-header-group;
+}
+
+tr {
+  break-inside: avoid;
+}
+
+th,
+td {
+  padding: 2mm 2.4mm;
+  vertical-align: top;
+  border: 1px solid var(--border);
+  word-break: break-word;
+}
+
+th {
+  color: #0b3558;
+  font-weight: 700;
+  background: #eaf1f8;
+}
+
+tbody tr:nth-child(even) td {
+  background: #fafbfd;
+}
+
+code {
+  padding: 0.2mm 1mm;
+  color: #1d4f7a;
+  font-family: Consolas, "Cascadia Mono", "Courier New", monospace;
+  font-size: 0.92em;
+  background: var(--code-bg);
+  border: 1px solid #e2e8f0;
+  border-radius: 3px;
+}
+
+pre {
+  margin: 4mm 0 5mm;
+  padding: 3mm 3.5mm;
+  overflow: visible;
+  white-space: pre-wrap;
+  word-break: break-word;
+  background: var(--code-bg);
+  border: 1px solid #dbe3ee;
+  border-left: 4px solid #8aa8c4;
+  border-radius: 4px;
+}
+
+pre code {
+  padding: 0;
+  color: #172033;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+}
+
+img {
+  max-width: 100%;
+}
+
+.sourceCode {
+  background: transparent;
+}
+
+#TOC {
+  margin: 0 0 8mm;
+  padding: 4mm 5mm;
+  background: var(--surface);
+  border: 1px solid var(--soft-border);
+  border-radius: 4px;
+}
+
+#TOC > ul {
+  margin-bottom: 0;
+}

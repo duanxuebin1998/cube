@@ -7,7 +7,7 @@
 - 字段位置：`HOLDREGISTER_DEVICEPARAM_PROTOCOL_VERSION`
 - 当前语义：CPU2/CPU3 共享协议版本
 - 旧程序语义：保留字段，默认值为 `0`
-- 当前程序语义：协议版本 `5`
+- 当前程序语义：协议版本 `6`
 
 该字段由原 `reserved1` 预留位正式替换而来，寄存器地址不移动，不新增存储字段。
 
@@ -21,6 +21,7 @@
 | 3 | V1.7.0.0 | V1.5.0.0 | 200 | 原 `reserved23` 正式替换为探底修正罐高，用于罐底测量后编码器修正；瓦锡兰分布测后探底前先回固定点监测位置。 |
 | 4 | V1.8.0.0 | V1.6.0.0 | 200 | 将 SI7000 所需补充状态融合进既有测量结构，并通过共享输入寄存器发布给 CPU3 外部协议转换层。 |
 | 5 | V1.9.0.0 | V1.7.0.0 | 200 | 新增 `CMD_PAIR_NEAREST_WIRELESS_SLIPRING = 117`，用于 CPU3 菜单或共享命令通道触发 CPU2 执行无线滑环 RSSI 最近匹配；新增无线滑环匹配中/完成设备状态；输入寄存器末尾追加无线滑环匹配结果和从机 MAC 状态。 |
+| 6 | V1.10.0.0 | V1.9.0.0 | 200 | 新增 `STATE_DEBUG_MODE = 0x0033`，用于 CPU2 串口调试指令执行期间通过 CPU3 显示“调试模式中”；原 `reserved2` 参数槽复用为故障自动恢复重跑上限；`empty_weight` 空载重量按 `int32_t` 有符号 32 位解释，寄存器地址和后续字段不移动。 |
 
 ## 兼容判断规则
 
@@ -132,6 +133,30 @@
 - 协议版本 4 仅包含 SI7000 辅助状态，不包含命令 117 和 `WirelessPairingStatus`；CPU3 V1.7.0.0 不应与协议版本 4 的 CPU2 混用。
 - 旧 CPU3 不提供该菜单入口，但不影响 CPU2 新版本通过调试串口 `SPR` 执行匹配。
 - 旧协议 CPU3 不知道追加的 `WirelessPairingStatus` 字段；协议版本不匹配时不应继续解释匹配结果。
+
+### 协议版本 6
+
+关联改动：
+- `DeviceState` 新增 `STATE_DEBUG_MODE = 0x0033`，CPU2 与 CPU3 枚举值保持一致。
+- CPU2 串口调试命令中，除调用正式测量流程的 `F/H/J`、正式命令映射、无线滑环 `SP*` 和演示 `X` 之外，执行期间临时发布 `STATE_DEBUG_MODE`。
+- CPU2 串口 `B/BE` 诊断进入时切换到 `STATE_DEBUG_MODE`，退出时恢复进入前的业务状态和错误码快照；诊断期间清除临时错误时仍保持调试模式显示。
+- 原 `reserved2` 正式替换为 `fault_auto_recovery_retry_limit`，用于控制故障自动恢复确认成功后最多自动重跑原命令次数：`0` 关闭，`1~10` 为上限，默认 `3`。
+- `empty_weight` 空载重量按 `int32_t` 有符号 32 位参数解释，寄存器仍占 2 个 word，负值按二进制补码传输。
+- CPU3 设备状态页新增 `STATE_DEBUG_MODE` 显示文案“调试模式中”，英文文案为 `Debug Mode`。
+- CPU3 参数页将原 `COM_NUM_DEVICEPARAM_RESERVED2` 显示为“自动恢复次数”，仍写入 `HOLDREGISTER_DEVICEPARAM_PROTOCOL_VERSION + REG_STRIDE` 对应地址。
+- CPU3 外部 DSM 状态转换层将内部 `STATE_DEBUG_MODE` 对外映射为既有维护模式状态，避免 DSM 主站收到未知 `0x0033`。
+
+寄存器布局影响：
+- 不新增保持寄存器或输入寄存器地址，不移动后续参数地址。
+- `DeviceParameters` 原 `reserved2` 字段语义替换为 `fault_auto_recovery_retry_limit`；CPU2/CPU3 Modbus 打包顺序不变。
+- `HOLDREGISTER_DEVICEPARAM_EMPTY_WEIGHT` 地址和长度不变，仅将 32 位寄存器内容解释为有符号值。
+- CPU2 旧协议存储升级到协议版本 6 时，将该字段补为默认 `3`，避免旧预留值 `0` 被误解释为关闭自动恢复。
+- 本次提升协议版本的原因是共享 `DeviceState` 语义新增和共享参数语义新增，旧 CPU3 无法正确显示新状态，也无法展示/写入新参数语义。
+
+兼容影响：
+- CPU2/CPU3 必须同为协议版本 6 才能正确显示串口调试模式状态，并正确同步故障自动恢复重跑上限。
+- CPU2 协议版本 6 与旧 CPU3 混用时，旧 CPU3 不识别 `STATE_DEBUG_MODE`；应由协议版本不匹配检查拦截。
+- CPU3 协议版本 6 与旧 CPU2 混用时，旧 CPU2 不会发布 `STATE_DEBUG_MODE`，原 `reserved2` 也没有故障恢复次数语义；仍应由协议版本不匹配检查拦截。
 
 ## 后续维护要求
 

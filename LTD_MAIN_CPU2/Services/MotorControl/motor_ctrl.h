@@ -59,6 +59,9 @@ typedef struct
 /** 初始化 TMC5130、恢复电机位置持久化数据并使能驱动。 */
 uint32_t MotorCtrl_Init(void);
 
+/** 上电早期安全停机：清除 TMC5130 旧运动状态，必须在 App_Init() 前调用。 */
+uint32_t MotorCtrl_BootSafeStop(void);
+
 /** 标记 TMC5130 需要重新完整初始化，用于驱动复位/通信异常后的恢复。 */
 void MotorCtrl_InvalidateDriverInit(void);
 
@@ -190,6 +193,9 @@ uint32_t MotorCtrl_MoveToPosition(float target_mm, uint32_t speed_x100);
 
 /** 无检测阻塞运动，调试/维护用，不建议用于关键测量流程。 */
 uint32_t MotorCtrl_MoveBlockingNoDetect(float mm, int dir, uint32_t speed_x100);
+
+/** 强制调试无检测运动：只绕过编码器首帧门控，仍保留驱动初始化和上电安全检查。 */
+uint32_t MotorCtrl_MoveBlockingNoDetectForceDebug(float mm, int dir, uint32_t speed_x100);
 
 /* ===================== 驱动状态 / 故障检测 ===================== */
 

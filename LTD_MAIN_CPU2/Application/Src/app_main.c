@@ -92,22 +92,36 @@ static uint8_t App_HandleIdleGlobalError(void) {
 }
 // 初始化函数
 void App_Init(void) {
+	uint32_t motor_init_ret;
 	printf("LTD重启！\n");
-	HAL_Delay(1000); // 延时1000ms
 	init_device_params(); // 初始化设备参数
 	Initialize_Encoder(); // 初始化编码器
+	/* 这 1 秒延时保留给外设稳定，但必须放在编码器启动之后，让编码器先采集首帧。 */
+	HAL_Delay(1000);
 	HartInit(); // 初始化AD5421
 	weight_init();
 	HostCommuInit(); // 初始化Modbus通信
 	AD5421_SetCurrent(6.0); // 设置初始电流为4mA
-	MotorCtrl_Init(); //电机初始化
+	motor_init_ret = MotorCtrl_Init();
+	if (motor_init_ret != NO_ERROR) {
+		g_measurement.device_status.error_code = motor_init_ret;
+		printf("电机初始化失败：0x%08lX\r\n", (unsigned long)motor_init_ret);
+	}
 	fault_info_init(); // 初始化故障信息
 	DetectSensorType(); // 检测传感器类型
 	g_deviceParams.command = CMD_NONE; // 清除命令
 	g_measurement.device_status.zero_point_status=1; // 设置零点状态为需要回零点
 	if (g_deviceParams.powerOnDefaultCommand != CMD_NONE) {
-		g_deviceParams.command = DefaultCmd_To_MeasureCmd(g_deviceParams.powerOnDefaultCommand); // 上电默认命令
-		printf("上电默认命令：%d\r\n", g_deviceParams.command);
+		if (motor_init_ret != NO_ERROR) {
+			printf("上电默认命令被拦截：电机初始化失败\r\n");
+		} else if ((!MotorCtrl_IsPositionSourceMotor()) && (!Encoder_IsReady())) {
+			/* 编码轮记步模式下，上电默认命令不能早于编码器首帧有效位置。 */
+			g_measurement.device_status.error_code = ENCODER_TIMEOUT;
+			printf("上电默认命令被拦截：编码器首帧尚未就绪\r\n");
+		} else {
+			g_deviceParams.command = DefaultCmd_To_MeasureCmd(g_deviceParams.powerOnDefaultCommand);
+			printf("上电默认命令：%d\r\n", g_deviceParams.command);
+		}
 	}
 	//测试函数
 //	Test_main(); // 测试函数

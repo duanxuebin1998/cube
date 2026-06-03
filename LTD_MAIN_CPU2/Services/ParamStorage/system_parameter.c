@@ -86,6 +86,7 @@ static int apply_protocol_version_runtime(void)
 
     /* 旧存储或异常写入导致协议不一致时，启动阶段恢复为CPU2当前协议。 */
     g_deviceParams.bottom_encoder_correction_tank_height = 0U;
+    g_deviceParams.fault_auto_recovery_retry_limit = FAULT_AUTO_RECOVERY_RETRY_DEFAULT;
     g_deviceParams.protocolVersion = DEVICE_PROTOCOL_VERSION;
     return 1;
 }
@@ -117,6 +118,11 @@ static int normalize_device_params_runtime(void)
     if ((g_deviceParams.motor_current < MOTOR_CURRENT_MIN) ||
         (g_deviceParams.motor_current > MOTOR_CURRENT_MAX)) {
         g_deviceParams.motor_current = MOTOR_CURRENT_DEFAULT;
+        changed = 1;
+    }
+
+    if (g_deviceParams.fault_auto_recovery_retry_limit > FAULT_AUTO_RECOVERY_RETRY_MAX) {
+        g_deviceParams.fault_auto_recovery_retry_limit = FAULT_AUTO_RECOVERY_RETRY_DEFAULT;
         changed = 1;
     }
 
@@ -502,6 +508,7 @@ void RestoreFactoryParamsConfig(void)
     g_deviceParams.protocolVersion      = DEVICE_PROTOCOL_VERSION;
     g_deviceParams.error_auto_back_zero  = 1;   /* 默认: 报错回零 */
     g_deviceParams.error_stop_measurement= 1;   /* 默认: 报错停止测量 */
+    g_deviceParams.fault_auto_recovery_retry_limit = FAULT_AUTO_RECOVERY_RETRY_DEFAULT; /* 默认: 自动恢复最多重跑3次 */
     g_deviceParams.position_source_auto_switch = POSITION_SOURCE_AUTO_SWITCH_ENABLE; /* 默认: 允许流程自动切换位置源 */
 
     /* ---------------- 电机与编码器参数 ---------------- */
@@ -665,6 +672,7 @@ void print_device_params(void)
     printf("  %-32s : %lu\r\n", "协议版本", (unsigned long)params.protocolVersion);
     printf("  %-32s : %lu\r\n", "故障自动回零", (unsigned long)params.error_auto_back_zero);
     printf("  %-32s : %lu\r\n", "故障停止测量", (unsigned long)params.error_stop_measurement);
+    printf("  %-32s : %lu\r\n", "故障自动恢复次数", (unsigned long)params.fault_auto_recovery_retry_limit);
     printf("  %-32s : %lu\r\n", "位置源自动切换", (unsigned long)params.position_source_auto_switch);
 
     /* 电机与编码器 */
@@ -679,7 +687,7 @@ void print_device_params(void)
 
     /* 称重 */
     printf("\r\n-- 称重参数 --\r\n");
-    printf("  %-32s : %lu\r\n", "空载重量", (unsigned long)params.empty_weight);
+    printf("  %-32s : %ld\r\n", "空载重量", (long)params.empty_weight);
     printf("  %-32s : %lu\r\n", "空载重量上限", (unsigned long)params.empty_weight_upper_limit);
     printf("  %-32s : %lu\r\n", "空载重量下限", (unsigned long)params.empty_weight_lower_limit);
     printf("  %-32s : %lu\r\n", "满载重量", (unsigned long)params.full_weight);

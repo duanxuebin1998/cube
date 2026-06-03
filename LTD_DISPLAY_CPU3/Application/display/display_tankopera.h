@@ -195,7 +195,7 @@ typedef enum
     COM_NUM_DEVICEPARAM_ERROR_STOP_MEASUREMENT,         // 故障停止测量开关/策略
 
     COM_NUM_DEVICEPARAM_PROTOCOL_VERSION,               // CPU2/CPU3协议版本，旧程序该位置默认为0
-    COM_NUM_DEVICEPARAM_RESERVED2,                      // 保留 2
+    COM_NUM_DEVICEPARAM_RESERVED2,                      // 故障自动恢复重跑上限
     COM_NUM_DEVICEPARAM_RESERVED3,                      // 保留 3
     COM_NUM_DEVICEPARAM_POSITION_SOURCE_AUTO_SWITCH,    // 位置源自动切换
 

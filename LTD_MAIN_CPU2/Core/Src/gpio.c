@@ -58,22 +58,25 @@ void MX_GPIO_Init(void)
   HAL_GPIO_WritePin(CPU2_485_SEL_GPIO_Port, CPU2_485_SEL_Pin, GPIO_PIN_SET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(ENCODE_SPI5_CS_GPIO_Port, ENCODE_SPI5_CS_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(ENCODE_SPI5_CS_GPIO_Port, ENCODE_SPI5_CS_Pin, GPIO_PIN_SET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(FRAM_SPI4_CS_GPIO_Port, FRAM_SPI4_CS_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(FRAM_SPI4_CS_GPIO_Port, FRAM_SPI4_CS_Pin, GPIO_PIN_SET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOB, MOTOR_SPI2_CS_Pin|AD5421_SPI3_CS_Pin|HART_RTS_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(MOTOR_SPI2_CS_GPIO_Port, MOTOR_SPI2_CS_Pin, GPIO_PIN_SET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(DRV_ENN_GPIO_Port, DRV_ENN_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(DRV_ENN_GPIO_Port, DRV_ENN_Pin, GPIO_PIN_SET);
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(SENSOR_ENN_GPIO_Port, SENSOR_ENN_Pin, GPIO_PIN_SET);
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOG, RELAY1_Pin|RELAY2_Pin|RELAY3_Pin|RELAY4_Pin, GPIO_PIN_RESET);
+
+  /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(GPIOB, AD5421_SPI3_CS_Pin|HART_RTS_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin : CPU2_485_SEL_Pin */
   GPIO_InitStruct.Pin = CPU2_485_SEL_Pin;

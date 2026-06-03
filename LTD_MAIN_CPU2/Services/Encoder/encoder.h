@@ -8,10 +8,17 @@
 #ifndef ENCODER_ENCODER_H_
 #define ENCODER_ENCODER_H_
 
+#include <stdbool.h>
+#include <stdint.h>
+
 extern volatile int32_t g_encoder_count ;            // 编码计数值
 // 函数接口声明
 
 void Initialize_Encoder(void);// 在系统启动时初始化编码计数器
+/* 编码器是否已经具备首帧有效位置，供电机启动门控使用。 */
+bool Encoder_IsReady(void);
+/* 等待编码器首帧有效位置；内部会阻塞等待，不能在中断上下文调用。 */
+uint32_t Encoder_WaitReady(uint32_t timeout_ms);
 void Update_Encoder_Count(uint16_t current_angle);
 void update_sensor_height_from_encoder(void);
 void update_sensor_height_from_encoder_force(void); // 根据编码器计数更新传感器高度测量值
