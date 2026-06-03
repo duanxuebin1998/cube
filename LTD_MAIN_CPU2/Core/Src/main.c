@@ -31,6 +31,7 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "app_main.h"
+#include "motor_ctrl.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -113,6 +114,8 @@ int main(void)
   MX_IWDG_Init();
   MX_TIM4_Init();
   /* USER CODE BEGIN 2 */
+	/* 业务初始化前先清 TMC5130 残留运动状态，避免运动中复位后继续跑。 */
+	(void)MotorCtrl_BootSafeStop();
 	App_Init();
   /* USER CODE END 2 */
 

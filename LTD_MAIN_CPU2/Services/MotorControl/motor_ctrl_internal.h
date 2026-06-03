@@ -157,6 +157,7 @@ typedef struct {
     bool initialized;           /* TMC5130 驱动是否已经完成初始化。 */
     bool motion_command_active; /* 已下发且尚未收尾的运动命令，决定 motor_state 能否保持上/下行。 */
     bool motion_wait_active;    /* 阻塞运动等待收尾时，后台轮询不得提前把 motor_state 清零。 */
+    bool boot_safe_stop_done; /* 上电安全停机或完整初始化已清除 TMC 旧运动状态。 */
 } MotorDriverRuntime;
 
 /* 位置运行态：保存电机记步模式的切换基准。 */
@@ -197,6 +198,12 @@ void MotorDriver_UpdateVelocityFromParams(void);
  * 返回错误时会清除驱动初始化标记，调用方应停止当前运动流程。
  */
 uint32_t MotorDriver_CheckHealth(MotorDriverHealthMode mode);
+
+/** 写运动寄存器前统一检查驱动初始化状态和位置源首帧就绪状态。 */
+uint32_t MotorDriver_CheckMotionReady(void);
+
+/** 强制调试运动专用：只绕过编码器首帧门控，不绕过驱动初始化和上电安全停机。 */
+uint32_t MotorDriver_CheckMotionReadyForceDebug(void);
 
 /**
  * @brief 判断业务方向参数是否合法。
@@ -268,6 +275,15 @@ void MotorDriver_RefreshVelocityDuringRun(TMC5130TypeDef *tmc5130,
  * @return 本次运动应使用的速度设定。
  */
 uint32_t MotorDriver_ApplyOptionalSpeed(uint32_t speed_x100);
+
+/**
+ * @brief 静默设置速度参数。
+ *
+ * 用于停机恢复和内部临时速度路径，不打印用户操作日志。
+ * @param speed_x100 请求速度，单位 0.01m/min。
+ * @return 成功返回 NO_ERROR，否则返回参数或通信错误码。
+ */
+uint32_t MotorDriver_SetSpeedQuiet(uint32_t speed_x100);
 
 /**
  * @brief 为单次运动临时切换速度设定。

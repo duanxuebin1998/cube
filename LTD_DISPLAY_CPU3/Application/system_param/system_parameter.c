@@ -30,7 +30,7 @@ struct ParameterMetadata param_meta[] = {
 {(uint8_t*)"故障停止测量",	0,	COM_NUM_DEVICEPARAM_ERROR_STOP_MEASUREMENT,	HOLDREGISTER_DEVICEPARAM_ERROR_STOP_MEASUREMENT,	2,	true,	0,	1,	NULL,	0,	0,	true,	TYPE_INT,	1,	NULL,	(uint8_t*)"ErrStopMeas"},
 
 {(uint8_t*)"协议版本",	0,	COM_NUM_DEVICEPARAM_PROTOCOL_VERSION,	HOLDREGISTER_DEVICEPARAM_PROTOCOL_VERSION,	2,	false,	0,	0,	NULL,	0,	0,	false,	TYPE_INT,	3,	NULL,	(uint8_t*)"ProtoVer"},
-{(uint8_t*)"保留2",	0,	COM_NUM_DEVICEPARAM_RESERVED2,	HOLDREGISTER_DEVICEPARAM_RESERVED2,	2,	false,	0,	0,	NULL,	0,	0,	false,	TYPE_INT,	8,	NULL,	(uint8_t*)"Rsv2"},
+{(uint8_t*)"自动恢复次数",	0,	COM_NUM_DEVICEPARAM_RESERVED2,	HOLDREGISTER_DEVICEPARAM_FAULT_AUTO_RECOVERY_RETRY_LIMIT,	2,	true,	0,	10,	NULL,	0,	0,	true,	TYPE_INT,	2,	NULL,	(uint8_t*)"AutoRecover"},
 {(uint8_t*)"保留3",	0,	COM_NUM_DEVICEPARAM_RESERVED3,	HOLDREGISTER_DEVICEPARAM_RESERVED3,	2,	false,	0,	0,	NULL,	0,	0,	false,	TYPE_INT,	8,	NULL,	(uint8_t*)"Rsv3"},
 {(uint8_t*)"位置源自动切换",	0,	COM_NUM_DEVICEPARAM_POSITION_SOURCE_AUTO_SWITCH,	HOLDREGISTER_DEVICEPARAM_POSITION_SOURCE_AUTO_SWITCH,	2,	true,	0,	1,	NULL,	0,	0,	true,	TYPE_INT,	1,	NULL,	(uint8_t*)"PosAutoSw"},
 
@@ -281,6 +281,7 @@ void print_device_params(void)
     printf("  %-32s : %lu\r\n", "协议版本", (unsigned long)params.protocolVersion);
     printf("  %-32s : %lu\r\n", "故障自动回零", (unsigned long)params.error_auto_back_zero);
     printf("  %-32s : %lu\r\n", "故障停止测量", (unsigned long)params.error_stop_measurement);
+    printf("  %-32s : %lu\r\n", "故障自动恢复次数", (unsigned long)params.fault_auto_recovery_retry_limit);
     printf("  %-32s : %lu\r\n", "位置源自动切换", (unsigned long)params.position_source_auto_switch);
 
     /* 电机与编码器 */
@@ -295,7 +296,7 @@ void print_device_params(void)
 
     /* 称重 */
     printf("\r\n-- 称重参数 --\r\n");
-    printf("  %-32s : %lu\r\n", "空载重量", (unsigned long)params.empty_weight);
+    printf("  %-32s : %ld\r\n", "空载重量", (long)params.empty_weight);
     printf("  %-32s : %lu\r\n", "空载重量上限", (unsigned long)params.empty_weight_upper_limit);
     printf("  %-32s : %lu\r\n", "空载重量下限", (unsigned long)params.empty_weight_lower_limit);
     printf("  %-32s : %lu\r\n", "满载重量", (unsigned long)params.full_weight);

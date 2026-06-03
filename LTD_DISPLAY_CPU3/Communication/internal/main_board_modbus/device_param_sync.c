@@ -38,6 +38,8 @@ static volatile uint32_t* get_deviceparam_ptr_by_operanum(int operanum)
         return &g_deviceParams.error_stop_measurement;
     case COM_NUM_DEVICEPARAM_PROTOCOL_VERSION:
         return &g_deviceParams.protocolVersion;
+    case COM_NUM_DEVICEPARAM_RESERVED2:
+        return &g_deviceParams.fault_auto_recovery_retry_limit;
     case COM_NUM_DEVICEPARAM_POSITION_SOURCE_AUTO_SWITCH:
         return &g_deviceParams.position_source_auto_switch;
 
@@ -58,8 +60,6 @@ static volatile uint32_t* get_deviceparam_ptr_by_operanum(int operanum)
         return &g_deviceParams.motor_count_first_loop_circumference_mm;
 
     /* ===== 称重参数 ===== */
-    case COM_NUM_DEVICEPARAM_EMPTY_WEIGHT:
-        return &g_deviceParams.empty_weight;
     case COM_NUM_DEVICEPARAM_EMPTY_WEIGHT_UPPER_LIMIT:
         return &g_deviceParams.empty_weight_upper_limit;
     case COM_NUM_DEVICEPARAM_EMPTY_WEIGHT_LOWER_LIMIT:
@@ -315,14 +315,18 @@ static void DeviceParams_SyncOneHold(volatile struct ParameterMetadata *h)
 {
     if (h == NULL) return;
 
-    volatile uint32_t *p_dev = get_deviceparam_ptr_by_operanum(h->operanum);
-    if (p_dev == NULL) {
-        // 不属于 DeviceParameters 的项（例如测量结果），跳过
-        return;
-    }
-
     // g_deviceParams 中的源值
-    int32_t dev_val = (int32_t)(*p_dev);
+    int32_t dev_val;
+    if (h->operanum == COM_NUM_DEVICEPARAM_EMPTY_WEIGHT) {
+        dev_val = g_deviceParams.empty_weight;
+    } else {
+        volatile uint32_t *p_dev = get_deviceparam_ptr_by_operanum(h->operanum);
+        if (p_dev == NULL) {
+            // 不属于 DeviceParameters 的项（例如测量结果），跳过
+            return;
+        }
+        dev_val = (int32_t)(*p_dev);
+    }
 
     if (h->val == dev_val) {
         // 与 CPU2 当前值一致，不需要更新

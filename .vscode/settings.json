@@ -5,5 +5,16 @@
   "cmake.configureSettings": {
     "CMAKE_TOOLCHAIN_FILE": "${workspaceFolder}/cmake/toolchain-arm-none-eabi.cmake",
     "CMAKE_BUILD_TYPE": "Debug"
-  }
+  },
+  "markdown-pdf.type": [
+    "pdf"
+  ],
+  "markdown-pdf.convertOnSave": true,
+  "markdown-pdf.displayHeaderFooter": false,
+  "markdown-pdf.margin.top": "9mm",
+  "markdown-pdf.margin.bottom": "10mm",
+  "markdown-pdf.margin.left": "9mm",
+  "markdown-pdf.margin.right": "9mm",
+  "markdown-pdf.outputDirectory": "",
+  "markdown-pdf.outputDirectoryRelativePathFile": false
 }

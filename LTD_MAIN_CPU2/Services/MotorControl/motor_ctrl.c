@@ -20,6 +20,7 @@ MotorDriverRuntime s_motor_driver = {
     .initialized = false,
     .motion_command_active = false,
     .motion_wait_active = false,
+    .boot_safe_stop_done = false,
 };
 
 /* 位置运行态：集中保存电机记步基准。 */

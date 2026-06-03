@@ -15,6 +15,7 @@
 static int32_t MotorDriver_GetSpeedSetpointX100(void);
 static uint32_t MotorDriver_ClampSpeedSetpointX100(uint32_t speed_x100);
 static uint32_t MotorDriver_ClampCurrentSetting(uint32_t current);
+static uint32_t MotorDriver_SetSpeedInternal(uint32_t speed_x100, bool print_result);
 static double MotorDriver_VmaxToUstepsPerSec(uint32_t vmax);
 static double MotorDriver_VmaxToOutputRevPerSec(uint32_t vmax);
 static double MotorDriver_VmaxToMotorRevPerSec(uint32_t vmax);
@@ -23,6 +24,7 @@ static uint32_t MotorDriver_UstepsPerSecToVmax(double usteps_per_s);
 static uint32_t MotorDriver_ComputeBaseVelocityFromParams(void);
 static uint32_t MotorDriver_GetDefaultSpeedSetpointX100(void);
 static uint32_t MotorDriver_ClearInitResetFlag(void);
+static uint32_t MotorDriver_CheckMotionReadyInternal(bool ignore_encoder_ready);
 
 /* ===================== 对外接口 ===================== */
 
@@ -42,6 +44,112 @@ void MotorCtrl_InvalidateDriverInit(void)
     s_motor_driver.applied_velocity = 0U;
     s_motor_driver.motion_command_active = false;
     s_motor_driver.motion_wait_active = false;
+    s_motor_driver.boot_safe_stop_done = false;
+}
+
+/**
+ * @brief 上电早期清除 TMC5130 残留运动状态。
+ *
+ * 该函数在外设初始化完成后、App_Init() 前调用：先保持驱动输出关闭，
+ * 再把 VMAX 清零、XTARGET 对齐当前 XACTUAL，并切回位置模式。
+ * 这样即使设备在运动中复位，TMC5130 也不会沿用旧速度或旧目标继续跑。
+ * 本函数会访问 SPI 和 GPIO，只能在任务上下文调用，不能在中断中调用。
+ */
+uint32_t MotorCtrl_BootSafeStop(void)
+{
+    uint32_t ret = NO_ERROR;
+    int32_t xactual = 0;
+
+    s_motor_driver.initialized = false;
+    s_motor_driver.applied_velocity = 0U;
+    s_motor_driver.motion_command_active = false;
+    s_motor_driver.motion_wait_active = false;
+    s_motor_driver.boot_safe_stop_done = false;
+    g_measurement.debug_data.motor_state = 0U;
+
+    /* 先关 EN，确保后续寄存器清理期间功率级不会输出脉冲。 */
+    stpr_disableDriver(&stepper);
+
+    if (!stpr_writeInt(&stepper, TMC5130_VMAX, 0)) {
+        ret = MOTOR_TMC_COMM_ERROR;
+    }
+
+    /* 用当前位置覆盖目标位置，防止旧 XTARGET 在驱动重新使能后继续生效。 */
+    if (stpr_tryReadInt(&stepper, TMC5130_XACTUAL, &xactual)) {
+        if (!stpr_writeInt(&stepper, TMC5130_XTARGET, xactual)) {
+            ret = MOTOR_TMC_COMM_ERROR;
+        }
+    } else {
+        ret = MOTOR_TMC_COMM_ERROR;
+    }
+
+    if (!stpr_writeInt(&stepper, TMC5130_RAMPMODE, TMC5130_MODE_POSITION)) {
+        ret = MOTOR_TMC_COMM_ERROR;
+    }
+
+    stpr_disableDriver(&stepper);
+    s_motor_driver.boot_safe_stop_done = (ret == NO_ERROR);
+
+    if (ret != NO_ERROR) {
+        printf("电机上电安全停机失败：0x%08lX\r\n", (unsigned long)ret);
+    } else {
+        printf("电机上电安全停机完成\r\n");
+    }
+
+    return ret;
+}
+
+/**
+ * @brief 写运动寄存器前检查电机和位置源是否允许运动。
+ *
+ * 所有上层运动入口在写 VMAX/XTARGET/RAMPMODE 前调用这里。
+ * 编码轮记步模式必须等编码器首帧有效；电机记步模式允许编码器后台异常，
+ * 避免因为编码器悬空阻断电机记步模式下的受控运动。
+ */
+uint32_t MotorDriver_CheckMotionReady(void)
+{
+    return MotorDriver_CheckMotionReadyInternal(false);
+}
+
+/**
+ * @brief 强制调试运动专用就绪检查。
+ *
+ * 只绕过编码器首帧就绪，仍要求上电安全停机和 TMC5130 完整初始化成功。
+ * 该入口只给人工强制运动使用，正常测量和普通运动不能调用。
+ */
+uint32_t MotorDriver_CheckMotionReadyForceDebug(void)
+{
+    return MotorDriver_CheckMotionReadyInternal(true);
+}
+
+static uint32_t MotorDriver_CheckMotionReadyInternal(bool ignore_encoder_ready)
+{
+    if ((!s_motor_driver.initialized) || (!s_motor_driver.boot_safe_stop_done)) {
+        printf("电机运动被拦截：驱动尚未完成初始化或上电安全停机\r\n");
+        return MOTOR_DISABLED;
+    }
+
+    if (MotorCtrl_IsPositionSourceMotor()) {
+        /* 电机记步模式下，编码器只作为后台采集对象，旧编码器错误不阻断运动。 */
+        if ((g_measurement.device_status.error_code >= ENCODER_TIMEOUT) &&
+            (g_measurement.device_status.error_code <= ENCODER_OCF_INCOMPLETE)) {
+            g_measurement.device_status.error_code = NO_ERROR;
+        }
+        return NO_ERROR;
+    }
+
+    if (!Encoder_IsReady()) {
+        if (ignore_encoder_ready) {
+            printf("强制调试运动：忽略编码器首帧未就绪，仅保留驱动安全检查\r\n");
+            return NO_ERROR;
+        }
+        /* 编码轮记步模式下没有首帧可信位置，必须禁止下发运动命令。 */
+        g_measurement.device_status.error_code = ENCODER_TIMEOUT;
+        printf("电机运动被拦截：编码器首帧尚未就绪\r\n");
+        return ENCODER_TIMEOUT;
+    }
+
+    return NO_ERROR;
 }
 
 /**
@@ -125,7 +233,18 @@ uint32_t MotorDriver_CheckHealth(MotorDriverHealthMode mode)
  */
 uint32_t MotorCtrl_SetSpeed(uint32_t speed_x100)
 {
+    return MotorDriver_SetSpeedInternal(speed_x100, true);
+}
+
+/**
+ * @brief 应用电机速度参数，可选择是否打印用户操作结果。
+ *
+ * 公开接口保留简洁日志；内部临时速度、停机恢复等路径保持安静，避免正常运动流程刷屏。
+ */
+static uint32_t MotorDriver_SetSpeedInternal(uint32_t speed_x100, bool print_result)
+{
     const uint32_t clamped_speed = MotorDriver_ClampSpeedSetpointX100(speed_x100);
+    const char *apply_state = "空闲待下发";
     bool is_running = false;
     double Lcur_mm = (double)g_measurement.debug_data.cable_length * 0.1;
 
@@ -159,21 +278,9 @@ uint32_t MotorCtrl_SetSpeed(uint32_t speed_x100)
         if (ret != NO_ERROR) {
             return ret;
         }
-//        printf("SpeedSet | running | req=%.2f m/min | set=%.2f m/min | L=%.1f mm | VMAX=%lu | eq_usteps/s=%.1f\r\n",
-//               requested_speed / 100.0,
-//               clamped_speed / 100.0,
-//               Lcur_mm,
-//               (unsigned long)velocity,
-//               MotorDriver_VmaxToUstepsPerSec(velocity));
-    } else {
-        /* 未运行时只更新内部速度状态，供下一次运动使用。 */
-//        printf("SpeedSet | idle | req=%.2f m/min | set=%.2f m/min | baseL=%.1f mm | nextVMAX=%lu | eq_usteps/s=%.1f\r\n",
-//               requested_speed / 100.0,
-//               clamped_speed / 100.0,
-//               Lcur_mm,
-//               (unsigned long)velocity,
-//               MotorDriver_VmaxToUstepsPerSec(velocity));
+        apply_state = "运行中已下发";
     }
+
     if (is_running && s_motor_driver.motion_command_active) {
         uint32_t inferred_state = MotorDriver_InferDisplayStateFromDriver(&stepper);
         if (((g_measurement.debug_data.motor_state != 1U) &&
@@ -188,6 +295,16 @@ uint32_t MotorCtrl_SetSpeed(uint32_t speed_x100)
         }
         g_measurement.debug_data.motor_state = 0U;
     }
+
+    if (print_result) {
+        printf("电机速度设置完成 | 请求=%.2f m/min | 生效=%.2f m/min | 尺带=%.1fmm | VMAX=%lu | 状态=%s\r\n",
+               (double)speed_x100 / 100.0,
+               (double)clamped_speed / 100.0,
+               Lcur_mm,
+               (unsigned long)velocity,
+               apply_state);
+    }
+
     return NO_ERROR;
 }
 
@@ -201,6 +318,7 @@ uint32_t MotorCtrl_SetSpeed(uint32_t speed_x100)
 uint32_t MotorCtrl_SetCurrent(uint32_t current)
 {
     const uint32_t clamped_current = MotorDriver_ClampCurrentSetting(current);
+    const char *apply_state = "下次初始化生效";
 
     g_deviceParams.motor_current = clamped_current;
 
@@ -211,7 +329,13 @@ uint32_t MotorCtrl_SetCurrent(uint32_t current)
         if (ret != NO_ERROR) {
             return ret;
         }
+        apply_state = "已下发";
     }
+
+    printf("电机电流设置完成 | 请求=%lu | 生效=%lu | 状态=%s\r\n",
+           (unsigned long)current,
+           (unsigned long)clamped_current,
+           apply_state);
 
     return NO_ERROR;
 }
@@ -225,6 +349,7 @@ uint32_t MotorCtrl_SetCurrent(uint32_t current)
 uint32_t MotorCtrl_Init(void)
 {
     uint32_t motor_current = MotorDriver_ClampCurrentSetting(g_deviceParams.motor_current);
+    const char *init_mode;
 
     /* 规范化后的电流回写到参数区，保证显示、保存和驱动寄存器一致。 */
     g_deviceParams.motor_current = motor_current;
@@ -238,6 +363,7 @@ uint32_t MotorCtrl_Init(void)
 
     MotorDriver_UpdateVelocityFromParams();
     s_motor_driver.applied_velocity = velocity;
+    init_mode = s_motor_driver.initialized ? "刷新配置" : "首次配置";
     if (s_motor_driver.initialized) {
         /* 初始化入口被重复调用时先做一次轻量探测，若运行期配置丢失可在后续分支重下发。 */
         (void)MotorDriver_CheckHealth(MOTOR_DRIVER_HEALTH_RUNNING);
@@ -283,7 +409,8 @@ uint32_t MotorCtrl_Init(void)
         uint32_t ret;
 
         stpr_enableDriver(&stepper);
-        ret = MotorCtrl_SetCurrent(motor_current);
+        /* 重复初始化只静默重下发电流，避免与初始化摘要重复打印。 */
+        ret = stpr_setCurrent(&stepper, (uint8_t)motor_current);
         if (ret != NO_ERROR) {
             return ret;
         }
@@ -301,11 +428,16 @@ uint32_t MotorCtrl_Init(void)
         s_motor_driver.applied_velocity = velocity;
     }
     MotorPosition_SyncDebugDrumState(&stepper);
+    /* 完整初始化成功后同样视为旧运动状态已经清理，可开放后续运动入口。 */
+    s_motor_driver.boot_safe_stop_done = true;
 
-    printf("电机初始化 | 设定速度=%.2f m/min | 尺带长度：%.1f mm | VMAX=%lu | 等效微步/s=%.1f\r\n",
-           g_deviceParams.max_motor_speed / 100.0,
+    printf("电机初始化完成 | 方式=%s | 速度=%.2f m/min | 尺带=%.1fmm | 周长=%.1fmm | VMAX=%lu | 电流=%lu | 等效微步/s=%.1f\r\n",
+           init_mode,
+           (double)MotorDriver_GetSpeedSetpointX100() / 100.0,
            g_measurement.debug_data.cable_length / 10.0,
+           MotorPosition_TapeInstantCircumferenceFromLength((double)g_measurement.debug_data.cable_length * 0.1),
            (unsigned long)velocity,
+           (unsigned long)motor_current,
            MotorDriver_VmaxToUstepsPerSec(velocity));
     return NO_ERROR;
 }
@@ -367,6 +499,16 @@ uint32_t MotorCtrl_CheckDriverGstat(void)
 /* ===================== 内部跨文件接口 ===================== */
 
 /**
+ * @brief 静默设置电机速度参数。
+ *
+ * 给停机恢复和内部临时速度使用，不打印用户操作日志。
+ */
+uint32_t MotorDriver_SetSpeedQuiet(uint32_t speed_x100)
+{
+    return MotorDriver_SetSpeedInternal(speed_x100, false);
+}
+
+/**
  * @brief 读取当前线速度设定并转换为 m/min。
  *
  * @return 当前线速度，单位 m/min。
@@ -387,14 +529,6 @@ void MotorDriver_UpdateVelocityFromParams(void)
     const double Lcur_mm = (double)g_measurement.debug_data.cable_length * 0.1;
     velocity = MotorDriver_ComputeUniformVelocityFromLength(Lcur_mm);
 
-    printf("速度初始化 | 线速度=%.2f m/min | 尺带长度：%.1f mm | 周长=%.1f mm | VMAX=%lu | 输出轴=%.3f r/s | 电机=%.3f r/s | 等效微步/s=%.1f\r\n",
-           (double)MotorDriver_GetSpeedSetpointX100() / 100.0,
-           Lcur_mm,
-           MotorPosition_TapeInstantCircumferenceFromLength(Lcur_mm),
-           (unsigned long)velocity,
-           MotorDriver_VmaxToOutputRevPerSec(velocity),
-           MotorDriver_VmaxToMotorRevPerSec(velocity),
-           MotorDriver_VmaxToUstepsPerSec(velocity));
 }
 
 /**
@@ -660,7 +794,7 @@ uint32_t MotorDriver_ApplyOptionalSpeed(uint32_t speed_x100)
     if (speed_x100 == 0U) {
         return NO_ERROR;
     }
-    return MotorCtrl_SetSpeed(speed_x100);
+    return MotorDriver_SetSpeedInternal(speed_x100, false);
 }
 
 /**
@@ -697,7 +831,7 @@ uint32_t MotorDriver_BeginTemporarySpeed(uint32_t speed_x100,
         *restore_needed = true;
     }
 
-    return MotorCtrl_SetSpeed(speed_x100);
+    return MotorDriver_SetSpeedInternal(speed_x100, false);
 }
 
 /**
@@ -714,7 +848,7 @@ uint32_t MotorDriver_EndTemporarySpeed(bool restore_needed,
     if (!restore_needed) {
         return NO_ERROR;
     }
-    return MotorCtrl_SetSpeed(restore_speed_x100);
+    return MotorDriver_SetSpeedInternal(restore_speed_x100, false);
 }
 
 /**

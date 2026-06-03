@@ -33,6 +33,7 @@ typedef struct {
 #define FRAM_ENCODER_A_ADDRESS  FRAM_ANGLE_ADDRESS
 #define FRAM_ENCODER_SLOT_SIZE  (0x40u)
 #define FRAM_ENCODER_B_ADDRESS  (FRAM_ENCODER_A_ADDRESS + FRAM_ENCODER_SLOT_SIZE)
+#define ENCODER_BOOT_READY_TIMEOUT_MS 300U
 
 static uint32_t EncoderRecordCRC(const EncoderPersistRecord *record)
 {
@@ -99,11 +100,32 @@ static int ReadEncoderDataAB(int32_t *encoder_count, uint16_t *angle)
     return 0;
 }
 
+/**
+ * @brief 判断编码器是否已有可信首帧位置。
+ *
+ * 该函数不访问 SPI，只读取 AS5145 采集链路的有效帧锁存状态。
+ */
+bool Encoder_IsReady(void)
+{
+    return AS5145_HasValidSample();
+}
+
+/**
+ * @brief 等待编码器首帧有效位置。
+ *
+ * 启动流程使用该函数缩短位置盲区；函数会阻塞等待，不能在中断上下文调用。
+ */
+uint32_t Encoder_WaitReady(uint32_t timeout_ms)
+{
+    return AS5145_WaitFirstValidSample(timeout_ms);
+}
 // 在系统启动时初始化编码计数器
 void Initialize_Encoder(void)
 {
     int32_t loaded_encoder = 0;
     uint16_t loaded_angle = 0;
+    HAL_StatusTypeDef start_status;
+    uint32_t ready_ret;
 
     if (ReadEncoderDataAB(&loaded_encoder, &loaded_angle)) {
         g_encoder_count = loaded_encoder;
@@ -112,16 +134,28 @@ void Initialize_Encoder(void)
         g_encoder_count = 0;
         prev_angle = 0;
         g_measurement.device_status.error_code = ENCODER_POWERON_FAIL;
-        printf("编码值 A/B 分区均异常，已回退默认值\r\n");
+        printf("编码器持久化 A/B 分区均异常，已回退默认值\r\n");
         WriteEncoderDataAB(g_encoder_count, prev_angle);
     }
 
     update_sensor_height_from_encoder();
-    g_encoder_saved = g_encoder_count; // 保存初始编码计数值
+    g_encoder_saved = g_encoder_count;
 
-    Start_Encoder_Collection_TIM(); // 启动编码器定时采集
+    start_status = Start_Encoder_Collection_TIM();
+    if (start_status != HAL_OK) {
+        if (!MotorCtrl_IsPositionSourceMotor()) {
+            g_measurement.device_status.error_code = ENCODER_TIMEOUT;
+        }
+        return;
+    }
+
+    /* 编码轮记步模式必须等首帧有效位置，否则重启后立即运动会丢失盲区位移。 */
+    ready_ret = Encoder_WaitReady(ENCODER_BOOT_READY_TIMEOUT_MS);
+    if ((ready_ret != NO_ERROR) && (!MotorCtrl_IsPositionSourceMotor())) {
+        g_measurement.device_status.error_code = ready_ret;
+        printf("编码器首帧有效数据等待失败：0x%08lX\r\n", (unsigned long)ready_ret);
+    }
 }
-
 // 更新编码计数
 void Update_Encoder_Count(uint16_t current_angle)
 {

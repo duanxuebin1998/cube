@@ -8,7 +8,6 @@
 #include "error_log.h"
 
 #define FAULT_RECOVERY_INTERVAL_MS 1000U
-#define FAULT_RECOVERY_MAX_MEASURE_RETRY 3U
 
 typedef struct {
     uint8_t active;               /* 是否存在待恢复命令；为 0 时主循环不进入恢复轮询。 */
@@ -51,6 +50,23 @@ static uint8_t FaultRecovery_IsMotorDriverError(uint32_t error_code)
     default:
         return 0U;
     }
+}
+
+/**
+ * @brief 获取故障自动恢复允许的业务重跑次数。
+ *
+ * 参数为0时关闭自动恢复；1~10为允许重跑次数，非法值按默认3次处理。
+ * @return 允许的自动重跑次数。
+ */
+static uint32_t FaultRecovery_GetRetryLimit(void)
+{
+    uint32_t retry_limit = g_deviceParams.fault_auto_recovery_retry_limit;
+
+    if (retry_limit > FAULT_AUTO_RECOVERY_RETRY_MAX) {
+        retry_limit = FAULT_AUTO_RECOVERY_RETRY_DEFAULT;
+    }
+
+    return retry_limit;
 }
 
 /**
@@ -154,6 +170,12 @@ static void FaultRecovery_RecordFailure(uint32_t error_code)
  */
 static void FaultRecovery_StopAfterMaxRetry(uint32_t error_code)
 {
+    uint32_t retry_limit = FaultRecovery_GetRetryLimit();
+
+    if (retry_limit == 0U) {
+        retry_limit = FAULT_AUTO_RECOVERY_RETRY_DEFAULT;
+    }
+
     if ((error_code == NO_ERROR) || (error_code == STATE_SWITCH)) {
         error_code = s_fault_recovery.error_code;
     }
@@ -164,7 +186,7 @@ static void FaultRecovery_StopAfterMaxRetry(uint32_t error_code)
     g_measurement.device_status.current_command = CMD_NONE;
 
     printf("自动恢复\t测量重跑次数达到上限%lu次，停止自动重跑，错误码=0x%08lX\r\n",
-           (unsigned long)FAULT_RECOVERY_MAX_MEASURE_RETRY,
+           (unsigned long)retry_limit,
            (unsigned long)error_code);
 
     // 错误	阶段：错误报警	模块：系统	操作：自动恢复	原因：自动恢复失败	处理：停止测量
@@ -187,6 +209,10 @@ static void FaultRecovery_Start(CommandType command, uint32_t error_code)
     uint32_t retry_count = 0U;
 
     if ((error_code == NO_ERROR) || (error_code == STATE_SWITCH)) {
+        return;
+    }
+
+    if (FaultRecovery_GetRetryLimit() == 0U) {
         return;
     }
 
@@ -225,6 +251,15 @@ static void FaultRecovery_Start(CommandType command, uint32_t error_code)
 void FaultRecovery_UpdateAfterCommand(CommandType command)
 {
     uint32_t error_code = g_measurement.device_status.error_code;
+    uint32_t retry_limit = FaultRecovery_GetRetryLimit();
+
+    if (retry_limit == 0U) {
+        /* 现场关闭自动恢复时，命令结果交给普通错误兜底处理。 */
+        if (s_fault_recovery.active) {
+            FaultRecovery_ClearContext();
+        }
+        return;
+    }
 
     if (s_fault_recovery.active &&
         s_fault_recovery.awaiting_retry_result &&
@@ -236,7 +271,7 @@ void FaultRecovery_UpdateAfterCommand(CommandType command)
             return;
         }
 
-        if (s_fault_recovery.command_retry_count >= FAULT_RECOVERY_MAX_MEASURE_RETRY) {
+        if (s_fault_recovery.command_retry_count >= retry_limit) {
             FaultRecovery_StopAfterMaxRetry(error_code);
             return;
         }
@@ -279,6 +314,7 @@ FaultRecoveryResult FaultRecovery_Poll(void)
     };
     uint32_t now;
     uint32_t check_ret;
+    uint32_t retry_limit;
 
     if (!s_fault_recovery.active) {
         return result;
@@ -286,6 +322,13 @@ FaultRecoveryResult FaultRecovery_Poll(void)
 
     result.handled = 1U;                /* 告诉主循环本轮已由恢复逻辑处理，不再进入空闲兜底。 */
     FaultRecovery_RestoreErrorStatus(); /* 每轮都恢复原错误态，避免等待期间状态被其他空闲逻辑清掉。 */
+
+    retry_limit = FaultRecovery_GetRetryLimit();
+    if (retry_limit == 0U) {
+        printf("自动恢复\t配置关闭，停止自动恢复\r\n");
+        FaultRecovery_ClearContext();
+        return result;
+    }
 
     now = HAL_GetTick();
     /* 自动恢复按 1 秒节流，减少传感器/电机反复通信和重复日志。 */
@@ -332,7 +375,7 @@ FaultRecoveryResult FaultRecovery_Poll(void)
         return result;
     }
 
-    if (s_fault_recovery.command_retry_count >= FAULT_RECOVERY_MAX_MEASURE_RETRY) {
+    if (s_fault_recovery.command_retry_count >= retry_limit) {
         FaultRecovery_StopAfterMaxRetry(s_fault_recovery.error_code);
         return result;
     }
@@ -342,12 +385,12 @@ FaultRecoveryResult FaultRecovery_Poll(void)
     result.should_retry_command = 1U;          /* 恢复确认成功，通知主循环重跑原命令。 */
     result.retry_command = s_fault_recovery.command; /* 恢复模块不直接执行业务，只返回需要重跑的命令。 */
 
-    // 错误	阶段：重试成功	模块：系统	操作：自动恢复	原因：恢复成功	尝试：s_fault_recovery.command_retry_count/FAULT_RECOVERY_MAX_MEASURE_RETRY
+    // 错误	阶段：重试成功	模块：系统	操作：自动恢复	原因：恢复成功	尝试：s_fault_recovery.command_retry_count/retry_limit
     ErrorLog_Recover(ERROR_LOG_MODULE_SYSTEM,
                      ERROR_LOG_OP_AUTO_RECOVER,
                      ERROR_LOG_REASON_RECOVER_OK,
                      s_fault_recovery.command_retry_count,
-                     FAULT_RECOVERY_MAX_MEASURE_RETRY);
+                     retry_limit);
     g_measurement.device_status.error_code = NO_ERROR; /* 恢复成功后清除全局错误码。 */
     return result;
 }

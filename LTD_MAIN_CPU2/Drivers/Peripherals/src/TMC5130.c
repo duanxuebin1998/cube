@@ -916,14 +916,9 @@ static uint32_t tmc5130_buildCurrentSetting(uint8_t current)
  */
 static void tmc5130_logCurrentSetting(uint32_t setting)
 {
-    const uint32_t fields = setting & TMC5130_IHOLD_IRUN_FIELD_MASK;
-
     /* IHOLD_IRUN 是写配置寄存器，IFCNT 在 SPI 模式下禁用。
-     * 因此 SPI 模式不能用普通回读或 IFCNT 判断本寄存器是否写入成功。 */
-    printf("TMC5130电流设置已下发 | IHOLD=%u | IRUN=%u | IHOLDDELAY=%u\r\n",
-           (unsigned)(fields & 0x1FU),
-           (unsigned)((fields >> 8) & 0x1FU),
-           (unsigned)((fields >> 16) & 0x0FU));
+     * 初始化摘要由 MotorCtrl_Init() 统一打印，底层写寄存器保持安静。 */
+    (void)setting;
 }
 /**
  * @brief  设置驱动电流（IHOLD_IRUN 寄存器）

@@ -1,0 +1,473 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MISRA C:2012 预筛整改重点</title>
+  <style>
+    :root {
+      --bg: #f6f7f9;
+      --paper: #ffffff;
+      --ink: #1f2933;
+      --muted: #5f6b7a;
+      --line: #d8dee7;
+      --p0: #b42318;
+      --p1: #b65c00;
+      --p2: #386641;
+      --head: #203040;
+      --code: #f1f4f8;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: "Microsoft YaHei", "Segoe UI", Arial, sans-serif;
+      line-height: 1.6;
+    }
+
+    main {
+      width: min(1180px, calc(100% - 40px));
+      margin: 28px auto 48px;
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 28px;
+      box-shadow: 0 8px 24px rgba(31, 41, 51, 0.08);
+    }
+
+    h1, h2, h3 {
+      color: var(--head);
+      line-height: 1.3;
+      margin: 0;
+    }
+
+    h1 {
+      font-size: 28px;
+      margin-bottom: 8px;
+    }
+
+    h2 {
+      font-size: 21px;
+      margin-top: 30px;
+      padding-top: 18px;
+      border-top: 1px solid var(--line);
+    }
+
+    h3 {
+      font-size: 17px;
+      margin-top: 20px;
+      margin-bottom: 8px;
+    }
+
+    p {
+      margin: 8px 0;
+    }
+
+    .meta {
+      color: var(--muted);
+      font-size: 14px;
+      margin-bottom: 18px;
+    }
+
+    .notice {
+      background: #fff8e5;
+      border-left: 4px solid #d99a00;
+      padding: 12px 14px;
+      margin: 18px 0;
+      border-radius: 4px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+      margin: 18px 0;
+    }
+
+    .metric {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 14px;
+      background: #fbfcfd;
+    }
+
+    .metric strong {
+      display: block;
+      font-size: 24px;
+      color: var(--head);
+    }
+
+    .metric span {
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 12px 0 20px;
+      font-size: 14px;
+    }
+
+    th, td {
+      border: 1px solid var(--line);
+      padding: 9px 10px;
+      vertical-align: top;
+      text-align: left;
+    }
+
+    th {
+      background: #eef2f6;
+      color: var(--head);
+      font-weight: 700;
+    }
+
+    code {
+      background: var(--code);
+      border-radius: 4px;
+      padding: 1px 5px;
+      font-family: Consolas, "Courier New", monospace;
+      font-size: 13px;
+    }
+
+    .tag {
+      display: inline-block;
+      min-width: 38px;
+      text-align: center;
+      color: #fff;
+      border-radius: 999px;
+      padding: 2px 8px;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .p0 {
+      background: var(--p0);
+    }
+
+    .p1 {
+      background: var(--p1);
+    }
+
+    .p2 {
+      background: var(--p2);
+    }
+
+    .evidence {
+      margin: 0;
+      padding-left: 18px;
+    }
+
+    .evidence li {
+      margin: 4px 0;
+    }
+
+    .muted {
+      color: var(--muted);
+    }
+
+    @media (max-width: 860px) {
+      main {
+        width: calc(100% - 20px);
+        padding: 18px;
+      }
+
+      .grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      table {
+        display: block;
+        overflow-x: auto;
+      }
+    }
+  </style>
+</head>
+<body>
+<main>
+  <h1>MISRA C:2012 预筛整改重点</h1>
+  <div class="meta">扫描日期：2026-06-03 | 范围：<code>LTD_MAIN_CPU2</code>、<code>LTD_DISPLAY_CPU3</code> 项目代码 | 输出类型：人工预筛报告</div>
+
+  <div class="notice">
+    本报告不是正式 MISRA C:2012 合规报告。当前结果来自 <code>rg</code>、<code>Select-String</code> 和人工上下文复核，用于确定整改优先级。正式合规仍需要静态分析工具规则集、人工评审、偏离记录和 compliance statement。
+  </div>
+
+  <h2>扫描口径</h2>
+  <p>纳入扫描：项目自有 <code>.c</code>/<code>.h</code> 文件，包含 CPU2 和 CPU3 的应用、通信、测量、运动控制、参数存储、外设适配层。</p>
+  <p>排除统计：<code>Drivers/STM32F4xx_HAL_Driver</code>、<code>Drivers/CMSIS</code> 和启动汇编等厂商库或生成代码。此类代码后续应通过第三方代码说明、厂商资料或 deviation record 管理。</p>
+
+  <div class="grid">
+    <div class="metric"><strong>363</strong><span>工程 C/H 文件总数</span></div>
+    <div class="metric"><strong>177</strong><span>本次项目代码扫描文件</span></div>
+    <div class="metric"><strong>106</strong><span>CPU2 扫描文件</span></div>
+    <div class="metric"><strong>71</strong><span>CPU3 扫描文件</span></div>
+  </div>
+
+  <h2>扫描统计</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>检查项</th>
+        <th>总命中</th>
+        <th>CPU2</th>
+        <th>CPU3</th>
+        <th>影响文件</th>
+        <th>说明</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>打印、阻塞、字符串/内存函数</td>
+        <td>1701</td>
+        <td>1351</td>
+        <td>350</td>
+        <td>61</td>
+        <td>包含 <code>printf</code>、<code>HAL_Delay</code>、<code>snprintf</code>、<code>memcpy</code>、<code>memset</code> 等，需要按安全路径和非安全路径分类。</td>
+      </tr>
+      <tr>
+        <td><code>HAL_Delay</code></td>
+        <td>131</td>
+        <td>108</td>
+        <td>23</td>
+        <td>26</td>
+        <td>安全相关路径中的阻塞等待应改为状态机、超时轮询或可中止等待。</td>
+      </tr>
+      <tr>
+        <td><code>printf</code></td>
+        <td>1458</td>
+        <td>1159</td>
+        <td>299</td>
+        <td>54</td>
+        <td>安全路径、ISR、停机路径和看门狗路径不能依赖直接打印。</td>
+      </tr>
+      <tr>
+        <td>动态内存</td>
+        <td>0</td>
+        <td>0</td>
+        <td>0</td>
+        <td>0</td>
+        <td>未发现活动的 <code>malloc/calloc/realloc/free</code> 调用，这是当前较好的状态。</td>
+      </tr>
+      <tr>
+        <td>函数式宏</td>
+        <td>58</td>
+        <td>28</td>
+        <td>30</td>
+        <td>16</td>
+        <td>需要重点处理含返回、函数调用、重复求值或副作用的宏。</td>
+      </tr>
+      <tr>
+        <td>显式强制类型转换</td>
+        <td>1226</td>
+        <td>959</td>
+        <td>267</td>
+        <td>58</td>
+        <td>显式转换不一定违规，但必须证明范围、符号、单位和溢出策略。</td>
+      </tr>
+      <tr>
+        <td><code>float/double</code></td>
+        <td>661</td>
+        <td>641</td>
+        <td>20</td>
+        <td>41</td>
+        <td>安全判断、运动边界、测量阈值中使用浮点时需要定点替代或偏离记录。</td>
+      </tr>
+      <tr>
+        <td><code>extern</code> 全局状态</td>
+        <td>166</td>
+        <td>72</td>
+        <td>94</td>
+        <td>50</td>
+        <td>安全相关全局状态应封装访问，尤其是 ISR/主循环共享变量。</td>
+      </tr>
+      <tr>
+        <td><code>volatile</code> 共享状态</td>
+        <td>106</td>
+        <td>45</td>
+        <td>61</td>
+        <td>38</td>
+        <td><code>volatile</code> 只保证访问不被优化，不保证原子性和一致性。</td>
+      </tr>
+      <tr>
+        <td><code>(void)</code> 丢弃返回值</td>
+        <td>71</td>
+        <td>71</td>
+        <td>0</td>
+        <td>20</td>
+        <td>运动、传感、DMA、停机相关返回值需要处理或有明确偏离记录。</td>
+      </tr>
+      <tr>
+        <td>固定下标数组访问</td>
+        <td>768</td>
+        <td>451</td>
+        <td>317</td>
+        <td>47</td>
+        <td>帧解析、寄存器映射、测点数组和字符串处理需证明边界。</td>
+      </tr>
+      <tr>
+        <td><code>switch</code> 缺少默认分支</td>
+        <td>4</td>
+        <td>2</td>
+        <td>2</td>
+        <td>4</td>
+        <td>命令和功能码解析应有默认兜底或明确不可达说明。</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>最需要优先整改的几项</h2>
+
+  <h3><span class="tag p0">P0</span> 中断中自动喂狗、打印和较长接收处理</h3>
+  <p>风险：中断路径直接刷新看门狗会掩盖主循环、运动控制、传感读取或故障管理卡死；ISR 中打印和循环处理 DMA 缓冲会引入不可预测执行时间，也不符合安全路径可分析性要求。</p>
+  <ul class="evidence">
+    <li><code>LTD_MAIN_CPU2/Core/Src/stm32f4xx_it.c:323</code>：<code>TIM4_IRQHandler</code> 中直接调用 <code>HAL_IWDG_Refresh(&amp;hiwdg)</code>。</li>
+    <li><code>LTD_MAIN_CPU2/Core/Src/stm32f4xx_it.c:351-370</code>：<code>USART1_IRQHandler</code> 中打印接收内容、遍历缓冲并修改命令状态。</li>
+    <li><code>LTD_MAIN_CPU2/Core/Src/stm32f4xx_it.c:346</code>、<code>:371</code>：ISR 中调用 <code>HAL_UART_DMAStop</code>、<code>HAL_UART_Receive_DMA</code>，返回值未作为错误路径处理。</li>
+  </ul>
+  <p>建议动作：把喂狗迁移到健康监督模型；ISR 只置位、取长度、清标志和投递事件；打印改为固定长度事件缓存或延迟日志；DMA 重新启动失败要进入通信诊断或错误记录。</p>
+
+  <h3><span class="tag p0">P0</span> 安全相关路径大量直接打印和阻塞等待</h3>
+  <p>风险：安全动作、运动控制、测量流程和参数恢复中大量 <code>printf</code> 与 <code>HAL_Delay</code> 会降低实时性和可验证性。MISRA 审查时这类问题通常会和可预测时序、未受控副作用、不可重入调用一起被提出。</p>
+  <ul class="evidence">
+    <li><code>printf</code> 活动命中：CPU2 1159 处，影响 54 个项目文件。</li>
+    <li><code>HAL_Delay</code> 活动命中：CPU2 108 处，影响测量、电机、传感、参数存储和外设适配层。</li>
+    <li><code>LTD_MAIN_CPU2/Application/Src/measure.c:620</code>、<code>:645</code>、<code>:667</code>：命令处理流程中存在 1000 ms 级阻塞。</li>
+    <li><code>LTD_MAIN_CPU2/Services/MotorControl/motor_ctrl_motion_api.c:777</code>：运动控制路径存在 4000 ms 阻塞。</li>
+    <li><code>LTD_MAIN_CPU2/Services/ParamStorage/system_parameter.c:465</code>：参数恢复流程存在 100 ms 阻塞。</li>
+  </ul>
+  <p>建议动作：安全相关路径先区分“诊断打印”和“安全决策”；安全路径移除直接打印；长延时改为状态机、超时轮询或 <code>abortable_delay</code> 类可中止等待，并记录最大执行时间。</p>
+
+  <h3><span class="tag p0">P0</span> 停机、运动和传感返回值被丢弃</h3>
+  <p>风险：安全相关函数返回值被 <code>(void)</code> 丢弃时，停机失败、DMA 停止失败、驱动读写失败可能不会升级为错误状态。此类问题和项目规则 <code>CUBE-C-007</code>、MISRA 返回值处理要求直接相关。</p>
+  <ul class="evidence">
+    <li><code>LTD_MAIN_CPU2/Core/Src/main.c:118</code>：启动安全停机 <code>MotorCtrl_BootSafeStop()</code> 的返回值被丢弃。</li>
+    <li><code>LTD_MAIN_CPU2/Services/MotorControl/motor_ctrl_internal.h:121</code>：宏内调用 <code>MotorDriver_StopAndMarkStopped()</code> 后丢弃返回值。</li>
+    <li><code>LTD_MAIN_CPU2/Services/MotorControl/motor_ctrl_motion_api.c:130-134</code>：多个 TMC5130 关键寄存器读取返回值被丢弃。</li>
+    <li><code>LTD_MAIN_CPU2/Services/Sensor/ch9141_at.c:406-407</code>、<code>ltd_sensor_communication.c:75</code>、<code>dsm_sensor_communication.c:88</code>：UART DMA 停止/中止返回值被丢弃。</li>
+  </ul>
+  <p>建议动作：安全相关返回值改为统一错误处理；若确实为尽力清理，必须加局部说明并登记 deviation record；启动安全停机失败应进入安全错误或至少记录可追溯事件。</p>
+
+  <h3><span class="tag p1">P1</span> 浮点和强制类型转换集中在运动、测量、称重路径</h3>
+  <p>风险：当前 CPU2 显式强制类型转换 959 处，<code>float/double</code> 641 处。运动边界、测量阈值和称重碰撞判断如果依赖浮点比较或无范围证明的转换，会影响可分析性和复现性。</p>
+  <ul class="evidence">
+    <li><code>LTD_MAIN_CPU2/Services/MotorControl/motor_ctrl_position_model.c</code>：显式转换 100 处，<code>float/double</code> 123 处。</li>
+    <li><code>LTD_MAIN_CPU2/Services/Weight/weight.c</code>：显式转换 95 处，包含重量阈值、位置和打印转换。</li>
+    <li><code>LTD_MAIN_CPU2/Application/Src/measure_density.c</code>：显式转换 87 处，密度测量算法涉及浮点。</li>
+    <li><code>LTD_MAIN_CPU2/Application/Src/measure_tank_height.c</code>：显式转换 69 处，罐高/罐底测量路径涉及运动边界。</li>
+  </ul>
+  <p>建议动作：安全阈值优先改为定点单位，例如 0.1 mm、0.01 mm、0.1 g；所有宽窄转换、有无符号转换和浮点到整数转换必须通过命名 helper，helper 内完成范围检查、饱和或拒绝策略。</p>
+
+  <h3><span class="tag p1">P1</span> 全局/extern/volatile 状态缺少访问边界</h3>
+  <p>风险：CPU2 发现 <code>extern</code> 全局状态 72 处、<code>volatile</code> 共享状态 45 处。<code>volatile</code> 不能保证多字节变量一致性，也不能保证状态机更新的原子性。</p>
+  <ul class="evidence">
+    <li><code>LTD_MAIN_CPU2/Services/ParamStorage/system_parameter.h:633-635</code>：<code>g_measurement</code>、<code>g_deviceParams</code>、<code>new_command_ready</code> 对外暴露。</li>
+    <li><code>LTD_MAIN_CPU2/Core/Inc/usart.h:51-66</code>：多个 UART RX 长度和缓冲区外部可见。</li>
+    <li><code>LTD_MAIN_CPU2/Services/Encoder/encoder.h:14</code>：编码器计数以 <code>extern volatile</code> 暴露。</li>
+    <li><code>LTD_MAIN_CPU2/Services/MotorControl/motor_ctrl.h:40</code>：运动速度全局变量暴露。</li>
+  </ul>
+  <p>建议动作：安全相关全局变量改为模块内 <code>static</code>，通过 getter/setter 或快照函数访问；ISR 与主循环共享数据要定义临界区、双缓冲或一致性读取策略；对仍需全局暴露的状态建立访问矩阵和偏离记录。</p>
+
+  <h3><span class="tag p1">P1</span> 固定下标数组访问和通信帧边界证明不足</h3>
+  <p>风险：固定下标数组访问在 CPU2 命中 451 处。并不是所有固定下标都违规，但通信帧、DMA 缓冲、Modbus 寄存器、HART 帧和测点数组必须有长度证明。</p>
+  <ul class="evidence">
+    <li><code>LTD_MAIN_CPU2/Application/Src/measure_density.c</code>：固定下标 85 处，涉及密度测点和数组计算。</li>
+    <li><code>LTD_MAIN_CPU2/Services/Sensor/wireless_communication.c:62-69</code>：8 字节帧按固定下标填充。</li>
+    <li><code>LTD_MAIN_CPU2/Services/Hart/hart.c:163-188</code>：直接访问 <code>RcvPackage-&gt;data[n]</code> 判断帧内容。</li>
+    <li><code>LTD_MAIN_CPU2/Application/Src/measure.c:674</code>、<code>:738</code>：直接访问 <code>command[1]</code> 解析二级命令。</li>
+  </ul>
+  <p>建议动作：所有外部输入帧进入解析前先验证最小长度和最大长度；把固定帧解析封装为带长度参数的 helper；Modbus/HART/无线协议增加边界单元测试。</p>
+
+  <h3><span class="tag p1">P1</span> 函数式宏存在副作用和流程控制</h3>
+  <p>风险：CPU2 发现真正函数式宏 28 处。寄存器地址宏和换算宏需要检查重复求值；含 <code>return</code>、函数调用和打印的宏会影响可读性、控制流分析和副作用证明。</p>
+  <ul class="evidence">
+    <li><code>LTD_MAIN_CPU2/Services/MotorControl/motor_ctrl_internal.h:103-114</code>：<code>CHECK_COMMAND_SWITCH_AND_STOP(retcode)</code> 宏内调用函数、打印并返回。</li>
+    <li><code>LTD_MAIN_CPU2/Services/MotorControl/motor_ctrl_internal.h:117-124</code>：<code>CHECK_COMMAND_SWITCH_AND_STOP_NO_RETURN()</code> 宏内丢弃停机返回值并返回。</li>
+    <li><code>LTD_MAIN_CPU2/Services/ParamStorage/system_parameter.h:37-40</code>：温度/密度转换宏使用参数表达式，需要防止重复求值和范围不明。</li>
+    <li><code>LTD_MAIN_CPU2/Services/Modbus/stateformodbus.h:302-304</code>：寄存器地址宏使用参数 <code>i</code>，应限定参数范围和类型。</li>
+  </ul>
+  <p>建议动作：含流程控制的宏改为 <code>static inline</code> 或普通函数；数值换算宏改为命名 helper；保留的寄存器地址宏要限制只传无副作用表达式，并登记偏离理由。</p>
+
+  <h3><span class="tag p1">P1</span> Modbus 功能码 switch 缺少默认兜底</h3>
+  <p>风险：功能码解析虽然前置有合法性判断，但 <code>switch</code> 本身缺少默认分支，静态分析和代码评审仍会要求说明不可达或补兜底错误处理。</p>
+  <ul class="evidence">
+    <li><code>LTD_MAIN_CPU2/Services/Modbus/hostcommu_modbus.c:76</code>：<code>switch (RCV_functioncode)</code> 未检测到 <code>default</code>。</li>
+    <li><code>LTD_MAIN_CPU2/Services/Modbus/hostcommu.c:293</code>：<code>switch (functioncode)</code> 未检测到 <code>default</code>。</li>
+    <li>CPU3 同类问题：<code>device_param_sync.c:18</code>、<code>cpu2_communicate.c:65</code>。</li>
+  </ul>
+  <p>建议动作：补 <code>default</code>，记录非法功能码并返回异常响应或不发送响应；如果由前置检查保证不可达，也要用注释和静态分析偏离记录说明。</p>
+
+  <h3><span class="tag p2">P2</span> 调试/测试代码进入扫描范围，需要发布隔离</h3>
+  <p>风险：<code>test.c</code> 中存在大量 <code>printf</code>、<code>HAL_Delay</code> 和返回值丢弃。它不一定要求立即重构，但不能进入安全发布基线或作为安全功能依据。</p>
+  <ul class="evidence">
+    <li><code>LTD_MAIN_CPU2/Application/Src/test.c</code>：打印/阻塞命中较多，<code>(void)</code> 丢弃返回值 16 处。</li>
+    <li>现有安全相关模块清单已把 <code>test.c</code> 标为 S3 非安全/调试模块。</li>
+  </ul>
+  <p>建议动作：安全发布构建显式排除 <code>test.c</code>；保留调试构建配置；如果调试代码必须保留在工程中，需要用编译开关隔离。</p>
+
+  <h2>建议整改顺序</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>顺序</th>
+        <th>整改主题</th>
+        <th>推荐范围</th>
+        <th>完成标准</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>1</td>
+        <td>看门狗健康监督和 ISR 简化</td>
+        <td><code>stm32f4xx_it.c</code>、<code>app_main.c</code>、故障管理</td>
+        <td>看门狗刷新由主循环健康条件控制；ISR 无直接打印，无长循环解析。</td>
+      </tr>
+      <tr>
+        <td>2</td>
+        <td>安全路径返回值处理</td>
+        <td>启动停机、运动控制、传感 DMA、TMC5130 读写</td>
+        <td>关键返回值不再静默丢弃；保留项有 deviation record。</td>
+      </tr>
+      <tr>
+        <td>3</td>
+        <td>测量/运动路径阻塞改造</td>
+        <td><code>measure*.c</code>、<code>motor_ctrl_motion_api.c</code></td>
+        <td>长延时改为状态机或可中止等待；最大等待时间可追踪。</td>
+      </tr>
+      <tr>
+        <td>4</td>
+        <td>类型转换和浮点策略</td>
+        <td>电机位置模型、称重、密度测量、罐高测量</td>
+        <td>安全阈值定点化；转换 helper 有范围检查；浮点保留项有偏离记录。</td>
+      </tr>
+      <tr>
+        <td>5</td>
+        <td>通信帧边界和数组访问</td>
+        <td>Modbus、HART、无线通信、密度测点</td>
+        <td>所有外部输入数组访问前有长度证明；协议解析有单元测试。</td>
+      </tr>
+      <tr>
+        <td>6</td>
+        <td>宏和全局状态收敛</td>
+        <td>运动控制宏、参数宏、寄存器地址宏、全局状态头文件</td>
+        <td>副作用宏改函数；全局状态改受控接口；共享变量有一致性策略。</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>后续验证建议</h2>
+  <ul>
+    <li>先用本报告建立第一轮整改清单，不要直接声明 MISRA C:2012 合规。</li>
+    <li>接入静态分析工具后，按项目规则映射 MISRA C:2012 和 CERT C 子集。</li>
+    <li>每条保留告警必须分类：修复、第三方代码偏离、历史代码暂缓、已批准 deviation。</li>
+    <li>每轮整改后保留工具版本、规则配置、报告、代码评审记录和测试结果。</li>
+  </ul>
+
+  <p class="muted">备注：本报告没有修改源码，只整理当前工程的高风险预筛结果。正式整改前需结合需求、安全分析和认证机构意见确认适用规则。</p>
+</main>
+</body>
+</html>

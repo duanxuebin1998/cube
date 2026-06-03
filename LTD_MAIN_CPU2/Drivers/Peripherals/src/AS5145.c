@@ -40,6 +40,9 @@ typedef struct {
 
 static SSI_State ssi_state = { .retry_count = 0, .error_reported = false };
 static volatile uint32_t ssi_last_error_code = NO_ERROR;
+/* 首帧有效数据锁存：定时器启动不等于位置可信，运动门控必须等到这里置位。 */
+static volatile bool ssi_first_valid_sample = false;
+static volatile uint32_t ssi_last_ok_tick = 0U;
 static uint8_t rxData[10] = { 0 };
 
 static uint8_t Calculate_Even_Parity(uint32_t data);
@@ -113,6 +116,9 @@ static SSI_Data_t Process_SSI_Frame(uint8_t *rx_data, GPIO_TypeDef *cs_port, uin
         ssi_state.retry_count = 0;
         ssi_state.error_reported = false;
         ssi_last_error_code = NO_ERROR;
+        /* 只有完整解析且无协议错误的帧，才能作为启动后的首个可信位置。 */
+        ssi_first_valid_sample = true;
+        ssi_last_ok_tick = HAL_GetTick();
 
         if (Is_Encoder_Error_Code(g_measurement.device_status.error_code)) {
             g_measurement.device_status.error_code = NO_ERROR;
@@ -266,6 +272,49 @@ uint32_t AS5145_GetLastError(void) {
     return ssi_last_error_code;
 }
 
+/**
+ * @brief 查询 AS5145 是否已经收到过首帧有效 SSI 数据。
+ *
+ * 该函数只读锁存状态，不阻塞，可在普通任务流程中频繁调用。
+ */
+bool AS5145_HasValidSample(void) {
+    return ssi_first_valid_sample;
+}
+
+/**
+ * @brief 获取最近一次有效 SSI 帧的 tick。
+ *
+ * 用于现场排查编码器数据是否持续刷新，不会触发新的 SPI 传输。
+ */
+uint32_t AS5145_GetLastOkTick(void) {
+    return ssi_last_ok_tick;
+}
+
+/**
+ * @brief 等待启动后的首帧有效 SSI 数据。
+ *
+ * 该函数会用 HAL_Delay() 短周期轮询，只能在任务上下文调用；
+ * 不能在中断回调内调用，避免阻塞 SPI/DMA 和系统调度。
+ */
+uint32_t AS5145_WaitFirstValidSample(uint32_t timeout_ms) {
+    uint32_t start_tick = HAL_GetTick();
+
+    while ((HAL_GetTick() - start_tick) < timeout_ms) {
+        if (ssi_first_valid_sample) {
+            return NO_ERROR;
+        }
+        HAL_Delay(5U);
+    }
+
+    if (ssi_first_valid_sample) {
+        return NO_ERROR;
+    }
+    if (ssi_last_error_code != NO_ERROR) {
+        return ssi_last_error_code;
+    }
+    return ENCODER_TIMEOUT;
+}
+
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
     if (htim->Instance == TIM1) {
         (void)Start_Read_SSI_Data();
@@ -304,16 +353,23 @@ static void Print_SSI_Error(const SSI_Data_t *data) {
 }
 
 HAL_StatusTypeDef Start_Encoder_Collection_TIM(void) {
+    HAL_StatusTypeDef status;
+
     ssi_state.retry_count = 0;
     ssi_state.error_reported = false;
+    ssi_last_error_code = NO_ERROR;
+    ssi_first_valid_sample = false;
+    ssi_last_ok_tick = 0U;
+    HAL_GPIO_WritePin(SSI_CSN_PORT, SSI_CSN_PIN, GPIO_PIN_SET);
 
-    {
-        HAL_StatusTypeDef status = HAL_TIM_Base_Start_IT(&ENCODER_TIM_HANDLE);
-        if (status != HAL_OK) {
-            printf("异常: 编码器定时器启动失败(代码: %d)\n", status);
-        } else {
-            printf("编码器定时器已启动\n");
-        }
+    status = HAL_TIM_Base_Start_IT(&ENCODER_TIM_HANDLE);
+    if (status != HAL_OK) {
+        printf("编码器定时器启动失败：%d\r\n", status);
         return status;
     }
+
+    printf("编码器定时器已启动，立即触发首帧读取\r\n");
+    /* 定时周期到来前先主动读一次，缩短上电后编码器不可用窗口。 */
+    (void)Start_Read_SSI_Data();
+    return status;
 }
