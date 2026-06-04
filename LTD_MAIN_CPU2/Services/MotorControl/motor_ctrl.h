@@ -65,6 +65,9 @@ uint32_t MotorCtrl_BootSafeStop(void);
 /** 标记 TMC5130 需要重新完整初始化，用于驱动复位/通信异常后的恢复。 */
 void MotorCtrl_InvalidateDriverInit(void);
 
+/** 判断 TMC5130 初始化和上电安全停机状态是否仍有效，供故障恢复判断是否需要先初始化。 */
+bool MotorCtrl_IsDriverInitValid(void);
+
 /** 急停：立即停机，短暂关闭驱动后重新使能。 */
 uint32_t MotorCtrl_QuickStop(void);
 

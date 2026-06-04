@@ -1,6 +1,12 @@
 #include "motor_ctrl_internal.h"
 #include "error_log.h"
 
+#define MOTOR_DRIVER_INIT_POWER_READY_TIMEOUT_MS  3000U
+#define MOTOR_DRIVER_INIT_POWER_READY_POLL_MS     100U
+#define MOTOR_DRIVER_INIT_POWER_READY_LOG_MS      500U
+#define MOTOR_DRIVER_DRVSTATUS_CS_ACTUAL_MASK     0x001F0000UL
+#define MOTOR_DRIVER_DRVSTATUS_CS_ACTUAL_SHIFT    16U
+
 /**
  * @file motor_ctrl_driver_param.c
  * @brief 电机驱动初始化、速度/电流参数和底层状态判断。
@@ -24,6 +30,8 @@ static uint32_t MotorDriver_UstepsPerSecToVmax(double usteps_per_s);
 static uint32_t MotorDriver_ComputeBaseVelocityFromParams(void);
 static uint32_t MotorDriver_GetDefaultSpeedSetpointX100(void);
 static uint32_t MotorDriver_ClearInitResetFlag(void);
+static uint32_t MotorDriver_CheckInitPowerReadyWithRetry(void);
+static uint32_t MotorDriver_ReinitIfMotionNotReady(void);
 static uint32_t MotorDriver_CheckMotionReadyInternal(bool ignore_encoder_ready);
 
 /* ===================== 对外接口 ===================== */
@@ -40,11 +48,17 @@ uint32_t MotorCtrl_GetDefaultSpeedX100(void)
 
 void MotorCtrl_InvalidateDriverInit(void)
 {
-    s_motor_driver.initialized = false;
+    /* 运行中掉电/复位只让“当前初始化有效性”失效，不能抹掉曾经完成初始化的事实。
+     * 后续 MotorCtrl_Init() 应走非首次刷新配置分支，避免恢复 FRAM 位置和位置源。 */
     s_motor_driver.applied_velocity = 0U;
     s_motor_driver.motion_command_active = false;
     s_motor_driver.motion_wait_active = false;
     s_motor_driver.boot_safe_stop_done = false;
+}
+
+bool MotorCtrl_IsDriverInitValid(void)
+{
+    return s_motor_driver.initialized && s_motor_driver.boot_safe_stop_done;
 }
 
 /**
@@ -122,11 +136,43 @@ uint32_t MotorDriver_CheckMotionReadyForceDebug(void)
     return MotorDriver_CheckMotionReadyInternal(true);
 }
 
+/**
+ * @brief 运动入口发现驱动初始化状态失效时，先尝试重新初始化电机。
+ *
+ * 运行中 24V 断电或 TMC5130 复位会让底层调用 MotorCtrl_InvalidateDriverInit()；
+ * 下一次业务重试不能直接返回 MOTOR_DISABLED，而应先重新下发 TMC5130 配置。
+ */
+static uint32_t MotorDriver_ReinitIfMotionNotReady(void)
+{
+    uint32_t ret;
+
+    if (s_motor_driver.initialized && s_motor_driver.boot_safe_stop_done) {
+        return NO_ERROR;
+    }
+
+    printf("电机运动准备 | 驱动未初始化或安全停机状态失效，尝试重新初始化\r\n");
+    s_motor_driver.motion_command_active = false;
+    s_motor_driver.motion_wait_active = false;
+    g_measurement.debug_data.motor_state = 0U;
+
+    ret = MotorCtrl_Init();
+    if (ret != NO_ERROR) {
+        printf("电机运动准备 | 自动重新初始化失败 | 返回=0x%08lX\r\n",
+               (unsigned long)ret);
+        return ret;
+    }
+
+    printf("电机运动准备 | 自动重新初始化完成\r\n");
+    return NO_ERROR;
+}
+
 static uint32_t MotorDriver_CheckMotionReadyInternal(bool ignore_encoder_ready)
 {
-    if ((!s_motor_driver.initialized) || (!s_motor_driver.boot_safe_stop_done)) {
-        printf("电机运动被拦截：驱动尚未完成初始化或上电安全停机\r\n");
-        return MOTOR_DISABLED;
+    uint32_t ret;
+
+    ret = MotorDriver_ReinitIfMotionNotReady();
+    if (ret != NO_ERROR) {
+        return ret;
     }
 
     if (MotorCtrl_IsPositionSourceMotor()) {
@@ -187,6 +233,49 @@ static uint32_t MotorDriver_ClearInitResetFlag(void)
 }
 
 /**
+ * @brief 初始化期等待 TMC5130 功率级实际电流建立。
+ *
+ * 电机 24V 刚恢复时，寄存器可能已经可写、GSTAT reset 也能清除，但 DRV_STATUS.CS_ACTUAL
+ * 仍短时间为 0。初始化期允许等待几秒；超时后再按电机被禁止返回，交给自动恢复继续等待。
+ */
+static uint32_t MotorDriver_CheckInitPowerReadyWithRetry(void)
+{
+    uint32_t start_tick = HAL_GetTick();
+    uint32_t last_log_tick = 0U;
+    int32_t drvstatus = 0;
+
+    while (1) {
+        uint32_t now = HAL_GetTick();
+
+        if (stpr_tryReadInt(&stepper, TMC5130_DRVSTATUS, &drvstatus)) {
+            uint32_t cs_actual = (((uint32_t)drvstatus) & MOTOR_DRIVER_DRVSTATUS_CS_ACTUAL_MASK) >>
+                                 MOTOR_DRIVER_DRVSTATUS_CS_ACTUAL_SHIFT;
+            if (cs_actual != 0U) {
+                if ((uint32_t)(now - start_tick) > 0U) {
+                    printf("TMC5130初始化等待电流建立完成 | DRV_STATUS=0x%08lX | CS_ACTUAL=%lu\r\n",
+                           (unsigned long)((uint32_t)drvstatus),
+                           (unsigned long)cs_actual);
+                }
+                return NO_ERROR;
+            }
+        }
+
+        if ((uint32_t)(now - start_tick) >= MOTOR_DRIVER_INIT_POWER_READY_TIMEOUT_MS) {
+            printf("TMC5130初始化等待电流建立超时，按电机被禁止处理\r\n");
+            return stpr_checkDriverPowerReady(&stepper);
+        }
+
+        if ((last_log_tick == 0U) ||
+            ((uint32_t)(now - last_log_tick) >= MOTOR_DRIVER_INIT_POWER_READY_LOG_MS)) {
+            printf("TMC5130初始化等待电流建立 | DRV_STATUS=0x%08lX\r\n",
+                   (unsigned long)((uint32_t)drvstatus));
+            last_log_tick = now;
+        }
+        HAL_Delay(MOTOR_DRIVER_INIT_POWER_READY_POLL_MS);
+    }
+}
+
+/**
  * @brief 统一检查 TMC5130 通信、配置、故障标志和功率级状态。
  *
  * 不同模式只影响未初始化时的返回语义；GSTAT/DRV_STATUS 故障位先由
@@ -216,7 +305,11 @@ uint32_t MotorDriver_CheckHealth(MotorDriverHealthMode mode)
         return ret;
     }
 
-    ret = stpr_checkDriverPowerReady(&stepper);
+    if (mode == MOTOR_DRIVER_HEALTH_INIT_CHECK) {
+        ret = MotorDriver_CheckInitPowerReadyWithRetry();
+    } else {
+        ret = stpr_checkDriverPowerReady(&stepper);
+    }
     if (ret != NO_ERROR) {
         return ret;
     }
@@ -343,7 +436,8 @@ uint32_t MotorCtrl_SetCurrent(uint32_t current)
 /**
  * @brief 初始化 TMC5130 电机驱动和电机控制运行态。
  *
- * 初始化会配置速度、电流、斜坡、位置持久化，并恢复位置源运行状态。
+ * 首次初始化会恢复持久化位置和位置源；非首次初始化用于恢复/退出调试，
+ * 只重写 TMC5130 寄存器配置，不恢复 FRAM 位置和位置源。
  * @return 成功返回 NO_ERROR，否则返回驱动通信或状态错误码。
  */
 uint32_t MotorCtrl_Init(void)
@@ -408,21 +502,29 @@ uint32_t MotorCtrl_Init(void)
     } else {
         uint32_t ret;
 
-        stpr_enableDriver(&stepper);
-        /* 重复初始化只静默重下发电流，避免与初始化摘要重复打印。 */
-        ret = stpr_setCurrent(&stepper, (uint8_t)motor_current);
+        /* 非首次初始化也必须重写整套 TMC5130 寄存器。
+         * BE 等速度模式调试退出后，不能只刷新电流和 VMAX，否则 RAMPMODE、斜坡等
+         * 配置可能沿用调试残留；非首次不恢复 FRAM 位置，也不恢复位置源。 */
+        stpr_disableDriver(&stepper);
+        ret = stpr_initStepper(&stepper, &hspi2, GPIOB, GPIO_PIN_12, 1, (uint8_t)motor_current);
         if (ret != NO_ERROR) {
-            return ret;
-        }
-        /* 已初始化路径同样要确认驱动供电，覆盖运行中 24V 断电后再恢复的场景。 */
-        ret = MotorDriver_CheckHealth(MOTOR_DRIVER_HEALTH_INIT_CHECK);
-        if (ret != NO_ERROR) {
+            s_motor_driver.initialized = false;
             return ret;
         }
 
-        /* 已初始化路径也要刷新 VMAX，确保参数修改后重新初始化能实时生效。 */
+        stpr_enableDriver(&stepper);
+        s_motor_driver.initialized = true;
+        ret = MotorDriver_CheckHealth(MOTOR_DRIVER_HEALTH_INIT_CHECK);
+        if (ret != NO_ERROR) {
+            s_motor_driver.initialized = false;
+            return ret;
+        }
+
+        /* stpr_initStepper() 会写默认速度寄存器；重写寄存器后再写当前业务速度。 */
         ret = stpr_setVelocity(&stepper, velocity);
         if (ret != NO_ERROR) {
+            s_motor_driver.initialized = false;
+            stpr_disableDriver(&stepper);
             return ret;
         }
         s_motor_driver.applied_velocity = velocity;
@@ -521,7 +623,7 @@ float MotorDriver_GetSpeedSetpointMMin(void)
 /**
  * @brief 根据当前速度参数刷新全局 VMAX 缓存。
  *
- * 该函数只更新软件侧 velocity 和已应用速度缓存，不主动判断运动状态。
+ * 该函数只更新软件侧全局 velocity 缓存，不主动判断运动状态。
  * 调用方如果需要立即生效，应继续写入 TMC5130 VMAX。
  */
 void MotorDriver_UpdateVelocityFromParams(void)

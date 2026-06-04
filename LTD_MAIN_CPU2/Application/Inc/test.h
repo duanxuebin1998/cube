@@ -22,7 +22,7 @@ void Test_main(void) ; // 测试主函数
 void motor_text_manual_stop(void); // A指令低检测停止
 void motor_text_manual_once(float run_distance_mm, int dir); // A指令低检测单段运动
 void motor_text(float run_distance_mm, uint8_t enable_sensor_comm); // 电机测试
-void motor_text_encoder(float run_distance_mm, uint8_t enable_sensor_comm); // encoder-based mm motor test
+void motor_text_encoder(float run_distance_mm, uint8_t enable_sensor_comm, uint32_t speed_x100, uint32_t accel_multiplier); // encoder-based mm motor test
 void Test_TMC5130_SPI_Static(void); // TMC5130静态SPI通信测试
 void Demo_SinglePointDisplayMock(void); // 单点测量展示（虚拟数据）
 #endif /* INC_TEST_H_ */

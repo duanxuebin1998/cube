@@ -1,0 +1,811 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>LNG计量仪设备说明书</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f5f6f8;
+      --paper: #ffffff;
+      --ink: #1f2933;
+      --muted: #637083;
+      --line: #d9dee7;
+      --head: #edf2f7;
+      --accent: #1f6feb;
+      --accent2: #157347;
+      --warn: #9a5b00;
+      --danger: #b42318;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font: 15px/1.72 "Microsoft YaHei", "Segoe UI", Arial, sans-serif;
+      letter-spacing: 0;
+    }
+
+    header {
+      background: #0f172a;
+      color: #fff;
+      padding: 34px 0 28px;
+      border-bottom: 5px solid var(--accent);
+    }
+
+    main, .wrap {
+      width: min(1180px, calc(100% - 32px));
+      margin: 0 auto;
+    }
+
+    main { padding: 22px 0 54px; }
+
+    h1, h2, h3, h4 {
+      margin: 0;
+      line-height: 1.28;
+      letter-spacing: 0;
+    }
+
+    h1 {
+      font-size: 32px;
+      margin-bottom: 10px;
+    }
+
+    h2 {
+      font-size: 23px;
+      margin: 30px 0 12px;
+      padding-bottom: 8px;
+      border-bottom: 2px solid var(--line);
+    }
+
+    h3 {
+      font-size: 18px;
+      margin: 22px 0 8px;
+      color: #143f6b;
+    }
+
+    h4 {
+      font-size: 16px;
+      margin: 16px 0 8px;
+    }
+
+    p { margin: 8px 0; }
+
+    code {
+      padding: 1px 5px;
+      border-radius: 4px;
+      background: #e9eef5;
+      font-family: Consolas, "Courier New", monospace;
+      font-size: 0.94em;
+    }
+
+    a { color: var(--accent); }
+
+    .subtitle {
+      color: #d7dee8;
+      max-width: 860px;
+      margin: 0;
+    }
+
+    .meta {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+      margin-top: 18px;
+    }
+
+    .meta div {
+      border: 1px solid rgba(255, 255, 255, 0.22);
+      background: rgba(255, 255, 255, 0.08);
+      padding: 10px 12px;
+      min-height: 62px;
+    }
+
+    .label {
+      display: block;
+      color: #aebbd0;
+      font-size: 12px;
+      margin-bottom: 4px;
+    }
+
+    .toc {
+      background: var(--paper);
+      border: 1px solid var(--line);
+      padding: 16px 18px;
+      margin: 18px 0 24px;
+    }
+
+    .toc ol {
+      columns: 2;
+      column-gap: 36px;
+      margin: 0;
+      padding-left: 22px;
+    }
+
+    .toc li { margin: 4px 0; break-inside: avoid; }
+
+    .note, .warn, .danger, .panel {
+      background: var(--paper);
+      border: 1px solid var(--line);
+      padding: 13px 15px;
+      margin: 12px 0;
+    }
+
+    .note { border-left: 4px solid var(--accent); }
+    .warn { border-left: 4px solid var(--warn); }
+    .danger { border-left: 4px solid var(--danger); color: var(--ink); }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .grid3 {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .panel h3 {
+      margin-top: 0;
+    }
+
+    .tag {
+      display: inline-block;
+      padding: 2px 8px;
+      margin: 2px 4px 2px 0;
+      border-radius: 999px;
+      background: #e8f1ff;
+      color: #174ea6;
+      font-size: 12px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .tag.green {
+      background: #e7f6ee;
+      color: #0b6b3a;
+    }
+
+    .tag.orange {
+      background: #fff3dc;
+      color: #805100;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: var(--paper);
+      border: 1px solid var(--line);
+      margin: 12px 0 20px;
+    }
+
+    th, td {
+      border: 1px solid var(--line);
+      padding: 9px 11px;
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th {
+      background: var(--head);
+      font-weight: 700;
+    }
+
+    ul, ol {
+      margin: 8px 0 12px;
+      padding-left: 22px;
+    }
+
+    li + li { margin-top: 4px; }
+
+    .flow {
+      display: grid;
+      gap: 10px;
+      margin: 12px 0;
+    }
+
+    .step {
+      display: grid;
+      grid-template-columns: 42px 1fr;
+      gap: 12px;
+      background: var(--paper);
+      border: 1px solid var(--line);
+      padding: 12px 14px;
+    }
+
+    .num {
+      display: inline-grid;
+      place-items: center;
+      width: 30px;
+      height: 30px;
+      background: var(--accent);
+      color: #fff;
+      border-radius: 50%;
+      font-weight: 700;
+      font-family: Consolas, "Courier New", monospace;
+    }
+
+    .small { color: var(--muted); font-size: 13px; }
+    .nowrap { white-space: nowrap; }
+
+    @media print {
+      body { background: #fff; }
+      header { background: #fff; color: var(--ink); border-bottom-color: var(--line); }
+      .subtitle, .label { color: var(--muted); }
+      .toc { break-after: page; }
+      a { color: var(--ink); text-decoration: none; }
+    }
+
+    @media (max-width: 860px) {
+      main, .wrap { width: min(100% - 22px, 1180px); }
+      h1 { font-size: 26px; }
+      .meta, .grid, .grid3 { grid-template-columns: 1fr; }
+      .toc ol { columns: 1; }
+      table { font-size: 14px; }
+    }
+  </style>
+</head>
+<body>
+<header>
+  <div class="wrap">
+    <h1>LNG计量仪设备说明书</h1>
+    <p class="subtitle">根据当前 `D:\CUBE` 工程源码、菜单文档、协议记录和版本测试资料整理。面向现场使用、参数配置、外部协议联调、故障排查和固件维护。</p>
+    <div class="meta">
+      <div><span class="label">适用设备</span>LNG 计量仪 / 双板 STM32 固件</div>
+      <div><span class="label">CPU2 主控版本</span><code>V1.10.0.0</code></div>
+      <div><span class="label">CPU3 显示通讯版本</span><code>V1.9.0.0</code></div>
+      <div><span class="label">共享协议版本</span><code>DEVICE_PROTOCOL_VERSION = 6</code></div>
+    </div>
+  </div>
+</header>
+
+<main>
+  <section class="toc" aria-label="目录">
+    <strong>目录</strong>
+    <ol>
+      <li><a href="#scope">适用范围</a></li>
+      <li><a href="#safety">安全注意事项</a></li>
+      <li><a href="#architecture">系统组成</a></li>
+      <li><a href="#startup">上电与版本兼容</a></li>
+      <li><a href="#screen">屏幕与菜单</a></li>
+      <li><a href="#workflow">现场操作流程</a></li>
+      <li><a href="#measurements">测量功能说明</a></li>
+      <li><a href="#parameters">参数配置说明</a></li>
+      <li><a href="#communication">通信与外部协议</a></li>
+      <li><a href="#faults">故障、日志与自动恢复</a></li>
+      <li><a href="#maintenance">维护与调试</a></li>
+      <li><a href="#checklists">联调检查清单</a></li>
+      <li><a href="#sources">资料来源</a></li>
+    </ol>
+  </section>
+
+  <section id="scope">
+    <h2>一、适用范围</h2>
+    <p>本说明书适用于当前工程主线中的 `LTD_MAIN_CPU2` 主控测量板和 `LTD_DISPLAY_CPU3` 显示通讯板。设备用于液位、罐底/罐高、水位、密度单点、密度分布、瓦锡兰区间密度等测量，并通过 CPU3 外部串口对接 DSM、Wartsila、LTD、SI7000 等协议。</p>
+    <div class="note">
+      <strong>版本要求：</strong>CPU2 和 CPU3 必须成对使用协议版本 6。固件版本只用于显示和发布追踪，跨 CPU 能力兼容以 `DeviceParameters.protocolVersion` 是否等于当前 `DEVICE_PROTOCOL_VERSION` 为准。
+    </div>
+    <table>
+      <thead>
+        <tr><th>项目</th><th>当前基线</th><th>说明</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>CPU2</td><td><code>V1.10.0.0</code></td><td>主控测量板，负责测量流程、电机、编码器、称重、传感器、参数 FRAM 和内部 Modbus。</td></tr>
+        <tr><td>CPU3</td><td><code>V1.9.0.0</code></td><td>显示通讯板，负责屏幕菜单、COM1/2/3 外部协议、CPU2 轮询和参数同步。</td></tr>
+        <tr><td>共享协议</td><td><code>6</code></td><td>新增调试模式状态、自动恢复次数参数、空载重量有符号解释等语义。</td></tr>
+        <tr><td>密度分布点数</td><td><code>200</code></td><td>CPU2/CPU3 内部结构和 Wartsila 外部密度点均按 200 点能力维护。</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="safety">
+    <h2>二、安全注意事项</h2>
+    <div class="danger">
+      <strong>机械运动风险：</strong>设备会驱动电机、尺带、浮子或传感器动作。执行上行、下行、强制运动、罐底测量、液位/水位跟随、B/BE 往返诊断、无线滑环匹配前，必须确认现场机械行程、人员位置、罐内工况和传感器连接安全。
+    </div>
+    <table>
+      <thead>
+        <tr><th>场景</th><th>要求</th><th>原因</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>上电或复位</td><td>确认电机 24V、TMC5130、CPU2 复位链路状态，观察启动安全停机日志。</td><td>CPU2 V1.10.0.0 已加入启动安全停机和编码器首帧门控，但真实保持力和机械自锁仍需现场确认。</td></tr>
+        <tr><td>强制上行/下行</td><td>只在维护人员确认行程安全后执行。</td><td>强制命令可以绕过部分普通测量流程条件，不应作为常规测量动作。</td></tr>
+        <tr><td>B/BE 串口诊断</td><td>用于低层运动诊断，不能替代正式测量命令；退出依赖新的有效命令。</td><td>B/BE 会持续循环，且有意隔离业务错误，只看电机停稳或编码器目标。</td></tr>
+        <tr><td>无线滑环匹配</td><td>测量或传感器通信过程中不要直接匹配，等待设备待机、故障或维护状态。</td><td>匹配期间 CPU2 会接管 UART6，使 CH9141K 离开透传业务。</td></tr>
+        <tr><td>参数修改</td><td>长期运行态例如液位跟随、水位跟随、固定点监测期间不要改关键参数。</td><td>CPU3 已禁止部分长期状态下写参数，避免旧缓存覆盖和运行中边界突变。</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="architecture">
+    <h2>三、系统组成</h2>
+    <div class="grid">
+      <section class="panel">
+        <h3>CPU2 主控测量板</h3>
+        <p>CPU2 是动作和测量的执行端。它保存设备参数，执行正式命令，驱动电机和传感器链路，并把测量结果打包为内部输入寄存器供 CPU3 读取。</p>
+        <p><span class="tag">电机 TMC5130</span><span class="tag">AS5145 编码器</span><span class="tag">FRAM 参数</span><span class="tag">称重</span><span class="tag">UART6 传感器</span><span class="tag">4-20mA</span><span class="tag">HART</span></p>
+      </section>
+      <section class="panel">
+        <h3>CPU3 显示通讯板</h3>
+        <p>CPU3 是人机界面和外部通讯入口。它显示设备状态和参数菜单，通过 UART5/RS485 轮询 CPU2，同时在 COM1/2/3 上响应外部协议。</p>
+        <p><span class="tag green">屏幕菜单</span><span class="tag green">DSM</span><span class="tag green">Wartsila</span><span class="tag green">LTD</span><span class="tag green">SI7000</span><span class="tag green">本机 FRAM</span></p>
+      </section>
+    </div>
+
+    <h3>通信拓扑</h3>
+    <table>
+      <thead>
+        <tr><th>链路</th><th>用途</th><th>主要协议或数据</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>CPU3 COM1/COM2/COM3</td><td>外部上位机或 PLC 接入</td><td>DSM、Wartsila、LTD、SI7000 等外部协议。</td></tr>
+        <tr><td>CPU3 UART5/RS485 到 CPU2</td><td>内部主板通信</td><td>Modbus RTU，读保持寄存器、读输入寄存器、写多个保持寄存器。</td></tr>
+        <tr><td>CPU2 UART6</td><td>传感器和无线滑环链路</td><td>DSM 一代文本协议、LTD/V2 二进制协议、CH9141K 无线主从透传和 AT 配置。</td></tr>
+        <tr><td>CPU2 USART1</td><td>调试串口</td><td>ASCII 调试命令、中文现场日志和错误日志。</td></tr>
+      </tbody>
+    </table>
+
+    <h3>内部数据对象</h3>
+    <table>
+      <thead>
+        <tr><th>对象</th><th>位置</th><th>说明</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><code>DeviceParameters</code></td><td>保持寄存器</td><td>命令、传感器、罐高、液位、水位、密度、Wartsila、报警、AO、显示和串口配置等参数。多数 32 位字段占 2 个 16 位寄存器。</td></tr>
+        <tr><td><code>MeasurementResult</code></td><td>输入寄存器</td><td>设备状态、调试量、液位、水位、实高、单点密度、分布密度、无线滑环匹配状态等运行数据。</td></tr>
+        <tr><td><code>DEVICE_PROTOCOL_VERSION</code></td><td>保持寄存器字段</td><td>CPU2/CPU3 共享协议版本。只有两侧完全一致，才认为共享字段和命令语义兼容。</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="startup">
+    <h2>四、上电与版本兼容</h2>
+    <h3>启动顺序要点</h3>
+    <div class="flow">
+      <div class="step"><span class="num">1</span><div><strong>GPIO 安全态</strong><p>CPU2 启动时电机驱动默认禁用，TMC5130 SPI 片选保持空闲高电平，避免旧运动目标在复位窗口继续驱动。</p></div></div>
+      <div class="step"><span class="num">2</span><div><strong>早期安全停机</strong><p>SPI2 初始化完成后，CPU2 执行 <code>MotorCtrl_BootSafeStop()</code>，清理 TMC5130 残留 <code>VMAX/XTARGET</code>，并保持电机输出受控。</p></div></div>
+      <div class="step"><span class="num">3</span><div><strong>参数加载和归一化</strong><p>CPU2 从 FRAM A/B 分区读取参数，校验 magic、版本、结构大小和 CRC。旧协议升级时，协议字段和自动恢复次数会按当前版本补默认值。</p></div></div>
+      <div class="step"><span class="num">4</span><div><strong>编码器首帧门控</strong><p>编码轮记步模式下，普通运动和上电默认命令必须等编码器首帧有效。编码器未就绪时会拦截普通运动。</p></div></div>
+      <div class="step"><span class="num">5</span><div><strong>CPU3 协议检查</strong><p>CPU3 轮询 CPU2 后读取协议版本。协议不匹配时，设备状态页应提示不兼容，不建议混用不同协议版本固件。</p></div></div>
+    </div>
+
+    <h3>协议版本记录摘要</h3>
+    <table>
+      <thead>
+        <tr><th>协议版本</th><th>首个 CPU2</th><th>首个 CPU3</th><th>关键能力</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>1</td><td>V1.5.0.0</td><td>V1.2.0.0</td><td>密度分布最大点数扩展到 200。</td></tr>
+        <tr><td>2</td><td>V1.6.0.0</td><td>V1.4.0.0</td><td>新增取消测量命令。</td></tr>
+        <tr><td>3</td><td>V1.7.0.0</td><td>V1.5.0.0</td><td>新增探底修正罐高语义。</td></tr>
+        <tr><td>4</td><td>V1.8.0.0</td><td>V1.6.0.0</td><td>新增 SI7000 所需通用状态字段。</td></tr>
+        <tr><td>5</td><td>V1.9.0.0</td><td>V1.7.0.0</td><td>新增无线滑环最近匹配命令和匹配结果输入区。</td></tr>
+        <tr><td>6</td><td>V1.10.0.0</td><td>V1.9.0.0</td><td>新增调试模式状态、自动恢复次数、空载重量有符号解释。</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="screen">
+    <h2>五、屏幕与菜单</h2>
+    <h3>进入方式与按键</h3>
+    <table>
+      <thead>
+        <tr><th>项目</th><th>说明</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>菜单入口</td><td>非罐区操作界面下长按确认键约 3 秒进入菜单。</td></tr>
+        <tr><td>密码</td><td>进入参数配置或调试指令前输入屏幕密码，通过后进入对应菜单。</td></tr>
+        <tr><td>方向键</td><td>菜单中上下键切换条目；参数页用于移动光标、修改数值或切换候选项。</td></tr>
+        <tr><td>确认键</td><td>进入当前菜单项、执行命令或保存当前编辑。</td></tr>
+        <tr><td>返回/退出</td><td>各级菜单包含退出或返回主菜单条目。状态界面长按返回可进入取消当前测量确认；故障态可查看故障原因。</td></tr>
+      </tbody>
+    </table>
+
+    <h3>主界面显示项</h3>
+    <table>
+      <thead>
+        <tr><th>显示项</th><th>说明</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>运行状态</td><td>显示待机、测量中、完成态、故障、维护模式、调试模式中、无线滑环匹配中/完成等状态。</td></tr>
+        <tr><td>油高/液位</td><td>显示液位或油高结果。</td></tr>
+        <tr><td>水高</td><td>显示水位结果，不满足条件时显示横线。</td></tr>
+        <tr><td>密度</td><td>显示单点、固定点监测或分布测量平均密度。</td></tr>
+        <tr><td>温度</td><td>显示平均温度或当前温度。</td></tr>
+        <tr><td>位置</td><td>显示浮子或传感器当前位置。</td></tr>
+        <tr><td>称重</td><td>显示称重值。</td></tr>
+        <tr><td>频率/电容</td><td>依据传感器和参数显示频率、电容或水位电压。</td></tr>
+        <tr><td>X/Y 轴角度</td><td>显示传感器姿态角。</td></tr>
+        <tr><td>罐高</td><td>罐高数据有效时显示当前罐高。</td></tr>
+      </tbody>
+    </table>
+
+    <h3>菜单总览</h3>
+    <table>
+      <thead>
+        <tr><th>一级菜单</th><th>下级内容</th><th>说明</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>测量命令</td><td>16 个测量命令</td><td>液位、水位、罐高、密度、区间密度、读取部件参数等流程。</td></tr>
+        <tr><td>参数配置</td><td>20 个参数组</td><td>参数明细按设备功能分组展示，当前菜单文档统计 136 个可见参数。</td></tr>
+        <tr><td>调试指令</td><td>15 个调试/标定命令</td><td>上/下行、强制控制、零点/液位/水位/罐高标定、称重采集和维护模式。</td></tr>
+        <tr><td>语言</td><td>中文、英文、退出</td><td>切换屏幕显示语言。</td></tr>
+        <tr><td>退出</td><td>无下级菜单</td><td>退出屏幕菜单。</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="workflow">
+    <h2>六、现场操作流程</h2>
+    <h3>首次上电或换板后的建议流程</h3>
+    <ol>
+      <li>核对 CPU2、CPU3 固件版本和共享协议版本，确认协议版本均为 6。</li>
+      <li>检查 COM1/COM2/COM3 的协议、波特率、校验和停止位，确认与上位机或 PLC 一致。</li>
+      <li>确认传感器类型、传感器编号、传感器软件版本能正确读取。</li>
+      <li>设置或核对液位罐高、水位罐高、液位探头距差、盲区、最大下行距离、罐底检测模式等基础参数。</li>
+      <li>执行回零点或标定零点，确认编码轮和电机位置基准一致。</li>
+      <li>按现场工艺执行液位标定、水位标定、罐高标定、空载称重和满载称重。</li>
+      <li>执行读取部件参数，确认传感器、电机、编码器、称重、水位电容、姿态角等通道正常。</li>
+      <li>先做单次液位、水位、罐底和单点密度验证，再开启长期跟随或固定点监测。</li>
+    </ol>
+
+    <h3>测量命令菜单</h3>
+    <table>
+      <thead>
+        <tr><th>菜单项</th><th>对应命令</th><th>用途</th><th>注意事项</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>提零点</td><td><code>CMD_BACK_ZERO</code></td><td>执行回零点流程。</td><td>用于建立零点或恢复零点位置。</td></tr>
+        <tr><td>液位测量</td><td><code>CMD_FIND_OIL</code></td><td>启动液位单次测量并可进入液位跟随。</td><td>依赖液位阈值、罐高、盲区和传感器模式。</td></tr>
+        <tr><td>水位单次测量</td><td><code>CMD_FIND_WATER</code></td><td>启动水位单次测量。</td><td>依赖水位电容零点和阈值。</td></tr>
+        <tr><td>罐高测量</td><td><code>CMD_FIND_BOTTOM</code></td><td>执行罐底/罐高测量。</td><td>受最大下行距离、罐底检测模式、称重和角度阈值保护。</td></tr>
+        <tr><td>密度单点测量</td><td><code>CMD_MEASURE_SINGLE</code></td><td>在指定位置执行一次密度测量。</td><td>目标位置必须满足盲区到罐高范围。</td></tr>
+        <tr><td>密度单点监测</td><td><code>CMD_MONITOR_SINGLE</code></td><td>固定点连续监测密度。</td><td>属于长期运行态，参数写入受限制。</td></tr>
+        <tr><td>综合测量</td><td><code>CMD_SYNTHETIC</code></td><td>综合执行液位、水位、密度等测量任务。</td><td>实际流程由参数组合决定。</td></tr>
+        <tr><td>水位跟随</td><td><code>CMD_FOLLOW_WATER</code></td><td>寻找水位点后进入水位闭环跟随。</td><td>进入跟随前可能自动切换到电机步进记步并重新找点。</td></tr>
+        <tr><td>浮子运行到高度</td><td><code>CMD_RUN_TO_POSITION</code></td><td>运行到指定高度。</td><td>目标位置需要在允许范围内。</td></tr>
+        <tr><td>分布测量</td><td><code>CMD_MEASURE_DISTRIBUTED</code></td><td>执行普通密度分布测量。</td><td>最多 200 点，点数和区间由分布参数决定。</td></tr>
+        <tr><td>国标分布测量</td><td><code>CMD_GB_MEASURE_DISTRIBUTED</code></td><td>执行国标密度分布测量。</td><td>按国标流程生成测点。</td></tr>
+        <tr><td>密度每米测量</td><td><code>CMD_MEASURE_DENSITY_METER</code></td><td>按每米间隔执行密度测量。</td><td>DSM 外部状态会按 V1.228 翻译。</td></tr>
+        <tr><td>区间密度测量</td><td><code>CMD_MEASURE_DENSITY_RANGE</code></td><td>按设定上下限执行区间密度测量。</td><td>注意区间上限和下限单位。</td></tr>
+        <tr><td>瓦锡兰区间密度</td><td><code>CMD_WARTSILA_DENSITY_RANGE</code></td><td>执行瓦锡兰区间密度测量流程。</td><td>支持测后按频率探底和探底修正罐高。</td></tr>
+        <tr><td>读取部件参数</td><td><code>CMD_READ_PART_PARAMS</code></td><td>读取传感器、电机、称重、编码器等部件参数。</td><td>故障自动恢复确认也会周期性读取部件参数。</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="measurements">
+    <h2>七、测量功能说明</h2>
+    <h3>零点与罐底</h3>
+    <p>零点用于建立尺带和编码器的上端基准。标定零点成功后，CPU2 会同时清编码轮零点和电机卷筒参考点，并切回编码轮记步。罐底测量通过称重、角度或组合方式识别罐底，完成后计算当前实高，并在满足条件时修正编码器位置。</p>
+    <ul>
+      <li>罐底粗找和精找下行前都会检查最大尺带长度，限制值为 <code>tankHeight + maxDownDistance</code>。</li>
+      <li>传感器位置低于 1 m 且原速度高于 0.50 m/min 时，罐底下行速度会被压到 0.50 m/min。</li>
+      <li>探底修正罐高为 0 时沿用液位罐高；非 0 时用于罐底后编码器修正目标。</li>
+      <li>实高偏差超过最大允许偏差时，只跳过编码器修正，不应把编码器强行改到目标位置。</li>
+    </ul>
+
+    <h3>液位测量和液位跟随</h3>
+    <p>液位测量依赖液位传感器信号、罐高、盲区、液位阈值、滞后阈值和测量方式。长期液位跟随流程会在进入跟随前确认位置源，必要时从编码轮记步切换到电机步进记步，并重新寻找液位点。</p>
+    <table>
+      <thead>
+        <tr><th>阶段</th><th>说明</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>初始化</td><td>执行测量初始化，确认电机和传感器可用，处理必要回零。</td></tr>
+        <tr><td>找液位</td><td>按当前液位测量方式搜索液位，成功后更新液位结果和 SI7000 辅助状态。</td></tr>
+        <tr><td>位置源处理</td><td>若允许自动切换并处于长期跟随类流程，切到电机步进记步后重新找点。</td></tr>
+        <tr><td>跟随/监测</td><td>长期稳定状态下维持液位跟随，并允许命令切换中断。</td></tr>
+      </tbody>
+    </table>
+
+    <h3>水位测量和水位跟随</h3>
+    <p>水位跟随以水位电容为闭环判断依据。水位目标电容等于零点电容加水位跟随电容阈值；寻找电容阈值用于闭环稳定带，滞后电容阈值用于稳定监测中判断是否需要重新寻找水位。</p>
+    <table>
+      <thead>
+        <tr><th>参数</th><th>单位/倍率</th><th>用途</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><code>water_cap_threshold</code></td><td>x1000</td><td>水位目标电容增量。</td></tr>
+        <tr><td><code>water_find_cap_threshold</code></td><td>x1000</td><td>闭环跟随稳定带半宽。</td></tr>
+        <tr><td><code>water_lag_cap_threshold</code></td><td>x1000</td><td>稳定监测阶段判断水位变化的偏差阈值。</td></tr>
+        <tr><td><code>water_stable_threshold</code></td><td>0.1 mm</td><td>快速翻转找点时判断水位估计波动是否稳定。</td></tr>
+      </tbody>
+    </table>
+    <p>闭环每 500 ms 读取一次电容。偏水时上行，偏空气时下行，步长按偏差分为 0.2 mm、3.0 mm 和 10.0 mm。连续稳定约 2.5 s 后进入稳定监测；稳定监测中只在电容偏离目标超过滞后阈值时回到闭环。</p>
+
+    <h3>密度单点、固定点和分布测量</h3>
+    <ul>
+      <li>单点测量使用单点测量位置，执行前会校验目标在 <code>blindZone <= target <= tankHeight</code> 范围内。</li>
+      <li>固定点监测使用单点监测位置，属于长期运行态，CPU3 会限制参数写入。</li>
+      <li>分布测量支持最多 200 个测点，测点数量、间距、上下限、悬停时间由密度测量参数决定。</li>
+      <li>SI7000 协议输出 profile 数据时，只在 profile 完成锁存后输出点数和有效点阵，范围外保持 0。</li>
+    </ul>
+
+    <h3>瓦锡兰区间密度</h3>
+    <p>瓦锡兰区间密度测量完成后，会等待 CPU3 读取结果，再根据“瓦锡兰探底频率”判断是否执行测后探底。需要探底时，流程先回到固定点监测位置，只移动不读取密度；固定点移动失败时跳过后续探底，不通过最终错误出口置错误态。</p>
+    <table>
+      <thead>
+        <tr><th>参数</th><th>说明</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>瓦锡兰探底频率</td><td>0 表示不探底；1~100 表示每 N 次瓦锡兰分布测后探底一次；大于 100 按 1 处理。</td></tr>
+        <tr><td>探底修正罐高</td><td>用于瓦锡兰测后探底或罐底后编码器修正；0 表示沿用液位罐高。</td></tr>
+        <tr><td>密度点上限/下限/间距</td><td>控制瓦锡兰密度区间测点范围和间隔。</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="parameters">
+    <h2>八、参数配置说明</h2>
+    <h3>单位和倍率口径</h3>
+    <table>
+      <thead>
+        <tr><th>类别</th><th>常见单位/倍率</th><th>说明</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>位置、液位、水位、罐高</td><td>0.1 mm 或菜单显示 mm 小数 1 位</td><td>内部多数字段以 0.1 mm 存储，菜单显示时换算为 mm。</td></tr>
+        <tr><td>编码轮周长、尺带厚度、电机局部周长</td><td>0.001 mm</td><td>用于位置换算和电机步进记步。</td></tr>
+        <tr><td>电机速度</td><td>0.01 m/min</td><td>参数和调试日志常使用速度 x100 的整数表达。</td></tr>
+        <tr><td>温度</td><td>原始值或 0.01 C</td><td>外部协议可能按不同倍率输出，需按协议说明解析。</td></tr>
+        <tr><td>密度</td><td>kg/m3 x10 或协议侧 x100</td><td>内部常用 kg/m3 x10，SI7000 会转为协议 kg/m3 x100 并做 16 位钳位。</td></tr>
+        <tr><td>水位电容阈值</td><td>x1000</td><td>实际电容值 = 参数值 / 1000。</td></tr>
+      </tbody>
+    </table>
+
+    <h3>参数组速查</h3>
+    <table>
+      <thead>
+        <tr><th>参数组</th><th>典型参数</th><th>现场用途</th><th>注意事项</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>基础信息</td><td>传感器类型、CPU2 程序版本、协议版本、自动恢复次数、标定值、单点位置、电机运行位置。</td><td>版本核对、命令参数和基础标定。</td><td>自动恢复次数 0 表示关闭；1~10 为最多重跑次数；默认 3。</td></tr>
+        <tr><td>电机与编码参数</td><td>位置源自动切换、电机运行电流、编码轮周长、电机最大速度、记步模式、电机局部周长。</td><td>运动能力、位置源和尺带模型。</td><td>记步模式 0 为编码轮，1 为电机步进；局部周长单位为 0.001 mm。</td></tr>
+        <tr><td>称重参数</td><td>空载重量、满载重量、上下限、碰撞比例。</td><td>零点、碰撞、称重通信和状态判断。</td><td>空载重量按有符号 32 位解释，外部工具不可按无符号大数显示。</td></tr>
+        <tr><td>零点参数</td><td>零点阈值比例、称重忽略区、零点最大偏差、找零下行距离。</td><td>零点检测和离开零点区域。</td><td>零点标定完成后会同步清编码器和电机基准。</td></tr>
+        <tr><td>液位参数</td><td>液位罐高、探头距差、盲区、找油阈值、滞后阈值、跟随频率/密度。</td><td>液位搜索、跟随和液位修正。</td><td>单点和固定点目标不能低于盲区或高于罐高。</td></tr>
+        <tr><td>水位参数</td><td>水位罐高、水位测量方式、水位电容阈值、寻找阈值、最大下行距离、零点电容、滞后阈值。</td><td>水位找点、闭环跟随和稳定监测。</td><td>阈值倍率为 x1000，调试时要换算为实际电容值。</td></tr>
+        <tr><td>罐高参数</td><td>罐底检测模式、角度阈值、称重阈值、更新罐高标志、实高最大偏差、罐底后编码器修正。</td><td>罐底识别、实高计算和编码器修正。</td><td>最大下行距离来自水位参数组的 <code>maxDownDistance</code>。</td></tr>
+        <tr><td>磁通量参数</td><td>磁通量 D、磁通量 T、上次液位修正液位、气相温度、尺带伸缩率、标定尺带温度。</td><td>密度/温度修正和尺带温度补偿。</td><td>尺带补偿参数需与现场标定口径一致。</td></tr>
+        <tr><td>密度测量参数</td><td>是否测罐底、是否测水位、分布测点数、点间距、顶点距液面、底点距罐底、悬停时间。</td><td>分布测量和区间测量策略。</td><td>分布测点数范围 1~200，悬停时间范围 0~600 s。</td></tr>
+        <tr><td>Wartsila 参数</td><td>密度点上下限、密度点间距、最高点距液面、瓦锡兰探底频率、探底修正罐高。</td><td>瓦锡兰区间测量和测后探底。</td><td>探底修正罐高为 0 时沿用液位罐高。</td></tr>
+        <tr><td>DO/AO 输出</td><td>高低液位报警、第三状态阈值、输出范围、报警电流、故障电流、调试电流。</td><td>继电器和 4-20 mA 输出。</td><td>AO 参数菜单范围通常为 0~3000，菜单按 mA 小数 2 位显示。</td></tr>
+        <tr><td>CPU3 本机参数</td><td>语言、数据源、手输值、小数位、屏幕密码、息屏、COM1/2/3 配置。</td><td>显示端、外部串口和手输数据源。</td><td>选择 SI7000 协议后串口会自动收敛为 9600 8O1。</td></tr>
+      </tbody>
+    </table>
+
+    <h3>参数写入限制</h3>
+    <ul>
+      <li>待机态和普通测量完成态允许写参数。</li>
+      <li>液位跟随、水位跟随、固定点监测等长期运行态不允许按普通完成态放行参数写入。</li>
+      <li>CPU3 批量同步会跳过 CPU2 可能自动更新的字段，例如位置源和电机局部周长，避免旧缓存覆盖 CPU2 新值。</li>
+      <li>涉及共享字段语义变化时必须升级协议版本，并同步更新 CPU2/CPU3 两端结构体、寄存器和菜单。</li>
+    </ul>
+  </section>
+
+  <section id="communication">
+    <h2>九、通信与外部协议</h2>
+    <h3>内部 CPU2/CPU3 Modbus</h3>
+    <table>
+      <thead>
+        <tr><th>功能码</th><th>用途</th><th>说明</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><code>0x03</code></td><td>读保持寄存器</td><td>读取 CPU2 参数和命令相关字段。</td></tr>
+        <tr><td><code>0x04</code></td><td>读输入寄存器</td><td>读取 CPU2 设备状态、测量结果和调试数据。</td></tr>
+        <tr><td><code>0x10</code></td><td>写多个保持寄存器</td><td>CPU3 参数下发、命令写入和参数同步。</td></tr>
+      </tbody>
+    </table>
+
+    <h3>CPU3 外部串口默认值</h3>
+    <table>
+      <thead>
+        <tr><th>端口</th><th>硬件串口</th><th>默认串口参数</th><th>默认协议</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>COM1</td><td>USART6</td><td>4800 8N1</td><td>DSM</td></tr>
+        <tr><td>COM2</td><td>USART2</td><td>4800 8N1</td><td>Wartsila</td></tr>
+        <tr><td>COM3</td><td>USART3</td><td>4800 8N2</td><td>Wartsila</td></tr>
+      </tbody>
+    </table>
+    <p>可选协议包括 DSM、Wartsila、LTD、预留协议 1、预留协议 2 和 SI7000。SI7000 被选中后，固件会把对应串口归一化为 9600 8O1，避免菜单组合出 PLC 不兼容配置。</p>
+
+    <h3>DSM V1.228 外部协议</h3>
+    <ul>
+      <li>CPU3 外部 DSM 层支持 <code>0x03</code>、<code>0x04</code>、<code>0x05</code>、<code>0x10</code> 核心功能码，并保留部分现场兼容行为。</li>
+      <li>外部状态码通过 CPU3 DSM 转换层翻译，避免直接暴露 CUBE 内部扩展状态。</li>
+      <li>写线圈只有合法地址且写入 <code>0xFF00</code> 时触发命令；写 <code>0x0000</code> 只回包不动作。</li>
+      <li>DSM V1.228 第 6 段保持寄存器当前按占位兼容处理，能响应但不参与 CPU2 算法。</li>
+      <li>调试模式在 DSM 外部状态中映射为维护模式，避免上位机收到未知内部状态 <code>0x0033</code>。</li>
+    </ul>
+
+    <h3>SI7000 外部协议</h3>
+    <table>
+      <thead>
+        <tr><th>区域</th><th>当前实现</th><th>限制</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>串口要求</td><td>Modbus RTU，9600 8O1，站号优先使用现有从站地址。</td><td>选择 SI7000 协议后自动收敛串口配置。</td></tr>
+        <tr><td>功能码</td><td>支持 FC01/FC02/FC03/FC04/FC05/FC06。</td><td>保留线圈写入返回非法地址，避免误写。</td></tr>
+        <tr><td>输入寄存器</td><td>位置、温度、密度、液位、profile 点阵、时间戳和当前时间。</td><td>密度按协议 kg/m3 x100 输出，超过 16 位会钳位。</td></tr>
+        <tr><td>保持寄存器</td><td><code>40001~40003</code> 桥接到分布测量参数，其余自动 profile 和报警设定点为影子回读。</td><td>影子寄存器当前不写入 CPU2 参数存储，掉电保持需后续新增参数。</td></tr>
+        <tr><td>状态位</td><td>Bottom Reference、Profile Complete、Probe At Liquid Level、报警位等由共享状态字段和影子阈值合成。</td><td>Lower/Upper Level Sensor 当前无可靠内部来源，固定为 0。</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Wartsila 和 LTD</h3>
+    <p>Wartsila 协议由 CPU3 外部 Modbus 模块处理，密度分布点已扩展到 200 点。瓦锡兰区间密度流程还会与 CPU2 的测后探底和固定点监测流程联动。LTD 协议作为外部协议选项保留，并与 CPU2 传感器类型和 UART6 传感器通信流程相关。</p>
+  </section>
+
+  <section id="faults">
+    <h2>十、故障、日志与自动恢复</h2>
+    <h3>错误码分类</h3>
+    <table>
+      <thead>
+        <tr><th>范围</th><th>类别</th><th>典型含义</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><code>0x000B0000</code></td><td>电机类</td><td>TMC5130 通信、驱动报警、过温、运行超时、步进异常。</td></tr>
+        <tr><td><code>0x000C0000</code></td><td>编码器类</td><td>SSI 超时、校验失败、无效数据、上电变化、线性度报警。</td></tr>
+        <tr><td><code>0x000D0000</code></td><td>传感器和无线类</td><td>BCC 错误、通信超时、密度/温度/电压异常、无线主机或从机无响应。</td></tr>
+        <tr><td><code>0x000F0000</code></td><td>测量流程类</td><td>位置错误、测量超时、零点超限、液位/水位未找到、密度测量无有效点。</td></tr>
+        <tr><td><code>0x00110000</code></td><td>参数存储类</td><td>FRAM 写入失败、参数未初始化、范围错误、地址越界、CRC 错误。</td></tr>
+        <tr><td><code>0x00120000</code></td><td>称重类</td><td>称重超限、碰撞、漂移、传感器饱和、称重通信超时。</td></tr>
+        <tr><td><code>0x00130000</code></td><td>其他类</td><td>未知错误、地址读取错误、电源波动、外设配置错误。</td></tr>
+      </tbody>
+    </table>
+
+    <h3>统一错误日志</h3>
+    <p>CPU2 日志字段使用制表符分隔，现场建议优先搜索 <code>错误</code>。再按阶段过滤：</p>
+    <p><span class="tag">阶段：错误重试</span><span class="tag green">阶段：重试成功</span><span class="tag orange">阶段：错误报警</span><span class="tag">阶段：最终报错</span></p>
+    <table>
+      <thead>
+        <tr><th>阶段</th><th>含义</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>错误重试</td><td>当前操作失败，但流程还会继续尝试。</td></tr>
+        <tr><td>重试成功</td><td>前面发生过失败，后续尝试恢复成功。</td></tr>
+        <tr><td>错误报警</td><td>不是最终报错，但现场需要关注，可能会停止电机或继续尝试。</td></tr>
+        <tr><td>最终报错</td><td>由故障管理统一出口打印，表示本次业务流程进入最终错误状态。</td></tr>
+      </tbody>
+    </table>
+
+    <h3>测量失败自动恢复</h3>
+    <p>任意测量类指令失败后，系统保持原错误状态和错误码，并进入自动恢复检查。恢复检查每 1 秒读取一次部件参数，只有所有部件恢复正常后，才清除错误并从头重新执行失败前的完整测量命令。</p>
+    <table>
+      <thead>
+        <tr><th>参数</th><th>行为</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><code>fault_auto_recovery_retry_limit = 0</code></td><td>关闭恢复确认成功后的原命令自动重跑。</td></tr>
+        <tr><td><code>1~10</code></td><td>恢复确认成功后，最多自动重跑原命令的次数。</td></tr>
+        <tr><td><code>&gt;10</code></td><td>CPU2 启动或参数加载时归一化为默认值 3。</td></tr>
+        <tr><td>新命令打断</td><td>自动恢复期间收到新命令，会取消当前恢复流程并执行新命令。</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="maintenance">
+    <h2>十一、维护与调试</h2>
+    <h3>调试指令菜单</h3>
+    <table>
+      <thead>
+        <tr><th>菜单项</th><th>用途</th><th>注意事项</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>上行/下行</td><td>点动或执行指定距离移动。</td><td>执行期间显示调试模式中。</td></tr>
+        <tr><td>强制上行/强制下行</td><td>强制执行运动控制。</td><td>只绕过特定门控，不应绕过现场安全确认。</td></tr>
+        <tr><td>强制提零点</td><td>强制执行提零点控制。</td><td>用于维护和异常场景。</td></tr>
+        <tr><td>标定零点/液位/水位/罐高</td><td>进入对应标定流程。</td><td>标定参数必须先设置正确。</td></tr>
+        <tr><td>获取空载/满载称重</td><td>采集称重基准。</td><td>空载重量支持负值，有符号 32 位解释。</td></tr>
+        <tr><td>恢复出厂设置</td><td>恢复默认参数。</td><td>执行前应备份现场关键参数。</td></tr>
+        <tr><td>进入维护模式</td><td>进入维护或工厂模式。</td><td>用于外部协议手动/维护状态映射。</td></tr>
+      </tbody>
+    </table>
+
+    <h3>CPU2 调试串口常用命令</h3>
+    <table>
+      <thead>
+        <tr><th>命令</th><th>用途</th><th>显示状态</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><code>I/G/K/R/W/O/P/Q</code></td><td>正式业务命令入口，转成 <code>CommandType</code> 后交给主循环。</td><td>对应业务状态。</td></tr>
+        <tr><td><code>SC</code></td><td>综合测试无线主机、无线从机和传感器通信。</td><td>调试模式中。</td></tr>
+        <tr><td><code>SP*</code></td><td>CH9141K 扫描、RSSI 匹配、按名称匹配、连接状态查询。</td><td>无线滑环流程状态。</td></tr>
+        <tr><td><code>B&lt;mm&gt;</code></td><td>按电机记步模型做下行/上行往返测试。</td><td>调试模式中。</td></tr>
+        <tr><td><code>BE&lt;mm&gt;</code></td><td>按编码轮读数做下行/上行往返测试。</td><td>调试模式中。</td></tr>
+        <tr><td><code>F/H/J</code></td><td>罐底、零点/罐底、液位重复性测试，调用正式测量流程。</td><td>对应业务状态。</td></tr>
+        <tr><td><code>T*</code></td><td>TFIT 尺带和卷筒参数采样、求解和应用。</td><td>调试模式中。</td></tr>
+        <tr><td><code>Y*</code></td><td>位置源切换、位置对比、电机记步诊断、TMC5130 静态 SPI 测试。</td><td>调试模式中。</td></tr>
+      </tbody>
+    </table>
+
+    <h3>无线滑环最近匹配</h3>
+    <p>CPU2 支持正式命令 <code>CMD_PAIR_NEAREST_WIRELESS_SLIPRING = 117</code> 和串口调试命令 <code>SPR</code>，用于按 RSSI 近距离规则匹配最近的 CH9141K 无线滑环从机。</p>
+    <ol>
+      <li>维护人员确认目标从机上电，并尽量让附近只有目标从机或目标从机距离最近。</li>
+      <li>CPU2 接管 UART6，进入 CH9141K AT 配置流程。</li>
+      <li>确认主机模式，扫描候选，按 RSSI 阈值和差值选择目标。</li>
+      <li>连接目标 MAC，保存默认连接，复位模块并恢复透传。</li>
+      <li>探测无线主机和从机链路，并把结果和 MAC 通过输入寄存器发布给 CPU3。</li>
+    </ol>
+    <p>匹配成功后 CPU3 显示无线滑环匹配完成和两行 MAC；匹配失败时 CPU2 进入故障态，CPU3 按错误码显示，详细失败阶段看 CPU2 串口日志。</p>
+
+    <h3>固件构建维护</h3>
+    <table>
+      <thead>
+        <tr><th>目标</th><th>推荐命令</th><th>产物</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>CPU2</td><td><code>cmake --build build\LTD_MAIN_CPU2</code></td><td><code>LTD_MAIN_CPU2.elf</code>、<code>.hex</code>、<code>_V1.10.0.0.hex</code>、<code>.bin</code>、<code>.map</code></td></tr>
+        <tr><td>CPU3</td><td><code>cmake --build build\LTD_DISPLAY_CPU3</code></td><td><code>LTD_DISPLAY_CPU3.elf</code>、<code>.hex</code>、<code>_V1.9.0.0.hex</code>、<code>.bin</code>、<code>.map</code></td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="checklists">
+    <h2>十二、联调检查清单</h2>
+    <h3>上电检查</h3>
+    <ul>
+      <li>CPU2/CPU3 固件版本与协议版本一致。</li>
+      <li>启动日志显示安全停机结果和编码器首帧状态。</li>
+      <li>屏幕状态页没有协议不匹配提示。</li>
+      <li>读取部件参数能成功返回传感器、称重、电机、编码器和水位电容相关数据。</li>
+    </ul>
+
+    <h3>测量检查</h3>
+    <ul>
+      <li>回零点、液位测量、水位测量、罐高测量均能正常结束或给出明确错误码。</li>
+      <li>单点测量和固定点监测目标位置在盲区到罐高范围内。</li>
+      <li>分布测量点数不超过 200，点距、上下限和悬停时间符合现场要求。</li>
+      <li>水位跟随参数换算后，目标电容、寻找带和滞后带符合实际传感器响应。</li>
+      <li>瓦锡兰测后探底频率、探底修正罐高和固定点监测位置已按现场工况配置。</li>
+    </ul>
+
+    <h3>外部协议检查</h3>
+    <ul>
+      <li>COM 口波特率、数据位、校验和停止位与外部主站一致。</li>
+      <li>DSM 主站读取设备状态时得到 DSM V1.228 对外状态码，不直接解析内部状态。</li>
+      <li>SI7000 协议端口被自动归一化到 9600 8O1。</li>
+      <li>Wartsila 主站读取密度点数、点阵和测后探底结果时，CPU2/CPU3 版本成对匹配。</li>
+    </ul>
+
+    <h3>故障排查</h3>
+    <ul>
+      <li>串口日志先搜索 <code>错误</code>，再按模块过滤电机、编码器、传感器、称重、参数、通信、测量或系统。</li>
+      <li>检查是否达到自动恢复重跑上限，参数值是否被误写为 0。</li>
+      <li>传感器异常时区分传感器本体、无线主机、无线从机和 UART6 硬件错误。</li>
+      <li>罐底或水位搜索失败时，核对最大下行距离、盲区、零点电容、称重阈值和角度阈值。</li>
+      <li>复位后位置漂移时，复核启动安全停机、编码器首帧和位置源门控日志。</li>
+    </ul>
+  </section>
+
+  <section id="sources">
+    <h2>十三、资料来源</h2>
+    <p>本 HTML 由工程内资料和源码扫描整理，主要参考：</p>
+    <ul>
+      <li><code>README.md</code>：仓库架构、CPU2/CPU3 职责和构建入口。</li>
+      <li><code>CHANGELOG.md</code>：固件版本、协议版本和近期行为变化。</li>
+      <li><code>docs/01_协议与寄存器/CPU2_CPU3协议变更记录.md</code>：共享协议版本记录。</li>
+      <li><code>docs/04_界面与菜单/LNG计量仪屏幕菜单.docx</code>：屏幕菜单、参数组、主界面显示项。</li>
+      <li><code>docs/04_界面与菜单/CPU3参数菜单与故障自动恢复次数说明.md</code>：自动恢复次数菜单和协议映射。</li>
+      <li><code>LTD_MAIN_CPU2/docs/02_通信与解耦/CPU2串口调试指令与打印信息梳理.md</code>：CPU2 串口调试命令。</li>
+      <li><code>docs/03_问题分析与整改/水位跟随流程梳理.md</code>：水位跟随流程。</li>
+      <li><code>docs/03_问题分析与整改/罐底测量下行保护改动说明.md</code>：罐底最大下行保护。</li>
+      <li><code>docs/01_协议与寄存器/SI7000协议适配/02_协议映射/SI7000兼容映射表.md</code>：SI7000 协议映射。</li>
+      <li><code>docs/02_需求与计划/二代计量仪同步支持DSM_V1.228协议需求方案.md</code>：DSM V1.228 兼容边界。</li>
+      <li><code>LTD_MAIN_CPU2/Services/ParamStorage/system_parameter.h</code> 和 <code>LTD_DISPLAY_CPU3/Application/system_param/system_parameter.h</code>：命令、状态、错误码、参数结构。</li>
+      <li><code>LTD_DISPLAY_CPU3/Application/system_param/cpu3_comm_display_params.c</code>：CPU3 串口默认配置和 SI7000 串口归一化。</li>
+    </ul>
+    <div class="warn">
+      <strong>未替代项：</strong>本文是根据当前工程生成的设备说明草案。真实硬件电气安全、机械限位、现场工艺流程、客户协议验收、第三方认证和最终出版版式仍需人工复核。
+    </div>
+  </section>
+</main>
+</body>
+</html>
