@@ -21,6 +21,20 @@ static uint32_t MotorMotion_MoveBlockingNoDetectInternal(float mm,
                                                          int dir,
                                                          uint32_t speed_x100,
                                                          bool ignore_encoder_ready);
+static uint32_t MotorMotion_DistanceToTicks(float move_mm,
+                                            int dir,
+                                            double current_length_mm,
+                                            int32_t *ticks);
+static uint32_t MotorMotion_DisplayStateFromDirection(int dir);
+static uint32_t MotorMotion_DisplayStateFromTicks(int32_t ticks);
+static bool MotorMotion_IsDisplayStateActive(uint32_t display_state);
+static void MotorMotion_SetActiveState(uint32_t display_state, bool wait_active);
+static void MotorMotion_ClearActiveState(void);
+static bool MotorMotion_ShouldStopAtTarget(float current_mm,
+                                           float target_mm,
+                                           float eps_mm,
+                                           int dir);
+static uint32_t MotorMotion_StopAtTargetAndWait(TMC5130TypeDef *tmc5130);
 
 /* ===================== 对外接口 ===================== */
 
@@ -68,7 +82,7 @@ uint32_t MotorCtrl_MoveByTicksAndWait(int32_t ticks, uint32_t speed_x100)
     int32_t rampstat_after = 0;
     int32_t gstat_after = 0;
     const int32_t requested_ticks = ticks;
-    const uint32_t requested_display_state = (requested_ticks > 0) ? 2U : 1U;
+    const uint32_t requested_display_state = MotorMotion_DisplayStateFromTicks(requested_ticks);
     char detail[128];
 //    int32_t delta_ticks = ticks;
 
@@ -120,9 +134,7 @@ uint32_t MotorCtrl_MoveByTicksAndWait(int32_t ticks, uint32_t speed_x100)
         /* 提前退出前先恢复临时速度，避免下一条命令沿用本次速度。 */
         return MotorDriver_ReturnAfterTemporarySpeed(ret, restore_needed, restore_speed_x100);
     }
-    s_motor_driver.motion_command_active = true;
-    s_motor_driver.motion_wait_active = true;
-    g_measurement.debug_data.motor_state = requested_display_state;
+    MotorMotion_SetActiveState(requested_display_state, true);
 
     /* TMC5130 写入 XTARGET 后，不能只看 RAMPSTAT.vzero。
      * 这里同时读回关键寄存器，并要求 XACTUAL 在启动窗口内发生变化。
@@ -191,9 +203,7 @@ uint32_t MotorCtrl_MoveByTicksAndWait(int32_t ticks, uint32_t speed_x100)
                    (long)xtarget_after,
                    (unsigned long)rampstat_after,
                    (unsigned long)gstat_after);
-            s_motor_driver.motion_command_active = false;
-            s_motor_driver.motion_wait_active = false;
-            g_measurement.debug_data.motor_state = 0U;
+            MotorMotion_ClearActiveState();
             return MOTOR_STEP_ERROR;
         }
     }
@@ -299,53 +309,21 @@ uint32_t MotorCtrl_MoveNoWait(float move_mm, int dir, uint32_t speed_x100)
     ret = MotorDriver_SyncPositionOrCheckHealth(&stepper);
     CHECK_ERROR(ret);
 
-    /* 1) 当前“相对基准点”的有符号长度（mm，可正可负） */
     const double Lcur_mm = (double)g_measurement.debug_data.cable_length * 0.1;
+    int32_t ticks = 0;
+
     velocity = MotorDriver_ComputeUniformVelocityFromLength(Lcur_mm);
     s_motor_driver.applied_velocity = velocity;
 
-    /* 2) 目标有符号长度（mm） */
-    double dL_mm = (double)move_mm;
-    if (dir == MOTOR_DIRECTION_UP) {
-        dL_mm = -dL_mm;  // 上行：长度更小（可继续变负）
-    }
-    const double Ltar_mm = Lcur_mm + dL_mm;
-
-    int64_t ticks64;
-
-    {
-        double local_circumference_mm = MotorPosition_GetLocalCircumferenceFromParams();
-        if ((g_deviceParams.position_count_mode == POSITION_COUNT_MODE_MOTOR) &&
-            (local_circumference_mm > 1e-6)) {
-            ticks64 = MotorPosition_RoundToInt64((dL_mm / local_circumference_mm) *
-                                   (double)MotorPosition_TapeTicksPerRev());
-        } else {
-            const double C0 = MotorPosition_TapeC0Mm();
-            const double t  = MotorPosition_TapeThicknessMm();
-            if (C0 <= 0.0) return PARAM_ERROR;
-
-            const double ncur = MotorPosition_TapeTurnsFromSignedLength(Lcur_mm, C0, t);
-            const double ntar = MotorPosition_TapeTurnsFromSignedLength(Ltar_mm, C0, t);
-            const double dn   = ntar - ncur;
-
-            double ticks_d = dn * (double)MotorPosition_TapeTicksPerRev();
-            ticks64 = MotorPosition_RoundToInt64(ticks_d);
-        }
-    }
-
-    if (ticks64 > (int64_t)INT32_MAX) ticks64 = (int64_t)INT32_MAX;
-    if (ticks64 < (int64_t)INT32_MIN) ticks64 = (int64_t)INT32_MIN;
-
-    int32_t ticks = (int32_t)ticks64;
+    ret = MotorMotion_DistanceToTicks(move_mm, dir, Lcur_mm, &ticks);
+    CHECK_ERROR(ret);
 
     /* 6) 下发运动 */
     ret = stpr_moveBy(&stepper, &ticks, velocity);
     if (ret != NO_ERROR) {
         return ret;
     }
-    s_motor_driver.motion_command_active = true;
-    s_motor_driver.motion_wait_active = false;
-    g_measurement.debug_data.motor_state = (dir == MOTOR_DIRECTION_UP) ? 1U : 2U;
+    MotorMotion_SetActiveState(MotorMotion_DisplayStateFromDirection(dir), false);
     ret = MotorDriver_SyncPositionOrCheckHealth(&stepper);
     CHECK_ERROR(ret);
 
@@ -426,9 +404,7 @@ uint32_t MotorCtrl_CalibrateFirstLoopCircumferenceAtZero(void)
      * 这个值会影响后续的尺带长度换算，所以标定成功后必须立即保存，
      * 同时通过 parameter_update_flag 通知 CPU3 刷新参数缓存。 */
     save_device_params();
-    s_motor_driver.motion_command_active = false;
-    s_motor_driver.motion_wait_active = false;
-    g_measurement.debug_data.motor_state = 0U;
+    MotorMotion_ClearActiveState();
     printf("首圈周长标定成功 | 首圈周长=%lu(0.1mm)\r\n",
            (unsigned long)g_deviceParams.first_loop_circumference_mm);
     return NO_ERROR;
@@ -468,7 +444,7 @@ uint32_t MotorCtrl_MoveAndWait(float mm, int dir, uint32_t speed_x100)
     ret = MotorDriver_CheckMotionReady();
     CHECK_ERROR(ret);
 
-    const uint32_t command_display_state = (dir == MOTOR_DIRECTION_UP) ? 1U : 2U;
+    const uint32_t command_display_state = MotorMotion_DisplayStateFromDirection(dir);
 
     /* 阻塞型接口支持“本次命令临时速度”：
      * 开始前切到 speed_x100，结束后恢复到默认最大速度。 */
@@ -502,9 +478,7 @@ uint32_t MotorCtrl_MoveAndWait(float mm, int dir, uint32_t speed_x100)
         /* 分段重试时不再重复切换速度，避免每一段都触发“恢复默认速度”。 */
         ret = MotorCtrl_MoveNoWait(remain_mm, dir, 0U);
         CHECK_ERROR(ret);
-        s_motor_driver.motion_command_active = true;
-        s_motor_driver.motion_wait_active = true;
-        g_measurement.debug_data.motor_state = command_display_state;
+        MotorMotion_SetActiveState(command_display_state, true);
 
         /* 下发后先进入一个短暂的“启动观察窗口”，
          * 期间持续做速度补偿，让起步阶段也尽快贴合目标线速度。 */
@@ -518,9 +492,7 @@ uint32_t MotorCtrl_MoveAndWait(float mm, int dir, uint32_t speed_x100)
             MotorDriver_RefreshVelocityDuringRun(&stepper, &prewait_vel_refresh_tick);
             ret = MotorCtrl_PollRuntimePosition();
             CHECK_ERROR(ret);
-            s_motor_driver.motion_command_active = true;
-            s_motor_driver.motion_wait_active = true;
-            g_measurement.debug_data.motor_state = command_display_state;
+            MotorMotion_SetActiveState(command_display_state, true);
             HAL_Delay(10);
         }
 
@@ -619,9 +591,7 @@ uint32_t MotorCtrl_MoveAndWait(float mm, int dir, uint32_t speed_x100)
 
     ret = MotorDriver_SyncPositionOrCheckHealth(&stepper);
     if (ret == NO_ERROR) {
-        s_motor_driver.motion_command_active = false;
-        s_motor_driver.motion_wait_active = false;
-        g_measurement.debug_data.motor_state = 0U;
+        MotorMotion_ClearActiveState();
     }
 
     /* 只有主命令整体结束后，才恢复默认速度。 */
@@ -778,9 +748,7 @@ uint32_t MotorCtrl_QuickStop(void)
     stpr_enableDriver(&stepper);
 
     MotorPosition_SyncDebugDrumState(&stepper);
-    s_motor_driver.motion_command_active = false;
-    s_motor_driver.motion_wait_active = false;
-    g_measurement.debug_data.motor_state = 0U;
+    MotorMotion_ClearActiveState();
     return MotorDriver_SetSpeedQuiet(g_deviceParams.max_motor_speed);
 }
 /**
@@ -819,7 +787,7 @@ uint32_t MotorCtrl_GetDisplayState(void)
     bool is_moving = false;
 
     if (!s_motor_driver.initialized) {
-        return ((motor_state == 1U) || (motor_state == 2U)) ? motor_state : 0U;
+        return MotorMotion_IsDisplayStateActive(motor_state) ? motor_state : 0U;
     }
 
     if (!s_motor_driver.motion_command_active) {
@@ -829,37 +797,35 @@ uint32_t MotorCtrl_GetDisplayState(void)
     }
 
     if (!MotorDriver_TryReadMovingState(&stepper, &is_moving)) {
-        return ((motor_state == 1U) || (motor_state == 2U)) ? motor_state : 0U;
+        return MotorMotion_IsDisplayStateActive(motor_state) ? motor_state : 0U;
     }
 
     if (!is_moving) {
         if (s_motor_driver.motion_wait_active) {
-            return ((motor_state == 1U) || (motor_state == 2U)) ? motor_state : 0U;
+            return MotorMotion_IsDisplayStateActive(motor_state) ? motor_state : 0U;
         }
         if (MotorCtrl_IsDriverMoving(&stepper)) {
-            if ((motor_state == 1U) || (motor_state == 2U)) {
+            if (MotorMotion_IsDisplayStateActive(motor_state)) {
                 return motor_state;
             }
             motor_state = MotorDriver_InferDisplayStateFromDriver(&stepper);
-            if ((motor_state == 1U) || (motor_state == 2U)) {
+            if (MotorMotion_IsDisplayStateActive(motor_state)) {
                 g_measurement.debug_data.motor_state = motor_state;
                 return motor_state;
             }
         }
-        if ((motor_state == 1U) || (motor_state == 2U)) {
-            s_motor_driver.motion_command_active = false;
-            s_motor_driver.motion_wait_active = false;
-            g_measurement.debug_data.motor_state = 0U;
+        if (MotorMotion_IsDisplayStateActive(motor_state)) {
+            MotorMotion_ClearActiveState();
         }
         return 0U;
     }
 
-    if ((motor_state == 1U) || (motor_state == 2U)) {
+    if (MotorMotion_IsDisplayStateActive(motor_state)) {
         return motor_state;
     }
 
     motor_state = MotorDriver_InferDisplayStateFromDriver(&stepper);
-    if ((motor_state == 1U) || (motor_state == 2U)) {
+    if (MotorMotion_IsDisplayStateActive(motor_state)) {
         g_measurement.debug_data.motor_state = motor_state;
         return motor_state;
     }
@@ -932,46 +898,21 @@ static uint32_t MotorMotion_MoveBlockingNoDetectInternal(float mm,
         return MotorDriver_ReturnAfterTemporarySpeed(ret, restore_needed, restore_speed_x100);
     }
 
-    const double C0 = MotorPosition_TapeC0Mm();
-    const double t  = MotorPosition_TapeThicknessMm();
-    const double local_circumference_mm = MotorPosition_GetLocalCircumferenceFromParams();
-    const bool use_local_circ =
-        (g_deviceParams.position_count_mode == POSITION_COUNT_MODE_MOTOR) &&
-        (local_circumference_mm > 1e-6);
-    if ((!use_local_circ) && (C0 <= 0.0)) {
-        ret = MotorDriver_EndTemporarySpeed(restore_needed, restore_speed_x100);
-        if (ret != NO_ERROR) {
-            printf("无检测阻塞运动：恢复默认速度失败 错误码：0x%08lX\r\n", (unsigned long)ret);
-            return ret;
+    const double Lcur_mm = (double)g_measurement.debug_data.cable_length * 0.1;
+    int32_t ticks = 0;
+
+    ret = MotorMotion_DistanceToTicks(mm, dir, Lcur_mm, &ticks);
+    if (ret != NO_ERROR) {
+        uint32_t restore_ret = MotorDriver_EndTemporarySpeed(restore_needed, restore_speed_x100);
+        if (restore_ret != NO_ERROR) {
+            printf("无检测阻塞运动：恢复默认速度失败 错误码：0x%08lX\r\n", (unsigned long)restore_ret);
+            return restore_ret;
         }
-        return PARAM_ERROR;
+        return ret;
     }
 
-    /* 当前有符号长度 */
-    const double Lcur_mm = (double)g_measurement.debug_data.cable_length * 0.1;
     velocity = MotorDriver_ComputeUniformVelocityFromLength(Lcur_mm);
     s_motor_driver.applied_velocity = velocity;
-
-    /* 目标有符号长度 */
-    double dL = (double)mm;
-    if (dir == MOTOR_DIRECTION_UP) dL = -dL;
-    const double Ltar_mm = Lcur_mm + dL;
-
-    int64_t ticks64;
-
-    if (use_local_circ) {
-        ticks64 = MotorPosition_RoundToInt64((dL / local_circumference_mm) *
-                               (double)MotorPosition_TapeTicksPerRev());
-    } else {
-        const double ncur = MotorPosition_TapeTurnsFromSignedLength(Lcur_mm, C0, t);
-        const double ntar = MotorPosition_TapeTurnsFromSignedLength(Ltar_mm, C0, t);
-        const double dn   = ntar - ncur;
-        ticks64 = MotorPosition_RoundToInt64(dn * (double)MotorPosition_TapeTicksPerRev());
-    }
-
-    if (ticks64 > (int64_t)INT32_MAX) ticks64 = (int64_t)INT32_MAX;
-    if (ticks64 < (int64_t)INT32_MIN) ticks64 = (int64_t)INT32_MIN;
-    int32_t ticks = (int32_t)ticks64;
 
     ret = MotorDriver_StopIfCommandSwitchRequested();
     if (ret != NO_ERROR) {
@@ -984,9 +925,7 @@ static uint32_t MotorMotion_MoveBlockingNoDetectInternal(float mm,
         (void)MotorDriver_EndTemporarySpeed(restore_needed, restore_speed_x100);
         return ret;
     }
-    s_motor_driver.motion_command_active = true;
-    s_motor_driver.motion_wait_active = true;
-    g_measurement.debug_data.motor_state = (dir == MOTOR_DIRECTION_UP) ? 1U : 2U;
+    MotorMotion_SetActiveState(MotorMotion_DisplayStateFromDirection(dir), true);
     ret = MotorDriver_SyncPositionOrCheckHealth(&stepper);
     if (ret != NO_ERROR) {
         /* 提前退出前先恢复临时速度，避免下一条命令沿用本次速度。 */
@@ -1010,9 +949,7 @@ static uint32_t MotorMotion_MoveBlockingNoDetectInternal(float mm,
         MotorLostStep_NoDetectRuntimeLogUpdate();
     }
 
-    s_motor_driver.motion_command_active = false;
-    s_motor_driver.motion_wait_active = false;
-    g_measurement.debug_data.motor_state = 0U;
+    MotorMotion_ClearActiveState();
     ret = MotorDriver_SyncPositionOrCheckHealth(&stepper);
     if (ret != NO_ERROR) {
         /* 提前退出前先恢复临时速度，避免下一条命令沿用本次速度。 */
@@ -1028,6 +965,177 @@ static uint32_t MotorMotion_MoveBlockingNoDetectInternal(float mm,
     return NO_ERROR;
 }
 
+/**
+ * @brief 将业务距离换算为 TMC5130 相对 ticks。
+ *
+ * 上层方向只负责表达收带/放带；本函数统一处理有符号尺带长度、局部周长优先级、
+ * 卷筒模型和 int32 目标范围钳位，避免多个运动入口各自维护一份换算逻辑。
+ */
+static uint32_t MotorMotion_DistanceToTicks(float move_mm,
+                                            int dir,
+                                            double current_length_mm,
+                                            int32_t *ticks)
+{
+    double delta_length_mm;
+    double target_length_mm;
+    double local_circumference_mm;
+    int64_t ticks64;
+
+    if (ticks == NULL) {
+        return PARAM_ERROR;
+    }
+    *ticks = 0;
+
+    if (move_mm < 0.0f) {
+        return PARAM_ERROR;
+    }
+    if (move_mm == 0.0f) {
+        return NO_ERROR;
+    }
+    if (!MotorDriver_IsDirValid(dir)) {
+        return PARAM_ERROR;
+    }
+
+    delta_length_mm = (double)move_mm;
+    if (dir == MOTOR_DIRECTION_UP) {
+        delta_length_mm = -delta_length_mm;
+    }
+    target_length_mm = current_length_mm + delta_length_mm;
+
+    local_circumference_mm = MotorPosition_GetLocalCircumferenceFromParams();
+    if ((g_deviceParams.position_count_mode == POSITION_COUNT_MODE_MOTOR) &&
+        (local_circumference_mm > 1e-6)) {
+        ticks64 = MotorPosition_RoundToInt64((delta_length_mm / local_circumference_mm) *
+                                            (double)MotorPosition_TapeTicksPerRev());
+    } else {
+        const double C0 = MotorPosition_TapeC0Mm();
+        const double t  = MotorPosition_TapeThicknessMm();
+        double ncur;
+        double ntar;
+        double dn;
+
+        if (C0 <= 0.0) {
+            return PARAM_ERROR;
+        }
+        ncur = MotorPosition_TapeTurnsFromSignedLength(current_length_mm, C0, t);
+        ntar = MotorPosition_TapeTurnsFromSignedLength(target_length_mm, C0, t);
+        dn = ntar - ncur;
+        ticks64 = MotorPosition_RoundToInt64(dn * (double)MotorPosition_TapeTicksPerRev());
+    }
+
+    if (ticks64 > (int64_t)INT32_MAX) {
+        ticks64 = (int64_t)INT32_MAX;
+    }
+    if (ticks64 < (int64_t)INT32_MIN) {
+        ticks64 = (int64_t)INT32_MIN;
+    }
+    *ticks = (int32_t)ticks64;
+    return NO_ERROR;
+}
+
+/**
+ * @brief 将业务方向转换为上层显示状态。
+ */
+static uint32_t MotorMotion_DisplayStateFromDirection(int dir)
+{
+    if (dir == MOTOR_DIRECTION_UP) {
+        return 1U;
+    }
+    if (dir == MOTOR_DIRECTION_DOWN) {
+        return 2U;
+    }
+    return 0U;
+}
+
+/**
+ * @brief 将相对 ticks 方向转换为上层显示状态。
+ */
+static uint32_t MotorMotion_DisplayStateFromTicks(int32_t ticks)
+{
+    if (ticks > 0) {
+        return 2U;
+    }
+    if (ticks < 0) {
+        return 1U;
+    }
+    return 0U;
+}
+
+/**
+ * @brief 判断显示状态是否代表有效运动方向。
+ */
+static bool MotorMotion_IsDisplayStateActive(uint32_t display_state)
+{
+    return (display_state == 1U) || (display_state == 2U);
+}
+
+/**
+ * @brief 统一置位当前运动状态。
+ */
+static void MotorMotion_SetActiveState(uint32_t display_state, bool wait_active)
+{
+    if (!MotorMotion_IsDisplayStateActive(display_state)) {
+        MotorMotion_ClearActiveState();
+        return;
+    }
+
+    s_motor_driver.motion_command_active = true;
+    s_motor_driver.motion_wait_active = wait_active;
+    g_measurement.debug_data.motor_state = display_state;
+}
+
+/**
+ * @brief 统一清除当前运动状态。
+ */
+static void MotorMotion_ClearActiveState(void)
+{
+    s_motor_driver.motion_command_active = false;
+    s_motor_driver.motion_wait_active = false;
+    g_measurement.debug_data.motor_state = 0U;
+}
+
+/**
+ * @brief 判断当前位置是否已经到达或越过目标。
+ */
+static bool MotorMotion_ShouldStopAtTarget(float current_mm,
+                                           float target_mm,
+                                           float eps_mm,
+                                           int dir)
+{
+    if (fabsf(current_mm - target_mm) <= eps_mm) {
+        return true;
+    }
+    if (dir == MOTOR_DIRECTION_DOWN) {
+        return current_mm <= target_mm;
+    }
+    if (dir == MOTOR_DIRECTION_UP) {
+        return current_mm >= target_mm;
+    }
+    return false;
+}
+
+/**
+ * @brief 到位后下发停止并等待驱动确认停稳。
+ */
+static uint32_t MotorMotion_StopAtTargetAndWait(TMC5130TypeDef *tmc5130)
+{
+    uint32_t ret;
+
+    ret = MotorDriver_StopAndMarkStopped();
+    if (ret != NO_ERROR) {
+        return ret;
+    }
+
+    while (MotorCtrl_IsDriverMoving(tmc5130)) {
+        CHECK_COMMAND_SWITCH_AND_STOP(COMMAND_SWITCH_ABORT);
+        ret = MotorDriver_SyncPositionOrCheckHealth(tmc5130);
+        CHECK_ERROR(ret);
+        HAL_Delay(5U);
+    }
+
+    MotorMotion_ClearActiveState();
+    return NO_ERROR;
+}
 /* ===================== 私有函数实现 ===================== */
 
 /**
@@ -1055,9 +1163,7 @@ static uint32_t MotorMotion_WaitStopAbortable(uint32_t poll_ms)
     if (ret != NO_ERROR) {
         return ret;
     }
-    s_motor_driver.motion_command_active = false;
-    s_motor_driver.motion_wait_active = false;
-    g_measurement.debug_data.motor_state = 0U;
+    MotorMotion_ClearActiveState();
     return NO_ERROR;
 }
 
@@ -1081,13 +1187,11 @@ static uint32_t MotorMotion_WaitUntilStopWithTarget(TMC5130TypeDef *tmc5130,
     uint32_t last_vel_refresh_tick = startTick;
     const uint32_t MAX_WAIT_MS = 60000 * 60;
     char detail[96];
-    const uint32_t command_display_state = (dir == MOTOR_DIRECTION_UP) ? 1U : 2U;
+    const uint32_t command_display_state = MotorMotion_DisplayStateFromDirection(dir);
 
     while (MotorCtrl_IsDriverMoving(tmc5130)) {
 
-        s_motor_driver.motion_command_active = true;
-        s_motor_driver.motion_wait_active = true;
-        g_measurement.debug_data.motor_state = command_display_state;
+        MotorMotion_SetActiveState(command_display_state, true);
         CHECK_COMMAND_SWITCH_AND_STOP(COMMAND_SWITCH_ABORT);
         MotorDriver_RefreshVelocityDuringRun(tmc5130, &last_vel_refresh_tick);
         /* 每轮等待都刷新位置并检查驱动健康，覆盖运行中 24V 断电。 */
@@ -1097,62 +1201,9 @@ static uint32_t MotorMotion_WaitUntilStopWithTarget(TMC5130TypeDef *tmc5130,
         /* 1) 当前位置（mm） */
         float cur_mm = (float)g_measurement.debug_data.sensor_position / 10.0f;
 
-        /* 2) 到位（容差）-> 立即停机并返回成功 */
-        if (fabsf(cur_mm - target_mm) <= eps_mm) {
-            ret = MotorDriver_StopAndMarkStopped();
-            if (ret != NO_ERROR) {
-                return ret;
-            }
-            while (MotorCtrl_IsDriverMoving(tmc5130)) {
-                CHECK_COMMAND_SWITCH_AND_STOP(COMMAND_SWITCH_ABORT);
-                ret = MotorDriver_SyncPositionOrCheckHealth(tmc5130);
-                CHECK_ERROR(ret);
-                HAL_Delay(5);
-            }
-            s_motor_driver.motion_command_active = false;
-            s_motor_driver.motion_wait_active = false;
-            g_measurement.debug_data.motor_state = 0U;
-            return NO_ERROR;
-        }
-
-        /* 3) 越过目标也应停（结合方向口径）：
-         *    - 下行：cur 逐渐变小，越过目标意味着 cur <= target
-         *    - 上行：cur 逐渐变大，越过目标意味着 cur >= target
-         */
-        if (dir == MOTOR_DIRECTION_DOWN) {
-            if (cur_mm <= target_mm) {
-                ret = MotorDriver_StopAndMarkStopped();
-                if (ret != NO_ERROR) {
-                    return ret;
-                }
-                while (MotorCtrl_IsDriverMoving(tmc5130)) {
-                    CHECK_COMMAND_SWITCH_AND_STOP(COMMAND_SWITCH_ABORT);
-                    ret = MotorDriver_SyncPositionOrCheckHealth(tmc5130);
-                    CHECK_ERROR(ret);
-                    HAL_Delay(5);
-                }
-                s_motor_driver.motion_command_active = false;
-                s_motor_driver.motion_wait_active = false;
-                g_measurement.debug_data.motor_state = 0U;
-                return NO_ERROR;
-            }
-        } else {
-            if (cur_mm >= target_mm) {
-                ret = MotorDriver_StopAndMarkStopped();
-                if (ret != NO_ERROR) {
-                    return ret;
-                }
-                while (MotorCtrl_IsDriverMoving(tmc5130)) {
-                    CHECK_COMMAND_SWITCH_AND_STOP(COMMAND_SWITCH_ABORT);
-                    ret = MotorDriver_SyncPositionOrCheckHealth(tmc5130);
-                    CHECK_ERROR(ret);
-                    HAL_Delay(5);
-                }
-                s_motor_driver.motion_command_active = false;
-                s_motor_driver.motion_wait_active = false;
-                g_measurement.debug_data.motor_state = 0U;
-                return NO_ERROR;
-            }
+        /* 到位或越过目标都立即停机，停止收尾统一放在 helper 内。 */
+        if (MotorMotion_ShouldStopAtTarget(cur_mm, target_mm, eps_mm, dir)) {
+            return MotorMotion_StopAtTargetAndWait(tmc5130);
         }
 
         /* 4) 碰撞/极限检测 */
@@ -1188,9 +1239,7 @@ static uint32_t MotorMotion_WaitUntilStopWithTarget(TMC5130TypeDef *tmc5130,
 
     ret = MotorDriver_SyncPositionOrCheckHealth(tmc5130);
     CHECK_ERROR(ret);
-    s_motor_driver.motion_command_active = false;
-    s_motor_driver.motion_wait_active = false;
-    g_measurement.debug_data.motor_state = 0U;
+    MotorMotion_ClearActiveState();
     return NO_ERROR;
 }
 
@@ -1230,9 +1279,7 @@ static uint32_t MotorMotion_WaitStoppedAfterStopCommand(uint32_t timeout_ms)
             if (ret != NO_ERROR) {
                 return ret;
             }
-            s_motor_driver.motion_command_active = false;
-            s_motor_driver.motion_wait_active = false;
-            g_measurement.debug_data.motor_state = 0U;
+            MotorMotion_ClearActiveState();
             return NO_ERROR;
         }
 

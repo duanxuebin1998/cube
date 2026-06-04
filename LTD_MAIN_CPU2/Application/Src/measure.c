@@ -13,6 +13,7 @@
 #include "measure_density.h"
 #include "wartsila_density_measurement.h"
 #include "motor_ctrl.h"
+#include "motor_ctrl_internal.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include "test.h"
@@ -318,7 +319,7 @@ static void CMD_CancelMeasurement(void)
  *       - A+<mm>：电机上行指定距离
  *       - A-<mm>：电机下行指定距离
  *       - B<mm>: motor-model round-trip test
- *       - BE<mm>: encoder-based round-trip test, parameter unit is mm
+ *       - BE<mm>[,<速度m/min>,<加速度倍率>][S|,1]: encoder-based continuous round-trip test
  *       - C：电机步进分辨率测试
  *       - D：电机下行触底测试
  *       - E：电机上行碰零点测试
@@ -464,6 +465,120 @@ static uint8_t ProcessCommand_MapFormalCommand(uint8_t command_char, CommandType
         return 0U;
     }
 }
+#define PROCESS_BE_SPEED_DEFAULT      0U
+#define PROCESS_BE_MULTIPLIER_DEFAULT 1U
+#define PROCESS_BE_MULTIPLIER_MAX     20U
+
+typedef struct {
+    uint32_t speed_x100;
+    uint32_t accel_multiplier;
+    uint8_t enable_sensor_comm;
+} ProcessCommandBeOptions;
+
+/**
+ * @brief 限制 BE 调试倍率；0 或负数按 1 档，过大按上限处理。
+ */
+static uint32_t ProcessCommand_ClampBeMultiplier(long value)
+{
+    if (value <= 0L) {
+        return PROCESS_BE_MULTIPLIER_DEFAULT;
+    }
+    if (value > (long)PROCESS_BE_MULTIPLIER_MAX) {
+        return PROCESS_BE_MULTIPLIER_MAX;
+    }
+    return (uint32_t)value;
+}
+
+/**
+ * @brief 将 BE 命令速度从 m/min 转为 0.01m/min；0 表示沿用当前速度配置。
+ */
+static uint32_t ProcessCommand_ClampBeSpeedMMin(double value)
+{
+    double speed_x100;
+
+    if (!(value > 0.0)) {
+        return PROCESS_BE_SPEED_DEFAULT;
+    }
+
+    speed_x100 = value * 100.0;
+    if (speed_x100 < (double)MOTOR_LINEAR_SPEED_MIN_X100) {
+        return MOTOR_LINEAR_SPEED_MIN_X100;
+    }
+    if (speed_x100 > (double)MOTOR_LINEAR_SPEED_MAX_X100) {
+        return MOTOR_LINEAR_SPEED_MAX_X100;
+    }
+    return (uint32_t)(speed_x100 + 0.5);
+}
+
+/**
+ * @brief 解析 BE 可选参数，兼容旧的 BE100S 和 BE100,1 传感器通信写法。
+ * @note  新格式：BE距离,速度m/min,加速度倍率,S 或 BE距离,速度m/min,加速度倍率,1。
+ */
+static void ProcessCommand_ParseBeOptions(const char *arg, ProcessCommandBeOptions *options)
+{
+    const char *p;
+    double values[4] = {0.0, 0.0, 0.0, 0.0};
+    uint32_t value_count = 0U;
+
+    if (options == NULL) {
+        return;
+    }
+
+    options->speed_x100 = PROCESS_BE_SPEED_DEFAULT;
+    options->accel_multiplier = PROCESS_BE_MULTIPLIER_DEFAULT;
+    options->enable_sensor_comm = 0U;
+
+    if (arg == NULL) {
+        return;
+    }
+
+    p = arg;
+    while (*p != '\0') {
+        if (*p == 'S') {
+            options->enable_sensor_comm = 1U;
+            p++;
+            continue;
+        }
+        if (*p == ',') {
+            char *endptr;
+            double value;
+
+            p++;
+            if (*p == 'S') {
+                options->enable_sensor_comm = 1U;
+                p++;
+                continue;
+            }
+            value = strtod(p, &endptr);
+            if (endptr == p) {
+                p++;
+                continue;
+            }
+            if (value_count < 4U) {
+                values[value_count] = value;
+                value_count++;
+            }
+            p = endptr;
+            continue;
+        }
+        p++;
+    }
+
+    if ((value_count == 1U) && (values[0] == 1.0)) {
+        options->enable_sensor_comm = 1U;
+        return;
+    }
+
+    if (value_count >= 1U) {
+        options->speed_x100 = ProcessCommand_ClampBeSpeedMMin(values[0]);
+    }
+    if (value_count >= 2U) {
+        options->accel_multiplier = ProcessCommand_ClampBeMultiplier((long)values[1]);
+    }
+    if ((value_count >= 3U) && ((long)values[2] == 1L)) {
+        options->enable_sensor_comm = 1U;
+    }
+}
 
 void process_command(uint8_t *command) {
     uint32_t ret = NO_ERROR;
@@ -514,8 +629,12 @@ void process_command(uint8_t *command) {
     }
     if (command[0] == 'B') {
         const uint8_t use_encoder_count = (command[1] == 'E') ? 1U : 0U;
-        int value = atoi((char*) &command[use_encoder_count ? 2U : 1U]);
+        const char *arg = (const char *)&command[use_encoder_count ? 2U : 1U];
+        int value = atoi(arg);
         uint8_t enable_sensor_comm = 0U;
+        ProcessCommandBeOptions be_options;
+
+        ProcessCommand_ParseBeOptions(arg, &be_options);
 
         /* B100: motor model distance in mm; BE100: encoder-based distance in mm. */
         for (uint32_t i = use_encoder_count ? 2U : 1U; command[i] != '\0'; ++i) {
@@ -536,11 +655,17 @@ void process_command(uint8_t *command) {
         }
 
         if (use_encoder_count) {
-            printf("串口B指令\t命令参数\t模式=BE编码器\t距离=%dmm\t传感器通信=%u\r\n",
+            printf("串口B指令\t命令参数\t模式=BE编码器\t距离=%dmm\t速度=%.2fm/min\t速度x100=%lu\t加速度倍率=%lu\t运动中传感器通信=%u\r\n",
                    value,
-                   (unsigned int)enable_sensor_comm);
-            motor_text_encoder((float)value, enable_sensor_comm);
-            /* BE 正常设计为循环测试；如果返回，说明命令切换、编码器目标未达或底层错误已经触发退出。 */
+                   (double)be_options.speed_x100 / 100.0,
+                   (unsigned long)be_options.speed_x100,
+                   (unsigned long)be_options.accel_multiplier,
+                   (unsigned int)be_options.enable_sensor_comm);
+            motor_text_encoder((float)value,
+                               be_options.enable_sensor_comm,
+                               be_options.speed_x100,
+                               be_options.accel_multiplier);
+            /* BE 正常设计为循环测试；如果返回，通常是命令切换或参数异常。 */
             printf("串口B指令\tBE已返回\t距离=%dmm\t待执行命令=%lu\t当前命令=%lu\t新串口命令=%u\r\n",
                    value,
                    (unsigned long)g_deviceParams.command,

@@ -12,6 +12,7 @@
 #include "error_log.h"
 
 ErrorInfo err; // 全局错误信息变量
+static uint8_t s_handle_error_skip_logged = 0U;
 
 /**
  * @brief 错误打印函数
@@ -102,6 +103,15 @@ void FaultManager_SetErrorState(uint32_t error_code,
 void HandleError(void)
 {
     uint32_t ret;
+
+    if (!MotorCtrl_IsDriverInitValid()) {
+        if (s_handle_error_skip_logged == 0U) {
+            printf("错误停机跳过 | 电机驱动未初始化，等待自动恢复重新初始化\r\n");
+            s_handle_error_skip_logged = 1U;
+        }
+        return;
+    }
+    s_handle_error_skip_logged = 0U;
 
     ret = MotorCtrl_SlowStop();
     if (ret != NO_ERROR) {

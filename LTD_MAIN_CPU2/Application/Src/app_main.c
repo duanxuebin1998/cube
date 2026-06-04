@@ -72,7 +72,7 @@ static uint8_t App_HandleIdleGlobalError(void) {
                                        __LINE__,
                                        __func__);
 		} else {
-			HandleError();
+			/* 已经处于错误态时不再重复慢停，避免驱动失效后刷“电机被禁止”；恢复模块会负责重新初始化。 */
 			g_measurement.device_status.device_state = STATE_ERROR;
 			g_measurement.device_status.zero_point_status = 1;
 		}

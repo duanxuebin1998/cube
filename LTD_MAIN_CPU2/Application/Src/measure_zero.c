@@ -38,6 +38,20 @@ static uint8_t Zero_ShouldCheckDeviation(void)
 	       (g_measurement.device_status.device_state != STATE_FINDZEROING);
 }
 
+/* 回零内部重试只处理搜索类失败；电机驱动掉电/复位交给外层自动恢复重新初始化。 */
+static uint8_t Zero_IsMotorDriverRecoveryError(uint32_t error_code)
+{
+    switch (error_code) {
+    case MOTOR_TMC_COMM_ERROR:
+    case MOTOR_CHARGE_PUMP_UNDER_VOLTAGE:
+    case MOTOR_DISABLED:
+    case MOTOR_RUN_TIMEOUT:
+        return 1U;
+    default:
+        return 0U;
+    }
+}
+
 /**
  * @brief 主零点搜索流程
  *        先进行多次粗略找零点，成功后再进行两次精确找零点（均带可配置重试机制）
@@ -98,6 +112,11 @@ int SearchZero(void) {
                        (uint32_t)ZERO_SEARCH_RETRY_MAX,
                        ret);
 
+        if (Zero_IsMotorDriverRecoveryError(ret)) {
+            printf("零点测量    粗找检测到电机驱动故障，退出本轮命令等待自动恢复 | 错误码=0x%08lX\r\n",
+                   (unsigned long)ret);
+            return (int)ret;
+        }
         if (try_times >= ZERO_SEARCH_RETRY_MAX) {
             CHECK_ERROR(ret);
             break;
@@ -147,6 +166,11 @@ int SearchZero(void) {
 			               (uint32_t)try_times,
 			               (uint32_t)ZERO_SEARCH_RETRY_MAX,
 			               ret);
+			if (Zero_IsMotorDriverRecoveryError(ret)) {
+				printf("零点测量    精找检测到电机驱动故障，退出本轮命令等待自动恢复 | 错误码=0x%08lX\r\n",
+				       (unsigned long)ret);
+				return (int)ret;
+			}
 			if (try_times < ZERO_SEARCH_RETRY_MAX) {
 				ret = MotorCtrl_MoveAndWait(100.0, MOTOR_DIRECTION_DOWN, MotorCtrl_GetDefaultSpeedX100());
 				CHECK_ERROR(ret);

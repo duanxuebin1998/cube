@@ -315,6 +315,7 @@ FaultRecoveryResult FaultRecovery_Poll(void)
     uint32_t now;
     uint32_t check_ret;
     uint32_t retry_limit;
+    uint8_t need_motor_init;
 
     if (!s_fault_recovery.active) {
         return result;
@@ -337,8 +338,13 @@ FaultRecoveryResult FaultRecovery_Poll(void)
     }
     s_fault_recovery.last_check_tick = now; /* 记录本轮检查时刻，下一轮继续节流。 */
 
-    if (FaultRecovery_IsMotorDriverError(s_fault_recovery.error_code)) {
-        /* 电机驱动类故障先重新下发 TMC5130 配置，再读取部件参数确认整机是否恢复。 */
+    need_motor_init = FaultRecovery_IsMotorDriverError(s_fault_recovery.error_code) ? 1U : 0U;
+    if (!MotorCtrl_IsDriverInitValid()) {
+        need_motor_init = 1U;
+    }
+
+    if (need_motor_init != 0U) {
+        /* 电机驱动类故障或驱动状态已失效时，先重新下发 TMC5130 配置，再读取部件参数确认整机是否恢复。 */
         check_ret = MotorCtrl_Init();
         if ((check_ret == STATE_SWITCH) || HasEffectiveCommandSwitchRequest()) {
             FaultRecovery_Cancel("command switch");
