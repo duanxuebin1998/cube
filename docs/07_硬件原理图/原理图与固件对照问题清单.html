@@ -1,0 +1,418 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>原理图与固件对照问题清单</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --text: #1d2733;
+      --muted: #667085;
+      --line: #d9e0e8;
+      --paper: #ffffff;
+      --bg: #eef3f7;
+      --panel: #f7fafc;
+      --accent: #0f766e;
+      --accent-weak: #dff3ef;
+      --warn: #b45309;
+      --warn-weak: #fff1d6;
+      --code: #0f172a;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Microsoft YaHei", "Segoe UI", Arial, sans-serif;
+      color: var(--text);
+      background: var(--bg);
+      line-height: 1.72;
+    }
+    .page {
+      display: grid;
+      grid-template-columns: minmax(220px, 300px) minmax(0, 1fr);
+      gap: 28px;
+      max-width: 1360px;
+      margin: 0 auto;
+      padding: 28px;
+    }
+    aside {
+      position: sticky;
+      top: 20px;
+      align-self: start;
+      max-height: calc(100vh - 40px);
+      overflow: auto;
+      padding: 18px;
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+    }
+    main {
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 34px 42px 46px;
+    }
+    h1, h2, h3, h4 { line-height: 1.28; margin: 1.35em 0 0.65em; }
+    h1 { margin-top: 0; font-size: 30px; color: #102030; }
+    h2 {
+      padding-top: 14px;
+      border-top: 1px solid var(--line);
+      font-size: 23px;
+    }
+    h3 {
+      padding: 10px 12px;
+      background: var(--panel);
+      border-left: 4px solid var(--accent);
+      border-radius: 0 6px 6px 0;
+      font-size: 18px;
+    }
+    h3:nth-of-type(-n+3) { border-left-color: var(--warn); background: var(--warn-weak); }
+    p { margin: 0.65em 0; }
+    ul, ol { padding-left: 1.4em; margin: 0.5em 0 0.9em; }
+    li { margin: 0.2em 0; }
+    strong { color: #111827; }
+    code {
+      color: var(--code);
+      background: #eef2f6;
+      border: 1px solid #d8e0ea;
+      border-radius: 4px;
+      padding: 0.08em 0.35em;
+      font-family: Consolas, "SFMono-Regular", monospace;
+      font-size: 0.92em;
+    }
+    pre {
+      overflow: auto;
+      padding: 14px 16px;
+      background: #101828;
+      border-radius: 8px;
+    }
+    pre code {
+      color: #e5eef8;
+      background: transparent;
+      border: 0;
+      padding: 0;
+    }
+    .meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin: 0 0 22px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+    .pill {
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 3px 10px;
+      background: var(--panel);
+    }
+    .toc-title {
+      margin: 0 0 10px;
+      font-weight: 700;
+      color: #142033;
+    }
+    .toc a {
+      display: block;
+      color: #344054;
+      text-decoration: none;
+      border-radius: 6px;
+      padding: 5px 8px;
+      font-size: 14px;
+    }
+    .toc a:hover { background: var(--accent-weak); color: #0f766e; }
+    .toc-level-3 { padding-left: 20px !important; color: #667085 !important; }
+    .source-note {
+      margin-top: 14px;
+      padding-top: 12px;
+      border-top: 1px solid var(--line);
+      color: var(--muted);
+      font-size: 13px;
+    }
+    @media (max-width: 900px) {
+      .page { grid-template-columns: 1fr; padding: 14px; }
+      aside { position: static; max-height: none; }
+      main { padding: 24px 20px 34px; }
+      h1 { font-size: 25px; }
+    }
+    @media print {
+      body { background: #fff; }
+      .page { display: block; padding: 0; max-width: none; }
+      aside { display: none; }
+      main { border: 0; padding: 0; }
+      h2 { break-before: auto; }
+      h3 { break-inside: avoid; }
+      a { color: inherit; }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <aside>
+      <p class="toc-title">目录</p>
+      <nav class="toc">
+        <a class="toc-level-2" href="#对照范围">对照范围</a>
+<a class="toc-level-2" href="#总体结论">总体结论</a>
+<a class="toc-level-2" href="#高优先级问题">高优先级问题</a>
+<a class="toc-level-3" href="#cpu2-24v-12v-电源检测链路未形成固件闭环">1. CPU2 24V/12V 电源检测链路未形成固件闭环</a>
+<a class="toc-level-3" href="#cpu2-cpu3-原理图存在-`wdi`-网络-但固件没有外部看门狗-gpio-闭环">2. CPU2/CPU3 原理图存在 `WDI` 网络，但固件没有外部看门狗 GPIO 闭环</a>
+<a class="toc-level-3" href="#cpu2-hart-串口标签方向反了-协议格式也需要复核">3. CPU2 HART 串口标签方向反了，协议格式也需要复核</a>
+<a class="toc-level-2" href="#中优先级问题">中优先级问题</a>
+<a class="toc-level-3" href="#cpu2-spi2-spi3-的-miso-mosi-标签错误">4. CPU2 SPI2/SPI3 的 MISO/MOSI 标签错误</a>
+<a class="toc-level-3" href="#cpu3-hart-bpm-插座与固件支持边界不清">5. CPU3 HART/BPM 插座与固件支持边界不清</a>
+<a class="toc-level-3" href="#cpu2-传感器供电-`ba_en`-`sensor_enn`-缺少明确的运行时电源管理">6. CPU2 传感器供电 `BA_EN`/`SENSOR_ENN` 缺少明确的运行时电源管理</a>
+<a class="toc-level-3" href="#ad5421-故障引脚和状态寄存器未接入故障闭环">7. AD5421 故障引脚和状态寄存器未接入故障闭环</a>
+<a class="toc-level-2" href="#低优先级优化项">低优先级优化项</a>
+<a class="toc-level-3" href="#cpu3-oled-spi-配置可收敛为写-only">8. CPU3 OLED SPI 配置可收敛为写-only</a>
+<a class="toc-level-3" href="#`tmc5130_pins.h`-保留旧宏且自引用">9. `TMC5130_Pins.h` 保留旧宏且自引用</a>
+<a class="toc-level-3" href="#源码中文注释存在混合编码-乱码风险">10. 源码中文注释存在混合编码/乱码风险</a>
+<a class="toc-level-2" href="#已对齐或相对健康的点">已对齐或相对健康的点</a>
+<a class="toc-level-2" href="#建议验证顺序">建议验证顺序</a>
+      </nav>
+      <div class="source-note">由 Markdown 清单生成，源文件：<code>原理图与固件对照问题清单.md</code></div>
+    </aside>
+    <main>
+      <div class="meta">
+        <span class="pill">CUBE 硬件资料</span>
+        <span class="pill">CPU2 / CPU3 固件对照</span>
+        <span class="pill">更新日期：2026-06-06</span>
+      </div>
+      <h1 id="原理图与固件对照问题清单">原理图与固件对照问题清单</h1>
+      <p>更新日期：2026-06-06</p>
+      <h2 id="对照范围">对照范围</h2>
+      <ul>
+      <li>原理图：<code>00_原始资料/储罐自动计量仪原理图汇总.pdf</code></li>
+      <li>原理图整理：<code>储罐自动计量仪原理图汇总整理.md</code></li>
+      <li>固件工程：<code>LTD_MAIN_CPU2</code>、<code>LTD_DISPLAY_CPU3</code></li>
+      <li>验证命令：</li>
+      <ul>
+      <li><code>cmake --build build\LTD_MAIN_CPU2</code></li>
+      <li><code>cmake --build build\LTD_DISPLAY_CPU3</code></li>
+      </ul>
+      </ul>
+      <p>两个构建目标当前均为 <code>ninja: no work to do</code>，本清单关注的是硬件接口闭环、引脚命名、功能覆盖和可维护性风险，不是当前编译失败。</p>
+      <h2 id="总体结论">总体结论</h2>
+      <p>当前固件的核心测量、电机、CPU2/CPU3 内部通信、CPU3 COM1/COM2/COM3 方向控制等主流程已经有实现。风险主要集中在三类：</p>
+      <ol>
+      <li>原理图上已经预留或明确画出的硬件检测链路，在固件里没有形成闭环。</li>
+      <li>CubeMX 标签和实际外设方向不一致，短期不一定影响 HAL 复用功能，但会影响调试、维护和后续手动 GPIO 操作。</li>
+      <li>部分接口可能是预留接口，但固件中没有显式文档化为“未使用/预留”，容易在联调时误判为已支持。</li>
+      </ol>
+      <h2 id="高优先级问题">高优先级问题</h2>
+      <h3 id="cpu2-24v-12v-电源检测链路未形成固件闭环">1. CPU2 24V/12V 电源检测链路未形成固件闭环</h3>
+      <p><strong>原理图依据</strong></p>
+      <ul>
+      <li>主控板 CPU2 页包含 <code>24V-TEST</code>、<code>12V-TEST</code>、复位/看门狗和电源检测相关网络。</li>
+      <li>电源树页包含 <code>48VIN</code>、<code>24V_MD</code>、<code>24V</code>、<code>12V</code>、<code>5V</code>、<code>3V3</code> 等电源域。</li>
+      </ul>
+      <p><strong>固件现状</strong></p>
+      <ul>
+      <li><code>LTD_MAIN_CPU2.ioc</code> 中 PC2 标为 <code>POWER_24V_TEST</code>，PC3 标为 <code>POWER_12V_TEST</code>。</li>
+      <li><code>Core/Src/adc.c</code> 同时把 PC2/PC3 初始化为模拟输入，但 ADC1 只配置了 <code>ADC_CHANNEL_12</code>，<code>ScanConvMode = DISABLE</code>，<code>NbrOfConversion = 1</code>。</li>
+      <li>代码搜索未看到业务层调用 <code>HAL_ADC_Start</code>、<code>HAL_ADC_GetValue</code> 或对 <code>POWER_12V_TEST</code> 的运行时采样。</li>
+      <li>当前电机 24V 故障主要通过 TMC5130 <code>DRV_STATUS.CS_ACTUAL</code> 间接判断，不能替代 12V/24V 板级检测。</li>
+      </ul>
+      <p><strong>影响</strong></p>
+      <ul>
+      <li>12V 掉电、异常偏低或异常偏高无法被固件主动识别。</li>
+      <li>24V 检测电路存在，但没有形成独立诊断，电机侧只能在 TMC5130 已参与通信的场景下间接发现问题。</li>
+      <li>现场问题定位时，原理图上的电源检测点和固件诊断信息不一致。</li>
+      </ul>
+      <p><strong>建议</strong></p>
+      <ul>
+      <li>增加电源监测服务，至少轮询 PC2/PC3 两路 ADC。</li>
+      <li>ADC 配置改为双通道扫描，或每次采样前显式切换 <code>ADC_CHANNEL_12</code>/<code>ADC_CHANNEL_13</code>。</li>
+      <li>给 24V/12V 建立标定系数、阈值、迟滞和故障恢复策略，并接入 <code>error_log</code>/<code>fault_manager</code>。</li>
+      <li>将电源状态映射到 Modbus 调试寄存器，方便联调时直接查看。</li>
+      </ul>
+      <h3 id="cpu2-cpu3-原理图存在-`wdi`-网络-但固件没有外部看门狗-gpio-闭环">2. CPU2/CPU3 原理图存在 <code>WDI</code> 网络，但固件没有外部看门狗 GPIO 闭环</h3>
+      <p><strong>原理图依据</strong></p>
+      <ul>
+      <li>CPU2 主控页整理中列出复位/看门狗、<code>WDI</code>、<code>NRESET</code>。</li>
+      <li>CPU3 主控页整理中列出 <code>SEL_485</code>、<code>WDI</code> 等主控引脚和复位相关网络。</li>
+      </ul>
+      <p><strong>固件现状</strong></p>
+      <ul>
+      <li>CPU2/CPU3 都启用了 STM32 内部 IWDG，并通过 TIM4 中断刷新。</li>
+      <li>固件目录搜索 <code>WDI</code> 未发现业务 GPIO 或外部看门狗喂狗逻辑。</li>
+      <li><code>.ioc</code> 中看到的是虚拟 IWDG 外设配置，没有看到名为 <code>WDI</code> 的 GPIO 标签。</li>
+      </ul>
+      <p><strong>影响</strong></p>
+      <ul>
+      <li>如果板上外部看门狗芯片的 <code>WDI</code> 确实接到 MCU 并要求周期翻转，那么当前固件没有服务外部看门狗。</li>
+      <li>如果 <code>WDI</code> 被硬件固定或未装配，固件侧没有说明，后续维护会反复踩这个确认点。</li>
+      </ul>
+      <p><strong>建议</strong></p>
+      <ul>
+      <li>和硬件确认 <code>WDI</code> 是否装配、是否接 MCU、有效时序和是否允许空置。</li>
+      <li>如果需要服务外部看门狗，增加独立 GPIO 翻转逻辑，不要只依赖内部 IWDG。</li>
+      <li>在硬件文档中明确标注：外部 WDI 已使用、未装配、硬件禁用，或预留。</li>
+      </ul>
+      <h3 id="cpu2-hart-串口标签方向反了-协议格式也需要复核">3. CPU2 HART 串口标签方向反了，协议格式也需要复核</h3>
+      <p><strong>原理图依据</strong></p>
+      <ul>
+      <li>主控板 HART/4-20mA 页包含 <code>SD2017B</code>、<code>AD5421</code>、HART RTS/TX/RX 和外部回路。</li>
+      </ul>
+      <p><strong>固件现状</strong></p>
+      <ul>
+      <li><code>LTD_MAIN_CPU2.ioc</code> 中 PD5 是 <code>USART2_TX</code>，却标为 <code>HART_RXD2</code>；PD6 是 <code>USART2_RX</code>，却标为 <code>HART_TXD2</code>。</li>
+      <li><code>Core/Inc/main.h</code> 也生成了 <code>HART_RXD2_Pin = GPIO_PIN_5</code>、<code>HART_TXD2_Pin = GPIO_PIN_6</code>。</li>
+      <li><code>Core/Src/usart.c</code> 的 HAL 复用配置仍按 PD5/PD6 配置 USART2，因此电气复用本身大概率能工作。</li>
+      <li>USART2 配置为 <code>1200 + UART_WORDLENGTH_9B + UART_PARITY_NONE + 1 stop bit</code>。如果现场对接的是标准 HART 字符格式，需要确认是否应为 8 位数据加奇校验。</li>
+      </ul>
+      <p><strong>影响</strong></p>
+      <ul>
+      <li>调试日志、示波器标注、线束排查和后续手动控制 GPIO 时容易把 TX/RX 判断反。</li>
+      <li>如果 HART 对端要求奇校验，当前 <code>9B + NONE</code> 会按 9 位数据发送，而不是 8 位数据加校验。</li>
+      </ul>
+      <p><strong>建议</strong></p>
+      <ul>
+      <li>修正 CubeMX 标签：PD5 使用 <code>HART_TXD2</code>，PD6 使用 <code>HART_RXD2</code>。</li>
+      <li>复核 HART 字符格式；若确认需要奇校验，按 STM32 HAL 规则调整 WordLength/Parity。</li>
+      <li>用逻辑分析仪同时抓 PD5、PD6、<code>HART_RTS</code>，验证发送前 RTS 拉低、发送完成后回到接收、字节格式和校验位。</li>
+      </ul>
+      <h2 id="中优先级问题">中优先级问题</h2>
+      <h3 id="cpu2-spi2-spi3-的-miso-mosi-标签错误">4. CPU2 SPI2/SPI3 的 MISO/MOSI 标签错误</h3>
+      <p><strong>固件现状</strong></p>
+      <ul>
+      <li>SPI2：PB14 实际是 <code>SPI2_MISO</code>，但标签是 <code>MOTOR_SPI2_MOSI</code>；PB15 实际是 <code>SPI2_MOSI</code>，标签也是 <code>MOTOR_SPI2_MOSI</code>。</li>
+      <li>SPI3：PB4 实际是 <code>SPI3_MISO</code>，但标签是 <code>AD5421_SPI3_MOSI</code>；PB5 实际是 <code>SPI3_MOSI</code>，标签也是 <code>AD5421_SPI3_MOSI</code>。</li>
+      <li><code>main.h</code> 因此生成了 <code>MOTOR_SPI2_MOSI_Pin</code> 指向 PB14、<code>AD5421_SPI3_MOSI_Pin</code> 指向 PB4 等误导性宏名。</li>
+      </ul>
+      <p><strong>影响</strong></p>
+      <ul>
+      <li>HAL SPI 外设复用仍按实际 Signal 初始化，当前不一定影响通信。</li>
+      <li>任何后续手动 GPIO 调试、临时 bit-bang、示波器记录或驱动封装都会被宏名误导。</li>
+      </ul>
+      <p><strong>建议</strong></p>
+      <ul>
+      <li>修正 CubeMX GPIO 标签：PB14/PB4 使用 <code>MISO</code>，PB15/PB5 使用 <code>MOSI</code>。</li>
+      <li>更新生成后的宏名引用，避免保留 <code>MOSIB15</code> 这类自动补名。</li>
+      </ul>
+      <h3 id="cpu3-hart-bpm-插座与固件支持边界不清">5. CPU3 HART/BPM 插座与固件支持边界不清</h3>
+      <p><strong>原理图依据</strong></p>
+      <ul>
+      <li>CPU3 第 1 页包含 HART/BPM 接口连接器和滤波。</li>
+      <li>HART 板页包含 HART 本安端子、光耦隔离 RX/TX/RTS 和回路保护。</li>
+      </ul>
+      <p><strong>固件现状</strong></p>
+      <ul>
+      <li>CPU3 <code>.ioc</code> 和 <code>Core/Src/usart.c</code> 只配置了 UART5、USART1、USART2、USART3、USART6。</li>
+      <li>CPU3 固件中没有 UART4/UART8 初始化，也没有独立 HART/BPM 通讯模块。</li>
+      <li>COM1/COM2/COM3 主通道已有 USART6/USART2/USART3、DMA 接收、方向切换和参数重配逻辑。</li>
+      </ul>
+      <p><strong>影响</strong></p>
+      <ul>
+      <li>如果 CPU3 HART/BPM 插座是量产功能，当前固件缺少对应串口和协议实现。</li>
+      <li>如果只是硬件预留，当前文档未明确“预留/未支持”，联调时容易误解。</li>
+      </ul>
+      <p><strong>建议</strong></p>
+      <ul>
+      <li>明确 CPU3 HART/BPM 是否为本版本需求。</li>
+      <li>若需要支持，补齐对应 UART、RTS/方向控制、协议模块和错误上报。</li>
+      <li>若暂不支持，在硬件整理文档和版本说明中标为预留接口。</li>
+      </ul>
+      <h3 id="cpu2-传感器供电-`ba_en`-`sensor_enn`-缺少明确的运行时电源管理">6. CPU2 传感器供电 <code>BA_EN</code>/<code>SENSOR_ENN</code> 缺少明确的运行时电源管理</h3>
+      <p><strong>原理图依据</strong></p>
+      <ul>
+      <li>CPU2 传感侧电源/接口页包含由 <code>BA_EN</code> 控制的 24V 开关、<code>TXD6/RXD6</code> 缓冲、<code>OUT_12V</code>、<code>SA+</code>、<code>SB-</code>。</li>
+      </ul>
+      <p><strong>固件现状</strong></p>
+      <ul>
+      <li><code>SENSOR_ENN</code> 在 GPIO 初始化时默认写为 <code>GPIO_PIN_SET</code>。</li>
+      <li>搜索业务代码未看到专门的 <code>SensorPower_Enable/Disable</code> 封装或测量前后供电时序控制。</li>
+      <li>固件中大量传感器通信复用 USART6，但供电使能没有和通信状态机显式绑定。</li>
+      </ul>
+      <p><strong>影响</strong></p>
+      <ul>
+      <li>如果该脚为高有效，传感侧电源会在 GPIO 初始化阶段即打开。</li>
+      <li>如果该脚为低有效，命名 <code>ENN</code> 与原理图 <code>BA_EN</code> 容易造成有效电平误判。</li>
+      <li>传感器通信异常时，缺少通过断电/上电恢复的统一策略。</li>
+      </ul>
+      <p><strong>建议</strong></p>
+      <ul>
+      <li>和硬件确认 <code>BA_EN</code>/<code>SENSOR_ENN</code> 的有效电平。</li>
+      <li>封装 <code>SensorPower_SetEnabled(bool enabled)</code>，并在注释中写清有效电平。</li>
+      <li>测量前上电后增加稳定等待；通信连续失败时可选择受控重启传感器电源。</li>
+      </ul>
+      <h3 id="ad5421-故障引脚和状态寄存器未接入故障闭环">7. AD5421 故障引脚和状态寄存器未接入故障闭环</h3>
+      <p><strong>原理图依据</strong></p>
+      <ul>
+      <li>CPU2 HART/4-20mA 页包含 <code>AD5421</code> 输出、HART 回路和外部保护。</li>
+      </ul>
+      <p><strong>固件现状</strong></p>
+      <ul>
+      <li>PB8 配置为 <code>AD5421_FAULT</code> 输入。</li>
+      <li><code>ad5421.c</code> 中有 <code>AD5421_GetStatus()</code>，但自检 <code>CurrentSelfTest()</code> 被注释，<code>Ad5421Init()</code> 中也没有启用自检结果。</li>
+      <li>参数中有故障电流配置，但 AD5421 硬件故障没有看到接入 <code>fault_manager</code>。</li>
+      </ul>
+      <p><strong>影响</strong></p>
+      <ul>
+      <li>4-20mA 回路开路、过流、芯片 fault 等状态可能不能及时上报。</li>
+      <li>现场只看到输出异常，但固件没有明确故障码。</li>
+      </ul>
+      <p><strong>建议</strong></p>
+      <ul>
+      <li>初始化后读取 AD5421 fault/status，输出电流变化后也做一次状态确认。</li>
+      <li>将 PB8 fault 引脚和 <code>READFAULT</code> 结果合并成 4-20mA 输出故障码。</li>
+      <li>触发故障时按参数设置故障电流，并记录 <code>error_log</code>。</li>
+      </ul>
+      <h2 id="低优先级优化项">低优先级优化项</h2>
+      <h3 id="cpu3-oled-spi-配置可收敛为写-only">8. CPU3 OLED SPI 配置可收敛为写-only</h3>
+      <p><strong>固件现状</strong></p>
+      <ul>
+      <li>CPU3 SPI1 配置为 <code>SPI_DIRECTION_2LINES</code>、硬件 NSS，PA6 配置为 MISO。</li>
+      <li>OLED 驱动代码只调用 <code>HAL_SPI_Transmit()</code>，没有读取 MISO。</li>
+      </ul>
+      <p><strong>建议</strong></p>
+      <ul>
+      <li>如果 OLED 硬件确认为单向写入，SPI1 可改为 1-line TX 或保持 2-line 但在文档中说明 PA6/硬件 NSS 的用途。</li>
+      <li>这样可以减少未使用引脚和后续误判。</li>
+      </ul>
+      <h3 id="`tmc5130_pins.h`-保留旧宏且自引用">9. <code>TMC5130_Pins.h</code> 保留旧宏且自引用</h3>
+      <p><strong>固件现状</strong></p>
+      <ul>
+      <li><code>TMC5130_Pins.h</code> 中 <code>CHIP_SELECT_1_PIN</code> 指向 <code>TMC1_CS_Pin</code>，但当前工程实际片选是 <code>MOTOR_SPI2_CS_Pin</code>。</li>
+      <li>同一文件还存在 <code>#define TMC1_CS_Pin TMC1_CS_Pin</code> 的自引用宏。</li>
+      <li>当前 TMC5130 底层直接使用 <code>GPIOB/GPIO_PIN_12</code> 或调用方传入片选，因此构建未失败。</li>
+      </ul>
+      <p><strong>影响</strong></p>
+      <ul>
+      <li>该头文件一旦被其他模块按旧接口使用，会展开到不存在或无意义的符号。</li>
+      </ul>
+      <p><strong>建议</strong></p>
+      <ul>
+      <li>删除旧头文件，或改成明确映射到 <code>MOTOR_SPI2_CS_Pin</code>/<code>MOTOR_SPI2_CS_GPIO_Port</code>。</li>
+      <li>优先让 TMC5130 驱动只依赖结构体传入的硬件资源，减少双重来源。</li>
+      </ul>
+      <h3 id="源码中文注释存在混合编码-乱码风险">10. 源码中文注释存在混合编码/乱码风险</h3>
+      <p><strong>现象</strong></p>
+      <ul>
+      <li>部分文件中文注释正常，部分文件在 UTF-8 读取时出现乱码。</li>
+      <li>当前仓库要求修改文件时注意编码，避免中文乱码。</li>
+      </ul>
+      <p><strong>建议</strong></p>
+      <ul>
+      <li>对 CPU2/CPU3 源码做一次编码盘点，明确哪些文件是 GBK/936，哪些是 UTF-8。</li>
+      <li>后续修改中文注释前先确认文件编码。</li>
+      <li>新增文档保持 UTF-8；若需要批量转换源码，应单独立项并构建验证。</li>
+      </ul>
+      <h2 id="已对齐或相对健康的点">已对齐或相对健康的点</h2>
+      <ul>
+      <li>CPU2/CPU3 内部 IWDG 已启用，并通过 TIM4 中断刷新。</li>
+      <li>CPU3 COM1/COM2/COM3 已有 USART、DMA、方向控制和发送完成后回接收的逻辑。</li>
+      <li>CPU2 TMC5130 驱动已经增加 <code>DRV_STATUS.CS_ACTUAL</code> 等功率级健康检查，对电机 24V 断电有间接诊断能力。</li>
+      <li>CPU2 传感器链路 USART6 已有 DSM/LTD/无线 AT 相关通信逻辑，主要缺口是供电使能和硬件电源状态闭环。</li>
+      </ul>
+      <h2 id="建议验证顺序">建议验证顺序</h2>
+      <ol>
+      <li>先确认 <code>WDI</code>、<code>BA_EN</code>、CPU3 HART/BPM 是否为当前硬件装配和软件需求。</li>
+      <li>用万用表/示波器验证 PC2/PC3 分压输出和 24V/12V 标定关系。</li>
+      <li>用逻辑分析仪抓 HART PD5/PD6/RTS，确认方向、波特率、校验格式。</li>
+      <li>断开或拉低 12V/24V，确认固件能否记录并上报电源异常。</li>
+      <li>触发 AD5421 fault 条件，确认 PB8 和 fault/status 寄存器行为。</li>
+      <li>修改 CubeMX 标签后重新生成并构建 CPU2，确认不引入宏名回归。</li>
+      </ol>
+    </main>
+  </div>
+</body>
+</html>

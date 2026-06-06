@@ -1,6 +1,6 @@
 # 外部资料索引
 
-更新日期：2026-06-03
+更新日期：2026-06-06
 
 ## 目录用途
 
@@ -24,6 +24,8 @@
 | `01_标准与流程/HSG238_Out_of_Control_HSE.pdf` | [HSE HSG238](https://www.hse.gov.uk/pubns/priced/hsg238.pdf) | 安全相关控制系统实施、管理和验证流程参考 |
 | `02_编码规范与静态分析/MISRA_Compliance_2020.pdf` | [MISRA Compliance:2020](https://misra.org.uk/app/uploads/2021/06/MISRA-Compliance-2020.pdf) | deviation、compliance statement、规则偏离闭环依据 |
 | `02_编码规范与静态分析/MISRA_C_2012_Amendment_4.pdf` | [MISRA C:2012 Amendment 4](https://misra.org.uk/app/uploads/2023/03/MISRA-C-2012-AMD4.pdf) | 新增规则和修订内容参考，不能替代 MISRA C 主规则 |
+| `03_STM32与X-CUBE-STL/01_ST官方PDF/` | 用户提供的 ST 官方 SIL 资料 | STM32F4 Safety Manual、AN5140/AN5141、AN5321、AN5659、AN5698、AN5829、AN5936 等 |
+| `03_STM32与X-CUBE-STL/02_X-CUBE-STL-F4_V2.0.0包内文档/` | X-CUBE-STL-F4 V2.0.0 安装包内资料 | STL F4 用户手册、安全手册、包内发布说明和许可证 |
 
 ## 官方链接资料
 
@@ -33,7 +35,7 @@
 | IEC 61508 标准检索 | [IEC Webstore search](https://webstore.iec.ch/searchform&q=IEC%2061508) | 需采购 |
 | MISRA C 产品页 | [MISRA C](https://misra.org.uk/product/misra-c2012/) | 主规则需采购 |
 | SEI CERT C 在线规则库 | [SEI CERT C Coding Standard](https://wiki.sei.cmu.edu/confluence/display/c/SEI+CERT+C+Coding+Standard) | 链接保留 |
-| X-CUBE-STL 产品页 | [ST X-CUBE-STL](https://www.st.com/en/embedded-software/x-cube-stl.html) | 链接保留；本机直连 ST PDF 超时 |
+| X-CUBE-STL 产品页 | [ST X-CUBE-STL](https://www.st.com/en/embedded-software/x-cube-stl.html) | 链接保留；已归档用户提供的 F4 V2.0.0 资料 |
 | STM32F4 系列资料 | [ST STM32F429/439 product page](https://www.st.com/en/microcontrollers-microprocessors/stm32f429-439.html) | 链接保留，CPU2 当前为 STM32F429ZGTx |
 
 ## 资料使用建议

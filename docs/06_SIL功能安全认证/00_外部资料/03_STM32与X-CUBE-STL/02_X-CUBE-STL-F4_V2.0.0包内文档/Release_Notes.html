@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="generator" content="pandoc" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+  <title>Release Notes for X-CUBE-STL-F4 Package</title>
+  <style type="text/css">
+      code{white-space: pre-wrap;}
+      span.smallcaps{font-variant: small-caps;}
+      span.underline{text-decoration: underline;}
+      div.column{display: inline-block; vertical-align: top; width: 50%;}
+  </style>
+  <link rel="stylesheet" href="_htmresc/mini-st_2020.css" />
+  <!--[if lt IE 9]>
+    <script src="//cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv-printshiv.min.js"></script>
+  <![endif]-->
+  <link rel="icon" type="image/x-icon" href="_htmresc/favicon.png" />
+</head>
+<body>
+<div class="row">
+<div class="col-sm-12 col-lg-4">
+<center>
+<h1 id="release-notes-for-x-cube-stl-f4"><small>Release Notes for</small> <mark>X-CUBE-STL-F4</mark></h1>
+<h1 id="expansion-package-for-stm32cube"><small>Expansion package for STM32Cube</small></h1>
+<p>Copyright © 2019 STMicroelectronics<br />
+</p>
+<p><a href="https://www.st.com" class="logo"><img src="./_htmresc/st_logo_2020.png" alt="ST logo" /></a></p>
+</center>
+<h1 id="purpose">Purpose</h1>
+<p>The X-CUBE-STL-F4 <strong>Self-Test Library (STL)</strong> is an application-independent software test library released by ST to implement a relevant subset of safety mechanisms required by the safety concepts applicable to microcontrollers of the STM32F4 Series.</p>
+<p>The STL is compilation tool chain-agnostic, so it can be compiled by any standard C-compiler. STL is an autonomous software, which executes on application demand selected tests to detect HW issues, and reports the outcomes to the application. STL is delivered partly in object code (for the library itself) and partly in source code for the user interfaces definition and user parameters settings.</p>
+<p>The X-CUBE-STL-F4 is built on top of STM32Cube software technology.</p>
+<p>The X-CUBE-STL-F4 software comes with example implementations running on NUCLEO-F413ZH.</p>
+<p>X-CUBE-STL-F4 software features:</p>
+<ul>
+<li>STL tests of the CPU Arm® core.</li>
+<li>STL tests of the Flash memory.</li>
+<li>STL tests of the RAM.</li>
+</ul>
+<p>The figure below shows the overall architecture.</p>
+<center>
+<img src="_htmresc/STM32Cube_safety_STL.png" alt="architecture" />
+</center>
+<p>Here is the list of references to user documents:</p>
+<ul>
+<li><a href="https://www.st.com/resource/en/user_manual/DM00107720.pdf">UM1730</a> : Getting started with STM32CubeF4 for STM32F4 Series</li>
+<li><a href="https://www.st.com/resource/en/user_manual/DM00105879.pdf">UM1725</a> : Description of STM32F4 HAL and low-layer drivers</li>
+<li><a href="https://www.st.com/resource/en/user_manual/DM00112348.pdf">UM1743</a> : STM32CubeF4 Nucleo demonstration firmware</li>
+<li><a href="STL_F4_SM_cx616769_7.0.pdf">UM2490</a>: STM32F4 Series self-test library safety manual</li>
+<li><a href="STL_F4_UG_cx616705_4.0.pdf">UM2494</a>: STM32F4 Series self-test library user guide</li>
+<li><a href="STL_ES_cx757577_2.0.pdf">ES0573</a>: X-CUBE-STL software and documentation errata</li>
+<li>AN5659: Safety self-test library Arm® Cortex®-M integration tips</li>
+</ul>
+</div>
+<div class="col-sm-12 col-lg-8">
+<h1 id="update-history">Update History</h1>
+<div class="collapse">
+<input type="checkbox" id="collapse-section2" checked aria-hidden="true"> <label for="collapse-section2" aria-hidden="true"><strong>V2.0.0 / 19-December-2022</strong></label>
+<div>
+<h2 id="main-changes">Main Changes</h2>
+<h3 id="maintenance-release">Maintenance release</h3>
+<p>Maintenance for X-CUBE-STL-F4 with</p>
+<ul>
+<li>STL updated</li>
+<li>Applications updated</li>
+<li>Drivers updated</li>
+</ul>
+<h2 id="contents">Contents</h2>
+<p><strong>Projects</strong> information</p>
+<p>The X-CUBE-STL-F4 package:</p>
+<ul>
+<li><p>comes with a set of Applications running on STMicroelectronics board, STM32F413ZH-Nucleo-144</p></li>
+<li><p>offers full scope of Applications ported on 3 toolchains</p></li>
+</ul>
+<table>
+<thead>
+<tr class="header">
+<th style="text-align: left;">Name</th>
+<th style="text-align: left;">Version</th>
+<th style="text-align: left;">Release note</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">Projects</td>
+<td style="text-align: left;">V2.0.0</td>
+<td style="text-align: left;"><a href="Projects\Release_Notes.html">release note</a></td>
+</tr>
+</tbody>
+</table>
+<h2 id="components">Components</h2>
+<p><small>The components flagged by “<span class="icon-st-update"></span>” have changed since the previous release. “<span class="icon-st-add"></span>” are new.</small></p>
+<p><strong>Drivers</strong></p>
+<table>
+<thead>
+<tr class="header">
+<th style="text-align: left;">Name</th>
+<th style="text-align: left;">Version</th>
+<th style="text-align: left;">Release note</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">Cortex®-M CMSIS</td>
+<td style="text-align: left;">V5.4.0_cm4 <span class="icon-st-update"></span></td>
+<td style="text-align: left;"><a href="Drivers/CMSIS/Docs/index.html">release note</a></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">STM32F4xx CMSIS</td>
+<td style="text-align: left;">V2.6.8 <span class="icon-st-update"></span></td>
+<td style="text-align: left;"><a href="Drivers/CMSIS/Device/ST/STM32F4xx/Release_Notes.html">release note</a></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">BSP STM32F4xx_Nucleo</td>
+<td style="text-align: left;">V1.2.8 <span class="icon-st-update"></span></td>
+<td style="text-align: left;"><a href="Drivers/BSP/STM32F4xx_Nucleo/Release_Notes.html">release note</a></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">BSP STM32F4xx_Nucleo_144</td>
+<td style="text-align: left;">V1.0.4 <span class="icon-st-update"></span></td>
+<td style="text-align: left;"><a href="Drivers/BSP/STM32F4xx_Nucleo_144/Release_Notes.html">release note</a></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">STM32F4 HAL/LL APIs</td>
+<td style="text-align: left;">V1.8.0 <span class="icon-st-update"></span></td>
+<td style="text-align: left;"><a href="Drivers/STM32F4xx_HAL_Driver/Release_Notes.html">release note</a></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Middlewares</strong></p>
+<table>
+<thead>
+<tr class="header">
+<th style="text-align: left;">Name</th>
+<th style="text-align: left;">Version</th>
+<th style="text-align: left;">Release note</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">Safety Self Test Library (STL)</td>
+<td style="text-align: left;">V2.0.0 <span class="icon-st-update"></span></td>
+<td style="text-align: left;"><a href="Middlewares/ST/STM32_Safety_STL/Release_Notes.html">release note</a></td>
+</tr>
+</tbody>
+</table>
+<h2 id="documents">Documents</h2>
+<p><small>The components flagged by “<span class="icon-st-update"></span>” have changed since the previous release. “<span class="icon-st-add"></span>” are new.</small></p>
+<table>
+<thead>
+<tr class="header">
+<th style="text-align: left;">Name</th>
+<th style="text-align: left;">md5sum</th>
+<th style="text-align: left;">Document</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">STL_F4_SM_cx616769_7.0.pdf <span class="icon-st-update"></span></td>
+<td style="text-align: left;">b0844c54bee0a1d27de11060ad679173</td>
+<td style="text-align: left;"><a href="STL_F4_SM_cx616769_7.0.pdf">document</a></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">STL_F4_UG_cx616705_4.0.pdf <span class="icon-st-update"></span></td>
+<td style="text-align: left;">7608c53fa93b9d96d9fc1b51dbf9623d</td>
+<td style="text-align: left;"><a href="STL_F4_UG_cx616705_4.0.pdf">document</a></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">STL_ES_cx757577_2.0.pdf <span class="icon-st-add"></span></td>
+<td style="text-align: left;">dcac8befbf50404a26c48a55b9508202</td>
+<td style="text-align: left;"><a href="STL_ES_cx757577_2.0.pdf">document</a></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">STL_STM32_AN_Integration_tips_cx723078_x.y.pdf <span class="icon-st-add"></span></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">To request to ST to get the most updated version</td>
+</tr>
+</tbody>
+</table>
+<h2 id="development-toolchains-and-compilers">Development Toolchains and Compilers</h2>
+<ul>
+<li>IAR Embedded Workbench for ARM (EWARM) toolchain V8.40.2 + ST-Link</li>
+<li>RealView Microcontroller Development Kit (MDK-ARM) toolchain V5.25 + ST-Link</li>
+<li>System Workbench STM32 (SW4STM32) toolchain V2.5 + ST-Link</li>
+<li>STM32CubeIDE v1.9.0 (please refer to the Toolchain Management chapter of the CubeIDE User Guide)</li>
+</ul>
+<p>Refer to Project <a href="Projects\Release_Notes.html">release note</a> for additional information</p>
+<h2 id="supported-devices-and-boards">Supported Devices and boards</h2>
+<ul>
+<li>STM32F413ZH-Nucleo-144 kit RevB (MB1137 B-01)</li>
+</ul>
+<h2 id="known-limitations">Known Limitations</h2>
+<p>None</p>
+<h2 id="backward-compatibility">Backward Compatibility</h2>
+<ul>
+<li>STL Errata Sheet version 2.0 is no longer applicable to this release, but it is kept in the package for the sake of consistency</li>
+</ul>
+</div>
+</div>
+<div class="collapse">
+<input type="checkbox" id="collapse-section1" aria-hidden="true"> <label for="collapse-section1" aria-hidden="true"><strong>V1.1.0 / 8-April-2020</strong></label>
+<div>
+<h2 id="main-changes-1">Main Changes</h2>
+<h3 id="release-package-updated">Release package updated</h3>
+<p>The Safety Manual and the User Guide are now included in the release package.</p>
+<p>So, even if the project version (associated to that document) is updated, the release content itself is exactly the same as in the version V1.0.0</p>
+<table>
+<caption>Documents</caption>
+<thead>
+<tr class="header">
+<th style="text-align: left;">Name</th>
+<th style="text-align: left;">md5sum</th>
+<th style="text-align: left;">Document</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">STL_F4_SM_cx616769_5.0.pdf</td>
+<td style="text-align: left;">e79c4ccb075c78bdcbc7ed5a00442e84</td>
+<td style="text-align: left;"><a href="STL_F4_SM_cx616769_5.0.pdf">document</a></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">STL_F4_UG_cx616705_3.0.pdf</td>
+<td style="text-align: left;">74e9b6e69ef8fc2dbd627e13e1dc0318</td>
+<td style="text-align: left;"><a href="STL_F4_UG_cx616705_3.0.pdf">document</a></td>
+</tr>
+</tbody>
+</table>
+<table>
+<caption>Projects</caption>
+<thead>
+<tr class="header">
+<th style="text-align: left;">Name</th>
+<th style="text-align: left;">Version</th>
+<th style="text-align: left;">Copyright owner</th>
+<th style="text-align: left;">License</th>
+<th style="text-align: left;">Release note</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">Application projects STM32F413ZH-Nucleo</td>
+<td style="text-align: left;">V1.1.0</td>
+<td style="text-align: left;">STMicroelectronics International N.V.</td>
+<td style="text-align: left;"><a href="http://www.st.com/SLA0044">Ultimate Liberty</a></td>
+<td style="text-align: left;">N/A see Application readme.txt file</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<div class="collapse">
+<input type="checkbox" id="collapse-section0" aria-hidden="true"> <label for="collapse-section0" aria-hidden="true"><strong>V1.0.0 / 12-April-2019</strong></label>
+<div>
+<h2 id="main-changes-2">Main Changes</h2>
+<h3 id="first-release">First release</h3>
+<p>First official release of X-CUBE-STL-F4 supporting STM32F4 series.</p>
+<h2 id="contents-1">Contents</h2>
+<table>
+<caption>Drivers</caption>
+<thead>
+<tr class="header">
+<th style="text-align: left;">Name</th>
+<th style="text-align: left;">Version</th>
+<th style="text-align: left;">Copyright owner</th>
+<th style="text-align: left;">License</th>
+<th style="text-align: left;">Release note</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">BSP STM32F4xx_Nucleo_144</td>
+<td style="text-align: left;">V1.0.3</td>
+<td style="text-align: left;">STMicroelectronics International N.V.</td>
+<td style="text-align: left;"><a href="https://opensource.org/licenses/BSD-3-Clause">BSD 3-Clause</a></td>
+<td style="text-align: left;"><a href="Drivers/BSP/STM32F4xx_Nucleo_144/Release_Notes.html">release note</a></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">BSP STM32F4xx_Nucleo</td>
+<td style="text-align: left;">V1.2.7</td>
+<td style="text-align: left;">STMicroelectronics International N.V.</td>
+<td style="text-align: left;"><a href="https://opensource.org/licenses/BSD-3-Clause">BSD 3-Clause</a></td>
+<td style="text-align: left;"><a href="Drivers/BSP/STM32F4xx_Nucleo/Release_Notes.html">release note</a></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Cortex®-M CMSIS</td>
+<td style="text-align: left;">V4.5</td>
+<td style="text-align: left;">Arm®</td>
+<td style="text-align: left;"><a href="https://opensource.org/licenses/BSD-3-Clause">BSD 3-Clause</a></td>
+<td style="text-align: left;"><a href="Drivers/CMSIS/index.html">release note</a></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">STM32F4xx CMSIS</td>
+<td style="text-align: left;">V2.6.2</td>
+<td style="text-align: left;">STMicroelectronics International N.V.</td>
+<td style="text-align: left;"><a href="https://opensource.org/licenses/BSD-3-Clause">BSD 3-Clause</a></td>
+<td style="text-align: left;"><a href="Drivers/CMSIS/Device/ST/STM32F4xx/Release_Notes.html">release note</a></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">STM32F4 HAL/LL APIs</td>
+<td style="text-align: left;">V1.7.4</td>
+<td style="text-align: left;">STMicroelectronics International N.V.</td>
+<td style="text-align: left;"><a href="https://opensource.org/licenses/BSD-3-Clause">BSD 3-Clause</a></td>
+<td style="text-align: left;"><a href="Drivers/STM32F4xx_HAL_Driver/Release_Notes.html">release note</a></td>
+</tr>
+</tbody>
+</table>
+<table>
+<caption>Middlewares</caption>
+<thead>
+<tr class="header">
+<th style="text-align: left;">Name</th>
+<th style="text-align: left;">Version</th>
+<th style="text-align: left;">Copyright owner</th>
+<th style="text-align: left;">License</th>
+<th style="text-align: left;">Release note</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">STM32 safety (binary and source code)</td>
+<td style="text-align: left;">V1.0.0</td>
+<td style="text-align: left;">STMicroelectronics International N.V.</td>
+<td style="text-align: left;"><a href="http://www.st.com/SLA0047">Image</a></td>
+<td style="text-align: left;"><a href="Middlewares/ST/STM32_Safety_STL/Release_Notes.html">release note</a></td>
+</tr>
+</tbody>
+</table>
+<table>
+<caption>Projects</caption>
+<thead>
+<tr class="header">
+<th style="text-align: left;">Name</th>
+<th style="text-align: left;">Version</th>
+<th style="text-align: left;">Copyright owner</th>
+<th style="text-align: left;">License</th>
+<th style="text-align: left;">Release note</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">Application projects STM32F413ZH-Nucleo</td>
+<td style="text-align: left;">V1.0.0</td>
+<td style="text-align: left;">STMicroelectronics International N.V.</td>
+<td style="text-align: left;"><a href="http://www.st.com/SLA0044">Ultimate Liberty</a></td>
+<td style="text-align: left;">N/A see Application readme.txt file</td>
+</tr>
+</tbody>
+</table>
+<p><br />
+</p>
+<h2 id="known-limitations-1">Known Limitations</h2>
+<p>None</p>
+<h2 id="development-toolchains-and-compilers-1">Development Toolchains and Compilers</h2>
+<ul>
+<li>IAR Embedded Workbench for ARM (EWARM) toolchain V8.20.2 + ST-Link</li>
+<li>RealView Microcontroller Development Kit (MDK-ARM) toolchain V5.25 + ST-Link</li>
+<li>System Workbench STM32 (SW4STM32) toolchain V2.5 + ST-Link</li>
+</ul>
+<h2 id="supported-devices-and-boards-1">Supported Devices and boards</h2>
+<ul>
+<li>STM32F413ZH-Nucleo-144 kit RevB (MB1137 B-01)</li>
+</ul>
+</div>
+</div>
+</div>
+</div>
+<footer class="sticky">
+<p>For complete documentation on <strong>STM32</strong>, visit: <a href="https://www.st.com/en/microcontrollers-microprocessors.html">www.st.com/STM32</a></p>
+This release note uses up to date web standards and, for this reason, should not be opened with Internet Explorer but preferably with popular browsers such as Google Chrome, Mozilla Firefox, Opera or Microsoft Edge.
+</footer>
+</body>
+</html>
