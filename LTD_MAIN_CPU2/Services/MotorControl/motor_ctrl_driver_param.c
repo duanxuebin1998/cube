@@ -317,17 +317,6 @@ uint32_t MotorDriver_CheckHealth(MotorDriverHealthMode mode)
     return NO_ERROR;
 }
 
-/**
- * @brief 持久设置电机速度参数。
- *
- * 空闲时只更新设备参数；运行中会立即重算 VMAX 并写入驱动。
- * @param speed_x100 请求速度，单位 0.01m/min。
- * @return 成功返回 NO_ERROR，否则返回参数或通信错误码。
- */
-uint32_t MotorCtrl_SetSpeed(uint32_t speed_x100)
-{
-    return MotorDriver_SetSpeedInternal(speed_x100, true);
-}
 
 /**
  * @brief 应用电机速度参数，可选择是否打印用户操作结果。

@@ -46,8 +46,6 @@ HAL_StatusTypeDef Start_Encoder_Collection_TIM(void);
 uint32_t AS5145_GetLastError(void);
 /* 是否已经收到过一帧有效 SSI 数据；供启动门控判断编码器是否真正可用。 */
 bool AS5145_HasValidSample(void);
-/* 最近一次有效 SSI 帧的系统 tick，用于现场判断编码器数据新鲜度。 */
-uint32_t AS5145_GetLastOkTick(void);
 /* 等待首帧有效 SSI 数据；会短延时轮询，只能在任务上下文调用，不能在中断里调用。 */
 uint32_t AS5145_WaitFirstValidSample(uint32_t timeout_ms);
 

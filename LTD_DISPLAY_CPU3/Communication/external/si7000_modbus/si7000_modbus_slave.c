@@ -969,25 +969,7 @@ static uint8_t si7000_handle_write_single_reg(const uint8_t *pdu,
     return 1U;
 }
 
-/*
- * 设置 SI7000 从站地址兜底值。
- * 系统 SlaveAddress 合法时优先使用系统地址，本值只在系统地址非法时生效。
- */
-void si7000_modbus_set_slave_address(uint8_t addr)
-{
-    if ((addr >= 1U) && (addr <= 247U)) {
-        s_slave_address = addr;
-    }
-}
 
-/*
- * 获取当前 SI7000 有效从站地址。
- * 返回值可能来自系统 SlaveAddress，也可能来自本模块兜底地址。
- */
-uint8_t si7000_modbus_get_slave_address(void)
-{
-    return si7000_get_effective_slave_address();
-}
 
 /*
  * 手动同步 SI7000 四类寄存器影子区。

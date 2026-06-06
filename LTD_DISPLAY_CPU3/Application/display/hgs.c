@@ -201,26 +201,6 @@ void all_screen(uint8_t m) {
 //    }
 //
 //}
-/* 清屏 - 局部范围内 */
-void CLS_scope(uint8_t row_start, uint8_t row_end, uint8_t column_start, uint8_t column_end) {
-	uint32_t j, i;
-
-	//Column Address
-	WriteCommand(0x15); /* Set Column Address */
-	WriteCommand(column_start); /* Start = 0 */
-	WriteCommand(column_end); /* End = 127 */
-	// Row Address
-	WriteCommand(0x75); /* Set Row Address */
-	WriteCommand(row_start); /* Start = 0 */
-	WriteCommand(row_end); /* End = 80 */
-	for (j = row_start; j < row_end; j++) /* 80 row */
-	{
-		for (i = column_start; i < column_end; i++) /* 64*2=128 column  a nibble of command is a dot*/
-		{
-			WriteSingleData(0);
-		}
-	}
-}
 /*********************************
  写入一个8*16的字母
  *********************************/
@@ -326,36 +306,3 @@ void OLED_Init(void) {
 	WriteCommand(0x02); /* 03=内部 02=外部 */
 
 }
-
-/* 显示 128 * 64 单色位图 */
-void oled_map_128_64(uint8_t *map) {
-	uint16_t j, i;
-	int x_start, x_stop;    //横向
-	int y_start, y_stop;    //纵向
-
-	int b_x = 128;
-	int b_y = 64;
-
-	x_start = 0;
-	x_stop = b_x / 2;
-
-	y_start = 0;
-	y_stop = b_y;
-
-	//设置列
-	WriteCommand(0x75); /* 范围 0x0C ~ 0x4B */
-	WriteCommand(0x0c + y_start); /* Start*/
-	WriteCommand(0x0c + y_stop - 1); /* End */
-	//设置行
-	WriteCommand(0x15); /* 范围 0x00 ~ 0x3F */
-	WriteCommand(0x00 + x_start); /* Start*/
-	WriteCommand(0x00 + x_stop - 1); /* End*/
-
-	for (j = 0; j < (y_stop - y_start); j++) {
-		for (i = 0; i < 16; i++) /* 16*8 column  a nibble of command is a dot*/
-		{
-			write_4_byte(map[(j << 4) + i]);        // 取16个字节后换行
-		}
-	}
-}
-

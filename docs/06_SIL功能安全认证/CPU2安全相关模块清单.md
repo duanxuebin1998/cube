@@ -2,7 +2,7 @@
 
 日期：2026-06-02
 
-用途：为 CPU2 编码规范、静态分析、偏离记录和后续 SIL3 准备工作划定模块范围。
+用途：为 CPU2 编码规范、静态分析、偏离记录和后续 SIL2 准备工作划定模块范围。
 
 ## 1. 分级原则
 
@@ -88,10 +88,10 @@ CPU2 模块按安全影响分为四级：
 | `LTD_MAIN_CPU2/Services/Modbus/**` | CPU2 对外/内部寄存器协议 | 外部命令或参数影响安全动作 | 寄存器写入必须范围检查 |
 | `LTD_MAIN_CPU2/Services/Hart/**` | AD5421/HART 相关 | 输出电流错误影响故障指示 | 检查故障电流策略 |
 | `LTD_MAIN_CPU2/Services/Weight/**` | 称重和碰撞辅助判断 | 误触发或漏触发碰撞判断 | 阈值范围、方向判断 |
-| `LTD_MAIN_CPU2/Drivers/Peripherals/src/TMC5130.c` | 电机驱动芯片底层访问 | 寄存器写错、读数异常 | 保留偏离，强化返回值 |
-| `LTD_MAIN_CPU2/Drivers/Peripherals/src/AS5145.c` | 编码器底层访问 | 数据异常或 DMA 处理错误 | 保留偏离，强化错误传播 |
-| `LTD_MAIN_CPU2/Drivers/Peripherals/src/mb85rs2m.c` | FRAM 访问 | 参数持久化失败 | 地址边界和返回值 |
-| `LTD_MAIN_CPU2/Drivers/Peripherals/src/ad5421.c` | 电流输出 | 故障电流错误 | 输出范围和状态确认 |
+| `LTD_MAIN_CPU2/BSP/Peripherals/src/TMC5130.c` | 电机驱动芯片底层访问 | 寄存器写错、读数异常 | 保留偏离，强化返回值 |
+| `LTD_MAIN_CPU2/BSP/Peripherals/src/AS5145.c` | 编码器底层访问 | 数据异常或 DMA 处理错误 | 保留偏离，强化错误传播 |
+| `LTD_MAIN_CPU2/BSP/Peripherals/src/mb85rs2m.c` | FRAM 访问 | 参数持久化失败 | 地址边界和返回值 |
+| `LTD_MAIN_CPU2/BSP/Peripherals/src/ad5421.c` | 电流输出 | 故障电流错误 | 输出范围和状态确认 |
 
 ## 5. S3 非安全/调试模块
 

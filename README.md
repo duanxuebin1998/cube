@@ -1,6 +1,6 @@
 # CUBE 仓库导览与新人上手指南
 
-> 最后核对时间：2026-03-05  
+> 最后核对时间：2026-06-06
 > 目标：帮助新同学在 1~2 天内建立“能编译、能跟流程、知道改哪里”的整体认知。
 
 ---
@@ -123,8 +123,8 @@ cmake --build build/LTD_DISPLAY_CPU3
 - `Services/`
   - `Modbus/`：协议处理与寄存器映射
   - `ParamStorage/`：参数结构、FRAM 持久化、CRC
-  - `MotorControl/`、`Sensor/`、`Weight/` 等：业务服务
-- `Drivers/Peripherals/`：具体芯片驱动（TMC5130、AD5421、FRAM 等）
+  - `MotorControl/`、`Sensor/`、`Weight/`、`Relay/` 等：业务服务
+- `BSP/Peripherals/`：具体芯片驱动（TMC5130、AS5145、AD5421、FRAM、CH9141K 等）
 
 ### 5.3 串口收包进入业务路径
 
@@ -168,7 +168,7 @@ CPU3 使用统一的 `IDLE + DMA` 接收框架：
 ### 7.1 两个核心结构
 
 - `DeviceParameters`：设备参数全集（控制、算法、输出、校验）
-- `MeasurementResult`：运行态结果全集（状态、调试、油水位、密度等）
+- `MeasurementResult`：运行态结果全集（状态、调试、油水位、密度、无线滑环匹配、继电器方式2运行态等）
 
 CPU2 全局对象：
 
@@ -190,6 +190,9 @@ CPU2 全局对象：
 2. 寄存器枚举/地址
 3. 读写映射代码
 4. CPU3 参数元数据（菜单、读写权限、显示）
+5. `DEVICE_PROTOCOL_VERSION` 与 `docs/01_协议与寄存器/CPU2_CPU3协议变更记录.md`
+
+当前 CPU2/CPU3 共享协议使用 `DeviceParameters.protocolVersion` 严格相等判断兼容性；固件版本只用于显示、发布追踪和构建产物命名。
 
 ---
 

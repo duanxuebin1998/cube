@@ -27,7 +27,6 @@ static inline void COM3_RecvMode(void) { COM3_SET_RECV_MODE(); }
 
 
 
-void CommuToCPU2Init(void);
 void HostCommuProcess(uint8_t*rcv,int len);
 void PollingInputData(void);
 void CPU2_CombinatePackage_Send(uint8_t f_code,uint16_t startadd,uint16_t registercnt,uint32_t* holddata);

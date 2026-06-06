@@ -308,22 +308,6 @@ void InputValueInit(void)
 		g_measurement.relay_alarm_runtime[channel].clear_alarm = RELAY_ALARM_CLEAR_NO;
 	}
 }
-/* 未与CPU2通讯成功时，需设置设备的故障状态 */
-void setEquipStateError(void)
-{
-//    static uint32_t const comerrcode = 0x000A0001;
-//    /* 设备状态 */
-//    input_register_value[INPUT_EQUIPMENTSTATE << 1] = 0xFF;
-//    input_register_value[(INPUT_EQUIPMENTSTATE << 1) + 1] = 0xFF;
-//    /* 故障代码 */
-//    input_register_value[INPUT_ERRORCODE << 1] = (comerrcode >> 24) & 0xFF;
-//    input_register_value[(INPUT_ERRORCODE << 1) + 1] = (comerrcode >> 16) & 0xFF;
-//    input_register_value[(INPUT_ERRORCODE << 1) + 2] = (comerrcode >> 8) & 0xFF;
-//    input_register_value[(INPUT_ERRORCODE << 1) + 3] = comerrcode & 0xFF;
-//
-//    //更新数据
-//    Analysis04Register();
-}
 /* 新增函数：打印所有设备参数 */
 void print_device_params(void)
 {

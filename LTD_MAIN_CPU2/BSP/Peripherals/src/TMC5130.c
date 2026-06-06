@@ -463,15 +463,6 @@ bool stpr_tryReadInt(TMC5130TypeDef *tmc5130, uint8_t address, int32_t *value)
     return tmc5130_readRegisterOnce(tmc5130, address, value);
 }
 
-int32_t stpr_readInt(TMC5130TypeDef *tmc5130, uint8_t address)
-{
-    int32_t value = 0;
-
-    if (!stpr_tryReadInt(tmc5130, address, &value)) {
-        return 0;
-    }
-    return value;
-}
 
 /************************ 内部速度模式工具 / 位置控制接口 ************************/
 

@@ -4,7 +4,6 @@
 #include "main.h"
 #include "system_parameter.h"
 
-//extern char SoftOfversion6;
 //#define SOFTOFVERSION_0 1213 // 程序版本
 //#define SOFTOFVERSION_1 'P'	 // 程序版本
 //#define SOFTOFVERSION_2 'B'	 // 程序版本

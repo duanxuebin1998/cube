@@ -281,14 +281,6 @@ bool AS5145_HasValidSample(void) {
     return ssi_first_valid_sample;
 }
 
-/**
- * @brief 获取最近一次有效 SSI 帧的 tick。
- *
- * 用于现场排查编码器数据是否持续刷新，不会触发新的 SPI 传输。
- */
-uint32_t AS5145_GetLastOkTick(void) {
-    return ssi_last_ok_tick;
-}
 
 /**
  * @brief 等待启动后的首帧有效 SSI 数据。

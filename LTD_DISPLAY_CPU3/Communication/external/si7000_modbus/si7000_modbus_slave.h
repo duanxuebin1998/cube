@@ -23,15 +23,12 @@ Si7000ModbusResult si7000_modbus_process(const uint8_t *rx_buf,
                                          uint16_t rx_len,
                                          uint8_t *tx_buf,
                                          uint16_t *tx_len);
-/* 适配 COM_DispatchProtocol 的 uint32_t 返回值口径。 */
+/* 主分发使用的 uint32_t 返回值口径。 */
 uint32_t si7000_modbus_process_for_dispatch(const uint8_t *rx_buf,
                                             uint16_t rx_len,
                                             uint8_t *tx_buf,
                                             uint16_t *tx_len);
 
-/* 地址优先跟随系统 SlaveAddress，外部设置值只作为系统地址非法时的兜底。 */
-void si7000_modbus_set_slave_address(uint8_t addr);
-uint8_t si7000_modbus_get_slave_address(void);
 
 /* 手动刷新四类 SI7000 影子区，主要供测试或后续联调入口调用。 */
 void si7000_modbus_sync_from_system(void);

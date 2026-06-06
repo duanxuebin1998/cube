@@ -1,0 +1,851 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CPU2 安全版与现场版双版本架构方案</title>
+  <style>
+    :root {
+      --bg: #f7f8fb;
+      --panel: #ffffff;
+      --text: #1f2937;
+      --muted: #5b6472;
+      --line: #d8dee9;
+      --primary: #0f766e;
+      --primary-soft: #e0f2f1;
+      --danger: #b42318;
+      --danger-soft: #fee4e2;
+      --warn: #a15c07;
+      --warn-soft: #fff3d6;
+      --ok: #166534;
+      --ok-soft: #dcfce7;
+      --code: #111827;
+      --code-bg: #f3f4f6;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: "Segoe UI", "Microsoft YaHei", Arial, sans-serif;
+      line-height: 1.65;
+    }
+
+    header {
+      background: linear-gradient(135deg, #0f766e, #2563eb);
+      color: #ffffff;
+      padding: 34px 28px 32px;
+    }
+
+    header .inner,
+    main {
+      max-width: 1160px;
+      margin: 0 auto;
+    }
+
+    h1 {
+      margin: 0 0 12px;
+      font-size: 32px;
+      line-height: 1.2;
+      letter-spacing: 0;
+    }
+
+    .subtitle {
+      max-width: 920px;
+      margin: 0;
+      color: rgba(255, 255, 255, 0.88);
+      font-size: 16px;
+    }
+
+    main {
+      padding: 26px 20px 56px;
+    }
+
+    section {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 22px 24px;
+      margin: 18px 0;
+      box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+    }
+
+    h2 {
+      margin: 0 0 14px;
+      color: #0f172a;
+      font-size: 22px;
+      letter-spacing: 0;
+    }
+
+    h3 {
+      margin: 20px 0 10px;
+      color: #111827;
+      font-size: 17px;
+      letter-spacing: 0;
+    }
+
+    p {
+      margin: 8px 0 12px;
+    }
+
+    a {
+      color: #0f766e;
+      text-decoration: none;
+    }
+
+    a:hover {
+      text-decoration: underline;
+    }
+
+    .meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 18px;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      min-height: 30px;
+      padding: 4px 10px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.16);
+      color: #ffffff;
+      border: 1px solid rgba(255, 255, 255, 0.26);
+      font-size: 13px;
+    }
+
+    .toc {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 10px;
+      margin-top: 8px;
+    }
+
+    .toc a {
+      display: block;
+      padding: 10px 12px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: #fbfcfe;
+      color: var(--text);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 12px 0 16px;
+      font-size: 14px;
+    }
+
+    th,
+    td {
+      border: 1px solid var(--line);
+      padding: 10px 12px;
+      vertical-align: top;
+      text-align: left;
+    }
+
+    th {
+      background: #eef2f7;
+      color: #111827;
+      font-weight: 600;
+    }
+
+    tr:nth-child(even) td {
+      background: #fbfcfe;
+    }
+
+    code {
+      padding: 2px 5px;
+      border-radius: 4px;
+      background: var(--code-bg);
+      color: var(--code);
+      font-family: Consolas, "Courier New", monospace;
+      font-size: 0.94em;
+    }
+
+    pre {
+      margin: 12px 0 16px;
+      padding: 14px 16px;
+      overflow-x: auto;
+      border: 1px solid #cfd6e4;
+      border-radius: 8px;
+      background: #111827;
+      color: #f9fafb;
+      font-family: Consolas, "Courier New", monospace;
+      font-size: 13px;
+      line-height: 1.55;
+    }
+
+    pre code {
+      padding: 0;
+      border-radius: 0;
+      background: transparent;
+      color: inherit;
+    }
+
+    ul,
+    ol {
+      margin: 8px 0 14px 22px;
+      padding: 0;
+    }
+
+    li {
+      margin: 6px 0;
+    }
+
+    .callout {
+      border-left: 4px solid var(--primary);
+      background: var(--primary-soft);
+      padding: 12px 14px;
+      border-radius: 6px;
+      margin: 14px 0;
+    }
+
+    .callout.warn {
+      border-left-color: var(--warn);
+      background: var(--warn-soft);
+    }
+
+    .callout.danger {
+      border-left-color: var(--danger);
+      background: var(--danger-soft);
+    }
+
+    .callout.ok {
+      border-left-color: var(--ok);
+      background: var(--ok-soft);
+    }
+
+    .flow {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 10px;
+      margin: 14px 0;
+    }
+
+    .flow .node {
+      min-height: 72px;
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fbfcfe;
+      text-align: center;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 600;
+    }
+
+    .grid2 {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(310px, 1fr));
+      gap: 14px;
+      margin: 12px 0;
+    }
+
+    .card {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fbfcfe;
+      padding: 14px;
+    }
+
+    .card h3 {
+      margin-top: 0;
+    }
+
+    .tag {
+      display: inline-block;
+      padding: 2px 7px;
+      border-radius: 4px;
+      background: #e5e7eb;
+      color: #111827;
+      font-size: 12px;
+      font-weight: 600;
+      margin-right: 4px;
+    }
+
+    .tag.s0 {
+      background: #dcfce7;
+      color: #166534;
+    }
+
+    .tag.s1 {
+      background: #dbeafe;
+      color: #1d4ed8;
+    }
+
+    .tag.s2 {
+      background: #fef3c7;
+      color: #92400e;
+    }
+
+    .tag.s3 {
+      background: #fee2e2;
+      color: #991b1b;
+    }
+
+    footer {
+      max-width: 1160px;
+      margin: 0 auto;
+      padding: 0 20px 40px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="inner">
+      <h1>CPU2 安全版与现场版双版本架构方案</h1>
+      <p class="subtitle">
+        本文用于指导 LTD_MAIN_CPU2 在一套源码下同时维护 SIL 安全认证版、现场正式版和开发调试版，
+        并把液位测量、4-20mA 输出、四路继电器方式2 HH/H/L/LL 报警等安全功能形成清晰、可审查、可复现的工程边界。
+      </p>
+      <div class="meta">
+        <span class="pill">工程：LTD_MAIN_CPU2</span>
+        <span class="pill">主题：SIL 软件架构</span>
+        <span class="pill">日期：2026-06-06</span>
+        <span class="pill">状态：实施方案</span>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <section id="purpose">
+      <h2>一、目标和基本结论</h2>
+      <p>
+        当前 CPU2 是安全功能板，安全功能涉及液位测量、4-20mA 输出和四路继电器方式2 HH/H/L/LL 报警输出。
+        由于找液位流程依赖传感器、编码器、电机控制和参数存储，不能简单把驱动层排除在安全范围外。
+      </p>
+      <div class="callout">
+        <strong>核心结论：</strong>不要维护两套源码。应维护一套源码，通过明确的目录边界、接口边界和 CMake 显式源码清单，
+        生成 <code>SAFETY</code>、<code>FIELD</code>、<code>DEV</code> 三类构建产物。
+      </div>
+      <p>
+        安全版和现场版的关系不是“安全代码”和“非安全代码”两套并列程序，而是：
+      </p>
+      <pre><code>安全认证版 = 安全核心 + 安全支撑 + X-CUBE-STL + 最小启动入口
+现场正式版 = 安全核心 + 安全支撑 + X-CUBE-STL + 现场辅助功能
+开发调试版 = 安全核心 + 安全支撑 + 现场辅助功能 + 调试测试代码</code></pre>
+    </section>
+
+    <section id="toc">
+      <h2>二、文档导航</h2>
+      <div class="toc">
+        <a href="#function-boundary">安全功能边界</a>
+        <a href="#variants">版本定义</a>
+        <a href="#classification">代码分类</a>
+        <a href="#architecture">推荐架构</a>
+        <a href="#rules">强制隔离规则</a>
+        <a href="#cmake">CMake 构建维护</a>
+        <a href="#implementation">实施阶段</a>
+        <a href="#checks">自动检查</a>
+        <a href="#acceptance">验收标准</a>
+      </div>
+    </section>
+
+    <section id="function-boundary">
+      <h2>三、安全功能边界</h2>
+      <p>
+        建议把 CPU2 的安全功能声明为下列闭环链路，而不是泛化为“CPU2 所有功能都是安全功能”。
+      </p>
+      <pre><code>CPU2 完成液位测量，并基于有效液位值输出：
+1. 4-20mA 液位电流信号
+2. 四路继电器方式2 HH/H/L/LL 液位报警信号
+3. 故障时进入定义的安全状态</code></pre>
+
+      <div class="flow">
+        <div class="node">传感器<br>编码器<br>电机</div>
+        <div class="node">找液位流程</div>
+        <div class="node">液位有效性判断</div>
+        <div class="node">4-20mA 输出</div>
+        <div class="node">继电器报警</div>
+        <div class="node">反馈诊断<br>故障降级</div>
+      </div>
+
+      <table>
+        <thead>
+          <tr>
+            <th>链路环节</th>
+            <th>是否安全相关</th>
+            <th>原因</th>
+            <th>工程处理</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>液位测量结果</td>
+            <td>是</td>
+            <td>错误液位会直接导致错误电流或错误继电器报警。</td>
+            <td>保留认证用单一路径，加入有效性、新鲜度和范围检查。</td>
+          </tr>
+          <tr>
+            <td>传感器、编码器、电机</td>
+            <td>是，作为安全支撑</td>
+            <td>这些驱动会影响找液位结果。</td>
+            <td>通过安全接口封装，并增加合理性诊断。</td>
+          </tr>
+          <tr>
+            <td>AD5421 4-20mA 输出</td>
+            <td>是</td>
+            <td>直接构成安全功能输出。</td>
+            <td>只能由 <code>Safety/Output</code> 控制。</td>
+          </tr>
+          <tr>
+            <td>四路继电器方式2 HH/H/L/LL 报警</td>
+            <td>是</td>
+            <td>直接构成报警输出。</td>
+            <td>只能由 <code>Safety/Output</code> 控制，并检查 NO/NC 反馈。</td>
+          </tr>
+          <tr>
+            <td>Modbus/HART/日志/显示</td>
+            <td>非安全或现场辅助</td>
+            <td>不应直接影响安全输出。</td>
+            <td>现场版可编译，但必须通过安全接口读写状态和参数。</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="variants">
+      <h2>四、版本定义</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>构建变体</th>
+            <th>用途</th>
+            <th>编译范围</th>
+            <th>产物建议命名</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>SAFETY</code></td>
+            <td>SIL 认证、型式测试、安全基线</td>
+            <td>S0 安全核心 + S1 安全支撑 + X-CUBE-STL + 最小启动入口</td>
+            <td><code>LTD_MAIN_CPU2_Vx.x.x.x_SAFETY.hex</code></td>
+          </tr>
+          <tr>
+            <td><code>FIELD</code></td>
+            <td>实际现场交付、运维、通信、参数管理</td>
+            <td>S0 + S1 + S2 现场辅助 + X-CUBE-STL</td>
+            <td><code>LTD_MAIN_CPU2_Vx.x.x.x_FIELD.hex</code></td>
+          </tr>
+          <tr>
+            <td><code>DEV</code></td>
+            <td>内部开发调试、问题定位、实验功能</td>
+            <td>S0 + S1 + S2 + S3 调试测试代码</td>
+            <td><code>LTD_MAIN_CPU2_Vx.x.x.x_DEV.hex</code></td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="callout warn">
+        <strong>注意：</strong><code>FIELD</code> 不是“放松安全要求”的非安全版。只要 CPU2 在现场仍负责液位安全输出，
+        现场版就必须保留同一套安全核心，并且不能绕过安全输出接口。
+      </div>
+    </section>
+
+    <section id="classification">
+      <h2>五、代码分类方法</h2>
+      <p>
+        所有 CPU2 源码文件需要在代码范围矩阵中标成 S0、S1、S2、S3。分类的关键不是目录名，而是它是否会影响安全输出。
+      </p>
+      <table>
+        <thead>
+          <tr>
+            <th>分类</th>
+            <th>含义</th>
+            <th>典型内容</th>
+            <th>SAFETY</th>
+            <th>FIELD</th>
+            <th>DEV</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><span class="tag s0">S0</span>安全核心</td>
+            <td>直接决定安全功能输出和故障状态。</td>
+            <td>安全监督、液位有效性、4-20mA 输出、继电器输出、故障降级。</td>
+            <td>编译</td>
+            <td>编译</td>
+            <td>编译</td>
+          </tr>
+          <tr>
+            <td><span class="tag s1">S1</span>安全支撑</td>
+            <td>会影响安全功能输入或安全核心判断。</td>
+            <td>找液位、传感器、编码器、电机控制、必要参数、基础驱动。</td>
+            <td>编译</td>
+            <td>编译</td>
+            <td>编译</td>
+          </tr>
+          <tr>
+            <td><span class="tag s2">S2</span>现场辅助</td>
+            <td>服务现场使用，但不允许直接影响安全输出。</td>
+            <td>Modbus、HART、日志、CPU3 通信、现场维护。</td>
+            <td>不编译或只读接口</td>
+            <td>编译</td>
+            <td>编译</td>
+          </tr>
+          <tr>
+            <td><span class="tag s3">S3</span>调试测试</td>
+            <td>实验、人工测试、临时命令和未受控输出。</td>
+            <td><code>test.c</code>、人工输出测试、临时串口命令、调试脚本入口。</td>
+            <td>不编译</td>
+            <td>不编译</td>
+            <td>编译</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>当前工程需要重点关注的文件</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>文件或模块</th>
+            <th>建议分类</th>
+            <th>说明</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>Application/Src/measure_oilLevel.c</code></td>
+            <td>S1</td>
+            <td>找液位逻辑依赖多层驱动，不能简单排除。后续应抽出认证用单一路径。</td>
+          </tr>
+          <tr>
+            <td><code>BSP/Peripherals/src/ad5421.c</code></td>
+            <td>S1/S0 支撑</td>
+            <td>底层驱动可作为支撑，但写电流的调用权限必须收口到 <code>Safety/Output</code>。</td>
+          </tr>
+          <tr>
+            <td><code>Services/Relay/relay_output.c</code></td>
+            <td>S2 或重写为 S0 子集</td>
+            <td>当前功能较宽，支持多来源、多通道和复杂报警逻辑。安全版建议写一个更窄的安全继电器模块。</td>
+          </tr>
+          <tr>
+            <td><code>Services/ParamStorage/system_parameter.c/h</code></td>
+            <td>S1 子集</td>
+            <td>不能整体纳入安全范围。应抽取 AO/DO、报警阈值、故障电流等安全参数快照。</td>
+          </tr>
+          <tr>
+            <td><code>Application/Src/test.c</code></td>
+            <td>S3</td>
+            <td>安全版和现场正式版均不应编译。</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="architecture">
+      <h2>六、推荐架构</h2>
+      <p>
+        推荐先新增 <code>Safety/</code> 目录，把安全判断和安全输出收口进去；旧模块先不大规模移动，避免一次性改造风险过大。
+      </p>
+      <pre><code>LTD_MAIN_CPU2/
+  Core/                  STM32 初始化、中断、时钟、GPIO、SPI、IWDG
+  Drivers/               ST HAL/CMSIS
+  BSP/                   外设驱动：AD5421、AS5145、TMC5130、FRAM 等
+
+  Safety/
+    Core/
+      safety_supervisor.c
+      safety_state.c
+    Input/
+      safety_level_input.c
+    Measure/
+      safety_level_measure.c
+    Output/
+      safety_analog_output.c
+      safety_relay_output.c
+    Diagnostics/
+      safety_stl.c
+      safety_output_diag.c
+    Config/
+      safety_config.c
+      safety_config.h
+
+  Application/
+    Src/
+      safety_app.c
+      field_app.c
+      dev_app.c</code></pre>
+
+      <div class="grid2">
+        <div class="card">
+          <h3>安全核心入口</h3>
+          <p>安全版主循环只运行安全入口，减少非安全任务对安全链路的干扰。</p>
+          <pre><code>void SafetyApp_Init(void);
+void SafetyApp_Run(void);</code></pre>
+        </div>
+        <div class="card">
+          <h3>现场版入口</h3>
+          <p>现场版可以运行通信和日志，但安全输出仍然由安全核心独占。</p>
+          <pre><code>void FieldApp_Init(void);
+void FieldApp_Run(void);</code></pre>
+        </div>
+      </div>
+    </section>
+
+    <section id="rules">
+      <h2>七、强制隔离规则</h2>
+      <div class="callout danger">
+        <strong>安全输出写权限必须独占。</strong>只要存在非安全模块直接写 AD5421 或 RELAY GPIO，安全边界就不清晰。
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>规则</th>
+            <th>允许</th>
+            <th>禁止</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>4-20mA 输出</td>
+            <td><code>Safety/Output/safety_analog_output.c</code> 调用 <code>AD5421_SetCurrent()</code></td>
+            <td>Modbus、HART、测试代码、应用层直接调用 <code>AD5421_SetCurrent()</code></td>
+          </tr>
+          <tr>
+            <td>继电器输出</td>
+            <td><code>Safety/Output/safety_relay_output.c</code> 写 <code>RELAYx</code></td>
+            <td>非安全模块直接 <code>HAL_GPIO_WritePin(RELAYx...)</code></td>
+          </tr>
+          <tr>
+            <td>安全参数</td>
+            <td>通过 <code>Safety_RequestConfigUpdate()</code> 请求更新</td>
+            <td>通信层直接改安全阈值并立即生效</td>
+          </tr>
+          <tr>
+            <td>故障状态</td>
+            <td><code>Safety/Core</code> 统一锁定和清除</td>
+            <td>非安全模块绕过安全监督清故障</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>推荐接口</h3>
+      <pre><code>typedef struct {
+    uint32_t level_01mm;
+    uint8_t valid;
+    uint32_t timestamp_ms;
+} SafetyLevelSnapshot;
+
+void Safety_Init(void);
+void Safety_Run10ms(void);
+void Safety_UpdateLevel(const SafetyLevelSnapshot *level);
+uint8_t Safety_RequestConfigUpdate(const SafetyConfig *config);
+SafetyStatus Safety_GetStatus(void);</code></pre>
+    </section>
+
+    <section id="cmake">
+      <h2>八、CMake 构建维护</h2>
+      <p>
+        当前 <code>LTD_MAIN_CPU2/CMakeLists.txt</code> 使用 <code>GLOB</code> 自动收集源码。双版本维护时必须改为显式源码清单，
+        否则新增测试文件可能被自动编进安全版。
+      </p>
+      <pre><code>set(CPU2_VARIANT "FIELD" CACHE STRING "CPU2 build variant: SAFETY, FIELD, DEV")
+
+set(CPU2_COMMON_SOURCES
+    Core/Src/main.c
+    Core/Src/gpio.c
+    Core/Src/spi.c
+    Core/Src/iwdg.c
+    BSP/Peripherals/src/ad5421.c
+    BSP/Peripherals/src/AS5145.c
+    BSP/Peripherals/src/TMC5130.c
+)
+
+set(CPU2_SAFETY_SOURCES
+    Safety/Core/safety_supervisor.c
+    Safety/Measure/safety_level_measure.c
+    Safety/Input/safety_level_input.c
+    Safety/Output/safety_analog_output.c
+    Safety/Output/safety_relay_output.c
+    Safety/Diagnostics/safety_stl.c
+)
+
+set(CPU2_FIELD_SOURCES
+    Services/Modbus/dataanalysis_modbus.c
+    Services/Hart/...
+)
+
+set(CPU2_DEV_SOURCES
+    Application/Src/test.c
+)</code></pre>
+
+      <h3>构建命令</h3>
+      <pre><code>cmake -S LTD_MAIN_CPU2 -B build/LTD_MAIN_CPU2_safety -G Ninja `
+  "-DCMAKE_TOOLCHAIN_FILE=D:/CUBE/cmake/toolchain-arm-none-eabi.cmake" `
+  -DCMAKE_BUILD_TYPE=Release `
+  -DCPU2_VARIANT=SAFETY
+
+cmake -S LTD_MAIN_CPU2 -B build/LTD_MAIN_CPU2_field -G Ninja `
+  "-DCMAKE_TOOLCHAIN_FILE=D:/CUBE/cmake/toolchain-arm-none-eabi.cmake" `
+  -DCMAKE_BUILD_TYPE=Release `
+  -DCPU2_VARIANT=FIELD</code></pre>
+    </section>
+
+    <section id="implementation">
+      <h2>九、实施阶段</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>阶段</th>
+            <th>工作内容</th>
+            <th>输出物</th>
+            <th>完成标准</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>1. 代码范围矩阵</td>
+            <td>逐个文件标注 S0/S1/S2/S3、是否进入 SAFETY、纳入理由和依赖。</td>
+            <td><code>CPU2安全功能代码范围矩阵.md</code></td>
+            <td>每个安全相关文件都有分类和理由。</td>
+          </tr>
+          <tr>
+            <td>2. 输出权限收口</td>
+            <td>把 AD5421 和 RELAY GPIO 写操作集中到 <code>Safety/Output</code>。</td>
+            <td>安全输出接口和调用替换记录</td>
+            <td>非安全模块不再直接写安全输出。</td>
+          </tr>
+          <tr>
+            <td>3. 找液位单路径化</td>
+            <td>安全版只保留认证用液位测量路径，剥离密度、水位、调试测量分支。</td>
+            <td><code>safety_level_measure.c</code></td>
+            <td>安全版液位路径唯一、可追踪。</td>
+          </tr>
+          <tr>
+            <td>4. 参数安全化</td>
+            <td>抽取 AO/DO、报警阈值、故障电流和量程参数，做范围、单位、互斥、CRC 检查。</td>
+            <td><code>safety_config.c/.h</code></td>
+            <td>参数更新必须通过安全接口。</td>
+          </tr>
+          <tr>
+            <td>5. 引入 X-CUBE-STL</td>
+            <td>通过 <code>safety_stl.c</code> 调度 CPU、Flash、RAM 自检。</td>
+            <td>STL 封装、链接脚本配置、启动/周期测试策略</td>
+            <td>STL 失败进入安全故障状态。</td>
+          </tr>
+          <tr>
+            <td>6. 双版本 CMake</td>
+            <td>取消自动 <code>GLOB</code>，建立 <code>SAFETY/FIELD/DEV</code> 显式源码清单。</td>
+            <td>改造后的 <code>CMakeLists.txt</code></td>
+            <td>三个变体可独立构建，产物可区分。</td>
+          </tr>
+          <tr>
+            <td>7. 自动检查</td>
+            <td>增加扫描脚本，检查安全版中是否存在越权调用。</td>
+            <td>构建前检查脚本</td>
+            <td>检查失败时阻止安全版发布。</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="checks">
+      <h2>十、自动检查建议</h2>
+      <p>
+        自动检查不是替代代码审查，而是防止明显越权调用进入安全版。
+      </p>
+      <table>
+        <thead>
+          <tr>
+            <th>检查项</th>
+            <th>失败条件</th>
+            <th>处理方式</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>安全版源码清单</td>
+            <td><code>test.c</code> 或 S3 文件进入 <code>SAFETY</code></td>
+            <td>构建失败</td>
+          </tr>
+          <tr>
+            <td>AD5421 写权限</td>
+            <td>非 <code>Safety/Output</code> 文件调用 <code>AD5421_SetCurrent</code></td>
+            <td>构建前检查失败</td>
+          </tr>
+          <tr>
+            <td>继电器写权限</td>
+            <td>非 <code>Safety/Output</code> 文件写 <code>RELAYx</code></td>
+            <td>构建前检查失败</td>
+          </tr>
+          <tr>
+            <td>安全参数更新</td>
+            <td>通信层直接修改安全参数并生效</td>
+            <td>代码审查或脚本扫描阻止</td>
+          </tr>
+          <tr>
+            <td>看门狗喂狗</td>
+            <td>中断或非安全任务直接喂狗</td>
+            <td>收口到安全监督健康检查后喂狗</td>
+          </tr>
+        </tbody>
+      </table>
+      <pre><code># 示例扫描目标，不是最终脚本
+rg -n "AD5421_SetCurrent|HAL_GPIO_WritePin\\(RELAY" LTD_MAIN_CPU2
+rg -n "test\\.c" LTD_MAIN_CPU2/CMakeLists.txt</code></pre>
+    </section>
+
+    <section id="stl">
+      <h2>十一、X-CUBE-STL 放置策略</h2>
+      <p>
+        X-CUBE-STL 只用于 MCU 自检，不能替代液位、AD5421、继电器和传感器诊断。建议只引入受控文件：
+      </p>
+      <ul>
+        <li><code>STM32_Safety_STL/Inc</code></li>
+        <li><code>STM32_Safety_STL/Lib/STL_Lib.a</code></li>
+        <li><code>STM32_Safety_STL/Src/stl_util.c</code></li>
+        <li>基于模板定制的 <code>stl_user_param.c</code></li>
+        <li>链接脚本中的 <code>backup_buffer_section</code></li>
+      </ul>
+      <div class="callout">
+        STL 的调用入口应放在 <code>Safety/Diagnostics/safety_stl.c</code>，由 <code>safety_supervisor</code> 调度。
+        STL 失败后不能交给通信层或应用层处理，应直接进入安全故障策略。
+      </div>
+    </section>
+
+    <section id="acceptance">
+      <h2>十二、架构验收标准</h2>
+      <ol>
+        <li><code>SAFETY</code> 构建不包含 <code>test.c</code> 和 S3 文件。</li>
+        <li><code>SAFETY</code> 构建不包含 Modbus/HART 直接输出逻辑。</li>
+        <li>AD5421 和继电器输出只有 <code>Safety/Output</code> 可写。</li>
+        <li>找液位安全路径唯一、可追踪、可测试。</li>
+        <li>STL、AD5421、继电器反馈、看门狗故障能统一进入安全状态。</li>
+        <li>每个安全相关文件都有 S0/S1 分类和纳入理由。</li>
+        <li><code>SAFETY</code>、<code>FIELD</code>、<code>DEV</code> 可独立构建，产物名称可区分。</li>
+        <li>安全版构建日志、源码清单、版本号和测试记录可追溯。</li>
+      </ol>
+      <div class="callout ok">
+        <strong>推荐第一步交付：</strong>先完成代码范围矩阵和 CMake 显式源码清单，再开始移动或拆分具体代码。
+        这样可以先把安全边界固定下来，避免边改边扩大认证范围。
+      </div>
+    </section>
+
+    <section id="references">
+      <h2>十三、关联资料</h2>
+      <ul>
+        <li><a href="CPU2目标系统架构整理文档.html">CPU2目标系统架构整理文档.html</a></li>
+        <li><a href="../CPU2安全相关模块清单.md">CPU2安全相关模块清单.md</a></li>
+        <li><a href="../00_外部资料/03_STM32与X-CUBE-STL/ST_X-CUBE-STL资料使用说明.html">ST_X-CUBE-STL资料使用说明.html</a></li>
+        <li><a href="../SIL认证软件工程师资料清单.md">SIL认证软件工程师资料清单.md</a></li>
+      </ul>
+    </section>
+  </main>
+
+  <footer>
+    本文档用于 CPU2 SIL 软件架构整改和认证准备，不代表产品已经完成 SIL 认证。
+  </footer>
+</body>
+</html>

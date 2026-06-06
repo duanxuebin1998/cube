@@ -50,8 +50,6 @@ void stpr_enableDriver(TMC5130TypeDef *tmc5130);
 /** 向 TMC5130 指定寄存器写入 32bit 值，返回写入是否成功。 */
 bool stpr_writeInt(TMC5130TypeDef *tmc5130, uint8_t address, int32_t value);
 
-/** 兼容式寄存器读取；读取失败时返回 0，关键流程应优先使用 stpr_tryReadInt()。 */
-int32_t stpr_readInt(TMC5130TypeDef *tmc5130, uint8_t address);
 
 /** 带成功/失败返回值的寄存器读取接口，避免 SPI 失败时把寄存器值误判为 0。 */
 bool stpr_tryReadInt(TMC5130TypeDef *tmc5130, uint8_t address, int32_t *value);

@@ -35,15 +35,7 @@ typedef enum {
 	FAULT_SEVERITY_FATAL          // 致命错误：强制系统重启
 } FaultSeverity;
 
-/* 故障信息结构体 */
-typedef struct {
-	uint8_t error_code;        // 自定义错误码
-	uint8_t location;          // 故障位置
-	FaultSeverity severity;    // 故障等级
-	uint8_t retry_count;       // 重试次数
-} FaultInfo;
 
-extern volatile FaultInfo g_faultInfo;           // 错误信息全局变量
 
 //
 // 故障恢复动作定义
@@ -159,7 +151,6 @@ void FaultManager_SetErrorState(uint32_t error_code,
     } while (0)
 
 void fault_info_init(void);
-uint32_t update_errorcode(uint8_t error_code);
 void HandleError(void);
 void printError(const ErrorInfo* err);
 const char* GetShortFilename(const char *fullpath);

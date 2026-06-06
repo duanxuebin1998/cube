@@ -785,6 +785,5 @@ extern volatile DeviceParameters g_deviceParams; // 设备参数
 extern const int param_metaAmount;
 int getHoldValueNum(int operanum);
 void InputValueInit(void);
-void setEquipStateError(void);
 void print_device_params(void); // 打印设备参数
 #endif

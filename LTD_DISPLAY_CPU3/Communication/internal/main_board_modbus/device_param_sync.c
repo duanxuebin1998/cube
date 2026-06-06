@@ -494,13 +494,3 @@ void DeviceParams_SyncAllToCPU2(void)
         DeviceParams_SyncOneHold(&param_meta[i]);
     }
 }
-/* 只同步一个 operanum 对应的参数 */
-void DeviceParams_SyncOneToCPU2(int operanum)
-{
-    for (uint32_t i = 0; i < param_metaAmount; ++i) {
-        if (param_meta[i].operanum == operanum) {
-            DeviceParams_SyncOneHold(&param_meta[i]);
-            break;
-        }
-    }
-}

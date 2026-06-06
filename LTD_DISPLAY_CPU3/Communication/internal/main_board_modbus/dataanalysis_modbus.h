@@ -13,7 +13,7 @@ void AnalysisHoldRegister(void);//解析保持寄存器数据
 
 void WriteDeviceParamsToHoldingRegisters(uint16_t *HoldingRegisterArray);//写入保持寄存器
 void ReadDeviceParamsFromHoldingRegisters(uint16_t *HoldingRegisterArray);//从输入寄存器读取设备参数
-void write_measurement_result_to_InputRegisters(uint16_t *regs); // 将测量结果写入输入寄存器数组
+// 将测量结果写入输入寄存器数组
 void read_measurement_result_from_InputRegisters(uint16_t *regs); // 从输入寄存器数组读取测量结果
 
 

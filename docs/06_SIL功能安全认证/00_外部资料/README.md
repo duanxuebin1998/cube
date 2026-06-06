@@ -15,6 +15,7 @@
 | `03_STM32与X-CUBE-STL/` | STM32、X-CUBE-STL、ST Safety Manual、芯片手册和勘误链接 |
 | `04_认证机构与流程/` | TÜV、exida、DNV 等认证机构流程链接和沟通准备项 |
 | `05_需购买或NDA资料/` | IEC/MISRA 主标准、ST FMEDA/FMEA、工具资质包等获取清单 |
+| `06_案例参考/` | 外部已认证产品的安全手册、证书整理和可借鉴的工程资料结构 |
 
 ## 已下载公开资料
 
@@ -26,6 +27,7 @@
 | `02_编码规范与静态分析/MISRA_C_2012_Amendment_4.pdf` | [MISRA C:2012 Amendment 4](https://misra.org.uk/app/uploads/2023/03/MISRA-C-2012-AMD4.pdf) | 新增规则和修订内容参考，不能替代 MISRA C 主规则 |
 | `03_STM32与X-CUBE-STL/01_ST官方PDF/` | 用户提供的 ST 官方 SIL 资料 | STM32F4 Safety Manual、AN5140/AN5141、AN5321、AN5659、AN5698、AN5829、AN5936 等 |
 | `03_STM32与X-CUBE-STL/02_X-CUBE-STL-F4_V2.0.0包内文档/` | X-CUBE-STL-F4 V2.0.0 安装包内资料 | STL F4 用户手册、安全手册、包内发布说明和许可证 |
+| `06_案例参考/EndressHauser_NMS81/` | 用户提供的 E+H Proservo NMS81 功能安全资料 | 参考外部产品安全功能边界、SIL 锁定、proof test、维修修改和证据包结构 |
 
 ## 官方链接资料
 
@@ -47,6 +49,7 @@
 | 评估 STM32 诊断和安全库 | `03_STM32与X-CUBE-STL/README.md`、X-CUBE-STL、ST Safety Manual |
 | 准备认证机构沟通 | `04_认证机构与流程/README.md`、项目交付物清单 |
 | 发起采购或 NDA | `05_需购买或NDA资料/README.md` |
+| 借鉴外部产品安全手册结构 | `06_案例参考/README.md`、`NMS81案例对CUBE_SIL认证和软件架构的启发.md` |
 
 ## 维护规则
 

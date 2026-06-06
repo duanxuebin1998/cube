@@ -324,9 +324,9 @@
       <p class="subtitle">依据当前 CUBE 工程整理的系统级硬件拓扑、硬件连接、CPU2/CPU3 数据闭环、外部协议适配和启动安全/故障恢复链路。</p>
       <div class="meta">
         <div><span class="label">适用设备</span>LNG 二代计量仪双板固件</div>
-        <div><span class="label">CPU2 主控板</span><code>V1.10.0.0</code></div>
-        <div><span class="label">CPU3 显示通讯板</span><code>V1.9.0.0</code></div>
-        <div><span class="label">共享协议</span><code>DEVICE_PROTOCOL_VERSION = 6</code></div>
+        <div><span class="label">CPU2 主控板</span><code>V1.12.0.0</code></div>
+        <div><span class="label">CPU3 显示通讯板</span><code>V1.10.0.0</code></div>
+        <div><span class="label">共享协议</span><code>DEVICE_PROTOCOL_VERSION = 7</code></div>
       </div>
     </div>
   </header>
@@ -474,7 +474,7 @@
         </article>
         <article class="card">
           <h3>共享协议是边界</h3>
-          <p>固件版本只用于显示和追踪；CPU2/CPU3 是否兼容以 <code>DeviceParameters.protocolVersion</code> 严格相等为准，当前为协议版本 6。</p>
+          <p>固件版本只用于显示和追踪；CPU2/CPU3 是否兼容以 <code>DeviceParameters.protocolVersion</code> 严格相等为准，当前为协议版本 7。</p>
         </article>
       </div>
     </section>
@@ -746,7 +746,7 @@
           <text x="486" y="274" class="box-title">输入寄存器</text>
           <text x="486" y="298" class="box-text">MeasurementResult / 状态 / 结果</text>
           <rect x="466" y="344" width="246" height="44" rx="6" fill="#fff7e8" stroke="#d6a55d"></rect>
-          <text x="486" y="372" class="box-text">协议版本字段：当前值 6</text>
+          <text x="486" y="372" class="box-text">协议版本字段：当前值 7</text>
 
           <rect x="892" y="78" width="250" height="338" rx="8" fill="#e3f0ff" stroke="#8bb7e5"></rect>
           <text x="914" y="112" class="box-title">CPU2</text>
@@ -812,7 +812,7 @@
               <td><code>protocolVersion</code></td>
               <td>CPU2 发布，CPU3 判断</td>
               <td>判断 CPU2/CPU3 共享协议是否兼容</td>
-              <td>当前协议版本为 6；固件版本号不参与兼容判断。</td>
+              <td>当前协议版本为 7；固件版本号不参与兼容判断。</td>
             </tr>
           </tbody>
         </table>
@@ -1162,7 +1162,7 @@
       <ul>
         <li><code>README.md</code>：双板架构、通信拓扑、构建和代码主线。</li>
         <li><code>LTD_MAIN_CPU2/Application/Inc/app_version.h</code>、<code>LTD_DISPLAY_CPU3/Application/app_version.h</code>：当前 CPU2/CPU3 固件版本。</li>
-        <li><code>docs/01_协议与寄存器/CPU2_CPU3协议变更记录.md</code>：共享协议版本 6、状态和参数语义。</li>
+        <li><code>docs/01_协议与寄存器/CPU2_CPU3协议变更记录.md</code>：共享协议版本 7、状态和参数语义。</li>
         <li><code>LTD_DISPLAY_CPU3/Application/system_param/system_parameter.h</code>：命令、状态、共享结构和无线滑环运行态字段。</li>
         <li><code>LTD_DISPLAY_CPU3/Application/system_param/com_port_config.h</code>、<code>cpu3_comm_display_params.c</code>：COM1/2/3 协议配置和 SI7000 串口收敛规则。</li>
         <li><code>docs/02_需求与计划</code>、<code>docs/03_问题分析与整改</code>、<code>docs/04_界面与菜单</code>：自动恢复、启动安全、无线滑环和菜单说明。</li>

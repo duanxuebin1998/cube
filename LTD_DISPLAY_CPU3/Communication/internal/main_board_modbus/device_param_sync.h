@@ -31,7 +31,6 @@ void DeviceParams_SyncAllToCPU2(void);
 /* 只同步一个 operanum 对应的参数
  *  - 用于某个菜单参数修改后，只下发该参数
  */
-void DeviceParams_SyncOneToCPU2(int operanum);
 
 #ifdef __cplusplus
 }

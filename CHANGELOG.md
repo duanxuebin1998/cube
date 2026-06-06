@@ -658,3 +658,32 @@
 - `git diff --check`：未发现空白错误，仅有工作区 LF 后续转换为 CRLF 的 Git warning。
 - `py tools\check_version_bumped.py`：提交前暂存后通过。
 - 尚未做台架/实物联调：需要现场验证 PG9~PG12 对 RELAY1~RELAY4 的吸合极性、常开/常闭配置、无效值策略和锁存清除；第四路外部驱动/端子需等待原理图补齐后实测。
+
+## 2026-06-06 - 清理正式固件未用代码（CPU2 V1.12.0.1，CPU3 V1.10.0.1）
+
+版本：
+- CPU2: V1.12.0.0 -> V1.12.0.1
+- CPU3: V1.10.0.0 -> V1.10.0.1
+
+协议版本/兼容性：
+- `DEVICE_PROTOCOL_VERSION` 保持 7，不改变 CPU2/CPU3 共享寄存器地址、字段含义、命令码、参数解释口径或外部协议响应语义。
+- 本次删除的是已确认未用、未进入正式调用链的旧接口、备用调试入口和历史兼容路径；CPU2 写入测量结果、CPU3 读取 CPU2 输入寄存器、SI7000 主分发和 DSM 主协议路径保留。
+- 删除源码后 CPU2/CPU3 `.hex` 哈希发生变化，按构建产物变化升级 CPU2/CPU3 build 版本，用于交付追踪和回溯。
+
+本次修改：
+- 删除 CPU3 旧 `com_manager.c/.h` 兼容分发模块，保留 `app_main` 现有主分发路径。
+- 删除 CPU2 旧 `CH9141EVT.c/.h` AT 初始化备用入口。
+- 删除 CPU2 `fault_manager` 旧全局故障接口、水位辅助接口、`AS5145_GetLastOkTick()`、`TMC5130 stpr_readInt()`、输入寄存器反向解析链路、`MotorCtrl_SetSpeed()`、`WIRELESS_Read_IntParam()` 和 `ErrorLog_Report()`。
+- 删除 CPU3 OLED 未用接口、CPU3 时钟设置入口、设备状态错误设置、DSM 备用发送/输入寄存器单读写接口、SI7000 站号 get/set、CPU2 通信初始化、测量结果写输入寄存器和单参数同步入口。
+- 调整 `tools/check_si7000_protocol_contract.py`，继续强制校验保留的 CPU2 写入测量结果和 CPU3 读取 CPU2 输入寄存器方向；对已删除的 CPU2 反向读取和 CPU3 写入死接口改为仅在源码存在时校验。
+- 同步记录当前文档和资料整理改动，包括需求计划 PDF、自动恢复需求 PDF 替换，以及 SIL 功能安全资料 PDF。
+
+验证：
+- `rg` 检查确认删除符号在 `.c/.h` 中清零；仅保留 CPU2 正常写输入寄存器和 CPU3 正常读取 CPU2 输入寄存器接口。
+- `cmake --build build\LTD_MAIN_CPU2`
+- `cmake --build build\LTD_DISPLAY_CPU3`
+- `py tools\check_si7000_modbus_frames.py`
+- `py tools\check_si7000_protocol_contract.py`
+- `git diff --check`
+- 暂存后运行 `py tools\check_version_bumped.py`
+- 已对比删除前后 CPU2/CPU3 `.hex` 哈希，确认构建产物变化，因此本次升级 build 版本；尚未做现场实物联调。

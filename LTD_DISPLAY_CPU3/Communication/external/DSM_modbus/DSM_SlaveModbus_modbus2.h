@@ -40,12 +40,10 @@ int Response16(unsigned char *revframe, unsigned char* sendframe);
 bool ReadInputRegister(unsigned int startaddress, unsigned int registeramount, int *registervalue);
 bool ReadHoldingRegister(unsigned int startaddress, unsigned int registeramount, int *registervalue);
 bool WriteHoldingRegister(unsigned int startaddress, unsigned int registeramount, int *registervalue);
-bool WriteInputRegister(unsigned int startaddress, unsigned int registeramount, int *registervalue);
 
 bool WriteOneInputRegister(unsigned int startaddress, unsigned int registeramount, int registervalue);
 bool WriteOneHoldingRegister(unsigned int startaddress, unsigned int registeramount, int registervalue);
 int ReadOneHoldingRegister(unsigned int startaddress, unsigned int registeramount);
-int ReadOneInputRegister(unsigned int startaddress, u8 registeramount);
 
 void DSM_RequestSelfCheckPlaceholder(void);
 uint16_t DSM_ConsumeSelfCheckPlaceholderState(void);

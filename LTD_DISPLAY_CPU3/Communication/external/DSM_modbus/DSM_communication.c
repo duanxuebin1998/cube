@@ -110,16 +110,3 @@ int DSM_CommunicationProcess(unsigned char *rcvbuff, int rcvcount, uint8_t* tx, 
 	}
 	return 0;
 }
-
-/*向上位机发送数据包*/
-void SendPacketToHost(uint8_t *arr, uint16_t len) {
-	HAL_UART_Transmit_DMA(&huart3, arr, len);
-#if DEBUG_COMMUCPU2
-    {
-        int i;
-        for(i = 0;i < len;i++)
-            printf("%02X ",arr[i]);
-        printf("\n");
-    }
-    #endif
-}

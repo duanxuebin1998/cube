@@ -1,0 +1,338 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SIL2 目标与 SIL3 排除说明</title>
+  <style>
+    :root {
+      --bg: #f7f8fb;
+      --panel: #ffffff;
+      --text: #172033;
+      --muted: #5e6878;
+      --line: #d7deea;
+      --primary: #0f766e;
+      --primary-soft: #e0f2f1;
+      --warn: #a15c07;
+      --warn-soft: #fff4d8;
+      --danger: #b42318;
+      --danger-soft: #fee4e2;
+      --code-bg: #f1f5f9;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: "Segoe UI", "Microsoft YaHei", Arial, sans-serif;
+      line-height: 1.65;
+    }
+
+    header {
+      background: linear-gradient(135deg, #0f766e, #2563eb);
+      color: #ffffff;
+      padding: 34px 26px 32px;
+    }
+
+    header .inner,
+    main,
+    footer {
+      max-width: 1120px;
+      margin: 0 auto;
+    }
+
+    h1 {
+      margin: 0 0 12px;
+      font-size: 31px;
+      line-height: 1.22;
+      letter-spacing: 0;
+    }
+
+    .subtitle {
+      max-width: 880px;
+      margin: 0;
+      color: rgba(255, 255, 255, 0.9);
+      font-size: 16px;
+    }
+
+    .meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 18px;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      min-height: 30px;
+      padding: 4px 10px;
+      border: 1px solid rgba(255, 255, 255, 0.28);
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.16);
+      color: #ffffff;
+      font-size: 13px;
+    }
+
+    main {
+      padding: 26px 20px 52px;
+    }
+
+    section {
+      margin: 18px 0;
+      padding: 22px 24px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+    }
+
+    h2 {
+      margin: 0 0 14px;
+      color: #0f172a;
+      font-size: 22px;
+      letter-spacing: 0;
+    }
+
+    p {
+      margin: 8px 0 12px;
+    }
+
+    a {
+      color: var(--primary);
+      text-decoration: none;
+    }
+
+    a:hover {
+      text-decoration: underline;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 12px 0 16px;
+      font-size: 14px;
+    }
+
+    th,
+    td {
+      border: 1px solid var(--line);
+      padding: 10px 12px;
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th {
+      background: #eef3f8;
+      font-weight: 600;
+    }
+
+    tr:nth-child(even) td {
+      background: #fbfcfe;
+    }
+
+    code {
+      padding: 2px 5px;
+      border-radius: 4px;
+      background: var(--code-bg);
+      font-family: Consolas, "Courier New", monospace;
+      font-size: 0.94em;
+    }
+
+    .callout {
+      margin: 14px 0;
+      padding: 12px 14px;
+      border-left: 4px solid var(--primary);
+      border-radius: 6px;
+      background: var(--primary-soft);
+    }
+
+    .callout.warn {
+      border-left-color: var(--warn);
+      background: var(--warn-soft);
+    }
+
+    .callout.danger {
+      border-left-color: var(--danger);
+      background: var(--danger-soft);
+    }
+
+    ul,
+    ol {
+      margin: 8px 0 14px 22px;
+      padding: 0;
+    }
+
+    li {
+      margin: 6px 0;
+    }
+
+    footer {
+      padding: 0 20px 40px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="inner">
+      <h1>SIL2 目标与 SIL3 排除说明</h1>
+      <p class="subtitle">
+        本文用于冻结 CUBE/CPU2 当前功能安全目标：参考 NMS8x/NMS81 单通道 HFT=0 的 SIL2 路线，
+        不按 SIL3 冗余架构推进。
+      </p>
+      <div class="meta">
+        <span class="pill">目标 SIL：SIL2</span>
+        <span class="pill">参考案例：NMS8x/NMS81</span>
+        <span class="pill">架构假设：单通道 HFT=0</span>
+        <span class="pill">日期：2026-06-06</span>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <section>
+      <h2>一、需求变更结论</h2>
+      <div class="callout">
+        <strong>当前需求：</strong>CUBE/CPU2 不做 SIL3，改为参考 NMS8x/NMS81 的单通道 HFT=0 路线做 SIL2 准备。
+        SIL3 相关的冗余架构、HFT=1、共因失效专项和 1oo2/2oo3 设计不纳入当前阶段。
+      </div>
+      <p>
+        该变更不代表 CUBE 已经满足 SIL2。它只是把当前工程整改、软件架构、证据包和认证沟通的目标等级统一为 SIL2。
+        SIL2 结论仍需由系统级危险分析、SRS、FMEDA/FMEA、PFDavg/PFH 计算、验证确认和认证机构评估证明。
+      </p>
+    </section>
+
+    <section>
+      <h2>二、参考 NMS81 的原因</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>NMS81 资料结论</th>
+            <th>CUBE 采用方式</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>单通道 HFT=0 时可用于最高 SIL2 应用。</td>
+            <td>CPU2 当前按单通道 SIL2 路线准备，不把单 CPU2 软件整改描述为 SIL3 能力。</td>
+          </tr>
+          <tr>
+            <td>HFT=1 冗余架构才讨论 SIL3。</td>
+            <td>SIL3 作为未来扩展，若重新提出必须重新评估传感器、CPU、输出、供电、布线和共因失效。</td>
+          </tr>
+          <tr>
+            <td>HART/Modbus 等通信用于信息目的，安全动作围绕 4-20 mA 或继电器输出。</td>
+            <td>CUBE 安全输出限定为 4-20mA 故障电流和继电器高/低液位报警，通信和显示只做诊断/维护。</td>
+          </tr>
+          <tr>
+            <td>需要 SIL 模式、参数锁定、proof test、维修后复测和变更控制。</td>
+            <td>CUBE 需要建立安全参数快照、SIL 锁定、proof test 规程、版本基线和变更记录。</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>三、当前 SIL2 安全功能范围</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>项目</th>
+            <th>当前定义</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>安全输入</td>
+            <td>CPU2 找液位流程产生的有效液位值，以及相关传感器、编码器、电机和参数状态。</td>
+          </tr>
+          <tr>
+            <td>安全输出</td>
+            <td>液位 4-20mA 输出、故障电流输出、继电器高/低液位报警输出。</td>
+          </tr>
+          <tr>
+            <td>安全状态</td>
+            <td>液位无效、输出故障、参数故障、MCU 自检失败或运动异常时进入定义的故障电流和继电器安全状态。</td>
+          </tr>
+          <tr>
+            <td>非安全通道</td>
+            <td>Modbus、HART、CPU3 显示、日志和调试信息不能作为唯一安全动作依据。</td>
+          </tr>
+          <tr>
+            <td>构建边界</td>
+            <td>保留 <code>SAFETY</code>、<code>FIELD</code>、<code>DEV</code> 三类构建变体；正式 SIL2 基线使用显式源码清单。</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>四、SIL3 排除范围</h2>
+      <div class="callout warn">
+        以下内容不属于当前 SIL2 需求，不能作为当前阶段交付承诺。
+      </div>
+      <ul>
+        <li>不做 1oo2、2oo3 或其他冗余 CPU/传感器/输出架构。</li>
+        <li>不声明单 CPU2、单传感器、单输出通道可达到 SIL3。</li>
+        <li>不把 X-CUBE-STL 描述为“装上即可满足 SIL2/SIL3”的证明。</li>
+        <li>不做 SIL3 所需的 HFT=1 冗余架构和共因失效专项，除非未来重新立项。</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>五、需要同步更新的交付物</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>交付物</th>
+            <th>更新方向</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>认证策略与范围说明</td>
+            <td>目标 SIL 固定为 SIL2；说明参考 NMS81 单通道 HFT=0；说明不做 SIL3。</td>
+          </tr>
+          <tr>
+            <td>SIF 清单与 SRS</td>
+            <td>每条 SIF 的目标等级按 SIL2 写入，避免同时出现 SIL3 目标。</td>
+          </tr>
+          <tr>
+            <td>软件架构设计</td>
+            <td>继续保留 Safety 层、诊断闭环和双版本构建，但不要求冗余 HFT=1 架构。</td>
+          </tr>
+          <tr>
+            <td>FMEDA/FMEA 和 PFDavg/PFH</td>
+            <td>按 SIL2 判据计算整条 SIF，不能只引用单个器件或软件库。</td>
+          </tr>
+          <tr>
+            <td>proof test 和运维</td>
+            <td>按 SIL2 安全功能定义设置测试周期、覆盖率、维修后复测和记录模板。</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>六、关联资料</h2>
+      <ul>
+        <li><a href="../00_外部资料/06_案例参考/EndressHauser_NMS81/SIL认证文档整理_NMS8x_NMS81.html">SIL认证文档整理_NMS8x_NMS81.html</a></li>
+        <li><a href="../NMS81案例对CUBE_SIL认证和软件架构的启发.md">NMS81案例对CUBE_SIL认证和软件架构的启发.md</a></li>
+        <li><a href="CPU2目标系统架构整理文档.html">CPU2目标系统架构整理文档.html</a></li>
+        <li><a href="CPU2安全版与现场版双版本架构方案.html">CPU2安全版与现场版双版本架构方案.html</a></li>
+        <li><a href="../CUBE功能安全认证详细工作计划.md">CUBE功能安全认证详细工作计划.md</a></li>
+      </ul>
+    </section>
+  </main>
+
+  <footer>
+    本文档是当前 SIL2 需求口径说明，不替代系统级危险分析、SRS、FMEDA/FMEA、PFDavg/PFH 计算和认证机构评估。
+  </footer>
+</body>
+</html>

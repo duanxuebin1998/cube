@@ -151,10 +151,10 @@ CubeMX 生成的 GPIO 初始化代码，包含 HAL 宏和寄存器配置。
 
 适用文件：
 
-- `LTD_MAIN_CPU2/Drivers/Peripherals/src/TMC5130.c`
-- `LTD_MAIN_CPU2/Drivers/Peripherals/src/AS5145.c`
-- `LTD_MAIN_CPU2/Drivers/Peripherals/src/mb85rs2m.c`
-- `LTD_MAIN_CPU2/Drivers/Peripherals/src/ad5421.c`
+- `LTD_MAIN_CPU2/BSP/Peripherals/src/TMC5130.c`
+- `LTD_MAIN_CPU2/BSP/Peripherals/src/AS5145.c`
+- `LTD_MAIN_CPU2/BSP/Peripherals/src/mb85rs2m.c`
+- `LTD_MAIN_CPU2/BSP/Peripherals/src/ad5421.c`
 
 处理策略：
 

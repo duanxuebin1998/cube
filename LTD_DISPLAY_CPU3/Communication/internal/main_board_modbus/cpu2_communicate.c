@@ -36,10 +36,6 @@ static void PresetRegister(bool registertype, int const *registervalue);
 
 static void RequestDensityDistPoints_ByCount(void);
 
-/*与CPU2通讯初始化*/
-void CommuToCPU2Init(void) {
-	PollingInputData();    //初始化后先轮询一遍测量数据
-}
 /*与CPU2通讯接收包主处理过程*/
 void HostCommuProcess(uint8_t *rcv, int len) {
 #if DEBUG_COMMUCPU2

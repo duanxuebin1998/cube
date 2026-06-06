@@ -1,0 +1,3117 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SIL认证文档整理 - E+H Proservo NMS8x / NMS81</title>
+  <style>
+    :root {
+      --ink: #17212b;
+      --muted: #5d6875;
+      --line: #d7dde5;
+      --paper: #ffffff;
+      --bg: #f4f7fb;
+      --blue: #0f5f9f;
+      --blue-2: #e9f3fb;
+      --green: #0f7a5b;
+      --green-2: #e9f7f2;
+      --amber: #9a6200;
+      --amber-2: #fff4dd;
+      --red: #a33b32;
+      --red-2: #fff0ee;
+      --gray-2: #eef1f5;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: "Microsoft YaHei", "PingFang SC", "Segoe UI", Arial, sans-serif;
+      color: var(--ink);
+      background: var(--bg);
+      line-height: 1.62;
+    }
+
+    header {
+      background: linear-gradient(135deg, #10263b, #0f5f9f 66%, #0f7a5b);
+      color: #fff;
+      padding: 42px 28px 34px;
+    }
+
+    header .wrap, main {
+      max-width: 1280px;
+      margin: 0 auto;
+    }
+
+    h1 {
+      margin: 0 0 12px;
+      font-size: 34px;
+      line-height: 1.22;
+      letter-spacing: 0;
+    }
+
+    .subtitle {
+      margin: 0;
+      max-width: 980px;
+      color: #e7f0f8;
+      font-size: 17px;
+    }
+
+    main {
+      padding: 24px 24px 60px;
+    }
+
+    nav {
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 18px 20px;
+      margin-bottom: 18px;
+    }
+
+    nav h2 {
+      margin-top: 0;
+      font-size: 20px;
+    }
+
+    nav a {
+      color: var(--blue);
+      text-decoration: none;
+      margin-right: 18px;
+      display: inline-block;
+      padding: 4px 0;
+    }
+
+    section {
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      margin: 18px 0;
+      padding: 24px;
+    }
+
+    h2 {
+      margin: 0 0 16px;
+      font-size: 25px;
+      line-height: 1.3;
+    }
+
+    h3 {
+      margin: 24px 0 10px;
+      font-size: 20px;
+      line-height: 1.35;
+    }
+
+    h4 {
+      margin: 18px 0 8px;
+      font-size: 17px;
+    }
+
+    p { margin: 8px 0 12px; }
+
+    .meta {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+      margin: 18px 0 8px;
+    }
+
+    .metric {
+      background: var(--gray-2);
+      border-radius: 8px;
+      padding: 14px;
+      min-height: 92px;
+    }
+
+    .metric strong {
+      display: block;
+      font-size: 22px;
+      line-height: 1.25;
+      margin-bottom: 5px;
+    }
+
+    .metric span {
+      display: block;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .note, .warning, .ok, .danger {
+      border-left: 5px solid;
+      padding: 12px 14px;
+      border-radius: 6px;
+      margin: 14px 0;
+    }
+
+    .note { background: var(--blue-2); border-color: var(--blue); }
+    .warning { background: var(--amber-2); border-color: var(--amber); }
+    .ok { background: var(--green-2); border-color: var(--green); }
+    .danger { background: var(--red-2); border-color: var(--red); }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 12px 0 20px;
+      font-size: 14px;
+    }
+
+    th, td {
+      border: 1px solid var(--line);
+      padding: 9px 10px;
+      vertical-align: top;
+    }
+
+    th {
+      background: #edf3f9;
+      text-align: left;
+      color: #18222d;
+    }
+
+    tbody tr:nth-child(even) td {
+      background: #fafbfd;
+    }
+
+    .small {
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    .tag {
+      display: inline-block;
+      border-radius: 999px;
+      padding: 2px 8px;
+      font-size: 12px;
+      font-weight: 700;
+      margin-right: 5px;
+      color: #fff;
+      background: var(--blue);
+      white-space: nowrap;
+    }
+
+    .tag.green { background: var(--green); }
+    .tag.amber { background: var(--amber); }
+    .tag.red { background: var(--red); }
+
+    .grid-2 {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 16px;
+    }
+
+    .card {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 16px;
+      background: #fbfcfe;
+    }
+
+    ol, ul {
+      padding-left: 22px;
+      margin-top: 8px;
+    }
+
+    li { margin: 6px 0; }
+
+    code {
+      font-family: Consolas, "Courier New", monospace;
+      background: #eef1f5;
+      border-radius: 4px;
+      padding: 1px 5px;
+    }
+
+    .formula {
+      font-family: Consolas, "Courier New", monospace;
+      background: #f7f9fc;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 12px;
+      overflow-x: auto;
+    }
+
+    .source-list {
+      margin-top: 12px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    @media (max-width: 860px) {
+      .meta, .grid-2 {
+        grid-template-columns: 1fr;
+      }
+
+      header { padding: 30px 18px; }
+      main { padding: 16px; }
+      section { padding: 18px; }
+
+      h1 { font-size: 27px; }
+      h2 { font-size: 22px; }
+
+      table {
+        display: block;
+        overflow-x: auto;
+        white-space: nowrap;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="wrap">
+      <h1>SIL认证文档整理 - E+H Proservo NMS8x / NMS81</h1>
+      <p class="subtitle">
+        基于 TÜV Rheinland 证书 <strong>968/FSP 1687.01/23</strong> 和 Endress+Hauser
+        <strong>Proservo NMS81 Functional Safety Manual FY01100G/00/EN/01.23-00</strong> 的中文整理。
+        目标是帮助第一次接触 SIL 的团队看懂证书、手册、术语和后续工作。
+      </p>
+    </div>
+  </header>
+
+  <main>
+    <nav>
+      <h2>目录</h2>
+      <a href="#quick">1. 先看结论</a>
+      <a href="#relationship">2. 两个文档的关系</a>
+      <a href="#certificate">3. TÜV证书整理</a>
+      <a href="#manual">4. 安全手册整理</a>
+      <a href="#terms">5. 术语表</a>
+      <a href="#parameters">6. 参数指标详解</a>
+      <a href="#workflow">7. 从零开始做SIL</a>
+      <a href="#checklists">8. 检查清单</a>
+      <a href="#deep-dive">9. 深度落地细节</a>
+      <a href="#questions">10. 待确认项</a>
+    </nav>
+
+    <section id="quick">
+      <h2>1. 先看结论</h2>
+      <div class="meta">
+        <div class="metric">
+          <strong>SIL 2</strong>
+          <span>NMS8x 设备硬件安全完整性等级为 SIL 2。单通道 HFT=0 时可用于最高 SIL 2 应用。</span>
+        </div>
+        <div class="metric">
+          <strong>SC 3</strong>
+          <span>系统能力 Systematic Capability 为 SC 3。它说明系统性失效控制过程可支持到相应等级。</span>
+        </div>
+        <div class="metric">
+          <strong>SIL 3</strong>
+          <span>证书说在 HFT=1 的架构下可用于最高 SIL 3 应用。常见理解是需要冗余架构，不是单台设备自动变成 SIL 3。</span>
+        </div>
+        <div class="metric">
+          <strong>2028-06-29</strong>
+          <span>TÜV 证书有效期到 2028-06-29。项目采购、投运、审查前应再次核对证书状态。</span>
+        </div>
+      </div>
+
+      <div class="ok">
+        <strong>这两份文件说明了什么：</strong>
+        E+H Proservo NMS8x 这类液位计已经通过第三方功能安全评估；只要选型、安装、配置、锁定、proof test、维护和修改都符合安全手册，它可以作为 SIS 中的传感器/输入设备参与实现 SIL 保护功能。
+      </div>
+
+      <div class="warning">
+        <strong>这两份文件不能替代什么：</strong>
+        不能替代我们项目自己的 HAZOP、LOPA、SRS、安全回路设计、PFDavg 计算、proof test 周期设定、调试验证记录、运行维护记录，也不能直接证明整条安全仪表功能已经达到 SIL 2 或 SIL 3。
+      </div>
+
+      <h3>最重要的项目判断</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>问题</th>
+            <th>基于文档的答案</th>
+            <th>我们要做的事</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>这台设备能不能用于 SIL？</td>
+            <td>可以，但必须是证书覆盖的 NMS8x 型号和安全手册覆盖的设备版本/订货选项。</td>
+            <td>核对铭牌、订单码、固件版本、硬件生产日期、SIL 标识。</td>
+          </tr>
+          <tr>
+            <td>能做到 SIL 几？</td>
+            <td>单通道应用最高 SIL 2；HFT=1 冗余架构可用于最高 SIL 3。</td>
+            <td>结合 SIF 架构、逻辑单元、执行机构和 proof test 周期计算整条回路的 PFDavg。</td>
+          </tr>
+          <tr>
+            <td>它认证的安全功能是什么？</td>
+            <td>液位安全检测，包含最低、最高、范围监测；电流输入安全测量，包含最低、最高、范围监测。</td>
+            <td>在 SRS 中明确本项目使用的是哪一个安全功能、报警点、动作、响应时间和安全状态。</td>
+          </tr>
+          <tr>
+            <td>安全相关输出是什么？</td>
+            <td>4-20 mA 模拟输出，或数字继电器输出。HART、Modbus、V1、WM550 等通信只用于信息目的，不应作为安全相关信号。</td>
+            <td>逻辑单元必须按手册处理 4-20 mA 失败电流、继电器开路、线路短路/断线和报警。</td>
+          </tr>
+          <tr>
+            <td>后续运维最关键的动作是什么？</td>
+            <td>按周期 proof test，配置后 SIL 锁定，维修后重新检查，修改必须由 E+H 或经 E+H 批准的服务人员处理。</td>
+            <td>建立 proof test 计划、记录模板、维修和变更流程。</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="relationship">
+      <h2>2. 两个文档的关系</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>文件</th>
+            <th>用途</th>
+            <th>它证明/规定的内容</th>
+            <th>项目上怎么用</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>EH_Proservo_NMS8x_TUV_SIL_Certificate_968_FSP_1687_01_23.pdf</td>
+            <td>第三方认证证书。</td>
+            <td>证明 TÜV Rheinland 对 NMS8x 产品按 IEC 61508 等标准完成评估，给出 SIL/SC/HFT/安全功能/有效期。</td>
+            <td>作为采购、项目审查、SIL 证据包中的外部证书。它是“设备有资格进入安全回路”的入口证据。</td>
+          </tr>
+          <tr>
+            <td>EH_Proservo_NMS81_Functional_Safety_Manual_FY01100G_2023.pdf</td>
+            <td>功能安全手册。</td>
+            <td>规定 NMS81 在安全仪表系统中如何选型、配置、锁定、运行、proof test、维修和修改。</td>
+            <td>作为 SRS、调试规程、proof test 规程、维护规程的直接依据。现场不按它做，证书结论就不能简单套用。</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="note">
+        <strong>一句话理解：</strong>
+        证书回答“这个产品通过了什么等级的认证”；安全手册回答“怎样使用它，项目现场才仍然满足认证假设”。
+      </div>
+    </section>
+
+    <section id="certificate">
+      <h2>3. TÜV证书整理</h2>
+      <h3>证书关键信息</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>字段</th>
+            <th>证书内容</th>
+            <th>中文解释</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>证书编号</td>
+            <td>968/FSP 1687.01/23</td>
+            <td>第三方认证的唯一编号。项目资料中应完整引用。</td>
+          </tr>
+          <tr>
+            <td>认证机构</td>
+            <td>TÜV Rheinland Industrie Service GmbH, Certification Body Safety &amp; Security for Automation &amp; Grid</td>
+            <td>独立评估机构。它不是项目设计单位，而是对产品和厂家安全生命周期证据进行评估。</td>
+          </tr>
+          <tr>
+            <td>证书持有人</td>
+            <td>Endress+Hauser SE + Co. KG, Maulburg, Germany</td>
+            <td>证书属于 E+H，不属于我们的项目或工厂。</td>
+          </tr>
+          <tr>
+            <td>被测产品</td>
+            <td>Tank Gauging Proservo</td>
+            <td>伺服式罐区计量/液位测量产品系列。</td>
+          </tr>
+          <tr>
+            <td>型号</td>
+            <td>NMS8x [x = 0, 1, 3]</td>
+            <td>覆盖 NMS80、NMS81、NMS83。安全手册这份文件只针对 NMS81。</td>
+          </tr>
+          <tr>
+            <td>标准</td>
+            <td>IEC 61508 Parts 1-7:2010; IEC 61326-3-2:2017; IEC 61010-1:2017 + Corr.1:2019</td>
+            <td>IEC 61508 是功能安全核心标准；IEC 61326-3-2 涉及安全相关系统的 EMC；IEC 61010-1 涉及测量/控制/实验室设备安全要求。</td>
+          </tr>
+          <tr>
+            <td>硬件安全完整性</td>
+            <td>Hardware Safety Integrity SIL 2</td>
+            <td>硬件随机失效相关指标满足 SIL 2 要求。它不等于整条安全回路已自动是 SIL 2。</td>
+          </tr>
+          <tr>
+            <td>系统能力</td>
+            <td>Systematic Capability SC 3</td>
+            <td>厂家开发、变更、验证等系统性失效控制能力达到 SC 3。</td>
+          </tr>
+          <tr>
+            <td>可用 SIL</td>
+            <td>Applications up to SIL 2 (HFT=0) resp. SIL 3 (HFT=1)</td>
+            <td>单通道无硬件容错 HFT=0 时到 SIL 2；有一个硬件容错 HFT=1 的冗余架构时可到 SIL 3。</td>
+          </tr>
+          <tr>
+            <td>认证安全功能 1</td>
+            <td>Safe detection of a level (min, max, range), accuracy ±2%</td>
+            <td>安全检测液位，支持低限、高限、范围监测，证书给出的安全相关精度是 ±2%。</td>
+          </tr>
+          <tr>
+            <td>认证安全功能 2</td>
+            <td>Safe current in measurement (min, max, range), accuracy ±1%</td>
+            <td>安全测量电流输入，支持低限、高限、范围监测，证书给出的安全相关精度是 ±1%。</td>
+          </tr>
+          <tr>
+            <td>安全输出</td>
+            <td>Safe analogue and/or digital outputs</td>
+            <td>可以通过安全相关模拟量输出或数字输出送到下游逻辑单元。</td>
+          </tr>
+          <tr>
+            <td>特定要求</td>
+            <td>The instructions of the associated Operating Manual and Safety Manual shall be considered.</td>
+            <td>必须遵守操作手册和安全手册。现场偏离手册使用，会削弱或失去证书可引用性。</td>
+          </tr>
+          <tr>
+            <td>有效期</td>
+            <td>Valid until 2028-06-29</td>
+            <td>至少在项目归档时记录证书有效期；投运前建议在 TÜV 或 E+H 官方渠道再次确认。</td>
+          </tr>
+          <tr>
+            <td>评估报告</td>
+            <td>Report No. 968/FSP 1687.01/23 dated 2023-06-26</td>
+            <td>证书依据的详细评估报告。通常评估报告不一定公开，但认证机构/厂家可在审查时提供摘要或必要证据。</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>证书的边界</h3>
+      <ul>
+        <li>证书只对“与被测产品相同的产品”有效。订货选项、硬件版本、固件版本、铭牌 SIL 标识都要核对。</li>
+        <li>证书覆盖的是设备能力，不是我们现场安全功能的完整认证。完整 SIF 还包含逻辑单元、执行机构、供电、布线、旁路、操作规程和维护规程。</li>
+        <li>证书要求考虑操作手册和安全手册，因此安全手册中的 proof test、锁定、维修和修改要求应纳入项目文件。</li>
+      </ul>
+    </section>
+
+    <section id="manual">
+      <h2>4. 安全手册整理</h2>
+      <h3>4.1 文件身份</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>项目</th>
+            <th>内容</th>
+            <th>说明</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>文件名称</td>
+            <td>Functional Safety Manual - Proservo NMS81</td>
+            <td>NMS81 的功能安全补充手册。</td>
+          </tr>
+          <tr>
+            <td>文件编号</td>
+            <td>FY01100G/00/EN/01.23-00; 71618212</td>
+            <td>项目归档引用时建议同时写文件编号、版本和日期。</td>
+          </tr>
+          <tr>
+            <td>日期</td>
+            <td>2023-06-12</td>
+            <td>与 2023-06-29 证书日期接近，是同一认证资料包的一部分。</td>
+          </tr>
+          <tr>
+            <td>固件标识</td>
+            <td>01.yy.zz (Device firmware)</td>
+            <td>手册还规定 SIL 有效固件版本从 01.02.zz 起。</td>
+          </tr>
+          <tr>
+            <td>文件功能</td>
+            <td>作为操作说明书的一部分，提供应用参数和注意事项的参考。</td>
+            <td>不是完整安装手册，安装、调试、维护还要看 BA01459G/00 等操作说明。</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>4.2 需要配套阅读的文件</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>文件类别</th>
+            <th>NMS81相关编号</th>
+            <th>作用</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Technical Information</td>
+            <td>TI01249G/00</td>
+            <td>产品技术参数、测量范围、环境和过程限制等。</td>
+          </tr>
+          <tr>
+            <td>Operating Instructions</td>
+            <td>BA01459G/00</td>
+            <td>安装、调试、菜单、诊断、维修等详细操作。</td>
+          </tr>
+          <tr>
+            <td>Brief Operating Instructions</td>
+            <td>KA01203G/00</td>
+            <td>随设备提供的快速操作说明。</td>
+          </tr>
+          <tr>
+            <td>Safety Instructions</td>
+            <td>XA / ZE 等，取决于 Approval 选项</td>
+            <td>防爆、区域使用、特殊安全注意事项。应按铭牌确认具体文件。</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>4.3 安全相关特征值</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>特征值</th>
+            <th>手册内容</th>
+            <th>项目含义</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>MTBF</td>
+            <td>29 Jahre / 29 年</td>
+            <td>平均故障间隔时间。用于理解可靠性，但 SIL 计算更关注危险失效率、PFDavg、proof test 周期等。</td>
+          </tr>
+          <tr>
+            <td>系统响应时间</td>
+            <td>在 Expert mode 中用户可配置。</td>
+            <td>SRS 里必须规定要求的响应时间，并把设备、逻辑单元、执行机构的总响应时间加总验证。</td>
+          </tr>
+          <tr>
+            <td>电气部件有效寿命</td>
+            <td>失效率适用于 IEC 61508-2:2010 7.4.9.5 note 3 所定义的 useful lifetime；厂家和操作方采取适当措施可延长。</td>
+            <td>不能无限期套用初始失效率。项目应在生命周期计划里规定寿命、复评、替换或延寿依据。</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>4.4 安全手册第5页声明和FMEDA摘要详解</h3>
+      <div class="note">
+        <strong>第 5 页的性质：</strong>
+        这一页是 Endress+Hauser 的 SIL declaration / FMEDA 摘要页，页眉仍属于
+        <strong>Declaration of conformity</strong>。它把证书、设备适用范围、安全输出、运行模式、SC/SIL 能力和关键失效率集中列在一张表中。
+        由于这一页在 PDF 中主要是图片，普通文本抽取无法完整识别，以下内容按渲染页面逐项整理。
+      </div>
+
+      <h4>页面头部和设备范围</h4>
+      <table>
+        <thead>
+          <tr>
+            <th>项目</th>
+            <th>第5页信息</th>
+            <th>详细解释</th>
+            <th>项目要怎么用</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>声明编号</td>
+            <td>SIL_00326_03.23</td>
+            <td>这是 E+H 内部 SIL 声明编号，版本时间可理解为 2023 年 3 月版本。</td>
+            <td>归档时可与 TÜV 证书号、手册号一起记录，便于追溯。</td>
+          </tr>
+          <tr>
+            <td>设备名称和允许类型</td>
+            <td>Proservo NMS8x ... + [LA]，x = 0, 1, 3</td>
+            <td>覆盖 NMS80、NMS81、NMS83，并且订货配置中需要包含 [LA]，即 SIL 附加认证选项。</td>
+            <td>核对完整订单码。没有 [LA] / 590=LA 的设备，不应按这份 SIL 声明使用。</td>
+          </tr>
+          <tr>
+            <td>安全相关输出信号</td>
+            <td>4...20 mA / relay contact</td>
+            <td>安全相关输出可以是 4-20 mA 模拟量，也可以是继电器触点。</td>
+            <td>PLC 或限值逻辑必须接收并处理这两个输出之一；不能把普通通信值当安全输出。</td>
+          </tr>
+          <tr>
+            <td>故障信号</td>
+            <td>≤ 3.6 mA / ≥ 21 mA / open contact</td>
+            <td>模拟量故障以低失败电流或高失败电流表示；数字量故障以触点打开表示。</td>
+            <td>逻辑单元必须把 ≤3.6 mA、≥21 mA、继电器开路都作为故障或安全动作条件处理。</td>
+          </tr>
+          <tr>
+            <td>过程变量/功能</td>
+            <td>Level measurement / current in measurement</td>
+            <td>声明覆盖两类功能：液位测量，以及电流输入测量。</td>
+            <td>SRS 中必须明确项目使用的是液位安全功能，还是电流输入安全功能，或两者都用。</td>
+          </tr>
+          <tr>
+            <td>安全功能</td>
+            <td>MIN / MAX / RANGE</td>
+            <td>支持低限、高限和范围监测。</td>
+            <td>proof test 和 PFDavg 计算要按实际使用的 MIN、MAX 或 RANGE 选择测试序列和参数。</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h4>IEC 61508 类型、运行模式和有效版本</h4>
+      <table>
+        <thead>
+          <tr>
+            <th>项目</th>
+            <th>第5页勾选/填写</th>
+            <th>含义</th>
+            <th>注意事项</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>设备类型</td>
+            <td>Type B 被勾选，Type A 未勾选</td>
+            <td>按 IEC 61508-2，Type B 通常表示设备包含复杂组件，例如微处理器、软件或复杂电子电路，失效模式不能像简单元件那样完全确定。</td>
+            <td>Type B 对硬件架构约束更严格，不能只用简单元件的思路评估。</td>
+          </tr>
+          <tr>
+            <td>运行模式</td>
+            <td>Low Demand Mode 和 High Demand Mode 都被勾选</td>
+            <td>设备可用于低需求模式，也可用于高需求/连续相关应用。低需求通常看 PFDavg，高需求/连续通常看 PFH。</td>
+            <td>项目必须先定义 SIF 的需求模式，再选择 PFDavg 或 PFH 作为主要判据。</td>
+          </tr>
+          <tr>
+            <td>有效硬件版本</td>
+            <td>Manufacturing date after Nov. 28, 2016</td>
+            <td>第 5 页要求生产日期晚于 2016-11-28。</td>
+            <td>手册第 9 页又写电子硬件生产日期从 2016-11-23 起。两处相差 5 天，正式审查建议向 E+H 确认；未确认前可保守按 2016-11-28 后判断。</td>
+          </tr>
+          <tr>
+            <td>有效软件版本</td>
+            <td>01.yy.zz，yy 和 zz 可为任意数字</td>
+            <td>软件主版本为 01 的系列版本。手册第 9 页另写有效固件从 01.02.zz 起。</td>
+            <td>现场应记录实际固件号，并确认是否满足手册更具体的 01.02.zz 起始要求。</td>
+          </tr>
+          <tr>
+            <td>安全手册编号</td>
+            <td>NMS80: FY01099G / NMS81: FY01100G / NMS83: FY01101G</td>
+            <td>不同 NMS8x 型号对应不同安全手册。本 HTML 主要整理 NMS81 的 FY01100G。</td>
+            <td>若项目实际使用 NMS80 或 NMS83，不应直接套用 NMS81 手册，需找对应文件。</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h4>评估类型和证据文件</h4>
+      <table>
+        <thead>
+          <tr>
+            <th>项目</th>
+            <th>第5页信息</th>
+            <th>详细解释</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>评估方式</td>
+            <td>勾选“开发并行的完整硬件/软件评估，包含 FMEDA 和按 IEC 61508-2、3 的变更请求”。</td>
+            <td>说明该产品不是只靠历史使用经验或单独 FMEDA，而是在开发过程中同步做了硬件、软件、FMEDA 和变更控制评估。</td>
+          </tr>
+          <tr>
+            <td>未勾选项</td>
+            <td>未勾选 proven in use、prior use、无软件设备的 FMEDA 评估等。</td>
+            <td>这说明本产品的认证路径不是单纯“已使用证明”，也不是“无软件简单设备”的路径。</td>
+          </tr>
+          <tr>
+            <td>评估报告/证书号</td>
+            <td>TÜV Rheinland 968/FSP 1687</td>
+            <td>与单页证书 968/FSP 1687.01/23 对应，是第 5 页声明引用的认证依据。</td>
+          </tr>
+          <tr>
+            <td>测试文件</td>
+            <td>Development documents、Test reports、Data sheets</td>
+            <td>厂家评估依据包括开发文件、测试报告和数据表。项目审查时如需要更深证据，应向厂家索取摘要或受控文件。</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h4>SIL - Integrity 区域</h4>
+      <table>
+        <thead>
+          <tr>
+            <th>项目</th>
+            <th>第5页勾选</th>
+            <th>含义</th>
+            <th>容易误读的点</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Systematic safety integrity</td>
+            <td>SC 3 被勾选，SC 2 未勾选</td>
+            <td>系统性安全完整性能力为 SC 3，说明厂家开发、验证和变更流程可支持 SC 3。</td>
+            <td>SC 3 不等于单台设备硬件随机失效达到 SIL 3；SC 是系统性失效控制维度。</td>
+          </tr>
+          <tr>
+            <td>Hardware safety integrity - single channel use</td>
+            <td>HFT = 0 时，SIL 2 capable 被勾选，SIL 3 capable 未勾选</td>
+            <td>单通道使用时，硬件架构能力按 SIL 2。</td>
+            <td>即使表中 PFDavg 数值落入 SIL 3 概率范围，单通道也不能直接宣称 SIL 3，因为还有硬件架构约束。</td>
+          </tr>
+          <tr>
+            <td>Hardware safety integrity - multi channel use</td>
+            <td>HFT ≥ 1 时，SIL 3 capable 被勾选，SIL 2 capable 未勾选</td>
+            <td>多通道冗余且硬件容错至少为 1 时，可用于 SIL 3 能力声明。</td>
+            <td>SIL 3 不是改参数得到的，需要冗余架构、共因失效控制和整条 SIF 计算。</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h4>FMEDA 数值表</h4>
+      <table>
+        <thead>
+          <tr>
+            <th>参数</th>
+            <th>MIN</th>
+            <th>MAX</th>
+            <th>RANGE</th>
+            <th>详细解释</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>λDU</td>
+            <td>196 FIT</td>
+            <td>196 FIT</td>
+            <td>196 FIT</td>
+            <td>危险未检测失效率。196 FIT = 196 次 / 10^9 小时 = 1.96E-7 /h。它是 PFDavg 和 PFH 中最关键的潜伏危险失效来源。</td>
+          </tr>
+          <tr>
+            <td>λDD</td>
+            <td>6095 FIT</td>
+            <td>6095 FIT</td>
+            <td>6095 FIT</td>
+            <td>危险已检测失效率。故障有危险潜力，但设备诊断能发现并输出故障安全信号。它与 MTTR 相关。</td>
+          </tr>
+          <tr>
+            <td>λS</td>
+            <td>2551 FIT</td>
+            <td>2551 FIT</td>
+            <td>2551 FIT</td>
+            <td>安全失效率。失效不会导致危险失效，通常影响可用性或导致安全侧动作。</td>
+          </tr>
+          <tr>
+            <td>SFF</td>
+            <td>97%</td>
+            <td>97%</td>
+            <td>97%</td>
+            <td>安全失效分数。表示安全失效和危险已检测失效在总相关失效中的比例。SFF 高有利于架构约束判断，但不能替代 PFDavg 计算。</td>
+          </tr>
+          <tr>
+            <td>PFDavg (T1 = 1 year, single channel architecture)</td>
+            <td>9.06E-4</td>
+            <td>9.06E-4</td>
+            <td>9.06E-4</td>
+            <td>单通道架构、proof test 周期 1 年时的平均按需失效概率。数值小于 1E-3，但单通道硬件能力仍按声明页勾选为 SIL 2 capable。</td>
+          </tr>
+          <tr>
+            <td>PFH</td>
+            <td>1.96E-7 1/h</td>
+            <td>1.96E-7 1/h</td>
+            <td>1.96E-7 1/h</td>
+            <td>每小时危险失效概率。这里数值与 196 FIT 换算一致，用于高需求或连续模式判断。</td>
+          </tr>
+          <tr>
+            <td>PTC A / B / C / D</td>
+            <td>99% / 91% / 97% / 99%</td>
+            <td>99% / 91% / 97% / 99%</td>
+            <td>99% / 91% / 97% / 99%</td>
+            <td>四种 proof test 序列的覆盖率。第 5 页这里与手册 5.3 总表一致，但与 B/C 小节末尾值仍存在差异，正式计算前应确认。</td>
+          </tr>
+          <tr>
+            <td>Diagnostic test interval</td>
+            <td>≤ 60 min</td>
+            <td>≤ 60 min</td>
+            <td>≤ 60 min</td>
+            <td>所有诊断功能至少在该时间间隔内执行一次。它描述设备内部诊断循环的最大间隔，不是 proof test 周期。</td>
+          </tr>
+          <tr>
+            <td>Fault reaction time</td>
+            <td>≤ 1 min</td>
+            <td>≤ 1 min</td>
+            <td>≤ 1 min</td>
+            <td>从错误识别到错误响应的最大时间。整条 SIF 响应时间还要加 PLC 处理和最终元件动作时间。</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h4>脚注和适用条件</h4>
+      <table>
+        <thead>
+          <tr>
+            <th>脚注</th>
+            <th>第5页含义</th>
+            <th>项目影响</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>1)</td>
+            <td>有效订单码和订单码排除项由 E+H 订货系统维护。</td>
+            <td>不要只凭型号名称判断，必须核对完整订单码和厂家订货系统确认。</td>
+          </tr>
+          <tr>
+            <td>2)</td>
+            <td>FIT = Failure In Time，即每 10^9 小时的失效次数。</td>
+            <td>换算到每小时失效率时，196 FIT = 196E-9 /h = 1.96E-7 /h。</td>
+          </tr>
+          <tr>
+            <td>3)</td>
+            <td>数值适用于平均环境温度最高 +40 °C；若长期接近 +60 °C，需应用 2.1 的系数。</td>
+            <td>高温现场不能直接套用表中失效率，PFDavg/PFH 计算可能需要乘以温度系数。</td>
+          </tr>
+          <tr>
+            <td>4)</td>
+            <td>PTC = Proof Test Coverage。</td>
+            <td>PTC 是定期验证覆盖率，不是在线诊断覆盖率。</td>
+          </tr>
+          <tr>
+            <td>5)</td>
+            <td>所有诊断功能至少在诊断测试间隔内执行一次。</td>
+            <td>这说明设备内部诊断不是实时连续每毫秒都完整执行，而是有最大诊断周期。</td>
+          </tr>
+          <tr>
+            <td>6)</td>
+            <td>故障响应时间是从错误识别到错误响应之间的最大时间。</td>
+            <td>做 SIF 响应时间验证时，应把它作为传感器/设备响应的一部分纳入总响应时间。</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h4>第5页最重要的项目结论</h4>
+      <ul>
+        <li>第 5 页给出了完整的失效率和 PFDavg/PFH 摘要，是做初步 SIL 计算时非常关键的一页。</li>
+        <li>MIN、MAX、RANGE 三种安全功能在该页列出的 FMEDA 数值相同：λDU 196 FIT、λDD 6095 FIT、λS 2551 FIT、SFF 97%。</li>
+        <li>单通道 1 年 proof test 周期下，声明页给出 PFDavg = 9.06E-4；但硬件安全完整性勾选仍是 HFT=0 时 SIL 2 capable。</li>
+        <li>如果目标是 SIL 3，不能只引用 PFDavg 数值，必须采用 HFT ≥ 1 的多通道架构，并处理 β/βD 共因失效。</li>
+        <li>高温工况要特别注意脚注 3：长期接近 +60 °C 时，失效率计算可能要应用 2.1 系数。</li>
+        <li>第 5 页的硬件日期是 2016-11-28 后，第 9 页文字是 2016-11-23 后；正式资料包建议把这个差异列为厂家确认项。</li>
+      </ul>
+
+      <h3>4.5 允许用于安全相关应用的设备版本</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>订货码项</th>
+            <th>手册规定</th>
+            <th>检查动作</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>010 Approval</td>
+            <td>All</td>
+            <td>全部允许，但防爆等还要看对应安全说明。</td>
+          </tr>
+          <tr>
+            <td>020 Connector type</td>
+            <td>All</td>
+            <td>全部允许。</td>
+          </tr>
+          <tr>
+            <td>030 Power supply; display</td>
+            <td>All</td>
+            <td>全部允许。</td>
+          </tr>
+          <tr>
+            <td>040 Primary output</td>
+            <td>See next table</td>
+            <td>需核对具体输出选项。手册表中出现 E1、H1 等允许选项。</td>
+          </tr>
+          <tr>
+            <td>050 Secondary I/O analog</td>
+            <td>See next table</td>
+            <td>需核对模拟 I/O 选项。手册表中出现 A1、A2、B1、B2、C2 等允许选项。</td>
+          </tr>
+          <tr>
+            <td>060 Secondary I/O digital Ex d/XP</td>
+            <td>See next table</td>
+            <td>需核对数字 I/O 选项。手册表中出现 A1、A2、A3、B2、B3 等允许选项。</td>
+          </tr>
+          <tr>
+            <td>070 Housing</td>
+            <td>All except Y9</td>
+            <td>外壳选项 Y9 不在手册允许范围内。</td>
+          </tr>
+          <tr>
+            <td>110 Measuring range; wire; diameter</td>
+            <td>All except Y</td>
+            <td>测量范围/钢丝/直径选项 Y 不在手册允许范围内。</td>
+          </tr>
+          <tr>
+            <td>120 Displacer material; type</td>
+            <td>All except Y</td>
+            <td>浮子/测量子材质或类型选项 Y 不在手册允许范围内。</td>
+          </tr>
+          <tr>
+            <td>590 Additional approval</td>
+            <td>LA = SIL</td>
+            <td>关键项。没有 LA SIL，SIL 调试/锁定序列不可见，不能按此手册启用 SIL 锁定。</td>
+          </tr>
+          <tr>
+            <td>850 Firmware version</td>
+            <td>不选时供应最新具 SIL 能力的软件；也可选择 01.yy.zz。</td>
+            <td>现场应记录固件版本；手册规定有效固件版本从 01.02.zz 起。</td>
+          </tr>
+          <tr>
+            <td>硬件版本</td>
+            <td>电子硬件生产日期从 2016-11-23 起。</td>
+            <td>按铭牌或设备信息确认。</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="warning">
+        <strong>选型核心：</strong>
+        订货码 590 必须是 <code>LA</code> SIL；固件至少 <code>01.02.zz</code>；电子硬件生产日期不早于 <code>2016-11-23</code>；铭牌应有 SIL 标识。
+      </div>
+
+      <h3>4.6 安全功能</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>安全功能</th>
+            <th>手册定义</th>
+            <th>典型项目用途</th>
+            <th>输出方式</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Safety function 1 - Level measurement</td>
+            <td>液位测量，包含 maximum point level monitoring、minimum point level monitoring、level range monitoring。</td>
+            <td>高高液位联锁、低低液位联锁、溢流保护、干运行保护、允许液位范围监控。</td>
+            <td>4-20 mA 或数字继电器输出。</td>
+          </tr>
+          <tr>
+            <td>Safety function 2 - Current input measurement</td>
+            <td>连接设备的电流输入测量，包含 current input monitoring。</td>
+            <td>把外部 4-20 mA 信号作为输入，由 NMS81 监测其上下限或范围。</td>
+            <td>4-20 mA 或数字继电器输出。</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>4.7 安全相关信号</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>信号</th>
+            <th>正常状态</th>
+            <th>安全/故障状态</th>
+            <th>下游逻辑单元必须做什么</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Digital relay contact</td>
+            <td>继电器触点在有效范围内闭合。</td>
+            <td>超出范围或发生报警/警告时触点打开；开路也应被当作故障。</td>
+            <td>PLC 或限值信号变送器必须监控开/闭状态，开路时使受控设备达到或保持安全状态。</td>
+          </tr>
+          <tr>
+            <td>Analog 4-20 mA output</td>
+            <td>输出与液位或电流输入对应的 4-20 mA。</td>
+            <td>报警时可为 ≤3.6 mA 或 ≥21.0 mA。断线、供电故障、输出故障、短路等情况下可能出现任一失败电流。</td>
+            <td>逻辑单元必须识别 HI alarm ≥21.0 mA 和 LO alarm ≤3.6 mA，并处理断线/短路。</td>
+          </tr>
+          <tr>
+            <td>HART / V1 / Modbus / WM550 / CDI</td>
+            <td>可用于信息、诊断或资产管理。</td>
+            <td>启动诊断阶段约 30 秒内不可通信。</td>
+            <td>不要把这些通信作为本手册定义的安全相关输出信号。</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>4.8 使用限制</h3>
+      <ul>
+        <li>必须按具体介质属性、环境条件和应用限制使用，不能超过操作说明书和技术资料的规格。</li>
+        <li>脉冲式强 EMC 干扰可能导致输出信号出现小于 1 秒的瞬态偏差，偏差可能达到或超过 ±2%。手册建议下游逻辑单元做时间常数 ≥1 秒的滤波。</li>
+        <li>误差范围是设备特定的，由交付时的 FMEDA 定义，包含非线性、重复性、滞后、零点漂移、温漂、EMC 等影响因素。</li>
+        <li>危险未检测失效的定义：输出信号相对真实值偏差超过 2%，但输出仍在 4-20 mA 范围内，或继电器触点仍保持闭合。</li>
+      </ul>
+
+      <h3>4.9 设备运行行为</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>场景</th>
+            <th>数字输出</th>
+            <th>模拟输出</th>
+            <th>项目含义</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>上电后约 30 秒诊断阶段</td>
+            <td>继电器触点打开。</td>
+            <td>输出失败电流 ≤3.6 mA。</td>
+            <td>逻辑单元应允许启动诊断行为，不能误以为设备已正常测量。</td>
+          </tr>
+          <tr>
+            <td>安全功能被请求</td>
+            <td>在有效范围闭合，超出范围打开。</td>
+            <td>输出与被监测限值相对应的电流值。</td>
+            <td>联锁逻辑必须把这些状态转换成正确的安全动作。</td>
+          </tr>
+          <tr>
+            <td>报警/警告</td>
+            <td>触点始终打开。</td>
+            <td>可输出 ≥21.0 mA 或 ≤3.6 mA；特定故障下可能不受配置失败电流限制。</td>
+            <td>逻辑单元必须双向识别失败电流和开路状态。</td>
+          </tr>
+          <tr>
+            <td>错误码</td>
+            <td>Fxxx = Open；Mxxx/Cxxx/Sxxx = 按测量模式。</td>
+            <td>Fxxx = ≥21.0 mA 或 ≤3.6 mA；Mxxx/Cxxx/Sxxx = 按测量模式；C484 为失败模式仿真例外。</td>
+            <td>错误码的详细含义在操作说明书中，应纳入调试和维护培训。</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>4.10 安全相关配置</h3>
+      <h4>配置前</h4>
+      <ul>
+        <li>手册建议配置参数前先恢复出厂设置：<code>Setup -&gt; Advanced setup -&gt; Administration -&gt; Device reset = To factory defaults</code>。</li>
+        <li>液位安全功能和电流输入安全功能都要求先完成测量点校准，校准细节见操作说明书。</li>
+      </ul>
+
+      <h4>液位测量安全功能配置</h4>
+      <table>
+        <thead>
+          <tr>
+            <th>配置链路</th>
+            <th>关键参数</th>
+            <th>说明</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>液位源</td>
+            <td><code>Level source = Level</code>; Empty、Tank reference height、High stop level、Low stop level 正确设置；<code>Gauge command = Level</code>。</td>
+            <td>这是安全功能 1 的测量基础，任何基准高度或空罐标定错误都会影响保护点。</td>
+          </tr>
+          <tr>
+            <td>液位 -&gt; 模拟输出</td>
+            <td>Analog I/O B1-3 或 C1-3；<code>Operating mode = 4..20mA output</code> 或 <code>HART slave + 4..20mA output</code>；<code>Analog input source = Tank level</code>；0% / 100% 正确；<code>Used for SIL/WHG = Enabled</code>。</td>
+            <td>用于把液位转换为 4-20 mA 安全相关输出。</td>
+          </tr>
+          <tr>
+            <td>液位 -&gt; 数字输出</td>
+            <td>选择 Alarm 1-4；<code>Alarm mode = On</code>；<code>Alarm value source = Tank level</code>；HH/H/L/LL 限值按应用设置；Digital A/B/C/D 对应端子设置为 <code>Output passive</code>；<code>Used for SIL/WHG = Enabled</code>。</td>
+            <td>用于通过继电器触点实现高/低/范围报警。</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h4>电流输入安全功能配置</h4>
+      <table>
+        <thead>
+          <tr>
+            <th>配置链路</th>
+            <th>关键参数</th>
+            <th>说明</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>模拟输入源</td>
+            <td>Analog I/O B1-3 或 C1-3；<code>Operating mode = 4..20mA input</code> 或 <code>HART master + 4..20mA input</code>；Analog input 0% / 100% 正确。</td>
+            <td>用于安全功能 2 的输入测量。</td>
+          </tr>
+          <tr>
+            <td>电流输入 -&gt; 模拟输出</td>
+            <td>输出通道设置为 4-20 mA；<code>Analog input source = AIO B1-3 value mA</code> 或 <code>AIO C1-3 value mA</code>；0% / 100%；<code>Used for SIL/WHG = Enabled</code>。</td>
+            <td>将被监测电流输入转换为安全相关模拟输出。</td>
+          </tr>
+          <tr>
+            <td>电流输入 -&gt; 数字输出</td>
+            <td>选择 Alarm 1-4；<code>Alarm value source = AIO B1-3 value mA</code> 或 <code>AIO C1-3 value mA</code>；HH/H/L/LL 限值按应用设置；Digital 输出启用 <code>Used for SIL/WHG</code>。</td>
+            <td>将被监测电流输入转换为安全相关开关量。</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>4.11 SIL确认和锁定</h3>
+      <p>手册要求配置必须满足两个概念：</p>
+      <ul>
+        <li><strong>Confirmation concept：</strong>输入的安全相关参数要经过经过验证的、独立的测试确认。</li>
+        <li><strong>Locking concept：</strong>配置完成后锁定设备，符合 IEC 61511-1:2016 11.6.3 对参数保护的要求。</li>
+      </ul>
+
+      <h4>Expert mode 下锁定顺序</h4>
+      <ol>
+        <li>完成配置，并遵守手册中的参数要求。</li>
+        <li>启动调试检查：<code>Diagnostics -&gt; Device check -&gt; Commissioning check = Start</code>。液位与参考位置距离至少 500 mm。</li>
+        <li>设置 Proservo 为液位模式：<code>Operation -&gt; Gauge command -&gt; Gauge command = Level</code>。</li>
+        <li>启动 SIL/WHG 确认：<code>Setup -&gt; Advanced setup -&gt; SIL/WHG confirmation</code>，选择 <code>Set write protection</code> 并输入 SIL 锁定码 <code>7452</code>。</li>
+        <li>确认 <code>Commissioning = Expert mode</code>，设备检查并必要时强制切换安全相关参数。</li>
+        <li>执行功能测试：MAX/MIN 监测至少到达一个超过或低于开关点的液位/电流；范围监测建议覆盖整个测量范围的 5 个值。</li>
+        <li>确认功能测试成功。</li>
+        <li>再次输入锁定码 <code>7452</code> 设置写保护，并确认 <code>Locking status = SIL locked</code>。</li>
+        <li>可选：通过主电子模块上的 <code>WP</code> DIP 开关启用硬件写保护。</li>
+      </ol>
+
+      <h4>可自由配置但影响安全功能的参数</h4>
+      <table>
+        <thead>
+          <tr>
+            <th>路径/类别</th>
+            <th>参数</th>
+            <th>建议</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td>Setup</td><td>Upper density</td><td>记录配置值。</td></tr>
+          <tr><td>Setup</td><td>Process condition</td><td>记录配置值。</td></tr>
+          <tr><td>Setup</td><td>High stop level</td><td>记录配置值。</td></tr>
+          <tr><td>Setup</td><td>Low stop level</td><td>记录配置值。</td></tr>
+          <tr><td>Setup</td><td>Empty</td><td>记录配置值。</td></tr>
+          <tr><td>Current input measurement -&gt; Analog I/O</td><td>0% value; 100% value</td><td>记录配置值。</td></tr>
+        </tbody>
+      </table>
+
+      <h4>Expert mode 下不可自由配置、设备会自动设为安全值的参数</h4>
+      <table>
+        <thead>
+          <tr>
+            <th>参数路径</th>
+            <th>预设值</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td>Operation -&gt; Gauge command -&gt; Gauge command</td><td>Level</td></tr>
+          <tr><td>Digital input mapping -&gt; Digital input source 1</td><td>None</td></tr>
+          <tr><td>Digital input mapping -&gt; Digital input source 2</td><td>None</td></tr>
+          <tr><td>Digital Xy-z -&gt; Contact type</td><td>Normally closed</td></tr>
+          <tr><td>Digital Xy-z -&gt; Output simulation</td><td>Disable</td></tr>
+          <tr><td>Tank calculation -&gt; HyTD -&gt; HyTD mode</td><td>No</td></tr>
+          <tr><td>Tank calculation -&gt; CTSh -&gt; CTSh mode</td><td>No</td></tr>
+          <tr><td>Alarm X -&gt; Error value</td><td>All alarms</td></tr>
+          <tr><td>Alarm X -&gt; Alarm mode</td><td>On</td></tr>
+          <tr><td>Safety settings -&gt; Output out of range</td><td>Alarm</td></tr>
+          <tr><td>Diagnostics -&gt; Simulation -&gt; Simulation distance on</td><td>Off</td></tr>
+          <tr><td>Diagnostics -&gt; Simulation -&gt; Current output 1 simulation</td><td>Off</td></tr>
+          <tr><td>Expert -&gt; Digital Xy-z -&gt; Error on event</td><td>Any error</td></tr>
+          <tr><td>Expert -&gt; Analog I/O -&gt; Error on event</td><td>Any error</td></tr>
+          <tr><td>Expert -&gt; Analog I/O -&gt; Output out of range</td><td>Alarm</td></tr>
+          <tr><td>Expert -&gt; Analog I/O -&gt; Feedback threshold</td><td>1 s</td></tr>
+        </tbody>
+      </table>
+
+      <div class="danger">
+        <strong>解锁风险：</strong>
+        手册明确说解锁 SIL 设备会停用诊断功能，设备在解锁期间可能无法执行安全功能。解锁、proof test、维护期间必须采取独立的替代监测措施保证过程安全。
+      </div>
+
+      <h3>4.12 Proof testing 定期验证</h3>
+      <p>
+        Proof test 的目的是按周期验证安全功能可用性和检测随机设备失效，尤其是危险未检测失效
+        <code>λDU</code>。周期由操作方制定。测试必须验证设备与所有 SIS 组件的交互，而不是只看仪表显示。
+      </p>
+
+      <div class="formula">
+        单通道架构下手册给出的 PFDavg 关系式：<br>
+        PFDavg = 1/2 * PTC * λDU * T1 + λDD * MTTR + 1/2 * (1 - PTC) * λDU * LT
+      </div>
+
+      <table>
+        <thead>
+          <tr>
+            <th>安全功能</th>
+            <th>测试序列</th>
+            <th>手册表格中的 PTC</th>
+            <th>小节末尾文字</th>
+            <th>说明</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>液位测量</td>
+            <td>A - Approach the level</td>
+            <td>99%</td>
+            <td>PTC = 0.99</td>
+            <td>通过真实接近液位测试，覆盖率最高，推荐作为强验证。</td>
+          </tr>
+          <tr>
+            <td>液位测量</td>
+            <td>B - Simulation of the level</td>
+            <td>91%</td>
+            <td>文字写“detects 91%”，但又写 <code>PTC = 0.88</code></td>
+            <td>文档内部不一致，正式计算前应向 E+H 或认证机构确认。</td>
+          </tr>
+          <tr>
+            <td>液位测量</td>
+            <td>C - Simulation of the level and single-point verification of the level</td>
+            <td>97%</td>
+            <td>文字写 <code>PTC = 0.95</code></td>
+            <td>文档内部不一致，正式计算前应确认采用值。</td>
+          </tr>
+          <tr>
+            <td>电流输入测量</td>
+            <td>D - Feed in real currents</td>
+            <td>99%</td>
+            <td>PTC = 0.99</td>
+            <td>输入真实电流进行测试。</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h4>Proof test 通用要求</h4>
+      <ul>
+        <li>测试期间必须采取替代监测措施保证过程安全。</li>
+        <li>所有盖板密封和电缆入口密封也要检查。</li>
+        <li>如果任一测试判据不满足，设备不得继续作为 SIS 的一部分使用。</li>
+        <li>Proof test 只覆盖随机设备失效，不覆盖系统性失效。介质属性、工况、挂料、腐蚀等系统性原因必须另行评估。</li>
+        <li>模拟量测试建议使用精度优于 ±0.1 mA 的测量设备。</li>
+        <li>数字输出测试建议使用精度优于 ±0.1 Ω 的电阻测量设备。</li>
+        <li>数字继电器自监测时，闭合判据通常为小于 1 Ω，打开判据为大于 1 MΩ。</li>
+      </ul>
+
+      <h4>测试序列 A - 真实接近液位</h4>
+      <table>
+        <thead>
+          <tr>
+            <th>适用</th>
+            <th>主要步骤</th>
+            <th>通过判据</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>液位测量；点液位监测或范围监测。SIL 模式激活时也可执行。</td>
+            <td>点液位：真实接近 MAX 点以上或 MIN 点以下液位，读取输出电流/继电器电阻并记录。范围监测：接近范围内 5 个液位并记录。</td>
+            <td>输出电流或继电器状态触发/保证所需功能；若特定液位下期望电流/电阻偏差大于 ±2%，测试失败。</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h4>测试序列 B - 模拟液位</h4>
+      <table>
+        <thead>
+          <tr>
+            <th>适用</th>
+            <th>主要步骤</th>
+            <th>通过判据</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>液位测量。需要先解锁 SIL。</td>
+            <td>启动传感器自检；打开距离仿真；按 <code>level = empty calibration - distance</code> 计算模拟液位；在限值两侧读取并记录电流和继电器状态。范围监测模拟 5 个液位。</td>
+            <td>只在超过应触发限值的一侧触发安全功能；范围内读数和继电器状态在精度限值内。</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h4>测试序列 C - 模拟液位 + 单点真实验证</h4>
+      <table>
+        <thead>
+          <tr>
+            <th>适用</th>
+            <th>主要步骤</th>
+            <th>通过判据</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>液位测量。需要先解锁 SIL。</td>
+            <td>先在任意真实液位点读取实际测量值或实际输出电流，与设定值比较；再执行限值两侧模拟或范围 5 点模拟。</td>
+            <td>真实单点在精度范围内，模拟点按预期触发或不触发。</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h4>测试序列 D - 输入真实电流</h4>
+      <table>
+        <thead>
+          <tr>
+            <th>适用</th>
+            <th>主要步骤</th>
+            <th>通过判据</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>电流输入测量。SIL 模式激活时也可执行。</td>
+            <td>点监测：输入限值两侧真实电流，读取输出电流和继电器状态。范围监测：输入范围内 5 个电流值并记录。</td>
+            <td>只在超过应触发限值的一侧触发安全功能；范围内输出和继电器状态在精度限值内。</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>4.13 生命周期要求</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>阶段</th>
+            <th>手册要求</th>
+            <th>项目文件建议</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>人员</td>
+            <td>安装、调试、诊断、维修、维护人员必须是受训合格专家，经业主/操作方授权，熟悉法规并读懂相关手册和证书。操作人员也需被授权并遵循手册。</td>
+            <td>培训记录、授权名单、岗位职责。</td>
+          </tr>
+          <tr>
+            <td>安装</td>
+            <td>按相关操作说明书安装。</td>
+            <td>安装检查表、接线图、回路图、铭牌照片。</td>
+          </tr>
+          <tr>
+            <td>调试</td>
+            <td>按相关操作说明书调试，并执行安全手册的 SIL 确认/锁定流程。</td>
+            <td>调试记录、SIL 参数记录、功能测试记录、锁定状态截图或照片。</td>
+          </tr>
+          <tr>
+            <td>运行</td>
+            <td>按操作说明书运行。</td>
+            <td>操作规程、旁路/复位/报警处理流程。</td>
+          </tr>
+          <tr>
+            <td>维护</td>
+            <td>配置、proof test、维护期间必须采取替代监测措施保证过程安全。</td>
+            <td>维护计划、proof test 周期、停用/旁路审批。</td>
+          </tr>
+          <tr>
+            <td>维修</td>
+            <td>使用同类型原厂备件，建议记录序列号、维修日期、维修类型、维修人员。部分部件可由客户技术人员按说明更换。</td>
+            <td>维修记录、备件证明、维修后检查记录。</td>
+          </tr>
+          <tr>
+            <td>修改</td>
+            <td>SIL 能力设备修改通常由 E+H 制造中心执行；现场修改需制造中心批准并由 E+H 服务人员执行和记录；用户自行修改不允许。</td>
+            <td>变更管理 MOC、厂家批准文件、服务报告。</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>4.14 系统结构和冗余</h3>
+      <p>手册给出的典型测量系统包含 Proservo NMS80/81/83、4-20 mA 线、开关输出、现场总线、Tankvision、以太网、FieldCare 电脑、逻辑单元和执行机构。</p>
+      <ul>
+        <li>保护系统中，NMS81 输出液位比例 4-20 mA 到 PLC 或限值信号变送器，下游判断是否低于或高于预设限值。</li>
+        <li>继电器触点在超限或检测到错误时打开。逻辑单元必须把开路识别为故障或保护动作。</li>
+        <li>模拟输出出现错误时输出失败电流。逻辑单元必须识别 ≥21.0 mA 和 ≤3.6 mA。</li>
+        <li>典型液位点包括 datum plate、low stop、4 mA/0%、L/LL、H/HH、20 mA/100%、high stop。</li>
+        <li>同质冗余传感器架构如 1oo2 或 2oo3 时，手册给出共同原因参数最小值：β = 5%，βD = 2%。</li>
+        <li>手册说设备在同质冗余中满足 SIL 3 要求；若冗余设备中一台发现错误，必须检查其他设备是否存在同类错误。</li>
+      </ul>
+    </section>
+
+    <section id="terms">
+      <h2>5. 术语表</h2>
+      <p>下面按“证书/标准术语”“安全手册术语”“测试和计算术语”“项目管理术语”整理。解释以这两份文件的上下文为主，并补充做项目时的实际含义。</p>
+
+      <h3>5.1 证书和标准术语</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>术语</th>
+            <th>英文/缩写</th>
+            <th>中文解释</th>
+            <th>在本文件中的含义</th>
+            <th>常见误解</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>SIL</td>
+            <td>Safety Integrity Level</td>
+            <td>安全完整性等级，用来表示安全功能降低风险的能力。通常从 SIL 1 到 SIL 4，过程工业常见 SIL 1-3。</td>
+            <td>证书给出设备硬件安全完整性 SIL 2，并说明在 HFT=1 时可用于 SIL 3 应用。</td>
+            <td>不是“设备越高级越安全”的营销等级，也不是单台设备自动决定整条回路 SIL。</td>
+          </tr>
+          <tr>
+            <td>IEC 61508</td>
+            <td>Functional safety standard</td>
+            <td>电气/电子/可编程电子安全相关系统的功能安全基础标准。</td>
+            <td>证书按 IEC 61508 Parts 1-7:2010 评估。</td>
+            <td>有设备 IEC 61508 证书不代表项目无需 IEC 61511 或现场生命周期管理。</td>
+          </tr>
+          <tr>
+            <td>IEC 61511</td>
+            <td>Process industry SIS standard</td>
+            <td>过程工业安全仪表系统全生命周期标准，更偏项目应用。</td>
+            <td>手册在锁定概念中引用 IEC 61511-1:2016 11.6.3。</td>
+            <td>项目现场通常不能只看 61508 证书，还要按 61511 做需求、设计、验证、运维。</td>
+          </tr>
+          <tr>
+            <td>Hardware Safety Integrity</td>
+            <td>硬件安全完整性</td>
+            <td>与随机硬件失效有关的安全完整性。</td>
+            <td>证书写 Hardware Safety Integrity SIL 2。</td>
+            <td>它只覆盖硬件随机失效部分，不覆盖所有人为配置错误或工艺误用。</td>
+          </tr>
+          <tr>
+            <td>SC</td>
+            <td>Systematic Capability</td>
+            <td>系统能力，表示厂家开发流程、验证、变更控制等对系统性失效的控制能力。</td>
+            <td>NMS8x 证书给出 SC 3。</td>
+            <td>SC 3 不等于硬件随机失效达到 SIL 3；它是另一个维度。</td>
+          </tr>
+          <tr>
+            <td>HFT</td>
+            <td>Hardware Fault Tolerance</td>
+            <td>硬件容错能力。HFT=0 表示一个危险故障就可能使功能丧失；HFT=1 表示可容忍一个硬件故障。</td>
+            <td>证书说 HFT=0 可到 SIL 2，HFT=1 可到 SIL 3。</td>
+            <td>HFT=1 通常意味着冗余架构，不是软件参数可以打开的能力。</td>
+          </tr>
+          <tr>
+            <td>TÜV</td>
+            <td>TÜV Rheinland</td>
+            <td>德国第三方检测认证机构。</td>
+            <td>本证书由 TÜV Rheinland Industrie Service GmbH 签发。</td>
+            <td>TÜV 证书不等于 TÜV 已审核我们现场设计。</td>
+          </tr>
+          <tr>
+            <td>Certificate holder</td>
+            <td>证书持有人</td>
+            <td>拥有证书的制造商或组织。</td>
+            <td>Endress+Hauser SE + Co. KG。</td>
+            <td>项目业主引用证书，不等于证书归项目业主所有。</td>
+          </tr>
+          <tr>
+            <td>Type designation</td>
+            <td>型号标识</td>
+            <td>认证覆盖的产品型号范围。</td>
+            <td>NMS8x [x=0,1,3]，即 NMS80、NMS81、NMS83。</td>
+            <td>NMS8x 之外或未覆盖选项不能自动套用。</td>
+          </tr>
+          <tr>
+            <td>IEC 61326-3-2</td>
+            <td>EMC for safety-related systems</td>
+            <td>测量、控制和实验室设备中安全相关系统的电磁兼容要求。</td>
+            <td>证书列为适用标准。</td>
+            <td>通过 EMC 标准不代表现场可忽视接地、屏蔽、布线和干扰滤波。</td>
+          </tr>
+          <tr>
+            <td>IEC 61010-1</td>
+            <td>Electrical safety</td>
+            <td>测量、控制和实验室用电气设备的安全要求。</td>
+            <td>证书列为适用标准。</td>
+            <td>这是电气安全标准，不是 SIL 计算标准。</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>5.2 安全功能和系统术语</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>术语</th>
+            <th>英文/缩写</th>
+            <th>中文解释</th>
+            <th>在本项目中的关注点</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>SIS</td>
+            <td>Safety Instrumented System</td>
+            <td>安全仪表系统，由传感器、逻辑单元、执行机构组成，用于把过程带到安全状态。</td>
+            <td>NMS81 通常是 SIS 的传感器/输入设备，不是整套 SIS。</td>
+          </tr>
+          <tr>
+            <td>SIF</td>
+            <td>Safety Instrumented Function</td>
+            <td>安全仪表功能。一条具体的保护功能，例如“罐液位高高时关闭进料阀”。</td>
+            <td>项目必须为每条 SIF 写清触发条件、动作、响应时间、SIL 目标。</td>
+          </tr>
+          <tr>
+            <td>Safety function</td>
+            <td>安全功能</td>
+            <td>为了达到或保持安全状态而执行的功能。</td>
+            <td>本手册定义液位测量安全功能和电流输入测量安全功能。</td>
+          </tr>
+          <tr>
+            <td>Safety-related signal</td>
+            <td>安全相关信号</td>
+            <td>被认证作为安全功能依据的输出信号。</td>
+            <td>本手册限定为 4-20 mA 模拟输出或数字继电器输出。</td>
+          </tr>
+          <tr>
+            <td>Logic unit</td>
+            <td>逻辑单元</td>
+            <td>接收输入并执行安全逻辑的设备，例如安全 PLC 或限值信号变送器。</td>
+            <td>必须识别 NMS81 的超限、开路、失败电流、故障码映射。</td>
+          </tr>
+          <tr>
+            <td>Actuator</td>
+            <td>执行机构</td>
+            <td>执行安全动作的最终元件，例如切断阀、泵停机、断电接触器。</td>
+            <td>整条 SIF 的 PFDavg 往往由执行机构贡献较大，不能只看仪表证书。</td>
+          </tr>
+          <tr>
+            <td>Safe state</td>
+            <td>安全状态</td>
+            <td>过程风险被降低到可接受水平的状态。</td>
+            <td>例如停止进料、关闭阀门、停泵、报警并联锁。必须在 SRS 中定义。</td>
+          </tr>
+          <tr>
+            <td>Fail-safe mode</td>
+            <td>故障安全模式</td>
+            <td>设备检测到故障后输出可被下游识别的故障状态。</td>
+            <td>NMS81 对模拟量可输出 ≤3.6 mA 或 ≥21.0 mA，对数字量打开继电器触点。</td>
+          </tr>
+          <tr>
+            <td>MAX monitoring</td>
+            <td>高限监测</td>
+            <td>超过上限时触发安全功能。</td>
+            <td>典型为溢流保护。</td>
+          </tr>
+          <tr>
+            <td>MIN monitoring</td>
+            <td>低限监测</td>
+            <td>低于下限时触发安全功能。</td>
+            <td>典型为泵干运行保护。</td>
+          </tr>
+          <tr>
+            <td>Range monitoring</td>
+            <td>范围监测</td>
+            <td>监测测量值是否在允许范围内。</td>
+            <td>proof test 通常要求覆盖范围的 5 个点。</td>
+          </tr>
+          <tr>
+            <td>HH/H/L/LL alarm</td>
+            <td>高高/高/低/低低报警</td>
+            <td>不同严重程度或位置的限值报警。</td>
+            <td>数字输出配置时要把有效范围放在 HH、H、L、LL 限值之间。</td>
+          </tr>
+          <tr>
+            <td>WHG</td>
+            <td>German Water Resources Act context</td>
+            <td>在 E+H 菜单中常与 SIL 锁定/确认放在一起出现的保护相关功能标识。</td>
+            <td>本手册菜单项写作 SIL/WHG confirmation 和 Deactivate SIL/WHG。</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>5.3 失效、诊断和可靠性术语</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>术语</th>
+            <th>含义</th>
+            <th>对输出信号的影响</th>
+            <th>项目影响</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>λ</td>
+            <td>失效率的符号，lambda。单位通常与时间相关，例如 1/h。</td>
+            <td>不同 λ 类别决定 PFDavg、诊断覆盖和 SIL 计算。</td>
+            <td>FMEDA 报告通常给出各类 λ。</td>
+          </tr>
+          <tr>
+            <td>λSD</td>
+            <td>Safe Detected，安全已检测失效。失效本身不会导致危险，且可被检测。</td>
+            <td>使输出进入故障安全模式。</td>
+            <td>会造成停机或报警，但不是危险未检测失效。</td>
+          </tr>
+          <tr>
+            <td>λSU</td>
+            <td>Safe Undetected，安全未检测失效。失效本身不危险，但设备不能检测。</td>
+            <td>仍在定义误差范围内，测量不确定性可能超出规格。</td>
+            <td>可能影响可用性或测量质量，但不直接计入危险失效。</td>
+          </tr>
+          <tr>
+            <td>λDD</td>
+            <td>Dangerous Detected，危险已检测失效。失效有危险潜力，但可被设备诊断检测。</td>
+            <td>使输出进入故障安全模式。</td>
+            <td>计入 PFDavg 公式中的 <code>λDD * MTTR</code>，修复时间很关键。</td>
+          </tr>
+          <tr>
+            <td>λDU</td>
+            <td>Dangerous Undetected，危险未检测失效。失效有危险潜力且不能被设备检测。</td>
+            <td>可能输出错误但看似正常，例如仍在 4-20 mA 范围内或继电器仍闭合。</td>
+            <td>这是 proof test 和 PFDavg 计算中最关键的失效率。</td>
+          </tr>
+          <tr>
+            <td>Dangerous undetected failure</td>
+            <td>危险未检测失效。</td>
+            <td>本手册定义为输出偏离真实值超过 2%，但仍在 4-20 mA 范围内或继电器仍闭合。</td>
+            <td>逻辑单元不会自动发现，所以需要 proof test。</td>
+          </tr>
+          <tr>
+            <td>FMEDA</td>
+            <td>Failure Modes, Effects and Diagnostic Analysis，失效模式、影响和诊断分析。</td>
+            <td>定义设备错误范围和失效分类。</td>
+            <td>产品 SIL 证书背后的核心分析资料之一。</td>
+          </tr>
+          <tr>
+            <td>Diagnostic coverage</td>
+            <td>诊断覆盖率。</td>
+            <td>表示诊断能发现多少相关失效。</td>
+            <td>在线诊断和 proof test 覆盖率共同影响 PFDavg。</td>
+          </tr>
+          <tr>
+            <td>MTBF</td>
+            <td>Mean Time Between Failures，平均故障间隔时间。</td>
+            <td>手册给出 29 年。</td>
+            <td>不能直接拿 MTBF 证明 SIL，要看危险失效率和 PFDavg。</td>
+          </tr>
+          <tr>
+            <td>MTTR</td>
+            <td>Mean Time To Repair，平均修复时间。</td>
+            <td>出现在 PFDavg 公式中。</td>
+            <td>维修响应慢会增加不可用性。SRS 或维护计划应设定 MTTR 假设。</td>
+          </tr>
+          <tr>
+            <td>Useful lifetime</td>
+            <td>有效寿命。</td>
+            <td>失效率只在有效寿命内适用。</td>
+            <td>超过寿命应替换、评估或由厂家/操作方措施支持延寿。</td>
+          </tr>
+          <tr>
+            <td>Systematic failure</td>
+            <td>系统性失效，来自设计、规格、软件、配置、工况误用、维护错误等非随机原因。</td>
+            <td>Proof test 不覆盖所有系统性失效。</td>
+            <td>需要通过流程、审查、验证、培训和变更管理控制。</td>
+          </tr>
+          <tr>
+            <td>Random hardware failure</td>
+            <td>随机硬件失效。</td>
+            <td>元器件随机失效造成。</td>
+            <td>FMEDA、λ、PFDavg 主要处理这一类。</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>5.4 Proof test 和计算术语</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>术语</th>
+            <th>中文解释</th>
+            <th>本手册中的用法</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Proof test</td>
+            <td>定期验证测试，用来证明安全功能仍然可用，并发现在线诊断发现不了的失效。</td>
+            <td>手册 5.3 给出 A、B、C、D 四类测试序列和 PTC。</td>
+          </tr>
+          <tr>
+            <td>PTC</td>
+            <td>Proof Test Coverage，proof test 覆盖率。</td>
+            <td>序列 A/D 为 99%；B/C 在文档内部存在表值和小节值不一致，需要确认。</td>
+          </tr>
+          <tr>
+            <td>PFDavg</td>
+            <td>Average Probability of Failure on Demand，平均按需失效概率。</td>
+            <td>低需求模式 SIL 计算核心指标。手册给出单通道架构公式。</td>
+          </tr>
+          <tr>
+            <td>T1</td>
+            <td>Proof test interval，proof test 周期。</td>
+            <td>公式中的测试间隔，由操作方根据风险和 PFDavg 目标制定。</td>
+          </tr>
+          <tr>
+            <td>LT</td>
+            <td>Lifetime，寿命。</td>
+            <td>公式中用于未被 proof test 覆盖部分的寿命项。</td>
+          </tr>
+          <tr>
+            <td>Low demand mode</td>
+            <td>低需求模式，安全功能不频繁动作，按需触发。</td>
+            <td>过程工业液位联锁通常按 PFDavg 分析。</td>
+          </tr>
+          <tr>
+            <td>PFH</td>
+            <td>Probability of dangerous Failure per Hour，每小时危险失效概率。</td>
+            <td>高需求或连续模式常用指标。此手册重点展示 PFDavg 关系式。</td>
+          </tr>
+          <tr>
+            <td>1oo1</td>
+            <td>One out of one，单台设备，1 台中 1 台动作即触发。</td>
+            <td>常对应 HFT=0。</td>
+          </tr>
+          <tr>
+            <td>1oo2</td>
+            <td>One out of two，两台中任一台动作即触发。</td>
+            <td>手册在冗余章节举例，同质冗余要考虑 β、βD。</td>
+          </tr>
+          <tr>
+            <td>2oo3</td>
+            <td>Two out of three，三台中两台动作才触发。</td>
+            <td>常用于降低误动作，同时保持一定容错，但计算更复杂。</td>
+          </tr>
+          <tr>
+            <td>β</td>
+            <td>Beta，共同原因失效因子。</td>
+            <td>手册给出同质冗余最小 β = 5%。</td>
+          </tr>
+          <tr>
+            <td>βD</td>
+            <td>Detected common cause beta，已检测共同原因失效因子。</td>
+            <td>手册给出同质冗余最小 βD = 2%。</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>5.5 设备、输出和菜单术语</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>术语</th>
+            <th>中文解释</th>
+            <th>项目注意事项</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Proservo</td>
+            <td>E+H 的伺服式高精度罐区液位测量设备。</td>
+            <td>NMS81 通过小型 displacer 和测量钢丝/鼓轮计量距离。</td>
+          </tr>
+          <tr>
+            <td>Displacer</td>
+            <td>伺服液位计的测量子/浮子，通过钢丝悬挂接触液面。</td>
+            <td>更换后需要重新校准和调试检查。</td>
+          </tr>
+          <tr>
+            <td>Datum plate</td>
+            <td>测量参考点。</td>
+            <td>液位基准错误会影响所有限值。</td>
+          </tr>
+          <tr>
+            <td>Empty</td>
+            <td>空罐标定值。</td>
+            <td>计算模拟液位时会用到，例如 level = empty calibration - distance。</td>
+          </tr>
+          <tr>
+            <td>Tank reference height</td>
+            <td>罐参考高度。</td>
+            <td>配置液位源时必须正确。</td>
+          </tr>
+          <tr>
+            <td>High stop level / Low stop level</td>
+            <td>高/低停止液位。</td>
+            <td>影响安全功能，应记录配置。</td>
+          </tr>
+          <tr>
+            <td>4-20 mA</td>
+            <td>工业标准模拟电流信号。4 mA 常代表 0%，20 mA 常代表 100%。</td>
+            <td>安全逻辑必须识别正常范围和失败电流范围。</td>
+          </tr>
+          <tr>
+            <td>HI alarm</td>
+            <td>高失败电流报警。</td>
+            <td>手册定义 ≥21.0 mA。</td>
+          </tr>
+          <tr>
+            <td>LO alarm</td>
+            <td>低失败电流报警。</td>
+            <td>手册定义 ≤3.6 mA。</td>
+          </tr>
+          <tr>
+            <td>Normally closed</td>
+            <td>常闭触点。</td>
+            <td>数字输出在安全配置下强制为 Normally closed；有效范围闭合，故障/超限打开。</td>
+          </tr>
+          <tr>
+            <td>WP switch</td>
+            <td>硬件写保护开关。</td>
+            <td>可选启用，解锁前需确认在 OFF。</td>
+          </tr>
+          <tr>
+            <td>SIL locked</td>
+            <td>SIL 锁定状态。</td>
+            <td>配置完成后必须确认锁定状态，否则参数可能被改动。</td>
+          </tr>
+          <tr>
+            <td>Locking code 7452</td>
+            <td>手册给出的 SIL 锁定/解锁码。</td>
+            <td>项目中应控制谁可使用该码，避免未经授权更改安全参数。</td>
+          </tr>
+          <tr>
+            <td>FieldCare</td>
+            <td>E+H 资产管理和配置工具。</td>
+            <td>可用于 SIL 确认序列，但参数确认和功能测试仍要独立记录。</td>
+          </tr>
+          <tr>
+            <td>HART</td>
+            <td>叠加在 4-20 mA 上的数字通信协议。</td>
+            <td>手册中作为信息用途，不是安全相关信号本体。</td>
+          </tr>
+          <tr>
+            <td>CDI</td>
+            <td>Service interface，服务接口。</td>
+            <td>启动诊断阶段不可通信。</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>5.6 做认证时常见中文词</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>术语</th>
+            <th>含义</th>
+            <th>我们需要产出的东西</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>HAZOP</td>
+            <td>危险与可操作性分析，用偏差方法识别工艺危险。</td>
+            <td>HAZOP 会议记录、偏差、原因、后果、保护层、建议措施。</td>
+          </tr>
+          <tr>
+            <td>LOPA</td>
+            <td>保护层分析，用半定量方法确定还需要多少风险降低。</td>
+            <td>每个场景的频率、后果、IPL、目标 SIL。</td>
+          </tr>
+          <tr>
+            <td>SRS</td>
+            <td>Safety Requirements Specification，安全需求规格书。</td>
+            <td>每条 SIF 的触发条件、动作、SIL 目标、响应时间、proof test、旁路、诊断、复位等。</td>
+          </tr>
+          <tr>
+            <td>Verification</td>
+            <td>验证，证明设计输出满足设计输入。</td>
+            <td>设计审查、计算复核、图纸校核、参数核对。</td>
+          </tr>
+          <tr>
+            <td>Validation</td>
+            <td>确认，证明最终系统满足安全需求。</td>
+            <td>整条 SIF 联动测试、FAT/SAT、投运确认。</td>
+          </tr>
+          <tr>
+            <td>MOC</td>
+            <td>Management of Change，变更管理。</td>
+            <td>任何参数、硬件、软件、工艺条件变化都要评估对 SIL 的影响。</td>
+          </tr>
+          <tr>
+            <td>Assessment</td>
+            <td>功能安全评估。</td>
+            <td>由独立人员或机构评估生命周期工作是否满足标准。</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="parameters">
+      <h2>6. 参数和计算指标详解</h2>
+      <div class="note">
+        <strong>先抓住主线：</strong>
+        SIL 计算不是看一个单独参数，而是看一条 SIF 在给定架构、给定 proof test 周期、给定维修时间、给定诊断能力下，平均有多大概率在需要动作时失效。
+        诊断覆盖率、proof test 覆盖率、失效率、MTTR、HFT、β/βD 都是在描述这件事的不同侧面。
+      </div>
+
+      <h3>6.1 最容易混淆的三个“覆盖/能力”指标</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>指标</th>
+            <th>中文名称</th>
+            <th>它回答的问题</th>
+            <th>发生在什么时候</th>
+            <th>不要和什么混用</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>DC</td>
+            <td>Diagnostic Coverage，在线诊断覆盖率</td>
+            <td>设备运行中，内部诊断能自动发现多少危险失效？</td>
+            <td>在线运行期间，故障发生后由设备诊断发现。</td>
+            <td>不要和 PTC 混用。DC 是在线诊断，PTC 是定期人工/程序测试。</td>
+          </tr>
+          <tr>
+            <td>PTC</td>
+            <td>Proof Test Coverage，定期验证测试覆盖率</td>
+            <td>一次 proof test 能发现多少平时没被诊断出来的危险未检测失效？</td>
+            <td>按 T1 周期执行 proof test 时。</td>
+            <td>不要把 PTC 当成设备日常自诊断能力。测试不做，PTC 就不会发挥作用。</td>
+          </tr>
+          <tr>
+            <td>SFF</td>
+            <td>Safe Failure Fraction，安全失效分数</td>
+            <td>所有相关失效中，有多少属于安全失效或危险但可检测失效？</td>
+            <td>FMEDA 结果中用于硬件架构约束判断。</td>
+            <td>不要把 SFF 当成 PFDavg。SFF 高不代表整条 SIF 的 PFDavg 一定达标。</td>
+          </tr>
+          <tr>
+            <td>SC</td>
+            <td>Systematic Capability，系统能力</td>
+            <td>厂家流程能控制到什么等级的系统性失效风险？</td>
+            <td>产品开发、验证、变更和管理过程。</td>
+            <td>不要把 SC 3 理解成硬件随机失效自动达到 SIL 3。</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>6.2 诊断覆盖率 DC 的具体含义</h3>
+      <p>
+        诊断覆盖率通常指设备在线运行时，内部诊断能发现的危险失效比例。对 SIL 计算最有用的是
+        <strong>危险失效诊断覆盖率</strong>，也就是危险失效中有多少会变成 <code>λDD</code>，而不是隐藏成 <code>λDU</code>。
+      </p>
+      <div class="formula">
+        危险失效诊断覆盖率 DC ≈ λDD / (λDD + λDU)
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>如果 DC 较高</th>
+            <th>如果 DC 较低</th>
+            <th>项目上的直接影响</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>更多危险故障会被设备发现，并输出故障安全状态，例如 ≤3.6 mA、≥21.0 mA 或继电器打开。</td>
+            <td>更多危险故障可能潜伏，输出看起来正常，但真实测量已经错误。</td>
+            <td>DC 越高，通常 <code>λDU</code> 越少，PFDavg 更容易降低；但诊断触发也可能带来更多报警或停车，需要在可用性上平衡。</td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="warning">
+        <strong>在这份 NMS81 安全手册中：</strong>
+        失效分类表把 <code>λDD</code> 解释为设备内部诊断可检测的危险失效；proof test 章节写的“diagnostic coverages”实际是在讲具体 proof test 序列的 <code>PTC</code>。阅读时要把在线 DC 和定期 PTC 分开。
+      </div>
+
+      <h3>6.3 PTC 的具体含义</h3>
+      <p>
+        PTC 是某个 proof test 序列对危险未检测失效的发现能力。它不是设备日常自动诊断，而是“按规程做了这次测试以后，能把多少潜伏危险故障暴露出来”。
+      </p>
+      <table>
+        <thead>
+          <tr>
+            <th>PTC 数值</th>
+            <th>直观理解</th>
+            <th>剩余风险</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>PTC = 0.99</td>
+            <td>该测试理论上能发现 99% 的相关危险未检测失效。</td>
+            <td>仍有 1% 的危险未检测失效可能测试也发现不了，需要用 <code>(1 - PTC)</code> 项计入计算。</td>
+          </tr>
+          <tr>
+            <td>PTC = 0.90</td>
+            <td>该测试能发现 90%，覆盖较低。</td>
+            <td>剩余 10% 会对长期 PFDavg 贡献更大，可能需要更短测试周期或更强测试方法。</td>
+          </tr>
+          <tr>
+            <td>PTC 未确认</td>
+            <td>不能正式用于 SIL 计算。</td>
+            <td>应向厂家/认证机构确认，或在初步估算中保守取较低值并写明假设。</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h4>NMS81 手册中 proof test 覆盖率的读取方式</h4>
+      <table>
+        <thead>
+          <tr>
+            <th>测试序列</th>
+            <th>测试对象</th>
+            <th>手册表格值</th>
+            <th>小节末尾值</th>
+            <th>建议处理</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>A - 真实接近液位</td>
+            <td>液位测量</td>
+            <td>99%</td>
+            <td>0.99</td>
+            <td>一致，可作为该序列的依据。</td>
+          </tr>
+          <tr>
+            <td>B - 模拟液位</td>
+            <td>液位测量</td>
+            <td>91%</td>
+            <td>文字同时出现 91% 和 <code>PTC = 0.88</code></td>
+            <td>正式计算前确认。初步保守估算可取 0.88，并标注“待厂家确认”。</td>
+          </tr>
+          <tr>
+            <td>C - 模拟液位 + 单点真实验证</td>
+            <td>液位测量</td>
+            <td>97%</td>
+            <td>0.95</td>
+            <td>正式计算前确认。初步保守估算可取 0.95，并标注“待厂家确认”。</td>
+          </tr>
+          <tr>
+            <td>D - 输入真实电流</td>
+            <td>电流输入测量</td>
+            <td>99%</td>
+            <td>0.99</td>
+            <td>一致，可作为该序列的依据。</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>6.4 PFDavg 公式每一项是什么意思</h3>
+      <p>NMS81 手册给出单通道架构的关系式：</p>
+      <div class="formula">
+        PFDavg = 1/2 * PTC * λDU * T1 + λDD * MTTR + 1/2 * (1 - PTC) * λDU * LT
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>公式项</th>
+            <th>中文解释</th>
+            <th>怎样降低这一项</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>1/2 * PTC * λDU * T1</code></td>
+            <td>能被 proof test 发现的危险未检测失效，在两次测试之间逐渐累积。平均来看，潜伏时间按半个测试周期估算。</td>
+            <td>降低 <code>λDU</code>、提高 PTC、缩短 T1、选择更充分的 proof test。</td>
+          </tr>
+          <tr>
+            <td><code>λDD * MTTR</code></td>
+            <td>危险已检测失效虽然被发现了，但从发现到修复期间仍有不可用时间。</td>
+            <td>提高维修响应能力、备件可用性、报警处理速度，降低 MTTR。</td>
+          </tr>
+          <tr>
+            <td><code>1/2 * (1 - PTC) * λDU * LT</code></td>
+            <td>proof test 也发现不了的危险未检测失效，可能跨过多次测试一直潜伏，按寿命 LT 计入。</td>
+            <td>选择覆盖率更高的 proof test，补充真实点验证，缩短设备有效寿命假设或增加更强的诊断/测试。</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="note">
+        <strong>关键直觉：</strong>
+        T1 越长，第一项越大；PTC 越低，第三项越大；MTTR 越长，第二项越大。做 SIL 设计时，不只是“设备通过 SIL 2”，还要把测试周期、维修能力和测试覆盖率一起写进 SRS 和运维计划。
+      </div>
+
+      <h3>6.5 常用参数速查表</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>参数</th>
+            <th>全称</th>
+            <th>中文含义</th>
+            <th>典型单位/范围</th>
+            <th>项目里谁提供或决定</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>λSD</td>
+            <td>Safe Detected failure rate</td>
+            <td>安全已检测失效率。故障会被发现，并不会使安全功能危险失效。</td>
+            <td>通常为 1/h</td>
+            <td>厂家 FMEDA。</td>
+          </tr>
+          <tr>
+            <td>λSU</td>
+            <td>Safe Undetected failure rate</td>
+            <td>安全未检测失效率。故障不危险，但设备自己不一定发现。</td>
+            <td>通常为 1/h</td>
+            <td>厂家 FMEDA。</td>
+          </tr>
+          <tr>
+            <td>λDD</td>
+            <td>Dangerous Detected failure rate</td>
+            <td>危险已检测失效率。故障有危险潜力，但会被诊断发现并进入故障安全输出。</td>
+            <td>通常为 1/h</td>
+            <td>厂家 FMEDA，结合设备诊断设计。</td>
+          </tr>
+          <tr>
+            <td>λDU</td>
+            <td>Dangerous Undetected failure rate</td>
+            <td>危险未检测失效率。最关键的潜伏危险故障来源。</td>
+            <td>通常为 1/h</td>
+            <td>厂家 FMEDA；proof test 用来发现其中一部分。</td>
+          </tr>
+          <tr>
+            <td>λS</td>
+            <td>Safe failure rate</td>
+            <td>安全失效率总和，通常可理解为 <code>λSD + λSU</code>。</td>
+            <td>通常为 1/h</td>
+            <td>由 FMEDA 汇总。</td>
+          </tr>
+          <tr>
+            <td>λD</td>
+            <td>Dangerous failure rate</td>
+            <td>危险失效率总和，通常可理解为 <code>λDD + λDU</code>。</td>
+            <td>通常为 1/h</td>
+            <td>由 FMEDA 汇总。</td>
+          </tr>
+          <tr>
+            <td>DC</td>
+            <td>Diagnostic Coverage</td>
+            <td>在线诊断覆盖率，危险失效中可被在线诊断发现的比例。</td>
+            <td>0-100%</td>
+            <td>厂家 FMEDA/安全手册，系统设计可通过诊断策略影响。</td>
+          </tr>
+          <tr>
+            <td>PTC</td>
+            <td>Proof Test Coverage</td>
+            <td>定期验证测试覆盖率，proof test 能发现的危险未检测失效比例。</td>
+            <td>0-100%</td>
+            <td>安全手册给出测试序列覆盖率；项目选择测试序列。</td>
+          </tr>
+          <tr>
+            <td>PFDavg</td>
+            <td>Average Probability of Failure on Demand</td>
+            <td>低需求模式下，安全功能在被要求动作时平均失效概率。</td>
+            <td>无量纲概率</td>
+            <td>项目 SIL 计算。</td>
+          </tr>
+          <tr>
+            <td>PFH</td>
+            <td>Probability of dangerous Failure per Hour</td>
+            <td>高需求或连续模式下，每小时危险失效概率。</td>
+            <td>1/h</td>
+            <td>项目 SIL 计算，取决于需求模式。</td>
+          </tr>
+          <tr>
+            <td>T1</td>
+            <td>Proof test interval</td>
+            <td>proof test 周期。</td>
+            <td>小时、月、年</td>
+            <td>操作方/项目组决定，并要通过 PFDavg 计算验证。</td>
+          </tr>
+          <tr>
+            <td>MTTR</td>
+            <td>Mean Time To Repair</td>
+            <td>平均修复时间，从发现故障到恢复安全功能的平均时间。</td>
+            <td>小时</td>
+            <td>项目运维能力决定，包括备件、人员、检修许可。</td>
+          </tr>
+          <tr>
+            <td>MTBF</td>
+            <td>Mean Time Between Failures</td>
+            <td>平均故障间隔时间，表示总体可靠性。</td>
+            <td>小时或年</td>
+            <td>厂家提供。NMS81 手册给出 29 年。</td>
+          </tr>
+          <tr>
+            <td>LT</td>
+            <td>Lifetime</td>
+            <td>寿命或任务时间。公式中用于未被 proof test 覆盖部分的潜伏时间。</td>
+            <td>小时或年</td>
+            <td>项目生命周期计划和厂家有效寿命假设。</td>
+          </tr>
+          <tr>
+            <td>SFF</td>
+            <td>Safe Failure Fraction</td>
+            <td>安全失效和危险已检测失效占全部相关失效的比例。</td>
+            <td>0-100%</td>
+            <td>厂家 FMEDA。用于硬件架构约束，不直接替代 PFDavg。</td>
+          </tr>
+          <tr>
+            <td>HFT</td>
+            <td>Hardware Fault Tolerance</td>
+            <td>硬件容错能力。HFT=0 表示不能容忍一个危险硬件故障；HFT=1 表示可容忍一个。</td>
+            <td>0、1、2...</td>
+            <td>架构设计决定，例如单台、1oo2、2oo3。</td>
+          </tr>
+          <tr>
+            <td>β</td>
+            <td>Common cause beta factor</td>
+            <td>共同原因失效比例。冗余设备可能因同一原因一起失效的比例。</td>
+            <td>0-100%</td>
+            <td>安全手册/项目共因失效评估。NMS81 手册给同质冗余最小 β = 5%。</td>
+          </tr>
+          <tr>
+            <td>βD</td>
+            <td>Detected common cause beta factor</td>
+            <td>已检测共同原因失效比例。</td>
+            <td>0-100%</td>
+            <td>NMS81 手册给同质冗余最小 βD = 2%。</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>6.6 SIL 等级和 PFDavg 的关系</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>低需求模式 SIL</th>
+            <th>PFDavg 范围</th>
+            <th>直观理解</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>SIL 1</td>
+            <td>≥ 10^-2 且 &lt; 10^-1</td>
+            <td>平均按需失效概率在 1% 到 10% 之间。</td>
+          </tr>
+          <tr>
+            <td>SIL 2</td>
+            <td>≥ 10^-3 且 &lt; 10^-2</td>
+            <td>平均按需失效概率在 0.1% 到 1% 之间。</td>
+          </tr>
+          <tr>
+            <td>SIL 3</td>
+            <td>≥ 10^-4 且 &lt; 10^-3</td>
+            <td>平均按需失效概率在 0.01% 到 0.1% 之间。</td>
+          </tr>
+          <tr>
+            <td>SIL 4</td>
+            <td>≥ 10^-5 且 &lt; 10^-4</td>
+            <td>过程工业中较少见，要求非常高。</td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="warning">
+        <strong>注意：</strong>
+        设备证书写“可用于 SIL 2/SIL 3 应用”，不等于整条 SIF 的 PFDavg 自动落在对应范围。传感器、逻辑单元、执行机构、架构、proof test 周期和维修时间都要一起计算。
+      </div>
+
+      <h3>6.7 一个简化算例，帮助理解各参数影响</h3>
+      <p class="small">下面是假设数字，只用于理解公式，不代表 NMS81 的实际失效率。</p>
+      <div class="formula">
+        假设：λDU = 1.0E-7 /h，λDD = 2.0E-7 /h，T1 = 8760 h，MTTR = 8 h，LT = 87600 h，PTC = 0.99<br>
+        第一项 = 1/2 * 0.99 * 1.0E-7 * 8760 = 4.34E-4<br>
+        第二项 = 2.0E-7 * 8 = 1.60E-6<br>
+        第三项 = 1/2 * 0.01 * 1.0E-7 * 87600 = 4.38E-5<br>
+        PFDavg ≈ 4.78E-4
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>调整项</th>
+            <th>会发生什么</th>
+            <th>工程含义</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>T1 从 1 年改为 2 年</td>
+            <td>第一项大约翻倍。</td>
+            <td>延长 proof test 周期会直接增加潜伏危险失效暴露时间。</td>
+          </tr>
+          <tr>
+            <td>PTC 从 0.99 降到 0.90</td>
+            <td>第三项会显著增加。</td>
+            <td>测试覆盖率低时，即使按期测试，也可能留下更多检测不到的危险故障。</td>
+          </tr>
+          <tr>
+            <td>MTTR 从 8 h 变成 72 h</td>
+            <td>第二项增加 9 倍。</td>
+            <td>诊断发现了故障但修得慢，安全功能仍然长期不可用。</td>
+          </tr>
+          <tr>
+            <td>λDU 降低</td>
+            <td>第一项和第三项都降低。</td>
+            <td>选择更可靠、诊断更强或架构更好的传感器子系统会改善 PFDavg。</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>6.8 NMS81 项目计算还缺哪些数据</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>数据</th>
+            <th>这两份文件有没有</th>
+            <th>下一步从哪里拿</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>NMS81 的 λSD、λSU、λDD、λDU 明细</td>
+            <td>安全手册解释了分类，但没有列出完整数值。</td>
+            <td>向 E+H 索取 FMEDA 摘要、SIL report 或安全参数表。</td>
+          </tr>
+          <tr>
+            <td>逻辑单元和执行机构失效率</td>
+            <td>没有。</td>
+            <td>安全 PLC、继电器、阀门、执行器、接触器等供应商 SIL 资料。</td>
+          </tr>
+          <tr>
+            <td>本项目 T1</td>
+            <td>手册说由操作方规定。</td>
+            <td>通过 PFDavg 目标、停车窗口、维护能力和法规要求确定。</td>
+          </tr>
+          <tr>
+            <td>本项目 MTTR</td>
+            <td>没有固定值。</td>
+            <td>由维修组织、备件、人员到场时间、许可证流程决定。</td>
+          </tr>
+          <tr>
+            <td>冗余架构和共因失效措施</td>
+            <td>手册只给同质冗余 β = 5%、βD = 2% 的最低值。</td>
+            <td>由 SIF 架构设计和共因失效评估决定，并向厂家确认 SIL 3 推荐方案。</td>
+          </tr>
+          <tr>
+            <td>proof test B/C 的准确 PTC</td>
+            <td>文件内部存在不一致。</td>
+            <td>向 E+H/TÜV 确认，正式计算前归档确认结果。</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>6.9 常见错误判断</h3>
+      <ul>
+        <li><strong>把 DC 当 PTC：</strong>在线诊断覆盖率再高，也不能替代定期 proof test；proof test 覆盖率再高，也不能说明设备日常能自动发现故障。</li>
+        <li><strong>拿 MTBF 直接证明 SIL：</strong>MTBF 是总体可靠性指标，SIL 更关心危险失效、诊断、测试周期和平均按需失效概率。</li>
+        <li><strong>只看传感器证书：</strong>一条 SIF 还包括逻辑单元和执行机构，执行机构通常是 PFDavg 的大头。</li>
+        <li><strong>随意延长 proof test 周期：</strong>T1 是计算输入，不是现场习惯值。延长 T1 后必须重算 PFDavg。</li>
+        <li><strong>忽略 β：</strong>冗余不是简单把 PFDavg 除以设备数量，共同原因失效会让多台设备一起失效。</li>
+        <li><strong>把 SC 3 当 SIL 3：</strong>SC 是系统性能力，不是硬件随机失效概率。</li>
+      </ul>
+    </section>
+
+    <section id="workflow">
+      <h2>7. 从零开始做 SIL，该怎么理解和推进</h2>
+      <div class="note">
+        <strong>先区分两种“做 SIL 认证”：</strong>
+        如果我们是项目业主/系统集成方，通常是做某条安全仪表功能的 SIL 目标确认、设计验证和生命周期资料包；如果我们是仪表制造商，才是按 IEC 61508 对自己的产品做第三方产品认证。两条路线工作量差别很大。
+      </div>
+
+      <h3>6.1 如果我们是在项目里使用 NMS81 做安全回路</h3>
+      <ol>
+        <li><strong>识别危险：</strong>组织 HAZOP，找出如罐溢流、泵干运行、误收料、超压等危险场景。</li>
+        <li><strong>确定目标 SIL：</strong>通过 LOPA 或风险矩阵确定每条 SIF 需要 SIL 1、SIL 2 还是 SIL 3。</li>
+        <li><strong>写 SRS：</strong>把每条 SIF 写成可测试需求，例如“液位达到 HH 时，X 秒内关闭进料阀并报警”。</li>
+        <li><strong>选设备：</strong>确认 NMS81 订货码 590=LA SIL、固件、硬件日期、输出类型和证书有效性；同时确认逻辑单元和执行机构的 SIL 资料。</li>
+        <li><strong>设计回路：</strong>确定 1oo1、1oo2、2oo3 等架构，画回路图、接线图、因果表、旁路逻辑。</li>
+        <li><strong>计算 PFDavg：</strong>使用传感器、逻辑单元、执行机构的失效率、诊断覆盖、proof test 周期和 MTTR 计算整条 SIF 是否满足目标 SIL。</li>
+        <li><strong>配置和锁定：</strong>按安全手册配置 NMS81，执行 commissioning check、功能测试、SIL/WHG confirmation、SIL locked。</li>
+        <li><strong>验证整条 SIF：</strong>做 FAT/SAT 或现场联动测试，确认输入、逻辑、输出、执行机构动作、报警、复位、旁路都符合 SRS。</li>
+        <li><strong>建立运维制度：</strong>规定 proof test 周期、测试步骤、记录模板、维修后检查、人员授权、变更审批。</li>
+        <li><strong>归档证据：</strong>把证书、安全手册、SRS、计算、图纸、参数记录、测试记录、培训记录、MOC 放入 SIL 资料包。</li>
+      </ol>
+
+      <h3>6.2 如果我们是要给自己的产品做 IEC 61508 第三方认证</h3>
+      <ol>
+        <li><strong>定义产品和安全功能：</strong>明确产品边界、输入输出、安全状态、诊断、需求模式、目标 SIL。</li>
+        <li><strong>建立功能安全管理体系：</strong>安全计划、角色独立性、配置管理、变更管理、供应商管理、问题闭环。</li>
+        <li><strong>编写安全需求：</strong>硬件安全需求、软件安全需求、接口需求、环境限制、误用限制。</li>
+        <li><strong>硬件分析：</strong>做 FMEDA，给出 λSD、λSU、λDD、λDU、SFF、DC、HFT、PFDavg/PFH。</li>
+        <li><strong>软件过程证据：</strong>需求到设计到代码到测试的追溯，静态分析，单元测试，集成测试，故障注入，版本控制。</li>
+        <li><strong>系统性能力证据：</strong>证明开发流程可控制系统性失效，例如评审、验证、确认、工具合格性、人员能力。</li>
+        <li><strong>安全手册：</strong>写清允许型号、环境、参数、安装、调试、诊断、proof test、维修和修改限制。</li>
+        <li><strong>独立评估：</strong>把资料提交 TÜV、exida、SIRA 等认证机构审查，回答问题并整改。</li>
+        <li><strong>证书维护：</strong>产品变更、固件升级、元器件替代、现场问题都要按认证机构认可的变更流程处理。</li>
+      </ol>
+
+      <h3>7.3 这两份 E+H 文件对我们的借鉴</h3>
+      <ul>
+        <li>证书文字非常短，真正落地要求都在安全手册里。因此项目不能只收集证书，还要把安全手册转成现场可执行规程。</li>
+        <li>证书把“硬件 SIL”“系统能力 SC”“架构 HFT”分开写，这三个概念不能混用。</li>
+        <li>安全手册要求配置确认、锁定和 proof test，这说明 SIL 不是买回来就结束，而是生命周期管理。</li>
+        <li>手册明确限制用户修改 SIL 设备，这意味着现场改硬件、改固件、改安全参数都必须走 MOC 和厂家确认。</li>
+      </ul>
+    </section>
+
+    <section id="checklists">
+      <h2>8. 项目检查清单</h2>
+      <h3>8.1 采购/到货检查</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>检查项</th>
+            <th>合格标准</th>
+            <th>证据</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td>型号</td><td>NMS80/NMS81/NMS83 中证书覆盖型号；本手册用于 NMS81。</td><td>铭牌照片、订单确认。</td></tr>
+          <tr><td>订货码 590</td><td>Additional approval = LA SIL。</td><td>订单码、铭牌、设备信息。</td></tr>
+          <tr><td>固件</td><td>至少 01.02.zz，或厂家供应的最新 SIL 能力版本。</td><td>设备信息截图。</td></tr>
+          <tr><td>硬件生产日期</td><td>电子硬件生产日期不早于 2016-11-23。</td><td>铭牌/设备信息。</td></tr>
+          <tr><td>SIL 标识</td><td>铭牌有 SIL certified 设备标识。</td><td>铭牌照片。</td></tr>
+          <tr><td>输出选项</td><td>模拟/数字 I/O 选项在手册允许范围内。</td><td>完整订单码、配置清单。</td></tr>
+          <tr><td>证书有效性</td><td>证书在项目审查时有效，或有厂家最新证书。</td><td>TÜV/E+H 官方记录或厂家文件。</td></tr>
+        </tbody>
+      </table>
+
+      <h3>8.2 调试记录清单</h3>
+      <ul>
+        <li>测量点 TAG、设备序列号、订单码、固件版本、硬件版本。</li>
+        <li>安全功能类型：液位 MAX、液位 MIN、液位范围、电流输入 MAX/MIN/范围。</li>
+        <li>安全相关输出：4-20 mA、数字继电器，具体端子号。</li>
+        <li>空罐标定、罐参考高度、高/低 stop level、HH/H/L/LL 限值、0%/100% 值。</li>
+        <li>commissioning check 结果。</li>
+        <li>功能测试点、设定值、实际值、输出电流、继电器电阻、通过/失败判据。</li>
+        <li>SIL/WHG confirmation 完成记录和 <code>SIL locked</code> 状态。</li>
+        <li>硬件 WP 开关状态。</li>
+      </ul>
+
+      <h3>8.3 Proof test 记录清单</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>字段</th>
+            <th>说明</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td>公司、装置、测点/TAG</td><td>对应手册附录 proof test protocol。</td></tr>
+          <tr><td>设备类型/订单码/序列号</td><td>确保测试对象唯一。</td></tr>
+          <tr><td>测试人、日期、签名</td><td>满足审计和追溯。</td></tr>
+          <tr><td>锁定码使用记录</td><td>手册示例为 SIL 7452。建议记录谁在何时解锁和重新锁定。</td></tr>
+          <tr><td>设备参数</td><td>Upper density、Process condition、High stop、Low stop、Empty、Tank reference height。</td></tr>
+          <tr><td>测试步骤</td><td>每个测试点的设定值、实际值、电流值、继电器电阻。</td></tr>
+          <tr><td>密封检查</td><td>盖板密封和电缆入口密封。</td></tr>
+          <tr><td>替代监测措施</td><td>测试期间如何保证过程安全。</td></tr>
+          <tr><td>结论</td><td>通过/失败；失败时设备不得继续作为 SIS 部件使用。</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="deep-dive">
+      <h2>9. 深度梳理和落地细节</h2>
+      <div class="note">
+        <strong>这一章按现场实施来讲：</strong>
+        前面章节已经解释证书、手册和术语；这一章把它们翻译成项目团队真正要做的判断、表格、记录和审查点。
+        重点不是背术语，而是知道每个参数要填在哪里、由谁确认、如何影响 SIL 结论。
+      </div>
+
+      <h3>9.1 把 SIL 项目拆成三层</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>层级</th>
+            <th>核心问题</th>
+            <th>本项目中 NMS81 文件能提供什么</th>
+            <th>还必须由项目自己完成什么</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>产品层</td>
+            <td>这台仪表本身有没有功能安全能力？</td>
+            <td>TÜV 证书、SIL 2、SC 3、HFT 条件、认证安全功能、安全手册。</td>
+            <td>确认采购型号和现场设备与证书覆盖范围一致。</td>
+          </tr>
+          <tr>
+            <td>回路层</td>
+            <td>这条 SIF 作为一条完整安全回路能达到目标 SIL 吗？</td>
+            <td>NMS81 可作为传感器子系统或输入测量环节的一部分。</td>
+            <td>把传感器、逻辑单元、执行机构、供电、接线、旁路和复位一起设计和计算。</td>
+          </tr>
+          <tr>
+            <td>生命周期层</td>
+            <td>投运后还能持续保持 SIL 能力吗？</td>
+            <td>手册规定 SIL 锁定、proof test、维修、修改和人员要求。</td>
+            <td>建立运维制度、测试计划、人员授权、MOC、记录归档和定期复评。</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>9.2 一条 SIF 应该怎么写清楚</h3>
+      <p>SIF 不是一句“液位高高联锁”。为了能做 SIL 计算和验收，至少要写清下面这些内容。</p>
+      <table>
+        <thead>
+          <tr>
+            <th>SIF字段</th>
+            <th>要写什么</th>
+            <th>以 NMS81 高高液位保护为例</th>
+            <th>为什么重要</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>SIF 名称</td>
+            <td>唯一名称和 TAG。</td>
+            <td>TK-101 HH Level Trip。</td>
+            <td>后续图纸、参数、测试记录都要对应同一条功能。</td>
+          </tr>
+          <tr>
+            <td>危险场景</td>
+            <td>什么事件会导致什么后果。</td>
+            <td>进料阀未关闭导致储罐溢流。</td>
+            <td>SIL 目标来自风险，不来自设备证书。</td>
+          </tr>
+          <tr>
+            <td>触发条件</td>
+            <td>测量值达到什么限值触发。</td>
+            <td>NMS81 液位达到 HH alarm value。</td>
+            <td>决定参数、测试点和验收判据。</td>
+          </tr>
+          <tr>
+            <td>安全状态</td>
+            <td>触发后系统必须达到什么状态。</td>
+            <td>关闭进料阀 XV-101，停止进料泵 P-101，触发声光报警。</td>
+            <td>“报警”通常不是安全状态本身，必须有降低风险的动作。</td>
+          </tr>
+          <tr>
+            <td>响应时间</td>
+            <td>从危险条件出现到安全动作完成的最大时间。</td>
+            <td>例如 10 s 内阀门到达关闭位置。</td>
+            <td>NMS81 手册说系统反应时间在 Expert mode 中用户可配置，但整条回路还要加 PLC 扫描和阀门动作时间。</td>
+          </tr>
+          <tr>
+            <td>目标 SIL</td>
+            <td>LOPA 或风险评估得出的 SIL 1/2/3。</td>
+            <td>例如 SIL 2。</td>
+            <td>目标 SIL 是计算判据。</td>
+          </tr>
+          <tr>
+            <td>传感器子系统</td>
+            <td>传感器型号、架构和输出。</td>
+            <td>NMS81，4-20 mA 输出或数字继电器输出，1oo1 或 1oo2。</td>
+            <td>影响 HFT、PFDavg、β 和 proof test。</td>
+          </tr>
+          <tr>
+            <td>逻辑单元</td>
+            <td>安全 PLC 或限值信号变送器，输入处理规则。</td>
+            <td>识别 4-20 mA 正常值、≤3.6 mA、≥21.0 mA，或识别继电器开路。</td>
+            <td>如果 PLC 没按手册识别失败电流，设备诊断输出就不能转化为安全动作。</td>
+          </tr>
+          <tr>
+            <td>执行机构</td>
+            <td>阀门、泵、接触器等最终元件和动作方向。</td>
+            <td>气关阀、弹簧复位阀、泵停机接触器。</td>
+            <td>最终元件常是 PFDavg 主要贡献者。</td>
+          </tr>
+          <tr>
+            <td>旁路和抑制</td>
+            <td>谁能旁路、何时旁路、旁路多久、旁路期间替代措施。</td>
+            <td>proof test 或维护时需要临时旁路，但必须审批和记录。</td>
+            <td>旁路管理失控会让 SIL 形同虚设。</td>
+          </tr>
+          <tr>
+            <td>复位策略</td>
+            <td>自动复位还是人工复位，复位条件。</td>
+            <td>高高液位联锁动作后，液位恢复且现场确认后人工复位。</td>
+            <td>防止危险未消除就恢复运行。</td>
+          </tr>
+          <tr>
+            <td>proof test</td>
+            <td>测试周期、测试方法、测试点、通过判据。</td>
+            <td>序列 A 或 C；记录液位点、电流、继电器电阻和动作结果。</td>
+            <td>PTC 和 T1 直接进入 PFDavg 计算。</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>9.3 NMS81 在安全回路里的角色</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>角色</th>
+            <th>NMS81做什么</th>
+            <th>安全边界</th>
+            <th>容易出错的地方</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>液位传感器</td>
+            <td>测量罐内液位，并输出 4-20 mA 或继电器状态。</td>
+            <td>证书覆盖液位 min、max、range 安全检测，液位安全相关精度 ±2%。</td>
+            <td>罐高、空罐标定、datum plate、high/low stop、浮子/钢丝状态配置错误。</td>
+          </tr>
+          <tr>
+            <td>电流输入测量设备</td>
+            <td>接收外部设备的 4-20 mA 输入，再监测其 min、max、range。</td>
+            <td>证书覆盖电流输入安全测量，电流安全相关精度 ±1%。</td>
+            <td>把外部输入 0%/100%、量程和报警限值配置错。</td>
+          </tr>
+          <tr>
+            <td>安全相关输出设备</td>
+            <td>把测量结果转换为安全相关模拟输出或数字输出。</td>
+            <td>手册明确所有安全措施只针对安全相关输出信号。</td>
+            <td>把 HART、Modbus、V1、WM550 当成安全信号。</td>
+          </tr>
+          <tr>
+            <td>诊断源</td>
+            <td>发生 Fxxx 等故障时输出故障安全信号。</td>
+            <td>下游必须能识别开路、≤3.6 mA、≥21.0 mA。</td>
+            <td>PLC 只监控过程高低限，不监控失败电流或线路故障。</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>9.4 液位安全功能逐项解释</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>模式</th>
+            <th>英文</th>
+            <th>保护目的</th>
+            <th>配置核心</th>
+            <th>proof test关注点</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>高限/高高限</td>
+            <td>MAX monitoring / overfill protection</td>
+            <td>防止液位过高导致溢流、污染、火灾、设备损坏。</td>
+            <td>HH/H 限值、0%/100%量程、高 stop、报警块和安全输出。</td>
+            <td>至少接近或模拟一个高于开关点的液位，确认安全输出触发；最好也验证开关点下方不误触发。</td>
+          </tr>
+          <tr>
+            <td>低限/低低限</td>
+            <td>MIN monitoring / dry run protection</td>
+            <td>防止泵干运行、吸空、气蚀、下游供料中断。</td>
+            <td>L/LL 限值、低 stop、报警块和安全输出。</td>
+            <td>至少接近或模拟一个低于开关点的液位，确认安全输出触发；验证开关点上方不误触发。</td>
+          </tr>
+          <tr>
+            <td>范围监测</td>
+            <td>Range monitoring</td>
+            <td>确认液位保持在允许范围内，超出上限或下限都要动作。</td>
+            <td>HH/H/L/LL 的组合、有效范围定义、输出映射。</td>
+            <td>手册建议覆盖整个测量范围的 5 个液位点，记录每个点的输出和继电器状态。</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>9.5 电流输入安全功能逐项解释</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>检查点</th>
+            <th>要确认什么</th>
+            <th>原因</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>外部信号来源</td>
+            <td>外部设备输出的 4-20 mA 是否本身适合进入安全功能。</td>
+            <td>NMS81 只能安全测量输入电流；外部设备本身的安全能力仍要另行证明。</td>
+          </tr>
+          <tr>
+            <td>输入通道</td>
+            <td>Analog I/O B1-3 或 C1-3 是否按手册设置为输入模式。</td>
+            <td>通道错、方向错会导致测试通过不了或安全功能无效。</td>
+          </tr>
+          <tr>
+            <td>0%/100%</td>
+            <td>输入 4 mA 和 20 mA 对应的工程值是否正确。</td>
+            <td>比例换算错误会让限值动作点偏移。</td>
+          </tr>
+          <tr>
+            <td>输出链路</td>
+            <td>电流输入是转为模拟输出，还是转为数字输出。</td>
+            <td>不同输出对应不同 PLC 输入卡、故障识别和 proof test 记录。</td>
+          </tr>
+          <tr>
+            <td>真实电流测试</td>
+            <td>按序列 D 输入限值两侧或范围内 5 个真实电流。</td>
+            <td>序列 D 的本质是验证电流输入到安全输出的整条转换链。</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>9.6 模拟量 4-20 mA 输出的细节</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>信号区间</th>
+            <th>手册含义</th>
+            <th>PLC/逻辑单元建议处理</th>
+            <th>记录要点</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>4-20 mA 正常范围</td>
+            <td>代表液位或电流输入测量值。</td>
+            <td>按工程量换算并比较安全限值。</td>
+            <td>记录 0%值、100%值、工程单位、报警限值。</td>
+          </tr>
+          <tr>
+            <td>≤3.6 mA</td>
+            <td>LO alarm 或某些故障下的失败电流，例如供电故障、断线、输出故障。</td>
+            <td>作为故障或安全动作处理，不能当成“低液位正常值”。</td>
+            <td>测试时记录低失败电流识别结果。</td>
+          </tr>
+          <tr>
+            <td>≥21.0 mA</td>
+            <td>HI alarm 或某些故障下的失败电流，例如短路。</td>
+            <td>作为故障或安全动作处理，不能当成“高液位正常值”继续参与普通量程计算。</td>
+            <td>测试时记录高失败电流识别结果。</td>
+          </tr>
+          <tr>
+            <td>瞬态偏差</td>
+            <td>强脉冲 EMC 干扰可能造成小于 1 s 的瞬态偏差，偏差可能 ≥ ±2%。</td>
+            <td>下游逻辑单元建议设置时间常数 ≥1 s 的滤波。</td>
+            <td>记录 PLC 滤波或延时设置，并确认不会破坏 SIF 响应时间要求。</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="warning">
+        <strong>模拟量处理的关键矛盾：</strong>
+        滤波能避免短时干扰误动作，但滤波也会增加响应时间。SRS 中必须同时规定抗干扰策略和最大允许响应时间，不能只写一个。
+      </div>
+
+      <h3>9.7 数字继电器输出的细节</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>状态</th>
+            <th>手册描述</th>
+            <th>现场理解</th>
+            <th>测试判据</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>闭合</td>
+            <td>继电器触点在有效范围内闭合。</td>
+            <td>过程值处于允许范围，且设备未输出报警/警告导致开路。</td>
+            <td>电阻通常应小于 1 Ω。</td>
+          </tr>
+          <tr>
+            <td>打开</td>
+            <td>超出范围、报警、警告、故障或线路开路时应被逻辑单元识别。</td>
+            <td>这是触发保护或进入故障安全处理的状态。</td>
+            <td>电阻通常应大于 1 MΩ。</td>
+          </tr>
+          <tr>
+            <td>Normally closed</td>
+            <td>SIL 工厂设置/安全预设值要求触点类型为常闭。</td>
+            <td>采用断线安全思路：线断或故障会表现为打开。</td>
+            <td>SIL 确认时设备会强制或检查该参数。</td>
+          </tr>
+          <tr>
+            <td>Output simulation</td>
+            <td>SIL 安全值应为 Disable，proof test 中可临时仿真。</td>
+            <td>测试结束必须关闭仿真并重新锁定。</td>
+            <td>proof test 步骤中明确记录 Fault 1、Fault 2、Simulating active/inactive、Disable。</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>9.8 参数配置的细化审查</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>参数类别</th>
+            <th>审查问题</th>
+            <th>错误后果</th>
+            <th>建议证据</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>量程和基准</td>
+            <td>Empty、Tank reference height、0%/100%、High stop、Low stop 是否与罐表和工艺图一致？</td>
+            <td>动作点整体偏移，proof test 可能只验证了错误基准下的正确输出。</td>
+            <td>罐表、仪表配置截图、现场标定记录。</td>
+          </tr>
+          <tr>
+            <td>报警限值</td>
+            <td>HH/H/L/LL 是否与 SRS、因果表、PLC 程序一致？</td>
+            <td>现场动作点与风险分析不一致。</td>
+            <td>SRS、因果表、DCS/PLC 变量表、NMS81 参数表。</td>
+          </tr>
+          <tr>
+            <td>输出映射</td>
+            <td>Tank level 或 AIO value mA 是否映射到正确的模拟/数字输出？</td>
+            <td>PLC 监控了错误信号，安全功能不动作或误动作。</td>
+            <td>接线图、I/O 清单、参数截图、回路测试记录。</td>
+          </tr>
+          <tr>
+            <td>SIL/WHG 启用</td>
+            <td>安全输出是否设置 <code>Used for SIL/WHG = Enabled</code>？</td>
+            <td>输出未纳入 SIL 安全配置。</td>
+            <td>配置截图和 SIL confirmation 记录。</td>
+          </tr>
+          <tr>
+            <td>错误处理</td>
+            <td>Error on event 是否为 Any error？Output out of range 是否为 Alarm？</td>
+            <td>某些故障不进入安全输出。</td>
+            <td>SIL 自动预设参数记录。</td>
+          </tr>
+          <tr>
+            <td>仿真状态</td>
+            <td>测试后 Simulation distance on 和 Current output simulation 是否关闭？</td>
+            <td>设备可能停留在仿真状态，真实过程不再被正确监测。</td>
+            <td>测试结束检查记录、SIL locked 状态。</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>9.9 SIL 锁定和解锁的细化流程</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>动作</th>
+            <th>什么时候做</th>
+            <th>风险</th>
+            <th>控制措施</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>锁定 SIL</td>
+            <td>完成配置、commissioning check 和功能测试后。</td>
+            <td>如果未锁定，安全参数可能被误改。</td>
+            <td>确认 <code>Locking status = SIL locked</code>，可选启用 WP 硬件写保护。</td>
+          </tr>
+          <tr>
+            <td>解锁 SIL</td>
+            <td>需要修改配置、执行某些 proof test 或维修操作时。</td>
+            <td>手册说明解锁会停用诊断功能，设备可能不能执行安全功能。</td>
+            <td>解锁前审批，设置替代监测，记录开始/结束时间和操作人。</td>
+          </tr>
+          <tr>
+            <td>使用锁定码 7452</td>
+            <td>SIL/WHG confirmation 或 Deactivate SIL/WHG。</td>
+            <td>锁定码泄露会导致未经授权参数修改。</td>
+            <td>纳入密码/权限管理，不在无控制的操作规程中随意公开。</td>
+          </tr>
+          <tr>
+            <td>重新锁定</td>
+            <td>测试、维护或修改完成后。</td>
+            <td>忘记重新锁定会留下长期风险。</td>
+            <td>把“确认 SIL locked”设为工作票关闭条件。</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>9.10 Proof test 选择建议</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>目标</th>
+            <th>优先选择</th>
+            <th>原因</th>
+            <th>代价</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>最高覆盖率验证液位安全功能</td>
+            <td>序列 A，真实接近液位。</td>
+            <td>PTC 99%，最接近真实工况，能验证测量链和输出链。</td>
+            <td>可能需要改变罐内真实液位，受生产条件限制。</td>
+          </tr>
+          <tr>
+            <td>无法改变真实液位，但要验证液位输出逻辑</td>
+            <td>序列 C。</td>
+            <td>结合单点真实测量和模拟测试，比纯模拟更强。</td>
+            <td>PTC 文档值不一致，需确认；仍可能不能发现所有校准问题。</td>
+          </tr>
+          <tr>
+            <td>只能做模拟验证</td>
+            <td>序列 B。</td>
+            <td>实施方便。</td>
+            <td>覆盖率较低且文档值不一致；对校准错误覆盖有限。</td>
+          </tr>
+          <tr>
+            <td>验证电流输入安全功能</td>
+            <td>序列 D，输入真实电流。</td>
+            <td>PTC 99%，直接验证电流输入链路。</td>
+            <td>需要电流源或外部设备仿真能力。</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>9.11 Proof test 详细记录模板</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>记录字段</th>
+            <th>建议填写内容</th>
+            <th>示例/说明</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>测试依据</td>
+            <td>安全手册文件号、版本、章节和测试序列。</td>
+            <td>FY01100G/00/EN/01.23-00，5.3.1 Test sequence A。</td>
+          </tr>
+          <tr>
+            <td>测试对象</td>
+            <td>TAG、序列号、订单码、固件版本、输出端子。</td>
+            <td>确保测试记录不会和另一台设备混淆。</td>
+          </tr>
+          <tr>
+            <td>测试前状态</td>
+            <td>SIL locked 状态、WP 开关、当前液位、报警状态、旁路状态。</td>
+            <td>说明测试前系统是否处于可控状态。</td>
+          </tr>
+          <tr>
+            <td>替代保护</td>
+            <td>人工监护、备用仪表、临时液位巡检、停止进料、工艺隔离等。</td>
+            <td>手册明确要求 proof test 期间保证过程安全。</td>
+          </tr>
+          <tr>
+            <td>测试设备</td>
+            <td>万用表、电流表、电流源、电阻表、校准证书编号。</td>
+            <td>模拟量建议优于 ±0.1 mA；电阻测量建议优于 ±0.1 Ω。</td>
+          </tr>
+          <tr>
+            <td>测试点</td>
+            <td>每个液位/电流点的设定值、实际值、期望输出、实际输出。</td>
+            <td>范围监测通常至少 5 个点。</td>
+          </tr>
+          <tr>
+            <td>联锁结果</td>
+            <td>PLC 输入状态、逻辑动作、阀门/泵动作、报警显示。</td>
+            <td>只测仪表输出不够，最好验证到逻辑单元和最终元件。</td>
+          </tr>
+          <tr>
+            <td>测试后恢复</td>
+            <td>仿真关闭、SIL 重新锁定、旁路解除、工艺恢复、报警复位。</td>
+            <td>这是 proof test 最容易遗漏的部分。</td>
+          </tr>
+          <tr>
+            <td>结论</td>
+            <td>通过/失败、偏差、整改、复测结果。</td>
+            <td>失败时设备不得继续作为 SIS 部件使用，必须处理后复测。</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>9.12 维修和更换后的重新验证</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>维修类型</th>
+            <th>手册倾向要求</th>
+            <th>项目建议</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>I/O 模块、主板、电子盒、SD 卡等电子相关部件</td>
+            <td>目视检查并执行 proof test 序列 A 或 B。</td>
+            <td>优先做能覆盖实际安全功能的测试；更换 I/O 后必须重新做回路测试。</td>
+          </tr>
+          <tr>
+            <td>伺服传感模块、测量鼓、钢丝、displacer 等测量链部件</td>
+            <td>目视检查、重新校准、重复 commissioning check。</td>
+            <td>这类维修会影响测量基准，建议重新执行功能测试和参数核对。</td>
+          </tr>
+          <tr>
+            <td>盖板、O-ring、窗口盖、外壳过滤器等机械/密封部件</td>
+            <td>目视检查，必要时任意液位测量检查。</td>
+            <td>除功能外，还要确认防爆/防护等级/密封状态未受影响。</td>
+          </tr>
+          <tr>
+            <td>无法排除设备错误的缺陷件</td>
+            <td>送回 E+H 故障分析，并注明“Used as SIL device in protective system”。</td>
+            <td>把返回单、故障分析、整改措施归入 SIL 资料包。</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>9.13 做 SIL 资料包时建议准备的文件</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>资料类别</th>
+            <th>具体文件</th>
+            <th>用途</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>风险分析</td>
+            <td>HAZOP、LOPA、风险矩阵、保护层清单。</td>
+            <td>证明为什么需要这条 SIF，以及目标 SIL 从哪里来。</td>
+          </tr>
+          <tr>
+            <td>安全需求</td>
+            <td>SRS、因果表、报警/联锁设定值表、响应时间要求。</td>
+            <td>作为设计和验收基准。</td>
+          </tr>
+          <tr>
+            <td>设备能力</td>
+            <td>NMS8x TÜV 证书、NMS81 安全手册、操作说明书、技术资料、FMEDA 摘要。</td>
+            <td>证明设备适合进入安全回路。</td>
+          </tr>
+          <tr>
+            <td>设计文件</td>
+            <td>P&ID、回路图、接线图、I/O 表、PLC 逻辑、阀门规格、供电图。</td>
+            <td>证明设计实现了 SRS。</td>
+          </tr>
+          <tr>
+            <td>计算文件</td>
+            <td>PFDavg/PFH 计算、架构说明、β/βD 假设、MTTR/T1 假设。</td>
+            <td>证明整条 SIF 达到目标 SIL。</td>
+          </tr>
+          <tr>
+            <td>调试验证</td>
+            <td>参数表、SIL locked 记录、FAT/SAT、回路测试、功能测试。</td>
+            <td>证明现场实际配置符合设计。</td>
+          </tr>
+          <tr>
+            <td>运维文件</td>
+            <td>proof test 程序、测试周期、培训记录、旁路管理、维修记录、MOC 流程。</td>
+            <td>证明投运后能持续保持 SIL 能力。</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>9.14 向 E+H 索取资料时的清单</h3>
+      <ul>
+        <li>当前最新 TÜV 证书和证书官网记录，确认有效期和覆盖型号。</li>
+        <li>NMS81 最新 Functional Safety Manual，以及是否有新版替代 FY01100G/00/EN/01.23-00。</li>
+        <li>对应完整订单码的 SIL suitability statement 或厂家确认函。</li>
+        <li>FMEDA 摘要，至少包括 λSD、λSU、λDD、λDU、SFF、DC、HFT、PFDavg/PFH 适用条件。</li>
+        <li>proof test B/C 的 PTC 不一致说明，正式推荐采用值。</li>
+        <li>1oo2 或 2oo3 架构下用于 SIL 3 的推荐接线、参数、proof test 和共因失效控制措施。</li>
+        <li>固件升级、主板/I/O 模块更换、传感模块更换后，SIL 证书是否仍适用以及需要哪些复验。</li>
+        <li>FieldCare 或设备菜单中 SIL/WHG confirmation 的操作截图或应用说明。</li>
+      </ul>
+
+      <h3>9.15 最后用一句话区分几个核心参数</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>参数</th>
+            <th>一句话</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td>SIL</td><td>目标风险降低等级或能力等级，不是单一设备标签就能决定整条回路。</td></tr>
+          <tr><td>SC</td><td>厂家对系统性失效的流程控制能力。</td></tr>
+          <tr><td>HFT</td><td>硬件坏几件还能保持安全功能的架构容错能力。</td></tr>
+          <tr><td>DC</td><td>设备在线自己能发现多少危险故障。</td></tr>
+          <tr><td>PTC</td><td>按周期做 proof test 能发现多少潜伏危险故障。</td></tr>
+          <tr><td>λDU</td><td>最需要警惕的危险潜伏故障发生率。</td></tr>
+          <tr><td>MTTR</td><td>故障被发现后多久能修复，越长风险越大。</td></tr>
+          <tr><td>T1</td><td>多久做一次 proof test，越长潜伏失效累积越多。</td></tr>
+          <tr><td>β</td><td>冗余设备被同一个原因一起打倒的比例。</td></tr>
+          <tr><td>PFDavg</td><td>低需求模式下，安全功能真正被要求动作时平均失效的概率。</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="questions">
+      <h2>10. 待确认项和风险提示</h2>
+      <div class="warning">
+        <strong>文档内部 PTC 不一致：</strong>
+        proof test 总表写 B=91%、C=97%；B 小节末尾又写 <code>PTC = 0.88</code>，C 小节末尾写 <code>PTC = 0.95</code>。正式 PFDavg 计算前，建议向 E+H 或 TÜV 确认应采用哪个值，并把确认邮件/文件归档。
+      </div>
+      <div class="warning">
+        <strong>证书和手册适用范围不同：</strong>
+        证书覆盖 NMS8x [x=0,1,3]，但本安全手册是 NMS81。若项目用 NMS80 或 NMS83，应找对应安全手册。
+      </div>
+      <div class="warning">
+        <strong>精度表述需要按功能区分：</strong>
+        证书写液位安全检测精度 ±2%，电流测量精度 ±1%；安全手册中危险未检测失效和 proof test 失败判据多处使用 ±2%。项目应按实际使用的安全功能和信号链确认验收判据。
+      </div>
+      <div class="danger">
+        <strong>不要把 HART/Modbus 当安全信号：</strong>
+        手册把安全相关信号限定为模拟 4-20 mA 或数字继电器。通信可用于信息和配置，但不应作为本证书/手册下的安全输出依据。
+      </div>
+      <div class="danger">
+        <strong>不要忽略生命周期：</strong>
+        SIL 的核心不是一次性认证文件，而是从需求、设计、调试、验证、运维、proof test、维修、变更到退役的全过程控制。
+      </div>
+
+      <h3>建议马上向供应商/认证机构确认的问题</h3>
+      <ol>
+        <li>我们采购的完整订单码是否完全落在 NMS81 安全手册允许范围内？</li>
+        <li>当前证书是否仍有效，是否有新版证书或新版安全手册？</li>
+        <li>proof test B/C 的 PTC 到底采用表格值还是小节末尾值？</li>
+        <li>如果项目要求 SIL 3，推荐的 NMS81 冗余架构、β/βD、共因失效控制措施是什么？</li>
+        <li>是否能提供 FMEDA 摘要、SIL declaration、Safety Manual 最新版、证书官网记录链接？</li>
+        <li>维修、固件升级、参数修改时，哪些动作必须由 E+H 服务人员执行？</li>
+      </ol>
+
+      <div class="source-list">
+        <strong>资料来源：</strong>
+        <br>1. D:\01工作日志\06_项目归档\SIL认证\EH_Proservo_NMS8x_TUV_SIL_Certificate_968_FSP_1687_01_23.pdf
+        <br>2. D:\01工作日志\06_项目归档\SIL认证\EH_Proservo_NMS81_Functional_Safety_Manual_FY01100G_2023.pdf
+        <br>整理日期：2026-06-02。本文是基于上述 PDF 的中文整理，不替代 E+H、TÜV 或项目功能安全工程师的正式评估结论。
+      </div>
+    </section>
+  </main>
+</body>
+</html>

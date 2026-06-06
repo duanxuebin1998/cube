@@ -55,7 +55,6 @@ typedef enum {
 
 // 通用读取
 uint32_t WIRELESS_Read_FloatParam(uint8_t addr,uint8_t param, float *out_value);
-uint32_t WIRELESS_Read_IntParam  (uint8_t addr,uint8_t param, int32_t *out_value);
 
 uint32_t WIRELESS_Read_SoftwareVersion(uint8_t addr,float *v) ;// 软件版本
 uint32_t WIRELESS_Read_Voltage(uint8_t addr,float *v) ;// 电压

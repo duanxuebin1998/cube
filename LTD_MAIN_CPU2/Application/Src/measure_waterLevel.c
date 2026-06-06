@@ -604,21 +604,6 @@ uint32_t read_zero_capacitance(void)
     return NO_ERROR;
 }
 
-uint32_t read_oil_capacitance(void)
-{
-    uint32_t ret;
-    float    cap = 0.0f;
-
-    ret = Sensor_ReadWaterCapacitance(&cap);
-    if (ret != NO_ERROR) {
-        return ret;
-    }
-
-    g_measurement.water_measurement.oil_capacitance = cap;
-
-    printf("油中电容 = %.1f\r\n", cap);
-    return NO_ERROR;
-}
 
 uint32_t check_water_status(uint8_t *water_state)
 {
@@ -659,28 +644,6 @@ uint32_t check_water_status(uint8_t *water_state)
     return NO_ERROR;
 }
 
-/**
- * @brief 根据当前设备状态更新水位值
- *
- * @note 仅在“已找到水位 / 水位跟随完成”等合法状态下才更新，
- *       防止在无效阶段误更新 water_level
- *
- * @return 1 已更新水位
- * @return 0 未更新（状态不允许）
- */
-uint8_t UpdateWaterLevelIfValid(void)
-{
-    if (g_measurement.device_status.device_state == STATE_FINDWATER_OVER ||
-                g_measurement.device_status.device_state == STATE_FOLLOW_WATERING)
-    {
-        /* 监测期间电机不动作，仅持续同步当前水位显示值。 */
-        WaterLevelSyncFromCable();
-
-        return 1;
-    }
-
-    return 0;
-}
 /**
  * @brief 停机后对齐到目标水位附近（通过“目标水位 -> 目标缆长 -> 计算delta -> 精确移动”）
  * @param[in] lvl_target_01mm   目标水位（0.1mm），例如 lvl_avg
@@ -1174,7 +1137,6 @@ static uint32_t FollowWaterLevelCore(WaterRecoverStrategy recover_strategy)
         }
 
         /* 运动完成后只打印当前水位值，不在这里刷新水位。 */
-        // UpdateWaterLevelIfValid();
 
         printf("水位跟随\t完成移动 位置=%.1fmm", g_measurement.debug_data.sensor_position / 10.0f); MotorCtrl_PrintPositionRefs();
         printf("  当前水位=%.1fmm\r\n", g_measurement.water_measurement.water_level / 10.0f);

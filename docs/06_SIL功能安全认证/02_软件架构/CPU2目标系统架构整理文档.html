@@ -1,0 +1,967 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CPU2 目标系统架构整理文档</title>
+  <style>
+    :root {
+      --bg: #f6f7f9;
+      --panel: #ffffff;
+      --text: #172033;
+      --muted: #5e6878;
+      --line: #d7deea;
+      --head: #0b4f6c;
+      --accent: #0f766e;
+      --accent-soft: #e0f2f1;
+      --warn: #a15c07;
+      --warn-soft: #fff4d8;
+      --danger: #b42318;
+      --danger-soft: #fee4e2;
+      --ok: #166534;
+      --ok-soft: #dcfce7;
+      --code-bg: #f1f5f9;
+      --code: #111827;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: "Segoe UI", "Microsoft YaHei", Arial, sans-serif;
+      line-height: 1.65;
+    }
+
+    header {
+      color: #ffffff;
+      background:
+        linear-gradient(120deg, rgba(11, 79, 108, 0.94), rgba(15, 118, 110, 0.9)),
+        linear-gradient(90deg, #0b4f6c, #1d4ed8);
+      padding: 36px 24px 34px;
+    }
+
+    header .inner,
+    main,
+    footer {
+      max-width: 1180px;
+      margin: 0 auto;
+    }
+
+    h1 {
+      margin: 0 0 12px;
+      font-size: 32px;
+      line-height: 1.22;
+      letter-spacing: 0;
+    }
+
+    .subtitle {
+      max-width: 940px;
+      margin: 0;
+      color: rgba(255, 255, 255, 0.9);
+      font-size: 16px;
+    }
+
+    .meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 18px;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      min-height: 30px;
+      padding: 4px 10px;
+      border: 1px solid rgba(255, 255, 255, 0.26);
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.16);
+      color: #ffffff;
+      font-size: 13px;
+    }
+
+    main {
+      padding: 26px 20px 52px;
+    }
+
+    section {
+      margin: 18px 0;
+      padding: 22px 24px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+    }
+
+    h2 {
+      margin: 0 0 14px;
+      color: #0f172a;
+      font-size: 22px;
+      letter-spacing: 0;
+    }
+
+    h3 {
+      margin: 20px 0 10px;
+      color: #111827;
+      font-size: 17px;
+      letter-spacing: 0;
+    }
+
+    p {
+      margin: 8px 0 12px;
+    }
+
+    a {
+      color: #0f766e;
+      text-decoration: none;
+    }
+
+    a:hover {
+      text-decoration: underline;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 12px 0 16px;
+      font-size: 14px;
+    }
+
+    th,
+    td {
+      border: 1px solid var(--line);
+      padding: 10px 12px;
+      vertical-align: top;
+      text-align: left;
+    }
+
+    th {
+      background: #eef3f8;
+      color: #111827;
+      font-weight: 600;
+    }
+
+    tr:nth-child(even) td {
+      background: #fbfcfe;
+    }
+
+    code {
+      padding: 2px 5px;
+      border-radius: 4px;
+      background: var(--code-bg);
+      color: var(--code);
+      font-family: Consolas, "Courier New", monospace;
+      font-size: 0.94em;
+    }
+
+    pre {
+      margin: 12px 0 16px;
+      padding: 14px 16px;
+      overflow-x: auto;
+      border: 1px solid #cfd6e4;
+      border-radius: 8px;
+      background: #111827;
+      color: #f9fafb;
+      font-family: Consolas, "Courier New", monospace;
+      font-size: 13px;
+      line-height: 1.55;
+    }
+
+    pre code {
+      padding: 0;
+      background: transparent;
+      color: inherit;
+    }
+
+    ul,
+    ol {
+      margin: 8px 0 14px 22px;
+      padding: 0;
+    }
+
+    li {
+      margin: 6px 0;
+    }
+
+    .toc {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 10px;
+    }
+
+    .toc a {
+      display: block;
+      min-height: 44px;
+      padding: 10px 12px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: #fbfcfe;
+      color: var(--text);
+    }
+
+    .callout {
+      margin: 14px 0;
+      padding: 12px 14px;
+      border-left: 4px solid var(--accent);
+      border-radius: 6px;
+      background: var(--accent-soft);
+    }
+
+    .callout.warn {
+      border-left-color: var(--warn);
+      background: var(--warn-soft);
+    }
+
+    .callout.danger {
+      border-left-color: var(--danger);
+      background: var(--danger-soft);
+    }
+
+    .callout.ok {
+      border-left-color: var(--ok);
+      background: var(--ok-soft);
+    }
+
+    .grid2 {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 14px;
+      margin: 12px 0;
+    }
+
+    .card {
+      padding: 14px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fbfcfe;
+    }
+
+    .card h3 {
+      margin-top: 0;
+    }
+
+    .layer-stack {
+      display: grid;
+      gap: 10px;
+      margin: 14px 0;
+    }
+
+    .layer {
+      display: grid;
+      grid-template-columns: 190px 1fr;
+      gap: 14px;
+      align-items: stretch;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      overflow: hidden;
+      background: #fbfcfe;
+    }
+
+    .layer .name {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 12px;
+      background: #e9f5f4;
+      color: #0f513f;
+      font-weight: 700;
+      text-align: center;
+    }
+
+    .layer .body {
+      padding: 12px 14px;
+    }
+
+    .flow {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(145px, 1fr));
+      gap: 10px;
+      margin: 14px 0;
+    }
+
+    .flow .node {
+      min-height: 76px;
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fbfcfe;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      font-weight: 600;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 2px 7px;
+      border-radius: 4px;
+      background: #e5e7eb;
+      color: #111827;
+      font-size: 12px;
+      font-weight: 700;
+      margin-right: 4px;
+    }
+
+    .badge.s0 {
+      background: #dcfce7;
+      color: #166534;
+    }
+
+    .badge.s1 {
+      background: #dbeafe;
+      color: #1d4ed8;
+    }
+
+    .badge.s2 {
+      background: #fef3c7;
+      color: #92400e;
+    }
+
+    .badge.s3 {
+      background: #fee2e2;
+      color: #991b1b;
+    }
+
+    footer {
+      padding: 0 20px 40px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    @media (max-width: 720px) {
+      .layer {
+        grid-template-columns: 1fr;
+      }
+
+      h1 {
+        font-size: 26px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="inner">
+      <h1>CPU2 目标系统架构整理文档</h1>
+      <p class="subtitle">
+        本文基于当前硬件原理图整理、CPU2 代码现状和 SIL2 认证准备计划，定义 CPU2 安全功能目标架构、
+        硬件诊断闭环、软件分层、版本构建和认证证据边界。
+      </p>
+      <div class="meta">
+        <span class="pill">工程：LTD_MAIN_CPU2</span>
+        <span class="pill">目标：SIL2</span>
+        <span class="pill">安全功能：液位测量 + 4-20mA + 继电器报警</span>
+        <span class="pill">日期：2026-06-06</span>
+        <span class="pill">状态：目标架构方案</span>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <section id="position">
+      <h2>一、定位和结论</h2>
+      <p>
+        本文不是证明 CUBE 已经满足 SIL2 的认证结论，而是把当前工程应改造成的目标系统架构写清楚。
+        架构目标是让 CPU2 的安全功能具备明确边界、受控构建、故障闭环、证据可追踪和后续测试可验证性。
+      </p>
+      <div class="callout">
+        <strong>目标结论：</strong>当前目标改为参考 NMS8x/NMS81 单通道 HFT=0 路线做 SIL2，不做 SIL3。CPU2 应形成以 <code>Safety</code> 层为中心的安全控制链路。
+        找液位、4-20mA 输出和继电器报警均纳入安全功能边界；Modbus、HART、CPU3 显示和日志只能作为现场辅助或诊断通道，
+        不能直接绕过安全层控制输出。
+      </div>
+      <pre><code>SIL2 目标系统架构 = 硬件安全边界 + 安全测量链路 + 安全输出链路 + 诊断监督链路 + 双版本构建基线 + 认证证据链</code></pre>
+    </section>
+
+    <section id="toc">
+      <h2>二、文档导航</h2>
+      <div class="toc">
+        <a href="#inputs">设计输入</a>
+        <a href="#hardware-boundary">硬件边界</a>
+        <a href="#current-gaps">当前差距</a>
+        <a href="#target-flow">目标安全功能链路</a>
+        <a href="#layers">目标软件分层</a>
+        <a href="#diagnostics">诊断闭环</a>
+        <a href="#variants">构建变体</a>
+        <a href="#evidence">SIL 证据要求</a>
+        <a href="#roadmap">实施路线</a>
+      </div>
+    </section>
+
+    <section id="inputs">
+      <h2>三、设计输入</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>输入来源</th>
+            <th>本架构使用方式</th>
+            <th>关键结论</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><a href="../../07_硬件原理图/储罐自动计量仪原理图汇总整理.md">储罐自动计量仪原理图汇总整理</a></td>
+            <td>识别 CPU2、传感器、电机、AD5421、继电器、供电、本安边界和 CPU3/CPU4 接口。</td>
+            <td>CPU2 是测量控制核心，硬件具备 4-20mA、继电器、AD5421 fault、继电器 NO/NC、24V/12V 检测等诊断条件。</td>
+          </tr>
+          <tr>
+            <td><a href="../../07_硬件原理图/原理图与固件对照问题清单.md">原理图与固件对照问题清单</a></td>
+            <td>识别硬件已有但固件未闭环的风险点。</td>
+            <td>电源检测、AD5421 fault、继电器反馈、外部看门狗、HART/SPI 标签等需要进入整改计划。</td>
+          </tr>
+          <tr>
+            <td><a href="../CUBE功能安全认证详细工作计划.md">CUBE 功能安全认证详细工作计划</a></td>
+            <td>作为 SIL 工作阶段、P0 整改项、X-CUBE-STL 和测试策略的输入。</td>
+            <td>先明确 SIF/SRS 和安全发布基线，再实施代码整改和测试证据闭环。</td>
+          </tr>
+          <tr>
+            <td><a href="../CPU2安全相关模块清单.md">CPU2 安全相关模块清单</a></td>
+            <td>作为 S0/S1/S2/S3 分类依据。</td>
+            <td>安全核心、测量流程、电机、传感器、参数、输出和看门狗均需分级管理。</td>
+          </tr>
+          <tr>
+            <td><code>LTD_MAIN_CPU2</code> 当前代码</td>
+            <td>用于确认实现现状和目标架构差距。</td>
+            <td>当前 CMake 自动收集源码，应用层仍可直接调用 AD5421，安全输出未完全收口。</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="hardware-boundary">
+      <h2>四、硬件边界和安全相关接口</h2>
+      <p>
+        目标架构把 CPU2 视为安全功能板。CPU3、CPU4 和外部通信不作为唯一安全动作通道，
+        只作为显示、维护、诊断或系统级信息通道。
+      </p>
+      <table>
+        <thead>
+          <tr>
+            <th>硬件区域</th>
+            <th>原理图依据</th>
+            <th>安全架构定位</th>
+            <th>目标软件责任</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>CPU2 主控板</td>
+            <td>主控板 CPU2、电机驱动、4-20mA/HART、继电器、传感侧电源、CPU2 电源树</td>
+            <td>安全功能执行核心</td>
+            <td>执行找液位、安全判断、输出控制、故障锁存、看门狗健康监督。</td>
+          </tr>
+          <tr>
+            <td>传感器和本安侧链路</td>
+            <td>无线供电、无线 UART/RS485、传感器激励和采集、本安限能</td>
+            <td>安全输入链路</td>
+            <td>采集液位相关信号，检查通信超时、数据范围、稳定性和供电使能状态。</td>
+          </tr>
+          <tr>
+            <td>TMC5130 电机和 AS5145 编码器</td>
+            <td>主控板电机驱动、编码器 SPI 网络</td>
+            <td>找液位支撑链路</td>
+            <td>提供运动控制、位置反馈、停机确认、位置合理性和驱动状态诊断。</td>
+          </tr>
+          <tr>
+            <td>AD5421 4-20mA 输出</td>
+            <td>主控板 HART/4-20mA 页，AD5421 和 fault 引脚</td>
+            <td>安全输出链路</td>
+            <td>输出 4-20mA、故障电流，读取 fault 引脚和状态寄存器。</td>
+          </tr>
+          <tr>
+            <td>继电器输出</td>
+            <td>ULN2001D、HFD3/9 继电器、RELAY1-4、NO/NC 反馈输入</td>
+            <td>安全报警输出链路</td>
+            <td>输出高/低液位报警，检查触点反馈与软件命令是否一致。</td>
+          </tr>
+          <tr>
+            <td>24V/12V 电源检测</td>
+            <td>PC2 <code>POWER_24V_TEST</code>、PC3 <code>POWER_12V_TEST</code>，电源树页</td>
+            <td>硬件健康诊断输入</td>
+            <td>轮询或周期采样电源电压，超限进入安全故障或降级状态。</td>
+          </tr>
+          <tr>
+            <td>CPU3/外部通信</td>
+            <td>CPU3 显示、外部 RS485/P20MA、CPU2/CPU3 内部通讯</td>
+            <td>现场辅助和诊断通道</td>
+            <td>只读安全状态或提交受控参数请求，不能直接驱动安全输出。</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="current-gaps">
+      <h2>五、当前实现差距</h2>
+      <p>
+        下面不是新增问题清单的替代，而是目标架构必须覆盖的实现差距。
+      </p>
+      <table>
+        <thead>
+          <tr>
+            <th>差距</th>
+            <th>当前证据</th>
+            <th>SIL 风险</th>
+            <th>目标架构处理</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>安全发布构建不可追溯</td>
+            <td><code>LTD_MAIN_CPU2/CMakeLists.txt</code> 使用 <code>file(GLOB...)</code> 自动收集源码。</td>
+            <td><code>test.c</code> 或调试文件可能进入安全版，构建基线难以证明。</td>
+            <td>改为 <code>SAFETY/FIELD/DEV</code> 显式源码清单。</td>
+          </tr>
+          <tr>
+            <td>4-20mA 输出未完全收口</td>
+            <td><code>app_main.c</code> 直接调用 <code>AD5421_SetCurrent(6.0)</code>。</td>
+            <td>非安全入口可绕过安全输出策略。</td>
+            <td>只有 <code>Safety/Output</code> 能调用 AD5421 写输出接口。</td>
+          </tr>
+          <tr>
+            <td>AD5421 fault 未形成安全闭环</td>
+            <td>PB8 配置为 <code>AD5421_FAULT</code>，<code>AD5421_GetStatus()</code> 存在，但自检被注释。</td>
+            <td>4-20mA 回路故障不能可靠进入安全状态。</td>
+            <td>加入 <code>safety_output_diag.c</code>，合并 PB8 和 fault/status 寄存器诊断。</td>
+          </tr>
+          <tr>
+            <td>继电器输出逻辑较宽</td>
+            <td><code>relay_output.c</code> 支持多来源、多通道、温度/水位/位移和复杂报警模式。</td>
+            <td>安全报警路径复杂，认证范围扩大。</td>
+            <td>为安全版抽取窄接口：液位高/低报警和触点反馈诊断。</td>
+          </tr>
+          <tr>
+            <td>电源检测电路未闭环</td>
+            <td>PC2/PC3 配置为 ADC 输入，但 ADC 当前只配置单通道 <code>ADC_CHANNEL_12</code>。</td>
+            <td>12V/24V 异常不能作为安全故障输入。</td>
+            <td>增加 <code>safety_power_diag.c</code>，采样双通道并建立阈值、迟滞和故障码。</td>
+          </tr>
+          <tr>
+            <td>看门狗喂狗位置不满足安全监督</td>
+            <td><code>stm32f4xx_it.c</code> 中断内刷新 <code>HAL_IWDG_Refresh(&amp;hiwdg)</code>。</td>
+            <td>主循环或安全监督失效时仍可能被中断喂狗掩盖。</td>
+            <td>由 <code>safety_supervisor</code> 在关键健康条件满足后统一喂狗。</td>
+          </tr>
+          <tr>
+            <td>通信层可写安全相关参数</td>
+            <td><code>dataanalysis_modbus.c</code> 读写 AO/DO、继电器配置和液位状态寄存器。</td>
+            <td>外部写入可能直接影响安全动作。</td>
+            <td>通信层只能提交配置请求，由 <code>Safety/Config</code> 校验后生效。</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="target-flow">
+      <h2>六、目标安全功能链路</h2>
+      <p>
+        目标链路需要把“找液位”纳入安全输入的生产过程，并把 4-20mA 和继电器纳入独占安全输出。
+      </p>
+      <div class="flow">
+        <div class="node">传感器供电<br>和通信诊断</div>
+        <div class="node">电机运动<br>和位置诊断</div>
+        <div class="node">认证用找液位<br>单一路径</div>
+        <div class="node">液位快照<br>有效性判断</div>
+        <div class="node">4-20mA<br>安全输出</div>
+        <div class="node">继电器<br>高/低报警</div>
+        <div class="node">反馈诊断<br>故障降级</div>
+      </div>
+
+      <table>
+        <thead>
+          <tr>
+            <th>阶段</th>
+            <th>目标行为</th>
+            <th>故障处理</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>启动</td>
+            <td>先进入安全输出默认态，完成 MCU 自检、参数校验、输出自检和关键驱动初始化后再允许测量。</td>
+            <td>任一关键自检失败则锁存故障，输出故障电流或继电器安全态。</td>
+          </tr>
+          <tr>
+            <td>找液位</td>
+            <td>只运行认证用单一路径；运动前检查安全状态、参数、供电、传感器和位置源。</td>
+            <td>传感器无效、位置跳变、运动超时或停机失败均进入安全故障处理。</td>
+          </tr>
+          <tr>
+            <td>液位快照</td>
+            <td>形成 <code>level_01mm</code>、有效标志、时间戳、质量状态和来源状态。</td>
+            <td>快照过期或无效时禁止输出正常液位，转入故障输出策略。</td>
+          </tr>
+          <tr>
+            <td>4-20mA 输出</td>
+            <td>按安全配置将液位映射为电流；高/低报警可输出配置电流；故障输出故障电流。</td>
+            <td>AD5421 fault、状态寄存器异常或输出确认失败则锁存 AO 故障。</td>
+          </tr>
+          <tr>
+            <td>继电器报警</td>
+            <td>按高/低阈值、迟滞和故障策略写继电器，并检查 NO/NC 反馈。</td>
+            <td>反馈与命令不一致、触点粘连或输入状态不可信则锁存 DO 故障。</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="layers">
+      <h2>七、目标软件分层</h2>
+      <div class="layer-stack">
+        <div class="layer">
+          <div class="name">应用入口层</div>
+          <div class="body">
+            <strong>目标：</strong>区分 <code>safety_app.c</code>、<code>field_app.c</code>、<code>dev_app.c</code>。
+            安全版只启动安全功能链路；现场版增加通信和维护任务；开发版才允许测试入口。
+          </div>
+        </div>
+        <div class="layer">
+          <div class="name">Safety 核心层</div>
+          <div class="body">
+            <strong>目标：</strong><code>safety_supervisor</code> 统一管理启动自检、运行状态、故障锁存、健康监督、看门狗喂狗和安全状态输出。
+          </div>
+        </div>
+        <div class="layer">
+          <div class="name">Safety 测量层</div>
+          <div class="body">
+            <strong>目标：</strong>把当前找液位程序收敛为认证用单一路径，向上只输出液位快照，不直接控制安全输出。
+          </div>
+        </div>
+        <div class="layer">
+          <div class="name">Safety 输出层</div>
+          <div class="body">
+            <strong>目标：</strong>独占 AD5421 和继电器写权限，负责 4-20mA、故障电流、高/低液位报警和输出反馈诊断。
+          </div>
+        </div>
+        <div class="layer">
+          <div class="name">Safety 诊断层</div>
+          <div class="body">
+            <strong>目标：</strong>整合 X-CUBE-STL、AD5421 fault、继电器反馈、电源检测、TMC5130 状态、编码器/传感器诊断。
+          </div>
+        </div>
+        <div class="layer">
+          <div class="name">支撑服务层</div>
+          <div class="body">
+            <strong>目标：</strong>电机、传感器、编码器、参数和 FRAM 作为安全支撑模块；Modbus/HART/日志作为现场辅助模块受限访问。
+          </div>
+        </div>
+        <div class="layer">
+          <div class="name">BSP/HAL 层</div>
+          <div class="body">
+            <strong>目标：</strong>保留底层外设驱动，但安全相关调用通过小接口封装，避免业务层到处直接调用硬件写操作。
+          </div>
+        </div>
+      </div>
+
+      <h3>目标目录</h3>
+      <pre><code>LTD_MAIN_CPU2/
+  Safety/
+    Core/
+      safety_supervisor.c
+      safety_state.c
+    Measure/
+      safety_level_measure.c
+      safety_level_snapshot.c
+    Output/
+      safety_analog_output.c
+      safety_relay_output.c
+    Diagnostics/
+      safety_stl.c
+      safety_output_diag.c
+      safety_power_diag.c
+      safety_motion_diag.c
+    Config/
+      safety_config.c
+      safety_config.h
+
+  Application/Src/
+    safety_app.c
+    field_app.c
+    dev_app.c</code></pre>
+    </section>
+
+    <section id="diagnostics">
+      <h2>八、目标诊断闭环</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>诊断对象</th>
+            <th>硬件/代码依据</th>
+            <th>目标诊断</th>
+            <th>安全动作</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>MCU CPU/Flash/RAM</td>
+            <td>STM32F429，ST X-CUBE-STL F4</td>
+            <td>启动自检和运行时分片自检。</td>
+            <td>STL 失败锁存 MCU 诊断故障，输出安全态。</td>
+          </tr>
+          <tr>
+            <td>24V/12V 电源</td>
+            <td>PC2/PC3 ADC 检测点</td>
+            <td>双通道采样、阈值、迟滞、故障恢复判断。</td>
+            <td>电源异常禁止运动，必要时输出故障电流和继电器安全态。</td>
+          </tr>
+          <tr>
+            <td>传感器通信</td>
+            <td>USART6、无线/DSM/LTD 传感器通信模块</td>
+            <td>通信超时、帧校验、数据范围和稳定性。</td>
+            <td>液位快照无效，禁止正常 AO/DO 输出。</td>
+          </tr>
+          <tr>
+            <td>运动控制</td>
+            <td>TMC5130、DRV_ENN、编码器、运动 API</td>
+            <td>驱动状态、运动超时、停机确认、位置变化合理性。</td>
+            <td>停止运动；停机失败升级为安全故障。</td>
+          </tr>
+          <tr>
+            <td>4-20mA 输出</td>
+            <td>AD5421、PB8 fault、SPI3 状态寄存器</td>
+            <td>初始化自检、写后状态确认、fault 引脚和寄存器合并诊断。</td>
+            <td>输出故障电流；若输出不可控则锁存 AO 故障。</td>
+          </tr>
+          <tr>
+            <td>继电器输出</td>
+            <td>RELAY1-4 输出和 NO/NC 输入反馈</td>
+            <td>命令状态和触点反馈一致性检查。</td>
+            <td>反馈异常锁存 DO 故障，进入定义的报警或失效状态。</td>
+          </tr>
+          <tr>
+            <td>参数存储</td>
+            <td>FRAM A/B、magic、version、CRC、默认值</td>
+            <td>安全参数范围、单位、互斥关系、CRC 和 SIL 锁定。</td>
+            <td>拒绝危险参数，恢复安全默认值或锁存参数故障。</td>
+          </tr>
+          <tr>
+            <td>看门狗</td>
+            <td>内部 IWDG，原理图 WDI 待确认</td>
+            <td>主循环、安全任务、诊断任务均健康后才喂狗。</td>
+            <td>健康条件缺失时停止喂狗，由复位或安全态处理。</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="variants">
+      <h2>九、构建变体和代码边界</h2>
+      <p>
+        目标系统架构必须通过构建系统固化，而不是依赖人工记忆。安全发布必须能追溯到明确源码清单。
+      </p>
+      <table>
+        <thead>
+          <tr>
+            <th>变体</th>
+            <th>包含</th>
+            <th>排除</th>
+            <th>用途</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>SAFETY</code></td>
+            <td><span class="badge s0">S0</span>安全核心、<span class="badge s1">S1</span>安全支撑、X-CUBE-STL、最小应用入口</td>
+            <td>Modbus/HART 直接写输出、日志重操作、<code>test.c</code>、开发命令</td>
+            <td>认证、型式测试、安全基线。</td>
+          </tr>
+          <tr>
+            <td><code>FIELD</code></td>
+            <td>S0、S1、<span class="badge s2">S2</span>现场辅助、通信、日志、显示同步</td>
+            <td><code>test.c</code>、人工硬件测试、未受控调试命令</td>
+            <td>现场交付版本；仍必须保留安全核心。</td>
+          </tr>
+          <tr>
+            <td><code>DEV</code></td>
+            <td>S0、S1、S2、<span class="badge s3">S3</span>调试测试</td>
+            <td>无认证用途</td>
+            <td>内部开发、联调和故障定位。</td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="callout warn">
+        <strong>必须整改：</strong>当前 CMake 使用自动 <code>GLOB</code>，目标架构要求改为显式源码清单，并在构建阶段检查
+        <code>SAFETY</code> 变体是否包含越权输出调用或调试文件。
+      </div>
+    </section>
+
+    <section id="safety-interfaces">
+      <h2>十、目标安全接口</h2>
+      <p>
+        外层模块只能通过安全接口交互，不能直接写安全输出和安全状态。
+      </p>
+      <pre><code>typedef struct {
+    uint32_t level_01mm;
+    uint8_t valid;
+    uint8_t quality;
+    uint32_t timestamp_ms;
+} SafetyLevelSnapshot;
+
+typedef struct {
+    uint32_t current_range_start_001ma;
+    uint32_t current_range_end_001ma;
+    uint32_t high_alarm_level_01mm;
+    uint32_t low_alarm_level_01mm;
+    uint32_t fault_current_001ma;
+} SafetyConfig;
+
+void Safety_Init(void);
+void Safety_Run10ms(void);
+void Safety_UpdateLevelSnapshot(const SafetyLevelSnapshot *snapshot);
+uint8_t Safety_RequestConfigUpdate(const SafetyConfig *config);
+SafetyStatus Safety_GetStatus(void);</code></pre>
+
+      <table>
+        <thead>
+          <tr>
+            <th>接口方向</th>
+            <th>允许</th>
+            <th>禁止</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>测量层到安全层</td>
+            <td>提交液位快照、质量状态、错误码。</td>
+            <td>直接设置 AD5421 或继电器。</td>
+          </tr>
+          <tr>
+            <td>通信层到安全层</td>
+            <td>请求参数更新、读取安全状态、读取故障记录。</td>
+            <td>直接修改运行中安全参数并立即生效。</td>
+          </tr>
+          <tr>
+            <td>安全层到底层驱动</td>
+            <td>通过受控 wrapper 调用 AD5421、继电器、诊断 ADC 和 STL。</td>
+            <td>在多个业务模块分散写输出。</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="evidence">
+      <h2>十一、SIL 认证证据要求</h2>
+      <p>
+        目标架构要服务 SIL2 认证证据闭环。每个架构元素都需要能追踪到需求、设计、代码、测试和评审。
+        SIL3 冗余架构、HFT 和共因失效专项不纳入当前需求，后续若重新提出 SIL3 目标需重新立项和重做系统架构评估。
+      </p>
+      <table>
+        <thead>
+          <tr>
+            <th>证据类别</th>
+            <th>目标产物</th>
+            <th>证明内容</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>SIF/SRS</td>
+            <td><code>SIF清单与安全状态定义.md</code>、<code>软件安全需求规格.md</code></td>
+            <td>安全功能、触发条件、安全动作、响应时间、故障处理和 proof test。</td>
+          </tr>
+          <tr>
+            <td>架构设计</td>
+            <td>本文档、双版本架构方案、代码范围矩阵</td>
+            <td>硬件/软件边界、S0/S1/S2/S3 分类、安全输出独占权。</td>
+          </tr>
+          <tr>
+            <td>构建基线</td>
+            <td><code>CPU2安全发布构建说明.md</code>、CMake 显式源码清单</td>
+            <td>安全版源码、工具链、版本号和产物可复现。</td>
+          </tr>
+          <tr>
+            <td>诊断设计</td>
+            <td><code>STL集成设计.md</code>、<code>安全诊断调度和耗时报告.md</code></td>
+            <td>MCU、输出、电源、传感器、运动和参数诊断如何进入安全状态。</td>
+          </tr>
+          <tr>
+            <td>验证确认</td>
+            <td>单元测试、集成测试、故障注入、proof test 记录</td>
+            <td>每条安全需求均有可重复验证证据。</td>
+          </tr>
+          <tr>
+            <td>变更控制</td>
+            <td>版本基线记录、偏离记录、评审记录</td>
+            <td>安全相关改动受控，历史偏离有风险说明和批准。</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="roadmap">
+      <h2>十二、实施路线</h2>
+      <ol>
+        <li>补齐 <code>CPU2安全功能代码范围矩阵</code>，按 S0/S1/S2/S3 标注文件、接口和纳入理由。</li>
+        <li>新增 <code>Safety/</code> 目录和空接口骨架，先不大规模搬移历史代码。</li>
+        <li>把 AD5421、继电器输出、故障电流和继电器反馈收口到 <code>Safety/Output</code>。</li>
+        <li>把找液位安全路径从现有测量大模块中抽成认证用单一路径。</li>
+        <li>增加 AD5421 fault、继电器 NO/NC、电源 PC2/PC3、看门狗健康监督和 STL wrapper。</li>
+        <li>把 CMake 改成 <code>SAFETY/FIELD/DEV</code> 显式源码清单，输出名称区分构建变体。</li>
+        <li>增加构建前扫描脚本，阻止 <code>SAFETY</code> 变体包含 <code>test.c</code>、越权 AD5421 调用和越权 RELAY 写操作。</li>
+        <li>根据 SRS 建立单元测试、集成测试、故障注入和 proof test 记录模板。</li>
+      </ol>
+    </section>
+
+    <section id="acceptance">
+      <h2>十三、目标架构验收标准</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>验收项</th>
+            <th>通过标准</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>硬件边界</td>
+            <td>CPU2、传感侧、AD5421、继电器、CPU3/CPU4 和电源检测的角色在架构中明确。</td>
+          </tr>
+          <tr>
+            <td>软件边界</td>
+            <td>安全核心、安全支撑、现场辅助和调试测试均有清晰分层和构建策略。</td>
+          </tr>
+          <tr>
+            <td>输出独占</td>
+            <td>AD5421 和 RELAYx 只有 <code>Safety/Output</code> 可以写。</td>
+          </tr>
+          <tr>
+            <td>诊断闭环</td>
+            <td>AD5421 fault、继电器反馈、电源检测、运动异常、传感异常、参数异常和 STL 失败均有安全动作。</td>
+          </tr>
+          <tr>
+            <td>构建可追溯</td>
+            <td><code>SAFETY</code> 构建不使用自动源码收集，不包含 S3 调试测试文件。</td>
+          </tr>
+          <tr>
+            <td>认证证据</td>
+            <td>架构项能追踪到 SRS、代码文件、测试用例、故障注入和评审记录。</td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="callout ok">
+        <strong>建议下一步：</strong>以本文为目标架构，先生成代码范围矩阵和 CMake 显式源码清单。
+        这两项完成后，再开始拆分 <code>Safety</code> 层和引入 X-CUBE-STL。
+      </div>
+    </section>
+
+    <section id="references">
+      <h2>十四、关联资料</h2>
+      <ul>
+        <li><a href="CPU2安全版与现场版双版本架构方案.html">CPU2安全版与现场版双版本架构方案.html</a></li>
+        <li><a href="../CUBE功能安全认证详细工作计划.md">CUBE功能安全认证详细工作计划.md</a></li>
+        <li><a href="../CPU2安全相关模块清单.md">CPU2安全相关模块清单.md</a></li>
+        <li><a href="../00_外部资料/03_STM32与X-CUBE-STL/ST_X-CUBE-STL资料使用说明.html">ST_X-CUBE-STL资料使用说明.html</a></li>
+        <li><a href="../../07_硬件原理图/储罐自动计量仪原理图汇总整理.md">储罐自动计量仪原理图汇总整理.md</a></li>
+        <li><a href="../../07_硬件原理图/原理图与固件对照问题清单.md">原理图与固件对照问题清单.md</a></li>
+      </ul>
+    </section>
+  </main>
+
+  <footer>
+    本文档用于 CPU2 SIL 目标架构设计和整改规划。正式认证结论需结合系统级危险分析、SRS、硬件 FMEDA/FMEA、软件验证确认和认证机构评估。
+  </footer>
+</body>
+</html>

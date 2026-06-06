@@ -145,12 +145,6 @@ void ErrorLog_RecoverDetail(const char *module,
                             uint32_t attempt,
                             uint32_t max,
                             const char *detail);
-/* 打印最终报错日志。 */
-void ErrorLog_Report(const char *module,
-                     const char *op,
-                     const char *reason,
-                     uint32_t code,
-                     const char *action);
 /* 打印带详情的最终报错日志。 */
 void ErrorLog_ReportDetail(const char *module,
                            const char *op,

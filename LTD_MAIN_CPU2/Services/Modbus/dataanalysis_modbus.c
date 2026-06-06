@@ -47,13 +47,6 @@ static inline void write_float_to_regs(uint16_t *regs, uint16_t addr, float valu
 	write_u32_to_regs(regs, addr, temp);
 }
 
-/* 从寄存器数组读取 float（按 IEEE754 编码） */
-static inline float read_float_from_regs(const uint16_t *regs, uint16_t addr) {
-	uint32_t temp = read_u32_from_regs(regs, addr);
-	float value;
-	memcpy(&value, &temp, sizeof(float));
-	return value;
-}
 
 
 /* 写入单路继电器方式2报警配置。 */
@@ -107,19 +100,6 @@ static void write_relay_alarm_runtime_to_regs(uint16_t *regs, uint32_t channel, 
     regs[REG_RELAY_ALARM_RUNTIME_CLEAR_ALARM(channel)] = (uint16_t)(state->clear_alarm & 0xFFFFU);
 }
 
-/* 从输入寄存器读取单路继电器方式2运行态。 */
-static void read_relay_alarm_runtime_from_regs(const uint16_t *regs, uint32_t channel, volatile RelayAlarmRuntimeState *state)
-{
-    state->alarm_value = read_float_from_regs(regs, REG_RELAY_ALARM_RUNTIME_ALARM_VALUE(channel));
-    state->HH_alarm = regs[REG_RELAY_ALARM_RUNTIME_HH_ALARM(channel)] & 0xFFFFU;
-    state->H_alarm = regs[REG_RELAY_ALARM_RUNTIME_H_ALARM(channel)] & 0xFFFFU;
-    state->HH_H_alarm = regs[REG_RELAY_ALARM_RUNTIME_HH_H_ALARM(channel)] & 0xFFFFU;
-    state->L_alarm = regs[REG_RELAY_ALARM_RUNTIME_L_ALARM(channel)] & 0xFFFFU;
-    state->LL_alarm = regs[REG_RELAY_ALARM_RUNTIME_LL_ALARM(channel)] & 0xFFFFU;
-    state->LL_L_alarm = regs[REG_RELAY_ALARM_RUNTIME_LL_L_ALARM(channel)] & 0xFFFFU;
-    state->any_error = regs[REG_RELAY_ALARM_RUNTIME_ANY_ERROR(channel)] & 0xFFFFU;
-    state->clear_alarm = regs[REG_RELAY_ALARM_RUNTIME_CLEAR_ALARM(channel)] & 0xFFFFU;
-}
 
 /* ===================== 参数结构体 <-> 保持寄存器映射 ===================== */
 
@@ -636,132 +616,5 @@ void write_measurement_result_to_InputRegisters(uint16_t *regs) {
 	/* ==== 继电器方式2运行态 ==== */
 	for (uint32_t channel = 0U; channel < RELAY_ALARM_CHANNEL_COUNT; channel++) {
 		write_relay_alarm_runtime_to_regs(regs, channel, &g_measurement.relay_alarm_runtime[channel]);
-	}
-}
-
-/**
- * @brief 将输入寄存器数组解析回 MeasurementResult 结构体
- * @param regs 输入寄存器数组（uint16_t 数组）
- */
-void read_measurement_result_from_InputRegisters(uint16_t *regs) {
-	if (regs == NULL) {
-		return;
-	}
-
-	const uint16_t *cregs = (const uint16_t*) regs;
-
-	/* ==== DeviceStatus ==== */
-	g_measurement.device_status.work_mode = read_u32_from_regs(cregs, REG_DEVICE_STATUS_WORK_MODE);
-	g_measurement.device_status.device_state = (DeviceState) read_u32_from_regs(cregs, REG_DEVICE_STATUS_DEVICE_STATE);
-	g_measurement.device_status.error_code = read_u32_from_regs(cregs, REG_DEVICE_STATUS_ERROR_CODE);
-	g_measurement.device_status.current_command = (CommandType) read_u32_from_regs(cregs, REG_DEVICE_STATUS_CURRENT_COMMAND);
-	/* zero_point_status 映射为 uint32，占 2 个寄存器，直接按 u32 读 */
-	g_measurement.device_status.zero_point_status = read_u32_from_regs(cregs, REG_DEVICE_STATUS_ZERO_POINT_STATUS);
-	g_measurement.device_status.parameter_update_flag = read_u32_from_regs(cregs, REG_DEVICE_STATUS_PARAM_UPDATE_FLAG);
-
-	/* ==== DebugData ==== */
-	g_measurement.debug_data.current_encoder_value = read_i32_from_regs(cregs, REG_DEBUG_CURRENT_ENCODER);
-	g_measurement.debug_data.sensor_position = read_i32_from_regs(cregs, REG_DEBUG_SENSOR_POSITION);
-	g_measurement.debug_data.cable_length = read_i32_from_regs(cregs, REG_DEBUG_CABLE_LENGTH);
-	g_measurement.debug_data.motor_step     = read_i32_from_regs(cregs, REG_DEBUG_MOTOR_STEP);
-	g_measurement.debug_data.motor_distance = read_i32_from_regs(cregs, REG_DEBUG_MOTOR_DISTANCE);
-
-	g_measurement.debug_data.frequency = read_u32_from_regs(cregs, REG_DEBUG_FREQUENCY);
-	g_measurement.debug_data.temperature = read_u32_from_regs(cregs, REG_DEBUG_TEMPERATURE);
-	g_measurement.debug_data.air_frequency = read_u32_from_regs(cregs, REG_DEBUG_AIR_FREQUENCY);
-	g_measurement.debug_data.current_amplitude = read_u32_from_regs(cregs, REG_DEBUG_CURRENT_AMPLITUDE);
-	g_measurement.debug_data.water_level_voltage = read_u32_from_regs(cregs, REG_DEBUG_WATER_LEVEL_VOLTAGE);
-
-	/* 称重相关 */
-	g_measurement.debug_data.current_weight = read_u32_from_regs(cregs, REG_DEBUG_CURRENT_WEIGHT);
-	g_measurement.debug_data.weight_param = read_u32_from_regs(cregs, REG_DEBUG_WEIGHT_PARAM);
-
-	/* 姿态角 */
-	g_measurement.debug_data.angle_x = read_i32_from_regs(cregs, REG_DEBUG_ANGLE_X);
-	g_measurement.debug_data.angle_y = read_i32_from_regs(cregs, REG_DEBUG_ANGLE_Y);
-
-	/* 电机状态 */
-	(void)MotorCtrl_SetSpeed(read_u32_from_regs(cregs, REG_DEBUG_MOTOR_SPEED));
-	g_measurement.debug_data.motor_state = read_u32_from_regs(cregs, REG_DEBUG_MOTOR_STATE);
-
-	/* ==== OilMeasurement ==== */
-	g_measurement.oil_measurement.oil_level = read_u32_from_regs(cregs, REG_OIL_MEASUREMENT_OIL_LEVEL);
-	g_measurement.oil_measurement.air_frequency = read_u32_from_regs(cregs, REG_OIL_MEASUREMENT_AIR_FREQUENCY);
-	g_measurement.oil_measurement.oil_frequency = read_u32_from_regs(cregs, REG_OIL_MEASUREMENT_OIL_FREQUENCY);
-	g_measurement.oil_measurement.follow_frequency = read_u32_from_regs(cregs, REG_OIL_MEASUREMENT_FOLLOW_FREQUENCY);
-	g_measurement.oil_measurement.current_frequency = read_u32_from_regs(cregs, REG_OIL_MEASUREMENT_CURRENT_FREQUENCY);
-
-	/* ==== WaterMeasurement ==== */
-	g_measurement.water_measurement.water_level = read_u32_from_regs(cregs, REG_WATER_MEASUREMENT_WATER_LEVEL);
-	g_measurement.water_measurement.zero_capacitance = read_float_from_regs(cregs, REG_WATER_MEASUREMENT_ZERO_CAPACITANCE);
-	g_measurement.water_measurement.oil_capacitance = read_float_from_regs(cregs, REG_WATER_MEASUREMENT_OIL_CAPACITANCE);
-	g_measurement.water_measurement.current_capacitance = read_float_from_regs(cregs, REG_WATER_MEASUREMENT_CURRENT_CAPACITANCE);
-
-	/* ==== 实高测量 ==== */
-	g_measurement.height_measurement.calibrated_liquid_level = read_u32_from_regs(cregs, REG_HEIGHT_MEASUREMENT_CAL_LIQUID_LEVEL);
-	g_measurement.height_measurement.current_real_height = read_u32_from_regs(cregs, REG_HEIGHT_MEASUREMENT_CURRENT_REAL);
-
-	/* ==== SI7000 shared status ====
-	 * 回读路径保持同样顺序，避免 CPU2/CPU3 调试时字段错位。
-	 */
-	g_measurement.height_measurement.bottom_reference_valid = read_u32_from_regs(cregs, REG_HEIGHT_MEASUREMENT_BOTTOM_REFERENCE_VALID);
-	g_measurement.oil_measurement.probe_at_liquid_level = read_u32_from_regs(cregs, REG_OIL_MEASUREMENT_PROBE_AT_LIQUID_LEVEL);
-	g_measurement.oil_measurement.liquid_stable = read_u32_from_regs(cregs, REG_OIL_MEASUREMENT_LIQUID_STABLE);
-	g_measurement.density_distribution.profile_complete_latched = read_u32_from_regs(cregs, REG_DENSITY_DIST_PROFILE_COMPLETE_LATCHED);
-	g_measurement.density_distribution.profile_complete_counter = read_u32_from_regs(cregs, REG_DENSITY_DIST_PROFILE_COMPLETE_COUNTER);
-	g_measurement.density_distribution.profile_blocked_by_process = read_u32_from_regs(cregs, REG_DENSITY_DIST_PROFILE_BLOCKED_BY_PROCESS);
-	g_measurement.device_status.loading_unloading_active = read_u32_from_regs(cregs, REG_DEVICE_STATUS_LOADING_UNLOADING_ACTIVE);
-	g_measurement.device_status.manual_alarm_inhibit = read_u32_from_regs(cregs, REG_DEVICE_STATUS_MANUAL_ALARM_INHIBIT);
-	g_measurement.oil_measurement.manual_level_update_inhibit = read_u32_from_regs(cregs, REG_OIL_MEASUREMENT_MANUAL_LEVEL_UPDATE_INHIBIT);
-	g_measurement.density_distribution.profile_temp_deviation_alarm = read_u32_from_regs(cregs, REG_DENSITY_DIST_PROFILE_TEMP_DEVIATION_ALARM);
-	g_measurement.density_distribution.profile_density_deviation_alarm = read_u32_from_regs(cregs, REG_DENSITY_DIST_PROFILE_DENSITY_DEVIATION_ALARM);
-
-	/* ==== 单点密度测量 ==== */
-	g_measurement.single_point_measurement.temperature = read_u32_from_regs(cregs, REG_SINGLE_POINT_MEAS_TEMP);
-	g_measurement.single_point_measurement.density = read_u32_from_regs(cregs, REG_SINGLE_POINT_MEAS_DENSITY);
-	g_measurement.single_point_measurement.temperature_position = read_u32_from_regs(cregs, REG_SINGLE_POINT_MEAS_TEMP_POS);
-	g_measurement.single_point_measurement.standard_density = read_u32_from_regs(cregs, REG_SINGLE_POINT_MEAS_STD_DENSITY);
-	g_measurement.single_point_measurement.vcf20 = read_u32_from_regs(cregs, REG_SINGLE_POINT_MEAS_VCF20);
-	g_measurement.single_point_measurement.weight_density = read_u32_from_regs(cregs, REG_SINGLE_POINT_MEAS_WEIGHT_DENSITY);
-
-	/* ==== 单点监测 ==== */
-	g_measurement.single_point_monitoring.temperature = read_u32_from_regs(cregs, REG_SINGLE_POINT_MON_TEMP);
-	g_measurement.single_point_monitoring.density = read_u32_from_regs(cregs, REG_SINGLE_POINT_MON_DENSITY);
-	g_measurement.single_point_monitoring.temperature_position = read_u32_from_regs(cregs, REG_SINGLE_POINT_MON_TEMP_POS);
-	g_measurement.single_point_monitoring.standard_density = read_u32_from_regs(cregs, REG_SINGLE_POINT_MON_STD_DENSITY);
-	g_measurement.single_point_monitoring.vcf20 = read_u32_from_regs(cregs, REG_SINGLE_POINT_MON_VCF20);
-	g_measurement.single_point_monitoring.weight_density = read_u32_from_regs(cregs, REG_SINGLE_POINT_MON_WEIGHT_DENSITY);
-
-	/* ==== 密度分布（平均值） ==== */
-	g_measurement.density_distribution.average_temperature = read_u32_from_regs(cregs, REG_DENSITY_DIST_AVG_TEMP);
-	g_measurement.density_distribution.average_density = read_u32_from_regs(cregs, REG_DENSITY_DIST_AVG_DENSITY);
-	g_measurement.density_distribution.average_standard_density = read_u32_from_regs(cregs, REG_DENSITY_DIST_AVG_STD_DENSITY);
-	g_measurement.density_distribution.average_vcf20 = read_u32_from_regs(cregs, REG_DENSITY_DIST_AVG_VCF20);
-	g_measurement.density_distribution.average_weight_density = read_u32_from_regs(cregs, REG_DENSITY_DIST_AVG_WEIGHT_DENSITY);
-	g_measurement.density_distribution.measurement_points = read_u32_from_regs(cregs, REG_DENSITY_DIST_MEAS_POINTS);
-	g_measurement.density_distribution.Density_oil_level = read_u32_from_regs(cregs, REG_DENSITY_DIST_OIL_LEVEL);
-
-	/* ==== 密度分布单点数据 ==== */
-	for (int i = 0; i < MAX_MEASUREMENT_POINTS; i++) {
-		g_measurement.density_distribution.single_density_data[i].temperature = read_u32_from_regs(cregs, REG_DENSITY_POINT_TEMP(i));
-		g_measurement.density_distribution.single_density_data[i].density = read_u32_from_regs(cregs, REG_DENSITY_POINT_DENSITY(i));
-		g_measurement.density_distribution.single_density_data[i].temperature_position = read_u32_from_regs(cregs, REG_DENSITY_POINT_TEMP_POS(i));
-		g_measurement.density_distribution.single_density_data[i].standard_density = read_u32_from_regs(cregs, REG_DENSITY_POINT_STD_DENSITY(i));
-		g_measurement.density_distribution.single_density_data[i].vcf20 = read_u32_from_regs(cregs, REG_DENSITY_POINT_VCF20(i));
-		g_measurement.density_distribution.single_density_data[i].weight_density = read_u32_from_regs(cregs, REG_DENSITY_POINT_WEIGHT_DENSITY(i));
-	}
-
-	/* ==== 无线滑环匹配状态 ==== */
-	g_measurement.wireless_pairing_status.result = read_u32_from_regs(cregs, REG_WIRELESS_PAIRING_RESULT);
-	g_measurement.wireless_pairing_status.mac_valid = read_u32_from_regs(cregs, REG_WIRELESS_PAIRING_MAC_VALID);
-	g_measurement.wireless_pairing_status.mac_high = read_u32_from_regs(cregs, REG_WIRELESS_PAIRING_MAC_HIGH);
-	g_measurement.wireless_pairing_status.mac_mid = read_u32_from_regs(cregs, REG_WIRELESS_PAIRING_MAC_MID);
-	g_measurement.wireless_pairing_status.mac_low = read_u32_from_regs(cregs, REG_WIRELESS_PAIRING_MAC_LOW);
-	g_measurement.wireless_pairing_status.error_code = read_u32_from_regs(cregs, REG_WIRELESS_PAIRING_ERROR_CODE);
-	g_measurement.wireless_pairing_status.update_counter = read_u32_from_regs(cregs, REG_WIRELESS_PAIRING_UPDATE_COUNTER);
-
-	/* ==== 继电器方式2运行态 ==== */
-	for (uint32_t channel = 0U; channel < RELAY_ALARM_CHANNEL_COUNT; channel++) {
-		read_relay_alarm_runtime_from_regs(cregs, channel, &g_measurement.relay_alarm_runtime[channel]);
 	}
 }

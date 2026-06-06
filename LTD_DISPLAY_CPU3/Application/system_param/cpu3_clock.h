@@ -24,8 +24,6 @@ void Cpu3Clock_Init(void);
 /* 获取当前时间；返回 1 表示 out 中字段已通过合法性校验。 */
 uint8_t Cpu3Clock_GetDateTime(Cpu3DateTime *out);
 
-/* 设置当前时间；仅接受合法日期，写入后会刷新 RTC 备份标记。 */
-uint8_t Cpu3Clock_SetDateTime(const Cpu3DateTime *dt);
 
 #ifdef __cplusplus
 }

@@ -497,17 +497,6 @@ void ErrorLog_RecoverDetail(const char *module,
            (unsigned long)max);
 }
 
-/**
- * @brief 打印最终报错日志，不带额外详情。
- */
-void ErrorLog_Report(const char *module,
-                     const char *op,
-                     const char *reason,
-                     uint32_t code,
-                     const char *action)
-{
-    ErrorLog_ReportDetail(module, op, reason, code, action, NULL);
-}
 
 /**
  * @brief 打印最终报错日志，带额外详情字段。

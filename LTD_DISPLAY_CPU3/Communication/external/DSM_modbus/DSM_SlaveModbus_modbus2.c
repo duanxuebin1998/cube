@@ -205,48 +205,6 @@ bool ReadInputRegister(unsigned int startaddress, unsigned int registeramount, i
 
 	return true;
 }
-/******************************************************
-函数功能： 读单或双输入寄存器
-
-函 数 名： ReadOneInputRegister
-参    数：
-		   unsigned int startaddress   起始地址
-		   unsigned int registeramount 数量
-
-返 回 值：
-******************************************************/
-int ReadOneInputRegister(unsigned int startaddress, u8 registeramount)
-{
-	int i, range, temp = 0;
-
-	switch ((startaddress & 0x180))
-	{
-	case 0x000:
-		startaddress = startaddress - STARTADDRESS1_INPUTREGISTER;
-		break;
-
-	case 0x080:
-		startaddress = startaddress - STARTADDRESS2_INPUTREGISTER + (ENDADDRESS1_INPUTREGISTER - STARTADDRESS1_INPUTREGISTER + 1);
-		break;
-
-	case 0x100:
-		startaddress = startaddress - STARTADDRESS3_INPUTREGISTER + (ENDADDRESS2_INPUTREGISTER - STARTADDRESS2_INPUTREGISTER + 1) + (ENDADDRESS1_INPUTREGISTER - STARTADDRESS1_INPUTREGISTER + 1);
-		break;
-
-	default:
-		return false;
-	}
-
-	range = startaddress + registeramount;
-
-	for (i = startaddress; i < range; i++)
-	{
-		temp <<= 16;
-		temp += DSM_InputRegisterArray[i];
-	}
-
-	return temp;
-}
 
 /******************************************************
 函数功能： 读单或双保持寄存器
@@ -362,52 +320,6 @@ bool ReadHoldingRegister(unsigned int startaddress, unsigned int registeramount,
 	for (i = startaddress, j = 0; i < range; i++, j++)
 	{
 		registervalue[j] = DSM_HoldingRegisterArray[i];
-	}
-
-	return true;
-}
-/******************************************************
-函数功能： 写输入寄存器
-
-函 数 名： WriteInputRegister
-参    数：
-		   unsigned int startaddress   起始地址
-		   unsigned int registeramount 数量
-		   int *registervalue          寄存器值
-
-返 回 值：
-		   true   成功
-		   false  失败,返回参数无效
-******************************************************/
-bool WriteInputRegister(unsigned int startaddress, unsigned int registeramount, int *registervalue)
-{
-	int range;
-	int i;
-	int j;
-
-	switch ((startaddress & 0x180))
-	{
-	case 0x000:
-		startaddress = startaddress - STARTADDRESS1_INPUTREGISTER;
-		break;
-
-	case 0x080:
-		startaddress = startaddress - STARTADDRESS2_INPUTREGISTER + (ENDADDRESS1_INPUTREGISTER - STARTADDRESS1_INPUTREGISTER + 1);
-		break;
-
-	case 0x100:
-		startaddress = startaddress - STARTADDRESS3_INPUTREGISTER + (ENDADDRESS2_INPUTREGISTER - STARTADDRESS2_INPUTREGISTER + 1) + (ENDADDRESS1_INPUTREGISTER - STARTADDRESS1_INPUTREGISTER + 1);
-		break;
-
-	default:
-		return false;
-	}
-
-	range = startaddress + registeramount;
-
-	for (i = startaddress, j = 0; i < range; i++, j++)
-	{
-		DSM_InputRegisterArray[i] = registervalue[j];
 	}
 
 	return true;

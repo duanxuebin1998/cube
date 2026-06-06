@@ -28,7 +28,7 @@ cmake --build build/LTD_MAIN_CPU2
 - `Application/Src/*.c`
 - `Services/**/*.c`
 - `Drivers/STM32F4xx_HAL_Driver/Src/*.c`
-- `Drivers/Peripherals/src/*.c`（补齐 TMC5130 与 FRAM 驱动符号，解决 `stpr_* / stepper / WriteMultiData / ReadMultiData` 链接错误）
+- `BSP/Peripherals/src/*.c`（补齐 TMC5130、AS5145、AD5421、FRAM、CH9141K 等板级外设驱动符号）
 - `Core/Startup/startup_stm32f429zgtx.s`
 ## 产物
 手动构建完成后，`build/LTD_MAIN_CPU2/` 下会生成：

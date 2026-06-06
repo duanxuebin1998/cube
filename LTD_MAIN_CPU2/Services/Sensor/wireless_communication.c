@@ -324,13 +324,6 @@ static uint32_t WIRELESS_CheckReply(const uint8_t tx[8], const uint8_t rx[8]) {
     return NO_ERROR;
 }
 
-/* 把回复数据区 [2..5] 按小端解释为 int32。 */
-static inline uint32_t WIRELESS_ParseInt32_LE(const uint8_t *d) {
-    return ((uint32_t)d[3] << 24 |
-            (uint32_t)d[2] << 16 |
-            (uint32_t)d[1] << 8  |
-            (uint32_t)d[0]);
-}
 
 /* 把回复数据区 [2..5] 按小端解释为 float。 */
 static inline float WIRELESS_ParseFloat_LE(const uint8_t *d) {
@@ -432,86 +425,6 @@ uint32_t WIRELESS_Read_FloatParam(uint8_t addr, uint8_t param, float *out_value)
     return last_err;
 }
 
-/*
- * 读取无线节点的整型参数。
- * 与浮点读取的流程一致，只是最终解析类型不同。
- */
-uint32_t WIRELESS_Read_IntParam(uint8_t addr, uint8_t param, int32_t *out_value)
-{
-    if (!out_value) {
-        return PARAM_ADDRESS_OVERFLOW;
-    }
-
-    uint8_t tx[8], rx[8];
-    int last_err = OTHER_PERIPHERAL_CONFIG_ERROR;
-    char detail[64];
-
-    WIRELESS_MakeFrame(tx, addr, (uint8_t)WIRELESS_FUNC_R, 0x00000000u, param);
-    snprintf(detail, sizeof(detail), "地址：%u,功能：R,参数：0x%02X", (unsigned)addr, (unsigned)param);
-
-    for (int attempt = 0; attempt < WIRELESS_MAX_RETRY; ++attempt) {
-        if (HasEffectiveCommandSwitchRequest()) {
-            /* 命令切换是正常打断，直接向上透传，不参与故障重试。 */
-            return STATE_SWITCH;
-        }
-        HAL_Delay(DSM_PRE_SEND_DELAY);
-
-        int ret = WIRELESS_Transceive(tx, rx);
-        if (ret == STATE_SWITCH) {
-            /* 命令切换是正常打断，直接向上透传，不参与故障重试。 */
-            return STATE_SWITCH;
-        }
-        if (ret != NO_ERROR) {
-            last_err = ret;
-            // 错误	阶段：错误重试	模块：滑环通信	操作：读取整数参数	原因：ErrorLog_GetReasonByCode((uint32_t)ret)	尝试：(attempt + 1)/WIRELESS_MAX_RETRY	错误码：ret	错误名：ErrorLog_GetCodeName(ret)	详情：detail
-            ErrorLog_RetryDetail(ERROR_LOG_MODULE_SLIPRING_COMM,
-                                 ERROR_LOG_OP_READ_INT_PARAM,
-                                 ErrorLog_GetReasonByCode((uint32_t)ret),
-                                 (uint32_t)(attempt + 1),
-                                 WIRELESS_MAX_RETRY,
-                                 (uint32_t)ret,
-                                 detail);
-            continue;
-        }
-
-        ret = WIRELESS_CheckReply(tx, rx);
-        if (ret == STATE_SWITCH) {
-            /* 命令切换是正常打断，直接向上透传，不参与故障重试。 */
-            return STATE_SWITCH;
-        }
-        if (ret == NO_ERROR) {
-            int32_t v = WIRELESS_ParseInt32_LE(rx + 2);
-            *out_value = v;
-            if (attempt > 0) {
-                // 错误	阶段：重试成功	模块：滑环通信	操作：读取整数参数	原因：ErrorLog_GetReasonByCode((uint32_t)last_err)	尝试：(attempt + 1)/WIRELESS_MAX_RETRY	详情：detail
-                ErrorLog_RecoverDetail(ERROR_LOG_MODULE_SLIPRING_COMM,
-                                       ERROR_LOG_OP_READ_INT_PARAM,
-                                       ErrorLog_GetReasonByCode((uint32_t)last_err),
-                                       (uint32_t)(attempt + 1),
-                                       WIRELESS_MAX_RETRY,
-                                       detail);
-            }
-#ifdef DEBUG_WIRELESS
-            printf("[无线 地址：%02X] 读取整数寄存器 R%u: %ld (0x%08lX)\r\n",
-                   (unsigned)addr, (unsigned)param, (long)v, (unsigned long)v);
-#endif
-            return NO_ERROR;
-        }
-
-        last_err = ret;
-        // 错误	阶段：错误重试	模块：滑环通信	操作：读取整数参数	原因：ErrorLog_GetReasonByCode((uint32_t)ret)	尝试：(attempt + 1)/WIRELESS_MAX_RETRY	错误码：ret	错误名：ErrorLog_GetCodeName(ret)	详情：detail
-        ErrorLog_RetryDetail(ERROR_LOG_MODULE_SLIPRING_COMM,
-                             ERROR_LOG_OP_READ_INT_PARAM,
-                             ErrorLog_GetReasonByCode((uint32_t)ret),
-                             (uint32_t)(attempt + 1),
-                             WIRELESS_MAX_RETRY,
-                             (uint32_t)ret,
-                             detail);
-        HAL_Delay(DSM_BCC_DELAY);
-    }
-
-    return last_err;
-}
 
 /* 读取软件版本，参数码固定为 0x00。 */
 uint32_t WIRELESS_Read_SoftwareVersion(uint8_t addr, float *v)

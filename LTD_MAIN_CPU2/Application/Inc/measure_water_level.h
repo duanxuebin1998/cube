@@ -51,7 +51,6 @@ uint32_t read_zero_capacitance(void);
  * @brief 获取油区电容值并写入 g_measurement.water_measurement.oil_capacitance
  * @return 错误码（NO_ERROR 表示成功）
  */
-uint32_t read_oil_capacitance(void);
 
 /**
  * @brief 读取当前电容并判断水位状态

@@ -192,10 +192,18 @@ def check_state_headers() -> None:
 def check_modbus_pack_unpack() -> None:
     """检查 CPU2/CPU3 Modbus 打包和回读代码是否按同一字段顺序处理。"""
 
-    for path in (CPU2_MODBUS, CPU3_MODBUS):
-        text = read_text(path)
-        assert_equal(f"{path} write merged SI7000 status order", parse_write_pairs(text), EXPECTED_PAIRS)
-        assert_equal(f"{path} read merged SI7000 status order", parse_read_pairs(text), EXPECTED_PAIRS)
+    cpu2_text = read_text(CPU2_MODBUS)
+    cpu3_text = read_text(CPU3_MODBUS)
+
+    assert_equal(f"{CPU2_MODBUS} write merged SI7000 status order", parse_write_pairs(cpu2_text), EXPECTED_PAIRS)
+    assert_equal(f"{CPU3_MODBUS} read merged SI7000 status order", parse_read_pairs(cpu3_text), EXPECTED_PAIRS)
+
+    # CPU2 的输入寄存器反向读取和 CPU3 的测量结果写入是已确认删除的死接口；
+    # 如果后续重新引入这些调试方向，再校验它们的字段顺序。
+    if "read_measurement_result_from_InputRegisters" in cpu2_text:
+        assert_equal(f"{CPU2_MODBUS} read merged SI7000 status order", parse_read_pairs(cpu2_text), EXPECTED_PAIRS)
+    if "write_measurement_result_to_InputRegisters" in cpu3_text:
+        assert_equal(f"{CPU3_MODBUS} write merged SI7000 status order", parse_write_pairs(cpu3_text), EXPECTED_PAIRS)
 
 
 def main() -> int:

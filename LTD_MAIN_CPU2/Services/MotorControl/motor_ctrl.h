@@ -36,7 +36,7 @@ extern "C" {
 /** 上行收带：cable_length 减少。 */
 #define MOTOR_DIRECTION_UP     1
 
-/** 当前换算后的 TMC5130 VMAX，主要供调试观察；业务层应通过 MotorCtrl_SetSpeed() 修改速度。 */
+/** 当前换算后的 TMC5130 VMAX，主要供调试观察；业务层速度由参数和测量流程统一维护。 */
 extern uint32_t velocity;
 
 
@@ -161,7 +161,6 @@ void MotorCtrl_UpdateDrumStateFromXActual(TMC5130TypeDef *tmc5130,
  *
  * 若电机空闲，只影响后续运动；若电机正在运行，会立即重算并写入 VMAX。
  */
-uint32_t MotorCtrl_SetSpeed(uint32_t speed_x100);
 
 /** 设置 TMC5130 运行电流 IRUN；驱动已初始化时立即生效。 */
 uint32_t MotorCtrl_SetCurrent(uint32_t current);
