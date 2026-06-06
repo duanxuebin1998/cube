@@ -599,3 +599,26 @@
 - `git diff --cached --check`
 - `py tools\check_version_bumped.py`
 - 未做现场联调：仍需台架复测 `BE50`、`BE50,1.5,3`、`BE150,0,1,1`、`BE300` 连续往返，确认到位后不停车、区间不漂移、超时/提前停稳只重启当前阶段。
+
+## 2026-06-06 - CPU2 外设驱动迁移到 BSP 目录（CPU2 V1.11.0.1）
+
+版本：
+- CPU2: V1.11.0.0 -> V1.11.0.1
+- CPU3: 未变化，保持 V1.9.0.0
+
+协议版本/兼容性：
+- 本次不修改 CPU2/CPU3 共享命令、共享状态、共享参数语义、寄存器映射或 `DEVICE_PROTOCOL_VERSION`。
+- 外设驱动文件内容保持不变，仅从 `LTD_MAIN_CPU2/Drivers/Peripherals` 迁移到 `LTD_MAIN_CPU2/BSP/Peripherals`，头文件名和对外 API 不变。
+- 迁移后 `Drivers/` 仅保留 ST HAL/CMSIS 等 CubeMX/CubeIDE 带入内容，项目板级外设驱动归入 `BSP/`，降低后续 CubeMX 再生成和代码统计时的边界混淆。
+
+本次修改：
+- 将 CPU2 的 TMC5130、AS5145、CH9141EVT、MB85RS2M 和 AD5421 底层外设驱动整体移动到 `BSP/Peripherals/inc` 与 `BSP/Peripherals/src`。
+- 更新 CPU2 CMake 构建脚本，使外设驱动从 `BSP/Peripherals/src` 编译，并从 `BSP/Peripherals/inc` 引入头文件。
+- 同步更新 CPU2 相关设计文档、解耦计划和无线滑环匹配记录中的旧路径。
+- 按提交检查脚本要求，将 CPU2 build 版本升级到 `V1.11.0.1`，用于追踪本次构建组织调整。
+
+验证：
+- `rg` 检查源码、CMake 和 CubeIDE 配置中的 `Drivers/Peripherals` 旧路径，除 `Debug/Release` 历史构建产物和迁移说明文本外无活动引用残留。
+- `cmake --build build\LTD_MAIN_CPU2`，确认 `BSP/Peripherals/src/*.c` 已参与编译并生成 `LTD_MAIN_CPU2_V1.11.0.1.hex`。
+- `git diff --cached --check`
+- `py tools\check_version_bumped.py`
