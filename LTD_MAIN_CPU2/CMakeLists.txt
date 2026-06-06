@@ -35,8 +35,8 @@ file(GLOB HAL_SOURCES CONFIGURE_DEPENDS
     ${CMAKE_CURRENT_LIST_DIR}/Drivers/STM32F4xx_HAL_Driver/Src/*.c
 )
 
-file(GLOB PERIPHERAL_SOURCES CONFIGURE_DEPENDS
-    ${CMAKE_CURRENT_LIST_DIR}/Drivers/Peripherals/src/*.c
+file(GLOB BSP_PERIPHERAL_SOURCES CONFIGURE_DEPENDS
+    ${CMAKE_CURRENT_LIST_DIR}/BSP/Peripherals/src/*.c
 )
 
 set(STARTUP_SOURCE
@@ -48,7 +48,7 @@ add_executable(${TARGET}
     ${APP_SOURCES}
     ${SERVICE_SOURCES}
     ${HAL_SOURCES}
-    ${PERIPHERAL_SOURCES}
+    ${BSP_PERIPHERAL_SOURCES}
     ${STARTUP_SOURCE}
 )
 
@@ -64,7 +64,7 @@ target_include_directories(${TARGET} PRIVATE
     ${CMAKE_CURRENT_LIST_DIR}/Drivers/STM32F4xx_HAL_Driver/Inc/Legacy
     ${CMAKE_CURRENT_LIST_DIR}/Drivers/CMSIS/Device/ST/STM32F4xx/Include
     ${CMAKE_CURRENT_LIST_DIR}/Drivers/CMSIS/Include
-    ${CMAKE_CURRENT_LIST_DIR}/Drivers/Peripherals/inc
+    ${CMAKE_CURRENT_LIST_DIR}/BSP/Peripherals/inc
     ${CMAKE_CURRENT_LIST_DIR}/Services
     ${CMAKE_CURRENT_LIST_DIR}/Services/Encoder
     ${CMAKE_CURRENT_LIST_DIR}/Services/Hart
