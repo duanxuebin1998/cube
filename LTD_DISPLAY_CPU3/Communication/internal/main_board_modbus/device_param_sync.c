@@ -8,8 +8,40 @@
 
 #include "device_param_sync.h"
 #include <stdio.h>
+#include <string.h>
 
 extern const int param_metaAmount;
+
+static float DeviceParams_DecimalScale(uint8_t point)
+{
+    float scale = 1.0f;
+    for (uint8_t i = 0U; i < point; i++) {
+        scale *= 10.0f;
+    }
+    return scale;
+}
+
+static uint32_t DeviceParams_MetaValueToRaw(volatile struct ParameterMetadata *h)
+{
+    if ((h != NULL) && (h->data_type == TYPE_FLOAT)) {
+        float value = ((float)h->val) / DeviceParams_DecimalScale(h->point);
+        uint32_t raw;
+        memcpy(&raw, &value, sizeof(raw));
+        return raw;
+    }
+    return (h != NULL) ? (uint32_t)((int32_t)h->val) : 0U;
+}
+
+static int32_t DeviceParams_RawToMetaValue(volatile struct ParameterMetadata *h, uint32_t raw)
+{
+    if ((h != NULL) && (h->data_type == TYPE_FLOAT)) {
+        float value;
+        memcpy(&value, &raw, sizeof(value));
+        value *= DeviceParams_DecimalScale(h->point);
+        return (int32_t)value;
+    }
+    return (int32_t)raw;
+}
 
 /* ==================== 内部：operanum → g_deviceParams 字段映射 ==================== */
 /* 根据 operanum(COM_NUM_xxx) 找到 DeviceParameters 中对应字段的指针（适配新寄存器/新操作码） */
@@ -191,13 +223,85 @@ static volatile uint32_t* get_deviceparam_ptr_by_operanum(int operanum)
     case COM_NUM_DEVICEPARAM_BOTTOM_ENCODER_CORRECTION_TANK_HEIGHT:
         return &g_deviceParams.bottom_encoder_correction_tank_height;
 
-    /* ===== 报警 DO ===== */
-    case COM_NUM_DEVICEPARAM_ALARM_HIGH_DO:
-        return &g_deviceParams.AlarmHighDO;
-    case COM_NUM_DEVICEPARAM_ALARM_LOW_DO:
-        return &g_deviceParams.AlarmLowDO;
-    case COM_NUM_DEVICEPARAM_THIRD_STATE_THRESHOLD:
-        return &g_deviceParams.ThirdStateThreshold;
+    /* ===== 继电器方式2报警配置（三路） ===== */
+    case COM_NUM_DEVICEPARAM_RELAY1_OPERATING_MODE:
+        return &g_deviceParams.relayAlarm[0U].operating_mode;
+    case COM_NUM_DEVICEPARAM_RELAY1_DIGITAL_SOURCE:
+        return &g_deviceParams.relayAlarm[0U].digital_source;
+    case COM_NUM_DEVICEPARAM_RELAY1_CONTACT_TYPE:
+        return &g_deviceParams.relayAlarm[0U].contact_type;
+    case COM_NUM_DEVICEPARAM_RELAY1_ALARM_MODE:
+        return &g_deviceParams.relayAlarm[0U].alarm_mode;
+    case COM_NUM_DEVICEPARAM_RELAY1_ERROR_VALUE:
+        return &g_deviceParams.relayAlarm[0U].error_value;
+    case COM_NUM_DEVICEPARAM_RELAY1_ALARM_SOURCE:
+        return &g_deviceParams.relayAlarm[0U].alarm_source;
+    case COM_NUM_DEVICEPARAM_RELAY1_HH_ALARM_VALUE:
+        return &g_deviceParams.relayAlarm[0U].HH_alarm_value;
+    case COM_NUM_DEVICEPARAM_RELAY1_H_ALARM_VALUE:
+        return &g_deviceParams.relayAlarm[0U].H_alarm_value;
+    case COM_NUM_DEVICEPARAM_RELAY1_L_ALARM_VALUE:
+        return &g_deviceParams.relayAlarm[0U].L_alarm_value;
+    case COM_NUM_DEVICEPARAM_RELAY1_LL_ALARM_VALUE:
+        return &g_deviceParams.relayAlarm[0U].LL_alarm_value;
+    case COM_NUM_DEVICEPARAM_RELAY1_ALARM_HYSTERESIS:
+        return &g_deviceParams.relayAlarm[0U].alarm_hysteresis;
+    case COM_NUM_DEVICEPARAM_RELAY1_DAMPING_FACTOR:
+        return &g_deviceParams.relayAlarm[0U].damping_factor;
+    case COM_NUM_DEVICEPARAM_RELAY1_CLEAR_ALARM:
+        return &g_deviceParams.relayAlarm[0U].clear_alarm;
+    case COM_NUM_DEVICEPARAM_RELAY2_OPERATING_MODE:
+        return &g_deviceParams.relayAlarm[1U].operating_mode;
+    case COM_NUM_DEVICEPARAM_RELAY2_DIGITAL_SOURCE:
+        return &g_deviceParams.relayAlarm[1U].digital_source;
+    case COM_NUM_DEVICEPARAM_RELAY2_CONTACT_TYPE:
+        return &g_deviceParams.relayAlarm[1U].contact_type;
+    case COM_NUM_DEVICEPARAM_RELAY2_ALARM_MODE:
+        return &g_deviceParams.relayAlarm[1U].alarm_mode;
+    case COM_NUM_DEVICEPARAM_RELAY2_ERROR_VALUE:
+        return &g_deviceParams.relayAlarm[1U].error_value;
+    case COM_NUM_DEVICEPARAM_RELAY2_ALARM_SOURCE:
+        return &g_deviceParams.relayAlarm[1U].alarm_source;
+    case COM_NUM_DEVICEPARAM_RELAY2_HH_ALARM_VALUE:
+        return &g_deviceParams.relayAlarm[1U].HH_alarm_value;
+    case COM_NUM_DEVICEPARAM_RELAY2_H_ALARM_VALUE:
+        return &g_deviceParams.relayAlarm[1U].H_alarm_value;
+    case COM_NUM_DEVICEPARAM_RELAY2_L_ALARM_VALUE:
+        return &g_deviceParams.relayAlarm[1U].L_alarm_value;
+    case COM_NUM_DEVICEPARAM_RELAY2_LL_ALARM_VALUE:
+        return &g_deviceParams.relayAlarm[1U].LL_alarm_value;
+    case COM_NUM_DEVICEPARAM_RELAY2_ALARM_HYSTERESIS:
+        return &g_deviceParams.relayAlarm[1U].alarm_hysteresis;
+    case COM_NUM_DEVICEPARAM_RELAY2_DAMPING_FACTOR:
+        return &g_deviceParams.relayAlarm[1U].damping_factor;
+    case COM_NUM_DEVICEPARAM_RELAY2_CLEAR_ALARM:
+        return &g_deviceParams.relayAlarm[1U].clear_alarm;
+    case COM_NUM_DEVICEPARAM_RELAY3_OPERATING_MODE:
+        return &g_deviceParams.relayAlarm[2U].operating_mode;
+    case COM_NUM_DEVICEPARAM_RELAY3_DIGITAL_SOURCE:
+        return &g_deviceParams.relayAlarm[2U].digital_source;
+    case COM_NUM_DEVICEPARAM_RELAY3_CONTACT_TYPE:
+        return &g_deviceParams.relayAlarm[2U].contact_type;
+    case COM_NUM_DEVICEPARAM_RELAY3_ALARM_MODE:
+        return &g_deviceParams.relayAlarm[2U].alarm_mode;
+    case COM_NUM_DEVICEPARAM_RELAY3_ERROR_VALUE:
+        return &g_deviceParams.relayAlarm[2U].error_value;
+    case COM_NUM_DEVICEPARAM_RELAY3_ALARM_SOURCE:
+        return &g_deviceParams.relayAlarm[2U].alarm_source;
+    case COM_NUM_DEVICEPARAM_RELAY3_HH_ALARM_VALUE:
+        return &g_deviceParams.relayAlarm[2U].HH_alarm_value;
+    case COM_NUM_DEVICEPARAM_RELAY3_H_ALARM_VALUE:
+        return &g_deviceParams.relayAlarm[2U].H_alarm_value;
+    case COM_NUM_DEVICEPARAM_RELAY3_L_ALARM_VALUE:
+        return &g_deviceParams.relayAlarm[2U].L_alarm_value;
+    case COM_NUM_DEVICEPARAM_RELAY3_LL_ALARM_VALUE:
+        return &g_deviceParams.relayAlarm[2U].LL_alarm_value;
+    case COM_NUM_DEVICEPARAM_RELAY3_ALARM_HYSTERESIS:
+        return &g_deviceParams.relayAlarm[2U].alarm_hysteresis;
+    case COM_NUM_DEVICEPARAM_RELAY3_DAMPING_FACTOR:
+        return &g_deviceParams.relayAlarm[2U].damping_factor;
+    case COM_NUM_DEVICEPARAM_RELAY3_CLEAR_ALARM:
+        return &g_deviceParams.relayAlarm[2U].clear_alarm;
 
     /* ===== 4–20mA / 报警 AO ===== */
     case COM_NUM_DEVICEPARAM_CURRENT_RANGE_START_mA:
@@ -297,11 +401,8 @@ static void DeviceParams_SendHoldValueToCPU2(volatile struct ParameterMetadata *
         return;
     }
 
-    // param_meta[i].val 就是与 CPU2 通信的“寄存器值”（之前已经说明）
-    int32_t val = h->val;
-
-    // 直接把这个 32 位值作为 holddata 传给 CPU2_CombinatePackage_Send
-    uint32_t u32_temp = (uint32_t)val;
+    // TYPE_FLOAT 菜单值是显示缩放后的整数，下发前恢复为 IEEE754 原始位。
+    uint32_t u32_temp = DeviceParams_MetaValueToRaw(h);
 
     CPU2_CombinatePackage_Send(FUNCTIONCODE_WRITE_MULREGISTER,
                                h->startadd,
@@ -325,7 +426,7 @@ static void DeviceParams_SyncOneHold(volatile struct ParameterMetadata *h)
             // 不属于 DeviceParameters 的项（例如测量结果），跳过
             return;
         }
-        dev_val = (int32_t)(*p_dev);
+        dev_val = DeviceParams_RawToMetaValue(h, *p_dev);
     }
 
     if (h->val == dev_val) {

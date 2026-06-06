@@ -26,10 +26,84 @@
 #define UNVALID_POSITION 0
 #define UNVALID_TEMPERATURE 0
 #define MAX_MEASUREMENT_POINTS 200 // 密度分布测量最大点数
-#define DEVICE_PROTOCOL_VERSION 6u // CPU2/CPU3共享协议版本；旧程序未写入时默认为0
+#define DEVICE_PROTOCOL_VERSION 7u // CPU2/CPU3共享协议版本；旧程序未写入时默认为0
 #define FAULT_AUTO_RECOVERY_RETRY_DEFAULT 3u
 #define FAULT_AUTO_RECOVERY_RETRY_MAX 10u
 
+
+
+#define RELAY_ALARM_CHANNEL_COUNT 3u // 当前项目只使用 RELAY1~RELAY3
+#define RELAY_ALARM_FIELD_COUNT   13u // 每路方式2配置占用的 32 位字段数
+
+typedef enum {
+    RELAY_ALARM_OPERATING_DISABLED = 0u,       // 禁用
+    RELAY_ALARM_OPERATING_OUTPUT_PASSIVE = 1u  // 无源输出
+} RelayAlarmOperatingMode;
+
+typedef enum {
+    RELAY_ALARM_DIGITAL_NONE = 0u,       // 无
+    RELAY_ALARM_DIGITAL_H = 1u,          // 高报
+    RELAY_ALARM_DIGITAL_HH = 2u,         // 高高报
+    RELAY_ALARM_DIGITAL_H_OR_HH = 3u,    // 高报或高高报
+    RELAY_ALARM_DIGITAL_L = 4u,          // 低报
+    RELAY_ALARM_DIGITAL_LL = 5u,         // 低低报
+    RELAY_ALARM_DIGITAL_L_OR_LL = 6u,    // 低报或低低报
+    RELAY_ALARM_DIGITAL_ANY = 7u         // 任意报警
+} RelayAlarmDigitalSource;
+
+typedef enum {
+    RELAY_ALARM_CONTACT_NORMALLY_OPEN = 0u,    // 常开
+    RELAY_ALARM_CONTACT_NORMALLY_CLOSED = 1u   // 常闭
+} RelayAlarmContactType;
+
+typedef enum {
+    RELAY_ALARM_MODE_OFF = 0u,       // 关
+    RELAY_ALARM_MODE_ON = 1u,        // 开
+    RELAY_ALARM_MODE_LATCHING = 2u   // 锁存
+} RelayAlarmMode;
+
+typedef enum {
+    RELAY_ALARM_ERROR_NO_ALARM = 0u,       // 无报警
+    RELAY_ALARM_ERROR_HH_H = 1u,           // 高高/高报警
+    RELAY_ALARM_ERROR_H = 2u,              // 高报警
+    RELAY_ALARM_ERROR_L = 3u,              // 低报警
+    RELAY_ALARM_ERROR_LL_L = 4u,           // 低低/低报警
+    RELAY_ALARM_ERROR_ALL_ALARMS = 5u      // 全部报警
+} RelayAlarmErrorValue;
+
+typedef enum {
+    RELAY_ALARM_SOURCE_TANK_LEVEL = 0u,        // 储罐液位
+    RELAY_ALARM_SOURCE_LIQUID_TEMP = 1u,       // 液相温度
+    RELAY_ALARM_SOURCE_WATER_LEVEL = 2u,       // 水位
+    RELAY_ALARM_SOURCE_DISPLACER_POS = 3u,     // 浮子位置
+    RELAY_ALARM_SOURCE_NONE = 4u               // 无
+} RelayAlarmSource;
+
+typedef enum {
+    RELAY_ALARM_STATE_ACTIVE = 0u,     // 激活，保持参考程序 0=激活 的语义
+    RELAY_ALARM_STATE_INACTIVE = 1u    // 未激活
+} RelayAlarmState;
+
+typedef enum {
+    RELAY_ALARM_CLEAR_NO = 0u,
+    RELAY_ALARM_CLEAR_YES = 1u
+} RelayAlarmClearCommand;
+
+typedef struct {
+    uint32_t operating_mode;     // 工作模式
+    uint32_t digital_source;     // 输出报警位
+    uint32_t contact_type;       // 接点类型
+    uint32_t alarm_mode;         // 报警模式
+    uint32_t error_value;        // 报警值无效时的故障值策略
+    uint32_t alarm_source;       // 报警值源
+    uint32_t HH_alarm_value;     // 高高报警值，IEEE754 float 原始位
+    uint32_t H_alarm_value;      // 高报警值，IEEE754 float 原始位
+    uint32_t L_alarm_value;      // 低报警值，IEEE754 float 原始位
+    uint32_t LL_alarm_value;     // 低低报警值，IEEE754 float 原始位
+    uint32_t alarm_hysteresis;   // 报警滞回值，IEEE754 float 原始位
+    uint32_t damping_factor;     // 阻尼因子，预留给后续滤波
+    uint32_t clear_alarm;        // 清除锁存报警命令，CPU2 消费后清零
+} RelayAlarmConfig;
 
 #define REPEATMAX 3//重复性测试次数
 #define COMMU_ERROR_MAX 10//通讯连续错误最多次数
@@ -433,6 +507,18 @@ typedef enum {
 } WirelessPairingResult;
 
 typedef struct {
+    float alarm_value;        // 当前报警值，参考程序 alarm_para_onlyread.alarm_value
+    uint32_t HH_alarm;        // 高高报警，0=激活，1=未激活
+    uint32_t H_alarm;         // 高报警，0=激活，1=未激活
+    uint32_t HH_H_alarm;      // 高高或高报警，0=激活，1=未激活
+    uint32_t L_alarm;         // 低报警，0=激活，1=未激活
+    uint32_t LL_alarm;        // 低低报警，0=激活，1=未激活
+    uint32_t LL_L_alarm;      // 低低或低报警，0=激活，1=未激活
+    uint32_t any_error;       // 任意报警，0=激活，1=未激活
+    uint32_t clear_alarm;     // 清除锁存报警命令运行态，参考程序不存储类参数
+} RelayAlarmRuntimeState;
+
+typedef struct {
     uint32_t result;                         // 无线滑环匹配结果
     uint32_t mac_valid;                      // MAC 是否有效
     uint32_t mac_high;                       // AA:BB
@@ -453,6 +539,7 @@ typedef struct {
 	DensityMeasurement single_point_monitoring;  ///< 单点监测数据
 	DensityDistribution density_distribution;    ///< 密度分布测量数据
 	WirelessPairingStatus wireless_pairing_status; ///< 无线滑环匹配状态
+	RelayAlarmRuntimeState relay_alarm_runtime[RELAY_ALARM_CHANNEL_COUNT]; ///< 继电器方式2每路运行态
 
 } MeasurementResult;
 
@@ -575,11 +662,6 @@ typedef struct {
     uint32_t wartsila_bottom_detect_interval; // 瓦锡兰测量后探底频率：0不探底，N表示每N次测量后探底一次，范围0~100
     uint32_t bottom_encoder_correction_tank_height; // 探底修正罐高，仅用于罐底后编码器修正，0表示沿用液位罐高
 
-    // ===================== 继电器报警输出 =====================
-    uint32_t AlarmHighDO;                // 高液位报警输出
-    uint32_t AlarmLowDO;                 // 低液位报警输出
-    uint32_t ThirdStateThreshold;        // 第三状态阈值
-
     uint32_t reserved24;                 // 预留
     uint32_t reserved25;                 // 预留（新增）
 
@@ -619,6 +701,9 @@ typedef struct {
     uint32_t reserved31;                 // 预留
     uint32_t reserved32;                 // 预留
     uint32_t reserved33;                 // 预留
+
+    // ===================== 继电器方式2报警配置（三路） =====================
+    RelayAlarmConfig relayAlarm[RELAY_ALARM_CHANNEL_COUNT];
 
     // ===================== 元信息与校验 =====================
     uint32_t param_version;              // 参数结构版本号

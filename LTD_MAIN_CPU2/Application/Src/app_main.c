@@ -21,6 +21,7 @@
 #include "ad5421.h"
 #include "sensor.h"
 #include "fault_recovery.h"
+#include "../../Services/Relay/relay_output.h"
 
 /**
  * @brief 判断错误码是否属于编码器故障范围。
@@ -101,6 +102,7 @@ void App_Init(void) {
 	HartInit(); // 初始化AD5421
 	weight_init();
 	HostCommuInit(); // 初始化Modbus通信
+	RelayOutput_Init(); // 初始化继电器输出，默认全部释放
 	AD5421_SetCurrent(6.0); // 设置初始电流为4mA
 	motor_init_ret = MotorCtrl_Init();
 	if (motor_init_ret != NO_ERROR) {
@@ -157,6 +159,7 @@ void App_MainLoop(void) {
 	(void)MotorCtrl_PollRuntimePosition();
 	(void)Weight_CheckCommunicationTimeout();
 	HostCommu_ProcessDeferredLogs();
+	RelayOutput_ProcessPending(); // main-context relay refresh
 
 	/* 第一优先级：处理刚收到的原始命令。
 	 * 这一层通常来自调试口/串口缓存，process_command() 会把字符命令翻译成具体动作，

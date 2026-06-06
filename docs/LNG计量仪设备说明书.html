@@ -257,9 +257,9 @@
     <p class="subtitle">根据当前 `D:\CUBE` 工程源码、菜单文档、协议记录和版本测试资料整理。面向现场使用、参数配置、外部协议联调、故障排查和固件维护。</p>
     <div class="meta">
       <div><span class="label">适用设备</span>LNG 计量仪 / 双板 STM32 固件</div>
-      <div><span class="label">CPU2 主控版本</span><code>V1.10.0.0</code></div>
-      <div><span class="label">CPU3 显示通讯版本</span><code>V1.9.0.0</code></div>
-      <div><span class="label">共享协议版本</span><code>DEVICE_PROTOCOL_VERSION = 6</code></div>
+      <div><span class="label">CPU2 主控版本</span><code>V1.12.0.0</code></div>
+      <div><span class="label">CPU3 显示通讯版本</span><code>V1.10.0.0</code></div>
+      <div><span class="label">共享协议版本</span><code>DEVICE_PROTOCOL_VERSION = 7</code></div>
     </div>
   </div>
 </header>
@@ -288,16 +288,16 @@
     <h2>一、适用范围</h2>
     <p>本说明书适用于当前工程主线中的 `LTD_MAIN_CPU2` 主控测量板和 `LTD_DISPLAY_CPU3` 显示通讯板。设备用于液位、罐底/罐高、水位、密度单点、密度分布、瓦锡兰区间密度等测量，并通过 CPU3 外部串口对接 DSM、Wartsila、LTD、SI7000 等协议。</p>
     <div class="note">
-      <strong>版本要求：</strong>CPU2 和 CPU3 必须成对使用协议版本 6。固件版本只用于显示和发布追踪，跨 CPU 能力兼容以 `DeviceParameters.protocolVersion` 是否等于当前 `DEVICE_PROTOCOL_VERSION` 为准。
+      <strong>版本要求：</strong>CPU2 和 CPU3 必须成对使用协议版本 7。固件版本只用于显示和发布追踪，跨 CPU 能力兼容以 `DeviceParameters.protocolVersion` 是否等于当前 `DEVICE_PROTOCOL_VERSION` 为准。
     </div>
     <table>
       <thead>
         <tr><th>项目</th><th>当前基线</th><th>说明</th></tr>
       </thead>
       <tbody>
-        <tr><td>CPU2</td><td><code>V1.10.0.0</code></td><td>主控测量板，负责测量流程、电机、编码器、称重、传感器、参数 FRAM 和内部 Modbus。</td></tr>
-        <tr><td>CPU3</td><td><code>V1.9.0.0</code></td><td>显示通讯板，负责屏幕菜单、COM1/2/3 外部协议、CPU2 轮询和参数同步。</td></tr>
-        <tr><td>共享协议</td><td><code>6</code></td><td>新增调试模式状态、自动恢复次数参数、空载重量有符号解释等语义。</td></tr>
+        <tr><td>CPU2</td><td><code>V1.12.0.0</code></td><td>主控测量板，负责测量流程、电机、编码器、称重、传感器、参数 FRAM、继电器方式2输出和内部 Modbus。</td></tr>
+        <tr><td>CPU3</td><td><code>V1.10.0.0</code></td><td>显示通讯板，负责屏幕菜单、COM1/2/3 外部协议、CPU2 轮询和参数同步。</td></tr>
+        <tr><td>共享协议</td><td><code>7</code></td><td>新增三路继电器方式2配置和运行态共享区，保留协议版本 6 的调试模式状态、自动恢复次数和空载重量有符号解释。</td></tr>
         <tr><td>密度分布点数</td><td><code>200</code></td><td>CPU2/CPU3 内部结构和 Wartsila 外部密度点均按 200 点能力维护。</td></tr>
       </tbody>
     </table>
@@ -313,7 +313,7 @@
         <tr><th>场景</th><th>要求</th><th>原因</th></tr>
       </thead>
       <tbody>
-        <tr><td>上电或复位</td><td>确认电机 24V、TMC5130、CPU2 复位链路状态，观察启动安全停机日志。</td><td>CPU2 V1.10.0.0 已加入启动安全停机和编码器首帧门控，但真实保持力和机械自锁仍需现场确认。</td></tr>
+        <tr><td>上电或复位</td><td>确认电机 24V、TMC5130、CPU2 复位链路状态，观察启动安全停机日志。</td><td>CPU2 V1.10.0.0 起已加入启动安全停机和编码器首帧门控；当前 V1.12.0.0 仍需现场确认真实保持力和机械自锁。</td></tr>
         <tr><td>强制上行/下行</td><td>只在维护人员确认行程安全后执行。</td><td>强制命令可以绕过部分普通测量流程条件，不应作为常规测量动作。</td></tr>
         <tr><td>B/BE 串口诊断</td><td>用于低层运动诊断，不能替代正式测量命令；退出依赖新的有效命令。</td><td>B/BE 会持续循环，且有意隔离业务错误，只看电机停稳或编码器目标。</td></tr>
         <tr><td>无线滑环匹配</td><td>测量或传感器通信过程中不要直接匹配，等待设备待机、故障或维护状态。</td><td>匹配期间 CPU2 会接管 UART6，使 CH9141K 离开透传业务。</td></tr>
@@ -357,7 +357,7 @@
       </thead>
       <tbody>
         <tr><td><code>DeviceParameters</code></td><td>保持寄存器</td><td>命令、传感器、罐高、液位、水位、密度、Wartsila、报警、AO、显示和串口配置等参数。多数 32 位字段占 2 个 16 位寄存器。</td></tr>
-        <tr><td><code>MeasurementResult</code></td><td>输入寄存器</td><td>设备状态、调试量、液位、水位、实高、单点密度、分布密度、无线滑环匹配状态等运行数据。</td></tr>
+        <tr><td><code>MeasurementResult</code></td><td>输入寄存器</td><td>设备状态、调试量、液位、水位、实高、单点密度、分布密度、无线滑环匹配状态、继电器方式2运行态等运行数据。</td></tr>
         <tr><td><code>DEVICE_PROTOCOL_VERSION</code></td><td>保持寄存器字段</td><td>CPU2/CPU3 共享协议版本。只有两侧完全一致，才认为共享字段和命令语义兼容。</td></tr>
       </tbody>
     </table>
@@ -386,6 +386,7 @@
         <tr><td>4</td><td>V1.8.0.0</td><td>V1.6.0.0</td><td>新增 SI7000 所需通用状态字段。</td></tr>
         <tr><td>5</td><td>V1.9.0.0</td><td>V1.7.0.0</td><td>新增无线滑环最近匹配命令和匹配结果输入区。</td></tr>
         <tr><td>6</td><td>V1.10.0.0</td><td>V1.9.0.0</td><td>新增调试模式状态、自动恢复次数、空载重量有符号解释。</td></tr>
+        <tr><td>7</td><td>V1.12.0.0</td><td>V1.10.0.0</td><td>新增三路继电器方式2配置、继电器输出菜单和运行态输入区。</td></tr>
       </tbody>
     </table>
   </section>
@@ -432,7 +433,7 @@
       </thead>
       <tbody>
         <tr><td>测量命令</td><td>16 个测量命令</td><td>液位、水位、罐高、密度、区间密度、读取部件参数等流程。</td></tr>
-        <tr><td>参数配置</td><td>20 个参数组</td><td>参数明细按设备功能分组展示，当前菜单文档统计 136 个可见参数。</td></tr>
+        <tr><td>参数配置</td><td>19 个参数配置入口</td><td>参数明细按设备功能分组展示，当前菜单文档统计 172 个可见参数；输出配置下包含继电器输出和AO输出入口。</td></tr>
         <tr><td>调试指令</td><td>15 个调试/标定命令</td><td>上/下行、强制控制、零点/液位/水位/罐高标定、称重采集和维护模式。</td></tr>
         <tr><td>语言</td><td>中文、英文、退出</td><td>切换屏幕显示语言。</td></tr>
         <tr><td>退出</td><td>无下级菜单</td><td>退出屏幕菜单。</td></tr>
@@ -444,7 +445,7 @@
     <h2>六、现场操作流程</h2>
     <h3>首次上电或换板后的建议流程</h3>
     <ol>
-      <li>核对 CPU2、CPU3 固件版本和共享协议版本，确认协议版本均为 6。</li>
+      <li>核对 CPU2、CPU3 固件版本和共享协议版本，确认协议版本均为 7。</li>
       <li>检查 COM1/COM2/COM3 的协议、波特率、校验和停止位，确认与上位机或 PLC 一致。</li>
       <li>确认传感器类型、传感器编号、传感器软件版本能正确读取。</li>
       <li>设置或核对液位罐高、水位罐高、液位探头距差、盲区、最大下行距离、罐底检测模式等基础参数。</li>
@@ -574,7 +575,7 @@
         <tr><td>磁通量参数</td><td>磁通量 D、磁通量 T、上次液位修正液位、气相温度、尺带伸缩率、标定尺带温度。</td><td>密度/温度修正和尺带温度补偿。</td><td>尺带补偿参数需与现场标定口径一致。</td></tr>
         <tr><td>密度测量参数</td><td>是否测罐底、是否测水位、分布测点数、点间距、顶点距液面、底点距罐底、悬停时间。</td><td>分布测量和区间测量策略。</td><td>分布测点数范围 1~200，悬停时间范围 0~600 s。</td></tr>
         <tr><td>Wartsila 参数</td><td>密度点上下限、密度点间距、最高点距液面、瓦锡兰探底频率、探底修正罐高。</td><td>瓦锡兰区间测量和测后探底。</td><td>探底修正罐高为 0 时沿用液位罐高。</td></tr>
-        <tr><td>DO/AO 输出</td><td>高低液位报警、第三状态阈值、输出范围、报警电流、故障电流、调试电流。</td><td>继电器和 4-20 mA 输出。</td><td>AO 参数菜单范围通常为 0~3000，菜单按 mA 小数 2 位显示。</td></tr>
+        <tr><td>继电器/AO 输出</td><td>三路继电器方式2配置、输出范围、报警电流、故障电流、调试电流。</td><td>继电器和 4-20 mA 输出。</td><td>继电器方式2包含 HH/H/L/LL 阈值、滞回、接点类型、无效值策略和锁存清除；旧 DO 报警入口已删除；AO 参数菜单范围通常为 0~3000，菜单按 mA 小数 2 位显示。</td></tr>
         <tr><td>CPU3 本机参数</td><td>语言、数据源、手输值、小数位、屏幕密码、息屏、COM1/2/3 配置。</td><td>显示端、外部串口和手输数据源。</td><td>选择 SI7000 协议后串口会自动收敛为 9600 8O1。</td></tr>
       </tbody>
     </table>
@@ -742,8 +743,8 @@
         <tr><th>目标</th><th>推荐命令</th><th>产物</th></tr>
       </thead>
       <tbody>
-        <tr><td>CPU2</td><td><code>cmake --build build\LTD_MAIN_CPU2</code></td><td><code>LTD_MAIN_CPU2.elf</code>、<code>.hex</code>、<code>_V1.10.0.0.hex</code>、<code>.bin</code>、<code>.map</code></td></tr>
-        <tr><td>CPU3</td><td><code>cmake --build build\LTD_DISPLAY_CPU3</code></td><td><code>LTD_DISPLAY_CPU3.elf</code>、<code>.hex</code>、<code>_V1.9.0.0.hex</code>、<code>.bin</code>、<code>.map</code></td></tr>
+        <tr><td>CPU2</td><td><code>cmake --build build\LTD_MAIN_CPU2</code></td><td><code>LTD_MAIN_CPU2.elf</code>、<code>.hex</code>、<code>_V1.12.0.0.hex</code>、<code>.bin</code>、<code>.map</code></td></tr>
+        <tr><td>CPU3</td><td><code>cmake --build build\LTD_DISPLAY_CPU3</code></td><td><code>LTD_DISPLAY_CPU3.elf</code>、<code>.hex</code>、<code>_V1.10.0.0.hex</code>、<code>.bin</code>、<code>.map</code></td></tr>
       </tbody>
     </table>
   </section>

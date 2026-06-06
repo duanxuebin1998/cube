@@ -52,6 +52,72 @@ static inline float read_float_from_regs(const uint16_t *regs, uint16_t addr) {
 }
 
 
+
+/* 写入单路继电器方式2报警配置。 */
+static void write_relay_alarm_config_to_regs(uint16_t *regs, uint32_t channel, const volatile RelayAlarmConfig *cfg)
+{
+    write_u32_to_regs(regs, HOLDREGISTER_DEVICEPARAM_RELAY_OPERATING_MODE(channel), cfg->operating_mode);
+    write_u32_to_regs(regs, HOLDREGISTER_DEVICEPARAM_RELAY_DIGITAL_SOURCE(channel), cfg->digital_source);
+    write_u32_to_regs(regs, HOLDREGISTER_DEVICEPARAM_RELAY_CONTACT_TYPE(channel), cfg->contact_type);
+    write_u32_to_regs(regs, HOLDREGISTER_DEVICEPARAM_RELAY_ALARM_MODE(channel), cfg->alarm_mode);
+    write_u32_to_regs(regs, HOLDREGISTER_DEVICEPARAM_RELAY_ERROR_VALUE(channel), cfg->error_value);
+    write_u32_to_regs(regs, HOLDREGISTER_DEVICEPARAM_RELAY_ALARM_SOURCE(channel), cfg->alarm_source);
+    write_u32_to_regs(regs, HOLDREGISTER_DEVICEPARAM_RELAY_HH_ALARM_VALUE(channel), cfg->HH_alarm_value);
+    write_u32_to_regs(regs, HOLDREGISTER_DEVICEPARAM_RELAY_H_ALARM_VALUE(channel), cfg->H_alarm_value);
+    write_u32_to_regs(regs, HOLDREGISTER_DEVICEPARAM_RELAY_L_ALARM_VALUE(channel), cfg->L_alarm_value);
+    write_u32_to_regs(regs, HOLDREGISTER_DEVICEPARAM_RELAY_LL_ALARM_VALUE(channel), cfg->LL_alarm_value);
+    write_u32_to_regs(regs, HOLDREGISTER_DEVICEPARAM_RELAY_ALARM_HYSTERESIS(channel), cfg->alarm_hysteresis);
+    write_u32_to_regs(regs, HOLDREGISTER_DEVICEPARAM_RELAY_DAMPING_FACTOR(channel), cfg->damping_factor);
+    write_u32_to_regs(regs, HOLDREGISTER_DEVICEPARAM_RELAY_CLEAR_ALARM(channel), cfg->clear_alarm);
+}
+
+/* 从保持寄存器读取单路继电器方式2报警配置。 */
+static void read_relay_alarm_config_from_regs(const uint16_t *regs, uint32_t channel, volatile RelayAlarmConfig *cfg)
+{
+    cfg->operating_mode = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_RELAY_OPERATING_MODE(channel));
+    cfg->digital_source = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_RELAY_DIGITAL_SOURCE(channel));
+    cfg->contact_type = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_RELAY_CONTACT_TYPE(channel));
+    cfg->alarm_mode = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_RELAY_ALARM_MODE(channel));
+    cfg->error_value = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_RELAY_ERROR_VALUE(channel));
+    cfg->alarm_source = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_RELAY_ALARM_SOURCE(channel));
+    cfg->HH_alarm_value = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_RELAY_HH_ALARM_VALUE(channel));
+    cfg->H_alarm_value = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_RELAY_H_ALARM_VALUE(channel));
+    cfg->L_alarm_value = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_RELAY_L_ALARM_VALUE(channel));
+    cfg->LL_alarm_value = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_RELAY_LL_ALARM_VALUE(channel));
+    cfg->alarm_hysteresis = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_RELAY_ALARM_HYSTERESIS(channel));
+    cfg->damping_factor = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_RELAY_DAMPING_FACTOR(channel));
+    cfg->clear_alarm = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_RELAY_CLEAR_ALARM(channel));
+}
+
+
+/* 写入单路继电器方式2运行态。运行态寄存器按参考程序只读区布局：报警值占2个寄存器，其余状态各占1个寄存器。 */
+static void write_relay_alarm_runtime_to_regs(uint16_t *regs, uint32_t channel, const volatile RelayAlarmRuntimeState *state)
+{
+    write_float_to_regs(regs, REG_RELAY_ALARM_RUNTIME_ALARM_VALUE(channel), state->alarm_value);
+    regs[REG_RELAY_ALARM_RUNTIME_HH_ALARM(channel)] = (uint16_t)(state->HH_alarm & 0xFFFFU);
+    regs[REG_RELAY_ALARM_RUNTIME_H_ALARM(channel)] = (uint16_t)(state->H_alarm & 0xFFFFU);
+    regs[REG_RELAY_ALARM_RUNTIME_HH_H_ALARM(channel)] = (uint16_t)(state->HH_H_alarm & 0xFFFFU);
+    regs[REG_RELAY_ALARM_RUNTIME_L_ALARM(channel)] = (uint16_t)(state->L_alarm & 0xFFFFU);
+    regs[REG_RELAY_ALARM_RUNTIME_LL_ALARM(channel)] = (uint16_t)(state->LL_alarm & 0xFFFFU);
+    regs[REG_RELAY_ALARM_RUNTIME_LL_L_ALARM(channel)] = (uint16_t)(state->LL_L_alarm & 0xFFFFU);
+    regs[REG_RELAY_ALARM_RUNTIME_ANY_ERROR(channel)] = (uint16_t)(state->any_error & 0xFFFFU);
+    regs[REG_RELAY_ALARM_RUNTIME_CLEAR_ALARM(channel)] = (uint16_t)(state->clear_alarm & 0xFFFFU);
+}
+
+/* 从输入寄存器读取单路继电器方式2运行态。 */
+static void read_relay_alarm_runtime_from_regs(const uint16_t *regs, uint32_t channel, volatile RelayAlarmRuntimeState *state)
+{
+    state->alarm_value = read_float_from_regs(regs, REG_RELAY_ALARM_RUNTIME_ALARM_VALUE(channel));
+    state->HH_alarm = regs[REG_RELAY_ALARM_RUNTIME_HH_ALARM(channel)] & 0xFFFFU;
+    state->H_alarm = regs[REG_RELAY_ALARM_RUNTIME_H_ALARM(channel)] & 0xFFFFU;
+    state->HH_H_alarm = regs[REG_RELAY_ALARM_RUNTIME_HH_H_ALARM(channel)] & 0xFFFFU;
+    state->L_alarm = regs[REG_RELAY_ALARM_RUNTIME_L_ALARM(channel)] & 0xFFFFU;
+    state->LL_alarm = regs[REG_RELAY_ALARM_RUNTIME_LL_ALARM(channel)] & 0xFFFFU;
+    state->LL_L_alarm = regs[REG_RELAY_ALARM_RUNTIME_LL_L_ALARM(channel)] & 0xFFFFU;
+    state->any_error = regs[REG_RELAY_ALARM_RUNTIME_ANY_ERROR(channel)] & 0xFFFFU;
+    state->clear_alarm = regs[REG_RELAY_ALARM_RUNTIME_CLEAR_ALARM(channel)] & 0xFFFFU;
+}
+
 /* ===================== 参数结构体 <-> 保持寄存器映射 ===================== */
 
 /*----------------------------------------------------------------
@@ -181,11 +247,6 @@ void WriteDeviceParamsToHoldingRegisters(uint16_t *HoldingRegisterArray)
     write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_WARTSILA_BOTTOM_DETECT_INTERVAL, g_deviceParams.wartsila_bottom_detect_interval);
     write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_BOTTOM_ENCODER_CORRECTION_TANK_HEIGHT, g_deviceParams.bottom_encoder_correction_tank_height);
 
-    /* ===================== 继电器报警输出 ===================== */
-    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_ALARM_HIGH_DO,         g_deviceParams.AlarmHighDO);
-    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_ALARM_LOW_DO,          g_deviceParams.AlarmLowDO);
-    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_THIRD_STATE_THRESHOLD, g_deviceParams.ThirdStateThreshold);
-
     write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_RESERVED24, g_deviceParams.reserved24);
     write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_RESERVED25, g_deviceParams.reserved25);
 
@@ -224,6 +285,11 @@ void WriteDeviceParamsToHoldingRegisters(uint16_t *HoldingRegisterArray)
     write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_RESERVED31, g_deviceParams.reserved31);
     write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_RESERVED32, g_deviceParams.reserved32);
     write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_RESERVED33, g_deviceParams.reserved33);
+
+    /* ===================== 继电器方式2报警配置（三路） ===================== */
+    for (uint32_t channel = 0U; channel < RELAY_ALARM_CHANNEL_COUNT; channel++) {
+        write_relay_alarm_config_to_regs(HoldingRegisterArray, channel, &g_deviceParams.relayAlarm[channel]);
+    }
 
     /* ===================== 元信息与校验 ===================== */
     write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_PARAM_VERSION, g_deviceParams.param_version);
@@ -368,11 +434,6 @@ void ReadDeviceParamsFromHoldingRegisters(uint16_t *HoldingRegisterArray)
     g_deviceParams.wartsila_bottom_detect_interval = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_WARTSILA_BOTTOM_DETECT_INTERVAL);
     g_deviceParams.bottom_encoder_correction_tank_height = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_BOTTOM_ENCODER_CORRECTION_TANK_HEIGHT);
 
-    /* ===================== 继电器报警输出 ===================== */
-    g_deviceParams.AlarmHighDO        = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_ALARM_HIGH_DO);
-    g_deviceParams.AlarmLowDO         = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_ALARM_LOW_DO);
-    g_deviceParams.ThirdStateThreshold= read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_THIRD_STATE_THRESHOLD);
-
     g_deviceParams.reserved24 = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_RESERVED24);
     g_deviceParams.reserved25 = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_RESERVED25);
 
@@ -411,6 +472,11 @@ void ReadDeviceParamsFromHoldingRegisters(uint16_t *HoldingRegisterArray)
     g_deviceParams.reserved31 = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_RESERVED31);
     g_deviceParams.reserved32 = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_RESERVED32);
     g_deviceParams.reserved33 = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_RESERVED33);
+
+    /* ===================== 继电器方式2报警配置（三路） ===================== */
+    for (uint32_t channel = 0U; channel < RELAY_ALARM_CHANNEL_COUNT; channel++) {
+        read_relay_alarm_config_from_regs(regs, channel, &g_deviceParams.relayAlarm[channel]);
+    }
 
     /* ===================== 元信息与校验 ===================== */
     g_deviceParams.param_version = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_PARAM_VERSION);
@@ -549,6 +615,11 @@ void write_measurement_result_to_InputRegisters(uint16_t *regs) {
 	write_u32_to_regs(regs, REG_WIRELESS_PAIRING_MAC_LOW, g_measurement.wireless_pairing_status.mac_low);
 	write_u32_to_regs(regs, REG_WIRELESS_PAIRING_ERROR_CODE, g_measurement.wireless_pairing_status.error_code);
 	write_u32_to_regs(regs, REG_WIRELESS_PAIRING_UPDATE_COUNTER, g_measurement.wireless_pairing_status.update_counter);
+
+	/* ==== 继电器方式2运行态 ==== */
+	for (uint32_t channel = 0U; channel < RELAY_ALARM_CHANNEL_COUNT; channel++) {
+		write_relay_alarm_runtime_to_regs(regs, channel, &g_measurement.relay_alarm_runtime[channel]);
+	}
 }
 
 /**
@@ -671,6 +742,11 @@ void read_measurement_result_from_InputRegisters(uint16_t *regs) {
 	g_measurement.wireless_pairing_status.mac_low = read_u32_from_regs(cregs, REG_WIRELESS_PAIRING_MAC_LOW);
 	g_measurement.wireless_pairing_status.error_code = read_u32_from_regs(cregs, REG_WIRELESS_PAIRING_ERROR_CODE);
 	g_measurement.wireless_pairing_status.update_counter = read_u32_from_regs(cregs, REG_WIRELESS_PAIRING_UPDATE_COUNTER);
+
+	/* ==== 继电器方式2运行态 ==== */
+	for (uint32_t channel = 0U; channel < RELAY_ALARM_CHANNEL_COUNT; channel++) {
+		read_relay_alarm_runtime_from_regs(cregs, channel, &g_measurement.relay_alarm_runtime[channel]);
+	}
 }
 
 /* 解析03功能码保持寄存器数据 */
@@ -723,5 +799,4 @@ int32_t ywj_hold_analysis_data(int startadd,int rgscnt)
     }
     return (int32_t)value;
 }
-
 

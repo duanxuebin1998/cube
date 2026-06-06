@@ -145,6 +145,57 @@ static uint8_t *level_mode[][2] = {
     { (uint8_t*)"非法配置",   (uint8_t*)"Illegal CFG" },
 };
 
+
+static uint8_t *arr_relay_operating[][2] = {
+    { (uint8_t*)"禁用", (uint8_t*)"Disabled" },
+    { (uint8_t*)"无源输出", (uint8_t*)"Passive Out" },
+    { (uint8_t*)"非法配置", (uint8_t*)"Illegal CFG" },
+};
+
+static uint8_t *arr_relay_digital[][2] = {
+    { (uint8_t*)"无", (uint8_t*)"None" },
+    { (uint8_t*)"高报", (uint8_t*)"H" },
+    { (uint8_t*)"高高报", (uint8_t*)"HH" },
+    { (uint8_t*)"高/高高", (uint8_t*)"H or HH" },
+    { (uint8_t*)"低报", (uint8_t*)"L" },
+    { (uint8_t*)"低低报", (uint8_t*)"LL" },
+    { (uint8_t*)"低/低低", (uint8_t*)"L or LL" },
+    { (uint8_t*)"全部报警", (uint8_t*)"Any" },
+    { (uint8_t*)"非法配置", (uint8_t*)"Illegal CFG" },
+};
+
+static uint8_t *arr_relay_contact[][2] = {
+    { (uint8_t*)"常开", (uint8_t*)"NO" },
+    { (uint8_t*)"常闭", (uint8_t*)"NC" },
+    { (uint8_t*)"非法配置", (uint8_t*)"Illegal CFG" },
+};
+
+static uint8_t *arr_relay_alarm_mode[][2] = {
+    { (uint8_t*)"关闭", (uint8_t*)"Off" },
+    { (uint8_t*)"开启", (uint8_t*)"On" },
+    { (uint8_t*)"Latch", (uint8_t*)"Latching" },
+    { (uint8_t*)"非法配置", (uint8_t*)"Illegal CFG" },
+};
+
+static uint8_t *arr_relay_error[][2] = {
+    { (uint8_t*)"无报警", (uint8_t*)"No Alarm" },
+    { (uint8_t*)"高高/高", (uint8_t*)"HH/H" },
+    { (uint8_t*)"高", (uint8_t*)"H" },
+    { (uint8_t*)"低", (uint8_t*)"L" },
+    { (uint8_t*)"低低/低", (uint8_t*)"LL/L" },
+    { (uint8_t*)"全部报警", (uint8_t*)"All" },
+    { (uint8_t*)"非法配置", (uint8_t*)"Illegal CFG" },
+};
+
+static uint8_t *arr_relay_source[][2] = {
+    { (uint8_t*)"储罐液位", (uint8_t*)"Tank Level" },
+    { (uint8_t*)"液相温度", (uint8_t*)"Liquid Temp" },
+    { (uint8_t*)"水位", (uint8_t*)"Water Level" },
+    { (uint8_t*)"浮子位置", (uint8_t*)"Displacer" },
+    { (uint8_t*)"无", (uint8_t*)"None" },
+    { (uint8_t*)"非法配置", (uint8_t*)"Illegal CFG" },
+};
+
 /* =====================================================================
  * 静态函数声明
  *	按“模块职责”重新分类，便于快速定位
@@ -168,13 +219,17 @@ static void menu_cmdconfig_main(void);	/* 调试指令主菜单 */
 //static void menu_realhighpara(void);	/* 实高测量参数 */
 //static void menu_liquidlevelparams(void);/* 液位测量参数 */
 //static void menu_waterlevelparams(void);/* 水位测量参数 */
-//static void menu_alarmdoparams(void);	/* 继电器/DO 报警参数 */
 //static void menu_aoparams(void);		/* 4-20mA/AO 输出参数 */
 //static void menu_wartsilapara(void);	/* 瓦锡兰参数组 */
 //static void menu_screen(void);			/* 屏幕/显示相关菜单 */
 //static void menu_scr_source(void);		/* 数据源菜单 */
 //static void menu_cpu3_comm(void);		/* CPU3 串口通信配置菜单 */
 //static void menu_magnetic(void);		/* 磁通量/修正相关菜单(旧菜单或兼容入口) */
+static int RelayParam_ChannelOf(int operaNum);
+static int RelayParam_FieldOf(int operaNum);
+static int RelayParam_IsConfig(int operaNum);
+static int RelayParam_IsChannelSetting(int operaNum);
+static int RelayParam_IsAlarmCondition(int operaNum);
 static MenuGroup ParamGroupOf(int operaNum);/* 根据操作码获取参数分组枚举 */
 static void menu_dev_info(void);
 static void menu_mech(void);
@@ -189,7 +244,17 @@ static void menu_correct(void);
 static void menu_policy(void)  ;
 static void menu_wartsila(void)  ;
 
+static void menu_output_config(void);
 static void menu_do_alarm(void)  ;
+static void menu_relay1_main(void);
+static void menu_relay1_channel(void);
+static void menu_relay1_alarm(void);
+static void menu_relay2_main(void);
+static void menu_relay2_channel(void);
+static void menu_relay2_alarm(void);
+static void menu_relay3_main(void);
+static void menu_relay3_channel(void);
+static void menu_relay3_alarm(void);
 static void menu_ao(void)      ;
 static void menu_cal_sp(void)     ;
 
@@ -386,7 +451,7 @@ struct KeyMenu keymenu[KEYNUM_END] = {
         { menu_wartsila, menu_wartsila, menu_wartsila, menu_wartsila,
           USE_KEY_BACK | USE_KEY_UP | USE_KEY_DOWN | USE_KEY_SURE, menu_wartsila },
 
-    /* 21 - 报警 DO 参数 */
+    /* 21 - 继电器输出参数 */
     [KEYNUM_MENU_PARA_DO] =
         { menu_do_alarm, menu_do_alarm, menu_do_alarm, menu_do_alarm,
           USE_KEY_BACK | USE_KEY_UP | USE_KEY_DOWN | USE_KEY_SURE, menu_do_alarm },
@@ -405,6 +470,46 @@ struct KeyMenu keymenu[KEYNUM_END] = {
     [KEYNUM_MENU_PARA_PARAM_CHECK] =
         { menu_param_check, menu_param_check, menu_param_check, menu_param_check,
           USE_KEY_BACK | USE_KEY_UP | USE_KEY_DOWN | USE_KEY_SURE, menu_param_check },
+
+    [KEYNUM_MENU_OUTPUT_CONFIG] =
+        { menu_output_config, menu_output_config, menu_output_config, menu_output_config,
+          USE_KEY_BACK | USE_KEY_UP | USE_KEY_DOWN | USE_KEY_SURE, menu_output_config },
+
+    [KEYNUM_MENU_RELAY1_MAIN] =
+        { menu_relay1_main, menu_relay1_main, menu_relay1_main, menu_relay1_main,
+          USE_KEY_BACK | USE_KEY_UP | USE_KEY_DOWN | USE_KEY_SURE, menu_relay1_main },
+
+    [KEYNUM_MENU_RELAY1_CHANNEL] =
+        { menu_relay1_channel, menu_relay1_channel, menu_relay1_channel, menu_relay1_channel,
+          USE_KEY_BACK | USE_KEY_UP | USE_KEY_DOWN | USE_KEY_SURE, menu_relay1_channel },
+
+    [KEYNUM_MENU_RELAY1_ALARM] =
+        { menu_relay1_alarm, menu_relay1_alarm, menu_relay1_alarm, menu_relay1_alarm,
+          USE_KEY_BACK | USE_KEY_UP | USE_KEY_DOWN | USE_KEY_SURE, menu_relay1_alarm },
+
+    [KEYNUM_MENU_RELAY2_MAIN] =
+        { menu_relay2_main, menu_relay2_main, menu_relay2_main, menu_relay2_main,
+          USE_KEY_BACK | USE_KEY_UP | USE_KEY_DOWN | USE_KEY_SURE, menu_relay2_main },
+
+    [KEYNUM_MENU_RELAY2_CHANNEL] =
+        { menu_relay2_channel, menu_relay2_channel, menu_relay2_channel, menu_relay2_channel,
+          USE_KEY_BACK | USE_KEY_UP | USE_KEY_DOWN | USE_KEY_SURE, menu_relay2_channel },
+
+    [KEYNUM_MENU_RELAY2_ALARM] =
+        { menu_relay2_alarm, menu_relay2_alarm, menu_relay2_alarm, menu_relay2_alarm,
+          USE_KEY_BACK | USE_KEY_UP | USE_KEY_DOWN | USE_KEY_SURE, menu_relay2_alarm },
+
+    [KEYNUM_MENU_RELAY3_MAIN] =
+        { menu_relay3_main, menu_relay3_main, menu_relay3_main, menu_relay3_main,
+          USE_KEY_BACK | USE_KEY_UP | USE_KEY_DOWN | USE_KEY_SURE, menu_relay3_main },
+
+    [KEYNUM_MENU_RELAY3_CHANNEL] =
+        { menu_relay3_channel, menu_relay3_channel, menu_relay3_channel, menu_relay3_channel,
+          USE_KEY_BACK | USE_KEY_UP | USE_KEY_DOWN | USE_KEY_SURE, menu_relay3_channel },
+
+    [KEYNUM_MENU_RELAY3_ALARM] =
+        { menu_relay3_alarm, menu_relay3_alarm, menu_relay3_alarm, menu_relay3_alarm,
+          USE_KEY_BACK | USE_KEY_UP | USE_KEY_DOWN | USE_KEY_SURE, menu_relay3_alarm },
 
     /* ===== CPU3（拆分页面） ===== */
 
@@ -1208,7 +1313,7 @@ static uint8_t __attribute__((unused)) debug_cmd_is_allowed(void)
 
 static void send_cpu2_command(uint32_t cmd)
 {
-    /* 写 2 个寄存器：如果你的协议定义就是“command 占 32bit”，这里保持 2 不动 */
+    /* 写 2 个寄存器：如果你的协议定义就是“command 占 32bit”，这里Latch 2 不动 */
     CPU2_CombinatePackage_Send(FUNCTIONCODE_WRITE_MULREGISTER,
                               HOLDREGISTER_DEVICEPARAM_COMMAND,
                               2,
@@ -1958,6 +2063,46 @@ uint8_t *(*dtm_disarr(int *pindex, int *plen))[2]
 
 	index = getHoldValueNum(now_Opera_Num);
 
+    if (RelayParam_IsConfig(now_Opera_Num)) {
+        int field_index = RelayParam_FieldOf(now_Opera_Num);
+        index = param_meta[index].val;
+        switch (field_index) {
+        case 0:
+            len = (int)(sizeof(arr_relay_operating) / sizeof(arr_relay_operating[0]));
+            p = arr_relay_operating;
+            break;
+        case 1:
+            len = (int)(sizeof(arr_relay_digital) / sizeof(arr_relay_digital[0]));
+            p = arr_relay_digital;
+            break;
+        case 2:
+            len = (int)(sizeof(arr_relay_contact) / sizeof(arr_relay_contact[0]));
+            p = arr_relay_contact;
+            break;
+        case 3:
+            len = (int)(sizeof(arr_relay_alarm_mode) / sizeof(arr_relay_alarm_mode[0]));
+            p = arr_relay_alarm_mode;
+            break;
+        case 4:
+            len = (int)(sizeof(arr_relay_error) / sizeof(arr_relay_error[0]));
+            p = arr_relay_error;
+            break;
+        case 5:
+            len = (int)(sizeof(arr_relay_source) / sizeof(arr_relay_source[0]));
+            p = arr_relay_source;
+            break;
+        case 12:
+            len = (int)(sizeof(arr_IF) / sizeof(arr_IF[0]));
+            p = arr_IF;
+            break;
+        default:
+            return NULL;
+        }
+        *pindex = index;
+        *plen = len;
+        return p;
+    }
+
 	switch (now_Opera_Num) {
 	case COM_NUM_DEVICEPARAM_SPREADMEASUREMENTORDER: {
 		index = param_meta[index].val;
@@ -2314,9 +2459,76 @@ static int is_reserved_cn(const uint8_t *name)
     return (strncmp((const char*)name, "保留", 2) == 0);
 }
 
+/* 每路继电器方式2参数固定为 13 个字段。
+ * 这里集中识别通道和字段，避免菜单和枚举文字显示各自写裸范围判断。 */
+static int RelayParam_ChannelOf(int operaNum)
+{
+    if ((operaNum >= COM_NUM_DEVICEPARAM_RELAY1_OPERATING_MODE) &&
+        (operaNum <= COM_NUM_DEVICEPARAM_RELAY1_CLEAR_ALARM)) {
+        return 0;
+    }
+
+    if ((operaNum >= COM_NUM_DEVICEPARAM_RELAY2_OPERATING_MODE) &&
+        (operaNum <= COM_NUM_DEVICEPARAM_RELAY2_CLEAR_ALARM)) {
+        return 1;
+    }
+
+    if ((operaNum >= COM_NUM_DEVICEPARAM_RELAY3_OPERATING_MODE) &&
+        (operaNum <= COM_NUM_DEVICEPARAM_RELAY3_CLEAR_ALARM)) {
+        return 2;
+    }
+
+    return -1;
+}
+
+static int RelayParam_FieldOf(int operaNum)
+{
+    switch (RelayParam_ChannelOf(operaNum)) {
+    case 0:
+        return operaNum - COM_NUM_DEVICEPARAM_RELAY1_OPERATING_MODE;
+    case 1:
+        return operaNum - COM_NUM_DEVICEPARAM_RELAY2_OPERATING_MODE;
+    case 2:
+        return operaNum - COM_NUM_DEVICEPARAM_RELAY3_OPERATING_MODE;
+    default:
+        return -1;
+    }
+}
+
+static int RelayParam_IsConfig(int operaNum)
+{
+    int field = RelayParam_FieldOf(operaNum);
+
+    return (field >= 0) && (field < (int)RELAY_ALARM_FIELD_COUNT);
+}
+
+static int RelayParam_IsChannelSetting(int operaNum)
+{
+    switch (RelayParam_FieldOf(operaNum)) {
+    case 0:  /* 工作模式 */
+    case 1:  /* 输出报警位 */
+    case 2:  /* 触点类型 */
+    case 12: /* 清除锁存报警 */
+        return 1;
+    default:
+        return 0;
+    }
+}
+
+static int RelayParam_IsAlarmCondition(int operaNum)
+{
+    int field = RelayParam_FieldOf(operaNum);
+
+    return (field >= 3) && (field <= 11);
+}
+
 /* -------------------- 分组映射（只维护这个即可） -------------------- */
 static MenuGroup ParamGroupOf(int operaNum)
 {
+    if (RelayParam_IsConfig(operaNum)) {
+        return MENU_GRP_DO_ALARM;
+    }
+
     switch (operaNum) {
     /* 设备信息 */
     case COM_NUM_DEVICEPARAM_SENSORTYPE:
@@ -2425,12 +2637,6 @@ static MenuGroup ParamGroupOf(int operaNum)
     case COM_NUM_DEVICEPARAM_WARTSILA_BOTTOM_DETECT_INTERVAL:
     case COM_NUM_DEVICEPARAM_BOTTOM_ENCODER_CORRECTION_TANK_HEIGHT:
         return MENU_GRP_WARTSILA;
-
-    /* DO */
-    case COM_NUM_DEVICEPARAM_ALARM_HIGH_DO:
-    case COM_NUM_DEVICEPARAM_ALARM_LOW_DO:
-    case COM_NUM_DEVICEPARAM_THIRD_STATE_THRESHOLD:
-        return MENU_GRP_DO_ALARM;
 
     /* AO */
     case COM_NUM_DEVICEPARAM_CURRENT_RANGE_START_mA:
@@ -2559,6 +2765,68 @@ static void menu_build_by_group(MenuGroup grp, int key_index, void (*backFunc)(v
     menuselect(menu, menulen);
 }
 
+static void menu_build_by_filter(int (*filter)(int), int key_index, void (*backFunc)(void))
+{
+    static struct MenuData menu[AUTO_MENU_MAX_ITEMS + 1];
+    int menulen = 0;
+
+    for (int i = 0; i < (int)param_metaAmount; i++) {
+        const struct ParameterMetadata *m = &param_meta[i];
+
+        if ((filter == NULL) || (filter(m->operanum) == 0)) continue;
+        if (is_reserved_cn(m->name)) continue;
+        if (menulen >= AUTO_MENU_MAX_ITEMS) break;
+
+        menu[menulen].operaName  = m->name;
+        menu[menulen].operaNum   = m->operanum;
+        menu[menulen].sureopera  = para_mainprocess;
+        menu[menulen].rorw       = (m->authority_write) ? COMMAND_WRITE : COMMAND_READ;
+        menu[menulen].operaName2 = m->name_English;
+        menulen++;
+    }
+
+    menu[menulen].operaName  = (uint8_t*)"返回";
+    menu[menulen].operaNum   = COM_NUM_NOOPERA;
+    menu[menulen].sureopera  = backFunc;
+    menu[menulen].rorw       = COMMANE_NORW;
+    menu[menulen].operaName2 = (uint8_t*)"Back";
+    menulen++;
+
+    all_screen(0x00);
+    func_index = key_index;
+    menuselect(menu, menulen);
+}
+
+static int menu_filter_relay1_channel(int operaNum)
+{
+    return (RelayParam_ChannelOf(operaNum) == 0) && RelayParam_IsChannelSetting(operaNum);
+}
+
+static int menu_filter_relay1_alarm(int operaNum)
+{
+    return (RelayParam_ChannelOf(operaNum) == 0) && RelayParam_IsAlarmCondition(operaNum);
+}
+
+static int menu_filter_relay2_channel(int operaNum)
+{
+    return (RelayParam_ChannelOf(operaNum) == 1) && RelayParam_IsChannelSetting(operaNum);
+}
+
+static int menu_filter_relay2_alarm(int operaNum)
+{
+    return (RelayParam_ChannelOf(operaNum) == 1) && RelayParam_IsAlarmCondition(operaNum);
+}
+
+static int menu_filter_relay3_channel(int operaNum)
+{
+    return (RelayParam_ChannelOf(operaNum) == 2) && RelayParam_IsChannelSetting(operaNum);
+}
+
+static int menu_filter_relay3_alarm(int operaNum)
+{
+    return (RelayParam_ChannelOf(operaNum) == 2) && RelayParam_IsAlarmCondition(operaNum);
+}
+
 /* CPU2：分组页 = 参数列表页（取消 DEBUG 容器页） */
 static void menu_dev_info(void)     { menu_build_by_group(MENU_GRP_DEV_INFO,     KEYNUM_MENU_PARA_DEV_INFO,     menu_paracfg_main); }
 static void menu_mech(void)         { menu_build_by_group(MENU_GRP_MECH,         KEYNUM_MENU_PARA_MECH,         menu_paracfg_main); }
@@ -2573,8 +2841,103 @@ static void menu_correct(void)      { menu_build_by_group(MENU_GRP_CORR,        
 static void menu_policy(void)       { menu_build_by_group(MENU_GRP_POLICY,       KEYNUM_MENU_PARA_POLICY,       menu_paracfg_main); }
 static void menu_wartsila(void)     { menu_build_by_group(MENU_GRP_WARTSILA,     KEYNUM_MENU_PARA_WARTSILA,     menu_paracfg_main); }
 
-static void menu_do_alarm(void)     { menu_build_by_group(MENU_GRP_DO_ALARM,     KEYNUM_MENU_PARA_DO,           menu_paracfg_main); }
-static void menu_ao(void)           { menu_build_by_group(MENU_GRP_AO,           KEYNUM_MENU_PARA_AO,           menu_paracfg_main); }
+static void menu_output_config(void)
+{
+    static struct MenuData menu[] = {
+        {(uint8_t*)"继电器输出", 0, menu_do_alarm,    COMMANE_NORW, (uint8_t*)"Relay Out"},
+        {(uint8_t*)"AO输出",     0, menu_ao,          COMMANE_NORW, (uint8_t*)"AO"},
+        {(uint8_t*)"返回",       0, menu_paracfg_main,COMMANE_NORW, (uint8_t*)"Back"},
+    };
+
+    all_screen(0x00);
+    func_index = KEYNUM_MENU_OUTPUT_CONFIG;
+    menuselect(menu, (int)(sizeof(menu) / sizeof(menu[0])));
+}
+
+static void menu_do_alarm(void)
+{
+    static struct MenuData menu[] = {
+        {(uint8_t*)"R1继电器", 0, menu_relay1_main,  COMMANE_NORW, (uint8_t*)"Relay1"},
+        {(uint8_t*)"R2继电器", 0, menu_relay2_main,  COMMANE_NORW, (uint8_t*)"Relay2"},
+        {(uint8_t*)"R3继电器", 0, menu_relay3_main,  COMMANE_NORW, (uint8_t*)"Relay3"},
+        {(uint8_t*)"返回",     0, menu_output_config,COMMANE_NORW, (uint8_t*)"Back"},
+    };
+
+    all_screen(0x00);
+    func_index = KEYNUM_MENU_PARA_DO;
+    menuselect(menu, (int)(sizeof(menu) / sizeof(menu[0])));
+}
+
+static void menu_relay1_main(void)
+{
+    static struct MenuData menu[] = {
+        {(uint8_t*)"通道设置", 0, menu_relay1_channel, COMMANE_NORW, (uint8_t*)"Channel"},
+        {(uint8_t*)"报警配置", 0, menu_relay1_alarm,   COMMANE_NORW, (uint8_t*)"Alarm"},
+        {(uint8_t*)"返回",     0, menu_do_alarm,       COMMANE_NORW, (uint8_t*)"Back"},
+    };
+
+    all_screen(0x00);
+    func_index = KEYNUM_MENU_RELAY1_MAIN;
+    menuselect(menu, (int)(sizeof(menu) / sizeof(menu[0])));
+}
+
+static void menu_relay1_channel(void)
+{
+    menu_build_by_filter(menu_filter_relay1_channel, KEYNUM_MENU_RELAY1_CHANNEL, menu_relay1_main);
+}
+
+static void menu_relay1_alarm(void)
+{
+    menu_build_by_filter(menu_filter_relay1_alarm, KEYNUM_MENU_RELAY1_ALARM, menu_relay1_main);
+}
+
+static void menu_relay2_main(void)
+{
+    static struct MenuData menu[] = {
+        {(uint8_t*)"通道设置", 0, menu_relay2_channel, COMMANE_NORW, (uint8_t*)"Channel"},
+        {(uint8_t*)"报警配置", 0, menu_relay2_alarm,   COMMANE_NORW, (uint8_t*)"Alarm"},
+        {(uint8_t*)"返回",     0, menu_do_alarm,       COMMANE_NORW, (uint8_t*)"Back"},
+    };
+
+    all_screen(0x00);
+    func_index = KEYNUM_MENU_RELAY2_MAIN;
+    menuselect(menu, (int)(sizeof(menu) / sizeof(menu[0])));
+}
+
+static void menu_relay2_channel(void)
+{
+    menu_build_by_filter(menu_filter_relay2_channel, KEYNUM_MENU_RELAY2_CHANNEL, menu_relay2_main);
+}
+
+static void menu_relay2_alarm(void)
+{
+    menu_build_by_filter(menu_filter_relay2_alarm, KEYNUM_MENU_RELAY2_ALARM, menu_relay2_main);
+}
+
+static void menu_relay3_main(void)
+{
+    static struct MenuData menu[] = {
+        {(uint8_t*)"通道设置", 0, menu_relay3_channel, COMMANE_NORW, (uint8_t*)"Channel"},
+        {(uint8_t*)"报警配置", 0, menu_relay3_alarm,   COMMANE_NORW, (uint8_t*)"Alarm"},
+        {(uint8_t*)"返回",     0, menu_do_alarm,       COMMANE_NORW, (uint8_t*)"Back"},
+    };
+
+    all_screen(0x00);
+    func_index = KEYNUM_MENU_RELAY3_MAIN;
+    menuselect(menu, (int)(sizeof(menu) / sizeof(menu[0])));
+}
+
+static void menu_relay3_channel(void)
+{
+    menu_build_by_filter(menu_filter_relay3_channel, KEYNUM_MENU_RELAY3_CHANNEL, menu_relay3_main);
+}
+
+static void menu_relay3_alarm(void)
+{
+    menu_build_by_filter(menu_filter_relay3_alarm, KEYNUM_MENU_RELAY3_ALARM, menu_relay3_main);
+}
+
+static void menu_ao(void)           { menu_build_by_group(MENU_GRP_AO,           KEYNUM_MENU_PARA_AO,           menu_output_config); }
 static void menu_cal_sp(void)       { menu_build_by_group(MENU_GRP_CAL_SP,       KEYNUM_MENU_PARA_CAL_SP,       menu_paracfg_main); }
 
 static void menu_param_check(void)  { menu_build_by_group(MENU_GRP_PARAM_CHECK, KEYNUM_MENU_PARA_PARAM_CHECK,  menu_paracfg_main); }
@@ -2604,8 +2967,7 @@ static void menu_paracfg_main(void)
         {(uint8_t*)"密度测量参数",0, menu_policy,       COMMANE_NORW, (uint8_t*)"Policy"},
         {(uint8_t*)"Wartsila参数",  0, menu_wartsila,     COMMANE_NORW, (uint8_t*)"Wartsila"},
 
-        {(uint8_t*)"DO报警",        0, menu_do_alarm,     COMMANE_NORW, (uint8_t*)"DO Alarm"},
-        {(uint8_t*)"AO输出",        0, menu_ao,           COMMANE_NORW, (uint8_t*)"AO"},
+        {(uint8_t*)"输出配置",      0, menu_output_config,COMMANE_NORW, (uint8_t*)"Output"},
 //        {(uint8_t*)"标定/单点",     0, menu_cal_sp,       COMMANE_NORW, (uint8_t*)"Cal/SP"},
         {(uint8_t*)"校验信息",      0, menu_param_check,  COMMANE_NORW, (uint8_t*)"Check"},
 
