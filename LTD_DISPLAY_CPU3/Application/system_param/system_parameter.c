@@ -117,9 +117,6 @@ struct ParameterMetadata param_meta[] = {
 {(uint8_t*)"瓦锡兰探底频率",	0,	COM_NUM_DEVICEPARAM_WARTSILA_BOTTOM_DETECT_INTERVAL,	HOLDREGISTER_DEVICEPARAM_WARTSILA_BOTTOM_DETECT_INTERVAL,	2,	true,	0,	100,	NULL,	0,	0,	true,	TYPE_INT,	3,	NULL,	(uint8_t*)"WBotFreq"},
 {(uint8_t*)"探底修正罐高",	0,	COM_NUM_DEVICEPARAM_BOTTOM_ENCODER_CORRECTION_TANK_HEIGHT,	HOLDREGISTER_DEVICEPARAM_BOTTOM_ENCODER_CORRECTION_TANK_HEIGHT,	2,	false,	0,	0,	(uint8_t*)"mm",	1,	0,	true,	TYPE_INT,	7,	NULL,	(uint8_t*)"BotFixH"},
 
-{(uint8_t*)"高液位报警(DO)",	0,	COM_NUM_DEVICEPARAM_ALARM_HIGH_DO,	HOLDREGISTER_DEVICEPARAM_ALARM_HIGH_DO,	2,	false,	0,	0,	NULL,	1,	0,	true,	TYPE_INT,	4,	NULL,	(uint8_t*)"AlarmHiDO"},
-{(uint8_t*)"低液位报警(DO)",	0,	COM_NUM_DEVICEPARAM_ALARM_LOW_DO,	HOLDREGISTER_DEVICEPARAM_ALARM_LOW_DO,	2,	false,	0,	0,	NULL,	1,	0,	true,	TYPE_INT,	4,	NULL,	(uint8_t*)"AlarmLoDO"},
-{(uint8_t*)"第三状态阈值",	0,	COM_NUM_DEVICEPARAM_THIRD_STATE_THRESHOLD,	HOLDREGISTER_DEVICEPARAM_THIRD_STATE_THRESHOLD,	2,	false,	0,	0,	NULL,	1,	0,	true,	TYPE_INT,	4,	NULL,	(uint8_t*)"ThirdStateTh"},
 {(uint8_t*)"保留24",	0,	COM_NUM_DEVICEPARAM_RESERVED24,	HOLDREGISTER_DEVICEPARAM_RESERVED24,	2,	false,	0,	0,	NULL,	0,	0,	false,	TYPE_INT,	8,	NULL,	(uint8_t*)"Rsv24"},
 {(uint8_t*)"保留25",	0,	COM_NUM_DEVICEPARAM_RESERVED25,	HOLDREGISTER_DEVICEPARAM_RESERVED25,	2,	false,	0,	0,	NULL,	0,	0,	false,	TYPE_INT,	8,	NULL,	(uint8_t*)"Rsv25"},
 
@@ -153,6 +150,63 @@ struct ParameterMetadata param_meta[] = {
 {(uint8_t*)"保留31",	0,	COM_NUM_DEVICEPARAM_RESERVED31,	HOLDREGISTER_DEVICEPARAM_RESERVED31,	2,	false,	0,	0,	NULL,	0,	0,	false,	TYPE_INT,	8,	NULL,	(uint8_t*)"Rsv31"},
 {(uint8_t*)"保留32",	0,	COM_NUM_DEVICEPARAM_RESERVED32,	HOLDREGISTER_DEVICEPARAM_RESERVED32,	2,	false,	0,	0,	NULL,	0,	0,	false,	TYPE_INT,	8,	NULL,	(uint8_t*)"Rsv32"},
 {(uint8_t*)"保留33",	0,	COM_NUM_DEVICEPARAM_RESERVED33,	HOLDREGISTER_DEVICEPARAM_RESERVED33,	2,	false,	0,	0,	NULL,	0,	0,	false,	TYPE_INT,	8,	NULL,	(uint8_t*)"Rsv33"},
+
+/* ==================== 继电器方式2报警配置（四路） ==================== */
+{(uint8_t*)"R1工作模式",	0,	COM_NUM_DEVICEPARAM_RELAY1_OPERATING_MODE,	HOLDREGISTER_DEVICEPARAM_RELAY_OPERATING_MODE(0U),	2,	true,	0,	1,	NULL,	0,	0,	true,	TYPE_INT,	1,	ret_arr_word,	(uint8_t*)"R1WorkMode"},
+{(uint8_t*)"R1输出报警位",	0,	COM_NUM_DEVICEPARAM_RELAY1_DIGITAL_SOURCE,	HOLDREGISTER_DEVICEPARAM_RELAY_DIGITAL_SOURCE(0U),	2,	true,	0,	7,	NULL,	0,	0,	true,	TYPE_INT,	2,	ret_arr_word,	(uint8_t*)"R1OutAlarm"},
+{(uint8_t*)"R1接点",	0,	COM_NUM_DEVICEPARAM_RELAY1_CONTACT_TYPE,	HOLDREGISTER_DEVICEPARAM_RELAY_CONTACT_TYPE(0U),	2,	true,	0,	1,	NULL,	0,	0,	true,	TYPE_INT,	1,	ret_arr_word,	(uint8_t*)"R1Contact"},
+{(uint8_t*)"R1报警模式",	0,	COM_NUM_DEVICEPARAM_RELAY1_ALARM_MODE,	HOLDREGISTER_DEVICEPARAM_RELAY_ALARM_MODE(0U),	2,	true,	0,	2,	NULL,	0,	0,	true,	TYPE_INT,	1,	ret_arr_word,	(uint8_t*)"R1AlarmMode"},
+{(uint8_t*)"R1无效值",	0,	COM_NUM_DEVICEPARAM_RELAY1_ERROR_VALUE,	HOLDREGISTER_DEVICEPARAM_RELAY_ERROR_VALUE(0U),	2,	true,	0,	5,	NULL,	0,	0,	true,	TYPE_INT,	1,	ret_arr_word,	(uint8_t*)"R1Invalid"},
+{(uint8_t*)"R1报警取值源",	0,	COM_NUM_DEVICEPARAM_RELAY1_ALARM_SOURCE,	HOLDREGISTER_DEVICEPARAM_RELAY_ALARM_SOURCE(0U),	2,	true,	0,	4,	NULL,	0,	0,	true,	TYPE_INT,	1,	ret_arr_word,	(uint8_t*)"R1ValueSrc"},
+{(uint8_t*)"R1高高值",	0,	COM_NUM_DEVICEPARAM_RELAY1_HH_ALARM_VALUE,	HOLDREGISTER_DEVICEPARAM_RELAY_HH_ALARM_VALUE(0U),	2,	false,	0,	0,	NULL,	1,	0,	true,	TYPE_FLOAT,	8,	NULL,	(uint8_t*)"R1HHValue"},
+{(uint8_t*)"R1高值",	0,	COM_NUM_DEVICEPARAM_RELAY1_H_ALARM_VALUE,	HOLDREGISTER_DEVICEPARAM_RELAY_H_ALARM_VALUE(0U),	2,	false,	0,	0,	NULL,	1,	0,	true,	TYPE_FLOAT,	8,	NULL,	(uint8_t*)"R1HValue"},
+{(uint8_t*)"R1低值",	0,	COM_NUM_DEVICEPARAM_RELAY1_L_ALARM_VALUE,	HOLDREGISTER_DEVICEPARAM_RELAY_L_ALARM_VALUE(0U),	2,	false,	0,	0,	NULL,	1,	0,	true,	TYPE_FLOAT,	8,	NULL,	(uint8_t*)"R1LValue"},
+{(uint8_t*)"R1低低值",	0,	COM_NUM_DEVICEPARAM_RELAY1_LL_ALARM_VALUE,	HOLDREGISTER_DEVICEPARAM_RELAY_LL_ALARM_VALUE(0U),	2,	false,	0,	0,	NULL,	1,	0,	true,	TYPE_FLOAT,	8,	NULL,	(uint8_t*)"R1LLValue"},
+{(uint8_t*)"R1滞回",	0,	COM_NUM_DEVICEPARAM_RELAY1_ALARM_HYSTERESIS,	HOLDREGISTER_DEVICEPARAM_RELAY_ALARM_HYSTERESIS(0U),	2,	false,	0,	0,	NULL,	1,	0,	true,	TYPE_FLOAT,	8,	NULL,	(uint8_t*)"R1Hysteresis"},
+{(uint8_t*)"R1阻值",	0,	COM_NUM_DEVICEPARAM_RELAY1_DAMPING_FACTOR,	HOLDREGISTER_DEVICEPARAM_RELAY_DAMPING_FACTOR(0U),	2,	false,	0,	0,	NULL,	0,	0,	true,	TYPE_INT,	4,	NULL,	(uint8_t*)"R1Damping"},
+{(uint8_t*)"R1清报警",	0,	COM_NUM_DEVICEPARAM_RELAY1_CLEAR_ALARM,	HOLDREGISTER_DEVICEPARAM_RELAY_CLEAR_ALARM(0U),	2,	true,	0,	1,	NULL,	0,	0,	true,	TYPE_INT,	1,	ret_arr_word,	(uint8_t*)"R1Clear"},
+
+{(uint8_t*)"R2工作模式",	0,	COM_NUM_DEVICEPARAM_RELAY2_OPERATING_MODE,	HOLDREGISTER_DEVICEPARAM_RELAY_OPERATING_MODE(1U),	2,	true,	0,	1,	NULL,	0,	0,	true,	TYPE_INT,	1,	ret_arr_word,	(uint8_t*)"R2WorkMode"},
+{(uint8_t*)"R2输出报警位",	0,	COM_NUM_DEVICEPARAM_RELAY2_DIGITAL_SOURCE,	HOLDREGISTER_DEVICEPARAM_RELAY_DIGITAL_SOURCE(1U),	2,	true,	0,	7,	NULL,	0,	0,	true,	TYPE_INT,	2,	ret_arr_word,	(uint8_t*)"R2OutAlarm"},
+{(uint8_t*)"R2接点",	0,	COM_NUM_DEVICEPARAM_RELAY2_CONTACT_TYPE,	HOLDREGISTER_DEVICEPARAM_RELAY_CONTACT_TYPE(1U),	2,	true,	0,	1,	NULL,	0,	0,	true,	TYPE_INT,	1,	ret_arr_word,	(uint8_t*)"R2Contact"},
+{(uint8_t*)"R2报警模式",	0,	COM_NUM_DEVICEPARAM_RELAY2_ALARM_MODE,	HOLDREGISTER_DEVICEPARAM_RELAY_ALARM_MODE(1U),	2,	true,	0,	2,	NULL,	0,	0,	true,	TYPE_INT,	1,	ret_arr_word,	(uint8_t*)"R2AlarmMode"},
+{(uint8_t*)"R2无效值",	0,	COM_NUM_DEVICEPARAM_RELAY2_ERROR_VALUE,	HOLDREGISTER_DEVICEPARAM_RELAY_ERROR_VALUE(1U),	2,	true,	0,	5,	NULL,	0,	0,	true,	TYPE_INT,	1,	ret_arr_word,	(uint8_t*)"R2Invalid"},
+{(uint8_t*)"R2报警取值源",	0,	COM_NUM_DEVICEPARAM_RELAY2_ALARM_SOURCE,	HOLDREGISTER_DEVICEPARAM_RELAY_ALARM_SOURCE(1U),	2,	true,	0,	4,	NULL,	0,	0,	true,	TYPE_INT,	1,	ret_arr_word,	(uint8_t*)"R2ValueSrc"},
+{(uint8_t*)"R2高高值",	0,	COM_NUM_DEVICEPARAM_RELAY2_HH_ALARM_VALUE,	HOLDREGISTER_DEVICEPARAM_RELAY_HH_ALARM_VALUE(1U),	2,	false,	0,	0,	NULL,	1,	0,	true,	TYPE_FLOAT,	8,	NULL,	(uint8_t*)"R2HHValue"},
+{(uint8_t*)"R2高值",	0,	COM_NUM_DEVICEPARAM_RELAY2_H_ALARM_VALUE,	HOLDREGISTER_DEVICEPARAM_RELAY_H_ALARM_VALUE(1U),	2,	false,	0,	0,	NULL,	1,	0,	true,	TYPE_FLOAT,	8,	NULL,	(uint8_t*)"R2HValue"},
+{(uint8_t*)"R2低值",	0,	COM_NUM_DEVICEPARAM_RELAY2_L_ALARM_VALUE,	HOLDREGISTER_DEVICEPARAM_RELAY_L_ALARM_VALUE(1U),	2,	false,	0,	0,	NULL,	1,	0,	true,	TYPE_FLOAT,	8,	NULL,	(uint8_t*)"R2LValue"},
+{(uint8_t*)"R2低低值",	0,	COM_NUM_DEVICEPARAM_RELAY2_LL_ALARM_VALUE,	HOLDREGISTER_DEVICEPARAM_RELAY_LL_ALARM_VALUE(1U),	2,	false,	0,	0,	NULL,	1,	0,	true,	TYPE_FLOAT,	8,	NULL,	(uint8_t*)"R2LLValue"},
+{(uint8_t*)"R2滞回",	0,	COM_NUM_DEVICEPARAM_RELAY2_ALARM_HYSTERESIS,	HOLDREGISTER_DEVICEPARAM_RELAY_ALARM_HYSTERESIS(1U),	2,	false,	0,	0,	NULL,	1,	0,	true,	TYPE_FLOAT,	8,	NULL,	(uint8_t*)"R2Hysteresis"},
+{(uint8_t*)"R2阻值",	0,	COM_NUM_DEVICEPARAM_RELAY2_DAMPING_FACTOR,	HOLDREGISTER_DEVICEPARAM_RELAY_DAMPING_FACTOR(1U),	2,	false,	0,	0,	NULL,	0,	0,	true,	TYPE_INT,	4,	NULL,	(uint8_t*)"R2Damping"},
+{(uint8_t*)"R2清报警",	0,	COM_NUM_DEVICEPARAM_RELAY2_CLEAR_ALARM,	HOLDREGISTER_DEVICEPARAM_RELAY_CLEAR_ALARM(1U),	2,	true,	0,	1,	NULL,	0,	0,	true,	TYPE_INT,	1,	ret_arr_word,	(uint8_t*)"R2Clear"},
+
+{(uint8_t*)"R3工作模式",	0,	COM_NUM_DEVICEPARAM_RELAY3_OPERATING_MODE,	HOLDREGISTER_DEVICEPARAM_RELAY_OPERATING_MODE(2U),	2,	true,	0,	1,	NULL,	0,	0,	true,	TYPE_INT,	1,	ret_arr_word,	(uint8_t*)"R3WorkMode"},
+{(uint8_t*)"R3输出报警位",	0,	COM_NUM_DEVICEPARAM_RELAY3_DIGITAL_SOURCE,	HOLDREGISTER_DEVICEPARAM_RELAY_DIGITAL_SOURCE(2U),	2,	true,	0,	7,	NULL,	0,	0,	true,	TYPE_INT,	2,	ret_arr_word,	(uint8_t*)"R3OutAlarm"},
+{(uint8_t*)"R3接点",	0,	COM_NUM_DEVICEPARAM_RELAY3_CONTACT_TYPE,	HOLDREGISTER_DEVICEPARAM_RELAY_CONTACT_TYPE(2U),	2,	true,	0,	1,	NULL,	0,	0,	true,	TYPE_INT,	1,	ret_arr_word,	(uint8_t*)"R3Contact"},
+{(uint8_t*)"R3报警模式",	0,	COM_NUM_DEVICEPARAM_RELAY3_ALARM_MODE,	HOLDREGISTER_DEVICEPARAM_RELAY_ALARM_MODE(2U),	2,	true,	0,	2,	NULL,	0,	0,	true,	TYPE_INT,	1,	ret_arr_word,	(uint8_t*)"R3AlarmMode"},
+{(uint8_t*)"R3无效值",	0,	COM_NUM_DEVICEPARAM_RELAY3_ERROR_VALUE,	HOLDREGISTER_DEVICEPARAM_RELAY_ERROR_VALUE(2U),	2,	true,	0,	5,	NULL,	0,	0,	true,	TYPE_INT,	1,	ret_arr_word,	(uint8_t*)"R3Invalid"},
+{(uint8_t*)"R3报警取值源",	0,	COM_NUM_DEVICEPARAM_RELAY3_ALARM_SOURCE,	HOLDREGISTER_DEVICEPARAM_RELAY_ALARM_SOURCE(2U),	2,	true,	0,	4,	NULL,	0,	0,	true,	TYPE_INT,	1,	ret_arr_word,	(uint8_t*)"R3ValueSrc"},
+{(uint8_t*)"R3高高值",	0,	COM_NUM_DEVICEPARAM_RELAY3_HH_ALARM_VALUE,	HOLDREGISTER_DEVICEPARAM_RELAY_HH_ALARM_VALUE(2U),	2,	false,	0,	0,	NULL,	1,	0,	true,	TYPE_FLOAT,	8,	NULL,	(uint8_t*)"R3HHValue"},
+{(uint8_t*)"R3高值",	0,	COM_NUM_DEVICEPARAM_RELAY3_H_ALARM_VALUE,	HOLDREGISTER_DEVICEPARAM_RELAY_H_ALARM_VALUE(2U),	2,	false,	0,	0,	NULL,	1,	0,	true,	TYPE_FLOAT,	8,	NULL,	(uint8_t*)"R3HValue"},
+{(uint8_t*)"R3低值",	0,	COM_NUM_DEVICEPARAM_RELAY3_L_ALARM_VALUE,	HOLDREGISTER_DEVICEPARAM_RELAY_L_ALARM_VALUE(2U),	2,	false,	0,	0,	NULL,	1,	0,	true,	TYPE_FLOAT,	8,	NULL,	(uint8_t*)"R3LValue"},
+{(uint8_t*)"R3低低值",	0,	COM_NUM_DEVICEPARAM_RELAY3_LL_ALARM_VALUE,	HOLDREGISTER_DEVICEPARAM_RELAY_LL_ALARM_VALUE(2U),	2,	false,	0,	0,	NULL,	1,	0,	true,	TYPE_FLOAT,	8,	NULL,	(uint8_t*)"R3LLValue"},
+{(uint8_t*)"R3滞回",	0,	COM_NUM_DEVICEPARAM_RELAY3_ALARM_HYSTERESIS,	HOLDREGISTER_DEVICEPARAM_RELAY_ALARM_HYSTERESIS(2U),	2,	false,	0,	0,	NULL,	1,	0,	true,	TYPE_FLOAT,	8,	NULL,	(uint8_t*)"R3Hysteresis"},
+{(uint8_t*)"R3阻值",	0,	COM_NUM_DEVICEPARAM_RELAY3_DAMPING_FACTOR,	HOLDREGISTER_DEVICEPARAM_RELAY_DAMPING_FACTOR(2U),	2,	false,	0,	0,	NULL,	0,	0,	true,	TYPE_INT,	4,	NULL,	(uint8_t*)"R3Damping"},
+{(uint8_t*)"R3清报警",	0,	COM_NUM_DEVICEPARAM_RELAY3_CLEAR_ALARM,	HOLDREGISTER_DEVICEPARAM_RELAY_CLEAR_ALARM(2U),	2,	true,	0,	1,	NULL,	0,	0,	true,	TYPE_INT,	1,	ret_arr_word,	(uint8_t*)"R3Clear"},
+
+{(uint8_t*)"R4工作模式",	0,	COM_NUM_DEVICEPARAM_RELAY4_OPERATING_MODE,	HOLDREGISTER_DEVICEPARAM_RELAY_OPERATING_MODE(3U),	2,	true,	0,	1,	NULL,	0,	0,	true,	TYPE_INT,	1,	ret_arr_word,	(uint8_t*)"R4WorkMode"},
+{(uint8_t*)"R4输出报警位",	0,	COM_NUM_DEVICEPARAM_RELAY4_DIGITAL_SOURCE,	HOLDREGISTER_DEVICEPARAM_RELAY_DIGITAL_SOURCE(3U),	2,	true,	0,	7,	NULL,	0,	0,	true,	TYPE_INT,	2,	ret_arr_word,	(uint8_t*)"R4OutAlarm"},
+{(uint8_t*)"R4接点",	0,	COM_NUM_DEVICEPARAM_RELAY4_CONTACT_TYPE,	HOLDREGISTER_DEVICEPARAM_RELAY_CONTACT_TYPE(3U),	2,	true,	0,	1,	NULL,	0,	0,	true,	TYPE_INT,	1,	ret_arr_word,	(uint8_t*)"R4Contact"},
+{(uint8_t*)"R4报警模式",	0,	COM_NUM_DEVICEPARAM_RELAY4_ALARM_MODE,	HOLDREGISTER_DEVICEPARAM_RELAY_ALARM_MODE(3U),	2,	true,	0,	2,	NULL,	0,	0,	true,	TYPE_INT,	1,	ret_arr_word,	(uint8_t*)"R4AlarmMode"},
+{(uint8_t*)"R4无效值",	0,	COM_NUM_DEVICEPARAM_RELAY4_ERROR_VALUE,	HOLDREGISTER_DEVICEPARAM_RELAY_ERROR_VALUE(3U),	2,	true,	0,	5,	NULL,	0,	0,	true,	TYPE_INT,	1,	ret_arr_word,	(uint8_t*)"R4Invalid"},
+{(uint8_t*)"R4报警取值源",	0,	COM_NUM_DEVICEPARAM_RELAY4_ALARM_SOURCE,	HOLDREGISTER_DEVICEPARAM_RELAY_ALARM_SOURCE(3U),	2,	true,	0,	4,	NULL,	0,	0,	true,	TYPE_INT,	1,	ret_arr_word,	(uint8_t*)"R4ValueSrc"},
+{(uint8_t*)"R4高高值",	0,	COM_NUM_DEVICEPARAM_RELAY4_HH_ALARM_VALUE,	HOLDREGISTER_DEVICEPARAM_RELAY_HH_ALARM_VALUE(3U),	2,	false,	0,	0,	NULL,	1,	0,	true,	TYPE_FLOAT,	8,	NULL,	(uint8_t*)"R4HHValue"},
+{(uint8_t*)"R4高值",	0,	COM_NUM_DEVICEPARAM_RELAY4_H_ALARM_VALUE,	HOLDREGISTER_DEVICEPARAM_RELAY_H_ALARM_VALUE(3U),	2,	false,	0,	0,	NULL,	1,	0,	true,	TYPE_FLOAT,	8,	NULL,	(uint8_t*)"R4HValue"},
+{(uint8_t*)"R4低值",	0,	COM_NUM_DEVICEPARAM_RELAY4_L_ALARM_VALUE,	HOLDREGISTER_DEVICEPARAM_RELAY_L_ALARM_VALUE(3U),	2,	false,	0,	0,	NULL,	1,	0,	true,	TYPE_FLOAT,	8,	NULL,	(uint8_t*)"R4LValue"},
+{(uint8_t*)"R4低低值",	0,	COM_NUM_DEVICEPARAM_RELAY4_LL_ALARM_VALUE,	HOLDREGISTER_DEVICEPARAM_RELAY_LL_ALARM_VALUE(3U),	2,	false,	0,	0,	NULL,	1,	0,	true,	TYPE_FLOAT,	8,	NULL,	(uint8_t*)"R4LLValue"},
+{(uint8_t*)"R4滞回",	0,	COM_NUM_DEVICEPARAM_RELAY4_ALARM_HYSTERESIS,	HOLDREGISTER_DEVICEPARAM_RELAY_ALARM_HYSTERESIS(3U),	2,	false,	0,	0,	NULL,	1,	0,	true,	TYPE_FLOAT,	8,	NULL,	(uint8_t*)"R4Hysteresis"},
+{(uint8_t*)"R4阻值",	0,	COM_NUM_DEVICEPARAM_RELAY4_DAMPING_FACTOR,	HOLDREGISTER_DEVICEPARAM_RELAY_DAMPING_FACTOR(3U),	2,	false,	0,	0,	NULL,	0,	0,	true,	TYPE_INT,	4,	NULL,	(uint8_t*)"R4Damping"},
+{(uint8_t*)"R4清报警",	0,	COM_NUM_DEVICEPARAM_RELAY4_CLEAR_ALARM,	HOLDREGISTER_DEVICEPARAM_RELAY_CLEAR_ALARM(3U),	2,	true,	0,	1,	NULL,	0,	0,	true,	TYPE_INT,	1,	ret_arr_word,	(uint8_t*)"R4Clear"},
 
 
 {(uint8_t*)"参数版本号",	0,	COM_NUM_DEVICEPARAM_PARAM_VERSION,	HOLDREGISTER_DEVICEPARAM_PARAM_VERSION,	2,	false,	0,	0,	NULL,	0,	0,	false,	TYPE_INT,	4,	NULL,	(uint8_t*)"ParamVer"},
@@ -240,6 +294,19 @@ void InputValueInit(void)
 	g_measurement.device_status.device_state = STATE_INIT;
 	g_measurement.single_point_monitoring.density = UNVALID_DENSITY;
 	g_measurement.single_point_monitoring.temperature = UNVALID_TEMPERATURE_WIRELESS;
+
+	/* CPU2 首包数据到达前，按参考程序只读状态默认值初始化为未激活。 */
+	for (uint32_t channel = 0U; channel < RELAY_ALARM_CHANNEL_COUNT; channel++) {
+		g_measurement.relay_alarm_runtime[channel].alarm_value = ((float)UNVALID_LEVEL) / 10.0f;
+		g_measurement.relay_alarm_runtime[channel].HH_alarm = RELAY_ALARM_STATE_INACTIVE;
+		g_measurement.relay_alarm_runtime[channel].H_alarm = RELAY_ALARM_STATE_INACTIVE;
+		g_measurement.relay_alarm_runtime[channel].HH_H_alarm = RELAY_ALARM_STATE_INACTIVE;
+		g_measurement.relay_alarm_runtime[channel].L_alarm = RELAY_ALARM_STATE_INACTIVE;
+		g_measurement.relay_alarm_runtime[channel].LL_alarm = RELAY_ALARM_STATE_INACTIVE;
+		g_measurement.relay_alarm_runtime[channel].LL_L_alarm = RELAY_ALARM_STATE_INACTIVE;
+		g_measurement.relay_alarm_runtime[channel].any_error = RELAY_ALARM_STATE_INACTIVE;
+		g_measurement.relay_alarm_runtime[channel].clear_alarm = RELAY_ALARM_CLEAR_NO;
+	}
 }
 /* 未与CPU2通讯成功时，需设置设备的故障状态 */
 void setEquipStateError(void)
@@ -377,11 +444,15 @@ void print_device_params(void)
     printf("  %-32s : %lu\r\n", "瓦锡兰探底频率", (unsigned long)params.wartsila_bottom_detect_interval);
     printf("  %-32s : %lu\r\n", "探底修正罐高", (unsigned long)params.bottom_encoder_correction_tank_height);
 
-    /* DO */
-    printf("\r\n-- 报警DO参数 --\r\n");
-    printf("  %-32s : %lu\r\n", "高液位报警DO", (unsigned long)params.AlarmHighDO);
-    printf("  %-32s : %lu\r\n", "低液位报警DO", (unsigned long)params.AlarmLowDO);
-    printf("  %-32s : %lu\r\n", "第三状态阈值", (unsigned long)params.ThirdStateThreshold);
+    for (uint32_t channel = 0U; channel < RELAY_ALARM_CHANNEL_COUNT; channel++) {
+        printf("  继电器%lu方式2: mode=%lu source=%lu digital=%lu contact=%lu alarmMode=%lu\r\n",
+               (unsigned long)(channel + 1U),
+               (unsigned long)params.relayAlarm[channel].operating_mode,
+               (unsigned long)params.relayAlarm[channel].alarm_source,
+               (unsigned long)params.relayAlarm[channel].digital_source,
+               (unsigned long)params.relayAlarm[channel].contact_type,
+               (unsigned long)params.relayAlarm[channel].alarm_mode);
+    }
 
     /* AO */
     printf("\r\n-- 4-20mA/AO参数 --\r\n");
@@ -537,5 +608,22 @@ void PrintMeasurementResult(const MeasurementResult *m)
                (unsigned long)d->temperature_position);
     }
 
+
+    printf("--------------------------------------------------------------\r\n");
+    printf("【继电器方式2运行态】\r\n");
+    for (uint32_t channel = 0U; channel < RELAY_ALARM_CHANNEL_COUNT; channel++) {
+        const RelayAlarmRuntimeState *state = &m->relay_alarm_runtime[channel];
+        printf("  继电器%lu: value=%.1f HH=%lu H=%lu HH_H=%lu L=%lu LL=%lu LL_L=%lu any=%lu clear=%lu\r\n",
+               (unsigned long)(channel + 1U),
+               (double)state->alarm_value,
+               (unsigned long)state->HH_alarm,
+               (unsigned long)state->H_alarm,
+               (unsigned long)state->HH_H_alarm,
+               (unsigned long)state->L_alarm,
+               (unsigned long)state->LL_alarm,
+               (unsigned long)state->LL_L_alarm,
+               (unsigned long)state->any_error,
+               (unsigned long)state->clear_alarm);
+    }
     printf("========================【打印结束】========================\r\n");
 }

@@ -29,7 +29,7 @@ static volatile uint32_t g_device_params_save_request_tick = 0; /* Last deferred
 #endif
 
 /* param_version和 magic 常量 */
-#define DEVICE_PARAM_VERSION   (2u)
+#define DEVICE_PARAM_VERSION   (3u)
 #define DEVICE_PARAM_MAGIC     (0x4C54444Du)  /* 'LTDM' */
 
 /*
@@ -41,6 +41,13 @@ static volatile uint32_t g_device_params_save_request_tick = 0; /* Last deferred
 #define DEVICE_PARAM_PERSIST_LEN      (offsetof(DeviceParameters, crc) - DEVICE_PARAM_PERSIST_OFFSET)
 #define DEVICE_PARAM_PERSIST_START(p) ((uint8_t *)(p) + DEVICE_PARAM_PERSIST_OFFSET)
 
+static uint32_t relay_alarm_float_to_raw(float value)
+{
+    uint32_t raw;
+    memcpy(&raw, &value, sizeof(raw));
+    return raw;
+}
+
 /*========================= 参数存储逻辑 =========================*/
 
 /* 根据持久化区计算crc（不含command和crc字段） */
@@ -49,6 +56,13 @@ static uint32_t device_param_crc(const DeviceParameters *params)
     const uint8_t *crc_base = DEVICE_PARAM_PERSIST_START(params);
     const uint32_t crc_size = (uint32_t)DEVICE_PARAM_PERSIST_LEN;
     return CRC32_HAL((const uint8_t *)crc_base, crc_size);
+}
+
+static void clear_relay_alarm_runtime_commands(DeviceParameters *params)
+{
+    for (uint32_t channel = 0U; channel < RELAY_ALARM_CHANNEL_COUNT; channel++) {
+        params->relayAlarm[channel].clear_alarm = RELAY_ALARM_CLEAR_NO;
+    }
 }
 #define MOTOR_LOCAL_CIRC_MIN_001MM  (50000u)    /* 50.000mm，和motor_count_first_loop_circumference_mm模型下限保持一致 */
 #define MOTOR_LOCAL_CIRC_MAX_001MM  (5000000u)  /* 5000.000mm，防止旧 reserved 脏值被当成有效周长 */
@@ -143,6 +157,13 @@ static int normalize_device_params_runtime(void)
     if (g_deviceParams.wartsila_bottom_detect_interval > 100U) {
         g_deviceParams.wartsila_bottom_detect_interval = 1U;
         changed = 1;
+    }
+
+    for (uint32_t channel = 0U; channel < RELAY_ALARM_CHANNEL_COUNT; channel++) {
+        if (g_deviceParams.relayAlarm[channel].clear_alarm != RELAY_ALARM_CLEAR_NO) {
+            g_deviceParams.relayAlarm[channel].clear_alarm = RELAY_ALARM_CLEAR_NO;
+            changed = 1;
+        }
     }
 
     return changed;
@@ -270,6 +291,7 @@ static void build_saved_device_params(DeviceParameters *out)
     apply_firmware_version_runtime();
     apply_protocol_version_runtime();
     *out = g_deviceParams;
+    clear_relay_alarm_runtime_commands(out);
     out->param_version = DEVICE_PARAM_VERSION;
     out->struct_size   = (uint32_t)sizeof(DeviceParameters);
     out->magic         = DEVICE_PARAM_MAGIC;
@@ -600,10 +622,25 @@ void RestoreFactoryParamsConfig(void)
     g_deviceParams.wartsila_bottom_detect_interval  = 1;   /* 瓦锡兰测量后探底频率：0不探底，N表示每N次测量后探底一次 */
     g_deviceParams.bottom_encoder_correction_tank_height = 0; /* 0: 编码器修正沿用液位罐高 */
 
-    /* ---------------- 继电器报警输出 ---------------- */
-    g_deviceParams.AlarmHighDO         = 0;
-    g_deviceParams.AlarmLowDO          = 0;
-    g_deviceParams.ThirdStateThreshold = 0;
+    /* ---------------- 继电器报警输出（旧阈值兼容字段） ---------------- */
+
+    /* ---------------- 继电器方式2报警配置（三路） ---------------- */
+    for (uint32_t channel = 0U; channel < RELAY_ALARM_CHANNEL_COUNT; channel++) {
+        volatile RelayAlarmConfig *cfg = &g_deviceParams.relayAlarm[channel];
+        cfg->operating_mode = RELAY_ALARM_OPERATING_DISABLED;
+        cfg->digital_source = RELAY_ALARM_DIGITAL_NONE;
+        cfg->contact_type = RELAY_ALARM_CONTACT_NORMALLY_OPEN;
+        cfg->alarm_mode = RELAY_ALARM_MODE_OFF;
+        cfg->error_value = RELAY_ALARM_ERROR_NO_ALARM;
+        cfg->alarm_source = RELAY_ALARM_SOURCE_TANK_LEVEL;
+        cfg->HH_alarm_value = relay_alarm_float_to_raw(0.0f);
+        cfg->H_alarm_value = relay_alarm_float_to_raw(0.0f);
+        cfg->L_alarm_value = relay_alarm_float_to_raw(0.0f);
+        cfg->LL_alarm_value = relay_alarm_float_to_raw(0.0f);
+        cfg->alarm_hysteresis = relay_alarm_float_to_raw(0.0f);
+        cfg->damping_factor = 0U;
+        cfg->clear_alarm = RELAY_ALARM_CLEAR_NO;
+    }
 
     /* ---------------- 4~20mA 输出 ---------------- */
     g_deviceParams.CurrentRangeStart_mA = 400;   /* 4.00mA (×0.01) */
@@ -768,11 +805,15 @@ void print_device_params(void)
     printf("  %-32s : %lu\r\n", "瓦锡兰探底频率", (unsigned long)params.wartsila_bottom_detect_interval);
     printf("  %-32s : %lu\r\n", "探底修正罐高", (unsigned long)params.bottom_encoder_correction_tank_height);
 
-    /* DO */
-    printf("\r\n-- 报警DO参数 --\r\n");
-    printf("  %-32s : %lu\r\n", "高液位报警DO", (unsigned long)params.AlarmHighDO);
-    printf("  %-32s : %lu\r\n", "低液位报警DO", (unsigned long)params.AlarmLowDO);
-    printf("  %-32s : %lu\r\n", "第三状态阈值", (unsigned long)params.ThirdStateThreshold);
+    for (uint32_t channel = 0U; channel < RELAY_ALARM_CHANNEL_COUNT; channel++) {
+        printf("  继电器%lu方式2: mode=%lu source=%lu digital=%lu contact=%lu alarmMode=%lu\r\n",
+               (unsigned long)(channel + 1U),
+               (unsigned long)params.relayAlarm[channel].operating_mode,
+               (unsigned long)params.relayAlarm[channel].alarm_source,
+               (unsigned long)params.relayAlarm[channel].digital_source,
+               (unsigned long)params.relayAlarm[channel].contact_type,
+               (unsigned long)params.relayAlarm[channel].alarm_mode);
+    }
 
     /* AO */
     printf("\r\n-- 4-20mA/AO参数 --\r\n");
@@ -938,6 +979,23 @@ void PrintMeasurementResult(const MeasurementResult *m)
                (unsigned long)d->vcf20,
                (unsigned long)d->weight_density,
                (unsigned long)d->temperature_position);
+    }
+
+    printf("--------------------------------------------------------------\r\n");
+    printf("【继电器方式2运行态】\r\n");
+    for (uint32_t channel = 0U; channel < RELAY_ALARM_CHANNEL_COUNT; channel++) {
+        const RelayAlarmRuntimeState *state = &m->relay_alarm_runtime[channel];
+        printf("  继电器%lu: value=%.1f HH=%lu H=%lu HH_H=%lu L=%lu LL=%lu LL_L=%lu any=%lu clear=%lu\r\n",
+               (unsigned long)(channel + 1U),
+               (double)state->alarm_value,
+               (unsigned long)state->HH_alarm,
+               (unsigned long)state->H_alarm,
+               (unsigned long)state->HH_H_alarm,
+               (unsigned long)state->L_alarm,
+               (unsigned long)state->LL_alarm,
+               (unsigned long)state->LL_L_alarm,
+               (unsigned long)state->any_error,
+               (unsigned long)state->clear_alarm);
     }
 
     printf("========================【打印结束】========================\r\n");

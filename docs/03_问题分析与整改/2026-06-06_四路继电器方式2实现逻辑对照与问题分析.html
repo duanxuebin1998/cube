@@ -1,0 +1,1019 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>四路继电器方式2实现逻辑对照与问题分析</title>
+  <style>
+    :root {
+      --bg: #f6f7f9;
+      --paper: #ffffff;
+      --ink: #17202a;
+      --muted: #5f6b7a;
+      --line: #d8dee8;
+      --soft: #eef2f7;
+      --accent: #1f6feb;
+      --accent-soft: #e8f1ff;
+      --ok: #0f7b4f;
+      --warn: #9a6700;
+      --bad: #b42318;
+      --code: #263238;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      color: var(--ink);
+      background: var(--bg);
+      font-family: "Microsoft YaHei", "Segoe UI", Arial, sans-serif;
+      line-height: 1.68;
+    }
+
+    .page {
+      max-width: 1180px;
+      margin: 0 auto;
+      padding: 28px 28px 56px;
+    }
+
+    header {
+      padding: 28px 0 18px;
+      border-bottom: 2px solid var(--line);
+    }
+
+    h1 {
+      margin: 0 0 12px;
+      font-size: 30px;
+      line-height: 1.25;
+      letter-spacing: 0;
+    }
+
+    h2 {
+      margin: 36px 0 14px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid var(--line);
+      font-size: 22px;
+      letter-spacing: 0;
+    }
+
+    h3 {
+      margin: 24px 0 10px;
+      font-size: 18px;
+      letter-spacing: 0;
+    }
+
+    p {
+      margin: 8px 0;
+    }
+
+    a {
+      color: var(--accent);
+      text-decoration: none;
+    }
+
+    a:hover {
+      text-decoration: underline;
+    }
+
+    code {
+      color: var(--code);
+      background: #edf0f3;
+      border: 1px solid #dce2e8;
+      border-radius: 4px;
+      padding: 1px 5px;
+      font-family: Consolas, "Cascadia Mono", monospace;
+      font-size: 0.94em;
+    }
+
+    pre {
+      margin: 12px 0;
+      padding: 14px 16px;
+      overflow-x: auto;
+      color: #f5f7fa;
+      background: #18212f;
+      border-radius: 6px;
+      line-height: 1.55;
+      font-family: Consolas, "Cascadia Mono", monospace;
+      font-size: 13px;
+    }
+
+    table {
+      width: 100%;
+      margin: 12px 0 20px;
+      border-collapse: collapse;
+      background: var(--paper);
+      border: 1px solid var(--line);
+    }
+
+    th,
+    td {
+      padding: 9px 11px;
+      border: 1px solid var(--line);
+      vertical-align: top;
+      text-align: left;
+    }
+
+    th {
+      background: #e9edf3;
+      font-weight: 700;
+    }
+
+    ul,
+    ol {
+      margin: 8px 0 14px 24px;
+      padding: 0;
+    }
+
+    li {
+      margin: 5px 0;
+    }
+
+    .meta {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 8px 18px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .card {
+      margin: 16px 0;
+      padding: 16px 18px;
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 6px;
+    }
+
+    .toc {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 8px 20px;
+      margin-top: 12px;
+    }
+
+    .toc a {
+      display: block;
+      padding: 6px 0;
+    }
+
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(270px, 1fr));
+      gap: 14px;
+      margin: 14px 0;
+    }
+
+    .summary-item {
+      padding: 14px 16px;
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-left: 5px solid var(--accent);
+      border-radius: 6px;
+    }
+
+    .summary-item strong {
+      display: block;
+      margin-bottom: 6px;
+      font-size: 16px;
+    }
+
+    .badge {
+      display: inline-block;
+      min-width: 42px;
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 700;
+      text-align: center;
+    }
+
+    .badge.ok {
+      color: #ffffff;
+      background: var(--ok);
+    }
+
+    .badge.warn {
+      color: #ffffff;
+      background: var(--warn);
+    }
+
+    .badge.bad {
+      color: #ffffff;
+      background: var(--bad);
+    }
+
+    .flow {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+      gap: 10px;
+      margin: 12px 0;
+    }
+
+    .step {
+      min-height: 82px;
+      padding: 12px;
+      background: var(--accent-soft);
+      border: 1px solid #bfd7ff;
+      border-radius: 6px;
+    }
+
+    .step .num {
+      display: inline-block;
+      margin-bottom: 5px;
+      color: #ffffff;
+      background: var(--accent);
+      border-radius: 4px;
+      padding: 0 7px;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .note {
+      padding: 12px 14px;
+      background: #fff8e6;
+      border: 1px solid #ead49a;
+      border-left: 5px solid var(--warn);
+      border-radius: 6px;
+    }
+
+    .risk-high {
+      background: #fff1f0;
+    }
+
+    .risk-mid {
+      background: #fff8e6;
+    }
+
+    .risk-low {
+      background: #f3f7ff;
+    }
+
+    .small {
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    @media print {
+      body {
+        background: #ffffff;
+      }
+
+      .page {
+        max-width: none;
+        padding: 10mm;
+      }
+
+      .card,
+      .summary-item,
+      table {
+        break-inside: avoid;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <header>
+      <h1>四路继电器方式2实现逻辑对照与问题分析</h1>
+      <div class="meta">
+        <div>整理日期：2026-06-06</div>
+        <div>当前工程：<code>D:\CUBE</code></div>
+        <div>参考程序：<code>D:\程序存档\CPU2_v1.563\CPU2_v1.563</code></div>
+        <div>分析范围：参考程序继电器方式2，对照当前 CPU2/CPU3 四路继电器报警输出实现</div>
+      </div>
+    </header>
+
+    <section class="card">
+      <h2 id="summary">一、结论摘要</h2>
+      <div class="summary-grid">
+        <div class="summary-item">
+          <strong>主算法基本对齐</strong>
+          当前 CPU2 的 HH/H/L/LL 判断、回差、锁存清除、无效值策略、数字源选择和常开/常闭翻转，整体已经按参考程序方式2实现。
+        </div>
+        <div class="summary-item">
+          <strong>实现范围已扩展到四路</strong>
+          优化前只处理 RELAY1 至 RELAY3，未纳入 RELAY4 输出；本次优化后 CPU2/CPU3 参数、寄存器、显示菜单和输出层均按四路展开。
+        </div>
+        <div class="summary-item">
+          <strong>clear_alarm 持久化风险已处理</strong>
+          参考程序把 <code>clear_alarm</code> 作为非存储运行期命令；当前仍保留保持寄存器写入口，但保存镜像和上电归一化都会清零该字段，批量写配置也不会把清锁存命令写入 FRAM。
+        </div>
+        <div class="summary-item">
+          <strong>刷新入口已收敛</strong>
+          TIM4 中断现在只调用 <code>RelayOutput_RequestUpdate()</code> 置位请求，主循环通过 <code>RelayOutput_ProcessPending()</code> 执行方式2计算和 GPIO 输出。
+        </div>
+      </div>
+      <p class="note">本次优化已执行：1. 保存参数前清零 <code>clear_alarm</code>；2. TIM4 只置位刷新请求；3. 继电器计算前复制单路配置和测量快照，运行态本地计算后短临界区一次提交；4. 手动报警抑制期间只释放输出，不清除已锁存运行态。</p>
+    </section>
+
+    <section class="card">
+      <h2 id="toc">二、目录</h2>
+      <div class="toc">
+        <a href="#source">1. 代码依据</a>
+        <a href="#reference">2. 参考程序方式2逻辑</a>
+        <a href="#current">3. 当前工程实现逻辑</a>
+        <a href="#compare">4. 对照结论</a>
+        <a href="#risks">5. 当前存在的问题</a>
+        <a href="#fix">6. 建议整改顺序</a>
+        <a href="#test">7. 建议测试矩阵</a>
+        <a href="#appendix">8. 状态和参数速查</a>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2 id="source">三、代码依据</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>范围</th>
+            <th>文件</th>
+            <th>关键位置</th>
+            <th>用途</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>参考程序</td>
+            <td><code>D:\程序存档\CPU2_v1.563\CPU2_v1.563\MEASURE\alarm.h</code></td>
+            <td>28, 44, 56, 63-127</td>
+            <td>继电器方式2参数结构、运行态结构、清报警非存储结构、枚举定义。</td>
+          </tr>
+          <tr>
+            <td>参考程序</td>
+            <td><code>D:\程序存档\CPU2_v1.563\CPU2_v1.563\MEASURE\alarm.c</code></td>
+            <td>70, 75, 91, 148, 193, 238, 272, 311, 366, 452, 472</td>
+            <td>方式2入口、聚合报警、逐路刷新、有效/无效值判断、阈值判断、数字源选择、硬件输出和只读状态初始化。</td>
+          </tr>
+          <tr>
+            <td>当前 CPU2</td>
+            <td><code>D:\CUBE\LTD_MAIN_CPU2\Services\Relay\relay_output.c</code></td>
+            <td>67, 126, 184, 222, 260, 330, 344, 394, 416, 430</td>
+            <td>当前四路继电器方式2核心实现。</td>
+          </tr>
+          <tr>
+            <td>当前 CPU2</td>
+            <td><code>D:\CUBE\LTD_MAIN_CPU2\Services\ParamStorage\system_parameter.h</code></td>
+            <td>35, 106, 505, 528, 695</td>
+            <td>四路继电器参数结构、运行态结构、测量结果扩展。</td>
+          </tr>
+          <tr>
+            <td>当前 CPU2</td>
+            <td><code>D:\CUBE\LTD_MAIN_CPU2\Services\Modbus\stateformodbus.h</code></td>
+            <td>192-217, 341-356</td>
+            <td>保持寄存器中四路配置布局，输入寄存器中四路运行态布局。</td>
+          </tr>
+          <tr>
+            <td>当前 CPU2</td>
+            <td><code>D:\CUBE\LTD_MAIN_CPU2\Services\Modbus\hostcommu_modbus.c</code></td>
+            <td>65-66, 247, 273-292</td>
+            <td>清报警写入与 FRAM 保存判定逻辑。</td>
+          </tr>
+          <tr>
+            <td>当前 CPU2</td>
+            <td><code>D:\CUBE\LTD_MAIN_CPU2\Application\Src\app_main.c</code><br><code>D:\CUBE\LTD_MAIN_CPU2\Core\Src\stm32f4xx_it.c</code></td>
+            <td>app_main.c:105, 162<br>stm32f4xx_it.c:324</td>
+            <td>继电器初始化和刷新调用点。</td>
+          </tr>
+          <tr>
+            <td>当前 CPU3</td>
+            <td><code>D:\CUBE\LTD_DISPLAY_CPU3\Application\system_param\system_parameter.c</code></td>
+            <td>157-198, 289-297, 607-610</td>
+            <td>CPU3 四路继电器菜单参数、运行态初值和调试输出。</td>
+          </tr>
+          <tr>
+            <td>当前 CPU3</td>
+            <td><code>D:\CUBE\LTD_DISPLAY_CPU3\Communication\internal\main_board_modbus\cpu2_communicate.c</code></td>
+            <td>99, 112-124, 142-144</td>
+            <td>CPU3 轮询 CPU2 输入寄存器尾部，包含无线滑环状态和继电器运行态。</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="card">
+      <h2 id="reference">四、参考程序方式2实现逻辑</h2>
+
+      <h3>4.1 数据模型</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>结构</th>
+            <th>字段</th>
+            <th>性质</th>
+            <th>说明</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>ALARM_PARA_STORAGE</code></td>
+            <td><code>operating_mode</code>, <code>digital_source</code>, <code>contact_type</code>, <code>alarm_mode</code>, <code>error_value</code>, <code>alarm_source</code>, <code>HH_alarm_value</code>, <code>H_alarm_value</code>, <code>L_alarm_value</code>, <code>LL_alarm_value</code>, <code>alarm_hysteresis</code>, <code>damping_factor</code></td>
+            <td>存储参数</td>
+            <td>每路继电器的持久化配置，共 12 项。</td>
+          </tr>
+          <tr>
+            <td><code>ALARM_PARA_ONLYREAD</code></td>
+            <td><code>alarm_value</code>, <code>HH_alarm</code>, <code>H_alarm</code>, <code>HH_H_alarm</code>, <code>L_alarm</code>, <code>LL_alarm</code>, <code>LL_L_alarm</code>, <code>any_error</code></td>
+            <td>只读运行态</td>
+            <td>对外展示当前报警源值和各级报警状态。</td>
+          </tr>
+          <tr>
+            <td><code>ALARM_PARA_NOSTORAGE</code></td>
+            <td><code>clear_alarm</code></td>
+            <td>非存储命令</td>
+            <td>仅用于释放锁存报警，不参与持久化。</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>4.2 主刷新流程</h3>
+      <p>参考程序在 <code>AlarmStateUpdate()</code> 中判断继电器类型。如果是方式2，也就是 <code>RELAYTYPE_2</code>，则执行：</p>
+      <pre>result.Alarm = UpdateAlarm(result.OilLevel);
+cfg2_alarmupdate();</pre>
+      <p><code>cfg2_alarmupdate()</code> 是方式2核心。它按继电器通道逐路执行，逻辑可以分解为以下步骤：</p>
+      <div class="flow">
+        <div class="step"><span class="num">1</span><br>判断该路是否启用：<code>operating_mode == OM_OUTPUT_PASSIVE</code> 且 <code>alarm_source != AS_NONE</code>。</div>
+        <div class="step"><span class="num">2</span><br>比较 <code>alarm_value</code> 是否等于该报警源对应的无效值。</div>
+        <div class="step"><span class="num">3A</span><br>如果无效，执行 <code>H_HH_L_LLstate_unvalid()</code>，按 <code>error_value</code> 生成报警状态。</div>
+        <div class="step"><span class="num">3B</span><br>如果有效，执行 <code>H_HH_L_LLstate_valid()</code>，按阈值、回差和报警模式判断 HH/H/L/LL。</div>
+        <div class="step"><span class="num">4</span><br>派生 <code>HH_H_alarm</code>、<code>LL_L_alarm</code>、<code>any_error</code>。</div>
+        <div class="step"><span class="num">5</span><br>按 <code>digital_source</code> 选择本路最终逻辑报警状态。</div>
+        <div class="step"><span class="num">6</span><br>按 <code>contact_type</code> 转换为继电器硬件状态。</div>
+      </div>
+
+      <h3>4.3 有效值路径</h3>
+      <p><code>H_HH_L_LLstate_valid()</code> 分别判断四类报警：</p>
+      <table>
+        <thead>
+          <tr>
+            <th>报警项</th>
+            <th>比较方向</th>
+            <th>阈值</th>
+            <th>回差</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>HH 高高报</td>
+            <td>当前值大于等于阈值</td>
+            <td><code>HH_alarm_value</code></td>
+            <td><code>alarm_hysteresis</code></td>
+          </tr>
+          <tr>
+            <td>H 高报</td>
+            <td>当前值大于等于阈值</td>
+            <td><code>H_alarm_value</code></td>
+            <td><code>alarm_hysteresis</code></td>
+          </tr>
+          <tr>
+            <td>L 低报</td>
+            <td>当前值小于等于阈值</td>
+            <td><code>L_alarm_value</code></td>
+            <td><code>alarm_hysteresis</code></td>
+          </tr>
+          <tr>
+            <td>LL 低低报</td>
+            <td>当前值小于等于阈值</td>
+            <td><code>LL_alarm_value</code></td>
+            <td><code>alarm_hysteresis</code></td>
+          </tr>
+        </tbody>
+      </table>
+      <p>参考程序通过 <code>float_compare()</code> 做比较，比较前用 <code>ZOOM = 10</code> 转成 0.1 精度整数，目的是避免浮点尾差影响报警边界。</p>
+
+      <h3>4.4 报警模式</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>模式</th>
+            <th>参考程序行为</th>
+            <th>关键点</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>AM_OFF</code></td>
+            <td>强制未激活。</td>
+            <td>无论当前值、阈值、锁存状态如何，都不报警。</td>
+          </tr>
+          <tr>
+            <td><code>AM_ON</code></td>
+            <td>非锁存报警。未报警时用阈值触发；已报警后用带回差条件释放。</td>
+            <td>防止当前值在阈值附近抖动导致继电器频繁动作。</td>
+          </tr>
+          <tr>
+            <td><code>AM_LATCHING</code></td>
+            <td>锁存报警。只要达到阈值就激活并把清报警命令复位为 NO；离开阈值后，只有收到 <code>clear_alarm == YES</code> 才释放。</td>
+            <td>清报警不是直接强制解除当前仍存在的报警；必须先不满足触发条件，清报警才有释放效果。</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>4.5 无效值路径</h3>
+      <p>当报警源值等于无效值时，参考程序不再按阈值比较，而是先把 HH/H/L/LL 清成未激活，再根据 <code>error_value</code> 设置报警：</p>
+      <table>
+        <thead>
+          <tr>
+            <th><code>error_value</code></th>
+            <th>行为</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td><code>EV_NO_ALARM</code></td><td>无效值不触发报警。</td></tr>
+          <tr><td><code>EV_HH_H</code></td><td>激活 HH。</td></tr>
+          <tr><td><code>EV_H</code></td><td>激活 H。</td></tr>
+          <tr><td><code>EV_L</code></td><td>激活 L。</td></tr>
+          <tr><td><code>EV_LL_L</code></td><td>激活 LL。</td></tr>
+          <tr><td><code>EV_ALL_ALARMS</code></td><td>HH/H/L/LL 全部激活。</td></tr>
+        </tbody>
+      </table>
+
+      <h3>4.6 数字源与触点输出</h3>
+      <p><code>determine_relay_status()</code> 根据 <code>digital_source</code> 从 HH/H/HH_H/L/LL/LL_L/ANY 中选出本路逻辑报警状态。之后 <code>set_relay()</code> 根据触点类型转为硬件状态：</p>
+      <table>
+        <thead>
+          <tr>
+            <th>触点类型</th>
+            <th>逻辑未激活</th>
+            <th>逻辑激活</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>CT_NORMALLY_OPEN</code></td>
+            <td>继电器打开</td>
+            <td>继电器闭合</td>
+          </tr>
+          <tr>
+            <td><code>CT_NORMALLY_CLOSED</code></td>
+            <td>继电器闭合</td>
+            <td>继电器打开</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>4.7 聚合报警状态</h3>
+      <p>参考程序还有 <code>cfg2_GetAlarmState()</code>，用于从所有方式2继电器运行态汇总一个总报警状态：</p>
+      <ul>
+        <li>任一路 <code>HH_H_alarm</code> 激活，返回高报警。</li>
+        <li>否则任一路 <code>LL_L_alarm</code> 激活，返回低报警。</li>
+        <li>否则返回无报警。</li>
+      </ul>
+      <p>这个聚合状态不等于某一路继电器输出状态，而是面向设备报警摘要或界面提示的总状态。</p>
+    </section>
+
+    <section class="card">
+      <h2 id="current">五、当前工程四路继电器实现逻辑</h2>
+
+      <h3>5.1 数据模型和协议布局</h3>
+      <p>当前工程在 CPU2 和 CPU3 都定义了四路继电器方式2配置和运行态：</p>
+      <ul>
+        <li><code>RELAY_ALARM_CHANNEL_COUNT = 4u</code>，只使用 RELAY1 至 RELAY4。</li>
+        <li><code>RelayAlarmConfig</code> 包含参考程序 12 个存储参数，并额外包含 <code>clear_alarm</code>。</li>
+        <li><code>RelayAlarmRuntimeState</code> 包含 <code>alarm_value</code>、HH/H/HH_H/L/LL/LL_L/any/clear。</li>
+        <li><code>MeasurementResult</code> 末尾追加 <code>relay_alarm_runtime[4]</code>，CPU3 可以读到每路运行态。</li>
+      </ul>
+      <p>Modbus 布局上，保持寄存器把四路继电器配置放在 <code>HOLDREGISTER_DEVICEPARAM_RESERVED33</code> 之后；输入寄存器把四路运行态放在无线滑环匹配状态之后，<code>REG_ENG</code> 相应后移。</p>
+
+      <h3>5.2 CPU2 运行流程</h3>
+      <p>当前 CPU2 的核心函数是 <code>RelayOutput_UpdateChannel()</code>。单路执行流程如下：</p>
+      <div class="flow">
+        <div class="step"><span class="num">1</span><br>如果 <code>manual_alarm_inhibit != 0</code>，只释放继电器输出，保留该路已锁存运行态。</div>
+        <div class="step"><span class="num">2</span><br>如果不是被动输出，或报警源为 none，复位该路运行态并释放继电器。</div>
+        <div class="step"><span class="num">3</span><br>如果配置里的 <code>clear_alarm == YES</code>，复制到运行态，然后把配置里的命令清回 NO。</div>
+        <div class="step"><span class="num">4</span><br>从当前测量结果读取报警源值，并判断是否有效。</div>
+        <div class="step"><span class="num">5A</span><br>有效值：按 HH/H/L/LL 阈值、回差和报警模式计算。</div>
+        <div class="step"><span class="num">5B</span><br>无效值：按 <code>error_value</code> 生成报警状态。</div>
+        <div class="step"><span class="num">6</span><br>派生 HH_H、LL_L、ANY，并按数字源选择输出状态。</div>
+        <div class="step"><span class="num">7</span><br>按常开/常闭转换为线圈吸合状态，返回给 bit mask。</div>
+      </div>
+
+      <h3>5.3 报警源取值</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>报警源</th>
+            <th>当前工程取值</th>
+            <th>无效条件</th>
+            <th>与参考程序关系</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>储罐液位</td>
+            <td><code>g_measurement.oil_level / 10.0F</code></td>
+            <td><code>UNVALID_LEVEL</code>，或探针不在液面且液位不稳定。</td>
+            <td>单位基本对齐参考程序，但增加了当前项目的稳定性判断。</td>
+          </tr>
+          <tr>
+            <td>液相温度</td>
+            <td><code>g_measurement.debug_data.temperature / 100.0F</code></td>
+            <td><code>UNVALID_TEMPERATURE_REALTIME</code> 或 <code>UNVALID_TEMPERATURE_WIRELESS</code>。</td>
+            <td>参考程序通常按 /10 更新报警值；当前按 /100，需确认 CPU3 显示和参数单位。</td>
+          </tr>
+          <tr>
+            <td>水位</td>
+            <td><code>g_measurement.water_level / 10.0F</code></td>
+            <td><code>LEVEL_DOWNLIMITWATER</code>。</td>
+            <td>基本对齐。</td>
+          </tr>
+          <tr>
+            <td>浮子位置</td>
+            <td><code>g_measurement.sensor_position / 10.0F</code></td>
+            <td><code>UNVALID_POSITION</code>。</td>
+            <td>基本对齐。</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>5.4 输出和调用</h3>
+      <ul>
+        <li><code>RelayOutput_BuildStateMask()</code> 逐路生成四路输出 bit。</li>
+        <li><code>RelayOutput_WriteMask()</code> 写 RELAY1/2/3/4 GPIO，输出状态 mask 按四路有效位保存，不再固定释放 RELAY4。</li>
+        <li>当前定义高电平为线圈吸合：<code>RELAY_OUTPUT_ACTIVE_LEVEL = GPIO_PIN_SET</code>。</li>
+        <li><code>RelayOutput_Init()</code> 在 <code>App_Init()</code> 中调用，初始化时全部释放。</li>
+        <li>TIM4 中断只置位刷新请求，<code>RelayOutput_Update()</code> 由主循环 pending 处理路径调用。</li>
+      </ul>
+
+      <h3>5.5 CPU3 参数和运行态</h3>
+      <p>CPU3 已经按四路，每路 13 个参数建立菜单和元数据。每路包括工作模式、数字源、接点、报警模式、故障值、报警源、HH/H/L/LL 值、滞回、阻值和清报警。CPU3 同时轮询输入寄存器尾部，把 CPU2 发布的四路运行态读入 <code>g_measurement.relay_alarm_runtime[]</code>。</p>
+    </section>
+
+    <section class="card">
+      <h2 id="compare">六、参考程序与当前实现对照</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>对照项</th>
+            <th>参考程序</th>
+            <th>当前实现</th>
+            <th>结论</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>继电器数量</td>
+            <td>方式2按 <code>RELAY_NUM_AMOUNT</code> 全量循环，参考工程为 4 路。</td>
+            <td>循环 <code>RELAY_ALARM_CHANNEL_COUNT = 4</code>，RELAY1~RELAY4 均参与方式2输出。</td>
+            <td><span class="badge ok">一致</span> 已按四路程序需求对齐；第四路外部驱动和端子待后续原理图补齐。</td>
+          </tr>
+          <tr>
+            <td>存储参数</td>
+            <td>12 个存储参数，不包含 <code>clear_alarm</code>。</td>
+            <td>13 个配置字段，包含 <code>clear_alarm</code>。</td>
+            <td><span class="badge bad">偏差</span> 清报警命令存在持久化风险。</td>
+          </tr>
+          <tr>
+            <td>运行态</td>
+            <td>只读区保存 <code>alarm_value</code> 和各报警状态。</td>
+            <td>运行态加入 <code>MeasurementResult</code>，CPU3 可读取。</td>
+            <td><span class="badge ok">增强</span> 符合“每路运行态增加到设备测量结果”。</td>
+          </tr>
+          <tr>
+            <td>有效值报警判断</td>
+            <td>HH/H 用大于等于，L/LL 用小于等于，支持回差和锁存。</td>
+            <td>逻辑等价实现。</td>
+            <td><span class="badge ok">一致</span></td>
+          </tr>
+          <tr>
+            <td>无效值策略</td>
+            <td>按 <code>error_value</code> 生成 HH/H/L/LL。</td>
+            <td>逻辑等价实现。</td>
+            <td><span class="badge ok">一致</span></td>
+          </tr>
+          <tr>
+            <td>比较精度</td>
+            <td>按 0.1 精度整数化比较。</td>
+            <td>按 0.1 精度整数化比较。</td>
+            <td><span class="badge ok">一致</span> 包括负数边界上的历史行为也基本保留。</td>
+          </tr>
+          <tr>
+            <td>禁用状态</td>
+            <td>不满足启用条件时基本不处理该路。</td>
+            <td>复位运行态并释放输出。</td>
+            <td><span class="badge warn">差异</span> 当前更安全直观，但与参考程序不完全等价。</td>
+          </tr>
+          <tr>
+            <td>手动抑制</td>
+            <td>方式2逻辑中未见等价分支。</td>
+            <td><code>manual_alarm_inhibit</code> 置位时只释放输出，不复位已锁存运行态。</td>
+            <td><span class="badge ok">已优化</span> 手动操作期间抑制输出，同时保留锁存语义。</td>
+          </tr>
+          <tr>
+            <td>聚合报警</td>
+            <td><code>cfg2_GetAlarmState()</code> 汇总高/低/无报警。</td>
+            <td>当前主要提供每路运行态，没有实现总报警摘要。</td>
+            <td><span class="badge warn">缺口</span> 如果界面或上位机需要摘要，需补。</td>
+          </tr>
+          <tr>
+            <td>刷新上下文</td>
+            <td>由参考工程原有节拍触发，和其全局状态模型配套。</td>
+            <td>TIM4 只请求刷新，主循环统一计算并写 GPIO。</td>
+            <td><span class="badge ok">已优化</span> 避免中断中读取配置/测量并做浮点计算。</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="card">
+      <h2 id="risks">七、当前问题状态和剩余风险</h2>
+
+      <h3>7.1 已优化：<code>clear_alarm</code> 不再进入保存镜像</h3>
+      <table>
+        <tbody>
+          <tr>
+            <th>现象</th>
+            <td>参考程序把 <code>clear_alarm</code> 放在非存储结构中；当前放入 <code>RelayAlarmConfig</code> 并映射到保持寄存器。</td>
+          </tr>
+          <tr>
+            <th>已执行优化</th>
+            <td><code>IsOnlyRelayClearAlarmWrite()</code> 继续避免单独写清报警触发 FRAM 保存；同时 <code>build_saved_device_params()</code> 会在计算 CRC 前清零四路 <code>clear_alarm</code>。</td>
+          </tr>
+          <tr>
+            <th>批量写场景</th>
+            <td>如果 CPU3 或外部主机做批量写配置，写入范围包含 <code>clear_alarm=1</code>，仍可以保存其他配置字段，但保存镜像中的 <code>clear_alarm</code> 会被强制清 0。</td>
+          </tr>
+          <tr>
+            <th>上电处理</th>
+            <td><code>normalize_device_params_runtime()</code> 会清理历史 FRAM 中可能残留的 <code>clear_alarm=1</code>，并触发必要的参数回写。</td>
+          </tr>
+          <tr>
+            <th>剩余验证</th>
+            <td>需要用外部 Modbus 主站实测“批量写配置包含 clear_alarm=1 后重启”，确认 FRAM 中不会保留清报警命令。</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>7.2 已优化：TIM4 中断只置位刷新请求</h3>
+      <table>
+        <tbody>
+          <tr>
+            <th>现象</th>
+            <td><code>RelayOutput_Update()</code> 不再由 <code>TIM4_IRQHandler()</code> 直接调用。</td>
+          </tr>
+          <tr>
+            <th>当前机制</th>
+            <td>TIM4 调用 <code>RelayOutput_RequestUpdate()</code>，只置位 <code>relay_output_update_pending</code>；主循环调用 <code>RelayOutput_ProcessPending()</code> 后执行完整计算。</td>
+          </tr>
+          <tr>
+            <th>效果</th>
+            <td>中断中不再读取配置、不再读取测量结果、不再写运行态、不再执行浮点比较或 GPIO 输出。</td>
+          </tr>
+          <tr>
+            <th>剩余风险</th>
+            <td>如果主循环长时间阻塞，继电器刷新会延后到主循环恢复后执行；需要结合测量流程确认延迟是否满足现场报警响应要求。</td>
+          </tr>
+          <tr>
+            <th>测试重点</th>
+            <td>观察 TIM4 持续运行、主循环 pending 刷新和看门狗刷新是否互不影响。</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>7.3 已优化：参数和测量值采用快照式读取</h3>
+      <p>当前继电器逻辑在计算前复制测量快照，并对每路继电器复制单路配置快照。每路运行态先在本地结构中完成计算，再通过短临界区一次提交到 <code>g_measurement.relay_alarm_runtime[]</code>。Modbus 写配置、测量流程更新数据或 CPU3 读取输入寄存器时，单次方式2计算使用同一轮快照，避免以下瞬态：</p>
+      <ul>
+        <li>报警源已经切换，但阈值仍是旧源的阈值。</li>
+        <li>浮点原始值两个寄存器写入期间，被继电器逻辑按半旧半新的 raw 值解码。</li>
+        <li>触点类型或数字源改变时，某一次刷新使用混合配置，导致继电器短暂动作。</li>
+      </ul>
+      <p>当前实现使用短临界区复制共享字段，并用短临界区提交运行态；计算过程不再直接逐字段读取全局配置和测量结果，也不再逐字段暴露中间运行态。</p>
+
+      <h3>7.4 已优化：手动抑制不再清锁存运行态</h3>
+      <p>当前 <code>manual_alarm_inhibit != 0</code> 时，继电器逻辑只返回释放输出，不调用 <code>RelayOutput_ResetRuntimeState()</code>。这样手动动作期间不会输出自动报警，同时不会清除已经锁存的每路运行态。</p>
+      <p>仍需现场确认产品语义：手动动作期间外部继电器释放是否符合安全设计；如果要求手动期间也保持报警输出，后续还需要增加独立策略配置。</p>
+
+      <h3>7.5 中风险：禁用和无报警源时行为不完全等价</h3>
+      <p>参考程序在未启用或 source none 时基本不处理该路；当前实现会复位运行态并释放继电器。这个选择偏安全，但常闭触点场景需要特别确认：</p>
+      <ul>
+        <li>如果“释放线圈”对应外部回路断开，禁用时符合无输出预期。</li>
+        <li>如果常闭接线被用作 fail-safe 正常吸合逻辑，禁用时释放线圈可能导致外部看到异常状态。</li>
+      </ul>
+      <p>建议结合原理图和端子定义，明确“禁用时继电器物理状态”和“用户看到的接点状态”。</p>
+
+      <h3>7.6 中风险：温度单位与参考程序存在差异</h3>
+      <p>参考程序的 <code>UpdateAlarmValue(data,type)</code> 以 <code>data / 10.0</code> 更新报警值。当前工程对液相温度使用 <code>temperature / 100.0F</code>。这可能是当前工程真实温度单位，但需要确认 CPU3 菜单、参数显示、Modbus 保持寄存器写入和运行态输入寄存器都采用同一单位。</p>
+      <p>如果菜单按一位小数输入，而 CPU2 按两位缩放读取，就会出现 10 倍报警阈值偏差。</p>
+
+      <h3>7.7 中低风险：未实现参考程序聚合报警摘要</h3>
+      <p>当前已经把每路运行态加入测量结果，这是必要增强。但参考程序还有 <code>cfg2_GetAlarmState()</code>，能够汇总所有继电器的高/低报警。当前没有等价总状态。</p>
+      <p>如果 CPU3 状态页、DSM 外部协议或上位机只看一个设备报警状态，而不逐路解析继电器运行态，就可能丢失方式2继电器报警摘要。</p>
+
+      <h3>7.8 低风险：手动设置接口容易被覆盖</h3>
+      <p><code>RelayOutput_SetChannel()</code> 可以直接设置输出 bit，但下一次 <code>RelayOutput_Update()</code> 会按报警逻辑覆盖它。若后续产测或调试要手动吸合继电器，需要独立的手动测试模式，不能直接依赖这个接口保持状态。</p>
+
+      <h3>7.9 低风险：协议尾部增加 40 个输入寄存器</h3>
+      <p>每路运行态占 10 个输入寄存器，四路共 40 个，<code>REG_ENG</code> 后移。CPU2 和 CPU3 已同步，但外部工具如果按旧输入寄存器尾部长度读取，需要确认协议版本或读寄存器长度是否已经更新。</p>
+
+      <h3>7.10 低风险：负数阈值的 0.1 精度比较继承历史行为</h3>
+      <p>当前比较逻辑为了和参考程序一致，保留了 <code>(int)(value * 10 + 0.5)</code> 形式。这对正数符合四舍五入直觉，但对负温度边界会有不对称行为。因为目标是尽量一致，当前可以保留，但测试中应增加负温度阈值用例。</p>
+    </section>
+
+    <section class="card">
+      <h2 id="fix">八、建议整改顺序</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>优先级</th>
+            <th>建议动作</th>
+            <th>涉及文件</th>
+            <th>预期结果</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr class="risk-high">
+            <td><span class="badge bad">P0</span></td>
+            <td>禁止 <code>clear_alarm</code> 持久化。最小改法是在保存参数前清零四路 <code>clear_alarm</code>；更彻底的改法是从持久化配置结构中拆出。</td>
+            <td><code>hostcommu_modbus.c</code><br><code>system_parameter.c/.h</code><br><code>dataanalysis_modbus.c</code></td>
+            <td>清报警恢复为参考程序的一次性非存储命令，避免重启后误清锁存。</td>
+          </tr>
+          <tr class="risk-high">
+            <td><span class="badge bad">P0</span></td>
+            <td>收敛 <code>RelayOutput_Update()</code> 调用上下文。建议 TIM4 中断只置位标志，主循环执行完整计算和 GPIO 输出。</td>
+            <td><code>app_main.c</code><br><code>stm32f4xx_it.c</code><br><code>relay_output.c/.h</code></td>
+            <td>减少中断计算量，避免主循环与中断同时读写运行态。</td>
+          </tr>
+          <tr class="risk-mid">
+            <td><span class="badge warn">P1</span></td>
+            <td>单路计算前复制配置和测量值快照，避免半更新参数影响继电器输出。</td>
+            <td><code>relay_output.c</code></td>
+            <td>继电器每次刷新使用同一时刻的一致数据。</td>
+          </tr>
+          <tr class="risk-mid">
+            <td><span class="badge warn">P1</span></td>
+            <td>确认并固化 <code>manual_alarm_inhibit</code> 的产品语义。若锁存必须保持，则手动抑制期间不应清运行态。</td>
+            <td><code>relay_output.c</code><br><code>measure.c</code></td>
+            <td>避免手动操作误释放锁存报警。</td>
+          </tr>
+          <tr class="risk-mid">
+            <td><span class="badge warn">P1</span></td>
+            <td>确认液温单位，并在文档、菜单、Modbus 映射中统一说明。</td>
+            <td><code>relay_output.c</code><br><code>system_parameter.c</code><br>协议文档</td>
+            <td>避免温度阈值 10 倍误差。</td>
+          </tr>
+          <tr class="risk-low">
+            <td><span class="badge ok">P2</span></td>
+            <td>补充方式2聚合报警摘要，或明确当前只提供逐路运行态。</td>
+            <td><code>relay_output.c/.h</code><br><code>MeasurementResult</code> 或状态页</td>
+            <td>恢复参考程序的总报警能力，便于显示和外部协议消费。</td>
+          </tr>
+          <tr class="risk-low">
+            <td><span class="badge ok">P2</span></td>
+            <td>明确 <code>RelayOutput_SetChannel()</code> 的定位，必要时增加产测专用手动模式。</td>
+            <td><code>relay_output.c/.h</code></td>
+            <td>避免后续调试接口误用。</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="card">
+      <h2 id="test">九、建议测试矩阵</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>测试项</th>
+            <th>配置</th>
+            <th>步骤</th>
+            <th>预期</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>四路独立输出</td>
+            <td>R1/R2/R3/R4 分别启用，数字源分别选 H、L、ANY。</td>
+            <td>分别制造对应报警条件。</td>
+            <td>只有命中的继电器动作，运行态只在对应路变化。</td>
+          </tr>
+          <tr>
+            <td>AM_ON 回差</td>
+            <td>高报阈值 100.0，回差 2.0。</td>
+            <td>值从 99.9 到 100.0，再降到 98.1、98.0。</td>
+            <td>到阈值激活，回落未越过回差前保持，越过释放。</td>
+          </tr>
+          <tr>
+            <td>AM_LATCHING 清除</td>
+            <td>高报锁存。</td>
+            <td>触发报警后回到正常，再写 clear_alarm。</td>
+            <td>触发后锁存；值正常后写清报警才释放；仍超限时写清报警不释放。</td>
+          </tr>
+          <tr>
+            <td>clear_alarm 重启保持</td>
+            <td>任一路锁存报警，写 clear_alarm。</td>
+            <td>模拟单寄存器写和批量写，然后重启。</td>
+            <td>重启后配置中的 clear_alarm 必须为 0，不应自动清报警。</td>
+          </tr>
+          <tr>
+            <td>无效值策略</td>
+            <td>分别设置 <code>EV_NO_ALARM</code>、<code>EV_HH_H</code>、<code>EV_ALL_ALARMS</code>。</td>
+            <td>制造各报警源无效值。</td>
+            <td>运行态按 error_value 生成，不按阈值判断。</td>
+          </tr>
+          <tr>
+            <td>常开/常闭</td>
+            <td>同一报警条件分别配置常开和常闭。</td>
+            <td>观察 GPIO 和继电器端子。</td>
+            <td>逻辑报警相同，物理输出按触点类型反转。</td>
+          </tr>
+          <tr>
+            <td>禁用状态</td>
+            <td>运行中把 operating_mode 改为 disabled。</td>
+            <td>观察运行态和继电器。</td>
+            <td>当前实现应复位运行态并释放；同时确认外部接点表现符合产品定义。</td>
+          </tr>
+          <tr>
+            <td>手动抑制</td>
+            <td>任一路锁存已激活。</td>
+            <td>触发 <code>manual_alarm_inhibit</code>。</td>
+            <td>继电器输出释放，但每路锁存运行态保持；手动抑制解除后按当前测量值和锁存清除命令继续判断。</td>
+          </tr>
+          <tr>
+            <td>温度单位</td>
+            <td>液温源，阈值设置 20.0。</td>
+            <td>模拟温度 19.9、20.0、20.1。</td>
+            <td>边界必须按 20.0 摄氏度触发，不能出现 2.0 或 200.0 的缩放误差。</td>
+          </tr>
+          <tr>
+            <td>负温度阈值</td>
+            <td>液温源，阈值 -1.0，回差 0.5。</td>
+            <td>模拟 -1.1、-1.0、-0.9、-0.5。</td>
+            <td>确认 0.1 精度整数化比较在负数边界的实际行为可接受。</td>
+          </tr>
+          <tr>
+            <td>参数批量写瞬态</td>
+            <td>CPU3 或外部主机连续写入继电器配置块。</td>
+            <td>写入过程中高频观察输出状态。</td>
+            <td>不应出现由于半更新参数导致的短暂误动作。</td>
+          </tr>
+          <tr>
+            <td>CPU3 运行态显示/读取</td>
+            <td>四路分别触发不同报警。</td>
+            <td>读 CPU3 的 <code>g_measurement.relay_alarm_runtime[]</code> 或对应输入寄存器。</td>
+            <td>四路 alarm_value 和各状态与 CPU2 输出一致。</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="card">
+      <h2 id="appendix">十、状态和参数速查</h2>
+
+      <h3>10.1 参数枚举</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>类别</th>
+            <th>值</th>
+            <th>含义</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td>工作模式</td><td><code>OM_DISABLED = 0</code><br><code>OM_OUTPUT_PASSIVE = 1</code></td><td>禁用；无源输出。</td></tr>
+          <tr><td>数字源</td><td><code>DS_NONE = 0</code><br><code>DS_ALARM_H = 1</code><br><code>DS_ALARM_HH = 2</code><br><code>DS_ALARM_H_HH = 3</code><br><code>DS_ALARM_L = 4</code><br><code>DS_ALARM_LL = 5</code><br><code>DS_ALARM_L_LL = 6</code><br><code>DS_ALARM_ANY = 7</code></td><td>决定哪一个运行态驱动本路继电器。</td></tr>
+          <tr><td>触点类型</td><td><code>CT_NORMALLY_OPEN = 0</code><br><code>CT_NORMALLY_CLOSED = 1</code></td><td>常开；常闭。</td></tr>
+          <tr><td>报警模式</td><td><code>AM_OFF = 0</code><br><code>AM_ON = 1</code><br><code>AM_LATCHING = 2</code></td><td>关闭；普通报警；锁存报警。</td></tr>
+          <tr><td>无效值策略</td><td><code>EV_NO_ALARM = 0</code><br><code>EV_HH_H = 1</code><br><code>EV_H = 2</code><br><code>EV_L = 3</code><br><code>EV_LL_L = 4</code><br><code>EV_ALL_ALARMS = 5</code></td><td>报警源无效时如何生成报警状态。</td></tr>
+          <tr><td>报警源</td><td><code>AS_TANK_LEVEL = 0</code><br><code>AS_LIQUID_TEMP = 1</code><br><code>AS_WATER_LEVEL = 2</code><br><code>AS_DISPLACER_POS = 3</code><br><code>AS_NONE = 4</code></td><td>储罐液位；液相温度；水位；浮子位置；无。</td></tr>
+          <tr><td>运行态</td><td><code>IA_ACTIVE = 0</code><br><code>IA_INACTIVE = 1</code></td><td>注意激活是 0，未激活是 1，和很多布尔习惯相反。</td></tr>
+          <tr><td>清报警</td><td><code>CLEARALARM_NO = 0</code><br><code>CLEARALARM_YES = 1</code></td><td>锁存清除命令。</td></tr>
+        </tbody>
+      </table>
+
+      <h3>10.2 单路运行态寄存器布局</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>偏移</th>
+            <th>字段</th>
+            <th>寄存器数</th>
+            <th>说明</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td>0</td><td><code>alarm_value</code></td><td>2</td><td>IEEE754 float，当前报警源值或该源无效值。</td></tr>
+          <tr><td>2</td><td><code>HH_alarm</code></td><td>1</td><td>高高报警状态。</td></tr>
+          <tr><td>3</td><td><code>H_alarm</code></td><td>1</td><td>高报警状态。</td></tr>
+          <tr><td>4</td><td><code>HH_H_alarm</code></td><td>1</td><td>HH 或 H 的组合状态。</td></tr>
+          <tr><td>5</td><td><code>L_alarm</code></td><td>1</td><td>低报警状态。</td></tr>
+          <tr><td>6</td><td><code>LL_alarm</code></td><td>1</td><td>低低报警状态。</td></tr>
+          <tr><td>7</td><td><code>LL_L_alarm</code></td><td>1</td><td>LL 或 L 的组合状态。</td></tr>
+          <tr><td>8</td><td><code>any_error</code></td><td>1</td><td>任意高侧或低侧报警。</td></tr>
+          <tr><td>9</td><td><code>clear_alarm</code></td><td>1</td><td>运行态中记录最近清报警命令状态。</td></tr>
+        </tbody>
+      </table>
+
+      <h3>10.3 当前建议的目标状态</h3>
+      <ol>
+        <li>四路方式2报警判定继续保持参考程序逻辑。</li>
+        <li><code>clear_alarm</code> 恢复为一次性非存储命令，不允许进入 FRAM 有效配置。</li>
+        <li>继电器刷新只在一个上下文中完整执行，避免中断和主循环同时计算。</li>
+        <li>每次刷新使用一致的参数和测量快照。</li>
+        <li>明确手动抑制、禁用状态、常闭触点的物理输出定义，并写入测试方案。</li>
+        <li>确认液温单位和运行态单位，避免 CPU2/CPU3/外部主机解释不一致。</li>
+      </ol>
+      <p class="small">本文件为代码审查和后续整改依据。若后续代码继续调整，应同步更新本文中的风险状态和测试矩阵。</p>
+    </section>
+  </main>
+</body>
+</html>

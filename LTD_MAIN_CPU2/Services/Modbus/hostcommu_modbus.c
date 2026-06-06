@@ -61,6 +61,34 @@ void SetSlaveaddress(int address) {
     #endif
 }
 
+
+/* 清除锁存报警是运行期命令，单独写这些寄存器时不触发 FRAM 保存。 */
+static bool IsOnlyRelayClearAlarmWrite(uint16_t startAddr, uint16_t regCount)
+{
+    if (regCount == 0U) {
+        return false;
+    }
+
+    for (uint16_t offset = 0U; offset < regCount; offset++) {
+        uint16_t addr = (uint16_t)(startAddr + offset);
+        bool matched = false;
+
+        for (uint16_t channel = 0U; channel < HOLDREGISTER_RELAY_ALARM_CHANNEL_COUNT; channel++) {
+            uint16_t clearAddr = (uint16_t)HOLDREGISTER_DEVICEPARAM_RELAY_CLEAR_ALARM(channel);
+            if ((addr == clearAddr) || (addr == (uint16_t)(clearAddr + 1U))) {
+                matched = true;
+                break;
+            }
+        }
+
+        if (!matched) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
 /*判断功能码是否正确*/
 static bool JudgeFunctioncode(void) {
 	if ((RCV_functioncode != readholdingregisterfuncode) && (RCV_functioncode != readinputregisterfuncode)
@@ -246,7 +274,8 @@ int Response10Process(uint8_t const *revframe, uint8_t *sendframe)
      *    规则：只写 command（起始地址刚好是 COMMAND 且长度为 2 寄存器）不存储，
      *          其它涉及参数区的写操作统一认为需要持久化。
      */
-    if (!((startAddr == HOLDREGISTER_DEVICEPARAM_COMMAND) && (regCount == 2))) {
+    if (!((startAddr == HOLDREGISTER_DEVICEPARAM_COMMAND) && (regCount == 2)) &&
+        !IsOnlyRelayClearAlarmWrite(startAddr, regCount)) {
         /* 只要写的范围落在参数持久化区域内，就认为需要保存 */
         uint16_t persist_start = HOLDREGISTER_DEVICEPARAM_SENSORTYPE;  /* 持久化起点：跳过 command */
         uint16_t persist_end   = HOLDREGISTER_DEVICEPARAM_CRC + 1;     /* 持久化终点：到 CRC 结束 */
