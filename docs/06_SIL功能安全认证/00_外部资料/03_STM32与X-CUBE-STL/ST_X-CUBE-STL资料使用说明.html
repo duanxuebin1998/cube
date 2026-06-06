@@ -1,0 +1,739 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ST X-CUBE-STL 资料使用说明</title>
+  <style>
+    :root {
+      --bg: #f6f7f9;
+      --paper: #ffffff;
+      --ink: #1f2933;
+      --muted: #5f6b7a;
+      --line: #d8dee7;
+      --head: #203040;
+      --blue: #1f5f99;
+      --green: #2f6f4e;
+      --orange: #b65c00;
+      --red: #b42318;
+      --code: #f1f4f8;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: "Microsoft YaHei", "Segoe UI", Arial, sans-serif;
+      line-height: 1.65;
+    }
+
+    main {
+      width: min(1180px, calc(100% - 40px));
+      margin: 28px auto 48px;
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 28px;
+      box-shadow: 0 8px 24px rgba(31, 41, 51, 0.08);
+    }
+
+    h1, h2, h3 {
+      color: var(--head);
+      line-height: 1.3;
+      margin: 0;
+    }
+
+    h1 {
+      font-size: 28px;
+      margin-bottom: 8px;
+    }
+
+    h2 {
+      font-size: 21px;
+      margin-top: 30px;
+      padding-top: 18px;
+      border-top: 1px solid var(--line);
+    }
+
+    h3 {
+      font-size: 17px;
+      margin-top: 20px;
+      margin-bottom: 8px;
+    }
+
+    p {
+      margin: 8px 0;
+    }
+
+    a {
+      color: var(--blue);
+      text-decoration: none;
+    }
+
+    a:hover {
+      text-decoration: underline;
+    }
+
+    .meta {
+      color: var(--muted);
+      font-size: 14px;
+      margin-bottom: 18px;
+    }
+
+    .notice {
+      background: #fff8e5;
+      border-left: 4px solid var(--orange);
+      padding: 12px 14px;
+      margin: 18px 0;
+      border-radius: 4px;
+    }
+
+    .summary {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+      margin: 18px 0;
+    }
+
+    .card {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 14px;
+      background: #fbfcfd;
+    }
+
+    .card strong {
+      display: block;
+      color: var(--head);
+      font-size: 16px;
+      margin-bottom: 6px;
+    }
+
+    .card span {
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .flow {
+      counter-reset: step;
+      margin: 14px 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    .flow li {
+      counter-increment: step;
+      position: relative;
+      margin: 10px 0;
+      padding: 12px 14px 12px 52px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fbfcfd;
+    }
+
+    .flow li::before {
+      content: counter(step);
+      position: absolute;
+      left: 14px;
+      top: 14px;
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      background: var(--blue);
+      color: #fff;
+      font-size: 13px;
+      font-weight: 700;
+      display: grid;
+      place-items: center;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 12px 0 20px;
+      font-size: 14px;
+    }
+
+    th, td {
+      border: 1px solid var(--line);
+      padding: 9px 10px;
+      vertical-align: top;
+      text-align: left;
+    }
+
+    th {
+      background: #eef2f6;
+      color: var(--head);
+      font-weight: 700;
+    }
+
+    code {
+      background: var(--code);
+      border-radius: 4px;
+      padding: 1px 5px;
+      font-family: Consolas, "Courier New", monospace;
+      font-size: 13px;
+    }
+
+    .tag {
+      display: inline-block;
+      min-width: 44px;
+      padding: 2px 8px;
+      border-radius: 999px;
+      color: #fff;
+      font-size: 12px;
+      font-weight: 700;
+      text-align: center;
+    }
+
+    .tag-input {
+      background: var(--blue);
+    }
+
+    .tag-action {
+      background: var(--orange);
+    }
+
+    .tag-output {
+      background: var(--green);
+    }
+
+    .tag-risk {
+      background: var(--red);
+    }
+
+    ul {
+      padding-left: 22px;
+      margin: 8px 0 14px;
+    }
+
+    li {
+      margin: 5px 0;
+    }
+
+    @media (max-width: 860px) {
+      main {
+        width: min(100% - 24px, 1180px);
+        margin-top: 16px;
+        padding: 18px;
+      }
+
+      .summary {
+        grid-template-columns: 1fr;
+      }
+
+      table {
+        display: block;
+        overflow-x: auto;
+        white-space: nowrap;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>ST X-CUBE-STL 资料使用说明</h1>
+    <div class="meta">适用范围：CUBE 工程 CPU2/CPU3 SIL 认证准备 | 更新日期：2026-06-06</div>
+
+    <div class="notice">
+      <strong>结论先看：</strong>
+      这些资料是 ST 为 STM32 和 X-CUBE-STL 功能安全支持包提供的参考文档、Safety Manual、FMEA/FMEDA 输入和自检库说明。
+      它们可以作为做 SIL 认证时的设计输入、第三方软件/芯片证据和诊断方案参考，但不能直接证明本产品已经达到 SIL。
+      最终 SIL 认证仍需要项目自己的安全需求、系统架构、FMEDA/FMEA/FTA、软件生命周期、验证证据和认证机构评估。
+    </div>
+
+    <div class="summary">
+      <div class="card">
+        <strong>它是什么</strong>
+        <span>STM32F4 功能安全资料和 X-CUBE-STL 自检库资料，用于说明芯片限制、诊断覆盖、库集成约束和工具边界。</span>
+      </div>
+      <div class="card">
+        <strong>它能帮什么</strong>
+        <span>帮助把 MCU、STL 自检项、FMEA/FMEDA 假设转成项目安全需求、软件设计、测试计划和认证证据。</span>
+      </div>
+      <div class="card">
+        <strong>它不能替代什么</strong>
+        <span>不能替代整机危险分析、SIL 目标确定、项目级 FMEDA、代码整改、验证报告和认证机构正式结论。</span>
+      </div>
+    </div>
+
+    <h2>一、这些资料分别是什么</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>资料类别</th>
+          <th>本地目录</th>
+          <th>作用</th>
+          <th>使用时机</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><span class="tag tag-input">输入</span> ST 官方 PDF</td>
+          <td><code>01_ST官方PDF/</code></td>
+          <td>提供 STM32F4 Safety Manual、FMEA、FMEDA、STL 集成和工具分析资料。</td>
+          <td>做硬件安全分析、软件诊断策略、认证资料准备前先读。</td>
+        </tr>
+        <tr>
+          <td><span class="tag tag-input">输入</span> X-CUBE-STL 包内文档</td>
+          <td><code>02_X-CUBE-STL-F4_V2.0.0包内文档/</code></td>
+          <td>提供 X-CUBE-STL-F4 用户手册、安全手册、发布说明、许可证和包内勘误。</td>
+          <td>决定是否引入 STL、自检项如何调度、失败如何处理时使用。</td>
+        </tr>
+        <tr>
+          <td><span class="tag tag-input">输入</span> 原始包</td>
+          <td><code>99_ST官方原始包/</code></td>
+          <td>保留 X-CUBE-STL-F4 V2.0.0 原始 zip 和 Readme，便于后续重新解包核对。</td>
+          <td>需要引入源码、示例工程或重新确认包内容时使用；zip 受 <code>*.zip</code> 规则忽略。</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h2>二、做 SIL 认证时的正确用法</h2>
+    <ol class="flow">
+      <li>
+        <strong>先定义项目安全范围，不要先套库。</strong>
+        明确 LNG 计量仪哪些功能是安全相关功能，例如电机运动安全停机、上电默认安全态、故障恢复边界、参数保护、通信命令误触发防护等。
+        输出物应是安全功能清单、危险场景、SIL 目标来源和 CPU2/CPU3 安全相关范围。
+      </li>
+      <li>
+        <strong>用 STM32F4 Safety Manual 反查硬件和软件约束。</strong>
+        把 Safety Manual 中的使用假设、时钟/Flash/RAM/复位/中断/外设限制转成项目约束。
+        对 CPU2 的 STM32F429ZGTx，要逐项确认实际硬件设计、初始化默认电平和故障处理是否满足这些假设。
+      </li>
+      <li>
+        <strong>用 FMEA/FMEDA 资料做项目级分析输入。</strong>
+        ST 的 FMEA/FMEDA 只能提供芯片级参考和假设，不能直接变成整机指标。
+        项目需要结合主控板、电机驱动、编码器、传感器供电、通信接口、本安边界和软件诊断策略重新计算或评审。
+      </li>
+      <li>
+        <strong>决定是否采用 X-CUBE-STL 自检库。</strong>
+        如果采用，需要定义自检项、运行阶段、调度周期、运行耗时、失败处理、错误上报、看门狗关系和对实时测量流程的影响。
+        如果不采用，也要说明用什么等效诊断或为什么不需要该诊断。
+      </li>
+      <li>
+        <strong>把 ST 文档要求落到工程文档和代码门禁。</strong>
+        将约束同步到 <code>CPU2编码规范.md</code>、<code>CPU2安全相关模块清单.md</code>、整改检查表、版本改动与测试方案和后续测试记录。
+        代码层面要形成可审计的安全状态机、启动安全、故障处理、参数校验和构建范围控制。
+      </li>
+      <li>
+        <strong>生成认证证据，而不是只保存资料。</strong>
+        每条安全要求都应能追溯到设计、代码、测试、评审和偏离记录。
+        ST 资料作为外部证据输入，项目自己的验证报告才是证明本产品满足要求的核心。
+      </li>
+    </ol>
+
+    <h2>三、资料到工作的映射</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>你要做的事</th>
+          <th>优先查看</th>
+          <th>要产出的工程资料</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>确认 STM32F4 在安全系统里的使用假设</td>
+          <td><a href="01_ST官方PDF/um1840-stm32f4-series-safety-manual-stmicroelectronics.pdf">UM1840 STM32F4 Safety Manual</a>、包内 <a href="02_X-CUBE-STL-F4_V2.0.0包内文档/STL_F4_SM_cx616769_7.0.pdf">STL_F4_SM</a></td>
+          <td>MCU 使用假设清单、硬件约束清单、软件初始化和故障处理约束。</td>
+        </tr>
+        <tr>
+          <td>做芯片相关 FMEA/FMEDA 输入</td>
+          <td><a href="01_ST官方PDF/FMEA%20for%20STM32F4%20-%20AN5141.pdf">AN5141 FMEA</a>、<a href="01_ST官方PDF/FMEDA%20for%20STM32F4%20-%20AN5140.pdf">AN5140 FMEDA</a>、<a href="01_ST官方PDF/Customizing%20FMEDA%20for%20STM32%20-%20AN5321%20rev3.pdf">AN5321</a></td>
+          <td>项目 FMEDA/FMEA、诊断覆盖假设、未覆盖故障和缓解措施。</td>
+        </tr>
+        <tr>
+          <td>评估是否引入 X-CUBE-STL</td>
+          <td><a href="02_X-CUBE-STL-F4_V2.0.0包内文档/STL_F4_UG_cx616705_4.0.pdf">STL_F4_UG</a>、<a href="02_X-CUBE-STL-F4_V2.0.0包内文档/STL_F4_SM_cx616769_7.0.pdf">STL_F4_SM</a>、<a href="01_ST官方PDF/Safety%20self-test%20library%20Arm%C2%AE%20Cortex%C2%AE-M%20integration%20tips%20AN5659%20rev1.pdf">AN5659</a></td>
+          <td>STL 集成方案、自检调度表、失败处理策略、CPU2 运行时影响评估。</td>
+        </tr>
+        <tr>
+          <td>准备认证机构沟通材料</td>
+          <td><a href="01_ST官方PDF/AN5698%20Adapting%20the%20X-CUBE-STL%20functional%20safety%20package%20for%20STM32%20IEC%2061508%20compliant%20to%20other%20safety%20standards.pdf">AN5698</a>、<a href="01_ST官方PDF/Tool%20analysis%20for%20X-CUBE-STL%20functional%20safety%20support%20package%20AN5829%20rev1.pdf">AN5829</a>、<a href="01_ST官方PDF/X-CUBE-STL%20advanced%20topics%20AN5936%20rev2.pdf">AN5936</a></td>
+          <td>第三方软件清单、工具分析说明、STL 适用范围说明和问题清单。</td>
+        </tr>
+        <tr>
+          <td>控制软件整改和代码评审</td>
+          <td><code>../../CPU2编码规范.md</code>、<code>../../CPU2安全相关模块清单.md</code>、<code>../../CPU2编码规范整改检查表.md</code></td>
+          <td>MISRA/CERT 整改记录、偏离记录、安全相关模块评审记录、测试证据。</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h2>四、在 CUBE 工程中的落地建议</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>阶段</th>
+          <th>动作</th>
+          <th>对应到当前工程</th>
+          <th>完成判据</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><span class="tag tag-action">阶段1</span> 范围确认</td>
+          <td>列出 CPU2/CPU3 中安全相关、支撑、非安全和调试模块。</td>
+          <td><code>docs/06_SIL功能安全认证/CPU2安全相关模块清单.md</code></td>
+          <td>每个模块有分级、理由、风险和整改状态。</td>
+        </tr>
+        <tr>
+          <td><span class="tag tag-action">阶段2</span> 需求和约束</td>
+          <td>把 ST Safety Manual、FMEA/FMEDA、项目危险分析转成软件安全需求。</td>
+          <td>启动安全、电机停机、编码器门控、参数校验、故障恢复、通信命令防误触发。</td>
+          <td>每条约束能追溯到来源、设计项和测试项。</td>
+        </tr>
+        <tr>
+          <td><span class="tag tag-action">阶段3</span> 设计和构建</td>
+          <td>确认安全发布构建范围，隔离测试源码和临时调试入口。</td>
+          <td>CPU2 构建脚本、<code>Application/Src/test.c</code>、串口调试命令、版本交付资料。</td>
+          <td>Release/Safety 构建有显式源码清单和受控编译开关。</td>
+        </tr>
+        <tr>
+          <td><span class="tag tag-action">阶段4</span> STL 集成评估</td>
+          <td>选择启动自检、周期自检或按需自检，定义失败后进入的安全状态。</td>
+          <td>CPU2 主循环、看门狗、错误日志、电机驱动禁用、CPU2/CPU3 错误码传递。</td>
+          <td>自检耗时、周期、失败处理、日志和对测量流程影响都有验证记录。</td>
+        </tr>
+        <tr>
+          <td><span class="tag tag-action">阶段5</span> 验证和证据</td>
+          <td>建立单元测试、集成测试、故障注入、静态分析和人工评审证据。</td>
+          <td><code>docs/05_测试记录/</code>、版本改动与测试方案、偏离记录模板。</td>
+          <td>认证机构抽查时能从需求一路追到测试结果和批准记录。</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h2>五、不要这样用</h2>
+    <ul>
+      <li><span class="tag tag-risk">风险</span> 不要把 X-CUBE-STL 当成“装上就 SIL3”的库。SIL 是系统级结论，不是单个库的结论。</li>
+      <li><span class="tag tag-risk">风险</span> 不要直接把 ST 的 FMEDA 指标复制到项目报告。必须检查硬件电路、诊断配置、运行条件和失效假设。</li>
+      <li><span class="tag tag-risk">风险</span> 不要把包内示例源码直接混进 CPU2 安全发布构建。需要先做许可证、版本锁定、构建范围和测试影响评审。</li>
+      <li><span class="tag tag-risk">风险</span> 不要只做 MISRA 整改而不做需求、设计、测试和变更控制。SIL 认证看完整生命周期证据。</li>
+      <li><span class="tag tag-risk">风险</span> 不要忽略 ST Safety Manual 的使用假设。任何不满足的假设都需要项目级缓解措施或偏离说明。</li>
+    </ul>
+
+    <h2>六、建议的下一步清单</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>优先级</th>
+          <th>任务</th>
+          <th>责任角色</th>
+          <th>产出物</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>P0</td>
+          <td>明确认证目标 SIL 等级、认证边界和安全功能列表。</td>
+          <td>项目负责人、功能安全负责人、软件负责人</td>
+          <td>安全范围说明、SIL 目标来源、CPU2/CPU3 安全相关功能清单。</td>
+        </tr>
+        <tr>
+          <td>P0</td>
+          <td>确认 CPU2 实际 MCU 型号、封装、时钟、Flash、RAM、复位和关键外设与 ST 资料匹配。</td>
+          <td>硬件负责人、软件负责人</td>
+          <td>STM32F4 使用假设符合性检查表。</td>
+        </tr>
+        <tr>
+          <td>P0</td>
+          <td>建立项目级 FMEA/FMEDA 输入，不直接照搬 ST 指标。</td>
+          <td>功能安全负责人、硬件负责人</td>
+          <td>项目 FMEDA/FMEA、诊断覆盖说明、未覆盖风险清单。</td>
+        </tr>
+        <tr>
+          <td>P1</td>
+          <td>评估 X-CUBE-STL 是否纳入 CPU2 安全发布构建。</td>
+          <td>软件负责人、功能安全负责人</td>
+          <td>STL 采用/不采用决策记录、集成方案或等效诊断说明。</td>
+        </tr>
+        <tr>
+          <td>P1</td>
+          <td>补齐编码规范、偏离记录、静态分析和安全相关模块整改计划。</td>
+          <td>软件负责人、开发工程师</td>
+          <td>整改检查表、偏离记录、静态分析报告、代码评审记录。</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h2>七、当前目录中的关键文件</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>文件</th>
+          <th>说明</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><a href="01_ST官方PDF/um1840-stm32f4-series-safety-manual-stmicroelectronics.pdf">um1840-stm32f4-series-safety-manual-stmicroelectronics.pdf</a></td>
+          <td>STM32F4 Safety Manual，是把 MCU 使用假设转成项目约束的核心资料。</td>
+        </tr>
+        <tr>
+          <td><a href="02_X-CUBE-STL-F4_V2.0.0包内文档/STL_F4_SM_cx616769_7.0.pdf">STL_F4_SM_cx616769_7.0.pdf</a></td>
+          <td>X-CUBE-STL-F4 Safety Manual，评估自检库使用约束和限制条件。</td>
+        </tr>
+        <tr>
+          <td><a href="02_X-CUBE-STL-F4_V2.0.0包内文档/STL_F4_UG_cx616705_4.0.pdf">STL_F4_UG_cx616705_4.0.pdf</a></td>
+          <td>X-CUBE-STL-F4 User Guide，评估自检库配置和调用方式。</td>
+        </tr>
+        <tr>
+          <td><a href="01_ST官方PDF/FMEDA%20for%20STM32F4%20-%20AN5140.pdf">FMEDA for STM32F4 - AN5140.pdf</a></td>
+          <td>STM32F4 FMEDA 参考输入，不能直接替代项目级 FMEDA。</td>
+        </tr>
+        <tr>
+          <td><a href="01_ST官方PDF/FMEA%20for%20STM32F4%20-%20AN5141.pdf">FMEA for STM32F4 - AN5141.pdf</a></td>
+          <td>STM32F4 FMEA 参考输入，用于识别芯片相关故障模式。</td>
+        </tr>
+        <tr>
+          <td><a href="01_ST官方PDF/Safety%20self-test%20library%20Arm%C2%AE%20Cortex%C2%AE-M%20integration%20tips%20AN5659%20rev1.pdf">AN5659 integration tips</a></td>
+          <td>STL 在 Cortex-M 上集成时的注意事项，可用于形成 CPU2 集成风险清单。</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h2>八、按当前 CPU2 安全功能分离代码</h2>
+    <div class="notice">
+      <strong>当前安全功能定义：</strong>
+      CPU2 是安全功能板，安全功能应定义为“液位测量结果输出 4-20mA”和“液位测量结果驱动继电器高/低液位报警信号”。
+      因此，安全边界不是整个 CPU2 所有功能，而是从液位有效性判断、阈值判断、4-20mA 输出、继电器输出、输出反馈和故障降级组成的一条闭环链路。
+    </div>
+
+    <table>
+      <thead>
+        <tr>
+          <th>分层</th>
+          <th>应归入安全功能代码</th>
+          <th>当前工程对应位置</th>
+          <th>分离要求</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><span class="tag tag-risk">S0</span> 安全输出核心</td>
+          <td>液位有效性、液位新鲜度、量程换算、4-20mA 输出、继电器高/低报警输出、故障电流、输出反馈确认。</td>
+          <td>建议新建 <code>LTD_MAIN_CPU2/Safety/Output/</code>，现有 AD5421 在 <code>BSP/Peripherals/src/ad5421.c</code>，继电器 GPIO 在 <code>Core/Src/gpio.c</code>。</td>
+          <td>非安全代码不得直接调用 <code>AD5421_SetCurrent()</code> 或 <code>HAL_GPIO_WritePin(RELAYx)</code>，只能通过安全输出 API 请求。</td>
+        </tr>
+        <tr>
+          <td><span class="tag tag-risk">S0</span> 故障和降级</td>
+          <td>传感器失效、液位无效、AD5421 fault、继电器反馈不一致、STL 自检失败、参数 CRC 失败后的安全动作。</td>
+          <td><code>Application/Src/fault_manager.c</code>、<code>Application/Src/app_main.c</code>。</td>
+          <td>故障后进入明确的安全输出状态：4-20mA 输出故障电流，继电器进入约定的报警/失电安全状态，错误锁存到统一故障入口。</td>
+        </tr>
+        <tr>
+          <td><span class="tag tag-input">S1</span> 液位测量输入</td>
+          <td>液位寻找、跟随、位置计算、频率读取、传感器模式切换、编码器/电机位置源。</td>
+          <td><code>Application/Src/measure_oilLevel.c</code>、<code>Services/Sensor/</code>、<code>Services/Encoder/</code>、<code>Services/MotorControl/</code>。</td>
+          <td>这些模块可作为安全功能输入，但必须输出“液位值 + 有效标志 + 时间戳 + 质量状态”，不能让安全输出层直接读一堆全局变量后自行猜测。</td>
+        </tr>
+        <tr>
+          <td><span class="tag tag-input">S1</span> 安全参数</td>
+          <td>液位高/低报警阈值、继电器通道配置、4-20mA 量程、故障电流、报警滞回、无效液位策略。</td>
+          <td><code>Services/ParamStorage/system_parameter.h</code> 中已有 <code>AlarmHighDO</code>、<code>AlarmLowDO</code>、<code>AlarmHighAO</code>、<code>AlarmLowAO</code>、<code>FaultCurrent_mA</code> 等字段。</td>
+          <td>参数写入必须做范围、单位、互斥关系和 CRC 校验；参数异常时不能继续使用旧的不可信值驱动安全输出。</td>
+        </tr>
+        <tr>
+          <td><span class="tag tag-output">S2</span> 通信和显示</td>
+          <td>Modbus/HART/CPU3 显示、安全状态查询、参数配置入口。</td>
+          <td><code>Services/Modbus/</code>、<code>Services/Hart/</code>。</td>
+          <td>通信只能请求参数或读取状态，不能绕过安全输出层直接改变继电器或电流输出。HART 通信和 AD5421 输出驱动要拆开。</td>
+        </tr>
+        <tr>
+          <td><span class="tag tag-risk">S3</span> 非安全/调试</td>
+          <td>测试命令、现场调试串口、密度测量、水位跟随、无线配对、日志打印、人工观察流程。</td>
+          <td><code>Application/Src/test.c</code>、部分临时串口命令、非液位安全输出相关测量流程。</td>
+          <td>安全发布构建必须排除或用编译开关禁用。非安全功能可以存在，但不得作为安全动作依据。</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h3>推荐的新代码边界</h3>
+    <table>
+      <thead>
+        <tr>
+          <th>建议模块</th>
+          <th>职责</th>
+          <th>典型接口</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>Safety/Core/safety_supervisor.c</code></td>
+          <td>安全功能总调度，收集液位输入、参数、诊断结果，决定安全输出状态。</td>
+          <td><code>SafetySupervisor_Init()</code>、<code>SafetySupervisor_Poll50ms()</code>、<code>SafetySupervisor_ReportFault()</code></td>
+        </tr>
+        <tr>
+          <td><code>Safety/Input/safety_level_input.c</code></td>
+          <td>把测量流程输出转成安全层可用的液位输入快照。</td>
+          <td><code>SafetyLevelInput_Update(level_01mm, quality)</code>、<code>SafetyLevelInput_GetSnapshot()</code></td>
+        </tr>
+        <tr>
+          <td><code>Safety/Output/safety_analog_output.c</code></td>
+          <td>4-20mA 量程换算、故障电流输出、AD5421 fault/status 读取和写后确认。</td>
+          <td><code>SafetyAo_SetLevel()</code>、<code>SafetyAo_SetFaultCurrent()</code>、<code>SafetyAo_CheckFeedback()</code></td>
+        </tr>
+        <tr>
+          <td><code>Safety/Output/safety_relay_output.c</code></td>
+          <td>高/低液位报警继电器输出、滞回、默认安全态、NC/NO 反馈确认。</td>
+          <td><code>SafetyRelay_SetAlarmState()</code>、<code>SafetyRelay_CheckFeedback()</code></td>
+        </tr>
+        <tr>
+          <td><code>Safety/Diagnostics/safety_stl.c</code></td>
+          <td>封装 X-CUBE-STL 调度结果，把 STL 失败映射成 CPU2 安全故障。</td>
+          <td><code>SafetyStl_Init()</code>、<code>SafetyStl_RunStartupTests()</code>、<code>SafetyStl_RunRuntimeSlice()</code></td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h3>安全发布构建必须改显式源码清单</h3>
+    <p>
+      当前 <code>LTD_MAIN_CPU2/CMakeLists.txt</code> 使用 <code>file(GLOB ... Application/Src/*.c)</code> 和 <code>file(GLOB_RECURSE ... Services/*.c)</code> 自动收集源码。
+      对 SIL 准备来说，这不能作为安全发布基线，因为 <code>Application/Src/test.c</code>、临时调试命令或新加的非安全文件可能自动进入固件。
+    </p>
+    <table>
+      <thead>
+        <tr>
+          <th>构建集合</th>
+          <th>说明</th>
+          <th>处理原则</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>CPU2_SAFETY_SOURCES</code></td>
+          <td>安全输出核心、故障处理、液位输入快照、STL wrapper、必要底层驱动。</td>
+          <td>显式列出，每次发布评审；静态分析和单元测试优先覆盖。</td>
+        </tr>
+        <tr>
+          <td><code>CPU2_SUPPORT_SOURCES</code></td>
+          <td>传感器、编码器、电机、参数、通信中会影响安全输入或参数的支撑模块。</td>
+          <td>允许进入安全发布，但必须受安全 API 和参数校验约束。</td>
+        </tr>
+        <tr>
+          <td><code>CPU2_NONSAFETY_SOURCES</code></td>
+          <td>密度、水位、无线、日志、普通协议功能等不属于液位安全输出的模块。</td>
+          <td>可以编译进普通固件，但不能直接写安全输出；进入安全发布前要有影响分析。</td>
+        </tr>
+        <tr>
+          <td><code>CPU2_DEBUG_SOURCES</code></td>
+          <td><code>test.c</code> 和串口调试硬件直控入口。</td>
+          <td>安全发布构建排除，或由 <code>CPU2_ENABLE_DEBUG_COMMANDS=0</code> 强制禁用。</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h2>九、X-CUBE-STL 自检库引入方案</h2>
+    <p>
+      X-CUBE-STL 的作用是给 STM32 内核、Flash、RAM 等提供诊断测试模块。它不能替代液位测量、AD5421、继电器和传感器本身的诊断。
+      在当前项目中，它应作为 <code>Safety/Diagnostics</code> 的一个输入：STL 通过则允许安全输出进入正常模式，STL 失败则进入故障电流和报警安全态。
+    </p>
+
+    <table>
+      <thead>
+        <tr>
+          <th>步骤</th>
+          <th>动作</th>
+          <th>当前项目注意点</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>1. 固定包版本</td>
+          <td>只引入 <code>STM32_Safety_STL/Inc</code>、<code>Src/stl_util.c</code>、定制后的 <code>stl_user_param.c</code> 和 <code>Lib/STL_Lib.a</code>。</td>
+          <td>不要复制整个示例工程；把许可证、发布说明和 Safety Manual 作为受控外部资料保留。</td>
+        </tr>
+        <tr>
+          <td>2. 定制 Flash/RAM 地址</td>
+          <td>以 <code>stl_user_param_template.c</code> 为模板生成项目自己的 <code>stl_user_param.c</code>。</td>
+          <td>CPU2 是 <code>STM32F429ZGTx</code>，模板中 <code>STM32F429xx</code> 的 Flash 结束地址为 <code>0x081FFFFF</code>，还要结合当前 linker script 核对实际使用范围。</td>
+        </tr>
+        <tr>
+          <td>3. 修改 linker script</td>
+          <td>为 STL RAM backup buffer 增加 <code>backup_buffer_section</code>，并保证 RAM 自检范围避开该区。</td>
+          <td>否则 RAM 测试会破坏 STL 备份区或业务数据，认证时也无法解释 RAM 测试范围。</td>
+        </tr>
+        <tr>
+          <td>4. 建 wrapper</td>
+          <td>新建 <code>Safety/Diagnostics/safety_stl.c</code>，只在 wrapper 内调用 <code>STL_SCH_*</code> API。</td>
+          <td>业务代码不直接调用 STL；所有 STL 结果统一映射到安全故障码和故障输出策略。</td>
+        </tr>
+        <tr>
+          <td>5. 启动自检</td>
+          <td>在允许正常 4-20mA 和继电器输出前，运行 CPU 核心测试、Flash 配置测试和必要 RAM 启动测试。</td>
+          <td>自检未通过时不进入正常安全输出，直接输出故障电流并置报警状态。</td>
+        </tr>
+        <tr>
+          <td>6. 运行时分片自检</td>
+          <td>在 <code>App_MainLoop()</code> 或安全监督 50ms 周期中调度短耗时测试，RAM/Flash 用 subset 分片。</td>
+          <td>必须实测每个 STL 调用耗时，不能影响液位更新、继电器输出、AD5421 写入和看门狗窗口。</td>
+        </tr>
+        <tr>
+          <td>7. 失败处理和证据</td>
+          <td>STL 返回 <code>STL_FAILED</code>、<code>STL_ERROR</code> 或 API 返回 <code>STL_KO</code> 时，锁存安全故障。</td>
+          <td>记录测试项、返回状态、时间戳、固件版本；验证故障注入时会进入故障电流和继电器安全态。</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h3>推荐调度策略</h3>
+    <table>
+      <thead>
+        <tr>
+          <th>测试项</th>
+          <th>建议阶段</th>
+          <th>通过后允许什么</th>
+          <th>失败动作</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>CPU TM</td>
+          <td>启动必测，运行时周期复测。</td>
+          <td>允许安全监督进入正常周期。</td>
+          <td>锁存 STL 故障，4-20mA 输出故障电流，继电器进入安全报警态。</td>
+        </tr>
+        <tr>
+          <td>Flash TM</td>
+          <td>启动时覆盖安全代码区，运行时按 section 分片。</td>
+          <td>允许继续使用当前固件安全逻辑。</td>
+          <td>认为程序存储完整性异常，禁止正常安全输出。</td>
+        </tr>
+        <tr>
+          <td>RAM TM</td>
+          <td>启动和运行时按 subset 分片。</td>
+          <td>允许使用安全状态对象和运行时变量。</td>
+          <td>认为运行数据存储异常，输出故障电流并报警。</td>
+        </tr>
+        <tr>
+          <td>用户自检</td>
+          <td>通过 STL user test 或 safety wrapper 调度。</td>
+          <td>AD5421 fault/status、继电器 NC/NO 反馈、参数 CRC、液位输入新鲜度均正常时允许正常输出。</td>
+          <td>按对应诊断项进入故障或报警状态。</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h3>引入前必须先补的项目诊断</h3>
+    <ul>
+      <li>AD5421：初始化后读取 <code>AD5421_FAULT</code> 引脚和 <code>READFAULT</code> 状态；每次电流输出变化后做写后确认或状态确认。</li>
+      <li>继电器：明确高/低液位报警对应继电器通道、失电安全态、NO/NC 反馈输入和反馈超时。</li>
+      <li>液位输入：明确无效液位、超时未更新、手动/强制动作期间报警抑制的安全策略。</li>
+      <li>看门狗：当前存在中断喂狗风险，应改成安全监督确认“主循环、STL、液位输入、输出反馈都健康”后再喂狗。</li>
+      <li>参数：高/低报警阈值、AO 量程、故障电流、继电器配置必须有范围校验和受控默认值。</li>
+    </ul>
+
+    <div class="notice">
+      <strong>给当前项目的判断：</strong>
+      现阶段这批资料最适合用于“认证准备”和“整改路线设计”。
+      在没有完成安全功能定义、项目级 FMEDA/FMEA、STL 集成评估和测试证据前，不建议把它描述成已经满足 SIL3 的证明。
+    </div>
+  </main>
+</body>
+</html>

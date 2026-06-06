@@ -1,6 +1,6 @@
 # 需购买或 NDA 资料清单
 
-更新日期：2026-06-03
+更新日期：2026-06-06
 
 ## 处理原则
 
@@ -16,8 +16,8 @@
 | P0 | 静态分析工具资质包 | 工具供应商 | 工具确认、规则覆盖和认证审计证据 |
 | P1 | 单元测试/覆盖率工具资质包 | 工具供应商 | 测试工具适用性和覆盖率证据 |
 | P1 | 编译器安全手册和已知问题列表 | 编译器供应商 | 编译器适用性、版本锁定和补充验证 |
-| P1 | X-CUBE-STL Safety Manual | [ST X-CUBE-STL](https://www.st.com/en/embedded-software/x-cube-stl.html) 或 ST 支持渠道 | STL 集成约束、使用假设、诊断范围 |
-| P1 | STM32 FMEA/FMEDA | ST 支持渠道，通常需要 NDA | 失效率、诊断覆盖率、安全指标计算 |
+| P1 | X-CUBE-STL Safety Manual 最新认证基线版本 | [ST X-CUBE-STL](https://www.st.com/en/embedded-software/x-cube-stl.html) 或 ST 支持渠道；本地已归档 F4 V2.0.0 包内文档作为参考 | STL 集成约束、使用假设、诊断范围 |
+| P1 | STM32 FMEA/FMEDA 最新版和项目适用包 | ST 支持渠道，通常需要 NDA；本地已归档 STM32F4 参考资料作为输入 | 失效率、诊断覆盖率、安全指标计算 |
 | P2 | 认证机构评估计划模板 | 认证机构 | 定义项目评估范围、样例证据和审计节点 |
 
 ## 采购或申请时要确认的问题
