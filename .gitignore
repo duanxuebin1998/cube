@@ -4,6 +4,18 @@
 .metadata/
 *.launch
 .mxproject
+
+# Track reproducible CubeIDE/CubeMX project configuration for firmware projects.
+!LTD_MAIN_CPU2/.project
+!LTD_MAIN_CPU2/.cproject
+!LTD_MAIN_CPU2/.mxproject
+!LTD_DISPLAY_CPU3/.project
+!LTD_DISPLAY_CPU3/.cproject
+!LTD_DISPLAY_CPU3/.mxproject
+!WirelessHost_V4.1_init/.project
+!WirelessHost_V4.1_init/.cproject
+!WirelessHost_V4.1_init/.mxproject
+
 .cubemx
 .accelerate
 Debug/
