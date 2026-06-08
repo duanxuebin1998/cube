@@ -201,8 +201,8 @@ uint32_t MotorCtrl_MoveBlockingNoDetectForceDebug(float mm, int dir, uint32_t sp
 
 /* ===================== 驱动状态 / 故障检测 ===================== */
 
-/** 基于 TMC5130_RAMPSTAT 判断电机是否仍在运动。 */
-bool MotorCtrl_IsDriverMoving(TMC5130TypeDef *tmc5130);
+/** Read driver moving state; is_moving is valid only when NO_ERROR is returned. */
+uint32_t MotorCtrl_IsDriverMoving(TMC5130TypeDef *tmc5130, bool *is_moving);
 
 /** 兼容旧命名的驱动健康检查：实际检查 GSTAT/DRV_STATUS、配置和功率级。 */
 uint32_t MotorCtrl_CheckDriverGstat(void);

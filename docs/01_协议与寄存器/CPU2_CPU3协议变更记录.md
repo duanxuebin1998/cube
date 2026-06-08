@@ -22,7 +22,7 @@
 | 4 | V1.8.0.0 | V1.6.0.0 | 200 | 将 SI7000 所需补充状态融合进既有测量结构，并通过共享输入寄存器发布给 CPU3 外部协议转换层。 |
 | 5 | V1.9.0.0 | V1.7.0.0 | 200 | 新增 `CMD_PAIR_NEAREST_WIRELESS_SLIPRING = 117`，用于 CPU3 菜单或共享命令通道触发 CPU2 执行无线滑环 RSSI 最近匹配；新增无线滑环匹配中/完成设备状态；输入寄存器末尾追加无线滑环匹配结果和从机 MAC 状态。 |
 | 6 | V1.10.0.0 | V1.9.0.0 | 200 | 新增 `STATE_DEBUG_MODE = 0x0033`，用于 CPU2 串口调试指令执行期间通过 CPU3 显示“调试模式中”；原 `reserved2` 参数槽复用为故障自动恢复重跑上限；`empty_weight` 空载重量按 `int32_t` 有符号 32 位解释，寄存器地址和后续字段不移动。 |
-| 7 | V1.12.0.0 | V1.10.0.0 | 200 | 新增四路继电器方式2配置和运行态共享区；CPU3 可显示、写入四路继电器输出配置，CPU2 执行 HH/H/L/LL、滞回、锁存清除和无效值策略。 |
+| 7 | V1.12.0.0 | V1.10.0.0 | 200 | 新增四路继电器报警输出配置和运行态共享区；CPU3 可显示、写入四路继电器报警输出配置，CPU2 执行 HH/H/L/LL、滞回、锁存清除和无效值策略。 |
 
 ## 兼容判断规则
 
@@ -166,23 +166,23 @@
 - 每路继电器配置占 13 个 32 位字段，字段顺序为：`operating_mode`、`digital_source`、`contact_type`、`alarm_mode`、`error_value`、`alarm_source`、`HH_alarm_value`、`H_alarm_value`、`L_alarm_value`、`LL_alarm_value`、`alarm_hysteresis`、`damping_factor`、`clear_alarm`。
 - `HH/H/L/LL_alarm_value` 与 `alarm_hysteresis` 按 IEEE754 float 原始位通过两个保持寄存器传输；CPU3 菜单按 1 位小数显示/输入。
 - 新增保持寄存器基址 `HOLDREGISTER_DEVICEPARAM_RELAY_ALARM_BASE`，四路配置结束地址为 `HOLDREGISTER_DEVICEPARAM_RELAY_ALARM_END`；`param_version`、`struct_size`、`magic`、`crc` 顺延到新配置之后。
-- CPU3 新增四路方式2继电器输出配置菜单和枚举文字表；原 `AlarmHighDO`、`AlarmLowDO`、`ThirdStateThreshold` 旧 DO 报警接口直接删除，后续 AO、指令参数、尺带补偿、继电器方式2配置和元信息寄存器整体前移。
-- 在 CPU2/CPU3 共享 `MeasurementResult` 的末尾追加 `RelayAlarmRuntimeState relay_alarm_runtime[4]`，用于发布每路方式2当前报警值、HH/H/L/LL、组合报警、任意报警和清锁存运行态。
-- `RelayAlarmRuntimeState` 字段顺序与参考程序方式2只读区/不存储区一致：`alarm_value`、`HH_alarm`、`H_alarm`、`HH_H_alarm`、`L_alarm`、`LL_alarm`、`LL_L_alarm`、`any_error`、`clear_alarm`。
+- CPU3 新增四路继电器报警输出配置菜单和枚举文字表；原 `AlarmHighDO`、`AlarmLowDO`、`ThirdStateThreshold` 旧 DO 报警接口直接删除，后续 AO、指令参数、尺带补偿、继电器报警输出配置和元信息寄存器整体前移。
+- 在 CPU2/CPU3 共享 `MeasurementResult` 的末尾追加 `RelayAlarmRuntimeState relay_alarm_runtime[4]`，用于发布每路当前报警值、HH/H/L/LL、组合报警、任意报警和清锁存运行态。
+- `RelayAlarmRuntimeState` 字段顺序与参考程序只读区/不存储区一致：`alarm_value`、`HH_alarm`、`H_alarm`、`HH_H_alarm`、`L_alarm`、`LL_alarm`、`LL_L_alarm`、`any_error`、`clear_alarm`。
 - CPU2 参数结构版本同步提升到 `DEVICE_PARAM_VERSION=3`，旧 FRAM 参数不会按新结构误读。
 
 寄存器布局影响：
 - 保持寄存器在 `HOLDREGISTER_DEVICEPARAM_RESERVED33 + REG_STRIDE` 后新增 104 个寄存器（四路 * 13 字段 * 2 寄存器）。
 - 同时删除旧 DO 报警 3 个 32 位字段，AO 及其后续保持寄存器前移 6 个寄存器；协议版本 7 相对协议版本 6 的保持寄存器净增量为 98 个寄存器。
 - 元信息与 CRC 寄存器整体后移，`HOLEREGISTER_STOP` 随之增大。
-- 输入寄存器在无线滑环匹配状态后追加四路方式2运行态：`REG_RELAY_ALARM_RUNTIME_BASE = REG_WIRELESS_PAIRING_UPDATE_COUNTER + REG_SIZE_U32`。
-- 每路方式2运行态占 10 个输入寄存器：`alarm_value` 按 IEEE754 float 占 2 个寄存器，其余 8 个状态字段各占 1 个寄存器；四路共追加 40 个输入寄存器，`REG_ENG` 随之后移。
+- 输入寄存器在无线滑环匹配状态后追加四路继电器运行态：`REG_RELAY_ALARM_RUNTIME_BASE = REG_WIRELESS_PAIRING_UPDATE_COUNTER + REG_SIZE_U32`。
+- 每路继电器报警输出运行态占 10 个输入寄存器：`alarm_value` 按 IEEE754 float 占 2 个寄存器，其余 8 个状态字段各占 1 个寄存器；四路共追加 40 个输入寄存器，`REG_ENG` 随之后移。
 - CPU3 上电和运行期轮询组 3 从 `REG_WIRELESS_PAIRING_RESULT` 读到新的 `REG_ENG`，同时同步无线滑环匹配状态和继电器运行态。
 
 兼容影响：
-- CPU2/CPU3 必须同为协议版本 7 才能正确显示、写入和执行四路方式2继电器报警配置，并正确读取四路运行态。
-- 协议版本 6 的 CPU3 不知道新增继电器配置寄存器、输入运行态寄存器和菜单，不能配置或解释方式2继电器。
-- 协议版本 6 的 CPU2 不执行新增 `relayAlarm[4]` 配置，也不会发布四路方式2运行态和顺延后的元信息地址；协议版本不匹配应由 CPU3 严格相等检查拦截。
+- CPU2/CPU3 必须同为协议版本 7 才能正确显示、写入和执行四路继电器报警输出配置，并正确读取四路运行态。
+- 协议版本 6 的 CPU3 不知道新增继电器配置寄存器、输入运行态寄存器和菜单，不能配置或解释继电器。
+- 协议版本 6 的 CPU2 不执行新增 `relayAlarm[4]` 配置，也不会发布四路继电器运行态和顺延后的元信息地址；协议版本不匹配应由 CPU3 严格相等检查拦截。
 
 验证结果：
 - `cmake --build build\LTD_MAIN_CPU2`：通过。

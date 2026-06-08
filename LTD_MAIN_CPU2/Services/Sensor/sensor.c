@@ -358,13 +358,19 @@ uint32_t EnableLevelMode(void) {
  */
 static uint8_t Sensor_IsMotorStopped(void)
 {
-	uint32_t motor_state = MotorCtrl_GetDisplayState();
+    uint32_t motor_state = MotorCtrl_GetDisplayState();
+    bool is_moving = true;
+    uint32_t ret;
 
-	if ((motor_state == 1U) || (motor_state == 2U)) {
-		return 0U;
-	}
+    if ((motor_state == 1U) || (motor_state == 2U)) {
+        return 0U;
+    }
 
-	return MotorCtrl_IsDriverMoving(&stepper) ? 0U : 1U;
+    ret = MotorCtrl_IsDriverMoving(&stepper, &is_moving);
+    if (ret != NO_ERROR) {
+        return 0U;
+    }
+    return is_moving ? 0U : 1U;
 }
 
 /**

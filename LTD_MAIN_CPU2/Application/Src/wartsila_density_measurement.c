@@ -345,6 +345,7 @@ uint32_t motorMoveUpToPositionOrAir(float target_mm, Level_StateTypeDef *final_s
 {
 	uint32_t hz = 0;
 	uint32_t ret = NO_ERROR;
+    bool is_moving = true;
     if (final_state) {
         *final_state = OIL;
     }
@@ -375,7 +376,15 @@ uint32_t motorMoveUpToPositionOrAir(float target_mm, Level_StateTypeDef *final_s
     uint32_t start_tick = HAL_GetTick();
     const uint32_t MAX_WAIT_MS = 60*60000;    // 最长等待 60s*60 =1小时，防止死循环
 
-    while (MotorCtrl_IsDriverMoving(&stepper)) {
+    while (1) {
+        ret = MotorCtrl_IsDriverMoving(&stepper, &is_moving);
+        if (ret != NO_ERROR) {
+            (void)MotorCtrl_SlowStop();
+            return ret;
+        }
+        if (!is_moving) {
+            break;
+        }
 
         /* 1) 检测空气状态 */
     	//如果传感器是LTD传感器

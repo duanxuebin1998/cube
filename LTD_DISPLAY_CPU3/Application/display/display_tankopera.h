@@ -45,7 +45,7 @@ typedef enum {
     KEYNUM_MENU_PARA_CORR,               // 修正参数（磁通量/温度/密度修正）
     KEYNUM_MENU_PARA_POLICY,             // 策略/分布/区间参数
     KEYNUM_MENU_PARA_WARTSILA,           // Wartsila 参数（如果你确实有此页）
-    KEYNUM_MENU_PARA_DO,                 // 继电器输出参数入口
+    KEYNUM_MENU_PARA_DO,                 // 继电器报警输出参数入口
     KEYNUM_MENU_PARA_AO,                 // AO 参数（如果你确实有此页）
     KEYNUM_MENU_PARA_CAL_SP,             // 标定/单点参数
     KEYNUM_MENU_PARA_PARAM_CHECK,        // 参数校验信息
@@ -89,7 +89,7 @@ typedef enum {
     MENU_GRP_CORR,              // 密度修正/温度修正
     MENU_GRP_POLICY,            // 是否测罐底/是否测水/是否测单点/顺序/模式/点数/间距/悬停/上下限
     MENU_GRP_WARTSILA,          // Wartsila 上下限/步进/最高点距液面
-    MENU_GRP_DO_ALARM,          // 继电器输出
+    MENU_GRP_DO_ALARM,          // 继电器报警输出
     MENU_GRP_AO,                // AO 输出/报警/故障电流/调试电流
     MENU_GRP_CAL_SP,            // 标定液位(油/水)/单点位置/监测位置/分布液位/电机运行距离
     MENU_GRP_PARAM_CHECK,       // ParamVer/StructSize/Magic/CRC
@@ -350,7 +350,7 @@ typedef enum
     COM_NUM_DEVICEPARAM_RESERVED32,                     // 保留 32
     COM_NUM_DEVICEPARAM_RESERVED33,                     // 保留 33
 
-    /* ---------------- 继电器方式2报警配置（四路） ---------------- */
+    /* ---------------- 继电器报警输出配置（四路） ---------------- */
     COM_NUM_DEVICEPARAM_RELAY1_OPERATING_MODE,
     COM_NUM_DEVICEPARAM_RELAY1_DIGITAL_SOURCE,
     COM_NUM_DEVICEPARAM_RELAY1_CONTACT_TYPE,

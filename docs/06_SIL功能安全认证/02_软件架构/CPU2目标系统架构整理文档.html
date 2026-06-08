@@ -355,7 +355,7 @@
       <div class="meta">
         <span class="pill">工程：LTD_MAIN_CPU2</span>
         <span class="pill">目标：SIL2</span>
-        <span class="pill">安全功能：液位测量 + 4-20mA + 继电器报警</span>
+        <span class="pill">安全功能：液位测量 + 4-20mA + 继电器报警输出</span>
         <span class="pill">日期：2026-06-06</span>
         <span class="pill">状态：目标架构方案</span>
       </div>
@@ -371,7 +371,7 @@
       </p>
       <div class="callout">
         <strong>目标结论：</strong>当前目标改为参考 NMS8x/NMS81 单通道 HFT=0 路线做 SIL2，不做 SIL3。CPU2 应形成以 <code>Safety</code> 层为中心的安全控制链路。
-        找液位、4-20mA 输出和继电器报警均纳入安全功能边界；Modbus、HART、CPU3 显示和日志只能作为现场辅助或诊断通道，
+        找液位、4-20mA 输出和继电器报警输出均纳入安全功能边界；Modbus、HART、CPU3 显示和日志只能作为现场辅助或诊断通道，
         不能直接绕过安全层控制输出。
       </div>
       <pre><code>SIL2 目标系统架构 = 硬件安全边界 + 安全测量链路 + 安全输出链路 + 诊断监督链路 + 双版本构建基线 + 认证证据链</code></pre>
@@ -473,7 +473,7 @@
             <td>输出 4-20mA、故障电流，读取 fault 引脚和状态寄存器。</td>
           </tr>
           <tr>
-            <td>继电器输出</td>
+            <td>继电器报警输出</td>
             <td>ULN2001D、HFD3/9 继电器、RELAY1-4、NO/NC 反馈输入</td>
             <td>安全报警输出链路</td>
             <td>输出高/低液位报警，检查触点反馈与软件命令是否一致。</td>
@@ -600,7 +600,7 @@
             <td>AD5421 fault、状态寄存器异常或输出确认失败则锁存 AO 故障。</td>
           </tr>
           <tr>
-            <td>继电器报警</td>
+            <td>继电器报警输出</td>
             <td>按高/低阈值、迟滞和故障策略写继电器，并检查 NO/NC 反馈。</td>
             <td>反馈与命令不一致、触点粘连或输入状态不可信则锁存 DO 故障。</td>
           </tr>
@@ -726,7 +726,7 @@
             <td>输出故障电流；若输出不可控则锁存 AO 故障。</td>
           </tr>
           <tr>
-            <td>继电器输出</td>
+            <td>继电器报警输出</td>
             <td>RELAY1-4 输出和 NO/NC 输入反馈</td>
             <td>命令状态和触点反馈一致性检查。</td>
             <td>反馈异常锁存 DO 故障，进入定义的报警或失效状态。</td>
@@ -896,7 +896,7 @@ SafetyStatus Safety_GetStatus(void);</code></pre>
       <ol>
         <li>补齐 <code>CPU2安全功能代码范围矩阵</code>，按 S0/S1/S2/S3 标注文件、接口和纳入理由。</li>
         <li>新增 <code>Safety/</code> 目录和空接口骨架，先不大规模搬移历史代码。</li>
-        <li>把 AD5421、继电器输出、故障电流和继电器反馈收口到 <code>Safety/Output</code>。</li>
+        <li>把 AD5421、继电器报警输出、故障电流和继电器反馈收口到 <code>Safety/Output</code>。</li>
         <li>把找液位安全路径从现有测量大模块中抽成认证用单一路径。</li>
         <li>增加 AD5421 fault、继电器 NO/NC、电源 PC2/PC3、看门狗健康监督和 STL wrapper。</li>
         <li>把 CMake 改成 <code>SAFETY/FIELD/DEV</code> 显式源码清单，输出名称区分构建变体。</li>

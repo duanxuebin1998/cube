@@ -454,7 +454,7 @@ struct KeyMenu keymenu[KEYNUM_END] = {
         { menu_wartsila, menu_wartsila, menu_wartsila, menu_wartsila,
           USE_KEY_BACK | USE_KEY_UP | USE_KEY_DOWN | USE_KEY_SURE, menu_wartsila },
 
-    /* 21 - 继电器输出参数 */
+    /* 21 - 继电器报警输出参数 */
     [KEYNUM_MENU_PARA_DO] =
         { menu_do_alarm, menu_do_alarm, menu_do_alarm, menu_do_alarm,
           USE_KEY_BACK | USE_KEY_UP | USE_KEY_DOWN | USE_KEY_SURE, menu_do_alarm },
@@ -2474,7 +2474,7 @@ static int is_reserved_cn(const uint8_t *name)
     return (strncmp((const char*)name, "保留", 2) == 0);
 }
 
-/* 每路继电器方式2参数固定为 13 个字段。
+/* 每路继电器报警输出参数固定为 13 个字段。
  * 这里集中识别通道和字段，避免菜单和枚举文字显示各自写裸范围判断。 */
 static int RelayParam_ChannelOf(int operaNum)
 {
@@ -2876,7 +2876,7 @@ static void menu_wartsila(void)     { menu_build_by_group(MENU_GRP_WARTSILA,    
 static void menu_output_config(void)
 {
     static struct MenuData menu[] = {
-        {(uint8_t*)"继电器输出", 0, menu_do_alarm,    COMMANE_NORW, (uint8_t*)"Relay Out"},
+        {(uint8_t*)"继电器报警输出", 0, menu_do_alarm,    COMMANE_NORW, (uint8_t*)"Relay Out"},
         {(uint8_t*)"AO输出",     0, menu_ao,          COMMANE_NORW, (uint8_t*)"AO"},
         {(uint8_t*)"返回",       0, menu_paracfg_main,COMMANE_NORW, (uint8_t*)"Back"},
     };

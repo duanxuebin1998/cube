@@ -102,7 +102,7 @@ void App_Init(void) {
 	HartInit(); // 初始化AD5421
 	weight_init();
 	HostCommuInit(); // 初始化Modbus通信
-	RelayOutput_Init(); // 初始化继电器输出，默认全部释放
+	RelayOutput_Init(); // 初始化继电器报警输出，默认全部释放
 	AD5421_SetCurrent(6.0); // 设置初始电流为4mA
 	motor_init_ret = MotorCtrl_Init();
 	if (motor_init_ret != NO_ERROR) {

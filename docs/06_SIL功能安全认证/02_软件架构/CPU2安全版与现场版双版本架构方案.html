@@ -307,7 +307,7 @@
       <h1>CPU2 安全版与现场版双版本架构方案</h1>
       <p class="subtitle">
         本文用于指导 LTD_MAIN_CPU2 在一套源码下同时维护 SIL 安全认证版、现场正式版和开发调试版，
-        并把液位测量、4-20mA 输出、四路继电器方式2 HH/H/L/LL 报警等安全功能形成清晰、可审查、可复现的工程边界。
+        并把液位测量、4-20mA 输出、四路继电器报警输出 HH/H/L/LL 报警等安全功能形成清晰、可审查、可复现的工程边界。
       </p>
       <div class="meta">
         <span class="pill">工程：LTD_MAIN_CPU2</span>
@@ -322,7 +322,7 @@
     <section id="purpose">
       <h2>一、目标和基本结论</h2>
       <p>
-        当前 CPU2 是安全功能板，安全功能涉及液位测量、4-20mA 输出和四路继电器方式2 HH/H/L/LL 报警输出。
+        当前 CPU2 是安全功能板，安全功能涉及液位测量、4-20mA 输出和四路继电器报警输出 HH/H/L/LL。
         由于找液位流程依赖传感器、编码器、电机控制和参数存储，不能简单把驱动层排除在安全范围外。
       </p>
       <div class="callout">
@@ -359,7 +359,7 @@
       </p>
       <pre><code>CPU2 完成液位测量，并基于有效液位值输出：
 1. 4-20mA 液位电流信号
-2. 四路继电器方式2 HH/H/L/LL 液位报警信号
+2. 四路继电器报警输出 HH/H/L/LL 液位报警信号
 3. 故障时进入定义的安全状态</code></pre>
 
       <div class="flow">
@@ -367,7 +367,7 @@
         <div class="node">找液位流程</div>
         <div class="node">液位有效性判断</div>
         <div class="node">4-20mA 输出</div>
-        <div class="node">继电器报警</div>
+        <div class="node">继电器报警输出</div>
         <div class="node">反馈诊断<br>故障降级</div>
       </div>
 
@@ -384,7 +384,7 @@
           <tr>
             <td>液位测量结果</td>
             <td>是</td>
-            <td>错误液位会直接导致错误电流或错误继电器报警。</td>
+            <td>错误液位会直接导致错误电流或错误继电器报警输出。</td>
             <td>保留认证用单一路径，加入有效性、新鲜度和范围检查。</td>
           </tr>
           <tr>
@@ -400,7 +400,7 @@
             <td>只能由 <code>Safety/Output</code> 控制。</td>
           </tr>
           <tr>
-            <td>四路继电器方式2 HH/H/L/LL 报警</td>
+            <td>四路继电器报警输出 HH/H/L/LL 报警</td>
             <td>是</td>
             <td>直接构成报警输出。</td>
             <td>只能由 <code>Safety/Output</code> 控制，并检查 NO/NC 反馈。</td>
@@ -473,7 +473,7 @@
           <tr>
             <td><span class="tag s0">S0</span>安全核心</td>
             <td>直接决定安全功能输出和故障状态。</td>
-            <td>安全监督、液位有效性、4-20mA 输出、继电器输出、故障降级。</td>
+            <td>安全监督、液位有效性、4-20mA 输出、继电器报警输出、故障降级。</td>
             <td>编译</td>
             <td>编译</td>
             <td>编译</td>
@@ -614,7 +614,7 @@ void FieldApp_Run(void);</code></pre>
             <td>Modbus、HART、测试代码、应用层直接调用 <code>AD5421_SetCurrent()</code></td>
           </tr>
           <tr>
-            <td>继电器输出</td>
+            <td>继电器报警输出</td>
             <td><code>Safety/Output/safety_relay_output.c</code> 写 <code>RELAYx</code></td>
             <td>非安全模块直接 <code>HAL_GPIO_WritePin(RELAYx...)</code></td>
           </tr>

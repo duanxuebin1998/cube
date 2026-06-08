@@ -33,7 +33,7 @@
 
 
 #define RELAY_ALARM_CHANNEL_COUNT 4u // 当前项目只使用 RELAY1~RELAY4
-#define RELAY_ALARM_FIELD_COUNT   13u // 每路方式2配置占用的 32 位字段数
+#define RELAY_ALARM_FIELD_COUNT   13u // 每路继电器报警输出配置占用的 32 位字段数
 
 typedef enum {
     RELAY_ALARM_OPERATING_DISABLED = 0u,       // 禁用
@@ -525,7 +525,7 @@ typedef struct {
 	DensityMeasurement single_point_monitoring;  ///< 单点监测数据
 	DensityDistribution density_distribution;    ///< 密度分布测量数据
     WirelessPairingStatus wireless_pairing_status; ///< 无线滑环匹配状态
-    RelayAlarmRuntimeState relay_alarm_runtime[RELAY_ALARM_CHANNEL_COUNT]; ///< 继电器方式2每路运行态
+    RelayAlarmRuntimeState relay_alarm_runtime[RELAY_ALARM_CHANNEL_COUNT]; ///< 继电器报警输出每路运行态
 
 } MeasurementResult;
 
@@ -687,7 +687,7 @@ typedef struct {
     uint32_t reserved32;                 // reserved
     uint32_t reserved33;                 // reserved
 
-    // ===================== 继电器方式2报警配置（四路） =====================
+    // ===================== 继电器报警输出配置（四路） =====================
     RelayAlarmConfig relayAlarm[RELAY_ALARM_CHANNEL_COUNT];
 
     // ===================== 元信息与校验 =====================
@@ -714,7 +714,7 @@ typedef struct {
 #define BOTTOM_ENCODER_CORRECTION_DISABLE 0u
 #define BOTTOM_ENCODER_CORRECTION_ENABLE  1u
 /* TMC5130 电机运行电流编码值，异常值恢复为 16。 */
-#define MOTOR_CURRENT_DEFAULT       16u
+#define MOTOR_CURRENT_DEFAULT       12u
 #define MOTOR_CURRENT_MIN           1u
 #define MOTOR_CURRENT_MAX           31u
 

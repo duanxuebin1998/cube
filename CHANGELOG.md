@@ -623,7 +623,7 @@
 - `git diff --cached --check`
 - `py tools\check_version_bumped.py`
 
-## 2026-06-06 - 新增四路继电器方式2报警输出（CPU2 V1.12.0.0，CPU3 V1.10.0.0）
+## 2026-06-06 - 新增四路继电器报警输出（CPU2 V1.12.0.0，CPU3 V1.10.0.0）
 
 版本：
 - CPU2: V1.11.0.1 -> V1.12.0.0
@@ -634,26 +634,26 @@
 - 本次在 `DeviceParameters` 元信息前追加四路 `RelayAlarmConfig`，每路 13 个 32 位字段，保持寄存器从 `HOLDREGISTER_DEVICEPARAM_RELAY_ALARM_BASE` 开始顺延。
 - 同步删除旧 DO 报警 3 个 32 位字段，AO 及后续保持寄存器前移 6 个寄存器；协议版本 7 相对协议版本 6 的保持寄存器净增量为 98 个寄存器。
 - 本次在 `MeasurementResult` 末尾追加四路 `RelayAlarmRuntimeState`，输入寄存器从无线滑环匹配状态后顺延，每路 10 个寄存器用于发布 `alarm_value`、HH/H/HH_H/L/LL/LL_L/any/clear 运行态。
-- CPU2/CPU3 必须同为协议版本 7 才能正确同步四路方式2继电器配置和运行态；旧协议 CPU3 不具备新增寄存器和菜单，旧协议 CPU2 不执行方式2配置。
-- 原 `AlarmHighDO`、`AlarmLowDO`、`ThirdStateThreshold` 旧 DO 报警接口直接删除；AO、指令参数、尺带补偿、继电器方式2配置和元信息寄存器整体前移，由协议版本 7 和 `DEVICE_PARAM_VERSION=3` 覆盖布局变化。
+- CPU2/CPU3 必须同为协议版本 7 才能正确同步四路继电器配置和运行态；旧协议 CPU3 不具备新增寄存器和菜单，旧协议 CPU2 不执行继电器报警输出配置。
+- 原 `AlarmHighDO`、`AlarmLowDO`、`ThirdStateThreshold` 旧 DO 报警接口直接删除；AO、指令参数、尺带补偿、继电器报警输出配置和元信息寄存器整体前移，由协议版本 7 和 `DEVICE_PARAM_VERSION=3` 覆盖布局变化。
 
 本次修改：
-- CPU2 新增 `Services/Relay/relay_output.c/.h`，按参考程序方式2实现四路继电器报警输出，支持工作模式、输出报警位、接点类型、报警模式、报警取值源、HH/H/L/LL 阈值、滞回、无效值策略和锁存清除。
+- CPU2 新增 `Services/Relay/relay_output.c/.h`，按参考程序继电器报警输出实现四路继电器报警输出，支持工作模式、输出报警位、接点类型、报警模式、报警取值源、HH/H/L/LL 阈值、滞回、无效值策略和锁存清除。
 - CPU2 程序侧按 PG9/PG10/PG11/PG12 驱动 RELAY1~RELAY4；ULN2001D 低边驱动按 GPIO 高电平吸合处理，第四路 MCU IO 已预留，外部驱动和端子待后续原理图补齐。
-- CPU2 在 `App_Init` 初始化继电器输出；TIM4 中断只置位继电器刷新请求，主循环统一执行方式2计算和 GPIO 输出，避免中断中读取参数、测量值和执行浮点比较。
-- CPU2 参数默认值将四路方式2配置设为禁用、常开、储罐液位源、阈值/滞回为 `0.0`，并将参数结构版本提升到 `DEVICE_PARAM_VERSION=3`。
+- CPU2 在 `App_Init` 初始化继电器报警输出；TIM4 中断只置位继电器刷新请求，主循环统一执行继电器报警输出计算和 GPIO 输出，避免中断中读取参数、测量值和执行浮点比较。
+- CPU2 参数默认值将四路继电器报警输出配置设为禁用、常开、储罐液位源、阈值/滞回为 `0.0`，并将参数结构版本提升到 `DEVICE_PARAM_VERSION=3`。
 - CPU2 将“清报警”字段按运行期命令处理：单独写清报警不触发 FRAM 保存，保存镜像和上电归一化都会清零 `clear_alarm`，批量写配置时也不会把清锁存命令持久化。
-- CPU2 继电器刷新前复制单路配置和测量快照，方式2计算使用同一时刻的数据；每路运行态在本地计算完成后通过短临界区一次提交，避免输入寄存器读取到半更新状态；手动报警抑制期间只释放输出，不清除已锁存的运行态。
-- CPU2 将每路方式2运行态写入 `g_measurement.relay_alarm_runtime[]`，字段和参考程序 `alarm_para_onlyread`/`alarm_para_no_storage` 对齐。
-- CPU3 同步新增操作码、参数元数据、保持寄存器映射、参数指针和枚举文字表；参数菜单调整为 `输出配置 -> 继电器输出 -> R1/R2/R3/R4 -> 通道设置/报警配置`，`AO输出` 下沉到输出配置页。
+- CPU2 继电器刷新前复制单路配置和测量快照，继电器报警输出计算使用同一时刻的数据；每路运行态在本地计算完成后通过短临界区一次提交，避免输入寄存器读取到半更新状态；手动报警抑制期间只释放输出，不清除已锁存的运行态。
+- CPU2 将每路继电器报警输出运行态写入 `g_measurement.relay_alarm_runtime[]`，字段和参考程序 `alarm_para_onlyread`/`alarm_para_no_storage` 对齐。
+- CPU3 同步新增操作码、参数元数据、保持寄存器映射、参数指针和枚举文字表；参数菜单调整为 `输出配置 -> 继电器报警输出 -> R1/R2/R3/R4 -> 通道设置/报警配置`，`AO输出` 下沉到输出配置页。
 - CPU3 删除旧 DO 报警菜单入口、操作码、参数元数据、结构体字段、寄存器打包读写和参数同步映射，不再保留兼容接口。
-- CPU3 上电和参数刷新时补读 AO/指令/尺带段以及继电器方式2配置与元信息段；正常轮询读取无线滑环匹配状态与继电器方式2运行态尾段，避免新增寄存器未同步。
+- CPU3 上电和参数刷新时补读 AO/指令/尺带段以及继电器报警输出配置与元信息段；正常轮询读取无线滑环匹配状态与继电器报警输出运行态尾段，避免新增寄存器未同步。
 
 验证：
 - `cmake --build build\LTD_MAIN_CPU2`：通过，已编译新增 `Services/Relay/relay_output.c`，生成 `LTD_MAIN_CPU2_V1.12.0.0.hex`。
 - `cmake --build build\LTD_DISPLAY_CPU3`：通过，生成 `LTD_DISPLAY_CPU3_V1.10.0.0.hex`。
 - `py LTD_DISPLAY_CPU3\font_check.py`：通过。
-- 复核参考程序 `MEASURE/alarm.c/.h`：方式2状态机、无效值策略、HH/H/L/LL 组合、锁存清报警和只读运行态字段已对齐到四路实现。
+- 复核参考程序 `MEASURE/alarm.c/.h`：参考程序报警状态机、无效值策略、HH/H/L/LL 组合、锁存清报警和只读运行态字段已对齐到四路实现。
 - 按 GBK/UTF-8 实际编码抽检本次修改源码和文档：通过，未发现替换字符。
 - `git diff --check`：未发现空白错误，仅有工作区 LF 后续转换为 CRLF 的 Git warning。
 - `py tools\check_version_bumped.py`：提交前暂存后通过。
@@ -687,3 +687,28 @@
 - `git diff --check`
 - 暂存后运行 `py tools\check_version_bumped.py`
 - 已对比删除前后 CPU2/CPU3 `.hex` 哈希，确认构建产物变化，因此本次升级 build 版本；尚未做现场实物联调。
+
+## 2026-06-08 - 优化电机停止判定并整理继电器报警输出文档（CPU2 V1.12.0.2，CPU3 V1.10.0.2）
+
+版本：
+- CPU2: V1.12.0.1 -> V1.12.0.2
+- CPU3: V1.10.0.1 -> V1.10.0.2
+
+协议版本/兼容性：
+- `DEVICE_PROTOCOL_VERSION` 保持 7，不改变 CPU2/CPU3 共享寄存器地址、命令码、参数字段顺序或参数解释口径。
+- CPU2 电机停止判定由布尔返回调整为错误码加输出参数，TMC5130 通信失败会向上返回具体错误码，不再把读取失败误判为已停止。
+- CPU3 仅调整继电器报警输出菜单、注释和文档命名口径，不改变协议布局和菜单层级入口语义。
+
+本次修改：
+- CPU2 统一 `MotorCtrl_IsDriverMoving()` / `MotorDriver_ReadMovingState()` 运动状态读取接口，综合 `RAMPSTAT.vzero`、二次确认、`VACTUAL` 和目标位置差值判断停止状态。
+- CPU2 在 Wartsila 密度测量、阻塞移动、目标停止等待、运行期位置轮询和液位传感器电机停止判断中传递运动状态读取错误，避免通信异常被吞掉。
+- CPU2 停止等待和显示状态刷新复用统一运动状态读取逻辑，减少重复推断路径。
+- CPU2/CPU3 将“四路继电器方式2”相关注释、菜单文案、协议记录和改动方案统一整理为“四路继电器报警输出”口径。
+- 新增 CPU2 电机程序与函数梳理 HTML，补充 SIL 功能安全认证资料和 README 索引，整理相关文档引用。
+
+验证：
+- `git diff --cached --check`
+- `py tools\check_version_bumped.py`
+- `cmake --build build\LTD_MAIN_CPU2`
+- `cmake --build build\LTD_DISPLAY_CPU3`
+- 尚未做现场实物联调；需后续验证 TMC5130 通信异常、目标位置容差停止判定、继电器报警输出菜单文案和 SIL 文档资料引用。

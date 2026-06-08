@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>四路继电器方式2实现逻辑对照与问题分析</title>
+  <title>四路继电器报警输出逻辑对照与问题分析</title>
   <style>
     :root {
       --bg: #f6f7f9;
@@ -276,12 +276,12 @@
 <body>
   <main class="page">
     <header>
-      <h1>四路继电器方式2实现逻辑对照与问题分析</h1>
+      <h1>四路继电器报警输出逻辑对照与问题分析</h1>
       <div class="meta">
         <div>整理日期：2026-06-06</div>
         <div>当前工程：<code>D:\CUBE</code></div>
         <div>参考程序：<code>D:\程序存档\CPU2_v1.563\CPU2_v1.563</code></div>
-        <div>分析范围：参考程序继电器方式2，对照当前 CPU2/CPU3 四路继电器报警输出实现</div>
+        <div>分析范围：参考程序继电器报警输出，对照当前 CPU2/CPU3 四路继电器报警输出实现</div>
       </div>
     </header>
 
@@ -290,7 +290,7 @@
       <div class="summary-grid">
         <div class="summary-item">
           <strong>主算法基本对齐</strong>
-          当前 CPU2 的 HH/H/L/LL 判断、回差、锁存清除、无效值策略、数字源选择和常开/常闭翻转，整体已经按参考程序方式2实现。
+          当前 CPU2 的 HH/H/L/LL 判断、回差、锁存清除、无效值策略、数字源选择和常开/常闭翻转，整体已经按参考程序继电器报警输出实现。
         </div>
         <div class="summary-item">
           <strong>实现范围已扩展到四路</strong>
@@ -302,7 +302,7 @@
         </div>
         <div class="summary-item">
           <strong>刷新入口已收敛</strong>
-          TIM4 中断现在只调用 <code>RelayOutput_RequestUpdate()</code> 置位请求，主循环通过 <code>RelayOutput_ProcessPending()</code> 执行方式2计算和 GPIO 输出。
+          TIM4 中断现在只调用 <code>RelayOutput_RequestUpdate()</code> 置位请求，主循环通过 <code>RelayOutput_ProcessPending()</code> 执行继电器报警输出计算和 GPIO 输出。
         </div>
       </div>
       <p class="note">本次优化已执行：1. 保存参数前清零 <code>clear_alarm</code>；2. TIM4 只置位刷新请求；3. 继电器计算前复制单路配置和测量快照，运行态本地计算后短临界区一次提交；4. 手动报警抑制期间只释放输出，不清除已锁存运行态。</p>
@@ -312,7 +312,7 @@
       <h2 id="toc">二、目录</h2>
       <div class="toc">
         <a href="#source">1. 代码依据</a>
-        <a href="#reference">2. 参考程序方式2逻辑</a>
+        <a href="#reference">2. 参考程序参考程序报警逻辑</a>
         <a href="#current">3. 当前工程实现逻辑</a>
         <a href="#compare">4. 对照结论</a>
         <a href="#risks">5. 当前存在的问题</a>
@@ -338,19 +338,19 @@
             <td>参考程序</td>
             <td><code>D:\程序存档\CPU2_v1.563\CPU2_v1.563\MEASURE\alarm.h</code></td>
             <td>28, 44, 56, 63-127</td>
-            <td>继电器方式2参数结构、运行态结构、清报警非存储结构、枚举定义。</td>
+            <td>继电器报警输出参数结构、运行态结构、清报警非存储结构、枚举定义。</td>
           </tr>
           <tr>
             <td>参考程序</td>
             <td><code>D:\程序存档\CPU2_v1.563\CPU2_v1.563\MEASURE\alarm.c</code></td>
             <td>70, 75, 91, 148, 193, 238, 272, 311, 366, 452, 472</td>
-            <td>方式2入口、聚合报警、逐路刷新、有效/无效值判断、阈值判断、数字源选择、硬件输出和只读状态初始化。</td>
+            <td>继电器报警输出入口、聚合报警、逐路刷新、有效/无效值判断、阈值判断、数字源选择、硬件输出和只读状态初始化。</td>
           </tr>
           <tr>
             <td>当前 CPU2</td>
             <td><code>D:\CUBE\LTD_MAIN_CPU2\Services\Relay\relay_output.c</code></td>
             <td>67, 126, 184, 222, 260, 330, 344, 394, 416, 430</td>
-            <td>当前四路继电器方式2核心实现。</td>
+            <td>当前四路继电器报警输出核心实现。</td>
           </tr>
           <tr>
             <td>当前 CPU2</td>
@@ -393,7 +393,7 @@
     </section>
 
     <section class="card">
-      <h2 id="reference">四、参考程序方式2实现逻辑</h2>
+      <h2 id="reference">四、参考程序继电器报警输出实现逻辑</h2>
 
       <h3>4.1 数据模型</h3>
       <table>
@@ -428,10 +428,10 @@
       </table>
 
       <h3>4.2 主刷新流程</h3>
-      <p>参考程序在 <code>AlarmStateUpdate()</code> 中判断继电器类型。如果是方式2，也就是 <code>RELAYTYPE_2</code>，则执行：</p>
+      <p>参考程序在 <code>AlarmStateUpdate()</code> 中判断继电器类型。如果是继电器报警输出，也就是 <code>RELAYTYPE_2</code>，则执行：</p>
       <pre>result.Alarm = UpdateAlarm(result.OilLevel);
 cfg2_alarmupdate();</pre>
-      <p><code>cfg2_alarmupdate()</code> 是方式2核心。它按继电器通道逐路执行，逻辑可以分解为以下步骤：</p>
+      <p><code>cfg2_alarmupdate()</code> 是继电器报警输出核心。它按继电器通道逐路执行，逻辑可以分解为以下步骤：</p>
       <div class="flow">
         <div class="step"><span class="num">1</span><br>判断该路是否启用：<code>operating_mode == OM_OUTPUT_PASSIVE</code> 且 <code>alarm_source != AS_NONE</code>。</div>
         <div class="step"><span class="num">2</span><br>比较 <code>alarm_value</code> 是否等于该报警源对应的无效值。</div>
@@ -554,20 +554,20 @@ cfg2_alarmupdate();</pre>
       </table>
 
       <h3>4.7 聚合报警状态</h3>
-      <p>参考程序还有 <code>cfg2_GetAlarmState()</code>，用于从所有方式2继电器运行态汇总一个总报警状态：</p>
+      <p>参考程序还有 <code>cfg2_GetAlarmState()</code>，用于从所有继电器运行态汇总一个总报警状态：</p>
       <ul>
         <li>任一路 <code>HH_H_alarm</code> 激活，返回高报警。</li>
         <li>否则任一路 <code>LL_L_alarm</code> 激活，返回低报警。</li>
         <li>否则返回无报警。</li>
       </ul>
-      <p>这个聚合状态不等于某一路继电器输出状态，而是面向设备报警摘要或界面提示的总状态。</p>
+      <p>这个聚合状态不等于某一路继电器报警输出状态，而是面向设备报警摘要或界面提示的总状态。</p>
     </section>
 
     <section class="card">
       <h2 id="current">五、当前工程四路继电器实现逻辑</h2>
 
       <h3>5.1 数据模型和协议布局</h3>
-      <p>当前工程在 CPU2 和 CPU3 都定义了四路继电器方式2配置和运行态：</p>
+      <p>当前工程在 CPU2 和 CPU3 都定义了四路继电器报警输出配置和运行态：</p>
       <ul>
         <li><code>RELAY_ALARM_CHANNEL_COUNT = 4u</code>，只使用 RELAY1 至 RELAY4。</li>
         <li><code>RelayAlarmConfig</code> 包含参考程序 12 个存储参数，并额外包含 <code>clear_alarm</code>。</li>
@@ -579,7 +579,7 @@ cfg2_alarmupdate();</pre>
       <h3>5.2 CPU2 运行流程</h3>
       <p>当前 CPU2 的核心函数是 <code>RelayOutput_UpdateChannel()</code>。单路执行流程如下：</p>
       <div class="flow">
-        <div class="step"><span class="num">1</span><br>如果 <code>manual_alarm_inhibit != 0</code>，只释放继电器输出，保留该路已锁存运行态。</div>
+        <div class="step"><span class="num">1</span><br>如果 <code>manual_alarm_inhibit != 0</code>，只释放继电器报警输出，保留该路已锁存运行态。</div>
         <div class="step"><span class="num">2</span><br>如果不是被动输出，或报警源为 none，复位该路运行态并释放继电器。</div>
         <div class="step"><span class="num">3</span><br>如果配置里的 <code>clear_alarm == YES</code>，复制到运行态，然后把配置里的命令清回 NO。</div>
         <div class="step"><span class="num">4</span><br>从当前测量结果读取报警源值，并判断是否有效。</div>
@@ -654,8 +654,8 @@ cfg2_alarmupdate();</pre>
         <tbody>
           <tr>
             <td>继电器数量</td>
-            <td>方式2按 <code>RELAY_NUM_AMOUNT</code> 全量循环，参考工程为 4 路。</td>
-            <td>循环 <code>RELAY_ALARM_CHANNEL_COUNT = 4</code>，RELAY1~RELAY4 均参与方式2输出。</td>
+            <td>参考程序按 <code>RELAY_NUM_AMOUNT</code> 全量循环，参考工程为 4 路。</td>
+            <td>循环 <code>RELAY_ALARM_CHANNEL_COUNT = 4</code>，RELAY1~RELAY4 均参与继电器报警输出。</td>
             <td><span class="badge ok">一致</span> 已按四路程序需求对齐；第四路外部驱动和端子待后续原理图补齐。</td>
           </tr>
           <tr>
@@ -696,7 +696,7 @@ cfg2_alarmupdate();</pre>
           </tr>
           <tr>
             <td>手动抑制</td>
-            <td>方式2逻辑中未见等价分支。</td>
+            <td>参考程序报警逻辑中未见等价分支。</td>
             <td><code>manual_alarm_inhibit</code> 置位时只释放输出，不复位已锁存运行态。</td>
             <td><span class="badge ok">已优化</span> 手动操作期间抑制输出，同时保留锁存语义。</td>
           </tr>
@@ -772,7 +772,7 @@ cfg2_alarmupdate();</pre>
       </table>
 
       <h3>7.3 已优化：参数和测量值采用快照式读取</h3>
-      <p>当前继电器逻辑在计算前复制测量快照，并对每路继电器复制单路配置快照。每路运行态先在本地结构中完成计算，再通过短临界区一次提交到 <code>g_measurement.relay_alarm_runtime[]</code>。Modbus 写配置、测量流程更新数据或 CPU3 读取输入寄存器时，单次方式2计算使用同一轮快照，避免以下瞬态：</p>
+      <p>当前继电器逻辑在计算前复制测量快照，并对每路继电器复制单路配置快照。每路运行态先在本地结构中完成计算，再通过短临界区一次提交到 <code>g_measurement.relay_alarm_runtime[]</code>。Modbus 写配置、测量流程更新数据或 CPU3 读取输入寄存器时，单次继电器报警输出计算使用同一轮快照，避免以下瞬态：</p>
       <ul>
         <li>报警源已经切换，但阈值仍是旧源的阈值。</li>
         <li>浮点原始值两个寄存器写入期间，被继电器逻辑按半旧半新的 raw 值解码。</li>
@@ -798,7 +798,7 @@ cfg2_alarmupdate();</pre>
 
       <h3>7.7 中低风险：未实现参考程序聚合报警摘要</h3>
       <p>当前已经把每路运行态加入测量结果，这是必要增强。但参考程序还有 <code>cfg2_GetAlarmState()</code>，能够汇总所有继电器的高/低报警。当前没有等价总状态。</p>
-      <p>如果 CPU3 状态页、DSM 外部协议或上位机只看一个设备报警状态，而不逐路解析继电器运行态，就可能丢失方式2继电器报警摘要。</p>
+      <p>如果 CPU3 状态页、DSM 外部协议或上位机只看一个设备报警状态，而不逐路解析继电器运行态，就可能丢失继电器报警输出摘要。</p>
 
       <h3>7.8 低风险：手动设置接口容易被覆盖</h3>
       <p><code>RelayOutput_SetChannel()</code> 可以直接设置输出 bit，但下一次 <code>RelayOutput_Update()</code> 会按报警逻辑覆盖它。若后续产测或调试要手动吸合继电器，需要独立的手动测试模式，不能直接依赖这个接口保持状态。</p>
@@ -836,7 +836,7 @@ cfg2_alarmupdate();</pre>
           </tr>
           <tr class="risk-mid">
             <td><span class="badge warn">P1</span></td>
-            <td>单路计算前复制配置和测量值快照，避免半更新参数影响继电器输出。</td>
+            <td>单路计算前复制配置和测量值快照，避免半更新参数影响继电器报警输出。</td>
             <td><code>relay_output.c</code></td>
             <td>继电器每次刷新使用同一时刻的一致数据。</td>
           </tr>
@@ -854,7 +854,7 @@ cfg2_alarmupdate();</pre>
           </tr>
           <tr class="risk-low">
             <td><span class="badge ok">P2</span></td>
-            <td>补充方式2聚合报警摘要，或明确当前只提供逐路运行态。</td>
+            <td>补充继电器聚合报警摘要，或明确当前只提供逐路运行态。</td>
             <td><code>relay_output.c/.h</code><br><code>MeasurementResult</code> 或状态页</td>
             <td>恢复参考程序的总报警能力，便于显示和外部协议消费。</td>
           </tr>
@@ -926,7 +926,7 @@ cfg2_alarmupdate();</pre>
             <td>手动抑制</td>
             <td>任一路锁存已激活。</td>
             <td>触发 <code>manual_alarm_inhibit</code>。</td>
-            <td>继电器输出释放，但每路锁存运行态保持；手动抑制解除后按当前测量值和锁存清除命令继续判断。</td>
+            <td>继电器报警输出释放，但每路锁存运行态保持；手动抑制解除后按当前测量值和锁存清除命令继续判断。</td>
           </tr>
           <tr>
             <td>温度单位</td>
@@ -1005,7 +1005,7 @@ cfg2_alarmupdate();</pre>
 
       <h3>10.3 当前建议的目标状态</h3>
       <ol>
-        <li>四路方式2报警判定继续保持参考程序逻辑。</li>
+        <li>四路继电器报警输出判定继续保持参考程序逻辑。</li>
         <li><code>clear_alarm</code> 恢复为一次性非存储命令，不允许进入 FRAM 有效配置。</li>
         <li>继电器刷新只在一个上下文中完整执行，避免中断和主循环同时计算。</li>
         <li>每次刷新使用一致的参数和测量快照。</li>

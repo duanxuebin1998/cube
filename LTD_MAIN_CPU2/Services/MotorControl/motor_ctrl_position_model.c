@@ -275,6 +275,7 @@ void MotorCtrl_PrintMotorCountStatus(void)
     int32_t rampstat = 0;
     int32_t gstat = 0;
     bool is_moving = false;
+    uint32_t moving_ret;
     const uint32_t display_state = MotorCtrl_GetDisplayState();
     const bool display_moving = ((display_state == 1U) || (display_state == 2U));
     const char *display_text = (display_state == 1U) ? "上行" :
@@ -296,7 +297,8 @@ void MotorCtrl_PrintMotorCountStatus(void)
         printf("电机记步诊断寄存器 | 读取失败\r\n");
     }
 
-    if (MotorDriver_TryReadMovingState(&stepper, &is_moving)) {
+    moving_ret = MotorDriver_ReadMovingState(&stepper, &is_moving);
+    if (moving_ret == NO_ERROR) {
         printf("电机记步诊断状态 | 显示状态=%lu(%s) | 驱动运动=%s | 校验=%s\r\n",
                (unsigned long)display_state,
                display_text,
@@ -321,7 +323,6 @@ uint32_t MotorCtrl_PollRuntimePosition(void)
     bool is_moving = false;
     uint32_t ret;
 
-    /* 后台轮询只处理已初始化驱动，空闲未初始化不作为故障上报。 */
     if (!s_motor_driver.initialized) {
         return NO_ERROR;
     }
@@ -341,30 +342,17 @@ uint32_t MotorCtrl_PollRuntimePosition(void)
         return NO_ERROR;
     }
 
-    if (!MotorDriver_TryReadMovingState(&stepper, &is_moving)) {
-        ret = MotorDriver_SyncPositionOrCheckHealth(&stepper);
-        if (ret != NO_ERROR) {
-            return ret;
+    ret = MotorDriver_ReadMovingState(&stepper, &is_moving);
+    if (ret != NO_ERROR) {
+        uint32_t sync_ret = MotorDriver_SyncPositionOrCheckHealth(&stepper);
+        if (sync_ret != NO_ERROR) {
+            return sync_ret;
         }
-        return NO_ERROR;
+        return ret;
     }
 
     if (!is_moving) {
         if (s_motor_driver.motion_wait_active) {
-            ret = MotorDriver_SyncPositionOrCheckHealth(&stepper);
-            if (ret != NO_ERROR) {
-                return ret;
-            }
-            return NO_ERROR;
-        }
-        if (MotorCtrl_IsDriverMoving(&stepper)) {
-            if ((g_measurement.debug_data.motor_state != 1U) &&
-                (g_measurement.debug_data.motor_state != 2U)) {
-                uint32_t inferred_state = MotorDriver_InferDisplayStateFromDriver(&stepper);
-                if ((inferred_state == 1U) || (inferred_state == 2U)) {
-                    g_measurement.debug_data.motor_state = inferred_state;
-                }
-            }
             ret = MotorDriver_SyncPositionOrCheckHealth(&stepper);
             if (ret != NO_ERROR) {
                 return ret;

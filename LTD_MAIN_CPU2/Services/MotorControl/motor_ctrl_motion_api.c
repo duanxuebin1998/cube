@@ -785,6 +785,7 @@ uint32_t MotorCtrl_GetDisplayState(void)
 {
     uint32_t motor_state = g_measurement.debug_data.motor_state;
     bool is_moving = false;
+    uint32_t ret;
 
     if (!s_motor_driver.initialized) {
         return MotorMotion_IsDisplayStateActive(motor_state) ? motor_state : 0U;
@@ -796,23 +797,14 @@ uint32_t MotorCtrl_GetDisplayState(void)
         return 0U;
     }
 
-    if (!MotorDriver_TryReadMovingState(&stepper, &is_moving)) {
+    ret = MotorDriver_ReadMovingState(&stepper, &is_moving);
+    if (ret != NO_ERROR) {
         return MotorMotion_IsDisplayStateActive(motor_state) ? motor_state : 0U;
     }
 
     if (!is_moving) {
         if (s_motor_driver.motion_wait_active) {
             return MotorMotion_IsDisplayStateActive(motor_state) ? motor_state : 0U;
-        }
-        if (MotorCtrl_IsDriverMoving(&stepper)) {
-            if (MotorMotion_IsDisplayStateActive(motor_state)) {
-                return motor_state;
-            }
-            motor_state = MotorDriver_InferDisplayStateFromDriver(&stepper);
-            if (MotorMotion_IsDisplayStateActive(motor_state)) {
-                g_measurement.debug_data.motor_state = motor_state;
-                return motor_state;
-            }
         }
         if (MotorMotion_IsDisplayStateActive(motor_state)) {
             MotorMotion_ClearActiveState();
@@ -829,7 +821,6 @@ uint32_t MotorCtrl_GetDisplayState(void)
         g_measurement.debug_data.motor_state = motor_state;
         return motor_state;
     }
-
     return 0U;
 }
 
@@ -934,7 +925,15 @@ static uint32_t MotorMotion_MoveBlockingNoDetectInternal(float mm,
     HAL_Delay(100);
 
     uint32_t last_vel_refresh_tick = HAL_GetTick();
-    while (MotorCtrl_IsDriverMoving(&stepper)) {
+    bool is_moving = true;
+    while (1) {
+        ret = MotorCtrl_IsDriverMoving(&stepper, &is_moving);
+        if (ret != NO_ERROR) {
+            return MotorDriver_ReturnAfterTemporarySpeed(ret, restore_needed, restore_speed_x100);
+        }
+        if (!is_moving) {
+            break;
+        }
         ret = MotorDriver_StopIfCommandSwitchRequested();
         if (ret != NO_ERROR) {
             /* 提前退出前先恢复临时速度，避免下一条命令沿用本次速度。 */
@@ -1120,13 +1119,21 @@ static bool MotorMotion_ShouldStopAtTarget(float current_mm,
 static uint32_t MotorMotion_StopAtTargetAndWait(TMC5130TypeDef *tmc5130)
 {
     uint32_t ret;
+    bool is_moving = true;
 
     ret = MotorDriver_StopAndMarkStopped();
     if (ret != NO_ERROR) {
         return ret;
     }
 
-    while (MotorCtrl_IsDriverMoving(tmc5130)) {
+    while (1) {
+        ret = MotorCtrl_IsDriverMoving(tmc5130, &is_moving);
+        if (ret != NO_ERROR) {
+            return ret;
+        }
+        if (!is_moving) {
+            break;
+        }
         CHECK_COMMAND_SWITCH_AND_STOP(COMMAND_SWITCH_ABORT);
         ret = MotorDriver_SyncPositionOrCheckHealth(tmc5130);
         CHECK_ERROR(ret);
@@ -1149,8 +1156,16 @@ static uint32_t MotorMotion_WaitStopAbortable(uint32_t poll_ms)
 {
     uint32_t ret;
     uint32_t last_vel_refresh_tick = HAL_GetTick();
+    bool is_moving = true;
 
-    while (MotorCtrl_IsDriverMoving(&stepper)) {
+    while (1) {
+        ret = MotorCtrl_IsDriverMoving(&stepper, &is_moving);
+        if (ret != NO_ERROR) {
+            return ret;
+        }
+        if (!is_moving) {
+            break;
+        }
         CHECK_COMMAND_SWITCH_AND_STOP(COMMAND_SWITCH_ABORT);
         MotorDriver_RefreshVelocityDuringRun(&stepper, &last_vel_refresh_tick);
         ret = MotorDriver_SyncPositionOrCheckHealth(&stepper);
@@ -1188,8 +1203,16 @@ static uint32_t MotorMotion_WaitUntilStopWithTarget(TMC5130TypeDef *tmc5130,
     const uint32_t MAX_WAIT_MS = 60000 * 60;
     char detail[96];
     const uint32_t command_display_state = MotorMotion_DisplayStateFromDirection(dir);
+    bool is_moving = true;
 
-    while (MotorCtrl_IsDriverMoving(tmc5130)) {
+    while (1) {
+        ret = MotorCtrl_IsDriverMoving(tmc5130, &is_moving);
+        if (ret != NO_ERROR) {
+            return ret;
+        }
+        if (!is_moving) {
+            break;
+        }
 
         MotorMotion_SetActiveState(command_display_state, true);
         CHECK_COMMAND_SWITCH_AND_STOP(COMMAND_SWITCH_ABORT);
@@ -1254,7 +1277,7 @@ static uint32_t MotorMotion_WaitStoppedAfterStopCommand(uint32_t timeout_ms)
 {
     uint32_t ret;
     uint32_t start_tick = HAL_GetTick();
-    int32_t rampstat = 0;
+    bool is_moving = true;
     char detail[80];
 
     if (timeout_ms == 0U) {
@@ -1262,19 +1285,18 @@ static uint32_t MotorMotion_WaitStoppedAfterStopCommand(uint32_t timeout_ms)
     }
 
     while (1) {
-        if (!stpr_tryReadInt(&stepper, TMC5130_RAMPSTAT, &rampstat)) {
-            snprintf(detail, sizeof(detail), "寄存器：RAMPSTAT");
-            // 错误	阶段：错误报警	模块：电机	操作：等待电机停止	原因：通信失败	处理：停止电机	详情：detail
+        ret = MotorCtrl_IsDriverMoving(&stepper, &is_moving);
+        if (ret != NO_ERROR) {
+            snprintf(detail, sizeof(detail), "moving state error=0x%08lX", (unsigned long)ret);
             ErrorLog_WarnDetail(ERROR_LOG_MODULE_MOTOR,
                                 ERROR_LOG_OP_WAIT_STOP,
                                 ERROR_LOG_REASON_COMM_FAIL,
                                 ERROR_LOG_ACTION_STOP_MOTOR,
                                 detail);
-            printf("电机停止等待失败：RAMPSTAT读取失败\r\n");
-            return MOTOR_TMC_COMM_ERROR;
+            return ret;
         }
 
-        if ((rampstat & 0x400) == 0x400) {
+        if (!is_moving) {
             ret = MotorDriver_SyncPositionOrCheckHealth(&stepper);
             if (ret != NO_ERROR) {
                 return ret;
@@ -1285,19 +1307,17 @@ static uint32_t MotorMotion_WaitStoppedAfterStopCommand(uint32_t timeout_ms)
 
         if ((HAL_GetTick() - start_tick) > timeout_ms) {
             snprintf(detail, sizeof(detail),
-                     "斜坡状态：0x%08lX,超时：%lums",
-                     (unsigned long)rampstat,
+                     "timeout=%lums",
                      (unsigned long)timeout_ms);
-            // 错误	阶段：错误报警	模块：电机	操作：等待电机停止	原因：ErrorLog_GetReasonByCode(MOTOR_RUN_TIMEOUT)	处理：停止电机	详情：detail
             ErrorLog_WarnDetail(ERROR_LOG_MODULE_MOTOR,
                                 ERROR_LOG_OP_WAIT_STOP,
                                 ErrorLog_GetReasonByCode(MOTOR_RUN_TIMEOUT),
                                 ERROR_LOG_ACTION_STOP_MOTOR,
                                 detail);
-            printf("电机停止等待超时：RAMPSTAT=0x%08lX\r\n", (unsigned long)rampstat);
+            printf("motor stop wait timeout | timeout=%lums\r\n", (unsigned long)timeout_ms);
             return MOTOR_RUN_TIMEOUT;
         }
 
-        HAL_Delay(10);
+        HAL_Delay(10U);
     }
 }

@@ -6,6 +6,8 @@
 #define MOTOR_DRIVER_INIT_POWER_READY_LOG_MS      500U
 #define MOTOR_DRIVER_DRVSTATUS_CS_ACTUAL_MASK     0x001F0000UL
 #define MOTOR_DRIVER_DRVSTATUS_CS_ACTUAL_SHIFT    16U
+#define MOTOR_DRIVER_RAMPSTAT_VZERO_MASK          0x400U
+#define MOTOR_DRIVER_POSITION_TOLERANCE_TICKS     1024L
 
 /**
  * @file motor_ctrl_driver_param.c
@@ -33,6 +35,7 @@ static uint32_t MotorDriver_ClearInitResetFlag(void);
 static uint32_t MotorDriver_CheckInitPowerReadyWithRetry(void);
 static uint32_t MotorDriver_ReinitIfMotionNotReady(void);
 static uint32_t MotorDriver_CheckMotionReadyInternal(bool ignore_encoder_ready);
+static uint32_t MotorDriver_ReadTargetPositionOpen(TMC5130TypeDef *tmc5130, bool *target_open);
 
 /* ===================== 对外接口 ===================== */
 
@@ -328,6 +331,7 @@ static uint32_t MotorDriver_SetSpeedInternal(uint32_t speed_x100, bool print_res
     const uint32_t clamped_speed = MotorDriver_ClampSpeedSetpointX100(speed_x100);
     const char *apply_state = "空闲待下发";
     bool is_running = false;
+    uint32_t ret = NO_ERROR;
     double Lcur_mm = (double)g_measurement.debug_data.cable_length * 0.1;
 
     /* 先更新“设定速度”本身。
@@ -335,7 +339,10 @@ static uint32_t MotorDriver_SetSpeedInternal(uint32_t speed_x100, bool print_res
     g_measurement.debug_data.motor_speed = clamped_speed;
 
     if (s_motor_driver.initialized) {
-        is_running = MotorCtrl_IsDriverMoving(&stepper);
+        ret = MotorCtrl_IsDriverMoving(&stepper, &is_running);
+        if (ret != NO_ERROR) {
+            return ret;
+        }
     }
 
     if (is_running) {
@@ -354,7 +361,6 @@ static uint32_t MotorDriver_SetSpeedInternal(uint32_t speed_x100, bool print_res
     s_motor_driver.applied_velocity = velocity;
 
     if (is_running) {
-        uint32_t ret;
         /* 运行中改速：立即写入驱动，让本次运动立刻生效。 */
         ret = stpr_setVelocity(&stepper, velocity);
         if (ret != NO_ERROR) {
@@ -390,6 +396,31 @@ static uint32_t MotorDriver_SetSpeedInternal(uint32_t speed_x100, bool print_res
     return NO_ERROR;
 }
 
+static uint32_t MotorDriver_ReadTargetPositionOpen(TMC5130TypeDef *tmc5130, bool *target_open)
+{
+    int32_t xactual = 0;
+    int32_t xtarget = 0;
+    int64_t diff;
+
+    if ((tmc5130 == NULL) || (target_open == NULL)) {
+        return PARAM_ERROR;
+    }
+
+    if (!stpr_tryReadInt(tmc5130, TMC5130_XACTUAL, &xactual)) {
+        return MOTOR_TMC_COMM_ERROR;
+    }
+    if (!stpr_tryReadInt(tmc5130, TMC5130_XTARGET, &xtarget)) {
+        return MOTOR_TMC_COMM_ERROR;
+    }
+
+    diff = (int64_t)xactual - (int64_t)xtarget;
+    if (diff < 0) {
+        diff = -diff;
+    }
+
+    *target_open = (diff > (int64_t)MOTOR_DRIVER_POSITION_TOLERANCE_TICKS);
+    return NO_ERROR;
+}
 /**
  * @brief 持久设置 TMC5130 运行电流。
  *
@@ -534,46 +565,15 @@ uint32_t MotorCtrl_Init(void)
 }
 
 /**
- * @brief 判断 TMC5130 当前是否仍在运动。
+ * @brief Read whether the TMC5130 driver is still moving.
  *
- * @param tmc5130 TMC5130 设备对象。
- * @return 正在运动返回 true，停止或读取失败返回 false。
+ * @param tmc5130 TMC5130 device object.
+ * @param is_moving Output moving state when return is NO_ERROR.
+ * @return NO_ERROR, PARAM_ERROR or MOTOR_TMC_COMM_ERROR.
  */
-bool MotorCtrl_IsDriverMoving(TMC5130TypeDef *tmc5130)
+uint32_t MotorCtrl_IsDriverMoving(TMC5130TypeDef *tmc5130, bool *is_moving)
 {
-    int32_t rampstat = 0;
-    int32_t rampstat_confirm = 0;
-    int32_t vactual = 0;
-
-    if (tmc5130 == NULL) {
-        return false;
-    }
-
-    if (!stpr_tryReadInt(tmc5130, TMC5130_RAMPSTAT, &rampstat)) {
-        return false;
-    }
-
-    /* bit10(vzero)=0 表示斜坡发生器仍有速度，直接判定为运动中。 */
-    if (((uint32_t)rampstat & 0x400U) != 0x400U) {
-        return true;
-    }
-
-    /* 换向过程中速度会短暂过零，RAMPSTAT.vzero 可能瞬间置位。
-     * 首次读到停止候选时延时后再确认一次，避免把换向过零误判成运动完成。 */
-    HAL_Delay(5U);
-    if (!stpr_tryReadInt(tmc5130, TMC5130_RAMPSTAT, &rampstat_confirm)) {
-        return false;
-    }
-    if (((uint32_t)rampstat_confirm & 0x400U) != 0x400U) {
-        return true;
-    }
-
-    /* 若状态位连续显示 vzero，但实际速度寄存器仍非 0，仍按运动中处理。 */
-    if (stpr_tryReadInt(tmc5130, TMC5130_VACTUAL, &vactual) && (vactual != 0)) {
-        return true;
-    }
-
-    return false;
+    return MotorDriver_ReadMovingState(tmc5130, is_moving);
 }
 
 /**
@@ -654,9 +654,10 @@ uint32_t MotorDriver_StopAndMarkStopped(void)
     /* 命令切换时不能只下发停止就返回，否则下一条命令会在电机减速过程中被读取执行。 */
     start_tick = HAL_GetTick();
     while (1) {
-        if (!MotorDriver_TryReadMovingState(&stepper, &is_moving)) {
-            printf("电机停止状态读取失败，错误码：0x%08lX\r\n", (unsigned long)MOTOR_TMC_COMM_ERROR);
-            return MOTOR_TMC_COMM_ERROR;
+        ret = MotorDriver_ReadMovingState(&stepper, &is_moving);
+        if (ret != NO_ERROR) {
+            printf("电机停止状态读取失败，错误码：0x%08lX\r\n", (unsigned long)ret);
+            return ret;
         }
         if (!is_moving) {
             break;
@@ -707,28 +708,59 @@ uint32_t MotorDriver_StopIfCommandSwitchRequested(void)
 }
 
 /**
- * @brief 从 TMC5130 读取当前运动状态。
+ * @brief Read current TMC5130 moving state.
  *
- * 通过 RAMPSTAT/VACTUAL 等驱动状态推断电机是否仍在运动。
- * @param tmc5130 TMC5130 设备对象。
- * @param is_moving 输出运动状态。
- * @return 读取成功返回 true，通信失败返回 false。
+ * @param tmc5130 TMC5130 device object.
+ * @param is_moving Output moving state when return is NO_ERROR.
+ * @return NO_ERROR, PARAM_ERROR or MOTOR_TMC_COMM_ERROR.
  */
-bool MotorDriver_TryReadMovingState(TMC5130TypeDef *tmc5130, bool *is_moving)
+uint32_t MotorDriver_ReadMovingState(TMC5130TypeDef *tmc5130, bool *is_moving)
 {
     int32_t rampstat = 0;
+    int32_t rampstat_confirm = 0;
+    int32_t vactual = 0;
+    bool target_open = false;
+    uint32_t ret;
 
     if ((tmc5130 == NULL) || (is_moving == NULL)) {
-        return false;
+        return PARAM_ERROR;
     }
+
+    *is_moving = true;
 
     if (!stpr_tryReadInt(tmc5130, TMC5130_RAMPSTAT, &rampstat)) {
-        return false;
+        return MOTOR_TMC_COMM_ERROR;
     }
 
-    /* RAMPSTAT.bit10(vzero)=1 表示速度已经为 0，用它校正显示状态，避免软件缓存滞留。 */
-    *is_moving = (((uint32_t)rampstat & 0x400U) != 0x400U);
-    return true;
+    if (((uint32_t)rampstat & MOTOR_DRIVER_RAMPSTAT_VZERO_MASK) != MOTOR_DRIVER_RAMPSTAT_VZERO_MASK) {
+        *is_moving = true;
+        return NO_ERROR;
+    }
+
+    HAL_Delay(5U);
+    if (!stpr_tryReadInt(tmc5130, TMC5130_RAMPSTAT, &rampstat_confirm)) {
+        return MOTOR_TMC_COMM_ERROR;
+    }
+    if (((uint32_t)rampstat_confirm & MOTOR_DRIVER_RAMPSTAT_VZERO_MASK) != MOTOR_DRIVER_RAMPSTAT_VZERO_MASK) {
+        *is_moving = true;
+        return NO_ERROR;
+    }
+
+    if (!stpr_tryReadInt(tmc5130, TMC5130_VACTUAL, &vactual)) {
+        return MOTOR_TMC_COMM_ERROR;
+    }
+    if (vactual != 0) {
+        *is_moving = true;
+        return NO_ERROR;
+    }
+
+    ret = MotorDriver_ReadTargetPositionOpen(tmc5130, &target_open);
+    if (ret != NO_ERROR) {
+        return ret;
+    }
+
+    *is_moving = target_open;
+    return NO_ERROR;
 }
 
 /**

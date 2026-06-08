@@ -47,7 +47,7 @@ static inline float read_float_from_regs(const uint16_t *regs, uint16_t addr) {
 
 
 
-/* 写入单路继电器方式2报警配置。 */
+/* 写入单路继电器报警输出配置。 */
 static void write_relay_alarm_config_to_regs(uint16_t *regs, uint32_t channel, const volatile RelayAlarmConfig *cfg)
 {
     write_u32_to_regs(regs, HOLDREGISTER_DEVICEPARAM_RELAY_OPERATING_MODE(channel), cfg->operating_mode);
@@ -65,7 +65,7 @@ static void write_relay_alarm_config_to_regs(uint16_t *regs, uint32_t channel, c
     write_u32_to_regs(regs, HOLDREGISTER_DEVICEPARAM_RELAY_CLEAR_ALARM(channel), cfg->clear_alarm);
 }
 
-/* 从保持寄存器读取单路继电器方式2报警配置。 */
+/* 从保持寄存器读取单路继电器报警输出配置。 */
 static void read_relay_alarm_config_from_regs(const uint16_t *regs, uint32_t channel, volatile RelayAlarmConfig *cfg)
 {
     cfg->operating_mode = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_RELAY_OPERATING_MODE(channel));
@@ -85,7 +85,7 @@ static void read_relay_alarm_config_from_regs(const uint16_t *regs, uint32_t cha
 
 
 
-/* 从输入寄存器读取单路继电器方式2运行态。 */
+/* 从输入寄存器读取单路继电器报警输出运行态。 */
 static void read_relay_alarm_runtime_from_regs(const uint16_t *regs, uint32_t channel, volatile RelayAlarmRuntimeState *state)
 {
     state->alarm_value = read_float_from_regs(regs, REG_RELAY_ALARM_RUNTIME_ALARM_VALUE(channel));
@@ -267,7 +267,7 @@ void WriteDeviceParamsToHoldingRegisters(uint16_t *HoldingRegisterArray)
     write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_RESERVED32, g_deviceParams.reserved32);
     write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_RESERVED33, g_deviceParams.reserved33);
 
-    /* ===================== 继电器方式2报警配置（四路） ===================== */
+    /* ===================== 继电器报警输出配置（四路） ===================== */
     for (uint32_t channel = 0U; channel < RELAY_ALARM_CHANNEL_COUNT; channel++) {
         write_relay_alarm_config_to_regs(HoldingRegisterArray, channel, &g_deviceParams.relayAlarm[channel]);
     }
@@ -454,7 +454,7 @@ void ReadDeviceParamsFromHoldingRegisters(uint16_t *HoldingRegisterArray)
     g_deviceParams.reserved32 = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_RESERVED32);
     g_deviceParams.reserved33 = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_RESERVED33);
 
-    /* ===================== 继电器方式2报警配置（四路） ===================== */
+    /* ===================== 继电器报警输出配置（四路） ===================== */
     for (uint32_t channel = 0U; channel < RELAY_ALARM_CHANNEL_COUNT; channel++) {
         read_relay_alarm_config_from_regs(regs, channel, &g_deviceParams.relayAlarm[channel]);
     }
@@ -593,7 +593,7 @@ void read_measurement_result_from_InputRegisters(uint16_t *regs) {
 	g_measurement.wireless_pairing_status.error_code = read_u32_from_regs(cregs, REG_WIRELESS_PAIRING_ERROR_CODE);
 	g_measurement.wireless_pairing_status.update_counter = read_u32_from_regs(cregs, REG_WIRELESS_PAIRING_UPDATE_COUNTER);
 
-	/* ==== 继电器方式2运行态 ==== */
+	/* ==== 继电器报警输出运行态 ==== */
 	for (uint32_t channel = 0U; channel < RELAY_ALARM_CHANNEL_COUNT; channel++) {
 		read_relay_alarm_runtime_from_regs(cregs, channel, &g_measurement.relay_alarm_runtime[channel]);
 	}

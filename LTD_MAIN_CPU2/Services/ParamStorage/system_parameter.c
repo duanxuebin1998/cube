@@ -23,6 +23,86 @@ volatile MeasurementResult g_measurement = {0};   /* 测量结果 */
 volatile DeviceParameters  g_deviceParams = {0};  /* 设备参数 */
 static volatile uint8_t g_device_params_save_pending = 0; /* Deferred save request flag */
 static volatile uint32_t g_device_params_save_request_tick = 0; /* Last deferred save request tick */
+/* 将继电器报警输出枚举值转换成中文打印文本，便于现场调试查看。 */
+static const char * relay_operating_mode_str(uint32_t value)
+{
+    switch ((RelayAlarmOperatingMode)value) {
+    case RELAY_ALARM_OPERATING_DISABLED:
+        return "禁用";
+    case RELAY_ALARM_OPERATING_OUTPUT_PASSIVE:
+        return "无源输出";
+    default:
+        return "未定义";
+    }
+}
+
+static const char * relay_digital_source_str(uint32_t value)
+{
+    switch ((RelayAlarmDigitalSource)value) {
+    case RELAY_ALARM_DIGITAL_NONE:
+        return "无";
+    case RELAY_ALARM_DIGITAL_H:
+        return "高报";
+    case RELAY_ALARM_DIGITAL_HH:
+        return "高高报";
+    case RELAY_ALARM_DIGITAL_H_OR_HH:
+        return "高报或高高报";
+    case RELAY_ALARM_DIGITAL_L:
+        return "低报";
+    case RELAY_ALARM_DIGITAL_LL:
+        return "低低报";
+    case RELAY_ALARM_DIGITAL_L_OR_LL:
+        return "低报或低低报";
+    case RELAY_ALARM_DIGITAL_ANY:
+        return "任意报警";
+    default:
+        return "未定义";
+    }
+}
+
+static const char * relay_contact_type_str(uint32_t value)
+{
+    switch ((RelayAlarmContactType)value) {
+    case RELAY_ALARM_CONTACT_NORMALLY_OPEN:
+        return "常开";
+    case RELAY_ALARM_CONTACT_NORMALLY_CLOSED:
+        return "常闭";
+    default:
+        return "未定义";
+    }
+}
+
+static const char * relay_alarm_mode_str(uint32_t value)
+{
+    switch ((RelayAlarmMode)value) {
+    case RELAY_ALARM_MODE_OFF:
+        return "关";
+    case RELAY_ALARM_MODE_ON:
+        return "开";
+    case RELAY_ALARM_MODE_LATCHING:
+        return "锁存";
+    default:
+        return "未定义";
+    }
+}
+
+static const char * relay_alarm_source_str(uint32_t value)
+{
+    switch ((RelayAlarmSource)value) {
+    case RELAY_ALARM_SOURCE_TANK_LEVEL:
+        return "储罐液位";
+    case RELAY_ALARM_SOURCE_LIQUID_TEMP:
+        return "液相温度";
+    case RELAY_ALARM_SOURCE_WATER_LEVEL:
+        return "水位";
+    case RELAY_ALARM_SOURCE_DISPLACER_POS:
+        return "浮子位置";
+    case RELAY_ALARM_SOURCE_NONE:
+        return "无";
+    default:
+        return "未定义";
+    }
+}
 
 #ifndef DEVICE_PARAMS_SAVE_DEBOUNCE_MS
 #define DEVICE_PARAMS_SAVE_DEBOUNCE_MS 100u
@@ -535,7 +615,7 @@ void RestoreFactoryParamsConfig(void)
 
     /* ---------------- 电机与编码器参数 ---------------- */
     g_deviceParams.encoder_wheel_circumference_mm = 95000;  /* 0.001mm */
-    g_deviceParams.max_motor_speed                = 400;    /* 0.01m/min */
+    g_deviceParams.max_motor_speed                = 200;    /* 0.01m/min */
     g_deviceParams.first_loop_circumference_mm    = 6000; /* 0.1mm */
     g_deviceParams.tape_thickness_mm              = 200;    /* 0.001mm */
     g_deviceParams.motor_current                 = MOTOR_CURRENT_DEFAULT; /* TMC5130 IRUN */
@@ -624,7 +704,7 @@ void RestoreFactoryParamsConfig(void)
 
     /* ---------------- 继电器报警输出（旧阈值兼容字段） ---------------- */
 
-    /* ---------------- 继电器方式2报警配置（三路） ---------------- */
+    /* ---------------- 继电器报警输出配置（三路） ---------------- */
     for (uint32_t channel = 0U; channel < RELAY_ALARM_CHANNEL_COUNT; channel++) {
         volatile RelayAlarmConfig *cfg = &g_deviceParams.relayAlarm[channel];
         cfg->operating_mode = RELAY_ALARM_OPERATING_DISABLED;
@@ -806,12 +886,17 @@ void print_device_params(void)
     printf("  %-32s : %lu\r\n", "探底修正罐高", (unsigned long)params.bottom_encoder_correction_tank_height);
 
     for (uint32_t channel = 0U; channel < RELAY_ALARM_CHANNEL_COUNT; channel++) {
-        printf("  继电器%lu方式2: mode=%lu source=%lu digital=%lu contact=%lu alarmMode=%lu\r\n",
+        printf("  继电器%lu报警: 模式=%s(%lu) 报警源=%s(%lu) 报警位=%s(%lu) 接点=%s(%lu) 报警模式=%s(%lu)\r\n",
                (unsigned long)(channel + 1U),
+               relay_operating_mode_str(params.relayAlarm[channel].operating_mode),
                (unsigned long)params.relayAlarm[channel].operating_mode,
+               relay_alarm_source_str(params.relayAlarm[channel].alarm_source),
                (unsigned long)params.relayAlarm[channel].alarm_source,
+               relay_digital_source_str(params.relayAlarm[channel].digital_source),
                (unsigned long)params.relayAlarm[channel].digital_source,
+               relay_contact_type_str(params.relayAlarm[channel].contact_type),
                (unsigned long)params.relayAlarm[channel].contact_type,
+               relay_alarm_mode_str(params.relayAlarm[channel].alarm_mode),
                (unsigned long)params.relayAlarm[channel].alarm_mode);
     }
 
@@ -982,7 +1067,7 @@ void PrintMeasurementResult(const MeasurementResult *m)
     }
 
     printf("--------------------------------------------------------------\r\n");
-    printf("【继电器方式2运行态】\r\n");
+    printf("【继电器报警输出运行态】\r\n");
     for (uint32_t channel = 0U; channel < RELAY_ALARM_CHANNEL_COUNT; channel++) {
         const RelayAlarmRuntimeState *state = &m->relay_alarm_runtime[channel];
         printf("  继电器%lu: value=%.1f HH=%lu H=%lu HH_H=%lu L=%lu LL=%lu LL_L=%lu any=%lu clear=%lu\r\n",

@@ -230,14 +230,13 @@ uint32_t MotorDriver_StopAndMarkStopped(void);
 uint32_t MotorDriver_StopIfCommandSwitchRequested(void);
 
 /**
- * @brief 从 TMC5130 读取当前运动状态。
+ * @brief Read current TMC5130 moving state.
  *
- * 通过 RAMPSTAT/VACTUAL 等驱动状态推断电机是否仍在运动。
- * @param tmc5130 TMC5130 设备对象。
- * @param is_moving 输出运动状态。
- * @return 读取成功返回 true，通信失败返回 false。
+ * @param tmc5130 TMC5130 device object.
+ * @param is_moving Output moving state when return is NO_ERROR.
+ * @return NO_ERROR, PARAM_ERROR or MOTOR_TMC_COMM_ERROR.
  */
-bool MotorDriver_TryReadMovingState(TMC5130TypeDef *tmc5130, bool *is_moving);
+uint32_t MotorDriver_ReadMovingState(TMC5130TypeDef *tmc5130, bool *is_moving);
 
 /**
  * @brief 根据驱动状态推断上层显示用运动状态。

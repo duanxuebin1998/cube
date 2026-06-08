@@ -501,8 +501,8 @@
     <h2>八、按当前 CPU2 安全功能分离代码</h2>
     <div class="notice">
       <strong>当前安全功能定义：</strong>
-      CPU2 是安全功能板，安全功能应定义为“液位测量结果输出 4-20mA”和“液位测量结果驱动四路继电器方式2 HH/H/L/LL 液位报警信号”。
-      因此，安全边界不是整个 CPU2 所有功能，而是从液位有效性判断、阈值判断、4-20mA 输出、继电器输出、输出反馈和故障降级组成的一条闭环链路。
+      CPU2 是安全功能板，安全功能应定义为“液位测量结果输出 4-20mA”和“液位测量结果驱动四路继电器 HH/H/L/LL 液位报警信号”。
+      因此，安全边界不是整个 CPU2 所有功能，而是从液位有效性判断、阈值判断、4-20mA 输出、继电器报警输出、输出反馈和故障降级组成的一条闭环链路。
     </div>
 
     <table>
@@ -517,7 +517,7 @@
       <tbody>
         <tr>
           <td><span class="tag tag-risk">S0</span> 安全输出核心</td>
-          <td>液位有效性、液位新鲜度、量程换算、4-20mA 输出、四路继电器方式2 HH/H/L/LL 报警输出、故障电流、输出反馈确认。</td>
+          <td>液位有效性、液位新鲜度、量程换算、4-20mA 输出、四路继电器 HH/H/L/LL 报警输出、故障电流、输出反馈确认。</td>
           <td>建议新建 <code>LTD_MAIN_CPU2/Safety/Output/</code>，现有 AD5421 在 <code>BSP/Peripherals/src/ad5421.c</code>，继电器 GPIO 在 <code>Core/Src/gpio.c</code>。</td>
           <td>非安全代码不得直接调用 <code>AD5421_SetCurrent()</code> 或 <code>HAL_GPIO_WritePin(RELAYx)</code>，只能通过安全输出 API 请求。</td>
         </tr>
@@ -581,7 +581,7 @@
         </tr>
         <tr>
           <td><code>Safety/Output/safety_relay_output.c</code></td>
-          <td>四路继电器方式2 HH/H/L/LL 液位报警输出、滞回、默认安全态、NC/NO 反馈确认。</td>
+          <td>四路继电器 HH/H/L/LL 液位报警输出、滞回、默认安全态、NC/NO 反馈确认。</td>
           <td><code>SafetyRelay_SetAlarmState()</code>、<code>SafetyRelay_CheckFeedback()</code></td>
         </tr>
         <tr>
@@ -672,7 +672,7 @@
         <tr>
           <td>6. 运行时分片自检</td>
           <td>在 <code>App_MainLoop()</code> 或安全监督 50ms 周期中调度短耗时测试，RAM/Flash 用 subset 分片。</td>
-          <td>必须实测每个 STL 调用耗时，不能影响液位更新、继电器输出、AD5421 写入和看门狗窗口。</td>
+          <td>必须实测每个 STL 调用耗时，不能影响液位更新、继电器报警输出、AD5421 写入和看门狗窗口。</td>
         </tr>
         <tr>
           <td>7. 失败处理和证据</td>
