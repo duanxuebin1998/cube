@@ -21,7 +21,7 @@
 | 3 | V1.7.0.0 | V1.5.0.0 | 200 | 原 `reserved23` 正式替换为探底修正罐高，用于罐底测量后编码器修正；瓦锡兰分布测后探底前先回固定点监测位置。 |
 | 4 | V1.8.0.0 | V1.6.0.0 | 200 | 将 SI7000 所需补充状态融合进既有测量结构，并通过共享输入寄存器发布给 CPU3 外部协议转换层。 |
 | 5 | V1.9.0.0 | V1.7.0.0 | 200 | 新增 `CMD_PAIR_NEAREST_WIRELESS_SLIPRING = 117`，用于 CPU3 菜单或共享命令通道触发 CPU2 执行无线滑环 RSSI 最近匹配；新增无线滑环匹配中/完成设备状态；输入寄存器末尾追加无线滑环匹配结果和从机 MAC 状态。 |
-| 6 | V1.10.0.0 | V1.9.0.0 | 200 | 新增 `STATE_DEBUG_MODE = 0x0033`，用于 CPU2 串口调试指令执行期间通过 CPU3 显示“调试模式中”；原 `reserved2` 参数槽复用为故障自动恢复重跑上限；`empty_weight` 空载重量按 `int32_t` 有符号 32 位解释，寄存器地址和后续字段不移动。 |
+| 6 | V1.10.0.0 | V1.9.0.0 | 200 | 新增 `STATE_DEBUG_MODE = 0x0033`，用于 CPU2 串口调试指令执行期间通过 CPU3 显示“调试模式中”；原 `reserved2` 参数槽复用为故障自动恢复重跑上限；`empty_weight` 空载称重按 `int32_t` 有符号 32 位解释，寄存器地址和后续字段不移动。 |
 | 7 | V1.12.0.0 | V1.10.0.0 | 200 | 新增四路继电器报警输出配置和运行态共享区；CPU3 可显示、写入四路继电器报警输出配置，CPU2 执行 HH/H/L/LL、滞回、锁存清除和无效值策略。 |
 
 ## 兼容判断规则
@@ -142,9 +142,9 @@
 - CPU2 串口调试命令中，除调用正式测量流程的 `F/H/J`、正式命令映射、无线滑环 `SP*` 和演示 `X` 之外，执行期间临时发布 `STATE_DEBUG_MODE`。
 - CPU2 串口 `B/BE` 诊断进入时切换到 `STATE_DEBUG_MODE`，退出时恢复进入前的业务状态和错误码快照；诊断期间清除临时错误时仍保持调试模式显示。
 - 原 `reserved2` 正式替换为 `fault_auto_recovery_retry_limit`，用于控制故障自动恢复确认成功后最多自动重跑原命令次数：`0` 关闭，`1~10` 为上限，默认 `3`。
-- `empty_weight` 空载重量按 `int32_t` 有符号 32 位参数解释，寄存器仍占 2 个 word，负值按二进制补码传输。
+- `empty_weight` 空载称重按 `int32_t` 有符号 32 位参数解释，寄存器仍占 2 个 word，负值按二进制补码传输。
 - CPU3 设备状态页新增 `STATE_DEBUG_MODE` 显示文案“调试模式中”，英文文案为 `Debug Mode`。
-- CPU3 参数页将原 `COM_NUM_DEVICEPARAM_RESERVED2` 显示为“自动恢复次数”，仍写入 `HOLDREGISTER_DEVICEPARAM_PROTOCOL_VERSION + REG_STRIDE` 对应地址。
+- CPU3 参数页将原 `COM_NUM_DEVICEPARAM_RESERVED2` 显示为“故障自动恢复重跑次数”，仍写入 `HOLDREGISTER_DEVICEPARAM_PROTOCOL_VERSION + REG_STRIDE` 对应地址。
 - CPU3 外部 DSM 状态转换层将内部 `STATE_DEBUG_MODE` 对外映射为既有维护模式状态，避免 DSM 主站收到未知 `0x0033`。
 
 寄存器布局影响：

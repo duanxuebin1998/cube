@@ -1022,7 +1022,7 @@
       <div class="diagram">
         <svg viewBox="0 0 1180 470" role="img" aria-labelledby="safety-title safety-desc">
           <title id="safety-title">启动安全与故障恢复框图</title>
-          <desc id="safety-desc">CPU2 启动后先禁用驱动并清除 TMC5130 旧目标，等待编码器首帧有效，再允许业务命令；测量失败后按自动恢复次数限制重跑。</desc>
+          <desc id="safety-desc">CPU2 启动后先禁用驱动并清除 TMC5130 旧目标，等待编码器首帧有效，再允许业务命令；测量失败后按故障自动恢复重跑次数限制重跑。</desc>
           <defs>
             <marker id="arrow5" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
               <path d="M 0 0 L 10 5 L 0 10 z" fill="#197044"></path>
@@ -1073,7 +1073,7 @@
 
           <rect x="932" y="254" width="214" height="86" rx="7" fill="#fff7e8" stroke="#d6a55d"></rect>
           <text x="954" y="284" class="box-title">按参数限制重跑</text>
-          <text x="954" y="310" class="box-text">自动恢复次数 0~10</text>
+          <text x="954" y="310" class="box-text">恢复重跑次数 0~10</text>
           <text x="954" y="330" class="small-text">默认 3，0 表示关闭重跑</text>
 
           <path d="M 250 298 L 330 298" stroke="#9a5b00" stroke-width="2.2" marker-end="url(#arrow5)"></path>

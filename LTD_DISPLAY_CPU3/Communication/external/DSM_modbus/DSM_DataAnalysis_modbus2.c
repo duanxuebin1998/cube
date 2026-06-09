@@ -304,7 +304,7 @@ int UpdateDeviceParamsFromLegacyRegs(int startadd, int reamount)
         g_deviceParams.spreadMeasurementDistance = temp;
     }
 
-    /*************** 顶点距液面 -> spreadTopLimit *********************/
+    /*************** 最高点距液面 -> spreadTopLimit *********************/
     if ((HOLDREGISTER_SPREAD_TOPLIMIT >= startadd) &&
         ((HOLDREGISTER_SPREAD_TOPLIMIT + 1) <= end))
     {
@@ -326,7 +326,7 @@ int UpdateDeviceParamsFromLegacyRegs(int startadd, int reamount)
         g_deviceParams.spreadTopLimit = temp;
     }
 
-    /*************** 底点距罐底 -> spreadBottomLimit ******************/
+    /*************** 最低点距罐底 -> spreadBottomLimit ******************/
     if ((HOLDREGISTER_SPREAD_FLOORLIMIT >= startadd) &&
         ((HOLDREGISTER_SPREAD_FLOORLIMIT + 1) <= end))
     {

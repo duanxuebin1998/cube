@@ -545,7 +545,7 @@ typedef struct {
     uint32_t error_stop_measurement;      // 错误停止测量标志(0/1)
 
     uint32_t protocolVersion;             // CPU2/CPU3共享协议版本，旧程序该字段默认为0
-    uint32_t fault_auto_recovery_retry_limit; // 故障自动恢复重跑上限：0关闭，1~10为最多重跑次数
+    uint32_t fault_auto_recovery_retry_limit; // 故障自动恢复重跑次数上限：0关闭，1~10为最多重跑次数
     uint32_t reserved3;                   // 预留
 
     // ===================== 电机与编码器参数 =====================
@@ -559,12 +559,12 @@ typedef struct {
     uint32_t motor_count_first_loop_circumference_mm; // 电机记步局部首圈周长(0.001mm)
 
     // ===================== 称重参数 =====================
-    int32_t empty_weight;                // 空载重量
-    uint32_t empty_weight_upper_limit;    // 空载重量上限
-    uint32_t empty_weight_lower_limit;    // 空载重量下限
+    int32_t empty_weight;                // 空载称重
+    uint32_t empty_weight_upper_limit;    // 空载称重上限
+    uint32_t empty_weight_lower_limit;    // 空载称重下限
     uint32_t full_weight;                 // 满载称重
-    uint32_t full_weight_upper_limit;     // 满载重量上限
-    uint32_t full_weight_lower_limit;     // 满载重量下限
+    uint32_t full_weight_upper_limit;     // 满载称重上限
+    uint32_t full_weight_lower_limit;     // 满载称重下限
     uint32_t weight_upper_limit_ratio;    // 称重变化量检测上限比例
     uint32_t weight_lower_limit_ratio;    // 称重变化量检测下限比例
 
@@ -584,7 +584,7 @@ typedef struct {
     uint32_t tankHeight;                     // 液位罐高(0.1mm)
     uint32_t liquid_sensor_distance_diff;    // 液位传感器距离差(0.1mm)
     uint32_t blindZone;                      // 液位盲区(0.1mm)
-    uint32_t oilLevelThreshold;              // 液位跟随阈值
+    uint32_t oilLevelThreshold;              // 液位找液阈值
     uint32_t oilLevelHysteresisThreshold;    // 液位滞后阈值
     uint32_t liquidLevelMeasurementMethod;   // 液位测量方式 0 空气+液体频率/2 1：根据设置跟随频率跟随 2 根据设置密度跟随
     uint32_t oilLevelFrequency;              // 液位跟随频率
@@ -597,20 +597,20 @@ typedef struct {
     uint32_t waterBlindZone;                    // 水位盲区(0.1mm)
     uint32_t water_cap_threshold;               // 水位电容阈值（建议明确倍率，如 x1000）
     uint32_t water_find_cap_threshold;              // 水位寻找电容阈值（建议明确倍率，如 x1000）
-    uint32_t maxDownDistance;                   // 水位/罐底测量最大下行距离(0.1mm)
+    uint32_t maxDownDistance;                   // 水位/罐底测量水位最大下行距离(0.1mm)
     uint32_t zero_cap;                          //零点电容值
     uint32_t water_stable_threshold;            //水位稳定阈值
     uint32_t waterLevelCorrection;              // 水位修正值
 
     // ===================== 罐高/罐底测量 =====================
     uint32_t bottom_detect_mode;          // 罐底测量模式
-    uint32_t bottom_angle_threshold;      // 罐底角度阈值（务必明确单位/倍率）
-    uint32_t bottom_weight_threshold;     // 罐底称重阈值
+    uint32_t bottom_angle_threshold;      // 探底角度阈值（务必明确单位/倍率）
+    uint32_t bottom_weight_threshold;     // 探底称重阈值
     uint32_t refreshTankHeightFlag;       // 是否更新液位罐高
-    uint32_t maxTankHeightDeviation;      // 罐高最大变化范围
+    uint32_t maxTankHeightDeviation;      // 实测罐高最大偏差
     uint32_t initialTankHeight;           // 初始实高
     uint32_t currentTankHeight;           // 当前实高
-    uint32_t bottom_encoder_correction_enable; // 罐底测量完成后修正编码器(0=不修正,1=修正)
+    uint32_t bottom_encoder_correction_enable; // 罐底后编码器修正(0=不修正,1=修正)
     uint32_t water_lag_cap_threshold;  // 水位滞后电容阈值(x1000)，稳定监测中偏离目标超过该值后返回跟随
 
     // ===================== 密度和温度修正参数 =====================
@@ -621,15 +621,15 @@ typedef struct {
     uint32_t reserved19;                 // 预留（新增）
 
     // ===================== 分布/区间测量参数 =====================
-    uint32_t requireBottomMeasurement;         // 是否需要测量罐底
-    uint32_t requireWaterMeasurement;          // 是否需要测量水位
-    uint32_t requireSinglePointDensity;        // 是否需要测量单点密度
+    uint32_t requireBottomMeasurement;         // 是否测罐底
+    uint32_t requireWaterMeasurement;          // 是否测水位
+    uint32_t requireSinglePointDensity;        // 是否测单点密度
     uint32_t spreadMeasurementOrder;           // 分布测量顺序
     uint32_t spreadMeasurementMode;            // 分布测量模式
     uint32_t spreadMeasurementCount;           // 分布测量数量
     uint32_t spreadMeasurementDistance;        // 分布测量间距
-    uint32_t spreadTopLimit;                   // 分布测量上限（距液面，0.1mm）
-    uint32_t spreadBottomLimit;                // 分布测量下限（距罐底，0.1mm）
+    uint32_t spreadTopLimit;                   // 最高点距液面（0.1mm）
+    uint32_t spreadBottomLimit;                // 最低点距罐底（，0.1mm）
     uint32_t spreadPointHoverTime;             // 第一测量点悬停时间
     uint32_t intervalMeasurementTopLimit;      // 区间测量上限（距液面，0.1mm）
     uint32_t intervalMeasurementBottomLimit;   // 区间测量下限（距罐底，0.1mm）
@@ -643,7 +643,7 @@ typedef struct {
     uint32_t wartsila_density_interval;           // 步进
     uint32_t wartsila_max_height_above_surface;   // 最高测点距液面距离(0.1mm 或按定义)
 
-    uint32_t wartsila_bottom_detect_interval; // 瓦锡兰测量后探底频率：0不探底，N表示每N次测量后探底一次，范围0~100
+    uint32_t wartsila_bottom_detect_interval; // 瓦锡兰探底间隔：0不探底，N表示每N次测量后探底一次，范围0~100
     uint32_t bottom_encoder_correction_tank_height; // 探底修正罐高，仅用于罐底后编码器修正，0表示沿用液位罐高
 
 
@@ -651,15 +651,15 @@ typedef struct {
     uint32_t reserved25;                 // 预留（新增）
 
     // ===================== 4-20mA 输出 =====================
-    uint32_t CurrentRangeStart_mA;       // 电流量程起始值
-    uint32_t CurrentRangeEnd_mA;         // 电流量程结束值
+    uint32_t CurrentRangeStart_mA;       // AO输出范围起点电流
+    uint32_t CurrentRangeEnd_mA;         // AO输出范围终点电流
     uint32_t AlarmHighAO;                // 高液位报警输出
     uint32_t AlarmLowAO;                 // 低液位报警输出
-    uint32_t InitialCurrent_mA;          // 初始化电流值
-    uint32_t AOHighCurrent_mA;           // AO高报电流值
-    uint32_t AOLowCurrent_mA;            // AO低报电流值
-    uint32_t FaultCurrent_mA;            // 故障模式电流值
-    uint32_t DebugCurrent_mA;            // 调试模式电流值
+    uint32_t InitialCurrent_mA;          // AO初始电流
+    uint32_t AOHighCurrent_mA;           // AO高位电流
+    uint32_t AOLowCurrent_mA;            // AO低位电流
+    uint32_t FaultCurrent_mA;            // AO故障电流
+    uint32_t DebugCurrent_mA;            // AO调试电流
 
     uint32_t reserved26;                 // 预留
     uint32_t reserved27;                 // 预留（新增）
@@ -677,7 +677,7 @@ typedef struct {
     uint32_t reserved29;                 // 预留（新增）
 
     // ===================== Tape compensation =====================
-    uint32_t lastOilCorrectionLevel;     // level at last oil correction
+    uint32_t lastOilCorrectionLevel;     // 上次液位修正液位
     uint32_t tankGasPhaseTemperature;    // tank gas phase temperature
     uint32_t tapeExpansionCoefficient;   // tape expansion coefficient
     uint32_t tapeCalibrationTemperature; // tape calibration temperature

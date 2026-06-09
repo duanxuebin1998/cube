@@ -27,6 +27,7 @@ typedef enum {
     KEYNUM_MENU_PARACFG_MAIN,            // 参数配置主菜单（新）
     KEYNUM_MENU_CMD_MAIN,                // 维护/调试指令主菜单
     KEYNUM_IFSENDCMD,                    // 是否下发指令或参数
+    KEYNUM_IF_PARAM_PROTECT_CONFIRM,     // 保护参数二次确认
     KEYNUM_INPUTCMDPARA,                 // 输入参数值(带参指令)
     KEYNUM_DISPLAY_PARA,                 // 参数显示(读写类参数)
     KEYNUM_WORDSELECT,                   // 隐藏信息选择
@@ -35,6 +36,8 @@ typedef enum {
     KEYNUM_MENU_LANGUAGE,                // 显示设置 - 语言
 
     /* ===== 参数配置（新分组页面） ===== */
+    KEYNUM_MENU_PARA_MEASURE_CONFIG,     // 测量参数主菜单
+    KEYNUM_MENU_PARA_RUN_POLICY,         // 运行策略参数
     KEYNUM_MENU_PARA_DEV_INFO,           // 设备信息参数
     KEYNUM_MENU_PARA_MECH,               // 机械参数
     KEYNUM_MENU_PARA_WEIGHT,             // 称重参数（如果你确实有此页）
@@ -53,15 +56,28 @@ typedef enum {
     KEYNUM_MENU_RELAY1_MAIN,             // R1 继电器配置
     KEYNUM_MENU_RELAY1_CHANNEL,          // R1 通道设置
     KEYNUM_MENU_RELAY1_ALARM,            // R1 报警配置
+    KEYNUM_MENU_RELAY1_STATUS,           // R1 报警状态
     KEYNUM_MENU_RELAY2_MAIN,             // R2 继电器配置
     KEYNUM_MENU_RELAY2_CHANNEL,          // R2 通道设置
     KEYNUM_MENU_RELAY2_ALARM,            // R2 报警配置
+    KEYNUM_MENU_RELAY2_STATUS,           // R2 报警状态
     KEYNUM_MENU_RELAY3_MAIN,             // R3 继电器配置
     KEYNUM_MENU_RELAY3_CHANNEL,          // R3 通道设置
     KEYNUM_MENU_RELAY3_ALARM,            // R3 报警配置
+    KEYNUM_MENU_RELAY3_STATUS,           // R3 报警状态
     KEYNUM_MENU_RELAY4_MAIN,             // R4 继电器配置
     KEYNUM_MENU_RELAY4_CHANNEL,          // R4 通道设置
     KEYNUM_MENU_RELAY4_ALARM,            // R4 报警配置
+    KEYNUM_MENU_RELAY4_STATUS,           // R4 报警状态
+    KEYNUM_MENU_COMM_CONFIG,             // 通信设置主菜单
+    KEYNUM_MENU_DISPLAY_CONFIG,          // 显示设置主菜单
+    KEYNUM_MENU_DISPLAY_BASE,            // 显示基础参数
+    KEYNUM_MENU_DISPLAY_DATA,            // 数据源与手输值主菜单
+    KEYNUM_MENU_DISPLAY_DATA_OIL,        // 液位数据源与手输值
+    KEYNUM_MENU_DISPLAY_DATA_WATER,      // 水位数据源与手输值
+    KEYNUM_MENU_DISPLAY_DATA_DENSITY,    // 密度数据源与手输值
+    KEYNUM_MENU_DISPLAY_DATA_TEMP,       // 温度数据源与手输值
+    KEYNUM_MENU_MAINT_CONFIG,            // 维护设置主菜单
 
     /* ===== CPU3（拆分页面） ===== */
     KEYNUM_MENU_CPU3_BASE,               // CPU3 - 基本参数
@@ -79,16 +95,17 @@ typedef enum {
 
 
 typedef enum {
-    MENU_GRP_DEV_INFO = 0,      // 传感器类型/编号/版本/软件版本/上电默认等
+    MENU_GRP_DEV_INFO = 0,      // 传感器类型/编号/版本/软件版本/协议版本
+    MENU_GRP_RUN_POLICY,        // 上电默认/故障策略/自动恢复/位置源切换
     MENU_GRP_MECH,              // 编码轮周长/首圈周长/尺带厚度/电机速度等
     MENU_GRP_WEIGHT,            // 空载/满载/上下限/比例
     MENU_GRP_ZERO,              // 零点阈值/忽略区/最大偏差/找零下行距离
     MENU_GRP_LIQUID,            // 罐高/液位距差/盲区/阈值/滞后/测量方式
-    MENU_GRP_WATER,             // 水罐高/水位距差/盲区/电容阈值/滞回/最大下行距离
+    MENU_GRP_WATER,             // 水罐高/水位距差/盲区/电容阈值/滞回/水位最大下行距离
     MENU_GRP_BOTTOM_TANKH,      // 罐底模式/角度阈值/称重阈值/更新罐高标志/实高偏差/初始/当前
     MENU_GRP_CORR,              // 密度修正/温度修正
     MENU_GRP_POLICY,            // 是否测罐底/是否测水/是否测单点/顺序/模式/点数/间距/悬停/上下限
-    MENU_GRP_WARTSILA,          // Wartsila 上下限/步进/最高点距液面
+    MENU_GRP_WARTSILA,          // Wartsila 上下限/步进/最高点液面距
     MENU_GRP_DO_ALARM,          // 继电器报警输出
     MENU_GRP_AO,                // AO 输出/报警/故障电流/调试电流
     MENU_GRP_CAL_SP,            // 标定液位(油/水)/单点位置/监测位置/分布液位/电机运行距离
@@ -223,12 +240,12 @@ typedef enum
     COM_NUM_DEVICEPARAM_MOTOR_COUNT_FIRST_LOOP_CIRC,    // 电机记步局部首圈周长
 
     /* ---------------- 称重参数 ---------------- */
-    COM_NUM_DEVICEPARAM_EMPTY_WEIGHT,                   // 空载重量
-    COM_NUM_DEVICEPARAM_EMPTY_WEIGHT_UPPER_LIMIT,       // 空载重量上限
-    COM_NUM_DEVICEPARAM_EMPTY_WEIGHT_LOWER_LIMIT,       // 空载重量下限
-    COM_NUM_DEVICEPARAM_FULL_WEIGHT,                    // 满载重量
-    COM_NUM_DEVICEPARAM_FULL_WEIGHT_UPPER_LIMIT,        // 满载重量上限
-    COM_NUM_DEVICEPARAM_FULL_WEIGHT_LOWER_LIMIT,        // 满载重量下限
+    COM_NUM_DEVICEPARAM_EMPTY_WEIGHT,                   // 空载称重
+    COM_NUM_DEVICEPARAM_EMPTY_WEIGHT_UPPER_LIMIT,       // 空载称重上限
+    COM_NUM_DEVICEPARAM_EMPTY_WEIGHT_LOWER_LIMIT,       // 空载称重下限
+    COM_NUM_DEVICEPARAM_FULL_WEIGHT,                    // 满载称重
+    COM_NUM_DEVICEPARAM_FULL_WEIGHT_UPPER_LIMIT,        // 满载称重上限
+    COM_NUM_DEVICEPARAM_FULL_WEIGHT_LOWER_LIMIT,        // 满载称重下限
     COM_NUM_DEVICEPARAM_WEIGHT_UPPER_LIMIT_RATIO,       // 称重上限比例
     COM_NUM_DEVICEPARAM_WEIGHT_LOWER_LIMIT_RATIO,       // 称重下限比例
 
@@ -262,15 +279,15 @@ typedef enum
     COM_NUM_DEVICEPARAM_WATER_BLINDZONE,                // 水位盲区
     COM_NUM_DEVICEPARAM_WATER_CAP_THRESHOLD,            // 水位电容阈值
     COM_NUM_DEVICEPARAM_WATER_FIND_CAP_THRESHOLD,           // 水位寻找电容阈值
-    COM_NUM_DEVICEPARAM_MAXDOWNDISTANCE,                // 最大下行距离
+    COM_NUM_DEVICEPARAM_MAXDOWNDISTANCE,                // 水位最大下行距离
     COM_NUM_DEVICEPARAM_ZERO_CAP,                     // 保留 14
     COM_NUM_DEVICEPARAM_WATER_STABLE_THRESHOLD,                     // 保留 15
     COM_NUM_DEVICEPARAM_WATER_LEVEL_CORRECTION,        // 水位修正值
 
     /* ---------------- 罐底/罐高测量参数 ---------------- */
     COM_NUM_DEVICEPARAM_BOTTOM_DETECT_MODE,             // 罐底检测模式
-    COM_NUM_DEVICEPARAM_BOTTOM_ANGLE_THRESHOLD,         // 罐底角度阈值
-    COM_NUM_DEVICEPARAM_BOTTOM_WEIGHT_THRESHOLD,        // 罐底称重阈值
+    COM_NUM_DEVICEPARAM_BOTTOM_ANGLE_THRESHOLD,         // 探底角度阈值
+    COM_NUM_DEVICEPARAM_BOTTOM_WEIGHT_THRESHOLD,        // 探底称重阈值
     COM_NUM_DEVICEPARAM_REFRESH_TANKHEIGHT_FLAG,        // 刷新罐高标志
     COM_NUM_DEVICEPARAM_MAX_TANKHEIGHT_DEVIATION,       // 罐高最大偏差
     COM_NUM_DEVICEPARAM_INITIAL_TANKHEIGHT,             // 初始罐高

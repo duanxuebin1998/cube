@@ -233,7 +233,7 @@ static int normalize_device_params_runtime(void)
         changed = 1;
     }
 
-    /* 瓦锡兰探底频率范围为0~100，旧 reserved22 脏值按默认每次探底处理。 */
+    /* 瓦锡兰探底间隔范围为0~100，旧 reserved22 脏值按默认每次探底处理。 */
     if (g_deviceParams.wartsila_bottom_detect_interval > 100U) {
         g_deviceParams.wartsila_bottom_detect_interval = 1U;
         changed = 1;
@@ -610,7 +610,7 @@ void RestoreFactoryParamsConfig(void)
     g_deviceParams.protocolVersion      = DEVICE_PROTOCOL_VERSION;
     g_deviceParams.error_auto_back_zero  = 1;   /* 默认: 报错回零 */
     g_deviceParams.error_stop_measurement= 1;   /* 默认: 报错停止测量 */
-    g_deviceParams.fault_auto_recovery_retry_limit = FAULT_AUTO_RECOVERY_RETRY_DEFAULT; /* 默认: 自动恢复最多重跑3次 */
+    g_deviceParams.fault_auto_recovery_retry_limit = FAULT_AUTO_RECOVERY_RETRY_DEFAULT; /* 默认: 故障自动恢复最多重跑3次 */
     g_deviceParams.position_source_auto_switch = POSITION_SOURCE_AUTO_SWITCH_ENABLE; /* 默认: 允许流程自动切换位置源 */
 
     /* ---------------- 电机与编码器参数 ---------------- */
@@ -699,7 +699,7 @@ void RestoreFactoryParamsConfig(void)
     g_deviceParams.wartsila_lower_density_limit      = 500;
     g_deviceParams.wartsila_density_interval         = 1000;
     g_deviceParams.wartsila_max_height_above_surface = 200; /* 0.1mm 或按定义 */
-    g_deviceParams.wartsila_bottom_detect_interval  = 1;   /* 瓦锡兰测量后探底频率：0不探底，N表示每N次测量后探底一次 */
+    g_deviceParams.wartsila_bottom_detect_interval  = 1;   /* 瓦锡兰探底间隔：0不探底，N表示每N次测量后探底一次 */
     g_deviceParams.bottom_encoder_correction_tank_height = 0; /* 0: 编码器修正沿用液位罐高 */
 
     /* ---------------- 继电器报警输出（旧阈值兼容字段） ---------------- */
@@ -789,13 +789,13 @@ void print_device_params(void)
     printf("  %-32s : %lu\r\n", "协议版本", (unsigned long)params.protocolVersion);
     printf("  %-32s : %lu\r\n", "故障自动回零", (unsigned long)params.error_auto_back_zero);
     printf("  %-32s : %lu\r\n", "故障停止测量", (unsigned long)params.error_stop_measurement);
-    printf("  %-32s : %lu\r\n", "故障自动恢复次数", (unsigned long)params.fault_auto_recovery_retry_limit);
+    printf("  %-32s : %lu\r\n", "故障自动恢复重跑次数", (unsigned long)params.fault_auto_recovery_retry_limit);
     printf("  %-32s : %lu\r\n", "位置源自动切换", (unsigned long)params.position_source_auto_switch);
 
     /* 电机与编码器 */
     printf("\r\n-- 电机与编码器 --\r\n");
     printf("  %-32s : %lu\r\n", "编码轮周长(0.001mm)", (unsigned long)params.encoder_wheel_circumference_mm);
-    printf("  %-32s : %lu\r\n", "电机最大速度(0.01m/min)", (unsigned long)params.max_motor_speed);
+    printf("  %-32s : %lu\r\n", "电机限速(0.01m/min)", (unsigned long)params.max_motor_speed);
     printf("  %-32s : %lu\r\n", "电机运行电流(IRUN 1-31)", (unsigned long)params.motor_current);
     printf("  %-32s : %lu\r\n", "首圈周长(0.1mm)", (unsigned long)params.first_loop_circumference_mm);
     printf("  %-32s : %lu\r\n", "尺带厚度(0.001mm)", (unsigned long)params.tape_thickness_mm);
@@ -804,12 +804,12 @@ void print_device_params(void)
 
     /* 称重 */
     printf("\r\n-- 称重参数 --\r\n");
-    printf("  %-32s : %ld\r\n", "空载重量", (long)params.empty_weight);
-    printf("  %-32s : %lu\r\n", "空载重量上限", (unsigned long)params.empty_weight_upper_limit);
-    printf("  %-32s : %lu\r\n", "空载重量下限", (unsigned long)params.empty_weight_lower_limit);
-    printf("  %-32s : %lu\r\n", "满载重量", (unsigned long)params.full_weight);
-    printf("  %-32s : %lu\r\n", "满载重量上限", (unsigned long)params.full_weight_upper_limit);
-    printf("  %-32s : %lu\r\n", "满载重量下限", (unsigned long)params.full_weight_lower_limit);
+    printf("  %-32s : %ld\r\n", "空载称重", (long)params.empty_weight);
+    printf("  %-32s : %lu\r\n", "空载称重上限", (unsigned long)params.empty_weight_upper_limit);
+    printf("  %-32s : %lu\r\n", "空载称重下限", (unsigned long)params.empty_weight_lower_limit);
+    printf("  %-32s : %lu\r\n", "满载称重", (unsigned long)params.full_weight);
+    printf("  %-32s : %lu\r\n", "满载称重上限", (unsigned long)params.full_weight_upper_limit);
+    printf("  %-32s : %lu\r\n", "满载称重下限", (unsigned long)params.full_weight_lower_limit);
     printf("  %-32s : %lu\r\n", "碰撞上限比率", (unsigned long)params.weight_upper_limit_ratio);
     printf("  %-32s : %lu\r\n", "碰撞下限比率", (unsigned long)params.weight_lower_limit_ratio);
 
@@ -825,7 +825,7 @@ void print_device_params(void)
     printf("  %-32s : %lu\r\n", "液位罐高(0.1mm)", (unsigned long)params.tankHeight);
     printf("  %-32s : %lu\r\n", "液位探头距差(0.1mm)", (unsigned long)params.liquid_sensor_distance_diff);
     printf("  %-32s : %lu\r\n", "液位盲区(0.1mm)", (unsigned long)params.blindZone);
-    printf("  %-32s : %lu\r\n", "找油阈值", (unsigned long)params.oilLevelThreshold);
+    printf("  %-32s : %lu\r\n", "液位找液阈值", (unsigned long)params.oilLevelThreshold);
     printf("  %-32s : %lu\r\n", "液位滞后阈值", (unsigned long)params.oilLevelHysteresisThreshold);
     printf("  %-32s : %lu\r\n", "液位测量方式", (unsigned long)params.liquidLevelMeasurementMethod);
     printf("  %-32s : %lu\r\n", "液位跟随频率", (unsigned long)params.oilLevelFrequency);
@@ -839,7 +839,7 @@ void print_device_params(void)
     printf("  %-32s : %lu\r\n", "水位盲区(0.1mm)", (unsigned long)params.waterBlindZone);
     printf("  %-32s : %lu\r\n", "水位电容阈值", (unsigned long)params.water_cap_threshold);
     printf("  %-32s : %lu\r\n", "水位寻找电容阈值", (unsigned long)params.water_find_cap_threshold);
-    printf("  %-32s : %lu\r\n", "最大下行距离(0.1mm)", (unsigned long)params.maxDownDistance);
+    printf("  %-32s : %lu\r\n", "水位最大下行距离(0.1mm)", (unsigned long)params.maxDownDistance);
     printf("  %-32s : %lu\r\n", "水位零点电容", (unsigned long)params.zero_cap);
     printf("  %-32s : %lu\r\n", "水位稳定阈值", (unsigned long)params.water_stable_threshold);
     printf("  %-32s : %lu\r\n", "水位滞后电容阈值", (unsigned long)params.water_lag_cap_threshold);
@@ -848,10 +848,10 @@ void print_device_params(void)
     /* 罐底/罐高 */
     printf("\r\n-- 罐底/罐高参数 --\r\n");
     printf("  %-32s : %lu\r\n", "罐底检测模式", (unsigned long)params.bottom_detect_mode);
-    printf("  %-32s : %lu\r\n", "罐底角度阈值", (unsigned long)params.bottom_angle_threshold);
-    printf("  %-32s : %lu\r\n", "罐底称重阈值", (unsigned long)params.bottom_weight_threshold);
+    printf("  %-32s : %lu\r\n", "探底角度阈值", (unsigned long)params.bottom_angle_threshold);
+    printf("  %-32s : %lu\r\n", "探底称重阈值", (unsigned long)params.bottom_weight_threshold);
     printf("  %-32s : %lu\r\n", "更新罐高标志", (unsigned long)params.refreshTankHeightFlag);
-    printf("  %-32s : %lu\r\n", "实高最大偏差", (unsigned long)params.maxTankHeightDeviation);
+    printf("  %-32s : %lu\r\n", "实测罐高最大偏差", (unsigned long)params.maxTankHeightDeviation);
     printf("  %-32s : %lu\r\n", "初始罐高", (unsigned long)params.initialTankHeight);
     printf("  %-32s : %lu\r\n", "当前罐高", (unsigned long)params.currentTankHeight);
     printf("  %-32s : %lu\r\n", "罐底后编码器修正", (unsigned long)params.bottom_encoder_correction_enable);
@@ -870,19 +870,19 @@ void print_device_params(void)
     printf("  %-32s : %lu\r\n", "分布测模式", (unsigned long)params.spreadMeasurementMode);
     printf("  %-32s : %lu\r\n", "分布测点数", (unsigned long)params.spreadMeasurementCount);
     printf("  %-32s : %lu\r\n", "分布点间距", (unsigned long)params.spreadMeasurementDistance);
-    printf("  %-32s : %lu\r\n", "顶点距液面(0.1mm)", (unsigned long)params.spreadTopLimit);
-    printf("  %-32s : %lu\r\n", "底点距罐底(0.1mm)", (unsigned long)params.spreadBottomLimit);
+    printf("  %-32s : %lu\r\n", "最高点距液面(0.1mm)", (unsigned long)params.spreadTopLimit);
+    printf("  %-32s : %lu\r\n", "最低点距罐底(0.1mm)", (unsigned long)params.spreadBottomLimit);
     printf("  %-32s : %lu\r\n", "分布点悬停时间", (unsigned long)params.spreadPointHoverTime);
     printf("  %-32s : %lu\r\n", "区间测量上限(0.1mm)", (unsigned long)params.intervalMeasurementTopLimit);
     printf("  %-32s : %lu\r\n", "区间测量下限(0.1mm)", (unsigned long)params.intervalMeasurementBottomLimit);
 
     /* Wartsila */
     printf("\r\n-- 瓦锡兰参数 --\r\n");
-    printf("  %-32s : %lu\r\n", "密度点上限", (unsigned long)params.wartsila_upper_density_limit);
-    printf("  %-32s : %lu\r\n", "密度点下限", (unsigned long)params.wartsila_lower_density_limit);
+    printf("  %-32s : %lu\r\n", "最高密度点", (unsigned long)params.wartsila_upper_density_limit);
+    printf("  %-32s : %lu\r\n", "最低密度点", (unsigned long)params.wartsila_lower_density_limit);
     printf("  %-32s : %lu\r\n", "密度点间距", (unsigned long)params.wartsila_density_interval);
-    printf("  %-32s : %lu\r\n", "最高点距液面", (unsigned long)params.wartsila_max_height_above_surface);
-    printf("  %-32s : %lu\r\n", "瓦锡兰探底频率", (unsigned long)params.wartsila_bottom_detect_interval);
+    printf("  %-32s : %lu\r\n", "最高点液面距", (unsigned long)params.wartsila_max_height_above_surface);
+    printf("  %-32s : %lu\r\n", "瓦锡兰探底间隔", (unsigned long)params.wartsila_bottom_detect_interval);
     printf("  %-32s : %lu\r\n", "探底修正罐高", (unsigned long)params.bottom_encoder_correction_tank_height);
 
     for (uint32_t channel = 0U; channel < RELAY_ALARM_CHANNEL_COUNT; channel++) {
@@ -902,15 +902,15 @@ void print_device_params(void)
 
     /* AO */
     printf("\r\n-- 4-20mA/AO参数 --\r\n");
-    printf("  %-32s : %lu\r\n", "输出范围起点mA", (unsigned long)params.CurrentRangeStart_mA);
-    printf("  %-32s : %lu\r\n", "输出范围终点mA", (unsigned long)params.CurrentRangeEnd_mA);
-    printf("  %-32s : %lu\r\n", "高限报警AO", (unsigned long)params.AlarmHighAO);
-    printf("  %-32s : %lu\r\n", "低限报警AO", (unsigned long)params.AlarmLowAO);
-    printf("  %-32s : %lu\r\n", "初始电流mA", (unsigned long)params.InitialCurrent_mA);
-    printf("  %-32s : %lu\r\n", "高位电流mA", (unsigned long)params.AOHighCurrent_mA);
-    printf("  %-32s : %lu\r\n", "低位电流mA", (unsigned long)params.AOLowCurrent_mA);
-    printf("  %-32s : %lu\r\n", "故障电流mA", (unsigned long)params.FaultCurrent_mA);
-    printf("  %-32s : %lu\r\n", "调试电流mA", (unsigned long)params.DebugCurrent_mA);
+    printf("  %-32s : %lu\r\n", "AO输出范围起点电流", (unsigned long)params.CurrentRangeStart_mA);
+    printf("  %-32s : %lu\r\n", "AO输出范围终点电流", (unsigned long)params.CurrentRangeEnd_mA);
+    printf("  %-32s : %lu\r\n", "AO高限报警电流", (unsigned long)params.AlarmHighAO);
+    printf("  %-32s : %lu\r\n", "AO低限报警电流", (unsigned long)params.AlarmLowAO);
+    printf("  %-32s : %lu\r\n", "AO初始电流", (unsigned long)params.InitialCurrent_mA);
+    printf("  %-32s : %lu\r\n", "AO高位电流", (unsigned long)params.AOHighCurrent_mA);
+    printf("  %-32s : %lu\r\n", "AO低位电流", (unsigned long)params.AOLowCurrent_mA);
+    printf("  %-32s : %lu\r\n", "AO故障电流", (unsigned long)params.FaultCurrent_mA);
+    printf("  %-32s : %lu\r\n", "AO调试电流", (unsigned long)params.DebugCurrent_mA);
 
     /* 指令参数 */
     printf("\r\n-- 指令参数 --\r\n");

@@ -90,21 +90,32 @@ static int Cpu3_BaudValueToIndex(uint32_t baud)
  */
 static ComProtocolType Cpu3_NormalizeProtocol(int32_t protocol)
 {
-    /* 防止 FRAM 旧值或菜单越界值落入未定义协议，避免后续用非法枚举做数组索引。 */
-    if ((protocol < COM_PROTO_DSM) || (protocol > COM_PROTO_SI7000)) {
+    /*
+     * 只允许现场菜单确认过的协议值。
+     * 预留协议值 3/4 也收敛回 DSM，避免选择后保留不明确的串口组合。
+     */
+    switch (protocol) {
+    case COM_PROTO_DSM:
+    case COM_PROTO_WARTSILA:
+    case COM_PROTO_LTD:
+    case COM_PROTO_SI7000:
+        return (ComProtocolType)protocol;
+    default:
         return COM_PROTO_DSM;
     }
-
-    return (ComProtocolType)protocol;
 }
 
 /*
- * 将单个串口配置收敛为 SI7000 要求的 9600 8O1。
+ * 将单个串口配置收敛为所选协议的推荐串口参数。
  * 返回值表示配置是否被修正，调用方据此决定是否回写 FRAM。
  */
-static uint8_t Cpu3_ApplySi7000SerialProfile(ComPortConfig *cfg)
+static uint8_t Cpu3_ApplyProtocolSerialProfile(ComPortConfig *cfg)
 {
     uint8_t changed = 0U;
+    uint32_t baudrate = 4800U;
+    uint8_t databits = 8U;
+    ComParityType parity = COM_PARITY_NONE;
+    ComStopBitsType stopbits = COM_STOPBITS_1;
 
     if (cfg == NULL) {
         return 0U;
@@ -115,28 +126,50 @@ static uint8_t Cpu3_ApplySi7000SerialProfile(ComPortConfig *cfg)
         changed = 1U;
     }
 
-    if (cfg->protocol != COM_PROTO_SI7000) {
-        return changed;
+    switch (cfg->protocol) {
+    case COM_PROTO_DSM:
+    case COM_PROTO_WARTSILA:
+        /* 现场确认：计量仪/DSM、瓦锡兰均按 4800 8N1。 */
+        baudrate = 4800U;
+        databits = 8U;
+        parity = COM_PARITY_NONE;
+        stopbits = COM_STOPBITS_1;
+        break;
+
+    case COM_PROTO_LTD:
+        /* LTD 按 CPU2 串口5（UART5）口径：115200 8N1。 */
+        baudrate = 115200U;
+        databits = 8U;
+        parity = COM_PARITY_NONE;
+        stopbits = COM_STOPBITS_1;
+        break;
+
+    case COM_PROTO_SI7000:
+        /* SI7000 官方 Modbus 资料要求 9600 8O1。 */
+        baudrate = 9600U;
+        databits = 8U;
+        parity = COM_PARITY_ODD;
+        stopbits = COM_STOPBITS_1;
+        break;
+
+    default:
+        break;
     }
 
-    /*
-     * SI7000 官方 Modbus 资料要求 9600 8O1。
-     * 用户只需要选择协议，底层串口参数自动收敛，避免菜单组合出 PLC 不兼容配置。
-     */
-    if (cfg->baudrate != 9600U) {
-        cfg->baudrate = 9600U;
+    if (cfg->baudrate != baudrate) {
+        cfg->baudrate = baudrate;
         changed = 1U;
     }
-    if (cfg->databits != 8U) {
-        cfg->databits = 8U;
+    if (cfg->databits != databits) {
+        cfg->databits = databits;
         changed = 1U;
     }
-    if (cfg->parity != COM_PARITY_ODD) {
-        cfg->parity = COM_PARITY_ODD;
+    if (cfg->parity != parity) {
+        cfg->parity = parity;
         changed = 1U;
     }
-    if (cfg->stopbits != COM_STOPBITS_1) {
-        cfg->stopbits = COM_STOPBITS_1;
+    if (cfg->stopbits != stopbits) {
+        cfg->stopbits = stopbits;
         changed = 1U;
     }
 
@@ -152,9 +185,9 @@ static uint8_t Cpu3_NormalizeAllPortProfiles(void)
     uint8_t changed = 0U;
 
     /* 三个外部口共用同一套协议收敛规则，后续新增端口时只在这里补入口。 */
-    changed |= Cpu3_ApplySi7000SerialProfile(&g_cpu3_comm_display_params.com1);
-    changed |= Cpu3_ApplySi7000SerialProfile(&g_cpu3_comm_display_params.com2);
-    changed |= Cpu3_ApplySi7000SerialProfile(&g_cpu3_comm_display_params.com3);
+    changed |= Cpu3_ApplyProtocolSerialProfile(&g_cpu3_comm_display_params.com1);
+    changed |= Cpu3_ApplyProtocolSerialProfile(&g_cpu3_comm_display_params.com2);
+    changed |= Cpu3_ApplyProtocolSerialProfile(&g_cpu3_comm_display_params.com3);
 
     return changed;
 }
@@ -357,7 +390,7 @@ void Cpu3Local_WriteValue(OperatingNumber opera, int32_t v)
     }
 
     if (Cpu3Local_IsUartParam(opera)) {
-        /* 写任一串口字段后统一归一化，确保先选协议或后改波特率都能收敛到 SI7000 配置。 */
+        /* 写任一串口字段后统一归一化，确保协议优先并自动套用推荐串口参数。 */
         Cpu3_NormalizeAllPortProfiles();
     }
 
@@ -444,11 +477,11 @@ void Cpu3_Params_InitDefaults(void)
     g_cpu3_comm_display_params.com2.stopbits = COM_STOPBITS_1;
     g_cpu3_comm_display_params.com2.protocol = COM_PROTO_WARTSILA;
 
-    /* COM3 = USART3: 4800 8N2 Wartsila */
+    /* COM3 = USART3: 4800 8N1 Wartsila */
     g_cpu3_comm_display_params.com3.baudrate = 4800;
     g_cpu3_comm_display_params.com3.databits = 8;
     g_cpu3_comm_display_params.com3.parity   = COM_PARITY_NONE;
-    g_cpu3_comm_display_params.com3.stopbits = COM_STOPBITS_2;
+    g_cpu3_comm_display_params.com3.stopbits = COM_STOPBITS_1;
     g_cpu3_comm_display_params.com3.protocol = COM_PROTO_WARTSILA;
 }
 
@@ -591,7 +624,7 @@ void Cpu3_Params_LoadFromFRAM(void)
             need_save = 1U;
         }
         if (Cpu3_NormalizeAllPortProfiles() != 0U) {
-            /* 旧 FRAM 参数加载后也要补齐 SI7000 串口要求，并回写一次，避免每次开机重复修正。 */
+            /* 旧 FRAM 参数加载后也要补齐协议推荐串口参数，并回写一次，避免每次开机重复修正。 */
             need_save = 1U;
         }
         if (need_save != 0U) {

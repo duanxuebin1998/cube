@@ -3,7 +3,7 @@
  *
  *  Created on: Jan 18, 2025
  *      Author: Duan Xuebin
- *  该文件实现了重量传感器的相关操作，包括获取空载重量、获取稳定重量、判断重量状态等功能。
+ *  该文件实现了重量传感器的相关操作，包括获取空载称重、获取稳定重量、判断重量状态等功能。
  */
 
 #include "main.h"
@@ -60,8 +60,8 @@ static void Weight_PrintCableRefs(float cable_mm)
 
 //初始化称重
 uint32_t weight_init() {
-	weight_parament.empty_weight = g_deviceParams.empty_weight;           // 从设备参数中获取空载重量
-	weight_parament.full_weight = g_deviceParams.full_weight;           // 从设备参数中获取满载重量
+	weight_parament.empty_weight = g_deviceParams.empty_weight;           // 从设备参数中获取空载称重
+	weight_parament.full_weight = g_deviceParams.full_weight;           // 从设备参数中获取满载称重
 	s_weight_last_rx_tick = HAL_GetTick();
 	s_weight_timeout_reported = 0U;
 	return NO_ERROR;
@@ -126,32 +126,32 @@ uint32_t Weight_CheckOwnCommunicationTimeout(void)
 
 
 /**
- * @brief 获取空载重量
- *        延时5秒后，将当前重量值记录为空载重量
- *        并通过串口打印空载重量
+ * @brief 获取空载称重
+ *        延时5秒后，将当前重量值记录为空载称重
+ *        并通过串口打印空载称重
  */
 uint32_t get_empty_weight(void) {
-	printf("正在获取空载称重值...\r\n"); // 打印获取空载重量信息
+	printf("正在获取空载称重值...\r\n"); // 打印获取空载称重信息
 	uint32_t wait_ret = AbortableDelay_CommandSwitch(5000U, 100U); // 等待5秒，确保重量稳定
 	if (wait_ret != NO_ERROR) {
 		return wait_ret;
 	}
-	weight_parament.empty_weight = g_weight; // 记录空载重量
-	printf("空载称重值获取成功\t空载称重：\t%d\r\n", weight_parament.empty_weight); // 打印空载重量
-	if (abs(weight_parament.empty_weight) > MAX_EMPTY_WEIGHT) { // 检查空载重量是否在合理范围内
+	weight_parament.empty_weight = g_weight; // 记录空载称重
+	printf("空载称重值获取成功\t空载称重：\t%d\r\n", weight_parament.empty_weight); // 打印空载称重
+	if (abs(weight_parament.empty_weight) > MAX_EMPTY_WEIGHT) { // 检查空载称重是否在合理范围内
 		printf("空载称重值异常，请检查传感器或重新校准\r\n");
-		RETURN_ERROR(WEIGHT_DRIFT_ERROR); // 如果空载重量不在合理范围内，打印错误信息并返回
+		RETURN_ERROR(WEIGHT_DRIFT_ERROR); // 如果空载称重不在合理范围内，打印错误信息并返回
 	} else {
-		g_deviceParams.empty_weight = weight_parament.empty_weight; // 更新设备参数中的空载重量
-		printf("空载称重值获取成功\t空载称重：\t%d\r\n", weight_parament.empty_weight); // 打印空载重量
+		g_deviceParams.empty_weight = weight_parament.empty_weight; // 更新设备参数中的空载称重
+		printf("空载称重值获取成功\t空载称重：\t%d\r\n", weight_parament.empty_weight); // 打印空载称重
 		save_device_params(); // 保存设备参数
 	}
-	return NO_ERROR; // 获取空载重量成功，返回无错误状态
+	return NO_ERROR; // 获取空载称重成功，返回无错误状态
 }
 /**
- * @brief 获取满载重量
- *        延时5秒后，计算当前重量与空载重量的差值，作为满载重量
- *        并通过串口打印满载重量
+ * @brief 获取满载称重
+ *        延时5秒后，计算当前重量与空载称重的差值，作为满载称重
+ *        并通过串口打印满载称重
  */
 uint32_t get_full_weight(void) {
 	printf("正在等待称重值稳定...\r\n"); // 打印等待信息
@@ -160,21 +160,21 @@ uint32_t get_full_weight(void) {
 		return wait_ret;
 	}
 
-	weight_parament.full_weight = weight_parament.current_weight; // 计算满载重量
+	weight_parament.full_weight = weight_parament.current_weight; // 计算满载称重
 
 	if (weight_parament.full_weight < MIN_WEIGHT) {
-		printf("满载重量小于最小限制，可能需要重新校准\r\n");
+		printf("满载称重小于最小限制，可能需要重新校准\r\n");
 		RETURN_ERROR(WEIGHT_UNDER_RANGE); // 小于最小限制，报错
 	} else if (weight_parament.full_weight > MAX_WEIGHT) {
-		printf("满载重量超出范围，可能需要重新校准\r\n");
+		printf("满载称重超出范围，可能需要重新校准\r\n");
 		RETURN_ERROR(WEIGHT_OUT_OF_RANGE); // 超出范围，报错
 	} else {
-		g_deviceParams.full_weight = weight_parament.full_weight; // 更新设备参数中的满载重量
-		printf("满载称重值获取成功\t满载的称重：\t%d\r\n", weight_parament.full_weight); // 打印满载重量
+		g_deviceParams.full_weight = weight_parament.full_weight; // 更新设备参数中的满载称重
+		printf("满载称重值获取成功\t满载的称重：\t%d\r\n", weight_parament.full_weight); // 打印满载称重
 		save_device_params(); // 保存设备参数
 	}
 
-	printf("满载称重值获取成功\t满载的称重：\t%d\r\n", weight_parament.full_weight); // 打印满载重量
+	printf("满载称重值获取成功\t满载的称重：\t%d\r\n", weight_parament.full_weight); // 打印满载称重
 	return NO_ERROR; // 获取成功
 }
 
@@ -264,7 +264,7 @@ uint32_t CheckWeightCollision(void)
 	 * ========================== */
 	if (cable_mm < (float)g_deviceParams.weight_ignore_zone/10.0) {
 #ifdef WEIGHT_DEBUG
-		printf("称重跳过 | 原因:零点保护 | 方向：%lu 当前重量=%ld 稳定重量=%ld 差值：%+ld 满载重量=%ld 尺带长度：%.1f",
+		printf("称重跳过 | 原因:零点保护 | 方向：%lu 当前重量=%ld 稳定重量=%ld 差值：%+ld 满载称重=%ld 尺带长度：%.1f",
 				(unsigned long)motor_dir,
 				(long)cur_weight,
 				(long)stable_weight,
@@ -284,7 +284,7 @@ uint32_t CheckWeightCollision(void)
 	 * ========================== */
 	if ((motor_dir != 1U) && (motor_dir != 2U)) {
 #ifdef WEIGHT_DEBUG
-		printf("称重检测 | 方向：%lu(无效) 当前重量=%ld 稳定重量=%ld 差值：%+ld 满载重量=%ld 尺带长度：%.1f",
+		printf("称重检测 | 方向：%lu(无效) 当前重量=%ld 稳定重量=%ld 差值：%+ld 满载称重=%ld 尺带长度：%.1f",
 				(unsigned long)motor_dir,
 				(long)cur_weight,
 				(long)stable_weight,
@@ -368,7 +368,7 @@ uint32_t CheckWeightCollision(void)
 			printf("当前重量 : %ld\r\n", (long)cur_weight);
 			printf("稳定重量 : %ld\r\n", (long)stable_weight);
 			printf("重量增加 : %ld (阈值:%ld)\r\n", (long)diff, (long)upper_threshold);
-			printf("满载重量 : %ld (ratio:%ld%%)\r\n",
+			printf("满载称重 : %ld (ratio:%ld%%)\r\n",
 					(long)full_weight,
 					(long)g_deviceParams.weight_upper_limit_ratio);
 			printf("零点阈值 : %ld (+%d%%)\r\n",
@@ -462,7 +462,7 @@ uint32_t CheckWeightCollision(void)
 			printf("当前重量 : %ld\r\n", (long)cur_weight);
 			printf("稳定重量 : %ld\r\n", (long)stable_weight);
 			printf("重量减少 : %ld (阈值:%ld)\r\n", (long)(-diff), (long)lower_threshold);
-			printf("满载重量 : %ld (ratio:%ld%%)\r\n",
+			printf("满载称重 : %ld (ratio:%ld%%)\r\n",
 					(long)full_weight,
 					(long)g_deviceParams.weight_lower_limit_ratio);
 			Weight_PrintCableRefs(cable_mm);
@@ -526,7 +526,7 @@ uint32_t CheckWeightCollision(void)
 //    /* 方向: 0 下行, 1 上行 (以你当前 motor_state 的定义为准) */
 //    uint32_t motor_dir = g_measurement.debug_data.motor_state;
 //
-//    /* 阈值 = 满载重量 * 比例 / 100，全部用整数计算 */
+//    /* 阈值 = 满载称重 * 比例 / 100，全部用整数计算 */
 //    int32_t upper_threshold =
 //        (int32_t)(((int64_t)full_weight * (int64_t)g_deviceParams.weight_upper_limit_ratio) / 100);
 //
@@ -594,7 +594,7 @@ uint32_t CheckWeightCollision(void)
 //            printf("当前重量 : %ld\r\n", (long)cur_weight);
 //            printf("稳定重量 : %ld\r\n", (long)stable_weight);
 //            printf("重量增加 : %ld (阈值:%ld)\r\n", (long)diff, (long)upper_threshold);
-//            printf("满载重量 : %ld (ratio:%ld%%)\r\n",
+//            printf("满载称重 : %ld (ratio:%ld%%)\r\n",
 //                   (long)full_weight, (long)g_deviceParams.weight_upper_limit_ratio);
 //            printf("零点阈值 : %ld (+%d%%)\r\n", (long)zero_limit, g_deviceParams.zero_weight_threshold_ratio);
 //            printf("尺带长度 : %.1f mm\r\n", cable_mm);
@@ -648,7 +648,7 @@ uint32_t CheckWeightCollision(void)
 //            printf("当前重量 : %ld\r\n", (long)cur_weight);
 //            printf("稳定重量 : %ld\r\n", (long)stable_weight);
 //            printf("重量减少 : %ld (阈值:%ld)\r\n", (long)(-diff), (long)lower_threshold);
-//            printf("满载重量 : %ld (ratio:%ld%%)\r\n",
+//            printf("满载称重 : %ld (ratio:%ld%%)\r\n",
 //                   (long)full_weight, (long)g_deviceParams.weight_lower_limit_ratio);
 //            printf("触底阈值 : %ld\r\n", (long)bottom_limit);
 //            printf("尺带长度 : %.1f mm\r\n", cable_mm);

@@ -52,12 +52,288 @@ enum{//用于记录每个参数显示在第几页第几行
 };
 static int ValidParaDisArr[Para_Amount][4] = {0};
 
+static int GetOilSensorFrequencyForDisplay(void);
+
+typedef enum {
+    DISPLAY_RESULT_CONTEXT_NONE = 0,
+    DISPLAY_RESULT_CONTEXT_OIL_LEVEL,
+    DISPLAY_RESULT_CONTEXT_WATER_LEVEL,
+    DISPLAY_RESULT_CONTEXT_SINGLE_POINT,
+    DISPLAY_RESULT_CONTEXT_SINGLE_MONITOR,
+    DISPLAY_RESULT_CONTEXT_DENSITY_DISTRIBUTION,
+    DISPLAY_RESULT_CONTEXT_BOTTOM_HEIGHT,
+    DISPLAY_RESULT_CONTEXT_MOTION_DEBUG,
+    DISPLAY_RESULT_CONTEXT_WEIGHT,
+    DISPLAY_RESULT_CONTEXT_ERROR
+} DisplayResultContext;
+
 static bool IsBottomAngleDisplayEnabled(void)
 {
     return (g_deviceParams.bottom_detect_mode != 0U);
 }
 
-static bool IsOilLevelSensorState(DeviceState state)
+static DisplayResultContext Display_GetResultContext(DeviceState state)
+{
+    switch (state)
+    {
+    case STATE_FINDOIL:
+    case STATE_CALIBRATIONOILING:
+    case STATE_FLOWOIL:
+    case STATE_FINDOILOVER:
+        return DISPLAY_RESULT_CONTEXT_OIL_LEVEL;
+
+    case STATE_FINDWATER:
+    case STATE_FOLLOW_WATER_POINT_SEARCHING:
+    case STATE_FOLLOW_WATERING:
+    case STATE_CALIBRATE_WATERING:
+    case STATE_FINDWATER_OVER:
+    case STATE_CALIBRATE_WATER_OVER:
+        return DISPLAY_RESULT_CONTEXT_WATER_LEVEL;
+
+    case STATE_SINGLEPOINTING:
+    case STATE_RUNTOPOINTING:
+    case STATE_SINGLEPOINTOVER:
+        return DISPLAY_RESULT_CONTEXT_SINGLE_POINT;
+
+    case STATE_SPTESTING:
+        return DISPLAY_RESULT_CONTEXT_SINGLE_MONITOR;
+
+    case STATE_GB_SPREADPOINTING:
+    case STATE_SPREADPOINTING:
+    case STATE_METER_DENSITY:
+    case STATE_INTERVAL_DENSITY:
+    case STATE_WARTSILA_DENSITY_START:
+    case STATE_WARTSILA_DENSITY_MEASURING:
+    case STATE_GB_SPREADPOINTOVER:
+    case STATE_SPREADPOINTOVER:
+    case STATE_COM_METER_DENSITY_OVER:
+    case STATE_INTERVAL_DENSITY_OVER:
+    case STATE_WARTSILA_DENSITY_OVER:
+        return DISPLAY_RESULT_CONTEXT_DENSITY_DISTRIBUTION;
+
+    case STATE_FINDBOTTOM:
+    case STATE_FINDBOTTOM_OVER:
+    case STATE_CALIBRATE_TANKHEIGHTING:
+    case STATE_CALIBRATE_TANKHEIGHT_OVER:
+        return DISPLAY_RESULT_CONTEXT_BOTTOM_HEIGHT;
+
+    case STATE_RUNUPING:
+    case STATE_RUNDOWNING:
+    case STATE_RUNUPOVER:
+    case STATE_RUNDOWNOVER:
+    case STATE_RUN_TO_POSITIONING:
+    case STATE_RUN_TO_POSITION_OVER:
+    case STATE_FORCE_RUNUPING:
+    case STATE_FORCE_RUNDOWNING:
+    case STATE_FORCE_RUNUP_OVER:
+    case STATE_FORCE_RUNDOWN_OVER:
+    case STATE_FORCEZERO:
+    case STATE_FORCEZERO_OVER:
+    case STATE_FORCE_LIFT_ZEROING:
+    case STATE_FORCE_LIFT_ZERO_OVER:
+    case STATE_MAINTENANCEMODE:
+    case STATE_DEBUG_MODE:
+        return DISPLAY_RESULT_CONTEXT_MOTION_DEBUG;
+
+    case STATE_GET_FULLWEIGHT:
+    case STATE_GET_EMPTYWEIGHT:
+    case STATE_GET_FULLWEIGHT_OVER:
+    case STATE_GET_EMPTYWEIGHT_OVER:
+        return DISPLAY_RESULT_CONTEXT_WEIGHT;
+
+    case STATE_SYNTHETICING:
+        return DISPLAY_RESULT_CONTEXT_MOTION_DEBUG;
+
+    case STATE_SYNTHETICING_OVER:
+        return DISPLAY_RESULT_CONTEXT_DENSITY_DISTRIBUTION;
+
+    case STATE_ERROR:
+        return DISPLAY_RESULT_CONTEXT_ERROR;
+
+    default:
+        return DISPLAY_RESULT_CONTEXT_NONE;
+    }
+}
+
+static bool Display_IsTemperatureValid(uint32_t temperature)
+{
+    return (temperature > 0U) && (temperature < 40000U);
+}
+
+static bool Display_IsDensityDistributionCompleteState(DeviceState state)
+{
+    switch (state)
+    {
+    case STATE_GB_SPREADPOINTOVER:
+    case STATE_SPREADPOINTOVER:
+    case STATE_COM_METER_DENSITY_OVER:
+    case STATE_INTERVAL_DENSITY_OVER:
+    case STATE_WARTSILA_DENSITY_OVER:
+    case STATE_SYNTHETICING_OVER:
+        return true;
+    default:
+        return false;
+    }
+}
+
+static bool Display_IsOilLevelResultState(DeviceState state)
+{
+    return (state == STATE_FINDOILOVER) ||
+           (state == STATE_FLOWOIL) ||
+           (state == STATE_SYNTHETICING_OVER);
+}
+
+static bool Display_IsWaterLevelResultState(DeviceState state)
+{
+    return (state == STATE_FINDWATER_OVER) ||
+           (state == STATE_FOLLOW_WATERING) ||
+           (state == STATE_CALIBRATE_WATER_OVER) ||
+           (state == STATE_SYNTHETICING_OVER);
+}
+
+static bool Display_GetDensityValue(DisplayResultContext ctx, uint32_t *density)
+{
+    uint32_t value = UNVALID_DENSITY;
+    DeviceState state = g_measurement.device_status.device_state;
+
+    if (density == NULL) {
+        return false;
+    }
+
+    switch (ctx)
+    {
+    case DISPLAY_RESULT_CONTEXT_SINGLE_POINT:
+        value = g_measurement.single_point_measurement.density;
+        break;
+    case DISPLAY_RESULT_CONTEXT_SINGLE_MONITOR:
+        value = g_measurement.single_point_monitoring.density;
+        break;
+    case DISPLAY_RESULT_CONTEXT_DENSITY_DISTRIBUTION:
+        if (Display_IsDensityDistributionCompleteState(state)) {
+            value = g_measurement.density_distribution.average_density;
+        }
+        break;
+    default:
+        break;
+    }
+
+    if (value == UNVALID_DENSITY) {
+        return false;
+    }
+
+    *density = value;
+    return true;
+}
+
+static bool Display_GetTemperatureValue(DisplayResultContext ctx, uint32_t *temperature)
+{
+    uint32_t value = 0U;
+    DeviceState state = g_measurement.device_status.device_state;
+
+    if (temperature == NULL) {
+        return false;
+    }
+
+    switch (ctx)
+    {
+    case DISPLAY_RESULT_CONTEXT_SINGLE_POINT:
+        value = g_measurement.single_point_measurement.temperature;
+        break;
+    case DISPLAY_RESULT_CONTEXT_SINGLE_MONITOR:
+        value = g_measurement.single_point_monitoring.temperature;
+        break;
+    case DISPLAY_RESULT_CONTEXT_DENSITY_DISTRIBUTION:
+        if (Display_IsDensityDistributionCompleteState(state)) {
+            value = g_measurement.density_distribution.average_temperature;
+        }
+        break;
+    default:
+        break;
+    }
+
+    if (!Display_IsTemperatureValid(value)) {
+        return false;
+    }
+
+    *temperature = value;
+    return true;
+}
+
+static bool Display_GetOilLevelValue(DisplayResultContext ctx, uint32_t *oil_level)
+{
+    uint32_t value = UNVALID_LEVEL;
+    DeviceState state = g_measurement.device_status.device_state;
+
+    if (oil_level == NULL) {
+        return false;
+    }
+
+    switch (ctx)
+    {
+    case DISPLAY_RESULT_CONTEXT_OIL_LEVEL:
+        if (Display_IsOilLevelResultState(state)) {
+            value = g_measurement.oil_measurement.oil_level;
+        }
+        break;
+    case DISPLAY_RESULT_CONTEXT_DENSITY_DISTRIBUTION:
+        if (Display_IsDensityDistributionCompleteState(state)) {
+            value = (state == STATE_SYNTHETICING_OVER)
+                ? g_measurement.oil_measurement.oil_level
+                : g_measurement.density_distribution.Density_oil_level;
+        }
+        break;
+    default:
+        break;
+    }
+
+    if (value == UNVALID_LEVEL) {
+        return false;
+    }
+
+    *oil_level = value;
+    return true;
+}
+
+static bool Display_GetWaterLevelValue(DisplayResultContext ctx, uint32_t *water_level)
+{
+    DeviceState state = g_measurement.device_status.device_state;
+
+    if (water_level == NULL) {
+        return false;
+    }
+
+    if (!Display_IsWaterLevelResultState(state)) {
+        return false;
+    }
+
+    if ((ctx != DISPLAY_RESULT_CONTEXT_WATER_LEVEL) &&
+        (state != STATE_SYNTHETICING_OVER)) {
+        return false;
+    }
+
+    if (g_measurement.water_measurement.water_level == LEVEL_DOWNLIMITWATER) {
+        return false;
+    }
+
+    *water_level = g_measurement.water_measurement.water_level;
+    return true;
+}
+
+static bool Display_ShouldShowOilLevel(DisplayResultContext ctx)
+{
+    uint32_t value;
+
+    return Display_GetOilLevelValue(ctx, &value);
+}
+
+static bool Display_ShouldShowWaterLevel(DisplayResultContext ctx)
+{
+    uint32_t value;
+
+    return Display_GetWaterLevelValue(ctx, &value);
+}
+
+static bool Display_ShouldShowOilFrequency(DeviceState state)
 {
     switch (state)
     {
@@ -70,7 +346,7 @@ static bool IsOilLevelSensorState(DeviceState state)
     }
 }
 
-static bool IsWaterLevelSensorState(DeviceState state)
+static bool Display_ShouldShowWaterCapacitance(DeviceState state)
 {
     switch (state)
     {
@@ -82,6 +358,46 @@ static bool IsWaterLevelSensorState(DeviceState state)
     default:
         return false;
     }
+}
+
+static bool Display_ShouldShowSensorValue(DisplayResultContext ctx)
+{
+    DeviceState state = g_measurement.device_status.device_state;
+
+    if ((ctx == DISPLAY_RESULT_CONTEXT_OIL_LEVEL) &&
+        Display_ShouldShowOilFrequency(state) &&
+        (GetOilSensorFrequencyForDisplay() > 0))
+    {
+        return true;
+    }
+
+    if ((ctx == DISPLAY_RESULT_CONTEXT_WATER_LEVEL) &&
+        Display_ShouldShowWaterCapacitance(state) &&
+        (g_measurement.water_measurement.current_capacitance > 0.0f))
+    {
+        return true;
+    }
+
+    return false;
+}
+
+static bool Display_GetPositionValue(DisplayResultContext ctx, int *position)
+{
+    (void)ctx;
+
+    if (position == NULL) {
+        return false;
+    }
+
+    *position = (int)g_measurement.debug_data.sensor_position;
+    return true;
+}
+
+static bool Display_ShouldShowWeight(DisplayResultContext ctx)
+{
+    (void)ctx;
+
+    return true;
 }
 
 /* 判断CPU2/CPU3共享协议是否一致。
@@ -356,12 +672,6 @@ void Display_ShowErrorReasonPage(void)
     DisplayLangaugeLineWords((uint8_t*)"返回", OLED_LINE8_1, OLED_ROW4_4, 0, (uint8_t*)"Back");
 }
 
-static bool IsRealHeightDisplayState(DeviceState state)
-{
-    return (state == STATE_FINDBOTTOM_OVER) ||
-           (state == STATE_CALIBRATE_TANKHEIGHT_OVER);
-}
-
 static int GetOilSensorFrequencyForDisplay(void)
 {
     if (g_measurement.oil_measurement.current_frequency != 0U)
@@ -406,7 +716,7 @@ static uint8_t StockMap[] = "通讯尝试中液位跟随密度温℃版本水测
                             "误础界面程序减比股长介信号后限例权屏幕维护视终继状态最探头浸小第悬停禁用弦工固产反先动当前"
                             "大英更传层滞域使磨结束针总阻六级内息命感顺有阈值角导本整瓦锡兰厚首波特率验位奇偶预留默强差"
 							"义已碰撞寄存次菜忽略志构魔术望全过收为裁剪准除以跳飞频声稳记局切匹"
-                            "馈被荷泵欠驱丢溢性弱响应格快越漂移饱和系统因";
+							"馈被荷泵欠驱丢溢性弱响应格快越漂移饱和系统因尼组跑锁隔策";
 static const int wordbyte      = 3; // UTF-8 下汉字 3 字节
 static const int StockmapLength = (sizeof(StockMap) - 1) / wordbyte;
 static uint8_t WordStock[255 * 28] =
@@ -867,6 +1177,12 @@ static uint8_t WordStock2[255 * 28] =
     0x01,0xE0,0x7E,0x00,0x04,0x00,0x08,0x40,0x10,0x80,0x3F,0x00,0x04,0x40,0x18,0x20,0x7F,0xF0,0x02,0x10,0x12,0x40,0x22,0x20,0x42,0x10,0x0E,0x00,/*"系",19*/
     0x21,0x00,0x20,0x80,0x40,0x00,0x97,0xF8,0xF1,0x00,0x21,0x20,0x42,0x10,0x87,0xF0,0xF1,0x50,0x01,0x40,0x02,0x40,0x32,0x48,0xC4,0x48,0x08,0x38,/*"统",20*/
     0x7F,0xF8,0x40,0x08,0x42,0x08,0x42,0x08,0x5F,0xE8,0x42,0x08,0x42,0x08,0x45,0x08,0x44,0x88,0x48,0x48,0x50,0x48,0x40,0x08,0x7F,0xF8,0x40,0x08,/*"因",21*/
+    0x1F,0xF8,0x10,0x08,0x10,0x08,0x10,0x08,0x1F,0xF8,0x10,0x00,0x12,0x08,0x12,0x10,0x12,0x60,0x13,0x80,0x12,0x00,0x22,0x04,0x22,0x04,0x41,0xFC,/*"尼",22*/
+    0x10,0x00,0x11,0xF8,0x25,0x08,0x25,0x08,0x79,0x08,0x09,0xF8,0x11,0x08,0x21,0x08,0x7D,0x08,0x01,0xF8,0x01,0x08,0x0D,0x08,0x71,0x08,0x03,0xFC,/*"组",23*/
+    0x00,0x80,0x3C,0x80,0x25,0xF8,0x25,0x08,0x26,0x08,0x3D,0xE8,0x09,0x28,0x29,0x28,0x2D,0xE8,0x29,0x08,0x29,0x30,0x2D,0x04,0x71,0x04,0x00,0xFC,/*"跑",24*/
+    0x10,0x20,0x11,0x24,0x1C,0xA8,0x20,0x20,0x41,0xFC,0x3D,0x04,0x11,0x24,0x11,0x24,0x7D,0x24,0x11,0x24,0x11,0x24,0x14,0x50,0x18,0x88,0x13,0x04,/*"锁",25*/
+    0x3D,0xFC,0x24,0x00,0x24,0xF8,0x28,0x88,0x28,0xF8,0x24,0x00,0x25,0xFC,0x25,0x54,0x25,0x24,0x39,0xFC,0x21,0x24,0x21,0x24,0x21,0x0C,0x00,0x00,/*"隔",26*/
+    0x10,0x40,0x1E,0x7C,0x28,0x90,0x45,0x08,0x01,0x00,0x7F,0xFC,0x01,0x00,0x3F,0xF8,0x21,0x08,0x23,0xB8,0x05,0x40,0x19,0x30,0x61,0x0C,0x01,0x00,/*"策",27*/
 };
 static uint8_t NumberStock[] = {
 
@@ -1007,6 +1323,7 @@ static uint8_t __attribute__((unused)) aubonlogo_128_64[] = {
 static uint8_t matchingwordstock(uint8_t **display,int cnt,int x,int y,int shift);
 static uint8_t judgedecimals(int value);
 static uint8_t dis_number(int sgn,int value,int points,uint8_t line,uint8_t row,uint8_t shift,uint8_t deci);
+static uint8_t trim_display_points(int *value, uint8_t points);
 static void oled_workingdata(void);
 static void oled_equipment(void);
 static void CalculateValidPara(void);
@@ -1130,19 +1447,34 @@ uint8_t OledValueDisplay(int value,uint8_t line,uint8_t row,uint8_t shift,uint8_
 {
     uint8_t deci;
     int sgn = 1;
-    //求出要显示的数据的总位数及符号
-    deci = judgedecimals(value);
+    //求出要显示的数据的符号，并裁剪小数末尾无效的0
     if(value < 0)
     {
         sgn = -1;
         value = abs(value);
     }
+    points = trim_display_points(&value, points);
+    deci = judgedecimals(value);
     //显示数值
     line = dis_number(sgn,value,points,line,row,shift,deci);
     //显示单位
     if(unit != NULL)
         line = OledDisplayLineWords(unit,line,row,shift);
     return line;
+}
+/* 裁剪小数尾随0: 16.000->16, 16.100->16.1, 16.120->16.12 */
+static uint8_t trim_display_points(int *value, uint8_t points)
+{
+    if(value == NULL)
+        return points;
+
+    while(points > 0U && ((*value % 10) == 0))
+    {
+        *value /= 10;
+        points--;
+    }
+
+    return points;
 }
 /* 计算数值位数 */
 static uint8_t judgedecimals(int value)
@@ -1246,6 +1578,9 @@ static void oled_equipment(void)
 {
     static int now_page = 0;
     u8 row = OLED_ROW4_2,line = 0;
+    DisplayResultContext ctx = Display_GetResultContext(g_measurement.device_status.device_state);
+    uint32_t display_value = 0U;
+    int display_position = 0;
     
     now_page++;
     if(now_page >= PageAmount)
@@ -1286,34 +1621,45 @@ static void oled_equipment(void)
         else
             row = OLED_ROW4_2;
         line = DisplayLangaugeLineWords((u8*)"液位:",OLED_LINE8_1,row,0,(u8*)"Level:");
-        if(g_measurement.oil_measurement.oil_level == OILLEVELDOWNLIMIT)
+        if (Display_GetOilLevelValue(ctx, &display_value) &&
+            ((display_value == OILLEVELDOWNLIMIT) || (display_value == LEVEL_DOWNLIMIT)))
+        {
             DisplayLangaugeLineWords((u8*)"低于盲区",line,row,0,(u8*)"Below Blind");
+        }
         else
-            OledValueDisplay(g_measurement.oil_measurement.oil_level,line,row,0,1,(u8*)"mm");
+        {
+            OledValueDisplay((int)display_value,line,row,0,1,(u8*)"mm");
+        }
     }
     //水位
     if(ValidParaDisArr[Para_Waterlevel][PARA_VALID] == true && now_page == ValidParaDisArr[Para_Waterlevel][PARA_PAGE])
     {
         row = ValidParaDisArr[Para_Waterlevel][PARA_X];
         line = DisplayLangaugeLineWords((u8*)"水位:",OLED_LINE8_1,row,0,(u8*)"Water:");
-        if(g_measurement.water_measurement.water_level == OILLEVELDOWNLIMIT)
-            DisplayLangaugeLineWords((u8*)"低于盲区",line,row,0,(u8*)"Below Blind");
-        else
-            OledValueDisplay(g_measurement.water_measurement.water_level,line,row,0,1,(u8*)"mm");
+        if (Display_GetWaterLevelValue(ctx, &display_value))
+        {
+            OledValueDisplay((int)display_value,line,row,0,1,(u8*)"mm");
+        }
     }
     //密度
     if(ValidParaDisArr[Para_AveDensity][PARA_VALID] == true && now_page == ValidParaDisArr[Para_AveDensity][PARA_PAGE])
     {
         row = ValidParaDisArr[Para_AveDensity][PARA_X];
         line = DisplayLangaugeLineWords((u8*)"密度:",OLED_LINE8_1,row,0,(u8*)"D:");
-        OledValueDisplay(g_measurement.single_point_monitoring.density,line,row,0,1,(u8*)"kg/m3");
+        if (Display_GetDensityValue(ctx, &display_value))
+        {
+            OledValueDisplay((int)display_value,line,row,0,1,(u8*)"kg/m3");
+        }
     }
     //温度
     if(ValidParaDisArr[Para_AveTemperature][PARA_VALID] == true && now_page == ValidParaDisArr[Para_AveTemperature][PARA_PAGE])
     {
         row = ValidParaDisArr[Para_AveTemperature][PARA_X];
         line = DisplayLangaugeLineWords((u8*)"温度:",OLED_LINE8_1,row,0,(u8*)"Temp:");
-        OledValueDisplay(g_measurement.single_point_monitoring.temperature-20000,line,row,0,2,(u8*)"℃");
+        if (Display_GetTemperatureValue(ctx, &display_value))
+        {
+            OledValueDisplay((int)display_value - 20000,line,row,0,2,(u8*)"℃");
+        }
     }
  
     //位置
@@ -1321,7 +1667,10 @@ static void oled_equipment(void)
     {
         row = ValidParaDisArr[Para_position][PARA_X];
         line = DisplayLangaugeLineWords((u8*)"位置:",OLED_LINE8_1,row,0,(u8*)"Pos:");
-        OledValueDisplay(g_measurement.debug_data.sensor_position,line,row,0,1,(u8*)"mm");
+        if (Display_GetPositionValue(ctx, &display_position))
+        {
+            OledValueDisplay(display_position,line,row,0,1,(u8*)"mm");
+        }
     }
     //称重
 	if (ValidParaDisArr[Para_weight][PARA_VALID] == true && now_page == ValidParaDisArr[Para_weight][PARA_PAGE]) {
@@ -1334,7 +1683,7 @@ static void oled_equipment(void)
         now_page == ValidParaDisArr[Para_sensor_value][PARA_PAGE])
     {
         row = ValidParaDisArr[Para_sensor_value][PARA_X];
-        if (IsOilLevelSensorState(g_measurement.device_status.device_state))
+        if (Display_ShouldShowOilFrequency(g_measurement.device_status.device_state))
         {
             line = DisplayLangaugeLineWords((u8*)"频率:", OLED_LINE8_1, row, 0, (u8*)"Freq:");
             OledValueDisplay(GetOilSensorFrequencyForDisplay(), line, row, 0, 0, (u8*)"Hz");
@@ -1389,22 +1738,18 @@ static void CalculateValidPara(void)
     static u8 start_x = 0;
     static int rowsperpage = 2;
     int i;
+    DisplayResultContext ctx = Display_GetResultContext(g_measurement.device_status.device_state);
+    uint32_t display_value = 0U;
+    int display_position = 0;
     
     /******计算总共有多少个有效参数需要显示******/
     ValidParaCnt = 0;
     ValidParaDisArr[Para_ErrorReason][PARA_VALID] = false;
     ValidParaDisArr[Para_ErrorReasonMore][PARA_VALID] = false;
     //液位
-    if(g_measurement.device_status.device_state != STATE_FLOWOIL)
-    {
-        flagofoillevelvalid = false;
-    }
-    else
-    {
-        flagofoillevelvalid = true;
-    }
+    flagofoillevelvalid = Display_ShouldShowOilLevel(ctx);
     //密度
-    if(!(g_measurement.single_point_monitoring.density == UNVALID_DENSITY ))
+    if(Display_GetDensityValue(ctx, &display_value))
     {
         ValidParaCnt++;
         ValidParaDisArr[Para_AveDensity][PARA_NUM] = ValidParaCnt;
@@ -1414,7 +1759,7 @@ static void CalculateValidPara(void)
     else
         ValidParaDisArr[Para_AveDensity][PARA_VALID] = false;
     //温度
-    if((g_measurement.single_point_monitoring.temperature > 0 )&&(g_measurement.single_point_monitoring.temperature <40000 ))
+    if(Display_GetTemperatureValue(ctx, &display_value))
     {
         ValidParaCnt++;
         ValidParaDisArr[Para_AveTemperature][PARA_NUM] = ValidParaCnt;
@@ -1423,7 +1768,7 @@ static void CalculateValidPara(void)
     else
         ValidParaDisArr[Para_AveTemperature][PARA_VALID] = false;
     //水位
-    if(!(g_measurement.water_measurement.water_level == LEVEL_DOWNLIMITWATER ))
+    if(Display_ShouldShowWaterLevel(ctx))
     {
         ValidParaCnt++;
         ValidParaDisArr[Para_Waterlevel][PARA_NUM] = ValidParaCnt;
@@ -1433,7 +1778,7 @@ static void CalculateValidPara(void)
         ValidParaDisArr[Para_Waterlevel][PARA_VALID] = false;
   
     //位置
-    if((!(g_measurement.device_status.device_state == STATE_FLOWOIL))&&(g_measurement.debug_data.sensor_position != 0 ))
+    if(Display_GetPositionValue(ctx, &display_position))
     {
         ValidParaCnt++;
         ValidParaDisArr[Para_position][PARA_NUM] = ValidParaCnt;
@@ -1442,7 +1787,7 @@ static void CalculateValidPara(void)
     else
         ValidParaDisArr[Para_position][PARA_VALID] = false;
     //称重
-    if(g_measurement.debug_data.current_weight> 0 )
+    if(Display_ShouldShowWeight(ctx))
     {
         ValidParaCnt++;
         ValidParaDisArr[Para_weight][PARA_NUM] = ValidParaCnt;
@@ -1451,15 +1796,7 @@ static void CalculateValidPara(void)
     else
         ValidParaDisArr[Para_weight][PARA_VALID] = false;
     // sensor value
-    if (IsOilLevelSensorState(g_measurement.device_status.device_state) &&
-        (GetOilSensorFrequencyForDisplay() > 0))
-    {
-        ValidParaCnt++;
-        ValidParaDisArr[Para_sensor_value][PARA_NUM] = ValidParaCnt;
-        ValidParaDisArr[Para_sensor_value][PARA_VALID] = true;
-    }
-    else if (IsWaterLevelSensorState(g_measurement.device_status.device_state) &&
-             (g_measurement.water_measurement.current_capacitance > 0.0f))
+    if (Display_ShouldShowSensorValue(ctx))
     {
         ValidParaCnt++;
         ValidParaDisArr[Para_sensor_value][PARA_NUM] = ValidParaCnt;
@@ -1468,7 +1805,9 @@ static void CalculateValidPara(void)
     else
         ValidParaDisArr[Para_sensor_value][PARA_VALID] = false;
     // 陀螺仪角度 X
-    if (IsBottomAngleDisplayEnabled() && (g_measurement.debug_data.angle_x != 0))
+    if ((ctx == DISPLAY_RESULT_CONTEXT_BOTTOM_HEIGHT) &&
+        IsBottomAngleDisplayEnabled() &&
+        (g_measurement.debug_data.angle_x != 0))
     {
         ValidParaCnt++;
         ValidParaDisArr[Para_angle_x][PARA_NUM] = ValidParaCnt;
@@ -1479,7 +1818,9 @@ static void CalculateValidPara(void)
     }
 
     // 陀螺仪角度 Y
-    if (IsBottomAngleDisplayEnabled() && (g_measurement.debug_data.angle_y != 0))
+    if ((ctx == DISPLAY_RESULT_CONTEXT_BOTTOM_HEIGHT) &&
+        IsBottomAngleDisplayEnabled() &&
+        (g_measurement.debug_data.angle_y != 0))
     {
         ValidParaCnt++;
         ValidParaDisArr[Para_angle_y][PARA_NUM] = ValidParaCnt;
@@ -1490,7 +1831,8 @@ static void CalculateValidPara(void)
     }
     // 罐高
     if ((g_measurement.height_measurement.current_real_height != 0) &&
-        IsRealHeightDisplayState(g_measurement.device_status.device_state))
+        ((g_measurement.device_status.device_state == STATE_FINDBOTTOM_OVER) ||
+         (g_measurement.device_status.device_state == STATE_CALIBRATE_TANKHEIGHT_OVER)))
     {
         ValidParaCnt++;
         ValidParaDisArr[Para_tankheight][PARA_NUM] = ValidParaCnt;

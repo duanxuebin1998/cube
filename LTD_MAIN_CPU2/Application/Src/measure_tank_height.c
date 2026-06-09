@@ -737,7 +737,7 @@ uint32_t check_bottom_status(Weight_StateTypeDef *status)
      *  保护：零点附近不做罐底检测
      * ========================== */
     if (cable_mm < (float)g_deviceParams.weight_ignore_zone/10.0) {
-        printf("称重跳过 | 原因:零点保护 | 方向：%lu 当前重量=%ld 稳定重量=%ld 差值：%+ld 满载重量=%ld 尺带长度：%.1f",
+        printf("称重跳过 | 原因:零点保护 | 方向：%lu 当前重量=%ld 稳定重量=%ld 差值：%+ld 满载称重=%ld 尺带长度：%.1f",
                 (unsigned long)motor_dir,
                 (long)cur_weight,
                 (long)stable_weight,
