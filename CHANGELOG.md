@@ -912,3 +912,30 @@ CPU2 参数加载会校验 FRAM 中的 `magic`、`struct_size`、`param_version`
 - `cmake --build build\LTD_DISPLAY_CPU3`：通过，生成 `LTD_DISPLAY_CPU3_V1.11.1.1.hex`。
 - `git diff --cached --check`：通过。
 - `py tools\check_version_bumped.py`：通过，确认 CPU3 已升版。
+
+## 2026-06-09 - CPU3 参数菜单单位倍率与手输值存储修正（CPU3 V1.11.1.2）
+
+版本：
+- CPU2: 保持 V1.12.1.2
+- CPU3: V1.11.1.1 -> V1.11.1.2
+
+协议版本/兼容性：
+- `DEVICE_PROTOCOL_VERSION` 保持 7。
+- 不改变 CPU2/CPU3 共享寄存器地址、命令码、CPU2 `DeviceParameters` 结构、CPU2 参数存储版本或 CPU2 执行逻辑。
+- CPU3 本地显示/通信参数结构变更，`CPU3_PARAM_VERSION` 从 `0x0002` 升至 `0x0003`；升级后 CPU3 本地显示/通信参数会按默认值重建，避免旧结构误读。
+
+本次修改：
+- CPU3 参数菜单补充电机限速 `m/min`、液位找液/滞后阈值 `Hz`、水位电容阈值 `pF`、零点电容 `pF`、探底角度阈值 `°` 等已确认单位。
+- 修正液位找液阈值和液位滞后阈值的小数位：两者在 CPU2 算法中直接按整数 Hz 频率差比较，CPU3 菜单不再按 1 位小数显示。
+- 将“磁通量D/磁通量T”文案改为“密度修正/温度修正”，并按算法口径显示 `kg/m3`、`℃`，小数位保持 1 位。
+- 修正密度手输值口径为 `kg/m3 x10`，范围改为 `0.0~2000.0 kg/m3`，不再显示为 `0.000~2.000 kg/m3`。
+- 将 CPU3 本地液位/水位/密度/温度手输值存储字段从 `uint8_t` 改为 `int32_t`，避免菜单允许的大范围输入被截断。
+- 同步更新 CPU3 参数单位与范围补充清单、系统参数出厂默认值和版本改动与测试方案。
+
+验证：
+- `py LTD_DISPLAY_CPU3\font_check.py`
+- `cmake -S LTD_DISPLAY_CPU3 -B build/LTD_DISPLAY_CPU3 -G Ninja "-DCMAKE_TOOLCHAIN_FILE=D:/CUBE/cmake/toolchain-arm-none-eabi.cmake" -DCMAKE_BUILD_TYPE=Debug`
+- `cmake --build build\LTD_DISPLAY_CPU3`
+- `git diff --check`
+- `py tools\check_version_bumped.py`
+- 尚未做实物按键联调；需现场确认参数列表页、详情页、输入页单位倍率显示，以及 CPU3 本地参数版本升级后的默认值重建行为。

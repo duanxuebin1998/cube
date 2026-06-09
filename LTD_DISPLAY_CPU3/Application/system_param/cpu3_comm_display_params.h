@@ -28,11 +28,12 @@ typedef struct
     uint8_t screen_source_t;
 
     /* ---------- 手工输入 ---------- */
-    uint8_t screen_input_oil;
-    uint8_t screen_input_water;
-    uint8_t screen_input_d;
+    /* 手输值按菜单原始倍率保存，不能用 uint8_t 截断。 */
+    int32_t screen_input_oil;
+    int32_t screen_input_water;
+    int32_t screen_input_d;
     uint8_t screen_input_d_switch;
-    uint8_t screen_input_t;
+    int32_t screen_input_t;
 
     /* ---------- 显示类参数 ---------- */
     uint8_t  screen_decimal;

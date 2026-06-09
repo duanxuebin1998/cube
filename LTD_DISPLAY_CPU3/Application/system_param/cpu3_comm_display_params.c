@@ -514,7 +514,7 @@ void Cpu3_ReinitAllUarts(void)
  */
 
 #define CPU3_PARAM_MAGIC   0x43505533UL   // 'CPU3'
-#define CPU3_PARAM_VERSION 0x0002U
+#define CPU3_PARAM_VERSION 0x0003U
 
 typedef struct
 {
