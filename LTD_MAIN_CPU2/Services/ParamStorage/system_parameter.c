@@ -199,7 +199,7 @@ static int normalize_device_params_runtime(void)
 
     if ((g_deviceParams.position_source_auto_switch != POSITION_SOURCE_AUTO_SWITCH_DISABLE) &&
         (g_deviceParams.position_source_auto_switch != POSITION_SOURCE_AUTO_SWITCH_ENABLE)) {
-        g_deviceParams.position_source_auto_switch = POSITION_SOURCE_AUTO_SWITCH_ENABLE;
+        g_deviceParams.position_source_auto_switch = POSITION_SOURCE_AUTO_SWITCH_DISABLE;
         changed = 1;
     }
 
@@ -233,9 +233,9 @@ static int normalize_device_params_runtime(void)
         changed = 1;
     }
 
-    /* 瓦锡兰探底间隔范围为0~100，旧 reserved22 脏值按默认每次探底处理。 */
+    /* Out-of-range old reserved22 values fall back to the new default: no bottom detect. */
     if (g_deviceParams.wartsila_bottom_detect_interval > 100U) {
-        g_deviceParams.wartsila_bottom_detect_interval = 1U;
+        g_deviceParams.wartsila_bottom_detect_interval = 0U;
         changed = 1;
     }
 
@@ -608,10 +608,10 @@ void RestoreFactoryParamsConfig(void)
     g_deviceParams.sensorSoftwareVersion = 0x00010001;
     g_deviceParams.softwareVersion       = CPU2_APP_VERSION_U32;
     g_deviceParams.protocolVersion      = DEVICE_PROTOCOL_VERSION;
-    g_deviceParams.error_auto_back_zero  = 1;   /* 默认: 报错回零 */
+    g_deviceParams.error_auto_back_zero  = 0;   /* default: disabled */
     g_deviceParams.error_stop_measurement= 1;   /* 默认: 报错停止测量 */
     g_deviceParams.fault_auto_recovery_retry_limit = FAULT_AUTO_RECOVERY_RETRY_DEFAULT; /* 默认: 故障自动恢复最多重跑3次 */
-    g_deviceParams.position_source_auto_switch = POSITION_SOURCE_AUTO_SWITCH_ENABLE; /* 默认: 允许流程自动切换位置源 */
+    g_deviceParams.position_source_auto_switch = POSITION_SOURCE_AUTO_SWITCH_DISABLE; /* default: disabled */
 
     /* ---------------- 电机与编码器参数 ---------------- */
     g_deviceParams.encoder_wheel_circumference_mm = 95000;  /* 0.001mm */
@@ -632,8 +632,8 @@ void RestoreFactoryParamsConfig(void)
     g_deviceParams.full_weight_upper_limit  = 30000;
     g_deviceParams.full_weight_lower_limit  = 2000;
 
-    g_deviceParams.weight_upper_limit_ratio = 50;
-    g_deviceParams.weight_lower_limit_ratio = 20;
+    g_deviceParams.weight_upper_limit_ratio = 80;
+    g_deviceParams.weight_lower_limit_ratio = 80;
 
     /* ---------------- 零点测量 ---------------- */
     g_deviceParams.zero_weight_threshold_ratio                 = 50;   /* 按算法需要调整 */
@@ -643,8 +643,8 @@ void RestoreFactoryParamsConfig(void)
 
     /* ---------------- 液位测量 ---------------- */
     g_deviceParams.tankHeight                  = 200000; /* 0.1mm => 20000mm */
-    g_deviceParams.liquid_sensor_distance_diff = 0;      /* 0.1mm */
-    g_deviceParams.blindZone                   = 3000;   /* 0.1mm => 300mm */
+    g_deviceParams.liquid_sensor_distance_diff = 1500; /* 0.1mm => 150mm */
+    g_deviceParams.blindZone                   = 1500; /* 0.1mm => 150mm */
 
     g_deviceParams.oilLevelThreshold                     = 15;     /* 项目自定义倍率/单位 */
     g_deviceParams.oilLevelHysteresisThreshold = 20;     /* 项目自定义倍率/单位 */
@@ -666,10 +666,10 @@ void RestoreFactoryParamsConfig(void)
     /* ---------------- 罐高/罐底测量 ---------------- */
     g_deviceParams.bottom_detect_mode      = 0;    /* 0=按项目定义 */
     g_deviceParams.bottom_angle_threshold  = 12;    /* 单位(度）/倍率*1 */
-    g_deviceParams.bottom_weight_threshold = 2000;    /* 按现场经验再设默认 */
+    g_deviceParams.bottom_weight_threshold = 500;
 
     g_deviceParams.refreshTankHeightFlag   = 0;  /* 不自动刷新 */
-    g_deviceParams.maxTankHeightDeviation  = 100;  /* 0.1mm => 10mm */
+    g_deviceParams.maxTankHeightDeviation  = 1000; /* 0.1mm => 100mm */
     g_deviceParams.initialTankHeight       = 0;
     g_deviceParams.currentTankHeight       = 0;
     g_deviceParams.bottom_encoder_correction_enable = BOTTOM_ENCODER_CORRECTION_DISABLE; /* 默认: 罐底测量后不修正编码器 */
@@ -691,15 +691,15 @@ void RestoreFactoryParamsConfig(void)
     g_deviceParams.spreadBottomLimit           = 300;  /* 0.1mm */
     g_deviceParams.spreadPointHoverTime               = 10;
 
-    g_deviceParams.intervalMeasurementTopLimit    = 300; /* 0.1mm */
-    g_deviceParams.intervalMeasurementBottomLimit = 300; /* 0.1mm */
+    g_deviceParams.intervalMeasurementTopLimit    = 0; /* 0.1mm */
+    g_deviceParams.intervalMeasurementBottomLimit = 0; /* 0.1mm */
 
     /* ---------------- Wartsila 密度区间 ---------------- */
     g_deviceParams.wartsila_upper_density_limit      = 38000;
     g_deviceParams.wartsila_lower_density_limit      = 500;
     g_deviceParams.wartsila_density_interval         = 1000;
     g_deviceParams.wartsila_max_height_above_surface = 200; /* 0.1mm 或按定义 */
-    g_deviceParams.wartsila_bottom_detect_interval  = 1;   /* 瓦锡兰探底间隔：0不探底，N表示每N次测量后探底一次 */
+    g_deviceParams.wartsila_bottom_detect_interval  = 0; /* 0: no bottom detect, N: every N measurements */
     g_deviceParams.bottom_encoder_correction_tank_height = 0; /* 0: 编码器修正沿用液位罐高 */
 
     /* ---------------- 继电器报警输出（旧阈值兼容字段） ---------------- */

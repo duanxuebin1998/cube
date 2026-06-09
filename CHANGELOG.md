@@ -36,6 +36,7 @@ CPU2 参数加载会校验 FRAM 中的 `magic`、`struct_size`、`param_version`
 | V1.12.0.2 | 3 | 存储版本不变，通常保留旧参数 |
 | V1.12.1.0 | 3 | 存储版本不变，通常保留旧参数 |
 | V1.12.1.1 | 3 | 存储版本不变；仅调整参数、打印和文档中的称重/探底等中文口径，通常保留旧参数 |
+| V1.12.1.2 | 3 | 存储版本不变；同步 11 项恢复出厂默认值，旧 FRAM 参数通常保留，新默认值仅在恢复出厂或 FRAM 无效时生效 |
 
 历史说明：建立 CPU2 程序版本号前，2025-12-16 引入当前参数元信息时使用 `DEVICE_PARAM_VERSION=1`；2026-03-05 系统参数增加时提升到 `DEVICE_PARAM_VERSION=2`，从版本 1 升级到版本 2 会因旧参数版本不匹配恢复出厂参数。
 
@@ -863,3 +864,27 @@ CPU2 参数加载会校验 FRAM 中的 `magic`、`struct_size`、`param_version`
 - `git diff --cached --check`
 - `py tools\check_version_bumped.py`
 - 尚未做实物按键联调；需现场进入维护设置/设备信息和维护设置/参数校验，确认列表页、详情页均按版本号和 HEX 口径显示且不越界。
+
+## 2026-06-09 - 同步系统参数出厂默认值（CPU2 V1.12.1.2）
+
+版本：
+- CPU2: V1.12.1.1 -> V1.12.1.2
+- CPU3: 保持 V1.11.1.0
+
+协议版本/兼容性：
+- `DEVICE_PROTOCOL_VERSION`: 保持 7。
+- 不改变保持寄存器地址、输入寄存器地址、字段顺序、命令码、`DeviceParameters` 结构大小或参数存储格式。
+- CPU2 `DEVICE_PARAM_VERSION` 保持 3，`struct_size` 不变，从 V1.12.1.1 升级到 V1.12.1.2 不会因参数存储版本触发恢复出厂。
+- 新默认值只在恢复出厂、FRAM A/B 均无效或首次写入参数区时生效；已有现场参数会正常保留。
+
+本次修改：
+- 根据《LNG计量仪屏幕菜单.docx》同步 11 项 CPU2 恢复出厂默认值：故障自动回零、位置源自动切换、碰撞上下限比率、液位探头距差、液位盲区、探底称重阈值、实测罐高最大偏差、区间测量上下限和瓦锡兰探底间隔。
+- 位置源自动切换非法值和瓦锡兰探底间隔越界值的运行期回退值同步改为新默认值。
+- 修正 `LNG计量仪屏幕菜单.docx` 中瓦锡兰探底间隔默认值说明为 `0（不探底）`。
+- 同步更新系统参数出厂默认值、参数存储升级清单和版本改动与测试方案。
+
+验证：
+- `cmake -S LTD_MAIN_CPU2 -B build\LTD_MAIN_CPU2 -G Ninja "-DCMAKE_TOOLCHAIN_FILE=D:/CUBE/cmake/toolchain-arm-none-eabi.cmake" -DCMAKE_BUILD_TYPE=Debug`：通过，配置显示 CPU2 固件版本 `V1.12.1.2`。
+- `cmake --build build\LTD_MAIN_CPU2`：通过，生成 `LTD_MAIN_CPU2_V1.12.1.2.hex`。
+- `git diff --check`：通过。
+- `python-docx` 读回《LNG计量仪屏幕菜单.docx》瓦锡兰探底间隔行，默认值为 `0（不探底）`。
