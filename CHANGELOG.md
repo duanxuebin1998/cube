@@ -888,3 +888,27 @@ CPU2 参数加载会校验 FRAM 中的 `magic`、`struct_size`、`param_version`
 - `cmake --build build\LTD_MAIN_CPU2`：通过，生成 `LTD_MAIN_CPU2_V1.12.1.2.hex`。
 - `git diff --check`：通过。
 - `python-docx` 读回《LNG计量仪屏幕菜单.docx》瓦锡兰探底间隔行，默认值为 `0（不探底）`。
+
+## 2026-06-09 - CPU3 继电器报警阈值按取值源显示单位（CPU3 V1.11.1.1）
+
+版本：
+- CPU2: 保持 V1.12.1.2
+- CPU3: V1.11.1.0 -> V1.11.1.1
+
+协议版本/兼容性：
+- `DEVICE_PROTOCOL_VERSION` 保持 7。
+- 不改变保持寄存器地址、字段顺序、命令码、`DeviceParameters` 结构大小、CPU2 参数存储格式或范围校验规则。
+- 本次仅改变 CPU3 OLED 参数菜单的单位显示，不改变参数写入值、倍率或 CPU2 执行逻辑。
+
+本次修改：
+- CPU3 参数列表、参数详情页和参数输入页显示继电器报警阈值、报警滞回时，按同一路“报警取值源”动态选择单位。
+- 报警取值源为储罐液位、水位、浮子位置时显示 `mm`；报警取值源为液相温度时显示 `℃`；报警取值源为无或非法值时不显示静态单位。
+- 保持 R1~R4 阈值和滞回的 `param_meta[]` 静态单位为空，避免把源相关参数误固定为单一物理单位。
+- 同步更新 CPU3 参数单位与范围补充清单、界面文档索引和版本改动与测试方案。
+
+验证：
+- `py LTD_DISPLAY_CPU3\font_check.py`：通过，未发现缺字。
+- `cmake -S LTD_DISPLAY_CPU3 -B build\LTD_DISPLAY_CPU3 -G Ninja "-DCMAKE_TOOLCHAIN_FILE=D:/CUBE/cmake/toolchain-arm-none-eabi.cmake" -DCMAKE_BUILD_TYPE=Debug`：通过，配置显示 CPU3 固件版本 `V1.11.1.1`。
+- `cmake --build build\LTD_DISPLAY_CPU3`：通过，生成 `LTD_DISPLAY_CPU3_V1.11.1.1.hex`。
+- `git diff --cached --check`：通过。
+- `py tools\check_version_bumped.py`：通过，确认 CPU3 已升版。

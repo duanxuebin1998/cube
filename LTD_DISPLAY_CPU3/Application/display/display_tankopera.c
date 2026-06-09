@@ -246,6 +246,7 @@ static int RelayParam_FieldOf(int operaNum);
 static int RelayParam_IsConfig(int operaNum);
 static int RelayParam_IsChannelSetting(int operaNum);
 static int RelayParam_IsAlarmCondition(int operaNum);
+static int RelayParam_IsAlarmValueField(int operaNum);
 static MenuGroup ParamGroupOf(int operaNum);/* 根据操作码获取参数分组枚举 */
 static void menu_measure_config(void);
 static void menu_run_policy(void);
@@ -352,6 +353,7 @@ static uint8_t *menu_display_name(const struct MenuData *item);/* 当前语言�
 static uint8_t *oled_fit_text(uint8_t *name, uint8_t max_width);/* 裁剪到 OLED 单行宽度 */
 static void format_version_u32(uint32_t version, char *buf, size_t buf_size);/* 版本编码格式化 */
 static int display_formatted_readonly_value(int operaNum, int32_t value, uint8_t line, uint8_t row, uint8_t shift);/* 只读特殊值显示 */
+static uint8_t *param_display_unit(int operaNum, const struct ParameterMetadata *meta);/* 参数显示单位 */
 static void display_menu_item_with_value(const struct MenuData *item, uint8_t line, uint8_t row, uint8_t shift);/* 菜单列表带值显示 */
 static uint8_t display_split_title(uint8_t *name, uint8_t row1, uint8_t row2);/* 长标题拆成最多两行 */
 static void display_param_detail_value(const struct ParameterMetadata *meta, uint8_t row);/* 详情页当前值 */
@@ -1258,6 +1260,41 @@ static int display_formatted_readonly_value(int operaNum, int32_t value, uint8_t
 	return 0;
 }
 
+static uint8_t *relay_alarm_source_unit(uint32_t source)
+{
+	switch ((RelayAlarmSource)source) {
+	case RELAY_ALARM_SOURCE_TANK_LEVEL:
+	case RELAY_ALARM_SOURCE_WATER_LEVEL:
+	case RELAY_ALARM_SOURCE_DISPLACER_POS:
+		return (uint8_t*)"mm";
+	case RELAY_ALARM_SOURCE_LIQUID_TEMP:
+		return (uint8_t*)"℃";
+	default:
+		return NULL;
+	}
+}
+
+static uint8_t *param_display_unit(int operaNum, const struct ParameterMetadata *meta)
+{
+	int channel;
+
+	if ((meta != NULL) && (meta->unit != NULL)) {
+		return meta->unit;
+	}
+
+	/* 继电器阈值和滞回的单位取决于同一路“报警取值源”，不能写死在 param_meta[]。 */
+	if (RelayParam_IsAlarmValueField(operaNum) == 0) {
+		return (meta != NULL) ? meta->unit : NULL;
+	}
+
+	channel = RelayParam_ChannelOf(operaNum);
+	if ((channel < 0) || (channel >= (int)RELAY_ALARM_CHANNEL_COUNT)) {
+		return NULL;
+	}
+
+	return relay_alarm_source_unit(g_deviceParams.relayAlarm[channel].alarm_source);
+}
+
 static void display_menu_item_with_value(const struct MenuData *item, uint8_t line, uint8_t row, uint8_t shift)
 {
 	int index;
@@ -1299,7 +1336,12 @@ static void display_menu_item_with_value(const struct MenuData *item, uint8_t li
 	}
 
 	if (param_meta[index].pword == NULL) {
-		OledValueDisplay(param_meta[index].val, line, row, shift, param_meta[index].point, param_meta[index].unit);
+		OledValueDisplay(param_meta[index].val,
+		                 line,
+		                 row,
+		                 shift,
+		                 param_meta[index].point,
+		                 param_display_unit(opera, &param_meta[index]));
 	} else {
 		old_opera = now_Opera_Num;
 		now_Opera_Num = opera;
@@ -1376,7 +1418,7 @@ static void display_param_detail_value(const struct ParameterMetadata *meta, uin
 	}
 
 	if (meta->pword == NULL) {
-		OledValueDisplay(meta->val, line, row, 0, meta->point, meta->unit);
+		OledValueDisplay(meta->val, line, row, 0, meta->point, param_display_unit(meta->operanum, meta));
 	} else {
 		OledDisplayLineWords(meta->pword(), line, row, 0);
 	}
@@ -1395,7 +1437,7 @@ static void display_param_detail_range(const struct ParameterMetadata *meta, uin
 	if (meta->flag_checkvalue) {
 		line = OledValueDisplay(meta->valuemin, line, row, 0, meta->point, NULL);
 		line = OledDisplayLineWords((uint8_t*)"~", line, row, 0);
-		OledValueDisplay(meta->valuemax, line, row, 0, meta->point, meta->unit);
+		OledValueDisplay(meta->valuemax, line, row, 0, meta->point, param_display_unit(meta->operanum, meta));
 	} else {
 		DisplayLangaugeLineWords((uint8_t*)"--", line, row, 0, (uint8_t*)"--");
 	}
@@ -1409,7 +1451,7 @@ static uint8_t *dtm_unit(void)
 	if ((now_Opera_Num > COM_NUM_PARA_DEBUG_START && now_Opera_Num < COM_NUM_PARA_LOCAL_STOP)
 		|| (now_Opera_Num > COM_NUM_ONEPARACMD_START && now_Opera_Num < COM_NUM_NOPARA_DEBUGCMD_END)) {
 		int index = getHoldValueNum(now_Opera_Num);
-		u = param_meta[index].unit;
+		u = param_display_unit(now_Opera_Num, &param_meta[index]);
 	} else {
 		switch (now_Opera_Num) {
 		default:
@@ -3304,6 +3346,13 @@ static int RelayParam_IsAlarmCondition(int operaNum)
     int field = RelayParam_FieldOf(operaNum);
 
     return (field >= 3) && (field <= 11);
+}
+
+static int RelayParam_IsAlarmValueField(int operaNum)
+{
+    int field = RelayParam_FieldOf(operaNum);
+
+    return (field >= 6) && (field <= 10);
 }
 
 typedef struct {
