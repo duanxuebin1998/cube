@@ -712,3 +712,49 @@
 - `cmake --build build\LTD_MAIN_CPU2`
 - `cmake --build build\LTD_DISPLAY_CPU3`
 - 尚未做现场实物联调；需后续验证 TMC5130 通信异常、目标位置容差停止判定、继电器报警输出菜单文案和 SIL 文档资料引用。
+
+## 2026-06-08 - 优化CPU3菜单选择型参数编辑（CPU3 V1.10.1.0）
+
+版本：
+- CPU2: 保持 V1.12.0.2
+- CPU3: V1.10.0.2 -> V1.10.1.0
+
+协议版本/兼容性：
+- `DEVICE_PROTOCOL_VERSION` 保持 7，不改变 CPU2/CPU3 共享寄存器地址、字段数值编码、参数存储结构或外部协议响应语义。
+- 本次只改变 CPU3 OLED 参数菜单的显示和编辑交互：有限枚举、开关和模式类参数由数字逐位输入优化为上下键候选选择。
+- “非法配置”仅作为异常值显示占位，不作为可写候选项；水位测量方式因未确认独立枚举语义，仍保持原数字编辑路径。
+
+本次修改：
+- CPU3 将故障自动回零、故障停止测量、位置源自动切换、记步模式、是否测罐底/水位/单点密度、分布测顺序/模式、数据源、密度手输上传、是否息屏、更新罐高标志和罐底后编码器修正等参数挂接到选择型文字显示和编辑流程。
+- CPU3 新增位置源自动切换和记步模式候选文字表，分别显示为禁用/启用、编码器/电机。
+- CPU3 优化选择页进入时的高亮位置，默认选中当前参数值；保存或返回后清理选择状态，避免下次进入沿用上一次菜单位置。
+- CPU3 为枚举候选表异常增加空指针和候选数防护，避免 `dtm_disarr()` 无映射时进入空菜单。
+
+验证：
+- `py LTD_DISPLAY_CPU3\font_check.py`：通过，未发现新增显示文字缺字。
+- `cmake -S LTD_DISPLAY_CPU3 -B build/LTD_DISPLAY_CPU3 -G Ninja "-DCMAKE_TOOLCHAIN_FILE=D:/CUBE/cmake/toolchain-arm-none-eabi.cmake" -DCMAKE_BUILD_TYPE=Debug`
+- `cmake --build build\LTD_DISPLAY_CPU3`
+- `git diff --check`：未发现空白错误，仅有工作区 LF 后续转换为 CRLF 的 Git warning。
+- 尚未做实物按键联调；需现场确认进入选择型参数时当前值高亮、上下键循环、确认写回、返回取消，以及 COM 协议可选择到 SI7000 但不能选择“非法配置”。
+
+## 2026-06-09 - 修复电机停止等待被目标位置差值卡死（CPU2 V1.12.1.0）
+
+版本：
+- CPU2: V1.12.0.2 -> V1.12.1.0
+- CPU3: 保持 V1.10.1.0
+
+协议版本/兼容性：
+- `DEVICE_PROTOCOL_VERSION` 保持 7，不改变 CPU2/CPU3 共享寄存器地址、字段数值编码、参数存储结构或外部协议响应语义。
+- 本次只修复 CPU2 电机停止等待逻辑：普通运动完成判定继续检查 `XTARGET/XACTUAL` 差值，停止命令后的刹停等待改为只依据 `RAMPSTAT.vzero` 与 `VACTUAL` 判断物理停止。
+
+本次修改：
+- 新增停止专用 `MotorDriver_ReadStoppingState()`，用于停止命令后的减速等待，避免旧 `XTARGET` 与减速滑行后的 `XACTUAL` 差值导致一直判定运动中。
+- `MotorDriver_StopAndMarkStopped()` 在确认物理停止后重新把 `XTARGET` 对齐当前 `XACTUAL`，避免恢复速度或重新使能后旧目标继续生效。
+- `MotorMotion_WaitStoppedAfterStopCommand()` 改用停止专用状态读取；普通移动等待仍使用带目标位置差值的运动判定，保留防提前到位保护。
+
+验证：
+- `git diff --check`
+- `py tools\check_version_bumped.py`
+- `cmake -S LTD_MAIN_CPU2 -B build/LTD_MAIN_CPU2 -G Ninja "-DCMAKE_TOOLCHAIN_FILE=D:/CUBE/cmake/toolchain-arm-none-eabi.cmake" -DCMAKE_BUILD_TYPE=Debug`
+- `cmake --build build\LTD_MAIN_CPU2`
+- 尚未做现场实物联调；需复测零点测量到达零点后的刹停、命令切换停止、TMC5130 通信异常和普通长距离运动到位判定。

@@ -1285,7 +1285,7 @@ static uint32_t MotorMotion_WaitStoppedAfterStopCommand(uint32_t timeout_ms)
     }
 
     while (1) {
-        ret = MotorCtrl_IsDriverMoving(&stepper, &is_moving);
+        ret = MotorDriver_ReadStoppingState(&stepper, &is_moving);
         if (ret != NO_ERROR) {
             snprintf(detail, sizeof(detail), "moving state error=0x%08lX", (unsigned long)ret);
             ErrorLog_WarnDetail(ERROR_LOG_MODULE_MOTOR,

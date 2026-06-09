@@ -36,6 +36,7 @@ static uint32_t MotorDriver_CheckInitPowerReadyWithRetry(void);
 static uint32_t MotorDriver_ReinitIfMotionNotReady(void);
 static uint32_t MotorDriver_CheckMotionReadyInternal(bool ignore_encoder_ready);
 static uint32_t MotorDriver_ReadTargetPositionOpen(TMC5130TypeDef *tmc5130, bool *target_open);
+static uint32_t MotorDriver_AlignTargetToActual(TMC5130TypeDef *tmc5130);
 
 /* ===================== 对外接口 ===================== */
 
@@ -421,6 +422,24 @@ static uint32_t MotorDriver_ReadTargetPositionOpen(TMC5130TypeDef *tmc5130, bool
     *target_open = (diff > (int64_t)MOTOR_DRIVER_POSITION_TOLERANCE_TICKS);
     return NO_ERROR;
 }
+
+static uint32_t MotorDriver_AlignTargetToActual(TMC5130TypeDef *tmc5130)
+{
+    int32_t xactual = 0;
+
+    if (tmc5130 == NULL) {
+        return PARAM_ERROR;
+    }
+
+    if (!stpr_tryReadInt(tmc5130, TMC5130_XACTUAL, &xactual)) {
+        return MOTOR_TMC_COMM_ERROR;
+    }
+    if (!stpr_writeInt(tmc5130, TMC5130_XTARGET, xactual)) {
+        return MOTOR_TMC_COMM_ERROR;
+    }
+    return NO_ERROR;
+}
+
 /**
  * @brief 持久设置 TMC5130 运行电流。
  *
@@ -654,7 +673,7 @@ uint32_t MotorDriver_StopAndMarkStopped(void)
     /* 命令切换时不能只下发停止就返回，否则下一条命令会在电机减速过程中被读取执行。 */
     start_tick = HAL_GetTick();
     while (1) {
-        ret = MotorDriver_ReadMovingState(&stepper, &is_moving);
+        ret = MotorDriver_ReadStoppingState(&stepper, &is_moving);
         if (ret != NO_ERROR) {
             printf("电机停止状态读取失败，错误码：0x%08lX\r\n", (unsigned long)ret);
             return ret;
@@ -674,6 +693,11 @@ uint32_t MotorDriver_StopAndMarkStopped(void)
     }
 
     ret = MotorDriver_SyncPositionOrCheckHealth(&stepper);
+    if (ret != NO_ERROR) {
+        return ret;
+    }
+
+    ret = MotorDriver_AlignTargetToActual(&stepper);
     if (ret != NO_ERROR) {
         return ret;
     }
@@ -763,6 +787,41 @@ uint32_t MotorDriver_ReadMovingState(TMC5130TypeDef *tmc5130, bool *is_moving)
     return NO_ERROR;
 }
 
+uint32_t MotorDriver_ReadStoppingState(TMC5130TypeDef *tmc5130, bool *is_moving)
+{
+    int32_t rampstat = 0;
+    int32_t rampstat_confirm = 0;
+    int32_t vactual = 0;
+
+    if ((tmc5130 == NULL) || (is_moving == NULL)) {
+        return PARAM_ERROR;
+    }
+
+    *is_moving = true;
+
+    if (!stpr_tryReadInt(tmc5130, TMC5130_RAMPSTAT, &rampstat)) {
+        return MOTOR_TMC_COMM_ERROR;
+    }
+
+    if (((uint32_t)rampstat & MOTOR_DRIVER_RAMPSTAT_VZERO_MASK) != MOTOR_DRIVER_RAMPSTAT_VZERO_MASK) {
+        return NO_ERROR;
+    }
+
+    HAL_Delay(5U);
+    if (!stpr_tryReadInt(tmc5130, TMC5130_RAMPSTAT, &rampstat_confirm)) {
+        return MOTOR_TMC_COMM_ERROR;
+    }
+    if (((uint32_t)rampstat_confirm & MOTOR_DRIVER_RAMPSTAT_VZERO_MASK) != MOTOR_DRIVER_RAMPSTAT_VZERO_MASK) {
+        return NO_ERROR;
+    }
+
+    if (!stpr_tryReadInt(tmc5130, TMC5130_VACTUAL, &vactual)) {
+        return MOTOR_TMC_COMM_ERROR;
+    }
+
+    *is_moving = (vactual != 0);
+    return NO_ERROR;
+}
 /**
  * @brief 根据驱动状态推断上层显示用运动状态。
  *

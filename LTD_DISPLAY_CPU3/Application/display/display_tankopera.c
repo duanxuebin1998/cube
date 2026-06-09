@@ -67,6 +67,18 @@ static uint8_t *arr_IF[][2] = {
 	{ (uint8_t*)"非法配置", (uint8_t*)"Illegal CFG" },
 };
 
+static uint8_t *arr_position_source_auto_switch[][2] = {
+	{ (uint8_t*)"禁用", (uint8_t*)"Disabled" },
+	{ (uint8_t*)"启用", (uint8_t*)"Enabled" },
+	{ (uint8_t*)"非法配置", (uint8_t*)"Illegal CFG" },
+};
+
+static uint8_t *arr_position_count_mode[][2] = {
+	{ (uint8_t*)"编码器", (uint8_t*)"Encoder" },
+	{ (uint8_t*)"电机", (uint8_t*)"Motor" },
+	{ (uint8_t*)"非法配置", (uint8_t*)"Illegal CFG" },
+};
+
 static uint8_t *arr_densitymode[][2] = {
 	{ (uint8_t*)"分布测量", (uint8_t*)"Distribution" },
 	{ (uint8_t*)"国标测量", (uint8_t*)"National Standard" },
@@ -278,7 +290,7 @@ static void menu_paracfg_main(void);
  *	分页、上下移动、确认/返回等统一菜单交互
  */
 static void menuselect(struct MenuData *menu, int menulen);		/* 通用菜单分页选择 */
-static void operationselect(uint8_t *(*menu)[2], int menulen);	/* 枚举含义选择列表 */
+static void operationselect(uint8_t *(*menu)[2], int menulen, int selected_index);	/* 枚举含义选择列表 */
 static void selectparaword(void);								/* 进入“枚举含义选择”页 */
 
 /* ---------- 4) 参数读写流程(读参数 -> 显示 -> 修改 -> 写回) ----------
@@ -2063,7 +2075,7 @@ uint8_t *ret_arr_word(void)
 	uint8_t *(*p)[2];
 
 	p = dtm_disarr(&index, &len);
-	if (index < len && p != NULL) {
+	if (p != NULL && index >= 0 && index < len) {
 		return p[index][screen_parameter.language];
 	} else {
 		return (uint8_t*)"非法配置";
@@ -2074,7 +2086,7 @@ uint8_t *ret_arr_word(void)
 uint8_t *(*dtm_disarr(int *pindex, int *plen))[2]
 {
 	int index = 0, len = -1;
-	uint8_t *(*p)[2];
+	uint8_t *(*p)[2] = NULL;
 
 	index = getHoldValueNum(now_Opera_Num);
 
@@ -2137,10 +2149,26 @@ uint8_t *(*dtm_disarr(int *pindex, int *plen))[2]
 	case COM_NUM_DEVICEPARAM_REQUIREBOTTOMMEASUREMENT:
 	case COM_NUM_DEVICEPARAM_REQUIREWATERMEASUREMENT:
 	case COM_NUM_DEVICEPARAM_REQUIRESINGLEPOINTDENSITY:
+	case COM_NUM_DEVICEPARAM_ERROR_AUTO_BACK_ZERO:
+	case COM_NUM_DEVICEPARAM_ERROR_STOP_MEASUREMENT:
+	case COM_NUM_DEVICEPARAM_REFRESH_TANKHEIGHT_FLAG:
+	case COM_NUM_DEVICEPARAM_BOTTOM_ENCODER_CORRECTION_ENABLE:
 	case COM_NUM_SCREEN_OFF: {
 		index = param_meta[index].val;
 		len = (int)(sizeof(arr_IF) / sizeof(arr_IF[0]));
 		p = arr_IF;
+		break;
+	}
+	case COM_NUM_DEVICEPARAM_POSITION_SOURCE_AUTO_SWITCH: {
+		index = param_meta[index].val;
+		len = (int)(sizeof(arr_position_source_auto_switch) / sizeof(arr_position_source_auto_switch[0]));
+		p = arr_position_source_auto_switch;
+		break;
+	}
+	case COM_NUM_DEVICEPARAM_POSITION_COUNT_MODE: {
+		index = param_meta[index].val;
+		len = (int)(sizeof(arr_position_count_mode) / sizeof(arr_position_count_mode[0]));
+		p = arr_position_count_mode;
 		break;
 	}
 	case COM_NUM_DEVICEPARAM_SPREADMEASUREMENTMODE: {
@@ -2223,6 +2251,10 @@ uint8_t *(*dtm_disarr(int *pindex, int *plen))[2]
 		return NULL;
 	}
 
+	if ((p == NULL) || (len <= 0)) {
+		return NULL;
+	}
+
 	*pindex = index;
 	*plen = len;
 	return p;
@@ -2234,16 +2266,30 @@ static void selectparaword(void)
 {
 	uint8_t *(*parr)[2];
 	int len, index;
+	int selected_index;
 
 	oled_clear();
 	func_index = KEYNUM_WORDSELECT;
 
 	parr = dtm_disarr(&index, &len);
-	operationselect(parr, len-1);
+	if (parr == NULL || len <= 1) {
+		DisplayLangaugeLineWords((uint8_t*)"非法参数!", OLED_LINE8_2, OLED_ROW3_2, 0, (uint8_t*)"Invalid Para");
+		HAL_Delay(800);
+		displaypara();
+		return;
+	}
+
+	selected_index = index;
+	if (selected_index < 0) {
+		selected_index = 0;
+	} else if (selected_index >= (len - 1)) {
+		selected_index = len - 2;
+	}
+	operationselect(parr, len - 1, selected_index);
 }
 
 /* 隐藏信息含义选择栏 */
-static void operationselect(uint8_t *(*menu)[2], int menulen)
+static void operationselect(uint8_t *(*menu)[2], int menulen, int selected_index)
 {
 	const static int RowsPerPage = 4;
 	static int shift = 0;
@@ -2255,6 +2301,28 @@ static void operationselect(uint8_t *(*menu)[2], int menulen)
 	static int timeback_hide = 0;
 	static int menu_page_hide = 0;
 	static int menu_num_hide = -1;
+	static int last_opera_num = -1;
+
+	if (menu == NULL || menulen <= 0) {
+		DisplayLangaugeLineWords((uint8_t*)"非法参数!", OLED_LINE8_2, OLED_ROW3_2, 0, (uint8_t*)"Invalid Para");
+		HAL_Delay(800);
+		displaypara();
+		return;
+	}
+
+	if (last_opera_num != now_Opera_Num) {
+		if (selected_index < 0) {
+			selected_index = 0;
+		} else if (selected_index >= menulen) {
+			selected_index = menulen - 1;
+		}
+		menu_cnt_hide = selected_index + 1;
+		menu_num_hide = selected_index;
+		menu_page_hide = (menu_num_hide / RowsPerPage) * RowsPerPage;
+		timesure_hide = 0;
+		timeback_hide = 0;
+		last_opera_num = now_Opera_Num;
+	}
 
 	if (NowKeyPress == USE_KEY_UP) {
 		menu_cnt_hide--;
@@ -2267,6 +2335,7 @@ static void operationselect(uint8_t *(*menu)[2], int menulen)
 		if (timesure_hide != 0) {
 			timesure_hide = 0;
 			now_Para_CT.val = menu_num_hide;
+			last_opera_num = -1;
 			parascopecheck();
 			return;
 		}
@@ -2281,6 +2350,7 @@ static void operationselect(uint8_t *(*menu)[2], int menulen)
 			menu_page_hide = 0;
 			timeback_hide = 0;
 			timesure_hide = 0;
+			last_opera_num = -1;
 			displaypara();
 			return;
 		}

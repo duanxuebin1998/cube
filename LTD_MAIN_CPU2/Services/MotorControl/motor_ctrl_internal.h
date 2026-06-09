@@ -238,6 +238,8 @@ uint32_t MotorDriver_StopIfCommandSwitchRequested(void);
  */
 uint32_t MotorDriver_ReadMovingState(TMC5130TypeDef *tmc5130, bool *is_moving);
 
+uint32_t MotorDriver_ReadStoppingState(TMC5130TypeDef *tmc5130, bool *is_moving);
+
 /**
  * @brief 根据驱动状态推断上层显示用运动状态。
  *
