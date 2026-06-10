@@ -939,3 +939,59 @@ CPU2 参数加载会校验 FRAM 中的 `magic`、`struct_size`、`param_version`
 - `git diff --check`
 - `py tools\check_version_bumped.py`
 - 尚未做实物按键联调；需现场确认参数列表页、详情页、输入页单位倍率显示，以及 CPU3 本地参数版本升级后的默认值重建行为。
+
+## 2026-06-10 - 同步系统参数默认值和 CPU3 状态页矩阵（CPU2 V1.12.1.3 / CPU3 V1.11.1.3）
+
+版本：
+- CPU2: V1.12.1.2 -> V1.12.1.3
+- CPU3: V1.11.1.2 -> V1.11.1.3
+
+协议版本/兼容性：
+- `DEVICE_PROTOCOL_VERSION` 保持 7。
+- 不改变 CPU2/CPU3 共享寄存器地址、输入寄存器地址、字段顺序、命令码、`DeviceParameters` 结构大小或参数语义。
+- CPU2 `DEVICE_PARAM_VERSION` 保持 3，`struct_size` 不变，从 V1.12.1.2 升级到 V1.12.1.3 不会因参数存储版本触发恢复出厂。
+- CPU3 本地参数结构和 `CPU3_PARAM_VERSION` 不变，从 V1.11.1.2 升级到 V1.11.1.3 不会触发 CPU3 本地显示/通信参数重建。
+- CPU2 新默认值只在恢复出厂、FRAM A/B 均无效或首次写入参数区时生效；已有现场参数会正常保留。
+
+本次修改：
+- 根据《LNG计量仪屏幕菜单.docx》当前工作区默认值，再同步 9 项 CPU2 恢复出厂默认值：空载称重上限、满载称重下限、液位盲区、水位盲区、水位跟随电容阈值、水位寻找电容阈值、水位滞后电容阈值、最高点距液面和最低点距罐底。
+- `water_lag_cap_threshold == 0` 的旧存储补默认值从 `80000` 同步为 `30000`，与恢复出厂默认值一致；非零现场值不被覆盖。
+- 按 `CPU3状态页显示参数矩阵.xlsx` 同步状态页显示逻辑：`STATE_WARTSILA_DENSITY_MEASURING` 显示平均密度和平均温度，但不显示分布液位。
+- `STATE_READPARAMETEROVER` 新增读取参数完成上下文，按有效数据分页显示液位、水位、平均密度、平均温度、频率、电容、X/Y 角和罐高。
+- 将频率和电容拆为两个独立状态页参数项，读取参数完成时两者可同时显示。
+- `STATE_ERROR` 状态页除状态、错误码、位置、称重外，新增故障详情行；故障原因过长时沿用既有两行拆分逻辑。
+- 同步更新系统参数出厂默认值、CPU2 参数存储升级清单、CPU3 参数单位与范围补充清单、CPU3 状态页确认表、状态页显示参数矩阵工作簿、界面/协议/版本文档索引和合并后的版本改动与测试方案。
+- 《LNG计量仪屏幕菜单.docx》中“尺带厚度”行仅带“改成选项尺带类型”备注，未给出新的数值或字段设计，本次不改变程序默认值和菜单结构。
+
+验证：
+- `cmake -S LTD_MAIN_CPU2 -B build/LTD_MAIN_CPU2 -G Ninja "-DCMAKE_TOOLCHAIN_FILE=D:/CUBE/cmake/toolchain-arm-none-eabi.cmake" -DCMAKE_BUILD_TYPE=Debug`：通过，配置显示 CPU2 固件版本 `V1.12.1.3`。
+- `cmake --build build\LTD_MAIN_CPU2`：通过，生成 `LTD_MAIN_CPU2_V1.12.1.3.hex`。
+- `py LTD_DISPLAY_CPU3\font_check.py`：通过，未发现缺字。
+- `cmake -S LTD_DISPLAY_CPU3 -B build/LTD_DISPLAY_CPU3 -G Ninja "-DCMAKE_TOOLCHAIN_FILE=D:/CUBE/cmake/toolchain-arm-none-eabi.cmake" -DCMAKE_BUILD_TYPE=Debug`：通过，配置显示 CPU3 固件版本 `V1.11.1.3`。
+- `cmake --build build\LTD_DISPLAY_CPU3`：通过，生成 `LTD_DISPLAY_CPU3_V1.11.1.3.hex`。
+- `git diff --cached --check`：通过。
+- `py tools\check_version_bumped.py`：通过。
+- 已通过 `python-docx` 对比《LNG计量仪屏幕菜单.docx》当前工作区与 `HEAD` 的出厂默认值变化，确认本次程序同步范围。
+- 尚未做实物恢复出厂、旧 FRAM 升级、水位实测和 OLED 翻页联调；需现场确认读取参数完成、LTD 密度分布测量中、故障态三类页面的实际显示顺序和翻页体验。
+
+## 2026-06-10 - 恢复磁通量D/T菜单显示并补充菜单文档选项含义（CPU3 V1.11.1.4）
+
+版本：
+- CPU2: 保持 V1.12.1.3
+- CPU3: V1.11.1.3 -> V1.11.1.4
+
+协议版本/兼容性：
+- `DEVICE_PROTOCOL_VERSION` 保持 7。
+- 不改变 CPU2/CPU3 共享寄存器地址、命令码、参数存储结构、字段倍率或算法计算口径。
+- CPU3 仅恢复两个参数菜单显示名：`密度修正/温度修正` 改回现场确认的 `磁通量D/磁通量T`。
+- CPU3 本地参数结构和 `CPU3_PARAM_VERSION` 不变，从 V1.11.1.3 升级到 V1.11.1.4 不会触发 CPU3 本地显示/通信参数重建。
+
+本次修改：
+- 将 CPU3 参数元数据中的 `COM_NUM_DEVICEPARAM_DENSITYCORRECTION` 和 `COM_NUM_DEVICEPARAM_TEMPERATURECORRECTION` 显示名恢复为 `磁通量D`、`磁通量T`。
+- 优化《LNG计量仪屏幕菜单.docx》：选项型参数默认值在数字后补充选项含义，例如 `0（否）`、`0（禁用）`、`0（8位）`。
+- 同步《LNG计量仪屏幕菜单.docx》中的 CPU2/CPU3 版本、单位/小数位、找油/找水阈值、修正倍率说明和密度手输值口径。
+
+验证：
+- `python-docx` 结构化读取《LNG计量仪屏幕菜单.docx》，确认 `磁通量D/T`、选项型默认值含义和 CPU3 版本号已更新。
+- `git diff --check -- LTD_DISPLAY_CPU3/Application/system_param/system_parameter.c`：通过。
+- 尚未重新构建 CPU3 固件；本次代码改动仅涉及菜单参数显示名，提交前已通过版本检查脚本约束升版范围。

@@ -229,7 +229,7 @@ static int normalize_device_params_runtime(void)
 
     /* 旧版本该位置为 reserved17，可能读到 0；这里补默认值，避免监测阈值过小。 */
     if (g_deviceParams.water_lag_cap_threshold == 0U) {
-        g_deviceParams.water_lag_cap_threshold = 80000U;
+        g_deviceParams.water_lag_cap_threshold = 30000U;
         changed = 1;
     }
 
@@ -625,12 +625,12 @@ void RestoreFactoryParamsConfig(void)
 
     /* ---------------- 称重参数 ---------------- */
     g_deviceParams.empty_weight             = 0;
-    g_deviceParams.empty_weight_upper_limit = 2000;
+    g_deviceParams.empty_weight_upper_limit = 5000;
     g_deviceParams.empty_weight_lower_limit = 0;
 
     g_deviceParams.full_weight              = 5000;
     g_deviceParams.full_weight_upper_limit  = 30000;
-    g_deviceParams.full_weight_lower_limit  = 2000;
+    g_deviceParams.full_weight_lower_limit  = 1000;
 
     g_deviceParams.weight_upper_limit_ratio = 80;
     g_deviceParams.weight_lower_limit_ratio = 80;
@@ -644,7 +644,7 @@ void RestoreFactoryParamsConfig(void)
     /* ---------------- 液位测量 ---------------- */
     g_deviceParams.tankHeight                  = 200000; /* 0.1mm => 20000mm */
     g_deviceParams.liquid_sensor_distance_diff = 1500; /* 0.1mm => 150mm */
-    g_deviceParams.blindZone                   = 1500; /* 0.1mm => 150mm */
+    g_deviceParams.blindZone                   = 3000; /* 0.1mm => 300mm */
 
     g_deviceParams.oilLevelThreshold                     = 15;     /* 项目自定义倍率/单位 */
     g_deviceParams.oilLevelHysteresisThreshold = 20;     /* 项目自定义倍率/单位 */
@@ -655,13 +655,13 @@ void RestoreFactoryParamsConfig(void)
     /* ---------------- 水位测量参数 ---------------- */
     g_deviceParams.water_tank_height                = 200000; /* 0.1mm */
     g_deviceParams.water_level_mode                      = 0;      /* 0:慢速 */
-    g_deviceParams.waterBlindZone                   = 100;    /* 0.1mm */
-    g_deviceParams.water_cap_threshold                      = 50000;      /* 建议明确倍率后再设默认 */
-    g_deviceParams.water_find_cap_threshold                      = 5000;      /* 水位寻找电容阈值，x1000，5.0pF */
+    g_deviceParams.waterBlindZone                   = 300;    /* 0.1mm => 30mm */
+    g_deviceParams.water_cap_threshold                      = 20000;      /* x1000 => 20.000pF */
+    g_deviceParams.water_find_cap_threshold                      = 10000;      /* x1000 => 10.000pF */
     g_deviceParams.maxDownDistance                  = 3000;   /* 0.1mm => 300mm */
     g_deviceParams.zero_cap                         = 0;      /* 0.1pf */
     g_deviceParams.water_stable_threshold                      = 500;      /* 0.1mm */
-    g_deviceParams.water_lag_cap_threshold  = 80000;  /* 水位滞后电容阈值，x1000，80.0pF */
+    g_deviceParams.water_lag_cap_threshold  = 30000;  /* x1000 => 30.000pF */
 
     /* ---------------- 罐高/罐底测量 ---------------- */
     g_deviceParams.bottom_detect_mode      = 0;    /* 0=按项目定义 */
@@ -687,8 +687,8 @@ void RestoreFactoryParamsConfig(void)
     g_deviceParams.spreadMeasurementMode                   = 0;
     g_deviceParams.spreadMeasurementCount                   = 5;
     g_deviceParams.spreadMeasurementDistance                   = 10000; /* 0.1mm */
-    g_deviceParams.spreadTopLimit              = 300;  /* 0.1mm */
-    g_deviceParams.spreadBottomLimit           = 300;  /* 0.1mm */
+    g_deviceParams.spreadTopLimit              = 1000;  /* 0.1mm => 100mm */
+    g_deviceParams.spreadBottomLimit           = 3000;  /* 0.1mm => 300mm */
     g_deviceParams.spreadPointHoverTime               = 10;
 
     g_deviceParams.intervalMeasurementTopLimit    = 0; /* 0.1mm */

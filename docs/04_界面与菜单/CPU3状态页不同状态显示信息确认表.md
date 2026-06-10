@@ -1,8 +1,8 @@
 # CPU3状态页不同状态显示信息确认表
 
-日期：2026-06-09
+日期：2026-06-10
 
-适用版本：CPU3 `V1.11.0.0`
+适用版本：CPU3 `V1.11.1.3`
 
 源码依据：`LTD_DISPLAY_CPU3/Application/display/display.c`
 
@@ -12,16 +12,18 @@ CPU3 状态页第一行固定显示设备状态文字，并在右侧显示电机
 
 | 显示项 | 显示条件 | 数据源 | 显示口径 |
 | --- | --- | --- | --- |
-| 液位 | 当前状态允许显示液位，且液位不是 `UNVALID_LEVEL` | 液位状态取 `oil_measurement.oil_level`；分布完成取 `density_distribution.Density_oil_level`；综合完成取 `oil_measurement.oil_level` | `0.1 mm`；值为 `OILLEVELDOWNLIMIT` / `LEVEL_DOWNLIMIT` 时显示“低于盲区” |
+| 液位 | 当前状态允许显示液位，且液位不是 `UNVALID_LEVEL` | 液位状态取 `oil_measurement.oil_level`；分布完成取 `density_distribution.Density_oil_level`；综合完成和读取参数完成取 `oil_measurement.oil_level` | `0.1 mm`；值为 `OILLEVELDOWNLIMIT` / `LEVEL_DOWNLIMIT` 时显示“低于盲区” |
 | 水位 | 当前状态允许显示水位，且 `water_measurement.water_level != LEVEL_DOWNLIMITWATER` | `water_measurement.water_level` | `0.1 mm`；当前实现水位为 `0` 时隐藏，不显示“低于盲区” |
-| 密度 | 当前上下文有密度源，且密度不是 `UNVALID_DENSITY` | 单点测量、单点监测或分布平均密度 | `0.1 kg/m3` |
-| 温度 | 当前上下文有温度源，且温度 `> 0` 且 `< 40000` | 单点测量、单点监测或分布平均温度 | 显示值为 `temperature - 20000`，小数 2 位，单位 `℃` |
+| 密度 | 当前上下文有密度源，且密度不是 `UNVALID_DENSITY` | 单点测量、单点监测或分布平均密度；LTD 密度分布测量中和读取参数完成显示 `density_distribution.average_density` | `0.1 kg/m3` |
+| 温度 | 当前上下文有温度源，且温度 `> 0` 且 `< 40000` | 单点测量、单点监测或分布平均温度；LTD 密度分布测量中和读取参数完成显示 `density_distribution.average_temperature` | 显示值为 `temperature - 20000`，小数 2 位，单位 `℃` |
 | 位置 | 正常状态页路径下固定显示 | `debug_data.sensor_position` | `0.1 mm`；值为 `0` 时也显示 |
 | 称重 | 正常状态页路径下固定显示 | `debug_data.current_weight` | 整数显示，无明确单位；值为 `0` 时也显示 |
-| 频率 | 液位过程/液位跟随状态，且当前频率有效 | 优先 `oil_measurement.current_frequency`，否则 `debug_data.frequency` | `Hz` |
-| 电容 | 水位过程/水位跟随状态，且 `water_measurement.current_capacitance > 0` | `water_measurement.current_capacitance` | 显示为 `current_capacitance * 10`，小数 1 位 |
-| X/Y角 | 罐高上下文，且 `bottom_detect_mode != 0`，角度不为 `0` | `debug_data.angle_x` / `debug_data.angle_y` | 小数 2 位，单位 `°` |
-| 罐高 | 罐底完成或罐高标定完成，且 `current_real_height != 0` | `height_measurement.current_real_height` | `0.1 mm` |
+| 频率 | 液位过程/液位跟随状态，或读取参数完成，且当前频率有效 | 优先 `oil_measurement.current_frequency`，否则 `debug_data.frequency` | `Hz` |
+| 电容 | 水位过程/水位跟随状态，或读取参数完成，且 `water_measurement.current_capacitance > 0` | `water_measurement.current_capacitance` | 显示为 `current_capacitance * 10`，小数 1 位 |
+| X/Y角 | 罐高上下文或读取参数完成，且 `bottom_detect_mode != 0`，角度不为 `0` | `debug_data.angle_x` / `debug_data.angle_y` | 小数 2 位，单位 `°` |
+| 罐高 | 罐底完成、罐高标定完成或读取参数完成，且 `current_real_height != 0` | `height_measurement.current_real_height` | `0.1 mm` |
+| 错误码 | `STATE_ERROR` | `device_status.error_code` | 状态行追加错误类型和位置，格式为 `type-pos` |
+| 故障详情 | `STATE_ERROR` 且 `error_code != NO_ERROR` | `Display_GetErrorReasonByCode(error_code)` | 结果区显示 `故障:` 原因，过长时拆成两行 |
 
 ## 2. 状态显示确认表
 
@@ -48,7 +50,7 @@ CPU3 状态页第一行固定显示设备状态文字，并在右侧显示电机
 | `STATE_METER_DENSITY` | 分布测量过程 | 状态、位置、称重 | `debug_data.sensor_position`、`debug_data.current_weight` | 密度每米测量中 |
 | `STATE_INTERVAL_DENSITY` | 分布测量过程 | 状态、位置、称重 | `debug_data.sensor_position`、`debug_data.current_weight` | 区间密度测量中 |
 | `STATE_WARTSILA_DENSITY_START` | 分布测量过程 | 状态、位置、称重 | `debug_data.sensor_position`、`debug_data.current_weight` | LTD/Wartsila 密度分布开始 |
-| `STATE_WARTSILA_DENSITY_MEASURING` | 分布测量过程 | 状态、位置、称重 | `debug_data.sensor_position`、`debug_data.current_weight` | LTD/Wartsila 密度分布测量中 |
+| `STATE_WARTSILA_DENSITY_MEASURING` | 分布测量过程 | 状态、位置、称重、平均密度、平均温度 | `debug_data.sensor_position`、`debug_data.current_weight`、`density_distribution.average_density`、`density_distribution.average_temperature` | 按矩阵显示测量中的密度/温度，不显示分布液位 |
 | `STATE_GB_SPREADPOINTOVER` | 分布测量完成 | 状态、液位、平均密度、平均温度 | `density_distribution.Density_oil_level`、`average_density`、`average_temperature` | 当前实现不显示测点数 |
 | `STATE_SPREADPOINTOVER` | 分布测量完成 | 状态、液位、平均密度、平均温度 | `density_distribution.Density_oil_level`、`average_density`、`average_temperature` | 当前实现不显示测点数 |
 | `STATE_COM_METER_DENSITY_OVER` | 分布测量完成 | 状态、液位、平均密度、平均温度 | `density_distribution.Density_oil_level`、`average_density`、`average_temperature` | 当前实现如分布液位有效也会显示液位 |
@@ -56,6 +58,7 @@ CPU3 状态页第一行固定显示设备状态文字，并在右侧显示电机
 | `STATE_WARTSILA_DENSITY_OVER` | 分布测量完成 | 状态、液位、平均密度、平均温度 | `density_distribution.Density_oil_level`、`average_density`、`average_temperature` | 当前实现不显示测点数 |
 | `STATE_SYNTHETICING` | 综合过程/运动调试 | 状态、位置、称重 | `debug_data.sensor_position`、`debug_data.current_weight` | 保守显示过程量，不显示旧业务结果 |
 | `STATE_SYNTHETICING_OVER` | 综合完成 | 状态、液位、水位、平均密度、平均温度 | `oil_measurement.oil_level`、`water_measurement.water_level`、`density_distribution.average_density`、`average_temperature` | OLED 分页显示；水位为 `0` 时隐藏 |
+| `STATE_READPARAMETEROVER` | 读取参数完成 | 状态、位置、称重、液位、水位、平均密度、平均温度、频率、电容、X角、Y角、罐高 | `debug_data`、`oil_measurement`、`water_measurement`、`density_distribution`、`height_measurement.current_real_height` | 各项按有效值分页显示，频率和电容可同时显示 |
 | `STATE_FINDBOTTOM` | 罐高过程 | 状态、位置、称重、X角、Y角 | `debug_data.sensor_position`、`debug_data.current_weight`、`debug_data.angle_x/y` | 角度需 `bottom_detect_mode != 0` |
 | `STATE_CALIBRATE_TANKHEIGHTING` | 罐高过程 | 状态、位置、称重、X角、Y角 | `debug_data.sensor_position`、`debug_data.current_weight`、`debug_data.angle_x/y` | 角度需 `bottom_detect_mode != 0` |
 | `STATE_FINDBOTTOM_OVER` | 罐高完成 | 状态、位置、称重、X角、Y角、罐高 | `debug_data`、`height_measurement.current_real_height` | 罐高不为 `0` 时显示 |
@@ -80,7 +83,7 @@ CPU3 状态页第一行固定显示设备状态文字，并在右侧显示电机
 | `STATE_GET_EMPTYWEIGHT` | 称重 | 状态、位置、称重 | `debug_data.sensor_position`、`debug_data.current_weight` | 空载称重中 |
 | `STATE_GET_FULLWEIGHT_OVER` | 称重 | 状态、位置、称重 | `debug_data.sensor_position`、`debug_data.current_weight` | 满载称重完成 |
 | `STATE_GET_EMPTYWEIGHT_OVER` | 称重 | 状态、位置、称重 | `debug_data.sensor_position`、`debug_data.current_weight` | 空载称重完成 |
-| `STATE_ERROR` | 故障 | 状态、错误码、位置、称重；故障详情页显示故障原因 | `device_status.error_code`、`debug_data.sensor_position`、`debug_data.current_weight` | 状态页不自动混入旧业务测量值 |
+| `STATE_ERROR` | 故障 | 状态、错误码、位置、称重、故障详情 | `device_status.error_code`、`Display_GetErrorReasonByCode()`、`debug_data.sensor_position`、`debug_data.current_weight` | 状态页不自动混入旧业务测量值 |
 | `STATE_WIRELESS_PAIRING` | 特殊页 | 状态 | 无线滑环匹配状态 | `oled_equipment()` 显示状态后直接返回 |
 | `STATE_WIRELESS_PAIRING_OVER` | 特殊页 | 状态、MAC 或 `MAC N/A` | `wireless_pairing_status` | 成功且 MAC 有效时分两行显示 MAC |
 
@@ -102,7 +105,6 @@ CPU3 状态页第一行固定显示设备状态文字，并在右侧显示电机
 | `STATE_RESTORYING` | 恢复配置文件中 |
 | `STATE_ONTANKOPRATIONING` | 罐上仪表操作中 |
 | `STATE_FINDZEROOVER` | 标定零点完成 |
-| `STATE_READPARAMETEROVER` | 读取参数完成 |
 | `STATE_SETZEROCIRCLOVER` | 设置零点编码值完成 |
 | `STATE_SETZEROANGLOVER` | 设置零点编码值完成 |
 | `STATE_EFACTORYSETTING_RESTOROVER` | 恢复出厂设置完成 |

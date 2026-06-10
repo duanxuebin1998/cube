@@ -39,6 +39,7 @@ enum{//用于记录每个参数显示在第几页第几行
     Para_current,
     Para_weight,
     Para_sensor_value, // sensor value
+    Para_capacitance,
     Para_angle_x,   // 新增：陀螺仪 X 角度
     Para_angle_y,   // 新增：陀螺仪 Y 角度
     Para_position,
@@ -64,6 +65,7 @@ typedef enum {
     DISPLAY_RESULT_CONTEXT_BOTTOM_HEIGHT,
     DISPLAY_RESULT_CONTEXT_MOTION_DEBUG,
     DISPLAY_RESULT_CONTEXT_WEIGHT,
+    DISPLAY_RESULT_CONTEXT_READ_PARAMETER,
     DISPLAY_RESULT_CONTEXT_ERROR
 } DisplayResultContext;
 
@@ -147,6 +149,9 @@ static DisplayResultContext Display_GetResultContext(DeviceState state)
     case STATE_SYNTHETICING_OVER:
         return DISPLAY_RESULT_CONTEXT_DENSITY_DISTRIBUTION;
 
+    case STATE_READPARAMETEROVER:
+        return DISPLAY_RESULT_CONTEXT_READ_PARAMETER;
+
     case STATE_ERROR:
         return DISPLAY_RESULT_CONTEXT_ERROR;
 
@@ -174,6 +179,18 @@ static bool Display_IsDensityDistributionCompleteState(DeviceState state)
     default:
         return false;
     }
+}
+
+static bool Display_IsDensityDistributionValueState(DeviceState state)
+{
+    return Display_IsDensityDistributionCompleteState(state) ||
+           (state == STATE_WARTSILA_DENSITY_MEASURING) ||
+           (state == STATE_READPARAMETEROVER);
+}
+
+static bool Display_IsDensityDistributionOilLevelState(DeviceState state)
+{
+    return Display_IsDensityDistributionCompleteState(state);
 }
 
 static bool Display_IsOilLevelResultState(DeviceState state)
@@ -209,7 +226,8 @@ static bool Display_GetDensityValue(DisplayResultContext ctx, uint32_t *density)
         value = g_measurement.single_point_monitoring.density;
         break;
     case DISPLAY_RESULT_CONTEXT_DENSITY_DISTRIBUTION:
-        if (Display_IsDensityDistributionCompleteState(state)) {
+    case DISPLAY_RESULT_CONTEXT_READ_PARAMETER:
+        if (Display_IsDensityDistributionValueState(state)) {
             value = g_measurement.density_distribution.average_density;
         }
         break;
@@ -243,7 +261,8 @@ static bool Display_GetTemperatureValue(DisplayResultContext ctx, uint32_t *temp
         value = g_measurement.single_point_monitoring.temperature;
         break;
     case DISPLAY_RESULT_CONTEXT_DENSITY_DISTRIBUTION:
-        if (Display_IsDensityDistributionCompleteState(state)) {
+    case DISPLAY_RESULT_CONTEXT_READ_PARAMETER:
+        if (Display_IsDensityDistributionValueState(state)) {
             value = g_measurement.density_distribution.average_temperature;
         }
         break;
@@ -276,11 +295,14 @@ static bool Display_GetOilLevelValue(DisplayResultContext ctx, uint32_t *oil_lev
         }
         break;
     case DISPLAY_RESULT_CONTEXT_DENSITY_DISTRIBUTION:
-        if (Display_IsDensityDistributionCompleteState(state)) {
+        if (Display_IsDensityDistributionOilLevelState(state)) {
             value = (state == STATE_SYNTHETICING_OVER)
                 ? g_measurement.oil_measurement.oil_level
                 : g_measurement.density_distribution.Density_oil_level;
         }
+        break;
+    case DISPLAY_RESULT_CONTEXT_READ_PARAMETER:
+        value = g_measurement.oil_measurement.oil_level;
         break;
     default:
         break;
@@ -302,11 +324,13 @@ static bool Display_GetWaterLevelValue(DisplayResultContext ctx, uint32_t *water
         return false;
     }
 
-    if (!Display_IsWaterLevelResultState(state)) {
+    if ((!Display_IsWaterLevelResultState(state)) &&
+        (state != STATE_READPARAMETEROVER)) {
         return false;
     }
 
     if ((ctx != DISPLAY_RESULT_CONTEXT_WATER_LEVEL) &&
+        (ctx != DISPLAY_RESULT_CONTEXT_READ_PARAMETER) &&
         (state != STATE_SYNTHETICING_OVER)) {
         return false;
     }
@@ -360,25 +384,36 @@ static bool Display_ShouldShowWaterCapacitance(DeviceState state)
     }
 }
 
-static bool Display_ShouldShowSensorValue(DisplayResultContext ctx)
+static bool Display_ShouldShowOilFrequencyValue(DisplayResultContext ctx)
 {
     DeviceState state = g_measurement.device_status.device_state;
 
-    if ((ctx == DISPLAY_RESULT_CONTEXT_OIL_LEVEL) &&
-        Display_ShouldShowOilFrequency(state) &&
-        (GetOilSensorFrequencyForDisplay() > 0))
-    {
+    if (GetOilSensorFrequencyForDisplay() <= 0) {
+        return false;
+    }
+
+    if (ctx == DISPLAY_RESULT_CONTEXT_READ_PARAMETER) {
         return true;
     }
 
-    if ((ctx == DISPLAY_RESULT_CONTEXT_WATER_LEVEL) &&
-        Display_ShouldShowWaterCapacitance(state) &&
-        (g_measurement.water_measurement.current_capacitance > 0.0f))
-    {
+    return (ctx == DISPLAY_RESULT_CONTEXT_OIL_LEVEL) &&
+           Display_ShouldShowOilFrequency(state);
+}
+
+static bool Display_ShouldShowWaterCapacitanceValue(DisplayResultContext ctx)
+{
+    DeviceState state = g_measurement.device_status.device_state;
+
+    if (g_measurement.water_measurement.current_capacitance <= 0.0f) {
+        return false;
+    }
+
+    if (ctx == DISPLAY_RESULT_CONTEXT_READ_PARAMETER) {
         return true;
     }
 
-    return false;
+    return (ctx == DISPLAY_RESULT_CONTEXT_WATER_LEVEL) &&
+           Display_ShouldShowWaterCapacitance(state);
 }
 
 static bool Display_GetPositionValue(DisplayResultContext ctx, int *position)
@@ -398,6 +433,12 @@ static bool Display_ShouldShowWeight(DisplayResultContext ctx)
     (void)ctx;
 
     return true;
+}
+
+static bool Display_ShouldShowErrorReason(DisplayResultContext ctx)
+{
+    return (ctx == DISPLAY_RESULT_CONTEXT_ERROR) &&
+           (g_measurement.device_status.error_code != NO_ERROR);
 }
 
 /* 判断CPU2/CPU3共享协议是否一致。
@@ -1613,6 +1654,21 @@ static void oled_equipment(void)
         return;
     }
 
+    // 故障详情
+    if (ValidParaDisArr[Para_ErrorReason][PARA_VALID] == true &&
+        now_page == ValidParaDisArr[Para_ErrorReason][PARA_PAGE])
+    {
+        row = ValidParaDisArr[Para_ErrorReason][PARA_X];
+        Display_ErrorReasonLine(row);
+    }
+
+    if (ValidParaDisArr[Para_ErrorReasonMore][PARA_VALID] == true &&
+        now_page == ValidParaDisArr[Para_ErrorReasonMore][PARA_PAGE])
+    {
+        row = ValidParaDisArr[Para_ErrorReasonMore][PARA_X];
+        Display_ErrorReasonMoreLine(row);
+    }
+
     //液位
     if(flagofoillevelvalid == true)
     {
@@ -1678,22 +1734,23 @@ static void oled_equipment(void)
 		line = DisplayLangaugeLineWords((u8*) "称重:", OLED_LINE8_1, row, 0, (u8*) "Weight:");
 		OledValueDisplay(g_measurement.debug_data.current_weight, line, row, 0, 0, (u8*) " ");
 	}
-    // sensor value
+    // 频率
     if (ValidParaDisArr[Para_sensor_value][PARA_VALID] == true &&
         now_page == ValidParaDisArr[Para_sensor_value][PARA_PAGE])
     {
         row = ValidParaDisArr[Para_sensor_value][PARA_X];
-        if (Display_ShouldShowOilFrequency(g_measurement.device_status.device_state))
-        {
-            line = DisplayLangaugeLineWords((u8*)"频率:", OLED_LINE8_1, row, 0, (u8*)"Freq:");
-            OledValueDisplay(GetOilSensorFrequencyForDisplay(), line, row, 0, 0, (u8*)"Hz");
-        }
-        else
-        {
-            line = DisplayLangaugeLineWords((u8*)"电容:", OLED_LINE8_1, row, 0, (u8*)"Cap:");
-            OledValueDisplay((int)(g_measurement.water_measurement.current_capacitance * 10.0f),
-                             line, row, 0, 1, NULL);
-        }
+        line = DisplayLangaugeLineWords((u8*)"频率:", OLED_LINE8_1, row, 0, (u8*)"Freq:");
+        OledValueDisplay(GetOilSensorFrequencyForDisplay(), line, row, 0, 0, (u8*)"Hz");
+    }
+
+    // 电容
+    if (ValidParaDisArr[Para_capacitance][PARA_VALID] == true &&
+        now_page == ValidParaDisArr[Para_capacitance][PARA_PAGE])
+    {
+        row = ValidParaDisArr[Para_capacitance][PARA_X];
+        line = DisplayLangaugeLineWords((u8*)"电容:", OLED_LINE8_1, row, 0, (u8*)"Cap:");
+        OledValueDisplay((int)(g_measurement.water_measurement.current_capacitance * 10.0f),
+                         line, row, 0, 1, NULL);
     }
     // 陀螺仪角度 X
     if (ValidParaDisArr[Para_angle_x][PARA_VALID] == true &&
@@ -1744,8 +1801,28 @@ static void CalculateValidPara(void)
     
     /******计算总共有多少个有效参数需要显示******/
     ValidParaCnt = 0;
-    ValidParaDisArr[Para_ErrorReason][PARA_VALID] = false;
-    ValidParaDisArr[Para_ErrorReasonMore][PARA_VALID] = false;
+    //故障详情
+    if (Display_ShouldShowErrorReason(ctx))
+    {
+        ValidParaCnt++;
+        ValidParaDisArr[Para_ErrorReason][PARA_NUM] = ValidParaCnt;
+        ValidParaDisArr[Para_ErrorReason][PARA_VALID] = true;
+        if (Display_IsErrorReasonNeedTwoRows())
+        {
+            ValidParaCnt++;
+            ValidParaDisArr[Para_ErrorReasonMore][PARA_NUM] = ValidParaCnt;
+            ValidParaDisArr[Para_ErrorReasonMore][PARA_VALID] = true;
+        }
+        else
+        {
+            ValidParaDisArr[Para_ErrorReasonMore][PARA_VALID] = false;
+        }
+    }
+    else
+    {
+        ValidParaDisArr[Para_ErrorReason][PARA_VALID] = false;
+        ValidParaDisArr[Para_ErrorReasonMore][PARA_VALID] = false;
+    }
     //液位
     flagofoillevelvalid = Display_ShouldShowOilLevel(ctx);
     //密度
@@ -1795,8 +1872,8 @@ static void CalculateValidPara(void)
     }
     else
         ValidParaDisArr[Para_weight][PARA_VALID] = false;
-    // sensor value
-    if (Display_ShouldShowSensorValue(ctx))
+    // 频率
+    if (Display_ShouldShowOilFrequencyValue(ctx))
     {
         ValidParaCnt++;
         ValidParaDisArr[Para_sensor_value][PARA_NUM] = ValidParaCnt;
@@ -1804,8 +1881,18 @@ static void CalculateValidPara(void)
     }
     else
         ValidParaDisArr[Para_sensor_value][PARA_VALID] = false;
+    // 电容
+    if (Display_ShouldShowWaterCapacitanceValue(ctx))
+    {
+        ValidParaCnt++;
+        ValidParaDisArr[Para_capacitance][PARA_NUM] = ValidParaCnt;
+        ValidParaDisArr[Para_capacitance][PARA_VALID] = true;
+    }
+    else
+        ValidParaDisArr[Para_capacitance][PARA_VALID] = false;
     // 陀螺仪角度 X
-    if ((ctx == DISPLAY_RESULT_CONTEXT_BOTTOM_HEIGHT) &&
+    if (((ctx == DISPLAY_RESULT_CONTEXT_BOTTOM_HEIGHT) ||
+         (ctx == DISPLAY_RESULT_CONTEXT_READ_PARAMETER)) &&
         IsBottomAngleDisplayEnabled() &&
         (g_measurement.debug_data.angle_x != 0))
     {
@@ -1818,7 +1905,8 @@ static void CalculateValidPara(void)
     }
 
     // 陀螺仪角度 Y
-    if ((ctx == DISPLAY_RESULT_CONTEXT_BOTTOM_HEIGHT) &&
+    if (((ctx == DISPLAY_RESULT_CONTEXT_BOTTOM_HEIGHT) ||
+         (ctx == DISPLAY_RESULT_CONTEXT_READ_PARAMETER)) &&
         IsBottomAngleDisplayEnabled() &&
         (g_measurement.debug_data.angle_y != 0))
     {
@@ -1832,7 +1920,8 @@ static void CalculateValidPara(void)
     // 罐高
     if ((g_measurement.height_measurement.current_real_height != 0) &&
         ((g_measurement.device_status.device_state == STATE_FINDBOTTOM_OVER) ||
-         (g_measurement.device_status.device_state == STATE_CALIBRATE_TANKHEIGHT_OVER)))
+         (g_measurement.device_status.device_state == STATE_CALIBRATE_TANKHEIGHT_OVER) ||
+         (g_measurement.device_status.device_state == STATE_READPARAMETEROVER)))
     {
         ValidParaCnt++;
         ValidParaDisArr[Para_tankheight][PARA_NUM] = ValidParaCnt;
