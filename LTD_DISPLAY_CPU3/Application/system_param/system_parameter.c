@@ -7,6 +7,7 @@
 #include "system_parameter.h"
 #include "display_tankopera.h"
 #include "cpu2_communicate.h"
+#include "cpu3_comm_display_params.h"
 #include <stdint.h>
 #include <string.h>
 #include <stdio.h>
@@ -327,6 +328,7 @@ struct ParameterMetadata param_meta[] = {
 {(uint8_t*)"小数点位数",	0,	COM_NUM_SCREEN_DECIMAL,	HOLDREGISTER_CPU3_DECIMAL,	2,	true,	0,	4,	(uint8_t*)"位",	0,	0,	true,	TYPE_INT,	1,	NULL,	(uint8_t*)"Decimal"},
 {(uint8_t*)"屏幕密码",	0,	COM_NUM_SCREEN_PASSWARD,	HOLDREGISTER_CPU3_PASSWORD,	2,	true,	0,	9999,	NULL,	0,	0,	true,	TYPE_INT,	4,	NULL,	(uint8_t*)"ScrPwd"},
 {(uint8_t*)"息屏开关",	0,	COM_NUM_SCREEN_OFF,	HOLDREGISTER_CPU3_OFF_TIME,	2,	true,	0,	1,	NULL,	0,	0,	true,	TYPE_INT,	1,	ret_arr_word,	(uint8_t*)"ScreenOff"},
+{(uint8_t*)"屏幕亮度",	0,	COM_NUM_SCREEN_BRIGHTNESS,	HOLDREGISTER_CPU3_BRIGHTNESS,	2,	true,	0,	4,	NULL,	0,	0,	true,	TYPE_INT,	1,	ret_arr_word,	(uint8_t*)"Brightness"},
 
 {(uint8_t*)"COM1波特率",	0,	COM_NUM_CPU3_COM1_BAUDRATE,	HOLDREGISTER_CPU3_COM1_BAUD,	2,	true,	0,	7,	NULL,	0,	0,	true,	TYPE_INT,	1,	ret_arr_word,	(uint8_t*)"C1Baud"},
 {(uint8_t*)"COM1数据位",	0,	COM_NUM_CPU3_COM1_DATABITS,	HOLDREGISTER_CPU3_COM1_DATABITS,	2,	true,	0,	1,	NULL,	0,	0,	true,	TYPE_INT,	1,	ret_arr_word,	(uint8_t*)"C1Data"},
@@ -370,6 +372,8 @@ int getHoldValueNum(int operanum)
 
 void InputValueInit(void)
 {
+	Cpu3Local_ApplyDisplayRuntimeParams();
+
 	g_measurement.oil_measurement.oil_level = UNVALID_LEVEL;
 	g_measurement.water_measurement.water_level = LEVEL_DOWNLIMITWATER;
 	g_measurement.device_status.device_state = STATE_INIT;

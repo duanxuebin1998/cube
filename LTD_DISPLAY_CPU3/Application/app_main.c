@@ -361,6 +361,7 @@ void App_MainLoop(void)
     uint8_t did_work = 0;
 
     cpu3_apply_uart_reinit_if_pending();// 如果有待重配的串口，先重配
+    Display_Task();
     /* ========= COM1 ========= */
     if (com1_rx_ready == 1) {
         com1_rx_ready = 0;

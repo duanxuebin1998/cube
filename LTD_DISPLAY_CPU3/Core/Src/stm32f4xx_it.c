@@ -573,14 +573,7 @@ void TIM1_UP_TIM10_IRQHandler(void)
 			button_long_press_key = LONG_PRESS_KEY_NONE;
 			HAL_TIM_Base_Stop_IT(&htim1);
 
-			if (long_press_key == LONG_PRESS_KEY_SURE) {
-				FlagofTankOpera = true;
-				useKey();
-				keymenu[KEYNUM_IF_ENTER_MAINMENU].execute_opera();
-			} else {
-				/* 与长按确认进菜单一致：先进入确认页，确认键再执行对应动作。 */
-				Display_EnterCancelMeasurementConfirm();
-			}
+			Display_RequestLongPressAction(long_press_key);
 		} else {
 			HAL_TIM_Base_Start_IT(&htim1);
 		}
@@ -607,7 +600,7 @@ void TIM3_IRQHandler(void)
   /* USER CODE END TIM3_IRQn 0 */
   HAL_TIM_IRQHandler(&htim3);
   /* USER CODE BEGIN TIM3_IRQn 1 */
-	RefreshScreen();  //刷新屏幕
+	Display_RequestRefresh();
 //	HAL_IWDG_Refresh(&hiwdg);
   /* USER CODE END TIM3_IRQn 1 */
 }

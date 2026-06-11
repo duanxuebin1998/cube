@@ -39,6 +39,7 @@ typedef struct
     uint8_t  screen_decimal;
     uint16_t screen_password;
     uint8_t  screen_off_time;
+    uint8_t  screen_brightness;
 
     /* ---------- 串口配置（每口一个结构体） ---------- */
     ComPortConfig com1;   // COM1 = USART6
@@ -52,6 +53,7 @@ extern Cpu3CommAndDisplayParams g_cpu3_comm_display_params;
 bool Cpu3Local_IsParam(OperatingNumber opera);//判断当前参数是否为CPU3参数
 int32_t Cpu3Local_ReadValue(OperatingNumber opera);
 void    Cpu3Local_WriteValue(OperatingNumber opera, int32_t v);
+void    Cpu3Local_ApplyDisplayRuntimeParams(void);
 
 /* 可选：用于判断写入后是否需要重配串口 */
 bool Cpu3Local_IsUartParam(OperatingNumber opera);

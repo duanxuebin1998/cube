@@ -1090,3 +1090,35 @@ CPU2 参数加载会校验 FRAM 中的 `magic`、`struct_size`、`param_version`
 - GBK 编码检查：`measure.c`、`test.c`、`test.h` 均未出现替换字符或 `??`。
 - 结构检查：`measure.c` 调用 `Test_ProcessSerialCommand()`，`test.c` 提供测试命令入口，`test.c` 不包含 `ProcessMeasureCmd()`。
 - `Get-FileHash -Algorithm SHA256 docs\04_界面与菜单\00_屏幕资料\HGS128645-Y-EH-LV_SSD1325_OLED_当前液位计屏幕_中文版.pdf`：与索引记录一致。
+
+## 2026-06-11 - 新增 CPU3 屏幕亮度配置并优化 OLED 刷新恢复（CPU3 V1.12.0.0）
+
+版本：
+- CPU2: 保持 V1.13.0.1
+- CPU3: V1.11.2.0 -> V1.12.0.0
+
+协议版本/兼容性：
+- `DEVICE_PROTOCOL_VERSION` 保持 7，不改变 CPU2/CPU3 共享命令、状态、输入寄存器和 CPU2 设备参数语义。
+- CPU2 `DEVICE_PARAM_VERSION` 保持 3，CPU2 `DeviceParameters` 结构和升级清参规则不变。
+- CPU3 本地显示/通信参数版本 `CPU3_PARAM_VERSION` 从 `0x0003` 升至 `0x0004`，新增屏幕亮度字段。
+- 从 CPU3 本地参数 V3 升级时保留原有显示/通信配置，把屏幕亮度补为默认“中低”挡并写回 V4；本地参数魔术字或版本异常时仍按默认值重建。
+- 新增 `HOLDREGISTER_CPU3_BRIGHTNESS` 使用 CPU3 本地保持寄存器预留地址 `CPU3_BASE + 0x1C`，只用于 CPU3 屏幕亮度配置，不要求提升共享协议版本。
+
+本次修改：
+- 在 `显示设置 -> 显示基础` 菜单新增“屏幕亮度”，支持“低/中低/中/中高/高”五挡，默认保持原等效亮度“中低”。
+- OLED 初始化改为统一命令表和亮度接口，初始化、清屏恢复、屏幕重开和异常恢复都使用当前配置的亮度。
+- OLED 驱动新增影子缓冲、刷新序号、SPI 错误统计和健康诊断字段，便于判断花屏或总线异常后的恢复状态。
+- 中断上下文只置刷新请求，实际 OLED 绘制在主循环中完成，降低中断内 SPI 操作和页面状态竞争风险。
+- 状态页从菜单等前景页面返回时强制全屏重绘，避免非全屏局部刷新导致乱码残留。
+- 状态页数值变化时仅清理并重画变化区域，变化值和单位反显高亮 0.5 秒，到期后自动请求一次局部刷新恢复普通显示。
+- 屏幕恢复入口优先重画当前页面；状态页、菜单页和页面刷新标志统一走恢复后的主循环刷新路径。
+- 同步更新 CPU3 屏幕驱动与刷新问题分析文档、界面索引、版本改动与测试方案，并新增 OLED 刷新边界和亮度配置检查脚本。
+
+验证：
+- `py tools\check_cpu3_display_isr_boundaries.py`
+- `py tools\check_cpu3_oled_brightness_config.py`
+- `py LTD_DISPLAY_CPU3\font_check.py`
+- `cmake -S LTD_DISPLAY_CPU3 -B build/LTD_DISPLAY_CPU3 -G Ninja "-DCMAKE_TOOLCHAIN_FILE=D:/CUBE/cmake/toolchain-arm-none-eabi.cmake" -DCMAKE_BUILD_TYPE=Debug`
+- `cmake --build build\LTD_DISPLAY_CPU3`
+- `git diff --cached --check`
+- `py tools\check_version_bumped.py`

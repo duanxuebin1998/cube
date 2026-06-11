@@ -14,7 +14,8 @@ struct KeyMenu {
 };
 extern struct KeyMenu keymenu[];
 void Display_RequestCancelMeasurement(void);
-void Display_EnterCancelMeasurementConfirm(void);
+bool Display_CanEnterCancelMeasurementConfirm(void);
+bool Display_EnterCancelMeasurementConfirm(void);
 
 /* 菜单索引号 */
 typedef enum {
@@ -476,6 +477,8 @@ typedef enum
     COM_NUM_CPU3_COM3_STOPBITS,
     COM_NUM_CPU3_COM3_PROTOCOL,
 
+    COM_NUM_SCREEN_BRIGHTNESS,        // 屏幕亮度挡位
+
     COM_NUM_PARA_LOCAL_STOP,          // CPU3 本机参数 - 结束
 
     COM_NUM_PARACONFIG_END,           // 参数配置类 - 结束
@@ -514,7 +517,9 @@ typedef enum {
 
 extern struct ParaContent now_Para_CT;
 
-void KeyProcess(uint8_t keypress);
+bool KeyProcess(uint8_t keypress);
+bool DisplayTankOpera_CanProcessKey(uint8_t keypress);
+bool DisplayTankOpera_RedrawCurrentPage(void);
 void useKey(void);
 void exitTankOpera(void);
 uint8_t* ret_arr_word(void);

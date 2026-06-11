@@ -13,6 +13,8 @@
 #include "my_crc.h"
 #include "display_tankopera.h"
 #include "app_version.h"
+#include "display.h"
+#include "hgs.h"
 /* 这些在 usart.c 里定义 */
 extern UART_HandleTypeDef huart2;
 extern UART_HandleTypeDef huart3;
@@ -22,8 +24,12 @@ extern uint8_t UART2_RX_BUF[UART2_RX_BUF_SIZE];
 extern uint8_t UART3_RX_BUF[UART3_RX_BUF_SIZE];
 extern uint8_t UART6_RX_BUF[UART6_RX_BUF_SIZE];
 
-/* 全局实例 */
-Cpu3CommAndDisplayParams g_cpu3_comm_display_params;
+/* 全局实例。DisplayInit 早于 FRAM 加载，先给显示参数一个安全默认值。 */
+Cpu3CommAndDisplayParams g_cpu3_comm_display_params = {
+    .local_led_version = CPU3_APP_VERSION_U32,
+    .screen_decimal = 2U,
+    .screen_brightness = OLED_BRIGHTNESS_LEVEL_LOW,
+};
 
 /* ================= CPU3 本机参数描述表 ================= */
 
@@ -213,6 +219,9 @@ int32_t Cpu3Local_ReadValue(OperatingNumber opera)
     case COM_NUM_SCREEN_OFF:
         return g_cpu3_comm_display_params.screen_off_time;
 
+    case COM_NUM_SCREEN_BRIGHTNESS:
+        return g_cpu3_comm_display_params.screen_brightness;
+
     /* 数据源选择 */
     case COM_NUM_SCREEN_SOURCE_OIL:
         return g_cpu3_comm_display_params.screen_source_oil;
@@ -303,6 +312,11 @@ void Cpu3Local_WriteValue(OperatingNumber opera, int32_t v)
 
     case COM_NUM_SCREEN_OFF:
         g_cpu3_comm_display_params.screen_off_time = (uint8_t)v;
+        break;
+
+    case COM_NUM_SCREEN_BRIGHTNESS:
+        g_cpu3_comm_display_params.screen_brightness = (uint8_t)v;
+        OLED_SetBrightnessLevel(g_cpu3_comm_display_params.screen_brightness);
         break;
 
     case COM_NUM_SCREEN_SOURCE_OIL:
@@ -404,6 +418,20 @@ bool Cpu3Local_IsUartParam(OperatingNumber opera)
     return (opera >= COM_NUM_CPU3_COM1_BAUDRATE && opera <= COM_NUM_CPU3_COM3_PROTOCOL);
 }
 
+/*
+ * 将 CPU3 本地显示参数同步到运行期全局变量，并立即应用 OLED 亮度。
+ * 上电时 FRAM 加载发生在 OLED 默认初始化之后，所以这里必须再应用一次保存的挡位。
+ */
+void Cpu3Local_ApplyDisplayRuntimeParams(void)
+{
+    screen_parameter.decimalplaces = g_cpu3_comm_display_params.screen_decimal;
+    screen_parameter.passward = g_cpu3_comm_display_params.screen_password;
+    screen_parameter.language = g_cpu3_comm_display_params.language;
+    screen_parameter.screenoff = g_cpu3_comm_display_params.screen_off_time;
+    screen_parameter.brightness = g_cpu3_comm_display_params.screen_brightness;
+    OLED_SetBrightnessLevel(g_cpu3_comm_display_params.screen_brightness);
+}
+
 /* ================ 内部小工具：用一个 ComPortConfig 初始化一个 UART ================ */
 static void Cpu3_ReinitOneUart(UART_HandleTypeDef *huart, const ComPortConfig *cfg)
 {
@@ -460,6 +488,7 @@ void Cpu3_Params_InitDefaults(void)
 
     /* 显示类默认 */
     g_cpu3_comm_display_params.screen_decimal  = 2;
+    g_cpu3_comm_display_params.screen_brightness = OLED_BRIGHTNESS_LEVEL_LOW;
 
     /* ========== 串口默认：保持和你现在 usart.c 一致 ========== */
 
@@ -514,7 +543,38 @@ void Cpu3_ReinitAllUarts(void)
  */
 
 #define CPU3_PARAM_MAGIC   0x43505533UL   // 'CPU3'
-#define CPU3_PARAM_VERSION 0x0003U
+#define CPU3_PARAM_VERSION_V3 0x0003U
+#define CPU3_PARAM_VERSION 0x0004U
+
+typedef struct
+{
+    uint32_t local_led_version;
+    uint8_t  language;
+    uint8_t  screen_source_oil;
+    uint8_t  screen_source_water;
+    uint8_t  screen_source_d;
+    uint8_t  screen_source_t;
+    int32_t  screen_input_oil;
+    int32_t  screen_input_water;
+    int32_t  screen_input_d;
+    uint8_t  screen_input_d_switch;
+    int32_t  screen_input_t;
+    uint8_t  screen_decimal;
+    uint16_t screen_password;
+    uint8_t  screen_off_time;
+    ComPortConfig com1;
+    ComPortConfig com2;
+    ComPortConfig com3;
+} Cpu3CommAndDisplayParamsV3;
+
+typedef struct
+{
+    uint32_t                    magic;
+    uint16_t                    version;
+    uint16_t                    reserved;
+    Cpu3CommAndDisplayParamsV3  params;
+    uint32_t                    crc;
+} Cpu3ParamStorageV3;
 
 typedef struct
 {
@@ -560,6 +620,44 @@ static bool Cpu3_Params_StorageValid(const Cpu3ParamStorage *stor)
     return crc_calc == stor->crc;
 }
 
+static bool Cpu3_Params_StorageV3Valid(const Cpu3ParamStorageV3 *stor)
+{
+    uint32_t crc_len;
+    uint32_t crc_calc;
+
+    if ((stor->magic != CPU3_PARAM_MAGIC) || (stor->version != CPU3_PARAM_VERSION_V3)) {
+        return false;
+    }
+
+    crc_len = sizeof(Cpu3ParamStorageV3) - sizeof(stor->crc);
+    crc_calc = CRC32_HAL((uint8_t*)stor, crc_len);
+    return crc_calc == stor->crc;
+}
+
+static void Cpu3_Params_MigrateFromV3(const Cpu3ParamStorageV3 *stor)
+{
+    memset(&g_cpu3_comm_display_params, 0, sizeof(g_cpu3_comm_display_params));
+
+    g_cpu3_comm_display_params.local_led_version = stor->params.local_led_version;
+    g_cpu3_comm_display_params.language = stor->params.language;
+    g_cpu3_comm_display_params.screen_source_oil = stor->params.screen_source_oil;
+    g_cpu3_comm_display_params.screen_source_water = stor->params.screen_source_water;
+    g_cpu3_comm_display_params.screen_source_d = stor->params.screen_source_d;
+    g_cpu3_comm_display_params.screen_source_t = stor->params.screen_source_t;
+    g_cpu3_comm_display_params.screen_input_oil = stor->params.screen_input_oil;
+    g_cpu3_comm_display_params.screen_input_water = stor->params.screen_input_water;
+    g_cpu3_comm_display_params.screen_input_d = stor->params.screen_input_d;
+    g_cpu3_comm_display_params.screen_input_d_switch = stor->params.screen_input_d_switch;
+    g_cpu3_comm_display_params.screen_input_t = stor->params.screen_input_t;
+    g_cpu3_comm_display_params.screen_decimal = stor->params.screen_decimal;
+    g_cpu3_comm_display_params.screen_password = stor->params.screen_password;
+    g_cpu3_comm_display_params.screen_off_time = stor->params.screen_off_time;
+    g_cpu3_comm_display_params.screen_brightness = OLED_BRIGHTNESS_LEVEL_LOW;
+    g_cpu3_comm_display_params.com1 = stor->params.com1;
+    g_cpu3_comm_display_params.com2 = stor->params.com2;
+    g_cpu3_comm_display_params.com3 = stor->params.com3;
+}
+
 void Cpu3_Params_SaveToFRAM(void)
 {
     Cpu3ParamStorage stor;
@@ -596,7 +694,24 @@ void Cpu3_Params_LoadFromFRAM(void)
     uint8_t use_default = 0;
 
     /* 检查 magic & version */
-    if ((stor.magic != CPU3_PARAM_MAGIC) || (stor.version != CPU3_PARAM_VERSION)) {
+    if ((stor.magic == CPU3_PARAM_MAGIC) && (stor.version == CPU3_PARAM_VERSION_V3)) {
+        Cpu3ParamStorageV3 legacy;
+
+        memset(&legacy, 0, sizeof(legacy));
+        ReadMultiData((uint8_t*)&legacy, FRAM_CPU3_PARAM_ADDRESS, sizeof(Cpu3ParamStorageV3));
+        if (Cpu3_Params_StorageV3Valid(&legacy)) {
+            Cpu3_Params_MigrateFromV3(&legacy);
+            (void)Cpu3_ApplyFirmwareVersionRuntime();
+            (void)Cpu3_NormalizeAllPortProfiles();
+            Cpu3Local_ApplyDisplayRuntimeParams();
+            Cpu3_Params_SaveToFRAM();
+            printf("CPU3 FRAM参数已从V3升级到V4，亮度使用默认挡位。\r\n");
+            return;
+        }
+
+        printf("CPU3 FRAM V3参数CRC无效，使用默认值。\r\n");
+        use_default = 1;
+    } else if ((stor.magic != CPU3_PARAM_MAGIC) || (stor.version != CPU3_PARAM_VERSION)) {
         printf("CPU3 FRAM参数魔术字/版本无效，使用默认值。\r\n");
         use_default = 1;
     } else {
@@ -614,6 +729,7 @@ void Cpu3_Params_LoadFromFRAM(void)
     if (use_default) {
         /* 使用默认值并立刻写回 FRAM */
         Cpu3_Params_InitDefaults();
+        Cpu3Local_ApplyDisplayRuntimeParams();
         Cpu3_Params_SaveToFRAM();
     } else {
         /* 正常加载 */
@@ -627,6 +743,7 @@ void Cpu3_Params_LoadFromFRAM(void)
             /* 旧 FRAM 参数加载后也要补齐协议推荐串口参数，并回写一次，避免每次开机重复修正。 */
             need_save = 1U;
         }
+        Cpu3Local_ApplyDisplayRuntimeParams();
         if (need_save != 0U) {
             Cpu3_Params_SaveToFRAM();
         }

@@ -98,6 +98,14 @@ static uint8_t *arr_language[][2] = {
 	{ (uint8_t*)"英文", (uint8_t*)"English" },
 	{ (uint8_t*)"非法配置", (uint8_t*)"Illegal CFG" },
 };
+static uint8_t *arr_oled_brightness[][2] = {
+	{ (uint8_t*)"低", (uint8_t*)"Dark" },
+	{ (uint8_t*)"中低", (uint8_t*)"Low" },
+	{ (uint8_t*)"中", (uint8_t*)"Standard" },
+	{ (uint8_t*)"中高", (uint8_t*)"High" },
+	{ (uint8_t*)"高", (uint8_t*)"Bright" },
+	{ (uint8_t*)"非法配置", (uint8_t*)"Illegal CFG" },
+};
 static uint8_t *arr_baudrate[][2] = {
 	{ (uint8_t*)"1200", (uint8_t*)"1200" },
 	{ (uint8_t*)"2400", (uint8_t*)"2400" },
@@ -679,27 +687,77 @@ struct KeyMenu keymenu[KEYNUM_END] = {
 };
 
 
+bool DisplayTankOpera_CanProcessKey(uint8_t keypress)
+{
+	if ((func_index < 0) || (func_index >= KEYNUM_END)) {
+		return false;
+	}
+
+	if ((keypress & keymenu[func_index].keyauthority) == 0) {
+		return false;
+	}
+
+	if ((keypress == USE_KEY_BACK) && (keymenu[func_index].back_opera != NULL)) {
+		return true;
+	}
+	if ((keypress == USE_KEY_UP) && (keymenu[func_index].up_opera != NULL)) {
+		return true;
+	}
+	if ((keypress == USE_KEY_DOWN) && (keymenu[func_index].down_opera != NULL)) {
+		return true;
+	}
+	if ((keypress == USE_KEY_SURE) && (keymenu[func_index].sure_opera != NULL)) {
+		return true;
+	}
+
+	return false;
+}
+
 /* ==============================
  * 按键操作处理
  * ============================== */
-void KeyProcess(uint8_t keypress)
+bool KeyProcess(uint8_t keypress)
 {
+	if ((func_index < 0) || (func_index >= KEYNUM_END)) {
+		return false;
+	}
+
 	if ((keypress & keymenu[func_index].keyauthority) != 0) {
 		NowKeyPress = keypress;
 		useKey();
 
 		if (keypress == USE_KEY_BACK && keymenu[func_index].back_opera != NULL) {
 			keymenu[func_index].back_opera();
+			return true;
 		} else if (keypress == USE_KEY_UP && keymenu[func_index].up_opera != NULL) {
 			keymenu[func_index].up_opera();
+			return true;
 		} else if (keypress == USE_KEY_DOWN && keymenu[func_index].down_opera != NULL) {
 			keymenu[func_index].down_opera();
+			return true;
 		} else if (keypress == USE_KEY_SURE && keymenu[func_index].sure_opera != NULL) {
 			keymenu[func_index].sure_opera();
+			return true;
 		} else {
 			printf("NULL\r\n");
 		}
 	}
+	return false;
+}
+
+bool DisplayTankOpera_RedrawCurrentPage(void)
+{
+	int saved_key = NowKeyPress;
+
+	if ((func_index < 0) || (func_index >= KEYNUM_END) || (keymenu[func_index].execute_opera == NULL)) {
+		return false;
+	}
+
+	/* 静电恢复后只重绘当前页，临时清空按键，避免重复执行上一次按键动作。 */
+	NowKeyPress = 0;
+	keymenu[func_index].execute_opera();
+	NowKeyPress = saved_key;
+	return true;
 }
 
 /* 使用了按键 - 更新按键检测定时器(你原来有 Timer1Start, 保留结构) */
@@ -1636,7 +1694,7 @@ static bool inputvalue(uint8_t deci, uint8_t row, uint8_t line, uint8_t points, 
 /* 是否下发指令或参数判断页 */
 static void ifsendcmd(void)
 {
-	all_screen(0x00);
+	oled_clear();
 	func_index = KEYNUM_IFSENDCMD;
 
 	if ((now_Opera_Num > COM_NUM_NOPARACMD_START && now_Opera_Num < COM_NUM_NOPARACMD_END) ||
@@ -1788,7 +1846,7 @@ static void param_protect_confirm(void)
 {
 	uint8_t *name;
 
-	all_screen(0x00);
+	oled_clear();
 	func_index = KEYNUM_IF_PARAM_PROTECT_CONFIRM;
 
 	DisplayLangaugeLineWords((uint8_t*)"参数保护", OLED_LINE8_1, OLED_ROW4_1, 0, (uint8_t*)"Protected");
@@ -2045,6 +2103,17 @@ static uint8_t display_state_can_cancel_measurement(DeviceState state)
     return 0;
 }
 
+bool Display_CanEnterCancelMeasurementConfirm(void)
+{
+    DeviceState state = g_measurement.device_status.device_state;
+
+    if ((state == STATE_ERROR) && (g_measurement.device_status.error_code != NO_ERROR)) {
+        return true;
+    }
+
+    return display_state_can_cancel_measurement(state) != 0U;
+}
+
 void Display_RequestCancelMeasurement(void)
 {
     DeviceState state = g_measurement.device_status.device_state;
@@ -2057,7 +2126,7 @@ void Display_RequestCancelMeasurement(void)
     send_cpu2_command(CMD_CANCEL_MEASUREMENT);
 }
 
-void Display_EnterCancelMeasurementConfirm(void)
+bool Display_EnterCancelMeasurementConfirm(void)
 {
     DeviceState state = g_measurement.device_status.device_state;
 
@@ -2065,17 +2134,18 @@ void Display_EnterCancelMeasurementConfirm(void)
         FlagofTankOpera = true;
         useKey();
         keymenu[KEYNUM_ERROR_REASON].execute_opera();
-        return;
+        return true;
     }
 
     if (!display_state_can_cancel_measurement(state)) {
         FlagofTankOpera = false;
-        return;
+        return false;
     }
 
     FlagofTankOpera = true;
     useKey();
     keymenu[KEYNUM_IF_CANCEL_MEASUREMENT].execute_opera();
+    return true;
 }
 
 /* 不带参线圈指令处理过程 */
@@ -2195,7 +2265,7 @@ static void cmd_onepara_process(void)
     /* 1) 找到该操作对应的“参数寄存器元数据” */
     index = getHoldValueNum(now_Opera_Num);
     if (index < 0) {
-        all_screen(0x00);
+        oled_clear();
         DisplayLangaugeLineWords((uint8_t*)"非法参数!", OLED_LINE8_2, OLED_ROW3_2, 0, (uint8_t*)"Invalid Para");
         HAL_Delay(800);
         exitTankOpera();
@@ -2206,7 +2276,7 @@ static void cmd_onepara_process(void)
     {
         int bytes = (int)param_meta[index].rgstcnt * 2;
         if (bytes <= 0 || bytes > 64) {
-            all_screen(0x00);
+            oled_clear();
             DisplayLangaugeLineWords((uint8_t*)"参数长度异常!", OLED_LINE8_2, OLED_ROW3_2, 0, (uint8_t*)"Bad Para Len");
             HAL_Delay(800);
             exitTankOpera();
@@ -2216,7 +2286,7 @@ static void cmd_onepara_process(void)
         uint8_t paraarr[64];
         memset(paraarr, 0, sizeof(paraarr));
 
-        all_screen(0x00);
+        oled_clear();
         DisplayLangaugeLineWords((uint8_t*)"正在下发参数", OLED_LINE8_2, OLED_ROW3_2, 0, (uint8_t*)"Send Para");
 
         for (i = 0; i < bytes; i++) {
@@ -2238,7 +2308,7 @@ static void cmd_onepara_process(void)
     }
 
     /* 3) 下发命令 */
-    all_screen(0x00);
+    oled_clear();
     DisplayLangaugeLineWords((uint8_t*)"正在下发指令", OLED_LINE8_2, OLED_ROW3_3, 0, (uint8_t*)"Send Command");
 
     {
@@ -2255,7 +2325,7 @@ static void cmd_onepara_process(void)
 
         if (!found) {
             /* 参数写了，但没有对应命令：给出明确提示 */
-            all_screen(0x00);
+            oled_clear();
             DisplayLangaugeLineWords((uint8_t*)"指令未定义!", OLED_LINE8_2, OLED_ROW3_2, 0, (uint8_t*)"Cmd Undefined");
             HAL_Delay(800);
             exitTankOpera();
@@ -2328,7 +2398,7 @@ static void cmd_onepara_process(void)
 /* 非法操作处理 */
 static void errorprocess(void)
 {
-	all_screen(0x00);
+	oled_clear();
 	DisplayLangaugeLineWords((uint8_t*)"非法操作!", OLED_LINE8_1, OLED_ROW4_2, 0, (uint8_t*)"Illegal operation");
 	DisplayLangaugeLineWords((uint8_t*)"1s后退出屏幕操作", OLED_LINE8_1, OLED_ROW4_3, 0, (uint8_t*)"Exit after 1 second");
 	HAL_Delay(1000);
@@ -2350,7 +2420,7 @@ static void displaypara(void)
 {
 	int index;
 
-	all_screen(0x00);
+	oled_clear();
 	func_index = KEYNUM_DISPLAY_PARA;
 
 	OledDisplayLineWords(oled_fit_text(dtm_operaname_short(now_Opera_Num, dtm_operaname(now_Opera_Num)), OLED_LINE8_END),
@@ -2444,7 +2514,7 @@ static void parawritecheck(void)
 			selectparaword();
 		}
 	} else {
-		all_screen(0x00);
+		oled_clear();
 		DisplayLangaugeLineWords((uint8_t*)"无修改权限!", OLED_LINE8_2, OLED_ROW3_2, 0, (uint8_t*)"No permission");
 		HAL_Delay(800);
 		displaypara();
@@ -2454,7 +2524,7 @@ static void parawritecheck(void)
 /* 是否进入罐上操作 */
 static void ifentermainmenu(void)
 {
-	all_screen(0x00);
+	oled_clear();
 	func_index = KEYNUM_IF_ENTER_MAINMENU;
 	DisplayLangaugeLineWords((uint8_t*)"是否进入罐上操作?", OLED_LINE8_1, OLED_ROW4_1, 0, (uint8_t*)"Enter operation?");
 	DisplayLangaugeLineWords((uint8_t*)"返回", OLED_LINE8_1, OLED_ROW4_4, 0, (uint8_t*)"Back");
@@ -2464,7 +2534,7 @@ static void ifentermainmenu(void)
 /* 是否退出罐上操作 */
 static void ifexittankopera(void)
 {
-	all_screen(0x00);
+	oled_clear();
 	func_index = KEYNUM_IF_EXIT_MAINMENU;
 	DisplayLangaugeLineWords((uint8_t*)"是否退出罐上操作?", OLED_LINE8_1, OLED_ROW4_1, 0, (uint8_t*)"Exit operation?");
 	DisplayLangaugeLineWords((uint8_t*)"返回", OLED_LINE8_1, OLED_ROW4_4, 0, (uint8_t*)"Back");
@@ -2474,7 +2544,7 @@ static void ifexittankopera(void)
 /* 是否取消当前测量 */
 static void ifcancelmeasurement(void)
 {
-	all_screen(0x00);
+	oled_clear();
 	func_index = KEYNUM_IF_CANCEL_MEASUREMENT;
 	DisplayLangaugeLineWords((uint8_t*)"是否停止测量?", OLED_LINE8_1, OLED_ROW4_1, 0, (uint8_t*)"Cancel measure?");
 	DisplayLangaugeLineWords((uint8_t*)"返回", OLED_LINE8_1, OLED_ROW4_4, 0, (uint8_t*)"Back");
@@ -2550,13 +2620,13 @@ static void parascopecheck(void)
 
 	index = getHoldValueNum(now_Opera_Num);
 	if (index == -1) {
-		all_screen(0x00);
+		oled_clear();
 		DisplayLangaugeLineWords((uint8_t*)"非法参数!", OLED_LINE8_2, OLED_ROW3_2, 0, (uint8_t*)"Invalid Para");
 		HAL_Delay(800);
 		displaypara();
 	} else if (param_meta[index].flag_checkvalue) {
 		if (now_Para_CT.val < param_meta[index].valuemin || now_Para_CT.val > param_meta[index].valuemax) {
-			all_screen(0x00);
+			oled_clear();
 			DisplayLangaugeLineWords((uint8_t*)"数值超范围!", OLED_LINE8_2, OLED_ROW3_2, 0, (uint8_t*)"Value out of Range");
 			HAL_Delay(800);
 			displaypara();
@@ -2586,7 +2656,7 @@ static void cmd_configpara_process(void)
 
 	index = getHoldValueNum(now_Opera_Num);
 
-	all_screen(0x00);
+	oled_clear();
 	DisplayLangaugeLineWords((uint8_t*)"正在修改参数", OLED_LINE8_2, OLED_ROW3_2, 0, (uint8_t*)"Modify Para");
 
 	if (param_meta[index].data_type == TYPE_FLOAT) {
@@ -2916,6 +2986,12 @@ uint8_t *(*dtm_disarr(int *pindex, int *plen))[2]
 		p = arr_language;
 		break;
 	}
+	case COM_NUM_SCREEN_BRIGHTNESS: {
+		index = param_meta[index].val;
+		len = (int)(sizeof(arr_oled_brightness) / sizeof(arr_oled_brightness[0]));
+		p = arr_oled_brightness;
+		break;
+	}
 	case COM_NUM_CPU3_COM1_BAUDRATE:
 	case COM_NUM_CPU3_COM2_BAUDRATE:
 	case COM_NUM_CPU3_COM3_BAUDRATE: {
@@ -3133,7 +3209,7 @@ static void mainmenu(void)
 
 	int menulen = (int)(sizeof(menu) / sizeof(menu[0]));
 
-	all_screen(0x00);
+	oled_clear();
 	func_index = KEYNUM_MAINMENU;
 	menuselect(menu, menulen);
 }
@@ -3174,7 +3250,7 @@ static void measuremenu(void)
 
     int menulen = (int)(sizeof(menu) / sizeof(menu[0]));
 
-    all_screen(0x00);
+    oled_clear();
     func_index = KEYNUM_MEASURE_MAINMENU;
     menuselect(menu, menulen);
 }
@@ -3214,7 +3290,7 @@ static void menu_cmdconfig_main(void)
 
     int menulen = (int)(sizeof(menu) / sizeof(menu[0]));
 
-    all_screen(0x00);
+    oled_clear();
     func_index = KEYNUM_MENU_CMD_MAIN;
     debugmode_back = 1;
     menuselect(menu, menulen);
@@ -3232,7 +3308,7 @@ static void setlanguage(void)
 
 	int menulen = (int)(sizeof(menu) / sizeof(menu[0]));
 
-	all_screen(0x00);
+	oled_clear();
 	func_index = KEYNUM_MENU_LANGUAGE;
 	menuselect(menu, menulen);
 }
@@ -3479,7 +3555,7 @@ static void menu_relay_status(uint32_t channel, keymenuNumber keynum, pFunc_void
         return;
     }
 
-    all_screen(0x00);
+    oled_clear();
     func_index = keynum;
 
     if (PageNum[keynum].menu_cnt <= 0) {
@@ -3697,6 +3773,7 @@ static MenuGroup ParamGroupOf(int operaNum)
     case COM_NUM_SCREEN_DECIMAL:
     case COM_NUM_SCREEN_PASSWARD:
     case COM_NUM_SCREEN_OFF:
+    case COM_NUM_SCREEN_BRIGHTNESS:
         return MENU_GRP_CPU3_SCREEN;
 
     case COM_NUM_CPU3_COM1_BAUDRATE:
@@ -3769,7 +3846,7 @@ static void menu_build_by_group(MenuGroup grp, int key_index, void (*backFunc)(v
     menu[menulen].operaName2 = (uint8_t*)"Back";
     menulen++;
 
-    all_screen(0x00);
+    oled_clear();
     func_index = key_index;
     menuselect(menu, menulen);
 }
@@ -3801,7 +3878,7 @@ static void menu_build_by_filter(int (*filter)(int), int key_index, void (*backF
     menu[menulen].operaName2 = (uint8_t*)"Back";
     menulen++;
 
-    all_screen(0x00);
+    oled_clear();
     func_index = key_index;
     menuselect(menu, menulen);
 }
@@ -3854,6 +3931,7 @@ static int menu_filter_display_base(int operaNum)
     case COM_NUM_SCREEN_DECIMAL:
     case COM_NUM_SCREEN_PASSWARD:
     case COM_NUM_SCREEN_OFF:
+    case COM_NUM_SCREEN_BRIGHTNESS:
         return 1;
     default:
         return 0;
@@ -3898,7 +3976,7 @@ static void menu_measure_config(void)
         {(uint8_t*)"返回",          0, menu_paracfg_main, COMMANE_NORW, (uint8_t*)"Back"},
     };
 
-    all_screen(0x00);
+    oled_clear();
     func_index = KEYNUM_MENU_PARA_MEASURE_CONFIG;
     menuselect(menu, (int)(sizeof(menu) / sizeof(menu[0])));
 }
@@ -3912,7 +3990,7 @@ static void menu_comm_config(void)
         {(uint8_t*)"返回",     0, menu_paracfg_main, COMMANE_NORW, (uint8_t*)"Back"},
     };
 
-    all_screen(0x00);
+    oled_clear();
     func_index = KEYNUM_MENU_COMM_CONFIG;
     menuselect(menu, (int)(sizeof(menu) / sizeof(menu[0])));
 }
@@ -3925,7 +4003,7 @@ static void menu_display_config(void)
         {(uint8_t*)"返回",          0, menu_paracfg_main, COMMANE_NORW, (uint8_t*)"Back"},
     };
 
-    all_screen(0x00);
+    oled_clear();
     func_index = KEYNUM_MENU_DISPLAY_CONFIG;
     menuselect(menu, (int)(sizeof(menu) / sizeof(menu[0])));
 }
@@ -3940,7 +4018,7 @@ static void menu_display_data(void)
         {(uint8_t*)"返回", 0, menu_display_config,       COMMANE_NORW, (uint8_t*)"Back"},
     };
 
-    all_screen(0x00);
+    oled_clear();
     func_index = KEYNUM_MENU_DISPLAY_DATA;
     menuselect(menu, (int)(sizeof(menu) / sizeof(menu[0])));
 }
@@ -3953,7 +4031,7 @@ static void menu_maint_config(void)
         {(uint8_t*)"返回",     0, menu_paracfg_main, COMMANE_NORW, (uint8_t*)"Back"},
     };
 
-    all_screen(0x00);
+    oled_clear();
     func_index = KEYNUM_MENU_MAINT_CONFIG;
     menuselect(menu, (int)(sizeof(menu) / sizeof(menu[0])));
 }
@@ -3981,7 +4059,7 @@ static void menu_output_config(void)
         {(uint8_t*)"返回",       0, menu_paracfg_main,COMMANE_NORW, (uint8_t*)"Back"},
     };
 
-    all_screen(0x00);
+    oled_clear();
     func_index = KEYNUM_MENU_OUTPUT_CONFIG;
     menuselect(menu, (int)(sizeof(menu) / sizeof(menu[0])));
 }
@@ -3996,7 +4074,7 @@ static void menu_do_alarm(void)
         {(uint8_t*)"返回",     0, menu_output_config,COMMANE_NORW, (uint8_t*)"Back"},
     };
 
-    all_screen(0x00);
+    oled_clear();
     func_index = KEYNUM_MENU_PARA_DO;
     menuselect(menu, (int)(sizeof(menu) / sizeof(menu[0])));
 }
@@ -4010,7 +4088,7 @@ static void menu_relay1_main(void)
         {(uint8_t*)"返回",     0, menu_do_alarm,       COMMANE_NORW, (uint8_t*)"Back"},
     };
 
-    all_screen(0x00);
+    oled_clear();
     func_index = KEYNUM_MENU_RELAY1_MAIN;
     menuselect(menu, (int)(sizeof(menu) / sizeof(menu[0])));
 }
@@ -4039,7 +4117,7 @@ static void menu_relay2_main(void)
         {(uint8_t*)"返回",     0, menu_do_alarm,       COMMANE_NORW, (uint8_t*)"Back"},
     };
 
-    all_screen(0x00);
+    oled_clear();
     func_index = KEYNUM_MENU_RELAY2_MAIN;
     menuselect(menu, (int)(sizeof(menu) / sizeof(menu[0])));
 }
@@ -4068,7 +4146,7 @@ static void menu_relay3_main(void)
         {(uint8_t*)"返回",     0, menu_do_alarm,       COMMANE_NORW, (uint8_t*)"Back"},
     };
 
-    all_screen(0x00);
+    oled_clear();
     func_index = KEYNUM_MENU_RELAY3_MAIN;
     menuselect(menu, (int)(sizeof(menu) / sizeof(menu[0])));
 }
@@ -4097,7 +4175,7 @@ static void menu_relay4_main(void)
         {(uint8_t*)"返回",     0, menu_do_alarm,       COMMANE_NORW, (uint8_t*)"Back"},
     };
 
-    all_screen(0x00);
+    oled_clear();
     func_index = KEYNUM_MENU_RELAY4_MAIN;
     menuselect(menu, (int)(sizeof(menu) / sizeof(menu[0])));
 }
@@ -4147,7 +4225,7 @@ static void menu_paracfg_main(void)
         {(uint8_t*)"返回主菜单", COM_NUM_NOOPERA, mainmenu, COMMANE_NORW, (uint8_t*)"Back"},
     };
 
-    all_screen(0x00);
+    oled_clear();
     func_index = KEYNUM_MENU_PARACFG_MAIN;
     menuselect(menu, (int)(sizeof(menu)/sizeof(menu[0])));
 }

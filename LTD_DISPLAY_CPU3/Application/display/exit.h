@@ -21,7 +21,10 @@ extern volatile uint8_t button_long_press_key;
 #define REQUIRED_PRESS_COUNT 30  // 需要连续按下3次才触发
 
 
-
+void Display_RequestKey(uint8_t keypress);
+void Display_RequestLongPressAction(uint8_t long_press_key);
+uint8_t Display_TakePendingKey(void);
+uint8_t Display_TakePendingLongPressAction(void);
 
 
 

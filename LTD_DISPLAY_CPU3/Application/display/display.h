@@ -8,6 +8,13 @@
 #define CONVER_QUALITY_P 3//质量显示几位小数
 #define CONVER_VOLUME_P 3//体积显示几位小数
 
+#define OLED_BRIGHTNESS_LEVEL_DARK      0U
+#define OLED_BRIGHTNESS_LEVEL_LOW       1U
+#define OLED_BRIGHTNESS_LEVEL_STANDARD  2U
+#define OLED_BRIGHTNESS_LEVEL_HIGH      3U
+#define OLED_BRIGHTNESS_LEVEL_MAX       4U
+#define OLED_BRIGHTNESS_LEVEL_COUNT     5U
+
 /*行 - 共4行*/
 #define OLED_ROW4_1     0
 #define OLED_ROW4_2     16
@@ -46,6 +53,7 @@ struct ScreenPARA{
     int input_val_t;
     int language;//语言
     int screenoff;//息屏
+    int brightness;//屏幕亮度挡位
 };
 typedef enum{
     LANGUAGE_CHINESE,
@@ -59,6 +67,8 @@ typedef struct {
 extern struct ScreenPARA screen_parameter;
 void EquipFirstPower(void);
 void DisplayInit(void);
+void Display_Task(void);
+void Display_RequestRefresh(void);
 uint8_t OledDisplayLineWords(uint8_t* data,uint8_t x,uint8_t y,uint8_t shift);
 uint8_t DisplayLangaugeLineWords(uint8_t* name1,uint8_t line,uint8_t row,uint8_t shift,uint8_t* name2);
 void RefreshScreen(void);

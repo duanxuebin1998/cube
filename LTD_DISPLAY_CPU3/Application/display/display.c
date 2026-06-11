@@ -7,12 +7,29 @@
 #include "tim.h"
 #include "system_parameter.h"
 #include <stdio.h>
+#include <string.h>
 
 #define DEBUG_DISPLAY 0
+#define DISPLAY_RECOVER_INTERVAL_MS 60000U
+#define DISPLAY_REFRESH_TIMEOUT_MS 500U
+#define DISPLAY_VALUE_HIGHLIGHT_MS 500U
+#define DISPLAY_STATUS_MAX_SLOTS 6U
+#define DISPLAY_VALUE_AREA_HEIGHT 16U
+#define DISPLAY_SCREEN_OFF_IDLE_MS 30000U
+#define DISPLAY_STATUS_PAGE_HOLD_REFRESHES 3U
 
 //struct ScreenDisplay SDisPosi;
 struct ScreenPARA screen_parameter = {0};//屏幕存储参数
-static bool flag_bright = false;            //亮屏标志位
+static volatile bool flag_bright = false;            //亮屏标志位
+static volatile bool display_refresh_pending = false;
+static bool display_recover_before_draw = false;
+static volatile bool display_screen_off_active = false;
+static bool display_recover_requested = false;
+static uint32_t display_last_recover_tick = 0U;
+static uint32_t display_last_spi_error_count = 0U;
+static uint32_t display_last_refresh_ms = 0U;
+static uint32_t display_refresh_timeout_count = 0U;
+static volatile uint32_t display_last_key_tick = 0U;
 
 
 static int PageAmount = 0;                  //总共显示几页
@@ -68,6 +85,59 @@ typedef enum {
     DISPLAY_RESULT_CONTEXT_READ_PARAMETER,
     DISPLAY_RESULT_CONTEXT_ERROR
 } DisplayResultContext;
+
+typedef enum {
+    DISPLAY_STATUS_SLOT_NONE = 0,
+    DISPLAY_STATUS_SLOT_ERROR_REASON,
+    DISPLAY_STATUS_SLOT_ERROR_REASON_MORE,
+    DISPLAY_STATUS_SLOT_OIL_LEVEL,
+    DISPLAY_STATUS_SLOT_WATER_LEVEL,
+    DISPLAY_STATUS_SLOT_DENSITY,
+    DISPLAY_STATUS_SLOT_TEMPERATURE,
+    DISPLAY_STATUS_SLOT_POSITION,
+    DISPLAY_STATUS_SLOT_WEIGHT,
+    DISPLAY_STATUS_SLOT_FREQUENCY,
+    DISPLAY_STATUS_SLOT_CAPACITANCE,
+    DISPLAY_STATUS_SLOT_ANGLE_X,
+    DISPLAY_STATUS_SLOT_ANGLE_Y,
+    DISPLAY_STATUS_SLOT_TANK_HEIGHT,
+    DISPLAY_STATUS_SLOT_WIRELESS_MAC_1,
+    DISPLAY_STATUS_SLOT_WIRELESS_MAC_2,
+    DISPLAY_STATUS_SLOT_WIRELESS_MAC_NA
+} DisplayStatusSlotId;
+
+typedef struct {
+    DisplayStatusSlotId id;
+    bool is_text;
+    int32_t value;
+    uint8_t points;
+    uint8_t row;
+    uint8_t value_line;
+    const uint8_t *unit;
+    char text[32];
+    bool highlight_visible;
+    uint32_t highlight_until_tick;
+} DisplayStatusSlot;
+
+typedef struct {
+    bool valid;
+    uint16_t state;
+    uint32_t error_code;
+    DisplayResultContext ctx;
+    bool protocol_compatible;
+    uint8_t language;
+    bool total_two_row;
+    int page;
+    int page_amount;
+    uint8_t slot_count;
+    DisplayStatusSlot slots[DISPLAY_STATUS_MAX_SLOTS];
+} DisplayStatusSnapshot;
+
+static DisplayStatusSnapshot display_status_last_snapshot = {0};
+static DisplayStatusSnapshot display_status_active_snapshot = {0};
+static int display_status_page_index = 0;
+static uint8_t display_status_page_hold_count = 0U;
+static bool display_status_full_redraw_required = true;
 
 static bool IsBottomAngleDisplayEnabled(void)
 {
@@ -757,7 +827,7 @@ static uint8_t StockMap[] = "通讯尝试中液位跟随密度温℃版本水测
                             "误础界面程序减比股长介信号后限例权屏幕维护视终继状态最探头浸小第悬停禁用弦工固产反先动当前"
                             "大英更传层滞域使磨结束针总阻六级内息命感顺有阈值角导本整瓦锡兰厚首波特率验位奇偶预留默强差"
 							"义已碰撞寄存次菜忽略志构魔术望全过收为裁剪准除以跳飞频声稳记局切匹"
-							"馈被荷泵欠驱丢溢性弱响应格快越漂移饱和系统因尼组跑锁隔策";
+							"馈被荷泵欠驱丢溢性弱响应格快越漂移饱和系统因尼组跑锁隔策亮";
 static const int wordbyte      = 3; // UTF-8 下汉字 3 字节
 static const int StockmapLength = (sizeof(StockMap) - 1) / wordbyte;
 static uint8_t WordStock[255 * 28] =
@@ -1224,6 +1294,7 @@ static uint8_t WordStock2[255 * 28] =
     0x10,0x20,0x11,0x24,0x1C,0xA8,0x20,0x20,0x41,0xFC,0x3D,0x04,0x11,0x24,0x11,0x24,0x7D,0x24,0x11,0x24,0x11,0x24,0x14,0x50,0x18,0x88,0x13,0x04,/*"锁",25*/
     0x3D,0xFC,0x24,0x00,0x24,0xF8,0x28,0x88,0x28,0xF8,0x24,0x00,0x25,0xFC,0x25,0x54,0x25,0x24,0x39,0xFC,0x21,0x24,0x21,0x24,0x21,0x0C,0x00,0x00,/*"隔",26*/
     0x10,0x40,0x1E,0x7C,0x28,0x90,0x45,0x08,0x01,0x00,0x7F,0xFC,0x01,0x00,0x3F,0xF8,0x21,0x08,0x23,0xB8,0x05,0x40,0x19,0x30,0x61,0x0C,0x01,0x00,/*"策",27*/
+    0x01,0x00,0x7F,0xFC,0x00,0x00,0x1F,0xF0,0x10,0x10,0x1F,0xF0,0x00,0x00,0x7F,0xFC,0x40,0x04,0x4F,0xE4,0x08,0x20,0x08,0x20,0x10,0x24,0x60,0x1C,/*"亮",28*/
 };
 static uint8_t NumberStock[] = {
 
@@ -1370,7 +1441,23 @@ static void oled_equipment(void);
 static void CalculateValidPara(void);
 static void DIS_Equipment(void);
 static bool ScreenOff( void );
-static void SetScreenOff( void );
+static void SetScreenOffState( void );
+static void Display_BuildStatusSnapshot(DisplayStatusSnapshot *snapshot);
+static bool Display_StatusLayoutChanged(const DisplayStatusSnapshot *current,
+                                        const DisplayStatusSnapshot *last);
+static void Display_DrawStatusFull(DisplayStatusSnapshot *snapshot);
+static void Display_DrawStatusDelta(DisplayStatusSnapshot *current,
+                                    const DisplayStatusSnapshot *last);
+static bool Display_ShouldRequestStatusHighlightRefresh(void);
+static uint8_t Display_GetStatusSlotShift(DisplayStatusSlotId id,
+                                          uint8_t row,
+                                          int32_t value,
+                                          bool is_text,
+                                          const char *text);
+static void Display_ClearBeforeDraw(void);
+static bool Display_ShouldRecoverBeforeDraw(void);
+static void Display_ProcessLongPressAction(uint8_t long_press_key);
+static void Display_ProcessPendingInput(void);
 
 
 /*
@@ -1454,7 +1541,7 @@ uint8_t OledDisplayLineWords(uint8_t* data,uint8_t x,uint8_t y,uint8_t shift)
 void EquipFirstPower(void)
 {
     int line;
-    oled_clear();
+    Display_ClearBeforeDraw();
     DisplayLangaugeLineWords((uint8_t*)"通讯尝试中...",0,OLED_ROW4_1,0,(u8*)"Communicate Attempt...");
     line = DisplayLangaugeLineWords((uint8_t*)"版本:",0,OLED_ROW4_2,0,(u8*)"Version:");
     OledDisplayLineWords((uint8_t*)CPU3_APP_VERSION_STRING,line,OLED_ROW4_2,0);
@@ -1473,9 +1560,17 @@ void DisplayAubonLogo(void)
 /* 显示设备数据 */
 static void oled_workingdata(void)
 {
-    oled_clear();
-    /* 显示设备状态 */
-    oled_equipment();
+    DisplayStatusSnapshot current_snapshot;
+
+    Display_BuildStatusSnapshot(&current_snapshot);
+    if (display_status_full_redraw_required ||
+        display_recover_before_draw ||
+        Display_StatusLayoutChanged(&current_snapshot, &display_status_last_snapshot)) {
+        Display_DrawStatusFull(&current_snapshot);
+    } else {
+        Display_DrawStatusDelta(&current_snapshot, &display_status_last_snapshot);
+    }
+    display_status_last_snapshot = current_snapshot;
 }
 /* 显示一个数字 */
 uint8_t OledDisplayOneNmb(int c,uint8_t row,uint8_t line,uint8_t shift)
@@ -1567,6 +1662,9 @@ static uint8_t dis_number(int sgn,int value,int points,uint8_t line,uint8_t row,
 void DisplayInit(void)
 {
     OLED_Init();    //屏幕初始化
+    display_last_recover_tick = HAL_GetTick();
+    display_last_key_tick = display_last_recover_tick;
+    display_last_spi_error_count = OLED_GetSpiErrorCount();
     HAL_TIM_Base_Start_IT(&htim3);
 //    Timer7Init();   //长按确定键计时定时器
 //    Timer1Init();   //检测按键,超时退出罐上操作定时器
@@ -1575,6 +1673,153 @@ void DisplayInit(void)
 //    readParaInit();
     ClearPageNum();
     InputValueInit();
+}
+
+void Display_RequestRefresh(void)
+{
+    display_refresh_pending = true;
+}
+
+static void Display_ClearBeforeDraw(void)
+{
+    if (display_recover_before_draw) {
+        OLED_RecoverAndClear();
+    } else {
+        oled_clear();
+    }
+}
+
+static bool Display_ShouldRecoverBeforeDraw(void)
+{
+    uint32_t now = HAL_GetTick();
+    uint32_t spi_error_count = OLED_GetSpiErrorCount();
+
+    if (display_recover_requested) {
+        display_recover_requested = false;
+        display_last_recover_tick = now;
+        return true;
+    }
+
+    if (spi_error_count != display_last_spi_error_count) {
+        display_last_spi_error_count = spi_error_count;
+        display_last_recover_tick = now;
+        return true;
+    }
+
+    if ((now - display_last_recover_tick) >= DISPLAY_RECOVER_INTERVAL_MS) {
+        display_last_recover_tick = now;
+        return true;
+    }
+
+    return false;
+}
+
+static uint32_t Display_BeginFrame(void)
+{
+    return OLED_GetSpiErrorCount();
+}
+
+static void Display_FinishFrame(uint32_t frame_spi_error_start)
+{
+    display_recover_before_draw = false;
+    if (OLED_GetSpiErrorCount() == frame_spi_error_start) {
+        OLED_MarkFrameComplete();
+    }
+}
+
+static uint32_t Display_PrepareForForegroundDraw(void)
+{
+    bool should_recover;
+    uint32_t frame_spi_error_start = Display_BeginFrame();
+
+    /* 菜单、确认页等前景界面会覆盖整屏，回到状态页时不能继续用状态页局部刷新缓存。 */
+    display_status_full_redraw_required = true;
+
+    if (display_screen_off_active) {
+        OLED_DisplayOn();
+        display_recover_requested = true;
+        display_screen_off_active = false;
+    }
+
+    should_recover = Display_ShouldRecoverBeforeDraw();
+    display_recover_before_draw = false;
+    if (should_recover) {
+        OLED_RecoverAndClear();
+    }
+
+    return frame_spi_error_start;
+}
+
+static void Display_ProcessLongPressAction(uint8_t long_press_key)
+{
+    if (long_press_key == LONG_PRESS_KEY_SURE) {
+        uint32_t frame_spi_error_start = Display_PrepareForForegroundDraw();
+        FlagofTankOpera = true;
+        useKey();
+        keymenu[KEYNUM_IF_ENTER_MAINMENU].execute_opera();
+        Display_FinishFrame(frame_spi_error_start);
+    } else if (long_press_key == LONG_PRESS_KEY_BACK) {
+        bool prepared = false;
+        uint32_t frame_spi_error_start = 0U;
+
+        /* 与长按确认进菜单一致：先进入确认页，确认键再执行对应动作。 */
+        if (Display_CanEnterCancelMeasurementConfirm()) {
+            frame_spi_error_start = Display_PrepareForForegroundDraw();
+            prepared = true;
+        }
+        if (Display_EnterCancelMeasurementConfirm()) {
+            Display_FinishFrame(frame_spi_error_start);
+        } else if (prepared) {
+            display_recover_before_draw = false;
+        }
+    }
+}
+
+static void Display_ProcessPendingInput(void)
+{
+    uint8_t keypress;
+    uint8_t long_press_key = Display_TakePendingLongPressAction();
+
+    if (long_press_key != LONG_PRESS_KEY_NONE) {
+        Display_ProcessLongPressAction(long_press_key);
+    }
+
+    do {
+        keypress = Display_TakePendingKey();
+        if ((keypress != 0U) && (FlagofTankOpera == true)) {
+            bool prepared = false;
+            uint32_t frame_spi_error_start = 0U;
+
+            if (DisplayTankOpera_CanProcessKey(keypress)) {
+                frame_spi_error_start = Display_PrepareForForegroundDraw();
+                prepared = true;
+            }
+            if (KeyProcess(keypress)) {
+                Display_FinishFrame(frame_spi_error_start);
+            } else if (prepared) {
+                display_recover_before_draw = false;
+            }
+        }
+    } while (keypress != 0U);
+}
+
+void Display_Task(void)
+{
+    Display_ProcessPendingInput();
+
+    if (!display_refresh_pending && Display_ShouldRequestStatusHighlightRefresh()) {
+        display_refresh_pending = true;
+    }
+
+    if (display_refresh_pending) {
+        uint32_t start_tick = HAL_GetTick();
+        display_refresh_pending = false;
+        RefreshScreen();
+        display_last_refresh_ms = HAL_GetTick() - start_tick;
+        if (display_last_refresh_ms > DISPLAY_REFRESH_TIMEOUT_MS) {
+            display_refresh_timeout_count++;
+        }
+    }
 }
 
 static void Display_FormatWirelessPairingMac(const volatile WirelessPairingStatus *status,
@@ -1595,43 +1840,631 @@ static void Display_FormatWirelessPairingMac(const volatile WirelessPairingStatu
              (unsigned long)(mac_low & 0xFFU));
 }
 
+static const char *Display_SelectLanguageText(const uint8_t *name_cn, const uint8_t *name_en)
+{
+    if ((screen_parameter.language == LANGUAGE_ENGLISH) && (name_en != NULL)) {
+        return (const char *)name_en;
+    }
+
+    return (const char *)name_cn;
+}
+
+static uint8_t Display_GetLabelEndLine(const uint8_t *name_cn, const uint8_t *name_en)
+{
+    return Display_GetTextWidth(Display_SelectLanguageText(name_cn, name_en), 63U);
+}
+
+static void Display_CopyStatusText(char dest[32], const char *src)
+{
+    uint8_t i;
+
+    if (src == NULL) {
+        dest[0] = '\0';
+        return;
+    }
+
+    for (i = 0U; (src[i] != '\0') && (i < 31U); i++) {
+        dest[i] = src[i];
+    }
+    dest[i] = '\0';
+}
+
+static DisplayStatusSlot *Display_AddStatusSlot(DisplayStatusSnapshot *snapshot,
+                                                DisplayStatusSlotId id,
+                                                uint8_t row,
+                                                uint8_t value_line)
+{
+    DisplayStatusSlot *slot;
+
+    if ((snapshot == NULL) || (snapshot->slot_count >= DISPLAY_STATUS_MAX_SLOTS)) {
+        return NULL;
+    }
+
+    slot = &snapshot->slots[snapshot->slot_count];
+    memset(slot, 0, sizeof(*slot));
+    slot->id = id;
+    slot->row = row;
+    slot->value_line = value_line;
+    snapshot->slot_count++;
+    return slot;
+}
+
+static void Display_AddValueStatusSlot(DisplayStatusSnapshot *snapshot,
+                                       DisplayStatusSlotId id,
+                                       uint8_t row,
+                                       uint8_t value_line,
+                                       int32_t value,
+                                       uint8_t points,
+                                       const uint8_t *unit)
+{
+    DisplayStatusSlot *slot = Display_AddStatusSlot(snapshot, id, row, value_line);
+
+    if (slot != NULL) {
+        slot->is_text = false;
+        slot->value = value;
+        slot->points = points;
+        slot->unit = unit;
+    }
+}
+
+static void Display_AddTextStatusSlot(DisplayStatusSnapshot *snapshot,
+                                      DisplayStatusSlotId id,
+                                      uint8_t row,
+                                      uint8_t value_line,
+                                      const char *text)
+{
+    DisplayStatusSlot *slot = Display_AddStatusSlot(snapshot, id, row, value_line);
+
+    if (slot != NULL) {
+        slot->is_text = true;
+        Display_CopyStatusText(slot->text, text);
+    }
+}
+
+static void Display_AddErrorReasonStatusSlots(DisplayStatusSnapshot *snapshot, int now_page)
+{
+    const char *reason = Display_GetErrorReasonByCode(g_measurement.device_status.error_code);
+    char first_line[32];
+    uint8_t prefix_width = Display_GetTextWidth("故障:", 7U);
+    uint8_t first_bytes = Display_GetFitTextBytes(reason, prefix_width);
+
+    if ((ValidParaDisArr[Para_ErrorReason][PARA_VALID] == true) &&
+        (now_page == ValidParaDisArr[Para_ErrorReason][PARA_PAGE])) {
+        uint8_t i;
+
+        for (i = 0U; (i < first_bytes) && (i < (sizeof(first_line) - 1U)); i++) {
+            first_line[i] = reason[i];
+        }
+        first_line[i] = '\0';
+        Display_AddTextStatusSlot(snapshot,
+                                  DISPLAY_STATUS_SLOT_ERROR_REASON,
+                                  (uint8_t)ValidParaDisArr[Para_ErrorReason][PARA_X],
+                                  prefix_width,
+                                  first_line);
+    }
+
+    if ((ValidParaDisArr[Para_ErrorReasonMore][PARA_VALID] == true) &&
+        (now_page == ValidParaDisArr[Para_ErrorReasonMore][PARA_PAGE]) &&
+        (reason[first_bytes] != '\0')) {
+        Display_AddTextStatusSlot(snapshot,
+                                  DISPLAY_STATUS_SLOT_ERROR_REASON_MORE,
+                                  (uint8_t)ValidParaDisArr[Para_ErrorReasonMore][PARA_X],
+                                  OLED_LINE8_1,
+                                  &reason[first_bytes]);
+    }
+}
+
+static void Display_AddCurrentPageValueStatusSlots(DisplayStatusSnapshot *snapshot, int now_page)
+{
+    uint8_t row;
+    uint8_t line;
+    uint32_t display_value = 0U;
+    int display_position = 0;
+    int display_frequency;
+    int display_capacitance;
+
+    Display_AddErrorReasonStatusSlots(snapshot, now_page);
+
+    if (flagofoillevelvalid == true) {
+        row = FlagofTotalTwoRow ? OLED_ROW4_3 : OLED_ROW4_2;
+        line = Display_GetLabelEndLine((uint8_t*)"液位:", (uint8_t*)"Level:");
+        if (Display_GetOilLevelValue(snapshot->ctx, &display_value) &&
+            ((display_value == OILLEVELDOWNLIMIT) || (display_value == LEVEL_DOWNLIMIT))) {
+            Display_AddTextStatusSlot(snapshot,
+                                      DISPLAY_STATUS_SLOT_OIL_LEVEL,
+                                      row,
+                                      line,
+                                      Display_SelectLanguageText((uint8_t*)"低于盲区",
+                                                                 (uint8_t*)"Below Blind"));
+        } else {
+            Display_AddValueStatusSlot(snapshot,
+                                       DISPLAY_STATUS_SLOT_OIL_LEVEL,
+                                       row,
+                                       line,
+                                       (int32_t)display_value,
+                                       1U,
+                                       (uint8_t*)"mm");
+        }
+    }
+
+    if ((ValidParaDisArr[Para_Waterlevel][PARA_VALID] == true) &&
+        (now_page == ValidParaDisArr[Para_Waterlevel][PARA_PAGE]) &&
+        Display_GetWaterLevelValue(snapshot->ctx, &display_value)) {
+        Display_AddValueStatusSlot(snapshot,
+                                   DISPLAY_STATUS_SLOT_WATER_LEVEL,
+                                   (uint8_t)ValidParaDisArr[Para_Waterlevel][PARA_X],
+                                   Display_GetLabelEndLine((uint8_t*)"水位:", (uint8_t*)"Water:"),
+                                   (int32_t)display_value,
+                                   1U,
+                                   (uint8_t*)"mm");
+    }
+
+    if ((ValidParaDisArr[Para_AveDensity][PARA_VALID] == true) &&
+        (now_page == ValidParaDisArr[Para_AveDensity][PARA_PAGE]) &&
+        Display_GetDensityValue(snapshot->ctx, &display_value)) {
+        Display_AddValueStatusSlot(snapshot,
+                                   DISPLAY_STATUS_SLOT_DENSITY,
+                                   (uint8_t)ValidParaDisArr[Para_AveDensity][PARA_X],
+                                   Display_GetLabelEndLine((uint8_t*)"密度:", (uint8_t*)"D:"),
+                                   (int32_t)display_value,
+                                   1U,
+                                   (uint8_t*)"kg/m3");
+    }
+
+    if ((ValidParaDisArr[Para_AveTemperature][PARA_VALID] == true) &&
+        (now_page == ValidParaDisArr[Para_AveTemperature][PARA_PAGE]) &&
+        Display_GetTemperatureValue(snapshot->ctx, &display_value)) {
+        Display_AddValueStatusSlot(snapshot,
+                                   DISPLAY_STATUS_SLOT_TEMPERATURE,
+                                   (uint8_t)ValidParaDisArr[Para_AveTemperature][PARA_X],
+                                   Display_GetLabelEndLine((uint8_t*)"温度:", (uint8_t*)"Temp:"),
+                                   (int32_t)display_value - 20000,
+                                   2U,
+                                   (uint8_t*)"℃");
+    }
+
+    if ((ValidParaDisArr[Para_position][PARA_VALID] == true) &&
+        (now_page == ValidParaDisArr[Para_position][PARA_PAGE]) &&
+        Display_GetPositionValue(snapshot->ctx, &display_position)) {
+        Display_AddValueStatusSlot(snapshot,
+                                   DISPLAY_STATUS_SLOT_POSITION,
+                                   (uint8_t)ValidParaDisArr[Para_position][PARA_X],
+                                   Display_GetLabelEndLine((uint8_t*)"位置:", (uint8_t*)"Pos:"),
+                                   (int32_t)display_position,
+                                   1U,
+                                   (uint8_t*)"mm");
+    }
+
+    if ((ValidParaDisArr[Para_weight][PARA_VALID] == true) &&
+        (now_page == ValidParaDisArr[Para_weight][PARA_PAGE])) {
+        Display_AddValueStatusSlot(snapshot,
+                                   DISPLAY_STATUS_SLOT_WEIGHT,
+                                   (uint8_t)ValidParaDisArr[Para_weight][PARA_X],
+                                   Display_GetLabelEndLine((uint8_t*)"称重:", (uint8_t*)"Weight:"),
+                                   (int32_t)g_measurement.debug_data.current_weight,
+                                   0U,
+                                   (uint8_t*)" ");
+    }
+
+    if ((ValidParaDisArr[Para_sensor_value][PARA_VALID] == true) &&
+        (now_page == ValidParaDisArr[Para_sensor_value][PARA_PAGE])) {
+        display_frequency = (snapshot->ctx == DISPLAY_RESULT_CONTEXT_READ_PARAMETER)
+            ? (int)g_measurement.debug_data.frequency
+            : GetOilSensorFrequencyForDisplay();
+        Display_AddValueStatusSlot(snapshot,
+                                   DISPLAY_STATUS_SLOT_FREQUENCY,
+                                   (uint8_t)ValidParaDisArr[Para_sensor_value][PARA_X],
+                                   Display_GetLabelEndLine((uint8_t*)"频率:", (uint8_t*)"Freq:"),
+                                   (int32_t)display_frequency,
+                                   0U,
+                                   (uint8_t*)"Hz");
+    }
+
+    if ((ValidParaDisArr[Para_capacitance][PARA_VALID] == true) &&
+        (now_page == ValidParaDisArr[Para_capacitance][PARA_PAGE])) {
+        display_capacitance = (snapshot->ctx == DISPLAY_RESULT_CONTEXT_READ_PARAMETER)
+            ? (int)g_measurement.debug_data.water_capacitance_x10
+            : (int)(g_measurement.water_measurement.current_capacitance * 10.0f);
+        Display_AddValueStatusSlot(snapshot,
+                                   DISPLAY_STATUS_SLOT_CAPACITANCE,
+                                   (uint8_t)ValidParaDisArr[Para_capacitance][PARA_X],
+                                   Display_GetLabelEndLine((uint8_t*)"电容:", (uint8_t*)"Cap:"),
+                                   (int32_t)display_capacitance,
+                                   1U,
+                                   NULL);
+    }
+
+    if ((ValidParaDisArr[Para_angle_x][PARA_VALID] == true) &&
+        (now_page == ValidParaDisArr[Para_angle_x][PARA_PAGE])) {
+        Display_AddValueStatusSlot(snapshot,
+                                   DISPLAY_STATUS_SLOT_ANGLE_X,
+                                   (uint8_t)ValidParaDisArr[Para_angle_x][PARA_X],
+                                   Display_GetLabelEndLine((uint8_t*)"X角:", (uint8_t*)"AngX:"),
+                                   (int32_t)g_measurement.debug_data.angle_x,
+                                   2U,
+                                   (uint8_t*)"°");
+    }
+
+    if ((ValidParaDisArr[Para_angle_y][PARA_VALID] == true) &&
+        (now_page == ValidParaDisArr[Para_angle_y][PARA_PAGE])) {
+        Display_AddValueStatusSlot(snapshot,
+                                   DISPLAY_STATUS_SLOT_ANGLE_Y,
+                                   (uint8_t)ValidParaDisArr[Para_angle_y][PARA_X],
+                                   Display_GetLabelEndLine((uint8_t*)"Y角:", (uint8_t*)"AngY:"),
+                                   (int32_t)g_measurement.debug_data.angle_y,
+                                   2U,
+                                   (uint8_t*)"°");
+    }
+
+    if ((ValidParaDisArr[Para_tankheight][PARA_VALID] == true) &&
+        (now_page == ValidParaDisArr[Para_tankheight][PARA_PAGE])) {
+        Display_AddValueStatusSlot(snapshot,
+                                   DISPLAY_STATUS_SLOT_TANK_HEIGHT,
+                                   (uint8_t)ValidParaDisArr[Para_tankheight][PARA_X],
+                                   Display_GetLabelEndLine((uint8_t*)"罐高:", (uint8_t*)"tankH:"),
+                                   (int32_t)g_measurement.height_measurement.current_real_height,
+                                   1U,
+                                   (uint8_t*)"mm");
+    }
+}
+
+static void Display_AddWirelessPairingSlots(DisplayStatusSnapshot *snapshot)
+{
+    const volatile WirelessPairingStatus *status = &g_measurement.wireless_pairing_status;
+
+    if ((snapshot->state != STATE_WIRELESS_PAIRING_OVER) ||
+        (status->result != WIRELESS_PAIRING_RESULT_SUCCESS) ||
+        (status->mac_valid == 0U)) {
+        if (snapshot->state == STATE_WIRELESS_PAIRING_OVER) {
+            Display_AddTextStatusSlot(snapshot,
+                                      DISPLAY_STATUS_SLOT_WIRELESS_MAC_NA,
+                                      OLED_ROW4_2,
+                                      OLED_LINE8_2,
+                                      "MAC N/A");
+        }
+        return;
+    }
+
+    {
+        char mac_line1[9];
+        char mac_line2[9];
+
+        Display_FormatWirelessPairingMac(status, mac_line1, mac_line2);
+        Display_AddTextStatusSlot(snapshot,
+                                  DISPLAY_STATUS_SLOT_WIRELESS_MAC_1,
+                                  OLED_ROW4_3,
+                                  OLED_LINE8_2,
+                                  mac_line1);
+        Display_AddTextStatusSlot(snapshot,
+                                  DISPLAY_STATUS_SLOT_WIRELESS_MAC_2,
+                                  OLED_ROW4_4,
+                                  OLED_LINE8_2,
+                                  mac_line2);
+    }
+}
+
+static void Display_AdvanceStatusPage(int page_amount)
+{
+    if (page_amount <= 1) {
+        display_status_page_index = 0;
+        display_status_page_hold_count = 0U;
+        return;
+    }
+
+    if (display_status_page_hold_count < (DISPLAY_STATUS_PAGE_HOLD_REFRESHES - 1U)) {
+        display_status_page_hold_count++;
+        return;
+    }
+
+    display_status_page_hold_count = 0U;
+    display_status_page_index++;
+    if (display_status_page_index >= page_amount) {
+        display_status_page_index = 0;
+    }
+}
+
+static void Display_BuildStatusSnapshot(DisplayStatusSnapshot *snapshot)
+{
+    uint8_t lang;
+
+    if (snapshot == NULL) {
+        return;
+    }
+
+    memset(snapshot, 0, sizeof(*snapshot));
+    snapshot->valid = true;
+    snapshot->state = g_measurement.device_status.device_state;
+    snapshot->error_code = g_measurement.device_status.error_code;
+    snapshot->ctx = Display_GetResultContext(g_measurement.device_status.device_state);
+    snapshot->protocol_compatible = IsCpu2ProtocolCompatible();
+    lang = (uint8_t)screen_parameter.language;
+    if (lang > LANGUAGE_ENGLISH) {
+        lang = LANGUAGE_ENGLISH;
+    }
+    snapshot->language = lang;
+
+    CalculateValidPara();
+    if ((PageAmount <= 0) || (display_status_page_index >= PageAmount)) {
+        display_status_page_index = 0;
+        display_status_page_hold_count = 0U;
+    }
+
+    snapshot->page = display_status_page_index;
+    snapshot->page_amount = PageAmount;
+    snapshot->total_two_row = FlagofTotalTwoRow;
+
+    if ((snapshot->state == STATE_WIRELESS_PAIRING) ||
+        (snapshot->state == STATE_WIRELESS_PAIRING_OVER)) {
+        Display_AddWirelessPairingSlots(snapshot);
+    } else {
+        Display_AddCurrentPageValueStatusSlots(snapshot, snapshot->page);
+    }
+
+    Display_AdvanceStatusPage(PageAmount);
+}
+
+static bool Display_StatusSlotLayoutChanged(const DisplayStatusSlot *current,
+                                            const DisplayStatusSlot *last)
+{
+    return (current->id != last->id) ||
+           (current->is_text != last->is_text) ||
+           (current->row != last->row) ||
+           (current->value_line != last->value_line) ||
+           (current->points != last->points) ||
+           (current->unit != last->unit);
+}
+
+static bool Display_StatusLayoutChanged(const DisplayStatusSnapshot *current,
+                                        const DisplayStatusSnapshot *last)
+{
+    uint8_t i;
+
+    if ((current == NULL) || (last == NULL) || !last->valid) {
+        return true;
+    }
+
+    if ((current->state != last->state) ||
+        (current->error_code != last->error_code) ||
+        (current->ctx != last->ctx) ||
+        (current->protocol_compatible != last->protocol_compatible) ||
+        (current->language != last->language) ||
+        (current->total_two_row != last->total_two_row) ||
+        (current->page != last->page) ||
+        (current->page_amount != last->page_amount) ||
+        (current->slot_count != last->slot_count)) {
+        return true;
+    }
+
+    for (i = 0U; i < current->slot_count; i++) {
+        if (Display_StatusSlotLayoutChanged(&current->slots[i], &last->slots[i])) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+static bool Display_StatusSlotValueChanged(const DisplayStatusSlot *current,
+                                           const DisplayStatusSlot *last)
+{
+    if ((current == NULL) || (last == NULL) || (current->is_text != last->is_text)) {
+        return true;
+    }
+
+    if (current->is_text) {
+        return (strncmp(current->text, last->text, sizeof(current->text)) != 0);
+    }
+
+    return (current->value != last->value);
+}
+
+static bool Display_StatusTickBefore(uint32_t left, uint32_t right)
+{
+    return ((int32_t)(left - right) < 0);
+}
+
+static bool Display_IsStatusHighlightActive(const DisplayStatusSlot *slot, uint32_t now)
+{
+    return ((slot != NULL) &&
+            slot->highlight_visible &&
+            Display_StatusTickBefore(now, slot->highlight_until_tick));
+}
+
+static void Display_ClearStatusSlotValueArea(const DisplayStatusSlot *slot)
+{
+    uint8_t width;
+
+    if ((slot == NULL) || (slot->value_line > OLED_LINE8_END)) {
+        return;
+    }
+
+    width = (uint8_t)(OLED_LINE8_END + 1U - slot->value_line);
+    OLED_ClearArea(slot->value_line, slot->row, width, DISPLAY_VALUE_AREA_HEIGHT);
+}
+
+static void Display_UpdateStatusHighlights(DisplayStatusSnapshot *current,
+                                           const DisplayStatusSnapshot *last)
+{
+    uint8_t i;
+    uint32_t now = HAL_GetTick();
+
+    if ((current == NULL) || (last == NULL)) {
+        return;
+    }
+
+    for (i = 0U; i < current->slot_count; i++) {
+        DisplayStatusSlot *current_slot = &current->slots[i];
+        const DisplayStatusSlot *last_slot = &last->slots[i];
+        bool value_changed = Display_StatusSlotValueChanged(current_slot, last_slot);
+
+        if (value_changed) {
+            current_slot->highlight_visible = true;
+            current_slot->highlight_until_tick = now + DISPLAY_VALUE_HIGHLIGHT_MS;
+        } else if (Display_IsStatusHighlightActive(last_slot, now)) {
+            current_slot->highlight_visible = true;
+            current_slot->highlight_until_tick = last_slot->highlight_until_tick;
+        } else {
+            current_slot->highlight_visible = false;
+            current_slot->highlight_until_tick = 0U;
+        }
+
+        if (value_changed ||
+            current_slot->highlight_visible ||
+            last_slot->highlight_visible) {
+            Display_ClearStatusSlotValueArea(current_slot);
+        }
+    }
+}
+
+static void Display_DrawStatusFull(DisplayStatusSnapshot *snapshot)
+{
+    uint8_t i;
+
+    if (snapshot == NULL) {
+        return;
+    }
+
+    for (i = 0U; i < snapshot->slot_count; i++) {
+        snapshot->slots[i].highlight_visible = false;
+        snapshot->slots[i].highlight_until_tick = 0U;
+    }
+
+    display_status_active_snapshot = *snapshot;
+    display_status_full_redraw_required = false;
+    Display_ClearBeforeDraw();
+    oled_equipment();
+}
+
+static void Display_DrawStatusDelta(DisplayStatusSnapshot *current,
+                                    const DisplayStatusSnapshot *last)
+{
+    if (current == NULL) {
+        return;
+    }
+
+    Display_UpdateStatusHighlights(current, last);
+    display_status_active_snapshot = *current;
+    oled_equipment();
+}
+
+static bool Display_ShouldRequestStatusHighlightRefresh(void)
+{
+    uint8_t i;
+    uint32_t now;
+
+    if (!display_status_active_snapshot.valid ||
+        FlagofTankOpera ||
+        display_screen_off_active) {
+        return false;
+    }
+
+    now = HAL_GetTick();
+    for (i = 0U; i < display_status_active_snapshot.slot_count; i++) {
+        const DisplayStatusSlot *slot = &display_status_active_snapshot.slots[i];
+
+        if (slot->highlight_visible &&
+            !Display_StatusTickBefore(now, slot->highlight_until_tick)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+static const DisplayStatusSlot *Display_FindActiveStatusSlot(DisplayStatusSlotId id,
+                                                            uint8_t row,
+                                                            bool is_text)
+{
+    uint8_t i;
+
+    for (i = 0U; i < display_status_active_snapshot.slot_count; i++) {
+        const DisplayStatusSlot *slot = &display_status_active_snapshot.slots[i];
+
+        if ((slot->id == id) && (slot->row == row) && (slot->is_text == is_text)) {
+            return slot;
+        }
+    }
+
+    return NULL;
+}
+
+static uint8_t Display_GetStatusSlotShift(DisplayStatusSlotId id,
+                                          uint8_t row,
+                                          int32_t value,
+                                          bool is_text,
+                                          const char *text)
+{
+    const DisplayStatusSlot *slot = Display_FindActiveStatusSlot(id, row, is_text);
+
+    if ((slot == NULL) || !slot->highlight_visible) {
+        return 0U;
+    }
+
+    if (is_text) {
+        if ((text == NULL) || (strncmp(slot->text, text, sizeof(slot->text)) == 0)) {
+            return 1U;
+        }
+        return 0U;
+    }
+
+    return (slot->value == value) ? 1U : 0U;
+}
+
 /* 刷新屏幕 */
 void RefreshScreen(void)
 {
-    if(FlagofTankOpera == false)
-    {
+    uint32_t frame_spi_error_start;
 
-        if(ScreenOff()) {
-            oled_clear();
+    display_recover_before_draw = false;
+
+    if (FlagofTankOpera == true) {
+        if (Display_ShouldRecoverBeforeDraw()) {
+            frame_spi_error_start = Display_BeginFrame();
+            OLED_RecoverAndClear();
+            if (DisplayTankOpera_RedrawCurrentPage()) {
+                Display_FinishFrame(frame_spi_error_start);
+            }
         }
+        return;
+    }
+
+    if(ScreenOff()) {
+        if (!display_screen_off_active) {
+            frame_spi_error_start = Display_BeginFrame();
+            OLED_DisplayOff();
+            display_screen_off_active = true;
+            Display_FinishFrame(frame_spi_error_start);
+        }
+    }
+    else
+    {
+        frame_spi_error_start = Display_BeginFrame();
+        if (display_screen_off_active) {
+            OLED_DisplayOn();
+            display_recover_requested = true;
+            display_screen_off_active = false;
+        }
+        SetScreenOffState();
+        display_recover_before_draw = Display_ShouldRecoverBeforeDraw();
+        if(cnt_commutoCPU2 >= COMMU_ERROR_MAX)
+            EquipFirstPower();
         else
-        {
-            SetScreenOff();
-            if(cnt_commutoCPU2 >= COMMU_ERROR_MAX)
-                EquipFirstPower();
-            else
-                oled_workingdata();
-        }
+            oled_workingdata();
+        display_recover_before_draw = false;
+        Display_FinishFrame(frame_spi_error_start);
     }
 }
 /* 显示设备状态 */
 static void oled_equipment(void)
 {
-    static int now_page = 0;
     u8 row = OLED_ROW4_2,line = 0;
     DisplayResultContext ctx = Display_GetResultContext(g_measurement.device_status.device_state);
+    int now_page = display_status_active_snapshot.page;
     uint32_t display_value = 0U;
     int display_position = 0;
     int display_frequency = 0;
     int display_capacitance = 0;
     
-    now_page++;
-    if(now_page >= PageAmount)
-    {
-        now_page = 0;
-    }
-    //统计有多少个有效参数,并计算总页数
-    CalculateValidPara();
     //显示当前设备状态
     DIS_Equipment();
 
@@ -1648,10 +2481,31 @@ static void oled_equipment(void)
 
             Display_FormatWirelessPairingMac(status, mac_line1, mac_line2);
             OledDisplayLineWords((uint8_t*)"MAC:", OLED_LINE8_1, OLED_ROW4_2, 0);
-            OledDisplayLineWords((uint8_t*)mac_line1, OLED_LINE8_2, OLED_ROW4_3, 0);
-            OledDisplayLineWords((uint8_t*)mac_line2, OLED_LINE8_2, OLED_ROW4_4, 0);
+            OledDisplayLineWords((uint8_t*)mac_line1,
+                                 OLED_LINE8_2,
+                                 OLED_ROW4_3,
+                                 Display_GetStatusSlotShift(DISPLAY_STATUS_SLOT_WIRELESS_MAC_1,
+                                                            OLED_ROW4_3,
+                                                            0,
+                                                            true,
+                                                            mac_line1));
+            OledDisplayLineWords((uint8_t*)mac_line2,
+                                 OLED_LINE8_2,
+                                 OLED_ROW4_4,
+                                 Display_GetStatusSlotShift(DISPLAY_STATUS_SLOT_WIRELESS_MAC_2,
+                                                            OLED_ROW4_4,
+                                                            0,
+                                                            true,
+                                                            mac_line2));
         } else {
-            OledDisplayLineWords((uint8_t*)"MAC N/A", OLED_LINE8_2, OLED_ROW4_2, 0);
+            OledDisplayLineWords((uint8_t*)"MAC N/A",
+                                 OLED_LINE8_2,
+                                 OLED_ROW4_2,
+                                 Display_GetStatusSlotShift(DISPLAY_STATUS_SLOT_WIRELESS_MAC_NA,
+                                                            OLED_ROW4_2,
+                                                            0,
+                                                            true,
+                                                            "MAC N/A"));
         }
         return;
     }
@@ -1682,11 +2536,30 @@ static void oled_equipment(void)
         if (Display_GetOilLevelValue(ctx, &display_value) &&
             ((display_value == OILLEVELDOWNLIMIT) || (display_value == LEVEL_DOWNLIMIT)))
         {
-            DisplayLangaugeLineWords((u8*)"低于盲区",line,row,0,(u8*)"Below Blind");
+            const char *text = Display_SelectLanguageText((uint8_t*)"低于盲区",
+                                                          (uint8_t*)"Below Blind");
+            DisplayLangaugeLineWords((u8*)"低于盲区",
+                                     line,
+                                     row,
+                                     Display_GetStatusSlotShift(DISPLAY_STATUS_SLOT_OIL_LEVEL,
+                                                                row,
+                                                                0,
+                                                                true,
+                                                                text),
+                                     (u8*)"Below Blind");
         }
         else
         {
-            OledValueDisplay((int)display_value,line,row,0,1,(u8*)"mm");
+            OledValueDisplay((int)display_value,
+                             line,
+                             row,
+                             Display_GetStatusSlotShift(DISPLAY_STATUS_SLOT_OIL_LEVEL,
+                                                        row,
+                                                        (int32_t)display_value,
+                                                        false,
+                                                        NULL),
+                             1,
+                             (u8*)"mm");
         }
     }
     //水位
@@ -1696,7 +2569,16 @@ static void oled_equipment(void)
         line = DisplayLangaugeLineWords((u8*)"水位:",OLED_LINE8_1,row,0,(u8*)"Water:");
         if (Display_GetWaterLevelValue(ctx, &display_value))
         {
-            OledValueDisplay((int)display_value,line,row,0,1,(u8*)"mm");
+            OledValueDisplay((int)display_value,
+                             line,
+                             row,
+                             Display_GetStatusSlotShift(DISPLAY_STATUS_SLOT_WATER_LEVEL,
+                                                        row,
+                                                        (int32_t)display_value,
+                                                        false,
+                                                        NULL),
+                             1,
+                             (u8*)"mm");
         }
     }
     //密度
@@ -1706,7 +2588,16 @@ static void oled_equipment(void)
         line = DisplayLangaugeLineWords((u8*)"密度:",OLED_LINE8_1,row,0,(u8*)"D:");
         if (Display_GetDensityValue(ctx, &display_value))
         {
-            OledValueDisplay((int)display_value,line,row,0,1,(u8*)"kg/m3");
+            OledValueDisplay((int)display_value,
+                             line,
+                             row,
+                             Display_GetStatusSlotShift(DISPLAY_STATUS_SLOT_DENSITY,
+                                                        row,
+                                                        (int32_t)display_value,
+                                                        false,
+                                                        NULL),
+                             1,
+                             (u8*)"kg/m3");
         }
     }
     //温度
@@ -1716,7 +2607,16 @@ static void oled_equipment(void)
         line = DisplayLangaugeLineWords((u8*)"温度:",OLED_LINE8_1,row,0,(u8*)"Temp:");
         if (Display_GetTemperatureValue(ctx, &display_value))
         {
-            OledValueDisplay((int)display_value - 20000,line,row,0,2,(u8*)"℃");
+            OledValueDisplay((int)display_value - 20000,
+                             line,
+                             row,
+                             Display_GetStatusSlotShift(DISPLAY_STATUS_SLOT_TEMPERATURE,
+                                                        row,
+                                                        (int32_t)display_value - 20000,
+                                                        false,
+                                                        NULL),
+                             2,
+                             (u8*)"℃");
         }
     }
  
@@ -1727,14 +2627,32 @@ static void oled_equipment(void)
         line = DisplayLangaugeLineWords((u8*)"位置:",OLED_LINE8_1,row,0,(u8*)"Pos:");
         if (Display_GetPositionValue(ctx, &display_position))
         {
-            OledValueDisplay(display_position,line,row,0,1,(u8*)"mm");
+            OledValueDisplay(display_position,
+                             line,
+                             row,
+                             Display_GetStatusSlotShift(DISPLAY_STATUS_SLOT_POSITION,
+                                                        row,
+                                                        (int32_t)display_position,
+                                                        false,
+                                                        NULL),
+                             1,
+                             (u8*)"mm");
         }
     }
     //称重
 	if (ValidParaDisArr[Para_weight][PARA_VALID] == true && now_page == ValidParaDisArr[Para_weight][PARA_PAGE]) {
 		row = ValidParaDisArr[Para_weight][PARA_X];
 		line = DisplayLangaugeLineWords((u8*) "称重:", OLED_LINE8_1, row, 0, (u8*) "Weight:");
-		OledValueDisplay(g_measurement.debug_data.current_weight, line, row, 0, 0, (u8*) " ");
+		OledValueDisplay(g_measurement.debug_data.current_weight,
+                         line,
+                         row,
+                         Display_GetStatusSlotShift(DISPLAY_STATUS_SLOT_WEIGHT,
+                                                    row,
+                                                    (int32_t)g_measurement.debug_data.current_weight,
+                                                    false,
+                                                    NULL),
+                         0,
+                         (u8*) " ");
 	}
     // 频率
     if (ValidParaDisArr[Para_sensor_value][PARA_VALID] == true &&
@@ -1745,7 +2663,16 @@ static void oled_equipment(void)
         display_frequency = (ctx == DISPLAY_RESULT_CONTEXT_READ_PARAMETER)
             ? (int)g_measurement.debug_data.frequency
             : GetOilSensorFrequencyForDisplay();
-        OledValueDisplay(display_frequency, line, row, 0, 0, (u8*)"Hz");
+        OledValueDisplay(display_frequency,
+                         line,
+                         row,
+                         Display_GetStatusSlotShift(DISPLAY_STATUS_SLOT_FREQUENCY,
+                                                    row,
+                                                    (int32_t)display_frequency,
+                                                    false,
+                                                    NULL),
+                         0,
+                         (u8*)"Hz");
     }
 
     // 电容
@@ -1757,7 +2684,16 @@ static void oled_equipment(void)
         display_capacitance = (ctx == DISPLAY_RESULT_CONTEXT_READ_PARAMETER)
             ? (int)g_measurement.debug_data.water_capacitance_x10
             : (int)(g_measurement.water_measurement.current_capacitance * 10.0f);
-        OledValueDisplay(display_capacitance, line, row, 0, 1, NULL);
+        OledValueDisplay(display_capacitance,
+                         line,
+                         row,
+                         Display_GetStatusSlotShift(DISPLAY_STATUS_SLOT_CAPACITANCE,
+                                                    row,
+                                                    (int32_t)display_capacitance,
+                                                    false,
+                                                    NULL),
+                         1,
+                         NULL);
     }
     // 陀螺仪角度 X
     if (ValidParaDisArr[Para_angle_x][PARA_VALID] == true &&
@@ -1765,7 +2701,16 @@ static void oled_equipment(void)
     {
         row = ValidParaDisArr[Para_angle_x][PARA_X];
         line = DisplayLangaugeLineWords((u8*)"X角:", OLED_LINE8_1, row, 0, (u8*)"AngX:");
-        OledValueDisplay(g_measurement.debug_data.angle_x, line, row, 0, 2, (u8*)"°");
+        OledValueDisplay(g_measurement.debug_data.angle_x,
+                         line,
+                         row,
+                         Display_GetStatusSlotShift(DISPLAY_STATUS_SLOT_ANGLE_X,
+                                                    row,
+                                                    (int32_t)g_measurement.debug_data.angle_x,
+                                                    false,
+                                                    NULL),
+                         2,
+                         (u8*)"°");
     }
 
     // 陀螺仪角度 Y
@@ -1774,7 +2719,16 @@ static void oled_equipment(void)
     {
         row = ValidParaDisArr[Para_angle_y][PARA_X];
         line = DisplayLangaugeLineWords((u8*)"Y角:", OLED_LINE8_1, row, 0, (u8*)"AngY:");
-        OledValueDisplay(g_measurement.debug_data.angle_y, line, row, 0, 2, (u8*)"°");
+        OledValueDisplay(g_measurement.debug_data.angle_y,
+                         line,
+                         row,
+                         Display_GetStatusSlotShift(DISPLAY_STATUS_SLOT_ANGLE_Y,
+                                                    row,
+                                                    (int32_t)g_measurement.debug_data.angle_y,
+                                                    false,
+                                                    NULL),
+                         2,
+                         (u8*)"°");
     }
     // 罐高显示
     if (ValidParaDisArr[Para_tankheight][PARA_VALID] == true &&
@@ -1782,7 +2736,16 @@ static void oled_equipment(void)
     {
         row = ValidParaDisArr[Para_tankheight][PARA_X];
         line = DisplayLangaugeLineWords((u8*)"罐高:", OLED_LINE8_1, row, 0, (u8*)"tankH:");
-        OledValueDisplay(g_measurement.height_measurement.current_real_height, line, row, 0, 1, (u8*)"mm");
+        OledValueDisplay(g_measurement.height_measurement.current_real_height,
+                         line,
+                         row,
+                         Display_GetStatusSlotShift(DISPLAY_STATUS_SLOT_TANK_HEIGHT,
+                                                    row,
+                                                    (int32_t)g_measurement.height_measurement.current_real_height,
+                                                    false,
+                                                    NULL),
+                         1,
+                         (u8*)"mm");
     }
 }
 /* 显示多个汉字或字符 - 带中英文选择 */
@@ -2113,10 +3076,15 @@ static void DIS_Equipment(void)
 /* 判断是否需要息屏 */
 static bool ScreenOff( void )
 {
+    uint32_t now = HAL_GetTick();
+
+    if(screen_parameter.screenoff == 0)
+        return false;
+
     if(flag_bright)
         return false;
-    
-    if(screen_parameter.screenoff == 0)
+
+    if ((now - display_last_key_tick) < DISPLAY_SCREEN_OFF_IDLE_MS)
         return false;
     
     return true;
@@ -2126,10 +3094,14 @@ static bool ScreenOff( void )
 void SetScreenBright( void )
 {
     flag_bright = true;
+    display_last_key_tick = HAL_GetTick();
+    if (display_screen_off_active) {
+        Display_RequestRefresh();
+    }
 }
 
-/* 设置息屏 */
-static void SetScreenOff( void )
+/* 清除本轮按键唤醒标志，不直接发送 OLED 关显示命令。 */
+static void SetScreenOffState( void )
 {
     flag_bright = false;
 }
