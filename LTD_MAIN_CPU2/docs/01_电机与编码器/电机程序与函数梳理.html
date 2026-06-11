@@ -185,7 +185,7 @@
     <h1>CPU2 电机程序与函数梳理</h1>
     <p>面向当前 <code>LTD_MAIN_CPU2</code> 源码，整理电机控制、TMC5130 驱动、编码轮记步、位置源切换、丢步检测和调试命令的函数边界。</p>
     <div class="meta">
-      <div><span class="label">生成日期</span>2026-06-11</div>
+      <div><span class="label">更新日期</span>2026-06-11</div>
       <div><span class="label">范围</span>CPU2 电机与编码器相关程序</div>
       <div><span class="label">主要入口</span><code>motor_ctrl.h</code> / <code>measure.c</code></div>
       <div><span class="label">编码说明</span>源码按 GBK/936 读取，本文档为 UTF-8</div>
@@ -197,10 +197,13 @@
     <div class="note">
       <p>电机程序的核心分层比较清晰：业务命令和测量流程调用 <code>MotorCtrl_*</code> 上层接口；<code>MotorControl</code> 内部再分为运动 API、驱动参数/健康检查、位置模型、丢步检测和尺带拟合；最底层由 <code>TMC5130.c</code> 负责 SPI 寄存器访问和步进驱动器控制，<code>AS5145.c</code> 与 <code>encoder.c</code> 负责外部编码轮采集与位置换算。</p>
     </div>
+    <div class="note">
+      <p>2026-06-11 当前 <code>codex/motor-simplify</code> worktree 已完成第一轮结构优化：临时速度恢复由 <code>MotorMotionSpeedScope</code> 统一收口，<code>MotorCtrl_MoveAndWait()</code> 保留单次正式运动主线，ticks 运动拆成起步确认和到位确认两个内部 helper，Jog 到目标流程复用统一的位置刷新检查。台架验证仍以《电机运动函数台架验证记录.md》为准，本文不宣称实物验证已经完成。</p>
+    </div>
     <div class="grid">
       <div class="panel">
         <h3>正常业务运动</h3>
-        <p><code>CMD_MoveUp()</code>、<code>CMD_MoveDown()</code>、液位/密度/罐底等测量流程主要走 <code>MotorCtrl_MoveAndWait()</code> 或 <code>MotorCtrl_MoveToPosition()</code>，默认带驱动健康检查、位置刷新、命令切换打断、慢停和保护检测。</p>
+        <p><code>CMD_MoveUp()</code>、<code>CMD_MoveDown()</code>、液位/密度/罐底等测量流程主要走 <code>MotorCtrl_MoveAndWait()</code> 或 <code>MotorCtrl_MoveToPosition()</code>，默认带驱动健康检查、有效位置刷新、命令切换打断、慢停和保护检测；临时速度由 <code>MotorMotionSpeedScope</code> 统一恢复。</p>
       </div>
       <div class="panel">
         <h3>调试和强制运动</h3>
@@ -312,11 +315,11 @@
         <tr><td>初始化/驱动状态</td><td><code>MotorCtrl_BootSafeStop()</code></td><td><span class="tag blue">对外</span></td><td>上电早期清理 TMC5130 残留运动目标，防止重启后沿旧目标继续运行。</td></tr>
         <tr><td>初始化/驱动状态</td><td><code>MotorCtrl_InvalidateDriverInit()</code></td><td><span class="tag blue">对外</span></td><td>TMC 复位、欠压、SPI 异常或配置丢失后标记初始化失效，后续运动前触发重新初始化。</td></tr>
         <tr><td>初始化/驱动状态</td><td><code>MotorCtrl_IsDriverInitValid()</code></td><td><span class="tag blue">对外</span></td><td>供故障恢复、空闲错误处理判断当前驱动初始化状态是否可信。</td></tr>
-        <tr><td>运动控制</td><td><code>MotorCtrl_MoveAndWait()</code></td><td><span class="tag blue">对外</span></td><td>正式业务推荐运动入口，按距离运动并等待停止，包含门控、保护、速度恢复和命令切换处理。</td></tr>
+        <tr><td>运动控制</td><td><code>MotorCtrl_MoveAndWait()</code></td><td><span class="tag blue">对外</span></td><td>正式业务推荐运动入口，按距离下发单次目标并等待停止，包含门控、保护、速度恢复、起步观察、最终偏差判断和命令切换处理。</td></tr>
         <tr><td>运动控制</td><td><code>MotorCtrl_MoveNoWait()</code></td><td><span class="tag blue">对外</span></td><td>只下发相对距离目标，不等待到位；适用于受控循环或上层自定义等待流程。</td></tr>
-        <tr><td>运动控制</td><td><code>MotorCtrl_MoveToPosition()</code></td><td><span class="tag blue">对外</span></td><td>移动到绝对尺带位置，内部根据当前有效位置源计算方向和距离。</td></tr>
-        <tr><td>运动控制</td><td><code>MotorCtrl_JogMoveAndWait()</code> / <code>MotorCtrl_JogMoveToPosition()</code></td><td><span class="tag blue">对外</span></td><td>速度模式点动运动，运行中用主动位置反馈判断剩余距离、提前减速、最终停机和越界。</td></tr>
-        <tr><td>运动控制</td><td><code>MotorCtrl_MoveByTicksAndWait()</code></td><td><span class="tag blue">对外</span></td><td>按 TMC ticks 相对运动，主要用于标定、位置源切换和模型内部操作。</td></tr>
+        <tr><td>运动控制</td><td><code>MotorCtrl_MoveToPosition()</code></td><td><span class="tag blue">对外</span></td><td>移动到绝对尺带位置，先拒绝超出罐高边界的目标，再刷新当前有效位置源并计算方向和距离。</td></tr>
+        <tr><td>运动控制</td><td><code>MotorCtrl_JogMoveAndWait()</code> / <code>MotorCtrl_JogMoveToPosition()</code></td><td><span class="tag blue">对外</span></td><td>速度模式点动运动，运行中用主动位置反馈判断剩余距离、提前减速、最终停机和越界；入口先拒绝超出罐高边界的绝对目标。</td></tr>
+        <tr><td>运动控制</td><td><code>MotorCtrl_MoveByTicksAndWait()</code></td><td><span class="tag blue">对外</span></td><td>按 TMC ticks 相对运动，主要用于标定、位置源切换和模型内部操作；内部拆分起步确认和到位确认。</td></tr>
         <tr><td>运动控制</td><td><code>MotorCtrl_MoveBlockingNoDetectForceDebug()</code></td><td><span class="tag blue">对外</span></td><td>强制调试运动入口，只绕过编码器首帧门控，不绕过驱动初始化和 TMC 健康检查。</td></tr>
         <tr><td>运动控制</td><td><code>MotorCtrl_QuickStop()</code> / <code>MotorCtrl_SlowStop()</code></td><td><span class="tag blue">对外</span></td><td>分别提供快速停止和斜坡慢停，命令切换、故障和自动恢复路径常用。</td></tr>
         <tr><td>运动内部</td><td><code>MotorMotion_DistanceToTicks()</code></td><td><span class="tag">内部</span></td><td>把业务距离、方向和当前尺带长度换算成 TMC 相对 ticks。</td></tr>
@@ -324,6 +327,9 @@
         <tr><td>运动内部</td><td><code>MotorMotion_StopAtTargetAndWait()</code></td><td><span class="tag">内部</span></td><td>到达保护目标后下发停止，并等待电机真正停稳。</td></tr>
         <tr><td>运动内部</td><td><code>MotorMotion_JogMoveToTargetInternal()</code></td><td><span class="tag">内部</span></td><td>Jog 核心状态机，处理临时速度、速度模式启动、慢速接近、提前停机、错误停机和速度恢复。</td></tr>
         <tr><td>运动内部</td><td><code>MotorMotion_CalcJogSlowdownDistanceMm()</code> / <code>MotorMotion_CalcJogStopDistanceMm()</code></td><td><span class="tag">内部</span></td><td>按当前周长、速度和加减速寄存器估算减速距离与停机距离。</td></tr>
+        <tr><td>运动内部</td><td><code>MotorMotionSpeedScope</code> / <code>MotorMotion_*SpeedScope()</code></td><td><span class="tag">内部</span></td><td>统一临时速度设置、恢复和异常返回前收尾，避免多入口重复恢复逻辑。</td></tr>
+        <tr><td>运动内部</td><td><code>MotorMotion_WaitTicksStartChanged()</code> / <code>MotorMotion_WaitTicksReachTarget()</code></td><td><span class="tag">内部</span></td><td>拆分 ticks 相对运动的起步确认和到位确认，保留命令切换、健康检查和详细错误日志。</td></tr>
+        <tr><td>运动内部</td><td><code>MotorMotion_RefreshJogPositionChecked()</code></td><td><span class="tag">内部</span></td><td>Jog 到目标流程专用的位置刷新 helper，集中处理有效位置检查和越界停止。</td></tr>
         <tr><td>速度/电流/健康</td><td><code>MotorCtrl_GetDefaultSpeedX100()</code></td><td><span class="tag blue">对外</span></td><td>返回默认线速度参数，单位 0.01 m/min。</td></tr>
         <tr><td>速度/电流/健康</td><td><code>MotorCtrl_SetCurrent()</code></td><td><span class="tag blue">对外</span></td><td>设置运行电流，内部限幅并下发 TMC5130 电流寄存器。</td></tr>
         <tr><td>速度/电流/健康</td><td><code>MotorCtrl_CheckDriverGstat()</code></td><td><span class="tag blue">对外</span></td><td>检查 TMC5130 状态、配置和功率级，返回统一错误码。</td></tr>
@@ -377,7 +383,7 @@
     <h3>4.2 一次正常距离运动</h3>
     <div class="flow">
       <div class="lane"><b>业务入口</b><br><code>CMD_MoveUp()</code> / <code>CMD_MoveDown()</code> / 测量流程</div>
-      <div class="lane"><b>上层 API</b><br><code>MotorCtrl_MoveAndWait()</code><br>处理速度、重试、方向、距离和打断。</div>
+      <div class="lane"><b>上层 API</b><br><code>MotorCtrl_MoveAndWait()</code><br>处理临时速度、方向、距离、有效位置和打断。</div>
       <div class="lane"><b>运动门控</b><br><code>MotorDriver_CheckMotionReady()</code><br>检查上电安全停机、驱动初始化、编码器首帧、位置源。</div>
       <div class="lane"><b>下发目标</b><br><code>stpr_moveBy()</code> / <code>stpr_moveTo()</code><br>写 <code>RAMPMODE</code>、<code>VMAX</code>、<code>XTARGET</code>。</div>
       <div class="lane"><b>等待和保护</b><br><code>MotorMotion_WaitUntilStopWithTarget()</code><br>轮询位置、刷新速度、检查驱动、处理命令切换。</div>
@@ -409,8 +415,8 @@
       <tbody>
         <tr>
           <td>正式距离运动</td>
-          <td><code>CMD_MoveUp()/CMD_MoveDown()</code> -> <code>MotorCtrl_MoveAndWait()</code> -> <code>MotorDriver_CheckMotionReady()</code> -> <code>MotorMotion_DistanceToTicks()</code> -> <code>stpr_moveBy()</code> -> <code>stpr_moveTo()</code> -> <code>MotorMotion_WaitUntilStopWithTarget()</code></td>
-          <td>运动前门控、速度临时切换、命令切换停止、运行中位置刷新、驱动健康检查。</td>
+          <td><code>CMD_MoveUp()/CMD_MoveDown()</code> -> <code>MotorCtrl_MoveAndWait()</code> -> <code>MotorMotion_BeginSpeedScope()</code> -> <code>MotorDriver_CheckMotionReady()</code> -> <code>MotorMotion_DistanceToTicks()</code> -> <code>stpr_moveBy()</code> -> <code>stpr_moveTo()</code> -> <code>MotorMotion_WaitUntilStopWithTarget()</code> -> <code>MotorMotion_EndSpeedScope()</code></td>
+          <td>运动前门控、临时速度恢复、命令切换停止、运行中位置刷新、驱动健康检查和最终偏差判断。</td>
         </tr>
         <tr>
           <td>强制调试运动</td>
@@ -424,7 +430,7 @@
         </tr>
         <tr>
           <td>位置源切换</td>
-          <td><code>YM</code> 或跟随流程 -> <code>MotorCtrl_SwitchPositionSourceToMotor()</code> -> 记录编码轮/XACTUAL 基准 -> <code>MotorCtrl_MoveByTicksAndWait()</code> 下行一圈 -> 计算局部周长 -> 回到切换前位置 -> 保存参数</td>
+          <td><code>YM</code> 或跟随流程 -> <code>MotorCtrl_SwitchPositionSourceToMotor()</code> -> 记录编码轮/XACTUAL 基准 -> <code>MotorCtrl_MoveByTicksAndWait()</code> 下行一圈 -> <code>MotorMotion_WaitTicksStartChanged()</code> / <code>MotorMotion_WaitTicksReachTarget()</code> -> 计算局部周长 -> 回到切换前位置 -> 保存参数</td>
           <td>切换过程有实际运动；失败时必须回滚旧位置源、旧局部周长、基准和错误码。</td>
         </tr>
         <tr>
@@ -462,11 +468,11 @@
       <thead><tr><th>函数</th><th>位置</th><th>作用</th><th>典型调用方</th></tr></thead>
       <tbody>
         <tr><td><code>MotorCtrl_MoveNoWait(float move_mm, int dir, uint32_t speed_x100)</code></td><td><code>motor_ctrl_motion_api.c</code></td><td>按距离换算 ticks 并下发运动目标，不等待到位。</td><td>B 指令、连续运动、部分调试循环。</td></tr>
-        <tr><td><code>MotorCtrl_MoveAndWait(float mm, int dir, uint32_t speed_x100)</code></td><td><code>motor_ctrl_motion_api.c</code></td><td>业务推荐入口；按距离运动并阻塞等待停止，包含保护、重试、位置刷新和命令切换。</td><td>手动上/下行、液位、罐底、水位、密度流程。</td></tr>
-        <tr><td><code>MotorCtrl_MoveByTicksAndWait(int32_t ticks, uint32_t speed_x100)</code></td><td><code>motor_ctrl_motion_api.c</code></td><td>按相对 ticks 移动并等待停止。</td><td>位置源切换、局部周长标定、卷筒模型内部操作。</td></tr>
-        <tr><td><code>MotorCtrl_MoveToPosition(float target_mm, uint32_t speed_x100)</code></td><td><code>motor_ctrl_motion_api.c</code></td><td>移动到绝对尺带位置，内部根据当前位置判断方向和距离。</td><td>单点测量、固定点监测、瓦锡兰测后回固定点。</td></tr>
-        <tr><td><code>MotorCtrl_JogMoveAndWait(float mm, int dir, uint32_t speed_x100)</code></td><td><code>motor_ctrl_motion_api.c</code></td><td>速度模式点动相对运动，按主动位置反馈等待到位。</td><td>BJ 调试命令、长距离点动方案验证。</td></tr>
-        <tr><td><code>MotorCtrl_JogMoveToPosition(float target_mm, uint32_t speed_x100)</code></td><td><code>motor_ctrl_motion_api.c</code></td><td>速度模式点动到绝对位置，接近目标时降到爬行速度并提前停机。</td><td>BJP 调试命令、目标位置点动验证。</td></tr>
+        <tr><td><code>MotorCtrl_MoveAndWait(float mm, int dir, uint32_t speed_x100)</code></td><td><code>motor_ctrl_motion_api.c</code></td><td>业务推荐入口；按距离运动并阻塞等待停止，包含保护、有效位置刷新、起步观察、最终偏差判断和命令切换。</td><td>手动上/下行、液位、罐底、水位、密度流程。</td></tr>
+        <tr><td><code>MotorCtrl_MoveByTicksAndWait(int32_t ticks, uint32_t speed_x100)</code></td><td><code>motor_ctrl_motion_api.c</code></td><td>按相对 ticks 移动并等待停止，内部先确认 <code>XACTUAL</code> 起步变化，再确认到达目标窗口。</td><td>位置源切换、局部周长标定、卷筒模型内部操作。</td></tr>
+        <tr><td><code>MotorCtrl_MoveToPosition(float target_mm, uint32_t speed_x100)</code></td><td><code>motor_ctrl_motion_api.c</code></td><td>移动到绝对尺带位置，先做绝对目标范围检查，再刷新当前有效位置源并判断方向和距离。</td><td>单点测量、固定点监测、瓦锡兰测后回固定点。</td></tr>
+        <tr><td><code>MotorCtrl_JogMoveAndWait(float mm, int dir, uint32_t speed_x100)</code></td><td><code>motor_ctrl_motion_api.c</code></td><td>速度模式点动相对运动，按主动位置反馈等待到位，计算出的绝对目标先做罐高范围检查。</td><td>BJ 调试命令、长距离点动方案验证。</td></tr>
+        <tr><td><code>MotorCtrl_JogMoveToPosition(float target_mm, uint32_t speed_x100)</code></td><td><code>motor_ctrl_motion_api.c</code></td><td>速度模式点动到绝对位置，入口先做绝对目标范围检查，接近目标时降到爬行速度并提前停机。</td><td>BJP 调试命令、目标位置点动验证。</td></tr>
         <tr><td><code>MotorCtrl_MoveUp(uint32_t speed_x100)</code></td><td><code>motor_ctrl_motion_api.c</code></td><td>连续上行收带，内部调用 <code>MotorCtrl_MoveNoWait(2000, UP)</code>。</td><td>液位查找中的连续上行。</td></tr>
         <tr><td><code>MotorCtrl_MoveDown(uint32_t speed_x100)</code></td><td><code>motor_ctrl_motion_api.c</code></td><td>连续下行放带，内部调用 <code>MotorCtrl_MoveNoWait(200, DOWN)</code>。</td><td>液位查找中的连续下行。</td></tr>
         <tr><td><code>MotorCtrl_MoveBlockingNoDetect(float mm, int dir, uint32_t speed_x100)</code></td><td><code>motor_ctrl_motion_api.c</code></td><td>调试/维护用无保护阻塞运动。</td><td>受控调试流程。</td></tr>
@@ -627,7 +633,7 @@
   <section>
     <h2>8. 源码定位表</h2>
     <div class="note">
-      <p>下表行号来自 2026-06-11 当前工作区源码快照；后续源码增删后行号可能变化，路径和函数名仍可作为主要定位依据。</p>
+      <p>下表行号来自 2026-06-11 当前 <code>codex/motor-simplify</code> worktree 源码快照；后续源码增删后行号可能变化，路径和函数名仍可作为主要定位依据。</p>
     </div>
     <table>
       <thead>
@@ -655,17 +661,23 @@
         <tr><td><code>MotorDriver_CheckMotionReadyForceDebug()</code></td><td><code>LTD_MAIN_CPU2/Services/MotorControl/motor_ctrl_driver_param.c:138</code></td><td>强制调试运动门控，允许绕过编码器首帧。</td></tr>
         <tr><td><code>MotorDriver_CheckHealth()</code></td><td><code>LTD_MAIN_CPU2/Services/MotorControl/motor_ctrl_driver_param.c:289</code></td><td>TMC 通信、配置、功率级和故障状态检查。</td></tr>
         <tr><td><code>MotorDriver_RefreshVelocityDuringRun()</code></td><td><code>LTD_MAIN_CPU2/Services/MotorControl/motor_ctrl_driver_param.c:901</code></td><td>运行中按尺带长度刷新 TMC5130 速度。</td></tr>
-        <tr><td><code>MotorCtrl_MoveAndWait()</code></td><td><code>LTD_MAIN_CPU2/Services/MotorControl/motor_ctrl_motion_api.c:488</code></td><td>正式距离运动主入口。</td></tr>
-        <tr><td><code>MotorCtrl_MoveNoWait()</code></td><td><code>LTD_MAIN_CPU2/Services/MotorControl/motor_ctrl_motion_api.c:358</code></td><td>非阻塞目标下发。</td></tr>
-        <tr><td><code>MotorCtrl_MoveToPosition()</code></td><td><code>LTD_MAIN_CPU2/Services/MotorControl/motor_ctrl_motion_api.c:725</code></td><td>绝对位置运动。</td></tr>
-        <tr><td><code>MotorCtrl_JogMoveAndWait()</code></td><td><code>LTD_MAIN_CPU2/Services/MotorControl/motor_ctrl_motion_api.c:806</code></td><td>速度模式相对点动运动。</td></tr>
-        <tr><td><code>MotorCtrl_JogMoveToPosition()</code></td><td><code>LTD_MAIN_CPU2/Services/MotorControl/motor_ctrl_motion_api.c:845</code></td><td>速度模式绝对位置点动运动。</td></tr>
-        <tr><td><code>MotorMotion_JogMoveToTargetInternal()</code></td><td><code>LTD_MAIN_CPU2/Services/MotorControl/motor_ctrl_motion_api.c:1296</code></td><td>Jog 主动位置反馈和减速停机状态机。</td></tr>
-        <tr><td><code>MotorCtrl_MoveBlockingNoDetectForceDebug()</code></td><td><code>LTD_MAIN_CPU2/Services/MotorControl/motor_ctrl_motion_api.c:989</code></td><td>强制调试无检测运动。</td></tr>
+        <tr><td><code>MotorCtrl_MoveByTicksAndWait()</code></td><td><code>LTD_MAIN_CPU2/Services/MotorControl/motor_ctrl_motion_api.c:177</code></td><td>ticks 相对运动主入口。</td></tr>
+        <tr><td><code>MotorCtrl_MoveNoWait()</code></td><td><code>LTD_MAIN_CPU2/Services/MotorControl/motor_ctrl_motion_api.c:264</code></td><td>非阻塞目标下发。</td></tr>
+        <tr><td><code>MotorCtrl_MoveAndWait()</code></td><td><code>LTD_MAIN_CPU2/Services/MotorControl/motor_ctrl_motion_api.c:394</code></td><td>正式距离运动主入口。</td></tr>
+        <tr><td><code>MotorCtrl_MoveToPosition()</code></td><td><code>LTD_MAIN_CPU2/Services/MotorControl/motor_ctrl_motion_api.c:602</code></td><td>绝对位置运动。</td></tr>
+        <tr><td><code>MotorCtrl_JogMoveAndWait()</code></td><td><code>LTD_MAIN_CPU2/Services/MotorControl/motor_ctrl_motion_api.c:674</code></td><td>速度模式相对点动运动。</td></tr>
+        <tr><td><code>MotorCtrl_JogMoveToPosition()</code></td><td><code>LTD_MAIN_CPU2/Services/MotorControl/motor_ctrl_motion_api.c:717</code></td><td>速度模式绝对位置点动运动。</td></tr>
+        <tr><td><code>MotorCtrl_MoveBlockingNoDetectForceDebug()</code></td><td><code>LTD_MAIN_CPU2/Services/MotorControl/motor_ctrl_motion_api.c:864</code></td><td>强制调试无检测运动。</td></tr>
+        <tr><td><code>MotorMotion_WaitTicksStartChanged()</code></td><td><code>LTD_MAIN_CPU2/Services/MotorControl/motor_ctrl_motion_api.c:978</code></td><td>ticks 运动起步确认。</td></tr>
+        <tr><td><code>MotorMotion_WaitTicksReachTarget()</code></td><td><code>LTD_MAIN_CPU2/Services/MotorControl/motor_ctrl_motion_api.c:1039</code></td><td>ticks 运动目标窗口确认。</td></tr>
+        <tr><td><code>MotorMotion_BeginSpeedScope()</code></td><td><code>LTD_MAIN_CPU2/Services/MotorControl/motor_ctrl_motion_api.c:1173</code></td><td>临时速度 scope 开始。</td></tr>
+        <tr><td><code>MotorMotion_CheckErrorWithSpeedScope()</code></td><td><code>LTD_MAIN_CPU2/Services/MotorControl/motor_ctrl_motion_api.c:1210</code></td><td>保留 <code>CHECK_ERROR</code> 语义并先恢复临时速度。</td></tr>
+        <tr><td><code>MotorMotion_CheckAbsoluteTargetRange()</code></td><td><code>LTD_MAIN_CPU2/Services/MotorControl/motor_ctrl_motion_api.c:1558</code></td><td>绝对目标范围前置检查。</td></tr>
+        <tr><td><code>MotorMotion_RefreshJogPositionChecked()</code></td><td><code>LTD_MAIN_CPU2/Services/MotorControl/motor_ctrl_motion_api.c:1626</code></td><td>Jog 到目标的位置刷新和越界检查。</td></tr>
         <tr><td><code>MotorCtrl_SwitchPositionSourceToMotor()</code></td><td><code>LTD_MAIN_CPU2/Services/MotorControl/motor_ctrl_position_model.c:412</code></td><td>编码轮切换到电机记步。</td></tr>
         <tr><td><code>MotorCtrl_SwitchPositionSourceToEncoder()</code></td><td><code>LTD_MAIN_CPU2/Services/MotorControl/motor_ctrl_position_model.c:396</code></td><td>电机记步切回编码轮。</td></tr>
         <tr><td><code>MotorCtrl_RefreshPositionFromActiveSource()</code></td><td><code>LTD_MAIN_CPU2/Services/MotorControl/motor_ctrl_position_model.c:143</code></td><td>按当前有效位置源刷新业务位置。</td></tr>
-        <tr><td><code>MotorCtrl_SnapshotSensorPositionMm()</code></td><td><code>LTD_MAIN_CPU2/Services/MotorControl/motor_ctrl_motion_api.c:707</code></td><td>生成 mm 单位业务位置快照。</td></tr>
+        <tr><td><code>MotorCtrl_SnapshotSensorPositionMm()</code></td><td><code>LTD_MAIN_CPU2/Services/MotorControl/motor_ctrl_motion_api.c:584</code></td><td>生成 mm 单位业务位置快照。</td></tr>
         <tr><td><code>MotorPosition_FilterXactualGlitch()</code></td><td><code>LTD_MAIN_CPU2/Services/MotorControl/motor_ctrl_position_model.c:1107</code></td><td>过滤 TMC5130 单帧异常位置读数。</td></tr>
         <tr><td><code>MotorCtrl_CheckLostStepAutoTiming()</code></td><td><code>LTD_MAIN_CPU2/Services/MotorControl/motor_ctrl_lost_step_detect.c:67</code></td><td>自动丢步检测。</td></tr>
         <tr><td><code>MotorCtrl_TapeFitStart()</code></td><td><code>LTD_MAIN_CPU2/Services/MotorControl/motor_ctrl_tape_fit.c:42</code></td><td>TFIT 拟合开始。</td></tr>
@@ -728,6 +740,7 @@
       <tbody>
         <tr><td>未初始化或 24V 功率级未建立时下发运动</td><td><code>MotorDriver_CheckMotionReady()</code>、<code>MotorDriver_CheckHealth()</code>、<code>stpr_checkDriverPowerReady()</code></td><td>新增运动入口必须经过 MotorControl 上层门控，除非明确是受控低检测测试。</td></tr>
         <tr><td>命令切换时电机未停稳</td><td><code>CHECK_COMMAND_SWITCH_AND_STOP</code>、<code>MotorDriver_StopIfCommandSwitchRequested()</code>、<code>MotorDriver_StopAndMarkStopped()</code></td><td>长循环和等待循环要持续检查命令切换，返回 <code>STATE_SWITCH</code> 前先停机。</td></tr>
+        <tr><td>异常返回时临时速度未恢复</td><td><code>MotorMotionSpeedScope</code>、<code>MotorMotion_ReturnWithSpeedScope()</code>、<code>MotorMotion_CheckErrorWithSpeedScope()</code></td><td>新增带临时速度的运动路径必须通过 scope 收尾；若提前调用故障处理，也要先恢复默认速度。</td></tr>
         <tr><td>编码轮未首帧有效导致位置盲区</td><td><code>Encoder_IsReady()</code>、<code>AS5145_HasValidSample()</code>、<code>MotorDriver_CheckMotionReady()</code></td><td>普通运动不能绕过首帧门控；强制调试路径要在文档和日志中明确。</td></tr>
         <tr><td>主动位置反馈使用了错误位置源</td><td><code>MotorCtrl_RefreshPositionFromActiveSource()</code>、<code>MotorCtrl_SnapshotSensorPositionMm()</code>、<code>MotorMotion_RefreshActivePositionMm()</code></td><td>Jog、绝对位置和密度流程都应按当前记步源刷新位置；切换位置源后要重新确认快照来源。</td></tr>
         <tr><td>Jog 速度模式接近目标时过冲</td><td><code>MotorMotion_CalcJogSlowdownDistanceMm()</code>、<code>MotorMotion_CalcJogStopDistanceMm()</code>、<code>MotorMotion_StopJogAndRestore()</code></td><td>调整速度、加减速或卷筒模型后，必须复核减速距离、最终停机距离和越界阈值。</td></tr>
@@ -761,6 +774,12 @@
           <td><code>MOTOR_DISABLED</code>、<code>MOTOR_TMC_COMM_ERROR</code> 或驱动状态错误</td>
           <td><code>stpr_checkDriverStatus()</code>、<code>MotorDriver_CheckHealth()</code>、<code>MotorDriver_CheckMotionReady()</code></td>
           <td>标记驱动初始化失效；运动入口尝试 <code>MotorCtrl_Init()</code> 恢复，恢复失败则阻止运动。</td>
+        </tr>
+        <tr>
+          <td>绝对目标超出罐高</td>
+          <td><code>PARAM_RANGE_ERROR</code></td>
+          <td><code>MotorMotion_CheckAbsoluteTargetRange()</code></td>
+          <td>在下发运动前返回错误；故障恢复过滤该确定性错误，避免自动重跑无效目标。</td>
         </tr>
         <tr>
           <td>TMC5130 过温/短路/开路/StallGuard</td>
@@ -870,10 +889,13 @@
         </tr>
       </tbody>
     </table>
+    <div class="note">
+      <p>第一轮代码收敛已完成本地实现：<code>MotorMotionSpeedScope</code>、ticks 起步/到位 helper、Jog 位置检查 helper 已进入 <code>motor_ctrl_motion_api.c</code>。完整后续路线见《电机运动函数简化优化计划.md》；实物回归矩阵见《电机运动函数台架验证记录.md》，其中已细化 T01 到 T16 的入口、步骤、通过条件和记录模板。</p>
+    </div>
   </section>
 
   <section>
-    <h2>14. 后续优化计划</h2>
+    <h2>14. 本文档整理完成情况</h2>
     <table>
       <thead>
         <tr>
@@ -934,7 +956,7 @@
   <section>
     <h2>15. 后续查代码建议</h2>
     <ul>
-      <li>追一次正常运动：从 <code>measure.c</code> 的具体命令函数进入，再看 <code>MotorCtrl_MoveAndWait()</code>、<code>MotorDriver_CheckMotionReady()</code>、<code>stpr_moveBy()</code> 和等待循环。</li>
+      <li>追一次正常运动：从 <code>measure.c</code> 的具体命令函数进入，再看 <code>MotorCtrl_MoveAndWait()</code>、<code>MotorMotion_BeginSpeedScope()</code>、<code>MotorDriver_CheckMotionReady()</code>、<code>stpr_moveBy()</code> 和 <code>MotorMotion_WaitUntilStopWithTarget()</code>。</li>
       <li>追一次电机记步：从 <code>MotorCtrl_SwitchPositionSourceToMotor()</code> 看基准建立、局部周长校准、<code>MotorPosition_UpdatePositionFromMotorSource()</code> 和 FRAM 持久化。</li>
       <li>追编码器问题：从 <code>AS5145.c</code> 的定时采集和错误处理进入，再看 <code>Update_Encoder_Count()</code>、<code>encoder_get_cable_length_01mm()</code> 和首帧有效门控。</li>
       <li>追 BE 调试：从 <code>process_command()</code> 的 <code>B</code>/<code>BE</code> 分支进入，再看 <code>test.c</code> 中 <code>motor_text()</code>、<code>motor_text_encoder()</code> 一类调试函数。</li>

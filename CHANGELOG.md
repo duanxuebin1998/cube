@@ -1184,3 +1184,34 @@ CPU2 参数加载会校验 FRAM 中的 `magic`、`struct_size`、`param_version`
 未验证风险：
 - 尚未执行现场 Wartsila 主站读写、CPU3 页面读取、真实液面慢速下行识别和裁剪边界实测。
 - `EnableLevelMode()` 已有 10 秒模式稳定等待，但瓦锡兰慢速下行运动中液位判定仍使用单次频率读取，现场需验证切换后频率稳定性和误判风险。
+
+## 2026-06-11 - 修复电机绝对目标越界保护和参数错误自动恢复（CPU2 V1.13.2.0）
+
+版本：
+- CPU2: V1.13.1.0 -> V1.13.2.0
+- CPU3: 保持 V1.12.1.0
+
+协议版本/兼容性：
+- `DEVICE_PROTOCOL_VERSION` 保持 7。
+- 不新增 CPU2/CPU3 共享命令、状态、寄存器、结构体或设备参数字段。
+- 电机绝对目标越界继续使用已有 `PARAM_RANGE_ERROR` (`0x00110003`)，不新增错误码。
+- CPU2 `DEVICE_PARAM_VERSION` 保持 3，`DeviceParameters` 结构大小不变，从 V1.13.1.0 升级到 V1.13.2.0 不会因参数存储版本触发恢复出厂。
+
+本次修改：
+- `MotorCtrl_MoveByTicksAndWait()` 拆分为起步等待和到位等待两个内部助手，保留编码器 tick 运动的起步、超时、误差和用户中断判定。
+- `MotorCtrl_MoveAndWait()` 删除不可达重试框架，改为单路径正式运动，入口统一刷新当前位置、计算目标位置并做目标范围检查。
+- 新增 `MotorMotionSpeedScope` 速度保护作用域，集中处理正式运动和点动运动的速度切换、失败退出和恢复默认速度。
+- 新增 `MotorMotion_CheckAbsoluteTargetRange()`，在正式绝对目标、点动绝对目标和由相对距离换算出的目标位置上统一拦截小于 0 或超过罐高的目标。
+- 点动位置刷新改为 `MotorMotion_RefreshJogPositionChecked()`，保留快照有效性、运动方向和越界检查。
+- 自动故障恢复入口增加不可恢复错误过滤，`PARAM_RANGE_ERROR`、`PARAM_ADDRESS_OVERFLOW` 和 `PARAM_ERROR` 不再进入自动恢复重跑，避免越界目标反复重试。
+- 同步整理电机运动函数优化计划、台架验证记录、本次改动点 HTML 和电机与编码器文档索引。
+
+验证：
+- `cmake --build build\LTD_MAIN_CPU2`
+- `git diff --cached --check`
+- `py tools\check_version_bumped.py`
+- COM12 115200 GBK + ST-LINK 台架验证同逻辑固件：T01~T14 通过，越界 1100mm 正式目标和 `BJP1100,1.0` 均返回 `PARAM_RANGE_ERROR` 且不运动、不触发自动恢复；`BJP700,1.0` 合法目标可正常执行。
+
+未验证风险：
+- T15/T16 大负距离和长时间软停止场景未在本轮台架覆盖。
+- 现场机械限位要求传感器位置不低于 200mm，本次固件只按 0 到罐高做通用目标保护，未把 200mm 作为固件硬限位。

@@ -53,6 +53,25 @@ static uint8_t FaultRecovery_IsMotorDriverError(uint32_t error_code)
 }
 
 /**
+ * @brief 判断错误码是否属于确定性配置/边界错误。
+ *
+ * 这类错误不会通过重新初始化或重读部件参数恢复，自动重跑只会重复失败。
+ * @param error_code 当前错误码。
+ * @return 1 表示不进入自动恢复；0 表示继续按命令白名单判断。
+ */
+static uint8_t FaultRecovery_IsNonRecoverableError(uint32_t error_code)
+{
+    switch (error_code) {
+    case PARAM_RANGE_ERROR:
+    case PARAM_ADDRESS_OVERFLOW:
+    case PARAM_ERROR:
+        return 1U;
+    default:
+        return 0U;
+    }
+}
+
+/**
  * @brief 获取故障自动恢复允许的业务重跑次数。
  *
  * 参数为0时关闭自动恢复；1~10为允许重跑次数，非法值按默认3次处理。
@@ -72,7 +91,7 @@ static uint32_t FaultRecovery_GetRetryLimit(void)
 /**
  * @brief 判断命令失败后是否允许进入自动恢复流程。
  *
- * 当前策略按命令白名单恢复，不按错误类型决定是否恢复，避免电机/传感器错误分支越拆越复杂。
+ * 当前策略先排除确定性配置/边界错误，再按命令白名单恢复，避免无效命令自动重跑。
  * @param command 失败的测量命令。
  * @return 1 表示允许自动恢复；0 表示交给普通错误态处理。
  */
@@ -209,6 +228,10 @@ static void FaultRecovery_Start(CommandType command, uint32_t error_code)
     uint32_t retry_count = 0U;
 
     if ((error_code == NO_ERROR) || (error_code == STATE_SWITCH)) {
+        return;
+    }
+
+    if (FaultRecovery_IsNonRecoverableError(error_code)) {
         return;
     }
 
