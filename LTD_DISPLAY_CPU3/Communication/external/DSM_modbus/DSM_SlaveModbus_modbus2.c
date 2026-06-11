@@ -784,7 +784,7 @@ static const CoilCmdMap g_coil_cmd_map[] = {
 
     /* ========= 调试模式区 (0x0100 ~ 0x0107) ========= */
     { COM_CAL_OIL,             CMD_CALIBRATE_OIL, COIL_ACTION_SEND_CMD },           // 液位标定
-    { COM_READPARAMETER,       CMD_MAINTENANCE_MODE, COIL_ACTION_SEND_CMD },        // 读取当前参数/维护动作
+    { COM_READPARAMETER,       CMD_READ_PART_PARAMS, COIL_ACTION_SEND_CMD },         // 读取当前参数
 
     { COM_RUNUP,               CMD_MOVE_UP, COIL_ACTION_SEND_CMD },                 // 向上运行
     { COM_RUNDOWN,             CMD_MOVE_DOWN, COIL_ACTION_SEND_CMD },               // 向下运行

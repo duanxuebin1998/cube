@@ -1,6 +1,6 @@
 # CPU3状态页不同状态显示信息确认表
 
-日期：2026-06-10
+日期：2026-06-11
 
 适用版本：CPU3 `V1.11.1.3`
 
@@ -12,16 +12,16 @@ CPU3 状态页第一行固定显示设备状态文字，并在右侧显示电机
 
 | 显示项 | 显示条件 | 数据源 | 显示口径 |
 | --- | --- | --- | --- |
-| 液位 | 当前状态允许显示液位，且液位不是 `UNVALID_LEVEL` | 液位状态取 `oil_measurement.oil_level`；分布完成取 `density_distribution.Density_oil_level`；综合完成和读取参数完成取 `oil_measurement.oil_level` | `0.1 mm`；值为 `OILLEVELDOWNLIMIT` / `LEVEL_DOWNLIMIT` 时显示“低于盲区” |
+| 液位 | 当前状态允许显示液位，且液位不是 `UNVALID_LEVEL` | 液位状态取 `oil_measurement.oil_level`；分布完成取 `density_distribution.Density_oil_level`；综合完成取 `oil_measurement.oil_level` | `0.1 mm`；值为 `OILLEVELDOWNLIMIT` / `LEVEL_DOWNLIMIT` 时显示“低于盲区” |
 | 水位 | 当前状态允许显示水位，且 `water_measurement.water_level != LEVEL_DOWNLIMITWATER` | `water_measurement.water_level` | `0.1 mm`；当前实现水位为 `0` 时隐藏，不显示“低于盲区” |
-| 密度 | 当前上下文有密度源，且密度不是 `UNVALID_DENSITY` | 单点测量、单点监测或分布平均密度；LTD 密度分布测量中和读取参数完成显示 `density_distribution.average_density` | `0.1 kg/m3` |
-| 温度 | 当前上下文有温度源，且温度 `> 0` 且 `< 40000` | 单点测量、单点监测或分布平均温度；LTD 密度分布测量中和读取参数完成显示 `density_distribution.average_temperature` | 显示值为 `temperature - 20000`，小数 2 位，单位 `℃` |
+| 密度 | 当前上下文有密度源，且密度不是 `UNVALID_DENSITY` | 单点测量、单点监测或分布平均密度；LTD 密度分布测量中显示 `density_distribution.average_density` | `0.1 kg/m3` |
+| 温度 | 当前上下文有温度源，且温度 `> 0` 且 `< 40000` | 单点测量、单点监测或分布平均温度；LTD 密度分布测量中显示 `density_distribution.average_temperature`；读取参数完成显示 `debug_data.temperature` | 显示值为 `temperature - 20000`，小数 2 位，单位 `℃` |
 | 位置 | 正常状态页路径下固定显示 | `debug_data.sensor_position` | `0.1 mm`；值为 `0` 时也显示 |
 | 称重 | 正常状态页路径下固定显示 | `debug_data.current_weight` | 整数显示，无明确单位；值为 `0` 时也显示 |
-| 频率 | 液位过程/液位跟随状态，或读取参数完成，且当前频率有效 | 优先 `oil_measurement.current_frequency`，否则 `debug_data.frequency` | `Hz` |
-| 电容 | 水位过程/水位跟随状态，或读取参数完成，且 `water_measurement.current_capacitance > 0` | `water_measurement.current_capacitance` | 显示为 `current_capacitance * 10`，小数 1 位 |
+| 频率 | 液位过程/液位跟随状态，或读取参数完成，且当前频率有效 | 液位过程取 `oil_measurement.current_frequency` 或 `debug_data.frequency`；读取参数完成取 `debug_data.frequency` | `Hz` |
+| 电容 | 水位过程/水位跟随状态，或读取参数完成，且当前电容有效 | 水位过程取 `water_measurement.current_capacitance`；读取参数完成取 `debug_data.water_capacitance_x10` | 显示为 0.1pF 口径，小数 1 位 |
 | X/Y角 | 罐高上下文或读取参数完成，且 `bottom_detect_mode != 0`，角度不为 `0` | `debug_data.angle_x` / `debug_data.angle_y` | 小数 2 位，单位 `°` |
-| 罐高 | 罐底完成、罐高标定完成或读取参数完成，且 `current_real_height != 0` | `height_measurement.current_real_height` | `0.1 mm` |
+| 罐高 | 罐底完成或罐高标定完成，且 `current_real_height != 0` | `height_measurement.current_real_height` | `0.1 mm` |
 | 错误码 | `STATE_ERROR` | `device_status.error_code` | 状态行追加错误类型和位置，格式为 `type-pos` |
 | 故障详情 | `STATE_ERROR` 且 `error_code != NO_ERROR` | `Display_GetErrorReasonByCode(error_code)` | 结果区显示 `故障:` 原因，过长时拆成两行 |
 
@@ -58,7 +58,7 @@ CPU3 状态页第一行固定显示设备状态文字，并在右侧显示电机
 | `STATE_WARTSILA_DENSITY_OVER` | 分布测量完成 | 状态、液位、平均密度、平均温度 | `density_distribution.Density_oil_level`、`average_density`、`average_temperature` | 当前实现不显示测点数 |
 | `STATE_SYNTHETICING` | 综合过程/运动调试 | 状态、位置、称重 | `debug_data.sensor_position`、`debug_data.current_weight` | 保守显示过程量，不显示旧业务结果 |
 | `STATE_SYNTHETICING_OVER` | 综合完成 | 状态、液位、水位、平均密度、平均温度 | `oil_measurement.oil_level`、`water_measurement.water_level`、`density_distribution.average_density`、`average_temperature` | OLED 分页显示；水位为 `0` 时隐藏 |
-| `STATE_READPARAMETEROVER` | 读取参数完成 | 状态、位置、称重、液位、水位、平均密度、平均温度、频率、电容、X角、Y角、罐高 | `debug_data`、`oil_measurement`、`water_measurement`、`density_distribution`、`height_measurement.current_real_height` | 各项按有效值分页显示，频率和电容可同时显示 |
+| `STATE_READPARAMETEROVER` | 读取参数完成/持续刷新 | 状态、位置、称重、温度、频率、电容、X角、Y角 | `debug_data.sensor_position`、`debug_data.current_weight`、`debug_data.temperature`、`debug_data.frequency`、`debug_data.water_capacitance_x10`、`debug_data.angle_x/y` | CPU2 `CMD_ReadPartParams()` 在该状态内每 1s 刷新，直到新命令或错误；显示侧展示最新部件参数快照，不混用液位、水位、罐高等历史业务结果 |
 | `STATE_FINDBOTTOM` | 罐高过程 | 状态、位置、称重、X角、Y角 | `debug_data.sensor_position`、`debug_data.current_weight`、`debug_data.angle_x/y` | 角度需 `bottom_detect_mode != 0` |
 | `STATE_CALIBRATE_TANKHEIGHTING` | 罐高过程 | 状态、位置、称重、X角、Y角 | `debug_data.sensor_position`、`debug_data.current_weight`、`debug_data.angle_x/y` | 角度需 `bottom_detect_mode != 0` |
 | `STATE_FINDBOTTOM_OVER` | 罐高完成 | 状态、位置、称重、X角、Y角、罐高 | `debug_data`、`height_measurement.current_real_height` | 罐高不为 `0` 时显示 |

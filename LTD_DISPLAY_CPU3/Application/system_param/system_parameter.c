@@ -603,7 +603,7 @@ void PrintMeasurementResult(const MeasurementResult *m)
     printf("  温度: %.2f ℃\r\n",       (float)m->debug_data.temperature / 100.0f);
     printf("  空气中频率: %lu Hz\r\n", (unsigned long)m->debug_data.air_frequency);
     printf("  幅值: %lu\r\n",          (unsigned long)m->debug_data.current_amplitude);
-    printf("  水位电压/电容值: %lu\r\n",(unsigned long)m->debug_data.water_level_voltage);
+    printf("  水位电容快照(0.1pF): %lu\r\n",(unsigned long)m->debug_data.water_capacitance_x10);
 
     printf("  当前称重值: %lu\r\n",    (unsigned long)m->debug_data.current_weight);
     printf("  称重参数: %lu\r\n",      (unsigned long)m->debug_data.weight_param);

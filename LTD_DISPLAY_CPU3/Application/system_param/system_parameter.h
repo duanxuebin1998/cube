@@ -450,7 +450,7 @@ typedef struct {
 	uint32_t temperature;          ///< 温度 (单位: 0.01°C)
 	uint32_t air_frequency;        ///< 空气中频率
 	uint32_t current_amplitude;    ///< 当前幅值
-	uint32_t water_level_voltage;  ///< 水位电压值/电容值
+	uint32_t water_capacitance_x10; ///< 水位电容快照(单位: 0.1pF)
 
     /* 称重相关 */
     uint32_t current_weight;       ///< 当前称重值

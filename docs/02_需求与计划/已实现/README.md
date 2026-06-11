@@ -8,3 +8,4 @@
 | `无线滑环最近匹配正式命令需求.md` | CPU2/CPU3 V1.9.0.0 / V1.7.0.0 已加入正式命令、匹配结果和 MAC 显示 |
 | `二代计量仪同步支持DSM_V1.228协议需求方案.md` | CPU3 V1.8.0.0 已完成 DSM V1.228 外部协议兼容的阶段性实现 |
 | `2026-06-09_CPU3测量结果按状态展示优化需求与计划.md` | CPU3 V1.11.0.0 已完成状态页测量结果按设备状态选源，并补充位置、称重全状态显示 |
+| `2026-06-10_读取部件参数指令优化记录.html` | CPU3 DSM `COM_READPARAMETER` 已改为下发 `CMD_READ_PART_PARAMS`，CPU2 在 `STATE_READPARAMETEROVER` 内由 `CMD_ReadPartParams()` 持续刷新部件参数，直到命令切换或故障 |

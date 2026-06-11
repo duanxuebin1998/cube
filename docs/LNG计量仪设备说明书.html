@@ -475,7 +475,7 @@
         <tr><td>密度每米测量</td><td><code>CMD_MEASURE_DENSITY_METER</code></td><td>按每米间隔执行密度测量。</td><td>DSM 外部状态会按 V1.228 翻译。</td></tr>
         <tr><td>区间密度测量</td><td><code>CMD_MEASURE_DENSITY_RANGE</code></td><td>按设定上下限执行区间密度测量。</td><td>注意区间上限和下限单位。</td></tr>
         <tr><td>瓦锡兰区间密度</td><td><code>CMD_WARTSILA_DENSITY_RANGE</code></td><td>执行瓦锡兰区间密度测量流程。</td><td>支持测后按频率探底和探底修正罐高。</td></tr>
-        <tr><td>读取部件参数</td><td><code>CMD_READ_PART_PARAMS</code></td><td>读取传感器、电机、称重、编码器等部件参数。</td><td>故障自动恢复确认也会周期性读取部件参数。</td></tr>
+        <tr><td>读取部件参数</td><td><code>CMD_READ_PART_PARAMS</code></td><td>读取传感器、电机、称重、编码器、水位电容、姿态角等部件参数。</td><td>首次读取完成后进入 <code>STATE_READPARAMETEROVER</code>，并在命令函数内部每 1 秒刷新；新命令或错误退出。</td></tr>
       </tbody>
     </table>
   </section>
@@ -756,7 +756,7 @@
       <li>CPU2/CPU3 固件版本与协议版本一致。</li>
       <li>启动日志显示安全停机结果和编码器首帧状态。</li>
       <li>屏幕状态页没有协议不匹配提示。</li>
-      <li>读取部件参数能成功返回传感器、称重、电机、编码器和水位电容相关数据。</li>
+      <li>读取部件参数能成功返回传感器、称重、电机、编码器和水位电容相关数据；进入完成态后数据会持续刷新，且新命令可打断。</li>
     </ul>
 
     <h3>测量检查</h3>

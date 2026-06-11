@@ -1,0 +1,507 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>读取部件参数指令优化记录</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f5f6f8;
+      --paper: #ffffff;
+      --ink: #1f2933;
+      --muted: #5e6b7a;
+      --line: #d9dee7;
+      --head: #edf2f7;
+      --accent: #1f6feb;
+      --ok: #157347;
+      --warn: #9a5b00;
+      --danger: #b42318;
+      --code: #e9eef5;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font: 15px/1.72 "Microsoft YaHei", "Segoe UI", Arial, sans-serif;
+      letter-spacing: 0;
+    }
+
+    header {
+      background: #0f172a;
+      color: #fff;
+      padding: 32px 0 26px;
+      border-bottom: 5px solid var(--accent);
+    }
+
+    main, .wrap {
+      width: min(1160px, calc(100% - 32px));
+      margin: 0 auto;
+    }
+
+    main { padding: 22px 0 54px; }
+
+    h1, h2, h3 {
+      margin: 0;
+      line-height: 1.3;
+      letter-spacing: 0;
+    }
+
+    h1 {
+      font-size: 31px;
+      margin-bottom: 10px;
+    }
+
+    h2 {
+      font-size: 22px;
+      margin: 30px 0 12px;
+      padding-bottom: 8px;
+      border-bottom: 2px solid var(--line);
+    }
+
+    h3 {
+      font-size: 18px;
+      margin: 22px 0 8px;
+      color: #143f6b;
+    }
+
+    p { margin: 8px 0; }
+
+    code {
+      padding: 1px 5px;
+      border-radius: 4px;
+      background: var(--code);
+      color: #172033;
+      font-family: Consolas, "Courier New", monospace;
+      font-size: 0.94em;
+    }
+
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    .meta {
+      margin: 0;
+      color: #cbd5e1;
+      font-size: 14px;
+    }
+
+    .card {
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 18px 20px;
+      margin: 16px 0;
+    }
+
+    .summary {
+      border-left: 5px solid var(--accent);
+      padding-left: 16px;
+    }
+
+    .warn {
+      border-left: 5px solid var(--warn);
+      padding-left: 16px;
+      background: #fff8ea;
+    }
+
+    .danger {
+      border-left: 5px solid var(--danger);
+      padding-left: 16px;
+      background: #fff1f0;
+    }
+
+    ul, ol {
+      padding-left: 24px;
+      margin: 8px 0;
+    }
+
+    li { margin: 4px 0; }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 12px 0 18px;
+      background: var(--paper);
+      border: 1px solid var(--line);
+    }
+
+    th, td {
+      border: 1px solid var(--line);
+      padding: 9px 10px;
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th {
+      background: var(--head);
+      font-weight: 700;
+      color: #172033;
+    }
+
+    .flow {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+      margin: 14px 0;
+    }
+
+    .step {
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 12px;
+      min-height: 108px;
+    }
+
+    .step strong {
+      display: block;
+      margin-bottom: 6px;
+      color: #143f6b;
+    }
+
+    .tag {
+      display: inline-block;
+      border-radius: 999px;
+      padding: 1px 8px;
+      font-size: 12px;
+      line-height: 1.8;
+      background: #e9eef5;
+      color: #2f3a4a;
+      white-space: nowrap;
+    }
+
+    .tag.ok { background: #e8f5ee; color: var(--ok); }
+    .tag.warn { background: #fff3cd; color: var(--warn); }
+    .tag.danger { background: #fde8e8; color: var(--danger); }
+
+    .muted { color: var(--muted); }
+
+    @media (max-width: 900px) {
+      .flow { grid-template-columns: 1fr; }
+      h1 { font-size: 26px; }
+      th, td { font-size: 14px; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="wrap">
+      <h1>读取部件参数指令优化记录</h1>
+      <p class="meta">日期：2026-06-10 ｜ 更新：2026-06-11 ｜ 范围：CPU3 菜单、DSM 外部 Modbus、CPU2 命令执行、状态回传 ｜ 状态：源码优化已落地</p>
+    </div>
+  </header>
+
+  <main>
+    <section class="card summary">
+      <h2>结论摘要</h2>
+      <ul>
+        <li>内部共享命令已有 <code>CMD_READ_PART_PARAMS = 15</code>，CPU2 会进入 <code>STATE_READPARAMETERING</code>，首次读取完成后进入 <code>STATE_READPARAMETEROVER</code> 并持续刷新部件参数。</li>
+        <li>CPU3 本机菜单和 DSM 外部线圈 <code>COM_READPARAMETER = 0x0101</code> 现在都下发 <code>CMD_READ_PART_PARAMS</code>。</li>
+        <li>CPU2 <code>CMD_ReadPartParams()</code> 首次调用 <code>Sensor_ReadPartParamsInternal(1U)</code> 完成读取；只要仍处于 <code>STATE_READPARAMETEROVER</code>，就在函数内部循环刷新，直到命令切换或真实错误。</li>
+      </ul>
+    </section>
+
+    <section class="card summary">
+      <h2>已优化点</h2>
+      <p>
+        修改前，同一个“读取参数/读取部件参数”业务在 CPU3 本机菜单和 DSM 外部协议入口下发的内部命令不同：
+        本机菜单下发 <code>CMD_READ_PART_PARAMS</code>，DSM 线圈入口下发 <code>CMD_MAINTENANCE_MODE</code>。
+      </p>
+      <p>
+        修改后，DSM 外部 <code>0x0101</code> 与本机菜单口径一致，都会触发 CPU2 的读取部件参数流程；维护模式仍保留为内部命令 <code>CMD_MAINTENANCE_MODE</code>，但不再复用“读取当前参数”线圈触发。
+      </p>
+      <p>
+        2026-06-11 进一步调整后，读取完成态不是一次性快照结束态，而是长驻刷新态：<code>CMD_ReadPartParams()</code> 在完成态内每 1 秒重新读取一次部件参数，外部 DSM 和本机菜单都会看到最新快照。
+      </p>
+    </section>
+
+    <section>
+      <h2>关键命令与状态</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>名称</th>
+            <th>值</th>
+            <th>当前语义</th>
+            <th>位置</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>CMD_READ_PART_PARAMS</code></td>
+            <td><code>15</code></td>
+            <td>读取部件参数。CPU2 会采集位置、电机、称重、姿态角、密度/温度/频率、水位电容等调试数据。</td>
+            <td><code>LTD_MAIN_CPU2/Services/ParamStorage/system_parameter.h</code><br><code>LTD_DISPLAY_CPU3/Application/system_param/system_parameter.h</code></td>
+          </tr>
+          <tr>
+            <td><code>CMD_MAINTENANCE_MODE</code></td>
+            <td><code>109</code></td>
+            <td>进入维护模式。设置手动报警抑制和液位自动更新抑制，长驻等待后续命令切换。</td>
+            <td><code>LTD_MAIN_CPU2/Application/Src/measure.c</code></td>
+          </tr>
+          <tr>
+            <td><code>COM_READPARAMETER</code></td>
+            <td><code>0x0101</code></td>
+            <td>DSM 外部调试模式区线圈，注释为“读取当前参数”。优化后映射到 <code>CMD_READ_PART_PARAMS</code>。</td>
+            <td><code>LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_stateformodbus2.h</code><br><code>LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c</code></td>
+          </tr>
+          <tr>
+            <td><code>STATE_READPARAMETERING</code></td>
+            <td><code>0x0016</code></td>
+            <td>读取参数中，由 CPU2 读取部件参数流程设置。</td>
+            <td><code>LTD_MAIN_CPU2/Services/Sensor/sensor.c</code></td>
+          </tr>
+          <tr>
+            <td><code>STATE_READPARAMETEROVER</code></td>
+            <td><code>0x8016</code></td>
+            <td>读取参数完成/持续刷新。CPU2 在该状态内每 1 秒刷新一次部件参数；CPU3 状态页按“读取参数结果”上下文显示最新快照。</td>
+            <td><code>LTD_MAIN_CPU2/Services/Sensor/sensor.c</code><br><code>LTD_DISPLAY_CPU3/Application/display/display.c</code></td>
+          </tr>
+          <tr>
+            <td><code>STATE_MAINTENANCEMODE</code></td>
+            <td><code>0x0029</code></td>
+            <td>维护模式中。CPU3 状态页按运动/调试上下文显示位置、称重等，不等价于读取部件参数完成。</td>
+            <td><code>LTD_MAIN_CPU2/Application/Src/measure.c</code><br><code>LTD_DISPLAY_CPU3/Application/display/display.c</code></td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>CPU3 本机菜单入口</h2>
+      <div class="flow">
+        <div class="step">
+          <strong>1. 菜单项</strong>
+          测量菜单包含“读取部件参数”，操作号为 <code>COM_NUM_READ_PART_PARAMS</code>。
+        </div>
+        <div class="step">
+          <strong>2. 菜单映射</strong>
+          <code>cmd_nopara_process()</code> 将 <code>COM_NUM_READ_PART_PARAMS</code> 映射为 <code>CMD_READ_PART_PARAMS</code>。
+        </div>
+        <div class="step">
+          <strong>3. 下发 CPU2</strong>
+          CPU3 写 <code>HOLDREGISTER_DEVICEPARAM_COMMAND</code>，长度为 2 个保持寄存器。
+        </div>
+        <div class="step">
+          <strong>4. CPU2 执行</strong>
+          CPU2 主循环取走命令，进入读取部件参数流程。
+        </div>
+      </div>
+      <p class="muted">
+        本机菜单链路的当前行为与“读取部件参数”语义一致。
+      </p>
+    </section>
+
+    <section>
+      <h2>DSM 外部 Modbus 入口</h2>
+      <div class="flow">
+        <div class="step">
+          <strong>1. 外部线圈</strong>
+          <code>COM_READPARAMETER = 0x0101</code>，位于 DSM 调试模式线圈区。
+        </div>
+        <div class="step">
+          <strong>2. 写线圈</strong>
+          <code>Response05()</code> 只在写入 <code>0xFF00</code> 时触发内部命令；写 <code>0x0000</code> 只回响应，不下发动作。
+        </div>
+        <div class="step">
+          <strong>3. 优化后映射</strong>
+          <code>g_coil_cmd_map[]</code> 将 <code>COM_READPARAMETER</code> 映射为 <code>CMD_READ_PART_PARAMS</code>。
+        </div>
+        <div class="step">
+          <strong>4. 实际结果</strong>
+          CPU2 收到 <code>CMD_READ_PART_PARAMS</code> 后执行读取部件参数流程。
+        </div>
+      </div>
+      <p>
+        该优化会改变 DSM 外部主站通过 <code>0x0101</code> 触发“读取当前参数”的行为：外部状态将跟随读取流程进入 <code>STATE_READPARAMETERING</code> 和 <code>STATE_READPARAMETEROVER</code>，不再进入维护模式。
+      </p>
+    </section>
+
+    <section>
+      <h2>CPU2 命令执行链路</h2>
+      <ol>
+        <li>CPU3 或外部协议写入 CPU2 的 <code>HOLDREGISTER_DEVICEPARAM_COMMAND</code>。</li>
+        <li>CPU2 Modbus 写多个寄存器处理函数先把当前 <code>g_deviceParams</code> 写入保持寄存器数组，再合并主站写入，再读回 <code>g_deviceParams.command</code>。</li>
+        <li>CPU2 主循环发现 <code>g_deviceParams.command != CMD_NONE</code> 后取走命令，并立即清空 <code>g_deviceParams.command</code>，避免重复执行。</li>
+        <li><code>App_ExecuteMeasureCommand()</code> 设置 <code>current_command</code>，调用 <code>ProcessMeasureCmd()</code>；由于读取部件参数会在命令函数内持续刷新，命令切换或错误退出后才清掉 <code>current_command</code>。</li>
+        <li><code>ProcessMeasureCmd()</code> 命中 <code>CMD_READ_PART_PARAMS</code> 后调用 <code>CMD_ReadPartParams()</code>。</li>
+        <li><code>CMD_ReadPartParams()</code> 首次调用 <code>Sensor_ReadPartParamsInternal(1U)</code>，成功后进入 <code>STATE_READPARAMETEROVER</code>。</li>
+        <li>只要状态仍为 <code>STATE_READPARAMETEROVER</code>，函数内部每 <code>READ_PART_PARAMS_REFRESH_INTERVAL_MS = 1000 ms</code> 调用 <code>Sensor_CheckAllPartParams()</code> 刷新；刷新逻辑不放在 <code>App_MainLoop()</code> 空闲轮询中。</li>
+        <li>刷新等待使用 <code>AbortableDelay_CommandSwitch(..., 100U)</code>，新命令最多按 100 ms 粒度打断；真实错误由 <code>SET_ERROR(ret)</code> 进入错误处理。</li>
+      </ol>
+      <div class="card warn">
+        <p>
+          设计边界：<code>STATE_READPARAMETEROVER</code> 对读取部件参数来说是长驻刷新态，行为类似液位/水位跟随的持续态；退出条件是命令切换、状态被其它流程改变或真实错误。
+        </p>
+      </div>
+    </section>
+
+    <section>
+      <h2>读取部件参数实际采集内容</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>类别</th>
+            <th>当前读取/刷新内容</th>
+            <th>结果写入位置</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>位置与编码器</td>
+            <td>当前编码器值、传感器位置、尺带长度、电机步数、电机距离。</td>
+            <td><code>g_measurement.debug_data</code></td>
+          </tr>
+          <tr>
+            <td>电机状态</td>
+            <td>驱动状态检查、调试滚筒状态刷新、电机速度、电机状态。</td>
+            <td><code>g_measurement.debug_data</code></td>
+          </tr>
+          <tr>
+            <td>称重</td>
+            <td>称重通信超时检查、当前称重、称重参数占位值。</td>
+            <td><code>g_measurement.debug_data</code></td>
+          </tr>
+          <tr>
+            <td>姿态角</td>
+            <td>支持辅助 DSM 通道时读取 X/Y 角；不支持时写 0 并打印提示。</td>
+            <td><code>g_measurement.debug_data.angle_x/y</code></td>
+          </tr>
+          <tr>
+            <td>密度/温度/频率</td>
+            <td>LTD 传感器先准备密度模式，再读取密度、温度、频率；部分不可用场景会按现有逻辑降级或返回错误。</td>
+            <td><code>g_measurement.debug_data.frequency/temperature</code> 等</td>
+          </tr>
+          <tr>
+            <td>水位电容</td>
+            <td>支持辅助 DSM 通道时读取水位电容并按 0.1pF 写入水位电容快照；不支持时写 0。</td>
+            <td><code>g_measurement.debug_data.water_capacitance_x10</code></td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>状态回传与显示</h2>
+      <ul>
+        <li>CPU2 会把 <code>g_measurement.device_status.device_state</code> 写入输入寄存器，CPU3 运行期轮询输入寄存器获取状态和测量结果。</li>
+        <li><code>STATE_READPARAMETEROVER</code> 在 CPU3 显示层归类为 <code>DISPLAY_RESULT_CONTEXT_READ_PARAMETER</code>，用于显示读取参数结果上下文；CPU2 持续刷新期间，显示侧读取的是最新共享快照。</li>
+        <li><code>STATE_MAINTENANCEMODE</code> 在 CPU3 显示层仍归类为 <code>DISPLAY_RESULT_CONTEXT_MOTION_DEBUG</code>，用于真正进入维护模式的场景。</li>
+        <li>DSM 外部输入寄存器 <code>INPUTREGISTER_SYSTEMSTATE</code> 通过 <code>DSM_TranslateDeviceState()</code> 输出状态；本次不修改状态码，只改变 <code>0x0101</code> 触发的内部命令。</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>版本与兼容性</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>项目</th>
+            <th>判断</th>
+            <th>说明</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>CPU2/CPU3 共享协议</td>
+            <td>不变</td>
+            <td>未新增命令码、寄存器、共享结构字段或状态码；复用既有 <code>CMD_READ_PART_PARAMS</code> 和既有状态。</td>
+          </tr>
+          <tr>
+            <td><code>DEVICE_PROTOCOL_VERSION</code></td>
+            <td>不升级</td>
+            <td>本次复用既有命令和状态，读取刷新发生在 CPU2 命令函数内部，不改变共享寄存器、命令码或状态码。</td>
+          </tr>
+          <tr>
+            <td>固件版本</td>
+            <td>提交/发布前需要处理</td>
+            <td>改变 CPU3 外部 DSM 行为、CPU2 读取部件参数执行语义和状态页可见刷新行为；按版本规则，提交或发布前应同步评估并升级受影响 CPU 固件版本。</td>
+          </tr>
+          <tr>
+            <td>现场兼容风险</td>
+            <td>需联调确认</td>
+            <td>如果现场 PLC 曾依赖 <code>0x0101</code> 进入维护模式，需要同步说明新口径：该线圈现在表示读取部件参数。</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>已执行验证</h2>
+      <ul>
+        <li><code>py -3 tools\check_read_part_params_refresh_contract.py</code>：检查读取部件参数刷新循环只在 <code>CMD_ReadPartParams()</code> 内部实现，且可被命令切换打断。</li>
+        <li><code>py -3 tools\check_dsm_compat_contract.py</code>：检查 DSM 兼容协议关键映射，其中 X 角度继续按一代偏移格式输出。</li>
+        <li><code>cmake --build build\LTD_MAIN_CPU2</code>：确认 CPU2 固件可编译通过。</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>源码依据</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>文件</th>
+            <th>关键位置</th>
+            <th>说明</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>LTD_DISPLAY_CPU3/Application/system_param/system_parameter.h</code></td>
+            <td><code>CMD_READ_PART_PARAMS</code>、<code>CMD_MAINTENANCE_MODE</code></td>
+            <td>CPU3 内部命令枚举。</td>
+          </tr>
+          <tr>
+            <td><code>LTD_MAIN_CPU2/Services/ParamStorage/system_parameter.h</code></td>
+            <td><code>CMD_READ_PART_PARAMS</code>、状态枚举</td>
+            <td>CPU2 内部命令和设备状态枚举。</td>
+          </tr>
+          <tr>
+            <td><code>LTD_DISPLAY_CPU3/Application/display/display_tankopera.c</code></td>
+            <td><code>cmd_nopara_process()</code></td>
+            <td>CPU3 菜单“读取部件参数”到 <code>CMD_READ_PART_PARAMS</code> 的映射。</td>
+          </tr>
+          <tr>
+            <td><code>LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_stateformodbus2.h</code></td>
+            <td><code>COM_READPARAMETER = 0x0101</code></td>
+            <td>DSM 外部调试模式线圈定义。</td>
+          </tr>
+          <tr>
+            <td><code>LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c</code></td>
+            <td><code>g_coil_cmd_map[]</code>、<code>Response05()</code></td>
+            <td>DSM 线圈写入到内部命令的当前映射和触发条件。</td>
+          </tr>
+          <tr>
+            <td><code>LTD_MAIN_CPU2/Application/Src/app_main.c</code></td>
+            <td><code>App_MainLoop()</code>、<code>App_ExecuteMeasureCommand()</code></td>
+            <td>CPU2 正式命令取走、执行和 <code>current_command</code> 维护。</td>
+          </tr>
+          <tr>
+            <td><code>LTD_MAIN_CPU2/Application/Src/measure.c</code></td>
+            <td><code>ProcessMeasureCmd()</code>、<code>CMD_EnterMaintenanceMode()</code></td>
+            <td>CPU2 命令分支，读取部件参数和维护模式的分流。</td>
+          </tr>
+          <tr>
+            <td><code>LTD_MAIN_CPU2/Services/Sensor/sensor.c</code></td>
+            <td><code>CMD_ReadPartParams()</code>、<code>Sensor_ReadPartParamsInternal()</code>、<code>Sensor_CheckAllPartParams()</code></td>
+            <td>读取部件参数的具体采集流程与完成态循环刷新。</td>
+          </tr>
+          <tr>
+            <td><code>LTD_DISPLAY_CPU3/Application/display/display.c</code></td>
+            <td>显示上下文和状态显示表</td>
+            <td>读取参数完成与维护模式在 CPU3 状态页上的显示差异。</td>
+          </tr>
+          <tr>
+            <td><code>LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_DataAnalysis_modbus2.c</code></td>
+            <td><code>DSM_TranslateDeviceState()</code>、<code>Input_Write()</code></td>
+            <td>DSM 对外输入寄存器状态刷新和状态翻译。</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+  </main>
+</body>
+</html>

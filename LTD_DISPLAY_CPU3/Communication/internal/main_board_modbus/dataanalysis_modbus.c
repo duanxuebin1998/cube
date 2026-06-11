@@ -503,7 +503,7 @@ void read_measurement_result_from_InputRegisters(uint16_t *regs) {
 	g_measurement.debug_data.temperature = read_u32_from_regs(cregs, REG_DEBUG_TEMPERATURE);
 	g_measurement.debug_data.air_frequency = read_u32_from_regs(cregs, REG_DEBUG_AIR_FREQUENCY);
 	g_measurement.debug_data.current_amplitude = read_u32_from_regs(cregs, REG_DEBUG_CURRENT_AMPLITUDE);
-	g_measurement.debug_data.water_level_voltage = read_u32_from_regs(cregs, REG_DEBUG_WATER_LEVEL_VOLTAGE);
+	g_measurement.debug_data.water_capacitance_x10 = read_u32_from_regs(cregs, REG_DEBUG_WATER_CAPACITANCE_X10);
 
 	/* 称重相关 */
 	g_measurement.debug_data.current_weight = read_u32_from_regs(cregs, REG_DEBUG_CURRENT_WEIGHT);

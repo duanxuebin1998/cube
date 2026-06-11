@@ -37,6 +37,8 @@ CPU2 参数加载会校验 FRAM 中的 `magic`、`struct_size`、`param_version`
 | V1.12.1.0 | 3 | 存储版本不变，通常保留旧参数 |
 | V1.12.1.1 | 3 | 存储版本不变；仅调整参数、打印和文档中的称重/探底等中文口径，通常保留旧参数 |
 | V1.12.1.2 | 3 | 存储版本不变；同步 11 项恢复出厂默认值，旧 FRAM 参数通常保留，新默认值仅在恢复出厂或 FRAM 无效时生效 |
+| V1.12.1.3 | 3 | 存储版本不变；继续同步恢复出厂默认值和状态页矩阵，旧 FRAM 参数通常保留 |
+| V1.12.2.0 | 3 | 存储版本不变；读取部件参数完成态改为持续刷新，`debug_data` 水位字段改为水位电容快照，旧 FRAM 参数通常保留 |
 
 历史说明：建立 CPU2 程序版本号前，2025-12-16 引入当前参数元信息时使用 `DEVICE_PARAM_VERSION=1`；2026-03-05 系统参数增加时提升到 `DEVICE_PARAM_VERSION=2`，从版本 1 升级到版本 2 会因旧参数版本不匹配恢复出厂参数。
 
@@ -995,3 +997,37 @@ CPU2 参数加载会校验 FRAM 中的 `magic`、`struct_size`、`param_version`
 - `python-docx` 结构化读取《LNG计量仪屏幕菜单.docx》，确认 `磁通量D/T`、选项型默认值含义和 CPU3 版本号已更新。
 - `git diff --check -- LTD_DISPLAY_CPU3/Application/system_param/system_parameter.c`：通过。
 - 尚未重新构建 CPU3 固件；本次代码改动仅涉及菜单参数显示名，提交前已通过版本检查脚本约束升版范围。
+
+## 2026-06-11 - 优化读取部件参数持续刷新与 DSM 调试区兼容（CPU2 V1.12.2.0 / CPU3 V1.11.2.0）
+
+版本：
+- CPU2: V1.12.1.3 -> V1.12.2.0
+- CPU3: V1.11.1.4 -> V1.11.2.0
+
+协议版本/兼容性：
+- `DEVICE_PROTOCOL_VERSION` 保持 7。
+- 不新增 CPU2/CPU3 共享命令码、状态码或寄存器地址；读取部件参数继续复用 `CMD_READ_PART_PARAMS`、`STATE_READPARAMETERING` 和 `STATE_READPARAMETEROVER`。
+- CPU2 `DEVICE_PARAM_VERSION` 保持 3，`DeviceParameters` 结构大小不变，从 V1.12.1.3 升级到 V1.12.2.0 不会因参数存储版本触发恢复出厂。
+- `debug_data.water_level_voltage` 更名为 `debug_data.water_capacitance_x10`，内部语义明确为水位电容快照，单位 0.1pF；CPU2/CPU3 调试数据寄存器位置保持不变。
+- DSM 外部调试区保留历史寄存器地址，`0x0104` X 角度按一代兼容口径输出 `angle_x + 0x8000`，`0x010C~0x010D` 沿用“水位传感器电压”地址输出水位电容快照。
+
+本次修改：
+- CPU2 `CMD_ReadPartParams()` 首次读取完成后，在 `STATE_READPARAMETEROVER` 内每 1 秒刷新一次部件参数；等待期间通过 `AbortableDelay_CommandSwitch(..., 100U)` 支持新命令打断。
+- 刷新逻辑保留在读取部件参数命令函数内部，不放入 `App_MainLoop()` 空闲轮询。
+- CPU2/CPU3 内部调试数据字段统一改为 `water_capacitance_x10`，同步内部 Modbus 寄存器宏、打印和 CPU3 解析口径。
+- CPU3 状态页读取参数完成态显示最新部件参数快照，不混用液位、水位、罐高等历史业务结果；频率和电容读取 `debug_data`。
+- CPU3 DSM 外部输入寄存器修正 X 角度一代偏移兼容，并将水位电容快照写入历史水位传感器电压地址。
+- 同步更新读取部件参数需求记录、状态页确认表、LNG 设备说明书、DSM V1.228 兼容方案、版本方案和文档索引。
+- 新增读取部件参数刷新、DSM 兼容、CPU3 故障详情显示的契约检查脚本。
+- 整理 LTD 传感器 S002-2026-V1.1 原理图资料和阅读版文档；该资料整理不影响固件协议和版本兼容性。
+
+验证：
+- `py -3 tools\check_read_part_params_refresh_contract.py`
+- `py -3 tools\check_dsm_compat_contract.py`
+- `py -3 tools\check_cpu3_fault_reason_visibility.py`
+- `cmake --build build\LTD_MAIN_CPU2`
+- `cmake --build build\LTD_DISPLAY_CPU3`
+- `git diff --cached --check`
+- `py tools\check_version_bumped.py`
+- 已做源码/文档关键字复查，确认不再残留 `debug_data.water_level_voltage` 旧字段引用；目标文档不再描述主循环轮询或跳过外层初始化旧方案。
+- 尚未做实物 OLED 翻页、DSM 主站读取和读取部件参数长时间运行联调；现场需确认完成态持续刷新周期、新命令打断和外部寄存器数值倍率。

@@ -21,6 +21,7 @@
 #define WIRELESS_SLAVE_ADDR 2U
 #define SENSOR_LEVEL_FREQ_RECOVERY_LIFT_MM 1.0f
 #define SENSOR_DENSITY_MODE_SETTLE_MS 3000U
+#define READ_PART_PARAMS_REFRESH_INTERVAL_MS 1000U
 
 static uint32_t Sensor_PositionToU01mmClamped(void);
 
@@ -859,7 +860,7 @@ static uint32_t Sensor_ReadPartParamsInternal(uint8_t update_command_state)
         /* debug_data.temperature 在 Read_Density 内已 TEMP_TO_RAW，避免重复计算 */
     }
 
-    /* ---------- 6) 水位电容/电压 ---------- */
+    /* ---------- 6) 水位电容 ---------- */
     if ((!update_command_state) && HasEffectiveCommandSwitchRequest()) {
         return STATE_SWITCH;
     }
@@ -869,12 +870,12 @@ static uint32_t Sensor_ReadPartParamsInternal(uint8_t update_command_state)
         if (ret != NO_ERROR) {
             return ret;
         } else {
-            /* 水位电容值/电压值：你结构体写 uint32_t，这里约定 ×10 或 ×100 以保留小数
-               若你工程已有“水位电容原始值”的标定口径，请按你的口径替换 */
-            g_measurement.debug_data.water_level_voltage = (uint32_t)(cap * 10.0f); /* 例如：0.1单位 */
+            /* 水位电容快照按 0.1pF 保存，避免和历史“电压”语义混淆
+               若传感器返回单位变化，需要同步调整字段名和显示小数位。 */
+            g_measurement.debug_data.water_capacitance_x10 = (uint32_t)(cap * 10.0f); /* 0.1pF */
         }
     } else {
-        g_measurement.debug_data.water_level_voltage = 0;
+        g_measurement.debug_data.water_capacitance_x10 = 0;
         printf("读取部件参数\t当前传感器类型不支持水位电容读取，已跳过\r\n");
     }
 
@@ -896,7 +897,7 @@ static uint32_t Sensor_ReadPartParamsInternal(uint8_t update_command_state)
            (long)g_measurement.debug_data.motor_distance,
            (unsigned long)g_measurement.debug_data.frequency,
            (unsigned long)g_measurement.debug_data.temperature,
-           (unsigned long)g_measurement.debug_data.water_level_voltage,
+           (unsigned long)g_measurement.debug_data.water_capacitance_x10,
            (unsigned long)g_measurement.debug_data.current_weight,
            (long)g_measurement.debug_data.angle_x,
            (long)g_measurement.debug_data.angle_y,
@@ -920,4 +921,18 @@ void CMD_ReadPartParams(void)
     uint32_t ret = Sensor_ReadPartParamsInternal(1U);
 
     SET_ERROR(ret);
+
+    /* 读取部件参数完成态是长驻刷新态：不回到主循环轮询，直接在命令内按周期刷新；
+       等待过程保留命令切换检查，避免新命令被 1s 刷新周期阻塞。 */
+    while (g_measurement.device_status.device_state == STATE_READPARAMETEROVER) {
+        ret = AbortableDelay_CommandSwitch(READ_PART_PARAMS_REFRESH_INTERVAL_MS, 100U);
+        if (ret == STATE_SWITCH) {
+            /* 命令切换不是传感器故障，记录切换结果后退出本命令，让主循环执行新命令。 */
+            SET_ERROR(ret);
+            break;
+        }
+
+        ret = Sensor_CheckAllPartParams();
+        SET_ERROR(ret);
+    }
 }

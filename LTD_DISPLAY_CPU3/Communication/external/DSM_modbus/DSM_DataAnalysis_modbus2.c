@@ -592,16 +592,16 @@ void Input_Write(void) {
 	WriteOneInputRegister(INPUTREGISTER_FREQUENCE, 2, g_measurement.debug_data.frequency);										//传感器频率
 	WriteOneInputRegister(INPUTREGISTER_TEMPERATURE, 1, g_measurement.debug_data.temperature);								//传感器温度()
 	WriteOneInputRegister(INPUTREGISTER_STATEOFEINDUCTION, 1, 0);						//霍尔开关状态(改为带宽)														//干簧管状态
-	WriteOneInputRegister(INPUTREGISTER_FREQUENCEINAIR, 2, g_measurement.debug_data.air_frequency);							//空气中频率
 	WriteOneInputRegister(INPUTREGISTER_AMPLITUDE, 1, 0);										//传感器幅值
 	WriteOneInputRegister(INPUTREGISTER_SENSORX_ANGLE, 1, 0);								//传感器X角度
 	WriteOneInputRegister(INPUTREGISTER_SENSORY_ANGLE, 1, 0);								//传感器Y角度
-	WriteOneInputRegister(INPUTREGISTER_WARTER_VOLTAGE, 1, g_measurement.debug_data.water_level_voltage);							//水位传感器电压
-	/* V1.225 DSM 调试区修正：0x0104/0x0105 为 X/Y 角度，0x010B 为幅值，0x010C/0x010D 为水位电压，0x010E~0x0111 预留。 */
-	WriteOneInputRegister(INPUTREGISTER_CIRCLE, 1, g_measurement.debug_data.angle_x);
+	WriteOneInputRegister(INPUTREGISTER_WARTER_VOLTAGE, 1, g_measurement.debug_data.water_capacitance_x10);							//历史兼容寄存器，内部为水位电容快照
+	/* V1.225 DSM 调试区修正：0x0104/0x0105 为 X/Y 角度，0x010B 为幅值，0x010C/0x010D 沿用水位电压寄存器名输出水位电容快照，0x010E~0x0111 预留。
+	   一代上位机按 X_Angele + 0x8000 解析 0x0104，这里保留偏移口径，避免 X 角度符号解释不兼容。 */
+	WriteOneInputRegister(INPUTREGISTER_CIRCLE, 1, g_measurement.debug_data.angle_x + 0x8000);
 	WriteOneInputRegister(INPUTREGISTER_ANGLE, 1, g_measurement.debug_data.angle_y);
 	WriteOneInputRegister(INPUTREGISTER_STATEOFEINDUCTION, 1, g_measurement.debug_data.current_amplitude);
-	WriteOneInputRegister(INPUTREGISTER_FREQUENCEINAIR, 2, g_measurement.debug_data.water_level_voltage);
+	WriteOneInputRegister(INPUTREGISTER_WATER_SENSOR_VOLTAGE, 2, g_measurement.debug_data.water_capacitance_x10);
 	WriteOneInputRegister(INPUTREGISTER_AMPLITUDE, 1, 0);
 	WriteOneInputRegister(INPUTREGISTER_SENSORX_ANGLE, 1, 0);
 	WriteOneInputRegister(INPUTREGISTER_SENSORY_ANGLE, 1, 0);

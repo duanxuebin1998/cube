@@ -518,7 +518,7 @@ void write_measurement_result_to_InputRegisters(uint16_t *regs) {
 	write_u32_to_regs(regs, REG_DEBUG_TEMPERATURE, g_measurement.debug_data.temperature);
 	write_u32_to_regs(regs, REG_DEBUG_AIR_FREQUENCY, g_measurement.debug_data.air_frequency);
 	write_u32_to_regs(regs, REG_DEBUG_CURRENT_AMPLITUDE, g_measurement.debug_data.current_amplitude);
-	write_u32_to_regs(regs, REG_DEBUG_WATER_LEVEL_VOLTAGE, g_measurement.debug_data.water_level_voltage);
+	write_u32_to_regs(regs, REG_DEBUG_WATER_CAPACITANCE_X10, g_measurement.debug_data.water_capacitance_x10);
 
 	/* ≥∆÷ÿœ‡πÿ */
 	write_u32_to_regs(regs, REG_DEBUG_CURRENT_WEIGHT, g_measurement.debug_data.current_weight);

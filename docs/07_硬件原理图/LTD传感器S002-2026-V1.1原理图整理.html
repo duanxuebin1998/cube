@@ -1,0 +1,1282 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+  <meta charset="utf-8" />
+  <meta name="generator" content="pandoc" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+  <title>LTD传感器S002-2026-V1.1原理图整理</title>
+  <style>
+
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: min(4vw, 1.5em);}
+div.column{flex: auto; overflow-x: auto;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+
+ul.task-list[class]{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+font-size: inherit;
+width: 0.8em;
+margin: 0 0.8em 0.2em -1.6em;
+vertical-align: middle;
+}
+.display.math{display: block; text-align: center; margin: 0.5rem auto;}
+</style>
+  <style type="text/css">:root {
+color-scheme: light;
+--page-bg: #edf1f5;
+--paper: #ffffff;
+--ink: #182230;
+--muted: #617081;
+--line: #d9e0e8;
+--line-soft: #e8edf3;
+--nav-bg: #f8fafc;
+--nav-active: #e6f5f2;
+--accent: #0f766e;
+--accent-strong: #0b5f59;
+--accent-soft: #e8f6f3;
+--warn: #b45309;
+--warn-soft: #fff4df;
+--code: #15436b;
+--code-bg: #f3f7fb;
+--shadow: 0 18px 48px rgba(28, 43, 64, 0.12);
+}
+@page {
+size: A4;
+margin: 12mm;
+}
+html {
+background: var(--page-bg);
+scroll-behavior: smooth;
+}
+body {
+box-sizing: border-box;
+min-height: 100vh;
+margin: 0;
+color: var(--ink);
+background:
+linear-gradient(180deg, rgba(15, 118, 110, 0.08), rgba(15, 118, 110, 0) 260px),
+var(--page-bg);
+font-family: "Microsoft YaHei", "Segoe UI", Arial, sans-serif;
+font-size: 15px;
+line-height: 1.72;
+letter-spacing: 0;
+-webkit-font-smoothing: antialiased;
+-webkit-print-color-adjust: exact;
+print-color-adjust: exact;
+}
+* {
+box-sizing: border-box;
+}
+a {
+color: var(--accent-strong);
+text-decoration: none;
+}
+a:hover {
+text-decoration: underline;
+}
+body > .level1 {
+max-width: 1180px;
+margin: 28px auto 56px;
+padding: 44px 56px 52px;
+background: var(--paper);
+border: 1px solid var(--line-soft);
+border-radius: 8px;
+box-shadow: var(--shadow);
+}
+body > .level1 > p:first-of-type {
+display: inline-flex;
+align-items: center;
+gap: 8px;
+margin: 0 0 20px;
+padding: 5px 10px;
+color: var(--accent-strong);
+font-size: 13px;
+font-weight: 700;
+background: var(--accent-soft);
+border: 1px solid #cbe7e2;
+border-radius: 999px;
+}
+h1,
+h2,
+h3,
+h4 {
+color: #101828;
+font-weight: 750;
+line-height: 1.24;
+letter-spacing: 0;
+scroll-margin-top: 24px;
+break-after: avoid;
+}
+h1 {
+max-width: 920px;
+margin: 0 0 14px;
+padding: 0;
+color: #0f172a;
+font-size: 36px;
+border: 0;
+}
+h2 {
+margin: 38px 0 16px;
+padding: 0 0 10px;
+font-size: 24px;
+border: 0;
+border-bottom: 1px solid var(--line-soft);
+}
+h2::before {
+content: "";
+display: inline-block;
+width: 7px;
+height: 22px;
+margin-right: 10px;
+vertical-align: -4px;
+background: var(--accent);
+border-radius: 4px;
+}
+h3 {
+margin: 28px 0 12px;
+color: #1d2939;
+font-size: 18px;
+}
+h4 {
+margin: 22px 0 10px;
+color: #344054;
+font-size: 15px;
+}
+p {
+margin: 0 0 14px;
+}
+ul,
+ol {
+margin: 10px 0 18px 22px;
+padding-left: 18px;
+}
+li {
+margin: 7px 0;
+}
+li::marker {
+color: var(--accent);
+font-weight: 700;
+}
+blockquote {
+margin: 18px 0;
+padding: 14px 18px;
+color: #344054;
+background: var(--warn-soft);
+border: 1px solid #f4d7a1;
+border-left: 5px solid var(--warn);
+border-radius: 8px;
+}
+hr {
+height: 1px;
+margin: 28px 0;
+background: var(--line-soft);
+border: 0;
+}
+#TOC {
+max-width: 1180px;
+margin: 22px auto 0;
+padding: 16px 18px;
+color: #344054;
+background: rgba(255, 255, 255, 0.92);
+border: 1px solid var(--line-soft);
+border-radius: 8px;
+box-shadow: 0 8px 24px rgba(28, 43, 64, 0.08);
+}
+#TOC::before {
+content: "目录";
+display: block;
+margin: 0 0 8px;
+color: #101828;
+font-size: 15px;
+font-weight: 800;
+}
+#TOC ul {
+margin: 0;
+padding: 0;
+list-style: none;
+}
+#TOC li {
+margin: 0;
+}
+#TOC a {
+display: block;
+padding: 6px 8px;
+color: #475467;
+font-size: 13px;
+line-height: 1.35;
+border-radius: 6px;
+}
+#TOC a:hover {
+color: var(--accent-strong);
+background: var(--nav-active);
+text-decoration: none;
+}
+#TOC > ul > li > a {
+color: #101828;
+font-weight: 800;
+}
+#TOC ul ul {
+margin-top: 3px;
+padding-left: 10px;
+border-left: 2px solid var(--line-soft);
+}
+#TOC ul ul ul a {
+color: #667085;
+font-size: 12px;
+}
+table {
+display: block;
+width: 100%;
+margin: 18px 0 26px;
+overflow-x: auto;
+border-collapse: separate;
+border-spacing: 0;
+font-size: 13px;
+line-height: 1.55;
+}
+thead,
+tbody,
+tr {
+width: 100%;
+}
+th,
+td {
+min-width: 130px;
+padding: 11px 13px;
+vertical-align: top;
+border: 0;
+border-right: 1px solid var(--line);
+border-bottom: 1px solid var(--line);
+word-break: break-word;
+}
+th:first-child,
+td:first-child {
+border-left: 1px solid var(--line);
+}
+thead th {
+position: sticky;
+top: 0;
+z-index: 1;
+color: #102a43;
+font-weight: 800;
+background: #dff0ed;
+border-top: 1px solid var(--line);
+}
+thead th:first-child {
+border-top-left-radius: 8px;
+}
+thead th:last-child {
+border-top-right-radius: 8px;
+}
+tbody tr:nth-child(even) td {
+background: #fafcff;
+}
+tbody tr:hover td {
+background: #f3faf8;
+}
+code {
+padding: 2px 6px;
+color: var(--code);
+font-family: Consolas, "Cascadia Mono", "Courier New", monospace;
+font-size: 0.92em;
+background: var(--code-bg);
+border: 1px solid #dce7f2;
+border-radius: 5px;
+}
+pre {
+margin: 18px 0 24px;
+padding: 16px 18px;
+overflow-x: auto;
+color: #172033;
+white-space: pre;
+background: #f7fafc;
+border: 1px solid var(--line);
+border-left: 5px solid var(--accent);
+border-radius: 8px;
+}
+pre code {
+padding: 0;
+color: inherit;
+background: transparent;
+border: 0;
+}
+img {
+max-width: 100%;
+height: auto;
+}
+.report-summary {
+display: grid;
+grid-template-columns: repeat(4, minmax(0, 1fr));
+gap: 10px;
+margin: 20px 0 28px;
+padding: 14px;
+background: #f8fafc;
+border: 1px solid var(--line-soft);
+border-radius: 8px;
+}
+.report-summary div {
+min-width: 0;
+padding: 10px 12px;
+background: #ffffff;
+border: 1px solid var(--line-soft);
+border-radius: 8px;
+}
+.report-summary span {
+display: block;
+margin-bottom: 3px;
+color: var(--muted);
+font-size: 12px;
+}
+.report-summary strong {
+display: block;
+color: #101828;
+font-size: 14px;
+line-height: 1.35;
+}
+.signal-flow {
+display: grid;
+grid-template-columns: repeat(5, minmax(145px, 1fr));
+gap: 10px;
+margin: 18px 0 24px;
+}
+.flow-node {
+min-height: 118px;
+padding: 13px 13px 12px;
+background: #ffffff;
+border: 1px solid #cfdce8;
+border-top: 4px solid var(--accent);
+border-radius: 8px;
+}
+.flow-step {
+display: inline-flex;
+align-items: center;
+justify-content: center;
+width: 28px;
+height: 24px;
+margin-bottom: 8px;
+color: #ffffff;
+font-size: 12px;
+font-weight: 800;
+background: var(--accent);
+border-radius: 999px;
+}
+.flow-node strong {
+display: block;
+margin-bottom: 5px;
+color: #101828;
+font-size: 14px;
+line-height: 1.35;
+}
+.flow-node span:last-child {
+display: block;
+color: #667085;
+font-size: 12px;
+line-height: 1.45;
+}
+@media (min-width: 1180px) {
+body {
+display: grid;
+grid-template-columns: 286px minmax(0, 1180px);
+gap: 24px;
+align-items: start;
+padding: 28px 32px 56px;
+}
+#TOC {
+position: sticky;
+top: 24px;
+max-height: calc(100vh - 48px);
+margin: 0;
+overflow: auto;
+}
+body > .level1 {
+width: 100%;
+margin: 0;
+}
+}
+@media (max-width: 900px) {
+body > .level1 {
+margin: 14px 10px 28px;
+padding: 26px 18px 34px;
+}
+h1 {
+font-size: 28px;
+}
+h2 {
+font-size: 21px;
+}
+#TOC {
+margin: 12px 10px 0;
+}
+.report-summary {
+grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.signal-flow {
+grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+}
+@media (max-width: 560px) {
+.report-summary,
+.signal-flow {
+grid-template-columns: 1fr;
+}
+th,
+td {
+min-width: 180px;
+}
+}
+@media print {
+html,
+body {
+background: #ffffff;
+}
+body {
+display: block;
+padding: 0;
+font-size: 10.5pt;
+}
+#TOC,
+body > .level1 {
+max-width: none;
+margin: 0 0 8mm;
+padding: 0;
+border: 0;
+border-radius: 0;
+box-shadow: none;
+}
+table {
+display: table;
+font-size: 8.6pt;
+}
+pre,
+table,
+.report-summary,
+.signal-flow,
+.flow-node {
+break-inside: avoid;
+}
+}
+</style>
+</head>
+<body>
+<nav id="TOC" role="doc-toc">
+<ul>
+<li><a href="#ltd-传感器-s002-2026-v11-原理图整理" id="toc-ltd-传感器-s002-2026-v11-原理图整理">LTD 传感器 S002-2026-V1.1
+原理图整理</a>
+<ul>
+<li><a href="#资料信息" id="toc-资料信息">资料信息</a></li>
+<li><a href="#图纸定位" id="toc-图纸定位">图纸定位</a></li>
+<li><a href="#核心硬件链路" id="toc-核心硬件链路">核心硬件链路</a>
+<ul>
+<li><a href="#通信与板级控制" id="toc-通信与板级控制">通信与板级控制</a></li>
+<li><a href="#电源与电压检测" id="toc-电源与电压检测">电源与电压检测</a></li>
+<li><a href="#模拟计数与频率测量" id="toc-模拟计数与频率测量">模拟计数与频率测量</a></li>
+</ul></li>
+<li><a href="#采集--驱动部分" id="toc-采集--驱动部分">采集--驱动部分</a>
+<ul>
+<li><a href="#dds-驱动" id="toc-dds-驱动">DDS 驱动</a></li>
+<li><a href="#采集与选通" id="toc-采集与选通">采集与选通</a></li>
+<li><a href="#自激反馈与液位检测" id="toc-自激反馈与液位检测">自激反馈与液位检测</a></li>
+</ul></li>
+<li><a href="#密度测量原理" id="toc-密度测量原理">密度测量原理</a>
+<ul>
+<li><a href="#通用原理" id="toc-通用原理">通用原理</a></li>
+<li><a href="#s002-2026-板级链路" id="toc-s002-2026-板级链路">S002-2026
+板级链路</a></li>
+<li><a href="#cpu2-当前读数口径" id="toc-cpu2-当前读数口径">CPU2
+当前读数口径</a></li>
+<li><a href="#对固件和认证资料的影响" id="toc-对固件和认证资料的影响">对固件和认证资料的影响</a></li>
+</ul></li>
+<li><a href="#温度水位姿态和零点" id="toc-温度水位姿态和零点">温度、水位、姿态和零点</a></li>
+<li><a href="#外部接口整理" id="toc-外部接口整理">外部接口整理</a></li>
+<li><a href="#和当前工程的对应关系" id="toc-和当前工程的对应关系">和当前工程的对应关系</a></li>
+<li><a href="#固件开发关注点" id="toc-固件开发关注点">固件开发关注点</a></li>
+<li><a href="#待确认项" id="toc-待确认项">待确认项</a></li>
+</ul></li>
+</ul>
+</nav>
+<section id="ltd-传感器-s002-2026-v11-原理图整理" class="level1">
+<h1>LTD 传感器 S002-2026-V1.1 原理图整理</h1>
+<p>整理日期：2026-06-10；排版更新：2026-06-11</p>
+<div class="report-summary">
+  <div><span>图纸对象</span><strong>S002-2026 LTD 传感器板</strong></div>
+  <div><span>核心链路</span><strong>DDS 激励 + 压电采集 + MCU 计数</strong></div>
+  <div><span>密度原理</span><strong>振动式/谐振式测量</strong></div>
+  <div><span>CPU2 边界</span><strong>读取协议结果，不直接采模拟量</strong></div>
+</div>
+
+<section id="资料信息" class="level2">
+<h2>资料信息</h2>
+<table>
+<thead>
+<tr>
+<th>项目</th>
+<th>内容</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>原始文件</td>
+<td><code>00_原始资料/S002-2026-V1.1.pdf</code></td>
+</tr>
+<tr>
+<td>来源文件</td>
+<td><code>C:\Users\admin\Downloads\S002-2026-V1.1.pdf</code></td>
+</tr>
+<tr>
+<td>图纸文件</td>
+<td><code>S002-2026.SchDoc</code></td>
+</tr>
+<tr>
+<td>图纸日期</td>
+<td>2026-06-10</td>
+</tr>
+<tr>
+<td>PDF 页数</td>
+<td>1 页</td>
+</tr>
+<tr>
+<td>PDF 元数据</td>
+<td>Creator: <code>Altium Designer Summer 09</code>; Producer:
+<code>llPDFLib 3.x</code>; 创建时间：2026-06-10 08:00:00</td>
+</tr>
+<tr>
+<td>文件大小</td>
+<td>690,153 字节</td>
+</tr>
+<tr>
+<td>SHA256</td>
+<td><code>15498D0092B4F5C9ADA81763977D60E8378A3A301221DFE487BB1C1B3CC7B227</code></td>
+</tr>
+<tr>
+<td>整理方式</td>
+<td><code>pdfinfo</code>、<code>pdftotext -layout/-raw</code>
+提取文本，300 dpi 渲染后人工核对关键模块</td>
+</tr>
+</tbody>
+</table>
+<p>说明：本文用于固件开发、联调和排故时快速理解 LTD
+传感器采集驱动板内部链路，不替代 Altium
+源文件、PCB、BOM、硬件评审或本安认证资料。原理图中的部分功能名和公式来自图纸注释；与固件关联部分为结合当前
+<code>LTD_MAIN_CPU2</code> 代码的分析。</p>
+</section>
+<section id="图纸定位" class="level2">
+<h2>图纸定位</h2>
+<p>该 PDF 是单页 A2 原理图，标题区域未填写独立
+Title/Number/Revision，但文件名为
+<code>S002-2026.SchDoc</code>，图中主要分区如下：</p>
+<table>
+<thead>
+<tr>
+<th>分区</th>
+<th>主要内容</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>主控芯片</td>
+<td><code>MSPM0G3507</code> 64 脚
+MCU，负责本板采集、驱动、通信、模式切换和频率计数</td>
+</tr>
+<tr>
+<td>485</td>
+<td><code>SN65HVD72</code> RS485 收发器，信号名
+<code>TXD</code>、<code>RXD</code>、<code>DE</code>、<code>A+</code>、<code>B-</code></td>
+</tr>
+<tr>
+<td>SWD 烧写及晶振</td>
+<td>4 针 SWD、8 MHz
+晶振、<code>JTMS-SWDIO</code>、<code>JTCK-SWCLK</code></td>
+</tr>
+<tr>
+<td>电源及电压检测</td>
+<td><code>ADP7102-3.3</code> 生成 3.3V，<code>MCP6241T-E</code> 输出
+<code>POWERTEST</code></td>
+</tr>
+<tr>
+<td>加速度计</td>
+<td><code>ADXL345BCCZ-RL7</code>，SPI 接口
+<code>SCLK0/MOSI/MISO/CS</code>，中断 <code>INT1/INT2</code></td>
+</tr>
+<tr>
+<td>磁零点</td>
+<td>Hall 接口和 <code>TLV9061IDBVR</code> 比较/缓冲，输出
+<code>ZERO</code>，使能 <code>ZERO_EN</code></td>
+</tr>
+<tr>
+<td>温度测量模块</td>
+<td><code>ADS1247</code> 24 位
+ADC，<code>AIN1+</code>/<code>AIN1-</code> 输入，<code>IOUT1</code>
+激励，SPI/控制信号接 MCU</td>
+</tr>
+<tr>
+<td>测水模块</td>
+<td><code>FDC2212</code> 电容数字转换器，I2C 接口
+<code>SCL/SDA</code>，LC 网络输出 <code>TWater</code></td>
+</tr>
+<tr>
+<td>采集--驱动部分</td>
+<td>双 <code>AD9832</code> DDS、<code>AD8630</code>
+运放、<code>MAX942</code> 比较器、<code>ADG702</code>
+模拟开关、<code>AD8629</code> 自激反馈</td>
+</tr>
+<tr>
+<td>液位检测</td>
+<td><code>LEVEL</code> 模拟量经 <code>AD8630</code> 比较后形成
+<code>LEVEL_INT</code></td>
+</tr>
+<tr>
+<td>外部焊盘/接口</td>
+<td><code>VCC</code>、<code>GND</code>、<code>A+</code>、<code>B-</code>、<code>POWERTEST</code>、<code>TWater</code>、<code>Aout1/2</code>、<code>Ain1/2</code>、<code>AIN1+/-</code>
+等单针接口</td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="核心硬件链路" class="level2">
+<h2>核心硬件链路</h2>
+<section id="通信与板级控制" class="level3">
+<h3>通信与板级控制</h3>
+<table>
+<thead>
+<tr>
+<th>项目</th>
+<th>原理图信息</th>
+<th>固件关联</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>RS485 通信</td>
+<td><code>SN65HVD72</code>，<code>TXD</code> 接 DI，<code>RXD</code> 接
+RO，<code>DE</code> 同时接 DE 和 <code>/RE</code>
+控制收发方向，外部总线为 <code>A+</code>、<code>B-</code></td>
+<td>当前 CPU2 通过 USART6
+与传感器/无线链路通信，<code>LTD_MAIN_CPU2.ioc</code> 中 PC6/PC7 标为
+<code>SENSOR_TXD6</code>/<code>SENSOR_RXD6</code>，波特率 9600</td>
+</tr>
+<tr>
+<td>固件协议</td>
+<td>图纸未给出上层协议，只有板内 MCU 与 RS485 硬件</td>
+<td>当前 <code>ltd_sensor_communication.c</code> 按固定 8 字节 LTD/V2
+协议实现 <code>R/W/T/D/B</code> 命令、校验和模式切换</td>
+</tr>
+<tr>
+<td>传感器识别</td>
+<td>原理图没有直接暴露编号存储器件；编号应由板内 MCU 固件返回</td>
+<td>CPU2 使用 <code>DSM_V2_Read_SensorID()</code> 读取参数
+<code>R 0x16</code> 识别 LTD 传感器</td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="电源与电压检测" class="level3">
+<h3>电源与电压检测</h3>
+<table>
+<thead>
+<tr>
+<th>信号/器件</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>VCC</code></td>
+<td>本板输入电源，进入 <code>ADP7102-3.3</code> LDO</td>
+</tr>
+<tr>
+<td><code>3.3V</code></td>
+<td>供 MCU、RS485、ADXL345、FDC2212、ADC 数字侧和模拟控制器件使用</td>
+</tr>
+<tr>
+<td><code>POWERTEST</code></td>
+<td>由 <code>MCP6241T-E</code> 运放/比较器相关电路生成，接 MCU
+<code>PA24/A0_3</code>，同时作为外部测试焊盘</td>
+</tr>
+<tr>
+<td><code>PWR LED</code></td>
+<td>3.3V 电源指示</td>
+</tr>
+</tbody>
+</table>
+<p>固件关注点：CPU2
+侧只能看到传感器协议返回值或通信状态，不能直接采集该板
+<code>POWERTEST</code>。如果后续需要远程诊断传感器板电源，应确认传感器固件是否已把
+<code>POWERTEST</code> 映射到可读参数。</p>
+</section>
+<section id="模拟计数与频率测量" class="level3">
+<h3>模拟计数与频率测量</h3>
+<p>图纸注释给出的计数逻辑如下：</p>
+<table>
+<thead>
+<tr>
+<th>步骤</th>
+<th>图纸描述</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>采集到的传感器信号通过调制后产生类似正弦波信号，接入
+<code>TIMG8_ETR</code> 作为计时源</td>
+</tr>
+<tr>
+<td>2</td>
+<td><code>TIMG8</code> 计数达到固定值后，由 <code>TIMG8_C1</code> 输出
+<code>AM_COUNT</code></td>
+</tr>
+<tr>
+<td>3</td>
+<td><code>TIMG8_C1</code> 连接
+<code>TIMG12_C0</code>，<code>TIMG8</code>
+捕获计数，达到数量后进行计时</td>
+</tr>
+<tr>
+<td>4</td>
+<td>通过 <code>TIMG12</code> 计时和脉冲计数计算频率值</td>
+</tr>
+</tbody>
+</table>
+<p>固件关联：</p>
+<table>
+<thead>
+<tr>
+<th>CPU2 读取项</th>
+<th>当前代码路径</th>
+<th>硬件来源推断</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>液位频率</td>
+<td><code>DSM_V2_Read_LevelFrequency()</code> 读取
+<code>R 0x04</code></td>
+<td>传感器板 MCU 由 <code>TIMG8_ETR</code>/<code>AM_COUNT</code>
+等计数链路计算</td>
+</tr>
+<tr>
+<td>密度频率</td>
+<td><code>DSM_V2_Read_DensityFrequency()</code> 读取
+<code>R 0x11</code>/<code>R 0x12</code>，CPU2 再按均方值计算频率</td>
+<td>与 45 度/22.5 度采集波形、均方值或扫频结果有关</td>
+</tr>
+<tr>
+<td>温度/密度</td>
+<td><code>DSM_V2_Read_Temperature()</code>、<code>DSM_V2_Read_Density()</code></td>
+<td>由传感器板内部 ADC/算法输出，CPU2 只做协议读取和修正</td>
+</tr>
+</tbody>
+</table>
+</section>
+</section>
+<section id="采集--驱动部分" class="level2">
+<h2>采集--驱动部分</h2>
+<section id="dds-驱动" class="level3">
+<h3>DDS 驱动</h3>
+<table>
+<thead>
+<tr>
+<th>器件/信号</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>U2 AD9832BRUZ</code></td>
+<td>产生 <code>Drive_A</code></td>
+</tr>
+<tr>
+<td><code>U3 AD9832BRUZ</code></td>
+<td>产生 <code>Drive_B</code></td>
+</tr>
+<tr>
+<td>共用控制</td>
+<td><code>MCLK</code>、<code>SCLK</code>、<code>SDATA</code>、<code>FSELECT</code></td>
+</tr>
+<tr>
+<td>独立控制</td>
+<td><code>FSY1</code>、<code>PL0_1</code>、<code>PL1_1</code>；<code>FSY2</code>、<code>PL0_2</code>、<code>PL1_2</code></td>
+</tr>
+<tr>
+<td>相位关系</td>
+<td>图纸注释：<code>Drive_A</code> 相对 <code>Drive_B</code> 超前 45
+度或 22.5 度</td>
+</tr>
+<tr>
+<td>驱动接口</td>
+<td><code>Aout1</code> 接驱动组压电陶瓷正极，<code>Aout2</code>
+接驱动组压电陶瓷负极</td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="采集与选通" class="level3">
+<h3>采集与选通</h3>
+<table>
+<thead>
+<tr>
+<th>器件/信号</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>AD8630</code></td>
+<td>用于驱动/采集信号放大、差分处理和 <code>LEVEL</code> 比较前级</td>
+</tr>
+<tr>
+<td><code>MAX942</code></td>
+<td>比较器，图纸说明其将 <code>Drive_B</code> 与 2.5V
+比较生成方波控制信号</td>
+</tr>
+<tr>
+<td><code>JUDGE1/JUDGE2</code></td>
+<td><code>JUDGE1</code> 与 <code>Drive_B</code> 同相并放大到
+5V，用于生成 <code>Select_A</code>/<code>Select_B</code></td>
+</tr>
+<tr>
+<td><code>ADG702</code></td>
+<td>模拟开关，低电平导通；用于选择 A/B 路采集信号</td>
+</tr>
+<tr>
+<td>选通信号</td>
+<td><code>Drive_B</code> 正半周期时 <code>Select_A</code>
+高、<code>Select_B</code> 低，选通 B 信号；反向半周期选通 A 信号</td>
+</tr>
+<tr>
+<td>采集接口</td>
+<td><code>AIN2</code> 接采集组一组正极，<code>AIN1</code>
+接采集组另一组负极，GND 接采集组剩余正负极</td>
+</tr>
+</tbody>
+</table>
+<p>图纸注释写明：测得 <code>ADG702</code>
+输出波形为从波峰到波谷的半周期波形，剩余半周期为 2.5V 直线。</p>
+</section>
+<section id="自激反馈与液位检测" class="level3">
+<h3>自激反馈与液位检测</h3>
+<table>
+<thead>
+<tr>
+<th>信号/器件</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>SWAP</code></td>
+<td>控制 <code>1-? SPDT Analog Switch</code>，选择 DDS
+输出或反馈输出</td>
+</tr>
+<tr>
+<td><code>AD8629</code></td>
+<td>红框区域标注“模拟驱动部分--自激反馈”，增益标注
+<code>Au = 11.9</code></td>
+</tr>
+<tr>
+<td><code>Drive</code></td>
+<td>经过模拟开关后送往后级，图纸通断逻辑写明 IN 低电平时 NC 导通、DDS
+输出</td>
+</tr>
+<tr>
+<td><code>LEVEL</code></td>
+<td>采集/选通信号处理后的液位模拟量</td>
+</tr>
+<tr>
+<td><code>LEVEL_INT</code></td>
+<td><code>LEVEL</code> 经 <code>AD8630</code>
+比较形成的中断/数字信号，接 MCU</td>
+</tr>
+</tbody>
+</table>
+<p>需要注意：<code>SWAP</code> 的业务模式含义需要结合传感器板 MCU
+固件确认。对 CPU2
+来说，它通常只表现为不同命令或模式下返回的频率、密度、液位结果。</p>
+</section>
+</section>
+<section id="密度测量原理" class="level2">
+<h2>密度测量原理</h2>
+<section id="通用原理" class="level3">
+<h3>通用原理</h3>
+<p>从现有原理图和 CPU2 代码看，LTD
+密度通道更接近振动式/谐振式密度测量，而不是差压式、浮子称重式或 CPU2
+直接采集模拟量计算密度。</p>
+<p>振动式密度测量的基本逻辑是：被测结构在液体中振动时，液体会形成附加质量和阻尼；在结构刚度、几何尺寸和安装条件固定时，谐振频率或振荡周期会随被测介质密度变化。公开资料中，Anton
+Paar 对振荡式密度计给出的通用形式为
+<code>rho = A * tau^2 - B</code>，其中 <code>tau</code>
+为振荡周期，<code>A/B</code> 为仪表常数；Emerson
+的振动叉密度计资料也说明，叉齿以压电方式在固有频率振动，固有频率会随周围液体密度变化。这些资料只能作为振动式测量机理佐证，不代表本
+LTD 板的最终标定公式。</p>
+<table>
+<thead>
+<tr>
+<th>参考资料</th>
+<th>可借鉴结论</th>
+<th>本板使用边界</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a href="https://wiki.anton-paar.com/en/u-tube-technology-in-digital-laboratory-density-meters/">Anton
+Paar: U-tube technology in digital laboratory density meters</a></td>
+<td>振荡周期与密度通过仪表常数关联，可用周期平方形式计算密度</td>
+<td>说明“周期/频率可反推密度”的通用物理基础</td>
+</tr>
+<tr>
+<td><a href="https://wiki.anton-paar.com/us-en/density-and-density-measurement/">Anton
+Paar: Density and density measurement</a></td>
+<td>数字密度计通过激励振荡并测频来计算样品密度</td>
+<td>说明“激励-测频-计算密度”的仪表链路</td>
+</tr>
+<tr>
+<td><a href="https://www.emerson.com/documents/automation/product-data-sheet-micro-motion-fork-density-meters-en-64588.pdf">Emerson
+Micro Motion Fork Density Meters product data sheet</a></td>
+<td>振动叉以压电方式在固有频率振动，固有频率随周围液体密度变化</td>
+<td>说明压电振动结构在液体中可用于直接密度测量</td>
+</tr>
+<tr>
+<td><a href="https://www.analog.com/media/en/technical-documentation/data-sheets/ad9832.pdf">Analog
+Devices AD9832 data sheet</a></td>
+<td><code>AD9832</code> 集成 NCO、正弦查找表、频率/相位调制和 DAC</td>
+<td>说明本图 <code>AD9832</code> 可作为受控正弦激励源</td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="s002-2026-板级链路" class="level3">
+<h3>S002-2026 板级链路</h3>
+<p>结合原理图，密度相关链路可以整理为以下顺序：</p>
+<div class="signal-flow">
+  <div class="flow-node"><span class="flow-step">1</span><strong>板内 MCU</strong><span>密度模式、扫频控制和采样时序</span></div>
+  <div class="flow-node"><span class="flow-step">2</span><strong>双 AD9832 DDS</strong><span>产生 Drive_A / Drive_B 正弦激励</span></div>
+  <div class="flow-node"><span class="flow-step">3</span><strong>压电驱动组</strong><span>Aout1 / Aout2 驱动探头振动</span></div>
+  <div class="flow-node"><span class="flow-step">4</span><strong>液体中振动探头</strong><span>频率、相位或周期响应随密度变化</span></div>
+  <div class="flow-node"><span class="flow-step">5</span><strong>压电采集组</strong><span>Ain1 / Ain2 接收振动响应</span></div>
+  <div class="flow-node"><span class="flow-step">6</span><strong>模拟前端</strong><span>AD8630 放大、MAX942 比较</span></div>
+  <div class="flow-node"><span class="flow-step">7</span><strong>半周期选通</strong><span>ADG702 按 Drive_B 选通 45 度/22.5 度采样关系</span></div>
+  <div class="flow-node"><span class="flow-step">8</span><strong>计数/扫频算法</strong><span>MSPM0G3507 定时器计数和内部算法</span></div>
+  <div class="flow-node"><span class="flow-step">9</span><strong>LTD/V2 参数</strong><span>输出密度、温度、扫频均方值</span></div>
+  <div class="flow-node"><span class="flow-step">10</span><strong>CPU2 读取</strong><span>USART6 读取、修正、稳定判定、存储/显示</span></div>
+</div>
+
+<p>关键点：</p>
+<ol type="1">
+<li><code>U2/U3 AD9832</code> 分别产生 <code>Drive_A</code> 和
+<code>Drive_B</code>，图纸注释中 <code>Drive_A</code> 相对
+<code>Drive_B</code> 可超前 45 度或 22.5 度。</li>
+<li><code>Aout1/Aout2</code> 驱动压电陶瓷，<code>Ain1/Ain2</code>
+接收压电采集信号；密度变化反映到探头振动响应、相位关系、周期或扫频结果中。</li>
+<li><code>MAX942</code> 根据 <code>Drive_B</code> 和 2.5V
+比较生成方波控制；<code>ADG702</code> 在不同半周期选通 A/B
+采集信号，用于得到与相位/周期相关的采样波形。</li>
+<li><code>SWAP</code> 和 <code>AD8629</code>
+自激反馈区域说明本板可能支持 DDS
+外部激励和反馈自激两类模式，但实际业务切换条件需要传感器板 MCU
+固件确认。</li>
+<li>板内 <code>MSPM0G3507</code>
+完成定时器计数、扫频均方值、温度补偿和密度计算；CPU2 不直接控制
+<code>AD9832</code>，也不直接读取模拟采集波形。</li>
+</ol>
+</section>
+<section id="cpu2-当前读数口径" class="level3">
+<h3>CPU2 当前读数口径</h3>
+<p>CPU2 侧密度测量以 LTD/V2 协议为边界，主要代码路径如下：</p>
+<table>
+<thead>
+<tr>
+<th>步骤</th>
+<th>代码/参数</th>
+<th>当前含义</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>切密度模式</td>
+<td><code>DSM_V2_SwitchToDensityMode()</code></td>
+<td>通过 LTD/V2 命令请求传感器板进入密度测量模式</td>
+</tr>
+<tr>
+<td>读温度</td>
+<td><code>DSM_V2_Read_Temperature()</code>，参数
+<code>R 0x06</code></td>
+<td>读取传感器板计算/采集后的温度值</td>
+</tr>
+<tr>
+<td>读密度</td>
+<td><code>DSM_V2_Read_Density()</code>，参数 <code>R 0x07</code></td>
+<td>读取传感器板已经计算出的密度值</td>
+</tr>
+<tr>
+<td>读密度频率</td>
+<td><code>DSM_V2_Read_DensityFrequency()</code>，参数
+<code>R 0x11</code>/<code>R 0x12</code></td>
+<td>读取 45 度和 22.5 度扫频周期平方均值</td>
+</tr>
+<tr>
+<td>频率换算</td>
+<td><code>freq_hz = sqrt(1000000000000.0 / v)</code></td>
+<td>CPU2 用 <code>R 0x11</code>
+的平方均值换算显示/诊断频率；比例因子和单位需以传感器协议为准</td>
+</tr>
+<tr>
+<td>固定修正</td>
+<td><code>densityCorrection</code>、<code>temperatureCorrection</code></td>
+<td>密度加 <code>(densityCorrection - 10000) / 10</code>；温度加
+<code>(temperatureCorrection - 1000) / 10</code></td>
+</tr>
+<tr>
+<td>稳定判定</td>
+<td><code>SinglePoint_ReadSensor()</code></td>
+<td>200 ms 采样；频率变化阈值 1 Hz、密度 0.1、温度 0.2 ℃；稳定窗口默认 5
+s，可由 <code>spreadPointHoverTime</code> 配置</td>
+</tr>
+</tbody>
+</table>
+<p>因此，当前工程中“密度值”的来源不是 CPU2
+根据频率自行套公式算出的结果，而是传感器板返回的
+<code>R 0x07</code>。CPU2
+读取频率更多用于过程显示、稳定判定和异常诊断；真正的密度标定曲线、温度补偿模型、45
+度/22.5 度扫频值如何参与最终密度计算，仍属于传感器板 MCU
+固件和标定资料范围。</p>
+</section>
+<section id="对固件和认证资料的影响" class="level3">
+<h3>对固件和认证资料的影响</h3>
+<ol type="1">
+<li>文档和软件应把“CPU2 读数边界”和“传感器板内部算法”分开描述，避免把
+<code>R 0x07</code> 误写成 CPU2 本地计算值。</li>
+<li>如要做计量溯源或 SIL/FMEDA
+证据，需要补充传感器板固件版本、密度标定公式/系数、温度补偿策略、异常输出策略和扫频值单位定义。</li>
+<li><code>R 0x11</code>/<code>R 0x12</code> 为 45 度/22.5
+度扫频均方值，当前 CPU2 只用 <code>R 0x11</code>
+换算主频率；<code>R 0x12</code>
+暂以辅助诊断值记录，是否参与传感器端密度算法需确认。</li>
+<li>现场排故时，如果密度为 0、频率为 0
+或扫频均方值异常，应优先区分“传感器板未稳定/未检测到有效振动”“RS485
+通信异常”“传感器内部标定/温度补偿异常”，不要只按 CPU2
+运动流程归因。</li>
+</ol>
+</section>
+</section>
+<section id="温度水位姿态和零点" class="level2">
+<h2>温度、水位、姿态和零点</h2>
+<table>
+<thead>
+<tr>
+<th>模块</th>
+<th>关键器件/信号</th>
+<th>原理图含义</th>
+<th>当前 CPU2 关联</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>温度</td>
+<td><code>ADS1247</code>、<code>AIN1+</code>、<code>AIN1-</code>、<code>IOUT1</code>、<code>REFIN+/-</code>、<code>START</code>、<code>DRDY</code></td>
+<td>通过精密 ADC 和激励电流采集温度相关输入</td>
+<td><code>DSM_V2_Read_Temperature()</code> 读取 LTD/V2 温度参数
+<code>R 0x06</code></td>
+</tr>
+<tr>
+<td>水位/测水</td>
+<td><code>FDC2212</code>、<code>SCL/SDA</code>、<code>TWater</code>、LC
+网络</td>
+<td>电容式测水输入</td>
+<td>当前 <code>Sensor_ReadWaterCapacitance()</code> 只对
+<code>DSM_SENSOR</code> 开启，LTD 传感器读取分支未启用水位电容</td>
+</tr>
+<tr>
+<td>加速度</td>
+<td><code>ADXL345BCCZ-RL7</code>、<code>SCLK0/MOSI/MISO/CS</code>、<code>INT1/INT2</code></td>
+<td>板内姿态/倾角测量</td>
+<td>当前 <code>Sensor_ReadGyroAngle()</code> 同样只对
+<code>DSM_SENSOR</code> 开启；LTD 分支不读姿态角</td>
+</tr>
+<tr>
+<td>磁零点</td>
+<td>Hall
+接口、<code>SI4559ADY</code>、<code>TLV9061IDBVR</code>、<code>ZERO_EN</code>、<code>ZERO</code></td>
+<td>通过 Hall/比较电路检测零点</td>
+<td>CPU2 侧未直接读取该板
+<code>ZERO</code>，是否参与传感器内部算法需确认传感器固件</td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="外部接口整理" class="level2">
+<h2>外部接口整理</h2>
+<p>图纸右下角为单针式接口/测试点，能辨认的网络如下：</p>
+<table>
+<thead>
+<tr>
+<th>网络</th>
+<th>图纸标注</th>
+<th>用途</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>VCC</code></td>
+<td><code>VCC</code></td>
+<td>本板输入电源</td>
+</tr>
+<tr>
+<td><code>GND</code></td>
+<td><code>GND</code>、<code>G</code></td>
+<td>电源和信号地</td>
+</tr>
+<tr>
+<td><code>A+</code></td>
+<td><code>A+</code></td>
+<td>RS485 A</td>
+</tr>
+<tr>
+<td><code>B-</code></td>
+<td><code>B-</code></td>
+<td>RS485 B</td>
+</tr>
+<tr>
+<td><code>POWERTEST</code></td>
+<td><code>P</code></td>
+<td>板内电源/电压检测测试点</td>
+</tr>
+<tr>
+<td><code>TWater</code></td>
+<td><code>W</code></td>
+<td>测水 LC 网络输出/测试点</td>
+</tr>
+<tr>
+<td><code>Aout1</code></td>
+<td><code>T1 +</code></td>
+<td>驱动组压电陶瓷正极</td>
+</tr>
+<tr>
+<td><code>Aout2</code></td>
+<td><code>T2 -</code></td>
+<td>驱动组压电陶瓷负极</td>
+</tr>
+<tr>
+<td><code>Ain1</code></td>
+<td><code>R1_ -</code></td>
+<td>采集组输入之一</td>
+</tr>
+<tr>
+<td><code>Ain2</code></td>
+<td><code>R2_ +</code></td>
+<td>采集组输入之一</td>
+</tr>
+<tr>
+<td><code>AIN1+</code></td>
+<td><code>AI1+</code></td>
+<td>温度/ADC 差分输入正端</td>
+</tr>
+<tr>
+<td><code>AIN1-</code></td>
+<td><code>AI1-</code></td>
+<td>温度/ADC 差分输入负端</td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="和当前工程的对应关系" class="level2">
+<h2>和当前工程的对应关系</h2>
+<table>
+<thead>
+<tr>
+<th>工程位置</th>
+<th>当前作用</th>
+<th>与本原理图的关系</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>LTD_MAIN_CPU2/Core/Inc/main.h</code></td>
+<td>定义
+<code>SENSOR_ENN</code>、<code>SENSOR_TXD6</code>、<code>SENSOR_RXD6</code></td>
+<td>对应整机主控板给传感器/无线链路供电和 USART6
+通信，不直接控制本图中的 MSPM0 引脚</td>
+</tr>
+<tr>
+<td><code>LTD_MAIN_CPU2/Core/Src/usart.c</code></td>
+<td>USART6 配置为 9600 8N1，DMA TX/RX</td>
+<td>与本图 <code>SN65HVD72</code> RS485 通信入口对应</td>
+</tr>
+<tr>
+<td><code>LTD_MAIN_CPU2/Services/Sensor/ltd_sensor_communication.c</code></td>
+<td>实现 LTD/V2 固定 8 字节协议和 <code>R/W/T/D/B</code> 命令</td>
+<td>本图板内 MCU 是该协议的从机或下游节点</td>
+</tr>
+<tr>
+<td><code>LTD_MAIN_CPU2/Services/Sensor/sensor.c</code></td>
+<td>识别传感器类型、切换液位/密度模式、读取频率/密度/温度</td>
+<td>本图采集驱动、温度、水位、姿态等板内算法通过协议读数体现</td>
+</tr>
+<tr>
+<td><code>LTD_MAIN_CPU2/docs/02_通信与解耦/传感器与无线通信优化检查.md</code></td>
+<td>已整理 CPU2 与无线主从机、LTD/V2、DSM 的 UART6 通信链路</td>
+<td>本文补充 LTD 传感器内部采集驱动硬件依据</td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="固件开发关注点" class="level2">
+<h2>固件开发关注点</h2>
+<ol type="1">
+<li>CPU2 不直接配置本图中的
+<code>AD9832</code>、<code>ADS1247</code>、<code>FDC2212</code> 或
+<code>ADXL345</code>，这些由传感器板 MCU 控制；CPU2
+的职责是供电、通信、模式切换、读数、异常归因和结果校准。</li>
+<li>LTD/V2
+的液位频率、密度频率、温度、密度和传感器编号应继续以协议参数为边界维护，避免在
+CPU2 里假设板内具体器件寄存器。</li>
+<li>当前 CPU2 的水位电容和姿态读取只对 <code>DSM_SENSOR</code>
+开启；本原理图显示 LTD 板具备 <code>FDC2212</code> 和
+<code>ADXL345</code>，但是否开放到 LTD/V2 协议需要进一步确认。</li>
+<li>如果后续需要诊断传感器板内部电源、零点或液位中断，应先确认传感器板固件是否提供
+<code>POWERTEST</code>、<code>ZERO</code>、<code>LEVEL_INT</code>
+相关状态参数，再规划 CPU2/CPU3 协议显示。</li>
+<li><code>SWAP</code>、自激反馈、45 度/22.5
+度相位和均方值关系会影响密度/频率算法，固件文档应把 CPU2
+计算公式与传感器板返回值口径分开描述。</li>
+</ol>
+</section>
+<section id="待确认项" class="level2">
+<h2>待确认项</h2>
+<table>
+<thead>
+<tr>
+<th>项目</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>板内 MCU 型号</td>
+<td>渲染图上可辨认为 <code>MSPM0G3507</code> 系列，但完整后缀需以 Altium
+源文件或 BOM 为准</td>
+</tr>
+<tr>
+<td><code>SWAP</code> 模式</td>
+<td>原理图给出通断逻辑，但业务模式、何时切
+DDS/反馈输出需结合传感器板固件确认</td>
+</tr>
+<tr>
+<td>LTD 水位/姿态协议</td>
+<td>图纸已有 <code>FDC2212</code> 和 <code>ADXL345</code>，当前 CPU2
+代码未对 LTD 分支读取水位电容和姿态角；需确认 LTD/V2
+是否开放相应参数</td>
+</tr>
+<tr>
+<td><code>POWERTEST</code>/<code>ZERO</code>/<code>LEVEL_INT</code>
+状态</td>
+<td>图纸显示这些信号接入板内 MCU，但 CPU2
+侧无直接采集入口；是否能通过协议读取待确认</td>
+</tr>
+<tr>
+<td>传感器板固件版本</td>
+<td>原理图不包含传感器板固件版本与参数表；若后续要改协议，应同步补齐传感器端协议文档</td>
+</tr>
+</tbody>
+</table>
+</section>
+</section>
+</body>
+</html>
