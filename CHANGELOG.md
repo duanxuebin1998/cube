@@ -1122,3 +1122,33 @@ CPU2 参数加载会校验 FRAM 中的 `magic`、`struct_size`、`param_version`
 - `cmake --build build\LTD_DISPLAY_CPU3`
 - `git diff --cached --check`
 - `py tools\check_version_bumped.py`
+
+## 2026-06-11 - 优化 CPU3 长按确认进入配置菜单稳定性（CPU3 V1.12.1.0）
+
+版本：
+- CPU2: 保持 V1.13.0.1
+- CPU3: V1.12.0.0 -> V1.12.1.0
+
+协议版本/兼容性：
+- `DEVICE_PROTOCOL_VERSION` 保持 7，不改变 CPU2/CPU3 共享命令、状态、寄存器或 CPU2 参数语义。
+- CPU2 `DEVICE_PARAM_VERSION` 保持 3，CPU2 参数存储结构和升级清参规则不变。
+- CPU3 本地显示/通信参数结构和 `CPU3_PARAM_VERSION` 保持 `0x0004`，不触发 CPU3 本地参数重建。
+- 本次只影响 CPU3 本地按键识别、长按进入配置菜单和长按返回确认页的 UI 操作体验。
+
+本次修改：
+- 长按确认进入配置菜单的阈值从约 3.0 秒调整为约 1.5 秒，修正旧注释与实际计数不一致的问题。
+- EXTI 按键入口增加 50ms 软件消抖，降低确认键抖动导致长按计数反复清零的概率。
+- 状态页长按检测增加目标键锁定，确认长按开始后返回/上下误触不再覆盖当前长按目标。
+- 旧目标键已经释放但 TIM1 尚未清锁时，新按下的确认/返回可以清理旧目标并接管长按检测，修正先按其它键再长按确认无法进入配置菜单的问题。
+- 启动 TIM1 长按采样前清零计数器并清除更新标志，使首次采样时间更一致。
+- 长按触发后清空普通按键队列并进入释放保护，必须松开确认键后再短按确认，避免二次确认页被残留确认键自动越过。
+- 新增长按入口回归检查脚本，并同步 CPU3 长按确认不灵敏问题分析文档和问题索引。
+
+验证：
+- `py tools\check_cpu3_long_press_entry.py`
+- `py tools\check_cpu3_display_isr_boundaries.py`
+- `py LTD_DISPLAY_CPU3\font_check.py`
+- `cmake -S LTD_DISPLAY_CPU3 -B build/LTD_DISPLAY_CPU3 -G Ninja "-DCMAKE_TOOLCHAIN_FILE=D:/CUBE/cmake/toolchain-arm-none-eabi.cmake" -DCMAKE_BUILD_TYPE=Debug`
+- `cmake --build build\LTD_DISPLAY_CPU3`
+- `git diff --cached --check`
+- `py tools\check_version_bumped.py`

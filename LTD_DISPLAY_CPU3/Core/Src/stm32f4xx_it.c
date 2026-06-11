@@ -573,6 +573,7 @@ void TIM1_UP_TIM10_IRQHandler(void)
 			button_long_press_key = LONG_PRESS_KEY_NONE;
 			HAL_TIM_Base_Stop_IT(&htim1);
 
+			Display_ArmLongPressReleaseGuard(long_press_key);
 			Display_RequestLongPressAction(long_press_key);
 		} else {
 			HAL_TIM_Base_Start_IT(&htim1);

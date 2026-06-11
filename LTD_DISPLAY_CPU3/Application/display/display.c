@@ -1782,6 +1782,7 @@ static void Display_ProcessPendingInput(void)
 
     if (long_press_key != LONG_PRESS_KEY_NONE) {
         Display_ProcessLongPressAction(long_press_key);
+        return;
     }
 
     do {
@@ -1805,6 +1806,7 @@ static void Display_ProcessPendingInput(void)
 
 void Display_Task(void)
 {
+    Display_UpdateLongPressReleaseGuard();
     Display_ProcessPendingInput();
 
     if (!display_refresh_pending && Display_ShouldRequestStatusHighlightRefresh()) {
