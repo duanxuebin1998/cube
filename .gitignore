@@ -37,3 +37,4 @@ Objects/
 *.tmp
 *.zip
 old/
+.worktrees/
