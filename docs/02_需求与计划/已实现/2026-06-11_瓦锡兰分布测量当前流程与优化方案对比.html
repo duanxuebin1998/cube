@@ -1,0 +1,1325 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>瓦锡兰分布测量改前流程与已实现优化方案对比</title>
+  <style>
+    :root {
+      --ink: #17202a;
+      --muted: #64748b;
+      --line: #d7dde8;
+      --panel: #f8fafc;
+      --current: #475569;
+      --target: #2563eb;
+      --cpu3: #059669;
+      --warn: #b45309;
+      --risk: #b91c1c;
+      --ok: #047857;
+      --code: #eef2f7;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      color: var(--ink);
+      font-family: "Microsoft YaHei", "Segoe UI", Arial, sans-serif;
+      line-height: 1.66;
+      background: #ffffff;
+    }
+
+    header {
+      padding: 34px 42px 28px;
+      border-bottom: 5px solid var(--target);
+      background: #f7fbff;
+    }
+
+    main {
+      max-width: 1240px;
+      margin: 0 auto;
+      padding: 28px 36px 56px;
+    }
+
+    h1 {
+      margin: 0 0 10px;
+      font-size: 31px;
+      line-height: 1.25;
+    }
+
+    h2 {
+      margin: 34px 0 14px;
+      padding-bottom: 8px;
+      border-bottom: 2px solid var(--line);
+      font-size: 23px;
+    }
+
+    h3 {
+      margin: 23px 0 9px;
+      font-size: 18px;
+    }
+
+    p { margin: 8px 0 12px; }
+
+    a {
+      color: #1d4ed8;
+      text-decoration: none;
+    }
+
+    a:hover { text-decoration: underline; }
+
+    code {
+      padding: 1px 5px;
+      border-radius: 4px;
+      background: var(--code);
+      font-family: Consolas, "Courier New", monospace;
+      font-size: 0.94em;
+    }
+
+    pre {
+      overflow-x: auto;
+      padding: 14px 16px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: var(--code);
+      font-family: Consolas, "Courier New", monospace;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 12px 0 18px;
+      font-size: 14px;
+    }
+
+    th, td {
+      padding: 9px 10px;
+      border: 1px solid var(--line);
+      vertical-align: top;
+      text-align: left;
+    }
+
+    th {
+      background: #eef3f9;
+      font-weight: 700;
+    }
+
+    ul, ol { padding-left: 24px; }
+    li { margin: 5px 0; }
+
+    .meta {
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .summary {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+      margin-top: 22px;
+    }
+
+    .summary-card {
+      min-height: 124px;
+      padding: 14px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: #fff;
+    }
+
+    .summary-card strong {
+      display: block;
+      margin-bottom: 7px;
+      font-size: 16px;
+    }
+
+    .tag {
+      display: inline-block;
+      margin: 0 6px 6px 0;
+      padding: 2px 8px;
+      border-radius: 999px;
+      color: #fff;
+      font-size: 12px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .tag.current { background: var(--current); }
+    .tag.target { background: var(--target); }
+    .tag.cpu3 { background: var(--cpu3); }
+    .tag.warn { background: var(--warn); }
+    .tag.risk { background: var(--risk); }
+    .tag.ok { background: var(--ok); }
+
+    .toc {
+      padding: 16px 18px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: var(--panel);
+    }
+
+    .toc ol {
+      margin: 8px 0 0;
+      columns: 2;
+    }
+
+    .note {
+      margin: 16px 0;
+      padding: 13px 15px;
+      border-left: 4px solid var(--target);
+      background: var(--panel);
+    }
+
+    .warning {
+      margin: 16px 0;
+      padding: 13px 15px;
+      border-left: 4px solid var(--warn);
+      background: #fff7ed;
+    }
+
+    .riskbox {
+      margin: 16px 0;
+      padding: 13px 15px;
+      border-left: 4px solid var(--risk);
+      background: #fff1f2;
+    }
+
+    .two-col {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 18px;
+    }
+
+    .panel {
+      padding: 15px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: #fff;
+    }
+
+    .panel.current {
+      border-top: 4px solid var(--current);
+    }
+
+    .panel.target {
+      border-top: 4px solid var(--target);
+    }
+
+    .flow {
+      display: grid;
+      gap: 10px;
+      margin: 16px 0 20px;
+    }
+
+    .flow-row {
+      display: grid;
+      grid-template-columns: 180px 1fr;
+      gap: 12px;
+      align-items: stretch;
+    }
+
+    .lane {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 12px;
+      border-radius: 6px;
+      border: 1px solid var(--line);
+      color: #334155;
+      font-weight: 700;
+      text-align: center;
+    }
+
+    .lane.current { background: #f1f5f9; border-color: #cbd5e1; }
+    .lane.target { background: #eff6ff; border-color: #bfdbfe; color: #1d4ed8; }
+    .lane.pending { background: #fff7ed; border-color: #fed7aa; color: #9a3412; }
+    .lane.result { background: #ecfdf5; border-color: #bbf7d0; color: #047857; }
+
+    .step {
+      padding: 12px 14px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: #fff;
+    }
+
+    .step strong {
+      display: block;
+      margin-bottom: 4px;
+    }
+
+    .arrow {
+      margin-left: 210px;
+      color: var(--muted);
+      font-size: 20px;
+      line-height: 1;
+    }
+
+    .swimlane-chart {
+      display: none;
+      margin: 18px 0 24px;
+      padding: 16px;
+      overflow-x: auto;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #f8fafc;
+    }
+
+    .chart-kicker {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 14px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .chart-pill {
+      padding: 3px 9px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: #fff;
+      color: var(--muted);
+      font-weight: 700;
+    }
+
+    .swim-grid {
+      min-width: 1280px;
+      display: grid;
+      grid-template-columns: 132px repeat(6, minmax(170px, 1fr));
+      gap: 8px;
+      align-items: stretch;
+    }
+
+    .stage-corner,
+    .stage-head,
+    .lane-title,
+    .swim-cell {
+      border-radius: 6px;
+    }
+
+    .stage-corner,
+    .stage-head {
+      min-height: 48px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 8px;
+      text-align: center;
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    .stage-corner {
+      background: #e2e8f0;
+      color: #475569;
+    }
+
+    .stage-head {
+      border: 1px solid #bfdbfe;
+      background: #eff6ff;
+      color: #1d4ed8;
+    }
+
+    .lane-title {
+      min-height: 108px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 10px;
+      color: #fff;
+      text-align: center;
+      font-weight: 700;
+    }
+
+    .lane-title.main { background: #334155; }
+    .lane-title.liquid { background: var(--ok); }
+    .lane-title.air { background: var(--warn); }
+    .lane-title.fail { background: var(--risk); }
+
+    .swim-cell {
+      min-height: 108px;
+      padding: 8px;
+      border: 1px dashed #d7dde8;
+      background: rgba(255, 255, 255, 0.78);
+    }
+
+    .flow-card {
+      min-height: 100%;
+      padding: 10px;
+      border: 1px solid var(--line);
+      border-left: 4px solid var(--target);
+      border-radius: 6px;
+      background: #fff;
+      box-shadow: 0 7px 18px rgba(15, 23, 42, 0.06);
+      overflow-wrap: anywhere;
+    }
+
+    .flow-card.start { border-left-color: var(--cpu3); }
+    .flow-card.main { border-left-color: var(--target); }
+    .flow-card.liquid { border-left-color: var(--ok); background: #f0fdf4; }
+    .flow-card.air { border-left-color: var(--warn); background: #fff7ed; }
+    .flow-card.fail { border-left-color: var(--risk); background: #fff1f2; }
+    .flow-card.success { border-left-color: var(--ok); background: #ecfdf5; }
+    .flow-card.ghost {
+      border-color: transparent;
+      background: transparent;
+      box-shadow: none;
+    }
+
+    .step-no {
+      display: inline-block;
+      margin-bottom: 5px;
+      padding: 1px 6px;
+      border-radius: 999px;
+      background: #e2e8f0;
+      color: #475569;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .flow-card strong {
+      display: block;
+      margin-bottom: 4px;
+      font-size: 14px;
+      line-height: 1.35;
+    }
+
+    .flow-card p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    .flow-card code {
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
+
+    .decision-chip {
+      display: inline-block;
+      margin-top: 7px;
+      padding: 2px 7px;
+      border-radius: 999px;
+      background: #fffbeb;
+      color: #92400e;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .svg-flow-wrap {
+      margin: 18px 0 24px;
+      overflow-x: auto;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fbfdff;
+    }
+
+    .process-svg {
+      display: block;
+      width: 100%;
+      min-width: 1120px;
+      height: auto;
+      font-family: "Microsoft YaHei", "Segoe UI", Arial, sans-serif;
+    }
+
+    .svg-title {
+      fill: #17202a;
+      font-size: 18px;
+      font-weight: 700;
+    }
+
+    .svg-subtitle {
+      fill: #64748b;
+      font-size: 12px;
+    }
+
+    .svg-node {
+      fill: #fff;
+      stroke: #cbd5e1;
+      stroke-width: 1.4;
+      rx: 8;
+      ry: 8;
+    }
+
+    .svg-node.main { stroke: #93c5fd; }
+    .svg-node.liquid { fill: #f0fdf4; stroke: #86efac; }
+    .svg-node.air { fill: #fff7ed; stroke: #fdba74; }
+    .svg-node.fail { fill: #fff1f2; stroke: #fca5a5; }
+    .svg-node.success { fill: #ecfdf5; stroke: #86efac; }
+
+    .svg-label {
+      fill: #0f172a;
+      font-size: 14px;
+      font-weight: 700;
+    }
+
+    .svg-small {
+      fill: #475569;
+      font-size: 12px;
+    }
+
+    .svg-code {
+      fill: #334155;
+      font-family: Consolas, "Courier New", monospace;
+      font-size: 11px;
+    }
+
+    .svg-path-main {
+      fill: none;
+      stroke: #2563eb;
+      stroke-width: 2.2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      marker-end: url(#arrow-blue);
+    }
+
+    .svg-path-liquid {
+      fill: none;
+      stroke: #059669;
+      stroke-width: 2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      marker-end: url(#arrow-green);
+    }
+
+    .svg-path-air {
+      fill: none;
+      stroke: #d97706;
+      stroke-width: 2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      marker-end: url(#arrow-orange);
+    }
+
+    .svg-path-fail {
+      fill: none;
+      stroke: #dc2626;
+      stroke-width: 1.8;
+      stroke-dasharray: 5 5;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      marker-end: url(#arrow-red);
+    }
+
+    .svg-lane {
+      fill: #f8fafc;
+      stroke: #e2e8f0;
+      stroke-width: 1;
+      rx: 10;
+      ry: 10;
+    }
+
+    .svg-lane-label {
+      fill: #64748b;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .svg-badge {
+      fill: #eff6ff;
+      stroke: #bfdbfe;
+      stroke-width: 1;
+      rx: 999;
+      ry: 999;
+    }
+
+    .svg-badge-text {
+      fill: #1d4ed8;
+      font-size: 11px;
+      font-weight: 700;
+    }
+
+    .change-no {
+      width: 48px;
+      text-align: center;
+      font-weight: 700;
+      color: var(--target);
+    }
+
+    .small {
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    @media (max-width: 900px) {
+      header { padding: 26px 20px; }
+      main { padding: 22px 18px 42px; }
+      .summary, .two-col { grid-template-columns: 1fr; }
+      .flow-row { grid-template-columns: 1fr; }
+      .arrow { margin-left: 0; text-align: center; }
+      .swimlane-chart { padding: 12px; }
+      .swim-grid {
+        min-width: 0;
+        grid-template-columns: 1fr;
+      }
+      .stage-corner { display: none; }
+      .stage-head { justify-content: flex-start; }
+      .lane-title { min-height: 44px; }
+      .swim-cell { min-height: auto; }
+      .process-svg { min-width: 1040px; }
+      .toc ol { columns: 1; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>瓦锡兰分布测量改前流程与已实现优化方案对比</h1>
+    <div class="meta">日期：2026-06-11。状态：方案对比、需求整理和 CPU2 实现口径已同步，待现场硬件联调验证。本文保留改前流程作为对比基线，并同步“点间移动与慢速下行识别液位优化方案”的已实现口径，用于评审改动点、实现范围和后续验收。</div>
+    <div class="summary">
+      <div class="summary-card">
+        <strong>改前方案</strong>
+        <span class="tag current">改前</span>
+        <p>改前点间上行时切液位模式并在运动中检测空气，遇空气即停止布点。</p>
+      </div>
+      <div class="summary-card">
+        <strong>已实现方案</strong>
+        <span class="tag target">已实现</span>
+        <p>点间只按位置移动，到点后用密度和频率判定空气；空气点后慢速下行识别液体。</p>
+      </div>
+      <div class="summary-card">
+        <strong>核心改动</strong>
+        <span class="tag warn">行为变化</span>
+        <p>空气判定从“运动中液位模式检测”改为“到点密度模式判定 + 慢速下行识别液体”。</p>
+      </div>
+      <div class="summary-card">
+        <strong>协议影响</strong>
+        <span class="tag ok">暂不变更</span>
+        <p>本轮不改寄存器和共享结构；仅改 CPU2 内部流程，预计不升协议版本。</p>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <section class="toc">
+      <strong>目录</strong>
+      <ol>
+        <li><a href="#source">来源文档</a></li>
+        <li><a href="#current">改前方案流程</a></li>
+        <li><a href="#target">已实现优化流程</a></li>
+        <li><a href="#changes">方案改动点</a></li>
+        <li><a href="#flow-compare">流程对比</a></li>
+        <li><a href="#target-chart">已实现方案程序流程图</a></li>
+        <li><a href="#behavior">关键行为差异</a></li>
+        <li><a href="#impact">影响范围</a></li>
+        <li><a href="#risks">风险和已确认口径</a></li>
+        <li><a href="#verification">已执行本地验证</a></li>
+        <li><a href="#acceptance">验收标准</a></li>
+      </ol>
+    </section>
+
+    <section id="source">
+      <h2>来源文档</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>文档</th>
+            <th>用途</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>docs/03_问题分析与整改/瓦锡兰分布测量详细流程梳理.html</code></td>
+            <td>当前源码流程梳理，覆盖 CPU3 下发、CPU2 测点循环、完成态回传、测后探底和现有风险。</td>
+          </tr>
+          <tr>
+            <td><code>docs/02_需求与计划/已实现/2026-06-11_瓦锡兰分布测量点间移动与慢速下行识别液位优化需求方案.html</code></td>
+            <td>已实现优化方案，覆盖点间移动、到点空气判定、慢速下行识别液体、有效点裁剪和验收标准。</td>
+          </tr>
+          <tr>
+            <td><code>docs/05_测试记录/2026-06-11_瓦锡兰分布测量点间移动与慢速下行识别液体优化验证记录.md</code></td>
+            <td>CPU2 本地规则检查、构建检查和未验证项记录。</td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="note">本合并文档不替代原始分析文档；它的作用是把改前方案和已实现方案放到同一视图下，突出改动点、行为差异、CPU2 已实现范围和后续联调边界。</div>
+    </section>
+
+    <section id="current">
+      <h2>改前方案流程</h2>
+      <div class="flow">
+        <div class="flow-row">
+          <div class="lane current">CPU3 下发</div>
+          <div class="step">
+            <strong>Wartsila 寄存器转内部命令和参数</strong>
+            外部主站写 <code>0x0006</code> 和 <code>0x005A~0x005D</code>，CPU3 转为 <code>CMD_WARTSILA_DENSITY_RANGE</code> 和 <code>g_deviceParams.wartsila_*</code> 参数后下发 CPU2。
+          </div>
+        </div>
+        <div class="arrow">↓</div>
+        <div class="flow-row">
+          <div class="lane current">CPU2 调度</div>
+          <div class="step">
+            <strong>进入 <code>CMD_WartsilaDensitySpread()</code></strong>
+            设置 <code>STATE_WARTSILA_DENSITY_MEASURING</code>，调用 <code>Wartsila_Density_SpreadMeasurement()</code> 执行测量。
+          </div>
+        </div>
+        <div class="arrow">↓</div>
+        <div class="flow-row">
+          <div class="lane current">起点定位</div>
+          <div class="step">
+            <strong>移动到起始点</strong>
+            改前低于起始点时调用 <code>motorMoveUpToPositionOrAir()</code>，上行过程中切液位模式并检测空气；改前高于起始点时直接下行到起始点。
+          </div>
+        </div>
+        <div class="arrow">↓</div>
+        <div class="flow-row">
+          <div class="lane current">点间上行</div>
+          <div class="step">
+            <strong>上行到目标或空气</strong>
+            后续测点先调用 <code>motorMoveUpToPositionOrAir()</code>，运动过程中通过液位频率/液位状态判断是否进入空气；遇空气立即停止，不采当前点。
+          </div>
+        </div>
+        <div class="arrow">↓</div>
+        <div class="flow-row">
+          <div class="lane current">采点复判</div>
+          <div class="step">
+            <strong>精确定位后再次判断空气</strong>
+            到点后再次 <code>determine_level_status()</code>；若为空气，改前逻辑可能用 <code>cur_mm - 100mm</code> 作为液位并停止测量。
+          </div>
+        </div>
+        <div class="arrow">↓</div>
+        <div class="flow-row">
+          <div class="lane current">结果处理</div>
+          <div class="step">
+            <strong>最高点距离液面判断</strong>
+            若最高有效点距液面小于 <code>wartsila_max_height_above_surface</code>，删除最高点；然后统计平均密度、平均温度和点数。
+          </div>
+        </div>
+        <div class="arrow">↓</div>
+        <div class="flow-row">
+          <div class="lane current">完成和探底</div>
+          <div class="step">
+            <strong>完成态保留和测后动作</strong>
+            状态进入 <code>STATE_WARTSILA_DENSITY_OVER</code> 并保留 8 秒供 CPU3 读取；随后按 <code>wartsila_bottom_detect_interval</code> 判断是否回固定点并探底。
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="target">
+      <h2>已实现优化流程</h2>
+      <div class="flow">
+        <div class="flow-row">
+          <div class="lane target">参数和起点</div>
+          <div class="step">
+            <strong>沿用瓦锡兰参数</strong>
+            继续使用 <code>wartsila_lower_density_limit</code>、<code>wartsila_upper_density_limit</code>、<code>wartsila_density_interval</code>、<code>wartsila_max_height_above_surface</code> 和 <code>oilLevelFrequency</code>。
+          </div>
+        </div>
+        <div class="arrow">↓</div>
+        <div class="flow-row">
+          <div class="lane target">点间移动</div>
+          <div class="step">
+            <strong>只按位置运行到目标点</strong>
+            从一个点到下一个点的过程中，不切换液位模式，不做运动中液位空气检测，不因液位阈值提前停止。
+          </div>
+        </div>
+        <div class="arrow">↓</div>
+        <div class="flow-row">
+          <div class="lane target">到点判定</div>
+          <div class="step">
+            <strong>密度模式读取后判定空气</strong>
+            到点后读取频率、密度、温度；若 <code>density &lt; 100</code> 或 <code>frequency &gt; oilLevelFrequency</code>，判定为空气。
+          </div>
+        </div>
+        <div class="arrow">↓</div>
+        <div class="flow-row">
+          <div class="lane target">液体点</div>
+          <div class="step">
+            <strong>保存并继续</strong>
+            若当前点为液体，保存到临时结果并继续下一个点。
+          </div>
+        </div>
+        <div class="arrow">↓</div>
+        <div class="flow-row">
+          <div class="lane pending">空气点</div>
+          <div class="step">
+            <strong>空气点不入结果，慢速下行识别液体</strong>
+            若当前点为空气，记录空气点日志但不保存该点；随后切液位模式并慢速下行，识别到液体后取当前位置作为液位。
+          </div>
+        </div>
+        <div class="arrow">↓</div>
+        <div class="flow-row">
+          <div class="lane result">裁剪和写入</div>
+          <div class="step">
+            <strong>按识别液位裁剪有效点</strong>
+            计算 <code>valid_limit_mm = level_mm - wartsila_max_height_above_surface</code>，只保留位置小于该边界的液体点；重算统计后写入结果。
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="changes">
+      <h2>方案改动点</h2>
+      <table>
+        <thead>
+          <tr>
+            <th class="change-no">编号</th>
+            <th>改动主题</th>
+            <th>改前方案</th>
+            <th>已实现方案</th>
+            <th>目的</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="change-no">C1</td>
+            <td>点间移动模式</td>
+            <td>点间上行调用 <code>motorMoveUpToPositionOrAir()</code>，会切液位模式并在运动中检测空气。</td>
+            <td>点间只调用位置运行逻辑，直接运行到下一个目标测点。</td>
+            <td>降低模式切换频率，把运动和空气判定解耦。</td>
+          </tr>
+          <tr>
+            <td class="change-no">C2</td>
+            <td>空气判定时机</td>
+            <td>运动过程中和采点前都可能通过液位状态判断空气。</td>
+            <td>只在到达测点后，通过密度模式读取结果判断空气。</td>
+            <td>让空气判定和密度采集点位对齐，减少运动中提前停止带来的位置不确定。</td>
+          </tr>
+          <tr>
+            <td class="change-no">C3</td>
+            <td>空气判定规则</td>
+            <td>主要依赖液位模式频率/状态；采点前空气时曾使用 <code>cur_mm - 100mm</code> 估算液位。</td>
+            <td><code>density &lt; 100</code> 或 <code>frequency &gt; oilLevelFrequency</code> 即判为空气；5 分钟超时密度 0 也按空气处理。</td>
+            <td>把空气判定规则显式化，避免继续使用 <code>cur_mm - 100mm</code> 估算液位。</td>
+          </tr>
+          <tr>
+            <td class="change-no">C4</td>
+            <td>空气点处理</td>
+            <td>运动中遇空气时停止，不采当前点；采点前为空气时使用估算液位结束。</td>
+            <td>空气点不进入最终结果，只记录位置、密度、频率和触发原因。</td>
+            <td>外部结果只包含有效液体点，同时保留现场诊断信息。</td>
+          </tr>
+          <tr>
+            <td class="change-no">C5</td>
+            <td>液位来源</td>
+            <td>运动中检测到空气时使用停止位置，采点前空气时可能使用 <code>cur_mm - 100mm</code>。</td>
+            <td>空气点后切液位模式并慢速下行，识别到液体后取当前位置作为液位。</td>
+            <td>让液位值来自识别到液体时的实际当前位置，而不是点位估算。</td>
+          </tr>
+          <tr>
+            <td class="change-no">C6</td>
+            <td>高位点裁剪</td>
+            <td>只按最高有效点和液位距离判断，通常最多删除最后一个有效点。</td>
+            <td>计算 <code>valid_limit_mm = level_mm - wartsila_max_height_above_surface</code>，只保留 <code>point.position_mm &lt; valid_limit_mm</code> 的点。</td>
+            <td>把有效点判定写成明确边界，解决空气点不入结果后高位液体点仍可能离液面过近的问题。</td>
+          </tr>
+          <tr>
+            <td class="change-no">C7</td>
+            <td>失败语义</td>
+            <td>外层当前会把临时结果写入 <code>g_measurement.density_distribution</code>，失败时有覆盖为空结果的风险。</td>
+            <td>慢速下行未识别到液体、裁剪后无有效点或关键读取失败时，不更新新的有效分布结果，不进入成功完成态语义。</td>
+            <td>避免外部读取到不可信的空结果或误认为本次分布测量成功。</td>
+          </tr>
+          <tr>
+            <td class="change-no">C8</td>
+            <td>通用函数影响</td>
+            <td><code>SinglePoint_ReadSensor()</code> 负责通用单点稳定读取。</td>
+            <td>建议新增瓦锡兰专用采点封装，不改变通用单点读取语义。</td>
+            <td>控制影响范围，避免普通单点、固定点监测和其他分布测量行为被新规则改变。</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="flow-compare">
+      <h2>流程对比</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>阶段</th>
+            <th>改前方案</th>
+            <th>已实现方案</th>
+            <th>变化类型</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>CPU3 下发</td>
+            <td>Wartsila 寄存器写入后转 CPU2 命令和参数。</td>
+            <td>保持不变。</td>
+            <td>不变</td>
+          </tr>
+          <tr>
+            <td>CPU2 命令入口</td>
+            <td><code>CMD_WARTSILA_DENSITY_RANGE</code> 进入瓦锡兰测量函数。</td>
+            <td>保持入口不变，内部流程调整。</td>
+            <td>入口不变，内部变更</td>
+          </tr>
+          <tr>
+            <td>起始点定位</td>
+            <td>可能使用现有上行到目标或空气逻辑。</td>
+            <td>同步改为只按位置移动，不做运动中液位检测。</td>
+            <td>核心变更</td>
+          </tr>
+          <tr>
+            <td>点间移动</td>
+            <td>切液位模式，上行中检测空气。</td>
+            <td>不切液位模式，直接运行到目标点。</td>
+            <td>核心变更</td>
+          </tr>
+          <tr>
+            <td>空气判断</td>
+            <td>运动中液位频率/状态检测，采点前再次复判。</td>
+            <td>到点后密度模式读取；密度低或频率高判空气。</td>
+            <td>核心变更</td>
+          </tr>
+          <tr>
+            <td>液位确定</td>
+            <td>用运动停止位置或 <code>cur_mm - 100mm</code> 估算。</td>
+            <td>空气点后切液位模式慢速下行，识别到液体即取当前位置作为液位。</td>
+            <td>核心变更</td>
+          </tr>
+          <tr>
+            <td>点数裁剪</td>
+            <td>最高点距液面不足时删除最高点。</td>
+            <td>只保留位置小于 <code>level_mm - wartsila_max_height_above_surface</code> 的液体点。</td>
+            <td>核心变更</td>
+          </tr>
+          <tr>
+            <td>结果回传</td>
+            <td>完成态保留 8 秒，CPU3 拉取点数据。</td>
+            <td>成功时保持该机制；失败时不按成功完成态暴露。</td>
+            <td>成功路径不变，失败语义变更</td>
+          </tr>
+          <tr>
+            <td>测后探底</td>
+            <td>按 <code>wartsila_bottom_detect_interval</code> 决定是否回固定点并探底。</td>
+            <td>需求未改变该流程。</td>
+            <td>不变</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="target-chart">
+      <h2>已实现方案程序流程图</h2>
+      <div class="svg-flow-wrap">
+        <svg class="process-svg" viewBox="0 0 1180 620" role="img" aria-labelledby="flowTitle flowDesc">
+          <title id="flowTitle">瓦锡兰分布测量目标程序流程图</title>
+          <desc id="flowDesc">主流程横向推进，液体点回到点间移动继续循环，空气点进入慢速下行识别液体和裁剪，错误统一收敛到失败处理。</desc>
+          <defs>
+            <marker id="arrow-blue" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto" markerUnits="strokeWidth">
+              <path d="M0,0 L10,5 L0,10 Z" fill="#2563eb" />
+            </marker>
+            <marker id="arrow-green" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto" markerUnits="strokeWidth">
+              <path d="M0,0 L10,5 L0,10 Z" fill="#059669" />
+            </marker>
+            <marker id="arrow-orange" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto" markerUnits="strokeWidth">
+              <path d="M0,0 L10,5 L0,10 Z" fill="#d97706" />
+            </marker>
+            <marker id="arrow-red" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto" markerUnits="strokeWidth">
+              <path d="M0,0 L10,5 L0,10 Z" fill="#dc2626" />
+            </marker>
+          </defs>
+
+          <text class="svg-title" x="36" y="38">目标程序流程图</text>
+          <text class="svg-subtitle" x="36" y="60">点间移动只负责到位；到点后判定空气；空气点切液位模式慢速下行；失败不更新有效结果。</text>
+
+          <rect class="svg-lane" x="24" y="88" width="1132" height="126" />
+          <text class="svg-lane-label" x="42" y="112">主流程</text>
+          <rect class="svg-lane" x="24" y="246" width="1132" height="128" />
+          <text class="svg-lane-label" x="42" y="270">液体 / 空气分支</text>
+          <rect class="svg-lane" x="24" y="414" width="1132" height="150" />
+          <text class="svg-lane-label" x="42" y="438">失败处理</text>
+
+          <rect class="svg-node main" x="70" y="126" width="130" height="64" />
+          <text class="svg-label" x="135" y="151" text-anchor="middle">命令入口</text>
+          <text class="svg-code" x="135" y="172" text-anchor="middle">CMD_WARTSILA</text>
+
+          <rect class="svg-node main" x="240" y="126" width="130" height="64" />
+          <text class="svg-label" x="305" y="151" text-anchor="middle">参数校验</text>
+          <text class="svg-small" x="305" y="172" text-anchor="middle">起点 / 最高点 / 间距</text>
+
+          <rect class="svg-node main" x="410" y="126" width="130" height="64" />
+          <text class="svg-label" x="475" y="151" text-anchor="middle">起点定位</text>
+          <text class="svg-small" x="475" y="172" text-anchor="middle">移动到最低测点</text>
+
+          <rect class="svg-node main" x="580" y="126" width="130" height="64" />
+          <text class="svg-label" x="645" y="151" text-anchor="middle">点间移动</text>
+          <text class="svg-small" x="645" y="172" text-anchor="middle">不切液位模式</text>
+
+          <rect class="svg-node main" x="750" y="126" width="130" height="64" />
+          <text class="svg-label" x="815" y="151" text-anchor="middle">到点采集</text>
+          <text class="svg-small" x="815" y="172" text-anchor="middle">密度 / 频率 / 温度</text>
+
+          <path class="svg-node main" d="M985 116 L1070 158 L985 200 L900 158 Z" />
+          <text class="svg-label" x="985" y="151" text-anchor="middle">空气?</text>
+          <text class="svg-small" x="985" y="171" text-anchor="middle">实际密度&lt;100 或浮点频率高</text>
+
+          <path class="svg-path-main" d="M200 158 H236" />
+          <path class="svg-path-main" d="M370 158 H406" />
+          <path class="svg-path-main" d="M540 158 H576" />
+          <path class="svg-path-main" d="M710 158 H746" />
+          <path class="svg-path-main" d="M880 158 H896" />
+
+          <rect class="svg-node liquid" x="565" y="286" width="160" height="64" />
+          <text class="svg-label" x="645" y="311" text-anchor="middle">液体点</text>
+          <text class="svg-small" x="645" y="332" text-anchor="middle">保存后进入下一个测点</text>
+          <path class="svg-path-liquid" d="M945 188 C900 242 780 318 730 318" />
+          <path class="svg-path-liquid" d="M565 318 C510 318 510 220 580 176" />
+          <rect class="svg-badge" x="812" y="231" width="82" height="24" />
+          <text class="svg-badge-text" x="853" y="247" text-anchor="middle">否：液体</text>
+
+          <rect class="svg-node air" x="858" y="286" width="150" height="64" />
+          <text class="svg-label" x="933" y="311" text-anchor="middle">空气点</text>
+          <text class="svg-small" x="933" y="332" text-anchor="middle">记录日志，不保存</text>
+
+          <rect class="svg-node air" x="1018" y="286" width="126" height="64" />
+          <text class="svg-label" x="1081" y="311" text-anchor="middle">慢速下行</text>
+          <text class="svg-small" x="1081" y="332" text-anchor="middle">识别液体取当前位置</text>
+
+          <rect class="svg-node success" x="930" y="382" width="180" height="64" />
+          <text class="svg-label" x="1020" y="407" text-anchor="middle">裁剪并写入</text>
+          <text class="svg-small" x="1020" y="428" text-anchor="middle">删除近液面点，重算统计</text>
+
+          <path class="svg-path-air" d="M985 200 V248 C985 268 960 274 933 286" />
+          <path class="svg-path-air" d="M1008 318 H1014" />
+          <path class="svg-path-air" d="M1081 350 V378 C1081 392 1055 394 1038 394" />
+          <rect class="svg-badge" x="1030" y="218" width="82" height="24" />
+          <text class="svg-badge-text" x="1071" y="234" text-anchor="middle">是：空气</text>
+
+          <rect class="svg-node fail" x="70" y="470" width="160" height="58" />
+          <text class="svg-label" x="150" y="494" text-anchor="middle">参数 / 运动错误</text>
+          <text class="svg-small" x="150" y="513" text-anchor="middle">测量失败</text>
+
+          <rect class="svg-node fail" x="290" y="470" width="160" height="58" />
+          <text class="svg-label" x="370" y="494" text-anchor="middle">读取失败</text>
+          <text class="svg-small" x="370" y="513" text-anchor="middle">传感器错误</text>
+
+          <rect class="svg-node fail" x="510" y="470" width="180" height="58" />
+          <text class="svg-label" x="600" y="494" text-anchor="middle">未遇空气到顶</text>
+          <text class="svg-small" x="600" y="513" text-anchor="middle">无法识别液位</text>
+
+          <rect class="svg-node fail" x="750" y="470" width="170" height="58" />
+          <text class="svg-label" x="835" y="494" text-anchor="middle">未识别到液体</text>
+          <text class="svg-small" x="835" y="513" text-anchor="middle">不写入新结果</text>
+
+          <rect class="svg-node fail" x="980" y="470" width="160" height="58" />
+          <text class="svg-label" x="1060" y="494" text-anchor="middle">裁剪后无有效点</text>
+          <text class="svg-small" x="1060" y="513" text-anchor="middle">不进入成功完成态</text>
+
+          <path class="svg-path-fail" d="M305 190 C305 300 150 330 150 466" />
+          <path class="svg-path-fail" d="M815 190 C815 294 370 336 370 466" />
+          <path class="svg-path-fail" d="M645 350 V466" />
+          <path class="svg-path-fail" d="M1081 350 C1081 420 835 430 835 466" />
+          <path class="svg-path-fail" d="M1020 446 V466" />
+
+          <text class="svg-subtitle" x="70" y="590">失败口径：不更新新的有效分布结果，不按成功完成态对外暴露。</text>
+        </svg>
+      </div>
+      <div class="swimlane-chart">
+        <div class="chart-kicker">
+          <span class="chart-pill">横向主流程</span>
+          <span class="chart-pill">液体循环</span>
+          <span class="chart-pill">空气分支</span>
+          <span class="chart-pill">失败收敛</span>
+        </div>
+        <div class="swim-grid">
+          <div class="stage-corner">路径 / 阶段</div>
+          <div class="stage-head">1 命令入口</div>
+          <div class="stage-head">2 起点定位</div>
+          <div class="stage-head">3 点间移动</div>
+          <div class="stage-head">4 到点采集</div>
+          <div class="stage-head">5 空气判定</div>
+          <div class="stage-head">6 裁剪写入</div>
+
+          <div class="lane-title main">主流程</div>
+          <div class="swim-cell">
+            <div class="flow-card start">
+              <span class="step-no">开始</span>
+              <strong>接收瓦锡兰分布测命令</strong>
+              <p><code>CMD_WARTSILA_DENSITY_RANGE</code> 进入 CPU2 测量流程。</p>
+            </div>
+          </div>
+          <div class="swim-cell">
+            <div class="flow-card main">
+              <span class="step-no">定位</span>
+              <strong>读取参数并定位起始点</strong>
+              <p>校验起始点、最高点、点间距和液面距离限制。</p>
+              <span class="decision-chip">参数/运动失败进入失败处理</span>
+            </div>
+          </div>
+          <div class="swim-cell">
+            <div class="flow-card main">
+              <span class="step-no">移动</span>
+              <strong>按位置移动到目标测点</strong>
+              <p>点间不切换液位模式，不因液位阈值提前停止。</p>
+            </div>
+          </div>
+          <div class="swim-cell">
+            <div class="flow-card main">
+              <span class="step-no">采集</span>
+              <strong>密度模式读取三项数据</strong>
+              <p>读取频率、密度、温度；读取失败进入失败处理。</p>
+            </div>
+          </div>
+          <div class="swim-cell">
+            <div class="flow-card main">
+              <span class="step-no">判定</span>
+              <strong>判断当前点是否为空气</strong>
+              <p>实际密度值 <code>&lt; 100</code> 或浮点频率 <code>&gt; oilLevelFrequency</code> 判为空气。</p>
+            </div>
+          </div>
+          <div class="swim-cell">
+            <div class="flow-card success">
+              <span class="step-no">完成</span>
+              <strong>写入有效分布结果</strong>
+              <p>裁剪通过后重算点数、平均密度和平均温度，进入成功完成态。</p>
+            </div>
+          </div>
+
+          <div class="lane-title liquid">液体路径</div>
+          <div class="swim-cell"><div class="flow-card ghost"></div></div>
+          <div class="swim-cell"><div class="flow-card ghost"></div></div>
+          <div class="swim-cell">
+            <div class="flow-card liquid">
+              <span class="step-no">循环</span>
+              <strong>液体点继续布点</strong>
+              <p>上一点为液体时，目标点增加 <code>wartsila_density_interval</code>。</p>
+            </div>
+          </div>
+          <div class="swim-cell">
+            <div class="flow-card liquid">
+              <span class="step-no">保存</span>
+              <strong>保存液体测点</strong>
+              <p>密度和频率未触发空气条件时，写入临时结果。</p>
+            </div>
+          </div>
+          <div class="swim-cell">
+            <div class="flow-card liquid">
+              <span class="step-no">继续</span>
+              <strong>返回点间移动</strong>
+              <p>还有下一个测点时继续循环；未遇空气到顶则失败。</p>
+            </div>
+          </div>
+          <div class="swim-cell"><div class="flow-card ghost"></div></div>
+
+          <div class="lane-title air">空气路径</div>
+          <div class="swim-cell"><div class="flow-card ghost"></div></div>
+          <div class="swim-cell"><div class="flow-card ghost"></div></div>
+          <div class="swim-cell"><div class="flow-card ghost"></div></div>
+          <div class="swim-cell">
+            <div class="flow-card air">
+              <span class="step-no">空气点</span>
+              <strong>空气点不入结果</strong>
+              <p>记录位置、密度、频率和触发原因，停止继续向上布点。</p>
+            </div>
+          </div>
+          <div class="swim-cell">
+            <div class="flow-card air">
+              <span class="step-no">下行</span>
+              <strong>慢速下行识别液体</strong>
+              <p>切液位模式，从空气点慢速下行；识别到液体后取当前位置。</p>
+            </div>
+          </div>
+          <div class="swim-cell">
+            <div class="flow-card air">
+              <span class="step-no">裁剪</span>
+              <strong>按识别液位裁剪高位点</strong>
+              <p>只保留位置小于液位位置减距离限制的液体点。</p>
+            </div>
+          </div>
+
+          <div class="lane-title fail">失败处理</div>
+          <div class="swim-cell">
+            <div class="flow-card fail">
+              <span class="step-no">参数</span>
+              <strong>参数非法</strong>
+              <p>本次测量失败，不更新新的有效结果。</p>
+            </div>
+          </div>
+          <div class="swim-cell">
+            <div class="flow-card fail">
+              <span class="step-no">运动</span>
+              <strong>起点定位失败</strong>
+              <p>返回运动错误或命令切换状态。</p>
+            </div>
+          </div>
+          <div class="swim-cell">
+            <div class="flow-card fail">
+              <span class="step-no">运动</span>
+              <strong>点间移动失败</strong>
+              <p>不保存当前点，不进入成功完成态。</p>
+            </div>
+          </div>
+          <div class="swim-cell">
+            <div class="flow-card fail">
+              <span class="step-no">读取</span>
+              <strong>传感器读取失败</strong>
+              <p>关键读取失败时本次测量失败。</p>
+            </div>
+          </div>
+          <div class="swim-cell">
+            <div class="flow-card fail">
+              <span class="step-no">液位</span>
+              <strong>未识别到液体</strong>
+              <p>不使用空气点估算液位，不写入新结果。</p>
+            </div>
+          </div>
+          <div class="swim-cell">
+            <div class="flow-card fail">
+              <span class="step-no">结果</span>
+              <strong>裁剪后无有效点</strong>
+              <p>不进入 <code>STATE_WARTSILA_DENSITY_OVER</code> 成功语义。</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="behavior">
+      <h2>关键行为差异</h2>
+      <div class="two-col">
+        <div class="panel current">
+          <h3>改前方案特点</h3>
+          <ul>
+            <li>运动中切液位模式，依赖液位状态提前识别空气。</li>
+            <li>遇空气时停止在液面附近，液位来自运动停止位置或采点前估算。</li>
+            <li>如果始终没有遇到空气，测量失败。</li>
+            <li>最高点过近时通常删除最后一个有效点。</li>
+            <li>测量失败后仍存在临时结果覆盖为新结果的风险点。</li>
+          </ul>
+        </div>
+        <div class="panel target">
+          <h3>已实现方案特点</h3>
+          <ul>
+            <li>运动中不切液位模式，点间移动只负责到位。</li>
+            <li>到点后以密度和频率作为空气判定依据。</li>
+            <li>空气点不保存；切液位模式慢速下行，识别到液体后取当前位置作为液位。</li>
+            <li>只保留位置小于 <code>level_mm - wartsila_max_height_above_surface</code> 的液体点，不限定最多删除两个点。</li>
+            <li>失败时不更新新的有效结果，不进入成功完成态语义。</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section id="impact">
+      <h2>影响范围</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>模块</th>
+            <th>影响判断</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>CPU2 <code>wartsila_density_measurement.c</code></td>
+            <td>已调整点间移动、到点采样、空气判定、慢速下行识别液体和裁剪统计。</td>
+          </tr>
+          <tr>
+            <td>CPU2 <code>measure_density.c</code></td>
+            <td>建议不改变通用 <code>SinglePoint_ReadSensor()</code>；如需复用稳定读取，应新增瓦锡兰专用封装。</td>
+          </tr>
+          <tr>
+            <td>CPU2 结果写入</td>
+            <td>已调整为失败时不把临时结果覆盖为新的有效结果。</td>
+          </tr>
+          <tr>
+            <td>CPU3 / 外部 Wartsila</td>
+            <td>本方案不要求改变寄存器映射；成功结果仍由 <code>density_distribution</code> 对外提供。</td>
+          </tr>
+          <tr>
+            <td>测后探底</td>
+            <td>本方案不改变 <code>wartsila_bottom_detect_interval</code> 控制的测后回固定点和探底流程。</td>
+          </tr>
+          <tr>
+            <td>协议版本</td>
+            <td>若只改 CPU2 内部测量策略，不改共享命令/寄存器/结构体/参数语义，预计不升级 <code>DEVICE_PROTOCOL_VERSION</code>。</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="risks">
+      <h2>风险和已确认口径</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>风险/确认项</th>
+            <th>说明</th>
+            <th>建议</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>慢速下行识别液体函数已实现，待硬件联调</td>
+            <td>已实现方案依赖空气点后切液位模式慢速下行；若未识别到液体，本次测量失败。</td>
+            <td>实现已包含慢速下行、液体识别、盲区、碰撞、丢步、驱动状态、超时和命令切换处理；现场仍需联调确认。</td>
+          </tr>
+          <tr>
+            <td>密度 <code>&lt; 100</code> 的单位口径</td>
+            <td>已确认使用实际密度值，不使用 RAW 值。</td>
+            <td>实现和日志打印都按实际密度值口径处理。</td>
+          </tr>
+          <tr>
+            <td>频率比较口径</td>
+            <td>已确认使用本次读取得到的浮点频率，不使用写入 <code>debug_data.frequency</code> 后的整数频率。</td>
+            <td>空气判定和日志记录应保留同一浮点频率口径。</td>
+          </tr>
+          <tr>
+            <td>起始点定位同步调整</td>
+            <td>已确认起始点定位同步改为不做运动中液位检测。</td>
+            <td>仍需保留电机安全检查、目标位置检查、错误返回和命令切换处理。</td>
+          </tr>
+          <tr>
+            <td>失败态对外表达</td>
+            <td>已确认失败时不需要同步优化 CPU3 外部 Wartsila 主站状态码表达。</td>
+            <td>按现有错误/非成功完成语义处理，本方案不因失败状态表达调整 CPU3 外部协议。</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="verification">
+      <h2>已执行本地验证</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>验证项</th>
+            <th>结果</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>py -B tools\check_wartsila_distribution_logic.py</code></td>
+            <td>通过；覆盖点间移动不做运动中液位检测、到点空气判定、5 分钟超时按空气、慢速下行识别液体、有效点严格裁剪和失败不写回等关键规则。</td>
+          </tr>
+          <tr>
+            <td><code>cmake --build build\LTD_MAIN_CPU2</code></td>
+            <td>通过；CPU2 工程可构建。</td>
+          </tr>
+          <tr>
+            <td><code>git diff --check</code></td>
+            <td>通过；仅存在 Windows 换行转换提示，无补丁空白错误。</td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="note">现场硬件联调、CPU3 页面读取和外部 Wartsila 主站读取尚未执行，仍需在发布前验证。</div>
+    </section>
+
+    <section id="acceptance">
+      <h2>验收标准</h2>
+      <ol>
+        <li>起始点定位和点间移动过程中都不切换液位模式，不因液位频率阈值提前停止。</li>
+        <li>到点后实际密度值和浮点频率均有效时，该点保存为液体测点。</li>
+        <li>到点后实际密度值 <code>&lt; 100</code> 时，该点按空气处理且不保存。</li>
+        <li>到点后浮点频率 <code>&gt; oilLevelFrequency</code> 时，该点按空气处理且不保存。</li>
+        <li>密度读取 5 分钟超时输出 0 时，该点按空气处理。</li>
+        <li>空气点后切液位模式并慢速下行；未识别到液体时本次测量失败，不更新新的有效结果。</li>
+        <li>识别到液体后，只有 <code>point.position_mm &lt; level_mm - wartsila_max_height_above_surface</code> 的液体点保留为有效点。</li>
+        <li>裁剪后重新计算点数、平均密度和平均温度。</li>
+        <li>裁剪后无有效液体点时，本次测量失败。</li>
+        <li>普通单点、固定点监测、普通分布测量、国标分布测量、密度每米测量和测后探底流程不因本方案改变。</li>
+      </ol>
+    </section>
+
+    <footer class="small">
+      本文档为改前方案和已实现方案的合并对比文档，已同步 CPU2 实现口径。后续仍需按现场传感器工况、CPU3 读取时序和 Wartsila 外部协议读取进行硬件联调验证。
+    </footer>
+  </main>
+</body>
+</html>

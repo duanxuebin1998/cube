@@ -1001,9 +1001,19 @@ static void CMD_WartsilaDensitySpread(void) {
 	g_measurement.device_status.device_state = STATE_WARTSILA_DENSITY_MEASURING;
 
 	ret = Wartsila_Density_SpreadMeasurement(&temp);
-// 记录/上报错误码（和零点测量一样用 SET_ERROR）
-	SET_ERROR(ret);
+	if (ret == STATE_SWITCH) {
+		return;
+	}
+	if (ret != NO_ERROR) {
+		printf("瓦锡兰分布测量失败，错误码：0x%08lX，不更新新的有效结果\r\n", (unsigned long)ret);
+		SET_ERROR(ret);
+		return;
+	}
+
+	uint32_t previous_profile_complete_counter = g_measurement.density_distribution.profile_complete_counter;
 	g_measurement.density_distribution = temp;
+	g_measurement.density_distribution.profile_complete_latched = 1U;
+	g_measurement.density_distribution.profile_complete_counter = previous_profile_complete_counter + 1U;
 
 	if (AbortableDelay_CommandSwitch(1000U, 100U) == STATE_SWITCH) {
 		return;

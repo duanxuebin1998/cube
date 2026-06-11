@@ -9,6 +9,7 @@
 #include "wartsila_density_measurement.h"
 #include "measure_oilLevel.h"
 #include "ltd_sensor_communication.h"
+#include "sensor.h"
 #include "measure_density.h"
 #include "abortable_delay.h"
 
@@ -33,29 +34,361 @@ static uint32_t PositionMm_ToU01mmClamped(float pos_mm)
 }
 
 
+#define WARTSILA_AIR_DENSITY_THRESHOLD      100.0f
+#define WARTSILA_LEVEL_DOWN_SPEED_X100      50U
+#define WARTSILA_LEVEL_DOWN_POLL_MS         80U
+#define WARTSILA_LEVEL_DOWN_TIMEOUT_MS      (60U * 60U * 1000U)
+#define WARTSILA_DENSITY_SAMPLE_MS          200U
+#define WARTSILA_DENSITY_MAX_WAIT_MS        (5U * 60U * 1000U)
+#define WARTSILA_DENSITY_FREQ_EPS_HZ        1.0f
+#define WARTSILA_DENSITY_VALUE_EPS          0.1f
+#define WARTSILA_DENSITY_TEMP_EPS_C         0.2f
+
+typedef struct {
+    DensityMeasurement measurement;
+    float frequency_hz;
+    float density_value;
+    float temperature_c;
+    float actual_position_mm;
+    bool is_air;
+    const char *air_reason;
+} WartsilaPointSample;
+
+static bool Wartsila_IsAirPoint(float density_value, float frequency_hz, const char **air_reason)
+{
+    if (density_value < WARTSILA_AIR_DENSITY_THRESHOLD) {
+        if (air_reason != NULL) {
+            *air_reason = "density_low";
+        }
+        return true;
+    }
+
+    if (frequency_hz > (float)g_deviceParams.oilLevelFrequency) {
+        if (air_reason != NULL) {
+            *air_reason = "frequency_high";
+        }
+        return true;
+    }
+
+    if (air_reason != NULL) {
+        *air_reason = "liquid";
+    }
+    return false;
+}
+
+static void Wartsila_FillPointSample(WartsilaPointSample *sample,
+                                     float frequency_hz,
+                                     float density_value,
+                                     float temperature_c,
+                                     float actual_position_mm,
+                                     bool is_air,
+                                     const char *air_reason)
+{
+    memset(sample, 0, sizeof(*sample));
+    sample->frequency_hz = frequency_hz;
+    sample->density_value = density_value;
+    sample->temperature_c = temperature_c;
+    sample->actual_position_mm = actual_position_mm;
+    sample->is_air = is_air;
+    sample->air_reason = air_reason;
+
+    sample->measurement.density = DENSITY_TO_RAW(density_value);
+    sample->measurement.standard_density = DENSITY_TO_RAW(density_value);
+    sample->measurement.weight_density = DENSITY_TO_RAW(density_value);
+    sample->measurement.temperature = TEMP_TO_RAW(temperature_c);
+    sample->measurement.temperature_position = PositionMm_ToU01mmClamped(actual_position_mm);
+    sample->measurement.vcf20 = 1U;
+}
+
+static uint32_t Wartsila_MoveToDensityPoint(float target_mm,
+                                            uint32_t point_no,
+                                            float *actual_position_mm)
+{
+    uint32_t ret = NO_ERROR;
+    float cur_mm = 0.0f;
+
+    if (actual_position_mm == NULL) {
+        return PARAM_ADDRESS_OVERFLOW;
+    }
+
+    for (uint32_t attempt = 0U; attempt <= WARTSILA_POINT_POSITION_RETRY_MAX; attempt++) {
+        if (attempt > 0U) {
+            printf("瓦锡兰分布测量 第%lu个点偏差超限，重试按位置定位\r\n",
+                   (unsigned long)point_no);
+        }
+
+        ret = MotorCtrl_MoveToPosition(target_mm, MotorCtrl_GetDefaultSpeedX100());
+        if (ret == STATE_SWITCH) {
+            return STATE_SWITCH;
+        }
+        CHECK_ERROR(ret);
+
+        MotorCtrl_SnapshotSensorPositionMm(&cur_mm);
+        float deviation_mm = cur_mm - target_mm;
+        float abs_deviation_mm = (deviation_mm >= 0.0f) ? deviation_mm : -deviation_mm;
+
+        printf("瓦锡兰分布测量 第%lu个点定位：目标=%.3fmm 实际=%.3fmm 偏差=%.3fmm\r\n",
+               (unsigned long)point_no,
+               target_mm,
+               cur_mm,
+               deviation_mm);
+
+        if (abs_deviation_mm <= WARTSILA_POINT_POSITION_TOLERANCE_MM) {
+            *actual_position_mm = cur_mm;
+            return NO_ERROR;
+        }
+    }
+
+    *actual_position_mm = cur_mm;
+    printf("瓦锡兰分布测量 第%lu个点定位失败：目标=%.3fmm 实际=%.3fmm 偏差超出%.3fmm\r\n",
+           (unsigned long)point_no,
+           target_mm,
+           cur_mm,
+           WARTSILA_POINT_POSITION_TOLERANCE_MM);
+    return MEASUREMENT_POSITION_ERROR;
+}
+
+static uint32_t Wartsila_ReadPointAndClassify(WartsilaPointSample *sample)
+{
+    uint32_t ret = NO_ERROR;
+    uint32_t hover_time_s = g_deviceParams.spreadPointHoverTime;
+    uint32_t stable_win_ms = hover_time_s * 1000U;
+    uint32_t start_tick = 0U;
+    uint32_t stable_start = 0U;
+    uint8_t first_sample = 1U;
+    float ref_freq = 0.0f;
+    float ref_density = 0.0f;
+    float ref_temp = 0.0f;
+    float cur_freq = 0.0f;
+    float cur_density = 0.0f;
+    float cur_temp = 0.0f;
+    float cur_mm = 0.0f;
+
+    if (sample == NULL) {
+        return PARAM_ADDRESS_OVERFLOW;
+    }
+
+    ret = EnableDensityMode();
+    if (ret == STATE_SWITCH) {
+        return STATE_SWITCH;
+    }
+    CHECK_ERROR(ret);
+
+    if (stable_win_ms == 0U) {
+        stable_win_ms = 5000U;
+    }
+
+    start_tick = HAL_GetTick();
+    while (1) {
+        if (HasEffectiveCommandSwitchRequest()) {
+            return STATE_SWITCH;
+        }
+
+        uint32_t now = HAL_GetTick();
+        if ((now - start_tick) >= WARTSILA_DENSITY_MAX_WAIT_MS) {
+            /* 密度读取超过 5 分钟仍未形成有效液体点时，按密度 0 的空气点处理。 */
+            MotorCtrl_SnapshotSensorPositionMm(&cur_mm);
+            Wartsila_FillPointSample(sample,
+                                     cur_freq,
+                                     0.0f,
+                                     cur_temp,
+                                     cur_mm,
+                                     true,
+                                     "density_timeout_zero");
+            return NO_ERROR;
+        }
+
+        ret = Read_Density(&cur_freq, &cur_density, &cur_temp);
+        if (ret == STATE_SWITCH) {
+            return STATE_SWITCH;
+        }
+        if (ret != NO_ERROR) {
+            return ret;
+        }
+
+        MotorCtrl_SnapshotSensorPositionMm(&cur_mm);
+
+        const char *air_reason = NULL;
+        if (Wartsila_IsAirPoint(cur_density, cur_freq, &air_reason)) {
+            Wartsila_FillPointSample(sample,
+                                     cur_freq,
+                                     cur_density,
+                                     cur_temp,
+                                     cur_mm,
+                                     true,
+                                     air_reason);
+            return NO_ERROR;
+        }
+
+
+        if (first_sample != 0U) {
+            ref_freq = cur_freq;
+            ref_density = cur_density;
+            ref_temp = cur_temp;
+            stable_start = now;
+            first_sample = 0U;
+        } else {
+            float df = fabsf(cur_freq - ref_freq);
+            float dd = fabsf(cur_density - ref_density);
+            float dt = fabsf(cur_temp - ref_temp);
+            if ((df > WARTSILA_DENSITY_FREQ_EPS_HZ) ||
+                (dd > WARTSILA_DENSITY_VALUE_EPS) ||
+                (dt > WARTSILA_DENSITY_TEMP_EPS_C)) {
+                ref_freq = cur_freq;
+                ref_density = cur_density;
+                ref_temp = cur_temp;
+                stable_start = now;
+            }
+        }
+
+        if ((first_sample == 0U) && ((now - stable_start) >= stable_win_ms)) {
+            Wartsila_FillPointSample(sample,
+                                     ref_freq,
+                                     ref_density,
+                                     ref_temp,
+                                     cur_mm,
+                                     false,
+                                     "liquid");
+            return NO_ERROR;
+        }
+
+        ret = AbortableDelay_CommandSwitch(WARTSILA_DENSITY_SAMPLE_MS, 50U);
+        if (ret != NO_ERROR) {
+            return ret;
+        }
+    }
+}
+
+static uint32_t Wartsila_MoveDownToLiquidAfterAirPoint(float air_point_mm, float *level_mm)
+{
+    uint32_t ret = NO_ERROR;
+    bool is_moving = false;
+    float cur_mm = air_point_mm;
+    uint32_t start_tick = 0U;
+
+    if (level_mm == NULL) {
+        return PARAM_ADDRESS_OVERFLOW;
+    }
+
+    ret = EnableLevelMode();
+    if (ret == STATE_SWITCH) {
+        return STATE_SWITCH;
+    }
+    CHECK_ERROR(ret);
+
+    MotorCtrl_LostStepInit();
+    ret = MotorCtrl_MoveDown(WARTSILA_LEVEL_DOWN_SPEED_X100);
+    CHECK_ERROR(ret);
+
+    start_tick = HAL_GetTick();
+    while (1) {
+        Level_StateTypeDef level_state = AIR;
+
+        ret = determine_level_status_motion(&level_state);
+        if (ret != NO_ERROR) {
+            (void)MotorCtrl_SlowStop();
+            return ret;
+        }
+
+        if (level_state == OIL) {
+            ret = MotorCtrl_SlowStop();
+            CHECK_ERROR(ret);
+            MotorCtrl_SnapshotSensorPositionMm(&cur_mm);
+            *level_mm = cur_mm;
+            printf("瓦锡兰分布测量 空气点后慢速下行识别到液体，液位位置=%.3fmm\r\n", cur_mm);
+            return NO_ERROR;
+        }
+
+        ret = MotorCtrl_IsDriverMoving(&stepper, &is_moving);
+        if (ret != NO_ERROR) {
+            (void)MotorCtrl_SlowStop();
+            return ret;
+        }
+        if (!is_moving) {
+            ret = MotorCtrl_MoveDown(WARTSILA_LEVEL_DOWN_SPEED_X100);
+            CHECK_ERROR(ret);
+        }
+
+        MotorCtrl_SnapshotSensorPositionMm(&cur_mm);
+        if (g_measurement.debug_data.sensor_position < (int32_t)g_deviceParams.blindZone) {
+            (void)MotorCtrl_SlowStop();
+            return MEASUREMENT_OILLEVEL_LOW;
+        }
+
+        ret = MotorCtrl_CheckLostStepAutoTiming(g_measurement.debug_data.cable_length);
+        if (ret != NO_ERROR) {
+            (void)MotorCtrl_SlowStop();
+            return ret;
+        }
+
+        ret = CheckWeightCollision();
+        if (ret != NO_ERROR) {
+            (void)MotorCtrl_SlowStop();
+            return ret;
+        }
+
+        ret = MotorCtrl_CheckDriverGstat();
+        if (ret != NO_ERROR) {
+            (void)MotorCtrl_SlowStop();
+            return ret;
+        }
+
+        if ((HAL_GetTick() - start_tick) > WARTSILA_LEVEL_DOWN_TIMEOUT_MS) {
+            (void)MotorCtrl_SlowStop();
+            return MOTOR_RUN_TIMEOUT;
+        }
+
+        ret = AbortableDelay_CommandSwitch(WARTSILA_LEVEL_DOWN_POLL_MS, 20U);
+        if (ret != NO_ERROR) {
+            (void)MotorCtrl_SlowStop();
+            return ret;
+        }
+    }
+}
+
+static uint32_t Wartsila_TrimPointsByOilLevel(DensityDistribution *dist,
+                                              uint32_t *valid_points,
+                                              uint32_t *sum_temp,
+                                              uint32_t *sum_density,
+                                              float level_mm,
+                                              uint32_t min_gap_surface)
+{
+    if ((dist == NULL) || (valid_points == NULL) || (sum_temp == NULL) || (sum_density == NULL)) {
+        return PARAM_ADDRESS_OVERFLOW;
+    }
+
+    float valid_limit_mm = level_mm - (float)min_gap_surface;
+    while (*valid_points > 0U) {
+        DensityMeasurement *last_pt = &dist->single_density_data[*valid_points - 1U];
+        float point_pos_mm = (float)last_pt->temperature_position / 10.0f;
+        if (point_pos_mm >= valid_limit_mm) {
+            *sum_temp -= last_pt->temperature;
+            *sum_density -= last_pt->density;
+            memset(last_pt, 0, sizeof(*last_pt));
+            (*valid_points)--;
+            printf("瓦锡兰分布测量 高位点位置=%.3fmm 不小于有效边界=%.3fmm，删除后剩余=%lu\r\n",
+                   point_pos_mm,
+                   valid_limit_mm,
+                   (unsigned long)*valid_points);
+            continue;
+        }
+
+        break;
+    }
+
+    if (*valid_points == 0U) {
+        return MEASUREMENT_DENSITY_NO_VALID_POINT;
+    }
+
+    return NO_ERROR;
+}
+
 /**
- * @brief  Wartsila 密度分布测量（从起始点向上，途中遇到空气或到达最高点停止）
+ * @brief  Wartsila 密度分布测量（点间只按位置移动，到点后用密度/频率判定空气）
  *
- * 流程说明：
- * 1. 使用以下参数控制分布测量：
- *    - wartsila_lower_density_limit        分布测量起始点高度（mm）
- *    - wartsila_upper_density_limit        分布测量最高点高度（mm）
- *    - wartsila_density_interval           分布测量点间距（mm）
- *    - wartsila_max_height_above_surface   最高测点距油面最小允许距离（mm）
- *
- * 2. 先把传感器移动到起始点高度；
- * 3. 从起始点开始，按间距向上依次运行到各个测点目标高度：
- *    - 上行过程中调用 motorMoveUpToPositionOrAir() 检测液位状态；
- *    - 若途中检测到传感器进入空气（AIR），立即停止，不再向上；
- *    - 若顺利到达目标高度（OIL），则在该位置采集一个密度测点；
- * 4. 若始终未进入空气，则最多运行到分布测量最高点；
- * 5. 测量结束后如果最高测点距离油面小于 wartsila_max_height_above_surface，则舍弃最高点数据。
- *
- * 坐标与单位约定：
- * - 罐底为 0 mm，向上为正方向；
- * - g_measurement.oil_measurement.oil_level 单位为 0.1 mm；
- * - wartsila_* 相关位置参数单位均为 mm；
- * - 单点密度、温度字段为原始值（与 RAW_TO_DENSITY、RAW_TO_TEMP 对应）。
+ * 点间移动和起始点定位不做运动中液位检测；到点后使用密度模式读取实际密度值和浮点频率。
+ * 空气点不保存，切液位模式慢速下行，首次识别到 OIL 时把当前位置作为液位。
+ * 最终只保留位置严格小于“液位 - 距离限制”的液体点。
  *
  * @param  dist  输出测量结果的结构体指针（一般为 &g_measurement.density_distribution）
  * @return 错误码，NO_ERROR 表示成功
@@ -67,261 +400,133 @@ uint32_t Wartsila_Density_SpreadMeasurement(DensityDistribution *dist)
     }
 
     memset(dist, 0, sizeof(DensityDistribution));
-	EnableLevelMode();
-    /* 位置相关参数 */
-    uint32_t start_pos_mm    = g_deviceParams.wartsila_lower_density_limit;      /* 起始点高度 */
-    uint32_t end_pos_mm      = g_deviceParams.wartsila_upper_density_limit;      /* 最高点高度 */
-    uint32_t step_mm         = g_deviceParams.wartsila_density_interval;         /* 点间距 */
-    uint32_t min_gap_surface = g_deviceParams.wartsila_max_height_above_surface; /* 最高点距油面最小距离 */
 
-    if (step_mm == 0) {
-        printf("分布测量参数异常：步长=0\n");
+    uint32_t start_pos_mm    = g_deviceParams.wartsila_lower_density_limit;
+    uint32_t end_pos_mm      = g_deviceParams.wartsila_upper_density_limit;
+    uint32_t step_mm         = g_deviceParams.wartsila_density_interval;
+    uint32_t min_gap_surface = g_deviceParams.wartsila_max_height_above_surface;
+
+    if (step_mm == 0U) {
+        printf("瓦锡兰分布测量参数异常：步长=0\r\n");
         return PARAM_RANGE_ERROR;
     }
     if (end_pos_mm <= start_pos_mm) {
-        printf("分布测量参数异常：结束位置<=起始位置 (%lu <= %lu)\n",
-               (unsigned long)end_pos_mm, (unsigned long)start_pos_mm);
+        printf("瓦锡兰分布测量参数异常：结束位置<=起始位置 (%lu <= %lu)\r\n",
+               (unsigned long)end_pos_mm,
+               (unsigned long)start_pos_mm);
         return PARAM_RANGE_ERROR;
     }
 
-    /* 分布测量前不知道油位，这里先置为未找到 */
-    float oil_level_mm    = -1.0f;
-    bool  oil_level_found = false;
-
-    /* 根据高度范围算出理论最大点数，并限制在 MAX_MEASUREMENT_POINTS 内 */
     float range_mm = (float)(end_pos_mm - start_pos_mm);
     uint32_t max_points_by_range = (uint32_t)(range_mm / (float)step_mm) + 1U;
-    if (max_points_by_range == 0) {
-        printf("分布测量异常：高度范围过小，无法布点\n");
+    if (max_points_by_range == 0U) {
         return PARAM_RANGE_ERROR;
     }
     if (max_points_by_range > MAX_MEASUREMENT_POINTS) {
-        printf("分布测量提示：理论点数 %lu 超过上限 %u，裁剪为上限\n",
-               (unsigned long)max_points_by_range, (unsigned int)MAX_MEASUREMENT_POINTS);
         max_points_by_range = MAX_MEASUREMENT_POINTS;
     }
 
-    printf("分布测量开始：起始=%lumm, 最高=%lumm, 间距=%lumm, 理论点数=%lu\n",
+    printf("瓦锡兰分布测量开始：起始=%lumm, 最高=%lumm, 间距=%lumm, 理论点数=%lu\r\n",
            (unsigned long)start_pos_mm,
            (unsigned long)end_pos_mm,
            (unsigned long)step_mm,
            (unsigned long)max_points_by_range);
 
-    /* 先移动到起始点高度 */
-    float cur_mm = 0.0f;
-    MotorCtrl_SnapshotSensorPositionMm(&cur_mm);
-
     uint32_t ret = NO_ERROR;
-
-    if (cur_mm < (float)start_pos_mm - 0.05f) {
-        /* 当前在起始点下方：用“上行到指定位置或空气”函数 */
-        Level_StateTypeDef st = OIL;
-        printf("先从 %.3fmm 上行到起始点 %lumm\n", cur_mm, (unsigned long)start_pos_mm);
-        ret = motorMoveUpToPositionOrAir((float)start_pos_mm, &st);
-        CHECK_ERROR(ret);
-        if (st == AIR) {
-            /* 理论上起始点以下不应该是空气，这里认为异常 */
-            MotorCtrl_SnapshotSensorPositionMm(&cur_mm);
-            printf("到起始点之前已经进入空气，位置=%.3fmm，本次分布测量取消\n", cur_mm);
-            return MEASUREMENT_DENSITY_RANGE_INVALID;
-        }
-    } else if (cur_mm > (float)start_pos_mm + 0.05f) {
-        /* 当前在起始点上方：直接用绝对位置函数下行，不需要检测空气 */
-        printf("当前位置高于起始点，从 %.3fmm 下行到 %lumm\n", cur_mm, (unsigned long)start_pos_mm);
-        ret = MotorCtrl_MoveToPosition((float)start_pos_mm, MotorCtrl_GetDefaultSpeedX100());
-        CHECK_ERROR(ret);
-    } else {
-        printf("当前位置已经在起始点附近，无需调整位置。\n");
-    }
-
-    /* 再读一次当前位置，作为正式起点 */
-    MotorCtrl_SnapshotSensorPositionMm(&cur_mm);
-    printf("分布测量起点位置确认：%.3fmm\n", cur_mm);
-    g_measurement.device_status.device_state = STATE_WARTSILA_DENSITY_MEASURING;
-    /* 起始点如果一开始就在空气中，可以直接结束（说明下面都是空气或空罐） */
-    Level_StateTypeDef st0 = OIL;
-    ret = determine_level_status(&st0);
-    CHECK_ERROR(ret);
-    if (st0 == AIR) {
-        printf("起始点位置传感器在空气中，本次分布测量取消\n");
-        return MEASUREMENT_DENSITY_RANGE_INVALID;
-    }
-
-    /* 循环向上采点 */
-    uint32_t valid_points = 0;
-    uint32_t sum_temp     = 0;
-    uint32_t sum_density  = 0;
-    float    last_pos_mm  = cur_mm;
-
+    uint32_t valid_points = 0U;
+    uint32_t sum_temp = 0U;
+    uint32_t sum_density = 0U;
+    bool oil_level_found = false;
+    float oil_level_mm = -1.0f;
     float target_mm = (float)start_pos_mm;
 
-    for (uint32_t i = 0; i < max_points_by_range; i++) {
-
-        if (i == 0) {
-            printf("分布测量 首点精确定位：目标首点=%.3fmm\n", target_mm);
-        } else {
+    for (uint32_t i = 0U; i < max_points_by_range; i++) {
+        if (i > 0U) {
             target_mm += (float)step_mm;
             if (target_mm > (float)end_pos_mm + 0.01f) {
-                printf("目标高度 %.3fmm 超出最高限制 %lumm，停止布点\n",
-                       target_mm, (unsigned long)end_pos_mm);
                 break;
-            }
-
-            printf("分布测量 上行到第%lu个点目标位置 %.3fmm\n",
-                   (unsigned long)(i + 1U), target_mm);
-
-            Level_StateTypeDef st = OIL;
-            ret = motorMoveUpToPositionOrAir(target_mm, &st);
-            CHECK_ERROR(ret);
-
-            /* motorMoveUpToPositionOrAir 结束后，再读一次实际位置 */
-            MotorCtrl_SnapshotSensorPositionMm(&cur_mm);
-
-            if (st == AIR) {
-                /* 在从上一个点到 target_mm 的过程中，已经提出油面 */
-                oil_level_mm    = cur_mm;
-                oil_level_found = true;
-                printf("在上行过程中检测到空气，认为液位位置=%.3fmm，停止分布测量\n", oil_level_mm);
-                break;  /* 不再继续向上，也不采当前点密度 */
             }
         }
 
-        printf("精确寻找密度点位...\r\n");
-        bool point_position_ok = false;
-        for (uint32_t attempt = 0U; attempt <= WARTSILA_POINT_POSITION_RETRY_MAX; attempt++) {
-            if (attempt > 0U) {
-                printf("分布测量 第%lu个点偏差超限，使用原有位置函数重试精确定位\n",
-                       (unsigned long)(i + 1U));
-            }
+        float cur_mm = 0.0f;
+        ret = Wartsila_MoveToDensityPoint(target_mm, i + 1U, &cur_mm);
+        if (ret == STATE_SWITCH) {
+            return STATE_SWITCH;
+        }
+        CHECK_ERROR(ret);
 
-            ret = MotorCtrl_MoveToPosition(target_mm, MotorCtrl_GetDefaultSpeedX100());
+        WartsilaPointSample sample;
+        ret = Wartsila_ReadPointAndClassify(&sample);
+        if (ret == STATE_SWITCH) {
+            return STATE_SWITCH;
+        }
+        CHECK_ERROR(ret);
+
+        cur_mm = sample.actual_position_mm;
+        if (sample.is_air) {
+            printf("瓦锡兰分布测量 第%lu个点判定为空气：目标=%.3fmm 实际=%.3fmm 密度=%.3f 频率=%.3f 原因=%s\r\n",
+                   (unsigned long)(i + 1U),
+                   target_mm,
+                   cur_mm,
+                   sample.density_value,
+                   sample.frequency_hz,
+                   sample.air_reason);
+
+            ret = Wartsila_MoveDownToLiquidAfterAirPoint(cur_mm, &oil_level_mm);
             if (ret == STATE_SWITCH) {
                 return STATE_SWITCH;
             }
             CHECK_ERROR(ret);
-
-            MotorCtrl_SnapshotSensorPositionMm(&cur_mm);
-            float deviation_mm = cur_mm - target_mm;
-            float abs_deviation_mm = (deviation_mm >= 0.0f) ? deviation_mm : -deviation_mm;
-
-            if (i == 0) {
-                printf("分布测量 首点定位：目标首点=%.3fmm 实际首点=%.3fmm 偏差=%.3fmm\n",
-                       target_mm, cur_mm, deviation_mm);
-            } else {
-                printf("分布测量 第%lu个点定位：目标=%.3fmm 实际=%.3fmm 偏差=%.3fmm\n",
-                       (unsigned long)(i + 1U), target_mm, cur_mm, deviation_mm);
-            }
-
-            if (abs_deviation_mm <= WARTSILA_POINT_POSITION_TOLERANCE_MM) {
-                point_position_ok = true;
-                break;
-            }
-        }
-
-        if (!point_position_ok) {
-            printf("分布测量 第%lu个点定位失败：目标=%.3fmm 实际=%.3fmm 偏差超出%.3fmm\n",
-                   (unsigned long)(i + 1U),
-                   target_mm,
-                   cur_mm,
-                   WARTSILA_POINT_POSITION_TOLERANCE_MM);
-            return MEASUREMENT_POSITION_ERROR;
-        }
-        /* 在密度点采集前再次判断当前是否在油中
-                * 如果此时已经在空气中，则把当前位置-100mm当作液位值，结束分布测量
-                */
-               {
-                   Level_StateTypeDef st_cur = OIL;
-                   ret = determine_level_status(&st_cur);
-                   CHECK_ERROR(ret);
-                   if (st_cur == AIR) {
-                       if (!oil_level_found) {
-                           oil_level_mm    = cur_mm-100.0f;
-                           oil_level_found = true;
-                       }
-                       printf("分布测量：在采点位置检测到传感器在空气中，液位=%.3fmm，停止测量\n", oil_level_mm);
-                       break;  /* 不再采当前点，也不再继续向上 */
-                   }
-               }
-        /* 当前位置在油中，采集一个密度点 */
-        if (g_deviceParams.spreadPointHoverTime > 0) {
-            ret = AbortableDelay_CommandSwitch(g_deviceParams.spreadPointHoverTime, 50U);
-            if (ret != NO_ERROR) {
-                return ret;
-            }
-        }
-
-        if (valid_points >= MAX_MEASUREMENT_POINTS) {
-            printf("有效点数达到上限 %u，停止采集\n", (unsigned int)MAX_MEASUREMENT_POINTS);
+            oil_level_found = true;
             break;
         }
 
-        DensityMeasurement *pt = &dist->single_density_data[valid_points];
-        ret = SinglePoint_ReadSensor(pt);
-        if (ret != NO_ERROR) {
-            printf("读取单点密度失败 位置=%.3fmm 错误码=%lu\n", cur_mm, (unsigned long)ret);
-            return ret;
+        if (valid_points >= MAX_MEASUREMENT_POINTS) {
+            break;
         }
 
-        /* 在单点结构里记录位置，单位：0.1mm */
-        pt->temperature_position = PositionMm_ToU01mmClamped(cur_mm);
-
-        sum_temp    += pt->temperature;
-        sum_density += pt->density;
+        dist->single_density_data[valid_points] = sample.measurement;
+        sum_temp += sample.measurement.temperature;
+        sum_density += sample.measurement.density;
         valid_points++;
-        last_pos_mm = cur_mm;
 
-        printf("分布测量 点%lu：位置=%.3fmm 密度=%lu 温度=%lu\n",
+        printf("瓦锡兰分布测量 液体点%lu：位置=%.3fmm 密度=%lu(%.3f) 温度=%lu(%.2f) 频率=%.3f\r\n",
                (unsigned long)valid_points,
                cur_mm,
-               (unsigned long)pt->density,
-               (unsigned long)pt->temperature);
+               (unsigned long)sample.measurement.density,
+               sample.density_value,
+               (unsigned long)sample.measurement.temperature,
+               sample.temperature_c,
+               sample.frequency_hz);
     }
 
-    /* 如果整个扫描过程中都没有检测到空气，则认为没有找到油面，报错 */
     if (!oil_level_found) {
-        printf("分布测量执行到最高点仍未检测到空气，未找到液位，测量失败\n");
+        printf("瓦锡兰分布测量执行到最高点仍未遇到空气，无法识别液位\r\n");
         return MEASUREMENT_DENSITY_SURFACE_NOTFOUND;
     }
 
-    if (valid_points == 0) {
-        printf("本次分布测量没有得到任何有效测点\n");
+    if (valid_points == 0U) {
+        printf("瓦锡兰分布测量没有得到任何有效液体测点\r\n");
         return MEASUREMENT_DENSITY_SURFACE_NOTFOUND;
     }
 
-    /* 最高测点距离油面的判断：过近则舍弃最高点
-     * gap_to_surface = (液位高度 - 最高测点高度)
-     */
-    float gap_to_surface = oil_level_mm - last_pos_mm;
+    ret = Wartsila_TrimPointsByOilLevel(dist,
+                                        &valid_points,
+                                        &sum_temp,
+                                        &sum_density,
+                                        oil_level_mm,
+                                        min_gap_surface);
+    CHECK_ERROR(ret);
 
-    printf("最高测点高度=%.3fmm, 液位=%.3fmm, 间距=%.3fmm, 限制=%.3fmm\n",
-           last_pos_mm, oil_level_mm, gap_to_surface, (float)min_gap_surface);
-
-    if (gap_to_surface < (float)min_gap_surface && valid_points > 0) {
-        /* 丢掉最后一个点 */
-        DensityMeasurement *last_pt = &dist->single_density_data[valid_points - 1];
-        sum_temp    -= last_pt->temperature;
-        sum_density -= last_pt->density;
-        valid_points--;
-
-        printf("最高测点距离液位小于限制，舍弃该点数据，剩余有效点数=%lu\n",
-               (unsigned long)valid_points);
-    }
-
-    if (valid_points == 0) {
-        printf("舍弃最高点后无有效测点\n");
-        return MEASUREMENT_DENSITY_NO_VALID_POINT;
-    }
-
-    /* 统计平均值（原始单位，做简单四舍五入） */
     dist->measurement_points       = valid_points;
-    dist->Density_oil_level        = PositionMm_ToU01mmClamped(oil_level_mm);  /* 0.1mm 单位 */
-    dist->average_temperature      = (sum_temp    + valid_points / 2) / valid_points;
-    dist->average_density          = (sum_density + valid_points / 2) / valid_points;
+    dist->Density_oil_level        = PositionMm_ToU01mmClamped(oil_level_mm);
+    dist->average_temperature      = (sum_temp    + valid_points / 2U) / valid_points;
+    dist->average_density          = (sum_density + valid_points / 2U) / valid_points;
     dist->average_standard_density = dist->average_density;
     dist->average_weight_density   = dist->average_density;
-    dist->average_vcf20            = 0;
+    dist->average_vcf20            = 0U;
 
-    printf("分布测量完成：有效点数=%lu, 液位=%.1fmm, 平均密度=%lu(%.3f), 平均温度=%lu(%.2f)\n",
+    printf("瓦锡兰分布测量完成：有效点数=%lu, 液位=%.1fmm, 平均密度=%lu(%.3f), 平均温度=%lu(%.2f)\r\n",
            (unsigned long)valid_points,
            oil_level_mm,
            (unsigned long)dist->average_density,

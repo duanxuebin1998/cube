@@ -1,0 +1,932 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>瓦锡兰分布测量详细流程梳理</title>
+  <style>
+    :root {
+      --ink: #17202a;
+      --muted: #5f6b7a;
+      --line: #d8dee8;
+      --panel: #f7f9fc;
+      --cpu2: #2563eb;
+      --cpu3: #059669;
+      --external: #9a3412;
+      --warn: #b45309;
+      --risk: #b91c1c;
+      --ok: #047857;
+      --code: #f1f5f9;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      color: var(--ink);
+      font-family: "Microsoft YaHei", "Segoe UI", Arial, sans-serif;
+      line-height: 1.65;
+      background: #ffffff;
+    }
+
+    header {
+      padding: 34px 42px 28px;
+      border-bottom: 5px solid var(--cpu2);
+      background: #f8fbff;
+    }
+
+    main {
+      max-width: 1220px;
+      margin: 0 auto;
+      padding: 28px 36px 56px;
+    }
+
+    h1 {
+      margin: 0 0 10px;
+      font-size: 32px;
+      line-height: 1.25;
+    }
+
+    h2 {
+      margin: 36px 0 14px;
+      padding-bottom: 8px;
+      border-bottom: 2px solid var(--line);
+      font-size: 24px;
+    }
+
+    h3 {
+      margin: 24px 0 10px;
+      font-size: 19px;
+    }
+
+    p { margin: 8px 0 12px; }
+
+    a {
+      color: #1d4ed8;
+      text-decoration: none;
+    }
+
+    a:hover { text-decoration: underline; }
+
+    code {
+      padding: 1px 5px;
+      border-radius: 4px;
+      background: var(--code);
+      font-family: Consolas, "Courier New", monospace;
+      font-size: 0.94em;
+    }
+
+    pre {
+      overflow-x: auto;
+      padding: 14px 16px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: var(--code);
+      font-family: Consolas, "Courier New", monospace;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 12px 0 18px;
+      font-size: 14px;
+    }
+
+    th, td {
+      padding: 9px 10px;
+      border: 1px solid var(--line);
+      vertical-align: top;
+      text-align: left;
+    }
+
+    th {
+      background: #eef3f9;
+      font-weight: 700;
+    }
+
+    ul, ol { padding-left: 24px; }
+
+    li { margin: 5px 0; }
+
+    .meta {
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .summary {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+      margin-top: 22px;
+    }
+
+    .summary-card {
+      min-height: 118px;
+      padding: 14px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: #fff;
+    }
+
+    .summary-card strong {
+      display: block;
+      margin-bottom: 7px;
+      font-size: 16px;
+    }
+
+    .tag {
+      display: inline-block;
+      margin: 0 6px 6px 0;
+      padding: 2px 8px;
+      border-radius: 999px;
+      color: #fff;
+      font-size: 12px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .tag.external { background: var(--external); }
+    .tag.cpu3 { background: var(--cpu3); }
+    .tag.cpu2 { background: var(--cpu2); }
+    .tag.warn { background: var(--warn); }
+    .tag.risk { background: var(--risk); }
+    .tag.ok { background: var(--ok); }
+
+    .note {
+      margin: 16px 0;
+      padding: 13px 15px;
+      border-left: 4px solid var(--cpu2);
+      background: var(--panel);
+    }
+
+    .warning {
+      margin: 16px 0;
+      padding: 13px 15px;
+      border-left: 4px solid var(--warn);
+      background: #fff7ed;
+    }
+
+    .riskbox {
+      margin: 16px 0;
+      padding: 13px 15px;
+      border-left: 4px solid var(--risk);
+      background: #fff1f2;
+    }
+
+    .flow {
+      display: grid;
+      gap: 10px;
+      margin: 16px 0 20px;
+    }
+
+    .flow-row {
+      display: grid;
+      grid-template-columns: 170px 1fr;
+      gap: 12px;
+      align-items: stretch;
+    }
+
+    .lane {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 12px;
+      border-radius: 6px;
+      color: #fff;
+      font-weight: 700;
+      text-align: center;
+    }
+
+    .lane.external { background: var(--external); }
+    .lane.cpu3 { background: var(--cpu3); }
+    .lane.cpu2 { background: var(--cpu2); }
+
+    .step {
+      padding: 12px 14px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: #fff;
+    }
+
+    .step strong {
+      display: block;
+      margin-bottom: 4px;
+    }
+
+    .arrow {
+      margin: 0 0 0 197px;
+      color: var(--muted);
+      font-size: 20px;
+      line-height: 1;
+    }
+
+    .two-col {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 18px;
+    }
+
+    .panel {
+      padding: 15px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: #fff;
+    }
+
+    .toc {
+      padding: 16px 18px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: var(--panel);
+    }
+
+    .toc ol {
+      margin: 8px 0 0;
+      columns: 2;
+    }
+
+    .small { font-size: 13px; color: var(--muted); }
+
+    @media (max-width: 900px) {
+      header { padding: 26px 20px; }
+      main { padding: 22px 18px 42px; }
+      .summary, .two-col { grid-template-columns: 1fr; }
+      .flow-row { grid-template-columns: 1fr; }
+      .arrow { margin-left: 0; text-align: center; }
+      .toc ol { columns: 1; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>瓦锡兰分布测量详细流程梳理</h1>
+    <div class="meta">适用范围：CPU3 Wartsila 外部 Modbus 适配、CPU2 瓦锡兰区间密度分布测量、测后固定点回位和探底流程。整理日期：2026-06-11。</div>
+    <div class="summary">
+      <div class="summary-card">
+        <strong>外部入口</strong>
+        <span class="tag external">Wartsila</span>
+        <p>外部主站通过 CPU3 Wartsila Modbus 保持寄存器下发指令和区间参数。</p>
+      </div>
+      <div class="summary-card">
+        <strong>协议转换</strong>
+        <span class="tag cpu3">CPU3</span>
+        <p>CPU3 把 Wartsila 地址转换为内部 <code>DeviceParameters</code> 和 CPU2 Modbus 写命令。</p>
+      </div>
+      <div class="summary-card">
+        <strong>测量执行</strong>
+        <span class="tag cpu2">CPU2</span>
+        <p>CPU2 从起始点向上布点，遇空气停止，逐点稳定读取密度和温度。</p>
+      </div>
+      <div class="summary-card">
+        <strong>结果返回</strong>
+        <span class="tag ok">结果</span>
+        <p>CPU2 保留完成态，CPU3 拉取分布点后映射回 Wartsila 寄存器。</p>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <section class="toc">
+      <strong>目录</strong>
+      <ol>
+        <li><a href="#overview">一页总览</a></li>
+        <li><a href="#files">关键代码位置</a></li>
+        <li><a href="#cpu3-downlink">CPU3 下发链路</a></li>
+        <li><a href="#cpu2-command">CPU2 命令调度</a></li>
+        <li><a href="#measurement">CPU2 详细测量流程</a></li>
+        <li><a href="#single-point">单点密度读取</a></li>
+        <li><a href="#result">结果统计与回传</a></li>
+        <li><a href="#bottom">测后探底</a></li>
+        <li><a href="#states">状态和寄存器映射</a></li>
+        <li><a href="#risks">当前优化风险点</a></li>
+      </ol>
+    </section>
+
+    <section id="overview">
+      <h2>一页总览</h2>
+      <div class="flow">
+        <div class="flow-row">
+          <div class="lane external">外部 Wartsila 主站</div>
+          <div class="step">
+            <strong>写保持寄存器</strong>
+            写 <code>0x0006</code> 下发命令，写 <code>0x005A~0x005D</code> 设置最低点、最高点、点间距和最高点距液面限制。
+          </div>
+        </div>
+        <div class="arrow">↓</div>
+        <div class="flow-row">
+          <div class="lane cpu3">CPU3 外部协议层</div>
+          <div class="step">
+            <strong>Wartsila 转内部模型</strong>
+            <code>down_command == 5</code> 转 <code>CMD_WARTSILA_DENSITY_RANGE</code>；区间参数写入 <code>g_deviceParams.wartsila_*</code>。
+          </div>
+        </div>
+        <div class="arrow">↓</div>
+        <div class="flow-row">
+          <div class="lane cpu3">CPU3 内部通信</div>
+          <div class="step">
+            <strong>写 CPU2 保持寄存器</strong>
+            CPU3 通过内部 Modbus 把命令和 Wartsila 参数发送给 CPU2。
+          </div>
+        </div>
+        <div class="arrow">↓</div>
+        <div class="flow-row">
+          <div class="lane cpu2">CPU2 测量调度</div>
+          <div class="step">
+            <strong>执行瓦锡兰区间密度</strong>
+            命令分发到 <code>CMD_WartsilaDensitySpread()</code>，实际测量由 <code>Wartsila_Density_SpreadMeasurement()</code> 完成。
+          </div>
+        </div>
+        <div class="arrow">↓</div>
+        <div class="flow-row">
+          <div class="lane cpu2">CPU2 测点循环</div>
+          <div class="step">
+            <strong>从低点向高点布点</strong>
+            上行过程中用液位状态判断是否进入空气；在油中才稳定读取单点密度；遇空气后停止布点并计算液位。
+          </div>
+        </div>
+        <div class="arrow">↓</div>
+        <div class="flow-row">
+          <div class="lane cpu2">CPU2 完成态</div>
+          <div class="step">
+            <strong>统计并保留结果</strong>
+            写入 <code>g_measurement.density_distribution</code>，状态设为 <code>STATE_WARTSILA_DENSITY_OVER</code>，保留 8 秒供 CPU3 读取。
+          </div>
+        </div>
+        <div class="arrow">↓</div>
+        <div class="flow-row">
+          <div class="lane cpu3">CPU3 结果回传</div>
+          <div class="step">
+            <strong>拉取分布点并对外映射</strong>
+            CPU3 在完成态下按点数读取 CPU2 分布点，并在 Wartsila 主站读寄存器时刷新 <code>g_holding_regs</code>。
+          </div>
+        </div>
+        <div class="arrow">↓</div>
+        <div class="flow-row">
+          <div class="lane cpu2">测后动作</div>
+          <div class="step">
+            <strong>固定点回位和按频率探底</strong>
+            根据 <code>wartsila_bottom_detect_interval</code> 判断是否回固定点后执行 <code>SearchBottom()</code>，最终切回 <code>CMD_MONITOR_SINGLE</code>。
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="files">
+      <h2>关键代码位置</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>模块</th>
+            <th>文件</th>
+            <th>职责</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>CPU3 Wartsila 外部协议</td>
+            <td><code>LTD_DISPLAY_CPU3/Communication/external/wartsila_modbus/wartsila_modbus_communication.c</code></td>
+            <td>处理外部 Modbus <code>0x03</code> 读、<code>0x10</code> 写，写入后触发参数解析和向 CPU2 下发。</td>
+          </tr>
+          <tr>
+            <td>CPU3 Wartsila 数据转换</td>
+            <td><code>LTD_DISPLAY_CPU3/Communication/external/wartsila_modbus/wartsila_modbus_data_analysis.c</code></td>
+            <td>完成 Wartsila 寄存器模型和内部 <code>DeviceParameters</code>/<code>MeasurementResult</code> 的双向转换。</td>
+          </tr>
+          <tr>
+            <td>CPU3 内部轮询</td>
+            <td><code>LTD_DISPLAY_CPU3/Communication/internal/main_board_modbus/cpu2_communicate.c</code></td>
+            <td>轮询 CPU2 输入寄存器，在瓦锡兰分布测完成态按点数读取分布点。</td>
+          </tr>
+          <tr>
+            <td>CPU2 命令调度</td>
+            <td><code>LTD_MAIN_CPU2/Application/Src/measure.c</code></td>
+            <td>分发 <code>CMD_WARTSILA_DENSITY_RANGE</code>，维护完成态、结果保留、测后探底和切回单点监测。</td>
+          </tr>
+          <tr>
+            <td>CPU2 瓦锡兰测量</td>
+            <td><code>LTD_MAIN_CPU2/Application/Src/wartsila_density_measurement.c</code></td>
+            <td>从起始点向上布点、遇空气停止、逐点采集密度和温度、统计结果。</td>
+          </tr>
+          <tr>
+            <td>CPU2 单点读取</td>
+            <td><code>LTD_MAIN_CPU2/Application/Src/measure_density.c</code></td>
+            <td><code>SinglePoint_ReadSensor()</code> 实现单点密度稳定判定、超时兜底和错误透传。</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="cpu3-downlink">
+      <h2>CPU3 下发链路</h2>
+      <h3>外部寄存器写入</h3>
+      <p>Wartsila 主站写保持寄存器时，CPU3 先把数据写入 <code>g_holding_regs</code>，再调用写入回调解析本次写入影响范围。当前实现关注命令地址 <code>0x0006</code> 和分布测量参数地址 <code>0x005A~0x005D</code>。</p>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Wartsila 地址</th>
+            <th>含义</th>
+            <th>内部字段</th>
+            <th>单位</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>0x0006</code></td>
+            <td>下发指令</td>
+            <td><code>g_deviceParams.command</code></td>
+            <td>枚举命令</td>
+          </tr>
+          <tr>
+            <td><code>0x005A</code></td>
+            <td>分布测量起始点/最低点</td>
+            <td><code>wartsila_lower_density_limit</code></td>
+            <td>mm</td>
+          </tr>
+          <tr>
+            <td><code>0x005B</code></td>
+            <td>分布测量最高点</td>
+            <td><code>wartsila_upper_density_limit</code></td>
+            <td>mm</td>
+          </tr>
+          <tr>
+            <td><code>0x005C</code></td>
+            <td>密度点间距</td>
+            <td><code>wartsila_density_interval</code></td>
+            <td>mm</td>
+          </tr>
+          <tr>
+            <td><code>0x005D</code></td>
+            <td>最高点距液面最小距离</td>
+            <td><code>wartsila_max_height_above_surface</code></td>
+            <td>mm</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>命令转换</h3>
+      <p><code>WartsilaToDSM()</code> 根据 <code>down_command</code> 转换内部命令：</p>
+      <table>
+        <thead>
+          <tr>
+            <th>Wartsila 下发值</th>
+            <th>内部命令</th>
+            <th>说明</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>5</code></td>
+            <td><code>CMD_WARTSILA_DENSITY_RANGE</code></td>
+            <td>启动瓦锡兰密度区间/分布测量。</td>
+          </tr>
+          <tr>
+            <td><code>3</code></td>
+            <td><code>CMD_MONITOR_SINGLE</code></td>
+            <td>切回固定点监测。</td>
+          </tr>
+          <tr>
+            <td><code>4</code></td>
+            <td><code>CMD_BACK_ZERO</code></td>
+            <td>回零点。</td>
+          </tr>
+          <tr>
+            <td>其他非零值</td>
+            <td><code>CMD_NONE</code></td>
+            <td>不执行有效业务命令。</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="note">
+        CPU3 写入命令时会把内部命令写到 CPU2 的 <code>HOLDREGISTER_DEVICEPARAM_COMMAND</code>；写入参数时会分别写 CPU2 的 Wartsila 参数保持寄存器。命令下发后 CPU3 将本地 <code>g_deviceParams.command</code> 清为 <code>CMD_NONE</code>，避免重复下发。
+      </div>
+    </section>
+
+    <section id="cpu2-command">
+      <h2>CPU2 命令调度</h2>
+      <p>CPU2 主测量调度在 <code>ProcessCommand()</code> 分支中识别 <code>CMD_WARTSILA_DENSITY_RANGE</code>，然后进入 <code>CMD_WartsilaDensitySpread()</code>。</p>
+      <pre>case CMD_WARTSILA_DENSITY_RANGE:
+    printf("执行瓦西莱区间密度测量指令\r\n");
+    CMD_WartsilaDensitySpread();
+    break;</pre>
+
+      <p><code>CMD_WartsilaDensitySpread()</code> 是外层流程函数，它负责状态、错误记录、结果写入、完成态等待、测后探底计数和最终命令切换。</p>
+      <ol>
+        <li>状态置为 <code>STATE_WARTSILA_DENSITY_MEASURING</code>。</li>
+        <li>调用 <code>Wartsila_Density_SpreadMeasurement(&amp;temp)</code> 执行实际测量。</li>
+        <li>如果返回 <code>STATE_SWITCH</code>，按命令切换正常退出。</li>
+        <li>如果返回错误码，打印失败日志，调用 <code>SET_ERROR(ret)</code>，并且不把临时结果写入 <code>g_measurement.density_distribution</code>。</li>
+        <li>仅在返回 <code>NO_ERROR</code> 时，把临时结果 <code>temp</code> 写入 <code>g_measurement.density_distribution</code>，并刷新完成锁存和完成计数。</li>
+        <li>等待 1 秒后打印分布测量结果。</li>
+        <li>状态置为 <code>STATE_WARTSILA_DENSITY_OVER</code>。</li>
+        <li>保留完成态 8 秒，给 CPU3 拉取点数据。</li>
+        <li>按 <code>wartsila_bottom_detect_interval</code> 判断是否测后探底。</li>
+        <li>流程结束后切回 <code>CMD_MONITOR_SINGLE</code>。</li>
+      </ol>
+    </section>
+
+    <section id="measurement">
+      <h2>CPU2 详细测量流程</h2>
+      <h3>参数快照和基础校验</h3>
+      <p><code>Wartsila_Density_SpreadMeasurement()</code> 开始后先清空输出结构，随后只按位置移动到各个测点；起始点定位和点间移动阶段不切换液位模式，也不做运动中液位检测。它使用的区间参数如下：</p>
+      <table>
+        <thead>
+          <tr>
+            <th>变量</th>
+            <th>来源</th>
+            <th>语义</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>start_pos_mm</code></td>
+            <td><code>g_deviceParams.wartsila_lower_density_limit</code></td>
+            <td>分布测量起始点高度，罐底为 0，向上为正。</td>
+          </tr>
+          <tr>
+            <td><code>end_pos_mm</code></td>
+            <td><code>g_deviceParams.wartsila_upper_density_limit</code></td>
+            <td>分布测量最高点高度。</td>
+          </tr>
+          <tr>
+            <td><code>step_mm</code></td>
+            <td><code>g_deviceParams.wartsila_density_interval</code></td>
+            <td>相邻测点间距。</td>
+          </tr>
+          <tr>
+            <td><code>min_gap_surface</code></td>
+            <td><code>g_deviceParams.wartsila_max_height_above_surface</code></td>
+            <td>最高有效测点到液面的最小距离；最终只保留位置严格小于 <code>液位 - 距离限制</code> 的液体点。</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <p>基础校验只检查两项：<code>step_mm != 0</code>；<code>end_pos_mm &gt; start_pos_mm</code>。理论点数按 <code>(end - start) / step + 1</code> 计算，并裁剪到 <code>MAX_MEASUREMENT_POINTS</code>。</p>
+
+      <h3>移动到起始点和点间移动</h3>
+      <p>当前实现把起始点定位和点间移动统一为 <code>Wartsila_MoveToDensityPoint()</code>：只调用 <code>MotorCtrl_MoveToPosition()</code> 按目标位置移动，不切换液位模式，不调用运动中液位状态检测，也不会因为液位频率阈值提前停止。</p>
+      <table>
+        <thead>
+          <tr>
+            <th>阶段</th>
+            <th>动作</th>
+            <th>液位检测</th>
+            <th>异常处理</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>起始点定位</td>
+            <td>目标为 <code>wartsila_lower_density_limit</code>，按位置移动到位。</td>
+            <td>不做运动中液位检测。</td>
+            <td>定位偏差超限后重试；仍超限返回 <code>MEASUREMENT_POSITION_ERROR</code>。</td>
+          </tr>
+          <tr>
+            <td>后续点间移动</td>
+            <td>目标每次增加 <code>wartsila_density_interval</code>，直到超过最高点或达到点数上限。</td>
+            <td>不切液位模式，不检测空气。</td>
+            <td>电机错误、命令切换和位置偏差错误原样向上返回。</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>布点循环</h3>
+      <ol>
+        <li>首点目标为 <code>start_pos_mm</code>。</li>
+        <li>后续目标每次增加 <code>step_mm</code>。</li>
+        <li>如果目标超过 <code>end_pos_mm</code>，停止布点。</li>
+        <li>每个目标点都先调用 <code>Wartsila_MoveToDensityPoint()</code> 按位置定位。</li>
+        <li>到点后调用 <code>Wartsila_ReadPointAndClassify()</code> 切密度模式读取密度、频率和温度。</li>
+        <li>实际密度值小于 <code>100</code>，或浮点频率大于 <code>oilLevelFrequency</code>，当前点判定为空气。</li>
+        <li>密度读取 5 分钟仍未形成有效液体点时，按密度 <code>0</code> 的空气点处理。</li>
+        <li>液体点保存到临时结果并继续下一个目标点；空气点只记录日志，不保存。</li>
+        <li>遇到空气点后调用 <code>Wartsila_MoveDownToLiquidAfterAirPoint()</code>，切液位模式慢速下行识别液体。</li>
+      </ol>
+
+      <h3>空气点后慢速下行</h3>
+      <p><code>Wartsila_MoveDownToLiquidAfterAirPoint()</code> 从空气点切换液位模式并慢速下行，首次识别到 <code>OIL</code> 后慢停，并把当前位置作为本次液位位置。</p>
+      <table>
+        <thead>
+          <tr>
+            <th>检查项</th>
+            <th>实现方式</th>
+            <th>触发后的动作</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>识别液体</td>
+            <td>循环调用 <code>determine_level_status_motion()</code>。</td>
+            <td>识别到 <code>OIL</code> 后慢停，快照当前位置并写入 <code>level_mm</code>。</td>
+          </tr>
+          <tr>
+            <td>连续下行</td>
+            <td>慢速调用 <code>MotorCtrl_MoveDown(WARTSILA_LEVEL_DOWN_SPEED_X100)</code>；单段结束仍未识别到液体时继续补发下行。</td>
+            <td>直到识别到液体、到达下限、超时或发生错误。</td>
+          </tr>
+          <tr>
+            <td>安全保护</td>
+            <td>盲区、碰撞、丢步、驱动状态和命令切换检查。</td>
+            <td>错误码向上返回；上层按失败处理，不更新新的有效结果。</td>
+          </tr>
+          <tr>
+            <td>超时</td>
+            <td>最长 <code>60 * 60 * 1000ms</code>。</td>
+            <td>返回 <code>MOTOR_RUN_TIMEOUT</code>。</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="single-point">
+      <h2>瓦锡兰到点密度读取</h2>
+      <p>每个瓦锡兰测点通过 <code>Wartsila_ReadPointAndClassify()</code> 读取密度模式下的浮点频率、实际密度值和温度。该函数不改变通用 <code>SinglePoint_ReadSensor()</code> 语义。</p>
+      <div class="two-col">
+        <div class="panel">
+          <h3>稳定判定</h3>
+          <ul>
+            <li>先切换密度模式：<code>EnableDensityMode()</code>。</li>
+            <li>采样周期为 <code>200ms</code>。</li>
+            <li>密度为 0 时不参与稳定判定，也不更新参考值。</li>
+            <li>非零样本作为稳定参考值。</li>
+            <li>频率变化阈值：<code>1.0Hz</code>。</li>
+            <li>密度变化阈值：<code>0.1</code>。</li>
+            <li>温度变化阈值：<code>0.2℃</code>。</li>
+            <li>连续稳定窗口达到 <code>spreadPointHoverTime</code> 秒后返回结果；如果参数为 0，默认 <code>5s</code>。</li>
+          </ul>
+        </div>
+        <div class="panel">
+          <h3>超时兜底</h3>
+          <ul>
+            <li>最长等待 <code>5 分钟</code>。</li>
+            <li>瓦锡兰专用读取不使用最后一次非零密度作为兜底液体点。</li>
+            <li>5 分钟超时后输出密度 0，并按空气点处理。</li>
+            <li>读取传感器错误不会在内部吞掉，会向上返回，让外层置错误状态。</li>
+            <li>命令切换返回 <code>STATE_SWITCH</code>，按正常中断透传。</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="note">
+        当前实现已去掉瓦锡兰采点前的额外悬停，<code>spreadPointHoverTime</code> 只作为到点密度读取的稳定窗口使用。
+      </div>
+    </section>
+
+    <section id="result">
+      <h2>结果统计与回传</h2>
+      <h3>CPU2 结果统计</h3>
+      <p>布点循环结束后，CPU2 先判断是否找到液位、是否有有效测点。如果全程没有检测到空气，认为未找到液位并返回 <code>MEASUREMENT_DENSITY_SURFACE_NOTFOUND</code>。</p>
+      <ol>
+        <li>如果 <code>oil_level_found == false</code>，返回未找到液位。</li>
+        <li>如果 <code>valid_points == 0</code>，返回未找到有效测点。</li>
+        <li>计算有效边界：<code>valid_limit_mm = oil_level_mm - min_gap_surface</code>。</li>
+        <li>从最高已保存液体点开始裁剪，只保留 <code>point.position_mm &lt; valid_limit_mm</code> 的点；位置大于等于边界的高位点全部删除。</li>
+        <li>如果丢弃后没有有效点，返回 <code>MEASUREMENT_DENSITY_NO_VALID_POINT</code>。</li>
+        <li>写入 <code>measurement_points</code>、<code>Density_oil_level</code>、<code>average_temperature</code>、<code>average_density</code>。</li>
+      </ol>
+
+      <h3>CPU2 完成态保留</h3>
+      <p>测量函数返回后，外层把结果写到 <code>g_measurement.density_distribution</code>，再把设备状态切到 <code>STATE_WARTSILA_DENSITY_OVER</code>，并保留 8 秒。这个等待的目的，是让 CPU3 在完成态下有机会优先读取分布点数据。</p>
+
+      <h3>CPU3 拉点和外部读取</h3>
+      <p>CPU3 正常轮询 CPU2 输入寄存器时，如果当前设备状态是 <code>STATE_WARTSILA_DENSITY_OVER</code> 或其他分布测量完成态，会调用 <code>RequestDensityDistPoints_ByCount()</code> 按点数读取分布点。外部 Wartsila 主站读寄存器时，CPU3 在处理 <code>0x03</code> 前调用 <code>DeviceParams_StoreToRegisters(g_holding_regs)</code>，把最新 <code>g_measurement</code> 映射成 Wartsila 寄存器池。</p>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Wartsila 对外寄存器</th>
+            <th>来源</th>
+            <th>说明</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>0x0050</code></td>
+            <td><code>density_distribution.measurement_points</code></td>
+            <td>分布测量点数。</td>
+          </tr>
+          <tr>
+            <td><code>0x0051</code></td>
+            <td><code>density_distribution.Density_oil_level / 10</code></td>
+            <td>分布测量液位，mm 单位。</td>
+          </tr>
+          <tr>
+            <td><code>0x005A~0x005D</code></td>
+            <td><code>g_deviceParams.wartsila_*</code></td>
+            <td>当前 Wartsila 测量参数回显。</td>
+          </tr>
+          <tr>
+            <td><code>0x0064 + i * 6</code></td>
+            <td><code>single_density_data[i].temperature_position / 10</code></td>
+            <td>第 i 点位置，mm 单位。</td>
+          </tr>
+          <tr>
+            <td><code>0x0064 + i * 6 + 1</code></td>
+            <td><code>single_density_data[i].density</code></td>
+            <td>第 i 点密度原始值。</td>
+          </tr>
+          <tr>
+            <td><code>0x0064 + i * 6 + 2</code></td>
+            <td><code>single_density_data[i].temperature - 20000</code></td>
+            <td>第 i 点温度偏移值。</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="bottom">
+      <h2>测后固定点回位和探底</h2>
+      <p>瓦锡兰分布测量完成并等待 CPU3 读取结果后，CPU2 根据 <code>wartsila_bottom_detect_interval</code> 决定是否执行测后探底。</p>
+      <table>
+        <thead>
+          <tr>
+            <th>参数值</th>
+            <th>当前行为</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>0</code></td>
+            <td>不探底，清零运行期探底计数。</td>
+          </tr>
+          <tr>
+            <td><code>1~100</code></td>
+            <td>每 N 次瓦锡兰分布测量完成后探底一次。</td>
+          </tr>
+          <tr>
+            <td><code>&gt;100</code></td>
+            <td>打印越界提示，并按每 1 次探底处理。</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>需要探底时的顺序</h3>
+      <ol>
+        <li>调用 <code>Wartsila_MoveToMonitorPositionOnly()</code> 回固定点监测位置。</li>
+        <li>回固定点前先检查 <code>singlePointMonitoringPosition</code> 是否在允许范围。</li>
+        <li>最多尝试移动 3 次。</li>
+        <li>回固定点成功后，调用 <code>SearchBottom()</code>。</li>
+        <li>回固定点失败或探底失败时，切回 <code>CMD_MONITOR_SINGLE</code>，通常不置错误状态。</li>
+        <li>只有固定点位置参数非法返回 <code>PARAM_RANGE_ERROR</code> 时会调用 <code>SET_ERROR(ret)</code>。</li>
+      </ol>
+
+      <div class="note">
+        “回固定点”阶段只移动，不读取密度。这样避免瓦锡兰分布测量刚完成后，测后探底前又刷新固定点密度结果，导致外部读取结果语义混杂。
+      </div>
+    </section>
+
+    <section id="states">
+      <h2>状态和寄存器映射</h2>
+      <h3>CPU2/CPU3 设备状态</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>内部状态</th>
+            <th>出现阶段</th>
+            <th>CPU3 显示/外部映射用途</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>STATE_WARTSILA_DENSITY_MEASURING</code></td>
+            <td>CPU2 进入瓦锡兰测量主流程后、布点和采点期间。</td>
+            <td>CPU3 显示为 Wartsila Density Measuring；Wartsila 工作状态映射为 <code>0x0C60</code>。</td>
+          </tr>
+          <tr>
+            <td><code>STATE_WARTSILA_DENSITY_OVER</code></td>
+            <td>CPU2 写入分布结果后，保留 8 秒等待 CPU3 读取。</td>
+            <td>CPU3 优先读取分布点；当前 Wartsila 工作状态也映射为 <code>0x0C60</code>。</td>
+          </tr>
+          <tr>
+            <td><code>STATE_RUNTOPOINTING</code></td>
+            <td>测后需要探底时，先回固定点监测位置。</td>
+            <td>Wartsila 工作状态映射为 <code>0x0840</code>。</td>
+          </tr>
+          <tr>
+            <td><code>STATE_SPTESTING</code></td>
+            <td>流程结束后切回单点监测并进入固定点密度读取。</td>
+            <td>Wartsila 工作状态映射为 <code>0x0044</code>。</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>外部 Wartsila 工作状态映射</h3>
+      <p><code>AubonState_To_WartsilaWorkState()</code> 使用双字节复合码对外返回设备工作状态。代码注释写明“密度分布测量完成”为 <code>0x2840</code>，但当前实现对 <code>STATE_WARTSILA_DENSITY_OVER</code> 返回 <code>0x0C60</code>，与测量中相同。这是后续优化需要确认的行为差异。</p>
+    </section>
+
+    <section id="risks">
+      <h2>当前优化风险点</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>编号</th>
+            <th>风险点</th>
+            <th>影响</th>
+            <th>建议确认方向</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>R1</td>
+            <td>测量失败后不更新有效结果的外部读取时序需联调</td>
+            <td>CPU2 已调整为失败时调用 <code>SET_ERROR(ret)</code> 且不覆盖 <code>g_measurement.density_distribution</code>；CPU3/外部主站需要确认失败时读取到的是上次有效结果还是错误状态。</td>
+            <td>现场联调验证失败路径下 CPU3 页面、外部 Wartsila 主站和错误日志的组合表现。</td>
+          </tr>
+          <tr>
+            <td>R2</td>
+            <td>空气点后慢速下行识别液体的现场触发边界</td>
+            <td>已取消 <code>cur_mm - 100mm</code> 估算，改为切液位模式慢速下行，识别到液体时取当前位置；液位传感器滞后、速度和油品工况会影响液位位置。</td>
+            <td>用真实油面验证 <code>OIL</code> 识别点与液面偏差，必要时评估速度或补偿参数。</td>
+          </tr>
+          <tr>
+            <td>R3</td>
+            <td>外部 Wartsila 点数组仍是 100 点</td>
+            <td>仓库历史记录已有 200 点扩展，CPU2/CPU3 内部分布能力与外部 Wartsila 对外结构可能不一致。</td>
+            <td>确认 Wartsila 外部协议是否需要 200 点；若需要，同步结构体、寄存器映射和读取边界。</td>
+          </tr>
+          <tr>
+            <td>R4</td>
+            <td>完成态对外工作状态映射与注释不一致</td>
+            <td><code>STATE_WARTSILA_DENSITY_OVER</code> 当前映射为 <code>0x0C60</code>，外部可能无法区分测量中和完成。</td>
+            <td>确认 Wartsila 主站期望。如果完成态应为 <code>0x2840</code>，需要调整并测试外部读取时序。</td>
+          </tr>
+          <tr>
+            <td>R5</td>
+            <td>到点密度读取 5 分钟超时按空气处理</td>
+            <td>若传感器长时间无稳定密度但测点仍在液体中，本次会按空气点进入慢速下行流程，可能提前结束布点。</td>
+            <td>现场验证传感器异常、气泡和高粘度工况下的超时概率及日志可追溯性。</td>
+          </tr>
+          <tr>
+            <td>R6</td>
+            <td>执行到最高点仍未检测到空气即报液位未找到</td>
+            <td>如果最高点低于实际液面，测量会失败而不是返回“区间内有效密度分布”。</td>
+            <td>确认 Wartsila 区间最高点语义：必须越过液面，还是允许只测液面以下区间。</td>
+          </tr>
+          <tr>
+            <td>R7</td>
+            <td>测后探底失败通常不置错误状态</td>
+            <td>外部主站可能只看到已切回单点监测，无法知道测后探底未完成。</td>
+            <td>确认“测量结果成功但测后维护动作失败”的对外状态和日志要求。</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="riskbox">
+        后续若优化上述行为，需要分别判断是否影响 CPU2 固件行为、CPU3 外部 Wartsila 协议行为、CPU2/CPU3 共享协议字段或参数语义。只改 CPU2 内部测量策略通常不需要升级 <code>DEVICE_PROTOCOL_VERSION</code>；改变 CPU3 对外寄存器、状态码或点数能力时需要同步协议/文档和版本影响评估。
+      </div>
+    </section>
+
+    <section>
+      <h2>建议后续验证</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>场景</th>
+            <th>输入条件</th>
+            <th>预期观察点</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>正常越过液面</td>
+            <td>起始点在液面下，最高点高于液面，间距合理。</td>
+            <td>空气点不保存，慢速下行识别液体后写入液位；CPU3 可读到点数、液位和点数据。</td>
+          </tr>
+          <tr>
+            <td>起始点已在空气中</td>
+            <td>最低点高于实际液面。</td>
+            <td>起始点到点后按密度/频率判为空气，不保存该点；若慢速下行后裁剪无有效点，本次失败且不更新有效结果。</td>
+          </tr>
+          <tr>
+            <td>最高点低于液面</td>
+            <td>整个区间都在油中。</td>
+            <td>确认当前失败行为是否符合 Wartsila 业务预期。</td>
+          </tr>
+          <tr>
+            <td>最高点过近剔除</td>
+            <td>最后一个有效测点距离液面小于 <code>wartsila_max_height_above_surface</code>。</td>
+            <td>所有 <code>point.position_mm &gt;= level_mm - wartsila_max_height_above_surface</code> 的高位点被剔除，平均值按剩余点重算。</td>
+          </tr>
+          <tr>
+            <td>测后探底频率</td>
+            <td><code>wartsila_bottom_detect_interval</code> 分别取 0、1、N、101。</td>
+            <td>探底计数、回固定点、探底动作和切回单点监测符合预期。</td>
+          </tr>
+          <tr>
+            <td>CPU3 外部读取时序</td>
+            <td>外部主站在完成态 8 秒内和 8 秒后分别读取。</td>
+            <td>确认完成态保留是否足够，点数据是否完整，测后探底是否影响读取。</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <footer class="small">
+      本文档为当前源码流程梳理，不表示现场行为已经完成联调验证。涉及固件行为优化时，应结合 CPU2 构建、CPU3 构建、Wartsila 外部寄存器读写和现场传感器工况共同验证。
+    </footer>
+  </main>
+</body>
+</html>

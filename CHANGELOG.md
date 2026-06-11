@@ -41,6 +41,7 @@ CPU2 参数加载会校验 FRAM 中的 `magic`、`struct_size`、`param_version`
 | V1.12.2.0 | 3 | 存储版本不变；读取部件参数完成态改为持续刷新，`debug_data` 水位字段改为水位电容快照，旧 FRAM 参数通常保留 |
 | V1.13.0.0 | 3 | 存储版本不变；新增点动长距离运动接口和 BJ/BJP 本地串口测试命令，旧 FRAM 参数通常保留 |
 | V1.13.0.1 | 3 | 存储版本不变；拆分串口测试命令到 `test.c` 并整理构建流程，旧 FRAM 参数通常保留 |
+| V1.13.1.0 | 3 | 存储版本不变；优化瓦锡兰分布测量点间移动、空气点液位识别和失败写回语义，旧 FRAM 参数通常保留 |
 
 历史说明：建立 CPU2 程序版本号前，2025-12-16 引入当前参数元信息时使用 `DEVICE_PARAM_VERSION=1`；2026-03-05 系统参数增加时提升到 `DEVICE_PARAM_VERSION=2`，从版本 1 升级到版本 2 会因旧参数版本不匹配恢复出厂参数。
 
@@ -1152,3 +1153,34 @@ CPU2 参数加载会校验 FRAM 中的 `magic`、`struct_size`、`param_version`
 - `cmake --build build\LTD_DISPLAY_CPU3`
 - `git diff --cached --check`
 - `py tools\check_version_bumped.py`
+
+## 2026-06-11 - 优化瓦锡兰分布测量点间移动与空气点液位识别（CPU2 V1.13.1.0）
+
+版本：
+- CPU2: V1.13.0.1 -> V1.13.1.0
+- CPU3: 保持 V1.12.1.0
+
+协议版本/兼容性：
+- `DEVICE_PROTOCOL_VERSION` 保持 7。
+- 不修改 CPU2/CPU3 共享命令、状态、输入寄存器、共享结构体或设备参数字段语义。
+- 不修改外部 Wartsila 寄存器映射和 CPU3 外部 Wartsila 主站状态码表达。
+- CPU2 `DEVICE_PARAM_VERSION` 保持 3，`DeviceParameters` 结构大小不变，从 V1.13.0.1 升级到 V1.13.1.0 不会因参数存储版本触发恢复出厂。
+
+本次修改：
+- 瓦锡兰分布测量起始点定位和点间移动改为只按位置运行，不再在点间运动过程中切液位模式或做液位模式空气检测。
+- 到达测点后使用密度模式读取的实际密度值和浮点频率判定空气：实际密度 `< 100`、浮点频率 `> oilLevelFrequency` 或密度读取 5 分钟超时输出 `0` 均按空气点处理。
+- 空气点不写入分布测结果；遇空气点后切液位模式慢速下行，首次识别到液体时把当前位置作为液位位置。
+- 结果裁剪改为只保留 `point.position_mm < level_mm - wartsila_max_height_above_surface` 的液体点，不再设置最多删除两个点的硬限制。
+- 瓦锡兰分布测失败时不把临时结果覆盖到 `g_measurement.density_distribution`，避免失败后对 CPU3/外部读取暴露清零结果。
+- 新增瓦锡兰流程规则检查脚本和配套需求、流程、对比、验证及版本测试文档。
+
+验证：
+- `py -B tools\check_wartsila_distribution_logic.py`
+- `cmake -S LTD_MAIN_CPU2 -B build/LTD_MAIN_CPU2 -G Ninja "-DCMAKE_TOOLCHAIN_FILE=D:/CUBE/cmake/toolchain-arm-none-eabi.cmake" -DCMAKE_BUILD_TYPE=Debug`
+- `cmake --build build\LTD_MAIN_CPU2`
+- `git diff --check`
+- `py tools\check_version_bumped.py`
+
+未验证风险：
+- 尚未执行现场 Wartsila 主站读写、CPU3 页面读取、真实液面慢速下行识别和裁剪边界实测。
+- `EnableLevelMode()` 已有 10 秒模式稳定等待，但瓦锡兰慢速下行运动中液位判定仍使用单次频率读取，现场需验证切换后频率稳定性和误判风险。
