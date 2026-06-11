@@ -9,6 +9,43 @@
  * 过程中处理命令切换、撞底、驱动异常、丢步检测和运行期位置刷新。
  */
 
+
+#ifndef MOTOR_JOG_SLOWDOWN_DISTANCE_MM
+#define MOTOR_JOG_SLOWDOWN_DISTANCE_MM     50.0f
+#endif
+#ifndef MOTOR_JOG_CREEP_SPEED_X100
+#define MOTOR_JOG_CREEP_SPEED_X100         30U
+#endif
+#ifndef MOTOR_JOG_POSITION_EPS_MM
+#define MOTOR_JOG_POSITION_EPS_MM          0.5f
+#endif
+#ifndef MOTOR_JOG_OVERSHOOT_LIMIT_MM
+#define MOTOR_JOG_OVERSHOOT_LIMIT_MM       1.0f
+#endif
+#ifndef MOTOR_JOG_POLL_MS
+#define MOTOR_JOG_POLL_MS                  20U
+#endif
+#ifndef MOTOR_JOG_MAX_RUN_MS
+#define MOTOR_JOG_MAX_RUN_MS               3600000U
+#endif
+#ifndef MOTOR_JOG_START_GRACE_MS
+#define MOTOR_JOG_START_GRACE_MS           500U
+#endif
+#ifndef MOTOR_JOG_BRAKE_MARGIN_X100
+#define MOTOR_JOG_BRAKE_MARGIN_X100       130U
+#endif
+#ifndef MOTOR_JOG_BRAKE_MAX_DISTANCE_MM
+#define MOTOR_JOG_BRAKE_MAX_DISTANCE_MM   1000.0f
+#endif
+#ifndef MOTOR_JOG_FINAL_STOP_MARGIN_X100
+#define MOTOR_JOG_FINAL_STOP_MARGIN_X100  250U
+#endif
+#ifndef MOTOR_JOG_FINAL_STOP_MIN_MM
+#define MOTOR_JOG_FINAL_STOP_MIN_MM       3.0f
+#endif
+#ifndef MOTOR_JOG_FINAL_STOP_MAX_MM
+#define MOTOR_JOG_FINAL_STOP_MAX_MM       100.0f
+#endif
 /* ===================== 私有函数声明 ===================== */
 
 static uint32_t MotorMotion_WaitStopAbortable(uint32_t poll_ms);
@@ -35,6 +72,35 @@ static bool MotorMotion_ShouldStopAtTarget(float current_mm,
                                            float eps_mm,
                                            int dir);
 static uint32_t MotorMotion_StopAtTargetAndWait(TMC5130TypeDef *tmc5130);
+static uint32_t MotorMotion_JogMoveToTargetInternal(float target_mm,
+                                                    int dir,
+                                                    uint32_t speed_x100);
+static uint32_t MotorMotion_RefreshActivePositionMm(float *pos_mm);
+static bool MotorMotion_IsPositionSnapshotValid(float pos_mm);
+static float MotorMotion_RemainingDistanceToTarget(float current_mm,
+                                                   float target_mm,
+                                                   int dir);
+static bool MotorMotion_IsOvershotPastTarget(float current_mm,
+                                             float target_mm,
+                                             int dir,
+                                             float limit_mm);
+static uint32_t MotorMotion_StartJogVelocity(int dir);
+static uint32_t MotorMotion_StopJogAndRestore(uint32_t ret,
+                                              bool restore_needed,
+                                              uint32_t restore_speed_x100,
+                                              float target_mm,
+                                              int dir);
+static uint32_t MotorMotion_CalcJogSlowdownDistanceMm(float current_mm,
+                                                       uint32_t fast_velocity,
+                                                       float *slowdown_mm);
+static uint32_t MotorMotion_CalcJogStopDistanceMm(float current_mm,
+                                                   uint32_t current_velocity,
+                                                   float *stop_mm);
+static double MotorMotion_TmcVelocityToUstepsPerSec(uint32_t vmax);
+static double MotorMotion_TmcAccelerationToUstepsPerSec2(uint32_t accel);
+static uint32_t MotorMotion_CalcVelocityFromSpeedX100(uint32_t speed_x100,
+                                                       float current_mm);
+static uint32_t MotorMotion_ClampVelocityDouble(double vmax);
 
 /* ===================== 对外接口 ===================== */
 
@@ -728,6 +794,83 @@ uint32_t MotorCtrl_MoveToPosition(float target_mm, uint32_t speed_x100)
 }
 
 /**
+ * @brief 使用速度点动模式按相对距离运动并等待到位。
+ *
+ * 该接口不把目标距离一次性换算成 XTARGET，而是先下发方向和速度，运行中持续读取
+ * 当前有效位置源；接近目标时切换到低速，达到或越过保护边界立即慢停。
+ * @param mm 移动距离，单位 mm。
+ * @param dir 运动方向。
+ * @param speed_x100 本次运动速度，0 表示使用当前默认速度。
+ * @return 成功返回 NO_ERROR，否则返回运动、保护或打断错误码。
+ */
+uint32_t MotorCtrl_JogMoveAndWait(float mm, int dir, uint32_t speed_x100)
+{
+    float start_mm;
+    float target_mm;
+    uint32_t ret;
+
+    if (mm <= 0.0f) {
+        return NO_ERROR;
+    }
+    if (!MotorDriver_IsDirValid(dir)) {
+        return PARAM_ERROR;
+    }
+
+    ret = MotorDriver_CheckMotionReady();
+    CHECK_ERROR(ret);
+    ret = MotorDriver_CheckHealth(MOTOR_DRIVER_HEALTH_BEFORE_MOTION);
+    CHECK_ERROR(ret);
+
+    ret = MotorMotion_RefreshActivePositionMm(&start_mm);
+    if (ret != NO_ERROR) {
+        return ret;
+    }
+    if (!MotorMotion_IsPositionSnapshotValid(start_mm)) {
+        return MEASUREMENT_POSITION_ERROR;
+    }
+
+    target_mm = start_mm + ((dir == MOTOR_DIRECTION_UP) ? mm : -mm);
+    return MotorMotion_JogMoveToTargetInternal(target_mm, dir, speed_x100);
+}
+
+/**
+ * @brief 使用速度点动模式运动到绝对位置并等待到位。
+ *
+ * 该接口用于长距离运动的提前减速场景：启动前只计算目标方向，运行中按有效位置源
+ * 判断剩余距离、减速距离、越界和异常停止，不依赖拟合距离一次性生成 XTARGET。
+ * @param target_mm 目标位置，单位 mm。
+ * @param speed_x100 本次运动速度，0 表示使用当前默认速度。
+ * @return 成功返回 NO_ERROR，否则返回运动、保护或打断错误码。
+ */
+uint32_t MotorCtrl_JogMoveToPosition(float target_mm, uint32_t speed_x100)
+{
+    float cur_mm;
+    float delta_mm;
+    int dir;
+    uint32_t ret;
+
+    ret = MotorDriver_CheckMotionReady();
+    CHECK_ERROR(ret);
+    ret = MotorDriver_CheckHealth(MOTOR_DRIVER_HEALTH_BEFORE_MOTION);
+    CHECK_ERROR(ret);
+
+    ret = MotorMotion_RefreshActivePositionMm(&cur_mm);
+    if (ret != NO_ERROR) {
+        return ret;
+    }
+    if (!MotorMotion_IsPositionSnapshotValid(cur_mm)) {
+        return MEASUREMENT_POSITION_ERROR;
+    }
+
+    delta_mm = target_mm - cur_mm;
+    if (fabsf(delta_mm) <= MOTOR_JOG_POSITION_EPS_MM) {
+        return NO_ERROR;
+    }
+
+    dir = (delta_mm > 0.0f) ? MOTOR_DIRECTION_UP : MOTOR_DIRECTION_DOWN;
+    return MotorMotion_JogMoveToTargetInternal(target_mm, dir, speed_x100);
+}
+/**
  * @brief 急停电机并刷新状态。
  *
  * 急停会立即下发停止，并短暂关闭再重新使能驱动。
@@ -1145,6 +1288,518 @@ static uint32_t MotorMotion_StopAtTargetAndWait(TMC5130TypeDef *tmc5130)
 }
 /* ===================== 私有函数实现 ===================== */
 
+/**
+ * @brief 点动模式运动到目标位置的内部实现。
+ *
+ * 进入前已经明确目标和方向；本函数负责临时速度、运行中保护、提前降速、慢停和速度恢复。
+ */
+static uint32_t MotorMotion_JogMoveToTargetInternal(float target_mm,
+                                                    int dir,
+                                                    uint32_t speed_x100)
+{
+    uint32_t ret;
+    uint32_t restore_speed_x100 = 0U;
+    bool restore_needed = false;
+    bool slow_mode = false;
+    uint32_t start_tick;
+    uint32_t last_vel_refresh_tick;
+    uint32_t fast_velocity;
+    float cur_mm = 0.0f;
+    float remaining_mm;
+    float slowdown_distance_mm = MOTOR_JOG_SLOWDOWN_DISTANCE_MM;
+    float stop_distance_mm = MOTOR_JOG_FINAL_STOP_MIN_MM;
+    uint32_t display_state;
+
+    if (!MotorDriver_IsDirValid(dir)) {
+        return PARAM_ERROR;
+    }
+
+    ret = MotorDriver_CheckMotionReady();
+    CHECK_ERROR(ret);
+    ret = MotorDriver_CheckHealth(MOTOR_DRIVER_HEALTH_BEFORE_MOTION);
+    CHECK_ERROR(ret);
+
+    ret = MotorDriver_BeginTemporarySpeed(speed_x100, &restore_needed, &restore_speed_x100);
+    CHECK_ERROR(ret);
+
+    MotorDriver_UpdateVelocityFromParams();
+    fast_velocity = velocity;
+
+    ret = MotorDriver_StopIfCommandSwitchRequested();
+    if (ret != NO_ERROR) {
+        return MotorDriver_ReturnAfterTemporarySpeed(ret, restore_needed, restore_speed_x100);
+    }
+
+    ret = MotorDriver_SyncPositionOrCheckHealth(&stepper);
+    if (ret != NO_ERROR) {
+        return MotorDriver_ReturnAfterTemporarySpeed(ret, restore_needed, restore_speed_x100);
+    }
+
+    ret = MotorMotion_RefreshActivePositionMm(&cur_mm);
+    if (ret != NO_ERROR) {
+        return MotorDriver_ReturnAfterTemporarySpeed(ret, restore_needed, restore_speed_x100);
+    }
+    if (!MotorMotion_IsPositionSnapshotValid(cur_mm)) {
+        return MotorDriver_ReturnAfterTemporarySpeed(MEASUREMENT_POSITION_ERROR,
+                                                     restore_needed,
+                                                     restore_speed_x100);
+    }
+    if (MotorMotion_IsOvershotPastTarget(cur_mm, target_mm, dir, MOTOR_JOG_OVERSHOOT_LIMIT_MM)) {
+        return MotorDriver_ReturnAfterTemporarySpeed(MEASUREMENT_POSITION_ERROR,
+                                                     restore_needed,
+                                                     restore_speed_x100);
+    }
+
+    ret = MotorMotion_CalcJogSlowdownDistanceMm(cur_mm, fast_velocity, &slowdown_distance_mm);
+    if (ret != NO_ERROR) {
+        return MotorDriver_ReturnAfterTemporarySpeed(ret, restore_needed, restore_speed_x100);
+    }
+
+    remaining_mm = MotorMotion_RemainingDistanceToTarget(cur_mm, target_mm, dir);
+    if (remaining_mm <= MOTOR_JOG_POSITION_EPS_MM) {
+        return MotorDriver_ReturnAfterTemporarySpeed(NO_ERROR, restore_needed, restore_speed_x100);
+    }
+
+    if (remaining_mm <= slowdown_distance_mm) {
+        ret = MotorDriver_SetSpeedQuiet(MOTOR_JOG_CREEP_SPEED_X100);
+        if (ret != NO_ERROR) {
+            return MotorDriver_ReturnAfterTemporarySpeed(ret, restore_needed, restore_speed_x100);
+        }
+        slow_mode = true;
+    }
+
+    if (!slow_mode) {
+        velocity = fast_velocity;
+    }
+    ret = MotorMotion_StartJogVelocity(dir);
+    if (ret != NO_ERROR) {
+        return MotorDriver_ReturnAfterTemporarySpeed(ret, restore_needed, restore_speed_x100);
+    }
+
+    display_state = MotorMotion_DisplayStateFromDirection(dir);
+    MotorMotion_SetActiveState(display_state, true);
+    MotorCtrl_LostStepInit();
+    start_tick = HAL_GetTick();
+    last_vel_refresh_tick = start_tick;
+
+    while (1) {
+        bool is_moving = true;
+
+        ret = MotorDriver_StopIfCommandSwitchRequested();
+        if (ret != NO_ERROR) {
+            return MotorDriver_ReturnAfterTemporarySpeed(ret, restore_needed, restore_speed_x100);
+        }
+
+        ret = MotorDriver_SyncPositionOrCheckHealth(&stepper);
+        if (ret != NO_ERROR) {
+            return MotorMotion_StopJogAndRestore(ret, restore_needed, restore_speed_x100, target_mm, dir);
+        }
+
+        ret = MotorMotion_RefreshActivePositionMm(&cur_mm);
+        if (ret != NO_ERROR) {
+            return MotorMotion_StopJogAndRestore(ret, restore_needed, restore_speed_x100, target_mm, dir);
+        }
+        if (!MotorMotion_IsPositionSnapshotValid(cur_mm)) {
+            return MotorMotion_StopJogAndRestore(MEASUREMENT_POSITION_ERROR,
+                                                 restore_needed,
+                                                 restore_speed_x100,
+                                                 target_mm,
+                                                 dir);
+        }
+
+        if (MotorMotion_IsOvershotPastTarget(cur_mm, target_mm, dir, MOTOR_JOG_OVERSHOOT_LIMIT_MM)) {
+            return MotorMotion_StopJogAndRestore(MEASUREMENT_POSITION_ERROR,
+                                                 restore_needed,
+                                                 restore_speed_x100,
+                                                 target_mm,
+                                                 dir);
+        }
+
+        remaining_mm = MotorMotion_RemainingDistanceToTarget(cur_mm, target_mm, dir);
+        if (remaining_mm <= MOTOR_JOG_POSITION_EPS_MM) {
+            return MotorMotion_StopJogAndRestore(NO_ERROR, restore_needed, restore_speed_x100, target_mm, dir);
+        }
+
+        if (slow_mode) {
+            ret = MotorMotion_CalcJogStopDistanceMm(cur_mm,
+                                                    (s_motor_driver.applied_velocity != 0U) ?
+                                                    s_motor_driver.applied_velocity : velocity,
+                                                    &stop_distance_mm);
+            if (ret != NO_ERROR) {
+                return MotorMotion_StopJogAndRestore(ret, restore_needed, restore_speed_x100, target_mm, dir);
+            }
+            if (remaining_mm <= stop_distance_mm) {
+                printf("点动提前停机 | 目标=%.3fmm | 当前=%.3fmm | 剩余=%.3fmm | 估算停机距离=%.3fmm\r\n",
+                       target_mm,
+                       cur_mm,
+                       remaining_mm,
+                       stop_distance_mm);
+                return MotorMotion_StopJogAndRestore(NO_ERROR, restore_needed, restore_speed_x100, target_mm, dir);
+            }
+        }
+
+        if ((!slow_mode) && (remaining_mm <= slowdown_distance_mm)) {
+            /* 接近目标后改用低速 VMAX 继续速度模式，减少停止惯性造成的过冲。 */
+            ret = MotorDriver_SetSpeedQuiet(MOTOR_JOG_CREEP_SPEED_X100);
+            if (ret != NO_ERROR) {
+                return MotorMotion_StopJogAndRestore(ret, restore_needed, restore_speed_x100, target_mm, dir);
+            }
+            MotorDriver_UpdateVelocityFromParams();
+            ret = MotorMotion_StartJogVelocity(dir);
+            if (ret != NO_ERROR) {
+                return MotorMotion_StopJogAndRestore(ret, restore_needed, restore_speed_x100, target_mm, dir);
+            }
+            slow_mode = true;
+            MotorMotion_SetActiveState(display_state, true);
+        } else {
+            MotorDriver_RefreshVelocityDuringRun(&stepper, &last_vel_refresh_tick);
+        }
+
+        ret = MotorDriver_CheckHealth(MOTOR_DRIVER_HEALTH_RUNNING);
+        if (ret != NO_ERROR) {
+            return MotorMotion_StopJogAndRestore(ret, restore_needed, restore_speed_x100, target_mm, dir);
+        }
+
+        ret = CheckWeightCollision();
+        if (ret != NO_ERROR) {
+            return MotorMotion_StopJogAndRestore(ret, restore_needed, restore_speed_x100, target_mm, dir);
+        }
+
+        ret = MotorCtrl_CheckLostStepAutoTiming(g_measurement.debug_data.sensor_position);
+        if (ret != NO_ERROR) {
+            return MotorMotion_StopJogAndRestore(ret, restore_needed, restore_speed_x100, target_mm, dir);
+        }
+
+        ret = MotorCtrl_IsDriverMoving(&stepper, &is_moving);
+        if (ret != NO_ERROR) {
+            return MotorMotion_StopJogAndRestore(ret, restore_needed, restore_speed_x100, target_mm, dir);
+        }
+        if ((!is_moving) && ((HAL_GetTick() - start_tick) > MOTOR_JOG_START_GRACE_MS)) {
+            return MotorMotion_StopJogAndRestore(MOTOR_STEP_ERROR, restore_needed, restore_speed_x100, target_mm, dir);
+        }
+
+        if ((HAL_GetTick() - start_tick) > MOTOR_JOG_MAX_RUN_MS) {
+            return MotorMotion_StopJogAndRestore(MOTOR_RUN_TIMEOUT, restore_needed, restore_speed_x100, target_mm, dir);
+        }
+
+        HAL_Delay(MOTOR_JOG_POLL_MS);
+    }
+}
+
+/**
+ * @brief 按当前有效位置源刷新并获取当前位置快照。
+ */
+static uint32_t MotorMotion_RefreshActivePositionMm(float *pos_mm)
+{
+    if (pos_mm == NULL) {
+        return PARAM_ERROR;
+    }
+
+    MotorCtrl_RefreshPositionFromActiveSource();
+    MotorCtrl_SnapshotSensorPositionMm(pos_mm);
+    return NO_ERROR;
+}
+
+/**
+ * @brief 判断位置快照是否在罐高兜底范围内。
+ */
+static bool MotorMotion_IsPositionSnapshotValid(float pos_mm)
+{
+    float guard_tank_height_mm = (float)g_deviceParams.tankHeight / 10.0f;
+    float min_valid_mm;
+    float max_valid_mm;
+
+    if ((guard_tank_height_mm <= 0.0f) || (guard_tank_height_mm > 500000.0f)) {
+        guard_tank_height_mm = 500000.0f;
+    }
+
+    min_valid_mm = -guard_tank_height_mm - 1000.0f;
+    max_valid_mm = guard_tank_height_mm + 1000.0f;
+    return (pos_mm >= min_valid_mm) && (pos_mm <= max_valid_mm);
+}
+
+/**
+ * @brief 按方向计算当前位置到目标的剩余距离。
+ */
+static float MotorMotion_RemainingDistanceToTarget(float current_mm,
+                                                   float target_mm,
+                                                   int dir)
+{
+    float remaining_mm;
+
+    if (dir == MOTOR_DIRECTION_UP) {
+        remaining_mm = target_mm - current_mm;
+    } else if (dir == MOTOR_DIRECTION_DOWN) {
+        remaining_mm = current_mm - target_mm;
+    } else {
+        return 0.0f;
+    }
+
+    return (remaining_mm > 0.0f) ? remaining_mm : 0.0f;
+}
+
+/**
+ * @brief 判断当前位置是否已经越过目标超过允许保护量。
+ */
+static bool MotorMotion_IsOvershotPastTarget(float current_mm,
+                                             float target_mm,
+                                             int dir,
+                                             float limit_mm)
+{
+    if (limit_mm < 0.0f) {
+        limit_mm = 0.0f;
+    }
+
+    if (dir == MOTOR_DIRECTION_UP) {
+        return current_mm > (target_mm + limit_mm);
+    }
+    if (dir == MOTOR_DIRECTION_DOWN) {
+        return current_mm < (target_mm - limit_mm);
+    }
+    return false;
+}
+
+/**
+ * @brief 根据 TMC5130 当前斜坡参数估算点动模式提前减速距离。
+ */
+static uint32_t MotorMotion_CalcJogSlowdownDistanceMm(float current_mm,
+                                                      uint32_t fast_velocity,
+                                                      float *slowdown_mm)
+{
+    int32_t amax_reg = 0;
+    uint32_t creep_velocity;
+    double fast_usteps_s;
+    double creep_usteps_s;
+    double accel_usteps_s2;
+    double ticks_per_rev;
+    double circumference_mm;
+    double brake_usteps;
+    double brake_mm;
+
+    if (slowdown_mm == NULL) {
+        return PARAM_ERROR;
+    }
+
+    *slowdown_mm = MOTOR_JOG_SLOWDOWN_DISTANCE_MM;
+    if (fast_velocity == 0U) {
+        return NO_ERROR;
+    }
+
+    creep_velocity = MotorMotion_CalcVelocityFromSpeedX100(MOTOR_JOG_CREEP_SPEED_X100,
+                                                           current_mm);
+    if (creep_velocity == 0U) {
+        return NO_ERROR;
+    }
+
+    if (!stpr_tryReadInt(&stepper, TMC5130_AMAX, &amax_reg) || (amax_reg <= 0)) {
+        return NO_ERROR;
+    }
+
+    fast_usteps_s = MotorMotion_TmcVelocityToUstepsPerSec(fast_velocity);
+    creep_usteps_s = MotorMotion_TmcVelocityToUstepsPerSec(creep_velocity);
+    if (fast_usteps_s <= creep_usteps_s) {
+        return NO_ERROR;
+    }
+
+    accel_usteps_s2 = MotorMotion_TmcAccelerationToUstepsPerSec2((uint32_t)amax_reg);
+    ticks_per_rev = (double)MotorPosition_TapeTicksPerRev();
+    circumference_mm = MotorPosition_TapeInstantCircumferenceFromLength((double)current_mm);
+    if ((accel_usteps_s2 <= 1e-6) || (ticks_per_rev <= 1e-6) || (circumference_mm <= 1e-6)) {
+        return NO_ERROR;
+    }
+
+    brake_usteps = ((fast_usteps_s * fast_usteps_s) -
+                    (creep_usteps_s * creep_usteps_s)) / (2.0 * accel_usteps_s2);
+    brake_mm = (brake_usteps / ticks_per_rev) * circumference_mm;
+    brake_mm = (brake_mm * (double)MOTOR_JOG_BRAKE_MARGIN_X100) / 100.0;
+
+    if (brake_mm > (double)MOTOR_JOG_BRAKE_MAX_DISTANCE_MM) {
+        brake_mm = (double)MOTOR_JOG_BRAKE_MAX_DISTANCE_MM;
+    }
+    if (brake_mm > (double)(*slowdown_mm)) {
+        *slowdown_mm = (float)brake_mm;
+    }
+
+    return NO_ERROR;
+}
+
+/**
+ * @brief 根据当前低速 VMAX 和减速度寄存器估算从当前速度到 0 的停机距离。
+ */
+static uint32_t MotorMotion_CalcJogStopDistanceMm(float current_mm,
+                                                   uint32_t current_velocity,
+                                                   float *stop_mm)
+{
+    int32_t dmax_reg = 0;
+    int32_t d1_reg = 0;
+    uint32_t decel_reg = 0U;
+    double velocity_usteps_s;
+    double accel_usteps_s2;
+    double ticks_per_rev;
+    double circumference_mm;
+    double stop_usteps;
+    double calc_stop_mm;
+
+    if (stop_mm == NULL) {
+        return PARAM_ERROR;
+    }
+
+    *stop_mm = MOTOR_JOG_FINAL_STOP_MIN_MM;
+    if (current_velocity == 0U) {
+        return NO_ERROR;
+    }
+
+    if (stpr_tryReadInt(&stepper, TMC5130_DMAX, &dmax_reg) && (dmax_reg > 0)) {
+        decel_reg = (uint32_t)dmax_reg;
+    }
+    if (stpr_tryReadInt(&stepper, TMC5130_D1, &d1_reg) && (d1_reg > 0)) {
+        if ((decel_reg == 0U) || ((uint32_t)d1_reg < decel_reg)) {
+            decel_reg = (uint32_t)d1_reg;
+        }
+    }
+    if (decel_reg == 0U) {
+        return NO_ERROR;
+    }
+
+    velocity_usteps_s = MotorMotion_TmcVelocityToUstepsPerSec(current_velocity);
+    accel_usteps_s2 = MotorMotion_TmcAccelerationToUstepsPerSec2(decel_reg);
+    ticks_per_rev = (double)MotorPosition_TapeTicksPerRev();
+    circumference_mm = MotorPosition_TapeInstantCircumferenceFromLength((double)current_mm);
+    if ((velocity_usteps_s <= 1e-6) ||
+        (accel_usteps_s2 <= 1e-6) ||
+        (ticks_per_rev <= 1e-6) ||
+        (circumference_mm <= 1e-6)) {
+        return NO_ERROR;
+    }
+
+    stop_usteps = (velocity_usteps_s * velocity_usteps_s) / (2.0 * accel_usteps_s2);
+    calc_stop_mm = (stop_usteps / ticks_per_rev) * circumference_mm;
+    calc_stop_mm = (calc_stop_mm * (double)MOTOR_JOG_FINAL_STOP_MARGIN_X100) / 100.0;
+
+    if (calc_stop_mm > (double)MOTOR_JOG_FINAL_STOP_MAX_MM) {
+        calc_stop_mm = (double)MOTOR_JOG_FINAL_STOP_MAX_MM;
+    }
+    if (calc_stop_mm > (double)(*stop_mm)) {
+        *stop_mm = (float)calc_stop_mm;
+    }
+    return NO_ERROR;
+}
+/**
+ * @brief 将 TMC5130 VMAX 寄存器值换算为微步每秒。
+ */
+static double MotorMotion_TmcVelocityToUstepsPerSec(uint32_t vmax)
+{
+    return ((double)vmax * TMC5130_FCLK_HZ) / 16777216.0;
+}
+
+/**
+ * @brief 将 TMC5130 加速度寄存器值换算为微步每秒平方。
+ */
+static double MotorMotion_TmcAccelerationToUstepsPerSec2(uint32_t accel)
+{
+    return ((double)accel * TMC5130_FCLK_HZ * TMC5130_FCLK_HZ) / 2199023255552.0;
+}
+/**
+ * @brief 按给定线速度和当前位置直接计算 TMC5130 VMAX。
+ */
+static uint32_t MotorMotion_CalcVelocityFromSpeedX100(uint32_t speed_x100,
+                                                      float current_mm)
+{
+    const double circumference_mm = MotorPosition_TapeInstantCircumferenceFromLength((double)current_mm);
+    const double ticks_per_rev = (double)MotorPosition_TapeTicksPerRev();
+    double usteps_per_s;
+    double vmax;
+
+    if ((circumference_mm <= 1e-6) || (ticks_per_rev <= 1e-6)) {
+        return 0U;
+    }
+
+    usteps_per_s = ((double)speed_x100 * ticks_per_rev) / (6.0 * circumference_mm);
+    vmax = usteps_per_s * 16777216.0 / TMC5130_FCLK_HZ;
+    return MotorMotion_ClampVelocityDouble(vmax);
+}
+
+/**
+ * @brief 将浮点 VMAX 限制到 TMC5130 速度寄存器范围。
+ */
+static uint32_t MotorMotion_ClampVelocityDouble(double vmax)
+{
+    if (vmax < 1.0) {
+        return 1U;
+    }
+    if (vmax > (double)TMC5130_MAX_VELOCITY) {
+        return (uint32_t)TMC5130_MAX_VELOCITY;
+    }
+    return (uint32_t)llround(vmax);
+}
+/**
+ * @brief 按业务方向下发 TMC5130 速度模式点动命令。
+ */
+static uint32_t MotorMotion_StartJogVelocity(int dir)
+{
+    int32_t signed_velocity;
+
+    if (!MotorDriver_IsDirValid(dir)) {
+        return PARAM_ERROR;
+    }
+    if (velocity == 0U) {
+        MotorDriver_UpdateVelocityFromParams();
+    }
+    if ((velocity == 0U) || (velocity > (uint32_t)INT32_MAX)) {
+        return PARAM_ERROR;
+    }
+
+    signed_velocity = (int32_t)velocity;
+    if (dir == MOTOR_DIRECTION_UP) {
+        signed_velocity = -signed_velocity;
+    }
+
+    s_motor_driver.applied_velocity = velocity;
+    return stpr_rotate(&stepper, signed_velocity);
+}
+
+/**
+ * @brief 点动模式异常或到位退出时慢停并恢复进入前速度。
+ */
+static uint32_t MotorMotion_StopJogAndRestore(uint32_t ret,
+                                              bool restore_needed,
+                                              uint32_t restore_speed_x100,
+                                              float target_mm,
+                                              int dir)
+{
+    uint32_t stop_ret;
+    uint32_t restore_ret;
+    uint32_t verify_ret = NO_ERROR;
+    float final_mm = 0.0f;
+
+    stop_ret = MotorCtrl_SlowStop();
+    if ((ret == NO_ERROR) && (stop_ret == NO_ERROR)) {
+        verify_ret = MotorMotion_RefreshActivePositionMm(&final_mm);
+        if ((verify_ret == NO_ERROR) &&
+            ((!MotorMotion_IsPositionSnapshotValid(final_mm)) ||
+             MotorMotion_IsOvershotPastTarget(final_mm, target_mm, dir, MOTOR_JOG_OVERSHOOT_LIMIT_MM))) {
+            printf("点动停机超限 | 目标=%.3fmm | 终点=%.3fmm | 方向=%s | 允许超限=%.3fmm\r\n",
+                   target_mm,
+                   final_mm,
+                   MotorCtrl_DirectionText(dir),
+                   MOTOR_JOG_OVERSHOOT_LIMIT_MM);
+            verify_ret = MEASUREMENT_POSITION_ERROR;
+        }
+    }
+
+    restore_ret = MotorDriver_EndTemporarySpeed(restore_needed, restore_speed_x100);
+
+    if (ret != NO_ERROR) {
+        return ret;
+    }
+    if (stop_ret != NO_ERROR) {
+        return stop_ret;
+    }
+    if (verify_ret != NO_ERROR) {
+        return verify_ret;
+    }
+    return restore_ret;
+}
 /**
  * @brief 等待电机停止，并允许命令切换打断。
  *

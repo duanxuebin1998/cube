@@ -1031,3 +1031,31 @@ CPU2 参数加载会校验 FRAM 中的 `magic`、`struct_size`、`param_version`
 - `py tools\check_version_bumped.py`
 - 已做源码/文档关键字复查，确认不再残留 `debug_data.water_level_voltage` 旧字段引用；目标文档不再描述主循环轮询或跳过外层初始化旧方案。
 - 尚未做实物 OLED 翻页、DSM 主站读取和读取部件参数长时间运行联调；现场需确认完成态持续刷新周期、新命令打断和外部寄存器数值倍率。
+
+## 2026-06-11 - 新增 CPU2 点动长距离运动接口和 BJ 测试命令（CPU2 V1.13.0.0）
+
+版本：
+- CPU2: V1.12.2.0 -> V1.13.0.0
+- CPU3: 保持 V1.11.2.0
+
+协议版本/兼容性：
+- `DEVICE_PROTOCOL_VERSION` 保持 7。
+- 不新增 CPU2/CPU3 共享命令码、状态码、寄存器地址或参数字段。
+- CPU2 `DEVICE_PARAM_VERSION` 保持 3，`DeviceParameters` 结构大小不变，从 V1.12.2.0 升级到 V1.13.0.0 不会因参数存储版本触发恢复出厂。
+- `BJ+`、`BJ-`、`BJP` 仅为 CPU2 本地串口调试命令，不改变内部 Modbus、DSM 或 Wartsila 外部协议。
+- 既有 `MotorCtrl_MoveToPosition()` 和 `MotorCtrl_MoveAndWait()` 保持原有位置模式方案；新增点动接口供长距离移动场景单独调用。
+
+本次修改：
+- TMC5130 BSP 暴露速度点动接口 `stpr_rotate()`，并在 `stpr_stop()` 停机后对齐 `XTARGET` 和 `RAMPMODE`，避免速度模式停机后目标位置状态残留。
+- 新增 `MotorCtrl_JogMoveAndWait()` 和 `MotorCtrl_JogMoveToPosition()`，使用速度点动模式按方向运行，持续读取有效位置源，并在接近目标前提前降速和提前停机。
+- 点动方案根据当前速度、驱动加速度和毫米换算系数计算降速距离和低速停机距离，低速停机后再次刷新位置；若最终位置超过目标容差，返回 `MEASUREMENT_POSITION_ERROR`，不再把超限当作成功。
+- 点动运行过程中保留命令切换、驱动健康检查、位置源有效性检查、驱动状态刷新、称重碰撞保护、丢步检测、运行超时和临时速度恢复。
+- 新增 `motor_jog_text()` 和 `motor_jog_to_position_text()` 测试封装，串口 `BJ+<mm>[,<速度m/min>]`、`BJ-<mm>[,<速度m/min>]`、`BJP<target_mm>[,<速度m/min>]` 可直接验证相对和绝对点动运行。
+- 同步新增 CPU2 V1.13.0.0 改动与测试方案，记录兼容性、参数存储影响、重点测试、回归范围和现场验证结果。
+
+验证：
+- `cmake -S LTD_MAIN_CPU2 -B build/LTD_MAIN_CPU2 -G Ninja "-DCMAKE_TOOLCHAIN_FILE=D:/CUBE/cmake/toolchain-arm-none-eabi.cmake" -DCMAKE_BUILD_TYPE=Debug`
+- `cmake --build build\LTD_MAIN_CPU2`
+- `git diff --cached --check`
+- `py tools\check_version_bumped.py`
+- 功能分支已通过 ST-LINK 下载同一电机点动控制改动并做现场 BJ/BJP 测试：`BJP19450,1.5` 终点约 `19450.500mm`，未再出现超过目标位置后仍返回成功的问题。

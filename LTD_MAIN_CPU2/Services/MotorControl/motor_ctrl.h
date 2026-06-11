@@ -193,6 +193,12 @@ uint32_t MotorCtrl_MoveByTicksAndWait(int32_t ticks, uint32_t speed_x100);
 /** 移动到绝对尺带位置 target_mm，并阻塞等待停止。 */
 uint32_t MotorCtrl_MoveToPosition(float target_mm, uint32_t speed_x100);
 
+/** Jog mode: move relative distance using velocity mode and active position feedback. */
+uint32_t MotorCtrl_JogMoveAndWait(float mm, int dir, uint32_t speed_x100);
+
+/** Jog mode: move to absolute position using velocity mode and active position feedback. */
+uint32_t MotorCtrl_JogMoveToPosition(float target_mm, uint32_t speed_x100);
+
 /** 无检测阻塞运动，调试/维护用，不建议用于关键测量流程。 */
 uint32_t MotorCtrl_MoveBlockingNoDetect(float mm, int dir, uint32_t speed_x100);
 

@@ -1452,6 +1452,106 @@ void motor_text_manual_once(float run_distance_mm, int dir)
     printf("%s\t运动完成\r\n", phase_name);
     Test_MotorTextExit(&error_snapshot);
 }
+/**
+ * @brief 读取当前有效位置源并返回 mm 快照，供 BJ 点动测试打印前后位置。
+ * @note  只在串口调试任务上下文调用；刷新失败由正式运动 API 自行返回错误码。
+ */
+static float Test_MotorJogSnapshotPositionMm(void)
+{
+    float pos_mm = 0.0f;
+
+    MotorCtrl_RefreshPositionFromActiveSource();
+    MotorCtrl_SnapshotSensorPositionMm(&pos_mm);
+    return pos_mm;
+}
+
+/**
+ * @brief BJ 指令测试专用：初始化电机后直接调用点动相对运动正式接口。
+ * @note  该函数不绕过 MotorCtrl_JogMoveAndWait 内部检测，用于现场验证新长距离点动控制方案。
+ */
+void motor_jog_text(float run_distance_mm, int dir, uint32_t speed_x100)
+{
+    MotorTextErrorSnapshot error_snapshot = Test_MotorTextCaptureErrorState();
+    float start_mm;
+    float end_mm;
+    uint32_t ret;
+
+    if ((run_distance_mm <= 0.0f) || (!MotorDriver_IsDirValid(dir))) {
+        printf("BJ点动测试\t参数异常\t距离=%.2fmm\t方向=%d\r\n",
+               run_distance_mm,
+               dir);
+        Test_MotorTextExit(&error_snapshot);
+        return;
+    }
+
+    Test_MotorTextClearIgnoredError();
+    ret = MotorCtrl_Init();
+    if (ret != NO_ERROR) {
+        printf("BJ点动测试\t初始化失败\t返回=0x%08lX\r\n", (unsigned long)ret);
+        Test_MotorTextExit(&error_snapshot);
+        return;
+    }
+
+    start_mm = Test_MotorJogSnapshotPositionMm();
+    printf("BJ点动测试\t开始\t模式=相对\t方向=%s\t距离=%.2fmm\t速度=%.2fm/min\t速度x100=%lu\t起点=%.3fmm\r\n",
+           MotorCtrl_DirectionText(dir),
+           run_distance_mm,
+           (double)Test_MotorTextEffectiveSpeedX100(speed_x100) / 100.0,
+           (unsigned long)Test_MotorTextEffectiveSpeedX100(speed_x100),
+           start_mm);
+
+    ret = MotorCtrl_JogMoveAndWait(run_distance_mm, dir, speed_x100);
+    end_mm = Test_MotorJogSnapshotPositionMm();
+    printf("BJ点动测试\t结束\t返回=0x%08lX\t起点=%.3fmm\t终点=%.3fmm\t变化=%.3fmm\r\n",
+           (unsigned long)ret,
+           start_mm,
+           end_mm,
+           end_mm - start_mm);
+
+    Test_MotorTextClearIgnoredError();
+    Test_MotorTextExit(&error_snapshot);
+}
+
+/**
+ * @brief BJP 指令测试专用：初始化电机后直接调用点动绝对位置正式接口。
+ * @note  用于验证目标位置、提前降速、越界保护和命令切换等正式 API 行为。
+ */
+void motor_jog_to_position_text(float target_mm, uint32_t speed_x100)
+{
+    MotorTextErrorSnapshot error_snapshot = Test_MotorTextCaptureErrorState();
+    float start_mm;
+    float end_mm;
+    float delta_mm;
+    uint32_t ret;
+
+    Test_MotorTextClearIgnoredError();
+    ret = MotorCtrl_Init();
+    if (ret != NO_ERROR) {
+        printf("BJP点动到位测试\t初始化失败\t返回=0x%08lX\r\n", (unsigned long)ret);
+        Test_MotorTextExit(&error_snapshot);
+        return;
+    }
+
+    start_mm = Test_MotorJogSnapshotPositionMm();
+    delta_mm = target_mm - start_mm;
+    printf("BJP点动到位测试\t开始\t目标=%.3fmm\t当前位置=%.3fmm\t剩余=%.3fmm\t速度=%.2fm/min\t速度x100=%lu\r\n",
+           target_mm,
+           start_mm,
+           delta_mm,
+           (double)Test_MotorTextEffectiveSpeedX100(speed_x100) / 100.0,
+           (unsigned long)Test_MotorTextEffectiveSpeedX100(speed_x100));
+
+    ret = MotorCtrl_JogMoveToPosition(target_mm, speed_x100);
+    end_mm = Test_MotorJogSnapshotPositionMm();
+    printf("BJP点动到位测试\t结束\t返回=0x%08lX\t目标=%.3fmm\t终点=%.3fmm\t误差=%.3fmm\r\n",
+           (unsigned long)ret,
+           target_mm,
+           end_mm,
+           end_mm - target_mm);
+
+    Test_MotorTextClearIgnoredError();
+    Test_MotorTextExit(&error_snapshot);
+}
 /* ========================= 主测试函数 ========================= */
 void motor_text(float run_distance_mm, uint8_t enable_sensor_comm)
 {

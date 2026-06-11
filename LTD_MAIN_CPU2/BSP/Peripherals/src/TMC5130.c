@@ -471,7 +471,7 @@ bool stpr_tryReadInt(TMC5130TypeDef *tmc5130, uint8_t address, int32_t *value)
  *
  * @param  velocity 目标速度（正：正向，负：反向）
  */
-static uint32_t tmc5130_rotate(TMC5130TypeDef *tmc5130, int32_t velocity)
+uint32_t stpr_rotate(TMC5130TypeDef *tmc5130, int32_t velocity)
 {
     TMC5130_REQUIRE_WRITE(tmc5130, TMC5130_VMAX, abs(velocity));
     TMC5130_REQUIRE_WRITE(tmc5130,
@@ -492,7 +492,7 @@ uint32_t stpr_stop(TMC5130TypeDef *tmc5130)
     uint32_t ret;
     int32_t xactual = 0;
 
-    ret = tmc5130_rotate(tmc5130, 0);
+    ret = stpr_rotate(tmc5130, 0);
     if (ret != NO_ERROR) {
         return ret;
     }

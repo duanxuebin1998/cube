@@ -320,6 +320,9 @@ static void CMD_CancelMeasurement(void)
  *       - A-<mm>：电机下行指定距离
  *       - B<mm>: motor-model round-trip test
  *       - BE<mm>[,<速度m/min>,<加速度倍率>][S|,1]: encoder-based continuous round-trip test
+ *       - BJ+<mm>[,<速度m/min>]：点动模式上行相对运动测试
+ *       - BJ-<mm>[,<速度m/min>]：点动模式下行相对运动测试
+ *       - BJP<target_mm>[,<速度m/min>]：点动模式绝对位置测试
  *       - C：电机步进分辨率测试
  *       - D：电机下行触底测试
  *       - E：电机上行碰零点测试
@@ -511,6 +514,97 @@ static uint32_t ProcessCommand_ClampBeSpeedMMin(double value)
 }
 
 /**
+ * @brief 解析 BJ/BJP 点动测试的可选速度，单位 m/min。
+ * @note  找不到逗号或速度非法时返回 0，表示沿用当前默认速度配置。
+ */
+static uint32_t ProcessCommand_ParseJogSpeedX100(const char *arg_tail)
+{
+    const char *comma;
+    char *endptr;
+    double speed_m_min;
+
+    if (arg_tail == NULL) {
+        return PROCESS_BE_SPEED_DEFAULT;
+    }
+
+    comma = arg_tail;
+    while ((*comma != '\0') && (*comma != ',')) {
+        comma++;
+    }
+    if (*comma != ',') {
+        return PROCESS_BE_SPEED_DEFAULT;
+    }
+
+    comma++;
+    speed_m_min = strtod(comma, &endptr);
+    if (endptr == comma) {
+        return PROCESS_BE_SPEED_DEFAULT;
+    }
+    return ProcessCommand_ClampBeSpeedMMin(speed_m_min);
+}
+
+/**
+ * @brief 处理 BJ/BJP 点动测试命令。
+ * @return 已识别并处理返回 1，非 BJ 命令返回 0。
+ */
+static uint8_t ProcessCommand_HandleJogMotorTest(const uint8_t *command)
+{
+    const char *arg;
+    char *endptr;
+    double value;
+    uint32_t speed_x100;
+    int dir;
+
+    if ((command == NULL) || (command[0] != 'B') || (command[1] != 'J')) {
+        return 0U;
+    }
+
+    if (command[2] == 'P') {
+        arg = (const char *)&command[3];
+        value = strtod(arg, &endptr);
+        if (endptr == arg) {
+            printf("BJP点动到位测试\t目标参数无效\t命令=%s\r\n", (const char *)command);
+            return 1U;
+        }
+        speed_x100 = ProcessCommand_ParseJogSpeedX100(endptr);
+        printf("串口BJ指令\t命令参数\t模式=BJP绝对位置\t目标=%.3fmm\t速度=%.2fm/min\t速度x100=%lu\r\n",
+               value,
+               (double)speed_x100 / 100.0,
+               (unsigned long)speed_x100);
+        motor_jog_to_position_text((float)value, speed_x100);
+        return 1U;
+    }
+
+    if ((command[2] != '+') && (command[2] != '-')) {
+        printf("BJ点动测试\t用法：BJ+<mm>[,<速度m/min>]，BJ-<mm>[,<速度m/min>]，BJP<目标mm>[,<速度m/min>]\r\n");
+        return 1U;
+    }
+
+    dir = (command[2] == '+') ? MOTOR_DIRECTION_UP : MOTOR_DIRECTION_DOWN;
+    arg = (const char *)&command[3];
+    value = strtod(arg, &endptr);
+    if (endptr == arg) {
+        printf("BJ点动测试\t距离参数无效\t命令=%s\r\n", (const char *)command);
+        return 1U;
+    }
+    if (value < 0.0) {
+        value = -value;
+    }
+    if (!(value > 0.0)) {
+        printf("BJ点动测试\t距离参数无效\t距离=%.3fmm\r\n", value);
+        return 1U;
+    }
+
+    speed_x100 = ProcessCommand_ParseJogSpeedX100(endptr);
+    printf("串口BJ指令\t命令参数\t模式=BJ相对\t方向=%s\t距离=%.3fmm\t速度=%.2fm/min\t速度x100=%lu\r\n",
+           MotorCtrl_DirectionText(dir),
+           value,
+           (double)speed_x100 / 100.0,
+           (unsigned long)speed_x100);
+    motor_jog_text((float)value, dir, speed_x100);
+    return 1U;
+}
+/**
  * @brief 解析 BE 可选参数，兼容旧的 BE100S 和 BE100,1 传感器通信写法。
  * @note  新格式：BE距离,速度m/min,加速度倍率,S 或 BE距离,速度m/min,加速度倍率,1。
  */
@@ -628,6 +722,10 @@ void process_command(uint8_t *command) {
         return;
     }
     if (command[0] == 'B') {
+        if (ProcessCommand_HandleJogMotorTest(command)) {
+            return;
+        }
+
         const uint8_t use_encoder_count = (command[1] == 'E') ? 1U : 0U;
         const char *arg = (const char *)&command[use_encoder_count ? 2U : 1U];
         int value = atoi(arg);

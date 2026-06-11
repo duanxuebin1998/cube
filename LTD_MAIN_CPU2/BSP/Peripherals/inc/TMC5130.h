@@ -59,6 +59,9 @@ bool stpr_tryReadInt(TMC5130TypeDef *tmc5130, uint8_t address, int32_t *value);
 /** 按速度斜坡停止电机。 */
 uint32_t stpr_stop(TMC5130TypeDef *tmc5130);
 
+/** Velocity mode: keep rotating at signed VMAX until caller stops or changes speed. */
+uint32_t stpr_rotate(TMC5130TypeDef *tmc5130, int32_t velocity);
+
 /** 位置模式：移动到指定绝对 ticks 位置。 */
 uint32_t stpr_moveTo(TMC5130TypeDef *tmc5130, int32_t position, uint32_t velocityMax);
 
