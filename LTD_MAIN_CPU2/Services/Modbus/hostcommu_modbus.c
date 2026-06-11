@@ -8,44 +8,44 @@
 #include <ctype.h>
 #include "system_parameter.h"
 
-/*从机地址*/
-int SlaveAddress = 1;
-/*功能码*/
-static const int readholdingregisterfuncode = 0x03; //读保持寄存器功能码
-static const int readinputregisterfuncode = 0x04; //读输入寄存器功能码
-static const int presetmultipleregisterfuncode = 0x10; //写多个寄存器功能码
-/*异常码*/
-static const int illegalfunction = 0x01; //非法功能
-static const int illegaldataaddress = 0x02; //非法数据地址
-//static const int illegaldatavalue = 0x03; //非法数据值
-//static const int slavedevicefailure = 0x04; //从设备故障
-//static const int slavedevicebusy = 0x05; //从设备忙
-/*保持寄存器*/
-static const int HoldingregisterAddress = 0x00; //保持寄存器起始地址
-static const int HoldingregisterAmount = HOLEREGISTER_STOP + 1; //保持寄存器总数
-//static int HoldingRegisterArray[HOLEREGISTER_STOP] = { 0 }; //保持寄存器数组
-static uint16_t HoldingRegisterArray[HOLEREGISTER_STOP] = { 0 };/* 保持寄存器数组，1 个元素对应 1 个 16 位保持寄存器 */
-/*输入寄存器*/
-static const int InputregisterAddress = 0x00; //输入寄存器起始地址
-static const int InputRegisterAmount = INPUTREGISTER_AMOUNT; //输入寄存器总数
-static uint16_t InputRegisterArray[INPUTREGISTER_AMOUNT] = { 0 };    //输入寄存器数组
-/*发送区暂存数组*/
-static int SlaveTempBuffer[HOSTCOMMU_SENDLENGTH];
-/*接收到的命令包数据暂存变量*/
-static int RCV_functioncode = 0;
-static int RCV_startaddress = 0;
-static int RCV_registercnt = 0;
-/*静态函数*/
+/* 从机地址 */
+int SlaveAddress = 1; /* 主板通信地址配置，影响协议寻址或硬件访问。 */
+/* 功能码 */
+static const int readholdingregisterfuncode = 0x03; /* 读保持寄存器功能码 */
+static const int readinputregisterfuncode = 0x04; /* 读输入寄存器功能码 */
+static const int presetmultipleregisterfuncode = 0x10; /* 写多个寄存器功能码 */
+/* 异常码 */
+static const int illegalfunction = 0x01; /* 非法功能 */
+static const int illegaldataaddress = 0x02; /* 非法数据地址 */
+/* static const int illegaldatavalue = 0x03; / /非法数据值 */
+/* static const int slavedevicefailure = 0x04; / /从设备故障 */
+/* static const int slavedevicebusy = 0x05; / /从设备忙 */
+/* 保持寄存器 */
+static const int HoldingregisterAddress = 0x00; /* 保持寄存器起始地址 */
+static const int HoldingregisterAmount = HOLEREGISTER_STOP + 1; /* 保持寄存器总数 */
+/* static int HoldingRegisterArray[HOLEREGISTER_STOP] = { 0 }; / /保持寄存器数组 */
+static uint16_t HoldingRegisterArray[HOLEREGISTER_STOP] = { 0 }; /* 保持寄存器数组，1 个元素对应 1 个 16 位保持寄存器 */
+/* 输入寄存器 */
+static const int InputregisterAddress = 0x00; /* 输入寄存器起始地址 */
+static const int InputRegisterAmount = INPUTREGISTER_AMOUNT; /* 输入寄存器总数 */
+static uint16_t InputRegisterArray[INPUTREGISTER_AMOUNT] = { 0 };    /* 输入寄存器数组 */
+/* 发送区暂存数组 */
+static int SlaveTempBuffer[HOSTCOMMU_SENDLENGTH]; /* 主板通信数据缓冲区，注意与中断或 DMA 访问边界保持一致。 */
+/* 接收到的命令包数据暂存变量 */
+static int RCV_functioncode = 0; /* 主板通信模块级变量，保存跨函数共享的业务状态。 */
+static int RCV_startaddress = 0; /* 主板通信地址配置，影响协议寻址或硬件访问。 */
+static int RCV_registercnt = 0; /* 主板通信模块级变量，保存跨函数共享的业务状态。 */
+/* 静态函数 */
 static bool JudgeFunctioncode(void);
 static bool JudgeStartAddress(void);
-static void ReadRegister(bool registertype, int *registervalue); //读寄存器
-static void PresetRegister(bool registertype, int const *registervalue); //写寄存器
+static void ReadRegister(bool registertype, int *registervalue); /* 读寄存器 */
+static void PresetRegister(bool registertype, int const *registervalue); /* 写寄存器 */
 static int __attribute__((unused)) ResponseException(int exception, uint8_t  *sendframe);
 static int Compose03Package(uint8_t  *revframe, uint8_t  *sendframe);
 static int Compose04Package(uint8_t  *revframe, uint8_t  *sendframe);
 static int Compose10Package(uint8_t  const *revframe, uint8_t  *sendframe);
 
-/*接收到的数据包进行地址检查*/
+/* 接收到的数据包进行地址检查 */
 bool SlaveCheckAddress(uint8_t  const *revframe, int framelen) {
 	if (revframe[0] != SlaveAddress && revframe[0] != 0) {
 		return false;
@@ -53,7 +53,7 @@ bool SlaveCheckAddress(uint8_t  const *revframe, int framelen) {
 		return true;
 	}
 }
-/*设置从机地址对照量 作为数据包地址是否正确的判断依据*/
+/* 设置从机地址对照量 作为数据包地址是否正确的判断依据 */
 void SetSlaveaddress(int address) {
 	SlaveAddress = address;
 #if DEBUG_HOSTCOMMU_MODBUS
@@ -89,7 +89,7 @@ static bool IsOnlyRelayClearAlarmWrite(uint16_t startAddr, uint16_t regCount)
     return true;
 }
 
-/*判断功能码是否正确*/
+/* 判断功能码是否正确 */
 static bool JudgeFunctioncode(void) {
 	if ((RCV_functioncode != readholdingregisterfuncode) && (RCV_functioncode != readinputregisterfuncode)
 			&& (RCV_functioncode != presetmultipleregisterfuncode)) {
@@ -98,7 +98,7 @@ static bool JudgeFunctioncode(void) {
 		return true;
 	}
 }
-/*根据不同功能码判断相应的地址是否正确*/
+/* 根据不同功能码判断相应的地址是否正确 */
 static bool JudgeStartAddress(void) {
 	bool ret = true;
 	switch (RCV_functioncode) {
@@ -143,7 +143,7 @@ static void ReadRegister(bool registertype, int *registervalue) {
 	}
 }
 
-/*检查功能码，若错误则组织违法功能码响应包*/
+/* 检查功能码，若错误则组织违法功能码响应包 */
 bool FunctionCheckIllPack(uint8_t  *sendframe, int *framelength) {
 	if (JudgeFunctioncode() == false) {
 		sendframe[0] = SlaveAddress;
@@ -155,7 +155,7 @@ bool FunctionCheckIllPack(uint8_t  *sendframe, int *framelength) {
 		return true;
 	}
 }
-/*检查数据起始地址和寄存器数量,若错误则组织违法数据响应包*/
+/* 检查数据起始地址和寄存器数量,若错误则组织违法数据响应包 */
 bool IllegalDataAddressPack(uint8_t  *sendframe, int *framelength) {
 	if (JudgeStartAddress() == false) {
 		sendframe[0] = SlaveAddress;
@@ -168,7 +168,7 @@ bool IllegalDataAddressPack(uint8_t  *sendframe, int *framelength) {
 	}
 }
 
-/*更新功能码\起始地址\寄存器数量*/
+/* 更新功能码\起始地址\寄存器数量 */
 void UpdateRcvPara(int funccode, int startadd, int registercnt) {
 	RCV_functioncode = funccode;
 	RCV_startaddress = startadd;
@@ -180,17 +180,17 @@ void UpdateRcvPara(int funccode, int startadd, int registercnt) {
     #endif
 }
 
-/*处理03功能码命令包 并组织响应包*/
+/* 处理03功能码命令包 并组织响应包 */
 int Response03Process(uint8_t  *revframe, uint8_t  *sendframe) {
 	int length;
-	/*重置保持寄存器*/
+	/* 重置保持寄存器 */
 	WriteDeviceParamsToHoldingRegisters(HoldingRegisterArray);
-	/*组包*/
+	/* 组包 */
 	length = Compose03Package(revframe, sendframe);
 	return length;
 }
 
-/*在命令包格式正确的情况下,组织03响应包*/
+/* 在命令包格式正确的情况下,组织03响应包 */
 static int Compose03Package(uint8_t  *revframe, uint8_t  *sendframe) {
 	int i;
 	int j;
@@ -198,7 +198,7 @@ static int Compose03Package(uint8_t  *revframe, uint8_t  *sendframe) {
 	sendframe[0] = SlaveAddress;
 	sendframe[1] = RCV_functioncode;
 	sendframe[2] = RCV_registercnt * 2;
-	/*读保持寄存器*/
+	/* 读保持寄存器 */
 	ReadRegister(false, SlaveTempBuffer);
 	for (i = 0, j = 3; i < RCV_registercnt; i++, j = j + 2) {
 		sendframe[j] = (SlaveTempBuffer[i] >> 8) & 0xff;
@@ -207,16 +207,16 @@ static int Compose03Package(uint8_t  *revframe, uint8_t  *sendframe) {
 	sendlength = 3 + RCV_registercnt * 2;
 	return sendlength;
 }
-/*处理04功能码命令包 并组织响应包*/
+/* 处理04功能码命令包 并组织响应包 */
 int Response04Process(uint8_t  *revframe, uint8_t  *sendframe) {
 	int length;
-	/*重置输入寄存器*/
+	/* 重置输入寄存器 */
 	write_measurement_result_to_InputRegisters(InputRegisterArray);
-	/*组包*/
+	/* 组包 */
 	length = Compose04Package(revframe, sendframe);
 	return length;
 }
-/*在命令包格式正确的情况下,组织04响应包*/
+/* 在命令包格式正确的情况下,组织04响应包 */
 static int Compose04Package(uint8_t  *revframe, uint8_t  *sendframe) {
 	int i;
 	int j;
@@ -224,7 +224,7 @@ static int Compose04Package(uint8_t  *revframe, uint8_t  *sendframe) {
 	sendframe[0] = SlaveAddress;
 	sendframe[1] = RCV_functioncode;
 	sendframe[2] = RCV_registercnt * 2;
-	/*读输入寄存器*/
+	/* 读输入寄存器 */
 	ReadRegister(true, SlaveTempBuffer);
 	for (i = 0, j = 3; i < RCV_registercnt; i++, j = j + 2) {
 		sendframe[j] = (SlaveTempBuffer[i] >> 8) & 0xff;
@@ -234,6 +234,12 @@ static int Compose04Package(uint8_t  *revframe, uint8_t  *sendframe) {
 	return sendlength;
 }
 
+/**
+ * @brief 执行主板通信中的 __attribute__ 逻辑。
+ *
+ * @param sendframe 业务参数。
+ * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ */
 static int __attribute__((unused)) ResponseException(int exception, uint8_t *sendframe) {
 	int framelen;
 	sendframe[0] = SlaveAddress;
@@ -265,11 +271,11 @@ int Response10Process(uint8_t const *revframe, uint8_t *sendframe)
     ReadDeviceParamsFromHoldingRegisters(HoldingRegisterArray);
 
 
-//    printf("0x10 write startAddr=%u regCount=%u, COMMAND=%u, TANKHEIGHT=%u, CRC=%u\r\n",
-//           startAddr, regCount,
-//           HOLDREGISTER_DEVICEPARAM_COMMAND,
-//           HOLDREGISTER_DEVICEPARAM_TANKHEIGHT,
-//           HOLDREGISTER_DEVICEPARAM_CRC);
+/* printf("0x10 write startAddr=%u regCount=%u, COMMAND=%u, TANKHEIGHT=%u, CRC=%u\r\n", */
+/* startAddr, regCount, */
+/* HOLDREGISTER_DEVICEPARAM_COMMAND, */
+/* HOLDREGISTER_DEVICEPARAM_TANKHEIGHT, */
+/* HOLDREGISTER_DEVICEPARAM_CRC); */
     /* 4. 判断这次写操作是否需要存储到 FRAM
      *    规则：只写 command（起始地址刚好是 COMMAND 且长度为 2 寄存器）不存储，
      *          其它涉及参数区的写操作统一认为需要持久化。
@@ -298,7 +304,7 @@ int Response10Process(uint8_t const *revframe, uint8_t *sendframe)
 }
 
 
-/*更新保持寄存器,组织10响应包*/
+/* 更新保持寄存器,组织10响应包 */
 static int Compose10Package(uint8_t  const *revframe, uint8_t  *sendframe) {
 	int i, j;
 	int length;
@@ -306,7 +312,7 @@ static int Compose10Package(uint8_t  const *revframe, uint8_t  *sendframe) {
 	for (i = 0, j = 0; i < RCV_registercnt; i++, j = j + 2) {
 		SlaveTempBuffer[i] = (revframe[j + 7] << 8) + revframe[j + 8];
 	}
-	/*写保持寄存器*/
+	/* 写保持寄存器 */
 	PresetRegister(false, SlaveTempBuffer);
 	sendframe[0] = SlaveAddress;
 	sendframe[1] = RCV_functioncode;

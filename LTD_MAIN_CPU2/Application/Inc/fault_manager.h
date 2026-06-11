@@ -8,64 +8,86 @@
 #ifndef INC_FAULT_MANAGER_H_
 #define INC_FAULT_MANAGER_H_
 
-#include <stdint.h>   // 处理 uint8_t, uint32_t 等类型
-#include <string.h>   // 处理 memset、memcpy 等函数
+#include <stdint.h>   /* 处理 uint8_t, uint32_t 等类型 */
+#include <string.h>   /* 处理 memset、memcpy 等函数 */
 #include "error_log.h"
 
-//#define ERROR_PRINT(msg)  printf("ERROR: %s | FILE: %s | LINE: %d\r\n", msg, __FILE__, __LINE__)
+/* #define ERROR_PRINT(msg) printf("ERROR: %s | FILE: %s | LINE: %d\r\n", msg, __FILE__, __LINE__) */
 
 /* 故障大类枚举 */
 typedef enum {
-	FAULT_MOTOR = 11,          // 电机类故障
-	FAULT_ENCODER,            // 编码器类故障
-	FAULT_SENSOR,             // 传感器类故障
-	FAULT_WEIGHT,             // 称重故障
-	FAULT_MEASUREMENT,        // 测量过程类错误
-	FAULT_WIRELESS_SLIPRING,  // 无线滑环类故障
-	FAULT_PARAM_STORAGE,      // 参数/存储错误
-	FAULT_OTHER               // 其他类型错误
+	FAULT_MOTOR = 11,          /* 电机类故障 */
+	FAULT_ENCODER,            /* 编码器类故障 */
+	FAULT_SENSOR,             /* 传感器类故障 */
+	FAULT_WEIGHT,             /* 称重故障 */
+	FAULT_MEASUREMENT,        /* 测量过程类错误 */
+	FAULT_WIRELESS_SLIPRING,  /* 无线滑环类故障 */
+	FAULT_PARAM_STORAGE,      /* 参数/存储错误 */
+	FAULT_OTHER               /* 其他类型错误 */
 } FaultCategory;
 
 /* 故障等级（决定处理优先级和恢复策略） */
 typedef enum {
-	FAULT_SEVERITY_NONE = 0,      // 无故障
-	FAULT_SEVERITY_WARNING,   	  // 警告：不影响核心功能，需要打印故障信息
-	FAULT_SEVERITY_ERROR,         // 错误：功能降级/有限次重试
-	FAULT_SEVERITY_CRITICAL,      // 严重错误：安全保护，立即停机等待人工干预
-	FAULT_SEVERITY_FATAL          // 致命错误：强制系统重启
+	FAULT_SEVERITY_NONE = 0,      /* 无故障 */
+	FAULT_SEVERITY_WARNING,   	  /* 警告：不影响核心功能，需要打印故障信息 */
+	FAULT_SEVERITY_ERROR,         /* 错误：功能降级/有限次重试 */
+	FAULT_SEVERITY_CRITICAL,      /* 严重错误：安全保护，立即停机等待人工干预 */
+	FAULT_SEVERITY_FATAL          /* 致命错误：强制系统重启 */
 } FaultSeverity;
 
 
 
-//
-// 故障恢复动作定义
+/* */
+/* 故障恢复动作定义 */
 typedef enum {
-	FAULT_ACTION_NONE,          // 无操作（仅记录日志）
-	FAULT_ACTION_RETRY,         // 重试操作（如重新初始化外设）
-	FAULT_ACTION_RESET_MODULE,  // 复位模块（如重启通信芯片）
-	FAULT_ACTION_SYSTEM_REBOOT  // 系统级复位
+	FAULT_ACTION_NONE,          /* 无操作（仅记录日志） */
+	FAULT_ACTION_RETRY,         /* 重试操作（如重新初始化外设） */
+	FAULT_ACTION_RESET_MODULE,  /* 复位模块（如重启通信芯片） */
+	FAULT_ACTION_SYSTEM_REBOOT  /* 系统级复位 */
 } FaultRecoveryAction;
 
-// 故障恢复策略配置
+/* 故障恢复策略配置 */
 typedef struct {
-	FaultSeverity severity;      // 触发等级
-	uint8_t max_retries;        // 最大重试次数
-	FaultRecoveryAction action;  // 恢复动作
+	FaultSeverity severity;      /* 触发等级 */
+	uint8_t max_retries;        /* 最大重试次数 */
+	FaultRecoveryAction action;  /* 恢复动作 */
 } FaultRecoveryPolicy;
-// 错误信息结构体
+/* 错误信息结构体 */
 typedef struct {
 	const char *file;
 	uint32_t line;
 	const char *func;
-	uint32_t error_code; // 错误码;
+	uint32_t error_code; /* 错误码; */
 } ErrorInfo;
-extern ErrorInfo err; // 全局错误信息变量
+extern ErrorInfo err; /* 全局错误信息变量 */
 
+/**
+ * @brief 执行故障处理中的 FaultManager_ReportErrorExit 逻辑。
+ *
+ * @param error_code 故障或错误码。
+ */
 void FaultManager_ReportErrorExit(uint32_t error_code);
+/**
+ * @brief 处理故障处理中的 FaultManager_HandleCheckError 逻辑。
+ *
+ * @param error_code 故障或错误码。
+ * @param file 业务参数。
+ * @param line 业务参数。
+ * @param func 业务参数。
+ * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ */
 uint32_t FaultManager_HandleCheckError(uint32_t error_code,
                                        const char *file,
                                        uint32_t line,
                                        const char *func);
+/**
+ * @brief 执行故障处理中的 FaultManager_SetErrorState 逻辑。
+ *
+ * @param error_code 故障或错误码。
+ * @param file 业务参数。
+ * @param line 业务参数。
+ * @param func 业务参数。
+ */
 void FaultManager_SetErrorState(uint32_t error_code,
                                 const char *file,
                                 uint32_t line,
@@ -150,8 +172,25 @@ void FaultManager_SetErrorState(uint32_t error_code,
         }                                                                        \
     } while (0)
 
+/**
+ * @brief 初始化故障处理中的 fault_info_init 逻辑。
+ */
 void fault_info_init(void);
+/**
+ * @brief 处理故障处理中的 HandleError 逻辑。
+ */
 void HandleError(void);
+/**
+ * @brief 显示或打印故障处理中的 printError 逻辑。
+ *
+ * @param err 业务参数。
+ */
 void printError(const ErrorInfo* err);
+/**
+ * @brief 读取故障处理中的 GetShortFilename 逻辑。
+ *
+ * @param fullpath 业务参数。
+ * @return 返回业务对象或缓冲区指针，NULL 表示无有效对象。
+ */
 const char* GetShortFilename(const char *fullpath);
 #endif /* INC_FAULT_MANAGER_H_ */

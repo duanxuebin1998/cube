@@ -39,10 +39,10 @@ typedef struct {
 } SSI_State;
 
 static SSI_State ssi_state = { .retry_count = 0, .error_reported = false };
-static volatile uint32_t ssi_last_error_code = NO_ERROR;
+static volatile uint32_t ssi_last_error_code = NO_ERROR; /* AS5145 编码器故障记录，供恢复、显示或日志链路使用。 */
 /* 首帧有效数据锁存：定时器启动不等于位置可信，运动门控必须等到这里置位。 */
-static volatile bool ssi_first_valid_sample = false;
-static volatile uint32_t ssi_last_ok_tick = 0U;
+static volatile bool ssi_first_valid_sample = false; /* AS5145 编码器模块级变量，保存跨函数共享的业务状态。 */
+static volatile uint32_t ssi_last_ok_tick = 0U; /* AS5145 编码器模块级变量，保存跨函数共享的业务状态。 */
 static uint8_t rxData[10] = { 0 };
 
 static uint8_t Calculate_Even_Parity(uint32_t data);
@@ -110,6 +110,7 @@ static SSI_Data_t Process_SSI_Frame(uint8_t *rx_data, GPIO_TypeDef *cs_port, uin
 
     parsed_data = Parse_SSI_Data(rx_data);
 
+    /* 先处理异常边界，避免AS5145 编码器状态机带故障继续运行。 */
     if (Check_SSI_Error_Condition(&parsed_data)) {
         Handle_SSI_Error(&parsed_data);
     } else {
@@ -120,6 +121,7 @@ static SSI_Data_t Process_SSI_Frame(uint8_t *rx_data, GPIO_TypeDef *cs_port, uin
         ssi_first_valid_sample = true;
         ssi_last_ok_tick = HAL_GetTick();
 
+        /* 先处理异常边界，避免AS5145 编码器状态机带故障继续运行。 */
         if (Is_Encoder_Error_Code(g_measurement.device_status.error_code)) {
             g_measurement.device_status.error_code = NO_ERROR;
         }
@@ -201,7 +203,7 @@ static void Handle_SSI_Error(const SSI_Data_t *data) {
     }
 
     if (++ssi_state.retry_count <= SSI_RETRY_LIMIT) {
-        // 错误	阶段：错误重试	模块：编码器	操作：通信诊断	原因：ErrorLog_GetReasonByCode(err)	尝试：ssi_state.retry_count/SSI_RETRY_LIMIT	错误码：err	错误名：ErrorLog_GetCodeName(err)
+        /* 错误 阶段：错误重试 模块：编码器 操作：通信诊断 原因：ErrorLog_GetReasonByCode(err) 尝试：ssi_state.retry_count/SSI_RETRY_LIMIT 错误码：err 错误名：ErrorLog_GetCodeName(err) */
         ErrorLog_Retry(ERROR_LOG_MODULE_ENCODER,
                        ERROR_LOG_OP_COMM_DIAG,
                        ErrorLog_GetReasonByCode(err),
@@ -212,6 +214,7 @@ static void Handle_SSI_Error(const SSI_Data_t *data) {
         return;
     }
 
+    /* 先处理异常边界，避免AS5145 编码器状态机带故障继续运行。 */
     if (!ssi_state.error_reported) {
         ssi_state.error_reported = true;
         if (!MotorCtrl_IsPositionSourceMotor()) {
@@ -220,12 +223,24 @@ static void Handle_SSI_Error(const SSI_Data_t *data) {
     }
 }
 
+/**
+ * @brief 接收AS5145 编码器中的 HAL_SPI_RxCpltCallback 逻辑。
+ *
+ * @param hspi 业务参数。
+ * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ */
 void HAL_SPI_RxCpltCallback(SPI_HandleTypeDef *hspi) {
     if (hspi == &SSI) {
         Process_SSI_Frame(rxData, SSI_CSN_PORT, SSI_CSN_PIN);
     }
 }
 
+/**
+ * @brief 执行AS5145 编码器中的 HAL_SPI_ErrorCallback 逻辑。
+ *
+ * @param hspi 业务参数。
+ * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ */
 void HAL_SPI_ErrorCallback(SPI_HandleTypeDef *hspi) {
     if (hspi == &SSI) {
         Handle_SSI_Error(NULL);
@@ -268,6 +283,10 @@ static HAL_StatusTypeDef Start_Read_SSI_Data(void) {
     return status;
 }
 
+/**
+ * @brief 执行AS5145 编码器中的 AS5145_GetLastError 逻辑。
+ * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ */
 uint32_t AS5145_GetLastError(void) {
     return ssi_last_error_code;
 }
@@ -295,18 +314,26 @@ uint32_t AS5145_WaitFirstValidSample(uint32_t timeout_ms) {
         if (ssi_first_valid_sample) {
             return NO_ERROR;
         }
+        /* AS5145 编码器与外设通信之间保留等待时间，避免硬件或对端协议尚未准备好。 */
         HAL_Delay(5U);
     }
 
     if (ssi_first_valid_sample) {
         return NO_ERROR;
     }
+    /* 先处理异常边界，避免AS5145 编码器状态机带故障继续运行。 */
     if (ssi_last_error_code != NO_ERROR) {
         return ssi_last_error_code;
     }
     return ENCODER_TIMEOUT;
 }
 
+/**
+ * @brief 执行AS5145 编码器中的 HAL_TIM_PeriodElapsedCallback 逻辑。
+ *
+ * @param htim 业务参数。
+ * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ */
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
     if (htim->Instance == TIM1) {
         (void)Start_Read_SSI_Data();
@@ -344,6 +371,10 @@ static void Print_SSI_Error(const SSI_Data_t *data) {
     }
 }
 
+/**
+ * @brief 执行AS5145 编码器中的 Start_Encoder_Collection_TIM 逻辑。
+ * @return HAL 状态码，用于判断底层外设访问是否成功。
+ */
 HAL_StatusTypeDef Start_Encoder_Collection_TIM(void) {
     HAL_StatusTypeDef status;
 

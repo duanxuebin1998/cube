@@ -172,34 +172,86 @@
 		W		113			3.温度准确值				W				单浮点
 		W		114			4.温度测量值				W				单浮点
 */
-// 模式枚举
+/* 模式枚举 */
 typedef enum {
-    DSM_V2_MODE_LEVEL   = 'T',   // 液位模式
-    DSM_V2_MODE_DENSITY = 'D',   // 密度模式
+    DSM_V2_MODE_LEVEL   = 'T',   /* 液位模式 */
+    DSM_V2_MODE_DENSITY = 'D',   /* 密度模式 */
 } dsm_v2_mode_t;
 
-// === 对外 API ===
+/* === 对外 API === */
 
-// 模式切换（param 固定 0x00）
+/* 模式切换（param 固定 0x00） */
 int DSM_V2_SwitchMode(dsm_v2_mode_t mode);
 int DSM_V2_SwitchToLevelMode(void);
+/**
+ * @brief 将 LTD/DSM V2 传感器切换到密度模式。
+ * @return 0 表示成功，非 0 表示通信或模式切换失败。
+ */
 int DSM_V2_SwitchToDensityMode(void);
 
-// 通用读取
+/* 通用读取 */
 int DSM_V2_Read_FloatParam(uint8_t param, float *out_value);
 int DSM_V2_Read_IntParam  (uint8_t param, int32_t *out_value);
 
-// 参数读取
-int DSM_V2_Read_SoftwareVersion(float *v);        // R 00
-int DSM_V2_Read_LevelFrequency(uint32_t *freq_hz);   // R 04
-int DSM_V2_Read_DensityFrequency(float *freq_hz,float *freq_45,float *freq_225) ; // R 17/18 (0x11/12)
-int DSM_V2_Read_Temperature    (float *t);        // R 06
-int DSM_V2_Read_Density        (float *rho);      // R 07
-int DSM_V2_Read_DynamicViscosity(float *mu);      // R 08 动力粘度
-int DSM_V2_Read_KinematicViscosity(float *nu);    // R 09 运动粘度
-int DSM_V2_Read_MeanSquare45   (float *msq45);    // R 17 (0x11)
-int DSM_V2_Read_MeanSquare22p5 (float *msq22p5);  // R 18 (0x12)
-int DSM_V2_Read_SensorID       (uint32_t *sensor_id); // R 22 (0x16) 整型
+/* 参数读取 */
+int DSM_V2_Read_SoftwareVersion(float *v);        /* R 00 */
+int DSM_V2_Read_LevelFrequency(uint32_t *freq_hz);   /* R 04 */
+/**
+ * @brief 读取密度探头主频和两路参考频率。
+ * @param freq_hz 主频输出指针。
+ * @param freq_45 45 度参考频率输出指针。
+ * @param freq_225 225 度参考频率输出指针。
+ * @return 0 表示成功，非 0 表示通信异常。
+ */
+int DSM_V2_Read_DensityFrequency(float *freq_hz,float *freq_45,float *freq_225) ; /* R 17/18 (0x11/12) */
+/**
+ * @brief 读取 LTD/DSM V2 传感器温度。
+ * @param t 温度输出指针。
+ * @return 0 表示成功，非 0 表示通信异常。
+ */
+int DSM_V2_Read_Temperature    (float *t);        /* R 06 */
+/**
+ * @brief 读取LTD 传感器通信中的 DSM_V2_Read_Density 逻辑。
+ *
+ * @param rho 业务参数。
+ * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ */
+int DSM_V2_Read_Density        (float *rho);      /* R 07 */
+/**
+ * @brief 读取LTD 传感器通信中的 DSM_V2_Read_DynamicViscosity 逻辑。
+ *
+ * @param mu 业务参数。
+ * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ */
+int DSM_V2_Read_DynamicViscosity(float *mu);      /* R 08 动力粘度 */
+/**
+ * @brief 读取LTD 传感器通信中的 DSM_V2_Read_KinematicViscosity 逻辑。
+ *
+ * @param nu 业务参数。
+ * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ */
+int DSM_V2_Read_KinematicViscosity(float *nu);    /* R 09 运动粘度 */
+/**
+ * @brief 读取LTD 传感器通信中的 DSM_V2_Read_MeanSquare45 逻辑。
+ *
+ * @param msq45 业务参数。
+ * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ */
+int DSM_V2_Read_MeanSquare45   (float *msq45);    /* R 17 (0x11) */
+/**
+ * @brief 读取LTD 传感器通信中的 DSM_V2_Read_MeanSquare22p5 逻辑。
+ *
+ * @param msq22p5 业务参数。
+ * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ */
+int DSM_V2_Read_MeanSquare22p5 (float *msq22p5);  /* R 18 (0x12) */
+/**
+ * @brief 读取LTD 传感器通信中的 DSM_V2_Read_SensorID 逻辑。
+ *
+ * @param sensor_id 业务参数。
+ * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ */
+int DSM_V2_Read_SensorID       (uint32_t *sensor_id); /* R 22 (0x16) 整型 */
 
 
-#endif // DSM_V2_H
+#endif /* DSM_V2_H */

@@ -17,10 +17,46 @@ enum OilCategoryofDensity20
 #define	ERROR_NORESULT		-4.0
 
 
+/**
+ * @brief 执行密度换算中的 roundd 逻辑。
+ *
+ * @param value 待处理数值。
+ * @param digits 业务参数。
+ * @return 计算后的业务数值。
+ */
 double_t roundd(double_t value,int32_t  digits);
+/**
+ * @brief 读取密度换算中的 get_standdensity 逻辑。
+ *
+ * @param rhot 业务参数。
+ * @param temperature 业务参数。
+ * @return 计算后的业务数值。
+ */
 double_t get_standdensity(double_t	rhot,double_t temperature);
+/**
+ * @brief 读取密度换算中的 GetVCF20ofPMP3 逻辑。
+ *
+ * @param oilcategory 业务参数。
+ * @param RHO20 业务参数。
+ * @param temperature 业务参数。
+ * @return 计算后的业务数值。
+ */
 double_t GetVCF20ofPMP3(int32_t  oilcategory,double_t RHO20,double_t temperature);
+/**
+ * @brief 执行密度换算中的 DensityT_Get 逻辑。
+ *
+ * @param VCF20 业务参数。
+ * @param density20 业务参数。
+ * @return 计算后的业务数值。
+ */
 double_t DensityT_Get(uint32_t  VCF20,uint32_t  density20);
+/**
+ * @brief 执行密度换算中的 RHOTtoRHO 逻辑。
+ *
+ * @param density 业务参数。
+ * @param temperature 业务参数。
+ * @return 计算后的业务数值。
+ */
 double_t RHOTtoRHO(double_t density,double_t temperature);
 
 #endif

@@ -11,8 +11,8 @@
 #include "motor_ctrl.h"
 #include "error_log.h"
 
-ErrorInfo err; // 全局错误信息变量
-static uint8_t s_handle_error_skip_logged = 0U;
+ErrorInfo err; /* 全局错误信息变量 */
+static uint8_t s_handle_error_skip_logged = 0U; /* 故障处理故障记录，供恢复、显示或日志链路使用。 */
 
 /**
  * @brief 错误打印函数
@@ -21,7 +21,7 @@ static uint8_t s_handle_error_skip_logged = 0U;
  */
 void printError(const ErrorInfo* err)
 {
-    if (err == NULL) return; // 空指针保护
+    if (err == NULL) return; /* 空指针保护 */
 
     FaultManager_ReportErrorExit(err->error_code);
 }
@@ -34,10 +34,12 @@ void FaultManager_ReportErrorExit(uint32_t error_code)
 {
     char detail[96];
 
+    /* 先处理异常边界，避免故障处理状态机带故障继续运行。 */
     if ((error_code == NO_ERROR) || (error_code == STATE_SWITCH)) {
         return;
     }
 
+    /* 先处理异常边界，避免故障处理状态机带故障继续运行。 */
     if (ErrorLog_TakeRecentReport(error_code) != 0U) {
         return;
     }
@@ -48,7 +50,7 @@ void FaultManager_ReportErrorExit(uint32_t error_code)
              (unsigned long)err.line,
              (err.func != NULL) ? err.func : "未知");
 
-    // 错误	阶段：最终报错	模块：ErrorLog_GetModuleByCode(error_code)	操作：错误出口	原因：ErrorLog_GetReasonByCode(error_code)	错误码：error_code	错误名：ErrorLog_GetCodeName(error_code)	处理：停止测量	详情：detail
+    /* 错误 阶段：最终报错 模块：ErrorLog_GetModuleByCode(error_code) 操作：错误出口 原因：ErrorLog_GetReasonByCode(error_code) 错误码：error_code 错误名：ErrorLog_GetCodeName(error_code) 处理：停止测量 详情：detail */
     ErrorLog_ReportDetail(ErrorLog_GetModuleByCode(error_code),
                           ERROR_LOG_OP_ERROR_EXIT,
                           ErrorLog_GetReasonByCode(error_code),
@@ -105,6 +107,7 @@ void HandleError(void)
     uint32_t ret;
 
     if (!MotorCtrl_IsDriverInitValid()) {
+        /* 先处理异常边界，避免故障处理状态机带故障继续运行。 */
         if (s_handle_error_skip_logged == 0U) {
             printf("错误停机跳过 | 电机驱动未初始化，等待自动恢复重新初始化\r\n");
             s_handle_error_skip_logged = 1U;
@@ -114,8 +117,9 @@ void HandleError(void)
     s_handle_error_skip_logged = 0U;
 
     ret = MotorCtrl_SlowStop();
+    /* 先处理异常边界，避免故障处理状态机带故障继续运行。 */
     if (ret != NO_ERROR) {
-        // 错误	阶段：错误报警	模块：电机	操作：停止电机	原因：ErrorLog_GetReasonByCode(ret)	处理：保持原故障
+        /* 错误 阶段：错误报警 模块：电机 操作：停止电机 原因：ErrorLog_GetReasonByCode(ret) 处理：保持原故障 */
         ErrorLog_Warn(ERROR_LOG_MODULE_MOTOR,
                       "停止电机",
                       ErrorLog_GetReasonByCode(ret),
@@ -125,13 +129,13 @@ void HandleError(void)
 
 /* 旧的错误记录函数示例（保留注释备查）
 void LogError(const ErrorInfo* err) {
-    MotorCtrl_SlowStop(); // 慢速停止电机
+    MotorCtrl_SlowStop(); / / 慢速停止电机
     if (g_measurement.device_status.error_code == NO_ERROR &&
         g_measurement.device_status.error_code != STATE_SWITCH &&
         err->error_code != STATE_SWITCH) {
 
-        g_measurement.device_status.error_code = err->error_code; // 更新错误码
-        g_measurement.device_status.zero_point_status = 1;        // 设置零点状态为需要回零点
+        g_measurement.device_status.error_code = err->error_code; / / 更新错误码
+        g_measurement.device_status.zero_point_status = 1;        / / 设置零点状态为需要回零点
 
         printf("故障 代码: 0x%X | 文件: %s | 行号: %lu | 函数: %s \r\n",
                err->error_code, err->file, err->line, err->func);
@@ -153,12 +157,12 @@ const char* GetShortFilename(const char* fullpath) {
     return p;
 }
 
-// 全局故障信息结构体
+/* 全局故障信息结构体 */
 
 /**
  * @brief 故障信息初始化函数（系统启动时调用）
  */
 void fault_info_init(void) {
-    MotorCtrl_SlowStop(); // 初始化时确保电机停止
-    g_measurement.device_status.error_code = NO_ERROR; // 清除设备状态错误码
+    MotorCtrl_SlowStop(); /* 初始化时确保电机停止 */
+    g_measurement.device_status.error_code = NO_ERROR; /* 清除设备状态错误码 */
 }

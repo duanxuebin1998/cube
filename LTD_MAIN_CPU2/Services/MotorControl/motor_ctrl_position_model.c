@@ -12,10 +12,10 @@
 /* ===================== 私有类型/状态 ===================== */
 
 /* 电机位置持久化恢复缓存，由 MotorPosition_RestorePersistedRegisters() 写入。 */
-static int32_t s_motor_saved_xactual = 0;
-static int32_t s_motor_restored_base_length_01mm = 0;
-static int32_t s_motor_restored_base_step = 0;
-static bool s_motor_restored_base_valid = false;
+static int32_t s_motor_saved_xactual = 0; /* 电机控制模块级变量，保存跨函数共享的业务状态。 */
+static int32_t s_motor_restored_base_length_01mm = 0; /* 电机控制模块级变量，保存跨函数共享的业务状态。 */
+static int32_t s_motor_restored_base_step = 0; /* 电机控制模块级变量，保存跨函数共享的业务状态。 */
+static bool s_motor_restored_base_valid = false; /* 电机控制模块级变量，保存跨函数共享的业务状态。 */
 
 /* XACTUAL 单次读取可能因为 SPI 帧错位出现 0 或极大跳变。
  * 这里用很宽的阈值只拦截明显不可能的单帧异常，真实大位移会通过二次读取确认。 */
@@ -298,6 +298,7 @@ void MotorCtrl_PrintMotorCountStatus(void)
     }
 
     moving_ret = MotorDriver_ReadMovingState(&stepper, &is_moving);
+    /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
     if (moving_ret == NO_ERROR) {
         printf("电机记步诊断状态 | 显示状态=%lu(%s) | 驱动运动=%s | 校验=%s\r\n",
                (unsigned long)display_state,
@@ -336,6 +337,7 @@ uint32_t MotorCtrl_PollRuntimePosition(void)
         s_motor_driver.motion_wait_active = false;
         g_measurement.debug_data.motor_state = 0U;
         ret = MotorDriver_SyncPositionOrCheckHealth(&stepper);
+        /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
         if (ret != NO_ERROR) {
             return ret;
         }
@@ -343,8 +345,10 @@ uint32_t MotorCtrl_PollRuntimePosition(void)
     }
 
     ret = MotorDriver_ReadMovingState(&stepper, &is_moving);
+    /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
     if (ret != NO_ERROR) {
         uint32_t sync_ret = MotorDriver_SyncPositionOrCheckHealth(&stepper);
+        /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
         if (sync_ret != NO_ERROR) {
             return sync_ret;
         }
@@ -354,6 +358,7 @@ uint32_t MotorCtrl_PollRuntimePosition(void)
     if (!is_moving) {
         if (s_motor_driver.motion_wait_active) {
             ret = MotorDriver_SyncPositionOrCheckHealth(&stepper);
+            /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
             if (ret != NO_ERROR) {
                 return ret;
             }
@@ -365,6 +370,7 @@ uint32_t MotorCtrl_PollRuntimePosition(void)
             s_motor_driver.motion_wait_active = false;
             g_measurement.debug_data.motor_state = 0U;
             ret = MotorDriver_SyncPositionOrCheckHealth(&stepper);
+            /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
             if (ret != NO_ERROR) {
                 return ret;
             }
@@ -381,6 +387,7 @@ uint32_t MotorCtrl_PollRuntimePosition(void)
     }
 
     ret = MotorDriver_SyncPositionOrCheckHealth(&stepper);
+    /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
     if (ret != NO_ERROR) {
         return ret;
     }
@@ -473,6 +480,7 @@ uint32_t MotorCtrl_SwitchPositionSourceToMotor(void)
     /* 标定过程中临时切到电机源，用于屏蔽切换窗口内的编码器 SSI 错误。
      * 成功前不保存参数；任何失败都会回滚到进入函数前的模式和基准。 */
     g_deviceParams.position_count_mode = POSITION_COUNT_MODE_MOTOR;
+    /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
     if (MotorPosition_IsEncoderErrorCode(g_measurement.device_status.error_code)) {
         g_measurement.device_status.error_code = NO_ERROR;
     }
@@ -485,6 +493,7 @@ uint32_t MotorCtrl_SwitchPositionSourceToMotor(void)
            (long)one_rev_ticks,
            local_circumference_mm);
     ret = MotorCtrl_MoveByTicksAndWait(one_rev_ticks, MotorCtrl_GetDefaultSpeedX100());
+    /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
     if (ret != NO_ERROR) {
         return MotorPosition_RollbackPositionSourceSwitch(ret, old_mode, old_local_circ_param, old_base_step, old_base_length_01mm, old_base_turns, old_error_code);
     }
@@ -520,6 +529,7 @@ uint32_t MotorCtrl_SwitchPositionSourceToMotor(void)
     /* 无论标定值是否有效，都回到切换瞬间的 XACTUAL 位置。 */
     return_ticks = -one_rev_ticks;
     ret = MotorCtrl_MoveByTicksAndWait(return_ticks, MotorCtrl_GetDefaultSpeedX100());
+    /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
     if (ret != NO_ERROR) {
         return MotorPosition_RollbackPositionSourceSwitch(ret, old_mode, old_local_circ_param, old_base_step, old_base_length_01mm, old_base_turns, old_error_code);
     }
@@ -529,6 +539,7 @@ uint32_t MotorCtrl_SwitchPositionSourceToMotor(void)
     }
     MotorPosition_UpdatePositionFromMotorSource(&drum);
 
+    /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
     if (calibration_ret != NO_ERROR) {
         return MotorPosition_RollbackPositionSourceSwitch(calibration_ret, old_mode, old_local_circ_param, old_base_step, old_base_length_01mm, old_base_turns, old_error_code);
     }
@@ -621,6 +632,10 @@ void MotorCtrl_PersistRegistersFromDriver(void)
     MotorPosition_MaybePersistRegisters(&stepper, true);
 }
 
+/**
+ * @brief 清除或复位电机控制中的 MotorCtrl_ResetDrumReferenceForZeroCalibration 逻辑。
+ * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ */
 uint32_t MotorCtrl_ResetDrumReferenceForZeroCalibration(void)
 {
     /* 回零成功后统一切回编码轮记步，因此这里清除电机记步坐标、基准和旧局部周长。 */
@@ -631,6 +646,7 @@ uint32_t MotorCtrl_ResetDrumReferenceForZeroCalibration(void)
         return PARAM_ERROR;
     }
 
+    /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
     if (MotorPosition_IsEncoderErrorCode(g_measurement.device_status.error_code)) {
         g_measurement.device_status.error_code = NO_ERROR;
     }
@@ -642,6 +658,7 @@ uint32_t MotorCtrl_ResetDrumReferenceForZeroCalibration(void)
     }
     {
         uint32_t ret = stpr_setPos(&stepper, 0);
+        /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
         if (ret != NO_ERROR) {
             printf("标定零点清除电机坐标失败，错误码：0x%08lX\r\n", (unsigned long)ret);
             return ret;
@@ -1269,7 +1286,7 @@ static void MotorPosition_TapeMinRadiusThreshold(double C0_mm, double t_mm,
         return;
     }
 
-    /* 达到 minR 时：C(n)=C0-2*pi*t*n = Cmin  =>  n1=(C0-Cmin)/(2*pi*t) */
+    /* 达到 minR 时：C(n)=C0-2*pi*t*n = Cmin => n1=(C0-Cmin)/(2*pi*t) */
     const double n1_local = (C0_mm - Cmin_local) / (2.0 * M_PI * t_mm);
 
     if (n1) {
@@ -1393,7 +1410,7 @@ static void MotorPosition_BuildDrumStateFromStep(int32_t motor_step, MotorDrumSt
     out->turns_total         = turns;
     out->turns_int           = turns_int;
     out->angle_deg           = angle_deg;
-    out->motor_distance_01mm = (int32_t)llround(L_mm * 10.0); // mm -> 0.1mm
+    out->motor_distance_01mm = (int32_t)llround(L_mm * 10.0); /* mm -> 0.1mm */
 }
 
 /**
@@ -1536,6 +1553,7 @@ static uint32_t MotorPosition_RollbackPositionSourceSwitch(uint32_t ret,
     s_motor_position.count_base_length_01mm = old_base_length_01mm;
     s_motor_position.count_base_turns = old_base_turns;
 
+    /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
     if (MotorPosition_IsEncoderErrorCode(g_measurement.device_status.error_code)) {
         g_measurement.device_status.error_code = old_error_code;
     }

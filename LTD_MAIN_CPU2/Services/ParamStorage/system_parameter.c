@@ -36,6 +36,12 @@ static const char * relay_operating_mode_str(uint32_t value)
     }
 }
 
+/**
+ * @brief 执行系统参数中的 relay_digital_source_str 逻辑。
+ *
+ * @param value 待处理数值。
+ * @return 返回业务对象或缓冲区指针，NULL 表示无有效对象。
+ */
 static const char * relay_digital_source_str(uint32_t value)
 {
     switch ((RelayAlarmDigitalSource)value) {
@@ -60,6 +66,12 @@ static const char * relay_digital_source_str(uint32_t value)
     }
 }
 
+/**
+ * @brief 执行系统参数中的 relay_contact_type_str 逻辑。
+ *
+ * @param value 待处理数值。
+ * @return 返回业务对象或缓冲区指针，NULL 表示无有效对象。
+ */
 static const char * relay_contact_type_str(uint32_t value)
 {
     switch ((RelayAlarmContactType)value) {
@@ -72,6 +84,12 @@ static const char * relay_contact_type_str(uint32_t value)
     }
 }
 
+/**
+ * @brief 执行系统参数中的 relay_alarm_mode_str 逻辑。
+ *
+ * @param value 待处理数值。
+ * @return 返回业务对象或缓冲区指针，NULL 表示无有效对象。
+ */
 static const char * relay_alarm_mode_str(uint32_t value)
 {
     switch ((RelayAlarmMode)value) {
@@ -86,6 +104,12 @@ static const char * relay_alarm_mode_str(uint32_t value)
     }
 }
 
+/**
+ * @brief 执行系统参数中的 relay_alarm_source_str 逻辑。
+ *
+ * @param value 待处理数值。
+ * @return 返回业务对象或缓冲区指针，NULL 表示无有效对象。
+ */
 static const char * relay_alarm_source_str(uint32_t value)
 {
     switch ((RelayAlarmSource)value) {
@@ -121,14 +145,21 @@ static const char * relay_alarm_source_str(uint32_t value)
 #define DEVICE_PARAM_PERSIST_LEN      (offsetof(DeviceParameters, crc) - DEVICE_PARAM_PERSIST_OFFSET)
 #define DEVICE_PARAM_PERSIST_START(p) ((uint8_t *)(p) + DEVICE_PARAM_PERSIST_OFFSET)
 
+/**
+ * @brief 执行系统参数中的 relay_alarm_float_to_raw 逻辑。
+ *
+ * @param value 待处理数值。
+ * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ */
 static uint32_t relay_alarm_float_to_raw(float value)
 {
     uint32_t raw;
+    /* 按结构或原始字节复制，保持系统参数协议/存储布局不被字段解释改变。 */
     memcpy(&raw, &value, sizeof(raw));
     return raw;
 }
 
-/*========================= 参数存储逻辑 =========================*/
+/* ========================= 参数存储逻辑 ========================= */
 
 /* 根据持久化区计算crc（不含command和crc字段） */
 static uint32_t device_param_crc(const DeviceParameters *params)
@@ -138,6 +169,12 @@ static uint32_t device_param_crc(const DeviceParameters *params)
     return CRC32_HAL((const uint8_t *)crc_base, crc_size);
 }
 
+/**
+ * @brief 清除或复位系统参数中的 clear_relay_alarm_runtime_commands 逻辑。
+ *
+ * @param params 输入/输出指针。
+ * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ */
 static void clear_relay_alarm_runtime_commands(DeviceParameters *params)
 {
     for (uint32_t channel = 0U; channel < RELAY_ALARM_CHANNEL_COUNT; channel++) {
@@ -215,6 +252,7 @@ static int normalize_device_params_runtime(void)
         changed = 1;
     }
 
+    /* 先处理异常边界，避免系统参数状态机带故障继续运行。 */
     if (g_deviceParams.fault_auto_recovery_retry_limit > FAULT_AUTO_RECOVERY_RETRY_MAX) {
         g_deviceParams.fault_auto_recovery_retry_limit = FAULT_AUTO_RECOVERY_RETRY_DEFAULT;
         changed = 1;
@@ -274,7 +312,7 @@ static int load_device_params_from_slot_impl(uint32_t base_addr,
                      slot_name,
                      (unsigned long)temp.magic,
                      (unsigned long)DEVICE_PARAM_MAGIC);
-            // 错误	阶段：错误报警	模块：参数	操作：参数校验	原因：魔术字不匹配	处理：继续尝试	详情：detail
+            /* 错误 阶段：错误报警 模块：参数 操作：参数校验 原因：魔术字不匹配 处理：继续尝试 详情：detail */
             ErrorLog_WarnDetail(ERROR_LOG_MODULE_PARAM,
                                 ERROR_LOG_OP_PARAM_VALIDATE,
                                 ERROR_LOG_REASON_PARAM_MAGIC,
@@ -298,7 +336,7 @@ static int load_device_params_from_slot_impl(uint32_t base_addr,
                      slot_name,
                      (unsigned long)temp.struct_size,
                      (unsigned long)sizeof(DeviceParameters));
-            // 错误	阶段：错误报警	模块：参数	操作：参数校验	原因：结构体大小不匹配	处理：继续尝试	详情：detail
+            /* 错误 阶段：错误报警 模块：参数 操作：参数校验 原因：结构体大小不匹配 处理：继续尝试 详情：detail */
             ErrorLog_WarnDetail(ERROR_LOG_MODULE_PARAM,
                                 ERROR_LOG_OP_PARAM_VALIDATE,
                                 ERROR_LOG_REASON_PARAM_SIZE,
@@ -322,7 +360,7 @@ static int load_device_params_from_slot_impl(uint32_t base_addr,
                      slot_name,
                      (unsigned long)temp.param_version,
                      (unsigned long)DEVICE_PARAM_VERSION);
-            // 错误	阶段：错误报警	模块：参数	操作：参数校验	原因：版本不匹配	处理：继续尝试	详情：detail
+            /* 错误 阶段：错误报警 模块：参数 操作：参数校验 原因：版本不匹配 处理：继续尝试 详情：detail */
             ErrorLog_WarnDetail(ERROR_LOG_MODULE_PARAM,
                                 ERROR_LOG_OP_PARAM_VALIDATE,
                                 ERROR_LOG_REASON_PARAM_VERSION,
@@ -348,7 +386,7 @@ static int load_device_params_from_slot_impl(uint32_t base_addr,
                          slot_name,
                          (unsigned long)calc_crc,
                          (unsigned long)temp.crc);
-                // 错误	阶段：错误报警	模块：参数	操作：参数校验	原因：CRC不匹配	处理：继续尝试	详情：detail
+                /* 错误 阶段：错误报警 模块：参数 操作：参数校验 原因：CRC不匹配 处理：继续尝试 详情：detail */
                 ErrorLog_WarnDetail(ERROR_LOG_MODULE_PARAM,
                                     ERROR_LOG_OP_PARAM_VALIDATE,
                                     ERROR_LOG_REASON_PARAM_CRC,
@@ -494,6 +532,10 @@ void process_device_params_deferred_tasks(void)
     g_device_params_save_pending = 0;
     save_device_params_internal(1, 0);
 }
+/**
+ * @brief 加载或恢复系统参数中的 load_device_params 逻辑。
+ * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ */
 int load_device_params(void)
 {
     DeviceParameters temp;
@@ -513,7 +555,7 @@ int load_device_params(void)
     }
     else if (load_device_params_from_slot(FRAM_PARAM_B_ADDRESS, &temp, "B"))
     {
-        // 错误	阶段：重试成功	模块：参数	操作：FRAM参数分区回退	原因：A分区异常，使用B分区	尝试：1U/1U
+        /* 错误 阶段：重试成功 模块：参数 操作：FRAM参数分区回退 原因：A分区异常，使用B分区 尝试：1U/1U */
         ErrorLog_Recover(ERROR_LOG_MODULE_PARAM,
                          ERROR_LOG_OP_FRAM_FALLBACK,
                          ERROR_LOG_REASON_FRAM_FALLBACK,
@@ -526,6 +568,7 @@ int load_device_params(void)
         return 0;
     }
 
+    /* 按结构或原始字节复制，保持系统参数协议/存储布局不被字段解释改变。 */
     memcpy((void * volatile)&g_deviceParams, &temp, sizeof(DeviceParameters));
 
     g_deviceParams.command = g_deviceParams.powerOnDefaultCommand;
@@ -545,7 +588,7 @@ int load_device_params(void)
     return 1;
 }
 
-/*========================= 参数初始化 =========================*/
+/* ========================= 参数初始化 ========================= */
 
 /* 初始化设备参数模块：连续 3 次读取失败才恢复出厂 */
 void init_device_params(void)
@@ -563,7 +606,7 @@ void init_device_params(void)
             print_device_params();
             break;
         }
-        // 错误	阶段：错误重试	模块：参数	操作：FRAM参数分区回退	原因：FRAM参数分区异常	尝试：attempt/MAX_RETRY	错误码：PARAM_EEPROM_FAIL	错误名：ErrorLog_GetCodeName(PARAM_EEPROM_FAIL)
+        /* 错误 阶段：错误重试 模块：参数 操作：FRAM参数分区回退 原因：FRAM参数分区异常 尝试：attempt/MAX_RETRY 错误码：PARAM_EEPROM_FAIL 错误名：ErrorLog_GetCodeName(PARAM_EEPROM_FAIL) */
         ErrorLog_Retry(ERROR_LOG_MODULE_PARAM,
                        ERROR_LOG_OP_FRAM_FALLBACK,
                        ERROR_LOG_REASON_FRAM_ERROR,
@@ -580,14 +623,14 @@ void init_device_params(void)
         RestoreFactoryParamsConfig(); /* 内部会调用 save_device_params() */
 
         g_measurement.device_status.error_code = PARAM_EEPROM_FAIL;
-        // 错误	阶段：错误报警	模块：参数	操作：FRAM参数分区回退	原因：FRAM参数分区异常	处理：使用默认参数
+        /* 错误 阶段：错误报警 模块：参数 操作：FRAM参数分区回退 原因：FRAM参数分区异常 处理：使用默认参数 */
         ErrorLog_Warn(ERROR_LOG_MODULE_PARAM,
                       ERROR_LOG_OP_FRAM_FALLBACK,
                       ERROR_LOG_REASON_FRAM_ERROR,
                       ERROR_LOG_ACTION_USE_DEFAULT_PARAM);
     }
 }
-/*========================= 恢复出厂参数 =========================*/
+/* ========================= 恢复出厂参数 ========================= */
 
 /*
  * 恢复出厂参数配置
@@ -758,12 +801,13 @@ void RestoreFactoryParamsConfig(void)
     save_device_params();
 }
 
-/*========================= 参数打印 =========================*/
+/* ========================= 参数打印 ========================= */
 
 /* 打印所有设备参数, 便于调试 */
 void print_device_params(void)
 {
     DeviceParameters params;
+    /* 按结构或原始字节复制，保持系统参数协议/存储布局不被字段解释改变。 */
     memcpy(&params, (void *)&g_deviceParams, sizeof(DeviceParameters));
 
     printf("\r\n========================================\r\n");
@@ -936,7 +980,7 @@ void print_device_params(void)
     printf("========================================\r\n");
 }
 
-/*========================= 测量结果打印（可选） =========================*/
+/* ========================= 测量结果打印（可选） ========================= */
 /* 注: 该部分与参数结构无强耦合，仅保留你现有打印习惯；如果不需要可移除 */
 
 /**

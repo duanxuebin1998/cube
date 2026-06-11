@@ -11,8 +11,8 @@
 #include "error_log.h"
 
 #define DEBUG_HOSTCOMMU 0
-// 常量定义
-#define MAXRCVLENGTH 256 // Modbus帧最大接收长度（RTU模式一般为256字节）
+/* 常量定义 */
+#define MAXRCVLENGTH 256 /* Modbus帧最大接收长度（RTU模式一般为256字节） */
 #define HOSTCOMMU_ERROR_LOG_INTERVAL_MS 1000U
 
 typedef enum {
@@ -37,9 +37,9 @@ typedef struct {
 	const char *reason;
 } HostCommuDeferredLog;
 
-// 发送缓冲区（静态分配）
-static uint8_t  HCOM_SendBuff[HOSTCOMMU_SENDLENGTH]; // Modbus响应帧缓冲区
-static int HCOM_SendCount = 0;                   // 发送缓冲区当前数据长度
+/* 发送缓冲区（静态分配） */
+static uint8_t  HCOM_SendBuff[HOSTCOMMU_SENDLENGTH]; /* Modbus响应帧缓冲区 */
+static int HCOM_SendCount = 0;                   /* 发送缓冲区当前数据长度 */
 static HostCommuDeferredLog s_hostcommu_deferred_logs[HOSTCOMMU_LOG_COUNT] = {0};
 
 /**
@@ -100,6 +100,7 @@ void HostCommu_ProcessDeferredLogs(void)
 	     type = (HostCommuLogType)(type + 1)) {
 		/* 复制 pending 数据时短暂关中断，避免 UART5 中断同时改写缓存。 */
 		primask = __get_PRIMASK();
+		/* 进入临界区，保护主板通信共享状态，避免中断同时修改。 */
 		__disable_irq();
 		if (s_hostcommu_deferred_logs[type].pending == 0U) {
 			if (primask == 0U) {
@@ -147,7 +148,7 @@ void HostCommu_ProcessDeferredLogs(void)
 			}
 		}
 
-		// 错误	阶段：错误报警	模块：通信	操作：接收主机帧	原因：log.reason	处理：继续尝试	详情：detail
+		/* 错误 阶段：错误报警 模块：通信 操作：接收主机帧 原因：log.reason 处理：继续尝试 详情：detail */
 		ErrorLog_WarnDetail(ERROR_LOG_MODULE_COMM,
 		                    ERROR_LOG_OP_HOST_FRAME,
 		                    log.reason,
@@ -156,6 +157,10 @@ void HostCommu_ProcessDeferredLogs(void)
 	}
 }
 
+/**
+ * @brief 接收主板通信中的 HostCommuResumeRxDMA 逻辑。
+ * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ */
 static void HostCommuResumeRxDMA(void) {
 	/* UART5 IDLE IRQ stops RX DMA first; restore RX here for bad frames or TX start failures. */
 	RS485_SET_RECV_MODE();
@@ -171,7 +176,7 @@ static void HostCommuResumeRxDMA(void) {
 int HostCommuInit(void) {
 	int ret = 0;
 
-	// 设置从站地址（默认为01）
+	/* 设置从站地址（默认为01） */
 	SetSlaveaddress(01);
 
 	return ret;
@@ -185,12 +190,12 @@ int HostCommuInit(void) {
  * @param commu_num 通信通道号（用于多接口系一）
  */
 void HostCommuProcess(uint8_t *rcvbuff, int rcvcount) {
-	int functioncode;    // Modbus功能码
-	int startaddress;    // 寄存器起始地址
-	int registeramount;  // 寄存器数量
-	uint16_t crc;        // CRC校验值
+	int functioncode;    /* Modbus功能码 */
+	int startaddress;    /* 寄存器起始地址 */
+	int registeramount;  /* 寄存器数量 */
+	uint16_t crc;        /* CRC校验值 */
 
-	// 调试输出：打印接收到的原始帧数据（仅在调试模式启用时）
+	/* 调试输出：打印接收到的原始帧数据（仅在调试模式启用时） */
 #if DEBUG_HOSTCOMMU
 	int i;
 	printf("主机接收 %d 字节:\t", rcvcount);
@@ -200,9 +205,9 @@ void HostCommuProcess(uint8_t *rcvbuff, int rcvcount) {
 	printf("\n");
 #endif
 
-	// 检查1: 接收数据长度有效性
+	/* 检查1: 接收数据长度有效性 */
 	if ((rcvcount <= 3) || (rcvcount >= MAXRCVLENGTH)) {
-		// 帧长度过短或过长都不合法
+		/* 帧长度过短或过长都不合法 */
 #if DEBUG_HOSTCOMMU
 		printf("主机通信: 长度%d异常\r\n", rcvcount);
 #endif
@@ -215,9 +220,9 @@ void HostCommuProcess(uint8_t *rcvbuff, int rcvcount) {
 		                            0);
 		HostCommuResumeRxDMA();
 	}
-	// 检查2: 目标地址校验
+	/* 检查2: 目标地址校验 */
 	else if (SlaveCheckAddress(rcvbuff, rcvcount) == false) {
-		// 地址不匹配，不是发给本机的请求
+		/* 地址不匹配，不是发给本机的请求 */
 #if DEBUG_HOSTCOMMU
 		printf("主机通信: 地址%d异常\r\n", rcvbuff[0]);
 #endif
@@ -230,9 +235,9 @@ void HostCommuProcess(uint8_t *rcvbuff, int rcvcount) {
 		                            0);
 		HostCommuResumeRxDMA();
 	}
-	// 检查3: CRC校验
+	/* 检查3: CRC校验 */
 	else if (SlaveCheckCRC(rcvbuff, rcvcount) == false) {
-		// CRC校验失败，记录一一告警
+		/* CRC校验失败，记录一一告警 */
 		HostCommu_RecordDeferredLog(HOSTCOMMU_LOG_CRC,
 		                            ERROR_LOG_REASON_PARAM_CRC,
 		                            rcvcount,
@@ -242,26 +247,26 @@ void HostCommuProcess(uint8_t *rcvbuff, int rcvcount) {
 		                            0);
 		HostCommuResumeRxDMA();
 	}
-	// 处理有效请求
+	/* 处理有效请求 */
 	else {
-		// 解析功能码 (第2字节)
+		/* 解析功能码 (第2字节) */
 		functioncode = rcvbuff[1];
 
-		// 解析起始地址 (第3-4字节，高位在前)
+		/* 解析起始地址 (第3-4字节，高位在前) */
 		startaddress = (rcvbuff[2] << 8) + rcvbuff[3];
 
-		// 解析寄存器数量 (第5-6字节，高位在前)
+		/* 解析寄存器数量 (第5-6字节，高位在前) */
 		registeramount = (rcvbuff[4] << 8) + rcvbuff[5];
 
-		// 更新接收参数状态（用于调试/监控）
+		/* 更新接收参数状态（用于调试/监控） */
 		UpdateRcvPara(functioncode, startaddress, registeramount);
 
-		// 准备发送缓冲区（重置长度）
+		/* 准备发送缓冲区（重置长度） */
 		HCOM_SendCount = 0;
 
-		// 检查4: 功能码合法性
+		/* 检查4: 功能码合法性 */
 		if (FunctionCheckIllPack(HCOM_SendBuff, &HCOM_SendCount) == false) {
-			// 非支持的功能码
+			/* 非支持的功能码 */
 #if DEBUG_HOSTCOMMU
 			printf("主机通信: 功能码%d异常\r\n", functioncode);
 #endif
@@ -273,9 +278,9 @@ void HostCommuProcess(uint8_t *rcvbuff, int rcvcount) {
 			                            startaddress,
 			                            registeramount);
 		}
-		// 检查5: 数据地址合法性
+		/* 检查5: 数据地址合法性 */
 		else if (IllegalDataAddressPack(HCOM_SendBuff, &HCOM_SendCount) == false) {
-			// 请求的寄存器地址或数量超出范围
+			/* 请求的寄存器地址或数量超出范围 */
 #if DEBUG_HOSTCOMMU
 			printf("主机通信: 起始地址%d 寄存器数%d异常\r\n", startaddress, registeramount);
 #endif
@@ -287,28 +292,28 @@ void HostCommuProcess(uint8_t *rcvbuff, int rcvcount) {
 			                            startaddress,
 			                            registeramount);
 		}
-		// 处理支持的合法请求
+		/* 处理支持的合法请求 */
 		else {
-			// 根据功能码调用对应的处理函数
+			/* 根据功能码调用对应的处理函数 */
 			switch (functioncode) {
-			case FUNCTIONCODE_READ_HOLDREGISTER:  // 03 - 读保持寄存器
+			case FUNCTIONCODE_READ_HOLDREGISTER:  /* 03 - 读保持寄存器 */
 				HCOM_SendCount = Response03Process(rcvbuff, HCOM_SendBuff);
 				break;
 
-			case FUNCTIONCODE_READ_INPUTREGISTER: // 04 - 读输入寄存器
+			case FUNCTIONCODE_READ_INPUTREGISTER: /* 04 - 读输入寄存器 */
 				HCOM_SendCount = Response04Process(rcvbuff, HCOM_SendBuff);
 				break;
 
-			case FUNCTIONCODE_WRITE_MULREGISTER:  // 16 - 写多个寄存器
+			case FUNCTIONCODE_WRITE_MULREGISTER:  /* 16 - 写多个寄存器 */
 				HCOM_SendCount = Response10Process(rcvbuff, HCOM_SendBuff);
 				break;
 			}
 		}
 
-		//添加CRC校验到响应帧尾部
+		/* 添加CRC校验到响应帧尾部 */
 		crc = CRC16_Calculate(HCOM_SendBuff, HCOM_SendCount);
-		HCOM_SendBuff[HCOM_SendCount] = crc & 0xff;    // CRC低字节
-		HCOM_SendBuff[HCOM_SendCount + 1] = crc >> 8;   // CRC高字节
+		HCOM_SendBuff[HCOM_SendCount] = crc & 0xff;    /* CRC低字节 */
+		HCOM_SendBuff[HCOM_SendCount + 1] = crc >> 8;   /* CRC高字节 */
 		HCOM_SendCount += 2;
 #if DEBUG_HOSTCOMMU
 		printf("主机通信: 发送%d字节:", HCOM_SendCount);
@@ -317,9 +322,9 @@ void HostCommuProcess(uint8_t *rcvbuff, int rcvcount) {
 		}
 		printf("\r\n");
 #endif
-		//切换发送模式
-		RS485_SET_SEND_MODE();  // 切换到发送模式
-		if (HAL_UART_Transmit_DMA(&huart5, (uint8_t*)HCOM_SendBuff, HCOM_SendCount) != HAL_OK) {  // send response
+		/* 切换发送模式 */
+		RS485_SET_SEND_MODE();  /* 切换到发送模式 */
+		if (HAL_UART_Transmit_DMA(&huart5, (uint8_t*)HCOM_SendBuff, HCOM_SendCount) != HAL_OK) {  /* send response */
 			/* If TX DMA does not start, TxCpltCallback will not run, so force the bus back to RX here. */
 			HostCommuResumeRxDMA();
 		}

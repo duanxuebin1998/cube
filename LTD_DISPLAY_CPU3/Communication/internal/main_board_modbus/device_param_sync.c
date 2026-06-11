@@ -12,6 +12,12 @@
 
 extern const int param_metaAmount;
 
+/**
+ * @brief 执行参数存储中的 DeviceParams_DecimalScale 逻辑。
+ *
+ * @param point 输入/输出指针。
+ * @return 计算后的业务数值。
+ */
 static float DeviceParams_DecimalScale(uint8_t point)
 {
     float scale = 1.0f;
@@ -21,21 +27,36 @@ static float DeviceParams_DecimalScale(uint8_t point)
     return scale;
 }
 
+/**
+ * @brief 执行参数存储中的 DeviceParams_MetaValueToRaw 逻辑。
+ *
+ * @param h 业务参数。
+ * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ */
 static uint32_t DeviceParams_MetaValueToRaw(volatile struct ParameterMetadata *h)
 {
     if ((h != NULL) && (h->data_type == TYPE_FLOAT)) {
         float value = ((float)h->val) / DeviceParams_DecimalScale(h->point);
         uint32_t raw;
+        /* 按结构或原始字节复制，保持参数存储协议/存储布局不被字段解释改变。 */
         memcpy(&raw, &value, sizeof(raw));
         return raw;
     }
     return (h != NULL) ? (uint32_t)((int32_t)h->val) : 0U;
 }
 
+/**
+ * @brief 执行参数存储中的 DeviceParams_RawToMetaValue 逻辑。
+ *
+ * @param h 业务参数。
+ * @param raw 业务参数。
+ * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ */
 static int32_t DeviceParams_RawToMetaValue(volatile struct ParameterMetadata *h, uint32_t raw)
 {
     if ((h != NULL) && (h->data_type == TYPE_FLOAT)) {
         float value;
+        /* 按结构或原始字节复制，保持参数存储协议/存储布局不被字段解释改变。 */
         memcpy(&value, &raw, sizeof(value));
         value *= DeviceParams_DecimalScale(h->point);
         return (int32_t)value;
@@ -414,20 +435,20 @@ static void DeviceParams_SendHoldValueToCPU2(volatile struct ParameterMetadata *
     if (h == NULL) return;
 
     if (!h->authority_write) {
-        // 屏幕不可写的参数通常不需要同步到 CPU2
+        /* 屏幕不可写的参数通常不需要同步到 CPU2 */
         return;
     }
 
-    // CPU2_CombinatePackage_Send 是按 32bit + word swap 来发的，
-    // 每个参数占两个寄存器，因此这里只支持 rgstcnt == 2 的情况。
+    /* CPU2_CombinatePackage_Send 是按 32bit + word swap 来发的， */
+    /* 每个参数占两个寄存器，因此这里只支持 rgstcnt == 2 的情况。 */
     if (h->rgstcnt != 2) {
-        // 如果以后有 1 寄存器参数，再单独处理
+        /* 如果以后有 1 寄存器参数，再单独处理 */
         printf("设备参数警告: %s 寄存器数=%u 暂不支持同步\n",
                h->name ? (char*)h->name : "noname", h->rgstcnt);
         return;
     }
 
-    // TYPE_FLOAT 菜单值是显示缩放后的整数，下发前恢复为 IEEE754 原始位。
+    /* TYPE_FLOAT 菜单值是显示缩放后的整数，下发前恢复为 IEEE754 原始位。 */
     uint32_t u32_temp = DeviceParams_MetaValueToRaw(h);
 
     CPU2_CombinatePackage_Send(FUNCTIONCODE_WRITE_MULREGISTER,
@@ -442,21 +463,21 @@ static void DeviceParams_SyncOneHold(volatile struct ParameterMetadata *h)
 {
     if (h == NULL) return;
 
-    // g_deviceParams 中的源值
+    /* g_deviceParams 中的源值 */
     int32_t dev_val;
     if (h->operanum == COM_NUM_DEVICEPARAM_EMPTY_WEIGHT) {
         dev_val = g_deviceParams.empty_weight;
     } else {
         volatile uint32_t *p_dev = get_deviceparam_ptr_by_operanum(h->operanum);
         if (p_dev == NULL) {
-            // 不属于 DeviceParameters 的项（例如测量结果），跳过
+            /* 不属于 DeviceParameters 的项（例如测量结果），跳过 */
             return;
         }
         dev_val = DeviceParams_RawToMetaValue(h, *p_dev);
     }
 
     if (h->val == dev_val) {
-        // 与 CPU2 当前值一致，不需要更新
+        /* 与 CPU2 当前值一致，不需要更新 */
         return;
     }
 
@@ -464,10 +485,10 @@ static void DeviceParams_SyncOneHold(volatile struct ParameterMetadata *h)
            h->name ? (char*)h->name : "noname",
            h->val, dev_val);
 
-    // 1) 把 g_deviceParams 的值写回 param_meta[i].val
+    /* 1) 把 g_deviceParams 的值写回 param_meta[i].val */
     h->val = dev_val;
 
-    // 2) 按寄存器信息下发 10 指令给 CPU2
+    /* 2) 按寄存器信息下发 10 指令给 CPU2 */
     DeviceParams_SendHoldValueToCPU2(h);
 }
 
@@ -490,7 +511,7 @@ void DeviceParams_SyncAllToCPU2(void)
         if (DeviceParams_ShouldSkipBulkSync(param_meta[i].operanum)) {
             continue;
         }
-        //需要判定一下是否是CPU2的可写参数
+        /* 需要判定一下是否是CPU2的可写参数 */
         DeviceParams_SyncOneHold(&param_meta[i]);
     }
 }

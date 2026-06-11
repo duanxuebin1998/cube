@@ -34,18 +34,34 @@ static const RelayOutputIo relay_output_ios[RELAY_OUTPUT_COUNT] = {
     { RELAY4_GPIO_Port, RELAY4_Pin },
 };
 
-static volatile uint8_t relay_output_initialized = 0U;
-static volatile uint8_t relay_output_updating = 0U;
-static volatile uint8_t relay_output_update_pending = 0U;
-static volatile uint8_t relay_output_state_mask = 0U;
+static volatile uint8_t relay_output_initialized = 0U; /* 继电器输出模块级变量，保存跨函数共享的业务状态。 */
+static volatile uint8_t relay_output_updating = 0U; /* 继电器输出模块级变量，保存跨函数共享的业务状态。 */
+static volatile uint8_t relay_output_update_pending = 0U; /* 继电器输出状态标志，通常由主循环或中断回调共同检查。 */
+static volatile uint8_t relay_output_state_mask = 0U; /* 继电器输出运行状态缓存，供状态机或协议上报使用。 */
 
+/**
+ * @brief 执行继电器输出中的 RelayOutput_RawToFloat 逻辑。
+ *
+ * @param raw 业务参数。
+ * @return 计算后的业务数值。
+ */
 static float RelayOutput_RawToFloat(uint32_t raw)
 {
     float value;
+    /* 按结构或原始字节复制，保持继电器输出协议/存储布局不被字段解释改变。 */
     memcpy(&value, &raw, sizeof(value));
     return value;
 }
 
+/**
+ * @brief 执行继电器输出中的 RelayOutput_Compare 逻辑。
+ *
+ * @param current 业务参数。
+ * @param target 业务参数。
+ * @param hysteresis 业务参数。
+ * @param type 业务参数。
+ * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ */
 static uint8_t RelayOutput_Compare(float current,
                                    float target,
                                    float hysteresis,
@@ -66,18 +82,36 @@ static uint8_t RelayOutput_Compare(float current,
     return (current_tenths <= (target_tenths + hysteresis_tenths)) ? 1U : 0U;
 }
 
+/**
+ * @brief 执行继电器输出中的 RelayOutput_EnterCritical 逻辑。
+ * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ */
 static uint32_t RelayOutput_EnterCritical(void)
 {
     uint32_t primask = __get_PRIMASK();
+    /* 进入临界区，保护继电器输出共享状态，避免中断同时修改。 */
     __disable_irq();
     return primask;
 }
 
+/**
+ * @brief 执行继电器输出中的 RelayOutput_ExitCritical 逻辑。
+ *
+ * @param primask 进入临界区前保存的中断屏蔽状态。
+ * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ */
 static void RelayOutput_ExitCritical(uint32_t primask)
 {
     __set_PRIMASK(primask);
 }
 
+/**
+ * @brief 执行继电器输出中的 RelayOutput_CopyConfigSnapshot 逻辑。
+ *
+ * @param channel 业务参数。
+ * @param cfg 业务参数。
+ * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ */
 static void RelayOutput_CopyConfigSnapshot(uint32_t channel, RelayAlarmConfig *cfg)
 {
     uint32_t primask;
@@ -105,6 +139,12 @@ static void RelayOutput_CopyConfigSnapshot(uint32_t channel, RelayAlarmConfig *c
     RelayOutput_ExitCritical(primask);
 }
 
+/**
+ * @brief 执行继电器输出中的 RelayOutput_CopyMeasurementSnapshot 逻辑。
+ *
+ * @param snapshot 业务参数。
+ * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ */
 static void RelayOutput_CopyMeasurementSnapshot(RelayOutputMeasurementSnapshot *snapshot)
 {
     uint32_t primask;
@@ -124,6 +164,13 @@ static void RelayOutput_CopyMeasurementSnapshot(RelayOutputMeasurementSnapshot *
     RelayOutput_ExitCritical(primask);
 }
 
+/**
+ * @brief 执行继电器输出中的 RelayOutput_CopyRuntimeSnapshot 逻辑。
+ *
+ * @param channel 业务参数。
+ * @param state 状态值。
+ * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ */
 static void RelayOutput_CopyRuntimeSnapshot(uint32_t channel, RelayAlarmRuntimeState *state)
 {
     uint32_t primask;
@@ -147,6 +194,13 @@ static void RelayOutput_CopyRuntimeSnapshot(uint32_t channel, RelayAlarmRuntimeS
     RelayOutput_ExitCritical(primask);
 }
 
+/**
+ * @brief 执行继电器输出中的 RelayOutput_CommitRuntimeState 逻辑。
+ *
+ * @param channel 业务参数。
+ * @param state 状态值。
+ * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ */
 static void RelayOutput_CommitRuntimeState(uint32_t channel, const RelayAlarmRuntimeState *state)
 {
     uint32_t primask;
@@ -170,6 +224,12 @@ static void RelayOutput_CommitRuntimeState(uint32_t channel, const RelayAlarmRun
     RelayOutput_ExitCritical(primask);
 }
 
+/**
+ * @brief 执行继电器输出中的 RelayOutput_GetInvalidAlarmValue 逻辑。
+ *
+ * @param source 业务参数。
+ * @return 计算后的业务数值。
+ */
 static float RelayOutput_GetInvalidAlarmValue(uint32_t source)
 {
     switch (source) {
@@ -187,6 +247,13 @@ static float RelayOutput_GetInvalidAlarmValue(uint32_t source)
     return 0.0f;
 }
 
+/**
+ * @brief 清除或复位继电器输出中的 RelayOutput_ResetRuntimeState 逻辑。
+ *
+ * @param state 状态值。
+ * @param cfg 业务参数。
+ * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ */
 static void RelayOutput_ResetRuntimeState(RelayAlarmRuntimeState *state, const RelayAlarmConfig *cfg)
 {
     uint32_t source = RELAY_ALARM_SOURCE_NONE;
@@ -210,6 +277,12 @@ static void RelayOutput_ResetRuntimeState(RelayAlarmRuntimeState *state, const R
     state->clear_alarm = RELAY_ALARM_CLEAR_NO;
 }
 
+/**
+ * @brief 写入或设置继电器输出中的 RelayOutput_WriteMask 逻辑。
+ *
+ * @param mask 业务参数。
+ * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ */
 static void RelayOutput_WriteMask(uint8_t mask)
 {
     uint8_t active_mask = 0U;
@@ -226,6 +299,14 @@ static void RelayOutput_WriteMask(uint8_t mask)
     relay_output_state_mask = (uint8_t)(mask & active_mask);
 }
 
+/**
+ * @brief 执行继电器输出中的 RelayOutput_GetAlarmSourceValue 逻辑。
+ *
+ * @param cfg 业务参数。
+ * @param snapshot 业务参数。
+ * @param value 待处理数值。
+ * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ */
 static uint8_t RelayOutput_GetAlarmSourceValue(const RelayAlarmConfig *cfg,
                                                const RelayOutputMeasurementSnapshot *snapshot,
                                                float *value)
@@ -277,6 +358,13 @@ static uint8_t RelayOutput_GetAlarmSourceValue(const RelayAlarmConfig *cfg,
     return 0U;
 }
 
+/**
+ * @brief 执行继电器输出中的 RelayOutput_ApplyInvalidState 逻辑。
+ *
+ * @param cfg 业务参数。
+ * @param state 状态值。
+ * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ */
 static void RelayOutput_ApplyInvalidState(const RelayAlarmConfig *cfg,
                                           RelayAlarmRuntimeState *state)
 {
@@ -314,6 +402,18 @@ static void RelayOutput_ApplyInvalidState(const RelayAlarmConfig *cfg,
     }
 }
 
+/**
+ * @brief 执行继电器输出中的 RelayOutput_JudgeAlarm 逻辑。
+ *
+ * @param current 业务参数。
+ * @param target 业务参数。
+ * @param hysteresis 业务参数。
+ * @param compare_type 业务参数。
+ * @param current_state 状态值。
+ * @param mode 工作模式。
+ * @param state 状态值。
+ * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ */
 static uint32_t RelayOutput_JudgeAlarm(float current,
                                        float target,
                                        float hysteresis,
@@ -349,6 +449,14 @@ static uint32_t RelayOutput_JudgeAlarm(float current,
     return RELAY_ALARM_STATE_INACTIVE;
 }
 
+/**
+ * @brief 执行继电器输出中的 RelayOutput_ApplyValidState 逻辑。
+ *
+ * @param cfg 业务参数。
+ * @param state 状态值。
+ * @param value 待处理数值。
+ * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ */
 static void RelayOutput_ApplyValidState(const RelayAlarmConfig *cfg,
                                         RelayAlarmRuntimeState *state,
                                         float value)
@@ -387,6 +495,13 @@ static void RelayOutput_ApplyValidState(const RelayAlarmConfig *cfg,
                                              state);
 }
 
+/**
+ * @brief 执行继电器输出中的 RelayOutput_SelectDigitalState 逻辑。
+ *
+ * @param cfg 业务参数。
+ * @param state 状态值。
+ * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ */
 static uint32_t RelayOutput_SelectDigitalState(const RelayAlarmConfig *cfg,
                                                const RelayAlarmRuntimeState *state)
 {
@@ -414,6 +529,14 @@ static uint32_t RelayOutput_SelectDigitalState(const RelayAlarmConfig *cfg,
     }
 }
 
+/**
+ * @brief 清除或复位继电器输出中的 RelayOutput_ConsumeClearCommand 逻辑。
+ *
+ * @param channel 业务参数。
+ * @param cfg 业务参数。
+ * @param state 状态值。
+ * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ */
 static void RelayOutput_ConsumeClearCommand(uint32_t channel,
                                             const RelayAlarmConfig *cfg,
                                             RelayAlarmRuntimeState *state)
@@ -432,6 +555,13 @@ static void RelayOutput_ConsumeClearCommand(uint32_t channel,
     }
 }
 
+/**
+ * @brief 更新继电器输出中的 RelayOutput_UpdateChannel 逻辑。
+ *
+ * @param channel 业务参数。
+ * @param measurement 业务参数。
+ * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ */
 static uint8_t RelayOutput_UpdateChannel(uint32_t channel,
                                          const RelayOutputMeasurementSnapshot *measurement)
 {
@@ -484,6 +614,10 @@ static uint8_t RelayOutput_UpdateChannel(uint32_t channel,
     return coil_active;
 }
 
+/**
+ * @brief 执行继电器输出中的 RelayOutput_BuildStateMask 逻辑。
+ * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ */
 static uint8_t RelayOutput_BuildStateMask(void)
 {
     RelayOutputMeasurementSnapshot measurement;
@@ -500,6 +634,10 @@ static uint8_t RelayOutput_BuildStateMask(void)
     return mask;
 }
 
+/**
+ * @brief 初始化继电器输出中的 RelayOutput_Init 逻辑。
+ * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ */
 void RelayOutput_Init(void)
 {
     RelayAlarmConfig cfg;
@@ -515,11 +653,19 @@ void RelayOutput_Init(void)
     relay_output_update_pending = 1U;
 }
 
+/**
+ * @brief 更新继电器输出中的 RelayOutput_RequestUpdate 逻辑。
+ * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ */
 void RelayOutput_RequestUpdate(void)
 {
     relay_output_update_pending = 1U;
 }
 
+/**
+ * @brief 处理继电器输出中的 RelayOutput_ProcessPending 逻辑。
+ * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ */
 void RelayOutput_ProcessPending(void)
 {
     if (relay_output_update_pending == 0U) {
@@ -530,6 +676,10 @@ void RelayOutput_ProcessPending(void)
     RelayOutput_Update();
 }
 
+/**
+ * @brief 更新继电器输出中的 RelayOutput_Update 逻辑。
+ * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ */
 void RelayOutput_Update(void)
 {
     uint8_t mask;
@@ -544,6 +694,13 @@ void RelayOutput_Update(void)
     relay_output_updating = 0U;
 }
 
+/**
+ * @brief 执行继电器输出中的 RelayOutput_SetChannel 逻辑。
+ *
+ * @param channel 业务参数。
+ * @param active 业务参数。
+ * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ */
 void RelayOutput_SetChannel(RelayOutputChannel channel, uint8_t active)
 {
     uint8_t mask;
@@ -562,11 +719,21 @@ void RelayOutput_SetChannel(RelayOutputChannel channel, uint8_t active)
     RelayOutput_WriteMask(mask);
 }
 
+/**
+ * @brief 执行继电器输出中的 RelayOutput_GetStateMask 逻辑。
+ * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ */
 uint8_t RelayOutput_GetStateMask(void)
 {
     return relay_output_state_mask;
 }
 
+/**
+ * @brief 执行继电器输出中的 RelayOutput_GetRuntimeState 逻辑。
+ *
+ * @param channel 业务参数。
+ * @return 返回业务对象或缓冲区指针，NULL 表示无有效对象。
+ */
 const volatile RelayAlarmRuntimeState *RelayOutput_GetRuntimeState(uint32_t channel)
 {
     if (channel >= RELAY_ALARM_CHANNEL_COUNT) {

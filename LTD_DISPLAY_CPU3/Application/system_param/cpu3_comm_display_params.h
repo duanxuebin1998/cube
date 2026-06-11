@@ -9,7 +9,7 @@
 extern "C" {
 #endif
 
-#define FRAM_CPU3_PARAM_ADDRESS   0x00001000U   // CPU3参数存储地址
+#define FRAM_CPU3_PARAM_ADDRESS   0x00001000U   /* CPU3参数存储地址 */
 
 
 /* ==================== Cpu3 通讯 + 显示参数（含每口配置） ==================== */
@@ -17,8 +17,8 @@ extern "C" {
 typedef struct
 {
     /* ---------- 屏幕 / 基本信息 ---------- */
-    uint32_t local_led_version;      // CPU3程序版本
-    uint8_t  language;               // 语言：0=中文 1=英文
+    uint32_t local_led_version;      /* CPU3程序版本 */
+    uint8_t  language;               /* 语言：0=中文 1=英文 */
 
 
     /* ---------- 数据源选择 ---------- */
@@ -42,17 +42,35 @@ typedef struct
     uint8_t  screen_brightness;
 
     /* ---------- 串口配置（每口一个结构体） ---------- */
-    ComPortConfig com1;   // COM1 = USART6
-    ComPortConfig com2;   // COM2 = USART2
-    ComPortConfig com3;   // COM3 = USART3
+    ComPortConfig com1;   /* COM1 = USART6 */
+    ComPortConfig com2;   /* COM2 = USART2 */
+    ComPortConfig com3;   /* COM3 = USART3 */
 
 } Cpu3CommAndDisplayParams;
 
 /* 全局实例 */
 extern Cpu3CommAndDisplayParams g_cpu3_comm_display_params;
-bool Cpu3Local_IsParam(OperatingNumber opera);//判断当前参数是否为CPU3参数
+/**
+ * @brief 判断操作号是否属于 CPU3 本地参数。
+ * @param opera 参数操作号。
+ * @return true 表示 CPU3 本地参数，false 表示需要转发 CPU2。
+ */
+bool Cpu3Local_IsParam(OperatingNumber opera); /* 判断当前参数是否为CPU3参数 */
+/**
+ * @brief 读取 CPU3 本地参数当前值。
+ * @param opera 参数操作号。
+ * @return 参数值。
+ */
 int32_t Cpu3Local_ReadValue(OperatingNumber opera);
+/**
+ * @brief 写入 CPU3 本地参数并触发必要的运行态刷新。
+ * @param opera 参数操作号。
+ * @param v 待写入值。
+ */
 void    Cpu3Local_WriteValue(OperatingNumber opera, int32_t v);
+/**
+ * @brief 显示或打印参数存储中的 Cpu3Local_ApplyDisplayRuntimeParams 逻辑。
+ */
 void    Cpu3Local_ApplyDisplayRuntimeParams(void);
 
 /* 可选：用于判断写入后是否需要重配串口 */

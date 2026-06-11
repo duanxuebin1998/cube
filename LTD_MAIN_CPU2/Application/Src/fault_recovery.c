@@ -17,7 +17,7 @@ typedef struct {
     uint32_t zero_point_status;   /* 进入恢复时的零点状态，等待期保持给 CPU3/显示侧读取。 */
     uint32_t last_check_tick;     /* 上次恢复检查时刻，用于 1 秒节流，避免连续刷通信和日志。 */
     uint32_t command_retry_count; /* 已经由自动恢复触发的业务命令重跑次数。 */
-    uint8_t awaiting_retry_result;/* 已触发重跑后置 1，等待命令结果决定清理或继续恢复。 */
+    uint8_t awaiting_retry_result; /* 已触发重跑后置 1，等待命令结果决定清理或继续恢复。 */
 } FaultRecoveryContext;
 
 static FaultRecoveryContext s_fault_recovery = {
@@ -81,6 +81,7 @@ static uint32_t FaultRecovery_GetRetryLimit(void)
 {
     uint32_t retry_limit = g_deviceParams.fault_auto_recovery_retry_limit;
 
+    /* 先处理异常边界，避免故障处理状态机带故障继续运行。 */
     if (retry_limit > FAULT_AUTO_RECOVERY_RETRY_MAX) {
         retry_limit = FAULT_AUTO_RECOVERY_RETRY_DEFAULT;
     }
@@ -148,6 +149,7 @@ static void FaultRecovery_ClearContext(void)
  */
 static void FaultRecovery_RestoreErrorStatus(void)
 {
+    /* 先处理异常边界，避免故障处理状态机带故障继续运行。 */
     if (!s_fault_recovery.active) {
         return;
     }
@@ -166,6 +168,7 @@ static void FaultRecovery_RestoreErrorStatus(void)
  */
 static void FaultRecovery_RecordFailure(uint32_t error_code)
 {
+    /* 先处理异常边界，避免故障处理状态机带故障继续运行。 */
     if ((error_code == NO_ERROR) || (error_code == STATE_SWITCH)) {
         return;
     }
@@ -173,7 +176,7 @@ static void FaultRecovery_RecordFailure(uint32_t error_code)
     g_measurement.device_status.device_state = STATE_ERROR; /* 恢复失败后仍处于错误态。 */
     g_measurement.device_status.error_code = error_code;   /* 记录本轮检查得到的真实错误，而不是旧错误。 */
     g_measurement.device_status.zero_point_status = 1U;    /* 维持错误零点状态，阻止业务继续认为设备正常。 */
-    g_measurement.device_status.current_command = CMD_NONE;/* 恢复检查不是测量命令，不能占用 current_command。 */
+    g_measurement.device_status.current_command = CMD_NONE; /* 恢复检查不是测量命令，不能占用 current_command。 */
 
     s_fault_recovery.error_code = error_code;        /* 后续恢复检查按最新错误决定是否先初始化电机。 */
     s_fault_recovery.device_state = STATE_ERROR;     /* 上下文也同步为错误态，等待期可反复恢复。 */
@@ -195,6 +198,7 @@ static void FaultRecovery_StopAfterMaxRetry(uint32_t error_code)
         retry_limit = FAULT_AUTO_RECOVERY_RETRY_DEFAULT;
     }
 
+    /* 先处理异常边界，避免故障处理状态机带故障继续运行。 */
     if ((error_code == NO_ERROR) || (error_code == STATE_SWITCH)) {
         error_code = s_fault_recovery.error_code;
     }
@@ -208,7 +212,7 @@ static void FaultRecovery_StopAfterMaxRetry(uint32_t error_code)
            (unsigned long)retry_limit,
            (unsigned long)error_code);
 
-    // 错误	阶段：错误报警	模块：系统	操作：自动恢复	原因：自动恢复失败	处理：停止测量
+    /* 错误 阶段：错误报警 模块：系统 操作：自动恢复 原因：自动恢复失败 处理：停止测量 */
     ErrorLog_Warn(ERROR_LOG_MODULE_SYSTEM,
                   ERROR_LOG_OP_AUTO_RECOVER,
                   ERROR_LOG_REASON_AUTO_RECOVER_FAIL,
@@ -227,26 +231,32 @@ static void FaultRecovery_Start(CommandType command, uint32_t error_code)
 {
     uint32_t retry_count = 0U;
 
+    /* 先处理异常边界，避免故障处理状态机带故障继续运行。 */
     if ((error_code == NO_ERROR) || (error_code == STATE_SWITCH)) {
         return;
     }
 
+    /* 先处理异常边界，避免故障处理状态机带故障继续运行。 */
     if (FaultRecovery_IsNonRecoverableError(error_code)) {
         return;
     }
 
+    /* 先处理异常边界，避免故障处理状态机带故障继续运行。 */
     if (FaultRecovery_GetRetryLimit() == 0U) {
         return;
     }
 
+    /* 先处理异常边界，避免故障处理状态机带故障继续运行。 */
     if (!FaultRecovery_IsRecoverableCommand(command)) {
         return;
     }
 
+    /* 先处理异常边界，避免故障处理状态机带故障继续运行。 */
     if (s_fault_recovery.active && (s_fault_recovery.command == command)) {
         retry_count = s_fault_recovery.command_retry_count;
     }
 
+    /* 先处理异常边界，避免故障处理状态机带故障继续运行。 */
     if (g_measurement.device_status.device_state != STATE_ERROR) {
         HandleError();
         /* 进入自动恢复前先固定为错误态，后续由恢复检查决定是否清除。 */
@@ -263,7 +273,7 @@ static void FaultRecovery_Start(CommandType command, uint32_t error_code)
     s_fault_recovery.command_retry_count = retry_count;                       /* 同一命令多轮恢复时保留已重跑次数。 */
     s_fault_recovery.awaiting_retry_result = 0U;                              /* 重新进入恢复等待，还没有触发下一次重跑。 */
 
-    // 错误	阶段：错误报警	模块：系统	操作：自动恢复	原因：进入自动恢复	处理：继续尝试
+    /* 错误 阶段：错误报警 模块：系统 操作：自动恢复 原因：进入自动恢复 处理：继续尝试 */
     ErrorLog_Warn(ERROR_LOG_MODULE_SYSTEM,
                   ERROR_LOG_OP_AUTO_RECOVER,
                   ERROR_LOG_REASON_AUTO_RECOVER_START,
@@ -271,6 +281,12 @@ static void FaultRecovery_Start(CommandType command, uint32_t error_code)
     FaultRecovery_RestoreErrorStatus();
 }
 
+/**
+ * @brief 更新故障处理中的 FaultRecovery_UpdateAfterCommand 逻辑。
+ *
+ * @param command 命令值。
+ * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ */
 void FaultRecovery_UpdateAfterCommand(CommandType command)
 {
     uint32_t error_code = g_measurement.device_status.error_code;
@@ -284,16 +300,19 @@ void FaultRecovery_UpdateAfterCommand(CommandType command)
         return;
     }
 
+    /* 先处理异常边界，避免故障处理状态机带故障继续运行。 */
     if (s_fault_recovery.active &&
         s_fault_recovery.awaiting_retry_result &&
         (s_fault_recovery.command == command)) {
         s_fault_recovery.awaiting_retry_result = 0U;
 
+        /* 先处理异常边界，避免故障处理状态机带故障继续运行。 */
         if ((error_code == NO_ERROR) || (error_code == STATE_SWITCH)) {
             FaultRecovery_ClearContext();
             return;
         }
 
+        /* 先处理异常边界，避免故障处理状态机带故障继续运行。 */
         if (s_fault_recovery.command_retry_count >= retry_limit) {
             FaultRecovery_StopAfterMaxRetry(error_code);
             return;
@@ -315,10 +334,17 @@ void FaultRecovery_UpdateAfterCommand(CommandType command)
     }
 }
 
+/**
+ * @brief 执行故障处理中的 FaultRecovery_Cancel 逻辑。
+ *
+ * @param reason 业务参数。
+ * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ */
 void FaultRecovery_Cancel(const char *reason)
 {
     (void)reason;
 
+    /* 先处理异常边界，避免故障处理状态机带故障继续运行。 */
     if (!s_fault_recovery.active) {
         return;
     }
@@ -328,6 +354,10 @@ void FaultRecovery_Cancel(const char *reason)
     FaultRecovery_ClearContext();
 }
 
+/**
+ * @brief 轮询故障自动恢复状态机并在等待期结束后触发重试。
+ * @return 恢复处理结果，包含是否已处理、是否需要重跑命令以及重跑命令号。
+ */
 FaultRecoveryResult FaultRecovery_Poll(void)
 {
     FaultRecoveryResult result = {
@@ -340,6 +370,7 @@ FaultRecoveryResult FaultRecovery_Poll(void)
     uint32_t retry_limit;
     uint8_t need_motor_init;
 
+    /* 先处理异常边界，避免故障处理状态机带故障继续运行。 */
     if (!s_fault_recovery.active) {
         return result;
     }
@@ -373,8 +404,9 @@ FaultRecoveryResult FaultRecovery_Poll(void)
             FaultRecovery_Cancel("command switch");
             return result;
         }
+        /* 先处理异常边界，避免故障处理状态机带故障继续运行。 */
         if (check_ret != NO_ERROR) {
-            // 错误	阶段：错误重试	模块：系统	操作：自动恢复	原因：自动恢复失败	尝试：1U/1U	错误码：check_ret	错误名：ErrorLog_GetCodeName(check_ret)
+            /* 错误 阶段：错误重试 模块：系统 操作：自动恢复 原因：自动恢复失败 尝试：1U/1U 错误码：check_ret 错误名：ErrorLog_GetCodeName(check_ret) */
             ErrorLog_Retry(ERROR_LOG_MODULE_SYSTEM,
                            ERROR_LOG_OP_AUTO_RECOVER,
                            ERROR_LOG_REASON_AUTO_RECOVER_FAIL,
@@ -392,8 +424,9 @@ FaultRecoveryResult FaultRecovery_Poll(void)
         FaultRecovery_Cancel("command switch");
         return result;
     }
+    /* 先处理异常边界，避免故障处理状态机带故障继续运行。 */
     if (check_ret != NO_ERROR) {
-        // 错误	阶段：错误重试	模块：系统	操作：自动恢复	原因：自动恢复失败	尝试：1U/1U	错误码：check_ret	错误名：ErrorLog_GetCodeName(check_ret)
+        /* 错误 阶段：错误重试 模块：系统 操作：自动恢复 原因：自动恢复失败 尝试：1U/1U 错误码：check_ret 错误名：ErrorLog_GetCodeName(check_ret) */
         ErrorLog_Retry(ERROR_LOG_MODULE_SYSTEM,
                        ERROR_LOG_OP_AUTO_RECOVER,
                        ERROR_LOG_REASON_AUTO_RECOVER_FAIL,
@@ -404,6 +437,7 @@ FaultRecoveryResult FaultRecovery_Poll(void)
         return result;
     }
 
+    /* 先处理异常边界，避免故障处理状态机带故障继续运行。 */
     if (s_fault_recovery.command_retry_count >= retry_limit) {
         FaultRecovery_StopAfterMaxRetry(s_fault_recovery.error_code);
         return result;
@@ -414,7 +448,7 @@ FaultRecoveryResult FaultRecovery_Poll(void)
     result.should_retry_command = 1U;          /* 恢复确认成功，通知主循环重跑原命令。 */
     result.retry_command = s_fault_recovery.command; /* 恢复模块不直接执行业务，只返回需要重跑的命令。 */
 
-    // 错误	阶段：重试成功	模块：系统	操作：自动恢复	原因：恢复成功	尝试：s_fault_recovery.command_retry_count/retry_limit
+    /* 错误 阶段：重试成功 模块：系统 操作：自动恢复 原因：恢复成功 尝试：s_fault_recovery.command_retry_count/retry_limit */
     ErrorLog_Recover(ERROR_LOG_MODULE_SYSTEM,
                      ERROR_LOG_OP_AUTO_RECOVER,
                      ERROR_LOG_REASON_RECOVER_OK,

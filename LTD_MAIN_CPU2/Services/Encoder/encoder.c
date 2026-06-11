@@ -14,11 +14,11 @@
 #include <stdlib.h>
 #include <stddef.h>
 
-// 全局变量
-volatile int32_t g_encoder_count = 0; // 编码计数值
-volatile int32_t g_encoder_saved = 0;
-static uint16_t prev_angle = 0;        // 上一次的角度值
-static const uint16_t MAX_ANGLE = 4096; // 最大角度值 (12位分辨率)
+/* 全局变量 */
+volatile int32_t g_encoder_count = 0; /* 编码计数值 */
+volatile int32_t g_encoder_saved = 0; /* 本模块模块级变量，保存跨函数共享的业务状态。 */
+static uint16_t prev_angle = 0;        /* 上一次的角度值 */
+static const uint16_t MAX_ANGLE = 4096; /* 最大角度值 (12位分辨率) */
 
 typedef struct {
     uint32_t magic;
@@ -35,6 +35,12 @@ typedef struct {
 #define FRAM_ENCODER_B_ADDRESS  (FRAM_ENCODER_A_ADDRESS + FRAM_ENCODER_SLOT_SIZE)
 #define ENCODER_BOOT_READY_TIMEOUT_MS 300U
 
+/**
+ * @brief 计算校验本模块中的 EncoderRecordCRC 逻辑。
+ *
+ * @param record 业务参数。
+ * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ */
 static uint32_t EncoderRecordCRC(const EncoderPersistRecord *record)
 {
     const uint8_t *base = (const uint8_t *)&record->version;
@@ -42,6 +48,15 @@ static uint32_t EncoderRecordCRC(const EncoderPersistRecord *record)
     return CRC32_HAL(base, len);
 }
 
+/**
+ * @brief 读取本模块中的 ReadEncoderDataFromSlot 逻辑。
+ *
+ * @param base_addr 地址参数。
+ * @param encoder_count 业务参数。
+ * @param angle 业务参数。
+ * @param slot_name 业务参数。
+ * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ */
 static int ReadEncoderDataFromSlot(uint32_t base_addr, int32_t *encoder_count, uint16_t *angle, const char *slot_name)
 {
     EncoderPersistRecord rec;
@@ -72,6 +87,13 @@ static int ReadEncoderDataFromSlot(uint32_t base_addr, int32_t *encoder_count, u
     return 1;
 }
 
+/**
+ * @brief 写入或设置本模块中的 WriteEncoderDataAB 逻辑。
+ *
+ * @param encoder_count 业务参数。
+ * @param angle 业务参数。
+ * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ */
 static void WriteEncoderDataAB(int32_t encoder_count, uint16_t angle)
 {
     EncoderPersistRecord rec;
@@ -85,6 +107,13 @@ static void WriteEncoderDataAB(int32_t encoder_count, uint16_t angle)
     WriteMultiData((const uint8_t *)&rec, (int)FRAM_ENCODER_B_ADDRESS, sizeof(rec));
 }
 
+/**
+ * @brief 读取本模块中的 ReadEncoderDataAB 逻辑。
+ *
+ * @param encoder_count 业务参数。
+ * @param angle 业务参数。
+ * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ */
 static int ReadEncoderDataAB(int32_t *encoder_count, uint16_t *angle)
 {
     if (ReadEncoderDataFromSlot(FRAM_ENCODER_A_ADDRESS, encoder_count, angle, "A")) {
@@ -119,7 +148,7 @@ uint32_t Encoder_WaitReady(uint32_t timeout_ms)
 {
     return AS5145_WaitFirstValidSample(timeout_ms);
 }
-// 在系统启动时初始化编码计数器
+/* 在系统启动时初始化编码计数器 */
 void Initialize_Encoder(void)
 {
     int32_t loaded_encoder = 0;
@@ -151,17 +180,18 @@ void Initialize_Encoder(void)
 
     /* 编码轮记步模式必须等首帧有效位置，否则重启后立即运动会丢失盲区位移。 */
     ready_ret = Encoder_WaitReady(ENCODER_BOOT_READY_TIMEOUT_MS);
+    /* 先处理异常边界，避免本模块状态机带故障继续运行。 */
     if ((ready_ret != NO_ERROR) && (!MotorCtrl_IsPositionSourceMotor())) {
         g_measurement.device_status.error_code = ready_ret;
         printf("编码器首帧有效数据等待失败：0x%08lX\r\n", (unsigned long)ready_ret);
     }
 }
-// 更新编码计数
+/* 更新编码计数 */
 void Update_Encoder_Count(uint16_t current_angle)
 {
     int16_t delta = current_angle - prev_angle;
 
-    // 处理跨零点情况
+    /* 处理跨零点情况 */
     if (delta > (MAX_ANGLE / 2)) {
         delta -= MAX_ANGLE;
     } else if (delta < -(MAX_ANGLE / 2)) {
@@ -169,7 +199,7 @@ void Update_Encoder_Count(uint16_t current_angle)
     }
 
     g_encoder_count += delta;
-    prev_angle = current_angle; // 更新上一角度值
+    prev_angle = current_angle; /* 更新上一角度值 */
 
     if ((abs((int)g_encoder_count - (int)g_encoder_saved) > 3) || (g_measurement.debug_data.sensor_position == 0)) {
         WriteEncoderDataAB(g_encoder_count, prev_angle);
@@ -193,34 +223,42 @@ static void update_sensor_height_from_encoder_impl(bool force_position_update)
     float cable_length;
     float current_height;
 
-    // 更新调试信息：当前编码值取负（编码器方向取反）
+    /* 更新调试信息：当前编码值取负（编码器方向取反） */
     g_measurement.debug_data.current_encoder_value = -g_encoder_count;
     if ((!force_position_update) && MotorCtrl_IsPositionSourceMotor()) {
         return;
     }
 
-    // 1. 计算转动的总圈数（含小数）
+    /* 1. 计算转动的总圈数（含小数） */
     revolutions = (float)g_measurement.debug_data.current_encoder_value / (float)MAX_ANGLE;
-    // 2. 计算尺带的收放长度
+    /* 2. 计算尺带的收放长度 */
     cable_length = g_deviceParams.encoder_wheel_circumference_mm * revolutions / 100;
-    // 3. 计算当前传感器高度（油罐高度减去悬吊长度）
+    /* 3. 计算当前传感器高度（油罐高度减去悬吊长度） */
     current_height = g_deviceParams.tankHeight - cable_length;
-    // 更新调试数据（高度值）
+    /* 更新调试数据（高度值） */
     g_measurement.debug_data.cable_length = (int)cable_length;
     g_measurement.debug_data.sensor_position = (int)current_height;
 }
 
+/**
+ * @brief 按编码轮当前计数更新尺带长度和传感器高度调试数据。
+ * @note 使用普通更新路径，不强制覆盖已有高度来源。
+ */
 void update_sensor_height_from_encoder(void)
 {
     update_sensor_height_from_encoder_impl(false);
 }
 
+/**
+ * @brief 更新本模块中的 update_sensor_height_from_encoder_force 逻辑。
+ * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ */
 void update_sensor_height_from_encoder_force(void)
 {
     update_sensor_height_from_encoder_impl(true);
 }
 
-// 设置编码器零点
+/* 设置编码器零点 */
 
 int32_t encoder_get_cable_length_01mm(void)
 {
@@ -231,11 +269,19 @@ int32_t encoder_get_cable_length_01mm(void)
     return (int32_t)cable_length;
 }
 
+/**
+ * @brief 执行本模块中的 encoder_get_sensor_position_01mm 逻辑。
+ * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ */
 int32_t encoder_get_sensor_position_01mm(void)
 {
     return (int32_t)g_deviceParams.tankHeight - encoder_get_cable_length_01mm();
 }
 
+/**
+ * @brief 写入或设置本模块中的 set_encoder_zero 逻辑。
+ * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ */
 void set_encoder_zero(void)
 {
     printf("设置编码器零点，当前置零点前零点编码值 %ld\r\n", (long)g_encoder_count);
@@ -245,6 +291,12 @@ void set_encoder_zero(void)
     update_sensor_height_from_encoder();
     printf("编码器零点设置为 %ld\r\n", (long)g_encoder_count);
 }
+/**
+ * @brief 执行本模块中的 encoder_set_cable_length_01mm 逻辑。
+ *
+ * @param cable_length_01mm 数据长度。
+ * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ */
 void encoder_set_cable_length_01mm(int32_t cable_length_01mm)
 {
     double encoder_value;

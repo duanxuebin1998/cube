@@ -11,15 +11,15 @@
 /* ===================== 私有类型/状态 ===================== */
 
 /* TFIT 采样和拟合结果缓存，仅在本文件内部使用，断电后丢失。 */
-static MotorTapeFitSample s_motor_tape_fit_samples[MOTOR_TAPE_FIT_MAX_SAMPLES];
-static uint16_t s_motor_tape_fit_count = 0;
-static bool s_motor_tape_fit_enabled = false;
-static int32_t s_motor_tape_fit_last_step = INT32_MIN;
+static MotorTapeFitSample s_motor_tape_fit_samples[MOTOR_TAPE_FIT_MAX_SAMPLES]; /* 电机控制模块级变量，保存跨函数共享的业务状态。 */
+static uint16_t s_motor_tape_fit_count = 0; /* 电机控制计数值，用于节拍、统计或协议数量控制。 */
+static bool s_motor_tape_fit_enabled = false; /* 电机控制模块级变量，保存跨函数共享的业务状态。 */
+static int32_t s_motor_tape_fit_last_step = INT32_MIN; /* 电机控制模块级变量，保存跨函数共享的业务状态。 */
 static MotorTapeFitResult s_motor_tape_fit_result = {0};
-static bool s_motor_tape_fit_result_is_local = false;
-static bool s_motor_tape_fit_local_origin_valid = false;
-static int32_t s_motor_tape_fit_origin_step = 0;
-static int32_t s_motor_tape_fit_origin_length_01mm = 0;
+static bool s_motor_tape_fit_result_is_local = false; /* 电机控制模块级变量，保存跨函数共享的业务状态。 */
+static bool s_motor_tape_fit_local_origin_valid = false; /* 电机控制模块级变量，保存跨函数共享的业务状态。 */
+static int32_t s_motor_tape_fit_origin_step = 0; /* 电机控制模块级变量，保存跨函数共享的业务状态。 */
+static int32_t s_motor_tape_fit_origin_length_01mm = 0; /* 电机控制模块级变量，保存跨函数共享的业务状态。 */
 
 /* ===================== 私有函数声明 ===================== */
 
@@ -343,6 +343,7 @@ uint32_t MotorCtrl_TapeFitApply(bool apply_c0, bool apply_t)
         } else {
             ret = MotorCtrl_TapeFitSolve();
         }
+        /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
         if (ret != NO_ERROR) {
             return ret;
         }

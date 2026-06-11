@@ -54,6 +54,14 @@ typedef struct {
     const char *air_reason;
 } WartsilaPointSample;
 
+/**
+ * @brief 执行测量流程中的 Wartsila_IsAirPoint 逻辑。
+ *
+ * @param density_value 待处理数值。
+ * @param frequency_hz 业务参数。
+ * @param air_reason 业务参数。
+ * @return true 表示条件满足或处理成功，false 表示条件不满足或处理失败。
+ */
 static bool Wartsila_IsAirPoint(float density_value, float frequency_hz, const char **air_reason)
 {
     if (density_value < WARTSILA_AIR_DENSITY_THRESHOLD) {
@@ -76,6 +84,18 @@ static bool Wartsila_IsAirPoint(float density_value, float frequency_hz, const c
     return false;
 }
 
+/**
+ * @brief 执行测量流程中的 Wartsila_FillPointSample 逻辑。
+ *
+ * @param sample 业务参数。
+ * @param frequency_hz 业务参数。
+ * @param density_value 待处理数值。
+ * @param temperature_c 业务参数。
+ * @param actual_position_mm 业务参数。
+ * @param is_air 业务参数。
+ * @param air_reason 业务参数。
+ * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ */
 static void Wartsila_FillPointSample(WartsilaPointSample *sample,
                                      float frequency_hz,
                                      float density_value,
@@ -100,6 +120,14 @@ static void Wartsila_FillPointSample(WartsilaPointSample *sample,
     sample->measurement.vcf20 = 1U;
 }
 
+/**
+ * @brief 执行测量流程中的 Wartsila_MoveToDensityPoint 逻辑。
+ *
+ * @param target_mm 业务参数。
+ * @param point_no 输入/输出指针。
+ * @param actual_position_mm 业务参数。
+ * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ */
 static uint32_t Wartsila_MoveToDensityPoint(float target_mm,
                                             uint32_t point_no,
                                             float *actual_position_mm)
@@ -148,6 +176,12 @@ static uint32_t Wartsila_MoveToDensityPoint(float target_mm,
     return MEASUREMENT_POSITION_ERROR;
 }
 
+/**
+ * @brief 读取测量流程中的 Wartsila_ReadPointAndClassify 逻辑。
+ *
+ * @param sample 业务参数。
+ * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ */
 static uint32_t Wartsila_ReadPointAndClassify(WartsilaPointSample *sample)
 {
     uint32_t ret = NO_ERROR;
@@ -202,6 +236,7 @@ static uint32_t Wartsila_ReadPointAndClassify(WartsilaPointSample *sample)
         if (ret == STATE_SWITCH) {
             return STATE_SWITCH;
         }
+        /* 先处理异常边界，避免测量流程状态机带故障继续运行。 */
         if (ret != NO_ERROR) {
             return ret;
         }
@@ -253,12 +288,20 @@ static uint32_t Wartsila_ReadPointAndClassify(WartsilaPointSample *sample)
         }
 
         ret = AbortableDelay_CommandSwitch(WARTSILA_DENSITY_SAMPLE_MS, 50U);
+        /* 先处理异常边界，避免测量流程状态机带故障继续运行。 */
         if (ret != NO_ERROR) {
             return ret;
         }
     }
 }
 
+/**
+ * @brief 执行测量流程中的 Wartsila_MoveDownToLiquidAfterAirPoint 逻辑。
+ *
+ * @param air_point_mm 业务参数。
+ * @param level_mm 业务参数。
+ * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ */
 static uint32_t Wartsila_MoveDownToLiquidAfterAirPoint(float air_point_mm, float *level_mm)
 {
     uint32_t ret = NO_ERROR;
@@ -285,6 +328,7 @@ static uint32_t Wartsila_MoveDownToLiquidAfterAirPoint(float air_point_mm, float
         Level_StateTypeDef level_state = AIR;
 
         ret = determine_level_status_motion(&level_state);
+        /* 先处理异常边界，避免测量流程状态机带故障继续运行。 */
         if (ret != NO_ERROR) {
             (void)MotorCtrl_SlowStop();
             return ret;
@@ -300,6 +344,7 @@ static uint32_t Wartsila_MoveDownToLiquidAfterAirPoint(float air_point_mm, float
         }
 
         ret = MotorCtrl_IsDriverMoving(&stepper, &is_moving);
+        /* 先处理异常边界，避免测量流程状态机带故障继续运行。 */
         if (ret != NO_ERROR) {
             (void)MotorCtrl_SlowStop();
             return ret;
@@ -316,29 +361,34 @@ static uint32_t Wartsila_MoveDownToLiquidAfterAirPoint(float air_point_mm, float
         }
 
         ret = MotorCtrl_CheckLostStepAutoTiming(g_measurement.debug_data.cable_length);
+        /* 先处理异常边界，避免测量流程状态机带故障继续运行。 */
         if (ret != NO_ERROR) {
             (void)MotorCtrl_SlowStop();
             return ret;
         }
 
         ret = CheckWeightCollision();
+        /* 先处理异常边界，避免测量流程状态机带故障继续运行。 */
         if (ret != NO_ERROR) {
             (void)MotorCtrl_SlowStop();
             return ret;
         }
 
         ret = MotorCtrl_CheckDriverGstat();
+        /* 先处理异常边界，避免测量流程状态机带故障继续运行。 */
         if (ret != NO_ERROR) {
             (void)MotorCtrl_SlowStop();
             return ret;
         }
 
+        /* 先处理异常边界，避免测量流程状态机带故障继续运行。 */
         if ((HAL_GetTick() - start_tick) > WARTSILA_LEVEL_DOWN_TIMEOUT_MS) {
             (void)MotorCtrl_SlowStop();
             return MOTOR_RUN_TIMEOUT;
         }
 
         ret = AbortableDelay_CommandSwitch(WARTSILA_LEVEL_DOWN_POLL_MS, 20U);
+        /* 先处理异常边界，避免测量流程状态机带故障继续运行。 */
         if (ret != NO_ERROR) {
             (void)MotorCtrl_SlowStop();
             return ret;
@@ -346,6 +396,17 @@ static uint32_t Wartsila_MoveDownToLiquidAfterAirPoint(float air_point_mm, float
     }
 }
 
+/**
+ * @brief 执行测量流程中的 Wartsila_TrimPointsByOilLevel 逻辑。
+ *
+ * @param dist 业务参数。
+ * @param valid_points 待处理数值。
+ * @param sum_temp 业务参数。
+ * @param sum_density 业务参数。
+ * @param level_mm 业务参数。
+ * @param min_gap_surface 业务参数。
+ * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ */
 static uint32_t Wartsila_TrimPointsByOilLevel(DensityDistribution *dist,
                                               uint32_t *valid_points,
                                               uint32_t *sum_temp,
@@ -567,22 +628,23 @@ uint32_t motorMoveUpToPositionOrAir(float target_mm, Level_StateTypeDef *final_s
         printf("当前位置已高于目标点，无需上行。\r\n");
         return NO_ERROR;
     }
-    //切换频率模式
+    /* 切换频率模式 */
     ret = EnableLevelMode();
     CHECK_ERROR(ret);
     printf("上行到目标或空气：液位测量模式已稳定，开始上行检测。\r\n");
     /* 下发上行运动指令（长度设为足够大） */
-    float max_move = target_mm - cur_mm;   // 理论需要跑的距离
+    float max_move = target_mm - cur_mm;   /* 理论需要跑的距离 */
 
-    ret = MotorCtrl_MoveNoWait(3*max_move, MOTOR_DIRECTION_UP, MotorCtrl_GetDefaultSpeedX100());//走三倍距离保证一定会跑到
+    ret = MotorCtrl_MoveNoWait(3*max_move, MOTOR_DIRECTION_UP, MotorCtrl_GetDefaultSpeedX100()); /* 走三倍距离保证一定会跑到 */
     CHECK_ERROR(ret);
 
     /* 进入循环检测：空气 + 到位 + 安全检查 */
     uint32_t start_tick = HAL_GetTick();
-    const uint32_t MAX_WAIT_MS = 60*60000;    // 最长等待 60s*60 =1小时，防止死循环
+    const uint32_t MAX_WAIT_MS = 60*60000;    /* 最长等待 60s*60 =1小时，防止死循环 */
 
     while (1) {
         ret = MotorCtrl_IsDriverMoving(&stepper, &is_moving);
+        /* 先处理异常边界，避免测量流程状态机带故障继续运行。 */
         if (ret != NO_ERROR) {
             (void)MotorCtrl_SlowStop();
             return ret;
@@ -592,22 +654,23 @@ uint32_t motorMoveUpToPositionOrAir(float target_mm, Level_StateTypeDef *final_s
         }
 
         /* 1) 检测空气状态 */
-    	//如果传感器是LTD传感器
+        /* 如果传感器是 LTD 传感器 */
         /* 这里处于电机运动监测环节，只允许做轻量频率读取；
            不走 DSM_Get_LevelMode_Frequence() 的重恢复逻辑，
            否则异常时会停电机、重切模式并等待，破坏当前运动流程。 */
 		if (g_deviceParams.sensorType == LTD_SENSOR) {
 	    	ret = DSM_V2_Read_LevelFrequency(&hz);
+			/* 先处理异常边界，避免测量流程状态机带故障继续运行。 */
 	    	if (ret != NO_ERROR) {
 				(void)MotorCtrl_SlowStop();
-				return ret;  // 读取失败前先停止电机
+				return ret;  /* 读取失败前先停止电机 */
 	    	}
 	    	if (hz == 0 || hz > g_deviceParams.oilLevelFrequency) {
-	    		 if (final_state) *final_state = AIR;//读到0或者异常频率认为是空气
+			if (final_state) *final_state = AIR; /* 读到0或者异常频率认为是空气 */
 	            printf("上行到目标或空气：频率检测到到达液面，立即停止电机！\r\n");
 	            ret = MotorCtrl_SlowStop();
 	            CHECK_ERROR(ret);
-	    		break;  // 读到0也返回
+			break;  /* 读到0也返回 */
 	    	}
 	    	 HAL_Delay(80);
 		}
@@ -626,7 +689,7 @@ uint32_t motorMoveUpToPositionOrAir(float target_mm, Level_StateTypeDef *final_s
         /* 2) 检测当前位置是否已经到达目标点 */
         MotorCtrl_SnapshotSensorPositionMm(&cur_mm);
 
-        if (cur_mm >= target_mm - 0.05f) {   // 加一点浮动允许
+        if (cur_mm >= target_mm - 0.05f) {   /* 加一点浮动允许 */
             printf("上行到目标或空气：已到达目标位置 %.3fmm\r\n", cur_mm);
             ret = MotorCtrl_SlowStop();
             CHECK_ERROR(ret);
@@ -637,7 +700,7 @@ uint32_t motorMoveUpToPositionOrAir(float target_mm, Level_StateTypeDef *final_s
         ret = CheckWeightCollision();
         CHECK_ERROR(ret);
 
-        ret = MotorCtrl_CheckDriverGstat();//电机状态检测
+        ret = MotorCtrl_CheckDriverGstat(); /* 电机状态检测 */
         CHECK_ERROR(ret);
 
         /* 4) 超时保护 */

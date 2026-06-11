@@ -11,14 +11,14 @@
 /* ===================== 私有类型/状态 ===================== */
 
 /* 丢步检测环形缓冲区：记录最近位置采样，单位 0.1mm。 */
-static int32_t pos_buf[LOST_STEP_WINDOW];
-static int32_t motor_pos_buf[LOST_STEP_WINDOW];
-static int32_t encoder_pos_buf[LOST_STEP_WINDOW];
-static uint32_t tick_buf[LOST_STEP_WINDOW];
-static int write_idx = 0;
-static int samples = 0;
-static uint32_t last_check_tick = 0;
-static uint32_t last_alarm_tick = 0;
+static int32_t pos_buf[LOST_STEP_WINDOW]; /* 电机控制数据缓冲区，注意与中断或 DMA 访问边界保持一致。 */
+static int32_t motor_pos_buf[LOST_STEP_WINDOW]; /* 电机控制数据缓冲区，注意与中断或 DMA 访问边界保持一致。 */
+static int32_t encoder_pos_buf[LOST_STEP_WINDOW]; /* 电机控制数据缓冲区，注意与中断或 DMA 访问边界保持一致。 */
+static uint32_t tick_buf[LOST_STEP_WINDOW]; /* 电机控制数据缓冲区，注意与中断或 DMA 访问边界保持一致。 */
+static int write_idx = 0; /* 电机控制模块级变量，保存跨函数共享的业务状态。 */
+static int samples = 0; /* 电机控制模块级变量，保存跨函数共享的业务状态。 */
+static uint32_t last_check_tick = 0; /* 电机控制模块级变量，保存跨函数共享的业务状态。 */
+static uint32_t last_alarm_tick = 0; /* 电机控制模块级变量，保存跨函数共享的业务状态。 */
 #ifndef NODETECT_LOG_PERIOD_MS
 #define NODETECT_LOG_PERIOD_MS        100u   /* 打印周期：100ms */
 #endif
@@ -223,15 +223,15 @@ void MotorLostStep_NoDetectRuntimeLogUpdate(void)
 
     /* 2) 陀螺仪 */
 
-//    if ((now - last_gyro_tick) >= NODETECT_GYRO_PERIOD_MS) {
-//        last_gyro_tick = now;
-//        float ax = 0.0f, ay = 0.0f;
-//        uint32_t ret = Read_Gyro_Angle(&ax, &ay);
-//        if (ret == NO_ERROR) {
-//            g_measurement.debug_data.angle_x = (int32_t)(ax * 100.0f);
-//            g_measurement.debug_data.angle_y = (int32_t)(ay * 100.0f);
-//        }
-//    }
+/* if ((now - last_gyro_tick) >= NODETECT_GYRO_PERIOD_MS) { */
+/* last_gyro_tick = now; */
+/* float ax = 0.0f, ay = 0.0f; */
+/* uint32_t ret = Read_Gyro_Angle(&ax, &ay); */
+/* if (ret == NO_ERROR) { */
+/* g_measurement.debug_data.angle_x = (int32_t)(ax * 100.0f); */
+/* g_measurement.debug_data.angle_y = (int32_t)(ay * 100.0f); */
+/* } */
+/* } */
 
     /* 3) 密度/温度/频率 */
     if ((now - last_den_tick) >= NODETECT_DENS_PERIOD_MS) {
@@ -239,6 +239,7 @@ void MotorLostStep_NoDetectRuntimeLogUpdate(void)
         float f = 0.0f, d = 0.0f, t = 0.0f;
         uint32_t ret = Read_Density(&f, &d, &t);
         (void)f; (void)d; (void)t;
+        /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
         if (ret == NO_ERROR) {
             /* Read_Density 内部写 debug_data.temperature/frequency 等 */
         }

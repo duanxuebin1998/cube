@@ -9,7 +9,7 @@
 #include "system_parameter.h"
 #include "cpu2_communicate.h"
 #include "cpu3_comm_display_params.h"
-#include <math.h>     // for pow()
+#include <math.h>     /* for pow() */
 
 int32_t ywj_hold_analysis_data(int startadd,int rgscnt);
 
@@ -41,6 +41,7 @@ static inline int32_t read_i32_from_regs(const uint16_t *regs, uint16_t addr) {
 static inline float read_float_from_regs(const uint16_t *regs, uint16_t addr) {
 	uint32_t temp = read_u32_from_regs(regs, addr);
 	float value;
+	/* 按结构或原始字节复制，保持Modbus 协议协议/存储布局不被字段解释改变。 */
 	memcpy(&value, &temp, sizeof(float));
 	return value;
 }
@@ -465,8 +466,8 @@ void ReadDeviceParamsFromHoldingRegisters(uint16_t *HoldingRegisterArray)
     g_deviceParams.magic         = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_MAGIC);
     g_deviceParams.crc           = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_CRC);
 
-//	update_sensor_height_from_encoder(); // 如果修改了罐高，需要更新传感器高度测量
-//	save_device_params();//保存设备参数
+/* update_sensor_height_from_encoder(); / / 如果修改了罐高，需要更新传感器高度测量 */
+/* save_device_params();/ /保存设备参数 */
 }
 
 /* ===================== MeasurementResult <-> 输入寄存器映射 ===================== */
@@ -614,7 +615,7 @@ void AnalysisHoldRegister(void)
         {
             param_meta[index].val = ywj_hold_analysis_data(param_meta[index].startadd,param_meta[index].rgstcnt);
             param_meta[index].val += param_meta[index].offset;
-//            printf("Hold Reg %s: %d\n",param_meta[index].name,param_meta[index].val);
+/* printf("Hold Reg %s: %d\n",param_meta[index].name,param_meta[index].val); */
         }
         else if(param_meta[index].data_type == TYPE_FLOAT)
         {
@@ -640,8 +641,8 @@ int32_t ywj_hold_analysis_data(int startadd,int rgscnt)
     uint32_t value = 0U;
     int i;
 
-//    startadd *= 2;
-    //解析数据
+/* startadd *= 2; */
+    /* 解析数据 */
     for(i = 0;i < rgscnt;i++)
     {
         value <<= 16;

@@ -53,9 +53,9 @@ typedef struct {
 } WirelessPairingScanResult;
 
 /* CH9141K 当前连接查询只能读到 MAC；名称用本次运行期最近一次成功匹配的候选补充。 */
-static char s_wireless_pairing_last_peer_mac[WIRELESS_PAIRING_MAC_TEXT_SIZE];
-static char s_wireless_pairing_last_peer_name[WIRELESS_PAIRING_NAME_TEXT_SIZE];
-static uint8_t s_wireless_pairing_last_peer_has_name;
+static char s_wireless_pairing_last_peer_mac[WIRELESS_PAIRING_MAC_TEXT_SIZE]; /* 无线滑环匹配模块级变量，保存跨函数共享的业务状态。 */
+static char s_wireless_pairing_last_peer_name[WIRELESS_PAIRING_NAME_TEXT_SIZE]; /* 无线滑环匹配模块级变量，保存跨函数共享的业务状态。 */
+static uint8_t s_wireless_pairing_last_peer_has_name; /* 无线滑环匹配模块级变量，保存跨函数共享的业务状态。 */
 
 /**
  * @brief 打印普通结果摘要，不走 ErrorLog_*，避免维护调试失败被记成最终故障链路。
@@ -69,6 +69,7 @@ static void WirelessPairing_PrintRet(const char *stage, uint32_t ret)
         stage = "无线滑环匹配";
     }
 
+    /* 先处理异常边界，避免无线滑环匹配状态机带故障继续运行。 */
     if (ret == NO_ERROR) {
         printf("%s\t结果=成功\r\n", stage);
     } else {
@@ -209,6 +210,13 @@ static uint8_t WirelessPairing_CopyMacFromLine(const char *line, char out[WIRELE
     return 0U;
 }
 
+/**
+ * @brief 执行无线滑环匹配中的 WirelessPairing_ParseIndexFromLine 逻辑。
+ *
+ * @param line 业务参数。
+ * @param index 索引值。
+ * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ */
 static uint8_t WirelessPairing_ParseIndexFromLine(const char *line, uint8_t *index)
 {
     int value = 0;
@@ -521,6 +529,7 @@ static void WirelessPairing_PublishStatus(uint32_t result,
         g_measurement.device_status.error_code = NO_ERROR;
         g_measurement.device_status.device_state = STATE_WIRELESS_PAIRING_OVER;
     } else if (publish_result == WIRELESS_PAIRING_RESULT_FAILED) {
+        /* 先处理异常边界，避免无线滑环匹配状态机带故障继续运行。 */
         if (publish_error == NO_ERROR) {
             publish_error = SENSOR_RESP_FORMAT_ERROR;
         }
@@ -658,6 +667,15 @@ static uint8_t WirelessPairing_ParseByteResponseFiltered(const CH9141AtResponse 
     return 0U;
 }
 
+/**
+ * @brief 执行无线滑环匹配中的 WirelessPairing_ParseModeResponse 逻辑。
+ *
+ * @param response 业务参数。
+ * @param value 待处理数值。
+ * @param out_line 业务参数。
+ * @param out_size 数据长度。
+ * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ */
 static uint8_t WirelessPairing_ParseModeResponse(const CH9141AtResponse *response,
                                                 uint8_t *value,
                                                 char *out_line,
@@ -666,6 +684,15 @@ static uint8_t WirelessPairing_ParseModeResponse(const CH9141AtResponse *respons
     return WirelessPairing_ParseByteResponseFiltered(response, value, out_line, out_size, 0U);
 }
 
+/**
+ * @brief 执行无线滑环匹配中的 WirelessPairing_ParseStatusResponse 逻辑。
+ *
+ * @param response 业务参数。
+ * @param value 待处理数值。
+ * @param out_line 业务参数。
+ * @param out_size 数据长度。
+ * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ */
 static uint8_t WirelessPairing_ParseStatusResponse(const CH9141AtResponse *response,
                                                   uint8_t *value,
                                                   char *out_line,
@@ -1000,14 +1027,17 @@ static uint32_t WirelessPairing_ResetModule(void)
         WirelessPairing_PrintRet("无线滑环匹配\t复位命令返回错误", ret);
         return ret;
     }
+    /* 先处理异常边界，避免无线滑环匹配状态机带故障继续运行。 */
     if ((ret != NO_ERROR) && (ret != SENSOR_DEVICE_COMM_TIMEOUT)) {
         WirelessPairing_PrintRet("无线滑环匹配\t复位命令发送失败", ret);
         return ret;
     }
+    /* 先处理异常边界，避免无线滑环匹配状态机带故障继续运行。 */
     if (ret == SENSOR_DEVICE_COMM_TIMEOUT) {
         printf("无线滑环匹配\t复位命令未等到OK，按模块已重启处理并继续等待\r\n");
     }
 
+    /* 无线滑环匹配与外设通信之间保留等待时间，避免硬件或对端协议尚未准备好。 */
     HAL_Delay(WIRELESS_PAIRING_RESET_WAIT_MS);
     WirelessPairing_PrintRet("无线滑环匹配\t复位等待完成", NO_ERROR);
     return NO_ERROR;
@@ -1037,6 +1067,7 @@ static uint32_t WirelessPairing_EnterAtAndHostMode(void)
 
     printf("无线滑环匹配\t阶段：进入AT并确认主机模式\r\n");
     ret = CH9141_AT_EnterSoftwareMode(&response);
+    /* 先处理异常边界，避免无线滑环匹配状态机带故障继续运行。 */
     if (ret != NO_ERROR) {
         WirelessPairing_PrintRet("无线滑环匹配\t进入AT", ret);
         printf("无线滑环匹配\t进入AT响应=%s\r\n", response.text);
@@ -1049,6 +1080,7 @@ static uint32_t WirelessPairing_EnterAtAndHostMode(void)
                                 CH9141_AT_WAIT_ACK,
                                 WIRELESS_PAIRING_ACK_TIMEOUT_MS,
                                 &response);
+    /* 先处理异常边界，避免无线滑环匹配状态机带故障继续运行。 */
     if (ret != NO_ERROR) {
         WirelessPairing_PrintRet("无线滑环匹配\t查询主机模式", ret);
         printf("无线滑环匹配\tBLEMODE响应=%s\r\n", response.text);
@@ -1073,6 +1105,7 @@ static uint32_t WirelessPairing_EnterAtAndHostMode(void)
                                 CH9141_AT_WAIT_ACK,
                                 WIRELESS_PAIRING_ACK_TIMEOUT_MS,
                                 &response);
+    /* 先处理异常边界，避免无线滑环匹配状态机带故障继续运行。 */
     if (ret != NO_ERROR) {
         WirelessPairing_PrintRet("无线滑环匹配\t设置主机模式", ret);
         printf("无线滑环匹配\t设置主机模式响应=%s\r\n", response.text);
@@ -1081,6 +1114,7 @@ static uint32_t WirelessPairing_EnterAtAndHostMode(void)
     WirelessPairing_PrintRet("无线滑环匹配\t设置主机模式", ret);
 
     ret = WirelessPairing_ResetModule();
+    /* 先处理异常边界，避免无线滑环匹配状态机带故障继续运行。 */
     if (ret != NO_ERROR) {
         return ret;
     }
@@ -1088,6 +1122,7 @@ static uint32_t WirelessPairing_EnterAtAndHostMode(void)
     printf("无线滑环匹配\t主机模式复位后重新进入AT\r\n");
     ret = CH9141_AT_EnterSoftwareMode(&response);
     WirelessPairing_PrintRet("无线滑环匹配\t重新进入AT", ret);
+    /* 先处理异常边界，避免无线滑环匹配状态机带故障继续运行。 */
     if (ret != NO_ERROR) {
         printf("无线滑环匹配\t重新进入AT响应=%s\r\n", response.text);
     }
@@ -1110,6 +1145,7 @@ static uint32_t WirelessPairing_Scan(WirelessPairingScanResult *scan)
     printf("无线滑环匹配\t阶段：扫描准备\t超时=%lu ms\r\n",
            (unsigned long)WIRELESS_PAIRING_SCAN_TIMEOUT_MS);
     ret = WirelessPairing_EnterAtAndHostMode();
+    /* 先处理异常边界，避免无线滑环匹配状态机带故障继续运行。 */
     if (ret != NO_ERROR) {
         return ret;
     }
@@ -1118,6 +1154,7 @@ static uint32_t WirelessPairing_Scan(WirelessPairingScanResult *scan)
                                         CH9141_AT_WAIT_ACK,
                                         WIRELESS_PAIRING_ACK_TIMEOUT_MS,
                                         &response);
+    /* 先处理异常边界，避免无线滑环匹配状态机带故障继续运行。 */
     if (disconn_ret == NO_ERROR) {
         printf("无线滑环匹配\t扫描前断开旧连接\t结果=已发送断开请求\r\n");
     } else {
@@ -1131,6 +1168,7 @@ static uint32_t WirelessPairing_Scan(WirelessPairingScanResult *scan)
                                 CH9141_AT_WAIT_SCAN_END,
                                 WIRELESS_PAIRING_SCAN_TIMEOUT_MS,
                                 &response);
+    /* 先处理异常边界，避免无线滑环匹配状态机带故障继续运行。 */
     if (ret != NO_ERROR) {
         WirelessPairing_PrintRet("无线滑环匹配\t扫描", ret);
         return ret;
@@ -1297,6 +1335,7 @@ static uint32_t WirelessPairing_ConnectAndSave(const WirelessPairingCandidate *c
                                 CH9141_AT_WAIT_LINK,
                                 WIRELESS_PAIRING_LINK_TIMEOUT_MS,
                                 &response);
+    /* 先处理异常边界，避免无线滑环匹配状态机带故障继续运行。 */
     if (ret != NO_ERROR) {
         WirelessPairing_PrintRet("无线滑环匹配\t连接目标", ret);
         return ret;
@@ -1309,6 +1348,7 @@ static uint32_t WirelessPairing_ConnectAndSave(const WirelessPairingCandidate *c
                                 CH9141_AT_WAIT_ACK,
                                 WIRELESS_PAIRING_ACK_TIMEOUT_MS,
                                 &response);
+    /* 先处理异常边界，避免无线滑环匹配状态机带故障继续运行。 */
     if (ret != NO_ERROR) {
         WirelessPairing_PrintRet("无线滑环匹配\t保存默认连接", ret);
         return ret;
@@ -1316,6 +1356,7 @@ static uint32_t WirelessPairing_ConnectAndSave(const WirelessPairingCandidate *c
     WirelessPairing_PrintRet("无线滑环匹配\t保存默认连接", ret);
 
     ret = WirelessPairing_ResetModule();
+    /* 先处理异常边界，避免无线滑环匹配状态机带故障继续运行。 */
     if (ret != NO_ERROR) {
         return ret;
     }
@@ -1323,6 +1364,7 @@ static uint32_t WirelessPairing_ConnectAndSave(const WirelessPairingCandidate *c
     printf("无线滑环匹配\t复位完成，恢复UART6透传并探测节点\r\n");
     (void)CH9141_AT_PrepareUart6(WIRELESS_PAIRING_POST_RESET_IDLE_MS);
     ret = WIRELESS_ProbeNode(WIRELESS_PAIRING_HOST_ADDR);
+    /* 先处理异常边界，避免无线滑环匹配状态机带故障继续运行。 */
     if (ret != NO_ERROR) {
         WirelessPairing_PrintRet("无线滑环匹配\t复位后主机探测", ret);
         return ret;
@@ -1330,6 +1372,7 @@ static uint32_t WirelessPairing_ConnectAndSave(const WirelessPairingCandidate *c
     WirelessPairing_PrintRet("无线滑环匹配\t复位后主机探测", ret);
 
     ret = WIRELESS_ProbeNode(WIRELESS_PAIRING_SLAVE_ADDR);
+    /* 先处理异常边界，避免无线滑环匹配状态机带故障继续运行。 */
     if (ret != NO_ERROR) {
         WirelessPairing_PrintRet("无线滑环匹配\t复位后从机探测", ret);
         return ret;
@@ -1362,6 +1405,7 @@ static void WirelessPairing_Finish(const char *title, uint32_t ret)
 
     snprintf(stage, sizeof(stage), "%s\t最终结果", title);
     WirelessPairing_PrintRet(stage, ret);
+    /* 先处理异常边界，避免无线滑环匹配状态机带故障继续运行。 */
     if (ret != NO_ERROR) {
         uint32_t reset_ret;
 
@@ -1381,6 +1425,10 @@ static void WirelessPairing_Finish(const char *title, uint32_t ret)
 }
 
 
+/**
+ * @brief 显示或打印无线滑环匹配中的 WirelessPairing_PrintConnectionStatus 逻辑。
+ * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ */
 uint32_t WirelessPairing_PrintConnectionStatus(void)
 {
     CH9141AtResponse response;
@@ -1408,6 +1456,7 @@ uint32_t WirelessPairing_PrintConnectionStatus(void)
     g_measurement.device_status.device_state = STATE_MAINTENANCEMODE;
 
     ret = CH9141_AT_EnterSoftwareMode(&response);
+    /* 先处理异常边界，避免无线滑环匹配状态机带故障继续运行。 */
     if (ret != NO_ERROR) {
         WirelessPairing_PrintRet("无线滑环连接状态\t进入AT", ret);
         printf("无线滑环连接状态\t进入AT响应=%s\r\n", response.text);
@@ -1420,6 +1469,7 @@ uint32_t WirelessPairing_PrintConnectionStatus(void)
                                 CH9141_AT_WAIT_ACK,
                                 WIRELESS_PAIRING_ACK_TIMEOUT_MS,
                                 &response);
+    /* 先处理异常边界，避免无线滑环匹配状态机带故障继续运行。 */
     if (ret != NO_ERROR) {
         WirelessPairing_PrintRet("无线滑环连接状态\t查询BLEMODE", ret);
         goto finish;
@@ -1438,6 +1488,7 @@ uint32_t WirelessPairing_PrintConnectionStatus(void)
                                 CH9141_AT_WAIT_ACK,
                                 WIRELESS_PAIRING_ACK_TIMEOUT_MS,
                                 &response);
+    /* 先处理异常边界，避免无线滑环匹配状态机带故障继续运行。 */
     if (ret != NO_ERROR) {
         WirelessPairing_PrintRet("无线滑环连接状态\t查询BLESTA", ret);
         goto finish;
@@ -1466,6 +1517,7 @@ uint32_t WirelessPairing_PrintConnectionStatus(void)
                                 CH9141_AT_WAIT_ACK,
                                 WIRELESS_PAIRING_ACK_TIMEOUT_MS,
                                 &response);
+    /* 先处理异常边界，避免无线滑环匹配状态机带故障继续运行。 */
     if (ret != NO_ERROR) {
         WirelessPairing_PrintRet("无线滑环连接状态\t查询连接MAC", ret);
         goto finish;
@@ -1486,6 +1538,7 @@ uint32_t WirelessPairing_PrintConnectionStatus(void)
                                       CH9141_AT_WAIT_ACK,
                                       WIRELESS_PAIRING_ACK_TIMEOUT_MS,
                                       &response);
+    /* 先处理异常边界，避免无线滑环匹配状态机带故障继续运行。 */
     if (rssi_ret == NO_ERROR) {
         rssi_started = 1U;
         WirelessPairing_PrintRet("无线滑环连接状态\t打开RSSI上报", rssi_ret);
@@ -1494,10 +1547,12 @@ uint32_t WirelessPairing_PrintConnectionStatus(void)
         rssi_ret = CH9141_AT_WaitAsync(CH9141_AT_WAIT_RSSI,
                                        WIRELESS_PAIRING_RSSI_ASYNC_TIMEOUT_MS,
                                        &response);
+        /* 先处理异常边界，避免无线滑环匹配状态机带故障继续运行。 */
         if ((rssi_ret == NO_ERROR) && (WirelessPairing_ParseRssiResponse(&response, &rssi) != 0U)) {
             has_rssi = 1U;
             printf("无线滑环连接状态\tRSSI读取成功\tRSSI=%d dB\r\n", (int)rssi);
         } else {
+            /* 先处理异常边界，避免无线滑环匹配状态机带故障继续运行。 */
             if (rssi_ret == NO_ERROR) {
                 rssi_ret = SENSOR_RESP_FORMAT_ERROR;
                 printf("无线滑环连接状态\tRSSI解析失败\t说明=收到异步数据但未解析到RSSI数值\r\n");
@@ -1518,6 +1573,7 @@ uint32_t WirelessPairing_PrintConnectionStatus(void)
                                               WIRELESS_PAIRING_ACK_TIMEOUT_MS,
                                               &response);
         WirelessPairing_PrintRet("无线滑环连接状态\t关闭RSSI读取", rssi_stop_ret);
+        /* 先处理异常边界，避免无线滑环匹配状态机带故障继续运行。 */
         if ((ret == NO_ERROR) && (rssi_stop_ret != NO_ERROR)) {
             ret = rssi_stop_ret;
         }
@@ -1546,6 +1602,7 @@ finish:
                                          &response);
         WirelessPairing_PrintRet("无线滑环连接状态\t退出AT", exit_ret);
         (void)CH9141_AT_PrepareUart6(WIRELESS_PAIRING_POST_RESET_IDLE_MS);
+        /* 先处理异常边界，避免无线滑环匹配状态机带故障继续运行。 */
         if ((ret == NO_ERROR) && (exit_ret != NO_ERROR)) {
             ret = exit_ret;
         }
@@ -1562,6 +1619,10 @@ finish:
     return ret;
 }
 
+/**
+ * @brief 执行无线滑环匹配中的 WirelessPairing_DebugScan 逻辑。
+ * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ */
 uint32_t WirelessPairing_DebugScan(void)
 {
     WirelessPairingScanResult scan;
@@ -1571,9 +1632,11 @@ uint32_t WirelessPairing_DebugScan(void)
     printf("无线滑环扫描调试\t命令=SPS\t动作=扫描候选，会临时断开当前连接，不保存默认连接\r\n");
     g_measurement.device_status.device_state = STATE_MAINTENANCEMODE;
     ret = WirelessPairing_Scan(&scan);
+    /* 先处理异常边界，避免无线滑环匹配状态机带故障继续运行。 */
     if (ret == NO_ERROR) {
         printf("无线滑环扫描调试\t扫描完成后复位模块，恢复透传\r\n");
         ret = WirelessPairing_ResetModule();
+        /* 先处理异常边界，避免无线滑环匹配状态机带故障继续运行。 */
         if (ret == NO_ERROR) {
             (void)CH9141_AT_PrepareUart6(WIRELESS_PAIRING_POST_RESET_IDLE_MS);
         }
@@ -1582,6 +1645,10 @@ uint32_t WirelessPairing_DebugScan(void)
     return ret;
 }
 
+/**
+ * @brief 执行无线滑环匹配中的 WirelessPairing_RunByRssi 逻辑。
+ * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ */
 uint32_t WirelessPairing_RunByRssi(void)
 {
     WirelessPairingScanResult scan;
@@ -1595,6 +1662,7 @@ uint32_t WirelessPairing_RunByRssi(void)
     WirelessPairing_PublishStatus(WIRELESS_PAIRING_RESULT_RUNNING, NULL, NO_ERROR);
     g_measurement.device_status.device_state = STATE_WIRELESS_PAIRING;
     ret = WirelessPairing_Scan(&scan);
+    /* 先处理异常边界，避免无线滑环匹配状态机带故障继续运行。 */
     if (ret == NO_ERROR) {
         if (WirelessPairing_SelectByRssi(&scan, &selected) == 0U) {
             printf("无线滑环匹配\tRSSI条件不满足：要求最强RSSI>=%d dB，多候选差值>=%d dB\r\n",
@@ -1606,6 +1674,7 @@ uint32_t WirelessPairing_RunByRssi(void)
         }
     }
     WirelessPairing_Finish("无线滑环RSSI匹配", ret);
+    /* 先处理异常边界，避免无线滑环匹配状态机带故障继续运行。 */
     if ((ret == NO_ERROR) && (selected != NULL)) {
         WirelessPairing_PublishStatus(WIRELESS_PAIRING_RESULT_SUCCESS, selected, NO_ERROR);
     } else {
@@ -1614,6 +1683,12 @@ uint32_t WirelessPairing_RunByRssi(void)
     return ret;
 }
 
+/**
+ * @brief 执行无线滑环匹配中的 WirelessPairing_RunByName 逻辑。
+ *
+ * @param target_name 业务参数。
+ * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ */
 uint32_t WirelessPairing_RunByName(const char *target_name)
 {
     WirelessPairingScanResult scan;
@@ -1632,6 +1707,7 @@ uint32_t WirelessPairing_RunByName(const char *target_name)
     WirelessPairing_PublishStatus(WIRELESS_PAIRING_RESULT_RUNNING, NULL, NO_ERROR);
     g_measurement.device_status.device_state = STATE_WIRELESS_PAIRING;
     ret = WirelessPairing_Scan(&scan);
+    /* 先处理异常边界，避免无线滑环匹配状态机带故障继续运行。 */
     if (ret == NO_ERROR) {
         if (scan.scan_has_name_field == 0U) {
             printf("无线滑环匹配\t扫描结果未包含名称字段，不能按名称匹配\r\n");
@@ -1644,6 +1720,7 @@ uint32_t WirelessPairing_RunByName(const char *target_name)
         }
     }
     WirelessPairing_Finish("无线滑环名称匹配", ret);
+    /* 先处理异常边界，避免无线滑环匹配状态机带故障继续运行。 */
     if ((ret == NO_ERROR) && (selected != NULL)) {
         WirelessPairing_PublishStatus(WIRELESS_PAIRING_RESULT_SUCCESS, selected, NO_ERROR);
     } else {

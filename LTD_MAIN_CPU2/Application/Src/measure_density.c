@@ -71,7 +71,9 @@ static void GB_FilterPoints_ByDensity20(DensityDistribution *dist,
                                         int32_t oil_standard_th);
 
 /* ===================== 工具函数 ===================== */
+/* 返回两个 0.1mm/计数类整数中的较大值，避免分布测点排序时重复写三目表达式。 */
 static inline int32_t i32_max(int32_t a, int32_t b) { return (a > b) ? a : b; }
+/* 返回有符号位置差的绝对值，用于密度测量位置偏差判断。 */
 static inline int32_t i32_abs(int32_t x) { return (x >= 0) ? x : -x; }
 
 /**
@@ -89,6 +91,10 @@ static uint32_t Density_ValueToU01mmClamped(int32_t value_01mm, const char *tag)
     return (uint32_t)value_01mm;
 }
 
+/**
+ * @brief 执行密度测量中的 Density_CurrentPositionToU01mmClamped 逻辑。
+ * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ */
 static uint32_t Density_CurrentPositionToU01mmClamped(void)
 {
     return Density_ValueToU01mmClamped(g_measurement.debug_data.sensor_position, "测点位置");
@@ -220,6 +226,7 @@ static uint32_t SinglePointMonitoringPrototype_Run(void)
         sample_index++;
 
         ret = AbortableDelay_CommandSwitch(SINGLE_POINT_MONITORING_PROTO_PERIOD_MS, 50U);
+        /* 先处理异常边界，避免密度测量状态机带故障继续运行。 */
         if (ret != NO_ERROR) {
             return ret;
         }
@@ -227,6 +234,14 @@ static uint32_t SinglePointMonitoringPrototype_Run(void)
 }
 #endif
 
+/**
+ * @brief 显示或打印密度测量中的 PrintPoints01mm 逻辑。
+ *
+ * @param tag 业务参数。
+ * @param p01 输入/输出指针。
+ * @param n 业务参数。
+ * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ */
 static void PrintPoints01mm(const char *tag, const int32_t *p01, uint32_t n)
 {
     printf("%s 取点 点数=%lu: ", tag, (unsigned long)n);
@@ -247,6 +262,7 @@ static uint32_t Density_RunPoints01mm(const int32_t *p01,
                                       DensityDistribution *dist)
 {
     if (!p01 || !dist) return PARAM_ADDRESS_OVERFLOW;
+    /* 先处理异常边界，避免密度测量状态机带故障继续运行。 */
     if (n == 0 || n > MAX_MEASUREMENT_POINTS) return PARAM_RANGE_ERROR;
 
     memset(dist, 0, sizeof(*dist));
@@ -268,6 +284,7 @@ static uint32_t Density_RunPoints01mm(const int32_t *p01,
             /* 命令切换是正常打断，直接向上透传，不参与故障重试。 */
             return STATE_SWITCH;
         }
+        /* 先处理异常边界，避免密度测量状态机带故障继续运行。 */
         if (ret != NO_ERROR) {
             printf("分布测量 电机移动失败: 位置=%.1fmm 错误码=%lu\r\n", pos_mm, (unsigned long)ret);
             return ret;
@@ -286,6 +303,7 @@ static uint32_t Density_RunPoints01mm(const int32_t *p01,
             /* 命令切换是正常打断，直接向上透传，不参与故障重试。 */
             return STATE_SWITCH;
         }
+        /* 先处理异常边界，避免密度测量状态机带故障继续运行。 */
         if (ret != NO_ERROR) {
             printf("分布测量 单点读取失败: 位置=%.1fmm 错误码=%lu\r\n", pos_mm, (unsigned long)ret);
             return ret;
@@ -356,7 +374,9 @@ static uint32_t BuildPoints_Spread_Exact(int32_t oil_level_01mm,
     /* 例程：distance>=1000(0.1mm)=100mm */
     if (distmin < 1000) distmin = 1000;
 
+    /* 先处理异常边界，避免密度测量状态机带故障继续运行。 */
     if (high <= 0) return PARAM_RANGE_ERROR;
+    /* 先处理异常边界，避免密度测量状态机带故障继续运行。 */
     if (N_req == 0) return PARAM_RANGE_ERROR;
     if (N_req > MAX_MEASUREMENT_POINTS) N_req = MAX_MEASUREMENT_POINTS;
 
@@ -608,6 +628,7 @@ static uint32_t BuildPoints_Meter_Exact(int32_t oil_level_01mm,
         }
     }
 
+    /* 先处理异常边界，避免密度测量状态机带故障继续运行。 */
     if (NumMeter == 0) return PARAM_RANGE_ERROR;
 
     *out_n = NumMeter;
@@ -642,9 +663,11 @@ static uint32_t BuildPoints_Interval_Exact(int32_t oil_level_01mm,
     high_a = oil_level_01mm - (int32_t)g_deviceParams.intervalMeasurementTopLimit;
     high_b = (int32_t)g_deviceParams.intervalMeasurementBottomLimit;
 
+    /* 先处理异常边界，避免密度测量状态机带故障继续运行。 */
     if (high_b >= high_a) return PARAM_RANGE_ERROR;
 
     c_num = (int)g_deviceParams.spreadMeasurementCount;
+    /* 先处理异常边界，避免密度测量状态机带故障继续运行。 */
     if (c_num <= 0) return PARAM_RANGE_ERROR;
     if (c_num > (int)MAX_MEASUREMENT_POINTS) c_num = MAX_MEASUREMENT_POINTS;
 
@@ -704,6 +727,7 @@ uint32_t Density_MeasureByMode_Exact(DensitySpreadModeId mode, DensityDistributi
 
     /* 1) 先液位搜索 */
     ret = SearchOilLevel();
+    /* 先处理异常边界，避免密度测量状态机带故障继续运行。 */
     if (ret != NO_ERROR) {
         printf("密度测量\t液位搜索失败，错误码=0x%08lX\r\n", (unsigned long)ret);
         return ret;
@@ -721,21 +745,25 @@ uint32_t Density_MeasureByMode_Exact(DensitySpreadModeId mode, DensityDistributi
     /* 3) 按模式取点 */
     if (mode == DENS_MODE_SPREAD) {
         ret = BuildPoints_Spread_Exact(oil_level_01mm, points01, &n);
+        /* 先处理异常边界，避免密度测量状态机带故障继续运行。 */
         if (ret != NO_ERROR) return ret;
         PrintPoints01mm("普通分布测", points01, n);
     }
     else if (mode == DENS_MODE_GB) {
         BuildPoints_GB4575_Exact((uint32_t)oil_level_01mm, points01, &n);
+        /* 先处理异常边界，避免密度测量状态机带故障继续运行。 */
         if (n == 0) return PARAM_RANGE_ERROR;
         PrintPoints01mm("国标测", points01, n);
     }
     else if (mode == DENS_MODE_METER) {
         ret = BuildPoints_Meter_Exact(oil_level_01mm, points01, &n);
+        /* 先处理异常边界，避免密度测量状态机带故障继续运行。 */
         if (ret != NO_ERROR) return ret;
         PrintPoints01mm("每米测", points01, n);
     }
     else if (mode == DENS_MODE_INTERVAL) {
         ret = BuildPoints_Interval_Exact(oil_level_01mm, points01, &n);
+        /* 先处理异常边界，避免密度测量状态机带故障继续运行。 */
         if (ret != NO_ERROR) return ret;
         PrintPoints01mm("区间测", points01, n);
     }
@@ -745,6 +773,7 @@ uint32_t Density_MeasureByMode_Exact(DensitySpreadModeId mode, DensityDistributi
 
     /* 4) 统一执行测量 */
     ret = Density_RunPoints01mm(points01, n, oil_level_01mm, out_dist);
+    /* 先处理异常边界，避免密度测量状态机带故障继续运行。 */
     if (ret != NO_ERROR) return ret;
 
     /* 5) 国标后处理：按标密差值阈值过滤点，并重算平均值
@@ -785,6 +814,7 @@ void CMD_MeasureDensitySpread_Spread(void)
     if (ret == STATE_SWITCH) {
         return;
     }
+    /* 先处理异常边界，避免密度测量状态机带故障继续运行。 */
     if (ret != NO_ERROR) {
         printf("普通分布测\t失败，错误码=0x%08lX\r\n", (unsigned long)ret);
         SET_ERROR(ret);
@@ -801,6 +831,10 @@ void CMD_MeasureDensitySpread_Spread(void)
     g_measurement.device_status.device_state = STATE_SPREADPOINTOVER;
 }
 
+/**
+ * @brief 执行密度测量中的 CMD_MeasureDensitySpread_GB 逻辑。
+ * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ */
 void CMD_MeasureDensitySpread_GB(void)
 {
     uint32_t ret = 0;
@@ -819,6 +853,7 @@ void CMD_MeasureDensitySpread_GB(void)
     if (ret == STATE_SWITCH) {
         return;
     }
+    /* 先处理异常边界，避免密度测量状态机带故障继续运行。 */
     if (ret != NO_ERROR) {
         printf("国标测\t失败，错误码=0x%08lX\r\n", (unsigned long)ret);
         SET_ERROR(ret);
@@ -835,6 +870,10 @@ void CMD_MeasureDensitySpread_GB(void)
     g_measurement.device_status.device_state = STATE_GB_SPREADPOINTOVER;
 }
 
+/**
+ * @brief 执行密度测量中的 CMD_MeasureDensitySpread_Meter 逻辑。
+ * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ */
 void CMD_MeasureDensitySpread_Meter(void)
 {
     uint32_t ret = 0;
@@ -853,6 +892,7 @@ void CMD_MeasureDensitySpread_Meter(void)
     if (ret == STATE_SWITCH) {
         return;
     }
+    /* 先处理异常边界，避免密度测量状态机带故障继续运行。 */
     if (ret != NO_ERROR) {
         printf("每米测\t失败，错误码=0x%08lX\r\n", (unsigned long)ret);
         SET_ERROR(ret);
@@ -869,6 +909,10 @@ void CMD_MeasureDensitySpread_Meter(void)
     g_measurement.device_status.device_state = STATE_COM_METER_DENSITY_OVER;
 }
 
+/**
+ * @brief 执行密度测量中的 CMD_MeasureDensitySpread_Interval 逻辑。
+ * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ */
 void CMD_MeasureDensitySpread_Interval(void)
 {
     uint32_t ret = 0;
@@ -887,6 +931,7 @@ void CMD_MeasureDensitySpread_Interval(void)
     if (ret == STATE_SWITCH) {
         return;
     }
+    /* 先处理异常边界，避免密度测量状态机带故障继续运行。 */
     if (ret != NO_ERROR) {
         printf("区间测\t失败，错误码=0x%08lX\r\n", (unsigned long)ret);
         SET_ERROR(ret);
@@ -916,6 +961,12 @@ void CMD_MeasureDensitySpread_Interval(void)
 #define GB_COMPARE_USE_STANDARD_DENSITY  1
 #endif
 
+/**
+ * @brief 执行密度测量中的 gb_get_density20_raw 逻辑。
+ *
+ * @param m 业务参数。
+ * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ */
 static inline int32_t gb_get_density20_raw(const DensityMeasurement *m)
 {
 #if GB_COMPARE_USE_STANDARD_DENSITY
@@ -925,13 +976,32 @@ static inline int32_t gb_get_density20_raw(const DensityMeasurement *m)
 #endif
 }
 
+/**
+ * @brief 执行密度测量中的 gb_abs_i32 逻辑。
+ *
+ * @param x 业务参数。
+ * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ */
 static inline int32_t gb_abs_i32(int32_t x) { return (x >= 0) ? x : -x; }
 
+/**
+ * @brief 执行密度测量中的 gb_copy_point 逻辑。
+ *
+ * @param dst 业务参数。
+ * @param src 业务参数。
+ * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ */
 static void gb_copy_point(DensityMeasurement *dst, const DensityMeasurement *src)
 {
     *dst = *src;
 }
 
+/**
+ * @brief 计算密度测量中的 gb_recalc_average 逻辑。
+ *
+ * @param dist 业务参数。
+ * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ */
 static void gb_recalc_average(DensityDistribution *dist)
 {
     if (!dist || dist->measurement_points == 0) return;
@@ -1188,9 +1258,9 @@ uint32_t SinglePoint_ReadSensor(volatile DensityMeasurement *result)
     /* ---------- 稳定判定阈值 ----------
      * 任一项超出阈值，均认为“不稳定”，需要重新计时
      */
-    const float FREQ_EPS    = 1.0f;   // 频率变化阈值（Hz）
-    const float DENSITY_EPS = 0.1f;   // 密度变化阈值
-    const float TEMP_EPS    = 0.2f;   // 温度变化阈值（℃）
+    const float FREQ_EPS    = 1.0f;   /* 频率变化阈值（Hz） */
+    const float DENSITY_EPS = 0.1f;   /* 密度变化阈值 */
+    const float TEMP_EPS    = 0.2f;   /* 温度变化阈值（℃） */
 
     /* 采样周期 */
     const uint32_t SAMPLE_INTERVAL_MS = 200U;
@@ -1199,9 +1269,9 @@ uint32_t SinglePoint_ReadSensor(volatile DensityMeasurement *result)
     uint32_t density_zero_retry_count = 0U;
 
     /* ---------- 时间与状态变量 ---------- */
-    uint32_t t_start      = HAL_GetTick();  // 整个流程起始时间
-    uint32_t stable_start = 0;              // 当前稳定窗口起始时间
-    uint8_t  first_sample = 1;              // 是否为首次有效样本
+    uint32_t t_start      = HAL_GetTick();  /* 整个流程起始时间 */
+    uint32_t stable_start = 0;              /* 当前稳定窗口起始时间 */
+    uint8_t  first_sample = 1;              /* 是否为首次有效样本 */
 
     /* ---------- 参考值（用于稳定判定） ----------
      * 仅在“非零密度样本”下才会更新
@@ -1277,9 +1347,10 @@ uint32_t SinglePoint_ReadSensor(volatile DensityMeasurement *result)
             /* 命令切换是正常打断，直接向上透传，不参与故障重试。 */
             return STATE_SWITCH;
         }
+        /* 先处理异常边界，避免密度测量状态机带故障继续运行。 */
         if (ret != NO_ERROR) {
             density_read_retry_count++;
-            // 错误	阶段：错误重试	模块：传感器	操作：读取浮点参数	原因：ErrorLog_GetReasonByCode(ret)	尝试：1U/1U	错误码：ret	错误名：ErrorLog_GetCodeName(ret)
+            /* 错误 阶段：错误重试 模块：传感器 操作：读取浮点参数 原因：ErrorLog_GetReasonByCode(ret) 尝试：1U/1U 错误码：ret 错误名：ErrorLog_GetCodeName(ret) */
             ErrorLog_Retry(ERROR_LOG_MODULE_SENSOR,
                            ERROR_LOG_OP_READ_FLOAT_PARAM,
                            ErrorLog_GetReasonByCode(ret),
@@ -1291,7 +1362,7 @@ uint32_t SinglePoint_ReadSensor(volatile DensityMeasurement *result)
             return ret;
         }
         if (density_read_retry_count > 0U) {
-            // 错误	阶段：重试成功	模块：传感器	操作：读取浮点参数	原因：恢复成功	尝试：(density_read_retry_count + 1U)/density_sample_retry_max
+            /* 错误 阶段：重试成功 模块：传感器 操作：读取浮点参数 原因：恢复成功 尝试：(density_read_retry_count + 1U)/density_sample_retry_max */
             ErrorLog_Recover(ERROR_LOG_MODULE_SENSOR,
                              ERROR_LOG_OP_READ_FLOAT_PARAM,
                              ERROR_LOG_REASON_RECOVER_OK,
@@ -1322,6 +1393,7 @@ uint32_t SinglePoint_ReadSensor(volatile DensityMeasurement *result)
             }
             /* 密度为 0 时会持续重试；这里同样使用可打断延时响应退出命令。 */
             ret = AbortableDelay_CommandSwitch(SAMPLE_INTERVAL_MS, 50U);
+            /* 先处理异常边界，避免密度测量状态机带故障继续运行。 */
             if (ret != NO_ERROR) {
                 return ret;
             }
@@ -1386,6 +1458,7 @@ uint32_t SinglePoint_ReadSensor(volatile DensityMeasurement *result)
 
         /* 普通采样间隔也要可打断，固定点监测才能在稳定等待期间退出。 */
         ret = AbortableDelay_CommandSwitch(SAMPLE_INTERVAL_MS, 50U);
+        /* 先处理异常边界，避免密度测量状态机带故障继续运行。 */
         if (ret != NO_ERROR) {
             return ret;
         }

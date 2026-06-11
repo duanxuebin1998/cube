@@ -2,7 +2,7 @@
 #define _STATEFORMODBUS_H
 
 
-/*功能码*/
+/* 功能码 */
 #define FUNCTIONCODE_READ_HOLDREGISTER    0x03
 #define FUNCTIONCODE_READ_INPUTREGISTER   0x04
 #define FUNCTIONCODE_WRITE_MULREGISTER    0x10
@@ -252,9 +252,9 @@ typedef enum
 #define HOLDREGISTER_CPU3_COM3_PROTO	(HOLDREGISTER_CPU3_BASE + 0x48)
 
 
-/*保持寄存器详细地址*/
+/* 保持寄存器详细地址 */
 
-/*输入寄存器详细地址*/
+/* 输入寄存器详细地址 */
 
 /* 输入寄存器详细地址 */
 
@@ -398,20 +398,20 @@ typedef enum
 
 
 
-/*报警状态*/
+/* 报警状态 */
 #define ALARMSTATE_NONE 0
 #define ALARMSTATE_LOW 1
 #define ALARMSTATE_HIGH 2
 
-/*平均温度状态*/
+/* 平均温度状态 */
 #define AVETEMPERATURESTATE_UNVALID 0
 #define AVETEMPERATURESTATE_VALID 1
 
-/*平均密度状态*/
+/* 平均密度状态 */
 #define AVERAGEDENSITY_UNVALID 0
 #define AVERAGEDENSITY_VALID 1
 
-/*水位状态*/
+/* 水位状态 */
 #define WATER_UNVALID 0
 #define WATER_VALID 1
 

@@ -26,6 +26,14 @@ typedef struct {
 } GyroZeroRef;
 
 extern int32_t bottom_value;
+/**
+ * @brief 执行罐高测量中的 SearchBottom 逻辑。
+ * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ */
 uint32_t SearchBottom(void);
-uint32_t Bottom_SaveGyroZeroRef(void);// 保存陀螺仪零点基准
+/**
+ * @brief 保存罐高测量中的 Bottom_SaveGyroZeroRef 逻辑。
+ * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ */
+uint32_t Bottom_SaveGyroZeroRef(void); /* 保存陀螺仪零点基准 */
 #endif /* INC_MEASURE_TANK_HEIGHT_H_ */

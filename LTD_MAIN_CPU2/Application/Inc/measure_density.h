@@ -59,9 +59,27 @@ void Print_DensitySpreadResult(const DensityDistribution *dist);
 /* 单点读数：内部完成稳定判定并写入 result */
 uint32_t SinglePoint_ReadSensor(volatile DensityMeasurement *result);
 
+/**
+ * @brief 按指定分布测量模式执行密度测量并输出完整点表。
+ * @param mode 分布测量模式。
+ * @param out_dist 测量结果输出结构。
+ * @return NO_ERROR 表示测量完成，其他值表示测量或传感器链路异常。
+ */
 uint32_t Density_MeasureByMode_Exact(DensitySpreadModeId mode, DensityDistribution *out_dist);
+/**
+ * @brief 检查单点测量目标位置是否在当前罐高和安全范围内。
+ * @param scene 调用场景名称，用于打印现场诊断信息。
+ * @param target_01mm 目标位置，单位 0.1mm。
+ * @return NO_ERROR 表示目标有效，其他值表示参数或位置越界。
+ */
 uint32_t SinglePoint_CheckTargetPosition(const char *scene, uint32_t target_01mm);
+/**
+ * @brief 执行密度测量中的 CMD_SinglePointMeasurement 逻辑。
+ */
 void CMD_SinglePointMeasurement();
+/**
+ * @brief 执行密度测量中的 CMD_SinglePointMonitoring 逻辑。
+ */
 void CMD_SinglePointMonitoring();
 
 #endif /* INC_MEASURE_DENSITY_H_ */

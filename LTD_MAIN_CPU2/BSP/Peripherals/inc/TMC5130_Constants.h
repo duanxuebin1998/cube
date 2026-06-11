@@ -15,13 +15,13 @@
 #define TMC5130_MAX_VELOCITY     8388096
 #define TMC5130_MAX_ACCELERATION 65535
 
-// ramp modes (Register TMC5161_RAMPMODE)
+/* ramp modes (Register TMC5161_RAMPMODE) */
 #define TMC5130_MODE_POSITION  0
 #define TMC5130_MODE_VELPOS    1
 #define TMC5130_MODE_VELNEG    2
 #define TMC5130_MODE_HOLD      3
 
-// limit switch mode bits (Register TMC5130_SWMODE)
+/* limit switch mode bits (Register TMC5130_SWMODE) */
 #define TMC5130_SW_STOPL_ENABLE    0x0001
 #define TMC5130_SW_STOPR_ENABLE    0x0002
 #define TMC5130_SW_STOPL_POLARITY  0x0004
@@ -35,7 +35,7 @@
 #define TMC5130_SW_SG_STOP         0x0400
 #define TMC5130_SW_SOFTSTOP        0x0800
 
-// Status bits (Register TMC5130_RAMPSTAT)
+/* Status bits (Register TMC5130_RAMPSTAT) */
 #define TMC5130_RS_STOPL          0x0001
 #define TMC5130_RS_STOPR          0x0002
 #define TMC5130_RS_LATCHL         0x0004
@@ -51,7 +51,7 @@
 #define TMC5130_RS_SECONDMOVE     0x1000
 #define TMC5130_RS_SG             0x2000
 
-// Encoderbits (Register TMC5130_ENCMODE)
+/* Encoderbits (Register TMC5130_ENCMODE) */
 #define TMC5130_EM_DECIMAL     0x0400
 #define TMC5130_EM_LATCH_XACT  0x0200
 #define TMC5130_EM_CLR_XENC    0x0100

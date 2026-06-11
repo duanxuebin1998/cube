@@ -50,6 +50,10 @@ uint32_t MotorCtrl_GetDefaultSpeedX100(void)
     return MotorDriver_GetDefaultSpeedSetpointX100();
 }
 
+/**
+ * @brief 检查电机控制中的 MotorCtrl_InvalidateDriverInit 逻辑。
+ * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ */
 void MotorCtrl_InvalidateDriverInit(void)
 {
     /* 运行中掉电/复位只让“当前初始化有效性”失效，不能抹掉曾经完成初始化的事实。
@@ -60,6 +64,10 @@ void MotorCtrl_InvalidateDriverInit(void)
     s_motor_driver.boot_safe_stop_done = false;
 }
 
+/**
+ * @brief 执行电机控制中的 MotorCtrl_IsDriverInitValid 逻辑。
+ * @return true 表示条件满足或处理成功，false 表示条件不满足或处理失败。
+ */
 bool MotorCtrl_IsDriverInitValid(void)
 {
     return s_motor_driver.initialized && s_motor_driver.boot_safe_stop_done;
@@ -108,6 +116,7 @@ uint32_t MotorCtrl_BootSafeStop(void)
     stpr_disableDriver(&stepper);
     s_motor_driver.boot_safe_stop_done = (ret == NO_ERROR);
 
+    /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
     if (ret != NO_ERROR) {
         printf("电机上电安全停机失败：0x%08lX\r\n", (unsigned long)ret);
     } else {
@@ -160,6 +169,7 @@ static uint32_t MotorDriver_ReinitIfMotionNotReady(void)
     g_measurement.debug_data.motor_state = 0U;
 
     ret = MotorCtrl_Init();
+    /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
     if (ret != NO_ERROR) {
         printf("电机运动准备 | 自动重新初始化失败 | 返回=0x%08lX\r\n",
                (unsigned long)ret);
@@ -170,11 +180,18 @@ static uint32_t MotorDriver_ReinitIfMotionNotReady(void)
     return NO_ERROR;
 }
 
+/**
+ * @brief 检查电机控制中的 MotorDriver_CheckMotionReadyInternal 逻辑。
+ *
+ * @param ignore_encoder_ready 业务参数。
+ * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ */
 static uint32_t MotorDriver_CheckMotionReadyInternal(bool ignore_encoder_ready)
 {
     uint32_t ret;
 
     ret = MotorDriver_ReinitIfMotionNotReady();
+    /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
     if (ret != NO_ERROR) {
         return ret;
     }
@@ -264,6 +281,7 @@ static uint32_t MotorDriver_CheckInitPowerReadyWithRetry(void)
             }
         }
 
+        /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
         if ((uint32_t)(now - start_tick) >= MOTOR_DRIVER_INIT_POWER_READY_TIMEOUT_MS) {
             printf("TMC5130初始化等待电流建立超时，按电机被禁止处理\r\n");
             return stpr_checkDriverPowerReady(&stepper);
@@ -298,6 +316,7 @@ uint32_t MotorDriver_CheckHealth(MotorDriverHealthMode mode)
     if (mode == MOTOR_DRIVER_HEALTH_INIT_CHECK) {
         /* 初始化阶段允许清除纯 reset 标志；欠压和驱动错误仍由后续状态检查处理。 */
         ret = MotorDriver_ClearInitResetFlag();
+        /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
         if (ret != NO_ERROR) {
             return ret;
         }
@@ -305,6 +324,7 @@ uint32_t MotorDriver_CheckHealth(MotorDriverHealthMode mode)
 
     /* 先解析 GSTAT/DRV_STATUS 的真实故障位，再追加功率级电流建立检查。 */
     ret = stpr_checkDriverStatus(&stepper);
+    /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
     if (ret != NO_ERROR) {
         return ret;
     }
@@ -314,6 +334,7 @@ uint32_t MotorDriver_CheckHealth(MotorDriverHealthMode mode)
     } else {
         ret = stpr_checkDriverPowerReady(&stepper);
     }
+    /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
     if (ret != NO_ERROR) {
         return ret;
     }
@@ -341,6 +362,7 @@ static uint32_t MotorDriver_SetSpeedInternal(uint32_t speed_x100, bool print_res
 
     if (s_motor_driver.initialized) {
         ret = MotorCtrl_IsDriverMoving(&stepper, &is_running);
+        /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
         if (ret != NO_ERROR) {
             return ret;
         }
@@ -364,6 +386,7 @@ static uint32_t MotorDriver_SetSpeedInternal(uint32_t speed_x100, bool print_res
     if (is_running) {
         /* 运行中改速：立即写入驱动，让本次运动立刻生效。 */
         ret = stpr_setVelocity(&stepper, velocity);
+        /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
         if (ret != NO_ERROR) {
             return ret;
         }
@@ -397,6 +420,13 @@ static uint32_t MotorDriver_SetSpeedInternal(uint32_t speed_x100, bool print_res
     return NO_ERROR;
 }
 
+/**
+ * @brief 读取电机控制中的 MotorDriver_ReadTargetPositionOpen 逻辑。
+ *
+ * @param tmc5130 业务参数。
+ * @param target_open 业务参数。
+ * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ */
 static uint32_t MotorDriver_ReadTargetPositionOpen(TMC5130TypeDef *tmc5130, bool *target_open)
 {
     int32_t xactual = 0;
@@ -423,6 +453,12 @@ static uint32_t MotorDriver_ReadTargetPositionOpen(TMC5130TypeDef *tmc5130, bool
     return NO_ERROR;
 }
 
+/**
+ * @brief 执行电机控制中的 MotorDriver_AlignTargetToActual 逻辑。
+ *
+ * @param tmc5130 业务参数。
+ * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ */
 static uint32_t MotorDriver_AlignTargetToActual(TMC5130TypeDef *tmc5130)
 {
     int32_t xactual = 0;
@@ -458,6 +494,7 @@ uint32_t MotorCtrl_SetCurrent(uint32_t current)
         uint32_t ret;
         /* 电流参数写入后立即更新 TMC5130，避免必须重启才生效。 */
         ret = stpr_setCurrent(&stepper, (uint8_t)clamped_current);
+        /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
         if (ret != NO_ERROR) {
             return ret;
         }
@@ -506,19 +543,22 @@ uint32_t MotorCtrl_Init(void)
      * 不能通过 CHECK_ERROR() 再读取历史全局错误码。 */
     if (!s_motor_driver.initialized) {
         uint32_t ret = stpr_initStepper(&stepper, &hspi2, GPIOB, GPIO_PIN_12, 1, (uint8_t)motor_current);
+        /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
         if (ret != NO_ERROR) {
             return ret;
         }
-//      stpr_initStepper(&stepper, &hspi2, GPIOB, GPIO_PIN_12, 1, 16);
+/* stpr_initStepper(&stepper, &hspi2, GPIOB, GPIO_PIN_12, 1, 16); */
         stpr_enableDriver(&stepper);
         s_motor_driver.initialized = true;
         /* 使能后立即确认 24V 功率级和配置寄存器，避免未上电时仍显示初始化成功。 */
         ret = MotorDriver_CheckHealth(MOTOR_DRIVER_HEALTH_INIT_CHECK);
+        /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
         if (ret != NO_ERROR) {
             s_motor_driver.initialized = false;
             return ret;
         }
         ret = MotorPosition_RestorePersistedRegisters(&stepper);
+        /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
         if (ret != NO_ERROR) {
             s_motor_driver.initialized = false;
             return ret;
@@ -528,6 +568,7 @@ uint32_t MotorCtrl_Init(void)
         /* stpr_initStepper() 只写基础斜坡参数，不写当前业务速度对应的 VMAX。
          * 初始化完成后必须把本次计算出的 velocity 下发到 TMC5130，否则驱动会沿用旧 VMAX。 */
         ret = stpr_setVelocity(&stepper, velocity);
+        /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
         if (ret != NO_ERROR) {
             s_motor_driver.initialized = false;
             stpr_disableDriver(&stepper);
@@ -546,6 +587,7 @@ uint32_t MotorCtrl_Init(void)
          * 配置可能沿用调试残留；非首次不恢复 FRAM 位置，也不恢复位置源。 */
         stpr_disableDriver(&stepper);
         ret = stpr_initStepper(&stepper, &hspi2, GPIOB, GPIO_PIN_12, 1, (uint8_t)motor_current);
+        /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
         if (ret != NO_ERROR) {
             s_motor_driver.initialized = false;
             return ret;
@@ -554,6 +596,7 @@ uint32_t MotorCtrl_Init(void)
         stpr_enableDriver(&stepper);
         s_motor_driver.initialized = true;
         ret = MotorDriver_CheckHealth(MOTOR_DRIVER_HEALTH_INIT_CHECK);
+        /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
         if (ret != NO_ERROR) {
             s_motor_driver.initialized = false;
             return ret;
@@ -561,6 +604,7 @@ uint32_t MotorCtrl_Init(void)
 
         /* stpr_initStepper() 会写默认速度寄存器；重写寄存器后再写当前业务速度。 */
         ret = stpr_setVelocity(&stepper, velocity);
+        /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
         if (ret != NO_ERROR) {
             s_motor_driver.initialized = false;
             stpr_disableDriver(&stepper);
@@ -665,6 +709,7 @@ uint32_t MotorDriver_StopAndMarkStopped(void)
     uint32_t start_tick;
 
     ret = stpr_stop(&stepper);
+    /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
     if (ret != NO_ERROR) {
         printf("电机停止命令写入失败，错误码：0x%08lX\r\n", (unsigned long)ret);
         return ret;
@@ -674,6 +719,7 @@ uint32_t MotorDriver_StopAndMarkStopped(void)
     start_tick = HAL_GetTick();
     while (1) {
         ret = MotorDriver_ReadStoppingState(&stepper, &is_moving);
+        /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
         if (ret != NO_ERROR) {
             printf("电机停止状态读取失败，错误码：0x%08lX\r\n", (unsigned long)ret);
             return ret;
@@ -682,9 +728,11 @@ uint32_t MotorDriver_StopAndMarkStopped(void)
             break;
         }
         ret = MotorDriver_SyncPositionOrCheckHealth(&stepper);
+        /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
         if (ret != NO_ERROR) {
             return ret;
         }
+        /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
         if ((HAL_GetTick() - start_tick) > MOTOR_STOP_WAIT_TIMEOUT_MS) {
             printf("电机停止等待超时，错误码：0x%08lX\r\n", (unsigned long)MOTOR_RUN_TIMEOUT);
             return MOTOR_RUN_TIMEOUT;
@@ -693,11 +741,13 @@ uint32_t MotorDriver_StopAndMarkStopped(void)
     }
 
     ret = MotorDriver_SyncPositionOrCheckHealth(&stepper);
+    /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
     if (ret != NO_ERROR) {
         return ret;
     }
 
     ret = MotorDriver_AlignTargetToActual(&stepper);
+    /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
     if (ret != NO_ERROR) {
         return ret;
     }
@@ -723,6 +773,7 @@ uint32_t MotorDriver_StopIfCommandSwitchRequested(void)
     if (HasEffectiveCommandSwitchRequest()) {
         printf("检测到命令切换请求，停止当前操作\r\n");
         ret = MotorDriver_StopAndMarkStopped();
+        /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
         if (ret != NO_ERROR) {
             return ret;
         }
@@ -779,6 +830,7 @@ uint32_t MotorDriver_ReadMovingState(TMC5130TypeDef *tmc5130, bool *is_moving)
     }
 
     ret = MotorDriver_ReadTargetPositionOpen(tmc5130, &target_open);
+    /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
     if (ret != NO_ERROR) {
         return ret;
     }
@@ -787,6 +839,13 @@ uint32_t MotorDriver_ReadMovingState(TMC5130TypeDef *tmc5130, bool *is_moving)
     return NO_ERROR;
 }
 
+/**
+ * @brief 读取电机控制中的 MotorDriver_ReadStoppingState 逻辑。
+ *
+ * @param tmc5130 业务参数。
+ * @param is_moving 业务参数。
+ * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ */
 uint32_t MotorDriver_ReadStoppingState(TMC5130TypeDef *tmc5130, bool *is_moving)
 {
     int32_t rampstat = 0;
@@ -931,6 +990,7 @@ void MotorDriver_RefreshVelocityDuringRun(TMC5130TypeDef *tmc5130,
 
     if (delta >= threshold) {
         uint32_t ret = stpr_setVelocity(tmc5130, new_v);
+        /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
         if (ret != NO_ERROR) {
             printf("速度刷新失败 | 错误码：0x%08lX | 目标VMAX=%lu\r\n",
                    (unsigned long)ret,
@@ -1129,6 +1189,12 @@ static double MotorDriver_VmaxToUstepsPerSec(uint32_t vmax)
     return ((double)vmax * TMC5130_FCLK_HZ) / 16777216.0;
 }
 
+/**
+ * @brief 执行电机控制中的 MotorDriver_VmaxToOutputRevPerSec 逻辑。
+ *
+ * @param vmax 业务参数。
+ * @return 计算后的业务数值。
+ */
 static double MotorDriver_VmaxToOutputRevPerSec(uint32_t vmax)
 {
     const double ticks_per_rev = (double)MotorPosition_TapeTicksPerRev();
@@ -1138,6 +1204,12 @@ static double MotorDriver_VmaxToOutputRevPerSec(uint32_t vmax)
     return MotorDriver_VmaxToUstepsPerSec(vmax) / ticks_per_rev;
 }
 
+/**
+ * @brief 执行电机控制中的 MotorDriver_VmaxToMotorRevPerSec 逻辑。
+ *
+ * @param vmax 业务参数。
+ * @return 计算后的业务数值。
+ */
 static double MotorDriver_VmaxToMotorRevPerSec(uint32_t vmax)
 {
     return MotorDriver_VmaxToUstepsPerSec(vmax) / (1600.0 * 32.0);

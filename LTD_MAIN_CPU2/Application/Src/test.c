@@ -95,7 +95,11 @@ static void Test_MotorTextRestoreErrorState(const MotorTextErrorSnapshot *snapsh
     g_measurement.device_status.error_code = snapshot->error_code;
 }
 
-static int32_t s_motor_text_raw_target = 0;
+static int32_t s_motor_text_raw_target = 0; /* 本模块模块级变量，保存跨函数共享的业务状态。 */
+/**
+ * @brief 执行本模块中的 Test_ShouldAbortForCommandSwitch 逻辑。
+ * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ */
 static uint8_t Test_ShouldAbortForCommandSwitch(void)
 {
     if (!HasEffectiveCommandSwitchRequest()) {
@@ -114,6 +118,7 @@ static uint8_t Test_ShouldAbortForCommandSwitch(void)
 static void Test_MotorTextClearIgnoredError(void)
 {
     g_measurement.device_status.error_code = NO_ERROR;
+    /* 先处理异常边界，避免本模块状态机带故障继续运行。 */
     if (g_measurement.device_status.device_state == STATE_ERROR) {
         g_measurement.device_status.device_state = STATE_DEBUG_MODE;
     }
@@ -142,6 +147,7 @@ static uint8_t Test_ShouldAbortForCommandSwitchNoError(void)
 
     printf("A/B/BE检测到命令切换请求，停止当前串口测试\r\n");
     stop_ret = MotorDriver_StopAndMarkStopped();
+    /* 先处理异常边界，避免本模块状态机带故障继续运行。 */
     if (stop_ret != NO_ERROR) {
         printf("A/B/BE命令切换\t停止等待或切回位置模式失败\t返回=0x%08lX\r\n",
                (unsigned long)stop_ret);
@@ -153,6 +159,10 @@ static uint8_t Test_ShouldAbortForCommandSwitchNoError(void)
     return 1U;
 }
 
+/**
+ * @brief 检查本模块中的 Test_MotorTextMotorCurrentNoCheck 逻辑。
+ * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ */
 static uint32_t Test_MotorTextMotorCurrentNoCheck(void)
 {
     if ((g_deviceParams.motor_current < MOTOR_CURRENT_MIN) ||
@@ -215,6 +225,7 @@ static void Test_MotorTextRecoverDriverAfterCommandSwitch(const char *phase_name
     s_motor_driver.motion_wait_active = false;
 
     ret = MotorCtrl_Init();
+    /* 先处理异常边界，避免本模块状态机带故障继续运行。 */
     if (ret != NO_ERROR) {
         printf("%s\t退出恢复\t电机重新初始化失败\t返回=0x%08lX\r\n",
                name,
@@ -244,6 +255,7 @@ static void Test_MotorTextRecoverDriverAfterCommandSwitch(const char *phase_name
 static uint8_t Test_MotorTextPrepareNoExit(const char *name)
 {
     (void)name;
+    /* 先处理异常边界，避免本模块状态机带故障继续运行。 */
     if (Test_ShouldAbortForCommandSwitchNoError()) {
         return 0U;
     }
@@ -566,6 +578,7 @@ static uint32_t Test_MotorTextReinitForRestartNoExit(const char *phase_name,
     while (1) {
         uint32_t ret;
 
+        /* 先处理异常边界，避免本模块状态机带故障继续运行。 */
         if (Test_ShouldAbortForCommandSwitchNoError()) {
             return STATE_SWITCH;
         }
@@ -576,6 +589,7 @@ static uint32_t Test_MotorTextReinitForRestartNoExit(const char *phase_name,
         s_motor_driver.motion_wait_active = false;
 
         ret = MotorCtrl_Init();
+        /* 先处理异常边界，避免本模块状态机带故障继续运行。 */
         if (ret == NO_ERROR) {
             Test_MotorTextApplyRampNoError(ramp_snapshot, accel_multiplier);
             printf("%s\t重启恢复\t电机已重新初始化\t重试=%lu\t加速度倍率=%lu\r\n",
@@ -648,6 +662,7 @@ static uint8_t Test_MotorTextConfirmStoppedNoError(const char *phase_name, uint8
         *known = 0U;
     }
 
+    /* 先处理异常边界，避免本模块状态机带故障继续运行。 */
     if (Test_MotorTextIsStoppedNoError(&first_known) == 0U) {
         if (known != NULL) {
             *known = first_known;
@@ -656,10 +671,12 @@ static uint8_t Test_MotorTextConfirmStoppedNoError(const char *phase_name, uint8
     }
 
     HAL_Delay(MOTOR_TEXT_STOP_CONFIRM_MS);
+    /* 先处理异常边界，避免本模块状态机带故障继续运行。 */
     if (Test_ShouldAbortForCommandSwitchNoError()) {
         return 0U;
     }
 
+    /* 先处理异常边界，避免本模块状态机带故障继续运行。 */
     if (Test_MotorTextIsStoppedNoError(&second_known) == 0U) {
         if (known != NULL) {
             *known = second_known;
@@ -687,11 +704,13 @@ static uint8_t Test_WaitMotorStoppedNoErrorCheck(const char *phase_name)
         uint8_t known = 0U;
         uint32_t now;
 
+        /* 先处理异常边界，避免本模块状态机带故障继续运行。 */
         if (Test_ShouldAbortForCommandSwitchNoError()) {
             return 0U;
         }
 
         now = HAL_GetTick();
+        /* 先处理异常边界，避免本模块状态机带故障继续运行。 */
         if ((Test_MotorTextConfirmStoppedNoError(name, &known) != 0U) &&
             ((now - start_tick) >= MOTOR_TEXT_STOP_SETTLE_MS)) {
             Test_MotorTextSyncRawTargetNoError();
@@ -722,6 +741,7 @@ static uint8_t Test_MotorTextRunMoveStageNoExit(const char *phase_name,
                                                 float move_mm,
                                                 int dir)
 {
+    /* 先处理异常边界，避免本模块状态机带故障继续运行。 */
     if (Test_ShouldAbortForCommandSwitchNoError()) {
         return 0U;
     }
@@ -735,6 +755,7 @@ static uint8_t Test_MotorTextRunMoveStageNoExit(const char *phase_name,
     printf("[第%lu轮]\t%s\t开始\r\n",
            (unsigned long)(loop_index + 1U),
            phase_name);
+    /* 先处理异常边界，避免本模块状态机带故障继续运行。 */
     if (Test_WaitMotorStoppedNoErrorCheck(phase_name) == 0U) {
         return 0U;
     }
@@ -750,6 +771,7 @@ static uint8_t Test_MotorTextRunMoveStageNoExit(const char *phase_name,
  */
 static uint8_t Test_CommRecordResult(const char *name, uint32_t ret, uint32_t *ok_count, uint32_t *fail_count)
 {
+    /* 先处理异常边界，避免本模块状态机带故障继续运行。 */
     if (ret == NO_ERROR) {
         (*ok_count)++;
         printf("[正常]\t%s\r\n", name);
@@ -776,12 +798,24 @@ static uint8_t Test_CommShouldStop(uint32_t *fail_count)
     return 0U;
 }
 
+/**
+ * @brief 执行本模块中的 Test_GetEncoderValue 逻辑。
+ * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ */
 static int32_t Test_GetEncoderValue(void)
 {
     update_sensor_height_from_encoder();
     return -g_encoder_count;
 }
 
+/**
+ * @brief 执行本模块中的 Test_EncoderTargetReached 逻辑。
+ *
+ * @param current 业务参数。
+ * @param target 业务参数。
+ * @param dir 业务参数。
+ * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ */
 static uint8_t Test_EncoderTargetReached(int32_t current, int32_t target, int dir)
 {
     if (dir == MOTOR_DIRECTION_DOWN) {
@@ -791,6 +825,12 @@ static uint8_t Test_EncoderTargetReached(int32_t current, int32_t target, int di
     return (current <= target) ? 1U : 0U;
 }
 
+/**
+ * @brief 执行本模块中的 Test_EncoderDistanceMmToCount 逻辑。
+ *
+ * @param distance_mm 业务参数。
+ * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ */
 static int32_t Test_EncoderDistanceMmToCount(float distance_mm)
 {
     float encoder_count;
@@ -808,6 +848,12 @@ static int32_t Test_EncoderDistanceMmToCount(float distance_mm)
     return (int32_t)(encoder_count + 0.5f);
 }
 
+/**
+ * @brief 执行本模块中的 Test_EncoderCountToDistanceMm 逻辑。
+ *
+ * @param encoder_count 业务参数。
+ * @return 计算后的业务数值。
+ */
 static float Test_EncoderCountToDistanceMm(int32_t encoder_count)
 {
     if (g_deviceParams.encoder_wheel_circumference_mm == 0U) {
@@ -836,9 +882,11 @@ static uint32_t Test_MotorTextComputeLegTimeoutMs(float distance_mm, uint32_t sp
     timeout_ms = expected_ms * (double)MOTOR_TEXT_ENCODER_TIMEOUT_SCALE +
                  (double)MOTOR_TEXT_ENCODER_TIMEOUT_MARGIN_MS;
 
+    /* 先处理异常边界，避免本模块状态机带故障继续运行。 */
     if (timeout_ms < (double)MOTOR_TEXT_ENCODER_TIMEOUT_MIN_MS) {
         return MOTOR_TEXT_ENCODER_TIMEOUT_MIN_MS;
     }
+    /* 先处理异常边界，避免本模块状态机带故障继续运行。 */
     if (timeout_ms > (double)MOTOR_TEXT_ENCODER_TIMEOUT_MAX_MS) {
         return MOTOR_TEXT_ENCODER_TIMEOUT_MAX_MS;
     }
@@ -869,6 +917,20 @@ static void Test_MotorTextSensorCommDuringRun(const char *phase_name,
     Test_MotorTextClearIgnoredError();
 }
 
+/**
+ * @brief 执行本模块中的 Test_MoveUntilEncoderTarget 逻辑。
+ *
+ * @param target_encoder 业务参数。
+ * @param origin_encoder 业务参数。
+ * @param dir 业务参数。
+ * @param speed_x100 业务参数。
+ * @param timeout_ms 业务参数。
+ * @param enable_sensor_comm 业务参数。
+ * @param ramp_snapshot 业务参数。
+ * @param accel_multiplier 业务参数。
+ * @param phase_name 输入/输出指针。
+ * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ */
 static uint32_t Test_MoveUntilEncoderTarget(int32_t target_encoder,
                                             int32_t origin_encoder,
                                             int dir,
@@ -884,6 +946,7 @@ static uint32_t Test_MoveUntilEncoderTarget(int32_t target_encoder,
     uint32_t last_comm_tick = 0U;
     uint32_t restart_count = 0U;
 
+    /* 先处理异常边界，避免本模块状态机带故障继续运行。 */
     if (Test_ShouldAbortForCommandSwitchNoError()) {
         return STATE_SWITCH;
     }
@@ -910,6 +973,7 @@ static uint32_t Test_MoveUntilEncoderTarget(int32_t target_encoder,
         uint8_t stopped_known = 0U;
         uint32_t now_tick;
 
+        /* 先处理异常边界，避免本模块状态机带故障继续运行。 */
         if (Test_ShouldAbortForCommandSwitchNoError()) {
             return STATE_SWITCH;
         }
@@ -932,6 +996,7 @@ static uint32_t Test_MoveUntilEncoderTarget(int32_t target_encoder,
 
         Test_MotorTextSensorCommDuringRun(name, enable_sensor_comm, &last_comm_tick);
 
+        /* 先处理异常边界，避免本模块状态机带故障继续运行。 */
         if ((timeout_ms > 0U) && ((now_tick - start_tick) >= timeout_ms)) {
             restart_error = current_encoder - target_encoder;
             restart_count++;
@@ -981,6 +1046,10 @@ static uint32_t Test_MoveUntilEncoderTarget(int32_t target_encoder,
     }
 }
 
+/**
+ * @brief 处理本模块中的 Test_ProcessCommandSwitchRequested 逻辑。
+ * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ */
 static uint8_t Test_ProcessCommandSwitchRequested(void)
 {
     if (!HasEffectiveCommandSwitchRequest()) {
@@ -998,11 +1067,12 @@ static uint8_t Test_ProcessCommandSwitchRequested(void)
  */
 static void Test_ProcessCommandWarnFailure(const char *operation, uint32_t error_code)
 {
+    /* 先处理异常边界，避免本模块状态机带故障继续运行。 */
     if ((error_code == NO_ERROR) || (error_code == STATE_SWITCH)) {
         return;
     }
 
-    // 错误	阶段：错误报警	模块：通信	操作：operation	原因：ErrorLog_GetReasonByCode(error_code)	处理：仅记录
+    /* 错误 阶段：错误报警 模块：通信 操作：operation 原因：ErrorLog_GetReasonByCode(error_code) 处理：仅记录 */
     ErrorLog_Warn(ERROR_LOG_MODULE_COMM,
                   operation,
                   ErrorLog_GetReasonByCode(error_code),
@@ -1256,6 +1326,13 @@ static void TestCommand_ParseBeOptions(const char *arg, TestCommandBeOptions *op
     }
 }
 
+/**
+ * @brief 执行本模块中的 Test_EnsureMotorPositionSourceBeforeFollow 逻辑。
+ *
+ * @param follow_name 业务参数。
+ * @param switched_to_motor 业务参数。
+ * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ */
 static uint32_t Test_EnsureMotorPositionSourceBeforeFollow(const char *follow_name, uint8_t *switched_to_motor)
 {
     uint32_t ret;
@@ -1275,6 +1352,7 @@ static uint32_t Test_EnsureMotorPositionSourceBeforeFollow(const char *follow_na
 
     printf("%s\tswitch position source to motor count\r\n", follow_name);
     ret = MotorCtrl_SwitchPositionSourceToMotor();
+    /* 先处理异常边界，避免本模块状态机带故障继续运行。 */
     if (ret != NO_ERROR) {
         printf("%s\tswitch motor count failed:0x%08lX\r\n", follow_name, (unsigned long)ret);
         return ret;
@@ -1287,6 +1365,10 @@ static uint32_t Test_EnsureMotorPositionSourceBeforeFollow(const char *follow_na
     return NO_ERROR;
 }
 
+/**
+ * @brief 执行本模块中的 Test_RunMeasureZeroOnce 逻辑。
+ * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ */
 static void Test_RunMeasureZeroOnce(void)
 {
     uint32_t ret;
@@ -1298,6 +1380,10 @@ static void Test_RunMeasureZeroOnce(void)
     g_measurement.device_status.device_state = STATE_STANDBY;
 }
 
+/**
+ * @brief 执行本模块中的 Test_RunMeasureAndFollowOilLevelOnce 逻辑。
+ * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ */
 static void Test_RunMeasureAndFollowOilLevelOnce(void)
 {
     uint32_t ret;
@@ -1433,6 +1519,7 @@ uint8_t Test_ProcessSerialCommand(uint8_t *command)
     /* A 指令走与 B/BE 一致的低检测电机路径；其它调试/恢复动作仍先执行 MeasureStart。 */
     if (command[0] != 'A') {
         ret = (uint32_t)MeasureStart();
+        /* 先处理异常边界，避免本模块状态机带故障继续运行。 */
         if (ret != NO_ERROR) {
             printf("串口命令\t启动失败\t电机初始化错误码=0x%08lX\\r\\n", (unsigned long)ret);
             return 1U;
@@ -1633,6 +1720,7 @@ uint8_t Test_ProcessSerialCommand(uint8_t *command)
         case 'R':
             /* 求解拟合参数 */
             ret = MotorCtrl_TapeFitSolve();
+            /* 先处理异常边界，避免本模块状态机带故障继续运行。 */
             if (ret != NO_ERROR) {
                 printf("卷筒拟合\t全局求解失败\t错误码=0x%08lX\r\n", (unsigned long)ret);
                 Test_ProcessCommandWarnFailure("卷筒拟合全局求解", ret);
@@ -1642,6 +1730,7 @@ uint8_t Test_ProcessSerialCommand(uint8_t *command)
         case 'V':
             /* 局部 TFIT：用当前位置起点采样求解局部厚度/周长 */
             ret = MotorCtrl_TapeFitSolveLocalOrigin();
+            /* 先处理异常边界，避免本模块状态机带故障继续运行。 */
             if (ret != NO_ERROR) {
                 printf("卷筒拟合\t局部求解失败\t错误码=0x%08lX\r\n", (unsigned long)ret);
                 Test_ProcessCommandWarnFailure("卷筒拟合局部求解", ret);
@@ -1651,6 +1740,7 @@ uint8_t Test_ProcessSerialCommand(uint8_t *command)
         case 'P':
             /* 仅应用拟合出的厚度 t */
             ret = MotorCtrl_TapeFitApply(false, true);
+            /* 先处理异常边界，避免本模块状态机带故障继续运行。 */
             if (ret != NO_ERROR) {
                 printf("卷筒拟合\t应用尺带厚度失败\t错误码=0x%08lX\r\n", (unsigned long)ret);
                 Test_ProcessCommandWarnFailure("卷筒拟合应用尺带厚度", ret);
@@ -1660,6 +1750,7 @@ uint8_t Test_ProcessSerialCommand(uint8_t *command)
         case 'U':
             /* 同时应用拟合出的 C0 和 t */
             ret = MotorCtrl_TapeFitApply(true, true);
+            /* 先处理异常边界，避免本模块状态机带故障继续运行。 */
             if (ret != NO_ERROR) {
                 printf("卷筒拟合\t应用首圈周长和厚度失败\t错误码=0x%08lX\r\n", (unsigned long)ret);
                 Test_ProcessCommandWarnFailure("卷筒拟合应用首圈周长和厚度", ret);
@@ -1683,6 +1774,7 @@ uint8_t Test_ProcessSerialCommand(uint8_t *command)
         case 'M':
             printf("位置源切换\t编码轮切换到电机记步\r\n");
             ret = MotorCtrl_SwitchPositionSourceToMotor();
+            /* 先处理异常边界，避免本模块状态机带故障继续运行。 */
             if (ret != NO_ERROR) {
                 printf("位置源切换\t切换电机记步失败\t错误码=0x%08lX\r\n", (unsigned long)ret);
                 Test_ProcessCommandWarnFailure("切换电机记步", ret);
@@ -1694,6 +1786,7 @@ uint8_t Test_ProcessSerialCommand(uint8_t *command)
         case 'E':
             printf("位置源切换\t电机记步切换到编码轮\r\n");
             ret = MotorCtrl_SwitchPositionSourceToEncoder();
+            /* 先处理异常边界，避免本模块状态机带故障继续运行。 */
             if (ret != NO_ERROR) {
                 printf("位置源切换\t切换编码轮记步失败\t错误码=0x%08lX\r\n", (unsigned long)ret);
                 Test_ProcessCommandWarnFailure("切换编码轮记步", ret);
@@ -1730,7 +1823,7 @@ uint8_t Test_ProcessSerialCommand(uint8_t *command)
     return 0U;
 }
 
-//电机小步进上行测试
+/* 电机小步进上行测试 */
 void motor_step_up_text(void) {
     int i = 0;
     int32_t ticks = 4 * 32;
@@ -1763,7 +1856,7 @@ void motor_step_up_text(void) {
     printf("motor text over\n");
 }
 
-//电机小步进下行测试
+/* 电机小步进下行测试 */
 void motor_step_down_text(void) {
     int i = 0;
     int32_t ticks = 4 * 32;
@@ -1797,7 +1890,7 @@ void motor_step_down_text(void) {
     printf("motor text over\n");
 }
 
-//电机步进测试
+/* 电机步进测试 */
 void motor_step_text(void) {
     int i = 0;
     int32_t ticks = 4 * 32;
@@ -1957,19 +2050,19 @@ void motor_step_text(void) {
     stpr_disableDriver(&stepper);
     printf("motor text over\n");
 }
-///*********************** 测试函数 ***********************/
+/* / *********************** 测试函数 *********************** / */
 void Test_Params_Storage(void) {
-	// 备份原始参数
+	/* 备份原始参数 */
 	DeviceParameters original = g_deviceParams;
 
-	// 测试写读校验
-	g_deviceParams.tankHeight = 1234; // 测试数据
-	save_device_params(); //存储
+	/* 测试写读校验 */
+	g_deviceParams.tankHeight = 1234; /* 测试数据 */
+	save_device_params(); /* 存储 */
 
 	if (load_device_params()) {
 		if (g_deviceParams.tankHeight != 1234) {
 			printf("数据加载失败");
-			// 数据验证失败处理
+			/* 数据验证失败处理 */
 		} else {
 			printf("数据加载成功: tankHeight = %lu", g_deviceParams.tankHeight);
 		}
@@ -1977,15 +2070,19 @@ void Test_Params_Storage(void) {
 		printf("CRC校验失败");
 	}
 
-	// 恢复原始参数
+	/* 恢复原始参数 */
 	g_deviceParams = original;
-	save_device_params(); //存储
+	save_device_params(); /* 存储 */
 }
 
 #define TEST_ENCODER_SLOT_SIZE  (0x40u)
 #define TEST_ENCODER_A_ADDRESS   FRAM_ANGLE_ADDRESS
 #define TEST_ENCODER_B_ADDRESS   (TEST_ENCODER_A_ADDRESS + TEST_ENCODER_SLOT_SIZE)
 
+/**
+ * @brief 执行本模块中的 Test_ParamEncoder_AB_Backup 逻辑。
+ * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ */
 void Test_ParamEncoder_AB_Backup(void)
 {
     DeviceParameters param_backup = g_deviceParams;
@@ -2019,6 +2116,7 @@ void Test_ParamEncoder_AB_Backup(void)
     WriteSingleData(0u, FRAM_PARAM_A_ADDRESS + param_magic_offset);
     WriteSingleData(0u, FRAM_PARAM_B_ADDRESS + param_magic_offset);
 
+    /* 先处理异常边界，避免本模块状态机带故障继续运行。 */
     if ((!load_device_params()) && (g_measurement.device_status.error_code == PARAM_EEPROM_FAIL)) {
         printf("[通过] 参数区: A/B都损坏时已报错 PARAM_EEPROM_FAIL\r\n");
     } else {
@@ -2037,6 +2135,7 @@ void Test_ParamEncoder_AB_Backup(void)
     WriteSingleData(0u, TEST_ENCODER_A_ADDRESS);
     Initialize_Encoder();
 
+    /* 先处理异常边界，避免本模块状态机带故障继续运行。 */
     if (g_measurement.device_status.error_code != ENCODER_POWERON_FAIL) {
         printf("[通过] 编码区: A损坏后已回退到B\r\n");
     } else {
@@ -2049,6 +2148,7 @@ void Test_ParamEncoder_AB_Backup(void)
     WriteSingleData(0u, TEST_ENCODER_B_ADDRESS);
     Initialize_Encoder();
 
+    /* 先处理异常边界，避免本模块状态机带故障继续运行。 */
     if (g_measurement.device_status.error_code == ENCODER_POWERON_FAIL) {
         printf("[通过] 编码区: A/B都损坏时已报错 ENCODER_POWERON_FAIL\r\n");
     } else {
@@ -2063,11 +2163,21 @@ void Test_ParamEncoder_AB_Backup(void)
 
     printf("===== AB双备份回退测试结束 =====\r\n\r\n");
 }
+/**
+ * @brief 显示或打印本模块中的 Test_SensorCommPrintResult 逻辑。
+ *
+ * @param tag 业务参数。
+ * @param name 业务参数。
+ * @param ret 业务参数。
+ * @param fail_count 业务参数。
+ * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ */
 static void Test_SensorCommPrintResult(const char *tag,
                                        const char *name,
                                        uint32_t ret,
                                        uint32_t *fail_count)
 {
+    /* 先处理异常边界，避免本模块状态机带故障继续运行。 */
     if (ret == NO_ERROR) {
         printf("[传感器][正常] %s %s\r\n", tag, name);
         return;
@@ -2088,6 +2198,12 @@ static void Test_SensorCommPrintResult(const char *tag,
     }
 }
 
+/**
+ * @brief 执行本模块中的 __attribute__ 逻辑。
+ *
+ * @param tag 业务参数。
+ * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ */
 static void __attribute__((unused)) Sensor_CommCheckAndLog(const char *tag)
 {
     float temp = 0.0f;
@@ -2103,6 +2219,7 @@ static void __attribute__((unused)) Sensor_CommCheckAndLog(const char *tag)
 
         ret = (uint32_t)DSM_Read_Frequency_Density_Temp(&frequency, &density, &temp);
         Test_SensorCommPrintResult(tag, "DSM一代读取频率/密度/温度", ret, &comm_fail_cnt);
+        /* 先处理异常边界，避免本模块状态机带故障继续运行。 */
         if (ret == NO_ERROR) {
             printf("[传感器][正常] %s DSM一代 频率=%.3f Hz 密度=%.3f 温度=%.3f C\r\n",
                    tag,
@@ -2120,6 +2237,7 @@ static void __attribute__((unused)) Sensor_CommCheckAndLog(const char *tag)
 
         ret = (uint32_t)DSM_V2_Read_Density(&density);
         Test_SensorCommPrintResult(tag, "LTD/V2读取密度", ret, &comm_fail_cnt);
+        /* 先处理异常边界，避免本模块状态机带故障继续运行。 */
         if (ret == NO_ERROR) {
             printf("[传感器][正常] %s LTD/V2 密度=%.3f\r\n", tag, density);
         }
@@ -2196,6 +2314,7 @@ void motor_text_manual_once(float run_distance_mm, int dir)
     Test_MotorTextMoveByNoCheck(run_distance_mm, dir);
     printf("%s\t运动已下发\t距离=%.2fmm\r\n", phase_name, run_distance_mm);
 
+    /* 先处理异常边界，避免本模块状态机带故障继续运行。 */
     if (Test_WaitMotorStoppedNoErrorCheck(phase_name) == 0U) {
         Test_MotorTextRecoverDriverAfterCommandSwitch(phase_name, NULL);
         Test_MotorTextExit(&error_snapshot);
@@ -2242,6 +2361,7 @@ void motor_jog_text(float run_distance_mm, int dir, uint32_t speed_x100)
 
     Test_MotorTextClearIgnoredError();
     ret = MotorCtrl_Init();
+    /* 先处理异常边界，避免本模块状态机带故障继续运行。 */
     if (ret != NO_ERROR) {
         printf("BJ点动测试\t初始化失败\t返回=0x%08lX\r\n", (unsigned long)ret);
         Test_MotorTextExit(&error_snapshot);
@@ -2282,6 +2402,7 @@ void motor_jog_to_position_text(float target_mm, uint32_t speed_x100)
 
     Test_MotorTextClearIgnoredError();
     ret = MotorCtrl_Init();
+    /* 先处理异常边界，避免本模块状态机带故障继续运行。 */
     if (ret != NO_ERROR) {
         printf("BJP点动到位测试\t初始化失败\t返回=0x%08lX\r\n", (unsigned long)ret);
         Test_MotorTextExit(&error_snapshot);
@@ -2337,6 +2458,7 @@ void motor_text(float run_distance_mm, uint8_t enable_sensor_comm)
     (void)stpr_writeInt(&stepper, TMC5130_XTARGET, 0);
     Test_MotorTextClearIgnoredError();
     while (1) {
+        /* 先处理异常边界，避免本模块状态机带故障继续运行。 */
         if (Test_ShouldAbortForCommandSwitchNoError()) {
             Test_MotorTextRecoverDriverAfterCommandSwitch("B电机测试", NULL);
             Test_MotorTextExit(&error_snapshot);
@@ -2372,6 +2494,15 @@ void motor_text(float run_distance_mm, uint8_t enable_sensor_comm)
     }
 }
 
+/**
+ * @brief 执行本模块中的 motor_text_encoder 逻辑。
+ *
+ * @param run_distance_mm 业务参数。
+ * @param enable_sensor_comm 业务参数。
+ * @param speed_x100 业务参数。
+ * @param accel_multiplier 业务参数。
+ * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ */
 void motor_text_encoder(float run_distance_mm,
                         uint8_t enable_sensor_comm,
                         uint32_t speed_x100,
@@ -2432,6 +2563,7 @@ void motor_text_encoder(float run_distance_mm,
            (unsigned int)enable_sensor_comm);
 
     while (1) {
+        /* 先处理异常边界，避免本模块状态机带故障继续运行。 */
         if (Test_ShouldAbortForCommandSwitchNoError()) {
             Test_MotorTextRecoverDriverAfterCommandSwitch("BE编码器测试", &ramp_snapshot);
             Test_MotorTextExit(&error_snapshot);
@@ -2461,6 +2593,7 @@ void motor_text_encoder(float run_distance_mm,
             Test_MotorTextExit(&error_snapshot);
             return;
         }
+        /* 先处理异常边界，避免本模块状态机带故障继续运行。 */
         if (ret != NO_ERROR) {
             printf("BE下行\t阶段异常，先初始化电机再按固定区间重试\t返回=0x%08lX\r\n", (unsigned long)ret);
             if (Test_MotorTextReinitForRestartNoExit("BE下行", &ramp_snapshot, accel_mul) == STATE_SWITCH) {
@@ -2480,6 +2613,7 @@ void motor_text_encoder(float run_distance_mm,
                (long)down_target_encoder,
                Test_EncoderCountToDistanceMm(down_target_encoder - origin_encoder));
 
+        /* 先处理异常边界，避免本模块状态机带故障继续运行。 */
         if (Test_ShouldAbortForCommandSwitchNoError()) {
             Test_MotorTextRecoverDriverAfterCommandSwitch("BE编码器测试", &ramp_snapshot);
             Test_MotorTextExit(&error_snapshot);
@@ -2509,6 +2643,7 @@ void motor_text_encoder(float run_distance_mm,
             Test_MotorTextExit(&error_snapshot);
             return;
         }
+        /* 先处理异常边界，避免本模块状态机带故障继续运行。 */
         if (ret != NO_ERROR) {
             printf("BE上行\t阶段异常，先初始化电机再按固定区间重试\t返回=0x%08lX\r\n", (unsigned long)ret);
             if (Test_MotorTextReinitForRestartNoExit("BE上行", &ramp_snapshot, accel_mul) == STATE_SWITCH) {
@@ -2538,23 +2673,23 @@ void motor_text_encoder(float run_distance_mm,
 void DSM_V2_Test_AllParams(void) {
 	printf("\r\n===== DSM V2 通讯测试开始 =====\r\n");
 
-//    // 1. 切换到液位模式
-//    int ret = DSM_V2_SwitchToLevelMode();
-//    if (ret == NO_ERROR)
-//        printf("切换液位模式成功\r\n");
-//    else {
-//        printf("切换液位模式失败，错误码 %d\r\n", ret);
-//        return; // 通讯异常，后面读也没意义
-//    }
+/* / / 1. 切换到液位模式 */
+/* int ret = DSM_V2_SwitchToLevelMode(); */
+/* if (ret == NO_ERROR) */
+/* printf("切换液位模式成功\r\n"); */
+/* else { */
+/* printf("切换液位模式失败，错误码 %d\r\n", ret); */
+/* return; / / 通讯异常，后面读也没意义 */
+/* } */
 
-	// 2. 定义变量
+	/* 2. 定义变量 */
 	float temp = 0, rho = 0, mu = 0, nu = 0;
 	uint32_t freq = 0, sensor_id = 0;
 
-	// 3. 依次读取各参数
-//    if (DSM_V2_Read_SoftwareVersion(&ver) == NO_ERROR)
-//        printf("软件版本: %.3f\r\n", ver);
-//    else printf("读取软件版本失败\r\n");
+	/* 3. 依次读取各参数 */
+/* if (DSM_V2_Read_SoftwareVersion(&ver) == NO_ERROR) */
+/* printf("软件版本: %.3f\r\n", ver); */
+/* else printf("读取软件版本失败\r\n"); */
 
 	if (DSM_V2_Read_Temperature(&temp) == NO_ERROR) {
 		printf("温度值: %.3f ℃\r\n", temp);
@@ -2562,26 +2697,31 @@ void DSM_V2_Test_AllParams(void) {
 	} else
 		printf("读取温度失败\r\n");
 
+	/* 先处理异常边界，避免本模块状态机带故障继续运行。 */
 	if (DSM_V2_Read_Density(&rho) == NO_ERROR) {
 		g_measurement.single_point_monitoring.density = (int) (rho * 10);
 		printf("密度值: %.3f\r\n", rho);
 	} else
 		printf("读取密度失败\r\n");
 
+	/* 先处理异常边界，避免本模块状态机带故障继续运行。 */
 	if (DSM_V2_Read_DynamicViscosity(&mu) == NO_ERROR)
 		printf("动力粘度: %.3f\r\n", mu);
 	else
 		printf("读取动力粘度失败\r\n");
 
+	/* 先处理异常边界，避免本模块状态机带故障继续运行。 */
 	if (DSM_V2_Read_KinematicViscosity(&nu) == NO_ERROR)
 		printf("运动粘度: %.3f\r\n", nu);
 	else
 		printf("读取运动粘度失败\r\n");
 
+    /* 先处理异常边界，避免本模块状态机带故障继续运行。 */
     if (DSM_V2_Read_LevelFrequency(&freq) == NO_ERROR)
         printf("液位频率: %lu Hz\r\n", (unsigned long)freq);
     else printf("读取液位频率失败\r\n");
 
+    /* 先处理异常边界，避免本模块状态机带故障继续运行。 */
     if (DSM_V2_Read_SensorID(&sensor_id) == NO_ERROR)
         printf("传感器号: %lu\r\n", (unsigned long)sensor_id);
     else printf("读取传感器号失败\r\n");
@@ -2661,6 +2801,10 @@ void SensorWireless_CommTest(void)
            (unsigned long)ok_count,
            (unsigned long)fail_count);
 }
+/**
+ * @brief 显示或打印本模块中的 Demo_SinglePointDisplay_ShouldAbort 逻辑。
+ * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ */
 static uint8_t Demo_SinglePointDisplay_ShouldAbort(void)
 {
     if (!HasEffectiveCommandSwitchRequest()) {
@@ -2673,6 +2817,18 @@ static uint8_t Demo_SinglePointDisplay_ShouldAbort(void)
     return 1;
 }
 
+/**
+ * @brief 更新本模块中的 Demo_SinglePointDisplay_UpdateResult 逻辑。
+ *
+ * @param result 业务参数。
+ * @param temperature_raw 业务参数。
+ * @param density_raw 业务参数。
+ * @param pos_01mm 输入/输出指针。
+ * @param standard_density_raw 业务参数。
+ * @param vcf20_raw 业务参数。
+ * @param weight_density_raw 业务参数。
+ * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ */
 static void Demo_SinglePointDisplay_UpdateResult(volatile DensityMeasurement *result,
                                                  uint32_t temperature_raw,
                                                  uint32_t density_raw,
@@ -2693,6 +2849,10 @@ static void Demo_SinglePointDisplay_UpdateResult(volatile DensityMeasurement *re
     result->weight_density = weight_density_raw;
 }
 
+/**
+ * @brief 显示或打印本模块中的 Demo_SinglePointDisplayMock 逻辑。
+ * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ */
 void Demo_SinglePointDisplayMock(void)
 {
     static const int16_t temp_wave_x100[]    = { 0, 6, 12, 18, 24, 18, 12, 6, 0, -4, -8, -4 };
@@ -2836,6 +2996,12 @@ void Demo_SinglePointDisplayMock(void)
         HAL_Delay(500);
     }
 }
+/**
+ * @brief 执行本模块中的 Test_TMC5130_IsValidGstat 逻辑。
+ *
+ * @param gstat 业务参数。
+ * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ */
 static uint8_t Test_TMC5130_IsValidGstat(uint32_t gstat)
 {
     return ((gstat & ~0x07UL) == 0UL);
@@ -2939,11 +3105,11 @@ void Test_TMC5130_SPI_Static(void)
            (unsigned long)chopconf_read_fail,
            (unsigned long)xactual_read_fail);
 }
-//测试主函数
+/* 测试主函数 */
 void Test_main(void) {
-	Test_FRAM_ReadWrite(); //测试FRAM读写
-//	motor_text(300.0f, 0U);
-	Test_Params_Storage(); //测试参数存储
-	CRC32_HAL_Test(); //CRC校验测试
+	Test_FRAM_ReadWrite(); /* 测试FRAM读写 */
+/* motor_text(300.0f, 0U); */
+	Test_Params_Storage(); /* 测试参数存储 */
+	CRC32_HAL_Test(); /* CRC校验测试 */
 }
 

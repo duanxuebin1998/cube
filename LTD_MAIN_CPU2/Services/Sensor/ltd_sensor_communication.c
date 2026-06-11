@@ -18,12 +18,12 @@
 #define DSM_V2_RX_TIMEOUT  DSM_CMD_TIMEOUT
 #endif
 
-// 主机方向功能码
+/* 主机方向功能码 */
 typedef enum {
 	DSM_V2_FUNC_R = 'R', DSM_V2_FUNC_W = 'W', DSM_V2_FUNC_L = 'T', DSM_V2_FUNC_D = 'D', DSM_V2_FUNC_B = 'B',
 } dsm_v2_func_t;
 
-// === 内部：求和校验（前7字节） ===
+/* === 内部：求和校验（前7字节） === */
 static inline uint8_t DSM_V2_CalcSum(const uint8_t f[8]) {
 	uint32_t s = 0;
 	for (int i = 0; i < 7; ++i)
@@ -31,7 +31,7 @@ static inline uint8_t DSM_V2_CalcSum(const uint8_t f[8]) {
 	return (uint8_t) (s & 0xFF);
 }
 
-// === 内部：打帧（addr=0x00，data 大端入参；若给 0 则无所谓端序） ===
+/* === 内部：打帧（addr=0x00，data 大端入参；若给 0 则无所谓端序） === */
 static inline void DSM_V2_MakeFrame(uint8_t out[8], uint8_t func, uint32_t data_be, uint8_t param) {
 	out[0] = 0x00;
 	out[1] = func;
@@ -43,27 +43,27 @@ static inline void DSM_V2_MakeFrame(uint8_t out[8], uint8_t func, uint32_t data_
 	out[7] = DSM_V2_CalcSum(out);
 }
 
-// === 内部：传输 8→8 ===
+/* === 内部：传输 8→8 === */
 
-// === 1) 发前清空可能的残留：非正式“flush” ===
+/* === 1) 发前清空可能的残留：非正式“flush” === */
 static void UART6_DrainRX_UntilIdle(uint32_t idle_ms) {
     uint8_t dump;
     uint32_t last = HAL_GetTick();
     for (;;) {
-        // 1字节超时设为1ms：有字节就读走并更新时间；没字节就看是否空闲超时
+        /* 1字节超时设为1ms：有字节就读走并更新时间；没字节就看是否空闲超时 */
         if (HAL_UART_Receive(&huart6, &dump, 1, 1) == HAL_OK) {
-            last = HAL_GetTick(); // 读到了字节，刷新“最近一次活动时间”
+            last = HAL_GetTick(); /* 读到了字节，刷新“最近一次活动时间” */
         } else {
-            if ((HAL_GetTick() - last) >= idle_ms) break; // 空闲>=idle_ms 认为干净
+            if ((HAL_GetTick() - last) >= idle_ms) break; /* 空闲>=idle_ms 认为干净 */
         }
     }
 
-    // 清理溢出等异常标志（可选，避免ORE悬挂）
+    /* 清理溢出等异常标志（可选，避免ORE悬挂） */
     __HAL_UART_CLEAR_OREFLAG(&huart6);
-    // 读SR/DR清RXNE的老派做法（F4上清ORE通常需要读SR后读DR，HAL宏已封装）
+    /* 读SR/DR清RXNE的老派做法（F4上清ORE通常需要读SR后读DR，HAL宏已封装） */
 }
 
-static uint8_t s_dsm_v2_dma_rx_buf[8];
+static uint8_t s_dsm_v2_dma_rx_buf[8]; /* LTD 传感器通信数据缓冲区，注意与中断或 DMA 访问边界保持一致。 */
 
 /**
  * @brief 停止 UART6 DMA 接收并清理固定 8 字节协议的硬件错误状态。
@@ -113,10 +113,12 @@ static uint32_t DSM_V2_WaitTransmitDmaDone(uint32_t timeout)
         if (huart6.gState == HAL_UART_STATE_READY) {
             return NO_ERROR;
         }
+        /* 先处理异常边界，避免LTD 传感器通信状态机带故障继续运行。 */
         if (huart6.ErrorCode != HAL_UART_ERROR_NONE) {
             DSM_V2_StopDmaReceive();
             return OTHER_PERIPHERAL_CONFIG_ERROR;
         }
+        /* LTD 传感器通信与外设通信之间保留等待时间，避免硬件或对端协议尚未准备好。 */
         HAL_Delay(1);
     }
 
@@ -171,6 +173,7 @@ static uint32_t DSM_V2_WaitFixedReceiveDma(uint8_t rx[8], uint32_t timeout)
             DSM_V2_StopDmaReceive();
             return STATE_SWITCH;
         }
+        /* 先处理异常边界，避免LTD 传感器通信状态机带故障继续运行。 */
         if (huart6.ErrorCode != HAL_UART_ERROR_NONE) {
             DSM_V2_StopDmaReceive();
             return SENSOR_RESP_FORMAT_ERROR;
@@ -182,6 +185,7 @@ static uint32_t DSM_V2_WaitFixedReceiveDma(uint8_t rx[8], uint32_t timeout)
             DSM_V2_StopDmaReceive();
             return NO_ERROR;
         }
+        /* LTD 传感器通信与外设通信之间保留等待时间，避免硬件或对端协议尚未准备好。 */
         HAL_Delay(1);
     }
 
@@ -194,6 +198,13 @@ static uint32_t DSM_V2_WaitFixedReceiveDma(uint8_t rx[8], uint32_t timeout)
         return (got == 0U) ? SENSOR_DEVICE_COMM_TIMEOUT : SENSOR_RESP_FORMAT_ERROR;
     }
 }
+/**
+ * @brief 执行LTD 传感器通信中的 DSM_V2_Transceive 逻辑。
+ *
+ * @param tx 业务参数。
+ * @param rx 业务参数。
+ * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ */
 static int DSM_V2_Transceive(const uint8_t tx[8], uint8_t rx[8]) {
 #ifdef DEBUG_DSM
 	printf("V2发送: ");
@@ -201,8 +212,9 @@ static int DSM_V2_Transceive(const uint8_t tx[8], uint8_t rx[8]) {
 		printf("%02X ", tx[i]);
 	printf("\r\n");
 #endif
-	UART6_DrainRX_UntilIdle(5); // 发前清空残留数据
+	UART6_DrainRX_UntilIdle(5); /* 发前清空残留数据 */
 	uint32_t rx_ret = DSM_V2_StartFixedReceiveDma(rx);
+	/* 先处理异常边界，避免LTD 传感器通信状态机带故障继续运行。 */
 	if (rx_ret != NO_ERROR) {
 		return (int)rx_ret;
 	}
@@ -215,11 +227,13 @@ static int DSM_V2_Transceive(const uint8_t tx[8], uint8_t rx[8]) {
 	}
 
 	rx_ret = DSM_V2_WaitTransmitDmaDone(DSM_CMD_TIMEOUT);
+	/* 先处理异常边界，避免LTD 传感器通信状态机带故障继续运行。 */
 	if (rx_ret != NO_ERROR) {
 		return (int)rx_ret;
 	}
 
 	rx_ret = DSM_V2_WaitFixedReceiveDma(rx, DSM_V2_RX_TIMEOUT);
+	/* 先处理异常边界，避免LTD 传感器通信状态机带故障继续运行。 */
 	if (rx_ret != NO_ERROR) {
 		return (int)rx_ret;
 	}
@@ -238,9 +252,9 @@ static int DSM_V2_Transceive(const uint8_t tx[8], uint8_t rx[8]) {
 	return NO_ERROR;
 }
 
-// === 内部：校验功能码/参数码 ===
+/* === 内部：校验功能码/参数码 === */
 static int DSM_V2_CheckReply(const uint8_t tx[8], const uint8_t rx[8]) {
-	uint8_t expect_func = tx[1] | 0x80; // 从机高位置1
+	uint8_t expect_func = tx[1] | 0x80; /* 从机高位置1 */
 	uint8_t expect_param = ((tx[1] == (uint8_t)DSM_V2_MODE_LEVEL) ||
 	                        (tx[1] == (uint8_t)DSM_V2_MODE_DENSITY)) ? 0x00U : tx[6];
 
@@ -264,10 +278,11 @@ static int DSM_V2_CheckReply(const uint8_t tx[8], const uint8_t rx[8]) {
 	return NO_ERROR;
 }
 
-// === 内部：端序解析 ===
+/* === 内部：端序解析 === */
 static inline int32_t DSM_V2_ParseInt32_LE(const uint8_t *d) {
 	return (int32_t) ((uint32_t) d[3] << 24 | (uint32_t) d[2] << 16 | (uint32_t) d[1] << 8 | (uint32_t) d[0]);
 }
+/* 按小端字节序解析 float，用于 LTD/DSM V2 协议浮点参数。 */
 static inline float DSM_V2_ParseFloat_LE(const uint8_t *d) {
 	union {
 		uint32_t u;
@@ -277,27 +292,29 @@ static inline float DSM_V2_ParseFloat_LE(const uint8_t *d) {
 	return cvt.f;
 }
 
-// === 对外：切换模式（param=0x00） ===
+/* === 对外：切换模式（param=0x00） === */
 int DSM_V2_SwitchMode(dsm_v2_mode_t mode) {
 	uint8_t tx[8], rx[8];
 	int last_err = OTHER_PERIPHERAL_CONFIG_ERROR;
 
-	DSM_V2_MakeFrame(tx, (uint8_t) mode, 0x00000000u, 0x00U); // 模式切换帧参数码固定为 0x00
+	DSM_V2_MakeFrame(tx, (uint8_t) mode, 0x00000000u, 0x00U); /* 模式切换帧参数码固定为 0x00 */
 
 	for (int attempt = 0; attempt < DSM_V2_MAX_RETRY; ++attempt) {
 		if (HasEffectiveCommandSwitchRequest()) {
 			/* 命令切换是正常打断，直接向上透传，不参与故障重试。 */
 			return STATE_SWITCH;
 		}
+		/* LTD 传感器通信与外设通信之间保留等待时间，避免硬件或对端协议尚未准备好。 */
 		HAL_Delay(DSM_PRE_SEND_DELAY);
 		int ret = DSM_V2_Transceive(tx, rx);
 		if (ret == STATE_SWITCH) {
 			/* 命令切换是正常打断，直接向上透传，不参与故障重试。 */
 			return STATE_SWITCH;
 		}
+		/* 先处理异常边界，避免LTD 传感器通信状态机带故障继续运行。 */
 		if (ret != NO_ERROR) {
 			last_err = ret;
-			// 错误	阶段：错误重试	模块：传感器	操作：切换模式	原因：ErrorLog_GetReasonByCode((uint32_t)ret)	尝试：(attempt + 1)/DSM_V2_MAX_RETRY	错误码：ret	错误名：ErrorLog_GetCodeName(ret)
+			/* 错误 阶段：错误重试 模块：传感器 操作：切换模式 原因：ErrorLog_GetReasonByCode((uint32_t)ret) 尝试：(attempt + 1)/DSM_V2_MAX_RETRY 错误码：ret 错误名：ErrorLog_GetCodeName(ret) */
 			ErrorLog_Retry(ERROR_LOG_MODULE_SENSOR,
 			               ERROR_LOG_OP_SWITCH_MODE,
 			               ErrorLog_GetReasonByCode((uint32_t)ret),
@@ -312,9 +329,10 @@ int DSM_V2_SwitchMode(dsm_v2_mode_t mode) {
 			/* 命令切换是正常打断，直接向上透传，不参与故障重试。 */
 			return STATE_SWITCH;
 		}
+		/* 先处理异常边界，避免LTD 传感器通信状态机带故障继续运行。 */
 		if (ret == NO_ERROR) {
 			if (attempt > 0) {
-				// 错误	阶段：重试成功	模块：传感器	操作：切换模式	原因：通信失败	尝试：(attempt + 1)/DSM_V2_MAX_RETRY
+				/* 错误 阶段：重试成功 模块：传感器 操作：切换模式 原因：通信失败 尝试：(attempt + 1)/DSM_V2_MAX_RETRY */
 				ErrorLog_Recover(ERROR_LOG_MODULE_SENSOR,
 				                 ERROR_LOG_OP_SWITCH_MODE,
 				                 ERROR_LOG_REASON_COMM_FAIL,
@@ -327,13 +345,14 @@ int DSM_V2_SwitchMode(dsm_v2_mode_t mode) {
 			return NO_ERROR;
 		}
 		last_err = ret;
-		// 错误	阶段：错误重试	模块：传感器	操作：切换模式	原因：ErrorLog_GetReasonByCode((uint32_t)ret)	尝试：(attempt + 1)/DSM_V2_MAX_RETRY	错误码：ret	错误名：ErrorLog_GetCodeName(ret)
+		/* 错误 阶段：错误重试 模块：传感器 操作：切换模式 原因：ErrorLog_GetReasonByCode((uint32_t)ret) 尝试：(attempt + 1)/DSM_V2_MAX_RETRY 错误码：ret 错误名：ErrorLog_GetCodeName(ret) */
 		ErrorLog_Retry(ERROR_LOG_MODULE_SENSOR,
 		               ERROR_LOG_OP_SWITCH_MODE,
 		               ErrorLog_GetReasonByCode((uint32_t)ret),
 		               (uint32_t)(attempt + 1),
 		               DSM_V2_MAX_RETRY,
 		               (uint32_t)ret);
+		/* LTD 传感器通信与外设通信之间保留等待时间，避免硬件或对端协议尚未准备好。 */
 		HAL_Delay(DSM_BCC_DELAY);
 	}
 #ifdef DEBUG_DSM
@@ -341,14 +360,22 @@ int DSM_V2_SwitchMode(dsm_v2_mode_t mode) {
 #endif
 	return last_err;
 }
+/**
+ * @brief 执行LTD 传感器通信中的 DSM_V2_SwitchToLevelMode 逻辑。
+ * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ */
 int DSM_V2_SwitchToLevelMode(void) {
 	return DSM_V2_SwitchMode(DSM_V2_MODE_LEVEL);
 }
+/**
+ * @brief 执行LTD 传感器通信中的 DSM_V2_SwitchToDensityMode 逻辑。
+ * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ */
 int DSM_V2_SwitchToDensityMode(void) {
 	return DSM_V2_SwitchMode(DSM_V2_MODE_DENSITY);
 }
 
-// === 对外：通用读取 ===
+/* === 对外：通用读取 === */
 int DSM_V2_Read_FloatParam(uint8_t param, float *out_value) {
 	if (!out_value)
 		return PARAM_ADDRESS_OVERFLOW;
@@ -363,15 +390,17 @@ int DSM_V2_Read_FloatParam(uint8_t param, float *out_value) {
 			/* 命令切换是正常打断，直接向上透传，不参与故障重试。 */
 			return STATE_SWITCH;
 		}
+		/* LTD 传感器通信与外设通信之间保留等待时间，避免硬件或对端协议尚未准备好。 */
 		HAL_Delay(DSM_PRE_SEND_DELAY);
 		int ret = DSM_V2_Transceive(tx, rx);
 		if (ret == STATE_SWITCH) {
 			/* 命令切换是正常打断，直接向上透传，不参与故障重试。 */
 			return STATE_SWITCH;
 		}
+		/* 先处理异常边界，避免LTD 传感器通信状态机带故障继续运行。 */
 		if (ret != NO_ERROR) {
 			last_err = ret;
-			// 错误	阶段：错误重试	模块：传感器	操作：读取浮点参数	原因：ErrorLog_GetReasonByCode((uint32_t)ret)	尝试：(attempt + 1)/DSM_V2_MAX_RETRY	错误码：ret	错误名：ErrorLog_GetCodeName(ret)
+			/* 错误 阶段：错误重试 模块：传感器 操作：读取浮点参数 原因：ErrorLog_GetReasonByCode((uint32_t)ret) 尝试：(attempt + 1)/DSM_V2_MAX_RETRY 错误码：ret 错误名：ErrorLog_GetCodeName(ret) */
 			ErrorLog_Retry(ERROR_LOG_MODULE_SENSOR,
 			               ERROR_LOG_OP_READ_FLOAT_PARAM,
 			               ErrorLog_GetReasonByCode((uint32_t)ret),
@@ -386,11 +415,12 @@ int DSM_V2_Read_FloatParam(uint8_t param, float *out_value) {
 			/* 命令切换是正常打断，直接向上透传，不参与故障重试。 */
 			return STATE_SWITCH;
 		}
+		/* 先处理异常边界，避免LTD 传感器通信状态机带故障继续运行。 */
 		if (ret == NO_ERROR) {
 			float v = DSM_V2_ParseFloat_LE(rx + 2);
 			*out_value = v;
             if (attempt > 0) {
-                // 错误	阶段：重试成功	模块：传感器	操作：读取浮点参数	原因：通信失败	尝试：(attempt + 1)/DSM_V2_MAX_RETRY
+                /* 错误 阶段：重试成功 模块：传感器 操作：读取浮点参数 原因：通信失败 尝试：(attempt + 1)/DSM_V2_MAX_RETRY */
                 ErrorLog_Recover(ERROR_LOG_MODULE_SENSOR,
                                  ERROR_LOG_OP_READ_FLOAT_PARAM,
                                  ERROR_LOG_REASON_COMM_FAIL,
@@ -403,18 +433,26 @@ int DSM_V2_Read_FloatParam(uint8_t param, float *out_value) {
 			return NO_ERROR;
 		}
 		last_err = ret;
-		// 错误	阶段：错误重试	模块：传感器	操作：读取浮点参数	原因：ErrorLog_GetReasonByCode((uint32_t)ret)	尝试：(attempt + 1)/DSM_V2_MAX_RETRY	错误码：ret	错误名：ErrorLog_GetCodeName(ret)
+		/* 错误 阶段：错误重试 模块：传感器 操作：读取浮点参数 原因：ErrorLog_GetReasonByCode((uint32_t)ret) 尝试：(attempt + 1)/DSM_V2_MAX_RETRY 错误码：ret 错误名：ErrorLog_GetCodeName(ret) */
 		ErrorLog_Retry(ERROR_LOG_MODULE_SENSOR,
 		               ERROR_LOG_OP_READ_FLOAT_PARAM,
 		               ErrorLog_GetReasonByCode((uint32_t)ret),
 		               (uint32_t)(attempt + 1),
 		               DSM_V2_MAX_RETRY,
 		               (uint32_t)ret);
+		/* LTD 传感器通信与外设通信之间保留等待时间，避免硬件或对端协议尚未准备好。 */
 		HAL_Delay(DSM_BCC_DELAY);
 	}
 	return last_err;
 }
 
+/**
+ * @brief 读取LTD 传感器通信中的 DSM_V2_Read_IntParam 逻辑。
+ *
+ * @param param 输入/输出指针。
+ * @param out_value 待处理数值。
+ * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ */
 int DSM_V2_Read_IntParam(uint8_t param, int32_t *out_value) {
 	if (!out_value)
 		return PARAM_ADDRESS_OVERFLOW;
@@ -429,15 +467,17 @@ int DSM_V2_Read_IntParam(uint8_t param, int32_t *out_value) {
 			/* 命令切换是正常打断，直接向上透传，不参与故障重试。 */
 			return STATE_SWITCH;
 		}
+		/* LTD 传感器通信与外设通信之间保留等待时间，避免硬件或对端协议尚未准备好。 */
 		HAL_Delay(DSM_PRE_SEND_DELAY);
 		int ret = DSM_V2_Transceive(tx, rx);
 		if (ret == STATE_SWITCH) {
 			/* 命令切换是正常打断，直接向上透传，不参与故障重试。 */
 			return STATE_SWITCH;
 		}
+		/* 先处理异常边界，避免LTD 传感器通信状态机带故障继续运行。 */
 		if (ret != NO_ERROR) {
 			last_err = ret;
-			// 错误	阶段：错误重试	模块：传感器	操作：读取整数参数	原因：ErrorLog_GetReasonByCode((uint32_t)ret)	尝试：(attempt + 1)/DSM_V2_MAX_RETRY	错误码：ret	错误名：ErrorLog_GetCodeName(ret)
+			/* 错误 阶段：错误重试 模块：传感器 操作：读取整数参数 原因：ErrorLog_GetReasonByCode((uint32_t)ret) 尝试：(attempt + 1)/DSM_V2_MAX_RETRY 错误码：ret 错误名：ErrorLog_GetCodeName(ret) */
 			ErrorLog_Retry(ERROR_LOG_MODULE_SENSOR,
 			               ERROR_LOG_OP_READ_INT_PARAM,
 			               ErrorLog_GetReasonByCode((uint32_t)ret),
@@ -452,11 +492,12 @@ int DSM_V2_Read_IntParam(uint8_t param, int32_t *out_value) {
 			/* 命令切换是正常打断，直接向上透传，不参与故障重试。 */
 			return STATE_SWITCH;
 		}
+		/* 先处理异常边界，避免LTD 传感器通信状态机带故障继续运行。 */
 		if (ret == NO_ERROR) {
 			int32_t v = DSM_V2_ParseInt32_LE(rx + 2);
 			*out_value = v;
             if (attempt > 0) {
-                // 错误	阶段：重试成功	模块：传感器	操作：读取整数参数	原因：通信失败	尝试：(attempt + 1)/DSM_V2_MAX_RETRY
+                /* 错误 阶段：重试成功 模块：传感器 操作：读取整数参数 原因：通信失败 尝试：(attempt + 1)/DSM_V2_MAX_RETRY */
                 ErrorLog_Recover(ERROR_LOG_MODULE_SENSOR,
                                  ERROR_LOG_OP_READ_INT_PARAM,
                                  ERROR_LOG_REASON_COMM_FAIL,
@@ -469,46 +510,83 @@ int DSM_V2_Read_IntParam(uint8_t param, int32_t *out_value) {
 			return NO_ERROR;
 		}
 		last_err = ret;
-		// 错误	阶段：错误重试	模块：传感器	操作：读取整数参数	原因：ErrorLog_GetReasonByCode((uint32_t)ret)	尝试：(attempt + 1)/DSM_V2_MAX_RETRY	错误码：ret	错误名：ErrorLog_GetCodeName(ret)
+		/* 错误 阶段：错误重试 模块：传感器 操作：读取整数参数 原因：ErrorLog_GetReasonByCode((uint32_t)ret) 尝试：(attempt + 1)/DSM_V2_MAX_RETRY 错误码：ret 错误名：ErrorLog_GetCodeName(ret) */
 		ErrorLog_Retry(ERROR_LOG_MODULE_SENSOR,
 		               ERROR_LOG_OP_READ_INT_PARAM,
 		               ErrorLog_GetReasonByCode((uint32_t)ret),
 		               (uint32_t)(attempt + 1),
 		               DSM_V2_MAX_RETRY,
 		               (uint32_t)ret);
+		/* LTD 传感器通信与外设通信之间保留等待时间，避免硬件或对端协议尚未准备好。 */
 		HAL_Delay(DSM_BCC_DELAY);
 	}
 	return last_err;
 }
 
-// === 便捷读取 ===
+/* === 便捷读取 === */
 int DSM_V2_Read_SoftwareVersion(float *v) {
 	return DSM_V2_Read_FloatParam(0x00, v);
 }
+/**
+ * @brief 读取 LTD/DSM V2 传感器温度参数。
+ * @param t 温度输出指针。
+ * @return 0 表示读取成功，非 0 表示通信失败。
+ */
 int DSM_V2_Read_Temperature(float *t) {
 	return DSM_V2_Read_FloatParam(0x06, t);
 }
+/**
+ * @brief 读取LTD 传感器通信中的 DSM_V2_Read_Density 逻辑。
+ *
+ * @param rho 业务参数。
+ * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ */
 int DSM_V2_Read_Density(float *rho) {
 	return DSM_V2_Read_FloatParam(0x07, rho);
 }
+/**
+ * @brief 读取LTD 传感器通信中的 DSM_V2_Read_DynamicViscosity 逻辑。
+ *
+ * @param mu 业务参数。
+ * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ */
 int DSM_V2_Read_DynamicViscosity(float *mu) {
 	return DSM_V2_Read_FloatParam(0x08, mu);
 }
+/**
+ * @brief 读取LTD 传感器通信中的 DSM_V2_Read_KinematicViscosity 逻辑。
+ *
+ * @param nu 业务参数。
+ * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ */
 int DSM_V2_Read_KinematicViscosity(float *nu) {
 	return DSM_V2_Read_FloatParam(0x09, nu);
 }
+/**
+ * @brief 读取LTD 传感器通信中的 DSM_V2_Read_MeanSquare45 逻辑。
+ *
+ * @param msq45 业务参数。
+ * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ */
 int DSM_V2_Read_MeanSquare45(float *msq45) {
 	return DSM_V2_Read_FloatParam(0x11, msq45);
-} // 17
+} /* 17 */
+/**
+ * @brief 读取LTD 传感器通信中的 DSM_V2_Read_MeanSquare22p5 逻辑。
+ *
+ * @param msq22p5 业务参数。
+ * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ */
 int DSM_V2_Read_MeanSquare22p5(float *msq22p5) {
 	return DSM_V2_Read_FloatParam(0x12, msq22p5);
-} // 18
-// R04 液位频率（整型）
+} /* 18 */
+/* R04 液位频率（整型） */
 int DSM_V2_Read_LevelFrequency(uint32_t *freq_hz) {
 	if (!freq_hz)
 		return PARAM_ADDRESS_OVERFLOW;
 	int32_t v = 0;
-	int ret = DSM_V2_Read_IntParam(0x04, &v);   // 参数码 0x04 = R04
+	int ret = DSM_V2_Read_IntParam(0x04, &v);   /* 参数码 0x04 = R04 */
+	/* 先处理异常边界，避免LTD 传感器通信状态机带故障继续运行。 */
 	if (ret == NO_ERROR) {
 		if (v < 0) {
 			v = -v;
@@ -520,12 +598,13 @@ int DSM_V2_Read_LevelFrequency(uint32_t *freq_hz) {
 	}
 	return ret;
 }
-// R16 液位频率（整型）
+/* R16 液位频率（整型） */
 int DSM_V2_Read_DensityFrequency(float *freq_hz,float *freq_45,float *freq_225) {
 	if (!freq_hz || !freq_45 || !freq_225)
 		return PARAM_ADDRESS_OVERFLOW;
 	float v = 0;
-	int ret = DSM_V2_Read_FloatParam(0x11, &v);   // 参数码 0x11 = 45度扫频平方均值
+	int ret = DSM_V2_Read_FloatParam(0x11, &v);   /* 参数码 0x11 = 45度扫频平方均值 */
+	/* 先处理异常边界，避免LTD 传感器通信状态机带故障继续运行。 */
 	if (ret == NO_ERROR) {
 		*freq_45 = v;
 		if (v > 0.0f) {
@@ -535,7 +614,8 @@ int DSM_V2_Read_DensityFrequency(float *freq_hz,float *freq_45,float *freq_225) 
 			printf("LTD频率周期平方均值为0，等待稳定/未测到\r\n");
 		}
 	}
-	ret = DSM_V2_Read_FloatParam(0x12, &v);   // 参数码 0x12 = 22.5度扫频平方均值
+	ret = DSM_V2_Read_FloatParam(0x12, &v);   /* 参数码 0x12 = 22.5度扫频平方均值 */
+	/* 先处理异常边界，避免LTD 传感器通信状态机带故障继续运行。 */
 	if (ret == NO_ERROR) {
 		*freq_225 =  v;
 		if (v <= 0.0f) {
@@ -544,11 +624,18 @@ int DSM_V2_Read_DensityFrequency(float *freq_hz,float *freq_45,float *freq_225) 
 	}
 	return ret;
 }
+/**
+ * @brief 读取LTD 传感器通信中的 DSM_V2_Read_SensorID 逻辑。
+ *
+ * @param sensor_id 业务参数。
+ * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ */
 int DSM_V2_Read_SensorID(uint32_t *sensor_id) {
 	if (!sensor_id)
 		return PARAM_ADDRESS_OVERFLOW;
 	int32_t v = 0;
-	int ret = DSM_V2_Read_IntParam(0x16, &v); // 22
+	int ret = DSM_V2_Read_IntParam(0x16, &v); /* 22 */
+	/* 先处理异常边界，避免LTD 传感器通信状态机带故障继续运行。 */
 	if (ret == NO_ERROR)
 		*sensor_id = (uint32_t) v;
 	return ret;

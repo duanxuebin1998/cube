@@ -67,6 +67,7 @@ static uint8_t App_HandleIdleGlobalError(void) {
 		(g_measurement.device_status.current_command == CMD_NONE) &&
 		(error_code != NO_ERROR) &&
 		(error_code != STATE_SWITCH)) {
+		/* 先处理异常边界，避免应用主循环状态机带故障继续运行。 */
 		if (g_measurement.device_status.device_state != STATE_ERROR) {
             FaultManager_SetErrorState(error_code,
                                        GetShortFilename(__FILE__),
@@ -82,6 +83,7 @@ static uint8_t App_HandleIdleGlobalError(void) {
 		return 1;
 	}
 
+	/* 先处理异常边界，避免应用主循环状态机带故障继续运行。 */
 	if ((g_measurement.device_status.device_state == STATE_ERROR) &&
 		(g_deviceParams.command == CMD_NONE) &&
 		(g_measurement.device_status.current_command == CMD_NONE) &&
@@ -91,29 +93,32 @@ static uint8_t App_HandleIdleGlobalError(void) {
 
 	return 0;
 }
-// 初始化函数
+/* 初始化函数 */
 void App_Init(void) {
 	uint32_t motor_init_ret;
 	printf("LTD重启！\n");
-	init_device_params(); // 初始化设备参数
-	Initialize_Encoder(); // 初始化编码器
+	init_device_params(); /* 初始化设备参数 */
+	Initialize_Encoder(); /* 初始化编码器 */
 	/* 这 1 秒延时保留给外设稳定，但必须放在编码器启动之后，让编码器先采集首帧。 */
 	HAL_Delay(1000);
-	HartInit(); // 初始化AD5421
+	HartInit(); /* 初始化AD5421 */
 	weight_init();
-	HostCommuInit(); // 初始化Modbus通信
-	RelayOutput_Init(); // 初始化继电器报警输出，默认全部释放
-	AD5421_SetCurrent(6.0); // 设置初始电流为4mA
+	HostCommuInit(); /* 初始化Modbus通信 */
+	RelayOutput_Init(); /* 初始化继电器报警输出，默认全部释放 */
+	AD5421_SetCurrent(6.0); /* 设置初始电流为4mA */
 	motor_init_ret = MotorCtrl_Init();
+	/* 先处理异常边界，避免应用主循环状态机带故障继续运行。 */
 	if (motor_init_ret != NO_ERROR) {
 		g_measurement.device_status.error_code = motor_init_ret;
 		printf("电机初始化失败：0x%08lX\r\n", (unsigned long)motor_init_ret);
 	}
-	fault_info_init(); // 初始化故障信息
-	DetectSensorType(); // 检测传感器类型
-	g_deviceParams.command = CMD_NONE; // 清除命令
-	g_measurement.device_status.zero_point_status=1; // 设置零点状态为需要回零点
+	fault_info_init(); /* 初始化故障信息 */
+	DetectSensorType(); /* 检测传感器类型 */
+	g_deviceParams.command = CMD_NONE; /* 清除命令 */
+	g_measurement.device_status.zero_point_status=1; /* 设置零点状态为需要回零点 */
+	/* 先处理异常边界，避免应用主循环状态机带故障继续运行。 */
 	if (g_deviceParams.powerOnDefaultCommand != CMD_NONE) {
+		/* 先处理异常边界，避免应用主循环状态机带故障继续运行。 */
 		if (motor_init_ret != NO_ERROR) {
 			printf("上电默认命令被拦截：电机初始化失败\r\n");
 		} else if ((!MotorCtrl_IsPositionSourceMotor()) && (!Encoder_IsReady())) {
@@ -125,12 +130,12 @@ void App_Init(void) {
 			printf("上电默认命令：%d\r\n", g_deviceParams.command);
 		}
 	}
-	//测试函数
-//	Test_main(); // 测试函数
-//	motor_text(300.0f, 0U); //电机测试
-//	MotorCtrl_SwitchPositionSourceToMotor();//切换成电机记步测试
+	/* 测试函数 */
+/* Test_main(); / / 测试函数 */
+/* motor_text(300.0f, 0U); / /电机测试 */
+/* MotorCtrl_SwitchPositionSourceToMotor();/ /切换成电机记步测试 */
 }
-// 主循环任务
+/* 主循环任务 */
 /*
  * 主循环本身不直接做测量，它更像一个“调度器”。
  * 每轮循环只做一件最高优先级的事，优先级从高到低如下：
@@ -145,21 +150,21 @@ void App_Init(void) {
  */
 void App_MainLoop(void) {
 
-	/*测试指令*/
-	//		DSM_V2_Test_AllParams(); // 二代传感器测试函数
-	//		Sensor_Test(); // 传感器测试
-	//		Test_FRAM_ReadWrite();
-//			printf("{encoder}%d\r\n{weight}%d\r\n", (int) g_encoder_count, g_weight);
-	//		printf("位置%d", g_measurement.debug_data.sensor_position);
-	//		HAL_GPIO_WritePin(HART_RTS_GPIO_Port, HART_RTS_Pin, GPIO_PIN_RESET);
-	//		HAL_UART_Transmit_DMA(&huart2, "123456", 6);  // 通过UART发送响应
+	/* 测试指令 */
+	/* DSM_V2_Test_AllParams(); / / 二代传感器测试函数 */
+	/* Sensor_Test(); / / 传感器测试 */
+	/* Test_FRAM_ReadWrite(); */
+/* printf("{encoder}%d\r\n{weight}%d\r\n", (int) g_encoder_count, g_weight); */
+	/* printf("位置%d", g_measurement.debug_data.sensor_position); */
+	/* HAL_GPIO_WritePin(HART_RTS_GPIO_Port, HART_RTS_Pin, GPIO_PIN_RESET); */
+	/* HAL_UART_Transmit_DMA(&huart2, "123456", 6); / / 通过UART发送响应 */
 
 
 	/* 后台轻量检查：这里只做一次快速轮询，不在主循环里展开复杂处理。 */
 	(void)MotorCtrl_PollRuntimePosition();
 	(void)Weight_CheckCommunicationTimeout();
 	HostCommu_ProcessDeferredLogs();
-	RelayOutput_ProcessPending(); // main-context relay refresh
+	RelayOutput_ProcessPending(); /* main-context relay refresh */
 
 	/* 第一优先级：处理刚收到的原始命令。
 	 * 这一层通常来自调试口/串口缓存，process_command() 会把字符命令翻译成具体动作，
@@ -167,7 +172,7 @@ void App_MainLoop(void) {
 	if (new_command_ready) {
 		/* 新串口命令优先级最高，先取消等待中的自动恢复，避免恢复命令和新命令竞争。 */
 		FaultRecovery_Cancel("serial command");
-		new_command_ready = 0;  // 本轮已经接管这条新命令，先清标志避免重复处理
+		new_command_ready = 0;  /* 本轮已经接管这条新命令，先清标志避免重复处理 */
 		process_command(received_buffer);
 	}
 	/* 第二优先级：执行已经挂起的正式命令。
@@ -177,7 +182,7 @@ void App_MainLoop(void) {
 
         /* 参数命令同样打断自动恢复，主循环本轮只执行最新命令。 */
         FaultRecovery_Cancel("formal command");
-        g_deviceParams.command = CMD_NONE; // 取走后立即清空，避免下轮重复执行
+        g_deviceParams.command = CMD_NONE; /* 取走后立即清空，避免下轮重复执行 */
         App_ExecuteMeasureCommand(command);
     }
     /* 第三优先级：自动恢复期间保持原错误状态，每 1 秒检查一次部件参数。
@@ -190,6 +195,7 @@ void App_MainLoop(void) {
                 App_ExecuteMeasureCommand(recovery.retry_command);
             }
             process_device_params_deferred_tasks();
+            /* 应用主循环与外设通信之间保留等待时间，避免硬件或对端协议尚未准备好。 */
             HAL_Delay(50);
             return;
         }
@@ -198,11 +204,13 @@ void App_MainLoop(void) {
          * 也就是说：自动恢复会先保持原错误状态，空闲兜底只处理未纳入恢复流程的全局错误。 */
         if (App_HandleIdleGlobalError()) {
             process_device_params_deferred_tasks();
-            HAL_Delay(50); // 出错分支也保持和主循环一致的节拍
+            /* 应用主循环与外设通信之间保留等待时间，避免硬件或对端协议尚未准备好。 */
+            HAL_Delay(50); /* 出错分支也保持和主循环一致的节拍 */
             return;
         }
     }
 	/* 本轮尾声：无论本轮是否空闲，只要没提前 return，就统一走一次节拍延时。 */
 	process_device_params_deferred_tasks();
-	HAL_Delay(50); // 延时50ms
+	/* 应用主循环与外设通信之间保留等待时间，避免硬件或对端协议尚未准备好。 */
+	HAL_Delay(50); /* 延时50ms */
 }

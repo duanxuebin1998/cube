@@ -17,42 +17,42 @@
 #include "measure_zero.h"
 #include "sensor.h"
 #include "error_log.h"
-// TODO: 这里替换为你的水位检测头文件
-// #include "water.h"  // 提供 check_water_status()
+/* TODO: 这里替换为你的水位检测头文件 */
+/* #include "water.h" / / 提供 check_water_status() */
 
 /* -------------------- 可配置参数 -------------------- */
-#define WATER_INIT_UP_MM                 (100.0f)   // 初始上行避让
+#define WATER_INIT_UP_MM                 (100.0f)   /* 初始上行避让 */
 #define WATER_ROUGH_RETRY_MAX            (3)
 #define WATER_PRECISE_RETRY_MAX          (3)
-#define WATER_ROUGH_CONFIRM_DELAY_MS     (3000)     // 粗找停下后等待稳定
-#define WATER_FAIL_RECOVER_UP_MM         (100.0f)   // 粗找失败上行回退
+#define WATER_ROUGH_CONFIRM_DELAY_MS     (3000)     /* 粗找停下后等待稳定 */
+#define WATER_FAIL_RECOVER_UP_MM         (100.0f)   /* 粗找失败上行回退 */
 
-#define WATER_V1_SLOWDOWN_TH             (1000)     // 接近粗定位点：第一次降速阈值
-#define WATER_V2_SLOWDOWN_TH             (100)      // 更接近：第二次降速阈值
-#define WATER_OVERSHOOT_TH               (-100)     // 走过头保护阈值
+#define WATER_V1_SLOWDOWN_TH             (1000)     /* 接近粗定位点：第一次降速阈值 */
+#define WATER_V2_SLOWDOWN_TH             (100)      /* 更接近：第二次降速阈值 */
+#define WATER_OVERSHOOT_TH               (-100)     /* 走过头保护阈值 */
 
 /* 速度设置（沿用你 bottom 的写法） */
 #define WATER_VEL_MID                    (16 * 32 * 40)
 #define WATER_VEL_SLOW                   (16 * 32 * 2)
 
-//#define WATER_FOLLOW_OFFSET              (5.0f)     /* 阈值 = air + 50 */
-//#define WATER_FOLLOW_HYSTERESIS          (0.3f)     /* 滞回，防抖：可调 3~10 */
-//#define WATER_FOLLOW_SAMPLE_MS           (500)      /* 采样周期 */
-//#define WATER_FOLLOW_STEP_SMALL_MM       (0.2f)     /* 阈值附近小步 */
-//#define WATER_FOLLOW_STEP_MED_MM         (5.0f)     /* 中等偏差 */
-//#define WATER_FOLLOW_STEP_BIG_MM         (20.0f)    /* 大偏差/饱和时快速拉回 */
-//#define WATER_CAP_SAT_LIMIT              (9999.0f)  /* 认为“饱和/无穷大”的阈值，用于保护 */
-//#define WATER_FOLLOW_LOST_DIFF_BIG       (2.5f)     /* 认为偏差很大 */
-//#define WATER_FOLLOW_LOST_COUNT_MAX      (20)       /* 连续大偏差次数阈值：20次*500ms=10s */
+/* #define WATER_FOLLOW_OFFSET (5.0f) / * 阈值 = air + 50 * / */
+/* #define WATER_FOLLOW_HYSTERESIS (0.3f) / * 滞回，防抖：可调 3~10 * / */
+/* #define WATER_FOLLOW_SAMPLE_MS (500) / * 采样周期 * / */
+/* #define WATER_FOLLOW_STEP_SMALL_MM (0.2f) / * 阈值附近小步 * / */
+/* #define WATER_FOLLOW_STEP_MED_MM (5.0f) / * 中等偏差 * / */
+/* #define WATER_FOLLOW_STEP_BIG_MM (20.0f) / * 大偏差/饱和时快速拉回 * / */
+/* #define WATER_CAP_SAT_LIMIT (9999.0f) / * 认为“饱和/无穷大”的阈值，用于保护 * / */
+/* #define WATER_FOLLOW_LOST_DIFF_BIG (2.5f) / * 认为偏差很大 * / */
+/* #define WATER_FOLLOW_LOST_COUNT_MAX (20) / * 连续大偏差次数阈值：20次*500ms=10s * / */
 
 
-//#define WATER_FOLLOW_OFFSET            (50.0f)   /* 阈值 = air + 50 */
-//#define WATER_FOLLOW_HYSTERESIS        (5.0f)    /* 滞回，防抖：可调 3~10 */
+/* #define WATER_FOLLOW_OFFSET (50.0f) / * 阈值 = air + 50 * / */
+/* #define WATER_FOLLOW_HYSTERESIS (5.0f) / * 滞回，防抖：可调 3~10 * / */
 #define WATER_FOLLOW_SAMPLE_MS         (500)     /* 采样周期 */
 #define WATER_FOLLOW_STEP_SMALL_MM     (0.2f)    /* 阈值附近小步 */
 #define WATER_FOLLOW_STEP_MED_MM       (3.0f)    /* 中等偏差 */
 #define WATER_FOLLOW_STEP_BIG_MM       (10.0f)    /* 大偏差/饱和时快速拉回 */
-#define WATER_CAP_SAT_LIMIT            (9999.0f)/* 认为“饱和/无穷大”的阈值，用于保护 */
+#define WATER_CAP_SAT_LIMIT            (9999.0f) /* 认为“饱和/无穷大”的阈值，用于保护 */
 #define WATER_FOLLOW_LOST_DIFF_BIG       (80.0f)   /* 认为偏差很大 */
 #define WATER_FOLLOW_LOST_COUNT_MAX      (20)      /* 连续大偏差次数阈值：20次*500ms=10s */
 #define WATER_FOLLOW_ENTER_TIMEOUT_MS    (180000u)  /* 长时间未进入稳定区，也认为已进入跟随态 */
@@ -64,7 +64,7 @@
 #define WATER_SENSOR_TEST_POINT_COUNT    (1000u)   /* 10cm / 0.1mm = 1000 个采样点 */
 /* -------------------- 全局变量 -------------------- */
 /* 存储最终确定的水位位置（以 sensor_position 记录） */
-int32_t water_value = -100000000; // 初始值设为无效
+int32_t water_value = -100000000; /* 初始值设为无效 */
 
 /* -------------------- 函数原型 -------------------- */
 typedef struct {
@@ -72,8 +72,8 @@ typedef struct {
     float capacitance;
 } WaterSensorTestPoint;
 
-static WaterSensorTestPoint g_water_sensor_test_up_points[WATER_SENSOR_TEST_POINT_COUNT];
-static WaterSensorTestPoint g_water_sensor_test_down_points[WATER_SENSOR_TEST_POINT_COUNT];
+static WaterSensorTestPoint g_water_sensor_test_up_points[WATER_SENSOR_TEST_POINT_COUNT]; /* 水位测量模块级变量，保存跨函数共享的业务状态。 */
+static WaterSensorTestPoint g_water_sensor_test_down_points[WATER_SENSOR_TEST_POINT_COUNT]; /* 水位测量模块级变量，保存跨函数共享的业务状态。 */
 
 static int SearchWaterRough(void);
 static int SearchWaterPrecise(void);
@@ -86,6 +86,12 @@ static void WaterSensorTestPrintResults(const char *phase_name,
                                         uint16_t point_count,
                                         int32_t water_pos_01mm);
 
+/**
+ * @brief 执行水位测量中的 WaterCapRawToFloat 逻辑。
+ *
+ * @param raw 业务参数。
+ * @return 计算后的业务数值。
+ */
 static inline float WaterCapRawToFloat(uint32_t raw)
 {
     return raw / 1000.0f;
@@ -126,11 +132,23 @@ static inline int32_t WaterCableTargetFromLevel(int32_t lvl_target_01mm)
 
     return (int32_t)cable_target;
 }
+/**
+ * @brief 执行水位测量中的 WaterLevelClampForReport 逻辑。
+ *
+ * @param lvl 业务参数。
+ * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ */
 static inline uint32_t WaterLevelClampForReport(int32_t lvl)
 {
     return (lvl > 0) ? (uint32_t)lvl : 0U;
 }
 
+/**
+ * @brief 执行水位测量中的 WaterLevelSetAndLog 逻辑。
+ *
+ * @param lvl 业务参数。
+ * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ */
 static inline void WaterLevelSetAndLog(int32_t lvl)
 {
     uint32_t old_lvl = g_measurement.water_measurement.water_level;
@@ -152,12 +170,25 @@ static inline void WaterLevelSetAndLog(int32_t lvl)
     }
 }
 
+/**
+ * @brief 执行水位测量中的 WaterLevelSyncFromCable 逻辑。
+ * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ */
 static inline void WaterLevelSyncFromCable(void)
 {
     int32_t lvl = WaterLevelCalcFromCable();
     WaterLevelSetAndLog(lvl);
 }
 
+/**
+ * @brief 执行水位测量中的 WaterSensorTestScanDirection 逻辑。
+ *
+ * @param phase_name 输入/输出指针。
+ * @param dir 业务参数。
+ * @param points 输入/输出指针。
+ * @param point_count 输入/输出指针。
+ * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ */
 static uint32_t WaterSensorTestScanDirection(const char *phase_name,
                                              uint32_t dir,
                                              WaterSensorTestPoint *points,
@@ -192,6 +223,15 @@ static uint32_t WaterSensorTestScanDirection(const char *phase_name,
     return NO_ERROR;
 }
 
+/**
+ * @brief 显示或打印水位测量中的 WaterSensorTestPrintResults 逻辑。
+ *
+ * @param phase_name 输入/输出指针。
+ * @param points 输入/输出指针。
+ * @param point_count 输入/输出指针。
+ * @param water_pos_01mm 业务参数。
+ * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ */
 static void WaterSensorTestPrintResults(const char *phase_name,
                                         const WaterSensorTestPoint *points,
                                         uint16_t point_count,
@@ -258,7 +298,7 @@ uint32_t SearchWaterLevel(void)
 			g_measurement.water_measurement.zero_capacitance = (float)g_deviceParams.zero_cap/10.0;
 		}
     }
-    //打印零点电容值，水位电容阈值，水位滞后阈值
+    /* 打印零点电容值，水位电容阈值，水位滞后阈值 */
     printf("水位测量\t零点电容值：%lu\r\n", g_deviceParams.zero_cap);
     printf("水位测量\t水位电容阈值：%lu\r\n", g_deviceParams.water_cap_threshold);
     printf("水位测量\t水位寻找电容阈值：%lu\r\n", g_deviceParams.water_find_cap_threshold);
@@ -313,7 +353,7 @@ uint32_t SearchWaterLevel(void)
         }
     }
 
-    /*************** 粗找阶段 - 带重试机制 ***************/
+    /* ************** 粗找阶段 - 带重试机制 ************** */
     try_times = 0;
     while (try_times < WATER_ROUGH_RETRY_MAX)
     {
@@ -330,9 +370,10 @@ uint32_t SearchWaterLevel(void)
 
         CHECK_COMMAND_SWITCH(ret);
 
+        /* 先处理异常边界，避免水位测量状态机带故障继续运行。 */
         if (ret != NO_ERROR)
         {
-            // 错误	阶段：错误重试	模块：测量	操作：粗找水位	原因：搜索失败	尝试：try_times/WATER_ROUGH_RETRY_MAX	错误码：ret	错误名：ErrorLog_GetCodeName(ret)
+            /* 错误 阶段：错误重试 模块：测量 操作：粗找水位 原因：搜索失败 尝试：try_times/WATER_ROUGH_RETRY_MAX 错误码：ret 错误名：ErrorLog_GetCodeName(ret) */
             ErrorLog_Retry(ERROR_LOG_MODULE_MEASURE,
                            ERROR_LOG_OP_SEARCH_WATER_ROUGH,
                            ERROR_LOG_REASON_SEARCH_FAIL,
@@ -347,7 +388,7 @@ uint32_t SearchWaterLevel(void)
         {
             if (try_times > 1U)
             {
-                // 错误	阶段：重试成功	模块：测量	操作：粗找水位	原因：恢复成功	尝试：try_times/WATER_ROUGH_RETRY_MAX
+                /* 错误 阶段：重试成功 模块：测量 操作：粗找水位 原因：恢复成功 尝试：try_times/WATER_ROUGH_RETRY_MAX */
                 ErrorLog_Recover(ERROR_LOG_MODULE_MEASURE,
                                  ERROR_LOG_OP_SEARCH_WATER_ROUGH,
                                  ERROR_LOG_REASON_RECOVER_OK,
@@ -358,6 +399,7 @@ uint32_t SearchWaterLevel(void)
         }
     }
 
+    /* 先处理异常边界，避免水位测量状态机带故障继续运行。 */
     if (ret != NO_ERROR)
     {
         RETURN_ERROR(last_rough_ret);
@@ -365,7 +407,7 @@ uint32_t SearchWaterLevel(void)
 
     printf("水位测量\t粗找完成：水位：%ld\r\n", water_value);
 
-    /*************** 精找阶段 - 带重试 ***************/
+    /* ************** 精找阶段 - 带重试 ************** */
     try_times = 0;
     while (try_times < WATER_PRECISE_RETRY_MAX)
     {
@@ -379,11 +421,12 @@ uint32_t SearchWaterLevel(void)
             return STATE_SWITCH;
         }
 
+        /* 先处理异常边界，避免水位测量状态机带故障继续运行。 */
         if (ret == NO_ERROR)
         {
             if (try_times > 1U)
             {
-                // 错误	阶段：重试成功	模块：测量	操作：精找水位	原因：恢复成功	尝试：try_times/WATER_PRECISE_RETRY_MAX
+                /* 错误 阶段：重试成功 模块：测量 操作：精找水位 原因：恢复成功 尝试：try_times/WATER_PRECISE_RETRY_MAX */
                 ErrorLog_Recover(ERROR_LOG_MODULE_MEASURE,
                                  ERROR_LOG_OP_SEARCH_WATER_PRECISE,
                                  ERROR_LOG_REASON_RECOVER_OK,
@@ -394,7 +437,7 @@ uint32_t SearchWaterLevel(void)
         }
         else
         {
-            // 错误	阶段：错误重试	模块：测量	操作：精找水位	原因：搜索失败	尝试：try_times/WATER_PRECISE_RETRY_MAX	错误码：ret	错误名：ErrorLog_GetCodeName(ret)
+            /* 错误 阶段：错误重试 模块：测量 操作：精找水位 原因：搜索失败 尝试：try_times/WATER_PRECISE_RETRY_MAX 错误码：ret 错误名：ErrorLog_GetCodeName(ret) */
             ErrorLog_Retry(ERROR_LOG_MODULE_MEASURE,
                            ERROR_LOG_OP_SEARCH_WATER_PRECISE,
                            ERROR_LOG_REASON_SEARCH_FAIL,
@@ -405,12 +448,13 @@ uint32_t SearchWaterLevel(void)
         }
     }
 
+    /* 先处理异常边界，避免水位测量状态机带故障继续运行。 */
     if (ret != NO_ERROR)
     {
         CHECK_ERROR(ret);
     }
 
-    /*************** 最终记录 ***************/
+    /* ************** 最终记录 ************** */
     WaterLevelSyncFromCable();
 
     printf("水位测量\t水位：%ld mm\r\n", g_measurement.water_measurement.water_level);
@@ -418,6 +462,10 @@ uint32_t SearchWaterLevel(void)
     return NO_ERROR;
 }
 
+/**
+ * @brief 执行水位测量中的 WaterSensorCapacitanceProfileTest 逻辑。
+ * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ */
 uint32_t WaterSensorCapacitanceProfileTest(void)
 {
     uint32_t ret;
@@ -473,17 +521,21 @@ uint32_t WaterSensorCapacitanceProfileTest(void)
     return NO_ERROR;
 }
 
+/**
+ * @brief 执行水位测量中的 SearchWaterRough 逻辑。
+ * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ */
 static int SearchWaterRough(void)
 {
     uint32_t ret;
     uint8_t  water_state = NORMAL;
 
-    MotorCtrl_LostStepInit();// 重置丢步检测计数器
+    MotorCtrl_LostStepInit(); /* 重置丢步检测计数器 */
     /* 持续下探直到检测到 WATER */
     while (1)
     {
-	ret = MotorCtrl_MoveDown(MotorCtrl_GetDefaultSpeedX100());  // 启动电机向下运动
-    	CHECK_ERROR(ret); // 检查上行是否成功
+	ret = MotorCtrl_MoveDown(MotorCtrl_GetDefaultSpeedX100());  /* 启动电机向下运动 */
+	CHECK_ERROR(ret); /* 检查上行是否成功 */
 
         ret = check_water_status(&water_state);
         CHECK_ERROR(ret);
@@ -543,7 +595,7 @@ static int SearchWaterPrecise(void)
         printf("水位测量\t上行完成\r\n");
     }
 
-    MotorCtrl_LostStepInit();// 重置丢步检测计数器
+    MotorCtrl_LostStepInit(); /* 重置丢步检测计数器 */
     while (1)
     {
         speed_x100 = MotorCtrl_GetDefaultSpeedX100();
@@ -556,8 +608,8 @@ static int SearchWaterPrecise(void)
             speed_x100 = 40;
         }
 
-	ret = MotorCtrl_MoveDown(speed_x100);  // 启动电机向下运动
-    	CHECK_ERROR(ret); // 检查上行是否成功
+	ret = MotorCtrl_MoveDown(speed_x100);  /* 启动电机向下运动 */
+	CHECK_ERROR(ret); /* 检查上行是否成功 */
 
         ret = check_water_status(&water_state);
         CHECK_ERROR(ret);
@@ -567,11 +619,11 @@ static int SearchWaterPrecise(void)
         }
 
         /* 走过头保护 */
-//        if (g_deviceParams.water_tank_height - g_measurement.debug_data.cable_length - water_value < WATER_OVERSHOOT_TH)
-//        {
-//            printf("水位测量\t精确寻找水位未找到水位\r\n");
-//            RETURN_ERROR(MEASUREMENT_WATERLEVEL_LOW);
-//        }
+/* if (g_deviceParams.water_tank_height - g_measurement.debug_data.cable_length - water_value < WATER_OVERSHOOT_TH) */
+/* { */
+/* printf("水位测量\t精确寻找水位未找到水位\r\n"); */
+/* RETURN_ERROR(MEASUREMENT_WATERLEVEL_LOW); */
+/* } */
 
         ret = MotorCtrl_CheckLostStepAutoTiming(g_measurement.debug_data.sensor_position);
         CHECK_ERROR(ret);
@@ -586,12 +638,17 @@ static int SearchWaterPrecise(void)
     return NO_ERROR;
 }
 
+/**
+ * @brief 读取水位测量中的 read_zero_capacitance 逻辑。
+ * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ */
 uint32_t read_zero_capacitance(void)
 {
     uint32_t ret;
     float    cap = 0.0f;
 
     ret = Sensor_ReadWaterCapacitance(&cap);
+    /* 先处理异常边界，避免水位测量状态机带故障继续运行。 */
     if (ret != NO_ERROR) {
         return ret;
     }
@@ -599,12 +656,17 @@ uint32_t read_zero_capacitance(void)
     g_measurement.water_measurement.zero_capacitance = cap;
 
     printf("零点电容 = %.1f\r\n", cap);
-    //参数存储
+    /* 参数存储 */
     save_device_params();
     return NO_ERROR;
 }
 
 
+/**
+ * @brief 根据当前电容和零点电容判断水位探头是否接触水层。
+ * @param water_state 输出水位状态。
+ * @return NO_ERROR 表示判断完成，其他值表示参数或传感器异常。
+ */
 uint32_t check_water_status(uint8_t *water_state)
 {
     uint32_t ret;
@@ -617,6 +679,7 @@ uint32_t check_water_status(uint8_t *water_state)
     }
 
     ret = Sensor_ReadWaterCapacitance(&cap);
+    /* 先处理异常边界，避免水位测量状态机带故障继续运行。 */
     if (ret != NO_ERROR) {
         return ret;
     }
@@ -673,6 +736,7 @@ static uint32_t AlignToWaterLevel_01mm(int32_t lvl_target_01mm)
            move_mm);
 
     ret = MotorCtrl_MoveAndWait(move_mm, dir, MotorCtrl_GetDefaultSpeedX100());
+    /* 先处理异常边界，避免水位测量状态机带故障继续运行。 */
     if (ret != NO_ERROR) return ret;
 
     return NO_ERROR;
@@ -720,7 +784,7 @@ uint32_t FindWaterLevel_FastByStateFlip_StableExit(uint32_t stable_win_ms)
     /* 翻转缓存 */
     static uint8_t have_last_flip = 0;
     static int32_t last_flip_lvl  = 0;
-    have_last_flip = 0;//每次调用都重置，确保独立测量
+    have_last_flip = 0; /* 每次调用都重置，确保独立测量 */
     /* -------------------- 零点检查 -------------------- */
     if (g_measurement.water_measurement.zero_capacitance == 0)
     {
@@ -734,7 +798,7 @@ uint32_t FindWaterLevel_FastByStateFlip_StableExit(uint32_t stable_win_ms)
 			g_measurement.water_measurement.zero_capacitance = (float)g_deviceParams.zero_cap/10.0;
 		}
     }
-    //打印零点电容值，水位电容阈值，水位滞后阈值
+    /* 打印零点电容值，水位电容阈值，水位滞后阈值 */
     printf("水位测量\t零点电容值：%lu\r\n", g_deviceParams.zero_cap);
     printf("水位测量\t水位电容阈值：%lu\r\n", g_deviceParams.water_cap_threshold);
     printf("水位测量\t水位寻找电容阈值：%lu\r\n", g_deviceParams.water_find_cap_threshold);
@@ -814,7 +878,7 @@ uint32_t FindWaterLevel_FastByStateFlip_StableExit(uint32_t stable_win_ms)
         {
             have_last_flip = 1;
             last_flip_lvl  = lvl_flip;
-            win_start_tick = HAL_GetTick();//开始稳定判定计时
+            win_start_tick = HAL_GetTick(); /* 开始稳定判定计时 */
             printf("快速跟随\t第1次翻转 液位=%.1fmm -> 缓存(等待第二次翻转后才开始更新/判稳)\r\n",
                    lvl_flip / 10.0f);
 
@@ -855,7 +919,7 @@ uint32_t FindWaterLevel_FastByStateFlip_StableExit(uint32_t stable_win_ms)
                 min_level = lvl;
                 max_level = lvl;
                 printf("快速跟随\t波动超限 -> 重置稳定窗口(最小=最大=%.1fmm)\r\n", lvl / 10.0f);
-                //如果设备状态不是水位跟随状态，设置水位跟随状态
+                /* 如果设备状态不是水位跟随状态，设置水位跟随状态 */
 				if (g_measurement.device_status.device_state != STATE_FOLLOW_WATERING) {
 					g_measurement.device_status.device_state = STATE_FOLLOW_WATERING;
 				}
@@ -910,6 +974,12 @@ typedef enum {
     WATER_RECOVER_BY_STATE_FLIP = 1,
 } WaterRecoverStrategy;
 
+/**
+ * @brief 执行水位测量中的 WaterRecoverAfterLost 逻辑。
+ *
+ * @param strategy 业务参数。
+ * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ */
 static uint32_t WaterRecoverAfterLost(WaterRecoverStrategy strategy)
 {
     if (strategy == WATER_RECOVER_BY_SEARCH) {
@@ -966,6 +1036,12 @@ static uint32_t MonitorWaterFollowChange(float target_cap)
     }
 }
 
+/**
+ * @brief 执行水位测量中的 FollowWaterLevelCore 逻辑。
+ *
+ * @param recover_strategy 业务参数。
+ * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ */
 static uint32_t FollowWaterLevelCore(WaterRecoverStrategy recover_strategy)
 {
     uint32_t ret;
@@ -1022,6 +1098,7 @@ static uint32_t FollowWaterLevelCore(WaterRecoverStrategy recover_strategy)
     {
         /* ---------- 1. 读取当前水位电容 ---------- */
         ret = Sensor_ReadWaterCapacitance(&cap);
+        /* 先处理异常边界，避免水位测量状态机带故障继续运行。 */
         if (ret != NO_ERROR)
         {
             printf("水位跟随\t读取电容失败 错误码=0x%lX\r\n", ret);
@@ -1075,7 +1152,7 @@ static uint32_t FollowWaterLevelCore(WaterRecoverStrategy recover_strategy)
                    th_low, th);
 
             /* 稳定区只打印当前水位值，不在这里刷新水位。 */
-            // WaterLevelSyncFromCable();
+            /* WaterLevelSyncFromCable(); */
             printf("水位跟随\t稳定区 当前水位=%.1fmm\r\n",
                    g_measurement.water_measurement.water_level / 10.0f);
 
@@ -1152,7 +1229,7 @@ static uint32_t FollowWaterLevelCore(WaterRecoverStrategy recover_strategy)
         {
             float th_span = WaterCapRawToFloat(g_deviceParams.water_cap_threshold);
 
-//            if ((diff > 0.8f * th_span) && (cap_delta < 1.0f))
+/* if ((diff > 0.8f * th_span) && (cap_delta < 1.0f)) */
             if (diff > 0.6f * th_span)
             {
                 if (lost_count < 0xFFFFu)
@@ -1184,11 +1261,19 @@ static uint32_t FollowWaterLevelCore(WaterRecoverStrategy recover_strategy)
     }
 }
 
+/**
+ * @brief 执行水位测量中的 FollowWaterLevel_fast 逻辑。
+ * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ */
 uint32_t FollowWaterLevel_fast(void)
 {
     return FollowWaterLevelCore(WATER_RECOVER_BY_STATE_FLIP);
 }
 
+/**
+ * @brief 执行水位测量中的 FollowWaterLevel 逻辑。
+ * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ */
 uint32_t FollowWaterLevel(void)
 {
     return FollowWaterLevelCore(WATER_RECOVER_BY_SEARCH);
@@ -1228,7 +1313,7 @@ static uint32_t CorrectWaterTankHeightProcess(void)
 
     return NO_ERROR;
 }
-// 标定水位：修正 water_tank_height
+/* 标定水位：修正 water_tank_height */
  void CMD_CalibrateWaterLevel(void)
 {
     uint32_t ret = NO_ERROR;

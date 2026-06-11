@@ -21,10 +21,10 @@
 #include "cpu3_comm_display_params.h"
 #include "app_version.h"
 #include "system_parameter.h"
-#include <string.h>    // for memset, memcpy, strcmp, strlen...
+#include <string.h>    /* for memset, memcpy, strcmp, strlen... */
 
 #define PASSWORD_ENTERMAIN		1009
-extern volatile uint8_t g_cpu3_uart_reinit_pending;// CPU3 串口重初始化标志
+extern volatile uint8_t g_cpu3_uart_reinit_pending; /* CPU3 串口重初始化标志 */
 
 typedef void (*pFunc_void)(void);
 
@@ -35,7 +35,7 @@ typedef struct
 	int menu_page;			/* 当前显示的页数(页起始项) */
 } PAGENUM_T;
 
- PAGENUM_T PageNum[KEYNUM_END];
+ PAGENUM_T PageNum[KEYNUM_END]; /* 屏幕菜单操作计数值，用于节拍、统计或协议数量控制。 */
  struct ParaContent now_Para_CT;		/* 当前设置的参数内容 */
 
 static int func_index = 0;					/* 菜单索引 */
@@ -230,32 +230,32 @@ static uint8_t *arr_relay_source[][2] = {
  */
 static void mainmenu(void);				/* 主菜单 */
 static void measuremenu(void);			/* 测量命令菜单 */
-//static void menu_paraconfig(void);		/* 参数配置主菜单 */
+/* static void menu_paraconfig(void); / * 参数配置主菜单 * / */
 static void menu_cmdconfig_main(void);	/* 调试指令主菜单 */
 
 /* ---------- 2) 参数分组子菜单(参数页面) ----------
  *	各参数分类页面，仅负责“列出参数项 + 跳转到参数读写流程”
  */
-//static void menu_tankbasicpara(void);	/* 基础参数 */
-//static void menu_weightpara(void);		/* 称重/载荷相关参数 */
-//static void menu_spreadpara(void);		/* 分布测量参数 */
-//static void menu_correctionpara(void);	/* 密度/温度修正参数 */
-//static void menu_realhighpara(void);	/* 实高测量参数 */
-//static void menu_liquidlevelparams(void);/* 液位测量参数 */
-//static void menu_waterlevelparams(void);/* 水位测量参数 */
-//static void menu_aoparams(void);		/* 4-20mA/AO 输出参数 */
-//static void menu_wartsilapara(void);	/* 瓦锡兰参数组 */
-//static void menu_screen(void);			/* 屏幕/显示相关菜单 */
-//static void menu_scr_source(void);		/* 数据源菜单 */
-//static void menu_cpu3_comm(void);		/* CPU3 串口通信配置菜单 */
-//static void menu_magnetic(void);		/* 磁通量/修正相关菜单(旧菜单或兼容入口) */
+/* static void menu_tankbasicpara(void); / * 基础参数 * / */
+/* static void menu_weightpara(void); / * 称重/载荷相关参数 * / */
+/* static void menu_spreadpara(void); / * 分布测量参数 * / */
+/* static void menu_correctionpara(void); / * 密度/温度修正参数 * / */
+/* static void menu_realhighpara(void); / * 实高测量参数 * / */
+/* static void menu_liquidlevelparams(void);/ * 液位测量参数 * / */
+/* static void menu_waterlevelparams(void);/ * 水位测量参数 * / */
+/* static void menu_aoparams(void); / * 4-20mA/AO 输出参数 * / */
+/* static void menu_wartsilapara(void); / * 瓦锡兰参数组 * / */
+/* static void menu_screen(void); / * 屏幕/显示相关菜单 * / */
+/* static void menu_scr_source(void); / * 数据源菜单 * / */
+/* static void menu_cpu3_comm(void); / * CPU3 串口通信配置菜单 * / */
+/* static void menu_magnetic(void); / * 磁通量/修正相关菜单(旧菜单或兼容入口) * / */
 static int RelayParam_ChannelOf(int operaNum);
 static int RelayParam_FieldOf(int operaNum);
 static int RelayParam_IsConfig(int operaNum);
 static int RelayParam_IsChannelSetting(int operaNum);
 static int RelayParam_IsAlarmCondition(int operaNum);
 static int RelayParam_IsAlarmValueField(int operaNum);
-static MenuGroup ParamGroupOf(int operaNum);/* 根据操作码获取参数分组枚举 */
+static MenuGroup ParamGroupOf(int operaNum); /* 根据操作码获取参数分组枚举 */
 static void menu_measure_config(void);
 static void menu_run_policy(void);
 static void menu_dev_info(void);
@@ -329,19 +329,19 @@ static void para_mainprocess(void);		/* 参数流程入口：读 -> displaypara 
 static void displaypara(void);			/* 显示参数值/含义 */
 static void parawritecheck(void);		/* 写权限检查：是否允许修改 */
 static void parascopecheck(void);		/* 范围检查：最小/最大等 */
-static void cmd_configpara_process(void);/* 组包写参数 -> 回读 -> 刷新显示 */
+static void cmd_configpara_process(void); /* 组包写参数 -> 回读 -> 刷新显示 */
 
 /* ---------- 5) 指令下发流程(无参/带参) ----------
  *	把“确定/返回”的动作映射到具体执行：下发指令或写参数
  */
 static void ifsendcmd(void);			/* “是否下发/确认返回”页面 */
-static void param_protect_confirm(void);/* 保护参数/恢复出厂的额外确认页 */
+static void param_protect_confirm(void); /* 保护参数/恢复出厂的额外确认页 */
 static pFunc_void dtm_suretofunc(void);	/* 确认键 -> 下一步函数 */
 static pFunc_void dtm_backtofunc(void);	/* 返回键 -> 返回上一级函数 */
 static void cmd_nopara_process(void);	/* 无参指令：直接下发 */
 static void cmd_onepara_process(void);	/* 带参指令：先写参数再下发 */
-static bool operation_needs_protect_confirm(int operaNum);/* 是否需要额外保护确认 */
-static void protected_operation_process(void);/* 保护确认通过后的实际执行 */
+static bool operation_needs_protect_confirm(int operaNum); /* 是否需要额外保护确认 */
+static void protected_operation_process(void); /* 保护确认通过后的实际执行 */
 
 /* ---------- 6) 输入与数值编辑(输入框) ----------
  *	数字逐位输入、符号输入、位数/单位/小数点等显示规则
@@ -349,29 +349,29 @@ static void protected_operation_process(void);/* 保护确认通过后的实际�
 static void inputcmdpara(void);			/* 输入参数页面(数值/符号) */
 static bool inputvalue(uint8_t deci, uint8_t row, uint8_t line,
 		uint8_t points, uint8_t *unit, int *value);				/* 多位数字输入状态机 */
-static int SignInput(uint8_t row, uint8_t line, uint8_t shift);/* 正负号输入 */
+static int SignInput(uint8_t row, uint8_t line, uint8_t shift); /* 正负号输入 */
 
 /* ---------- 7) 名称/单位/枚举含义工具函数 ----------
  *	根据 operaNum 或 param_meta 表，返回名字、单位、小数点位数、显示位数等
  */
 static uint8_t *dtm_operaname(int num);	/* 根据操作号返回名称(中/英) */
-static uint8_t oled_text_width(const uint8_t *name);/* 按 OLED 绘制列宽估算显示长度 */
-static uint8_t *dtm_operaname_short(int num, uint8_t *fallback);/* 菜单列表短名 */
-static uint8_t *menu_display_name(const struct MenuData *item);/* 当前语言下的菜单列表显示名 */
-static uint8_t *oled_fit_text(uint8_t *name, uint8_t max_width);/* 裁剪到 OLED 单行宽度 */
-static void format_version_u32(uint32_t version, char *buf, size_t buf_size);/* 版本编码格式化 */
-static int display_formatted_readonly_value(int operaNum, int32_t value, uint8_t line, uint8_t row, uint8_t shift);/* 只读特殊值显示 */
-static uint8_t *param_display_unit(int operaNum, const struct ParameterMetadata *meta);/* 参数显示单位 */
-static void display_menu_item_with_value(const struct MenuData *item, uint8_t line, uint8_t row, uint8_t shift);/* 菜单列表带值显示 */
-static uint8_t display_split_title(uint8_t *name, uint8_t row1, uint8_t row2);/* 长标题拆成最多两行 */
-static void display_param_detail_value(const struct ParameterMetadata *meta, uint8_t row);/* 详情页当前值 */
-static void display_param_detail_range(const struct ParameterMetadata *meta, uint8_t row);/* 详情页范围 */
+static uint8_t oled_text_width(const uint8_t *name); /* 按 OLED 绘制列宽估算显示长度 */
+static uint8_t *dtm_operaname_short(int num, uint8_t *fallback); /* 菜单列表短名 */
+static uint8_t *menu_display_name(const struct MenuData *item); /* 当前语言下的菜单列表显示名 */
+static uint8_t *oled_fit_text(uint8_t *name, uint8_t max_width); /* 裁剪到 OLED 单行宽度 */
+static void format_version_u32(uint32_t version, char *buf, size_t buf_size); /* 版本编码格式化 */
+static int display_formatted_readonly_value(int operaNum, int32_t value, uint8_t line, uint8_t row, uint8_t shift); /* 只读特殊值显示 */
+static uint8_t *param_display_unit(int operaNum, const struct ParameterMetadata *meta); /* 参数显示单位 */
+static void display_menu_item_with_value(const struct MenuData *item, uint8_t line, uint8_t row, uint8_t shift); /* 菜单列表带值显示 */
+static uint8_t display_split_title(uint8_t *name, uint8_t row1, uint8_t row2); /* 长标题拆成最多两行 */
+static void display_param_detail_value(const struct ParameterMetadata *meta, uint8_t row); /* 详情页当前值 */
+static void display_param_detail_range(const struct ParameterMetadata *meta, uint8_t row); /* 详情页范围 */
 static uint8_t dtm_points(void);		/* 小数点位数 */
 static uint8_t *dtm_unit(void);		/* 单位字符串 */
 static uint8_t dtm_bits(void);			/* 显示/输入位数 */
 static uint8_t *(*dtm_disarr(int *pindex, int *plen))[2];		/* 获取枚举含义数组 */
-static int selection_index_to_value(int operaNum, int selectedIndex);/* 选择项下标转实际写入值 */
-static uint8_t *returnWordType(uint8_t *chinese, uint8_t *english);/* 语言选择 */
+static int selection_index_to_value(int operaNum, int selectedIndex); /* 选择项下标转实际写入值 */
+static uint8_t *returnWordType(uint8_t *chinese, uint8_t *english); /* 语言选择 */
 
 /* ---------- 8) 密码/权限入口 ----------
  *	进入参数配置/调试指令前的密码流程
@@ -687,6 +687,12 @@ struct KeyMenu keymenu[KEYNUM_END] = {
 };
 
 
+/**
+ * @brief 处理屏幕菜单操作中的 DisplayTankOpera_CanProcessKey 逻辑。
+ *
+ * @param keypress 业务参数。
+ * @return true 表示条件满足或处理成功，false 表示条件不满足或处理失败。
+ */
 bool DisplayTankOpera_CanProcessKey(uint8_t keypress)
 {
 	if ((func_index < 0) || (func_index >= KEYNUM_END)) {
@@ -745,6 +751,10 @@ bool KeyProcess(uint8_t keypress)
 	return false;
 }
 
+/**
+ * @brief 显示或打印屏幕菜单操作中的 DisplayTankOpera_RedrawCurrentPage 逻辑。
+ * @return true 表示条件满足或处理成功，false 表示条件不满足或处理失败。
+ */
 bool DisplayTankOpera_RedrawCurrentPage(void)
 {
 	int saved_key = NowKeyPress;
@@ -850,6 +860,12 @@ typedef struct {
     uint8_t *name_en;
 } OperaNameMap_t;
 
+/**
+ * @brief 执行屏幕菜单操作中的 dtm_operaname 逻辑。
+ *
+ * @param num 业务参数。
+ * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ */
 static uint8_t *dtm_operaname(int num)
 {
     /* 1) 普通无参测量指令（显式映射，避免依赖枚举连续性） */
@@ -970,79 +986,79 @@ static uint8_t *dtm_operaname(int num)
     return returnWordType((uint8_t*)"非法操作", (uint8_t*)"Invalid Operation");
 }
 
-///* 返回操作名称 */
-//static uint8_t *dtm_operaname(int num)
-//{
-//	/* 1) 普通无参测量指令 */
-//	static uint8_t *OperaNameArr_normal_cmd[][2] = {
-//		{ (uint8_t*)"回零点", (uint8_t*)"Return to Zero" },
-//		{ (uint8_t*)"标定零点", (uint8_t*)"Zero Calibration" },
-//		{ (uint8_t*)"分布测量", (uint8_t*)"Spread-M" },
-//		{ (uint8_t*)"寻找液位", (uint8_t*)"Find Oil Level" },
-//		{ (uint8_t*)"寻找水位", (uint8_t*)"Find Water Level" },
-//		{ (uint8_t*)"寻找罐底", (uint8_t*)"Find Tank Bottom" },
-//		{ (uint8_t*)"综合测量", (uint8_t*)"Comprehensive-M" },
-//		{ (uint8_t*)"每米测量", (uint8_t*)"DT-PerMeter-M" },
-//		{ (uint8_t*)"区间测量", (uint8_t*)"Interval-M" },
-//		{ (uint8_t*)"瓦锡兰区间密度", (uint8_t*)"Wartsila Interval-M" },
-//	};
-//
-//	/* 2) 无参调试指令 */
-//	static uint8_t *OperaNameArr_debug_cmd[][2] = {
-//		{ (uint8_t*)"设置空载称重", (uint8_t*)"Set Empty Weight" },
-//		{ (uint8_t*)"设置满载称重", (uint8_t*)"Set Full Weight" },
-//		{ (uint8_t*)"恢复出厂设置", (uint8_t*)"Factory Reset" },
-//		{ (uint8_t*)"维护模式", (uint8_t*)"Maintenance Mode" },
-//	};
-//
-//	/* 3) 本机参数名称 */
-//	static uint8_t *OperaNameArr_local[][2] = {
-//		{ (uint8_t*)"设备地址", (uint8_t*)"DeviceAddress" },
-//		{ (uint8_t*)"屏幕程序版本", (uint8_t*)"Screen FW Ver" },
-//	};
-//
-//	int idx;
-//
-//	/* A) 普通不带参指令 */
-//	if (num > COM_NUM_NOPARACMD_NORMAL_START && num < COM_NUM_NOPARACMD_NORMAL_STOP) {
-//		idx = num - COM_NUM_NOPARACMD_NORMAL_START - 1;
-//		if (idx >= 0 && idx < (int)(sizeof(OperaNameArr_normal_cmd) / sizeof(OperaNameArr_normal_cmd[0]))) {
-//			return OperaNameArr_normal_cmd[idx][screen_parameter.language];
-//		}
-//	}
-//	/* B) 无参调试指令 */
-//	else if (num > COM_NUM_DEBUGCMD_START && num < COM_NUM_DEBUGCMD_STOP) {
-//		idx = num - COM_NUM_DEBUGCMD_START - 1;
-//		if (idx >= 0 && idx < (int)(sizeof(OperaNameArr_debug_cmd) / sizeof(OperaNameArr_debug_cmd[0]))) {
-//			return OperaNameArr_debug_cmd[idx][screen_parameter.language];
-//		}
-//	}
-//	/* C) 参数类 & 带参指令: 使用 param_meta 表 */
-//	else if ((num > COM_NUM_PARA_DEBUG_START && num < COM_NUM_PARA_LOCAL_STOP)
-//		|| (num > COM_NUM_ONEPARACMD_START && num < COM_NUM_NOPARA_DEBUGCMD_END)) {
-//		int index = getHoldValueNum(num);
-//		if (index >= 0) {
-//			if (screen_parameter.language == LANGUAGE_CHINESE) {
-//				return param_meta[index].name;
-//			} else if (screen_parameter.language == LANGUAGE_ENGLISH) {
-//				return param_meta[index].name_English;
-//			}
-//		}
-//	}
-//	/* D) 密码类 */
-//	else if (num > COM_NUM_PASSWORD_START && num < COM_NUM_PASSWORD_END) {
-//		return returnWordType((uint8_t*)"密码", (uint8_t*)"Password");
-//	}
-//	/* E) 本机参数类 */
-//	else if (num > COM_NUM_PARA_LOCAL_START && num < COM_NUM_PARA_LOCAL_STOP) {
-//		idx = num - COM_NUM_PARA_LOCAL_START - 1;
-//		if (idx >= 0 && idx < (int)(sizeof(OperaNameArr_local) / sizeof(OperaNameArr_local[0]))) {
-//			return OperaNameArr_local[idx][screen_parameter.language];
-//		}
-//	}
-//
-//	return returnWordType((uint8_t*)"非法操作", (uint8_t*)"Invalid Operation");
-//}
+/* / * 返回操作名称 * / */
+/* static uint8_t *dtm_operaname(int num) */
+/* { */
+/* / * 1) 普通无参测量指令 * / */
+/* static uint8_t *OperaNameArr_normal_cmd[][2] = { */
+/* { (uint8_t*)"回零点", (uint8_t*)"Return to Zero" }, */
+/* { (uint8_t*)"标定零点", (uint8_t*)"Zero Calibration" }, */
+/* { (uint8_t*)"分布测量", (uint8_t*)"Spread-M" }, */
+/* { (uint8_t*)"寻找液位", (uint8_t*)"Find Oil Level" }, */
+/* { (uint8_t*)"寻找水位", (uint8_t*)"Find Water Level" }, */
+/* { (uint8_t*)"寻找罐底", (uint8_t*)"Find Tank Bottom" }, */
+/* { (uint8_t*)"综合测量", (uint8_t*)"Comprehensive-M" }, */
+/* { (uint8_t*)"每米测量", (uint8_t*)"DT-PerMeter-M" }, */
+/* { (uint8_t*)"区间测量", (uint8_t*)"Interval-M" }, */
+/* { (uint8_t*)"瓦锡兰区间密度", (uint8_t*)"Wartsila Interval-M" }, */
+/* }; */
+/* */
+/* / * 2) 无参调试指令 * / */
+/* static uint8_t *OperaNameArr_debug_cmd[][2] = { */
+/* { (uint8_t*)"设置空载称重", (uint8_t*)"Set Empty Weight" }, */
+/* { (uint8_t*)"设置满载称重", (uint8_t*)"Set Full Weight" }, */
+/* { (uint8_t*)"恢复出厂设置", (uint8_t*)"Factory Reset" }, */
+/* { (uint8_t*)"维护模式", (uint8_t*)"Maintenance Mode" }, */
+/* }; */
+/* */
+/* / * 3) 本机参数名称 * / */
+/* static uint8_t *OperaNameArr_local[][2] = { */
+/* { (uint8_t*)"设备地址", (uint8_t*)"DeviceAddress" }, */
+/* { (uint8_t*)"屏幕程序版本", (uint8_t*)"Screen FW Ver" }, */
+/* }; */
+/* */
+/* int idx; */
+/* */
+/* / * A) 普通不带参指令 * / */
+/* if (num > COM_NUM_NOPARACMD_NORMAL_START && num < COM_NUM_NOPARACMD_NORMAL_STOP) { */
+/* idx = num - COM_NUM_NOPARACMD_NORMAL_START - 1; */
+/* if (idx >= 0 && idx < (int)(sizeof(OperaNameArr_normal_cmd) / sizeof(OperaNameArr_normal_cmd[0]))) { */
+/* return OperaNameArr_normal_cmd[idx][screen_parameter.language]; */
+/* } */
+/* } */
+/* / * B) 无参调试指令 * / */
+/* else if (num > COM_NUM_DEBUGCMD_START && num < COM_NUM_DEBUGCMD_STOP) { */
+/* idx = num - COM_NUM_DEBUGCMD_START - 1; */
+/* if (idx >= 0 && idx < (int)(sizeof(OperaNameArr_debug_cmd) / sizeof(OperaNameArr_debug_cmd[0]))) { */
+/* return OperaNameArr_debug_cmd[idx][screen_parameter.language]; */
+/* } */
+/* } */
+/* / * C) 参数类 & 带参指令: 使用 param_meta 表 * / */
+/* else if ((num > COM_NUM_PARA_DEBUG_START && num < COM_NUM_PARA_LOCAL_STOP) */
+/* || (num > COM_NUM_ONEPARACMD_START && num < COM_NUM_NOPARA_DEBUGCMD_END)) { */
+/* int index = getHoldValueNum(num); */
+/* if (index >= 0) { */
+/* if (screen_parameter.language == LANGUAGE_CHINESE) { */
+/* return param_meta[index].name; */
+/* } else if (screen_parameter.language == LANGUAGE_ENGLISH) { */
+/* return param_meta[index].name_English; */
+/* } */
+/* } */
+/* } */
+/* / * D) 密码类 * / */
+/* else if (num > COM_NUM_PASSWORD_START && num < COM_NUM_PASSWORD_END) { */
+/* return returnWordType((uint8_t*)"密码", (uint8_t*)"Password"); */
+/* } */
+/* / * E) 本机参数类 * / */
+/* else if (num > COM_NUM_PARA_LOCAL_START && num < COM_NUM_PARA_LOCAL_STOP) { */
+/* idx = num - COM_NUM_PARA_LOCAL_START - 1; */
+/* if (idx >= 0 && idx < (int)(sizeof(OperaNameArr_local) / sizeof(OperaNameArr_local[0]))) { */
+/* return OperaNameArr_local[idx][screen_parameter.language]; */
+/* } */
+/* } */
+/* */
+/* return returnWordType((uint8_t*)"非法操作", (uint8_t*)"Invalid Operation"); */
+/* } */
 
 static uint8_t *returnWordType(uint8_t *chinese, uint8_t *english)
 {
@@ -1055,6 +1071,12 @@ static uint8_t *returnWordType(uint8_t *chinese, uint8_t *english)
 	}
 }
 
+/**
+ * @brief 执行屏幕菜单操作中的 oled_text_width 逻辑。
+ *
+ * @param name 业务参数。
+ * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ */
 static uint8_t oled_text_width(const uint8_t *name)
 {
 	uint8_t width = 0;
@@ -1082,6 +1104,13 @@ typedef struct {
 	uint8_t *name_en;
 } OperaShortNameMap_t;
 
+/**
+ * @brief 执行屏幕菜单操作中的 dtm_operaname_short 逻辑。
+ *
+ * @param num 业务参数。
+ * @param fallback 业务参数。
+ * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ */
 static uint8_t *dtm_operaname_short(int num, uint8_t *fallback)
 {
 	static const OperaShortNameMap_t short_map[] = {
@@ -1229,6 +1258,12 @@ static uint8_t *dtm_operaname_short(int num, uint8_t *fallback)
 	return fallback;
 }
 
+/**
+ * @brief 显示或打印屏幕菜单操作中的 menu_display_name 逻辑。
+ *
+ * @param item 业务参数。
+ * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ */
 static uint8_t *menu_display_name(const struct MenuData *item)
 {
 	uint8_t *name;
@@ -1274,6 +1309,12 @@ static uint8_t *oled_fit_text(uint8_t *name, uint8_t max_width)
 	return fit;
 }
 
+/**
+ * @brief 检查屏幕菜单操作中的 is_version_value_opera 逻辑。
+ *
+ * @param operaNum 业务参数。
+ * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ */
 static int is_version_value_opera(int operaNum)
 {
 	switch (operaNum) {
@@ -1286,6 +1327,12 @@ static int is_version_value_opera(int operaNum)
 	}
 }
 
+/**
+ * @brief 检查屏幕菜单操作中的 is_hex_u32_value_opera 逻辑。
+ *
+ * @param operaNum 业务参数。
+ * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ */
 static int is_hex_u32_value_opera(int operaNum)
 {
 	switch (operaNum) {
@@ -1318,6 +1365,12 @@ static int display_formatted_readonly_value(int operaNum, int32_t value, uint8_t
 	return 0;
 }
 
+/**
+ * @brief 执行屏幕菜单操作中的 relay_alarm_source_unit 逻辑。
+ *
+ * @param source 业务参数。
+ * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ */
 static uint8_t *relay_alarm_source_unit(uint32_t source)
 {
 	switch ((RelayAlarmSource)source) {
@@ -1332,6 +1385,13 @@ static uint8_t *relay_alarm_source_unit(uint32_t source)
 	}
 }
 
+/**
+ * @brief 显示或打印屏幕菜单操作中的 param_display_unit 逻辑。
+ *
+ * @param operaNum 业务参数。
+ * @param meta 业务参数。
+ * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ */
 static uint8_t *param_display_unit(int operaNum, const struct ParameterMetadata *meta)
 {
 	int channel;
@@ -1353,6 +1413,15 @@ static uint8_t *param_display_unit(int operaNum, const struct ParameterMetadata 
 	return relay_alarm_source_unit(g_deviceParams.relayAlarm[channel].alarm_source);
 }
 
+/**
+ * @brief 显示或打印屏幕菜单操作中的 display_menu_item_with_value 逻辑。
+ *
+ * @param item 业务参数。
+ * @param line 业务参数。
+ * @param row 业务参数。
+ * @param shift 业务参数。
+ * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ */
 static void display_menu_item_with_value(const struct MenuData *item, uint8_t line, uint8_t row, uint8_t shift)
 {
 	int index;
@@ -1408,6 +1477,14 @@ static void display_menu_item_with_value(const struct MenuData *item, uint8_t li
 	}
 }
 
+/**
+ * @brief 显示或打印屏幕菜单操作中的 display_split_title 逻辑。
+ *
+ * @param name 业务参数。
+ * @param row1 业务参数。
+ * @param row2 业务参数。
+ * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ */
 static uint8_t display_split_title(uint8_t *name, uint8_t row1, uint8_t row2)
 {
 	static uint8_t part1[64];
@@ -1465,6 +1542,13 @@ static uint8_t display_split_title(uint8_t *name, uint8_t row1, uint8_t row2)
 	return (uint8_t)(row1 + OLED_ROW4_2);
 }
 
+/**
+ * @brief 显示或打印屏幕菜单操作中的 display_param_detail_value 逻辑。
+ *
+ * @param meta 业务参数。
+ * @param row 业务参数。
+ * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ */
 static void display_param_detail_value(const struct ParameterMetadata *meta, uint8_t row)
 {
 	uint8_t line;
@@ -1482,6 +1566,13 @@ static void display_param_detail_value(const struct ParameterMetadata *meta, uin
 	}
 }
 
+/**
+ * @brief 显示或打印屏幕菜单操作中的 display_param_detail_range 逻辑。
+ *
+ * @param meta 业务参数。
+ * @param row 业务参数。
+ * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ */
 static void display_param_detail_range(const struct ParameterMetadata *meta, uint8_t row)
 {
 	uint8_t line;
@@ -1758,6 +1849,12 @@ static void ifsendcmd(void)
 	DisplayLangaugeLineWords((uint8_t*)"确认", OLED_LINE8_8, OLED_ROW4_4, timesure, (uint8_t*)"Ok");
 }
 
+/**
+ * @brief 执行屏幕菜单操作中的 operation_needs_protect_confirm 逻辑。
+ *
+ * @param operaNum 业务参数。
+ * @return true 表示条件满足或处理成功，false 表示条件不满足或处理失败。
+ */
 static bool operation_needs_protect_confirm(int operaNum)
 {
 	switch (operaNum) {
@@ -1826,6 +1923,10 @@ static bool operation_needs_protect_confirm(int operaNum)
 	}
 }
 
+/**
+ * @brief 处理屏幕菜单操作中的 protected_operation_process 逻辑。
+ * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ */
 static void protected_operation_process(void)
 {
 	if (now_Opera_Num == COM_NUM_RESTOR_EFACTORYSETTING) {
@@ -2057,6 +2158,12 @@ typedef struct {
     uint32_t cmd;
 } NoParaCmdMap_t;
 
+/**
+ * @brief 执行屏幕菜单操作中的 __attribute__ 逻辑。
+ *
+ * @param opera 业务参数。
+ * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ */
 static uint8_t __attribute__((unused)) is_debug_cmd(uint32_t opera)
 {
     return ((opera > COM_NUM_DEBUGCMD_START) && (opera < COM_NUM_DEBUGCMD_STOP)) ||
@@ -2070,12 +2177,19 @@ static uint8_t __attribute__((unused)) debug_cmd_is_allowed(void)
 
     /* 你当前对恢复出厂的限制：允许 STANDBY / ERROR / MAINTENANCEMODE
        这里建议把调试类都统一到同一套口径，避免口径不一致 */
+    /* 先处理异常边界，避免屏幕菜单操作状态机带故障继续运行。 */
     if ((st == STATE_STANDBY) || (st == STATE_ERROR) || (st == STATE_MAINTENANCEMODE)) {
         return 1;
     }
     return 0;
 }
 
+/**
+ * @brief 发送屏幕菜单操作中的 send_cpu2_command 逻辑。
+ *
+ * @param cmd 命令值。
+ * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ */
 static void send_cpu2_command(uint32_t cmd)
 {
     /* 写 2 个寄存器：如果协议定义为 command 占 32bit，这里保持 2 不动。 */
@@ -2085,6 +2199,12 @@ static void send_cpu2_command(uint32_t cmd)
                               &cmd);
 }
 
+/**
+ * @brief 显示或打印屏幕菜单操作中的 display_state_can_cancel_measurement 逻辑。
+ *
+ * @param state 状态值。
+ * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ */
 static uint8_t display_state_can_cancel_measurement(DeviceState state)
 {
     if ((state == STATE_STANDBY) ||
@@ -2103,10 +2223,15 @@ static uint8_t display_state_can_cancel_measurement(DeviceState state)
     return 0;
 }
 
+/**
+ * @brief 显示或打印屏幕菜单操作中的 Display_CanEnterCancelMeasurementConfirm 逻辑。
+ * @return true 表示条件满足或处理成功，false 表示条件不满足或处理失败。
+ */
 bool Display_CanEnterCancelMeasurementConfirm(void)
 {
     DeviceState state = g_measurement.device_status.device_state;
 
+    /* 先处理异常边界，避免屏幕菜单操作状态机带故障继续运行。 */
     if ((state == STATE_ERROR) && (g_measurement.device_status.error_code != NO_ERROR)) {
         return true;
     }
@@ -2114,6 +2239,10 @@ bool Display_CanEnterCancelMeasurementConfirm(void)
     return display_state_can_cancel_measurement(state) != 0U;
 }
 
+/**
+ * @brief 显示或打印屏幕菜单操作中的 Display_RequestCancelMeasurement 逻辑。
+ * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ */
 void Display_RequestCancelMeasurement(void)
 {
     DeviceState state = g_measurement.device_status.device_state;
@@ -2126,10 +2255,15 @@ void Display_RequestCancelMeasurement(void)
     send_cpu2_command(CMD_CANCEL_MEASUREMENT);
 }
 
+/**
+ * @brief 显示或打印屏幕菜单操作中的 Display_EnterCancelMeasurementConfirm 逻辑。
+ * @return true 表示条件满足或处理成功，false 表示条件不满足或处理失败。
+ */
 bool Display_EnterCancelMeasurementConfirm(void)
 {
     DeviceState state = g_measurement.device_status.device_state;
 
+    /* 先处理异常边界，避免屏幕菜单操作状态机带故障继续运行。 */
     if ((state == STATE_ERROR) && (g_measurement.device_status.error_code != NO_ERROR)) {
         FlagofTankOpera = true;
         useKey();
@@ -2198,14 +2332,14 @@ static void cmd_nopara_process(void)
     }
 
     /* 调试类命令：统一加权限/状态限制（你也可以只限制“危险指令”子集） */
-//    if (is_debug_cmd((uint32_t)now_Opera_Num)) {
-//        if (!debug_cmd_is_allowed()) {
-//            oled_clear();
-//            DisplayLangaugeLineWords((uint8_t*)"失败", OLED_LINE8_1, OLED_ROW4_2, 0, (uint8_t*)"Failed");
-//            DisplayLangaugeLineWords((uint8_t*)"请先进入调试模式", OLED_LINE8_1, OLED_ROW4_3, 0, (uint8_t*)"Enter debug mode");
-//            return;
-//        }
-//    }
+/* if (is_debug_cmd((uint32_t)now_Opera_Num)) { */
+/* if (!debug_cmd_is_allowed()) { */
+/* oled_clear(); */
+/* DisplayLangaugeLineWords((uint8_t*)"失败", OLED_LINE8_1, OLED_ROW4_2, 0, (uint8_t*)"Failed"); */
+/* DisplayLangaugeLineWords((uint8_t*)"请先进入调试模式", OLED_LINE8_1, OLED_ROW4_3, 0, (uint8_t*)"Enter debug mode"); */
+/* return; */
+/* } */
+/* } */
 
     /* 下发命令 */
     send_cpu2_command(cmd);
@@ -2341,59 +2475,59 @@ static void cmd_onepara_process(void)
 
     exitTankOpera();
 }
-//
-///* 不带参线圈指令处理过程 */
-//static void cmd_nopara_process(void)
-//{
-//	static const uint32_t nopara_cmd_map[][2] = {
-//		{ COM_NUM_BACK_ZERO, CMD_BACK_ZERO },
-//		{ COM_NUM_FIND_ZERO, CMD_CALIBRATE_ZERO },
-//		{ COM_NUM_SPREADPOINTS, CMD_MEASURE_DISTRIBUTED },
-//		{ COM_NUM_FIND_OIL, CMD_FIND_OIL },
-//		{ COM_NUM_FIND_WATER, CMD_FIND_WATER },
-//		{ COM_NUM_FIND_BOTTOM, CMD_FIND_BOTTOM },
-//		{ COM_NUM_SYNTHETIC, CMD_SYNTHETIC },
-//		{ COM_NUM_METER_DENSITY, CMD_MEASURE_DENSITY_METER },
-//		{ COM_NUM_INTERVAL_DENSITY, CMD_MEASURE_DENSITY_RANGE },
-//		{ COM_NUM_WARTSILA_DENSITY, CMD_WARTSILA_DENSITY_RANGE },
-//
-//		{ COM_NUM_SET_EMPTY_WEIGHT, CMD_SET_EMPTY_WEIGHT },
-//		{ COM_NUM_SET_FULL_WEIGHT, CMD_SET_FULL_WEIGHT },
-//		{ COM_NUM_RESTOR_EFACTORYSETTING, CMD_RESTORE_FACTORY },
-//		{ COM_NUM_MAINTENANCE_MODE, CMD_MAINTENANCE_MODE },
-//	};
-//
-//	int mapamount = (int)(sizeof(nopara_cmd_map) / sizeof(nopara_cmd_map[0]));
-//	int i;
-//
-//	for (i = 0; i < mapamount; i++) {
-//		if (now_Opera_Num == (int)nopara_cmd_map[i][0]) {
-//			CPU2_CombinatePackage_Send(FUNCTIONCODE_WRITE_MULREGISTER,
-//					HOLDREGISTER_DEVICEPARAM_COMMAND, 2,
-//					(uint32_t*)&nopara_cmd_map[i][1]);
-//			break;
-//		}
-//	}
-//
-//	if (now_Opera_Num == COM_NUM_RESTOR_EFACTORYSETTING) {
-//		oled_clear();
-//		if ((g_measurement.device_status.device_state != STATE_STANDBY)
-//			&& (g_measurement.device_status.device_state != STATE_ERROR)
-//			&& (g_measurement.device_status.device_state != STATE_MAINTENANCEMODE)) {
-//			DisplayLangaugeLineWords((uint8_t*)"失败", OLED_LINE8_1, OLED_ROW4_2, 0, (uint8_t*)"Failed to set");
-//			DisplayLangaugeLineWords((uint8_t*)"请先进入调试模式", OLED_LINE8_1, OLED_ROW4_3, 0, (uint8_t*)"Enter debug mode");
-//		} else {
-//			DisplayLangaugeLineWords((uint8_t*)"正在恢复出厂设置", OLED_LINE8_1, OLED_ROW4_2, 0, (uint8_t*)"Factory Settings");
-//			HAL_Delay(800);
-//			exitTankOpera();
-//		}
-//	} else if (now_Opera_Num == COM_NUM_MAINTENANCE_MODE) {
-//		oled_clear();
-//		DisplayLangaugeLineWords((uint8_t*)"已进入维护模式", OLED_LINE8_1, OLED_ROW4_2, 0, (uint8_t*)"Maintenance Mode");
-//	} else {
-//		exitTankOpera();
-//	}
-//}
+/* */
+/* / * 不带参线圈指令处理过程 * / */
+/* static void cmd_nopara_process(void) */
+/* { */
+/* static const uint32_t nopara_cmd_map[][2] = { */
+/* { COM_NUM_BACK_ZERO, CMD_BACK_ZERO }, */
+/* { COM_NUM_FIND_ZERO, CMD_CALIBRATE_ZERO }, */
+/* { COM_NUM_SPREADPOINTS, CMD_MEASURE_DISTRIBUTED }, */
+/* { COM_NUM_FIND_OIL, CMD_FIND_OIL }, */
+/* { COM_NUM_FIND_WATER, CMD_FIND_WATER }, */
+/* { COM_NUM_FIND_BOTTOM, CMD_FIND_BOTTOM }, */
+/* { COM_NUM_SYNTHETIC, CMD_SYNTHETIC }, */
+/* { COM_NUM_METER_DENSITY, CMD_MEASURE_DENSITY_METER }, */
+/* { COM_NUM_INTERVAL_DENSITY, CMD_MEASURE_DENSITY_RANGE }, */
+/* { COM_NUM_WARTSILA_DENSITY, CMD_WARTSILA_DENSITY_RANGE }, */
+/* */
+/* { COM_NUM_SET_EMPTY_WEIGHT, CMD_SET_EMPTY_WEIGHT }, */
+/* { COM_NUM_SET_FULL_WEIGHT, CMD_SET_FULL_WEIGHT }, */
+/* { COM_NUM_RESTOR_EFACTORYSETTING, CMD_RESTORE_FACTORY }, */
+/* { COM_NUM_MAINTENANCE_MODE, CMD_MAINTENANCE_MODE }, */
+/* }; */
+/* */
+/* int mapamount = (int)(sizeof(nopara_cmd_map) / sizeof(nopara_cmd_map[0])); */
+/* int i; */
+/* */
+/* for (i = 0; i < mapamount; i++) { */
+/* if (now_Opera_Num == (int)nopara_cmd_map[i][0]) { */
+/* CPU2_CombinatePackage_Send(FUNCTIONCODE_WRITE_MULREGISTER, */
+/* HOLDREGISTER_DEVICEPARAM_COMMAND, 2, */
+/* (uint32_t*)&nopara_cmd_map[i][1]); */
+/* break; */
+/* } */
+/* } */
+/* */
+/* if (now_Opera_Num == COM_NUM_RESTOR_EFACTORYSETTING) { */
+/* oled_clear(); */
+/* if ((g_measurement.device_status.device_state != STATE_STANDBY) */
+/* && (g_measurement.device_status.device_state != STATE_ERROR) */
+/* && (g_measurement.device_status.device_state != STATE_MAINTENANCEMODE)) { */
+/* DisplayLangaugeLineWords((uint8_t*)"失败", OLED_LINE8_1, OLED_ROW4_2, 0, (uint8_t*)"Failed to set"); */
+/* DisplayLangaugeLineWords((uint8_t*)"请先进入调试模式", OLED_LINE8_1, OLED_ROW4_3, 0, (uint8_t*)"Enter debug mode"); */
+/* } else { */
+/* DisplayLangaugeLineWords((uint8_t*)"正在恢复出厂设置", OLED_LINE8_1, OLED_ROW4_2, 0, (uint8_t*)"Factory Settings"); */
+/* HAL_Delay(800); */
+/* exitTankOpera(); */
+/* } */
+/* } else if (now_Opera_Num == COM_NUM_MAINTENANCE_MODE) { */
+/* oled_clear(); */
+/* DisplayLangaugeLineWords((uint8_t*)"已进入维护模式", OLED_LINE8_1, OLED_ROW4_2, 0, (uint8_t*)"Maintenance Mode"); */
+/* } else { */
+/* exitTankOpera(); */
+/* } */
+/* } */
 
 /* 非法操作处理 */
 static void errorprocess(void)
@@ -2577,13 +2711,14 @@ static int get_para_data(void)
 {
 	int index;
 	index = getHoldValueNum(now_Opera_Num);
-	  // CPU3 本机参数：不走 CPU2 通讯，直接刷新 val
+	  /* CPU3 本机参数：不走 CPU2 通讯，直接刷新 val */
 	if (Cpu3Local_IsParam((OperatingNumber)now_Opera_Num)) {
 		param_meta[index].val = Cpu3Local_ReadValue((OperatingNumber)now_Opera_Num);
 		return 0;
 	}
-	else  // CPU2 参数
+	else  /* CPU2 参数 */
 	{
+		/* 先处理异常边界，避免屏幕菜单操作状态机带故障继续运行。 */
 		if (cnt_commutoCPU2 >= COMMU_ERROR_MAX) {
 			oled_clear();
 			DisplayLangaugeLineWords((uint8_t*)"与CPU2通讯故障!", OLED_LINE8_1, OLED_ROW3_2, 0, (uint8_t*)"Cpu2 CF!");
@@ -2681,7 +2816,7 @@ static void cmd_configpara_process(void)
 		}
 	}
 
-	//如果是本机参数
+	/* 如果是本机参数 */
 	if(now_Opera_Num > COM_NUM_PARA_LOCAL_START && now_Opera_Num < COM_NUM_PARA_LOCAL_STOP)
 	{
 	    /* CPU3 本机参数：本地写 + 保存FRAM */
@@ -2695,7 +2830,7 @@ static void cmd_configpara_process(void)
 	    /* 刷新元数据值供显示 */
 	    param_meta[index].val = Cpu3Local_ReadValue((OperatingNumber)now_Opera_Num);
 	}
-	else //下发给CPU2
+	else /* 下发给CPU2 */
 	{
 	    uint16_t regs16[32]; /* rgstcnt 最大一般不会很大；32=最多64字节 */
 	    int rc = (int)param_meta[index].rgstcnt;
@@ -2823,6 +2958,12 @@ static int SignInput(uint8_t row, uint8_t line, uint8_t shift)
 	return ret;
 }
 
+/**
+ * @brief 执行屏幕菜单操作中的 opera_is_com_protocol 逻辑。
+ *
+ * @param operaNum 业务参数。
+ * @return true 表示条件满足或处理成功，false 表示条件不满足或处理失败。
+ */
 static bool opera_is_com_protocol(int operaNum)
 {
 	return (operaNum == COM_NUM_CPU3_COM1_PROTOCOL)
@@ -2830,6 +2971,12 @@ static bool opera_is_com_protocol(int operaNum)
 		|| (operaNum == COM_NUM_CPU3_COM3_PROTOCOL);
 }
 
+/**
+ * @brief 执行屏幕菜单操作中的 protocol_value_to_selection_index 逻辑。
+ *
+ * @param value 待处理数值。
+ * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ */
 static int protocol_value_to_selection_index(int value)
 {
 	switch (value) {
@@ -2846,6 +2993,13 @@ static int protocol_value_to_selection_index(int value)
 	}
 }
 
+/**
+ * @brief 执行屏幕菜单操作中的 selection_index_to_value 逻辑。
+ *
+ * @param operaNum 业务参数。
+ * @param selectedIndex 索引值。
+ * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ */
 static int selection_index_to_value(int operaNum, int selectedIndex)
 {
 	static const int protocol_values[] = {
@@ -3184,6 +3338,10 @@ static void operationselect(uint8_t *(*menu)[2], int menulen, int selected_index
 	}
 }
 
+/**
+ * @brief 清除或复位屏幕菜单操作中的 ClearPageNum 逻辑。
+ * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ */
 void ClearPageNum(void)
 {
 	int i;
@@ -3313,12 +3471,20 @@ static void setlanguage(void)
 	menuselect(menu, menulen);
 }
 
+/**
+ * @brief 写入或设置屏幕菜单操作中的 setchinese 逻辑。
+ * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ */
 static void setchinese(void)
 {
 	screen_parameter.language = LANGUAGE_CHINESE;
 	mainmenu();
 }
 
+/**
+ * @brief 写入或设置屏幕菜单操作中的 setenglish 逻辑。
+ * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ */
 static void setenglish(void)
 {
 	screen_parameter.language = LANGUAGE_ENGLISH;
@@ -3381,6 +3547,12 @@ static int RelayParam_ChannelOf(int operaNum)
     return -1;
 }
 
+/**
+ * @brief 执行屏幕菜单操作中的 RelayParam_FieldOf 逻辑。
+ *
+ * @param operaNum 业务参数。
+ * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ */
 static int RelayParam_FieldOf(int operaNum)
 {
     switch (RelayParam_ChannelOf(operaNum)) {
@@ -3397,6 +3569,12 @@ static int RelayParam_FieldOf(int operaNum)
     }
 }
 
+/**
+ * @brief 执行屏幕菜单操作中的 RelayParam_IsConfig 逻辑。
+ *
+ * @param operaNum 业务参数。
+ * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ */
 static int RelayParam_IsConfig(int operaNum)
 {
     int field = RelayParam_FieldOf(operaNum);
@@ -3404,6 +3582,12 @@ static int RelayParam_IsConfig(int operaNum)
     return (field >= 0) && (field < (int)RELAY_ALARM_FIELD_COUNT);
 }
 
+/**
+ * @brief 执行屏幕菜单操作中的 RelayParam_IsChannelSetting 逻辑。
+ *
+ * @param operaNum 业务参数。
+ * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ */
 static int RelayParam_IsChannelSetting(int operaNum)
 {
     switch (RelayParam_FieldOf(operaNum)) {
@@ -3417,6 +3601,12 @@ static int RelayParam_IsChannelSetting(int operaNum)
     }
 }
 
+/**
+ * @brief 执行屏幕菜单操作中的 RelayParam_IsAlarmCondition 逻辑。
+ *
+ * @param operaNum 业务参数。
+ * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ */
 static int RelayParam_IsAlarmCondition(int operaNum)
 {
     int field = RelayParam_FieldOf(operaNum);
@@ -3424,6 +3614,12 @@ static int RelayParam_IsAlarmCondition(int operaNum)
     return (field >= 3) && (field <= 11);
 }
 
+/**
+ * @brief 执行屏幕菜单操作中的 RelayParam_IsAlarmValueField 逻辑。
+ *
+ * @param operaNum 业务参数。
+ * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ */
 static int RelayParam_IsAlarmValueField(int operaNum)
 {
     int field = RelayParam_FieldOf(operaNum);
@@ -3448,6 +3644,12 @@ static const RelayStatusFieldName relay_status_field_name[] = {
     { (uint8_t*)"清锁存", (uint8_t*)"Clear" },
 };
 
+/**
+ * @brief 执行屏幕菜单操作中的 relay_alarm_state_word 逻辑。
+ *
+ * @param state 状态值。
+ * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ */
 static uint8_t *relay_alarm_state_word(uint32_t state)
 {
     if (state == RELAY_ALARM_STATE_ACTIVE) {
@@ -3461,6 +3663,12 @@ static uint8_t *relay_alarm_state_word(uint32_t state)
     return (screen_parameter.language == LANGUAGE_CHINESE) ? (uint8_t*)"非法" : (uint8_t*)"Invalid";
 }
 
+/**
+ * @brief 清除或复位屏幕菜单操作中的 relay_clear_state_word 逻辑。
+ *
+ * @param state 状态值。
+ * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ */
 static uint8_t *relay_clear_state_word(uint32_t state)
 {
     if (state == RELAY_ALARM_CLEAR_YES) {
@@ -3474,6 +3682,13 @@ static uint8_t *relay_clear_state_word(uint32_t state)
     return (screen_parameter.language == LANGUAGE_CHINESE) ? (uint8_t*)"非法" : (uint8_t*)"Invalid";
 }
 
+/**
+ * @brief 执行屏幕菜单操作中的 relay_status_state_of 逻辑。
+ *
+ * @param state 状态值。
+ * @param field 业务参数。
+ * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ */
 static uint32_t relay_status_state_of(const volatile RelayAlarmRuntimeState *state, int field)
 {
     if (state == NULL) {
@@ -3500,6 +3715,12 @@ static uint32_t relay_status_state_of(const volatile RelayAlarmRuntimeState *sta
     }
 }
 
+/**
+ * @brief 执行屏幕菜单操作中的 relay_status_alarm_value_x10 逻辑。
+ *
+ * @param value 待处理数值。
+ * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ */
 static int relay_status_alarm_value_x10(float value)
 {
     float scaled = value * 10.0f;
@@ -3507,6 +3728,15 @@ static int relay_status_alarm_value_x10(float value)
     return (scaled >= 0.0f) ? (int)(scaled + 0.5f) : (int)(scaled - 0.5f);
 }
 
+/**
+ * @brief 显示或打印屏幕菜单操作中的 display_relay_status_row 逻辑。
+ *
+ * @param state 状态值。
+ * @param field 业务参数。
+ * @param row 业务参数。
+ * @param shift 业务参数。
+ * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ */
 static void display_relay_status_row(const volatile RelayAlarmRuntimeState *state, int field, uint8_t row, uint8_t shift)
 {
     uint8_t line;
@@ -3806,6 +4036,12 @@ static MenuGroup ParamGroupOf(int operaNum)
 /* -------------------- 自动生成菜单列表 -------------------- */
 #define AUTO_MENU_MAX_ITEMS  90
 
+/**
+ * @brief 按菜单分组动态构造参数菜单列表并进入选择界面。
+ * @param grp 菜单分组。
+ * @param key_index 当前菜单页索引。
+ * @param backFunc 返回上一级菜单的回调函数。
+ */
 static void menu_build_by_group(MenuGroup grp, int key_index, void (*backFunc)(void))
 {
     static struct MenuData menu[AUTO_MENU_MAX_ITEMS + 1];
@@ -3851,6 +4087,14 @@ static void menu_build_by_group(MenuGroup grp, int key_index, void (*backFunc)(v
     menuselect(menu, menulen);
 }
 
+/**
+ * @brief 执行屏幕菜单操作中的 menu_build_by_filter 逻辑。
+ *
+ * @param filter 业务参数。
+ * @param key_index 索引值。
+ * @param backFunc 业务参数。
+ * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ */
 static void menu_build_by_filter(int (*filter)(int), int key_index, void (*backFunc)(void))
 {
     static struct MenuData menu[AUTO_MENU_MAX_ITEMS + 1];
@@ -3883,46 +4127,100 @@ static void menu_build_by_filter(int (*filter)(int), int key_index, void (*backF
     menuselect(menu, menulen);
 }
 
+/**
+ * @brief 执行屏幕菜单操作中的 menu_filter_relay1_channel 逻辑。
+ *
+ * @param operaNum 业务参数。
+ * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ */
 static int menu_filter_relay1_channel(int operaNum)
 {
     return (RelayParam_ChannelOf(operaNum) == 0) && RelayParam_IsChannelSetting(operaNum);
 }
 
+/**
+ * @brief 执行屏幕菜单操作中的 menu_filter_relay1_alarm 逻辑。
+ *
+ * @param operaNum 业务参数。
+ * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ */
 static int menu_filter_relay1_alarm(int operaNum)
 {
     return (RelayParam_ChannelOf(operaNum) == 0) && RelayParam_IsAlarmCondition(operaNum);
 }
 
+/**
+ * @brief 执行屏幕菜单操作中的 menu_filter_relay2_channel 逻辑。
+ *
+ * @param operaNum 业务参数。
+ * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ */
 static int menu_filter_relay2_channel(int operaNum)
 {
     return (RelayParam_ChannelOf(operaNum) == 1) && RelayParam_IsChannelSetting(operaNum);
 }
 
+/**
+ * @brief 执行屏幕菜单操作中的 menu_filter_relay2_alarm 逻辑。
+ *
+ * @param operaNum 业务参数。
+ * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ */
 static int menu_filter_relay2_alarm(int operaNum)
 {
     return (RelayParam_ChannelOf(operaNum) == 1) && RelayParam_IsAlarmCondition(operaNum);
 }
 
+/**
+ * @brief 执行屏幕菜单操作中的 menu_filter_relay3_channel 逻辑。
+ *
+ * @param operaNum 业务参数。
+ * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ */
 static int menu_filter_relay3_channel(int operaNum)
 {
     return (RelayParam_ChannelOf(operaNum) == 2) && RelayParam_IsChannelSetting(operaNum);
 }
 
+/**
+ * @brief 执行屏幕菜单操作中的 menu_filter_relay3_alarm 逻辑。
+ *
+ * @param operaNum 业务参数。
+ * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ */
 static int menu_filter_relay3_alarm(int operaNum)
 {
     return (RelayParam_ChannelOf(operaNum) == 2) && RelayParam_IsAlarmCondition(operaNum);
 }
 
+/**
+ * @brief 执行屏幕菜单操作中的 menu_filter_relay4_channel 逻辑。
+ *
+ * @param operaNum 业务参数。
+ * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ */
 static int menu_filter_relay4_channel(int operaNum)
 {
     return (RelayParam_ChannelOf(operaNum) == 3) && RelayParam_IsChannelSetting(operaNum);
 }
 
+/**
+ * @brief 执行屏幕菜单操作中的 menu_filter_relay4_alarm 逻辑。
+ *
+ * @param operaNum 业务参数。
+ * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ */
 static int menu_filter_relay4_alarm(int operaNum)
 {
     return (RelayParam_ChannelOf(operaNum) == 3) && RelayParam_IsAlarmCondition(operaNum);
 }
 
+/**
+ * @brief 显示或打印屏幕菜单操作中的 menu_filter_display_base 逻辑。
+ *
+ * @param operaNum 业务参数。
+ * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ */
 static int menu_filter_display_base(int operaNum)
 {
     switch (operaNum) {
@@ -3938,16 +4236,34 @@ static int menu_filter_display_base(int operaNum)
     }
 }
 
+/**
+ * @brief 显示或打印屏幕菜单操作中的 menu_filter_display_data_oil 逻辑。
+ *
+ * @param operaNum 业务参数。
+ * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ */
 static int menu_filter_display_data_oil(int operaNum)
 {
     return (operaNum == COM_NUM_SCREEN_SOURCE_OIL) || (operaNum == COM_NUM_SCREEN_INPUT_OIL);
 }
 
+/**
+ * @brief 显示或打印屏幕菜单操作中的 menu_filter_display_data_water 逻辑。
+ *
+ * @param operaNum 业务参数。
+ * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ */
 static int menu_filter_display_data_water(int operaNum)
 {
     return (operaNum == COM_NUM_SCREEN_SOURCE_WATER) || (operaNum == COM_NUM_SCREEN_INPUT_WATER);
 }
 
+/**
+ * @brief 显示或打印屏幕菜单操作中的 menu_filter_display_data_density 逻辑。
+ *
+ * @param operaNum 业务参数。
+ * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ */
 static int menu_filter_display_data_density(int operaNum)
 {
     return (operaNum == COM_NUM_SCREEN_SOURCE_D)
@@ -3955,11 +4271,21 @@ static int menu_filter_display_data_density(int operaNum)
         || (operaNum == COM_NUM_SCREEN_INPUT_D_SWITCH);
 }
 
+/**
+ * @brief 显示或打印屏幕菜单操作中的 menu_filter_display_data_temp 逻辑。
+ *
+ * @param operaNum 业务参数。
+ * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ */
 static int menu_filter_display_data_temp(int operaNum)
 {
     return (operaNum == COM_NUM_SCREEN_SOURCE_T) || (operaNum == COM_NUM_SCREEN_INPUT_T);
 }
 
+/**
+ * @brief 执行屏幕菜单操作中的 menu_measure_config 逻辑。
+ * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ */
 static void menu_measure_config(void)
 {
     static struct MenuData menu[] = {
@@ -3981,6 +4307,10 @@ static void menu_measure_config(void)
     menuselect(menu, (int)(sizeof(menu) / sizeof(menu[0])));
 }
 
+/**
+ * @brief 执行屏幕菜单操作中的 menu_comm_config 逻辑。
+ * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ */
 static void menu_comm_config(void)
 {
     static struct MenuData menu[] = {
@@ -3995,6 +4325,10 @@ static void menu_comm_config(void)
     menuselect(menu, (int)(sizeof(menu) / sizeof(menu[0])));
 }
 
+/**
+ * @brief 显示或打印屏幕菜单操作中的 menu_display_config 逻辑。
+ * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ */
 static void menu_display_config(void)
 {
     static struct MenuData menu[] = {
@@ -4008,6 +4342,10 @@ static void menu_display_config(void)
     menuselect(menu, (int)(sizeof(menu) / sizeof(menu[0])));
 }
 
+/**
+ * @brief 显示或打印屏幕菜单操作中的 menu_display_data 逻辑。
+ * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ */
 static void menu_display_data(void)
 {
     static struct MenuData menu[] = {
@@ -4023,6 +4361,10 @@ static void menu_display_data(void)
     menuselect(menu, (int)(sizeof(menu) / sizeof(menu[0])));
 }
 
+/**
+ * @brief 执行屏幕菜单操作中的 menu_maint_config 逻辑。
+ * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ */
 static void menu_maint_config(void)
 {
     static struct MenuData menu[] = {
@@ -4038,19 +4380,54 @@ static void menu_maint_config(void)
 
 /* CPU2：分组页 = 参数列表页（取消 DEBUG 容器页） */
 static void menu_run_policy(void)   { menu_build_by_group(MENU_GRP_RUN_POLICY,   KEYNUM_MENU_PARA_RUN_POLICY,   menu_measure_config); }
+/* * @brief 进入设备信息参数分组菜单。 */
 static void menu_dev_info(void)     { menu_build_by_group(MENU_GRP_DEV_INFO,     KEYNUM_MENU_PARA_DEV_INFO,     menu_maint_config); }
+/* * @brief 进入机械参数分组菜单。 */
 static void menu_mech(void)         { menu_build_by_group(MENU_GRP_MECH,         KEYNUM_MENU_PARA_MECH,         menu_measure_config); }
+/* * @brief 进入称重参数分组菜单。 */
 static void menu_weight(void)       { menu_build_by_group(MENU_GRP_WEIGHT,       KEYNUM_MENU_PARA_WEIGHT,       menu_measure_config); }
+/**
+ * @brief 执行屏幕菜单操作中的 menu_zero 逻辑。
+ * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ */
 static void menu_zero(void)         { menu_build_by_group(MENU_GRP_ZERO,         KEYNUM_MENU_PARA_ZERO,         menu_measure_config); }
 
+/**
+ * @brief 执行屏幕菜单操作中的 menu_liquid 逻辑。
+ * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ */
 static void menu_liquid(void)       { menu_build_by_group(MENU_GRP_LIQUID,       KEYNUM_MENU_PARA_LIQUID,       menu_measure_config); }
+/**
+ * @brief 执行屏幕菜单操作中的 menu_water 逻辑。
+ * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ */
 static void menu_water(void)        { menu_build_by_group(MENU_GRP_WATER,        KEYNUM_MENU_PARA_WATER,        menu_measure_config); }
+/**
+ * @brief 执行屏幕菜单操作中的 menu_bottom_tankh 逻辑。
+ * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ */
 static void menu_bottom_tankh(void) { menu_build_by_group(MENU_GRP_BOTTOM_TANKH, KEYNUM_MENU_PARA_BOTTOM_TANKH, menu_measure_config); }
 
+/**
+ * @brief 执行屏幕菜单操作中的 menu_correct 逻辑。
+ * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ */
 static void menu_correct(void)      { menu_build_by_group(MENU_GRP_CORR,         KEYNUM_MENU_PARA_CORR,         menu_measure_config); }
+/**
+ * @brief 执行屏幕菜单操作中的 menu_policy 逻辑。
+ * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ */
 static void menu_policy(void)       { menu_build_by_group(MENU_GRP_POLICY,       KEYNUM_MENU_PARA_POLICY,       menu_measure_config); }
+/**
+ * @brief 执行屏幕菜单操作中的 menu_wartsila 逻辑。
+ * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ */
 static void menu_wartsila(void)     { menu_build_by_group(MENU_GRP_WARTSILA,     KEYNUM_MENU_PARA_WARTSILA,     menu_measure_config); }
 
+/**
+ * @brief 执行屏幕菜单操作中的 menu_output_config 逻辑。
+ * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ */
 static void menu_output_config(void)
 {
     static struct MenuData menu[] = {
@@ -4064,6 +4441,10 @@ static void menu_output_config(void)
     menuselect(menu, (int)(sizeof(menu) / sizeof(menu[0])));
 }
 
+/**
+ * @brief 执行屏幕菜单操作中的 menu_do_alarm 逻辑。
+ * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ */
 static void menu_do_alarm(void)
 {
     static struct MenuData menu[] = {
@@ -4079,6 +4460,10 @@ static void menu_do_alarm(void)
     menuselect(menu, (int)(sizeof(menu) / sizeof(menu[0])));
 }
 
+/**
+ * @brief 执行屏幕菜单操作中的 menu_relay1_main 逻辑。
+ * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ */
 static void menu_relay1_main(void)
 {
     static struct MenuData menu[] = {
@@ -4093,21 +4478,37 @@ static void menu_relay1_main(void)
     menuselect(menu, (int)(sizeof(menu) / sizeof(menu[0])));
 }
 
+/**
+ * @brief 执行屏幕菜单操作中的 menu_relay1_channel 逻辑。
+ * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ */
 static void menu_relay1_channel(void)
 {
     menu_build_by_filter(menu_filter_relay1_channel, KEYNUM_MENU_RELAY1_CHANNEL, menu_relay1_main);
 }
 
+/**
+ * @brief 执行屏幕菜单操作中的 menu_relay1_alarm 逻辑。
+ * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ */
 static void menu_relay1_alarm(void)
 {
     menu_build_by_filter(menu_filter_relay1_alarm, KEYNUM_MENU_RELAY1_ALARM, menu_relay1_main);
 }
 
+/**
+ * @brief 执行屏幕菜单操作中的 menu_relay1_status 逻辑。
+ * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ */
 static void menu_relay1_status(void)
 {
     menu_relay_status(0U, KEYNUM_MENU_RELAY1_STATUS, menu_relay1_main);
 }
 
+/**
+ * @brief 执行屏幕菜单操作中的 menu_relay2_main 逻辑。
+ * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ */
 static void menu_relay2_main(void)
 {
     static struct MenuData menu[] = {
@@ -4122,21 +4523,37 @@ static void menu_relay2_main(void)
     menuselect(menu, (int)(sizeof(menu) / sizeof(menu[0])));
 }
 
+/**
+ * @brief 执行屏幕菜单操作中的 menu_relay2_channel 逻辑。
+ * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ */
 static void menu_relay2_channel(void)
 {
     menu_build_by_filter(menu_filter_relay2_channel, KEYNUM_MENU_RELAY2_CHANNEL, menu_relay2_main);
 }
 
+/**
+ * @brief 执行屏幕菜单操作中的 menu_relay2_alarm 逻辑。
+ * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ */
 static void menu_relay2_alarm(void)
 {
     menu_build_by_filter(menu_filter_relay2_alarm, KEYNUM_MENU_RELAY2_ALARM, menu_relay2_main);
 }
 
+/**
+ * @brief 执行屏幕菜单操作中的 menu_relay2_status 逻辑。
+ * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ */
 static void menu_relay2_status(void)
 {
     menu_relay_status(1U, KEYNUM_MENU_RELAY2_STATUS, menu_relay2_main);
 }
 
+/**
+ * @brief 执行屏幕菜单操作中的 menu_relay3_main 逻辑。
+ * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ */
 static void menu_relay3_main(void)
 {
     static struct MenuData menu[] = {
@@ -4151,21 +4568,37 @@ static void menu_relay3_main(void)
     menuselect(menu, (int)(sizeof(menu) / sizeof(menu[0])));
 }
 
+/**
+ * @brief 执行屏幕菜单操作中的 menu_relay3_channel 逻辑。
+ * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ */
 static void menu_relay3_channel(void)
 {
     menu_build_by_filter(menu_filter_relay3_channel, KEYNUM_MENU_RELAY3_CHANNEL, menu_relay3_main);
 }
 
+/**
+ * @brief 执行屏幕菜单操作中的 menu_relay3_alarm 逻辑。
+ * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ */
 static void menu_relay3_alarm(void)
 {
     menu_build_by_filter(menu_filter_relay3_alarm, KEYNUM_MENU_RELAY3_ALARM, menu_relay3_main);
 }
 
+/**
+ * @brief 执行屏幕菜单操作中的 menu_relay3_status 逻辑。
+ * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ */
 static void menu_relay3_status(void)
 {
     menu_relay_status(2U, KEYNUM_MENU_RELAY3_STATUS, menu_relay3_main);
 }
 
+/**
+ * @brief 执行屏幕菜单操作中的 menu_relay4_main 逻辑。
+ * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ */
 static void menu_relay4_main(void)
 {
     static struct MenuData menu[] = {
@@ -4180,40 +4613,103 @@ static void menu_relay4_main(void)
     menuselect(menu, (int)(sizeof(menu) / sizeof(menu[0])));
 }
 
+/**
+ * @brief 执行屏幕菜单操作中的 menu_relay4_channel 逻辑。
+ * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ */
 static void menu_relay4_channel(void)
 {
     menu_build_by_filter(menu_filter_relay4_channel, KEYNUM_MENU_RELAY4_CHANNEL, menu_relay4_main);
 }
 
+/**
+ * @brief 执行屏幕菜单操作中的 menu_relay4_alarm 逻辑。
+ * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ */
 static void menu_relay4_alarm(void)
 {
     menu_build_by_filter(menu_filter_relay4_alarm, KEYNUM_MENU_RELAY4_ALARM, menu_relay4_main);
 }
 
+/**
+ * @brief 执行屏幕菜单操作中的 menu_relay4_status 逻辑。
+ * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ */
 static void menu_relay4_status(void)
 {
     menu_relay_status(3U, KEYNUM_MENU_RELAY4_STATUS, menu_relay4_main);
 }
 
+/**
+ * @brief 执行屏幕菜单操作中的 menu_ao 逻辑。
+ * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ */
 static void menu_ao(void)           { menu_build_by_group(MENU_GRP_AO,           KEYNUM_MENU_PARA_AO,           menu_output_config); }
+/**
+ * @brief 执行屏幕菜单操作中的 menu_cal_sp 逻辑。
+ * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ */
 static void menu_cal_sp(void)       { menu_build_by_group(MENU_GRP_CAL_SP,       KEYNUM_MENU_PARA_CAL_SP,       menu_paracfg_main); }
 
+/**
+ * @brief 检查屏幕菜单操作中的 menu_param_check 逻辑。
+ * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ */
 static void menu_param_check(void)  { menu_build_by_group(MENU_GRP_PARAM_CHECK, KEYNUM_MENU_PARA_PARAM_CHECK,  menu_maint_config); }
 
 /* CPU3：同理，分组页 = 参数列表页 */
 static void menu_cpu3_base(void)    { menu_build_by_group(MENU_GRP_CPU3_BASE,   KEYNUM_MENU_CPU3_BASE,   menu_paracfg_main); }
+/* * @brief 进入 CPU3 来源配置菜单。 */
 static void menu_cpu3_source(void)  { menu_build_by_group(MENU_GRP_CPU3_SOURCE, KEYNUM_MENU_CPU3_SOURCE, menu_paracfg_main); }
+/* * @brief 进入 CPU3 手输值配置菜单。 */
 static void menu_cpu3_input(void)   { menu_build_by_group(MENU_GRP_CPU3_INPUT,  KEYNUM_MENU_CPU3_INPUT,  menu_paracfg_main); }
+/* * @brief 进入 CPU3 屏幕配置菜单。 */
 static void menu_cpu3_screen(void)  { menu_build_by_group(MENU_GRP_CPU3_SCREEN, KEYNUM_MENU_CPU3_SCREEN, menu_paracfg_main); }
+/**
+ * @brief 显示或打印屏幕菜单操作中的 menu_display_base 逻辑。
+ * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ */
 static void menu_display_base(void) { menu_build_by_filter(menu_filter_display_base, KEYNUM_MENU_DISPLAY_BASE, menu_display_config); }
+/**
+ * @brief 显示或打印屏幕菜单操作中的 menu_display_data_oil 逻辑。
+ * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ */
 static void menu_display_data_oil(void)     { menu_build_by_filter(menu_filter_display_data_oil,     KEYNUM_MENU_DISPLAY_DATA_OIL,     menu_display_data); }
+/**
+ * @brief 显示或打印屏幕菜单操作中的 menu_display_data_water 逻辑。
+ * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ */
 static void menu_display_data_water(void)   { menu_build_by_filter(menu_filter_display_data_water,   KEYNUM_MENU_DISPLAY_DATA_WATER,   menu_display_data); }
+/**
+ * @brief 显示或打印屏幕菜单操作中的 menu_display_data_density 逻辑。
+ * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ */
 static void menu_display_data_density(void) { menu_build_by_filter(menu_filter_display_data_density, KEYNUM_MENU_DISPLAY_DATA_DENSITY, menu_display_data); }
+/**
+ * @brief 显示或打印屏幕菜单操作中的 menu_display_data_temp 逻辑。
+ * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ */
 static void menu_display_data_temp(void)    { menu_build_by_filter(menu_filter_display_data_temp,    KEYNUM_MENU_DISPLAY_DATA_TEMP,    menu_display_data); }
+/**
+ * @brief 执行屏幕菜单操作中的 menu_cpu3_comm1 逻辑。
+ * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ */
 static void menu_cpu3_comm1(void)   { menu_build_by_group(MENU_GRP_CPU3_COM1,   KEYNUM_MENU_CPU3_COM1,   menu_comm_config); }
+/**
+ * @brief 执行屏幕菜单操作中的 menu_cpu3_comm2 逻辑。
+ * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ */
 static void menu_cpu3_comm2(void)   { menu_build_by_group(MENU_GRP_CPU3_COM2,   KEYNUM_MENU_CPU3_COM2,   menu_comm_config); }
+/**
+ * @brief 执行屏幕菜单操作中的 menu_cpu3_comm3 逻辑。
+ * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ */
 static void menu_cpu3_comm3(void)   { menu_build_by_group(MENU_GRP_CPU3_COM3,   KEYNUM_MENU_CPU3_COM3,   menu_comm_config); }
 
+/**
+ * @brief 执行屏幕菜单操作中的 menu_paracfg_main 逻辑。
+ * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ */
 static void menu_paracfg_main(void)
 {
     static struct MenuData menu[] = {

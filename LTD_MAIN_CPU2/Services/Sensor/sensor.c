@@ -33,9 +33,11 @@ static uint32_t Sensor_PositionToU01mmClamped(void);
  */
 static uint32_t Sensor_MapWirelessProbeError(uint32_t ret, uint32_t timeout_code)
 {
+    /* 先处理异常边界，避免传感器数据状态机带故障继续运行。 */
     if (ret == NO_ERROR) {
         return NO_ERROR;
     }
+    /* 先处理异常边界，避免传感器数据状态机带故障继续运行。 */
     if (ret == SENSOR_DEVICE_COMM_TIMEOUT) {
         return timeout_code;
     }
@@ -49,15 +51,19 @@ static uint32_t Sensor_MapWirelessProbeError(uint32_t ret, uint32_t timeout_code
  */
 static uint32_t Sensor_SelectProbeError(uint32_t ltd_ret, uint32_t dsm_ret)
 {
+    /* 先处理异常边界，避免传感器数据状态机带故障继续运行。 */
     if ((ltd_ret != NO_ERROR) && (ltd_ret != SENSOR_DEVICE_COMM_TIMEOUT)) {
         return ltd_ret;
     }
+    /* 先处理异常边界，避免传感器数据状态机带故障继续运行。 */
     if ((dsm_ret != NO_ERROR) && (dsm_ret != SENSOR_DEVICE_COMM_TIMEOUT)) {
         return dsm_ret;
     }
+    /* 先处理异常边界，避免传感器数据状态机带故障继续运行。 */
     if ((ltd_ret == SENSOR_DEVICE_COMM_TIMEOUT) || (dsm_ret == SENSOR_DEVICE_COMM_TIMEOUT)) {
         return SENSOR_DEVICE_COMM_TIMEOUT;
     }
+    /* 先处理异常边界，避免传感器数据状态机带故障继续运行。 */
     if (ltd_ret != NO_ERROR) {
         return ltd_ret;
     }
@@ -71,6 +77,7 @@ static uint32_t Sensor_SelectProbeError(uint32_t ltd_ret, uint32_t dsm_ret)
  */
 static void Sensor_SetCommDetectError(uint32_t err)
 {
+    /* 先处理异常边界，避免传感器数据状态机带故障继续运行。 */
     if ((err != NO_ERROR) && (err != STATE_SWITCH)) {
         g_measurement.device_status.error_code = err;
     }
@@ -91,12 +98,13 @@ static uint32_t Sensor_DiagnoseCommTimeout(uint32_t ret, const char *context)
     const char *op_context = (context != NULL) ? context : "未知操作";
     char detail[96];
 
+    /* 先处理异常边界，避免传感器数据状态机带故障继续运行。 */
     if (ret != SENSOR_DEVICE_COMM_TIMEOUT) {
         return ret;
     }
 
     snprintf(detail, sizeof(detail), "原操作：%s", op_context);
-    // 错误	阶段：错误报警	模块：传感器	操作：通信诊断	原因：ErrorLog_GetReasonByCode(ret)	处理：继续尝试	详情：detail
+    /* 错误 阶段：错误报警 模块：传感器 操作：通信诊断 原因：ErrorLog_GetReasonByCode(ret) 处理：继续尝试 详情：detail */
     ErrorLog_WarnDetail(ERROR_LOG_MODULE_SENSOR,
                         ERROR_LOG_OP_COMM_DIAG,
                         ErrorLog_GetReasonByCode(ret),
@@ -108,9 +116,10 @@ static uint32_t Sensor_DiagnoseCommTimeout(uint32_t ret, const char *context)
         return STATE_SWITCH;
     }
     diag_ret = Sensor_MapWirelessProbeError(host_ret, WIRELESS_HOST_COMM_TIMEOUT);
+    /* 先处理异常边界，避免传感器数据状态机带故障继续运行。 */
     if (diag_ret != NO_ERROR) {
         snprintf(detail, sizeof(detail), "原操作：%s,节点：主机,地址：%u", op_context, (unsigned)WIRELESS_HOST_ADDR);
-        // 错误	阶段：错误报警	模块：滑环通信	操作：链路诊断	原因：ErrorLog_GetReasonByCode(diag_ret)	处理：继续尝试	详情：detail
+        /* 错误 阶段：错误报警 模块：滑环通信 操作：链路诊断 原因：ErrorLog_GetReasonByCode(diag_ret) 处理：继续尝试 详情：detail */
         ErrorLog_WarnDetail(ERROR_LOG_MODULE_SLIPRING_COMM,
                             "链路诊断",
                             ErrorLog_GetReasonByCode(diag_ret),
@@ -124,9 +133,10 @@ static uint32_t Sensor_DiagnoseCommTimeout(uint32_t ret, const char *context)
         return STATE_SWITCH;
     }
     diag_ret = Sensor_MapWirelessProbeError(slave_ret, WIRELESS_SLAVE_COMM_TIMEOUT);
+    /* 先处理异常边界，避免传感器数据状态机带故障继续运行。 */
     if (diag_ret != NO_ERROR) {
         snprintf(detail, sizeof(detail), "原操作：%s,节点：从机,地址：%u", op_context, (unsigned)WIRELESS_SLAVE_ADDR);
-        // 错误	阶段：错误报警	模块：滑环通信	操作：链路诊断	原因：ErrorLog_GetReasonByCode(diag_ret)	处理：继续尝试	详情：detail
+        /* 错误 阶段：错误报警 模块：滑环通信 操作：链路诊断 原因：ErrorLog_GetReasonByCode(diag_ret) 处理：继续尝试 详情：detail */
         ErrorLog_WarnDetail(ERROR_LOG_MODULE_SLIPRING_COMM,
                             "链路诊断",
                             ErrorLog_GetReasonByCode(diag_ret),
@@ -147,12 +157,14 @@ static uint32_t Sensor_ProbeWirelessLink(void)
     uint32_t ret;
 
     ret = WIRELESS_PrintInfo(WIRELESS_HOST_ADDR);
+    /* 先处理异常边界，避免传感器数据状态机带故障继续运行。 */
     if (ret != NO_ERROR) {
         ret = Sensor_MapWirelessProbeError(ret, WIRELESS_HOST_COMM_TIMEOUT);
         return ret;
     }
 
     ret = WIRELESS_PrintInfo(WIRELESS_SLAVE_ADDR);
+    /* 先处理异常边界，避免传感器数据状态机带故障继续运行。 */
     if (ret != NO_ERROR) {
         ret = Sensor_MapWirelessProbeError(ret, WIRELESS_SLAVE_COMM_TIMEOUT);
         return ret;
@@ -201,6 +213,7 @@ static uint32_t Sensor_ProbeLtdSensor(uint32_t *sensor_id_out)
     uint32_t sensor_id = 0U;
     uint32_t ret = DSM_V2_Read_SensorID(&sensor_id);
 
+    /* 先处理异常边界，避免传感器数据状态机带故障继续运行。 */
     if ((ret == NO_ERROR) && (sensor_id_out != NULL)) {
         *sensor_id_out = sensor_id;
     }
@@ -219,16 +232,19 @@ static uint32_t Sensor_ProbeDsmSensor(uint32_t *sensor_id_out)
     uint32_t ret;
 
     ret = Read_VibrationTube_ID(id_text, sizeof(id_text));
+    /* 先处理异常边界，避免传感器数据状态机带故障继续运行。 */
     if (ret != NO_ERROR) {
         return ret;
     }
 
     ret = Sensor_ParseDsmTextId(id_text, &sensor_id);
+    /* 先处理异常边界，避免传感器数据状态机带故障继续运行。 */
     if (ret != NO_ERROR) {
         return ret;
     }
 
     ret = DSM_EnableDensityMode();
+    /* 先处理异常边界，避免传感器数据状态机带故障继续运行。 */
     if (ret != NO_ERROR) {
         return ret;
     }
@@ -238,6 +254,10 @@ static uint32_t Sensor_ProbeDsmSensor(uint32_t *sensor_id_out)
     }
     return NO_ERROR;
 }
+/**
+ * @brief 执行传感器数据中的 Sensor_SupportsAuxDsmChannels 逻辑。
+ * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ */
 static int Sensor_SupportsAuxDsmChannels(void)
 {
     return (g_deviceParams.sensorType == DSM_SENSOR);
@@ -258,6 +278,7 @@ uint32_t DetectSensorType(void) {
 	printf("[1/3] 检查无线链路\r\n");
 
 	ret = Sensor_ProbeWirelessLink();
+	/* 先处理异常边界，避免传感器数据状态机带故障继续运行。 */
 	if (ret != NO_ERROR) {
 		Sensor_SetCommDetectError(ret);
 		return ret;
@@ -266,6 +287,7 @@ uint32_t DetectSensorType(void) {
 
 	printf("[2/3] 尝试LTD协议\r\n");
 	ltd_ret = Sensor_ProbeLtdSensor(&sensor_id);
+	/* 先处理异常边界，避免传感器数据状态机带故障继续运行。 */
 	if (ltd_ret == NO_ERROR) {
 		g_deviceParams.sensorType = LTD_SENSOR;
 		g_deviceParams.sensorID = sensor_id;
@@ -278,12 +300,13 @@ uint32_t DetectSensorType(void) {
 		return NO_ERROR;
 	}
 
-	// 错误	阶段：错误报警	模块：传感器	操作：通信诊断	原因：ErrorLog_GetReasonByCode(ltd_ret)	处理：继续尝试
+	/* 错误 阶段：错误报警 模块：传感器 操作：通信诊断 原因：ErrorLog_GetReasonByCode(ltd_ret) 处理：继续尝试 */
 	ErrorLog_Warn(ERROR_LOG_MODULE_SENSOR,
 	              ERROR_LOG_OP_COMM_DIAG,
 	              ErrorLog_GetReasonByCode(ltd_ret),
 	              ERROR_LOG_ACTION_CONTINUE);
 	dsm_ret = Sensor_ProbeDsmSensor(&sensor_id);
+	/* 先处理异常边界，避免传感器数据状态机带故障继续运行。 */
 	if (dsm_ret == NO_ERROR) {
 		g_deviceParams.sensorType = DSM_SENSOR;
 		g_deviceParams.sensorID = sensor_id;
@@ -295,7 +318,7 @@ uint32_t DetectSensorType(void) {
 		return NO_ERROR;
 	}
 
-	// 错误	阶段：错误报警	模块：传感器	操作：通信诊断	原因：ErrorLog_GetReasonByCode(dsm_ret)	处理：继续尝试
+	/* 错误 阶段：错误报警 模块：传感器 操作：通信诊断 原因：ErrorLog_GetReasonByCode(dsm_ret) 处理：继续尝试 */
 	ErrorLog_Warn(ERROR_LOG_MODULE_SENSOR,
 	              ERROR_LOG_OP_COMM_DIAG,
 	              ErrorLog_GetReasonByCode(dsm_ret),
@@ -304,6 +327,10 @@ uint32_t DetectSensorType(void) {
 	Sensor_SetCommDetectError(ret);
 	return ret;
 }
+/**
+ * @brief 执行传感器数据中的 EnableDensityMode 逻辑。
+ * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ */
 uint32_t EnableDensityMode(void) {
 	uint32_t ret;
 	if (g_deviceParams.sensorType == DSM_SENSOR) {
@@ -314,9 +341,14 @@ uint32_t EnableDensityMode(void) {
 	return Sensor_DiagnoseCommTimeout(ret, "切换密度模式");
 }
 
+/**
+ * @brief 执行传感器数据中的 Sensor_PrepareLtdDensityModeForPartParams 逻辑。
+ * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ */
 static uint32_t Sensor_PrepareLtdDensityModeForPartParams(void)
 {
 	uint32_t ret = EnableDensityMode();
+	/* 先处理异常边界，避免传感器数据状态机带故障继续运行。 */
 	if (ret != NO_ERROR) {
 		return ret;
 	}
@@ -325,10 +357,15 @@ static uint32_t Sensor_PrepareLtdDensityModeForPartParams(void)
 	return AbortableDelay_CommandSwitch(SENSOR_DENSITY_MODE_SETTLE_MS, 50U);
 }
 
+/**
+ * @brief 执行传感器数据中的 EnableLevelMode 逻辑。
+ * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ */
 uint32_t EnableLevelMode(void) {
 	uint32_t ret;
 
 	ret = MotorCtrl_SlowStop();
+	/* 先处理异常边界，避免传感器数据状态机带故障继续运行。 */
 	if (ret != NO_ERROR) {
 		return ret;
 	}
@@ -339,6 +376,7 @@ uint32_t EnableLevelMode(void) {
 		ret = DSM_V2_SwitchToLevelMode();
 	}
 	ret = Sensor_DiagnoseCommTimeout(ret, "切换液位模式");
+	/* 先处理异常边界，避免传感器数据状态机带故障继续运行。 */
 	if (ret == NO_ERROR) {
 		printf("切换液位模式成功，等待%lu ms稳定\r\n", (unsigned long)SENSOR_LEVEL_MODE_SETTLE_MS);
 		ret = AbortableDelay_CommandSwitch(SENSOR_LEVEL_MODE_SETTLE_MS, 100U);
@@ -346,11 +384,11 @@ uint32_t EnableLevelMode(void) {
 	return ret;
 }
 
-// 读取一次并以整数 Hz 返回。
-// 这里的循环是业务层“等待有效频率”，不是底层串口通信重试；
-// 真正的通信重试统一收敛在各协议层，所有 UART6 传感器/无线协议统一使用 UART6_COMM_MAX_RETRY。
-// 如果频率连续 3 次为 0 或大于 6500Hz，且电机静止，则上行 1mm 后切密度/液位模式恢复；
-// 若多轮恢复后仍无有效频率，则返回 SONIC_FREQ_ABNORMAL。
+/* 读取一次并以整数 Hz 返回。 */
+/* 这里的循环是业务层“等待有效频率”，不是底层串口通信重试； */
+/* 真正的通信重试统一收敛在各协议层，所有 UART6 传感器/无线协议统一使用 UART6_COMM_MAX_RETRY。 */
+/* 如果频率连续 3 次为 0 或大于 6500Hz，且电机静止，则上行 1mm 后切密度/液位模式恢复； */
+/* 若多轮恢复后仍无有效频率，则返回 SONIC_FREQ_ABNORMAL。 */
 
 /**
  * @brief 判断电机是否已经停止，供液位频率恢复动作使用。
@@ -368,6 +406,7 @@ static uint8_t Sensor_IsMotorStopped(void)
     }
 
     ret = MotorCtrl_IsDriverMoving(&stepper, &is_moving);
+    /* 先处理异常边界，避免传感器数据状态机带故障继续运行。 */
     if (ret != NO_ERROR) {
         return 0U;
     }
@@ -386,6 +425,7 @@ static uint32_t Sensor_RecoverLevelFrequencyWhenStopped(void)
 
 	if (!Sensor_IsMotorStopped()) {
 		ret = EnableLevelMode();
+		/* 先处理异常边界，避免传感器数据状态机带故障继续运行。 */
 		if (ret != NO_ERROR) {
 			return ret;
 		}
@@ -395,21 +435,25 @@ static uint32_t Sensor_RecoverLevelFrequencyWhenStopped(void)
 	ret = MotorCtrl_MoveAndWait(SENSOR_LEVEL_FREQ_RECOVERY_LIFT_MM,
 	                            MOTOR_DIRECTION_UP,
 	                            MotorCtrl_GetDefaultSpeedX100());
+	/* 先处理异常边界，避免传感器数据状态机带故障继续运行。 */
 	if (ret != NO_ERROR) {
 		return ret;
 	}
 
 	ret = EnableDensityMode();
+	/* 先处理异常边界，避免传感器数据状态机带故障继续运行。 */
 	if (ret != NO_ERROR) {
 		return ret;
 	}
 
 	ret = AbortableDelay_CommandSwitch(SENSOR_DENSITY_MODE_SETTLE_MS, 100U);
+	/* 先处理异常边界，避免传感器数据状态机带故障继续运行。 */
 	if (ret != NO_ERROR) {
 		return ret;
 	}
 
 	ret = EnableLevelMode();
+	/* 先处理异常边界，避免传感器数据状态机带故障继续运行。 */
 	if (ret != NO_ERROR) {
 		return ret;
 	}
@@ -417,9 +461,15 @@ static uint32_t Sensor_RecoverLevelFrequencyWhenStopped(void)
 	return NO_ERROR;
 }
 
+/**
+ * @brief 执行传感器数据中的 DSM_Get_LevelMode_Frequence 逻辑。
+ *
+ * @param frequency_out 业务参数。
+ * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ */
 uint32_t DSM_Get_LevelMode_Frequence(volatile uint32_t *frequency_out) {
 	if (frequency_out == NULL) {
-		return PARAM_ADDRESS_OVERFLOW;   // 比设备通信错误更合理
+		return PARAM_ADDRESS_OVERFLOW;   /* 比设备通信错误更合理 */
 	}
 
 	uint32_t ret;
@@ -436,8 +486,9 @@ uint32_t DSM_Get_LevelMode_Frequence(volatile uint32_t *frequency_out) {
 				ret = DSM_V2_Read_LevelFrequency(&hz);
 			}
 
+			/* 先处理异常边界，避免传感器数据状态机带故障继续运行。 */
 			if (ret != NO_ERROR) {
-				return Sensor_DiagnoseCommTimeout(ret, "读取液位频率");  // 读取失败直接返回错误码
+				return Sensor_DiagnoseCommTimeout(ret, "读取液位频率");  /* 读取失败直接返回错误码 */
 			}
 
 			if (hz != 0 && hz <= 6500) {
@@ -446,7 +497,7 @@ uint32_t DSM_Get_LevelMode_Frequence(volatile uint32_t *frequency_out) {
 				return NO_ERROR;
 			}
 
-            // 错误	阶段：错误重试	模块：传感器	操作：读取液位频率	原因：ErrorLog_GetCodeName(SONIC_FREQ_ABNORMAL)	尝试：(attempt + 1)/MAX_INVALID_FREQ_RETRY	错误码：SONIC_FREQ_ABNORMAL	错误名：ErrorLog_GetCodeName(SONIC_FREQ_ABNORMAL)
+            /* 错误 阶段：错误重试 模块：传感器 操作：读取液位频率 原因：ErrorLog_GetCodeName(SONIC_FREQ_ABNORMAL) 尝试：(attempt + 1)/MAX_INVALID_FREQ_RETRY 错误码：SONIC_FREQ_ABNORMAL 错误名：ErrorLog_GetCodeName(SONIC_FREQ_ABNORMAL) */
             ErrorLog_Retry(ERROR_LOG_MODULE_SENSOR,
                            ERROR_LOG_OP_READ_LEVEL_FREQ,
                            ErrorLog_GetCodeName(SONIC_FREQ_ABNORMAL),
@@ -454,6 +505,7 @@ uint32_t DSM_Get_LevelMode_Frequence(volatile uint32_t *frequency_out) {
                            MAX_INVALID_FREQ_RETRY,
                            SONIC_FREQ_ABNORMAL);
 			ret = AbortableDelay_CommandSwitch(1000U, 100U);
+			/* 先处理异常边界，避免传感器数据状态机带故障继续运行。 */
 			if (ret != NO_ERROR) {
 				return ret;
 			}
@@ -464,7 +516,7 @@ uint32_t DSM_Get_LevelMode_Frequence(volatile uint32_t *frequency_out) {
 		}
 
 		mode_switch_recovery_count++;
-        // 错误	阶段：错误重试	模块：传感器	操作：切换模式	原因：ErrorLog_GetCodeName(SONIC_FREQ_ABNORMAL)	尝试：mode_switch_recovery_count/MAX_MODE_SWITCH_RECOVERY	错误码：SONIC_FREQ_ABNORMAL	错误名：ErrorLog_GetCodeName(SONIC_FREQ_ABNORMAL)
+        /* 错误 阶段：错误重试 模块：传感器 操作：切换模式 原因：ErrorLog_GetCodeName(SONIC_FREQ_ABNORMAL) 尝试：mode_switch_recovery_count/MAX_MODE_SWITCH_RECOVERY 错误码：SONIC_FREQ_ABNORMAL 错误名：ErrorLog_GetCodeName(SONIC_FREQ_ABNORMAL) */
         ErrorLog_Retry(ERROR_LOG_MODULE_SENSOR,
                        ERROR_LOG_OP_SWITCH_MODE,
                        ErrorLog_GetCodeName(SONIC_FREQ_ABNORMAL),
@@ -472,10 +524,11 @@ uint32_t DSM_Get_LevelMode_Frequence(volatile uint32_t *frequency_out) {
                        MAX_MODE_SWITCH_RECOVERY,
                        SONIC_FREQ_ABNORMAL);
 		ret = Sensor_RecoverLevelFrequencyWhenStopped();
+		/* 先处理异常边界，避免传感器数据状态机带故障继续运行。 */
 		if (ret != NO_ERROR) {
 			return ret;
 		}
-        // 错误	阶段：重试成功	模块：传感器	操作：切换模式	原因：ErrorLog_GetCodeName(SONIC_FREQ_ABNORMAL)	尝试：mode_switch_recovery_count/MAX_MODE_SWITCH_RECOVERY
+        /* 错误 阶段：重试成功 模块：传感器 操作：切换模式 原因：ErrorLog_GetCodeName(SONIC_FREQ_ABNORMAL) 尝试：mode_switch_recovery_count/MAX_MODE_SWITCH_RECOVERY */
         ErrorLog_Recover(ERROR_LOG_MODULE_SENSOR,
                          ERROR_LOG_OP_SWITCH_MODE,
                          ErrorLog_GetCodeName(SONIC_FREQ_ABNORMAL),
@@ -497,17 +550,19 @@ uint32_t DSM_Get_LevelMode_Frequence_Avg(volatile uint32_t *frequency_out) {
 
 	for (int i = 0; i < 10; i++) {
 		ret = DSM_Get_LevelMode_Frequence(&values[i]);
+		/* 先处理异常边界，避免传感器数据状态机带故障继续运行。 */
 		if (ret != NO_ERROR) {
 			return ret;
 		}
 		printf("第 %d 次液位频率: %lu Hz\r\n", i + 1, (unsigned long) values[i]);
-		ret = AbortableDelay_CommandSwitch(2000U, 100U); // 2 秒间隔，可被命令切换打断
+		ret = AbortableDelay_CommandSwitch(2000U, 100U); /* 2 秒间隔，可被命令切换打断 */
+		/* 先处理异常边界，避免传感器数据状态机带故障继续运行。 */
 		if (ret != NO_ERROR) {
 			return ret;
 		}
 	}
 
-	// 冒泡排序（升序）
+	/* 冒泡排序（升序） */
 	for (int i = 0; i < 9; i++) {
 		for (int j = 0; j < 9 - i; j++) {
 			if (values[j] > values[j + 1]) {
@@ -518,7 +573,7 @@ uint32_t DSM_Get_LevelMode_Frequence_Avg(volatile uint32_t *frequency_out) {
 		}
 	}
 
-	// 去掉两个最大与两个最小
+	/* 去掉两个最大与两个最小 */
 	float sum = 0.0f;
 	for (int i = 2; i < 8; i++) {
 		sum += (float) values[i];
@@ -532,6 +587,14 @@ uint32_t DSM_Get_LevelMode_Frequence_Avg(volatile uint32_t *frequency_out) {
 	return NO_ERROR;
 }
 
+/**
+ * @brief 读取传感器数据中的 Read_Density_text 逻辑。
+ *
+ * @param frequency 业务参数。
+ * @param density 业务参数。
+ * @param temp 业务参数。
+ * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ */
 uint32_t Read_Density_text(float *frequency, float *density, float *temp) {
 	if (frequency == NULL || temp == NULL || density == NULL) {
 		return PARAM_ADDRESS_OVERFLOW;
@@ -544,6 +607,13 @@ uint32_t Read_Density_text(float *frequency, float *density, float *temp) {
 	return 0;
 }
 
+/**
+ * @brief 执行传感器数据中的 Apply_Fixed_DensityTemp_Correction 逻辑。
+ *
+ * @param density 业务参数。
+ * @param temp 业务参数。
+ * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ */
 static void Apply_Fixed_DensityTemp_Correction(float *density, float *temp)
 {
     if ((density)&&(*density>200.0)) {
@@ -555,6 +625,14 @@ static void Apply_Fixed_DensityTemp_Correction(float *density, float *temp)
     }
 }
 
+/**
+ * @brief 读取传感器数据中的 Read_Density 逻辑。
+ *
+ * @param frequency 业务参数。
+ * @param density 业务参数。
+ * @param temp 业务参数。
+ * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ */
 uint32_t Read_Density(float *frequency, float *density, float *temp) {
 	if (frequency == NULL || temp == NULL || density == NULL) {
 		return PARAM_ADDRESS_OVERFLOW;
@@ -565,6 +643,7 @@ uint32_t Read_Density(float *frequency, float *density, float *temp) {
 		ret = DSM_Read_Frequency_Density_Temp(frequency, density, temp);
 	} else {
 		ret = DSM_V2_Read_Temperature(temp);
+		/* 先处理异常边界，避免传感器数据状态机带故障继续运行。 */
 		if (ret == NO_ERROR) {
 			printf("温度值: %.3f ℃\r\n", *temp);
 		} else {
@@ -572,12 +651,14 @@ uint32_t Read_Density(float *frequency, float *density, float *temp) {
 		}
 
 		ret = DSM_V2_Read_Density(density);
+		/* 先处理异常边界，避免传感器数据状态机带故障继续运行。 */
 		if (ret == NO_ERROR) {
 			printf("密度值: %.3f\r\n", *density);
 		} else {
 			return Sensor_DiagnoseCommTimeout(ret, "读取LTD密度");
 		}
 		ret = DSM_V2_Read_DensityFrequency(frequency,&hz_45,&hz_225);
+		/* 先处理异常边界，避免传感器数据状态机带故障继续运行。 */
 		if (ret == NO_ERROR) {
 			printf("频率值: %.1f Hz\r\n45度扫频周期平方均值:  %.2f Hz\r\n22.5度扫频周期平方均值: %.2f Hz\r\n", *frequency,hz_45,hz_225);
 		} else {
@@ -585,13 +666,14 @@ uint32_t Read_Density(float *frequency, float *density, float *temp) {
 		}
 	}
 	ret = Sensor_DiagnoseCommTimeout(ret, "读取密度");
+	/* 先处理异常边界，避免传感器数据状态机带故障继续运行。 */
 	if (ret == NO_ERROR) {
 
 	    /* ===== 固定系数修正 ===== */
 	    float density_before = *density;
 	    float temp_before    = *temp;
 
-	    Apply_Fixed_DensityTemp_Correction(density, temp);//修正密度和温度
+	    Apply_Fixed_DensityTemp_Correction(density, temp); /* 修正密度和温度 */
 
 	    printf("原始密度: %.3f  修正后密度: %.3f\r\n",
 	           density_before, *density);
@@ -616,7 +698,7 @@ uint32_t Read_Density(float *frequency, float *density, float *temp) {
 		g_measurement.single_point_measurement.temperature = temp_raw;
 		g_measurement.single_point_measurement.temperature_position = pos;
 
-		//调试信息赋值
+		/* 调试信息赋值 */
 	    g_measurement.debug_data.temperature = temp_raw;
 	    g_measurement.debug_data.frequency = *frequency;
 	}
@@ -637,6 +719,12 @@ static uint32_t Sensor_PositionToU01mmClamped(void)
 
     return (uint32_t)pos_s;
 }
+/**
+ * @brief 读取传感器数据中的 Sensor_ReadWaterCapacitance 逻辑。
+ *
+ * @param cap_out 业务参数。
+ * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ */
 uint32_t Sensor_ReadWaterCapacitance(float *cap_out)
 {
     if (!Sensor_SupportsAuxDsmChannels()) {
@@ -648,6 +736,13 @@ uint32_t Sensor_ReadWaterCapacitance(float *cap_out)
     return Sensor_DiagnoseCommTimeout(ret, "读取水位电容");
 }
 
+/**
+ * @brief 读取传感器数据中的 Sensor_ReadGyroAngle 逻辑。
+ *
+ * @param angle_x_deg 业务参数。
+ * @param angle_y_deg 业务参数。
+ * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ */
 uint32_t Sensor_ReadGyroAngle(float *angle_x_deg, float *angle_y_deg)
 {
     if (!Sensor_SupportsAuxDsmChannels()) {
@@ -658,6 +753,10 @@ uint32_t Sensor_ReadGyroAngle(float *angle_x_deg, float *angle_y_deg)
     uint32_t ret = Read_Gyro_Angle(angle_x_deg, angle_y_deg);
     return Sensor_DiagnoseCommTimeout(ret, "读取陀螺仪");
 }
+/**
+ * @brief 执行传感器数据中的 Sensor_Test1 逻辑。
+ * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ */
 uint32_t Sensor_Test1(void) {
 	float frequency = 5500.123f;
 	float density = 800.5f;
@@ -699,6 +798,10 @@ static int32_t Calc_SensorPosition_Adapter(void)
     return g_measurement.debug_data.sensor_position;
 }
 
+/**
+ * @brief 从调试数据读取当前尺带长度快照。
+ * @return 尺带长度，单位 0.1mm。
+ */
 static int32_t Calc_CableLength_Adapter(void)
 {
     /* TODO: 替换为你工程中的“尺带长度”计算逻辑（允许负值则这里不要 abs） */
@@ -712,18 +815,30 @@ static int32_t Read_MotorStep_Adapter(void)
     return g_measurement.debug_data.motor_step;
 }
 
+/**
+ * @brief 读取当前电机运动距离快照。
+ * @return 电机运动距离，单位 0.1mm。
+ */
 static int32_t Read_MotorDistance_0p1mm_Adapter(void)
 {
     /* TODO: 若你有当前运动距离累计，替换这里 */
     return g_measurement.debug_data.motor_distance;
 }
 
+/**
+ * @brief 读取当前电机速度快照。
+ * @return 电机速度，沿用调试数据中的单位口径。
+ */
 static uint32_t Read_MotorSpeed_Adapter(void)
 {
     /* TODO: 若你有实际速度读取接口，替换这里 */
     return g_measurement.debug_data.motor_speed;
 }
 
+/**
+ * @brief 读取当前电机运行状态快照。
+ * @return 0 停止，1 上行，2 下行，其他值表示上层尚未归一化。
+ */
 static uint32_t Read_MotorState_Adapter(void)
 {
     /* TODO: 统一为 0停 1上 2下；如果你已有 g_measurement.debug_data.motor_state 维护，就直接返回 */
@@ -736,6 +851,10 @@ static uint32_t Read_CurrentWeight_Adapter(void)
     return (uint32_t)weight_parament.current_weight;
 }
 
+/**
+ * @brief 读取传感器数据中的 Read_WeightParam_Adapter 逻辑。
+ * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ */
 static uint32_t Read_WeightParam_Adapter(void)
 {
     /* TODO: 若你有称重系数/滤波参数等，可填这里；没有就保持原值 */
@@ -760,6 +879,7 @@ static uint32_t Sensor_ReadPartParamsInternal(uint8_t update_command_state)
 
     if (update_command_state) {
         ret = (uint32_t)MeasureStart();
+        /* 先处理异常边界，避免传感器数据状态机带故障继续运行。 */
         if (ret != NO_ERROR) {
             return ret;
         }
@@ -770,6 +890,7 @@ static uint32_t Sensor_ReadPartParamsInternal(uint8_t update_command_state)
 
     /* ---------- 1) 位置类：编码器/位置/尺带长度/步进/距离 ---------- */
     ret = MotorCtrl_CheckDriverGstat();
+    /* 先处理异常边界，避免传感器数据状态机带故障继续运行。 */
     if (ret != NO_ERROR) {
         return ret;
     }
@@ -781,6 +902,7 @@ static uint32_t Sensor_ReadPartParamsInternal(uint8_t update_command_state)
 
     if (!MotorCtrl_IsPositionSourceMotor()) {
         ret = AS5145_GetLastError();
+        /* 先处理异常边界，避免传感器数据状态机带故障继续运行。 */
         if (ret != NO_ERROR) {
             return ret;
         }
@@ -799,6 +921,7 @@ static uint32_t Sensor_ReadPartParamsInternal(uint8_t update_command_state)
     /* ---------- 3) 称重类 ---------- */
     ret = Weight_CheckOwnCommunicationTimeout();
 
+    /* 先处理异常边界，避免传感器数据状态机带故障继续运行。 */
     if (ret != NO_ERROR) {
         return ret;
     }
@@ -813,6 +936,7 @@ static uint32_t Sensor_ReadPartParamsInternal(uint8_t update_command_state)
 
     if (Sensor_SupportsAuxDsmChannels()) {
         ret = Sensor_ReadGyroAngle(&ax, &ay);
+        /* 先处理异常边界，避免传感器数据状态机带故障继续运行。 */
         if (ret != NO_ERROR) {
             return ret;
         } else {
@@ -838,6 +962,7 @@ static uint32_t Sensor_ReadPartParamsInternal(uint8_t update_command_state)
         }
     }
 
+    /* 先处理异常边界，避免传感器数据状态机带故障继续运行。 */
     if (ret == NO_ERROR) {
         ret = Read_Density(&freq, &dens, &temp);
         if (ret == STATE_SWITCH) {
@@ -845,6 +970,7 @@ static uint32_t Sensor_ReadPartParamsInternal(uint8_t update_command_state)
         }
     }
 
+    /* 先处理异常边界，避免传感器数据状态机带故障继续运行。 */
     if (ret != NO_ERROR) {
         if (is_ltd_sensor) {
             g_measurement.debug_data.frequency = 0U;
@@ -867,6 +993,7 @@ static uint32_t Sensor_ReadPartParamsInternal(uint8_t update_command_state)
 
     if (Sensor_SupportsAuxDsmChannels()) {
         ret = Sensor_ReadWaterCapacitance(&cap);
+        /* 先处理异常边界，避免传感器数据状态机带故障继续运行。 */
         if (ret != NO_ERROR) {
             return ret;
         } else {
@@ -911,11 +1038,19 @@ static uint32_t Sensor_ReadPartParamsInternal(uint8_t update_command_state)
     return NO_ERROR;
 }
 
+/**
+ * @brief 检查传感器数据中的 Sensor_CheckAllPartParams 逻辑。
+ * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ */
 uint32_t Sensor_CheckAllPartParams(void)
 {
     return Sensor_ReadPartParamsInternal(0U);
 }
 
+/**
+ * @brief 读取传感器数据中的 CMD_ReadPartParams 逻辑。
+ * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ */
 void CMD_ReadPartParams(void)
 {
     uint32_t ret = Sensor_ReadPartParamsInternal(1U);

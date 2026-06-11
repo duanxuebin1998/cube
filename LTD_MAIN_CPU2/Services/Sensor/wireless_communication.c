@@ -92,7 +92,7 @@ static void UART6_DrainRX_UntilIdle(uint32_t idle_ms) {
     __HAL_UART_CLEAR_OREFLAG(&huart6);
 }
 
-static uint8_t s_wireless_dma_rx_buf[8];
+static uint8_t s_wireless_dma_rx_buf[8]; /* 无线通信数据缓冲区，注意与中断或 DMA 访问边界保持一致。 */
 
 /**
  * @brief 停止 UART6 DMA 接收并清理无线 8 字节协议的硬件错误状态。
@@ -142,10 +142,12 @@ static uint32_t WIRELESS_WaitTransmitDmaDone(uint32_t timeout)
         if (huart6.gState == HAL_UART_STATE_READY) {
             return NO_ERROR;
         }
+        /* 先处理异常边界，避免无线通信状态机带故障继续运行。 */
         if (huart6.ErrorCode != HAL_UART_ERROR_NONE) {
             WIRELESS_StopDmaReceive();
             return OTHER_PERIPHERAL_CONFIG_ERROR;
         }
+        /* 无线通信与外设通信之间保留等待时间，避免硬件或对端协议尚未准备好。 */
         HAL_Delay(1);
     }
 
@@ -200,6 +202,7 @@ static uint32_t WIRELESS_WaitFixedReceiveDma(uint8_t rx[8], uint32_t timeout)
             WIRELESS_StopDmaReceive();
             return STATE_SWITCH;
         }
+        /* 先处理异常边界，避免无线通信状态机带故障继续运行。 */
         if (huart6.ErrorCode != HAL_UART_ERROR_NONE) {
             WIRELESS_StopDmaReceive();
             return SENSOR_RESP_FORMAT_ERROR;
@@ -211,6 +214,7 @@ static uint32_t WIRELESS_WaitFixedReceiveDma(uint8_t rx[8], uint32_t timeout)
             WIRELESS_StopDmaReceive();
             return NO_ERROR;
         }
+        /* 无线通信与外设通信之间保留等待时间，避免硬件或对端协议尚未准备好。 */
         HAL_Delay(1);
     }
 
@@ -240,6 +244,7 @@ static uint32_t WIRELESS_Transceive(const uint8_t tx[8], uint8_t rx[8]) {
     UART6_DrainRX_UntilIdle(5);
 
     uint32_t rx_ret = WIRELESS_StartFixedReceiveDma(rx);
+    /* 先处理异常边界，避免无线通信状态机带故障继续运行。 */
     if (rx_ret != NO_ERROR) {
         return rx_ret;
     }
@@ -252,11 +257,13 @@ static uint32_t WIRELESS_Transceive(const uint8_t tx[8], uint8_t rx[8]) {
     }
 
     rx_ret = WIRELESS_WaitTransmitDmaDone(DSM_CMD_TIMEOUT);
+    /* 先处理异常边界，避免无线通信状态机带故障继续运行。 */
     if (rx_ret != NO_ERROR) {
         return rx_ret;
     }
 
     rx_ret = WIRELESS_WaitFixedReceiveDma(rx, WIRELESS_RX_TIMEOUT);
+    /* 先处理异常边界，避免无线通信状态机带故障继续运行。 */
     if (rx_ret != NO_ERROR) {
         return rx_ret;
     }
@@ -366,6 +373,7 @@ uint32_t WIRELESS_Read_FloatParam(uint8_t addr, uint8_t param, float *out_value)
             /* 命令切换是正常打断，直接向上透传，不参与故障重试。 */
             return STATE_SWITCH;
         }
+        /* 无线通信与外设通信之间保留等待时间，避免硬件或对端协议尚未准备好。 */
         HAL_Delay(DSM_PRE_SEND_DELAY);
 
         int ret = WIRELESS_Transceive(tx, rx);
@@ -373,9 +381,10 @@ uint32_t WIRELESS_Read_FloatParam(uint8_t addr, uint8_t param, float *out_value)
             /* 命令切换是正常打断，直接向上透传，不参与故障重试。 */
             return STATE_SWITCH;
         }
+        /* 先处理异常边界，避免无线通信状态机带故障继续运行。 */
         if (ret != NO_ERROR) {
             last_err = ret;
-            // 错误	阶段：错误重试	模块：滑环通信	操作：读取浮点参数	原因：ErrorLog_GetReasonByCode((uint32_t)ret)	尝试：(attempt + 1)/WIRELESS_MAX_RETRY	错误码：ret	错误名：ErrorLog_GetCodeName(ret)	详情：detail
+            /* 错误 阶段：错误重试 模块：滑环通信 操作：读取浮点参数 原因：ErrorLog_GetReasonByCode((uint32_t)ret) 尝试：(attempt + 1)/WIRELESS_MAX_RETRY 错误码：ret 错误名：ErrorLog_GetCodeName(ret) 详情：detail */
             ErrorLog_RetryDetail(ERROR_LOG_MODULE_SLIPRING_COMM,
                                  ERROR_LOG_OP_READ_FLOAT_PARAM,
                                  ErrorLog_GetReasonByCode((uint32_t)ret),
@@ -391,11 +400,12 @@ uint32_t WIRELESS_Read_FloatParam(uint8_t addr, uint8_t param, float *out_value)
             /* 命令切换是正常打断，直接向上透传，不参与故障重试。 */
             return STATE_SWITCH;
         }
+        /* 先处理异常边界，避免无线通信状态机带故障继续运行。 */
         if (ret == NO_ERROR) {
             float v = WIRELESS_ParseFloat_LE(rx + 2);
             *out_value = v;
             if (attempt > 0) {
-                // 错误	阶段：重试成功	模块：滑环通信	操作：读取浮点参数	原因：ErrorLog_GetReasonByCode((uint32_t)last_err)	尝试：(attempt + 1)/WIRELESS_MAX_RETRY	详情：detail
+                /* 错误 阶段：重试成功 模块：滑环通信 操作：读取浮点参数 原因：ErrorLog_GetReasonByCode((uint32_t)last_err) 尝试：(attempt + 1)/WIRELESS_MAX_RETRY 详情：detail */
                 ErrorLog_RecoverDetail(ERROR_LOG_MODULE_SLIPRING_COMM,
                                        ERROR_LOG_OP_READ_FLOAT_PARAM,
                                        ErrorLog_GetReasonByCode((uint32_t)last_err),
@@ -411,7 +421,7 @@ uint32_t WIRELESS_Read_FloatParam(uint8_t addr, uint8_t param, float *out_value)
         }
 
         last_err = ret;
-        // 错误	阶段：错误重试	模块：滑环通信	操作：读取浮点参数	原因：ErrorLog_GetReasonByCode((uint32_t)ret)	尝试：(attempt + 1)/WIRELESS_MAX_RETRY	错误码：ret	错误名：ErrorLog_GetCodeName(ret)	详情：detail
+        /* 错误 阶段：错误重试 模块：滑环通信 操作：读取浮点参数 原因：ErrorLog_GetReasonByCode((uint32_t)ret) 尝试：(attempt + 1)/WIRELESS_MAX_RETRY 错误码：ret 错误名：ErrorLog_GetCodeName(ret) 详情：detail */
         ErrorLog_RetryDetail(ERROR_LOG_MODULE_SLIPRING_COMM,
                              ERROR_LOG_OP_READ_FLOAT_PARAM,
                              ErrorLog_GetReasonByCode((uint32_t)ret),
@@ -419,6 +429,7 @@ uint32_t WIRELESS_Read_FloatParam(uint8_t addr, uint8_t param, float *out_value)
                              WIRELESS_MAX_RETRY,
                              (uint32_t)ret,
                              detail);
+        /* 无线通信与外设通信之间保留等待时间，避免硬件或对端协议尚未准备好。 */
         HAL_Delay(DSM_BCC_DELAY);
     }
 
@@ -454,9 +465,11 @@ uint32_t WIRELESS_ProbeNode(uint8_t addr)
     }
 
     WIRELESS_MakeFrame(tx, addr, (uint8_t)WIRELESS_FUNC_R, 0x00000000u, 0x01U);
+    /* 无线通信与外设通信之间保留等待时间，避免硬件或对端协议尚未准备好。 */
     HAL_Delay(DSM_PRE_SEND_DELAY);
 
     ret = WIRELESS_Transceive(tx, rx);
+    /* 先处理异常边界，避免无线通信状态机带故障继续运行。 */
     if (ret != NO_ERROR) {
         return ret;
     }
@@ -487,12 +500,14 @@ uint32_t WIRELESS_PrintInfo(uint8_t addr)
     }
 
     uint32_t ret_ver = WIRELESS_Read_SoftwareVersion(addr, &ver);
+    /* 先处理异常边界，避免无线通信状态机带故障继续运行。 */
     if (ret_ver != NO_ERROR) {
         printf("%s: 软件版本读取失败 | 错误码：0x%08lX\r\n", role, (unsigned long)ret_ver);
         return ret_ver;
     }
 
     uint32_t ret_volt = WIRELESS_Read_Voltage(addr, &volt);
+    /* 先处理异常边界，避免无线通信状态机带故障继续运行。 */
     if (ret_volt != NO_ERROR) {
         printf("%s: 电压读取失败 | 错误码：0x%08lX\r\n", role, (unsigned long)ret_volt);
         return ret_volt;

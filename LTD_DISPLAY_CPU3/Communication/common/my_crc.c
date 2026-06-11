@@ -7,7 +7,7 @@
 #include <my_crc.h>
 #include "crc.h"
 #include "stdio.h"
-#include <string.h>   // memcpy
+#include <string.h>   /* memcpy */
 /******************************
  * CRC 高字节表
  *******************************/
@@ -56,12 +56,12 @@ uint16_t CRC16_Calculate(const uint8_t *data, uint32_t length) {
 
 	return (crc_hi << 8) | crc_lo;
 }
-/*接收到的数据包进行CRC校验*/
+/* 接收到的数据包进行CRC校验 */
 /* 接收到的数据包进行CRC校验 */
 bool SlaveCheckCRC(uint8_t const *revframe, int framelen) {
     unsigned char Hi, Lo;
     unsigned short crc;
-    // 修复类型不匹配问题
+    /* 修复类型不匹配问题 */
     crc = CRC16_Calculate(revframe, framelen - 2);
 
     Lo = crc & 0x00ff;
@@ -81,7 +81,7 @@ bool SlaveCheckCRC(uint8_t const *revframe, int framelen) {
 /* lenBytes 必须是 4 的倍数，不足时用 0 填充 */
 uint32_t CRC32_HAL(const uint8_t *buf, uint32_t lenBytes) {
 	uint32_t word, crc;
-	uint32_t words = lenBytes >> 2;                // HAL 接口的长度单位是“32-bit word” :contentReference[oaicite:3]{index=3}
+	uint32_t words = lenBytes >> 2;                /* HAL 接口的长度单位是“32-bit word” :contentReference[oaicite:3]{index=3} */
 	crc = HAL_CRC_Calculate(&hcrc, (uint32_t*) buf, words);
 
 	/* 处理尾部 1‒3 个字节 */
@@ -92,7 +92,7 @@ uint32_t CRC32_HAL(const uint8_t *buf, uint32_t lenBytes) {
 		crc = HAL_CRC_Accumulate(&hcrc, &word, 1);
 	}
 
-	return crc;   // HAL 已做反射，这里做最后一步取反
+	return crc;   /* HAL 已做反射，这里做最后一步取反 */
 }
 /* --------------- 测试用例表 -------------- */
 typedef struct {
