@@ -12,9 +12,9 @@
 #include <string.h>
 #include <stdio.h>
 #include <math.h>
-int cnt_commutoCPU2 = COMMU_ERROR_MAX;
-volatile MeasurementResult g_measurement = { 0 }; // 测量结果
-volatile DeviceParameters g_deviceParams = { 0 }; // 设备参数
+int cnt_commutoCPU2 = COMMU_ERROR_MAX; /* 系统参数模块级变量，保存跨函数共享的业务状态。 */
+volatile MeasurementResult g_measurement = { 0 }; /* 测量结果 */
+volatile DeviceParameters g_deviceParams = { 0 }; /* 设备参数 */
 
 /* 将继电器报警输出枚举值转换成中文打印文本，便于现场调试查看。 */
 static const char * relay_operating_mode_str(uint32_t value)
@@ -29,6 +29,12 @@ static const char * relay_operating_mode_str(uint32_t value)
     }
 }
 
+/**
+ * @brief 执行系统参数中的 relay_digital_source_str 逻辑。
+ *
+ * @param value 待处理数值。
+ * @return 返回业务对象或缓冲区指针，NULL 表示无有效对象。
+ */
 static const char * relay_digital_source_str(uint32_t value)
 {
     switch ((RelayAlarmDigitalSource)value) {
@@ -53,6 +59,12 @@ static const char * relay_digital_source_str(uint32_t value)
     }
 }
 
+/**
+ * @brief 执行系统参数中的 relay_contact_type_str 逻辑。
+ *
+ * @param value 待处理数值。
+ * @return 返回业务对象或缓冲区指针，NULL 表示无有效对象。
+ */
 static const char * relay_contact_type_str(uint32_t value)
 {
     switch ((RelayAlarmContactType)value) {
@@ -65,6 +77,12 @@ static const char * relay_contact_type_str(uint32_t value)
     }
 }
 
+/**
+ * @brief 执行系统参数中的 relay_alarm_mode_str 逻辑。
+ *
+ * @param value 待处理数值。
+ * @return 返回业务对象或缓冲区指针，NULL 表示无有效对象。
+ */
 static const char * relay_alarm_mode_str(uint32_t value)
 {
     switch ((RelayAlarmMode)value) {
@@ -79,6 +97,12 @@ static const char * relay_alarm_mode_str(uint32_t value)
     }
 }
 
+/**
+ * @brief 执行系统参数中的 relay_alarm_source_str 逻辑。
+ *
+ * @param value 待处理数值。
+ * @return 返回业务对象或缓冲区指针，NULL 表示无有效对象。
+ */
 static const char * relay_alarm_source_str(uint32_t value)
 {
     switch ((RelayAlarmSource)value) {
@@ -97,8 +121,8 @@ static const char * relay_alarm_source_str(uint32_t value)
     }
 }
 
-/* 名称	数值	数据号	起始地址	寄存器数	是否检范围	最小	最大	单位	小数	偏移	写权	类型	显示	隐藏	英文 */
-//参数元数据
+/* 名称 数值 数据号 起始地址 寄存器数 是否检范围 最小 最大 单位 小数 偏移 写权 类型 显示 隐藏 英文 */
+/* 参数元数据 */
 struct ParameterMetadata param_meta[] = {
 
 {(uint8_t*)"设备指令",	0,	COM_NUM_DEVICEPARAM_COMMAND,	HOLDREGISTER_DEVICEPARAM_COMMAND,	2,	false,	0,	0,	NULL,	0,	0,	true,	TYPE_INT,	7,	NULL,	(uint8_t*)"Cmd"},
@@ -370,6 +394,10 @@ int getHoldValueNum(int operanum)
         return i;
 }
 
+/**
+ * @brief 执行系统参数中的 InputValueInit 逻辑。
+ * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ */
 void InputValueInit(void)
 {
 	Cpu3Local_ApplyDisplayRuntimeParams();
@@ -397,6 +425,7 @@ void InputValueInit(void)
 void print_device_params(void)
 {
     DeviceParameters params;
+    /* 按结构或原始字节复制，保持系统参数协议/存储布局不被字段解释改变。 */
     memcpy(&params, (void *)&g_deviceParams, sizeof(DeviceParameters));
 
     printf("\r\n========================================\r\n");
@@ -564,7 +593,7 @@ void print_device_params(void)
 
     printf("========================================\r\n");
 }
-/*========================= 测量结果打印（可选） =========================*/
+/* ========================= 测量结果打印（可选） ========================= */
 /* 注: 该部分与参数结构无强耦合，仅保留你现有打印习惯；如果不需要可移除 */
 
 void PrintDensity(const char *title, const DensityMeasurement *d)
@@ -579,6 +608,12 @@ void PrintDensity(const char *title, const DensityMeasurement *d)
     printf("    计重密度: %lu\r\n", (unsigned long)d->weight_density);
     printf("    温度位置: %lu\r\n", (unsigned long)d->temperature_position);
 }
+/**
+ * @brief 显示或打印系统参数中的 PrintMeasurementResult 逻辑。
+ *
+ * @param m 业务参数。
+ * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ */
 void PrintMeasurementResult(const MeasurementResult *m)
 {
     if (!m) return;

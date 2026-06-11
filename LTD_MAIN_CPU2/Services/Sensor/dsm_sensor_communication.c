@@ -15,14 +15,20 @@
 #include <math.h>
 #include <inttypes.h>
 
-DSMSENSOR_DATA dsmsensor_data;
+DSMSENSOR_DATA dsmsensor_data; /* DSM 传感器通信模块级变量，保存跨函数共享的业务状态。 */
 
-char DSMCommand[RCVBUFFLEN];
-char DSMRcvBuffer[RCVBUFFLEN];
-int DSMRcvLen;
+char DSMCommand[RCVBUFFLEN]; /* DSM 传感器通信模块级变量，保存跨函数共享的业务状态。 */
+char DSMRcvBuffer[RCVBUFFLEN]; /* DSM 传感器通信数据缓冲区，注意与中断或 DMA 访问边界保持一致。 */
+int DSMRcvLen; /* DSM 传感器通信模块级变量，保存跨函数共享的业务状态。 */
 
 static char CalculationBCC_DSM(char command[], int count);
 
+/**
+ * @brief 接收DSM 传感器通信中的 UART6_DrainRX_UntilIdle 逻辑。
+ *
+ * @param idle_ms 业务参数。
+ * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ */
 static void UART6_DrainRX_UntilIdle(uint32_t idle_ms)
 {
     uint8_t dump;
@@ -39,18 +45,24 @@ static void UART6_DrainRX_UntilIdle(uint32_t idle_ms)
     __HAL_UART_CLEAR_OREFLAG(&huart6);
 }
 
-// 错误码关键字表
+/* 错误码关键字表 */
 const char *error_codes[] = {
-    "A+111.11B+111.11", // 超声无谐振
-    "A+222.22B+222.22", // 电源电压异常
-    "A+333.33B+333.33", // 陀螺仪IIC通讯超时
-    "A+444.44B+444.44", // 陀螺仪角度异常
-    "A+555.55B+555.55", // CPU1自检错误
-    "A+888.88B+888.88", // 与CPU0通讯超时
-    "A+999.99B+999.99"  // 与CPU0通讯校验错误
+    "A+111.11B+111.11", /* 超声无谐振 */
+    "A+222.22B+222.22", /* 电源电压异常 */
+    "A+333.33B+333.33", /* 陀螺仪IIC通讯超时 */
+    "A+444.44B+444.44", /* 陀螺仪角度异常 */
+    "A+555.55B+555.55", /* CPU1自检错误 */
+    "A+888.88B+888.88", /* 与CPU0通讯超时 */
+    "A+999.99B+999.99"  /* 与CPU0通讯校验错误 */
 };
 #define ERROR_CODES_COUNT (sizeof(error_codes)/sizeof(error_codes[0]))
 
+/**
+ * @brief 执行DSM 传感器通信中的 DSM_LogLowVoltageFrame 逻辑。
+ *
+ * @param resp 业务参数。
+ * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ */
 static void DSM_LogLowVoltageFrame(const char *resp)
 {
     if ((resp != NULL) && ((resp[0] == 'E') || (resp[0] == 'e'))) {
@@ -58,25 +70,26 @@ static void DSM_LogLowVoltageFrame(const char *resp)
     }
 }
 
-// 检查返回是否为错误码
+/* 检查返回是否为错误码 */
 int IsErrorResponse(const char *resp) {
     if (resp == NULL) {
         return 0;
     }
     if ((resp[0] == 'E') || (resp[0] == 'e')) {
-        return 0; // DSM首字母E/e只表示传感器电压过低，不作为设备错误处理
+        return 0; /* DSM首字母E/e只表示传感器电压过低，不作为设备错误处理 */
     }
     for (int i = 0; i < ERROR_CODES_COUNT; i++) {
+        /* 先处理异常边界，避免DSM 传感器通信状态机带故障继续运行。 */
         if (strstr(resp, error_codes[i]) != NULL) {
-            return 1; // 是错误码
+            return 1; /* 是错误码 */
         }
     }
-    return 0; // 正常
+    return 0; /* 正常 */
 }
 
 #define DSM_UART_MAX_RETRY UART6_COMM_MAX_RETRY
-static uint32_t s_uart6_last_error = HAL_UART_ERROR_NONE;
-static uint8_t s_uart6_dma_rx_buf[RX_BUF_LEN];
+static uint32_t s_uart6_last_error = HAL_UART_ERROR_NONE; /* DSM 传感器通信故障记录，供恢复、显示或日志链路使用。 */
+static uint8_t s_uart6_dma_rx_buf[RX_BUF_LEN]; /* DSM 传感器通信数据缓冲区，注意与中断或 DMA 访问边界保持一致。 */
 
 /**
  * @brief 停止 UART6 单次 DMA 接收并清理硬件错误状态。
@@ -126,11 +139,13 @@ static uint32_t UART6_WaitTransmitDmaDone(uint32_t timeout)
         if (huart6.gState == HAL_UART_STATE_READY) {
             return NO_ERROR;
         }
+        /* 先处理异常边界，避免DSM 传感器通信状态机带故障继续运行。 */
         if (huart6.ErrorCode != HAL_UART_ERROR_NONE) {
             s_uart6_last_error = huart6.ErrorCode;
             UART6_StopDmaReceive();
             return OTHER_PERIPHERAL_CONFIG_ERROR;
         }
+        /* DSM 传感器通信与外设通信之间保留等待时间，避免硬件或对端协议尚未准备好。 */
         HAL_Delay(1);
     }
 
@@ -191,6 +206,7 @@ static uint32_t UART6_WaitTextReceiveDma(char *response,
             return STATE_SWITCH;
         }
 
+        /* 先处理异常边界，避免DSM 传感器通信状态机带故障继续运行。 */
         if (huart6.ErrorCode != HAL_UART_ERROR_NONE) {
             s_uart6_last_error = huart6.ErrorCode;
             UART6_StopDmaReceive();
@@ -219,6 +235,7 @@ static uint32_t UART6_WaitTextReceiveDma(char *response,
             UART6_StopDmaReceive();
             return SENSOR_RESP_FORMAT_ERROR;
         }
+        /* DSM 传感器通信与外设通信之间保留等待时间，避免硬件或对端协议尚未准备好。 */
         HAL_Delay(1);
     }
 
@@ -245,6 +262,7 @@ static uint32_t UART6_TakeHardwareError(void)
 {
     uint32_t error = huart6.ErrorCode;
 
+    /* 先处理异常边界，避免DSM 传感器通信状态机带故障继续运行。 */
     if (error != HAL_UART_ERROR_NONE) {
         __HAL_UART_CLEAR_OREFLAG(&huart6);
         s_uart6_last_error = error;
@@ -318,7 +336,7 @@ static bool DSM_IsSevenDigitValue(const char *value)
     return dot_count <= 1U;
 }
 
-// 串口发送并接收（带调试打印）
+/* 串口发送并接收（带调试打印） */
 static int UART6_SendCommand(const char *cmd,
                              char *response,
                              uint16_t maxLen,
@@ -338,6 +356,7 @@ static int UART6_SendCommand(const char *cmd,
     /* 先启动接收 DMA，再启动发送 DMA，避免从机快速回包时丢掉应答开头。 */
     uint16_t dma_len = 0U;
     uint32_t rx_ret = UART6_StartTextReceiveDma(maxLen, &dma_len);
+    /* 先处理异常边界，避免DSM 传感器通信状态机带故障继续运行。 */
     if (rx_ret != NO_ERROR) {
         if (recv_len_out != NULL) {
             *recv_len_out = 0U;
@@ -357,6 +376,7 @@ static int UART6_SendCommand(const char *cmd,
     }
 
     rx_ret = UART6_WaitTransmitDmaDone(100);
+    /* 先处理异常边界，避免DSM 传感器通信状态机带故障继续运行。 */
     if (rx_ret != NO_ERROR) {
         if (recv_len_out != NULL) {
             *recv_len_out = 0U;
@@ -366,6 +386,7 @@ static int UART6_SendCommand(const char *cmd,
 
     /* 接收 DMA 已在发送前启动，这里只等待换行终止符确认帧边界。 */
     rx_ret = UART6_WaitTextReceiveDma(response, dma_len, &recvLen, timeout);
+    /* 先处理异常边界，避免DSM 传感器通信状态机带故障继续运行。 */
     if (rx_ret != NO_ERROR) {
         if (recv_len_out != NULL) {
             *recv_len_out = recvLen;
@@ -378,6 +399,7 @@ static int UART6_SendCommand(const char *cmd,
 
     /* 响应校验前再取一次硬件错误，避免最后一字节后留下 ORE/FE/NE 却继续解析。 */
     uart_error = UART6_TakeHardwareError();
+    /* 先处理异常边界，避免DSM 传感器通信状态机带故障继续运行。 */
     if (uart_error != HAL_UART_ERROR_NONE) {
         return SENSOR_RESP_FORMAT_ERROR;
     }
@@ -397,7 +419,7 @@ static int UART6_SendCommand(const char *cmd,
     printf("\r\n");
 #endif
 
-    // 校验 BCC
+    /* 校验 BCC */
     bcc = CalculationBCC_DSM(response, (recvLen - 3));
     if (bcc == response[recvLen - 3]) {
 #if DEBUG_UART6
@@ -405,11 +427,11 @@ static int UART6_SendCommand(const char *cmd,
 #endif
         return NO_ERROR;
     } else {
-        return SENSOR_BCC_ERROR; // 校验失败
+        return SENSOR_BCC_ERROR; /* 校验失败 */
     }
 }
 
-// 发送指令，带重试机制
+/* 发送指令，带重试机制 */
 static int UART6_SendWithRetry(const char *cmd,
                                char *response,
                                uint16_t maxLen,
@@ -423,6 +445,7 @@ static int UART6_SendWithRetry(const char *cmd,
             return STATE_SWITCH;
         }
         if (i > 0) {
+            /* DSM 传感器通信与外设通信之间保留等待时间，避免硬件或对端协议尚未准备好。 */
             HAL_Delay(DSM_PRE_SEND_DELAY);
         }
         ret = UART6_SendCommand(cmd, response, maxLen, &recvLen, timeout);
@@ -432,21 +455,22 @@ static int UART6_SendWithRetry(const char *cmd,
         }
         if (ret == 0) {
             DSM_LogLowVoltageFrame(response);
+            /* 先处理异常边界，避免DSM 传感器通信状态机带故障继续运行。 */
             if (!IsErrorResponse(response)) {
                 if (recv_len_out != NULL) {
                     *recv_len_out = recvLen;
                 }
                 if (i > 0) {
-                    // 错误	阶段：重试成功	模块：传感器	操作：读取液位	原因：通信失败	尝试：(i + 1)/DSM_UART_MAX_RETRY
+                    /* 错误 阶段：重试成功 模块：传感器 操作：读取液位 原因：通信失败 尝试：(i + 1)/DSM_UART_MAX_RETRY */
                     ErrorLog_Recover(ERROR_LOG_MODULE_SENSOR,
                                      ERROR_LOG_OP_READ_LEVEL,
                                      ERROR_LOG_REASON_COMM_FAIL,
                                      (uint32_t)(i + 1),
                                      DSM_UART_MAX_RETRY);
                 }
-                return NO_ERROR; // 成功且不是错误码
+                return NO_ERROR; /* 成功且不是错误码 */
             } else {
-                // 错误	阶段：错误重试	模块：传感器	操作：读取液位	原因：设备返回错误	尝试：(i + 1)/DSM_UART_MAX_RETRY	错误码：SENSOR_DEVICE_REPORTED_ERROR	错误名：ErrorLog_GetCodeName(SENSOR_DEVICE_REPORTED_ERROR)
+                /* 错误 阶段：错误重试 模块：传感器 操作：读取液位 原因：设备返回错误 尝试：(i + 1)/DSM_UART_MAX_RETRY 错误码：SENSOR_DEVICE_REPORTED_ERROR 错误名：ErrorLog_GetCodeName(SENSOR_DEVICE_REPORTED_ERROR) */
                 ErrorLog_Retry(ERROR_LOG_MODULE_SENSOR,
                                ERROR_LOG_OP_READ_LEVEL,
                                ERROR_LOG_REASON_DEVICE_ERROR,
@@ -464,7 +488,7 @@ static int UART6_SendWithRetry(const char *cmd,
                                   s_uart6_last_error,
                                   detail,
                                   sizeof(detail));
-            // 错误	阶段：错误重试	模块：传感器	操作：读取液位	原因：ErrorLog_GetReasonByCode(ret)	尝试：(i + 1)/DSM_UART_MAX_RETRY	错误码：ret	错误名：ErrorLog_GetCodeName(ret)
+            /* 错误 阶段：错误重试 模块：传感器 操作：读取液位 原因：ErrorLog_GetReasonByCode(ret) 尝试：(i + 1)/DSM_UART_MAX_RETRY 错误码：ret 错误名：ErrorLog_GetCodeName(ret) */
             ErrorLog_RetryDetail(ERROR_LOG_MODULE_SENSOR,
                                  ERROR_LOG_OP_READ_LEVEL,
                                  ErrorLog_GetReasonByCode(ret),
@@ -477,7 +501,7 @@ static int UART6_SendWithRetry(const char *cmd,
     return ret;
 }
 
-// 读取传感器电压
+/* 读取传感器电压 */
 uint32_t Read_Sensor_Voltage(float *voltage_out) {
     uint32_t ret;
     char resp[RX_BUF_LEN];
@@ -487,6 +511,7 @@ uint32_t Read_Sensor_Voltage(float *voltage_out) {
     }
 
     ret = UART6_SendWithRetry("CK", resp, RX_BUF_LEN, NULL, 500);
+    /* 先处理异常边界，避免DSM 传感器通信状态机带故障继续运行。 */
     if (ret != NO_ERROR) {
         return ret;
     }
@@ -501,17 +526,18 @@ uint32_t Read_Sensor_Voltage(float *voltage_out) {
     return SENSOR_RESP_FORMAT_ERROR;
 }
 
-// 开启测水探针 (CL 命令)
+/* 开启测水探针 (CL 命令) */
 int Probe_EnableWaterSensor(void) {
     char resp[RX_BUF_LEN];
     uint32_t ret;
 
-    // 发送命令 "CL\r\n" 并带 3 次重试
+    /* 发送命令 "CL\r\n" 并带 3 次重试 */
     ret = UART6_SendWithRetry("CL", resp, RX_BUF_LEN, NULL, 500);
+    /* 先处理异常边界，避免DSM 传感器通信状态机带故障继续运行。 */
     if (ret == NO_ERROR) {
         printf("[探针] 开启测水探针响应: %s\r\n", resp);
 
-        // 协议约定：如果返回包含 "%" 或其他成功标识，就认为成功
+        /* 协议约定：如果返回包含 "%" 或其他成功标识，就认为成功 */
         if (strstr(resp, "%") != NULL) {
             printf("[探针] 测水探针开启成功！\r\n");
             return NO_ERROR;
@@ -524,17 +550,18 @@ int Probe_EnableWaterSensor(void) {
     }
 }
 
-// 开启液位模式
+/* 开启液位模式 */
 int DSM_EnableLevelMode(void) {
     char resp[RX_BUF_LEN];
     uint32_t ret;
 
-    // 发送命令 "CB\r\n" 并带 3 次重试
+    /* 发送命令 "CB\r\n" 并带 3 次重试 */
     ret = UART6_SendWithRetry("CB", resp, RX_BUF_LEN, NULL, 500);
+    /* 先处理异常边界，避免DSM 传感器通信状态机带故障继续运行。 */
     if (ret == NO_ERROR) {
         printf("[液位模式] 开启液位模式响应: %s\r\n", resp);
 
-        // 协议约定：如果返回包含 "%" 或其他成功标识，就认为成功
+        /* 协议约定：如果返回包含 "%" 或其他成功标识，就认为成功 */
         if (strstr(resp, "%") != NULL) {
             printf("[液位模式] 开启成功！\r\n");
             return NO_ERROR;
@@ -547,17 +574,18 @@ int DSM_EnableLevelMode(void) {
     }
 }
 
-// 开启密度模式
+/* 开启密度模式 */
 int DSM_EnableDensityMode(void) {
     char resp[RX_BUF_LEN];
     uint32_t ret;
 
-    // 发送命令 "CD\r\n" 并带 3 次重试
+    /* 发送命令 "CD\r\n" 并带 3 次重试 */
     ret = UART6_SendWithRetry("CD", resp, RX_BUF_LEN, NULL, 500);
+    /* 先处理异常边界，避免DSM 传感器通信状态机带故障继续运行。 */
     if (ret == NO_ERROR) {
         printf("[密度模式] 开启密度模式响应: %s\r\n", resp);
 
-        // 协议约定：如果返回包含 "%" 或其他成功标识，就认为成功
+        /* 协议约定：如果返回包含 "%" 或其他成功标识，就认为成功 */
         if (strstr(resp, "%") != NULL) {
             printf("[密度模式] 开启成功！\r\n");
             return NO_ERROR;
@@ -570,35 +598,36 @@ int DSM_EnableDensityMode(void) {
     }
 }
 
-// 工具函数: 解析 "E06.6379V\r\n" 这类响应为浮点数
+/* 工具函数: 解析 "E06.6379V\r\n" 这类响应为浮点数 */
 static int parse_freq_response(const char *resp, float *out_hz)
 {
     if (!resp || !out_hz) return PARAM_ADDRESS_OVERFLOW;
 
-    // 1) 跳过起始标志（例如 'E'）和前导空白
+    /* 1) 跳过起始标志（例如 'E'）和前导空白 */
     const char *p = resp;
     while (*p && !isdigit((unsigned char)*p) && *p != '-' && *p != '+') {
         ++p;
     }
     if (!*p) return -2;
 
-    // 2) 使用 strtod 解析到非数字处（会自动停在 'V' 或回车）
+    /* 2) 使用 strtod 解析到非数字处（会自动停在 'V' 或回车） */
     char *endp = NULL;
     double v = strtod(p, &endp);
-    if (endp == p) return -3;   // 没解析到数字
+    if (endp == p) return -3;   /* 没解析到数字 */
     if (!isfinite(v)) return -4;
 
     *out_hz = (float)v;
     return 0;
 }
 
-// 读取液位跟随频率（单次）
+/* 读取液位跟随频率（单次） */
 uint32_t Read_Level_Frequency(uint32_t *frequency_out)
 {
     if (!frequency_out) return PARAM_ADDRESS_OVERFLOW;
 
     char resp[RX_BUF_LEN] = {0};
     uint32_t ret = UART6_SendWithRetry("Cb", resp, RX_BUF_LEN, NULL, 500);
+    /* 先处理异常边界，避免DSM 传感器通信状态机带故障继续运行。 */
     if (ret != NO_ERROR) {
         return ret;
     }
@@ -611,11 +640,11 @@ uint32_t Read_Level_Frequency(uint32_t *frequency_out)
         return SENSOR_RESP_FORMAT_ERROR;
     }
 
-    *frequency_out = (uint32_t)hz;   // Hz
+    *frequency_out = (uint32_t)hz;   /* Hz */
     return NO_ERROR;
 }
 
-// 读取密度、温度
+/* 读取密度、温度 */
 int DSM_Read_Frequency_Density_Temp(float *frequency, float *density, float *temp) {
     if (!frequency || !density || !temp) {
         return PARAM_ADDRESS_OVERFLOW;
@@ -625,8 +654,9 @@ int DSM_Read_Frequency_Density_Temp(float *frequency, float *density, float *tem
     char resp[RX_BUF_LEN];
 
     ret = UART6_SendWithRetry("Cd", resp, RX_BUF_LEN, NULL, 500);
+    /* 先处理异常边界，避免DSM 传感器通信状态机带故障继续运行。 */
     if (ret == NO_ERROR) {
-        // 格式: F+0000.0D+000.00T+19.570P
+        /* 格式: F+0000.0D+000.00T+19.570P */
         if ((resp[0] == 'E') || (resp[0] == 'F')) {
             char *pD = strchr(resp, 'D');
             char *pT = strchr(resp, 'T');
@@ -660,7 +690,7 @@ static char CalculationBCC_DSM(char command[], int count) {
     return bcc;
 }
 
-// 读取振动管编号（CN 指令）
+/* 读取振动管编号（CN 指令） */
 uint32_t Read_VibrationTube_ID(char *id_out, size_t id_out_size)
 {
     if ((id_out == NULL) || (id_out_size == 0)) {
@@ -669,26 +699,27 @@ uint32_t Read_VibrationTube_ID(char *id_out, size_t id_out_size)
 
     char resp[RX_BUF_LEN] = {0};
 
-    // 发送 CN 指令
+    /* 发送 CN 指令 */
     uint32_t ret = UART6_SendWithRetry("CN", resp, RX_BUF_LEN, NULL, 500);
+    /* 先处理异常边界，避免DSM 传感器通信状态机带故障继续运行。 */
     if (ret != NO_ERROR) {
         return ret;
     }
 
     printf("[UART6] CN 响应: %s\r\n", resp);
 
-    // 解析响应: 去掉前导空白
+    /* 解析响应: 去掉前导空白 */
     char *p = resp;
     while (*p == ' ' || *p == '\t' || *p == '\r' || *p == '\n') {
         p++;
     }
 
-    // 按协议，一般以 'N' 开头，例如 N2009924H
+    /* 按协议，一般以 'N' 开头，例如 N2009924H */
     if (*p != 'N') {
         return SENSOR_RESP_FORMAT_ERROR;
     }
 
-    // 找到行尾 / 结束符（遇到 CR/LF/* 就停）
+    /* 找到行尾 / 结束符（遇到 CR/LF/ * 就停） */
     char *end = p;
     while (*end != '\0' && *end != '\r' && *end != '\n' && *end != '*') {
         end++;
@@ -700,9 +731,9 @@ uint32_t Read_VibrationTube_ID(char *id_out, size_t id_out_size)
         return SENSOR_RESP_FORMAT_ERROR;
     }
 
-    // 拷贝到输出缓冲区，确保以 '\0' 结尾
+    /* 拷贝到输出缓冲区，确保以 '\0' 结尾 */
     if (id_len >= id_out_size) {
-        id_len = id_out_size - 1;   // 截断，避免越界
+        id_len = id_out_size - 1;   /* 截断，避免越界 */
     }
     memcpy(id_out, p, id_len);
     id_out[id_len] = '\0';
@@ -727,12 +758,13 @@ uint32_t Read_VibrationTube_ID(char *id_out, size_t id_out_size)
 uint32_t Read_Water_Capacitance(float *cap_out)
 {
     if (cap_out == NULL) {
-        return PARAM_ADDRESS_OVERFLOW;   // 你工程里若叫 PARAM_ADDRESS_OVERFLOW/PARAM_ERROR 请替换
+        return PARAM_ADDRESS_OVERFLOW;   /* 你工程里若叫 PARAM_ADDRESS_OVERFLOW/PARAM_ERROR 请替换 */
     }
 
     char resp[RX_BUF_LEN] = {0};
     uint16_t recv_len = 0;
     uint32_t ret = UART6_SendWithRetry("Cl", resp, RX_BUF_LEN, &recv_len, 500);
+    /* 先处理异常边界，避免DSM 传感器通信状态机带故障继续运行。 */
     if (ret != NO_ERROR) {
         return ret;
     }
@@ -808,6 +840,7 @@ uint32_t Read_Gyro_Angle(float *angle_x_deg, float *angle_y_deg)
 
     char resp[RX_BUF_LEN] = {0};
     uint32_t ret = UART6_SendWithRetry("Ch", resp, RX_BUF_LEN, NULL, 500);
+    /* 先处理异常边界，避免DSM 传感器通信状态机带故障继续运行。 */
     if (ret != NO_ERROR) {
         return ret;
     }

@@ -15,20 +15,20 @@
 #define DEBUG_COMMUCPU2 0
 #define ADERSS 0X01
 
-volatile bool wait_response = false; //主控板响应标志位
+volatile bool wait_response = false; /* 主控板响应标志位 */
 
-/*保持寄存器*/
-uint16_t HoldingRegisterArray[HOLEREGISTER_STOP] = { 0 }; //保持寄存器数组
-/*输入寄存器*/
-static uint16_t InputRegisterArray[INPUTREGISTER_AMOUNT] = { 0 };    //输入寄存器数组
+/* 保持寄存器 */
+uint16_t HoldingRegisterArray[HOLEREGISTER_STOP] = { 0 }; /* 保持寄存器数组 */
+/* 输入寄存器 */
+static uint16_t InputRegisterArray[INPUTREGISTER_AMOUNT] = { 0 };    /* 输入寄存器数组 */
 
-/*接收到的命令包数据暂存变量*/
-static int RCV_functioncode = 0;
-static int RCV_startaddress = 0;
-static int RCV_registercnt = 0;
-static int SlaveTempBuffer[INPUTREGISTER_AMOUNT];
+/* 接收到的命令包数据暂存变量 */
+static int RCV_functioncode = 0; /* Modbus 协议模块级变量，保存跨函数共享的业务状态。 */
+static int RCV_startaddress = 0; /* Modbus 协议地址配置，影响协议寻址或硬件访问。 */
+static int RCV_registercnt = 0; /* Modbus 协议模块级变量，保存跨函数共享的业务状态。 */
+static int SlaveTempBuffer[INPUTREGISTER_AMOUNT]; /* Modbus 协议数据缓冲区，注意与中断或 DMA 访问边界保持一致。 */
 
-//static void CPU2_Response03Process(char const *revframe);
+/* static void CPU2_Response03Process(char const *revframe); */
 static void CPU2_Response03Process(uint8_t const *revframe);
 static void CPU2_Response04Process(uint8_t const *revframe);
 static void CPU2_Response10Process(uint8_t *arr, uint16_t len);
@@ -36,7 +36,7 @@ static void PresetRegister(bool registertype, int const *registervalue);
 
 static void RequestDensityDistPoints_ByCount(void);
 
-/*与CPU2通讯接收包主处理过程*/
+/* 与CPU2通讯接收包主处理过程 */
 void HostCommuProcess(uint8_t *rcv, int len) {
 #if DEBUG_COMMUCPU2
     int i;
@@ -63,14 +63,14 @@ void HostCommuProcess(uint8_t *rcv, int len) {
 		CPU2_Response03Process(rcv);
 #if DEBUG_COMMUCPU2
             printf("CPU3处理03响应\r\n");
-//            print_device_params();
+/* print_device_params(); */
 #endif
 		break;
 	}
 	case FUNCTIONCODE_READ_INPUTREGISTER: {
 #if DEBUG_COMMUCPU2
             printf("CPU3处理04响应\r\n");
-//            print_device_params();
+/* print_device_params(); */
 #endif
 		CPU2_Response04Process(rcv);
 		break;
@@ -78,7 +78,7 @@ void HostCommuProcess(uint8_t *rcv, int len) {
 	case FUNCTIONCODE_WRITE_MULREGISTER: {
 		CPU2_Response10Process(rcv, len);
 #if DEBUG_COMMUCPU2
-//            print_device_params();
+/* print_device_params(); */
 #endif
 		break;
 	}
@@ -86,9 +86,9 @@ void HostCommuProcess(uint8_t *rcv, int len) {
 }
 
 typedef struct {
-	uint8_t func;     // 功能码：3 或 4
-	uint16_t start;   // 起始寄存器
-	uint16_t len;     // 寄存器个数
+	uint8_t func;     /* 功能码：3 或 4 */
+	uint16_t start;   /* 起始寄存器 */
+	uint16_t len;     /* 寄存器个数 */
 } PollGroup;
 #include <stdbool.h>
 
@@ -177,11 +177,11 @@ void PollingInputData(void) {
 
 			if (poweron_index >= POWERON_GROUP_COUNT) {
 				poweron_done = true; /* 上电读取全部完成 */
-				 DeviceParams_StoreToRegisters(g_holding_regs);/* 把读取到的设备参数存入瓦锡兰保持寄存器 */
+				 DeviceParams_StoreToRegisters(g_holding_regs); /* 把读取到的设备参数存入瓦锡兰保持寄存器 */
 				 last_param_update_flag = g_measurement.device_status.parameter_update_flag;
 				 refresh_target_flag = last_param_update_flag;
 				 param_flag_valid = true;
-//				print_device_params();
+/* print_device_params(); */
 			}
 		}
 		return; /* 上电阶段结束本次调用，不再发 runtime 组 */
@@ -233,17 +233,17 @@ void PollingInputData(void) {
 		return;
 	}
 
-    // 特定设备状态下，优先按测点数读取分布测量点
+    /* 特定设备状态下，优先按测点数读取分布测量点 */
     if( (g_measurement.device_status.device_state == STATE_WARTSILA_DENSITY_OVER)
     || (g_measurement.device_status.device_state == STATE_SPREADPOINTOVER)
 	  || (g_measurement.device_status.device_state == STATE_GB_SPREADPOINTOVER)
 	  || (g_measurement.device_status.device_state == STATE_SYNTHETICING_OVER)
 	  || (g_measurement.device_status.device_state == STATE_COM_METER_DENSITY_OVER)
 	  || (g_measurement.device_status.device_state == STATE_INTERVAL_DENSITY_OVER)) {
-        // 根据 REG_DENSITY_DIST_MEAS_POINTS 的值拉点数据
+        /* 根据 REG_DENSITY_DIST_MEAS_POINTS 的值拉点数据 */
         RequestDensityDistPoints_ByCount();
-        // 你可以在读完后置一个标志，避免每次都重复读
-        // g_measurement.flags.density_points_fetched = true;
+        /* 你可以在读完后置一个标志，避免每次都重复读 */
+        /* g_measurement.flags.density_points_fetched = true; */
         return;
     }
 }
@@ -296,13 +296,13 @@ static void RequestDensityDistPoints_ByCount(void)
     }
 }
 
-/*由屏幕向CPU2发送指令包*/
+/* 由屏幕向CPU2发送指令包 */
 void CPU2_CombinatePackage_Send(uint8_t f_code, uint16_t startadd, uint16_t registercnt, uint32_t *holddata) {
 	uint8_t arr[1024];
 	int len = 0;
 	uint16_t crc;
 	int i;
-	const uint16_t *regs = (const uint16_t*) holddata;   // 关键修正：按16位寄存器解释
+	const uint16_t *regs = (const uint16_t*) holddata;   /* 关键修正：按16位寄存器解释 */
 	arr[len++] = ADERSS;
 	arr[len++] = f_code;
 	arr[len++] = startadd >> 8;
@@ -313,14 +313,14 @@ void CPU2_CombinatePackage_Send(uint8_t f_code, uint16_t startadd, uint16_t regi
 		arr[len++] = registercnt * 2;
 		/* === Word Swap: 交换寄存器顺序 === */
 		for (i = 0; i < registercnt; i += 2) {
-			uint16_t low_word = regs[i + 1]; // 原本的高字
-			uint16_t high_word = regs[i];     // 原本的低字
+			uint16_t low_word = regs[i + 1]; /* 原本的高字 */
+			uint16_t high_word = regs[i];     /* 原本的低字 */
 
-			// 低字先发（高字节→低字节）
+			/* 低字先发（高字节→低字节） */
 			arr[len++] = (uint8_t) (low_word >> 8);
 			arr[len++] = (uint8_t) (low_word & 0xFF);
 
-			// 高字后发（高字节→低字节）
+			/* 高字后发（高字节→低字节） */
 			arr[len++] = (uint8_t) (high_word >> 8);
 			arr[len++] = (uint8_t) (high_word & 0xFF);
 		}
@@ -334,25 +334,26 @@ void CPU2_CombinatePackage_Send(uint8_t f_code, uint16_t startadd, uint16_t regi
 	if (!sendToCPU2(arr, len, false)) {
 		return;
 	}
-	//全局变量赋值，用于接收CPU2的响应包处理
+	/* 全局变量赋值，用于接收CPU2的响应包处理 */
 	RCV_functioncode = f_code;
 	RCV_startaddress = startadd;
 	RCV_registercnt = registercnt;
-	// 等待接收完成
+	/* 等待接收完成 */
 	uint32_t timeout = HAL_GetTick();
 	while (wait_response) {
-		if (HAL_GetTick() - timeout > 1000) // 100ms超时
+		/* 先处理异常边界，避免Modbus 协议状态机带故障继续运行。 */
+		if (HAL_GetTick() - timeout > 1000) /* 100ms超时 */
 				{
 			printf("等待响应超时！\n");
-			wait_response = false;    // 防止一直 True
+			wait_response = false;    /* 防止一直 True */
 			return;
 		}
 	}
-	HostCommuProcess(UART5_RX_BUF, UART5_RX_LEN);  // 处理接收到的数据
+	HostCommuProcess(UART5_RX_BUF, UART5_RX_LEN);  /* 处理接收到的数据 */
 }
-/*向CPU2发送数据包*/
+/* 向CPU2发送数据包 */
 bool sendToCPU2(uint8_t *arr, uint16_t len, bool flag_fromhost) {
-	RS485_SET_SEND_MODE();  // switch to transmit
+	RS485_SET_SEND_MODE();  /* switch to transmit */
 	if (HAL_UART_Transmit_DMA(&huart5, arr, len) != HAL_OK) {
 		/* Fall back to RX immediately if TX DMA cannot start. */
 		RS485_SET_RECV_MODE();
@@ -362,7 +363,7 @@ bool sendToCPU2(uint8_t *arr, uint16_t len, bool flag_fromhost) {
 		wait_response = false;
 		return false;
 	}
-	wait_response = true; // wait for CPU2 response
+	wait_response = true; /* wait for CPU2 response */
 	cnt_commutoCPU2++;
 #if DEBUG_COMMUCPU2
     {
@@ -379,49 +380,55 @@ static void CPU2_Response03Process(uint8_t const *revframe) {
 	int i;
 	int byteamount;
 
-	// Modbus RTU: revframe[0]=地址, revframe[1]=功能码(0x03), revframe[2]=字节数
+	/* Modbus RTU: revframe[0]=地址, revframe[1]=功能码(0x03), revframe[2]=字节数 */
 	byteamount = revframe[2];
 
-	// 简单防御：返回的字节数必须是寄存器数 * 2
+	/* 简单防御：返回的字节数必须是寄存器数 * 2 */
 	if (byteamount != RCV_registercnt * 2) {
 		return;
 	}
 
 	memset(SlaveTempBuffer, 0, sizeof(SlaveTempBuffer));
 
-	// 1. 把数据区解析成寄存器值，填到 SlaveTempBuffer
+	/* 1. 把数据区解析成寄存器值，填到 SlaveTempBuffer */
 	for (i = 0; i < RCV_registercnt; i++) {
 		uint16_t reg = ((uint16_t) revframe[3 + i * 2] << 8) | (uint16_t) revframe[3 + i * 2 + 1];
 		SlaveTempBuffer[i] = reg;
 	}
 
-	// 2. 写保持寄存器（根据项目逻辑，这里我不动你的调用顺序）
+	/* 2. 写保持寄存器（根据项目逻辑，这里我不动你的调用顺序） */
 	WriteDeviceParamsToHoldingRegisters(HoldingRegisterArray);
 	PresetRegister(false, SlaveTempBuffer);
 
-	// 3. 更新 HoldingRegisterArray 里对应的寄存器（注意，这里是按“寄存器”写）
+	/* 3. 更新 HoldingRegisterArray 里对应的寄存器（注意，这里是按“寄存器”写） */
 	for (i = 0; i < RCV_registercnt; i++) {
 		HoldingRegisterArray[RCV_startaddress + i] = SlaveTempBuffer[i];
 	}
 
-	// 4. 解析保持寄存器并刷新 g_deviceParams
+	/* 4. 解析保持寄存器并刷新 g_deviceParams */
 	AnalysisHoldRegister();
 	ReadDeviceParamsFromHoldingRegisters(HoldingRegisterArray);
 }
 
-/*解析CPU2的响应包0x04功能码*/
+/* 解析CPU2的响应包0x04功能码 */
 static void CPU2_Response04Process(uint8_t const *revframe) {
 	int i, j;
 	memset(SlaveTempBuffer, 0, sizeof(SlaveTempBuffer));
 	for (i = 0, j = 0; i < RCV_registercnt; i++, j = j + 2) {
 		SlaveTempBuffer[i] = (revframe[j + 3] << 8) + revframe[j + 4];
 	}
-//	printf("CPU2_Response04Process: RCV_registercnt = %d\r\n", RCV_registercnt);
-	/*写保持寄存器*/
+/* printf("CPU2_Response04Process: RCV_registercnt = %d\r\n", RCV_registercnt); */
+	/* 写保持寄存器 */
 	PresetRegister(true, SlaveTempBuffer);
 	read_measurement_result_from_InputRegisters(InputRegisterArray);
 }
 
+/**
+ * @brief 处理 CPU2 对写多个寄存器指令的响应帧。
+ * @param arr 响应帧数据缓冲区。
+ * @param len 响应帧长度。
+ * @note 当前保留接口，后续若需要确认 0x10 写入结果可在此解析。
+ */
 static void CPU2_Response10Process(uint8_t *arr, uint16_t len) {
 
 }
@@ -440,12 +447,12 @@ static void PresetRegister(bool registertype, int const *registervalue) {
 	if (registertype) {
 		for (i = RCV_startaddress, j = 0; i < range; i++, j++) {
 			InputRegisterArray[i] = registervalue[j];
-//			printf("InputRegisterArray[%d] = %d\r\n", i, InputRegisterArray[i]);
+/* printf("InputRegisterArray[%d] = %d\r\n", i, InputRegisterArray[i]); */
 		}
 	} else {
 		for (i = RCV_startaddress, j = 0; i < range; i++, j++) {
 			HoldingRegisterArray[i] = registervalue[j];
-//			printf("HoldingRegisterArray[%d] = %d\r\n", i, HoldingRegisterArray[i]);
+/* printf("HoldingRegisterArray[%d] = %d\r\n", i, HoldingRegisterArray[i]); */
 		}
 	}
 }

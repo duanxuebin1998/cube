@@ -13,7 +13,7 @@
 #define CPU3_CLOCK_DEFAULT_DAY       1U
 
 /* RTC 初始化成功后置位，读取接口用它区分“时间无效”和“时间为 0 点”。 */
-static uint8_t s_cpu3_clock_ready = 0U;
+static uint8_t s_cpu3_clock_ready = 0U; /* 参数存储模块级变量，保存跨函数共享的业务状态。 */
 
 /*
  * 将 RTC 寄存器中的一个 BCD 字段转成普通二进制值。

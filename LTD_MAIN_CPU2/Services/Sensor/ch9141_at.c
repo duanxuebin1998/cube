@@ -95,6 +95,7 @@ static void CH9141_AT_PrintResult(const char *cmd,
                                   uint32_t ret,
                                   const CH9141AtResponse *response)
 {
+    /* 先处理异常边界，避免CH9141K AT 控制状态机带故障继续运行。 */
     if ((CH9141_AT_VERBOSE_LOG == 0U) && (ret == NO_ERROR)) {
         return;
     }
@@ -120,6 +121,7 @@ static void CH9141_AT_PrintResult(const char *cmd,
            (unsigned)has_scan_end,
            (unsigned)has_rssi);
 
+    /* 先处理异常边界，避免CH9141K AT 控制状态机带故障继续运行。 */
     if (ret != NO_ERROR) {
         CH9141_AT_PrintRawResponse(response);
     }
@@ -153,6 +155,12 @@ static void CH9141_AT_DrainRxUntilIdle(uint32_t idle_ms)
     }
 }
 
+/**
+ * @brief 清除或复位CH9141K AT 控制中的 CH9141_AT_ResetResponse 逻辑。
+ *
+ * @param response 业务参数。
+ * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ */
 void CH9141_AT_ResetResponse(CH9141AtResponse *response)
 {
     if (response == NULL) {
@@ -397,6 +405,12 @@ static uint32_t CH9141_AT_CollectResponse(CH9141AtWaitMode wait_mode,
     return SENSOR_DEVICE_COMM_TIMEOUT;
 }
 
+/**
+ * @brief 执行CH9141K AT 控制中的 CH9141_AT_PrepareUart6 逻辑。
+ *
+ * @param idle_ms 业务参数。
+ * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ */
 uint32_t CH9141_AT_PrepareUart6(uint32_t idle_ms)
 {
     if (CH9141_AT_VERBOSE_LOG != 0U) {
@@ -412,6 +426,12 @@ uint32_t CH9141_AT_PrepareUart6(uint32_t idle_ms)
 }
 
 
+/**
+ * @brief 执行CH9141K AT 控制中的 CH9141_AT_EnterSoftwareMode 逻辑。
+ *
+ * @param response 业务参数。
+ * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ */
 uint32_t CH9141_AT_EnterSoftwareMode(CH9141AtResponse *response)
 {
     uint32_t ret;
@@ -420,12 +440,14 @@ uint32_t CH9141_AT_EnterSoftwareMode(CH9141AtResponse *response)
         printf("CH9141K AT\t进入软件AT模式\r\n");
     }
     ret = CH9141_AT_PrepareUart6(CH9141_AT_SOFTWARE_IDLE_MS);
+    /* 先处理异常边界，避免CH9141K AT 控制状态机带故障继续运行。 */
     if (ret != NO_ERROR) {
         return ret;
     }
 
     /* CH9141K 软件 AT 入口命令为 AT...，协议不使用裸 AT 作为入口。 */
     ret = CH9141_AT_SendCommand("AT...", CH9141_AT_WAIT_ACK, CH9141_AT_ENTER_TIMEOUT_MS, response);
+    /* 先处理异常边界，避免CH9141K AT 控制状态机带故障继续运行。 */
     if ((ret == SENSOR_DEVICE_COMM_TIMEOUT) &&
         (response != NULL) &&
         (response->len == 0U)) {
@@ -436,6 +458,14 @@ uint32_t CH9141_AT_EnterSoftwareMode(CH9141AtResponse *response)
 }
 
 
+/**
+ * @brief 执行CH9141K AT 控制中的 CH9141_AT_WaitAsync 逻辑。
+ *
+ * @param wait_mode 工作模式。
+ * @param timeout_ms 业务参数。
+ * @param response 业务参数。
+ * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ */
 uint32_t CH9141_AT_WaitAsync(CH9141AtWaitMode wait_mode,
                              uint32_t timeout_ms,
                              CH9141AtResponse *response)
@@ -461,6 +491,15 @@ uint32_t CH9141_AT_WaitAsync(CH9141AtWaitMode wait_mode,
 
 
 
+/**
+ * @brief 发送CH9141K AT 控制中的 CH9141_AT_SendCommand 逻辑。
+ *
+ * @param cmd 命令值。
+ * @param wait_mode 工作模式。
+ * @param timeout_ms 业务参数。
+ * @param response 业务参数。
+ * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ */
 uint32_t CH9141_AT_SendCommand(const char *cmd,
                                CH9141AtWaitMode wait_mode,
                                uint32_t timeout_ms,
@@ -489,12 +528,14 @@ uint32_t CH9141_AT_SendCommand(const char *cmd,
     }
 
     cmd_len = (uint16_t)strlen(cmd);
+    /* 先处理异常边界，避免CH9141K AT 控制状态机带故障继续运行。 */
     if (HAL_UART_Transmit(&huart6, (uint8_t *)cmd, cmd_len, CH9141_AT_COMMAND_TX_TIMEOUT_MS) != HAL_OK) {
         CH9141_AT_ClearUartError();
         ret = OTHER_PERIPHERAL_CONFIG_ERROR;
         CH9141_AT_PrintResult(cmd, wait_mode, timeout_ms, ret, response);
         return ret;
     }
+    /* 先处理异常边界，避免CH9141K AT 控制状态机带故障继续运行。 */
     if (HAL_UART_Transmit(&huart6, (uint8_t *)line_end, 2U, CH9141_AT_COMMAND_TX_TIMEOUT_MS) != HAL_OK) {
         CH9141_AT_ClearUartError();
         ret = OTHER_PERIPHERAL_CONFIG_ERROR;

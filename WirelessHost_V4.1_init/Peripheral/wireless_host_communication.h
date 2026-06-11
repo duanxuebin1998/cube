@@ -11,6 +11,11 @@
 #include "main.h"
 #include "stdint.h"
 
+/**
+ * @brief 处理无线主机通信中的 Wireless_Handle_MasterFrame 逻辑。
+ *
+ * @param req 业务参数。
+ */
 void Wireless_Handle_MasterFrame(const uint8_t req[8]);
 
 #endif /* WIRELESS_HOST_COMMUNICATION_H_ */

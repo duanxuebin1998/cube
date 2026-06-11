@@ -7,15 +7,16 @@
 #define ERROR_LOG_RECENT_REPORT_WINDOW_MS 200U
 #define ERROR_LOG_RETRY_VERBOSE_LIMIT 3U
 
-static uint8_t s_error_log_recent_report_valid = 0U;
-static uint32_t s_error_log_recent_report_code = 0U;
-static uint32_t s_error_log_recent_report_tick = 0U;
+static uint8_t s_error_log_recent_report_valid = 0U; /* 错误日志故障记录，供恢复、显示或日志链路使用。 */
+static uint32_t s_error_log_recent_report_code = 0U; /* 错误日志故障记录，供恢复、显示或日志链路使用。 */
+static uint32_t s_error_log_recent_report_tick = 0U; /* 错误日志故障记录，供恢复、显示或日志链路使用。 */
 /**
  * @brief 判断当前重试次数是否需要打印。
  * @note 短重试保留每次打印，长重试只打印首次和末次，避免现场日志刷屏。
  */
 static uint8_t ErrorLog_ShouldPrintRetry(uint32_t attempt, uint32_t max)
 {
+    /* 先处理异常边界，避免错误日志状态机带故障继续运行。 */
     if ((max <= ERROR_LOG_RETRY_VERBOSE_LIMIT) || (attempt <= 1U) || (attempt >= max)) {
         return 1U;
     }
@@ -29,6 +30,7 @@ static uint8_t ErrorLog_ShouldPrintRetry(uint32_t attempt, uint32_t max)
  */
 static void ErrorLog_MarkRecentReport(uint32_t code)
 {
+    /* 先处理异常边界，避免错误日志状态机带故障继续运行。 */
     if ((code == NO_ERROR) || (code == STATE_SWITCH)) {
         s_error_log_recent_report_valid = 0U;
         return;
@@ -45,10 +47,12 @@ static void ErrorLog_MarkRecentReport(uint32_t code)
  */
 uint8_t ErrorLog_TakeRecentReport(uint32_t code)
 {
+    /* 先处理异常边界，避免错误日志状态机带故障继续运行。 */
     if (s_error_log_recent_report_valid == 0U) {
         return 0U;
     }
 
+    /* 先处理异常边界，避免错误日志状态机带故障继续运行。 */
     if ((s_error_log_recent_report_code == code) &&
         ((HAL_GetTick() - s_error_log_recent_report_tick) <= ERROR_LOG_RECENT_REPORT_WINDOW_MS)) {
         return 1U;
@@ -429,6 +433,7 @@ void ErrorLog_RetryDetail(const char *module,
         return;
     }
 
+    /* 先处理异常边界，避免错误日志状态机带故障继续运行。 */
     if (ErrorLog_ShouldPrintRetry(attempt, max) == 0U) {
         return;
     }

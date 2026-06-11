@@ -9,7 +9,7 @@
 #include "cpu3_comm_display_params.h"
 #include "usart.h"
 #include <string.h>
-#include "mb85rs2m.h"     // WriteMultiData / ReadMultiData
+#include "mb85rs2m.h"     /* WriteMultiData / ReadMultiData */
 #include "my_crc.h"
 #include "display_tankopera.h"
 #include "app_version.h"
@@ -409,10 +409,15 @@ void Cpu3Local_WriteValue(OperatingNumber opera, int32_t v)
     }
 
     /* 这里可以顺手：重配串口 + 保存 FRAM */
-    // Cpu3_Comm_ReInitAll();       // 你自己实现
-    Cpu3_Params_SaveToFRAM();     // 你自己实现
+    /* Cpu3_Comm_ReInitAll(); / / 你自己实现 */
+    Cpu3_Params_SaveToFRAM();     /* 你自己实现 */
 }
 
+/**
+ * @brief 判断指定操作号是否属于 CPU3 本地串口参数。
+ * @param opera 参数操作号。
+ * @return true 表示串口参数，false 表示其他本地参数。
+ */
 bool Cpu3Local_IsUartParam(OperatingNumber opera)
 {
     return (opera >= COM_NUM_CPU3_COM1_BAUDRATE && opera <= COM_NUM_CPU3_COM3_PROTOCOL);
@@ -542,7 +547,7 @@ void Cpu3_ReinitAllUarts(void)
  *  - crc     : 对上述 (magic, version, params) 计算 CRC32
  */
 
-#define CPU3_PARAM_MAGIC   0x43505533UL   // 'CPU3'
+#define CPU3_PARAM_MAGIC   0x43505533UL   /* 'CPU3' */
 #define CPU3_PARAM_VERSION_V3 0x0003U
 #define CPU3_PARAM_VERSION 0x0004U
 
@@ -580,7 +585,7 @@ typedef struct
 {
     uint32_t                 magic;
     uint16_t                 version;
-    uint16_t                 reserved;  // 对齐/预留
+    uint16_t                 reserved;  /* 对齐/预留 */
     Cpu3CommAndDisplayParams params;
     uint32_t                 crc;
 } Cpu3ParamStorage;
@@ -620,6 +625,12 @@ static bool Cpu3_Params_StorageValid(const Cpu3ParamStorage *stor)
     return crc_calc == stor->crc;
 }
 
+/**
+ * @brief 执行参数存储中的 Cpu3_Params_StorageV3Valid 逻辑。
+ *
+ * @param stor 业务参数。
+ * @return true 表示条件满足或处理成功，false 表示条件不满足或处理失败。
+ */
 static bool Cpu3_Params_StorageV3Valid(const Cpu3ParamStorageV3 *stor)
 {
     uint32_t crc_len;
@@ -634,6 +645,12 @@ static bool Cpu3_Params_StorageV3Valid(const Cpu3ParamStorageV3 *stor)
     return crc_calc == stor->crc;
 }
 
+/**
+ * @brief 执行参数存储中的 Cpu3_Params_MigrateFromV3 逻辑。
+ *
+ * @param stor 业务参数。
+ * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ */
 static void Cpu3_Params_MigrateFromV3(const Cpu3ParamStorageV3 *stor)
 {
     memset(&g_cpu3_comm_display_params, 0, sizeof(g_cpu3_comm_display_params));
@@ -658,6 +675,10 @@ static void Cpu3_Params_MigrateFromV3(const Cpu3ParamStorageV3 *stor)
     g_cpu3_comm_display_params.com3 = stor->params.com3;
 }
 
+/**
+ * @brief 保存参数存储中的 Cpu3_Params_SaveToFRAM 逻辑。
+ * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ */
 void Cpu3_Params_SaveToFRAM(void)
 {
     Cpu3ParamStorage stor;
@@ -684,6 +705,10 @@ void Cpu3_Params_SaveToFRAM(void)
     printf("CPU3参数已保存到FRAM，CRC=0x%08lX\r\n", (unsigned long)stor.crc);
 }
 
+/**
+ * @brief 加载或恢复参数存储中的 Cpu3_Params_LoadFromFRAM 逻辑。
+ * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ */
 void Cpu3_Params_LoadFromFRAM(void)
 {
     Cpu3ParamStorage stor;
@@ -726,6 +751,7 @@ void Cpu3_Params_LoadFromFRAM(void)
         }
     }
 
+    /* 先处理异常边界，避免参数存储状态机带故障继续运行。 */
     if (use_default) {
         /* 使用默认值并立刻写回 FRAM */
         Cpu3_Params_InitDefaults();

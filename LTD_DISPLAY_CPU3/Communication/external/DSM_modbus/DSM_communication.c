@@ -20,10 +20,10 @@ int DSM_CommunicationInit(void) {
 	int LocalAddress = 129;
 	LocalAddress = Get_Device_Address();
 	SetSlaveaddress(LocalAddress);
-//用于权限设置
-	MaxNum_Coil = ENDADDRESS3_COM;					   // 线圈工作模式有效值
-	MaxNum_HoldingRegister = ENDADDRESS6_HOLDREGISTER; // 保持寄存器工作模式有效值
-	MaxNum_InputRegister = ENDADDRESS5_INPUTREGISTER;  // 输入寄存器工作模式有效值
+/* 用于权限设置 */
+	MaxNum_Coil = ENDADDRESS3_COM;					   /* 线圈工作模式有效值 */
+	MaxNum_HoldingRegister = ENDADDRESS6_HOLDREGISTER; /* 保持寄存器工作模式有效值 */
+	MaxNum_InputRegister = ENDADDRESS5_INPUTREGISTER;  /* 输入寄存器工作模式有效值 */
 	WriteOneInputRegister(INPUTREGISTER_SYSTEMSTATE, 1, STATE_INIT);
 #ifdef DEBUG_COMM
 	printf("Address = %d\r\n", LocalAddress);
@@ -57,7 +57,7 @@ int DSM_CommunicationProcess(unsigned char *rcvbuff, int rcvcount, uint8_t* tx, 
 		printf("\r\n");
 		return -1;
 	}
-	//校验地址
+	/* 校验地址 */
 	if (rcvbuff[0] != SlaveAddress && rcvbuff[0] != 0) {
 		return -1;
 	}
@@ -68,8 +68,8 @@ int DSM_CommunicationProcess(unsigned char *rcvbuff, int rcvcount, uint8_t* tx, 
 	if (GetFunctioncode(rcvbuff, &functioncode) == false) {
 		tx[0] = SlaveAddress;
 		tx[1] = 0x80 + functioncode;
-		tx[2] = 0x01; // 非法功能码
-		// 缺少CRC校验
+		tx[2] = 0x01; /* 非法功能码 */
+		/* 缺少CRC校验 */
 		crc = CRC16_Calculate(tx, 3);
 		tx[3] = crc & 0xff;
 		tx[4] = (crc >> 8) & 0xff;
@@ -82,13 +82,13 @@ int DSM_CommunicationProcess(unsigned char *rcvbuff, int rcvcount, uint8_t* tx, 
 		}
 
 		case FUNCTIONCODE_READ_HOLDREGISTER: {
-			SystemParameterSet(); // 更新参数,每一个保持寄存器必须写入，否则读出来会不变；
+			SystemParameterSet(); /* 更新参数,每一个保持寄存器必须写入，否则读出来会不变； */
 			*tx_len = Response03(rcvbuff, tx);
 			break;
 		}
 
 		case FUNCTIONCODE_READ_INPUTREGISTER: {
-			Input_Write(); // 更新数据,每一个输入寄存器的参数必须写入，否则读出来会不变；
+			Input_Write(); /* 更新数据,每一个输入寄存器的参数必须写入，否则读出来会不变； */
 			*tx_len = Response04(rcvbuff, tx);
 			break;
 		}

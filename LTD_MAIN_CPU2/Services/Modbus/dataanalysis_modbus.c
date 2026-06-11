@@ -43,6 +43,7 @@ static inline int32_t read_i32_from_regs(const uint16_t *regs, uint16_t addr) {
 /* 写入 float 到寄存器数组（按 IEEE754 的 uint32_t 比特位存放） */
 static inline void write_float_to_regs(uint16_t *regs, uint16_t addr, float value) {
 	uint32_t temp;
+	/* 按结构或原始字节复制，保持Modbus 协议协议/存储布局不被字段解释改变。 */
 	memcpy(&temp, &value, sizeof(float));
 	write_u32_to_regs(regs, addr, temp);
 }
@@ -480,7 +481,7 @@ void ReadDeviceParamsFromHoldingRegisters(uint16_t *HoldingRegisterArray)
 
     MotorCtrl_ApplyPositionSourceParams();
 
-    //todo:
+    /* todo: */
 }
 
 /* ===================== MeasurementResult <-> 输入寄存器映射 ===================== */

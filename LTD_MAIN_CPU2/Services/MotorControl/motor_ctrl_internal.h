@@ -199,10 +199,10 @@ void MotorDriver_UpdateVelocityFromParams(void);
  */
 uint32_t MotorDriver_CheckHealth(MotorDriverHealthMode mode);
 
-/** 写运动寄存器前统一检查驱动初始化状态和位置源首帧就绪状态。 */
+/* * 写运动寄存器前统一检查驱动初始化状态和位置源首帧就绪状态。 */
 uint32_t MotorDriver_CheckMotionReady(void);
 
-/** 强制调试运动专用：只绕过编码器首帧门控，不绕过驱动初始化和上电安全停机。 */
+/* * 强制调试运动专用：只绕过编码器首帧门控，不绕过驱动初始化和上电安全停机。 */
 uint32_t MotorDriver_CheckMotionReadyForceDebug(void);
 
 /**
@@ -238,6 +238,13 @@ uint32_t MotorDriver_StopIfCommandSwitchRequested(void);
  */
 uint32_t MotorDriver_ReadMovingState(TMC5130TypeDef *tmc5130, bool *is_moving);
 
+/**
+ * @brief 读取电机控制中的 MotorDriver_ReadStoppingState 逻辑。
+ *
+ * @param tmc5130 业务参数。
+ * @param is_moving 业务参数。
+ * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ */
 uint32_t MotorDriver_ReadStoppingState(TMC5130TypeDef *tmc5130, bool *is_moving);
 
 /**

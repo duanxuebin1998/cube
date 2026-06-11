@@ -6,29 +6,40 @@
 #define DISPLAY_KEY_QUEUE_SIZE 8U
 #define DISPLAY_KEY_INDEX_COUNT 4U
 
-volatile uint8_t button_press_counter = 0;
-volatile uint8_t button_long_press_key = LONG_PRESS_KEY_NONE;
-bool FlagofTankOpera = false; //罐上操作标志位
-static volatile uint8_t pending_key_queue[DISPLAY_KEY_QUEUE_SIZE];
-static volatile uint8_t pending_key_head = 0U;
-static volatile uint8_t pending_key_tail = 0U;
-static volatile uint8_t pending_key_overflow_count = 0U;
-static volatile uint8_t pending_long_press_mask = 0U;
-static volatile uint32_t key_last_falling_tick[DISPLAY_KEY_INDEX_COUNT];
-static volatile uint8_t key_last_falling_valid[DISPLAY_KEY_INDEX_COUNT];
-static volatile uint8_t long_press_release_guard_key = LONG_PRESS_KEY_NONE;
-static volatile uint8_t long_press_release_guard_released = 0U;
-static volatile uint32_t long_press_release_guard_tick = 0U;
+volatile uint8_t button_press_counter = 0; /* 屏幕显示计数值，用于节拍、统计或协议数量控制。 */
+volatile uint8_t button_long_press_key = LONG_PRESS_KEY_NONE; /* 屏幕显示模块级变量，保存跨函数共享的业务状态。 */
+bool FlagofTankOpera = false; /* 罐上操作标志位 */
+static volatile uint8_t pending_key_queue[DISPLAY_KEY_QUEUE_SIZE]; /* 屏幕显示状态标志，通常由主循环或中断回调共同检查。 */
+static volatile uint8_t pending_key_head = 0U; /* 屏幕显示状态标志，通常由主循环或中断回调共同检查。 */
+static volatile uint8_t pending_key_tail = 0U; /* 屏幕显示状态标志，通常由主循环或中断回调共同检查。 */
+static volatile uint8_t pending_key_overflow_count = 0U; /* 屏幕显示状态标志，通常由主循环或中断回调共同检查。 */
+static volatile uint8_t pending_long_press_mask = 0U; /* 屏幕显示状态标志，通常由主循环或中断回调共同检查。 */
+static volatile uint32_t key_last_falling_tick[DISPLAY_KEY_INDEX_COUNT]; /* 屏幕显示模块级变量，保存跨函数共享的业务状态。 */
+static volatile uint8_t key_last_falling_valid[DISPLAY_KEY_INDEX_COUNT]; /* 屏幕显示模块级变量，保存跨函数共享的业务状态。 */
+static volatile uint8_t long_press_release_guard_key = LONG_PRESS_KEY_NONE; /* 屏幕显示模块级变量，保存跨函数共享的业务状态。 */
+static volatile uint8_t long_press_release_guard_released = 0U; /* 屏幕显示模块级变量，保存跨函数共享的业务状态。 */
+static volatile uint32_t long_press_release_guard_tick = 0U; /* 屏幕显示模块级变量，保存跨函数共享的业务状态。 */
 
+/**
+ * @brief 显示或打印屏幕显示中的 Display_EnterCritical 逻辑。
+ * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ */
 static uint32_t Display_EnterCritical(void)
 {
 	uint32_t primask = __get_PRIMASK();
 	if (__get_IPSR() == 0U) {
+		/* 进入临界区，保护屏幕显示共享状态，避免中断同时修改。 */
 		__disable_irq();
 	}
 	return primask;
 }
 
+/**
+ * @brief 显示或打印屏幕显示中的 Display_ExitCritical 逻辑。
+ *
+ * @param primask 进入临界区前保存的中断屏蔽状态。
+ * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ */
 static void Display_ExitCritical(uint32_t primask)
 {
 	if ((__get_IPSR() == 0U) && (primask == 0U)) {
@@ -36,6 +47,12 @@ static void Display_ExitCritical(uint32_t primask)
 	}
 }
 
+/**
+ * @brief 显示或打印屏幕显示中的 Display_NextKeyQueueIndex 逻辑。
+ *
+ * @param index 索引值。
+ * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ */
 static uint8_t Display_NextKeyQueueIndex(uint8_t index)
 {
 	index++;
@@ -45,6 +62,13 @@ static uint8_t Display_NextKeyQueueIndex(uint8_t index)
 	return index;
 }
 
+/**
+ * @brief 显示或打印屏幕显示中的 Display_KeyIndexFromPin 逻辑。
+ *
+ * @param GPIO_Pin 业务参数。
+ * @param index 索引值。
+ * @return true 表示条件满足或处理成功，false 表示条件不满足或处理失败。
+ */
 static bool Display_KeyIndexFromPin(uint16_t GPIO_Pin, uint8_t *index)
 {
 	if (GPIO_Pin == KEY_BACK_Pin) {
@@ -62,6 +86,12 @@ static bool Display_KeyIndexFromPin(uint16_t GPIO_Pin, uint8_t *index)
 	return true;
 }
 
+/**
+ * @brief 显示或打印屏幕显示中的 Display_AcceptKeyFalling 逻辑。
+ *
+ * @param GPIO_Pin 业务参数。
+ * @return true 表示条件满足或处理成功，false 表示条件不满足或处理失败。
+ */
 static bool Display_AcceptKeyFalling(uint16_t GPIO_Pin)
 {
 	uint8_t index = 0U;
@@ -86,6 +116,12 @@ static bool Display_AcceptKeyFalling(uint16_t GPIO_Pin)
 	return accepted;
 }
 
+/**
+ * @brief 读取屏幕显示中的 Display_ReadLongPressKey 逻辑。
+ *
+ * @param long_press_key 业务参数。
+ * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ */
 static GPIO_PinState Display_ReadLongPressKey(uint8_t long_press_key)
 {
 	if (long_press_key == LONG_PRESS_KEY_SURE) {
@@ -98,6 +134,12 @@ static GPIO_PinState Display_ReadLongPressKey(uint8_t long_press_key)
 	return GPIO_PIN_SET;
 }
 
+/**
+ * @brief 显示或打印屏幕显示中的 Display_StartLongPress 逻辑。
+ *
+ * @param long_press_key 业务参数。
+ * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ */
 static void Display_StartLongPress(uint8_t long_press_key)
 {
 	bool should_start = false;
@@ -130,6 +172,12 @@ static void Display_StartLongPress(uint8_t long_press_key)
 	}
 }
 
+/**
+ * @brief 显示或打印屏幕显示中的 Display_RequestKey 逻辑。
+ *
+ * @param keypress 业务参数。
+ * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ */
 void Display_RequestKey(uint8_t keypress)
 {
 	uint8_t next_head = Display_NextKeyQueueIndex(pending_key_head);
@@ -148,6 +196,10 @@ void Display_RequestKey(uint8_t keypress)
 	pending_key_head = next_head;
 }
 
+/**
+ * @brief 清除或复位屏幕显示中的 Display_ClearPendingKeys 逻辑。
+ * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ */
 void Display_ClearPendingKeys(void)
 {
 	uint32_t primask = Display_EnterCritical();
@@ -155,6 +207,12 @@ void Display_ClearPendingKeys(void)
 	Display_ExitCritical(primask);
 }
 
+/**
+ * @brief 显示或打印屏幕显示中的 Display_RequestLongPressAction 逻辑。
+ *
+ * @param long_press_key 业务参数。
+ * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ */
 void Display_RequestLongPressAction(uint8_t long_press_key)
 {
 	if (long_press_key == LONG_PRESS_KEY_SURE) {
@@ -164,6 +222,10 @@ void Display_RequestLongPressAction(uint8_t long_press_key)
 	}
 }
 
+/**
+ * @brief 显示或打印屏幕显示中的 Display_TakePendingKey 逻辑。
+ * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ */
 uint8_t Display_TakePendingKey(void)
 {
 	uint8_t keypress = 0U;
@@ -178,6 +240,10 @@ uint8_t Display_TakePendingKey(void)
 	return keypress;
 }
 
+/**
+ * @brief 显示或打印屏幕显示中的 Display_TakePendingLongPressAction 逻辑。
+ * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ */
 uint8_t Display_TakePendingLongPressAction(void)
 {
 	uint8_t long_press_key = LONG_PRESS_KEY_NONE;
@@ -197,6 +263,12 @@ uint8_t Display_TakePendingLongPressAction(void)
 	return long_press_key;
 }
 
+/**
+ * @brief 显示或打印屏幕显示中的 Display_ArmLongPressReleaseGuard 逻辑。
+ *
+ * @param long_press_key 业务参数。
+ * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ */
 void Display_ArmLongPressReleaseGuard(uint8_t long_press_key)
 {
 	uint32_t primask = Display_EnterCritical();
@@ -209,6 +281,10 @@ void Display_ArmLongPressReleaseGuard(uint8_t long_press_key)
 	Display_ExitCritical(primask);
 }
 
+/**
+ * @brief 更新屏幕显示中的 Display_UpdateLongPressReleaseGuard 逻辑。
+ * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ */
 void Display_UpdateLongPressReleaseGuard(void)
 {
 	uint8_t guard_key = long_press_release_guard_key;
@@ -233,10 +309,16 @@ void Display_UpdateLongPressReleaseGuard(void)
 	}
 }
 
+/**
+ * @brief 执行屏幕显示中的 HAL_GPIO_EXTI_Callback 逻辑。
+ *
+ * @param GPIO_Pin 业务参数。
+ * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ */
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
 	SetScreenBright();
-	//延时消抖
-//    HAL_Delay(5);
+	/* 延时消抖 */
+/* HAL_Delay(5); */
 	switch (GPIO_Pin) {
 	case KEY_BACK_Pin: {
 		if ((HAL_GPIO_ReadPin(KEY_BACK_GPIO_Port, KEY_BACK_Pin) == GPIO_PIN_RESET) &&
@@ -272,7 +354,7 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
 			if (FlagofTankOpera == true)
 				Display_RequestKey(USE_KEY_SURE);
 			else {
-				Display_StartLongPress(LONG_PRESS_KEY_SURE); //解锁
+				Display_StartLongPress(LONG_PRESS_KEY_SURE); /* 解锁 */
 			}
 		}
 		break;

@@ -110,15 +110,15 @@ enum {
     SI7000_HR_DENSITY_DEVIATION_SETPOINT
 };
 
-static uint8_t s_slave_address = 1U;
+static uint8_t s_slave_address = 1U; /* Modbus 协议地址配置，影响协议寻址或硬件访问。 */
 /* 四类寄存器区都是 CPU3 侧快照，收到请求前由 si7000_modbus_sync_from_system 刷新。 */
-static uint8_t s_coils[SI7000_COIL_COUNT];
-static uint8_t s_discrete_inputs[SI7000_DISCRETE_INPUT_COUNT];
-static uint16_t s_holding_regs[SI7000_HOLDING_REG_COUNT];
-static uint16_t s_input_regs[SI7000_INPUT_REG_COUNT];
-static Cpu3DateTime s_profile_timestamp;
-static uint32_t s_seen_profile_counter = 0U;
-static uint8_t s_profile_timestamp_valid = 0U;
+static uint8_t s_coils[SI7000_COIL_COUNT]; /* Modbus 协议模块级变量，保存跨函数共享的业务状态。 */
+static uint8_t s_discrete_inputs[SI7000_DISCRETE_INPUT_COUNT]; /* Modbus 协议模块级变量，保存跨函数共享的业务状态。 */
+static uint16_t s_holding_regs[SI7000_HOLDING_REG_COUNT]; /* Modbus 协议模块级变量，保存跨函数共享的业务状态。 */
+static uint16_t s_input_regs[SI7000_INPUT_REG_COUNT]; /* Modbus 协议模块级变量，保存跨函数共享的业务状态。 */
+static Cpu3DateTime s_profile_timestamp; /* Modbus 协议模块级变量，保存跨函数共享的业务状态。 */
+static uint32_t s_seen_profile_counter = 0U; /* Modbus 协议计数值，用于节拍、统计或协议数量控制。 */
+static uint8_t s_profile_timestamp_valid = 0U; /* Modbus 协议模块级变量，保存跨函数共享的业务状态。 */
 
 /*
  * 从 Modbus PDU 中读取大端 16 位值。
@@ -218,6 +218,7 @@ static uint8_t si7000_is_invalid_temp_raw(uint32_t raw_temperature)
 /* CPU2 温度原始值以 0.01K 偏移编码，SI7000 按 0.01C 的有符号值输出。 */
 static uint16_t si7000_temp_raw_to_si_s16(uint32_t raw_temperature)
 {
+    /* 先处理异常边界，避免Modbus 协议状态机带故障继续运行。 */
     if (si7000_is_invalid_temp_raw(raw_temperature) != 0U) {
         return 0U;
     }
@@ -340,6 +341,12 @@ static void si7000_refresh_profile_timestamp(void)
     }
 }
 
+/**
+ * @brief 发送Modbus 协议中的 si7000_send_cpu2_command 逻辑。
+ *
+ * @param cmd 命令值。
+ * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ */
 static void si7000_send_cpu2_command(CommandType cmd)
 {
     uint32_t cmd32 = (uint32_t)cmd;
@@ -352,6 +359,14 @@ static void si7000_send_cpu2_command(CommandType cmd)
     g_deviceParams.command = CMD_NONE;
 }
 
+/**
+ * @brief 写入或设置Modbus 协议中的 si7000_write_device_param_u32 逻辑。
+ *
+ * @param hold_addr 地址参数。
+ * @param shadow 业务参数。
+ * @param value 待处理数值。
+ * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ */
 static void si7000_write_device_param_u32(uint16_t hold_addr,
                                           volatile uint32_t *shadow,
                                           uint32_t value)
@@ -370,6 +385,15 @@ static void si7000_write_device_param_u32(uint16_t hold_addr,
                                &value32);
 }
 
+/**
+ * @brief 执行Modbus 协议中的 si7000_build_exception 逻辑。
+ *
+ * @param func 业务参数。
+ * @param ex_code 业务参数。
+ * @param tx 业务参数。
+ * @param tx_len 数据长度。
+ * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ */
 static uint8_t si7000_build_exception(uint8_t func,
                                       uint8_t ex_code,
                                       uint8_t *tx,
@@ -559,6 +583,7 @@ static void si7000_refresh_discrete_inputs_from_state(void)
             uint16_t point_density = si7000_density_raw_to_si_u16(p->density);
             uint8_t point_density_valid = (p->density != UNVALID_DENSITY) ? 1U : 0U;
 
+            /* 先处理异常边界，避免Modbus 协议状态机带故障继续运行。 */
             if (si7000_is_invalid_temp_raw(p->temperature) == 0U) {
                 int16_t point_temp = (int16_t)si7000_temp_raw_to_si_s16(p->temperature);
 

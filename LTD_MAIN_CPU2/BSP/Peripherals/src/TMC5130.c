@@ -8,8 +8,8 @@
 #include "fault_manager.h"
 #include "error_log.h"
 
-#include "sensor.h"    // 传感器相关接口（如称重、防撞检测等）
-#include "motor_ctrl.h" // 电机控制上层接口
+#include "sensor.h"    /* 传感器相关接口（如称重、防撞检测等） */
+#include "motor_ctrl.h" /* 电机控制上层接口 */
 
 /* 保持电流固定为同一口径，运行时修改 motor_current 只改变 IRUN。 */
 #define TMC5130_MOTOR_IHOLD_VALUE       (4U)
@@ -69,6 +69,12 @@ static uint32_t tmc5130_drvStatusCurrent(uint32_t drvstatus)
     return (drvstatus & TMC5130_DRVSTATUS_CS_ACTUAL_MASK) >> 16;
 }
 
+/**
+ * @brief 执行TMC5130 驱动中的 tmc5130_decodeDrvStatus 逻辑。
+ *
+ * @param drvstatus 状态值。
+ * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ */
 static uint32_t tmc5130_decodeDrvStatus(uint32_t drvstatus)
 {
     uint32_t ret = NO_ERROR;
@@ -95,30 +101,35 @@ static uint32_t tmc5130_decodeDrvStatus(uint32_t drvstatus)
     }
     if (drvstatus & TMC5130_DRVSTATUS_OTPW) {
         printf("TMC5130 过温预警（DRV_STATUS[26]=otpw）\r\n");
+        /* 先处理异常边界，避免TMC5130 驱动状态机带故障继续运行。 */
         if (ret == NO_ERROR) {
             ret = MOTOR_OVERTEMPERATURE;
         }
     }
     if (drvstatus & TMC5130_DRVSTATUS_S2GA) {
         printf("TMC5130 A 相对地短路（DRV_STATUS[27]=s2ga）\r\n");
+        /* 先处理异常边界，避免TMC5130 驱动状态机带故障继续运行。 */
         if (ret == NO_ERROR) {
             ret = MOTOR_ALARM_TRIGGERED;
         }
     }
     if (drvstatus & TMC5130_DRVSTATUS_S2GB) {
         printf("TMC5130 B 相对地短路（DRV_STATUS[28]=s2gb）\r\n");
+        /* 先处理异常边界，避免TMC5130 驱动状态机带故障继续运行。 */
         if (ret == NO_ERROR) {
             ret = MOTOR_ALARM_TRIGGERED;
         }
     }
     if (drvstatus & TMC5130_DRVSTATUS_OLA) {
         printf("TMC5130 A 相开路/断线（DRV_STATUS[29]=ola）\r\n");
+        /* 先处理异常边界，避免TMC5130 驱动状态机带故障继续运行。 */
         if (ret == NO_ERROR) {
             ret = MOTOR_ALARM_TRIGGERED;
         }
     }
     if (drvstatus & TMC5130_DRVSTATUS_OLB) {
         printf("TMC5130 B 相开路/断线（DRV_STATUS[30]=olb）\r\n");
+        /* 先处理异常边界，避免TMC5130 驱动状态机带故障继续运行。 */
         if (ret == NO_ERROR) {
             ret = MOTOR_ALARM_TRIGGERED;
         }
@@ -126,17 +137,17 @@ static uint32_t tmc5130_decodeDrvStatus(uint32_t drvstatus)
 
     return ret;
 }
-// 全局步进电机驱动句柄（默认配置）
-// 注意：这里只是给出一个全局默认实例，实际项目中也可以在别处重新初始化
+/* 全局步进电机驱动句柄（默认配置） */
+/* 注意：这里只是给出一个全局默认实例，实际项目中也可以在别处重新初始化 */
 TMC5130TypeDef stepper = {
-    .spi     = &hspi2,        // 使用的 SPI 句柄
-    .cs_port = GPIOB,         // SPI 片选 GPIO 端口
-    .cs_pin  = GPIO_PIN_12,   // SPI 片选引脚
-    .en_port = GPIOD,         // 使能引脚 GPIO 端口
-    .en_pin  = GPIO_PIN_10    // 使能引脚
+    .spi     = &hspi2,        /* 使用的 SPI 句柄 */
+    .cs_port = GPIOB,         /* SPI 片选 GPIO 端口 */
+    .cs_pin  = GPIO_PIN_12,   /* SPI 片选引脚 */
+    .en_port = GPIOD,         /* 使能引脚 GPIO 端口 */
+    .en_pin  = GPIO_PIN_10    /* 使能引脚 */
 };
 
-// => SPI 底层封装（仅本文件内部使用）
+/* => SPI 底层封装（仅本文件内部使用） */
 static bool tmc5130_tryReadArray(TMC5130TypeDef *tmc5130, uint8_t *data, size_t length, uint32_t *value);
 static bool tmc5130_writeArray(TMC5130TypeDef *tmc5130, uint8_t *data, size_t length);
 static bool tmc5130_readRegisterOnce(TMC5130TypeDef *tmc5130, uint8_t address, int32_t *value);
@@ -151,11 +162,12 @@ static void tmc5130_initWrite(TMC5130TypeDef *tmc5130,
                               uint8_t address,
                               int32_t value,
                               uint32_t *failed_count);
-// <= SPI 底层封装
+/* < = SPI 底层封装 */
 
-static volatile uint8_t s_tmc5130_spi_busy = 0U;
+static volatile uint8_t s_tmc5130_spi_busy = 0U; /* TMC5130 驱动模块级变量，保存跨函数共享的业务状态。 */
 
 static void tmc5130_delayCsGuard(void)
+/* TMC5130 驱动与外设通信之间保留等待时间，避免硬件或对端协议尚未准备好。 */
 /* 这里使用 NOP 而不是 HAL_Delay，避免把每次 5 字节 SPI 访问扩大到 ms 级。
  * 延时会同时用于 CS 拉低前、拉低后和拉高后，确保每帧边界留出恢复时间。 */
 {
@@ -164,10 +176,15 @@ static void tmc5130_delayCsGuard(void)
     }
 }
 
+/**
+ * @brief 执行TMC5130 驱动中的 tmc5130_enterSpiAccess 逻辑。
+ * @return true 表示条件满足或处理成功，false 表示条件不满足或处理失败。
+ */
 static bool tmc5130_enterSpiAccess(void)
 {
     uint32_t primask = __get_PRIMASK();
 
+    /* 进入临界区，保护TMC5130 驱动共享状态，避免中断同时修改。 */
     __disable_irq();
     if (s_tmc5130_spi_busy != 0U) {
         __set_PRIMASK(primask);
@@ -179,16 +196,21 @@ static bool tmc5130_enterSpiAccess(void)
     return true;
 }
 
+/**
+ * @brief 执行TMC5130 驱动中的 tmc5130_leaveSpiAccess 逻辑。
+ * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ */
 static void tmc5130_leaveSpiAccess(void)
 {
     uint32_t primask = __get_PRIMASK();
 
+    /* 进入临界区，保护TMC5130 驱动共享状态，避免中断同时修改。 */
     __disable_irq();
     s_tmc5130_spi_busy = 0U;
     __set_PRIMASK(primask);
 }
 
-/************************ SPI 读写封装 ************************/
+/* *********************** SPI 读写封装 *********************** */
 
 /**
  * @brief  通过 SPI 读一个寄存器（发送 length 字节，接收 5 字节）
@@ -233,7 +255,7 @@ static bool tmc5130_tryReadArray(TMC5130TypeDef *tmc5130,
         return false;
     }
 
-    // TMC5130 数据在 rxBuff[1..4]，按大端组合为 32 位
+    /* TMC5130 数据在 rxBuff[1..4]，按大端组合为 32 位 */
     *value = (((uint32_t)rxBuff[1] << 24) |
               ((uint32_t)rxBuff[2] << 16) |
               ((uint32_t)rxBuff[3] << 8) |
@@ -272,7 +294,7 @@ static bool tmc5130_writeArray(TMC5130TypeDef *tmc5130, uint8_t *data, size_t le
     return (status == HAL_OK);
 }
 
-/************************ 寄存器级读写 ************************/
+/* *********************** 寄存器级读写 *********************** */
 
 /**
  * @brief  写 4 字节（x1~x4）到指定寄存器地址
@@ -306,6 +328,15 @@ bool stpr_writeInt(TMC5130TypeDef *tmc5130, uint8_t address, int32_t value)
     );
 }
 
+/**
+ * @brief 初始化TMC5130 驱动中的 tmc5130_initWrite 逻辑。
+ *
+ * @param tmc5130 业务参数。
+ * @param address 地址参数。
+ * @param value 待处理数值。
+ * @param failed_count 业务参数。
+ * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ */
 static void tmc5130_initWrite(TMC5130TypeDef *tmc5130,
                               uint8_t address,
                               int32_t value,
@@ -314,7 +345,7 @@ static void tmc5130_initWrite(TMC5130TypeDef *tmc5130,
     for (uint32_t attempt = 1U; attempt <= TMC5130_INIT_WRITE_RETRY_MAX; ++attempt) {
         if (stpr_writeInt(tmc5130, address, value)) {
             if (attempt > 1U) {
-                // 错误	阶段：重试成功	模块：电机	操作：驱动初始化	原因：恢复成功	尝试：attempt/TMC5130_INIT_WRITE_RETRY_MAX
+                /* 错误 阶段：重试成功 模块：电机 操作：驱动初始化 原因：恢复成功 尝试：attempt/TMC5130_INIT_WRITE_RETRY_MAX */
                 ErrorLog_Recover(ERROR_LOG_MODULE_MOTOR,
                                  ERROR_LOG_OP_DRIVER_INIT,
                                  ERROR_LOG_REASON_RECOVER_OK,
@@ -329,7 +360,7 @@ static void tmc5130_initWrite(TMC5130TypeDef *tmc5130,
             return;
         }
 
-        // 错误	阶段：错误重试	模块：电机	操作：驱动初始化	原因：通信失败	尝试：attempt/TMC5130_INIT_WRITE_RETRY_MAX	错误码：MOTOR_TMC_COMM_ERROR	错误名：ErrorLog_GetCodeName(MOTOR_TMC_COMM_ERROR)
+        /* 错误 阶段：错误重试 模块：电机 操作：驱动初始化 原因：通信失败 尝试：attempt/TMC5130_INIT_WRITE_RETRY_MAX 错误码：MOTOR_TMC_COMM_ERROR 错误名：ErrorLog_GetCodeName(MOTOR_TMC_COMM_ERROR) */
         ErrorLog_Retry(ERROR_LOG_MODULE_MOTOR,
                        ERROR_LOG_OP_DRIVER_INIT,
                        ERROR_LOG_REASON_COMM_FAIL,
@@ -364,12 +395,12 @@ static bool tmc5130_readRegisterOnce(TMC5130TypeDef *tmc5130, uint8_t address, i
     }
 
     data[0] = address;
-    if (!tmc5130_tryReadArray(tmc5130, data, 5, &raw)) { // 第一次触发读取（数据无效）
+    if (!tmc5130_tryReadArray(tmc5130, data, 5, &raw)) { /* 第一次触发读取（数据无效） */
         return false;
     }
 
     data[0] = address;
-    if (!tmc5130_tryReadArray(tmc5130, data, 5, &raw)) { // 第二次才是真正数据
+    if (!tmc5130_tryReadArray(tmc5130, data, 5, &raw)) { /* 第二次才是真正数据 */
         return false;
     }
 
@@ -377,6 +408,14 @@ static bool tmc5130_readRegisterOnce(TMC5130TypeDef *tmc5130, uint8_t address, i
     return true;
 }
 
+/**
+ * @brief 执行TMC5130 驱动中的 tmc5130_isCloseInt32 逻辑。
+ *
+ * @param a 业务参数。
+ * @param b 业务参数。
+ * @param tolerance 业务参数。
+ * @return true 表示条件满足或处理成功，false 表示条件不满足或处理失败。
+ */
 static bool tmc5130_isCloseInt32(int32_t a, int32_t b, int32_t tolerance)
 {
     int64_t delta = (int64_t)a - (int64_t)b;
@@ -435,7 +474,7 @@ static bool tmc5130_readXactualStable(TMC5130TypeDef *tmc5130, int32_t *value)
              (long)first,
              (long)second,
              (long)third);
-    // 错误	阶段：错误报警	模块：电机	操作：驱动状态检查	原因：通信失败	处理：停止电机	详情：detail
+    /* 错误 阶段：错误报警 模块：电机 操作：驱动状态检查 原因：通信失败 处理：停止电机 详情：detail */
     ErrorLog_WarnDetail(ERROR_LOG_MODULE_MOTOR,
                         ERROR_LOG_OP_DRIVER_CHECK,
                         ERROR_LOG_REASON_COMM_FAIL,
@@ -464,7 +503,7 @@ bool stpr_tryReadInt(TMC5130TypeDef *tmc5130, uint8_t address, int32_t *value)
 }
 
 
-/************************ 内部速度模式工具 / 位置控制接口 ************************/
+/* *********************** 内部速度模式工具 / 位置控制接口 *********************** */
 
 /**
  * @brief  以给定速度持续旋转（速度模式）
@@ -493,6 +532,7 @@ uint32_t stpr_stop(TMC5130TypeDef *tmc5130)
     int32_t xactual = 0;
 
     ret = stpr_rotate(tmc5130, 0);
+    /* 先处理异常边界，避免TMC5130 驱动状态机带故障继续运行。 */
     if (ret != NO_ERROR) {
         return ret;
     }
@@ -552,7 +592,7 @@ uint32_t stpr_moveBy(TMC5130TypeDef *tmc5130, int32_t *ticks, uint32_t velocityM
     return stpr_moveTo(tmc5130, *ticks, velocityMax);
 }
 
-/************************ 使能与位置设置 ************************/
+/* *********************** 使能与位置设置 *********************** */
 
 /**
  * @brief  禁止驱动（EN 引脚拉高或拉低视硬件设计，一般为高电平关闭）
@@ -581,7 +621,7 @@ uint32_t stpr_setPos(TMC5130TypeDef *tmc5130, int32_t position)
     return NO_ERROR;
 }
 
-/************************ 运动等待与故障检测 ************************/
+/* *********************** 运动等待与故障检测 *********************** */
 /**
  * @brief 检查并解析 TMC5130 驱动异常状态。
  *
@@ -615,7 +655,7 @@ uint32_t stpr_checkDriverStatus(TMC5130TypeDef *tmc5130)
         /* GSTAT/RAMPSTAT 可能读成 0；再读 CHOPCONF 用于识别“读得通但配置全丢”的掉电场景。 */
         if (!stpr_tryReadInt(tmc5130, TMC5130_CHOPCONF, &chopconf)) {
             snprintf(detail, sizeof(detail), "全局状态：0x00000000,斩波配置：读取失败");
-            // 错误	阶段：错误报警	模块：电机	操作：驱动状态检查	原因：通信失败	处理：停止电机	详情：detail
+            /* 错误 阶段：错误报警 模块：电机 操作：驱动状态检查 原因：通信失败 处理：停止电机 详情：detail */
             ErrorLog_WarnDetail(ERROR_LOG_MODULE_MOTOR,
                                 ERROR_LOG_OP_DRIVER_CHECK,
                                 ERROR_LOG_REASON_COMM_FAIL,
@@ -628,7 +668,7 @@ uint32_t stpr_checkDriverStatus(TMC5130TypeDef *tmc5130)
             /* CHOPCONF 正常配置不应为 0；为 0 时不能再把 GSTAT=0 当作健康状态。 */
             printf("TMC5130配置丢失或驱动掉电 | GSTAT=0x00000000 | CHOPCONF=0x00000000\r\n");
             snprintf(detail, sizeof(detail), "全局状态：0x00000000,斩波配置：0x00000000");
-            // 错误	阶段：错误报警	模块：电机	操作：驱动状态检查	原因：通信失败	处理：停止电机	详情：detail
+            /* 错误 阶段：错误报警 模块：电机 操作：驱动状态检查 原因：通信失败 处理：停止电机 详情：detail */
             ErrorLog_WarnDetail(ERROR_LOG_MODULE_MOTOR,
                                 ERROR_LOG_OP_DRIVER_CHECK,
                                 ERROR_LOG_REASON_COMM_FAIL,
@@ -652,7 +692,7 @@ uint32_t stpr_checkDriverStatus(TMC5130TypeDef *tmc5130)
                  "全局状态：0x%08lX,非法位：0x%08lX",
                  (unsigned long)gstat_raw,
                  (unsigned long)(gstat_raw & ~TMC5130_GSTAT_VALID_MASK));
-        // 错误	阶段：错误报警	模块：电机	操作：驱动状态检查	原因：校验失败	处理：继续尝试	详情：detail
+        /* 错误 阶段：错误报警 模块：电机 操作：驱动状态检查 原因：校验失败 处理：继续尝试 详情：detail */
         ErrorLog_WarnDetail(ERROR_LOG_MODULE_MOTOR,
                             ERROR_LOG_OP_DRIVER_CHECK,
                             ERROR_LOG_REASON_VALIDATE_FAIL,
@@ -683,6 +723,7 @@ uint32_t stpr_checkDriverStatus(TMC5130TypeDef *tmc5130)
         printf("TMC5130 芯片复位标志（GSTAT[0]），运动过程中复位按通信/供电异常处理\r\n");
     }
 
+    /* 先处理异常边界，避免TMC5130 驱动状态机带故障继续运行。 */
     if (driver_error) {
         uint32_t driver_ret;
 
@@ -692,7 +733,7 @@ uint32_t stpr_checkDriverStatus(TMC5130TypeDef *tmc5130)
             snprintf(detail, sizeof(detail),
                      "全局状态：0x%08lX,驱动状态：读取失败",
                      (unsigned long)gstat_raw);
-            // 错误	阶段：错误报警	模块：电机	操作：驱动状态检查	原因：通信失败	处理：停止电机	详情：detail
+            /* 错误 阶段：错误报警 模块：电机 操作：驱动状态检查 原因：通信失败 处理：停止电机 详情：detail */
             ErrorLog_WarnDetail(ERROR_LOG_MODULE_MOTOR,
                                 ERROR_LOG_OP_DRIVER_CHECK,
                                 ERROR_LOG_REASON_COMM_FAIL,
@@ -704,10 +745,11 @@ uint32_t stpr_checkDriverStatus(TMC5130TypeDef *tmc5130)
 
         driver_ret = tmc5130_decodeDrvStatus((uint32_t)drvstatus);
         printf("检测到驱动器错误（GSTAT[1]）\r\n");
-        if (!stpr_writeInt(tmc5130, TMC5130_GSTAT, 0x07)) { // 清除所有 GSTAT 标志位
+        if (!stpr_writeInt(tmc5130, TMC5130_GSTAT, 0x07)) { /* 清除所有 GSTAT 标志位 */
             MotorCtrl_InvalidateDriverInit();
             return MOTOR_TMC_COMM_ERROR;
         }
+        /* 先处理异常边界，避免TMC5130 驱动状态机带故障继续运行。 */
         if (driver_ret == NO_ERROR) {
             driver_ret = MOTOR_UNKNOWN_FEEDBACK;
         }
@@ -715,7 +757,7 @@ uint32_t stpr_checkDriverStatus(TMC5130TypeDef *tmc5130)
                  "全局状态：0x%08lX,驱动状态：0x%08lX",
                  (unsigned long)gstat_raw,
                  (unsigned long)((uint32_t)drvstatus));
-        // 错误	阶段：错误报警	模块：电机	操作：驱动状态检查	原因：ErrorLog_GetReasonByCode(driver_ret)	处理：停止电机	详情：detail
+        /* 错误 阶段：错误报警 模块：电机 操作：驱动状态检查 原因：ErrorLog_GetReasonByCode(driver_ret) 处理：停止电机 详情：detail */
         ErrorLog_WarnDetail(ERROR_LOG_MODULE_MOTOR,
                             ERROR_LOG_OP_DRIVER_CHECK,
                             ErrorLog_GetReasonByCode(driver_ret),
@@ -728,7 +770,7 @@ uint32_t stpr_checkDriverStatus(TMC5130TypeDef *tmc5130)
     if (charge_pump_uv) {
         /* 充电泵欠压会影响高边驱动能力，继续运动风险较高，返回错误交给上层停机。 */
         printf("检测到充电泵欠压（GSTAT[2]）\r\n");
-        if (!stpr_writeInt(tmc5130, TMC5130_GSTAT, 0x07)) { // 清除所有 GSTAT 标志位
+        if (!stpr_writeInt(tmc5130, TMC5130_GSTAT, 0x07)) { /* 清除所有 GSTAT 标志位 */
             MotorCtrl_InvalidateDriverInit();
             return MOTOR_TMC_COMM_ERROR;
         }
@@ -736,7 +778,7 @@ uint32_t stpr_checkDriverStatus(TMC5130TypeDef *tmc5130)
                  "全局状态：0x%08lX,驱动状态：%s",
                  (unsigned long)gstat_raw,
                  drvstatus_ok ? "读取成功" : "读取失败");
-        // 错误	阶段：错误报警	模块：电机	操作：驱动状态检查	原因：电荷泵欠压	处理：停止电机	详情：detail
+        /* 错误 阶段：错误报警 模块：电机 操作：驱动状态检查 原因：电荷泵欠压 处理：停止电机 详情：detail */
         ErrorLog_WarnDetail(ERROR_LOG_MODULE_MOTOR,
                             ERROR_LOG_OP_DRIVER_CHECK,
                             ERROR_LOG_REASON_DRIVER_UV,
@@ -747,7 +789,7 @@ uint32_t stpr_checkDriverStatus(TMC5130TypeDef *tmc5130)
     }
 
     if (reset_flag) {
-        if (!stpr_writeInt(tmc5130, TMC5130_GSTAT, 0x07)) { // 清除复位标志，便于后续重新初始化观察
+        if (!stpr_writeInt(tmc5130, TMC5130_GSTAT, 0x07)) { /* 清除复位标志，便于后续重新初始化观察 */
             MotorCtrl_InvalidateDriverInit();
             return MOTOR_TMC_COMM_ERROR;
         }
@@ -755,7 +797,7 @@ uint32_t stpr_checkDriverStatus(TMC5130TypeDef *tmc5130)
                  "全局状态：0x%08lX,驱动状态：%s",
                  (unsigned long)gstat_raw,
                  drvstatus_ok ? "读取成功" : "读取失败");
-        // 错误	阶段：错误报警	模块：电机	操作：驱动状态检查	原因：通信失败	处理：停止电机	详情：detail
+        /* 错误 阶段：错误报警 模块：电机 操作：驱动状态检查 原因：通信失败 处理：停止电机 详情：detail */
         ErrorLog_WarnDetail(ERROR_LOG_MODULE_MOTOR,
                             ERROR_LOG_OP_DRIVER_CHECK,
                             ERROR_LOG_REASON_COMM_FAIL,
@@ -785,7 +827,7 @@ uint32_t stpr_checkDriverPowerReady(TMC5130TypeDef *tmc5130)
     /* 读取 DRV_STATUS 是功率级判断的依据，失败时按通信异常处理并失效初始化标记。 */
     if (!stpr_tryReadInt(tmc5130, TMC5130_DRVSTATUS, &drvstatus)) {
         snprintf(detail, sizeof(detail), "驱动状态：读取失败");
-        // 错误	阶段：错误报警	模块：电机	操作：驱动状态检查	原因：通信失败	处理：停止电机	详情：detail
+        /* 错误 阶段：错误报警 模块：电机 操作：驱动状态检查 原因：通信失败 处理：停止电机 详情：detail */
         ErrorLog_WarnDetail(ERROR_LOG_MODULE_MOTOR,
                             ERROR_LOG_OP_DRIVER_CHECK,
                             ERROR_LOG_REASON_COMM_FAIL,
@@ -802,7 +844,7 @@ uint32_t stpr_checkDriverPowerReady(TMC5130TypeDef *tmc5130)
                (unsigned long)((uint32_t)drvstatus));
         snprintf(detail, sizeof(detail), "驱动状态：0x%08lX,实际电流档：0",
                  (unsigned long)((uint32_t)drvstatus));
-        // 错误	阶段：错误报警	模块：电机	操作：驱动状态检查	原因：电机被禁止	处理：停止电机	详情：detail
+        /* 错误 阶段：错误报警 模块：电机 操作：驱动状态检查 原因：电机被禁止 处理：停止电机 详情：detail */
         ErrorLog_WarnDetail(ERROR_LOG_MODULE_MOTOR,
                             ERROR_LOG_OP_DRIVER_CHECK,
                             ErrorLog_GetReasonByCode(MOTOR_DISABLED),
@@ -815,6 +857,12 @@ uint32_t stpr_checkDriverPowerReady(TMC5130TypeDef *tmc5130)
     return NO_ERROR;
 }
 
+/**
+ * @brief 执行TMC5130 驱动中的 stpr_waitMove 逻辑。
+ *
+ * @param tmc5130 业务参数。
+ * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ */
 uint32_t stpr_waitMove(TMC5130TypeDef *tmc5130)
 {
     uint32_t ret;
@@ -856,15 +904,17 @@ uint32_t stpr_waitMove(TMC5130TypeDef *tmc5130)
             return STATE_SWITCH;
         }
 
-        // 在运动过程中周期性检查防撞（比如称重超限等）
+        /* 在运动过程中周期性检查防撞（比如称重超限等） */
         ret = CheckWeightCollision();
+        /* 先处理异常边界，避免TMC5130 驱动状态机带故障继续运行。 */
         if (ret != NO_ERROR) {
             MotorCtrl_SlowStop();
             RETURN_ERROR(ret);
         }
 
-        // 检查 TMC5130 全局状态；读取失败或检测到真实故障时停止运动并把错误交给上层处理
+        /* 检查 TMC5130 全局状态；读取失败或检测到真实故障时停止运动并把错误交给上层处理 */
         ret = stpr_checkDriverStatus(tmc5130);
+        /* 先处理异常边界，避免TMC5130 驱动状态机带故障继续运行。 */
         if (ret != NO_ERROR) {
             MotorCtrl_SlowStop();
             RETURN_ERROR(ret);
@@ -873,22 +923,25 @@ uint32_t stpr_waitMove(TMC5130TypeDef *tmc5130)
         /* stpr_waitMove() 是底层直接调用点，不能依赖 MotorDriver_CheckHealth() 追加功率级检查；
          * 这里单独确认 CS_ACTUAL，避免 24V 未上电时仍按普通等待继续运行。 */
         ret = stpr_checkDriverPowerReady(tmc5130);
+        /* 先处理异常边界，避免TMC5130 驱动状态机带故障继续运行。 */
         if (ret != NO_ERROR) {
             MotorCtrl_SlowStop();
             RETURN_ERROR(ret);
         }
 
         ret = MotorCtrl_PollRuntimePosition();
+        /* 先处理异常边界，避免TMC5130 驱动状态机带故障继续运行。 */
         if (ret != NO_ERROR) {
             MotorCtrl_SlowStop();
             RETURN_ERROR(ret);
         }
+        /* TMC5130 驱动与外设通信之间保留等待时间，避免硬件或对端协议尚未准备好。 */
         HAL_Delay(50);
     }
     MotorCtrl_RefreshDebugDrumState();
-    return NO_ERROR; // 正常结束运动
+    return NO_ERROR; /* 正常结束运动 */
 }
-/************************ 电流 / 速度 / 初始化 ************************/
+/* *********************** 电流 / 速度 / 初始化 *********************** */
 
 /**
  * @brief  生成 IHOLD_IRUN 寄存器值。
@@ -960,32 +1013,32 @@ uint32_t stpr_initStepper(TMC5130TypeDef *tmc5130,
         return PARAM_ADDRESS_OVERFLOW;
     }
 
-    // 更新句柄中的硬件资源
+    /* 更新句柄中的硬件资源 */
     tmc5130->spi     = spi;
     tmc5130->cs_pin  = cs_pin;
     tmc5130->cs_port = cs_port;
     (void)dir;
 
-    // 基础配置：GCONF
+    /* 基础配置：GCONF */
     TMC5130_INIT_WRITE(tmc5130, TMC5130_GCONF, 0x0084);
-    // 若需要根据 dir 设置方向，可改为：
-    // TMC5130_INIT_WRITE(tmc5130, TMC5130_GCONF, (dir << 4));
+    /* 若需要根据 dir 设置方向，可改为： */
+    /* TMC5130_INIT_WRITE(tmc5130, TMC5130_GCONF, (dir << 4)); */
 
-    // 空闲功耗降低时间
-    TMC5130_INIT_WRITE(tmc5130, TMC5130_TPOWERDOWN, 0x00000002); // 停稳后更快进入保持电流
+    /* 空闲功耗降低时间 */
+    TMC5130_INIT_WRITE(tmc5130, TMC5130_TPOWERDOWN, 0x00000002); /* 停稳后更快进入保持电流 */
 
-    // 斩波器配置 CHOPCONF
+    /* 斩波器配置 CHOPCONF */
     TMC5130_INIT_WRITE(
         tmc5130,
         TMC5130_CHOPCONF,
-        (2 << 15) |   // TBL：死区时间
-        (0 << 24) |   // 其他参数可按需调整
-        (3 << 0)  |   // TOFF
-        (4 << 7)  |   // HEND
-        (0 << 4)      // HSTART
+        (2 << 15) |   /* TBL：死区时间 */
+        (0 << 24) |   /* 其他参数可按需调整 */
+        (3 << 0)  |   /* TOFF */
+        (4 << 7)  |   /* HEND */
+        (0 << 4)      /* HSTART */
     );
 
-    // 基本加减速、速度参数（需根据实际机械系统调优）
+    /* 基本加减速、速度参数（需根据实际机械系统调优） */
     TMC5130_INIT_WRITE(tmc5130, TMC5130_AMAX,    20 * 32);
     TMC5130_INIT_WRITE(tmc5130, TMC5130_A1,      10 * 32);
     TMC5130_INIT_WRITE(tmc5130, TMC5130_V1,     800 * 32);
@@ -995,28 +1048,28 @@ uint32_t stpr_initStepper(TMC5130TypeDef *tmc5130,
     TMC5130_INIT_WRITE(tmc5130, TMC5130_VSTART, 0x00000005);
     TMC5130_INIT_WRITE(tmc5130, TMC5130_TZEROWAIT, 10000);
 
-    // 位置模式 & 初始位置
+    /* 位置模式 & 初始位置 */
     TMC5130_INIT_WRITE(tmc5130, TMC5130_RAMPMODE, TMC5130_MODE_POSITION);
     TMC5130_INIT_WRITE(tmc5130, TMC5130_XACTUAL,  0x00000000);
     TMC5130_INIT_WRITE(tmc5130, TMC5130_XTARGET,  0x00000000);
 
-    // 设置 IHOLD / IRUN / IHOLDDELAY
+    /* 设置 IHOLD / IRUN / IHOLDDELAY */
     value = tmc5130_buildCurrentSetting(current);
     TMC5130_INIT_WRITE(tmc5130, TMC5130_IHOLD_IRUN, value);
     tmc5130_logCurrentSetting(value);
 
-    // 启用 PWM 模式（stealthChop）
-    TMC5130_INIT_WRITE(tmc5130, TMC5130_GCONF, 0x00000004); // EN_PWM_MODE=1
+    /* 启用 PWM 模式（stealthChop） */
+    TMC5130_INIT_WRITE(tmc5130, TMC5130_GCONF, 0x00000004); /* EN_PWM_MODE=1 */
 
-    // 速度阈值（PWM、CoolStep 等，这里默认关闭）
+    /* 速度阈值（PWM、CoolStep 等，这里默认关闭） */
     TMC5130_INIT_WRITE(tmc5130, TMC5130_TPWMTHRS, 0);
     TMC5130_INIT_WRITE(tmc5130, TMC5130_TCOOLTHRS, 0);
     TMC5130_INIT_WRITE(tmc5130, TMC5130_THIGH, 20);
 
-    // PWM 配置：AUTO=1, Fclk/1024, 振幅限制=200, Grad=1 等
+    /* PWM 配置：AUTO=1, Fclk/1024, 振幅限制=200, Grad=1 等 */
     TMC5130_INIT_WRITE(tmc5130, TMC5130_PWMCONF, 0x000401C8);
 
-    // 清除 GSTAT 错误标志
+    /* 清除 GSTAT 错误标志 */
     TMC5130_INIT_WRITE(tmc5130, TMC5130_GSTAT, 0x07);
 
     if (init_write_failed_count != 0U) {

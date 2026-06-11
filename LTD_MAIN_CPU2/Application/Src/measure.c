@@ -83,6 +83,12 @@ static void CMD_SyntheticMeasurement(void);
 static void CMD_RunToPosition(void);
 void CMD_ReadPartParams(void);
 
+/**
+ * @brief 处理测量流程中的 ProcessMeasureCmd 逻辑。
+ *
+ * @param command 命令值。
+ * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ */
 void ProcessMeasureCmd(CommandType command)
 {
     if (command == CMD_CANCEL_MEASUREMENT) {
@@ -95,7 +101,8 @@ void ProcessMeasureCmd(CommandType command)
         return;
     }
 
-    uint32_t start_ret = (uint32_t)MeasureStart(); // 测量初始化
+    uint32_t start_ret = (uint32_t)MeasureStart(); /* 测量初始化 */
+    /* 先处理异常边界，避免测量流程状态机带故障继续运行。 */
     if (start_ret != NO_ERROR) {
         printf("测量启动失败，电机初始化错误码：0x%08lX\r\n", (unsigned long)start_ret);
         SET_ERROR(start_ret);
@@ -284,6 +291,10 @@ void ProcessMeasureCmd(CommandType command)
 
 
 
+/**
+ * @brief 执行测量流程中的 CMD_CancelMeasurement 逻辑。
+ * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ */
 static void CMD_CancelMeasurement(void)
 {
     uint32_t stop_ret;
@@ -297,6 +308,7 @@ static void CMD_CancelMeasurement(void)
     g_measurement.device_status.error_code = NO_ERROR;
 
     stop_ret = MotorCtrl_SlowStop();
+    /* 先处理异常边界，避免测量流程状态机带故障继续运行。 */
     if ((stop_ret != NO_ERROR) && (stop_ret != STATE_SWITCH)) {
         printf("取消测量\t停止电机返回：0x%08lX\r\n", (unsigned long)stop_ret);
     }
@@ -403,6 +415,12 @@ static uint8_t ProcessCommand_MapFormalCommand(uint8_t command_char, CommandType
         return 0U;
     }
 }
+/**
+ * @brief 处理测量流程中的 process_command 逻辑。
+ *
+ * @param command 命令值。
+ * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ */
 void process_command(uint8_t *command) {
     CommandType formal_command = CMD_NONE;
 
@@ -425,15 +443,20 @@ void process_command(uint8_t *command) {
 
     printf("Serial command\tunsupported\tcmd=%s\r\n", (const char *)command);
 }
+/**
+ * @brief 执行测量流程中的 MeasureStart 逻辑。
+ * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ */
 int MeasureStart(void) {
-	fault_info_init(); //故障初始化清零
-    uint32_t ret = MotorCtrl_Init(); //电机初始化
+	fault_info_init(); /* 故障初始化清零 */
+    uint32_t ret = MotorCtrl_Init(); /* 电机初始化 */
+    /* 先处理异常边界，避免测量流程状态机带故障继续运行。 */
     if (ret != NO_ERROR) {
         printf("电机初始化失败，错误码：0x%08lX\r\n", (unsigned long)ret);
         return (int)ret;
     }
 	weight_init();
-	g_measurement.device_status.error_code = NO_ERROR; //故障代码清零
+	g_measurement.device_status.error_code = NO_ERROR; /* 故障代码清零 */
     /*
      * 外部协议适配辅助状态随新测量命令重新计算，避免上一次流程残留。
      * 这些状态只给 CPU3/SI7000 做协议转换，不参与原测量流程控制。
@@ -448,7 +471,7 @@ int MeasureStart(void) {
 	return NO_ERROR;
 }
 
-//测量水位主函数
+/* 测量水位主函数 */
 /* 跟随类命令进入闭环前，如果参数允许且当前位置源为编码器，则切到电机记步。
  * 发生切换后不直接沿用旧的液位/水位点，而是重新定位后再跟随。 */
 static uint32_t EnsureMotorPositionSourceBeforeFollow(const char *follow_name, uint8_t *switched_to_motor)
@@ -470,6 +493,7 @@ static uint32_t EnsureMotorPositionSourceBeforeFollow(const char *follow_name, u
 
     printf("%s\t当前位置源为编码器，切换到电机记步后重新搜索\r\n", follow_name);
     ret = MotorCtrl_SwitchPositionSourceToMotor();
+    /* 先处理异常边界，避免测量流程状态机带故障继续运行。 */
     if (ret != NO_ERROR) {
         printf("%s\t切换电机记步失败，错误码:0x%08lX\r\n", follow_name, (unsigned long)ret);
         return ret;
@@ -482,6 +506,10 @@ static uint32_t EnsureMotorPositionSourceBeforeFollow(const char *follow_name, u
     return NO_ERROR;
 }
 
+/**
+ * @brief 执行测量流程中的 CMD_MeasurWater 逻辑。
+ * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ */
 static void CMD_MeasurWater(void) {
 	uint32_t ret = 0;
 	MeasureStart();
@@ -493,14 +521,14 @@ static void CMD_MeasurWater(void) {
 	g_measurement.device_status.device_state = STATE_FINDWATER_OVER;
 	return;
 }
-// 水位跟随主函数（命令入口）
+/* 水位跟随主函数（命令入口） */
 static void CMD_FollowWaterLevel(void)
 {
     uint32_t ret = NO_ERROR;
     MeasureStart();
     g_measurement.device_status.device_state = STATE_FOLLOW_WATER_POINT_SEARCHING;
 
-    // 先按当前记步来源找一次水位，保证切换基准前的位置是最新水位点。
+    /* 先按当前记步来源找一次水位，保证切换基准前的位置是最新水位点。 */
     if (g_deviceParams.water_level_mode == 0) {
         ret = SearchWaterLevel();
         SET_ERROR(ret);
@@ -516,7 +544,7 @@ static void CMD_FollowWaterLevel(void)
 
         if (switched_to_motor) {
             g_measurement.device_status.device_state = STATE_FOLLOW_WATER_POINT_SEARCHING;
-            // 切到电机记步后重新找水位，后续闭环跟随以电机位置为基准。
+            /* 切到电机记步后重新找水位，后续闭环跟随以电机位置为基准。 */
             if (g_deviceParams.water_level_mode == 0) {
                 ret = SearchWaterLevel();
                 SET_ERROR(ret);
@@ -527,7 +555,7 @@ static void CMD_FollowWaterLevel(void)
         }
     }
 
-    // 再跟随水位
+    /* 再跟随水位 */
     printf("水位跟随	进入闭环跟随\r\n");
     if (g_deviceParams.water_level_mode == 0) {
         ret = FollowWaterLevel();
@@ -538,27 +566,32 @@ static void CMD_FollowWaterLevel(void)
     }
 }
 
+/**
+ * @brief 执行测量流程中的 CMD_MeasureZero 逻辑。
+ * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ */
 static void CMD_MeasureZero(void) {
 	uint32_t ret = 0;
 	MeasureStart();
 	g_measurement.device_status.device_state = STATE_BACKZEROING;
 
-	//开始回零点
+	/* 开始回零点 */
 	ret = SearchZero();
 	SET_ERROR(ret);
 	g_measurement.device_status.device_state = STATE_STANDBY;
 	return;
 }
-//罐底零点主函数
+/* 罐底零点主函数 */
 static void CMD_CalibrateZeroPoint(void) {
     uint32_t ret = 0;
     MeasureStart();
     g_measurement.device_status.device_state = STATE_FINDZEROING;
 
-    //开始回零点
+    /* 开始回零点 */
     ret = SearchZero();
     SET_ERROR(ret);
     ret = MotorCtrl_CalibrateFirstLoopCircumferenceAtZero();
+    /* 先处理异常边界，避免测量流程状态机带故障继续运行。 */
     if (ret != NO_ERROR) {
         printf("标定零点\t首圈周长标定失败 错误码：0x%08lX\r\n", (unsigned long)ret);
         SET_ERROR(ret);
@@ -583,9 +616,10 @@ static void CMD_MeasureBottom(void) {
 	uint32_t ret = 0;
 	MeasureStart();
 	g_measurement.device_status.device_state = STATE_FINDBOTTOM;
-	//开始测量罐高
+	/* 开始测量罐高 */
 	ret = SearchBottom();
 
+    /* 先处理异常边界，避免测量流程状态机带故障继续运行。 */
     if ((g_deviceParams.error_stop_measurement == 1U) &&
         (ret != STATE_SWITCH))
     {
@@ -635,9 +669,10 @@ static void CMD_MeasureBottom(void) {
                     fallback_real_height;
             g_measurement.device_status.error_code = NO_ERROR;
 
+            /* 先处理异常边界，避免测量流程状态机带故障继续运行。 */
             if (ret != NO_ERROR)
             {
-                // 错误	阶段：错误报警	模块：测量	操作：精找罐底	原因：ErrorLog_GetReasonByCode(ret)	处理：使用回退值
+                /* 错误 阶段：错误报警 模块：测量 操作：精找罐底 原因：ErrorLog_GetReasonByCode(ret) 处理：使用回退值 */
                 ErrorLog_Warn(ERROR_LOG_MODULE_MEASURE,
                               ERROR_LOG_OP_SEARCH_BOTTOM_PRECISE,
                               ErrorLog_GetReasonByCode(ret),
@@ -648,7 +683,7 @@ static void CMD_MeasureBottom(void) {
             }
             else
             {
-                // 错误	阶段：错误报警	模块：测量	操作：精找罐底	原因：位置异常	处理：使用回退值
+                /* 错误 阶段：错误报警 模块：测量 操作：精找罐底 原因：位置异常 处理：使用回退值 */
                 ErrorLog_Warn(ERROR_LOG_MODULE_MEASURE,
                               ERROR_LOG_OP_SEARCH_BOTTOM_PRECISE,
                               ERROR_LOG_REASON_POSITION_ERROR,
@@ -667,6 +702,7 @@ static void CMD_MeasureBottom(void) {
         }
     }
 	SET_ERROR(ret);
+    /* 先处理异常边界，避免测量流程状态机带故障继续运行。 */
     if (ret == NO_ERROR) {
         /* 普通探底路径成功时同样刷新协议辅助状态，保持与快速返回路径一致。 */
         g_measurement.height_measurement.bottom_reference_valid = 1U;
@@ -675,6 +711,10 @@ static void CMD_MeasureBottom(void) {
 	g_measurement.device_status.device_state = STATE_FINDBOTTOM_OVER;
 	return;
 }
+/**
+ * @brief 执行测量流程中的 CMD_MeasureAndFollowOilLevel 逻辑。
+ * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ */
 static void CMD_MeasureAndFollowOilLevel(void) {
     uint32_t ret = 0;
     MeasureStart();
@@ -688,7 +728,7 @@ static void CMD_MeasureAndFollowOilLevel(void) {
         printf("液位测量	回零点完成\r\n");
     }
 
-    // 先按当前记步来源找一次液位，随后再决定是否切到电机记步。
+    /* 先按当前记步来源找一次液位，随后再决定是否切到电机记步。 */
     ret = SearchOilLevel();
     SET_ERROR(ret);
 
@@ -699,7 +739,7 @@ static void CMD_MeasureAndFollowOilLevel(void) {
 
         if (switched_to_motor) {
             g_measurement.device_status.device_state = STATE_FINDOIL;
-            // 切到电机记步后重新找液位，后续闭环跟随以电机位置为基准。
+            /* 切到电机记步后重新找液位，后续闭环跟随以电机位置为基准。 */
             ret = SearchOilLevel();
             SET_ERROR(ret);
         }
@@ -711,7 +751,7 @@ static void CMD_MeasureAndFollowOilLevel(void) {
     return;
 }
 
-//标定液位
+/* 标定液位 */
 static void CMD_CalibrateOilLevel(void) {
 	uint32_t ret = 0;
 	MeasureStart();
@@ -719,7 +759,7 @@ static void CMD_CalibrateOilLevel(void) {
     if (g_measurement.device_status.device_state == STATE_FLOWOIL) {
 		printf("当前处于液位跟随状态，执行液位修正操作\r\n");
 		CorrectOilLevelProcess();
-		//继续液位跟随
+		/* 继续液位跟随 */
 		ret = FollowOilLevel();
 		SET_ERROR(ret);
 		return;
@@ -727,12 +767,12 @@ static void CMD_CalibrateOilLevel(void) {
     else
     {
         g_measurement.device_status.device_state = STATE_CALIBRATIONOILING;
-        //标定液位为0为实高标定液位
+        /* 标定液位为0为实高标定液位 */
         if(g_deviceParams.calibrateOilLevel == 0)
         {
             ret = SearchBottom();
             SET_ERROR(ret);
-            save_device_params();//把修正后的罐高保存到参数
+            save_device_params(); /* 把修正后的罐高保存到参数 */
             g_measurement.device_status.device_state = STATE_FINDOIL;
         }
         ret = SearchAndFollowOilLevel();
@@ -740,17 +780,21 @@ static void CMD_CalibrateOilLevel(void) {
         return;
     }
 }
+/**
+ * @brief 执行测量流程中的 CMD_CorrectOilLevel 逻辑。
+ * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ */
 static void CMD_CorrectOilLevel(void) {
 	uint32_t ret = 0;
 
-	// 测量前准备
+	/* 测量前准备 */
 	MeasureStart();
 
-	// 如果当前正在跟随液位，则直接执行修正
+	/* 如果当前正在跟随液位，则直接执行修正 */
 	if (g_measurement.device_status.device_state == STATE_FLOWOIL) {
 		printf("当前处于液位跟随状态，执行液位修正操作\r\n");
 		CorrectOilLevelProcess();
-		//继续液位跟随
+		/* 继续液位跟随 */
 		ret = FollowOilLevel();
 		SET_ERROR(ret);
 		return;
@@ -760,6 +804,10 @@ static void CMD_CorrectOilLevel(void) {
 		return;
 	}
 }
+/**
+ * @brief 执行测量流程中的 CMD_EnterMaintenanceMode 逻辑。
+ * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ */
 static void CMD_EnterMaintenanceMode(void)
 {
     printf("进入维护模式\n");
@@ -777,7 +825,7 @@ static void CMD_EnterMaintenanceMode(void)
         }
     }
 }
-// 电机上行指令
+/* 电机上行指令 */
 static void CMD_MoveUp(void)
 {
     uint32_t ret = 0;
@@ -798,6 +846,7 @@ static void CMD_MoveUp(void)
         g_measurement.oil_measurement.manual_level_update_inhibit = 0U;
         return;
     }
+    /* 先处理异常边界，避免测量流程状态机带故障继续运行。 */
     if (ret != NO_ERROR) {
         g_measurement.device_status.manual_alarm_inhibit = 0U;
         g_measurement.oil_measurement.manual_level_update_inhibit = 0U;
@@ -809,7 +858,7 @@ static void CMD_MoveUp(void)
     g_measurement.device_status.device_state = STATE_RUNUPOVER;
     return;
 }
-// 电机下行指令
+/* 电机下行指令 */
 static void CMD_MoveDown(void)
 {
     uint32_t ret = 0;
@@ -830,6 +879,7 @@ static void CMD_MoveDown(void)
         g_measurement.oil_measurement.manual_level_update_inhibit = 0U;
         return;
     }
+    /* 先处理异常边界，避免测量流程状态机带故障继续运行。 */
     if (ret != NO_ERROR) {
         g_measurement.device_status.manual_alarm_inhibit = 0U;
         g_measurement.oil_measurement.manual_level_update_inhibit = 0U;
@@ -841,7 +891,7 @@ static void CMD_MoveDown(void)
     g_measurement.device_status.device_state = STATE_RUNDOWNOVER;
     return;
 }
-// 电机强制上行指令（无检测）
+/* 电机强制上行指令（无检测） */
 static void CMD_ForceMoveUp(void)
 {
     uint32_t ret;
@@ -862,6 +912,7 @@ static void CMD_ForceMoveUp(void)
         g_measurement.oil_measurement.manual_level_update_inhibit = 0U;
         return;
     }
+    /* 先处理异常边界，避免测量流程状态机带故障继续运行。 */
     if (ret != NO_ERROR) {
         g_measurement.device_status.manual_alarm_inhibit = 0U;
         g_measurement.oil_measurement.manual_level_update_inhibit = 0U;
@@ -870,14 +921,14 @@ static void CMD_ForceMoveUp(void)
     printf("电机强制上行操作完成\r\n");
     g_measurement.device_status.manual_alarm_inhibit = 0U;
     g_measurement.oil_measurement.manual_level_update_inhibit = 0U;
-//    MotorCtrl_MoveAndWait(
-//            (float)g_deviceParams.motorCommandDistance / 10.0f,
-//            MOTOR_DIRECTION_UP);
+/* MotorCtrl_MoveAndWait( */
+/* (float)g_deviceParams.motorCommandDistance / 10.0f, */
+/* MOTOR_DIRECTION_UP); */
     g_measurement.device_status.device_state = STATE_FORCE_RUNUP_OVER;
     return;
 }
 
-// 电机强制下行指令（无检测）
+/* 电机强制下行指令（无检测） */
 static void CMD_ForceMoveDown(void)
 {
     uint32_t ret;
@@ -898,6 +949,7 @@ static void CMD_ForceMoveDown(void)
         g_measurement.oil_measurement.manual_level_update_inhibit = 0U;
         return;
     }
+    /* 先处理异常边界，避免测量流程状态机带故障继续运行。 */
     if (ret != NO_ERROR) {
         g_measurement.device_status.manual_alarm_inhibit = 0U;
         g_measurement.oil_measurement.manual_level_update_inhibit = 0U;
@@ -910,7 +962,7 @@ static void CMD_ForceMoveDown(void)
     return;
 }
 
-// 强制回零点：只控制电机上行，无检测重量/液位等
+/* 强制回零点：只控制电机上行，无检测重量/液位等 */
 static void CMD_ForceLiftZero(void)
 {
     uint32_t ret;
@@ -920,7 +972,7 @@ static void CMD_ForceLiftZero(void)
 
     /* 长距离上行：不检测称重/丢步，底层可被命令切换打断 */
     ret = MotorCtrl_MoveBlockingNoDetectForceDebug(
-        2000000.0f,  // 300m,
+        2000000.0f,  /* 300m, */
         MOTOR_DIRECTION_UP,
         MotorCtrl_GetDefaultSpeedX100());
     if (ret == STATE_SWITCH) {
@@ -931,7 +983,7 @@ static void CMD_ForceLiftZero(void)
     g_measurement.device_status.device_state = STATE_FORCE_LIFT_ZERO_OVER;
     return;
 }
-// 设置空载称重指令
+/* 设置空载称重指令 */
 static void CMD_SetEmptyWeight(void)
 {
     uint32_t ret = 0;
@@ -946,7 +998,7 @@ static void CMD_SetEmptyWeight(void)
     g_measurement.device_status.device_state = STATE_GET_EMPTYWEIGHT_OVER;
     return;
 }
-// 设置满载称重指令
+/* 设置满载称重指令 */
 static void CMD_SetFullWeight(void)
 {
     uint32_t ret = 0;
@@ -961,6 +1013,10 @@ static void CMD_SetFullWeight(void)
     g_measurement.device_status.device_state = STATE_GET_FULLWEIGHT_OVER;
     return;
 }
+/**
+ * @brief 执行测量流程中的 Wartsila_MoveToMonitorPositionOnly 逻辑。
+ * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ */
 static uint32_t Wartsila_MoveToMonitorPositionOnly(void)
 {
     uint32_t ret = NO_ERROR;
@@ -971,12 +1027,14 @@ static uint32_t Wartsila_MoveToMonitorPositionOnly(void)
     printf("瓦锡兰测后探底\t先回固定点监测位置：%.1fmm，仅移动不读密度\r\n", (double)target_mm);
 
     ret = SinglePoint_CheckTargetPosition("瓦锡兰测后回固定点", g_deviceParams.singlePointMonitoringPosition);
+    /* 先处理异常边界，避免测量流程状态机带故障继续运行。 */
     if (ret != NO_ERROR) {
         return ret;
     }
 
     for (uint32_t attempt = 1U; attempt <= max_attempts; attempt++) {
         ret = MotorCtrl_MoveToPosition(target_mm, MotorCtrl_GetDefaultSpeedX100());
+        /* 先处理异常边界，避免测量流程状态机带故障继续运行。 */
         if ((ret == NO_ERROR) || (ret == STATE_SWITCH)) {
             return ret;
         }
@@ -991,19 +1049,24 @@ static uint32_t Wartsila_MoveToMonitorPositionOnly(void)
     return ret;
 }
 
+/**
+ * @brief 执行测量流程中的 CMD_WartsilaDensitySpread 逻辑。
+ * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ */
 static void CMD_WartsilaDensitySpread(void) {
 	static uint32_t bottom_detect_count = 0; /* 瓦锡兰测量后探底计数，仅运行期累计 */
 	static uint32_t wartsila_measure_total_count = 0; /* 瓦锡兰分布测量完成次数，仅运行期累计 */
 	uint32_t ret = 0;
 	uint32_t bottom_detect_interval = g_deviceParams.wartsila_bottom_detect_interval; /* 本次瓦锡兰测量后的探底频率参数快照 */
 	DensityDistribution temp = {0};
-	// 设置设备状态：分布测量中
+	/* 设置设备状态：分布测量中 */
 	g_measurement.device_status.device_state = STATE_WARTSILA_DENSITY_MEASURING;
 
 	ret = Wartsila_Density_SpreadMeasurement(&temp);
 	if (ret == STATE_SWITCH) {
 		return;
 	}
+	/* 先处理异常边界，避免测量流程状态机带故障继续运行。 */
 	if (ret != NO_ERROR) {
 		printf("瓦锡兰分布测量失败，错误码：0x%08lX，不更新新的有效结果\r\n", (unsigned long)ret);
 		SET_ERROR(ret);
@@ -1019,7 +1082,7 @@ static void CMD_WartsilaDensitySpread(void) {
 		return;
 	}
 	Print_DensitySpreadResult(&temp);
-// 测量结束，状态切换为分布测量完成
+/* 测量结束，状态切换为分布测量完成 */
 	g_measurement.device_status.device_state = STATE_WARTSILA_DENSITY_OVER;
 	printf("瓦锡兰分布测量结果保留8秒，原因：等待CPU3读取结果，期间可切换命令退出\r\n");
 	for (uint32_t remain_s = 8U; remain_s > 0U; remain_s--) {
@@ -1054,9 +1117,11 @@ static void CMD_WartsilaDensitySpread(void) {
             if (ret == STATE_SWITCH) {
                 return;
             }
+            /* 先处理异常边界，避免测量流程状态机带故障继续运行。 */
             if (ret == PARAM_RANGE_ERROR) {
                 SET_ERROR(ret);
             }
+            /* 先处理异常边界，避免测量流程状态机带故障继续运行。 */
             if (ret != NO_ERROR) {
                 g_deviceParams.command = CMD_MONITOR_SINGLE;
                 return;
@@ -1066,6 +1131,7 @@ static void CMD_WartsilaDensitySpread(void) {
             if (ret == STATE_SWITCH) {
                 return;
             }
+            /* 先处理异常边界，避免测量流程状态机带故障继续运行。 */
             if (ret != NO_ERROR) {
                 printf("瓦锡兰测后探底\t罐底测量失败：0x%08lX，退出且不置错误状态\r\n", (unsigned long)ret);
                 g_deviceParams.command = CMD_MONITOR_SINGLE;
@@ -1077,38 +1143,44 @@ static void CMD_WartsilaDensitySpread(void) {
         printf("瓦锡兰测后探底\t测量总次数=%lu | 探底频次=0，不探底\r\n",
                (unsigned long)wartsila_measure_total_count);
     }
-    g_deviceParams.command = CMD_MONITOR_SINGLE; // 切回单点监测状态，继续监测当前液位/密度
+    g_deviceParams.command = CMD_MONITOR_SINGLE; /* 切回单点监测状态，继续监测当前液位/密度 */
 	return;
 }
+/**
+ * @brief 执行测量流程中的 CMD_SyntheticMeasurement 逻辑。
+ * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ */
 static void CMD_SyntheticMeasurement(void) {
 	uint32_t ret = 0;
-	DensityDistribution temp = {0};   // 本次测量结果临时缓存
-	// 设置设备状态：分布测量中
+	DensityDistribution temp = {0};   /* 本次测量结果临时缓存 */
+	/* 设置设备状态：分布测量中 */
 	g_measurement.device_status.device_state = STATE_SYNTHETICING;
 
-    // 1. 先搜索液位
+    /* 1. 先搜索液位 */
     ret = SearchOilLevel();
+    /* 先处理异常边界，避免测量流程状态机带故障继续运行。 */
     if (ret != NO_ERROR) {
         printf("密度分布\t液位搜索失败, 错误码: 0x%08lX\r\n", ret);
         SET_ERROR(ret);
     }
     printf("密度分布\t液位搜索成功\r\n");
 
-    // 2. 切换到密度测量模式
+    /* 2. 切换到密度测量模式 */
     EnableDensityMode();
 
-    // 3. 执行分布密度测量, 结果写入 temp
+    /* 3. 执行分布密度测量, 结果写入 temp */
     ret = Density_MeasureByMode_Exact(DENS_MODE_SPREAD, &temp);
+    /* 先处理异常边界，避免测量流程状态机带故障继续运行。 */
     if (ret != NO_ERROR) {
         printf("普通分布测\t失败，错误码：0x%08lX\r\n", (unsigned long)ret);
         SET_ERROR(ret);
     }
 
 
-    // 4. 测量成功, 写回全局结果
+    /* 4. 测量成功, 写回全局结果 */
     g_measurement.density_distribution = temp;
     Print_DensitySpreadResult(&temp);
-// 测量结束，状态切换为分布测量完成
+/* 测量结束，状态切换为分布测量完成 */
 	g_measurement.device_status.device_state = STATE_SYNTHETICING_OVER;
 
 	return;
@@ -1144,6 +1216,7 @@ static void CMD_RunToPosition(void)
         return;
     }
 
+    /* 先处理异常边界，避免测量流程状态机带故障继续运行。 */
     if (ret != NO_ERROR) {
         printf("运行到指定位置\t失败 错误码：0x%lX\r\n", ret);
         SET_ERROR(ret);

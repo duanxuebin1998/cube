@@ -14,10 +14,10 @@
 #include "weight.h"
 #include "TMC5130.h"
 #include "fault_manager.h"
-// 主程序初始化
+/* 主程序初始化 */
 void App_Init(void);
 
-// 主循环任务
+/* 主循环任务 */
 void App_MainLoop(void);
 
 #endif

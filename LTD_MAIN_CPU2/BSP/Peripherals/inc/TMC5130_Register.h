@@ -8,7 +8,7 @@
 #ifndef TMC5130_REGISTER_H
 #define TMC5130_REGISTER_H
 
-// ===== TMC5130 register set =====
+/* ===== TMC5130 register set ===== */
 
 #define TMC5130_GCONF       0x00
 #define TMC5130_GSTAT       0x01

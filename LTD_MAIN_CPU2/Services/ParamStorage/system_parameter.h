@@ -13,75 +13,75 @@
 
 #include <stdint.h>
 #include <stdbool.h>
-/*无效值*/
-#define UNVALID_LEVEL 999999u // 液位无效值
+/* 无效值 */
+#define UNVALID_LEVEL 999999u /* 液位无效值 */
 #define UNVALID_CURRENT 3.5
-#define LEVEL_DOWNLIMIT 100u               // 盲区液位值
-#define UNVALID_TEMPERATURE_REALTIME 99999 // 实时温度无效值
-#define UNVALID_TEMPERATURE_WIRELESS 9999  // 无线温度无效值
-#define UNVALID_POSITION 0                 // 位置无效值
-#define UNVALID_DENSITY 0                  // 密度无效值
-#define LEVEL_DOWNLIMITWATER 0             // 盲区水位值
-#define UNVALID_VCF 1                      // VCF无效值
-#define UNVALID_TOV 0                      // 体积无效值
-#define UNVALID_GSW 0                      // 质量无效值
+#define LEVEL_DOWNLIMIT 100u               /* 盲区液位值 */
+#define UNVALID_TEMPERATURE_REALTIME 99999 /* 实时温度无效值 */
+#define UNVALID_TEMPERATURE_WIRELESS 9999  /* 无线温度无效值 */
+#define UNVALID_POSITION 0                 /* 位置无效值 */
+#define UNVALID_DENSITY 0                  /* 密度无效值 */
+#define LEVEL_DOWNLIMITWATER 0             /* 盲区水位值 */
+#define UNVALID_VCF 1                      /* VCF无效值 */
+#define UNVALID_TOV 0                      /* 体积无效值 */
+#define UNVALID_GSW 0                      /* 质量无效值 */
 
-#define MAX_MEASUREMENT_POINTS 200 // 密度分布测量最大点数
-#define DEVICE_PROTOCOL_VERSION 7u // CPU2/CPU3共享协议版本；旧程序未写入时默认为0
+#define MAX_MEASUREMENT_POINTS 200 /* 密度分布测量最大点数 */
+#define DEVICE_PROTOCOL_VERSION 7u /* CPU2/CPU3共享协议版本；旧程序未写入时默认为0 */
 #define FAULT_AUTO_RECOVERY_RETRY_DEFAULT 3u
 #define FAULT_AUTO_RECOVERY_RETRY_MAX 10u
 
 
-#define RELAY_ALARM_CHANNEL_COUNT 4u // 当前项目只使用 RELAY1~RELAY4
-#define RELAY_ALARM_FIELD_COUNT   13u // 每路继电器报警输出配置占用的 32 位字段数
+#define RELAY_ALARM_CHANNEL_COUNT 4u /* 当前项目只使用 RELAY1~RELAY4 */
+#define RELAY_ALARM_FIELD_COUNT   13u /* 每路继电器报警输出配置占用的 32 位字段数 */
 
 typedef enum {
-    RELAY_ALARM_OPERATING_DISABLED = 0u,       // 禁用
-    RELAY_ALARM_OPERATING_OUTPUT_PASSIVE = 1u  // 无源输出
+    RELAY_ALARM_OPERATING_DISABLED = 0u,       /* 禁用 */
+    RELAY_ALARM_OPERATING_OUTPUT_PASSIVE = 1u  /* 无源输出 */
 } RelayAlarmOperatingMode;
 
 typedef enum {
-    RELAY_ALARM_DIGITAL_NONE = 0u,       // 无
-    RELAY_ALARM_DIGITAL_H = 1u,          // 高报
-    RELAY_ALARM_DIGITAL_HH = 2u,         // 高高报
-    RELAY_ALARM_DIGITAL_H_OR_HH = 3u,    // 高报或高高报
-    RELAY_ALARM_DIGITAL_L = 4u,          // 低报
-    RELAY_ALARM_DIGITAL_LL = 5u,         // 低低报
-    RELAY_ALARM_DIGITAL_L_OR_LL = 6u,    // 低报或低低报
-    RELAY_ALARM_DIGITAL_ANY = 7u         // 任意报警
+    RELAY_ALARM_DIGITAL_NONE = 0u,       /* 无 */
+    RELAY_ALARM_DIGITAL_H = 1u,          /* 高报 */
+    RELAY_ALARM_DIGITAL_HH = 2u,         /* 高高报 */
+    RELAY_ALARM_DIGITAL_H_OR_HH = 3u,    /* 高报或高高报 */
+    RELAY_ALARM_DIGITAL_L = 4u,          /* 低报 */
+    RELAY_ALARM_DIGITAL_LL = 5u,         /* 低低报 */
+    RELAY_ALARM_DIGITAL_L_OR_LL = 6u,    /* 低报或低低报 */
+    RELAY_ALARM_DIGITAL_ANY = 7u         /* 任意报警 */
 } RelayAlarmDigitalSource;
 
 typedef enum {
-    RELAY_ALARM_CONTACT_NORMALLY_OPEN = 0u,    // 常开
-    RELAY_ALARM_CONTACT_NORMALLY_CLOSED = 1u   // 常闭
+    RELAY_ALARM_CONTACT_NORMALLY_OPEN = 0u,    /* 常开 */
+    RELAY_ALARM_CONTACT_NORMALLY_CLOSED = 1u   /* 常闭 */
 } RelayAlarmContactType;
 
 typedef enum {
-    RELAY_ALARM_MODE_OFF = 0u,       // 关
-    RELAY_ALARM_MODE_ON = 1u,        // 开
-    RELAY_ALARM_MODE_LATCHING = 2u   // 锁存
+    RELAY_ALARM_MODE_OFF = 0u,       /* 关 */
+    RELAY_ALARM_MODE_ON = 1u,        /* 开 */
+    RELAY_ALARM_MODE_LATCHING = 2u   /* 锁存 */
 } RelayAlarmMode;
 
 typedef enum {
-    RELAY_ALARM_ERROR_NO_ALARM = 0u,       // 无报警
-    RELAY_ALARM_ERROR_HH_H = 1u,           // 高高/高报警
-    RELAY_ALARM_ERROR_H = 2u,              // 高报警
-    RELAY_ALARM_ERROR_L = 3u,              // 低报警
-    RELAY_ALARM_ERROR_LL_L = 4u,           // 低低/低报警
-    RELAY_ALARM_ERROR_ALL_ALARMS = 5u      // 全部报警
+    RELAY_ALARM_ERROR_NO_ALARM = 0u,       /* 无报警 */
+    RELAY_ALARM_ERROR_HH_H = 1u,           /* 高高/高报警 */
+    RELAY_ALARM_ERROR_H = 2u,              /* 高报警 */
+    RELAY_ALARM_ERROR_L = 3u,              /* 低报警 */
+    RELAY_ALARM_ERROR_LL_L = 4u,           /* 低低/低报警 */
+    RELAY_ALARM_ERROR_ALL_ALARMS = 5u      /* 全部报警 */
 } RelayAlarmErrorValue;
 
 typedef enum {
-    RELAY_ALARM_SOURCE_TANK_LEVEL = 0u,        // 储罐液位
-    RELAY_ALARM_SOURCE_LIQUID_TEMP = 1u,       // 液相温度
-    RELAY_ALARM_SOURCE_WATER_LEVEL = 2u,       // 水位
-    RELAY_ALARM_SOURCE_DISPLACER_POS = 3u,     // 浮子位置
-    RELAY_ALARM_SOURCE_NONE = 4u               // 无
+    RELAY_ALARM_SOURCE_TANK_LEVEL = 0u,        /* 储罐液位 */
+    RELAY_ALARM_SOURCE_LIQUID_TEMP = 1u,       /* 液相温度 */
+    RELAY_ALARM_SOURCE_WATER_LEVEL = 2u,       /* 水位 */
+    RELAY_ALARM_SOURCE_DISPLACER_POS = 3u,     /* 浮子位置 */
+    RELAY_ALARM_SOURCE_NONE = 4u               /* 无 */
 } RelayAlarmSource;
 
 typedef enum {
-    RELAY_ALARM_STATE_ACTIVE = 0u,     // 激活，保持参考程序 0=激活 的语义
-    RELAY_ALARM_STATE_INACTIVE = 1u    // 未激活
+    RELAY_ALARM_STATE_ACTIVE = 0u,     /* 激活，保持参考程序 0=激活 的语义 */
+    RELAY_ALARM_STATE_INACTIVE = 1u    /* 未激活 */
 } RelayAlarmState;
 
 typedef enum {
@@ -90,29 +90,29 @@ typedef enum {
 } RelayAlarmClearCommand;
 
 typedef struct {
-    uint32_t operating_mode;     // 工作模式
-    uint32_t digital_source;     // 数字量源
-    uint32_t contact_type;       // 接点类型
-    uint32_t alarm_mode;         // 报警模式
-    uint32_t error_value;        // 报警值无效时的故障值策略
-    uint32_t alarm_source;       // 报警值源
-    uint32_t HH_alarm_value;     // 高高报警值，IEEE754 float 原始位
-    uint32_t H_alarm_value;      // 高报警值，IEEE754 float 原始位
-    uint32_t L_alarm_value;      // 低报警值，IEEE754 float 原始位
-    uint32_t LL_alarm_value;     // 低低报警值，IEEE754 float 原始位
-    uint32_t alarm_hysteresis;   // 报警滞回值，IEEE754 float 原始位
-    uint32_t damping_factor;     // 阻尼因子，预留给后续滤波
-    uint32_t clear_alarm;        // 清除锁存报警命令，CPU2 消费后清零
+    uint32_t operating_mode;     /* 工作模式 */
+    uint32_t digital_source;     /* 数字量源 */
+    uint32_t contact_type;       /* 接点类型 */
+    uint32_t alarm_mode;         /* 报警模式 */
+    uint32_t error_value;        /* 报警值无效时的故障值策略 */
+    uint32_t alarm_source;       /* 报警值源 */
+    uint32_t HH_alarm_value;     /* 高高报警值，IEEE754 float 原始位 */
+    uint32_t H_alarm_value;      /* 高报警值，IEEE754 float 原始位 */
+    uint32_t L_alarm_value;      /* 低报警值，IEEE754 float 原始位 */
+    uint32_t LL_alarm_value;     /* 低低报警值，IEEE754 float 原始位 */
+    uint32_t alarm_hysteresis;   /* 报警滞回值，IEEE754 float 原始位 */
+    uint32_t damping_factor;     /* 阻尼因子，预留给后续滤波 */
+    uint32_t clear_alarm;        /* 清除锁存报警命令，CPU2 消费后清零 */
 } RelayAlarmConfig;
 
-// 模式枚举
+/* 模式枚举 */
 typedef enum {
-	DSM_SENSOR = 12,   // 一体机传感器
-	LTD_SENSOR = 13,   // LTD传感器
+	DSM_SENSOR = 12,   /* 一体机传感器 */
+	LTD_SENSOR = 13,   /* LTD传感器 */
 } SENSOR_TYPE;
 
-#define TEMP_TO_RAW(t)  ((uint32_t)((t) * 100.0f + 20000.0f)) //温度存储到寄存器
-#define DENSITY_TO_RAW(d) ((uint32_t)((d) * 10.0f))//密度存储到寄存器
+#define TEMP_TO_RAW(t)  ((uint32_t)((t) * 100.0f + 20000.0f)) /* 温度存储到寄存器 */
+#define DENSITY_TO_RAW(d) ((uint32_t)((d) * 10.0f)) /* 密度存储到寄存器 */
 #define RAW_TO_TEMP(raw)    (((int32_t)(raw) - 20000) / 100.0f)
 #define RAW_TO_DENSITY(raw) ((raw) / 10.0f)
 /**
@@ -127,123 +127,123 @@ typedef enum {
 
 typedef enum {
     /* ==================== 正常状态 ==================== */
-    NO_ERROR = 0,                    // 正常状态
-    STATE_SWITCH = 1,                // 状态切换（非故障）
+    NO_ERROR = 0,                    /* 正常状态 */
+    STATE_SWITCH = 1,                /* 状态切换（非故障） */
 
     /* ==================== 11 电机类故障 (0x000B0000 - 0x000BFFFF) ==================== */
-    MOTOR_FAIL_SETTING = 0x000B0001,             // 电机设置失败
-    MOTOR_UNKNOWN_FEEDBACK = 0x000B0002,         // 未知反馈
-    MOTOR_RESET_FAIL = 0x000B0003,               // 复位失败
-    MOTOR_DISABLED = 0x000B0004,                 // 电机被禁止
-    MOTOR_ALARM_TRIGGERED = 0x000B0005,          // 电机报警
-    MOTOR_STEP_ERROR = 0x000B0006,               // 步进数错误
-    MOTOR_CHARGE_PUMP_UNDER_VOLTAGE = 0x000B0007,// 电荷泵欠压
-    MOTOR_OVERTEMPERATURE = 0x000B0008,          // 电机过温
-    MOTOR_RUN_TIMEOUT = 0x000B0009,              // 电机运行超时
-    MOTOR_TMC_COMM_ERROR = 0x000B000A,           // TMC5130寄存器通信异常
+    MOTOR_FAIL_SETTING = 0x000B0001,             /* 电机设置失败 */
+    MOTOR_UNKNOWN_FEEDBACK = 0x000B0002,         /* 未知反馈 */
+    MOTOR_RESET_FAIL = 0x000B0003,               /* 复位失败 */
+    MOTOR_DISABLED = 0x000B0004,                 /* 电机被禁止 */
+    MOTOR_ALARM_TRIGGERED = 0x000B0005,          /* 电机报警 */
+    MOTOR_STEP_ERROR = 0x000B0006,               /* 步进数错误 */
+    MOTOR_CHARGE_PUMP_UNDER_VOLTAGE = 0x000B0007, /* 电荷泵欠压 */
+    MOTOR_OVERTEMPERATURE = 0x000B0008,          /* 电机过温 */
+    MOTOR_RUN_TIMEOUT = 0x000B0009,              /* 电机运行超时 */
+    MOTOR_TMC_COMM_ERROR = 0x000B000A,           /* TMC5130寄存器通信异常 */
 
     /* ==================== 12 编码器类故障 (0x000C0000 - 0x000CFFFF) ==================== */
-    ENCODER_TIMEOUT = 0x000C0001,                // 编码器通信超时
-    ENCODER_PARITY_ERROR = 0x000C0002,           // 校验失败
-    ENCODER_LOST_STEP = 0x000C0003,              // 编码器丢步
-    ENCODER_INVALID_DATA = 0x000C0004,           // 持续无效数据
-    ENCODER_POWERON_FAIL = 0x000C0005,           // 上电初始化失败
-    ENCODER_POWERON_CHANGE = 0x000C0006,         // 上电编码值变化
-    ENCODER_CORDIC_OVERFLOW = 0x000C0007,        // CORDIC 溢出
-    ENCODER_LINEARITY_WARNING = 0x000C0008,      // 线性度报警
-    ENCODER_DIFF_EXCESS = 0x000C0009,            // 相邻编码差值过大
-    ENCODER_OCF_INCOMPLETE = 0x000C000A,         // OCF 未完成
+    ENCODER_TIMEOUT = 0x000C0001,                /* 编码器通信超时 */
+    ENCODER_PARITY_ERROR = 0x000C0002,           /* 校验失败 */
+    ENCODER_LOST_STEP = 0x000C0003,              /* 编码器丢步 */
+    ENCODER_INVALID_DATA = 0x000C0004,           /* 持续无效数据 */
+    ENCODER_POWERON_FAIL = 0x000C0005,           /* 上电初始化失败 */
+    ENCODER_POWERON_CHANGE = 0x000C0006,         /* 上电编码值变化 */
+    ENCODER_CORDIC_OVERFLOW = 0x000C0007,        /* CORDIC 溢出 */
+    ENCODER_LINEARITY_WARNING = 0x000C0008,      /* 线性度报警 */
+    ENCODER_DIFF_EXCESS = 0x000C0009,            /* 相邻编码差值过大 */
+    ENCODER_OCF_INCOMPLETE = 0x000C000A,         /* OCF 未完成 */
 
     /* ==================== 13 传感器类故障 (0x000D0000 - 0x000DFFFF) ==================== */
-    SENSOR_BCC_ERROR = 0x000D0001,               // 数据校验错误
-    SONIC_FREQ_ABNORMAL = 0x000D0002,            // 震动管频率异常
-	SENSOR_DEVICE_COMM_TIMEOUT = 0x000D0003,     // 设备通信超时（按上下文映射为主机/从机/传感器）
-    DENSITY_INVALID = 0x000D0004,                // 密度值异常
-    SENSOR_TEMPERATURE_ERROR = 0x000D0005,       // 温度异常
-    SENSOR_VOLTAGE_ERROR = 0x000D0006,           // 电压异常
-    SLIPRING_COMM_FAIL = 0x000D0007,             // 无线滑环通信失败
-    SLIPRING_BCC_ERROR = 0x000D0008,             // 无线滑环校验错误
-    SLIPRING_PACKET_LOSS = 0x000D0009,           // 数据包丢失
-    SLIPRING_SIGNAL_WEAK = 0x000D000A,           // 信号强度不足
-    SENSOR_RESP_FORMAT_ERROR = 0x000D000B,       // 传感器响应格式错误
-	DENSITY_UNSTABLE = 0x000D000C,               // 密度值不稳定
-    SENSOR_DEVICE_REPORTED_ERROR = 0x000D000D,   // 传感器返回设备内部错误
-    WIRELESS_HOST_COMM_TIMEOUT = 0x000D0010,     // 与无线主机通信无响应
-    WIRELESS_SLAVE_COMM_TIMEOUT = 0x000D0011,    // 与无线从机通信无响应
+    SENSOR_BCC_ERROR = 0x000D0001,               /* 数据校验错误 */
+    SONIC_FREQ_ABNORMAL = 0x000D0002,            /* 震动管频率异常 */
+	SENSOR_DEVICE_COMM_TIMEOUT = 0x000D0003,     /* 设备通信超时（按上下文映射为主机/从机/传感器） */
+    DENSITY_INVALID = 0x000D0004,                /* 密度值异常 */
+    SENSOR_TEMPERATURE_ERROR = 0x000D0005,       /* 温度异常 */
+    SENSOR_VOLTAGE_ERROR = 0x000D0006,           /* 电压异常 */
+    SLIPRING_COMM_FAIL = 0x000D0007,             /* 无线滑环通信失败 */
+    SLIPRING_BCC_ERROR = 0x000D0008,             /* 无线滑环校验错误 */
+    SLIPRING_PACKET_LOSS = 0x000D0009,           /* 数据包丢失 */
+    SLIPRING_SIGNAL_WEAK = 0x000D000A,           /* 信号强度不足 */
+    SENSOR_RESP_FORMAT_ERROR = 0x000D000B,       /* 传感器响应格式错误 */
+	DENSITY_UNSTABLE = 0x000D000C,               /* 密度值不稳定 */
+    SENSOR_DEVICE_REPORTED_ERROR = 0x000D000D,   /* 传感器返回设备内部错误 */
+    WIRELESS_HOST_COMM_TIMEOUT = 0x000D0010,     /* 与无线主机通信无响应 */
+    WIRELESS_SLAVE_COMM_TIMEOUT = 0x000D0011,    /* 与无线从机通信无响应 */
     /* ==================== 测量过程故障 (0x000F0000 - 0x000FFFFF) ==================== */
-    MEASUREMENT_POSITION_ERROR = 0x000F0001,     // 位置测量错误
-    MEASUREMENT_TIMEOUT = 0x000F0002,            // 测量超时
-    MEASUREMENT_ZERO_OUT_OF_RANGE = 0x000F0003,  // 零点超限
-    MEASUREMENT_ZERO_REPEAT_FAIL = 0x000F0005,   // 零点重复性差
-    MEASUREMENT_HEIGHT_DEVIATION = 0x000F0006,   // 实高偏差过大
-    MEASUREMENT_OILLEVEL_HIGH = 0x000F0007,      // 液位超过罐高
-    MEASUREMENT_OILLEVEL_LOW = 0x000F0008,       // 下行未找到液位
-    MEASUREMENT_OILLEVEL_NOTFOUND = 0x000F0009,  // 上行未找到液位
-    MEASUREMENT_WEIGHT_DOWN_FAIL = 0x000F000A,   // 下行寻重失败
-    MEASUREMENT_WEIGHT_UP_FAIL = 0x000F000B,     // 上行寻重失败
-	MEASUREMENT_WATERLEVEL_LOW = 0x000F000C,       // 下行未找到水位
-    MEASUREMENT_OVERSPEED = 0x000F000F,          // 液位变化过快
-    MEASUREMENT_DENSITY_NO_VALID_POINT = 0x000F0010, // 密度测量无有效测点
-    MEASUREMENT_DENSITY_SURFACE_NOTFOUND = 0x000F0011, // 密度测量未找到油面
-    MEASUREMENT_DENSITY_RANGE_INVALID = 0x000F0012, // 密度测量范围异常
+    MEASUREMENT_POSITION_ERROR = 0x000F0001,     /* 位置测量错误 */
+    MEASUREMENT_TIMEOUT = 0x000F0002,            /* 测量超时 */
+    MEASUREMENT_ZERO_OUT_OF_RANGE = 0x000F0003,  /* 零点超限 */
+    MEASUREMENT_ZERO_REPEAT_FAIL = 0x000F0005,   /* 零点重复性差 */
+    MEASUREMENT_HEIGHT_DEVIATION = 0x000F0006,   /* 实高偏差过大 */
+    MEASUREMENT_OILLEVEL_HIGH = 0x000F0007,      /* 液位超过罐高 */
+    MEASUREMENT_OILLEVEL_LOW = 0x000F0008,       /* 下行未找到液位 */
+    MEASUREMENT_OILLEVEL_NOTFOUND = 0x000F0009,  /* 上行未找到液位 */
+    MEASUREMENT_WEIGHT_DOWN_FAIL = 0x000F000A,   /* 下行寻重失败 */
+    MEASUREMENT_WEIGHT_UP_FAIL = 0x000F000B,     /* 上行寻重失败 */
+	MEASUREMENT_WATERLEVEL_LOW = 0x000F000C,       /* 下行未找到水位 */
+    MEASUREMENT_OVERSPEED = 0x000F000F,          /* 液位变化过快 */
+    MEASUREMENT_DENSITY_NO_VALID_POINT = 0x000F0010, /* 密度测量无有效测点 */
+    MEASUREMENT_DENSITY_SURFACE_NOTFOUND = 0x000F0011, /* 密度测量未找到油面 */
+    MEASUREMENT_DENSITY_RANGE_INVALID = 0x000F0012, /* 密度测量范围异常 */
 
     /* ==================== 参数存储类故障 (0x00110000 - 0x0011FFFF) ==================== */
-    PARAM_EEPROM_FAIL = 0x00110001,              // EEPROM 写入失败
-    PARAM_UNINITIALIZED = 0x00110002,            // 参数未初始化
-    PARAM_RANGE_ERROR = 0x00110003,              // 参数超限
-    PARAM_ADDRESS_OVERFLOW = 0x00110004,         // 地址越界
-    PARAM_CRC_ERROR = 0x00110005,                // 参数 CRC 错误
-	PARAM_ERROR = 0x00110006,                // 程序内参数调用错误
+    PARAM_EEPROM_FAIL = 0x00110001,              /* EEPROM 写入失败 */
+    PARAM_UNINITIALIZED = 0x00110002,            /* 参数未初始化 */
+    PARAM_RANGE_ERROR = 0x00110003,              /* 参数超限 */
+    PARAM_ADDRESS_OVERFLOW = 0x00110004,         /* 地址越界 */
+    PARAM_CRC_ERROR = 0x00110005,                /* 参数 CRC 错误 */
+	PARAM_ERROR = 0x00110006,                /* 程序内参数调用错误 */
     /* ==================== 称重类故障 (0x00120000 - 0x0012FFFF) ==================== */
-    WEIGHT_OUT_OF_RANGE = 0x00120001,            // 称重超上限
-    WEIGHT_UNDER_RANGE = 0x00120002,             // 称重超下限
-    WEIGHT_COLLISION_DETECTED = 0x00120003,      // 检测到碰撞
-    WEIGHT_DRIFT_ERROR = 0x00120004,             // 称重漂移异常
-    WEIGHT_SENSOR_SATURATION = 0x00120005,       // 传感器饱和
-    WEIGHT_COMM_TIMEOUT = 0x00120006,            // 称重通信超时
+    WEIGHT_OUT_OF_RANGE = 0x00120001,            /* 称重超上限 */
+    WEIGHT_UNDER_RANGE = 0x00120002,             /* 称重超下限 */
+    WEIGHT_COLLISION_DETECTED = 0x00120003,      /* 检测到碰撞 */
+    WEIGHT_DRIFT_ERROR = 0x00120004,             /* 称重漂移异常 */
+    WEIGHT_SENSOR_SATURATION = 0x00120005,       /* 传感器饱和 */
+    WEIGHT_COMM_TIMEOUT = 0x00120006,            /* 称重通信超时 */
 
     /* ==================== 其他错误 (0x00130000 - 0x0013FFFF) ==================== */
-    OTHER_UNKNOWN_ERROR = 0x00130001,            // 未知故障
-    OTHER_ADDRESS_READ_ERROR = 0x00130002,       // 地址读取错误
-    OTHER_POWER_FLUCTUATION = 0x00130003,        // 电源波动异常
-    OTHER_PERIPHERAL_CONFIG_ERROR = 0x00130004   // 外设配置错误
+    OTHER_UNKNOWN_ERROR = 0x00130001,            /* 未知故障 */
+    OTHER_ADDRESS_READ_ERROR = 0x00130002,       /* 地址读取错误 */
+    OTHER_POWER_FLUCTUATION = 0x00130003,        /* 电源波动异常 */
+    OTHER_PERIPHERAL_CONFIG_ERROR = 0x00130004   /* 外设配置错误 */
 
 } ErrorCode;
 
-/*测量命令*/
-/*测量命令*/
+/* 测量命令 */
+/* 测量命令 */
 typedef enum {
 
     /* ======================= 基础 ======================= */
-    CMD_NONE                       = 0,    // 无命令
+    CMD_NONE                       = 0,    /* 无命令 */
 
     /* ======================= 普通指令（测量类 1~99） ======================= */
 
     /* --- 基础测量动作 --- */
-    CMD_BACK_ZERO                  = 1,    // 回零点
-    CMD_FIND_OIL                   = 2,    // 寻找液位
-    CMD_FIND_WATER                 = 3,    // 寻找水位
-    CMD_FIND_BOTTOM                = 4,    // 寻找罐底
+    CMD_BACK_ZERO                  = 1,    /* 回零点 */
+    CMD_FIND_OIL                   = 2,    /* 寻找液位 */
+    CMD_FIND_WATER                 = 3,    /* 寻找水位 */
+    CMD_FIND_BOTTOM                = 4,    /* 寻找罐底 */
 
-    CMD_MEASURE_SINGLE             = 5,    // 单点测量
-    CMD_MONITOR_SINGLE             = 6,    // 单点监测
-    CMD_SYNTHETIC                  = 7,    // 综合测量
+    CMD_MEASURE_SINGLE             = 5,    /* 单点测量 */
+    CMD_MONITOR_SINGLE             = 6,    /* 单点监测 */
+    CMD_SYNTHETIC                  = 7,    /* 综合测量 */
 
     /* --- 跟随 / 运动控制类（新增，建议 8~9 占位） --- */
-    CMD_FOLLOW_WATER               = 8,    // 水位跟随（新增）
-    CMD_RUN_TO_POSITION            = 9,    // 电机运行到指定位置（新增）
+    CMD_FOLLOW_WATER               = 8,    /* 水位跟随（新增） */
+    CMD_RUN_TO_POSITION            = 9,    /* 电机运行到指定位置（新增） */
 
     /* --- 密度分布测量（整个系列，与普通液位分布区分） --- */
-    CMD_MEASURE_DISTRIBUTED        = 10,   // 普通分布测量
-    CMD_GB_MEASURE_DISTRIBUTED     = 11,   // 国标分布测量
+    CMD_MEASURE_DISTRIBUTED        = 10,   /* 普通分布测量 */
+    CMD_GB_MEASURE_DISTRIBUTED     = 11,   /* 国标分布测量 */
 
-    CMD_MEASURE_DENSITY_METER      = 12,   // 密度每米测量
-    CMD_MEASURE_DENSITY_RANGE      = 13,   // 区间密度测量
-    CMD_WARTSILA_DENSITY_RANGE     = 14,   // 瓦西莱密度区间测量
+    CMD_MEASURE_DENSITY_METER      = 12,   /* 密度每米测量 */
+    CMD_MEASURE_DENSITY_RANGE      = 13,   /* 区间密度测量 */
+    CMD_WARTSILA_DENSITY_RANGE     = 14,   /* 瓦西莱密度区间测量 */
 
     /* --- 参数读取类（新增，放在 15，避免占用你后续密度扩展） --- */
-    CMD_READ_PART_PARAMS           = 15,   // 读取部件参数（新增）
-    CMD_CANCEL_MEASUREMENT         = 16,   // 取消当前测量并进入待机
+    CMD_READ_PART_PARAMS           = 15,   /* 读取部件参数（新增） */
+    CMD_CANCEL_MEASUREMENT         = 16,   /* 取消当前测量并进入待机 */
 
     /* 普通指令预留 */
     CMD_RESERVED_CMD1              = 20,
@@ -252,171 +252,171 @@ typedef enum {
 
     /* ======================= 调试/强制指令（100~199） ======================= */
 
-    CMD_DEBUG_MODE                 = 100,  // 进入调试模式
+    CMD_DEBUG_MODE                 = 100,  /* 进入调试模式 */
 
-    CMD_CALIBRATE_ZERO             = 101,  // 标定零点
-    CMD_CALIBRATE_OIL              = 102,  // 标定液位
-    CMD_CORRECT_OIL                = 103,  // 修正液位
+    CMD_CALIBRATE_ZERO             = 101,  /* 标定零点 */
+    CMD_CALIBRATE_OIL              = 102,  /* 标定液位 */
+    CMD_CORRECT_OIL                = 103,  /* 修正液位 */
 
-    CMD_MOVE_UP                    = 104,  // 上行
-    CMD_MOVE_DOWN                  = 105,  // 下行
+    CMD_MOVE_UP                    = 104,  /* 上行 */
+    CMD_MOVE_DOWN                  = 105,  /* 下行 */
 
-    CMD_SET_EMPTY_WEIGHT           = 106,  // 设置空载称重
-    CMD_SET_FULL_WEIGHT            = 107,  // 设置满载称重
-    CMD_RESTORE_FACTORY            = 108,  // 恢复出厂设置
-    CMD_MAINTENANCE_MODE           = 109,  // 维护模式
+    CMD_SET_EMPTY_WEIGHT           = 106,  /* 设置空载称重 */
+    CMD_SET_FULL_WEIGHT            = 107,  /* 设置满载称重 */
+    CMD_RESTORE_FACTORY            = 108,  /* 恢复出厂设置 */
+    CMD_MAINTENANCE_MODE           = 109,  /* 维护模式 */
 
     /* --- 强制运动 / 强制位置类（新增） --- */
-    CMD_FORCE_MOVE_UP              = 113,  // 电机强制上行（新增）
-    CMD_FORCE_MOVE_DOWN            = 114,  // 电机强制下行（新增）
-    CMD_FORCE_LIFT_ZERO            = 115,  // 强制提零点（新增）
+    CMD_FORCE_MOVE_UP              = 113,  /* 电机强制上行（新增） */
+    CMD_FORCE_MOVE_DOWN            = 114,  /* 电机强制下行（新增） */
+    CMD_FORCE_LIFT_ZERO            = 115,  /* 强制提零点（新增） */
 
     /* --- 水位标定（新增，建议归类到标定类） --- */
-    CMD_CALIBRATE_WATER            = 116,  // 水位标定（新增）
+    CMD_CALIBRATE_WATER            = 116,  /* 水位标定（新增） */
 
     /* 调试预留 */
-    CMD_CALIBRATE_TANKHEIGHT       = 110,  // 罐高标定
+    CMD_CALIBRATE_TANKHEIGHT       = 110,  /* 罐高标定 */
     CMD_RESERVED_CMD5              = 111,
     CMD_RESERVED_CMD6              = 112,
-    CMD_PAIR_NEAREST_WIRELESS_SLIPRING = 117, // 匹配最近无线滑环
+    CMD_PAIR_NEAREST_WIRELESS_SLIPRING = 117, /* 匹配最近无线滑环 */
 
     /* ======================= 其他 ======================= */
-    CMD_UNKNOWN                    = 255   // 未知命令
+    CMD_UNKNOWN                    = 255   /* 未知命令 */
 
 } CommandType;
 typedef enum {
-    CMD_NONE_DEF                       = 0,    // 无命令
-    CMD_BACK_ZERO_DEF                  = 1,    // 回零点
-    CMD_FIND_OIL_DEF                   = 2,    // 寻找液位
-    CMD_MONITOR_SINGLE_DEF             = 3,    // 单点监测
-    CMD_FOLLOW_WATER_DEF               = 4,    // 水位跟随（新增）
+    CMD_NONE_DEF                       = 0,    /* 无命令 */
+    CMD_BACK_ZERO_DEF                  = 1,    /* 回零点 */
+    CMD_FIND_OIL_DEF                   = 2,    /* 寻找液位 */
+    CMD_MONITOR_SINGLE_DEF             = 3,    /* 单点监测 */
+    CMD_FOLLOW_WATER_DEF               = 4,    /* 水位跟随（新增） */
 } DefaultCommandType;
 
-/*设备状态*/
+/* 设备状态 */
 typedef enum {
-    STATE_STANDBY = 0x0000,                   // 待机状态
-    STATE_INIT = 0x0001,                      // 初始化状态
-    STATE_BACKZEROING = 0x0002,               // 回零点中
-    STATE_FINDZEROING = 0x0010,               // 标定零点中
-    STATE_SINGLEPOINTING = 0x0011,            // 单点测量中
-    STATE_RUNTOPOINTING = 0x0012,             // 运行到测量点中
-    STATE_GB_SPREADPOINTING = 0x0013,         // 国标分布测量中
-    STATE_SPREADPOINTING = 0x0014,            // 分布测量中
-    STATE_CALIBRATIONOILING = 0x0015,         // 标定液位
-    STATE_READPARAMETERING = 0x0016,          // 读取参数中
-    STATE_RUNUPING = 0x0017,                  // 向上运行中
-    STATE_RUNDOWNING = 0x0018,                // 向下运行中
-    STATE_SETZEROCIRCLING = 0x0019,           // 设置零点编码值
-    STATE_SETZEROANGLING = 0x001A,            // 设置零点编码值
-    STATE_EFACTORYSETTING_RESTORING = 0x001B, // 恢复出厂设置中
-    STATE_BACKUPING = 0x001C,                 // 备份配置文件中
-    STATE_RESTORYING = 0x001D,                // 恢复配置文件中
-    STATE_FINDOIL = 0x001E,                   // 寻找液位中
-    STATE_FINDWATER = 0x001F,                 // 寻找水位中
-    STATE_FINDBOTTOM = 0x0020,                // 寻找罐底中
-    STATE_FORCEZERO = 0x0021,                 // 设置电机零点中
-    STATE_ONTANKOPRATIONING = 0x0022,         // 罐上仪表操作中
-    STATE_SYNTHETICING = 0x0023,              // 综合指令中
+    STATE_STANDBY = 0x0000,                   /* 待机状态 */
+    STATE_INIT = 0x0001,                      /* 初始化状态 */
+    STATE_BACKZEROING = 0x0002,               /* 回零点中 */
+    STATE_FINDZEROING = 0x0010,               /* 标定零点中 */
+    STATE_SINGLEPOINTING = 0x0011,            /* 单点测量中 */
+    STATE_RUNTOPOINTING = 0x0012,             /* 运行到测量点中 */
+    STATE_GB_SPREADPOINTING = 0x0013,         /* 国标分布测量中 */
+    STATE_SPREADPOINTING = 0x0014,            /* 分布测量中 */
+    STATE_CALIBRATIONOILING = 0x0015,         /* 标定液位 */
+    STATE_READPARAMETERING = 0x0016,          /* 读取参数中 */
+    STATE_RUNUPING = 0x0017,                  /* 向上运行中 */
+    STATE_RUNDOWNING = 0x0018,                /* 向下运行中 */
+    STATE_SETZEROCIRCLING = 0x0019,           /* 设置零点编码值 */
+    STATE_SETZEROANGLING = 0x001A,            /* 设置零点编码值 */
+    STATE_EFACTORYSETTING_RESTORING = 0x001B, /* 恢复出厂设置中 */
+    STATE_BACKUPING = 0x001C,                 /* 备份配置文件中 */
+    STATE_RESTORYING = 0x001D,                /* 恢复配置文件中 */
+    STATE_FINDOIL = 0x001E,                   /* 寻找液位中 */
+    STATE_FINDWATER = 0x001F,                 /* 寻找水位中 */
+    STATE_FINDBOTTOM = 0x0020,                /* 寻找罐底中 */
+    STATE_FORCEZERO = 0x0021,                 /* 设置电机零点中 */
+    STATE_ONTANKOPRATIONING = 0x0022,         /* 罐上仪表操作中 */
+    STATE_SYNTHETICING = 0x0023,              /* 综合指令中 */
 
     /* ===================== LTD / 新增测量中状态（顺延） ===================== */
-    STATE_FOLLOW_WATER_POINT_SEARCHING = 0x0024, // 寻找水位跟随点中
-    STATE_METER_DENSITY = 0x0025,              // 密度每米测量中
-    STATE_INTERVAL_DENSITY = 0x0026,           // 液位区间测量中
-    STATE_GET_FULLWEIGHT = 0x0027,             // 获取满载称重中
-    STATE_GET_EMPTYWEIGHT = 0x0028,            // 获取空载称重中
-    STATE_MAINTENANCEMODE = 0x0029,            // 维护模式中
-    STATE_WARTSILA_DENSITY_START = 0x002A,     // 瓦西莱密度梯度测量开始
-    STATE_WARTSILA_DENSITY_MEASURING = 0x002B, // 瓦西莱密度梯度测量中
-    STATE_RUN_TO_POSITIONING = 0x002C,         // 运行到指定位置中
-    STATE_FORCE_RUNUPING = 0x002D,             // 电机强制上行中
-    STATE_FORCE_RUNDOWNING = 0x002E,           // 电机强制下行中
-    STATE_FORCE_LIFT_ZEROING = 0x002F,         // 强制提零点中
-    STATE_CALIBRATE_WATERING = 0x0030,         // 水位标定中
-    STATE_CALIBRATE_TANKHEIGHTING = 0x0031,     // 罐高标定中
-    STATE_WIRELESS_PAIRING = 0x0032,             // 无线滑环匹配中
-    STATE_DEBUG_MODE = 0x0033,                   // 调试模式中
+    STATE_FOLLOW_WATER_POINT_SEARCHING = 0x0024, /* 寻找水位跟随点中 */
+    STATE_METER_DENSITY = 0x0025,              /* 密度每米测量中 */
+    STATE_INTERVAL_DENSITY = 0x0026,           /* 液位区间测量中 */
+    STATE_GET_FULLWEIGHT = 0x0027,             /* 获取满载称重中 */
+    STATE_GET_EMPTYWEIGHT = 0x0028,            /* 获取空载称重中 */
+    STATE_MAINTENANCEMODE = 0x0029,            /* 维护模式中 */
+    STATE_WARTSILA_DENSITY_START = 0x002A,     /* 瓦西莱密度梯度测量开始 */
+    STATE_WARTSILA_DENSITY_MEASURING = 0x002B, /* 瓦西莱密度梯度测量中 */
+    STATE_RUN_TO_POSITIONING = 0x002C,         /* 运行到指定位置中 */
+    STATE_FORCE_RUNUPING = 0x002D,             /* 电机强制上行中 */
+    STATE_FORCE_RUNDOWNING = 0x002E,           /* 电机强制下行中 */
+    STATE_FORCE_LIFT_ZEROING = 0x002F,         /* 强制提零点中 */
+    STATE_CALIBRATE_WATERING = 0x0030,         /* 水位标定中 */
+    STATE_CALIBRATE_TANKHEIGHTING = 0x0031,     /* 罐高标定中 */
+    STATE_WIRELESS_PAIRING = 0x0032,             /* 无线滑环匹配中 */
+    STATE_DEBUG_MODE = 0x0033,                   /* 调试模式中 */
 
     /* ===================== 完成态（0x80xx） ===================== */
-    STATE_FINDZEROOVER = 0x8010,               // 标定零点完成
-    STATE_SINGLEPOINTOVER = 0x8011,            // 单点测量完成
-    STATE_SPTESTING = 0x8012,                  // 正在单点检测
-    STATE_GB_SPREADPOINTOVER = 0x8013,         // 国标分布测量完成
-    STATE_SPREADPOINTOVER = 0x8014,            // 分布测量完成
-    STATE_FINDOILOVER = 0x8015,                // 标定液位完成
-    STATE_READPARAMETEROVER = 0x8016,          // 读取参数完成
-    STATE_RUNUPOVER = 0x8017,                  // 向上运行完成
-    STATE_RUNDOWNOVER = 0x8018,                // 向下运行完成
-    STATE_SETZEROCIRCLOVER = 0x8019,           // 设置零点编码值完成
-    STATE_SETZEROANGLOVER = 0x801A,            // 设置零点编码值完成
-    STATE_EFACTORYSETTING_RESTOROVER = 0x801B, // 恢复出厂设置完成
-    STATE_BACKUPOVER = 0x801C,                 // 备份配置文件完成
-    STATE_RESTORYOVER = 0x801D,                // 恢复配置文件完成
-    STATE_FLOWOIL = 0x801E,                    // 液位跟随中（旧逻辑）
-    STATE_FINDWATER_OVER = 0x801F,             // 寻找水位完成
-    STATE_FINDBOTTOM_OVER = 0x8020,            // 寻找罐底完成
-    STATE_FORCEZERO_OVER = 0x8021,             // 设置电机零点完成
-    STATE_ONTANKOPRATIONCOMPLATE = 0x8022,     // 罐上仪表操作完成
-    STATE_SYNTHETICING_OVER = 0x8023,          // 综合指令完成
+    STATE_FINDZEROOVER = 0x8010,               /* 标定零点完成 */
+    STATE_SINGLEPOINTOVER = 0x8011,            /* 单点测量完成 */
+    STATE_SPTESTING = 0x8012,                  /* 正在单点检测 */
+    STATE_GB_SPREADPOINTOVER = 0x8013,         /* 国标分布测量完成 */
+    STATE_SPREADPOINTOVER = 0x8014,            /* 分布测量完成 */
+    STATE_FINDOILOVER = 0x8015,                /* 标定液位完成 */
+    STATE_READPARAMETEROVER = 0x8016,          /* 读取参数完成 */
+    STATE_RUNUPOVER = 0x8017,                  /* 向上运行完成 */
+    STATE_RUNDOWNOVER = 0x8018,                /* 向下运行完成 */
+    STATE_SETZEROCIRCLOVER = 0x8019,           /* 设置零点编码值完成 */
+    STATE_SETZEROANGLOVER = 0x801A,            /* 设置零点编码值完成 */
+    STATE_EFACTORYSETTING_RESTOROVER = 0x801B, /* 恢复出厂设置完成 */
+    STATE_BACKUPOVER = 0x801C,                 /* 备份配置文件完成 */
+    STATE_RESTORYOVER = 0x801D,                /* 恢复配置文件完成 */
+    STATE_FLOWOIL = 0x801E,                    /* 液位跟随中（旧逻辑） */
+    STATE_FINDWATER_OVER = 0x801F,             /* 寻找水位完成 */
+    STATE_FINDBOTTOM_OVER = 0x8020,            /* 寻找罐底完成 */
+    STATE_FORCEZERO_OVER = 0x8021,             /* 设置电机零点完成 */
+    STATE_ONTANKOPRATIONCOMPLATE = 0x8022,     /* 罐上仪表操作完成 */
+    STATE_SYNTHETICING_OVER = 0x8023,          /* 综合指令完成 */
 
     /* ===================== LTD / 新增完成态 ===================== */
-    STATE_FOLLOW_WATERING = 0x8024,            // 水位跟随中（沿用0x80xx状态码）
-    STATE_COM_METER_DENSITY_OVER = 0x8025,      // 密度每米测量完成
-    STATE_INTERVAL_DENSITY_OVER = 0x8026,       // 液位区间测量完成
-    STATE_GET_FULLWEIGHT_OVER = 0x8027,         // 获取满载称重完成
-    STATE_GET_EMPTYWEIGHT_OVER = 0x8028,        // 获取空载称重完成
-    STATE_WARTSILA_DENSITY_OVER = 0x8029,       // 瓦西莱密度梯度测量完成
-    STATE_RUN_TO_POSITION_OVER = 0x802C,        // 运行到指定位置完成
-    STATE_FORCE_RUNUP_OVER = 0x802D,            // 强制上行完成
-    STATE_FORCE_RUNDOWN_OVER = 0x802E,          // 强制下行完成
-    STATE_FORCE_LIFT_ZERO_OVER = 0x802F,        // 强制提零点完成
-    STATE_CALIBRATE_WATER_OVER = 0x8030,        // 水位标定完成
-    STATE_CALIBRATE_TANKHEIGHT_OVER = 0x8031,   // 罐高标定完成
-    STATE_WIRELESS_PAIRING_OVER = 0x8032,        // 无线滑环匹配完成
+    STATE_FOLLOW_WATERING = 0x8024,            /* 水位跟随中（沿用0x80xx状态码） */
+    STATE_COM_METER_DENSITY_OVER = 0x8025,      /* 密度每米测量完成 */
+    STATE_INTERVAL_DENSITY_OVER = 0x8026,       /* 液位区间测量完成 */
+    STATE_GET_FULLWEIGHT_OVER = 0x8027,         /* 获取满载称重完成 */
+    STATE_GET_EMPTYWEIGHT_OVER = 0x8028,        /* 获取空载称重完成 */
+    STATE_WARTSILA_DENSITY_OVER = 0x8029,       /* 瓦西莱密度梯度测量完成 */
+    STATE_RUN_TO_POSITION_OVER = 0x802C,        /* 运行到指定位置完成 */
+    STATE_FORCE_RUNUP_OVER = 0x802D,            /* 强制上行完成 */
+    STATE_FORCE_RUNDOWN_OVER = 0x802E,          /* 强制下行完成 */
+    STATE_FORCE_LIFT_ZERO_OVER = 0x802F,        /* 强制提零点完成 */
+    STATE_CALIBRATE_WATER_OVER = 0x8030,        /* 水位标定完成 */
+    STATE_CALIBRATE_TANKHEIGHT_OVER = 0x8031,   /* 罐高标定完成 */
+    STATE_WIRELESS_PAIRING_OVER = 0x8032,        /* 无线滑环匹配完成 */
 
-    STATE_ERROR = 0xFFFF                        // 故障
+    STATE_ERROR = 0xFFFF                        /* 故障 */
 } DeviceState;
 
 
 /* 设备状态结构体 */
 typedef struct {
-	/*---- 设备核心状态 ----*/
-	uint32_t work_mode;          // 工作模式（0:工作模式 1.调试模式 78.解锁模式）
-	DeviceState device_state;    // 设备运行状态
-	uint32_t error_code;         // 当前错误码（0表示无错误）
-	CommandType current_command; // 当前指令
+	/* ---- 设备核心状态 ---- */
+	uint32_t work_mode;          /* 工作模式（0:工作模式 1.调试模式 78.解锁模式） */
+	DeviceState device_state;    /* 设备运行状态 */
+	uint32_t error_code;         /* 当前错误码（0表示无错误） */
+	CommandType current_command; /* 当前指令 */
 
-	/*---- 标志位 ----*/
-	uint32_t zero_point_status; // 零点状态（0-正常 1-需要回零）
-	uint32_t parameter_update_flag; // parameter update flag
-    uint32_t loading_unloading_active;        ///< 装卸液过程标志，供 CPU3/SI7000 判断工况
-    uint32_t manual_alarm_inhibit;            ///< 手动/强制动作期间报警抑制，避免误判为自动测量报警
+	/* ---- 标志位 ---- */
+	uint32_t zero_point_status; /* 零点状态（0-正常 1-需要回零） */
+	uint32_t parameter_update_flag; /* parameter update flag */
+    uint32_t loading_unloading_active;        /* /< 装卸液过程标志，供 CPU3/SI7000 判断工况 */
+    uint32_t manual_alarm_inhibit;            /* /< 手动/强制动作期间报警抑制，避免误判为自动测量报警 */
 } DeviceStatus;
-// 单点密度数据
+/* 单点密度数据 */
 typedef struct {
-	uint32_t temperature;          ///< 温度
-	uint32_t density;              ///< 密度
-	uint32_t temperature_position; ///< 温度密度位置
-	uint32_t standard_density;     ///< 标准密度
-	uint32_t vcf20;                ///< 体积修正系数 (VCF20)
-	uint32_t weight_density;       ///< 计重密度
+	uint32_t temperature;          /* /< 温度 */
+	uint32_t density;              /* /< 密度 */
+	uint32_t temperature_position; /* /< 温度密度位置 */
+	uint32_t standard_density;     /* /< 标准密度 */
+	uint32_t vcf20;                /* /< 体积修正系数 (VCF20) */
+	uint32_t weight_density;       /* /< 计重密度 */
 } DensityMeasurement;
 /**
  * @brief 密度分布数据
  */
 typedef struct {
-	uint32_t average_temperature;                                   ///< 温度
-	uint32_t average_density;                                       ///< 密度
-	uint32_t average_standard_density;                              ///< 标准密度
-	uint32_t average_vcf20;                                         ///< 体积修正系数 (VCF20)
-	uint32_t average_weight_density;                                ///< 计重密度
-	uint32_t measurement_points;                                    ///< 实际测量点数
-	uint32_t Density_oil_level;                                     // 密度分布测量时的液位值(0.1mm)
-    uint32_t profile_complete_latched;        ///< 分布测量完成锁存，失败或命令切换不置位
-    uint32_t profile_complete_counter;        ///< 分布测量完成计数，CPU3 用于锁存 profile 时间戳
-    uint32_t profile_blocked_by_process;      ///< 分布测量被当前工况阻止标志
-    uint32_t profile_temp_deviation_alarm;    ///< 分布温度偏差报警状态
-    uint32_t profile_density_deviation_alarm; ///< 分布密度偏差报警状态
-	DensityMeasurement single_density_data[MAX_MEASUREMENT_POINTS]; // 200个点的密度测量数据
+	uint32_t average_temperature;                                   /* /< 温度 */
+	uint32_t average_density;                                       /* /< 密度 */
+	uint32_t average_standard_density;                              /* /< 标准密度 */
+	uint32_t average_vcf20;                                         /* /< 体积修正系数 (VCF20) */
+	uint32_t average_weight_density;                                /* /< 计重密度 */
+	uint32_t measurement_points;                                    /* /< 实际测量点数 */
+	uint32_t Density_oil_level;                                     /* 密度分布测量时的液位值(0.1mm) */
+    uint32_t profile_complete_latched;        /* /< 分布测量完成锁存，失败或命令切换不置位 */
+    uint32_t profile_complete_counter;        /* /< 分布测量完成计数，CPU3 用于锁存 profile 时间戳 */
+    uint32_t profile_blocked_by_process;      /* /< 分布测量被当前工况阻止标志 */
+    uint32_t profile_temp_deviation_alarm;    /* /< 分布温度偏差报警状态 */
+    uint32_t profile_density_deviation_alarm; /* /< 分布密度偏差报警状态 */
+	DensityMeasurement single_density_data[MAX_MEASUREMENT_POINTS]; /* 200个点的密度测量数据 */
 
 } DensityDistribution;
 
@@ -425,30 +425,30 @@ typedef struct {
  */
 typedef struct {
     /* 位置相关 */
-	int32_t current_encoder_value; ///< 当前编码值
-	int32_t sensor_position;       ///< 传感器位置
-	int32_t cable_length;          ///< 尺带长度;
-	int32_t motor_step;            ///< 电机步进值
-	int32_t motor_distance;        ///< 电机距离值(单位: 0.1mm)
+	int32_t current_encoder_value; /* /< 当前编码值 */
+	int32_t sensor_position;       /* /< 传感器位置 */
+	int32_t cable_length;          /* /< 尺带长度; */
+	int32_t motor_step;            /* /< 电机步进值 */
+	int32_t motor_distance;        /* /< 电机距离值(单位: 0.1mm) */
 
     /* 频率与温度、电压 */
-	uint32_t frequency;            ///< 当前频率
-	uint32_t temperature;          ///< 温度 (单位: 0.01°C)
-	uint32_t air_frequency;        ///< 空气中频率
-	uint32_t current_amplitude;    ///< 当前幅值
-	uint32_t water_capacitance_x10; ///< 水位电容快照(单位: 0.1pF)
+	uint32_t frequency;            /* /< 当前频率 */
+	uint32_t temperature;          /* /< 温度 (单位: 0.01°C) */
+	uint32_t air_frequency;        /* /< 空气中频率 */
+	uint32_t current_amplitude;    /* /< 当前幅值 */
+	uint32_t water_capacitance_x10; /* /< 水位电容快照(单位: 0.1pF) */
 
     /* 称重相关 */
-    uint32_t current_weight;       ///< 当前称重值
-    uint32_t weight_param;         ///< 称重参数
+    uint32_t current_weight;       /* /< 当前称重值 */
+    uint32_t weight_param;         /* /< 称重参数 */
 
     /* 姿态角 */
-    int32_t  angle_x;              ///< X 轴角度
-    int32_t  angle_y;              ///< Y 轴角度
+    int32_t  angle_x;              /* /< X 轴角度 */
+    int32_t  angle_y;              /* /< Y 轴角度 */
 
     /* 电机状态相关 */
-    uint32_t motor_speed;          ///< 电机速度（0.01m/min）
-    uint32_t  motor_state;          ///< 电机状态: 0 停止, 1 上行, 2 下行
+    uint32_t motor_speed;          /* /< 电机速度（0.01m/min） */
+    uint32_t  motor_state;          /* /< 电机状态: 0 停止, 1 上行, 2 下行 */
 } DebugData;
 
 
@@ -456,253 +456,253 @@ typedef struct {
  * @brief  实高测量数据
  */
 typedef struct {
-	uint32_t calibrated_liquid_level; ///< 标定液位时实高
-	uint32_t current_real_height;     ///< 当前实高
-    uint32_t bottom_reference_valid;  ///< 探底参考位置是否有效，供 CPU3 映射 SI7000 Bottom Reference
+	uint32_t calibrated_liquid_level; /* /< 标定液位时实高 */
+	uint32_t current_real_height;     /* /< 当前实高 */
+    uint32_t bottom_reference_valid;  /* /< 探底参考位置是否有效，供 CPU3 映射 SI7000 Bottom Reference */
 } ActualHeightMeasurement;
 
 /**
  * @brief  液位测量数据
  */
 typedef struct {
-	uint32_t oil_level;                          ///< 液位跟随液位值
-	uint32_t air_frequency;		//空气中频率
-	uint32_t oil_frequency;		//油中频率
-	uint32_t follow_frequency;		//液位跟随频率
-	uint32_t current_frequency;	//当前频率
-    uint32_t probe_at_liquid_level;       ///< 探头是否位于液位点，找液位成功后置位
-    uint32_t liquid_stable;               ///< 液体稳定标志，找液位成功后置位
-    uint32_t manual_level_update_inhibit; ///< 手动/强制动作期间液位自动更新抑制
+	uint32_t oil_level;                          /* /< 液位跟随液位值 */
+	uint32_t air_frequency;		/* 空气中频率 */
+	uint32_t oil_frequency;		/* 油中频率 */
+	uint32_t follow_frequency;		/* 液位跟随频率 */
+	uint32_t current_frequency;	/* 当前频率 */
+    uint32_t probe_at_liquid_level;       /* /< 探头是否位于液位点，找液位成功后置位 */
+    uint32_t liquid_stable;               /* /< 液体稳定标志，找液位成功后置位 */
+    uint32_t manual_level_update_inhibit; /* /< 手动/强制动作期间液位自动更新抑制 */
 } OilMeasurement;
 
 /**
  * @brief  液位测量数据
  */
 typedef struct {
-	uint32_t water_level;                        ///< 测量水位的值
+	uint32_t water_level;                        /* /< 测量水位的值 */
 	float zero_capacitance;
 	float oil_capacitance;
 	float current_capacitance;
 } WaterMeasurement;
 
 typedef enum {
-    WIRELESS_PAIRING_RESULT_NONE = 0U,      // 未执行或无结果
-    WIRELESS_PAIRING_RESULT_RUNNING = 1U,   // 正在匹配
-    WIRELESS_PAIRING_RESULT_SUCCESS = 2U,   // 匹配成功
-    WIRELESS_PAIRING_RESULT_FAILED = 3U     // 匹配失败
+    WIRELESS_PAIRING_RESULT_NONE = 0U,      /* 未执行或无结果 */
+    WIRELESS_PAIRING_RESULT_RUNNING = 1U,   /* 正在匹配 */
+    WIRELESS_PAIRING_RESULT_SUCCESS = 2U,   /* 匹配成功 */
+    WIRELESS_PAIRING_RESULT_FAILED = 3U     /* 匹配失败 */
 } WirelessPairingResult;
 
 typedef struct {
-    float alarm_value;        // 当前报警值，参考程序 alarm_para_onlyread.alarm_value
-    uint32_t HH_alarm;        // 高高报警，0=激活，1=未激活
-    uint32_t H_alarm;         // 高报警，0=激活，1=未激活
-    uint32_t HH_H_alarm;      // 高高或高报警，0=激活，1=未激活
-    uint32_t L_alarm;         // 低报警，0=激活，1=未激活
-    uint32_t LL_alarm;        // 低低报警，0=激活，1=未激活
-    uint32_t LL_L_alarm;      // 低低或低报警，0=激活，1=未激活
-    uint32_t any_error;       // 任意报警，0=激活，1=未激活
-    uint32_t clear_alarm;     // 清除锁存报警命令运行态，参考程序不存储类参数
+    float alarm_value;        /* 当前报警值，参考程序 alarm_para_onlyread.alarm_value */
+    uint32_t HH_alarm;        /* 高高报警，0=激活，1=未激活 */
+    uint32_t H_alarm;         /* 高报警，0=激活，1=未激活 */
+    uint32_t HH_H_alarm;      /* 高高或高报警，0=激活，1=未激活 */
+    uint32_t L_alarm;         /* 低报警，0=激活，1=未激活 */
+    uint32_t LL_alarm;        /* 低低报警，0=激活，1=未激活 */
+    uint32_t LL_L_alarm;      /* 低低或低报警，0=激活，1=未激活 */
+    uint32_t any_error;       /* 任意报警，0=激活，1=未激活 */
+    uint32_t clear_alarm;     /* 清除锁存报警命令运行态，参考程序不存储类参数 */
 } RelayAlarmRuntimeState;
 
 typedef struct {
-    uint32_t result;                         // 无线滑环匹配结果
-    uint32_t mac_valid;                      // MAC 是否有效
-    uint32_t mac_high;                       // AA:BB
-    uint32_t mac_mid;                        // CC:DD
-    uint32_t mac_low;                        // EE:FF
-    uint32_t error_code;                     // 失败时的 CPU2 错误码
-    uint32_t update_counter;                 // CPU2 每次状态变化递增
+    uint32_t result;                         /* 无线滑环匹配结果 */
+    uint32_t mac_valid;                      /* MAC 是否有效 */
+    uint32_t mac_high;                       /* AA:BB */
+    uint32_t mac_mid;                        /* CC:DD */
+    uint32_t mac_low;                        /* EE:FF */
+    uint32_t error_code;                     /* 失败时的 CPU2 错误码 */
+    uint32_t update_counter;                 /* CPU2 每次状态变化递增 */
 } WirelessPairingStatus;
 
 /* 测量结果结构体，输入寄存器 */
 typedef struct {
-	DeviceStatus device_status;                  ///< 设备状态
-	DebugData debug_data;                        ///< 调试数据
-	OilMeasurement oil_measurement;                ///< 液位测量数据
-	WaterMeasurement water_measurement;          ///< 水位测量数据
-	ActualHeightMeasurement height_measurement;  ///< 实高测量数据
-	DensityMeasurement single_point_measurement; ///< 单点测量数据
-	DensityMeasurement single_point_monitoring;  ///< 单点监测数据
-	DensityDistribution density_distribution;    ///< 密度分布测量数据
-    WirelessPairingStatus wireless_pairing_status; ///< 无线滑环匹配状态
-    RelayAlarmRuntimeState relay_alarm_runtime[RELAY_ALARM_CHANNEL_COUNT]; ///< 继电器报警输出每路运行态
+	DeviceStatus device_status;                  /* /< 设备状态 */
+	DebugData debug_data;                        /* /< 调试数据 */
+	OilMeasurement oil_measurement;                /* /< 液位测量数据 */
+	WaterMeasurement water_measurement;          /* /< 水位测量数据 */
+	ActualHeightMeasurement height_measurement;  /* /< 实高测量数据 */
+	DensityMeasurement single_point_measurement; /* /< 单点测量数据 */
+	DensityMeasurement single_point_monitoring;  /* /< 单点监测数据 */
+	DensityDistribution density_distribution;    /* /< 密度分布测量数据 */
+    WirelessPairingStatus wireless_pairing_status; /* /< 无线滑环匹配状态 */
+    RelayAlarmRuntimeState relay_alarm_runtime[RELAY_ALARM_CHANNEL_COUNT]; /* /< 继电器报警输出每路运行态 */
 
 } MeasurementResult;
 
 /* 设备参数结构体 */
-#pragma pack(push, 1) // 确保结构体紧凑对齐（防止编译器填充）
+#pragma pack(push, 1) /* 确保结构体紧凑对齐（防止编译器填充） */
 typedef struct {
-    // 指令
-    CommandType command;                  // 当前指令
+    /* 指令 */
+    CommandType command;                  /* 当前指令 */
 
-    // ===================== 基础参数 =====================
-    uint32_t sensorType;                  // 传感器类型
-    uint32_t sensorID;                    // 传感器编号
-    uint32_t sensorSoftwareVersion;       // 传感器软件版本
-    uint32_t softwareVersion;             // LTD 软件版本
-    CommandType powerOnDefaultCommand;    // 上电默认指令
-    uint32_t error_auto_back_zero;        // 错误自动回零标志(0/1)
-    uint32_t error_stop_measurement;      // 错误停止测量标志(0/1)
+    /* ===================== 基础参数 ===================== */
+    uint32_t sensorType;                  /* 传感器类型 */
+    uint32_t sensorID;                    /* 传感器编号 */
+    uint32_t sensorSoftwareVersion;       /* 传感器软件版本 */
+    uint32_t softwareVersion;             /* LTD 软件版本 */
+    CommandType powerOnDefaultCommand;    /* 上电默认指令 */
+    uint32_t error_auto_back_zero;        /* 错误自动回零标志(0/1) */
+    uint32_t error_stop_measurement;      /* 错误停止测量标志(0/1) */
 
-    uint32_t protocolVersion;             // CPU2/CPU3共享协议版本，旧程序该字段默认为0
-    uint32_t fault_auto_recovery_retry_limit; // 故障自动恢复重跑次数上限：0关闭，1~10为最多重跑次数
-    uint32_t reserved3;                   // 预留
+    uint32_t protocolVersion;             /* CPU2/CPU3共享协议版本，旧程序该字段默认为0 */
+    uint32_t fault_auto_recovery_retry_limit; /* 故障自动恢复重跑次数上限：0关闭，1~10为最多重跑次数 */
+    uint32_t reserved3;                   /* 预留 */
 
-    // ===================== 电机与编码器参数 =====================
-    uint32_t position_source_auto_switch;       // 位置源自动切换(0=不切换,1=自动切换)
-    uint32_t motor_current;              // 电机运行电流(1~31，异常恢复为16)
-    uint32_t encoder_wheel_circumference_mm; // 编码轮周长(0.001mm)
-    uint32_t max_motor_speed;                 // 最大电机速度(0.01m/min)
-    uint32_t first_loop_circumference_mm;     // 尺带首圈周长(0.1mm)
-    uint32_t tape_thickness_mm;               // 尺带厚度(0.001mm)
-    uint32_t position_count_mode;          // 当前记步模式(0=编码轮,1=电机步进)
-    uint32_t motor_count_first_loop_circumference_mm; // 电机记步局部首圈周长(0.001mm)
+    /* ===================== 电机与编码器参数 ===================== */
+    uint32_t position_source_auto_switch;       /* 位置源自动切换(0=不切换,1=自动切换) */
+    uint32_t motor_current;              /* 电机运行电流(1~31，异常恢复为16) */
+    uint32_t encoder_wheel_circumference_mm; /* 编码轮周长(0.001mm) */
+    uint32_t max_motor_speed;                 /* 最大电机速度(0.01m/min) */
+    uint32_t first_loop_circumference_mm;     /* 尺带首圈周长(0.1mm) */
+    uint32_t tape_thickness_mm;               /* 尺带厚度(0.001mm) */
+    uint32_t position_count_mode;          /* 当前记步模式(0=编码轮,1=电机步进) */
+    uint32_t motor_count_first_loop_circumference_mm; /* 电机记步局部首圈周长(0.001mm) */
 
-    // ===================== 称重参数 =====================
-    int32_t empty_weight;                // 空载称重
-    uint32_t empty_weight_upper_limit;    // 空载称重上限
-    uint32_t empty_weight_lower_limit;    // 空载称重下限
-    uint32_t full_weight;                 // 满载称重
-    uint32_t full_weight_upper_limit;     // 满载称重上限
-    uint32_t full_weight_lower_limit;     // 满载称重下限
-    uint32_t weight_upper_limit_ratio;    // 称重变化量检测上限比例
-    uint32_t weight_lower_limit_ratio;    // 称重变化量检测下限比例
+    /* ===================== 称重参数 ===================== */
+    int32_t empty_weight;                /* 空载称重 */
+    uint32_t empty_weight_upper_limit;    /* 空载称重上限 */
+    uint32_t empty_weight_lower_limit;    /* 空载称重下限 */
+    uint32_t full_weight;                 /* 满载称重 */
+    uint32_t full_weight_upper_limit;     /* 满载称重上限 */
+    uint32_t full_weight_lower_limit;     /* 满载称重下限 */
+    uint32_t weight_upper_limit_ratio;    /* 称重变化量检测上限比例 */
+    uint32_t weight_lower_limit_ratio;    /* 称重变化量检测下限比例 */
 
-    uint32_t reserved8;                   // 预留
-    uint32_t reserved9;                   // 预留（新增）
+    uint32_t reserved8;                   /* 预留 */
+    uint32_t reserved9;                   /* 预留（新增） */
 
-    // ===================== 零点测量 =====================
-    uint32_t zero_weight_threshold_ratio;     // 零点称重阈值比例
-    uint32_t weight_ignore_zone;              // 零点下称重不检测区域(建议 0.1mm)
-    uint32_t max_zero_deviation_distance;     // 零点最大偏差距离(建议 0.1mm)
-    uint32_t findZeroDownDistance;            // 找零点完成后下行距离(0.1mm)
+    /* ===================== 零点测量 ===================== */
+    uint32_t zero_weight_threshold_ratio;     /* 零点称重阈值比例 */
+    uint32_t weight_ignore_zone;              /* 零点下称重不检测区域(建议 0.1mm) */
+    uint32_t max_zero_deviation_distance;     /* 零点最大偏差距离(建议 0.1mm) */
+    uint32_t findZeroDownDistance;            /* 找零点完成后下行距离(0.1mm) */
 
-    uint32_t reserved10;                  // 预留
-    uint32_t reserved11;                  // 预留（新增）
+    uint32_t reserved10;                  /* 预留 */
+    uint32_t reserved11;                  /* 预留（新增） */
 
-    // ===================== 液位测量 =====================
-    uint32_t tankHeight;                     // 液位罐高(0.1mm)
-    uint32_t liquid_sensor_distance_diff;    // 液位传感器距离差(0.1mm)
-    uint32_t blindZone;                      // 液位盲区(0.1mm)
-    uint32_t oilLevelThreshold;              // 液位找液阈值
-    uint32_t oilLevelHysteresisThreshold;    // 液位滞后阈值
-    uint32_t liquidLevelMeasurementMethod;   // 液位测量方式 0 空气+液体频率/2 1：根据设置跟随频率跟随 2 根据设置密度跟随
-    uint32_t oilLevelFrequency;              // 液位跟随频率
-    uint32_t oilLevelDensity;                // 液位跟随密度
-    uint32_t oilLevelHysteresisTime;         // oil level hysteresis time
+    /* ===================== 液位测量 ===================== */
+    uint32_t tankHeight;                     /* 液位罐高(0.1mm) */
+    uint32_t liquid_sensor_distance_diff;    /* 液位传感器距离差(0.1mm) */
+    uint32_t blindZone;                      /* 液位盲区(0.1mm) */
+    uint32_t oilLevelThreshold;              /* 液位找液阈值 */
+    uint32_t oilLevelHysteresisThreshold;    /* 液位滞后阈值 */
+    uint32_t liquidLevelMeasurementMethod;   /* 液位测量方式 0 空气+液体频率/2 1：根据设置跟随频率跟随 2 根据设置密度跟随 */
+    uint32_t oilLevelFrequency;              /* 液位跟随频率 */
+    uint32_t oilLevelDensity;                /* 液位跟随密度 */
+    uint32_t oilLevelHysteresisTime;         /* oil level hysteresis time */
 
-    // ===================== 水位测量参数 =====================
-    uint32_t water_tank_height;                 // 水位罐高(0.1mm)
-    uint32_t water_level_mode;                  // 水位测量方式
-    uint32_t waterBlindZone;                    // 水位盲区(0.1mm)
-    uint32_t water_cap_threshold;               // 水位电容阈值（建议明确倍率，如 x1000）
-    uint32_t water_find_cap_threshold;              // 水位寻找电容阈值（建议明确倍率，如 x1000）
-    uint32_t maxDownDistance;                   // 水位/罐底测量水位最大下行距离(0.1mm)
-    uint32_t zero_cap;                          //零点电容值
-    uint32_t water_stable_threshold;            //水位稳定阈值
-    uint32_t waterLevelCorrection;              // 水位修正值
+    /* ===================== 水位测量参数 ===================== */
+    uint32_t water_tank_height;                 /* 水位罐高(0.1mm) */
+    uint32_t water_level_mode;                  /* 水位测量方式 */
+    uint32_t waterBlindZone;                    /* 水位盲区(0.1mm) */
+    uint32_t water_cap_threshold;               /* 水位电容阈值（建议明确倍率，如 x1000） */
+    uint32_t water_find_cap_threshold;              /* 水位寻找电容阈值（建议明确倍率，如 x1000） */
+    uint32_t maxDownDistance;                   /* 水位/罐底测量水位最大下行距离(0.1mm) */
+    uint32_t zero_cap;                          /* 零点电容值 */
+    uint32_t water_stable_threshold;            /* 水位稳定阈值 */
+    uint32_t waterLevelCorrection;              /* 水位修正值 */
 
-    // ===================== 罐高/罐底测量 =====================
-    uint32_t bottom_detect_mode;          // 罐底测量模式
-    uint32_t bottom_angle_threshold;      // 探底角度阈值（务必明确单位/倍率）
-    uint32_t bottom_weight_threshold;     // 探底称重阈值
-    uint32_t refreshTankHeightFlag;       // 是否更新液位罐高
-    uint32_t maxTankHeightDeviation;      // 实测罐高最大偏差
-    uint32_t initialTankHeight;           // 初始实高
-    uint32_t currentTankHeight;           // 当前实高
-    uint32_t bottom_encoder_correction_enable; // 罐底后编码器修正(0=不修正,1=修正)
-    uint32_t water_lag_cap_threshold;  // 水位滞后电容阈值(x1000)，稳定监测中偏离目标超过该值后返回跟随
+    /* ===================== 罐高/罐底测量 ===================== */
+    uint32_t bottom_detect_mode;          /* 罐底测量模式 */
+    uint32_t bottom_angle_threshold;      /* 探底角度阈值（务必明确单位/倍率） */
+    uint32_t bottom_weight_threshold;     /* 探底称重阈值 */
+    uint32_t refreshTankHeightFlag;       /* 是否更新液位罐高 */
+    uint32_t maxTankHeightDeviation;      /* 实测罐高最大偏差 */
+    uint32_t initialTankHeight;           /* 初始实高 */
+    uint32_t currentTankHeight;           /* 当前实高 */
+    uint32_t bottom_encoder_correction_enable; /* 罐底后编码器修正(0=不修正,1=修正) */
+    uint32_t water_lag_cap_threshold;  /* 水位滞后电容阈值(x1000)，稳定监测中偏离目标超过该值后返回跟随 */
 
-    // ===================== 密度和温度修正参数 =====================
-    uint32_t densityCorrection;           // 密度修正值、磁通量D
-    uint32_t temperatureCorrection;       // 温度修正值、磁通量T
+    /* ===================== 密度和温度修正参数 ===================== */
+    uint32_t densityCorrection;           /* 密度修正值、磁通量D */
+    uint32_t temperatureCorrection;       /* 温度修正值、磁通量T */
 
-    uint32_t reserved18;                 // 预留
-    uint32_t reserved19;                 // 预留（新增）
+    uint32_t reserved18;                 /* 预留 */
+    uint32_t reserved19;                 /* 预留（新增） */
 
-    // ===================== 分布/区间测量参数 =====================
-    uint32_t requireBottomMeasurement;         // 是否测罐底
-    uint32_t requireWaterMeasurement;          // 是否测水位
-    uint32_t requireSinglePointDensity;        // 是否测单点密度
-    uint32_t spreadMeasurementOrder;           // 分布测量顺序
-    uint32_t spreadMeasurementMode;            // 分布测量模式
-    uint32_t spreadMeasurementCount;           // 分布测量数量
-    uint32_t spreadMeasurementDistance;        // 分布测量间距
-    uint32_t spreadTopLimit;                   // 最高点距液面（0.1mm）
-    uint32_t spreadBottomLimit;                // 最低点距罐底（，0.1mm）
-    uint32_t spreadPointHoverTime;             // 第一测量点悬停时间
-    uint32_t intervalMeasurementTopLimit;      // 区间测量上限（距液面，0.1mm）
-    uint32_t intervalMeasurementBottomLimit;   // 区间测量下限（距罐底，0.1mm）
+    /* ===================== 分布/区间测量参数 ===================== */
+    uint32_t requireBottomMeasurement;         /* 是否测罐底 */
+    uint32_t requireWaterMeasurement;          /* 是否测水位 */
+    uint32_t requireSinglePointDensity;        /* 是否测单点密度 */
+    uint32_t spreadMeasurementOrder;           /* 分布测量顺序 */
+    uint32_t spreadMeasurementMode;            /* 分布测量模式 */
+    uint32_t spreadMeasurementCount;           /* 分布测量数量 */
+    uint32_t spreadMeasurementDistance;        /* 分布测量间距 */
+    uint32_t spreadTopLimit;                   /* 最高点距液面（0.1mm） */
+    uint32_t spreadBottomLimit;                /* 最低点距罐底（，0.1mm） */
+    uint32_t spreadPointHoverTime;             /* 第一测量点悬停时间 */
+    uint32_t intervalMeasurementTopLimit;      /* 区间测量上限（距液面，0.1mm） */
+    uint32_t intervalMeasurementBottomLimit;   /* 区间测量下限（距罐底，0.1mm） */
 
-    uint32_t reserved20;                 // 预留
-    uint32_t reserved21;                 // 预留（新增）
+    uint32_t reserved20;                 /* 预留 */
+    uint32_t reserved21;                 /* 预留（新增） */
 
-    // ===================== Wartsila 密度区间测量参数 =====================
-    uint32_t wartsila_upper_density_limit;        // 上限
-    uint32_t wartsila_lower_density_limit;        // 下限
-    uint32_t wartsila_density_interval;           // 步进
-    uint32_t wartsila_max_height_above_surface;   // 最高测点距液面距离(0.1mm 或按定义)
+    /* ===================== Wartsila 密度区间测量参数 ===================== */
+    uint32_t wartsila_upper_density_limit;        /* 上限 */
+    uint32_t wartsila_lower_density_limit;        /* 下限 */
+    uint32_t wartsila_density_interval;           /* 步进 */
+    uint32_t wartsila_max_height_above_surface;   /* 最高测点距液面距离(0.1mm 或按定义) */
 
-    uint32_t wartsila_bottom_detect_interval; // 瓦锡兰探底间隔：0不探底，N表示每N次测量后探底一次，范围0~100
-    uint32_t bottom_encoder_correction_tank_height; // 探底修正罐高，仅用于罐底后编码器修正，0表示沿用液位罐高
+    uint32_t wartsila_bottom_detect_interval; /* 瓦锡兰探底间隔：0不探底，N表示每N次测量后探底一次，范围0~100 */
+    uint32_t bottom_encoder_correction_tank_height; /* 探底修正罐高，仅用于罐底后编码器修正，0表示沿用液位罐高 */
 
 
-    uint32_t reserved24;                 // 预留
-    uint32_t reserved25;                 // 预留（新增）
+    uint32_t reserved24;                 /* 预留 */
+    uint32_t reserved25;                 /* 预留（新增） */
 
-    // ===================== 4-20mA 输出 =====================
-    uint32_t CurrentRangeStart_mA;       // AO输出范围起点电流
-    uint32_t CurrentRangeEnd_mA;         // AO输出范围终点电流
-    uint32_t AlarmHighAO;                // 高液位报警输出
-    uint32_t AlarmLowAO;                 // 低液位报警输出
-    uint32_t InitialCurrent_mA;          // AO初始电流
-    uint32_t AOHighCurrent_mA;           // AO高位电流
-    uint32_t AOLowCurrent_mA;            // AO低位电流
-    uint32_t FaultCurrent_mA;            // AO故障电流
-    uint32_t DebugCurrent_mA;            // AO调试电流
+    /* ===================== 4-20mA 输出 ===================== */
+    uint32_t CurrentRangeStart_mA;       /* AO输出范围起点电流 */
+    uint32_t CurrentRangeEnd_mA;         /* AO输出范围终点电流 */
+    uint32_t AlarmHighAO;                /* 高液位报警输出 */
+    uint32_t AlarmLowAO;                 /* 低液位报警输出 */
+    uint32_t InitialCurrent_mA;          /* AO初始电流 */
+    uint32_t AOHighCurrent_mA;           /* AO高位电流 */
+    uint32_t AOLowCurrent_mA;            /* AO低位电流 */
+    uint32_t FaultCurrent_mA;            /* AO故障电流 */
+    uint32_t DebugCurrent_mA;            /* AO调试电流 */
 
-    uint32_t reserved26;                 // 预留
-    uint32_t reserved27;                 // 预留（新增）
+    uint32_t reserved26;                 /* 预留 */
+    uint32_t reserved27;                 /* 预留（新增） */
 
-    // ===================== 指令参数 =====================
-    uint32_t calibrateOilLevel;              // 标定液位值
-    uint32_t calibrateWaterLevel;            // 水位标定值
-    uint32_t calibrateTankHeight;           // 罐高标定值
-    uint32_t singlePointMeasurementPosition; // 单点测量位置
-    uint32_t singlePointMonitoringPosition;  // 单点监测位置
-    uint32_t densityDistributionOilLevel;    // 电机指令的运行位置
-    uint32_t motorCommandDistance;           // 电机指令的运行距离
+    /* ===================== 指令参数 ===================== */
+    uint32_t calibrateOilLevel;              /* 标定液位值 */
+    uint32_t calibrateWaterLevel;            /* 水位标定值 */
+    uint32_t calibrateTankHeight;           /* 罐高标定值 */
+    uint32_t singlePointMeasurementPosition; /* 单点测量位置 */
+    uint32_t singlePointMonitoringPosition;  /* 单点监测位置 */
+    uint32_t densityDistributionOilLevel;    /* 电机指令的运行位置 */
+    uint32_t motorCommandDistance;           /* 电机指令的运行距离 */
 
-    uint32_t reserved28;                 // 预留
-    uint32_t reserved29;                 // 预留（新增）
+    uint32_t reserved28;                 /* 预留 */
+    uint32_t reserved29;                 /* 预留（新增） */
 
-    // ===================== Tape compensation =====================
-    uint32_t lastOilCorrectionLevel;     // 上次液位修正液位
-    uint32_t tankGasPhaseTemperature;    // tank gas phase temperature
-    uint32_t tapeExpansionCoefficient;   // tape expansion coefficient
-    uint32_t tapeCalibrationTemperature; // tape calibration temperature
+    /* ===================== Tape compensation ===================== */
+    uint32_t lastOilCorrectionLevel;     /* 上次液位修正液位 */
+    uint32_t tankGasPhaseTemperature;    /* tank gas phase temperature */
+    uint32_t tapeExpansionCoefficient;   /* tape expansion coefficient */
+    uint32_t tapeCalibrationTemperature; /* tape calibration temperature */
 
-    uint32_t reserved30;                 // reserved
-    uint32_t reserved31;                 // reserved
-    uint32_t reserved32;                 // reserved
-    uint32_t reserved33;                 // reserved
+    uint32_t reserved30;                 /* reserved */
+    uint32_t reserved31;                 /* reserved */
+    uint32_t reserved32;                 /* reserved */
+    uint32_t reserved33;                 /* reserved */
 
-    // ===================== 继电器报警输出配置（四路） =====================
+    /* ===================== 继电器报警输出配置（四路） ===================== */
     RelayAlarmConfig relayAlarm[RELAY_ALARM_CHANNEL_COUNT];
 
-    // ===================== 元信息与校验 =====================
-    uint32_t param_version;              // 参数结构版本号
-    uint32_t struct_size;                // sizeof(DeviceParameters)
-    uint32_t magic;                      // 0x4C54444D = 'LTDM'
-    uint32_t crc;                        // CRC32
+    /* ===================== 元信息与校验 ===================== */
+    uint32_t param_version;              /* 参数结构版本号 */
+    uint32_t struct_size;                /* sizeof(DeviceParameters) */
+    uint32_t magic;                      /* 0x4C54444D = 'LTDM' */
+    uint32_t crc;                        /* CRC32 */
 } DeviceParameters;
 #pragma pack(pop)
 
 #define FRAM_PARAM_A_ADDRESS 0x0000u
 #define FRAM_PARAM_SLOT_SIZE 0x0800u
 #define FRAM_PARAM_B_ADDRESS (FRAM_PARAM_A_ADDRESS + FRAM_PARAM_SLOT_SIZE)
-#define FRAM_PARAM_ADDRESS FRAM_PARAM_A_ADDRESS // 兼容旧代码
-#define CRC_SEED 0xFFFFFFFF       // CRC初始值
+#define FRAM_PARAM_ADDRESS FRAM_PARAM_A_ADDRESS /* 兼容旧代码 */
+#define CRC_SEED 0xFFFFFFFF       /* CRC初始值 */
 
 /* 位置记步来源：0 使用编码轮，1 使用 TMC5130 XACTUAL 电机步进。 */
 #define POSITION_COUNT_MODE_ENCODER 0u
@@ -718,11 +718,11 @@ typedef struct {
 #define MOTOR_CURRENT_MIN           1u
 #define MOTOR_CURRENT_MAX           31u
 
-/***************** 全局变量 ****************************/
+/* **************** 全局变量 *************************** */
 
-extern volatile MeasurementResult g_measurement; // 测量结果
-extern volatile DeviceParameters g_deviceParams; // 设备参数
-extern volatile uint8_t new_command_ready;       // 串口原始命令就绪标志
+extern volatile MeasurementResult g_measurement; /* 测量结果 */
+extern volatile DeviceParameters g_deviceParams; /* 设备参数 */
+extern volatile uint8_t new_command_ready;       /* 串口原始命令就绪标志 */
 /* 仅对白名单命令开放“自身打断自身”，其他命令仍保持重复下发无效。 */
 static inline bool IsSelfInterruptibleCommand(CommandType cmd)
 {
@@ -760,15 +760,47 @@ static inline bool HasEffectiveCommandSwitchRequest(void)
 
     return false;
 }
-void save_device_params(void); // Save device parameters to FRAM immediately
-void request_device_params_save(void); // Queue one deferred save request
-void process_device_params_deferred_tasks(void); // Run deferred save tasks in the main loop
-int load_device_params(void); // 加载设备参数
-void init_device_params(void); // 初始化设备参数
-void RestoreFactoryParamsConfig(void); //恢复出厂默认参数配置
-void print_device_params(void); // 打印设备参数
+/**
+ * @brief 保存系统参数中的 save_device_params 逻辑。
+ */
+void save_device_params(void); /* Save device parameters to FRAM immediately */
+/**
+ * @brief 保存系统参数中的 request_device_params_save 逻辑。
+ */
+void request_device_params_save(void); /* Queue one deferred save request */
+/**
+ * @brief 处理系统参数中的 process_device_params_deferred_tasks 逻辑。
+ */
+void process_device_params_deferred_tasks(void); /* Run deferred save tasks in the main loop */
+/**
+ * @brief 加载或恢复系统参数中的 load_device_params 逻辑。
+ * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ */
+int load_device_params(void); /* 加载设备参数 */
+/**
+ * @brief 初始化系统参数中的 init_device_params 逻辑。
+ */
+void init_device_params(void); /* 初始化设备参数 */
+/**
+ * @brief 保存系统参数中的 RestoreFactoryParamsConfig 逻辑。
+ */
+void RestoreFactoryParamsConfig(void); /* 恢复出厂默认参数配置 */
+/**
+ * @brief 显示或打印系统参数中的 print_device_params 逻辑。
+ */
+void print_device_params(void); /* 打印设备参数 */
+/**
+ * @brief 执行系统参数中的 DefaultCmd_To_MeasureCmd 逻辑。
+ *
+ * @param def_cmd 命令值。
+ * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ */
 CommandType DefaultCmd_To_MeasureCmd(DefaultCommandType def_cmd);
 /* 调试打印接口 */
-void PrintDensity(const char *title, const DensityMeasurement *d); // 打印单个密度测点
-void PrintMeasurementResult(const MeasurementResult *m); // 打印完整测量结果
+void PrintDensity(const char *title, const DensityMeasurement *d); /* 打印单个密度测点 */
+/**
+ * @brief 打印完整测量结果，供串口调试和现场排查使用。
+ * @param m 测量结果结构指针。
+ */
+void PrintMeasurementResult(const MeasurementResult *m); /* 打印完整测量结果 */
 #endif

@@ -359,6 +359,7 @@ static double_t GetDensity20ofPMP3(int32_t oilcategory, double_t density, double
         return RHOT;
 
     RHO15 = GetRHO15(oilcategory, RHOT, temperature);
+    /* 先处理异常边界，避免密度换算状态机带故障继续运行。 */
     if (RHO15 == ERROR_NORESULT)
         return RHO15;
 
@@ -533,6 +534,7 @@ double_t GetVCF20ofPMP3(int32_t oilcategory, double_t RHO20, double_t temperatur
         return RHOT;
 
     RHO15 = GetRHO15(oilcategory, RHOT, 20.0);
+    /* 先处理异常边界，避免密度换算状态机带故障继续运行。 */
     if (RHO15 == ERROR_NORESULT)
         return RHO15;
 

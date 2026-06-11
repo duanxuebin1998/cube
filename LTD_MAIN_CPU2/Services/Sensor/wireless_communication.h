@@ -45,19 +45,25 @@
 		R		01			电压		R				单浮点
 		....
 */
-// 模式枚举
+/* 模式枚举 */
 typedef enum {
-    DSM_V2_MODE_LEVEL   = 'R',   // 液位模式
-    DSM_V2_MODE_DENSITY = 'W',   // 密度模式
+    DSM_V2_MODE_LEVEL   = 'R',   /* 液位模式 */
+    DSM_V2_MODE_DENSITY = 'W',   /* 密度模式 */
 } dsm_v2_mode_t;
 
-// === 对外 API ===
+/* === 对外 API === */
 
-// 通用读取
+/* 通用读取 */
 uint32_t WIRELESS_Read_FloatParam(uint8_t addr,uint8_t param, float *out_value);
 
-uint32_t WIRELESS_Read_SoftwareVersion(uint8_t addr,float *v) ;// 软件版本
-uint32_t WIRELESS_Read_Voltage(uint8_t addr,float *v) ;// 电压
-/** 轻量无线链路探测：只做一次最小读请求，命令切换时返回 STATE_SWITCH，不打印节点信息。 */
+uint32_t WIRELESS_Read_SoftwareVersion(uint8_t addr,float *v) ; /* 软件版本 */
+/**
+ * @brief 通过无线链路读取指定节点电压。
+ * @param addr 无线节点地址。
+ * @param v 电压输出指针。
+ * @return NO_ERROR 表示读取成功，其他值表示链路或协议异常。
+ */
+uint32_t WIRELESS_Read_Voltage(uint8_t addr,float *v) ; /* 电压 */
+/* * 轻量无线链路探测：只做一次最小读请求，命令切换时返回 STATE_SWITCH，不打印节点信息。 */
 uint32_t WIRELESS_ProbeNode(uint8_t addr);
 #endif /* SENSOR_WIRELESS_COMMUNICATION_H_ */

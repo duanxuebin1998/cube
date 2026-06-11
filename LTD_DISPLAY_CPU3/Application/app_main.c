@@ -24,6 +24,9 @@
 #define UART_TX_POST_DELAY_LOOP   (18000u)   /* 你原来的 18000，按主频自行校准 */
 #endif
 
+/**
+ * @brief UART DMA 发送完成后补充短延时，等待 RS485 电平方向恢复。
+ */
 static inline void uart_post_tx_delay(void)
 {
     for (volatile uint32_t i = 0; i < UART_TX_POST_DELAY_LOOP; i++) {
@@ -31,32 +34,36 @@ static inline void uart_post_tx_delay(void)
     }
 }
 
+/**
+ * @brief 接收屏幕显示中的 RS485_RecvMode 逻辑。
+ * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ */
 static inline void RS485_RecvMode(void)
 {
     RS485_SET_RECV_MODE();
 }
 
 /* ====== 每口 TX busy + 单帧 pending 队列（忙时缓存 1 帧）====== */
-volatile uint8_t  g_tx_busy_com1 = 0;
-volatile uint8_t  g_tx_busy_com2 = 0;
-volatile uint8_t  g_tx_busy_com3 = 0;
+volatile uint8_t  g_tx_busy_com1 = 0; /* 屏幕显示模块级变量，保存跨函数共享的业务状态。 */
+volatile uint8_t  g_tx_busy_com2 = 0; /* 屏幕显示模块级变量，保存跨函数共享的业务状态。 */
+volatile uint8_t  g_tx_busy_com3 = 0; /* 屏幕显示模块级变量，保存跨函数共享的业务状态。 */
 
-static uint16_t g_tx_pending_len_com1 = 0;
-static uint16_t g_tx_pending_len_com2 = 0;
-static uint16_t g_tx_pending_len_com3 = 0;
+static uint16_t g_tx_pending_len_com1 = 0; /* 屏幕显示状态标志，通常由主循环或中断回调共同检查。 */
+static uint16_t g_tx_pending_len_com2 = 0; /* 屏幕显示状态标志，通常由主循环或中断回调共同检查。 */
+static uint16_t g_tx_pending_len_com3 = 0; /* 屏幕显示状态标志，通常由主循环或中断回调共同检查。 */
 
-static uint8_t  g_tx_pending_buf_com1[256];
-static uint8_t  g_tx_pending_buf_com2[256];
-static uint8_t  g_tx_pending_buf_com3[256];
+static uint8_t  g_tx_pending_buf_com1[256]; /* 屏幕显示数据缓冲区，注意与中断或 DMA 访问边界保持一致。 */
+static uint8_t  g_tx_pending_buf_com2[256]; /* 屏幕显示数据缓冲区，注意与中断或 DMA 访问边界保持一致。 */
+static uint8_t  g_tx_pending_buf_com3[256]; /* 屏幕显示数据缓冲区，注意与中断或 DMA 访问边界保持一致。 */
 
 /* 统计：如果 pending 已有帧又来新帧，会覆盖旧帧（可观察是否需要更大队列） */
-static uint32_t g_tx_pending_overwrite_com1 = 0;
-static uint32_t g_tx_pending_overwrite_com2 = 0;
-static uint32_t g_tx_pending_overwrite_com3 = 0;
+static uint32_t g_tx_pending_overwrite_com1 = 0; /* 屏幕显示状态标志，通常由主循环或中断回调共同检查。 */
+static uint32_t g_tx_pending_overwrite_com2 = 0; /* 屏幕显示状态标志，通常由主循环或中断回调共同检查。 */
+static uint32_t g_tx_pending_overwrite_com3 = 0; /* 屏幕显示状态标志，通常由主循环或中断回调共同检查。 */
 
 
 /* UI/参数修改后置位，主循环应用 */
-volatile uint8_t g_cpu3_uart_reinit_pending = 0;
+volatile uint8_t g_cpu3_uart_reinit_pending = 0; /* 屏幕显示状态标志，通常由主循环或中断回调共同检查。 */
 
 /**
  * @brief 重启UART接收DMA
@@ -258,7 +265,7 @@ typedef void (*ProtoResetFn)(void);
 
 typedef struct {
     ProtoProcessFn process;
-    ProtoResetFn   reset;   // 可为 NULL
+    ProtoResetFn   reset;   /* 可为 NULL */
 } ComProtocolHandler;
 
 /* 封装： */
@@ -268,6 +275,15 @@ static uint32_t proto_dsm_process(const uint8_t* rx, uint16_t rx_len,
     return DSM_CommunicationProcess((unsigned char *)rx, rx_len, tx, tx_len);
 }
 
+/**
+ * @brief 处理屏幕显示中的 proto_wartsila_process 逻辑。
+ *
+ * @param rx 业务参数。
+ * @param rx_len 数据长度。
+ * @param tx 业务参数。
+ * @param tx_len 数据长度。
+ * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ */
 static uint32_t proto_wartsila_process(const uint8_t* rx, uint16_t rx_len,
                                       uint8_t* tx, uint16_t* tx_len)
 {
@@ -299,7 +315,7 @@ static const ComProtocolHandler g_handlers[] = {
     [COM_PROTO_DSM]      = { proto_dsm_process,      NULL },
     [COM_PROTO_WARTSILA] = { proto_wartsila_process, NULL },
     [COM_PROTO_SI7000]   = { proto_si7000_process,   NULL },
-    [COM_PROTO_LTD]      = { proto_no_reply,         NULL },  // 先占位
+    [COM_PROTO_LTD]      = { proto_no_reply,         NULL },  /* 先占位 */
 };
 
 /* 按端口号取配置：你这里的 com1/com2/com3 结构来自 cpu3_comm_display_params.h */
@@ -313,6 +329,16 @@ static const ComPortConfig* cpu3_get_port_cfg(uint8_t port_idx)
     }
 }
 
+/**
+ * @brief 处理屏幕显示中的 cpu3_port_process 逻辑。
+ *
+ * @param port_idx 输入/输出指针。
+ * @param rx 业务参数。
+ * @param rx_len 数据长度。
+ * @param tx 业务参数。
+ * @param tx_len 数据长度。
+ * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ */
 static uint32_t cpu3_port_process(uint8_t port_idx,
                                  const uint8_t* rx, uint16_t rx_len,
                                  uint8_t* tx, uint16_t* tx_len)
@@ -320,7 +346,7 @@ static uint32_t cpu3_port_process(uint8_t port_idx,
     const ComPortConfig *cfg = cpu3_get_port_cfg(port_idx);
     if (cfg == NULL) {
         *tx_len = 0;
-        return 1; // 参数错误
+        return 1; /* 参数错误 */
     }
 
     /* 防御：protocol 越界或 handler 未配置 */
@@ -334,21 +360,30 @@ static uint32_t cpu3_port_process(uint8_t port_idx,
 }
 
 
+/**
+ * @brief 初始化屏幕显示中的 App_Init 逻辑。
+ * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ */
 void App_Init(void) {
 	printf("LTD显示端重启！\r\n");
 	/* Force UART5 RS485 direction back to RX after CubeMX init. */
 	RS485_SET_RECV_MODE();
 	__HAL_UART_CLEAR_IDLEFLAG(&huart5);
-	DisplayInit(); // Initialize the OLED display
+	DisplayInit(); /* Initialize the OLED display */
 	DisplayAubonLogo(); /* 刚上电显示AUBON LOGO */
     /* RTC 先初始化，保证后续 SI7000 读当前时间或 profile 时间戳时有合法兜底值。 */
     Cpu3Clock_Init();
-    Cpu3_Params_LoadFromFRAM();//从 FRAM 载入 Cpu3 通讯+显示参数（里面会自动回退默认并保存）
-    Cpu3_ReinitAllUarts();//根据参数重配 3 个串口
-	DSM_CommunicationInit(); // 初始化通信模块
-	HAL_Delay(1000); //
+    Cpu3_Params_LoadFromFRAM(); /* 从 FRAM 载入 Cpu3 通讯+显示参数（里面会自动回退默认并保存） */
+    Cpu3_ReinitAllUarts(); /* 根据参数重配 3 个串口 */
+	DSM_CommunicationInit(); /* 初始化通信模块 */
+	/* 屏幕显示与外设通信之间保留等待时间，避免硬件或对端协议尚未准备好。 */
+	HAL_Delay(1000); /* */
 }
 
+/**
+ * @brief 执行屏幕显示中的 App_MainLoop 逻辑。
+ * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ */
 void App_MainLoop(void)
 {
     uint32_t ret;
@@ -360,7 +395,7 @@ void App_MainLoop(void)
 
     uint8_t did_work = 0;
 
-    cpu3_apply_uart_reinit_if_pending();// 如果有待重配的串口，先重配
+    cpu3_apply_uart_reinit_if_pending(); /* 如果有待重配的串口，先重配 */
     Display_Task();
     /* ========= COM1 ========= */
     if (com1_rx_ready == 1) {
@@ -492,7 +527,7 @@ void App_MainLoop(void)
     /* ========= 空闲才做轮询任务 ========= */
     if (!did_work) {
         PollingInputData();
-//        PrintMeasurementResult();
+/* PrintMeasurementResult(); */
         HAL_Delay(CPU2_POLL_IDLE_DELAY_MS);
     }
 }
