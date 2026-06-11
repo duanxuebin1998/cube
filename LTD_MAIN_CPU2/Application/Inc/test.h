@@ -27,4 +27,5 @@ void motor_text(float run_distance_mm, uint8_t enable_sensor_comm); // 电机测试
 void motor_text_encoder(float run_distance_mm, uint8_t enable_sensor_comm, uint32_t speed_x100, uint32_t accel_multiplier); // encoder-based mm motor test
 void Test_TMC5130_SPI_Static(void); // TMC5130静态SPI通信测试
 void Demo_SinglePointDisplayMock(void); // 单点测量展示（虚拟数据）
+uint8_t Test_ProcessSerialCommand(uint8_t *command);
 #endif /* INC_TEST_H_ */

@@ -39,6 +39,8 @@ CPU2 参数加载会校验 FRAM 中的 `magic`、`struct_size`、`param_version`
 | V1.12.1.2 | 3 | 存储版本不变；同步 11 项恢复出厂默认值，旧 FRAM 参数通常保留，新默认值仅在恢复出厂或 FRAM 无效时生效 |
 | V1.12.1.3 | 3 | 存储版本不变；继续同步恢复出厂默认值和状态页矩阵，旧 FRAM 参数通常保留 |
 | V1.12.2.0 | 3 | 存储版本不变；读取部件参数完成态改为持续刷新，`debug_data` 水位字段改为水位电容快照，旧 FRAM 参数通常保留 |
+| V1.13.0.0 | 3 | 存储版本不变；新增点动长距离运动接口和 BJ/BJP 本地串口测试命令，旧 FRAM 参数通常保留 |
+| V1.13.0.1 | 3 | 存储版本不变；拆分串口测试命令到 `test.c` 并整理构建流程，旧 FRAM 参数通常保留 |
 
 历史说明：建立 CPU2 程序版本号前，2025-12-16 引入当前参数元信息时使用 `DEVICE_PARAM_VERSION=1`；2026-03-05 系统参数增加时提升到 `DEVICE_PARAM_VERSION=2`，从版本 1 升级到版本 2 会因旧参数版本不匹配恢复出厂参数。
 
@@ -1059,3 +1061,32 @@ CPU2 参数加载会校验 FRAM 中的 `magic`、`struct_size`、`param_version`
 - `git diff --cached --check`
 - `py tools\check_version_bumped.py`
 - 功能分支已通过 ST-LINK 下载同一电机点动控制改动并做现场 BJ/BJP 测试：`BJP19450,1.5` 终点约 `19450.500mm`，未再出现超过目标位置后仍返回成功的问题。
+
+## 2026-06-11 - 拆分 CPU2 串口测试命令并整理构建流程（CPU2 V1.13.0.1）
+
+版本：
+- CPU2: V1.13.0.0 -> V1.13.0.1
+- CPU3: 保持 V1.11.2.0
+
+协议版本/兼容性：
+- `DEVICE_PROTOCOL_VERSION` 保持 7。
+- 不新增 CPU2/CPU3 共享命令码、状态码、寄存器地址或参数字段。
+- CPU2 `DEVICE_PARAM_VERSION` 保持 3，`DeviceParameters` 结构大小不变，从 V1.13.0.0 升级到 V1.13.0.1 不会因参数存储版本触发恢复出厂。
+- CPU2 本地串口测试命令字符、参数格式和执行入口保持兼容；本次只把测试命令实现从 `measure.c` 拆到 `test.c`，暂不区分正式/测试构建。
+- CPU3 屏幕驱动与刷新资料整理只新增分析文档和屏幕资料归档，不改变 CPU3 固件代码或协议行为。
+
+本次修改：
+- `measure.c` 保留正式业务串口命令映射和主循环调度，测试串口命令统一转交 `Test_ProcessSerialCommand()`。
+- `test.c` 承接 `SC`、`SP*`、`B/BE/BJ/BJP`、`A/C/D/E/F/H/J/L/M/N/T*/Y*/X` 等本地串口测试命令，并增加空命令保护。
+- `test.h` 新增 `Test_ProcessSerialCommand()` 声明，避免 `measure.c` 继续保存大量测试实现。
+- GitHub Actions CPU2/CPU3 构建流程改为显式 `source_dir`/`build_dir`，使用项目固定构建目录并按 `.elf/.hex/.bin/.map` 上传产物。
+- `.gitignore` 忽略 `.superpowers/` 本地工具目录。
+- 新增 CPU3 屏幕驱动与刷新问题分析文档，归档当前 HGS128645-Y-EH-LV / SSD1325 OLED 屏资料，并同步问题分析和界面文档索引。
+- 同步新增 CPU2 V1.13.0.1 改动与测试方案和 CPU2 参数存储升级说明。
+
+验证：
+- `cmake --build build\LTD_MAIN_CPU2`
+- `git diff --check -- LTD_MAIN_CPU2/Application/Src/measure.c LTD_MAIN_CPU2/Application/Src/test.c LTD_MAIN_CPU2/Application/Inc/test.h`
+- GBK 编码检查：`measure.c`、`test.c`、`test.h` 均未出现替换字符或 `??`。
+- 结构检查：`measure.c` 调用 `Test_ProcessSerialCommand()`，`test.c` 提供测试命令入口，`test.c` 不包含 `ProcessMeasureCmd()`。
+- `Get-FileHash -Algorithm SHA256 docs\04_界面与菜单\00_屏幕资料\HGS128645-Y-EH-LV_SSD1325_OLED_当前液位计屏幕_中文版.pdf`：与索引记录一致。

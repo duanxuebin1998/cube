@@ -14,6 +14,10 @@
 #include <stdlib.h>
 #include "system_parameter.h"
 #include "measure_tank_height.h"
+#include "measure_zero.h"
+#include "measure_oilLevel.h"
+#include "wireless_pairing.h"
+#include "error_log.h"
 #include "weight.h"
 #include "system_parameter.h"
 #include "sensor.h"
@@ -58,6 +62,9 @@ typedef struct {
 
 static void Test_SensorCommCheckAndPrintOnly(const char *tag);
 static void Test_MotorTextRestoreRampNoError(const MotorTextRampSnapshot *snapshot);
+static uint32_t Test_EnsureMotorPositionSourceBeforeFollow(const char *follow_name, uint8_t *switched_to_motor);
+static void Test_RunMeasureZeroOnce(void);
+static void Test_RunMeasureAndFollowOilLevelOnce(void);
 
 
 /**
@@ -972,6 +979,755 @@ static uint32_t Test_MoveUntilEncoderTarget(int32_t target_encoder,
         Test_MotorTextClearIgnoredError();
         HAL_Delay(MOTOR_TEXT_ENCODER_POLL_MS);
     }
+}
+
+static uint8_t Test_ProcessCommandSwitchRequested(void)
+{
+    if (!HasEffectiveCommandSwitchRequest()) {
+        return 0;
+    }
+
+    printf("检测到命令切换请求，停止当前串口命令\r\n");
+    return 1;
+}
+
+
+/**
+ * @brief 记录串口调试命令失败告警。
+ * @note 串口调试命令只做现场提示，不在这里设置最终错误状态。
+ */
+static void Test_ProcessCommandWarnFailure(const char *operation, uint32_t error_code)
+{
+    if ((error_code == NO_ERROR) || (error_code == STATE_SWITCH)) {
+        return;
+    }
+
+    // 错误	阶段：错误报警	模块：通信	操作：operation	原因：ErrorLog_GetReasonByCode(error_code)	处理：仅记录
+    ErrorLog_Warn(ERROR_LOG_MODULE_COMM,
+                  operation,
+                  ErrorLog_GetReasonByCode(error_code),
+                  "仅记录");
+}
+
+
+typedef struct {
+    DeviceState saved_state;
+    uint8_t active;
+} TestCommandDebugDisplaySnapshot;
+
+/**
+ * @brief 保存串口调试前的显示状态，并临时切到调试模式。
+ * @note 只在任务上下文调用；不清错误码、不执行硬件动作。
+ */
+static void Test_EnterDebugDisplayState(TestCommandDebugDisplaySnapshot *snapshot)
+{
+    if (snapshot == NULL) {
+        return;
+    }
+
+    if (snapshot->active == 0U) {
+        snapshot->saved_state = g_measurement.device_status.device_state;
+        snapshot->active = 1U;
+    }
+    g_measurement.device_status.device_state = STATE_DEBUG_MODE;
+}
+
+
+/**
+ * @brief 恢复串口调试前的显示状态。
+ * @note 仅当当前仍停留在调试模式时恢复，避免覆盖故障态或其他业务态。
+ */
+static void Test_RestoreDebugDisplayState(TestCommandDebugDisplaySnapshot *snapshot)
+{
+    if ((snapshot == NULL) || (snapshot->active == 0U)) {
+        return;
+    }
+
+    if (g_measurement.device_status.device_state == STATE_DEBUG_MODE) {
+        g_measurement.device_status.device_state = snapshot->saved_state;
+    }
+    snapshot->active = 0U;
+}
+
+
+#define TEST_COMMAND_BE_SPEED_DEFAULT      0U
+#define TEST_COMMAND_BE_MULTIPLIER_DEFAULT 1U
+#define TEST_COMMAND_BE_MULTIPLIER_MAX     20U
+
+typedef struct {
+    uint32_t speed_x100;
+    uint32_t accel_multiplier;
+    uint8_t enable_sensor_comm;
+} TestCommandBeOptions;
+
+/**
+ * @brief 限制 BE 调试倍率；0 或负数按 1 档，过大按上限处理。
+ */
+static uint32_t TestCommand_ClampBeMultiplier(long value)
+{
+    if (value <= 0L) {
+        return TEST_COMMAND_BE_MULTIPLIER_DEFAULT;
+    }
+    if (value > (long)TEST_COMMAND_BE_MULTIPLIER_MAX) {
+        return TEST_COMMAND_BE_MULTIPLIER_MAX;
+    }
+    return (uint32_t)value;
+}
+
+/**
+ * @brief 将 BE 命令速度从 m/min 转为 0.01m/min；0 表示沿用当前速度配置。
+ */
+static uint32_t TestCommand_ClampBeSpeedMMin(double value)
+{
+    double speed_x100;
+
+    if (!(value > 0.0)) {
+        return TEST_COMMAND_BE_SPEED_DEFAULT;
+    }
+
+    speed_x100 = value * 100.0;
+    if (speed_x100 < (double)MOTOR_LINEAR_SPEED_MIN_X100) {
+        return MOTOR_LINEAR_SPEED_MIN_X100;
+    }
+    if (speed_x100 > (double)MOTOR_LINEAR_SPEED_MAX_X100) {
+        return MOTOR_LINEAR_SPEED_MAX_X100;
+    }
+    return (uint32_t)(speed_x100 + 0.5);
+}
+
+/**
+ * @brief 解析 BJ/BJP 点动测试的可选速度，单位 m/min。
+ * @note  找不到逗号或速度非法时返回 0，表示沿用当前默认速度配置。
+ */
+static uint32_t TestCommand_ParseJogSpeedX100(const char *arg_tail)
+{
+    const char *comma;
+    char *endptr;
+    double speed_m_min;
+
+    if (arg_tail == NULL) {
+        return TEST_COMMAND_BE_SPEED_DEFAULT;
+    }
+
+    comma = arg_tail;
+    while ((*comma != '\0') && (*comma != ',')) {
+        comma++;
+    }
+    if (*comma != ',') {
+        return TEST_COMMAND_BE_SPEED_DEFAULT;
+    }
+
+    comma++;
+    speed_m_min = strtod(comma, &endptr);
+    if (endptr == comma) {
+        return TEST_COMMAND_BE_SPEED_DEFAULT;
+    }
+    return TestCommand_ClampBeSpeedMMin(speed_m_min);
+}
+
+/**
+ * @brief 处理 BJ/BJP 点动测试命令。
+ * @return 已识别并处理返回 1，非 BJ 命令返回 0。
+ */
+static uint8_t TestCommand_HandleJogMotorTest(const uint8_t *command)
+{
+    const char *arg;
+    char *endptr;
+    double value;
+    uint32_t speed_x100;
+    int dir;
+
+    if ((command == NULL) || (command[0] != 'B') || (command[1] != 'J')) {
+        return 0U;
+    }
+
+    if (command[2] == 'P') {
+        arg = (const char *)&command[3];
+        value = strtod(arg, &endptr);
+        if (endptr == arg) {
+            printf("BJP点动到位测试\t目标参数无效\t命令=%s\r\n", (const char *)command);
+            return 1U;
+        }
+        speed_x100 = TestCommand_ParseJogSpeedX100(endptr);
+        printf("串口BJ指令\t命令参数\t模式=BJP绝对位置\t目标=%.3fmm\t速度=%.2fm/min\t速度x100=%lu\r\n",
+               value,
+               (double)speed_x100 / 100.0,
+               (unsigned long)speed_x100);
+        motor_jog_to_position_text((float)value, speed_x100);
+        return 1U;
+    }
+
+    if ((command[2] != '+') && (command[2] != '-')) {
+        printf("BJ点动测试\t用法：BJ+<mm>[,<速度m/min>]，BJ-<mm>[,<速度m/min>]，BJP<目标mm>[,<速度m/min>]\r\n");
+        return 1U;
+    }
+
+    dir = (command[2] == '+') ? MOTOR_DIRECTION_UP : MOTOR_DIRECTION_DOWN;
+    arg = (const char *)&command[3];
+    value = strtod(arg, &endptr);
+    if (endptr == arg) {
+        printf("BJ点动测试\t距离参数无效\t命令=%s\r\n", (const char *)command);
+        return 1U;
+    }
+    if (value < 0.0) {
+        value = -value;
+    }
+    if (!(value > 0.0)) {
+        printf("BJ点动测试\t距离参数无效\t距离=%.3fmm\r\n", value);
+        return 1U;
+    }
+
+    speed_x100 = TestCommand_ParseJogSpeedX100(endptr);
+    printf("串口BJ指令\t命令参数\t模式=BJ相对\t方向=%s\t距离=%.3fmm\t速度=%.2fm/min\t速度x100=%lu\r\n",
+           MotorCtrl_DirectionText(dir),
+           value,
+           (double)speed_x100 / 100.0,
+           (unsigned long)speed_x100);
+    motor_jog_text((float)value, dir, speed_x100);
+    return 1U;
+}
+/**
+ * @brief 解析 BE 可选参数，兼容旧的 BE100S 和 BE100,1 传感器通信写法。
+ * @note  新格式：BE距离,速度m/min,加速度倍率,S 或 BE距离,速度m/min,加速度倍率,1。
+ */
+static void TestCommand_ParseBeOptions(const char *arg, TestCommandBeOptions *options)
+{
+    const char *p;
+    double values[4] = {0.0, 0.0, 0.0, 0.0};
+    uint32_t value_count = 0U;
+
+    if (options == NULL) {
+        return;
+    }
+
+    options->speed_x100 = TEST_COMMAND_BE_SPEED_DEFAULT;
+    options->accel_multiplier = TEST_COMMAND_BE_MULTIPLIER_DEFAULT;
+    options->enable_sensor_comm = 0U;
+
+    if (arg == NULL) {
+        return;
+    }
+
+    p = arg;
+    while (*p != '\0') {
+        if (*p == 'S') {
+            options->enable_sensor_comm = 1U;
+            p++;
+            continue;
+        }
+        if (*p == ',') {
+            char *endptr;
+            double value;
+
+            p++;
+            if (*p == 'S') {
+                options->enable_sensor_comm = 1U;
+                p++;
+                continue;
+            }
+            value = strtod(p, &endptr);
+            if (endptr == p) {
+                p++;
+                continue;
+            }
+            if (value_count < 4U) {
+                values[value_count] = value;
+                value_count++;
+            }
+            p = endptr;
+            continue;
+        }
+        p++;
+    }
+
+    if ((value_count == 1U) && (values[0] == 1.0)) {
+        options->enable_sensor_comm = 1U;
+        return;
+    }
+
+    if (value_count >= 1U) {
+        options->speed_x100 = TestCommand_ClampBeSpeedMMin(values[0]);
+    }
+    if (value_count >= 2U) {
+        options->accel_multiplier = TestCommand_ClampBeMultiplier((long)values[1]);
+    }
+    if ((value_count >= 3U) && ((long)values[2] == 1L)) {
+        options->enable_sensor_comm = 1U;
+    }
+}
+
+static uint32_t Test_EnsureMotorPositionSourceBeforeFollow(const char *follow_name, uint8_t *switched_to_motor)
+{
+    uint32_t ret;
+
+    if (switched_to_motor != NULL) {
+        *switched_to_motor = 0U;
+    }
+
+    if (MotorCtrl_IsPositionSourceMotor()) {
+        return NO_ERROR;
+    }
+
+    if (g_deviceParams.position_source_auto_switch != POSITION_SOURCE_AUTO_SWITCH_ENABLE) {
+        printf("%s\tposition source auto switch disabled\r\n", follow_name);
+        return NO_ERROR;
+    }
+
+    printf("%s\tswitch position source to motor count\r\n", follow_name);
+    ret = MotorCtrl_SwitchPositionSourceToMotor();
+    if (ret != NO_ERROR) {
+        printf("%s\tswitch motor count failed:0x%08lX\r\n", follow_name, (unsigned long)ret);
+        return ret;
+    }
+
+    if (switched_to_motor != NULL) {
+        *switched_to_motor = 1U;
+    }
+
+    return NO_ERROR;
+}
+
+static void Test_RunMeasureZeroOnce(void)
+{
+    uint32_t ret;
+
+    (void)MeasureStart();
+    g_measurement.device_status.device_state = STATE_BACKZEROING;
+    ret = (uint32_t)SearchZero();
+    SET_ERROR(ret);
+    g_measurement.device_status.device_state = STATE_STANDBY;
+}
+
+static void Test_RunMeasureAndFollowOilLevelOnce(void)
+{
+    uint32_t ret;
+
+    (void)MeasureStart();
+    g_measurement.device_status.device_state = STATE_FINDOIL;
+    if ((g_measurement.device_status.zero_point_status == 1) &&
+        (g_deviceParams.error_auto_back_zero == 1)) {
+        printf("Oil measure\tback zero required\r\n");
+        ret = (uint32_t)SearchZero();
+        SET_ERROR(ret);
+        printf("Oil measure\tback zero done\r\n");
+    }
+
+    ret = SearchOilLevel();
+    SET_ERROR(ret);
+
+    if (!MotorCtrl_IsPositionSourceMotor()) {
+        uint8_t switched_to_motor = 0U;
+        ret = Test_EnsureMotorPositionSourceBeforeFollow("Oil follow", &switched_to_motor);
+        SET_ERROR(ret);
+        if (switched_to_motor != 0U) {
+            g_measurement.device_status.device_state = STATE_FINDOIL;
+            ret = SearchOilLevel();
+            SET_ERROR(ret);
+        }
+    }
+
+    g_measurement.device_status.device_state = STATE_FLOWOIL;
+    ret = FollowOilLevel();
+    SET_ERROR(ret);
+}
+
+/**
+ * @brief 处理从 measure.c 拆出的串口测试命令。
+ * @return 已识别并处理返回 1，非测试命令返回 0。
+ */
+uint8_t Test_ProcessSerialCommand(uint8_t *command)
+{
+    uint32_t ret = NO_ERROR;
+    TestCommandDebugDisplaySnapshot debug_display = { STATE_STANDBY, 0U };
+
+    if ((command == NULL) || (command[0] == '\0')) {
+        return 0U;
+    }
+
+    if ((command[0] == 'S') && (command[1] == 'C') && (command[2] == '\0')) {
+        /* 通信测试不依赖电机初始化，放在 MeasureStart 前便于排查传感器和无线链路。 */
+        printf("串口调试\t执行传感器与无线通信综合测试指令\r\n");
+        Test_EnterDebugDisplayState(&debug_display);
+        SensorWireless_CommTest();
+        Test_RestoreDebugDisplayState(&debug_display);
+                return 1U;
+    }
+
+    if ((command[0] == 'S') && (command[1] == 'P')) {
+        if (command[2] == 'S' && command[3] == '\0') {
+            (void)WirelessPairing_DebugScan();
+            return 1U;
+        }
+        if (command[2] == 'R' && command[3] == '\0') {
+            (void)WirelessPairing_RunByRssi();
+            return 1U;
+        }
+        if (command[2] == 'N' && command[3] == '=') {
+            (void)WirelessPairing_RunByName((const char *)&command[4]);
+            return 1U;
+        }
+        if (command[2] == 'C' && command[3] == '\0') {
+            /* SPC 只查询当前连接，不触发扫描或默认连接保存，便于现场确认已连接从机。 */
+            (void)WirelessPairing_PrintConnectionStatus();
+            return 1U;
+        }
+        printf("SP调试命令\t用法：SPS=扫描，SPR=按RSSI匹配，SPN=<名称>=按蓝牙名称匹配，SPC=读取连接状态\r\n");
+        return 1U;
+    }
+    if (command[0] == 'B') {
+        if (TestCommand_HandleJogMotorTest(command)) {
+            return 1U;
+        }
+
+        const uint8_t use_encoder_count = (command[1] == 'E') ? 1U : 0U;
+        const char *arg = (const char *)&command[use_encoder_count ? 2U : 1U];
+        int value = atoi(arg);
+        uint8_t enable_sensor_comm = 0U;
+        TestCommandBeOptions be_options;
+
+        TestCommand_ParseBeOptions(arg, &be_options);
+
+        /* B100: motor model distance in mm; BE100: encoder-based distance in mm. */
+        for (uint32_t i = use_encoder_count ? 2U : 1U; command[i] != '\0'; ++i) {
+            if ((command[i] == 'S') ||
+                ((command[i] == ',') && (command[i + 1U] == '1'))) {
+                enable_sensor_comm = 1U;
+                break;
+            }
+        }
+
+        if (value <= 0) {
+            if (use_encoder_count) {
+                printf("BE编码器测试\t距离参数无效\t距离=%dmm\r\n", value);
+            } else {
+                printf("B电机测试\t距离参数无效\t距离=%dmm\r\n", value);
+            }
+            return 1U;
+        }
+
+        if (use_encoder_count) {
+            printf("串口B指令\t命令参数\t模式=BE编码器\t距离=%dmm\t速度=%.2fm/min\t速度x100=%lu\t加速度倍率=%lu\t运动中传感器通信=%u\r\n",
+                   value,
+                   (double)be_options.speed_x100 / 100.0,
+                   (unsigned long)be_options.speed_x100,
+                   (unsigned long)be_options.accel_multiplier,
+                   (unsigned int)be_options.enable_sensor_comm);
+            motor_text_encoder((float)value,
+                               be_options.enable_sensor_comm,
+                               be_options.speed_x100,
+                               be_options.accel_multiplier);
+            /* BE 正常设计为循环测试；如果返回，通常是命令切换或参数异常。 */
+            printf("串口B指令\tBE已返回\t距离=%dmm\t待执行命令=%lu\t当前命令=%lu\t新串口命令=%u\r\n",
+                   value,
+                   (unsigned long)g_deviceParams.command,
+                   (unsigned long)g_measurement.device_status.current_command,
+                   (unsigned int)new_command_ready);
+        } else {
+            printf("串口B指令\t命令参数\t模式=B电机\t距离=%dmm\t传感器通信=%u\r\n",
+                   value,
+                   (unsigned int)enable_sensor_comm);
+            motor_text((float)value, enable_sensor_comm);
+        }
+        return 1U;
+    }
+    /* A 指令走与 B/BE 一致的低检测电机路径；其它调试/恢复动作仍先执行 MeasureStart。 */
+    if (command[0] != 'A') {
+        ret = (uint32_t)MeasureStart();
+        if (ret != NO_ERROR) {
+            printf("串口命令\t启动失败\t电机初始化错误码=0x%08lX\\r\\n", (unsigned long)ret);
+            return 1U;
+        }
+    }
+    if (command[0] == 'A') {
+        Test_EnterDebugDisplayState(&debug_display);
+        if (command[1] == '0') {
+            motor_text_manual_stop();
+        } else if (command[1] == '+') {
+            int mm = atoi((char*) &command[2]);
+            printf("串口上行\t距离=%dmm\\r\\n", mm);
+            motor_text_manual_once((float)mm, MOTOR_DIRECTION_UP);
+        } else if (command[1] == '-') {
+            int mm = atoi((char*) &command[2]);
+            printf("串口下行\t距离=%dmm\\r\\n", mm);
+            motor_text_manual_once((float)mm, MOTOR_DIRECTION_DOWN);
+        }
+        Test_RestoreDebugDisplayState(&debug_display);
+                return 1U;
+    }
+
+    if (command[0] == 'C') {
+        printf("串口调试\t电机4步进分辨率测试开始\r\n");
+        Test_EnterDebugDisplayState(&debug_display);
+        motor_step_text();
+        Test_RestoreDebugDisplayState(&debug_display);
+                return 1U;
+    }
+    if (command[0] == 'D') {
+        printf("串口调试\t电机4步进下行触底测试开始\r\n");
+        Test_EnterDebugDisplayState(&debug_display);
+        motor_step_down_text();
+        Test_RestoreDebugDisplayState(&debug_display);
+                return 1U;
+    }
+    if (command[0] == 'E') {
+        printf("串口调试\t电机4步进上行碰零点测试开始\r\n");
+        Test_EnterDebugDisplayState(&debug_display);
+        motor_step_up_text();
+        Test_RestoreDebugDisplayState(&debug_display);
+                return 1U;
+    }
+    if (command[0] == 'F') {
+        printf("串口调试\t罐底测量重复性测试开始\r\n");
+        while (1) {
+            if (Test_ProcessCommandSwitchRequested()) {
+                return 1U;
+            }
+            ret = SearchBottom();
+            if ((ret == STATE_SWITCH) || Test_ProcessCommandSwitchRequested()) {
+                return 1U;
+            }
+        }
+    }
+    if (command[0] == 'H') {
+        printf("串口调试\t零点/罐底测量重复性测试开始\r\n");
+        while (1) {
+            if (Test_ProcessCommandSwitchRequested()) {
+                return 1U;
+            }
+            Test_RunMeasureZeroOnce();
+            if (Test_ProcessCommandSwitchRequested()) {
+                return 1U;
+            }
+            ret = SearchBottom();
+            if ((ret == STATE_SWITCH) || Test_ProcessCommandSwitchRequested()) {
+                return 1U;
+            }
+        }
+    }
+    if (command[0] == 'J') {
+        printf("串口调试\t液位测量重复性测试开始\r\n");
+        while (1) {
+            if (Test_ProcessCommandSwitchRequested()) {
+                MotorCtrl_SlowStop();
+                return 1U;
+            }
+            Test_RunMeasureAndFollowOilLevelOnce();
+            if (Test_ProcessCommandSwitchRequested()) {
+                MotorCtrl_SlowStop();
+                return 1U;
+            }
+        }
+    }
+    if (command[0] == 'L') {
+        printf("串口调试\t编码值清零\r\n");
+        Test_EnterDebugDisplayState(&debug_display);
+        set_encoder_zero();
+        Test_RestoreDebugDisplayState(&debug_display);
+        /* 手动清编码器零点不清电机记步基准，避免电机记步位置口径被重置。 */
+        return 1U;
+    }
+    if (command[0] == 'M') {
+        Test_EnterDebugDisplayState(&debug_display);
+        printf("串口调试\t电机高温循环测试开始\r\n");
+        while (1) {
+            if (Test_ProcessCommandSwitchRequested()) {
+                MotorCtrl_SlowStop();
+                Test_RestoreDebugDisplayState(&debug_display);
+                return 1U;
+            }
+            ret = MotorCtrl_MoveNoWait(100000, MOTOR_DIRECTION_DOWN, MotorCtrl_GetDefaultSpeedX100());
+            if ((ret == STATE_SWITCH) || Test_ProcessCommandSwitchRequested()) {
+                MotorCtrl_SlowStop();
+                Test_RestoreDebugDisplayState(&debug_display);
+                return 1U;
+            }
+            HAL_Delay(1000);
+            if (Test_ProcessCommandSwitchRequested()) {
+                MotorCtrl_SlowStop();
+                Test_RestoreDebugDisplayState(&debug_display);
+                return 1U;
+            }
+            ret = stpr_waitMove(&stepper);
+            if ((ret == STATE_SWITCH) || Test_ProcessCommandSwitchRequested()) {
+                MotorCtrl_SlowStop();
+                Test_RestoreDebugDisplayState(&debug_display);
+                return 1U;
+            }
+        }
+    }
+    if (command[0] == 'N') {
+        Test_EnterDebugDisplayState(&debug_display);
+        printf("串口调试\t电机300mm往返测试开始\r\n");
+        while (1) {
+            if (Test_ProcessCommandSwitchRequested()) {
+                MotorCtrl_SlowStop();
+                Test_RestoreDebugDisplayState(&debug_display);
+                return 1U;
+            }
+            stpr_enableDriver(&stepper);
+            ret = MotorCtrl_MoveNoWait(300, MOTOR_DIRECTION_DOWN, MotorCtrl_GetDefaultSpeedX100());
+            if ((ret == STATE_SWITCH) || Test_ProcessCommandSwitchRequested()) {
+                MotorCtrl_SlowStop();
+                Test_RestoreDebugDisplayState(&debug_display);
+                return 1U;
+            }
+            HAL_Delay(1000);
+            printf("电机往返测试\t下行开始\r\n");
+            HAL_Delay(1000);
+            printf("电机往返测试\t下行指令已等待\r\n");
+            ret = stpr_waitMove(&stepper);
+            if ((ret == STATE_SWITCH) || Test_ProcessCommandSwitchRequested()) {
+                MotorCtrl_SlowStop();
+                Test_RestoreDebugDisplayState(&debug_display);
+                return 1U;
+            }
+            ret = MotorCtrl_MoveNoWait(300, MOTOR_DIRECTION_UP, MotorCtrl_GetDefaultSpeedX100());
+            if ((ret == STATE_SWITCH) || Test_ProcessCommandSwitchRequested()) {
+                MotorCtrl_SlowStop();
+                Test_RestoreDebugDisplayState(&debug_display);
+                return 1U;
+            }
+            printf("电机往返测试\t上行回零开始\r\n");
+            HAL_Delay(1000);
+            ret = stpr_waitMove(&stepper);
+            if ((ret == STATE_SWITCH) || Test_ProcessCommandSwitchRequested()) {
+                MotorCtrl_SlowStop();
+                Test_RestoreDebugDisplayState(&debug_display);
+                return 1U;
+            }
+            printf("电机往返测试\t上行回零完成\r\n");
+            HAL_Delay(1000);
+            stpr_disableDriver(&stepper);
+        }
+    }
+    /* TFIT：卷筒参数拟合调试命令。
+     * 推荐流程：T1 开始采样 -> 运行电机 -> TS/TR 查看或求解 -> TP/TU 应用参数。 */
+    if (command[0] == 'T') {
+        Test_EnterDebugDisplayState(&debug_display);
+        switch (command[1]) {
+        case '1':
+            /* 开始自动采样 */
+            MotorCtrl_TapeFitStart();
+            Test_RestoreDebugDisplayState(&debug_display);
+                return 1U;
+        case '2':
+            /* 局部 TFIT：把当前位置作为新的 0 圈起点 */
+            MotorCtrl_TapeFitStartLocalOrigin();
+            Test_RestoreDebugDisplayState(&debug_display);
+                return 1U;
+        case '0':
+            /* 停止自动采样 */
+            MotorCtrl_TapeFitStop();
+            Test_RestoreDebugDisplayState(&debug_display);
+                return 1U;
+        case 'A':
+            /* 手动添加样本 */
+            MotorCtrl_TapeFitAddCurrentSample();
+            Test_RestoreDebugDisplayState(&debug_display);
+                return 1U;
+        case 'S':
+            /* 打印拟合状态 */
+            MotorCtrl_TapeFitPrintStatus();
+            Test_RestoreDebugDisplayState(&debug_display);
+                return 1U;
+        case 'R':
+            /* 求解拟合参数 */
+            ret = MotorCtrl_TapeFitSolve();
+            if (ret != NO_ERROR) {
+                printf("卷筒拟合\t全局求解失败\t错误码=0x%08lX\r\n", (unsigned long)ret);
+                Test_ProcessCommandWarnFailure("卷筒拟合全局求解", ret);
+            }
+            Test_RestoreDebugDisplayState(&debug_display);
+                return 1U;
+        case 'V':
+            /* 局部 TFIT：用当前位置起点采样求解局部厚度/周长 */
+            ret = MotorCtrl_TapeFitSolveLocalOrigin();
+            if (ret != NO_ERROR) {
+                printf("卷筒拟合\t局部求解失败\t错误码=0x%08lX\r\n", (unsigned long)ret);
+                Test_ProcessCommandWarnFailure("卷筒拟合局部求解", ret);
+            }
+            Test_RestoreDebugDisplayState(&debug_display);
+                return 1U;
+        case 'P':
+            /* 仅应用拟合出的厚度 t */
+            ret = MotorCtrl_TapeFitApply(false, true);
+            if (ret != NO_ERROR) {
+                printf("卷筒拟合\t应用尺带厚度失败\t错误码=0x%08lX\r\n", (unsigned long)ret);
+                Test_ProcessCommandWarnFailure("卷筒拟合应用尺带厚度", ret);
+            }
+            Test_RestoreDebugDisplayState(&debug_display);
+                return 1U;
+        case 'U':
+            /* 同时应用拟合出的 C0 和 t */
+            ret = MotorCtrl_TapeFitApply(true, true);
+            if (ret != NO_ERROR) {
+                printf("卷筒拟合\t应用首圈周长和厚度失败\t错误码=0x%08lX\r\n", (unsigned long)ret);
+                Test_ProcessCommandWarnFailure("卷筒拟合应用首圈周长和厚度", ret);
+            }
+            Test_RestoreDebugDisplayState(&debug_display);
+                return 1U;
+        default:
+            printf("卷筒拟合命令\t用法：T1=全局开始，T2=局部开始，T0=停止，TA=采样，TS=状态，TR=全局求解，TV=局部求解，TP=应用厚度，TU=应用首圈周长和厚度\r\n");
+            Test_RestoreDebugDisplayState(&debug_display);
+                return 1U;
+        }
+    }
+    /* Y：位置源手动切换调试命令。
+     * YM：以当前编码轮尺带长度为基准，切换到电机记步；切换过程会下行一周标定局部周长再返回。
+     * YE：切回编码轮记步，后续 cable_length / sensor_position 重新由编码轮刷新。
+     * YS：打印当前记步模式，以及电机尺带和编码轮尺带参考值。
+     * YC：电机记步诊断，统一打印基准、局部周长、寄存器和状态校验。 */
+    if (command[0] == 'Y') {
+        Test_EnterDebugDisplayState(&debug_display);
+        switch (command[1]) {
+        case 'M':
+            printf("位置源切换\t编码轮切换到电机记步\r\n");
+            ret = MotorCtrl_SwitchPositionSourceToMotor();
+            if (ret != NO_ERROR) {
+                printf("位置源切换\t切换电机记步失败\t错误码=0x%08lX\r\n", (unsigned long)ret);
+                Test_ProcessCommandWarnFailure("切换电机记步", ret);
+            } else {
+                printf("位置源切换\t电机记步切换完成\r\n");
+            }
+            Test_RestoreDebugDisplayState(&debug_display);
+                return 1U;
+        case 'E':
+            printf("位置源切换\t电机记步切换到编码轮\r\n");
+            ret = MotorCtrl_SwitchPositionSourceToEncoder();
+            if (ret != NO_ERROR) {
+                printf("位置源切换\t切换编码轮记步失败\t错误码=0x%08lX\r\n", (unsigned long)ret);
+                Test_ProcessCommandWarnFailure("切换编码轮记步", ret);
+            } else {
+                printf("位置源切换\t编码轮记步切换完成\r\n");
+            }
+            Test_RestoreDebugDisplayState(&debug_display);
+                return 1U;
+        case 'S':
+            MotorCtrl_PrintPositionCompare();
+            Test_RestoreDebugDisplayState(&debug_display);
+                return 1U;
+        case 'C':
+            MotorCtrl_PrintMotorCountStatus();
+            Test_RestoreDebugDisplayState(&debug_display);
+                return 1U;
+        case 'T':
+            Test_TMC5130_SPI_Static();
+            Test_RestoreDebugDisplayState(&debug_display);
+                return 1U;
+        default:
+            printf("位置源命令\t用法：YM=切换电机记步，YE=切换编码轮记步，YS=显示位置源，YC=电机记步诊断，YT=静态SPI测试\r\n");
+            Test_RestoreDebugDisplayState(&debug_display);
+                return 1U;
+        }
+    }
+    if (command[0] == 'X') {
+        printf("串口调试\t执行单点测量展示指令\r\n");
+        Demo_SinglePointDisplayMock();
+        return 1U;
+    }
+
+
+    return 0U;
 }
 
 //电机小步进上行测试

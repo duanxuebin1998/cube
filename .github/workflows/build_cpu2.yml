@@ -12,7 +12,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        target: [cpu2-debug, cpu3-debug]
+        include:
+          - target: cpu2-debug
+            source_dir: LTD_MAIN_CPU2
+            build_dir: build/LTD_MAIN_CPU2
+          - target: cpu3-debug
+            source_dir: LTD_DISPLAY_CPU3
+            build_dir: build/LTD_DISPLAY_CPU3
 
     steps:
       - name: Checkout
@@ -29,14 +35,21 @@ jobs:
 
       - name: Configure (${{ matrix.target }})
         run: |
-          cmake --preset ${{ matrix.target }} --fresh
+          cmake -S "${{ matrix.source_dir }}" -B "${{ matrix.build_dir }}" -G Ninja \
+            -DCMAKE_TOOLCHAIN_FILE="${GITHUB_WORKSPACE}/cmake/toolchain-arm-none-eabi.cmake" \
+            -DCMAKE_BUILD_TYPE=Debug
 
       - name: Build (${{ matrix.target }})
         run: |
-          cmake --build --preset ${{ matrix.target }}
+          cmake --build "${{ matrix.build_dir }}"
 
       - name: Upload artifacts (${{ matrix.target }})
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.target }}-artifacts
-          path: ${{ matrix.target == 'cpu2-debug' && 'build/LTD_MAIN_CPU2/LTD_MAIN_CPU2/*' || 'build/LTD_DISPLAY_CPU3/LTD_DISPLAY_CPU3/*' }}
+          path: |
+            ${{ matrix.build_dir }}/*.elf
+            ${{ matrix.build_dir }}/*.hex
+            ${{ matrix.build_dir }}/*.bin
+            ${{ matrix.build_dir }}/*.map
+          if-no-files-found: error

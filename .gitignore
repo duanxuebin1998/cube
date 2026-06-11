@@ -2,6 +2,7 @@
 .cproject
 .settings/
 .metadata/
+.superpowers/
 *.launch
 .mxproject
 
