@@ -2,7 +2,7 @@
 
 日期：2026-06-11
 
-适用版本：CPU3 `V1.11.1.3`
+适用版本：CPU3 `V1.13.0.0`
 
 源码依据：`LTD_DISPLAY_CPU3/Application/display/display.c`
 

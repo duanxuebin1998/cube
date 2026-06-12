@@ -595,6 +595,41 @@ static int SearchWaterPrecise(void)
         printf("水位测量\t上行完成\r\n");
     }
 
+    /* 粗找停稳后探头可能仍在水中，细找前先上行脱离水区，避免第一次采样直接结束。 */
+    ret = check_water_status(&water_state);
+    CHECK_ERROR(ret);
+    if (water_state == WATER)
+    {
+        const int32_t zero_near_th = 1000;
+
+        MotorCtrl_LostStepInit();
+        printf("水位测量\t细找前仍在水中，先上行脱离水区\r\n");
+        while (water_state == WATER)
+        {
+            if (g_measurement.debug_data.cable_length <= zero_near_th)
+            {
+                ret = MotorCtrl_SlowStop();
+                CHECK_ERROR(ret);
+                RETURN_ERROR(MEASUREMENT_WATERLEVEL_LOW);
+            }
+
+            ret = MotorCtrl_MoveUp(40U);
+            CHECK_ERROR(ret);
+
+            ret = check_water_status(&water_state);
+            CHECK_ERROR(ret);
+
+            ret = MotorCtrl_CheckLostStepAutoTiming(g_measurement.debug_data.sensor_position);
+            CHECK_ERROR(ret);
+
+            CHECK_COMMAND_SWITCH(NO_ERROR);
+        }
+
+        ret = MotorCtrl_SlowStop();
+        CHECK_ERROR(ret);
+        printf("水位测量\t已脱离水区，开始低速下行细找\r\n");
+    }
+
     MotorCtrl_LostStepInit(); /* 重置丢步检测计数器 */
     while (1)
     {

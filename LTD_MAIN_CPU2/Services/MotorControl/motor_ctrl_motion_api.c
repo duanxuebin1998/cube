@@ -605,6 +605,35 @@ uint32_t MotorCtrl_MoveDown(uint32_t speed_x100)
     return NO_ERROR;
 }
 
+uint32_t MotorCtrl_StartVelocity(int dir, uint32_t speed_x100)
+{
+    uint32_t ret;
+
+    CHECK_COMMAND_SWITCH_AND_STOP(COMMAND_SWITCH_ABORT);
+
+    if (!MotorDriver_IsDirValid(dir)) {
+        return PARAM_ERROR;
+    }
+
+    ret = MotorDriver_CheckMotionReady();
+    CHECK_ERROR(ret);
+
+    ret = MotorDriver_CheckHealth(MOTOR_DRIVER_HEALTH_BEFORE_MOTION);
+    CHECK_ERROR(ret);
+
+    ret = MotorDriver_ApplyOptionalSpeed(speed_x100);
+    CHECK_ERROR(ret);
+
+    ret = MotorDriver_SyncPositionOrCheckHealth(&stepper);
+    CHECK_ERROR(ret);
+
+    ret = MotorMotion_StartJogVelocity(dir);
+    CHECK_ERROR(ret);
+
+    MotorMotion_SetActiveState(MotorMotion_DisplayStateFromDirection(dir), false);
+    return NO_ERROR;
+}
+
 /**
  * @brief 获取当前传感器位置快照。
  *

@@ -24,6 +24,7 @@
 #include "encoder.h"
 #include "error_log.h"
 #include "abortable_delay.h"
+#include <math.h>
 
 /* 函数原型声明 */
 static int SearchOil();   /* 粗略搜索液位 */
@@ -35,6 +36,51 @@ static uint32_t determine_level_status_internal(Level_StateTypeDef *state_out, u
 static uint32_t OilLevel_StopBeforeReturn(uint32_t error_code, const char *reason);
 static uint32_t OilLevel_ClampLevelForReport(int32_t oil_level, const char *reason);
 static void OilLevel_SyncCurrentPositionToResult(const char *reason);
+
+#define OIL_LEVEL_METHOD_RELATIVE_FREQ 0U
+#define OIL_LEVEL_METHOD_FIXED_FREQ    1U
+#define OIL_LEVEL_METHOD_DENSITY       2U
+#define OIL_LEVEL_METHOD_CONTINUOUS_RELATIVE_FREQ 4U
+#define OIL_LEVEL_METHOD_CONTINUOUS_FIXED_FREQ    5U
+
+#define DENSITY_LEVEL_RUN_SEARCH              0U
+#define DENSITY_LEVEL_RUN_FOLLOW              1U
+#define DENSITY_LEVEL_DIR_NONE                (-1)
+#define DENSITY_LEVEL_MIN_SPEED_X100          10U
+#define DENSITY_LEVEL_SPEED_DELTA_X100        5U
+#define DENSITY_LEVEL_STABLE_COUNT            3U
+#define DENSITY_LEVEL_INVALID_DENSITY_LIMIT   5U
+#define DENSITY_LEVEL_SAMPLE_DELAY_MS         200U
+#define DENSITY_LEVEL_SEARCH_TIMEOUT_MS       600000U
+#define DENSITY_LEVEL_DEFAULT_DEADBAND_KGM3   0.5f
+#define DENSITY_LEVEL_KP_SPEED_X100_PER_KGM3  20.0f
+
+#define FREQUENCY_LEVEL_RUN_SEARCH              0U
+#define FREQUENCY_LEVEL_RUN_FOLLOW              1U
+#define FREQUENCY_LEVEL_MIN_SPEED_X100          10U
+#define FREQUENCY_LEVEL_STABLE_COUNT            3U
+#define FREQUENCY_LEVEL_SAMPLE_DELAY_MS         200U
+#define FREQUENCY_LEVEL_SEARCH_TIMEOUT_MS       600000U
+#define FREQUENCY_LEVEL_DEFAULT_DEADBAND_HZ     15.0f
+#define FREQUENCY_LEVEL_KP_SPEED_X100_PER_HZ    0.10f
+#define FREQUENCY_LEVEL_RELATIVE_EDGE_MARGIN_HZ 200.0f
+
+static uint32_t DensityLevel_StopAndReturn(uint32_t error_code, const char *reason);
+static uint32_t DensityLevel_RunClosedLoop(uint32_t follow_mode);
+static uint32_t DensityLevel_ReadCurrent(float *density, float *frequency, float *temperature);
+static uint32_t DensityLevel_ComputeSpeedX100(float density_error, float deadband, uint32_t max_speed_x100);
+static uint32_t DensityLevel_StartOrUpdateMotion(int dir, uint32_t speed_x100, int *active_dir, uint32_t *active_speed_x100);
+static float DensityLevel_GetDeadband(uint32_t raw_threshold);
+static uint32_t DensityLevel_GetStableDelayMs(void);
+static void DensityLevel_RecordCurrentPosition(const char *tag);
+
+static uint32_t FrequencyLevel_StopAndReturn(uint32_t error_code, const char *reason);
+static uint32_t FrequencyLevel_RunClosedLoop(uint32_t follow_mode);
+static uint32_t FrequencyLevel_ComputeSpeedX100(float frequency_error, float deadband, uint32_t max_speed_x100);
+static float FrequencyLevel_GetDeadband(uint32_t raw_threshold);
+static uint8_t FrequencyLevel_IsStableInsideBand(float frequency_error, float deadband);
+static int FrequencyLevel_CorrectRelativeEndpointDirection(int dir);
+static void FrequencyLevel_RecordCurrentPosition(const char *tag);
 
 static void OilLevel_PrintFollowPositionInfo(void);
 uint32_t FollowOilLevel(void);
@@ -52,6 +98,8 @@ static uint32_t OilLevel_StopBeforeReturn(uint32_t error_code, const char *reaso
 
     return error_code;
 }
+
+
 
 /**
  * @brief 液位结果字段是无符号，上报前负位置统一按0处理。
@@ -107,6 +155,301 @@ static void OilLevel_PrintFollowPositionInfo(void)
 }
 
 
+static uint32_t DensityLevel_StopAndReturn(uint32_t error_code, const char *reason)
+{
+    if (error_code == NO_ERROR) {
+        return NO_ERROR;
+    }
+    if (error_code != STATE_SWITCH) {
+        printf("密度找液位\t%s\t停止电机后返回\t错误码=0x%08lX\r\n",
+               (reason != NULL) ? reason : "闭环退出",
+               (unsigned long)error_code);
+    }
+    (void)MotorCtrl_SlowStop();
+    return error_code;
+}
+
+static float DensityLevel_GetDeadband(uint32_t raw_threshold)
+{
+    if (raw_threshold == 0U) {
+        return DENSITY_LEVEL_DEFAULT_DEADBAND_KGM3;
+    }
+    return RAW_TO_DENSITY(raw_threshold);
+}
+
+static uint32_t DensityLevel_GetStableDelayMs(void)
+{
+    if (g_deviceParams.oilLevelHysteresisTime == 0U) {
+        return 1000U;
+    }
+    return g_deviceParams.oilLevelHysteresisTime * 1000U;
+}
+
+static uint32_t DensityLevel_ReadCurrent(float *density, float *frequency, float *temperature)
+{
+    uint32_t ret;
+
+    if ((density == NULL) || (frequency == NULL) || (temperature == NULL)) {
+        return PARAM_ADDRESS_OVERFLOW;
+    }
+
+    ret = Read_Density(frequency, density, temperature);
+    if (ret != NO_ERROR) {
+        return ret;
+    }
+
+    if ((*density <= 0.0f) || (*density > 2000.0f)) {
+        printf("密度找液位\t密度值无效\t密度=%.3f\r\n", (double)*density);
+        return DENSITY_INVALID;
+    }
+
+    return NO_ERROR;
+}
+
+static uint32_t DensityLevel_ComputeSpeedX100(float density_error, float deadband, uint32_t max_speed_x100)
+{
+    float abs_error;
+    float speed_f;
+    uint32_t speed_x100;
+    uint32_t effective_max_speed = max_speed_x100;
+
+    if (effective_max_speed == 0U) {
+        effective_max_speed = MotorCtrl_GetDefaultSpeedX100();
+    }
+    if (effective_max_speed < DENSITY_LEVEL_MIN_SPEED_X100) {
+        effective_max_speed = DENSITY_LEVEL_MIN_SPEED_X100;
+    }
+
+    abs_error = fabsf(density_error);
+    if (abs_error <= deadband) {
+        return 0U;
+    }
+
+    speed_f = (float)DENSITY_LEVEL_MIN_SPEED_X100 +
+              (DENSITY_LEVEL_KP_SPEED_X100_PER_KGM3 * (abs_error - deadband));
+    if (speed_f < (float)DENSITY_LEVEL_MIN_SPEED_X100) {
+        speed_f = (float)DENSITY_LEVEL_MIN_SPEED_X100;
+    }
+    if (speed_f > (float)effective_max_speed) {
+        speed_f = (float)effective_max_speed;
+    }
+
+    speed_x100 = (uint32_t)(speed_f + 0.5f);
+    if (speed_x100 == 0U) {
+        speed_x100 = DENSITY_LEVEL_MIN_SPEED_X100;
+    }
+    return speed_x100;
+}
+
+static uint32_t DensityLevel_StartOrUpdateMotion(int dir,
+                                                 uint32_t speed_x100,
+                                                 int *active_dir,
+                                                 uint32_t *active_speed_x100)
+{
+    uint32_t ret;
+    uint32_t old_speed;
+    uint32_t delta_speed;
+
+    if ((active_dir == NULL) || (active_speed_x100 == NULL)) {
+        return PARAM_ADDRESS_OVERFLOW;
+    }
+
+    if (speed_x100 == 0U) {
+        if (*active_dir != DENSITY_LEVEL_DIR_NONE) {
+            ret = MotorCtrl_SlowStop();
+            if (ret != NO_ERROR) {
+                return ret;
+            }
+            *active_dir = DENSITY_LEVEL_DIR_NONE;
+            *active_speed_x100 = 0U;
+        }
+        return NO_ERROR;
+    }
+
+    if ((*active_dir != DENSITY_LEVEL_DIR_NONE) && (*active_dir != dir)) {
+        ret = MotorCtrl_SlowStop();
+        if (ret != NO_ERROR) {
+            return ret;
+        }
+        *active_dir = DENSITY_LEVEL_DIR_NONE;
+        *active_speed_x100 = 0U;
+    }
+
+    old_speed = *active_speed_x100;
+    delta_speed = (speed_x100 >= old_speed) ? (speed_x100 - old_speed) : (old_speed - speed_x100);
+    if ((*active_dir == dir) && (delta_speed < DENSITY_LEVEL_SPEED_DELTA_X100)) {
+        return NO_ERROR;
+    }
+
+    ret = MotorCtrl_StartVelocity(dir, speed_x100);
+    if (ret != NO_ERROR) {
+        return ret;
+    }
+
+    *active_dir = dir;
+    *active_speed_x100 = speed_x100;
+    return NO_ERROR;
+}
+
+static void DensityLevel_RecordCurrentPosition(const char *tag)
+{
+    g_measurement.oil_measurement.oil_level =
+            OilLevel_ClampLevelForReport(g_measurement.debug_data.sensor_position, tag);
+    g_measurement.density_distribution.Density_oil_level = g_measurement.oil_measurement.oil_level;
+    g_measurement.oil_measurement.probe_at_liquid_level = 1U;
+    g_measurement.oil_measurement.liquid_stable = 1U;
+    printf("密度找液位\t%s\t液位=%lu(0.1mm)\r\n",
+           (tag != NULL) ? tag : "记录",
+           (unsigned long)g_measurement.oil_measurement.oil_level);
+}
+
+static uint32_t DensityLevel_RunClosedLoop(uint32_t follow_mode)
+{
+    uint32_t ret;
+    uint32_t start_tick;
+    uint32_t stable_count = 0U;
+    uint32_t invalid_density_count = 0U;
+    int active_dir = DENSITY_LEVEL_DIR_NONE;
+    uint32_t active_speed_x100 = 0U;
+    float target_density;
+    float deadband;
+    float follow_deadband;
+
+    if (g_deviceParams.oilLevelDensity == 0U) {
+        printf("密度找液位\t目标密度未配置\r\n");
+        return PARAM_ERROR;
+    }
+
+    target_density = RAW_TO_DENSITY(g_deviceParams.oilLevelDensity);
+    deadband = DensityLevel_GetDeadband(g_deviceParams.oilLevelThreshold);
+    follow_deadband = DensityLevel_GetDeadband(g_deviceParams.oilLevelHysteresisThreshold);
+    if (follow_mode != 0U) {
+        deadband = follow_deadband;
+    }
+
+    g_measurement.oil_measurement.probe_at_liquid_level = 0U;
+    g_measurement.oil_measurement.liquid_stable = 0U;
+
+    ret = EnableDensityMode();
+    if (ret != NO_ERROR) {
+        return DensityLevel_StopAndReturn(ret, "切换密度模式失败");
+    }
+
+    printf("密度找液位\t开始闭环\t模式=%s\t目标密度=%.3f\t死区=%.3f\r\n",
+           (follow_mode != 0U) ? "跟随" : "查找",
+           (double)target_density,
+           (double)deadband);
+
+    start_tick = HAL_GetTick();
+    while (1) {
+        float density = 0.0f;
+        float frequency = 0.0f;
+        float temperature = 0.0f;
+        float density_error;
+        uint32_t speed_x100;
+        int dir;
+
+        if (HasEffectiveCommandSwitchRequest()) {
+            return DensityLevel_StopAndReturn(STATE_SWITCH, "命令切换");
+        }
+
+        ret = DensityLevel_ReadCurrent(&density, &frequency, &temperature);
+        if (ret == DENSITY_INVALID) {
+            invalid_density_count++;
+            if (invalid_density_count >= DENSITY_LEVEL_INVALID_DENSITY_LIMIT) {
+                return DensityLevel_StopAndReturn(DENSITY_INVALID, "连续密度无效");
+            }
+            ret = AbortableDelay_CommandSwitch(DENSITY_LEVEL_SAMPLE_DELAY_MS, 50U);
+            if (ret != NO_ERROR) {
+                return DensityLevel_StopAndReturn(ret, "命令切换");
+            }
+            continue;
+        }
+        if (ret != NO_ERROR) {
+            return DensityLevel_StopAndReturn(ret, "读取密度失败");
+        }
+        invalid_density_count = 0U;
+
+        density_error = target_density - density;
+        g_measurement.oil_measurement.current_frequency = (uint32_t)(frequency + 0.5f);
+
+        printf("密度找液位\t当前密度=%.3f\t目标=%.3f\t偏差=%.3f\t温度=%.3f\r\n",
+               (double)density,
+               (double)target_density,
+               (double)density_error,
+               (double)temperature);
+
+        if (density_error > deadband) {
+            dir = MOTOR_DIRECTION_DOWN;
+        } else if (density_error < -deadband) {
+            dir = MOTOR_DIRECTION_UP;
+        } else {
+            dir = DENSITY_LEVEL_DIR_NONE;
+        }
+
+        if (dir == DENSITY_LEVEL_DIR_NONE) {
+            ret = DensityLevel_StartOrUpdateMotion(dir, 0U, &active_dir, &active_speed_x100);
+            if (ret != NO_ERROR) {
+                return DensityLevel_StopAndReturn(ret, "停止确认失败");
+            }
+            stable_count++;
+            printf("密度找液位\t进入死区\t稳定计数=%lu/%lu\r\n",
+                   (unsigned long)stable_count,
+                   (unsigned long)DENSITY_LEVEL_STABLE_COUNT);
+            if (stable_count >= DENSITY_LEVEL_STABLE_COUNT) {
+                DensityLevel_RecordCurrentPosition((follow_mode != 0U) ? "密度跟随" : "密度查找");
+                if (follow_mode == 0U) {
+                    return NO_ERROR;
+                }
+                stable_count = DENSITY_LEVEL_STABLE_COUNT;
+            }
+            ret = AbortableDelay_CommandSwitch(DensityLevel_GetStableDelayMs(), 100U);
+            if (ret != NO_ERROR) {
+                return DensityLevel_StopAndReturn(ret, "命令切换");
+            }
+            continue;
+        }
+
+        stable_count = 0U;
+        g_measurement.oil_measurement.probe_at_liquid_level = 0U;
+        g_measurement.oil_measurement.liquid_stable = 0U;
+        speed_x100 = DensityLevel_ComputeSpeedX100(density_error, deadband, MotorCtrl_GetDefaultSpeedX100());
+        printf("密度找液位\t速度闭环\t方向=%s\t速度=%.2f m/min\r\n",
+               MotorCtrl_DirectionText(dir),
+               (double)speed_x100 / 100.0);
+
+        ret = DensityLevel_StartOrUpdateMotion(dir, speed_x100, &active_dir, &active_speed_x100);
+        if (ret != NO_ERROR) {
+            return DensityLevel_StopAndReturn(ret, "启动速度模式失败");
+        }
+
+        ret = determineTheSensorPositionAndUpdateTheLevelValue();
+        if (ret != NO_ERROR) {
+            return DensityLevel_StopAndReturn(ret, "位置越界");
+        }
+
+        ret = CheckWeightCollision();
+        if (ret != NO_ERROR) {
+            return DensityLevel_StopAndReturn(ret, "称重碰撞");
+        }
+
+        ret = MotorCtrl_CheckLostStepAutoTiming(g_measurement.debug_data.sensor_position);
+        if (ret != NO_ERROR) {
+            return DensityLevel_StopAndReturn(ret, "丢步检测失败");
+        }
+
+        if ((follow_mode == 0U) &&
+            ((HAL_GetTick() - start_tick) > DENSITY_LEVEL_SEARCH_TIMEOUT_MS)) {
+            return DensityLevel_StopAndReturn(MEASUREMENT_TIMEOUT, "密度闭环超时");
+        }
+
+        ret = AbortableDelay_CommandSwitch(DENSITY_LEVEL_SAMPLE_DELAY_MS, 50U);
+        if (ret != NO_ERROR) {
+            return DensityLevel_StopAndReturn(ret, "命令切换");
+        }
+    }
+}
+
 /**
  * @brief 液位测量与跟随主流程
  *        包含3个阶段：启用液位模式、搜索液位、跟随液位
@@ -114,6 +457,297 @@ static void OilLevel_PrintFollowPositionInfo(void)
  *
  * @return uint32_t 错误代码（NO_ERROR表示成功）
  */
+
+/**
+ * @brief 频率连续找液位异常退出统一停机，避免速度模式保持运行。
+ */
+static uint32_t FrequencyLevel_StopAndReturn(uint32_t error_code, const char *reason)
+{
+    if (error_code == NO_ERROR) {
+        return NO_ERROR;
+    }
+    if (error_code != STATE_SWITCH) {
+        printf("频率找液位\t%s\t停止电机后返回\t错误码=0x%08lX\r\n",
+               (reason != NULL) ? reason : "闭环退出",
+               (unsigned long)error_code);
+    }
+    (void)MotorCtrl_SlowStop();
+    return error_code;
+}
+
+/**
+ * @brief 获取频率闭环死区，参数未配置时使用保守默认值。
+ */
+static float FrequencyLevel_GetDeadband(uint32_t raw_threshold)
+{
+    if (raw_threshold == 0U) {
+        return FREQUENCY_LEVEL_DEFAULT_DEADBAND_HZ;
+    }
+    return (float)raw_threshold;
+}
+
+/**
+ * @brief 根据频率偏差按比例计算速度模式速度，速度受默认运行速度上限保护。
+ */
+static uint32_t FrequencyLevel_ComputeSpeedX100(float frequency_error, float deadband, uint32_t max_speed_x100)
+{
+    float abs_error;
+    float speed_f;
+    uint32_t speed_x100;
+    uint32_t effective_max_speed = max_speed_x100;
+
+    if (effective_max_speed == 0U) {
+        effective_max_speed = MotorCtrl_GetDefaultSpeedX100();
+    }
+    if (effective_max_speed < FREQUENCY_LEVEL_MIN_SPEED_X100) {
+        effective_max_speed = FREQUENCY_LEVEL_MIN_SPEED_X100;
+    }
+
+    abs_error = fabsf(frequency_error);
+    if (abs_error <= deadband) {
+        return 0U;
+    }
+
+    speed_f = (float)FREQUENCY_LEVEL_MIN_SPEED_X100 +
+              (FREQUENCY_LEVEL_KP_SPEED_X100_PER_HZ * (abs_error - deadband));
+    if (speed_f < (float)FREQUENCY_LEVEL_MIN_SPEED_X100) {
+        speed_f = (float)FREQUENCY_LEVEL_MIN_SPEED_X100;
+    }
+    if (speed_f > (float)effective_max_speed) {
+        speed_f = (float)effective_max_speed;
+    }
+
+    speed_x100 = (uint32_t)(speed_f + 0.5f);
+    if (speed_x100 == 0U) {
+        speed_x100 = FREQUENCY_LEVEL_MIN_SPEED_X100;
+    }
+    return speed_x100;
+}
+
+/**
+ * @brief 判断频率是否已进入稳定区，相对频率法额外避开空气/油中端点。
+ */
+static uint8_t FrequencyLevel_IsStableInsideBand(float frequency_error, float deadband)
+{
+    if (fabsf(frequency_error) > deadband) {
+        return 0U;
+    }
+
+    if (g_deviceParams.liquidLevelMeasurementMethod == OIL_LEVEL_METHOD_CONTINUOUS_RELATIVE_FREQ) {
+        float air_frequency = (float)g_measurement.oil_measurement.air_frequency;
+        float oil_frequency = (float)g_measurement.oil_measurement.oil_frequency;
+        float current_frequency = (float)g_measurement.oil_measurement.current_frequency;
+
+        if ((air_frequency > oil_frequency) &&
+            ((air_frequency - oil_frequency) > (2.0f * FREQUENCY_LEVEL_RELATIVE_EDGE_MARGIN_HZ))) {
+            if (((air_frequency - current_frequency) <= FREQUENCY_LEVEL_RELATIVE_EDGE_MARGIN_HZ) ||
+                ((current_frequency - oil_frequency) <= FREQUENCY_LEVEL_RELATIVE_EDGE_MARGIN_HZ)) {
+                return 0U;
+            }
+        }
+    }
+
+    return 1U;
+}
+
+/**
+ * @brief 相对频率法在目标死区内但靠近端点时补充运动方向。
+ */
+static int FrequencyLevel_CorrectRelativeEndpointDirection(int dir)
+{
+    if ((dir == DENSITY_LEVEL_DIR_NONE) &&
+        (g_deviceParams.liquidLevelMeasurementMethod == OIL_LEVEL_METHOD_CONTINUOUS_RELATIVE_FREQ)) {
+        float air_frequency = (float)g_measurement.oil_measurement.air_frequency;
+        float oil_frequency = (float)g_measurement.oil_measurement.oil_frequency;
+        float current_frequency = (float)g_measurement.oil_measurement.current_frequency;
+
+        if ((air_frequency > oil_frequency) &&
+            ((air_frequency - oil_frequency) > (2.0f * FREQUENCY_LEVEL_RELATIVE_EDGE_MARGIN_HZ))) {
+            if ((air_frequency - current_frequency) <= FREQUENCY_LEVEL_RELATIVE_EDGE_MARGIN_HZ) {
+                dir = MOTOR_DIRECTION_DOWN;
+            } else if ((current_frequency - oil_frequency) <= FREQUENCY_LEVEL_RELATIVE_EDGE_MARGIN_HZ) {
+                dir = MOTOR_DIRECTION_UP;
+            }
+        }
+    }
+
+    return dir;
+}
+
+
+
+/**
+ * @brief 记录频率闭环确认到的液位，并同步外部协议稳定标志。
+ */
+static void FrequencyLevel_RecordCurrentPosition(const char *tag)
+{
+    g_measurement.oil_measurement.oil_level =
+            OilLevel_ClampLevelForReport(g_measurement.debug_data.sensor_position, tag);
+    g_measurement.density_distribution.Density_oil_level = g_measurement.oil_measurement.oil_level;
+    g_measurement.oil_measurement.probe_at_liquid_level = 1U;
+    g_measurement.oil_measurement.liquid_stable = 1U;
+    printf("频率找液位\t%s\t液位=%lu(0.1mm)\r\n",
+           (tag != NULL) ? tag : "记录",
+           (unsigned long)g_measurement.oil_measurement.oil_level);
+}
+
+/**
+ * @brief 相对频率和绝对频率共用的速度模式连续找液位/跟随闭环。
+ */
+static uint32_t FrequencyLevel_RunClosedLoop(uint32_t follow_mode)
+{
+    uint32_t ret;
+    uint32_t start_tick;
+    uint32_t stable_count = 0U;
+    int active_dir = DENSITY_LEVEL_DIR_NONE;
+    uint32_t active_speed_x100 = 0U;
+    float deadband;
+    float follow_deadband;
+    uint32_t method = g_deviceParams.liquidLevelMeasurementMethod;
+    const char *method_text = "频率";
+
+    if ((method == OIL_LEVEL_METHOD_CONTINUOUS_FIXED_FREQ) &&
+        (g_measurement.oil_measurement.follow_frequency == 0U)) {
+        g_measurement.oil_measurement.follow_frequency = g_deviceParams.oilLevelFrequency;
+    }
+    if (g_measurement.oil_measurement.follow_frequency == 0U) {
+        printf("频率找液位\t目标频率未配置\r\n");
+        return PARAM_ERROR;
+    }
+
+    if (method == OIL_LEVEL_METHOD_CONTINUOUS_RELATIVE_FREQ) {
+        method_text = "连续相对频率";
+    } else if (method == OIL_LEVEL_METHOD_CONTINUOUS_FIXED_FREQ) {
+        method_text = "连续绝对频率";
+    }
+
+    deadband = FrequencyLevel_GetDeadband(g_deviceParams.oilLevelThreshold);
+    follow_deadband = FrequencyLevel_GetDeadband(g_deviceParams.oilLevelHysteresisThreshold);
+    if (follow_mode != 0U) {
+        deadband = follow_deadband;
+    }
+
+    g_measurement.oil_measurement.probe_at_liquid_level = 0U;
+    g_measurement.oil_measurement.liquid_stable = 0U;
+
+    ret = EnableLevelMode();
+    if (ret != NO_ERROR) {
+        return FrequencyLevel_StopAndReturn(ret, "切换液位模式失败");
+    }
+
+    printf("频率找液位\t开始闭环\t方法=%s\t模式=%s\t目标频率=%lu Hz\t死区=%.1f Hz\r\n",
+           method_text,
+           (follow_mode != 0U) ? "跟随" : "查找",
+           (unsigned long)g_measurement.oil_measurement.follow_frequency,
+           (double)deadband);
+
+    start_tick = HAL_GetTick();
+    while (1) {
+        float frequency_error;
+        uint32_t speed_x100;
+        int dir;
+
+        if (HasEffectiveCommandSwitchRequest()) {
+            return FrequencyLevel_StopAndReturn(STATE_SWITCH, "命令切换");
+        }
+
+        ret = DSM_Get_LevelMode_Frequence(&g_measurement.oil_measurement.current_frequency);
+        if (ret != NO_ERROR) {
+            return FrequencyLevel_StopAndReturn(ret, "读取液位频率失败");
+        }
+
+        frequency_error = (float)g_measurement.oil_measurement.current_frequency -
+                          (float)g_measurement.oil_measurement.follow_frequency;
+        printf("频率找液位\t当前频率=%lu Hz\t目标=%lu Hz\t偏差=%.1f Hz\r\n",
+               (unsigned long)g_measurement.oil_measurement.current_frequency,
+               (unsigned long)g_measurement.oil_measurement.follow_frequency,
+               (double)frequency_error);
+
+        if (frequency_error > deadband) {
+            dir = MOTOR_DIRECTION_DOWN;
+        } else if (frequency_error < -deadband) {
+            dir = MOTOR_DIRECTION_UP;
+        } else {
+            dir = DENSITY_LEVEL_DIR_NONE;
+        }
+        dir = FrequencyLevel_CorrectRelativeEndpointDirection(dir);
+
+        if (FrequencyLevel_IsStableInsideBand(frequency_error, deadband) != 0U) {
+            ret = DensityLevel_StartOrUpdateMotion(DENSITY_LEVEL_DIR_NONE, 0U, &active_dir, &active_speed_x100);
+            if (ret != NO_ERROR) {
+                return FrequencyLevel_StopAndReturn(ret, "停止确认失败");
+            }
+            stable_count++;
+            printf("频率找液位\t进入死区\t稳定计数=%lu/%lu\r\n",
+                   (unsigned long)stable_count,
+                   (unsigned long)FREQUENCY_LEVEL_STABLE_COUNT);
+            if (stable_count >= FREQUENCY_LEVEL_STABLE_COUNT) {
+                FrequencyLevel_RecordCurrentPosition((follow_mode != 0U) ? "频率跟随" : "频率查找");
+                if (follow_mode == 0U) {
+                    return NO_ERROR;
+                }
+                stable_count = FREQUENCY_LEVEL_STABLE_COUNT;
+            }
+            ret = AbortableDelay_CommandSwitch(DensityLevel_GetStableDelayMs(), 100U);
+            if (ret != NO_ERROR) {
+                return FrequencyLevel_StopAndReturn(ret, "命令切换");
+            }
+            continue;
+        }
+
+        stable_count = 0U;
+        g_measurement.oil_measurement.probe_at_liquid_level = 0U;
+        g_measurement.oil_measurement.liquid_stable = 0U;
+        speed_x100 = FrequencyLevel_ComputeSpeedX100(frequency_error, deadband, MotorCtrl_GetDefaultSpeedX100());
+        if (speed_x100 == 0U) {
+            speed_x100 = FREQUENCY_LEVEL_MIN_SPEED_X100;
+        }
+        printf("频率找液位\t速度闭环\t方向=%s\t速度=%.2f m/min\r\n",
+               MotorCtrl_DirectionText(dir),
+               (double)speed_x100 / 100.0);
+
+        ret = DensityLevel_StartOrUpdateMotion(dir, speed_x100, &active_dir, &active_speed_x100);
+        if (ret != NO_ERROR) {
+            return FrequencyLevel_StopAndReturn(ret, "启动速度模式失败");
+        }
+
+        ret = determineTheSensorPositionAndUpdateTheLevelValue();
+        if (ret == MEASUREMENT_OILLEVEL_LOW) {
+            active_dir = DENSITY_LEVEL_DIR_NONE;
+            active_speed_x100 = 0U;
+            ret = waitForTheLiquidLevelToExceedTheBlindZone();
+            if (ret != NO_ERROR) {
+                return FrequencyLevel_StopAndReturn((uint32_t)ret, "等待液位离开盲区失败");
+            }
+            continue;
+        }
+        if (ret != NO_ERROR) {
+            return FrequencyLevel_StopAndReturn((uint32_t)ret, "位置越界");
+        }
+
+        ret = CheckWeightCollision();
+        if (ret != NO_ERROR) {
+            return FrequencyLevel_StopAndReturn(ret, "称重碰撞");
+        }
+
+        ret = MotorCtrl_CheckLostStepAutoTiming(g_measurement.debug_data.sensor_position);
+        if (ret != NO_ERROR) {
+            return FrequencyLevel_StopAndReturn(ret, "丢步检测失败");
+        }
+
+        if ((follow_mode == 0U) &&
+            ((HAL_GetTick() - start_tick) > FREQUENCY_LEVEL_SEARCH_TIMEOUT_MS)) {
+            return FrequencyLevel_StopAndReturn(MEASUREMENT_TIMEOUT, "频率闭环超时");
+        }
+
+        ret = AbortableDelay_CommandSwitch(FREQUENCY_LEVEL_SAMPLE_DELAY_MS, 50U);
+        if (ret != NO_ERROR) {
+            return FrequencyLevel_StopAndReturn(ret, "命令切换");
+        }
+    }
+}
+
+
 /**
  * @brief 搜索并跟随液位
  *
@@ -257,6 +891,14 @@ uint32_t SearchAndFollowOilLevel(void) {
  *       - SearchOilPrecise(): 精确搜索液位
  */
 uint32_t SearchOilLevel(void) {
+    switch (g_deviceParams.liquidLevelMeasurementMethod) {
+    case OIL_LEVEL_METHOD_DENSITY:
+        g_measurement.device_status.device_state = STATE_FINDOIL;
+        return DensityLevel_RunClosedLoop(DENSITY_LEVEL_RUN_SEARCH);
+    default:
+        break;
+    }
+
     uint32_t ret;
     uint32_t last_coarse_ret = MEASUREMENT_OILLEVEL_NOTFOUND;
     uint8_t coarse_found = 0U;
@@ -363,18 +1005,40 @@ uint32_t SearchOilLevel(void) {
     printf("液位测量\t粗找液位完成\r\n");
     /* ************** 精找阶段 ************** */
     /* 精确找液位 */
-    if (g_deviceParams.liquidLevelMeasurementMethod == 0) {
-        g_measurement.oil_measurement.follow_frequency = (g_measurement.oil_measurement.air_frequency + g_measurement.oil_measurement.oil_frequency) / 2.0;
-    }
-    else {
+    switch (g_deviceParams.liquidLevelMeasurementMethod) {
+    case OIL_LEVEL_METHOD_RELATIVE_FREQ:
+    case OIL_LEVEL_METHOD_CONTINUOUS_RELATIVE_FREQ:
+        g_measurement.oil_measurement.follow_frequency =
+                (g_measurement.oil_measurement.air_frequency + g_measurement.oil_measurement.oil_frequency) / 2U;
+        break;
+    case OIL_LEVEL_METHOD_FIXED_FREQ:
+    case OIL_LEVEL_METHOD_CONTINUOUS_FIXED_FREQ:
         g_measurement.oil_measurement.follow_frequency = g_deviceParams.oilLevelFrequency;
+        break;
+    default:
+        g_measurement.oil_measurement.follow_frequency = g_deviceParams.oilLevelFrequency;
+        break;
     }
-    printf("液位测量\t目标频率：%ld Hz\r\n", g_measurement.oil_measurement.follow_frequency);
+    printf("液位查找\t目标频率：%lu Hz\r\n",
+           (unsigned long)g_measurement.oil_measurement.follow_frequency);
 
-    ret = SearchOilPrecise(100);  /* 执行精确搜索 */
-    /* 先处理异常边界，避免液位测量状态机带故障继续运行。 */
-    if (ret != NO_ERROR) {
-        CHECK_ERROR(ret);
+    switch (g_deviceParams.liquidLevelMeasurementMethod) {
+    case OIL_LEVEL_METHOD_CONTINUOUS_RELATIVE_FREQ:
+    case OIL_LEVEL_METHOD_CONTINUOUS_FIXED_FREQ:
+        ret = FrequencyLevel_RunClosedLoop(FREQUENCY_LEVEL_RUN_SEARCH);
+        if (ret != NO_ERROR) {
+            CHECK_ERROR(ret);
+        }
+        return NO_ERROR;
+    case OIL_LEVEL_METHOD_RELATIVE_FREQ:
+    case OIL_LEVEL_METHOD_FIXED_FREQ:
+    default:
+        ret = SearchOilPrecise(100);
+        /* 旧频率方式和未识别方法保留原有步进式精找路径。 */
+        if (ret != NO_ERROR) {
+            CHECK_ERROR(ret);
+        }
+        break;
     }
     /* ************** 最终校验与记录 ************** */
     /* 记录最终液位位置 */
@@ -408,7 +1072,18 @@ uint32_t FollowOilLevel(void) {
 	/* 切换到跟随状态 */
 	g_measurement.device_status.device_state = STATE_FLOWOIL;
 
+	switch (g_deviceParams.liquidLevelMeasurementMethod) {
+	case OIL_LEVEL_METHOD_CONTINUOUS_RELATIVE_FREQ:
+	case OIL_LEVEL_METHOD_CONTINUOUS_FIXED_FREQ:
+		return FrequencyLevel_RunClosedLoop(FREQUENCY_LEVEL_RUN_FOLLOW);
+	case OIL_LEVEL_METHOD_DENSITY:
+		return DensityLevel_RunClosedLoop(DENSITY_LEVEL_RUN_FOLLOW);
+	default:
+		break;
+	}
+
 	/* 液位跟随主循环 */
+
 	while (1) {
 		printf("液位跟随\t");
 

@@ -27,7 +27,7 @@
 #define UNVALID_GSW 0                      /* 质量无效值 */
 
 #define MAX_MEASUREMENT_POINTS 200 /* 密度分布测量最大点数 */
-#define DEVICE_PROTOCOL_VERSION 7u /* CPU2/CPU3共享协议版本；旧程序未写入时默认为0 */
+#define DEVICE_PROTOCOL_VERSION 8u /* CPU2/CPU3共享协议版本；旧程序未写入时默认为0 */
 #define FAULT_AUTO_RECOVERY_RETRY_DEFAULT 3u
 #define FAULT_AUTO_RECOVERY_RETRY_MAX 10u
 
@@ -586,7 +586,7 @@ typedef struct {
     uint32_t blindZone;                      /* 液位盲区(0.1mm) */
     uint32_t oilLevelThreshold;              /* 液位找液阈值 */
     uint32_t oilLevelHysteresisThreshold;    /* 液位滞后阈值 */
-    uint32_t liquidLevelMeasurementMethod;   /* 液位测量方式 0 空气+液体频率/2 1：根据设置跟随频率跟随 2 根据设置密度跟随 */
+    uint32_t liquidLevelMeasurementMethod;   /* 液位测量方式 0 空气+液体频率/2 1：按设置频率步进跟随 2 密度连续跟随 4 连续相对频率 5 连续定频 */
     uint32_t oilLevelFrequency;              /* 液位跟随频率 */
     uint32_t oilLevelDensity;                /* 液位跟随密度 */
     uint32_t oilLevelHysteresisTime;         /* oil level hysteresis time */

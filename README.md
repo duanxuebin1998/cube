@@ -1,6 +1,6 @@
 # CUBE 仓库导览与新人上手指南
 
-> 最后核对时间：2026-06-06
+> 最后核对时间：2026-06-11
 > 目标：帮助新同学在 1~2 天内建立“能编译、能跟流程、知道改哪里”的整体认知。
 
 ---
@@ -12,10 +12,18 @@
 - `LTD_MAIN_CPU2/`：CPU2 主控测量板固件（测量流程、参数管理、设备控制、Modbus 从站）
 - `LTD_DISPLAY_CPU3/`：CPU3 显示通讯板固件（显示、外部协议适配、轮询 CPU2、参数下发）
 
-顶层通过 CMake 管理目标选择，`CUBE_TARGET` 可选：
+当前采用两个子工程各自独立配置和构建的 CMake/Ninja 入口：
 
 - `LTD_MAIN_CPU2`
 - `LTD_DISPLAY_CPU3`
+
+当前文档核对基线：
+
+- CPU2 固件版本：`V1.14.0.0`
+- CPU3 固件版本：`V1.13.0.0`
+- CPU2/CPU3 共享协议版本：`DEVICE_PROTOCOL_VERSION = 8`
+- CPU2 参数存储版本：`DEVICE_PARAM_VERSION = 3`
+- CPU3 本地显示/通信参数版本：`CPU3_PARAM_VERSION = 0x0004`
 
 ---
 
@@ -27,7 +35,7 @@
 - `LTD_DISPLAY_CPU3/`：CPU3 主工程
 - `docs/`：文档
 - `cmake/`：通用工具链配置
-- `tools/`：一键构建脚本
+- `tools/`：构建、版本和契约检查脚本
 - `old/`：历史归档
 - `WirelessHost_V4.1_init/`：历史/独立验证工程
 - `build/`：本地构建输出（可删除重建）
@@ -208,6 +216,8 @@ CPU2 全局对象：
 8. `LTD_MAIN_CPU2/Services/Modbus/dataanalysis_modbus.c`
 9. `LTD_MAIN_CPU2/Services/Modbus/hostcommu.c`
 10. `LTD_DISPLAY_CPU3/Communication/internal/main_board_modbus/cpu2_communicate.c`
+11. `LTD_MAIN_CPU2/Application/Src/wartsila_density_measurement.c`
+12. `LTD_MAIN_CPU2/Application/Src/test.c`
 
 ---
 
@@ -258,4 +268,3 @@ CPU2 全局对象：
 - `docs/01_协议与寄存器/SI7000协议适配/README.md`
 
 建议新同学先看本导览，再看两份构建文档。
-

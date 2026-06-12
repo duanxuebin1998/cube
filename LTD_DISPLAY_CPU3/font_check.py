@@ -20,7 +20,7 @@ C_STRING_RE = re.compile(r'"([^"\\]*(?:\\.[^"\\]*)*)"')
 STOCK_MAP_RE = re.compile(
     r"static\s+uint8_t\s+StockMap\[\]\s*=([\s\S]*?);\s*static\s+const\s+int\s+wordbyte"
 )
-GLYPH_COMMENT_RE = re.compile(r'/\*"([^"]+)",\s*(\d+)\*/')
+GLYPH_COMMENT_RE = re.compile(r'/\*\s*"([^"]+)",\s*(\d+)\s*\*/')
 
 
 @dataclass

@@ -176,6 +176,9 @@ uint32_t MotorCtrl_MoveUp(uint32_t speed_x100);
 /* * 非阻塞连续下行，返回后电机仍可能在运行。 */
 uint32_t MotorCtrl_MoveDown(uint32_t speed_x100);
 
+/** Start continuous velocity mode in the given direction. */
+uint32_t MotorCtrl_StartVelocity(int dir, uint32_t speed_x100);
+
 /**
  * @brief 按距离下发运动命令（非阻塞）
  *

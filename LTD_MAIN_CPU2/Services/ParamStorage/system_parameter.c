@@ -691,7 +691,7 @@ void RestoreFactoryParamsConfig(void)
 
     g_deviceParams.oilLevelThreshold                     = 15;     /* 项目自定义倍率/单位 */
     g_deviceParams.oilLevelHysteresisThreshold = 20;     /* 项目自定义倍率/单位 */
-    g_deviceParams.liquidLevelMeasurementMethod= 0;		/* 0 空气+液体频率/2 1：根据设置跟随频率跟随 2 根据设置密度跟随 3.根据振动管跟随 */
+    g_deviceParams.liquidLevelMeasurementMethod= 0;		/* 0 空气+液体频率/2 1：按设置频率步进跟随 2 密度连续跟随 3.根据振动管跟随 4 连续相对频率 5 连续定频 */
     g_deviceParams.oilLevelFrequency                = 5500;      /* oilLevelFrequency */
     g_deviceParams.oilLevelDensity                = 0;      /* oilLevelDensity */
 

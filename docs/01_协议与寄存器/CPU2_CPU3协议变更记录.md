@@ -7,7 +7,7 @@
 - 字段位置：`HOLDREGISTER_DEVICEPARAM_PROTOCOL_VERSION`
 - 当前语义：CPU2/CPU3 共享协议版本
 - 旧程序语义：保留字段，默认值为 `0`
-- 当前程序语义：协议版本 `7`
+- 当前程序语义：协议版本 `8`
 
 该字段由原 `reserved1` 预留位正式替换而来，寄存器地址不移动，不新增存储字段。
 
@@ -23,6 +23,7 @@
 | 5 | V1.9.0.0 | V1.7.0.0 | 200 | 新增 `CMD_PAIR_NEAREST_WIRELESS_SLIPRING = 117`，用于 CPU3 菜单或共享命令通道触发 CPU2 执行无线滑环 RSSI 最近匹配；新增无线滑环匹配中/完成设备状态；输入寄存器末尾追加无线滑环匹配结果和从机 MAC 状态。 |
 | 6 | V1.10.0.0 | V1.9.0.0 | 200 | 新增 `STATE_DEBUG_MODE = 0x0033`，用于 CPU2 串口调试指令执行期间通过 CPU3 显示“调试模式中”；原 `reserved2` 参数槽复用为故障自动恢复重跑上限；`empty_weight` 空载称重按 `int32_t` 有符号 32 位解释，寄存器地址和后续字段不移动。 |
 | 7 | V1.12.0.0 | V1.10.0.0 | 200 | 新增四路继电器报警输出配置和运行态共享区；CPU3 可显示、写入四路继电器报警输出配置，CPU2 执行 HH/H/L/LL、滞回、锁存清除和无效值策略。 |
+| 8 | V1.14.0.0 | V1.13.0.0 | 200 | `liquidLevelMeasurementMethod` 液位测量方式语义扩展：保留 0/1 原相对频率和定频步进方案，补实 2=密度连续找液位，新增 4=连续相对频率、5=连续定频；CPU3 菜单和参数范围同步允许 0..5。 |
 
 ## 兼容判断规则
 
@@ -189,6 +190,30 @@
 - `cmake --build build\LTD_DISPLAY_CPU3`：通过。
 - `py LTD_DISPLAY_CPU3\font_check.py`：通过。
 - 未做实物联调；需要现场验证 RELAY1~RELAY4 输出极性、锁存清除、无效值故障策略和 CPU3 运行态显示/读取。
+
+### 协议版本 8
+
+关联改动：
+- `DeviceParameters.liquidLevelMeasurementMethod` 仍使用原保持寄存器和原 32 位字段，不新增或移动寄存器。
+- 液位测量方式语义调整为：`0=相对频率`、`1=定频`、`2=密度连续找液位`、`3=超声预留`、`4=连续相对频率`、`5=连续定频`。
+- CPU2 在 `SearchOilLevel()` / `FollowOilLevel()` 中保留 0/1 原步进式频率方案；方法 2 进入密度阈值速度闭环；方法 4/5 进入频率偏差速度闭环。
+- CPU3 “液位测量方式”菜单新增“连相对频率”和“连定频”，并将参数元数据有效范围同步为 `0..5`。
+
+寄存器布局影响：
+- 不新增保持寄存器、输入寄存器、命令码或共享结构体字段。
+- `DeviceParameters` 结构大小、`DEVICE_PARAM_VERSION`、`param_version`、`struct_size`、`magic` 和 `crc` 字段位置不变。
+- 本次提升协议版本的原因是已有字段 `liquidLevelMeasurementMethod` 的跨 CPU 参数语义发生变化；旧协议 7 的 CPU3 或外部工具可能不知道 2/4/5 的新含义。
+
+兼容影响：
+- CPU2/CPU3 必须同为协议版本 8，才能正确显示、写入并执行新的连续找液位方式。
+- 协议版本 7 的 CPU3 只知道旧液位测量方式语义，不应继续向协议版本 8 的 CPU2 写入或解释该字段。
+- 协议版本 7 的 CPU2 不支持新的 2/4/5 连续找液位执行路径，协议版本不匹配应由 CPU3 严格相等检查拦截。
+
+验证结果：
+- `py -3 tools\check_density_level_control_contract.py`：通过。
+- `cmake --build build\LTD_MAIN_CPU2`：通过。
+- `cmake --build build\LTD_DISPLAY_CPU3`：通过。
+- 未做实物联调；需要现场验证密度连续、连续相对频率、连续定频三种新方案的电机速度闭环方向、速度响应、稳定判定和命令切换退出。
 
 ## 后续维护要求
 
