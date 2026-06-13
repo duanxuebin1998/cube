@@ -1,0 +1,1423 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CPU2 找液位详细流程梳理</title>
+  <style>
+    :root {
+      --bg: #f5f7fa;
+      --paper: #ffffff;
+      --ink: #16202a;
+      --muted: #5d6978;
+      --line: #d8dee8;
+      --soft: #eef2f7;
+      --accent: #1769aa;
+      --accent-soft: #e6f2fb;
+      --ok: #0f7b4f;
+      --warn: #9a6700;
+      --bad: #b42318;
+      --code: #263238;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      color: var(--ink);
+      background: var(--bg);
+      font-family: "Microsoft YaHei", "Segoe UI", Arial, sans-serif;
+      line-height: 1.68;
+    }
+
+    .page {
+      max-width: 1180px;
+      margin: 0 auto;
+      padding: 28px 28px 56px;
+    }
+
+    header {
+      padding: 28px 0 18px;
+      border-bottom: 2px solid var(--line);
+    }
+
+    h1 {
+      margin: 0 0 12px;
+      font-size: 30px;
+      line-height: 1.25;
+      letter-spacing: 0;
+    }
+
+    h2 {
+      margin: 36px 0 14px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid var(--line);
+      font-size: 22px;
+      letter-spacing: 0;
+    }
+
+    h3 {
+      margin: 24px 0 10px;
+      font-size: 18px;
+      letter-spacing: 0;
+    }
+
+    p {
+      margin: 8px 0;
+    }
+
+    code {
+      color: var(--code);
+      background: #edf0f3;
+      border: 1px solid #dce2e8;
+      border-radius: 4px;
+      padding: 1px 5px;
+      font-family: Consolas, "Cascadia Mono", monospace;
+      font-size: 0.94em;
+    }
+
+    pre {
+      margin: 12px 0;
+      padding: 14px 16px;
+      overflow-x: auto;
+      color: #f5f7fa;
+      background: #18212f;
+      border-radius: 6px;
+      line-height: 1.55;
+      font-family: Consolas, "Cascadia Mono", monospace;
+      font-size: 13px;
+    }
+
+    table {
+      width: 100%;
+      margin: 12px 0 20px;
+      border-collapse: collapse;
+      background: var(--paper);
+      border: 1px solid var(--line);
+    }
+
+    th,
+    td {
+      padding: 9px 11px;
+      border: 1px solid var(--line);
+      vertical-align: top;
+      text-align: left;
+    }
+
+    th {
+      background: #e9edf3;
+      font-weight: 700;
+    }
+
+    ul,
+    ol {
+      margin: 8px 0 14px 24px;
+      padding: 0;
+    }
+
+    li {
+      margin: 4px 0;
+    }
+
+    .summary {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+      margin: 20px 0;
+    }
+
+    .card {
+      min-height: 92px;
+      padding: 14px 16px;
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 6px;
+    }
+
+    .card strong {
+      display: block;
+      margin-bottom: 6px;
+      color: var(--accent);
+      font-size: 14px;
+    }
+
+    .muted {
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .note,
+    .warn,
+    .risk {
+      margin: 14px 0;
+      padding: 12px 14px;
+      border-left: 4px solid var(--accent);
+      background: var(--accent-soft);
+      border-radius: 4px;
+    }
+
+    .warn {
+      border-left-color: var(--warn);
+      background: #fff7df;
+    }
+
+    .risk {
+      border-left-color: var(--bad);
+      background: #fff0ed;
+    }
+
+    .flow {
+      display: grid;
+      grid-template-columns: repeat(6, minmax(120px, 1fr));
+      gap: 8px;
+      margin: 16px 0 20px;
+    }
+
+    .step {
+      position: relative;
+      padding: 10px 12px;
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      min-height: 86px;
+    }
+
+    .step::after {
+      content: ">";
+      position: absolute;
+      right: -10px;
+      top: 34px;
+      color: var(--muted);
+      font-family: Consolas, "Cascadia Mono", monospace;
+      font-size: 16px;
+    }
+
+    .step:last-child::after {
+      content: "";
+    }
+
+    .step b {
+      display: block;
+      margin-bottom: 5px;
+      color: var(--accent);
+    }
+
+    .ok {
+      color: var(--ok);
+      font-weight: 700;
+    }
+
+    .bad {
+      color: var(--bad);
+      font-weight: 700;
+    }
+
+    .warn-text {
+      color: var(--warn);
+      font-weight: 700;
+    }
+
+
+    .diagram {
+      margin: 18px 0 26px;
+      padding: 16px;
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      overflow-x: auto;
+    }
+
+    .diagram-title {
+      margin: 0 0 10px;
+      color: var(--accent);
+      font-weight: 700;
+    }
+
+    .diagram svg {
+      display: block;
+      min-width: 980px;
+      max-width: 100%;
+      height: auto;
+      font-family: "Microsoft YaHei", "Segoe UI", Arial, sans-serif;
+    }
+
+    .diagram .box {
+      fill: #ffffff;
+      stroke: #9aa7b7;
+      stroke-width: 1.3;
+      rx: 6;
+      ry: 6;
+    }
+
+    .diagram .decision {
+      fill: #fff8e6;
+      stroke: #c58b00;
+      stroke-width: 1.3;
+    }
+
+    .diagram .okbox {
+      fill: #e9f8f1;
+      stroke: #0f7b4f;
+      stroke-width: 1.3;
+      rx: 6;
+      ry: 6;
+    }
+
+    .diagram .warnbox {
+      fill: #fff4e5;
+      stroke: #b7791f;
+      stroke-width: 1.3;
+      rx: 6;
+      ry: 6;
+    }
+
+    .diagram .badbox {
+      fill: #fff0ed;
+      stroke: #b42318;
+      stroke-width: 1.3;
+      rx: 6;
+      ry: 6;
+    }
+
+    .diagram .line {
+      stroke: #607086;
+      stroke-width: 1.5;
+      fill: none;
+      marker-end: url(#arrow);
+    }
+
+    .diagram .line-warn {
+      stroke: #b7791f;
+      stroke-width: 1.5;
+      fill: none;
+      marker-end: url(#arrow-warn);
+    }
+
+    .diagram text {
+      fill: #17212b;
+      font-size: 13px;
+    }
+
+    .diagram .small {
+      fill: var(--muted);
+      font-size: 12px;
+    }
+
+    .diagram .label {
+      fill: #3f4c5d;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    footer {
+      margin-top: 36px;
+      padding-top: 16px;
+      border-top: 1px solid var(--line);
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    @media (max-width: 900px) {
+      .summary,
+      .flow {
+        grid-template-columns: 1fr;
+      }
+
+      .step::after {
+        content: "v";
+        right: 50%;
+        top: auto;
+        bottom: -18px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <header>
+      <h1>CPU2 找液位详细流程梳理</h1>
+      <p class="muted">整理日期：2026-06-11；依据当前 worktree 源码梳理，不包含未落地的新测量方式设计。</p>
+    </header>
+
+    <section class="summary">
+      <div class="card">
+        <strong>主命令</strong>
+        <code>CMD_FIND_OIL</code>，串口正式命令字符 <code>K</code> 也会映射到该命令。
+      </div>
+      <div class="card">
+        <strong>主入口</strong>
+        <code>CMD_MeasureAndFollowOilLevel()</code> 先找液位，再按配置切换电机记步并进入液位跟随。
+      </div>
+      <div class="card">
+        <strong>核心分流</strong>
+        <code>0/1</code> 保留旧步进精找，<code>2</code> 走密度连续闭环，<code>4/5</code> 走频率连续闭环。
+      </div>
+      <div class="card">
+        <strong>结果字段</strong>
+        <code>oil_level</code>、<code>Density_oil_level</code>、<code>probe_at_liquid_level</code>、<code>liquid_stable</code>。
+      </div>
+    </section>
+
+    <section>
+      <h2>1. 阅读路径和方式矩阵</h2>
+      <div class="note">
+        <strong>建议阅读顺序：</strong>
+        先看本节确认测量方式分流，再看第 2 节主调用链；第 4 节只讲单次 <code>SearchOilLevel()</code>，第 5 节补充粗找边界细节，第 6 节单独讲长驻跟随，第 7-9 节集中看异常、命令切换和风险点。
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>液位方式</th>
+            <th>找液位入口路径</th>
+            <th>精找/闭环方案</th>
+            <th>跟随方案</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>0</code> 原有相对频率</td>
+            <td>频率粗找，读取 <code>oil_frequency</code> 和 <code>air_frequency</code>。</td>
+            <td><code>follow_frequency=(air+oil)/2</code>，进入旧 <code>SearchOilPrecise(100)</code>。</td>
+            <td>旧频率跟随循环，偏差超滞后阈值后重新步进精找。</td>
+          </tr>
+          <tr>
+            <td><code>1</code> 原有绝对频率</td>
+            <td>频率粗找，确认空气/油中边界。</td>
+            <td><code>follow_frequency=oilLevelFrequency</code>，进入旧 <code>SearchOilPrecise(100)</code>。</td>
+            <td>旧频率跟随循环，偏差超滞后阈值后重新步进精找。</td>
+          </tr>
+          <tr>
+            <td><code>2</code> 密度连续闭环</td>
+            <td>不执行频率粗找，进入密度模式。</td>
+            <td>以 <code>oilLevelDensity</code> 为目标，按密度偏差速度模式上下行。</td>
+            <td><code>DensityLevel_RunClosedLoop(...FOLLOW)</code> 长驻跟随。</td>
+          </tr>
+          <tr>
+            <td><code>4</code> 连续相对频率</td>
+            <td>沿用方式 0 的频率粗找。</td>
+            <td><code>follow_frequency=(air+oil)/2</code>，进入 <code>FrequencyLevel_RunClosedLoop(...SEARCH)</code>。</td>
+            <td><code>FrequencyLevel_RunClosedLoop(...FOLLOW)</code> 长驻跟随。</td>
+          </tr>
+          <tr>
+            <td><code>5</code> 连续绝对频率</td>
+            <td>沿用方式 1 的频率粗找。</td>
+            <td><code>follow_frequency=oilLevelFrequency</code>，进入 <code>FrequencyLevel_RunClosedLoop(...SEARCH)</code>。</td>
+            <td><code>FrequencyLevel_RunClosedLoop(...FOLLOW)</code> 长驻跟随。</td>
+          </tr>
+          <tr>
+            <td>其他未识别方式</td>
+            <td>按绝对频率目标处理。</td>
+            <td>保留旧 <code>SearchOilPrecise(100)</code> 兜底。</td>
+            <td>保留旧频率跟随循环。</td>
+          </tr>
+        </tbody>
+      </table>
+      <table>
+        <thead>
+          <tr>
+            <th>流程图</th>
+            <th>阅读目的</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td>流程图 1</td><td>看 <code>CMD_FIND_OIL</code> 如何进入找液位、是否回零、是否切换记步源、如何进入跟随。</td></tr>
+          <tr><td>流程图 2</td><td>看 <code>SearchOilLevel()</code> 内部如何按方式 2、4、5、0/1 分流。</td></tr>
+          <tr><td>流程图 3</td><td>看频率粗找如何在空气和油中之间找边界。</td></tr>
+          <tr><td>流程图 4</td><td>看原有方式 0/1 的 <code>SearchOilPrecise(100)</code> 步进精找。</td></tr>
+          <tr><td>流程图 5</td><td>看密度/频率连续方案的速度闭环。</td></tr>
+          <tr><td>流程图 6</td><td>看 <code>FollowOilLevel()</code> 长驻跟随如何按方式分流。</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>2. 入口总览：命令到找液位/跟随</h2>
+      <div class="flow">
+        <div class="step">
+          <b>命令进入</b>
+          <code>CMD_FIND_OIL</code><br>
+          串口 <code>K</code> 或 Modbus 命令字段触发。
+        </div>
+        <div class="step">
+          <b>测量初始化</b>
+          <code>MeasureStart()</code><br>
+          初始化电机和称重，清错误码和协议辅助状态。
+        </div>
+        <div class="step">
+          <b>必要回零</b>
+          <code>SearchZero()</code><br>
+          仅在 <code>zero_point_status==1</code> 且允许故障自动回零时执行。
+        </div>
+        <div class="step">
+          <b>先找液位</b>
+          <code>SearchOilLevel()</code><br>
+          先按当前记步源搜索一次液位点。
+        </div>
+        <div class="step">
+          <b>记步源切换</b>
+          <code>EnsureMotorPositionSourceBeforeFollow()</code><br>
+          若配置允许且当前为编码器记步，切到电机记步并重新找液位。
+        </div>
+        <div class="step">
+          <b>闭环跟随</b>
+          <code>FollowOilLevel()</code><br>
+          进入 <code>STATE_FLOWOIL</code> 后持续监测频率偏移。
+        </div>
+      </div>
+
+      <div class="diagram">
+        <p class="diagram-title">流程图 1：主命令到长驻跟随</p>
+        <svg viewBox="0 0 1180 430" role="img" aria-label="CMD_FIND_OIL 主流程图">
+          <defs>
+            <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L0,6 L9,3 z" fill="#607086" /></marker>
+            <marker id="arrow-warn" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L0,6 L9,3 z" fill="#b7791f" /></marker>
+          </defs>
+          <rect class="box" x="30" y="60" width="150" height="70" />
+          <text x="105" y="88" text-anchor="middle">CMD_FIND_OIL</text>
+          <text class="small" x="105" y="110" text-anchor="middle">串口 K / 命令字段</text>
+
+          <rect class="box" x="220" y="60" width="160" height="70" />
+          <text x="300" y="88" text-anchor="middle">MeasureStart()</text>
+          <text class="small" x="300" y="110" text-anchor="middle">测量前初始化</text>
+
+          <polygon class="decision" points="470,45 565,95 470,145 375,95" />
+          <text x="470" y="88" text-anchor="middle">需要回零?</text>
+          <text class="small" x="470" y="108" text-anchor="middle">zero_point_status</text>
+
+          <rect class="box" x="430" y="190" width="150" height="70" />
+          <text x="505" y="218" text-anchor="middle">SearchZero()</text>
+          <text class="small" x="505" y="240" text-anchor="middle">失败 SET_ERROR</text>
+
+          <rect class="box" x="650" y="60" width="165" height="70" />
+          <text x="732" y="88" text-anchor="middle">SearchOilLevel()</text>
+          <text class="small" x="732" y="110" text-anchor="middle">按当前记步源找液位</text>
+
+          <polygon class="decision" points="910,45 1020,95 910,145 800,95" />
+          <text x="910" y="83" text-anchor="middle">当前非电机记步?</text>
+          <text class="small" x="910" y="104" text-anchor="middle">且允许自动切换</text>
+
+          <rect class="box" x="810" y="190" width="200" height="82" />
+          <text x="910" y="220" text-anchor="middle">切换到电机记步</text>
+          <text class="small" x="910" y="242" text-anchor="middle">EnsureMotorPositionSourceBeforeFollow()</text>
+          <text class="small" x="910" y="260" text-anchor="middle">成功切换后重新找液位</text>
+
+          <rect class="box" x="650" y="315" width="165" height="70" />
+          <text x="732" y="343" text-anchor="middle">SearchOilLevel()</text>
+          <text class="small" x="732" y="365" text-anchor="middle">电机记步基准重找</text>
+
+          <rect class="okbox" x="1040" y="315" width="120" height="70" />
+          <text x="1100" y="343" text-anchor="middle">FollowOilLevel()</text>
+          <text class="small" x="1100" y="365" text-anchor="middle">STATE_FLOWOIL</text>
+
+          <path class="line" d="M180 95 H220" />
+          <path class="line" d="M380 95 H375" />
+          <path class="line" d="M565 95 H650" />
+          <path class="line" d="M470 145 V190" />
+          <path class="line" d="M580 225 C620 225 620 130 650 105" />
+          <path class="line" d="M815 95 H800" />
+          <path class="line" d="M910 145 V190" />
+          <path class="line" d="M910 272 C910 315 835 350 815 350" />
+          <path class="line" d="M1020 95 C1090 95 1100 250 1100 315" />
+          <path class="line" d="M815 350 H1040" />
+          <text class="label" x="585" y="80">否</text>
+          <text class="label" x="484" y="170">是</text>
+          <text class="label" x="1025" y="82">否</text>
+          <text class="label" x="925" y="170">是</text>
+        </svg>
+      </div>
+
+      <div class="note">
+        <strong>当前主命令路径的重试层级：</strong>
+        <code>CMD_MeasureAndFollowOilLevel()</code> 对 <code>SearchOilLevel()</code> 和 <code>FollowOilLevel()</code> 是单次调用；高层 3 次搜索/3 次跟随重试存在于 <code>SearchAndFollowOilLevel()</code>，主要被标定等其他入口复用。<code>SearchOilLevel()</code> 内部仍有启用液位模式和粗找阶段的局部重试。
+      </div>
+    </section>
+
+    <section>
+      <h2>3. 分支依据：参数、状态和结果字段</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>名称</th>
+            <th>当前作用</th>
+            <th>注意点</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>oilLevelFrequency</code></td>
+            <td>空气/油中粗判定阈值；绝对频率和连续绝对频率方式下也作为目标频率。</td>
+            <td><code>INAIR</code> 为当前频率大于该值，<code>INOIL</code> 为当前频率小于该值。</td>
+          </tr>
+          <tr>
+            <td><code>liquidLevelMeasurementMethod</code></td>
+            <td>本分支 CPU2 已区分 <code>0</code>、<code>1</code>、<code>2</code>、<code>4</code>、<code>5</code> 和其他未识别方式。</td>
+            <td><code>0</code>/<code>1</code> 保留原有步进式频率找液位；<code>2</code> 走密度连续闭环；<code>4</code>/<code>5</code> 是新增频率连续闭环方案。</td>
+          </tr>
+          <tr>
+            <td><code>oilLevelThreshold</code></td>
+            <td>连续频率找液位阶段的查找死区；未配置时默认 15Hz。</td>
+            <td>新增连续相对频率方式还会避免停在空气频率或油中频率端点附近，端点保护边距为 200Hz。</td>
+          </tr>
+          <tr>
+            <td><code>oilLevelHysteresisThreshold</code></td>
+            <td>连续频率跟随阶段的死区；未配置时默认 15Hz。</td>
+            <td>跟随稳定时电机停止并做可打断等待；偏差超出死区后重新按速度模式运动。</td>
+          </tr>
+          <tr>
+            <td><code>blindZone</code></td>
+            <td>液位盲区下限，单位 0.1mm。</td>
+            <td>位置非负且低于盲区时返回 <code>MEASUREMENT_OILLEVEL_LOW</code>，并清除外部协议命中/稳定状态。</td>
+          </tr>
+          <tr>
+            <td><code>tankHeight</code></td>
+            <td>液位罐高，单位 0.1mm。</td>
+            <td>跟随更新时若位置达到 <code>tankHeight - 1000</code>，返回 <code>MEASUREMENT_OILLEVEL_HIGH</code>。</td>
+          </tr>
+          <tr>
+            <td><code>oil_level</code></td>
+            <td>最终液位结果，单位 0.1mm。</td>
+            <td>由 <code>debug_data.sensor_position</code> 写入；负位置上报前钳位为 0。</td>
+          </tr>
+          <tr>
+            <td><code>probe_at_liquid_level</code> / <code>liquid_stable</code></td>
+            <td>给 CPU3/SI7000 等外部协议使用的辅助状态。</td>
+            <td>找液位开始和异常边界会清 0；找液位成功后置 1。</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>4. 单次找液位：SearchOilLevel</h2>
+      <p class="note">本节只看一次 <code>SearchOilLevel()</code> 的执行路径：先处理方式 <code>2</code> 的密度闭环提前分支；其余频率方式先做液位模式启用和粗找，再按方式 <code>0/1/4/5</code> 选择旧步进精找或新增连续频率闭环。</p>
+
+      <div class="diagram">
+        <p class="diagram-title">流程图 2：SearchOilLevel 完整分支</p>
+        <svg viewBox="0 0 1220 760" role="img" aria-label="SearchOilLevel 分支流程图">
+          <defs>
+            <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L0,6 L9,3 z" fill="#607086" /></marker>
+            <marker id="arrow-warn" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L0,6 L9,3 z" fill="#b7791f" /></marker>
+          </defs>
+          <rect class="box" x="40" y="40" width="170" height="70" />
+          <text x="125" y="70" text-anchor="middle">SearchOilLevel()</text>
+          <text class="small" x="125" y="92" text-anchor="middle">进入找液位</text>
+
+          <polygon class="decision" points="330,25 445,75 330,125 215,75" />
+          <text x="330" y="69" text-anchor="middle">方法 == 2?</text>
+          <text class="small" x="330" y="91" text-anchor="middle">密度找液位</text>
+
+          <rect class="okbox" x="505" y="40" width="190" height="70" />
+          <text x="600" y="70" text-anchor="middle">DensityLevel_RunClosedLoop</text>
+          <text class="small" x="600" y="92" text-anchor="middle">密度速度模式查找</text>
+
+          <rect class="box" x="245" y="165" width="170" height="70" />
+          <text x="330" y="194" text-anchor="middle">清状态/清故障</text>
+          <text class="small" x="330" y="216" text-anchor="middle">probe/stable=0</text>
+
+          <rect class="box" x="245" y="275" width="170" height="70" />
+          <text x="330" y="304" text-anchor="middle">EnableLevelMode()</text>
+          <text class="small" x="330" y="326" text-anchor="middle">最多 3 次</text>
+
+          <polygon class="decision" points="330,395 445,445 330,495 215,445" />
+          <text x="330" y="432" text-anchor="middle">平均频率读取</text>
+          <text x="330" y="452" text-anchor="middle">和粗找成功?</text>
+
+          <rect class="badbox" x="40" y="410" width="135" height="70" />
+          <text x="108" y="438" text-anchor="middle">返回错误</text>
+          <text class="small" x="108" y="460" text-anchor="middle">STATE_SWITCH 透传</text>
+
+          <rect class="box" x="515" y="360" width="190" height="70" />
+          <text x="610" y="389" text-anchor="middle">粗找边界</text>
+          <text class="small" x="610" y="411" text-anchor="middle">SearchOil / SearchAir</text>
+
+          <rect class="box" x="515" y="500" width="190" height="82" />
+          <text x="610" y="528" text-anchor="middle">计算 follow_frequency</text>
+          <text class="small" x="610" y="550" text-anchor="middle">0/4: 空气油中均值</text>
+          <text class="small" x="610" y="568" text-anchor="middle">1/5/其他: oilLevelFrequency</text>
+
+          <polygon class="decision" points="845,490 990,545 845,600 700,545" />
+          <text x="845" y="533" text-anchor="middle">方法 == 4 或 5?</text>
+          <text class="small" x="845" y="555" text-anchor="middle">新增连续频率</text>
+
+          <rect class="okbox" x="1030" y="505" width="170" height="80" />
+          <text x="1115" y="535" text-anchor="middle">FrequencyLevel</text>
+          <text x="1115" y="555" text-anchor="middle">RunClosedLoop</text>
+          <text class="small" x="1115" y="575" text-anchor="middle">稳定后直接返回</text>
+
+          <rect class="box" x="760" y="650" width="170" height="70" />
+          <text x="845" y="678" text-anchor="middle">SearchOilPrecise(100)</text>
+          <text class="small" x="845" y="700" text-anchor="middle">旧 0/1 与未知方法</text>
+
+          <rect class="okbox" x="1030" y="650" width="170" height="70" />
+          <text x="1115" y="678" text-anchor="middle">记录结果</text>
+          <text class="small" x="1115" y="700" text-anchor="middle">oil_level / stable</text>
+
+          <path class="line" d="M210 75 H215" />
+          <path class="line" d="M445 75 H505" />
+          <path class="line" d="M330 125 V165" />
+          <path class="line" d="M330 235 V275" />
+          <path class="line" d="M330 345 V395" />
+          <path class="line-warn" d="M215 445 H175" />
+          <path class="line" d="M445 445 C485 445 485 395 515 395" />
+          <path class="line" d="M610 430 V500" />
+          <path class="line" d="M705 545 H700" />
+          <path class="line" d="M990 545 H1030" />
+          <path class="line" d="M845 600 V650" />
+          <path class="line" d="M930 685 H1030" />
+          <text class="label" x="457" y="63">是</text>
+          <text class="label" x="342" y="150">否</text>
+          <text class="label" x="185" y="432">失败</text>
+          <text class="label" x="470" y="430">成功</text>
+          <text class="label" x="1000" y="532">是</text>
+          <text class="label" x="858" y="628">否</text>
+        </svg>
+      </div>
+
+      <h3>4.1 清状态并启用液位模式</h3>
+      <ol>
+        <li>清除 <code>probe_at_liquid_level</code> 和 <code>liquid_stable</code>，避免 CPU3 读到上一轮结果。</li>
+        <li>调用 <code>fault_info_init()</code> 清故障信息。</li>
+        <li>最多 3 次调用 <code>EnableLevelMode()</code>。</li>
+        <li>若返回 <code>STATE_SWITCH</code>，说明有新命令切换，直接返回，不记录为故障重试。</li>
+        <li>若液位模式启用失败，写入传感器模块的错误重试日志，延时 500ms 后重试。</li>
+      </ol>
+
+      <h3>4.2 粗找阶段：先判断探头当前在空气中还是油中</h3>
+      <p>粗找阶段最多循环 3 次。每次先用 <code>DSM_Get_LevelMode_Frequence_Avg()</code> 读取当前平均频率，再根据 <code>oilLevelFrequency</code> 判断探头位置。</p>
+      <table>
+        <thead>
+          <tr>
+            <th>条件</th>
+            <th>判断结果</th>
+            <th>动作</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>current_frequency &lt; oilLevelFrequency</code></td>
+            <td>认为探头在油中。</td>
+            <td>若传感器位置高于盲区 100mm，先下行 100mm 确保完全在油中；读取 <code>oil_frequency</code>；再调用 <code>SearchAir()</code> 上行找空气。</td>
+          </tr>
+          <tr>
+            <td><code>current_frequency &gt; oilLevelFrequency</code></td>
+            <td>认为探头在空气中。</td>
+            <td>调用 <code>SearchOil()</code> 下行找油中，再由 <code>SearchOil()</code> 内部继续调用 <code>SearchAir()</code> 找空气侧边界。</td>
+          </tr>
+          <tr>
+            <td><code>current_frequency == oilLevelFrequency</code></td>
+            <td>粗找入口的两个宏都不命中。</td>
+            <td>本轮不进入空气/油中分支；若 3 次都没有 <code>coarse_found</code>，返回最后一次粗找错误码，默认是 <code>MEASUREMENT_OILLEVEL_NOTFOUND</code>。</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="warn">
+        <strong>粗找重试的实际覆盖范围：</strong>
+        粗找循环能重试平均频率读取失败和入口判定；但 <code>SearchOil()</code>、<code>SearchAir()</code> 内部错误通过 <code>CHECK_ERROR()</code> 直接向上返回，不会回到粗找循环继续尝试。
+      </div>
+
+      <div class="diagram">
+        <p class="diagram-title">流程图 3：粗找阶段空气/油中边界搜索</p>
+        <svg viewBox="0 0 1180 620" role="img" aria-label="粗找阶段流程图">
+          <defs>
+            <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L0,6 L9,3 z" fill="#607086" /></marker>
+            <marker id="arrow-warn" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L0,6 L9,3 z" fill="#b7791f" /></marker>
+          </defs>
+          <rect class="box" x="40" y="250" width="180" height="70" />
+          <text x="130" y="278" text-anchor="middle">读取平均频率</text>
+          <text class="small" x="130" y="300" text-anchor="middle">10 次采样去极值</text>
+
+          <polygon class="decision" points="355,220 485,285 355,350 225,285" />
+          <text x="355" y="278" text-anchor="middle">当前频率</text>
+          <text x="355" y="300" text-anchor="middle">与阈值比较</text>
+
+          <rect class="box" x="545" y="70" width="190" height="82" />
+          <text x="640" y="98" text-anchor="middle">判定在油中</text>
+          <text class="small" x="640" y="120" text-anchor="middle">current &lt; oilLevelFrequency</text>
+          <text class="small" x="640" y="138" text-anchor="middle">必要时下行 100mm</text>
+
+          <rect class="box" x="545" y="205" width="190" height="70" />
+          <text x="640" y="233" text-anchor="middle">读取 oil_frequency</text>
+          <text class="small" x="640" y="255" text-anchor="middle">保存油中端点</text>
+
+          <rect class="box" x="545" y="335" width="190" height="70" />
+          <text x="640" y="363" text-anchor="middle">SearchAir()</text>
+          <text class="small" x="640" y="385" text-anchor="middle">上行寻找空气端点</text>
+
+          <rect class="box" x="820" y="335" width="190" height="70" />
+          <text x="915" y="363" text-anchor="middle">读取 air_frequency</text>
+          <text class="small" x="915" y="385" text-anchor="middle">必要时下行回界面附近</text>
+
+          <rect class="box" x="545" y="470" width="190" height="70" />
+          <text x="640" y="498" text-anchor="middle">判定在空气中</text>
+          <text class="small" x="640" y="520" text-anchor="middle">current &gt; oilLevelFrequency</text>
+
+          <rect class="box" x="820" y="470" width="190" height="70" />
+          <text x="915" y="498" text-anchor="middle">SearchOil()</text>
+          <text class="small" x="915" y="520" text-anchor="middle">下行找油中后再调 SearchAir</text>
+
+          <rect class="warnbox" x="805" y="70" width="220" height="82" />
+          <text x="915" y="100" text-anchor="middle">等于阈值</text>
+          <text class="small" x="915" y="122" text-anchor="middle">INAIR/INOIL 都不命中</text>
+          <text class="small" x="915" y="140" text-anchor="middle">3 次后返回 NOTFOUND</text>
+
+          <rect class="okbox" x="1035" y="335" width="120" height="70" />
+          <text x="1095" y="363" text-anchor="middle">粗找完成</text>
+          <text class="small" x="1095" y="385" text-anchor="middle">coarse_found=1</text>
+
+          <path class="line" d="M220 285 H225" />
+          <path class="line" d="M420 250 C470 175 500 110 545 110" />
+          <path class="line" d="M640 152 V205" />
+          <path class="line" d="M640 275 V335" />
+          <path class="line" d="M735 370 H820" />
+          <path class="line" d="M1010 370 H1035" />
+          <path class="line" d="M420 320 C470 430 500 505 545 505" />
+          <path class="line" d="M735 505 H820" />
+          <path class="line" d="M915 470 C900 430 845 405 735 385" />
+          <path class="line-warn" d="M420 235 C520 90 690 90 805 110" />
+          <text class="label" x="500" y="130">油中</text>
+          <text class="label" x="505" y="475">空气</text>
+          <text class="label" x="610" y="82">current &lt; 阈值</text>
+          <text class="label" x="616" y="548">current &gt; 阈值</text>
+          <text class="label" x="724" y="100">等于</text>
+        </svg>
+      </div>
+
+      <h3>4.3 频率平均值读取</h3>
+      <p><code>DSM_Get_LevelMode_Frequence_Avg()</code> 当前执行 10 次液位频率采样，每次间隔 2s，延时可被命令切换打断。采样完成后排序，去掉 2 个最大值和 2 个最小值，对中间 6 个值求平均并四舍五入为整数 Hz。</p>
+
+      <h3>4.4 目标频率和后续入口选择</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>参数值</th>
+            <th>当前 CPU2 行为</th>
+            <th>说明</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>liquidLevelMeasurementMethod == 0</code></td>
+            <td><code>follow_frequency = (air_frequency + oil_frequency) / 2</code>，然后 <code>SearchOilPrecise(100)</code></td>
+            <td>原有相对频率方式保留步进式精找，不进入新增连续闭环。</td>
+          </tr>
+          <tr>
+            <td><code>liquidLevelMeasurementMethod == 1</code></td>
+            <td><code>follow_frequency = oilLevelFrequency</code>，然后 <code>SearchOilPrecise(100)</code></td>
+            <td>原有绝对频率方式保留步进式精找，不进入新增连续闭环。</td>
+          </tr>
+          <tr>
+            <td><code>liquidLevelMeasurementMethod == 2</code></td>
+            <td><code>DensityLevel_RunClosedLoop()</code></td>
+            <td>密度闭环速度模式：以 <code>oilLevelDensity</code> 为目标，低于目标下行，高于目标上行，速度按密度偏差限幅控制；该方式不执行频率粗找。</td>
+          </tr>
+          <tr>
+            <td><code>liquidLevelMeasurementMethod == 4</code></td>
+            <td><code>follow_frequency = (air_frequency + oil_frequency) / 2</code>，然后 <code>FrequencyLevel_RunClosedLoop()</code></td>
+            <td>新增连续相对频率方案，保留原粗找取空气/油中频率，再用速度模式连续逼近目标频率。</td>
+          </tr>
+          <tr>
+            <td><code>liquidLevelMeasurementMethod == 5</code></td>
+            <td><code>follow_frequency = oilLevelFrequency</code>，然后 <code>FrequencyLevel_RunClosedLoop()</code></td>
+            <td>新增连续绝对频率方案，保留原粗找流程，再用速度模式连续逼近固定目标频率。</td>
+          </tr>
+          <tr>
+            <td>其他未识别方式</td>
+            <td><code>follow_frequency = oilLevelFrequency</code></td>
+            <td>保留旧 <code>SearchOilPrecise(100)</code> 兜底路径，避免未知配置直接改变行为。</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>4.5 原有方式 0/1：步进式精找 SearchOilPrecise</h3>
+      <p>方式 <code>0</code>/<code>1</code> 以及未识别方式保留旧精找：先按粗找结果确定 <code>follow_frequency</code>，再用当前频率与目标频率的偏差换算步进距离，并通过固定速度的 <code>MoveAndWait</code> 分段靠近液位。</p>
+      <div class="diagram">
+        <p class="diagram-title">流程图 4：SearchOilPrecise 步进式精找</p>
+        <svg viewBox="0 0 1220 720" role="img" aria-labelledby="flow6-title flow6-desc">
+          <title id="flow6-title">SearchOilPrecise 步进式精找流程</title>
+          <desc id="flow6-desc">展示原有方式0和方式1在粗找后进入 SearchOilPrecise 的循环、偏差判断、步进运动、稳定计数和超限退出逻辑。</desc>
+          <defs>
+            <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+              <path d="M0,0 L0,6 L9,3 z" fill="#607086" />
+            </marker>
+            <marker id="arrow-warn" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+              <path d="M0,0 L0,6 L9,3 z" fill="#b7791f" />
+            </marker>
+          </defs>
+
+          <rect class="box" x="40" y="45" width="165" height="76" />
+          <text x="122" y="76" text-anchor="middle">进入旧精找</text>
+          <text class="small" x="122" y="98" text-anchor="middle">SearchOilPrecise(100)</text>
+
+          <rect class="box" x="245" y="45" width="170" height="76" />
+          <text x="330" y="76" text-anchor="middle">循环条件</text>
+          <text class="small" x="330" y="98" text-anchor="middle">followTime &lt; 10</text>
+
+          <rect class="box" x="455" y="45" width="170" height="76" />
+          <text x="540" y="76" text-anchor="middle">可打断延时</text>
+          <text class="small" x="540" y="98" text-anchor="middle">2s，检查命令切换</text>
+
+          <rect class="box" x="665" y="45" width="170" height="76" />
+          <text x="750" y="76" text-anchor="middle">读取当前频率</text>
+          <text class="small" x="750" y="98" text-anchor="middle">DSM_Get_LevelMode_Frequence</text>
+
+          <polygon class="decision" points="960,45 1075,83 960,121 845,83" />
+          <text x="960" y="78" text-anchor="middle">循环超限？</text>
+          <text class="small" x="960" y="99" text-anchor="middle">loopTime &gt; 100</text>
+
+          <rect class="warnbox" x="1045" y="155" width="145" height="82" />
+          <text x="1118" y="187" text-anchor="middle">打印提示</text>
+          <text class="small" x="1118" y="209" text-anchor="middle">break 后返回</text>
+          <text class="small" x="1118" y="227" text-anchor="middle">NO_ERROR</text>
+
+          <polygon class="decision" points="610,180 750,225 610,270 470,225" />
+          <text x="610" y="214" text-anchor="middle">计算频率偏差</text>
+          <text class="small" x="610" y="235" text-anchor="middle">current - follow</text>
+
+          <rect class="box" x="115" y="160" width="210" height="94" />
+          <text x="220" y="192" text-anchor="middle">高于目标很多</text>
+          <text class="small" x="220" y="214" text-anchor="middle">或靠近空气端点</text>
+          <text class="small" x="220" y="233" text-anchor="middle">overTime++，下行补偿</text>
+
+          <rect class="box" x="115" y="300" width="210" height="82" />
+          <text x="220" y="332" text-anchor="middle">高于目标且超阈值</text>
+          <text class="small" x="220" y="354" text-anchor="middle">偏差 / per_mm_Frequency</text>
+          <text class="small" x="220" y="372" text-anchor="middle">下行线性步长</text>
+
+          <rect class="box" x="895" y="160" width="210" height="94" />
+          <text x="1000" y="192" text-anchor="middle">低于目标很多</text>
+          <text class="small" x="1000" y="214" text-anchor="middle">或靠近油中端点</text>
+          <text class="small" x="1000" y="233" text-anchor="middle">lowerTime++，上行补偿</text>
+
+          <rect class="box" x="895" y="300" width="210" height="82" />
+          <text x="1000" y="332" text-anchor="middle">低于目标且超阈值</text>
+          <text class="small" x="1000" y="354" text-anchor="middle">-偏差 / per_mm_Frequency</text>
+          <text class="small" x="1000" y="372" text-anchor="middle">上行线性步长</text>
+
+          <polygon class="decision" points="610,405 780,460 610,515 440,460" />
+          <text x="610" y="448" text-anchor="middle">已在稳定窗口？</text>
+          <text class="small" x="610" y="469" text-anchor="middle">偏差小且离两端 &gt; 200Hz</text>
+
+          <rect class="okbox" x="850" y="420" width="200" height="82" />
+          <text x="950" y="452" text-anchor="middle">稳定计数</text>
+          <text class="small" x="950" y="474" text-anchor="middle">followTime++</text>
+          <text class="small" x="950" y="492" text-anchor="middle">runlenth = 0</text>
+
+          <rect class="box" x="285" y="545" width="230" height="96" />
+          <text x="400" y="578" text-anchor="middle">需要动作时修正步长</text>
+          <text class="small" x="400" y="600" text-anchor="middle">&lt;5mm 时减半</text>
+          <text class="small" x="400" y="619" text-anchor="middle">&lt;0.3mm 时按 0.1mm 动作</text>
+
+          <rect class="box" x="565" y="545" width="210" height="96" />
+          <text x="670" y="578" text-anchor="middle">步进运动</text>
+          <text class="small" x="670" y="600" text-anchor="middle">MotorCtrl_MoveAndWait</text>
+          <text class="small" x="670" y="619" text-anchor="middle">默认速度，按方向移动</text>
+
+          <rect class="box" x="825" y="545" width="220" height="96" />
+          <text x="935" y="578" text-anchor="middle">位置与盲区检查</text>
+          <text class="small" x="935" y="600" text-anchor="middle">更新液位值</text>
+          <text class="small" x="935" y="619" text-anchor="middle">低液位时等待越过盲区</text>
+
+          <rect class="badbox" x="45" y="545" width="180" height="96" />
+          <text x="135" y="578" text-anchor="middle">补偿次数超限</text>
+          <text class="small" x="135" y="600" text-anchor="middle">over/lower 超阈值</text>
+          <text class="small" x="135" y="619" text-anchor="middle">MEASUREMENT_OVERSPEED</text>
+
+          <rect class="okbox" x="1045" y="545" width="145" height="96" />
+          <text x="1118" y="583" text-anchor="middle">稳定 10 次</text>
+          <text class="small" x="1118" y="606" text-anchor="middle">循环结束</text>
+          <text class="small" x="1118" y="624" text-anchor="middle">返回 NO_ERROR</text>
+
+          <path class="line" d="M205 83 H245" />
+          <path class="line" d="M415 83 H455" />
+          <path class="line" d="M625 83 H665" />
+          <path class="line" d="M835 83 H845" />
+          <path class="line-warn" d="M960 121 V146 H1118 V155" />
+          <path class="line" d="M960 121 C920 150 815 188 748 214" />
+          <path class="line" d="M470 225 H325" />
+          <path class="line" d="M525 252 C420 285 360 322 325 341" />
+          <path class="line" d="M695 252 C800 285 860 322 895 341" />
+          <path class="line" d="M750 225 H895" />
+          <path class="line" d="M220 254 V405 H440" />
+          <path class="line" d="M220 382 V460 H440" />
+          <path class="line" d="M1000 254 V405 H780" />
+          <path class="line" d="M1000 382 V460 H780" />
+          <path class="line" d="M780 460 H850" />
+          <path class="line" d="M610 515 V545" />
+          <path class="line" d="M515 593 H565" />
+          <path class="line" d="M775 593 H825" />
+          <path class="line-warn" d="M285 593 H225" />
+          <path class="line" d="M1045 593 H1118 V525 C1118 500 1070 480 1050 468" />
+          <path class="line" d="M935 545 V525 C935 500 860 482 780 466" />
+          <path class="line" d="M935 641 V675 H330 V121" />
+          <path class="line" d="M950 502 V675 H330" />
+          <path class="line" d="M330 121 V135" />
+          <text class="label" x="1005" y="144">是</text>
+          <text class="label" x="830" y="172">否</text>
+          <text class="label" x="372" y="211">偏差 &gt; 500</text>
+          <text class="label" x="382" y="318">偏差 &gt; 阈值</text>
+          <text class="label" x="825" y="211">偏差 &lt; -500</text>
+          <text class="label" x="815" y="318">偏差 &lt; -阈值</text>
+          <text class="label" x="798" y="448">是</text>
+          <text class="label" x="620" y="535">否</text>
+        </svg>
+      </div>
+
+      <h3>4.6 连续速度闭环：方式 2/4/5</h3>
+      <p>方式 <code>2</code> 在 <code>SearchOilLevel()</code> 入口直接进入 <code>DensityLevel_RunClosedLoop(DENSITY_LEVEL_RUN_SEARCH)</code>；新增方式 <code>4</code> 和 <code>5</code> 粗找完成后进入 <code>FrequencyLevel_RunClosedLoop(FREQUENCY_LEVEL_RUN_SEARCH)</code>。这两类闭环都使用电机速度模式，不再按步长调用 <code>MotorCtrl_MoveAndWait()</code>。</p>
+      <pre>frequency_difference = current_frequency - follow_frequency</pre>
+      <table>
+        <thead>
+          <tr>
+            <th>偏差条件</th>
+            <th>方向</th>
+            <th>速度与稳定策略</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>密度方式：当前密度低于 <code>oilLevelDensity</code></td>
+            <td>下行</td>
+            <td>按密度偏差比例计算速度，偏差越大速度越高，并受默认速度上限约束。</td>
+          </tr>
+          <tr>
+            <td>密度方式：当前密度高于 <code>oilLevelDensity</code></td>
+            <td>上行</td>
+            <td>按相同的比例速度控制逻辑上行。</td>
+          </tr>
+          <tr>
+            <td>频率方式：<code>difference &gt; deadband</code></td>
+            <td>下行</td>
+            <td>按 <code>FrequencyLevel_ComputeSpeedX100()</code> 比例计算速度，并受默认速度上限约束。</td>
+          </tr>
+          <tr>
+            <td>频率方式：<code>difference &lt; -deadband</code></td>
+            <td>上行</td>
+            <td>按相同的比例速度控制逻辑上行。</td>
+          </tr>
+          <tr>
+            <td>频率方式：<code>|difference| &lt;= deadband</code> 且相对频率方式靠近空气/油中端点</td>
+            <td>靠近空气端点下行；靠近油中端点上行</td>
+            <td>即使偏差已在死区内，也使用最小速度离开端点，避免把端点误判为液位界面。</td>
+          </tr>
+          <tr>
+            <td>频率/密度方式：偏差在死区内且无需端点修正</td>
+            <td>不动作</td>
+            <td>停止电机，稳定计数达到 3 次后记录液位并置位 <code>probe_at_liquid_level</code>、<code>liquid_stable</code>。</td>
+          </tr>
+        </tbody>
+      </table>
+      <p>运动中每 200ms 采样一次频率，并持续执行位置边界、称重碰撞和丢步检查。查找模式最长运行 600s；稳定后查找返回，跟随模式则继续长驻监控。</p>
+
+      <div class="diagram">
+        <p class="diagram-title">流程图 5：连续频率/密度速度闭环控制</p>
+        <svg viewBox="0 0 1220 720" role="img" aria-label="连续闭环控制流程图">
+          <defs>
+            <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L0,6 L9,3 z" fill="#607086" /></marker>
+            <marker id="arrow-warn" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L0,6 L9,3 z" fill="#b7791f" /></marker>
+          </defs>
+          <rect class="box" x="40" y="45" width="170" height="70" />
+          <text x="125" y="74" text-anchor="middle">进入闭环</text>
+          <text class="small" x="125" y="96" text-anchor="middle">search 或 follow</text>
+
+          <rect class="box" x="260" y="45" width="200" height="70" />
+          <text x="360" y="74" text-anchor="middle">清命中/稳定标志</text>
+          <text class="small" x="360" y="96" text-anchor="middle">EnableLevel/DensityMode</text>
+
+          <rect class="box" x="520" y="45" width="180" height="70" />
+          <text x="610" y="74" text-anchor="middle">读取当前值</text>
+          <text class="small" x="610" y="96" text-anchor="middle">频率或密度</text>
+
+          <polygon class="decision" points="850,25 980,80 850,135 720,80" />
+          <text x="850" y="68" text-anchor="middle">偏差在死区内?</text>
+          <text class="small" x="850" y="90" text-anchor="middle">含端点保护判断</text>
+
+          <rect class="okbox" x="1030" y="45" width="160" height="70" />
+          <text x="1110" y="73" text-anchor="middle">停止电机</text>
+          <text class="small" x="1110" y="95" text-anchor="middle">稳定计数 +1</text>
+
+          <polygon class="decision" points="1110,175 1210,225 1110,275 1010,225" />
+          <text x="1110" y="218" text-anchor="middle">计数 >= 3?</text>
+          <text class="small" x="1110" y="240" text-anchor="middle">稳定确认</text>
+
+          <rect class="okbox" x="1015" y="325" width="190" height="80" />
+          <text x="1110" y="354" text-anchor="middle">记录当前液位</text>
+          <text class="small" x="1110" y="376" text-anchor="middle">oil_level / Density_oil_level</text>
+          <text class="small" x="1110" y="394" text-anchor="middle">probe/stable=1</text>
+
+          <polygon class="decision" points="1110,455 1210,505 1110,555 1010,505" />
+          <text x="1110" y="498" text-anchor="middle">查找模式?</text>
+          <text class="small" x="1110" y="520" text-anchor="middle">follow_mode==0</text>
+
+          <rect class="okbox" x="1015" y="610" width="190" height="70" />
+          <text x="1110" y="638" text-anchor="middle">返回 NO_ERROR</text>
+          <text class="small" x="1110" y="660" text-anchor="middle">查找完成</text>
+
+          <rect class="box" x="730" y="210" width="205" height="90" />
+          <text x="832" y="238" text-anchor="middle">确定方向</text>
+          <text class="small" x="832" y="260" text-anchor="middle">频率高/密度低 -> 下行</text>
+          <text class="small" x="832" y="278" text-anchor="middle">频率低/密度高 -> 上行</text>
+
+          <rect class="box" x="730" y="345" width="205" height="80" />
+          <text x="832" y="374" text-anchor="middle">按偏差算速度</text>
+          <text class="small" x="832" y="396" text-anchor="middle">最小 0.10 m/min</text>
+          <text class="small" x="832" y="414" text-anchor="middle">不超过默认速度上限</text>
+
+          <rect class="box" x="480" y="345" width="190" height="80" />
+          <text x="575" y="374" text-anchor="middle">StartVelocity()</text>
+          <text class="small" x="575" y="396" text-anchor="middle">方向变化先慢停</text>
+          <text class="small" x="575" y="414" text-anchor="middle">速度变化小则不重发</text>
+
+          <rect class="box" x="250" y="345" width="180" height="80" />
+          <text x="340" y="374" text-anchor="middle">安全检查</text>
+          <text class="small" x="340" y="396" text-anchor="middle">位置/碰撞/丢步</text>
+          <text class="small" x="340" y="414" text-anchor="middle">超时/命令切换</text>
+
+          <rect class="badbox" x="40" y="345" width="150" height="80" />
+          <text x="115" y="374" text-anchor="middle">异常退出</text>
+          <text class="small" x="115" y="396" text-anchor="middle">SlowStop 后返回</text>
+          <text class="small" x="115" y="414" text-anchor="middle">STATE_SWITCH 透传</text>
+
+          <path class="line" d="M210 80 H260" />
+          <path class="line" d="M460 80 H520" />
+          <path class="line" d="M700 80 H720" />
+          <path class="line" d="M980 80 H1030" />
+          <path class="line" d="M1110 115 V175" />
+          <path class="line" d="M1110 275 V325" />
+          <path class="line" d="M1110 405 V455" />
+          <path class="line" d="M1110 555 V610" />
+          <path class="line" d="M1010 505 C930 505 930 115 700 95" />
+          <path class="line" d="M850 135 V210" />
+          <path class="line" d="M832 300 V345" />
+          <path class="line" d="M730 385 H670" />
+          <path class="line" d="M480 385 H430" />
+          <path class="line-warn" d="M250 385 H190" />
+          <path class="line" d="M340 345 C340 200 520 140 610 115" />
+          <text class="label" x="995" y="66">是</text>
+          <text class="label" x="862" y="160">否</text>
+          <text class="label" x="1124" y="302">是</text>
+          <text class="label" x="1000" y="492">否，继续跟随</text>
+          <text class="label" x="1124" y="582">是</text>
+        </svg>
+      </div>
+
+      <h3>4.7 成功结果写入</h3>
+      <ol>
+        <li>将 <code>debug_data.sensor_position</code> 作为液位结果来源。</li>
+        <li>若位置为负，<code>OilLevel_ClampLevelForReport()</code> 按 0 上报，避免无符号字段变成超大值。</li>
+        <li>写入 <code>g_measurement.oil_measurement.oil_level</code>。</li>
+        <li>同步写入 <code>g_measurement.density_distribution.Density_oil_level</code>，供密度分布相关流程复用。</li>
+        <li>置位 <code>probe_at_liquid_level=1</code> 和 <code>liquid_stable=1</code>。</li>
+      </ol>
+    </section>
+
+    <section>
+      <h2>5. 粗找边界：SearchOil / SearchAir</h2>
+
+      <h3>SearchOil：从空气侧下行找油中</h3>
+      <ol>
+        <li>若 <code>debug_data.cable_length &gt; 1000</code>（0.1mm 单位，约 100mm），先上行 100mm，尽量保证探头在空气中。</li>
+        <li>调用 <code>MotorCtrl_LostStepInit()</code> 重置丢步检测。</li>
+        <li>循环调用 <code>determine_level_status_motion()</code>，若判定为 <code>OIL</code> 则退出循环。</li>
+        <li>未到油中时，下行运动，并持续打印传感器位置、记步参考和称重值。</li>
+        <li>每轮检查丢步 <code>MotorCtrl_CheckLostStepAutoTiming()</code> 和称重碰撞 <code>CheckWeightCollision()</code>。</li>
+        <li>若传感器位置低于 <code>blindZone</code>，停止并返回 <code>MEASUREMENT_OILLEVEL_LOW</code>。</li>
+        <li>到油中后慢停；若仍高于盲区 100mm，再下行 100mm，确保完全在油中。</li>
+        <li>读取并保存 <code>oil_frequency</code>，随后调用 <code>SearchAir()</code> 找空气侧边界。</li>
+      </ol>
+
+      <h3>SearchAir：从油中上行找空气</h3>
+      <ol>
+        <li>调用 <code>MotorCtrl_LostStepInit()</code> 重置丢步检测。</li>
+        <li>循环调用 <code>determine_level_status_motion()</code>，若判定为 <code>AIR</code> 则退出循环。</li>
+        <li>未到空气时，上行运动，并持续检查丢步和称重碰撞。</li>
+        <li>到空气后慢停；若尺带长度大于 100mm，再上行 100mm，确保探头全部在空气中。</li>
+        <li>读取并保存 <code>air_frequency</code>。</li>
+        <li>若传感器位置高于盲区 100mm，再下行 100mm，为后续精找回到液位附近。</li>
+      </ol>
+
+      <h3>运动中液位状态判定</h3>
+      <p><code>determine_level_status_motion()</code> 通过 <code>determine_level_status_internal(..., 0)</code> 实现。它不会走完整的 <code>DSM_Get_LevelMode_Frequence()</code> 异常恢复流程，而是按传感器类型直接读取液位频率：</p>
+      <ul>
+        <li><code>DSM_SENSOR</code>：调用 <code>Read_Level_Frequency()</code>。</li>
+        <li>其他传感器：调用 <code>DSM_V2_Read_LevelFrequency()</code>。</li>
+      </ul>
+      <p>读取成功后，<code>current_frequency &gt; oilLevelFrequency</code> 判为 <code>AIR</code>，否则判为 <code>OIL</code>。</p>
+    </section>
+
+    <section>
+      <h2>6. 长驻跟随：FollowOilLevel</h2>
+      <p><code>FollowOilLevel()</code> 是长驻闭环函数，正常情况下不会自己结束。它只有在命令切换、传感器/电机/边界错误等情况下返回。</p>
+      <div class="diagram">
+        <p class="diagram-title">流程图 6：FollowOilLevel 长驻跟随</p>
+        <svg viewBox="0 0 1180 600" role="img" aria-label="FollowOilLevel 跟随流程图">
+          <defs>
+            <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L0,6 L9,3 z" fill="#607086" /></marker>
+            <marker id="arrow-warn" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L0,6 L9,3 z" fill="#b7791f" /></marker>
+          </defs>
+          <rect class="box" x="40" y="60" width="170" height="70" />
+          <text x="125" y="88" text-anchor="middle">FollowOilLevel()</text>
+          <text class="small" x="125" y="110" text-anchor="middle">STATE_FLOWOIL</text>
+
+          <polygon class="decision" points="350,35 485,95 350,155 215,95" />
+          <text x="350" y="82" text-anchor="middle">方法分支</text>
+          <text class="small" x="350" y="105" text-anchor="middle">2 / 4 / 5 / 其他</text>
+
+          <rect class="okbox" x="545" y="35" width="210" height="80" />
+          <text x="650" y="65" text-anchor="middle">方法 4/5</text>
+          <text class="small" x="650" y="87" text-anchor="middle">FrequencyLevel_RunClosedLoop</text>
+          <text class="small" x="650" y="105" text-anchor="middle">频率速度模式跟随</text>
+
+          <rect class="okbox" x="545" y="145" width="210" height="80" />
+          <text x="650" y="175" text-anchor="middle">方法 2</text>
+          <text class="small" x="650" y="197" text-anchor="middle">DensityLevel_RunClosedLoop</text>
+          <text class="small" x="650" y="215" text-anchor="middle">密度速度模式跟随</text>
+
+          <rect class="box" x="275" y="255" width="170" height="70" />
+          <text x="360" y="283" text-anchor="middle">旧跟随循环</text>
+          <text class="small" x="360" y="305" text-anchor="middle">方法 0/1/未知</text>
+
+          <rect class="box" x="535" y="255" width="190" height="70" />
+          <text x="630" y="283" text-anchor="middle">读取当前频率</text>
+          <text class="small" x="630" y="305" text-anchor="middle">DSM_Get_LevelMode_Frequence</text>
+
+          <polygon class="decision" points="895,235 1030,290 895,345 760,290" />
+          <text x="895" y="278" text-anchor="middle">频率差在滞后</text>
+          <text x="895" y="298" text-anchor="middle">阈值内?</text>
+
+          <rect class="box" x="1020" y="380" width="140" height="70" />
+          <text x="1090" y="408" text-anchor="middle">稳定等待</text>
+          <text class="small" x="1090" y="430" text-anchor="middle">3s 可打断</text>
+
+          <rect class="box" x="805" y="475" width="180" height="70" />
+          <text x="895" y="503" text-anchor="middle">SearchOilPrecise(100)</text>
+          <text class="small" x="895" y="525" text-anchor="middle">频率偏离后重找</text>
+
+          <polygon class="decision" points="590,455 710,510 590,565 470,510" />
+          <text x="590" y="498" text-anchor="middle">进入盲区?</text>
+          <text class="small" x="590" y="520" text-anchor="middle">MEASUREMENT_LOW</text>
+
+          <rect class="warnbox" x="245" y="475" width="175" height="70" />
+          <text x="332" y="503" text-anchor="middle">等待离开盲区</text>
+          <text class="small" x="332" y="525" text-anchor="middle">频率超过 follow_frequency</text>
+
+          <path class="line" d="M210 95 H215" />
+          <path class="line" d="M485 95 C510 75 525 75 545 75" />
+          <path class="line" d="M445 110 C500 145 510 185 545 185" />
+          <path class="line" d="M350 155 V255" />
+          <path class="line" d="M445 290 H535" />
+          <path class="line" d="M725 290 H760" />
+          <path class="line" d="M1030 290 C1090 290 1090 340 1090 380" />
+          <path class="line" d="M1090 450 C1010 470 965 470 935 475" />
+          <path class="line" d="M895 345 V475" />
+          <path class="line" d="M805 510 H710" />
+          <path class="line-warn" d="M470 510 H420" />
+          <path class="line" d="M332 475 C332 390 430 330 535 305" />
+          <path class="line" d="M590 455 C610 380 630 335 630 325" />
+          <text class="label" x="510" y="61">4/5</text>
+          <text class="label" x="510" y="171">2</text>
+          <text class="label" x="362" y="180">0/1/未知</text>
+          <text class="label" x="1038" y="277">是</text>
+          <text class="label" x="908" y="370">否</text>
+          <text class="label" x="438" y="497">是</text>
+          <text class="label" x="612" y="445">否</text>
+        </svg>
+      </div>
+
+      <ol>
+        <li>将设备状态设为 <code>STATE_FLOWOIL</code>。</li>
+        <li>方式 <code>4</code> 和 <code>5</code> 进入 <code>FrequencyLevel_RunClosedLoop(FREQUENCY_LEVEL_RUN_FOLLOW)</code>，按频率偏差连续调速。</li>
+        <li>方式 <code>2</code> 进入 <code>DensityLevel_RunClosedLoop(DENSITY_LEVEL_RUN_FOLLOW)</code>，按密度偏差连续调速。</li>
+        <li>方式 <code>0</code>/<code>1</code> 以及未识别方式保留旧循环：读取当前频率，超过滞后阈值后重新调用 <code>SearchOilPrecise(100)</code>。</li>
+      </ol>
+
+      <table>
+        <thead>
+          <tr>
+            <th>边界</th>
+            <th>触发条件</th>
+            <th>处理</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>上限</td>
+            <td><code>tankHeight &gt; 1000</code> 且 <code>sensor_position &gt;= tankHeight - 1000</code></td>
+            <td>清 <code>probe_at_liquid_level</code> 和 <code>liquid_stable</code>，停电机，返回 <code>MEASUREMENT_OILLEVEL_HIGH</code>。</td>
+          </tr>
+          <tr>
+            <td>下限/盲区</td>
+            <td><code>sensor_position &gt;= 0</code> 且 <code>sensor_position &lt; blindZone</code></td>
+            <td>清外部协议辅助状态，停电机，返回 <code>MEASUREMENT_OILLEVEL_LOW</code>，上层进入盲区等待。</td>
+          </tr>
+          <tr>
+            <td>负位置</td>
+            <td><code>sensor_position &lt; 0</code></td>
+            <td>不按盲区错误处理；写入结果时钳位为 0。</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>6.1 盲区等待</h3>
+      <p><code>waitForTheLiquidLevelToExceedTheBlindZone()</code> 会保持 <code>probe_at_liquid_level=0</code>、<code>liquid_stable=0</code>，循环读取液位频率。当 <code>current_frequency &gt; follow_frequency</code> 时认为脱离盲区等待条件并返回。等待期间显式检查命令切换，返回 <code>STATE_SWITCH</code> 时不作为故障。</p>
+    </section>
+
+    <section>
+      <h2>7. 传感器读取和异常恢复</h2>
+      <p><code>DSM_Get_LevelMode_Frequence()</code> 是静态读频率和精找阶段使用的通用读取函数。它的有效频率范围为 <code>hz != 0 && hz &lt;= 6500</code>。</p>
+      <ol>
+        <li>每轮最多读取 3 次液位频率。</li>
+        <li>读到有效频率后写入输出指针并返回 <code>NO_ERROR</code>。</li>
+        <li>若读到 0 或大于 6500 的异常频率，记录 <code>SONIC_FREQ_ABNORMAL</code> 重试日志，并执行 1s 可打断延时。</li>
+        <li>连续 3 次无效后进入模式恢复，最多 3 轮。</li>
+        <li>恢复逻辑会根据电机状态决定：若电机仍在动，只重新启用液位模式；若电机已停，先上行微动，再切密度模式等待稳定，最后切回液位模式。</li>
+        <li>恢复 3 轮仍无有效频率，返回 <code>SONIC_FREQ_ABNORMAL</code>。</li>
+      </ol>
+    </section>
+
+    <section>
+      <h2>8. 命令切换和错误传播</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>场景</th>
+            <th>当前处理</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>STATE_SWITCH</code></td>
+            <td>命令切换被视为正常打断，找液位、精找、平均频率采样和盲区等待都会向上透传，不参与故障重试。</td>
+          </tr>
+          <tr>
+            <td>电机移动失败、丢步、碰撞、传感器读取失败</td>
+            <td>大多通过 <code>CHECK_ERROR()</code> 或 <code>OilLevel_StopBeforeReturn()</code> 向上返回；后者会先调用 <code>MotorCtrl_SlowStop()</code>。</td>
+          </tr>
+          <tr>
+            <td>找液位成功</td>
+            <td>写入液位结果和密度分布液位缓存，并置位外部协议辅助状态。</td>
+          </tr>
+          <tr>
+            <td>边界错误</td>
+            <td>到达上限、盲区或频率跟随超速都会清除命中/稳定状态，避免 CPU3 或外部协议误判液位有效。</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>9. 风险和后续关注点</h2>
+      <ul>
+        <li><span class="ok-text">原有液位方式 0/1 已保留：</span>方式 0/1 仍使用原来的粗找 + <code>SearchOilPrecise(100)</code> 步进式精找；方式 2 使用密度连续闭环；新增方式 4/5 使用频率偏差速度控制；方式 3 仍未实现独立超声算法。</li>
+        <li><span class="warn-text">粗找循环不是完整三次业务重试：</span><code>SearchOil()</code>、<code>SearchAir()</code> 内部错误会直接返回，粗找循环不会重新从入口读频率再试。</li>
+        <li><span class="warn-text">旧精找循环保护不返回错误：</span>未识别测量方式的 <code>SearchOilPrecise()</code> 兜底中，<code>loopTime &gt; 100</code> 后跳出循环并返回 <code>NO_ERROR</code>。</li>
+        <li><span class="warn-text">频率等于阈值的入口边界：</span><code>SearchOilLevel()</code> 粗找入口对 <code>current_frequency == oilLevelFrequency</code> 没有明确分支。</li>
+        <li><span class="warn-text">主找液命令没有高层 3 次重试：</span><code>CMD_FIND_OIL</code> 的主路径是 <code>CMD_MeasureAndFollowOilLevel()</code>，不同于 <code>SearchAndFollowOilLevel()</code> 的高层重试封装。</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>10. 简化伪代码</h2>
+      <pre>CMD_FIND_OIL:
+  MeasureStart()
+  device_state = STATE_FINDOIL
+  if zero_point_status && error_auto_back_zero:
+      SearchZero()
+
+  SearchOilLevel()
+
+  if position source is encoder and auto switch enabled:
+      MotorCtrl_SwitchPositionSourceToMotor()
+      device_state = STATE_FINDOIL
+      SearchOilLevel()
+
+  device_state = STATE_FLOWOIL
+  FollowOilLevel()
+
+SearchOilLevel:
+  clear probe_at_liquid_level/liquid_stable
+  if liquidLevelMeasurementMethod == 2:
+      DensityLevel_RunClosedLoop(search)
+      oil_level = clamp_negative_to_zero(sensor_position)
+      Density_oil_level = oil_level
+      probe_at_liquid_level = 1
+      liquid_stable = 1
+      return
+
+  EnableLevelMode() up to 3 attempts
+
+  read current average level frequency
+  if current_frequency &lt; oilLevelFrequency:
+      ensure probe fully in oil
+      read oil_frequency
+      SearchAir()
+  else if current_frequency &gt; oilLevelFrequency:
+      SearchOil()
+
+  if liquidLevelMeasurementMethod == 4:
+      follow_frequency = (air_frequency + oil_frequency) / 2
+      FrequencyLevel_RunClosedLoop(search)
+  else if liquidLevelMeasurementMethod == 5:
+      follow_frequency = oilLevelFrequency
+      FrequencyLevel_RunClosedLoop(search)
+  else if liquidLevelMeasurementMethod == 0:
+      follow_frequency = (air_frequency + oil_frequency) / 2
+      SearchOilPrecise(100)
+  else:
+      follow_frequency = oilLevelFrequency
+      SearchOilPrecise(100)
+
+  oil_level = clamp_negative_to_zero(sensor_position)
+  Density_oil_level = oil_level
+  probe_at_liquid_level = 1
+  liquid_stable = 1</pre>
+    </section>
+
+    <section>
+      <h2>附录：源码证据范围</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>文件</th>
+            <th>关键函数/定义</th>
+            <th>用途</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>LTD_MAIN_CPU2/Application/Src/measure.c</code></td>
+            <td><code>ProcessCommand()</code>、<code>CMD_MeasureAndFollowOilLevel()</code>、<code>EnsureMotorPositionSourceBeforeFollow()</code></td>
+            <td>命令入口、测量前初始化、自动切换电机记步和重找液位。</td>
+          </tr>
+          <tr>
+            <td><code>LTD_MAIN_CPU2/Application/Src/measure_oilLevel.c</code></td>
+            <td><code>SearchOilLevel()</code>、<code>SearchOil()</code>、<code>SearchAir()</code>、<code>SearchOilPrecise()</code>、<code>FollowOilLevel()</code></td>
+            <td>找液位和跟随液位的核心状态机。</td>
+          </tr>
+          <tr>
+            <td><code>LTD_MAIN_CPU2/Application/Inc/measure_oilLevel.h</code></td>
+            <td><code>frequency_difference</code>、<code>INAIR</code>、<code>INOIL</code>、<code>MAX_TIMES_WHEN_FRE_FOLLOW</code></td>
+            <td>频率差、空气/油中判定和精找超限阈值。</td>
+          </tr>
+          <tr>
+            <td><code>LTD_MAIN_CPU2/Services/Sensor/sensor.c</code></td>
+            <td><code>EnableLevelMode()</code>、<code>DSM_Get_LevelMode_Frequence()</code>、<code>DSM_Get_LevelMode_Frequence_Avg()</code></td>
+            <td>液位模式切换、频率读取、异常频率恢复和平均频率计算。</td>
+          </tr>
+          <tr>
+            <td><code>LTD_MAIN_CPU2/Services/ParamStorage/system_parameter.h</code></td>
+            <td><code>CMD_FIND_OIL</code>、<code>STATE_FINDOIL</code>、<code>STATE_FLOWOIL</code>、<code>OilMeasurement</code>、液位参数字段</td>
+            <td>命令、状态、错误码、测量结果结构和参数定义。</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <footer>
+      本文档只整理当前 CPU2 找液位源码流程，不修改协议、参数、固件版本或构建产物。若后续要补实新的液位测量方式，应另行评估 CPU2/CPU3 参数语义、菜单范围、协议版本和现场兼容影响。
+    </footer>
+  </main>
+</body>
+</html>
