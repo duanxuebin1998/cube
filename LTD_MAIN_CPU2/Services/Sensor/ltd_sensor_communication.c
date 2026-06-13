@@ -453,7 +453,12 @@ int DSM_V2_Read_FloatParam(uint8_t param, float *out_value) {
  * @param out_value 待处理数值。
  * @return 状态码、计数值或协议数值，具体含义由调用点约定。
  */
-int DSM_V2_Read_IntParam(uint8_t param, int32_t *out_value) {
+/*
+ * 函数用途：读取 LTD/V2 整型参数，支持识别探测阶段抑制重试日志。
+ * 调用场景：正式读取保持错误重试日志，自动识别候选协议未命中时只返回错误码。
+ * 关键约束：不改变通信重试次数和返回码，只控制是否打印统一错误日志。
+ */
+static int DSM_V2_Read_IntParamInternal(uint8_t param, int32_t *out_value, uint8_t log_retry) {
 	if (!out_value)
 		return PARAM_ADDRESS_OVERFLOW;
 
@@ -477,13 +482,15 @@ int DSM_V2_Read_IntParam(uint8_t param, int32_t *out_value) {
 		/* 先处理异常边界，避免LTD 传感器通信状态机带故障继续运行。 */
 		if (ret != NO_ERROR) {
 			last_err = ret;
-			/* 错误 阶段：错误重试 模块：传感器 操作：读取整数参数 原因：ErrorLog_GetReasonByCode((uint32_t)ret) 尝试：(attempt + 1)/DSM_V2_MAX_RETRY 错误码：ret 错误名：ErrorLog_GetCodeName(ret) */
-			ErrorLog_Retry(ERROR_LOG_MODULE_SENSOR,
-			               ERROR_LOG_OP_READ_INT_PARAM,
-			               ErrorLog_GetReasonByCode((uint32_t)ret),
-			               (uint32_t)(attempt + 1),
-			               DSM_V2_MAX_RETRY,
-			               (uint32_t)ret);
+			if (log_retry != 0U) {
+				/* 错误 阶段：错误重试 模块：传感器 操作：读取整数参数 原因：ErrorLog_GetReasonByCode((uint32_t)ret) 尝试：(attempt + 1)/DSM_V2_MAX_RETRY 错误码：ret 错误名：ErrorLog_GetCodeName(ret) */
+				ErrorLog_Retry(ERROR_LOG_MODULE_SENSOR,
+				               ERROR_LOG_OP_READ_INT_PARAM,
+				               ErrorLog_GetReasonByCode((uint32_t)ret),
+				               (uint32_t)(attempt + 1),
+				               DSM_V2_MAX_RETRY,
+				               (uint32_t)ret);
+			}
 			continue;
 		}
 
@@ -496,31 +503,37 @@ int DSM_V2_Read_IntParam(uint8_t param, int32_t *out_value) {
 		if (ret == NO_ERROR) {
 			int32_t v = DSM_V2_ParseInt32_LE(rx + 2);
 			*out_value = v;
-            if (attempt > 0) {
-                /* 错误 阶段：重试成功 模块：传感器 操作：读取整数参数 原因：通信失败 尝试：(attempt + 1)/DSM_V2_MAX_RETRY */
-                ErrorLog_Recover(ERROR_LOG_MODULE_SENSOR,
-                                 ERROR_LOG_OP_READ_INT_PARAM,
-                                 ERROR_LOG_REASON_COMM_FAIL,
-                                 (uint32_t)(attempt + 1),
-                                 DSM_V2_MAX_RETRY);
-            }
+			if ((attempt > 0) && (log_retry != 0U)) {
+				/* 错误 阶段：重试成功 模块：传感器 操作：读取整数参数 原因：通信失败 尝试：(attempt + 1)/DSM_V2_MAX_RETRY */
+				ErrorLog_Recover(ERROR_LOG_MODULE_SENSOR,
+				                 ERROR_LOG_OP_READ_INT_PARAM,
+				                 ERROR_LOG_REASON_COMM_FAIL,
+				                 (uint32_t)(attempt + 1),
+				                 DSM_V2_MAX_RETRY);
+			}
 #ifdef DEBUG_DSM
 			printf("[V2] 读取整数寄存器 R%u: %ld (0x%08lX)\r\n", (unsigned) param, (long) v, (unsigned long) v);
 #endif
 			return NO_ERROR;
 		}
 		last_err = ret;
-		/* 错误 阶段：错误重试 模块：传感器 操作：读取整数参数 原因：ErrorLog_GetReasonByCode((uint32_t)ret) 尝试：(attempt + 1)/DSM_V2_MAX_RETRY 错误码：ret 错误名：ErrorLog_GetCodeName(ret) */
-		ErrorLog_Retry(ERROR_LOG_MODULE_SENSOR,
-		               ERROR_LOG_OP_READ_INT_PARAM,
-		               ErrorLog_GetReasonByCode((uint32_t)ret),
-		               (uint32_t)(attempt + 1),
-		               DSM_V2_MAX_RETRY,
-		               (uint32_t)ret);
+		if (log_retry != 0U) {
+			/* 错误 阶段：错误重试 模块：传感器 操作：读取整数参数 原因：ErrorLog_GetReasonByCode((uint32_t)ret) 尝试：(attempt + 1)/DSM_V2_MAX_RETRY 错误码：ret 错误名：ErrorLog_GetCodeName(ret) */
+			ErrorLog_Retry(ERROR_LOG_MODULE_SENSOR,
+			               ERROR_LOG_OP_READ_INT_PARAM,
+			               ErrorLog_GetReasonByCode((uint32_t)ret),
+			               (uint32_t)(attempt + 1),
+			               DSM_V2_MAX_RETRY,
+			               (uint32_t)ret);
+		}
 		/* LTD 传感器通信与外设通信之间保留等待时间，避免硬件或对端协议尚未准备好。 */
 		HAL_Delay(DSM_BCC_DELAY);
 	}
 	return last_err;
+}
+
+int DSM_V2_Read_IntParam(uint8_t param, int32_t *out_value) {
+	return DSM_V2_Read_IntParamInternal(param, out_value, 1U);
 }
 
 /* === 便捷读取 === */
@@ -636,6 +649,17 @@ int DSM_V2_Read_SensorID(uint32_t *sensor_id) {
 	int32_t v = 0;
 	int ret = DSM_V2_Read_IntParam(0x16, &v); /* 22 */
 	/* 先处理异常边界，避免LTD 传感器通信状态机带故障继续运行。 */
+	if (ret == NO_ERROR)
+		*sensor_id = (uint32_t) v;
+	return ret;
+}
+
+int DSM_V2_Probe_SensorID(uint32_t *sensor_id) {
+	if (!sensor_id)
+		return PARAM_ADDRESS_OVERFLOW;
+	int32_t v = 0;
+	int ret = DSM_V2_Read_IntParamInternal(0x16, &v, 0U); /* 22 */
+	/* 识别阶段的协议探测失败属于候选未命中，不打印错误重试。 */
 	if (ret == NO_ERROR)
 		*sensor_id = (uint32_t) v;
 	return ret;

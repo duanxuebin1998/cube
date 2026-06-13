@@ -3,9 +3,50 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>CPU2 电机程序与函数梳理</title>
+  <title>CPU2 电机程序、函数与运动流程综合梳理</title>
   <style>
     :root {
+      --merge-bg: #f4f7fb;
+      --merge-paper: #ffffff;
+      --merge-text: #1d2733;
+      --merge-muted: #617084;
+      --merge-line: #d8e0ea;
+      --merge-blue: #1f5fbf;
+      --merge-green: #20734d;
+      --merge-amber: #9a6200;
+      --merge-shadow: 0 12px 30px rgba(28, 44, 68, 0.12);
+    }
+    html { scroll-behavior: smooth; }
+    body { margin: 0; background: var(--merge-bg); color: var(--merge-text); font-family: "Microsoft YaHei", "Segoe UI", Arial, sans-serif; line-height: 1.6; }
+    .merged-root { max-width: 1320px; margin: 0 auto; padding: 28px 24px 64px; }
+    .merge-hero { background: linear-gradient(135deg, #123151 0%, #1f5fbf 54%, #056b7a 100%); color: #fff; border-radius: 12px; padding: 28px 30px; box-shadow: var(--merge-shadow); margin-bottom: 18px; }
+    .merge-hero h1 { margin: 0 0 10px; font-size: 30px; line-height: 1.25; }
+    .merge-hero p { margin: 8px 0; color: rgba(255,255,255,0.88); }
+    .merge-hero code { color: #fff; background: rgba(255,255,255,0.13); border: 1px solid rgba(255,255,255,0.26); border-radius: 4px; padding: 1px 4px; }
+    .merge-meta { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-top: 14px; }
+    .merge-meta div { border: 1px solid rgba(255,255,255,0.24); border-radius: 8px; padding: 10px 12px; background: rgba(255,255,255,0.10); }
+    .merge-label { display: block; margin-bottom: 4px; color: rgba(255,255,255,0.72); font-size: 12px; }
+    .merge-index { background: var(--merge-paper); border: 1px solid var(--merge-line); border-radius: 8px; padding: 16px 18px; margin-bottom: 18px; }
+    .merge-index h2 { margin: 0 0 10px; font-size: 20px; }
+    .merge-cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+    .merge-card { display: block; border: 1px solid var(--merge-line); border-radius: 8px; padding: 12px; text-decoration: none; color: var(--merge-text); background: #fbfdff; }
+    .merge-card strong { display: block; color: var(--merge-blue); margin-bottom: 5px; }
+    .merge-card span { color: var(--merge-muted); font-size: 13px; }
+    .merge-note { margin-top: 12px; border-left: 4px solid var(--merge-green); background: #eefaf4; padding: 10px 12px; border-radius: 6px; }
+    .chapter { margin: 22px 0; }
+    .chapter-head { background: var(--merge-paper); border: 1px solid var(--merge-line); border-radius: 10px; padding: 18px 20px; margin-bottom: 12px; box-shadow: 0 1px 2px rgba(19, 36, 56, 0.05); }
+    .chapter-head h2 { margin: 4px 0 8px; font-size: 24px; line-height: 1.25; }
+    .chapter-head p { margin: 0; color: var(--merge-muted); }
+    .chapter-label { display: inline-block; color: var(--merge-amber); font-weight: 700; font-size: 13px; }
+    .chapter-body { margin-bottom: 12px; }
+    @media (max-width: 980px) {
+      .merge-meta, .merge-cards { grid-template-columns: 1fr; }
+      .merged-root { padding: 18px 14px 42px; }
+      .merge-hero { padding: 22px 18px; }
+    }
+
+/* scoped source: overview */
+.source-overview {
       color-scheme: light;
       --bg: #f4f6f8;
       --paper: #ffffff;
@@ -21,44 +62,44 @@
       --code: #e8eef5;
     }
 
-    * { box-sizing: border-box; }
+    .source-overview * { box-sizing: border-box; }
 
-    body {
+    .source-overview {
       margin: 0;
       background: var(--bg);
       color: var(--ink);
       font: 15px/1.68 "Microsoft YaHei", "Segoe UI", Arial, sans-serif;
     }
 
-    main {
+    .source-overview .source-main {
       width: min(1220px, calc(100% - 32px));
       margin: 0 auto;
       padding: 28px 0 56px;
     }
 
-    header {
+    .source-overview header {
       padding: 28px 0 20px;
       border-bottom: 2px solid var(--line);
       margin-bottom: 22px;
     }
 
-    h1, h2, h3 {
+    .source-overview h1, .source-overview h2, .source-overview h3 {
       margin: 0;
       line-height: 1.28;
       letter-spacing: 0;
     }
 
-    h1 { font-size: 32px; margin-bottom: 10px; }
-    h2 {
+    .source-overview h1 { font-size: 32px; margin-bottom: 10px; }
+    .source-overview h2 {
       font-size: 22px;
       margin: 30px 0 12px;
       padding-bottom: 8px;
       border-bottom: 1px solid var(--line);
     }
-    h3 { font-size: 17px; margin: 18px 0 8px; }
-    p { margin: 8px 0; }
+    .source-overview h3 { font-size: 17px; margin: 18px 0 8px; }
+    .source-overview p { margin: 8px 0; }
 
-    code {
+    .source-overview code {
       padding: 1px 5px;
       border-radius: 4px;
       background: var(--code);
@@ -66,49 +107,49 @@
       font-size: 0.94em;
     }
 
-    .meta {
+    .source-overview .meta {
       display: grid;
       grid-template-columns: repeat(4, minmax(0, 1fr));
       gap: 10px;
       margin-top: 18px;
     }
 
-    .meta div, .note, .warn, .panel, .lane {
+    .source-overview .meta div, .source-overview .note, .source-overview .warn, .source-overview .panel, .source-overview .lane {
       background: var(--paper);
       border: 1px solid var(--line);
       border-radius: 8px;
     }
 
-    .meta div {
+    .source-overview .meta div {
       padding: 10px 12px;
       min-height: 62px;
     }
 
-    .label {
+    .source-overview .label {
       display: block;
       color: var(--muted);
       font-size: 12px;
       margin-bottom: 3px;
     }
 
-    .note, .warn {
+    .source-overview .note, .source-overview .warn {
       padding: 13px 15px;
       margin: 12px 0;
     }
 
-    .note { border-left: 4px solid var(--blue); }
-    .warn { border-left: 4px solid var(--amber); }
+    .source-overview .note { border-left: 4px solid var(--blue); }
+    .source-overview .warn { border-left: 4px solid var(--amber); }
 
-    .grid {
+    .source-overview .grid {
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 12px;
     }
 
-    .panel { padding: 14px 16px; }
-    .panel h3 { margin-top: 0; }
+    .source-overview .panel { padding: 14px 16px; }
+    .source-overview .panel h3 { margin-top: 0; }
 
-    table {
+    .source-overview table {
       width: 100%;
       border-collapse: collapse;
       background: var(--paper);
@@ -117,36 +158,36 @@
       table-layout: fixed;
     }
 
-    th, td {
+    .source-overview th, .source-overview td {
       border: 1px solid var(--line);
       padding: 8px 10px;
       vertical-align: top;
       word-break: break-word;
     }
 
-    th {
+    .source-overview th {
       background: var(--head);
       text-align: left;
       font-weight: 700;
     }
 
-    ul { margin: 8px 0 8px 22px; padding: 0; }
-    li { margin: 4px 0; }
+    .source-overview ul { margin: 8px 0 8px 22px; padding: 0; }
+    .source-overview li { margin: 4px 0; }
 
-    .flow {
+    .source-overview .flow {
       display: grid;
       grid-template-columns: repeat(5, minmax(0, 1fr));
       gap: 10px;
       margin: 12px 0;
     }
 
-    .lane {
+    .source-overview .lane {
       padding: 12px;
       min-height: 120px;
       position: relative;
     }
 
-    .lane::after {
+    .source-overview .lane::after {
       content: "";
       position: absolute;
       top: 48px;
@@ -156,8 +197,8 @@
       background: var(--line);
     }
 
-    .lane:last-child::after { display: none; }
-    .tag {
+    .source-overview .lane:last-child::after { display: none; }
+    .source-overview .tag {
       display: inline-block;
       padding: 1px 7px;
       border-radius: 999px;
@@ -167,25 +208,666 @@
       margin-right: 4px;
     }
 
-    .tag.blue { background: #e7f0ff; color: var(--blue); }
-    .tag.green { background: #e7f6ee; color: var(--green); }
-    .tag.amber { background: #fff4df; color: var(--amber); }
-    .tag.red { background: #fdebea; color: var(--red); }
-    .tag.violet { background: #f1e8ff; color: var(--violet); }
+    .source-overview .tag.blue { background: #e7f0ff; color: var(--blue); }
+    .source-overview .tag.green { background: #e7f6ee; color: var(--green); }
+    .source-overview .tag.amber { background: #fff4df; color: var(--amber); }
+    .source-overview .tag.red { background: #fdebea; color: var(--red); }
+    .source-overview .tag.violet { background: #f1e8ff; color: var(--violet); }
 
     @media (max-width: 900px) {
-      .meta, .grid, .flow { grid-template-columns: 1fr; }
-      .lane::after { display: none; }
+      .source-overview .meta, .source-overview .grid, .source-overview .flow { grid-template-columns: 1fr; }
+      .source-overview .lane::after { display: none; }
+    }
+
+/* scoped source: layer */
+.source-layer {
+      --bg: #f4f7fb;
+      --paper: #ffffff;
+      --ink: #1c2733;
+      --muted: #66758a;
+      --line: #d7e0ea;
+      --head: #eef4fa;
+      --blue: #1d5fbf;
+      --blue-soft: #e7f0ff;
+      --green: #1f7a4f;
+      --green-soft: #e7f7ee;
+      --amber: #986300;
+      --amber-soft: #fff4df;
+      --red: #b42318;
+      --red-soft: #fdebea;
+      --cyan: #056b7a;
+      --cyan-soft: #e3f7fa;
+      --violet: #6840b8;
+      --violet-soft: #f2eaff;
+      --shadow: 0 12px 28px rgba(25, 42, 61, 0.12);
+    }
+
+    .source-layer * { box-sizing: border-box; }
+    .source-layer {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: "Microsoft YaHei", "Segoe UI", Arial, sans-serif;
+      line-height: 1.62;
+    }
+    .source-layer .source-main {
+      max-width: 1280px;
+      margin: 0 auto;
+      padding: 28px 24px 56px;
+    }
+    .source-layer h1, .source-layer h2, .source-layer h3 {
+      margin: 0 0 12px;
+      line-height: 1.28;
+    }
+    .source-layer h1 { font-size: 30px; }
+    .source-layer h2 {
+      margin-top: 26px;
+      padding-top: 20px;
+      border-top: 1px solid var(--line);
+      font-size: 22px;
+    }
+    .source-layer h3 {
+      margin-top: 18px;
+      font-size: 17px;
+    }
+    .source-layer p { margin: 8px 0; }
+    .source-layer code {
+      font-family: Consolas, "Cascadia Mono", monospace;
+      background: #edf3f8;
+      border: 1px solid #dbe5ee;
+      border-radius: 4px;
+      padding: 1px 4px;
+      word-break: break-word;
+    }
+    .source-layer .hero, .source-layer section {
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 18px 20px;
+      margin-bottom: 18px;
+      box-shadow: 0 1px 2px rgba(18, 34, 51, 0.05);
+    }
+    .source-layer .hero {
+      background: linear-gradient(135deg, #123151 0%, #1d5fbf 52%, #056b7a 100%);
+      color: #fff;
+      border: 0;
+      border-radius: 12px;
+      padding: 28px 30px;
+      box-shadow: var(--shadow);
+    }
+    .source-layer .hero p { color: rgba(255, 255, 255, 0.88); }
+    .source-layer .hero code {
+      background: rgba(255, 255, 255, 0.13);
+      border-color: rgba(255, 255, 255, 0.27);
+      color: #fff;
+    }
+    .source-layer .meta {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+      margin-top: 14px;
+    }
+    .source-layer .meta div, .source-layer .note, .source-layer .warn, .source-layer .ok {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 10px 12px;
+      background: #fbfdff;
+    }
+    .source-layer .hero .meta div {
+      background: rgba(255, 255, 255, 0.10);
+      border-color: rgba(255, 255, 255, 0.24);
+    }
+    .source-layer .label {
+      display: block;
+      margin-bottom: 4px;
+      color: var(--muted);
+      font-size: 12px;
+      letter-spacing: 0;
+    }
+    .source-layer .hero .label { color: rgba(255, 255, 255, 0.72); }
+    .source-layer .toc {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+      padding: 0;
+      list-style: none;
+      margin: 12px 0 0;
+    }
+    .source-layer .toc a {
+      display: block;
+      min-height: 42px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 9px 10px;
+      color: var(--blue);
+      background: #fbfdff;
+      text-decoration: none;
+      font-weight: 600;
+    }
+    .source-layer .toc a:hover {
+      background: var(--blue-soft);
+      border-color: #b8cff5;
+    }
+    .source-layer .grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+    }
+    .source-layer .grid.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .source-layer .card {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fbfdff;
+      padding: 12px;
+    }
+    .source-layer .card h3 {
+      margin: 0 0 6px;
+      font-size: 16px;
+    }
+    .source-layer .tag {
+      display: inline-block;
+      margin: 2px 4px 2px 0;
+      border-radius: 999px;
+      padding: 2px 8px;
+      font-size: 12px;
+      font-weight: 700;
+      color: #1b334d;
+      background: #edf3f8;
+      border: 1px solid #dbe5ee;
+      white-space: nowrap;
+    }
+    .source-layer .tag.blue { color: var(--blue); background: var(--blue-soft); border-color: #b9cef3; }
+    .source-layer .tag.green { color: var(--green); background: var(--green-soft); border-color: #aadcc3; }
+    .source-layer .tag.amber { color: var(--amber); background: var(--amber-soft); border-color: #efcf8f; }
+    .source-layer .tag.red { color: var(--red); background: var(--red-soft); border-color: #f4b4ad; }
+    .source-layer .tag.cyan { color: var(--cyan); background: var(--cyan-soft); border-color: #a9dce3; }
+    .source-layer .tag.violet { color: var(--violet); background: var(--violet-soft); border-color: #d2bdf3; }
+    .source-layer table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 12px 0 4px;
+      font-size: 14px;
+    }
+    .source-layer th, .source-layer td {
+      border: 1px solid var(--line);
+      padding: 9px 10px;
+      vertical-align: top;
+    }
+    .source-layer th {
+      background: var(--head);
+      text-align: left;
+      white-space: nowrap;
+    }
+    .source-layer tbody tr:nth-child(even) td { background: #fbfdff; }
+    .source-layer .flow {
+      display: grid;
+      grid-template-columns: 190px minmax(0, 1fr);
+      gap: 10px;
+      align-items: stretch;
+      margin: 12px 0;
+    }
+    .source-layer .lane-title {
+      border-radius: 8px;
+      padding: 12px;
+      border: 1px solid var(--line);
+      background: var(--head);
+      font-weight: 700;
+    }
+    .source-layer .steps {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 8px;
+    }
+    .source-layer .step {
+      position: relative;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fff;
+      padding: 10px;
+      min-height: 92px;
+    }
+    .source-layer .step::after {
+      content: "";
+      position: absolute;
+      top: 50%;
+      right: -8px;
+      width: 8px;
+      border-top: 2px solid #9fb0c3;
+    }
+    .source-layer .step:last-child::after { display: none; }
+    .source-layer .step strong {
+      display: block;
+      margin-bottom: 5px;
+      color: #1a3c61;
+    }
+    .source-layer .step small {
+      display: block;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.45;
+    }
+    .source-layer .callmap {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      gap: 14px;
+      margin-top: 12px;
+    }
+    .source-layer .call {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fbfdff;
+      padding: 12px;
+    }
+    .source-layer .call ol {
+      margin: 8px 0 0 22px;
+      padding: 0;
+    }
+    .source-layer .call li { margin: 5px 0; }
+    .source-layer .note { background: #fbfdff; }
+    .source-layer .warn {
+      background: var(--amber-soft);
+      border-color: #efcf8f;
+    }
+    .source-layer .ok {
+      background: var(--green-soft);
+      border-color: #aadcc3;
+    }
+    .source-layer .redbox {
+      background: var(--red-soft);
+      border: 1px solid #f4b4ad;
+      border-radius: 8px;
+      padding: 10px 12px;
+    }
+    .source-layer .compact td, .source-layer .compact th { padding: 7px 8px; }
+    .source-layer .mono-list {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px 12px;
+      margin: 10px 0 0;
+    }
+    .source-layer .mono-list div {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 8px 10px;
+      background: #fbfdff;
+    }
+    .source-layer .footer {
+      color: var(--muted);
+      font-size: 13px;
+      text-align: center;
+      margin-top: 24px;
+    }
+
+    @media (max-width: 980px) {
+      .source-layer .meta, .source-layer .toc, .source-layer .grid, .source-layer .grid.two, .source-layer .callmap, .source-layer .mono-list {
+        grid-template-columns: 1fr;
+      }
+      .source-layer .flow {
+        grid-template-columns: 1fr;
+      }
+      .source-layer .steps {
+        grid-template-columns: 1fr;
+      }
+      .source-layer .step::after {
+        left: 18px;
+        right: auto;
+        top: auto;
+        bottom: -8px;
+        width: 0;
+        height: 8px;
+        border-top: 0;
+        border-left: 2px solid #9fb0c3;
+      }
+    }
+
+/* scoped source: flow */
+.source-flow {
+      --bg: #f6f8fb;
+      --paper: #ffffff;
+      --text: #1d2733;
+      --muted: #617084;
+      --line: #d8e0ea;
+      --head: #edf3f9;
+      --blue: #1f5fbf;
+      --blue-soft: #e7f0ff;
+      --green: #20734d;
+      --green-soft: #e7f6ee;
+      --amber: #9a6200;
+      --amber-soft: #fff4df;
+      --red: #b42318;
+      --red-soft: #fdebea;
+      --violet: #6840b8;
+      --violet-soft: #f1e8ff;
+      --cyan: #056b7a;
+      --cyan-soft: #e3f7fa;
+      --shadow: 0 12px 30px rgba(28, 44, 68, 0.12);
+    }
+
+    .source-flow * { box-sizing: border-box; }
+    .source-flow {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: "Microsoft YaHei", "Segoe UI", Arial, sans-serif;
+      line-height: 1.6;
+    }
+    .source-flow .source-main {
+      max-width: 1280px;
+      margin: 0 auto;
+      padding: 28px 24px 56px;
+    }
+    .source-flow h1, .source-flow h2, .source-flow h3 { margin: 0 0 12px; line-height: 1.25; }
+    .source-flow h1 { font-size: 30px; }
+    .source-flow h2 {
+      margin-top: 28px;
+      padding-top: 20px;
+      border-top: 1px solid var(--line);
+      font-size: 22px;
+    }
+    .source-flow h3 { margin-top: 18px; font-size: 17px; }
+    .source-flow p { margin: 8px 0; }
+    .source-flow code {
+      font-family: Consolas, "Cascadia Mono", monospace;
+      background: #eef3f8;
+      border: 1px solid #dbe5ee;
+      border-radius: 4px;
+      padding: 1px 4px;
+      word-break: break-word;
+    }
+    .source-flow .hero, .source-flow section {
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 18px 20px;
+      margin-bottom: 18px;
+      box-shadow: 0 1px 2px rgba(19, 36, 56, 0.05);
+    }
+    .source-flow .hero {
+      background: linear-gradient(135deg, #123151 0%, #1f5fbf 54%, #056b7a 100%);
+      color: #fff;
+      border: 0;
+      border-radius: 12px;
+      padding: 28px 30px;
+      box-shadow: var(--shadow);
+    }
+    .source-flow .hero p { color: rgba(255, 255, 255, 0.88); }
+    .source-flow .hero code {
+      background: rgba(255, 255, 255, 0.12);
+      border-color: rgba(255, 255, 255, 0.26);
+      color: #fff;
+    }
+    .source-flow .meta {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+      margin-top: 14px;
+    }
+    .source-flow .meta div, .source-flow .note, .source-flow .warn, .source-flow .ok {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 10px 12px;
+      background: #fbfdff;
+    }
+    .source-flow .hero .meta div, .source-flow .hero .note {
+      background: rgba(255, 255, 255, 0.10);
+      border-color: rgba(255, 255, 255, 0.24);
+    }
+    .source-flow .hero .label { color: rgba(255, 255, 255, 0.72); }
+    .source-flow .label {
+      display: block;
+      margin-bottom: 4px;
+      color: var(--muted);
+      font-size: 12px;
+      letter-spacing: 0;
+    }
+    .source-flow .warn {
+      background: #fff8eb;
+      border-color: #f3d08a;
+    }
+    .source-flow .ok {
+      background: #effaf4;
+      border-color: #a9dcc1;
+    }
+    .source-flow .toc {
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 14px 16px;
+      margin-bottom: 18px;
+      box-shadow: 0 8px 24px rgba(38, 53, 79, 0.08);
+    }
+    .source-flow .toc h2 {
+      margin: 0 0 8px;
+      padding: 0;
+      border: 0;
+      font-size: 17px;
+    }
+    .source-flow .toc ol {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+    .source-flow .toc a {
+      display: inline-flex;
+      align-items: center;
+      min-height: 30px;
+      padding: 4px 10px;
+      border: 1px solid #d6e3f2;
+      border-radius: 8px;
+      background: #f7fbff;
+      color: var(--blue);
+      font-size: 14px;
+      text-decoration: none;
+    }
+    .source-flow .lead {
+      color: var(--muted);
+      font-size: 16px;
+    }
+    .source-flow .grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+    }
+    .source-flow .grid-3 {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+    }
+    .source-flow .card {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 14px 16px;
+      background: #fbfcfe;
+      min-width: 0;
+    }
+    .source-flow .card h3 { margin-top: 0; }
+    .source-flow .flow {
+      display: grid;
+      grid-template-columns: repeat(6, minmax(0, 1fr));
+      gap: 10px;
+      margin: 12px 0;
+    }
+    .source-flow .flow.five { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+    .source-flow .flow.four { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+    .source-flow .flow-wrap {
+      overflow-x: auto;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: #fbfdff;
+      padding: 14px;
+      margin: 12px 0;
+      max-width: 100%;
+      min-width: 0;
+    }
+    .source-flow svg.flow {
+      display: block;
+      margin: 0 auto;
+      width: 100%;
+      max-width: 1120px;
+      height: auto;
+      font-family: "Microsoft YaHei", "Segoe UI", Arial, sans-serif;
+    }
+    .source-flow .node rect, .source-flow .node path, .source-flow .node ellipse {
+      stroke-width: 1.4;
+      filter: drop-shadow(0 2px 2px rgba(22, 35, 55, 0.08));
+    }
+    .source-flow .node text {
+      font-size: 13px;
+      fill: #162337;
+    }
+    .source-flow .node .small { font-size: 12px; }
+    .source-flow .start rect, .source-flow .start ellipse { fill: var(--green-soft); stroke: var(--green); }
+    .source-flow .process rect { fill: var(--blue-soft); stroke: var(--blue); }
+    .source-flow .decision path { fill: var(--amber-soft); stroke: var(--amber); }
+    .source-flow .state rect { fill: var(--violet-soft); stroke: var(--violet); }
+    .source-flow .error rect, .source-flow .error ellipse { fill: var(--red-soft); stroke: var(--red); }
+    .source-flow .special rect { fill: var(--cyan-soft); stroke: var(--cyan); }
+    .source-flow .edge {
+      stroke: #516276;
+      stroke-width: 1.4;
+      fill: none;
+      marker-end: url(#arrow);
+    }
+    .source-flow .edge.ok-line { stroke: var(--green); }
+    .source-flow .edge.err-line { stroke: var(--red); }
+    .source-flow .edge.warn-line { stroke: var(--amber); }
+    .source-flow .edge-label {
+      font-size: 12px;
+      fill: #43536b;
+      paint-order: stroke;
+      stroke: #fbfdff;
+      stroke-width: 4px;
+      stroke-linejoin: round;
+    }
+    .source-flow .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin: 10px 0;
+    }
+    .source-flow .legend span {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+    .source-flow .legend i {
+      width: 18px;
+      height: 12px;
+      border-radius: 3px;
+      display: inline-block;
+      border: 1px solid;
+    }
+    .source-flow .src {
+      color: var(--muted);
+      font-size: 13px;
+    }
+    .source-flow .step {
+      position: relative;
+      min-height: 128px;
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fbfdff;
+    }
+    .source-flow .step::after {
+      content: "";
+      position: absolute;
+      top: 52px;
+      right: -10px;
+      width: 10px;
+      height: 2px;
+      background: var(--line);
+    }
+    .source-flow .step:last-child::after { display: none; }
+    .source-flow .step b { display: block; margin-bottom: 6px; }
+    .source-flow .tag {
+      display: inline-block;
+      margin: 0 4px 4px 0;
+      padding: 1px 7px;
+      border-radius: 999px;
+      background: #e8eef5;
+      color: #344054;
+      font-size: 12px;
+      white-space: nowrap;
+    }
+    .source-flow .tag.blue { background: #e7f0ff; color: var(--blue); }
+    .source-flow .tag.green { background: #e7f6ee; color: var(--green); }
+    .source-flow .tag.amber { background: #fff4df; color: var(--amber); }
+    .source-flow .tag.red { background: #fdebea; color: var(--red); }
+    .source-flow .tag.violet { background: #f1e8ff; color: var(--violet); }
+    .source-flow .tag.cyan { background: #e3f7fa; color: var(--cyan); }
+    .source-flow table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 12px 0;
+      table-layout: fixed;
+    }
+    .source-flow th, .source-flow td {
+      border: 1px solid var(--line);
+      padding: 8px 10px;
+      vertical-align: top;
+      word-break: break-word;
+    }
+    .source-flow th {
+      background: var(--head);
+      text-align: left;
+    }
+    .source-flow ul { margin: 8px 0 8px 22px; padding: 0; }
+    .source-flow li { margin: 4px 0; }
+    .source-flow .compact td { font-size: 14px; }
+    .source-flow .split {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+    @media (max-width: 980px) {
+      .source-flow .source-main { padding: 18px 12px 36px; }
+      .source-flow .meta, .source-flow .grid, .source-flow .grid-3, .source-flow .split, .source-flow .flow, .source-flow .flow.five, .source-flow .flow.four { grid-template-columns: 1fr; }
+      .source-flow .step::after { display: none; }
     }
   </style>
 </head>
 <body>
-<main>
+  <div class="merged-root">
+    <section class="merge-hero">
+      <h1>CPU2 电机程序、函数与运动流程综合梳理</h1>
+      <p>本综合版把原来的三份资料整理到一个 HTML：程序与函数总览、运动函数层次地图、详细程序流程图。后续查代码、评审和台架验证优先打开本文。</p>
+      <div class="merge-meta">
+        <div><span class="merge-label">主文件</span><code>LTD_MAIN_CPU2/Services/MotorControl/motor_ctrl_motion_api.c</code></div>
+        <div><span class="merge-label">整合来源</span>3 份 HTML 文档</div>
+        <div><span class="merge-label">整合日期</span>2026-06-13</div>
+        <div><span class="merge-label">维护方式</span>以后优先维护本综合版</div>
+      </div>
+    </section>
+
+    <section class="merge-index">
+      <h2>综合目录</h2>
+      <div class="merge-cards">
+        <a class="merge-card" href="#chapter-overview"><strong>第一章：程序与函数总览</strong><span>文件职责、函数索引、业务入口、保护矩阵、错误处理和查代码建议。</span></a>
+        <a class="merge-card" href="#chapter-layer"><strong>第二章：运动函数层次地图</strong><span>公开入口、目标规划、正式位置模式、Jog 点动模式、ticks、无检测和优化方案。</span></a>
+        <a class="merge-card" href="#chapter-flow"><strong>第三章：详细程序流程图</strong><span>完整流程图、入口选择、各运动链路、关键参数、异常出口和待测覆盖。</span></a>
+      </div>
+      <div class="merge-note">旧文件 <code>电机运动程序详细流程图.html</code> 和 <code>电机运动函数层次梳理.html</code> 已改为跳转入口，正文统一合并到本文。</div>
+    </section>
+
+    <section class="chapter" id="chapter-overview">
+      <div class="chapter-head">
+        <span class="chapter-label">第一章：程序与函数总览</span>
+        <h2>CPU2 电机程序与函数梳理</h2>
+        <p>覆盖 CPU2 电机控制文件职责、函数索引、业务入口、保护矩阵、错误来源和查代码建议。</p>
+      </div>
+      <div class="chapter-body source-overview">
+<div class="source-main">
   <header>
     <h1>CPU2 电机程序与函数梳理</h1>
     <p>面向当前 <code>LTD_MAIN_CPU2</code> 源码，整理电机控制、TMC5130 驱动、编码轮记步、位置源切换、丢步检测和调试命令的函数边界。</p>
     <div class="meta">
-      <div><span class="label">更新日期</span>2026-06-11</div>
+      <div><span class="label">更新日期</span>2026-06-13</div>
       <div><span class="label">范围</span>CPU2 电机与编码器相关程序</div>
       <div><span class="label">主要入口</span><code>motor_ctrl.h</code> / <code>measure.c</code></div>
       <div><span class="label">编码说明</span>源码按 GBK/936 读取，本文档为 UTF-8</div>
@@ -198,12 +880,12 @@
       <p>电机程序的核心分层比较清晰：业务命令和测量流程调用 <code>MotorCtrl_*</code> 上层接口；<code>MotorControl</code> 内部再分为运动 API、驱动参数/健康检查、位置模型、丢步检测和尺带拟合；最底层由 <code>TMC5130.c</code> 负责 SPI 寄存器访问和步进驱动器控制，<code>AS5145.c</code> 与 <code>encoder.c</code> 负责外部编码轮采集与位置换算。</p>
     </div>
     <div class="note">
-      <p>2026-06-11 当前 <code>codex/motor-simplify</code> worktree 已完成第一轮结构优化：临时速度恢复由 <code>MotorMotionSpeedScope</code> 统一收口，<code>MotorCtrl_MoveAndWait()</code> 保留单次正式运动主线，ticks 运动拆成起步确认和到位确认两个内部 helper，Jog 到目标流程复用统一的位置刷新检查。台架验证仍以《电机运动函数台架验证记录.md》为准，本文不宣称实物验证已经完成。</p>
+      <p>2026-06-13 当前 <code>MAIN</code> 工作区在第一轮结构优化基础上继续收敛点动和位置模式：<code>MotorMotionTargetPlan</code> 统一相对/绝对目标规划，<code>MotorMotion_CheckReadyForProtectedMotion()</code>、<code>MotorMotion_CheckCommandAbortWithSpeedScope()</code>、<code>MotorMotion_WaitMoveStartObservation()</code>、<code>MotorMotion_CheckJogRuntimeGuards()</code>、<code>MotorMotion_CheckAbortRefreshAndHealth()</code> 和 <code>MotorMotion_CheckStoppedAndRefresh()</code> 收敛入口门控、命令切换、正式运动启动观察、Jog 单轮运行保护、等待循环公共运行检查和停稳后刷新收尾；第三轮策略评估结论是继续保留正式位置模式和 Jog 点动速度模式各自执行策略，不用 Jog 默认替换 <code>MotorCtrl_MoveToPosition()</code>。台架验证仍以《电机运动函数台架验证记录.md》为准，本文不宣称本轮实物验证已经完成。</p>
     </div>
     <div class="grid">
       <div class="panel">
         <h3>正常业务运动</h3>
-        <p><code>CMD_MoveUp()</code>、<code>CMD_MoveDown()</code>、液位/密度/罐底等测量流程主要走 <code>MotorCtrl_MoveAndWait()</code> 或 <code>MotorCtrl_MoveToPosition()</code>，默认带驱动健康检查、有效位置刷新、命令切换打断、慢停和保护检测；临时速度由 <code>MotorMotionSpeedScope</code> 统一恢复。</p>
+        <p><code>CMD_MoveUp()</code>、<code>CMD_MoveDown()</code>、液位/密度/罐底等测量流程主要走 <code>MotorCtrl_MoveAndWait()</code> 或 <code>MotorCtrl_MoveToPosition()</code>，入口目标先由 <code>MotorMotionTargetPlan</code> 统一规划，执行仍走正式位置目标模式；临时速度由 <code>MotorMotionSpeedScope</code> 统一恢复。</p>
       </div>
       <div class="panel">
         <h3>调试和强制运动</h3>
@@ -317,8 +999,8 @@
         <tr><td>初始化/驱动状态</td><td><code>MotorCtrl_IsDriverInitValid()</code></td><td><span class="tag blue">对外</span></td><td>供故障恢复、空闲错误处理判断当前驱动初始化状态是否可信。</td></tr>
         <tr><td>运动控制</td><td><code>MotorCtrl_MoveAndWait()</code></td><td><span class="tag blue">对外</span></td><td>正式业务推荐运动入口，按距离下发单次目标并等待停止，包含门控、保护、速度恢复、起步观察、最终偏差判断和命令切换处理。</td></tr>
         <tr><td>运动控制</td><td><code>MotorCtrl_MoveNoWait()</code></td><td><span class="tag blue">对外</span></td><td>只下发相对距离目标，不等待到位；适用于受控循环或上层自定义等待流程。</td></tr>
-        <tr><td>运动控制</td><td><code>MotorCtrl_MoveToPosition()</code></td><td><span class="tag blue">对外</span></td><td>移动到绝对尺带位置，先拒绝超出罐高边界的目标，再刷新当前有效位置源并计算方向和距离。</td></tr>
-        <tr><td>运动控制</td><td><code>MotorCtrl_JogMoveAndWait()</code> / <code>MotorCtrl_JogMoveToPosition()</code></td><td><span class="tag blue">对外</span></td><td>速度模式点动运动，运行中用主动位置反馈判断剩余距离、提前减速、最终停机和越界；入口先拒绝超出罐高边界的绝对目标。</td></tr>
+        <tr><td>运动控制</td><td><code>MotorCtrl_MoveToPosition()</code></td><td><span class="tag blue">对外</span></td><td>移动到绝对尺带位置，复用 <code>MotorMotion_BuildAbsoluteTargetPlan()</code> 计算方向、距离和到位状态，执行仍走正式位置目标模式。</td></tr>
+        <tr><td>运动控制</td><td><code>MotorCtrl_JogMoveAndWait()</code> / <code>MotorCtrl_JogMoveToPosition()</code></td><td><span class="tag blue">对外</span></td><td>速度模式点动运动，入口复用统一目标规划；运行中仍用主动位置反馈判断剩余距离、提前减速、最终停机和越界。</td></tr>
         <tr><td>运动控制</td><td><code>MotorCtrl_MoveByTicksAndWait()</code></td><td><span class="tag blue">对外</span></td><td>按 TMC ticks 相对运动，主要用于标定、位置源切换和模型内部操作；内部拆分起步确认和到位确认。</td></tr>
         <tr><td>运动控制</td><td><code>MotorCtrl_MoveBlockingNoDetectForceDebug()</code></td><td><span class="tag blue">对外</span></td><td>强制调试运动入口，只绕过编码器首帧门控，不绕过驱动初始化和 TMC 健康检查。</td></tr>
         <tr><td>运动控制</td><td><code>MotorCtrl_QuickStop()</code> / <code>MotorCtrl_SlowStop()</code></td><td><span class="tag blue">对外</span></td><td>分别提供快速停止和斜坡慢停，命令切换、故障和自动恢复路径常用。</td></tr>
@@ -328,8 +1010,13 @@
         <tr><td>运动内部</td><td><code>MotorMotion_JogMoveToTargetInternal()</code></td><td><span class="tag">内部</span></td><td>Jog 核心状态机，处理临时速度、速度模式启动、慢速接近、提前停机、错误停机和速度恢复。</td></tr>
         <tr><td>运动内部</td><td><code>MotorMotion_CalcJogSlowdownDistanceMm()</code> / <code>MotorMotion_CalcJogStopDistanceMm()</code></td><td><span class="tag">内部</span></td><td>按当前周长、速度和加减速寄存器估算减速距离与停机距离。</td></tr>
         <tr><td>运动内部</td><td><code>MotorMotionSpeedScope</code> / <code>MotorMotion_*SpeedScope()</code></td><td><span class="tag">内部</span></td><td>统一临时速度设置、恢复和异常返回前收尾，避免多入口重复恢复逻辑。</td></tr>
+        <tr><td>运动内部</td><td><code>MotorMotion_CheckReadyForProtectedMotion()</code> / <code>MotorMotion_CheckCommandAbortWithSpeedScope()</code> / <code>MotorMotion_WaitMoveStartObservation()</code></td><td><span class="tag">内部</span></td><td>收敛运行前门控、带速度恢复的命令切换打断和正式距离运动启动观察窗口；是否强制调试、是否检查健康仍由调用方选择。</td></tr>
         <tr><td>运动内部</td><td><code>MotorMotion_WaitTicksStartChanged()</code> / <code>MotorMotion_WaitTicksReachTarget()</code></td><td><span class="tag">内部</span></td><td>拆分 ticks 相对运动的起步确认和到位确认，保留命令切换、健康检查和详细错误日志。</td></tr>
+        <tr><td>运动内部</td><td><code>MotorMotion_CheckAbortRefreshAndHealth()</code></td><td><span class="tag">内部</span></td><td>等待循环公共运行检查 helper，集中命令切换、运行中速度刷新和 TMC 同步/健康检查；不恢复速度、不做撞底/丢步、不判断目标、不清活动状态。</td></tr>
+        <tr><td>运动内部</td><td><code>MotorMotion_CheckStoppedAndRefresh()</code></td><td><span class="tag">内部</span></td><td>停稳后刷新收尾 helper，集中最终位置同步和活动状态清理；同步失败时保留原始错误码且不清活动状态。</td></tr>
+        <tr><td>运动内部</td><td><code>MotorMotionTargetPlan</code> / <code>MotorMotion_BuildRelativeTargetPlan()</code> / <code>MotorMotion_BuildAbsoluteTargetPlan()</code></td><td><span class="tag">内部</span></td><td>统一相对/绝对目标规划，输出起点、目标、距离、方向和是否已到位；不下发运动，不决定使用位置模式还是 Jog 速度模式。</td></tr>
         <tr><td>运动内部</td><td><code>MotorMotion_RefreshJogPositionChecked()</code></td><td><span class="tag">内部</span></td><td>Jog 到目标流程专用的位置刷新 helper，集中处理有效位置检查和越界停止。</td></tr>
+        <tr><td>运动内部</td><td><code>MotorMotion_CheckJogRuntimeGuards()</code></td><td><span class="tag">内部</span></td><td>Jog 循环末尾运行保护 helper，集中检查运行健康、撞底、丢步、运动状态、起步宽限超时和最大运行超时；不切换速度、不下发停机。</td></tr>
         <tr><td>速度/电流/健康</td><td><code>MotorCtrl_GetDefaultSpeedX100()</code></td><td><span class="tag blue">对外</span></td><td>返回默认线速度参数，单位 0.01 m/min。</td></tr>
         <tr><td>速度/电流/健康</td><td><code>MotorCtrl_SetCurrent()</code></td><td><span class="tag blue">对外</span></td><td>设置运行电流，内部限幅并下发 TMC5130 电流寄存器。</td></tr>
         <tr><td>速度/电流/健康</td><td><code>MotorCtrl_CheckDriverGstat()</code></td><td><span class="tag blue">对外</span></td><td>检查 TMC5130 状态、配置和功率级，返回统一错误码。</td></tr>
@@ -380,30 +1067,39 @@
       <div class="lane"><b>位置源恢复</b><br><code>MotorPosition_RestorePositionSourceFromParams()</code><br>按参数和 FRAM 记录恢复编码轮/电机记步口径。</div>
     </div>
 
-    <h3>4.2 一次正常距离运动</h3>
+    <h3>4.2 运动入口分层总流程</h3>
     <div class="flow">
-      <div class="lane"><b>业务入口</b><br><code>CMD_MoveUp()</code> / <code>CMD_MoveDown()</code> / 测量流程</div>
-      <div class="lane"><b>上层 API</b><br><code>MotorCtrl_MoveAndWait()</code><br>处理临时速度、方向、距离、有效位置和打断。</div>
-      <div class="lane"><b>运动门控</b><br><code>MotorDriver_CheckMotionReady()</code><br>检查上电安全停机、驱动初始化、编码器首帧、位置源。</div>
-      <div class="lane"><b>下发目标</b><br><code>stpr_moveBy()</code> / <code>stpr_moveTo()</code><br>写 <code>RAMPMODE</code>、<code>VMAX</code>、<code>XTARGET</code>。</div>
-      <div class="lane"><b>等待和保护</b><br><code>MotorMotion_WaitUntilStopWithTarget()</code><br>轮询位置、刷新速度、检查驱动、处理命令切换。</div>
+      <div class="lane"><b>入口分类</b><br><code>MotorCtrl_MoveAndWait()</code><br><code>MotorCtrl_MoveToPosition()</code><br><code>MotorCtrl_JogMoveAndWait()</code><br><code>MotorCtrl_JogMoveToPosition()</code></div>
+      <div class="lane"><b>统一目标规划</b><br><code>MotorMotion_BuildRelativeTargetPlan()</code><br><code>MotorMotion_BuildAbsoluteTargetPlan()</code><br>输出起点、目标、距离、方向和已到位状态。</div>
+      <div class="lane"><b>运行前门控</b><br><code>MotorMotion_CheckReadyForProtectedMotion()</code><br>检查初始化、首帧、位置源和驱动健康；调用方决定是否允许强制调试。</div>
+      <div class="lane"><b>策略分流</b><br>正式业务走位置目标模式；<br>Jog 调试走速度点动模式。<br>两者共用目标，不共用执行策略。</div>
+      <div class="lane"><b>等待和收尾</b><br>正式路径：启动观察、目标等待、停稳同步。<br>Jog 路径：反馈减速、提前停机、运行保护。</div>
     </div>
 
-    <h3>4.3 位置源切换链路</h3>
+    <h3>4.3 一次正常距离运动</h3>
+    <div class="flow">
+      <div class="lane"><b>业务入口</b><br><code>CMD_MoveUp()</code> / <code>CMD_MoveDown()</code> / 测量流程</div>
+      <div class="lane"><b>上层 API</b><br><code>MotorCtrl_MoveAndWait()</code><br>调用 <code>MotorMotion_BuildRelativeTargetPlan()</code> 统一相对目标规划，并用 <code>MotorMotion_WaitMoveStartObservation()</code> 保留启动观察窗口。</div>
+      <div class="lane"><b>运动门控</b><br><code>MotorMotion_CheckReadyForProtectedMotion()</code><br>检查上电安全停机、驱动初始化、编码器首帧、位置源。</div>
+      <div class="lane"><b>下发目标</b><br><code>stpr_moveBy()</code> / <code>stpr_moveTo()</code><br>写 <code>RAMPMODE</code>、<code>VMAX</code>、<code>XTARGET</code>。</div>
+      <div class="lane"><b>等待和保护</b><br><code>MotorMotion_WaitUntilStopWithTarget()</code><br>轮询位置、刷新速度、检查驱动、处理命令切换；停稳后复用 <code>MotorMotion_CheckStoppedAndRefresh()</code>。</div>
+    </div>
+
+    <h3>4.4 位置源切换链路</h3>
     <div class="note">
       <p><code>MotorCtrl_SwitchPositionSourceToMotor()</code> 会以当前编码轮长度和 <code>XACTUAL</code> 建立基准，下行一圈并读取编码轮差分，计算当前局部周长，再回到切换前位置。切换到编码轮模式则通过 <code>MotorCtrl_SwitchPositionSourceToEncoder()</code> 让业务位置重新由编码轮刷新。</p>
     </div>
 
-    <h3>4.4 Jog 主动位置反馈链路</h3>
+    <h3>4.5 Jog 主动位置反馈链路</h3>
     <div class="flow">
       <div class="lane"><b>串口入口</b><br><code>BJ/BJP</code><br><code>test.c</code> 解析距离、目标位置和速度。</div>
       <div class="lane"><b>调试包装</b><br><code>motor_jog_text()</code><br><code>motor_jog_to_position_text()</code><br>初始化并打印起止位置。</div>
-      <div class="lane"><b>上层 API</b><br><code>MotorCtrl_JogMoveAndWait()</code><br><code>MotorCtrl_JogMoveToPosition()</code><br>刷新有效位置源并计算目标。</div>
+      <div class="lane"><b>上层 API</b><br><code>MotorCtrl_JogMoveAndWait()</code><br><code>MotorCtrl_JogMoveToPosition()</code><br>复用统一目标规划，执行仍走速度点动策略。</div>
       <div class="lane"><b>速度模式</b><br><code>MotorMotion_StartJogVelocity()</code><br>用 <code>RAMPMODE</code> 速度模式启动。</div>
-      <div class="lane"><b>反馈停机</b><br><code>MotorMotion_JogMoveToTargetInternal()</code><br>按剩余距离减速、提前停机、检查丢步和越界。</div>
+      <div class="lane"><b>反馈停机</b><br><code>MotorMotion_JogMoveToTargetInternal()</code><br>按剩余距离减速、提前停机；通过 <code>MotorMotion_CheckJogRuntimeGuards()</code> 做运行保护。</div>
     </div>
 
-    <h3>4.5 关键调用关系图</h3>
+    <h3>4.6 关键调用关系图</h3>
     <table>
       <thead>
         <tr>
@@ -415,12 +1111,17 @@
       <tbody>
         <tr>
           <td>正式距离运动</td>
-          <td><code>CMD_MoveUp()/CMD_MoveDown()</code> -> <code>MotorCtrl_MoveAndWait()</code> -> <code>MotorMotion_BeginSpeedScope()</code> -> <code>MotorDriver_CheckMotionReady()</code> -> <code>MotorMotion_DistanceToTicks()</code> -> <code>stpr_moveBy()</code> -> <code>stpr_moveTo()</code> -> <code>MotorMotion_WaitUntilStopWithTarget()</code> -> <code>MotorMotion_EndSpeedScope()</code></td>
+          <td><code>CMD_MoveUp()/CMD_MoveDown()</code> -> <code>MotorCtrl_MoveAndWait()</code> -> <code>MotorMotion_BeginSpeedScope()</code> -> <code>MotorMotion_CheckReadyForProtectedMotion()</code> -> <code>MotorMotion_BuildRelativeTargetPlan()</code> -> <code>MotorCtrl_MoveNoWait()</code> -> <code>MotorMotion_WaitMoveStartObservation()</code> -> <code>MotorMotion_WaitUntilStopWithTarget()</code> -> <code>MotorMotion_EndSpeedScope()</code></td>
           <td>运动前门控、临时速度恢复、命令切换停止、运行中位置刷新、驱动健康检查和最终偏差判断。</td>
         </tr>
         <tr>
+          <td>正式绝对位置运动</td>
+          <td><code>MotorCtrl_MoveToPosition()</code> -> 刷新当前有效位置源 -> <code>MotorMotion_BuildAbsoluteTargetPlan()</code> -> 分段调用 <code>MotorCtrl_MoveAndWait()</code> -> 正式位置目标模式等待和收尾</td>
+          <td>绝对目标范围、当前位置快照、方向和剩余距离规划；默认路径仍是正式位置模式，不替换为 Jog。</td>
+        </tr>
+        <tr>
           <td>强制调试运动</td>
-          <td><code>CMD_ForceMoveUp()/CMD_ForceMoveDown()</code> -> <code>MotorCtrl_MoveBlockingNoDetectForceDebug()</code> -> <code>MotorDriver_CheckMotionReadyForceDebug()</code> -> <code>stpr_moveBy()</code> -> 无检测等待循环</td>
+          <td><code>CMD_ForceMoveUp()/CMD_ForceMoveDown()</code> -> <code>MotorCtrl_MoveBlockingNoDetectForceDebug()</code> -> <code>MotorMotion_MoveBlockingNoDetectInternal()</code> -> <code>MotorMotion_CheckReadyForProtectedMotion()</code> -> <code>stpr_moveBy()</code> -> 无检测等待循环 -> <code>MotorMotion_CheckAbortRefreshAndHealth()</code></td>
           <td>只绕过编码器首帧门控；仍要求上电安全停机、驱动初始化、TMC 健康检查。</td>
         </tr>
         <tr>
@@ -430,12 +1131,12 @@
         </tr>
         <tr>
           <td>位置源切换</td>
-          <td><code>YM</code> 或跟随流程 -> <code>MotorCtrl_SwitchPositionSourceToMotor()</code> -> 记录编码轮/XACTUAL 基准 -> <code>MotorCtrl_MoveByTicksAndWait()</code> 下行一圈 -> <code>MotorMotion_WaitTicksStartChanged()</code> / <code>MotorMotion_WaitTicksReachTarget()</code> -> 计算局部周长 -> 回到切换前位置 -> 保存参数</td>
+          <td><code>YM</code> 或跟随流程 -> <code>MotorCtrl_SwitchPositionSourceToMotor()</code> -> 记录编码轮/XACTUAL 基准 -> <code>MotorCtrl_MoveByTicksAndWait()</code> 下行一圈 -> <code>MotorMotion_WaitTicksStartChanged()</code> / <code>MotorMotion_WaitTicksReachTarget()</code> -> 运行中复用 <code>MotorMotion_CheckAbortRefreshAndHealth()</code> -> 计算局部周长 -> 回到切换前位置 -> 保存参数</td>
           <td>切换过程有实际运动；失败时必须回滚旧位置源、旧局部周长、基准和错误码。</td>
         </tr>
         <tr>
           <td>Jog 点动调试</td>
-          <td><code>BJ/BJP</code> -> <code>TestCommand_HandleJogMotorTest()</code> -> <code>motor_jog_text()</code> / <code>motor_jog_to_position_text()</code> -> <code>MotorCtrl_JogMoveAndWait()</code> / <code>MotorCtrl_JogMoveToPosition()</code> -> <code>MotorMotion_JogMoveToTargetInternal()</code></td>
+          <td><code>BJ/BJP</code> -> <code>TestCommand_HandleJogMotorTest()</code> -> <code>motor_jog_text()</code> / <code>motor_jog_to_position_text()</code> -> <code>MotorCtrl_JogMoveAndWait()</code> / <code>MotorCtrl_JogMoveToPosition()</code> -> <code>MotorMotion_BuildRelativeTargetPlan()</code> / <code>MotorMotion_BuildAbsoluteTargetPlan()</code> -> <code>MotorMotion_JogMoveToTargetInternal()</code> -> <code>MotorMotion_CheckJogRuntimeGuards()</code></td>
           <td>用当前有效位置源闭环判断剩余距离；靠速度模式、慢速接近和提前停机减少长距离点动过冲。</td>
         </tr>
         <tr>
@@ -626,14 +1327,14 @@
       </tbody>
     </table>
     <div class="warn">
-      <p>保护矩阵的核心结论：正式业务优先使用 <code>MotorCtrl_MoveAndWait()</code> / <code>MotorCtrl_MoveToPosition()</code>；需要主动位置反馈和长距离点动验证时使用 <code>MotorCtrl_JogMoveAndWait()</code> / <code>MotorCtrl_JogMoveToPosition()</code>；调试和强制路径必须保持用途边界清晰，不能默默替代正式运动入口。</p>
+      <p>保护矩阵的核心结论：正式业务优先使用 <code>MotorCtrl_MoveAndWait()</code> / <code>MotorCtrl_MoveToPosition()</code>；需要主动位置反馈和长距离点动验证时使用 <code>MotorCtrl_JogMoveAndWait()</code> / <code>MotorCtrl_JogMoveToPosition()</code>。两类入口共用目标规划，但执行策略不能混用；调试和强制路径必须保持用途边界清晰，不能默默替代正式运动入口。</p>
     </div>
   </section>
 
   <section>
     <h2>8. 源码定位表</h2>
     <div class="note">
-      <p>下表行号来自 2026-06-11 当前 <code>codex/motor-simplify</code> worktree 源码快照；后续源码增删后行号可能变化，路径和函数名仍可作为主要定位依据。</p>
+      <p>下表行号来自 2026-06-13 当前 <code>MAIN</code> 工作区源码快照；后续源码增删后行号可能变化，路径和函数名仍可作为主要定位依据。</p>
     </div>
     <table>
       <thead>
@@ -644,53 +1345,56 @@
         </tr>
       </thead>
       <tbody>
-        <tr><td><code>process_command()</code></td><td><code>LTD_MAIN_CPU2/Application/Src/measure.c:406</code></td><td>串口调试命令总入口，B/BE/BJ/BJP/A/T/Y 等命令从这里分发。</td></tr>
-        <tr><td><code>CMD_MoveUp()</code></td><td><code>LTD_MAIN_CPU2/Application/Src/measure.c:781</code></td><td>正式手动上行命令入口。</td></tr>
-        <tr><td><code>CMD_MoveDown()</code></td><td><code>LTD_MAIN_CPU2/Application/Src/measure.c:813</code></td><td>正式手动下行命令入口。</td></tr>
-        <tr><td><code>CMD_ForceMoveUp()</code></td><td><code>LTD_MAIN_CPU2/Application/Src/measure.c:845</code></td><td>正式强制上行命令入口。</td></tr>
-        <tr><td><code>CMD_ForceMoveDown()</code></td><td><code>LTD_MAIN_CPU2/Application/Src/measure.c:881</code></td><td>正式强制下行命令入口。</td></tr>
-        <tr><td><code>CMD_ForceLiftZero()</code></td><td><code>LTD_MAIN_CPU2/Application/Src/measure.c:914</code></td><td>正式强制提零点入口。</td></tr>
-        <tr><td><code>TestCommand_HandleJogMotorTest()</code></td><td><code>LTD_MAIN_CPU2/Application/Src/test.c:1132</code></td><td>BJ/BJP 点动调试命令解析。</td></tr>
-        <tr><td><code>motor_jog_text()</code></td><td><code>LTD_MAIN_CPU2/Application/Src/test.c:2228</code></td><td>BJ 相对距离点动调试实现。</td></tr>
-        <tr><td><code>motor_jog_to_position_text()</code></td><td><code>LTD_MAIN_CPU2/Application/Src/test.c:2275</code></td><td>BJP 绝对位置点动调试实现。</td></tr>
-        <tr><td><code>motor_text()</code></td><td><code>LTD_MAIN_CPU2/Application/Src/test.c:2312</code></td><td>B 电机往返测试实现。</td></tr>
-        <tr><td><code>motor_text_encoder()</code></td><td><code>LTD_MAIN_CPU2/Application/Src/test.c:2375</code></td><td>BE 编码器往返测试实现。</td></tr>
-        <tr><td><code>MotorCtrl_Init()</code></td><td><code>LTD_MAIN_CPU2/Services/MotorControl/motor_ctrl_driver_param.c:482</code></td><td>TMC5130 初始化和驱动运行态恢复。</td></tr>
-        <tr><td><code>MotorCtrl_BootSafeStop()</code></td><td><code>LTD_MAIN_CPU2/Services/MotorControl/motor_ctrl_driver_param.c:76</code></td><td>上电安全停机。</td></tr>
-        <tr><td><code>MotorDriver_CheckMotionReady()</code></td><td><code>LTD_MAIN_CPU2/Services/MotorControl/motor_ctrl_driver_param.c:127</code></td><td>运动前门控。</td></tr>
-        <tr><td><code>MotorDriver_CheckMotionReadyForceDebug()</code></td><td><code>LTD_MAIN_CPU2/Services/MotorControl/motor_ctrl_driver_param.c:138</code></td><td>强制调试运动门控，允许绕过编码器首帧。</td></tr>
-        <tr><td><code>MotorDriver_CheckHealth()</code></td><td><code>LTD_MAIN_CPU2/Services/MotorControl/motor_ctrl_driver_param.c:289</code></td><td>TMC 通信、配置、功率级和故障状态检查。</td></tr>
-        <tr><td><code>MotorDriver_RefreshVelocityDuringRun()</code></td><td><code>LTD_MAIN_CPU2/Services/MotorControl/motor_ctrl_driver_param.c:901</code></td><td>运行中按尺带长度刷新 TMC5130 速度。</td></tr>
-        <tr><td><code>MotorCtrl_MoveByTicksAndWait()</code></td><td><code>LTD_MAIN_CPU2/Services/MotorControl/motor_ctrl_motion_api.c:177</code></td><td>ticks 相对运动主入口。</td></tr>
-        <tr><td><code>MotorCtrl_MoveNoWait()</code></td><td><code>LTD_MAIN_CPU2/Services/MotorControl/motor_ctrl_motion_api.c:264</code></td><td>非阻塞目标下发。</td></tr>
-        <tr><td><code>MotorCtrl_MoveAndWait()</code></td><td><code>LTD_MAIN_CPU2/Services/MotorControl/motor_ctrl_motion_api.c:394</code></td><td>正式距离运动主入口。</td></tr>
-        <tr><td><code>MotorCtrl_MoveToPosition()</code></td><td><code>LTD_MAIN_CPU2/Services/MotorControl/motor_ctrl_motion_api.c:602</code></td><td>绝对位置运动。</td></tr>
-        <tr><td><code>MotorCtrl_JogMoveAndWait()</code></td><td><code>LTD_MAIN_CPU2/Services/MotorControl/motor_ctrl_motion_api.c:674</code></td><td>速度模式相对点动运动。</td></tr>
-        <tr><td><code>MotorCtrl_JogMoveToPosition()</code></td><td><code>LTD_MAIN_CPU2/Services/MotorControl/motor_ctrl_motion_api.c:717</code></td><td>速度模式绝对位置点动运动。</td></tr>
-        <tr><td><code>MotorCtrl_MoveBlockingNoDetectForceDebug()</code></td><td><code>LTD_MAIN_CPU2/Services/MotorControl/motor_ctrl_motion_api.c:864</code></td><td>强制调试无检测运动。</td></tr>
-        <tr><td><code>MotorMotion_WaitTicksStartChanged()</code></td><td><code>LTD_MAIN_CPU2/Services/MotorControl/motor_ctrl_motion_api.c:978</code></td><td>ticks 运动起步确认。</td></tr>
-        <tr><td><code>MotorMotion_WaitTicksReachTarget()</code></td><td><code>LTD_MAIN_CPU2/Services/MotorControl/motor_ctrl_motion_api.c:1039</code></td><td>ticks 运动目标窗口确认。</td></tr>
-        <tr><td><code>MotorMotion_BeginSpeedScope()</code></td><td><code>LTD_MAIN_CPU2/Services/MotorControl/motor_ctrl_motion_api.c:1173</code></td><td>临时速度 scope 开始。</td></tr>
-        <tr><td><code>MotorMotion_CheckErrorWithSpeedScope()</code></td><td><code>LTD_MAIN_CPU2/Services/MotorControl/motor_ctrl_motion_api.c:1210</code></td><td>保留 <code>CHECK_ERROR</code> 语义并先恢复临时速度。</td></tr>
-        <tr><td><code>MotorMotion_CheckAbsoluteTargetRange()</code></td><td><code>LTD_MAIN_CPU2/Services/MotorControl/motor_ctrl_motion_api.c:1558</code></td><td>绝对目标范围前置检查。</td></tr>
-        <tr><td><code>MotorMotion_RefreshJogPositionChecked()</code></td><td><code>LTD_MAIN_CPU2/Services/MotorControl/motor_ctrl_motion_api.c:1626</code></td><td>Jog 到目标的位置刷新和越界检查。</td></tr>
-        <tr><td><code>MotorCtrl_SwitchPositionSourceToMotor()</code></td><td><code>LTD_MAIN_CPU2/Services/MotorControl/motor_ctrl_position_model.c:412</code></td><td>编码轮切换到电机记步。</td></tr>
-        <tr><td><code>MotorCtrl_SwitchPositionSourceToEncoder()</code></td><td><code>LTD_MAIN_CPU2/Services/MotorControl/motor_ctrl_position_model.c:396</code></td><td>电机记步切回编码轮。</td></tr>
+        <tr><td><code>process_command()</code></td><td><code>LTD_MAIN_CPU2/Application/Src/measure.c:424</code></td><td>串口调试命令总入口，B/BE/BJ/BJP/A/T/Y 等命令从这里分发。</td></tr>
+        <tr><td><code>CMD_MoveUp()</code></td><td><code>LTD_MAIN_CPU2/Application/Src/measure.c:829</code></td><td>正式手动上行命令入口。</td></tr>
+        <tr><td><code>CMD_MoveDown()</code></td><td><code>LTD_MAIN_CPU2/Application/Src/measure.c:862</code></td><td>正式手动下行命令入口。</td></tr>
+        <tr><td><code>CMD_ForceMoveUp()</code></td><td><code>LTD_MAIN_CPU2/Application/Src/measure.c:895</code></td><td>正式强制上行命令入口。</td></tr>
+        <tr><td><code>CMD_ForceMoveDown()</code></td><td><code>LTD_MAIN_CPU2/Application/Src/measure.c:932</code></td><td>正式强制下行命令入口。</td></tr>
+        <tr><td><code>CMD_ForceLiftZero()</code></td><td><code>LTD_MAIN_CPU2/Application/Src/measure.c:966</code></td><td>正式强制提零点入口。</td></tr>
+        <tr><td><code>TestCommand_HandleJogMotorTest()</code></td><td><code>LTD_MAIN_CPU2/Application/Src/test.c:1202</code></td><td>BJ/BJP 点动调试命令解析。</td></tr>
+        <tr><td><code>motor_jog_text()</code></td><td><code>LTD_MAIN_CPU2/Application/Src/test.c:2347</code></td><td>BJ 相对距离点动调试实现。</td></tr>
+        <tr><td><code>motor_jog_to_position_text()</code></td><td><code>LTD_MAIN_CPU2/Application/Src/test.c:2395</code></td><td>BJP 绝对位置点动调试实现。</td></tr>
+        <tr><td><code>motor_text()</code></td><td><code>LTD_MAIN_CPU2/Application/Src/test.c:2433</code></td><td>B 电机往返测试实现。</td></tr>
+        <tr><td><code>motor_text_encoder()</code></td><td><code>LTD_MAIN_CPU2/Application/Src/test.c:2506</code></td><td>BE 编码器往返测试实现。</td></tr>
+        <tr><td><code>MotorCtrl_Init()</code></td><td><code>LTD_MAIN_CPU2/Services/MotorControl/motor_ctrl_driver_param.c:519</code></td><td>TMC5130 初始化和驱动运行态恢复。</td></tr>
+        <tr><td><code>MotorCtrl_BootSafeStop()</code></td><td><code>LTD_MAIN_CPU2/Services/MotorControl/motor_ctrl_driver_param.c:84</code></td><td>上电安全停机。</td></tr>
+        <tr><td><code>MotorDriver_CheckMotionReady()</code></td><td><code>LTD_MAIN_CPU2/Services/MotorControl/motor_ctrl_driver_param.c:136</code></td><td>运动前门控。</td></tr>
+        <tr><td><code>MotorDriver_CheckMotionReadyForceDebug()</code></td><td><code>LTD_MAIN_CPU2/Services/MotorControl/motor_ctrl_driver_param.c:147</code></td><td>强制调试运动门控，允许绕过编码器首帧。</td></tr>
+        <tr><td><code>MotorDriver_CheckHealth()</code></td><td><code>LTD_MAIN_CPU2/Services/MotorControl/motor_ctrl_driver_param.c:307</code></td><td>TMC 通信、配置、功率级和故障状态检查。</td></tr>
+        <tr><td><code>MotorDriver_RefreshVelocityDuringRun()</code></td><td><code>LTD_MAIN_CPU2/Services/MotorControl/motor_ctrl_driver_param.c:960</code></td><td>运行中按尺带长度刷新 TMC5130 速度。</td></tr>
+        <tr><td><code>MotorCtrl_MoveByTicksAndWait()</code></td><td><code>LTD_MAIN_CPU2/Services/MotorControl/motor_ctrl_motion_api.c:213</code></td><td>ticks 相对运动主入口。</td></tr>
+        <tr><td><code>MotorCtrl_MoveNoWait()</code></td><td><code>LTD_MAIN_CPU2/Services/MotorControl/motor_ctrl_motion_api.c:305</code></td><td>非阻塞目标下发。</td></tr>
+        <tr><td><code>MotorCtrl_MoveAndWait()</code></td><td><code>LTD_MAIN_CPU2/Services/MotorControl/motor_ctrl_motion_api.c:441</code></td><td>正式距离运动主入口。</td></tr>
+        <tr><td><code>MotorCtrl_MoveToPosition()</code></td><td><code>LTD_MAIN_CPU2/Services/MotorControl/motor_ctrl_motion_api.c:664</code></td><td>绝对位置运动。</td></tr>
+        <tr><td><code>MotorCtrl_JogMoveAndWait()</code></td><td><code>LTD_MAIN_CPU2/Services/MotorControl/motor_ctrl_motion_api.c:741</code></td><td>速度模式相对点动运动。</td></tr>
+        <tr><td><code>MotorCtrl_JogMoveToPosition()</code></td><td><code>LTD_MAIN_CPU2/Services/MotorControl/motor_ctrl_motion_api.c:780</code></td><td>速度模式绝对位置点动运动。</td></tr>
+        <tr><td><code>MotorCtrl_MoveBlockingNoDetectForceDebug()</code></td><td><code>LTD_MAIN_CPU2/Services/MotorControl/motor_ctrl_motion_api.c:932</code></td><td>强制调试无检测运动。</td></tr>
+        <tr><td><code>MotorMotion_WaitTicksStartChanged()</code></td><td><code>LTD_MAIN_CPU2/Services/MotorControl/motor_ctrl_motion_api.c:1062</code></td><td>ticks 运动起步确认。</td></tr>
+        <tr><td><code>MotorMotion_WaitTicksReachTarget()</code></td><td><code>LTD_MAIN_CPU2/Services/MotorControl/motor_ctrl_motion_api.c:1126</code></td><td>ticks 运动目标窗口确认。</td></tr>
+        <tr><td><code>MotorMotion_BeginSpeedScope()</code></td><td><code>LTD_MAIN_CPU2/Services/MotorControl/motor_ctrl_motion_api.c:1270</code></td><td>临时速度 scope 开始。</td></tr>
+        <tr><td><code>MotorMotion_CheckErrorWithSpeedScope()</code></td><td><code>LTD_MAIN_CPU2/Services/MotorControl/motor_ctrl_motion_api.c:1324</code></td><td>保留 <code>CHECK_ERROR</code> 语义并先恢复临时速度。</td></tr>
+        <tr><td><code>MotorMotion_CheckAbortRefreshAndHealth()</code></td><td><code>LTD_MAIN_CPU2/Services/MotorControl/motor_ctrl_motion_api.c:1445</code></td><td>等待循环中的命令切换、速度刷新和 TMC 同步/健康检查。</td></tr>
+        <tr><td><code>MotorMotion_CheckStoppedAndRefresh()</code></td><td><code>LTD_MAIN_CPU2/Services/MotorControl/motor_ctrl_motion_api.c:1473</code></td><td>停稳后的最终位置同步和活动状态清理。</td></tr>
+        <tr><td><code>MotorMotion_CheckAbsoluteTargetRange()</code></td><td><code>LTD_MAIN_CPU2/Services/MotorControl/motor_ctrl_motion_api.c:1891</code></td><td>绝对目标范围前置检查。</td></tr>
+        <tr><td><code>MotorMotion_RefreshJogPositionChecked()</code></td><td><code>LTD_MAIN_CPU2/Services/MotorControl/motor_ctrl_motion_api.c:1959</code></td><td>Jog 到目标的位置刷新和越界检查。</td></tr>
+        <tr><td><code>MotorMotion_CheckJogRuntimeGuards()</code></td><td><code>LTD_MAIN_CPU2/Services/MotorControl/motor_ctrl_motion_api.c:1988</code></td><td>Jog 循环运行健康、撞底、丢步、运动状态和超时检查。</td></tr>
+        <tr><td><code>MotorCtrl_SwitchPositionSourceToMotor()</code></td><td><code>LTD_MAIN_CPU2/Services/MotorControl/motor_ctrl_position_model.c:419</code></td><td>编码轮切换到电机记步。</td></tr>
+        <tr><td><code>MotorCtrl_SwitchPositionSourceToEncoder()</code></td><td><code>LTD_MAIN_CPU2/Services/MotorControl/motor_ctrl_position_model.c:403</code></td><td>电机记步切回编码轮。</td></tr>
         <tr><td><code>MotorCtrl_RefreshPositionFromActiveSource()</code></td><td><code>LTD_MAIN_CPU2/Services/MotorControl/motor_ctrl_position_model.c:143</code></td><td>按当前有效位置源刷新业务位置。</td></tr>
-        <tr><td><code>MotorCtrl_SnapshotSensorPositionMm()</code></td><td><code>LTD_MAIN_CPU2/Services/MotorControl/motor_ctrl_motion_api.c:584</code></td><td>生成 mm 单位业务位置快照。</td></tr>
-        <tr><td><code>MotorPosition_FilterXactualGlitch()</code></td><td><code>LTD_MAIN_CPU2/Services/MotorControl/motor_ctrl_position_model.c:1107</code></td><td>过滤 TMC5130 单帧异常位置读数。</td></tr>
+        <tr><td><code>MotorCtrl_SnapshotSensorPositionMm()</code></td><td><code>LTD_MAIN_CPU2/Services/MotorControl/motor_ctrl_motion_api.c:646</code></td><td>生成 mm 单位业务位置快照。</td></tr>
+        <tr><td><code>MotorPosition_FilterXactualGlitch()</code></td><td><code>LTD_MAIN_CPU2/Services/MotorControl/motor_ctrl_position_model.c:1124</code></td><td>过滤 TMC5130 单帧异常位置读数。</td></tr>
         <tr><td><code>MotorCtrl_CheckLostStepAutoTiming()</code></td><td><code>LTD_MAIN_CPU2/Services/MotorControl/motor_ctrl_lost_step_detect.c:67</code></td><td>自动丢步检测。</td></tr>
         <tr><td><code>MotorCtrl_TapeFitStart()</code></td><td><code>LTD_MAIN_CPU2/Services/MotorControl/motor_ctrl_tape_fit.c:42</code></td><td>TFIT 拟合开始。</td></tr>
         <tr><td><code>MotorCtrl_TapeFitSolve()</code></td><td><code>LTD_MAIN_CPU2/Services/MotorControl/motor_ctrl_tape_fit.c:131</code></td><td>TFIT 全局求解。</td></tr>
-        <tr><td><code>Initialize_Encoder()</code></td><td><code>LTD_MAIN_CPU2/Services/Encoder/encoder.c:123</code></td><td>编码器初始化和首帧等待。</td></tr>
-        <tr><td><code>Update_Encoder_Count()</code></td><td><code>LTD_MAIN_CPU2/Services/Encoder/encoder.c:160</code></td><td>AS5145 角度跨零点累计。</td></tr>
-        <tr><td><code>AS5145_GetLastError()</code></td><td><code>LTD_MAIN_CPU2/BSP/Peripherals/src/AS5145.c:271</code></td><td>读取编码器最近错误。</td></tr>
-        <tr><td><code>AS5145_HasValidSample()</code></td><td><code>LTD_MAIN_CPU2/BSP/Peripherals/src/AS5145.c:280</code></td><td>编码器首帧有效判断。</td></tr>
-        <tr><td><code>stpr_writeInt()</code></td><td><code>LTD_MAIN_CPU2/BSP/Peripherals/src/TMC5130.c:297</code></td><td>TMC5130 寄存器写入。</td></tr>
-        <tr><td><code>stpr_tryReadInt()</code></td><td><code>LTD_MAIN_CPU2/BSP/Peripherals/src/TMC5130.c:453</code></td><td>TMC5130 寄存器读取。</td></tr>
-        <tr><td><code>stpr_moveTo()</code> / <code>stpr_moveBy()</code></td><td><code>LTD_MAIN_CPU2/BSP/Peripherals/src/TMC5130.c:513</code> / <code>:529</code></td><td>TMC5130 位置模式目标下发。</td></tr>
-        <tr><td><code>stpr_checkDriverStatus()</code></td><td><code>LTD_MAIN_CPU2/BSP/Peripherals/src/TMC5130.c:597</code></td><td>解析 TMC5130 GSTAT/DRV_STATUS。</td></tr>
-        <tr><td><code>stpr_checkDriverPowerReady()</code></td><td><code>LTD_MAIN_CPU2/BSP/Peripherals/src/TMC5130.c:779</code></td><td>检查功率级实际电流。</td></tr>
+        <tr><td><code>Initialize_Encoder()</code></td><td><code>LTD_MAIN_CPU2/Services/Encoder/encoder.c:152</code></td><td>编码器初始化和首帧等待。</td></tr>
+        <tr><td><code>Update_Encoder_Count()</code></td><td><code>LTD_MAIN_CPU2/Services/Encoder/encoder.c:190</code></td><td>AS5145 角度跨零点累计。</td></tr>
+        <tr><td><code>AS5145_GetLastError()</code></td><td><code>LTD_MAIN_CPU2/BSP/Peripherals/src/AS5145.c:290</code></td><td>读取编码器最近错误。</td></tr>
+        <tr><td><code>AS5145_HasValidSample()</code></td><td><code>LTD_MAIN_CPU2/BSP/Peripherals/src/AS5145.c:299</code></td><td>编码器首帧有效判断。</td></tr>
+        <tr><td><code>stpr_writeInt()</code></td><td><code>LTD_MAIN_CPU2/BSP/Peripherals/src/TMC5130.c:319</code></td><td>TMC5130 寄存器写入。</td></tr>
+        <tr><td><code>stpr_tryReadInt()</code></td><td><code>LTD_MAIN_CPU2/BSP/Peripherals/src/TMC5130.c:492</code></td><td>TMC5130 寄存器读取。</td></tr>
+        <tr><td><code>stpr_moveTo()</code> / <code>stpr_moveBy()</code></td><td><code>LTD_MAIN_CPU2/BSP/Peripherals/src/TMC5130.c:553</code> / <code>:569</code></td><td>TMC5130 位置模式目标下发。</td></tr>
+        <tr><td><code>stpr_checkDriverStatus()</code></td><td><code>LTD_MAIN_CPU2/BSP/Peripherals/src/TMC5130.c:637</code></td><td>解析 TMC5130 GSTAT/DRV_STATUS。</td></tr>
+        <tr><td><code>stpr_checkDriverPowerReady()</code></td><td><code>LTD_MAIN_CPU2/BSP/Peripherals/src/TMC5130.c:821</code></td><td>检查功率级实际电流。</td></tr>
       </tbody>
     </table>
   </section>
@@ -744,6 +1448,7 @@
         <tr><td>编码轮未首帧有效导致位置盲区</td><td><code>Encoder_IsReady()</code>、<code>AS5145_HasValidSample()</code>、<code>MotorDriver_CheckMotionReady()</code></td><td>普通运动不能绕过首帧门控；强制调试路径要在文档和日志中明确。</td></tr>
         <tr><td>主动位置反馈使用了错误位置源</td><td><code>MotorCtrl_RefreshPositionFromActiveSource()</code>、<code>MotorCtrl_SnapshotSensorPositionMm()</code>、<code>MotorMotion_RefreshActivePositionMm()</code></td><td>Jog、绝对位置和密度流程都应按当前记步源刷新位置；切换位置源后要重新确认快照来源。</td></tr>
         <tr><td>Jog 速度模式接近目标时过冲</td><td><code>MotorMotion_CalcJogSlowdownDistanceMm()</code>、<code>MotorMotion_CalcJogStopDistanceMm()</code>、<code>MotorMotion_StopJogAndRestore()</code></td><td>调整速度、加减速或卷筒模型后，必须复核减速距离、最终停机距离和越界阈值。</td></tr>
+        <tr><td>未经 A/B 数据替换正式绝对位置策略</td><td><code>MotorCtrl_MoveToPosition()</code>、<code>MotorCtrl_JogMoveToPosition()</code>、<code>MotorMotion_JogMoveToTargetInternal()</code></td><td>第三轮策略评估结论是暂不替换默认路径；只有补齐同目标、同速度、同起点对比和故障注入后，才允许进入可回退实验。</td></tr>
         <tr><td>TMC5130 单帧异常 <code>XACTUAL</code> 污染位置</td><td><code>MotorPosition_FilterXactualGlitch()</code>、<code>MotorPosition_TryUpdateDrumStateFromXactual()</code></td><td>读取异常时二次确认，不要直接更新缓存和 FRAM。</td></tr>
         <tr><td>位置源切换失败留下半更新状态</td><td><code>MotorCtrl_SwitchPositionSourceToMotor()</code>、<code>MotorPosition_RollbackPositionSourceSwitch()</code></td><td>切换失败必须回滚旧模式、旧局部周长、基准和错误码。</td></tr>
         <tr><td>调试无检测运动误用于正式流程</td><td><code>MotorCtrl_MoveBlockingNoDetect()</code>、<code>MotorCtrl_MoveBlockingNoDetectForceDebug()</code></td><td>正式测量流程优先使用 <code>MotorCtrl_MoveAndWait()</code> 或 <code>MotorCtrl_MoveToPosition()</code>。</td></tr>
@@ -890,7 +1595,7 @@
       </tbody>
     </table>
     <div class="note">
-      <p>第一轮代码收敛已完成本地实现：<code>MotorMotionSpeedScope</code>、ticks 起步/到位 helper、Jog 位置检查 helper 已进入 <code>motor_ctrl_motion_api.c</code>。完整后续路线见《电机运动函数简化优化计划.md》；实物回归矩阵见《电机运动函数台架验证记录.md》，其中已细化 T01 到 T16 的入口、步骤、通过条件和记录模板。</p>
+      <p>当前 worktree 已完成第一轮结构收敛、第二轮等待循环窄 helper 收敛和第三轮策略评估记录：默认 <code>MotorCtrl_MoveToPosition()</code> 策略暂不替换，后续实验条件见《电机运动第三轮策略评估记录.md》。完整路线见《电机运动函数简化优化计划.md》；实物回归矩阵见《电机运动函数台架验证记录.md》，其中已细化 T01 到 T16 的入口、步骤、通过条件和记录模板。</p>
     </div>
   </section>
 
@@ -956,13 +1661,1324 @@
   <section>
     <h2>15. 后续查代码建议</h2>
     <ul>
-      <li>追一次正常运动：从 <code>measure.c</code> 的具体命令函数进入，再看 <code>MotorCtrl_MoveAndWait()</code>、<code>MotorMotion_BeginSpeedScope()</code>、<code>MotorDriver_CheckMotionReady()</code>、<code>stpr_moveBy()</code> 和 <code>MotorMotion_WaitUntilStopWithTarget()</code>。</li>
+      <li>追一次正常运动：从 <code>measure.c</code> 的具体命令函数进入，再看 <code>MotorCtrl_MoveAndWait()</code>、<code>MotorMotion_BeginSpeedScope()</code>、<code>MotorMotion_CheckReadyForProtectedMotion()</code>、<code>MotorMotion_BuildRelativeTargetPlan()</code>、<code>MotorCtrl_MoveNoWait()</code> 和 <code>MotorMotion_WaitUntilStopWithTarget()</code>。</li>
       <li>追一次电机记步：从 <code>MotorCtrl_SwitchPositionSourceToMotor()</code> 看基准建立、局部周长校准、<code>MotorPosition_UpdatePositionFromMotorSource()</code> 和 FRAM 持久化。</li>
       <li>追编码器问题：从 <code>AS5145.c</code> 的定时采集和错误处理进入，再看 <code>Update_Encoder_Count()</code>、<code>encoder_get_cable_length_01mm()</code> 和首帧有效门控。</li>
       <li>追 BE 调试：从 <code>process_command()</code> 的 <code>B</code>/<code>BE</code> 分支进入，再看 <code>test.c</code> 中 <code>motor_text()</code>、<code>motor_text_encoder()</code> 一类调试函数。</li>
       <li>追 BJ/BJP 点动：从 <code>test.c</code> 的 <code>TestCommand_HandleJogMotorTest()</code> 进入，再看 <code>MotorCtrl_JogMoveAndWait()</code>、<code>MotorCtrl_JogMoveToPosition()</code> 和 <code>MotorMotion_JogMoveToTargetInternal()</code>。</li>
     </ul>
   </section>
-</main>
+</div>
+      </div>
+    </section>
+    <section class="chapter" id="chapter-layer">
+      <div class="chapter-head">
+        <span class="chapter-label">第二章：运动函数层次地图</span>
+        <h2>CPU2 电机运动函数层次梳理</h2>
+        <p>覆盖 motor_ctrl_motion_api.c 的公开入口、共享目标规划、正式位置模式、Jog 点动模式、ticks、无检测和后续优化点。</p>
+      </div>
+      <div class="chapter-body source-layer">
+<div class="source-main">
+  <div class="hero">
+    <h1>CPU2 电机运动函数层次梳理</h1>
+    <p>
+      本文按函数职责梳理 <code>motor_ctrl_motion_api.c</code> 的运动控制层次，重点说明正式位置模式、Jog 点动模式、ticks 运动和无检测运动之间的复用边界。
+      它用于代码维护和评审定位，现已作为综合版第二章与详细流程图合并维护。
+    </p>
+    <div class="meta">
+      <div><span class="label">代码依据</span><code>LTD_MAIN_CPU2/Services/MotorControl/motor_ctrl_motion_api.c</code></div>
+      <div><span class="label">版本上下文</span>CPU2 V1.14.0.1 当前工作区</div>
+      <div><span class="label">整理日期</span>2026-06-13</div>
+      <div><span class="label">使用对象</span>开发、评审、台架验证人员</div>
+    </div>
+  </div>
+
+  <section>
+    <h2 id="layer-read-first">阅读结论</h2>
+    <div class="grid">
+      <div class="card">
+        <h3>核心层次已经形成</h3>
+        <p>公开入口由 <code>MotorCtrl_*</code> 承担，目标计算由 <code>MotorMotionTargetPlan</code> 和两个 Build 函数统一，执行策略再分成正式位置、Jog 速度、ticks 和无检测四类。</p>
+      </div>
+      <div class="card">
+        <h3>点动和位置模式不应硬合并</h3>
+        <p>二者共享“当前位置信息、目标位置、方向、剩余距离”的规划结果，但驱动下发方式不同。正式模式走 <code>MoveNoWait</code> 和到位等待；Jog 模式走速度模式、减速距离和主动停机。</p>
+      </div>
+      <div class="card">
+        <h3>后续优化重点在拆小循环</h3>
+        <p><code>MotorMotion_JogMoveToTargetInternal</code> 仍是最长函数，后续可把“启动前准备、循环判定、减速切换、停机出口”继续拆出，降低评审和台架定位成本。</p>
+      </div>
+    </div>
+    <ul class="toc">
+      <li><a href="#layer-layer-map">一页层次图</a></li>
+      <li><a href="#layer-public-api">公开入口</a></li>
+      <li><a href="#layer-target-plan">目标规划</a></li>
+      <li><a href="#layer-formal-flow">正式位置模式</a></li>
+      <li><a href="#layer-jog-flow">Jog 点动模式</a></li>
+      <li><a href="#layer-ticks-nodetect">ticks 与无检测</a></li>
+      <li><a href="#layer-guard-stop">保护与停机</a></li>
+      <li><a href="#layer-next-step">后续优化</a></li>
+    </ul>
+  </section>
+
+  <section>
+    <h2 id="layer-layer-map">一页层次图</h2>
+    <div class="flow">
+      <div class="lane-title">A. 公开入口层</div>
+      <div class="steps">
+        <div class="step"><strong>距离入口</strong><code>MotorCtrl_MoveAndWait</code><small>正式距离运动，使用目标规划后下发位置模式。</small></div>
+        <div class="step"><strong>绝对入口</strong><code>MotorCtrl_MoveToPosition</code><small>按当前有效位置计算方向和剩余距离，分轮调用距离入口。</small></div>
+        <div class="step"><strong>Jog 入口</strong><code>MotorCtrl_JogMoveAndWait</code><small>相对距离点动，目标规划后进入速度点动。</small></div>
+        <div class="step"><strong>Jog 绝对入口</strong><code>MotorCtrl_JogMoveToPosition</code><small>绝对位置点动，按目标方向进入速度点动。</small></div>
+        <div class="step"><strong>辅助入口</strong><code>MoveByTicks</code><small>ticks、无检测、上下行、停机和显示状态等辅助接口。</small></div>
+      </div>
+    </div>
+
+    <div class="flow">
+      <div class="lane-title">B. 目标规划层</div>
+      <div class="steps">
+        <div class="step"><strong>位置刷新</strong><code>MotorMotion_RefreshActivePositionMm</code><small>从当前有效位置源刷新，并输出 mm 快照。</small></div>
+        <div class="step"><strong>位置有效性</strong><code>MotorMotion_IsPositionSnapshotValid</code><small>按罐高和保护余量过滤异常快照。</small></div>
+        <div class="step"><strong>相对目标</strong><code>MotorMotion_BuildRelativeTargetPlan</code><small>start + move + dir 得到 target 和 distance。</small></div>
+        <div class="step"><strong>绝对目标</strong><code>MotorMotion_BuildAbsoluteTargetPlan</code><small>current 与 target 得到 dir、distance、already_reached。</small></div>
+        <div class="step"><strong>范围保护</strong><code>MotorMotion_CheckAbsoluteTargetRange</code><small>目标必须在 0 到 tankHeight 范围内。</small></div>
+      </div>
+    </div>
+
+    <div class="flow">
+      <div class="lane-title">C. 执行策略层</div>
+      <div class="steps">
+        <div class="step"><strong>正式位置模式</strong><code>MotorCtrl_MoveNoWait</code><small>写入位置目标，由驱动位置模式执行。</small></div>
+        <div class="step"><strong>正式等待</strong><code>MotorMotion_WaitUntilStopWithTarget</code><small>轮询健康、碰撞、丢步、当前位置和目标到达。</small></div>
+        <div class="step"><strong>Jog 速度模式</strong><code>MotorMotion_StartJogVelocity</code><small>持续速度运行，接近目标时切到爬行速度。</small></div>
+        <div class="step"><strong>Jog 主循环</strong><code>MotorMotion_JogMoveToTargetInternal</code><small>计算剩余距离、减速点、停机点和运行保护。</small></div>
+        <div class="step"><strong>无检测执行</strong><code>MotorMotion_MoveBlockingNoDetectInternal</code><small>按距离转 ticks，弱化传感检测，保留驱动健康检查。</small></div>
+      </div>
+    </div>
+
+    <div class="flow">
+      <div class="lane-title">D. 保护收尾层</div>
+      <div class="steps">
+        <div class="step"><strong>运行前检查</strong><code>MotorMotion_CheckReadyForProtectedMotion</code><small>检查驱动、编码器就绪和可选健康状态。</small></div>
+        <div class="step"><strong>命令切换</strong><code>MotorMotion_CheckCommandAbortWithSpeedScope</code><small>命令切换时停机，并恢复临时速度。</small></div>
+        <div class="step"><strong>运行守护</strong><code>MotorMotion_CheckJogRuntimeGuards</code><small>健康、称重碰撞、丢步、运动状态和超时。</small></div>
+        <div class="step"><strong>目标停机</strong><code>MotorMotion_StopAtTargetAndWait</code><small>到达目标后下发停机并等待静止。</small></div>
+        <div class="step"><strong>恢复清理</strong><code>MotorMotion_StopJogAndRestore</code><small>Jog 出口统一停机、复核位置、恢复速度和清活动状态。</small></div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2 id="layer-public-api">公开入口函数</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>函数</th>
+          <th>模式</th>
+          <th>核心链路</th>
+          <th>适用场景</th>
+          <th>维护关注点</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>MotorCtrl_MoveAndWait</code></td>
+          <td><span class="tag blue">正式距离</span></td>
+          <td>刷新当前位置 -> 相对目标规划 -> <code>MoveNoWait</code> -> 到位等待 -> 位置差复核</td>
+          <td>业务推荐的相对距离运动入口。</td>
+          <td>依赖有效位置源，异常退出要恢复临时速度。</td>
+        </tr>
+        <tr>
+          <td><code>MotorCtrl_MoveToPosition</code></td>
+          <td><span class="tag blue">正式绝对</span></td>
+          <td>绝对目标范围检查 -> 多轮刷新当前位置 -> 绝对目标规划 -> 调用 <code>MoveAndWait</code></td>
+          <td>移动到指定 mm 绝对位置。</td>
+          <td>当前仍保留最多 10 轮逼近逻辑，不直接走 Jog 速度模式。</td>
+        </tr>
+        <tr>
+          <td><code>MotorCtrl_JogMoveAndWait</code></td>
+          <td><span class="tag green">Jog 相对</span></td>
+          <td>运行前检查 -> 刷新当前位置 -> 相对目标规划 -> <code>JogMoveToTargetInternal</code></td>
+          <td>需要用速度点动完成相对距离运动时使用。</td>
+          <td>目标规划和正式距离共用，但执行策略完全不同。</td>
+        </tr>
+        <tr>
+          <td><code>MotorCtrl_JogMoveToPosition</code></td>
+          <td><span class="tag green">Jog 绝对</span></td>
+          <td>目标范围检查 -> 刷新当前位置 -> 绝对目标规划 -> <code>JogMoveToTargetInternal</code></td>
+          <td>长距离或需要更平滑减速的绝对位置运动实验入口。</td>
+          <td>以有效位置源闭环判断剩余距离，越界或位置异常直接退出。</td>
+        </tr>
+        <tr>
+          <td><code>MotorCtrl_MoveByTicksAndWait</code></td>
+          <td><span class="tag cyan">ticks</span></td>
+          <td>ticks 参数 -> 临时速度 -> 等待 XACTUAL 变化 -> 等待目标 ticks</td>
+          <td>校准、位置源切换和底层 ticks 验证。</td>
+          <td>不经过 <code>MotorMotionTargetPlan</code>，评审时不要把它归入位置规划链路。</td>
+        </tr>
+        <tr>
+          <td><code>MotorCtrl_MoveBlockingNoDetect</code><br><code>MotorCtrl_MoveBlockingNoDetectForceDebug</code></td>
+          <td><span class="tag amber">无检测</span></td>
+          <td>距离转 ticks -> 下发运动 -> 守护等待 -> 驱动同步</td>
+          <td>编码器不可用或调试强制运动。</td>
+          <td>可以忽略编码器就绪，但不应忽略驱动健康、命令切换和超时。</td>
+        </tr>
+        <tr>
+          <td><code>MotorCtrl_QuickStop</code><br><code>MotorCtrl_SlowStop</code></td>
+          <td><span class="tag red">停机</span></td>
+          <td>命令切换保护 -> 停机命令 -> 同步/状态清理</td>
+          <td>外部命令、异常处理或调试停机。</td>
+          <td>停机动作要和显示活动态、速度恢复、驱动状态保持一致。</td>
+        </tr>
+        <tr>
+          <td><code>MotorCtrl_GetDisplayState</code></td>
+          <td><span class="tag violet">显示状态</span></td>
+          <td>活动态缓存 -> 驱动运动状态 -> 方向映射</td>
+          <td>上位显示当前电机运动状态。</td>
+          <td>活动态由运动入口设置，由停机/收尾路径清理。</td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section>
+    <h2 id="layer-target-plan">共享目标规划层</h2>
+    <p>
+      本轮优化后，正式模式和 Jog 模式的共同部分被压缩到 <code>MotorMotionTargetPlan</code>。
+      该结构只回答“从哪里开始、到哪里结束、朝哪个方向、还有多少距离、是否已经到位”，不决定使用位置模式还是速度模式。
+    </p>
+    <table class="compact">
+      <thead>
+        <tr>
+          <th>字段</th>
+          <th>含义</th>
+          <th>由谁填充</th>
+          <th>被谁消费</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>start_mm</code></td>
+          <td>规划时的当前有效位置。</td>
+          <td>相对规划使用入口传入 start；绝对规划使用 current。</td>
+          <td>正式模式用于运动后位移差核对；Jog 用于启动前目标确认。</td>
+        </tr>
+        <tr>
+          <td><code>target_mm</code></td>
+          <td>最终目标绝对位置。</td>
+          <td>相对规划按方向加减距离；绝对规划直接使用 target。</td>
+          <td>正式等待和 Jog 循环都用它判断到位、越界和停机。</td>
+        </tr>
+        <tr>
+          <td><code>distance_mm</code></td>
+          <td>需要执行的正数距离。</td>
+          <td>相对规划等于 move；绝对规划等于 <code>fabs(target-current)</code>。</td>
+          <td>正式模式下发 <code>MoveNoWait</code>；Jog 用于启动目标。</td>
+        </tr>
+        <tr>
+          <td><code>dir</code></td>
+          <td>向上或向下运动方向。</td>
+          <td>相对规划沿用入口参数；绝对规划按 delta 正负选择。</td>
+          <td>显示状态、剩余距离、越界判断和驱动方向。</td>
+        </tr>
+        <tr>
+          <td><code>already_reached</code></td>
+          <td>目标已经在允许误差内，无需运动。</td>
+          <td>相对距离小于等于 0 或绝对目标误差内。</td>
+          <td>绝对入口直接返回成功；相对入口通常在入口参数处提前返回。</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="callmap">
+      <div class="call">
+        <h3>相对规划</h3>
+        <ol>
+          <li>入口先校验 <code>move_mm &gt; 0</code> 和方向合法。</li>
+          <li>调用 <code>MotorMotion_RefreshActivePositionMm</code> 获取当前有效位置。</li>
+          <li><code>MotorMotion_BuildRelativeTargetPlan</code> 检查位置快照有效性。</li>
+          <li>按方向得到 <code>target_mm</code>，再用 <code>MotorMotion_CheckAbsoluteTargetRange</code> 检查目标范围。</li>
+          <li>正式距离和 Jog 相对入口各自选择自己的执行策略。</li>
+        </ol>
+      </div>
+      <div class="call">
+        <h3>绝对规划</h3>
+        <ol>
+          <li>入口先调用 <code>MotorMotion_CheckAbsoluteTargetRange</code> 检查目标 mm。</li>
+          <li>刷新当前有效位置，异常快照返回 <code>MEASUREMENT_POSITION_ERROR</code>。</li>
+          <li><code>MotorMotion_BuildAbsoluteTargetPlan</code> 计算 delta、方向和剩余距离。</li>
+          <li>误差小于 eps 时设置 <code>already_reached</code> 并返回成功。</li>
+          <li>正式绝对入口分轮调用 <code>MoveAndWait</code>，Jog 绝对入口进入 Jog 内核。</li>
+        </ol>
+      </div>
+    </div>
+
+    <div class="ok">
+      <strong>分层边界：</strong>
+      目标规划层不接触 TMC5130 寄存器、不下发速度、不等待停机。这样后续无论正式模式还是 Jog 模式调整执行策略，都不需要重复修改方向和目标范围判断。
+    </div>
+  </section>
+
+  <section>
+    <h2 id="layer-formal-flow">正式位置模式链路</h2>
+    <div class="callmap">
+      <div class="call">
+        <h3><code>MotorCtrl_MoveAndWait(mm, dir, speed)</code></h3>
+        <ol>
+          <li>参数层：距离小于等于 0 直接成功，方向非法返回 <code>PARAM_ERROR</code>。</li>
+          <li>运行前：<code>MotorMotion_CheckReadyForProtectedMotion(false, false)</code>，允许后续等待过程中再做健康轮询。</li>
+          <li>速度域：<code>MotorMotion_BeginSpeedScope</code> 记录并应用临时速度。</li>
+          <li>目标规划：刷新有效位置，调用 <code>MotorMotion_BuildRelativeTargetPlan</code> 得到 start、target 和 distance。</li>
+          <li>执行：调用 <code>MotorCtrl_MoveNoWait(distance, dir, 0U)</code> 下发正式位置模式。</li>
+          <li>观察：设置活动显示态，调用 <code>MotorMotion_WaitMoveStartObservation</code> 避免刚下发未启动的误判。</li>
+          <li>等待：<code>MotorMotion_WaitUntilStopWithTarget</code> 按目标位置、误差和方向等待到位/停机。</li>
+          <li>收尾：刷新位置、计算实际位移差、做丢步判断、同步驱动、清活动态、恢复速度。</li>
+        </ol>
+      </div>
+      <div class="call">
+        <h3><code>MotorCtrl_MoveToPosition(target, speed)</code></h3>
+        <ol>
+          <li>先检查目标绝对位置是否在 <code>0 ~ tankHeight</code> 范围。</li>
+          <li>检查驱动运动就绪，进入临时速度域。</li>
+          <li>最多循环 10 次，每轮先检查命令切换，再刷新当前有效位置。</li>
+          <li>调用 <code>MotorMotion_BuildAbsoluteTargetPlan</code> 计算剩余距离和方向。</li>
+          <li>如果已经到位，恢复速度后返回成功。</li>
+          <li>如果未到位，将过小距离抬到 <code>EPS_MM * 2</code>，再调用 <code>MotorCtrl_MoveAndWait</code>。</li>
+          <li>每一轮都重新取当前位置，抵消位置更新滞后和累计误差。</li>
+        </ol>
+      </div>
+    </div>
+
+    <table>
+      <thead>
+        <tr>
+          <th>节点</th>
+          <th>函数</th>
+          <th>做了什么</th>
+          <th>异常出口</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>下发前</td>
+          <td><code>MotorMotion_CheckReadyForProtectedMotion</code></td>
+          <td>检查运动就绪，必要时检查编码器就绪和驱动健康。</td>
+          <td>返回底层就绪、编码器或驱动健康错误。</td>
+        </tr>
+        <tr>
+          <td>目标规划</td>
+          <td><code>MotorMotion_BuildRelativeTargetPlan</code><br><code>MotorMotion_BuildAbsoluteTargetPlan</code></td>
+          <td>统一生成目标位置、方向和正数距离。</td>
+          <td><code>PARAM_ERROR</code>、<code>PARAM_RANGE_ERROR</code>、<code>MEASUREMENT_POSITION_ERROR</code>。</td>
+        </tr>
+        <tr>
+          <td>运行等待</td>
+          <td><code>MotorMotion_WaitUntilStopWithTarget</code></td>
+          <td>轮询驱动、命令切换、位置、到位和停止状态。</td>
+          <td>命令切换、碰撞、丢步、运动超时、位置异常。</td>
+        </tr>
+        <tr>
+          <td>结果复核</td>
+          <td><code>MotorCtrl_UpdateDrumStateFromXActual</code><br><code>MotorDriver_SyncPositionOrCheckHealth</code></td>
+          <td>打印移动结果，检查运动距离偏差并同步驱动位置。</td>
+          <td>编码器丢步、驱动健康错误。</td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section>
+    <h2 id="layer-jog-flow">Jog 点动速度模式链路</h2>
+    <p>
+      Jog 模式不是“正式位置模式的另一层包装”，它是使用目标规划结果驱动速度模式的另一套执行策略。
+      关键差异是：它不会一次性把 <code>XTARGET</code> 作为最终控制目标，而是在循环中根据有效位置源持续计算剩余距离，接近目标时主动减速和停机。
+    </p>
+    <div class="callmap">
+      <div class="call">
+        <h3>Jog 相对入口</h3>
+        <ol>
+          <li><code>MotorCtrl_JogMoveAndWait</code> 校验距离和方向。</li>
+          <li><code>MotorMotion_CheckReadyForProtectedMotion(false, true)</code> 运行前检查驱动健康。</li>
+          <li>刷新当前有效位置。</li>
+          <li>复用 <code>MotorMotion_BuildRelativeTargetPlan</code> 得到目标。</li>
+          <li>调用 <code>MotorMotion_JogMoveToTargetInternal</code>。</li>
+        </ol>
+      </div>
+      <div class="call">
+        <h3>Jog 绝对入口</h3>
+        <ol>
+          <li><code>MotorCtrl_JogMoveToPosition</code> 先检查绝对目标范围。</li>
+          <li>运行前检查和当前位置刷新。</li>
+          <li>复用 <code>MotorMotion_BuildAbsoluteTargetPlan</code>，误差使用 <code>MOTOR_JOG_POSITION_EPS_MM</code>。</li>
+          <li>已到位直接成功。</li>
+          <li>未到位进入 <code>MotorMotion_JogMoveToTargetInternal</code>。</li>
+        </ol>
+      </div>
+    </div>
+
+    <h3><code>MotorMotion_JogMoveToTargetInternal</code> 内部阶段</h3>
+    <table>
+      <thead>
+        <tr>
+          <th>阶段</th>
+          <th>关键函数/变量</th>
+          <th>职责</th>
+          <th>为什么需要独立</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>启动准备</td>
+          <td><code>MotorMotion_BeginSpeedScope</code><br><code>MotorDriver_ApplyOptionalSpeed</code><br><code>MotorDriver_SyncPositionOrCheckHealth</code></td>
+          <td>应用临时速度、处理命令切换、同步驱动状态。</td>
+          <td>速度点动要直接改 <code>VMAX</code>，必须确保异常退出可恢复。</td>
+        </tr>
+        <tr>
+          <td>减速距离</td>
+          <td><code>MotorMotion_CalcJogSlowdownDistanceMm</code></td>
+          <td>读取当前加速度寄存器，按当前带长换算从快速速度降到爬行速度的距离。</td>
+          <td>不同位置卷径不同，同样寄存器速度对应的 mm/s 不固定。</td>
+        </tr>
+        <tr>
+          <td>速度启动</td>
+          <td><code>MotorMotion_StartJogVelocity</code></td>
+          <td>设置方向并进入速度模式运行。</td>
+          <td>Jog 的控制对象是速度，不是单次位置目标。</td>
+        </tr>
+        <tr>
+          <td>循环刷新</td>
+          <td><code>MotorMotion_RefreshJogPositionChecked</code><br><code>MotorMotion_RemainingDistanceToTarget</code></td>
+          <td>获取当前位置、检查越界、计算剩余距离。</td>
+          <td>这是 Jog 闭环的核心，每轮都依赖有效位置源。</td>
+        </tr>
+        <tr>
+          <td>减速切换</td>
+          <td><code>MOTOR_JOG_CREEP_SPEED_X100</code><br><code>MotorMotion_CalcVelocityFromSpeedX100</code></td>
+          <td>剩余距离进入减速区后，切到爬行速度继续接近目标。</td>
+          <td>避免高速运行时到达目标附近仍无法及时停住。</td>
+        </tr>
+        <tr>
+          <td>停机判断</td>
+          <td><code>MotorMotion_CalcJogStopDistanceMm</code><br><code>MotorMotion_StopJogAndRestore</code></td>
+          <td>按当前速度和减速度估算停机距离，达到停机窗口后主动停机。</td>
+          <td>最终停机距离取决于当前速度、减速寄存器和当前卷径。</td>
+        </tr>
+        <tr>
+          <td>运行保护</td>
+          <td><code>MotorMotion_CheckJogRuntimeGuards</code></td>
+          <td>检查驱动健康、称重碰撞、丢步、运动状态、启动宽限和总超时。</td>
+          <td>Jog 主循环可能长时间运行，保护必须每轮执行。</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="warn">
+      <strong>当前待优化点：</strong>
+      <code>MotorMotion_JogMoveToTargetInternal</code> 仍承担了启动、循环、减速、停机和恢复多个职责。建议下一轮拆成 <code>PrepareJogRun</code>、<code>UpdateJogLoopState</code>、<code>HandleJogSlowdown</code>、<code>HandleJogStopWindow</code> 四类小函数。
+    </div>
+  </section>
+
+  <section>
+    <h2 id="layer-ticks-nodetect">ticks 与无检测链路</h2>
+    <div class="grid two">
+      <div class="card">
+        <h3>ticks 运动：<code>MotorCtrl_MoveByTicksAndWait</code></h3>
+        <p>ticks 运动直接面向 TMC5130 步数，不经过 mm 目标规划。它适合一圈校准、位置源切换验证、底层驱动动作验证。</p>
+        <table class="compact">
+          <tbody>
+            <tr><th>主要输入</th><td><code>ticks</code>、<code>speed_x100</code></td></tr>
+            <tr><th>启动判断</th><td><code>MotorMotion_WaitTicksStartChanged</code> 观察 <code>XACTUAL</code> 是否变化。</td></tr>
+            <tr><th>到位判断</th><td><code>MotorMotion_WaitTicksReachTarget</code> 等待 ticks 目标。</td></tr>
+            <tr><th>停机等待</th><td><code>MotorMotion_WaitStopAbortable</code> 处理可中断停机。</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="card">
+        <h3>无检测运动：<code>MotorMotion_MoveBlockingNoDetectInternal</code></h3>
+        <p>无检测运动将 mm 距离转换为 ticks 后执行，用于编码器不可用或强制调试场景。它弱化位置源依赖，但仍需要保留驱动健康和命令切换保护。</p>
+        <table class="compact">
+          <tbody>
+            <tr><th>公开入口</th><td><code>MotorCtrl_MoveBlockingNoDetect</code>、<code>MotorCtrl_MoveBlockingNoDetectForceDebug</code></td></tr>
+            <tr><th>准备检查</th><td><code>MotorMotion_CheckReadyForProtectedMotion(ignore_encoder_ready, true)</code></td></tr>
+            <tr><th>距离换算</th><td><code>MotorMotion_DistanceToTicks</code></td></tr>
+            <tr><th>循环保护</th><td><code>MotorMotion_CheckAbortRefreshAndHealth</code></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="note">
+      <strong>维护边界：</strong>
+      ticks 和无检测链路是底层/调试通道，不能因为正式模式和 Jog 模式共享目标规划，就把它们强行改成同一套目标规划入口。否则会破坏校准和编码器异常时的兜底能力。
+    </div>
+  </section>
+
+  <section>
+    <h2 id="layer-guard-stop">保护、停机和状态收尾</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>类别</th>
+          <th>函数</th>
+          <th>当前职责</th>
+          <th>调用模式</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>速度作用域</td>
+          <td><code>MotorMotion_BeginSpeedScope</code><br><code>MotorMotion_EndSpeedScope</code><br><code>MotorMotion_ReturnWithSpeedScope</code></td>
+          <td>记录默认速度、应用临时速度、异常或正常出口恢复速度。</td>
+          <td>正式距离、正式绝对、Jog 和无检测均可使用。</td>
+        </tr>
+        <tr>
+          <td>错误包装</td>
+          <td><code>MotorMotion_CheckErrorWithSpeedScope</code></td>
+          <td>在错误检查失败时先恢复速度，再执行错误码处理。</td>
+          <td>下发运动后避免临时速度泄漏。</td>
+        </tr>
+        <tr>
+          <td>命令切换</td>
+          <td><code>MotorMotion_CheckCommandAbortWithSpeedScope</code><br><code>MotorDriver_StopIfCommandSwitchRequested</code></td>
+          <td>发现外部命令切换时主动停机，返回 <code>COMMAND_SWITCH_ABORT</code>。</td>
+          <td>正式距离已使用 speed-scope 包装；正式绝对循环仍有直接调用点。</td>
+        </tr>
+        <tr>
+          <td>运行前检查</td>
+          <td><code>MotorMotion_CheckReadyForProtectedMotion</code></td>
+          <td>统一检查运动就绪、编码器就绪和可选驱动健康。</td>
+          <td>正式距离、Jog、无检测入口共享。</td>
+        </tr>
+        <tr>
+          <td>运行中守护</td>
+          <td><code>MotorMotion_CheckAbortRefreshAndHealth</code><br><code>MotorMotion_CheckJogRuntimeGuards</code></td>
+          <td>处理命令切换、驱动同步、健康、碰撞、丢步、停止异常和超时。</td>
+          <td>正式等待、Jog 循环和无检测循环分别使用。</td>
+        </tr>
+        <tr>
+          <td>停机等待</td>
+          <td><code>MotorMotion_StopAtTargetAndWait</code><br><code>MotorMotion_WaitStoppedAfterStopCommand</code><br><code>MotorMotion_WaitStopAbortable</code></td>
+          <td>下发停机、等待驱动静止、可中断地处理停机过程。</td>
+          <td>正式到位、Jog 退出和 ticks 停机。</td>
+        </tr>
+        <tr>
+          <td>状态显示</td>
+          <td><code>MotorMotion_SetActiveState</code><br><code>MotorMotion_ClearActiveState</code><br><code>MotorMotion_DisplayStateFromDirection</code></td>
+          <td>将运动方向映射为显示状态，并在停机后清理活动态。</td>
+          <td>公开入口和停机收尾路径共同维护。</td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section>
+    <h2 id="layer-function-index">源码函数索引</h2>
+    <p>以下行号来自 2026-06-13 当前工作区的 <code>motor_ctrl_motion_api.c</code>，后续源码增删后需重新生成。</p>
+    <div class="mono-list">
+      <div><code>MotorCtrl_MoveByTicksAndWait</code>：约 213 行，ticks 阻塞运动。</div>
+      <div><code>MotorCtrl_MoveNoWait</code>：约 305 行，正式位置模式非阻塞下发。</div>
+      <div><code>MotorCtrl_MoveAndWait</code>：约 441 行，正式相对距离入口。</div>
+      <div><code>MotorCtrl_MoveToPosition</code>：约 664 行，正式绝对位置入口。</div>
+      <div><code>MotorCtrl_JogMoveAndWait</code>：约 741 行，Jog 相对距离入口。</div>
+      <div><code>MotorCtrl_JogMoveToPosition</code>：约 780 行，Jog 绝对位置入口。</div>
+      <div><code>MotorMotion_MoveBlockingNoDetectInternal</code>：约 946 行，无检测内部执行。</div>
+      <div><code>MotorMotion_CheckReadyForProtectedMotion</code>：约 1380 行，运行前统一检查。</div>
+      <div><code>MotorMotion_JogMoveToTargetInternal</code>：约 1609 行，Jog 速度模式主流程。</div>
+      <div><code>MotorMotion_RefreshActivePositionMm</code>：约 1767 行，刷新当前有效位置源。</div>
+      <div><code>MotorMotion_BuildRelativeTargetPlan</code>：约 1801 行，相对目标规划。</div>
+      <div><code>MotorMotion_BuildAbsoluteTargetPlan</code>：约 1845 行，绝对目标规划。</div>
+      <div><code>MotorMotion_CheckAbsoluteTargetRange</code>：约 1891 行，绝对目标范围检查。</div>
+      <div><code>MotorMotion_CheckJogRuntimeGuards</code>：约 1988 行，Jog 循环保护。</div>
+      <div><code>MotorMotion_CalcJogSlowdownDistanceMm</code>：约 2029 行，Jog 减速距离估算。</div>
+      <div><code>MotorMotion_CalcJogStopDistanceMm</code>：约 2093 行，Jog 停机距离估算。</div>
+      <div><code>MotorMotion_StopJogAndRestore</code>：约 2228 行，Jog 停机和速度恢复。</div>
+      <div><code>MotorMotion_WaitUntilStopWithTarget</code>：约 2313 行，正式模式目标等待。</div>
+    </div>
+  </section>
+
+  <section>
+    <h2 id="layer-next-step">后续优化方案</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>优先级</th>
+          <th>优化项</th>
+          <th>建议动作</th>
+          <th>验证重点</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>P0</td>
+          <td>保持正式模式和 Jog 模式执行策略分离</td>
+          <td>继续共享 <code>MotorMotionTargetPlan</code>，但不要把 Jog 强行改成 <code>MoveNoWait</code> 包装。</td>
+          <td>相同目标下比较正式距离、正式绝对、Jog 相对、Jog 绝对的终点误差和异常出口。</td>
+        </tr>
+        <tr>
+          <td>P1</td>
+          <td>拆小 Jog 内部主函数</td>
+          <td>按准备、循环状态、减速切换、停机窗口、异常收尾拆出静态函数。</td>
+          <td>运行现有静态检查，补充 200mm 到 1000mm 安全范围内的小距离台架验证。</td>
+        </tr>
+        <tr>
+          <td>P1</td>
+          <td>统一命令切换出口</td>
+          <td>将正式绝对循环里的直接 <code>MotorDriver_StopIfCommandSwitchRequested</code> 评估为 speed-scope 包装调用。</td>
+          <td>命令切换后速度恢复、活动态清理、错误码返回必须一致。</td>
+        </tr>
+        <tr>
+          <td>P2</td>
+          <td>扩展静态结构检查脚本</td>
+          <td>除目标规划复用外，增加“入口是否绕过规划”“临时速度是否恢复”“活动态是否清理”的模式检查。</td>
+          <td>脚本只检查结构约束，不替代编译和台架运动验证。</td>
+        </tr>
+        <tr>
+          <td>P2</td>
+          <td>分文件整理</td>
+          <td>在函数继续稳定后，可评估拆为 plan、jog、wait、utility 等文件。</td>
+          <td>先保持符号静态边界和头文件不扩散，避免一次性改动过大。</td>
+        </tr>
+      </tbody>
+    </table>
+    <div class="redbox">
+      <strong>安全提醒：</strong>
+      当前台架验证时用户给出的硬限制是传感器位置不要高于 1000mm、不要低于 200mm。该限制属于现场测试约束，不是本文描述的代码内置范围；后续若要固化为自动保护，需要另行设计参数来源、错误码和兼容影响。
+    </div>
+  </section>
+
+  <div class="footer">
+    生成依据：当前工作区源码和本目录既有电机运动文档。若后续源码函数行号或调用关系变更，请同步刷新本文。
+  </div>
+</div>
+      </div>
+    </section>
+    <section class="chapter" id="chapter-flow">
+      <div class="chapter-head">
+        <span class="chapter-label">第三章：详细程序流程图</span>
+        <h2>电机运动程序详细流程图</h2>
+        <p>覆盖正式距离、绝对位置、Jog、ticks、无检测、停机等待、位置源切换、异常出口和待测覆盖。</p>
+      </div>
+      <div class="chapter-body source-flow">
+<div class="source-main">
+  <div class="hero">
+    <h1>电机运动程序详细流程图</h1>
+    <p>本文面向当前 <code>MAIN</code> 工作区，按源码实际调用关系梳理 CPU2 电机运动程序流程。重点覆盖正式距离运动、绝对位置运动、Jog 点动、ticks 运动、无检测运动、停机等待和位置源切换。</p>
+    <div class="meta">
+      <div><span class="label">更新日期</span>2026-06-13</div>
+      <div><span class="label">代码范围</span><code>motor_ctrl_motion_api.c</code>、<code>motor_ctrl_position_model.c</code></div>
+      <div><span class="label">文档编码</span>UTF-8</div>
+      <div><span class="label">源码编码</span>CPU2 既有源码按 GBK/936 维护</div>
+    </div>
+    <div class="note" style="margin-top: 12px;">
+      <p>当前结构结论是“目标规划统一，执行策略分离”：相对和绝对目标先统一规划为 <code>MotorMotionTargetPlan</code>，正式业务仍走 TMC5130 位置目标模式，Jog 调试仍走速度点动反馈模式。</p>
+    </div>
+  </div>
+
+  <nav class="toc">
+    <h2>目录</h2>
+    <ol>
+      <li><a href="#flow-scope">整理范围</a></li>
+      <li><a href="#flow-main-flow">完整程序流程图</a></li>
+      <li><a href="#flow-layer-flow">总体分层流程</a></li>
+      <li><a href="#flow-entry">入口选择图</a></li>
+      <li><a href="#flow-distance">正式距离运动</a></li>
+      <li><a href="#flow-absolute">正式绝对位置</a></li>
+      <li><a href="#flow-jog">Jog 速度点动</a></li>
+      <li><a href="#flow-ticks">ticks 运动</a></li>
+      <li><a href="#flow-no-detect">无检测阻塞运动</a></li>
+      <li><a href="#flow-wait-stop">等待和停机收尾</a></li>
+      <li><a href="#flow-position-source">位置源切换</a></li>
+      <li><a href="#flow-params">关键参数与状态</a></li>
+      <li><a href="#flow-errors">异常出口</a></li>
+      <li><a href="#flow-risks">问题点与整改建议</a></li>
+      <li><a href="#flow-test-map">保护点和待测覆盖</a></li>
+      <li><a href="#flow-source-index">源码定位</a></li>
+    </ol>
+  </nav>
+
+  <section id="flow-scope">
+    <h2>1. 整理范围</h2>
+    <p class="lead">电机运动不是单个函数，而是由业务命令、运动入口、目标规划、驱动下发、等待保护、停机收尾、位置源模型和调试入口组成的一组状态机。本节先给出本文件覆盖的边界。</p>
+    <div class="grid-3">
+      <div class="card">
+        <h3>业务入口</h3>
+        <p><code>measure.c</code>、<code>measure_oilLevel.c</code>、<code>measure_waterLevel.c</code>、<code>measure_density.c</code>、<code>measure_tank_height.c</code> 和 <code>test.c</code> 按场景调用不同 MotorCtrl 入口。</p>
+        <p class="src">依据：全仓搜索 <code>MotorCtrl_Move*</code> 和 <code>MotorCtrl_SwitchPositionSource*</code> 调用点。</p>
+      </div>
+      <div class="card">
+        <h3>运动 API</h3>
+        <p>核心实现集中在 <code>motor_ctrl_motion_api.c</code>，包含正式距离、绝对位置、ticks、Jog、无检测、快停/慢停和等待收尾。</p>
+        <p class="src">依据：<code>motor_ctrl_motion_api.c:213-2410</code>。</p>
+      </div>
+      <div class="card">
+        <h3>位置模型</h3>
+        <p><code>motor_ctrl_position_model.c</code> 负责编码轮/电机记步切换、XACTUAL 基准、局部周长、业务位置刷新和持久化快照。</p>
+        <p class="src">依据：<code>motor_ctrl_position_model.c:403-560</code>。</p>
+      </div>
+    </div>
+    <div class="note">
+      <p>本文只整理当前分支实际代码路径。第一轮历史修复和台架记录只作为背景；当前分支没有把默认 <code>MotorCtrl_MoveToPosition()</code> 替换为 Jog 速度模式。</p>
+    </div>
+  </section>
+
+  <section id="flow-main-flow">
+    <h2>2. 完整程序流程图</h2>
+    <p>下图把当前电机运动从业务入口到最终收尾的主分支完整展开。节点优先写“动作和判断”，函数名在节点内保留，便于同时给测试人员和维护人员使用。</p>
+    <div class="legend">
+      <span><i style="background: var(--green-soft); border-color: var(--green);"></i>入口/正常出口</span>
+      <span><i style="background: var(--blue-soft); border-color: var(--blue);"></i>处理步骤</span>
+      <span><i style="background: var(--amber-soft); border-color: var(--amber);"></i>判断/分流</span>
+      <span><i style="background: var(--red-soft); border-color: var(--red);"></i>错误出口</span>
+      <span><i style="background: var(--violet-soft); border-color: var(--violet);"></i>状态变化</span>
+    </div>
+    <div class="flow-wrap">
+      <svg class="flow" width="1120" height="1980" viewBox="0 0 1120 1980" role="img" aria-label="电机运动完整程序流程图">
+        <defs>
+          <marker id="flow-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="#516276"></path>
+          </marker>
+        </defs>
+
+        <g class="node start">
+          <ellipse cx="560" cy="42" rx="170" ry="30"></ellipse>
+          <text x="560" y="39" text-anchor="middle">业务或调试命令触发运动</text>
+          <text x="560" y="57" text-anchor="middle">测量流程 / 串口测试 / 位置源切换</text>
+        </g>
+
+        <g class="node decision">
+          <path d="M560 104 L750 180 L560 256 L370 180 Z"></path>
+          <text x="560" y="171" text-anchor="middle">选择哪类 MotorCtrl 入口？</text>
+          <text x="560" y="191" text-anchor="middle">正式 / Jog / ticks / 无检测 / 位置源</text>
+        </g>
+
+        <g class="node process">
+          <rect x="70" y="318" width="250" height="82" rx="8"></rect>
+          <text x="195" y="346" text-anchor="middle">正式距离运动</text>
+          <text x="195" y="366" text-anchor="middle">MotorCtrl_MoveAndWait</text>
+          <text x="195" y="386" text-anchor="middle">相对 mm + 方向</text>
+        </g>
+
+        <g class="node process">
+          <rect x="340" y="318" width="250" height="82" rx="8"></rect>
+          <text x="465" y="346" text-anchor="middle">正式绝对位置</text>
+          <text x="465" y="366" text-anchor="middle">MotorCtrl_MoveToPosition</text>
+          <text x="465" y="386" text-anchor="middle">目标 mm</text>
+        </g>
+
+        <g class="node process">
+          <rect x="610" y="318" width="250" height="82" rx="8"></rect>
+          <text x="735" y="346" text-anchor="middle">Jog 点动</text>
+          <text x="735" y="366" text-anchor="middle">MotorCtrl_JogMove*</text>
+          <text x="735" y="386" text-anchor="middle">BJ/BJP 调试入口</text>
+        </g>
+
+        <g class="node process">
+          <rect x="880" y="318" width="190" height="82" rx="8"></rect>
+          <text x="975" y="346" text-anchor="middle">ticks / 无检测</text>
+          <text x="975" y="366" text-anchor="middle">MoveByTicks</text>
+          <text x="975" y="386" text-anchor="middle">NoDetect</text>
+        </g>
+
+        <g class="node state">
+          <rect x="385" y="454" width="350" height="74" rx="8"></rect>
+          <text x="560" y="482" text-anchor="middle">公共前置门控</text>
+          <text x="560" y="502" text-anchor="middle">MotionReady / ForceDebug / Health</text>
+        </g>
+
+        <g class="node decision">
+          <path d="M560 574 L735 642 L560 710 L385 642 Z"></path>
+          <text x="560" y="632" text-anchor="middle">门控或参数是否失败？</text>
+          <text x="560" y="652" text-anchor="middle">方向、距离、目标范围、位置源</text>
+        </g>
+
+        <g class="node error">
+          <rect x="92" y="604" width="245" height="78" rx="8"></rect>
+          <text x="215" y="632" text-anchor="middle">直接返回错误码</text>
+          <text x="215" y="652" text-anchor="middle">PARAM / POSITION / HEALTH</text>
+          <text x="215" y="672" text-anchor="middle">不下发运动目标</text>
+        </g>
+
+        <g class="node process">
+          <rect x="385" y="752" width="350" height="84" rx="8"></rect>
+          <text x="560" y="780" text-anchor="middle">进入速度 scope 和目标规划</text>
+          <text x="560" y="800" text-anchor="middle">BeginSpeedScope</text>
+          <text x="560" y="820" text-anchor="middle">BuildRelative / BuildAbsolute TargetPlan</text>
+        </g>
+
+        <g class="node decision">
+          <path d="M560 886 L735 954 L560 1022 L385 954 Z"></path>
+          <text x="560" y="944" text-anchor="middle">执行策略分流</text>
+          <text x="560" y="964" text-anchor="middle">位置模式 / Jog 速度模式 / ticks</text>
+        </g>
+
+        <g class="node process">
+          <rect x="70" y="1064" width="270" height="90" rx="8"></rect>
+          <text x="205" y="1092" text-anchor="middle">正式位置目标模式</text>
+          <text x="205" y="1112" text-anchor="middle">MoveNoWait -> stpr_moveBy</text>
+          <text x="205" y="1132" text-anchor="middle">WaitMoveStartObservation</text>
+        </g>
+
+        <g class="node process">
+          <rect x="425" y="1064" width="270" height="90" rx="8"></rect>
+          <text x="560" y="1092" text-anchor="middle">Jog 速度点动模式</text>
+          <text x="560" y="1112" text-anchor="middle">StartJogVelocity</text>
+          <text x="560" y="1132" text-anchor="middle">主动位置反馈减速/提前停机</text>
+        </g>
+
+        <g class="node process">
+          <rect x="780" y="1064" width="270" height="90" rx="8"></rect>
+          <text x="915" y="1092" text-anchor="middle">ticks 或无检测路径</text>
+          <text x="915" y="1112" text-anchor="middle">MoveByTicks / NoDetect</text>
+          <text x="915" y="1132" text-anchor="middle">公共运行检查但保护强度不同</text>
+        </g>
+
+        <g class="node process">
+          <rect x="70" y="1212" width="270" height="86" rx="8"></rect>
+          <text x="205" y="1240" text-anchor="middle">正式等待到位</text>
+          <text x="205" y="1260" text-anchor="middle">WaitUntilStopWithTarget</text>
+          <text x="205" y="1280" text-anchor="middle">目标窗口 / 撞底 / 健康 / 超时</text>
+        </g>
+
+        <g class="node process">
+          <rect x="425" y="1212" width="270" height="86" rx="8"></rect>
+          <text x="560" y="1240" text-anchor="middle">Jog 循环保护</text>
+          <text x="560" y="1260" text-anchor="middle">CheckJogRuntimeGuards</text>
+          <text x="560" y="1280" text-anchor="middle">健康 / 撞底 / 丢步 / 超时</text>
+        </g>
+
+        <g class="node process">
+          <rect x="780" y="1212" width="270" height="86" rx="8"></rect>
+          <text x="915" y="1240" text-anchor="middle">ticks / 无检测等待</text>
+          <text x="915" y="1260" text-anchor="middle">CheckAbortRefreshAndHealth</text>
+          <text x="915" y="1280" text-anchor="middle">命令切换 / 速度刷新 / TMC 同步</text>
+        </g>
+
+        <g class="node decision">
+          <path d="M560 1350 L735 1420 L560 1490 L385 1420 Z"></path>
+          <text x="560" y="1410" text-anchor="middle">等待过程中是否异常？</text>
+          <text x="560" y="1430" text-anchor="middle">命令切换、超时、通信、撞底、丢步</text>
+        </g>
+
+        <g class="node error">
+          <rect x="90" y="1384" width="250" height="82" rx="8"></rect>
+          <text x="215" y="1412" text-anchor="middle">错误出口</text>
+          <text x="215" y="1432" text-anchor="middle">必要时停机并恢复速度</text>
+          <text x="215" y="1452" text-anchor="middle">错误码向上层传播</text>
+        </g>
+
+        <g class="node process">
+          <rect x="385" y="1532" width="350" height="86" rx="8"></rect>
+          <text x="560" y="1560" text-anchor="middle">停稳后同步和状态清理</text>
+          <text x="560" y="1580" text-anchor="middle">CheckStoppedAndRefresh / StopJogAndRestore</text>
+          <text x="560" y="1600" text-anchor="middle">SyncPositionOrCheckHealth + ClearActiveState</text>
+        </g>
+
+        <g class="node decision">
+          <path d="M560 1668 L735 1736 L560 1804 L385 1736 Z"></path>
+          <text x="560" y="1726" text-anchor="middle">是否需要切换位置源？</text>
+          <text x="560" y="1746" text-anchor="middle">编码轮 / 电机记步</text>
+        </g>
+
+        <g class="node special">
+          <rect x="770" y="1696" width="260" height="86" rx="8"></rect>
+          <text x="900" y="1724" text-anchor="middle">位置源切换流程</text>
+          <text x="900" y="1744" text-anchor="middle">编码轮：直接刷新保存</text>
+          <text x="900" y="1764" text-anchor="middle">电机源：一圈标定后保存或回滚</text>
+        </g>
+
+        <g class="node start">
+          <ellipse cx="560" cy="1918" rx="176" ry="32"></ellipse>
+          <text x="560" y="1915" text-anchor="middle">返回上层业务</text>
+          <text x="560" y="1934" text-anchor="middle">NO_ERROR 或具体错误码</text>
+        </g>
+
+        <path class="edge" d="M560 72 V104"></path>
+        <path class="edge" d="M370 180 H195 V318"></path>
+        <text class="edge-label" x="238" y="170">正式距离</text>
+        <path class="edge" d="M505 234 V318"></path>
+        <text class="edge-label" x="514" y="285">绝对位置</text>
+        <path class="edge" d="M615 234 V318"></path>
+        <text class="edge-label" x="637" y="285">Jog</text>
+        <path class="edge" d="M750 180 H975 V318"></path>
+        <text class="edge-label" x="815" y="170">ticks/无检测</text>
+        <path class="edge" d="M195 400 V432 H560 V454"></path>
+        <path class="edge" d="M465 400 V432 H560"></path>
+        <path class="edge" d="M735 400 V432 H560"></path>
+        <path class="edge" d="M975 400 V432 H560"></path>
+        <path class="edge" d="M560 528 V574"></path>
+        <path class="edge err-line" d="M385 642 H337"></path>
+        <text class="edge-label" x="342" y="630">失败</text>
+        <path class="edge ok-line" d="M560 710 V752"></path>
+        <text class="edge-label" x="586" y="734">通过</text>
+        <path class="edge" d="M560 836 V886"></path>
+        <path class="edge" d="M385 954 H205 V1064"></path>
+        <text class="edge-label" x="238" y="944">正式</text>
+        <path class="edge" d="M560 1022 V1064"></path>
+        <text class="edge-label" x="586" y="1044">Jog</text>
+        <path class="edge" d="M735 954 H915 V1064"></path>
+        <text class="edge-label" x="782" y="944">ticks/无检测</text>
+        <path class="edge" d="M205 1154 V1212"></path>
+        <path class="edge" d="M560 1154 V1212"></path>
+        <path class="edge" d="M915 1154 V1212"></path>
+        <path class="edge" d="M205 1298 V1328 H560 V1350"></path>
+        <path class="edge" d="M560 1298 V1350"></path>
+        <path class="edge" d="M915 1298 V1328 H560"></path>
+        <path class="edge err-line" d="M385 1420 H340"></path>
+        <text class="edge-label" x="348" y="1408">是</text>
+        <path class="edge ok-line" d="M560 1490 V1532"></path>
+        <text class="edge-label" x="586" y="1512">否</text>
+        <path class="edge" d="M560 1618 V1668"></path>
+        <path class="edge warn-line" d="M735 1736 H770"></path>
+        <text class="edge-label" x="742" y="1724">是</text>
+        <path class="edge ok-line" d="M560 1804 V1886"></path>
+        <text class="edge-label" x="586" y="1836">否</text>
+        <path class="edge ok-line" d="M900 1782 V1848 H560 V1886"></path>
+      </svg>
+    </div>
+  </section>
+
+  <section id="flow-layer-flow">
+    <h2>3. 总体分层流程</h2>
+    <div class="flow">
+      <div class="step"><b>上层业务入口</b><span class="tag blue">业务</span><br><code>measure.c</code><br><code>measure_density.c</code><br><code>measure_tank_height.c</code><br><code>test.c</code></div>
+      <div class="step"><b>MotorCtrl 对外 API</b><span class="tag blue">接口</span><br><code>MotorCtrl_MoveAndWait()</code><br><code>MotorCtrl_MoveToPosition()</code><br><code>MotorCtrl_JogMove*</code><br><code>MotorCtrl_MoveByTicksAndWait()</code></div>
+      <div class="step"><b>统一准备</b><span class="tag green">公共</span><br>速度 scope<br>运行前门控<br>命令切换检查<br>有效位置刷新</div>
+      <div class="step"><b>目标规划</b><span class="tag green">公共</span><br><code>MotorMotion_BuildRelativeTargetPlan()</code><br><code>MotorMotion_BuildAbsoluteTargetPlan()</code></div>
+      <div class="step"><b>执行策略</b><span class="tag amber">分流</span><br>正式：位置目标模式<br>Jog：速度点动模式<br>ticks：寄存器 ticks 目标<br>无检测：低检测阻塞运动</div>
+      <div class="step"><b>等待和收尾</b><span class="tag red">保护</span><br>运行健康检查<br>撞底/丢步检查<br>停稳位置同步<br>速度恢复和状态清理</div>
+    </div>
+    <div class="warn">
+      <p>流程图中的“无检测”不是无保护。当前代码仍保留驱动初始化、TMC 健康、命令切换和速度恢复，只是不走普通位置/撞底/丢步完整检测链路，不能替代正式测量运动入口。</p>
+    </div>
+  </section>
+
+  <section id="flow-entry">
+    <h2>4. 入口选择图</h2>
+    <table>
+      <thead>
+        <tr>
+          <th style="width: 18%;">场景</th>
+          <th style="width: 24%;">典型上层调用</th>
+          <th style="width: 22%;">MotorCtrl 入口</th>
+          <th>执行策略</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>液位、水位、找零点等步进测量</td>
+          <td><code>measure.c</code>、<code>measure_oilLevel.c</code>、<code>measure_waterLevel.c</code>、<code>measure_zero.c</code></td>
+          <td><code>MotorCtrl_MoveAndWait()</code></td>
+          <td>按 mm 转 ticks，下发 TMC5130 位置目标，等待到位并做最终偏差判断。</td>
+        </tr>
+        <tr>
+          <td>固定点、密度点位、瓦锡兰测后回位</td>
+          <td><code>measure_density.c</code>、<code>wartsila_density_measurement.c</code>、<code>measure.c</code></td>
+          <td><code>MotorCtrl_MoveToPosition()</code></td>
+          <td>刷新当前位置，构造绝对目标计划，再分段调用 <code>MotorCtrl_MoveAndWait()</code>。</td>
+        </tr>
+        <tr>
+          <td>串口 BJ/BJP 点动验证</td>
+          <td><code>test.c</code> 的 Jog 测试命令</td>
+          <td><code>MotorCtrl_JogMoveAndWait()</code><br><code>MotorCtrl_JogMoveToPosition()</code></td>
+          <td>目标规划后进入 Jog 状态机，按主动位置反馈减速、提前停机和运行保护。</td>
+        </tr>
+        <tr>
+          <td>电机记步切换、局部周长标定</td>
+          <td><code>measure.c</code>、<code>test.c</code>、<code>motor_ctrl_position_model.c</code></td>
+          <td><code>MotorCtrl_MoveByTicksAndWait()</code></td>
+          <td>直接按 TMC ticks 运动，确认起步、停稳和最终 XACTUAL 到目标窗口。</td>
+        </tr>
+        <tr>
+          <td>罐底、受控维护、强制调试</td>
+          <td><code>measure_tank_height.c</code>、<code>measure.c</code></td>
+          <td><code>MotorCtrl_MoveBlockingNoDetect()</code><br><code>MotorCtrl_MoveBlockingNoDetectForceDebug()</code></td>
+          <td>低检测阻塞运动，强制调试入口可绕过编码器首帧门控，但仍检查驱动健康。</td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="flow-distance">
+    <h2>5. 正式距离运动流程</h2>
+    <div class="flow">
+      <div class="step"><b>参数检查</b><span class="tag blue">入口</span><br><code>mm &gt; 0</code><br>方向合法<br>否则返回 <code>NO_ERROR</code> 或 <code>PARAM_ERROR</code></div>
+      <div class="step"><b>运行前门控</b><span class="tag green">门控</span><br><code>MotorMotion_CheckReadyForProtectedMotion(false, false)</code><br>检查安全停机、初始化、编码器首帧、位置源</div>
+      <div class="step"><b>速度 scope</b><span class="tag green">速度</span><br><code>MotorMotion_BeginSpeedScope()</code><br>可临时切换速度，异常路径统一恢复</div>
+      <div class="step"><b>刷新起点</b><span class="tag cyan">位置</span><br><code>MotorMotion_RefreshActivePositionMm()</code><br>按当前有效位置源取得 <code>startPos_mm</code></div>
+      <div class="step"><b>目标规划</b><span class="tag green">目标</span><br><code>MotorMotion_BuildRelativeTargetPlan()</code><br>计算 <code>target_mm</code>、距离、方向和范围</div>
+      <div class="step"><b>下发目标</b><span class="tag amber">执行</span><br><code>MotorCtrl_MoveNoWait()</code><br>内部 mm 转 ticks，调用 <code>stpr_moveBy()</code></div>
+    </div>
+    <div class="flow five">
+      <div class="step"><b>设置活动状态</b><br><code>MotorMotion_SetActiveState()</code><br>供显示和协议侧读取运动方向</div>
+      <div class="step"><b>启动观察</b><br><code>MotorMotion_WaitMoveStartObservation()</code><br>100 次、每次 10ms；轮询位置、速度刷新、命令切换</div>
+      <div class="step"><b>等待到位</b><br><code>MotorMotion_WaitUntilStopWithTarget()</code><br>判断驱动运动状态、目标窗口、撞底、健康和超时</div>
+      <div class="step"><b>最终偏差</b><br>刷新当前位置，计算实际移动距离和目标距离偏差；编码轮模式下超过阈值返回丢步</div>
+      <div class="step"><b>收尾</b><br><code>MotorDriver_SyncPositionOrCheckHealth()</code><br>清活动状态<br><code>MotorMotion_EndSpeedScope()</code></div>
+    </div>
+    <table class="compact">
+      <thead><tr><th>关键分支</th><th>处理方式</th></tr></thead>
+      <tbody>
+        <tr><td>目标超出罐高范围</td><td>在 <code>MotorMotion_BuildRelativeTargetPlan()</code> 内通过 <code>MotorMotion_CheckAbsoluteTargetRange()</code> 拒绝。</td></tr>
+        <tr><td>命令切换</td><td>通过 <code>MotorMotion_CheckCommandAbortWithSpeedScope()</code> 或等待循环检查停止并恢复速度。</td></tr>
+        <tr><td>到达目标窗口</td><td><code>MotorMotion_ShouldStopAtTarget()</code> 成立后调用 <code>MotorMotion_StopAtTargetAndWait()</code>。</td></tr>
+        <tr><td>停稳同步失败</td><td><code>MotorMotion_CheckStoppedAndRefresh()</code> 返回原始错误码，不清活动状态。</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="flow-absolute">
+    <h2>6. 正式绝对位置运动流程</h2>
+    <div class="flow five">
+      <div class="step"><b>绝对目标检查</b><br><code>MotorMotion_CheckAbsoluteTargetRange(target_mm)</code><br>先拒绝非法目标</div>
+      <div class="step"><b>运动门控和速度</b><br><code>MotorDriver_CheckMotionReady()</code><br><code>MotorMotion_BeginSpeedScope()</code></div>
+      <div class="step"><b>最多 10 轮重算</b><br>每轮检查命令切换，再刷新当前有效位置源</div>
+      <div class="step"><b>绝对目标规划</b><br><code>MotorMotion_BuildAbsoluteTargetPlan(cur_mm, target_mm, EPS_MM)</code><br>得到方向和剩余距离</div>
+      <div class="step"><b>分段执行</b><br>未到位时调用 <code>MotorCtrl_MoveAndWait(plan_mm, dir, 0U)</code><br>到位则恢复速度返回</div>
+    </div>
+    <div class="note">
+      <p><code>MotorCtrl_MoveToPosition()</code> 没有改成 Jog。它只共用目标规划，实际执行仍通过正式位置目标模式和 <code>MotorCtrl_MoveAndWait()</code> 完成。</p>
+    </div>
+  </section>
+
+  <section id="flow-jog">
+    <h2>7. Jog 速度点动流程</h2>
+    <h3>7.1 相对/绝对 Jog 入口</h3>
+    <div class="split">
+      <div>
+        <table>
+          <thead><tr><th>相对 Jog</th></tr></thead>
+          <tbody>
+            <tr><td><code>MotorCtrl_JogMoveAndWait(mm, dir, speed)</code></td></tr>
+            <tr><td>检查距离和方向。</td></tr>
+            <tr><td><code>MotorMotion_CheckReadyForProtectedMotion(false, true)</code>。</td></tr>
+            <tr><td>刷新当前位置，调用 <code>MotorMotion_BuildRelativeTargetPlan()</code>。</td></tr>
+            <tr><td>进入 <code>MotorMotion_JogMoveToTargetInternal(target, dir, speed)</code>。</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div>
+        <table>
+          <thead><tr><th>绝对 Jog</th></tr></thead>
+          <tbody>
+            <tr><td><code>MotorCtrl_JogMoveToPosition(target_mm, speed)</code></td></tr>
+            <tr><td>先做绝对目标范围检查。</td></tr>
+            <tr><td><code>MotorMotion_CheckReadyForProtectedMotion(false, true)</code>。</td></tr>
+            <tr><td>刷新当前位置，调用 <code>MotorMotion_BuildAbsoluteTargetPlan()</code>。</td></tr>
+            <tr><td>已到位直接返回；否则进入 Jog 内部状态机。</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <h3>7.2 Jog 内部状态机</h3>
+    <div class="flow">
+      <div class="step"><b>启动准备</b><br>速度 scope<br>更新速度参数<br>检查命令切换<br>同步 TMC 位置和健康</div>
+      <div class="step"><b>位置快照</b><br><code>MotorMotion_RefreshJogPositionChecked()</code><br>刷新有效位置源，检查快照和越界过冲</div>
+      <div class="step"><b>减速距离</b><br><code>MotorMotion_CalcJogSlowdownDistanceMm()</code><br>按当前周长、速度和加减速寄存器估算</div>
+      <div class="step"><b>速度模式启动</b><br>必要时先切爬行速度<br><code>MotorMotion_StartJogVelocity()</code><br>设置活动状态并初始化丢步检测</div>
+      <div class="step"><b>循环反馈</b><br>命令切换<br>同步健康<br>刷新位置<br>计算剩余距离</div>
+      <div class="step"><b>停机收尾</b><br>到位或提前停机时调用 <code>MotorMotion_StopJogAndRestore()</code><br>慢停、最终位置验证、恢复速度</div>
+    </div>
+    <table class="compact">
+      <thead><tr><th>循环判断</th><th>结果</th></tr></thead>
+      <tbody>
+        <tr><td><code>remaining_mm &lt;= MOTOR_JOG_POSITION_EPS_MM</code></td><td>认为到位，慢停并恢复速度。</td></tr>
+        <tr><td>进入慢速后 <code>remaining_mm &lt;= stop_distance_mm</code></td><td>提前停机，减少过冲风险。</td></tr>
+        <tr><td>剩余距离进入减速距离</td><td>切换 <code>MOTOR_JOG_CREEP_SPEED_X100</code> 并重新启动速度模式。</td></tr>
+        <tr><td><code>MotorMotion_CheckJogRuntimeGuards()</code> 失败</td><td>按错误停机，覆盖健康、撞底、丢步、运动状态和最大运行超时。</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="flow-ticks">
+    <h2>8. ticks 运动流程</h2>
+    <div class="flow five">
+      <div class="step"><b>入口</b><br><code>MotorCtrl_MoveByTicksAndWait(ticks, speed)</code><br>ticks 为 0 直接返回</div>
+      <div class="step"><b>准备</b><br><code>MotorDriver_CheckMotionReady()</code><br><code>MotorMotion_BeginSpeedScope()</code><br>更新速度参数</div>
+      <div class="step"><b>下发前读数</b><br>检查命令切换<br>读取 <code>XACTUAL</code> 作为起步前位置</div>
+      <div class="step"><b>下发 ticks</b><br><code>stpr_moveBy(&amp;stepper, &amp;ticks, velocity)</code><br>设置活动状态</div>
+      <div class="step"><b>起步确认</b><br><code>MotorMotion_WaitTicksStartChanged()</code><br>500ms 内确认 <code>XACTUAL</code> 发生变化</div>
+    </div>
+    <div class="flow four">
+      <div class="step"><b>等待停稳</b><br><code>MotorMotion_WaitStopAbortable(10)</code><br>运动中复用 <code>MotorMotion_CheckAbortRefreshAndHealth()</code></div>
+      <div class="step"><b>目标窗口</b><br><code>MotorMotion_WaitTicksReachTarget()</code><br>确认 <code>XACTUAL</code> 接近目标 ticks</div>
+      <div class="step"><b>速度恢复</b><br><code>MotorMotion_EndSpeedScope()</code><br>异常时保留原错误返回</div>
+      <div class="step"><b>用途</b><br>位置源切换、局部周长标定、内部模型操作</div>
+    </div>
+  </section>
+
+  <section id="flow-no-detect">
+    <h2>9. 无检测阻塞运动流程</h2>
+    <div class="flow five">
+      <div class="step"><b>入口</b><br><code>MotorCtrl_MoveBlockingNoDetect()</code><br><code>MotorCtrl_MoveBlockingNoDetectForceDebug()</code></div>
+      <div class="step"><b>门控差异</b><br><code>ignore_encoder_ready=false</code>：普通门控<br><code>true</code>：强制调试门控</div>
+      <div class="step"><b>准备下发</b><br>速度 scope<br>TMC 同步健康<br>mm 转 ticks<br>命令切换检查</div>
+      <div class="step"><b>阻塞等待</b><br><code>stpr_moveBy()</code><br>循环检查驱动是否仍运动</div>
+      <div class="step"><b>低检测循环</b><br><code>MotorMotion_CheckAbortRefreshAndHealth()</code><br><code>MotorLostStep_NoDetectRuntimeLogUpdate()</code></div>
+    </div>
+    <div class="warn">
+      <p>该流程不做完整目标窗口、撞底、丢步和主动位置闭环判断。用于受控调试或特定罐底流程时，现场必须控制距离、速度和人工断电条件。</p>
+    </div>
+  </section>
+
+  <section id="flow-wait-stop">
+    <h2>10. 通用等待和停机收尾流程</h2>
+    <table>
+      <thead>
+        <tr>
+          <th style="width: 24%;">函数</th>
+          <th>流程</th>
+          <th style="width: 28%;">边界</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>MotorMotion_CheckAbortRefreshAndHealth()</code></td>
+          <td>命令切换检查 -> 运行中速度刷新 -> <code>MotorDriver_SyncPositionOrCheckHealth()</code>。</td>
+          <td>不恢复速度、不做撞底/丢步、不判断目标、不清活动状态。</td>
+        </tr>
+        <tr>
+          <td><code>MotorMotion_WaitStopAbortable()</code></td>
+          <td>循环读取驱动运动状态 -> 运动中调用公共运行检查 -> 停稳后调用 <code>MotorMotion_CheckStoppedAndRefresh()</code>。</td>
+          <td>用于可被命令切换打断的通用停机等待。</td>
+        </tr>
+        <tr>
+          <td><code>MotorMotion_WaitUntilStopWithTarget()</code></td>
+          <td>读取运动状态 -> 设置活动状态 -> 命令切换 -> 速度刷新 -> TMC 同步健康 -> 目标窗口 -> 撞底 -> 健康 -> 超时。</td>
+          <td>正式距离运动主等待函数，保留目标判断和路径专属保护。</td>
+        </tr>
+        <tr>
+          <td><code>MotorMotion_StopAtTargetAndWait()</code></td>
+          <td>目标窗口成立后慢停并等待驱动停稳，期间仍检查命令切换和 TMC 健康。</td>
+          <td>停稳后清活动状态，但不做完整速度 scope 收尾。</td>
+        </tr>
+        <tr>
+          <td><code>MotorMotion_WaitStoppedAfterStopCommand()</code></td>
+          <td>停止命令后读取停止状态，直到停稳或超时；停稳后调用 <code>MotorMotion_CheckStoppedAndRefresh()</code>。</td>
+          <td>用于快停/慢停命令后的停止确认。</td>
+        </tr>
+        <tr>
+          <td><code>MotorMotion_CheckStoppedAndRefresh()</code></td>
+          <td>最终 TMC 同步和健康检查通过后清活动状态。</td>
+          <td>同步失败时直接返回错误，不清活动状态。</td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="flow-position-source">
+    <h2>11. 位置源切换流程</h2>
+    <h3>11.1 切换到编码轮</h3>
+    <div class="flow four">
+      <div class="step"><b>设置模式</b><br><code>POSITION_COUNT_MODE_ENCODER</code></div>
+      <div class="step"><b>刷新业务位置</b><br><code>update_sensor_height_from_encoder()</code></div>
+      <div class="step"><b>同步调试状态</b><br><code>MotorPosition_SyncDebugDrumState()</code></div>
+      <div class="step"><b>保存参数</b><br><code>MotorPosition_SavePositionSourceParams(true)</code></div>
+    </div>
+    <h3>11.2 切换到电机记步</h3>
+    <div class="flow">
+      <div class="step"><b>保存旧状态</b><br>旧位置源、旧局部周长、旧基准、旧错误码</div>
+      <div class="step"><b>建立基准</b><br>读取 <code>XACTUAL</code> 和编码轮长度<br>记录 <code>base_step</code>、<code>base_length</code>、<code>base_turns</code></div>
+      <div class="step"><b>临时切电机源</b><br>设置 <code>POSITION_COUNT_MODE_MOTOR</code><br>清理编码器错误码<br>按电机源更新业务位置</div>
+      <div class="step"><b>下行一圈标定</b><br><code>MotorCtrl_MoveByTicksAndWait(one_rev_ticks)</code><br>读取编码轮变化并计算实测局部周长</div>
+      <div class="step"><b>回到原位置</b><br><code>MotorCtrl_MoveByTicksAndWait(-one_rev_ticks)</code><br>重新读取 <code>XACTUAL</code> 并更新电机源位置</div>
+      <div class="step"><b>保存或回滚</b><br>实测周长有效则保存参数和持久化快照；任一步失败则 <code>MotorPosition_RollbackPositionSourceSwitch()</code></div>
+    </div>
+  </section>
+
+  <section id="flow-params">
+    <h2>12. 关键参数与状态变量</h2>
+    <h3>12.1 单位和方向口径</h3>
+    <table>
+      <thead><tr><th style="width: 22%;">项目</th><th style="width: 28%;">源码口径</th><th>说明</th></tr></thead>
+      <tbody>
+        <tr><td>方向</td><td><code>MOTOR_DIRECTION_DOWN = 0</code><br><code>MOTOR_DIRECTION_UP = 1</code></td><td>下行放带，<code>cable_length</code> 增加；上行收带，<code>cable_length</code> 减少。</td></tr>
+        <tr><td>速度</td><td><code>speed_x100</code></td><td>单位为 0.01m/min，<code>100</code> 表示 1.00m/min；<code>0</code> 表示使用当前默认速度。</td></tr>
+        <tr><td>位置和长度</td><td><code>cable_length</code>、<code>sensor_position</code>、<code>motor_distance</code></td><td>内部全局字段多为 0.1mm；流程图中若标注 mm，则已经换算为浮点 mm。</td></tr>
+        <tr><td>罐高边界</td><td><code>g_deviceParams.tankHeight / 10.0f</code></td><td>绝对目标必须在 <code>0..tankHeight</code> 范围内；当前台架额外限制 200mm 到 1000mm 尚未固化为产品代码。</td></tr>
+        <tr><td>位置源</td><td><code>POSITION_COUNT_MODE_ENCODER</code><br><code>POSITION_COUNT_MODE_MOTOR</code></td><td>编码轮模式由外部编码器刷新业务位置；电机记步模式由 XACTUAL 和卷筒模型刷新业务位置。</td></tr>
+      </tbody>
+    </table>
+
+    <h3>12.2 正式运动和停机阈值</h3>
+    <table>
+      <thead><tr><th style="width: 24%;">常量/阈值</th><th style="width: 22%;">当前值</th><th>用途</th></tr></thead>
+      <tbody>
+        <tr><td><code>EPS_MM</code></td><td><code>0.20f</code></td><td>正式位置到位公差。<code>MoveToPosition()</code> 用它判断已到位，并保证最小分段距离不小于 <code>EPS_MM * 2</code>。</td></tr>
+        <tr><td><code>MOTOR_STOP_WAIT_TIMEOUT_MS</code></td><td><code>15000U</code></td><td>停止命令后的默认停稳等待超时。</td></tr>
+        <tr><td><code>WaitUntilStopWithTarget</code> 最大等待</td><td><code>60000 * 60 ms</code></td><td>正式距离运动等待目标到位的最长等待时间，超时返回 <code>MOTOR_RUN_TIMEOUT</code>。</td></tr>
+        <tr><td>ticks 到位公差</td><td><code>1024 ticks</code></td><td><code>MotorMotion_WaitTicksReachTarget()</code> 判断 <code>XACTUAL</code> 是否进入目标窗口。</td></tr>
+        <tr><td>ticks 起步确认</td><td><code>500ms</code></td><td><code>MotorMotion_WaitTicksStartChanged()</code> 在 500ms 内确认 <code>XACTUAL</code> 变化，否则返回 <code>MOTOR_STEP_ERROR</code>。</td></tr>
+      </tbody>
+    </table>
+
+    <h3>12.3 Jog 阈值和速度模型</h3>
+    <table>
+      <thead><tr><th style="width: 24%;">常量</th><th style="width: 18%;">当前值</th><th>作用</th></tr></thead>
+      <tbody>
+        <tr><td><code>MOTOR_JOG_SLOWDOWN_DISTANCE_MM</code></td><td><code>50.0f</code></td><td>默认减速距离；实际会结合当前速度、周长和加减速参数重新估算。</td></tr>
+        <tr><td><code>MOTOR_JOG_CREEP_SPEED_X100</code></td><td><code>30U</code></td><td>接近目标后的爬行速度，单位 0.01m/min，即 0.30m/min。</td></tr>
+        <tr><td><code>MOTOR_JOG_POSITION_EPS_MM</code></td><td><code>0.5f</code></td><td>Jog 到位判定公差。</td></tr>
+        <tr><td><code>MOTOR_JOG_OVERSHOOT_LIMIT_MM</code></td><td><code>1.0f</code></td><td>Jog 过冲保护，最终停机验证和运行中越界检查都会使用。</td></tr>
+        <tr><td><code>MOTOR_JOG_POLL_MS</code></td><td><code>20U</code></td><td>Jog 主循环轮询周期。</td></tr>
+        <tr><td><code>MOTOR_JOG_START_GRACE_MS</code></td><td><code>500U</code></td><td>Jog 起步宽限期，超过后若驱动不动则返回 <code>MOTOR_STEP_ERROR</code>。</td></tr>
+        <tr><td><code>MOTOR_JOG_MAX_RUN_MS</code></td><td><code>3600000U</code></td><td>Jog 最大运行时间，超时返回 <code>MOTOR_RUN_TIMEOUT</code>。</td></tr>
+        <tr><td><code>MOTOR_JOG_BRAKE_MARGIN_X100</code></td><td><code>130U</code></td><td>减速距离估算的安全系数。</td></tr>
+        <tr><td><code>MOTOR_JOG_FINAL_STOP_MARGIN_X100</code></td><td><code>250U</code></td><td>最终提前停机距离估算的安全系数。</td></tr>
+        <tr><td><code>MOTOR_JOG_FINAL_STOP_MIN_MM</code> / <code>MAX_MM</code></td><td><code>3.0f</code> / <code>100.0f</code></td><td>最终提前停机距离的上下限。</td></tr>
+      </tbody>
+    </table>
+
+    <h3>12.4 关键状态变量</h3>
+    <table>
+      <thead><tr><th style="width: 28%;">变量/字段</th><th>用途</th><th style="width: 26%;">风险点</th></tr></thead>
+      <tbody>
+        <tr><td><code>s_motor_driver.motion_command_active</code></td><td>表示当前是否存在电机命令活动，用于显示状态和位置模型判断。</td><td>错误路径如果未清理，可能导致显示或位置刷新口径误判。</td></tr>
+        <tr><td><code>s_motor_driver.motion_wait_active</code></td><td>表示当前是否处于等待运动完成阶段。</td><td>停稳同步失败时当前 helper 故意不清状态，便于暴露异常。</td></tr>
+        <tr><td><code>g_measurement.debug_data.motor_state</code></td><td>协议/显示侧运动状态，0 静止、1 上行、2 下行。</td><td>与 TMC 实际状态不一致时，需要以底层状态和错误码排查。</td></tr>
+        <tr><td><code>g_measurement.debug_data.sensor_position</code></td><td>业务位置，单位 0.1mm，正式等待和 Jog 反馈都依赖它。</td><td>位置源未刷新、首帧缺失或切换失败会直接影响目标判断。</td></tr>
+        <tr><td><code>g_measurement.debug_data.cable_length</code></td><td>尺带长度，单位 0.1mm，用于 mm 到 ticks 和速度换算。</td><td>卷筒模型或编码轮异常会影响速度和距离估算。</td></tr>
+        <tr><td><code>g_deviceParams.position_count_mode</code></td><td>当前业务位置源，编码轮或电机记步。</td><td>切换到电机源失败必须回滚旧模式和基准。</td></tr>
+        <tr><td><code>s_motor_position.count_base_step</code> / <code>count_base_length_01mm</code></td><td>电机记步位置源的 XACTUAL 和尺带长度基准。</td><td>基准污染会导致后续所有电机记步位置错误。</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="flow-errors">
+    <h2>13. 异常与特殊出口</h2>
+    <p>电机运动函数多数直接向上层传播错误码。下表按当前流程图中最常见的出口整理，方便台架记录和日志对照。</p>
+    <table>
+      <thead><tr><th style="width: 24%;">错误/特殊码</th><th style="width: 18%;">数值</th><th>典型触发场景</th><th style="width: 28%;">处理口径</th></tr></thead>
+      <tbody>
+        <tr><td><code>NO_ERROR</code></td><td><code>0</code></td><td>已到位、距离为 0、运动正常结束。</td><td>继续上层流程或返回成功。</td></tr>
+        <tr><td><code>PARAM_ERROR</code></td><td>项目通用参数错误</td><td>方向非法、空指针、ticks/距离参数不合法。</td><td>不下发运动；调用方按参数错误处理。</td></tr>
+        <tr><td><code>PARAM_RANGE_ERROR</code></td><td><code>0x00110003</code></td><td>绝对目标不是有限值、低于 0 或高于罐高。</td><td>下发前拒绝，不能进入自动危险运动。</td></tr>
+        <tr><td><code>MEASUREMENT_POSITION_ERROR</code></td><td><code>0x000F0001</code></td><td>位置快照无效、Jog 过冲、当前位置不可信。</td><td>Jog 会停机并恢复速度；正式路径不应继续规划目标。</td></tr>
+        <tr><td><code>COMMAND_SWITCH_ABORT</code></td><td><code>STATE_SWITCH</code></td><td>运动中上层命令切换或状态切换。</td><td>停止运动，恢复临时速度，把打断返回给上层。</td></tr>
+        <tr><td><code>MOTOR_TMC_COMM_ERROR</code></td><td><code>0x000B000A</code></td><td>TMC5130 寄存器读取/写入失败。</td><td>记录日志，停止或拒绝后续运动，等待故障恢复或人工处理。</td></tr>
+        <tr><td><code>MOTOR_STEP_ERROR</code></td><td><code>0x000B0006</code></td><td>ticks 500ms 起步无 XACTUAL 变化，Jog 起步宽限后驱动不动。</td><td>视为步进运动异常，需要结合 TMC 状态和机械状态排查。</td></tr>
+        <tr><td><code>MOTOR_RUN_TIMEOUT</code></td><td><code>0x000B0009</code></td><td>正式等待、停止等待、Jog 最大运行时间或 ticks 到位等待超时。</td><td>记录超时上下文，返回上层，不应自动重复危险运动。</td></tr>
+        <tr><td><code>ENCODER_LOST_STEP</code></td><td><code>0x000C0003</code></td><td>正式距离运动最终偏差过大且当前不是电机记步位置源；Jog 运行丢步检测也会触发类似保护。</td><td>上层按丢步或位置异常处理，台架需记录起点、终点和偏差。</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="flow-risks">
+    <h2>14. 问题点与整改建议</h2>
+    <p>当前分支以结构收敛为主，未改变默认运动策略。以下问题不是本次新增 bug，而是后续评审和台架验证需要优先收敛的风险点。</p>
+    <table>
+      <thead><tr><th style="width: 22%;">问题点</th><th>影响</th><th style="width: 24%;">源码依据</th><th style="width: 26%;">建议</th></tr></thead>
+      <tbody>
+        <tr>
+          <td>默认绝对位置策略是否替换为 Jog 证据不足</td>
+          <td>Jog 更依赖主动位置反馈和减速模型，直接替换可能改变正式业务到位、过冲和错误收尾语义。</td>
+          <td><code>MotorCtrl_MoveToPosition()</code><br><code>MotorCtrl_JogMoveToPosition()</code></td>
+          <td>先完成同目标、同速度、同起点 A/B 对比，再考虑可回退实验开关。</td>
+        </tr>
+        <tr>
+          <td>台架 200mm 下限尚未定义为产品边界</td>
+          <td>测试规程限制和固件边界不一致时，现场容易误以为代码已经保护 200mm。</td>
+          <td><code>MotorMotion_CheckAbsoluteTargetRange()</code> 当前使用 <code>0..tankHeight</code></td>
+          <td>本分支保持为台架限制；若要固化，另开分支评估兼容、参数化和显示/协议文档。</td>
+        </tr>
+        <tr>
+          <td>T15/T16 故障注入未覆盖当前分支</td>
+          <td>本地构建和结构脚本不能证明编码器首帧缺失、TMC/24V 异常时的真实停机表现。</td>
+          <td><code>MotorMotion_CheckReadyForProtectedMotion()</code><br><code>MotorMotion_CheckAbortRefreshAndHealth()</code></td>
+          <td>按剩余台架验证规程补测，记录返回码、日志、停止位置和是否恢复重跑。</td>
+        </tr>
+        <tr>
+          <td>无检测路径容易被误用</td>
+          <td>该路径缺少完整目标窗口、撞底、丢步和主动位置闭环，不适合作为正式测量运动。</td>
+          <td><code>MotorMotion_MoveBlockingNoDetectInternal()</code></td>
+          <td>文档和测试命令继续标注“受控调试/特定罐底流程”，必要时加运行权限或日志提示。</td>
+        </tr>
+        <tr>
+          <td>位置源切换失败会影响后续所有位置判断</td>
+          <td>电机记步基准、局部周长或 FRAM 快照污染后，后续目标规划会基于错误位置。</td>
+          <td><code>MotorCtrl_SwitchPositionSourceToMotor()</code><br><code>MotorPosition_RollbackPositionSourceSwitch()</code></td>
+          <td>继续保留失败回滚；台架验证 YM 时记录旧模式、新模式、实测周长和回滚结果。</td>
+        </tr>
+      </tbody>
+    </table>
+    <div class="warn">
+      <p><strong>优先整改顺序：</strong>先补 T15/T16 和 A/B 对比数据；再决策 200mm 下限是否产品化；最后才进入默认运动策略替换或无检测权限收紧。</p>
+    </div>
+  </section>
+
+  <section id="flow-test-map">
+    <h2>15. 保护点和待测覆盖</h2>
+    <table>
+      <thead>
+        <tr>
+          <th style="width: 22%;">保护点</th>
+          <th>覆盖路径</th>
+          <th style="width: 26%;">当前待测</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>编码器首帧和位置源门控</td>
+          <td>正式距离、正式绝对、Jog、ticks、无检测普通入口。</td>
+          <td>T15 编码器首帧缺失故障注入。</td>
+        </tr>
+        <tr>
+          <td>TMC 通信、配置和 24V 功率级健康</td>
+          <td>运行前门控、等待循环公共检查、Jog 运行保护、停稳同步。</td>
+          <td>T16 TMC/24V 故障注入。</td>
+        </tr>
+        <tr>
+          <td>目标范围和台架安全边界</td>
+          <td>目标规划、绝对目标检查、Jog 位置刷新和越界判断。</td>
+          <td>当前台架限制为传感器位置 200mm 到 1000mm；是否固化到产品边界仍待决策。</td>
+        </tr>
+        <tr>
+          <td>正式位置模式和 Jog 模式策略差异</td>
+          <td><code>MotorCtrl_MoveToPosition()</code> 与 <code>MotorCtrl_JogMoveToPosition()</code> 共用目标规划但执行策略分离。</td>
+          <td>需要同目标、同速度、同起点 A/B 对比后才能评估是否进入行为替换实验。</td>
+        </tr>
+        <tr>
+          <td>命令切换打断</td>
+          <td>正式运动、ticks、无检测、Jog 和停机等待均保留命令切换检查。</td>
+          <td>台架回归时记录返回码、停机时机和速度恢复。</td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="flow-source-index">
+    <h2>16. 源码定位</h2>
+    <table class="compact">
+      <thead><tr><th style="width: 32%;">函数</th><th>文件和当前行号</th><th style="width: 30%;">职责</th></tr></thead>
+      <tbody>
+        <tr><td><code>MotorCtrl_MoveByTicksAndWait()</code></td><td><code>LTD_MAIN_CPU2/Services/MotorControl/motor_ctrl_motion_api.c:213</code></td><td>ticks 相对运动主入口。</td></tr>
+        <tr><td><code>MotorCtrl_MoveNoWait()</code></td><td><code>LTD_MAIN_CPU2/Services/MotorControl/motor_ctrl_motion_api.c:305</code></td><td>非阻塞位置目标下发。</td></tr>
+        <tr><td><code>MotorCtrl_MoveAndWait()</code></td><td><code>LTD_MAIN_CPU2/Services/MotorControl/motor_ctrl_motion_api.c:441</code></td><td>正式距离运动主入口。</td></tr>
+        <tr><td><code>MotorCtrl_MoveToPosition()</code></td><td><code>LTD_MAIN_CPU2/Services/MotorControl/motor_ctrl_motion_api.c:664</code></td><td>正式绝对位置运动入口。</td></tr>
+        <tr><td><code>MotorCtrl_JogMoveAndWait()</code></td><td><code>LTD_MAIN_CPU2/Services/MotorControl/motor_ctrl_motion_api.c:741</code></td><td>Jog 相对点动入口。</td></tr>
+        <tr><td><code>MotorCtrl_JogMoveToPosition()</code></td><td><code>LTD_MAIN_CPU2/Services/MotorControl/motor_ctrl_motion_api.c:780</code></td><td>Jog 绝对点动入口。</td></tr>
+        <tr><td><code>MotorMotion_MoveBlockingNoDetectInternal()</code></td><td><code>LTD_MAIN_CPU2/Services/MotorControl/motor_ctrl_motion_api.c:946</code></td><td>无检测阻塞运动内部实现。</td></tr>
+        <tr><td><code>MotorMotion_CheckReadyForProtectedMotion()</code></td><td><code>LTD_MAIN_CPU2/Services/MotorControl/motor_ctrl_motion_api.c:1380</code></td><td>运行前门控聚合。</td></tr>
+        <tr><td><code>MotorMotion_CheckAbortRefreshAndHealth()</code></td><td><code>LTD_MAIN_CPU2/Services/MotorControl/motor_ctrl_motion_api.c:1445</code></td><td>等待循环公共运行检查。</td></tr>
+        <tr><td><code>MotorMotion_CheckStoppedAndRefresh()</code></td><td><code>LTD_MAIN_CPU2/Services/MotorControl/motor_ctrl_motion_api.c:1473</code></td><td>停稳同步和状态清理。</td></tr>
+        <tr><td><code>MotorMotion_JogMoveToTargetInternal()</code></td><td><code>LTD_MAIN_CPU2/Services/MotorControl/motor_ctrl_motion_api.c:1609</code></td><td>Jog 核心状态机。</td></tr>
+        <tr><td><code>MotorMotion_BuildRelativeTargetPlan()</code></td><td><code>LTD_MAIN_CPU2/Services/MotorControl/motor_ctrl_motion_api.c:1801</code></td><td>相对目标规划。</td></tr>
+        <tr><td><code>MotorMotion_BuildAbsoluteTargetPlan()</code></td><td><code>LTD_MAIN_CPU2/Services/MotorControl/motor_ctrl_motion_api.c:1845</code></td><td>绝对目标规划。</td></tr>
+        <tr><td><code>MotorMotion_CheckJogRuntimeGuards()</code></td><td><code>LTD_MAIN_CPU2/Services/MotorControl/motor_ctrl_motion_api.c:1988</code></td><td>Jog 单轮运行保护。</td></tr>
+        <tr><td><code>MotorMotion_StopJogAndRestore()</code></td><td><code>LTD_MAIN_CPU2/Services/MotorControl/motor_ctrl_motion_api.c:2228</code></td><td>Jog 停机、最终位置验证和速度恢复。</td></tr>
+        <tr><td><code>MotorMotion_WaitUntilStopWithTarget()</code></td><td><code>LTD_MAIN_CPU2/Services/MotorControl/motor_ctrl_motion_api.c:2313</code></td><td>正式目标等待主循环。</td></tr>
+        <tr><td><code>MotorCtrl_SwitchPositionSourceToEncoder()</code></td><td><code>LTD_MAIN_CPU2/Services/MotorControl/motor_ctrl_position_model.c:403</code></td><td>切换到编码轮位置源。</td></tr>
+        <tr><td><code>MotorCtrl_SwitchPositionSourceToMotor()</code></td><td><code>LTD_MAIN_CPU2/Services/MotorControl/motor_ctrl_position_model.c:419</code></td><td>切换到电机记步并标定局部周长。</td></tr>
+      </tbody>
+    </table>
+    <div class="note">
+      <p>行号来自 2026-06-13 当前 <code>MAIN</code> 工作区快照，后续源码增删后可能变化；定位时优先按函数名搜索。</p>
+    </div>
+    <div class="ok">
+      <p><strong>结论：</strong>当前电机运动结构已经达到“公共目标规划、分策略执行、公共等待检查、分路径保护保留”的状态。后续真正会改变行为的动作不是继续合并函数，而是基于台架数据决定是否让 Jog 反馈策略影响默认绝对位置运动。</p>
+    </div>
+  </section>
+</div>
+      </div>
+    </section>
+  </div>
 </body>
 </html>

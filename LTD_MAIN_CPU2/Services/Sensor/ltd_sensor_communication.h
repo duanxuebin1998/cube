@@ -252,6 +252,13 @@ int DSM_V2_Read_MeanSquare22p5 (float *msq22p5);  /* R 18 (0x12) */
  * @return 状态码、计数值或协议数值，具体含义由调用点约定。
  */
 int DSM_V2_Read_SensorID       (uint32_t *sensor_id); /* R 22 (0x16) 整型 */
+/**
+ * @brief 自动识别阶段静默探测 LTD/V2 传感器编号。
+ *
+ * @param sensor_id 业务参数。
+ * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ */
+int DSM_V2_Probe_SensorID      (uint32_t *sensor_id); /* R 22 (0x16) 识别探测 */
 
 
 #endif /* DSM_V2_H */

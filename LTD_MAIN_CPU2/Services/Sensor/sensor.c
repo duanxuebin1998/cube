@@ -204,14 +204,14 @@ static uint32_t Sensor_ParseDsmTextId(const char *id_text, uint32_t *sensor_id_o
 }
 
 /**
- * @brief 用传感器编号读数探测 LTD/V2 传感器。
+ * @brief 用静默传感器编号读数探测 LTD/V2 传感器。
  *
- * 识别阶段直接读取编号，成功时回填 sensorID，避免后续再额外发一次编号读取命令。
+ * 识别阶段的候选协议未命中不是最终故障，因此这里不打印错误重试日志。
  */
 static uint32_t Sensor_ProbeLtdSensor(uint32_t *sensor_id_out)
 {
     uint32_t sensor_id = 0U;
-    uint32_t ret = DSM_V2_Read_SensorID(&sensor_id);
+    uint32_t ret = DSM_V2_Probe_SensorID(&sensor_id);
 
     /* 先处理异常边界，避免传感器数据状态机带故障继续运行。 */
     if ((ret == NO_ERROR) && (sensor_id_out != NULL)) {
@@ -300,11 +300,9 @@ uint32_t DetectSensorType(void) {
 		return NO_ERROR;
 	}
 
-	/* 错误 阶段：错误报警 模块：传感器 操作：通信诊断 原因：ErrorLog_GetReasonByCode(ltd_ret) 处理：继续尝试 */
-	ErrorLog_Warn(ERROR_LOG_MODULE_SENSOR,
-	              ERROR_LOG_OP_COMM_DIAG,
-	              ErrorLog_GetReasonByCode(ltd_ret),
-	              ERROR_LOG_ACTION_CONTINUE);
+	printf("探测结果：未匹配LTD/V2协议 | 原因：%s | 继续尝试DSM一代协议\r\n",
+	       ErrorLog_GetReasonByCode(ltd_ret));
+	printf("[3/3] 尝试DSM一代协议\r\n");
 	dsm_ret = Sensor_ProbeDsmSensor(&sensor_id);
 	/* 先处理异常边界，避免传感器数据状态机带故障继续运行。 */
 	if (dsm_ret == NO_ERROR) {
@@ -318,12 +316,17 @@ uint32_t DetectSensorType(void) {
 		return NO_ERROR;
 	}
 
-	/* 错误 阶段：错误报警 模块：传感器 操作：通信诊断 原因：ErrorLog_GetReasonByCode(dsm_ret) 处理：继续尝试 */
-	ErrorLog_Warn(ERROR_LOG_MODULE_SENSOR,
-	              ERROR_LOG_OP_COMM_DIAG,
-	              ErrorLog_GetReasonByCode(dsm_ret),
-	              ERROR_LOG_ACTION_CONTINUE);
+	printf("探测结果：未匹配DSM一代协议 | 原因：%s\r\n",
+	       ErrorLog_GetReasonByCode(dsm_ret));
 	ret = Sensor_SelectProbeError(ltd_ret, dsm_ret);
+	printf("识别失败：未匹配支持的传感器 | LTD原因：%s | DSM原因：%s\r\n",
+	       ErrorLog_GetReasonByCode(ltd_ret),
+	       ErrorLog_GetReasonByCode(dsm_ret));
+	/* 错误 阶段：错误报警 模块：传感器 操作：传感器识别 原因：ErrorLog_GetReasonByCode(ret) 处理：继续尝试 */
+	ErrorLog_Warn(ERROR_LOG_MODULE_SENSOR,
+	              "传感器识别",
+	              ErrorLog_GetReasonByCode(ret),
+	              ERROR_LOG_ACTION_CONTINUE);
 	Sensor_SetCommDetectError(ret);
 	return ret;
 }

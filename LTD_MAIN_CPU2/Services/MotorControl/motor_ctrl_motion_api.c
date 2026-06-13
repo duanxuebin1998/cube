@@ -54,6 +54,15 @@ typedef struct
     uint32_t restore_speed_x100;
 } MotorMotionSpeedScope;
 
+typedef struct
+{
+    float start_mm;
+    float target_mm;
+    float distance_mm;
+    int dir;
+    bool already_reached;
+} MotorMotionTargetPlan;
+
 /**
  * @brief 开始单次运动临时速度作用域并记录恢复信息。
  */
@@ -73,6 +82,17 @@ static uint32_t MotorMotion_CheckErrorWithSpeedScope(uint32_t ret,
                                                      const char *file,
                                                      uint32_t line,
                                                      const char *func);
+static uint32_t MotorMotion_CheckCommandAbortWithSpeedScope(const MotorMotionSpeedScope *scope);
+static uint32_t MotorMotion_CheckReadyForProtectedMotion(bool ignore_encoder_ready,
+                                                        bool check_health);
+static uint32_t MotorMotion_WaitMoveStartObservation(uint32_t command_display_state,
+                                                     const MotorMotionSpeedScope *speed_scope,
+                                                     const char *file,
+                                                     uint32_t line,
+                                                     const char *func);
+static uint32_t MotorMotion_CheckAbortRefreshAndHealth(TMC5130TypeDef *tmc5130,
+                                                       uint32_t *last_vel_refresh_tick);
+static uint32_t MotorMotion_CheckStoppedAndRefresh(TMC5130TypeDef *tmc5130);
 static uint32_t MotorMotion_WaitStopAbortable(uint32_t poll_ms);
 static uint32_t MotorMotion_WaitUntilStopWithTarget(TMC5130TypeDef *tmc5130,
                                                 float target_mm,
@@ -114,6 +134,14 @@ static uint32_t MotorMotion_JogMoveToTargetInternal(float target_mm,
                                                     uint32_t speed_x100);
 static uint32_t MotorMotion_RefreshActivePositionMm(float *pos_mm);
 static bool MotorMotion_IsPositionSnapshotValid(float pos_mm);
+static uint32_t MotorMotion_BuildRelativeTargetPlan(float start_mm,
+                                                    float move_mm,
+                                                    int dir,
+                                                    MotorMotionTargetPlan *plan);
+static uint32_t MotorMotion_BuildAbsoluteTargetPlan(float current_mm,
+                                                    float target_mm,
+                                                    float eps_mm,
+                                                    MotorMotionTargetPlan *plan);
 static uint32_t MotorMotion_CheckAbsoluteTargetRange(float target_mm);
 static float MotorMotion_RemainingDistanceToTarget(float current_mm,
                                                    float target_mm,
@@ -125,6 +153,8 @@ static bool MotorMotion_IsOvershotPastTarget(float current_mm,
 static uint32_t MotorMotion_RefreshJogPositionChecked(float *cur_mm,
                                                       float target_mm,
                                                       int dir);
+static uint32_t MotorMotion_CheckJogRuntimeGuards(uint32_t start_tick,
+                                                  bool *is_moving);
 static uint32_t MotorMotion_StartJogVelocity(int dir);
 static uint32_t MotorMotion_StopJogAndRestore(uint32_t ret,
                                               const MotorMotionSpeedScope *speed_scope,
@@ -402,7 +432,7 @@ uint32_t MotorCtrl_CalibrateFirstLoopCircumferenceAtZero(void)
 /**
  * @brief 按距离运动并阻塞等待停止。
  *
- * 该接口是业务流程推荐的距离运动入口，内部包含重试和保护检测。
+ * 该接口是业务流程推荐的距离运动入口，内部包含目标规划、到位等待和保护检测。
  * @param mm 移动距离，单位 mm。
  * @param dir 运动方向。
  * @param speed_x100 本次运动速度，0 表示使用默认速度。
@@ -413,13 +443,13 @@ uint32_t MotorCtrl_MoveAndWait(float mm, int dir, uint32_t speed_x100)
     uint32_t ret = NO_ERROR;
     uint32_t restore_ret = NO_ERROR;
     MotorMotionSpeedScope speed_scope = { false, 0U };
+    MotorMotionTargetPlan target_plan;
     float startPos_mm;
     float currentPos_mm;
     float targetPos_mm;
-    float total_cmd_mm = mm;
+    float total_cmd_mm;
     float moved_mm;
     float diff_pct;
-    uint32_t prewait_vel_refresh_tick;
     MotorDrumState drum;
 
     if (mm <= 0.0f) {
@@ -430,7 +460,7 @@ uint32_t MotorCtrl_MoveAndWait(float mm, int dir, uint32_t speed_x100)
     }
 
     /* 阻塞运动虽然后续会轮询保护，但首帧位置不可用时不能先下发运动。 */
-    ret = MotorDriver_CheckMotionReady();
+    ret = MotorMotion_CheckReadyForProtectedMotion(false, false);
     CHECK_ERROR(ret);
 
     const uint32_t command_display_state = MotorMotion_DisplayStateFromDirection(dir);
@@ -440,11 +470,9 @@ uint32_t MotorCtrl_MoveAndWait(float mm, int dir, uint32_t speed_x100)
     ret = MotorMotion_BeginSpeedScope(&speed_scope, speed_x100);
     CHECK_ERROR(ret);
 
-    ret = MotorDriver_StopIfCommandSwitchRequested();
-    /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
+    ret = MotorMotion_CheckCommandAbortWithSpeedScope(&speed_scope);
     if (ret != NO_ERROR) {
-        /* 提前退出前先恢复临时速度，避免下一条命令沿用本次速度。 */
-        return MotorMotion_ReturnWithSpeedScope(ret, &speed_scope);
+        return ret;
     }
 
     ret = MotorMotion_RefreshActivePositionMm(&startPos_mm);
@@ -452,25 +480,19 @@ uint32_t MotorCtrl_MoveAndWait(float mm, int dir, uint32_t speed_x100)
     if (ret != NO_ERROR) {
         return MotorMotion_ReturnWithSpeedScope(ret, &speed_scope);
     }
-    if (!MotorMotion_IsPositionSnapshotValid(startPos_mm)) {
-        return MotorMotion_ReturnWithSpeedScope(MEASUREMENT_POSITION_ERROR, &speed_scope);
-    }
 
-    /* 你现场口径：下行 pos 变小，上行 pos 变大 */
-    targetPos_mm = startPos_mm +
-                   ((dir == MOTOR_DIRECTION_UP) ? total_cmd_mm : -total_cmd_mm);
-
-    ret = MotorMotion_CheckAbsoluteTargetRange(targetPos_mm);
+    ret = MotorMotion_BuildRelativeTargetPlan(startPos_mm, mm, dir, &target_plan);
     /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
     if (ret != NO_ERROR) {
         return MotorMotion_ReturnWithSpeedScope(ret, &speed_scope);
     }
+    startPos_mm = target_plan.start_mm;
+    targetPos_mm = target_plan.target_mm;
+    total_cmd_mm = target_plan.distance_mm;
 
-    ret = MotorDriver_StopIfCommandSwitchRequested();
-    /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
+    ret = MotorMotion_CheckCommandAbortWithSpeedScope(&speed_scope);
     if (ret != NO_ERROR) {
-        /* 提前退出前先恢复临时速度，避免下一条命令沿用本次速度。 */
-        return MotorMotion_ReturnWithSpeedScope(ret, &speed_scope);
+        return ret;
     }
 
     ret = MotorCtrl_MoveNoWait(total_cmd_mm, dir, 0U);
@@ -485,29 +507,13 @@ uint32_t MotorCtrl_MoveAndWait(float mm, int dir, uint32_t speed_x100)
     }
     MotorMotion_SetActiveState(command_display_state, true);
 
-    /* 下发后先进入一个短暂的“启动观察窗口”，
-     * 期间持续做速度补偿，让起步阶段也尽快贴合目标线速度。 */
-    prewait_vel_refresh_tick = HAL_GetTick();
-    for (int i = 0; i < 100; i++) {
-        ret = MotorDriver_StopIfCommandSwitchRequested();
-        /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
-        if (ret != NO_ERROR) {
-            /* 提前退出前先恢复临时速度，避免下一条命令沿用本次速度。 */
-            return MotorMotion_ReturnWithSpeedScope(ret, &speed_scope);
-        }
-        MotorDriver_RefreshVelocityDuringRun(&stepper, &prewait_vel_refresh_tick);
-        ret = MotorCtrl_PollRuntimePosition();
-        ret = MotorMotion_CheckErrorWithSpeedScope(ret,
-                                                 &speed_scope,
-                                                 GetShortFilename(__FILE__),
-                                                 __LINE__,
-                                                 __func__);
-        /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
-        if (ret != NO_ERROR) {
-            return ret;
-        }
-        MotorMotion_SetActiveState(command_display_state, true);
-        HAL_Delay(10);
+    ret = MotorMotion_WaitMoveStartObservation(command_display_state,
+                                               &speed_scope,
+                                               GetShortFilename(__FILE__),
+                                               __LINE__,
+                                               __func__);
+    if (ret != NO_ERROR) {
+        return ret;
     }
 
     ret = MotorMotion_WaitUntilStopWithTarget(&stepper, targetPos_mm, EPS_MM, dir);
@@ -517,11 +523,9 @@ uint32_t MotorCtrl_MoveAndWait(float mm, int dir, uint32_t speed_x100)
         return MotorMotion_ReturnWithSpeedScope(ret, &speed_scope);
     }
 
-    ret = MotorDriver_StopIfCommandSwitchRequested();
-    /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
+    ret = MotorMotion_CheckCommandAbortWithSpeedScope(&speed_scope);
     if (ret != NO_ERROR) {
-        /* 提前退出前先恢复临时速度，避免下一条命令沿用本次速度。 */
-        return MotorMotion_ReturnWithSpeedScope(ret, &speed_scope);
+        return ret;
     }
 
     ret = MotorMotion_RefreshActivePositionMm(&currentPos_mm);
@@ -661,6 +665,7 @@ uint32_t MotorCtrl_MoveToPosition(float target_mm, uint32_t speed_x100)
 {
     uint32_t ret = NO_ERROR;
     MotorMotionSpeedScope speed_scope = { false, 0U };
+    MotorMotionTargetPlan target_plan;
     float cur_mm;
 
     ret = MotorMotion_CheckAbsoluteTargetRange(target_mm);
@@ -691,28 +696,29 @@ uint32_t MotorCtrl_MoveToPosition(float target_mm, uint32_t speed_x100)
         }
         printf("运动到位置 | 当前：%.3fmm | 目标：%.3fmm\r\n", cur_mm, target_mm);
 
-        if (!MotorMotion_IsPositionSnapshotValid(cur_mm)) {
+        ret = MotorMotion_BuildAbsoluteTargetPlan(cur_mm, target_mm, EPS_MM, &target_plan);
+        if (ret == MEASUREMENT_POSITION_ERROR) {
             printf("运动到位置 | 当前快照异常：%.3fmm，取消移动\r\n", cur_mm);
-            return MotorMotion_ReturnWithSpeedScope(MEASUREMENT_POSITION_ERROR, &speed_scope);
+        }
+        /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
+        if (ret != NO_ERROR) {
+            return MotorMotion_ReturnWithSpeedScope(ret, &speed_scope);
         }
 
-        float delta = target_mm - cur_mm;
-
-        if (fabsf(delta) <= EPS_MM) {
+        if (target_plan.already_reached) {
             printf("到位 | 当前：%.3fmm ≈ 目标：%.3fmm (±%.2fmm)\r\n",
                    cur_mm, target_mm, EPS_MM);
             return MotorMotion_ReturnWithSpeedScope(NO_ERROR, &speed_scope);
         }
 
-        int dir = (delta > 0.0f) ? MOTOR_DIRECTION_UP : MOTOR_DIRECTION_DOWN;
         printf("运动到位置 | 方向：%s | 剩余距离：%.3fmm\r\n",
-               MotorCtrl_DirectionText(dir), fabsf(delta));
+               MotorCtrl_DirectionText(target_plan.dir), target_plan.distance_mm);
 
-        float plan_mm = fabsf(delta);
+        float plan_mm = target_plan.distance_mm;
         if (plan_mm < (EPS_MM * 2.0f)) {
             plan_mm = (EPS_MM * 2.0f);
         }
-        ret = MotorCtrl_MoveAndWait(plan_mm, dir, 0U);
+        ret = MotorCtrl_MoveAndWait(plan_mm, target_plan.dir, 0U);
         /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
         if (ret != NO_ERROR) {
             /* 提前退出前先恢复临时速度，避免下一条命令沿用本次速度。 */
@@ -735,7 +741,7 @@ uint32_t MotorCtrl_MoveToPosition(float target_mm, uint32_t speed_x100)
 uint32_t MotorCtrl_JogMoveAndWait(float mm, int dir, uint32_t speed_x100)
 {
     float start_mm;
-    float target_mm;
+    MotorMotionTargetPlan target_plan;
     uint32_t ret;
 
     if (mm <= 0.0f) {
@@ -745,9 +751,7 @@ uint32_t MotorCtrl_JogMoveAndWait(float mm, int dir, uint32_t speed_x100)
         return PARAM_ERROR;
     }
 
-    ret = MotorDriver_CheckMotionReady();
-    CHECK_ERROR(ret);
-    ret = MotorDriver_CheckHealth(MOTOR_DRIVER_HEALTH_BEFORE_MOTION);
+    ret = MotorMotion_CheckReadyForProtectedMotion(false, true);
     CHECK_ERROR(ret);
 
     ret = MotorMotion_RefreshActivePositionMm(&start_mm);
@@ -755,17 +759,13 @@ uint32_t MotorCtrl_JogMoveAndWait(float mm, int dir, uint32_t speed_x100)
     if (ret != NO_ERROR) {
         return ret;
     }
-    if (!MotorMotion_IsPositionSnapshotValid(start_mm)) {
-        return MEASUREMENT_POSITION_ERROR;
-    }
 
-    target_mm = start_mm + ((dir == MOTOR_DIRECTION_UP) ? mm : -mm);
-    ret = MotorMotion_CheckAbsoluteTargetRange(target_mm);
+    ret = MotorMotion_BuildRelativeTargetPlan(start_mm, mm, dir, &target_plan);
     /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
     if (ret != NO_ERROR) {
         return ret;
     }
-    return MotorMotion_JogMoveToTargetInternal(target_mm, dir, speed_x100);
+    return MotorMotion_JogMoveToTargetInternal(target_plan.target_mm, target_plan.dir, speed_x100);
 }
 
 /**
@@ -779,17 +779,14 @@ uint32_t MotorCtrl_JogMoveAndWait(float mm, int dir, uint32_t speed_x100)
  */
 uint32_t MotorCtrl_JogMoveToPosition(float target_mm, uint32_t speed_x100)
 {
+    MotorMotionTargetPlan target_plan;
     float cur_mm;
-    float delta_mm;
-    int dir;
     uint32_t ret;
 
     ret = MotorMotion_CheckAbsoluteTargetRange(target_mm);
     CHECK_ERROR(ret);
 
-    ret = MotorDriver_CheckMotionReady();
-    CHECK_ERROR(ret);
-    ret = MotorDriver_CheckHealth(MOTOR_DRIVER_HEALTH_BEFORE_MOTION);
+    ret = MotorMotion_CheckReadyForProtectedMotion(false, true);
     CHECK_ERROR(ret);
 
     ret = MotorMotion_RefreshActivePositionMm(&cur_mm);
@@ -797,17 +794,20 @@ uint32_t MotorCtrl_JogMoveToPosition(float target_mm, uint32_t speed_x100)
     if (ret != NO_ERROR) {
         return ret;
     }
-    if (!MotorMotion_IsPositionSnapshotValid(cur_mm)) {
-        return MEASUREMENT_POSITION_ERROR;
-    }
 
-    delta_mm = target_mm - cur_mm;
-    if (fabsf(delta_mm) <= MOTOR_JOG_POSITION_EPS_MM) {
+    ret = MotorMotion_BuildAbsoluteTargetPlan(cur_mm,
+                                              target_mm,
+                                              MOTOR_JOG_POSITION_EPS_MM,
+                                              &target_plan);
+    /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
+    if (ret != NO_ERROR) {
+        return ret;
+    }
+    if (target_plan.already_reached) {
         return NO_ERROR;
     }
 
-    dir = (delta_mm > 0.0f) ? MOTOR_DIRECTION_UP : MOTOR_DIRECTION_DOWN;
-    return MotorMotion_JogMoveToTargetInternal(target_mm, dir, speed_x100);
+    return MotorMotion_JogMoveToTargetInternal(target_plan.target_mm, target_plan.dir, speed_x100);
 }
 /**
  * @brief 急停电机并刷新状态。
@@ -957,16 +957,7 @@ static uint32_t MotorMotion_MoveBlockingNoDetectInternal(float mm,
     if (!MotorDriver_IsDirValid(dir)) return PARAM_ERROR;
 
     /* 无检测只跳过撞底/丢步检测；强制调试入口才允许额外绕过编码器首帧。 */
-    ret = ignore_encoder_ready ? MotorDriver_CheckMotionReadyForceDebug()
-                               : MotorDriver_CheckMotionReady();
-    /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
-    if (ret != NO_ERROR) {
-        return ret;
-    }
-
-    /* 无检测运动也必须先确认驱动健康，否则会掩盖 24V 断电故障。 */
-    ret = MotorDriver_CheckHealth(MOTOR_DRIVER_HEALTH_BEFORE_MOTION);
-    /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
+    ret = MotorMotion_CheckReadyForProtectedMotion(ignore_encoder_ready, true);
     if (ret != NO_ERROR) {
         return ret;
     }
@@ -1033,14 +1024,7 @@ static uint32_t MotorMotion_MoveBlockingNoDetectInternal(float mm,
         if (!is_moving) {
             break;
         }
-        ret = MotorDriver_StopIfCommandSwitchRequested();
-        /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
-        if (ret != NO_ERROR) {
-            /* 提前退出前先恢复临时速度，避免下一条命令沿用本次速度。 */
-            return MotorMotion_ReturnWithSpeedScope(ret, &speed_scope);
-        }
-        MotorDriver_RefreshVelocityDuringRun(&stepper, &last_vel_refresh_tick);
-        ret = MotorDriver_SyncPositionOrCheckHealth(&stepper);
+        ret = MotorMotion_CheckAbortRefreshAndHealth(&stepper, &last_vel_refresh_tick);
         /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
         if (ret != NO_ERROR) {
             /* 提前退出前先恢复临时速度，避免下一条命令沿用本次速度。 */
@@ -1089,14 +1073,7 @@ static uint32_t MotorMotion_WaitTicksStartChanged(int32_t requested_ticks,
     char detail[128];
 
     do {
-        ret = MotorDriver_StopIfCommandSwitchRequested();
-        /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
-        if (ret != NO_ERROR) {
-            /* 提前退出前先恢复临时速度，避免下一条命令沿用本次速度。 */
-            return MotorMotion_ReturnWithSpeedScope(ret, speed_scope);
-        }
-        MotorDriver_RefreshVelocityDuringRun(&stepper, &last_vel_refresh_tick);
-        ret = MotorDriver_SyncPositionOrCheckHealth(&stepper);
+        ret = MotorMotion_CheckAbortRefreshAndHealth(&stepper, &last_vel_refresh_tick);
         /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
         if (ret != NO_ERROR) {
             /* 提前退出前先恢复临时速度，避免下一条命令沿用本次速度。 */
@@ -1377,6 +1354,138 @@ static uint32_t MotorMotion_CheckErrorWithSpeedScope(uint32_t ret,
 
     return NO_ERROR;
 }
+
+/*
+ * 函数用途：检查命令切换打断，并在打断时恢复本次临时速度。
+ * 调用场景：阻塞运动入口已经进入 MotorMotionSpeedScope 后使用。
+ * 关键约束：返回非 NO_ERROR 时已经完成速度恢复，调用方直接返回该错误码。
+ */
+static uint32_t MotorMotion_CheckCommandAbortWithSpeedScope(const MotorMotionSpeedScope *scope)
+{
+    uint32_t ret;
+
+    ret = MotorDriver_StopIfCommandSwitchRequested();
+    if (ret != NO_ERROR) {
+        return MotorMotion_ReturnWithSpeedScope(ret, scope);
+    }
+
+    return NO_ERROR;
+}
+
+/*
+ * 函数用途：统一执行受保护运动的运行前门控。
+ * 调用场景：正式运动、Jog 运动和无检测运动下发前。
+ * 关键约束：只封装既有就绪/健康检查；是否绕过编码器首帧和是否检查健康由调用方显式选择。
+ */
+static uint32_t MotorMotion_CheckReadyForProtectedMotion(bool ignore_encoder_ready,
+                                                        bool check_health)
+{
+    uint32_t ret;
+
+    ret = ignore_encoder_ready ? MotorDriver_CheckMotionReadyForceDebug()
+                               : MotorDriver_CheckMotionReady();
+    if (ret != NO_ERROR) {
+        return ret;
+    }
+
+    if (check_health) {
+        ret = MotorDriver_CheckHealth(MOTOR_DRIVER_HEALTH_BEFORE_MOTION);
+        if (ret != NO_ERROR) {
+            return ret;
+        }
+    }
+
+    return NO_ERROR;
+}
+
+/*
+ * 函数用途：等待正式位置运动下发后的启动观察窗口。
+ * 调用场景：MotorCtrl_MoveAndWait() 下发 MoveNoWait 后，到位等待前。
+ * 关键约束：只抽取原有 100 次、10ms 观察流程，不改变启动节奏和保护顺序。
+ */
+static uint32_t MotorMotion_WaitMoveStartObservation(uint32_t command_display_state,
+                                                     const MotorMotionSpeedScope *speed_scope,
+                                                     const char *file,
+                                                     uint32_t line,
+                                                     const char *func)
+{
+    uint32_t ret;
+    uint32_t prewait_vel_refresh_tick;
+
+    prewait_vel_refresh_tick = HAL_GetTick();
+    for (int i = 0; i < 100; i++) {
+        ret = MotorMotion_CheckCommandAbortWithSpeedScope(speed_scope);
+        if (ret != NO_ERROR) {
+            return ret;
+        }
+
+        MotorDriver_RefreshVelocityDuringRun(&stepper, &prewait_vel_refresh_tick);
+        ret = MotorCtrl_PollRuntimePosition();
+        ret = MotorMotion_CheckErrorWithSpeedScope(ret,
+                                                  speed_scope,
+                                                  file,
+                                                  line,
+                                                  func);
+        if (ret != NO_ERROR) {
+            return ret;
+        }
+
+        MotorMotion_SetActiveState(command_display_state, true);
+        HAL_Delay(10);
+    }
+
+    return NO_ERROR;
+}
+
+/*
+ * 函数用途：集中执行等待循环内的命令切换、速度刷新和 TMC 同步/健康检查。
+ * 调用场景：阻塞等待循环已确认电机仍在运动后，每轮进入路径专属检查前。
+ * 关键约束：不处理路径专属的速度恢复、撞底、丢步、目标判断或停机收尾。
+ */
+static uint32_t MotorMotion_CheckAbortRefreshAndHealth(TMC5130TypeDef *tmc5130,
+                                                       uint32_t *last_vel_refresh_tick)
+{
+    uint32_t ret;
+
+    if ((tmc5130 == NULL) || (last_vel_refresh_tick == NULL)) {
+        return PARAM_ERROR;
+    }
+
+    ret = MotorDriver_StopIfCommandSwitchRequested();
+    if (ret != NO_ERROR) {
+        return ret;
+    }
+
+    MotorDriver_RefreshVelocityDuringRun(tmc5130, last_vel_refresh_tick);
+    ret = MotorDriver_SyncPositionOrCheckHealth(tmc5130);
+    if (ret != NO_ERROR) {
+        return ret;
+    }
+
+    return NO_ERROR;
+}
+
+/*
+ * 函数用途：电机确认停稳后同步最终位置并清理活动状态。
+ * 调用场景：等待循环发现驱动不再运动后，返回 NO_ERROR 前使用。
+ * 关键约束：只做最终同步和状态清理；同步失败时保留原始错误码且不清活动状态。
+ */
+static uint32_t MotorMotion_CheckStoppedAndRefresh(TMC5130TypeDef *tmc5130)
+{
+    uint32_t ret;
+
+    if (tmc5130 == NULL) {
+        return PARAM_ERROR;
+    }
+
+    ret = MotorDriver_SyncPositionOrCheckHealth(tmc5130);
+    if (ret != NO_ERROR) {
+        return ret;
+    }
+
+    MotorMotion_ClearActiveState();
+    return NO_ERROR;
+}
 /**
  * @brief 将业务方向转换为上层显示状态。
  */
@@ -1517,9 +1626,7 @@ static uint32_t MotorMotion_JogMoveToTargetInternal(float target_mm,
         return PARAM_ERROR;
     }
 
-    ret = MotorDriver_CheckMotionReady();
-    CHECK_ERROR(ret);
-    ret = MotorDriver_CheckHealth(MOTOR_DRIVER_HEALTH_BEFORE_MOTION);
+    ret = MotorMotion_CheckReadyForProtectedMotion(false, true);
     CHECK_ERROR(ret);
 
     ret = MotorMotion_BeginSpeedScope(&speed_scope, speed_x100);
@@ -1645,35 +1752,9 @@ static uint32_t MotorMotion_JogMoveToTargetInternal(float target_mm,
             MotorDriver_RefreshVelocityDuringRun(&stepper, &last_vel_refresh_tick);
         }
 
-        ret = MotorDriver_CheckHealth(MOTOR_DRIVER_HEALTH_RUNNING);
-        /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
+        ret = MotorMotion_CheckJogRuntimeGuards(start_tick, &is_moving);
         if (ret != NO_ERROR) {
             return MotorMotion_StopJogAndRestore(ret, &speed_scope, target_mm, dir);
-        }
-
-        ret = CheckWeightCollision();
-        /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
-        if (ret != NO_ERROR) {
-            return MotorMotion_StopJogAndRestore(ret, &speed_scope, target_mm, dir);
-        }
-
-        ret = MotorCtrl_CheckLostStepAutoTiming(g_measurement.debug_data.sensor_position);
-        /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
-        if (ret != NO_ERROR) {
-            return MotorMotion_StopJogAndRestore(ret, &speed_scope, target_mm, dir);
-        }
-
-        ret = MotorCtrl_IsDriverMoving(&stepper, &is_moving);
-        /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
-        if (ret != NO_ERROR) {
-            return MotorMotion_StopJogAndRestore(ret, &speed_scope, target_mm, dir);
-        }
-        if ((!is_moving) && ((HAL_GetTick() - start_tick) > MOTOR_JOG_START_GRACE_MS)) {
-            return MotorMotion_StopJogAndRestore(MOTOR_STEP_ERROR, &speed_scope, target_mm, dir);
-        }
-
-        if ((HAL_GetTick() - start_tick) > MOTOR_JOG_MAX_RUN_MS) {
-            return MotorMotion_StopJogAndRestore(MOTOR_RUN_TIMEOUT, &speed_scope, target_mm, dir);
         }
 
         HAL_Delay(MOTOR_JOG_POLL_MS);
@@ -1710,6 +1791,95 @@ static bool MotorMotion_IsPositionSnapshotValid(float pos_mm)
     min_valid_mm = -guard_tank_height_mm - 1000.0f;
     max_valid_mm = guard_tank_height_mm + 1000.0f;
     return (pos_mm >= min_valid_mm) && (pos_mm <= max_valid_mm);
+}
+
+/*
+ * 函数用途：按当前位置、相对距离和方向生成统一目标规划。
+ * 调用场景：正式相对运动和 Jog 相对点动入口共用。
+ * 关键约束：只做目标计算和边界检查，不决定后续使用位置目标模式还是速度点动模式。
+ */
+static uint32_t MotorMotion_BuildRelativeTargetPlan(float start_mm,
+                                                    float move_mm,
+                                                    int dir,
+                                                    MotorMotionTargetPlan *plan)
+{
+    uint32_t ret;
+
+    if (plan == NULL) {
+        return PARAM_ERROR;
+    }
+
+    plan->start_mm = start_mm;
+    plan->target_mm = start_mm;
+    plan->distance_mm = 0.0f;
+    plan->dir = dir;
+    plan->already_reached = false;
+
+    if (move_mm <= 0.0f) {
+        plan->already_reached = true;
+        return NO_ERROR;
+    }
+    if (!MotorDriver_IsDirValid(dir)) {
+        return PARAM_ERROR;
+    }
+    if (!MotorMotion_IsPositionSnapshotValid(start_mm)) {
+        return MEASUREMENT_POSITION_ERROR;
+    }
+
+    plan->distance_mm = move_mm;
+    plan->target_mm = start_mm + ((dir == MOTOR_DIRECTION_UP) ? move_mm : -move_mm);
+
+    ret = MotorMotion_CheckAbsoluteTargetRange(plan->target_mm);
+    if (ret != NO_ERROR) {
+        return ret;
+    }
+
+    return NO_ERROR;
+}
+
+/*
+ * 函数用途：按当前位置和绝对目标生成统一目标规划。
+ * 调用场景：正式到绝对位置和 Jog 到绝对位置入口共用。
+ * 关键约束：只输出方向、剩余距离和是否已经到位，调用方继续选择执行策略。
+ */
+static uint32_t MotorMotion_BuildAbsoluteTargetPlan(float current_mm,
+                                                    float target_mm,
+                                                    float eps_mm,
+                                                    MotorMotionTargetPlan *plan)
+{
+    float delta_mm;
+    uint32_t ret;
+
+    if (plan == NULL) {
+        return PARAM_ERROR;
+    }
+
+    plan->start_mm = current_mm;
+    plan->target_mm = target_mm;
+    plan->distance_mm = 0.0f;
+    plan->dir = MOTOR_DIRECTION_UP;
+    plan->already_reached = false;
+
+    ret = MotorMotion_CheckAbsoluteTargetRange(target_mm);
+    if (ret != NO_ERROR) {
+        return ret;
+    }
+    if (!MotorMotion_IsPositionSnapshotValid(current_mm)) {
+        return MEASUREMENT_POSITION_ERROR;
+    }
+
+    if (eps_mm < 0.0f) {
+        eps_mm = 0.0f;
+    }
+    delta_mm = target_mm - current_mm;
+    if (fabsf(delta_mm) <= eps_mm) {
+        plan->already_reached = true;
+        return NO_ERROR;
+    }
+
+    plan->dir = (delta_mm > 0.0f) ? MOTOR_DIRECTION_UP : MOTOR_DIRECTION_DOWN;
+    plan->distance_mm = fabsf(delta_mm);
+    return NO_ERROR;
 }
 
 /**
@@ -1805,6 +1975,50 @@ static uint32_t MotorMotion_RefreshJogPositionChecked(float *cur_mm,
                                          dir,
                                          MOTOR_JOG_OVERSHOOT_LIMIT_MM)) {
         return MEASUREMENT_POSITION_ERROR;
+    }
+
+    return NO_ERROR;
+}
+
+/*
+ * 函数用途：集中执行 Jog 循环每轮末尾的运行保护检查。
+ * 调用场景：速度点动模式已经启动后，每轮位置、减速和停机判断完成之后。
+ * 关键约束：不计算剩余距离、不切换速度、不下发停机；只返回应由上层慢停收尾的错误码。
+ */
+static uint32_t MotorMotion_CheckJogRuntimeGuards(uint32_t start_tick,
+                                                  bool *is_moving)
+{
+    uint32_t ret;
+
+    if (is_moving == NULL) {
+        return PARAM_ERROR;
+    }
+
+    ret = MotorDriver_CheckHealth(MOTOR_DRIVER_HEALTH_RUNNING);
+    if (ret != NO_ERROR) {
+        return ret;
+    }
+
+    ret = CheckWeightCollision();
+    if (ret != NO_ERROR) {
+        return ret;
+    }
+
+    ret = MotorCtrl_CheckLostStepAutoTiming(g_measurement.debug_data.sensor_position);
+    if (ret != NO_ERROR) {
+        return ret;
+    }
+
+    ret = MotorCtrl_IsDriverMoving(&stepper, is_moving);
+    if (ret != NO_ERROR) {
+        return ret;
+    }
+    if ((!(*is_moving)) && ((HAL_GetTick() - start_tick) > MOTOR_JOG_START_GRACE_MS)) {
+        return MOTOR_STEP_ERROR;
+    }
+
+    if ((HAL_GetTick() - start_tick) > MOTOR_JOG_MAX_RUN_MS) {
+        return MOTOR_RUN_TIMEOUT;
     }
 
     return NO_ERROR;
@@ -2076,22 +2290,14 @@ static uint32_t MotorMotion_WaitStopAbortable(uint32_t poll_ms)
         if (!is_moving) {
             break;
         }
-        CHECK_COMMAND_SWITCH_AND_STOP(COMMAND_SWITCH_ABORT);
-        MotorDriver_RefreshVelocityDuringRun(&stepper, &last_vel_refresh_tick);
-        ret = MotorDriver_SyncPositionOrCheckHealth(&stepper);
+        ret = MotorMotion_CheckAbortRefreshAndHealth(&stepper, &last_vel_refresh_tick);
         /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
         if (ret != NO_ERROR) {
             return ret;
         }
         HAL_Delay(poll_ms);
     }
-    ret = MotorDriver_SyncPositionOrCheckHealth(&stepper);
-    /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
-    if (ret != NO_ERROR) {
-        return ret;
-    }
-    MotorMotion_ClearActiveState();
-    return NO_ERROR;
+    return MotorMotion_CheckStoppedAndRefresh(&stepper);
 }
 
 /**
@@ -2173,9 +2379,8 @@ static uint32_t MotorMotion_WaitUntilStopWithTarget(TMC5130TypeDef *tmc5130,
         HAL_Delay(50);
     }
 
-    ret = MotorDriver_SyncPositionOrCheckHealth(tmc5130);
+    ret = MotorMotion_CheckStoppedAndRefresh(tmc5130);
     CHECK_ERROR(ret);
-    MotorMotion_ClearActiveState();
     return NO_ERROR;
 }
 
@@ -2212,13 +2417,7 @@ static uint32_t MotorMotion_WaitStoppedAfterStopCommand(uint32_t timeout_ms)
         }
 
         if (!is_moving) {
-            ret = MotorDriver_SyncPositionOrCheckHealth(&stepper);
-            /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
-            if (ret != NO_ERROR) {
-                return ret;
-            }
-            MotorMotion_ClearActiveState();
-            return NO_ERROR;
+            return MotorMotion_CheckStoppedAndRefresh(&stepper);
         }
 
         /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */

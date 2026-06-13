@@ -3,25 +3,25 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>SI7000 协议兼容性与指令映射整理</title>
+  <title>SI7000 协议兼容情况整理</title>
   <style>
     :root {
       color-scheme: light;
-      --bg: #f5f7fa;
+      --bg: #eef3f7;
       --paper: #ffffff;
-      --ink: #1f2937;
-      --muted: #5b6776;
-      --line: #d6dde6;
-      --head: #243447;
-      --blue: #1f6feb;
-      --green: #16794c;
-      --amber: #9a5b00;
-      --red: #b42318;
-      --code: #edf2f7;
-      --soft-blue: #e9f2ff;
-      --soft-green: #e8f5ee;
-      --soft-amber: #fff4d8;
-      --soft-red: #ffecec;
+      --ink: #17202a;
+      --muted: #5d6b7a;
+      --line: #cfdae5;
+      --head: #15283c;
+      --blue: #145cc7;
+      --green: #137a4b;
+      --amber: #986200;
+      --red: #b3261e;
+      --soft-blue: #e7f0ff;
+      --soft-green: #e6f5ee;
+      --soft-amber: #fff3d6;
+      --soft-red: #ffe9e8;
+      --code: #eef2f6;
     }
 
     * {
@@ -36,15 +36,15 @@
     }
 
     main {
-      width: min(1220px, calc(100% - 32px));
+      width: min(1240px, calc(100% - 32px));
       margin: 0 auto;
-      padding: 28px 0 52px;
+      padding: 28px 0 56px;
     }
 
     header {
-      padding: 28px 0 18px;
+      margin-bottom: 20px;
+      padding: 26px 0 18px;
       border-bottom: 2px solid var(--line);
-      margin-bottom: 22px;
     }
 
     h1,
@@ -58,7 +58,7 @@
 
     h1 {
       font-size: 32px;
-      margin-bottom: 10px;
+      margin-bottom: 8px;
     }
 
     h2 {
@@ -85,6 +85,44 @@
       font-size: 0.94em;
     }
 
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: var(--paper);
+      border: 1px solid var(--line);
+      margin: 10px 0 18px;
+    }
+
+    th,
+    td {
+      border: 1px solid var(--line);
+      padding: 9px 10px;
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th {
+      background: #f4f7fa;
+      color: var(--head);
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    ul {
+      margin: 8px 0 14px 22px;
+      padding: 0;
+    }
+
+    li {
+      margin: 3px 0;
+    }
+
+    .lead {
+      color: var(--muted);
+      max-width: 960px;
+      font-size: 16px;
+    }
+
     .meta {
       display: grid;
       grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -94,10 +132,9 @@
 
     .meta div,
     .panel,
+    .summary-card,
     .note,
-    .warn,
-    .ok,
-    .gap {
+    .risk {
       background: var(--paper);
       border: 1px solid var(--line);
       border-radius: 8px;
@@ -119,152 +156,122 @@
       display: grid;
       grid-template-columns: repeat(4, minmax(0, 1fr));
       gap: 12px;
-      margin: 18px 0 6px;
+      margin: 18px 0 24px;
+    }
+
+    .summary-card {
+      padding: 14px;
+    }
+
+    .summary-card strong {
+      display: block;
+      font-size: 15px;
+      margin-bottom: 5px;
+    }
+
+    .summary-card span {
+      color: var(--muted);
+      font-size: 13px;
     }
 
     .panel {
-      padding: 14px 15px;
-      min-height: 132px;
-    }
-
-    .panel strong {
-      display: block;
-      font-size: 17px;
-      margin-bottom: 4px;
-    }
-
-    .panel small {
-      color: var(--muted);
-    }
-
-    .status-good {
-      border-top: 4px solid var(--green);
-    }
-
-    .status-partial {
-      border-top: 4px solid var(--amber);
-    }
-
-    .status-risk {
-      border-top: 4px solid var(--red);
-    }
-
-    .status-info {
-      border-top: 4px solid var(--blue);
-    }
-
-    .note,
-    .warn,
-    .ok,
-    .gap {
-      padding: 13px 15px;
-      margin: 12px 0;
-    }
-
-    .note {
-      background: var(--soft-blue);
-      border-left: 4px solid var(--blue);
-    }
-
-    .ok {
-      background: var(--soft-green);
-      border-left: 4px solid var(--green);
-    }
-
-    .warn {
-      background: var(--soft-amber);
-      border-left: 4px solid var(--amber);
-    }
-
-    .gap {
-      background: var(--soft-red);
-      border-left: 4px solid var(--red);
-    }
-
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      background: var(--paper);
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      overflow: hidden;
+      padding: 15px 16px;
       margin: 12px 0 18px;
     }
 
-    th,
-    td {
-      border-bottom: 1px solid var(--line);
-      padding: 9px 10px;
-      text-align: left;
-      vertical-align: top;
+    .note {
+      padding: 12px 14px;
+      background: var(--soft-blue);
+      border-color: #bad2f4;
     }
 
-    th {
-      background: #eef3f8;
-      color: var(--head);
-      font-weight: 700;
-      white-space: nowrap;
-    }
-
-    tr:last-child td {
-      border-bottom: 0;
-    }
-
-    ul {
-      margin: 8px 0 8px 22px;
-      padding: 0;
-    }
-
-    li {
-      margin: 4px 0;
+    .risk {
+      padding: 12px 14px;
+      background: var(--soft-amber);
+      border-color: #eed18b;
     }
 
     .tag {
       display: inline-block;
-      min-width: 64px;
-      padding: 1px 7px;
+      margin: 1px 4px 1px 0;
+      padding: 2px 7px;
       border-radius: 999px;
-      color: #ffffff;
       font-size: 12px;
-      text-align: center;
+      font-weight: 700;
+      border: 1px solid transparent;
       white-space: nowrap;
     }
 
-    .done {
-      background: var(--green);
+    .ok {
+      color: var(--green);
+      background: var(--soft-green);
+      border-color: #b7dfca;
     }
 
     .partial {
-      background: var(--amber);
+      color: var(--amber);
+      background: var(--soft-amber);
+      border-color: #edd084;
     }
 
-    .todo {
-      background: var(--red);
+    .fixed {
+      color: var(--blue);
+      background: var(--soft-blue);
+      border-color: #b7cff4;
     }
 
-    .readonly {
-      background: var(--blue);
+    .blocked {
+      color: var(--red);
+      background: var(--soft-red);
+      border-color: #f1bbb8;
     }
 
-    .small {
-      color: var(--muted);
-      font-size: 13px;
+    .grid-2 {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .compact td,
+    .compact th {
+      padding: 7px 9px;
+      font-size: 14px;
     }
 
     .nowrap {
       white-space: nowrap;
     }
 
-    @media (max-width: 860px) {
+    .source-list {
+      columns: 2;
+    }
+
+    .footer {
+      color: var(--muted);
+      font-size: 13px;
+      margin-top: 28px;
+      padding-top: 16px;
+      border-top: 1px solid var(--line);
+    }
+
+    @media (max-width: 920px) {
       .meta,
-      .summary {
+      .summary,
+      .grid-2 {
         grid-template-columns: 1fr;
+      }
+
+      .source-list {
+        columns: 1;
+      }
+
+      h1 {
+        font-size: 26px;
       }
 
       table {
         display: block;
         overflow-x: auto;
-        white-space: nowrap;
       }
     }
   </style>
@@ -272,368 +279,158 @@
 <body>
   <main>
     <header>
-      <h1>SI7000 协议兼容性与指令映射整理</h1>
-      <p>基于当前工作区源码、SI7000 映射文档和协议检查脚本整理。当前结论是：第一版 SI7000 PLC 兼容层已能覆盖主要 Modbus 读写和核心测量数据，但还不是 SI7000 原机行为的完全等价实现。</p>
+      <h1>SI7000 协议兼容情况整理</h1>
+      <p class="lead">本文面向 PLC 联调、项目评审和后续需求确认，按当前工程源码与既有 SI7000 文档整理第一版兼容状态。结论只覆盖当前已经落地或明确固定返回的行为，未确认的现场需求单独列为限制和后续确认项。</p>
       <div class="meta">
-        <div>
-          <span class="label">整理日期</span>
-          2026-06-03
-        </div>
-        <div>
-          <span class="label">兼容层位置</span>
-          CPU3 外部串口协议转换层
-        </div>
-        <div>
-          <span class="label">通信格式</span>
-          Modbus RTU，9600，8O1
-        </div>
-        <div>
-          <span class="label">验证脚本</span>
-          SI7000 地址表和共享协议契约均通过
-        </div>
+        <div><span class="label">整理日期</span>2026-06-13</div>
+        <div><span class="label">兼容层位置</span>CPU3 外部串口侧</div>
+        <div><span class="label">外部协议</span>SI7000 Modbus RTU 从站</div>
+        <div><span class="label">协议版本依据</span><code>DEVICE_PROTOCOL_VERSION = 8</code></div>
       </div>
     </header>
 
     <section>
-      <h2>1. 兼容性总览</h2>
+      <h2>1. 总体结论</h2>
       <div class="summary">
-        <div class="panel status-good">
-          <strong>已可联调</strong>
-          <small>支持 <code>FC01/FC02/FC03/FC04/FC05/FC06</code>，并接入 CPU3 主分发和兼容分发路径。</small>
+        <div class="summary-card">
+          <strong><span class="tag ok">可联调</span>基础 Modbus 功能</strong>
+          <span>已支持 <code>FC01</code>、<code>FC02</code>、<code>FC03</code>、<code>FC04</code>、<code>FC05</code>、<code>FC06</code>，带标准 CRC、站号、长度、地址和值域检查。</span>
         </div>
-        <div class="panel status-info">
-          <strong>核心数据已映射</strong>
-          <small>位置、温度、密度、液位、profile 点阵、profile 完成状态、当前时间和完成时间戳已有输出。</small>
+        <div class="summary-card">
+          <strong><span class="tag ok">已映射</span>测量和 profile 输出</strong>
+          <span>实时位置、温度、密度、液位、profile 点数、点阵和时间寄存器已经接入 CPU2/CPU3 共享数据。</span>
         </div>
-        <div class="panel status-partial">
-          <strong>部分功能是影子兼容</strong>
-          <small><code>40010~40023</code> 可写可回读，可参与报警合成，但未落盘，也不触发真实自动 profile 调度。</small>
+        <div class="summary-card">
+          <strong><span class="tag partial">部分兼容</span>命令和保持寄存器</strong>
+          <span>模式/动作线圈已桥接 CPU2 通用命令；<code>40001~40003</code> 写入真实参数，其余 SI7000 专用设定先保持影子回读。</span>
         </div>
-        <div class="panel status-risk">
-          <strong>仍有现场确认项</strong>
-          <small>Tank ID、上下液位传感器、真实三档速度、密度缩放范围和首点时间戳仍需确认。</small>
+        <div class="summary-card">
+          <strong><span class="tag partial">待确认</span>现场语义</strong>
+          <span>Tank ID、上下液位传感器、自动 profile 调度、报警阈值落盘、三档速度和 profile 首点时间戳仍需现场或 PLC 侧确认。</span>
         </div>
       </div>
 
-      <div class="ok">
-        当前适配策略是让 <code>CPU3</code> 对外模拟 SI7000 Modbus 从站，<code>CPU2</code> 只提供通用测量数据、通用状态和通用命令。这样不会把 SI7000 地址、线圈、功能码等外部协议语义下沉到 CPU2 测量内核。
+      <div class="note">
+        当前定位是“第一版可联调兼容”：CPU3 对外模拟 SI7000 地址、功能码、缩放和异常响应；CPU2 只提供真实测量、通用状态和通用命令，不下沉 SI7000 专用地址或 PLC 语义。
       </div>
+    </section>
 
+    <section>
+      <h2>2. 通信兼容</h2>
       <table>
         <thead>
           <tr>
             <th>项目</th>
-            <th>当前兼容状态</th>
+            <th>当前兼容情况</th>
             <th>说明</th>
           </tr>
         </thead>
         <tbody>
           <tr>
-            <td>功能码</td>
-            <td><span class="tag done">已支持</span></td>
-            <td><code>FC01</code> 读线圈、<code>FC02</code> 读离散输入、<code>FC03</code> 读保持寄存器、<code>FC04</code> 读输入寄存器、<code>FC05</code> 写单线圈、<code>FC06</code> 写单保持寄存器。其它功能码返回 <code>Illegal Function</code>。</td>
+            <td>串口参数</td>
+            <td><span class="tag ok">已支持</span><code>9600 8O1</code></td>
+            <td>选择 <code>COM_PROTO_SI7000</code> 后，CPU3 保存和加载 COM 参数时自动收敛到 SI7000 官方要求的 9600、8 数据位、奇校验、1 停止位。</td>
           </tr>
           <tr>
-            <td>地址窗口</td>
-            <td><span class="tag done">已保护</span></td>
-            <td>线圈 16 位、离散输入 32 位、保持寄存器 23 个、输入寄存器 620 个。越界读取或写保留区返回 Modbus 异常。</td>
+            <td>站号 / Tank ID</td>
+            <td><span class="tag partial">复用现有地址</span></td>
+            <td>优先使用现有 <code>SlaveAddress</code>，有效范围 <code>1~247</code>；无效时使用 SI7000 层默认地址。独立 SI7000 Tank ID 尚未确认。</td>
           </tr>
           <tr>
-            <td>串口配置</td>
-            <td><span class="tag done">已接入</span></td>
-            <td>选择 <code>COM_PROTO_SI7000</code> 后，CPU3 参数加载和写入会收敛到 SI7000 要求的 <code>9600 8O1</code>。</td>
-          </tr>
-          <tr>
-            <td>从站地址</td>
-            <td><span class="tag partial">部分兼容</span></td>
-            <td>优先使用现有 <code>SlaveAddress</code>，合法范围 <code>1~247</code>；SI7000 独立 Tank ID 尚未做专用参数。</td>
+            <td>请求频率</td>
+            <td><span class="tag partial">从站正常响应</span></td>
+            <td>当前不主动限制合法请求频率；联调建议 PLC 轮询周期不小于 1 秒，后续可增加诊断计数。</td>
           </tr>
           <tr>
             <td>异常响应</td>
-            <td><span class="tag done">已支持</span></td>
-            <td>非法功能、非法地址、非法值均生成标准异常帧；CRC 错、站号不匹配或帧长过短不生成正常响应。</td>
-          </tr>
-          <tr>
-            <td>工程量转换</td>
-            <td><span class="tag done">已支持</span></td>
-            <td>位置/液位从内部 <code>0.1mm</code> 转协议 <code>mm</code>；温度转有符号 <code>0.01°C</code>；密度转协议 <code>0.01 kg/m3</code> 并做 16 位钳位。</td>
-          </tr>
-          <tr>
-            <td>profile 数据</td>
-            <td><span class="tag done">已支持</span></td>
-            <td>完成锁存后输出点数和点阵；未完成时点阵保持 0，避免 PLC 读到上一轮残留。</td>
-          </tr>
-          <tr>
-            <td>自动 profile</td>
-            <td><span class="tag partial">影子兼容</span></td>
-            <td><code>40010~40013</code> 可写可回读，<code>40011</code> 影响 <code>10012</code>，但不触发真实定时调度。</td>
-          </tr>
-          <tr>
-            <td>报警阈值</td>
-            <td><span class="tag partial">影子兼容</span></td>
-            <td><code>40014~40023</code> 运行期保存，可合成离散输入报警位；掉电保存、偏差算法和报警细分仍待确认。</td>
+            <td><span class="tag ok">已支持</span></td>
+            <td>非法功能返回 <code>01</code>，非法地址返回 <code>02</code>，非法值返回 <code>03</code>；CRC 错误、地址不匹配和长度过短不生成正常响应。</td>
           </tr>
         </tbody>
       </table>
     </section>
 
     <section>
-      <h2>2. Modbus 功能码和地址窗口</h2>
+      <h2>3. 功能码覆盖</h2>
       <table>
         <thead>
           <tr>
             <th>功能码</th>
-            <th>SI7000 地址区</th>
-            <th>当前行为</th>
-            <th>边界处理</th>
+            <th>用途</th>
+            <th>当前状态</th>
+            <th>边界</th>
           </tr>
         </thead>
         <tbody>
           <tr>
             <td><code>FC01</code></td>
-            <td><code>00001~00016</code> 线圈</td>
-            <td>读取模式线圈、停止/方向线圈和保留位。</td>
-            <td>读数量为 0 或超过 2000 返回 <code>Illegal Data Value</code>；越界返回 <code>Illegal Data Address</code>。</td>
+            <td>读线圈 <code>00001~00016</code></td>
+            <td><span class="tag ok">已支持</span></td>
+            <td>16 位窗口；越界返回非法地址；响应位按 Modbus 低位优先打包。</td>
           </tr>
           <tr>
             <td><code>FC02</code></td>
-            <td><code>10001~10032</code> 离散输入</td>
-            <td>读取罐底参考、联锁、profile 完成、公制单位、报警和 profile 报警等状态。</td>
-            <td>同 <code>FC01</code> 位读取边界。</td>
+            <td>读离散输入 <code>10001~10032</code></td>
+            <td><span class="tag ok">已支持</span></td>
+            <td>32 位窗口；上下液位传感器无可靠来源，当前固定为 0。</td>
           </tr>
           <tr>
             <td><code>FC03</code></td>
-            <td><code>40001~40023</code> 保持寄存器</td>
-            <td>读取 profile 参数、自动 profile 影子参数和报警阈值影子参数。</td>
-            <td>读数量为 0 或超过 125 返回 <code>Illegal Data Value</code>；越界返回 <code>Illegal Data Address</code>。</td>
+            <td>读保持寄存器 <code>40001~40023</code></td>
+            <td><span class="tag ok">已支持</span></td>
+            <td>23 个寄存器窗口；单帧最多 125 个寄存器。</td>
           </tr>
           <tr>
             <td><code>FC04</code></td>
-            <td><code>30001~30620</code> 输入寄存器</td>
-            <td>读取实时位置、温度、密度、液位、时间、profile 时间戳和最多 200 个 profile 点。</td>
-            <td>同 <code>FC03</code> 寄存器读取边界。</td>
+            <td>读输入寄存器 <code>30001~30620</code></td>
+            <td><span class="tag ok">已支持</span></td>
+            <td>620 个寄存器窗口；profile 点阵只在完成锁存后输出，范围外保持 0。</td>
           </tr>
           <tr>
             <td><code>FC05</code></td>
-            <td><code>00001~00016</code> 单线圈写</td>
-            <td>仅允许已实现的动作线圈；合法 ON 写入桥接到 CPU2 通用命令。</td>
-            <td>只接受 <code>0xFF00</code> 或 <code>0x0000</code>；写保留线圈返回 <code>Illegal Data Address</code>。</td>
+            <td>写单线圈</td>
+            <td><span class="tag partial">已桥接</span></td>
+            <td>只接受 <code>0xFF00</code> / <code>0x0000</code>；保留线圈拒绝写入；ON 写入桥接 CPU2 通用命令。</td>
           </tr>
           <tr>
             <td><code>FC06</code></td>
-            <td><code>40001~40023</code> 单寄存器写</td>
-            <td><code>40001~40003</code> 下发 CPU2 参数；<code>40010~40023</code> 保存在 CPU3 影子寄存器。</td>
-            <td><code>40011</code> 仅允许 <code>0/1</code>，<code>40012</code> 仅允许 <code>0~23</code>，<code>40013</code> 仅允许 <code>0~59</code>。</td>
+            <td>写单保持寄存器</td>
+            <td><span class="tag partial">部分真实写入</span></td>
+            <td><code>40001~40003</code> 写 CPU2 分布测量参数；<code>40010~40023</code> 当前为 CPU3 影子回读。</td>
           </tr>
         </tbody>
       </table>
     </section>
 
     <section>
-      <h2>3. FC05 线圈到 CPU2 指令映射</h2>
-      <p>线圈写入只作为外部指令入口。写入 ON 后，CPU3 通过 CPU2 既有命令保持寄存器下发 <code>CommandType</code>；下一次读回仍以 CPU2 实际状态为准。</p>
+      <h2>4. 地址区兼容明细</h2>
 
-      <table>
+      <h3>4.1 线圈区 <code>00001~00016</code></h3>
+      <table class="compact">
         <thead>
           <tr>
-            <th>SI7000 地址</th>
-            <th>线圈含义</th>
-            <th>当前 CPU2 指令</th>
-            <th>兼容状态</th>
-            <th>说明</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td><code>00001</code></td>
-            <td>Manual</td>
-            <td><code>CMD_MAINTENANCE_MODE</code></td>
-            <td><span class="tag partial">近似映射</span></td>
-            <td>当前系统里最接近 Manual 的入口是维护模式，也用于退出自动/动作状态。</td>
-          </tr>
-          <tr>
-            <td><code>00002</code></td>
-            <td>Calibrate</td>
-            <td><code>CMD_CALIBRATE_ZERO</code></td>
-            <td><span class="tag partial">保守映射</span></td>
-            <td>先映射到零点标定；SI7000 是否需要细分零点、液位、水位或罐高校准仍待确认。</td>
-          </tr>
-          <tr>
-            <td><code>00003</code></td>
-            <td>Auto</td>
-            <td><code>CMD_FIND_OIL</code></td>
-            <td><span class="tag done">已桥接</span></td>
-            <td>作为液位自动跟随/找液位入口。</td>
-          </tr>
-          <tr>
-            <td><code>00004</code></td>
-            <td>Profile</td>
-            <td><code>CMD_MEASURE_DISTRIBUTED</code></td>
-            <td><span class="tag done">已桥接</span></td>
-            <td>作为分布/区间密度 profile 测量入口。</td>
-          </tr>
-          <tr>
-            <td><code>00005~00008</code></td>
-            <td>保留</td>
-            <td>无</td>
-            <td><span class="tag todo">拒绝写入</span></td>
-            <td><code>FC05</code> 写入返回 <code>Illegal Data Address</code>，读取保持 0。</td>
-          </tr>
-          <tr>
-            <td><code>00009</code></td>
-            <td>Stop</td>
-            <td><code>CMD_MAINTENANCE_MODE</code></td>
-            <td><span class="tag partial">近似映射</span></td>
-            <td>承担“打断当前动作并进入手动态”的保守停止语义。</td>
-          </tr>
-          <tr>
-            <td><code>00010</code></td>
-            <td>Up Slow</td>
-            <td><code>CMD_FORCE_MOVE_UP</code></td>
-            <td><span class="tag partial">合并映射</span></td>
-            <td>慢/中/快三档当前没有真实速度差异。</td>
-          </tr>
-          <tr>
-            <td><code>00011</code></td>
-            <td>Up Medium</td>
-            <td><code>CMD_FORCE_MOVE_UP</code></td>
-            <td><span class="tag partial">合并映射</span></td>
-            <td>与 <code>Up Slow</code> 相同。</td>
-          </tr>
-          <tr>
-            <td><code>00012</code></td>
-            <td>Up Fast</td>
-            <td><code>CMD_FORCE_MOVE_UP</code></td>
-            <td><span class="tag partial">合并映射</span></td>
-            <td>与 <code>Up Slow</code> 相同。</td>
-          </tr>
-          <tr>
-            <td><code>00013</code></td>
-            <td>Down Slow</td>
-            <td><code>CMD_FORCE_MOVE_DOWN</code></td>
-            <td><span class="tag partial">合并映射</span></td>
-            <td>慢/中/快三档当前没有真实速度差异。</td>
-          </tr>
-          <tr>
-            <td><code>00014</code></td>
-            <td>Down Medium</td>
-            <td><code>CMD_FORCE_MOVE_DOWN</code></td>
-            <td><span class="tag partial">合并映射</span></td>
-            <td>与 <code>Down Slow</code> 相同。</td>
-          </tr>
-          <tr>
-            <td><code>00015</code></td>
-            <td>Down Fast</td>
-            <td><code>CMD_FORCE_MOVE_DOWN</code></td>
-            <td><span class="tag partial">合并映射</span></td>
-            <td>与 <code>Down Slow</code> 相同。</td>
-          </tr>
-          <tr>
-            <td><code>00016</code></td>
-            <td>保留</td>
-            <td>无</td>
-            <td><span class="tag todo">拒绝写入</span></td>
-            <td><code>FC05</code> 写入返回 <code>Illegal Data Address</code>，读取保持 0。</td>
-          </tr>
-        </tbody>
-      </table>
-
-      <div class="note">
-        <strong>互斥规则：</strong><code>00001~00004</code> 模式线圈在 CPU3 影子区互斥；<code>00009~00015</code> 停止和手动方向/速度线圈在影子区互斥。影子区只用于写后立即回读和协议表现，最终状态仍由 CPU2 运行状态刷新。
-      </div>
-    </section>
-
-    <section>
-      <h2>4. 保持寄存器写入映射</h2>
-      <table>
-        <thead>
-          <tr>
-            <th>SI7000 地址</th>
-            <th>文档含义</th>
+            <th>地址</th>
+            <th>SI7000 含义</th>
             <th>当前映射</th>
-            <th>状态</th>
-            <th>兼容影响</th>
+            <th>兼容状态</th>
           </tr>
         </thead>
         <tbody>
-          <tr>
-            <td><code>40001</code></td>
-            <td>Profile First Point</td>
-            <td><code>g_deviceParams.spreadTopLimit</code>，mm 转内部 <code>0.1mm</code></td>
-            <td><span class="tag partial">已桥接，语义待确认</span></td>
-            <td>SI7000 的 First Point 与当前分布测量方向、边界是否完全一致仍需现场确认。</td>
-          </tr>
-          <tr>
-            <td><code>40002</code></td>
-            <td>Profile Increment</td>
-            <td><code>g_deviceParams.spreadMeasurementDistance</code>，mm 转内部 <code>0.1mm</code></td>
-            <td><span class="tag done">已桥接</span></td>
-            <td>当前按现有分布测量点间距处理。</td>
-          </tr>
-          <tr>
-            <td><code>40003</code></td>
-            <td>Profile Dwell Time</td>
-            <td><code>g_deviceParams.spreadPointHoverTime</code></td>
-            <td><span class="tag done">已桥接</span></td>
-            <td>当前按现有分布测量停留时间处理。</td>
-          </tr>
-          <tr>
-            <td><code>40004~40009</code></td>
-            <td>保留/扩展</td>
-            <td>无</td>
-            <td><span class="tag todo">拒绝写入</span></td>
-            <td>读取为 0，写入返回 <code>Illegal Data Address</code>。</td>
-          </tr>
-          <tr>
-            <td><code>40010</code></td>
-            <td>Automatic Profile Interval</td>
-            <td>CPU3 影子寄存器</td>
-            <td><span class="tag partial">仅回读</span></td>
-            <td>不触发真实定时 profile 调度，掉电不保存。</td>
-          </tr>
-          <tr>
-            <td><code>40011</code></td>
-            <td>Automatic Profile Enable</td>
-            <td>CPU3 影子寄存器；影响 <code>10012</code></td>
-            <td><span class="tag partial">仅回读</span></td>
-            <td>仅允许 <code>0/1</code>，不触发真实调度。</td>
-          </tr>
-          <tr>
-            <td><code>40012</code></td>
-            <td>Automatic Profile Hour</td>
-            <td>CPU3 影子寄存器</td>
-            <td><span class="tag partial">仅回读</span></td>
-            <td>仅允许 <code>0~23</code>，不参与真实调度。</td>
-          </tr>
-          <tr>
-            <td><code>40013</code></td>
-            <td>Automatic Profile Minute</td>
-            <td>CPU3 影子寄存器</td>
-            <td><span class="tag partial">仅回读</span></td>
-            <td>仅允许 <code>0~59</code>，不参与真实调度。</td>
-          </tr>
-          <tr>
-            <td><code>40014~40021</code></td>
-            <td>密度、温度、液位上下限</td>
-            <td>CPU3 影子寄存器，用于合成 <code>10017~10024</code> 和 <code>10029~10032</code></td>
-            <td><span class="tag partial">运行期有效</span></td>
-            <td>阈值为 0 视为未启用；不落盘，不写 CPU2 参数。</td>
-          </tr>
-          <tr>
-            <td><code>40022~40023</code></td>
-            <td>温度/密度偏差阈值</td>
-            <td>CPU3 影子寄存器</td>
-            <td><span class="tag partial">仅回读</span></td>
-            <td>当前偏差报警字段来自 CPU2 通用状态，具体阈值算法仍待确认。</td>
-          </tr>
+          <tr><td><code>00001</code></td><td>Manual</td><td><code>CMD_MAINTENANCE_MODE</code></td><td><span class="tag ok">已桥接</span></td></tr>
+          <tr><td><code>00002</code></td><td>Calibrate</td><td><code>CMD_CALIBRATE_ZERO</code></td><td><span class="tag partial">保守映射</span></td></tr>
+          <tr><td><code>00003</code></td><td>Auto</td><td><code>CMD_FIND_OIL</code></td><td><span class="tag ok">已桥接</span></td></tr>
+          <tr><td><code>00004</code></td><td>Profile</td><td><code>CMD_MEASURE_DISTRIBUTED</code></td><td><span class="tag ok">已桥接</span></td></tr>
+          <tr><td><code>00005~00008</code></td><td>保留</td><td>读取为 0，写入非法地址</td><td><span class="tag fixed">固定处理</span></td></tr>
+          <tr><td><code>00009</code></td><td>Stop</td><td><code>CMD_MAINTENANCE_MODE</code></td><td><span class="tag partial">等价停止</span></td></tr>
+          <tr><td><code>00010~00012</code></td><td>Up Slow/Medium/Fast</td><td><code>CMD_FORCE_MOVE_UP</code></td><td><span class="tag partial">三档未细分</span></td></tr>
+          <tr><td><code>00013~00015</code></td><td>Down Slow/Medium/Fast</td><td><code>CMD_FORCE_MOVE_DOWN</code></td><td><span class="tag partial">三档未细分</span></td></tr>
+          <tr><td><code>00016</code></td><td>保留</td><td>读取为 0，写入非法地址</td><td><span class="tag fixed">固定处理</span></td></tr>
         </tbody>
       </table>
-    </section>
+      <p>模式线圈 <code>00001~00004</code> 在影子区内互斥；停止/手动方向线圈 <code>00009~00015</code> 在影子区内互斥。PLC 写入只作为命令入口，后续读回以 CPU2 当前真实状态刷新。</p>
 
-    <section>
-      <h2>5. 状态和输入寄存器映射重点</h2>
-      <h3>5.1 离散输入</h3>
-      <table>
+      <h3>4.2 离散输入区 <code>10001~10032</code></h3>
+      <table class="compact">
         <thead>
           <tr>
             <th>地址</th>
@@ -643,279 +440,225 @@
           </tr>
         </thead>
         <tbody>
-          <tr>
-            <td><code>10001</code></td>
-            <td>Bottom Reference</td>
-            <td><code>height_measurement.bottom_reference_valid</code></td>
-            <td><span class="tag done">已接</span></td>
-          </tr>
-          <tr>
-            <td><code>10002~10003</code></td>
-            <td>Lower/Upper Level Sensor</td>
-            <td>无可靠内部来源，固定 0</td>
-            <td><span class="tag todo">不完整</span></td>
-          </tr>
-          <tr>
-            <td><code>10004</code></td>
-            <td>Interlock</td>
-            <td><code>error_code != NO_ERROR</code> 或 <code>profile_blocked_by_process</code></td>
-            <td><span class="tag partial">简化合成</span></td>
-          </tr>
-          <tr>
-            <td><code>10005</code></td>
-            <td>Profile Complete</td>
-            <td><code>density_distribution.profile_complete_latched</code> 和完成状态兜底</td>
-            <td><span class="tag done">已接</span></td>
-          </tr>
-          <tr>
-            <td><code>10006</code></td>
-            <td>Unit Is Metric</td>
-            <td>固定 1</td>
-            <td><span class="tag done">已固定</span></td>
-          </tr>
-          <tr>
-            <td><code>10009</code></td>
-            <td>Reel Alarm</td>
-            <td><code>error_code != NO_ERROR</code></td>
-            <td><span class="tag partial">简化合成</span></td>
-          </tr>
-          <tr>
-            <td><code>10010</code></td>
-            <td>Probe Un-calibrated</td>
-            <td><code>zero_point_status != 0</code></td>
-            <td><span class="tag partial">简化合成</span></td>
-          </tr>
-          <tr>
-            <td><code>10012</code></td>
-            <td>Interval Timer</td>
-            <td><code>40011 != 0</code></td>
-            <td><span class="tag partial">影子合成</span></td>
-          </tr>
-          <tr>
-            <td><code>10013</code></td>
-            <td>Probe At Liquid Level</td>
-            <td><code>oil_measurement.probe_at_liquid_level</code></td>
-            <td><span class="tag done">已接</span></td>
-          </tr>
-          <tr>
-            <td><code>10017~10024</code></td>
-            <td>当前值报警</td>
-            <td>当前密度/温度/液位与 <code>40014~40021</code> 阈值比较</td>
-            <td><span class="tag partial">影子合成</span></td>
-          </tr>
-          <tr>
-            <td><code>10025~10026</code></td>
-            <td>profile 偏差报警</td>
-            <td>CPU2 通用偏差状态字段</td>
-            <td><span class="tag partial">算法待确认</span></td>
-          </tr>
-          <tr>
-            <td><code>10029~10032</code></td>
-            <td>profile 点上下限报警</td>
-            <td>profile 完成后扫描点阵，与阈值比较</td>
-            <td><span class="tag done">已接</span></td>
-          </tr>
+          <tr><td><code>10001</code></td><td>Bottom Reference</td><td><code>height_measurement.bottom_reference_valid</code></td><td><span class="tag ok">已接</span></td></tr>
+          <tr><td><code>10002</code></td><td>Lower Level Sensor</td><td>无可靠内部来源</td><td><span class="tag fixed">固定 0</span></td></tr>
+          <tr><td><code>10003</code></td><td>Upper Level Sensor</td><td>无可靠内部来源</td><td><span class="tag fixed">固定 0</span></td></tr>
+          <tr><td><code>10004</code></td><td>Interlock</td><td>设备错误或 profile 过程阻挡</td><td><span class="tag partial">简化合成</span></td></tr>
+          <tr><td><code>10005</code></td><td>Profile Complete</td><td><code>profile_complete_latched</code> 及完成状态兜底</td><td><span class="tag ok">已接</span></td></tr>
+          <tr><td><code>10006</code></td><td>Metric/English</td><td>当前固定公制</td><td><span class="tag fixed">固定 1</span></td></tr>
+          <tr><td><code>10009</code></td><td>Reel Alarm</td><td><code>error_code != NO_ERROR</code></td><td><span class="tag partial">简化合成</span></td></tr>
+          <tr><td><code>10010</code></td><td>Probe Un-calibrated</td><td><code>zero_point_status != 0</code></td><td><span class="tag partial">简化合成</span></td></tr>
+          <tr><td><code>10012</code></td><td>Interval Timer</td><td><code>40011 Automatic Profile Enable</code> 影子值</td><td><span class="tag partial">非真实调度</span></td></tr>
+          <tr><td><code>10013</code></td><td>Probe At Liquid Level</td><td><code>oil_measurement.probe_at_liquid_level</code></td><td><span class="tag ok">已接</span></td></tr>
+          <tr><td><code>10017~10024</code></td><td>当前值报警</td><td>当前密度/温度/液位与 <code>40014~40021</code> 影子阈值比较</td><td><span class="tag ok">已合成</span></td></tr>
+          <tr><td><code>10025~10026</code></td><td>Profile 偏差报警</td><td>CPU2 通用 profile 偏差字段</td><td><span class="tag partial">算法待确认</span></td></tr>
+          <tr><td><code>10029~10032</code></td><td>Profile 上下限报警</td><td>profile 完成后扫描点阵与阈值</td><td><span class="tag ok">已合成</span></td></tr>
+          <tr><td>其它预留位</td><td>保留</td><td>无</td><td><span class="tag fixed">固定 0</span></td></tr>
         </tbody>
       </table>
 
-      <h3>5.2 输入寄存器</h3>
-      <table>
+      <h3>4.3 输入寄存器区 <code>30001~30620</code></h3>
+      <table class="compact">
         <thead>
           <tr>
             <th>地址</th>
             <th>含义</th>
-            <th>当前来源和缩放</th>
-            <th>注意点</th>
+            <th>当前来源和单位</th>
+            <th>状态</th>
           </tr>
         </thead>
         <tbody>
-          <tr>
-            <td><code>30001</code></td>
-            <td>Current Probe Position</td>
-            <td><code>debug_data.sensor_position</code>，内部 <code>0.1mm</code> 转 <code>mm</code></td>
-            <td>负位置按 0 输出。</td>
-          </tr>
-          <tr>
-            <td><code>30002</code></td>
-            <td>Current Temperature</td>
-            <td><code>debug_data.temperature</code>，按 <code>raw - 20000</code> 转有符号 <code>0.01°C</code></td>
-            <td>无效温度输出 0。</td>
-          </tr>
-          <tr>
-            <td><code>30003</code></td>
-            <td>Current Density</td>
-            <td><code>single_point_monitoring.density</code>，内部 <code>kg/m3 x10</code> 转协议 <code>kg/m3 x100</code></td>
-            <td>超过 16 位时钳位为 <code>65535</code>。</td>
-          </tr>
-          <tr>
-            <td><code>30004</code></td>
-            <td>Liquid Level</td>
-            <td><code>oil_measurement.oil_level</code>，内部 <code>0.1mm</code> 转 <code>mm</code></td>
-            <td>无效液位输出 0；Manual/profile 期间保持策略待确认。</td>
-          </tr>
-          <tr>
-            <td><code>30006</code></td>
-            <td>Number Of Points</td>
-            <td><code>density_distribution.measurement_points</code></td>
-            <td>仅 profile 完成锁存后输出有效点数。</td>
-          </tr>
-          <tr>
-            <td><code>30007~30010</code></td>
-            <td>Profile Timestamp</td>
-            <td>CPU3 RTC，在 <code>profile_complete_counter</code> 变化后锁存</td>
-            <td>当前锁存完成时刻，不是首点采集时刻。</td>
-          </tr>
-          <tr>
-            <td><code>30011~30013</code></td>
-            <td>Current Time</td>
-            <td>CPU3 RTC 当前时、分、秒</td>
-            <td>用于 SI7000 显示和通信有效性判断，不参与 CPU2 测量调度。</td>
-          </tr>
-          <tr>
-            <td><code>30021~30620</code></td>
-            <td>profile 点阵</td>
-            <td>每点 3 个寄存器：位置、温度、密度</td>
-            <td>按 200 点窗口输出，超出有效点数保持 0。</td>
-          </tr>
+          <tr><td><code>30001</code></td><td>Current Probe Position</td><td>探头位置，内部 <code>0.1mm</code> 转 <code>mm</code>，负值按 0 输出</td><td><span class="tag ok">已接</span></td></tr>
+          <tr><td><code>30002</code></td><td>Current Temperature</td><td>CPU2 原始温度 <code>raw - 20000</code>，按有符号 <code>0.01°C</code></td><td><span class="tag ok">已接</span></td></tr>
+          <tr><td><code>30003</code></td><td>Current Density</td><td>内部 <code>kg/m3 x10</code> 转协议 <code>kg/m3 x100</code>，超 16 位钳位</td><td><span class="tag partial">范围待确认</span></td></tr>
+          <tr><td><code>30004</code></td><td>Liquid Level</td><td>当前 CPU2 液位，内部 <code>0.1mm</code> 转 <code>mm</code></td><td><span class="tag ok">已接</span></td></tr>
+          <tr><td><code>30005</code></td><td>保留</td><td>无</td><td><span class="tag fixed">固定 0</span></td></tr>
+          <tr><td><code>30006</code></td><td>Number Of Points</td><td>profile 完成锁存后输出有效点数</td><td><span class="tag ok">已接</span></td></tr>
+          <tr><td><code>30007~30010</code></td><td>Profile Timestamp</td><td>CPU3 RTC 在 profile 完成计数变化后锁存月/日/时/分</td><td><span class="tag partial">完成时刻</span></td></tr>
+          <tr><td><code>30011~30013</code></td><td>Current Time</td><td>CPU3 RTC 当前时/分/秒</td><td><span class="tag ok">已接</span></td></tr>
+          <tr><td><code>30014~30020</code></td><td>保留</td><td>无</td><td><span class="tag fixed">固定 0</span></td></tr>
+          <tr><td><code>30021~30620</code></td><td>Profile 点阵</td><td>每点位置、温度、密度 3 个寄存器；当前按 200 点 DCS 地址表输出</td><td><span class="tag ok">已接</span></td></tr>
         </tbody>
       </table>
-    </section>
+      <p>Profile 未完成时，点数和点阵输出为 0，避免 PLC 读到上一轮残留。完成锁存后只输出 <code>Number Of Points</code> 范围内的有效点，范围外保持 0。</p>
 
-    <section>
-      <h2>6. 当前不兼容和待确认点</h2>
-      <table>
+      <h3>4.4 保持寄存器区 <code>40001~40023</code></h3>
+      <table class="compact">
         <thead>
           <tr>
-            <th>优先级</th>
-            <th>问题点</th>
-            <th>当前行为</th>
-            <th>兼容风险</th>
-            <th>建议下一步</th>
+            <th>地址</th>
+            <th>含义</th>
+            <th>当前处理</th>
+            <th>状态</th>
           </tr>
         </thead>
         <tbody>
-          <tr>
-            <td><span class="tag todo">P0</span></td>
-            <td>密度缩放范围</td>
-            <td>按 <code>0.01 kg/m3</code> 输出，超过 16 位钳位。</td>
-            <td>16 位最高只表达 <code>655.35 kg/m3</code>，常规油品密度可能被钳位。</td>
-            <td>与 PLC 确认倍率；必要时定义兼容倍率或扩展寄存器。</td>
-          </tr>
-          <tr>
-            <td><span class="tag todo">P0</span></td>
-            <td>从站地址/Tank ID</td>
-            <td>复用 <code>SlaveAddress</code>。</td>
-            <td>如果现场 Tank ID 与 Modbus 站号不是同一口径，会出现地址配置不一致。</td>
-            <td>确认是否需要 SI7000 专用 Tank ID 参数。</td>
-          </tr>
-          <tr>
-            <td><span class="tag todo">P0</span></td>
-            <td><code>40001~40003</code> profile 参数语义</td>
-            <td>桥接现有分布测量参数。</td>
-            <td>SI7000 First Point 是罐底之后首个停点，当前 <code>spreadTopLimit</code> 方向和边界可能不完全一致。</td>
-            <td>复核官方资料和现场 PLC 参数定义，必要时新增专用转换。</td>
-          </tr>
-          <tr>
-            <td><span class="tag todo">P0</span></td>
-            <td>Lower/Upper Level Sensor</td>
-            <td><code>10002/10003</code> 固定 0。</td>
-            <td>官方资料把上下液位传感器作为液/气界面核心状态，长期固定 0 只能算第一版兼容。</td>
-            <td>确认硬件来源或 CPU2 等价通用状态。</td>
-          </tr>
-          <tr>
-            <td><span class="tag todo">P0</span></td>
-            <td>profile 时间戳</td>
-            <td>按完成时刻锁存。</td>
-            <td>官方语义更接近首点采集时间，PLC 若按首点时间判断会有偏差。</td>
-            <td>后续补 CPU2 profile 生命周期事件后修正。</td>
-          </tr>
-          <tr>
-            <td><span class="tag partial">P1</span></td>
-            <td><code>40010~40023</code> 掉电保存</td>
-            <td>只保存在 CPU3 运行期影子寄存器。</td>
-            <td>掉电后自动 profile 和报警设定丢失。</td>
-            <td>确认是否需要 CPU3 本机参数或 CPU2 专用参数持久化。</td>
-          </tr>
-          <tr>
-            <td><span class="tag partial">P1</span></td>
-            <td>自动 profile 真实调度</td>
-            <td><code>40010~40013</code> 不触发调度。</td>
-            <td>PLC 以为已经开启自动 profile，但设备不会按时间自动执行。</td>
-            <td>明确调度责任边界后再实现。</td>
-          </tr>
-          <tr>
-            <td><span class="tag partial">P1</span></td>
-            <td>三档手动速度</td>
-            <td>Slow/Medium/Fast 合并到上行或下行命令。</td>
-            <td>PLC 若依赖速度档位，现场动作与 SI7000 原机不一致。</td>
-            <td>确认是否需要 CPU2 新增通用速度参数或命令。</td>
-          </tr>
-          <tr>
-            <td><span class="tag partial">P1</span></td>
-            <td>报警语义细分</td>
-            <td>Reel Alarm、Probe Un-calibrated、profile 偏差报警为简化或通用字段映射。</td>
-            <td>PLC 可能无法区分卷尺、电机、校准和偏差算法来源。</td>
-            <td>确认报警分类和阈值算法。</td>
-          </tr>
-          <tr>
-            <td><span class="tag readonly">P2</span></td>
-            <td>协议诊断计数</td>
-            <td>当前只返回异常帧，不记录诊断统计。</td>
-            <td>联调时不易定位 CRC 错、站号错、非法地址等问题频率。</td>
-            <td>后续增加 CPU3 本地诊断计数和最后一次错误摘要。</td>
-          </tr>
+          <tr><td><code>40001</code></td><td>Profile First Point</td><td>桥接 <code>spreadTopLimit</code>，写入时 <code>mm</code> 转 <code>0.1mm</code></td><td><span class="tag partial">语义待确认</span></td></tr>
+          <tr><td><code>40002</code></td><td>Profile Increment</td><td>桥接 <code>spreadMeasurementDistance</code></td><td><span class="tag ok">已接</span></td></tr>
+          <tr><td><code>40003</code></td><td>Profile Dwell Time</td><td>桥接 <code>spreadPointHoverTime</code></td><td><span class="tag ok">已接</span></td></tr>
+          <tr><td><code>40004~40009</code></td><td>保留</td><td>读取为 0，写入非法地址</td><td><span class="tag fixed">固定处理</span></td></tr>
+          <tr><td><code>40010</code></td><td>Automatic Profile Interval</td><td>CPU3 影子回读，不触发真实调度</td><td><span class="tag partial">影子</span></td></tr>
+          <tr><td><code>40011</code></td><td>Automatic Profile Enable</td><td>CPU3 影子回读，只接受 <code>0/1</code>，影响 <code>10012</code></td><td><span class="tag partial">影子</span></td></tr>
+          <tr><td><code>40012</code></td><td>Automatic Profile Hour</td><td>CPU3 影子回读，只接受 <code>0~23</code></td><td><span class="tag partial">影子</span></td></tr>
+          <tr><td><code>40013</code></td><td>Automatic Profile Minute</td><td>CPU3 影子回读，只接受 <code>0~59</code></td><td><span class="tag partial">影子</span></td></tr>
+          <tr><td><code>40014~40023</code></td><td>报警和偏差阈值</td><td>运行期影子回读，参与报警位合成，掉电不保留</td><td><span class="tag partial">待落盘需求</span></td></tr>
         </tbody>
       </table>
     </section>
 
     <section>
-      <h2>7. 验证结果和依据</h2>
-      <div class="ok">
-        本次整理前已运行并通过：<code>py tools\check_si7000_modbus_frames.py</code>、<code>py tools\check_si7000_protocol_contract.py</code>。这说明当前源码中的 SI7000 地址常量、golden frame、CPU2/CPU3 共享字段顺序和共享协议契约是一致的。
+      <h2>5. 已完成的工程对接</h2>
+      <div class="grid-2">
+        <div class="panel">
+          <h3>CPU3 外部协议层</h3>
+          <ul>
+            <li>新增 SI7000 独立 Modbus RTU 从站模块。</li>
+            <li>接入 CPU3 主分发路径和兼容分发路径。</li>
+            <li>按 SI7000 地址表维护线圈、离散输入、保持寄存器和输入寄存器快照。</li>
+            <li>实现 CRC、站号、长度、地址窗口和值域检查。</li>
+            <li>对 <code>COM_PROTO_SI7000</code> 自动收敛串口参数到 <code>9600 8O1</code>。</li>
+          </ul>
+        </div>
+        <div class="panel">
+          <h3>CPU2/CPU3 共享状态</h3>
+          <ul>
+            <li>协议版本当前为 <code>DEVICE_PROTOCOL_VERSION = 8</code>，两端严格一致。</li>
+            <li>补充并同步 <code>bottom_reference_valid</code>、<code>probe_at_liquid_level</code>、<code>profile_complete_latched</code> 等 SI7000 所需中性状态。</li>
+            <li>CPU2 写共享输入寄存器，CPU3 读取后再转换成 SI7000 状态位。</li>
+            <li>已有契约脚本检查字段顺序、寄存器偏移和协议版本一致性。</li>
+          </ul>
+        </div>
       </div>
+    </section>
+
+    <section>
+      <h2>6. 保留限制和风险</h2>
       <table>
         <thead>
           <tr>
-            <th>依据</th>
+            <th>限制项</th>
+            <th>当前处理</th>
+            <th>兼容影响</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>独立 Tank ID</td>
+            <td>复用现有 <code>SlaveAddress</code></td>
+            <td>如果 PLC 要求 SI7000 Tank ID 独立于其它协议地址，需要新增 CPU3 本机参数和配置入口。</td>
+          </tr>
+          <tr>
+            <td>上下液位传感器</td>
+            <td><code>10002/10003</code> 固定 0</td>
+            <td>官方 SI7000 用这两个状态判断液/气界面，长期兼容需要硬件或 CPU2 等价状态确认。</td>
+          </tr>
+          <tr>
+            <td>Profile First Point</td>
+            <td><code>40001</code> 先桥接 <code>spreadTopLimit</code></td>
+            <td>SI7000 语义是“罐底之后第一个编程停点”，需确认与现有分布测量参数方向和边界完全一致。</td>
+          </tr>
+          <tr>
+            <td>Profile 时间戳</td>
+            <td>按 profile 完成时刻锁存</td>
+            <td>官方语义更接近首点采集时间；如 PLC 严格依赖采集开始时间，需要 CPU2 增加生命周期事件。</td>
+          </tr>
+          <tr>
+            <td>自动 profile 调度</td>
+            <td><code>40010~40013</code> 影子回读</td>
+            <td>当前不会到点自动触发 profile；若现场需要，应设计 CPU3 调度、互斥条件和参数落盘。</td>
+          </tr>
+          <tr>
+            <td>报警阈值落盘</td>
+            <td><code>40014~40023</code> 运行期影子值</td>
+            <td>掉电后不保留；如果 PLC 写入后必须持久化，需要新增 SI7000 专用参数，不建议复用其它协议阈值。</td>
+          </tr>
+          <tr>
+            <td>手动三档速度</td>
+            <td>Slow/Medium/Fast 统一桥接方向命令</td>
+            <td>PLC 如果要求三档真实速度，需要 CPU2 新增通用速度命令或速度参数。</td>
+          </tr>
+          <tr>
+            <td>密度 16 位范围</td>
+            <td>按 <code>0.01 kg/m3</code> 输出，超 16 位钳位到 <code>65535</code></td>
+            <td>16 位最高只表达 <code>655.35 kg/m3</code>，常规高密度值可能被钳位，必须与 PLC 侧确认倍率或扩展方案。</td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="risk">
+        上述限制不是当前联调失败项，但会影响“完全替代 SI7000”的长期兼容度。后续新增外部可见行为时，应同步更新映射表、PLC 联调检查表和 golden frame/协议契约脚本。
+      </div>
+    </section>
+
+    <section>
+      <h2>7. 联调验收建议</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>检查项</th>
+            <th>建议验收口径</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>基础通信</td>
+            <td>PLC 使用 <code>9600 8O1</code>、正确站号和 Modbus RTU CRC 后，能读取四类地址区并收到合法响应。</td>
+          </tr>
+          <tr>
+            <td>异常响应</td>
+            <td>非法功能码、越界地址、保留线圈/寄存器写入、<code>40011/40012/40013</code> 非法值均返回对应异常码。</td>
+          </tr>
+          <tr>
+            <td>命令桥接</td>
+            <td>写 <code>00001~00004</code>、<code>00009~00015</code> 时应收到标准 echo；设备状态变化以 CPU2 实际状态为准。</td>
+          </tr>
+          <tr>
+            <td>实时测量值</td>
+            <td><code>30001~30004</code> 的位置、温度、密度和液位应符合当前 CPU2 数据与单位转换口径。</td>
+          </tr>
+          <tr>
+            <td>Profile 输出</td>
+            <td>未完成 profile 时 <code>30006</code> 和点阵为 0；完成锁存后输出有效点数、时间戳和 200 点窗口内的点阵数据。</td>
+          </tr>
+          <tr>
+            <td>影子寄存器</td>
+            <td><code>40010~40023</code> 写入后运行期可回读，并能参与 <code>10012</code> 或报警位合成；掉电保存不纳入本轮验收。</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>8. 依据文件和验证命令</h2>
+      <div class="panel">
+        <h3>主要依据</h3>
+        <ul class="source-list">
+          <li><code>LTD_DISPLAY_CPU3/Communication/external/si7000_modbus/si7000_modbus_slave.c</code></li>
+          <li><code>LTD_DISPLAY_CPU3/Communication/external/si7000_modbus/si7000_modbus_slave.h</code></li>
+          <li><code>LTD_DISPLAY_CPU3/Application/system_param/cpu3_comm_display_params.c</code></li>
+          <li><code>LTD_DISPLAY_CPU3/Application/app_main.c</code></li>
+          <li><code>docs/01_协议与寄存器/SI7000协议适配/02_协议映射/SI7000兼容映射表.md</code></li>
+          <li><code>docs/01_协议与寄存器/SI7000协议适配/04_联调测试/SI7000_PLC联调检查表.md</code></li>
+          <li><code>docs/01_协议与寄存器/SI7000协议适配/01_计划与需求/SI7000说明书需求确认清单.md</code></li>
+          <li><code>docs/01_协议与寄存器/SI7000协议适配/01_计划与需求/SI7000后续需求记录.md</code></li>
+        </ul>
+      </div>
+      <table class="compact">
+        <thead>
+          <tr>
+            <th>命令</th>
             <th>用途</th>
           </tr>
         </thead>
         <tbody>
-          <tr>
-            <td><code>LTD_DISPLAY_CPU3/Communication/external/si7000_modbus/si7000_modbus_slave.c</code></td>
-            <td>SI7000 功能码、地址窗口、线圈写入、保持寄存器写入、状态刷新和异常响应实现。</td>
-          </tr>
-          <tr>
-            <td><code>LTD_DISPLAY_CPU3/Communication/external/si7000_modbus/si7000_modbus_slave.h</code></td>
-            <td>四类地址窗口大小和对外处理接口。</td>
-          </tr>
-          <tr>
-            <td><code>LTD_DISPLAY_CPU3/Application/app_main.c</code>、<code>LTD_DISPLAY_CPU3/Communication/common/com_manager.c</code></td>
-            <td>SI7000 协议分发接入点。</td>
-          </tr>
-          <tr>
-            <td><code>LTD_DISPLAY_CPU3/Application/system_param/cpu3_comm_display_params.c</code></td>
-            <td>SI7000 选择后串口参数自动收敛到 <code>9600 8O1</code>。</td>
-          </tr>
-          <tr>
-            <td><code>docs/01_协议与寄存器/SI7000协议适配/02_协议映射/SI7000兼容映射表.md</code></td>
-            <td>现有地址映射、当前实现状态和保留限制。</td>
-          </tr>
-          <tr>
-            <td><code>docs/01_协议与寄存器/SI7000协议适配/01_计划与需求/SI7000后续需求记录.md</code></td>
-            <td>尚未兼容和后续优化项。</td>
-          </tr>
-          <tr>
-            <td><code>docs/01_协议与寄存器/SI7000协议适配/04_联调测试/SI7000_PLC联调检查表.md</code></td>
-            <td>PLC 联调口径和参考帧。</td>
-          </tr>
+          <tr><td><code>py tools/check_si7000_modbus_frames.py --dump</code></td><td>检查地址窗口、功能码、枚举 offset 和 golden frame，并导出联调参考帧。</td></tr>
+          <tr><td><code>py tools/check_si7000_protocol_contract.py</code></td><td>检查 CPU2/CPU3 协议版本、SI7000 共享状态字段顺序和寄存器偏移一致性。</td></tr>
+          <tr><td><code>cmake --build build/LTD_DISPLAY_CPU3</code></td><td>确认 CPU3 SI7000 协议层和串口参数逻辑可构建。</td></tr>
+          <tr><td><code>cmake --build build/LTD_MAIN_CPU2</code></td><td>确认 CPU2 共享状态和通用命令/参数路径可构建。</td></tr>
         </tbody>
       </table>
-
-      <div class="warn">
-        本文是协议兼容性整理，不改变固件行为。若后续要把影子寄存器落盘、增加真实自动 profile 调度、补上下液位传感器或新增速度档位，需要同步更新映射表、联调检查表、golden frame 或协议契约脚本，并评估是否影响 CPU2/CPU3 共享协议版本。
-      </div>
     </section>
+
+    <p class="footer">本文为 HTML 阅读版；完整地址映射和逐地址说明以同目录 <code>SI7000兼容映射表.md</code> 为主，PLC 现场操作步骤以 <code>04_联调测试/SI7000_PLC联调检查表.md</code> 为主。</p>
   </main>
 </body>
 </html>

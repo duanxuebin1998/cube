@@ -1,0 +1,642 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CPU3 RTC 真实时间兼容电路修改方案</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f5f7fb;
+      --paper: #ffffff;
+      --ink: #18202a;
+      --muted: #637083;
+      --line: #d8e0ea;
+      --soft: #eef3f8;
+      --accent: #1667a8;
+      --accent-soft: #e6f1fa;
+      --good: #18734a;
+      --good-soft: #e7f5ee;
+      --warn: #a16207;
+      --warn-soft: #fff4d8;
+      --bad: #a33131;
+      --bad-soft: #fdecec;
+      --code: #0f172a;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: "Microsoft YaHei", "Segoe UI", Arial, sans-serif;
+      line-height: 1.65;
+    }
+
+    main {
+      width: min(1180px, calc(100% - 32px));
+      margin: 28px auto 48px;
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      box-shadow: 0 18px 38px rgba(20, 34, 56, 0.08);
+      overflow: hidden;
+    }
+
+    header {
+      padding: 32px 40px 26px;
+      border-bottom: 1px solid var(--line);
+      background: linear-gradient(180deg, #ffffff 0%, #f7fbff 100%);
+    }
+
+    h1 {
+      margin: 0 0 10px;
+      font-size: 30px;
+      line-height: 1.25;
+      letter-spacing: 0;
+    }
+
+    .subtitle {
+      margin: 0;
+      color: var(--muted);
+      font-size: 15px;
+    }
+
+    section {
+      padding: 26px 40px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    section:last-child {
+      border-bottom: 0;
+    }
+
+    h2 {
+      margin: 0 0 16px;
+      font-size: 21px;
+      line-height: 1.35;
+      letter-spacing: 0;
+    }
+
+    h3 {
+      margin: 22px 0 10px;
+      font-size: 17px;
+      line-height: 1.35;
+      letter-spacing: 0;
+    }
+
+    p {
+      margin: 10px 0;
+    }
+
+    ul,
+    ol {
+      margin: 10px 0 0 22px;
+      padding: 0;
+    }
+
+    li {
+      margin: 6px 0;
+    }
+
+    code {
+      color: var(--code);
+      background: #edf2f7;
+      border: 1px solid #d9e2ec;
+      border-radius: 4px;
+      padding: 1px 5px;
+      font-family: Consolas, "SFMono-Regular", monospace;
+      font-size: 0.92em;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 14px 0 18px;
+      font-size: 14px;
+    }
+
+    th,
+    td {
+      border: 1px solid var(--line);
+      padding: 10px 12px;
+      vertical-align: top;
+      text-align: left;
+    }
+
+    th {
+      background: var(--soft);
+      font-weight: 700;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 14px;
+      margin: 18px 0 4px;
+    }
+
+    .card {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 16px 16px 14px;
+      background: #fff;
+      min-height: 156px;
+    }
+
+    .card h3 {
+      margin-top: 0;
+    }
+
+    .tag {
+      display: inline-flex;
+      align-items: center;
+      min-height: 24px;
+      border-radius: 999px;
+      padding: 2px 9px;
+      font-size: 12px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .ok {
+      color: var(--good);
+      background: var(--good-soft);
+      border: 1px solid #b8e0ca;
+    }
+
+    .warn {
+      color: var(--warn);
+      background: var(--warn-soft);
+      border: 1px solid #efd38c;
+    }
+
+    .bad {
+      color: var(--bad);
+      background: var(--bad-soft);
+      border: 1px solid #f3b7b7;
+    }
+
+    .note {
+      border-left: 4px solid var(--accent);
+      background: var(--accent-soft);
+      padding: 12px 14px;
+      margin: 14px 0;
+      border-radius: 0 6px 6px 0;
+    }
+
+    .warnbox {
+      border-left: 4px solid var(--warn);
+      background: var(--warn-soft);
+      padding: 12px 14px;
+      margin: 14px 0;
+      border-radius: 0 6px 6px 0;
+    }
+
+    .badbox {
+      border-left: 4px solid var(--bad);
+      background: var(--bad-soft);
+      padding: 12px 14px;
+      margin: 14px 0;
+      border-radius: 0 6px 6px 0;
+    }
+
+    .schematic {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin: 16px 0;
+    }
+
+    .diagram {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fbfdff;
+      padding: 16px;
+    }
+
+    .diagram-title {
+      font-weight: 700;
+      margin-bottom: 10px;
+    }
+
+    .ascii {
+      overflow-x: auto;
+      margin: 0;
+      color: #1f2937;
+      background: #f8fafc;
+      border: 1px solid #dbe4ef;
+      border-radius: 6px;
+      padding: 12px;
+      font-family: Consolas, "SFMono-Regular", monospace;
+      font-size: 13px;
+      line-height: 1.45;
+      white-space: pre;
+    }
+
+    .decision {
+      display: grid;
+      grid-template-columns: 190px 1fr;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      overflow: hidden;
+      margin: 12px 0;
+    }
+
+    .decision strong {
+      display: block;
+      padding: 13px 14px;
+      background: var(--soft);
+      border-right: 1px solid var(--line);
+    }
+
+    .decision span {
+      padding: 13px 14px;
+    }
+
+    .small {
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    @media (max-width: 860px) {
+      main {
+        width: calc(100% - 18px);
+        margin: 12px auto 28px;
+      }
+
+      header,
+      section {
+        padding: 22px 18px;
+      }
+
+      .grid,
+      .schematic {
+        grid-template-columns: 1fr;
+      }
+
+      .decision {
+        grid-template-columns: 1fr;
+      }
+
+      .decision strong {
+        border-right: 0;
+        border-bottom: 1px solid var(--line);
+      }
+    }
+
+    @media print {
+      body {
+        background: #fff;
+      }
+
+      main {
+        width: 100%;
+        margin: 0;
+        border: 0;
+        box-shadow: none;
+      }
+
+      section,
+      header {
+        break-inside: avoid;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <h1>CPU3 RTC 真实时间兼容电路修改方案</h1>
+      <p class="subtitle">结合当前 CPU3 原理图、SI7000 寄存器需求和 STM32F429 RTC 资源整理。整理日期：2026-06-13。</p>
+    </header>
+
+    <section>
+      <h2>1. 结论</h2>
+      <p>要让 <code>30007~30010</code> 锁存 profile 完成时刻、<code>30011~30013</code> 输出当前时分秒，并且在外接 RTC、LSE+备份电池、PLC/菜单校时后都输出真实时间，硬件必须提供一个“不断电或可恢复”的真实时间来源。</p>
+      <div class="grid">
+        <div class="card">
+          <h3>推荐量产方案</h3>
+          <p><span class="tag ok">优先</span> 使用 STM32F429 内部 RTC，加 <code>32.768 kHz</code> LSE 晶体和 <code>VBAT</code> 备份电池/超级电容。</p>
+          <p>优点是 BOM 少、固件接口简单、CPU3 现有 <code>Cpu3Clock_GetDateTime()</code> 可以直接承接。</p>
+        </div>
+        <div class="card">
+          <h3>当前图纸限制</h3>
+          <p><span class="tag bad">必须改</span> 当前 CPU3 图纸中 <code>VBAT</code> 直接接 <code>3V3</code>，断主电后不保时。</p>
+          <p><code>PC15/OSC32_OUT</code> 当前接到 <code>WLED1</code>，不能同时作为 LSE 晶振脚。</p>
+        </div>
+        <div class="card">
+          <h3>备选方案</h3>
+          <p><span class="tag warn">可选</span> 如果不方便释放 <code>PC15</code>，就外接 I2C RTC，并新增 RTC 芯片电池域。</p>
+          <p>PLC/菜单校时只负责设置时间，不能替代断电保时硬件。</p>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>2. 当前 CPU3 原理图现状</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>位置</th>
+            <th>当前连接</th>
+            <th>对 RTC 的影响</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>CPU3 第 5 页，<code>U1.3 VBAT</code></td>
+            <td><code>VBAT</code> 与 <code>3V3</code> 同网，旁路电容在主 <code>3V3</code> 域。</td>
+            <td><span class="tag bad">不保时</span> 主电掉电后 RTC/备份寄存器无独立供电，不能保存真实时间。</td>
+          </tr>
+          <tr>
+            <td>CPU3 第 5 页，<code>PC14/OSC32_IN</code></td>
+            <td>图中未见外接 32.768 kHz 晶体和负载电容。</td>
+            <td><span class="tag warn">需补料</span> 若用内部 RTC 的 LSE，需要补晶体输入脚连接。</td>
+          </tr>
+          <tr>
+            <td>CPU3 第 5 页，<code>PC15/OSC32_OUT</code></td>
+            <td>当前接到 <code>WLED1</code>，并在 CPU3 第 1 页连接到显示接口 <code>P2</code> 的 <code>WLED1</code>。</td>
+            <td><span class="tag bad">冲突</span> LSE 开启后 <code>PC15</code> 必须作为 <code>OSC32_OUT</code>，不能再驱动显示背光/接口线。</td>
+          </tr>
+          <tr>
+            <td>CPU3 第 5 页，<code>PH0/PH1</code></td>
+            <td>已接 <code>25 MHz</code> 主晶振 <code>Y1</code>，负载电容 <code>C32/C35 22 pF</code>。</td>
+            <td><span class="tag ok">保留</span> 这是 HSE 主时钟，不是 RTC LSE，不解决断电时间保持。</td>
+          </tr>
+          <tr>
+            <td>CPU3 第 5 页，<code>PDR_ON</code></td>
+            <td><code>PDR_ON</code> 已接 <code>3V3</code>。</td>
+            <td><span class="tag ok">符合方向</span> STM32F429 的 VBAT 功能要求该条件保持，不建议改动。</td>
+          </tr>
+          <tr>
+            <td>CPU3 固件工程</td>
+            <td><code>HAL_I2C_MODULE_ENABLED</code> 当前未打开，<code>.ioc</code> 未配置 I2C 外设。</td>
+            <td><span class="tag warn">外接 RTC 需改固件</span> 外接 I2C RTC 要新增 I2C 或软件 I2C 驱动。</td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="note">
+        当前 CPU3 已有 <code>cpu3_clock.c</code>，但 RTC 时钟源配置为 <code>RCC_RTCCLKSOURCE_LSI</code>。LSI 可以让寄存器有时间值，但长期精度和断电保持都不满足“真实时间”的交付要求。
+      </div>
+    </section>
+
+    <section>
+      <h2>3. 推荐改法：LSE + VBAT 备份</h2>
+      <p>这一路径最适合新板修订。核心动作是释放 <code>PC14/PC15</code> 给 LSE，重做 <code>VBAT</code> 为独立备份电源域，并保留 PLC/菜单校时作为设置时间入口。</p>
+
+      <div class="schematic">
+        <div class="diagram">
+          <div class="diagram-title">当前连接</div>
+          <pre class="ascii">3V3 ─────────────── VBAT(U1.3)
+
+PC14/OSC32_IN  ─── 未见 LSE 晶体
+PC15/OSC32_OUT ─── WLED1 ─── P2 显示接口
+
+PH0/PH1 ────────── 25 MHz HSE 晶体</pre>
+        </div>
+        <div class="diagram">
+          <div class="diagram-title">建议连接</div>
+          <pre class="ascii">CR2032 或超级电容 ─── VBAT(U1.3)
+                         │
+                       100 nF
+                         │
+                        GND
+
+PC14/OSC32_IN  ─┬─ 32.768 kHz ─┬─ PC15/OSC32_OUT
+                │              │
+               Cx             Cy
+                │              │
+               GND            GND
+
+WLED1 改接其他背光控制网络或固定供电</pre>
+        </div>
+      </div>
+
+      <h3>3.1 必改网络</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>网络</th>
+            <th>修改要求</th>
+            <th>说明</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>VBAT</code></td>
+            <td>断开当前 <code>VBAT</code> 到 <code>3V3</code> 的直接硬连接，改为电池/超级电容备份域。</td>
+            <td>建议用跳帽或 0 欧电阻做选配：无电池版本可短接到 <code>3V3</code>，有电池版本不得让主 <code>3V3</code> 反向充 CR2032。</td>
+          </tr>
+          <tr>
+            <td><code>PC14/OSC32_IN</code></td>
+            <td>接 32.768 kHz 晶体一端，旁路负载电容到地。</td>
+            <td>走线短、远离 RS485、DC/DC、电机/继电器、OLED SPI 等快速或强干扰网络。</td>
+          </tr>
+          <tr>
+            <td><code>PC15/OSC32_OUT</code></td>
+            <td>从 <code>WLED1</code> 断开，接 32.768 kHz 晶体另一端，旁路负载电容到地。</td>
+            <td>这是当前原理图的主要冲突点。LSE 使用后，<code>PC15</code> 不能再接显示接口或 LED 负载。</td>
+          </tr>
+          <tr>
+            <td><code>WLED1</code></td>
+            <td>改到其他背光控制方式：并到 <code>WLED2</code>、固定上拉供电，或移到一个确认空闲 GPIO 通过三极管/MOS 管驱动。</td>
+            <td>不建议 MCU 管脚直接承受背光电流。若需要亮度控制，应单独用驱动管并预留限流。</td>
+          </tr>
+          <tr>
+            <td><code>PDR_ON</code></td>
+            <td>保持接 <code>3V3</code>。</td>
+            <td>不要为节省器件改成悬空或其他状态，否则会影响备份域可用性。</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>3.2 建议器件和布局</h3>
+      <ul>
+        <li>晶体：<code>32.768 kHz</code>、低 ESR、低负载电容型号，优先选 <code>CL=6 pF</code> 或 <code>CL=7 pF</code> 的表晶，便于降低负载电容和启动风险。</li>
+        <li>负载电容：先按晶体 <code>CL</code> 和 PCB 寄生电容估算，建议预留 <code>6.8 pF</code>、<code>8.2 pF</code>、<code>10 pF</code> 调试档位，不要照搬 HSE 的 <code>22 pF</code>。</li>
+        <li>电容材质：LSE 负载电容用 C0G/NP0，小封装、靠近 MCU；<code>VBAT</code> 去耦至少放 <code>100 nF</code> 靠近管脚。</li>
+        <li>电池：CR2032 正极接 <code>VBAT</code>、负极接 <code>GND</code>；非充电电池不得接充电通路。超级电容方案需串限流电阻/二极管，并保证 <code>VBAT</code> 不超过器件允许范围。</li>
+        <li>测试点：可以给 <code>VBAT</code> 预留测试点；不建议在 <code>PC14/PC15</code> 晶振线上挂长测试点或跨板走线。</li>
+      </ul>
+
+      <div class="warnbox">
+        如果只把 <code>VBAT</code> 加电池，但仍使用当前 LSI 作为 RTC 时钟，断电后时间可能能继续走，但精度仍受 LSI 影响；如果只加 LSE 但 <code>VBAT</code> 仍并到 <code>3V3</code>，掉电后仍会丢时间。真实时间要求两部分一起闭环。
+      </div>
+    </section>
+
+    <section>
+      <h2>4. 备选改法：外接 RTC 芯片</h2>
+      <p>如果当前 PCB 版本不方便释放 <code>PC15/WLED1</code>，外接 RTC 是更少动 MCU 晶振脚的方案。它需要新增 RTC 芯片、电池域和两根通信线。</p>
+
+      <table>
+        <thead>
+          <tr>
+            <th>引脚/网络</th>
+            <th>连接建议</th>
+            <th>注意事项</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>RTC_VCC</code></td>
+            <td>接 CPU3 <code>3V3</code>，旁边放 <code>100 nF</code>。</td>
+            <td>与 CPU3 逻辑电平一致。</td>
+          </tr>
+          <tr>
+            <td><code>RTC_VBAT</code></td>
+            <td>接 CR2032 或超级电容备份。</td>
+            <td>按所选 RTC 芯片手册处理充电/非充电配置。</td>
+          </tr>
+          <tr>
+            <td><code>SCL/SDA</code></td>
+            <td>接 CPU3 两个确认空闲的 GPIO 或 I2C 复用脚，外拉 <code>2.2 kΩ~4.7 kΩ</code> 到 <code>3V3</code>。</td>
+            <td>当前 CPU3 固件未启用 I2C。若选非 I2C 复用脚，可用软件 I2C，但要评估实时性和抗干扰。</td>
+          </tr>
+          <tr>
+            <td><code>INT/SQW</code></td>
+            <td>可不接；如需 1 Hz 校准或闹钟唤醒，可接一个空闲 GPIO。</td>
+            <td>当前 SI7000 时间寄存器不强制需要中断。</td>
+          </tr>
+          <tr>
+            <td><code>GND</code></td>
+            <td>接 CPU3 数字地。</td>
+            <td>远离 RS485 浪涌回流和 DC/DC 大电流回路。</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>4.1 当前图纸下的引脚选择原则</h3>
+      <ul>
+        <li>不要占用 <code>PB8/PB9/PB12</code>，它们当前是 COM 口模式选择输出。</li>
+        <li>不要占用 <code>PF1~PF4</code>，它们当前是按键输入。</li>
+        <li>不要占用 <code>PE11~PE14</code>，它们当前是 FRAM 的 <code>SPI4</code>。</li>
+        <li>不要占用 <code>PC6/PC7</code>、<code>PD5/PD6</code>、<code>PD8/PD9</code>，它们当前是外部通信串口。</li>
+        <li>图纸上可见的未命名 GPIO 需要结合 PCB 走线、连接器和装配版本再定稿；若只是新板修订，可优先从未接网络中挑两根并做软件 I2C。</li>
+      </ul>
+
+      <div class="note">
+        外接 RTC 方案可以保留 <code>PC15/WLED1</code>，但固件需要新增 RTC 芯片读写、掉电后启动读取、PLC/菜单校时写 RTC、通信异常时的时间有效性判定。
+      </div>
+    </section>
+
+    <section>
+      <h2>5. PLC/菜单校时的电路含义</h2>
+      <p>PLC/菜单校时本质是“写入时间”，不是“保持时间”。电路要按现场期望分两档处理：</p>
+      <div class="decision">
+        <strong>只要求上电后校时</strong>
+        <span>可不改硬件；PLC 或菜单设置时间后，CPU3 在不断电期间输出真实时间。缺点是掉电后必须重新校时，LSI 长时间运行会漂移。</span>
+      </div>
+      <div class="decision">
+        <strong>要求断电后仍真实</strong>
+        <span>必须改硬件：采用 LSE+VBAT 或外接 RTC+电池。PLC/菜单校时只负责首次设置或现场校准。</span>
+      </div>
+      <div class="decision">
+        <strong>要求长期精度</strong>
+        <span>优先 LSE 晶体或温补外接 RTC。内部 LSI 只能作为兜底，不能作为长期真实时间基准。</span>
+      </div>
+    </section>
+
+    <section>
+      <h2>6. SI7000 寄存器输出关系</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>寄存器</th>
+            <th>输出内容</th>
+            <th>硬件/固件条件</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>30007</code></td>
+            <td>Profile 完成时刻：月</td>
+            <td rowspan="4">CPU2 完成 profile 并递增完成计数后，CPU3 读取当前真实时间并锁存。下一次 profile 完成前保持该次完成时刻。</td>
+          </tr>
+          <tr>
+            <td><code>30008</code></td>
+            <td>Profile 完成时刻：日</td>
+          </tr>
+          <tr>
+            <td><code>30009</code></td>
+            <td>Profile 完成时刻：时</td>
+          </tr>
+          <tr>
+            <td><code>30010</code></td>
+            <td>Profile 完成时刻：分</td>
+          </tr>
+          <tr>
+            <td><code>30011</code></td>
+            <td>当前时间：时</td>
+            <td rowspan="3">每次刷新输入寄存器时读取 CPU3 当前真实时间。时间源可以是 LSE RTC、外接 RTC 同步后的本机时钟，或 PLC/菜单校时后的运行时钟。</td>
+          </tr>
+          <tr>
+            <td><code>30012</code></td>
+            <td>当前时间：分</td>
+          </tr>
+          <tr>
+            <td><code>30013</code></td>
+            <td>当前时间：秒</td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="badbox">
+        不建议把这些时间寄存器反向耦合到 CPU2 测量调度。它们应保持“协议展示/时间戳”用途，自动 profile 调度若后续要做，需要单独设计互斥条件、掉电恢复和安全边界。
+      </div>
+    </section>
+
+    <section>
+      <h2>7. 推荐落地顺序</h2>
+      <ol>
+        <li>硬件评审先确认 <code>WLED1</code> 是否必须由 MCU 控制。如果不是必须，优先释放 <code>PC15</code>。</li>
+        <li>新板修订采用 <code>PC14/PC15 + 32.768 kHz LSE + VBAT</code>，同时把 <code>VBAT</code> 从当前 <code>3V3</code> 直连改为可选备份电源域。</li>
+        <li>如果 <code>WLED1</code> 不能释放，改走外接 RTC，先定两根不冲突的 CPU3 GPIO/I2C 线，再更新 <code>.ioc</code> 和驱动。</li>
+        <li>固件把 <code>Cpu3Clock</code> 抽象成统一时间源：LSE RTC、外接 RTC 同步、PLC/菜单校时都通过同一接口输出给 SI7000。</li>
+        <li>联调时验证：断主电再上电，<code>30011~30013</code> 不回到默认时间；完成一次 profile 后，<code>30007~30010</code> 保持完成时刻，不随当前时间滚动。</li>
+      </ol>
+    </section>
+
+    <section>
+      <h2>8. 资料依据</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>资料</th>
+            <th>使用点</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>docs/07_硬件原理图/00_原始资料/储罐自动计量仪原理图汇总.pdf</code></td>
+            <td>CPU3 第 1 页显示接口、CPU3 第 5 页 MCU/VBAT/晶振/FRAM/调试接口。</td>
+          </tr>
+          <tr>
+            <td><code>docs/07_硬件原理图/储罐自动计量仪原理图汇总整理.md</code></td>
+            <td>确认 CPU3 页码、板卡角色和 CPU3 电源/接口归类。</td>
+          </tr>
+          <tr>
+            <td><code>LTD_DISPLAY_CPU3/Application/system_param/cpu3_clock.c</code></td>
+            <td>确认当前 CPU3 RTC 使用 LSI，且时间只用于 SI7000 展示和 profile 时间戳。</td>
+          </tr>
+          <tr>
+            <td><code>LTD_DISPLAY_CPU3/Communication/external/si7000_modbus/si7000_modbus_slave.c</code></td>
+            <td>确认 <code>30007~30010</code> profile 完成时刻锁存和 <code>30011~30013</code> 当前时间输出路径。</td>
+          </tr>
+          <tr>
+            <td><a href="https://www.st.com/resource/en/datasheet/stm32f427vg.pdf">ST STM32F427xx/STM32F429xx Datasheet</a></td>
+            <td>确认 STM32F429 支持 RTC、备份寄存器、VBAT 域、32 kHz RTC 振荡器和 I2C 外设资源。</td>
+          </tr>
+          <tr>
+            <td><a href="https://www.st.com/resource/en/application_note/an2867-guidelines-for-oscillator-design-on-stm8afals-and-stm32-mcusmpus-stmicroelectronics.pdf">ST AN2867 Oscillator Design Guidelines</a></td>
+            <td>确认 LSE 晶体选型、负载电容、PCB 布局和起振评估应按晶体参数设计。</td>
+          </tr>
+        </tbody>
+      </table>
+      <p class="small">本文件用于电路修改和固件联调评审，不替代正式硬件设计评审、BOM、PCB 走线审查或本安认证结论。</p>
+    </section>
+  </main>
+</body>
+</html>
