@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>跨 CPU 业务链路导航</title>
+<style>
+:root{--ink:#17233a;--muted:#5c6f85;--line:#d5e1ed;--panel:#fff;--bg:#f2f6fb;--blue:#2f78c8;--green:#248b70;--amber:#b97816;--red:#b84a55;--violet:#6658bd;--shadow:0 12px 32px rgba(31,59,91,.10)}
+*{box-sizing:border-box}
+body{margin:0;background:linear-gradient(180deg,#f6f9fd 0,#edf3f9 100%);color:var(--ink);font:15px/1.72 "Microsoft YaHei",Segoe UI,Arial,sans-serif}
+a{color:#1f65aa;text-decoration:none}
+code{font-family:Consolas,"Courier New",monospace;background:#eef4fb;border:1px solid #d7e4f2;border-radius:5px;padding:1px 5px}
+.wrap{max-width:1240px;margin:0 auto;padding:28px 28px 64px}
+.hero{background:linear-gradient(135deg,#163a62,#0a7775);color:#fff;border-radius:12px;padding:30px 34px;box-shadow:var(--shadow)}
+.hero h1{margin:0 0 10px;font-size:31px;line-height:1.25}
+.hero p{margin:0;max-width:980px;color:#e6f4ff}
+.meta-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-top:22px}
+.meta{border:1px solid rgba(255,255,255,.24);background:rgba(255,255,255,.09);border-radius:8px;padding:12px 14px}
+.meta span{display:block;color:#cbe7ff;font-size:12px;font-weight:700}
+.meta strong{display:block;margin-top:4px;color:#fff}
+.topnav{position:sticky;top:0;z-index:5;margin:18px 0;padding:10px;background:rgba(255,255,255,.94);border:1px solid #d8e4f0;border-radius:10px;box-shadow:0 6px 18px rgba(38,65,96,.08);display:flex;flex-wrap:wrap;gap:8px}
+.topnav a{padding:7px 10px;border-radius:6px;background:#f4f8fd;border:1px solid #dce8f6;color:#23527d;font-size:13px;font-weight:700}
+section{background:var(--panel);border:1px solid #d7e2ef;border-radius:10px;margin:18px 0;padding:22px 24px;box-shadow:0 8px 24px rgba(35,58,92,.06)}
+h2{margin:0 0 10px;font-size:24px}
+h3{margin:16px 0 8px;font-size:18px}
+.lead{color:var(--muted);margin:0 0 14px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:12px}
+.card{border:1px solid #dbe6f2;border-radius:8px;background:#fbfdff;padding:13px}
+.card strong{display:block;margin-bottom:5px;color:#15263c}
+.card p{margin:0 0 8px;color:#46596f}
+.links{display:flex;flex-wrap:wrap;gap:7px}
+.pill{display:inline-flex;align-items:center;min-height:28px;padding:4px 9px;border-radius:999px;background:#f4f8fd;border:1px solid #d8e5f4;color:#245d96;font-size:12px;font-weight:700}
+.split{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.flow-wrap{overflow:auto;border:1px solid #d7e2ef;border-radius:10px;background:#fbfdff;margin-top:12px}
+.route-svg{display:block;min-width:1000px;width:100%;height:auto}
+.node{stroke-width:2}
+.node.cpu3{fill:#eaf4ff;stroke:#5d9be2}
+.node.cpu2{fill:#eaf8f1;stroke:#39a97e}
+.node.ext{fill:#fff6df;stroke:#d39a31}
+.node.state{fill:#f3f1ff;stroke:#7464c9}
+.node.error{fill:#fff0f1;stroke:#c55c66}
+.edge{fill:none;stroke:#61758e;stroke-width:2}
+.edge-red{fill:none;stroke:#b84a55;stroke-width:2}
+.nt{text-anchor:middle;font-size:16px;font-weight:800;fill:#17233a}
+.ns{text-anchor:middle;font-size:12px;fill:#5c6f85}
+.route-card{border-left:4px solid #2f78c8}
+.route-card:nth-child(2n){border-left-color:#248b70}
+.route-card:nth-child(3n){border-left-color:#b97816}
+.steps{display:grid;gap:8px;margin-top:10px}
+.step{display:grid;grid-template-columns:116px 1fr;gap:8px;align-items:start;padding:9px;border:1px solid #e0e8f2;border-radius:8px;background:#fff}
+.step b{font-size:13px;color:#28476a}
+.step span{display:block;color:#4d6076;font-size:13px}
+.note{border:1px solid #bad8fb;background:#eef7ff;border-radius:8px;padding:11px 13px}
+@media(max-width:800px){.wrap{padding:16px}.hero h1{font-size:24px}.meta-grid,.split{grid-template-columns:1fr}section{padding:18px}.step{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header class="hero">
+<h1>跨 CPU 业务链路导航</h1>
+<p>按整机业务把 CPU3 入口、内部 Modbus、CPU2 命令入口、测量执行、状态回读和显示/协议响应串成连续路线。这里解决“从一个 HTML 跳到另一个 HTML 太生硬”的问题。</p>
+<div class="meta-grid">
+<div class="meta"><span>入口侧</span><strong>菜单 / 外部协议 / 显示</strong></div>
+<div class="meta"><span>通道</span><strong>CPU3 UART5 Modbus</strong></div>
+<div class="meta"><span>执行侧</span><strong>CPU2 测量状态机</strong></div>
+<div class="meta"><span>回读侧</span><strong>寄存器 / 显示 / 协议响应</strong></div>
+</div>
+</header>
+<nav class="topnav">
+<a href="index.html">统一入口</a>
+<a href="#map">整机闭环图</a>
+<a href="#oil">液位</a>
+<a href="#water">水位</a>
+<a href="#density">密度</a>
+<a href="#param">参数</a>
+<a href="#fault">故障</a>
+<a href="#external">外部协议</a>
+</nav>
+<section id="map">
+<h2>1. 整机业务闭环图</h2>
+<p class="lead">图中只写业务动作，不写函数名。函数名和源码证据保留在各自详细页面里。</p>
+<div class="flow-wrap">
+<svg class="route-svg" viewBox="0 0 1200 760" role="img" aria-label="CPU2 CPU3 跨 CPU 业务闭环">
+<defs>
+<marker id="route-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#61758e"/></marker>
+<marker id="route-arrow-red" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#b84a55"/></marker>
+</defs>
+<rect class="node ext" x="70" y="55" width="230" height="78" rx="10"/><text class="nt" x="185" y="88">用户/上位机</text><text class="ns" x="185" y="111">按键菜单、DSM、Wartsila、SI7000</text>
+<rect class="node cpu3" x="390" y="55" width="260" height="78" rx="10"/><text class="nt" x="520" y="88">CPU3 入口映射</text><text class="ns" x="520" y="111">菜单确认、协议解析、参数检查</text>
+<rect class="node cpu3" x="770" y="55" width="260" height="78" rx="10"/><text class="nt" x="900" y="88">CPU3 内部 Modbus 主站</text><text class="ns" x="900" y="111">写 CPU2 命令/参数，轮询输入结果</text>
+<rect class="node cpu2" x="770" y="215" width="260" height="82" rx="10"/><text class="nt" x="900" y="250">CPU2 通信寄存器入口</text><text class="ns" x="900" y="273">保持寄存器写入、输入寄存器发布</text>
+<rect class="node cpu2" x="390" y="215" width="260" height="82" rx="10"/><text class="nt" x="520" y="250">CPU2 测量命令入口</text><text class="ns" x="520" y="273">公共准备、命令分发、状态切换</text>
+<rect class="node cpu2" x="70" y="215" width="230" height="82" rx="10"/><text class="nt" x="185" y="250">CPU2 运动/传感支撑</text><text class="ns" x="185" y="273">电机、位置、传感、称重</text>
+<rect class="node cpu2" x="160" y="395" width="260" height="92" rx="10"/><text class="nt" x="290" y="430">CPU2 测量执行</text><text class="ns" x="290" y="453">液位、水位、密度、回零、输出</text>
+<rect class="node error" x="490" y="395" width="230" height="92" rx="10"/><text class="nt" x="605" y="430">故障/异常出口</text><text class="ns" x="605" y="453">SET_ERROR、命令切换、状态恢复</text>
+<rect class="node state" x="800" y="395" width="250" height="92" rx="10"/><text class="nt" x="925" y="430">CPU2 状态发布</text><text class="ns" x="925" y="453">测量结果、设备状态、错误码</text>
+<rect class="node cpu3" x="800" y="575" width="250" height="82" rx="10"/><text class="nt" x="925" y="610">CPU3 缓存刷新</text><text class="ns" x="925" y="633">g_measurement、参数镜像、点表</text>
+<rect class="node cpu3" x="390" y="575" width="260" height="82" rx="10"/><text class="nt" x="520" y="610">显示和外部协议响应</text><text class="ns" x="520" y="633">状态页刷新、DSM/Wartsila/SI7000 读出</text>
+<path class="edge" d="M300 94 L390 94" marker-end="url(#route-arrow)"/>
+<path class="edge" d="M650 94 L770 94" marker-end="url(#route-arrow)"/>
+<path class="edge" d="M900 133 L900 215" marker-end="url(#route-arrow)"/>
+<path class="edge" d="M770 256 L650 256" marker-end="url(#route-arrow)"/>
+<path class="edge" d="M390 256 L300 256" marker-end="url(#route-arrow)"/>
+<path class="edge" d="M185 297 C195 342 235 365 290 395" marker-end="url(#route-arrow)"/>
+<path class="edge" d="M520 297 C450 335 360 360 290 395" marker-end="url(#route-arrow)"/>
+<path class="edge-red" d="M420 441 L490 441" marker-end="url(#route-arrow-red)"/>
+<path class="edge" d="M720 441 L800 441" marker-end="url(#route-arrow)"/>
+<path class="edge" d="M925 487 L925 575" marker-end="url(#route-arrow)"/>
+<path class="edge" d="M800 616 L650 616" marker-end="url(#route-arrow)"/>
+<path class="edge" d="M520 575 C470 505 370 485 290 487" marker-end="url(#route-arrow)"/>
+<path class="edge" d="M900 575 C1010 505 1030 300 1030 133" marker-end="url(#route-arrow)"/>
+</svg>
+</div>
+</section>
+<section>
+<h2>2. 分业务路线</h2>
+<p class="lead">每条路线都按“入口 -> 通道 -> CPU2 执行 -> 回读/显示”展开。点击步骤可直接进入对应的详细流程图页面。</p>
+<div class="grid">
+<article class="card route-card" id="oil"><h3>液位测量与跟随链路</h3><p>从 CPU3 菜单或外部协议发起找液位/液位跟随，CPU2 执行找液位、闭环跟随和状态上报，CPU3 再显示或对外响应。</p><div class="steps"><div class="step"><b>1. CPU3 指令来源</b><span><a href="../../LTD_DISPLAY_CPU3/docs/00_程序流程/07_菜单参数与指令下发.html">菜单参数与指令下发</a>：菜单发找液位、标定或修正指令</span></div><div class="step"><b>2. CPU3 内部通道</b><span><a href="../../LTD_DISPLAY_CPU3/docs/00_程序流程/02_CPU2内部通信与轮询.html">CPU2 内部通信与轮询</a>：通过 UART5/Modbus 写 CPU2 命令或参数</span></div><div class="step"><b>3. CPU2 命令入口</b><span><a href="../../LTD_MAIN_CPU2/docs/00_程序流程/02_测量命令总入口.html">测量命令总入口</a>：统一进入测量公共准备和命令分发</span></div><div class="step"><b>4. CPU2 测量核心</b><span><a href="../../LTD_MAIN_CPU2/docs/00_程序流程/04_液位测量与跟随.html">液位测量与跟随</a>：完成粗找、精找、阈值确定和跟随闭环</span></div><div class="step"><b>5. 状态回读</b><span><a href="../../LTD_MAIN_CPU2/docs/00_程序流程/10_Modbus与CPU3通信.html">Modbus 与 CPU3 通信</a>：CPU2 更新输入寄存器和状态</span></div><div class="step"><b>6. CPU3 显示/协议</b><span><a href="../../LTD_DISPLAY_CPU3/docs/00_程序流程/06_显示刷新与按键事件.html">显示刷新与按键事件</a>：状态页刷新，外部 DSM/Wartsila/SI7000 可读取结果</span></div></div></article><article class="card route-card" id="water"><h3>水位测量与跟随链路</h3><p>水位链路与液位类似，但传感模式、阈值和盲区策略不同，建议从命令入口一路跟到 CPU2 水位详细流程。</p><div class="steps"><div class="step"><b>1. CPU3 指令来源</b><span><a href="../../LTD_DISPLAY_CPU3/docs/00_程序流程/07_菜单参数与指令下发.html">菜单参数与指令下发</a>：菜单或外部协议选择找水/水位跟随</span></div><div class="step"><b>2. CPU3 内部通道</b><span><a href="../../LTD_DISPLAY_CPU3/docs/00_程序流程/02_CPU2内部通信与轮询.html">CPU2 内部通信与轮询</a>：写 CPU2 命令，运行期轮询输入寄存器</span></div><div class="step"><b>3. CPU2 命令入口</b><span><a href="../../LTD_MAIN_CPU2/docs/00_程序流程/02_测量命令总入口.html">测量命令总入口</a>：统一公共准备后分发到水位流程</span></div><div class="step"><b>4. CPU2 测量核心</b><span><a href="../../LTD_MAIN_CPU2/docs/00_程序流程/05_水位测量与跟随.html">水位测量与跟随</a>：找水、跟随、盲区和错误出口</span></div><div class="step"><b>5. 状态回读</b><span><a href="../../LTD_MAIN_CPU2/docs/00_程序流程/10_Modbus与CPU3通信.html">Modbus 与 CPU3 通信</a>：水位状态、错误码和结果进入通信寄存器</span></div><div class="step"><b>6. CPU3 显示/协议</b><span><a href="../../LTD_DISPLAY_CPU3/docs/00_程序流程/06_显示刷新与按键事件.html">显示刷新与按键事件</a>：显示端刷新水位状态或等待下一轮</span></div></div></article><article class="card route-card" id="density"><h3>密度、单点和分布测量链路</h3><p>密度链路同时涉及 CPU2 测量算法、分布点回读和 CPU3 的 Wartsila/SI7000 协议适配。</p><div class="steps"><div class="step"><b>1. 外部/菜单入口</b><span><a href="../../LTD_DISPLAY_CPU3/docs/00_程序流程/05_Wartsila与SI7000协议适配.html">Wartsila 与 SI7000 协议适配</a>：Wartsila/SI7000 或菜单触发密度类指令</span></div><div class="step"><b>2. CPU3 内部通道</b><span><a href="../../LTD_DISPLAY_CPU3/docs/00_程序流程/02_CPU2内部通信与轮询.html">CPU2 内部通信与轮询</a>：写命令并在完成后分批读取密度分布点</span></div><div class="step"><b>3. CPU2 命令入口</b><span><a href="../../LTD_MAIN_CPU2/docs/00_程序流程/02_测量命令总入口.html">测量命令总入口</a>：按密度、单点、区间、瓦锡兰场景分发</span></div><div class="step"><b>4. CPU2 测量核心</b><span><a href="../../LTD_MAIN_CPU2/docs/00_程序流程/06_密度与单点测量.html">密度与单点测量</a>：完成单点、分布、区间密度测量和状态发布</span></div><div class="step"><b>5. 状态/点表回读</b><span><a href="../../LTD_MAIN_CPU2/docs/00_程序流程/10_Modbus与CPU3通信.html">Modbus 与 CPU3 通信</a>：结果、profile 完成标志和点表供 CPU3 读取</span></div><div class="step"><b>6. 外部协议响应</b><span><a href="../../LTD_DISPLAY_CPU3/docs/00_程序流程/05_Wartsila与SI7000协议适配.html">Wartsila 与 SI7000 协议适配</a>：Wartsila/SI7000 将缓存结果映射给外部系统</span></div></div></article><article class="card route-card" id="param"><h3>参数修改、保存和同步链路</h3><p>CPU3 菜单和外部协议都可能修改参数，必须区分 CPU3 本机参数、CPU2 设备参数和共享寄存器缓存。</p><div class="steps"><div class="step"><b>1. 显示/协议入口</b><span><a href="../../LTD_DISPLAY_CPU3/docs/00_程序流程/07_菜单参数与指令下发.html">菜单参数与指令下发</a>：用户输入参数或外部协议写保持寄存器</span></div><div class="step"><b>2. 本机参数支撑</b><span><a href="../../LTD_DISPLAY_CPU3/docs/00_程序流程/08_本机参数FRAM时钟与外设恢复.html">本机参数、FRAM、时钟与外设恢复</a>：CPU3 通信/显示参数保存到 FRAM 并触发串口重配</span></div><div class="step"><b>3. 内部写入</b><span><a href="../../LTD_DISPLAY_CPU3/docs/00_程序流程/02_CPU2内部通信与轮询.html">CPU2 内部通信与轮询</a>：CPU2 设备参数通过 0x10 写入 CPU2</span></div><div class="step"><b>4. CPU2 通信入口</b><span><a href="../../LTD_MAIN_CPU2/docs/00_程序流程/10_Modbus与CPU3通信.html">Modbus 与 CPU3 通信</a>：CPU2 接收保持寄存器写入并更新参数结构</span></div><div class="step"><b>5. CPU2 参数存储</b><span><a href="../../LTD_MAIN_CPU2/docs/00_程序流程/12_参数存储与系统配置.html">参数存储与系统配置</a>：延后保存、默认值、范围和系统配置</span></div><div class="step"><b>6. 业务生效</b><span><a href="../../LTD_MAIN_CPU2/docs/00_程序流程/04_液位测量与跟随.html">液位测量与跟随</a>：测量流程在下一次执行时读取新参数</span></div></div></article><article class="card route-card" id="fault"><h3>故障、恢复和状态展示链路</h3><p>CPU2 是主要故障产生和恢复位置，CPU3 负责轮询状态、显示提示，并在外部协议里反馈故障结果。</p><div class="steps"><div class="step"><b>1. 故障产生</b><span><a href="../../LTD_MAIN_CPU2/docs/00_程序流程/08_电机与位置模型.html">电机与位置模型</a>：电机、位置、称重碰撞或传感异常触发错误条件</span></div><div class="step"><b>2. CPU2 故障管理</b><span><a href="../../LTD_MAIN_CPU2/docs/00_程序流程/07_故障管理与恢复.html">故障管理与恢复</a>：SET_ERROR、状态切换、恢复尝试和错误输出</span></div><div class="step"><b>3. CPU2 通信发布</b><span><a href="../../LTD_MAIN_CPU2/docs/00_程序流程/10_Modbus与CPU3通信.html">Modbus 与 CPU3 通信</a>：设备状态、错误码和测量状态进入寄存器</span></div><div class="step"><b>4. CPU3 轮询缓存</b><span><a href="../../LTD_DISPLAY_CPU3/docs/00_程序流程/02_CPU2内部通信与轮询.html">CPU2 内部通信与轮询</a>：输入寄存器刷新 g_measurement</span></div><div class="step"><b>5. CPU3 显示</b><span><a href="../../LTD_DISPLAY_CPU3/docs/00_程序流程/06_显示刷新与按键事件.html">显示刷新与按键事件</a>：状态页和菜单页展示设备状态</span></div><div class="step"><b>6. 外部协议</b><span><a href="../../LTD_DISPLAY_CPU3/docs/00_程序流程/04_DSM协议与命令映射.html">DSM 协议与命令映射</a>：DSM/Wartsila/SI7000 读取缓存状态</span></div></div></article><article class="card route-card" id="external"><h3>外部协议到 CPU2 测量链路</h3><p>外部 COM 先在 CPU3 分发，协议层只做映射和缓存，真正测量动作仍由 CPU2 命令入口完成。</p><div class="steps"><div class="step"><b>1. 外部 COM</b><span><a href="../../LTD_DISPLAY_CPU3/docs/00_程序流程/03_外部COM协议分发与RS485发送.html">外部 COM 协议分发与 RS485 发送</a>：COM1/COM2/COM3 按端口参数选择协议处理</span></div><div class="step"><b>2. DSM 映射</b><span><a href="../../LTD_DISPLAY_CPU3/docs/00_程序流程/04_DSM协议与命令映射.html">DSM 协议与命令映射</a>：DSM 读写线圈/保持寄存器映射到缓存或 CPU2 指令</span></div><div class="step"><b>3. Wartsila/SI7000</b><span><a href="../../LTD_DISPLAY_CPU3/docs/00_程序流程/05_Wartsila与SI7000协议适配.html">Wartsila 与 SI7000 协议适配</a>：协议适配层映射参数、结果和密度点</span></div><div class="step"><b>4. CPU3 内部通道</b><span><a href="../../LTD_DISPLAY_CPU3/docs/00_程序流程/02_CPU2内部通信与轮询.html">CPU2 内部通信与轮询</a>：需要 CPU2 动作时通过内部 Modbus 下发</span></div><div class="step"><b>5. CPU2 命令入口</b><span><a href="../../LTD_MAIN_CPU2/docs/00_程序流程/02_测量命令总入口.html">测量命令总入口</a>：命令进入 CPU2 正式测量状态机</span></div><div class="step"><b>6. CPU2 结果发布</b><span><a href="../../LTD_MAIN_CPU2/docs/00_程序流程/10_Modbus与CPU3通信.html">Modbus 与 CPU3 通信</a>：运行结果回到 CPU3 缓存并对外响应</span></div></div></article>
+</div>
+</section>
+<section>
+<h2>3. 使用建议</h2>
+<div class="grid">
+<article class="card"><strong>查一个命令为什么没执行</strong><p>先看 CPU3 是否把命令写入内部 Modbus，再看 CPU2 命令入口是否接收，最后看对应测量页的异常出口。</p></article>
+<article class="card"><strong>查结果为什么没显示</strong><p>先看 CPU2 是否发布输入寄存器，再看 CPU3 内部轮询是否刷新缓存，最后看显示页或外部协议页。</p></article>
+<article class="card"><strong>查参数为什么没生效</strong><p>区分 CPU3 本机参数、CPU2 设备参数和协议缓存，按参数链路逐页核对。</p></article>
+</div>
+</section>
+</div>
+</body>
+</html>

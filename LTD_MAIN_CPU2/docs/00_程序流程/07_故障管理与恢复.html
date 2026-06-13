@@ -22,11 +22,31 @@ h2{font-size:23px;margin:0 0 14px;} p{margin:8px 0 14px}.lead{font-size:15px;col
 .evidence-row{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}.evidence{display:inline-flex;align-items:center;gap:6px;border:1px solid #d8e5f1;background:#f7fbff;border-radius:7px;padding:6px 9px;font-size:12px;color:#435973}.evidence code{color:#174c83}.callout{border-left:4px solid #4f8cc9;background:#f2f7fd;padding:10px 12px;border-radius:7px;margin:12px 0}.callout strong{display:block}.callout span{display:block;color:#425975;font-size:13px}.callout.warn{border-left-color:#d99a2b;background:#fff8e8}
 .biz-flow{width:100%;height:auto;border:1px solid #d7e4f2;border-radius:10px;background:#fbfdff;margin:12px 0 4px;}.biz-flow .canvas{fill:#fbfdff}.svg-title{font-size:18px;font-weight:700;fill:#18304d}.svg-subtitle{font-size:12px;fill:#5a6b83}.edge{fill:none;stroke:#526a84;stroke-width:2.1}.edge.dashed{stroke-dasharray:7 6}.edge-label{font-size:12px;fill:#2f435b;font-weight:600}.node{stroke-width:1.5}.node-text{font-size:13px;fill:#13253c;text-anchor:middle;dominant-baseline:middle;font-weight:600}.node-text.small{font-size:12px}.issue-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.issue{border:1px solid #d9e5f1;border-radius:8px;padding:13px 14px;background:#fff}.issue.high{border-left:5px solid #d24a4a}.issue.medium{border-left:5px solid #d49328}.issue.low{border-left:5px solid #4b88d8}.issue-head{display:flex;align-items:center;gap:8px}.issue-head span{font-size:12px;border-radius:999px;padding:2px 8px;background:#f1f5f9}.issue p{font-size:13px;color:#324a66;margin:8px 0}.issue footer{font-size:12px;color:#62758e}table{width:100%;border-collapse:collapse;margin-top:10px;font-size:13px}th,td{border:1px solid #dbe7f3;padding:9px 10px;text-align:left;vertical-align:top}th{background:#f0f6fc}code{font-family:Consolas,"Courier New",monospace;background:#eef5fc;border:1px solid #d6e5f2;border-radius:4px;padding:1px 4px;color:#173b63}@media(max-width:900px){.wrap{padding:18px 14px}.meta-grid,.info-grid,.issue-list{grid-template-columns:1fr}.hero{padding:24px 20px}.topnav{position:static}.card{padding:18px 14px}.node-text{font-size:12px}}
 </style>
+
+<style id="cross-flow-nav-style">
+.cross-flow-nav{margin:16px 0 20px;padding:16px 18px;border:1px solid #cfe0f2;border-radius:10px;background:#fff;box-shadow:0 8px 22px rgba(31,59,91,.07)}
+.cross-flow-nav *{box-sizing:border-box}
+.cross-flow-nav__head{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;margin-bottom:12px}
+.cross-flow-nav__kicker{display:block;color:#4f6b86;font-size:12px;font-weight:700;margin-bottom:3px}
+.cross-flow-nav__title{font-size:18px;font-weight:850;color:#17233a}
+.cross-flow-nav__quick{display:flex;flex-wrap:wrap;gap:7px;justify-content:flex-end}
+.cross-flow-nav__quick a,.cross-flow-nav__links a{display:inline-flex;align-items:center;min-height:28px;padding:4px 9px;border:1px solid #d7e5f3;border-radius:999px;background:#f6faff;color:#245d96;text-decoration:none;font-size:12px;font-weight:700}
+.cross-flow-nav__grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px}
+.cross-flow-nav__card{border:1px solid #dce7f2;border-radius:8px;background:#fbfdff;padding:12px}
+.cross-flow-nav__card b{display:block;margin-bottom:5px;color:#16263b}
+.cross-flow-nav__card p{margin:0 0 8px;color:#43556b;line-height:1.62;font-size:13px}
+.cross-flow-nav__links{display:flex;flex-wrap:wrap;gap:6px}
+@media(max-width:720px){.cross-flow-nav__head{display:block}.cross-flow-nav__quick{justify-content:flex-start;margin-top:10px}.cross-flow-nav{padding:14px}}
+</style>
 </head>
 <body>
 <div class="wrap">
 <header class="hero"><h1>CPU2 故障管理与恢复程序详细流程</h1><p>按当前源码重新整理故障入口、错误状态、停机保护、日志去重、自动恢复上下文、主循环重试和可中断延时。所有流程图均为业务级 SVG 图，节点描述功能动作和判断条件，函数名只作为源码索引保留。</p><div class="meta-grid"><div class="meta"><span>功能域</span><strong>故障管理与自动恢复</strong></div><div class="meta"><span>核心源文件</span><strong>fault_manager / fault_recovery / error_log</strong></div><div class="meta"><span>流程图数量</span><strong>8 张业务级 SVG</strong></div><div class="meta"><span>整理日期</span><strong>2026-06-12</strong></div></div></header>
 <nav class="topnav"><a href="#scope">整理范围</a><a href="#overview">总体流程</a><a href="#macros">错误宏入口</a><a href="#manager">故障落地</a><a href="#update">恢复判定</a><a href="#poll">恢复轮询</a><a href="#app">主循环接入</a><a href="#log">错误日志</a><a href="#delay">可中断延时</a><a href="#allow">准入规则</a><a href="#issues">问题点</a><a href="#source">源码索引</a></nav>
+<!-- CROSS-FLOW-NAV-START -->
+<section class="cross-flow-nav" id="cross-flow-nav" aria-label="程序流程关联导航"><div class="cross-flow-nav__head"><div><span class="cross-flow-nav__kicker">程序流程关联导航</span><div class="cross-flow-nav__title">故障管理与恢复 在整机链路中的位置</div></div><div class="cross-flow-nav__quick"><a href="../../../docs/00_程序流程导航/index.html">统一入口</a><a href="../../../docs/00_程序流程导航/跨CPU业务链路.html">跨 CPU 链路</a><a href="CPU2程序流程总览.html">CPU2 总览</a><a href="../../../LTD_DISPLAY_CPU3/docs/00_程序流程/CPU3程序流程总览.html">CPU3 总览</a></div></div><div class="cross-flow-nav__grid"><article class="cross-flow-nav__card"><b>上游入口</b><p>先看这些页面，可以知道本页由哪个菜单、协议、主循环或测量状态触发。</p><div class="cross-flow-nav__links"><a href="04_液位测量与跟随.html">液位测量与跟随</a><a href="05_水位测量与跟随.html">水位测量与跟随</a><a href="06_密度与单点测量.html">密度与单点测量</a><a href="08_电机与位置模型.html">电机与位置模型</a><a href="09_传感器与无线通信.html">传感器与无线通信</a><a href="13_称重与继电器输出.html">称重与继电器输出</a></div></article><article class="cross-flow-nav__card"><b>本页定位</b><p>CPU2 统一故障状态、错误码、恢复尝试和异常出口，是测量、电机、传感和通信的安全汇聚点。</p><div class="cross-flow-nav__links"><a href="07_故障管理与恢复.html">故障管理与恢复</a></div></article><article class="cross-flow-nav__card"><b>下游输出</b><p>本页处理完成后，通常会影响这些测量、通信、显示、故障或参数页面。</p><div class="cross-flow-nav__links"><a href="10_Modbus与CPU3通信.html">Modbus 与 CPU3 通信</a><a href="../../../LTD_DISPLAY_CPU3/docs/00_程序流程/02_CPU2内部通信与轮询.html">CPU2 内部通信与轮询</a><a href="../../../LTD_DISPLAY_CPU3/docs/00_程序流程/06_显示刷新与按键事件.html">显示刷新与按键事件</a><a href="问题点总表.html">CPU2 问题点总表</a></div></article><article class="cross-flow-nav__card"><b>建议阅读路线</b><p>按业务链路阅读时，建议按这些页面顺序前后跳转。</p><div class="cross-flow-nav__links"><a href="../../../docs/00_程序流程导航/跨CPU业务链路.html">跨 CPU 业务链路</a><a href="08_电机与位置模型.html">电机与位置模型</a><a href="07_故障管理与恢复.html">故障管理与恢复</a><a href="10_Modbus与CPU3通信.html">Modbus 与 CPU3 通信</a><a href="../../../LTD_DISPLAY_CPU3/docs/00_程序流程/06_显示刷新与按键事件.html">显示刷新与按键事件</a></div></article></div></section>
+<!-- CROSS-FLOW-NAV-END -->
+
 <section id="scope" class="card"><h2>1. 整理范围</h2>
 <p class="lead">本页不是按函数名堆叠，而是按故障业务链路整理：错误从业务函数进入，先统一停机和最终报警，再在命令结束后登记自动恢复上下文，最后由主循环空闲分支周期性检查并重跑原业务命令。</p>
 <div class="info-grid">
@@ -41,7 +61,7 @@ h2{font-size:23px;margin:0 0 14px;} p{margin:8px 0 14px}.lead{font-size:15px;col
 <span class="evidence"><code>Application/Src/fault_recovery.c:230-459</code> 故障恢复负责登记上下文、轮询检查和触发重跑命令。</span>
 <span class="evidence"><code>Application/Src/app_main.c:174-223</code> 主循环决定新命令优先、空闲时轮询自动恢复。</span>
 </div></section>
-<section id="overview" class="card"><h2>2. 总体业务流程图</h2><p>这张图按真实业务时序画：错误入口不是直接进入重试，而是先完成统一错误处理；自动恢复只在命令结束后登记，重试动作由主循环空闲分支触发。</p><svg class="biz-flow" viewBox="0 0 1320 735" role="img" aria-labelledby="fault-overview-title fault-overview-desc">
+<section id="overview" class="card"><h2>2. 总体业务流程图</h2><p>这张图按真实业务时序画：错误入口不是直接进入重试，而是先完成统一错误处理；自动恢复只在命令结束后登记，重试动作由主循环空闲分支触发。</p><svg class="biz-flow" viewBox="0 0 1320 834" role="img" aria-labelledby="fault-overview-title fault-overview-desc">
 <title id="fault-overview-title">故障管理总体业务链路</title><desc id="fault-overview-desc">从业务错误入口到停机、日志、恢复上下文、主循环重试的完整闭环</desc><defs>
     <marker id="arrow-fault-overview" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#46627f"/></marker>
     <filter id="shadow-fault-overview" x="-10%" y="-15%" width="130%" height="140%"><feDropShadow dx="0" dy="7" stdDeviation="7" flood-color="#24415f" flood-opacity="0.14"/></filter>
@@ -110,7 +130,7 @@ h2{font-size:23px;margin:0 0 14px;} p{margin:8px 0 14px}.lead{font-size:15px;col
 <text class="node-text " x="207.5" y="646">统一执行入口</text>
 <text class="node-text " x="207.5" y="668">App_ExecuteMeasureCommand(原命令)</text>
 </svg></section>
-<section id="macros" class="card"><h2>3. 错误宏与命令切换入口</h2><p>故障管理最容易误解的地方在宏语义：<code>CHECK_ERROR</code> 会把非 <code>NO_ERROR</code> 返回码直接送入 <code>FaultManager_HandleCheckError</code>；<code>SET_ERROR</code> 明确跳过 <code>STATE_SWITCH</code>；<code>CHECK_COMMAND_SWITCH</code> 只处理命令切换并返回 <code>STATE_SWITCH</code>。</p><svg class="biz-flow" viewBox="0 0 1320 610" role="img" aria-labelledby="fault-macros-title fault-macros-desc">
+<section id="macros" class="card"><h2>3. 错误宏与命令切换入口</h2><p>故障管理最容易误解的地方在宏语义：<code>CHECK_ERROR</code> 会把非 <code>NO_ERROR</code> 返回码直接送入 <code>FaultManager_HandleCheckError</code>；<code>SET_ERROR</code> 明确跳过 <code>STATE_SWITCH</code>；<code>CHECK_COMMAND_SWITCH</code> 只处理命令切换并返回 <code>STATE_SWITCH</code>。</p><svg class="biz-flow" viewBox="0 0 1320 709" role="img" aria-labelledby="fault-macros-title fault-macros-desc">
 <title id="fault-macros-title">错误宏与命令切换入口流程</title><desc id="fault-macros-desc">宏本身就是业务边界：不同宏对 STATE_SWITCH 和设备状态的处理不同</desc><defs>
     <marker id="arrow-fault-macros" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#46627f"/></marker>
     <filter id="shadow-fault-macros" x="-10%" y="-15%" width="130%" height="140%"><feDropShadow dx="0" dy="7" stdDeviation="7" flood-color="#24415f" flood-opacity="0.14"/></filter>
@@ -180,7 +200,7 @@ h2{font-size:23px;margin:0 0 14px;} p{margin:8px 0 14px}.lead{font-size:15px;col
 <text class="node-text " x="817.5" y="520">无异常路径</text>
 <text class="node-text " x="817.5" y="542">继续执行当前业务代码</text>
 </svg><div class="evidence-row"><span class="evidence"><code>Application/Inc/fault_manager.h:96-123</code> CHECK_ERROR 先检查 ret，再检查全局 error_code，最后检查命令切换。</span><span class="evidence"><code>Application/Inc/fault_manager.h:141-152</code> SET_ERROR 对 STATE_SWITCH 和 NO_ERROR 不处理，只对真实故障置设备错误态。</span><span class="evidence"><code>Application/Inc/fault_manager.h:154-164</code> CHECK_COMMAND_SWITCH 发现切换或 ret==STATE_SWITCH 时 HandleError 并返回 STATE_SWITCH。</span></div></section>
-<section id="manager" class="card"><h2>4. FaultManager 故障落地流程</h2><p>FaultManager 的目标是把“某个业务点失败”落成可追踪的错误：保留文件、行号、函数，过滤正常和状态切换，避免短时间重复最终报警，并执行安全停机。</p><svg class="biz-flow" viewBox="0 0 1320 625" role="img" aria-labelledby="fault-manager-title fault-manager-desc">
+<section id="manager" class="card"><h2>4. FaultManager 故障落地流程</h2><p>FaultManager 的目标是把“某个业务点失败”落成可追踪的错误：保留文件、行号、函数，过滤正常和状态切换，避免短时间重复最终报警，并执行安全停机。</p><svg class="biz-flow" viewBox="0 0 1320 724" role="img" aria-labelledby="fault-manager-title fault-manager-desc">
 <title id="fault-manager-title">FaultManager 故障落地流程</title><desc id="fault-manager-desc">统一记录源码位置、去重最终报警、执行安全停机、必要时置设备错误态</desc><defs>
     <marker id="arrow-fault-manager" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#46627f"/></marker>
     <filter id="shadow-fault-manager" x="-10%" y="-15%" width="130%" height="140%"><feDropShadow dx="0" dy="7" stdDeviation="7" flood-color="#24415f" flood-opacity="0.14"/></filter>
@@ -238,7 +258,7 @@ h2{font-size:23px;margin:0 0 14px;} p{margin:8px 0 14px}.lead{font-size:15px;col
 <text class="node-text " x="822.5" y="546">CHECK_ERROR 返回错误码</text>
 <text class="node-text " x="822.5" y="568">SET_ERROR 已 return void</text>
 </svg><div class="evidence-row"><span class="evidence"><code>Application/Src/fault_manager.c:33-60</code> ReportErrorExit 过滤 NO_ERROR/STATE_SWITCH，调用 ErrorLog_TakeRecentReport 去重，再输出最终报警。</span><span class="evidence"><code>Application/Src/fault_manager.c:66-100</code> HandleCheckError 返回错误码；SetErrorState 额外写 device_state/error_code/zero_point_status。</span><span class="evidence"><code>Application/Src/fault_manager.c:105-128</code> HandleError 在驱动有效时慢停，慢停失败只记录告警。</span></div></section>
-<section id="update" class="card"><h2>5. 命令结束后的自动恢复判定</h2><p><code>FaultRecovery_UpdateAfterCommand</code> 是自动恢复的入口，但它不直接执行恢复动作。它判断当前命令和错误是否允许恢复，记录上下文后等待主循环空闲时轮询。</p><svg class="biz-flow" viewBox="0 0 1320 610" role="img" aria-labelledby="fault-update-title fault-update-desc">
+<section id="update" class="card"><h2>5. 命令结束后的自动恢复判定</h2><p><code>FaultRecovery_UpdateAfterCommand</code> 是自动恢复的入口，但它不直接执行恢复动作。它判断当前命令和错误是否允许恢复，记录上下文后等待主循环空闲时轮询。</p><svg class="biz-flow" viewBox="0 0 1320 709" role="img" aria-labelledby="fault-update-title fault-update-desc">
 <title id="fault-update-title">命令结束后的自动恢复判定</title><desc id="fault-update-desc">业务命令执行结束后只登记恢复上下文，不在这里立即重跑命令</desc><defs>
     <marker id="arrow-fault-update" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#46627f"/></marker>
     <filter id="shadow-fault-update" x="-10%" y="-15%" width="130%" height="140%"><feDropShadow dx="0" dy="7" stdDeviation="7" flood-color="#24415f" flood-opacity="0.14"/></filter>
@@ -306,7 +326,7 @@ h2{font-size:23px;margin:0 0 14px;} p{margin:8px 0 14px}.lead{font-size:15px;col
 <text class="node-text " x="185" y="479">不进入自动恢复</text>
 <text class="node-text " x="185" y="501">保持普通故障处理结果</text>
 </svg><div class="evidence-row"><span class="evidence"><code>Application/Src/fault_recovery.c:290-335</code> UpdateAfterCommand 处理重试结果、上限、真实错误和上下文清理。</span><span class="evidence"><code>Application/Src/fault_recovery.c:230-282</code> Start 会排除无错误、STATE_SWITCH、不可恢复参数错误、关闭恢复和非白名单命令。</span></div></section>
-<section id="poll" class="card"><h2>6. 主循环恢复轮询流程</h2><p><code>FaultRecovery_Poll</code> 是等待期真正干活的函数：它恢复原错误态、按 1 秒节流做电机和传感器检查；检查通过后只返回“应该重跑原命令”，不直接执行业务命令。</p><svg class="biz-flow" viewBox="0 0 1320 640" role="img" aria-labelledby="fault-poll-title fault-poll-desc">
+<section id="poll" class="card"><h2>6. 主循环恢复轮询流程</h2><p><code>FaultRecovery_Poll</code> 是等待期真正干活的函数：它恢复原错误态、按 1 秒节流做电机和传感器检查；检查通过后只返回“应该重跑原命令”，不直接执行业务命令。</p><svg class="biz-flow" viewBox="0 0 1320 739" role="img" aria-labelledby="fault-poll-title fault-poll-desc">
 <title id="fault-poll-title">主循环 FaultRecovery_Poll 恢复轮询</title><desc id="fault-poll-desc">空闲期每 1 秒验证恢复条件，通过后只返回“应重跑原命令”</desc><defs>
     <marker id="arrow-fault-poll" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#46627f"/></marker>
     <filter id="shadow-fault-poll" x="-10%" y="-15%" width="130%" height="140%"><feDropShadow dx="0" dy="7" stdDeviation="7" flood-color="#24415f" flood-opacity="0.14"/></filter>
@@ -384,7 +404,7 @@ h2{font-size:23px;margin:0 0 14px;} p{margin:8px 0 14px}.lead{font-size:15px;col
 <text class="node-text " x="1100" y="543">retry_command=原命令</text>
 <text class="node-text " x="1100" y="565">error_code 先清为 NO_ERROR</text>
 </svg><div class="evidence-row"><span class="evidence"><code>Application/Src/fault_recovery.c:361-459</code> Poll 的 active、1 秒节流、电机初始化、传感器检查、上限判断和 retry_command 逻辑。</span><span class="evidence"><code>Application/Src/fault_recovery.c:150-161</code> RestoreErrorStatus 在等待恢复时持续保持原故障状态。</span></div></section>
-<section id="app" class="card"><h2>7. 主循环接入关系</h2><p>新命令优先级高于恢复。串口原始命令或正式命令到来都会取消正在等待的自动恢复；只有没有新命令时，才轮询恢复并可能把原命令送回统一执行入口。</p><svg class="biz-flow" viewBox="0 0 1320 660" role="img" aria-labelledby="fault-app-title fault-app-desc">
+<section id="app" class="card"><h2>7. 主循环接入关系</h2><p>新命令优先级高于恢复。串口原始命令或正式命令到来都会取消正在等待的自动恢复；只有没有新命令时，才轮询恢复并可能把原命令送回统一执行入口。</p><svg class="biz-flow" viewBox="0 0 1320 759" role="img" aria-labelledby="fault-app-title fault-app-desc">
 <title id="fault-app-title">主循环与自动恢复的时序关系</title><desc id="fault-app-desc">新的人工/上位机命令优先，自动恢复只在空闲分支接管</desc><defs>
     <marker id="arrow-fault-app" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#46627f"/></marker>
     <filter id="shadow-fault-app" x="-10%" y="-15%" width="130%" height="140%"><feDropShadow dx="0" dy="7" stdDeviation="7" flood-color="#24415f" flood-opacity="0.14"/></filter>
@@ -448,7 +468,7 @@ h2{font-size:23px;margin:0 0 14px;} p{margin:8px 0 14px}.lead{font-size:15px;col
 <text class="node-text " x="1132.5" y="563">统一收尾</text>
 <text class="node-text " x="1132.5" y="585">deferred tasks + HAL_Delay(50)</text>
 </svg><div class="evidence-row"><span class="evidence"><code>Application/Src/app_main.c:174-189</code> 串口命令到来时取消自动恢复，再处理 received_buffer。</span><span class="evidence"><code>Application/Src/app_main.c:190-199</code> 正式命令到来时取消自动恢复，清 CMD_NONE 后执行命令。</span><span class="evidence"><code>Application/Src/app_main.c:200-223</code> 空闲分支轮询 FaultRecovery_Poll，若 should_retry_command 则 App_ExecuteMeasureCommand。</span></div></section>
-<section id="log" class="card"><h2>8. 错误日志流程</h2><p>日志不是单一 printf。代码把重试、恢复成功、最终报警、普通告警分成不同阶段；最终报警还有 200ms 同码去重，重试日志也有打印节流。</p><svg class="biz-flow" viewBox="0 0 1320 540" role="img" aria-labelledby="fault-log-title fault-log-desc">
+<section id="log" class="card"><h2>8. 错误日志流程</h2><p>日志不是单一 printf。代码把重试、恢复成功、最终报警、普通告警分成不同阶段；最终报警还有 200ms 同码去重，重试日志也有打印节流。</p><svg class="biz-flow" viewBox="0 0 1320 639" role="img" aria-labelledby="fault-log-title fault-log-desc">
 <title id="fault-log-title">错误日志生命周期</title><desc id="fault-log-desc">阶段日志、最终报警日志、去重窗口和重试打印策略分开处理</desc><defs>
     <marker id="arrow-fault-log" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#46627f"/></marker>
     <filter id="shadow-fault-log" x="-10%" y="-15%" width="130%" height="140%"><feDropShadow dx="0" dy="7" stdDeviation="7" flood-color="#24415f" flood-opacity="0.14"/></filter>
@@ -506,7 +526,7 @@ h2{font-size:23px;margin:0 0 14px;} p{margin:8px 0 14px}.lead{font-size:15px;col
 <text class="node-text " x="1132.5" y="435">UART/printf 输出</text>
 <text class="node-text " x="1132.5" y="457">阶段、模块、操作、原因、错误码、动作、详情</text>
 </svg><div class="evidence-row"><span class="evidence"><code>Services/Utilities/error_log.c:17-63</code> 重试日志打印策略和最终报警去重窗口。</span><span class="evidence"><code>Services/Utilities/error_log.c:100-405</code> 错误码到模块、原因、名称的映射。</span><span class="evidence"><code>Services/Utilities/error_log.c:410-542</code> Retry、Recover、ReportDetail、Warn 的实际输出路径。</span></div></section>
-<section id="delay" class="card"><h2>9. 可中断延时流程</h2><p>长等待不能一次性阻塞，否则命令切换不及时。<code>AbortableDelay_CommandSwitch</code> 把等待切成小片，每片结束都检查有效命令切换。</p><svg class="biz-flow" viewBox="0 0 1320 530" role="img" aria-labelledby="fault-delay-title fault-delay-desc">
+<section id="delay" class="card"><h2>9. 可中断延时流程</h2><p>长等待不能一次性阻塞，否则命令切换不及时。<code>AbortableDelay_CommandSwitch</code> 把等待切成小片，每片结束都检查有效命令切换。</p><svg class="biz-flow" viewBox="0 0 1320 629" role="img" aria-labelledby="fault-delay-title fault-delay-desc">
 <title id="fault-delay-title">可中断延时业务流程</title><desc id="fault-delay-desc">把长等待拆成小片，每片结束检查有效命令切换</desc><defs>
     <marker id="arrow-fault-delay" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#46627f"/></marker>
     <filter id="shadow-fault-delay" x="-10%" y="-15%" width="130%" height="140%"><feDropShadow dx="0" dy="7" stdDeviation="7" flood-color="#24415f" flood-opacity="0.14"/></filter>
@@ -552,7 +572,7 @@ h2{font-size:23px;margin:0 0 14px;} p{margin:8px 0 14px}.lead{font-size:15px;col
 <text class="node-text " x="522.5" y="434">返回 NO_ERROR</text>
 <text class="node-text " x="522.5" y="456">总等待完成</text>
 </svg><div class="evidence-row"><span class="evidence"><code>Services/Utilities/abortable_delay.c:13-38</code> step_ms 为 0 时使用 50ms；循环 HAL_Delay 后检查 HasEffectiveCommandSwitchRequest。</span></div></section>
-<section id="allow" class="card"><h2>10. 自动恢复准入规则</h2><p>自动恢复并不是所有错误都重跑。参数类错误直接排除，现场参数可关闭恢复，命令还必须在白名单中；恢复前只做电机/传感器可用性检查，原业务条件是否真的恢复要靠重跑原命令验证。</p><svg class="biz-flow" viewBox="0 0 1320 520" role="img" aria-labelledby="fault-allow-title fault-allow-desc">
+<section id="allow" class="card"><h2>10. 自动恢复准入规则</h2><p>自动恢复并不是所有错误都重跑。参数类错误直接排除，现场参数可关闭恢复，命令还必须在白名单中；恢复前只做电机/传感器可用性检查，原业务条件是否真的恢复要靠重跑原命令验证。</p><svg class="biz-flow" viewBox="0 0 1320 619" role="img" aria-labelledby="fault-allow-title fault-allow-desc">
 <title id="fault-allow-title">自动恢复准入与排除规则</title><desc id="fault-allow-desc">不是所有错误和命令都能自动恢复，准入在 Start 前集中判断</desc><defs>
     <marker id="arrow-fault-allow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#46627f"/></marker>
     <filter id="shadow-fault-allow" x="-10%" y="-15%" width="130%" height="140%"><feDropShadow dx="0" dy="7" stdDeviation="7" flood-color="#24415f" flood-opacity="0.14"/></filter>
