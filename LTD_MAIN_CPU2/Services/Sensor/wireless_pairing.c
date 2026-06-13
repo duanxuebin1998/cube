@@ -490,6 +490,57 @@ static uint8_t WirelessPairing_ParseMacWords(const char *mac,
     return 1U;
 }
 
+static void WirelessPairing_ResetConnectionStatus(WirelessConnectionStatus *status)
+{
+    if (status != NULL) {
+        memset(status, 0, sizeof(*status));
+    }
+}
+
+static uint8_t WirelessPairing_FillConnectionMac(WirelessConnectionStatus *status, const char *mac)
+{
+    uint32_t mac_high = 0U;
+    uint32_t mac_mid = 0U;
+    uint32_t mac_low = 0U;
+
+    if ((status == NULL) ||
+        (WirelessPairing_ParseMacWords(mac, &mac_high, &mac_mid, &mac_low) == 0U)) {
+        return 0U;
+    }
+
+    status->mac_valid = 1U;
+    status->mac_high = mac_high;
+    status->mac_mid = mac_mid;
+    status->mac_low = mac_low;
+    return 1U;
+}
+
+static void WirelessPairing_PublishConnectionStatus(const WirelessConnectionStatus *snapshot)
+{
+    volatile WirelessPairingStatus *status = &g_measurement.wireless_pairing_status;
+
+    if (snapshot == NULL) {
+        return;
+    }
+
+    status->connection_valid = snapshot->connection_valid;
+    status->rssi_valid = snapshot->rssi_valid;
+    status->rssi = snapshot->rssi;
+    status->connection_error_code = snapshot->error_code;
+
+    if (snapshot->mac_valid != 0U) {
+        status->mac_valid = 1U;
+        status->mac_high = snapshot->mac_high;
+        status->mac_mid = snapshot->mac_mid;
+        status->mac_low = snapshot->mac_low;
+    }
+
+    status->rssi_update_counter++;
+    if (status->rssi_update_counter == 0U) {
+        status->rssi_update_counter = 1U;
+    }
+}
+
 /**
  * @brief 发布无线滑环匹配状态给 CPU3；只发布数值字段，显示端本地格式化 MAC。
  */
@@ -1424,6 +1475,152 @@ static void WirelessPairing_Finish(const char *title, uint32_t ret)
     printf("===== %s结束 =====\r\n\r\n", title);
 }
 
+
+uint32_t WirelessPairing_ReadConnectionStatus(WirelessConnectionStatus *status)
+{
+    CH9141AtResponse response;
+    uint32_t ret = NO_ERROR;
+    uint32_t exit_ret = NO_ERROR;
+    uint32_t rssi_stop_ret = NO_ERROR;
+    uint32_t rssi_ret = NO_ERROR;
+    uint8_t at_entered = 0U;
+    uint8_t mode = 0xFFU;
+    uint8_t ble_status = 0xFFU;
+    uint8_t rssi_started = 0U;
+    char data_line[WIRELESS_PAIRING_LINE_TEXT_SIZE];
+    char mac[WIRELESS_PAIRING_MAC_TEXT_SIZE] = {0};
+    char rssi_cmd[32];
+    int16_t rssi = 0;
+
+    if (status == NULL) {
+        return PARAM_ADDRESS_OVERFLOW;
+    }
+
+    WirelessPairing_ResetConnectionStatus(status);
+
+    ret = CH9141_AT_EnterSoftwareMode(&response);
+    if (ret != NO_ERROR) {
+        status->error_code = ret;
+        goto finish;
+    }
+    at_entered = 1U;
+
+    ret = CH9141_AT_SendCommand("AT+BLEMODE?",
+                                CH9141_AT_WAIT_ACK,
+                                WIRELESS_PAIRING_ACK_TIMEOUT_MS,
+                                &response);
+    if (ret != NO_ERROR) {
+        status->error_code = ret;
+        goto finish;
+    }
+    if (WirelessPairing_ParseModeResponse(&response, &mode, data_line, sizeof(data_line)) == 0U) {
+        ret = SENSOR_RESP_FORMAT_ERROR;
+        status->error_code = ret;
+        goto finish;
+    }
+
+    ret = CH9141_AT_SendCommand("AT+BLESTA?",
+                                CH9141_AT_WAIT_ACK,
+                                WIRELESS_PAIRING_ACK_TIMEOUT_MS,
+                                &response);
+    if (ret != NO_ERROR) {
+        status->error_code = ret;
+        goto finish;
+    }
+    if (WirelessPairing_ParseStatusResponse(&response, &ble_status, data_line, sizeof(data_line)) == 0U) {
+        ret = SENSOR_RESP_FORMAT_ERROR;
+        status->error_code = ret;
+        goto finish;
+    }
+
+    if ((mode != WIRELESS_PAIRING_HOST_MODE) ||
+        (ble_status != WIRELESS_PAIRING_HOST_CONNECTED_STATE)) {
+        ret = NO_ERROR;
+        status->error_code = NO_ERROR;
+        goto finish;
+    }
+
+    status->connection_valid = 1U;
+
+    ret = CH9141_AT_SendCommand("AT+CCADD?",
+                                CH9141_AT_WAIT_ACK,
+                                WIRELESS_PAIRING_ACK_TIMEOUT_MS,
+                                &response);
+    if (ret != NO_ERROR) {
+        status->error_code = ret;
+        goto finish;
+    }
+    if ((WirelessPairing_CopyMacFromLine(response.text, mac) == 0U) ||
+        (WirelessPairing_FillConnectionMac(status, mac) == 0U)) {
+        ret = SENSOR_RESP_FORMAT_ERROR;
+        status->error_code = ret;
+        goto finish;
+    }
+
+    snprintf(rssi_cmd, sizeof(rssi_cmd), "AT+RSSI=ON,%lu",
+             (unsigned long)WIRELESS_PAIRING_RSSI_REPORT_PERIOD_MS);
+    rssi_ret = CH9141_AT_SendCommand(rssi_cmd,
+                                      CH9141_AT_WAIT_ACK,
+                                      WIRELESS_PAIRING_ACK_TIMEOUT_MS,
+                                      &response);
+    if (rssi_ret == NO_ERROR) {
+        rssi_started = 1U;
+        rssi_ret = CH9141_AT_WaitAsync(CH9141_AT_WAIT_RSSI,
+                                       WIRELESS_PAIRING_RSSI_ASYNC_TIMEOUT_MS,
+                                       &response);
+        if ((rssi_ret == NO_ERROR) && (WirelessPairing_ParseRssiResponse(&response, &rssi) != 0U)) {
+            status->rssi_valid = 1U;
+            status->rssi = (int32_t)rssi;
+        } else if (rssi_ret == NO_ERROR) {
+            rssi_ret = SENSOR_RESP_FORMAT_ERROR;
+        }
+    }
+
+    if (rssi_ret != NO_ERROR) {
+        status->error_code = rssi_ret;
+    }
+    ret = NO_ERROR;
+
+finish:
+    if (rssi_started != 0U) {
+        rssi_stop_ret = CH9141_AT_SendCommand("AT+RSSI=OFF",
+                                              CH9141_AT_WAIT_ACK,
+                                              WIRELESS_PAIRING_ACK_TIMEOUT_MS,
+                                              &response);
+        if ((status->error_code == NO_ERROR) && (rssi_stop_ret != NO_ERROR)) {
+            status->error_code = rssi_stop_ret;
+        }
+    }
+
+    if (at_entered != 0U) {
+        exit_ret = CH9141_AT_SendCommand("AT+EXIT",
+                                         CH9141_AT_WAIT_ACK,
+                                         WIRELESS_PAIRING_ACK_TIMEOUT_MS,
+                                         &response);
+        (void)CH9141_AT_PrepareUart6(WIRELESS_PAIRING_POST_RESET_IDLE_MS);
+        if ((ret == NO_ERROR) && (exit_ret != NO_ERROR)) {
+            ret = exit_ret;
+        }
+        if ((status->error_code == NO_ERROR) && (exit_ret != NO_ERROR)) {
+            status->error_code = exit_ret;
+        }
+    }
+
+    return ret;
+}
+
+uint32_t WirelessPairing_UpdateConnectionStatusSnapshot(void)
+{
+    WirelessConnectionStatus status;
+    uint32_t ret;
+
+    ret = WirelessPairing_ReadConnectionStatus(&status);
+    if ((ret != NO_ERROR) && (status.error_code == NO_ERROR)) {
+        status.error_code = ret;
+    }
+    WirelessPairing_PublishConnectionStatus(&status);
+    return ret;
+}
 
 /**
  * @brief 显示或打印无线滑环匹配中的 WirelessPairing_PrintConnectionStatus 逻辑。

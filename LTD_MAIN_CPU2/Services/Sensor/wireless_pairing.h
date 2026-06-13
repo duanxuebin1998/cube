@@ -9,6 +9,17 @@
 
 #include <stdint.h>
 
+typedef struct {
+    uint32_t connection_valid;
+    uint32_t mac_valid;
+    uint32_t mac_high;
+    uint32_t mac_mid;
+    uint32_t mac_low;
+    uint32_t rssi_valid;
+    int32_t rssi;
+    uint32_t error_code;
+} WirelessConnectionStatus;
+
 /**
  * @brief 扫描并打印 CH9141K 主机可见的从机候选。
  *
@@ -29,6 +40,16 @@ uint32_t WirelessPairing_RunByRssi(void);
  * 串口调试命令 SPN=<name> 使用该接口；如果扫描输出不包含名称字段，会拒绝匹配。
  */
 uint32_t WirelessPairing_RunByName(const char *target_name);
+
+/**
+ * @brief 查询当前 CH9141K 连接状态和 RSSI，不扫描、不断开、不保存默认连接。
+ */
+uint32_t WirelessPairing_ReadConnectionStatus(WirelessConnectionStatus *status);
+
+/**
+ * @brief 查询当前 CH9141K 连接状态和 RSSI，并发布到 CPU2/CPU3 共享快照。
+ */
+uint32_t WirelessPairing_UpdateConnectionStatusSnapshot(void);
 
 /**
  * @brief 查询当前 CH9141K 连接状态并打印模式、状态、MAC、RSSI 和缓存名称。

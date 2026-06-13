@@ -618,4 +618,11 @@ void write_measurement_result_to_InputRegisters(uint16_t *regs) {
 	for (uint32_t channel = 0U; channel < RELAY_ALARM_CHANNEL_COUNT; channel++) {
 		write_relay_alarm_runtime_to_regs(regs, channel, &g_measurement.relay_alarm_runtime[channel]);
 	}
+
+	/* ==== 蓝牙连接 RSSI 运行态，追加在继电器运行态之后，避免移动既有地址 ==== */
+	write_u32_to_regs(regs, REG_WIRELESS_PAIRING_CONNECTION_VALID, g_measurement.wireless_pairing_status.connection_valid);
+	write_u32_to_regs(regs, REG_WIRELESS_PAIRING_RSSI_VALID, g_measurement.wireless_pairing_status.rssi_valid);
+	write_i32_to_regs(regs, REG_WIRELESS_PAIRING_RSSI, g_measurement.wireless_pairing_status.rssi);
+	write_u32_to_regs(regs, REG_WIRELESS_PAIRING_CONNECTION_ERROR_CODE, g_measurement.wireless_pairing_status.connection_error_code);
+	write_u32_to_regs(regs, REG_WIRELESS_PAIRING_RSSI_UPDATE_COUNTER, g_measurement.wireless_pairing_status.rssi_update_counter);
 }

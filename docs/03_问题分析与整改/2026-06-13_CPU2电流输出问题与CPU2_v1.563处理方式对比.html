@@ -1,0 +1,1669 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CPU2 电流输出问题与 CPU2_v1.563 处理方式对比</title>
+  <style>
+    :root {
+      --bg: #f5f7fa;
+      --paper: #ffffff;
+      --ink: #17202a;
+      --muted: #5d6878;
+      --line: #d7dee9;
+      --soft: #eef3f8;
+      --blue: #1f6feb;
+      --blue-soft: #e9f2ff;
+      --green: #0f7b4f;
+      --green-soft: #e8f7f0;
+      --amber: #9a6700;
+      --amber-soft: #fff5d8;
+      --red: #b42318;
+      --red-soft: #fff1f0;
+      --code: #253040;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      color: var(--ink);
+      background: var(--bg);
+      font: 15px/1.72 "Microsoft YaHei", "Segoe UI", Arial, sans-serif;
+      letter-spacing: 0;
+    }
+
+    .page {
+      max-width: 1240px;
+      margin: 0 auto;
+      padding: 28px 28px 56px;
+    }
+
+    header {
+      padding: 28px 0 18px;
+      border-bottom: 2px solid var(--line);
+    }
+
+    h1 {
+      margin: 0 0 12px;
+      font-size: 30px;
+      line-height: 1.25;
+      letter-spacing: 0;
+    }
+
+    h2 {
+      margin: 36px 0 14px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid var(--line);
+      font-size: 22px;
+      letter-spacing: 0;
+    }
+
+    h3 {
+      margin: 24px 0 10px;
+      font-size: 18px;
+      letter-spacing: 0;
+    }
+
+    h4 {
+      margin: 22px 0 8px;
+      font-size: 16px;
+      color: #24384f;
+      letter-spacing: 0;
+    }
+
+    p {
+      margin: 8px 0;
+    }
+
+    a {
+      color: var(--blue);
+      text-decoration: none;
+    }
+
+    a:hover {
+      text-decoration: underline;
+    }
+
+    code {
+      color: var(--code);
+      background: var(--soft);
+      border: 1px solid #d9e2ee;
+      border-radius: 5px;
+      padding: 1px 5px;
+      font-family: Consolas, "Courier New", monospace;
+      font-size: 0.92em;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 12px 0 18px;
+      background: var(--paper);
+    }
+
+    th,
+    td {
+      border: 1px solid var(--line);
+      padding: 9px 10px;
+      vertical-align: top;
+    }
+
+    th {
+      background: #edf2f8;
+      text-align: left;
+      font-weight: 700;
+    }
+
+    ul,
+    ol {
+      margin: 8px 0 14px 22px;
+      padding: 0;
+    }
+
+    li {
+      margin: 5px 0;
+    }
+
+    .lead {
+      max-width: 1000px;
+      color: var(--muted);
+      font-size: 16px;
+    }
+
+    .meta {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 10px;
+      margin-top: 18px;
+    }
+
+    .meta div {
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 10px 12px;
+    }
+
+    .meta b {
+      display: block;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    nav {
+      position: sticky;
+      top: 0;
+      z-index: 5;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin: 18px 0;
+      padding: 10px;
+      background: rgba(255, 255, 255, 0.94);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      box-shadow: 0 8px 22px rgba(31, 55, 85, 0.08);
+    }
+
+    nav a {
+      display: inline-block;
+      padding: 6px 10px;
+      background: #f8fbff;
+      border: 1px solid #dce6f2;
+      border-radius: 6px;
+      color: #24527d;
+      font-size: 13px;
+    }
+
+    section {
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      margin: 18px 0;
+      padding: 22px 24px;
+    }
+
+    .summary {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 12px;
+      margin: 16px 0;
+    }
+
+    .summary-item {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 12px;
+      background: #fbfdff;
+    }
+
+    .summary-item strong {
+      display: block;
+      margin-bottom: 4px;
+    }
+
+    .tag {
+      display: inline-block;
+      margin: 2px 5px 2px 0;
+      padding: 1px 7px;
+      border-radius: 999px;
+      background: var(--soft);
+      border: 1px solid #dce5ef;
+      color: #374960;
+      font-size: 12px;
+    }
+
+    .callout {
+      margin: 14px 0;
+      padding: 12px 14px;
+      border-radius: 8px;
+      border: 1px solid var(--line);
+      background: #fbfdff;
+    }
+
+    .callout.bad {
+      border-color: #f0b8b3;
+      background: var(--red-soft);
+    }
+
+    .callout.warn {
+      border-color: #ecd18c;
+      background: var(--amber-soft);
+    }
+
+    .callout.ok {
+      border-color: #acd9c4;
+      background: var(--green-soft);
+    }
+
+    .flow {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+      gap: 10px;
+      margin: 14px 0;
+    }
+
+    .step {
+      position: relative;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 12px;
+      background: #fbfdff;
+      min-height: 112px;
+    }
+
+    .step b {
+      display: block;
+      margin-bottom: 5px;
+    }
+
+    .step.current {
+      border-color: #f0b8b3;
+      background: var(--red-soft);
+    }
+
+    .step.archive {
+      border-color: #acd9c4;
+      background: var(--green-soft);
+    }
+
+    .issue-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 12px;
+    }
+
+    .issue {
+      border-radius: 8px;
+      border: 1px solid var(--line);
+      padding: 12px;
+      background: #fbfdff;
+    }
+
+    .issue strong {
+      display: block;
+      margin-bottom: 5px;
+    }
+
+    .issue.high {
+      border-color: #f0b8b3;
+      background: var(--red-soft);
+    }
+
+    .issue.medium {
+      border-color: #ecd18c;
+      background: var(--amber-soft);
+    }
+
+    .issue.low {
+      border-color: #bed6f4;
+      background: var(--blue-soft);
+    }
+
+    .source-list {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(330px, 1fr));
+      gap: 10px;
+    }
+
+    .source {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 10px;
+      background: #fbfdff;
+    }
+
+    .source b {
+      display: block;
+      margin-bottom: 4px;
+    }
+
+    .source span {
+      color: var(--muted);
+      font-family: Consolas, "Courier New", monospace;
+      font-size: 13px;
+    }
+
+    .diagram-card {
+      margin: 16px 0 22px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: #fbfdff;
+      overflow: hidden;
+    }
+
+    .diagram-card figcaption {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--line);
+      background: #f4f8fd;
+    }
+
+    .diagram-card figcaption strong {
+      font-size: 16px;
+    }
+
+    .diagram-card figcaption span {
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .svg-wrap {
+      overflow-x: auto;
+      background: #ffffff;
+    }
+
+    .diagram-svg {
+      display: block;
+      min-width: 980px;
+      width: 100%;
+      height: auto;
+    }
+
+    .node-box {
+      fill: #fbfdff;
+      stroke: #9fb2c7;
+      stroke-width: 2;
+    }
+
+    .node-good {
+      fill: var(--green-soft);
+      stroke: #3fa374;
+    }
+
+    .node-bad {
+      fill: var(--red-soft);
+      stroke: #d36a62;
+    }
+
+    .node-warn {
+      fill: var(--amber-soft);
+      stroke: #d2a83f;
+    }
+
+    .node-blue {
+      fill: var(--blue-soft);
+      stroke: #72a4e5;
+    }
+
+    .node-muted {
+      fill: #f3f6fa;
+      stroke: #b8c5d4;
+    }
+
+    .node-diamond {
+      fill: var(--amber-soft);
+      stroke: #d2a83f;
+      stroke-width: 2;
+    }
+
+    .edge {
+      fill: none;
+      stroke: #60758d;
+      stroke-width: 2.2;
+    }
+
+    .edge-bad {
+      fill: none;
+      stroke: #c84f48;
+      stroke-width: 2.4;
+      stroke-dasharray: 7 5;
+    }
+
+    .edge-good {
+      fill: none;
+      stroke: #19865d;
+      stroke-width: 2.4;
+    }
+
+    .edge-warn {
+      fill: none;
+      stroke: #b98200;
+      stroke-width: 2.2;
+    }
+
+    .svg-title {
+      font-size: 18px;
+      font-weight: 800;
+      fill: var(--ink);
+    }
+
+    .svg-text {
+      font-size: 14px;
+      fill: var(--ink);
+      font-weight: 700;
+    }
+
+    .svg-small {
+      font-size: 12px;
+      fill: #526173;
+    }
+
+    .svg-tiny {
+      font-size: 11px;
+      fill: #65758a;
+    }
+
+    .lane-label {
+      font-size: 14px;
+      font-weight: 800;
+      fill: #31445a;
+    }
+
+    .diagram-note {
+      margin: 10px 14px 14px;
+      padding: 9px 11px;
+      border-left: 4px solid var(--blue);
+      background: #f3f8ff;
+      color: #31445a;
+    }
+
+    .phase-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 12px;
+      margin: 14px 0 18px;
+    }
+
+    .phase-card {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 12px;
+      background: #fbfdff;
+    }
+
+    .phase-card strong {
+      display: block;
+      margin-bottom: 5px;
+    }
+
+    .phase-card .tag {
+      margin-bottom: 6px;
+    }
+
+    .task-table td:first-child {
+      width: 170px;
+      font-family: Consolas, "Courier New", monospace;
+      font-size: 13px;
+    }
+
+    .done-criteria {
+      border-left: 4px solid var(--green);
+      background: var(--green-soft);
+      padding: 10px 12px;
+      margin: 12px 0;
+    }
+
+    @media (max-width: 760px) {
+      .page {
+        padding: 16px;
+      }
+
+      section {
+        padding: 18px;
+      }
+
+      h1 {
+        font-size: 24px;
+      }
+
+      .diagram-card figcaption {
+        display: block;
+      }
+    }
+  </style>
+</head>
+<body>
+<div class="page">
+  <header>
+    <h1>CPU2 电流输出问题与 CPU2_v1.563 处理方式对比</h1>
+    <p class="lead">本文按当前工程 <code>D:\CUBE\LTD_MAIN_CPU2</code> 和归档工程 <code>D:\程序存档\CPU2_v1.563</code> 的源码证据整理 4-20mA / AD5421 电流输出功能。结论重点是：当前工程已经有 AD5421 底层写寄存器和 AO 参数，但缺少从测量结果到输出电流、HART 回报、故障电流和状态诊断的统一闭环。</p>
+    <div class="meta">
+      <div><b>整理日期</b><span>2026-06-13</span></div>
+      <div><b>当前工程</b><span>D:\CUBE\LTD_MAIN_CPU2</span></div>
+      <div><b>历史对照</b><span>D:\程序存档\CPU2_v1.563</span></div>
+      <div><b>结论类型</b><span>问题分析与整改建议</span></div>
+    </div>
+  </header>
+
+  <nav>
+    <a href="#summary">1. 总结</a>
+    <a href="#current">2. 当前工程现状</a>
+    <a href="#archive">3. CPU2_v1.563 做法</a>
+    <a href="#compare">4. 对比结论</a>
+    <a href="#plan">5. 应该怎么做</a>
+    <a href="#change-plan">5.3 详细修改方案</a>
+    <a href="#verify">6. 验证建议</a>
+    <a href="#sources">7. 证据索引</a>
+  </nav>
+
+  <section id="summary">
+    <h2>1. 总结</h2>
+    <div class="callout bad">
+      <strong>当前主要问题：</strong>4-20mA 输出只有 AD5421 写 DAC 的底层动作，没有统一的“当前输出电流”业务状态，也没有把液位、报警、故障、调试模式和 HART 回包统一到同一个状态源。结果是现场可能看到 AD5421 实际输出、CPU3/Modbus 参数、HART 报告值互相不一致。
+    </div>
+    <figure class="diagram-card">
+      <figcaption>
+        <strong>一屏看懂：当前是断链，旧工程是闭环</strong>
+        <span>红色虚线表示“没有接起来”或“输出值不可信”；绿色实线表示同一状态源向外发布。</span>
+      </figcaption>
+      <div class="svg-wrap">
+        <svg class="diagram-svg" viewBox="0 0 1180 520" role="img" aria-label="当前工程和旧工程电流输出链路对比图">
+          <defs>
+            <marker id="arrow-summary" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto">
+              <path d="M0,0 L10,4 L0,8 Z" fill="#60758d"/>
+            </marker>
+            <marker id="arrow-summary-red" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto">
+              <path d="M0,0 L10,4 L0,8 Z" fill="#c84f48"/>
+            </marker>
+            <marker id="arrow-summary-green" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto">
+              <path d="M0,0 L10,4 L0,8 Z" fill="#19865d"/>
+            </marker>
+          </defs>
+          <rect x="28" y="24" width="540" height="462" rx="14" fill="#fff7f6" stroke="#e8aaa4"/>
+          <rect x="612" y="24" width="540" height="462" rx="14" fill="#f2fbf6" stroke="#9fd5bd"/>
+          <text x="298" y="58" text-anchor="middle" class="svg-title">当前工程：只会写 DAC，业务断链</text>
+          <text x="882" y="58" text-anchor="middle" class="svg-title">CPU2_v1.563：统一状态源闭环</text>
+
+          <rect class="node-blue" x="60" y="92" width="160" height="60" rx="8"/>
+          <text x="140" y="118" text-anchor="middle" class="svg-text">App_Init</text>
+          <text x="140" y="138" text-anchor="middle" class="svg-small">硬编码 6.0mA</text>
+          <rect class="node-warn" x="250" y="92" width="160" height="60" rx="8"/>
+          <text x="330" y="118" text-anchor="middle" class="svg-text">AO 参数</text>
+          <text x="330" y="138" text-anchor="middle" class="svg-small">存了但没用</text>
+          <rect class="node-bad" x="155" y="190" width="190" height="66" rx="8"/>
+          <text x="250" y="216" text-anchor="middle" class="svg-text">CurrentStateJudge</text>
+          <text x="250" y="236" text-anchor="middle" class="svg-small">空函数，无状态源</text>
+          <rect class="node-bad" x="60" y="306" width="160" height="62" rx="8"/>
+          <text x="140" y="332" text-anchor="middle" class="svg-text">HART 返回</text>
+          <text x="140" y="352" text-anchor="middle" class="svg-small">固定 4.0mA</text>
+          <rect class="node-blue" x="340" y="306" width="170" height="62" rx="8"/>
+          <text x="425" y="332" text-anchor="middle" class="svg-text">AD5421 输出</text>
+          <text x="425" y="352" text-anchor="middle" class="svg-small">4~20mA 钳位</text>
+          <rect class="node-bad" x="235" y="402" width="190" height="50" rx="8"/>
+          <text x="330" y="432" text-anchor="middle" class="svg-text">现场看到的值可能不一致</text>
+          <path class="edge" d="M220 122 H250" marker-end="url(#arrow-summary)"/>
+          <path class="edge-bad" d="M330 152 C330 172 310 178 288 190" marker-end="url(#arrow-summary-red)"/>
+          <path class="edge-bad" d="M220 152 C196 168 184 178 198 190" marker-end="url(#arrow-summary-red)"/>
+          <path class="edge-bad" d="M212 256 C176 274 150 288 142 306" marker-end="url(#arrow-summary-red)"/>
+          <path class="edge-bad" d="M298 256 C352 274 406 286 424 306" marker-end="url(#arrow-summary-red)"/>
+          <path class="edge-bad" d="M140 368 C165 392 220 410 235 420" marker-end="url(#arrow-summary-red)"/>
+          <path class="edge-bad" d="M425 368 C405 394 372 406 360 420" marker-end="url(#arrow-summary-red)"/>
+
+          <rect class="node-blue" x="650" y="92" width="150" height="60" rx="8"/>
+          <text x="725" y="118" text-anchor="middle" class="svg-text">测量/液位</text>
+          <text x="725" y="138" text-anchor="middle" class="svg-small">OilLevel</text>
+          <rect class="node-warn" x="832" y="92" width="150" height="60" rx="8"/>
+          <text x="907" y="118" text-anchor="middle" class="svg-text">报警/故障</text>
+          <text x="907" y="138" text-anchor="middle" class="svg-small">Alarm/Error</text>
+          <rect class="node-good" x="742" y="196" width="170" height="66" rx="8"/>
+          <text x="827" y="221" text-anchor="middle" class="svg-text">result.CurrentValue</text>
+          <text x="827" y="241" text-anchor="middle" class="svg-small">唯一电流状态源</text>
+          <rect class="node-good" x="655" y="318" width="160" height="62" rx="8"/>
+          <text x="735" y="343" text-anchor="middle" class="svg-text">AD5421</text>
+          <text x="735" y="363" text-anchor="middle" class="svg-small">真实输出</text>
+          <rect class="node-good" x="848" y="318" width="160" height="62" rx="8"/>
+          <text x="928" y="343" text-anchor="middle" class="svg-text">HART/Modbus</text>
+          <text x="928" y="363" text-anchor="middle" class="svg-small">同源发布</text>
+          <rect class="node-good" x="746" y="410" width="190" height="48" rx="8"/>
+          <text x="841" y="440" text-anchor="middle" class="svg-text">现场值和协议值一致</text>
+          <path class="edge-good" d="M725 152 C735 176 765 186 788 196" marker-end="url(#arrow-summary-green)"/>
+          <path class="edge-good" d="M907 152 C895 176 870 186 850 196" marker-end="url(#arrow-summary-green)"/>
+          <path class="edge-good" d="M800 262 C770 286 746 300 738 318" marker-end="url(#arrow-summary-green)"/>
+          <path class="edge-good" d="M858 262 C898 286 922 300 926 318" marker-end="url(#arrow-summary-green)"/>
+          <path class="edge-good" d="M735 380 C758 404 796 412 812 410" marker-end="url(#arrow-summary-green)"/>
+          <path class="edge-good" d="M928 380 C902 404 872 412 858 410" marker-end="url(#arrow-summary-green)"/>
+        </svg>
+      </div>
+      <p class="diagram-note">整改的关键不是“多调用一次 AD5421_SetCurrent”，而是先恢复一个统一的 AO 运行态，让 AD5421、HART、Modbus/CPU3 都从同一处取值。</p>
+    </figure>
+    <div class="summary">
+      <div class="summary-item">
+        <strong>输出来源不闭环</strong>
+        当前只有 <code>AD5421_SetCurrent()</code>，没有类似旧工程 <code>result.CurrentValue</code> 的统一字段；<code>CurrentStateJudgeAndSend()</code> 为空函数。
+      </div>
+      <div class="summary-item">
+        <strong>初始化值混乱</strong>
+        <code>Ad5421Init()</code> 先设置宏 <code>CURRENT_INIT</code>，随后 <code>App_Init()</code> 又硬编码设置 <code>6.0</code>，注释却写“4mA”。
+      </div>
+      <div class="summary-item">
+        <strong>参数没有真正生效</strong>
+        <code>CurrentRangeStart_mA</code>、<code>FaultCurrent_mA</code>、<code>DebugCurrent_mA</code> 等参数已经存储和映射，但没有接入输出算法。
+      </div>
+      <div class="summary-item">
+        <strong>HART 报告不可信</strong>
+        HART 命令 2/3 当前固定返回 4.0mA，命令 1/3 的液位、温度、密度、压力也是演示值。
+      </div>
+      <div class="summary-item">
+        <strong>故障诊断未接入</strong>
+        AD5421 的 <code>READFAULT</code> 和 <code>AD5421_FAULT_Pin</code> 没有合并成故障码，也没有接入 <code>fault_manager</code>。
+      </div>
+      <div class="summary-item">
+        <strong>输出范围被错误钳位</strong>
+        当前 <code>AD5421_SetCurrent()</code> 强制钳位到 4~20mA，会挡住旧逻辑里的 3.5mA 检修电流和 22mA/24mA 故障或上限电流策略。
+      </div>
+    </div>
+  </section>
+
+  <section id="current">
+    <h2>2. 当前工程现状</h2>
+    <figure class="diagram-card">
+      <figcaption>
+        <strong>当前工程断链图</strong>
+        <span>这些红色断点解释了为什么“参数写了、HART 也能回，但现场电流仍然不可控”。</span>
+      </figcaption>
+      <div class="svg-wrap">
+        <svg class="diagram-svg" viewBox="0 0 1180 620" role="img" aria-label="当前工程电流输出断链图">
+          <defs>
+            <marker id="arrow-current" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto">
+              <path d="M0,0 L10,4 L0,8 Z" fill="#60758d"/>
+            </marker>
+            <marker id="arrow-current-red" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto">
+              <path d="M0,0 L10,4 L0,8 Z" fill="#c84f48"/>
+            </marker>
+          </defs>
+          <text x="30" y="42" class="lane-label">初始化链路</text>
+          <rect class="node-blue" x="50" y="70" width="170" height="62" rx="8"/>
+          <text x="135" y="96" text-anchor="middle" class="svg-text">HartInit</text>
+          <text x="135" y="116" text-anchor="middle" class="svg-small">调用 Ad5421Init</text>
+          <rect class="node-blue" x="260" y="70" width="170" height="62" rx="8"/>
+          <text x="345" y="96" text-anchor="middle" class="svg-text">Ad5421Init</text>
+          <text x="345" y="116" text-anchor="middle" class="svg-small">CURRENT_INIT</text>
+          <rect class="node-bad" x="470" y="70" width="190" height="62" rx="8"/>
+          <text x="565" y="96" text-anchor="middle" class="svg-text">App_Init 再覆盖</text>
+          <text x="565" y="116" text-anchor="middle" class="svg-small">AD5421_SetCurrent(6.0)</text>
+          <rect class="node-bad" x="700" y="70" width="190" height="62" rx="8"/>
+          <text x="795" y="96" text-anchor="middle" class="svg-text">注释写 4mA</text>
+          <text x="795" y="116" text-anchor="middle" class="svg-small">实际输出 6.0mA</text>
+          <path class="edge" d="M220 101 H260" marker-end="url(#arrow-current)"/>
+          <path class="edge" d="M430 101 H470" marker-end="url(#arrow-current)"/>
+          <path class="edge-bad" d="M660 101 H700" marker-end="url(#arrow-current-red)"/>
+
+          <text x="30" y="188" class="lane-label">参数和测量链路</text>
+          <rect class="node-warn" x="50" y="216" width="190" height="64" rx="8"/>
+          <text x="145" y="242" text-anchor="middle" class="svg-text">AO 参数已存在</text>
+          <text x="145" y="262" text-anchor="middle" class="svg-small">4.00/20.00/22.00mA</text>
+          <rect class="node-bad" x="300" y="216" width="210" height="64" rx="8"/>
+          <text x="405" y="242" text-anchor="middle" class="svg-text">没有液位换算</text>
+          <text x="405" y="262" text-anchor="middle" class="svg-small">缺 CalculateFollowingCurrent</text>
+          <rect class="node-bad" x="570" y="216" width="220" height="64" rx="8"/>
+          <text x="680" y="242" text-anchor="middle" class="svg-text">没有 CurrentValue</text>
+          <text x="680" y="262" text-anchor="middle" class="svg-small">MeasurementResult 无同等字段</text>
+          <rect class="node-bad" x="850" y="216" width="220" height="64" rx="8"/>
+          <text x="960" y="242" text-anchor="middle" class="svg-text">统一出口为空</text>
+          <text x="960" y="262" text-anchor="middle" class="svg-small">CurrentStateJudgeAndSend</text>
+          <path class="edge-bad" d="M240 248 H300" marker-end="url(#arrow-current-red)"/>
+          <path class="edge-bad" d="M510 248 H570" marker-end="url(#arrow-current-red)"/>
+          <path class="edge-bad" d="M790 248 H850" marker-end="url(#arrow-current-red)"/>
+
+          <text x="30" y="336" class="lane-label">对外发布链路</text>
+          <rect class="node-bad" x="50" y="364" width="190" height="66" rx="8"/>
+          <text x="145" y="390" text-anchor="middle" class="svg-text">HART 命令 2/3</text>
+          <text x="145" y="410" text-anchor="middle" class="svg-small">固定 4.0mA</text>
+          <rect class="node-warn" x="300" y="364" width="190" height="66" rx="8"/>
+          <text x="395" y="390" text-anchor="middle" class="svg-text">Modbus 参数</text>
+          <text x="395" y="410" text-anchor="middle" class="svg-small">可读写，但非运行态</text>
+          <rect class="node-blue" x="550" y="364" width="190" height="66" rx="8"/>
+          <text x="645" y="390" text-anchor="middle" class="svg-text">AD5421_SetCurrent</text>
+          <text x="645" y="410" text-anchor="middle" class="svg-small">只写 DAC</text>
+          <rect class="node-bad" x="800" y="364" width="240" height="66" rx="8"/>
+          <text x="920" y="390" text-anchor="middle" class="svg-text">FAULT/READFAULT</text>
+          <text x="920" y="410" text-anchor="middle" class="svg-small">未接 fault_manager</text>
+          <path class="edge-bad" d="M240 397 H300" marker-end="url(#arrow-current-red)"/>
+          <path class="edge-bad" d="M490 397 H550" marker-end="url(#arrow-current-red)"/>
+          <path class="edge-bad" d="M740 397 H800" marker-end="url(#arrow-current-red)"/>
+
+          <rect class="node-bad" x="350" y="506" width="480" height="64" rx="10"/>
+          <text x="590" y="532" text-anchor="middle" class="svg-title">结果：实际电流、HART 报告、参数显示可能三套值</text>
+          <text x="590" y="554" text-anchor="middle" class="svg-small">这就是当前电流输出功能的核心问题</text>
+          <path class="edge-bad" d="M145 430 C210 486 325 520 350 528" marker-end="url(#arrow-current-red)"/>
+          <path class="edge-bad" d="M645 430 C625 474 602 492 596 506" marker-end="url(#arrow-current-red)"/>
+          <path class="edge-bad" d="M920 430 C850 486 830 500 806 506" marker-end="url(#arrow-current-red)"/>
+        </svg>
+      </div>
+    </figure>
+    <h3>2.1 当前调用链</h3>
+    <div class="flow">
+      <div class="step current">
+        <b>App_Init()</b>
+        <p>先调用 <code>HartInit()</code>，随后又直接调用 <code>AD5421_SetCurrent(6.0)</code>。</p>
+        <span class="tag">app_main.c:104</span><span class="tag">app_main.c:108</span>
+      </div>
+      <div class="step current">
+        <b>HartInit()</b>
+        <p>调用 <code>Ad5421Init()</code>，再初始化 HART 参数。返回值没有被上层检查。</p>
+        <span class="tag">hart.c:52-57</span>
+      </div>
+      <div class="step current">
+        <b>Ad5421Init()</b>
+        <p>复位 AD5421，写控制寄存器，设置 <code>CURRENT_INIT</code>，但返回值始终是 <code>NO_ERROR</code>。</p>
+        <span class="tag">ad5421.c:225-237</span>
+      </div>
+      <div class="step current">
+        <b>AD5421_SetCurrent()</b>
+        <p>把输入电流钳位到 4~20mA，换算为 16 位 DAC 值后写 <code>WRITEDAC</code>。</p>
+        <span class="tag">ad5421.c:55-64</span>
+      </div>
+    </div>
+
+    <h3>2.2 当前已经有的参数</h3>
+    <p>当前 <code>DeviceParameters</code> 已经保留一组 AO 参数，默认值也已经在参数初始化里写入：</p>
+    <table>
+      <thead>
+        <tr>
+          <th>字段</th>
+          <th>默认值</th>
+          <th>含义</th>
+          <th>当前使用情况</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td><code>CurrentRangeStart_mA</code></td><td>400</td><td>4.00mA，单位 0.01mA</td><td>只存储和映射，未进入输出算法</td></tr>
+        <tr><td><code>CurrentRangeEnd_mA</code></td><td>2000</td><td>20.00mA，单位 0.01mA</td><td>只存储和映射，未进入输出算法</td></tr>
+        <tr><td><code>AlarmHighAO</code></td><td>2000</td><td>高限报警 AO 电流</td><td>未接入报警电流覆盖逻辑</td></tr>
+        <tr><td><code>AlarmLowAO</code></td><td>400</td><td>低限报警 AO 电流</td><td>未接入报警电流覆盖逻辑</td></tr>
+        <tr><td><code>InitialCurrent_mA</code></td><td>400</td><td>初始电流</td><td>未用于 <code>Ad5421Init()</code> 或 <code>App_Init()</code></td></tr>
+        <tr><td><code>AOHighCurrent_mA</code></td><td>2000</td><td>高位电流</td><td>未使用</td></tr>
+        <tr><td><code>AOLowCurrent_mA</code></td><td>400</td><td>低位电流</td><td>未使用</td></tr>
+        <tr><td><code>FaultCurrent_mA</code></td><td>2200</td><td>22.00mA 故障电流</td><td>被当前 4~20mA 钳位策略挡住</td></tr>
+        <tr><td><code>DebugCurrent_mA</code></td><td>1200</td><td>12.00mA 调试电流</td><td>未使用</td></tr>
+      </tbody>
+    </table>
+
+    <h3>2.3 当前具体问题</h3>
+    <div class="issue-grid">
+      <div class="issue high">
+        <strong>问题 1：没有统一电流状态源</strong>
+        <p>当前 <code>MeasurementResult</code> 没有 <code>CurrentValue</code> 或同等字段，<code>CurrentStateJudgeAndSend()</code> 也是空函数。测量流程无法发布“本轮液位对应的当前输出电流”。</p>
+      </div>
+      <div class="issue high">
+        <strong>问题 2：初始化电流覆盖且注释错误</strong>
+        <p><code>Ad5421Init()</code> 设置 <code>CURRENT_INIT</code>，随后 <code>App_Init()</code> 设置 <code>6.0</code>；注释写“设置初始电流为4mA”，但代码实际输出 6.0mA。</p>
+      </div>
+      <div class="issue high">
+        <strong>问题 3：HART 数据与实际输出断开</strong>
+        <p>HART 命令 2 和 3 固定返回 <code>4.0</code>，不读取 AD5421 设定值，也不读取测量结果。命令 1 和 3 的主变量、温度、密度、压力也都是固定演示值。</p>
+      </div>
+      <div class="issue medium">
+        <strong>问题 4：故障电流被钳位</strong>
+        <p>参数里默认 <code>FaultCurrent_mA=2200</code>，但 <code>AD5421_SetCurrent()</code> 把输入强制限制在 4~20mA，故障输出无法设置到 22.00mA。</p>
+      </div>
+      <div class="issue medium">
+        <strong>问题 5：AD5421 写入没有错误返回</strong>
+        <p><code>AD5421_WriteReg()</code> 使用 <code>HAL_SPI_Transmit(..., HAL_MAX_DELAY)</code>，函数返回 <code>void</code>。写失败、SPI 卡死、CS 时序异常都不能向上层传递。</p>
+      </div>
+      <div class="issue medium">
+        <strong>问题 6：控制寄存器回读校验被注释</strong>
+        <p><code>WriteControlRegister()</code> 中读回比较逻辑被注释，函数最终直接返回 <code>NO_ERROR</code>。初始化成功与否不可知。</p>
+      </div>
+      <div class="issue medium">
+        <strong>问题 7：READFAULT 被当成电流回读</strong>
+        <p><code>AD5421_ReadCurrent()</code> 读取的是 <code>READFAULT</code>，再按 3.2~24mA 线性换算。这个值更像故障/状态寄存器读数，不应直接当作实际输出电流。</p>
+      </div>
+      <div class="issue low">
+        <strong>问题 8：AD5421 故障脚未形成故障链</strong>
+        <p><code>AD5421_FAULT_Pin</code> 已在 GPIO 中配置，但当前没有看到读取 PB8、解析 <code>READFAULT</code> 并上报 <code>fault_manager</code> 的链路。</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="archive">
+    <h2>3. CPU2_v1.563 工程怎么处理</h2>
+    <p>归档工程的核心不是只“写 AD5421”，而是有一个统一出口 <code>CurrentStateJudgeAndSend()</code>：先根据设备状态、错误状态、测量结果和参数决定当前应该输出多少 mA，再调用底层 <code>SetCurrent()</code> 写到 AD421 或 AD5421。</p>
+    <figure class="diagram-card">
+      <figcaption>
+        <strong>旧工程闭环图</strong>
+        <span>旧工程最值得借鉴的是“先算出统一 CurrentValue，再统一输出和发布”。</span>
+      </figcaption>
+      <div class="svg-wrap">
+        <svg class="diagram-svg" viewBox="0 0 1180 620" role="img" aria-label="CPU2_v1.563 电流输出闭环图">
+          <defs>
+            <marker id="arrow-archive" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto">
+              <path d="M0,0 L10,4 L0,8 Z" fill="#19865d"/>
+            </marker>
+            <marker id="arrow-archive-warn" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto">
+              <path d="M0,0 L10,4 L0,8 Z" fill="#b98200"/>
+            </marker>
+          </defs>
+          <rect class="node-blue" x="70" y="70" width="180" height="64" rx="8"/>
+          <text x="160" y="96" text-anchor="middle" class="svg-text">液位/状态</text>
+          <text x="160" y="116" text-anchor="middle" class="svg-small">OilLevel / EquipmentState</text>
+          <rect class="node-warn" x="70" y="182" width="180" height="64" rx="8"/>
+          <text x="160" y="208" text-anchor="middle" class="svg-text">报警/故障</text>
+          <text x="160" y="228" text-anchor="middle" class="svg-small">Alarm / ErrorCode</text>
+          <rect class="node-warn" x="70" y="294" width="180" height="64" rx="8"/>
+          <text x="160" y="320" text-anchor="middle" class="svg-text">参数</text>
+          <text x="160" y="340" text-anchor="middle" class="svg-small">初始/故障/AO 报警</text>
+
+          <rect class="node-good" x="340" y="138" width="230" height="84" rx="10"/>
+          <text x="455" y="166" text-anchor="middle" class="svg-text">CalculateFollowingCurrent</text>
+          <text x="455" y="188" text-anchor="middle" class="svg-small">液位量程换算 4~20mA</text>
+          <text x="455" y="206" text-anchor="middle" class="svg-small">报警时覆盖 AO 电流</text>
+
+          <rect class="node-good" x="675" y="138" width="220" height="84" rx="10"/>
+          <text x="785" y="166" text-anchor="middle" class="svg-text">result.CurrentValue</text>
+          <text x="785" y="188" text-anchor="middle" class="svg-small">统一运行态</text>
+          <text x="785" y="206" text-anchor="middle" class="svg-small">电流唯一事实来源</text>
+
+          <rect class="node-good" x="965" y="70" width="170" height="64" rx="8"/>
+          <text x="1050" y="96" text-anchor="middle" class="svg-text">AD5421</text>
+          <text x="1050" y="116" text-anchor="middle" class="svg-small">SetCurrent 输出</text>
+          <rect class="node-good" x="965" y="184" width="170" height="64" rx="8"/>
+          <text x="1050" y="210" text-anchor="middle" class="svg-text">HART</text>
+          <text x="1050" y="230" text-anchor="middle" class="svg-small">读 CurrentValue</text>
+          <rect class="node-good" x="965" y="298" width="170" height="64" rx="8"/>
+          <text x="1050" y="324" text-anchor="middle" class="svg-text">Modbus</text>
+          <text x="1050" y="344" text-anchor="middle" class="svg-small">发布当前电流</text>
+
+          <rect class="node-good" x="360" y="382" width="250" height="74" rx="10"/>
+          <text x="485" y="410" text-anchor="middle" class="svg-text">CurrentStateJudgeAndSend</text>
+          <text x="485" y="432" text-anchor="middle" class="svg-small">按状态选择初始/跟随/故障/检修电流</text>
+          <rect class="node-good" x="700" y="382" width="230" height="74" rx="10"/>
+          <text x="815" y="410" text-anchor="middle" class="svg-text">SetCurrent</text>
+          <text x="815" y="432" text-anchor="middle" class="svg-small">按硬件版本写 AD421/AD5421</text>
+
+          <path class="edge-good" d="M250 102 C286 118 306 140 340 160" marker-end="url(#arrow-archive)"/>
+          <path class="edge-good" d="M250 214 C292 212 310 200 340 190" marker-end="url(#arrow-archive)"/>
+          <path class="edge-good" d="M250 326 C304 302 322 234 364 214" marker-end="url(#arrow-archive)"/>
+          <path class="edge-good" d="M570 180 H675" marker-end="url(#arrow-archive)"/>
+          <path class="edge-good" d="M785 222 C780 290 640 350 525 382" marker-end="url(#arrow-archive)"/>
+          <path class="edge-good" d="M610 419 H700" marker-end="url(#arrow-archive)"/>
+          <path class="edge-good" d="M895 180 C930 146 950 120 965 104" marker-end="url(#arrow-archive)"/>
+          <path class="edge-good" d="M895 180 H965" marker-end="url(#arrow-archive)"/>
+          <path class="edge-good" d="M895 192 C935 238 955 286 965 322" marker-end="url(#arrow-archive)"/>
+          <path class="edge-good" d="M930 419 C1000 385 1036 370 1048 362" marker-end="url(#arrow-archive)"/>
+
+          <rect class="node-warn" x="108" y="485" width="928" height="58" rx="10"/>
+          <text x="572" y="511" text-anchor="middle" class="svg-text">可借鉴：统一状态源、状态决策、同源发布</text>
+          <text x="572" y="531" text-anchor="middle" class="svg-small">不能直接照搬：旧工程单位、全局变量和错误管理体系与当前工程不同</text>
+        </svg>
+      </div>
+    </figure>
+
+    <h3>3.1 旧工程的业务链路</h3>
+    <div class="flow">
+      <div class="step archive">
+        <b>测量启动</b>
+        <p><code>MeasureStart()</code> 读取参数，必要时把 <code>result.CurrentValue</code> 设置为初始化电流，然后调用统一输出。</p>
+        <span class="tag">measure_modbus_gcc.c:916-960</span>
+      </div>
+      <div class="step archive">
+        <b>液位换算</b>
+        <p><code>CalculateFollowingCurrent()</code> 按液位量程换算 4~20mA，并根据报警状态覆盖 AO 高/低报警电流。</p>
+        <span class="tag">measure_modbus_gcc.c:2475-2515</span>
+      </div>
+      <div class="step archive">
+        <b>结果同步</b>
+        <p>方式二跟随更新液位时同步写 <code>result.CurrentValue</code>，随后立即调用 <code>CurrentStateJudgeAndSend()</code>。</p>
+        <span class="tag">measure_modbus_gcc.c:6631-6667</span>
+      </div>
+      <div class="step archive">
+        <b>统一输出</b>
+        <p><code>CurrentStateJudgeAndSend()</code> 根据状态重新计算当前电流，再调用 <code>SetCurrent()</code> 输出。</p>
+        <span class="tag">HARDWARE/ad5421.c:244-248</span>
+      </div>
+      <div class="step archive">
+        <b>HART/Modbus 发布</b>
+        <p>HART 和输入寄存器都从 <code>result.CurrentValue</code> 取当前值，对外报告与输出状态同源。</p>
+        <span class="tag">hart_protocol.c:275-285</span><span class="tag">dataanalysis_modbus.c:735</span>
+      </div>
+    </div>
+
+    <h3>3.2 旧工程输出决策规则</h3>
+    <table>
+      <thead>
+        <tr>
+          <th>场景</th>
+          <th>旧工程处理</th>
+          <th>源码证据</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>正常无错误，处于液位跟随态</td>
+          <td>输出 <code>result.CurrentValue</code>，该值由液位换算函数更新。</td>
+          <td><code>HARDWARE/ad5421.c:199-204</code></td>
+        </tr>
+        <tr>
+          <td>正常无错误，但不处于跟随态且要求初始电流</td>
+          <td>输出 <code>systemparameter.CURRENT_INIT / CURRENTSCALE</code>。</td>
+          <td><code>HARDWARE/ad5421.c:205-208</code></td>
+        </tr>
+        <tr>
+          <td>设备存在错误</td>
+          <td>输出 <code>systemparameter.CURRENT_MEASUREERROR / CURRENTSCALE</code>。</td>
+          <td><code>HARDWARE/ad5421.c:210-213</code></td>
+        </tr>
+        <tr>
+          <td>配置模式或检修模式</td>
+          <td>直接使用 <code>result.CurrentValue</code>，检修模式会轮流输出 3.5、12、24mA。</td>
+          <td><code>HARDWARE/ad5421.c:222-237</code>，<code>measure_modbus_gcc.c:6047-6066</code></td>
+        </tr>
+        <tr>
+          <td>HART 读数</td>
+          <td>把 <code>result.CurrentValue</code> 同步到 HART 结果结构。</td>
+          <td><code>COMMU/hart_protocol.c:275-285</code></td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h3>3.3 旧工程 AD5421 底层细节</h3>
+    <ul>
+      <li>旧工程支持按硬件版本选择 AD421 或 AD5421，<code>SetCurrent()</code> 内部根据 <code>Version()</code> 分流。</li>
+      <li>AD5421 写 DAC 时按 3.2~24.0mA 满量程换算，并带 CRC 字节。</li>
+      <li>写控制寄存器后会读回控制寄存器比较，失败返回 <code>ERR_CURRENT_WRIEWCONERR</code>。</li>
+      <li>初始化时读取存储区 <code>ADD_CURRENT_INIT</code>，再调用 <code>SetCurrent(cur)</code> 输出。</li>
+      <li>参数检查会校验初始化电流和故障电流范围，避免明显非法值进入运行。</li>
+    </ul>
+  </section>
+
+  <section id="compare">
+    <h2>4. 对比结论</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>维度</th>
+          <th>当前工程</th>
+          <th>CPU2_v1.563</th>
+          <th>结论</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>当前输出电流状态</td>
+          <td>没有统一字段；<code>CurrentStateJudgeAndSend()</code> 为空。</td>
+          <td><code>result.CurrentValue</code> 是统一状态源。</td>
+          <td>当前缺口最大，必须先补状态源。</td>
+        </tr>
+        <tr>
+          <td>液位到电流换算</td>
+          <td>没有看到基于液位的 AO 换算函数。</td>
+          <td><code>CalculateFollowingCurrent()</code> 按量程计算 4~20mA。</td>
+          <td>需要恢复或重写液位映射算法。</td>
+        </tr>
+        <tr>
+          <td>报警 AO 覆盖</td>
+          <td>有参数，未使用。</td>
+          <td>高/低报警会覆盖输出电流。</td>
+          <td>需要接入报警状态，且与当前四路继电器报警口径统一。</td>
+        </tr>
+        <tr>
+          <td>故障电流</td>
+          <td>有 <code>FaultCurrent_mA=2200</code>，但底层钳位 4~20mA。</td>
+          <td>错误状态下输出故障电流参数。</td>
+          <td>应允许配置的故障电流进入 AD5421 安全范围。</td>
+        </tr>
+        <tr>
+          <td>HART</td>
+          <td>命令 2/3 固定返回 4.0mA，命令 1/3 也有演示值。</td>
+          <td>HART 结果从测量结果结构同步。</td>
+          <td>HART 必须从统一快照取值。</td>
+        </tr>
+        <tr>
+          <td>AD5421 写入确认</td>
+          <td>写寄存器无返回，控制寄存器回读被注释。</td>
+          <td>控制寄存器写入后读回校验。</td>
+          <td>当前无法判断 AD5421 初始化和写入是否成功。</td>
+        </tr>
+        <tr>
+          <td>故障上报</td>
+          <td>FAULT 引脚和 READFAULT 未纳入故障管理。</td>
+          <td>旧工程保留芯片报警检查入口，但部分报警也处于注释状态。</td>
+          <td>不能简单照搬旧工程，应该按当前 <code>fault_manager</code> 体系补齐。</td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="plan">
+    <h2>5. 应该怎么做</h2>
+    <div class="callout warn">
+      <strong>建议原则：</strong>不要只在某个流程里直接调用 <code>AD5421_SetCurrent()</code>。应先建立统一的 AO 状态和输出管理模块，再让测量、故障、调试、HART、Modbus 都从这个模块取同一个值。
+    </div>
+    <figure class="diagram-card">
+      <figcaption>
+        <strong>建议整改架构图</strong>
+        <span>新增 AO 输出管理层后，所有路径都先进入状态源，再统一输出和发布。</span>
+      </figcaption>
+      <div class="svg-wrap">
+        <svg class="diagram-svg" viewBox="0 0 1180 640" role="img" aria-label="建议整改后的 AO 输出管理架构图">
+          <defs>
+            <marker id="arrow-plan" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto">
+              <path d="M0,0 L10,4 L0,8 Z" fill="#60758d"/>
+            </marker>
+            <marker id="arrow-plan-green" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto">
+              <path d="M0,0 L10,4 L0,8 Z" fill="#19865d"/>
+            </marker>
+          </defs>
+          <text x="35" y="42" class="lane-label">输入</text>
+          <rect class="node-blue" x="55" y="76" width="180" height="62" rx="8"/>
+          <text x="145" y="102" text-anchor="middle" class="svg-text">液位结果</text>
+          <text x="145" y="122" text-anchor="middle" class="svg-small">oil_level / sensor_position</text>
+          <rect class="node-warn" x="55" y="176" width="180" height="62" rx="8"/>
+          <text x="145" y="202" text-anchor="middle" class="svg-text">报警状态</text>
+          <text x="145" y="222" text-anchor="middle" class="svg-small">继电器同口径</text>
+          <rect class="node-warn" x="55" y="276" width="180" height="62" rx="8"/>
+          <text x="145" y="302" text-anchor="middle" class="svg-text">设备故障</text>
+          <text x="145" y="322" text-anchor="middle" class="svg-small">fault_manager</text>
+          <rect class="node-muted" x="55" y="376" width="180" height="62" rx="8"/>
+          <text x="145" y="402" text-anchor="middle" class="svg-text">调试/待机</text>
+          <text x="145" y="422" text-anchor="middle" class="svg-small">命令和设备状态</text>
+
+          <text x="360" y="42" class="lane-label">AO 输出管理模块</text>
+          <rect class="node-good" x="330" y="86" width="230" height="70" rx="10"/>
+          <text x="445" y="114" text-anchor="middle" class="svg-text">AoOutput_Calculate</text>
+          <text x="445" y="136" text-anchor="middle" class="svg-small">液位 -> mA；报警覆盖</text>
+          <polygon class="node-diamond" points="445,206 560,268 445,330 330,268"/>
+          <text x="445" y="256" text-anchor="middle" class="svg-text">状态决策</text>
+          <text x="445" y="276" text-anchor="middle" class="svg-small">故障优先</text>
+          <text x="445" y="294" text-anchor="middle" class="svg-small">再调试/待机/跟随</text>
+          <rect class="node-good" x="330" y="382" width="230" height="74" rx="10"/>
+          <text x="445" y="410" text-anchor="middle" class="svg-text">AoOutputRuntime</text>
+          <text x="445" y="432" text-anchor="middle" class="svg-small">current_mA_x100 + source + fault</text>
+
+          <text x="700" y="42" class="lane-label">统一输出</text>
+          <rect class="node-blue" x="690" y="112" width="210" height="70" rx="10"/>
+          <text x="795" y="140" text-anchor="middle" class="svg-text">AD5421_SetCurrent</text>
+          <text x="795" y="162" text-anchor="middle" class="svg-small">返回错误码；允许故障电流</text>
+          <rect class="node-warn" x="690" y="250" width="210" height="70" rx="10"/>
+          <text x="795" y="278" text-anchor="middle" class="svg-text">AD5421 诊断</text>
+          <text x="795" y="300" text-anchor="middle" class="svg-small">PB8 + READFAULT</text>
+          <rect class="node-good" x="690" y="388" width="210" height="70" rx="10"/>
+          <text x="795" y="416" text-anchor="middle" class="svg-text">HART/Modbus/CPU3</text>
+          <text x="795" y="438" text-anchor="middle" class="svg-small">读取同一运行态</text>
+
+          <text x="1005" y="42" class="lane-label">结果</text>
+          <rect class="node-good" x="980" y="188" width="160" height="78" rx="10"/>
+          <text x="1060" y="218" text-anchor="middle" class="svg-text">一致</text>
+          <text x="1060" y="240" text-anchor="middle" class="svg-small">现场电流</text>
+          <text x="1060" y="258" text-anchor="middle" class="svg-small">协议读数</text>
+          <rect class="node-good" x="980" y="336" width="160" height="78" rx="10"/>
+          <text x="1060" y="366" text-anchor="middle" class="svg-text">可诊断</text>
+          <text x="1060" y="388" text-anchor="middle" class="svg-small">写失败/开路</text>
+          <text x="1060" y="406" text-anchor="middle" class="svg-small">能进故障链</text>
+
+          <path class="edge" d="M235 107 H330" marker-end="url(#arrow-plan)"/>
+          <path class="edge" d="M235 207 C286 218 305 240 330 256" marker-end="url(#arrow-plan)"/>
+          <path class="edge" d="M235 307 C292 296 308 284 330 276" marker-end="url(#arrow-plan)"/>
+          <path class="edge" d="M235 407 C292 392 312 342 354 318" marker-end="url(#arrow-plan)"/>
+          <path class="edge-good" d="M445 156 V206" marker-end="url(#arrow-plan-green)"/>
+          <path class="edge-good" d="M445 330 V382" marker-end="url(#arrow-plan-green)"/>
+          <path class="edge-good" d="M560 419 H690" marker-end="url(#arrow-plan-green)"/>
+          <path class="edge-good" d="M560 419 C642 392 666 338 690 300" marker-end="url(#arrow-plan-green)"/>
+          <path class="edge-good" d="M560 419 C632 420 655 424 690 424" marker-end="url(#arrow-plan-green)"/>
+          <path class="edge-good" d="M900 147 C940 168 970 194 980 216" marker-end="url(#arrow-plan-green)"/>
+          <path class="edge-good" d="M900 285 C945 314 972 342 984 364" marker-end="url(#arrow-plan-green)"/>
+          <path class="edge-good" d="M900 424 C944 402 970 388 980 382" marker-end="url(#arrow-plan-green)"/>
+
+          <rect class="node-warn" x="270" y="535" width="660" height="58" rx="10"/>
+          <text x="600" y="561" text-anchor="middle" class="svg-text">实现顺序：先建状态源，再接算法，再接驱动诊断，最后同步 HART/Modbus/CPU3</text>
+          <text x="600" y="581" text-anchor="middle" class="svg-small">如果新增共享状态字段，要同步 DEVICE_PROTOCOL_VERSION 和协议变更记录</text>
+        </svg>
+      </div>
+    </figure>
+
+    <h3>5.1 建议的整改分层</h3>
+    <table>
+      <thead>
+        <tr>
+          <th>层级</th>
+          <th>建议内容</th>
+          <th>说明</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>状态层</td>
+          <td>新增当前 AO 输出状态，例如 <code>current_output_mA_x100</code>、<code>current_output_source</code>、<code>current_output_fault_flags</code>。</td>
+          <td>位置建议放在 <code>MeasurementResult</code> 或独立 <code>AoOutputRuntime</code>，如果 CPU3 需要显示或协议读取，则属于共享协议变化。</td>
+        </tr>
+        <tr>
+          <td>算法层</td>
+          <td>实现 <code>AoOutput_CalculateByLevel()</code>，按液位、量程、盲区、报警状态计算目标 mA。</td>
+          <td>可以参考旧工程 <code>CalculateFollowingCurrent()</code>，但字段单位要按当前参数重新确认。</td>
+        </tr>
+        <tr>
+          <td>策略层</td>
+          <td>实现 <code>AoOutput_UpdateAndSend()</code>，根据设备状态选择初始电流、跟随电流、故障电流、调试电流。</td>
+          <td>等价于旧工程 <code>CurrentStateJudgeAndSend()</code>，但要接当前 <code>g_measurement</code> 和 <code>fault_manager</code>。</td>
+        </tr>
+        <tr>
+          <td>驱动层</td>
+          <td>把 <code>AD5421_SetCurrent()</code> 改为返回错误码，底层允许 3.2~24.0mA 或按参数合法范围钳位。</td>
+          <td>4~20mA 是正常测量范围，不应挡住 3.5mA 检修和 22mA 故障输出。</td>
+        </tr>
+        <tr>
+          <td>诊断层</td>
+          <td>读取 <code>AD5421_FAULT_Pin</code> 和 <code>READFAULT</code>，形成 AD5421 输出故障码。</td>
+          <td>故障出口交给 <code>fault_manager</code>，避免在驱动层直接做复杂恢复。</td>
+        </tr>
+        <tr>
+          <td>协议层</td>
+          <td>HART 命令 2/3、Modbus 输入寄存器、CPU3 显示都读取统一 AO 状态。</td>
+          <td>若新增共享字段，必须同步 CPU2/CPU3 协议版本和协议变更记录。</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h3>5.2 建议的输出决策规则</h3>
+    <figure class="diagram-card">
+      <figcaption>
+        <strong>输出电流决策图</strong>
+        <span>这张图可以直接转成后续实现里的 if/else 优先级。</span>
+      </figcaption>
+      <div class="svg-wrap">
+        <svg class="diagram-svg" viewBox="0 0 1180 560" role="img" aria-label="AO 输出电流决策图">
+          <defs>
+            <marker id="arrow-decision" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto">
+              <path d="M0,0 L10,4 L0,8 Z" fill="#60758d"/>
+            </marker>
+            <marker id="arrow-decision-green" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto">
+              <path d="M0,0 L10,4 L0,8 Z" fill="#19865d"/>
+            </marker>
+          </defs>
+          <rect class="node-blue" x="40" y="230" width="150" height="60" rx="30"/>
+          <text x="115" y="266" text-anchor="middle" class="svg-text">开始更新 AO</text>
+
+          <polygon class="node-diamond" points="330,190 450,260 330,330 210,260"/>
+          <text x="330" y="252" text-anchor="middle" class="svg-text">设备故障?</text>
+          <text x="330" y="274" text-anchor="middle" class="svg-small">error_code != 0</text>
+          <rect class="node-bad" x="510" y="80" width="190" height="64" rx="8"/>
+          <text x="605" y="106" text-anchor="middle" class="svg-text">FaultCurrent_mA</text>
+          <text x="605" y="126" text-anchor="middle" class="svg-small">默认 22.00mA</text>
+
+          <polygon class="node-diamond" points="605,210 725,280 605,350 485,280"/>
+          <text x="605" y="272" text-anchor="middle" class="svg-text">调试/检修?</text>
+          <text x="605" y="294" text-anchor="middle" class="svg-small">debug/check mode</text>
+          <rect class="node-warn" x="770" y="88" width="190" height="64" rx="8"/>
+          <text x="865" y="114" text-anchor="middle" class="svg-text">DebugCurrent_mA</text>
+          <text x="865" y="134" text-anchor="middle" class="svg-small">或 3.5/12/24mA 步进</text>
+
+          <polygon class="node-diamond" points="865,230 985,300 865,370 745,300"/>
+          <text x="865" y="292" text-anchor="middle" class="svg-text">有效液位?</text>
+          <text x="865" y="314" text-anchor="middle" class="svg-small">自动测量/跟随</text>
+          <rect class="node-good" x="720" y="430" width="190" height="64" rx="8"/>
+          <text x="815" y="456" text-anchor="middle" class="svg-text">按液位换算</text>
+          <text x="815" y="476" text-anchor="middle" class="svg-small">4~20mA + 报警覆盖</text>
+          <rect class="node-muted" x="970" y="430" width="190" height="64" rx="8"/>
+          <text x="1065" y="456" text-anchor="middle" class="svg-text">InitialCurrent_mA</text>
+          <text x="1065" y="476" text-anchor="middle" class="svg-small">默认 4.00mA</text>
+
+          <rect class="node-good" x="500" y="430" width="160" height="64" rx="8"/>
+          <text x="580" y="456" text-anchor="middle" class="svg-text">写运行态</text>
+          <text x="580" y="476" text-anchor="middle" class="svg-small">mA + 来源 + 标志</text>
+          <rect class="node-good" x="270" y="430" width="160" height="64" rx="8"/>
+          <text x="350" y="456" text-anchor="middle" class="svg-text">输出并发布</text>
+          <text x="350" y="476" text-anchor="middle" class="svg-small">AD5421 / HART / Modbus</text>
+
+          <path class="edge" d="M190 260 H210" marker-end="url(#arrow-decision)"/>
+          <path class="edge" d="M450 260 H485" marker-end="url(#arrow-decision)"/>
+          <path class="edge" d="M330 190 C380 118 472 108 510 112" marker-end="url(#arrow-decision)"/>
+          <text x="468" y="100" class="svg-small">是</text>
+          <text x="462" y="252" class="svg-small">否</text>
+          <path class="edge" d="M605 210 C660 132 740 122 770 120" marker-end="url(#arrow-decision)"/>
+          <text x="730" y="108" class="svg-small">是</text>
+          <path class="edge" d="M725 280 H745" marker-end="url(#arrow-decision)"/>
+          <text x="732" y="270" class="svg-small">否</text>
+          <path class="edge" d="M865 370 C858 395 842 414 824 430" marker-end="url(#arrow-decision)"/>
+          <text x="826" y="400" class="svg-small">是</text>
+          <path class="edge" d="M985 300 C1040 332 1062 382 1065 430" marker-end="url(#arrow-decision)"/>
+          <text x="1035" y="345" class="svg-small">否</text>
+          <path class="edge-good" d="M605 144 C615 222 620 348 598 430" marker-end="url(#arrow-decision-green)"/>
+          <path class="edge-good" d="M865 152 C850 246 826 360 815 430" marker-end="url(#arrow-decision-green)"/>
+          <path class="edge-good" d="M815 494 C758 522 656 520 580 494" marker-end="url(#arrow-decision-green)"/>
+          <path class="edge-good" d="M1065 494 C934 542 704 530 580 494" marker-end="url(#arrow-decision-green)"/>
+          <path class="edge-good" d="M500 462 H430" marker-end="url(#arrow-decision-green)"/>
+        </svg>
+      </div>
+    </figure>
+    <ol>
+      <li>设备无故障、处于液位跟随或自动测量发布液位时：按当前液位和 AO 量程计算输出电流。</li>
+      <li>设备无故障、尚未有有效液位或处于待机时：输出 <code>InitialCurrent_mA</code>，不要硬编码 6.0mA。</li>
+      <li>液位触发高/低报警且 AO 报警策略启用时：输出 <code>AlarmHighAO</code> 或 <code>AlarmLowAO</code>，或者使用更明确的 <code>AOHighCurrent_mA</code> / <code>AOLowCurrent_mA</code>。</li>
+      <li>设备进入故障态时：输出 <code>FaultCurrent_mA</code>，并记录本次故障电流来源。</li>
+      <li>调试/检修模式时：输出 <code>DebugCurrent_mA</code> 或按检修步骤输出 3.5、12、24mA，但必须在状态源中标注来源为调试。</li>
+      <li>AD5421 写入失败或状态异常时：保留最后一次目标电流和失败原因，向 <code>fault_manager</code> 上报 AD5421 输出故障。</li>
+    </ol>
+
+    <h3 id="change-plan">5.3 详细修改方案</h3>
+    <div class="callout ok">
+      <strong>推荐实施口径：</strong>先在 CPU2 内部补齐 AO 输出闭环，HART 立即改为读取同一运行态；Modbus/CPU3 是否新增可见寄存器作为第二阶段开关处理。这样可以先修复现场电流和 HART 不一致的问题，再按协议版本规则处理跨 CPU 显示需求。
+    </div>
+
+    <figure class="diagram-card">
+      <figcaption>
+        <strong>修改阶段路线图</strong>
+        <span>从“内部闭环”到“协议发布”分阶段落地，避免一次性改动过大。</span>
+      </figcaption>
+      <div class="svg-wrap">
+        <svg class="diagram-svg" viewBox="0 0 1180 420" role="img" aria-label="AO 电流输出详细修改阶段路线图">
+          <defs>
+            <marker id="arrow-roadmap" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto">
+              <path d="M0,0 L10,4 L0,8 Z" fill="#60758d"/>
+            </marker>
+          </defs>
+          <text x="38" y="44" class="lane-label">建议按 6 个阶段实施</text>
+
+          <rect class="node-blue" x="45" y="86" width="160" height="92" rx="10"/>
+          <text x="125" y="118" text-anchor="middle" class="svg-text">阶段 0</text>
+          <text x="125" y="140" text-anchor="middle" class="svg-small">确认口径</text>
+          <text x="125" y="158" text-anchor="middle" class="svg-small">单位/范围/字段</text>
+
+          <rect class="node-good" x="240" y="86" width="160" height="92" rx="10"/>
+          <text x="320" y="118" text-anchor="middle" class="svg-text">阶段 1</text>
+          <text x="320" y="140" text-anchor="middle" class="svg-small">AO 运行态</text>
+          <text x="320" y="158" text-anchor="middle" class="svg-small">唯一状态源</text>
+
+          <rect class="node-good" x="435" y="86" width="160" height="92" rx="10"/>
+          <text x="515" y="118" text-anchor="middle" class="svg-text">阶段 2</text>
+          <text x="515" y="140" text-anchor="middle" class="svg-small">计算与决策</text>
+          <text x="515" y="158" text-anchor="middle" class="svg-small">液位/报警/故障</text>
+
+          <rect class="node-warn" x="630" y="86" width="160" height="92" rx="10"/>
+          <text x="710" y="118" text-anchor="middle" class="svg-text">阶段 3</text>
+          <text x="710" y="140" text-anchor="middle" class="svg-small">AD5421 驱动</text>
+          <text x="710" y="158" text-anchor="middle" class="svg-small">返回值/诊断</text>
+
+          <rect class="node-good" x="825" y="86" width="160" height="92" rx="10"/>
+          <text x="905" y="118" text-anchor="middle" class="svg-text">阶段 4</text>
+          <text x="905" y="140" text-anchor="middle" class="svg-small">HART 同步</text>
+          <text x="905" y="158" text-anchor="middle" class="svg-small">命令 2/3 取状态</text>
+
+          <rect class="node-muted" x="1020" y="86" width="120" height="92" rx="10"/>
+          <text x="1080" y="118" text-anchor="middle" class="svg-text">阶段 5</text>
+          <text x="1080" y="140" text-anchor="middle" class="svg-small">Modbus/CPU3</text>
+          <text x="1080" y="158" text-anchor="middle" class="svg-small">可选发布</text>
+
+          <path class="edge" d="M205 132 H240" marker-end="url(#arrow-roadmap)"/>
+          <path class="edge" d="M400 132 H435" marker-end="url(#arrow-roadmap)"/>
+          <path class="edge" d="M595 132 H630" marker-end="url(#arrow-roadmap)"/>
+          <path class="edge" d="M790 132 H825" marker-end="url(#arrow-roadmap)"/>
+          <path class="edge" d="M985 132 H1020" marker-end="url(#arrow-roadmap)"/>
+
+          <rect class="node-box" x="60" y="240" width="1060" height="92" rx="10"/>
+          <text x="590" y="272" text-anchor="middle" class="svg-text">阶段 1~4 不新增 CPU2/CPU3 共享字段时，DEVICE_PROTOCOL_VERSION 可保持不变</text>
+          <text x="590" y="300" text-anchor="middle" class="svg-small">阶段 5 如果把当前 AO 电流、来源、故障标志发布给 CPU3 或上位机输入寄存器，则属于共享协议变化，必须同步 CPU2/CPU3 协议版本和协议变更记录</text>
+        </svg>
+      </div>
+    </figure>
+
+    <h4>5.3.1 阶段 0：先确认口径，避免把旧工程单位直接搬错</h4>
+    <table class="task-table">
+      <thead>
+        <tr>
+          <th>确认项</th>
+          <th>建议口径</th>
+          <th>原因和处理</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>AO 参数单位</td>
+          <td>统一使用 <code>0.01mA</code> 存储，运行态字段命名为 <code>current_mA_x100</code>。</td>
+          <td>当前默认值 <code>400/1200/2000/2200</code> 明显按 0.01mA 表达；旧工程 <code>CURRENTSCALE=1000.0</code> 不能直接套用。</td>
+        </tr>
+        <tr>
+          <td>正常输出范围</td>
+          <td>跟随液位输出按 <code>CurrentRangeStart_mA</code> 到 <code>CurrentRangeEnd_mA</code>，默认 4.00~20.00mA。</td>
+          <td>正常测量值不应越过 4~20mA；报警、故障、检修电流作为策略覆盖单独处理。</td>
+        </tr>
+        <tr>
+          <td>硬件允许范围</td>
+          <td>AD5421 写入层允许 3.2~24.0mA，或者至少允许 3.5、22.0、24.0mA。</td>
+          <td>当前驱动钳位 4~20mA 会挡住 <code>FaultCurrent_mA=2200</code> 和检修电流。</td>
+        </tr>
+        <tr>
+          <td>液位来源</td>
+          <td>优先使用 <code>g_measurement.oil_measurement.oil_level</code>；跟随中如只更新探头位置，则用当前稳定的液位发布口径。</td>
+          <td>不能把 <code>sensor_position</code> 和已发布液位混用，否则 HART/Modbus/现场电流会跳变。</td>
+        </tr>
+        <tr>
+          <td>报警口径</td>
+          <td>AO 高/低报警覆盖应复用继电器报警判断结果或同一套阈值函数。</td>
+          <td>避免继电器显示高报警、AO 却输出正常跟随电流的口径不一致。</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h4>5.3.2 阶段 1：新增 AO 输出运行态，形成唯一状态源</h4>
+    <div class="phase-grid">
+      <div class="phase-card">
+        <span class="tag">目标</span>
+        <strong>让所有模块读取同一个 AO 当前值</strong>
+        <p>新增 <code>AoOutputRuntime</code>，保存目标电流、实际下发结果、来源、故障标志和更新时间。HART、Modbus、日志、诊断都从它取值。</p>
+      </div>
+      <div class="phase-card">
+        <span class="tag">推荐位置</span>
+        <strong>先独立模块，后决定是否进共享结构</strong>
+        <p>优先新增 <code>Services\AoOutput\ao_output.h/.c</code>，避免一开始就改大结构；如 CPU3 必须显示，再追加到 <code>MeasurementResult</code> 尾部。</p>
+      </div>
+      <div class="phase-card">
+        <span class="tag">线程口径</span>
+        <strong>主循环上下文更新</strong>
+        <p>AO 更新不放中断，不在 HART 回调里临时计算；由主循环或测量流程调用 <code>AoOutput_Update()</code>。</p>
+      </div>
+    </div>
+
+    <table class="task-table">
+      <thead>
+        <tr>
+          <th>目标文件</th>
+          <th>建议修改</th>
+          <th>验收标准</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>新增 ao_output.h</td>
+          <td>定义 <code>AoOutputSource</code>：<code>INIT</code>、<code>LEVEL</code>、<code>ALARM_HIGH</code>、<code>ALARM_LOW</code>、<code>FAULT</code>、<code>DEBUG</code>、<code>DRIVER_ERROR</code>；定义 <code>AoOutputRuntime</code>。</td>
+          <td>字段至少包含 <code>target_mA_x100</code>、<code>last_sent_mA_x100</code>、<code>source</code>、<code>driver_fault_flags</code>、<code>last_error_code</code>。</td>
+        </tr>
+        <tr>
+          <td>新增 ao_output.c</td>
+          <td>实现 <code>AoOutput_Init()</code>、<code>AoOutput_Update()</code>、<code>AoOutput_GetRuntime()</code>、<code>AoOutput_GetCurrentFloat()</code>。</td>
+          <td>初始化后目标电流来自 <code>g_deviceParams.InitialCurrent_mA</code>，不再出现硬编码 6.0mA。</td>
+        </tr>
+        <tr>
+          <td>MeasurementResult</td>
+          <td>第一阶段不强制新增字段；若要通过输入寄存器发布，则把 <code>AoOutputRuntime</code> 追加在 <code>MeasurementResult</code> 尾部。</td>
+          <td>不发布给 CPU3 时不改变共享协议；发布时必须同步 CPU2/CPU3 寄存器布局。</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h4>5.3.3 阶段 2：实现电流计算和状态决策</h4>
+    <table class="task-table">
+      <thead>
+        <tr>
+          <th>函数/入口</th>
+          <th>建议逻辑</th>
+          <th>关键边界</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>AoOutput_CalcLevel</td>
+          <td>按 <code>level</code>、量程起点、量程终点线性换算：<code>start + percent * (end - start)</code>。</td>
+          <td>液位低于量程起点输出起始电流，高于量程终点输出结束电流；参数反向或量程为 0 时返回 <code>PARAM_RANGE_ERROR</code>。</td>
+        </tr>
+        <tr>
+          <td>AoOutput_ApplyAlarm</td>
+          <td>如果高/低报警状态有效，覆盖为 <code>AOHighCurrent_mA</code> 或 <code>AOLowCurrent_mA</code>；如果现场仍使用 <code>AlarmHighAO</code>/<code>AlarmLowAO</code>，先在文档和代码里统一命名含义。</td>
+          <td>报警覆盖必须与继电器报警口径一致，建议从 <code>relay_alarm_runtime</code> 读取已计算状态，或抽出公共判断函数。</td>
+        </tr>
+        <tr>
+          <td>AoOutput_SelectTarget</td>
+          <td>优先级：驱动故障保持/上报、设备故障电流、调试电流、有效液位跟随、初始电流。</td>
+          <td>故障电流不参与 4~20mA 钳位；调试模式必须标记来源，不能伪装成液位跟随。</td>
+        </tr>
+        <tr>
+          <td>CurrentStateJudgeAndSend</td>
+          <td>保留旧函数名作为兼容入口，内部直接调用 <code>AoOutput_Update()</code>；或删除旧空函数并统一替换调用点。</td>
+          <td>不再允许空函数存在；同名入口必须有清晰返回值或错误处理。</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h4>5.3.4 阶段 3：改 AD5421 驱动，补返回值和诊断</h4>
+    <table class="task-table">
+      <thead>
+        <tr>
+          <th>目标文件</th>
+          <th>建议修改</th>
+          <th>验收标准</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>ad5421.h</td>
+          <td>把 <code>AD5421_SetCurrent(float mA)</code> 改为返回 <code>uint32_t</code>；新增 <code>AD5421_SetCurrentX100(uint32_t mA_x100)</code>。</td>
+          <td>调用方能知道 SPI 写失败、参数越界、FAULT 状态异常，不再静默失败。</td>
+        </tr>
+        <tr>
+          <td>ad5421.c</td>
+          <td>底层换算使用 AD5421 满量程 3.2~24.0mA；正常 AO 范围由策略层决定，不在驱动层固定钳位 4~20mA。</td>
+          <td><code>FaultCurrent_mA=2200</code> 能输出 22.00mA；3.5mA 检修值不被钳成 4.0mA。</td>
+        </tr>
+        <tr>
+          <td>WriteControlRegister</td>
+          <td>恢复控制寄存器读回校验，失败返回错误码；SPI 超时从 <code>HAL_MAX_DELAY</code> 改为有限超时。</td>
+          <td>初始化失败能被 <code>App_Init()</code> 或 <code>AoOutput_Init()</code> 记录到故障链。</td>
+        </tr>
+        <tr>
+          <td>AD5421 诊断</td>
+          <td>周期读取 <code>AD5421_FAULT_Pin</code> 和 <code>READFAULT</code>，把状态写入 <code>driver_fault_flags</code>。</td>
+          <td>开路、过温、通信异常至少能进入日志和 AO 运行态；是否停机由 <code>fault_manager</code> 决定。</td>
+        </tr>
+        <tr>
+          <td>错误码</td>
+          <td>新增 AD5421 相关错误码，建议归入 <code>OTHER_PERIPHERAL_CONFIG_ERROR</code> 附近或新增外设类错误。</td>
+          <td>错误码命名能区分初始化失败、写电流失败、FAULT 引脚告警、READFAULT 异常。</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h4>5.3.5 阶段 4：接入初始化、测量流程和 HART</h4>
+    <table class="task-table">
+      <thead>
+        <tr>
+          <th>目标文件</th>
+          <th>建议修改</th>
+          <th>验收标准</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>app_main.c</td>
+          <td>删除 <code>AD5421_SetCurrent(6.0)</code>，改为 <code>AoOutput_Init()</code> 后执行一次 <code>AoOutput_Update()</code>。</td>
+          <td>上电默认输出为 <code>InitialCurrent_mA</code>，默认 4.00mA；注释和实际值一致。</td>
+        </tr>
+        <tr>
+          <td>hart.c</td>
+          <td>拆清 <code>HartInit()</code> 与 AD5421 初始化职责：HART 只初始化通信参数，AD5421 初始化交给 <code>AoOutput_Init()</code> 或独立驱动初始化入口。</td>
+          <td>避免 HART 初始化阶段写一次电流、AO 初始化阶段又写一次电流，导致上电输出短暂跳变。</td>
+        </tr>
+        <tr>
+          <td>测量流程</td>
+          <td>液位测量完成、液位跟随更新、故障状态变化、调试命令切换后调用 <code>AoOutput_Update()</code>。</td>
+          <td>液位更新后 AO 同步刷新；故障进入后目标电流立即切到故障电流。</td>
+        </tr>
+        <tr>
+          <td>fault_manager</td>
+          <td>AD5421 写入失败或诊断异常时只上报清晰错误，不在驱动层直接做复杂恢复。</td>
+          <td>故障日志能看到错误来源文件、行号、错误码；主循环状态能进入 <code>STATE_ERROR</code> 或按策略继续运行。</td>
+        </tr>
+        <tr>
+          <td>hart.c</td>
+          <td>命令 2/3 删除固定 <code>4.0</code>，改为从 <code>AoOutput_GetRuntime()</code> 读取当前电流；百分比按正常量程 <code>(mA - 4.0) / 16.0</code> 计算并钳位到 0~1。</td>
+          <td>现场电流、HART 命令 2、HART 命令 3 返回同一值；故障 22mA 时百分比按协议约定处理，不再伪报 4mA。</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h4>5.3.6 阶段 5：是否发布到 Modbus/CPU3，按需求分两档</h4>
+    <table class="task-table">
+      <thead>
+        <tr>
+          <th>方案档位</th>
+          <th>改动范围</th>
+          <th>版本和兼容性</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>最低风险档</td>
+          <td>只在 CPU2 内部和 HART 使用 AO 运行态；保持现有保持寄存器参数地址不变，不新增输入寄存器。</td>
+          <td>不改变 CPU2/CPU3 共享协议，<code>DEVICE_PROTOCOL_VERSION</code> 可不变；提交前仍需升级 CPU2 固件版本，因为运行行为已改变。</td>
+        </tr>
+        <tr>
+          <td>完整发布档</td>
+          <td>把 <code>current_mA_x100</code>、<code>source</code>、<code>driver_fault_flags</code>、<code>last_error_code</code> 追加到输入寄存器尾部，并在 CPU3 显示或上位机读取。</td>
+          <td>属于共享协议变化，必须同步 CPU2/CPU3 <code>DEVICE_PROTOCOL_VERSION</code>、协议变更记录、CPU3 解析、版本号和测试方案。</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h4>5.3.7 推荐文件改动清单</h4>
+    <table class="task-table">
+      <thead>
+        <tr>
+          <th>文件</th>
+          <th>改动内容</th>
+          <th>风险</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Services\AoOutput\ao_output.h/.c</td>
+          <td>新增 AO 输出管理模块，承载运行态、计算、决策和统一输出入口。</td>
+          <td>新模块需要加入 CPU2 CMake/工程文件，避免只写文件但未参与构建。</td>
+        </tr>
+        <tr>
+          <td>BSP\Peripherals\inc\ad5421.h</td>
+          <td>调整 <code>AD5421_SetCurrent</code> 返回值；新增 x100 接口和状态读取接口。</td>
+          <td>所有调用点必须同步改返回值处理。</td>
+        </tr>
+        <tr>
+          <td>BSP\Peripherals\src\ad5421.c</td>
+          <td>改范围、改超时、恢复读回校验、补诊断状态。</td>
+          <td>硬件寄存器读回时序要实测；SPI 超时时间不能过短。</td>
+        </tr>
+        <tr>
+          <td>Application\Src\app_main.c</td>
+          <td>用 <code>AoOutput_Init/Update</code> 替换硬编码 6.0mA。</td>
+          <td>初始化顺序要在参数加载之后、HART/AD5421 可用之后。</td>
+        </tr>
+        <tr>
+          <td>Application\Src\measure_oilLevel.c</td>
+          <td>液位发布和跟随更新后触发 AO 刷新。</td>
+          <td>不要在高频循环中无节制写 AD5421，建议值变化或周期到达才写。</td>
+        </tr>
+        <tr>
+          <td>Services\Relay\relay_output.c</td>
+          <td>复用或抽出报警判断结果给 AO 覆盖逻辑。</td>
+          <td>继电器报警含义中 0/1 是否激活要核对，避免反向。</td>
+        </tr>
+        <tr>
+          <td>Services\Hart\hart.c</td>
+          <td>命令 2/3 从 AO 运行态取电流和百分比。</td>
+          <td>HART float 大端转换保持原有 <code>SetFloatData()</code> 路径。</td>
+        </tr>
+        <tr>
+          <td>Services\Modbus\stateformodbus.h</td>
+          <td>完整发布档才追加 AO 输入寄存器宏。</td>
+          <td>一旦追加，CPU3 必须同步，否则协议严格相等检查会失败。</td>
+        </tr>
+        <tr>
+          <td>Services\Modbus\dataanalysis_modbus.c</td>
+          <td>完整发布档才把 AO 运行态写入输入寄存器。</td>
+          <td>只追加到尾部，不能移动已有寄存器。</td>
+        </tr>
+        <tr>
+          <td>ParamStorage\system_parameter.h/.c</td>
+          <td>不新增参数时只补单位和范围校验；如新增 AO 使能或模式参数，则同步存储版本。</td>
+          <td>新增持久化字段会影响 <code>DEVICE_PARAM_VERSION</code> 和现场参数兼容性。</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h4>5.3.8 验收标准和版本影响</h4>
+    <div class="done-criteria">
+      <strong>完成定义：</strong>现场实际输出电流、AO 运行态、HART 命令 2/3、可选 Modbus/CPU3 显示值必须来自同一状态源；任何 AD5421 写入失败或诊断异常都不能静默吞掉。
+    </div>
+    <table class="task-table">
+      <thead>
+        <tr>
+          <th>类别</th>
+          <th>必须满足</th>
+          <th>版本处理</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>CPU2 行为</td>
+          <td>上电默认 4.00mA，液位中点约 12.00mA，高低报警和故障能覆盖输出。</td>
+          <td>提交前应升级 CPU2 固件版本，建议按 bug 修复升 <code>PATCH</code>。</td>
+        </tr>
+        <tr>
+          <td>HART 行为</td>
+          <td>命令 2/3 返回当前 AO 运行态，不再固定 4.0mA。</td>
+          <td>属于 CPU2 对外可见行为变化，纳入同一次 CPU2 版本说明。</td>
+        </tr>
+        <tr>
+          <td>共享协议</td>
+          <td>只有新增 CPU3/Modbus 输入寄存器或改变共享字段含义时才升级 <code>DEVICE_PROTOCOL_VERSION</code>。</td>
+          <td>完整发布档必须同步 CPU2/CPU3 协议版本、协议变更记录和 CPU3 解析。</td>
+        </tr>
+        <tr>
+          <td>参数存储</td>
+          <td>不新增参数时不改变 <code>DEVICE_PARAM_VERSION</code>；新增 AO 使能/模式参数时必须评估是否清参数。</td>
+          <td>若参数存储版本变化，要同步 <code>CHANGELOG.md</code> 和 CPU2 参数存储升级清单。</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h3>5.4 不能直接照搬旧工程的点</h3>
+    <ul>
+      <li>旧工程单位是 <code>CURRENTSCALE=1000.0</code>，当前参数注释是 0.01mA，迁移时必须统一单位，避免 4.00mA 被当成 0.4mA 或 400mA。</li>
+      <li>旧工程有 <code>EquipmentState</code>、<code>EquipmentErrorCode</code>、<code>systemparameter</code>，当前工程对应的是 <code>g_measurement.device_status</code> 和 <code>g_deviceParams</code>。</li>
+      <li>当前已有四路继电器报警输出模块，AO 报警覆盖逻辑应复用同一报警判定口径，避免继电器和 AO 报警状态不一致。</li>
+      <li>当前错误管理已经有 <code>fault_manager</code> 和 <code>ErrorLog_*</code> 规范，AD5421 故障不要沿用旧工程的零散 <code>printf</code> 方式。</li>
+      <li>当前 CPU2/CPU3 共享协议有严格版本管理，新增 AO 状态给 CPU3 或上位机读取时要同步协议版本、文档和测试。</li>
+    </ul>
+  </section>
+
+  <section id="verify">
+    <h2>6. 验证建议</h2>
+    <h3>6.1 软件验证</h3>
+    <ul>
+      <li>参数默认值检查：确认 <code>InitialCurrent_mA=400</code> 时上电目标电流为 4.00mA，不再被硬编码 6.0mA 覆盖。</li>
+      <li>液位换算检查：输入低于起点、量程中点、高于终点三组液位，确认输出分别接近 4.00mA、12.00mA、20.00mA。</li>
+      <li>报警覆盖检查：触发高/低液位报警，确认 AO 输出和继电器报警状态来源一致。</li>
+      <li>故障电流检查：模拟错误码，确认目标电流切到 <code>FaultCurrent_mA</code>，且 AD5421 允许 22.00mA。</li>
+      <li>HART 检查：命令 2/3 返回电流与统一 AO 状态一致，百分比计算按 4~20mA 正常量程处理。</li>
+      <li>Modbus/CPU3 检查：如果新增只读 AO 状态，确认 CPU2/CPU3 地址和协议版本同步。</li>
+    </ul>
+
+    <h3>6.2 硬件验证</h3>
+    <ul>
+      <li>上电后测量回路电流，确认没有 6.0mA 的意外输出。</li>
+      <li>分别设置 4.00、12.00、20.00、22.00mA，使用万用表或校准仪确认回路电流。</li>
+      <li>断开回路或制造 AD5421 fault 条件，确认 PB8 和 <code>READFAULT</code> 能形成故障上报。</li>
+      <li>长时间运行时观察 SPI 访问是否出现阻塞，必要时把 <code>HAL_MAX_DELAY</code> 改为有限超时并纳入错误码。</li>
+    </ul>
+  </section>
+
+  <section id="sources">
+    <h2>7. 证据索引</h2>
+    <h3>7.1 当前工程</h3>
+    <div class="source-list">
+      <div class="source"><b>应用初始化</b><span>D:\CUBE\LTD_MAIN_CPU2\Application\Src\app_main.c:97-108</span><p>上电初始化调用 <code>HartInit()</code> 后又硬编码 <code>AD5421_SetCurrent(6.0)</code>。</p></div>
+      <div class="source"><b>HART 初始化</b><span>D:\CUBE\LTD_MAIN_CPU2\Services\Hart\hart.c:52-74</span><p>初始化 AD5421，并把 HART 参数全部设为演示变量。</p></div>
+      <div class="source"><b>HART 电流回包</b><span>D:\CUBE\LTD_MAIN_CPU2\Services\Hart\hart.c:329-367</span><p>命令 2/3 固定使用 4.0mA 和固定动态变量。</p></div>
+      <div class="source"><b>AD5421 输出</b><span>D:\CUBE\LTD_MAIN_CPU2\BSP\Peripherals\src\ad5421.c:20-65</span><p>写寄存器无返回值，输出电流被钳位到 4~20mA。</p></div>
+      <div class="source"><b>AD5421 初始化</b><span>D:\CUBE\LTD_MAIN_CPU2\BSP\Peripherals\src\ad5421.c:158-169, 210-237</span><p>控制寄存器回读校验被注释，<code>CurrentStateJudgeAndSend()</code> 为空，初始化始终返回 <code>NO_ERROR</code>。</p></div>
+      <div class="source"><b>AO 参数</b><span>D:\CUBE\LTD_MAIN_CPU2\Services\ParamStorage\system_parameter.h:653-662</span><p>结构体已有 4-20mA 输出参数。</p></div>
+      <div class="source"><b>AO 默认值</b><span>D:\CUBE\LTD_MAIN_CPU2\Services\ParamStorage\system_parameter.c:768-777</span><p>默认 4.00、20.00、22.00、12.00mA 等参数已经写入。</p></div>
+      <div class="source"><b>AO 参数映射</b><span>D:\CUBE\LTD_MAIN_CPU2\Services\Modbus\dataanalysis_modbus.c:241-249, 432-440</span><p>AO 参数可通过保持寄存器读写，但没有进一步接入输出计算。</p></div>
+    </div>
+
+    <h3>7.2 归档工程 CPU2_v1.563</h3>
+    <div class="source-list">
+      <div class="source"><b>旧 AD5421 输出驱动</b><span>D:\程序存档\CPU2_v1.563\CPU2_v1.563\HARDWARE\ad5421.c:120-157</span><p>按 3.2~24.0mA 换算 AD5421 DAC，并生成 CRC 字节。</p></div>
+      <div class="source"><b>旧输出决策</b><span>D:\程序存档\CPU2_v1.563\CPU2_v1.563\HARDWARE\ad5421.c:190-248</span><p>根据状态、错误和 <code>result.CurrentValue</code> 选择输出电流。</p></div>
+      <div class="source"><b>旧初始化</b><span>D:\程序存档\CPU2_v1.563\CPU2_v1.563\HARDWARE\ad5421.c:267-277, 290-313</span><p>初始化 AD5421，读存储的初始电流，并对控制寄存器写入做回读校验。</p></div>
+      <div class="source"><b>旧测量启动</b><span>D:\程序存档\CPU2_v1.563\CPU2_v1.563\MEASURE\measure_modbus_gcc.c:916-960</span><p>测量开始时读取参数，更新初始电流，并调用统一输出。</p></div>
+      <div class="source"><b>旧液位换算</b><span>D:\程序存档\CPU2_v1.563\CPU2_v1.563\MEASURE\measure_modbus_gcc.c:2475-2515</span><p>按液位量程计算当前电流，并根据报警状态覆盖高/低报警电流。</p></div>
+      <div class="source"><b>旧方式二跟随</b><span>D:\程序存档\CPU2_v1.563\CPU2_v1.563\MEASURE\measure_modbus_gcc.c:6631-6667, 7544-7548</span><p>液位更新和电流更新同步进行，跟随循环开头也维护当前输出。</p></div>
+      <div class="source"><b>旧 HART 同步</b><span>D:\程序存档\CPU2_v1.563\CPU2_v1.563\COMMU\hart_protocol.c:275-285</span><p>HART 电流和百分比来自 <code>result.CurrentValue</code>。</p></div>
+      <div class="source"><b>旧 Modbus 发布</b><span>D:\程序存档\CPU2_v1.563\CPU2_v1.563\COMMU\dataanalysis_modbus.c:735</span><p>输入寄存器发布 <code>result.CurrentValue * 1000</code>。</p></div>
+    </div>
+  </section>
+</div>
+</body>
+</html>

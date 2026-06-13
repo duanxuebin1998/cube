@@ -1,0 +1,485 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>电机运行类指令一键停止方案</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f4f6f8;
+      --paper: #ffffff;
+      --ink: #1f2933;
+      --muted: #64748b;
+      --line: #d8dee8;
+      --head: #eef3f8;
+      --accent: #1d6fb8;
+      --ok: #157347;
+      --warn: #a16207;
+      --danger: #b42318;
+      --code: #e9eef5;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font: 15px/1.72 "Microsoft YaHei", "Segoe UI", Arial, sans-serif;
+      letter-spacing: 0;
+    }
+
+    header {
+      background: #102236;
+      color: #fff;
+      padding: 34px 0 28px;
+      border-bottom: 5px solid var(--accent);
+    }
+
+    main, .wrap {
+      width: min(1180px, calc(100% - 32px));
+      margin: 0 auto;
+    }
+
+    main { padding: 24px 0 56px; }
+
+    h1, h2, h3 {
+      margin: 0;
+      line-height: 1.32;
+      letter-spacing: 0;
+    }
+
+    h1 {
+      margin-bottom: 10px;
+      font-size: 31px;
+    }
+
+    h2 {
+      margin: 30px 0 12px;
+      padding-bottom: 8px;
+      border-bottom: 2px solid var(--line);
+      font-size: 22px;
+    }
+
+    h3 {
+      margin: 22px 0 8px;
+      color: #16466f;
+      font-size: 18px;
+    }
+
+    p { margin: 8px 0; }
+
+    code {
+      padding: 1px 5px;
+      border-radius: 4px;
+      background: var(--code);
+      color: #172033;
+      font-family: Consolas, "Courier New", monospace;
+      font-size: 0.94em;
+    }
+
+    ul, ol {
+      margin: 8px 0;
+      padding-left: 24px;
+    }
+
+    li { margin: 4px 0; }
+
+    table {
+      width: 100%;
+      margin: 12px 0 18px;
+      border: 1px solid var(--line);
+      border-collapse: collapse;
+      background: var(--paper);
+    }
+
+    th, td {
+      padding: 9px 10px;
+      border: 1px solid var(--line);
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th {
+      background: var(--head);
+      color: #172033;
+      font-weight: 700;
+    }
+
+    .meta {
+      margin: 0;
+      color: #d2dce8;
+      font-size: 14px;
+    }
+
+    .card {
+      margin: 16px 0;
+      padding: 18px 20px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--paper);
+    }
+
+    .summary { border-left: 5px solid var(--accent); }
+    .warn { border-left: 5px solid var(--warn); background: #fff8ea; }
+    .danger { border-left: 5px solid var(--danger); background: #fff1f0; }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+      margin: 14px 0;
+    }
+
+    .tile {
+      min-height: 132px;
+      padding: 14px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--paper);
+    }
+
+    .tile strong {
+      display: block;
+      margin-bottom: 7px;
+      color: #16466f;
+      font-size: 16px;
+    }
+
+    .flow {
+      display: grid;
+      gap: 10px;
+      margin: 14px 0 18px;
+    }
+
+    .flow-row {
+      display: grid;
+      grid-template-columns: 190px 1fr;
+      gap: 12px;
+      align-items: stretch;
+    }
+
+    .flow-label {
+      display: flex;
+      align-items: center;
+      padding: 10px 12px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--head);
+      font-weight: 700;
+    }
+
+    .flow-body {
+      padding: 10px 12px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--paper);
+    }
+
+    .tag {
+      display: inline-block;
+      margin: 0 5px 5px 0;
+      padding: 1px 8px;
+      border-radius: 999px;
+      background: #e9eef5;
+      color: #2f3a4a;
+      font-size: 12px;
+      line-height: 1.8;
+      white-space: nowrap;
+    }
+
+    .tag.ok { background: #e8f5ee; color: var(--ok); }
+    .tag.warn { background: #fff3cd; color: var(--warn); }
+    .tag.danger { background: #fde8e8; color: var(--danger); }
+    .muted { color: var(--muted); }
+
+    @media (max-width: 860px) {
+      .grid { grid-template-columns: 1fr; }
+      .flow-row { grid-template-columns: 1fr; }
+      h1 { font-size: 25px; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="wrap">
+      <h1>电机运行类指令一键停止方案</h1>
+      <p class="meta">日期：2026-06-13 | 状态：CPU3 已落地初版，待硬件联调 | 范围：CPU3 UI、CPU2 已有取消命令复用、电机停止语义、外部协议口径</p>
+    </div>
+  </header>
+
+  <main>
+    <section class="card summary">
+      <h2>结论</h2>
+      <p>推荐保持现有电机运行指令入口不变：用户仍在原有命令页下发纯电机指令，包括运行到指定位置、上行、下行、强制上行、强制下行和强制提零点。上述指令下发成功后不返回状态页，而是自动进入新的电机运行监控页。</p>
+      <p>运行监控页实时显示电机运行位置和称重值，并提供“一键停止当前运动”。纯电机指令自然完成、停止完成或取消完成后，CPU3 再自动切回状态页。</p>
+      <p>“一键停止”仍定义为“停止当前动作”的受控停止功能，底层复用现有 <code>CMD_CANCEL_MEASUREMENT = 16</code> 语义，由 CPU2 统一取消当前命令、停止电机并回到待机。UI 上不使用“急停”字样，避免把受控慢停误认为安全急停。</p>
+      <p>页面沟通原型见同目录 <code>2026-06-13_电机运行监控页UI预览.html</code>，用于确认小屏布局、按键提示和运行/停止/完成状态文案。</p>
+    </section>
+
+    <section>
+      <h2>落地状态</h2>
+      <div class="card">
+        <p><span class="tag ok">CPU3 已实现</span> 已在 <code>LTD_DISPLAY_CPU3/Application/display/display_tankopera.c</code> 增加电机运行监控页，指令下发成功后按命令类型决定是否进入该页。</p>
+        <p><span class="tag ok">入口不变</span> 电机运行指令仍在原有命令页下发，不新增“电机控制”单独页面。</p>
+        <p><span class="tag ok">范围收敛</span> 仅 <code>CMD_RUN_TO_POSITION</code>、<code>CMD_MOVE_UP</code>、<code>CMD_MOVE_DOWN</code>、<code>CMD_FORCE_MOVE_UP</code>、<code>CMD_FORCE_MOVE_DOWN</code>、<code>CMD_FORCE_LIFT_ZERO</code> 进入监控页，其它测量或业务命令保持原退出策略。</p>
+        <p><span class="tag ok">停止复用</span> 监控页“停止运动”确认后仍下发 <code>CMD_CANCEL_MEASUREMENT</code>，CPU2 复用既有取消当前命令与慢停逻辑。</p>
+        <p><span class="tag warn">待硬件联调</span> 本地已通过 CPU3 构建验证；仍需台架确认运行态刷新、自然完成返回状态页、停止后不继续跑到原目标。</p>
+      </div>
+    </section>
+
+    <section>
+      <h2>设计目标</h2>
+      <div class="grid">
+        <div class="tile">
+          <strong>操作目标</strong>
+          <p>现场人员沿用原有命令页下发纯电机运行或强制运动指令，随后自动进入运行监控页；监控页持续显示设备状态第一行、位置和称重，并提供停止运动入口。</p>
+        </div>
+        <div class="tile">
+          <strong>安全目标</strong>
+          <p>停止动作必须由 CPU2 主循环统一执行，CPU3 只下发命令，不直接改 CPU2 状态机或 TMC5130 寄存器。</p>
+        </div>
+        <div class="tile">
+          <strong>兼容目标</strong>
+          <p>优先复用既有保持寄存器中的 <code>command</code> 字段和 <code>CMD_CANCEL_MEASUREMENT</code>，避免新增 CPU2/CPU3 共享协议。</p>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>推荐方案</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>层级</th>
+            <th>方案</th>
+            <th>说明</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>CPU3 UI</td>
+            <td>沿用原有命令页，新增“电机运行监控页”</td>
+            <td>运行到指定位置、上行、下行、强制上行、强制下行和强制提零点仍在原有命令页下发；CPU3 下发这些纯电机指令成功后自动进入运行监控页，监控页显示设备状态第一行、运行位置、称重值和停止运动入口。</td>
+          </tr>
+          <tr>
+            <td>CPU2 命令</td>
+            <td>复用 <code>CMD_CancelMeasurement()</code></td>
+            <td>取消自动恢复、清当前命令、清错误码、调用 <code>MotorCtrl_SlowStop()</code>，最后切到待机。</td>
+          </tr>
+          <tr>
+            <td>电机动作</td>
+            <td>使用受控慢停</td>
+            <td><code>MotorCtrl_SlowStop()</code> 下发停止并等待 <code>RAMPSTAT.VZERO</code>，不是直接断能。</td>
+          </tr>
+          <tr>
+            <td>外部协议</td>
+            <td>后续统一 STOP 语义</td>
+            <td>SI7000 当前 STOP 线圈映射到维护模式，建议后续评估是否改为同样下发取消当前动作，或区分 Manual 与 Stop。</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>UI 交互设计</h2>
+      <div class="flow">
+        <div class="flow-row">
+          <div class="flow-label">入口</div>
+          <div class="flow-body">不新增单独电机控制菜单；运行到指定位置、上行、下行、强制上行、强制下行和强制提零点仍从原有命令页下发。</div>
+        </div>
+        <div class="flow-row">
+          <div class="flow-label">命令下发后</div>
+          <div class="flow-body">用户在原有命令页确认下发上述纯电机指令后，CPU3 写入对应命令并立即切到运行监控页，不先返回状态页。</div>
+        </div>
+        <div class="flow-row">
+          <div class="flow-label">运行监控页</div>
+          <div class="flow-body">第一行直接复用设备状态页第一行，例如“向下运行中”“运行到指定位置中”；下面显示当前位置、称重值和停止运动入口。</div>
+        </div>
+        <div class="flow-row">
+          <div class="flow-label">一键停止</div>
+          <div class="flow-body">运行监控页底部确认项使用“停止运动”，避免“停止”二字含义不清。触发确认页时文案为“停止当前运动?”，确认后下发 <code>CMD_CANCEL_MEASUREMENT</code>。</div>
+        </div>
+        <div class="flow-row">
+          <div class="flow-label">自动返回</div>
+          <div class="flow-body">监控页轮询 CPU2 当前命令和设备状态。运动自然完成、停止完成或取消完成后，显示“已完成”或“已停止”，短暂停留后自动切回状态页。</div>
+        </div>
+      </div>
+
+      <div class="card warn">
+        <h3>界面文案建议</h3>
+        <ul>
+          <li>入口：沿用原有电机运行和强制运动指令页面</li>
+          <li>监控页标题：电机运行中</li>
+          <li>第 1 行：复用设备状态页第一行</li>
+          <li>监控数据显示：位置、称重</li>
+          <li>监控页操作：停止运动</li>
+          <li>确认页标题：停止当前运动?</li>
+          <li>确认键提示：确认停止</li>
+          <li>返回键提示：返回</li>
+          <li>执行中提示：正在停止...</li>
+          <li>完成提示：已停止</li>
+        </ul>
+      </div>
+    </section>
+
+    <section>
+      <h2>控制对象</h2>
+      <p>电机运行命令仍按原有命令页权限和状态判断下发。运行监控页只跟踪本次纯电机控制指令，停止运动入口只在“当前运动可停止”时可用。</p>
+      <table>
+        <thead>
+          <tr>
+            <th>类别</th>
+            <th>处理方式</th>
+            <th>理由</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>运行类指令</td>
+            <td>进入运行监控页：<code>CMD_RUN_TO_POSITION</code>、<code>CMD_MOVE_UP</code>、<code>CMD_MOVE_DOWN</code></td>
+            <td>这是本需求重点，用户应能直接停止当前电机运动。</td>
+          </tr>
+          <tr>
+            <td>强制运动</td>
+            <td>进入运行监控页：<code>CMD_FORCE_MOVE_UP</code>、<code>CMD_FORCE_MOVE_DOWN</code>、<code>CMD_FORCE_LIFT_ZERO</code></td>
+            <td>强制动作风险更高，停止入口应更容易触达，但仍需要确认。</td>
+          </tr>
+          <tr>
+            <td>普通测量/业务流程</td>
+            <td>不进入运行监控页：找油、找水、找底、单点、分布、密度区间、瓦锡兰密度流程等</td>
+            <td>这些流程可能内部触发电机动作，但它们不是用户直接下发的纯电机指令，仍按原业务状态页、测量流程和取消策略处理。</td>
+          </tr>
+          <tr>
+            <td>维护/手动</td>
+            <td>暂不纳入：<code>CMD_MAINTENANCE_MODE</code> 或手动运行态</td>
+            <td>维护模式是否退出、是否停止当前动作需要单独定义，避免和本次纯电机运行监控页混在一起。</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>实现拆分</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>步骤</th>
+            <th>改动点</th>
+            <th>验收口径</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>1</td>
+            <td>CPU3 保持原有电机运行指令入口，仅纯电机指令下发成功后跳转到运行监控页。</td>
+            <td>不新增单独电机控制菜单；<code>CMD_RUN_TO_POSITION</code>、<code>CMD_MOVE_UP</code>、<code>CMD_MOVE_DOWN</code>、<code>CMD_FORCE_MOVE_UP</code>、<code>CMD_FORCE_MOVE_DOWN</code>、<code>CMD_FORCE_LIFT_ZERO</code> 能正常下发并进入监控页。</td>
+          </tr>
+          <tr>
+            <td>2</td>
+            <td>运行监控页第一行复用设备状态页第一行，下方显示当前位置和称重值。</td>
+            <td>监控页第一行和状态页一致，例如“向下运行中”“运行到指定位置中”。</td>
+          </tr>
+          <tr>
+            <td>3</td>
+            <td>运行监控页底部确认项从“停止”优化为“停止运动”。</td>
+            <td>用户能明确知道确认键会停止当前电机运动，而不是退出页面。</td>
+          </tr>
+          <tr>
+            <td>4</td>
+            <td>停止操作复用确认页和 <code>Display_RequestCancelMeasurement()</code>，确认后写 CPU2 命令寄存器。</td>
+            <td>从运行监控页下发的停止命令仍为 <code>CMD_CANCEL_MEASUREMENT</code>。</td>
+          </tr>
+          <tr>
+            <td>5</td>
+            <td>运行监控页检测纯电机指令完成、停止完成或取消完成后自动切回状态页。</td>
+            <td>自然完成和用户停止都能从监控页收敛回状态页，不需要用户手动返回。</td>
+          </tr>
+          <tr>
+            <td>6</td>
+            <td>CPU2 检查所有运行类循环是否持续调用命令切换检查。</td>
+            <td>运行到位置、点动、强制运动过程中收到 <code>CMD_CANCEL_MEASUREMENT</code> 能及时退出并慢停。</td>
+          </tr>
+          <tr>
+            <td>7</td>
+            <td>补充调试日志和测试方案，区分用户停止与故障停机。</td>
+            <td>用户主动停止不进入最终报错，不把取消动作记成故障。</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>协议与版本影响</h2>
+      <div class="card">
+        <p><span class="tag ok">推荐方案</span> 不新增保持寄存器、不新增命令枚举、不改变 <code>DeviceParameters</code> 布局时，通常不需要升级 <code>DEVICE_PROTOCOL_VERSION</code>。</p>
+        <p><span class="tag warn">需要评估</span> 如果后续把外部协议 STOP 线圈从维护模式改为取消当前动作，属于外部协议行为变化，应同步更新 SI7000 映射文档、联调检查表和版本测试方案。</p>
+        <p><span class="tag warn">固件版本</span> 本次初版仅改变 CPU3 UI 行为并复用 CPU2 已有取消命令，未新增 CPU2 协议或寄存器；合入版本时需要评估 CPU3 固件版本，CPU2 无新增改动则不单独升版。</p>
+      </div>
+    </section>
+
+    <section>
+      <h2>风险与边界</h2>
+      <div class="card danger">
+        <h3>不能把本功能称为急停</h3>
+        <p>当前推荐路径是 <code>MotorCtrl_SlowStop()</code>，属于受控停止。真正急停需要独立设计硬件断能、驱动禁用、恢复流程和故障记录策略。</p>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>风险</th>
+            <th>规避方式</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>CPU3 只改 UI，CPU2 运行循环没有响应命令切换</td>
+            <td>实现时逐个检查运行到位置、点动、强制运动和调试路径的 <code>HasEffectiveCommandSwitchRequest()</code> 或停机封装调用。</td>
+          </tr>
+          <tr>
+            <td>用户停止被当成故障记录</td>
+            <td>取消命令返回值按用户动作处理，不进入最终报错；停止失败才记录告警或故障。</td>
+          </tr>
+          <tr>
+            <td>SI7000 STOP 与本机 UI STOP 语义不一致</td>
+            <td>短期文档说明差异；后续按外部协议需求统一 Manual 与 Stop 的映射。</td>
+          </tr>
+          <tr>
+            <td>停止后位置源或目标残留影响下一次运动</td>
+            <td>沿用电机停止后的目标对齐、状态刷新和速度恢复逻辑；必要时补充台架验证。</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>验证建议</h2>
+      <ul>
+        <li>在原有电机运行指令页选择运行到指定位置、上行、下行、强制上行、强制下行或强制提零点，不新增单独电机控制页。</li>
+        <li>上述纯电机指令下发成功后，CPU3 不返回状态页，而是自动进入电机运行监控页。</li>
+        <li>找油、找水、找底、单点、分布、密度区间、瓦锡兰密度流程等业务命令不进入运行监控页。</li>
+        <li>运行监控页第一行复用设备状态页第一行，并持续刷新当前位置和称重值。</li>
+        <li>在运行监控页选择停止并确认后，CPU2 收到 <code>CMD_CANCEL_MEASUREMENT</code>，电机慢停并回待机。</li>
+        <li>纯电机指令自然完成后，运行监控页自动切换到状态页。</li>
+        <li><code>CMD_RUN_TO_POSITION</code> 运行过程中停止，确认不会继续跑到原目标。</li>
+        <li><code>CMD_MOVE_UP</code>、<code>CMD_MOVE_DOWN</code>、强制上/下行过程中停止，确认停止后速度恢复为参数速度。</li>
+        <li>停止过程中连续按键不会重复下发导致状态错乱。</li>
+        <li>停止不是故障：CPU2 不应留下最终错误码，CPU3 状态页不显示故障原因。</li>
+        <li>电机停止失败或通信异常时，有清晰的提示和日志，不静默失败。</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>当前代码依据</h2>
+      <div class="card">
+        <p><code>LTD_MAIN_CPU2/Services/ParamStorage/system_parameter.h</code>：已有 <code>CMD_CANCEL_MEASUREMENT = 16</code>。</p>
+        <p><code>LTD_MAIN_CPU2/Application/Src/measure.c</code>：已有 <code>CMD_CancelMeasurement()</code>，会取消自动恢复、清命令/错误码、调用 <code>MotorCtrl_SlowStop()</code> 并回待机。</p>
+        <p><code>LTD_DISPLAY_CPU3/Application/display/display.c</code>：现有长按返回取消页可作为确认页和绘制逻辑参考，但本方案不再把状态页作为主要控制入口。</p>
+        <p><code>LTD_DISPLAY_CPU3/Application/display/display_tankopera.c</code>：已有菜单框架和 <code>Display_RequestCancelMeasurement()</code>，可复用其下发 <code>CMD_CANCEL_MEASUREMENT</code> 的能力。</p>
+        <p><code>LTD_DISPLAY_CPU3/Communication/external/si7000_modbus/si7000_modbus_slave.c</code>：SI7000 STOP 当前映射到 <code>CMD_MAINTENANCE_MODE</code>，后续需要单独评估是否统一。</p>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

@@ -45,6 +45,7 @@ CPU2 参数加载会校验 FRAM 中的 `magic`、`struct_size`、`param_version`
 | V1.13.2.0 | 3 | 存储版本不变；修复电机绝对目标越界保护和参数错误自动恢复过滤，旧 FRAM 参数通常保留 |
 | V1.14.0.0 | 3 | 存储版本不变；新增密度连续、连续相对频率和连续定频找液位方式，旧 FRAM 参数通常保留 |
 | V1.14.0.1 | 3 | 存储版本不变；优化电机点动与位置模式运动流程，旧 FRAM 参数通常保留 |
+| V1.15.0.0 | 3 | 存储版本不变；新增读取部件参数蓝牙 RSSI 快照、协议版本 9 和 CPU3 菜单显示优化，旧 FRAM 参数通常保留 |
 
 历史说明：建立 CPU2 程序版本号前，2025-12-16 引入当前参数元信息时使用 `DEVICE_PARAM_VERSION=1`；2026-03-05 系统参数增加时提升到 `DEVICE_PARAM_VERSION=2`，从版本 1 升级到版本 2 会因旧参数版本不匹配恢复出厂参数。
 
@@ -1286,3 +1287,42 @@ CPU2 参数加载会校验 FRAM 中的 `magic`、`struct_size`、`param_version`
 - 前序台架中出现过两次可恢复的 AS5145 编码器校验失败重试，后续静止 24 次 `YS/YC` 和 5mm 往返复测未复现；现场仍需观察运动后首帧采样和线束抗干扰。
 - 长距离软停止、大负距离越界和更多速度组合仍建议按《电机运动剩余台架验证执行规程》补测。
 - 台架安全要求传感器位置不低于 200mm、不高于 1000mm；固件通用目标范围仍按 0 到罐高判断，没有把 200mm 作为软件硬限位。
+
+## 2026-06-13 - 新增读取部件参数蓝牙RSSI并优化CPU3菜单显示（CPU2 V1.15.0.0 / CPU3 V1.14.0.0）
+
+版本：
+- CPU2: V1.14.0.1 -> V1.15.0.0
+- CPU3: V1.13.0.0 -> V1.14.0.0
+
+协议版本/兼容性：
+- `DEVICE_PROTOCOL_VERSION`: 8 -> 9。
+- `WirelessPairingStatus` 输入寄存器尾部追加当前连接有效、RSSI 有效、RSSI 值、查询错误码和 RSSI 更新计数；`REG_ENG` 随新增尾部字段顺延。
+- CPU2/CPU3 必须同为协议版本 9，才能正确读取和显示当前蓝牙连接 RSSI；协议版本 8 的旧端不应解释新增尾部输入寄存器。
+- CPU2 `DEVICE_PARAM_VERSION` 保持 3，`DeviceParameters` 结构大小不变，从 V1.14.0.1 升级到 V1.15.0.0 不会因参数存储版本触发恢复出厂。
+- CPU3 本机参数版本保持 `0x0004`，不改变本机显示/通信参数存储布局。
+
+本次修改：
+- CPU2 读取部件参数流程增加 CH9141K 当前蓝牙连接状态和 RSSI 快照查询；查询失败时发布错误码和无效 RSSI，不重新配对、不保存默认连接。
+- CPU2/CPU3 同步协议版本 9、输入寄存器映射和无线滑环 RSSI 契约检查脚本。
+- CPU3 读取部件参数完成态持续显示位置、称重、温度、频率、电容、X/Y 角和 RSSI；RSSI 有效时显示数值，无效时显示 `RSSI:N/A`。
+- CPU3 菜单按现场口径重组：读取部件参数前移，测量命令拆分密度单点测量和密度分布测量，水位命令归组，分布类密度命令集中到密度分布测量，传感器运动命令集中到浮子运动控制。
+- CPU3 调试指令显示完整指令名称，空载/满载称重获取时进入独立等待页，完成后返回称重配置菜单；补充“控”字模。
+- CPU2 瓦锡兰密度读取在频率无效或超时保持无有效频率时返回频率异常，避免把无效频率误归类为有效空气点。
+- 同步更新菜单 Markdown/Word 文档、状态页显示确认表、协议变更记录、系统参数默认值、程序流程导航、版本改动与测试方案和相关检查脚本。
+
+验证：
+- `py tools\check_wireless_rssi_contract.py`
+- `py tools\check_si7000_protocol_contract.py`
+- `py tools\check_density_level_control_contract.py`
+- `py tools\check_read_part_params_refresh_contract.py`
+- `py LTD_DISPLAY_CPU3\font_check.py`
+- `py tools\update_flow_navigation.py`
+- `cmake --build build\LTD_MAIN_CPU2`
+- `cmake --build build\LTD_DISPLAY_CPU3`
+- `git diff --cached --check`
+- `py tools\check_version_bumped.py`
+
+未验证风险：
+- 未做实物联调；需要现场验证 CH9141K 已连接、未连接、RSSI 查询超时、命令切换打断和 UART6 透传恢复。
+- CPU3 菜单回退路径、称重等待页返回路径和 OLED 分页显示仍建议在实机按键上逐项确认。
+- 瓦锡兰频率异常保护需在现场确认无效频率、空气点和液体点的边界表现。

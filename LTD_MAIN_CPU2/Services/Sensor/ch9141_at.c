@@ -180,22 +180,22 @@ void CH9141_AT_ResetResponse(CH9141AtResponse *response)
 /**
  * @brief 判断文本中是否已经出现完整数字，跳过扫描候选的 "1." 序号格式。
  */
-static uint8_t CH9141_AT_TextHasNumber(const char *text)
+static uint8_t CH9141_AT_TextHasNumber(const char *text, const char *end)
 {
-    while ((text != NULL) && (*text != '\0')) {
+    while ((text != NULL) && (end != NULL) && (text < end)) {
         const char *number = text;
         uint8_t has_digit = 0U;
 
-        if ((*number == '-') || (*number == '+')) {
+        if (((*number == '-') || (*number == '+')) && ((number + 1) < end)) {
             number++;
         }
-        while ((*number >= '0') && (*number <= '9')) {
+        while ((number < end) && (*number >= '0') && (*number <= '9')) {
             has_digit = 1U;
             number++;
         }
 
         if (has_digit != 0U) {
-            if (*number != '.') {
+            if ((number >= end) || (*number != '.')) {
                 return 1U;
             }
             text = number + 1;
@@ -209,34 +209,80 @@ static uint8_t CH9141_AT_TextHasNumber(const char *text)
 /**
  * @brief 判断响应文本里是否已经出现完整 RSSI 上报内容。
  *
- * CH9141K RSSI 命令先返回 OK，随后异步输出 RSSI；仅收到 "RSSI" 标题不算完成，必须等到数值。
+ * CH9141K RSSI 命令先返回 OK，随后异步输出 RSSI；仅收到不完整的 "-2" 不能提前结束。
  */
 static uint8_t CH9141_AT_ResponseHasRssiText(const char *text)
 {
-    const char *payload;
+    const char *cursor;
 
     if (text == NULL) {
         return 0U;
     }
 
-    /* 命令响应阶段从 OK 后查找，异步等待阶段没有 OK 时直接检查整段文本。 */
-    payload = strstr(text, "OK");
-    if (payload != NULL) {
-        payload += 2;
-    } else {
-        payload = text;
+    cursor = text;
+    while (*cursor != '\0') {
+        const char *line_start = cursor;
+        const char *raw_end;
+        const char *line_end;
+        uint8_t has_rssi_token = 0U;
+        uint8_t has_signed_line = 0U;
+
+        while ((*line_start == '\r') || (*line_start == '\n') ||
+               (*line_start == ' ') || (*line_start == '\t')) {
+            line_start++;
+        }
+
+        raw_end = line_start;
+        while ((*raw_end != '\0') && (*raw_end != '\r') && (*raw_end != '\n')) {
+            raw_end++;
+        }
+        if (*raw_end == '\0') {
+            return 0U;
+        }
+
+        line_end = raw_end;
+        while ((line_end > line_start) && ((line_end[-1] == ' ') || (line_end[-1] == '\t'))) {
+            line_end--;
+        }
+
+        if (line_end > line_start) {
+            const char *scan;
+            uint16_t line_len = (uint16_t)(line_end - line_start);
+
+            if (!(((line_len == 2U) && (strncmp(line_start, "OK", 2U) == 0)) ||
+                  ((line_len >= 2U) && (line_start[0] == 'A') && (line_start[1] == 'T')))) {
+                for (scan = line_start; scan < line_end; scan++) {
+                    if (((uint16_t)(line_end - scan) >= 4U) &&
+                        ((scan[0] == 'R') || (scan[0] == 'r')) &&
+                        ((scan[1] == 'S') || (scan[1] == 's')) &&
+                        ((scan[2] == 'S') || (scan[2] == 's')) &&
+                        ((scan[3] == 'I') || (scan[3] == 'i'))) {
+                        has_rssi_token = 1U;
+                        break;
+                    }
+                }
+
+                if (((line_start[0] == '-') || (line_start[0] == '+')) &&
+                    ((line_start + 1) < line_end) &&
+                    (line_start[1] >= '0') && (line_start[1] <= '9')) {
+                    has_signed_line = 1U;
+                }
+
+                if (((has_rssi_token != 0U) || (has_signed_line != 0U)) &&
+                    (CH9141_AT_TextHasNumber(line_start, line_end) != 0U)) {
+                    return 1U;
+                }
+            }
+        }
+
+        cursor = raw_end;
+        while ((*cursor == '\r') || (*cursor == '\n')) {
+            cursor++;
+        }
     }
 
-    while ((*payload == '\r') || (*payload == '\n') || (*payload == ' ') || (*payload == '\t')) {
-        payload++;
-    }
-    if ((payload[0] == 'A') && (payload[1] == 'T')) {
-        return 0U;
-    }
-
-    return CH9141_AT_TextHasNumber(payload);
+    return 0U;
 }
-
 /**
  * @brief 按独立响应行识别 AT 控制 token，避免扫描数据里的 NAME/文本误触发 OK/ERR。
  */

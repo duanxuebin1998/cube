@@ -240,6 +240,19 @@ ROUTES = [
         ],
     },
     {
+        "id": "readparams",
+        "title": "读取部件参数与RSSI链路",
+        "summary": "读取部件参数由 CPU3 菜单下发，CPU2 周期刷新传感器快照并查询 CH9141K 当前连接 RSSI，CPU3 轮询尾部输入寄存器后在状态页显示。",
+        "steps": [
+            ("CPU3 菜单入口", "cpu3_07", "读取部件参数位于测量/维护入口，下发 CMD_READ_PART_PARAMS"),
+            ("CPU3 内部轮询", "cpu3_02", "运行轮询读取输入寄存器尾部 WirelessPairingStatus RSSI 字段"),
+            ("CPU2 命令入口", "cpu2_02", "进入读取部件参数命令并保持 STATE_READPARAMETEROVER 持续刷新"),
+            ("CPU2 传感器快照", "cpu2_09", "每 1s 刷新位置、称重、温度、频率、电容、角度，每 5s 查询蓝牙 RSSI"),
+            ("CPU2 寄存器发布", "cpu2_10", "协议版本 9 在继电器运行态后追加连接有效、RSSI 有效、RSSI 值、错误码和更新计数"),
+            ("CPU3 状态显示", "cpu3_06", "读取参数完成页显示 RSSI 数值或 RSSI:N/A，并继续显示 X/Y 角等快照"),
+        ],
+    },
+    {
         "id": "param",
         "title": "参数修改、保存和同步链路",
         "summary": "CPU3 菜单和外部协议都可能修改参数，必须区分 CPU3 本机参数、CPU2 设备参数和共享寄存器缓存。",
@@ -343,13 +356,13 @@ RELATIONS: Dict[str, Dict[str, object]] = {
         "route": ["cpu2_total", "cpu2_02", "cpu2_08", "cpu2_07"],
     },
     "cpu2_09": {
-        "focus": "传感器采集、无线通信和传感状态更新，为测量判断、状态输出和故障管理提供输入。",
+        "focus": "传感器采集、无线通信、读取部件参数和蓝牙 RSSI 快照，为测量判断、状态输出和故障管理提供输入。",
         "upstream": ["cpu2_01", "cpu2_14"],
         "downstream": ["cpu2_04", "cpu2_05", "cpu2_06", "cpu2_07", "cpu2_10"],
-        "route": ["cpu2_total", "cpu2_09", "cpu2_04", "cpu2_10"],
+        "route": ["cpu2_total", "cpu2_09", "cpu2_10", "cpu3_02", "cpu3_06"],
     },
     "cpu2_10": {
-        "focus": "CPU2 与 CPU3 的共享寄存器和 Modbus 接口，是 CPU2 测量结果返回 CPU3 的主通道。",
+        "focus": "CPU2 与 CPU3 的共享寄存器和 Modbus 接口，是 CPU2 测量结果、无线 RSSI 运行态和协议版本 9 尾部字段返回 CPU3 的主通道。",
         "upstream": ["cpu2_02", "cpu2_04", "cpu2_05", "cpu2_06", "cpu2_07", "cpu3_02"],
         "downstream": ["cpu3_02", "cpu3_04", "cpu3_05", "cpu3_06", "cpu2_12"],
         "route": ["cross", "cpu2_04", "cpu2_10", "cpu3_02", "cpu3_06"],
@@ -403,7 +416,7 @@ RELATIONS: Dict[str, Dict[str, object]] = {
         "route": ["cpu3_total", "cpu3_01", "cpu3_02"],
     },
     "cpu3_02": {
-        "focus": "CPU3 作为 CPU2 Modbus 主站，负责写指令/参数、读输入/保持寄存器和密度点分批回读。",
+        "focus": "CPU3 作为 CPU2 Modbus 主站，负责写指令/参数、读输入/保持寄存器、密度点分批回读和协议版本 9 RSSI 尾部字段解析。",
         "upstream": ["cpu3_01", "cpu3_03", "cpu3_04", "cpu3_05", "cpu3_07"],
         "downstream": ["cpu2_10", "cpu2_02", "cpu2_04", "cpu2_05", "cpu2_06", "cpu3_06"],
         "route": ["cross", "cpu3_07", "cpu3_02", "cpu2_02", "cpu2_04", "cpu2_10"],
@@ -427,13 +440,13 @@ RELATIONS: Dict[str, Dict[str, object]] = {
         "route": ["cross", "cpu3_05", "cpu3_02", "cpu2_06", "cpu3_05"],
     },
     "cpu3_06": {
-        "focus": "显示刷新、按键事件和状态页展示，负责把 CPU2 状态和 CPU3 本机交互变成现场可见界面。",
+        "focus": "显示刷新、按键事件、状态页展示和调试等待页，负责把 CPU2 状态、读取部件参数 RSSI 和 CPU3 本机交互变成现场可见界面。",
         "upstream": ["cpu3_01", "cpu3_02", "cpu3_07", "cpu3_08", "cpu2_10"],
         "downstream": ["cpu3_07", "cpu2_02", "cpu2_12"],
         "route": ["cross", "cpu2_10", "cpu3_02", "cpu3_06", "cpu3_07"],
     },
     "cpu3_07": {
-        "focus": "菜单参数、指令确认、保护确认和 CPU2 指令/参数下发，是人工操作进入测量链路的主入口。",
+        "focus": "菜单参数、指令确认、保护确认、测量/调试菜单分组和 CPU2 指令/参数下发，是人工操作进入测量链路的主入口。",
         "upstream": ["cpu3_06", "cpu3_08"],
         "downstream": ["cpu3_02", "cpu2_02", "cpu2_04", "cpu2_05", "cpu2_06", "cpu2_12"],
         "route": ["cross", "cpu3_06", "cpu3_07", "cpu3_02", "cpu2_02"],

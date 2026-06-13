@@ -1,0 +1,503 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>读取部件参数增加蓝牙连接 RSSI 需求方案</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f6f8fb;
+      --panel: #ffffff;
+      --ink: #1f2937;
+      --muted: #5b6677;
+      --line: #d8dee9;
+      --accent: #0f766e;
+      --accent-soft: #e6f4f1;
+      --warn: #92400e;
+      --warn-soft: #fff4db;
+      --ok: #166534;
+      --ok-soft: #e8f6ed;
+      --code: #111827;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font: 15px/1.72 "Microsoft YaHei", "Segoe UI", Arial, sans-serif;
+    }
+
+    header {
+      background: #102a43;
+      color: #ffffff;
+      padding: 32px 24px 28px;
+    }
+
+    header .inner,
+    main {
+      max-width: 1120px;
+      margin: 0 auto;
+    }
+
+    h1 {
+      margin: 0 0 12px;
+      font-size: 30px;
+      line-height: 1.25;
+      letter-spacing: 0;
+    }
+
+    .subtitle {
+      margin: 0;
+      color: #dbeafe;
+      max-width: 860px;
+    }
+
+    main {
+      padding: 24px;
+    }
+
+    section {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 22px;
+      margin: 0 0 18px;
+    }
+
+    h2 {
+      margin: 0 0 14px;
+      font-size: 20px;
+      line-height: 1.35;
+    }
+
+    h3 {
+      margin: 18px 0 10px;
+      font-size: 16px;
+    }
+
+    p {
+      margin: 0 0 10px;
+    }
+
+    ul,
+    ol {
+      margin: 8px 0 0 22px;
+      padding: 0;
+    }
+
+    li {
+      margin: 5px 0;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 12px 0 4px;
+      table-layout: fixed;
+    }
+
+    th,
+    td {
+      border: 1px solid var(--line);
+      padding: 9px 10px;
+      vertical-align: top;
+      word-break: break-word;
+    }
+
+    th {
+      background: #edf2f7;
+      text-align: left;
+      font-weight: 700;
+    }
+
+    code {
+      color: var(--code);
+      background: #edf2f7;
+      border-radius: 4px;
+      padding: 1px 5px;
+      font-family: Consolas, "Courier New", monospace;
+      font-size: 0.92em;
+    }
+
+    .meta {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+      margin-top: 18px;
+    }
+
+    .meta div {
+      background: rgba(255,255,255,0.1);
+      border: 1px solid rgba(255,255,255,0.2);
+      border-radius: 8px;
+      padding: 10px;
+    }
+
+    .meta b {
+      display: block;
+      color: #bfdbfe;
+      font-size: 12px;
+      margin-bottom: 2px;
+    }
+
+    .tag {
+      display: inline-block;
+      border-radius: 999px;
+      padding: 2px 9px;
+      font-size: 12px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .tag.todo {
+      color: var(--warn);
+      background: var(--warn-soft);
+    }
+
+    .tag.ok {
+      color: var(--ok);
+      background: var(--ok-soft);
+    }
+
+    .tag.info {
+      color: var(--accent);
+      background: var(--accent-soft);
+    }
+
+    .callout {
+      border-left: 4px solid var(--accent);
+      background: var(--accent-soft);
+      padding: 12px 14px;
+      margin: 12px 0;
+      border-radius: 0 8px 8px 0;
+    }
+
+    .warning {
+      border-left-color: #d97706;
+      background: var(--warn-soft);
+    }
+
+    .flow {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 10px;
+      margin-top: 12px;
+    }
+
+    .flow .step {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fbfdff;
+      padding: 12px;
+      min-height: 112px;
+    }
+
+    .flow .step b {
+      display: block;
+      color: var(--accent);
+      margin-bottom: 6px;
+    }
+
+    .evidence {
+      font-size: 13px;
+      color: var(--muted);
+      margin-top: 10px;
+    }
+
+    @media (max-width: 900px) {
+      .meta,
+      .flow {
+        grid-template-columns: 1fr;
+      }
+
+      main {
+        padding: 14px;
+      }
+
+      section {
+        padding: 16px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="inner">
+      <h1>读取部件参数增加蓝牙连接 RSSI 需求方案</h1>
+      <p class="subtitle">面向 CPU2/CPU3 固件的落地方案：在现有读取部件参数命令中补充当前蓝牙连接 RSSI 读取、共享、显示和验证方案。</p>
+      <div class="meta">
+        <div><b>文档日期</b>2026-06-13</div>
+        <div><b>当前状态</b>需求待确认</div>
+        <div><b>涉及模块</b>CPU2 Sensor / CH9141K / Modbus / CPU3 Display</div>
+        <div><b>版本影响</b>预计改变共享协议，需要评估协议版本升级</div>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <section>
+      <h2>1. 目标</h2>
+      <p>在现有 <code>CMD_READ_PART_PARAMS</code> 读取部件参数流程中增加“当前蓝牙连接 RSSI”读取能力，让维护人员在执行读取部件参数时，可以同时确认无线滑环蓝牙链路的信号强度。</p>
+      <div class="callout">
+        <p><strong>推荐需求口径：</strong>读取当前已连接从机的 RSSI，不触发扫描、不触发重新配对、不保存默认连接；读取失败不影响读取部件参数主流程完成。</p>
+      </div>
+    </section>
+
+    <section>
+      <h2>2. 当前实现依据</h2>
+      <table>
+        <thead>
+          <tr>
+            <th style="width: 26%;">对象</th>
+            <th>当前事实</th>
+            <th style="width: 30%;">主要文件 / 函数</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>读取部件参数命令</td>
+            <td>首次读取后进入 <code>STATE_READPARAMETEROVER</code>，并在命令函数内部按 1 秒周期持续刷新部件参数快照。</td>
+            <td><code>LTD_MAIN_CPU2/Services/Sensor/sensor.c</code><br><code>Sensor_ReadPartParamsInternal()</code><br><code>CMD_ReadPartParams()</code></td>
+          </tr>
+          <tr>
+            <td>蓝牙 RSSI 查询能力</td>
+            <td>已有串口调试入口 <code>SPC</code>，内部可查询 <code>BLEMODE</code>、<code>BLESTA</code>、当前连接 MAC，并通过 <code>AT+RSSI=ON</code> 等待异步 RSSI 上报。</td>
+            <td><code>LTD_MAIN_CPU2/Services/Sensor/wireless_pairing.c</code><br><code>WirelessPairing_PrintConnectionStatus()</code></td>
+          </tr>
+          <tr>
+            <td>CPU2/CPU3 共享数据</td>
+            <td>读取部件参数页面使用 <code>debug_data</code>；无线滑环匹配结果已单独发布到 <code>wireless_pairing_status</code>，包含匹配结果、MAC 和错误码等字段。</td>
+            <td><code>system_parameter.h</code><br><code>stateformodbus.h</code><br><code>dataanalysis_modbus.c</code></td>
+          </tr>
+          <tr>
+            <td>CPU3 显示</td>
+            <td>读取参数完成态显示最新 <code>debug_data</code> 快照；无线滑环匹配状态已有独立显示逻辑，可复用部分显示与格式化思路。</td>
+            <td><code>LTD_DISPLAY_CPU3/Application/display/display.c</code></td>
+          </tr>
+        </tbody>
+      </table>
+      <p class="evidence">说明：以上依据来自当前源码静态检查，尚未执行硬件联调。</p>
+    </section>
+
+    <section>
+      <h2>3. 需求边界</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>需求项</th>
+            <th>建议定义</th>
+            <th>待确认点</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>触发时机</td>
+            <td>执行 <code>CMD_READ_PART_PARAMS</code> 时读取 RSSI；进入 <code>STATE_READPARAMETEROVER</code> 后跟随现有刷新机制周期更新。</td>
+            <td>刷新周期是否保持 1 秒，还是改为 5 秒或仅首次读取。</td>
+          </tr>
+          <tr>
+            <td>读取对象</td>
+            <td>仅查询当前已连接的 CH9141K 从机 RSSI。</td>
+            <td>是否需要同时显示或上报当前连接 MAC。</td>
+          </tr>
+          <tr>
+            <td>失败处理</td>
+            <td>未连接、AT 失败、RSSI 超时、解析失败均不让读取部件参数命令失败，只置 RSSI 无效并记录错误状态。</td>
+            <td>现场是否希望把 RSSI 失败提升为设备错误。</td>
+          </tr>
+          <tr>
+            <td>单位和范围</td>
+            <td>保存 CH9141K 上报的有符号原始 RSSI 值，典型值如 <code>-30</code>、<code>-55</code>、<code>-80</code>，界面建议显示 <code>dB</code>。</td>
+            <td>最终文档需结合 CH9141K 手册确认单位写作 <code>dB</code> 还是 <code>dBm</code>。</td>
+          </tr>
+          <tr>
+            <td>对外可见性</td>
+            <td>推荐通过 CPU2/CPU3 共享输入寄存器发布，CPU3 可显示，上位机也可读取。</td>
+            <td>是否需要同步映射到 DSM、SI7000 或其他外部协议。</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>4. 推荐协议字段</h2>
+      <p>推荐扩展现有 <code>WirelessPairingStatus</code>，而不是把 RSSI 插入 <code>DebugData</code> 中间。无线滑环已有独立运行态结构，继续扩展该结构可以降低语义混乱。</p>
+      <table>
+        <thead>
+          <tr>
+            <th style="width: 28%;">字段</th>
+            <th style="width: 20%;">类型</th>
+            <th>语义</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>connection_valid</code></td>
+            <td><code>uint32_t</code></td>
+            <td><code>1</code> 表示当前蓝牙处于已连接状态；<code>0</code> 表示未连接或无法确认。</td>
+          </tr>
+          <tr>
+            <td><code>rssi_valid</code></td>
+            <td><code>uint32_t</code></td>
+            <td><code>1</code> 表示 <code>rssi</code> 字段有效；<code>0</code> 表示未连接或读取失败。</td>
+          </tr>
+          <tr>
+            <td><code>rssi</code></td>
+            <td><code>int32_t</code></td>
+            <td>当前连接 RSSI，有符号值。显示时建议格式为 <code>-55 dB</code>。</td>
+          </tr>
+          <tr>
+            <td><code>connection_error_code</code></td>
+            <td><code>uint32_t</code></td>
+            <td>查询失败时记录 CPU2 错误码，例如 AT 无响应、状态解析失败、RSSI 异步上报超时等。</td>
+          </tr>
+          <tr>
+            <td><code>rssi_update_counter</code></td>
+            <td><code>uint32_t</code></td>
+            <td>每次完成连接状态或 RSSI 刷新后递增，便于 CPU3 和上位机判断数据是否更新。该字段可选。</td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="callout warning">
+        <p><strong>协议影响：</strong>新增共享输入寄存器字段属于 CPU2/CPU3 共享协议变化。本次已将 <code>DEVICE_PROTOCOL_VERSION</code> 升到 <code>9</code>，并同步 CPU2、CPU3 和协议变更记录。</p>
+      </div>
+    </section>
+
+    <section>
+      <h2>5. 推荐流程</h2>
+      <div class="flow">
+        <div class="step">
+          <b>1. 读取部件参数</b>
+          <span>沿用现有位置、电机、称重、姿态、频率、电容读取逻辑。</span>
+        </div>
+        <div class="step">
+          <b>2. 查询连接状态</b>
+          <span>进入 CH9141K AT 模式，读取 <code>BLEMODE</code> 与 <code>BLESTA</code>。</span>
+        </div>
+        <div class="step">
+          <b>3. 读取 RSSI</b>
+          <span>已连接时发送 <code>AT+RSSI=ON</code>，等待异步 RSSI，并关闭 RSSI 上报。</span>
+        </div>
+        <div class="step">
+          <b>4. 发布状态</b>
+          <span>写入 <code>wireless_pairing_status</code> 和输入寄存器，保留无效与错误信息。</span>
+        </div>
+        <div class="step">
+          <b>5. CPU3 展示</b>
+          <span>读取参数完成页显示 RSSI；无效时显示未连接或读取失败。</span>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>6. 实施计划</h2>
+      <ol>
+        <li>从 <code>WirelessPairing_PrintConnectionStatus()</code> 中抽出无打印或少打印的查询接口，例如 <code>WirelessPairing_ReadConnectionRssi()</code>。</li>
+        <li>新增结果结构，返回连接有效、MAC、RSSI 有效、RSSI 值和错误码，避免读取部件参数直接解析 AT 文本。</li>
+        <li>在 <code>Sensor_ReadPartParamsInternal()</code> 末尾增加 RSSI 查询调用，并保证失败不覆盖主流程 <code>ret</code>。</li>
+        <li>扩展 CPU2/CPU3 的 <code>WirelessPairingStatus</code>，同步输入寄存器宏和 Modbus 读写映射。</li>
+        <li>CPU3 显示侧新增 RSSI 显示项，优先放在读取参数完成态页面；显示文案建议中文 <code>蓝牙:</code>，英文 <code>RSSI:</code>。</li>
+        <li>同步协议变更记录和需求文档；实现阶段先不主动升固件版本，提交或发布前统一处理版本号和 <code>CHANGELOG.md</code>。</li>
+      </ol>
+    </section>
+
+    <section>
+      <h2>7. 验证方案</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>场景</th>
+            <th>操作</th>
+            <th>预期结果</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>已连接且 RSSI 正常</td>
+            <td>执行读取部件参数命令。</td>
+            <td>状态进入读取参数完成；CPU3 和寄存器显示有效 RSSI，如 <code>-55 dB</code>。</td>
+          </tr>
+          <tr>
+            <td>蓝牙未连接</td>
+            <td>断开从机或关闭从机后执行读取部件参数。</td>
+            <td>读取部件参数仍完成；RSSI 标记无效；显示未连接或无效。</td>
+          </tr>
+          <tr>
+            <td>RSSI 异步上报超时</td>
+            <td>模拟 <code>AT+RSSI=ON</code> 返回 OK 但无 RSSI 数值。</td>
+            <td>RSSI 标记无效并记录错误码；主流程不失败；后续新命令仍可打断完成态刷新。</td>
+          </tr>
+          <tr>
+            <td>连续刷新</td>
+            <td>保持在读取参数完成态 5 分钟以上。</td>
+            <td>部件参数和 RSSI 按配置周期刷新；UART6 透传恢复正常；无残留 <code>AT+RSSI=ON</code> 上报污染后续命令。</td>
+          </tr>
+          <tr>
+            <td>协议兼容</td>
+            <td>CPU2/CPU3 使用同协议版本联调，并测试协议版本不匹配。</td>
+            <td>同版本正常显示；不匹配时 CPU3 按既有严格相等规则判定不兼容。</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>8. 风险与处理</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>风险</th>
+            <th>影响</th>
+            <th>建议处理</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>AT 模式切换影响 UART6 传感器透传</td>
+            <td>读取参数过程可能干扰传感器链路。</td>
+            <td>RSSI 查询后必须执行 <code>AT+RSSI=OFF</code>、<code>AT+EXIT</code> 和 UART6 空闲清理；失败路径也要恢复透传。</td>
+          </tr>
+          <tr>
+            <td>1 秒刷新过密</td>
+            <td>AT 查询耗时可能拉长读取参数刷新周期。</td>
+            <td>若台架验证发现影响明显，将 RSSI 刷新周期独立配置为 5 秒或仅首次读取。</td>
+          </tr>
+          <tr>
+            <td>共享寄存器扩展带来兼容变化</td>
+            <td>旧 CPU2/CPU3 混用时解释错误或协议不兼容。</td>
+            <td>升级 <code>DEVICE_PROTOCOL_VERSION</code>，同步 CPU2/CPU3 结构、寄存器、协议变更记录和测试方案。</td>
+          </tr>
+          <tr>
+            <td>屏幕空间不足</td>
+            <td>读取参数完成页可能已有频率、电容、重量、角度等内容。</td>
+            <td>优先显示短文本 <code>蓝牙:-55dB</code>；如空间不足，则放到无线滑环状态页或翻页项。</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>9. 待确认问题</h2>
+      <ol>
+        <li>RSSI 是否必须在 CPU3 OLED 的读取参数完成态显示，还是只通过输入寄存器提供给上位机。</li>
+        <li>是否需要同步上报当前连接 MAC；若需要，使用已有 MAC 字段还是在读取参数页也显示。</li>
+        <li>蓝牙未连接或 RSSI 读取失败时，读取部件参数是否仍然显示完成。当前推荐为仍完成。</li>
+        <li>RSSI 刷新周期已采用独立 5 秒节流；读取部件参数主页面仍按现有 1 秒周期刷新。</li>
+        <li>显示单位最终写作 <code>dB</code> 还是 <code>dBm</code>，需要以 CH9141K 手册或现场约定为准。</li>
+        <li>是否需要把 RSSI 映射到 DSM、SI7000 或其他外部协议；当前推荐先仅做 CPU2/CPU3 共享输入寄存器和 CPU3 显示。</li>
+      </ol>
+    </section>
+
+    <section>
+      <h2>10. 推荐结论</h2>
+      <p><span class="tag ok">已落地</span> 已实现“读取部件参数时查询当前连接 RSSI，并发布到 <code>WirelessPairingStatus</code> 扩展字段”。该方案复用现有 CH9141K AT 解析能力，RSSI 查询失败不改变读取部件参数主流程的成功判定。</p>
+      <p><span class="tag.todo">待确认</span> 显示位置、刷新周期、外部协议映射和单位写法确认后，再进入实现阶段。</p>
+    </section>
+  </main>
+</body>
+</html>

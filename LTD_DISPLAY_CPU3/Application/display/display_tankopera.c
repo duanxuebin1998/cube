@@ -24,6 +24,8 @@
 #include <string.h>    /* for memset, memcpy, strcmp, strlen... */
 
 #define PASSWORD_ENTERMAIN		1009
+#define MOTOR_RUN_MONITOR_START_GRACE_MS 5000U
+#define MOTOR_RUN_MONITOR_VALUE_LINE OLED_LINE8_4
 extern volatile uint8_t g_cpu3_uart_reinit_pending; /* CPU3 串口重初始化标志 */
 
 typedef void (*pFunc_void)(void);
@@ -44,6 +46,12 @@ static int now_Opera_Num = 0;				/* 当前选择的指令或参数的序号 */
 static int timesure = 0;					/* 按下确定键的次数 */
 static int timeback = 0;					/* 按下返回键的次数 */
 static int debugmode_back = 0;				/* 进入调试模式返回到哪个菜单 */
+static uint32_t motor_run_monitor_enter_tick = 0U; /* 电机监控页进入时刻 */
+static bool motor_run_monitor_started = false; /* 电机监控页是否已观察到运行态 */
+static bool motor_run_monitor_stop_confirm_requested = false; /* 停止确认页是否来自电机监控页 */
+static int debug_weight_wait_opera = COM_NUM_NOOPERA; /* 称重等待页对应的指令 */
+static bool debug_weight_wait_started = false; /* 称重等待页是否已进入本次等待周期 */
+static bool debug_weight_wait_ignore_initial_done = false; /* 称重等待页是否忽略进入前残留完成态 */
 
 /* ==============================
  * 枚举/隐藏含义文字表
@@ -232,8 +240,16 @@ static uint8_t *arr_relay_source[][2] = {
  */
 static void mainmenu(void);				/* 主菜单 */
 static void measuremenu(void);			/* 测量命令菜单 */
+static void menu_measure_water(void);	/* 测量命令 - 水位测量 */
+static void menu_measure_density_single(void); /* 测量命令 - 密度单点测量 */
+static void menu_measure_density_distribution(void); /* 测量命令 - 密度分布测量 */
 /* static void menu_paraconfig(void); / * 参数配置主菜单 * / */
 static void menu_cmdconfig_main(void);	/* 调试指令主菜单 */
+static void menu_debug_float_motion(void); /* 调试指令 - 浮子运动控制 */
+static void menu_debug_calibration(void); /* 调试指令 - 标定修正 */
+static void menu_debug_weight(void);	/* 调试指令 - 称重标定 */
+static void menu_debug_wireless(void);	/* 调试指令 - 无线维护 */
+static void menu_debug_system(void);	/* 调试指令 - 系统维护 */
 
 /* ---------- 2) 参数分组子菜单(参数页面) ----------
  *	各参数分类页面，仅负责“列出参数项 + 跳转到参数读写流程”
@@ -315,6 +331,21 @@ static void menu_cpu3_comm2(void)   ;
 static void menu_cpu3_comm3(void)  ;
 
 static void menu_paracfg_main(void);
+static void motor_run_monitor_page(void); /* 电机运行监控页 */
+static void enter_motor_run_monitor_page(void); /* 进入电机运行监控页 */
+static void enter_motor_run_monitor_page_waiting_stop(void); /* 停止后回到监控页等待收敛 */
+static void motor_run_monitor_back_to_status(void); /* 监控页返回状态页 */
+static void motor_run_monitor_enter_stop_confirm(void); /* 从监控页进入停止确认 */
+static void motor_run_monitor_draw_values(void); /* 绘制监控页位置和称重 */
+static bool command_is_motor_monitor_command(uint32_t cmd); /* 纯电机指令范围判断 */
+static bool motor_run_monitor_state_is_active(DeviceState state); /* 电机监控运行态判断 */
+static bool motor_run_monitor_state_is_done(DeviceState state); /* 电机监控完成态判断 */
+static void motor_run_monitor_handle_sent_command(uint32_t cmd); /* 指令下发后页面跳转 */
+static void debug_weight_wait_page(void); /* 称重获取等待页 */
+static void enter_debug_weight_wait_page(int operaNum); /* 进入称重获取等待页 */
+static void debug_weight_wait_back_to_menu(void); /* 称重等待页返回称重标定菜单 */
+static bool debug_weight_wait_state_is_active(int operaNum, DeviceState state); /* 称重获取中状态判断 */
+static bool debug_weight_wait_state_is_done(int operaNum, DeviceState state); /* 称重获取完成状态判断 */
 
 /* ---------- 3) 通用菜单渲染/选择器 ----------
  *	分页、上下移动、确认/返回等统一菜单交互
@@ -383,6 +414,7 @@ static void password_enter_cmd(void);	/* 进入调试指令前输入密码 */
 static void ifentermainmenu(void);		/* 是否进入罐上操作 */
 static void ifexittankopera(void);		/* 是否退出罐上操作 */
 static void ifcancelmeasurement(void);  /* 是否取消当前测量 */
+static void cancel_confirm_back(void); /* 取消/停止确认页返回处理 */
 static void confirm_cancel_measurement(void); /* 确认取消当前测量 */
 
 /* ---------- 9) 语言设置 ----------
@@ -423,17 +455,49 @@ struct KeyMenu keymenu[KEYNUM_END] = {
         { measuremenu, measuremenu, measuremenu, measuremenu,
           USE_KEY_BACK | USE_KEY_UP | USE_KEY_DOWN | USE_KEY_SURE, measuremenu },
 
-    /* 4 - 参数配置主菜单（新） */
+    [KEYNUM_MEASURE_WATER] =
+        { menu_measure_water, menu_measure_water, menu_measure_water, menu_measure_water,
+          USE_KEY_BACK | USE_KEY_UP | USE_KEY_DOWN | USE_KEY_SURE, menu_measure_water },
+
+    [KEYNUM_MEASURE_DENSITY_SINGLE] =
+        { menu_measure_density_single, menu_measure_density_single, menu_measure_density_single, menu_measure_density_single,
+          USE_KEY_BACK | USE_KEY_UP | USE_KEY_DOWN | USE_KEY_SURE, menu_measure_density_single },
+
+    [KEYNUM_MEASURE_DENSITY_DISTRIBUTION] =
+        { menu_measure_density_distribution, menu_measure_density_distribution, menu_measure_density_distribution, menu_measure_density_distribution,
+          USE_KEY_BACK | USE_KEY_UP | USE_KEY_DOWN | USE_KEY_SURE, menu_measure_density_distribution },
+
+    /* 参数配置主菜单（新） */
     [KEYNUM_MENU_PARACFG_MAIN] =
         { menu_paracfg_main, menu_paracfg_main, menu_paracfg_main, menu_paracfg_main,
           USE_KEY_BACK | USE_KEY_UP | USE_KEY_DOWN | USE_KEY_SURE, menu_paracfg_main },
 
-    /* 5 - 维护/调试指令主菜单 */
+    /* 维护/调试指令主菜单 */
     [KEYNUM_MENU_CMD_MAIN] =
         { menu_cmdconfig_main, menu_cmdconfig_main, menu_cmdconfig_main, menu_cmdconfig_main,
           USE_KEY_BACK | USE_KEY_UP | USE_KEY_DOWN | USE_KEY_SURE, menu_cmdconfig_main },
 
-    /* 6 - 是否下发指令或参数 */
+    [KEYNUM_DEBUG_FLOAT_MOTION] =
+        { menu_debug_float_motion, menu_debug_float_motion, menu_debug_float_motion, menu_debug_float_motion,
+          USE_KEY_BACK | USE_KEY_UP | USE_KEY_DOWN | USE_KEY_SURE, menu_debug_float_motion },
+
+    [KEYNUM_DEBUG_CALIBRATION] =
+        { menu_debug_calibration, menu_debug_calibration, menu_debug_calibration, menu_debug_calibration,
+          USE_KEY_BACK | USE_KEY_UP | USE_KEY_DOWN | USE_KEY_SURE, menu_debug_calibration },
+
+    [KEYNUM_DEBUG_WEIGHT] =
+        { menu_debug_weight, menu_debug_weight, menu_debug_weight, menu_debug_weight,
+          USE_KEY_BACK | USE_KEY_UP | USE_KEY_DOWN | USE_KEY_SURE, menu_debug_weight },
+
+    [KEYNUM_DEBUG_WIRELESS] =
+        { menu_debug_wireless, menu_debug_wireless, menu_debug_wireless, menu_debug_wireless,
+          USE_KEY_BACK | USE_KEY_UP | USE_KEY_DOWN | USE_KEY_SURE, menu_debug_wireless },
+
+    [KEYNUM_DEBUG_SYSTEM] =
+        { menu_debug_system, menu_debug_system, menu_debug_system, menu_debug_system,
+          USE_KEY_BACK | USE_KEY_UP | USE_KEY_DOWN | USE_KEY_SURE, menu_debug_system },
+
+    /* 是否下发指令或参数 */
     [KEYNUM_IFSENDCMD] =
         { ifsendcmd, NULL, NULL, ifsendcmd,
           USE_KEY_BACK | USE_KEY_SURE, ifsendcmd },
@@ -679,8 +743,18 @@ struct KeyMenu keymenu[KEYNUM_END] = {
 
     /* 状态显示界面长按返回后的取消测量确认页 */
     [KEYNUM_IF_CANCEL_MEASUREMENT] =
-        { exitTankOpera, NULL, NULL, confirm_cancel_measurement,
+        { cancel_confirm_back, NULL, NULL, confirm_cancel_measurement,
           USE_KEY_BACK | USE_KEY_SURE, ifcancelmeasurement },
+
+    /* 纯电机指令下发后的运行监控页 */
+    [KEYNUM_MOTOR_RUN_MONITOR] =
+        { motor_run_monitor_back_to_status, NULL, NULL, motor_run_monitor_enter_stop_confirm,
+          USE_KEY_BACK | USE_KEY_SURE, motor_run_monitor_page },
+
+    /* 获取空载/满载称重后的等待页 */
+    [KEYNUM_DEBUG_WEIGHT_WAIT] =
+        { debug_weight_wait_back_to_menu, NULL, NULL, debug_weight_wait_back_to_menu,
+          USE_KEY_BACK | USE_KEY_SURE, debug_weight_wait_page },
 
     /* 故障状态长按返回后的故障原因查看页 */
     [KEYNUM_ERROR_REASON] =
@@ -770,6 +844,272 @@ bool DisplayTankOpera_RedrawCurrentPage(void)
 	keymenu[func_index].execute_opera();
 	NowKeyPress = saved_key;
 	return true;
+}
+
+/**
+ * @brief 显示或打印屏幕菜单操作中的 DisplayTankOpera_IsMotorRunMonitorActive 逻辑。
+ * @return true 表示当前前景页是电机运行监控页。
+ */
+bool DisplayTankOpera_IsMotorRunMonitorActive(void)
+{
+	return (FlagofTankOpera == true) && (func_index == KEYNUM_MOTOR_RUN_MONITOR);
+}
+
+/**
+ * @brief 显示或打印屏幕菜单操作中的 DisplayTankOpera_IsDebugWeightWaitActive 逻辑。
+ * @return true 表示当前前景页是称重获取等待页。
+ */
+bool DisplayTankOpera_IsDebugWeightWaitActive(void)
+{
+	return (FlagofTankOpera == true) && (func_index == KEYNUM_DEBUG_WEIGHT_WAIT);
+}
+
+/**
+ * @brief 进入电机运行监控页。
+ */
+static void enter_motor_run_monitor_page(void)
+{
+	FlagofTankOpera = true;
+	func_index = KEYNUM_MOTOR_RUN_MONITOR;
+	motor_run_monitor_enter_tick = HAL_GetTick();
+	motor_run_monitor_started = false;
+	motor_run_monitor_stop_confirm_requested = false;
+	timesure = 0;
+	timeback = 0;
+	ClearPageNum();
+	motor_run_monitor_page();
+}
+
+/**
+ * @brief 停止命令下发后回到监控页，保持已启动状态以便 CPU2 待机后自动退出。
+ */
+static void enter_motor_run_monitor_page_waiting_stop(void)
+{
+	FlagofTankOpera = true;
+	func_index = KEYNUM_MOTOR_RUN_MONITOR;
+	motor_run_monitor_enter_tick = HAL_GetTick();
+	motor_run_monitor_started = true;
+	motor_run_monitor_stop_confirm_requested = false;
+	timesure = 0;
+	timeback = 0;
+	ClearPageNum();
+	motor_run_monitor_page();
+}
+
+/**
+ * @brief 从电机运行监控页返回普通状态页，不取消当前电机运动。
+ */
+static void motor_run_monitor_back_to_status(void)
+{
+	FlagofTankOpera = false;
+	HAL_TIM_Base_Stop_IT(&htim1);
+	motor_run_monitor_stop_confirm_requested = false;
+	oled_clear();
+	Display_RequestRefresh();
+}
+
+/**
+ * @brief 绘制电机监控页的实时位置和称重，两行使用相同的数值起始列。
+ */
+static void motor_run_monitor_draw_values(void)
+{
+	uint8_t value_line = (screen_parameter.language == LANGUAGE_ENGLISH)
+	                     ? OLED_LINE8_5
+	                     : MOTOR_RUN_MONITOR_VALUE_LINE;
+
+	DisplayLangaugeLineWords((uint8_t*)"位置", OLED_LINE8_1, OLED_ROW4_2, 0, (uint8_t*)"Pos");
+	OledValueDisplay((int)g_measurement.debug_data.sensor_position,
+	                 value_line,
+	                 OLED_ROW4_2,
+	                 0,
+	                 1,
+	                 (uint8_t*)"mm");
+
+	DisplayLangaugeLineWords((uint8_t*)"称重", OLED_LINE8_1, OLED_ROW4_3, 0, (uint8_t*)"Weight");
+	OledValueDisplay((int)g_measurement.debug_data.current_weight,
+	                 value_line,
+	                 OLED_ROW4_3,
+	                 0,
+	                 0,
+	                 (uint8_t*)" ");
+}
+
+/**
+ * @brief 显示电机运行监控页。
+ */
+static void motor_run_monitor_page(void)
+{
+	DeviceState state = g_measurement.device_status.device_state;
+	uint32_t now_tick = HAL_GetTick();
+	uint8_t lang = (uint8_t)screen_parameter.language;
+	const char *state_text;
+
+	if (lang > LANGUAGE_ENGLISH) {
+		lang = LANGUAGE_ENGLISH;
+	}
+
+	if (motor_run_monitor_state_is_active(state)) {
+		motor_run_monitor_started = true;
+	} else if ((motor_run_monitor_started == true) && motor_run_monitor_state_is_done(state)) {
+		motor_run_monitor_back_to_status();
+		return;
+	} else if ((motor_run_monitor_started == false) &&
+	           ((now_tick - motor_run_monitor_enter_tick) > MOTOR_RUN_MONITOR_START_GRACE_MS)) {
+		motor_run_monitor_back_to_status();
+		return;
+	}
+
+	oled_clear();
+	func_index = KEYNUM_MOTOR_RUN_MONITOR;
+
+	state_text = GetStateString(state, lang);
+	OledDisplayLineWords((uint8_t*)state_text, OLED_LINE8_1, OLED_ROW4_1, 0);
+	motor_run_monitor_draw_values();
+
+	DisplayLangaugeLineWords((uint8_t*)"返回", OLED_LINE8_1, OLED_ROW4_4, 0, (uint8_t*)"Back");
+	DisplayLangaugeLineWords((uint8_t*)"停止运动", OLED_LINE8_5, OLED_ROW4_4, 0, (uint8_t*)"Stop");
+}
+
+/**
+ * @brief 从电机监控页进入停止确认页。
+ */
+static void motor_run_monitor_enter_stop_confirm(void)
+{
+	if (DisplayTankOpera_IsMotorRunMonitorActive()) {
+		motor_run_monitor_stop_confirm_requested = true;
+	}
+	if ((Display_EnterCancelMeasurementConfirm() == false) ||
+	    (func_index != KEYNUM_IF_CANCEL_MEASUREMENT)) {
+		motor_run_monitor_stop_confirm_requested = false;
+	}
+}
+
+/**
+ * @brief 进入称重获取等待页。
+ */
+static void enter_debug_weight_wait_page(int operaNum)
+{
+	FlagofTankOpera = true;
+	func_index = KEYNUM_DEBUG_WEIGHT_WAIT;
+	debug_weight_wait_opera = operaNum;
+	debug_weight_wait_ignore_initial_done =
+	    debug_weight_wait_state_is_done(operaNum, g_measurement.device_status.device_state);
+	debug_weight_wait_started = !debug_weight_wait_ignore_initial_done;
+	timesure = 0;
+	timeback = 0;
+	ClearPageNum();
+	debug_weight_wait_page();
+}
+
+/**
+ * @brief 称重等待页返回称重标定菜单，不取消 CPU2 正在执行的称重获取。
+ */
+static void debug_weight_wait_back_to_menu(void)
+{
+	debug_weight_wait_opera = COM_NUM_NOOPERA;
+	debug_weight_wait_started = false;
+	debug_weight_wait_ignore_initial_done = false;
+	NowKeyPress = 0;
+	timesure = 0;
+	timeback = 0;
+	ClearPageNum();
+	menu_debug_weight();
+}
+
+/**
+ * @brief 判断 CPU2 当前状态是否属于空载/满载称重获取中。
+ */
+static bool debug_weight_wait_state_is_active(int operaNum, DeviceState state)
+{
+	if (operaNum == COM_NUM_SET_EMPTY_WEIGHT) {
+		return state == STATE_GET_EMPTYWEIGHT;
+	}
+
+	if (operaNum == COM_NUM_SET_FULL_WEIGHT) {
+		return state == STATE_GET_FULLWEIGHT;
+	}
+
+	return false;
+}
+
+/**
+ * @brief 判断 CPU2 当前状态是否属于空载/满载称重获取完成。
+ */
+static bool debug_weight_wait_state_is_done(int operaNum, DeviceState state)
+{
+	if (operaNum == COM_NUM_SET_EMPTY_WEIGHT) {
+		return state == STATE_GET_EMPTYWEIGHT_OVER;
+	}
+
+	if (operaNum == COM_NUM_SET_FULL_WEIGHT) {
+		return state == STATE_GET_FULLWEIGHT_OVER;
+	}
+
+	return false;
+}
+
+/**
+ * @brief 显示称重获取等待页，完成后直接回到调试指令的称重标定菜单。
+ */
+static void debug_weight_wait_page(void)
+{
+	DeviceState state = g_measurement.device_status.device_state;
+	int operaNum = debug_weight_wait_opera;
+	uint8_t *title_cn;
+	uint8_t *title_en;
+
+	if ((operaNum != COM_NUM_SET_EMPTY_WEIGHT) && (operaNum != COM_NUM_SET_FULL_WEIGHT)) {
+		operaNum = now_Opera_Num;
+	}
+
+	if (!debug_weight_wait_state_is_done(operaNum, state)) {
+		debug_weight_wait_started = true;
+		debug_weight_wait_ignore_initial_done = false;
+	}
+
+	if (debug_weight_wait_state_is_active(operaNum, state)) {
+		debug_weight_wait_started = true;
+		debug_weight_wait_ignore_initial_done = false;
+	}
+
+	if (debug_weight_wait_state_is_done(operaNum, state) &&
+	    (debug_weight_wait_ignore_initial_done == false) &&
+	    (debug_weight_wait_started == true)) {
+		debug_weight_wait_back_to_menu();
+		return;
+	}
+
+	if (state == STATE_ERROR) {
+		FlagofTankOpera = false;
+		HAL_TIM_Base_Stop_IT(&htim1);
+		debug_weight_wait_opera = COM_NUM_NOOPERA;
+		debug_weight_wait_started = false;
+		debug_weight_wait_ignore_initial_done = false;
+		oled_clear();
+		Display_RequestRefresh();
+		return;
+	}
+
+	oled_clear();
+	func_index = KEYNUM_DEBUG_WEIGHT_WAIT;
+
+	if (operaNum == COM_NUM_SET_FULL_WEIGHT) {
+		title_cn = (uint8_t*)"获取满载称重中";
+		title_en = (uint8_t*)"Getting Full";
+	} else {
+		title_cn = (uint8_t*)"获取空载称重中";
+		title_en = (uint8_t*)"Getting Empty";
+	}
+
+	DisplayLangaugeLineWords(title_cn, OLED_LINE8_1, OLED_ROW4_1, 0, title_en);
+	DisplayLangaugeLineWords((uint8_t*)"称重", OLED_LINE8_1, OLED_ROW4_3, 0, (uint8_t*)"Weight");
+	OledValueDisplay((int)g_measurement.debug_data.current_weight,
+	                 OLED_LINE8_5,
+	                 OLED_ROW4_3,
+	                 0,
+	                 0,
+	                 (uint8_t*)" ");
+	DisplayLangaugeLineWords((uint8_t*)"返回", OLED_LINE8_1, OLED_ROW4_4, 0, (uint8_t*)"Back");
 }
 
 /* 使用了按键 - 更新按键检测定时器(你原来有 Timer1Start, 保留结构) */
@@ -872,18 +1212,18 @@ static uint8_t *dtm_operaname(int num)
 {
     /* 1) 普通无参测量指令（显式映射，避免依赖枚举连续性） */
     static const OperaNameMap_t normal_cmd_map[] = {
-        { COM_NUM_BACK_ZERO,           (uint8_t*)"回零点",         (uint8_t*)"Return to Zero" },
-        { COM_NUM_FIND_OIL,            (uint8_t*)"寻找液位",       (uint8_t*)"Find Oil Level" },
-        { COM_NUM_FIND_WATER,          (uint8_t*)"寻找水位",       (uint8_t*)"Find Water Level" },
-        { COM_NUM_FIND_BOTTOM,         (uint8_t*)"寻找罐底",       (uint8_t*)"Find Tank Bottom" },
+        { COM_NUM_BACK_ZERO,           (uint8_t*)"提零点",         (uint8_t*)"Return to Zero" },
+        { COM_NUM_FIND_OIL,            (uint8_t*)"液位测量",       (uint8_t*)"Find Oil Level" },
+        { COM_NUM_FIND_WATER,          (uint8_t*)"水位单次测量",   (uint8_t*)"Find Water Level" },
+        { COM_NUM_FIND_BOTTOM,         (uint8_t*)"罐高测量",       (uint8_t*)"Find Tank Bottom" },
         { COM_NUM_SYNTHETIC,           (uint8_t*)"综合测量",       (uint8_t*)"Comprehensive-M" },
 
         { COM_NUM_FOLLOW_WATER,        (uint8_t*)"水位跟随",       (uint8_t*)"Water Follow" },
         { COM_NUM_SPREADPOINTS,        (uint8_t*)"分布测量",       (uint8_t*)"Spread-M" },
         { COM_NUM_SPREADPOINTS_GB,     (uint8_t*)"国标分布测量",   (uint8_t*)"GB Spread-M" },
 
-        { COM_NUM_METER_DENSITY,       (uint8_t*)"每米测量",       (uint8_t*)"DT-PerMeter-M" },
-        { COM_NUM_INTERVAL_DENSITY,    (uint8_t*)"区间测量",       (uint8_t*)"Interval-M" },
+        { COM_NUM_METER_DENSITY,       (uint8_t*)"密度每米测量",   (uint8_t*)"DT-PerMeter-M" },
+        { COM_NUM_INTERVAL_DENSITY,    (uint8_t*)"区间密度测量",   (uint8_t*)"Interval-M" },
         { COM_NUM_WARTSILA_DENSITY,    (uint8_t*)"瓦锡兰区间密度", (uint8_t*)"Wartsila Interval-M" },
 
         { COM_NUM_READ_PART_PARAMS,    (uint8_t*)"读取部件参数",   (uint8_t*)"Read Component Params" },
@@ -894,11 +1234,28 @@ static uint8_t *dtm_operaname(int num)
         { COM_NUM_FIND_ZERO,           (uint8_t*)"标定零点",       (uint8_t*)"Zero Calibration" },
         { COM_NUM_FORCE_LIFT_ZERO,     (uint8_t*)"强制提零点",     (uint8_t*)"Force Lift Zero" },
 
-        { COM_NUM_SET_EMPTY_WEIGHT,    (uint8_t*)"设置空载称重",   (uint8_t*)"Set Empty Weight" },
-        { COM_NUM_SET_FULL_WEIGHT,     (uint8_t*)"设置满载称重",   (uint8_t*)"Set Full Weight" },
+        { COM_NUM_SET_EMPTY_WEIGHT,    (uint8_t*)"获取空载称重",   (uint8_t*)"Set Empty Weight" },
+        { COM_NUM_SET_FULL_WEIGHT,     (uint8_t*)"获取满载称重",   (uint8_t*)"Set Full Weight" },
         { COM_NUM_RESTOR_EFACTORYSETTING,(uint8_t*)"恢复出厂设置", (uint8_t*)"Factory Reset" },
-        { COM_NUM_MAINTENANCE_MODE,    (uint8_t*)"维护模式",       (uint8_t*)"Maintenance Mode" },
+        { COM_NUM_MAINTENANCE_MODE,    (uint8_t*)"进入维护模式",   (uint8_t*)"Maintenance Mode" },
         { COM_NUM_PAIR_NEAREST_WIRELESS_SLIPRING, (uint8_t*)"匹配无线滑环", (uint8_t*)"Pair Wireless" },
+    };
+
+    static const OperaNameMap_t one_para_cmd_map[] = {
+        { COM_NUM_SINGLE_POINT,         (uint8_t*)"密度单点测量",   (uint8_t*)"SingleMeasure" },
+        { COM_NUM_SP_TEST,              (uint8_t*)"密度单点监测",   (uint8_t*)"SingleMonitor" },
+        { COM_NUM_RUN_TO_POSITION,      (uint8_t*)"浮子运行到高度", (uint8_t*)"RunToPos" },
+    };
+
+    static const OperaNameMap_t debug_one_para_cmd_map[] = {
+        { COM_NUM_CAL_OIL,              (uint8_t*)"标定液位",       (uint8_t*)"CalOil" },
+        { COM_NUM_CORRECTION_OIL,       (uint8_t*)"修正液位",       (uint8_t*)"CorrectOil" },
+        { COM_NUM_CALIBRATE_WATER,      (uint8_t*)"标定水位",       (uint8_t*)"CalWater" },
+        { COM_NUM_CALIBRATE_TANKHEIGHT, (uint8_t*)"标定罐高",       (uint8_t*)"CalTankH" },
+        { COM_NUM_RUNUP,                (uint8_t*)"上行",           (uint8_t*)"MoveUp" },
+        { COM_NUM_RUNDOWN,              (uint8_t*)"下行",           (uint8_t*)"MoveDown" },
+        { COM_NUM_FORCE_RUNUP,          (uint8_t*)"强制上行",       (uint8_t*)"ForceMoveUp" },
+        { COM_NUM_FORCE_RUNDOWN,        (uint8_t*)"强制下行",       (uint8_t*)"ForceMoveDown" },
     };
 
     /* 3) CPU3 本机“固定项”名称（如果你仍然需要这种非 param_meta 的本机项） */
@@ -936,15 +1293,35 @@ static uint8_t *dtm_operaname(int num)
         return returnWordType((uint8_t*)"未知调试指令", (uint8_t*)"Unknown Debug Cmd");
     }
 
-    /* ---------- C) 参数类 & 带参指令：统一走 param_meta ---------- */
+    if (num > COM_NUM_ONEPARACMD_START && num < COM_NUM_ONEPARACMD_END) {
+        for (int i = 0; i < (int)(sizeof(one_para_cmd_map)/sizeof(one_para_cmd_map[0])); i++) {
+            if (num == one_para_cmd_map[i].opera) {
+                return (screen_parameter.language == LANGUAGE_CHINESE)
+                        ? one_para_cmd_map[i].name_cn
+                        : one_para_cmd_map[i].name_en;
+            }
+        }
+        return returnWordType((uint8_t*)"未知带参指令", (uint8_t*)"Unknown Param Cmd");
+    }
+
+    if (num > COM_NUM_ONEPARA_DEBUGCMD_START && num < COM_NUM_NOPARA_DEBUGCMD_END) {
+        for (int i = 0; i < (int)(sizeof(debug_one_para_cmd_map)/sizeof(debug_one_para_cmd_map[0])); i++) {
+            if (num == debug_one_para_cmd_map[i].opera) {
+                return (screen_parameter.language == LANGUAGE_CHINESE)
+                        ? debug_one_para_cmd_map[i].name_cn
+                        : debug_one_para_cmd_map[i].name_en;
+            }
+        }
+        return returnWordType((uint8_t*)"未知调试指令", (uint8_t*)"Unknown Debug Cmd");
+    }
+
+    /* ---------- C) 参数类：统一走 param_meta ---------- */
     /* 注意：你原逻辑里的区间判断有两个隐患：
        1) (num > COM_NUM_PARA_DEBUG_START && num < COM_NUM_PARA_LOCAL_STOP) 已经覆盖了 CPU2+CPU3 参数
        2) (num > COM_NUM_ONEPARACMD_START && num < COM_NUM_NOPARA_DEBUGCMD_END) 这个 stop 名字本身不一致，建议你修成 ONEPARA_DEBUGCMD_END/STOP
        这里我保留你的区间语义，但把条件拆清晰一点。
      */
-    if ( (num > COM_NUM_PARA_DEBUG_START && num < COM_NUM_PARA_LOCAL_STOP) ||
-         (num > COM_NUM_ONEPARACMD_START && num < COM_NUM_ONEPARACMD_END) ||
-         (num > COM_NUM_ONEPARA_DEBUGCMD_START && num < COM_NUM_NOPARA_DEBUGCMD_END) )
+    if (num > COM_NUM_PARA_DEBUG_START && num < COM_NUM_PARA_LOCAL_STOP)
     {
         int index = getHoldValueNum(num);
         if (index >= 0) {
@@ -1116,20 +1493,6 @@ typedef struct {
 static uint8_t *dtm_operaname_short(int num, uint8_t *fallback)
 {
 	static const OperaShortNameMap_t short_map[] = {
-		{ COM_NUM_FIND_WATER, (uint8_t*)"水位测量", (uint8_t*)"FindWater" },
-		{ COM_NUM_SINGLE_POINT, (uint8_t*)"单点测量", (uint8_t*)"SingleMeas" },
-		{ COM_NUM_SP_TEST, (uint8_t*)"单点监测", (uint8_t*)"SingleMon" },
-		{ COM_NUM_RUN_TO_POSITION, (uint8_t*)"运行到高度", (uint8_t*)"RunToPos" },
-		{ COM_NUM_SPREADPOINTS_GB, (uint8_t*)"国标分布", (uint8_t*)"GBSpread" },
-		{ COM_NUM_METER_DENSITY, (uint8_t*)"每米密度", (uint8_t*)"MeterDens" },
-		{ COM_NUM_INTERVAL_DENSITY, (uint8_t*)"区间密度", (uint8_t*)"RangeDens" },
-		{ COM_NUM_WARTSILA_DENSITY, (uint8_t*)"瓦锡兰区间", (uint8_t*)"Wartsila" },
-		{ COM_NUM_READ_PART_PARAMS, (uint8_t*)"读部件参数", (uint8_t*)"ReadPart" },
-		{ COM_NUM_FORCE_LIFT_ZERO, (uint8_t*)"强制提零", (uint8_t*)"ForceZero" },
-		{ COM_NUM_SET_EMPTY_WEIGHT, (uint8_t*)"空载称重", (uint8_t*)"EmptyWt" },
-		{ COM_NUM_SET_FULL_WEIGHT, (uint8_t*)"满载称重", (uint8_t*)"FullWt" },
-		{ COM_NUM_RESTOR_EFACTORYSETTING, (uint8_t*)"恢复出厂", (uint8_t*)"Factory" },
-		{ COM_NUM_PAIR_NEAREST_WIRELESS_SLIPRING, (uint8_t*)"匹配滑环", (uint8_t*)"PairRing" },
 		{ COM_NUM_DEVICEPARAM_SENSOR_SOFTWARE_VERSION, (uint8_t*)"传感器版本", (uint8_t*)"SenVer" },
 		{ COM_NUM_DEVICEPARAM_SOFTWAREVERSION, (uint8_t*)"C2版本", (uint8_t*)"C2Ver" },
 		{ COM_NUM_DEVICEPARAM_MAGIC, (uint8_t*)"魔术字", (uint8_t*)"M" },
@@ -1259,10 +1622,6 @@ static uint8_t *dtm_operaname_short(int num, uint8_t *fallback)
 		{ COM_NUM_DEVICEPARAM_SP_MONITOR_POSITION, (uint8_t*)"监测位置", (uint8_t*)"SP_MonPos" },
 		{ COM_NUM_DEVICEPARAM_DENSITY_DISTRIBUTION_OIL_LEVEL, (uint8_t*)"运行位置", (uint8_t*)"DistOilLvl" },
 		{ COM_NUM_DEVICEPARAM_MOTOR_COMMAND_DISTANCE, (uint8_t*)"指令距离", (uint8_t*)"MotorDist" },
-		{ COM_NUM_RUNUP, (uint8_t*)"上行距离", (uint8_t*)"RunUpDist" },
-		{ COM_NUM_RUNDOWN, (uint8_t*)"下行距离", (uint8_t*)"RunDownDist" },
-		{ COM_NUM_FORCE_RUNUP, (uint8_t*)"上行距离", (uint8_t*)"ForceUpDist" },
-		{ COM_NUM_FORCE_RUNDOWN, (uint8_t*)"下行距离", (uint8_t*)"ForceDownDist" },
 		{ COM_NUM_SCREEN_INPUT_D_SWITCH, (uint8_t*)"上传密度", (uint8_t*)"InDSw" },
 		{ COM_NUM_SCREEN_DECIMAL, (uint8_t*)"小数点位", (uint8_t*)"Decimal" },
 		{ COM_NUM_CPU3_COM1_BAUDRATE, (uint8_t*)"C1波特率", (uint8_t*)"C1Baud" },
@@ -1275,6 +1634,13 @@ static uint8_t *dtm_operaname_short(int num, uint8_t *fallback)
 		{ COM_NUM_CPU3_COM3_DATABITS, (uint8_t*)"C3数据位", (uint8_t*)"C3Data" },
 		{ COM_NUM_CPU3_COM3_STOPBITS, (uint8_t*)"C3停止位", (uint8_t*)"C3Stop" },
 	};
+
+	if (((num > COM_NUM_NOPARACMD_START) && (num < COM_NUM_NOPARACMD_END)) ||
+	    (num == COM_NUM_PAIR_NEAREST_WIRELESS_SLIPRING) ||
+	    ((num > COM_NUM_ONEPARACMD_START) && (num < COM_NUM_ONEPARACMD_END)) ||
+	    ((num > COM_NUM_ONEPARA_DEBUGCMD_START) && (num < COM_NUM_NOPARA_DEBUGCMD_END))) {
+		return fallback;
+	}
 
 	for (int i = 0; i < (int)(sizeof(short_map) / sizeof(short_map[0])); i++) {
 		if (num == short_map[i].opera) {
@@ -1999,7 +2365,7 @@ static void param_protect_confirm(void)
 			timeback = 0;
 			timesure = 1;
 			if (now_Opera_Num == COM_NUM_RESTOR_EFACTORYSETTING) {
-				menu_cmdconfig_main();
+				menu_debug_system();
 			} else {
 				displaypara();
 			}
@@ -2031,46 +2397,62 @@ static pFunc_void dtm_backtofunc(void)
     /* ---------- 1) 纯指令类：回到指令入口 ---------- */
     switch (now_Opera_Num) {
 
-    /* 普通无参测量指令 */
+    /* 普通测量主菜单直属指令 */
     case COM_NUM_BACK_ZERO:
     case COM_NUM_FIND_OIL:
-    case COM_NUM_SPREADPOINTS:
-    case COM_NUM_FIND_WATER:
     case COM_NUM_FIND_BOTTOM:
     case COM_NUM_SYNTHETIC:
-    case COM_NUM_METER_DENSITY:
-    case COM_NUM_INTERVAL_DENSITY:
-    case COM_NUM_WARTSILA_DENSITY:
-    case COM_NUM_FOLLOW_WATER:
-    case COM_NUM_SPREADPOINTS_GB:
     case COM_NUM_READ_PART_PARAMS:
-        return measuremenu;
-
-    /* 普通带参测量指令 */
-    case COM_NUM_SINGLE_POINT:
-    case COM_NUM_SP_TEST:
     case COM_NUM_RUN_TO_POSITION:
         return measuremenu;
 
-    /* 调试无参/带参指令入口 */
-    case COM_NUM_FIND_ZERO:
+    /* 水位测量子菜单 */
+    case COM_NUM_FIND_WATER:
+    case COM_NUM_FOLLOW_WATER:
+        return menu_measure_water;
+
+    /* 密度分布测量子菜单 */
+    case COM_NUM_SPREADPOINTS:
+    case COM_NUM_SPREADPOINTS_GB:
+    case COM_NUM_METER_DENSITY:
+    case COM_NUM_INTERVAL_DENSITY:
+    case COM_NUM_WARTSILA_DENSITY:
+        return menu_measure_density_distribution;
+
+    /* 密度单点测量子菜单 */
+    case COM_NUM_SINGLE_POINT:
+    case COM_NUM_SP_TEST:
+        return menu_measure_density_single;
+
+    /* 浮子运动控制子菜单 */
     case COM_NUM_FORCE_LIFT_ZERO:
     case COM_NUM_RUNUP:
     case COM_NUM_RUNDOWN:
     case COM_NUM_FORCE_RUNUP:
     case COM_NUM_FORCE_RUNDOWN:
+        return menu_debug_float_motion;
+
+    /* 标定修正子菜单 */
+    case COM_NUM_FIND_ZERO:
     case COM_NUM_CORRECTION_OIL:
     case COM_NUM_CAL_OIL:
     case COM_NUM_CALIBRATE_WATER:
-    case COM_NUM_RESTOR_EFACTORYSETTING:
-    case COM_NUM_MAINTENANCE_MODE:
-    case COM_NUM_PAIR_NEAREST_WIRELESS_SLIPRING:
-        return menu_cmdconfig_main;
+    case COM_NUM_CALIBRATE_TANKHEIGHT:
+        return menu_debug_calibration;
 
-    /* 获取空载/满载称重：它们属于调试菜单项，返回也应回调试菜单 */
+    /* 称重标定子菜单 */
     case COM_NUM_SET_EMPTY_WEIGHT:
     case COM_NUM_SET_FULL_WEIGHT:
-        return menu_cmdconfig_main;
+        return menu_debug_weight;
+
+    /* 无线维护子菜单 */
+    case COM_NUM_PAIR_NEAREST_WIRELESS_SLIPRING:
+        return menu_debug_wireless;
+
+    /* 系统维护子菜单 */
+    case COM_NUM_RESTOR_EFACTORYSETTING:
+    case COM_NUM_MAINTENANCE_MODE:
+        return menu_debug_system;
 
     /* 密码入口：回主菜单 */
     case COM_NUM_PASSWORD_ENTER_PARA:
@@ -2225,6 +2607,75 @@ static void send_cpu2_command(uint32_t cmd)
                               HOLDREGISTER_DEVICEPARAM_COMMAND,
                               2,
                               &cmd);
+}
+
+/**
+ * @brief 判断命令是否属于本需求定义的纯电机运行监控范围。
+ *
+ * 只有用户直接下发的纯电机指令进入监控页，普通测量流程即使内部驱动电机也不进入。
+ */
+static bool command_is_motor_monitor_command(uint32_t cmd)
+{
+	switch (cmd) {
+	case CMD_RUN_TO_POSITION:
+	case CMD_MOVE_UP:
+	case CMD_MOVE_DOWN:
+	case CMD_FORCE_MOVE_UP:
+	case CMD_FORCE_MOVE_DOWN:
+	case CMD_FORCE_LIFT_ZERO:
+		return true;
+	default:
+		return false;
+	}
+}
+
+/**
+ * @brief 判断 CPU2 当前状态是否仍属于电机监控运行态。
+ */
+static bool motor_run_monitor_state_is_active(DeviceState state)
+{
+	switch (state) {
+	case STATE_RUNUPING:
+	case STATE_RUNDOWNING:
+	case STATE_RUN_TO_POSITIONING:
+	case STATE_FORCE_RUNUPING:
+	case STATE_FORCE_RUNDOWNING:
+	case STATE_FORCE_LIFT_ZEROING:
+		return true;
+	default:
+		return false;
+	}
+}
+
+/**
+ * @brief 判断 CPU2 当前状态是否已从纯电机指令收敛到完成态。
+ */
+static bool motor_run_monitor_state_is_done(DeviceState state)
+{
+	switch (state) {
+	case STATE_RUNUPOVER:
+	case STATE_RUNDOWNOVER:
+	case STATE_RUN_TO_POSITION_OVER:
+	case STATE_FORCE_RUNUP_OVER:
+	case STATE_FORCE_RUNDOWN_OVER:
+	case STATE_FORCE_LIFT_ZERO_OVER:
+	case STATE_STANDBY:
+		return true;
+	default:
+		return false;
+	}
+}
+
+/**
+ * @brief 纯电机指令下发后进入运行监控页，其它业务命令保持原有退出策略。
+ */
+static void motor_run_monitor_handle_sent_command(uint32_t cmd)
+{
+	if (command_is_motor_monitor_command(cmd)) {
+		enter_motor_run_monitor_page();
+	} else {
+		exitTankOpera();
+	}
 }
 
 /**
@@ -2385,8 +2836,11 @@ static void cmd_nopara_process(void)
         FlagofTankOpera = false;
         HAL_TIM_Base_Stop_IT(&htim1);
         ClearPageNum();
+    } else if ((now_Opera_Num == COM_NUM_SET_EMPTY_WEIGHT) ||
+               (now_Opera_Num == COM_NUM_SET_FULL_WEIGHT)) {
+        enter_debug_weight_wait_page(now_Opera_Num);
     } else {
-        exitTankOpera();
+        motor_run_monitor_handle_sent_command(cmd);
     }
 }
 
@@ -2499,9 +2953,9 @@ static void cmd_onepara_process(void)
                                   HOLDREGISTER_DEVICEPARAM_COMMAND,
                                   2,
                                   (uint32_t *)&cmd);
+        motor_run_monitor_handle_sent_command(cmd);
+        return;
     }
-
-    exitTankOpera();
 }
 /* */
 /* / * 不带参线圈指令处理过程 * / */
@@ -2708,16 +3162,43 @@ static void ifcancelmeasurement(void)
 {
 	oled_clear();
 	func_index = KEYNUM_IF_CANCEL_MEASUREMENT;
-	DisplayLangaugeLineWords((uint8_t*)"是否停止测量?", OLED_LINE8_1, OLED_ROW4_1, 0, (uint8_t*)"Cancel measure?");
+	if (motor_run_monitor_stop_confirm_requested) {
+		DisplayLangaugeLineWords((uint8_t*)"停止当前运动?", OLED_LINE8_1, OLED_ROW4_1, 0, (uint8_t*)"Stop movement?");
+		motor_run_monitor_draw_values();
+	} else {
+		DisplayLangaugeLineWords((uint8_t*)"是否停止测量?", OLED_LINE8_1, OLED_ROW4_1, 0, (uint8_t*)"Cancel measure?");
+	}
 	DisplayLangaugeLineWords((uint8_t*)"返回", OLED_LINE8_1, OLED_ROW4_4, 0, (uint8_t*)"Back");
-	DisplayLangaugeLineWords((uint8_t*)"确认", OLED_LINE8_8, OLED_ROW4_4, 0, (uint8_t*)"Ok");
+	if (motor_run_monitor_stop_confirm_requested) {
+		DisplayLangaugeLineWords((uint8_t*)"确认停止", OLED_LINE8_5, OLED_ROW4_4, 0, (uint8_t*)"Stop");
+	} else {
+		DisplayLangaugeLineWords((uint8_t*)"确认", OLED_LINE8_8, OLED_ROW4_4, 0, (uint8_t*)"Ok");
+	}
+}
+
+/* 取消/停止确认页返回处理。 */
+static void cancel_confirm_back(void)
+{
+	if (motor_run_monitor_stop_confirm_requested) {
+		motor_run_monitor_stop_confirm_requested = false;
+		enter_motor_run_monitor_page();
+	} else {
+		exitTankOpera();
+	}
 }
 
 /* 确认取消测量：确认键触发后直接下发CPU2取消测量命令。 */
 static void confirm_cancel_measurement(void)
 {
+	bool from_motor_monitor = motor_run_monitor_stop_confirm_requested;
+
 	Display_RequestCancelMeasurement();
-	exitTankOpera();
+	motor_run_monitor_stop_confirm_requested = false;
+	if (from_motor_monitor) {
+		enter_motor_run_monitor_page_waiting_stop();
+	} else {
+		exitTankOpera();
+	}
 }
 
 /* 进入参数配置前的密码输入操作页 */
@@ -3403,34 +3884,15 @@ static void mainmenu(void)
 static void measuremenu(void)
 {
     static struct MenuData menu[] = {
-
-        /* ===== 基础动作 ===== */
-        { (uint8_t*)"提零点",     COM_NUM_BACK_ZERO,     ifsendcmd,   COMMANE_NORW, (uint8_t*)"BackZero"   },
-        { (uint8_t*)"液位测量",   COM_NUM_FIND_OIL,      ifsendcmd,   COMMANE_NORW, (uint8_t*)"FindOil"    },
-        { (uint8_t*)"水位单次测量",   COM_NUM_FIND_WATER,    ifsendcmd,   COMMANE_NORW, (uint8_t*)"FindWater"  },
-        { (uint8_t*)"罐高测量",   COM_NUM_FIND_BOTTOM,   ifsendcmd,   COMMANE_NORW, (uint8_t*)"FindBottom" },
-
-        /* ===== 单点/监测/综合 ===== */
-        { (uint8_t*)"密度单点测量",   COM_NUM_SINGLE_POINT,  inputcmdpara,COMMANE_NORW, (uint8_t*)"SingleMeasure" },
-        { (uint8_t*)"密度单点监测",   COM_NUM_SP_TEST,       inputcmdpara,COMMANE_NORW, (uint8_t*)"SingleMonitor" },
-        { (uint8_t*)"综合测量",   COM_NUM_SYNTHETIC,     ifsendcmd,   COMMANE_NORW, (uint8_t*)"Synthetic"     },
-
-        /* ===== 跟随/运动控制（新增）===== */
-        { (uint8_t*)"水位跟随",   COM_NUM_FOLLOW_WATER,  ifsendcmd,   COMMANE_NORW, (uint8_t*)"FollowWater"   },
-        { (uint8_t*)"浮子运行到高度", COM_NUM_RUN_TO_POSITION,inputcmdpara,COMMANE_NORW, (uint8_t*)"RunToPos"      },
-
-        /* ===== 分布/密度系列 ===== */
-        { (uint8_t*)"分布测量",     COM_NUM_SPREADPOINTS,     ifsendcmd, COMMANE_NORW, (uint8_t*)"DistMeasure"     },
-        { (uint8_t*)"国标分布测量", COM_NUM_SPREADPOINTS_GB,  ifsendcmd, COMMANE_NORW, (uint8_t*)"GB_DistMeasure"  },
-
-        { (uint8_t*)"密度每米测量", COM_NUM_METER_DENSITY,    ifsendcmd, COMMANE_NORW, (uint8_t*)"MeterDensity"    },
-        { (uint8_t*)"区间密度测量", COM_NUM_INTERVAL_DENSITY, ifsendcmd, COMMANE_NORW, (uint8_t*)"RangeDensity"    },
-        { (uint8_t*)"瓦锡兰区间密度", COM_NUM_WARTSILA_DENSITY, ifsendcmd, COMMANE_NORW, (uint8_t*)"WartsilaRange"  },
-
-        /* ===== 读取类（新增）===== */
+        { (uint8_t*)"提零点", COM_NUM_BACK_ZERO, ifsendcmd, COMMANE_NORW, (uint8_t*)"BackZero" },
+        { (uint8_t*)"液位测量", COM_NUM_FIND_OIL, ifsendcmd, COMMANE_NORW, (uint8_t*)"FindOil" },
+        { (uint8_t*)"水位测量", COM_NUM_NOOPERA, menu_measure_water, COMMANE_NORW, (uint8_t*)"WaterMeasure" },
+        { (uint8_t*)"罐高测量", COM_NUM_FIND_BOTTOM, ifsendcmd, COMMANE_NORW, (uint8_t*)"FindBottom" },
+        { (uint8_t*)"综合测量", COM_NUM_SYNTHETIC, ifsendcmd, COMMANE_NORW, (uint8_t*)"Synthetic" },
         { (uint8_t*)"读取部件参数", COM_NUM_READ_PART_PARAMS, ifsendcmd, COMMANE_NORW, (uint8_t*)"ReadPartParams" },
-
-        /* ===== 退出 ===== */
+        { (uint8_t*)"密度单点测量", COM_NUM_NOOPERA, menu_measure_density_single, COMMANE_NORW, (uint8_t*)"SingleDensity" },
+        { (uint8_t*)"密度分布测量", COM_NUM_NOOPERA, menu_measure_density_distribution, COMMANE_NORW, (uint8_t*)"DistDensity" },
+        { (uint8_t*)"浮子运行到高度", COM_NUM_RUN_TO_POSITION, inputcmdpara, COMMANE_NORW, (uint8_t*)"RunToPos" },
         { (uint8_t*)"退出", COM_NUM_NOOPERA, mainmenu, COMMANE_NORW, (uint8_t*)"Exit" },
     };
 
@@ -3441,36 +3903,58 @@ static void measuremenu(void)
     menuselect(menu, menulen);
 }
 
+static void menu_measure_water(void)
+{
+    static struct MenuData menu[] = {
+        { (uint8_t*)"水位单次测量", COM_NUM_FIND_WATER, ifsendcmd, COMMANE_NORW, (uint8_t*)"FindWater" },
+        { (uint8_t*)"水位跟随", COM_NUM_FOLLOW_WATER, ifsendcmd, COMMANE_NORW, (uint8_t*)"FollowWater" },
+        { (uint8_t*)"返回", COM_NUM_NOOPERA, measuremenu, COMMANE_NORW, (uint8_t*)"Back" },
+    };
+
+    oled_clear();
+    func_index = KEYNUM_MEASURE_WATER;
+    menuselect(menu, (int)(sizeof(menu) / sizeof(menu[0])));
+}
+
+static void menu_measure_density_single(void)
+{
+    static struct MenuData menu[] = {
+        { (uint8_t*)"密度单点测量", COM_NUM_SINGLE_POINT, inputcmdpara, COMMANE_NORW, (uint8_t*)"SingleMeasure" },
+        { (uint8_t*)"密度单点监测", COM_NUM_SP_TEST, inputcmdpara, COMMANE_NORW, (uint8_t*)"SingleMonitor" },
+        { (uint8_t*)"返回", COM_NUM_NOOPERA, measuremenu, COMMANE_NORW, (uint8_t*)"Back" },
+    };
+
+    oled_clear();
+    func_index = KEYNUM_MEASURE_DENSITY_SINGLE;
+    menuselect(menu, (int)(sizeof(menu) / sizeof(menu[0])));
+}
+
+static void menu_measure_density_distribution(void)
+{
+    static struct MenuData menu[] = {
+        { (uint8_t*)"分布测量", COM_NUM_SPREADPOINTS, ifsendcmd, COMMANE_NORW, (uint8_t*)"DistMeasure" },
+        { (uint8_t*)"国标分布测量", COM_NUM_SPREADPOINTS_GB, ifsendcmd, COMMANE_NORW, (uint8_t*)"GB_DistMeasure" },
+        { (uint8_t*)"密度每米测量", COM_NUM_METER_DENSITY, ifsendcmd, COMMANE_NORW, (uint8_t*)"MeterDensity" },
+        { (uint8_t*)"区间密度测量", COM_NUM_INTERVAL_DENSITY, ifsendcmd, COMMANE_NORW, (uint8_t*)"RangeDensity" },
+        { (uint8_t*)"瓦锡兰区间密度", COM_NUM_WARTSILA_DENSITY, ifsendcmd, COMMANE_NORW, (uint8_t*)"WartsilaRange" },
+        { (uint8_t*)"返回", COM_NUM_NOOPERA, measuremenu, COMMANE_NORW, (uint8_t*)"Back" },
+    };
+
+    oled_clear();
+    func_index = KEYNUM_MEASURE_DENSITY_DISTRIBUTION;
+    menuselect(menu, (int)(sizeof(menu) / sizeof(menu[0])));
+}
+
 
 /* 菜单 - 调试指令 */
 static void menu_cmdconfig_main(void)
 {
     static struct MenuData menu[] = {
-
-        /* ===== 运动控制 ===== */
-        { (uint8_t*)"上行",       COM_NUM_RUNUP,        inputcmdpara, COMMANE_NORW, (uint8_t*)"MoveUp"       },
-        { (uint8_t*)"下行",       COM_NUM_RUNDOWN,      inputcmdpara, COMMANE_NORW, (uint8_t*)"MoveDown"     },
-        { (uint8_t*)"强制上行",   COM_NUM_FORCE_RUNUP,  inputcmdpara, COMMANE_NORW, (uint8_t*)"ForceMoveUp"  },
-        { (uint8_t*)"强制下行",   COM_NUM_FORCE_RUNDOWN,inputcmdpara, COMMANE_NORW, (uint8_t*)"ForceMoveDown"},
-        { (uint8_t*)"强制提零点", COM_NUM_FORCE_LIFT_ZERO, ifsendcmd, COMMANE_NORW, (uint8_t*)"ForceLiftZero"},
-
-        /* ===== 标定/修正 ===== */
-        { (uint8_t*)"标定零点",   COM_NUM_FIND_ZERO,    ifsendcmd,    COMMANE_NORW, (uint8_t*)"CalZero"      },
-        { (uint8_t*)"标定液位", COM_NUM_CAL_OIL,     inputcmdpara, COMMANE_NORW, (uint8_t*)"CalOil"       },
-        { (uint8_t*)"修正液位",   COM_NUM_CORRECTION_OIL,inputcmdpara, COMMANE_NORW, (uint8_t*)"CorrectOil"   },
-        { (uint8_t*)"标定水位",   COM_NUM_CALIBRATE_WATER, inputcmdpara, COMMANE_NORW, (uint8_t*)"CalWater"    },
-        { (uint8_t*)"标定罐高",   COM_NUM_CALIBRATE_TANKHEIGHT, inputcmdpara, COMMANE_NORW, (uint8_t*)"CalTankH" },
-
-        /* ===== 称重相关 ===== */
-        { (uint8_t*)"获取空载称重", COM_NUM_SET_EMPTY_WEIGHT, ifsendcmd, COMMANE_NORW, (uint8_t*)"SetEmptyWeight" },
-        { (uint8_t*)"获取满载称重", COM_NUM_SET_FULL_WEIGHT,  ifsendcmd, COMMANE_NORW, (uint8_t*)"SetFullWeight"  },
-
-        /* ===== 系统/维护 ===== */
-        { (uint8_t*)"恢复出厂设置", COM_NUM_RESTOR_EFACTORYSETTING, ifsendcmd, COMMANE_NORW, (uint8_t*)"RestoreFactory" },
-        { (uint8_t*)"进入维护模式",     COM_NUM_MAINTENANCE_MODE,       ifsendcmd, COMMANE_NORW, (uint8_t*)"Maintenance"    },
-        { (uint8_t*)"匹配无线滑环", COM_NUM_PAIR_NEAREST_WIRELESS_SLIPRING, ifsendcmd, COMMANE_NORW, (uint8_t*)"PairWireless" },
-
-        /* ===== 退出 ===== */
+        { (uint8_t*)"浮子运动控制", COM_NUM_NOOPERA, menu_debug_float_motion, COMMANE_NORW, (uint8_t*)"FloatMotion" },
+        { (uint8_t*)"标定修正", COM_NUM_NOOPERA, menu_debug_calibration, COMMANE_NORW, (uint8_t*)"Calibration" },
+        { (uint8_t*)"称重标定", COM_NUM_NOOPERA, menu_debug_weight, COMMANE_NORW, (uint8_t*)"WeightCal" },
+        { (uint8_t*)"无线维护", COM_NUM_NOOPERA, menu_debug_wireless, COMMANE_NORW, (uint8_t*)"WirelessMaint" },
+        { (uint8_t*)"系统维护", COM_NUM_NOOPERA, menu_debug_system, COMMANE_NORW, (uint8_t*)"SystemMaint" },
         { (uint8_t*)"退出", COM_NUM_NOOPERA, mainmenu, COMMANE_NORW, (uint8_t*)"Exit" },
     };
 
@@ -3480,6 +3964,81 @@ static void menu_cmdconfig_main(void)
     func_index = KEYNUM_MENU_CMD_MAIN;
     debugmode_back = 1;
     menuselect(menu, menulen);
+}
+
+static void menu_debug_float_motion(void)
+{
+    static struct MenuData menu[] = {
+        { (uint8_t*)"上行", COM_NUM_RUNUP, inputcmdpara, COMMANE_NORW, (uint8_t*)"MoveUp" },
+        { (uint8_t*)"下行", COM_NUM_RUNDOWN, inputcmdpara, COMMANE_NORW, (uint8_t*)"MoveDown" },
+        { (uint8_t*)"强制上行", COM_NUM_FORCE_RUNUP, inputcmdpara, COMMANE_NORW, (uint8_t*)"ForceMoveUp" },
+        { (uint8_t*)"强制下行", COM_NUM_FORCE_RUNDOWN, inputcmdpara, COMMANE_NORW, (uint8_t*)"ForceMoveDown" },
+        { (uint8_t*)"强制提零点", COM_NUM_FORCE_LIFT_ZERO, ifsendcmd, COMMANE_NORW, (uint8_t*)"ForceLiftZero" },
+        { (uint8_t*)"返回", COM_NUM_NOOPERA, menu_cmdconfig_main, COMMANE_NORW, (uint8_t*)"Back" },
+    };
+
+    oled_clear();
+    func_index = KEYNUM_DEBUG_FLOAT_MOTION;
+    debugmode_back = 1;
+    menuselect(menu, (int)(sizeof(menu) / sizeof(menu[0])));
+}
+
+static void menu_debug_calibration(void)
+{
+    static struct MenuData menu[] = {
+        { (uint8_t*)"标定零点", COM_NUM_FIND_ZERO, ifsendcmd, COMMANE_NORW, (uint8_t*)"CalZero" },
+        { (uint8_t*)"标定液位", COM_NUM_CAL_OIL, inputcmdpara, COMMANE_NORW, (uint8_t*)"CalOil" },
+        { (uint8_t*)"修正液位", COM_NUM_CORRECTION_OIL, inputcmdpara, COMMANE_NORW, (uint8_t*)"CorrectOil" },
+        { (uint8_t*)"标定水位", COM_NUM_CALIBRATE_WATER, inputcmdpara, COMMANE_NORW, (uint8_t*)"CalWater" },
+        { (uint8_t*)"标定罐高", COM_NUM_CALIBRATE_TANKHEIGHT, inputcmdpara, COMMANE_NORW, (uint8_t*)"CalTankH" },
+        { (uint8_t*)"返回", COM_NUM_NOOPERA, menu_cmdconfig_main, COMMANE_NORW, (uint8_t*)"Back" },
+    };
+
+    oled_clear();
+    func_index = KEYNUM_DEBUG_CALIBRATION;
+    debugmode_back = 1;
+    menuselect(menu, (int)(sizeof(menu) / sizeof(menu[0])));
+}
+
+static void menu_debug_weight(void)
+{
+    static struct MenuData menu[] = {
+        { (uint8_t*)"获取空载称重", COM_NUM_SET_EMPTY_WEIGHT, ifsendcmd, COMMANE_NORW, (uint8_t*)"SetEmptyWeight" },
+        { (uint8_t*)"获取满载称重", COM_NUM_SET_FULL_WEIGHT, ifsendcmd, COMMANE_NORW, (uint8_t*)"SetFullWeight" },
+        { (uint8_t*)"返回", COM_NUM_NOOPERA, menu_cmdconfig_main, COMMANE_NORW, (uint8_t*)"Back" },
+    };
+
+    oled_clear();
+    func_index = KEYNUM_DEBUG_WEIGHT;
+    debugmode_back = 1;
+    menuselect(menu, (int)(sizeof(menu) / sizeof(menu[0])));
+}
+
+static void menu_debug_wireless(void)
+{
+    static struct MenuData menu[] = {
+        { (uint8_t*)"匹配无线滑环", COM_NUM_PAIR_NEAREST_WIRELESS_SLIPRING, ifsendcmd, COMMANE_NORW, (uint8_t*)"PairWireless" },
+        { (uint8_t*)"返回", COM_NUM_NOOPERA, menu_cmdconfig_main, COMMANE_NORW, (uint8_t*)"Back" },
+    };
+
+    oled_clear();
+    func_index = KEYNUM_DEBUG_WIRELESS;
+    debugmode_back = 1;
+    menuselect(menu, (int)(sizeof(menu) / sizeof(menu[0])));
+}
+
+static void menu_debug_system(void)
+{
+    static struct MenuData menu[] = {
+        { (uint8_t*)"进入维护模式", COM_NUM_MAINTENANCE_MODE, ifsendcmd, COMMANE_NORW, (uint8_t*)"Maintenance" },
+        { (uint8_t*)"恢复出厂设置", COM_NUM_RESTOR_EFACTORYSETTING, ifsendcmd, COMMANE_NORW, (uint8_t*)"RestoreFactory" },
+        { (uint8_t*)"返回", COM_NUM_NOOPERA, menu_cmdconfig_main, COMMANE_NORW, (uint8_t*)"Back" },
+    };
+
+    oled_clear();
+    func_index = KEYNUM_DEBUG_SYSTEM;
+    debugmode_back = 1;
+    menuselect(menu, (int)(sizeof(menu) / sizeof(menu[0])));
 }
 
 

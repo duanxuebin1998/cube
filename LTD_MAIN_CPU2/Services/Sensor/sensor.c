@@ -16,14 +16,17 @@
 #include "measure.h"
 #include "motor_ctrl.h"
 #include "abortable_delay.h"
+#include "wireless_pairing.h"
 
 #define WIRELESS_HOST_ADDR 1U
 #define WIRELESS_SLAVE_ADDR 2U
 #define SENSOR_LEVEL_FREQ_RECOVERY_LIFT_MM 1.0f
 #define SENSOR_DENSITY_MODE_SETTLE_MS 3000U
 #define READ_PART_PARAMS_REFRESH_INTERVAL_MS 1000U
+#define READ_PART_PARAMS_RSSI_REFRESH_INTERVAL_MS 5000U
 
 static uint32_t Sensor_PositionToU01mmClamped(void);
+static void Sensor_UpdateWirelessRssiForPartParams(uint8_t force_update);
 
 
 /**
@@ -864,6 +867,20 @@ static uint32_t Read_WeightParam_Adapter(void)
     return g_measurement.debug_data.weight_param;
 }
 
+static void Sensor_UpdateWirelessRssiForPartParams(uint8_t force_update)
+{
+    static uint32_t last_update_tick = 0U;
+    uint32_t now_tick = HAL_GetTick();
+
+    if ((force_update == 0U) &&
+        ((now_tick - last_update_tick) < READ_PART_PARAMS_RSSI_REFRESH_INTERVAL_MS)) {
+        return;
+    }
+
+    last_update_tick = now_tick;
+    (void)WirelessPairing_UpdateConnectionStatusSnapshot();
+}
+
 /* ================== CMD：读取部件参数 ================== */
 /**
  * @brief 读取部件参数的共用实现。
@@ -1009,7 +1026,16 @@ static uint32_t Sensor_ReadPartParamsInternal(uint8_t update_command_state)
         printf("读取部件参数\t当前传感器类型不支持水位电容读取，已跳过\r\n");
     }
 
-    /* ---------- 7) 预留接口：后续新增部件参数统一挂这里 ---------- */
+    /* ---------- 7) 蓝牙连接 RSSI ---------- */
+    if ((!update_command_state) && HasEffectiveCommandSwitchRequest()) {
+        return STATE_SWITCH;
+    }
+    Sensor_UpdateWirelessRssiForPartParams(update_command_state);
+    if ((!update_command_state) && HasEffectiveCommandSwitchRequest()) {
+        return STATE_SWITCH;
+    }
+
+    /* ---------- 8) 预留接口：后续新增部件参数统一挂这里 ---------- */
     /* TODO:
        - 读电源电压/驱动电压
        - 读TMC5130错误寄存器(GSTAT/DRV_STATUS)
@@ -1017,9 +1043,9 @@ static uint32_t Sensor_ReadPartParamsInternal(uint8_t update_command_state)
        - 读温度2/环境温度
     */
 
-    /* ---------- 8) 打印汇总：正常信息集中一行 ---------- */
+    /* ---------- 9) 打印汇总：正常信息集中一行 ---------- */
     printf("读取部件参数完成 | 编码值=%ld 位置=%ld 缆长=%ld 步数=%ld 距离=%ld(0.1mm) "
-           "| freq=%lu temp=%lu | cap=%lu | w=%lu | ax=%ld ay=%ld | mspd=%lu mstate=%lu\r\n",
+           "| freq=%lu temp=%lu | cap=%lu | w=%lu | ang_x=%ld ang_y=%ld(0.01deg) | mspd=%lu mstate=%lu | rssi_valid=%lu rssi=%ld\r\n",
            (long)g_measurement.debug_data.current_encoder_value,
            (long)g_measurement.debug_data.sensor_position,
            (long)g_measurement.debug_data.cable_length,
@@ -1032,7 +1058,9 @@ static uint32_t Sensor_ReadPartParamsInternal(uint8_t update_command_state)
            (long)g_measurement.debug_data.angle_x,
            (long)g_measurement.debug_data.angle_y,
            (unsigned long)g_measurement.debug_data.motor_speed,
-           (unsigned long)g_measurement.debug_data.motor_state);
+           (unsigned long)g_measurement.debug_data.motor_state,
+           (unsigned long)g_measurement.wireless_pairing_status.rssi_valid,
+           (long)g_measurement.wireless_pairing_status.rssi);
 
     if (update_command_state) {
         g_measurement.device_status.device_state = STATE_READPARAMETEROVER;

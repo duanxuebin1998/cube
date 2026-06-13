@@ -61,6 +61,7 @@ enum { /* 用于记录每个参数显示在第几页第几行 */
     Para_angle_y,   /* 新增：陀螺仪 Y 角度 */
     Para_position,
 	Para_tankheight, /* 新增：罐高 */
+    Para_wireless_rssi, /* 新增：蓝牙连接 RSSI */
     Para_wireless_t,
     Para_V,
     Para_VMax,
@@ -101,6 +102,8 @@ typedef enum {
     DISPLAY_STATUS_SLOT_ANGLE_X,
     DISPLAY_STATUS_SLOT_ANGLE_Y,
     DISPLAY_STATUS_SLOT_TANK_HEIGHT,
+    DISPLAY_STATUS_SLOT_WIRELESS_RSSI,
+    DISPLAY_STATUS_SLOT_WIRELESS_RSSI_NA,
     DISPLAY_STATUS_SLOT_WIRELESS_MAC_1,
     DISPLAY_STATUS_SLOT_WIRELESS_MAC_2,
     DISPLAY_STATUS_SLOT_WIRELESS_MAC_NA
@@ -1006,7 +1009,7 @@ static uint8_t StockMap[] = "通讯尝试中液位跟随密度温℃版本水测
                             "误础界面程序减比股长介信号后限例权屏幕维护视终继状态最探头浸小第悬停禁用弦工固产反先动当前"
                             "大英更传层滞域使磨结束针总阻六级内息命感顺有阈值角导本整瓦锡兰厚首波特率验位奇偶预留默强差"
 							"义已碰撞寄存次菜忽略志构魔术望全过收为裁剪准除以跳飞频声稳记局切匹"
-							"馈被荷泵欠驱丢溢性弱响应格快越漂移饱和系统因尼组跑锁隔策亮";
+							"馈被荷泵欠驱丢溢性弱响应格快越漂移饱和系统因尼组跑锁隔策亮控";
 static const int wordbyte      = 3; /* UTF-8 下汉字 3 字节 */
 static const int StockmapLength = (sizeof(StockMap) - 1) / wordbyte;
 static uint8_t WordStock[255 * 28] =
@@ -1474,6 +1477,7 @@ static uint8_t WordStock2[255 * 28] =
     0x3D,0xFC,0x24,0x00,0x24,0xF8,0x28,0x88,0x28,0xF8,0x24,0x00,0x25,0xFC,0x25,0x54,0x25,0x24,0x39,0xFC,0x21,0x24,0x21,0x24,0x21,0x0C,0x00,0x00, /* "隔",26 */
     0x10,0x40,0x1E,0x7C,0x28,0x90,0x45,0x08,0x01,0x00,0x7F,0xFC,0x01,0x00,0x3F,0xF8,0x21,0x08,0x23,0xB8,0x05,0x40,0x19,0x30,0x61,0x0C,0x01,0x00, /* "策",27 */
     0x01,0x00,0x7F,0xFC,0x00,0x00,0x1F,0xF0,0x10,0x10,0x1F,0xF0,0x00,0x00,0x7F,0xFC,0x40,0x04,0x4F,0xE4,0x08,0x20,0x08,0x20,0x10,0x24,0x60,0x1C, /* "亮",28 */
+    0x21,0x00,0x20,0x80,0x27,0xF8,0xF4,0x08,0x21,0x20,0x22,0x10,0x24,0x08,0x30,0x00,0xE3,0xF0,0x20,0x80,0x20,0x80,0x20,0x80,0x20,0x80,0xE7,0xF8, /* "控",29 */
 };
 static uint8_t NumberStock[] = {
 
@@ -2405,6 +2409,25 @@ static void Display_AddCurrentPageValueStatusSlots(DisplayStatusSnapshot *snapsh
                                    1U,
                                    (uint8_t*)"mm");
     }
+
+    if ((ValidParaDisArr[Para_wireless_rssi][PARA_VALID] == true) &&
+        (now_page == ValidParaDisArr[Para_wireless_rssi][PARA_PAGE])) {
+        if (g_measurement.wireless_pairing_status.rssi_valid != 0U) {
+            Display_AddValueStatusSlot(snapshot,
+                                       DISPLAY_STATUS_SLOT_WIRELESS_RSSI,
+                                       (uint8_t)ValidParaDisArr[Para_wireless_rssi][PARA_X],
+                                       Display_GetLabelEndLine((uint8_t*)"RSSI:", (uint8_t*)"RSSI:"),
+                                       g_measurement.wireless_pairing_status.rssi,
+                                       0U,
+                                       (uint8_t*)"dB");
+        } else {
+            Display_AddTextStatusSlot(snapshot,
+                                      DISPLAY_STATUS_SLOT_WIRELESS_RSSI_NA,
+                                      (uint8_t)ValidParaDisArr[Para_wireless_rssi][PARA_X],
+                                      OLED_LINE8_1,
+                                      "RSSI:N/A");
+        }
+    }
 }
 
 /**
@@ -2818,6 +2841,14 @@ void RefreshScreen(void)
     display_recover_before_draw = false;
 
     if (FlagofTankOpera == true) {
+        if (DisplayTankOpera_IsMotorRunMonitorActive() ||
+            DisplayTankOpera_IsDebugWeightWaitActive()) {
+            frame_spi_error_start = Display_PrepareForForegroundDraw();
+            if (DisplayTankOpera_RedrawCurrentPage()) {
+                Display_FinishFrame(frame_spi_error_start);
+            }
+            return;
+        }
         if (Display_ShouldRecoverBeforeDraw()) {
             frame_spi_error_start = Display_BeginFrame();
             OLED_RecoverAndClear();
@@ -3149,6 +3180,37 @@ static void oled_equipment(void)
                          1,
                          (u8*)"mm");
     }
+    /* 蓝牙连接 RSSI */
+    if (ValidParaDisArr[Para_wireless_rssi][PARA_VALID] == true &&
+        now_page == ValidParaDisArr[Para_wireless_rssi][PARA_PAGE])
+    {
+        row = ValidParaDisArr[Para_wireless_rssi][PARA_X];
+        if (g_measurement.wireless_pairing_status.rssi_valid != 0U)
+        {
+            line = DisplayLangaugeLineWords((u8*)"RSSI:", OLED_LINE8_1, row, 0, (u8*)"RSSI:");
+            OledValueDisplay((int)g_measurement.wireless_pairing_status.rssi,
+                             line,
+                             row,
+                             Display_GetStatusSlotShift(DISPLAY_STATUS_SLOT_WIRELESS_RSSI,
+                                                        row,
+                                                        g_measurement.wireless_pairing_status.rssi,
+                                                        false,
+                                                        NULL),
+                             0,
+                             (u8*)"dB");
+        }
+        else
+        {
+            OledDisplayLineWords((u8*)"RSSI:N/A",
+                                 OLED_LINE8_1,
+                                 row,
+                                 Display_GetStatusSlotShift(DISPLAY_STATUS_SLOT_WIRELESS_RSSI_NA,
+                                                            row,
+                                                            0,
+                                                            true,
+                                                            "RSSI:N/A"));
+        }
+    }
 }
 /* 显示多个汉字或字符 - 带中英文选择 */
 uint8_t DisplayLangaugeLineWords(uint8_t* name1,uint8_t line,uint8_t row,uint8_t shift,uint8_t* name2)
@@ -3264,9 +3326,8 @@ static void CalculateValidPara(void)
     else
         ValidParaDisArr[Para_capacitance][PARA_VALID] = false;
     /* 陀螺仪角度 X */
-    if (((ctx == DISPLAY_RESULT_CONTEXT_BOTTOM_HEIGHT) ||
-         (ctx == DISPLAY_RESULT_CONTEXT_READ_PARAMETER)) &&
-        IsBottomAngleDisplayEnabled() &&
+    if (((ctx == DISPLAY_RESULT_CONTEXT_READ_PARAMETER) ||
+         ((ctx == DISPLAY_RESULT_CONTEXT_BOTTOM_HEIGHT) && IsBottomAngleDisplayEnabled())) &&
         (g_measurement.debug_data.angle_x != 0))
     {
         ValidParaCnt++;
@@ -3278,9 +3339,8 @@ static void CalculateValidPara(void)
     }
 
     /* 陀螺仪角度 Y */
-    if (((ctx == DISPLAY_RESULT_CONTEXT_BOTTOM_HEIGHT) ||
-         (ctx == DISPLAY_RESULT_CONTEXT_READ_PARAMETER)) &&
-        IsBottomAngleDisplayEnabled() &&
+    if (((ctx == DISPLAY_RESULT_CONTEXT_READ_PARAMETER) ||
+         ((ctx == DISPLAY_RESULT_CONTEXT_BOTTOM_HEIGHT) && IsBottomAngleDisplayEnabled())) &&
         (g_measurement.debug_data.angle_y != 0))
     {
         ValidParaCnt++;
@@ -3302,6 +3362,16 @@ static void CalculateValidPara(void)
     }
     else {
         ValidParaDisArr[Para_tankheight][PARA_VALID] = false;
+    }
+    /* 蓝牙连接 RSSI */
+    if (ctx == DISPLAY_RESULT_CONTEXT_READ_PARAMETER)
+    {
+        ValidParaCnt++;
+        ValidParaDisArr[Para_wireless_rssi][PARA_NUM] = ValidParaCnt;
+        ValidParaDisArr[Para_wireless_rssi][PARA_VALID] = true;
+    }
+    else {
+        ValidParaDisArr[Para_wireless_rssi][PARA_VALID] = false;
     }
     #if DEBUG_DISPLAY
     printf("ValidParaCnt = %d\n",ValidParaCnt);

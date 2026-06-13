@@ -44,13 +44,13 @@ def main() -> int:
     checks = [
         (
             cpu2_param_header,
-            r"#define\s+DEVICE_PROTOCOL_VERSION\s+8u",
-            "CPU2 protocol version must be bumped to 8 for liquidLevelMeasurementMethod semantics",
+            r"#define\s+DEVICE_PROTOCOL_VERSION\s+9u",
+            "CPU2 protocol version must match current shared protocol version 9",
         ),
         (
             cpu3_param_header,
-            r"#define\s+DEVICE_PROTOCOL_VERSION\s+8u",
-            "CPU3 protocol version must be bumped to 8 for liquidLevelMeasurementMethod semantics",
+            r"#define\s+DEVICE_PROTOCOL_VERSION\s+9u",
+            "CPU3 protocol version must match current shared protocol version 9",
         ),
         (
             cpu3_param_table,

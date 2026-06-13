@@ -66,6 +66,14 @@ typedef struct {
 } EquipStateDisplay; /* 设备状态显示 */
 extern struct ScreenPARA screen_parameter;
 /**
+ * @brief 读取屏幕显示中的 GetStateString 逻辑。
+ *
+ * @param state 状态值。
+ * @param lang 语言。
+ * @return 返回状态显示文本。
+ */
+const char* GetStateString(uint16_t state, uint8_t lang);
+/**
  * @brief 执行屏幕显示中的 EquipFirstPower 逻辑。
  */
 void EquipFirstPower(void);

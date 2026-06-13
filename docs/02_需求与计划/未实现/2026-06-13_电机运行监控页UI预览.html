@@ -1,0 +1,540 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>电机运行监控页 UI 预览</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f3f5f7;
+      --paper: #ffffff;
+      --ink: #17202a;
+      --muted: #647282;
+      --line: #d8e0e8;
+      --soft: #eef3f8;
+      --accent: #24679a;
+      --danger: #b42318;
+      --ok: #147447;
+      --warn: #9a5b00;
+      --case: #222832;
+      --case-line: #424c58;
+      --screen: #071018;
+      --screen-line: #142231;
+      --screen-text: #eaf6ff;
+      --screen-dim: #88a6bf;
+      --screen-warn: #ffd37a;
+      --screen-danger: #ff9a9a;
+      --screen-ok: #9fe6b8;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font: 15px/1.68 "Microsoft YaHei", "Segoe UI", Arial, sans-serif;
+      letter-spacing: 0;
+    }
+
+    header {
+      background: #172331;
+      color: #fff;
+      border-bottom: 4px solid var(--accent);
+    }
+
+    .wrap {
+      width: min(1120px, calc(100% - 32px));
+      margin: 0 auto;
+      padding: 24px 0 20px;
+    }
+
+    h1, h2, h3, p { margin-top: 0; }
+    h1 { margin-bottom: 6px; font-size: 28px; line-height: 1.25; }
+    h2 { margin-bottom: 12px; font-size: 20px; }
+    h3 { margin-bottom: 7px; font-size: 16px; color: #16466f; }
+    .meta { margin: 0; color: #d9e3ee; font-size: 14px; }
+
+    main {
+      width: min(1120px, calc(100% - 32px));
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: minmax(390px, 500px) 1fr;
+      gap: 20px;
+      padding: 22px 0 52px;
+      align-items: start;
+    }
+
+    .card {
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 18px 20px;
+    }
+
+    .preview-card {
+      position: sticky;
+      top: 16px;
+    }
+
+    .state-tabs {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+      margin: 0 0 16px;
+    }
+
+    .tab {
+      min-height: 38px;
+      padding: 7px 8px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: #fff;
+      color: var(--ink);
+      cursor: pointer;
+      font: inherit;
+      line-height: 1.25;
+    }
+
+    .tab.active {
+      border-color: var(--accent);
+      background: #e7f1fa;
+      color: #16466f;
+      font-weight: 700;
+    }
+
+    .device {
+      padding: 20px;
+      border-radius: 10px;
+      background: linear-gradient(180deg, #2d3540, #1d232c);
+      border: 1px solid var(--case-line);
+      box-shadow: 0 16px 32px rgba(23, 32, 42, 0.18);
+    }
+
+    .bezel {
+      padding: 18px;
+      border-radius: 8px;
+      background: #111820;
+      border: 1px solid #3b4652;
+    }
+
+    .screen-frame {
+      padding: 10px;
+      border-radius: 7px;
+      background: #05090d;
+      border: 1px solid #303b47;
+    }
+
+    .screen {
+      width: 100%;
+      aspect-ratio: 2 / 1;
+      display: grid;
+      grid-template-rows: repeat(4, 1fr);
+      overflow: hidden;
+      border-radius: 4px;
+      background:
+        linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px) 0 0 / 24px 100%,
+        linear-gradient(180deg, rgba(255, 255, 255, 0.035) 1px, transparent 1px) 0 0 / 100% 25%,
+        var(--screen);
+      border: 2px solid #2c3c4d;
+      box-shadow: inset 0 0 18px rgba(75, 160, 225, 0.12);
+      color: var(--screen-text);
+      font-family: "Microsoft YaHei", "SimHei", Consolas, monospace;
+      font-size: 20px;
+      font-weight: 700;
+      line-height: 1;
+    }
+
+    .oled-row {
+      min-width: 0;
+      display: grid;
+      align-items: center;
+      padding: 0 14px;
+      border-bottom: 1px solid var(--screen-line);
+      white-space: nowrap;
+    }
+
+    .oled-row:last-child { border-bottom: 0; }
+
+    .status-row {
+      grid-template-columns: 1fr auto;
+      gap: 8px;
+      color: var(--screen-text);
+    }
+
+    .metric-row {
+      grid-template-columns: 58px 1fr 34px;
+      gap: 6px;
+    }
+
+    .metric-label {
+      color: var(--screen-dim);
+      font-weight: 700;
+    }
+
+    .metric-value {
+      min-width: 0;
+      text-align: right;
+      color: var(--screen-text);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .metric-unit {
+      color: var(--screen-dim);
+      font-size: 16px;
+      font-weight: 600;
+    }
+
+    .action-row {
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      color: var(--screen-dim);
+    }
+
+    .action-right {
+      justify-self: end;
+      color: var(--screen-danger);
+    }
+
+    .status-pill {
+      min-width: 44px;
+      padding: 4px 6px;
+      border-radius: 4px;
+      background: rgba(246, 211, 101, 0.14);
+      color: var(--screen-warn);
+      text-align: center;
+      font-size: 13px;
+      font-family: Consolas, "Courier New", monospace;
+      letter-spacing: 0;
+    }
+
+    .screen.confirm .status-row { color: var(--screen-danger); }
+    .screen.confirm .action-right { color: var(--screen-warn); }
+    .screen.stopping .status-pill,
+    .screen.stopping .action-right { color: var(--screen-warn); }
+    .screen.done .status-row,
+    .screen.done .status-pill,
+    .screen.done .action-right { color: var(--screen-ok); }
+
+    .keybar {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+      margin-top: 14px;
+    }
+
+    .key {
+      min-height: 48px;
+      padding: 7px 6px;
+      border-radius: 6px;
+      border: 1px solid #566170;
+      background: #202833;
+      color: #edf4fb;
+      text-align: center;
+      user-select: none;
+    }
+
+    .key strong {
+      display: block;
+      font-size: 15px;
+      line-height: 1.2;
+    }
+
+    .key span {
+      display: block;
+      margin-top: 4px;
+      color: #aebdca;
+      font-size: 12px;
+      line-height: 1.2;
+    }
+
+    .key.stop {
+      border-color: #c96767;
+      background: #3a2025;
+    }
+
+    .key.neutral {
+      color: #9aa7b5;
+      background: #1a2028;
+    }
+
+    .caption {
+      margin: 14px 0 0;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .notes {
+      display: grid;
+      gap: 12px;
+    }
+
+    .note {
+      padding: 13px 15px;
+      border-left: 5px solid var(--accent);
+      background: var(--soft);
+    }
+
+    .note.ok { border-left-color: var(--ok); background: #eef9f3; }
+    .note.warn { border-left-color: var(--warn); background: #fff7e8; }
+    .note.danger { border-left-color: var(--danger); background: #fff1f0; }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 8px;
+      background: #fff;
+    }
+
+    th, td {
+      border: 1px solid var(--line);
+      padding: 8px 9px;
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th { background: #eef3f8; }
+
+    code {
+      padding: 1px 5px;
+      border-radius: 4px;
+      background: #e9eef5;
+      font-family: Consolas, "Courier New", monospace;
+    }
+
+    .compact-list {
+      margin: 0;
+      padding-left: 18px;
+    }
+
+    .compact-list li { margin: 4px 0; }
+
+    @media (max-width: 900px) {
+      main { grid-template-columns: 1fr; }
+      .preview-card { position: static; }
+    }
+
+    @media (max-width: 520px) {
+      .wrap, main { width: min(100% - 20px, 1120px); }
+      .card { padding: 15px; }
+      .device { padding: 14px; }
+      .bezel { padding: 12px; }
+      .screen { font-size: 17px; }
+      .metric-row { grid-template-columns: 50px 1fr 30px; }
+      .state-tabs { grid-template-columns: repeat(2, 1fr); }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="wrap">
+      <h1>电机运行监控页 UI 预览</h1>
+      <p class="meta">优化版：弱化网页装饰，按 CPU3 128x64 小屏的 4 行信息节奏重新排版。</p>
+    </div>
+  </header>
+
+  <main>
+    <section class="card preview-card">
+      <h2>推荐小屏样式</h2>
+      <div class="state-tabs" role="tablist" aria-label="运行状态切换">
+        <button class="tab active" data-state="running" type="button">运行中</button>
+        <button class="tab" data-state="confirm" type="button">确认停止</button>
+        <button class="tab" data-state="stopping" type="button">停止中</button>
+        <button class="tab" data-state="done" type="button">已完成</button>
+      </div>
+
+      <div class="device">
+        <div class="bezel">
+          <div class="screen-frame">
+            <div class="screen" id="screen" aria-label="OLED 128x64 预览">
+              <div class="oled-row status-row">
+                <span id="line1">向下运行中</span>
+                <span class="status-pill" id="statusPill">RUN</span>
+              </div>
+              <div class="oled-row metric-row">
+                <span class="metric-label" id="line2Label">位置</span>
+                <span class="metric-value" id="line2Value">1250.5</span>
+                <span class="metric-unit" id="line2Unit">mm</span>
+              </div>
+              <div class="oled-row metric-row">
+                <span class="metric-label" id="line3Label">称重</span>
+                <span class="metric-value" id="line3Value">18.6</span>
+                <span class="metric-unit" id="line3Unit">kg</span>
+              </div>
+              <div class="oled-row action-row">
+                <span id="line4Left">返回</span>
+                <span class="action-right" id="line4Right">停止运动</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="keybar" aria-label="四键操作">
+            <div class="key" data-key="back"><strong>返回</strong><span id="keyBack">状态页</span></div>
+            <div class="key neutral" data-key="up"><strong>上</strong><span>无动作</span></div>
+            <div class="key neutral" data-key="down"><strong>下</strong><span>无动作</span></div>
+            <div class="key stop" data-key="sure"><strong>确认</strong><span id="keySure">停止运动</span></div>
+          </div>
+        </div>
+      </div>
+
+      <p class="caption">这个版本把页面重心放在 4 行屏幕内容上：状态、位置、称重、软键动作。网页里的彩色只用于沟通层级，实际 OLED 仍按单色文本落地。</p>
+    </section>
+
+    <section class="notes">
+      <div class="card">
+        <h2>优化原则</h2>
+        <table>
+          <tr>
+            <th>位置</th>
+            <th>推荐显示</th>
+            <th>原因</th>
+          </tr>
+          <tr>
+            <td>第 1 行</td>
+            <td>直接显示设备状态第一行，例如“向下运行中”</td>
+            <td>不再额外加标题，避免小屏浪费空间，也和状态页口径一致。</td>
+          </tr>
+          <tr>
+            <td>第 2 行</td>
+            <td>位置 + 右侧数值 + 单位</td>
+            <td>用固定标签宽度和右对齐数值，读数变化时不显得跳。</td>
+          </tr>
+          <tr>
+            <td>第 3 行</td>
+            <td>称重 + 右侧数值 + 单位</td>
+            <td>和位置行形成相同节奏，现场扫一眼就能比较趋势。</td>
+          </tr>
+          <tr>
+            <td>第 4 行</td>
+            <td>返回 / 停止运动，确认页改为返回 / 确认停止</td>
+            <td>底行只放软键语义，不再混入状态说明。</td>
+          </tr>
+        </table>
+      </div>
+
+      <div class="note ok">
+        <h3>我建议采用的改法</h3>
+        <ul class="compact-list">
+          <li>运行监控页保留当前 4 行结构，但让位置、称重的数值列固定，减少“乱”的感觉。</li>
+          <li>停止确认页不要只显示一句话，继续显示位置和称重，用户确认时还能看见电机当前状态。</li>
+          <li>底部右侧统一用动作词：运行页“停止运动”，确认页“确认停止”，停止中“停止中”。</li>
+          <li>完成态可以短暂停留 1 到 2 秒显示“运行完成”，再自动返回状态页。</li>
+        </ul>
+      </div>
+
+      <div class="note warn">
+        <h3>固件同步点</h3>
+        <p>当前优化版已同步到 CPU3 固件：<code>display_tankopera.c</code> 已将运行页和停止确认页统一为状态、位置、称重、软键四行节奏，并让位置和称重数值从固定列开始显示。</p>
+      </div>
+
+      <div class="note ok">
+        <h3>适用命令</h3>
+        <p>仍只针对 <code>CMD_RUN_TO_POSITION</code>、<code>CMD_MOVE_UP</code>、<code>CMD_MOVE_DOWN</code>、<code>CMD_FORCE_MOVE_UP</code>、<code>CMD_FORCE_MOVE_DOWN</code>、<code>CMD_FORCE_LIFT_ZERO</code>。找油、找水、找底、单点、分布、密度区间、瓦锡兰密度流程等业务命令不进入本页。</p>
+      </div>
+
+      <div class="note danger">
+        <h3>边界</h3>
+        <p>这里的停止仍是受控慢停，不应标成“急停”。真正急停需要独立的硬件断能、驱动禁用、恢复流程和故障记录策略。</p>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const states = {
+      running: {
+        screenClass: "",
+        line1: "向下运行中",
+        pill: "RUN",
+        line2Label: "位置",
+        line2Value: "1250.5",
+        line2Unit: "mm",
+        line3Label: "称重",
+        line3Value: "18.6",
+        line3Unit: "kg",
+        line4Left: "返回",
+        line4Right: "停止运动",
+        keyBack: "状态页",
+        keySure: "停止运动"
+      },
+      confirm: {
+        screenClass: "confirm",
+        line1: "停止当前运动?",
+        pill: "ASK",
+        line2Label: "位置",
+        line2Value: "1248.0",
+        line2Unit: "mm",
+        line3Label: "称重",
+        line3Value: "19.1",
+        line3Unit: "kg",
+        line4Left: "返回",
+        line4Right: "确认停止",
+        keyBack: "返回监控",
+        keySure: "下发停止"
+      },
+      stopping: {
+        screenClass: "stopping",
+        line1: "正在停止",
+        pill: "STOP",
+        line2Label: "位置",
+        line2Value: "1245.0",
+        line2Unit: "mm",
+        line3Label: "称重",
+        line3Value: "19.0",
+        line3Unit: "kg",
+        line4Left: "返回",
+        line4Right: "停止中",
+        keyBack: "状态页",
+        keySure: "无动作"
+      },
+      done: {
+        screenClass: "done",
+        line1: "向下运行完成",
+        pill: "OK",
+        line2Label: "位置",
+        line2Value: "1200.0",
+        line2Unit: "mm",
+        line3Label: "称重",
+        line3Value: "17.9",
+        line3Unit: "kg",
+        line4Left: "自动返回",
+        line4Right: "2s",
+        keyBack: "状态页",
+        keySure: "无动作"
+      }
+    };
+
+    function setState(name) {
+      const state = states[name];
+      const screen = document.getElementById("screen");
+      screen.className = "screen";
+      if (state.screenClass) {
+        screen.classList.add(state.screenClass);
+      }
+
+      document.querySelectorAll(".tab").forEach((tab) => {
+        tab.classList.toggle("active", tab.dataset.state === name);
+      });
+
+      document.getElementById("line1").textContent = state.line1;
+      document.getElementById("statusPill").textContent = state.pill;
+      document.getElementById("line2Label").textContent = state.line2Label;
+      document.getElementById("line2Value").textContent = state.line2Value;
+      document.getElementById("line2Unit").textContent = state.line2Unit;
+      document.getElementById("line3Label").textContent = state.line3Label;
+      document.getElementById("line3Value").textContent = state.line3Value;
+      document.getElementById("line3Unit").textContent = state.line3Unit;
+      document.getElementById("line4Left").textContent = state.line4Left;
+      document.getElementById("line4Right").textContent = state.line4Right;
+      document.getElementById("keyBack").textContent = state.keyBack;
+      document.getElementById("keySure").textContent = state.keySure;
+    }
+
+    document.querySelectorAll(".tab").forEach((tab) => {
+      tab.addEventListener("click", () => setState(tab.dataset.state));
+    });
+
+    document.querySelector('[data-key="sure"]').addEventListener("click", () => setState("confirm"));
+  </script>
+</body>
+</html>

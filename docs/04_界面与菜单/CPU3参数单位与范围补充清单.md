@@ -1,6 +1,6 @@
 # CPU3参数单位与范围补充清单
 
-日期：2026-06-10
+日期：2026-06-13
 
 ## 1. 结论
 
@@ -14,7 +14,8 @@
 - 暂不启用新的静态范围：罐高、盲区、分布上下限、单点位置、电机距离等依赖现场配置或其它参数，不适合直接写死范围。
 - 本轮已从源码确认：电机限速为 `0.01m/min`，液位找液/滞后阈值为整数 `Hz` 频率差，运行态角度为 `0.01°`，探底角度阈值为 `°`，水位阈值类电容为 `pF` 且参数原始值 `x1000`，零点电容为 `0.1pF`，磁通量 D/T 本质为密度/温度修正量。
 - 已完成密度手输值口径整改：CPU3 V1.11.1.2 起，`密度手输值` 按 `kg/m3 x10` 显示和保存，范围为 `0.0~2000.0 kg/m3`；CPU3 本地手输值字段改为 32 位，避免大于 255 的手输值被截断。
-- CPU3 本地参数结构已变更，`CPU3_PARAM_VERSION` 从 `0x0002` 升至 `0x0003`；升级后 CPU3 本地显示/通信参数会按默认值重建，CPU2 设备参数和 `DEVICE_PROTOCOL_VERSION` 不受影响。
+- CPU3 本地参数结构已继续演进，当前 `CPU3_PARAM_VERSION` 为 `0x0004`，并保留 `0x0003` 迁移路径；CPU2 设备参数和共享 `DEVICE_PROTOCOL_VERSION` 仍按协议文档单独维护。
+- 已同步读取部件参数状态页口径：X/Y 角按 `debug_data.angle_x/y` 的角度 `x100` 显示，读取参数态不受 `bottom_detect_mode` 限制；蓝牙 RSSI 为运行态字段，单位 `dB`，`rssi_valid == 0` 时显示 `RSSI:N/A`，不属于 `param_meta[]` 可写参数。
 - 仍需现场或算法确认：称重类原始量含义、尺带伸缩率单位、是否给液位探头距差启用范围校验，以及“尺带类型”选项与厚度映射。
 
 ## 2. 参数元数据规则
@@ -100,6 +101,8 @@ CPU3 V1.11.1.1 起，R1~R4 的 HH/H/L/LL 报警阈值和报警滞回不在 `para
 | 电机限速 | 原始值单位为 `0.01m/min`；`200` 表示 `2.00m/min` | `max_motor_speed` 注释、运动接口 `speed_x100` 和日志均按 `0.01m/min` | 可显示为 `m/min`，`point=2`，单位 `m/min` |
 | 运行态电机速度 | 原始值单位为 `0.01m/min` | `debug_data.motor_speed` 注释和打印口径 | 状态/调试页按 `m/min` 显示时用 `point=2` |
 | 运行态 X/Y 角 | 原始值为角度 `x100`；`123` 表示 `1.23°` | 读陀螺仪后写入 `angle_x = ax * 100`，显示侧 `point=2` | 已按 `°`、2 位小数显示，保持 |
+| 读取参数态 X/Y 角 | 与运行态 X/Y 角同口径；读取部件参数完成态直接按 `debug_data.angle_x/y` 显示，不依赖 `bottom_detect_mode` | `CMD_ReadPartParams()` 读取陀螺仪后刷新 `debug_data.angle_x/y`，CPU3 状态页读取参数上下文直接使用该快照 | 读取参数页保持 `°`、2 位小数；探底/罐高上下文仍按探底模式控制角度显示 |
+| 蓝牙连接 RSSI | 运行态原始值为 dB；`rssi_valid` 表示当前快照是否有效 | CPU2 发布 `wireless_pairing_status.rssi_valid/rssi`，CPU3 通过协议 9 读取 | 状态页只读显示 `RSSI:<value>dB` 或 `RSSI:N/A`；不是 `param_meta[]` 参数 |
 | 液位找液阈值 | 原始值为整数 `Hz` 频率差；默认 `15` 表示 `15Hz` | 精找液位中直接比较 `frequency_difference` 与 `oilLevelThreshold` | CPU3 V1.11.1.2 起显示单位 `Hz`，`point=0` |
 | 液位滞后阈值 | 原始值为整数 `Hz` 频率差；默认 `20` 表示 `20Hz` | 跟随监测中直接比较 `fabs(frequency_difference)` 与 `oilLevelHysteresisThreshold` | CPU3 V1.11.1.2 起显示单位 `Hz`，`point=0` |
 | 探底角度阈值 | 原始值为整度；默认 `12` 表示 `12°` | 默认值注释为“单位(度)/倍率*1”，探底判断中直接转 `float` 比较 | 可补单位 `°`，小数位保持 `0` |

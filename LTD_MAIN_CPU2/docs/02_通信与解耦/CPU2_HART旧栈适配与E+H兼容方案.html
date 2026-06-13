@@ -1,0 +1,1057 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CPU2 HART旧栈适配与E+H兼容方案</title>
+  <style>
+    :root {
+      --bg: #f3f6fa;
+      --panel: #ffffff;
+      --ink: #17233a;
+      --muted: #5b6d84;
+      --line: #d5e0ec;
+      --blue: #245f9f;
+      --green: #1f7a5f;
+      --amber: #a66812;
+      --red: #b63d45;
+      --soft-blue: #eef6ff;
+      --soft-green: #edf8f3;
+      --soft-amber: #fff6df;
+      --soft-red: #fff0f1;
+      --code: #edf3f9;
+      --shadow: 0 12px 28px rgba(35, 58, 92, 0.08);
+      --radius: 8px;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font: 15px/1.72 "Microsoft YaHei", "Segoe UI", Arial, sans-serif;
+    }
+
+    a {
+      color: #1d63aa;
+      text-decoration: none;
+    }
+
+    code {
+      padding: 1px 5px;
+      border: 1px solid #d5e1ee;
+      border-radius: 5px;
+      background: var(--code);
+      font-family: Consolas, "Courier New", monospace;
+      font-size: 0.94em;
+    }
+
+    .wrap {
+      width: min(1320px, calc(100vw - 48px));
+      margin: 0 auto;
+      padding: 28px 0 56px;
+    }
+
+    .hero {
+      padding: 32px 36px;
+      color: #fff;
+      border-radius: var(--radius);
+      background: linear-gradient(135deg, #183a61 0%, #245f9f 55%, #0f766e 100%);
+      box-shadow: var(--shadow);
+    }
+
+    h1,
+    h2,
+    h3 {
+      margin: 0;
+      line-height: 1.28;
+    }
+
+    h1 {
+      font-size: clamp(27px, 3vw, 42px);
+      letter-spacing: 0;
+    }
+
+    h2 {
+      margin-bottom: 12px;
+      font-size: 24px;
+    }
+
+    h3 {
+      margin: 18px 0 8px;
+      font-size: 18px;
+    }
+
+    p {
+      margin: 8px 0;
+    }
+
+    .hero p {
+      max-width: 1060px;
+      margin-top: 14px;
+      color: rgba(255, 255, 255, 0.9);
+      font-size: 16px;
+    }
+
+    .meta-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+      margin-top: 24px;
+    }
+
+    .meta {
+      min-height: 82px;
+      padding: 13px 15px;
+      border: 1px solid rgba(255, 255, 255, 0.24);
+      border-radius: var(--radius);
+      background: rgba(255, 255, 255, 0.08);
+    }
+
+    .meta span {
+      display: block;
+      margin-bottom: 6px;
+      color: rgba(255, 255, 255, 0.72);
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .meta strong {
+      display: block;
+      color: #fff;
+      overflow-wrap: anywhere;
+      font-size: 14px;
+    }
+
+    .topnav {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin: 18px 0;
+      padding: 10px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: rgba(255, 255, 255, 0.95);
+      box-shadow: 0 6px 18px rgba(35, 58, 92, 0.06);
+    }
+
+    .topnav a {
+      padding: 7px 10px;
+      border: 1px solid #d9e5f2;
+      border-radius: 6px;
+      background: #f8fbff;
+      color: #24577f;
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    .section {
+      margin: 18px 0;
+      padding: 22px 24px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--panel);
+      box-shadow: var(--shadow);
+    }
+
+    .lead {
+      color: var(--muted);
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 12px;
+      margin-top: 14px;
+    }
+
+    .card {
+      padding: 14px;
+      border: 1px solid #dce7f3;
+      border-radius: var(--radius);
+      background: #fbfdff;
+    }
+
+    .card b {
+      display: block;
+      margin-bottom: 6px;
+    }
+
+    .callout {
+      margin: 14px 0;
+      padding: 12px 14px;
+      border: 1px solid #b9d5f1;
+      border-left: 5px solid var(--blue);
+      border-radius: var(--radius);
+      background: var(--soft-blue);
+    }
+
+    .callout.warn {
+      border-color: #efd087;
+      border-left-color: var(--amber);
+      background: var(--soft-amber);
+    }
+
+    .callout.danger {
+      border-color: #efb5bc;
+      border-left-color: var(--red);
+      background: var(--soft-red);
+    }
+
+    .callout.ok {
+      border-color: #b9ddca;
+      border-left-color: var(--green);
+      background: var(--soft-green);
+    }
+
+    .status {
+      display: inline-flex;
+      align-items: center;
+      min-height: 24px;
+      padding: 2px 9px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    .status.ok {
+      color: #176348;
+      background: #e5f5ec;
+      border: 1px solid #b9ddca;
+    }
+
+    .status.warn {
+      color: #865007;
+      background: #fff4d7;
+      border: 1px solid #e8ca82;
+    }
+
+    .status.block {
+      color: #98323a;
+      background: #ffebee;
+      border: 1px solid #efb5bc;
+    }
+
+    table {
+      width: 100%;
+      margin: 12px 0;
+      border-collapse: collapse;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: #fff;
+    }
+
+    th,
+    td {
+      padding: 10px 11px;
+      border-bottom: 1px solid #e1e9f2;
+      border-right: 1px solid #e1e9f2;
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th {
+      color: #233d5c;
+      background: #f3f8fe;
+      font-size: 13px;
+    }
+
+    tr:last-child td {
+      border-bottom: 0;
+    }
+
+    th:last-child,
+    td:last-child {
+      border-right: 0;
+    }
+
+    ul,
+    ol {
+      margin: 8px 0 8px 22px;
+      padding: 0;
+    }
+
+    li {
+      margin: 5px 0;
+    }
+
+    .flow {
+      margin-top: 14px;
+      padding: 16px;
+      border: 1px solid #dce7f3;
+      border-radius: var(--radius);
+      background: #fbfdff;
+      overflow-x: auto;
+    }
+
+    .flow svg {
+      min-width: 1040px;
+      width: 100%;
+      height: auto;
+      display: block;
+    }
+
+    .node {
+      fill: #eef6ff;
+      stroke: #6fa5db;
+      stroke-width: 2;
+    }
+
+    .node.green {
+      fill: #edf8f3;
+      stroke: #49a77c;
+    }
+
+    .node.amber {
+      fill: #fff6df;
+      stroke: #d69a2d;
+    }
+
+    .node.red {
+      fill: #fff0f1;
+      stroke: #d56a73;
+    }
+
+    .edge {
+      fill: none;
+      stroke: #617991;
+      stroke-width: 2;
+    }
+
+    .nt {
+      fill: #17233a;
+      font-size: 16px;
+      font-weight: 800;
+      text-anchor: middle;
+    }
+
+    .ns {
+      fill: #5b6d84;
+      font-size: 12px;
+      text-anchor: middle;
+    }
+
+    .source-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 10px;
+      margin-top: 12px;
+    }
+
+    .source {
+      padding: 11px;
+      border: 1px solid #dce7f3;
+      border-radius: var(--radius);
+      background: #fbfdff;
+    }
+
+    .source b {
+      display: block;
+      overflow-wrap: anywhere;
+    }
+
+    .source span {
+      display: block;
+      color: #4e6d8f;
+      font-family: Consolas, "Courier New", monospace;
+      font-size: 13px;
+    }
+
+    @media (max-width: 780px) {
+      .wrap {
+        width: calc(100vw - 28px);
+        padding-top: 16px;
+      }
+
+      .hero {
+        padding: 24px 20px;
+      }
+
+      .meta-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .section {
+        padding: 18px;
+      }
+
+      table {
+        display: block;
+        overflow-x: auto;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header class="hero">
+      <h1>CPU2 HART旧栈适配与E+H兼容方案</h1>
+      <p>本文整理当前建议方案：放弃现有手写 HART 解析器，优先复用 CPU2_v1.563 的 HART 协议栈和 DD/E+H 映射，但硬件收发、数据源、命令分发和参数存储必须按当前 LTD_MAIN_CPU2 架构重新适配。</p>
+      <div class="meta-grid">
+        <div class="meta"><span>适用工程</span><strong>D:\CUBE\LTD_MAIN_CPU2</strong></div>
+        <div class="meta"><span>参考旧工程</span><strong>D:\程序存档\CPU2_v1.563\CPU2_v1.563</strong></div>
+        <div class="meta"><span>目标</span><strong>HART 标准命令 + DD 私有命令 + E+H 兼容</strong></div>
+        <div class="meta"><span>整理日期</span><strong>2026-06-13</strong></div>
+      </div>
+    </header>
+
+    <nav class="topnav">
+      <a href="#decision">1. 结论</a>
+      <a href="#current">2. 当前现状</a>
+      <a href="#architecture">3. 目标架构</a>
+      <a href="#porting">4. 适配点</a>
+      <a href="#eh">5. E+H 兼容</a>
+      <a href="#storage">6. 参数与版本</a>
+      <a href="#plan">7. 落地计划</a>
+      <a href="#validation">8. 验证清单</a>
+      <a href="#sources">9. 源码索引</a>
+    </nav>
+
+    <section class="section" id="decision">
+      <h2>1. 结论</h2>
+      <div class="callout danger">
+        <b>首要门槛：不能直接无脑链接旧库。</b>
+        <p>旧工程的 <code>COMMU/HartM3.lib</code> 是 ARM EABI archive，目标属性显示为 Cortex-M3、Thumb-2、软浮点风格；当前 CPU2 工程工具链使用 Cortex-M4 hard-float：<code>-mcpu=cortex-m4 -mthumb -mfpu=fpv4-sp-d16 -mfloat-abi=hard</code>。如果没有 M4/GCC/hard-float 版本的库或源码，直接移植可能在链接阶段失败，或引入浮点 ABI 风险。</p>
+      </div>
+      <div class="grid">
+        <div class="card">
+          <b>推荐路线</b>
+          <p>拿到匹配当前工具链的 HART 库或源码后，移植旧工程的 <code>interface.h</code>、<code>hart_protocol.c</code>、<code>hart_dd.c/h</code> 逻辑，并新写 HAL 适配层。</p>
+        </div>
+        <div class="card">
+          <b>保留内容</b>
+          <p>保留当前工程 USART2、PB7 <code>HART_RTS</code>、AD5421、<code>g_deviceParams</code>、<code>g_measurement</code>、主循环命令消费模型。</p>
+        </div>
+        <div class="card">
+          <b>不建议照搬</b>
+          <p>不要复制旧工程 UART4、PD4、DMA2_CH5、Timer1 寄存器级硬件代码；这些和当前 STM32F429 HAL/CubeMX 工程不匹配。</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="current">
+      <h2>2. 当前现状</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>项目</th>
+            <th>当前 LTD_MAIN_CPU2</th>
+            <th>旧 CPU2_v1.563</th>
+            <th>适配判断</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>协议栈</td>
+            <td><code>Services/Hart/hart.c</code> 手写解析，主要支持 0/1/2/3/6。</td>
+            <td><code>HartM3.lib</code> + <code>hart_protocol.c</code>，支持标准命令并通过回调扩展 DD 私有命令。</td>
+            <td><span class="status warn">需要替换</span> 当前解析器能力不足，E+H 兼容应接入旧 DD 模型。</td>
+          </tr>
+          <tr>
+            <td>硬件接口</td>
+            <td>USART2、DMA1 Stream5/6、PB7 <code>HART_RTS</code>、AD5421。</td>
+            <td>UART4、DMA2_CH5、PD4 <code>HART_RTS</code>、AD5421。</td>
+            <td><span class="status ok">保留当前硬件</span> 只重写端口适配层。</td>
+          </tr>
+          <tr>
+            <td>串口参数</td>
+            <td>1200、9B、<code>UART_PARITY_NONE</code>。</td>
+            <td>1200、9 位、1 stop、Odd parity。</td>
+            <td><span class="status block">必须复核</span> HART 常规应使用奇校验，需结合调制解调器和 E+H 主站实测。</td>
+          </tr>
+          <tr>
+            <td>数据源</td>
+            <td><code>g_measurement</code>、<code>g_deviceParams</code>。</td>
+            <td><code>result</code>、<code>systemparameter</code>、<code>InputRegisterArray</code>。</td>
+            <td><span class="status warn">需要桥接</span> 旧字段不能照搬，必须做当前快照映射。</td>
+          </tr>
+          <tr>
+            <td>命令执行</td>
+            <td>通过 <code>g_deviceParams.command</code> 进入主循环，由 <code>ProcessMeasureCmd()</code> 执行业务。</td>
+            <td>通过 DD coil 转 <code>ProcessWriteCoil()</code>。</td>
+            <td><span class="status ok">接入主循环</span> HART 回调只下发命令，不直接跑测量流程。</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="section" id="architecture">
+      <h2>3. 目标架构</h2>
+      <p class="lead">目标不是把旧工程全部搬进当前工程，而是把“协议栈/私有命令/DD 映射”作为独立服务，下面接当前 HAL 和业务数据。</p>
+      <div class="flow">
+        <svg viewBox="0 0 1120 520" role="img" aria-label="HART旧栈适配目标架构">
+          <defs>
+            <marker id="arrow" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto">
+              <path d="M0,0 L10,4 L0,8 Z" fill="#617991"></path>
+            </marker>
+          </defs>
+          <rect class="node green" x="70" y="46" width="220" height="72" rx="8"></rect>
+          <text class="nt" x="180" y="76">E+H/HART 主站</text>
+          <text class="ns" x="180" y="98">1200 bps FSK</text>
+
+          <rect class="node" x="430" y="46" width="250" height="72" rx="8"></rect>
+          <text class="nt" x="555" y="76">hart_port_hal.c</text>
+          <text class="ns" x="555" y="98">USART2 DMA + PB7 RTS + 5ms tick</text>
+
+          <rect class="node" x="820" y="46" width="230" height="72" rx="8"></rect>
+          <text class="nt" x="935" y="76">HartM3 协议栈</text>
+          <text class="ns" x="935" y="98">hrtInit / hrtGetChar / hrt5msCycle</text>
+
+          <rect class="node" x="820" y="190" width="230" height="72" rx="8"></rect>
+          <text class="nt" x="935" y="220">hart_protocol.c</text>
+          <text class="ns" x="935" y="242">ST_HART 回调和动态变量</text>
+
+          <rect class="node amber" x="820" y="334" width="230" height="72" rx="8"></rect>
+          <text class="nt" x="935" y="364">hart_dd.c/h</text>
+          <text class="ns" x="935" y="386">170/171/172/175/194/195</text>
+
+          <rect class="node" x="430" y="334" width="250" height="72" rx="8"></rect>
+          <text class="nt" x="555" y="364">hart_snapshot.c</text>
+          <text class="ns" x="555" y="386">g_measurement / g_deviceParams 映射</text>
+
+          <rect class="node green" x="70" y="334" width="220" height="72" rx="8"></rect>
+          <text class="nt" x="180" y="364">当前业务主循环</text>
+          <text class="ns" x="180" y="386">g_deviceParams.command -> ProcessMeasureCmd</text>
+
+          <path class="edge" d="M290 82 L430 82" marker-end="url(#arrow)"></path>
+          <path class="edge" d="M680 82 L820 82" marker-end="url(#arrow)"></path>
+          <path class="edge" d="M935 118 L935 190" marker-end="url(#arrow)"></path>
+          <path class="edge" d="M935 262 L935 334" marker-end="url(#arrow)"></path>
+          <path class="edge" d="M820 370 L680 370" marker-end="url(#arrow)"></path>
+          <path class="edge" d="M430 370 L290 370" marker-end="url(#arrow)"></path>
+          <path class="edge" d="M555 334 L555 118" marker-end="url(#arrow)"></path>
+        </svg>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>模块</th>
+            <th>职责</th>
+            <th>建议来源</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>interface.h</code></td>
+            <td>定义 <code>ST_HART</code>、<code>ST_PARA_HART</code>、回调函数类型和库 API。</td>
+            <td>从旧工程移植，必要时按当前类型风格调整。</td>
+          </tr>
+          <tr>
+            <td><code>hart_protocol.c</code></td>
+            <td>初始化 HART 数据、注册回调、更新 PV/SV/TV/FV、电流和私有命令分发。</td>
+            <td>移植旧工程逻辑，去掉旧硬件初始化。</td>
+          </tr>
+          <tr>
+            <td><code>hart_dd.c/h</code></td>
+            <td>实现 DD 参数读写、测量值读取、命令下发、E+H 读数据和下发命令。</td>
+            <td>移植旧工程表结构，重做字段映射。</td>
+          </tr>
+          <tr>
+            <td><code>hart_port_hal.c</code></td>
+            <td>封装 USART2、DMA、RTS、5ms tick、发送完成回接收。</td>
+            <td>当前工程新写，禁止照搬旧寄存器级代码。</td>
+          </tr>
+          <tr>
+            <td><code>hart_snapshot.c</code></td>
+            <td>把当前测量结果和参数转换为 HART/DD/E+H 所需数据。</td>
+            <td>当前工程新写，集中处理单位和缩放。</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="section" id="porting">
+      <h2>4. 关键适配点</h2>
+      <h3>4.1 初始化顺序</h3>
+      <ol>
+        <li><code>init_device_params()</code> 先加载当前设备参数。</li>
+        <li>AD5421 初始化归属要统一，建议保留在模拟输出/BSP 层，不再让 <code>HartInit()</code> 内部重复初始化。</li>
+        <li><code>HartInit()</code> 只负责 HART 参数加载、<code>ST_HART</code> 回调注册、<code>hrtInit()</code> 和 DD 初始化。</li>
+        <li>USART2 RX DMA 或 RXNE 接收启动由当前 HAL 串口层负责。</li>
+      </ol>
+
+      <h3>4.2 接收路径</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>方案</th>
+            <th>做法</th>
+            <th>评价</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>RXNE 单字节</td>
+            <td>USART2 每收到 1 字节，写入 <code>HartData.RxdData</code> 后调用 <code>hrtGetChar()</code>。</td>
+            <td>最贴近旧库调用模型，但要确认回调中不会触发重处理、打印或阻塞。</td>
+          </tr>
+          <tr>
+            <td>DMA + IDLE 批量喂入</td>
+            <td>沿用当前 DMA IDLE 收帧，收到一段数据后循环逐字节调用 <code>hrtGetChar()</code>。</td>
+            <td>改动较小，但要验证库内部对字节间隔、前导符和超时判断是否依赖实时 5ms tick。</td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="callout warn">
+        <b>中断边界要求</b>
+        <p>无论采用哪种路径，私有命令最终不要在中断里直接执行测量流程。HART 回调只解析并写入 <code>g_deviceParams.command</code> 或轻量状态，实际测量仍由 <code>App_MainLoop()</code> 统一消费。</p>
+      </div>
+
+      <h3>4.3 发送路径</h3>
+      <ol>
+        <li>库调用 <code>HartSendDataFunc</code> 时，先将 PB7 <code>HART_RTS</code> 拉低进入发送。</li>
+        <li>调用 <code>HAL_UART_Transmit_DMA(&amp;huart2, pData, len)</code>。</li>
+        <li>发送完成后等待 UART TC，确认最后一位已经移出，再拉高 PB7 回接收。</li>
+        <li>重新启动 RX DMA 或继续打开 RXNE 接收。</li>
+      </ol>
+
+      <h3>4.4 动态变量映射</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>HART 变量</th>
+            <th>旧工程来源</th>
+            <th>当前建议来源</th>
+            <th>单位口径</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>PV / 液位</td>
+            <td><code>result.OilLevel / 10.0</code></td>
+            <td><code>g_measurement.oil_measurement.oil_level</code></td>
+            <td>确认当前字段为 0.1mm 后转换为 mm。</td>
+          </tr>
+          <tr>
+            <td>SV / 温度</td>
+            <td><code>result.TemperatureValueAverage / 10.0</code></td>
+            <td><code>g_measurement.density_distribution.average_temperature</code> 或单点温度</td>
+            <td>当前字段常见为 0.01°C，需统一转换。</td>
+          </tr>
+          <tr>
+            <td>TV / 密度</td>
+            <td><code>result.DensityValueAverage / 10.0</code></td>
+            <td><code>g_measurement.density_distribution.average_density</code> 或单点密度</td>
+            <td>按当前密度单位确认缩放。</td>
+          </tr>
+          <tr>
+            <td>QV / 水位</td>
+            <td><code>result.WaterValue / 10.0</code></td>
+            <td><code>g_measurement.water_measurement.water_level</code></td>
+            <td>确认当前字段为 0.1mm 后转换为 mm。</td>
+          </tr>
+          <tr>
+            <td>电流/百分比</td>
+            <td><code>result.CurrentValue</code></td>
+            <td>AO 输出缓存或按 PV 经 <code>IoutProcessValue()</code> 计算</td>
+            <td>必须和 AD5421 实际输出保持一致。</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="section" id="eh">
+      <h2>5. E+H 兼容方案</h2>
+      <p class="lead">旧工程的 E+H 兼容不是单独的 Modbus/E+H 协议栈，而是放在 HART DD 私有命令里，通过命令 194/195 承载 E+H NMS 语义。</p>
+
+      <h3>5.1 私有命令</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>命令</th>
+            <th>名称</th>
+            <th>当前适配要求</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>170</code></td>
+            <td>读取测量值</td>
+            <td>从当前 <code>g_measurement</code> 或 Modbus 输入寄存器快照读取。</td>
+          </tr>
+          <tr>
+            <td><code>171</code></td>
+            <td>读取参数</td>
+            <td>读取映射到当前 <code>g_deviceParams</code> 或 HART 独立参数块的数据。</td>
+          </tr>
+          <tr>
+            <td><code>172</code></td>
+            <td>写参数</td>
+            <td>写入前必须先检查权限、状态和范围，不能照搬旧工程“先写 RAM 后校验”的顺序。</td>
+          </tr>
+          <tr>
+            <td><code>175</code></td>
+            <td>下发 DD coil 命令</td>
+            <td>转换为当前 <code>CommandType</code>，由主循环执行。</td>
+          </tr>
+          <tr>
+            <td><code>194</code></td>
+            <td>E+H 读数据</td>
+            <td>按 3 字节地址返回过程状态、命令状态、距离、密度、停止液位等数据。</td>
+          </tr>
+          <tr>
+            <td><code>195</code></td>
+            <td>E+H 下发命令</td>
+            <td>解析 <code>0x037E00 + 2 字节命令码</code>，转换为当前 <code>CommandType</code>。</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>5.2 E+H 数据地址映射</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>E+H 地址</th>
+            <th>语义</th>
+            <th>当前建议来源</th>
+            <th>待确认点</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>0x037200</code></td>
+            <td>Process condition</td>
+            <td>默认返回通用过程条件 <code>2577</code>。</td>
+            <td>是否需要按液面稳定/扰动扩展。</td>
+          </tr>
+          <tr>
+            <td><code>0x037E00</code></td>
+            <td>Gauge command/status</td>
+            <td>由 <code>g_measurement.device_status.device_state/current_command</code> 映射。</td>
+            <td>状态到 E+H 命令码的优先级。</td>
+          </tr>
+          <tr>
+            <td><code>0x03DA00</code></td>
+            <td>Distance</td>
+            <td>优先使用探头/浮子当前位置或罐高减液位。</td>
+            <td>现场主站期望“空高”还是“浮子距离”。</td>
+          </tr>
+          <tr>
+            <td><code>0x03E200</code></td>
+            <td>Upper density</td>
+            <td>密度分布上层点或平均密度。</td>
+            <td>没有分层结果时的降级策略。</td>
+          </tr>
+          <tr>
+            <td><code>0x03E300</code></td>
+            <td>Middle density</td>
+            <td>密度分布中层点或平均密度。</td>
+            <td>同上。</td>
+          </tr>
+          <tr>
+            <td><code>0x03E400</code></td>
+            <td>Lower density</td>
+            <td>密度分布下层点或平均密度。</td>
+            <td>同上。</td>
+          </tr>
+          <tr>
+            <td><code>0x040B00</code></td>
+            <td>Low stop level</td>
+            <td><code>g_deviceParams.blindZone</code> 或下限停止液位。</td>
+            <td>当前工程是否已有独立低停止参数。</td>
+          </tr>
+          <tr>
+            <td><code>0x040C00</code></td>
+            <td>High stop level</td>
+            <td><code>g_deviceParams.tankHeight</code> 或高停止液位。</td>
+            <td>是否需要扣除盲区或机械保护距离。</td>
+          </tr>
+          <tr>
+            <td><code>0x044100</code></td>
+            <td>Profile density</td>
+            <td>密度分布平均密度或最近一次 profile 密度。</td>
+            <td>是否要锁存最近一次完成结果。</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>5.3 E+H 命令码映射</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>E+H 命令码</th>
+            <th>旧工程语义</th>
+            <th>当前建议映射</th>
+            <th>说明</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>1334</code></td>
+            <td>Level</td>
+            <td><code>CMD_FIND_OIL</code></td>
+            <td>液位测量。</td>
+          </tr>
+          <tr>
+            <td><code>1335</code></td>
+            <td>Up</td>
+            <td><code>CMD_FORCE_LIFT_ZERO</code> 或 <code>CMD_BACK_ZERO</code></td>
+            <td>需按现场“提浮子到原点”定义确认。</td>
+          </tr>
+          <tr>
+            <td><code>1336</code></td>
+            <td>Stop</td>
+            <td><code>CMD_CANCEL_MEASUREMENT</code></td>
+            <td>建议实现真正取消/停止，不照搬旧工程映射到取重量。</td>
+          </tr>
+          <tr>
+            <td><code>1374</code></td>
+            <td>Bottom level</td>
+            <td><code>CMD_FIND_BOTTOM</code></td>
+            <td>罐底测量。</td>
+          </tr>
+          <tr>
+            <td><code>1384</code> / <code>1777</code></td>
+            <td>Interface level</td>
+            <td><code>CMD_FIND_WATER</code></td>
+            <td>按上下界面液位现场口径确认是否都走水位。</td>
+          </tr>
+          <tr>
+            <td><code>1386</code> / <code>1387</code> / <code>1388</code></td>
+            <td>Upper/Middle/Lower density</td>
+            <td><code>CMD_MEASURE_DENSITY_RANGE</code> 或 <code>CMD_WARTSILA_DENSITY_RANGE</code></td>
+            <td>当前密度流程较多，需确定客户使用哪套。</td>
+          </tr>
+          <tr>
+            <td><code>1390</code></td>
+            <td>Water dip</td>
+            <td><code>CMD_FIND_WATER</code></td>
+            <td>水位测量。</td>
+          </tr>
+          <tr>
+            <td><code>1690</code> / <code>1691</code> / <code>1692</code></td>
+            <td>Tank/interface/manual profile</td>
+            <td><code>CMD_MEASURE_DENSITY_RANGE</code> 或 <code>CMD_WARTSILA_DENSITY_RANGE</code></td>
+            <td>建议用 profile 完成锁存结果满足 E+H 读取。</td>
+          </tr>
+          <tr>
+            <td><code>1715</code></td>
+            <td>Release overtension</td>
+            <td><code>CMD_FORCE_LIFT_ZERO</code> 或独立释放过张力命令</td>
+            <td>如现场有过张力恢复流程，建议新增明确命令语义。</td>
+          </tr>
+          <tr>
+            <td><code>1778</code></td>
+            <td>Self check</td>
+            <td>暂返回不支持，或新增自检命令</td>
+            <td>当前未看到等价正式业务命令。</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="section" id="storage">
+      <h2>6. 参数存储与版本影响</h2>
+      <h3>6.1 HART 参数存储</h3>
+      <div class="callout ok">
+        <b>建议：HART 环境参数单独建 FRAM 块。</b>
+        <p>旧工程 <code>ST_PARA_HART</code> 是 128 字节并带 CRC，包含 tag、long tag、description、polling address、trim、PV range、IOUT range、DV map 等。当前 <code>DeviceParameters</code> 有 <code>struct_size</code>、<code>DEVICE_PARAM_VERSION</code> 和 A/B 分区校验。若只是 HART 自有参数，单独存储可以避免扰动主参数结构。</p>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>方案</th>
+            <th>优点</th>
+            <th>风险</th>
+            <th>建议</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>独立 HART FRAM 块</td>
+            <td>不改变 <code>DeviceParameters</code> 布局；CPU3 协议不一定受影响。</td>
+            <td>需要规划地址、CRC 和默认恢复逻辑。</td>
+            <td><span class="status ok">优先</span></td>
+          </tr>
+          <tr>
+            <td>并入 <code>DeviceParameters</code></td>
+            <td>统一参数读写和备份。</td>
+            <td>会改变结构体大小，涉及 <code>DEVICE_PARAM_VERSION</code>、升级清参数风险和版本文档。</td>
+            <td><span class="status warn">仅在 CPU3 也要配置时考虑</span></td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>6.2 CPU2/CPU3 协议版本</h3>
+      <ul>
+        <li>如果 HART 只在 CPU2 内部运行，不新增 CPU3 菜单/寄存器/共享字段，通常不需要改变 <code>DEVICE_PROTOCOL_VERSION</code>。</li>
+        <li>如果要在 CPU3 显示或配置 HART tag、地址、E+H 模式、DD 参数，则属于 CPU2/CPU3 共享协议变化，必须同步 CPU2 和 CPU3 的 <code>DEVICE_PROTOCOL_VERSION</code>。</li>
+        <li>如果新增或改变 <code>DeviceParameters</code> 字段，必须评估 <code>DEVICE_PARAM_VERSION</code>、旧 FRAM 是否加载失败、升级是否会恢复出厂参数。</li>
+      </ul>
+    </section>
+
+    <section class="section" id="plan">
+      <h2>7. 推荐落地计划</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>阶段</th>
+            <th>目标</th>
+            <th>主要动作</th>
+            <th>退出标准</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>阶段 0</td>
+            <td>库兼容性验证</td>
+            <td>获取 M4/GCC/hard-float 库或源码；最小工程链接 <code>hrtInit</code>、<code>hrt5msCycle</code>、<code>hrtGetChar</code>。</td>
+            <td>当前工具链可稳定链接，无浮点 ABI 错误。</td>
+          </tr>
+          <tr>
+            <td>阶段 1</td>
+            <td>HAL 端口层</td>
+            <td>实现 USART2 收发、PB7 RTS、TX 完成回接收、5ms tick。</td>
+            <td>逻辑分析仪可看到前导符、RTS 时序和完整响应帧。</td>
+          </tr>
+          <tr>
+            <td>阶段 2</td>
+            <td>标准 HART 命令</td>
+            <td>接通 0/1/2/3/6，PV/SV/TV/FV 和电流来自当前测量快照。</td>
+            <td>HART 主站读取基本变量正常，AD5421 电流一致。</td>
+          </tr>
+          <tr>
+            <td>阶段 3</td>
+            <td>DD 私有命令</td>
+            <td>移植 170/171/172/175，建立参数、结果、命令映射表。</td>
+            <td>读写参数、读取结果、下发命令都有明确响应码和状态限制。</td>
+          </tr>
+          <tr>
+            <td>阶段 4</td>
+            <td>E+H 兼容</td>
+            <td>实现 194/195，完成 E+H 地址表和命令码映射。</td>
+            <td>E+H 设备或主站能读取关键地址并触发液位/水位/密度命令。</td>
+          </tr>
+          <tr>
+            <td>阶段 5</td>
+            <td>文档和版本收口</td>
+            <td>补映射表、联调记录、协议影响、参数升级说明和测试报告。</td>
+            <td>代码、文档、版本影响判断一致。</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="section" id="validation">
+      <h2>8. 验证清单</h2>
+      <div class="grid">
+        <div class="card">
+          <b>构建验证</b>
+          <ul>
+            <li>确认 HART 库和当前工具链 ABI 匹配。</li>
+            <li>运行 <code>cmake --build build\LTD_MAIN_CPU2</code>。</li>
+            <li>检查 map 文件中 HART 库符号是否按预期链接。</li>
+          </ul>
+        </div>
+        <div class="card">
+          <b>协议帧验证</b>
+          <ul>
+            <li>命令 0/1/2/3/6 golden frame。</li>
+            <li>私有命令 170/171/172/175/194/195 golden frame。</li>
+            <li>错误帧、短地址、长地址、BCC、长度异常。</li>
+          </ul>
+        </div>
+        <div class="card">
+          <b>硬件时序验证</b>
+          <ul>
+            <li>USART2 1200 波特率和奇偶校验。</li>
+            <li>RTS 发送前拉低、最后一位发完后拉高。</li>
+            <li>HART 调制解调器载波和前导符数量。</li>
+          </ul>
+        </div>
+        <div class="card">
+          <b>E+H 联调验证</b>
+          <ul>
+            <li>读 <code>0x037200</code>、<code>0x037E00</code>、<code>0x03DA00</code>。</li>
+            <li>下发 1334、1336、1374、1390、1690/1691。</li>
+            <li>确认 E+H 主站状态码和测量结果刷新符合预期。</li>
+          </ul>
+        </div>
+        <div class="card">
+          <b>业务安全验证</b>
+          <ul>
+            <li>非待机状态写参数被拒绝。</li>
+            <li>命令只进入主循环，不在中断里直接执行。</li>
+            <li>错误状态和取消命令不会导致电机异常动作。</li>
+          </ul>
+        </div>
+        <div class="card">
+          <b>参数兼容验证</b>
+          <ul>
+            <li>HART 参数 CRC 错误时恢复默认或上报明确错误。</li>
+            <li>如改变 <code>DeviceParameters</code>，验证旧 FRAM 升级路径。</li>
+            <li>CPU3 是否需要显示/配置 HART 参数已经明确。</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="sources">
+      <h2>9. 源码和资料索引</h2>
+      <div class="source-grid">
+        <div class="source">
+          <b>当前 HART 手写解析</b>
+          <span>D:\CUBE\LTD_MAIN_CPU2\Services\Hart\hart.c</span>
+          <p>当前支持 0/1/2/3/6，存在演示变量和中断内解析发送链路。</p>
+        </div>
+        <div class="source">
+          <b>当前 HART 接口头文件</b>
+          <span>D:\CUBE\LTD_MAIN_CPU2\Services\Hart\hart.h</span>
+          <p>当前帧结构、命令号、厂商/设备 ID 和 HART API。</p>
+        </div>
+        <div class="source">
+          <b>当前 USART2 收发</b>
+          <span>D:\CUBE\LTD_MAIN_CPU2\Core\Src\usart.c</span>
+          <p>USART2 1200 bps、DMA 接收、TX 完成后回接收。</p>
+        </div>
+        <div class="source">
+          <b>当前 USART2 IDLE 中断</b>
+          <span>D:\CUBE\LTD_MAIN_CPU2\Core\Src\stm32f4xx_it.c</span>
+          <p>IDLE 中断停止 DMA、计算长度、调用 HART 解析并启动发送。</p>
+        </div>
+        <div class="source">
+          <b>当前参数和命令</b>
+          <span>D:\CUBE\LTD_MAIN_CPU2\Services\ParamStorage\system_parameter.h</span>
+          <p><code>CommandType</code>、<code>DeviceState</code>、<code>MeasurementResult</code>、<code>DeviceParameters</code>。</p>
+        </div>
+        <div class="source">
+          <b>当前主循环命令消费</b>
+          <span>D:\CUBE\LTD_MAIN_CPU2\Application\Src\app_main.c</span>
+          <p><code>g_deviceParams.command</code> 由主循环消费并调用 <code>ProcessMeasureCmd()</code>。</p>
+        </div>
+        <div class="source">
+          <b>旧 HART 库接口</b>
+          <span>D:\程序存档\CPU2_v1.563\CPU2_v1.563\COMMU\interface.h</span>
+          <p><code>ST_HART</code>、<code>ST_PARA_HART</code>、回调和库 API。</p>
+        </div>
+        <div class="source">
+          <b>旧 HART 协议封装</b>
+          <span>D:\程序存档\CPU2_v1.563\CPU2_v1.563\COMMU\hart_protocol.c</span>
+          <p>旧工程 HART 初始化、发送、电流、参数保存、私有命令分发和数据更新。</p>
+        </div>
+        <div class="source">
+          <b>旧 DD/E+H 映射</b>
+          <span>D:\程序存档\CPU2_v1.563\CPU2_v1.563\COMMU\hart_dd.c / hart_dd.h</span>
+          <p>170/171/172/175/194/195 命令和 E+H 数据/命令地址表。</p>
+        </div>
+        <div class="source">
+          <b>旧 HART 实现梳理</b>
+          <span>D:\程序存档\CPU2_v1.563\CPU2_v1.563\docs\CPU2_v1.563_HART实现梳理.html</span>
+          <p>此前整理的旧工程 HART 实现细节，可作为移植对照。</p>
+        </div>
+      </div>
+    </section>
+  </div>
+</body>
+</html>

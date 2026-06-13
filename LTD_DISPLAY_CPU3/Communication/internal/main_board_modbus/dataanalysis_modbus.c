@@ -598,6 +598,13 @@ void read_measurement_result_from_InputRegisters(uint16_t *regs) {
 	for (uint32_t channel = 0U; channel < RELAY_ALARM_CHANNEL_COUNT; channel++) {
 		read_relay_alarm_runtime_from_regs(cregs, channel, &g_measurement.relay_alarm_runtime[channel]);
 	}
+
+	/* ==== 蓝牙连接 RSSI 运行态，追加在继电器运行态之后，避免移动既有地址 ==== */
+	g_measurement.wireless_pairing_status.connection_valid = read_u32_from_regs(cregs, REG_WIRELESS_PAIRING_CONNECTION_VALID);
+	g_measurement.wireless_pairing_status.rssi_valid = read_u32_from_regs(cregs, REG_WIRELESS_PAIRING_RSSI_VALID);
+	g_measurement.wireless_pairing_status.rssi = read_i32_from_regs(cregs, REG_WIRELESS_PAIRING_RSSI);
+	g_measurement.wireless_pairing_status.connection_error_code = read_u32_from_regs(cregs, REG_WIRELESS_PAIRING_CONNECTION_ERROR_CODE);
+	g_measurement.wireless_pairing_status.rssi_update_counter = read_u32_from_regs(cregs, REG_WIRELESS_PAIRING_RSSI_UPDATE_COUNTER);
 }
 
 /* 解析03功能码保持寄存器数据 */

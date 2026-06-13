@@ -7,7 +7,7 @@
 - 字段位置：`HOLDREGISTER_DEVICEPARAM_PROTOCOL_VERSION`
 - 当前语义：CPU2/CPU3 共享协议版本
 - 旧程序语义：保留字段，默认值为 `0`
-- 当前程序语义：协议版本 `8`
+- 当前程序语义：协议版本 `9`
 
 该字段由原 `reserved1` 预留位正式替换而来，寄存器地址不移动，不新增存储字段。
 
@@ -24,6 +24,7 @@
 | 6 | V1.10.0.0 | V1.9.0.0 | 200 | 新增 `STATE_DEBUG_MODE = 0x0033`，用于 CPU2 串口调试指令执行期间通过 CPU3 显示“调试模式中”；原 `reserved2` 参数槽复用为故障自动恢复重跑上限；`empty_weight` 空载称重按 `int32_t` 有符号 32 位解释，寄存器地址和后续字段不移动。 |
 | 7 | V1.12.0.0 | V1.10.0.0 | 200 | 新增四路继电器报警输出配置和运行态共享区；CPU3 可显示、写入四路继电器报警输出配置，CPU2 执行 HH/H/L/LL、滞回、锁存清除和无效值策略。 |
 | 8 | V1.14.0.0 | V1.13.0.0 | 200 | `liquidLevelMeasurementMethod` 液位测量方式语义扩展：保留 0/1 原相对频率和定频步进方案，补实 2=密度连续找液位，新增 4=连续相对频率、5=连续定频；CPU3 菜单和参数范围同步允许 0..5。 |
+| 9 | V1.15.0.0 | V1.14.0.0 | 200 | 读取部件参数增加当前蓝牙连接 RSSI 快照；扩展 `WirelessPairingStatus` 并在输入寄存器尾部追加连接有效、RSSI 有效、RSSI 值、查询错误码和 RSSI 更新计数。 |
 
 ## 兼容判断规则
 
@@ -214,6 +215,38 @@
 - `cmake --build build\LTD_MAIN_CPU2`：通过。
 - `cmake --build build\LTD_DISPLAY_CPU3`：通过。
 - 未做实物联调；需要现场验证密度连续、连续相对频率、连续定频三种新方案的电机速度闭环方向、速度响应、稳定判定和命令切换退出。
+
+### 协议版本 9
+
+关联改动：
+- `CMD_READ_PART_PARAMS` / `STATE_READPARAMETEROVER` 读取部件参数流程增加当前 CH9141K 蓝牙连接 RSSI 只读查询。
+- CPU2 新增 `WirelessPairing_ReadConnectionStatus()` 和 `WirelessPairing_UpdateConnectionStatusSnapshot()`，复用 `BLEMODE`、`BLESTA`、`CCADD` 和 `AT+RSSI=ON/OFF` 查询链路；不扫描、不重新配对、不保存默认连接。
+- `WirelessPairingStatus` 在原匹配结果字段后新增 `connection_valid`、`rssi_valid`、`rssi`、`connection_error_code`、`rssi_update_counter`。
+- CPU3 读取参数完成态新增 RSSI 显示项：有效时显示 `RSSI:<value>dB`，无效时显示 `RSSI:N/A`。
+
+寄存器布局影响：
+- 保留协议版本 8 既有无线滑环匹配状态和四路继电器运行态地址。
+- RSSI 运行态字段追加在继电器运行态之后：
+  - `REG_WIRELESS_PAIRING_CONNECTION_VALID`
+  - `REG_WIRELESS_PAIRING_RSSI_VALID`
+  - `REG_WIRELESS_PAIRING_RSSI`
+  - `REG_WIRELESS_PAIRING_CONNECTION_ERROR_CODE`
+  - `REG_WIRELESS_PAIRING_RSSI_UPDATE_COUNTER`
+- `REG_ENG` 顺延到 `REG_WIRELESS_PAIRING_RSSI_UPDATE_COUNTER + REG_SIZE_U32`。
+
+兼容影响：
+- CPU2/CPU3 必须同为协议版本 9，才能正确读取和显示当前蓝牙连接 RSSI。
+- 协议版本 8 的 CPU3 不知道 RSSI 尾部输入寄存器，不应解释新增字段。
+- 协议版本 8 的 CPU2 不发布 RSSI 快照，协议版本不匹配应由 CPU3 严格相等检查拦截。
+
+验证结果：
+- `py -3 tools\check_wireless_rssi_contract.py`：通过。
+- `py -3 tools\check_si7000_protocol_contract.py`：通过。
+- `py -3 tools\check_density_level_control_contract.py`：通过。
+- `py -3 tools\check_read_part_params_refresh_contract.py`：通过。
+- `cmake --build build\LTD_MAIN_CPU2`：通过。
+- `cmake --build build\LTD_DISPLAY_CPU3`：通过。
+- 未做实物联调；需要现场验证已连接、未连接、RSSI 异步超时、命令切换打断和 UART6 透传恢复。
 
 ## 后续维护要求
 

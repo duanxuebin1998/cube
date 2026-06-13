@@ -27,7 +27,7 @@
 #define UNVALID_GSW 0                      /* 质量无效值 */
 
 #define MAX_MEASUREMENT_POINTS 200 /* 密度分布测量最大点数 */
-#define DEVICE_PROTOCOL_VERSION 8u /* CPU2/CPU3共享协议版本；旧程序未写入时默认为0 */
+#define DEVICE_PROTOCOL_VERSION 9u /* CPU2/CPU3共享协议版本；旧程序未写入时默认为0 */
 #define FAULT_AUTO_RECOVERY_RETRY_DEFAULT 3u
 #define FAULT_AUTO_RECOVERY_RETRY_MAX 10u
 
@@ -512,6 +512,11 @@ typedef struct {
     uint32_t mac_low;                        /* EE:FF */
     uint32_t error_code;                     /* 失败时的 CPU2 错误码 */
     uint32_t update_counter;                 /* CPU2 每次状态变化递增 */
+    uint32_t connection_valid;               /* 当前蓝牙连接是否有效 */
+    uint32_t rssi_valid;                     /* 当前蓝牙 RSSI 是否有效 */
+    int32_t rssi;                            /* 当前蓝牙 RSSI，单位 dB */
+    uint32_t connection_error_code;          /* 当前连接/RSSI 查询错误码 */
+    uint32_t rssi_update_counter;            /* CPU2 每次 RSSI 快照查询递增 */
 } WirelessPairingStatus;
 
 /* 测量结果结构体，输入寄存器 */

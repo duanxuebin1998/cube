@@ -190,6 +190,8 @@ static uint32_t Wartsila_ReadPointAndClassify(WartsilaPointSample *sample)
     uint32_t start_tick = 0U;
     uint32_t stable_start = 0U;
     uint8_t first_sample = 1U;
+    uint8_t has_valid_frequency = 0U;
+    uint8_t current_frequency_invalid = 0U;
     float ref_freq = 0.0f;
     float ref_density = 0.0f;
     float ref_temp = 0.0f;
@@ -220,6 +222,9 @@ static uint32_t Wartsila_ReadPointAndClassify(WartsilaPointSample *sample)
 
         uint32_t now = HAL_GetTick();
         if ((now - start_tick) >= WARTSILA_DENSITY_MAX_WAIT_MS) {
+            if ((has_valid_frequency == 0U) || (current_frequency_invalid != 0U)) {
+                return SONIC_FREQ_ABNORMAL;
+            }
             /* 密度读取超过 5 分钟仍未形成有效液体点时，按密度 0 的空气点处理。 */
             MotorCtrl_SnapshotSensorPositionMm(&cur_mm);
             Wartsila_FillPointSample(sample,
@@ -240,6 +245,18 @@ static uint32_t Wartsila_ReadPointAndClassify(WartsilaPointSample *sample)
         if (ret != NO_ERROR) {
             return ret;
         }
+
+        if (cur_freq <= 0.0f) {
+            current_frequency_invalid = 1U;
+            first_sample = 1U;
+            ret = AbortableDelay_CommandSwitch(WARTSILA_DENSITY_SAMPLE_MS, 50U);
+            if (ret != NO_ERROR) {
+                return ret;
+            }
+            continue;
+        }
+        has_valid_frequency = 1U;
+        current_frequency_invalid = 0U;
 
         MotorCtrl_SnapshotSensorPositionMm(&cur_mm);
 

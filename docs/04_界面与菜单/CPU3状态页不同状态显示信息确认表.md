@@ -1,10 +1,10 @@
 # CPU3状态页不同状态显示信息确认表
 
-日期：2026-06-11
+日期：2026-06-13
 
-适用版本：CPU3 `V1.13.0.0`
+适用版本：CPU2 `V1.15.0.0` / CPU3 `V1.14.0.0`，共享协议版本 `9`
 
-源码依据：`LTD_DISPLAY_CPU3/Application/display/display.c`
+源码依据：`LTD_DISPLAY_CPU3/Application/display/display.c`、`LTD_MAIN_CPU2/Services/Sensor/sensor.c`
 
 ## 1. 显示规则总览
 
@@ -20,7 +20,8 @@ CPU3 状态页第一行固定显示设备状态文字，并在右侧显示电机
 | 称重 | 正常状态页路径下固定显示 | `debug_data.current_weight` | 整数显示，无明确单位；值为 `0` 时也显示 |
 | 频率 | 液位过程/液位跟随状态，或读取参数完成，且当前频率有效 | 液位过程取 `oil_measurement.current_frequency` 或 `debug_data.frequency`；读取参数完成取 `debug_data.frequency` | `Hz` |
 | 电容 | 水位过程/水位跟随状态，或读取参数完成，且当前电容有效 | 水位过程取 `water_measurement.current_capacitance`；读取参数完成取 `debug_data.water_capacitance_x10` | 显示为 0.1pF 口径，小数 1 位 |
-| X/Y角 | 罐高上下文或读取参数完成，且 `bottom_detect_mode != 0`，角度不为 `0` | `debug_data.angle_x` / `debug_data.angle_y` | 小数 2 位，单位 `°` |
+| X/Y角 | 读取参数完成时只要求角度不为 `0`；罐高上下文仍要求 `bottom_detect_mode != 0` 且角度不为 `0` | `debug_data.angle_x` / `debug_data.angle_y` | 原始值为角度 `x100`，小数 2 位，单位 `°` |
+| 蓝牙 RSSI | 读取参数完成；`rssi_valid != 0` 时显示数值，否则显示无有效值 | `wireless_pairing_status.rssi_valid` / `wireless_pairing_status.rssi` | 单位 `dB`，无效时显示 `RSSI:N/A` |
 | 罐高 | 罐底完成或罐高标定完成，且 `current_real_height != 0` | `height_measurement.current_real_height` | `0.1 mm` |
 | 错误码 | `STATE_ERROR` | `device_status.error_code` | 状态行追加错误类型和位置，格式为 `type-pos` |
 | 故障详情 | `STATE_ERROR` 且 `error_code != NO_ERROR` | `Display_GetErrorReasonByCode(error_code)` | 结果区显示 `故障:` 原因，过长时拆成两行 |
@@ -58,7 +59,7 @@ CPU3 状态页第一行固定显示设备状态文字，并在右侧显示电机
 | `STATE_WARTSILA_DENSITY_OVER` | 分布测量完成 | 状态、液位、平均密度、平均温度 | `density_distribution.Density_oil_level`、`average_density`、`average_temperature` | 当前实现不显示测点数 |
 | `STATE_SYNTHETICING` | 综合过程/运动调试 | 状态、位置、称重 | `debug_data.sensor_position`、`debug_data.current_weight` | 保守显示过程量，不显示旧业务结果 |
 | `STATE_SYNTHETICING_OVER` | 综合完成 | 状态、液位、水位、平均密度、平均温度 | `oil_measurement.oil_level`、`water_measurement.water_level`、`density_distribution.average_density`、`average_temperature` | OLED 分页显示；水位为 `0` 时隐藏 |
-| `STATE_READPARAMETEROVER` | 读取参数完成/持续刷新 | 状态、位置、称重、温度、频率、电容、X角、Y角 | `debug_data.sensor_position`、`debug_data.current_weight`、`debug_data.temperature`、`debug_data.frequency`、`debug_data.water_capacitance_x10`、`debug_data.angle_x/y` | CPU2 `CMD_ReadPartParams()` 在该状态内每 1s 刷新，直到新命令或错误；显示侧展示最新部件参数快照，不混用液位、水位、罐高等历史业务结果 |
+| `STATE_READPARAMETEROVER` | 读取参数完成/持续刷新 | 状态、位置、称重、温度、频率、电容、X角、Y角、RSSI | `debug_data.sensor_position`、`debug_data.current_weight`、`debug_data.temperature`、`debug_data.frequency`、`debug_data.water_capacitance_x10`、`debug_data.angle_x/y`、`wireless_pairing_status.rssi_valid/rssi` | CPU2 `CMD_ReadPartParams()` 在该状态内每 1s 刷新部件参数，RSSI 快照按 5s 节流刷新；读取参数态的 X/Y 角不再受 `bottom_detect_mode` 限制；显示侧展示最新部件参数快照，不混用液位、水位、罐高等历史业务结果 |
 | `STATE_FINDBOTTOM` | 罐高过程 | 状态、位置、称重、X角、Y角 | `debug_data.sensor_position`、`debug_data.current_weight`、`debug_data.angle_x/y` | 角度需 `bottom_detect_mode != 0` |
 | `STATE_CALIBRATE_TANKHEIGHTING` | 罐高过程 | 状态、位置、称重、X角、Y角 | `debug_data.sensor_position`、`debug_data.current_weight`、`debug_data.angle_x/y` | 角度需 `bottom_detect_mode != 0` |
 | `STATE_FINDBOTTOM_OVER` | 罐高完成 | 状态、位置、称重、X角、Y角、罐高 | `debug_data`、`height_measurement.current_real_height` | 罐高不为 `0` 时显示 |
@@ -120,3 +121,5 @@ CPU3 状态页第一行固定显示设备状态文字，并在右侧显示电机
 | 单点监测位置来源 | `STATE_SPTESTING` 当前固定显示 `debug_data.sensor_position` | 是否需要改为显示单点监测结果自带位置 |
 | 分布测点数 | 分布完成态当前不显示 `measurement_points` | OLED 行数不足时是否需要显示点数，以及优先级 |
 | 待机最近结果 | `STATE_STANDBY` 当前不显示最近测量结果 | 是否新增“最近”来源标签和本地缓存 |
+| 读取参数页分页 | 读取参数完成态当前包含位置、称重、温度、频率、电容、X/Y角、RSSI，超过一屏时按状态页分页显示 | 现场确认翻页操作是否足够直观 |
+| RSSI 无效值 | `rssi_valid == 0` 时显示 `RSSI:N/A`；RSSI 查询只读当前连接，不扫描、不断开、不保存默认连接 | 现场确认是否需要在无效时额外显示错误码或连接状态 |

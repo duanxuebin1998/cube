@@ -27,6 +27,16 @@ bool Display_CanEnterCancelMeasurementConfirm(void);
  * @return true 表示条件满足或处理成功，false 表示条件不满足或处理失败。
  */
 bool Display_EnterCancelMeasurementConfirm(void);
+/**
+ * @brief 显示或打印屏幕菜单操作中的 DisplayTankOpera_IsMotorRunMonitorActive 逻辑。
+ * @return true 表示当前前景页是电机运行监控页。
+ */
+bool DisplayTankOpera_IsMotorRunMonitorActive(void);
+/**
+ * @brief 显示或打印屏幕菜单操作中的 DisplayTankOpera_IsDebugWeightWaitActive 逻辑。
+ * @return true 表示当前前景页是称重获取等待页。
+ */
+bool DisplayTankOpera_IsDebugWeightWaitActive(void);
 
 /* 菜单索引号 */
 typedef enum {
@@ -36,8 +46,16 @@ typedef enum {
     KEYNUM_MAINMENU,                     /* 主菜单 */
     KEYNUM_IF_EXIT_MAINMENU,             /* 是否退出主菜单 */
     KEYNUM_MEASURE_MAINMENU,             /* 普通测量指令主菜单 */
+    KEYNUM_MEASURE_WATER,                /* 测量命令 - 水位测量 */
+    KEYNUM_MEASURE_DENSITY_SINGLE,       /* 测量命令 - 密度单点测量 */
+    KEYNUM_MEASURE_DENSITY_DISTRIBUTION, /* 测量命令 - 密度分布测量 */
     KEYNUM_MENU_PARACFG_MAIN,            /* 参数配置主菜单（新） */
     KEYNUM_MENU_CMD_MAIN,                /* 维护/调试指令主菜单 */
+    KEYNUM_DEBUG_FLOAT_MOTION,           /* 调试指令 - 浮子运动控制 */
+    KEYNUM_DEBUG_CALIBRATION,            /* 调试指令 - 标定修正 */
+    KEYNUM_DEBUG_WEIGHT,                 /* 调试指令 - 称重标定 */
+    KEYNUM_DEBUG_WIRELESS,               /* 调试指令 - 无线维护 */
+    KEYNUM_DEBUG_SYSTEM,                 /* 调试指令 - 系统维护 */
     KEYNUM_IFSENDCMD,                    /* 是否下发指令或参数 */
     KEYNUM_IF_PARAM_PROTECT_CONFIRM,     /* 保护参数二次确认 */
     KEYNUM_INPUTCMDPARA,                 /* 输入参数值(带参指令) */
@@ -100,6 +118,8 @@ typedef enum {
     KEYNUM_MENU_CPU3_COM2,               /* CPU3 - COM2 */
     KEYNUM_MENU_CPU3_COM3,               /* CPU3 - COM3 */
     KEYNUM_IF_CANCEL_MEASUREMENT,        /* 是否取消当前测量 */
+    KEYNUM_MOTOR_RUN_MONITOR,            /* 电机运行监控页 */
+    KEYNUM_DEBUG_WEIGHT_WAIT,            /* 称重获取等待页 */
     KEYNUM_ERROR_REASON,                 /* 故障原因查看页 */
 
     KEYNUM_END
