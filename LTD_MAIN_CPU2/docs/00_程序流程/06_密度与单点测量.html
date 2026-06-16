@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>CPU2 密度与单点测量统一程序流程</title><link rel="stylesheet" href="assets/流程文档样式.css">
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>CPU2 密度与单点测量统一程序流程</title><link rel="stylesheet" href="assets/流程文档样式.css?v=cpu2-20260616-flow-audit">
 
 <style id="cross-flow-nav-style">
 .cross-flow-nav{margin:16px 0 20px;padding:16px 18px;border:1px solid #cfe0f2;border-radius:10px;background:#fff;box-shadow:0 8px 22px rgba(31,59,91,.07)}
@@ -111,30 +111,30 @@
 <g class="decision"><path class="node-shape" d="M 560 514 L 730 570 L 560 626 L 390 570 Z"></path><text x="560" y="575" text-anchor="middle"><tspan x="560" dy="0">是否已等待超过 5 分钟？</tspan></text></g>
 <g class="state"><rect class="node-shape" x="760" y="525" width="280" height="108" rx="8"></rect><text x="900" y="559" text-anchor="middle"><tspan x="900" dy="0">超过：兜底返回成功</tspan><tspan x="900" dy="19">有非零密度则用最后一次非零值</tspan><tspan x="900" dy="19">从未非零则密度填 0</tspan></text></g>
 <g class="decision"><path class="node-shape" d="M 560 689 L 730 745 L 560 801 L 390 745 Z"></path><text x="560" y="750" text-anchor="middle"><tspan x="560" dy="0">当前密度是否为 0？</tspan></text></g>
-<g class="loop"><rect class="node-shape" x="95" y="700" width="310" height="108" rx="8"></rect><text x="250" y="734" text-anchor="middle"><tspan x="250" dy="0">密度为 0</tspan><tspan x="250" dy="19">不进入稳定判断</tspan><tspan x="250" dy="19">等待 200ms 后继续读数</tspan></text></g>
-<g class="process"><rect class="node-shape" x="715" y="700" width="310" height="108" rx="8"></rect><text x="870" y="734" text-anchor="middle"><tspan x="870" dy="0">密度非 0</tspan><tspan x="870" dy="19">记录最后一次非零密度</tspan><tspan x="870" dy="19">参与稳定窗口判断</tspan></text></g>
+<g class="loop"><rect class="node-shape" x="45" y="700" width="310" height="108" rx="8"></rect><text x="200" y="734" text-anchor="middle"><tspan x="200" dy="0">密度为 0</tspan><tspan x="200" dy="19">不进入稳定判断</tspan><tspan x="200" dy="19">等待 200ms 后继续读数</tspan></text></g>
+<g class="process"><rect class="node-shape" x="765" y="700" width="310" height="108" rx="8"></rect><text x="920" y="734" text-anchor="middle"><tspan x="920" dy="0">密度非 0</tspan><tspan x="920" dy="19">记录最后一次非零密度</tspan><tspan x="920" dy="19">参与稳定窗口判断</tspan></text></g>
 <g class="decision"><path class="node-shape" d="M 560 879 L 740 935 L 560 991 L 380 935 Z"></path><text x="560" y="931" text-anchor="middle"><tspan x="560" dy="0">频率/密度/温度变化</tspan><tspan x="560" dy="19">是否超过 1Hz/0.1/0.2℃？</tspan></text></g>
 <g class="process"><rect class="node-shape" x="95" y="1035" width="310" height="90" rx="8"></rect><text x="250" y="1061" text-anchor="middle"><tspan x="250" dy="0">超过阈值</tspan><tspan x="250" dy="19">重置参考值</tspan><tspan x="250" dy="19">重新开始稳定计时</tspan></text></g>
 <g class="state"><rect class="node-shape" x="715" y="1035" width="310" height="90" rx="8"></rect><text x="870" y="1070" text-anchor="middle"><tspan x="870" dy="0">未超过阈值</tspan><tspan x="870" dy="19">继续累计稳定时间</tspan></text></g>
 <g class="decision"><path class="node-shape" d="M 560 1163 L 735 1215 L 560 1267 L 385 1215 Z"></path><text x="560" y="1220" text-anchor="middle"><tspan x="560" dy="0">稳定时间是否达到窗口？</tspan></text></g>
 <g class="state"><rect class="node-shape" x="340" y="1340" width="440" height="92" rx="8"></rect><text x="560" y="1366" text-anchor="middle"><tspan x="560" dy="0">达到：写入单点结果</tspan><tspan x="560" dy="19">density/standard_density/weight_density</tspan><tspan x="560" dy="19">temperature_position 和 vcf20</tspan></text></g>
-<g class="loop"><rect class="node-shape" x="95" y="1340" width="310" height="82" rx="8"></rect><text x="250" y="1366" text-anchor="middle"><tspan x="250" dy="0">未达到</tspan><tspan x="250" dy="19">可中断等待 200ms</tspan><tspan x="250" dy="19">回到下一次采样</tspan></text></g>
+<g class="loop"><rect class="node-shape" x="20" y="1340" width="310" height="82" rx="8"></rect><text x="175" y="1366" text-anchor="middle"><tspan x="175" dy="0">未达到</tspan><tspan x="175" dy="19">可中断等待 200ms</tspan><tspan x="175" dy="19">回到下一次采样</tspan></text></g>
 <path class="edge" d="M560 78 L560 110" marker-end="url(#den-sensor-arrow)"></path>
 <path class="edge" d="M560 196 L560 250" marker-end="url(#den-sensor-arrow)"></path>
 <path class="edge" d="M560 354 L560 410" marker-end="url(#den-sensor-arrow)"></path>
 <path class="edge" d="M560 492 L560 514" marker-end="url(#den-sensor-arrow)"></path>
 <path class="edge ok-edge" d="M730 570 L760 570" marker-end="url(#den-sensor-arrow)"></path><text class="small label" x="745" y="558" text-anchor="middle">是</text>
 <path class="edge" d="M560 626 L560 689" marker-end="url(#den-sensor-arrow)"></path><text class="small label" x="592" y="660" text-anchor="middle">否</text>
-<path class="edge" d="M390 745 L405 745" marker-end="url(#den-sensor-arrow)"></path><text class="small label" x="360" y="733" text-anchor="middle">是</text>
-<path class="edge" d="M95 754 C20 760 20 430 340 451" marker-end="url(#den-sensor-arrow)"></path>
-<path class="edge ok-edge" d="M730 745 L715 745" marker-end="url(#den-sensor-arrow)"></path><text class="small label" x="760" y="733" text-anchor="middle">否</text>
-<path class="edge" d="M715 808 C640 860 590 885 560 879" marker-end="url(#den-sensor-arrow)"></path>
+<path class="edge" d="M390 745 L355 745" marker-end="url(#den-sensor-arrow)"></path><text class="small label" x="370" y="733" text-anchor="middle">是</text>
+<path class="edge" d="M45 754 C20 760 20 430 340 451" marker-end="url(#den-sensor-arrow)"></path>
+<path class="edge ok-edge" d="M730 745 L765 745" marker-end="url(#den-sensor-arrow)"></path><text class="small label" x="750" y="733" text-anchor="middle">否</text>
+<path class="edge" d="M765 808 C660 860 590 885 560 879" marker-end="url(#den-sensor-arrow)"></path>
 <path class="edge" d="M380 935 C265 965 250 1005 250 1035" marker-end="url(#den-sensor-arrow)"></path><text class="small label" x="315" y="1002" text-anchor="middle">是</text>
 <path class="edge" d="M250 1125 C115 1170 115 410 340 451" marker-end="url(#den-sensor-arrow)"></path>
 <path class="edge ok-edge" d="M740 935 C855 965 870 1005 870 1035" marker-end="url(#den-sensor-arrow)"></path><text class="small label" x="800" y="1002" text-anchor="middle">否</text>
 <path class="edge" d="M870 1125 C800 1180 665 1195 560 1163" marker-end="url(#den-sensor-arrow)"></path>
-<path class="edge" d="M390 1215 C285 1260 260 1305 250 1340" marker-end="url(#den-sensor-arrow)"></path><text class="small label" x="320" y="1290" text-anchor="middle">否</text>
-<path class="edge" d="M250 1422 C120 1465 120 410 340 451" marker-end="url(#den-sensor-arrow)"></path>
+<path class="edge" d="M390 1215 C285 1260 200 1305 175 1340" marker-end="url(#den-sensor-arrow)"></path><text class="small label" x="300" y="1290" text-anchor="middle">否</text>
+<path class="edge" d="M175 1422 C60 1465 60 410 340 451" marker-end="url(#den-sensor-arrow)"></path>
 <path class="edge ok-edge" d="M560 1267 L560 1340" marker-end="url(#den-sensor-arrow)"></path><text class="small label" x="592" y="1305" text-anchor="middle">是</text>
 </svg></div><div class="flow-evidence"><div class="evidence-item"><strong>稳定窗口</strong><span><code>Application/Src/measure_density.c:1225-1459</code>：稳定窗口由 <code>spreadPointHoverTime * 1000</code> 得到，未配置则 5000ms。</span></div><div class="evidence-item"><strong>兜底策略</strong><span><code>Application/Src/measure_density.c:1288-1339</code>：5 分钟未稳定时，优先使用最后一次非零密度；否则密度按 0 写入。</span></div><div class="evidence-item"><strong>波动阈值</strong><span><code>Application/Src/measure_density.c:1427-1458</code>：频率 1Hz、密度 0.1、温度 0.2℃ 任一超差就重置稳定计时。</span></div></div><h3>3.4 分布密度测点生成</h3><p class="flow-caption">四种分布模式共用同一个测量内核，但测点生成规则完全不同。普通模式等分有效高度，国标按 3m/4.5m 分段，每米测按 1m 步长，区间测按上下限均分。</p><div class="svg-flow-wrap"><svg class="biz-flow" width="1120" height="1537" viewBox="0 0 1120 1537" role="img" aria-label="密度分布测点生成流程图"><defs><marker id="den-points-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#6a7c93"></path></marker><marker id="den-points-arrow-red" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#b73737"></path></marker></defs>
 <g class="start"><ellipse class="node-shape" cx="560" cy="50" rx="165" ry="28"></ellipse><text x="560" y="55" text-anchor="middle"><tspan x="560" dy="0">进入密度分布测量内核</tspan></text></g>
@@ -235,8 +235,8 @@
 <g class="state"><rect class="node-shape" x="340" y="1305" width="440" height="92" rx="8"></rect><text x="560" y="1331" text-anchor="middle"><tspan x="560" dy="0">计算平均值并发布 profile</tspan><tspan x="560" dy="19">density_distribution = temp</tspan><tspan x="560" dy="19">profile_complete_latched=1，counter+1</tspan></text></g>
 <g class="process"><rect class="node-shape" x="340" y="1455" width="440" height="92" rx="8"></rect><text x="560" y="1491" text-anchor="middle"><tspan x="560" dy="0">完成后等待 CPU3 读取约 8 秒</tspan><tspan x="560" dy="19">等待期间命令切换可退出</tspan></text></g>
 <g class="decision"><path class="node-shape" d="M 560 1555 L 740 1610 L 560 1665 L 380 1610 Z"></path><text x="560" y="1615" text-anchor="middle"><tspan x="560" dy="0">是否到达测后探底周期？</tspan></text></g>
-<g class="process"><rect class="node-shape" x="90" y="1610" width="310" height="70" rx="8"></rect><text x="245" y="1636" text-anchor="middle"><tspan x="245" dy="0">是：先回固定监测点</tspan><tspan x="245" dy="19">再执行探底，失败则切回监测</tspan></text></g>
-<g class="state"><rect class="node-shape" x="720" y="1610" width="310" height="70" rx="8"></rect><text x="875" y="1636" text-anchor="middle"><tspan x="875" dy="0">否或完成后</tspan><tspan x="875" dy="19">命令切回 CMD_MONITOR_SINGLE</tspan></text></g>
+<g class="process"><rect class="node-shape" x="40" y="1610" width="310" height="70" rx="8"></rect><text x="195" y="1636" text-anchor="middle"><tspan x="195" dy="0">是：先回固定监测点</tspan><tspan x="195" dy="19">再执行探底，失败则切回监测</tspan></text></g>
+<g class="state"><rect class="node-shape" x="770" y="1610" width="310" height="70" rx="8"></rect><text x="925" y="1636" text-anchor="middle"><tspan x="925" dy="0">否或完成后</tspan><tspan x="925" dy="19">命令切回 CMD_MONITOR_SINGLE</tspan></text></g>
 <path class="edge" d="M560 78 L560 110" marker-end="url(#den-wartsila-arrow)"></path>
 <path class="edge" d="M560 196 L560 204" marker-end="url(#den-wartsila-arrow)"></path>
 <path class="edge error-edge" d="M735 260 L790 260" marker-end="url(#den-wartsila-arrow-red)"></path><text class="small label" x="765" y="248" text-anchor="middle">是</text>
@@ -254,8 +254,8 @@
 <path class="edge" d="M870 1250 C800 1290 665 1305 560 1305" marker-end="url(#den-wartsila-arrow)"></path>
 <path class="edge" d="M560 1397 L560 1455" marker-end="url(#den-wartsila-arrow)"></path>
 <path class="edge" d="M560 1547 L560 1555" marker-end="url(#den-wartsila-arrow)"></path>
-<path class="edge" d="M380 1610 L400 1610" marker-end="url(#den-wartsila-arrow)"></path><text class="small label" x="430" y="1598" text-anchor="middle">是</text>
-<path class="edge ok-edge" d="M740 1610 L720 1610" marker-end="url(#den-wartsila-arrow)"></path><text class="small label" x="690" y="1598" text-anchor="middle">否</text>
+<path class="edge" d="M380 1610 L350 1610" marker-end="url(#den-wartsila-arrow)"></path><text class="small label" x="365" y="1598" text-anchor="middle">是</text>
+<path class="edge ok-edge" d="M740 1610 L770 1610" marker-end="url(#den-wartsila-arrow)"></path><text class="small label" x="755" y="1598" text-anchor="middle">否</text>
 </svg></div><div class="flow-evidence"><div class="evidence-item"><strong>范围扫描</strong><span><code>Application/Src/wartsila_density_measurement.c:457-594</code>：用下限、上限、间隔生成扫描目标，遇空气点后下行找液面。</span></div><div class="evidence-item"><strong>空气判定</strong><span><code>Application/Src/wartsila_density_measurement.c:65-82</code>：密度低于 100 或频率高于液位频率均判为空气点。</span></div><div class="evidence-item"><strong>测后动作</strong><span><code>Application/Src/measure.c:1056-1147</code>：发布 profile 后等待 CPU3 读取，按周期可回固定点、探底，再切回 <code>CMD_MONITOR_SINGLE</code>。</span></div></div><h3>3.8 综合测量与发布差异</h3><p class="flow-caption">综合测量先显式找液位，然后调用普通分布内核。该内核内部又会再次找液位；综合测量写入密度分布结果，但没有像分布命令一样置 profile 完成沿。</p><div class="svg-flow-wrap"><svg class="biz-flow" width="1120" height="1017" viewBox="0 0 1120 1017" role="img" aria-label="综合测量与发布差异流程图"><defs><marker id="den-synth-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#6a7c93"></path></marker><marker id="den-synth-arrow-red" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#b73737"></path></marker></defs>
 <g class="start"><ellipse class="node-shape" cx="560" cy="50" rx="165" ry="28"></ellipse><text x="560" y="55" text-anchor="middle"><tspan x="560" dy="0">进入综合测量命令</tspan></text></g>
 <g class="process"><rect class="node-shape" x="340" y="115" width="440" height="82" rx="8"></rect><text x="560" y="146" text-anchor="middle"><tspan x="560" dy="0">状态置为综合测量中</tspan><tspan x="560" dy="19">先执行 SearchOilLevel()</tspan></text></g>

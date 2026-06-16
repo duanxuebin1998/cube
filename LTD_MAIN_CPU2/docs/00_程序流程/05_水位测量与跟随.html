@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>CPU2 水位测量与跟随统一程序流程</title><link rel="stylesheet" href="assets/流程文档样式.css">
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>CPU2 水位测量与跟随统一程序流程</title><link rel="stylesheet" href="assets/流程文档样式.css?v=cpu2-20260616-flow-audit">
 
 <style id="cross-flow-nav-style">
 .cross-flow-nav{margin:16px 0 20px;padding:16px 18px;border:1px solid #cfe0f2;border-radius:10px;background:#fff;box-shadow:0 8px 22px rgba(31,59,91,.07)}
@@ -215,7 +215,7 @@
 <g class="decision"><path class="node-shape" d="M 560 1377.5 L 740 1435 L 560 1492.5 L 380 1435 Z"></path><text x="560" y="1431" text-anchor="middle"><tspan x="560" dy="0">是否连续大偏差达到 5 次</tspan><tspan x="560" dy="19">或 180s 未进入稳定监视？</tspan></text></g>
 <g class="loop"><rect class="node-shape" x="90" y="1525" width="300" height="96" rx="8"></rect><text x="240" y="1553" text-anchor="middle"><tspan x="240" dy="0">是：重新寻找水位</tspan><tspan x="240" dy="19">普通跟随：完整找水位</tspan><tspan x="240" dy="19">快速跟随：状态翻转找点</tspan></text></g>
 <g class="loop"><rect class="node-shape" x="730" y="1525" width="300" height="96" rx="8"></rect><text x="880" y="1563" text-anchor="middle"><tspan x="880" dy="0">否：继续跟随循环</tspan><tspan x="880" dy="19">延时 500ms 后回到读取电容</tspan></text></g>
-<g class="state"><rect class="node-shape" x="340" y="1525" width="440" height="96" rx="8"></rect><text x="560" y="1553" text-anchor="middle"><tspan x="560" dy="0">稳定监视循环</tspan><tspan x="560" dy="19">进入 STATE_FOLLOW_WATERING</tspan><tspan x="560" dy="19">偏离 target 超过 lag 阈值后返回闭环</tspan></text></g>
+<g class="state"><rect class="node-shape" x="410" y="1525" width="300" height="96" rx="8"></rect><text x="560" y="1553" text-anchor="middle"><tspan x="560" dy="0">稳定监视循环</tspan><tspan x="560" dy="19">进入 STATE_FOLLOW_WATERING</tspan><tspan x="560" dy="19">偏离 target 超过 lag 阈值后返回闭环</tspan></text></g>
 <path class="edge" d="M560 76 L560 105" marker-end="url(#water-follow-arrow)"></path>
 <path class="edge" d="M560 213 L560 260" marker-end="url(#water-follow-arrow)"></path>
 <path class="edge" d="M560 340 L560 373" marker-end="url(#water-follow-arrow)"></path>

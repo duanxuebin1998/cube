@@ -364,6 +364,13 @@
         columns: 1;
       }
     }
+
+    .flow-diagram svg, .command-matrix svg, svg[role="img"] {
+      display: block;
+      width: 100%;
+      max-width: 100%;
+      height: auto;
+    }
   </style>
 </head>
 <body>
@@ -434,7 +441,7 @@
       <h2>2. 完整程序流程图</h2>
       <p class="lead">流程图优先写功能动作，括号内保留源码函数或中断名，便于对照源码。蓝色表示初始化，绿色表示接收，橙色表示解析/组包，红色表示异常或风险点，紫色表示发送完成后的方向切换。</p>
       <div class="flow-box">
-        <svg width="1280" height="1180" viewBox="0 0 1280 1180" role="img" aria-label="CPU2 HART完整程序流程图">
+        <svg class="responsive-svg" viewBox="0 0 1280 1180" role="img" aria-label="CPU2 HART完整程序流程图">
           <defs>
             <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
               <path d="M0,0 L0,6 L8,3 z" fill="#42556f"></path>
@@ -541,7 +548,7 @@
 
       <h3>命令响应分支图</h3>
       <div class="flow-box">
-        <svg width="1180" height="520" viewBox="0 0 1180 520" role="img" aria-label="HART命令响应分支图">
+        <svg class="responsive-svg" viewBox="0 0 1180 520" role="img" aria-label="HART命令响应分支图">
           <defs>
             <marker id="arrow2" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
               <path d="M0,0 L0,6 L8,3 z" fill="#42556f"></path>

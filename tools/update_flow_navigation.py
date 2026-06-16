@@ -241,15 +241,28 @@ ROUTES = [
     },
     {
         "id": "readparams",
-        "title": "读取部件参数与RSSI链路",
-        "summary": "读取部件参数由 CPU3 菜单下发，CPU2 周期刷新传感器快照并查询 CH9141K 当前连接 RSSI，CPU3 轮询尾部输入寄存器后在状态页显示。",
+        "title": "读取部件参数、RSSI 与 AO 运行态链路",
+        "summary": "读取部件参数由 CPU3 菜单下发，CPU2 周期刷新传感器快照并查询 CH9141K 当前连接 RSSI；协议 11 继续在 RSSI 后追加 AO 运行态，CPU3 轮询尾部输入寄存器后在状态页显示。",
         "steps": [
             ("CPU3 菜单入口", "cpu3_07", "读取部件参数位于测量/维护入口，下发 CMD_READ_PART_PARAMS"),
-            ("CPU3 内部轮询", "cpu3_02", "运行轮询读取输入寄存器尾部 WirelessPairingStatus RSSI 字段"),
+            ("CPU3 内部轮询", "cpu3_02", "运行轮询读取输入寄存器尾部 WirelessPairingStatus 和 AoOutputRuntime 字段"),
             ("CPU2 命令入口", "cpu2_02", "进入读取部件参数命令并保持 STATE_READPARAMETEROVER 持续刷新"),
             ("CPU2 传感器快照", "cpu2_09", "每 1s 刷新位置、称重、温度、频率、电容、角度，每 5s 查询蓝牙 RSSI"),
-            ("CPU2 寄存器发布", "cpu2_10", "协议版本 9 在继电器运行态后追加连接有效、RSSI 有效、RSSI 值、错误码和更新计数"),
-            ("CPU3 状态显示", "cpu3_06", "读取参数完成页显示 RSSI 数值或 RSSI:N/A，并继续显示 X/Y 角等快照"),
+            ("CPU2 寄存器发布", "cpu2_10", "协议版本 11 在继电器运行态后追加 RSSI，再追加 AO 目标/实际/错误运行态"),
+            ("CPU3 状态显示", "cpu3_06", "读取参数完成页显示 RSSI 或 N/A，状态页显示协议兼容和 AO/AD5421 故障原因"),
+        ],
+    },
+    {
+        "id": "ao",
+        "title": "AO 模拟电流输出与 HART 链路",
+        "summary": "AO 输出由 CPU3 菜单参数使能，CPU2 根据液位/故障/调试状态刷新 AoOutput 运行态，AD5421 输出电流，HART 和 CPU3 状态页读取同一运行数据。",
+        "steps": [
+            ("CPU3 AO 菜单", "cpu3_07", "AO使能为 0/1 设备参数，确认后通过内部 Modbus 写 CPU2"),
+            ("CPU2 参数生效", "cpu2_12", "AoOutputEnable 默认关闭，写入后作为 AoOutput_Update 的硬开关"),
+            ("液位结果来源", "cpu2_04", "找液位/跟随更新液位结果时同步刷新 AO 输出目标"),
+            ("AO 服务与硬件", "cpu2_13", "AoOutput_Update 计算目标、限幅、节流写 AD5421，并记录运行态"),
+            ("HART/AD5421 接口", "cpu2_11", "HART 命令 2/3 返回 AO 电流和百分比，AD5421 错误进入故障码"),
+            ("CPU3 状态回读", "cpu3_06", "协议 11 输入尾段显示 AO 运行态和 AD5421 故障原因"),
         ],
     },
     {
@@ -362,16 +375,16 @@ RELATIONS: Dict[str, Dict[str, object]] = {
         "route": ["cpu2_total", "cpu2_09", "cpu2_10", "cpu3_02", "cpu3_06"],
     },
     "cpu2_10": {
-        "focus": "CPU2 与 CPU3 的共享寄存器和 Modbus 接口，是 CPU2 测量结果、无线 RSSI 运行态和协议版本 9 尾部字段返回 CPU3 的主通道。",
+        "focus": "CPU2 与 CPU3 的共享寄存器和 Modbus 接口，是 CPU2 测量结果、无线 RSSI、AO 运行态和协议版本 11 尾部字段返回 CPU3 的主通道。",
         "upstream": ["cpu2_02", "cpu2_04", "cpu2_05", "cpu2_06", "cpu2_07", "cpu3_02"],
         "downstream": ["cpu3_02", "cpu3_04", "cpu3_05", "cpu3_06", "cpu2_12"],
         "route": ["cross", "cpu2_04", "cpu2_10", "cpu3_02", "cpu3_06"],
     },
     "cpu2_11": {
-        "focus": "HART 对外接口和电流/状态相关输出，适合和 CPU2 测量结果、参数和状态发布一起阅读。",
+        "focus": "HART 对外接口和 AO 电流/百分比状态输出，适合和 CPU2 液位结果、AoOutput 服务、AD5421 驱动和状态发布一起阅读。",
         "upstream": ["cpu2_02", "cpu2_10", "cpu2_12", "cpu2_13"],
-        "downstream": ["cpu2_04", "cpu2_07", "cpu2_13"],
-        "route": ["cpu2_total", "cpu2_11", "cpu2_13"],
+        "downstream": ["cpu2_04", "cpu2_07", "cpu2_13", "cpu3_06"],
+        "route": ["cross", "cpu3_07", "cpu2_13", "cpu2_11", "cpu3_06"],
     },
     "cpu2_12": {
         "focus": "CPU2 参数默认值、范围、保存和系统配置，是测量算法、通信协议和现场配置的共同数据源。",
@@ -380,10 +393,10 @@ RELATIONS: Dict[str, Dict[str, object]] = {
         "route": ["cross", "cpu3_07", "cpu3_02", "cpu2_10", "cpu2_12", "cpu2_04"],
     },
     "cpu2_13": {
-        "focus": "称重、继电器和电流输出把测量状态转换为硬件输出，是现场报警和模拟量输出的关键链路。",
+        "focus": "称重、继电器和 AO 电流输出把测量状态转换为硬件输出，是现场报警、模拟量输出和 AD5421 运行态发布的关键链路。",
         "upstream": ["cpu2_01", "cpu2_04", "cpu2_05", "cpu2_06", "cpu2_12"],
         "downstream": ["cpu2_07", "cpu2_10", "cpu2_11"],
-        "route": ["cpu2_total", "cpu2_13", "cpu2_10", "cpu3_06"],
+        "route": ["cross", "cpu3_07", "cpu2_12", "cpu2_13", "cpu2_10", "cpu3_06"],
     },
     "cpu2_14": {
         "focus": "BSP 外设驱动为电机、串口、传感器、FRAM、继电器和看门狗提供底层硬件能力。",
@@ -416,7 +429,7 @@ RELATIONS: Dict[str, Dict[str, object]] = {
         "route": ["cpu3_total", "cpu3_01", "cpu3_02"],
     },
     "cpu3_02": {
-        "focus": "CPU3 作为 CPU2 Modbus 主站，负责写指令/参数、读输入/保持寄存器、密度点分批回读和协议版本 9 RSSI 尾部字段解析。",
+        "focus": "CPU3 作为 CPU2 Modbus 主站，负责写指令/参数、读输入/保持寄存器、密度点分批回读，并解析协议版本 11 的 RSSI 与 AO 运行态尾部字段。",
         "upstream": ["cpu3_01", "cpu3_03", "cpu3_04", "cpu3_05", "cpu3_07"],
         "downstream": ["cpu2_10", "cpu2_02", "cpu2_04", "cpu2_05", "cpu2_06", "cpu3_06"],
         "route": ["cross", "cpu3_07", "cpu3_02", "cpu2_02", "cpu2_04", "cpu2_10"],
@@ -440,13 +453,13 @@ RELATIONS: Dict[str, Dict[str, object]] = {
         "route": ["cross", "cpu3_05", "cpu3_02", "cpu2_06", "cpu3_05"],
     },
     "cpu3_06": {
-        "focus": "显示刷新、按键事件、状态页展示和调试等待页，负责把 CPU2 状态、读取部件参数 RSSI 和 CPU3 本机交互变成现场可见界面。",
+        "focus": "显示刷新、按键事件、状态页展示和调试等待页，负责把 CPU2 状态、读取部件参数 RSSI、AO/AD5421 运行态和 CPU3 本机交互变成现场可见界面。",
         "upstream": ["cpu3_01", "cpu3_02", "cpu3_07", "cpu3_08", "cpu2_10"],
         "downstream": ["cpu3_07", "cpu2_02", "cpu2_12"],
         "route": ["cross", "cpu2_10", "cpu3_02", "cpu3_06", "cpu3_07"],
     },
     "cpu3_07": {
-        "focus": "菜单参数、指令确认、保护确认、测量/调试菜单分组和 CPU2 指令/参数下发，是人工操作进入测量链路的主入口。",
+        "focus": "菜单参数、指令确认、保护确认、测量/调试菜单分组、AO 输出使能和 CPU2 指令/参数下发，是人工操作进入测量链路的主入口。",
         "upstream": ["cpu3_06", "cpu3_08"],
         "downstream": ["cpu3_02", "cpu2_02", "cpu2_04", "cpu2_05", "cpu2_06", "cpu2_12"],
         "route": ["cross", "cpu3_06", "cpu3_07", "cpu3_02", "cpu2_02"],
@@ -480,9 +493,10 @@ INJECT_CSS = """
 GLOBAL_CSS = """
 :root{--ink:#17233a;--muted:#5c6f85;--line:#d5e1ed;--panel:#fff;--bg:#f2f6fb;--blue:#2f78c8;--green:#248b70;--amber:#b97816;--red:#b84a55;--violet:#6658bd;--shadow:0 12px 32px rgba(31,59,91,.10)}
 *{box-sizing:border-box}
-body{margin:0;background:linear-gradient(180deg,#f6f9fd 0,#edf3f9 100%);color:var(--ink);font:15px/1.72 "Microsoft YaHei",Segoe UI,Arial,sans-serif}
+html{overflow-x:hidden}
+body{margin:0;background:linear-gradient(180deg,#f6f9fd 0,#edf3f9 100%);color:var(--ink);font:15px/1.72 "Microsoft YaHei",Segoe UI,Arial,sans-serif;overflow-x:hidden}
 a{color:#1f65aa;text-decoration:none}
-code{font-family:Consolas,"Courier New",monospace;background:#eef4fb;border:1px solid #d7e4f2;border-radius:5px;padding:1px 5px}
+code{font-family:Consolas,"Courier New",monospace;background:#eef4fb;border:1px solid #d7e4f2;border-radius:5px;padding:1px 5px;overflow-wrap:anywhere;word-break:break-all}
 .wrap{max-width:1240px;margin:0 auto;padding:28px 28px 64px}
 .hero{background:linear-gradient(135deg,#163a62,#0a7775);color:#fff;border-radius:12px;padding:30px 34px;box-shadow:var(--shadow)}
 .hero h1{margin:0 0 10px;font-size:31px;line-height:1.25}
@@ -504,8 +518,8 @@ h3{margin:16px 0 8px;font-size:18px}
 .links{display:flex;flex-wrap:wrap;gap:7px}
 .pill{display:inline-flex;align-items:center;min-height:28px;padding:4px 9px;border-radius:999px;background:#f4f8fd;border:1px solid #d8e5f4;color:#245d96;font-size:12px;font-weight:700}
 .split{display:grid;grid-template-columns:1fr 1fr;gap:14px}
-.flow-wrap{overflow:auto;border:1px solid #d7e2ef;border-radius:10px;background:#fbfdff;margin-top:12px}
-.route-svg{display:block;min-width:1000px;width:100%;height:auto}
+.flow-wrap{width:100%;max-width:100%;min-width:0;overflow-x:auto;overflow-y:hidden;border:1px solid #d7e2ef;border-radius:10px;background:#fbfdff;margin-top:12px;-webkit-overflow-scrolling:touch}
+.route-svg{display:block;min-width:0!important;max-width:100%!important;width:100%!important;height:auto!important}
 .node{stroke-width:2}
 .node.cpu3{fill:#eaf4ff;stroke:#5d9be2}
 .node.cpu2{fill:#eaf8f1;stroke:#39a97e}
@@ -520,11 +534,12 @@ h3{margin:16px 0 8px;font-size:18px}
 .route-card:nth-child(2n){border-left-color:#248b70}
 .route-card:nth-child(3n){border-left-color:#b97816}
 .steps{display:grid;gap:8px;margin-top:10px}
-.step{display:grid;grid-template-columns:116px 1fr;gap:8px;align-items:start;padding:9px;border:1px solid #e0e8f2;border-radius:8px;background:#fff}
+.step{display:grid;grid-template-columns:minmax(0,116px) minmax(0,1fr);gap:8px;align-items:start;padding:9px;border:1px solid #e0e8f2;border-radius:8px;background:#fff;min-width:0}
 .step b{font-size:13px;color:#28476a}
+.step span,.step b{overflow-wrap:anywhere;word-break:break-word}
 .step span{display:block;color:#4d6076;font-size:13px}
 .note{border:1px solid #bad8fb;background:#eef7ff;border-radius:8px;padding:11px 13px}
-@media(max-width:800px){.wrap{padding:16px}.hero h1{font-size:24px}.meta-grid,.split{grid-template-columns:1fr}section{padding:18px}.step{grid-template-columns:1fr}}
+@media(max-width:800px){.wrap{padding:16px;max-width:100vw}.hero h1{font-size:24px}.meta-grid,.split{grid-template-columns:1fr}section{padding:18px;max-width:100%}.step{grid-template-columns:1fr}.topnav{position:static}.topnav a{white-space:normal;overflow-wrap:anywhere}.flow-wrap{overflow-x:auto}.route-svg{width:1000px!important;min-width:1000px!important;max-width:none!important}.nt{font-size:14px}.ns{font-size:11px}}
 """.strip()
 
 
@@ -925,7 +940,7 @@ def validate_files() -> None:
     bad_encoding = []
     for path in [GLOBAL_INDEX, CROSS_ROUTE, *[page_path(key) for key in ["cpu2_total", "cpu2_issue", *CPU2_ORDER, "cpu3_total", *CPU3_ORDER]]]:
         text = read_text(path)
-        if "�" in text or "锟" in text:
+        if "\ufffd" in text or "锟" in text:
             bad_encoding.append(str(path))
     if bad_encoding:
         raise RuntimeError("Encoding replacement characters found: " + ", ".join(bad_encoding))

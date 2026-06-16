@@ -12,7 +12,19 @@ CPU3 = ROOT / "LTD_DISPLAY_CPU3"
 DOC_DIR = CPU3 / "docs" / "00_程序流程"
 ASSET_DIR = DOC_DIR / "assets"
 CPU2_ASSET_DIR = ROOT / "LTD_MAIN_CPU2" / "docs" / "00_程序流程" / "assets"
-CSS_VERSION = "cpu3-20260613-layout2"
+CSS_VERSION = "cpu3-20260616-flow-audit"
+DOC_DATE = "2026-06-16"
+
+
+def read_version_macro(path: Path, macro: str, fallback: str) -> str:
+    text = path.read_text(encoding="utf-8", errors="replace")
+    match = re.search(rf'#define\s+{re.escape(macro)}\s+"([^"]+)"', text)
+    if match:
+        return match.group(1)
+    return fallback
+
+
+CPU3_VERSION = read_version_macro(CPU3 / "Application" / "app_version.h", "CPU3_APP_VERSION_STRING", "V1.15.0.0")
 
 
 CPU3_STYLE_APPEND = r"""
@@ -107,14 +119,19 @@ CPU3_STYLE_APPEND = r"""
 }
 
 .source-card {
+  min-width: 0;
   padding: 14px;
   border: 1px solid var(--line);
   border-radius: var(--radius);
   background: #fbfdff;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .source-card p {
   margin: 6px 0 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .issue-filter {
@@ -252,6 +269,7 @@ class SvgBuilder:
         )
 
     def add_node(self, node_id: str, kind: str, x: int, y: int, w: int, h: int, label: str):
+        dom_id = f"{self.diagram_id}-{node_id}"
         lines = split_label(label, 19 if w < 260 else 24)
         cx = x + w / 2
         cy = y + h / 2
@@ -270,7 +288,7 @@ class SvgBuilder:
             for i, line in enumerate(lines)
         )
         self.parts.append(
-            f'<g id="{esc(node_id)}" class="{esc(kind)}">{shape}'
+            f'<g id="{esc(dom_id)}" class="{esc(kind)}">{shape}'
             f'<text x="{cx:.0f}" y="{text_y:.0f}" text-anchor="middle">{tspans}</text></g>'
         )
 
@@ -388,7 +406,7 @@ def page_html(page: dict, all_pages: list[dict]) -> str:
         f'<div class="metric"><span>流程证据</span><strong>{flow_evidence_count}</strong></div>'
         f'<div class="metric"><span>源码索引</span><strong>{len(page.get("sources", []))}</strong></div>'
         f'<div class="metric"><span>问题点</span><strong>{len(page.get("issues", []))}</strong></div>'
-        f'<div class="metric"><span>整理日期</span><strong>2026-06-13</strong></div></div></section>'
+        f'<div class="metric"><span>整理日期</span><strong>{DOC_DATE}</strong></div></div></section>'
     )
     overview = (
         '<section id="flow"><h2>2. 功能域业务总览 SVG</h2>'
@@ -426,7 +444,7 @@ def page_html(page: dict, all_pages: list[dict]) -> str:
         '<body><div class="wrap">'
         f'<header class="hero"><h1>{esc(page["title"])}</h1><p>{esc(page["hero"])}</p>'
         '<div class="meta-grid">'
-        f'<div class="meta"><span>项目</span><strong>LTD_DISPLAY_CPU3 / CPU3 {esc(page.get("version", "V1.13.0.0"))}</strong></div>'
+        f'<div class="meta"><span>项目</span><strong>LTD_DISPLAY_CPU3 / CPU3 {esc(page.get("version", CPU3_VERSION))}</strong></div>'
         f'<div class="meta"><span>功能域</span><strong>{esc(page["short"])}</strong></div>'
         f'<div class="meta"><span>核心源码</span><strong>{esc(", ".join(page.get("source_files", [])[:2]))}</strong></div>'
         f'<div class="meta"><span>本页流程图</span><strong>{len(page["flows"]) + 1} 张业务级 SVG</strong></div>'
@@ -447,9 +465,9 @@ def overview_page(pages: list[dict]) -> str:
         {"id": "n2", "kind": "process", "x": 90, "y": 160, "w": 260, "h": 80, "label": "初始化显示、RTC、FRAM 参数、串口和 DSM 地址"},
         {"id": "n3", "kind": "loop", "x": 430, "y": 160, "w": 260, "h": 80, "label": "主循环调度显示任务、外部 COM 和 CPU2 轮询"},
         {"id": "n4", "kind": "process", "x": 770, "y": 160, "w": 260, "h": 80, "label": "外部协议请求通过 COM1/2/3 分发到 DSM、Wartsila、SI7000"},
-        {"id": "n5", "kind": "process", "x": 90, "y": 320, "w": 260, "h": 80, "label": "CPU2 轮询刷新测量结果和保持参数镜像"},
-        {"id": "n6", "kind": "process", "x": 430, "y": 320, "w": 260, "h": 80, "label": "显示任务消费按键、刷新状态页和菜单页"},
-        {"id": "n7", "kind": "process", "x": 770, "y": 320, "w": 260, "h": 80, "label": "菜单或外部协议写参数后下发 CPU2 并保存本地参数"},
+        {"id": "n5", "kind": "process", "x": 90, "y": 320, "w": 260, "h": 80, "label": "CPU2 轮询刷新测量结果、RSSI、AO运行态缓存和保持参数镜像"},
+        {"id": "n6", "kind": "process", "x": 430, "y": 320, "w": 260, "h": 80, "label": "显示任务消费按键，按节拍刷新状态页和菜单页"},
+        {"id": "n7", "kind": "process", "x": 770, "y": 320, "w": 260, "h": 80, "label": "菜单或外部协议写参数后下发 CPU2，含 AO 使能"},
         {"id": "n8", "kind": "decision", "x": 430, "y": 480, "w": 260, "h": 110, "label": "串口错误、忙队列覆盖或 CRC/地址异常？"},
         {"id": "n9", "kind": "error", "x": 760, "y": 500, "w": 260, "h": 82, "label": "恢复接收、异常响应或不回包"},
         {"id": "n10", "kind": "end", "x": 430, "y": 640, "w": 260, "h": 62, "label": "等待下一轮主循环或中断事件"},
@@ -524,9 +542,9 @@ def overview_page(pages: list[dict]) -> str:
         f'<title>CPU3 程序流程总览</title><link rel="stylesheet" href="assets/流程文档样式.css?v={CSS_VERSION}"></head>'
         '<body><div class="wrap"><header class="hero"><h1>CPU3 程序流程总览</h1>'
         '<p>按 CPU2 文档同等标准整理 CPU3 显示端、协议网关、参数镜像、按键菜单和外设恢复流程。所有页面均保留一套业务级程序流程图，不把命令流程和代码梳理拆开。</p>'
-        '<div class="meta-grid"><div class="meta"><span>项目</span><strong>LTD_DISPLAY_CPU3</strong></div><div class="meta"><span>页面数量</span><strong>'
+        '<div class="meta-grid"><div class="meta"><span>项目</span><strong>LTD_DISPLAY_CPU3 / CPU3 V1.15.0.0 / 协议 11</strong></div><div class="meta"><span>页面数量</span><strong>'
         + str(len(pages))
-        + '</strong></div><div class="meta"><span>整理日期</span><strong>2026-06-13</strong></div><div class="meta"><span>文档风格</span><strong>业务级 SVG + 源码证据</strong></div></div></header>'
+        + f'</strong></div><div class="meta"><span>整理日期</span><strong>{DOC_DATE}</strong></div><div class="meta"><span>文档风格</span><strong>业务级 SVG + 源码证据</strong></div></div></header>'
         '<nav class="topnav"><a href="#overview">总览图</a><a href="#pages">页面入口</a><a href="#search">全文索引</a><a href="../README.md">CPU3 docs</a></nav>'
         '<section id="overview"><h2>1. CPU3 总体业务流</h2><p class="lead">CPU3 的核心职责不是直接测量，而是在显示端把 CPU2 状态、外部协议、菜单参数和本地持久化连接起来。</p>'
         + flow_svg("cpu3-all", "CPU3 总体业务流", nodes, edges, height=740)
@@ -542,7 +560,7 @@ def readme(pages: list[dict]) -> str:
     rows = "\n".join(f"| [{p['short']}]({p['file']}) | {p['summary']} |" for p in pages)
     return (
         "# CPU3 程序流程文档\n\n"
-        "更新日期：2026-06-13\n\n"
+        f"更新日期：{DOC_DATE}\n\n"
         "本目录按 CPU2 程序流程文档同等标准整理 `LTD_DISPLAY_CPU3`。每个页面只保留一套业务级程序流程，命令入口、代码处理、异常出口和源码依据放在同一页面中。\n\n"
         "| 文档 | 内容 |\n| --- | --- |\n"
         f"| [CPU3 程序流程总览](CPU3程序流程总览.html) | CPU3 上电、主循环、外部协议、CPU2 轮询、显示和参数持久化总览 |\n{rows}\n\n"
@@ -563,13 +581,13 @@ PAGES: list[dict] = [
         "commands": [],
         "source_files": ["Core/Src/main.c", "Application/app_main.c", "Core/Src/usart.c"],
         "overview_nodes": [
-            {"id": "a", "kind": "start", "x": 440, "y": 40, "w": 240, "h": 62, "label": "CPU3 上电进入 main()"},
-            {"id": "b", "kind": "process", "x": 350, "y": 145, "w": 420, "h": 82, "label": "HAL_Init、SystemClock_Config、GPIO/DMA/UART/SPI/TIM/IWDG 初始化"},
-            {"id": "c", "kind": "process", "x": 350, "y": 275, "w": 420, "h": 82, "label": "App_Init 初始化显示、RTC、FRAM 参数、串口配置和 DSM 地址"},
-            {"id": "d", "kind": "loop", "x": 350, "y": 405, "w": 420, "h": 82, "label": "while(1) 周期调用 App_MainLoop"},
+            {"id": "a", "kind": "start", "x": 440, "y": 40, "w": 240, "h": 62, "label": "CPU3 上电进入启动入口"},
+            {"id": "b", "kind": "process", "x": 350, "y": 145, "w": 420, "h": 82, "label": "HAL、系统时钟和 GPIO/DMA/UART/SPI/TIM/IWDG 初始化"},
+            {"id": "c", "kind": "process", "x": 350, "y": 275, "w": 420, "h": 82, "label": "应用初始化显示、RTC、FRAM 参数、串口配置和 DSM 地址"},
+            {"id": "d", "kind": "loop", "x": 350, "y": 405, "w": 420, "h": 82, "label": "主循环周期执行应用调度"},
             {"id": "e", "kind": "decision", "x": 350, "y": 535, "w": 420, "h": 110, "label": "本轮是否有外部 COM 帧或显示按键事件？"},
             {"id": "f", "kind": "process", "x": 90, "y": 690, "w": 300, "h": 86, "label": "有事件：优先处理显示/协议，不执行 CPU2 轮询延时"},
-            {"id": "g", "kind": "process", "x": 730, "y": 690, "w": 300, "h": 86, "label": "无事件：PollingInputData 轮询 CPU2 并延时 10ms"},
+            {"id": "g", "kind": "process", "x": 730, "y": 690, "w": 300, "h": 86, "label": "无事件：轮询 CPU2 并延时 10ms"},
         ],
         "overview_edges": [
             {"d": "M 560 102 L 560 145"},
@@ -587,15 +605,15 @@ PAGES: list[dict] = [
                 "caption": "把 main() 中的 CubeMX 外设初始化和 App_Init 的应用初始化串起来，区分硬件层初始化和 CPU3 应用状态初始化。",
                 "height": 980,
                 "nodes": [
-                    {"id": "s", "kind": "start", "x": 430, "y": 35, "w": 260, "h": 62, "label": "复位后进入 main()"},
-                    {"id": "n1", "kind": "process", "x": 360, "y": 125, "w": 400, "h": 78, "label": "HAL_Init 清 HAL 状态并配置系统时钟"},
+                    {"id": "s", "kind": "start", "x": 430, "y": 35, "w": 260, "h": 62, "label": "复位后进入启动入口"},
+                    {"id": "n1", "kind": "process", "x": 360, "y": 125, "w": 400, "h": 78, "label": "清 HAL 状态并配置系统时钟"},
                     {"id": "n2", "kind": "process", "x": 360, "y": 245, "w": 400, "h": 86, "label": "初始化 GPIO、DMA、五路 UART、两路 SPI、TIM、CRC、IWDG"},
                     {"id": "d1", "kind": "decision", "x": 405, "y": 375, "w": 310, "h": 108, "label": "任一外设初始化失败？"},
                     {"id": "err", "kind": "error", "x": 780, "y": 392, "w": 250, "h": 80, "label": "Error_Handler 关中断后死循环"},
-                    {"id": "n3", "kind": "process", "x": 360, "y": 535, "w": 400, "h": 86, "label": "App_Init：显示 Logo、RTC 初始化、读取 CPU3 FRAM 参数"},
+                    {"id": "n3", "kind": "process", "x": 360, "y": 535, "w": 400, "h": 86, "label": "应用初始化：显示 Logo、RTC 初始化、读取 CPU3 FRAM 参数"},
                     {"id": "n4", "kind": "process", "x": 360, "y": 675, "w": 400, "h": 86, "label": "按 FRAM 参数重配 COM1/2/3 并启动 DMA 接收"},
                     {"id": "n5", "kind": "process", "x": 360, "y": 815, "w": 400, "h": 78, "label": "DSM 初始化地址和寄存器边界，延时等待外设稳定"},
-                    {"id": "e", "kind": "end", "x": 430, "y": 930, "w": 260, "h": 62, "label": "进入 App_MainLoop 循环"},
+                    {"id": "e", "kind": "end", "x": 430, "y": 930, "w": 260, "h": 62, "label": "进入应用主循环"},
                 ],
                 "edges": [
                     {"d": "M 560 97 L 560 125"},
@@ -618,18 +636,18 @@ PAGES: list[dict] = [
                 "caption": "主循环先消化串口重配置和显示输入，再处理外部 COM 帧；只有本轮没有外部工作时才访问 CPU2，避免协议响应被 CPU2 轮询阻塞。",
                 "height": 1040,
                 "nodes": [
-                    {"id": "s", "kind": "start", "x": 440, "y": 35, "w": 240, "h": 62, "label": "进入 App_MainLoop"},
-                    {"id": "n1", "kind": "process", "x": 360, "y": 125, "w": 400, "h": 78, "label": "检查 g_cpu3_uart_reinit_pending，安全点才重配串口"},
-                    {"id": "n2", "kind": "process", "x": 360, "y": 245, "w": 400, "h": 78, "label": "执行 Display_Task，消费按键和刷新状态页"},
+                    {"id": "s", "kind": "start", "x": 440, "y": 35, "w": 240, "h": 62, "label": "进入应用主循环"},
+                    {"id": "n1", "kind": "process", "x": 360, "y": 125, "w": 400, "h": 78, "label": "检查串口重配请求，只在安全点重配"},
+                    {"id": "n2", "kind": "process", "x": 360, "y": 245, "w": 400, "h": 78, "label": "执行显示任务，消费按键并刷新状态页"},
                     {"id": "d1", "kind": "decision", "x": 405, "y": 365, "w": 310, "h": 108, "label": "COM1 是否收到完整帧？"},
                     {"id": "p1", "kind": "process", "x": 790, "y": 378, "w": 250, "h": 82, "label": "按 COM1 配置分发协议并发送响应"},
                     {"id": "d2", "kind": "decision", "x": 405, "y": 525, "w": 310, "h": 108, "label": "COM2 是否收到完整帧？"},
                     {"id": "p2", "kind": "process", "x": 790, "y": 538, "w": 250, "h": 82, "label": "按 COM2 配置分发协议并发送响应"},
                     {"id": "d3", "kind": "decision", "x": 405, "y": 685, "w": 310, "h": 108, "label": "COM3 是否收到完整帧？"},
                     {"id": "p3", "kind": "process", "x": 790, "y": 698, "w": 250, "h": 82, "label": "按 COM3 配置分发协议并发送响应"},
-                    {"id": "d4", "kind": "decision", "x": 405, "y": 845, "w": 310, "h": 108, "label": "本轮 did_work 是否为 0？"},
+                    {"id": "d4", "kind": "decision", "x": 405, "y": 845, "w": 310, "h": 108, "label": "本轮是否没有处理任何事件？"},
                     {"id": "poll", "kind": "process", "x": 90, "y": 858, "w": 250, "h": 82, "label": "轮询 CPU2 并延时 10ms"},
-                    {"id": "e", "kind": "end", "x": 800, "y": 910, "w": 230, "h": 62, "label": "返回 main while 下一轮"},
+                    {"id": "e", "kind": "end", "x": 800, "y": 910, "w": 230, "h": 62, "label": "返回主循环下一轮"},
                 ],
                 "edges": [
                     {"d": "M 560 97 L 560 125"},
@@ -673,10 +691,10 @@ PAGES: list[dict] = [
         "file": "02_CPU2内部通信与轮询.html",
         "title": "CPU3 与 CPU2 内部 Modbus 通信程序流程",
         "short": "CPU2 内部通信与轮询",
-        "hero": "梳理 UART5/RS485 与 CPU2 的同步请求、响应解析、上电全量读取、运行输入轮询、参数更新补读和密度分布点读取。",
-        "entry": "App_MainLoop 空闲时调用 PollingInputData；菜单和外部协议写参数时调用 CPU2_CombinatePackage_Send。",
+        "hero": "梳理 UART5/RS485 与 CPU2 的同步请求、响应解析、上电全量读取、运行输入轮询、参数更新补读、密度分布点读取，以及协议 11 的 RSSI 与 AO 运行态尾段解析。",
+        "entry": "App_MainLoop 空闲时轮询 CPU2；菜单和外部协议写参数时通过内部 Modbus 组帧下发。",
         "summary": "CPU3 作为 CPU2 的 Modbus 主站，周期读取输入寄存器和保持寄存器，写指令/参数时通过 0x10 下发到 CPU2。",
-        "overview_text": "内部通信链路由 UART5 + RS485 实现。读响应刷新 g_measurement/g_deviceParams，写响应当前只作为等待结束信号使用。",
+        "overview_text": "内部通信链路由 UART5 + RS485 实现。读响应刷新测量状态缓存和参数镜像；协议 11 的输入寄存器尾段先解析 RSSI，再解析 AO 运行态缓存。",
         "commands": ["FUNCTIONCODE_READ_HOLDREGISTER", "FUNCTIONCODE_READ_INPUTREGISTER", "FUNCTIONCODE_WRITE_MULREGISTER"],
         "source_files": ["Communication/internal/main_board_modbus/cpu2_communicate.c", "Communication/internal/main_board_modbus/dataanalysis_modbus.c", "Application/system_param/stateformodbus.h"],
         "overview_nodes": [
@@ -686,8 +704,8 @@ PAGES: list[dict] = [
             {"id": "d", "kind": "process", "x": 730, "y": 310, "w": 300, "h": 90, "label": "写入：组 0x10 多寄存器帧下发命令或参数"},
             {"id": "e", "kind": "process", "x": 360, "y": 485, "w": 400, "h": 86, "label": "UART5 切发送 DMA，等待 CPU2 响应"},
             {"id": "f", "kind": "decision", "x": 405, "y": 625, "w": 310, "h": 108, "label": "响应地址、CRC、功能码有效？"},
-            {"id": "g", "kind": "process", "x": 90, "y": 800, "w": 300, "h": 90, "label": "读保持：刷新 HoldingRegisterArray 和 g_deviceParams"},
-            {"id": "h", "kind": "process", "x": 730, "y": 800, "w": 300, "h": 90, "label": "读输入：刷新 InputRegisterArray 和 g_measurement"},
+            {"id": "g", "kind": "process", "x": 90, "y": 800, "w": 300, "h": 90, "label": "读保持：刷新 CPU2 参数镜像和本地参数缓存"},
+            {"id": "h", "kind": "process", "x": 730, "y": 800, "w": 300, "h": 90, "label": "读输入：刷新测量状态缓存和运行态"},
             {"id": "i", "kind": "error", "x": 430, "y": 800, "w": 260, "h": 90, "label": "无效/超时：打印并恢复接收，不更新缓存"},
         ],
         "overview_edges": [
@@ -703,19 +721,19 @@ PAGES: list[dict] = [
         ],
         "flows": [
             {
-                "title": "PollingInputData 分组轮询",
+                "title": "CPU2 分组轮询",
                 "caption": "上电阶段读 7 组，包含输入寄存器和保持寄存器；运行阶段只读输入寄存器；参数更新标志变化后补读保持寄存器。",
                 "height": 1180,
                 "nodes": [
-                    {"id": "s", "kind": "start", "x": 430, "y": 35, "w": 260, "h": 62, "label": "主循环空闲调用 PollingInputData"},
+                    {"id": "s", "kind": "start", "x": 430, "y": 35, "w": 260, "h": 62, "label": "主循环空闲时轮询 CPU2"},
                     {"id": "d1", "kind": "decision", "x": 405, "y": 130, "w": 310, "h": 108, "label": "上电全量读取完成？"},
-                    {"id": "p1", "kind": "process", "x": 90, "y": 285, "w": 300, "h": 90, "label": "未完成：按 poweron_groups 每次发一组 03/04"},
+                    {"id": "p1", "kind": "process", "x": 90, "y": 285, "w": 300, "h": 90, "label": "上电未完成：每轮读取一组启动参数/状态"},
                     {"id": "p2", "kind": "process", "x": 90, "y": 420, "w": 300, "h": 90, "label": "最后一组完成后同步 Wartsila 保持寄存器并记录参数更新标志"},
                     {"id": "d2", "kind": "decision", "x": 405, "y": 285, "w": 310, "h": 108, "label": "有保持寄存器补读任务？"},
-                    {"id": "p3", "kind": "process", "x": 730, "y": 285, "w": 300, "h": 90, "label": "按 refresh_hold_groups 每次补读一组保持参数"},
-                    {"id": "p4", "kind": "process", "x": 405, "y": 520, "w": 310, "h": 90, "label": "运行轮询 runtime_groups：设备状态、测量结果、无线/继电器运行态"},
-                    {"id": "d3", "kind": "decision", "x": 405, "y": 660, "w": 310, "h": 108, "label": "parameter_update_flag 是否变化？"},
-                    {"id": "p5", "kind": "state", "x": 730, "y": 675, "w": 300, "h": 80, "label": "置 hold_refresh_pending，下轮开始补读保持参数"},
+                    {"id": "p3", "kind": "process", "x": 730, "y": 285, "w": 300, "h": 90, "label": "按补读队列每次读取一组保持参数"},
+                    {"id": "p4", "kind": "process", "x": 405, "y": 520, "w": 310, "h": 90, "label": "运行轮询：设备状态、测量结果、继电器、RSSI 和 AO 运行态"},
+                    {"id": "d3", "kind": "decision", "x": 405, "y": 660, "w": 310, "h": 108, "label": "CPU2 参数更新标志是否变化？"},
+                    {"id": "p5", "kind": "state", "x": 730, "y": 675, "w": 300, "h": 80, "label": "标记需要补读保持参数，下轮开始刷新镜像"},
                     {"id": "d4", "kind": "decision", "x": 405, "y": 815, "w": 310, "h": 108, "label": "CPU2 状态是否为分布/区间测量完成？"},
                     {"id": "p6", "kind": "process", "x": 730, "y": 830, "w": 300, "h": 90, "label": "按测点数分批读取密度分布点，每帧最多 100 寄存器"},
                     {"id": "e", "kind": "end", "x": 430, "y": 1030, "w": 260, "h": 62, "label": "本轮轮询结束"},
@@ -750,13 +768,13 @@ PAGES: list[dict] = [
                     {"id": "s", "kind": "start", "x": 430, "y": 35, "w": 260, "h": 62, "label": "需要向 CPU2 发读/写请求"},
                     {"id": "p1", "kind": "process", "x": 350, "y": 135, "w": 420, "h": 86, "label": "按地址、功能码、起始地址、数量和数据组 Modbus RTU 帧"},
                     {"id": "d1", "kind": "decision", "x": 405, "y": 275, "w": 310, "h": 108, "label": "UART5 TX DMA 启动成功？"},
-                    {"id": "err1", "kind": "error", "x": 790, "y": 290, "w": 250, "h": 82, "label": "失败：切回接收、清 wait_response 并返回"},
-                    {"id": "p2", "kind": "process", "x": 350, "y": 440, "w": 420, "h": 86, "label": "wait_response 等待响应或超时"},
+                    {"id": "err1", "kind": "error", "x": 790, "y": 290, "w": 250, "h": 82, "label": "失败：切回接收、清等待响应状态并返回"},
+                    {"id": "p2", "kind": "process", "x": 350, "y": 440, "w": 420, "h": 86, "label": "等待 CPU2 响应或超时"},
                     {"id": "d2", "kind": "decision", "x": 405, "y": 580, "w": 310, "h": 108, "label": "超时或响应帧非法？"},
                     {"id": "err2", "kind": "error", "x": 790, "y": 596, "w": 250, "h": 82, "label": "打印超时/CRC/地址错误，不更新缓存"},
                     {"id": "d3", "kind": "decision", "x": 405, "y": 735, "w": 310, "h": 108, "label": "响应功能码是 03/04/10？"},
-                    {"id": "p3", "kind": "process", "x": 70, "y": 900, "w": 300, "h": 90, "label": "03：解析保持寄存器，刷新参数元数据和 g_deviceParams"},
-                    {"id": "p4", "kind": "process", "x": 410, "y": 900, "w": 300, "h": 90, "label": "04：解析输入寄存器，刷新 g_measurement"},
+                    {"id": "p3", "kind": "process", "x": 70, "y": 900, "w": 300, "h": 90, "label": "03：解析保持寄存器，刷新参数元数据和参数缓存"},
+                    {"id": "p4", "kind": "process", "x": 410, "y": 900, "w": 300, "h": 90, "label": "04：解析输入寄存器，刷新测量状态缓存"},
                     {"id": "p5", "kind": "state", "x": 750, "y": 900, "w": 300, "h": 90, "label": "10：当前空实现，仅结束等待"},
                 ],
                 "edges": [
@@ -777,11 +795,47 @@ PAGES: list[dict] = [
                     {"title": "响应解析", "text": f"{code('cpu2_communicate.c:379-452')} 03/04 分别刷新保持/输入缓存，10 响应暂未解析。"},
                 ],
             },
+            {
+                "title": "协议 11 输入寄存器尾段解析",
+                "caption": "CPU2 在继电器运行态后追加无线 RSSI，再追加 AO 运行态；CPU3 必须按相同顺序读尾段，否则后续字段整体错位。",
+                "height": 1160,
+                "nodes": [
+                    {"id": "s", "kind": "start", "x": 430, "y": 35, "w": 260, "h": 62, "label": "04 响应进入输入寄存器解析"},
+                    {"id": "p1", "kind": "process", "x": 350, "y": 125, "w": 420, "h": 82, "label": "先解析设备状态、液位/水位/密度、调试数据和继电器运行态"},
+                    {"id": "p2", "kind": "state", "x": 350, "y": 250, "w": 420, "h": 86, "label": "读取无线配对状态：连接、RSSI、错误码和更新计数"},
+                    {"id": "p3", "kind": "state", "x": 350, "y": 385, "w": 420, "h": 86, "label": "继续读取 AO 输出运行态 9 个字段"},
+                    {"id": "d1", "kind": "decision", "x": 405, "y": 535, "w": 310, "h": 108, "label": "CPU2/CPU3 协议版本是否严格一致？"},
+                    {"id": "e1", "kind": "error", "x": 790, "y": 550, "w": 250, "h": 82, "label": "不一致：状态页提示协议不兼容，不可信尾段数据"},
+                    {"id": "p4", "kind": "process", "x": 70, "y": 720, "w": 300, "h": 94, "label": "读取部件参数页使用 RSSI 字段显示 RSSI 或 N/A"},
+                    {"id": "p5", "kind": "process", "x": 410, "y": 720, "w": 300, "h": 94, "label": "CPU3 缓存 AO 运行态；状态页未独立显示目标电流/来源"},
+                    {"id": "p6", "kind": "process", "x": 750, "y": 720, "w": 300, "h": 94, "label": "AD5421 故障码由 CPU3 文案表翻译显示"},
+                    {"id": "end", "kind": "end", "x": 430, "y": 940, "w": 260, "h": 62, "label": "RSSI 供状态页显示；AO运行态先进入缓存"},
+                ],
+                "edges": [
+                    {"d": "M 560 97 L 560 125"},
+                    {"d": "M 560 207 L 560 250"},
+                    {"d": "M 560 336 L 560 385"},
+                    {"d": "M 560 471 L 560 535"},
+                    {"d": "M 715 589 L 790 591", "label": "否", "red": True},
+                    {"d": "M 405 589 C 270 635 230 680 220 720", "label": "是/RSSI"},
+                    {"d": "M 560 643 L 560 720", "label": "是/AO"},
+                    {"d": "M 715 589 C 825 635 890 680 900 720", "label": "是/错误码"},
+                    {"d": "M 220 814 C 320 900 470 930 560 940"},
+                    {"d": "M 560 814 L 560 940"},
+                    {"d": "M 900 814 C 800 900 650 930 560 940"},
+                ],
+                "evidence": [
+                    {"title": "AO 尾段定义", "text": f"{code('Application/system_param/stateformodbus.h:402-415')} 在 RSSI 更新计数之后定义 REG_AO_OUTPUT_RUNTIME_*，REG_ENG 顺延到 AO 尾段末尾。"},
+                    {"title": "CPU3 尾段解析", "text": f"{code('dataanalysis_modbus.c:103-113,493-623')} 先解析 RSSI 字段，再调用 read_ao_output_runtime_from_regs 写入 g_measurement.ao_output_runtime。"},
+                    {"title": "协议版本", "text": f"{code('Application/system_param/system_parameter.h:29')} 当前 DEVICE_PROTOCOL_VERSION 为 11，CPU3 使用严格相等判断协议兼容。"},
+                ],
+            },
         ],
         "issues": [
             {"level": "high", "title": "等待响应期间阻塞主循环", "desc": "CPU2_CombinatePackage_Send 使用 while(wait_response) 同步等待，外部协议响应、显示刷新和按键处理都会被阻塞。", "suggest": "改成 UART5 请求状态机：发送完成、接收完成、超时分别由状态推进；主循环每轮只推进一次。", "ref": "cpu2_communicate.c:300-353"},
             {"level": "high", "title": "密度点读取在一个函数内连续发送多帧", "desc": "RequestDensityDistPoints_ByCount 的 while(total_regs > 0) 会连续调用同步发送，多点数据量大时可能长时间占用主循环。", "suggest": "把密度点读取拆成分帧状态机，每轮只发一帧，并记录已读 offset。", "ref": "cpu2_communicate.c:256-298"},
             {"level": "mid", "title": "0x10 响应未校验写入地址和数量", "desc": "CPU2_Response10Process 当前为空，无法确认 CPU2 回显的起始地址/数量是否与本次写入一致。", "suggest": "解析 0x10 回显并和 RCV_startaddress/RCV_registercnt 对比，失败时设置通信错误计数。", "ref": "cpu2_communicate.c:432-437"},
+            {"level": "mid", "title": "输入寄存器尾段强依赖两端协议版本一致", "desc": "协议 11 在 RSSI 后继续追加 AO 运行态。只要 CPU2/CPU3 任何一端仍停留在协议 9，后续尾段字段都会错位。", "suggest": "保持协议版本严格相等提示，并在现场升级清单里要求 CPU2/CPU3 成对升级。", "ref": "stateformodbus.h:397-415"},
             {"level": "mid", "title": "03 响应解析前先 WriteDeviceParamsToHoldingRegisters", "desc": "03 处理先把本地 g_deviceParams 写入 HoldingRegisterArray，再覆盖响应区间，若响应只是局部参数，未读区仍是本地旧镜像。", "suggest": "明确 HoldingRegisterArray 的主数据源，避免局部读时混入旧值；必要时增加脏区标记。", "ref": "cpu2_communicate.c:379-412"},
         ],
         "sources": [
@@ -842,15 +896,15 @@ def external_com_page() -> dict:
                 "caption": "COM1/COM2/COM3 的主循环处理逻辑基本一致：清 ready 标志、调用 cpu3_port_process、根据返回值和 tx_len 决定恢复接收或发送。",
                 "height": 1040,
                 "nodes": [
-                    {"id": "s", "kind": "start", "x": 430, "y": 35, "w": 260, "h": 62, "label": "comX_rx_ready == 1"},
-                    {"id": "p1", "kind": "process", "x": 350, "y": 130, "w": 420, "h": 82, "label": "清 ready，设置 did_work，取 UARTx_RX_BUF/LEN"},
-                    {"id": "p2", "kind": "process", "x": 350, "y": 260, "w": 420, "h": 82, "label": "cpu3_port_process 读取 g_cpu3_comm_display_params.comX.protocol"},
+                    {"id": "s", "kind": "start", "x": 430, "y": 35, "w": 260, "h": 62, "label": "外部端口收到完整帧？"},
+                    {"id": "p1", "kind": "process", "x": 350, "y": 130, "w": 420, "h": 82, "label": "清接收标志，标记本轮已处理并取接收缓存"},
+                    {"id": "p2", "kind": "process", "x": 350, "y": 260, "w": 420, "h": 82, "label": "读取当前端口协议配置"},
                     {"id": "d1", "kind": "decision", "x": 405, "y": 400, "w": 310, "h": 108, "label": "协议号越界或 handler 为空？"},
-                    {"id": "err", "kind": "error", "x": 790, "y": 415, "w": 250, "h": 82, "label": "ret != 0：打印结果并恢复接收 DMA"},
+                    {"id": "err", "kind": "error", "x": 790, "y": 415, "w": 250, "h": 82, "label": "处理失败：打印结果并恢复接收 DMA"},
                     {"id": "p3", "kind": "process", "x": 350, "y": 560, "w": 420, "h": 82, "label": "执行协议处理：DSM / Wartsila / SI7000 / LTD占位"},
                     {"id": "d2", "kind": "decision", "x": 405, "y": 700, "w": 310, "h": 108, "label": "是否生成响应帧？"},
-                    {"id": "p4", "kind": "process", "x": 90, "y": 860, "w": 300, "h": 82, "label": "无响应：COMx_RecvMode + HAL_UART_Receive_DMA"},
-                    {"id": "p5", "kind": "process", "x": 730, "y": 860, "w": 300, "h": 82, "label": "有响应：uart_try_send_or_queue 发送或排队"},
+                    {"id": "p4", "kind": "process", "x": 90, "y": 860, "w": 300, "h": 82, "label": "无响应：切回接收模式并重启 DMA"},
+                    {"id": "p5", "kind": "process", "x": 730, "y": 860, "w": 300, "h": 82, "label": "有响应：立即发送或进入待发队列"},
                 ],
                 "edges": [
                     {"d": "M 560 97 L 560 130"},
@@ -873,16 +927,16 @@ def external_com_page() -> dict:
                 "caption": "发送通道忙时只缓存一帧 pending，新帧覆盖旧帧并计数；Tx 完成回调如果有 pending 就续发，否则延时后恢复接收 DMA。",
                 "height": 1080,
                 "nodes": [
-                    {"id": "s", "kind": "start", "x": 430, "y": 35, "w": 260, "h": 62, "label": "外部协议生成 tx_len > 0"},
-                    {"id": "d1", "kind": "decision", "x": 405, "y": 140, "w": 310, "h": 108, "label": "g_tx_busy_comX 是否为 0？"},
+                    {"id": "s", "kind": "start", "x": 430, "y": 35, "w": 260, "h": 62, "label": "外部协议是否生成响应帧？"},
+                    {"id": "d1", "kind": "decision", "x": 405, "y": 140, "w": 310, "h": 108, "label": "当前发送通道是否空闲？"},
                     {"id": "p1", "kind": "process", "x": 90, "y": 310, "w": 300, "h": 90, "label": "空闲：置 busy，停 RX DMA，切发送模式，启动 TX DMA"},
                     {"id": "p2", "kind": "state", "x": 730, "y": 310, "w": 300, "h": 90, "label": "忙：复制到 pending_buf，若已有 pending 则覆盖并计数"},
                     {"id": "d2", "kind": "decision", "x": 405, "y": 470, "w": 310, "h": 108, "label": "TX DMA 启动或续发成功？"},
                     {"id": "err", "kind": "error", "x": 790, "y": 485, "w": 250, "h": 82, "label": "失败：释放 busy，恢复接收 DMA"},
                     {"id": "p3", "kind": "process", "x": 350, "y": 640, "w": 420, "h": 82, "label": "HAL_UART_TxCpltCallback 进入发送完成处理"},
                     {"id": "d3", "kind": "decision", "x": 405, "y": 780, "w": 310, "h": 108, "label": "是否还有 pending_len？"},
-                    {"id": "p4", "kind": "process", "x": 90, "y": 935, "w": 300, "h": 82, "label": "有：不切接收，继续 TX DMA 发送 pending"},
-                    {"id": "p5", "kind": "process", "x": 730, "y": 935, "w": 300, "h": 82, "label": "无：短延时后清 busy，切回接收并启动 RX DMA"},
+                    {"id": "p4", "kind": "process", "x": 90, "y": 935, "w": 300, "h": 82, "label": "有待发帧：继续发送，不切回接收"},
+                    {"id": "p5", "kind": "process", "x": 730, "y": 935, "w": 300, "h": 82, "label": "无待发帧：短延时后清忙标志并恢复接收"},
                 ],
                 "edges": [
                     {"d": "M 560 97 L 560 140"},
@@ -997,7 +1051,7 @@ def dsm_page() -> dict:
                 "height": 1040,
                 "nodes": [
                     {"id": "s", "kind": "start", "x": 430, "y": 35, "w": 260, "h": 62, "label": "DSM 0x05 写单线圈"},
-                    {"id": "p1", "kind": "process", "x": 350, "y": 130, "w": 420, "h": 82, "label": "解析线圈地址和线圈值，查 g_coil_cmd_map"},
+                    {"id": "p1", "kind": "process", "x": 350, "y": 130, "w": 420, "h": 82, "label": "解析线圈地址和线圈值，匹配线圈命令映射表"},
                     {"id": "d1", "kind": "decision", "x": 405, "y": 270, "w": 310, "h": 108, "label": "线圈地址和写入值合法？"},
                     {"id": "e1", "kind": "error", "x": 790, "y": 285, "w": 250, "h": 82, "label": "非法地址/数据：组异常响应"},
                     {"id": "d2", "kind": "decision", "x": 405, "y": 430, "w": 310, "h": 108, "label": "映射动作类型是什么？"},
@@ -1063,7 +1117,7 @@ def wartsila_si7000_page() -> dict:
             {"id": "c", "kind": "process", "x": 90, "y": 320, "w": 300, "h": 90, "label": "Wartsila：地址/CRC 校验后读写 g_holding_regs"},
             {"id": "d", "kind": "process", "x": 730, "y": 320, "w": 300, "h": 90, "label": "SI7000：地址/CRC 通过后刷新快照数组"},
             {"id": "e", "kind": "decision", "x": 90, "y": 485, "w": 300, "h": 108, "label": "Wartsila 是否写保持寄存器？"},
-            {"id": "f", "kind": "process", "x": 90, "y": 655, "w": 300, "h": 90, "label": "解析 g_holding_regs 到参数，指令或密度参数下发 CPU2"},
+            {"id": "f", "kind": "process", "x": 90, "y": 655, "w": 300, "h": 90, "label": "解析保持寄存器到参数，指令或密度参数下发 CPU2"},
             {"id": "g", "kind": "process", "x": 730, "y": 500, "w": 300, "h": 90, "label": "SI7000 按功能码读写线圈/寄存器并生成异常或正常响应"},
             {"id": "h", "kind": "end", "x": 430, "y": 815, "w": 260, "h": 62, "label": "返回响应帧或错误码给 COM 层"},
         ],
@@ -1087,11 +1141,11 @@ def wartsila_si7000_page() -> dict:
                     {"id": "d1", "kind": "decision", "x": 405, "y": 130, "w": 310, "h": 108, "label": "地址和 CRC 有效？"},
                     {"id": "err", "kind": "error", "x": 790, "y": 145, "w": 250, "h": 82, "label": "地址不匹配或 CRC 错误：不生成响应"},
                     {"id": "d2", "kind": "decision", "x": 405, "y": 285, "w": 310, "h": 108, "label": "功能码是 0x03 还是 0x10？"},
-                    {"id": "p1", "kind": "process", "x": 80, "y": 455, "w": 300, "h": 90, "label": "0x03：DeviceParams_StoreToRegisters 刷新寄存器池后返回数据"},
+                    {"id": "p1", "kind": "process", "x": 80, "y": 455, "w": 300, "h": 90, "label": "0x03：刷新参数寄存器池后返回数据"},
                     {"id": "p2", "kind": "process", "x": 730, "y": 455, "w": 300, "h": 90, "label": "0x10：校验数量、字节数和地址后写入寄存器池"},
-                    {"id": "p3", "kind": "process", "x": 730, "y": 620, "w": 300, "h": 90, "label": "modbus_on_holding_written 解析参数"},
+                    {"id": "p3", "kind": "process", "x": 730, "y": 620, "w": 300, "h": 90, "label": "写保持寄存器后解析命令或参数"},
                     {"id": "d3", "kind": "decision", "x": 730, "y": 770, "w": 300, "h": 108, "label": "写入范围包含 0x0006 指令？"},
-                    {"id": "p4", "kind": "process", "x": 420, "y": 925, "w": 300, "h": 82, "label": "是：下发 command 到 CPU2 后清 CMD_NONE"},
+                    {"id": "p4", "kind": "process", "x": 420, "y": 925, "w": 300, "h": 82, "label": "是：下发命令到 CPU2 后清空命令缓存"},
                     {"id": "p5", "kind": "process", "x": 780, "y": 925, "w": 300, "h": 82, "label": "否：转发 Wartsila 密度区间参数到 CPU2"},
                     {"id": "end", "kind": "end", "x": 80, "y": 925, "w": 260, "h": 62, "label": "返回正常/异常响应"},
                 ],
@@ -1121,7 +1175,7 @@ def wartsila_si7000_page() -> dict:
                 "height": 1040,
                 "nodes": [
                     {"id": "s", "kind": "start", "x": 430, "y": 35, "w": 260, "h": 62, "label": "SI7000 RTU 帧进入"},
-                    {"id": "d1", "kind": "decision", "x": 405, "y": 130, "w": 310, "h": 108, "label": "rx/tx/tx_len 有效且长度 >= 4？"},
+                    {"id": "d1", "kind": "decision", "x": 405, "y": 130, "w": 310, "h": 108, "label": "接收/发送缓存有效且长度足够？"},
                     {"id": "e1", "kind": "error", "x": 790, "y": 145, "w": 250, "h": 82, "label": "参数或长度错误：返回 BADLEN"},
                     {"id": "d2", "kind": "decision", "x": 405, "y": 285, "w": 310, "h": 108, "label": "地址匹配且 CRC 正确？"},
                     {"id": "e2", "kind": "error", "x": 790, "y": 300, "w": 250, "h": 82, "label": "地址不匹配或 CRC 错误：不回包"},
@@ -1174,21 +1228,21 @@ def display_page() -> dict:
         "file": "06_显示刷新与按键事件.html",
         "title": "CPU3 显示刷新与按键事件程序流程",
         "short": "显示刷新与按键事件",
-        "hero": "梳理 OLED 初始化、显示任务、状态页刷新、长按进入菜单、长按取消测量、按键队列、长按释放保护和 SPI 恢复。",
+        "hero": "梳理 OLED 初始化、显示任务、状态页 2 秒数据采样、协议兼容提示、AD5421 故障显示、长按进入菜单、按键队列、长按释放保护和 SPI 恢复。",
         "entry": "App_MainLoop 每轮调用 Display_Task；按键 EXTI 中断只入队或启动长按计时，不直接绘制。",
-        "summary": "显示模块在主循环中消费按键和刷新屏幕，通过 SPI 错误计数、定期恢复和超时计数保护 OLED 绘制。",
-        "overview_text": "显示流程的关键是把中断输入和主循环绘制解耦：中断只记录事件，Display_Task 在主循环里统一处理。",
+        "summary": "显示模块在主循环中消费按键和刷新屏幕，通过状态页采样节流、协议版本提示、AD5421 故障文案、SPI 错误计数和超时计数保护 OLED 绘制。",
+        "overview_text": "显示流程的关键是把中断输入、状态数据采样和 OLED 绘制解耦：中断只记录事件，状态页按变化/2 秒节拍采样，Display_Task 在主循环里统一处理。",
         "commands": ["LONG_PRESS_KEY_SURE", "LONG_PRESS_KEY_BACK", "USE_KEY_UP", "USE_KEY_DOWN", "USE_KEY_SURE", "USE_KEY_BACK"],
         "source_files": ["Application/display/display.c", "Application/display/exit.c", "Application/display/display_tankopera.c", "Application/display/hgs.c"],
         "overview_nodes": [
             {"id": "a", "kind": "start", "x": 430, "y": 40, "w": 260, "h": 62, "label": "按键中断或显示刷新请求"},
             {"id": "b", "kind": "process", "x": 90, "y": 175, "w": 300, "h": 86, "label": "EXTI 消抖：菜单态入普通按键队列，状态页启动长按"},
-            {"id": "c", "kind": "process", "x": 730, "y": 175, "w": 300, "h": 86, "label": "TIM/状态变化请求 display_refresh_pending"},
-            {"id": "d", "kind": "loop", "x": 350, "y": 340, "w": 420, "h": 90, "label": "Display_Task 更新释放保护，消费长按和普通按键"},
+            {"id": "c", "kind": "process", "x": 730, "y": 175, "w": 300, "h": 86, "label": "定时器或状态变化请求屏幕刷新"},
+            {"id": "d", "kind": "loop", "x": 350, "y": 340, "w": 420, "h": 90, "label": "显示任务更新释放保护，消费长按和普通按键"},
             {"id": "e", "kind": "decision", "x": 405, "y": 500, "w": 310, "h": 108, "label": "是否进入前景页面或状态刷新？"},
             {"id": "f", "kind": "process", "x": 90, "y": 670, "w": 300, "h": 90, "label": "前景页面：菜单/确认/故障原因整屏绘制"},
-            {"id": "g", "kind": "process", "x": 730, "y": 670, "w": 300, "h": 90, "label": "状态页：RefreshScreen 局部/全屏刷新"},
-            {"id": "h", "kind": "error", "x": 410, "y": 830, "w": 300, "h": 90, "label": "SPI 错误或周期恢复：OLED_RecoverAndClear"},
+            {"id": "g", "kind": "process", "x": 730, "y": 670, "w": 300, "h": 90, "label": "状态页按需要局部或全屏刷新"},
+            {"id": "h", "kind": "error", "x": 410, "y": 830, "w": 300, "h": 90, "label": "SPI 错误或周期恢复：执行 OLED 恢复清屏"},
         ],
         "overview_edges": [
             {"d": "M 560 102 C 390 125 260 145 240 175"},
@@ -1203,18 +1257,18 @@ def display_page() -> dict:
         "flows": [
             {
                 "title": "按键中断到主循环消费",
-                "caption": "EXTI 回调只做亮屏、消抖、普通按键入队或启动长按计时；实际页面跳转和绘制在 Display_Task 中完成。",
+                "caption": "EXTI 回调只做亮屏、消抖、普通按键入队或启动长按计时；实际页面跳转和绘制在显示任务中完成。",
                 "height": 1080,
                 "nodes": [
                     {"id": "s", "kind": "start", "x": 430, "y": 35, "w": 260, "h": 62, "label": "按键 EXTI 触发"},
-                    {"id": "p1", "kind": "process", "x": 350, "y": 130, "w": 420, "h": 82, "label": "SetScreenBright，并按键位读取 GPIO 电平"},
+                    {"id": "p1", "kind": "process", "x": 350, "y": 130, "w": 420, "h": 82, "label": "点亮屏幕，并按键位读取 GPIO 电平"},
                     {"id": "d1", "kind": "decision", "x": 405, "y": 270, "w": 310, "h": 108, "label": "50ms 内是否重复下降沿？"},
                     {"id": "e1", "kind": "error", "x": 790, "y": 285, "w": 250, "h": 82, "label": "抖动：丢弃本次按键"},
                     {"id": "d2", "kind": "decision", "x": 405, "y": 430, "w": 310, "h": 108, "label": "当前是否在罐上菜单操作？"},
                     {"id": "p2", "kind": "state", "x": 80, "y": 600, "w": 300, "h": 90, "label": "菜单态：按键入 8 项环形队列，队列满丢弃最新"},
                     {"id": "p3", "kind": "state", "x": 730, "y": 600, "w": 300, "h": 90, "label": "状态页：确认/返回长按启动 TIM1 计时"},
-                    {"id": "p4", "kind": "loop", "x": 350, "y": 760, "w": 420, "h": 82, "label": "Display_Task 读取长按动作或 pending_key_queue"},
-                    {"id": "p5", "kind": "process", "x": 350, "y": 900, "w": 420, "h": 90, "label": "长按确认进入主菜单；长按返回进入取消测量或故障原因页；普通按键交 KeyProcess"},
+                    {"id": "p4", "kind": "loop", "x": 350, "y": 760, "w": 420, "h": 82, "label": "显示任务读取长按动作或按键队列"},
+                    {"id": "p5", "kind": "process", "x": 350, "y": 900, "w": 420, "h": 90, "label": "长按确认进入主菜单；长按返回进入取消测量或故障原因页；普通按键交当前页面处理"},
                 ],
                 "edges": [
                     {"d": "M 560 97 L 560 130"},
@@ -1230,7 +1284,7 @@ def display_page() -> dict:
                 "evidence": [
                     {"title": "EXTI 回调", "text": f"{code('Application/display/exit.c:318-363')} 按键中断按 FlagofTankOpera 区分菜单按键和状态页长按。"},
                     {"title": "按键队列", "text": f"{code('Application/display/exit.c:181-246')} Display_RequestKey/TakePendingKey 实现 8 项队列和临界区保护。"},
-                    {"title": "主循环消费", "text": f"{code('Application/display/display.c:1965-2024')} Display_ProcessLongPressAction 和 Display_ProcessPendingInput 处理页面跳转和按键。"},
+                    {"title": "主循环消费", "text": f"{code('Application/display/display.c:2024-2073')} Display_ProcessLongPressAction 和 Display_ProcessPendingInput 处理页面跳转和按键。"},
                 ],
             },
             {
@@ -1238,14 +1292,14 @@ def display_page() -> dict:
                 "caption": "Display_Task 根据刷新请求、状态高亮计时和 SPI 错误计数决定是否重绘；前景页面会要求状态页下次全屏刷新。",
                 "height": 1040,
                 "nodes": [
-                    {"id": "s", "kind": "start", "x": 430, "y": 35, "w": 260, "h": 62, "label": "Display_Task 被主循环调用"},
+                    {"id": "s", "kind": "start", "x": 430, "y": 35, "w": 260, "h": 62, "label": "显示任务被主循环调用"},
                     {"id": "p1", "kind": "process", "x": 350, "y": 130, "w": 420, "h": 82, "label": "更新长按释放保护并消费输入事件"},
                     {"id": "d1", "kind": "decision", "x": 405, "y": 270, "w": 310, "h": 108, "label": "有状态高亮超时或刷新请求？"},
                     {"id": "end1", "kind": "end", "x": 790, "y": 285, "w": 250, "h": 82, "label": "无刷新：返回主循环"},
-                    {"id": "p2", "kind": "process", "x": 350, "y": 440, "w": 420, "h": 82, "label": "清 display_refresh_pending，记录刷新开始 tick"},
+                    {"id": "p2", "kind": "process", "x": 350, "y": 440, "w": 420, "h": 82, "label": "清屏幕刷新请求，记录刷新开始时间"},
                     {"id": "d2", "kind": "decision", "x": 405, "y": 580, "w": 310, "h": 108, "label": "是否需要 OLED 恢复或全屏清屏？"},
-                    {"id": "p3", "kind": "error", "x": 790, "y": 595, "w": 250, "h": 82, "label": "SPI 错误/周期恢复：OLED_RecoverAndClear"},
-                    {"id": "p4", "kind": "process", "x": 350, "y": 750, "w": 420, "h": 82, "label": "RefreshScreen 根据状态和数据源绘制状态页"},
+                    {"id": "p3", "kind": "error", "x": 790, "y": 595, "w": 250, "h": 82, "label": "SPI 错误/周期恢复：执行 OLED 恢复清屏"},
+                    {"id": "p4", "kind": "process", "x": 350, "y": 750, "w": 420, "h": 82, "label": "根据状态和数据源绘制状态页"},
                     {"id": "d3", "kind": "decision", "x": 405, "y": 880, "w": 310, "h": 108, "label": "刷新耗时是否超过 500ms？"},
                     {"id": "e2", "kind": "error", "x": 790, "y": 895, "w": 250, "h": 82, "label": "超时计数 +1"},
                 ],
@@ -1262,22 +1316,60 @@ def display_page() -> dict:
                     {"d": "M 715 934 L 790 936", "label": "是", "red": True},
                 ],
                 "evidence": [
-                    {"title": "显示初始化", "text": f"{code('Application/display/display.c:1841-1855')} DisplayInit 初始化 OLED、计数器、TIM3 和页面状态。"},
-                    {"title": "恢复条件", "text": f"{code('Application/display/display.c:1872-1903')} Display_ShouldRecoverBeforeDraw 监控强制恢复、SPI 错误和 60s 周期恢复。"},
-                    {"title": "刷新任务", "text": f"{code('Application/display/display.c:2027-2044')} Display_Task 执行刷新并统计超过 500ms 的耗时。"},
+                    {"title": "显示初始化", "text": f"{code('Application/display/display.c:1871-1905')} DisplayInit 初始化 OLED、计数器、TIM3 和页面状态。"},
+                    {"title": "恢复条件", "text": f"{code('Application/display/display.c:1912-2005')} Display_ShouldRecoverBeforeDraw 监控强制恢复、SPI 错误和 60s 周期恢复。"},
+                    {"title": "刷新任务", "text": f"{code('Application/display/display.c:2057-2073')} Display_Task 执行刷新并统计超过 500ms 的耗时。"},
+                ],
+            },
+            {
+                "title": "状态页数据采样、协议兼容和 AD5421 故障显示",
+                "caption": "状态页不是每次绘制都重新采样。当前程序在首次、强制刷新、关键状态变化或 2 秒采样节拍到期时更新快照，否则只恢复高亮区域。",
+                "height": 1180,
+                "nodes": [
+                    {"id": "s", "kind": "start", "x": 430, "y": 35, "w": 260, "h": 62, "label": "进入状态页绘制"},
+                    {"id": "d1", "kind": "decision", "x": 405, "y": 135, "w": 310, "h": 108, "label": "是否首次、全屏恢复或快照无效？"},
+                    {"id": "p1", "kind": "process", "x": 90, "y": 300, "w": 300, "h": 90, "label": "立即采样 CPU2 缓存，生成状态页快照"},
+                    {"id": "d2", "kind": "decision", "x": 730, "y": 300, "w": 300, "h": 108, "label": "状态/错误/协议/语言是否变化或已到 2 秒？"},
+                    {"id": "p2", "kind": "process", "x": 730, "y": 475, "w": 300, "h": 90, "label": "需要采样：刷新液位、水位、RSSI、协议状态和故障原因"},
+                    {"id": "p3", "kind": "state", "x": 350, "y": 635, "w": 420, "h": 86, "label": "不采样：只恢复状态高亮，不重新读取 CPU2 数据"},
+                    {"id": "d3", "kind": "decision", "x": 405, "y": 780, "w": 310, "h": 108, "label": "CPU2/CPU3 协议版本严格一致？"},
+                    {"id": "e1", "kind": "error", "x": 90, "y": 945, "w": 300, "h": 90, "label": "不一致：显示协议不兼容，提示成对升级"},
+                    {"id": "d4", "kind": "decision", "x": 730, "y": 945, "w": 300, "h": 108, "label": "错误码是否为 AD5421/AO 输出相关？"},
+                    {"id": "p4", "kind": "process", "x": 730, "y": 1110, "w": 300, "h": 90, "label": "按 AD5421 故障文案显示初始化、写电流、FAULT、READFAULT 或回读错误"},
+                ],
+                "edges": [
+                    {"d": "M 560 97 L 560 135"},
+                    {"d": "M 405 189 C 300 240 250 275 240 300", "label": "是"},
+                    {"d": "M 715 189 C 820 240 870 275 880 300", "label": "否"},
+                    {"d": "M 880 408 L 880 475", "label": "是"},
+                    {"d": "M 730 354 C 650 520 610 600 560 635", "label": "否"},
+                    {"d": "M 240 390 C 330 540 450 600 560 635"},
+                    {"d": "M 880 565 C 800 605 680 620 560 635"},
+                    {"d": "M 560 721 L 560 780"},
+                    {"d": "M 405 834 C 300 880 250 920 240 945", "label": "否", "red": True},
+                    {"d": "M 715 834 C 820 880 870 920 880 945", "label": "是"},
+                    {"d": "M 880 1053 L 880 1110", "label": "是", "red": True},
+                ],
+                "evidence": [
+                    {"title": "采样节流", "text": f"{code('Application/display/display.c:16,2633-2652')} 状态页使用 DISPLAY_STATUS_DATA_REFRESH_MS=2000，并由 Display_ShouldSampleStatusData 判断是否重新采样。"},
+                    {"title": "状态页绘制", "text": f"{code('Application/display/display.c:2968-3120')} RefreshScreen 根据快照有效性、全屏恢复和状态变化决定绘制路径。"},
+                    {"title": "协议与 AD5421 文案", "text": f"{code('Application/display/display.c:796-805,2968-3120')} 状态页严格判断协议版本，并把 AD5421/AO 错误码翻译成现场可读故障原因。"},
                 ],
             },
         ],
         "issues": [
             {"level": "mid", "title": "按键队列满时丢弃最新按键", "desc": "pending_key_queue 满时只增加 overflow_count，用户快速操作时最新按键会丢失但界面无提示。", "suggest": "在调试页显示 overflow_count，或改为丢弃最旧按键并给界面节流。", "ref": "Application/display/exit.c:181-199"},
-            {"level": "mid", "title": "前景绘制和协议轮询共用主循环", "desc": "菜单绘制、确认页和状态页刷新都在 App_MainLoop 中执行，刷新耗时过长会影响外部 COM 响应和 CPU2 轮询。", "suggest": "保留 display_last_refresh_ms 统计，并对状态页分帧/局部刷新做节流。", "ref": "Application/display/display.c:2027-2044"},
+            {"level": "mid", "title": "前景绘制和协议轮询共用主循环", "desc": "菜单绘制、确认页和状态页刷新都在 App_MainLoop 中执行，刷新耗时过长会影响外部 COM 响应和 CPU2 轮询。", "suggest": "保留 display_last_refresh_ms 统计，并对状态页分帧/局部刷新做节流。", "ref": "Application/display/display.c:2057-2073"},
             {"level": "low", "title": "长按释放保护会临时屏蔽按键", "desc": "长按动作后 pending_key_tail=head，并等待释放保护时间，用户可能感觉按键短暂失效。", "suggest": "在交互说明或界面状态上体现长按确认后的释放等待。", "ref": "Application/display/exit.c:254-314"},
-            {"level": "low", "title": "OLED 周期恢复固定 60s", "desc": "无论现场 SPI 状态如何，60s 到期会触发恢复策略，可能造成偶发刷新停顿。", "suggest": "将周期恢复做成参数或只在错误计数变化后触发。", "ref": "Application/display/display.c:13-15,1872-1903"},
+            {"level": "low", "title": "OLED 周期恢复固定 60s", "desc": "无论现场 SPI 状态如何，60s 到期会触发恢复策略，可能造成偶发刷新停顿。", "suggest": "将周期恢复做成参数或只在错误计数变化后触发。", "ref": "Application/display/display.c:13-16,1912-2005"},
+            {"level": "mid", "title": "状态页数据最多 2 秒才重新采样一次", "desc": "当前版本为降低闪烁和绘制负担，非强制刷新时按 2 秒采样状态数据；AO 电流、RSSI 或瞬时故障变化可能不会立即显示。", "suggest": "把 AO/故障字段纳入强制采样触发，或在状态页显示最近采样时间/更新计数。", "ref": "Application/display/display.c:16,2633-3120"},
+            {"level": "mid", "title": "协议不兼容和 AO 故障依赖 CPU2 运行态同步", "desc": "协议版本严格一致可以避免尾段错位；当前状态页的 AD5421/AO 故障原因来自 CPU2 设备错误码，AO runtime 虽已缓存但未作为独立状态字段显示。", "suggest": "升级流程要求 CPU2/CPU3 成对升级；若后续要显示 AO 目标电流/来源，需要在状态页快照中显式接入 ao_output_runtime。", "ref": "Communication/internal/main_board_modbus/dataanalysis_modbus.c:493-623"},
         ],
         "sources": [
-            {"title": "Display_Task", "desc": "显示任务主入口。", "refs": ["Application/display/display.c:2027-2044"]},
+            {"title": "Display_Task", "desc": "显示任务主入口。", "refs": ["Application/display/display.c:2057-2073"]},
             {"title": "HAL_GPIO_EXTI_Callback", "desc": "按键中断入口。", "refs": ["Application/display/exit.c:318-363"]},
-            {"title": "Display_ProcessPendingInput", "desc": "主循环消费长按和普通按键。", "refs": ["Application/display/display.c:1994-2024"]},
+            {"title": "Display_ProcessPendingInput", "desc": "主循环消费长按和普通按键。", "refs": ["Application/display/display.c:2024-2046"]},
+            {"title": "Display_ShouldSampleStatusData", "desc": "状态页采样节流和强制刷新判断。", "refs": ["Application/display/display.c:2633-2652"]},
             {"title": "OLED_RecoverAndClear", "desc": "OLED SPI 异常后的恢复清屏。", "refs": ["Application/display/hgs.c:591"]},
         ],
     }
@@ -1289,11 +1381,11 @@ def menu_page() -> dict:
         "file": "07_菜单参数与指令下发.html",
         "title": "CPU3 菜单参数与指令下发程序流程",
         "short": "菜单参数与指令下发",
-        "hero": "梳理主菜单、测量命令、调试指令、参数配置、密码、数值输入、保护确认、本机参数保存和 CPU2 参数/指令下发。",
+        "hero": "梳理主菜单、测量命令、读取部件参数、AO 输出使能、调试指令、参数配置、密码、数值输入、保护确认、本机参数保存和 CPU2 参数/指令下发。",
         "entry": "长按确认进入主菜单；菜单按键由 KeyProcess 根据 func_index 调用对应页面函数。",
-        "summary": "菜单既能发 CPU2 测量/调试命令，也能修改 CPU2 设备参数和 CPU3 本机显示/通信参数。",
+        "summary": "菜单既能发 CPU2 测量/调试命令，也能修改 CPU2 设备参数和 CPU3 本机显示/通信参数；当前版本新增 AO 输出使能，并保留读取部件参数触发 RSSI/传感器快照。",
         "overview_text": "菜单流程必须和参数/命令下发合在一起看：页面选择、输入、确认、保护确认、下发和本地保存都在一条链路中。",
-        "commands": ["COM_NUM_FIND_OIL", "COM_NUM_FIND_WATER", "COM_NUM_WARTSILA_DENSITY", "COM_NUM_CPU3_COM1_PROTOCOL", "CMD_CANCEL_MEASUREMENT"],
+        "commands": ["COM_NUM_FIND_OIL", "COM_NUM_FIND_WATER", "COM_NUM_WARTSILA_DENSITY", "COM_NUM_DEVICEPARAM_AO_OUTPUT_ENABLE", "CMD_READ_PART_PARAMS", "CMD_CANCEL_MEASUREMENT"],
         "source_files": ["Application/display/display_tankopera.c", "Communication/internal/main_board_modbus/device_param_sync.c", "Application/system_param/cpu3_comm_display_params.c"],
         "overview_nodes": [
             {"id": "a", "kind": "start", "x": 430, "y": 40, "w": 260, "h": 62, "label": "长按确认进入主菜单"},
@@ -1325,14 +1417,14 @@ def menu_page() -> dict:
                 "height": 980,
                 "nodes": [
                     {"id": "s", "kind": "start", "x": 430, "y": 35, "w": 260, "h": 62, "label": "长按确认进入主菜单"},
-                    {"id": "p1", "kind": "process", "x": 350, "y": 130, "w": 420, "h": 82, "label": "mainmenu 显示测量命令、参数配置、调试指令、语言、退出"},
-                    {"id": "p2", "kind": "process", "x": 350, "y": 260, "w": 420, "h": 82, "label": "menuselect 根据 UP/DOWN 改变当前选项和页码"},
+                    {"id": "p1", "kind": "process", "x": 350, "y": 130, "w": 420, "h": 82, "label": "主菜单显示测量命令、参数配置、调试指令、语言和退出"},
+                    {"id": "p2", "kind": "process", "x": 350, "y": 260, "w": 420, "h": 82, "label": "菜单选择根据上下键改变当前选项和页码"},
                     {"id": "d1", "kind": "decision", "x": 405, "y": 400, "w": 310, "h": 108, "label": "按确认进入哪类菜单？"},
                     {"id": "m1", "kind": "process", "x": 40, "y": 570, "w": 240, "h": 90, "label": "测量命令：回零、找液位、水位、密度、分布等"},
                     {"id": "m2", "kind": "process", "x": 320, "y": 570, "w": 240, "h": 90, "label": "参数配置：密码通过后按分组构建参数菜单"},
                     {"id": "m3", "kind": "process", "x": 600, "y": 570, "w": 240, "h": 90, "label": "调试指令：运动、标定、维护、无线匹配等"},
                     {"id": "m4", "kind": "state", "x": 880, "y": 570, "w": 200, "h": 90, "label": "语言/退出：修改本地显示或退出菜单"},
-                    {"id": "end", "kind": "end", "x": 430, "y": 780, "w": 260, "h": 62, "label": "等待下一次 KeyProcess"},
+                    {"id": "end", "kind": "end", "x": 430, "y": 780, "w": 260, "h": 62, "label": "等待下一次按键分发"},
                 ],
                 "edges": [
                     {"d": "M 560 97 L 560 130"},
@@ -1360,15 +1452,15 @@ def menu_page() -> dict:
                 "nodes": [
                     {"id": "s", "kind": "start", "x": 430, "y": 35, "w": 260, "h": 62, "label": "选择命令或参数项"},
                     {"id": "d1", "kind": "decision", "x": 405, "y": 130, "w": 310, "h": 108, "label": "是否无参指令？"},
-                    {"id": "p1", "kind": "process", "x": 90, "y": 300, "w": 300, "h": 90, "label": "无参：进入 ifsendcmd 二次确认"},
-                    {"id": "p2", "kind": "process", "x": 730, "y": 300, "w": 300, "h": 90, "label": "带参/参数：inputcmdpara 输入位数、小数点和符号"},
+                    {"id": "p1", "kind": "process", "x": 90, "y": 300, "w": 300, "h": 90, "label": "无参：进入二次确认页"},
+                    {"id": "p2", "kind": "process", "x": 730, "y": 300, "w": 300, "h": 90, "label": "带参/参数：进入数值输入页，设置位数、小数点和符号"},
                     {"id": "d2", "kind": "decision", "x": 405, "y": 470, "w": 310, "h": 108, "label": "密码或确认是否通过？"},
                     {"id": "err", "kind": "error", "x": 790, "y": 485, "w": 250, "h": 82, "label": "取消或密码错误：返回上级菜单"},
                     {"id": "d3", "kind": "decision", "x": 405, "y": 630, "w": 310, "h": 108, "label": "是否需要保护确认？"},
                     {"id": "p3", "kind": "process", "x": 730, "y": 645, "w": 300, "h": 90, "label": "保护确认页：再次确认后执行"},
                     {"id": "d4", "kind": "decision", "x": 405, "y": 800, "w": 310, "h": 108, "label": "操作对象是 CPU3 本机参数？"},
-                    {"id": "p4", "kind": "process", "x": 90, "y": 965, "w": 300, "h": 90, "label": "是：更新 g_cpu3_comm_display_params，保存 FRAM，必要时置串口重配"},
-                    {"id": "p5", "kind": "process", "x": 730, "y": 965, "w": 300, "h": 90, "label": "否：写 CPU2 保持寄存器或 command，等待 CPU2 响应"},
+                    {"id": "p4", "kind": "process", "x": 90, "y": 965, "w": 300, "h": 90, "label": "是：更新 CPU3 本机参数，保存 FRAM，必要时置串口重配"},
+                    {"id": "p5", "kind": "process", "x": 730, "y": 965, "w": 300, "h": 90, "label": "否：写 CPU2 保持寄存器或命令寄存器，等待响应"},
                 ],
                 "edges": [
                     {"d": "M 560 97 L 560 130"},
@@ -1385,23 +1477,63 @@ def menu_page() -> dict:
                     {"d": "M 715 854 C 820 900 870 930 880 965", "label": "否"},
                 ],
                 "evidence": [
-                    {"title": "数值输入", "text": f"{code('display_tankopera.c:786-845')} inputcmdpara 按位数、小数点、符号输入参数值。"},
-                    {"title": "确认页", "text": f"{code('display_tankopera.c:1814-1879')} ifsendcmd 根据操作类型显示确认内容，并用 timesure/timeback 做二次确认。"},
-                    {"title": "保护确认", "text": f"{code('display_tankopera.c:1887-1965')} operation_needs_protect_confirm 列出关键操作和通信参数。"},
+                    {"title": "数值输入", "text": f"{code('display_tankopera.c:1132-1180')} inputcmdpara 按位数、小数点、符号输入参数值。"},
+                    {"title": "确认页", "text": f"{code('display_tankopera.c:2193-2258')} ifsendcmd 根据操作类型显示确认内容，并用 timesure/timeback 做二次确认。"},
+                    {"title": "保护确认", "text": f"{code('display_tankopera.c:2265-2300')} operation_needs_protect_confirm 列出关键操作和通信参数。"},
+                ],
+            },
+            {
+                "title": "AO 输出使能与读取部件参数下发",
+                "caption": "当前程序把 AO 输出使能做成 CPU2 设备参数，把读取部件参数做成 CPU2 命令；两者都从菜单进入，但一个写保持寄存器，一个写命令寄存器。",
+                "height": 1180,
+                "nodes": [
+                    {"id": "s", "kind": "start", "x": 430, "y": 35, "w": 260, "h": 62, "label": "用户进入菜单维护/参数相关页面"},
+                    {"id": "d1", "kind": "decision", "x": 405, "y": 140, "w": 310, "h": 108, "label": "选择 AO 使能还是读取部件参数？"},
+                    {"id": "p1", "kind": "process", "x": 90, "y": 310, "w": 300, "h": 90, "label": "AO使能：显示为 0/1 布尔参数，归属 AO 输出分组"},
+                    {"id": "p2", "kind": "process", "x": 730, "y": 310, "w": 300, "h": 90, "label": "读取部件参数：进入确认页，下发 CMD_READ_PART_PARAMS"},
+                    {"id": "d2", "kind": "decision", "x": 90, "y": 475, "w": 300, "h": 108, "label": "输入值是否在 0..1 范围内？"},
+                    {"id": "e1", "kind": "error", "x": 90, "y": 650, "w": 300, "h": 82, "label": "非法值：提示范围错误并留在输入页"},
+                    {"id": "p3", "kind": "process", "x": 410, "y": 650, "w": 300, "h": 90, "label": "合法：映射为 CPU2 的 AO 输出使能参数"},
+                    {"id": "p4", "kind": "process", "x": 730, "y": 650, "w": 300, "h": 90, "label": "命令确认：写 command，CPU2 进入读取部件参数状态"},
+                    {"id": "p5", "kind": "process", "x": 350, "y": 820, "w": 420, "h": 90, "label": "CPU3 通过内部 0x10 写 CPU2；后续轮询输入寄存器确认状态"},
+                    {"id": "d3", "kind": "decision", "x": 405, "y": 990, "w": 310, "h": 108, "label": "CPU2 是否已发布 RSSI/AO 运行态？"},
+                    {"id": "end", "kind": "end", "x": 430, "y": 1140, "w": 260, "h": 62, "label": "状态页显示 RSSI 或故障原因；AO 运行态进入缓存"},
+                ],
+                "edges": [
+                    {"d": "M 560 97 L 560 140"},
+                    {"d": "M 405 194 C 300 245 250 280 240 310", "label": "AO使能"},
+                    {"d": "M 715 194 C 820 245 870 280 880 310", "label": "读取部件"},
+                    {"d": "M 240 400 L 240 475"},
+                    {"d": "M 240 583 L 240 650", "label": "否", "red": True},
+                    {"d": "M 390 529 C 450 570 500 610 560 650", "label": "是"},
+                    {"d": "M 880 400 L 880 650"},
+                    {"d": "M 560 740 L 560 820"},
+                    {"d": "M 880 740 C 800 785 680 805 560 820"},
+                    {"d": "M 560 910 L 560 990"},
+                    {"d": "M 560 1098 L 560 1140", "label": "是/下一轮"},
+                ],
+                "evidence": [
+                    {"title": "菜单枚举", "text": f"{code('display_tankopera.h:193')} 定义 COM_NUM_DEVICEPARAM_AO_OUTPUT_ENABLE，菜单短名为 AO使能。"},
+                    {"title": "AO 分组和范围", "text": f"{code('system_parameter.c:238')} AO输出使能范围为 0..1，按布尔枚举显示。"},
+                    {"title": "同步到 CPU2", "text": f"{code('device_param_sync.c:248,512')} CPU3 参数镜像把 AoOutputEnable 映射到 CPU2 设备参数，并通过内部 Modbus 同步。"},
+                    {"title": "读取部件参数", "text": f"{code('display_tankopera.c:1235,2796,3911')} 菜单触发 CMD_READ_PART_PARAMS 后，状态页使用后续轮询到的 RSSI/传感器快照。"},
                 ],
             },
         ],
         "issues": [
-            {"level": "mid", "title": "确认逻辑依赖 timesure/timeback 计数", "desc": "ifsendcmd 需要连续确认/返回操作，计数变量跨页面使用，状态未清理时可能造成误判。", "suggest": "把确认状态封装为独立结构，进入确认页时统一初始化。", "ref": "display_tankopera.c:1814-1879"},
+            {"level": "mid", "title": "确认逻辑依赖 timesure/timeback 计数", "desc": "ifsendcmd 需要连续确认/返回操作，计数变量跨页面使用，状态未清理时可能造成误判。", "suggest": "把确认状态封装为独立结构，进入确认页时统一初始化。", "ref": "display_tankopera.c:2193-2258"},
             {"level": "mid", "title": "参数范围判断依赖枚举区间", "desc": "dtm_operaname、dtm_points 等多处用 COM_NUM_* START/STOP 区间判断，枚举新增或命名不一致会影响显示和输入。", "suggest": "以 param_meta/显式表为主，减少区间判断；新增操作时要求表驱动校验。", "ref": "display_tankopera.c:846-980"},
             {"level": "mid", "title": "本机通信参数修改后异步重配", "desc": "菜单保存 CPU3 COM 参数后需要等待主循环安全点重配，用户确认保存和实际生效之间存在时间差。", "suggest": "保存后显示“等待串口空闲后生效”，并在重配完成后给出状态反馈。", "ref": "Application/app_main.c:182-221"},
-            {"level": "low", "title": "密码错误固定延时阻塞主循环", "desc": "密码错误时 HAL_Delay(500)，会暂停协议处理和 CPU2 轮询。", "suggest": "改成显示超时状态，由 Display_Task 周期返回主菜单。", "ref": "display_tankopera.c:1858-1868"},
+            {"level": "low", "title": "密码错误固定延时阻塞主循环", "desc": "密码错误时 HAL_Delay(500)，会暂停协议处理和 CPU2 轮询。", "suggest": "改成显示超时状态，由 Display_Task 周期返回主菜单。", "ref": "display_tankopera.c:2193-2258"},
+            {"level": "mid", "title": "AO 使能复用了原 reserved26 寄存器位置", "desc": "CPU2/CPU3 当前把 AO_OUTPUT_ENABLE 放在原保留保持寄存器位置；如果现场旧版本仍把该地址当保留位，升级前后可能出现配置含义变化。", "suggest": "在升级说明和参数表里明确 reserved26 已变更为 AO 输出使能，并要求 CPU2/CPU3 成对升级。", "ref": "Application/system_param/stateformodbus.h:378-384"},
+            {"level": "mid", "title": "读取部件参数和 AO 运行态缓存都依赖运行轮询刷新", "desc": "菜单下发后并不是立即得到 RSSI 或 AO 运行态，而是等待 CPU2 执行并由 CPU3 下一轮输入寄存器轮询刷新；当前 AO 运行态只是缓存，未独立显示在状态页。", "suggest": "状态页显示等待/更新时间；若后续要显示 AO 状态，需要补状态页快照和绘制字段。", "ref": "Communication/internal/main_board_modbus/cpu2_communicate.c:156-254"},
         ],
         "sources": [
-            {"title": "mainmenu / measuremenu", "desc": "主菜单和测量命令菜单定义。", "refs": ["Application/display/display_tankopera.c:3386-3438"]},
-            {"title": "KeyProcess", "desc": "按键分发到当前页面函数。", "refs": ["Application/display/display_tankopera.c:727-759"]},
-            {"title": "ifsendcmd", "desc": "指令/参数确认页。", "refs": ["Application/display/display_tankopera.c:1814-1879"]},
-            {"title": "DeviceParams_SyncAllToCPU2", "desc": "本地参数与 CPU2 参数差异同步。", "refs": ["Communication/internal/main_board_modbus/device_param_sync.c:508"]},
+            {"title": "mainmenu / measuremenu", "desc": "主菜单和测量命令菜单定义。", "refs": ["Application/display/display_tankopera.c:3886-4070"]},
+            {"title": "KeyProcess", "desc": "按键分发到当前页面函数。", "refs": ["Application/display/display_tankopera.c:778-830"]},
+            {"title": "ifsendcmd", "desc": "指令/参数确认页。", "refs": ["Application/display/display_tankopera.c:2193-2258"]},
+            {"title": "COM_NUM_DEVICEPARAM_AO_OUTPUT_ENABLE", "desc": "AO 输出使能菜单项。", "refs": ["Application/display/display_tankopera.h:193"]},
+            {"title": "DeviceParams_SyncAllToCPU2", "desc": "本地参数与 CPU2 参数差异同步。", "refs": ["Communication/internal/main_board_modbus/device_param_sync.c:512"]},
         ],
     }
 
@@ -1413,7 +1545,7 @@ def param_fram_io_page() -> dict:
         "title": "CPU3 本机参数、FRAM、时钟与外设恢复程序流程",
         "short": "本机参数与外设恢复",
         "hero": "梳理 CPU3 本机通信/显示参数默认值、FRAM V3 到 V4 迁移、CRC 校验、串口重配、RTC 初始化、OLED SPI 恢复和 UART 错误恢复。",
-        "entry": "App_Init 调用 Cpu3Clock_Init、Cpu3_Params_LoadFromFRAM、Cpu3_ReinitAllUarts；运行期菜单或错误回调触发保存和恢复。",
+        "entry": "App_Init 调用 Cpu3Clock_Init、读取 CPU3 本机 FRAM 参数、Cpu3_ReinitAllUarts；运行期菜单或错误回调触发保存和恢复。",
         "summary": "CPU3 本机参数独立于 CPU2 设备参数，存储在 FRAM 中；RTC 和 OLED/UART 恢复用于保证协议显示和现场交互稳定。",
         "overview_text": "本页是 CPU3 的本地支撑层：它不直接改变测量算法，但决定显示/通信参数是否能正确加载、生效和恢复。",
         "commands": ["CPU3_PARAM_VERSION", "CPU3_PARAM_VERSION_V3", "CPU3_CLOCK_BKP_MARKER"],
@@ -1444,13 +1576,13 @@ def param_fram_io_page() -> dict:
                 "caption": "FRAM 镜像包含 magic、version、params、crc；V3 可迁移到 V4，无效或 CRC 错误时使用默认值并写回。",
                 "height": 1160,
                 "nodes": [
-                    {"id": "s", "kind": "start", "x": 430, "y": 35, "w": 260, "h": 62, "label": "Cpu3_Params_LoadFromFRAM"},
-                    {"id": "p1", "kind": "process", "x": 350, "y": 130, "w": 420, "h": 82, "label": "从 FRAM_CPU3_PARAM_ADDRESS 读取 Cpu3ParamStorage"},
-                    {"id": "d1", "kind": "decision", "x": 405, "y": 270, "w": 310, "h": 108, "label": "magic 正确且 version 为 V3？"},
-                    {"id": "p2", "kind": "process", "x": 780, "y": 285, "w": 260, "h": 90, "label": "校验 V3 CRC，迁移字段，亮度使用默认挡位"},
-                    {"id": "d2", "kind": "decision", "x": 405, "y": 430, "w": 310, "h": 108, "label": "magic/version/CRC 是否为当前 V4 有效？"},
+                    {"id": "s", "kind": "start", "x": 430, "y": 35, "w": 260, "h": 62, "label": "读取 CPU3 本机 FRAM 参数"},
+                    {"id": "p1", "kind": "process", "x": 350, "y": 130, "w": 420, "h": 82, "label": "从 CPU3 参数地址读取本机参数镜像"},
+                    {"id": "d1", "kind": "decision", "x": 405, "y": 270, "w": 310, "h": 108, "label": "参数标识正确且为 V3 旧格式？"},
+                    {"id": "p2", "kind": "process", "x": 780, "y": 285, "w": 260, "h": 90, "label": "校验 V3 CRC，迁移字段并补默认亮度"},
+                    {"id": "d2", "kind": "decision", "x": 405, "y": 430, "w": 310, "h": 108, "label": "参数标识、版本和 CRC 是否为当前 V4 有效？"},
                     {"id": "p3", "kind": "error", "x": 80, "y": 600, "w": 300, "h": 90, "label": "无效：初始化默认参数，应用显示运行参数"},
-                    {"id": "p4", "kind": "process", "x": 730, "y": 600, "w": 300, "h": 90, "label": "有效：加载 params 到 g_cpu3_comm_display_params"},
+                    {"id": "p4", "kind": "process", "x": 730, "y": 600, "w": 300, "h": 90, "label": "有效：加载为 CPU3 本机运行参数"},
                     {"id": "p5", "kind": "process", "x": 350, "y": 760, "w": 420, "h": 86, "label": "补齐固件版本、归一化端口参数、应用显示运行参数"},
                     {"id": "d3", "kind": "decision", "x": 405, "y": 900, "w": 310, "h": 108, "label": "是否需要写回 FRAM？"},
                     {"id": "p6", "kind": "state", "x": 790, "y": 915, "w": 250, "h": 82, "label": "构造镜像并 CRC32；与现有有效镜像相同则跳过"},
@@ -1473,7 +1605,7 @@ def param_fram_io_page() -> dict:
                 ],
                 "evidence": [
                     {"title": "存储结构", "text": f"{code('cpu3_comm_display_params.c:550-590')} 定义 magic/version/V3/V4 参数镜像和 CRC 字段。"},
-                    {"title": "加载流程", "text": f"{code('cpu3_comm_display_params.c:712-782')} Cpu3_Params_LoadFromFRAM 处理 V3 迁移、V4 校验和默认值回退。"},
+                    {"title": "加载流程", "text": f"{code('cpu3_comm_display_params.c:712-782')} 读取 CPU3 本机 FRAM 参数 处理 V3 迁移、V4 校验和默认值回退。"},
                     {"title": "保存判重", "text": f"{code('cpu3_comm_display_params.c:682-710')} 保存前构造目标镜像，现有镜像有效且相同则跳过写入。"},
                 ],
             },
@@ -1490,7 +1622,7 @@ def param_fram_io_page() -> dict:
                     {"id": "p4", "kind": "state", "x": 70, "y": 515, "w": 300, "h": 90, "label": "无效：写默认日期 2026-01-01 并置 ready"},
                     {"id": "d2", "kind": "decision", "x": 410, "y": 340, "w": 300, "h": 108, "label": "UART 错误来自哪一路？"},
                     {"id": "p5", "kind": "state", "x": 410, "y": 515, "w": 300, "h": 90, "label": "COM1/2/3 释放 busy/pending；UART5 清 wait_response"},
-                    {"id": "d3", "kind": "decision", "x": 750, "y": 340, "w": 300, "h": 108, "label": "是否需要 OLED_RecoverAndClear？"},
+                    {"id": "d3", "kind": "decision", "x": 750, "y": 340, "w": 300, "h": 108, "label": "是否需要 OLED 恢复清屏？"},
                     {"id": "p6", "kind": "state", "x": 750, "y": 515, "w": 300, "h": 90, "label": "恢复清屏并标记本帧绘制完成"},
                     {"id": "end", "kind": "end", "x": 430, "y": 760, "w": 260, "h": 62, "label": "返回运行流程"},
                 ],
@@ -1522,7 +1654,7 @@ def param_fram_io_page() -> dict:
             {"level": "low", "title": "FRAM 保存判重只比较 params", "desc": "magic/version/CRC 有效且 params 相同就跳过写入，若保留字段策略变化需确认是否仍满足升级需求。", "suggest": "版本升级时复核 Cpu3_Params_BuildStorage 和判重条件。", "ref": "cpu3_comm_display_params.c:682-710"},
         ],
         "sources": [
-            {"title": "Cpu3_Params_LoadFromFRAM", "desc": "CPU3 本机参数加载、迁移和默认回退。", "refs": ["Application/system_param/cpu3_comm_display_params.c:712-782"]},
+            {"title": "读取 CPU3 本机 FRAM 参数", "desc": "CPU3 本机参数加载、迁移和默认回退。", "refs": ["Application/system_param/cpu3_comm_display_params.c:712-782"]},
             {"title": "Cpu3_Params_SaveToFRAM", "desc": "CPU3 本机参数 CRC 构造、判重和写入。", "refs": ["Application/system_param/cpu3_comm_display_params.c:682-710"]},
             {"title": "Cpu3Clock_Init", "desc": "CPU3 本机 RTC 初始化。", "refs": ["Application/system_param/cpu3_clock.c:194-239"]},
             {"title": "ReadMultiData / WriteMultiData", "desc": "MB85RS2M FRAM 多字节读写。", "refs": ["Application/system_param/mb85rs2m.c:112-150"]},
@@ -1550,7 +1682,7 @@ def main() -> None:
     row = "| `00_程序流程` | CPU3 启动主循环、CPU2 内部通信、外部协议、显示菜单、本机参数和外设恢复程序流程 HTML 文档 |\n"
     if "`00_程序流程`" not in text:
         text = text.replace("| `03_故障码` | CPU3 显示侧使用的 LTD 故障代码表、设备参数和保持寄存器辅助表 |\n", row + "| `03_故障码` | CPU3 显示侧使用的 LTD 故障代码表、设备参数和保持寄存器辅助表 |\n")
-    text = text.replace("更新日期：2026-06-06", "更新日期：2026-06-13")
+    text = re.sub(r"更新日期：\d{4}-\d{2}-\d{2}", f"更新日期：{DOC_DATE}", text)
     root_readme.write_text(text, encoding="utf-8", newline="\n")
 
 
