@@ -247,6 +247,11 @@ static int normalize_device_params_runtime(void)
         changed = 1;
     }
 
+    if (g_deviceParams.bottom_detect_mode > 1U) {
+        g_deviceParams.bottom_detect_mode = 0U;
+        changed = 1;
+    }
+
     if ((g_deviceParams.motor_current < MOTOR_CURRENT_MIN) ||
         (g_deviceParams.motor_current > MOTOR_CURRENT_MAX)) {
         g_deviceParams.motor_current = MOTOR_CURRENT_DEFAULT;
@@ -657,10 +662,10 @@ void RestoreFactoryParamsConfig(void)
     g_deviceParams.sensorSoftwareVersion = 0x00010001;
     g_deviceParams.softwareVersion       = CPU2_APP_VERSION_U32;
     g_deviceParams.protocolVersion      = DEVICE_PROTOCOL_VERSION;
-    g_deviceParams.error_auto_back_zero  = 0;   /* default: disabled */
+    g_deviceParams.error_auto_back_zero  = 0;   /* 默认关闭 */
     g_deviceParams.error_stop_measurement= 1;   /* 默认: 报错停止测量 */
     g_deviceParams.fault_auto_recovery_retry_limit = FAULT_AUTO_RECOVERY_RETRY_DEFAULT; /* 默认: 故障自动恢复最多重跑3次 */
-    g_deviceParams.position_source_auto_switch = POSITION_SOURCE_AUTO_SWITCH_DISABLE; /* default: disabled */
+    g_deviceParams.position_source_auto_switch = POSITION_SOURCE_AUTO_SWITCH_DISABLE; /* 默认关闭 */
 
     /* ---------------- 电机与编码器参数 ---------------- */
     g_deviceParams.encoder_wheel_circumference_mm = 95000;  /* 0.001mm */

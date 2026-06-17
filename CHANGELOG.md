@@ -1,4 +1,4 @@
-﻿# 升级日志
+# 升级日志
 
 记录 CPU2/CPU3 固件版本变更。使用 `tools/bump_version.py` 升级版本时会自动追加记录；提交前应补充到与 Git 提交信息同等详细。
 
@@ -47,6 +47,7 @@ CPU2 参数加载会校验 FRAM 中的 `magic`、`struct_size`、`param_version`
 | V1.14.0.1 | 3 | 存储版本不变；优化电机点动与位置模式运动流程，旧 FRAM 参数通常保留 |
 | V1.15.0.0 | 3 | 存储版本不变；新增读取部件参数蓝牙 RSSI 快照、协议版本 9 和 CPU3 菜单显示优化，旧 FRAM 参数通常保留 |
 | V1.16.0.0 | 3 | 存储版本不变；新增 AO 模拟电流输出运行态和 AO 输出使能，原 `reserved26` 语义改为 `AoOutputEnable`；旧存储升级到协议版本 10 时默认关闭 AO 输出，并保留启动阶段 AO/电机初始化错误 |
+| V1.16.0.1 | 3 | 存储版本不变；收紧罐底检测模式为 `0/1`，旧 FRAM 中异常值运行期归零，通常保留旧参数 |
 
 历史说明：建立 CPU2 程序版本号前，2025-12-16 引入当前参数元信息时使用 `DEVICE_PARAM_VERSION=1`；2026-03-05 系统参数增加时提升到 `DEVICE_PARAM_VERSION=2`，从版本 1 升级到版本 2 会因旧参数版本不匹配恢复出厂参数。
 
@@ -1367,3 +1368,34 @@ CPU2 参数加载会校验 FRAM 中的 `magic`、`struct_size`、`param_version`
 - `AoOutputEnable=1` 时仍需用电流表/HART 主站验证 4-20mA 输出、电流百分比、报警/故障/调试电流和 AD5421 故障诊断边界。
 - 提交前需要在暂存目标文件后运行 `git diff --cached --check` 和 `py -3 tools\check_version_bumped.py`。
 - AO 输出只作为测量结果后的辅助输出刷新，不新增 CPU2/CPU3 命令入口或改变测量状态机；启动流程图已同步 AO 初始化、启动错误保留和上电默认命令拦截，后续若把 AO 输出做成独立命令或闭环控制再补对应业务流程图。
+
+## 2026-06-17 - 修复状态页刷新节流和参数范围校验（CPU2 V1.16.0.1 / CPU3 V1.15.0.1）
+
+版本：
+- CPU2: V1.16.0.0 -> V1.16.0.1
+- CPU3: V1.15.0.0 -> V1.15.0.1
+
+协议版本/兼容性：
+- `DEVICE_PROTOCOL_VERSION` 保持 10，不新增 CPU2/CPU3 共享寄存器、命令码或输入寄存器尾段。
+- 协议版本 10 继续同时覆盖 `AoOutputRuntime` 输入寄存器尾段和 `AoOutputEnable` 保持寄存器语义，不再拆分为两个协议版本。
+- CPU2 `DEVICE_PARAM_VERSION` 保持 3，`DeviceParameters` 结构大小不变，从 V1.16.0.0 升级到 V1.16.0.1 不会因参数存储版本触发恢复出厂参数。
+- 旧 FRAM 中 `bottom_detect_mode` 若为非 `0/1` 异常值，运行期归一化为 0；保持寄存器读取路径按 `0=称重`、`非0=陀螺仪角度` 归一化显示。
+
+本次修改：
+- CPU3 状态页增加运行数据 2 秒采样节流，非采样周期只恢复反白区域，减少状态页频繁重绘带来的闪烁和数据跳动。
+- CPU3 参数详情页用数字绘制范围分隔符和小数点，避免使用字库外字符造成范围显示异常。
+- CPU3 参数元数据收紧罐底检测模式范围为 `0..1`，缩短尺带伸缩率和继电器报警阈值输入位宽，降低 OLED 输入显示越界风险。
+- CPU2/CPU3 读取保持寄存器时将 `bottom_detect_mode` 统一归一化为 `0/1`，CPU2 运行期加载旧 FRAM 参数时对异常值归零。
+- 同步修正协议版本 10 的文档口径、系统参数默认值、界面菜单索引和版本改动与测试方案。
+
+验证：
+- `git diff --cached --check`
+- `py -3 tools\check_version_bumped.py`
+- `py -3 tools\check_ao_output_enable_contract.py`
+- `py -3 tools\check_cpu3_ret_arr_word_contract.py`
+- `py -3 LTD_DISPLAY_CPU3\font_check.py`
+
+未验证风险：
+- 未做实物联调；需要在 OLED 实机上确认状态页 2 秒采样节流、反白恢复、菜单范围显示和参数输入位宽不会造成可见闪烁或截断。
+- 未重新运行 CPU2/CPU3 完整固件构建；提交前如需要发布固件，仍建议补跑 `cmake --build build\LTD_MAIN_CPU2` 和 `cmake --build build\LTD_DISPLAY_CPU3`。
+- 本次不改变测量状态机、命令入口、协议尾段布局或 AO 输出执行链路，程序流程图无需更新。

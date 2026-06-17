@@ -1,8 +1,8 @@
 # CPU3状态页不同状态显示信息确认表
 
-日期：2026-06-13
+日期：2026-06-17
 
-适用版本：CPU2 `V1.15.0.0` / CPU3 `V1.14.0.0`，共享协议版本 `9`
+适用版本：CPU2 `V1.16.0.1` / CPU3 `V1.15.0.1`，当前源码共享协议版本 `10`；读取部件参数页 RSSI 显示从协议版本 `9` 起支持
 
 源码依据：`LTD_DISPLAY_CPU3/Application/display/display.c`、`LTD_MAIN_CPU2/Services/Sensor/sensor.c`
 

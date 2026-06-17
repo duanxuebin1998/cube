@@ -233,15 +233,14 @@
   - `REG_WIRELESS_PAIRING_RSSI`
   - `REG_WIRELESS_PAIRING_CONNECTION_ERROR_CODE`
   - `REG_WIRELESS_PAIRING_RSSI_UPDATE_COUNTER`
-- `REG_ENG` 顺延到 `REG_WIRELESS_PAIRING_RSSI_UPDATE_COUNTER + REG_SIZE_U32`。
+- 协议版本 9 中 `REG_ENG` 顺延到 `REG_WIRELESS_PAIRING_RSSI_UPDATE_COUNTER + REG_SIZE_U32`。
 
-兼容影响：
+兼容性影响：
 - CPU2/CPU3 必须同为协议版本 9，才能正确读取和显示当前蓝牙连接 RSSI。
 - 协议版本 8 的 CPU3 不知道 RSSI 尾部输入寄存器，不应解释新增字段。
 - 协议版本 8 的 CPU2 不发布 RSSI 快照，协议版本不匹配应由 CPU3 严格相等检查拦截。
 
 验证结果：
-- `py -3 tools\check_wireless_rssi_contract.py`：通过。
 - `py -3 tools\check_si7000_protocol_contract.py`：通过。
 - `py -3 tools\check_density_level_control_contract.py`：通过。
 - `py -3 tools\check_read_part_params_refresh_contract.py`：通过。
@@ -260,6 +259,7 @@
 - CPU2 恢复出厂默认值将 `AoOutputEnable` 置为 `0`；旧协议存储升级到协议版本 10 时也强制置为 `0`，避免旧预留值误启用电流输出。
 - CPU2 AO 服务在关闭时不初始化、不诊断、不写入 AD5421，并将运行态来源置为 `AO_OUTPUT_SOURCE_DISABLED`，用于未接电流环场景避免 AD5421 环路故障上报。
 - CPU3 同步解析新增 AO 运行态字段，补充 AD5421 相关错误码的屏幕故障文案，并通过参数表、保持寄存器读写、参数同步指针和 AO 菜单支持 `AoOutputEnable`。
+- 同步收紧 `bottom_detect_mode` 的显示与写入范围为 `0..1`，与 CPU2 实际枚举 `0=称重`、`1=陀螺仪角度` 一致；异常值运行期归零，避免 CPU3 菜单显示“非法配置”或探底准备流程误判。
 
 寄存器布局影响：
 - 输入寄存器在协议版本 9 的 `REG_WIRELESS_PAIRING_RSSI_UPDATE_COUNTER` 后追加 AO 运行态：
@@ -273,6 +273,7 @@
   - `REG_AO_OUTPUT_RUNTIME_LAST_UPDATE_TICK`
   - `REG_AO_OUTPUT_RUNTIME_LAST_SENT_TICK`
 - `REG_ENG` 和 `INPUTREGISTER_AMOUNT` 随新增 AO 运行态顺延；旧输入寄存器地址不移动。
+
 - 保持寄存器不新增地址，`HOLDREGISTER_DEVICEPARAM_AO_OUTPUT_ENABLE = HOLDREGISTER_DEVICEPARAM_DEBUG_CURRENT_mA + REG_STRIDE`。
 - `HOLDREGISTER_DEVICEPARAM_RESERVED26` 作为兼容别名等于 `HOLDREGISTER_DEVICEPARAM_AO_OUTPUT_ENABLE`。
 - `HOLDREGISTER_DEVICEPARAM_RESERVED27` 仍为 `HOLDREGISTER_DEVICEPARAM_AO_OUTPUT_ENABLE + REG_STRIDE`，后续保持寄存器地址不移动。

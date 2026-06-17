@@ -105,15 +105,19 @@ def main() -> int:
 
     require_re(cpu2_modbus, r"HOLDREGISTER_DEVICEPARAM_AO_OUTPUT_ENABLE[\s\S]{0,120}g_deviceParams\.AoOutputEnable", "CPU2 Modbus write must publish AoOutputEnable", failed)
     require_re(cpu2_modbus, r"g_deviceParams\.AoOutputEnable\s*=\s*\(read_u32_from_regs\(regs,\s*HOLDREGISTER_DEVICEPARAM_AO_OUTPUT_ENABLE\)\s*==\s*0U\)\s*\?\s*0U\s*:\s*1U", "CPU2 Modbus read must normalize AoOutputEnable", failed)
+    require_re(cpu2_modbus, r"g_deviceParams\.bottom_detect_mode\s*=\s*\(read_u32_from_regs\(regs,\s*HOLDREGISTER_DEVICEPARAM_BOTTOM_DETECT_MODE\)\s*==\s*0U\)\s*\?\s*0U\s*:\s*1U", "CPU2 Modbus read must normalize bottom_detect_mode", failed)
     require_re(cpu3_modbus, r"HOLDREGISTER_DEVICEPARAM_AO_OUTPUT_ENABLE[\s\S]{0,120}g_deviceParams\.AoOutputEnable", "CPU3 Modbus write must publish AoOutputEnable", failed)
     require_re(cpu3_modbus, r"g_deviceParams\.AoOutputEnable\s*=\s*\(read_u32_from_regs\(regs,\s*HOLDREGISTER_DEVICEPARAM_AO_OUTPUT_ENABLE\)\s*==\s*0U\)\s*\?\s*0U\s*:\s*1U", "CPU3 Modbus read must normalize AoOutputEnable", failed)
+    require_re(cpu3_modbus, r"g_deviceParams\.bottom_detect_mode\s*=\s*\(read_u32_from_regs\(regs,\s*HOLDREGISTER_DEVICEPARAM_BOTTOM_DETECT_MODE\)\s*==\s*0U\)\s*\?\s*0U\s*:\s*1U", "CPU3 Modbus read must normalize bottom_detect_mode", failed)
 
     cpu2_param_compact = compact(cpu2_param_c)
     require("g_deviceParams.AoOutputEnable=0U;" in cpu2_param_compact, "CPU2 factory/protocol upgrade must default AoOutputEnable to disabled", failed)
     require("if(g_deviceParams.AoOutputEnable>1U){g_deviceParams.AoOutputEnable=0U;" in cpu2_param_compact, "CPU2 runtime normalization must clamp AoOutputEnable", failed)
+    require("if(g_deviceParams.bottom_detect_mode>1U){g_deviceParams.bottom_detect_mode=0U;" in cpu2_param_compact, "CPU2 runtime normalization must clamp bottom_detect_mode", failed)
 
     require("COM_NUM_DEVICEPARAM_AO_OUTPUT_ENABLE" in cpu3_meta, "CPU3 metadata must expose AO output enable", failed)
     require_re(cpu3_meta, r'"AO输出使能"[\s\S]{0,180}true,\s*0,\s*1', "CPU3 metadata must constrain AO output enable to 0..1", failed)
+    require_re(cpu3_meta, r'"罐底检测模式"[\s\S]{0,180}true,\s*0,\s*1', "CPU3 metadata must constrain bottom_detect_mode to 0..1", failed)
     require("COM_NUM_DEVICEPARAM_AO_OUTPUT_ENABLE" in cpu3_menu_h, "CPU3 menu enum must define AO output enable", failed)
     require("COM_NUM_DEVICEPARAM_RESERVED26 = COM_NUM_DEVICEPARAM_AO_OUTPUT_ENABLE" in cpu3_menu_h, "CPU3 menu reserved26 alias must be preserved", failed)
     require("AO使能" in cpu3_menu_c and "COM_NUM_DEVICEPARAM_AO_OUTPUT_ENABLE" in cpu3_menu_c, "CPU3 AO menu must include enable item", failed)

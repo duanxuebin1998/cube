@@ -385,7 +385,7 @@ void ReadDeviceParamsFromHoldingRegisters(uint16_t *HoldingRegisterArray)
 
     g_deviceParams.calibrateWaterLevel     = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_WATER_LEVEL_CORRECTION);
     /* ===================== 罐高/罐底测量 ===================== */
-    g_deviceParams.bottom_detect_mode      = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_BOTTOM_DETECT_MODE);
+    g_deviceParams.bottom_detect_mode      = (read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_BOTTOM_DETECT_MODE) == 0U) ? 0U : 1U;
     g_deviceParams.bottom_angle_threshold  = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_BOTTOM_ANGLE_THRESHOLD);
     g_deviceParams.bottom_weight_threshold = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_BOTTOM_WEIGHT_THRESHOLD);
     g_deviceParams.refreshTankHeightFlag  = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_REFRESH_TANKHEIGHT_FLAG);

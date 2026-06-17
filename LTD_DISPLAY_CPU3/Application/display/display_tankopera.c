@@ -1986,7 +1986,7 @@ static void display_param_detail_range(const struct ParameterMetadata *meta, uin
 
 	if (meta->flag_checkvalue) {
 		line = OledValueDisplay(meta->valuemin, line, row, 0, meta->point, NULL);
-		line = OledDisplayLineWords((uint8_t*)"~", line, row, 0);
+		line = OledDisplayOneNmb(11, row, line, 0);
 		OledValueDisplay(meta->valuemax, line, row, 0, meta->point, param_display_unit(meta->operanum, meta));
 	} else {
 		DisplayLangaugeLineWords((uint8_t*)"--", line, row, 0, (uint8_t*)"--");
@@ -2132,9 +2132,15 @@ static bool inputvalue(uint8_t deci, uint8_t row, uint8_t line, uint8_t points, 
 	/* 显示 */
 	switch (deci) {
 	case 7: {
+		if (points == 6) {
+			line = OledDisplayOneNmb(10, row, line, 0) - 2;
+		}
 		line = OledDisplayOneNmb(bit_6, row, line, (nowbit & 1) == 0 && (nowbit | 1) == 7);
 	}
 	case 6: {
+		if (points == 5) {
+			line = OledDisplayOneNmb(10, row, line, 0) - 2;
+		}
 		line = OledDisplayOneNmb(bit_5, row, line, (nowbit & 2) == 0 && (nowbit | 2) == 7);
 	}
 	case 5: {
