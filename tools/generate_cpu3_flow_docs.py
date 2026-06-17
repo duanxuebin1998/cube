@@ -1552,7 +1552,7 @@ def param_fram_io_page() -> dict:
         "source_files": ["Application/system_param/cpu3_comm_display_params.c", "Application/system_param/mb85rs2m.c", "Application/system_param/cpu3_clock.c", "Application/display/hgs.c", "Application/app_main.c"],
         "overview_nodes": [
             {"id": "a", "kind": "start", "x": 430, "y": 40, "w": 260, "h": 62, "label": "CPU3 应用初始化或参数保存"},
-            {"id": "b", "kind": "process", "x": 90, "y": 170, "w": 300, "h": 90, "label": "RTC 使用 LSI 和 BKP 标记初始化默认时间"},
+            {"id": "b", "kind": "process", "x": 90, "y": 170, "w": 300, "h": 90, "label": "RTC 优先使用 LSE，失败回退 LSI，并按 BKP 标记保留校时时间"},
             {"id": "c", "kind": "process", "x": 410, "y": 170, "w": 300, "h": 90, "label": "FRAM 读取 CPU3 参数镜像，校验 magic/version/CRC"},
             {"id": "d", "kind": "process", "x": 730, "y": 170, "w": 300, "h": 90, "label": "OLED/UART 运行期按错误回调或错误计数恢复"},
             {"id": "e", "kind": "decision", "x": 410, "y": 345, "w": 300, "h": 108, "label": "FRAM 参数是否有效或可迁移？"},
@@ -1611,15 +1611,15 @@ def param_fram_io_page() -> dict:
             },
             {
                 "title": "RTC 与外设错误恢复",
-                "caption": "RTC 初始化只服务协议时间展示；UART 和 OLED 错误恢复分别由 HAL 回调和显示任务触发，避免外设错误长期卡住显示端。",
+                "caption": "RTC 初始化只服务协议时间展示；LSE 缺失时回退 LSI，屏幕菜单可校时；UART 和 OLED 错误恢复分别由 HAL 回调和显示任务触发，避免外设错误长期卡住显示端。",
                 "height": 1040,
                 "nodes": [
                     {"id": "s", "kind": "start", "x": 430, "y": 35, "w": 260, "h": 62, "label": "进入本地外设支撑流程"},
-                    {"id": "p1", "kind": "process", "x": 70, "y": 170, "w": 300, "h": 90, "label": "RTC：打开 PWR/备份域，配置 LSI 为 RTC 时钟"},
+                    {"id": "p1", "kind": "process", "x": 70, "y": 170, "w": 300, "h": 90, "label": "RTC：打开 PWR/备份域，优先等待 LSE，失败启用 LSI"},
                     {"id": "p2", "kind": "process", "x": 410, "y": 170, "w": 300, "h": 90, "label": "UART：Tx 完成或错误回调恢复接收 DMA"},
                     {"id": "p3", "kind": "process", "x": 750, "y": 170, "w": 300, "h": 90, "label": "OLED：检测 SPI 错误计数或周期恢复请求"},
-                    {"id": "d1", "kind": "decision", "x": 70, "y": 340, "w": 300, "h": 108, "label": "RTC BKP 标记是否有效？"},
-                    {"id": "p4", "kind": "state", "x": 70, "y": 515, "w": 300, "h": 90, "label": "无效：写默认日期 2026-01-01 并置 ready"},
+                    {"id": "d1", "kind": "decision", "x": 70, "y": 340, "w": 300, "h": 108, "label": "RTC BKP 标记和寄存器时间是否有效？"},
+                    {"id": "p4", "kind": "state", "x": 70, "y": 515, "w": 300, "h": 90, "label": "无效：写默认日期 2026-01-01；菜单校时后写 SET 标记"},
                     {"id": "d2", "kind": "decision", "x": 410, "y": 340, "w": 300, "h": 108, "label": "UART 错误来自哪一路？"},
                     {"id": "p5", "kind": "state", "x": 410, "y": 515, "w": 300, "h": 90, "label": "COM1/2/3 释放 busy/pending；UART5 清 wait_response"},
                     {"id": "d3", "kind": "decision", "x": 750, "y": 340, "w": 300, "h": 108, "label": "是否需要 OLED 恢复清屏？"},
@@ -1641,7 +1641,7 @@ def param_fram_io_page() -> dict:
                     {"d": "M 900 605 C 790 700 660 735 560 760"},
                 ],
                 "evidence": [
-                    {"title": "RTC 初始化", "text": f"{code('cpu3_clock.c:194-239')} Cpu3Clock_Init 使用 LSI、BKP 标记和默认日期。"},
+                    {"title": "RTC 初始化", "text": f"{code('cpu3_clock.c:251-405')} Cpu3Clock_Init 优先使用 LSE，失败回退 LSI；只有 BKP 标记或时间非法时写默认日期。"},
                     {"title": "UART 错误恢复", "text": f"{code('Application/app_main.c:662-700')} HAL_UART_ErrorCallback 分别恢复外部 COM 和 UART5。"},
                     {"title": "OLED 恢复", "text": f"{code('display.c:1872-1903')} Display_ShouldRecoverBeforeDraw 根据请求、SPI 错误和周期条件恢复。"},
                 ],
@@ -1649,14 +1649,14 @@ def param_fram_io_page() -> dict:
         ],
         "issues": [
             {"level": "mid", "title": "FRAM 无效会静默恢复默认通信参数", "desc": "magic/version/CRC 无效时直接初始化默认并保存，现场串口协议配置可能回到默认值。", "suggest": "在显示端增加“参数恢复默认”提示或错误计数，便于现场定位 FRAM/升级问题。", "ref": "cpu3_comm_display_params.c:712-782"},
-            {"level": "mid", "title": "RTC 使用 LSI，时间精度有限", "desc": "RTC 时间用于协议展示和 profile 时间戳，LSI 漂移较大，长期运行时间戳可能偏差明显。", "suggest": "如果 SI7000/Wartsila 时间戳有审计意义，应支持外部校时或 LSE。", "ref": "cpu3_clock.c:170-191"},
+            {"level": "low", "title": "LSI 兜底时时间精度仍有限", "desc": "新板优先使用 LSE，旧板或 LSE 启动失败时会回退 LSI；LSI 长期漂移仍可能影响时间戳精度。", "suggest": "现场测试时应确认菜单显示的 RTC 状态，LSE 异常时按硬件问题排查晶振和 VBAT。", "ref": "cpu3_clock.c:251-335"},
             {"level": "mid", "title": "UART5 错误会清 wait_response", "desc": "内部 CPU2 通信错误回调直接 wait_response=false，调用方只看到等待结束，缺少明确错误状态。", "suggest": "增加 UART5 错误码/计数并让 CPU2_CombinatePackage_Send 返回错误。", "ref": "Application/app_main.c:693-700"},
             {"level": "low", "title": "FRAM 保存判重只比较 params", "desc": "magic/version/CRC 有效且 params 相同就跳过写入，若保留字段策略变化需确认是否仍满足升级需求。", "suggest": "版本升级时复核 Cpu3_Params_BuildStorage 和判重条件。", "ref": "cpu3_comm_display_params.c:682-710"},
         ],
         "sources": [
             {"title": "读取 CPU3 本机 FRAM 参数", "desc": "CPU3 本机参数加载、迁移和默认回退。", "refs": ["Application/system_param/cpu3_comm_display_params.c:712-782"]},
             {"title": "Cpu3_Params_SaveToFRAM", "desc": "CPU3 本机参数 CRC 构造、判重和写入。", "refs": ["Application/system_param/cpu3_comm_display_params.c:682-710"]},
-            {"title": "Cpu3Clock_Init", "desc": "CPU3 本机 RTC 初始化。", "refs": ["Application/system_param/cpu3_clock.c:194-239"]},
+            {"title": "Cpu3Clock_Init", "desc": "CPU3 本机 RTC 初始化、LSE/LSI 选择和备份标记处理。", "refs": ["Application/system_param/cpu3_clock.c:344-405"]},
             {"title": "ReadMultiData / WriteMultiData", "desc": "MB85RS2M FRAM 多字节读写。", "refs": ["Application/system_param/mb85rs2m.c:112-150"]},
         ],
     }

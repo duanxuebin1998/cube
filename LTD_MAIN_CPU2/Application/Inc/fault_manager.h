@@ -8,85 +8,85 @@
 #ifndef INC_FAULT_MANAGER_H_
 #define INC_FAULT_MANAGER_H_
 
-#include <stdint.h>   /* å¤„ç† uint8_t, uint32_t ç­‰ç±»å‹ */
-#include <string.h>   /* å¤„ç† memsetã€memcpy ç­‰å‡½æ•° */
+#include <stdint.h>   /* ´¦Àí uint8_t, uint32_t µÈÀàĞÍ */
+#include <string.h>   /* ´¦Àí memset¡¢memcpy µÈº¯Êı */
 #include "error_log.h"
 
 /* #define ERROR_PRINT(msg) printf("ERROR: %s | FILE: %s | LINE: %d\r\n", msg, __FILE__, __LINE__) */
 
-/* æ•…éšœå¤§ç±»æšä¸¾ */
+/* ¹ÊÕÏ´óÀàÃ¶¾Ù */
 typedef enum {
-	FAULT_MOTOR = 11,          /* ç”µæœºç±»æ•…éšœ */
-	FAULT_ENCODER,            /* ç¼–ç å™¨ç±»æ•…éšœ */
-	FAULT_SENSOR,             /* ä¼ æ„Ÿå™¨ç±»æ•…éšœ */
-	FAULT_WEIGHT,             /* ç§°é‡æ•…éšœ */
-	FAULT_MEASUREMENT,        /* æµ‹é‡è¿‡ç¨‹ç±»é”™è¯¯ */
-	FAULT_WIRELESS_SLIPRING,  /* æ— çº¿æ»‘ç¯ç±»æ•…éšœ */
-	FAULT_PARAM_STORAGE,      /* å‚æ•°/å­˜å‚¨é”™è¯¯ */
-	FAULT_OTHER               /* å…¶ä»–ç±»å‹é”™è¯¯ */
+	FAULT_MOTOR = 11,          /* µç»úÀà¹ÊÕÏ */
+	FAULT_ENCODER,            /* ±àÂëÆ÷Àà¹ÊÕÏ */
+	FAULT_SENSOR,             /* ´«¸ĞÆ÷Àà¹ÊÕÏ */
+	FAULT_WEIGHT,             /* ³ÆÖØ¹ÊÕÏ */
+	FAULT_MEASUREMENT,        /* ²âÁ¿¹ı³ÌÀà´íÎó */
+	FAULT_WIRELESS_SLIPRING,  /* ÎŞÏß»¬»·Àà¹ÊÕÏ */
+	FAULT_PARAM_STORAGE,      /* ²ÎÊı/´æ´¢´íÎó */
+	FAULT_OTHER               /* ÆäËûÀàĞÍ´íÎó */
 } FaultCategory;
 
-/* æ•…éšœç­‰çº§ï¼ˆå†³å®šå¤„ç†ä¼˜å…ˆçº§å’Œæ¢å¤ç­–ç•¥ï¼‰ */
+/* ¹ÊÕÏµÈ¼¶£¨¾ö¶¨´¦ÀíÓÅÏÈ¼¶ºÍ»Ö¸´²ßÂÔ£© */
 typedef enum {
-	FAULT_SEVERITY_NONE = 0,      /* æ— æ•…éšœ */
-	FAULT_SEVERITY_WARNING,   	  /* è­¦å‘Šï¼šä¸å½±å“æ ¸å¿ƒåŠŸèƒ½ï¼Œéœ€è¦æ‰“å°æ•…éšœä¿¡æ¯ */
-	FAULT_SEVERITY_ERROR,         /* é”™è¯¯ï¼šåŠŸèƒ½é™çº§/æœ‰é™æ¬¡é‡è¯• */
-	FAULT_SEVERITY_CRITICAL,      /* ä¸¥é‡é”™è¯¯ï¼šå®‰å…¨ä¿æŠ¤ï¼Œç«‹å³åœæœºç­‰å¾…äººå·¥å¹²é¢„ */
-	FAULT_SEVERITY_FATAL          /* è‡´å‘½é”™è¯¯ï¼šå¼ºåˆ¶ç³»ç»Ÿé‡å¯ */
+	FAULT_SEVERITY_NONE = 0,      /* ÎŞ¹ÊÕÏ */
+	FAULT_SEVERITY_WARNING,   	  /* ¾¯¸æ£º²»Ó°ÏìºËĞÄ¹¦ÄÜ£¬ĞèÒª´òÓ¡¹ÊÕÏĞÅÏ¢ */
+	FAULT_SEVERITY_ERROR,         /* ´íÎó£º¹¦ÄÜ½µ¼¶/ÓĞÏŞ´ÎÖØÊÔ */
+	FAULT_SEVERITY_CRITICAL,      /* ÑÏÖØ´íÎó£º°²È«±£»¤£¬Á¢¼´Í£»úµÈ´ıÈË¹¤¸ÉÔ¤ */
+	FAULT_SEVERITY_FATAL          /* ÖÂÃü´íÎó£ºÇ¿ÖÆÏµÍ³ÖØÆô */
 } FaultSeverity;
 
 
 
 /* */
-/* æ•…éšœæ¢å¤åŠ¨ä½œå®šä¹‰ */
+/* ¹ÊÕÏ»Ö¸´¶¯×÷¶¨Òå */
 typedef enum {
-	FAULT_ACTION_NONE,          /* æ— æ“ä½œï¼ˆä»…è®°å½•æ—¥å¿—ï¼‰ */
-	FAULT_ACTION_RETRY,         /* é‡è¯•æ“ä½œï¼ˆå¦‚é‡æ–°åˆå§‹åŒ–å¤–è®¾ï¼‰ */
-	FAULT_ACTION_RESET_MODULE,  /* å¤ä½æ¨¡å—ï¼ˆå¦‚é‡å¯é€šä¿¡èŠ¯ç‰‡ï¼‰ */
-	FAULT_ACTION_SYSTEM_REBOOT  /* ç³»ç»Ÿçº§å¤ä½ */
+	FAULT_ACTION_NONE,          /* ÎŞ²Ù×÷£¨½ö¼ÇÂ¼ÈÕÖ¾£© */
+	FAULT_ACTION_RETRY,         /* ÖØÊÔ²Ù×÷£¨ÈçÖØĞÂ³õÊ¼»¯ÍâÉè£© */
+	FAULT_ACTION_RESET_MODULE,  /* ¸´Î»Ä£¿é£¨ÈçÖØÆôÍ¨ĞÅĞ¾Æ¬£© */
+	FAULT_ACTION_SYSTEM_REBOOT  /* ÏµÍ³¼¶¸´Î» */
 } FaultRecoveryAction;
 
-/* æ•…éšœæ¢å¤ç­–ç•¥é…ç½® */
+/* ¹ÊÕÏ»Ö¸´²ßÂÔÅäÖÃ */
 typedef struct {
-	FaultSeverity severity;      /* è§¦å‘ç­‰çº§ */
-	uint8_t max_retries;        /* æœ€å¤§é‡è¯•æ¬¡æ•° */
-	FaultRecoveryAction action;  /* æ¢å¤åŠ¨ä½œ */
+	FaultSeverity severity;      /* ´¥·¢µÈ¼¶ */
+	uint8_t max_retries;        /* ×î´óÖØÊÔ´ÎÊı */
+	FaultRecoveryAction action;  /* »Ö¸´¶¯×÷ */
 } FaultRecoveryPolicy;
-/* é”™è¯¯ä¿¡æ¯ç»“æ„ä½“ */
+/* ´íÎóĞÅÏ¢½á¹¹Ìå */
 typedef struct {
 	const char *file;
 	uint32_t line;
 	const char *func;
-	uint32_t error_code; /* é”™è¯¯ç ; */
+	uint32_t error_code; /* ´íÎóÂë; */
 } ErrorInfo;
-extern ErrorInfo err; /* å…¨å±€é”™è¯¯ä¿¡æ¯å˜é‡ */
+extern ErrorInfo err; /* È«¾Ö´íÎóĞÅÏ¢±äÁ¿ */
 
 /**
- * @brief æ‰§è¡Œæ•…éšœå¤„ç†ä¸­çš„ FaultManager_ReportErrorExit é€»è¾‘ã€‚
+ * @brief Ö´ĞĞ¹ÊÕÏ´¦ÀíÖĞµÄ FaultManager_ReportErrorExit Âß¼­¡£
  *
- * @param error_code æ•…éšœæˆ–é”™è¯¯ç ã€‚
+ * @param error_code ¹ÊÕÏ»ò´íÎóÂë¡£
  */
 void FaultManager_ReportErrorExit(uint32_t error_code);
 /**
- * @brief å¤„ç†æ•…éšœå¤„ç†ä¸­çš„ FaultManager_HandleCheckError é€»è¾‘ã€‚
+ * @brief ´¦Àí¹ÊÕÏ´¦ÀíÖĞµÄ FaultManager_HandleCheckError Âß¼­¡£
  *
- * @param error_code æ•…éšœæˆ–é”™è¯¯ç ã€‚
- * @param file ä¸šåŠ¡å‚æ•°ã€‚
- * @param line ä¸šåŠ¡å‚æ•°ã€‚
- * @param func ä¸šåŠ¡å‚æ•°ã€‚
- * @return çŠ¶æ€ç ã€è®¡æ•°å€¼æˆ–åè®®æ•°å€¼ï¼Œå…·ä½“å«ä¹‰ç”±è°ƒç”¨ç‚¹çº¦å®šã€‚
+ * @param error_code ¹ÊÕÏ»ò´íÎóÂë¡£
+ * @param file ÒµÎñ²ÎÊı¡£
+ * @param line ÒµÎñ²ÎÊı¡£
+ * @param func ÒµÎñ²ÎÊı¡£
+ * @return ×´Ì¬Âë¡¢¼ÆÊıÖµ»òĞ­ÒéÊıÖµ£¬¾ßÌåº¬ÒåÓÉµ÷ÓÃµãÔ¼¶¨¡£
  */
 uint32_t FaultManager_HandleCheckError(uint32_t error_code,
                                        const char *file,
                                        uint32_t line,
                                        const char *func);
 /**
- * @brief æ‰§è¡Œæ•…éšœå¤„ç†ä¸­çš„ FaultManager_SetErrorState é€»è¾‘ã€‚
+ * @brief Ö´ĞĞ¹ÊÕÏ´¦ÀíÖĞµÄ FaultManager_SetErrorState Âß¼­¡£
  *
- * @param error_code æ•…éšœæˆ–é”™è¯¯ç ã€‚
- * @param file ä¸šåŠ¡å‚æ•°ã€‚
- * @param line ä¸šåŠ¡å‚æ•°ã€‚
- * @param func ä¸šåŠ¡å‚æ•°ã€‚
+ * @param error_code ¹ÊÕÏ»ò´íÎóÂë¡£
+ * @param file ÒµÎñ²ÎÊı¡£
+ * @param line ÒµÎñ²ÎÊı¡£
+ * @param func ÒµÎñ²ÎÊı¡£
  */
 void FaultManager_SetErrorState(uint32_t error_code,
                                 const char *file,
@@ -95,7 +95,7 @@ void FaultManager_SetErrorState(uint32_t error_code,
 
 #define CHECK_ERROR(errorcode)                                                   \
     do {                                                                         \
-        /* Step 1: ä¼˜å…ˆæ£€æŸ¥å‡½æ•°è¿”å›é”™è¯¯ç  */                                      \
+        /* Step 1: ÓÅÏÈ¼ì²éº¯Êı·µ»Ø´íÎóÂë */                                      \
         uint32_t check_error_code = (uint32_t)(errorcode);                       \
         if (check_error_code != NO_ERROR) {                                      \
             return FaultManager_HandleCheckError(check_error_code,               \
@@ -104,7 +104,7 @@ void FaultManager_SetErrorState(uint32_t error_code,
                                                  __func__);                      \
         }                                                                        \
                                                                                  \
-        /* Step 2: æ£€æŸ¥å…¨å±€è®¾å¤‡é”™è¯¯çŠ¶æ€ */                                        \
+        /* Step 2: ¼ì²éÈ«¾ÖÉè±¸´íÎó×´Ì¬ */                                        \
         if (g_measurement.device_status.error_code != NO_ERROR) {                \
             return FaultManager_HandleCheckError(                                \
                 g_measurement.device_status.error_code,                          \
@@ -113,7 +113,7 @@ void FaultManager_SetErrorState(uint32_t error_code,
                 __func__);                                                       \
         }                                                                        \
                                                                                  \
-        /* Step 3: æ£€æŸ¥æ˜¯å¦æœ‰å‘½ä»¤åˆ‡æ¢ */                                          \
+        /* Step 3: ¼ì²éÊÇ·ñÓĞÃüÁîÇĞ»» */                                          \
         if (HasEffectiveCommandSwitchRequest()) {                                \
             err.error_code = STATE_SWITCH;                                       \
             HandleError();                                                       \
@@ -130,8 +130,8 @@ void FaultManager_SetErrorState(uint32_t error_code,
             err.func       = __func__;                                           \
             err.error_code = (errorcode);                                        \
                                                                                  \
-            HandleError();        /* åœæœº / æŠ¥è­¦ / è®°å½•åˆ°å…¨å±€çŠ¶æ€ç­‰ */            \
-            printError(&err);     /* ä¸²å£/æ—¥å¿—è¾“å‡ºå¯è¯»ä¿¡æ¯ */                     \
+            HandleError();        /* Í£»ú / ±¨¾¯ / ¼ÇÂ¼µ½È«¾Ö×´Ì¬µÈ */            \
+            printError(&err);     /* ´®¿Ú/ÈÕÖ¾Êä³ö¿É¶ÁĞÅÏ¢ */                     \
                                                                                  \
             return err.error_code;                                               \
         }                                                                        \
@@ -154,7 +154,7 @@ void FaultManager_SetErrorState(uint32_t error_code,
 #define CHECK_COMMAND_SWITCH(ret)                                                \
     do {                                                                         \
         if (HasEffectiveCommandSwitchRequest()) {                                \
-            printf("æ£€æµ‹åˆ°å‘½ä»¤åˆ‡æ¢è¯·æ±‚ï¼Œåœæ­¢å½“å‰æ“ä½œ\r\n");                       \
+            printf("¼ì²âµ½ÃüÁîÇĞ»»ÇëÇó£¬Í£Ö¹µ±Ç°²Ù×÷\r\n");                       \
             HandleError();                                                       \
             return STATE_SWITCH;                                                 \
         }                                                                        \
@@ -167,30 +167,30 @@ void FaultManager_SetErrorState(uint32_t error_code,
 #define CHECK_COMMAND_SWITCH_NO_RETURN()                                          \
     do {                                                                         \
         if (HasEffectiveCommandSwitchRequest()) {                                \
-            printf("æ£€æµ‹åˆ°å‘½ä»¤åˆ‡æ¢è¯·æ±‚ï¼Œåœæ­¢å½“å‰æ“ä½œ\r\n");                   		    \
+            printf("¼ì²âµ½ÃüÁîÇĞ»»ÇëÇó£¬Í£Ö¹µ±Ç°²Ù×÷\r\n");                   		    \
             return ;                                                 \
         }                                                                        \
     } while (0)
 
 /**
- * @brief åˆå§‹åŒ–æ•…éšœå¤„ç†ä¸­çš„ fault_info_init é€»è¾‘ã€‚
+ * @brief ³õÊ¼»¯¹ÊÕÏ´¦ÀíÖĞµÄ fault_info_init Âß¼­¡£
  */
 void fault_info_init(void);
 /**
- * @brief å¤„ç†æ•…éšœå¤„ç†ä¸­çš„ HandleError é€»è¾‘ã€‚
+ * @brief ´¦Àí¹ÊÕÏ´¦ÀíÖĞµÄ HandleError Âß¼­¡£
  */
 void HandleError(void);
 /**
- * @brief æ˜¾ç¤ºæˆ–æ‰“å°æ•…éšœå¤„ç†ä¸­çš„ printError é€»è¾‘ã€‚
+ * @brief ÏÔÊ¾»ò´òÓ¡¹ÊÕÏ´¦ÀíÖĞµÄ printError Âß¼­¡£
  *
- * @param err ä¸šåŠ¡å‚æ•°ã€‚
+ * @param err ÒµÎñ²ÎÊı¡£
  */
 void printError(const ErrorInfo* err);
 /**
- * @brief è¯»å–æ•…éšœå¤„ç†ä¸­çš„ GetShortFilename é€»è¾‘ã€‚
+ * @brief ¶ÁÈ¡¹ÊÕÏ´¦ÀíÖĞµÄ GetShortFilename Âß¼­¡£
  *
- * @param fullpath ä¸šåŠ¡å‚æ•°ã€‚
- * @return è¿”å›ä¸šåŠ¡å¯¹è±¡æˆ–ç¼“å†²åŒºæŒ‡é’ˆï¼ŒNULL è¡¨ç¤ºæ— æœ‰æ•ˆå¯¹è±¡ã€‚
+ * @param fullpath ÒµÎñ²ÎÊı¡£
+ * @return ·µ»ØÒµÎñ¶ÔÏó»ò»º³åÇøÖ¸Õë£¬NULL ±íÊ¾ÎŞÓĞĞ§¶ÔÏó¡£
  */
 const char* GetShortFilename(const char *fullpath);
 #endif /* INC_FAULT_MANAGER_H_ */

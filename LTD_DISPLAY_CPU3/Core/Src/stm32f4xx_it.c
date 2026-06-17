@@ -18,11 +18,11 @@
 /* USER CODE END Header */
 
 /* Includes ------------------------------------------------------------------*/
-#include "cpu2_communicate.h"
 #include "main.h"
 #include "stm32f4xx_it.h"
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include "cpu2_communicate.h"
 #include "exit.h"
 #include "display_tankopera.h"
 #include "DSM_communication.h"

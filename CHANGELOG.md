@@ -1,4 +1,4 @@
-# 升级日志
+﻿# 升级日志
 
 记录 CPU2/CPU3 固件版本变更。使用 `tools/bump_version.py` 升级版本时会自动追加记录；提交前应补充到与 Git 提交信息同等详细。
 
@@ -1399,3 +1399,39 @@ CPU2 参数加载会校验 FRAM 中的 `magic`、`struct_size`、`param_version`
 - 未做实物联调；需要在 OLED 实机上确认状态页 2 秒采样节流、反白恢复、菜单范围显示和参数输入位宽不会造成可见闪烁或截断。
 - 未重新运行 CPU2/CPU3 完整固件构建；提交前如需要发布固件，仍建议补跑 `cmake --build build\LTD_MAIN_CPU2` 和 `cmake --build build\LTD_DISPLAY_CPU3`。
 - 本次不改变测量状态机、命令入口、协议尾段布局或 AO 输出执行链路，程序流程图无需更新。
+
+## 2026-06-17 - 增加 CPU3 RTC LSE 电池保持和屏幕校时（CPU3 V1.15.0.2）
+
+版本：
+- CPU2: 保持 V1.16.0.1。
+- CPU3: V1.15.0.1 -> V1.15.0.2。
+
+协议版本/兼容性：
+- `DEVICE_PROTOCOL_VERSION` 保持 10，不新增 CPU2/CPU3 共享寄存器、命令码或输入寄存器尾段。
+- CPU2 `DEVICE_PARAM_VERSION` 保持 3，`DeviceParameters` 结构大小不变，不会因本次 CPU3 RTC 改动触发恢复出厂参数。
+- CPU3 本机参数版本保持 `0x0004`，不改变 CPU3 FRAM 本机显示/通信参数布局。
+- 新 CPU3 板优先使用外部 32.768 kHz LSE 和 VBAT 电池保持 RTC；旧板或 LSE 起振失败时自动回退内部 LSI，启动不因 LSE 缺失卡死。
+- RTC 只服务外部协议时间显示和 profile 完成时间锁存，不参与 CPU2 测量控制和调度。
+
+本次修改：
+- CPU3 CubeMX 工程启用 RTC/HAL RTC 相关文件，并在 `.ioc` 中配置 RTC 时钟优先为 LSE。
+- CPU3 系统时钟配置增加 LSE 失败兜底逻辑，旧板未装 LSE 时会关闭 LSE 配置并继续启动。
+- `Cpu3Clock_Init()` 改为 LSE 优先、LSI 兜底；仅在备份标记无效、RTC 未初始化或时间非法时写入默认时间，避免每次上电覆盖电池保持时间。
+- 新增 `Cpu3Clock_SetDateTime()`、`Cpu3Clock_GetState()` 和 `Cpu3Clock_GetSource()`，用于屏幕校时和显示 RTC 状态。
+- CPU3 维护设置菜单新增 `RTC设置` 页面，可编辑年、月、日、时、分、秒，保存成功后写入已校时备份标记。
+- SI7000 现有 profile 完成时间锁存和当前时分秒实时输出逻辑保持不变，第一阶段不新增对外校时寄存器。
+- 同步更新 CPU3 程序流程文档和本版本改动与测试方案。
+- 本次提交按用户要求包含当前工作区全部改动，其中 CPU2 现有差异为中文注释编码形式变化，不改变 CPU2 版本号和运行逻辑。
+
+验证：
+- `py -3 tools\generate_cpu3_flow_docs.py`
+- `py -3 LTD_DISPLAY_CPU3\font_check.py`
+- `cmake --build build\LTD_MAIN_CPU2`
+- `cmake --build build\LTD_DISPLAY_CPU3`
+- `git diff --cached --check`
+- `py -3 tools\check_version_bumped.py`
+
+未验证风险：
+- 未做 RTC 实物联调；需要在新板验证 LSE 起振、VBAT 断主电保持、菜单校时保存和重新上电不覆盖时间。
+- 旧板兼容需要实机确认未装 LSE 时系统时钟配置不会卡死，并且 RTC 状态显示为 LSI 兜底。
+- LSI 兜底模式长期时间精度有限，现场若看到 `RTC LSI` 应按硬件配置或 LSE 起振问题排查。

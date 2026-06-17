@@ -108,6 +108,7 @@ typedef enum {
     KEYNUM_MENU_DISPLAY_DATA_DENSITY,    /* 密度数据源与手输值 */
     KEYNUM_MENU_DISPLAY_DATA_TEMP,       /* 温度数据源与手输值 */
     KEYNUM_MENU_MAINT_CONFIG,            /* 维护设置主菜单 */
+    KEYNUM_MENU_RTC_DATETIME,            /* RTC 日期时间设置 */
 
     /* ===== CPU3（拆分页面） ===== */
     KEYNUM_MENU_CPU3_BASE,               /* CPU3 - 基本参数 */

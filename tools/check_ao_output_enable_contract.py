@@ -45,6 +45,18 @@ def require_re(text: str, pattern: str, message: str, failed: list[str]) -> None
     require(re.search(pattern, text, re.S) is not None, message, failed)
 
 
+def read_text_with_fallback(path: Path, *encodings: str) -> str:
+    last_error: UnicodeDecodeError | None = None
+    for encoding in encodings:
+        try:
+            return path.read_text(encoding=encoding)
+        except UnicodeDecodeError as exc:
+            last_error = exc
+    if last_error is not None:
+        raise last_error
+    raise ValueError(f"{path}: no encoding provided")
+
+
 def extract_update_disabled_branch(compact_text: str) -> str:
     function_marker = "uint32_tAoOutput_Update(void){"
     function_start = compact_text.find(function_marker)
@@ -72,7 +84,7 @@ def main() -> int:
     cpu3_menu_h = CPU3_MENU_H.read_text(encoding="utf-8")
     cpu3_menu_c = CPU3_MENU_C.read_text(encoding="utf-8")
     cpu3_sync = CPU3_SYNC.read_text(encoding="utf-8")
-    cpu2_ao = CPU2_AO.read_text(encoding="utf-8")
+    cpu2_ao = read_text_with_fallback(CPU2_AO, "utf-8", "gbk")
     protocol_doc = PROTOCOL_DOC.read_text(encoding="utf-8")
     default_doc = DEFAULT_DOC.read_text(encoding="utf-8")
 
