@@ -1,0 +1,1256 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+  <meta charset="utf-8" />
+  <meta name="generator" content="pandoc" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+  <title>AD5421 控制寄存器回读 0xFFFF 问题分析与现场验证</title>
+  <style>
+
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: min(4vw, 1.5em);}
+div.column{flex: auto; overflow-x: auto;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+
+ul.task-list[class]{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+font-size: inherit;
+width: 0.8em;
+margin: 0 0.8em 0.2em -1.6em;
+vertical-align: middle;
+}
+.display.math{display: block; text-align: center; margin: 0.5rem auto;}
+</style>
+  <style type="text/css">:root {
+color-scheme: light;
+--page-bg: #edf1f5;
+--paper: #ffffff;
+--ink: #182230;
+--muted: #617081;
+--line: #d9e0e8;
+--line-soft: #e8edf3;
+--nav-bg: #f8fafc;
+--nav-active: #e6f5f2;
+--accent: #0f766e;
+--accent-strong: #0b5f59;
+--accent-soft: #e8f6f3;
+--warn: #b45309;
+--warn-soft: #fff4df;
+--code: #15436b;
+--code-bg: #f3f7fb;
+--shadow: 0 18px 48px rgba(28, 43, 64, 0.12);
+}
+@page {
+size: A4;
+margin: 12mm;
+}
+html {
+background: var(--page-bg);
+scroll-behavior: smooth;
+}
+body {
+box-sizing: border-box;
+min-height: 100vh;
+margin: 0;
+color: var(--ink);
+background:
+linear-gradient(180deg, rgba(15, 118, 110, 0.08), rgba(15, 118, 110, 0) 260px),
+var(--page-bg);
+font-family: "Microsoft YaHei", "Segoe UI", Arial, sans-serif;
+font-size: 15px;
+line-height: 1.72;
+letter-spacing: 0;
+-webkit-font-smoothing: antialiased;
+-webkit-print-color-adjust: exact;
+print-color-adjust: exact;
+}
+* {
+box-sizing: border-box;
+}
+a {
+color: var(--accent-strong);
+text-decoration: none;
+}
+a:hover {
+text-decoration: underline;
+}
+body > .level1 {
+max-width: 1180px;
+margin: 28px auto 56px;
+padding: 44px 56px 52px;
+background: var(--paper);
+border: 1px solid var(--line-soft);
+border-radius: 8px;
+box-shadow: var(--shadow);
+}
+body > .level1 > p:first-of-type {
+display: inline-flex;
+align-items: center;
+gap: 8px;
+margin: 0 0 20px;
+padding: 5px 10px;
+color: var(--accent-strong);
+font-size: 13px;
+font-weight: 700;
+background: var(--accent-soft);
+border: 1px solid #cbe7e2;
+border-radius: 999px;
+}
+h1,
+h2,
+h3,
+h4 {
+color: #101828;
+font-weight: 750;
+line-height: 1.24;
+letter-spacing: 0;
+scroll-margin-top: 24px;
+break-after: avoid;
+}
+h1 {
+max-width: 920px;
+margin: 0 0 14px;
+padding: 0;
+color: #0f172a;
+font-size: 36px;
+border: 0;
+}
+h2 {
+margin: 38px 0 16px;
+padding: 0 0 10px;
+font-size: 24px;
+border: 0;
+border-bottom: 1px solid var(--line-soft);
+}
+h2::before {
+content: "";
+display: inline-block;
+width: 7px;
+height: 22px;
+margin-right: 10px;
+vertical-align: -4px;
+background: var(--accent);
+border-radius: 4px;
+}
+h3 {
+margin: 28px 0 12px;
+color: #1d2939;
+font-size: 18px;
+}
+h4 {
+margin: 22px 0 10px;
+color: #344054;
+font-size: 15px;
+}
+p {
+margin: 0 0 14px;
+}
+ul,
+ol {
+margin: 10px 0 18px 22px;
+padding-left: 18px;
+}
+li {
+margin: 7px 0;
+}
+li::marker {
+color: var(--accent);
+font-weight: 700;
+}
+blockquote {
+margin: 18px 0;
+padding: 14px 18px;
+color: #344054;
+background: var(--warn-soft);
+border: 1px solid #f4d7a1;
+border-left: 5px solid var(--warn);
+border-radius: 8px;
+}
+hr {
+height: 1px;
+margin: 28px 0;
+background: var(--line-soft);
+border: 0;
+}
+#TOC {
+max-width: 1180px;
+margin: 22px auto 0;
+padding: 16px 18px;
+color: #344054;
+background: rgba(255, 255, 255, 0.92);
+border: 1px solid var(--line-soft);
+border-radius: 8px;
+box-shadow: 0 8px 24px rgba(28, 43, 64, 0.08);
+}
+#TOC::before {
+content: "目录";
+display: block;
+margin: 0 0 8px;
+color: #101828;
+font-size: 15px;
+font-weight: 800;
+}
+#TOC ul {
+margin: 0;
+padding: 0;
+list-style: none;
+}
+#TOC li {
+margin: 0;
+}
+#TOC a {
+display: block;
+padding: 6px 8px;
+color: #475467;
+font-size: 13px;
+line-height: 1.35;
+border-radius: 6px;
+}
+#TOC a:hover {
+color: var(--accent-strong);
+background: var(--nav-active);
+text-decoration: none;
+}
+#TOC > ul > li > a {
+color: #101828;
+font-weight: 800;
+}
+#TOC ul ul {
+margin-top: 3px;
+padding-left: 10px;
+border-left: 2px solid var(--line-soft);
+}
+#TOC ul ul ul a {
+color: #667085;
+font-size: 12px;
+}
+table {
+display: block;
+width: 100%;
+margin: 18px 0 26px;
+overflow-x: auto;
+border-collapse: separate;
+border-spacing: 0;
+font-size: 13px;
+line-height: 1.55;
+}
+thead,
+tbody,
+tr {
+width: 100%;
+}
+th,
+td {
+min-width: 130px;
+padding: 11px 13px;
+vertical-align: top;
+border: 0;
+border-right: 1px solid var(--line);
+border-bottom: 1px solid var(--line);
+word-break: break-word;
+}
+th:first-child,
+td:first-child {
+border-left: 1px solid var(--line);
+}
+thead th {
+position: sticky;
+top: 0;
+z-index: 1;
+color: #102a43;
+font-weight: 800;
+background: #dff0ed;
+border-top: 1px solid var(--line);
+}
+thead th:first-child {
+border-top-left-radius: 8px;
+}
+thead th:last-child {
+border-top-right-radius: 8px;
+}
+tbody tr:nth-child(even) td {
+background: #fafcff;
+}
+tbody tr:hover td {
+background: #f3faf8;
+}
+code {
+padding: 2px 6px;
+color: var(--code);
+font-family: Consolas, "Cascadia Mono", "Courier New", monospace;
+font-size: 0.92em;
+background: var(--code-bg);
+border: 1px solid #dce7f2;
+border-radius: 5px;
+}
+pre {
+margin: 18px 0 24px;
+padding: 16px 18px;
+overflow-x: auto;
+color: #172033;
+white-space: pre;
+background: #f7fafc;
+border: 1px solid var(--line);
+border-left: 5px solid var(--accent);
+border-radius: 8px;
+}
+pre code {
+padding: 0;
+color: inherit;
+background: transparent;
+border: 0;
+}
+img {
+max-width: 100%;
+height: auto;
+}
+.report-summary {
+display: grid;
+grid-template-columns: repeat(4, minmax(0, 1fr));
+gap: 10px;
+margin: 20px 0 28px;
+padding: 14px;
+background: #f8fafc;
+border: 1px solid var(--line-soft);
+border-radius: 8px;
+}
+.report-summary div {
+min-width: 0;
+padding: 10px 12px;
+background: #ffffff;
+border: 1px solid var(--line-soft);
+border-radius: 8px;
+}
+.report-summary span {
+display: block;
+margin-bottom: 3px;
+color: var(--muted);
+font-size: 12px;
+}
+.report-summary strong {
+display: block;
+color: #101828;
+font-size: 14px;
+line-height: 1.35;
+}
+.signal-flow {
+display: grid;
+grid-template-columns: repeat(5, minmax(145px, 1fr));
+gap: 10px;
+margin: 18px 0 24px;
+}
+.flow-node {
+min-height: 118px;
+padding: 13px 13px 12px;
+background: #ffffff;
+border: 1px solid #cfdce8;
+border-top: 4px solid var(--accent);
+border-radius: 8px;
+}
+.flow-step {
+display: inline-flex;
+align-items: center;
+justify-content: center;
+width: 28px;
+height: 24px;
+margin-bottom: 8px;
+color: #ffffff;
+font-size: 12px;
+font-weight: 800;
+background: var(--accent);
+border-radius: 999px;
+}
+.flow-node strong {
+display: block;
+margin-bottom: 5px;
+color: #101828;
+font-size: 14px;
+line-height: 1.35;
+}
+.flow-node span:last-child {
+display: block;
+color: #667085;
+font-size: 12px;
+line-height: 1.45;
+}
+@media (min-width: 1180px) {
+body {
+display: grid;
+grid-template-columns: 286px minmax(0, 1180px);
+gap: 24px;
+align-items: start;
+padding: 28px 32px 56px;
+}
+#TOC {
+position: sticky;
+top: 24px;
+max-height: calc(100vh - 48px);
+margin: 0;
+overflow: auto;
+}
+body > .level1 {
+width: 100%;
+margin: 0;
+}
+}
+@media (max-width: 900px) {
+body > .level1 {
+margin: 14px 10px 28px;
+padding: 26px 18px 34px;
+}
+h1 {
+font-size: 28px;
+}
+h2 {
+font-size: 21px;
+}
+#TOC {
+margin: 12px 10px 0;
+}
+.report-summary {
+grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.signal-flow {
+grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+}
+@media (max-width: 560px) {
+.report-summary,
+.signal-flow {
+grid-template-columns: 1fr;
+}
+th,
+td {
+min-width: 180px;
+}
+}
+@media print {
+html,
+body {
+background: #ffffff;
+}
+body {
+display: block;
+padding: 0;
+font-size: 10.5pt;
+}
+#TOC,
+body > .level1 {
+max-width: none;
+margin: 0 0 8mm;
+padding: 0;
+border: 0;
+border-radius: 0;
+box-shadow: none;
+}
+table {
+display: table;
+font-size: 8.6pt;
+}
+pre,
+table,
+.report-summary,
+.signal-flow,
+.flow-node {
+break-inside: avoid;
+}
+}
+</style>
+</head>
+<body>
+<nav id="TOC" role="doc-toc">
+<ul>
+<li><a href="#ad5421-控制寄存器回读-0xffff-问题分析与现场验证" id="toc-ad5421-控制寄存器回读-0xffff-问题分析与现场验证">AD5421
+控制寄存器回读 0xFFFF 问题分析与现场验证</a>
+<ul>
+<li><a href="#1-问题摘要" id="toc-1-问题摘要">1. 问题摘要</a></li>
+<li><a href="#2-触发路径" id="toc-2-触发路径">2. 触发路径</a></li>
+<li><a href="#3-已做的软件侧验证" id="toc-3-已做的软件侧验证">3.
+已做的软件侧验证</a>
+<ul>
+<li><a href="#31-spi-原始接收字节" id="toc-31-spi-原始接收字节">3.1 SPI
+原始接收字节</a></li>
+<li><a href="#32-pb4miso-普通-gpio-探测" id="toc-32-pb4miso-普通-gpio-探测">3.2 PB4/MISO 普通 GPIO 探测</a></li>
+<li><a href="#33-spi-模式矩阵" id="toc-33-spi-模式矩阵">3.3 SPI
+模式矩阵</a></li>
+<li><a href="#34-读帧格式对比" id="toc-34-读帧格式对比">3.4
+读帧格式对比</a></li>
+<li><a href="#35-cs-默认电平" id="toc-35-cs-默认电平">3.5 CS
+默认电平</a></li>
+<li><a href="#36-历史正常输出信息" id="toc-36-历史正常输出信息">3.6
+历史正常输出信息</a></li>
+</ul></li>
+<li><a href="#4-原理图对照" id="toc-4-原理图对照">4. 原理图对照</a>
+<ul>
+<li><a href="#41-mcu-到-ad5421-的-spi-链路" id="toc-41-mcu-到-ad5421-的-spi-链路">4.1 MCU 到 AD5421 的 SPI
+链路</a></li>
+<li><a href="#42-容易误导的命名问题" id="toc-42-容易误导的命名问题">4.2
+容易误导的命名问题</a></li>
+<li><a href="#43-fault-引脚疑点" id="toc-43-fault-引脚疑点">4.3 FAULT
+引脚疑点</a></li>
+<li><a href="#44-ldac-引脚疑点" id="toc-44-ldac-引脚疑点">4.4 LDAC
+引脚疑点</a></li>
+</ul></li>
+<li><a href="#5-关键判断" id="toc-5-关键判断">5. 关键判断</a></li>
+<li><a href="#6-现场验证步骤" id="toc-6-现场验证步骤">6.
+现场验证步骤</a>
+<ul>
+<li><a href="#61-优先使用逻辑分析仪或示波器" id="toc-61-优先使用逻辑分析仪或示波器">6.1
+优先使用逻辑分析仪或示波器</a></li>
+<li><a href="#62-电源和参考点测量" id="toc-62-电源和参考点测量">6.2
+电源和参考点测量</a></li>
+<li><a href="#63-断电电阻连通性检查" id="toc-63-断电电阻连通性检查">6.3
+断电电阻/连通性检查</a></li>
+<li><a href="#64-fault-和-ldac-补充确认" id="toc-64-fault-和-ldac-补充确认">6.4 FAULT 和 LDAC 补充确认</a></li>
+</ul></li>
+<li><a href="#7-建议的排查顺序" id="toc-7-建议的排查顺序">7.
+建议的排查顺序</a></li>
+<li><a href="#8-当前临时软件改动说明" id="toc-8-当前临时软件改动说明">8.
+当前临时软件改动说明</a></li>
+<li><a href="#9-整改建议" id="toc-9-整改建议">9. 整改建议</a>
+<ul>
+<li><a href="#91-硬件和原理图" id="toc-91-硬件和原理图">9.1
+硬件和原理图</a></li>
+<li><a href="#92-固件" id="toc-92-固件">9.2 固件</a></li>
+</ul></li>
+<li><a href="#10-当前结论" id="toc-10-当前结论">10. 当前结论</a></li>
+</ul></li>
+</ul>
+</nav>
+<section id="ad5421-控制寄存器回读-0xffff-问题分析与现场验证" class="level1">
+<h1>AD5421 控制寄存器回读 0xFFFF 问题分析与现场验证</h1>
+<p>更新日期：2026-06-16</p>
+<section id="1-问题摘要" class="level2">
+<h2>1. 问题摘要</h2>
+<p>CPU2 开启 AO 输出后，AD5421 初始化失败，最终错误码为
+<code>0x00130009</code>，CPU3 侧显示为报警 <code>19-9</code>。</p>
+<p>错误含义：</p>
+<table>
+<thead>
+<tr>
+<th>字段</th>
+<th>值</th>
+<th>含义</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>完整错误码</td>
+<td><code>0x00130009</code></td>
+<td>AD5421 控制寄存器回读失败</td>
+</tr>
+<tr>
+<td>高 16 位</td>
+<td><code>0x0013</code>，十进制 19</td>
+<td>模块/错误族显示为 19</td>
+</tr>
+<tr>
+<td>低 16 位</td>
+<td><code>0x0009</code>，十进制 9</td>
+<td>AD5421 控制回读失败</td>
+</tr>
+<tr>
+<td>触发动作</td>
+<td>AO 使能后初始化 AD5421</td>
+<td>写控制寄存器后回读校验</td>
+</tr>
+<tr>
+<td>当前处理</td>
+<td>停止测量/置错误状态</td>
+<td>防止 AO 初始化异常后继续默认测量</td>
+</tr>
+</tbody>
+</table>
+<p>补充现场信息：之前电流值能够正常下发并设置。若该现象指的是同一硬件上实测
+4-20mA 输出会随设定值变化，则不能优先判断为整条 SPI
+写入链路断开，也不能简单判断为 AD5421
+完全未工作。当前问题更应优先看成“写入方向可能可用，但控制寄存器读回方向异常”。</p>
+<p>现场串口关键日志：</p>
+<pre class="text"><code>AD5421 PB4/MISO probe: nopull=1 pulldown=1 pullup=1
+AD5421 diag pins: cs=1 miso=1 fault=1
+AD5421 diag mode=0 pol=0 pha=0 w=0x00000000 direct=0xFFFF rx=FF FF FF cmd1=0xFFFF rx=FF FF two=0xFFFF rx=FF FF FF ret=0x00000000
+AD5421 diag mode=1 pol=0 pha=1 w=0x00000000 direct=0xFFFF rx=FF FF FF cmd1=0xFFFF rx=FF FF two=0xFFFF rx=FF FF FF ret=0x00000000
+AD5421 diag mode=2 pol=2 pha=0 w=0x00000000 direct=0xFFFF rx=FF FF FF cmd1=0xFFFF rx=FF FF two=0xFFFF rx=FF FF FF ret=0x00000000
+AD5421 diag mode=3 pol=2 pha=1 w=0x00000000 direct=0xFFFF rx=FF FF FF cmd1=0xFFFF rx=FF FF two=0xFFFF rx=FF FF FF ret=0x00000000
+AD5421 control readback mismatch: write=0x1000 read=0xFFFF rx=FF FF FF</code></pre>
+<p>当前结论：软件 SPI
+模式、速度和读帧格式基本已排除。结合历史上电流值能够正常下发并设置的信息，更可能是
+AD5421 SDO 到 CPU2 PB4
+的回读链路一直处于高电平，或当前初始化/回读校验时序和历史写电流路径存在差异。排查重点应从“整条
+AD5421 通信链路不通”收敛到“读回方向、读回时序、U9 回读通道、当前上电/AO
+使能状态差异”。</p>
+</section>
+<section id="2-触发路径" class="level2">
+<h2>2. 触发路径</h2>
+<p>AO 使能打开后，CPU2 会进入 AD5421 初始化流程：</p>
+<ol type="1">
+<li><code>AoOutput_EnsureInitialized()</code> 或 AO 输出刷新路径触发
+<code>Ad5421Init()</code>。</li>
+<li><code>Ad5421Init()</code> 复位 AD5421。</li>
+<li><code>WriteControlRegister(CUR_SPIOFF_COMMAND)</code>
+写入控制寄存器。</li>
+<li>写入值为 <code>0x1000</code>，含义是关闭 AD5421 SPI 看门狗。</li>
+<li>随后读取 <code>READCONTROL</code> 做回读校验。</li>
+<li>当前读回值始终为 <code>0xFFFF</code>，和写入的 <code>0x1000</code>
+不一致。</li>
+<li>驱动返回 <code>AD5421_READBACK_ERROR</code>，上层转为
+<code>0x00130009</code>。</li>
+</ol>
+<p>相关源码位置：</p>
+<table>
+<thead>
+<tr>
+<th>文件</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>LTD_MAIN_CPU2/BSP/Peripherals/src/ad5421.c</code></td>
+<td>AD5421 SPI 写入、读取、初始化和诊断打印</td>
+</tr>
+<tr>
+<td><code>LTD_MAIN_CPU2/BSP/Peripherals/inc/ad5421.h</code></td>
+<td>AD5421 寄存器命令和故障标志定义</td>
+</tr>
+<tr>
+<td><code>LTD_MAIN_CPU2/Services/AoOutput/ao_output.c</code></td>
+<td>AO 使能后初始化和运行态维护</td>
+</tr>
+<tr>
+<td><code>LTD_MAIN_CPU2/Application/Src/app_main.c</code></td>
+<td>全局错误进入错误状态</td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="3-已做的软件侧验证" class="level2">
+<h2>3. 已做的软件侧验证</h2>
+<section id="31-spi-原始接收字节" class="level3">
+<h3>3.1 SPI 原始接收字节</h3>
+<p>最初只打印 <code>read=0xFFFF</code>，后续增加原始 SPI 接收字节：</p>
+<pre class="text"><code>AD5421 control readback mismatch: write=0x1000 read=0xFFFF rx=FF FF FF</code></pre>
+<p>说明不是解析高低字节顺序导致的误判，而是整个 SPI 接收帧三个字节全为
+<code>0xFF</code>。</p>
+</section>
+<section id="32-pb4miso-普通-gpio-探测" class="level3">
+<h3>3.2 PB4/MISO 普通 GPIO 探测</h3>
+<p>临时诊断把 PB4 先从 SPI3_MISO
+切为普通输入，分别配置无上下拉、内部下拉、内部上拉：</p>
+<pre class="text"><code>AD5421 PB4/MISO probe: nopull=1 pulldown=1 pullup=1</code></pre>
+<p>该结果说明 PB4 输入在内部下拉时仍然读高。考虑到 PB4
+前级接了数字隔离器 U9，这个结果不能直接等价于 PB4 对 3.3V
+短路，更准确的解释是：U9 的 MCU 侧输出正在把 PB4 驱动为高，或 PB4
+线上存在比 MCU 内部下拉更强的外部高电平驱动。</p>
+</section>
+<section id="33-spi-模式矩阵" class="level3">
+<h3>3.3 SPI 模式矩阵</h3>
+<p>临时诊断遍历 4 种 CPOL/CPHA，并把 SPI3 降速到
+<code>SPI_BAUDRATEPRESCALER_256</code>。四种组合全部读回
+<code>0xFFFF</code>：</p>
+<table>
+<thead>
+<tr>
+<th>mode</th>
+<th>CPOL</th>
+<th>CPHA</th>
+<th>直接 3 字节读</th>
+<th>1 字节命令 + 2 字节读</th>
+<th>两帧读</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0</td>
+<td>LOW</td>
+<td>1EDGE</td>
+<td><code>0xFFFF</code></td>
+<td><code>0xFFFF</code></td>
+<td><code>0xFFFF</code></td>
+</tr>
+<tr>
+<td>1</td>
+<td>LOW</td>
+<td>2EDGE</td>
+<td><code>0xFFFF</code></td>
+<td><code>0xFFFF</code></td>
+<td><code>0xFFFF</code></td>
+</tr>
+<tr>
+<td>2</td>
+<td>HIGH</td>
+<td>1EDGE</td>
+<td><code>0xFFFF</code></td>
+<td><code>0xFFFF</code></td>
+<td><code>0xFFFF</code></td>
+</tr>
+<tr>
+<td>3</td>
+<td>HIGH</td>
+<td>2EDGE</td>
+<td><code>0xFFFF</code></td>
+<td><code>0xFFFF</code></td>
+<td><code>0xFFFF</code></td>
+</tr>
+</tbody>
+</table>
+<p>这基本排除 SPI 极性、相位和速度造成的读取失败。</p>
+</section>
+<section id="34-读帧格式对比" class="level3">
+<h3>3.4 读帧格式对比</h3>
+<p>已测试三种读法：</p>
+<table>
+<thead>
+<tr>
+<th>读法</th>
+<th>说明</th>
+<th>结果</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>直接 3 字节 <code>TransmitReceive</code></td>
+<td><code>82 00 00</code> 同一帧读回</td>
+<td><code>FF FF FF</code></td>
+</tr>
+<tr>
+<td>1 字节读命令 + 2 字节空读</td>
+<td>CS 保持低，先发命令再读 2 字节</td>
+<td><code>FF FF</code></td>
+</tr>
+<tr>
+<td>两帧读</td>
+<td>先发读命令帧，再发 dummy 帧读回</td>
+<td><code>FF FF FF</code></td>
+</tr>
+</tbody>
+</table>
+<p>三种读法都为全 <code>FF</code>，所以问题不集中在软件读帧格式。</p>
+</section>
+<section id="35-cs-默认电平" class="level3">
+<h3>3.5 CS 默认电平</h3>
+<p>GPIO 初始化已临时调整为 AD5421 CS 默认高电平，避免上电后 CS
+长时间低电平：</p>
+<pre class="text"><code>AD5421 diag pins: cs=1 miso=1 fault=1</code></pre>
+<p>CS 空闲状态符合低有效片选器件的一般要求，但回读仍然失败。</p>
+</section>
+<section id="36-历史正常输出信息" class="level3">
+<h3>3.6 历史正常输出信息</h3>
+<p>现场补充信息显示：之前电流值能够正常下发并设置。该信息对判断有明显约束：</p>
+<table>
+<thead>
+<tr>
+<th>约束点</th>
+<th>对根因排序的影响</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>若同一硬件曾经实测电流输出随设定值变化</td>
+<td><code>SYNC/SCLK/SDIN</code> 前向写入链路、AD5421
+输出回路和基本供电不应被优先判为永久断开</td>
+</tr>
+<tr>
+<td>当前只在控制寄存器回读处失败</td>
+<td>更像是 <code>SDO -&gt; U9 -&gt; PB4</code>
+回读方向异常，或新增/当前回读校验暴露了原来未检查的问题</td>
+</tr>
+<tr>
+<td>若“正常下发并设置”只是上位机命令被接受</td>
+<td>仍需要现场实测 <code>P420+</code>/<code>P420-</code>
+电流，不能把命令接受等同于 AD5421 输出正常</td>
+</tr>
+<tr>
+<td>若当前硬件、接线、固件版本或 AO 使能时序已经变化</td>
+<td>仍需重新确认供电、回路、CS 上电状态和 AD5421 初始化时序</td>
+</tr>
+</tbody>
+</table>
+<p>因此，后续验证应优先区分“写能生效但读不回来”和“当前写也已经不生效”这两种情况。</p>
+</section>
+</section>
+<section id="4-原理图对照" class="level2">
+<h2>4. 原理图对照</h2>
+<p>原理图依据：</p>
+<table>
+<thead>
+<tr>
+<th>资料</th>
+<th>位置</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>原始 PDF</td>
+<td><code>docs/07_硬件原理图/00_原始资料/储罐自动计量仪原理图汇总.pdf</code>
+第 4 页</td>
+</tr>
+<tr>
+<td>整理文档</td>
+<td><code>docs/07_硬件原理图/储罐自动计量仪原理图汇总整理.md</code></td>
+</tr>
+<tr>
+<td>对照问题清单</td>
+<td><code>docs/07_硬件原理图/原理图与固件对照问题清单.md</code></td>
+</tr>
+</tbody>
+</table>
+<section id="41-mcu-到-ad5421-的-spi-链路" class="level3">
+<h3>4.1 MCU 到 AD5421 的 SPI 链路</h3>
+<p>原理图第 4 页显示 CPU2 SPI3 先经过 U9 数字隔离器，再到 AD5421：</p>
+<table>
+<thead>
+<tr>
+<th>CPU2 MCU 侧</th>
+<th>U9 MCU 侧</th>
+<th>U9 AD5421 侧</th>
+<th>AD5421 侧</th>
+<th>方向</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>PB6/SPI3_CS</code></td>
+<td>U9 <code>VIA</code> pin3</td>
+<td>U9 <code>VOA</code> pin14</td>
+<td><code>SPI1_NSS1</code> -&gt; AD5421 <code>SYNC</code></td>
+<td>CPU2 -&gt; AD5421</td>
+</tr>
+<tr>
+<td><code>PB3/SPI3_SCK</code></td>
+<td>U9 <code>VIB</code> pin4</td>
+<td>U9 <code>VOB</code> pin13</td>
+<td><code>SPI1_SCLK1</code> -&gt; AD5421 <code>SCLK</code></td>
+<td>CPU2 -&gt; AD5421</td>
+</tr>
+<tr>
+<td><code>PB5/SPI3_MOSI</code></td>
+<td>U9 <code>VIC</code> pin5</td>
+<td>U9 <code>VOC</code> pin12</td>
+<td><code>SPI1_SDI1</code> -&gt; AD5421 <code>SDIN</code></td>
+<td>CPU2 -&gt; AD5421</td>
+</tr>
+<tr>
+<td>AD5421 <code>SDO</code></td>
+<td>U9 <code>VID</code> pin11</td>
+<td>U9 <code>VOD</code> pin6</td>
+<td><code>SPI3_MISO</code> -&gt; <code>PB4</code></td>
+<td>AD5421 -&gt; CPU2</td>
+</tr>
+</tbody>
+</table>
+<p>结论：从原理图看，PB4/PB5 物理方向没有接反。PB4 是 MISO，PB5 是
+MOSI。</p>
+</section>
+<section id="42-容易误导的命名问题" class="level3">
+<h3>4.2 容易误导的命名问题</h3>
+<p>固件工程存在标签和宏名错误：</p>
+<table>
+<thead>
+<tr>
+<th>实际引脚</th>
+<th>实际功能</th>
+<th>当前标签/宏名问题</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>PB4</td>
+<td><code>SPI3_MISO</code></td>
+<td>CubeMX 标签为 <code>AD5421_SPI3_MOSI</code>，宏名也是
+<code>AD5421_SPI3_MOSI_Pin</code></td>
+</tr>
+<tr>
+<td>PB5</td>
+<td><code>SPI3_MOSI</code></td>
+<td>标签也为 <code>AD5421_SPI3_MOSI</code>，生成
+<code>AD5421_SPI3_MOSIB5_Pin</code></td>
+</tr>
+</tbody>
+</table>
+<p>这个问题不一定影响 HAL SPI 复用，因为 <code>.ioc</code> 的 Signal
+仍然是
+PB4=<code>SPI3_MISO</code>、PB5=<code>SPI3_MOSI</code>；但会严重影响现场核线、临时
+GPIO 探测和后续维护。</p>
+</section>
+<section id="43-fault-引脚疑点" class="level3">
+<h3>4.3 FAULT 引脚疑点</h3>
+<p>固件中 PB8 配置为 <code>AD5421_FAULT</code> 输入。原理图 MCU 页能看到
+<code>FAULT</code> 网络在 PB8 附近，但 AD5421 页上 AD5421
+<code>FAULT</code> 脚附近没有清晰看到它通过 U9 或跨页网络回到 PB8。</p>
+<p>当前判断：</p>
+<ul>
+<li>这不是导致 SPI 回读全 <code>FF</code> 的直接原因。</li>
+<li>但它说明 AD5421 硬件故障诊断闭环可能和固件假设不一致。</li>
+<li>现场应确认 AD5421 <code>FAULT</code> 脚是否实际接到 PB8，还是 PB8 的
+<code>FAULT</code> 来自别的网络或未装配链路。</li>
+</ul>
+</section>
+<section id="44-ldac-引脚疑点" class="level3">
+<h3>4.4 LDAC 引脚疑点</h3>
+<p>原理图中 AD5421 <code>LDAC</code> 脚看起来没有明显连接。若 LDAC
+确实悬空，可能影响 DAC 输出更新行为。该点不太像导致 SPI SDO 全
+<code>FF</code> 的主因，但会影响后续“写入是否能产生电流输出”的验证。</p>
+<p>现场应确认：</p>
+<ul>
+<li>LDAC 是否在 PCB 上有隐藏网络、默认焊接或器件内部处理。</li>
+<li>若无连接，是否需要固定到明确电平。</li>
+</ul>
+</section>
+</section>
+<section id="5-关键判断" class="level2">
+<h2>5. 关键判断</h2>
+<p>当前最关键的证据是：</p>
+<pre class="text"><code>PB4/MISO probe: nopull=1 pulldown=1 pullup=1
+rx=FF FF FF
+历史上电流值能够正常下发并设置</code></pre>
+<p>由于 PB4 不是直接接 AD5421 SDO，而是通过 U9
+隔离器接收，所以应把问题优先定位为“AD5421 SDO -&gt; U9 -&gt; PB4
+回读通道一直为高”。历史上电流输出能设置，则进一步降低了“前向写入链路永久断开”的优先级。</p>
+<p>优先级最高的可能原因：</p>
+<ol type="1">
+<li>AD5421 <code>SDO -&gt; U9 -&gt; PB4</code>
+回读方向被固定为高，导致所有读回字节都是 <code>FF</code>。</li>
+<li>U9 回读方向通道供电、焊接或器件状态异常，AD5421 侧 SDO 有数据但 MCU
+侧 PB4 仍为高。</li>
+<li>AD5421 在当前初始化/回读校验时序下没有驱动
+SDO，但历史写电流路径可能仍曾经可用。</li>
+<li>新增或当前启用的控制寄存器回读校验暴露了原来未检查的读回问题，旧流程可能只写
+DAC 而没有强制读回确认。</li>
+<li>当前上电、AO 使能、CS
+默认电平或复位时序和历史正常设置电流时不同，导致 AD5421
+当前没有进入可读状态。</li>
+<li>AD5421 所在 PVDD/COM/VLOOP/REGOUT/DVDD
+条件在当前现场状态下异常，历史正常不代表当前仍正常。</li>
+<li>AD5421 SDO 到 U9 pin11 断线、虚焊、连锡或网络接错。</li>
+<li>只有在示波器确认 <code>SYNC/SCLK/SDIN</code> 到不了 AD5421
+后，才把前向写入链路断开作为高优先级原因。</li>
+</ol>
+<p>相对低优先级的软件原因：</p>
+<table>
+<thead>
+<tr>
+<th>软件原因</th>
+<th>当前判断</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>SPI CPOL/CPHA 错误</td>
+<td>已遍历 4 种模式，仍全 <code>FF</code></td>
+</tr>
+<tr>
+<td>SPI 速度过快</td>
+<td>已降速，仍全 <code>FF</code></td>
+</tr>
+<tr>
+<td>读帧格式错误</td>
+<td>已测三种读法，仍全 <code>FF</code></td>
+</tr>
+<tr>
+<td>字节序解析错误</td>
+<td>原始字节全 <code>FF</code>，不是解析问题</td>
+</tr>
+<tr>
+<td>CS 空闲电平不对</td>
+<td>已改为默认高，仍失败</td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="6-现场验证步骤" class="level2">
+<h2>6. 现场验证步骤</h2>
+<section id="61-优先使用逻辑分析仪或示波器" class="level3">
+<h3>6.1 优先使用逻辑分析仪或示波器</h3>
+<p>建议同时抓 4 根 SPI 线，并尽量在 U9 两侧都测：</p>
+<table>
+<thead>
+<tr>
+<th>信号</th>
+<th>MCU 侧</th>
+<th>AD5421 侧</th>
+<th>期望现象</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>CS/SYNC</td>
+<td>PB6、U9 pin3</td>
+<td>U9 pin14、AD5421 SYNC</td>
+<td>访问时拉低，空闲高</td>
+</tr>
+<tr>
+<td>SCLK</td>
+<td>PB3、U9 pin4</td>
+<td>U9 pin13、AD5421 SCLK</td>
+<td>访问时有时钟</td>
+</tr>
+<tr>
+<td>MOSI/SDIN</td>
+<td>PB5、U9 pin5</td>
+<td>U9 pin12、AD5421 SDIN</td>
+<td>写控制寄存器时有 <code>02 10 00</code>，读时有 <code>82</code></td>
+</tr>
+<tr>
+<td>MISO/SDO</td>
+<td>AD5421 SDO、U9 pin11</td>
+<td>U9 pin6、PB4</td>
+<td>不应一直高，应在读回阶段有数据变化</td>
+</tr>
+</tbody>
+</table>
+<p>判断分支：</p>
+<table>
+<thead>
+<tr>
+<th>观测结果</th>
+<th>判断方向</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>写电流帧能改变实际输出，但读回帧 MISO 全高</td>
+<td>写入链路基本成立，重点查读回链路、读回命令/时序和 U9 回读方向</td>
+</tr>
+<tr>
+<td>PB6/PB3/PB5 有波形，但 U9 另一侧没有</td>
+<td>查 U9 输入方向通道、U9 供电、焊接</td>
+</tr>
+<tr>
+<td>U9 到 AD5421 的 SYNC/SCLK/SDIN 正常，AD5421 SDO 一直高</td>
+<td>查 AD5421 供电、回路、外围脚、焊接或芯片</td>
+</tr>
+<tr>
+<td>AD5421 SDO 有波形，U9 pin6/PB4 一直高</td>
+<td>查 U9 回读方向通道、U9 供电或 PB4 网络</td>
+</tr>
+<tr>
+<td>PB4 有数据波形但软件仍读 <code>0xFFFF</code></td>
+<td>再回到 SPI 模式、采样边沿和软件读法</td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="62-电源和参考点测量" class="level3">
+<h3>6.2 电源和参考点测量</h3>
+<p>在 AO 使能、AD5421 初始化期间测：</p>
+<table>
+<thead>
+<tr>
+<th>测点</th>
+<th>目的</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>U9 左侧 <code>3V3/GND</code></td>
+<td>确认 MCU 侧隔离器供电正常</td>
+</tr>
+<tr>
+<td>U9 右侧 <code>PVDD/COM</code></td>
+<td>确认 AD5421 侧隔离器供电正常</td>
+</tr>
+<tr>
+<td>AD5421 <code>DVDD/IOVDD</code></td>
+<td>确认数字接口电源正常</td>
+</tr>
+<tr>
+<td>AD5421 <code>REGOUT/REGIN</code></td>
+<td>确认内部调节相关脚状态正常</td>
+</tr>
+<tr>
+<td>AD5421 <code>VLOOP/LOOP-/COM</code></td>
+<td>确认回路供电和输出回路条件</td>
+</tr>
+<tr>
+<td><code>P420+</code>/<code>P420-</code> 外部端子</td>
+<td>确认现场电流环连接和负载条件</td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="63-断电电阻连通性检查" class="level3">
+<h3>6.3 断电电阻/连通性检查</h3>
+<p>断电后检查：</p>
+<table>
+<thead>
+<tr>
+<th>检查项</th>
+<th>预期</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>PB4 到 U9 pin6</td>
+<td>应连通</td>
+</tr>
+<tr>
+<td>U9 pin11 到 AD5421 SDO</td>
+<td>应连通</td>
+</tr>
+<tr>
+<td>PB5 到 U9 pin5，再到 U9 pin12/AD5421 SDIN</td>
+<td>路径应符合原理图</td>
+</tr>
+<tr>
+<td>PB3 到 U9 pin4，再到 U9 pin13/AD5421 SCLK</td>
+<td>路径应符合原理图</td>
+</tr>
+<tr>
+<td>PB6 到 U9 pin3，再到 U9 pin14/AD5421 SYNC</td>
+<td>路径应符合原理图</td>
+</tr>
+<tr>
+<td>PB4 对 3V3/COM/GND 的阻值</td>
+<td>不应异常低阻短路</td>
+</tr>
+<tr>
+<td>AD5421 SDO 对 PVDD/COM 的阻值</td>
+<td>不应异常低阻短路</td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="64-fault-和-ldac-补充确认" class="level3">
+<h3>6.4 FAULT 和 LDAC 补充确认</h3>
+<table>
+<thead>
+<tr>
+<th>项目</th>
+<th>验证目的</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>AD5421 FAULT 是否接 PB8</td>
+<td>确认固件 <code>AD5421_FAULT</code> 是否真实有效</td>
+</tr>
+<tr>
+<td>PB8 的 <code>fault=1</code> 是否来自 AD5421</td>
+<td>避免误把悬空或其它网络当成 AD5421 非故障</td>
+</tr>
+<tr>
+<td>LDAC 是否固定电平</td>
+<td>避免后续电流输出写入不更新</td>
+</tr>
+<tr>
+<td><code>REG_SEL0/1/2</code>、<code>Rext1/2</code> 实装</td>
+<td>确认量程/调节相关外围符合设计</td>
+</tr>
+</tbody>
+</table>
+</section>
+</section>
+<section id="7-建议的排查顺序" class="level2">
+<h2>7. 建议的排查顺序</h2>
+<ol type="1">
+<li>先确认“之前电流值能够正常下发并设置”是实测电流输出变化，还是仅上位机/CPU2
+接受了设定值。</li>
+<li>若是实测输出曾正常，优先做一次受控对比：写电流设定帧是否仍能让
+<code>P420+</code>/<code>P420-</code> 输出变化。</li>
+<li>如果写电流仍能生效，但控制寄存器读回全 <code>FF</code>，优先查
+AD5421 <code>SDO -&gt; U9 -&gt; PB4</code> 回读链路。</li>
+<li>如果当前写电流也不再生效，再用示波器确认 PB6/PB3/PB5 在 MCU
+侧有波形。</li>
+<li>再确认 U9 输出到 AD5421 侧的 <code>SPI1_NSS1/SCLK1/SDI1</code>
+有对应波形。</li>
+<li>测 AD5421 SDO 和 U9 pin11 是否有变化。</li>
+<li>如果 AD5421 SDO 一直高，优先查 AD5421 当前供电、回路、复位/CS
+时序和焊接。</li>
+<li>如果 AD5421 SDO 有变化但 PB4 一直高，优先查 U9 回读通道。</li>
+<li>确认 FAULT 和 LDAC 是否和固件假设一致。</li>
+<li>若硬件波形恢复正常，再移除临时诊断代码，保留必要的错误打印和 CS
+默认高修正。</li>
+</ol>
+</section>
+<section id="8-当前临时软件改动说明" class="level2">
+<h2>8. 当前临时软件改动说明</h2>
+<p>当前用于诊断的临时改动包括：</p>
+<table>
+<thead>
+<tr>
+<th>文件</th>
+<th>改动</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>LTD_MAIN_CPU2/Core/Src/gpio.c</code></td>
+<td>AD5421 CS 初始电平改为高，HART_RTS 仍保持低</td>
+</tr>
+<tr>
+<td><code>LTD_MAIN_CPU2/BSP/Peripherals/src/ad5421.c</code></td>
+<td>增加 PB4/MISO GPIO 上下拉探测</td>
+</tr>
+<tr>
+<td><code>LTD_MAIN_CPU2/BSP/Peripherals/src/ad5421.c</code></td>
+<td>打印原始 SPI 接收字节</td>
+</tr>
+<tr>
+<td><code>LTD_MAIN_CPU2/BSP/Peripherals/src/ad5421.c</code></td>
+<td>增加 SPI 模式矩阵、降速和多读法诊断</td>
+</tr>
+</tbody>
+</table>
+<p>这些改动用于现场定位，不建议作为最终长期版本全部保留。建议最终保留：</p>
+<ul>
+<li>CS 默认高电平。</li>
+<li>AD5421 初始化失败时打印 <code>write/read/rx</code> 原始字节。</li>
+<li>有节流的 AO 错误记录和运行态上报。</li>
+</ul>
+<p>建议最终移除：</p>
+<ul>
+<li>每次启动的 SPI 模式矩阵测试。</li>
+<li>PB4 临时 GPIO 上下拉探测。</li>
+<li>影响启动时间或改变 SPI 配置的临时诊断函数。</li>
+</ul>
+</section>
+<section id="9-整改建议" class="level2">
+<h2>9. 整改建议</h2>
+<section id="91-硬件和原理图" class="level3">
+<h3>9.1 硬件和原理图</h3>
+<ol type="1">
+<li>确认 U9 型号、方向、供电和默认输出状态。</li>
+<li>确认 AD5421 SDO 到 U9 pin11、U9 pin6 到 PB4 的实际 PCB 网络。</li>
+<li>补充或修正 AD5421 FAULT 到 PB8 的原理图连接说明。</li>
+<li>确认 LDAC 是否固定到有效电平，避免悬空。</li>
+<li>确认 AD5421 回路供电条件和外部 4-20mA 负载要求。</li>
+</ol>
+</section>
+<section id="92-固件" class="level3">
+<h3>9.2 固件</h3>
+<ol type="1">
+<li>修正 CubeMX 标签：PB4 使用 <code>AD5421_SPI3_MISO</code>，PB5 使用
+<code>AD5421_SPI3_MOSI</code>。</li>
+<li>更新生成后的宏名引用，避免 <code>AD5421_SPI3_MOSI_Pin</code>
+实际指向 PB4。</li>
+<li>保留 AD5421 回读失败时的原始字节打印，便于现场区分全
+<code>FF</code>、全 <code>00</code> 和随机数据。</li>
+<li>若 FAULT 线确认有效，将 PB8 和 <code>READFAULT</code> 合并为 AO
+诊断状态。</li>
+<li>若 FAULT 线确认无效，应从固件和文档中明确标注 PB8
+诊断不可用，避免误报。</li>
+</ol>
+</section>
+</section>
+<section id="10-当前结论" class="level2">
+<h2>10. 当前结论</h2>
+<p>本次问题不是典型的软件 SPI
+配置错误，也不应在已有“历史上电流值能够正常下发并设置”的前提下直接判断为完整
+AD5421 写入链路断开。已验证的现象说明 CPU2 从 AD5421
+回读路径收到的始终是高电平。原理图显示该路径经过 U9
+数字隔离器，因此现场排查应集中在：</p>
+<ul>
+<li>历史正常设置电流是否为实测输出正常，当前写电流是否仍能生效。</li>
+<li>AD5421 是否在当前 AO 使能和初始化时序下进入可读状态。</li>
+<li>U9 两侧供电和回读隔离方向是否正常。</li>
+<li>AD5421 SDO 到 U9，再到 PB4
+的回读链路是否断线、焊接异常或被固定高电平。</li>
+<li>原理图中 FAULT/LDAC 等辅助脚是否和固件假设一致。</li>
+</ul>
+<p>在 U9 两侧波形和“写能否生效”没有确认前，不建议继续反复调整 SPI
+模式或读帧格式，也不建议把读回校验直接长期屏蔽。</p>
+</section>
+</section>
+</body>
+</html>

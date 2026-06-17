@@ -218,6 +218,7 @@ static int apply_protocol_version_runtime(void)
     /* 旧存储或异常写入导致协议不一致时，启动阶段恢复为CPU2当前协议。 */
     g_deviceParams.bottom_encoder_correction_tank_height = 0U;
     g_deviceParams.fault_auto_recovery_retry_limit = FAULT_AUTO_RECOVERY_RETRY_DEFAULT;
+    g_deviceParams.AoOutputEnable = 0U;
     g_deviceParams.protocolVersion = DEVICE_PROTOCOL_VERSION;
     return 1;
 }
@@ -249,6 +250,11 @@ static int normalize_device_params_runtime(void)
     if ((g_deviceParams.motor_current < MOTOR_CURRENT_MIN) ||
         (g_deviceParams.motor_current > MOTOR_CURRENT_MAX)) {
         g_deviceParams.motor_current = MOTOR_CURRENT_DEFAULT;
+        changed = 1;
+    }
+
+    if (g_deviceParams.AoOutputEnable > 1U) {
+        g_deviceParams.AoOutputEnable = 0U;
         changed = 1;
     }
 
@@ -775,6 +781,7 @@ void RestoreFactoryParamsConfig(void)
     g_deviceParams.AOLowCurrent_mA      = 400;
     g_deviceParams.FaultCurrent_mA      = 2200;  /* 22.00mA */
     g_deviceParams.DebugCurrent_mA      = 1200;  /* 12.00mA */
+    g_deviceParams.AoOutputEnable       = 0U;    /* 默认关闭 */
 
     /* ---------------- 指令参数 ---------------- */
     g_deviceParams.calibrateOilLevel                      = 0;
@@ -955,6 +962,7 @@ void print_device_params(void)
     printf("  %-32s : %lu\r\n", "AO低位电流", (unsigned long)params.AOLowCurrent_mA);
     printf("  %-32s : %lu\r\n", "AO故障电流", (unsigned long)params.FaultCurrent_mA);
     printf("  %-32s : %lu\r\n", "AO调试电流", (unsigned long)params.DebugCurrent_mA);
+    printf("  %-32s : %lu\r\n", "AO输出使能", (unsigned long)params.AoOutputEnable);
 
     /* 指令参数 */
     printf("\r\n-- 指令参数 --\r\n");

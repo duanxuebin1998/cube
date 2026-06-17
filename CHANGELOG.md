@@ -46,6 +46,7 @@ CPU2 参数加载会校验 FRAM 中的 `magic`、`struct_size`、`param_version`
 | V1.14.0.0 | 3 | 存储版本不变；新增密度连续、连续相对频率和连续定频找液位方式，旧 FRAM 参数通常保留 |
 | V1.14.0.1 | 3 | 存储版本不变；优化电机点动与位置模式运动流程，旧 FRAM 参数通常保留 |
 | V1.15.0.0 | 3 | 存储版本不变；新增读取部件参数蓝牙 RSSI 快照、协议版本 9 和 CPU3 菜单显示优化，旧 FRAM 参数通常保留 |
+| V1.16.0.0 | 3 | 存储版本不变；新增 AO 模拟电流输出运行态和 AO 输出使能，原 `reserved26` 语义改为 `AoOutputEnable`；旧存储升级到协议版本 10 时默认关闭 AO 输出，并保留启动阶段 AO/电机初始化错误 |
 
 历史说明：建立 CPU2 程序版本号前，2025-12-16 引入当前参数元信息时使用 `DEVICE_PARAM_VERSION=1`；2026-03-05 系统参数增加时提升到 `DEVICE_PARAM_VERSION=2`，从版本 1 升级到版本 2 会因旧参数版本不匹配恢复出厂参数。
 
@@ -1326,3 +1327,43 @@ CPU2 参数加载会校验 FRAM 中的 `magic`、`struct_size`、`param_version`
 - 未做实物联调；需要现场验证 CH9141K 已连接、未连接、RSSI 查询超时、命令切换打断和 UART6 透传恢复。
 - CPU3 菜单回退路径、称重等待页返回路径和 OLED 分页显示仍建议在实机按键上逐项确认。
 - 瓦锡兰频率异常保护需在现场确认无效频率、空气点和液体点的边界表现。
+
+## 2026-06-15 - 新增 AO 电流输出运行态与使能参数（CPU2 V1.16.0.0 / CPU3 V1.15.0.0）
+
+版本：
+- CPU2: V1.15.0.0 -> V1.16.0.0
+- CPU3: V1.14.0.0 -> V1.15.0.0
+
+协议版本/兼容性：
+- `DEVICE_PROTOCOL_VERSION`: 9 -> 10。
+- 协议版本 10 在无线 RSSI 运行态后追加 `AoOutputRuntime` 输入寄存器尾段，发布 AO 目标电流、最近写入电流、来源、AD5421 故障标志、READFAULT 原始值、最近错误码和更新时间。
+- 协议版本 10 将原 `reserved26` 正式替换为 `AoOutputEnable`，保持地址 `0x00C2-0x00C3` 不后移，语义为 `0=关闭`、`1=启用`。
+- CPU2/CPU3 必须同为协议版本 10 才能正确显示、写入和执行 AO 输出使能；协议版本 9 的旧端不应与本版本混用。
+- CPU2 `DEVICE_PARAM_VERSION` 保持 3，`DeviceParameters` 结构大小不变，不会因参数存储版本触发恢复出厂参数；旧协议存储升级时将 `AoOutputEnable` 默认置 0，避免未接电流环时误启用 AO 输出。
+
+本次修改：
+- CPU2 新增 AO 模拟电流输出服务，统一处理液位电流计算、报警电流覆盖、故障/调试电流选择、AD5421 写入和运行态维护。
+- CPU2 AD5421 驱动增加有限 SPI 超时、控制寄存器回读、FAULT 管脚/READFAULT 诊断和专用错误码。
+- CPU2 在主循环和液位测量刷新 AO 输出，HART Command 2/3 改为读取 AO 运行态电流和 4-20mA 百分比。
+- CPU2 `AoOutputEnable=0` 时不初始化、不诊断、不写入 AD5421，并发布禁用运行态；恢复出厂和旧协议升级默认关闭 AO 输出。
+- CPU2 `AoOutputEnable=1` 时对 AD5421 初始化重试、诊断轮询和重复写失败做 1 秒节流，避免硬件异常时每轮主循环阻塞访问 SPI/GPIO。
+- CPU2 启动阶段 AO/电机初始化失败后，在 `fault_info_init()` 清理故障信息之后恢复启动错误码，并阻止上电默认命令继续下发。
+- CPU3 同步解析 AO 运行态、补充 AD5421 故障文案，并在 AO 输出配置菜单新增 `AO使能`，范围限制为 0..1。
+- 同步更新协议记录、默认值文档、CPU3 菜单/状态页文档、AO 契约检查脚本和版本改动与测试方案。
+
+验证：
+- `py -3 tools\check_ao_output_enable_contract.py`
+- `py -3 tools\check_si7000_protocol_contract.py`
+- `py -3 tools\check_density_level_control_contract.py`
+- `py -3 tools\check_wireless_rssi_contract.py`
+- `py -3 tools\check_read_part_params_refresh_contract.py`
+- `py -3 LTD_DISPLAY_CPU3\font_check.py`
+- `cmake --build build\LTD_MAIN_CPU2`
+- `cmake --build build\LTD_DISPLAY_CPU3`
+- `git diff --check`
+
+未验证风险：
+- 未做实物联调；需要现场验证 `AoOutputEnable=0` 且电流环未接时不上报 AO 故障。
+- `AoOutputEnable=1` 时仍需用电流表/HART 主站验证 4-20mA 输出、电流百分比、报警/故障/调试电流和 AD5421 故障诊断边界。
+- 提交前需要在暂存目标文件后运行 `git diff --cached --check` 和 `py -3 tools\check_version_bumped.py`。
+- AO 输出只作为测量结果后的辅助输出刷新，不新增 CPU2/CPU3 命令入口或改变测量状态机；启动流程图已同步 AO 初始化、启动错误保留和上电默认命令拦截，后续若把 AO 输出做成独立命令或闭环控制再补对应业务流程图。

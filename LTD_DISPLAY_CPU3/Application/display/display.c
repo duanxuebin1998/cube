@@ -791,6 +791,16 @@ static const char *Display_GetErrorReasonByCode(uint32_t code)
         return "电源波动异常";
     case OTHER_PERIPHERAL_CONFIG_ERROR:
         return "外设配置错误";
+    case AD5421_INIT_ERROR:
+        return "AD5421初始化失败";
+    case AD5421_WRITE_CURRENT_ERROR:
+        return "AD5421写电流失败";
+    case AD5421_FAULT_PIN_ERROR:
+        return "AD5421故障报警";
+    case AD5421_READFAULT_ERROR:
+        return "AD5421故障寄存器异常";
+    case AD5421_READBACK_ERROR:
+        return "AD5421控制回读失败";
     default:
         break;
     }

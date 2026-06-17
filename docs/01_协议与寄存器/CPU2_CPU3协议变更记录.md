@@ -7,7 +7,7 @@
 - 字段位置：`HOLDREGISTER_DEVICEPARAM_PROTOCOL_VERSION`
 - 当前语义：CPU2/CPU3 共享协议版本
 - 旧程序语义：保留字段，默认值为 `0`
-- 当前程序语义：协议版本 `9`
+- 当前程序语义：协议版本 `11`
 
 该字段由原 `reserved1` 预留位正式替换而来，寄存器地址不移动，不新增存储字段。
 
@@ -25,6 +25,7 @@
 | 7 | V1.12.0.0 | V1.10.0.0 | 200 | 新增四路继电器报警输出配置和运行态共享区；CPU3 可显示、写入四路继电器报警输出配置，CPU2 执行 HH/H/L/LL、滞回、锁存清除和无效值策略。 |
 | 8 | V1.14.0.0 | V1.13.0.0 | 200 | `liquidLevelMeasurementMethod` 液位测量方式语义扩展：保留 0/1 原相对频率和定频步进方案，补实 2=密度连续找液位，新增 4=连续相对频率、5=连续定频；CPU3 菜单和参数范围同步允许 0..5。 |
 | 9 | V1.15.0.0 | V1.14.0.0 | 200 | 读取部件参数增加当前蓝牙连接 RSSI 快照；扩展 `WirelessPairingStatus` 并在输入寄存器尾部追加连接有效、RSSI 有效、RSSI 值、查询错误码和 RSSI 更新计数。 |
+| 10 | V1.16.0.0 | V1.15.0.0 | 200 | 新增 AO 模拟电流输出服务和 AD5421 诊断；在 RSSI 运行态后追加 `AoOutputRuntime`；原 `reserved26` 正式替换为 `AoOutputEnable`，地址保持 `0x00C2-0x00C3` 不后移，CPU2/CPU3 同步支持 AO 输出启停，默认关闭。 |
 
 ## 兼容判断规则
 
@@ -247,6 +248,50 @@
 - `cmake --build build\LTD_MAIN_CPU2`：通过。
 - `cmake --build build\LTD_DISPLAY_CPU3`：通过。
 - 未做实物联调；需要现场验证已连接、未连接、RSSI 异步超时、命令切换打断和 UART6 透传恢复。
+
+### 协议版本 10
+
+关联改动：
+- CPU2 新增 AO 模拟电流输出服务，统一负责液位电流计算、报警电流覆盖、故障/调试电流选择、AD5421 写入和运行态维护。
+- AD5421 驱动新增有限 SPI 超时、控制寄存器回读、FAULT 管脚/READFAULT 诊断和专用错误码：`AD5421_INIT_ERROR`、`AD5421_WRITE_CURRENT_ERROR`、`AD5421_FAULT_PIN_ERROR`、`AD5421_READFAULT_ERROR`、`AD5421_READBACK_ERROR`。
+- HART Command 2/3 的电流值改为读取 AO 运行态，百分比按标准 4-20mA 量程 `(mA - 4.0) / 16.0` 计算并钳位。
+- CPU2/CPU3 共享输入寄存器在 RSSI 运行态后追加 `AoOutputRuntime`，用于发布 AO 目标电流、最近成功写入电流、来源、AD5421 故障标志、READFAULT 原始值、最近错误码和更新时间。
+- 原 `reserved26` 正式替换为 `AoOutputEnable`，语义为 `0=关闭`、`1=启用`。
+- CPU2 恢复出厂默认值将 `AoOutputEnable` 置为 `0`；旧协议存储升级到协议版本 10 时也强制置为 `0`，避免旧预留值误启用电流输出。
+- CPU2 AO 服务在关闭时不初始化、不诊断、不写入 AD5421，并将运行态来源置为 `AO_OUTPUT_SOURCE_DISABLED`，用于未接电流环场景避免 AD5421 环路故障上报。
+- CPU3 同步解析新增 AO 运行态字段，补充 AD5421 相关错误码的屏幕故障文案，并通过参数表、保持寄存器读写、参数同步指针和 AO 菜单支持 `AoOutputEnable`。
+
+寄存器布局影响：
+- 输入寄存器在协议版本 9 的 `REG_WIRELESS_PAIRING_RSSI_UPDATE_COUNTER` 后追加 AO 运行态：
+  - `REG_AO_OUTPUT_RUNTIME_TARGET_MA_X100`
+  - `REG_AO_OUTPUT_RUNTIME_LAST_SENT_MA_X100`
+  - `REG_AO_OUTPUT_RUNTIME_SOURCE`
+  - `REG_AO_OUTPUT_RUNTIME_DRIVER_FAULT_FLAGS`
+  - `REG_AO_OUTPUT_RUNTIME_DRIVER_FAULT_REGISTER`
+  - `REG_AO_OUTPUT_RUNTIME_LAST_ERROR_CODE`
+  - `REG_AO_OUTPUT_RUNTIME_UPDATE_COUNTER`
+  - `REG_AO_OUTPUT_RUNTIME_LAST_UPDATE_TICK`
+  - `REG_AO_OUTPUT_RUNTIME_LAST_SENT_TICK`
+- `REG_ENG` 和 `INPUTREGISTER_AMOUNT` 随新增 AO 运行态顺延；旧输入寄存器地址不移动。
+- 保持寄存器不新增地址，`HOLDREGISTER_DEVICEPARAM_AO_OUTPUT_ENABLE = HOLDREGISTER_DEVICEPARAM_DEBUG_CURRENT_mA + REG_STRIDE`。
+- `HOLDREGISTER_DEVICEPARAM_RESERVED26` 作为兼容别名等于 `HOLDREGISTER_DEVICEPARAM_AO_OUTPUT_ENABLE`。
+- `HOLDREGISTER_DEVICEPARAM_RESERVED27` 仍为 `HOLDREGISTER_DEVICEPARAM_AO_OUTPUT_ENABLE + REG_STRIDE`，后续保持寄存器地址不移动。
+- `DeviceParameters` 结构体大小和 `DEVICE_PARAM_VERSION` 不变；本次只改变原预留字段语义并追加输入运行态。
+
+兼容性影响：
+- CPU2/CPU3 必须同为协议版本 10，才能正确读取 AO 运行态、识别 AD5421 专用错误码，并正确显示、写入和执行 AO 输出使能。
+- 协议版本 9 的 CPU3 不知道新增 AO 输入寄存器尾部、AD5421 错误码文案和 `AoOutputEnable` 参数语义，不应与协议版本 10 的 CPU2 混用。
+- 协议版本 9 的 CPU2 不发布 AO 运行态，也不按 `AoOutputEnable` 控制 AO 服务，协议版本 10 的 CPU3 应由严格协议版本相等检查拦截。
+
+验证结果：
+- `py -3 tools\check_ao_output_enable_contract.py`：通过。
+- `py -3 tools\check_si7000_protocol_contract.py`：通过。
+- `py -3 tools\check_density_level_control_contract.py`：通过。
+- `py -3 tools\check_wireless_rssi_contract.py`：通过。
+- `py -3 tools\check_read_part_params_refresh_contract.py`：通过。
+- `cmake --build build\LTD_MAIN_CPU2`：通过。
+- `cmake --build build\LTD_DISPLAY_CPU3`：通过。
+- 未做实物联调；需要现场验证 `AoOutputEnable=0` 且电流环未接时不上报 AO 故障，`AoOutputEnable=1` 时 4-20mA 输出、HART 电流值和 AD5421 故障诊断恢复正常。
 
 ## 后续维护要求
 

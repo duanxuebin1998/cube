@@ -9,6 +9,7 @@
 #include "system_parameter.h"
 #include "encoder.h"
 #include "motor_ctrl.h"
+#include "AoOutput/ao_output.h"
 
 /* ===================== 通用寄存器读写函数 ===================== */
 
@@ -248,7 +249,7 @@ void WriteDeviceParamsToHoldingRegisters(uint16_t *HoldingRegisterArray)
     write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_FAULT_CURRENT_mA,       g_deviceParams.FaultCurrent_mA);
     write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_DEBUG_CURRENT_mA,       g_deviceParams.DebugCurrent_mA);
 
-    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_RESERVED26, g_deviceParams.reserved26);
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_AO_OUTPUT_ENABLE,       g_deviceParams.AoOutputEnable);
     write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_RESERVED27, g_deviceParams.reserved27);
 
     /* ===================== 指令参数 ===================== */
@@ -439,7 +440,7 @@ void ReadDeviceParamsFromHoldingRegisters(uint16_t *HoldingRegisterArray)
     g_deviceParams.FaultCurrent_mA      = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_FAULT_CURRENT_mA);
     g_deviceParams.DebugCurrent_mA      = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_DEBUG_CURRENT_mA);
 
-    g_deviceParams.reserved26 = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_RESERVED26);
+    g_deviceParams.AoOutputEnable       = (read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_AO_OUTPUT_ENABLE) == 0U) ? 0U : 1U;
     g_deviceParams.reserved27 = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_RESERVED27);
 
     /* ===================== 指令参数 ===================== */
@@ -625,4 +626,16 @@ void write_measurement_result_to_InputRegisters(uint16_t *regs) {
 	write_i32_to_regs(regs, REG_WIRELESS_PAIRING_RSSI, g_measurement.wireless_pairing_status.rssi);
 	write_u32_to_regs(regs, REG_WIRELESS_PAIRING_CONNECTION_ERROR_CODE, g_measurement.wireless_pairing_status.connection_error_code);
 	write_u32_to_regs(regs, REG_WIRELESS_PAIRING_RSSI_UPDATE_COUNTER, g_measurement.wireless_pairing_status.rssi_update_counter);
+
+	/* ==== AO 输出运行态，追加在 RSSI 运行态之后 ==== */
+	const AoOutputRuntime *ao_runtime = AoOutput_GetRuntime();
+	write_u32_to_regs(regs, REG_AO_OUTPUT_RUNTIME_TARGET_MA_X100, ao_runtime->target_mA_x100);
+	write_u32_to_regs(regs, REG_AO_OUTPUT_RUNTIME_LAST_SENT_MA_X100, ao_runtime->last_sent_mA_x100);
+	write_u32_to_regs(regs, REG_AO_OUTPUT_RUNTIME_SOURCE, ao_runtime->source);
+	write_u32_to_regs(regs, REG_AO_OUTPUT_RUNTIME_DRIVER_FAULT_FLAGS, ao_runtime->driver_fault_flags);
+	write_u32_to_regs(regs, REG_AO_OUTPUT_RUNTIME_DRIVER_FAULT_REGISTER, ao_runtime->driver_fault_register);
+	write_u32_to_regs(regs, REG_AO_OUTPUT_RUNTIME_LAST_ERROR_CODE, ao_runtime->last_error_code);
+	write_u32_to_regs(regs, REG_AO_OUTPUT_RUNTIME_UPDATE_COUNTER, ao_runtime->update_counter);
+	write_u32_to_regs(regs, REG_AO_OUTPUT_RUNTIME_LAST_UPDATE_TICK, ao_runtime->last_update_tick);
+	write_u32_to_regs(regs, REG_AO_OUTPUT_RUNTIME_LAST_SENT_TICK, ao_runtime->last_sent_tick);
 }

@@ -26,7 +26,7 @@
 #define UNVALID_POSITION 0
 #define UNVALID_TEMPERATURE 0
 #define MAX_MEASUREMENT_POINTS 200 /* 密度分布测量最大点数 */
-#define DEVICE_PROTOCOL_VERSION 9u /* CPU2/CPU3共享协议版本；旧程序未写入时默认为0 */
+#define DEVICE_PROTOCOL_VERSION 10u /* CPU2/CPU3共享协议版本；旧程序未写入时默认为0 */
 #define FAULT_AUTO_RECOVERY_RETRY_DEFAULT 3u
 #define FAULT_AUTO_RECOVERY_RETRY_MAX 10u
 
@@ -220,7 +220,12 @@ typedef enum {
     OTHER_UNKNOWN_ERROR = 0x00130001,            /* 未知故障 */
     OTHER_ADDRESS_READ_ERROR = 0x00130002,       /* 地址读取错误 */
     OTHER_POWER_FLUCTUATION = 0x00130003,        /* 电源波动异常 */
-    OTHER_PERIPHERAL_CONFIG_ERROR = 0x00130004   /* 外设配置错误 */
+    OTHER_PERIPHERAL_CONFIG_ERROR = 0x00130004,  /* 外设配置错误 */
+    AD5421_INIT_ERROR = 0x00130005,              /* AD5421初始化失败 */
+    AD5421_WRITE_CURRENT_ERROR = 0x00130006,     /* AD5421写电流失败 */
+    AD5421_FAULT_PIN_ERROR = 0x00130007,         /* AD5421故障报警 */
+    AD5421_READFAULT_ERROR = 0x00130008,         /* AD5421故障寄存器异常 */
+    AD5421_READBACK_ERROR = 0x00130009           /* AD5421控制寄存器回读失败 */
 
 } ErrorCode;
 
@@ -533,6 +538,18 @@ typedef struct {
     uint32_t rssi_update_counter;            /* CPU2 每次 RSSI 快照查询递增 */
 } WirelessPairingStatus;
 
+typedef struct {
+    uint32_t target_mA_x100;                 /* AO目标电流，单位0.01mA */
+    uint32_t last_sent_mA_x100;              /* AO最近一次成功写入电流，单位0.01mA */
+    uint32_t source;                         /* AO输出来源，参考CPU2 AoOutputSource */
+    uint32_t driver_fault_flags;             /* AD5421驱动故障标志 */
+    uint32_t driver_fault_register;          /* AD5421 READFAULT原始值 */
+    uint32_t last_error_code;                /* AO最近一次错误码 */
+    uint32_t update_counter;                 /* AO运行态更新计数 */
+    uint32_t last_update_tick;               /* AO最近一次更新tick */
+    uint32_t last_sent_tick;                 /* AO最近一次成功写入tick */
+} AoOutputRuntime;
+
 /* 测量结果结构体，输入寄存器 */
 typedef struct {
 	DeviceStatus device_status;                  /* /< 设备状态 */
@@ -545,6 +562,7 @@ typedef struct {
 	DensityDistribution density_distribution;    /* /< 密度分布测量数据 */
 	WirelessPairingStatus wireless_pairing_status; /* /< 无线滑环匹配状态 */
 	RelayAlarmRuntimeState relay_alarm_runtime[RELAY_ALARM_CHANNEL_COUNT]; /* /< 继电器报警输出每路运行态 */
+	AoOutputRuntime ao_output_runtime;           /* /< AO模拟电流输出运行态 */
 
 } MeasurementResult;
 
@@ -681,7 +699,7 @@ typedef struct {
     uint32_t FaultCurrent_mA;            /* 故障模式电流值 */
     uint32_t DebugCurrent_mA;            /* 调试模式电流值 */
 
-    uint32_t reserved26;                 /* 预留 */
+    uint32_t AoOutputEnable;             /* AO输出使能：0=关闭，1=启用 */
     uint32_t reserved27;                 /* 预留（新增） */
 
     /* ===================== 指令参数 ===================== */

@@ -235,7 +235,7 @@ struct ParameterMetadata param_meta[] = {
 {(uint8_t*)"AO低位电流",	0,	COM_NUM_DEVICEPARAM_AO_LOW_CURRENT_mA,	HOLDREGISTER_DEVICEPARAM_AO_LOW_CURRENT_mA,	2,	true,	0,	3000,	(uint8_t*)"mA",	2,	0,	true,	TYPE_INT,	5,	NULL,	(uint8_t*)"LowCurrent"},
 {(uint8_t*)"AO故障电流",	0,	COM_NUM_DEVICEPARAM_FAULT_CURRENT_mA,	HOLDREGISTER_DEVICEPARAM_FAULT_CURRENT_mA,	2,	true,	0,	3000,	(uint8_t*)"mA",	2,	0,	true,	TYPE_INT,	5,	NULL,	(uint8_t*)"FaultCurrent"},
 {(uint8_t*)"AO调试电流",	0,	COM_NUM_DEVICEPARAM_DEBUG_CURRENT_mA,	HOLDREGISTER_DEVICEPARAM_DEBUG_CURRENT_mA,	2,	true,	0,	3000,	(uint8_t*)"mA",	2,	0,	true,	TYPE_INT,	5,	NULL,	(uint8_t*)"DebugCurrent"},
-{(uint8_t*)"保留26",	0,	COM_NUM_DEVICEPARAM_RESERVED26,	HOLDREGISTER_DEVICEPARAM_RESERVED26,	2,	false,	0,	0,	NULL,	0,	0,	false,	TYPE_INT,	8,	NULL,	(uint8_t*)"Rsv26"},
+{(uint8_t*)"AO输出使能",	0,	COM_NUM_DEVICEPARAM_AO_OUTPUT_ENABLE,	HOLDREGISTER_DEVICEPARAM_AO_OUTPUT_ENABLE,	2,	true,	0,	1,	NULL,	0,	0,	true,	TYPE_INT,	1,	ret_arr_word,	(uint8_t*)"AOEnable"},
 {(uint8_t*)"保留27",	0,	COM_NUM_DEVICEPARAM_RESERVED27,	HOLDREGISTER_DEVICEPARAM_RESERVED27,	2,	false,	0,	0,	NULL,	0,	0,	false,	TYPE_INT,	8,	NULL,	(uint8_t*)"Rsv27"},
 
 {(uint8_t*)"标定液位值",	0,	COM_NUM_DEVICEPARAM_CALIBRATE_OIL_LEVEL,	HOLDREGISTER_DEVICEPARAM_CALIBRATE_OIL_LEVEL,	2,	false,	0,	0,	(uint8_t*)"mm",	1,	0,	true,	TYPE_INT,	6,	NULL,	(uint8_t*)"CalOilLvl"},

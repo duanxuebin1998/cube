@@ -244,6 +244,10 @@ static volatile uint32_t* get_deviceparam_ptr_by_operanum(int operanum)
     case COM_NUM_DEVICEPARAM_BOTTOM_ENCODER_CORRECTION_TANK_HEIGHT:
         return &g_deviceParams.bottom_encoder_correction_tank_height;
 
+    /* ===== AO 输出配置 ===== */
+    case COM_NUM_DEVICEPARAM_AO_OUTPUT_ENABLE:
+        return &g_deviceParams.AoOutputEnable;
+
     /* ===== 继电器报警输出配置（四路） ===== */
     case COM_NUM_DEVICEPARAM_RELAY1_OPERATING_MODE:
         return &g_deviceParams.relayAlarm[0U].operating_mode;

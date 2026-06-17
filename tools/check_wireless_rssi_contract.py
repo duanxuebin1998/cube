@@ -90,8 +90,8 @@ def main() -> int:
 
     cpu2_version = parse_protocol_version(cpu2_param, CPU2_PARAM)
     cpu3_version = parse_protocol_version(cpu3_param, CPU3_PARAM)
-    require(cpu2_version == 9, "CPU2 DEVICE_PROTOCOL_VERSION must be 9", failed)
-    require(cpu3_version == 9, "CPU3 DEVICE_PROTOCOL_VERSION must be 9", failed)
+    require(cpu2_version == 10, "CPU2 DEVICE_PROTOCOL_VERSION must be 10", failed)
+    require(cpu3_version == 10, "CPU3 DEVICE_PROTOCOL_VERSION must be 10", failed)
 
     cpu2_fields = field_order(extract_struct_body(cpu2_param, "WirelessPairingStatus", CPU2_PARAM))
     cpu3_fields = field_order(extract_struct_body(cpu3_param, "WirelessPairingStatus", CPU3_PARAM))
@@ -107,9 +107,12 @@ def main() -> int:
 
     cpu2_state_compact = compact(cpu2_state)
     cpu3_state_compact = compact(cpu3_state)
-    expected_tail = "REG_ENG(REG_WIRELESS_PAIRING_RSSI_UPDATE_COUNTER+REG_SIZE_U32)"
-    require(expected_tail in cpu2_state_compact, "CPU2 REG_ENG must end after RSSI update counter", failed)
-    require(expected_tail in cpu3_state_compact, "CPU3 REG_ENG must end after RSSI update counter", failed)
+    expected_ao_base = "REG_AO_OUTPUT_RUNTIME_BASE(REG_WIRELESS_PAIRING_RSSI_UPDATE_COUNTER+REG_SIZE_U32)"
+    require(expected_ao_base in cpu2_state_compact, "CPU2 AO runtime must follow RSSI update counter", failed)
+    require(expected_ao_base in cpu3_state_compact, "CPU3 AO runtime must follow RSSI update counter", failed)
+    expected_tail = "REG_ENG(REG_AO_OUTPUT_RUNTIME_BASE+REG_AO_OUTPUT_RUNTIME_REG_COUNT)"
+    require(expected_tail in cpu2_state_compact, "CPU2 REG_ENG must end after AO runtime", failed)
+    require(expected_tail in cpu3_state_compact, "CPU3 REG_ENG must end after AO runtime", failed)
 
     sensor_compact = compact(cpu2_sensor)
     require("READ_PART_PARAMS_RSSI_REFRESH_INTERVAL_MS5000U" in sensor_compact, "read-part-params RSSI refresh interval must be 5000 ms", failed)

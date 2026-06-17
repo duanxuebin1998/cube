@@ -100,6 +100,19 @@ static void read_relay_alarm_runtime_from_regs(const uint16_t *regs, uint32_t ch
     state->clear_alarm = regs[REG_RELAY_ALARM_RUNTIME_CLEAR_ALARM(channel)] & 0xFFFFU;
 }
 
+static void read_ao_output_runtime_from_regs(const uint16_t *regs, volatile AoOutputRuntime *state)
+{
+    state->target_mA_x100 = read_u32_from_regs(regs, REG_AO_OUTPUT_RUNTIME_TARGET_MA_X100);
+    state->last_sent_mA_x100 = read_u32_from_regs(regs, REG_AO_OUTPUT_RUNTIME_LAST_SENT_MA_X100);
+    state->source = read_u32_from_regs(regs, REG_AO_OUTPUT_RUNTIME_SOURCE);
+    state->driver_fault_flags = read_u32_from_regs(regs, REG_AO_OUTPUT_RUNTIME_DRIVER_FAULT_FLAGS);
+    state->driver_fault_register = read_u32_from_regs(regs, REG_AO_OUTPUT_RUNTIME_DRIVER_FAULT_REGISTER);
+    state->last_error_code = read_u32_from_regs(regs, REG_AO_OUTPUT_RUNTIME_LAST_ERROR_CODE);
+    state->update_counter = read_u32_from_regs(regs, REG_AO_OUTPUT_RUNTIME_UPDATE_COUNTER);
+    state->last_update_tick = read_u32_from_regs(regs, REG_AO_OUTPUT_RUNTIME_LAST_UPDATE_TICK);
+    state->last_sent_tick = read_u32_from_regs(regs, REG_AO_OUTPUT_RUNTIME_LAST_SENT_TICK);
+}
+
 /* ===================== 参数结构体 <-> 保持寄存器映射 ===================== */
 
 /*----------------------------------------------------------------
@@ -243,7 +256,7 @@ void WriteDeviceParamsToHoldingRegisters(uint16_t *HoldingRegisterArray)
     write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_FAULT_CURRENT_mA,       g_deviceParams.FaultCurrent_mA);
     write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_DEBUG_CURRENT_mA,       g_deviceParams.DebugCurrent_mA);
 
-    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_RESERVED26, g_deviceParams.reserved26);
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_AO_OUTPUT_ENABLE, g_deviceParams.AoOutputEnable);
     write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_RESERVED27, g_deviceParams.reserved27);
 
     /* ===================== 指令参数 ===================== */
@@ -430,7 +443,7 @@ void ReadDeviceParamsFromHoldingRegisters(uint16_t *HoldingRegisterArray)
     g_deviceParams.FaultCurrent_mA      = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_FAULT_CURRENT_mA);
     g_deviceParams.DebugCurrent_mA      = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_DEBUG_CURRENT_mA);
 
-    g_deviceParams.reserved26 = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_RESERVED26);
+    g_deviceParams.AoOutputEnable = (read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_AO_OUTPUT_ENABLE) == 0U) ? 0U : 1U;
     g_deviceParams.reserved27 = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_RESERVED27);
 
     /* ===================== 指令参数 ===================== */
@@ -605,6 +618,9 @@ void read_measurement_result_from_InputRegisters(uint16_t *regs) {
 	g_measurement.wireless_pairing_status.rssi = read_i32_from_regs(cregs, REG_WIRELESS_PAIRING_RSSI);
 	g_measurement.wireless_pairing_status.connection_error_code = read_u32_from_regs(cregs, REG_WIRELESS_PAIRING_CONNECTION_ERROR_CODE);
 	g_measurement.wireless_pairing_status.rssi_update_counter = read_u32_from_regs(cregs, REG_WIRELESS_PAIRING_RSSI_UPDATE_COUNTER);
+
+	/* ==== AO模拟电流输出运行态，追加在 RSSI 运行态之后 ==== */
+	read_ao_output_runtime_from_regs(cregs, &g_measurement.ao_output_runtime);
 }
 
 /* 解析03功能码保持寄存器数据 */

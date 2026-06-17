@@ -19,6 +19,7 @@
 #include "hostcommu.h"
 #include "test.h"
 #include "ad5421.h"
+#include "AoOutput/ao_output.h"
 #include "sensor.h"
 #include "fault_recovery.h"
 #include "../../Services/Relay/relay_output.h"
@@ -95,32 +96,47 @@ static uint8_t App_HandleIdleGlobalError(void) {
 }
 /* 初始化函数 */
 void App_Init(void) {
-	uint32_t motor_init_ret;
+    uint32_t motor_init_ret;
+    uint32_t ao_init_ret;
+    uint32_t startup_init_error = NO_ERROR;
 	printf("LTD重启！\n");
 	init_device_params(); /* 初始化设备参数 */
 	Initialize_Encoder(); /* 初始化编码器 */
 	/* 这 1 秒延时保留给外设稳定，但必须放在编码器启动之后，让编码器先采集首帧。 */
 	HAL_Delay(1000);
-	HartInit(); /* 初始化AD5421 */
+	HartInit();
 	weight_init();
 	HostCommuInit(); /* 初始化Modbus通信 */
 	RelayOutput_Init(); /* 初始化继电器报警输出，默认全部释放 */
-	AD5421_SetCurrent(6.0); /* 设置初始电流为4mA */
+    ao_init_ret = AoOutput_Init();
+    if (ao_init_ret != NO_ERROR) {
+        g_measurement.device_status.error_code = ao_init_ret;
+        startup_init_error = ao_init_ret;
+        printf("AO初始化失败：0x%08lX\r\n", (unsigned long)ao_init_ret);
+    }
 	motor_init_ret = MotorCtrl_Init();
 	/* 先处理异常边界，避免应用主循环状态机带故障继续运行。 */
 	if (motor_init_ret != NO_ERROR) {
 		g_measurement.device_status.error_code = motor_init_ret;
+		startup_init_error = motor_init_ret;
 		printf("电机初始化失败：0x%08lX\r\n", (unsigned long)motor_init_ret);
 	}
 	fault_info_init(); /* 初始化故障信息 */
+	/*
+	 * fault_info_init 会清故障码，启动阶段初始化错误需要恢复，
+	 * 避免只出现一次的硬件诊断丢失。
+	 */
+	if (startup_init_error != NO_ERROR) {
+		g_measurement.device_status.error_code = startup_init_error;
+	}
 	DetectSensorType(); /* 检测传感器类型 */
 	g_deviceParams.command = CMD_NONE; /* 清除命令 */
 	g_measurement.device_status.zero_point_status=1; /* 设置零点状态为需要回零点 */
-	/* 先处理异常边界，避免应用主循环状态机带故障继续运行。 */
 	if (g_deviceParams.powerOnDefaultCommand != CMD_NONE) {
-		/* 先处理异常边界，避免应用主循环状态机带故障继续运行。 */
-		if (motor_init_ret != NO_ERROR) {
-			printf("上电默认命令被拦截：电机初始化失败\r\n");
+		/* 启动期已有硬件初始化错误时，先保留错误码并阻止默认命令继续下发。 */
+		if (startup_init_error != NO_ERROR) {
+			printf("上电默认命令被拦截：启动初始化失败 0x%08lX\r\n",
+			       (unsigned long)startup_init_error);
 		} else if ((!MotorCtrl_IsPositionSourceMotor()) && (!Encoder_IsReady())) {
 			/* 编码轮记步模式下，上电默认命令不能早于编码器首帧有效位置。 */
 			g_measurement.device_status.error_code = ENCODER_TIMEOUT;
@@ -164,7 +180,13 @@ void App_MainLoop(void) {
 	(void)MotorCtrl_PollRuntimePosition();
 	(void)Weight_CheckCommunicationTimeout();
 	HostCommu_ProcessDeferredLogs();
-	RelayOutput_ProcessPending(); /* main-context relay refresh */
+    RelayOutput_ProcessPending(); /* 主循环刷新继电器输出 */
+    {
+        uint32_t ao_ret = AoOutput_Update();
+        if ((ao_ret != NO_ERROR) && (g_measurement.device_status.error_code == NO_ERROR)) {
+            FaultManager_SetErrorState(ao_ret, GetShortFilename(__FILE__), __LINE__, __func__);
+        }
+    }
 
 	/* 第一优先级：处理刚收到的原始命令。
 	 * 这一层通常来自调试口/串口缓存，process_command() 会把字符命令翻译成具体动作，

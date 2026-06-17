@@ -81,6 +81,12 @@ static uint8_t *arr_position_source_auto_switch[][2] = {
 	{ (uint8_t*)"非法配置", (uint8_t*)"Illegal CFG" },
 };
 
+static uint8_t *arr_ao_output_enable[][2] = {
+	{ (uint8_t*)"关闭", (uint8_t*)"Disabled" },
+	{ (uint8_t*)"启用", (uint8_t*)"Enabled" },
+	{ (uint8_t*)"非法配置", (uint8_t*)"Illegal CFG" },
+};
+
 static uint8_t *arr_position_count_mode[][2] = {
 	{ (uint8_t*)"编码器", (uint8_t*)"Encoder" },
 	{ (uint8_t*)"电机", (uint8_t*)"Motor" },
@@ -1617,6 +1623,7 @@ static uint8_t *dtm_operaname_short(int num, uint8_t *fallback)
 		{ COM_NUM_DEVICEPARAM_AO_LOW_CURRENT_mA, (uint8_t*)"低位电流", (uint8_t*)"LowCurrent" },
 		{ COM_NUM_DEVICEPARAM_FAULT_CURRENT_mA, (uint8_t*)"故障电流", (uint8_t*)"FaultCurrent" },
 		{ COM_NUM_DEVICEPARAM_DEBUG_CURRENT_mA, (uint8_t*)"调试电流", (uint8_t*)"DebugCurrent" },
+		{ COM_NUM_DEVICEPARAM_AO_OUTPUT_ENABLE, (uint8_t*)"AO使能", (uint8_t*)"AOEnable" },
 		{ COM_NUM_DEVICEPARAM_OILLEVEL_HYSTERESIS_THRESHOLD, (uint8_t*)"滞后阈值", (uint8_t*)"HysTh" },
 		{ COM_NUM_DEVICEPARAM_SP_MEAS_POSITION, (uint8_t*)"测量位置", (uint8_t*)"SP_MeasPos" },
 		{ COM_NUM_DEVICEPARAM_SP_MONITOR_POSITION, (uint8_t*)"监测位置", (uint8_t*)"SP_MonPos" },
@@ -3625,6 +3632,12 @@ uint8_t *(*dtm_disarr(int *pindex, int *plen))[2]
 		p = arr_position_source_auto_switch;
 		break;
 	}
+	case COM_NUM_DEVICEPARAM_AO_OUTPUT_ENABLE: {
+		index = param_meta[index].val;
+		len = (int)(sizeof(arr_ao_output_enable) / sizeof(arr_ao_output_enable[0]));
+		p = arr_ao_output_enable;
+		break;
+	}
 	case COM_NUM_DEVICEPARAM_POSITION_COUNT_MODE: {
 		index = param_meta[index].val;
 		len = (int)(sizeof(arr_position_count_mode) / sizeof(arr_position_count_mode[0]));
@@ -4539,6 +4552,7 @@ static MenuGroup ParamGroupOf(int operaNum)
     case COM_NUM_DEVICEPARAM_AO_LOW_CURRENT_mA:
     case COM_NUM_DEVICEPARAM_FAULT_CURRENT_mA:
     case COM_NUM_DEVICEPARAM_DEBUG_CURRENT_mA:
+    case COM_NUM_DEVICEPARAM_AO_OUTPUT_ENABLE:
         return MENU_GRP_AO;
 
     /* 标定/单点/位置 */

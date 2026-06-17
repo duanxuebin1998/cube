@@ -542,7 +542,7 @@ def overview_page(pages: list[dict]) -> str:
         f'<title>CPU3 程序流程总览</title><link rel="stylesheet" href="assets/流程文档样式.css?v={CSS_VERSION}"></head>'
         '<body><div class="wrap"><header class="hero"><h1>CPU3 程序流程总览</h1>'
         '<p>按 CPU2 文档同等标准整理 CPU3 显示端、协议网关、参数镜像、按键菜单和外设恢复流程。所有页面均保留一套业务级程序流程图，不把命令流程和代码梳理拆开。</p>'
-        '<div class="meta-grid"><div class="meta"><span>项目</span><strong>LTD_DISPLAY_CPU3 / CPU3 V1.15.0.0 / 协议 11</strong></div><div class="meta"><span>页面数量</span><strong>'
+        '<div class="meta-grid"><div class="meta"><span>项目</span><strong>LTD_DISPLAY_CPU3 / CPU3 V1.15.0.0 / 协议 10</strong></div><div class="meta"><span>页面数量</span><strong>'
         + str(len(pages))
         + f'</strong></div><div class="meta"><span>整理日期</span><strong>{DOC_DATE}</strong></div><div class="meta"><span>文档风格</span><strong>业务级 SVG + 源码证据</strong></div></div></header>'
         '<nav class="topnav"><a href="#overview">总览图</a><a href="#pages">页面入口</a><a href="#search">全文索引</a><a href="../README.md">CPU3 docs</a></nav>'
@@ -691,10 +691,10 @@ PAGES: list[dict] = [
         "file": "02_CPU2内部通信与轮询.html",
         "title": "CPU3 与 CPU2 内部 Modbus 通信程序流程",
         "short": "CPU2 内部通信与轮询",
-        "hero": "梳理 UART5/RS485 与 CPU2 的同步请求、响应解析、上电全量读取、运行输入轮询、参数更新补读、密度分布点读取，以及协议 11 的 RSSI 与 AO 运行态尾段解析。",
+        "hero": "梳理 UART5/RS485 与 CPU2 的同步请求、响应解析、上电全量读取、运行输入轮询、参数更新补读、密度分布点读取，以及协议 10 的 RSSI 与 AO 运行态尾段解析。",
         "entry": "App_MainLoop 空闲时轮询 CPU2；菜单和外部协议写参数时通过内部 Modbus 组帧下发。",
         "summary": "CPU3 作为 CPU2 的 Modbus 主站，周期读取输入寄存器和保持寄存器，写指令/参数时通过 0x10 下发到 CPU2。",
-        "overview_text": "内部通信链路由 UART5 + RS485 实现。读响应刷新测量状态缓存和参数镜像；协议 11 的输入寄存器尾段先解析 RSSI，再解析 AO 运行态缓存。",
+        "overview_text": "内部通信链路由 UART5 + RS485 实现。读响应刷新测量状态缓存和参数镜像；协议 10 的输入寄存器尾段先解析 RSSI，再解析 AO 运行态缓存。",
         "commands": ["FUNCTIONCODE_READ_HOLDREGISTER", "FUNCTIONCODE_READ_INPUTREGISTER", "FUNCTIONCODE_WRITE_MULREGISTER"],
         "source_files": ["Communication/internal/main_board_modbus/cpu2_communicate.c", "Communication/internal/main_board_modbus/dataanalysis_modbus.c", "Application/system_param/stateformodbus.h"],
         "overview_nodes": [
@@ -796,7 +796,7 @@ PAGES: list[dict] = [
                 ],
             },
             {
-                "title": "协议 11 输入寄存器尾段解析",
+                "title": "协议 10 输入寄存器尾段解析",
                 "caption": "CPU2 在继电器运行态后追加无线 RSSI，再追加 AO 运行态；CPU3 必须按相同顺序读尾段，否则后续字段整体错位。",
                 "height": 1160,
                 "nodes": [
@@ -835,7 +835,7 @@ PAGES: list[dict] = [
             {"level": "high", "title": "等待响应期间阻塞主循环", "desc": "CPU2_CombinatePackage_Send 使用 while(wait_response) 同步等待，外部协议响应、显示刷新和按键处理都会被阻塞。", "suggest": "改成 UART5 请求状态机：发送完成、接收完成、超时分别由状态推进；主循环每轮只推进一次。", "ref": "cpu2_communicate.c:300-353"},
             {"level": "high", "title": "密度点读取在一个函数内连续发送多帧", "desc": "RequestDensityDistPoints_ByCount 的 while(total_regs > 0) 会连续调用同步发送，多点数据量大时可能长时间占用主循环。", "suggest": "把密度点读取拆成分帧状态机，每轮只发一帧，并记录已读 offset。", "ref": "cpu2_communicate.c:256-298"},
             {"level": "mid", "title": "0x10 响应未校验写入地址和数量", "desc": "CPU2_Response10Process 当前为空，无法确认 CPU2 回显的起始地址/数量是否与本次写入一致。", "suggest": "解析 0x10 回显并和 RCV_startaddress/RCV_registercnt 对比，失败时设置通信错误计数。", "ref": "cpu2_communicate.c:432-437"},
-            {"level": "mid", "title": "输入寄存器尾段强依赖两端协议版本一致", "desc": "协议 11 在 RSSI 后继续追加 AO 运行态。只要 CPU2/CPU3 任何一端仍停留在协议 9，后续尾段字段都会错位。", "suggest": "保持协议版本严格相等提示，并在现场升级清单里要求 CPU2/CPU3 成对升级。", "ref": "stateformodbus.h:397-415"},
+            {"level": "mid", "title": "输入寄存器尾段强依赖两端协议版本一致", "desc": "协议 10 在 RSSI 后继续追加 AO 运行态。只要 CPU2/CPU3 任何一端仍停留在协议 9，后续尾段字段都会错位。", "suggest": "保持协议版本严格相等提示，并在现场升级清单里要求 CPU2/CPU3 成对升级。", "ref": "stateformodbus.h:397-415"},
             {"level": "mid", "title": "03 响应解析前先 WriteDeviceParamsToHoldingRegisters", "desc": "03 处理先把本地 g_deviceParams 写入 HoldingRegisterArray，再覆盖响应区间，若响应只是局部参数，未读区仍是本地旧镜像。", "suggest": "明确 HoldingRegisterArray 的主数据源，避免局部读时混入旧值；必要时增加脏区标记。", "ref": "cpu2_communicate.c:379-412"},
         ],
         "sources": [

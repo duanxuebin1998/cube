@@ -375,7 +375,8 @@ typedef enum
     COM_NUM_DEVICEPARAM_FAULT_CURRENT_mA,               /* 故障电流 */
     COM_NUM_DEVICEPARAM_DEBUG_CURRENT_mA,               /* 调试电流 */
 
-    COM_NUM_DEVICEPARAM_RESERVED26,                     /* 保留 26 */
+    COM_NUM_DEVICEPARAM_AO_OUTPUT_ENABLE,               /* AO 输出使能 */
+    COM_NUM_DEVICEPARAM_RESERVED26 = COM_NUM_DEVICEPARAM_AO_OUTPUT_ENABLE, /* 兼容旧保留 26 */
     COM_NUM_DEVICEPARAM_RESERVED27,                     /* 保留 27 */
 
     /* ---------------- 指令参数（用于带参命令） ---------------- */
