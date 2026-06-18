@@ -354,24 +354,24 @@ struct ParameterMetadata param_meta[] = {
 {(uint8_t*)"息屏开关",	0,	COM_NUM_SCREEN_OFF,	HOLDREGISTER_CPU3_OFF_TIME,	2,	true,	0,	1,	NULL,	0,	0,	true,	TYPE_INT,	1,	ret_arr_word,	(uint8_t*)"ScreenOff"},
 {(uint8_t*)"屏幕亮度",	0,	COM_NUM_SCREEN_BRIGHTNESS,	HOLDREGISTER_CPU3_BRIGHTNESS,	2,	true,	0,	4,	NULL,	0,	0,	true,	TYPE_INT,	1,	ret_arr_word,	(uint8_t*)"Brightness"},
 
+/* 协议菜单最大值 5 包含 SI7000；修改协议时自动带出协议默认串口参数，后续允许单独覆盖。 */
+{(uint8_t*)"COM1协议",	0,	COM_NUM_CPU3_COM1_PROTOCOL,	HOLDREGISTER_CPU3_COM1_PROTO,	2,	true,	0,	5,	NULL,	0,	0,	true,	TYPE_INT,	1,	ret_arr_word,	(uint8_t*)"C1Proto"},
 {(uint8_t*)"COM1波特率",	0,	COM_NUM_CPU3_COM1_BAUDRATE,	HOLDREGISTER_CPU3_COM1_BAUD,	2,	true,	0,	7,	NULL,	0,	0,	true,	TYPE_INT,	1,	ret_arr_word,	(uint8_t*)"C1Baud"},
 {(uint8_t*)"COM1数据位",	0,	COM_NUM_CPU3_COM1_DATABITS,	HOLDREGISTER_CPU3_COM1_DATABITS,	2,	true,	0,	1,	NULL,	0,	0,	true,	TYPE_INT,	1,	ret_arr_word,	(uint8_t*)"C1Data"},
 {(uint8_t*)"COM1校验",	0,	COM_NUM_CPU3_COM1_PARITY,	HOLDREGISTER_CPU3_COM1_PARITY,	2,	true,	0,	2,	NULL,	0,	0,	true,	TYPE_INT,	1,	ret_arr_word,	(uint8_t*)"C1Parity"},
 {(uint8_t*)"COM1停止位",	0,	COM_NUM_CPU3_COM1_STOPBITS,	HOLDREGISTER_CPU3_COM1_STOPBITS,	2,	true,	0,	1,	NULL,	0,	0,	true,	TYPE_INT,	1,	ret_arr_word,	(uint8_t*)"C1Stop"},
-/* 协议菜单最大值 5 包含 SI7000；选择 SI7000 后串口参数会在写入/加载时自动归一化。 */
-{(uint8_t*)"COM1协议",	0,	COM_NUM_CPU3_COM1_PROTOCOL,	HOLDREGISTER_CPU3_COM1_PROTO,	2,	true,	0,	5,	NULL,	0,	0,	true,	TYPE_INT,	1,	ret_arr_word,	(uint8_t*)"C1Proto"},
 
+{(uint8_t*)"COM2协议",	0,	COM_NUM_CPU3_COM2_PROTOCOL,	HOLDREGISTER_CPU3_COM2_PROTO,	2,	true,	0,	5,	NULL,	0,	0,	true,	TYPE_INT,	1,	ret_arr_word,	(uint8_t*)"C2Proto"},
 {(uint8_t*)"COM2波特率",	0,	COM_NUM_CPU3_COM2_BAUDRATE,	HOLDREGISTER_CPU3_COM2_BAUD,	2,	true,	0,	7,	NULL,	0,	0,	true,	TYPE_INT,	1,	ret_arr_word,	(uint8_t*)"C2Baud"},
 {(uint8_t*)"COM2数据位",	0,	COM_NUM_CPU3_COM2_DATABITS,	HOLDREGISTER_CPU3_COM2_DATABITS,	2,	true,	0,	1,	NULL,	0,	0,	true,	TYPE_INT,	1,	ret_arr_word,	(uint8_t*)"C2Data"},
 {(uint8_t*)"COM2校验",	0,	COM_NUM_CPU3_COM2_PARITY,	HOLDREGISTER_CPU3_COM2_PARITY,	2,	true,	0,	2,	NULL,	0,	0,	true,	TYPE_INT,	1,	ret_arr_word,	(uint8_t*)"C2Parity"},
 {(uint8_t*)"COM2停止位",	0,	COM_NUM_CPU3_COM2_STOPBITS,	HOLDREGISTER_CPU3_COM2_STOPBITS,	2,	true,	0,	1,	NULL,	0,	0,	true,	TYPE_INT,	1,	ret_arr_word,	(uint8_t*)"C2Stop"},
-{(uint8_t*)"COM2协议",	0,	COM_NUM_CPU3_COM2_PROTOCOL,	HOLDREGISTER_CPU3_COM2_PROTO,	2,	true,	0,	5,	NULL,	0,	0,	true,	TYPE_INT,	1,	ret_arr_word,	(uint8_t*)"C2Proto"},
 
+{(uint8_t*)"COM3协议",	0,	COM_NUM_CPU3_COM3_PROTOCOL,	HOLDREGISTER_CPU3_COM3_PROTO,	2,	true,	0,	5,	NULL,	0,	0,	true,	TYPE_INT,	1,	ret_arr_word,	(uint8_t*)"C3Proto"},
 {(uint8_t*)"COM3波特率",	0,	COM_NUM_CPU3_COM3_BAUDRATE,	HOLDREGISTER_CPU3_COM3_BAUD,	2,	true,	0,	7,	NULL,	0,	0,	true,	TYPE_INT,	1,	ret_arr_word,	(uint8_t*)"C3Baud"},
 {(uint8_t*)"COM3数据位",	0,	COM_NUM_CPU3_COM3_DATABITS,	HOLDREGISTER_CPU3_COM3_DATABITS,	2,	true,	0,	1,	NULL,	0,	0,	true,	TYPE_INT,	1,	ret_arr_word,	(uint8_t*)"C3Data"},
 {(uint8_t*)"COM3校验",	0,	COM_NUM_CPU3_COM3_PARITY,	HOLDREGISTER_CPU3_COM3_PARITY,	2,	true,	0,	2,	NULL,	0,	0,	true,	TYPE_INT,	1,	ret_arr_word,	(uint8_t*)"C3Parity"},
 {(uint8_t*)"COM3停止位",	0,	COM_NUM_CPU3_COM3_STOPBITS,	HOLDREGISTER_CPU3_COM3_STOPBITS,	2,	true,	0,	1,	NULL,	0,	0,	true,	TYPE_INT,	1,	ret_arr_word,	(uint8_t*)"C3Stop"},
-{(uint8_t*)"COM3协议",	0,	COM_NUM_CPU3_COM3_PROTOCOL,	HOLDREGISTER_CPU3_COM3_PROTO,	2,	true,	0,	5,	NULL,	0,	0,	true,	TYPE_INT,	1,	ret_arr_word,	(uint8_t*)"C3Proto"},
 };
 
 

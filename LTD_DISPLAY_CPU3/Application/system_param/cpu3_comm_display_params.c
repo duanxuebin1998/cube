@@ -112,70 +112,85 @@ static ComProtocolType Cpu3_NormalizeProtocol(int32_t protocol)
 }
 
 /*
- * 将单个串口配置收敛为所选协议的推荐串口参数。
- * 返回值表示配置是否被修正，调用方据此决定是否回写 FRAM。
+ * 根据协议生成默认串口模板。
+ * 只有协议字段发生变化时才应用该模板，普通串口字段允许现场单独覆盖。
  */
-static uint8_t Cpu3_ApplyProtocolSerialProfile(ComPortConfig *cfg)
+static void Cpu3_FillProtocolSerialProfile(ComProtocolType protocol, ComPortConfig *profile)
 {
-    uint8_t changed = 0U;
-    uint32_t baudrate = 4800U;
-    uint8_t databits = 8U;
-    ComParityType parity = COM_PARITY_NONE;
-    ComStopBitsType stopbits = COM_STOPBITS_1;
-
-    if (cfg == NULL) {
-        return 0U;
+    if (profile == NULL) {
+        return;
     }
 
-    if (cfg->protocol != Cpu3_NormalizeProtocol(cfg->protocol)) {
-        cfg->protocol = Cpu3_NormalizeProtocol(cfg->protocol);
-        changed = 1U;
-    }
+    profile->protocol = Cpu3_NormalizeProtocol(protocol);
+    profile->baudrate = 4800U;
+    profile->databits = 8U;
+    profile->parity = COM_PARITY_NONE;
+    profile->stopbits = COM_STOPBITS_1;
 
-    switch (cfg->protocol) {
+    switch (profile->protocol) {
     case COM_PROTO_DSM:
     case COM_PROTO_WARTSILA:
         /* 现场确认：计量仪/DSM、瓦锡兰均按 4800 8N1。 */
-        baudrate = 4800U;
-        databits = 8U;
-        parity = COM_PARITY_NONE;
-        stopbits = COM_STOPBITS_1;
+        profile->baudrate = 4800U;
+        profile->databits = 8U;
+        profile->parity = COM_PARITY_NONE;
+        profile->stopbits = COM_STOPBITS_1;
         break;
 
     case COM_PROTO_LTD:
         /* LTD 按 CPU2 串口5（UART5）口径：115200 8N1。 */
-        baudrate = 115200U;
-        databits = 8U;
-        parity = COM_PARITY_NONE;
-        stopbits = COM_STOPBITS_1;
+        profile->baudrate = 115200U;
+        profile->databits = 8U;
+        profile->parity = COM_PARITY_NONE;
+        profile->stopbits = COM_STOPBITS_1;
         break;
 
     case COM_PROTO_SI7000:
         /* SI7000 官方 Modbus 资料要求 9600 8O1。 */
-        baudrate = 9600U;
-        databits = 8U;
-        parity = COM_PARITY_ODD;
-        stopbits = COM_STOPBITS_1;
+        profile->baudrate = 9600U;
+        profile->databits = 8U;
+        profile->parity = COM_PARITY_ODD;
+        profile->stopbits = COM_STOPBITS_1;
         break;
 
     default:
         break;
     }
+}
 
-    if (cfg->baudrate != baudrate) {
-        cfg->baudrate = baudrate;
+/*
+ * 将单个串口配置切换到当前协议的默认参数。
+ * 返回值表示配置是否被修正，调用方据此决定是否回写 FRAM。
+ */
+static uint8_t Cpu3_ApplyProtocolSerialProfile(ComPortConfig *cfg)
+{
+    ComPortConfig profile;
+    uint8_t changed = 0U;
+
+    if (cfg == NULL) {
+        return 0U;
+    }
+
+    Cpu3_FillProtocolSerialProfile(cfg->protocol, &profile);
+
+    if (cfg->protocol != profile.protocol) {
+        cfg->protocol = profile.protocol;
         changed = 1U;
     }
-    if (cfg->databits != databits) {
-        cfg->databits = databits;
+    if (cfg->baudrate != profile.baudrate) {
+        cfg->baudrate = profile.baudrate;
         changed = 1U;
     }
-    if (cfg->parity != parity) {
-        cfg->parity = parity;
+    if (cfg->databits != profile.databits) {
+        cfg->databits = profile.databits;
         changed = 1U;
     }
-    if (cfg->stopbits != stopbits) {
-        cfg->stopbits = stopbits;
+    if (cfg->parity != profile.parity) {
+        cfg->parity = profile.parity;
+        changed = 1U;
+    }
+    if (cfg->stopbits != profile.stopbits) {
+        cfg->stopbits = profile.stopbits;
         changed = 1U;
     }
 
@@ -183,17 +198,79 @@ static uint8_t Cpu3_ApplyProtocolSerialProfile(ComPortConfig *cfg)
 }
 
 /*
- * 对三个外部串口统一执行协议相关参数归一化。
+ * 判断 FRAM 或外部写入的波特率是否在菜单支持范围内。
+ */
+static uint8_t Cpu3_IsSupportedBaudrate(uint32_t baudrate)
+{
+    switch (baudrate) {
+    case 1200U:
+    case 2400U:
+    case 4800U:
+    case 9600U:
+    case 19200U:
+    case 38400U:
+    case 57600U:
+    case 115200U:
+        return 1U;
+    default:
+        return 0U;
+    }
+}
+
+/*
+ * 只修正非法串口字段，不按协议覆盖用户已经保存的合法物理参数。
+ * 该函数用于 FRAM 加载或写入兜底，避免旧值越界导致 UART 初始化异常。
+ */
+static uint8_t Cpu3_SanitizePortConfig(ComPortConfig *cfg)
+{
+    ComPortConfig profile;
+    uint8_t changed = 0U;
+
+    if (cfg == NULL) {
+        return 0U;
+    }
+
+    Cpu3_FillProtocolSerialProfile(cfg->protocol, &profile);
+
+    if (cfg->protocol != profile.protocol) {
+        cfg->protocol = profile.protocol;
+        changed = 1U;
+    }
+    if (Cpu3_IsSupportedBaudrate(cfg->baudrate) == 0U) {
+        cfg->baudrate = profile.baudrate;
+        changed = 1U;
+    }
+    if ((cfg->databits != 8U) && (cfg->databits != 9U)) {
+        cfg->databits = profile.databits;
+        changed = 1U;
+    }
+    if ((cfg->parity != COM_PARITY_NONE)
+        && (cfg->parity != COM_PARITY_EVEN)
+        && (cfg->parity != COM_PARITY_ODD))
+    {
+        cfg->parity = profile.parity;
+        changed = 1U;
+    }
+    if ((cfg->stopbits != COM_STOPBITS_1) && (cfg->stopbits != COM_STOPBITS_2)) {
+        cfg->stopbits = profile.stopbits;
+        changed = 1U;
+    }
+
+    return changed;
+}
+
+/*
+ * 对三个外部串口统一执行非法值修正。
  * 该函数不直接重启 UART，只修正参数结构，避免和通信收发并发。
  */
-static uint8_t Cpu3_NormalizeAllPortProfiles(void)
+static uint8_t Cpu3_SanitizeAllPortConfigs(void)
 {
     uint8_t changed = 0U;
 
-    /* 三个外部口共用同一套协议收敛规则，后续新增端口时只在这里补入口。 */
-    changed |= Cpu3_ApplyProtocolSerialProfile(&g_cpu3_comm_display_params.com1);
-    changed |= Cpu3_ApplyProtocolSerialProfile(&g_cpu3_comm_display_params.com2);
-    changed |= Cpu3_ApplyProtocolSerialProfile(&g_cpu3_comm_display_params.com3);
+    /* 三个外部口共用同一套合法性规则，后续新增端口时只在这里补入口。 */
+    changed |= Cpu3_SanitizePortConfig(&g_cpu3_comm_display_params.com1);
+    changed |= Cpu3_SanitizePortConfig(&g_cpu3_comm_display_params.com2);
+    changed |= Cpu3_SanitizePortConfig(&g_cpu3_comm_display_params.com3);
 
     return changed;
 }
@@ -363,6 +440,7 @@ void Cpu3Local_WriteValue(OperatingNumber opera, int32_t v)
         break;
     case COM_NUM_CPU3_COM1_PROTOCOL:
         g_cpu3_comm_display_params.com1.protocol = Cpu3_NormalizeProtocol(v);
+        (void)Cpu3_ApplyProtocolSerialProfile(&g_cpu3_comm_display_params.com1);
         break;
 
     /* COM2 */
@@ -380,6 +458,7 @@ void Cpu3Local_WriteValue(OperatingNumber opera, int32_t v)
         break;
     case COM_NUM_CPU3_COM2_PROTOCOL:
         g_cpu3_comm_display_params.com2.protocol = Cpu3_NormalizeProtocol(v);
+        (void)Cpu3_ApplyProtocolSerialProfile(&g_cpu3_comm_display_params.com2);
         break;
 
     /* COM3 */
@@ -397,6 +476,7 @@ void Cpu3Local_WriteValue(OperatingNumber opera, int32_t v)
         break;
     case COM_NUM_CPU3_COM3_PROTOCOL:
         g_cpu3_comm_display_params.com3.protocol = Cpu3_NormalizeProtocol(v);
+        (void)Cpu3_ApplyProtocolSerialProfile(&g_cpu3_comm_display_params.com3);
         break;
 
     default:
@@ -404,8 +484,8 @@ void Cpu3Local_WriteValue(OperatingNumber opera, int32_t v)
     }
 
     if (Cpu3Local_IsUartParam(opera)) {
-        /* 写任一串口字段后统一归一化，确保协议优先并自动套用推荐串口参数。 */
-        Cpu3_NormalizeAllPortProfiles();
+        /* 非协议字段允许现场覆盖；这里只兜底修正越界值，避免 UART 初始化异常。 */
+        (void)Cpu3_SanitizeAllPortConfigs();
     }
 
     /* 这里可以顺手：重配串口 + 保存 FRAM */
@@ -727,7 +807,7 @@ void Cpu3_Params_LoadFromFRAM(void)
         if (Cpu3_Params_StorageV3Valid(&legacy)) {
             Cpu3_Params_MigrateFromV3(&legacy);
             (void)Cpu3_ApplyFirmwareVersionRuntime();
-            (void)Cpu3_NormalizeAllPortProfiles();
+            (void)Cpu3_SanitizeAllPortConfigs();
             Cpu3Local_ApplyDisplayRuntimeParams();
             Cpu3_Params_SaveToFRAM();
             printf("CPU3 FRAM参数已从V3升级到V4，亮度使用默认挡位。\r\n");
@@ -765,8 +845,8 @@ void Cpu3_Params_LoadFromFRAM(void)
         if (Cpu3_ApplyFirmwareVersionRuntime()) {
             need_save = 1U;
         }
-        if (Cpu3_NormalizeAllPortProfiles() != 0U) {
-            /* 旧 FRAM 参数加载后也要补齐协议推荐串口参数，并回写一次，避免每次开机重复修正。 */
+        if (Cpu3_SanitizeAllPortConfigs() != 0U) {
+            /* FRAM 参数加载后只修正非法串口字段，合法的人工串口配置必须原样保留。 */
             need_save = 1U;
         }
         Cpu3Local_ApplyDisplayRuntimeParams();
