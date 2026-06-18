@@ -14,10 +14,10 @@
 #include "weight.h"
 #include "TMC5130.h"
 #include "fault_manager.h"
-/* ä¸»ç¨‹åºåˆå§‹åŒ– */
+/* Ö÷³ÌĞò³õÊ¼»¯ */
 void App_Init(void);
 
-/* ä¸»å¾ªç¯ä»»åŠ¡ */
+/* Ö÷Ñ­»·ÈÎÎñ */
 void App_MainLoop(void);
 
 #endif

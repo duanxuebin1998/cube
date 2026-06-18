@@ -46,6 +46,8 @@ CPU2 参数加载会校验 FRAM 中的 `magic`、`struct_size`、`param_version`
 | V1.14.0.0 | 3 | 存储版本不变；新增密度连续、连续相对频率和连续定频找液位方式，旧 FRAM 参数通常保留 |
 | V1.14.0.1 | 3 | 存储版本不变；优化电机点动与位置模式运动流程，旧 FRAM 参数通常保留 |
 | V1.15.0.0 | 3 | 存储版本不变；新增读取部件参数蓝牙 RSSI 快照、协议版本 9 和 CPU3 菜单显示优化，旧 FRAM 参数通常保留 |
+| V1.16.0.0 | 3 | 存储版本不变；新增 AO 模拟电流输出运行态和 AO 输出使能，原 `reserved26` 语义改为 `AoOutputEnable`；旧存储升级到协议版本 10 时默认关闭 AO 输出，并保留启动阶段 AO/电机初始化错误 |
+| V1.16.0.1 | 3 | 存储版本不变；收紧罐底检测模式为 `0/1`，旧 FRAM 中异常值运行期归零，通常保留旧参数 |
 
 历史说明：建立 CPU2 程序版本号前，2025-12-16 引入当前参数元信息时使用 `DEVICE_PARAM_VERSION=1`；2026-03-05 系统参数增加时提升到 `DEVICE_PARAM_VERSION=2`，从版本 1 升级到版本 2 会因旧参数版本不匹配恢复出厂参数。
 
@@ -1326,3 +1328,138 @@ CPU2 参数加载会校验 FRAM 中的 `magic`、`struct_size`、`param_version`
 - 未做实物联调；需要现场验证 CH9141K 已连接、未连接、RSSI 查询超时、命令切换打断和 UART6 透传恢复。
 - CPU3 菜单回退路径、称重等待页返回路径和 OLED 分页显示仍建议在实机按键上逐项确认。
 - 瓦锡兰频率异常保护需在现场确认无效频率、空气点和液体点的边界表现。
+
+## 2026-06-15 - 新增 AO 电流输出运行态与使能参数（CPU2 V1.16.0.0 / CPU3 V1.15.0.0）
+
+版本：
+- CPU2: V1.15.0.0 -> V1.16.0.0
+- CPU3: V1.14.0.0 -> V1.15.0.0
+
+协议版本/兼容性：
+- `DEVICE_PROTOCOL_VERSION`: 9 -> 10。
+- 协议版本 10 在无线 RSSI 运行态后追加 `AoOutputRuntime` 输入寄存器尾段，发布 AO 目标电流、最近写入电流、来源、AD5421 故障标志、READFAULT 原始值、最近错误码和更新时间。
+- 协议版本 10 将原 `reserved26` 正式替换为 `AoOutputEnable`，保持地址 `0x00C2-0x00C3` 不后移，语义为 `0=关闭`、`1=启用`。
+- CPU2/CPU3 必须同为协议版本 10 才能正确显示、写入和执行 AO 输出使能；协议版本 9 的旧端不应与本版本混用。
+- CPU2 `DEVICE_PARAM_VERSION` 保持 3，`DeviceParameters` 结构大小不变，不会因参数存储版本触发恢复出厂参数；旧协议存储升级时将 `AoOutputEnable` 默认置 0，避免未接电流环时误启用 AO 输出。
+
+本次修改：
+- CPU2 新增 AO 模拟电流输出服务，统一处理液位电流计算、报警电流覆盖、故障/调试电流选择、AD5421 写入和运行态维护。
+- CPU2 AD5421 驱动增加有限 SPI 超时、控制寄存器回读、FAULT 管脚/READFAULT 诊断和专用错误码。
+- CPU2 在主循环和液位测量刷新 AO 输出，HART Command 2/3 改为读取 AO 运行态电流和 4-20mA 百分比。
+- CPU2 `AoOutputEnable=0` 时不初始化、不诊断、不写入 AD5421，并发布禁用运行态；恢复出厂和旧协议升级默认关闭 AO 输出。
+- CPU2 `AoOutputEnable=1` 时对 AD5421 初始化重试、诊断轮询和重复写失败做 1 秒节流，避免硬件异常时每轮主循环阻塞访问 SPI/GPIO。
+- CPU2 启动阶段 AO/电机初始化失败后，在 `fault_info_init()` 清理故障信息之后恢复启动错误码，并阻止上电默认命令继续下发。
+- CPU3 同步解析 AO 运行态、补充 AD5421 故障文案，并在 AO 输出配置菜单新增 `AO使能`，范围限制为 0..1。
+- 同步更新协议记录、默认值文档、CPU3 菜单/状态页文档、AO 契约检查脚本和版本改动与测试方案。
+
+验证：
+- `py -3 tools\check_ao_output_enable_contract.py`
+- `py -3 tools\check_si7000_protocol_contract.py`
+- `py -3 tools\check_density_level_control_contract.py`
+- `py -3 tools\check_wireless_rssi_contract.py`
+- `py -3 tools\check_read_part_params_refresh_contract.py`
+- `py -3 LTD_DISPLAY_CPU3\font_check.py`
+- `cmake --build build\LTD_MAIN_CPU2`
+- `cmake --build build\LTD_DISPLAY_CPU3`
+- `git diff --check`
+
+未验证风险：
+- 未做实物联调；需要现场验证 `AoOutputEnable=0` 且电流环未接时不上报 AO 故障。
+- `AoOutputEnable=1` 时仍需用电流表/HART 主站验证 4-20mA 输出、电流百分比、报警/故障/调试电流和 AD5421 故障诊断边界。
+- 提交前需要在暂存目标文件后运行 `git diff --cached --check` 和 `py -3 tools\check_version_bumped.py`。
+- AO 输出只作为测量结果后的辅助输出刷新，不新增 CPU2/CPU3 命令入口或改变测量状态机；启动流程图已同步 AO 初始化、启动错误保留和上电默认命令拦截，后续若把 AO 输出做成独立命令或闭环控制再补对应业务流程图。
+
+## 2026-06-17 - 修复状态页刷新节流和参数范围校验（CPU2 V1.16.0.1 / CPU3 V1.15.0.1）
+
+版本：
+- CPU2: V1.16.0.0 -> V1.16.0.1
+- CPU3: V1.15.0.0 -> V1.15.0.1
+
+协议版本/兼容性：
+- `DEVICE_PROTOCOL_VERSION` 保持 10，不新增 CPU2/CPU3 共享寄存器、命令码或输入寄存器尾段。
+- 协议版本 10 继续同时覆盖 `AoOutputRuntime` 输入寄存器尾段和 `AoOutputEnable` 保持寄存器语义，不再拆分为两个协议版本。
+- CPU2 `DEVICE_PARAM_VERSION` 保持 3，`DeviceParameters` 结构大小不变，从 V1.16.0.0 升级到 V1.16.0.1 不会因参数存储版本触发恢复出厂参数。
+- 旧 FRAM 中 `bottom_detect_mode` 若为非 `0/1` 异常值，运行期归一化为 0；保持寄存器读取路径按 `0=称重`、`非0=陀螺仪角度` 归一化显示。
+
+本次修改：
+- CPU3 状态页增加运行数据 2 秒采样节流，非采样周期只恢复反白区域，减少状态页频繁重绘带来的闪烁和数据跳动。
+- CPU3 参数详情页用数字绘制范围分隔符和小数点，避免使用字库外字符造成范围显示异常。
+- CPU3 参数元数据收紧罐底检测模式范围为 `0..1`，缩短尺带伸缩率和继电器报警阈值输入位宽，降低 OLED 输入显示越界风险。
+- CPU2/CPU3 读取保持寄存器时将 `bottom_detect_mode` 统一归一化为 `0/1`，CPU2 运行期加载旧 FRAM 参数时对异常值归零。
+- 同步修正协议版本 10 的文档口径、系统参数默认值、界面菜单索引和版本改动与测试方案。
+
+验证：
+- `git diff --cached --check`
+- `py -3 tools\check_version_bumped.py`
+- `py -3 tools\check_ao_output_enable_contract.py`
+- `py -3 tools\check_cpu3_ret_arr_word_contract.py`
+- `py -3 LTD_DISPLAY_CPU3\font_check.py`
+
+未验证风险：
+- 未做实物联调；需要在 OLED 实机上确认状态页 2 秒采样节流、反白恢复、菜单范围显示和参数输入位宽不会造成可见闪烁或截断。
+- 未重新运行 CPU2/CPU3 完整固件构建；提交前如需要发布固件，仍建议补跑 `cmake --build build\LTD_MAIN_CPU2` 和 `cmake --build build\LTD_DISPLAY_CPU3`。
+- 本次不改变测量状态机、命令入口、协议尾段布局或 AO 输出执行链路，程序流程图无需更新。
+
+## 2026-06-17 - 增加 CPU3 RTC LSE 电池保持和屏幕校时（CPU3 V1.15.0.2）
+
+版本：
+- CPU2: 保持 V1.16.0.1。
+- CPU3: V1.15.0.1 -> V1.15.0.2。
+
+协议版本/兼容性：
+- `DEVICE_PROTOCOL_VERSION` 保持 10，不新增 CPU2/CPU3 共享寄存器、命令码或输入寄存器尾段。
+- CPU2 `DEVICE_PARAM_VERSION` 保持 3，`DeviceParameters` 结构大小不变，不会因本次 CPU3 RTC 改动触发恢复出厂参数。
+- CPU3 本机参数版本保持 `0x0004`，不改变 CPU3 FRAM 本机显示/通信参数布局。
+- 新 CPU3 板优先使用外部 32.768 kHz LSE 和 VBAT 电池保持 RTC；旧板或 LSE 起振失败时自动回退内部 LSI，启动不因 LSE 缺失卡死。
+- RTC 只服务外部协议时间显示和 profile 完成时间锁存，不参与 CPU2 测量控制和调度。
+
+本次修改：
+- CPU3 CubeMX 工程启用 RTC/HAL RTC 相关文件，并在 `.ioc` 中配置 RTC 时钟优先为 LSE。
+- CPU3 系统时钟配置增加 LSE 失败兜底逻辑，旧板未装 LSE 时会关闭 LSE 配置并继续启动。
+- `Cpu3Clock_Init()` 改为 LSE 优先、LSI 兜底；仅在备份标记无效、RTC 未初始化或时间非法时写入默认时间，避免每次上电覆盖电池保持时间。
+- 新增 `Cpu3Clock_SetDateTime()`、`Cpu3Clock_GetState()` 和 `Cpu3Clock_GetSource()`，用于屏幕校时和显示 RTC 状态。
+- CPU3 维护设置菜单新增 `RTC设置` 页面，可编辑年、月、日、时、分、秒，保存成功后写入已校时备份标记。
+- SI7000 现有 profile 完成时间锁存和当前时分秒实时输出逻辑保持不变，第一阶段不新增对外校时寄存器。
+- 同步更新 CPU3 程序流程文档和本版本改动与测试方案。
+- 本次提交按用户要求包含当前工作区全部改动，其中 CPU2 现有差异为中文注释编码形式变化，不改变 CPU2 版本号和运行逻辑。
+
+验证：
+- `py -3 tools\generate_cpu3_flow_docs.py`
+- `py -3 LTD_DISPLAY_CPU3\font_check.py`
+- `cmake --build build\LTD_MAIN_CPU2`
+- `cmake --build build\LTD_DISPLAY_CPU3`
+- `git diff --cached --check`
+- `py -3 tools\check_version_bumped.py`
+
+未验证风险：
+- 未做 RTC 实物联调；需要在新板验证 LSE 起振、VBAT 断主电保持、菜单校时保存和重新上电不覆盖时间。
+- 旧板兼容需要实机确认未装 LSE 时系统时钟配置不会卡死，并且 RTC 状态显示为 LSI 兜底。
+- LSI 兜底模式长期时间精度有限，现场若看到 `RTC LSI` 应按硬件配置或 LSE 起振问题排查。
+
+## 2026-06-18 - 修复 CPU3 串口协议默认值与手动参数覆盖逻辑（CPU3 V1.15.1.0）
+
+版本：
+- CPU2: 保持 V1.16.0.1。
+- CPU3: V1.15.0.2 -> V1.15.1.0。
+
+协议版本/兼容性：
+- `DEVICE_PROTOCOL_VERSION` 保持 10，不新增 CPU2/CPU3 共享寄存器、命令码或输入寄存器尾段。
+- CPU2 `DEVICE_PARAM_VERSION` 保持 3，`DeviceParameters` 结构大小不变，不会触发 CPU2 参数恢复出厂。
+- CPU3 本机参数版本保持 `0x0004`，不改变 CPU3 FRAM 本机通信/显示参数存储布局。
+- 旧 FRAM 中已有的合法 COM1/COM2/COM3 串口参数会原样保留；只有协议字段被用户修改时，才按新协议带出默认串口参数。
+
+本次修改：
+- CPU3 COM1/COM2/COM3 协议字段修改时，自动带出对应协议默认串口参数：DSM/Wartsila 为 `4800 8N1`，LTD 为 `115200 8N1`，SI7000 为 `9600 8O1`。
+- CPU3 波特率、数据位、校验和停止位允许后续单独修改，保存和上电加载时只修正非法值，不再被当前协议持续覆盖。
+- CPU3 COM 配置菜单顺序调整为“协议、波特率、数据位、校验、停止位”，让现场先选协议再确认或覆盖物理串口参数。
+- 同步更新 SI7000 协议枚举注释和本版本改动与测试方案。
+
+验证：
+- `cmake --build build\LTD_DISPLAY_CPU3`
+- `git diff --cached --check`
+- `py -3 tools\check_version_bumped.py`
+
+未验证风险：
+- 未做实物联调；需要在 OLED 菜单中验证 COM1/COM2/COM3 修改协议后默认值立即带出，随后单独修改波特率、校验和停止位能够保存并重启后保持。
+- 如果现场依赖“选择 SI7000 后始终强制 9600 8O1”的旧行为，需要升级说明中明确新版本允许人工覆盖，避免误判为配置异常。
+- 本次不改变主循环、状态机、命令分发、CPU2 内部通信链路或外部协议寄存器映射，程序流程图无需更新。

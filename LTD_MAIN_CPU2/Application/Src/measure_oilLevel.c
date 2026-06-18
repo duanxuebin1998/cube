@@ -24,6 +24,8 @@
 #include "encoder.h"
 #include "error_log.h"
 #include "abortable_delay.h"
+#include "AoOutput/ao_output.h"
+#include "fault_manager.h"
 #include <math.h>
 
 /* 函数原型声明 */
@@ -35,6 +37,7 @@ static int waitForTheLiquidLevelToExceedTheBlindZone(void);
 static uint32_t determine_level_status_internal(Level_StateTypeDef *state_out, uint8_t allow_mode_recovery);
 static uint32_t OilLevel_StopBeforeReturn(uint32_t error_code, const char *reason);
 static uint32_t OilLevel_ClampLevelForReport(int32_t oil_level, const char *reason);
+static void OilLevel_UpdateAoOutput(void);
 static void OilLevel_SyncCurrentPositionToResult(const char *reason);
 
 #define OIL_LEVEL_METHOD_RELATIVE_FREQ 0U
@@ -101,6 +104,16 @@ static uint32_t OilLevel_StopBeforeReturn(uint32_t error_code, const char *reaso
 
 
 
+static void OilLevel_UpdateAoOutput(void)
+{
+    uint32_t ao_ret = AoOutput_Update();
+
+    if ((ao_ret != NO_ERROR) && (ao_ret != STATE_SWITCH) &&
+        (g_measurement.device_status.error_code == NO_ERROR)) {
+        FaultManager_SetErrorState(ao_ret, GetShortFilename(__FILE__), __LINE__, __func__);
+    }
+}
+
 /**
  * @brief 液位结果字段是无符号，上报前负位置统一按0处理。
  */
@@ -130,6 +143,7 @@ static void OilLevel_SyncCurrentPositionToResult(const char *reason)
 
     g_measurement.oil_measurement.oil_level = (uint32_t)oil_level;
     g_measurement.density_distribution.Density_oil_level = g_measurement.oil_measurement.oil_level;
+    OilLevel_UpdateAoOutput();
 
     printf("液位流程\t%s后同步液位：%lu(0.1mm)\r\n",
            tag,
@@ -298,6 +312,7 @@ static void DensityLevel_RecordCurrentPosition(const char *tag)
     g_measurement.density_distribution.Density_oil_level = g_measurement.oil_measurement.oil_level;
     g_measurement.oil_measurement.probe_at_liquid_level = 1U;
     g_measurement.oil_measurement.liquid_stable = 1U;
+    OilLevel_UpdateAoOutput();
     printf("密度找液位\t%s\t液位=%lu(0.1mm)\r\n",
            (tag != NULL) ? tag : "记录",
            (unsigned long)g_measurement.oil_measurement.oil_level);
@@ -586,6 +601,7 @@ static void FrequencyLevel_RecordCurrentPosition(const char *tag)
     g_measurement.density_distribution.Density_oil_level = g_measurement.oil_measurement.oil_level;
     g_measurement.oil_measurement.probe_at_liquid_level = 1U;
     g_measurement.oil_measurement.liquid_stable = 1U;
+    OilLevel_UpdateAoOutput();
     printf("频率找液位\t%s\t液位=%lu(0.1mm)\r\n",
            (tag != NULL) ? tag : "记录",
            (unsigned long)g_measurement.oil_measurement.oil_level);
@@ -1051,6 +1067,7 @@ uint32_t SearchOilLevel(void) {
     /* 成功找到液位后才置位 SI7000 的 Probe At Liquid Level 和液体稳定状态。 */
     g_measurement.oil_measurement.probe_at_liquid_level = 1;
     g_measurement.oil_measurement.liquid_stable = 1;
+    OilLevel_UpdateAoOutput();
     return NO_ERROR;  /* 返回成功状态 */
 }
 /**
@@ -1506,6 +1523,8 @@ static int determineTheSensorPositionAndUpdateTheLevelValue(void) {
 	if  (g_measurement.device_status.device_state == STATE_FLOWOIL) {
 		/* 更新当前液位值 */
 		g_measurement.oil_measurement.oil_level = OilLevel_ClampLevelForReport(oil_level, "液位跟随");
+		g_measurement.density_distribution.Density_oil_level = g_measurement.oil_measurement.oil_level;
+		OilLevel_UpdateAoOutput();
 		/* 打印正常液位值信息 */
 		printf("液位跟随\t液位值为%lu (0.1mm)", (unsigned long)g_measurement.oil_measurement.oil_level);
 		OilLevel_PrintFollowPositionInfo();

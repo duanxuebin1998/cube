@@ -1,17 +1,17 @@
 /*************************************************************
-* æ–‡ä»¶å: Density_analysis_calculation.c
-* åŠŸèƒ½: é€²è¡Œæ²¹å“å¯†åº¦ç›¸é—œçš„è¨ˆç®—, åŒ…æ‹¬:
-*       1. ä¿®æ­£å¯†åº¦ RHOT
-*       2. 15 åº¦æ¨™æº–å¯†åº¦ RHO15
-*       3. 20 åº¦æ¨™æº–å¯†åº¦ RHO20
-*       4. é«”ç©ä¿®æ­£ç³»æ•¸ VCF
-*       5. æ’å€¼èˆ‡æº«åº¦ä¿®æ­£è¨ˆç®—
+* ÎÄ¼şÃû: Density_analysis_calculation.c
+* ¹¦ÄÜ: ½øĞĞÓÍÆ·ÃÜ¶ÈÏà¹ØµÄ¼ÆËã, °üÀ¨:
+*       1. ĞŞÕıÃÜ¶È RHOT
+*       2. 15 ¶È±ê×¼ÃÜ¶È RHO15
+*       3. 20 ¶È±ê×¼ÃÜ¶È RHO20
+*       4. Ìå»ıĞŞÕıÏµÊı VCF
+*       5. ²åÖµÓëÎÂ¶ÈĞŞÕı¼ÆËã
 *
-* èªªæ˜:
-*   æœ¬æ–‡ä»¶åªåšè¨ˆç®—, ä¸æ¶‰åŠç¡¬ä»¶æ“ä½œã€‚
-*   æ‰€æœ‰è¼¸å…¥å¯†åº¦å–®ä½ç‚º kg/m3ã€‚
-*   æ‰€æœ‰æº«åº¦å–®ä½ç‚º æ”æ°åº¦ã€‚
-*   ä»£ç¢¼åŸºæ–¼åœ‹éš›æ²¹å“æ¨™æº–æ¼”ç®—æ³•ã€‚
+* ËµÃ÷:
+*   ±¾ÎÄ¼şÖ»×ö¼ÆËã, ²»Éæ¼°Ó²¼ş²Ù×÷¡£
+*   ËùÓĞÊäÈëÃÜ¶Èµ¥Î»Îª kg/m3¡£
+*   ËùÓĞÎÂ¶Èµ¥Î»Îª ÉãÊÏ¶È¡£
+*   ´úÂë»ùÓÚ¹ú¼ÊÓÍÆ·±ê×¼Ëã·¨¡£
 *************************************************************/
 
 #include <math.h>
@@ -31,10 +31,10 @@ static double_t GetVCF(int32_t oilcategory, double_t RHO15, double_t T);
 
 /*******************************************************
 * Name    truncd
-* Brief   æŒ‰æŒ‡å®šä½æ•¸æˆªæ–·å°æ•¸, ä¸é€²è¡Œå››æ¨äº”å…¥
-* Param   value    è¼¸å…¥æ•¸å€¼
-*         digits   ä¿ç•™çš„å°æ•¸ä½æ•¸
-* Return  æˆªæ–·å¾Œçš„çµæœ
+* Brief   °´Ö¸¶¨Î»Êı½Ø¶ÏĞ¡Êı, ²»½øĞĞËÄÉáÎåÈë
+* Param   value    ÊäÈëÊıÖµ
+*         digits   ±£ÁôµÄĞ¡ÊıÎ»Êı
+* Return  ½Ø¶ÏºóµÄ½á¹û
 *******************************************************/
 static double_t truncd(double_t value, int32_t digits)
 {
@@ -51,10 +51,10 @@ static double_t truncd(double_t value, int32_t digits)
 
 /*******************************************************
 * Name    pow1
-* Brief   è¨ˆç®— x çš„ y æ¬¡æ–¹, åªæ”¯æŒéè² æ•´æ•¸ y
-* Param   x   åº•æ•¸
-*         y   æŒ‡æ•¸
-* Return  x çš„ y æ¬¡æ–¹
+* Brief   ¼ÆËã x µÄ y ´Î·½, Ö»Ö§³Ö·Ç¸ºÕûÊı y
+* Param   x   µ×Êı
+*         y   Ö¸Êı
+* Return  x µÄ y ´Î·½
 *******************************************************/
 static double_t pow1(double_t x, int32_t y)
 {
@@ -69,10 +69,10 @@ static double_t pow1(double_t x, int32_t y)
 
 /*******************************************************
 * Name    roundd
-* Brief   æ ¹æ“šæŒ‡å®šä½æ•¸é€²è¡Œå››æ¨äº”å…¥
-* Param   value    è¼¸å…¥å€¼
-*         digits   ä¿ç•™çš„å°æ•¸ä½æ•¸
-* Return  å››æ¨äº”å…¥å¾Œçš„çµæœ
+* Brief   ¸ù¾İÖ¸¶¨Î»Êı½øĞĞËÄÉáÎåÈë
+* Param   value    ÊäÈëÖµ
+*         digits   ±£ÁôµÄĞ¡ÊıÎ»Êı
+* Return  ËÄÉáÎåÈëºóµÄ½á¹û
 *******************************************************/
 double_t roundd(double_t value, int32_t digits)
 {
@@ -93,10 +93,10 @@ double_t roundd(double_t value, int32_t digits)
 
 /*******************************************************
 * Name    roundd5
-* Brief   æŒ‰ 0 å’Œ 5 çš„è¦å‰‡é€²è¡Œå››æ¨äº”å…¥
-* Param   value    è¼¸å…¥å€¼
-*         digits   ä¿ç•™çš„å°æ•¸ä½æ•¸
-* Return  çµæœç‚ºæœ€æ¥è¿‘ 0 æˆ– 5 çš„å°æ•¸
+* Brief   °´ 0 ºÍ 5 µÄ¹æÔò½øĞĞËÄÉáÎåÈë
+* Param   value    ÊäÈëÖµ
+*         digits   ±£ÁôµÄĞ¡ÊıÎ»Êı
+* Return  ½á¹ûÎª×î½Ó½ü 0 »ò 5 µÄĞ¡Êı
 *******************************************************/
 static double_t roundd5(double_t value, int32_t digits)
 {
@@ -129,11 +129,11 @@ static double_t roundd5(double_t value, int32_t digits)
 
 /*******************************************************
 * Name    GetRHOT
-* Brief   è¨ˆç®— 20 åº¦ä¸‹çš„å¯†åº¦è¨ˆä¿®æ­£å¯†åº¦ RHOT
-* Param   oilcategory   æ²¹å“é¡å‹
-*         density       ç•¶å‰å¯†åº¦
-*         temperature   ç•¶å‰æº«åº¦
-* Return  RHOT æˆ–éŒ¯èª¤ç¢¼
+* Brief   ¼ÆËã 20 ¶ÈÏÂµÄÃÜ¶È¼ÆĞŞÕıÃÜ¶È RHOT
+* Param   oilcategory   ÓÍÆ·ÀàĞÍ
+*         density       µ±Ç°ÃÜ¶È
+*         temperature   µ±Ç°ÎÂ¶È
+* Return  RHOT »ò´íÎóÂë
 *******************************************************/
 static double_t GetRHOT(int32_t oilcategory, double_t density, double_t temperature)
 {
@@ -177,11 +177,11 @@ static double_t GetRHOT(int32_t oilcategory, double_t density, double_t temperat
 
 /*******************************************************
 * Name    GetRHO15
-* Brief   æ ¹æ“š RHOT å’Œæº«åº¦è¨ˆç®— 15 åº¦æ¨™æº–å¯†åº¦ RHO15
-* Param   oilcategory   æ²¹å“é¡å‹
-*         RHOT          ä¿®æ­£å¾Œå¯†åº¦
-*         temperature   ç•¶å‰æº«åº¦
-* Return  RHO15 æˆ–éŒ¯èª¤ç¢¼
+* Brief   ¸ù¾İ RHOT ºÍÎÂ¶È¼ÆËã 15 ¶È±ê×¼ÃÜ¶È RHO15
+* Param   oilcategory   ÓÍÆ·ÀàĞÍ
+*         RHOT          ĞŞÕıºóÃÜ¶È
+*         temperature   µ±Ç°ÎÂ¶È
+* Return  RHO15 »ò´íÎóÂë
 *******************************************************/
 static double_t GetRHO15(int32_t oilcategory, double_t RHOT, double_t temperature)
 {
@@ -274,10 +274,10 @@ static double_t GetRHO15(int32_t oilcategory, double_t RHOT, double_t temperatur
 
 /*******************************************************
 * Name    GetVcf20
-* Brief   æ ¹æ“š RHO15 å’Œæº«åº¦è¨ˆç®— VCF20
-* Param   oilcategory   æ²¹å“é¡å‹
-*         RHO15         15 åº¦æ¨™æº–å¯†åº¦
-*         T             ç•¶å‰æº«åº¦
+* Brief   ¸ù¾İ RHO15 ºÍÎÂ¶È¼ÆËã VCF20
+* Param   oilcategory   ÓÍÆ·ÀàĞÍ
+*         RHO15         15 ¶È±ê×¼ÃÜ¶È
+*         T             µ±Ç°ÎÂ¶È
 * Return  VCF20
 *******************************************************/
 static double_t GetVcf20(int32_t oilcategory, double_t RHO15, double_t T)
@@ -341,11 +341,11 @@ static double_t GetVcf20(int32_t oilcategory, double_t RHO15, double_t T)
 
 /*******************************************************
 * Name    GetDensity20ofPMP3
-* Brief   å°‡ä»»æ„æº«åº¦ä¸‹çš„å¯†åº¦æ›ç®—ç‚º 20 åº¦æ¨™æº–å¯†åº¦
-* Param   oilcategory   æ²¹å“é¡å‹
-*         density       ç•¶å‰å¯†åº¦
-*         temperature   ç•¶å‰æº«åº¦
-* Return  RHO20 æˆ–éŒ¯èª¤ç¢¼
+* Brief   ½«ÈÎÒâÎÂ¶ÈÏÂµÄÃÜ¶È»»ËãÎª 20 ¶È±ê×¼ÃÜ¶È
+* Param   oilcategory   ÓÍÆ·ÀàĞÍ
+*         density       µ±Ç°ÃÜ¶È
+*         temperature   µ±Ç°ÎÂ¶È
+* Return  RHO20 »ò´íÎóÂë
 *******************************************************/
 static double_t GetDensity20ofPMP3(int32_t oilcategory, double_t density, double_t temperature)
 {
@@ -359,7 +359,7 @@ static double_t GetDensity20ofPMP3(int32_t oilcategory, double_t density, double
         return RHOT;
 
     RHO15 = GetRHO15(oilcategory, RHOT, temperature);
-    /* å…ˆå¤„ç†å¼‚å¸¸è¾¹ç•Œï¼Œé¿å…å¯†åº¦æ¢ç®—çŠ¶æ€æœºå¸¦æ•…éšœç»§ç»­è¿è¡Œã€‚ */
+    /* ÏÈ´¦ÀíÒì³£±ß½ç£¬±ÜÃâÃÜ¶È»»Ëã×´Ì¬»ú´ø¹ÊÕÏ¼ÌĞøÔËĞĞ¡£ */
     if (RHO15 == ERROR_NORESULT)
         return RHO15;
 
@@ -371,10 +371,10 @@ static double_t GetDensity20ofPMP3(int32_t oilcategory, double_t density, double
 
 /*******************************************************
 * Name    get_standdensity
-* Brief   ä»¥å…©é»æ’å€¼æ–¹å¼è¨ˆç®— 20 åº¦æ¨™æº–å¯†åº¦
-* Param   rhot         ç•¶å‰æº«åº¦ä¸‹ä¿®æ­£å¾Œå¯†åº¦
-*         temperature  ç•¶å‰æº«åº¦
-* Return  20 åº¦æ¨™æº–å¯†åº¦
+* Brief   ÒÔÁ½µã²åÖµ·½Ê½¼ÆËã 20 ¶È±ê×¼ÃÜ¶È
+* Param   rhot         µ±Ç°ÎÂ¶ÈÏÂĞŞÕıºóÃÜ¶È
+*         temperature  µ±Ç°ÎÂ¶È
+* Return  20 ¶È±ê×¼ÃÜ¶È
 *******************************************************/
 double_t get_standdensity(double_t rhot, double_t temperature)
 {
@@ -401,11 +401,11 @@ double_t get_standdensity(double_t rhot, double_t temperature)
 
 /*******************************************************
 * Name    GetRHOTOmitHydrometer
-* Brief   ä¸è€ƒæ…®å¯†åº¦è¨ˆä¿®æ­£æ™‚çš„ RHOT è¨ˆç®—
-* Param   oilcategory   æ²¹å“é¡å‹
-*         density       å¯†åº¦
-*         temperature   æº«åº¦
-* Return  RHOT æˆ–éŒ¯èª¤ç¢¼
+* Brief   ²»¿¼ÂÇÃÜ¶È¼ÆĞŞÕıÊ±µÄ RHOT ¼ÆËã
+* Param   oilcategory   ÓÍÆ·ÀàĞÍ
+*         density       ÃÜ¶È
+*         temperature   ÎÂ¶È
+* Return  RHOT »ò´íÎóÂë
 *******************************************************/
 static double_t GetRHOTOmitHydrometer(int32_t oilcategory, double_t density, double_t temperature)
 {
@@ -436,10 +436,10 @@ static double_t GetRHOTOmitHydrometer(int32_t oilcategory, double_t density, dou
 
 /*******************************************************
 * Name    GetVCF
-* Brief   è¨ˆç®—é«”ç©ä¿®æ­£ç³»æ•¸ VCF
-* Param   oilcategory   æ²¹å“é¡å‹
-*         RHO15         15 åº¦æ¨™æº–å¯†åº¦
-*         T             ç•¶å‰æº«åº¦
+* Brief   ¼ÆËãÌå»ıĞŞÕıÏµÊı VCF
+* Param   oilcategory   ÓÍÆ·ÀàĞÍ
+*         RHO15         15 ¶È±ê×¼ÃÜ¶È
+*         T             µ±Ç°ÎÂ¶È
 * Return  VCF20
 *******************************************************/
 static double_t GetVCF(int32_t oilcategory, double_t RHO15, double_t T)
@@ -517,11 +517,11 @@ static double_t GetVCF(int32_t oilcategory, double_t RHO15, double_t T)
 
 /*******************************************************
 * Name    GetVCF20ofPMP3
-* Brief   è¨ˆç®— 20 åº¦çš„ VCF20
-* Param   oilcategory   æ²¹å“é¡å‹
-*         RHO20         20 åº¦å¯†åº¦
-*         temperature   ç•¶å‰æº«åº¦
-* Return  VCF20 æˆ–éŒ¯èª¤ç¢¼
+* Brief   ¼ÆËã 20 ¶ÈµÄ VCF20
+* Param   oilcategory   ÓÍÆ·ÀàĞÍ
+*         RHO20         20 ¶ÈÃÜ¶È
+*         temperature   µ±Ç°ÎÂ¶È
+* Return  VCF20 »ò´íÎóÂë
 *******************************************************/
 double_t GetVCF20ofPMP3(int32_t oilcategory, double_t RHO20, double_t temperature)
 {
@@ -534,7 +534,7 @@ double_t GetVCF20ofPMP3(int32_t oilcategory, double_t RHO20, double_t temperatur
         return RHOT;
 
     RHO15 = GetRHO15(oilcategory, RHOT, 20.0);
-    /* å…ˆå¤„ç†å¼‚å¸¸è¾¹ç•Œï¼Œé¿å…å¯†åº¦æ¢ç®—çŠ¶æ€æœºå¸¦æ•…éšœç»§ç»­è¿è¡Œã€‚ */
+    /* ÏÈ´¦ÀíÒì³£±ß½ç£¬±ÜÃâÃÜ¶È»»Ëã×´Ì¬»ú´ø¹ÊÕÏ¼ÌĞøÔËĞĞ¡£ */
     if (RHO15 == ERROR_NORESULT)
         return RHO15;
 
@@ -546,10 +546,10 @@ double_t GetVCF20ofPMP3(int32_t oilcategory, double_t RHO20, double_t temperatur
 
 /*******************************************************
 * Name    DensityT_Get
-* Brief   æ ¹æ“š VCF20 å’Œ 20 åº¦å¯†åº¦è¨ˆç®—å¢é‡
-* Param   VCF20      é«”ç©ä¿®æ­£ç³»æ•¸ æ”¾å¤§ä¸€è¬å€
-*         density20  20 åº¦å¯†åº¦ æ”¾å¤§åå€
-* Return  Dt         æº«åº¦ä¿®æ­£å¾Œçš„å¯†åº¦å¢é‡
+* Brief   ¸ù¾İ VCF20 ºÍ 20 ¶ÈÃÜ¶È¼ÆËãÔöÁ¿
+* Param   VCF20      Ìå»ıĞŞÕıÏµÊı·Å´óÒ»Íò±¶
+*         density20  20 ¶ÈÃÜ¶È ·Å´óÊ®±¶
+* Return  Dt         ÎÂ¶ÈĞŞÕıºóµÄÃÜ¶ÈÔöÁ¿
 *******************************************************/
 double_t DensityT_Get(uint32_t VCF20, uint32_t density20)
 {
@@ -569,10 +569,10 @@ double_t DensityT_Get(uint32_t VCF20, uint32_t density20)
 
 /*******************************************************
 * Name    RHOTtoRHO
-* Brief   å°‡ RHOT åç®—æˆæœªä¿®æ­£å‰çš„å¯†åº¦
-* Param   density       RHOT ä¿®æ­£å¾Œå¯†åº¦
-*         temperature   ç•¶å‰æº«åº¦
-* Return  RHO æˆ–éŒ¯èª¤ç¢¼
+* Brief   ½« RHOT ·´Ëã³ÉÎ´ĞŞÕıÇ°µÄÃÜ¶È
+* Param   density       RHOT ĞŞÕıºóÃÜ¶È
+*         temperature   µ±Ç°ÎÂ¶È
+* Return  RHO »ò´íÎóÂë
 *******************************************************/
 double_t RHOTtoRHO(double_t density, double_t temperature)
 {

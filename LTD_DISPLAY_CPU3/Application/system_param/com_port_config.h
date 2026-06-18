@@ -21,7 +21,7 @@ typedef enum {
     COM_PROTO_LTD         = 2,
     COM_PROTO_1    = 3,
     COM_PROTO_2 = 4,
-    COM_PROTO_SI7000 = 5, /* SI7000 协议选项，写入后串口参数自动收敛到 9600 8O1。 */
+    COM_PROTO_SI7000 = 5, /* SI7000 协议选项，切换协议时带出 9600 8O1 默认值。 */
 } ComProtocolType;
 
 /* 校验 */

@@ -76,7 +76,10 @@ void MX_GPIO_Init(void)
   HAL_GPIO_WritePin(GPIOG, RELAY1_Pin|RELAY2_Pin|RELAY3_Pin|RELAY4_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOB, AD5421_SPI3_CS_Pin|HART_RTS_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(AD5421_SPI3_CS_GPIO_Port, AD5421_SPI3_CS_Pin, GPIO_PIN_SET);
+
+  /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(HART_RTS_GPIO_Port, HART_RTS_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin : CPU2_485_SEL_Pin */
   GPIO_InitStruct.Pin = CPU2_485_SEL_Pin;

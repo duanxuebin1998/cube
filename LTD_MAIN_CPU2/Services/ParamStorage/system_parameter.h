@@ -27,7 +27,7 @@
 #define UNVALID_GSW 0                      /* 质量无效值 */
 
 #define MAX_MEASUREMENT_POINTS 200 /* 密度分布测量最大点数 */
-#define DEVICE_PROTOCOL_VERSION 9u /* CPU2/CPU3共享协议版本；旧程序未写入时默认为0 */
+#define DEVICE_PROTOCOL_VERSION 10u /* CPU2/CPU3共享协议版本；旧程序未写入时默认为0 */
 #define FAULT_AUTO_RECOVERY_RETRY_DEFAULT 3u
 #define FAULT_AUTO_RECOVERY_RETRY_MAX 10u
 
@@ -206,7 +206,12 @@ typedef enum {
     OTHER_UNKNOWN_ERROR = 0x00130001,            /* 未知故障 */
     OTHER_ADDRESS_READ_ERROR = 0x00130002,       /* 地址读取错误 */
     OTHER_POWER_FLUCTUATION = 0x00130003,        /* 电源波动异常 */
-    OTHER_PERIPHERAL_CONFIG_ERROR = 0x00130004   /* 外设配置错误 */
+    OTHER_PERIPHERAL_CONFIG_ERROR = 0x00130004,  /* 外设配置错误 */
+    AD5421_INIT_ERROR = 0x00130005,              /* AD5421初始化失败 */
+    AD5421_WRITE_CURRENT_ERROR = 0x00130006,     /* AD5421写电流失败 */
+    AD5421_FAULT_PIN_ERROR = 0x00130007,         /* AD5421故障管脚报警 */
+    AD5421_READFAULT_ERROR = 0x00130008,         /* AD5421故障寄存器异常 */
+    AD5421_READBACK_ERROR = 0x00130009           /* AD5421控制寄存器回读失败 */
 
 } ErrorCode;
 
@@ -666,7 +671,7 @@ typedef struct {
     uint32_t FaultCurrent_mA;            /* AO故障电流 */
     uint32_t DebugCurrent_mA;            /* AO调试电流 */
 
-    uint32_t reserved26;                 /* 预留 */
+    uint32_t AoOutputEnable;             /* AO输出使能：0=关闭，1=启用 */
     uint32_t reserved27;                 /* 预留（新增） */
 
     /* ===================== 指令参数 ===================== */

@@ -18,10 +18,10 @@
  */
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
-#include "cpu2_communicate.h"
 #include "usart.h"
 
 /* USER CODE BEGIN 0 */
+#include "cpu2_communicate.h"
 #include "stdio.h"
 #include "DSM_communication.h"
 #define NOP() __asm volatile("nop")

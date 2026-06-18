@@ -9,6 +9,7 @@
 #include "system_parameter.h"
 #include "encoder.h"
 #include "motor_ctrl.h"
+#include "AoOutput/ao_output.h"
 
 /* ===================== 通用寄存器读写函数 ===================== */
 
@@ -247,8 +248,7 @@ void WriteDeviceParamsToHoldingRegisters(uint16_t *HoldingRegisterArray)
     write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_AO_LOW_CURRENT_mA,      g_deviceParams.AOLowCurrent_mA);
     write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_FAULT_CURRENT_mA,       g_deviceParams.FaultCurrent_mA);
     write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_DEBUG_CURRENT_mA,       g_deviceParams.DebugCurrent_mA);
-
-    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_RESERVED26, g_deviceParams.reserved26);
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_AO_OUTPUT_ENABLE,       g_deviceParams.AoOutputEnable);
     write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_RESERVED27, g_deviceParams.reserved27);
 
     /* ===================== 指令参数 ===================== */
@@ -380,7 +380,7 @@ void ReadDeviceParamsFromHoldingRegisters(uint16_t *HoldingRegisterArray)
 
     g_deviceParams.calibrateWaterLevel     = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_WATER_LEVEL_CORRECTION);
     /* ===================== 罐高/罐底测量 ===================== */
-    g_deviceParams.bottom_detect_mode      = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_BOTTOM_DETECT_MODE);
+    g_deviceParams.bottom_detect_mode      = (read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_BOTTOM_DETECT_MODE) == 0U) ? 0U : 1U;
     g_deviceParams.bottom_angle_threshold  = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_BOTTOM_ANGLE_THRESHOLD);
     g_deviceParams.bottom_weight_threshold = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_BOTTOM_WEIGHT_THRESHOLD);
     g_deviceParams.refreshTankHeightFlag  = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_REFRESH_TANKHEIGHT_FLAG);
@@ -438,8 +438,7 @@ void ReadDeviceParamsFromHoldingRegisters(uint16_t *HoldingRegisterArray)
     g_deviceParams.AOLowCurrent_mA      = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_AO_LOW_CURRENT_mA);
     g_deviceParams.FaultCurrent_mA      = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_FAULT_CURRENT_mA);
     g_deviceParams.DebugCurrent_mA      = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_DEBUG_CURRENT_mA);
-
-    g_deviceParams.reserved26 = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_RESERVED26);
+    g_deviceParams.AoOutputEnable       = (read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_AO_OUTPUT_ENABLE) == 0U) ? 0U : 1U;
     g_deviceParams.reserved27 = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_RESERVED27);
 
     /* ===================== 指令参数 ===================== */
@@ -619,10 +618,22 @@ void write_measurement_result_to_InputRegisters(uint16_t *regs) {
 		write_relay_alarm_runtime_to_regs(regs, channel, &g_measurement.relay_alarm_runtime[channel]);
 	}
 
-	/* ==== 蓝牙连接 RSSI 运行态，追加在继电器运行态之后，避免移动既有地址 ==== */
+	/* ==== 无线 RSSI 运行态，追加在继电器运行态之后 ==== */
 	write_u32_to_regs(regs, REG_WIRELESS_PAIRING_CONNECTION_VALID, g_measurement.wireless_pairing_status.connection_valid);
 	write_u32_to_regs(regs, REG_WIRELESS_PAIRING_RSSI_VALID, g_measurement.wireless_pairing_status.rssi_valid);
 	write_i32_to_regs(regs, REG_WIRELESS_PAIRING_RSSI, g_measurement.wireless_pairing_status.rssi);
 	write_u32_to_regs(regs, REG_WIRELESS_PAIRING_CONNECTION_ERROR_CODE, g_measurement.wireless_pairing_status.connection_error_code);
 	write_u32_to_regs(regs, REG_WIRELESS_PAIRING_RSSI_UPDATE_COUNTER, g_measurement.wireless_pairing_status.rssi_update_counter);
+
+	/* ==== AO 输出运行态，追加在 RSSI 运行态之后 ==== */
+	const AoOutputRuntime *ao_runtime = AoOutput_GetRuntime();
+	write_u32_to_regs(regs, REG_AO_OUTPUT_RUNTIME_TARGET_MA_X100, ao_runtime->target_mA_x100);
+	write_u32_to_regs(regs, REG_AO_OUTPUT_RUNTIME_LAST_SENT_MA_X100, ao_runtime->last_sent_mA_x100);
+	write_u32_to_regs(regs, REG_AO_OUTPUT_RUNTIME_SOURCE, ao_runtime->source);
+	write_u32_to_regs(regs, REG_AO_OUTPUT_RUNTIME_DRIVER_FAULT_FLAGS, ao_runtime->driver_fault_flags);
+	write_u32_to_regs(regs, REG_AO_OUTPUT_RUNTIME_DRIVER_FAULT_REGISTER, ao_runtime->driver_fault_register);
+	write_u32_to_regs(regs, REG_AO_OUTPUT_RUNTIME_LAST_ERROR_CODE, ao_runtime->last_error_code);
+	write_u32_to_regs(regs, REG_AO_OUTPUT_RUNTIME_UPDATE_COUNTER, ao_runtime->update_counter);
+	write_u32_to_regs(regs, REG_AO_OUTPUT_RUNTIME_LAST_UPDATE_TICK, ao_runtime->last_update_tick);
+	write_u32_to_regs(regs, REG_AO_OUTPUT_RUNTIME_LAST_SENT_TICK, ao_runtime->last_sent_tick);
 }

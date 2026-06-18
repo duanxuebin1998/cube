@@ -6,14 +6,19 @@
  * CPU3 本机时钟只用于外部协议展示和 profile 完成时间戳锁存。
  * 它不参与 CPU2 测量控制，也不作为测量状态机的调度依据，避免显示协议反向影响底层测量流程。
  */
-#define CPU3_CLOCK_BKP_MARKER        0x43505533UL
-#define CPU3_CLOCK_INIT_TIMEOUT_MS   100U
-#define CPU3_CLOCK_DEFAULT_YEAR      2026U
-#define CPU3_CLOCK_DEFAULT_MONTH     1U
-#define CPU3_CLOCK_DEFAULT_DAY       1U
+#define CPU3_CLOCK_BKP_MARKER_DEFAULT 0x43505533UL
+#define CPU3_CLOCK_BKP_MARKER_SET     0x43525443UL
+#define CPU3_CLOCK_INIT_TIMEOUT_MS    100U
+#define CPU3_CLOCK_LSE_TIMEOUT_MS     1000U
+#define CPU3_CLOCK_LSI_TIMEOUT_MS     100U
+#define CPU3_CLOCK_DEFAULT_YEAR       2026U
+#define CPU3_CLOCK_DEFAULT_MONTH      1U
+#define CPU3_CLOCK_DEFAULT_DAY        1U
 
 /* RTC 初始化成功后置位，读取接口用它区分“时间无效”和“时间为 0 点”。 */
 static uint8_t s_cpu3_clock_ready = 0U; /* 参数存储模块级变量，保存跨函数共享的业务状态。 */
+static Cpu3ClockSource s_cpu3_clock_source = CPU3_CLOCK_SOURCE_NONE;
+static Cpu3ClockState s_cpu3_clock_state = CPU3_CLOCK_STATE_ERROR;
 
 /*
  * 将 RTC 寄存器中的一个 BCD 字段转成普通二进制值。
@@ -168,16 +173,99 @@ static void cpu3_clock_write_datetime_registers(const Cpu3DateTime *dt)
 }
 
 /*
- * 配置并打开 RTC 时钟源。
- * 当前使用 LSI，满足协议时间展示和 profile 完成时间戳兜底需求。
+ * 从 RTC 原始寄存器读取普通二进制时间。
+ * 读取路径不依赖 s_cpu3_clock_ready，初始化阶段也可用于判断备份域时间是否合法。
  */
-static uint8_t cpu3_clock_configure_rtc_clock(void)
+static uint8_t cpu3_clock_read_datetime_registers(Cpu3DateTime *out)
+{
+    uint32_t tr;
+    uint32_t dr;
+
+    if (out == NULL) {
+        return 0U;
+    }
+
+    /* 先快照 TR/DR，再做字段解析，减少跨秒读取造成的字段不一致窗口。 */
+    tr = RTC->TR;
+    dr = RTC->DR;
+
+    out->second = cpu3_clock_bcd2bin(((tr >> 4U) & 0x07U) << 4U | (tr & 0x0FU));
+    out->minute = cpu3_clock_bcd2bin(((tr >> 12U) & 0x07U) << 4U | ((tr >> 8U) & 0x0FU));
+    out->hour = cpu3_clock_bcd2bin(((tr >> 20U) & 0x03U) << 4U | ((tr >> 16U) & 0x0FU));
+    out->day = cpu3_clock_bcd2bin(((dr >> 4U) & 0x03U) << 4U | (dr & 0x0FU));
+    out->month = cpu3_clock_bcd2bin(((dr >> 12U) & 0x01U) << 4U | ((dr >> 8U) & 0x0FU));
+    out->year = (uint16_t)(2000U + cpu3_clock_bcd2bin(((dr >> 20U) & 0x0FU) << 4U | ((dr >> 16U) & 0x0FU)));
+    out->valid = cpu3_clock_validate(out);
+
+    return out->valid;
+}
+
+static uint8_t cpu3_clock_backup_marker_is_set(void)
+{
+    return (RTC->BKP0R == CPU3_CLOCK_BKP_MARKER_SET) ? 1U : 0U;
+}
+
+static uint8_t cpu3_clock_backup_marker_is_known(void)
+{
+    return ((RTC->BKP0R == CPU3_CLOCK_BKP_MARKER_DEFAULT) || (RTC->BKP0R == CPU3_CLOCK_BKP_MARKER_SET)) ? 1U : 0U;
+}
+
+/*
+ * 根据备份标记和当前时钟源刷新对外状态。
+ * 是否已校时由 BKP0R 的 SET 标记决定，默认时间只算未校时。
+ */
+static void cpu3_clock_apply_state(uint8_t calibrated)
+{
+    if (calibrated == 0U) {
+        s_cpu3_clock_state = CPU3_CLOCK_STATE_UNSET;
+    } else if (s_cpu3_clock_source == CPU3_CLOCK_SOURCE_LSI) {
+        s_cpu3_clock_state = CPU3_CLOCK_STATE_LSI_FALLBACK;
+    } else if (s_cpu3_clock_source == CPU3_CLOCK_SOURCE_LSE) {
+        s_cpu3_clock_state = CPU3_CLOCK_STATE_LSE_VALID;
+    } else {
+        s_cpu3_clock_state = CPU3_CLOCK_STATE_ERROR;
+    }
+}
+
+/*
+ * 等待低速时钟 ready 标志，避免旧板缺 LSE 时卡住启动。
+ */
+static uint8_t cpu3_clock_wait_rcc_flag(uint32_t flag, uint32_t timeout_ms)
+{
+    uint32_t tick_start = HAL_GetTick();
+
+    while (__HAL_RCC_GET_FLAG(flag) == RESET) {
+        if ((HAL_GetTick() - tick_start) >= timeout_ms) {
+            return 0U;
+        }
+    }
+
+    return 1U;
+}
+
+static uint8_t cpu3_clock_enable_lse(void)
+{
+    __HAL_RCC_LSE_CONFIG(RCC_LSE_ON);
+    return cpu3_clock_wait_rcc_flag(RCC_FLAG_LSERDY, CPU3_CLOCK_LSE_TIMEOUT_MS);
+}
+
+static void cpu3_clock_disable_lse(void)
+{
+    __HAL_RCC_LSE_CONFIG(RCC_LSE_OFF);
+}
+
+static uint8_t cpu3_clock_enable_lsi(void)
+{
+    __HAL_RCC_LSI_ENABLE();
+    return cpu3_clock_wait_rcc_flag(RCC_FLAG_LSIRDY, CPU3_CLOCK_LSI_TIMEOUT_MS);
+}
+
+static uint8_t cpu3_clock_select_rtc_source(uint32_t clock_source)
 {
     RCC_PeriphCLKInitTypeDef periph_clk = {0};
 
     periph_clk.PeriphClockSelection = RCC_PERIPHCLK_RTC;
-    /* 使用内部 LSI，不要求外部晶振；精度足够满足协议时间显示和完成时间戳。 */
-    periph_clk.RTCClockSelection = RCC_RTCCLKSOURCE_LSI;
+    periph_clk.RTCClockSelection = clock_source;
 
     if (HAL_RCCEx_PeriphCLKConfig(&periph_clk) != HAL_OK) {
         return 0U;
@@ -185,6 +273,69 @@ static uint8_t cpu3_clock_configure_rtc_clock(void)
 
     __HAL_RCC_RTC_ENABLE();
     return 1U;
+}
+
+/*
+ * 已经使用 LSI 且存在用户校时标记时优先保留，避免切换到 LSE 时复位备份域丢时间。
+ */
+static uint8_t cpu3_clock_existing_lsi_should_be_preserved(void)
+{
+    Cpu3DateTime current_dt;
+
+    if (cpu3_clock_backup_marker_is_set() == 0U) {
+        return 0U;
+    }
+
+    if ((RTC->ISR & RTC_ISR_INITS) == 0U) {
+        return 0U;
+    }
+
+    return cpu3_clock_read_datetime_registers(&current_dt);
+}
+
+/*
+ * 配置并打开 RTC 时钟源。
+ * 新板优先使用 LSE；LSE 不存在或启动失败时自动回退到 LSI，保证旧板能启动。
+ */
+static uint8_t cpu3_clock_configure_rtc_clock(void)
+{
+    uint32_t current_source = __HAL_RCC_GET_RTC_SOURCE();
+
+    if (((RCC->BDCR & RCC_BDCR_RTCEN) != 0U) && (current_source == RCC_RTCCLKSOURCE_LSE)) {
+        if (cpu3_clock_enable_lse() != 0U) {
+            __HAL_RCC_RTC_ENABLE();
+            s_cpu3_clock_source = CPU3_CLOCK_SOURCE_LSE;
+            return 1U;
+        }
+    }
+
+    if (((RCC->BDCR & RCC_BDCR_RTCEN) != 0U) && (current_source == RCC_RTCCLKSOURCE_LSI)) {
+        if (cpu3_clock_enable_lsi() != 0U) {
+            __HAL_RCC_RTC_ENABLE();
+            if (cpu3_clock_existing_lsi_should_be_preserved() != 0U) {
+                s_cpu3_clock_source = CPU3_CLOCK_SOURCE_LSI;
+                return 1U;
+            }
+        }
+    }
+
+    if (cpu3_clock_enable_lse() != 0U) {
+        if (cpu3_clock_select_rtc_source(RCC_RTCCLKSOURCE_LSE) != 0U) {
+            s_cpu3_clock_source = CPU3_CLOCK_SOURCE_LSE;
+            return 1U;
+        }
+    }
+
+    if (cpu3_clock_enable_lsi() != 0U) {
+        cpu3_clock_disable_lse();
+        if (cpu3_clock_select_rtc_source(RCC_RTCCLKSOURCE_LSI) != 0U) {
+            s_cpu3_clock_source = CPU3_CLOCK_SOURCE_LSI;
+            return 1U;
+        }
+    }
+
+    s_cpu3_clock_source = CPU3_CLOCK_SOURCE_NONE;
+    return 0U;
 }
 
 /*
@@ -202,8 +353,14 @@ void Cpu3Clock_Init(void)
         .second = 0U,
         .valid = 1U,
     };
+    Cpu3DateTime current_dt;
+    uint8_t calibrated;
+    uint8_t need_default_time = 0U;
 
     s_cpu3_clock_ready = 0U;
+    s_cpu3_clock_source = CPU3_CLOCK_SOURCE_NONE;
+    s_cpu3_clock_state = CPU3_CLOCK_STATE_ERROR;
+
     __HAL_RCC_PWR_CLK_ENABLE();
     HAL_PWR_EnableBkUpAccess();
 
@@ -214,23 +371,37 @@ void Cpu3Clock_Init(void)
     cpu3_clock_disable_write_protection();
 
     /*
-     * BKP0R 标记用于区分“已由本程序配置过 RTC”和上电默认状态。
-     * 未配置时写入保守默认日期，保证 SI7000 时间寄存器不会输出非法 BCD。
+     * BKP0R 的 DEFAULT 标记表示程序写过保守默认值但用户未校时；
+     * SET 标记表示用户通过菜单校过时。只有标记无效、RTC 未初始化或时间非法时才改写默认时间。
      */
-    if ((RTC->BKP0R != CPU3_CLOCK_BKP_MARKER) || ((RTC->ISR & RTC_ISR_INITS) == 0U)) {
+    calibrated = cpu3_clock_backup_marker_is_set();
+    if (cpu3_clock_backup_marker_is_known() == 0U) {
+        need_default_time = 1U;
+    }
+
+    if ((RTC->ISR & RTC_ISR_INITS) == 0U) {
+        need_default_time = 1U;
+    } else if (cpu3_clock_read_datetime_registers(&current_dt) == 0U) {
+        need_default_time = 1U;
+    }
+
+    if (need_default_time != 0U) {
         if (cpu3_clock_enter_init_mode() == 0U) {
             cpu3_clock_enable_write_protection();
+            s_cpu3_clock_state = CPU3_CLOCK_STATE_ERROR;
             return;
         }
 
         RTC->CR &= ~RTC_CR_FMT;
         RTC->PRER = (127UL << RTC_PRER_PREDIV_A_Pos) | 255UL;
         cpu3_clock_write_datetime_registers(&default_dt);
-        RTC->BKP0R = CPU3_CLOCK_BKP_MARKER;
+        RTC->BKP0R = CPU3_CLOCK_BKP_MARKER_DEFAULT;
         cpu3_clock_exit_init_mode();
+        calibrated = 0U;
     }
 
     cpu3_clock_enable_write_protection();
+    cpu3_clock_apply_state(calibrated);
     s_cpu3_clock_ready = 1U;
 }
 
@@ -240,24 +411,58 @@ void Cpu3Clock_Init(void)
  */
 uint8_t Cpu3Clock_GetDateTime(Cpu3DateTime *out)
 {
-    uint32_t tr;
-    uint32_t dr;
-
     if ((out == NULL) || (s_cpu3_clock_ready == 0U)) {
         return 0U;
     }
 
-    /* 先快照 TR/DR，再做字段解析，减少跨秒读取造成的字段不一致窗口。 */
-    tr = RTC->TR;
-    dr = RTC->DR;
+    if (cpu3_clock_read_datetime_registers(out) == 0U) {
+        s_cpu3_clock_state = CPU3_CLOCK_STATE_ERROR;
+        return 0U;
+    }
 
-    out->second = cpu3_clock_bcd2bin(((tr >> 4U) & 0x07U) << 4U | (tr & 0x0FU));
-    out->minute = cpu3_clock_bcd2bin(((tr >> 12U) & 0x07U) << 4U | ((tr >> 8U) & 0x0FU));
-    out->hour = cpu3_clock_bcd2bin(((tr >> 20U) & 0x03U) << 4U | ((tr >> 16U) & 0x0FU));
-    out->day = cpu3_clock_bcd2bin(((dr >> 4U) & 0x03U) << 4U | (dr & 0x0FU));
-    out->month = cpu3_clock_bcd2bin(((dr >> 12U) & 0x01U) << 4U | ((dr >> 8U) & 0x0FU));
-    out->year = (uint16_t)(2000U + cpu3_clock_bcd2bin(((dr >> 20U) & 0x0FU) << 4U | ((dr >> 16U) & 0x0FU)));
-    out->valid = cpu3_clock_validate(out);
+    return 1U;
+}
 
-    return out->valid;
+/*
+ * 设置 CPU3 RTC 时间。
+ * 保存成功后写入 SET 备份标记，后续上电不会再覆盖 RTC。
+ */
+uint8_t Cpu3Clock_SetDateTime(const Cpu3DateTime *dt)
+{
+    if ((dt == NULL) || (s_cpu3_clock_ready == 0U)) {
+        return 0U;
+    }
+
+    if (cpu3_clock_validate(dt) == 0U) {
+        return 0U;
+    }
+
+    cpu3_clock_disable_write_protection();
+
+    if (cpu3_clock_enter_init_mode() == 0U) {
+        cpu3_clock_enable_write_protection();
+        s_cpu3_clock_state = CPU3_CLOCK_STATE_ERROR;
+        return 0U;
+    }
+
+    RTC->CR &= ~RTC_CR_FMT;
+    RTC->PRER = (127UL << RTC_PRER_PREDIV_A_Pos) | 255UL;
+    cpu3_clock_write_datetime_registers(dt);
+    RTC->BKP0R = CPU3_CLOCK_BKP_MARKER_SET;
+    cpu3_clock_exit_init_mode();
+
+    cpu3_clock_enable_write_protection();
+    cpu3_clock_apply_state(1U);
+
+    return 1U;
+}
+
+Cpu3ClockState Cpu3Clock_GetState(void)
+{
+    return s_cpu3_clock_state;
+}
+
+Cpu3ClockSource Cpu3Clock_GetSource(void)
+{
+    return s_cpu3_clock_source;
 }

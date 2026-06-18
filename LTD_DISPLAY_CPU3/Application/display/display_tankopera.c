@@ -19,6 +19,7 @@
 #include <stdio.h>
 #include "system_parameter.h"
 #include "cpu3_comm_display_params.h"
+#include "cpu3_clock.h"
 #include "app_version.h"
 #include "system_parameter.h"
 #include <string.h>    /* for memset, memcpy, strcmp, strlen... */
@@ -52,6 +53,8 @@ static bool motor_run_monitor_stop_confirm_requested = false; /* 停止确认页
 static int debug_weight_wait_opera = COM_NUM_NOOPERA; /* 称重等待页对应的指令 */
 static bool debug_weight_wait_started = false; /* 称重等待页是否已进入本次等待周期 */
 static bool debug_weight_wait_ignore_initial_done = false; /* 称重等待页是否忽略进入前残留完成态 */
+static Cpu3DateTime rtc_menu_dt = {0};
+static uint8_t rtc_menu_field = 0U;
 
 /* ==============================
  * 枚举/隐藏含义文字表
@@ -77,6 +80,12 @@ static uint8_t *arr_IF[][2] = {
 
 static uint8_t *arr_position_source_auto_switch[][2] = {
 	{ (uint8_t*)"禁用", (uint8_t*)"Disabled" },
+	{ (uint8_t*)"启用", (uint8_t*)"Enabled" },
+	{ (uint8_t*)"非法配置", (uint8_t*)"Illegal CFG" },
+};
+
+static uint8_t *arr_ao_output_enable[][2] = {
+	{ (uint8_t*)"关闭", (uint8_t*)"Disabled" },
 	{ (uint8_t*)"启用", (uint8_t*)"Enabled" },
 	{ (uint8_t*)"非法配置", (uint8_t*)"Illegal CFG" },
 };
@@ -322,6 +331,7 @@ static void menu_display_data_water(void);
 static void menu_display_data_density(void);
 static void menu_display_data_temp(void);
 static void menu_maint_config(void);
+static void menu_rtc_datetime(void);
 static void menu_cpu3_base(void)   ;
 static void menu_cpu3_source(void);
 static void menu_cpu3_input(void)  ;
@@ -710,6 +720,10 @@ struct KeyMenu keymenu[KEYNUM_END] = {
     [KEYNUM_MENU_MAINT_CONFIG] =
         { menu_maint_config, menu_maint_config, menu_maint_config, menu_maint_config,
           USE_KEY_BACK | USE_KEY_UP | USE_KEY_DOWN | USE_KEY_SURE, menu_maint_config },
+
+    [KEYNUM_MENU_RTC_DATETIME] =
+        { menu_rtc_datetime, menu_rtc_datetime, menu_rtc_datetime, menu_rtc_datetime,
+          USE_KEY_BACK | USE_KEY_UP | USE_KEY_DOWN | USE_KEY_SURE, menu_rtc_datetime },
 
     /* ===== CPU3（拆分页面） ===== */
 
@@ -1617,6 +1631,7 @@ static uint8_t *dtm_operaname_short(int num, uint8_t *fallback)
 		{ COM_NUM_DEVICEPARAM_AO_LOW_CURRENT_mA, (uint8_t*)"低位电流", (uint8_t*)"LowCurrent" },
 		{ COM_NUM_DEVICEPARAM_FAULT_CURRENT_mA, (uint8_t*)"故障电流", (uint8_t*)"FaultCurrent" },
 		{ COM_NUM_DEVICEPARAM_DEBUG_CURRENT_mA, (uint8_t*)"调试电流", (uint8_t*)"DebugCurrent" },
+		{ COM_NUM_DEVICEPARAM_AO_OUTPUT_ENABLE, (uint8_t*)"AO使能", (uint8_t*)"AOEnable" },
 		{ COM_NUM_DEVICEPARAM_OILLEVEL_HYSTERESIS_THRESHOLD, (uint8_t*)"滞后阈值", (uint8_t*)"HysTh" },
 		{ COM_NUM_DEVICEPARAM_SP_MEAS_POSITION, (uint8_t*)"测量位置", (uint8_t*)"SP_MeasPos" },
 		{ COM_NUM_DEVICEPARAM_SP_MONITOR_POSITION, (uint8_t*)"监测位置", (uint8_t*)"SP_MonPos" },
@@ -1979,7 +1994,7 @@ static void display_param_detail_range(const struct ParameterMetadata *meta, uin
 
 	if (meta->flag_checkvalue) {
 		line = OledValueDisplay(meta->valuemin, line, row, 0, meta->point, NULL);
-		line = OledDisplayLineWords((uint8_t*)"~", line, row, 0);
+		line = OledDisplayOneNmb(11, row, line, 0);
 		OledValueDisplay(meta->valuemax, line, row, 0, meta->point, param_display_unit(meta->operanum, meta));
 	} else {
 		DisplayLangaugeLineWords((uint8_t*)"--", line, row, 0, (uint8_t*)"--");
@@ -2125,9 +2140,15 @@ static bool inputvalue(uint8_t deci, uint8_t row, uint8_t line, uint8_t points, 
 	/* 显示 */
 	switch (deci) {
 	case 7: {
+		if (points == 6) {
+			line = OledDisplayOneNmb(10, row, line, 0) - 2;
+		}
 		line = OledDisplayOneNmb(bit_6, row, line, (nowbit & 1) == 0 && (nowbit | 1) == 7);
 	}
 	case 6: {
+		if (points == 5) {
+			line = OledDisplayOneNmb(10, row, line, 0) - 2;
+		}
 		line = OledDisplayOneNmb(bit_5, row, line, (nowbit & 2) == 0 && (nowbit | 2) == 7);
 	}
 	case 5: {
@@ -3625,6 +3646,12 @@ uint8_t *(*dtm_disarr(int *pindex, int *plen))[2]
 		p = arr_position_source_auto_switch;
 		break;
 	}
+	case COM_NUM_DEVICEPARAM_AO_OUTPUT_ENABLE: {
+		index = param_meta[index].val;
+		len = (int)(sizeof(arr_ao_output_enable) / sizeof(arr_ao_output_enable[0]));
+		p = arr_ao_output_enable;
+		break;
+	}
 	case COM_NUM_DEVICEPARAM_POSITION_COUNT_MODE: {
 		index = param_meta[index].val;
 		len = (int)(sizeof(arr_position_count_mode) / sizeof(arr_position_count_mode[0]));
@@ -4539,6 +4566,7 @@ static MenuGroup ParamGroupOf(int operaNum)
     case COM_NUM_DEVICEPARAM_AO_LOW_CURRENT_mA:
     case COM_NUM_DEVICEPARAM_FAULT_CURRENT_mA:
     case COM_NUM_DEVICEPARAM_DEBUG_CURRENT_mA:
+    case COM_NUM_DEVICEPARAM_AO_OUTPUT_ENABLE:
         return MENU_GRP_AO;
 
     /* 标定/单点/位置 */
@@ -4957,12 +4985,210 @@ static void menu_maint_config(void)
     static struct MenuData menu[] = {
         {(uint8_t*)"设备信息", 0, menu_dev_info,     COMMANE_NORW, (uint8_t*)"Info"},
         {(uint8_t*)"参数校验", 0, menu_param_check,  COMMANE_NORW, (uint8_t*)"Check"},
+        {(uint8_t*)"RTC设置",  0, menu_rtc_datetime, COMMANE_NORW, (uint8_t*)"RTC Set"},
         {(uint8_t*)"返回",     0, menu_paracfg_main, COMMANE_NORW, (uint8_t*)"Back"},
     };
 
     oled_clear();
     func_index = KEYNUM_MENU_MAINT_CONFIG;
     menuselect(menu, (int)(sizeof(menu) / sizeof(menu[0])));
+}
+
+static uint8_t rtc_menu_days_in_month(uint16_t year, uint8_t month)
+{
+    static const uint8_t days[] = {
+        31U, 28U, 31U, 30U, 31U, 30U, 31U, 31U, 30U, 31U, 30U, 31U
+    };
+
+    if ((month < 1U) || (month > 12U)) {
+        return 31U;
+    }
+
+    if ((month == 2U) &&
+        (((year % 4U) == 0U) && (((year % 100U) != 0U) || ((year % 400U) == 0U)))) {
+        return 29U;
+    }
+
+    return days[month - 1U];
+}
+
+static void rtc_menu_normalize_day(void)
+{
+    uint8_t max_day = rtc_menu_days_in_month(rtc_menu_dt.year, rtc_menu_dt.month);
+
+    if (rtc_menu_dt.day > max_day) {
+        rtc_menu_dt.day = max_day;
+    }
+}
+
+static void rtc_menu_load_current_time(void)
+{
+    if (Cpu3Clock_GetDateTime(&rtc_menu_dt) == 0U) {
+        rtc_menu_dt.year = 2026U;
+        rtc_menu_dt.month = 1U;
+        rtc_menu_dt.day = 1U;
+        rtc_menu_dt.hour = 0U;
+        rtc_menu_dt.minute = 0U;
+        rtc_menu_dt.second = 0U;
+        rtc_menu_dt.valid = 1U;
+    }
+
+    rtc_menu_normalize_day();
+}
+
+static void rtc_menu_change_field(int delta)
+{
+    uint8_t max_day;
+
+    switch (rtc_menu_field) {
+    case 0U:
+        if ((delta > 0) && (rtc_menu_dt.year < 2099U)) {
+            rtc_menu_dt.year++;
+        } else if ((delta < 0) && (rtc_menu_dt.year > 2000U)) {
+            rtc_menu_dt.year--;
+        }
+        rtc_menu_normalize_day();
+        break;
+    case 1U:
+        if (delta > 0) {
+            rtc_menu_dt.month = (rtc_menu_dt.month >= 12U) ? 1U : (uint8_t)(rtc_menu_dt.month + 1U);
+        } else {
+            rtc_menu_dt.month = (rtc_menu_dt.month <= 1U) ? 12U : (uint8_t)(rtc_menu_dt.month - 1U);
+        }
+        rtc_menu_normalize_day();
+        break;
+    case 2U:
+        max_day = rtc_menu_days_in_month(rtc_menu_dt.year, rtc_menu_dt.month);
+        if (delta > 0) {
+            rtc_menu_dt.day = (rtc_menu_dt.day >= max_day) ? 1U : (uint8_t)(rtc_menu_dt.day + 1U);
+        } else {
+            rtc_menu_dt.day = (rtc_menu_dt.day <= 1U) ? max_day : (uint8_t)(rtc_menu_dt.day - 1U);
+        }
+        break;
+    case 3U:
+        if (delta > 0) {
+            rtc_menu_dt.hour = (uint8_t)((rtc_menu_dt.hour + 1U) % 24U);
+        } else {
+            rtc_menu_dt.hour = (rtc_menu_dt.hour == 0U) ? 23U : (uint8_t)(rtc_menu_dt.hour - 1U);
+        }
+        break;
+    case 4U:
+        if (delta > 0) {
+            rtc_menu_dt.minute = (uint8_t)((rtc_menu_dt.minute + 1U) % 60U);
+        } else {
+            rtc_menu_dt.minute = (rtc_menu_dt.minute == 0U) ? 59U : (uint8_t)(rtc_menu_dt.minute - 1U);
+        }
+        break;
+    default:
+        if (delta > 0) {
+            rtc_menu_dt.second = (uint8_t)((rtc_menu_dt.second + 1U) % 60U);
+        } else {
+            rtc_menu_dt.second = (rtc_menu_dt.second == 0U) ? 59U : (uint8_t)(rtc_menu_dt.second - 1U);
+        }
+        break;
+    }
+}
+
+static uint8_t *rtc_menu_status_text(void)
+{
+    static uint8_t text[16];
+    Cpu3ClockState state = Cpu3Clock_GetState();
+    Cpu3ClockSource source = Cpu3Clock_GetSource();
+
+    if (state == CPU3_CLOCK_STATE_ERROR) {
+        snprintf((char *)text, sizeof(text), "RTC ERR");
+    } else if (source == CPU3_CLOCK_SOURCE_LSI) {
+        snprintf((char *)text, sizeof(text), "RTC LSI");
+    } else if (source == CPU3_CLOCK_SOURCE_LSE) {
+        snprintf((char *)text, sizeof(text), "RTC LSE");
+    } else {
+        snprintf((char *)text, sizeof(text), "RTC NONE");
+    }
+
+    if (state == CPU3_CLOCK_STATE_UNSET) {
+        snprintf((char *)text, sizeof(text), "RTC UNSET");
+    }
+
+    return text;
+}
+
+static void rtc_menu_draw(void)
+{
+    static const uint8_t *field_name[] = {
+        (uint8_t *)"Y", (uint8_t *)"M", (uint8_t *)"D", (uint8_t *)"h", (uint8_t *)"m", (uint8_t *)"s"
+    };
+    char line[24];
+    uint8_t status_line;
+
+    oled_clear();
+    status_line = OledDisplayLineWords(rtc_menu_status_text(), OLED_LINE8_1, OLED_ROW4_1, 0);
+    OledDisplayLineWords((uint8_t *)field_name[rtc_menu_field], status_line, OLED_ROW4_1, 1);
+
+    snprintf(line,
+             sizeof(line),
+             "%04u-%02u-%02u",
+             (unsigned int)rtc_menu_dt.year,
+             (unsigned int)rtc_menu_dt.month,
+             (unsigned int)rtc_menu_dt.day);
+    OledDisplayLineWords((uint8_t *)line, OLED_LINE8_1, OLED_ROW4_2, (rtc_menu_field <= 2U) ? 1U : 0U);
+
+    snprintf(line,
+             sizeof(line),
+             "%02u:%02u:%02u",
+             (unsigned int)rtc_menu_dt.hour,
+             (unsigned int)rtc_menu_dt.minute,
+             (unsigned int)rtc_menu_dt.second);
+    OledDisplayLineWords((uint8_t *)line, OLED_LINE8_1, OLED_ROW4_3, (rtc_menu_field >= 3U) ? 1U : 0U);
+
+    DisplayLangaugeLineWords((uint8_t *)"返回", OLED_LINE8_1, OLED_ROW4_4, 0, (uint8_t *)"Back");
+    if (rtc_menu_field >= 5U) {
+        DisplayLangaugeLineWords((uint8_t *)"确认保存", OLED_LINE8_6, OLED_ROW4_4, 1, (uint8_t *)"Save");
+    } else {
+        DisplayLangaugeLineWords((uint8_t *)"确认", OLED_LINE8_8, OLED_ROW4_4, 0, (uint8_t *)"Ok");
+    }
+}
+
+static void menu_rtc_datetime(void)
+{
+    uint8_t save_ok;
+
+    if (func_index != KEYNUM_MENU_RTC_DATETIME) {
+        func_index = KEYNUM_MENU_RTC_DATETIME;
+        rtc_menu_field = 0U;
+        rtc_menu_load_current_time();
+        rtc_menu_draw();
+        return;
+    }
+
+    if (NowKeyPress == USE_KEY_UP) {
+        rtc_menu_change_field(1);
+    } else if (NowKeyPress == USE_KEY_DOWN) {
+        rtc_menu_change_field(-1);
+    } else if (NowKeyPress == USE_KEY_SURE) {
+        if (rtc_menu_field >= 5U) {
+            save_ok = Cpu3Clock_SetDateTime(&rtc_menu_dt);
+            oled_clear();
+            if (save_ok != 0U) {
+                DisplayLangaugeLineWords((uint8_t *)"已保存", OLED_LINE8_2, OLED_ROW3_2, 0, (uint8_t *)"Saved");
+            } else {
+                DisplayLangaugeLineWords((uint8_t *)"保存失败", OLED_LINE8_2, OLED_ROW3_2, 0, (uint8_t *)"Save Failed");
+            }
+            HAL_Delay(600);
+            NowKeyPress = 0;
+            menu_maint_config();
+            return;
+        }
+        rtc_menu_field++;
+    } else if (NowKeyPress == USE_KEY_BACK) {
+        if (rtc_menu_field == 0U) {
+            NowKeyPress = 0;
+            menu_maint_config();
+            return;
+        }
+        rtc_menu_field--;
+    }
+
+    rtc_menu_draw();
 }
 
 /* CPU2：分组页 = 参数列表页（取消 DEBUG 容器页） */

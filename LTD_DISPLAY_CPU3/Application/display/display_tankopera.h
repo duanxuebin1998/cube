@@ -108,6 +108,7 @@ typedef enum {
     KEYNUM_MENU_DISPLAY_DATA_DENSITY,    /* 密度数据源与手输值 */
     KEYNUM_MENU_DISPLAY_DATA_TEMP,       /* 温度数据源与手输值 */
     KEYNUM_MENU_MAINT_CONFIG,            /* 维护设置主菜单 */
+    KEYNUM_MENU_RTC_DATETIME,            /* RTC 日期时间设置 */
 
     /* ===== CPU3（拆分页面） ===== */
     KEYNUM_MENU_CPU3_BASE,               /* CPU3 - 基本参数 */
@@ -375,7 +376,8 @@ typedef enum
     COM_NUM_DEVICEPARAM_FAULT_CURRENT_mA,               /* 故障电流 */
     COM_NUM_DEVICEPARAM_DEBUG_CURRENT_mA,               /* 调试电流 */
 
-    COM_NUM_DEVICEPARAM_RESERVED26,                     /* 保留 26 */
+    COM_NUM_DEVICEPARAM_AO_OUTPUT_ENABLE,               /* AO 输出使能 */
+    COM_NUM_DEVICEPARAM_RESERVED26 = COM_NUM_DEVICEPARAM_AO_OUTPUT_ENABLE, /* 兼容旧保留 26 */
     COM_NUM_DEVICEPARAM_RESERVED27,                     /* 保留 27 */
 
     /* ---------------- 指令参数（用于带参命令） ---------------- */

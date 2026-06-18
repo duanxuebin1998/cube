@@ -10,6 +10,8 @@ History: 2022-03-16(初版)
 #include <string.h>
 #include "hart.h"
 #include "ad5421.h"
+#include "AoOutput/ao_output.h"
+#include "system_parameter.h"
 /* #include "timer5.h" */
 #include "usart.h"
 
@@ -25,7 +27,10 @@ static int ResponseCommand0(RCV_TYPE *revframe,SND_TYPE *sendframe);							/* 响
 static int ResponseCommand1(RCV_TYPE *revframe,SND_TYPE *sendframe);							/* 响应指令1：读主变量 */
 static int ResponseCommand2(RCV_TYPE *revframe,SND_TYPE *sendframe);							/* 响应指令2：读环路电流和量程百分比 */
 static int ResponseCommand3(RCV_TYPE *revframe,SND_TYPE *sendframe);							/* 响应指令3：读动态变量和环路电流 */
-static int ResponseCommand6(RCV_TYPE *revframe,SND_TYPE *sendframe);							/* 响应指令6：设置轮询地址 */
+static int ResponseCommand6(RCV_TYPE *revframe,SND_TYPE *sendframe);
+static float Hart_GetPrimaryVariable(void);
+static float Hart_GetSecondaryVariable(void);
+static float Hart_GetTertiaryVariable(void);
 static u8 ConvertToShortAddressResponsePacket(SND_TYPE *sendframe,u8 datalen,u8 HartCommand);	/* 把长地址响应包转换成短地址响应包 */
 static u8 AddPreamble(SND_TYPE *sendframe,u8 datalen,u8 NumberOfPreambles);						/* 在发送包数据前添加先导符0XFF */
 
@@ -51,7 +56,6 @@ Return: 无
 *************************************************/
 void HartInit(void)
 {
-	Ad5421Init(); /* 初始化AD5421 */
 	HAL_GPIO_WritePin(HART_RTS_GPIO_Port, HART_RTS_Pin, GPIO_PIN_SET);
 /* Timer5Init(); / *Timer5初始化* / */
 	HartParameterInit();				/* Hart参数初始化 */ /* TEXT */
@@ -65,12 +69,40 @@ Return: 无
 *************************************************/
 void HartParameterInit(void) /* TEXT */
 {
-	HartParameters.Current = SetGlobalVariables;
+	HartParameters.Current = AoOutput_GetCurrent_mA();
 	HartParameters.MaxPrimaryVariable =  SetGlobalVariables;
 	HartParameters.MinPrimaryVariable = SetGlobalVariables;
 	HartParameters.PrimaryVariable =  SetGlobalVariables;
 	HartParameters.SecondaryVariable =  SetGlobalVariables;
 	HartParameters.TertiaryVariable =  SetGlobalVariables;
+}
+
+static float Hart_GetPrimaryVariable(void)
+{
+    if (g_measurement.oil_measurement.oil_level == UNVALID_LEVEL) {
+        return 0.0f;
+    }
+
+    return ((float)g_measurement.oil_measurement.oil_level) / 10.0f;
+}
+
+static float Hart_GetSecondaryVariable(void)
+{
+    if ((g_measurement.debug_data.temperature == UNVALID_TEMPERATURE_REALTIME) ||
+        (g_measurement.debug_data.temperature == UNVALID_TEMPERATURE_WIRELESS)) {
+        return 0.0f;
+    }
+
+    return ((float)g_measurement.debug_data.temperature) / 100.0f;
+}
+
+static float Hart_GetTertiaryVariable(void)
+{
+    if (g_measurement.density_distribution.average_density == UNVALID_DENSITY) {
+        return 0.0f;
+    }
+
+    return RAW_TO_DENSITY(g_measurement.density_distribution.average_density);
 }
 /*************************************************
 Function: HartCommunicationProcess
@@ -310,7 +342,7 @@ Return: datalen - 发送包的长度
 static int ResponseCommand1(RCV_TYPE *revframe,SND_TYPE *sendframe)
 {
 	int datalen;
-	HartParameters.PrimaryVariable = 1.5; /* 配置参数 */
+	HartParameters.PrimaryVariable = Hart_GetPrimaryVariable();
 	
 	InitializeSndPackage(sendframe,1);													/* 初始化定界符，地址，命令，通信状态，设备状态 */
 	sendframe->Command1.BytesCount = 7;													/* 数据字节数 */
@@ -329,12 +361,12 @@ Return: datalen - 发送包的长度
 static int ResponseCommand2(RCV_TYPE *revframe,SND_TYPE *sendframe)
 {
 	int datalen;
-	HartParameters.Current = 4.0; /* 配置参数 */
+	HartParameters.Current = AoOutput_GetCurrent_mA();
 	
 	InitializeSndPackage(sendframe,2);									/* 初始化定界符，地址，命令，通信状态，设备状态 */
 	sendframe->Command2.BytesCount = 10;								/* 数据字节数 */
 	sendframe->Command2.Current = SetFloatData(HartParameters.Current);
-	sendframe->Command2.PrimaryVariablePercentofRange = SetFloatData((HartParameters.Current-4.0)/16.0);
+	sendframe->Command2.PrimaryVariablePercentofRange = SetFloatData(AoOutput_GetPercentOfRange());
 	datalen = sendframe->Command2.BytesCount+8;	
 	return datalen;
 }
@@ -348,11 +380,11 @@ Return: datalen - 发送包的长度
 static int ResponseCommand3(RCV_TYPE *revframe,SND_TYPE *sendframe)
 {
 	int datalen;
-	HartParameters.Current = 4.0; /* 配置参数 */
-	HartParameters.PrimaryVariable = 1.1;
-	HartParameters.SecondaryVariable = 2.2;
-	HartParameters.TertiaryVariable = 3.3;
-	HartParameters.FourthVariable = 1.0;
+	HartParameters.Current = AoOutput_GetCurrent_mA();
+	HartParameters.PrimaryVariable = Hart_GetPrimaryVariable();
+    HartParameters.SecondaryVariable = Hart_GetSecondaryVariable();
+    HartParameters.TertiaryVariable = Hart_GetTertiaryVariable();
+    HartParameters.FourthVariable = 0.0f;
 	
 	InitializeSndPackage(sendframe,3);														/* 初始化定界符，地址，命令，通信状态，设备状态 */
 	sendframe->Command3.BytesCount = 26;													/* 数据字节数 */

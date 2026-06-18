@@ -13,6 +13,7 @@
 #define DISPLAY_RECOVER_INTERVAL_MS 60000U
 #define DISPLAY_REFRESH_TIMEOUT_MS 500U
 #define DISPLAY_VALUE_HIGHLIGHT_MS 500U
+#define DISPLAY_STATUS_DATA_REFRESH_MS 2000U
 #define DISPLAY_STATUS_MAX_SLOTS 6U
 #define DISPLAY_VALUE_AREA_HEIGHT 16U
 #define DISPLAY_SCREEN_OFF_IDLE_MS 30000U
@@ -141,6 +142,7 @@ static DisplayStatusSnapshot display_status_active_snapshot = {0};
 static int display_status_page_index = 0; /* 屏幕显示运行状态缓存，供状态机或协议上报使用。 */
 static uint8_t display_status_page_hold_count = 0U; /* 屏幕显示计数值，用于节拍、统计或协议数量控制。 */
 static bool display_status_full_redraw_required = true; /* 屏幕显示运行状态缓存，供状态机或协议上报使用。 */
+static uint32_t display_status_last_data_refresh_tick = 0U; /* 状态页显示值最近一次采样时间。 */
 
 /**
  * @brief 检查屏幕显示中的 IsBottomAngleDisplayEnabled 逻辑。
@@ -791,6 +793,16 @@ static const char *Display_GetErrorReasonByCode(uint32_t code)
         return "电源波动异常";
     case OTHER_PERIPHERAL_CONFIG_ERROR:
         return "外设配置错误";
+    case AD5421_INIT_ERROR:
+        return "AD5421初始化失败";
+    case AD5421_WRITE_CURRENT_ERROR:
+        return "AD5421写电流失败";
+    case AD5421_FAULT_PIN_ERROR:
+        return "AD5421故障报警";
+    case AD5421_READFAULT_ERROR:
+        return "AD5421故障寄存器异常";
+    case AD5421_READBACK_ERROR:
+        return "AD5421控制回读失败";
     default:
         break;
     }
@@ -1628,6 +1640,10 @@ static void SetScreenOffState( void );
 static void Display_BuildStatusSnapshot(DisplayStatusSnapshot *snapshot);
 static bool Display_StatusLayoutChanged(const DisplayStatusSnapshot *current,
                                         const DisplayStatusSnapshot *last);
+static bool Display_ShouldSampleStatusData(uint32_t now);
+static void Display_ResetStatusDataRefreshTick(uint32_t now);
+static void Display_DrawStatusSlotValue(const DisplayStatusSlot *slot, uint8_t shift);
+static void Display_DrawStatusHighlightRestore(void);
 static void Display_DrawStatusFull(DisplayStatusSnapshot *snapshot);
 static void Display_DrawStatusDelta(DisplayStatusSnapshot *current,
                                     const DisplayStatusSnapshot *last);
@@ -1744,6 +1760,15 @@ void DisplayAubonLogo(void)
 static void oled_workingdata(void)
 {
     DisplayStatusSnapshot current_snapshot;
+    uint32_t now = HAL_GetTick();
+
+    if (!display_status_full_redraw_required &&
+        !display_recover_before_draw &&
+        display_status_active_snapshot.valid &&
+        !Display_ShouldSampleStatusData(now)) {
+        Display_DrawStatusHighlightRestore();
+        return;
+    }
 
     Display_BuildStatusSnapshot(&current_snapshot);
     if (display_status_full_redraw_required ||
@@ -1754,6 +1779,7 @@ static void oled_workingdata(void)
         Display_DrawStatusDelta(&current_snapshot, &display_status_last_snapshot);
     }
     display_status_last_snapshot = current_snapshot;
+    Display_ResetStatusDataRefreshTick(now);
 }
 /* 显示一个数字 */
 uint8_t OledDisplayOneNmb(int c,uint8_t row,uint8_t line,uint8_t shift)
@@ -2599,6 +2625,68 @@ static bool Display_StatusLayoutChanged(const DisplayStatusSnapshot *current,
 }
 
 /**
+ * @brief 判断状态页是否需要重新采样运行数据。
+ *
+ * @param now 当前系统节拍。
+ * @return true 表示需要按当前 g_measurement 生成新快照，false 表示仅允许恢复反白显示。
+ */
+static bool Display_ShouldSampleStatusData(uint32_t now)
+{
+    uint8_t lang = (uint8_t)screen_parameter.language;
+
+    if (!display_status_active_snapshot.valid) {
+        return true;
+    }
+
+    if (lang > LANGUAGE_ENGLISH) {
+        lang = LANGUAGE_ENGLISH;
+    }
+
+    if ((display_status_active_snapshot.state != g_measurement.device_status.device_state) ||
+        (display_status_active_snapshot.error_code != g_measurement.device_status.error_code) ||
+        (display_status_active_snapshot.language != lang) ||
+        (display_status_active_snapshot.protocol_compatible != IsCpu2ProtocolCompatible())) {
+        return true;
+    }
+
+    return ((now - display_status_last_data_refresh_tick) >= DISPLAY_STATUS_DATA_REFRESH_MS);
+}
+
+/**
+ * @brief 记录状态页最近一次按运行数据采样的节拍。
+ *
+ * @param now 当前系统节拍。
+ */
+static void Display_ResetStatusDataRefreshTick(uint32_t now)
+{
+    display_status_last_data_refresh_tick = now;
+}
+
+/**
+ * @brief 按状态页快照重画单个数值或文本区域。
+ *
+ * @param slot 状态页显示项快照。
+ * @param shift 非 0 时按反显方式绘制。
+ */
+static void Display_DrawStatusSlotValue(const DisplayStatusSlot *slot, uint8_t shift)
+{
+    if (slot == NULL) {
+        return;
+    }
+
+    if (slot->is_text) {
+        OledDisplayLineWords((uint8_t *)slot->text, slot->value_line, slot->row, shift);
+    } else {
+        OledValueDisplay((int)slot->value,
+                         slot->value_line,
+                         slot->row,
+                         shift,
+                         slot->points,
+                         (uint8_t *)slot->unit);
+    }
+}
+
+/**
  * @brief 显示或打印屏幕显示中的 Display_StatusSlotValueChanged 逻辑。
  *
  * @param current 业务参数。
@@ -2739,13 +2827,56 @@ static void Display_DrawStatusFull(DisplayStatusSnapshot *snapshot)
 static void Display_DrawStatusDelta(DisplayStatusSnapshot *current,
                                     const DisplayStatusSnapshot *last)
 {
+    uint8_t i;
+
     if (current == NULL) {
         return;
     }
 
     Display_UpdateStatusHighlights(current, last);
     display_status_active_snapshot = *current;
-    oled_equipment();
+    DIS_Equipment();
+    for (i = 0U; i < current->slot_count; i++) {
+        DisplayStatusSlot *slot = &current->slots[i];
+        const DisplayStatusSlot *last_slot = &last->slots[i];
+        bool redraw_slot = Display_StatusSlotValueChanged(slot, last_slot) ||
+                           slot->highlight_visible ||
+                           last_slot->highlight_visible;
+
+        if (redraw_slot) {
+            uint8_t shift = Display_IsStatusHighlightActive(slot, HAL_GetTick()) ? 1U : 0U;
+            Display_DrawStatusSlotValue(slot, shift);
+        }
+    }
+}
+
+/**
+ * @brief 非采样刷新时重画状态行并恢复反白区域，不重新采样状态页数值。
+ */
+static void Display_DrawStatusHighlightRestore(void)
+{
+    uint8_t i;
+    uint32_t now = HAL_GetTick();
+    bool any_restored = false;
+
+    DIS_Equipment();
+
+    for (i = 0U; i < display_status_active_snapshot.slot_count; i++) {
+        DisplayStatusSlot *slot = &display_status_active_snapshot.slots[i];
+
+        if (slot->highlight_visible &&
+            !Display_StatusTickBefore(now, slot->highlight_until_tick)) {
+            Display_ClearStatusSlotValueArea(slot);
+            slot->highlight_visible = false;
+            slot->highlight_until_tick = 0U;
+            Display_DrawStatusSlotValue(slot, 0U);
+            any_restored = true;
+        }
+    }
+
+    if (any_restored) {
+        display_status_last_snapshot = display_status_active_snapshot;
+    }
 }
 
 /**
