@@ -25,6 +25,8 @@ CPU3_DIR = ROOT / "LTD_DISPLAY_CPU3" / "docs" / "00_程序流程"
 STYLE_MARK = '<style id="cross-flow-nav-style">'
 NAV_START = "<!-- CROSS-FLOW-NAV-START -->"
 NAV_END = "<!-- CROSS-FLOW-NAV-END -->"
+LEGACY_START = "<!-- FLOW-LEGACY-NOTICE-START -->"
+LEGACY_END = "<!-- FLOW-LEGACY-NOTICE-END -->"
 
 
 PAGE_DEFS: Dict[str, Dict[str, str]] = {
@@ -196,6 +198,122 @@ CPU3_ORDER = [
     "cpu3_06",
     "cpu3_07",
     "cpu3_08",
+]
+
+LINEAR_ORDERS = {
+    "CPU2": ["cpu2_total", *CPU2_ORDER, "cpu2_issue"],
+    "CPU3": ["cpu3_total", *CPU3_ORDER],
+}
+
+LEGACY_DOCS: Sequence[Dict[str, str]] = [
+    {
+        "title": "串口 B 指令程序流程梳理",
+        "path": str(ROOT / "LTD_MAIN_CPU2" / "docs" / "01_电机与编码器" / "串口B指令详细执行过程.html"),
+        "status": "专题历史页",
+        "current": "cpu2_08",
+        "note": "串口 B 入口和运动执行细节的旧专题梳理；当前权威流程以 CPU2 电机与位置模型页为准。",
+    },
+    {
+        "title": "CPU2 电机程序、函数与运动流程综合梳理",
+        "path": str(ROOT / "LTD_MAIN_CPU2" / "docs" / "01_电机与编码器" / "电机程序与函数梳理.html"),
+        "status": "专题历史页",
+        "current": "cpu2_08",
+        "note": "电机函数层次、运动入口和保护逻辑的历史综合页；当前权威流程以 CPU2 电机与位置模型页为准。",
+    },
+    {
+        "title": "电机运动函数层次梳理已合并",
+        "path": str(ROOT / "LTD_MAIN_CPU2" / "docs" / "01_电机与编码器" / "电机运动函数层次梳理.html"),
+        "status": "已合并跳转页",
+        "current": "cpu2_08",
+        "note": "该页已指向电机综合梳理，当前流程体系统一指向 CPU2 电机与位置模型。",
+    },
+    {
+        "title": "电机运动函数第一轮改动点梳理",
+        "path": str(ROOT / "LTD_MAIN_CPU2" / "docs" / "01_电机与编码器" / "电机运动函数本次改动点梳理.html"),
+        "status": "改动记录页",
+        "current": "cpu2_08",
+        "note": "电机运动第一轮改动记录，保留改动背景；当前流程以 CPU2 电机与位置模型页为准。",
+    },
+    {
+        "title": "电机运动程序详细流程图已合并",
+        "path": str(ROOT / "LTD_MAIN_CPU2" / "docs" / "01_电机与编码器" / "电机运动程序详细流程图.html"),
+        "status": "已合并跳转页",
+        "current": "cpu2_08",
+        "note": "该页为旧流程图跳转页，当前权威流程以 CPU2 电机与位置模型页为准。",
+    },
+    {
+        "title": "CPU2 HART 接口程序梳理",
+        "path": str(ROOT / "LTD_MAIN_CPU2" / "docs" / "02_通信与解耦" / "CPU2_HART接口程序梳理.html"),
+        "status": "专题历史页",
+        "current": "cpu2_11",
+        "note": "HART 接口旧专题梳理；当前权威流程以 CPU2 HART 接口程序流程页为准。",
+    },
+    {
+        "title": "CPU2 HART 旧栈适配与 E+H 兼容方案",
+        "path": str(ROOT / "LTD_MAIN_CPU2" / "docs" / "02_通信与解耦" / "CPU2_HART旧栈适配与E+H兼容方案.html"),
+        "status": "方案参考页",
+        "current": "cpu2_11",
+        "note": "HART 旧栈适配和兼容性方案，保留方案背景；当前流程以 CPU2 HART 接口程序流程页为准。",
+    },
+    {
+        "title": "CPU2 找液位详细流程梳理",
+        "path": str(ROOT / "docs" / "03_问题分析与整改" / "2026-06-11_CPU2找液位详细流程梳理.html"),
+        "status": "问题分析历史页",
+        "current": "cpu2_04",
+        "note": "找液位问题分析和旧流程梳理；当前权威流程以 CPU2 液位测量与跟随页为准。",
+    },
+    {
+        "title": "瓦锡兰分布测量详细流程梳理",
+        "path": str(ROOT / "docs" / "03_问题分析与整改" / "瓦锡兰分布测量详细流程梳理.html"),
+        "status": "问题分析历史页",
+        "current": "cpu2_06",
+        "note": "瓦锡兰分布测量专题梳理；当前 CPU2 执行流程看密度与单点测量，CPU3 协议入口看 Wartsila 与 SI7000 适配。",
+    },
+    {
+        "title": "瓦锡兰分布测量改前流程与已实现优化方案对比",
+        "path": str(ROOT / "docs" / "02_需求与计划" / "已实现" / "2026-06-11_瓦锡兰分布测量当前流程与优化方案对比.html"),
+        "status": "需求实现记录",
+        "current": "cpu2_06",
+        "note": "瓦锡兰优化前后对比记录，保留实现依据；当前权威流程以 CPU2 密度与单点测量页为准。",
+    },
+    {
+        "title": "瓦锡兰分布测量点间移动与慢速下行识别液位优化需求方案",
+        "path": str(ROOT / "docs" / "02_需求与计划" / "已实现" / "2026-06-11_瓦锡兰分布测量点间移动与慢速下行识别液位优化需求方案.html"),
+        "status": "需求实现记录",
+        "current": "cpu2_06",
+        "note": "瓦锡兰点间移动和空气点液位识别的需求方案，当前权威流程以 CPU2 密度与单点测量页为准。",
+    },
+    {
+        "title": "读取部件参数指令优化记录",
+        "path": str(ROOT / "docs" / "02_需求与计划" / "已实现" / "2026-06-10_读取部件参数指令优化记录.html"),
+        "status": "需求实现记录",
+        "current": "cpu2_09",
+        "note": "读取部件参数、RSSI 与 AO 运行态链路的历史优化记录；当前执行流程以 CPU2 传感器与无线通信页为准，跨 CPU 入口看 readparams 业务链路。",
+        "route": "readparams",
+    },
+    {
+        "title": "四路继电器报警输出逻辑对照与问题分析",
+        "path": str(ROOT / "docs" / "03_问题分析与整改" / "2026-06-06_四路继电器报警输出逻辑对照与问题分析.html"),
+        "status": "问题分析历史页",
+        "current": "cpu2_13",
+        "note": "四路继电器报警输出逻辑的历史问题分析；当前权威流程以 CPU2 称重与继电器输出页为准。",
+    },
+    {
+        "title": "CPU2 电流输出问题与 v1.563 处理方式对比",
+        "path": str(ROOT / "docs" / "03_问题分析与整改" / "2026-06-13_CPU2电流输出问题与CPU2_v1.563处理方式对比.html"),
+        "status": "问题分析历史页",
+        "current": "cpu2_13",
+        "note": "CPU2 电流输出问题和 v1.563 处理方式的历史对比；当前 AO 输出与运行态流程以 CPU2 称重与继电器输出页为准。",
+        "route": "ao",
+    },
+    {
+        "title": "AD5421 控制寄存器回读 FFFF 问题分析与现场验证",
+        "path": str(ROOT / "docs" / "03_问题分析与整改" / "2026-06-16_AD5421控制寄存器回读FFFF问题分析与现场验证.html"),
+        "status": "问题分析历史页",
+        "current": "cpu2_13",
+        "note": "AD5421 控制寄存器回读 FFFF 的历史现场验证；当前 AO/AD5421 输出流程以 CPU2 称重与继电器输出页为准。",
+        "route": "ao",
+    },
 ]
 
 
@@ -479,14 +597,20 @@ INJECT_CSS = """
 .cross-flow-nav__head{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;margin-bottom:12px}
 .cross-flow-nav__kicker{display:block;color:#4f6b86;font-size:12px;font-weight:700;margin-bottom:3px}
 .cross-flow-nav__title{font-size:18px;font-weight:850;color:#17233a}
+.cross-flow-nav__crumbs{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:0 0 10px;color:#5a6f86;font-size:12px}
+.cross-flow-nav__crumbs a{color:#245d96;text-decoration:none;font-weight:700}
+.cross-flow-nav__crumbs span{overflow-wrap:anywhere}
 .cross-flow-nav__quick{display:flex;flex-wrap:wrap;gap:7px;justify-content:flex-end}
-.cross-flow-nav__quick a,.cross-flow-nav__links a{display:inline-flex;align-items:center;min-height:28px;padding:4px 9px;border:1px solid #d7e5f3;border-radius:999px;background:#f6faff;color:#245d96;text-decoration:none;font-size:12px;font-weight:700}
+.cross-flow-nav__quick a,.cross-flow-nav__links a{display:inline-flex;align-items:center;min-height:28px;padding:4px 9px;border:1px solid #d7e5f3;border-radius:999px;background:#f6faff;color:#245d96;text-decoration:none;font-size:12px;font-weight:700;max-width:100%;white-space:normal;overflow-wrap:anywhere;word-break:break-word}
 .cross-flow-nav__grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px}
 .cross-flow-nav__card{border:1px solid #dce7f2;border-radius:8px;background:#fbfdff;padding:12px}
 .cross-flow-nav__card b{display:block;margin-bottom:5px;color:#16263b}
 .cross-flow-nav__card p{margin:0 0 8px;color:#43556b;line-height:1.62;font-size:13px}
 .cross-flow-nav__links{display:flex;flex-wrap:wrap;gap:6px}
-@media(max-width:720px){.cross-flow-nav__head{display:block}.cross-flow-nav__quick{justify-content:flex-start;margin-top:10px}.cross-flow-nav{padding:14px}}
+.cross-flow-nav__linear{display:flex;justify-content:space-between;gap:10px;margin-top:12px;padding-top:12px;border-top:1px solid #e2ebf5}
+.cross-flow-nav__linear a{flex:1 1 0;min-width:0;padding:9px 11px;border:1px solid #d7e5f3;border-radius:8px;background:#f8fbff;color:#214f7d;text-decoration:none;font-size:13px;font-weight:800;overflow-wrap:anywhere}
+.cross-flow-nav__linear a:last-child{text-align:right}
+@media(max-width:720px){.cross-flow-nav{padding:14px;max-width:100%;overflow:hidden}.cross-flow-nav__head{display:block}.cross-flow-nav__title{font-size:16px}.cross-flow-nav__quick{justify-content:flex-start;margin-top:10px}.cross-flow-nav__grid{grid-template-columns:1fr}.cross-flow-nav__linear{flex-direction:column}.cross-flow-nav__linear a:last-child{text-align:left}}
 """.strip()
 
 
@@ -539,7 +663,7 @@ h3{margin:16px 0 8px;font-size:18px}
 .step span,.step b{overflow-wrap:anywhere;word-break:break-word}
 .step span{display:block;color:#4d6076;font-size:13px}
 .note{border:1px solid #bad8fb;background:#eef7ff;border-radius:8px;padding:11px 13px}
-@media(max-width:800px){.wrap{padding:16px;max-width:100vw}.hero h1{font-size:24px}.meta-grid,.split{grid-template-columns:1fr}section{padding:18px;max-width:100%}.step{grid-template-columns:1fr}.topnav{position:static}.topnav a{white-space:normal;overflow-wrap:anywhere}.flow-wrap{overflow-x:auto}.route-svg{width:1000px!important;min-width:1000px!important;max-width:none!important}.nt{font-size:14px}.ns{font-size:11px}}
+@media(max-width:800px){.wrap{padding:16px;max-width:100vw}.hero{padding:24px 22px;overflow:hidden}.hero h1{font-size:24px}.meta-grid,.split{grid-template-columns:1fr}.meta{min-width:0;overflow-wrap:anywhere;word-break:break-word}section{padding:18px;max-width:100%}.step{grid-template-columns:1fr}.topnav{position:static}.topnav a{white-space:normal;overflow-wrap:anywhere}.flow-wrap{overflow-x:visible}.route-svg{width:100%!important;min-width:0!important;max-width:100%!important}.nt{font-size:13px}.ns{font-size:10px}}
 """.strip()
 
 
@@ -573,6 +697,36 @@ def link_pill(from_file: Path, key: str, label: str | None = None, anchor: str =
     return f'<a class="pill" href="{html.escape(rel_href(from_file, key, anchor))}">{html.escape(title)}</a>'
 
 
+def rel_path_to_file(from_file: Path, target: Path) -> str:
+    return Path(os.path.relpath(target, from_file.parent)).as_posix()
+
+
+def legacy_link(from_file: Path, item: Mapping[str, str]) -> str:
+    return html.escape(rel_path_to_file(from_file, Path(item["path"])))
+
+
+def linear_neighbors(key: str) -> Tuple[str | None, str | None]:
+    cpu = PAGE_DEFS[key]["cpu"]
+    order = LINEAR_ORDERS.get(cpu)
+    if not order or key not in order:
+        return None, None
+    index = order.index(key)
+    prev_key = order[index - 1] if index > 0 else None
+    next_key = order[index + 1] if index < len(order) - 1 else None
+    return prev_key, next_key
+
+
+def breadcrumb(from_file: Path, key: str) -> str:
+    cpu = PAGE_DEFS[key]["cpu"]
+    parts = [link(from_file, "global", "统一入口")]
+    if cpu == "CPU2" and key != "cpu2_total":
+        parts.append(link(from_file, "cpu2_total", "CPU2 总览"))
+    elif cpu == "CPU3" and key != "cpu3_total":
+        parts.append(link(from_file, "cpu3_total", "CPU3 总览"))
+    parts.append(f'<span>{html.escape(PAGE_DEFS[key]["title"])}</span>')
+    return '<div class="cross-flow-nav__crumbs">' + "<span>/</span>".join(parts) + "</div>"
+
+
 def pills(from_file: Path, keys: Sequence[str]) -> str:
     return "".join(link_pill(from_file, key) for key in keys)
 
@@ -596,6 +750,11 @@ def ensure_style(text: str) -> str:
 
 def remove_nav_block(text: str) -> str:
     pattern = re.escape(NAV_START) + r".*?" + re.escape(NAV_END)
+    return re.sub(r"\s*" + pattern + r"\s*", "\n", text, flags=re.S)
+
+
+def remove_legacy_notice(text: str) -> str:
+    pattern = re.escape(LEGACY_START) + r".*?" + re.escape(LEGACY_END)
     return re.sub(r"\s*" + pattern + r"\s*", "\n", text, flags=re.S)
 
 
@@ -674,18 +833,35 @@ def make_relation_block(key: str) -> str:
             f"<p>{html.escape(desc)}</p><div class=\"cross-flow-nav__links\">{links}</div></article>"
         )
 
-    return (
-        f"\n{NAV_START}\n"
-        '<section class="cross-flow-nav" id="cross-flow-nav" aria-label="程序流程关联导航">'
+    prev_key, next_key = linear_neighbors(key)
+    linear_links = []
+    if prev_key:
+        linear_links.append(link(from_file, prev_key, "上一页：" + PAGE_DEFS[prev_key]["title"]))
+    else:
+        linear_links.append(link(from_file, "global", "上一层：程序流程统一入口"))
+    if next_key:
+        linear_links.append(link(from_file, next_key, "下一页：" + PAGE_DEFS[next_key]["title"]))
+    else:
+        linear_links.append(link(from_file, "cross", "下一步：跨 CPU 业务链路"))
+
+    head = (
         '<div class="cross-flow-nav__head"><div>'
         '<span class="cross-flow-nav__kicker">程序流程关联导航</span>'
         f'<div class="cross-flow-nav__title">{html.escape(current_title)} 在整机链路中的位置</div>'
         '</div><div class="cross-flow-nav__quick">'
         + "".join(quick_links)
         + "</div></div>"
-        '<div class="cross-flow-nav__grid">'
-        + "".join(card_html)
-        + "</div></section>\n"
+    )
+    grid = '<div class="cross-flow-nav__grid">' + "".join(card_html) + "</div>"
+    linear = '<div class="cross-flow-nav__linear">' + "".join(linear_links) + "</div>"
+    return (
+        f"\n{NAV_START}\n"
+        '<section class="cross-flow-nav" id="cross-flow-nav" aria-label="程序流程关联导航">'
+        + breadcrumb(from_file, key)
+        + head
+        + grid
+        + linear
+        + "</section>\n"
         f"{NAV_END}\n"
     )
 
@@ -703,6 +879,71 @@ def inject_page(key: str) -> None:
     if not updated:
         raise RuntimeError(f"Cannot find insertion point in {path}")
     write_text(path, updated)
+
+
+def make_legacy_notice(item: Mapping[str, str]) -> str:
+    from_file = Path(item["path"])
+    current_key = item["current"]
+    global_href = html.escape(rel_href(from_file, "global"))
+    current_href = html.escape(rel_href(from_file, current_key))
+    route_id = item.get("route")
+
+    links = [
+        f'<a style="color:#1f65aa;font-weight:700;text-decoration:none" href="{current_href}">'
+        f'当前权威流程：{html.escape(PAGE_DEFS[current_key]["title"])}'
+        "</a>",
+        f'<a style="color:#1f65aa;font-weight:700;text-decoration:none" href="{global_href}">'
+        "程序流程统一入口</a>",
+    ]
+    if route_id:
+        route_href_value = html.escape(route_href(from_file, route_id))
+        links.append(
+            f'<a style="color:#1f65aa;font-weight:700;text-decoration:none" href="{route_href_value}">'
+            "跨 CPU 业务链路</a>"
+        )
+
+    parts = [
+        f"\n{LEGACY_START}\n",
+        '<section class="flow-legacy-notice" ',
+        'style="margin:16px auto;padding:14px 16px;border:1px solid #bad8fb;',
+        'border-radius:10px;background:#eef7ff;color:#17233a;',
+        "font-size:14px;line-height:1.65;font-family:'Microsoft YaHei','Segoe UI',Arial,sans-serif;",
+        'max-width:min(1180px,calc(100% - 32px));box-sizing:border-box">',
+        '<b style="display:block;margin-bottom:4px">历史/专题流程提示</b>',
+        f'<p style="margin:0 0 8px">{html.escape(item["note"])}</p>',
+        '<div style="display:flex;flex-wrap:wrap;gap:8px">',
+        "".join(links),
+        "</div></section>\n",
+        f"{LEGACY_END}\n",
+    ]
+    return "".join(parts)
+
+def insert_after_opening_body(text: str, block: str) -> str:
+    match = re.search(r"<body\b[^>]*>", text, flags=re.I)
+    if not match:
+        return ""
+    return text[: match.end()] + block + text[match.end() :]
+
+
+def inject_legacy_notice(item: Mapping[str, str]) -> None:
+    path = Path(item["path"])
+    if not path.exists():
+        return
+    text = remove_legacy_notice(read_text(path))
+    block = make_legacy_notice(item)
+    updated = insert_after_first(text, "</header>", block)
+    if not updated:
+        updated = insert_after_first(text, "<body>", block)
+    if not updated:
+        updated = insert_after_opening_body(text, block)
+    if not updated:
+        raise RuntimeError(f"Cannot find legacy notice insertion point in {path}")
+    write_text(path, updated)
+
+
+def inject_legacy_notices() -> None:
+    for item in LEGACY_DOCS:
+        inject_legacy_notice(item)
 
 
 def route_steps(from_file: Path, route: Mapping[str, object]) -> str:
@@ -731,6 +972,17 @@ def make_global_index() -> str:
             + "".join(link_pill(from_file, step[1]) for step in route["steps"][0:2])  # type: ignore[index]
             + "</div></article>"
         )
+    legacy_cards = []
+    for item in LEGACY_DOCS:
+        legacy_cards.append(
+            '<article class="card">'
+            f'<strong>{html.escape(item["title"])}</strong>'
+            f'<p><b>{html.escape(item["status"])}</b>：{html.escape(item["note"])}</p>'
+            '<div class="links">'
+            f'<a class="pill" href="{legacy_link(from_file, item)}">打开原文</a>'
+            f'{link_pill(from_file, item["current"], "当前权威流程")}'
+            "</div></article>"
+        )
     return f"""<!doctype html>
 <html lang="zh-CN">
 <head>
@@ -758,6 +1010,7 @@ def make_global_index() -> str:
 <a href="#route">跨 CPU 业务链路</a>
 <a href="#cpu2">CPU2 页面</a>
 <a href="#cpu3">CPU3 页面</a>
+<a href="#legacy">历史/专题流程</a>
 <a href="#maintain">维护规则</a>
 </nav>
 <section id="path">
@@ -786,8 +1039,15 @@ def make_global_index() -> str:
 <p class="lead">CPU3 是显示端、外部协议网关、CPU2 Modbus 主站和本机参数维护入口。</p>
 <div class="links">{link_pill(from_file, "cpu3_total", "CPU3 程序流程总览")}{cpu3_links}</div>
 </section>
+<section id="legacy">
+<h2>5. 历史/专题流程文档</h2>
+<p class="lead">这些页面保留问题分析、需求方案或旧专题梳理价值，但不再作为当前程序流程的唯一入口。阅读时先看“当前权威流程”，再回到原文查背景。</p>
+<div class="grid">
+{''.join(legacy_cards)}
+</div>
+</section>
 <section id="maintain">
-<h2>5. 维护规则</h2>
+<h2>6. 维护规则</h2>
 <div class="grid">
 <article class="card"><strong>单页继续按源码单独整理</strong><p>每个功能页仍需要独立阅读源码、单独画业务级 SVG，不用统一模板批量凑图。</p></article>
 <article class="card"><strong>跨页只表达业务关系</strong><p>统一入口和跨 CPU 链路页不替代详细流程图，只说明上下游、触发源和结果去向。</p></article>
@@ -931,6 +1191,7 @@ def inject_all_pages() -> None:
     keys = ["cpu2_total", "cpu2_issue", *CPU2_ORDER, "cpu3_total", *CPU3_ORDER]
     for key in keys:
         inject_page(key)
+    inject_legacy_notices()
 
 
 def validate_files() -> None:
@@ -944,6 +1205,13 @@ def validate_files() -> None:
             bad_encoding.append(str(path))
     if bad_encoding:
         raise RuntimeError("Encoding replacement characters found: " + ", ".join(bad_encoding))
+    missing_nav = []
+    for key in ["cpu2_total", "cpu2_issue", *CPU2_ORDER, "cpu3_total", *CPU3_ORDER]:
+        text = read_text(page_path(key))
+        if NAV_START not in text:
+            missing_nav.append(key)
+    if missing_nav:
+        raise RuntimeError("Missing cross-flow navigation block: " + ", ".join(missing_nav))
 
 
 def main() -> None:

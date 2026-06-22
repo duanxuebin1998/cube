@@ -873,8 +873,11 @@
       <div><span class="label">编码说明</span>源码按 GBK/936 读取，本文档为 UTF-8</div>
     </div>
   </header>
+<!-- FLOW-LEGACY-NOTICE-START -->
+<section class="flow-legacy-notice" style="margin:16px auto;padding:14px 16px;border:1px solid #bad8fb;border-radius:10px;background:#eef7ff;color:#17233a;font-size:14px;line-height:1.65;font-family:'Microsoft YaHei','Segoe UI',Arial,sans-serif;max-width:min(1180px,calc(100% - 32px));box-sizing:border-box"><b style="display:block;margin-bottom:4px">历史/专题流程提示</b><p style="margin:0 0 8px">电机函数层次、运动入口和保护逻辑的历史综合页；当前权威流程以 CPU2 电机与位置模型页为准。</p><div style="display:flex;flex-wrap:wrap;gap:8px"><a style="color:#1f65aa;font-weight:700;text-decoration:none" href="../00_程序流程/08_电机与位置模型.html">当前权威流程：电机与位置模型</a><a style="color:#1f65aa;font-weight:700;text-decoration:none" href="../../../docs/00_程序流程导航/index.html">程序流程统一入口</a></div></section>
+<!-- FLOW-LEGACY-NOTICE-END -->
 
-  <section>
+<section>
     <h2>1. 总体结论</h2>
     <div class="note">
       <p>电机程序的核心分层比较清晰：业务命令和测量流程调用 <code>MotorCtrl_*</code> 上层接口；<code>MotorControl</code> 内部再分为运动 API、驱动参数/健康检查、位置模型、丢步检测和尺带拟合；最底层由 <code>TMC5130.c</code> 负责 SPI 寄存器访问和步进驱动器控制，<code>AS5145.c</code> 与 <code>encoder.c</code> 负责外部编码轮采集与位置换算。</p>

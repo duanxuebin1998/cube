@@ -307,7 +307,7 @@ class SvgBuilder:
 
     def render(self, title: str) -> str:
         return (
-            f'<div class="svg-flow-wrap"><svg class="biz-flow" width="{self.width}" height="{self.height}" '
+            f'<div class="svg-flow-wrap"><svg class="biz-flow" '
             f'viewBox="0 0 {self.width} {self.height}" role="img" aria-label="{esc(title)}">'
             f"{self.defs()}{''.join(self.parts)}</svg></div>"
         )
@@ -873,7 +873,7 @@ def external_com_page() -> dict:
         "source_files": ["Application/app_main.c", "Application/system_param/cpu3_comm_display_params.c", "Core/Src/stm32f4xx_it.c"],
         "overview_nodes": [
             {"id": "a", "kind": "start", "x": 430, "y": 40, "w": 260, "h": 62, "label": "COM1/2/3 收到完整 RTU 帧"},
-            {"id": "b", "kind": "process", "x": 350, "y": 150, "w": 420, "h": 82, "label": "主循环读取端口协议配置"},
+            {"id": "b", "kind": "process", "x": 350, "y": 150, "w": 420, "h": 82, "label": "先检查挂起重配安全点\n再读取端口协议配置"},
             {"id": "c", "kind": "decision", "x": 405, "y": 285, "w": 310, "h": 108, "label": "协议处理器是否存在？"},
             {"id": "d", "kind": "error", "x": 790, "y": 300, "w": 250, "h": 82, "label": "无协议/越界：不回包并恢复接收"},
             {"id": "e", "kind": "process", "x": 350, "y": 450, "w": 420, "h": 82, "label": "调用 DSM/Wartsila/SI7000 生成响应帧"},
@@ -923,6 +923,40 @@ def external_com_page() -> dict:
                 ],
             },
             {
+                "title": "挂起串口重配安全点",
+                "caption": "CPU3 菜单或参数写入可能只置位 UART 重配请求；真正重配在 App_MainLoop 开头执行，且必须确认三路外部 COM 没有接收就绪、发送忙和 pending 待发帧。",
+                "height": 1120,
+                "nodes": [
+                    {"id": "s", "kind": "start", "x": 430, "y": 35, "w": 260, "h": 62, "label": "主循环发现串口重配请求"},
+                    {"id": "d1", "kind": "decision", "x": 405, "y": 135, "w": 310, "h": 108, "label": "任一 COM 接收帧已就绪？"},
+                    {"id": "d2", "kind": "decision", "x": 405, "y": 300, "w": 310, "h": 108, "label": "任一 COM 正在发送？"},
+                    {"id": "d3", "kind": "decision", "x": 405, "y": 465, "w": 310, "h": 108, "label": "任一 pending_len 仍有待发帧？"},
+                    {"id": "hold", "kind": "state", "x": 780, "y": 300, "w": 260, "h": 90, "label": "不安全：保留 pending 标志，推迟到下一轮主循环"},
+                    {"id": "p1", "kind": "process", "x": 350, "y": 640, "w": 420, "h": 82, "label": "安全：清重配标志，停止三路 RX DMA"},
+                    {"id": "p2", "kind": "process", "x": 350, "y": 775, "w": 420, "h": 82, "label": "按 CPU3 本机通信参数重配 COM1/2/3"},
+                    {"id": "p3", "kind": "process", "x": 350, "y": 910, "w": 420, "h": 82, "label": "三路切回接收模式并重启 DMA 接收"},
+                    {"id": "end", "kind": "end", "x": 430, "y": 1040, "w": 260, "h": 62, "label": "继续显示任务和外部 COM 分发"},
+                ],
+                "edges": [
+                    {"d": "M 560 97 L 560 135"},
+                    {"d": "M 715 189 C 755 210 790 250 910 300", "label": "是"},
+                    {"d": "M 560 243 L 560 300", "label": "否"},
+                    {"d": "M 715 354 L 780 345", "label": "是"},
+                    {"d": "M 560 408 L 560 465", "label": "否"},
+                    {"d": "M 715 519 C 755 500 810 430 910 390", "label": "是"},
+                    {"d": "M 560 573 L 560 640", "label": "否"},
+                    {"d": "M 560 722 L 560 775"},
+                    {"d": "M 560 857 L 560 910"},
+                    {"d": "M 560 992 L 560 1040"},
+                    {"d": "M 910 390 C 910 720 780 940 560 1040"},
+                ],
+                "evidence": [
+                    {"title": "安全条件", "text": f"{code('Application/app_main.c:182-205')} cpu3_apply_uart_reinit_if_pending 依次检查接收 ready、发送 busy 和 pending_len。"},
+                    {"title": "调度位置", "text": f"{code('Application/app_main.c:398-405')} App_MainLoop 在 Display_Task 和 COM 分发之前先处理挂起重配。"},
+                    {"title": "重配动作", "text": f"{code('Application/system_param/cpu3_comm_display_params.c:523-540')} Cpu3_ReinitAllUarts 根据本机通信参数重配三路外部 COM。"},
+                ],
+            },
+            {
                 "title": "DMA 发送、pending 队列与回接收",
                 "caption": "发送通道忙时只缓存一帧 pending，新帧覆盖旧帧并计数；Tx 完成回调如果有 pending 就续发，否则延时后恢复接收 DMA。",
                 "height": 1080,
@@ -963,6 +997,7 @@ def external_com_page() -> dict:
             {"level": "mid", "title": "协议号依赖枚举连续作为数组下标", "desc": "g_handlers 用 COM_PROTO_* 作为数组下标，若枚举不连续或后续新增值未同步表项，会进入不回包路径。", "suggest": "改成 switch 分发或增加编译期断言/默认错误响应。", "ref": "Application/app_main.c:318-360"},
             {"level": "low", "title": "UART_TX_POST_DELAY_LOOP 是固定空转延时", "desc": "发送完成后用固定 NOP 循环等待 RS485 电平方向恢复，和主频/优化级别相关。", "suggest": "优先使用 TC 标志或定时器，固定循环只作为最后兜底。", "ref": "Application/app_main.c:18-31"},
             {"level": "low", "title": "LTD 协议当前是不回包占位", "desc": "COM_PROTO_LTD 绑定 proto_no_reply，如果现场配置为 LTD，上位机会表现为无响应。", "suggest": "在菜单中标注未实现，或配置层禁止选择 LTD。", "ref": "Application/app_main.c:298-323"},
+            {"level": "low", "title": "串口重配可能被持续外部流量推迟", "desc": "重配只在三路接收 ready、发送 busy 和 pending 都为空时执行；如果外部请求持续不断，g_cpu3_uart_reinit_pending 会一直保留。", "suggest": "增加重配延期计数或维护窗口，在现场能看到串口参数已保存但尚未生效的原因。", "ref": "Application/app_main.c:182-205"},
         ],
         "sources": [
             {"title": "cpu3_port_process", "desc": "按端口配置选择协议处理器。", "refs": ["Application/app_main.c:342-360"]},
@@ -1083,11 +1118,57 @@ def dsm_page() -> dict:
                     {"title": "自检占位", "text": f"{code('DSM_SlaveModbus_modbus2.c:57-74')} DSM_RequestSelfCheckPlaceholder/Consume 用模块变量模拟自检状态。"},
                 ],
             },
+            {
+                "title": "写保持寄存器转参数下发",
+                "caption": "Response16 不是简单写数组：它先校验数量和 byte count，再按地址段判定可写范围。合法写入后，第 6 段当前只作为协议占位回成功，其它地址段会解析为设备参数并尝试同步 CPU2。",
+                "height": 1290,
+                "nodes": [
+                    {"id": "s", "kind": "start", "x": 430, "y": 35, "w": 260, "h": 62, "label": "DSM 0x10 写多个保持寄存器"},
+                    {"id": "d1", "kind": "decision", "x": 405, "y": 130, "w": 310, "h": 108, "label": "数量 1..123 且 byteCount = 数量*2？"},
+                    {"id": "e1", "kind": "error", "x": 790, "y": 145, "w": 250, "h": 82, "label": "非法数量或字节数：返回数据异常"},
+                    {"id": "p1", "kind": "process", "x": 350, "y": 285, "w": 420, "h": 82, "label": "计算起止地址，按 0x000/0x100/0x180/0x200/0x280/0x300 地址段校验"},
+                    {"id": "d2", "kind": "decision", "x": 405, "y": 420, "w": 310, "h": 108, "label": "地址段和结束地址可写？"},
+                    {"id": "e2", "kind": "error", "x": 790, "y": 435, "w": 250, "h": 82, "label": "非法地址：返回地址异常"},
+                    {"id": "p2", "kind": "process", "x": 350, "y": 575, "w": 420, "h": 82, "label": "把请求数据复制到 TempBuffer 并写入 DSM 保持寄存器池"},
+                    {"id": "d3", "kind": "decision", "x": 405, "y": 710, "w": 310, "h": 108, "label": "写寄存器池成功？"},
+                    {"id": "e3", "kind": "error", "x": 790, "y": 725, "w": 250, "h": 82, "label": "写入失败：返回数据异常"},
+                    {"id": "d4", "kind": "decision", "x": 405, "y": 865, "w": 310, "h": 108, "label": "是否第 6 段零段占位？"},
+                    {"id": "p3", "kind": "state", "x": 80, "y": 1030, "w": 300, "h": 90, "label": "第 6 段：只回写成功，不落参数不下发 CPU2"},
+                    {"id": "p4", "kind": "process", "x": 410, "y": 1030, "w": 300, "h": 90, "label": "其它段：解析旧寄存器到 g_deviceParams 并下发差异参数"},
+                    {"id": "e4", "kind": "error", "x": 740, "y": 1030, "w": 300, "h": 90, "label": "参数越界返回数据异常；设备忙/写失败返回设备忙"},
+                    {"id": "end", "kind": "end", "x": 430, "y": 1200, "w": 260, "h": 62, "label": "正常时回显起始地址和寄存器数量"},
+                ],
+                "edges": [
+                    {"d": "M 560 97 L 560 130"},
+                    {"d": "M 715 184 L 790 186", "label": "否", "red": True},
+                    {"d": "M 560 238 L 560 285", "label": "是"},
+                    {"d": "M 560 367 L 560 420"},
+                    {"d": "M 715 474 L 790 476", "label": "否", "red": True},
+                    {"d": "M 560 528 L 560 575", "label": "是"},
+                    {"d": "M 560 657 L 560 710"},
+                    {"d": "M 715 764 L 790 766", "label": "否", "red": True},
+                    {"d": "M 560 818 L 560 865", "label": "是"},
+                    {"d": "M 405 919 C 300 960 230 990 230 1030", "label": "是"},
+                    {"d": "M 560 973 L 560 1030", "label": "否"},
+                    {"d": "M 710 1075 L 740 1075", "label": "异常", "red": True},
+                    {"d": "M 230 1120 C 300 1170 410 1185 560 1200"},
+                    {"d": "M 560 1120 L 560 1200"},
+                    {"d": "M 890 1120 C 780 1180 680 1200 560 1200", "red": True},
+                ],
+                "evidence": [
+                    {"title": "请求合法性", "text": f"{code('DSM_SlaveModbus_modbus2.c:917-943')} Response16 校验寄存器数量和 byteCount，不满足直接返回 EXCEPTIONCODE_ERRORDATA。"},
+                    {"title": "地址段边界", "text": f"{code('DSM_SlaveModbus_modbus2.c:945-985')} 按 0x000/0x100/0x180/0x200/0x280/0x300 分段限制写入范围。"},
+                    {"title": "参数解析与异常", "text": f"{code('DSM_SlaveModbus_modbus2.c:1001-1058')} 写池失败、参数错误、设备忙和正常回显分别走不同响应。"},
+                    {"title": "旧寄存器转设备参数", "text": f"{code('DSM_DataAnalysis_modbus2.c:170')} UpdateDeviceParamsFromLegacyRegs 把 DSM 旧寄存器映射到 g_deviceParams 并同步 CPU2。"},
+                ],
+            },
         ],
         "issues": [
             {"level": "high", "title": "Response05 在外部协议处理路径中同步下发 CPU2", "desc": "线圈命令会直接调用 CPU2_CombinatePackage_Send，外部 COM 响应等待 CPU2 同步写完成，可能导致上位机响应时间不可控。", "suggest": "将 CPU2 指令下发改为主循环命令队列，DSM 先回接收确认，再异步下发 CPU2。", "ref": "DSM_SlaveModbus_modbus2.c:834-914"},
+            {"level": "high", "title": "Response16 也可能在外部协议路径同步下发 CPU2 参数", "desc": "写保持寄存器成功后会进入 UpdateDeviceParamsFromLegacyRegs，解析参数并尝试同步 CPU2；外部 COM 响应时间会受到 CPU2 内部通信状态影响。", "suggest": "把参数同步拆成异步队列或至少为每次 0x10 写入记录 CPU2 下发耗时和失败原因。", "ref": "DSM_SlaveModbus_modbus2.c:1001-1058; DSM_DataAnalysis_modbus2.c:170"},
             {"level": "mid", "title": "广播地址 0 会进入处理并可能回包", "desc": "DSM_CommunicationProcess 接受 rcvbuff[0] == 0，但后续 Response 函数统一用 SlaveAddress 组帧，可能违反 Modbus 广播不响应习惯。", "suggest": "明确 DSM 广播口径；如按标准广播，应执行写动作但 tx_len=0。", "ref": "DSM_communication.c:55-63"},
             {"level": "mid", "title": "部分无效命令是业务口径而非地址不存在", "desc": "例如 SET_ZEROCIRCLE/SET_ZEROANGLE 映射为 INVALID_CMD，地址存在但返回数据异常，现场联调需要文档化。", "suggest": "在协议说明表中标记“占位成功/无效命令/下发 CPU2”的三类动作。", "ref": "DSM_SlaveModbus_modbus2.c:750-807"},
+            {"level": "mid", "title": "第 6 段写保持寄存器当前只做协议占位", "desc": "0x300 段通过 IsHoldingRegisterZeroSegment 判定后回正常响应，但注释明确不落参数、不下发 CPU2，容易被上位机误认为参数已生效。", "suggest": "协议表中单独标记 0x300 段为占位成功，并在联调时验证上位机是否依赖这些参数。", "ref": "DSM_SlaveModbus_modbus2.c:980-1018"},
             {"level": "low", "title": "03/04 读前全量刷新寄存器", "desc": "03 读前 SystemParameterSet、04 读前 Input_Write 全量写寄存器数组，读频繁时 CPU3 主循环负担较大。", "suggest": "可按脏标志或固定节拍刷新缓存，读请求只做拷贝。", "ref": "DSM_communication.c:70-79"},
         ],
         "sources": [
