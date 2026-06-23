@@ -121,6 +121,34 @@ static const char * relay_alarm_source_str(uint32_t value)
     }
 }
 
+static const char * relay_error_value_str(uint32_t value)
+{
+    switch ((RelayAlarmErrorValue)value) {
+    case RELAY_ALARM_ERROR_NO_ALARM:
+        return "无报警";
+    case RELAY_ALARM_ERROR_HH_H:
+        return "高高/高";
+    case RELAY_ALARM_ERROR_H:
+        return "高";
+    case RELAY_ALARM_ERROR_L:
+        return "低";
+    case RELAY_ALARM_ERROR_LL_L:
+        return "低低/低";
+    case RELAY_ALARM_ERROR_ALL_ALARMS:
+        return "全部报警";
+    default:
+        return "未定义";
+    }
+}
+
+static float relay_alarm_raw_to_float(uint32_t raw)
+{
+    float value;
+    /* 按原始位转换 IEEE754 float，避免字段打印改变协议解释口径。 */
+    memcpy(&value, &raw, sizeof(value));
+    return value;
+}
+
 /* 名称 数值 数据号 起始地址 寄存器数 是否检范围 最小 最大 单位 小数 偏移 写权 类型 显示 隐藏 英文 */
 /* 参数元数据 */
 struct ParameterMetadata param_meta[] = {
@@ -543,18 +571,29 @@ void print_device_params(void)
     printf("  %-32s : %lu\r\n", "探底修正罐高", (unsigned long)params.bottom_encoder_correction_tank_height);
 
     for (uint32_t channel = 0U; channel < RELAY_ALARM_CHANNEL_COUNT; channel++) {
-        printf("  继电器%lu报警: 模式=%s(%lu) 报警源=%s(%lu) 报警位=%s(%lu) 接点=%s(%lu) 报警模式=%s(%lu)\r\n",
+        const RelayAlarmConfig *cfg = &params.relayAlarm[channel];
+        printf("  继电器%lu报警: 模式=%s(%lu) 报警源=%s(%lu) 报警位=%s(%lu) 接点=%s(%lu) 报警模式=%s(%lu) 无效值=%s(%lu)\r\n",
                (unsigned long)(channel + 1U),
-               relay_operating_mode_str(params.relayAlarm[channel].operating_mode),
-               (unsigned long)params.relayAlarm[channel].operating_mode,
-               relay_alarm_source_str(params.relayAlarm[channel].alarm_source),
-               (unsigned long)params.relayAlarm[channel].alarm_source,
-               relay_digital_source_str(params.relayAlarm[channel].digital_source),
-               (unsigned long)params.relayAlarm[channel].digital_source,
-               relay_contact_type_str(params.relayAlarm[channel].contact_type),
-               (unsigned long)params.relayAlarm[channel].contact_type,
-               relay_alarm_mode_str(params.relayAlarm[channel].alarm_mode),
-               (unsigned long)params.relayAlarm[channel].alarm_mode);
+               relay_operating_mode_str(cfg->operating_mode),
+               (unsigned long)cfg->operating_mode,
+               relay_alarm_source_str(cfg->alarm_source),
+               (unsigned long)cfg->alarm_source,
+               relay_digital_source_str(cfg->digital_source),
+               (unsigned long)cfg->digital_source,
+               relay_contact_type_str(cfg->contact_type),
+               (unsigned long)cfg->contact_type,
+               relay_alarm_mode_str(cfg->alarm_mode),
+               (unsigned long)cfg->alarm_mode,
+               relay_error_value_str(cfg->error_value),
+               (unsigned long)cfg->error_value);
+        printf("    阈值: HH=%.1f H=%.1f L=%.1f LL=%.1f 滞回=%.1f 阻尼=%lu 清锁存=%lu\r\n",
+               relay_alarm_raw_to_float(cfg->HH_alarm_value),
+               relay_alarm_raw_to_float(cfg->H_alarm_value),
+               relay_alarm_raw_to_float(cfg->L_alarm_value),
+               relay_alarm_raw_to_float(cfg->LL_alarm_value),
+               relay_alarm_raw_to_float(cfg->alarm_hysteresis),
+               (unsigned long)cfg->damping_factor,
+               (unsigned long)cfg->clear_alarm);
     }
 
     /* AO */

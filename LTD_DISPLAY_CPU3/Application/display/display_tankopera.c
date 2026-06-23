@@ -3314,9 +3314,6 @@ static void parascopecheck(void)
 /* 配置参数过程 */
 static void cmd_configpara_process(void)
 {
-	int i;
-	int arrlen = 8;
-	static uint8_t paraarr[8];
 	int index;
 
 	index = getHoldValueNum(now_Opera_Num);
@@ -3324,33 +3321,15 @@ static void cmd_configpara_process(void)
 	oled_clear();
 	DisplayLangaugeLineWords((uint8_t*)"正在修改参数", OLED_LINE8_2, OLED_ROW3_2, 0, (uint8_t*)"Modify Para");
 
-	if (param_meta[index].data_type == TYPE_FLOAT) {
-		union utof tmp_f;
-		tmp_f.f = now_Para_CT.val * pow(0.1, (double)param_meta[index].point);
-		for (i = 0; i < 4; i++) {
-			paraarr[i] = (uint8_t)(tmp_f.u >> (8 * (3 - i)));
-		}
-	} else if (param_meta[index].data_type == TYPE_DOUBLE) {
-		union utod tmp_d;
-		tmp_d.d = now_Para_CT.val * pow(0.1, (double)param_meta[index].point);
-		for (i = 0; i < 4; i++) {
-			paraarr[i] = (uint8_t)(tmp_d.u[1] >> (8 * (3 - i)));
-		}
-		for (i = 4; i < 8; i++) {
-			paraarr[i] = (uint8_t)(tmp_d.u[0] >> (8 * (7 - i)));
-		}
-	} else {
-		now_Para_CT.val -= param_meta[index].offset;
-		for (i = 0; i < param_meta[index].rgstcnt * 2 && i < arrlen; i++) {
-			paraarr[i] = (uint8_t)((now_Para_CT.val >> (8 * i)) & 0xFF);
-		}
-	}
-
 	/* 如果是本机参数 */
 	if(now_Opera_Num > COM_NUM_PARA_LOCAL_START && now_Opera_Num < COM_NUM_PARA_LOCAL_STOP)
 	{
+		int local_value = now_Para_CT.val;
+		if ((param_meta[index].data_type != TYPE_FLOAT) && (param_meta[index].data_type != TYPE_DOUBLE)) {
+			local_value -= param_meta[index].offset;
+		}
 	    /* CPU3 本机参数：本地写 + 保存FRAM */
-	    Cpu3Local_WriteValue((OperatingNumber)now_Opera_Num, now_Para_CT.val);
+	    Cpu3Local_WriteValue((OperatingNumber)now_Opera_Num, local_value);
 
 	    if (Cpu3Local_IsUartParam((OperatingNumber)now_Opera_Num)) {
 	        /* 不在 UI 线程里直接重配，避免与通信收发并发；交给主循环安全点处理 */
@@ -3362,30 +3341,31 @@ static void cmd_configpara_process(void)
 	}
 	else /* 下发给CPU2 */
 	{
-	    uint16_t regs16[32]; /* rgstcnt 最大一般不会很大；32=最多64字节 */
-	    int rc = (int)param_meta[index].rgstcnt;
+	    uint32_t hold32[16]; /* rgstcnt 最大一般不会很大；16 个 u32 = 64 字节 */
+	    int raw_value;
 
 
-	    memset(regs16, 0, sizeof(regs16));
+	    memset(hold32, 0, sizeof(hold32));
 
-	    /* paraarr[] 当前的组织方式：
-	       - float/double 分支：你是按“高字节在前”的大端字节序写入 paraarr
-	       - int 分支：你是按小端（低字节在前）写入 paraarr
-	       为了不改变你现有逻辑，这里统一按 paraarr 的“字节顺序”去组 16-bit 寄存器：
-	       每个寄存器 = paraarr[2*i] 作为高字节，paraarr[2*i+1] 作为低字节（即网络序/寄存器序）
-	    */
-	    for (i = 0; i < rc; i++) {
-	        uint8_t hi = 0, lo = 0;
-	        int p = 2 * i;
-	        if (p < arrlen)     hi = paraarr[p + 1];
-	        if (p + 1 < arrlen) lo = paraarr[p];
-	        regs16[i] = ((uint16_t)hi << 8) | (uint16_t)lo;
+	    /* 直接组织 32 位原始值，字序统一交给 CPU2_CombinatePackage_Send 处理。 */
+	    if (param_meta[index].data_type == TYPE_FLOAT) {
+	        union utof tmp_f;
+	        tmp_f.f = now_Para_CT.val * pow(0.1, (double)param_meta[index].point);
+	        hold32[0] = tmp_f.u;
+	    } else if (param_meta[index].data_type == TYPE_DOUBLE) {
+	        union utod tmp_d;
+	        tmp_d.d = now_Para_CT.val * pow(0.1, (double)param_meta[index].point);
+	        hold32[0] = tmp_d.u[1];
+	        hold32[1] = tmp_d.u[0];
+	    } else {
+	        raw_value = now_Para_CT.val - param_meta[index].offset;
+	        hold32[0] = (uint32_t)((int32_t)raw_value);
 	    }
 
 	    CPU2_CombinatePackage_Send(FUNCTIONCODE_WRITE_MULREGISTER,
 	                              param_meta[index].startadd,
 	                              param_meta[index].rgstcnt,
-	                              (uint32_t *)regs16);
+	                              hold32);
 
 	    CPU2_CombinatePackage_Send(FUNCTIONCODE_READ_HOLDREGISTER,
 	                              param_meta[index].startadd,

@@ -64,22 +64,27 @@ def repo_root() -> Path:
     return Path(__file__).resolve().parents[1]
 
 
-def read_text_preserve_newline(path: Path) -> tuple[str, str]:
+def read_text_preserve_newline(path: Path) -> tuple[str, str, str]:
     raw = path.read_bytes()
     newline = "\r\n" if b"\r\n" in raw else "\n"
-    return raw.decode("utf-8"), newline
+    for encoding in ("utf-8", "gbk"):
+        try:
+            return raw.decode(encoding), newline, encoding
+        except UnicodeDecodeError:
+            continue
+    raise UnicodeDecodeError("utf-8", raw, 0, 1, f"unsupported text encoding for {path}")
 
 
-def write_text_preserve_newline(path: Path, text: str, newline: str) -> None:
+def write_text_preserve_newline(path: Path, text: str, newline: str, encoding: str) -> None:
     normalized = text.replace("\r\n", "\n").replace("\r", "\n")
     if newline == "\r\n":
         normalized = normalized.replace("\n", "\r\n")
-    path.write_bytes(normalized.encode("utf-8"))
+    path.write_bytes(normalized.encode(encoding))
 
 
-def read_optional_text(path: Path) -> tuple[str, str]:
+def read_optional_text(path: Path) -> tuple[str, str, str]:
     if not path.exists():
-        return "", "\n"
+        return "", "\n", "utf-8"
     return read_text_preserve_newline(path)
 
 
@@ -132,7 +137,7 @@ def replace_string_macro(text: str, name: str, value: str) -> str:
 
 
 def update_target(target: VersionTarget, kind: str, requested: Version | None, dry_run: bool) -> tuple[Version, Version]:
-    text, newline = read_text_preserve_newline(target.path)
+    text, newline, encoding = read_text_preserve_newline(target.path)
     old = parse_version(text, target.prefix)
     new = requested if kind == "set" else old.bump(kind)
     new.validate_byte_fields()
@@ -149,7 +154,7 @@ def update_target(target: VersionTarget, kind: str, requested: Version | None, d
     updated = replace_string_macro(updated, target.string_macro, new.text())
 
     if not dry_run:
-        write_text_preserve_newline(target.path, updated, newline)
+        write_text_preserve_newline(target.path, updated, newline, encoding)
 
     return old, new
 
@@ -176,13 +181,13 @@ def append_changelog(root: Path, changes: list[tuple[VersionTarget, Version, Ver
         print(entry.rstrip())
         return
 
-    current, newline = read_optional_text(changelog_path)
+    current, newline, encoding = read_optional_text(changelog_path)
     if current:
         updated = current.rstrip() + "\n\n" + entry
     else:
         updated = "# 升级日志\n\n记录 CPU2/CPU3 固件版本变更。使用 `tools/bump_version.py` 升级版本时会自动追加记录。\n\n" + entry
 
-    write_text_preserve_newline(changelog_path, updated, newline)
+    write_text_preserve_newline(changelog_path, updated, newline, encoding)
 
 
 def build_targets(root: Path) -> dict[str, VersionTarget]:
