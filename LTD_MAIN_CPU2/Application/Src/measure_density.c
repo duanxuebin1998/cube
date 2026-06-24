@@ -12,7 +12,7 @@
  *   A. 搜索液位（SearchOilLevel）
  *   B. 切换到密度测量模式（EnableDensityMode）
  *   C. 按模式生成取点数组（单位：0.1mm）
- *   D. 按点位依次移动并单点测量（MotorCtrl_MoveToPosition + SinglePoint_ReadSensor）
+ *   D. 按点位依次移动并单点测量（MotorCtrl_JogMoveToPosition + SinglePoint_ReadSensor）
  *   E. 计算平均值并输出（Print_DensitySpreadResult）
  *   F. 国标模式额外执行“按标密差值阈值过滤点，并重算平均值”
  *
@@ -23,7 +23,7 @@
  * 外部依赖（工程需提供）：
  *   - SearchOilLevel()
  *   - EnableDensityMode()
- *   - MotorCtrl_MoveToPosition(float pos_mm, uint32_t speed_x100)
+ *   - MotorCtrl_JogMoveToPosition(float pos_mm, uint32_t speed_x100)
  *   - SinglePoint_ReadSensor(volatile DensityMeasurement *result)
  *   - g_measurement / g_deviceParams
  *   - DensityDistribution / DensityMeasurement
@@ -279,7 +279,7 @@ static uint32_t Density_RunPoints01mm(const int32_t *p01,
         float pos_mm = (float)p01[i] / 10.0f;
         printf("分布测量 移动到位置 %.1f mm\r\n", pos_mm);
 
-        uint32_t ret = MotorCtrl_MoveToPosition(pos_mm, MotorCtrl_GetDefaultSpeedX100());
+        uint32_t ret = MotorCtrl_JogMoveToPosition(pos_mm, MotorCtrl_GetDefaultSpeedX100());
         if (ret == STATE_SWITCH) {
             /* 命令切换是正常打断，直接向上透传，不参与故障重试。 */
             return STATE_SWITCH;
@@ -1478,7 +1478,7 @@ void CMD_SinglePointMeasurement(void)
     ret = SinglePoint_CheckTargetPosition("单点测量", g_deviceParams.singlePointMeasurementPosition);
     SET_ERROR(ret);
 
-    ret = MotorCtrl_MoveToPosition((float)g_deviceParams.singlePointMeasurementPosition / 10.0f,
+    ret = MotorCtrl_JogMoveToPosition((float)g_deviceParams.singlePointMeasurementPosition / 10.0f,
                                               MotorCtrl_GetDefaultSpeedX100());
     SET_ERROR(ret);
 
@@ -1506,7 +1506,7 @@ void CMD_SinglePointMonitoring(void)
     ret = SinglePoint_CheckTargetPosition("固定点监测", g_deviceParams.singlePointMonitoringPosition);
     SET_ERROR(ret);
 
-    ret = MotorCtrl_MoveToPosition((float)g_deviceParams.singlePointMonitoringPosition / 10.0f,
+    ret = MotorCtrl_JogMoveToPosition((float)g_deviceParams.singlePointMonitoringPosition / 10.0f,
                                               MotorCtrl_GetDefaultSpeedX100());
     if (ret == STATE_SWITCH) {
         printf("固定点监测移动阶段检测到命令切换请求，退出\r\n");

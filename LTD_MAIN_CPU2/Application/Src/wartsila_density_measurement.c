@@ -145,7 +145,7 @@ static uint32_t Wartsila_MoveToDensityPoint(float target_mm,
                    (unsigned long)point_no);
         }
 
-        ret = MotorCtrl_MoveToPosition(target_mm, MotorCtrl_GetDefaultSpeedX100());
+        ret = MotorCtrl_JogMoveToPosition(target_mm, MotorCtrl_GetDefaultSpeedX100());
         if (ret == STATE_SWITCH) {
             return STATE_SWITCH;
         }

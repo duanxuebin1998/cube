@@ -1494,3 +1494,34 @@ CPU2 参数加载会校验 FRAM 中的 `magic`、`struct_size`、`param_version`
 - 未做实物联调；需要在 OLED 菜单实机写入 R1~R4 继电器报警 HH/H/L/LL 阈值和滞回后，读取 CPU2 参数打印确认数值一致。
 - 需要现场覆盖禁用、无源输出、不同报警源/报警位和常开/常闭组合，确认新增打印字段不会被串口工具截断或误判。
 - 本次不新增命令入口、状态机分支、流程跳转或跨 CPU 导航关系，只修正既有参数写入载荷编码并补全打印字段，程序流程图无需更新。
+
+## 2026-06-24 - 修复电机固定点定位点动两段减速（CPU2 V1.16.2.0）
+
+版本：
+- CPU2: V1.16.1.0 -> V1.16.2.0。
+- CPU3: 保持 V1.15.2.0。
+
+协议版本/兼容性：
+- `DEVICE_PROTOCOL_VERSION` 保持 10，不新增或变更 CPU2/CPU3 共享寄存器、命令码或输入寄存器尾段。
+- CPU2 `DEVICE_PARAM_VERSION` 保持 3，`DeviceParameters` 结构大小不变，不会因本次升级触发恢复出厂参数。
+- 不改变 `MotorCtrl_MoveToPosition()` 原有位置模式方案；正式测量、密度分布和瓦锡兰固定点移动调用处改为 `MotorCtrl_JogMoveToPosition()`。
+- Jog 最终误差仅在超过 10mm 时上报 `MEASUREMENT_POSITION_ERROR`；0.1mm 仍用于入口已到位判断。
+
+本次修改：
+- 正式单点测量、固定点监测、密度分布逐点移动、运行到指定位置、瓦锡兰测点和测后回监测点改用 `MotorCtrl_JogMoveToPosition()`。
+- 恢复点动绝对定位两段速度策略：高速段按计算刹车距离 * 1.3 且最小 2mm、最大 1000mm 切到 0.10m/min 低速；低速同向爬行到 0.45mm 触发慢停。
+- 移除低速段再次估算停机距离的提前停机路径，避免低速段过早刹车。
+- 最终停稳复核阈值放宽为 10mm，超过阈值才上报 `MEASUREMENT_POSITION_ERROR`；日志保留高低速切换、停止触发和刹车距离诊断。
+- 同步新增本版本改动与测试方案，并更新密度/单点测量、电机位置模型流程文档。
+
+验证：
+- `cmake --build build\LTD_MAIN_CPU2`
+- `python tools\check_motor_motion_target_plan.py`
+- `git diff --check`
+- `git diff --cached --check`
+- `python tools\check_version_bumped.py`
+
+未验证风险：
+- 未在本次提交流程重新接串口实物联调；需现场用 BJP 和正式单点、固定点、密度分布流程确认上下行到位、无反向修正和最终误差阈值。
+- 最终误差 10mm 内不再报 `MEASUREMENT_POSITION_ERROR`，上层流程可能把 2~10mm 误差视为成功；现场需确认该容差符合业务允许范围。
+- 本次改变正式测量入口的运动策略，程序流程文档已同步更新密度/单点测量和电机位置模型页面。

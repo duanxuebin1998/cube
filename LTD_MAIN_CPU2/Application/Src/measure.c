@@ -1033,7 +1033,7 @@ static uint32_t Wartsila_MoveToMonitorPositionOnly(void)
     }
 
     for (uint32_t attempt = 1U; attempt <= max_attempts; attempt++) {
-        ret = MotorCtrl_MoveToPosition(target_mm, MotorCtrl_GetDefaultSpeedX100());
+        ret = MotorCtrl_JogMoveToPosition(target_mm, MotorCtrl_GetDefaultSpeedX100());
         /* 先处理异常边界，避免测量流程状态机带故障继续运行。 */
         if ((ret == NO_ERROR) || (ret == STATE_SWITCH)) {
             return ret;
@@ -1189,7 +1189,7 @@ static void CMD_SyntheticMeasurement(void) {
  * @brief 运行到指定绝对位置（mm）
  * 依赖：
  *  - MeasureStart()
- *  - MotorCtrl_MoveToPosition(float target_mm, uint32_t speed_x100)
+ *  - MotorCtrl_JogMoveToPosition(float target_mm, uint32_t speed_x100)
  *  - CHECK_COMMAND_SWITCH(x) / SET_ERROR(x)
  *  - g_measurement.device_status.device_state
  *  - 目标位置参数来源（见下方 get_target_mm()）
@@ -1204,9 +1204,9 @@ static void CMD_RunToPosition(void)
 
 
     target_mm = (float)g_deviceParams.densityDistributionOilLevel/10.0;
-    ret = MotorCtrl_MoveToPosition(target_mm, MotorCtrl_GetDefaultSpeedX100());
+    ret = MotorCtrl_JogMoveToPosition(target_mm, MotorCtrl_GetDefaultSpeedX100());
 
-    /* MotorCtrl_MoveToPosition 里如果你也加了 CHECK_COMMAND_SWITCH，就能更快退出；
+    /* MotorCtrl_JogMoveToPosition 里如果你也加了 CHECK_COMMAND_SWITCH，就能更快退出；
        若没加，这里至少在调用前/后能响应一次切换。 */
 
     if (ret == STATE_SWITCH) {

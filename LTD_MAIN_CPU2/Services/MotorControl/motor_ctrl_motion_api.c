@@ -11,16 +11,22 @@
 
 
 #ifndef MOTOR_JOG_SLOWDOWN_DISTANCE_MM
-#define MOTOR_JOG_SLOWDOWN_DISTANCE_MM     50.0f
+#define MOTOR_JOG_SLOWDOWN_DISTANCE_MM     2.0f
 #endif
 #ifndef MOTOR_JOG_CREEP_SPEED_X100
-#define MOTOR_JOG_CREEP_SPEED_X100         30U
+#define MOTOR_JOG_CREEP_SPEED_X100         10U
 #endif
 #ifndef MOTOR_JOG_POSITION_EPS_MM
-#define MOTOR_JOG_POSITION_EPS_MM          0.5f
+#define MOTOR_JOG_POSITION_EPS_MM          0.1f
+#endif
+#ifndef MOTOR_JOG_FINAL_ERROR_LIMIT_MM
+#define MOTOR_JOG_FINAL_ERROR_LIMIT_MM     10.0f
+#endif
+#ifndef MOTOR_JOG_STOP_TRIGGER_MM
+#define MOTOR_JOG_STOP_TRIGGER_MM          0.45f
 #endif
 #ifndef MOTOR_JOG_OVERSHOOT_LIMIT_MM
-#define MOTOR_JOG_OVERSHOOT_LIMIT_MM       1.0f
+#define MOTOR_JOG_OVERSHOOT_LIMIT_MM       0.1f
 #endif
 #ifndef MOTOR_JOG_POLL_MS
 #define MOTOR_JOG_POLL_MS                  20U
@@ -37,14 +43,8 @@
 #ifndef MOTOR_JOG_BRAKE_MAX_DISTANCE_MM
 #define MOTOR_JOG_BRAKE_MAX_DISTANCE_MM   1000.0f
 #endif
-#ifndef MOTOR_JOG_FINAL_STOP_MARGIN_X100
-#define MOTOR_JOG_FINAL_STOP_MARGIN_X100  250U
-#endif
-#ifndef MOTOR_JOG_FINAL_STOP_MIN_MM
-#define MOTOR_JOG_FINAL_STOP_MIN_MM       3.0f
-#endif
-#ifndef MOTOR_JOG_FINAL_STOP_MAX_MM
-#define MOTOR_JOG_FINAL_STOP_MAX_MM       100.0f
+#ifndef MOTOR_JOG_DECEL_DEFAULT_REG
+#define MOTOR_JOG_DECEL_DEFAULT_REG       (20U * 32U)
 #endif
 /* ===================== 私有函数声明 ===================== */
 
@@ -163,9 +163,6 @@ static uint32_t MotorMotion_StopJogAndRestore(uint32_t ret,
 static uint32_t MotorMotion_CalcJogSlowdownDistanceMm(float current_mm,
                                                        uint32_t fast_velocity,
                                                        float *slowdown_mm);
-static uint32_t MotorMotion_CalcJogStopDistanceMm(float current_mm,
-                                                   uint32_t current_velocity,
-                                                   float *stop_mm);
 static double MotorMotion_TmcVelocityToUstepsPerSec(uint32_t vmax);
 static double MotorMotion_TmcAccelerationToUstepsPerSec2(uint32_t accel);
 static uint32_t MotorMotion_CalcVelocityFromSpeedX100(uint32_t speed_x100,
@@ -184,7 +181,6 @@ const char *MotorCtrl_DirectionText(int dir)
     }
     return "未知";
 }
-
 /**
  * @brief 显示或打印电机控制中的 MotorCtrl_DisplayStateText 逻辑。
  *
@@ -1619,7 +1615,6 @@ static uint32_t MotorMotion_JogMoveToTargetInternal(float target_mm,
     float cur_mm = 0.0f;
     float remaining_mm;
     float slowdown_distance_mm = MOTOR_JOG_SLOWDOWN_DISTANCE_MM;
-    float stop_distance_mm = MOTOR_JOG_FINAL_STOP_MIN_MM;
     uint32_t display_state;
 
     if (!MotorDriver_IsDirValid(dir)) {
@@ -1670,6 +1665,13 @@ static uint32_t MotorMotion_JogMoveToTargetInternal(float target_mm,
         if (ret != NO_ERROR) {
             return MotorMotion_ReturnWithSpeedScope(ret, &speed_scope);
         }
+        MotorDriver_UpdateVelocityFromParams();
+        printf("Jog start creep | target=%.3fmm | current=%.3fmm | remaining=%.3fmm | slowdown=%.3fmm | VMAX=%lu\r\n",
+               target_mm,
+               cur_mm,
+               remaining_mm,
+               slowdown_distance_mm,
+               (unsigned long)velocity);
         slow_mode = true;
     }
 
@@ -1710,28 +1712,16 @@ static uint32_t MotorMotion_JogMoveToTargetInternal(float target_mm,
         }
 
         remaining_mm = MotorMotion_RemainingDistanceToTarget(cur_mm, target_mm, dir);
-        if (remaining_mm <= MOTOR_JOG_POSITION_EPS_MM) {
+        if (remaining_mm <= MOTOR_JOG_STOP_TRIGGER_MM) {
+            printf("Jog stop trigger | target=%.3fmm | current=%.3fmm | remaining=%.3fmm | trigger=%.3fmm | VMAX=%lu\r\n",
+                   target_mm,
+                   cur_mm,
+                   remaining_mm,
+                   MOTOR_JOG_STOP_TRIGGER_MM,
+                   (unsigned long)((s_motor_driver.applied_velocity != 0U) ? s_motor_driver.applied_velocity : velocity));
             return MotorMotion_StopJogAndRestore(NO_ERROR, &speed_scope, target_mm, dir);
         }
 
-        if (slow_mode) {
-            ret = MotorMotion_CalcJogStopDistanceMm(cur_mm,
-                                                    (s_motor_driver.applied_velocity != 0U) ?
-                                                    s_motor_driver.applied_velocity : velocity,
-                                                    &stop_distance_mm);
-            /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
-            if (ret != NO_ERROR) {
-                return MotorMotion_StopJogAndRestore(ret, &speed_scope, target_mm, dir);
-            }
-            if (remaining_mm <= stop_distance_mm) {
-                printf("点动提前停机 | 目标=%.3fmm | 当前=%.3fmm | 剩余=%.3fmm | 估算停机距离=%.3fmm\r\n",
-                       target_mm,
-                       cur_mm,
-                       remaining_mm,
-                       stop_distance_mm);
-                return MotorMotion_StopJogAndRestore(NO_ERROR, &speed_scope, target_mm, dir);
-            }
-        }
 
         if ((!slow_mode) && (remaining_mm <= slowdown_distance_mm)) {
             /* 接近目标后改用低速 VMAX 继续速度模式，减少停止惯性造成的过冲。 */
@@ -1741,6 +1731,12 @@ static uint32_t MotorMotion_JogMoveToTargetInternal(float target_mm,
                 return MotorMotion_StopJogAndRestore(ret, &speed_scope, target_mm, dir);
             }
             MotorDriver_UpdateVelocityFromParams();
+            printf("Jog switch creep | target=%.3fmm | current=%.3fmm | remaining=%.3fmm | slowdown=%.3fmm | VMAX=%lu\r\n",
+                   target_mm,
+                   cur_mm,
+                   remaining_mm,
+                   slowdown_distance_mm,
+                   (unsigned long)velocity);
             ret = MotorMotion_StartJogVelocity(dir);
             /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
             if (ret != NO_ERROR) {
@@ -2030,7 +2026,13 @@ static uint32_t MotorMotion_CalcJogSlowdownDistanceMm(float current_mm,
                                                       uint32_t fast_velocity,
                                                       float *slowdown_mm)
 {
+    int32_t dmax_reg = 0;
+    int32_t d1_reg = 0;
     int32_t amax_reg = 0;
+    bool dmax_valid = false;
+    bool d1_valid = false;
+    bool amax_valid = false;
+    uint32_t decel_reg = MOTOR_JOG_DECEL_DEFAULT_REG;
     uint32_t creep_velocity;
     double fast_usteps_s;
     double creep_usteps_s;
@@ -2039,6 +2041,7 @@ static uint32_t MotorMotion_CalcJogSlowdownDistanceMm(float current_mm,
     double circumference_mm;
     double brake_usteps;
     double brake_mm;
+    double tape_length_mm;
 
     if (slowdown_mm == NULL) {
         return PARAM_ERROR;
@@ -2049,14 +2052,37 @@ static uint32_t MotorMotion_CalcJogSlowdownDistanceMm(float current_mm,
         return NO_ERROR;
     }
 
+    /* current_mm 是传感器位置，卷筒速度换算必须使用当前尺带长度。 */
+    tape_length_mm = ((double)g_deviceParams.tankHeight * 0.1) - (double)current_mm;
+    if ((!isfinite(tape_length_mm)) || (tape_length_mm < 0.0)) {
+        tape_length_mm = (double)g_measurement.debug_data.cable_length * 0.1;
+    }
+    if (tape_length_mm < 0.0) {
+        tape_length_mm = 0.0;
+    }
+
     creep_velocity = MotorMotion_CalcVelocityFromSpeedX100(MOTOR_JOG_CREEP_SPEED_X100,
-                                                           current_mm);
+                                                           (float)tape_length_mm);
     if (creep_velocity == 0U) {
         return NO_ERROR;
     }
 
-    if (!stpr_tryReadInt(&stepper, TMC5130_AMAX, &amax_reg) || (amax_reg <= 0)) {
-        return NO_ERROR;
+    dmax_valid = stpr_tryReadInt(&stepper, TMC5130_DMAX, &dmax_reg) &&
+                 (dmax_reg > 0) &&
+                 ((uint32_t)dmax_reg <= (uint32_t)TMC5130_MAX_ACCELERATION);
+    d1_valid = stpr_tryReadInt(&stepper, TMC5130_D1, &d1_reg) &&
+               (d1_reg > 0) &&
+               ((uint32_t)d1_reg <= (uint32_t)TMC5130_MAX_ACCELERATION);
+    amax_valid = stpr_tryReadInt(&stepper, TMC5130_AMAX, &amax_reg) &&
+                 (amax_reg > 0) &&
+                 ((uint32_t)amax_reg <= (uint32_t)TMC5130_MAX_ACCELERATION);
+
+    if (dmax_valid) {
+        decel_reg = (uint32_t)dmax_reg;
+    } else if (d1_valid) {
+        decel_reg = (uint32_t)d1_reg;
+    } else if (amax_valid) {
+        decel_reg = (uint32_t)amax_reg;
     }
 
     fast_usteps_s = MotorMotion_TmcVelocityToUstepsPerSec(fast_velocity);
@@ -2065,9 +2091,9 @@ static uint32_t MotorMotion_CalcJogSlowdownDistanceMm(float current_mm,
         return NO_ERROR;
     }
 
-    accel_usteps_s2 = MotorMotion_TmcAccelerationToUstepsPerSec2((uint32_t)amax_reg);
+    accel_usteps_s2 = MotorMotion_TmcAccelerationToUstepsPerSec2(decel_reg);
     ticks_per_rev = (double)MotorPosition_TapeTicksPerRev();
-    circumference_mm = MotorPosition_TapeInstantCircumferenceFromLength((double)current_mm);
+    circumference_mm = MotorPosition_TapeInstantCircumferenceFromLength(tape_length_mm);
     if ((accel_usteps_s2 <= 1e-6) || (ticks_per_rev <= 1e-6) || (circumference_mm <= 1e-6)) {
         return NO_ERROR;
     }
@@ -2084,68 +2110,17 @@ static uint32_t MotorMotion_CalcJogSlowdownDistanceMm(float current_mm,
         *slowdown_mm = (float)brake_mm;
     }
 
-    return NO_ERROR;
-}
+    printf("Jog slowdown calc | current=%.3fmm | tape=%.3fmm | fastVMAX=%lu | creepVMAX=%lu | decel=%lu | DMAX=%ld | D1=%ld | AMAX=%ld | slowdown=%.3fmm\r\n",
+           current_mm,
+           tape_length_mm,
+           (unsigned long)fast_velocity,
+           (unsigned long)creep_velocity,
+           (unsigned long)decel_reg,
+           (long)dmax_reg,
+           (long)d1_reg,
+           (long)amax_reg,
+           *slowdown_mm);
 
-/**
- * @brief 根据当前低速 VMAX 和减速度寄存器估算从当前速度到 0 的停机距离。
- */
-static uint32_t MotorMotion_CalcJogStopDistanceMm(float current_mm,
-                                                   uint32_t current_velocity,
-                                                   float *stop_mm)
-{
-    int32_t dmax_reg = 0;
-    int32_t d1_reg = 0;
-    uint32_t decel_reg = 0U;
-    double velocity_usteps_s;
-    double accel_usteps_s2;
-    double ticks_per_rev;
-    double circumference_mm;
-    double stop_usteps;
-    double calc_stop_mm;
-
-    if (stop_mm == NULL) {
-        return PARAM_ERROR;
-    }
-
-    *stop_mm = MOTOR_JOG_FINAL_STOP_MIN_MM;
-    if (current_velocity == 0U) {
-        return NO_ERROR;
-    }
-
-    if (stpr_tryReadInt(&stepper, TMC5130_DMAX, &dmax_reg) && (dmax_reg > 0)) {
-        decel_reg = (uint32_t)dmax_reg;
-    }
-    if (stpr_tryReadInt(&stepper, TMC5130_D1, &d1_reg) && (d1_reg > 0)) {
-        if ((decel_reg == 0U) || ((uint32_t)d1_reg < decel_reg)) {
-            decel_reg = (uint32_t)d1_reg;
-        }
-    }
-    if (decel_reg == 0U) {
-        return NO_ERROR;
-    }
-
-    velocity_usteps_s = MotorMotion_TmcVelocityToUstepsPerSec(current_velocity);
-    accel_usteps_s2 = MotorMotion_TmcAccelerationToUstepsPerSec2(decel_reg);
-    ticks_per_rev = (double)MotorPosition_TapeTicksPerRev();
-    circumference_mm = MotorPosition_TapeInstantCircumferenceFromLength((double)current_mm);
-    if ((velocity_usteps_s <= 1e-6) ||
-        (accel_usteps_s2 <= 1e-6) ||
-        (ticks_per_rev <= 1e-6) ||
-        (circumference_mm <= 1e-6)) {
-        return NO_ERROR;
-    }
-
-    stop_usteps = (velocity_usteps_s * velocity_usteps_s) / (2.0 * accel_usteps_s2);
-    calc_stop_mm = (stop_usteps / ticks_per_rev) * circumference_mm;
-    calc_stop_mm = (calc_stop_mm * (double)MOTOR_JOG_FINAL_STOP_MARGIN_X100) / 100.0;
-
-    if (calc_stop_mm > (double)MOTOR_JOG_FINAL_STOP_MAX_MM) {
-        calc_stop_mm = (double)MOTOR_JOG_FINAL_STOP_MAX_MM;
-    }
-    if (calc_stop_mm > (double)(*stop_mm)) {
-        *stop_mm = (float)calc_stop_mm;
-    }
     return NO_ERROR;
 }
 /**
@@ -2242,12 +2217,12 @@ static uint32_t MotorMotion_StopJogAndRestore(uint32_t ret,
         /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
         if ((verify_ret == NO_ERROR) &&
             ((!MotorMotion_IsPositionSnapshotValid(final_mm)) ||
-             MotorMotion_IsOvershotPastTarget(final_mm, target_mm, dir, MOTOR_JOG_OVERSHOOT_LIMIT_MM))) {
-            printf("点动停机超限 | 目标=%.3fmm | 终点=%.3fmm | 方向=%s | 允许超限=%.3fmm\r\n",
+             (fabsf(final_mm - target_mm) > MOTOR_JOG_FINAL_ERROR_LIMIT_MM))) {
+            printf("Jog final position error | target=%.3fmm | final=%.3fmm | error=%.3fmm | limit=%.3fmm\r\n",
                    target_mm,
                    final_mm,
-                   MotorCtrl_DirectionText(dir),
-                   MOTOR_JOG_OVERSHOOT_LIMIT_MM);
+                   fabsf(final_mm - target_mm),
+                   MOTOR_JOG_FINAL_ERROR_LIMIT_MM);
             verify_ret = MEASUREMENT_POSITION_ERROR;
         }
     }

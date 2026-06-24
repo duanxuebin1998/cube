@@ -2519,7 +2519,7 @@
               "summary": "执行“Wartsila移动到监测位置Only”，推动“测量命令总入口”中的动作型流程继续向下运行。",
               "calls": [
                 "SinglePoint_CheckTargetPosition",
-                "MotorCtrl_MoveToPosition",
+                "MotorCtrl_JogMoveToPosition",
                 "MotorCtrl_GetDefaultSpeedX100"
               ],
               "states": [
@@ -2536,7 +2536,7 @@
               "errors": [],
               "steps": [
                 "进入函数后执行“Wartsila移动到监测位置Only”相关处理。",
-                "按源码顺序调用 SinglePoint_CheckTargetPosition -> MotorCtrl_MoveToPosition -> MotorCtrl_GetDefaultSpeedX100。",
+                "按源码顺序调用 SinglePoint_CheckTargetPosition -> MotorCtrl_JogMoveToPosition -> MotorCtrl_GetDefaultSpeedX100。",
                 "读写或判断 设备状态：STATE_RUNTOPOINTING、STATE_SWITCH；全局/参数：g_deviceParams、g_measurement、device_state。",
                 "最终把状态码、计算值或处理结果返回给上层调用者。"
               ]
@@ -2618,7 +2618,7 @@
               "summary": "处理外部或内部测量指令，业务动作是“运行到位置”。",
               "calls": [
                 "MeasureStart",
-                "MotorCtrl_MoveToPosition",
+                "MotorCtrl_JogMoveToPosition",
                 "MotorCtrl_GetDefaultSpeedX100"
               ],
               "states": [
@@ -2641,7 +2641,7 @@
               ],
               "steps": [
                 "进入函数后执行“指令入口：运行到位置”相关处理。",
-                "按源码顺序调用 MeasureStart -> MotorCtrl_MoveToPosition -> MotorCtrl_GetDefaultSpeedX100。",
+                "按源码顺序调用 MeasureStart -> MotorCtrl_JogMoveToPosition -> MotorCtrl_GetDefaultSpeedX100。",
                 "读写或判断 设备状态：STATE_RUN_TO_POSITIONING、STATE_SWITCH、STATE_STANDBY、STATE_ERROR、STATE_RUN_TO_POSITION_OVER；全局/参数：g_measurement、device_state、g_deviceParams。",
                 "异常和提前退出主要通过 CHECK_COMMAND_SWITCH、SET_ERROR 传递。",
                 "最终把状态码、计算值或处理结果返回给上层调用者。"
@@ -4928,7 +4928,7 @@
               "signature": "static uint32_t Density_RunPoints01mm(const int32_t *p01, uint32_t n, int32_t oil_level_01mm, DensityDistribution *dist)",
               "summary": "完成“密度运行Points01mm”，为上层流程提供计算、校验或判断结果。",
               "calls": [
-                "MotorCtrl_MoveToPosition",
+                "MotorCtrl_JogMoveToPosition",
                 "MotorCtrl_GetDefaultSpeedX100",
                 "AbortableDelay_CommandSwitch",
                 "SinglePoint_ReadSensor",
@@ -4948,7 +4948,7 @@
               ],
               "steps": [
                 "进入函数后执行“密度运行Points01mm”相关处理。",
-                "按源码顺序调用 MotorCtrl_MoveToPosition -> MotorCtrl_GetDefaultSpeedX100 -> AbortableDelay_CommandSwitch -> SinglePoint_ReadSensor -> HasEffectiveCommandSwitchRequest -> Density_ValueToU01mmClamped。",
+                "按源码顺序调用 MotorCtrl_JogMoveToPosition -> MotorCtrl_GetDefaultSpeedX100 -> AbortableDelay_CommandSwitch -> SinglePoint_ReadSensor -> HasEffectiveCommandSwitchRequest -> Density_ValueToU01mmClamped。",
                 "读写或判断 设备状态：STATE_SWITCH；全局/参数：g_deviceParams。",
                 "异常和提前退出主要通过 AbortableDelay_CommandSwitch 传递。",
                 "最终把状态码、计算值或处理结果返回给上层调用者。"
@@ -5345,7 +5345,7 @@
               "calls": [
                 "MeasureStart",
                 "SinglePoint_CheckTargetPosition",
-                "MotorCtrl_MoveToPosition",
+                "MotorCtrl_JogMoveToPosition",
                 "MotorCtrl_GetDefaultSpeedX100",
                 "EnableDensityMode",
                 "SinglePoint_ReadSensor"
@@ -5367,7 +5367,7 @@
               ],
               "steps": [
                 "进入函数后执行“指令入口：单点PointMeasurement”相关处理。",
-                "按源码顺序调用 MeasureStart -> SinglePoint_CheckTargetPosition -> MotorCtrl_MoveToPosition -> MotorCtrl_GetDefaultSpeedX100 -> EnableDensityMode -> SinglePoint_ReadSensor。",
+                "按源码顺序调用 MeasureStart -> SinglePoint_CheckTargetPosition -> MotorCtrl_JogMoveToPosition -> MotorCtrl_GetDefaultSpeedX100 -> EnableDensityMode -> SinglePoint_ReadSensor。",
                 "读写或判断 设备状态：STATE_SINGLEPOINTING、STATE_SPTESTING、STATE_SINGLEPOINTOVER；全局/参数：g_measurement、device_state、g_deviceParams。",
                 "异常和提前退出主要通过 SET_ERROR 传递。"
               ]
@@ -5380,7 +5380,7 @@
               "calls": [
                 "HasEffectiveCommandSwitchRequest",
                 "SinglePoint_CheckTargetPosition",
-                "MotorCtrl_MoveToPosition",
+                "MotorCtrl_JogMoveToPosition",
                 "MotorCtrl_GetDefaultSpeedX100",
                 "SinglePointMonitoringPrototype_Run",
                 "EnableDensityMode",
@@ -5403,7 +5403,7 @@
               ],
               "steps": [
                 "进入函数后执行“指令入口：单点PointMonitoring”相关处理。",
-                "按源码顺序调用 HasEffectiveCommandSwitchRequest -> SinglePoint_CheckTargetPosition -> MotorCtrl_MoveToPosition -> MotorCtrl_GetDefaultSpeedX100 -> SinglePointMonitoringPrototype_Run -> EnableDensityMode -> SinglePoint_ReadSensor 等下游函数。",
+                "按源码顺序调用 HasEffectiveCommandSwitchRequest -> SinglePoint_CheckTargetPosition -> MotorCtrl_JogMoveToPosition -> MotorCtrl_GetDefaultSpeedX100 -> SinglePointMonitoringPrototype_Run -> EnableDensityMode -> SinglePoint_ReadSensor 等下游函数。",
                 "读写或判断 设备状态：STATE_RUNTOPOINTING、STATE_SWITCH、STATE_SPTESTING；全局/参数：g_measurement、device_state、g_deviceParams。",
                 "异常和提前退出主要通过 SET_ERROR 传递。",
                 "最终把状态码、计算值或处理结果返回给上层调用者。"
@@ -5474,7 +5474,7 @@
               "signature": "static uint32_t Wartsila_MoveToDensityPoint(float target_mm, uint32_t point_no, float *actual_position_mm)",
               "summary": "完成“Wartsila移动到密度Point”，为上层流程提供计算、校验或判断结果。",
               "calls": [
-                "MotorCtrl_MoveToPosition",
+                "MotorCtrl_JogMoveToPosition",
                 "MotorCtrl_GetDefaultSpeedX100",
                 "MotorCtrl_SnapshotSensorPositionMm"
               ],
@@ -5489,7 +5489,7 @@
               ],
               "steps": [
                 "进入函数后执行“Wartsila移动到密度Point”相关处理。",
-                "按源码顺序调用 MotorCtrl_MoveToPosition -> MotorCtrl_GetDefaultSpeedX100 -> MotorCtrl_SnapshotSensorPositionMm。",
+                "按源码顺序调用 MotorCtrl_JogMoveToPosition -> MotorCtrl_GetDefaultSpeedX100 -> MotorCtrl_SnapshotSensorPositionMm。",
                 "读写或判断 设备状态：STATE_SWITCH。",
                 "异常和提前退出主要通过 CHECK_ERROR 传递。",
                 "最终把状态码、计算值或处理结果返回给上层调用者。"
