@@ -38,7 +38,7 @@
 #define ERROR_LOG_OP_AUTO_RECOVER     "自动恢复"
 #define ERROR_LOG_OP_HOST_FRAME       "接收主机帧"
 #define ERROR_LOG_OP_COMM_DIAG        "通信诊断"
-#define ERROR_LOG_OP_WIRELESS_PROBE   "无线链路探测"
+#define ERROR_LOG_OP_WIRELESS_PROBE   "蓝牙链路检查"
 #define ERROR_LOG_OP_PARAM_VALIDATE   "参数校验"
 #define ERROR_LOG_OP_WEIGHT_COLLISION "称重碰撞检查"
 #define ERROR_LOG_OP_DRIVER_INIT      "驱动初始化"

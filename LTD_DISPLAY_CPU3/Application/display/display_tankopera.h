@@ -61,6 +61,7 @@ typedef enum {
     KEYNUM_INPUTCMDPARA,                 /* 输入参数值(带参指令) */
     KEYNUM_DISPLAY_PARA,                 /* 参数显示(读写类参数) */
     KEYNUM_WORDSELECT,                   /* 隐藏信息选择 */
+    KEYNUM_TAPE_THICKNESS_SELECT,        /* 尺带厚度型号选择 */
 
     /* ===== 界面显示类（如果你还有单独“语言”页） ===== */
     KEYNUM_MENU_LANGUAGE,                /* 显示设置 - 语言 */

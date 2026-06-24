@@ -24,7 +24,7 @@
 - `LTD_MAIN_CPU2/Core/Src/usart.c`
 - `LTD_MAIN_CPU2/Services/Sensor/dsm_sensor_communication.c`
 - `LTD_MAIN_CPU2/Services/Sensor/ltd_sensor_communication.c`
-- `LTD_MAIN_CPU2/Services/Sensor/wireless_communication.c`
+- `LTD_MAIN_CPU2/Services/Sensor/wireless_pairing.c`
 
 当前 USART6 仍是 `9600 8N1`，传感器通信仍使用前台逐字节轮询：
 
@@ -90,7 +90,7 @@ write_u32_to_regs(regs, REG_DEBUG_MOTOR_STATE, g_measurement.debug_data.motor_st
 - `LTD_MAIN_CPU2/Services/Sensor/sensor.h`
 - `LTD_MAIN_CPU2/Services/Sensor/dsm_sensor_communication.c`
 - `LTD_MAIN_CPU2/Services/Sensor/ltd_sensor_communication.c`
-- `LTD_MAIN_CPU2/Services/Sensor/wireless_communication.c`
+- `LTD_MAIN_CPU2/Services/Sensor/wireless_pairing.c`
 
 当前统一使用：
 

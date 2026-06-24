@@ -158,9 +158,9 @@ const char *ErrorLog_GetReasonByCode(uint32_t code)
     case SENSOR_DEVICE_COMM_TIMEOUT:
         return "传感器无响应";
     case WIRELESS_HOST_COMM_TIMEOUT:
-        return "滑环主机无响应";
+        return "蓝牙主机无响应";
     case WIRELESS_SLAVE_COMM_TIMEOUT:
-        return "滑环从机无响应";
+        return "蓝牙从机未连接";
     case WEIGHT_COMM_TIMEOUT:
         return "称重模块无响应";
     case SENSOR_BCC_ERROR:
@@ -344,9 +344,9 @@ const char *ErrorLog_GetCodeName(uint32_t code)
     case SENSOR_DEVICE_REPORTED_ERROR:
         return "传感器设备内部错误";
     case WIRELESS_HOST_COMM_TIMEOUT:
-        return "滑环主机通信超时";
+        return "蓝牙主机通信超时";
     case WIRELESS_SLAVE_COMM_TIMEOUT:
-        return "滑环从机通信超时";
+        return "蓝牙从机未连接";
     case MEASUREMENT_POSITION_ERROR:
         return "位置测量错误";
     case MEASUREMENT_TIMEOUT:

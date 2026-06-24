@@ -18,34 +18,16 @@
 #include "abortable_delay.h"
 #include "wireless_pairing.h"
 
-#define WIRELESS_HOST_ADDR 1U
-#define WIRELESS_SLAVE_ADDR 2U
 #define SENSOR_LEVEL_FREQ_RECOVERY_LIFT_MM 1.0f
 #define SENSOR_DENSITY_MODE_SETTLE_MS 3000U
 #define READ_PART_PARAMS_REFRESH_INTERVAL_MS 1000U
 #define READ_PART_PARAMS_RSSI_REFRESH_INTERVAL_MS 5000U
 
 static uint32_t Sensor_PositionToU01mmClamped(void);
-static void Sensor_UpdateWirelessRssiForPartParams(uint8_t force_update);
+static uint32_t Sensor_UpdateWirelessRssiForPartParams(uint8_t force_update);
+static void Sensor_PrintBluetoothLinkSnapshot(const WirelessConnectionStatus *status);
 
 
-/**
- * @brief 把轻量无线探测错误映射成对应节点错误码。
- *
- * 仅用于通信超时后的链路归因，不打印日志；STATE_SWITCH 等非超时返回值保持原样向上传递。
- */
-static uint32_t Sensor_MapWirelessProbeError(uint32_t ret, uint32_t timeout_code)
-{
-    /* 先处理异常边界，避免传感器数据状态机带故障继续运行。 */
-    if (ret == NO_ERROR) {
-        return NO_ERROR;
-    }
-    /* 先处理异常边界，避免传感器数据状态机带故障继续运行。 */
-    if (ret == SENSOR_DEVICE_COMM_TIMEOUT) {
-        return timeout_code;
-    }
-    return ret;
-}
 
 /**
  * @brief 在 LTD 和 DSM 探测结果中选择最终识别错误。
@@ -73,6 +55,7 @@ static uint32_t Sensor_SelectProbeError(uint32_t ltd_ret, uint32_t dsm_ret)
     return dsm_ret;
 }
 
+
 /**
  * @brief 记录传感器识别阶段的最终错误。
  *
@@ -88,20 +71,18 @@ static void Sensor_SetCommDetectError(uint32_t err)
 
 
 /**
- * @brief 在传感器无响应后执行滑环/无线链路诊断。
+ * @brief 在传感器无响应后执行蓝牙链路诊断。
  *
  * 该函数只在普通任务上下文调用，允许打印错误报警；诊断过程中若收到命令切换，
  * 立即返回 STATE_SWITCH，不把切换动作当作通信故障。
  */
 static uint32_t Sensor_DiagnoseCommTimeout(uint32_t ret, const char *context)
 {
-    uint32_t host_ret;
-    uint32_t slave_ret;
+    uint32_t link_ret;
     uint32_t diag_ret;
     const char *op_context = (context != NULL) ? context : "未知操作";
     char detail[96];
 
-    /* 先处理异常边界，避免传感器数据状态机带故障继续运行。 */
     if (ret != SENSOR_DEVICE_COMM_TIMEOUT) {
         return ret;
     }
@@ -114,66 +95,69 @@ static uint32_t Sensor_DiagnoseCommTimeout(uint32_t ret, const char *context)
                         ERROR_LOG_ACTION_CONTINUE,
                         detail);
 
-    host_ret = WIRELESS_ProbeNode(WIRELESS_HOST_ADDR);
-    if (host_ret == STATE_SWITCH) {
+    link_ret = WirelessPairing_CheckBluetoothLink();
+    if (link_ret == STATE_SWITCH) {
         return STATE_SWITCH;
     }
-    diag_ret = Sensor_MapWirelessProbeError(host_ret, WIRELESS_HOST_COMM_TIMEOUT);
-    /* 先处理异常边界，避免传感器数据状态机带故障继续运行。 */
+
+    diag_ret = link_ret;
     if (diag_ret != NO_ERROR) {
-        snprintf(detail, sizeof(detail), "原操作：%s,节点：主机,地址：%u", op_context, (unsigned)WIRELESS_HOST_ADDR);
-        /* 错误 阶段：错误报警 模块：滑环通信 操作：链路诊断 原因：ErrorLog_GetReasonByCode(diag_ret) 处理：继续尝试 详情：detail */
+        snprintf(detail, sizeof(detail), "原操作：%s,链路：蓝牙", op_context);
+        /* 错误 阶段：错误报警 模块：滑环通信 操作：蓝牙链路诊断 原因：ErrorLog_GetReasonByCode(diag_ret) 处理：继续尝试 详情：detail */
         ErrorLog_WarnDetail(ERROR_LOG_MODULE_SLIPRING_COMM,
-                            "链路诊断",
+                            "蓝牙链路诊断",
                             ErrorLog_GetReasonByCode(diag_ret),
                             ERROR_LOG_ACTION_CONTINUE,
                             detail);
         return diag_ret;
     }
 
-    slave_ret = WIRELESS_ProbeNode(WIRELESS_SLAVE_ADDR);
-    if (slave_ret == STATE_SWITCH) {
-        return STATE_SWITCH;
-    }
-    diag_ret = Sensor_MapWirelessProbeError(slave_ret, WIRELESS_SLAVE_COMM_TIMEOUT);
-    /* 先处理异常边界，避免传感器数据状态机带故障继续运行。 */
-    if (diag_ret != NO_ERROR) {
-        snprintf(detail, sizeof(detail), "原操作：%s,节点：从机,地址：%u", op_context, (unsigned)WIRELESS_SLAVE_ADDR);
-        /* 错误 阶段：错误报警 模块：滑环通信 操作：链路诊断 原因：ErrorLog_GetReasonByCode(diag_ret) 处理：继续尝试 详情：detail */
-        ErrorLog_WarnDetail(ERROR_LOG_MODULE_SLIPRING_COMM,
-                            "链路诊断",
-                            ErrorLog_GetReasonByCode(diag_ret),
-                            ERROR_LOG_ACTION_CONTINUE,
-                            detail);
-        return diag_ret;
-    }
     return SENSOR_DEVICE_COMM_TIMEOUT;
 }
 
 /**
- * @brief 识别传感器前检查主机和从机无线链路。
+ * @brief 识别传感器前检查蓝牙主机和蓝牙从机连接状态。
  *
- * 用完整信息读取确认链路是否可用，失败时映射为主机或从机通信超时，便于现场定位。
+ * 通过 CH9141 状态查询确认蓝牙连接是否可用，失败时映射为主机或从机通信超时，便于现场定位。
  */
-static uint32_t Sensor_ProbeWirelessLink(void)
+static uint32_t Sensor_ProbeWirelessLink(WirelessConnectionStatus *status)
 {
-    uint32_t ret;
+    return WirelessPairing_CheckBluetoothLinkDetailed(status);
+}
 
-    ret = WIRELESS_PrintInfo(WIRELESS_HOST_ADDR);
-    /* 先处理异常边界，避免传感器数据状态机带故障继续运行。 */
-    if (ret != NO_ERROR) {
-        ret = Sensor_MapWirelessProbeError(ret, WIRELESS_HOST_COMM_TIMEOUT);
-        return ret;
+/**
+ * @brief 打印最近一次蓝牙链路检查得到的从机 MAC 和 RSSI。
+ *
+ * 调用场景：DetectSensorType() 完成蓝牙链路检查后调用；不再次访问 UART6，避免延长传感器识别时序。
+ * 关键约束：RSSI 获取失败不代表链路断开，按本次快照有效位分别打印。
+ */
+static void Sensor_PrintBluetoothLinkSnapshot(const WirelessConnectionStatus *status)
+{
+    if (status == NULL) {
+        printf("蓝牙链路正常 | 从机MAC=未读取 | RSSI=未读取\r\n");
+        return;
     }
 
-    ret = WIRELESS_PrintInfo(WIRELESS_SLAVE_ADDR);
-    /* 先处理异常边界，避免传感器数据状态机带故障继续运行。 */
-    if (ret != NO_ERROR) {
-        ret = Sensor_MapWirelessProbeError(ret, WIRELESS_SLAVE_COMM_TIMEOUT);
-        return ret;
+    printf("蓝牙链路正常 | 从机MAC=");
+    if (status->mac_valid != 0U) {
+        printf("%02lX:%02lX:%02lX:%02lX:%02lX:%02lX",
+               (unsigned long)((status->mac_high >> 8U) & 0xFFU),
+               (unsigned long)(status->mac_high & 0xFFU),
+               (unsigned long)((status->mac_mid >> 8U) & 0xFFU),
+               (unsigned long)(status->mac_mid & 0xFFU),
+               (unsigned long)((status->mac_low >> 8U) & 0xFFU),
+               (unsigned long)(status->mac_low & 0xFFU));
+    } else {
+        printf("未读取");
     }
 
-    return NO_ERROR;
+    printf(" | RSSI=");
+    if (status->rssi_valid != 0U) {
+        printf("%ld dB", (long)status->rssi);
+    } else {
+        printf("未读取");
+    }
+    printf("\r\n");
 }
 
 /**
@@ -257,6 +241,7 @@ static uint32_t Sensor_ProbeDsmSensor(uint32_t *sensor_id_out)
     }
     return NO_ERROR;
 }
+
 /**
  * @brief 执行传感器数据中的 Sensor_SupportsAuxDsmChannels 逻辑。
  * @return 状态码、计数值或协议数值，具体含义由调用点约定。
@@ -265,6 +250,7 @@ static int Sensor_SupportsAuxDsmChannels(void)
 {
     return (g_deviceParams.sensorType == DSM_SENSOR);
 }
+
 /**
  * @brief 自动识别传感器类型（DSM 一代 / DSM_V2 / SIL）
  *
@@ -276,17 +262,18 @@ uint32_t DetectSensorType(void) {
 	uint32_t ltd_ret;
 	uint32_t dsm_ret;
 	uint32_t sensor_id = 0U;
+	WirelessConnectionStatus bluetooth_status;
 
 	printf("========== 传感器识别开始 ==========\r\n");
-	printf("[1/3] 检查无线链路\r\n");
+	printf("[1/3] 检查蓝牙链路\r\n");
 
-	ret = Sensor_ProbeWirelessLink();
+	ret = Sensor_ProbeWirelessLink(&bluetooth_status);
 	/* 先处理异常边界，避免传感器数据状态机带故障继续运行。 */
 	if (ret != NO_ERROR) {
 		Sensor_SetCommDetectError(ret);
 		return ret;
 	}
-	printf("无线链路正常\r\n");
+	Sensor_PrintBluetoothLinkSnapshot(&bluetooth_status);
 
 	printf("[2/3] 尝试LTD协议\r\n");
 	ltd_ret = Sensor_ProbeLtdSensor(&sensor_id);
@@ -333,6 +320,7 @@ uint32_t DetectSensorType(void) {
 	Sensor_SetCommDetectError(ret);
 	return ret;
 }
+
 /**
  * @brief 执行传感器数据中的 EnableDensityMode 逻辑。
  * @return 状态码、计数值或协议数值，具体含义由调用点约定。
@@ -542,6 +530,7 @@ uint32_t DSM_Get_LevelMode_Frequence(volatile uint32_t *frequency_out) {
                          MAX_MODE_SWITCH_RECOVERY);
 	}
 }
+
 /**
  * @brief 获取液位跟随频率的平均值
  *        （10 次采样，2s 间隔，去 2 大 2 小，取中间 6 次均值）
@@ -725,6 +714,7 @@ static uint32_t Sensor_PositionToU01mmClamped(void)
 
     return (uint32_t)pos_s;
 }
+
 /**
  * @brief 读取传感器数据中的 Sensor_ReadWaterCapacitance 逻辑。
  *
@@ -759,6 +749,7 @@ uint32_t Sensor_ReadGyroAngle(float *angle_x_deg, float *angle_y_deg)
     uint32_t ret = Read_Gyro_Angle(angle_x_deg, angle_y_deg);
     return Sensor_DiagnoseCommTimeout(ret, "读取陀螺仪");
 }
+
 /**
  * @brief 执行传感器数据中的 Sensor_Test1 逻辑。
  * @return 状态码、计数值或协议数值，具体含义由调用点约定。
@@ -867,20 +858,28 @@ static uint32_t Read_WeightParam_Adapter(void)
     return g_measurement.debug_data.weight_param;
 }
 
-static void Sensor_UpdateWirelessRssiForPartParams(uint8_t force_update)
+/*
+ * 函数用途：按周期刷新蓝牙 RSSI 快照。
+ * 调用场景：读取部件参数循环末尾调用，用于刷新显示缓存。
+ * 关键约束：该操作会短时占用 UART6 进入 CH9141 AT 模式；命令切换时必须把 STATE_SWITCH 传给上层，不能继续抢占传感器透传链路。
+ */
+static uint32_t Sensor_UpdateWirelessRssiForPartParams(uint8_t force_update)
 {
     static uint32_t last_update_tick = 0U;
     uint32_t now_tick = HAL_GetTick();
 
     if ((force_update == 0U) &&
         ((now_tick - last_update_tick) < READ_PART_PARAMS_RSSI_REFRESH_INTERVAL_MS)) {
-        return;
+        return NO_ERROR;
+    }
+
+    if (HasEffectiveCommandSwitchRequest()) {
+        return STATE_SWITCH;
     }
 
     last_update_tick = now_tick;
-    (void)WirelessPairing_UpdateConnectionStatusSnapshot();
+    return WirelessPairing_UpdateConnectionStatusSnapshot();
 }
-
 /* ================== CMD：读取部件参数 ================== */
 /**
  * @brief 读取部件参数的共用实现。
@@ -1030,7 +1029,15 @@ static uint32_t Sensor_ReadPartParamsInternal(uint8_t update_command_state)
     if ((!update_command_state) && HasEffectiveCommandSwitchRequest()) {
         return STATE_SWITCH;
     }
-    Sensor_UpdateWirelessRssiForPartParams(update_command_state);
+    ret = Sensor_UpdateWirelessRssiForPartParams(update_command_state);
+    if (ret == STATE_SWITCH) {
+        return STATE_SWITCH;
+    }
+    if (ret != NO_ERROR) {
+        printf("读取部件参数\t蓝牙RSSI刷新失败，保留上次RSSI快照。错误码=0x%08lX\r\n",
+               (unsigned long)ret);
+        ret = NO_ERROR;
+    }
     if ((!update_command_state) && HasEffectiveCommandSwitchRequest()) {
         return STATE_SWITCH;
     }

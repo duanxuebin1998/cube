@@ -52,6 +52,17 @@ uint32_t WirelessPairing_ReadConnectionStatus(WirelessConnectionStatus *status);
 uint32_t WirelessPairing_UpdateConnectionStatusSnapshot(void);
 
 /**
+ * @brief 查询当前 CH9141K 连接状态、发布共享快照，并按蓝牙主从机连接条件返回链路结果。
+ */
+uint32_t WirelessPairing_CheckBluetoothLinkDetailed(WirelessConnectionStatus *status);
+
+/**
+ * @brief 检查蓝牙主机是否可查询且蓝牙从机是否已连接。
+ *
+ * 返回 WIRELESS_HOST_COMM_TIMEOUT 表示蓝牙主机状态查询失败，返回 WIRELESS_SLAVE_COMM_TIMEOUT 表示主机正常但未连接从机。
+ */
+uint32_t WirelessPairing_CheckBluetoothLink(void);
+/**
  * @brief 查询当前 CH9141K 连接状态并打印模式、状态、MAC、RSSI 和缓存名称。
  *
  * 串口调试命令 SPC 使用该接口；只读查询，不扫描、不断开、不保存默认连接。

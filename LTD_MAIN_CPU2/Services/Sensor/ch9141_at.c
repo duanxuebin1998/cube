@@ -451,6 +451,29 @@ static uint32_t CH9141_AT_CollectResponse(CH9141AtWaitMode wait_mode,
     return SENSOR_DEVICE_COMM_TIMEOUT;
 }
 
+/*
+ * 函数用途：AT 入口失败或被命令切换打断后，把 CH9141K 和 UART6 尽量恢复到透传可用状态。
+ * 调用场景：CH9141_AT_EnterSoftwareMode() 的失败出口；只在主循环任务上下文调用。
+ * 关键约束：仅在 AT... 已经发出且可能进入 AT 模式时发送 AT+EXIT，避免无谓污染透传传感器链路。
+ */
+static void CH9141_AT_RecoverTransparentMode(uint8_t send_exit)
+{
+    static const uint8_t exit_cmd[] = "AT+EXIT\r\n";
+
+    (void)HAL_UART_DMAStop(&huart6);
+    CH9141_AT_ClearUartError();
+    if (send_exit != 0U) {
+        (void)HAL_UART_Transmit(&huart6,
+                                (uint8_t *)exit_cmd,
+                                (uint16_t)(sizeof(exit_cmd) - 1U),
+                                CH9141_AT_COMMAND_TX_TIMEOUT_MS);
+        CH9141_AT_DrainRxUntilIdle(CH9141_AT_PRE_COMMAND_IDLE_MS);
+    }
+    (void)HAL_UART_Abort(&huart6);
+    CH9141_AT_ClearUartError();
+    CH9141_AT_DrainRxUntilIdle(CH9141_AT_PRE_COMMAND_IDLE_MS);
+    CH9141_AT_ClearUartError();
+}
 /**
  * @brief 执行CH9141K AT 控制中的 CH9141_AT_PrepareUart6 逻辑。
  *
@@ -493,11 +516,20 @@ uint32_t CH9141_AT_EnterSoftwareMode(CH9141AtResponse *response)
 
     /* CH9141K 软件 AT 入口命令为 AT...，协议不使用裸 AT 作为入口。 */
     ret = CH9141_AT_SendCommand("AT...", CH9141_AT_WAIT_ACK, CH9141_AT_ENTER_TIMEOUT_MS, response);
-    /* 先处理异常边界，避免CH9141K AT 控制状态机带故障继续运行。 */
-    if ((ret == SENSOR_DEVICE_COMM_TIMEOUT) &&
-        (response != NULL) &&
-        (response->len == 0U)) {
-        printf("CH9141K AT\tAT...进入无响应\t请检查UART6链路、模块供电、AT入口时序或硬件AT引脚\r\n");
+    /* 入口失败时必须恢复透传和 UART6，避免后续传感器命令接在半截 AT 状态后面。 */
+    if (ret != NO_ERROR) {
+        uint8_t send_exit = 0U;
+
+        if ((ret == SENSOR_DEVICE_COMM_TIMEOUT) &&
+            (response != NULL) &&
+            (response->len == 0U)) {
+            printf("CH9141K AT\tAT...进入无响应\t请检查UART6链路、模块供电、AT入口时序或硬件AT引脚\r\n");
+        }
+        if ((ret == STATE_SWITCH) ||
+            ((response != NULL) && (response->len != 0U))) {
+            send_exit = 1U;
+        }
+        CH9141_AT_RecoverTransparentMode(send_exit);
     }
 
     return ret;

@@ -31,8 +31,6 @@
 #define WIRELESS_PAIRING_HOST_MODE             1U
 #define WIRELESS_PAIRING_HOST_CONNECTED_STATE  0x03U
 #define WIRELESS_PAIRING_SLAVE_CONNECTED_STATE 0x05U
-#define WIRELESS_PAIRING_HOST_ADDR             1U
-#define WIRELESS_PAIRING_SLAVE_ADDR            2U
 #define WIRELESS_PAIRING_RSSI_NEAR_THRESHOLD   (-55)
 #define WIRELESS_PAIRING_RSSI_MIN_GAP_DB       8
 
@@ -539,6 +537,73 @@ static void WirelessPairing_PublishConnectionStatus(const WirelessConnectionStat
     if (status->rssi_update_counter == 0U) {
         status->rssi_update_counter = 1U;
     }
+}
+
+/**
+ * @brief 把 CH9141 蓝牙主机状态查询错误映射为链路错误码。
+ */
+static uint32_t WirelessPairing_MapBluetoothLinkError(uint32_t ret)
+{
+    if ((ret == NO_ERROR) || (ret == STATE_SWITCH)) {
+        return ret;
+    }
+
+    if (ret == SENSOR_DEVICE_COMM_TIMEOUT) {
+        return WIRELESS_HOST_COMM_TIMEOUT;
+    }
+
+    return ret;
+}
+
+/**
+ * @brief 查询 CH9141 蓝牙主机，并判断蓝牙从机连接是否有效。
+ *
+ * 调用场景：上电识别、传感器通信超时归因、配对收尾和串口维护测试；只在任务上下文调用。
+ * status_out 返回本次 AT 查询得到的临时状态，用于现场打印 MAC/RSSI，避免使用可能保留配对结果的共享 MAC 字段。
+ */
+uint32_t WirelessPairing_CheckBluetoothLinkDetailed(WirelessConnectionStatus *status_out)
+{
+    WirelessConnectionStatus status;
+    uint32_t ret;
+
+    ret = WirelessPairing_ReadConnectionStatus(&status);
+    if ((ret != NO_ERROR) && (status.error_code == NO_ERROR)) {
+        status.error_code = ret;
+    }
+    WirelessPairing_PublishConnectionStatus(&status);
+
+    ret = WirelessPairing_MapBluetoothLinkError(ret);
+    if (ret != NO_ERROR) {
+        g_measurement.wireless_pairing_status.connection_error_code = ret;
+        status.error_code = ret;
+        if (status_out != NULL) {
+            *status_out = status;
+        }
+        return ret;
+    }
+
+    if (status.connection_valid == 0U) {
+        ret = WirelessPairing_MapBluetoothLinkError(status.error_code);
+        if (ret == NO_ERROR) {
+            ret = WIRELESS_SLAVE_COMM_TIMEOUT;
+        }
+        g_measurement.wireless_pairing_status.connection_error_code = ret;
+        status.error_code = ret;
+        if (status_out != NULL) {
+            *status_out = status;
+        }
+        return ret;
+    }
+
+    if (status_out != NULL) {
+        *status_out = status;
+    }
+    return NO_ERROR;
+}
+
+uint32_t WirelessPairing_CheckBluetoothLink(void)
+{
+    return WirelessPairing_CheckBluetoothLinkDetailed(NULL);
 }
 
 /**
@@ -1412,23 +1477,14 @@ static uint32_t WirelessPairing_ConnectAndSave(const WirelessPairingCandidate *c
         return ret;
     }
 
-    printf("无线滑环匹配\t复位完成，恢复UART6透传并探测节点\r\n");
-    (void)CH9141_AT_PrepareUart6(WIRELESS_PAIRING_POST_RESET_IDLE_MS);
-    ret = WIRELESS_ProbeNode(WIRELESS_PAIRING_HOST_ADDR);
+    printf("无线滑环匹配\t复位完成，检查蓝牙主机和从机连接状态\r\n");
+    ret = WirelessPairing_CheckBluetoothLink();
     /* 先处理异常边界，避免无线滑环匹配状态机带故障继续运行。 */
     if (ret != NO_ERROR) {
-        WirelessPairing_PrintRet("无线滑环匹配\t复位后主机探测", ret);
+        WirelessPairing_PrintRet("无线滑环匹配\t复位后蓝牙链路检查", ret);
         return ret;
     }
-    WirelessPairing_PrintRet("无线滑环匹配\t复位后主机探测", ret);
-
-    ret = WIRELESS_ProbeNode(WIRELESS_PAIRING_SLAVE_ADDR);
-    /* 先处理异常边界，避免无线滑环匹配状态机带故障继续运行。 */
-    if (ret != NO_ERROR) {
-        WirelessPairing_PrintRet("无线滑环匹配\t复位后从机探测", ret);
-        return ret;
-    }
-    WirelessPairing_PrintRet("无线滑环匹配\t复位后从机探测", ret);
+    WirelessPairing_PrintRet("无线滑环匹配\t复位后蓝牙链路检查", ret);
 
     WirelessPairing_RememberPeer(candidate);
     printf("无线滑环匹配\t已缓存当前连接从机\tMAC=%s", candidate->mac);
@@ -1439,7 +1495,7 @@ static uint32_t WirelessPairing_ConnectAndSave(const WirelessPairingCandidate *c
     }
     printf("\r\n");
 
-    printf("无线滑环匹配\t完成，透传链路探测正常\r\n");
+    printf("无线滑环匹配\t完成，蓝牙链路检查正常\r\n");
     return NO_ERROR;
 }
 
@@ -1533,10 +1589,15 @@ uint32_t WirelessPairing_ReadConnectionStatus(WirelessConnectionStatus *status)
         goto finish;
     }
 
-    if ((mode != WIRELESS_PAIRING_HOST_MODE) ||
-        (ble_status != WIRELESS_PAIRING_HOST_CONNECTED_STATE)) {
+    if (mode != WIRELESS_PAIRING_HOST_MODE) {
         ret = NO_ERROR;
-        status->error_code = NO_ERROR;
+        status->error_code = WIRELESS_HOST_COMM_TIMEOUT;
+        goto finish;
+    }
+
+    if (ble_status != WIRELESS_PAIRING_HOST_CONNECTED_STATE) {
+        ret = NO_ERROR;
+        status->error_code = WIRELESS_SLAVE_COMM_TIMEOUT;
         goto finish;
     }
 

@@ -168,8 +168,8 @@ typedef enum {
     SENSOR_RESP_FORMAT_ERROR = 0x000D000B,       /* 传感器响应格式错误 */
 	DENSITY_UNSTABLE = 0x000D000C,               /* 密度值不稳定 */
     SENSOR_DEVICE_REPORTED_ERROR = 0x000D000D,   /* 传感器返回设备内部错误 */
-    WIRELESS_HOST_COMM_TIMEOUT = 0x000D0010,     /* 与无线主机通信无响应 */
-    WIRELESS_SLAVE_COMM_TIMEOUT = 0x000D0011,    /* 与无线从机通信无响应 */
+    WIRELESS_HOST_COMM_TIMEOUT = 0x000D0010,     /* 与蓝牙主机通信无响应 */
+    WIRELESS_SLAVE_COMM_TIMEOUT = 0x000D0011,    /* 蓝牙从机未连接或无响应 */
     /* ==================== 测量过程故障 (0x000F0000 - 0x000FFFFF) ==================== */
     MEASUREMENT_POSITION_ERROR = 0x000F0001,     /* 位置测量错误 */
     MEASUREMENT_TIMEOUT = 0x000F0002,            /* 测量超时 */

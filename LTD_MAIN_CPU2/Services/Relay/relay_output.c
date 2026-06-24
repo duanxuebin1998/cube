@@ -36,7 +36,6 @@ static const RelayOutputIo relay_output_ios[RELAY_OUTPUT_COUNT] = {
 
 static volatile uint8_t relay_output_initialized = 0U; /* 继电器输出模块级变量，保存跨函数共享的业务状态。 */
 static volatile uint8_t relay_output_updating = 0U; /* 继电器输出模块级变量，保存跨函数共享的业务状态。 */
-static volatile uint8_t relay_output_update_pending = 0U; /* 继电器输出状态标志，通常由主循环或中断回调共同检查。 */
 static volatile uint8_t relay_output_state_mask = 0U; /* 继电器输出运行状态缓存，供状态机或协议上报使用。 */
 
 /**
@@ -650,31 +649,8 @@ void RelayOutput_Init(void)
     }
     RelayOutput_WriteMask(0U);
     relay_output_initialized = 1U;
-    relay_output_update_pending = 1U;
 }
 
-/**
- * @brief 更新继电器输出中的 RelayOutput_RequestUpdate 逻辑。
- * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
- */
-void RelayOutput_RequestUpdate(void)
-{
-    relay_output_update_pending = 1U;
-}
-
-/**
- * @brief 处理继电器输出中的 RelayOutput_ProcessPending 逻辑。
- * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
- */
-void RelayOutput_ProcessPending(void)
-{
-    if (relay_output_update_pending == 0U) {
-        return;
-    }
-
-    relay_output_update_pending = 0U;
-    RelayOutput_Update();
-}
 
 /**
  * @brief 更新继电器输出中的 RelayOutput_Update 逻辑。

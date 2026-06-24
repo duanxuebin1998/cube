@@ -1525,3 +1525,39 @@ CPU2 参数加载会校验 FRAM 中的 `magic`、`struct_size`、`param_version`
 - 未在本次提交流程重新接串口实物联调；需现场用 BJP 和正式单点、固定点、密度分布流程确认上下行到位、无反向修正和最终误差阈值。
 - 最终误差 10mm 内不再报 `MEASUREMENT_POSITION_ERROR`，上层流程可能把 2~10mm 误差视为成功；现场需确认该容差符合业务允许范围。
 - 本次改变正式测量入口的运动策略，程序流程文档已同步更新密度/单点测量和电机位置模型页面。
+
+## 2026-06-24 - 改用蓝牙主从机链路并优化 CPU3 菜单（CPU2 V1.17.0.0 / CPU3 V1.16.0.0）
+
+版本：
+- CPU2: V1.16.2.0 -> V1.17.0.0。
+- CPU3: V1.15.2.0 -> V1.16.0.0。
+
+协议版本/兼容性：
+- `DEVICE_PROTOCOL_VERSION` 保持 10，不新增或变更 CPU2/CPU3 共享寄存器、命令码、输入寄存器尾段或保持寄存器地址。
+- CPU2 `DEVICE_PARAM_VERSION` 保持 3，`DeviceParameters` 结构大小不变，不会因本次升级触发恢复出厂参数。
+- `WIRELESS_HOST_COMM_TIMEOUT` 和 `WIRELESS_SLAVE_COMM_TIMEOUT` 错误码数值保持不变，仅把现场语义和显示文案调整为蓝牙主机/蓝牙从机连接异常，避免破坏既有错误码传递链路。
+- 旧无线主机/从机 8 字节自身通信模块移除后，传感器测量透传仍继续使用 UART6；蓝牙链路状态统一通过 CH9141K AT 状态查询判断。
+
+本次修改：
+- CPU2 删除旧 `wireless_communication.c/.h`，上电传感器识别、传感器通信超时诊断、配对完成链路确认和 `SC` 串口测试统一改为 `WirelessPairing_CheckBluetoothLink()`。
+- 蓝牙链路检查进入 CH9141K AT 模式后读取 `AT+BLEMODE?`、`AT+BLESTA?`、`AT+CCADD?`，并按需读取 RSSI，启动识别日志可打印从机 MAC 和 RSSI 快照。
+- 读取部件参数流程继续保留 RSSI 刷新；刷新被新命令打断时返回 `STATE_SWITCH`，普通 RSSI 刷新失败只保留上次快照，不中断部件参数主流程。
+- CH9141K AT 入口失败或被命令切换打断时增加透明模式恢复和 UART6 清理，降低后续传感器透传被半截 AT 状态影响的风险。
+- CPU3 修复继电器参数四级菜单返回路径，通道设置返回对应 `menu_relayN_channel`，报警配置返回对应 `menu_relayN_alarm`。
+- CPU3 尺带厚度参数增加 PET 0.300、PEEK 0.500、ETFE 1.100 和手输入口，常用材料厚度可直接选择写入。
+- CPU2 继电器输出刷新去掉 pending 机制，TIM4 中断中直接调用 `RelayOutput_Update()` 并依赖模块内部重入保护。
+- CPU2/CPU3 错误日志、屏幕错误原因、串口调试说明、无线滑环匹配文档和菜单文档同步改为蓝牙主从机语义。
+- 同步新增本版本改动与测试方案，并更新版本索引、CPU2 参数存储升级清单和相关流程文档说明。
+
+验证：
+- `cmake --build build\LTD_MAIN_CPU2`
+- `cmake --build build\LTD_DISPLAY_CPU3`
+- `py -3 LTD_DISPLAY_CPU3\font_check.py`
+- `git diff --cached --check`
+- `py -3 tools\check_version_bumped.py`
+
+未验证风险：
+- 未做实物联调；需要现场验证蓝牙主机断电、蓝牙从机未连接、RSSI 查询超时、命令切换打断 AT 查询和 UART6 透传恢复。
+- 需要在 OLED 实机上逐项确认继电器 R1~R4 通道设置、报警配置和报警状态页的返回路径，以及尺带厚度型号选择和手输路径。
+- TIM4 中断直接执行继电器输出计算会增加中断内工作量，现场需重点观察 TIM4 周期、看门狗刷新、UART6 传感器通信和电机控制是否受影响。
+- `CHANGELOG.pdf` 已包含当前暂存区原有 PDF 更新；本次提交未重新生成 PDF。

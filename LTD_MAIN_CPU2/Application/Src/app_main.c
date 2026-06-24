@@ -180,7 +180,6 @@ void App_MainLoop(void) {
 	(void)MotorCtrl_PollRuntimePosition();
 	(void)Weight_CheckCommunicationTimeout();
 	HostCommu_ProcessDeferredLogs();
-    RelayOutput_ProcessPending(); /* 主循环刷新继电器输出 */
     {
         uint32_t ao_ret = AoOutput_Update();
         if ((ao_ret != NO_ERROR) && (g_measurement.device_status.error_code == NO_ERROR)) {

@@ -728,9 +728,9 @@ static const char *Display_GetErrorReasonByCode(uint32_t code)
     case SENSOR_DEVICE_REPORTED_ERROR:
         return "传感器设备内部错误";
     case WIRELESS_HOST_COMM_TIMEOUT:
-        return "滑环主机无响应";
+        return "BT主机无响应";
     case WIRELESS_SLAVE_COMM_TIMEOUT:
-        return "滑环从机无响应";
+        return "BT从机未连接";
     case MEASUREMENT_POSITION_ERROR:
         return "位置测量值异常";
     case MEASUREMENT_TIMEOUT:

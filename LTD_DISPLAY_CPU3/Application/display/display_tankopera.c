@@ -27,6 +27,10 @@
 #define PASSWORD_ENTERMAIN		1009
 #define MOTOR_RUN_MONITOR_START_GRACE_MS 5000U
 #define MOTOR_RUN_MONITOR_VALUE_LINE OLED_LINE8_4
+#define TAPE_THICKNESS_PET_001MM 300
+#define TAPE_THICKNESS_PEEK_001MM 500
+#define TAPE_THICKNESS_ETFE_001MM 1100
+#define TAPE_THICKNESS_CUSTOM_INDEX 3
 extern volatile uint8_t g_cpu3_uart_reinit_pending; /* CPU3 串口重初始化标志 */
 
 typedef void (*pFunc_void)(void);
@@ -93,6 +97,14 @@ static uint8_t *arr_ao_output_enable[][2] = {
 static uint8_t *arr_position_count_mode[][2] = {
 	{ (uint8_t*)"编码器", (uint8_t*)"Encoder" },
 	{ (uint8_t*)"电机", (uint8_t*)"Motor" },
+	{ (uint8_t*)"非法配置", (uint8_t*)"Illegal CFG" },
+};
+
+static uint8_t *arr_tape_thickness[][2] = {
+	{ (uint8_t*)"PET 0.300", (uint8_t*)"PET 0.300" },
+	{ (uint8_t*)"PEEK 0.500", (uint8_t*)"PEEK 0.500" },
+	{ (uint8_t*)"ETFE 1.100", (uint8_t*)"ETFE 1.100" },
+	{ (uint8_t*)"手输", (uint8_t*)"Custom" },
 	{ (uint8_t*)"非法配置", (uint8_t*)"Illegal CFG" },
 };
 
@@ -282,6 +294,7 @@ static int RelayParam_IsConfig(int operaNum);
 static int RelayParam_IsChannelSetting(int operaNum);
 static int RelayParam_IsAlarmCondition(int operaNum);
 static int RelayParam_IsAlarmValueField(int operaNum);
+static pFunc_void RelayParam_BackToConfigMenu(int operaNum);
 static MenuGroup ParamGroupOf(int operaNum); /* 根据操作码获取参数分组枚举 */
 static void menu_measure_config(void);
 static void menu_run_policy(void);
@@ -385,6 +398,8 @@ static void cmd_nopara_process(void);	/* 无参指令：直接下发 */
 static void cmd_onepara_process(void);	/* 带参指令：先写参数再下发 */
 static bool operation_needs_protect_confirm(int operaNum); /* 是否需要额外保护确认 */
 static void protected_operation_process(void); /* 保护确认通过后的实际执行 */
+static void tape_thickness_select(void); /* 尺带厚度型号选择 */
+static int tape_thickness_to_selection_index(int value); /* 尺带厚度转型号下标 */
 
 /* ---------- 6) 输入与数值编辑(输入框) ----------
  *	数字逐位输入、符号输入、位数/单位/小数点等显示规则
@@ -531,6 +546,10 @@ struct KeyMenu keymenu[KEYNUM_END] = {
     [KEYNUM_WORDSELECT] =
         { selectparaword, selectparaword, selectparaword, selectparaword,
           USE_KEY_BACK | USE_KEY_UP | USE_KEY_DOWN | USE_KEY_SURE, selectparaword },
+
+    [KEYNUM_TAPE_THICKNESS_SELECT] =
+        { tape_thickness_select, tape_thickness_select, tape_thickness_select, tape_thickness_select,
+          USE_KEY_BACK | USE_KEY_UP | USE_KEY_DOWN | USE_KEY_SURE, tape_thickness_select },
 
     /* 10 - 显示设置 - 语言 */
     [KEYNUM_MENU_LANGUAGE] =
@@ -2502,7 +2521,7 @@ static pFunc_void dtm_backtofunc(void)
         case MENU_GRP_CORR:          p = menu_correct;      break;
         case MENU_GRP_POLICY:        p = menu_policy;       break;
         case MENU_GRP_WARTSILA:      p = menu_wartsila;     break;
-        case MENU_GRP_DO_ALARM:      p = menu_do_alarm;     break;
+        case MENU_GRP_DO_ALARM:      p = RelayParam_BackToConfigMenu(now_Opera_Num); break;
         case MENU_GRP_AO:            p = menu_ao;           break;
         case MENU_GRP_CAL_SP:        p = menu_cal_sp;       break;
         case MENU_GRP_PARAM_CHECK:   p = menu_param_check;  break;
@@ -3145,6 +3164,11 @@ static void parawritecheck(void)
 		&& param_meta[index].authority_write
 		&& state_allows_param_write(g_measurement.device_status.device_state)) {
 
+		if (now_Opera_Num == COM_NUM_DEVICEPARAM_TAPE_THICKNESS_MM) {
+			tape_thickness_select();
+			return;
+		}
+
 		if (param_meta[index].pword == NULL) {
 			inputcmdpara();
 		} else {
@@ -3527,6 +3551,110 @@ static int selection_index_to_value(int operaNum, int selectedIndex)
 	}
 
 	return selectedIndex;
+}
+
+static int tape_thickness_to_selection_index(int value)
+{
+	switch (value) {
+	case TAPE_THICKNESS_PET_001MM:
+		return 0;
+	case TAPE_THICKNESS_PEEK_001MM:
+		return 1;
+	case TAPE_THICKNESS_ETFE_001MM:
+		return 2;
+	default:
+		return TAPE_THICKNESS_CUSTOM_INDEX;
+	}
+}
+
+/*
+ * 函数用途：为尺带厚度提供材料型号快速选择。
+ * 调用场景：参数详情页选择修改“尺带厚度”时调用。
+ * 关键约束：前三项仍写入现有厚度参数，手输保留原数字输入入口。
+ */
+static void tape_thickness_select(void)
+{
+	const int menulen = (int)((sizeof(arr_tape_thickness) / sizeof(arr_tape_thickness[0])) - 1U);
+	static int menu_cnt = 1;
+	static int timesure_local = 0;
+	static int timeback_local = 0;
+	static int last_value = -1;
+	int selected_index;
+	int i;
+	int row = 0;
+	int line = 0;
+	int shift = 0;
+	int current_value;
+
+	current_value = param_meta[getHoldValueNum(COM_NUM_DEVICEPARAM_TAPE_THICKNESS_MM)].val;
+	if (last_value != current_value) {
+		menu_cnt = tape_thickness_to_selection_index(current_value) + 1;
+		timesure_local = 0;
+		timeback_local = 0;
+		last_value = current_value;
+	}
+
+	oled_clear();
+	func_index = KEYNUM_TAPE_THICKNESS_SELECT;
+
+	if (NowKeyPress == USE_KEY_UP) {
+		menu_cnt--;
+		if (menu_cnt <= 0) {
+			menu_cnt += menulen;
+		}
+	} else if (NowKeyPress == USE_KEY_DOWN) {
+		menu_cnt++;
+	} else if (NowKeyPress == USE_KEY_SURE) {
+		if (timesure_local != 0) {
+			selected_index = (menu_cnt - 1) % menulen;
+			timesure_local = 0;
+			timeback_local = 0;
+			last_value = -1;
+
+			if (selected_index == TAPE_THICKNESS_CUSTOM_INDEX) {
+				menu_cnt = 1;
+				inputcmdpara();
+				return;
+			}
+
+			if (selected_index == 0) {
+				now_Para_CT.val = TAPE_THICKNESS_PET_001MM;
+			} else if (selected_index == 1) {
+				now_Para_CT.val = TAPE_THICKNESS_PEEK_001MM;
+			} else {
+				now_Para_CT.val = TAPE_THICKNESS_ETFE_001MM;
+			}
+			now_Para_CT.points = 3;
+			now_Para_CT.unit = (uint8_t*)"mm";
+			now_Para_CT.bits = 6;
+			parascopecheck();
+			return;
+		}
+		timesure_local++;
+		if (timeback_local != 0) {
+			timeback_local = 0;
+		}
+	} else if (NowKeyPress == USE_KEY_BACK) {
+		if (timeback_local != 0) {
+			menu_cnt = 1;
+			timeback_local = 0;
+			timesure_local = 0;
+			last_value = -1;
+			displaypara();
+			return;
+		}
+		timeback_local++;
+		if (timesure_local != 0) {
+			timesure_local = 0;
+		}
+	}
+
+	selected_index = (menu_cnt - 1) % menulen;
+	for (i = 0; i < menulen; i++) {
+		shift = (i == selected_index) ? 1 : 0;
+		OledDisplayLineWords(oled_fit_text(arr_tape_thickness[i][screen_parameter.language], OLED_LINE8_END), line, row, shift);
+		row += OLED_ROW4_2;
+	}
 }
 
 /* 返回通讯方式文字信息 */
@@ -4219,6 +4347,48 @@ static int RelayParam_IsAlarmValueField(int operaNum)
     int field = RelayParam_FieldOf(operaNum);
 
     return (field >= 6) && (field <= 10);
+}
+
+/*
+ * 函数用途：返回继电器参数详情页的上一级配置菜单。
+ * 调用场景：参数详情页按返回键时，由 dtm_backtofunc() 根据当前参数调用。
+ * 关键约束：通道设置和报警配置是四级菜单，不能统一返回继电器总列表。
+ */
+static pFunc_void RelayParam_BackToConfigMenu(int operaNum)
+{
+    int channel = RelayParam_ChannelOf(operaNum);
+
+    if (RelayParam_IsChannelSetting(operaNum) != 0) {
+        switch (channel) {
+        case 0:
+            return menu_relay1_channel;
+        case 1:
+            return menu_relay2_channel;
+        case 2:
+            return menu_relay3_channel;
+        case 3:
+            return menu_relay4_channel;
+        default:
+            return menu_do_alarm;
+        }
+    }
+
+    if (RelayParam_IsAlarmCondition(operaNum) != 0) {
+        switch (channel) {
+        case 0:
+            return menu_relay1_alarm;
+        case 1:
+            return menu_relay2_alarm;
+        case 2:
+            return menu_relay3_alarm;
+        case 3:
+            return menu_relay4_alarm;
+        default:
+            return menu_do_alarm;
+        }
+    }
+
+    return menu_do_alarm;
 }
 
 typedef struct {

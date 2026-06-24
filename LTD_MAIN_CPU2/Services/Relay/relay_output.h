@@ -17,13 +17,7 @@ typedef enum {
  */
 void RelayOutput_Init(void);
 
-/* IRQ-safe request hook. It only sets a flag and does not read parameters or GPIO. */
-void RelayOutput_RequestUpdate(void);
-
-/* Run pending relay calculation in the main context. */
-void RelayOutput_ProcessPending(void);
-
-/* Full relay calculation. Keep this in the main context unless a caller owns the timing risk. */
+/* 完整计算继电器输出状态；当前由 TIM4 中断直接调用。 */
 void RelayOutput_Update(void);
 
 /**

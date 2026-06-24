@@ -45,8 +45,6 @@
 #define MOTOR_TEXT_RETRY_LOG_INTERVAL_MS         1000U
 #define MOTOR_TEXT_STOP_SETTLE_MS                50U
 #define MOTOR_TEXT_STOP_CONFIRM_MS               200U
-#define COMM_TEST_WIRELESS_HOST_ADDR              1U
-#define COMM_TEST_WIRELESS_SLAVE_ADDR             2U
 typedef struct {
     DeviceState device_state;
     uint32_t error_code;
@@ -2729,7 +2727,7 @@ void DSM_V2_Test_AllParams(void) {
 	printf("===== DSM V2 通讯测试结束 =====\r\n\r\n");
 }
 /**
- * @brief  传感器与无线链路综合通信测试
+ * @brief  传感器与蓝牙链路综合通信测试
  * @note   手动调试入口，建议在系统初始化完成后临时调用；函数会执行传感器识别，
  *         并刷新 g_deviceParams.sensorType/sensorID，正式流程中不要周期性调用。
  */
@@ -2742,29 +2740,14 @@ void SensorWireless_CommTest(void)
     float density = 0.0f;
     float frequency = 0.0f;
 
-    printf("\r\n===== 传感器与无线通信测试开始 =====\r\n");
+    printf("\r\n===== 传感器与蓝牙通信测试开始 =====\r\n");
 
-    ret = WIRELESS_ProbeNode(COMM_TEST_WIRELESS_HOST_ADDR);
-    if (Test_CommRecordResult("无线主机链路探测", ret, &ok_count, &fail_count)) {
-        if (Test_CommShouldStop(&fail_count)) {
-            return;
-        }
-        ret = WIRELESS_PrintInfo(COMM_TEST_WIRELESS_HOST_ADDR);
-        (void)Test_CommRecordResult("读取无线主机信息", ret, &ok_count, &fail_count);
-    }
-
-    if (Test_CommShouldStop(&fail_count)) {
+    if (Test_ProcessCommandSwitchRequested() != 0U) {
         return;
     }
 
-    ret = WIRELESS_ProbeNode(COMM_TEST_WIRELESS_SLAVE_ADDR);
-    if (Test_CommRecordResult("无线从机链路探测", ret, &ok_count, &fail_count)) {
-        if (Test_CommShouldStop(&fail_count)) {
-            return;
-        }
-        ret = WIRELESS_PrintInfo(COMM_TEST_WIRELESS_SLAVE_ADDR);
-        (void)Test_CommRecordResult("读取无线从机信息", ret, &ok_count, &fail_count);
-    }
+    ret = WirelessPairing_CheckBluetoothLink();
+    (void)Test_CommRecordResult("蓝牙主机/从机连接状态检查", ret, &ok_count, &fail_count);
 
     if (Test_CommShouldStop(&fail_count)) {
         return;
