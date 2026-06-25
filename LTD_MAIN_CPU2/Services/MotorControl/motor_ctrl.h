@@ -205,6 +205,9 @@ uint32_t MotorCtrl_JogMoveToPosition(float target_mm, uint32_t speed_x100);
 /* * 无检测阻塞运动，调试/维护用，不建议用于关键测量流程。 */
 uint32_t MotorCtrl_MoveBlockingNoDetect(float mm, int dir, uint32_t speed_x100);
 
+/* * 无检测阻塞运动静默版，仅供内部短距离退让使用。 */
+uint32_t MotorCtrl_MoveBlockingNoDetectQuiet(float mm, int dir, uint32_t speed_x100);
+
 /* * 强制调试无检测运动：只绕过编码器首帧门控，仍保留驱动初始化和上电安全检查。 */
 uint32_t MotorCtrl_MoveBlockingNoDetectForceDebug(float mm, int dir, uint32_t speed_x100);
 

@@ -83,6 +83,11 @@ uint32_t weight_init() {
 	return NO_ERROR;
 }
 
+void Weight_RebaseStableWeight(void)
+{
+	weight_parament.stable_weight = weight_parament.current_weight;
+}
+
 /**
  * @brief 接收称重数据中的 Weight_MarkFrameReceived 逻辑。
  * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。

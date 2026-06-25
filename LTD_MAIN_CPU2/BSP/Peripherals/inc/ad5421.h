@@ -18,11 +18,14 @@
 #define WRITEDAC 0x01u /* AD5421 写 DAC 寄存器命令。 */
 #define WRITECONTROL 0x02u /* AD5421 写控制寄存器命令。 */
 #define RESETAD5421REG 0x07u /* AD5421 复位寄存器命令。 */
+#define NOOPAD5421 0x09u /* AD5421 空操作命令。 */
 #define READCONTROL 0x82u /* AD5421 读控制寄存器命令。 */
 #define READFAULT 0x85u /* AD5421 读故障寄存器命令。 */
 /* SPI 看门狗开关 */
 #define CUR_SPION_COMMAND 0xC000u /* SPI 看门狗开启，4s */
 #define CUR_SPIOFF_COMMAND 0x1000u /* SPI 看门狗关闭 */
+#define CUR_AUTO_FAULT_READBACK_OFF_COMMAND 0x0800u /* 禁止自动 fault 回读，允许专用寄存器回读 */
+#define CUR_SPIOFF_READBACK_COMMAND (CUR_SPIOFF_COMMAND | CUR_AUTO_FAULT_READBACK_OFF_COMMAND) /* AD5421 关闭 SPI 看门狗并允许专用回读的控制字。 */
 
 #define AD5421_FAULT_FLAG_SPI_WRITE    0x00000001u /* AD5421 故障位标志：AD5421 故障 FLAG SPI 写入。 */
 #define AD5421_FAULT_FLAG_SPI_READ     0x00000002u /* AD5421 故障位标志：AD5421 故障 FLAG SPI 读取。 */
@@ -57,6 +60,8 @@ uint32_t AD5421_SetCurrentX100(uint32_t mA_x100);
 uint32_t AD5421_PollDiagnostics(void);
 uint32_t AD5421_GetFaultFlags(void);
 uint32_t AD5421_GetFaultRegister(void);
+uint8_t AD5421_SetTraceSuppressed(uint8_t suppress);
+uint8_t AD5421_IsAccessBusy(void);
 
 #endif
 

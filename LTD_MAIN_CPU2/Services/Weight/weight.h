@@ -43,6 +43,7 @@ uint32_t CheckWeightCollision(void);
  * @param currWeight 当前重量采样值。
  */
 void Weight_Update(int32_t currWeight);
+void Weight_RebaseStableWeight(void);
 /**
  * @brief 接收称重数据中的 Weight_MarkFrameReceived 逻辑。
  */

@@ -102,7 +102,8 @@ static uint32_t MotorMotion_WaitStoppedAfterStopCommand(uint32_t timeout_ms);
 static uint32_t MotorMotion_MoveBlockingNoDetectInternal(float mm,
                                                          int dir,
                                                          uint32_t speed_x100,
-                                                         bool ignore_encoder_ready);
+                                                         bool ignore_encoder_ready,
+                                                         bool verbose);
 /**
  * @brief 等待 ticks 运动启动窗口内 XACTUAL 发生变化。
  */
@@ -916,7 +917,12 @@ uint32_t MotorCtrl_GetDisplayState(void)
  */
 uint32_t MotorCtrl_MoveBlockingNoDetect(float mm, int dir, uint32_t speed_x100)
 {
-    return MotorMotion_MoveBlockingNoDetectInternal(mm, dir, speed_x100, false);
+    return MotorMotion_MoveBlockingNoDetectInternal(mm, dir, speed_x100, false, true);
+}
+
+uint32_t MotorCtrl_MoveBlockingNoDetectQuiet(float mm, int dir, uint32_t speed_x100)
+{
+    return MotorMotion_MoveBlockingNoDetectInternal(mm, dir, speed_x100, false, false);
 }
 
 /**
@@ -927,7 +933,7 @@ uint32_t MotorCtrl_MoveBlockingNoDetect(float mm, int dir, uint32_t speed_x100)
  */
 uint32_t MotorCtrl_MoveBlockingNoDetectForceDebug(float mm, int dir, uint32_t speed_x100)
 {
-    return MotorMotion_MoveBlockingNoDetectInternal(mm, dir, speed_x100, true);
+    return MotorMotion_MoveBlockingNoDetectInternal(mm, dir, speed_x100, true, true);
 }
 
 /**
@@ -942,7 +948,8 @@ uint32_t MotorCtrl_MoveBlockingNoDetectForceDebug(float mm, int dir, uint32_t sp
 static uint32_t MotorMotion_MoveBlockingNoDetectInternal(float mm,
                                                          int dir,
                                                          uint32_t speed_x100,
-                                                         bool ignore_encoder_ready)
+                                                         bool ignore_encoder_ready,
+                                                         bool verbose)
 {
     MotorMotionSpeedScope speed_scope = { false, 0U };
     uint32_t ret;
@@ -967,7 +974,9 @@ static uint32_t MotorMotion_MoveBlockingNoDetectInternal(float mm,
         return ret;
     }
 
-    printf("无检测阻塞运动：距离=%.2f, 方向：%s\r\n", mm, MotorCtrl_DirectionText(dir));
+    if (verbose) {
+        printf("无检测阻塞运动：距离=%.2f, 方向：%s\r\n", mm, MotorCtrl_DirectionText(dir));
+    }
 
     ret = MotorDriver_SyncPositionOrCheckHealth(&stepper);
     /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
@@ -1026,7 +1035,9 @@ static uint32_t MotorMotion_MoveBlockingNoDetectInternal(float mm,
             /* 提前退出前先恢复临时速度，避免下一条命令沿用本次速度。 */
             return MotorMotion_ReturnWithSpeedScope(ret, &speed_scope);
         }
-        MotorLostStep_NoDetectRuntimeLogUpdate();
+        if (verbose) {
+            MotorLostStep_NoDetectRuntimeLogUpdate();
+        }
     }
 
     MotorMotion_ClearActiveState();

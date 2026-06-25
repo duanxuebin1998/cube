@@ -180,12 +180,6 @@ void App_MainLoop(void) {
 	(void)MotorCtrl_PollRuntimePosition();
 	(void)Weight_CheckCommunicationTimeout();
 	HostCommu_ProcessDeferredLogs();
-    {
-        uint32_t ao_ret = AoOutput_Update();
-        if ((ao_ret != NO_ERROR) && (g_measurement.device_status.error_code == NO_ERROR)) {
-            FaultManager_SetErrorState(ao_ret, GetShortFilename(__FILE__), __LINE__, __func__);
-        }
-    }
 
 	/* 第一优先级：处理刚收到的原始命令。
 	 * 这一层通常来自调试口/串口缓存，process_command() 会把字符命令翻译成具体动作，

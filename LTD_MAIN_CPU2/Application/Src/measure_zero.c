@@ -29,6 +29,27 @@ int32_t zero_position; /* 回零测量模块级变量，保存跨函数共享的业务状态。 */
 /* 内部函数声明：粗略和精确寻找零点 */
 static int SearchZeroRough();
 static int SearchZeroPrecise();
+static uint32_t Zero_MoveDownWithoutWeightGuard(const char *phase_name, float distance_mm);
+
+static uint32_t Zero_MoveDownWithoutWeightGuard(const char *phase_name, float distance_mm)
+{
+    uint32_t ret;
+
+    printf("零点测量    %s开始    下行距离=%.1fmm    当前称重=%ld", phase_name, (double)distance_mm, (long)weight_parament.current_weight);
+    MotorCtrl_PrintPositionRefs();
+    printf("\r\n");
+    ret = MotorCtrl_MoveBlockingNoDetectQuiet(distance_mm,
+                                          MOTOR_DIRECTION_DOWN,
+                                          MotorCtrl_GetDefaultSpeedX100());
+    if (ret == NO_ERROR) {
+        Weight_RebaseStableWeight();
+        printf("零点测量    %s完成    下行距离=%.1fmm    当前称重=%ld", phase_name, (double)distance_mm, (long)weight_parament.current_weight);
+        MotorCtrl_PrintPositionRefs();
+        printf("\r\n");
+    }
+    return ret;
+}
+
 
 /* 电机记步时，零点位置由 XACTUAL/电机基准维护，不再用编码轮零点偏差报警。
  * 标定零点流程本身也跳过该检查，避免标定过程被旧零点拦截。 */
@@ -76,9 +97,8 @@ int SearchZero(void) {
 	printf("零点测量    开始\r\n");
 
 	if (weight_parament.stable_weight >weight_parament.full_weight+2000) { /* 如果当前超重 */
-		ret = MotorCtrl_MoveAndWait(100.0, MOTOR_DIRECTION_DOWN, MotorCtrl_GetDefaultSpeedX100());
+		ret = Zero_MoveDownWithoutWeightGuard("初始脱离零点", 100.0f);
 		CHECK_ERROR(ret);
-		printf("零点测量    脱离零点完成\r\n");
 	}
 
 	printf("零点测量    初始重量：%d\r\n", weight_parament.stable_weight);
@@ -128,7 +148,7 @@ int SearchZero(void) {
             break;
         }
 
-        ret = MotorCtrl_MoveAndWait(100.0, MOTOR_DIRECTION_DOWN, MotorCtrl_GetDefaultSpeedX100());
+        ret = Zero_MoveDownWithoutWeightGuard("粗找退让", 100.0f);
         CHECK_ERROR(ret);
     }
     if (!rough_ok) {
@@ -144,7 +164,7 @@ int SearchZero(void) {
 	}
 
 	/* ************** 精找阶段 - 第一次精确找零点 ************** */
-	ret = MotorCtrl_MoveAndWait(200.0, MOTOR_DIRECTION_DOWN, MotorCtrl_GetDefaultSpeedX100());
+	ret = Zero_MoveDownWithoutWeightGuard("精找前退让", 200.0f);
 	CHECK_ERROR(ret);
 
 	try_times = 0;
@@ -180,7 +200,7 @@ int SearchZero(void) {
 				return (int)ret;
 			}
 			if (try_times < ZERO_SEARCH_RETRY_MAX) {
-				ret = MotorCtrl_MoveAndWait(100.0, MOTOR_DIRECTION_DOWN, MotorCtrl_GetDefaultSpeedX100());
+				ret = Zero_MoveDownWithoutWeightGuard("精找退让", 100.0f);
 				CHECK_ERROR(ret);
 				HAL_Delay(1000);
 			}
@@ -205,11 +225,9 @@ int SearchZero(void) {
 		} else {
 			printf("零点测量    编码器零点设置成功，按参数保持当前记步模式\r\n");
 		}
-		ret = MotorCtrl_MoveNoWait(10, MOTOR_DIRECTION_DOWN, MotorCtrl_GetDefaultSpeedX100()); /* 脱离零点 */
+		ret = Zero_MoveDownWithoutWeightGuard("标零后脱离", 10.0f); /* 脱离零点 */
 		CHECK_ERROR(ret);
-		HAL_Delay(3000);
-		printf("零点测量    向下移动    下行距离    %ld\r\n", g_deviceParams.findZeroDownDistance/10);
-		ret = MotorCtrl_MoveAndWait((float)g_deviceParams.findZeroDownDistance/10.0, MOTOR_DIRECTION_DOWN, MotorCtrl_GetDefaultSpeedX100());
+		ret = Zero_MoveDownWithoutWeightGuard("标零后下行", (float)g_deviceParams.findZeroDownDistance/10.0f);
 		CHECK_ERROR(ret);
 		if (g_deviceParams.sensorType == DSM_SENSOR) {
 			/* 零点电容只是一代 DSM 水位通道的空气基准，LTD/V2 不支持时不能阻断回零点。 */

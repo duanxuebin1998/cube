@@ -26,6 +26,9 @@ static AoOutputRuntime ao_output_runtime = {
 };
 
 static uint8_t ao_output_initialized = 0U;
+static volatile uint8_t ao_output_update_busy = 0U;
+static volatile uint8_t ao_output_timer_refresh_pending = 0U;
+static volatile uint32_t ao_output_timer_suspend_count = 0U;
 static uint8_t ao_output_driver_ready = 0U;
 static uint8_t ao_output_driver_retry_valid = 0U;
 static uint8_t ao_output_diag_valid = 0U;
@@ -35,7 +38,54 @@ static uint32_t ao_output_last_diag_tick = 0U;
 static uint32_t ao_output_last_diag_error = NO_ERROR;
 static uint32_t ao_output_last_write_attempt_tick = 0U;
 static uint32_t ao_output_last_write_attempt_mA_x100 = 0U;
+static uint32_t AoOutput_UpdateInternal(uint8_t allow_driver_init);
+/*
+ * 函数用途：挂起最低优先级 AO 延后刷新。
+ * 调用场景：TIM4 请求 AO 刷新或测试流程恢复自动刷新时调用。
+ * 关键约束：只设置 PendSV 挂起位，不访问 SPI、不打印、不阻塞。
+ */
+static void AoOutput_PendDeferredRefresh(void)
+{
+    SCB->ICSR = SCB_ICSR_PENDSVSET_Msk;
+    __DSB();
+    __ISB();
+}
 
+/*
+ * 函数用途：尝试占用 AO 更新窗口。
+ * 调用场景：前台刷新和 PendSV 延后刷新进入 AO 服务前调用。
+ * 关键约束：只用短临界区保护标志位，不在临界区内访问 SPI。
+ */
+static uint8_t AoOutput_TryEnterUpdate(void)
+{
+    uint32_t primask;
+    uint8_t entered = 0U;
+
+    primask = __get_PRIMASK();
+    __disable_irq();
+    if (ao_output_update_busy == 0U) {
+        ao_output_update_busy = 1U;
+        entered = 1U;
+    }
+    __set_PRIMASK(primask);
+
+    return entered;
+}
+
+/*
+ * 函数用途：释放 AO 更新窗口。
+ * 调用场景：前台刷新和 PendSV 延后刷新退出 AO 服务时调用。
+ * 关键约束：只清保护标志，真实错误状态已在调用链里保存。
+ */
+static void AoOutput_LeaveUpdate(void)
+{
+    uint32_t primask;
+
+    primask = __get_PRIMASK();
+    __disable_irq();
+    ao_output_update_busy = 0U;
+    __set_PRIMASK(primask);
+}
 /*
  * 函数用途：判断 AO 输出功能是否被参数使能。
  * 调用场景：AO 初始化和周期更新入口。
@@ -69,12 +119,24 @@ static void AoOutput_SetDisabledRuntime(uint32_t now)
  * 调用场景：AO 输出已使能时，由初始化和周期更新路径调用。
  * 关键约束：会访问 SPI 和 AD5421 诊断寄存器，不应在中断中调用。
  */
-static uint32_t AoOutput_EnsureDriverReady(uint32_t now)
+static uint32_t AoOutput_EnsureDriverReady(uint32_t now, uint8_t allow_init)
 {
     uint32_t ret;
 
     if (ao_output_driver_ready != 0U) {
         return NO_ERROR;
+    }
+
+    if (allow_init == 0U) {
+        ret = ao_output_runtime.last_error_code;
+        if (ret == NO_ERROR) {
+            ret = AD5421_INIT_ERROR;
+        }
+        ao_output_runtime.driver_fault_flags = AD5421_GetFaultFlags();
+        ao_output_runtime.driver_fault_register = AD5421_GetFaultRegister();
+        ao_output_runtime.last_update_tick = now;
+        ao_output_runtime.last_error_code = ret;
+        return ret;
     }
 
     if ((ao_output_driver_retry_valid != 0U) &&
@@ -103,7 +165,7 @@ static uint32_t AoOutput_EnsureDriverReady(uint32_t now)
 /*
  * 函数用途：按节流周期轮询 AD5421 诊断。
  * 调用场景：AO 已使能且驱动已初始化后的周期刷新。
- * 关键约束：诊断访问 SPI/GPIO，故障持续时不在每轮主循环阻塞访问硬件。
+ * 关键约束：诊断访问 SPI，故障持续时不在每轮主循环阻塞访问硬件。
  */
 static uint32_t AoOutput_PollDiagnosticsThrottled(uint32_t now)
 {
@@ -356,15 +418,20 @@ uint32_t AoOutput_Init(void)
     uint32_t ret;
     uint32_t now;
 
+    if (AoOutput_TryEnterUpdate() == 0U) {
+        return ao_output_runtime.last_error_code;
+    }
+
     ao_output_initialized = 1U;
     ao_output_driver_ready = 0U;
     now = HAL_GetTick();
     if (AoOutput_IsEnabled() == 0U) {
         AoOutput_SetDisabledRuntime(now);
+        AoOutput_LeaveUpdate();
         return NO_ERROR;
     }
 
-    ret = AoOutput_EnsureDriverReady(now);
+    ret = AoOutput_EnsureDriverReady(now, 1U);
     ao_output_runtime.target_mA_x100 = AoOutput_NormalizeHardwareCurrent(g_deviceParams.InitialCurrent_mA);
     ao_output_runtime.last_sent_mA_x100 = 0U;
     ao_output_runtime.source = AO_OUTPUT_SOURCE_INIT;
@@ -378,18 +445,21 @@ uint32_t AoOutput_Init(void)
     if (ret != NO_ERROR) {
         ao_output_runtime.source = AO_OUTPUT_SOURCE_DRIVER_ERROR;
         ao_output_runtime.target_mA_x100 = AoOutput_NormalizeHardwareCurrent(g_deviceParams.FaultCurrent_mA);
+        AoOutput_LeaveUpdate();
         return ret;
     }
 
-    return AoOutput_Update();
+    ret = AoOutput_UpdateInternal(1U);
+    AoOutput_LeaveUpdate();
+    return ret;
 }
 
 /*
- * 函数用途：刷新 AO 目标电流、诊断 AD5421，并按需写入输出电流。
- * 调用场景：主循环或测量流程周期调用。
- * 关键约束：AO 未使能时直接进入关闭运行态；函数会访问 SPI 和 GPIO，不应在中断中调用。
+ * 函数用途：刷新 AO 目标电流并写入 AD5421。
+ * 调用场景：AO 初始化、前台刷新和 PendSV 延后刷新共用内部流程。
+ * 关键约束：调用方必须先持有 AO 更新窗口；由 PendSV 调用时会抑制驱动内部打印。
  */
-uint32_t AoOutput_Update(void)
+static uint32_t AoOutput_UpdateInternal(uint8_t allow_driver_init)
 {
     AoOutputSource source = AO_OUTPUT_SOURCE_INIT;
     uint32_t target_mA_x100;
@@ -418,7 +488,7 @@ uint32_t AoOutput_Update(void)
         return NO_ERROR;
     }
 
-    ret = AoOutput_EnsureDriverReady(now);
+    ret = AoOutput_EnsureDriverReady(now, allow_driver_init);
     if (ret != NO_ERROR) {
         ao_output_runtime.target_mA_x100 = AoOutput_NormalizeHardwareCurrent(g_deviceParams.FaultCurrent_mA);
         ao_output_runtime.source = AO_OUTPUT_SOURCE_DRIVER_ERROR;
@@ -473,9 +543,127 @@ uint32_t AoOutput_Update(void)
 }
 
 /*
+ * 函数用途：刷新 AO 目标电流并写入 AD5421，带重入保护。
+ * 调用场景：前台流程或测量流程需要主动刷新 AO 时调用。
+ * 关键约束：内部会访问 SPI/GPIO；如果 PendSV 正在刷新，则返回上一次 AO 状态。
+ */
+uint32_t AoOutput_Update(void)
+{
+    uint32_t ret;
+
+    if (AoOutput_TryEnterUpdate() == 0U) {
+        return ao_output_runtime.last_error_code;
+    }
+
+    ret = AoOutput_UpdateInternal(1U);
+    AoOutput_LeaveUpdate();
+
+    return ret;
+}
+
+/*
+ * 函数用途：暂停定时触发的 AO 自动刷新。
+ * 调用场景：串口 AO 正式测试直接访问 AD5421 前调用。
+ * 关键约束：只影响 TIM4 请求和 PendSV 延后刷新，不影响继电器和前台 AO 调用。
+ */
+void AoOutput_SuspendTimerRefresh(void)
+{
+    uint32_t primask;
+
+    primask = __get_PRIMASK();
+    __disable_irq();
+    ao_output_timer_suspend_count++;
+    __set_PRIMASK(primask);
+}
+
+/*
+ * 函数用途：恢复定时触发的 AO 自动刷新。
+ * 调用场景：串口 AO 正式测试退出前调用。
+ * 关键约束：按计数恢复；如果暂停期间已有请求，则重新挂起 PendSV。
+ */
+void AoOutput_ResumeTimerRefresh(void)
+{
+    uint32_t primask;
+    uint8_t should_pend = 0U;
+
+    primask = __get_PRIMASK();
+    __disable_irq();
+    if (ao_output_timer_suspend_count > 0U) {
+        ao_output_timer_suspend_count--;
+    }
+    if ((ao_output_timer_suspend_count == 0U) &&
+        (ao_output_timer_refresh_pending != 0U)) {
+        should_pend = 1U;
+    }
+    __set_PRIMASK(primask);
+
+    if (should_pend != 0U) {
+        AoOutput_PendDeferredRefresh();
+    }
+}
+
+/*
+ * 函数用途：由 TIM4 中断请求一次 AO 延后刷新。
+ * 调用场景：TIM4_IRQHandler 在继电器刷新后调用。
+ * 关键约束：只置位请求并挂起 PendSV，不访问 AD5421、不打印、不阻塞。
+ */
+void AoOutput_RequestTimerRefreshFromTim4Isr(void)
+{
+    if (ao_output_timer_suspend_count != 0U) {
+        return;
+    }
+
+    ao_output_timer_refresh_pending = 1U;
+    AoOutput_PendDeferredRefresh();
+}
+
+/*
+ * 函数用途：处理 TIM4 请求的 AO 延后刷新。
+ * 调用场景：PendSV_Handler 最低优先级调用，补偿主循环阻塞时 AO 长时间不刷新。
+ * 关键约束：会访问 AD5421 SPI；驱动内部打印被抑制，错误只记录到 AO 运行态和全局错误码。
+ */
+uint32_t AoOutput_ProcessPendingTimerRefresh(void)
+{
+    uint32_t primask;
+    uint32_t ret;
+    uint8_t trace_suppressed;
+
+    if (ao_output_timer_suspend_count != 0U) {
+        return ao_output_runtime.last_error_code;
+    }
+
+    primask = __get_PRIMASK();
+    __disable_irq();
+    if (ao_output_timer_refresh_pending == 0U) {
+        __set_PRIMASK(primask);
+        return ao_output_runtime.last_error_code;
+    }
+    if ((ao_output_update_busy != 0U) ||
+        (AD5421_IsAccessBusy() != 0U)) {
+        __set_PRIMASK(primask);
+        return ao_output_runtime.last_error_code;
+    }
+    ao_output_timer_refresh_pending = 0U;
+    ao_output_update_busy = 1U;
+    __set_PRIMASK(primask);
+
+    trace_suppressed = AD5421_SetTraceSuppressed(1U);
+    ret = AoOutput_UpdateInternal(1U);
+    (void)AD5421_SetTraceSuppressed(trace_suppressed);
+    AoOutput_LeaveUpdate();
+
+    if ((ret != NO_ERROR) &&
+        (ret != STATE_SWITCH) &&
+        (g_measurement.device_status.error_code == NO_ERROR)) {
+        g_measurement.device_status.error_code = ret;
+    }
+
+    return ret;
+}
+/*
  * 函数用途：返回 AO 运行态只读指针。
- * 调用场景：Modbus 输入寄存器打包或调试查看。
- * 关键约束：调用方不得通过返回指针修改运行态。
+ * 调用场景：Modbus 输入寄存器、HART 和调试查看。
+ * 关键约束：调用方不得通过返回指针修改运行态数据。
  */
 const AoOutputRuntime *AoOutput_GetRuntime(void)
 {

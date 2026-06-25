@@ -24,6 +24,7 @@
 #include <mb85rs2m.h>
 #include "my_crc.h"
 #include "ad5421.h"
+#include "AoOutput/ao_output.h"
 #include "encoder.h"
 #include <stddef.h>
 #define MOTOR_TEXT_ENCODER_MAX_ANGLE             4096.0f /* 串口 B/BE 编码器换算使用的一圈计数基准。 */
@@ -45,6 +46,11 @@
 #define MOTOR_TEXT_RETRY_LOG_INTERVAL_MS         1000U /* 串口电机测试重试日志打印间隔，单位 ms。 */
 #define MOTOR_TEXT_STOP_SETTLE_MS                50U /* 串口电机测试停机后的状态稳定等待时间，单位 ms。 */
 #define MOTOR_TEXT_STOP_CONFIRM_MS               200U /* 串口电机测试停机确认等待时间，单位 ms。 */
+#define TEST_AO_CURRENT_MIN_X100                 320U /* 模拟量输出测试允许的最小电流，单位 0.01mA。 */
+#define TEST_AO_CURRENT_MAX_X100                 2400U /* 模拟量输出测试允许的最大电流，单位 0.01mA。 */
+#define TEST_AO_HOLD_MS                          5000U /* 模拟量输出测试单点保持时间，单位 ms。 */
+#define TEST_AO_REFRESH_MS                       500U /* 模拟量输出测试刷新周期，单位 ms。 */
+#define TEST_AO_DIAG_DELAY_MS                   10U /* 模拟量输出测试写电流后等待 AD5421 状态稳定的时间。 */
 typedef struct {
     DeviceState device_state;
     uint32_t error_code;
@@ -63,6 +69,7 @@ static void Test_MotorTextRestoreRampNoError(const MotorTextRampSnapshot *snapsh
 static uint32_t Test_EnsureMotorPositionSourceBeforeFollow(const char *follow_name, uint8_t *switched_to_motor);
 static void Test_RunMeasureZeroOnce(void);
 static void Test_RunMeasureAndFollowOilLevelOnce(void);
+static uint8_t TestCommand_HandleAoOutputTest(const uint8_t *command);
 
 
 /**
@@ -1254,6 +1261,103 @@ static uint8_t TestCommand_HandleJogMotorTest(const uint8_t *command)
     motor_jog_text((float)value, dir, speed_x100);
     return 1U;
 }
+
+/*
+ * 函数用途：执行一次 AO 正式电流下发，并在短时间内重复写入同一电流值。
+ * 调用场景：串口 AO 命令现场验证 AD5421 控制寄存器回读、故障寄存器回读和电流环输出。
+ * 关键约束：使用正式 Ad5421Init() 初始化路径；诊断失败只提示，不提前结束电流保持。
+ */
+static void TestCommand_RunAoOutputPoint(uint32_t current_mA_x100)
+{
+    uint32_t init_ret;
+    uint32_t write_ret;
+    uint32_t diag_ret;
+    uint32_t elapsed_ms = 0U;
+
+    init_ret = Ad5421Init();
+    printf("AO FORMAL\tformal init=0x%08lX\tfault=0x%04lX\tflags=0x%08lX\tcurrent_x100=%lu\r\n",
+           (unsigned long)init_ret,
+           (unsigned long)AD5421_GetFaultRegister(),
+           (unsigned long)AD5421_GetFaultFlags(),
+           (unsigned long)current_mA_x100);
+    if (init_ret != NO_ERROR) {
+        printf("AO FORMAL\tinit failed, skip write\r\n");
+        return;
+    }
+
+    while (elapsed_ms < TEST_AO_HOLD_MS) {
+        write_ret = AD5421_SetCurrentX100(current_mA_x100);
+        if (write_ret == NO_ERROR) {
+            HAL_Delay(TEST_AO_DIAG_DELAY_MS);
+            diag_ret = AD5421_PollDiagnostics();
+        } else {
+            diag_ret = write_ret;
+        }
+        printf("AO FORMAL\twrite current=%.2fmA\twrite=0x%08lX\tdiag=0x%08lX\tfault=0x%04lX\tflags=0x%08lX\telapsed=%lums\r\n",
+               (double)current_mA_x100 / 100.0,
+               (unsigned long)write_ret,
+               (unsigned long)diag_ret,
+               (unsigned long)AD5421_GetFaultRegister(),
+               (unsigned long)AD5421_GetFaultFlags(),
+               (unsigned long)elapsed_ms);
+        if (write_ret != NO_ERROR) {
+            return;
+        }
+        if (diag_ret != NO_ERROR) {
+            printf("AO FORMAL\tdiag warning, keep current for meter check\r\n");
+        }
+        if (Test_ProcessCommandSwitchRequested() != 0U) {
+            return;
+        }
+        HAL_Delay(TEST_AO_REFRESH_MS);
+        elapsed_ms += TEST_AO_REFRESH_MS;
+    }
+}
+/*
+ * 函数用途：处理 AO 正式回读电流命令。
+ * 调用场景：串口发送 AO400、AO1200、AO2000 或 AOS 时验证正式回读和物理电流输出。
+ * 关键约束：命令在 MeasureStart 前处理，避免被 A 电机测试路径截获。
+ */
+static uint8_t TestCommand_HandleAoOutputTest(const uint8_t *command)
+{
+    const uint32_t scan_points[] = {400U, 1200U, 2000U, 2200U};
+    const char *arg;
+    char *endptr;
+    unsigned long current_mA_x100;
+
+    if ((command == NULL) || (command[0] != 'A') || (command[1] != 'O')) {
+        return 0U;
+    }
+
+    AoOutput_SuspendTimerRefresh();
+
+    if ((command[2] == 'S') && (command[3] == '\0')) {
+        for (uint32_t i = 0U; i < (sizeof(scan_points) / sizeof(scan_points[0])); i++) {
+            if (Test_ProcessCommandSwitchRequested() != 0U) {
+                AoOutput_ResumeTimerRefresh();
+                return 1U;
+            }
+            TestCommand_RunAoOutputPoint(scan_points[i]);
+        }
+        printf("AO FORMAL\tscan done\r\n");
+        AoOutput_ResumeTimerRefresh();
+        return 1U;
+    }
+
+    arg = (const char *)&command[2];
+    current_mA_x100 = strtoul(arg, &endptr, 10);
+    if ((endptr == arg) || (*endptr != '\0') ||
+        (current_mA_x100 < TEST_AO_CURRENT_MIN_X100) ||
+        (current_mA_x100 > TEST_AO_CURRENT_MAX_X100)) {
+        printf("AO FORMAL\tusage: AO400/AO1200/AO2000/AO2200 or AOS, unit=0.01mA\r\n");
+        AoOutput_ResumeTimerRefresh();
+        return 1U;
+    }
+
+    TestCommand_RunAoOutputPoint((uint32_t)current_mA_x100);
+    AoOutput_ResumeTimerRefresh();
+    return 1U;
+}
 /**
  * @brief 解析 BE 可选参数，兼容旧的 BE100S 和 BE100,1 传感器通信写法。
  * @note  新格式：BE距离,速度m/min,加速度倍率,S 或 BE距离,速度m/min,加速度倍率,1。
@@ -1426,6 +1530,10 @@ uint8_t Test_ProcessSerialCommand(uint8_t *command)
 
     if ((command == NULL) || (command[0] == '\0')) {
         return 0U;
+    }
+
+    if (TestCommand_HandleAoOutputTest(command) != 0U) {
+        return 1U;
     }
 
     if ((command[0] == 'S') && (command[1] == 'C') && (command[2] == '\0')) {

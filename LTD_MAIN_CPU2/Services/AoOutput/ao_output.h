@@ -41,6 +41,27 @@ uint32_t AoOutput_Init(void);
 uint32_t AoOutput_Update(void);
 
 /*
+ * 函数用途：由 TIM4 中断请求一次 AO 延后刷新。
+ * 调用场景：TIM4_IRQHandler 在继电器刷新后调用。
+ * 关键约束：只置位请求并挂起 PendSV，不访问 AD5421、不打印、不阻塞。
+ */
+void AoOutput_RequestTimerRefreshFromTim4Isr(void);
+
+/*
+ * 函数用途：处理 TIM4 请求的 AO 延后刷新。
+ * 调用场景：PendSV_Handler 最低优先级调用。
+ * 关键约束：会访问 AD5421 SPI；驱动内部打印被抑制，错误延后由系统统一兜底。
+ */
+uint32_t AoOutput_ProcessPendingTimerRefresh(void);
+
+/*
+ * 函数用途：暂停或恢复定时触发的 AO 自动刷新。
+ * 调用场景：串口 AO 测试直接访问 AD5421 期间使用。
+ * 关键约束：只影响 TIM4 请求和 PendSV 延后刷新，不影响继电器和前台 AO 调用。
+ */
+void AoOutput_SuspendTimerRefresh(void);
+void AoOutput_ResumeTimerRefresh(void);
+/*
  * 函数用途：返回 AO 运行态只读指针。
  * 调用场景：Modbus 输入寄存器打包和调试查看。
  * 关键约束：调用方不得修改返回的运行态数据。

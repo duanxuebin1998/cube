@@ -4,7 +4,6 @@
 #include "main.h"
 #include "system_parameter.h"
 /* static int32_t SetCurrent(double current); */
-
 static inline void AD5421_CS_LOW(void)
 {
     HAL_GPIO_WritePin(AD5421_CS_GPIO_PORT, AD5421_CS_PIN, GPIO_PIN_RESET);
@@ -20,16 +19,126 @@ static inline void AD5421_CS_HIGH(void)
 }
 
 #define AD5421_SPI_TIMEOUT_MS 10U /* AD5421 SPI 传输超时时间，单位 ms。 */
-
 static volatile uint32_t ad5421_fault_flags = 0U;
 static volatile uint32_t ad5421_fault_register = 0U;
+static volatile uint8_t ad5421_trace_suppressed = 0U;
+static volatile uint8_t ad5421_access_busy = 0U;
+static volatile uint8_t ad5421_sequence_busy = 0U;
 static uint8_t ad5421_last_rx_data[3] = {0x00u, 0x00u, 0x00u};
+
+/*
+ * 函数用途：尝试占用 AD5421 SPI 访问窗口。
+ * 调用场景：所有 AD5421 公开访问入口和控制寄存器回读序列。
+ * 关键约束：只用短临界区保护标志位，不在临界区内访问 SPI。
+ */
+static uint8_t AD5421_TryBeginAccess(void)
+{
+    uint32_t primask;
+    uint8_t entered = 0U;
+
+    primask = __get_PRIMASK();
+    __disable_irq();
+    if (ad5421_access_busy == 0U) {
+        ad5421_access_busy = 1U;
+        entered = 1U;
+    }
+    __set_PRIMASK(primask);
+
+    return entered;
+}
+
+/*
+ * 函数用途：释放 AD5421 SPI 访问窗口。
+ * 调用场景：AD5421 访问入口结束后统一调用。
+ * 关键约束：只清本模块访问保护标志，不操作硬件片选。
+ */
+static void AD5421_EndAccess(void)
+{
+    uint32_t primask;
+
+    primask = __get_PRIMASK();
+    __disable_irq();
+    ad5421_access_busy = 0U;
+    __set_PRIMASK(primask);
+}
+
+/*
+ * 函数用途：尝试占用 AD5421 多帧初始化序列。
+ * 调用场景：Ad5421Init() 开始复位、控制回读、初始电流写入前调用。
+ * 关键约束：只阻止 TIM4 中断插入 AO 刷新，单帧 SPI 访问仍由 access_busy 保护。
+ */
+static uint8_t AD5421_TryBeginSequence(void)
+{
+    uint32_t primask;
+    uint8_t entered = 0U;
+
+    primask = __get_PRIMASK();
+    __disable_irq();
+    if ((ad5421_sequence_busy == 0U) && (ad5421_access_busy == 0U)) {
+        ad5421_sequence_busy = 1U;
+        entered = 1U;
+    }
+    __set_PRIMASK(primask);
+
+    return entered;
+}
+
+/*
+ * 函数用途：释放 AD5421 多帧初始化序列。
+ * 调用场景：Ad5421Init() 所有出口统一调用。
+ * 关键约束：只清序列保护标志，不操作 SPI 和片选。
+ */
+static void AD5421_EndSequence(void)
+{
+    uint32_t primask;
+
+    primask = __get_PRIMASK();
+    __disable_irq();
+    ad5421_sequence_busy = 0U;
+    __set_PRIMASK(primask);
+}
+
+/*
+ * 函数用途：切换 AD5421 调试打印抑制状态并返回旧状态。
+ * 调用场景：TIM4 中断刷新 AO 前抑制 printf，退出中断前恢复。
+ * 关键约束：只影响本驱动内部诊断打印，不改变错误码和故障标志。
+ */
+uint8_t AD5421_SetTraceSuppressed(uint8_t suppress)
+{
+    uint8_t previous = (uint8_t)ad5421_trace_suppressed;
+    ad5421_trace_suppressed = (suppress != 0U) ? 1U : 0U;
+    return previous;
+}
+
+/*
+ * 函数用途：返回 AD5421 当前是否正在访问 SPI。
+ * 调用场景：TIM4 AO 刷新前判断是否需要跳过本次中断刷新。
+ * 关键约束：只返回软件访问保护状态，不读取 SPI 外设寄存器。
+ */
+uint8_t AD5421_IsAccessBusy(void)
+{
+    if ((ad5421_access_busy != 0U) || (ad5421_sequence_busy != 0U)) {
+        return 1U;
+    }
+    return 0U;
+}
+
+/*
+ * 函数用途：判断 AD5421 诊断打印当前是否允许输出。
+ * 调用场景：本驱动内部错误诊断打印前调用。
+ * 关键约束：中断刷新 AO 时应返回 0，避免 ISR 直接 printf。
+ */
+static uint8_t AD5421_CanPrint(void)
+{
+    return (ad5421_trace_suppressed == 0U) ? 1U : 0U;
+}
+
 /*
  * 函数用途：向 AD5421 写入 24 位寄存器数据。
  * 调用场景：AD5421 初始化、复位和 DAC 电流更新。
  * 关键约束：通过 SPI3 阻塞发送，带有限超时，不应在中断中调用。
  */
-uint32_t AD5421_WriteReg(uint8_t reg, uint16_t value)
+static uint32_t AD5421_WriteRegRaw(uint8_t reg, uint16_t value)
 {
     HAL_StatusTypeDef status;
     uint8_t txData[3];
@@ -50,16 +159,11 @@ uint32_t AD5421_WriteReg(uint8_t reg, uint16_t value)
     return NO_ERROR;
 }
 
-/*
- * 函数用途：从 AD5421 读取寄存器并返回通信状态。
- * 调用场景：控制寄存器回读校验和故障寄存器诊断。
- * 关键约束：通过 SPI3 阻塞收发，带有限超时，不应在中断中调用。
- */
-static uint32_t AD5421_ReadRegChecked(uint8_t reg, uint16_t *value)
+static uint32_t AD5421_ReadRegCheckedRaw(uint8_t reg, uint16_t *value)
 {
     HAL_StatusTypeDef status;
     uint8_t commandData[3];
-    uint8_t dummyData[3] = {0x00u, 0x00u, 0x00u};
+    uint8_t dummyData[3] = {NOOPAD5421, 0x00u, 0x00u};
     uint8_t rxData[3] = {0x00u, 0x00u, 0x00u};
 
     if (value == NULL) {
@@ -94,6 +198,42 @@ static uint32_t AD5421_ReadRegChecked(uint8_t reg, uint16_t *value)
     *value = ((uint16_t)rxData[1] << 8) | rxData[2];
     return NO_ERROR;
 }
+uint32_t AD5421_WriteReg(uint8_t reg, uint16_t value)
+{
+    uint32_t ret;
+
+    if (AD5421_TryBeginAccess() == 0U) {
+        ad5421_fault_flags |= AD5421_FAULT_FLAG_SPI_WRITE;
+        return OTHER_PERIPHERAL_CONFIG_ERROR;
+    }
+
+    ret = AD5421_WriteRegRaw(reg, value);
+    AD5421_EndAccess();
+    return ret;
+}
+
+/*
+ * 函数用途：从 AD5421 读取寄存器并返回通信状态。
+ * 调用场景：控制寄存器回读校验和故障寄存器诊断。
+ * 关键约束：通过 SPI3 阻塞收发，带有限超时，不应在中断中调用。
+ */
+static uint32_t AD5421_ReadRegChecked(uint8_t reg, uint16_t *value)
+{
+    uint32_t ret;
+
+    if (value == NULL) {
+        return PARAM_ERROR;
+    }
+    if (AD5421_TryBeginAccess() == 0U) {
+        *value = 0U;
+        ad5421_fault_flags |= AD5421_FAULT_FLAG_SPI_READ;
+        return OTHER_PERIPHERAL_CONFIG_ERROR;
+    }
+
+    ret = AD5421_ReadRegCheckedRaw(reg, value);
+    AD5421_EndAccess();
+    return ret;
+}
 
 /*
  * 函数用途：兼容旧接口读取 AD5421 寄存器值。
@@ -106,6 +246,7 @@ uint16_t AD5421_ReadReg(uint8_t reg)
     (void)AD5421_ReadRegChecked(reg, &value);
     return value;
 }
+
 /*
  * 函数用途：直接写入 AD5421 DAC 原始值。
  * 调用场景：电流换算完成后由电流设置接口调用。
@@ -174,15 +315,14 @@ uint32_t AD5421_GetFaultRegister(void)
 }
 
 /*
- * 函数用途：轮询 AD5421 故障寄存器和故障引脚。
+ * 函数用途：轮询 AD5421 故障寄存器。
  * 调用场景：AO 初始化和周期刷新时确认电流环/芯片状态。
- * 关键约束：会访问 SPI 和 GPIO，不应在中断中调用；未使能 AO 时上层不会调用。
+ * 关键约束：会访问 SPI，不应在中断中调用；当前 PCB 未接 AD5421 FAULT 引脚。
  */
 uint32_t AD5421_PollDiagnostics(void)
 {
     uint16_t fault_reg = 0U;
     uint32_t ret;
-    GPIO_PinState fault_pin;
 
     ret = AD5421_ReadRegChecked(READFAULT, &fault_reg);
     if (ret != NO_ERROR) {
@@ -190,23 +330,21 @@ uint32_t AD5421_PollDiagnostics(void)
     }
 
     ad5421_fault_register = fault_reg;
+    /* 当前硬件 PB8 悬空，保留历史 PIN 位清零，避免误污染运行状态。 */
     ad5421_fault_flags &= ~(AD5421_FAULT_FLAG_PIN | AD5421_FAULT_FLAG_STATUS);
 
-    fault_pin = HAL_GPIO_ReadPin(AD5421_FAULT_GPIO_Port, AD5421_FAULT_Pin);
-    if (fault_pin == GPIO_PIN_SET) {
-        ad5421_fault_flags |= AD5421_FAULT_FLAG_PIN;
-    }
     if (fault_reg != 0U) {
         ad5421_fault_flags |= AD5421_FAULT_FLAG_STATUS;
     }
 
-    if ((ad5421_fault_flags & AD5421_FAULT_FLAG_PIN) != 0U) {
-        return AD5421_FAULT_PIN_ERROR;
-    }
     if ((ad5421_fault_flags & AD5421_FAULT_FLAG_STATUS) != 0U) {
+        if (AD5421_CanPrint() != 0U) {
+            printf("AD5421 fault diag: fault=0x%04X flags=0x%08lX\r\n",
+                   (unsigned int)fault_reg,
+                   (unsigned long)ad5421_fault_flags);
+        }
         return AD5421_READFAULT_ERROR;
     }
-
     return NO_ERROR;
 }
 
@@ -246,7 +384,6 @@ float AD5421_ReadCurrent(void)
     return 0.0f;
 }
 
-
 /**
  * @brief 清除或复位AD5421 模拟输出中的 ResetAD5421 逻辑。
  * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
@@ -254,7 +391,9 @@ float AD5421_ReadCurrent(void)
 void ResetAD5421(void)
 {
 	(void)AD5421_WriteReg(RESETAD5421REG, 0x0000);
+    HAL_Delay(1);
 }
+
 /*******************************************************
 * Name    ReadControlRegister
 * brief
@@ -300,25 +439,38 @@ static uint32_t WriteControlRegister(uint16_t controldata)
     uint32_t ret;
     uint16_t readback = 0U;
 
-    ret = AD5421_WriteReg(WRITECONTROL, controldata);
-    if (ret != NO_ERROR) {
-        printf("AD5421 control write fail: ret=0x%08lX\r\n", (unsigned long)ret);
+    if (AD5421_TryBeginAccess() == 0U) {
+        ad5421_fault_flags |= AD5421_FAULT_FLAG_READBACK;
         return AD5421_INIT_ERROR;
     }
 
-    ret = AD5421_ReadRegChecked(READCONTROL, &readback);
+    ret = AD5421_WriteRegRaw(WRITECONTROL, controldata);
     if (ret != NO_ERROR) {
-        printf("AD5421 control read fail: ret=0x%08lX\r\n", (unsigned long)ret);
+        AD5421_EndAccess();
+        if (AD5421_CanPrint() != 0U) {
+            printf("AD5421 control write fail: ret=0x%08lX\r\n", (unsigned long)ret);
+        }
+        return AD5421_INIT_ERROR;
+    }
+
+    ret = AD5421_ReadRegCheckedRaw(READCONTROL, &readback);
+    AD5421_EndAccess();
+    if (ret != NO_ERROR) {
+        if (AD5421_CanPrint() != 0U) {
+            printf("AD5421 control read fail: ret=0x%08lX\r\n", (unsigned long)ret);
+        }
         return AD5421_INIT_ERROR;
     }
 
     if (readback != controldata) {
-        printf("AD5421 control readback mismatch: write=0x%04X read=0x%04X rx=%02X %02X %02X\r\n",
-               (unsigned int)controldata,
-               (unsigned int)readback,
-               (unsigned int)ad5421_last_rx_data[0],
-               (unsigned int)ad5421_last_rx_data[1],
-               (unsigned int)ad5421_last_rx_data[2]);
+        if (AD5421_CanPrint() != 0U) {
+            printf("AD5421 control readback mismatch: write=0x%04X read=0x%04X rx=%02X %02X %02X\r\n",
+                   (unsigned int)controldata,
+                   (unsigned int)readback,
+                   (unsigned int)ad5421_last_rx_data[0],
+                   (unsigned int)ad5421_last_rx_data[1],
+                   (unsigned int)ad5421_last_rx_data[2]);
+        }
         ad5421_fault_flags |= AD5421_FAULT_FLAG_READBACK;
         return AD5421_READBACK_ERROR;
     }
@@ -367,22 +519,36 @@ static uint32_t WriteControlRegister(uint16_t controldata)
 /*
  * 函数用途：复位并初始化 AD5421，建立 AO 驱动可用状态。
  * 调用场景：AO 输出使能后首次刷新或初始化时调用。
- * 关键约束：会访问 SPI/GPIO 并读取诊断状态，不应在中断中调用。
+ * 关键约束：会访问 SPI 和片选 GPIO，并读取诊断状态，不应在中断中调用。
  */
 uint32_t Ad5421Init(void)
 {
     uint32_t ret;
 
+    if (AD5421_TryBeginSequence() == 0U) {
+        return AD5421_INIT_ERROR;
+    }
+
     ad5421_fault_flags = 0U;
     ad5421_fault_register = 0U;
     ResetAD5421();
 
-    ret = WriteControlRegister(CUR_SPIOFF_COMMAND);
+    ret = WriteControlRegister(CUR_SPIOFF_READBACK_COMMAND);
     if (ret != NO_ERROR) {
+        AD5421_EndSequence();
         return ret;
     }
 
-    return AD5421_PollDiagnostics();
+    ret = AD5421_SetCurrentX100(g_deviceParams.InitialCurrent_mA);
+    if (ret != NO_ERROR) {
+        AD5421_EndSequence();
+        return ret;
+    }
+    HAL_Delay(10);
+
+    ret = AD5421_PollDiagnostics();
+    AD5421_EndSequence();
+    return ret;
 }
 
 /*******************************************************

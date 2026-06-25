@@ -27,6 +27,7 @@
 #include "hostcommu.h"
 #include "iwdg.h"
 #include "../../Services/Relay/relay_output.h"
+#include "../../Services/AoOutput/ao_output.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -216,7 +217,7 @@ void PendSV_Handler(void)
 
   /* USER CODE END PendSV_IRQn 0 */
   /* USER CODE BEGIN PendSV_IRQn 1 */
-
+  (void)AoOutput_ProcessPendingTimerRefresh();
   /* USER CODE END PendSV_IRQn 1 */
 }
 
@@ -322,6 +323,7 @@ void TIM4_IRQHandler(void)
   HAL_TIM_IRQHandler(&htim4);
   /* USER CODE BEGIN TIM4_IRQn 1 */
 	RelayOutput_Update();
+	AoOutput_RequestTimerRefreshFromTim4Isr();
 	HAL_IWDG_Refresh(&hiwdg);
   /* USER CODE END TIM4_IRQn 1 */
 }

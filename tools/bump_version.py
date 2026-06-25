@@ -89,14 +89,14 @@ def read_optional_text(path: Path) -> tuple[str, str, str]:
 
 
 def macro_pattern(name: str) -> re.Pattern[str]:
-    return re.compile(rf"^#define\s+{re.escape(name)}\s+(\d+)u\s*$", re.MULTILINE)
+    return re.compile(rf"^(#define\s+{re.escape(name)}\s+)(\d+)(u\b.*)$", re.MULTILINE)
 
 
 def parse_macro(text: str, name: str) -> int:
     match = macro_pattern(name).search(text)
     if not match:
         raise RuntimeError(f"Missing macro: {name}")
-    return int(match.group(1))
+    return int(match.group(2))
 
 
 def parse_version(text: str, prefix: str) -> Version:
@@ -126,14 +126,14 @@ def replace_macro(text: str, name: str, value: int) -> str:
     pattern = macro_pattern(name)
     if not pattern.search(text):
         raise RuntimeError(f"Missing macro: {name}")
-    return pattern.sub(f"#define {name:<27} {value}u", text)
+    return pattern.sub(lambda match: f"{match.group(1)}{value}{match.group(3)}", text)
 
 
 def replace_string_macro(text: str, name: str, value: str) -> str:
-    pattern = re.compile(rf'^#define\s+{re.escape(name)}\s+"[^"]*"\s*$', re.MULTILINE)
+    pattern = re.compile(rf'^(#define\s+{re.escape(name)}\s+)"[^"]*"(.*)$', re.MULTILINE)
     if not pattern.search(text):
         raise RuntimeError(f"Missing macro: {name}")
-    return pattern.sub(f'#define {name} "{value}"', text)
+    return pattern.sub(lambda match: f'{match.group(1)}"{value}"{match.group(2)}', text)
 
 
 def update_target(target: VersionTarget, kind: str, requested: Version | None, dry_run: bool) -> tuple[Version, Version]:
