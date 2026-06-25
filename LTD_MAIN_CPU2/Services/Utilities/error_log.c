@@ -4,8 +4,8 @@
 #include "system_parameter.h"
 #include <stdio.h>
 
-#define ERROR_LOG_RECENT_REPORT_WINDOW_MS 200U
-#define ERROR_LOG_RETRY_VERBOSE_LIMIT 3U
+#define ERROR_LOG_RECENT_REPORT_WINDOW_MS 200U /* 错误日志重复上报抑制窗口，单位 ms。 */
+#define ERROR_LOG_RETRY_VERBOSE_LIMIT 3U /* 重试日志详细打印次数上限。 */
 
 static uint8_t s_error_log_recent_report_valid = 0U; /* 错误日志故障记录，供恢复、显示或日志链路使用。 */
 static uint32_t s_error_log_recent_report_code = 0U; /* 错误日志故障记录，供恢复、显示或日志链路使用。 */

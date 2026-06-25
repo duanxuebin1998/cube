@@ -13,9 +13,9 @@ typedef enum {
 	OIL, AIR
 } Level_StateTypeDef;
 
-#define frequency_difference ((float)g_measurement.oil_measurement.current_frequency-(float)g_measurement.oil_measurement.follow_frequency)
-#define INAIR   (g_measurement.oil_measurement.current_frequency > g_deviceParams.oilLevelFrequency)
-#define INOIL   (g_measurement.oil_measurement.current_frequency < g_deviceParams.oilLevelFrequency)
+#define frequency_difference ((float)g_measurement.oil_measurement.current_frequency-(float)g_measurement.oil_measurement.follow_frequency) /* 当前频率与跟随基准频率的差值。 */
+#define INAIR   (g_measurement.oil_measurement.current_frequency > g_deviceParams.oilLevelFrequency) /* 当前频率高于油面频率，判定探头在空气中。 */
+#define INOIL   (g_measurement.oil_measurement.current_frequency < g_deviceParams.oilLevelFrequency) /* 当前频率低于油面频率，判定探头在油中。 */
 #define MAX_TIMES_WHEN_FRE_FOLLOW				15 /* 频率跟随时的最大加速次数 */
 
 uint32_t determine_level_status(Level_StateTypeDef *state_out);

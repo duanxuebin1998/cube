@@ -19,7 +19,7 @@ static bool s_motor_restored_base_valid = false; /* 电机控制模块级变量，保存跨函
 
 /* XACTUAL 单次读取可能因为 SPI 帧错位出现 0 或极大跳变。
  * 这里用很宽的阈值只拦截明显不可能的单帧异常，真实大位移会通过二次读取确认。 */
-#define MOTOR_XACTUAL_SUSPECT_JUMP_TICKS   (MotorPosition_TapeTicksPerRev() * 2L)
+#define MOTOR_XACTUAL_SUSPECT_JUMP_TICKS   (MotorPosition_TapeTicksPerRev() * 2L) /* XACTUAL 可疑跳变判定阈值，单位 tick。 */
 
 /* ===================== 私有函数声明 ===================== */
 

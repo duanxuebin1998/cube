@@ -20,16 +20,16 @@
 #include "error_log.h"
 #include "system_parameter.h"
 #include "abortable_delay.h"
-#define WEIGHT_DEBUG
+#define WEIGHT_DEBUG /* 称重处理参数：称重 调试。 */
 #define MAX_WEIGHT 20000 /* 最大重量限制 */
 #define MIN_WEIGHT -2000 /* 最小重量限制 */
 #define MAX_EMPTY_WEIGHT 20000 /* 最大重量限制 */
 /* 采样和更新周期定义 */
-#define WEIGHT_SAMPLE_INTERVAL 200
-#define WEIGHT_FILTER_OLD_FACTOR 8
-#define WEIGHT_FILTER_NEW_FACTOR 2
-#define WEIGHT_FILTER_DIVISOR    (WEIGHT_FILTER_OLD_FACTOR + WEIGHT_FILTER_NEW_FACTOR)
-#define WEIGHT_COMM_TIMEOUT_MS 1000U
+#define WEIGHT_SAMPLE_INTERVAL 200 /* 称重处理参数：称重 SAMPLE 间隔。 */
+#define WEIGHT_FILTER_OLD_FACTOR 8 /* 称重一阶滤波旧值权重。 */
+#define WEIGHT_FILTER_NEW_FACTOR 2 /* 称重一阶滤波新值权重。 */
+#define WEIGHT_FILTER_DIVISOR    (WEIGHT_FILTER_OLD_FACTOR + WEIGHT_FILTER_NEW_FACTOR) /* 称重一阶滤波权重除数。 */
+#define WEIGHT_COMM_TIMEOUT_MS 1000U /* 称重处理参数：称重 通信 超时 毫秒。 */
 
 /* 全局变量，存储当前称重传感器的原始重量值 */
 int16_t g_weight; /* 称重数据模块级变量，保存跨函数共享的业务状态。 */

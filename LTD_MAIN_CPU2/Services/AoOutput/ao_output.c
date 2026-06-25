@@ -6,12 +6,12 @@
 #include "system_parameter.h"
 #include <stddef.h>
 
-#define AO_OUTPUT_MIN_MA_X100          320U
-#define AO_OUTPUT_MAX_MA_X100          2400U
-#define AO_OUTPUT_NORMAL_MIN_MA_X100   400U
-#define AO_OUTPUT_NORMAL_MAX_MA_X100   2000U
-#define AO_OUTPUT_REFRESH_INTERVAL_MS  1000U
-#define AO_OUTPUT_DIAG_INTERVAL_MS     1000U
+#define AO_OUTPUT_MIN_MA_X100          320U /* 4-20mA 模拟量输出参数：最小值 MA 放大 100 倍。 */
+#define AO_OUTPUT_MAX_MA_X100          2400U /* 4-20mA 模拟量输出参数：最大值 MA 放大 100 倍。 */
+#define AO_OUTPUT_NORMAL_MIN_MA_X100   400U /* 4-20mA 模拟量输出参数：正常 最小值 MA 放大 100 倍。 */
+#define AO_OUTPUT_NORMAL_MAX_MA_X100   2000U /* 4-20mA 模拟量输出参数：正常 最大值 MA 放大 100 倍。 */
+#define AO_OUTPUT_REFRESH_INTERVAL_MS  1000U /* 4-20mA 模拟量输出参数：刷新 间隔 毫秒。 */
+#define AO_OUTPUT_DIAG_INTERVAL_MS     1000U /* 4-20mA 模拟量输出参数：诊断 间隔 毫秒。 */
 
 static AoOutputRuntime ao_output_runtime = {
     AO_OUTPUT_NORMAL_MIN_MA_X100,

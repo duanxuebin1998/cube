@@ -5,7 +5,7 @@
 #include <stdint.h>   /* 提供固定宽度整数类型支持 */
 
 /* 调试模式开关：设置为1启用调试输出，0禁用 */
-#define DEBUG_HOSTCOMMU_MODBUS 0
+#define DEBUG_HOSTCOMMU_MODBUS 0 /* Modbus 主机通信调试打印开关。 */
 
 /* 全局变量：当前Modbus从站地址 */
 extern int SlaveAddress;

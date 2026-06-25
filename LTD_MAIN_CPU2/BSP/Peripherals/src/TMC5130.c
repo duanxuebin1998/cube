@@ -12,34 +12,35 @@
 #include "motor_ctrl.h" /* 电机控制上层接口 */
 
 /* 保持电流固定为同一口径，运行时修改 motor_current 只改变 IRUN。 */
-#define TMC5130_MOTOR_IHOLD_VALUE       (4U)
-#define TMC5130_MOTOR_IHOLDDELAY_VALUE  (7U)
+#define TMC5130_MOTOR_IHOLD_VALUE       (4U) /* TMC5130 电机保持电流配置值。 */
+#define TMC5130_MOTOR_IHOLDDELAY_VALUE  (7U) /* TMC5130 保持电流延时配置值。 */
 
-#define TMC5130_BYTE(value, n)           (((value) >> ((n) << 3)) & 0xFF)
-#define TMC5130_SET_IHOLD(a)             (((a) & 0x1F) << 0)
-#define TMC5130_SET_IRUN(a)              (((a) & 0x1F) << 8)
-#define TMC5130_SET_IHOLDDELAY(a)        (((a) & 0x0F) << 16)
-#define TMC5130_IHOLD_IRUN_FIELD_MASK     (0x000F1F1FU)
+#define TMC5130_BYTE(value, n)           (((value) >> ((n) << 3)) & 0xFF) /* 从 32 位寄存器值中取第 n 个字节。 */
+#define TMC5130_SET_IHOLD(a)             (((a) & 0x1F) << 0) /* 生成 IHOLD_IRUN 寄存器的保持电流字段。 */
+#define TMC5130_SET_IRUN(a)              (((a) & 0x1F) << 8) /* 生成 IHOLD_IRUN 寄存器的运行电流字段。 */
+#define TMC5130_SET_IHOLDDELAY(a)        (((a) & 0x0F) << 16) /* 生成 IHOLD_IRUN 寄存器的保持电流延时字段。 */
+#define TMC5130_IHOLD_IRUN_FIELD_MASK     (0x000F1F1FU) /* IHOLD_IRUN 寄存器中电流相关字段掩码。 */
 #ifndef TMC5130_SPI_CS_DELAY_CYCLES
 /* CS 保护延时：手册的最小时序是 ns 级，但现场在电机运动时出现过读帧错位/非法 GSTAT。
  * 这里保留更大的高/低电平间隔，用来提高片选重新同步和抗干扰裕量。 */
-#define TMC5130_SPI_CS_DELAY_CYCLES      (512U)
+#define TMC5130_SPI_CS_DELAY_CYCLES      (512U) /* SPI 片选翻转后的短延时循环数。 */
 #endif
 #ifndef TMC5130_XACTUAL_READ_TOLERANCE_TICKS
-#define TMC5130_XACTUAL_READ_TOLERANCE_TICKS  (8192L)
+#define TMC5130_XACTUAL_READ_TOLERANCE_TICKS  (8192L) /* XACTUAL 连续读数一致性允许偏差，单位 tick。 */
 #endif
 #ifndef TMC5130_INIT_WRITE_RETRY_MAX
-#define TMC5130_INIT_WRITE_RETRY_MAX          (3U)
+#define TMC5130_INIT_WRITE_RETRY_MAX          (3U) /* TMC5130 初始化寄存器写入最大重试次数。 */
 #endif
 #ifndef TMC5130_WAIT_POS_TOLERANCE_TICKS
 /* waitMove 退出前会比较 XACTUAL 与 XTARGET。该容差用于吸收细分步误差、
  * 停止瞬间寄存器刷新延迟，以及位置读数的正常抖动，避免等不到完全相等。 */
-#define TMC5130_WAIT_POS_TOLERANCE_TICKS     (1024L)
+#define TMC5130_WAIT_POS_TOLERANCE_TICKS     (1024L) /* 等待到位时允许的位置误差，单位 tick。 */
 #endif
 /* GSTAT 按手册只有 bit0(reset)、bit1(drv_err)、bit2(uv_cp) 有效。
  * 高位非 0 不是新增故障位，而是 SPI 读数不可信，应按通信异常处理。 */
-#define TMC5130_GSTAT_VALID_MASK              (0x07UL)
+#define TMC5130_GSTAT_VALID_MASK              (0x07UL) /* GSTAT 寄存器合法状态位掩码。 */
 
+/* TMC5130 初始化写寄存器失败即返回的检查宏。 */
 #define TMC5130_REQUIRE_WRITE(handle, address, value)            \
     do {                                                         \
         if (!stpr_writeInt((handle), (address), (value))) {      \
@@ -47,17 +48,17 @@
         }                                                        \
     } while (0)
 
-#define TMC5130_DRVSTATUS_SG_RESULT_MASK   (0x000003FFUL)
-#define TMC5130_DRVSTATUS_FSACTIVE         (1UL << 15)
-#define TMC5130_DRVSTATUS_CS_ACTUAL_MASK   (0x001F0000UL)
-#define TMC5130_DRVSTATUS_STALLGUARD       (1UL << 24)
-#define TMC5130_DRVSTATUS_OT               (1UL << 25)
-#define TMC5130_DRVSTATUS_OTPW             (1UL << 26)
-#define TMC5130_DRVSTATUS_S2GA             (1UL << 27)
-#define TMC5130_DRVSTATUS_S2GB             (1UL << 28)
-#define TMC5130_DRVSTATUS_OLA              (1UL << 29)
-#define TMC5130_DRVSTATUS_OLB              (1UL << 30)
-#define TMC5130_DRVSTATUS_STST             (1UL << 31)
+#define TMC5130_DRVSTATUS_SG_RESULT_MASK   (0x000003FFUL) /* TMC5130 DRV_STATUS 位掩码：SG RESULT 掩码。 */
+#define TMC5130_DRVSTATUS_FSACTIVE         (1UL << 15) /* TMC5130 DRV_STATUS 位掩码：fullstep 主动标志。 */
+#define TMC5130_DRVSTATUS_CS_ACTUAL_MASK   (0x001F0000UL) /* TMC5130 DRV_STATUS 位掩码：实际线圈电流档位 CS_ACTUAL。 */
+#define TMC5130_DRVSTATUS_STALLGUARD       (1UL << 24) /* TMC5130 DRV_STATUS 位掩码：stallGuard 报警标志。 */
+#define TMC5130_DRVSTATUS_OT               (1UL << 25) /* TMC5130 DRV_STATUS 位掩码：OT。 */
+#define TMC5130_DRVSTATUS_OTPW             (1UL << 26) /* TMC5130 DRV_STATUS 位掩码：OTPW。 */
+#define TMC5130_DRVSTATUS_S2GA             (1UL << 27) /* TMC5130 DRV_STATUS 位掩码：S2GA。 */
+#define TMC5130_DRVSTATUS_S2GB             (1UL << 28) /* TMC5130 DRV_STATUS 位掩码：S2GB。 */
+#define TMC5130_DRVSTATUS_OLA              (1UL << 29) /* TMC5130 DRV_STATUS 位掩码：OLA。 */
+#define TMC5130_DRVSTATUS_OLB              (1UL << 30) /* TMC5130 DRV_STATUS 位掩码：OLB。 */
+#define TMC5130_DRVSTATUS_STST             (1UL << 31) /* TMC5130 DRV_STATUS 位掩码：STST。 */
 
 /**
  * @brief 从 DRV_STATUS 中提取实际电流档 CS_ACTUAL。
@@ -1006,6 +1007,7 @@ uint32_t stpr_initStepper(TMC5130TypeDef *tmc5130,
 {
     uint32_t value = 0;
     uint32_t init_write_failed_count = 0U;
+/* TMC5130 初始化阶段写寄存器并记录失败状态的宏。 */
 #define TMC5130_INIT_WRITE(handle, address, value) \
     tmc5130_initWrite((handle), (address), (value), &init_write_failed_count)
 

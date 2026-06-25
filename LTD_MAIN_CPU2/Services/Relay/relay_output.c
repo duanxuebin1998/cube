@@ -4,8 +4,8 @@
 #include <stddef.h>
 #include <string.h>
 
-#define RELAY_OUTPUT_ACTIVE_LEVEL   GPIO_PIN_SET
-#define RELAY_OUTPUT_INACTIVE_LEVEL GPIO_PIN_RESET
+#define RELAY_OUTPUT_ACTIVE_LEVEL   GPIO_PIN_SET /* 继电器输出参数：继电器 输出 有效 液位。 */
+#define RELAY_OUTPUT_INACTIVE_LEVEL GPIO_PIN_RESET /* 继电器输出参数：继电器 输出 无效 液位。 */
 
 typedef enum {
     RELAY_COMPARE_GREATER = 0U,

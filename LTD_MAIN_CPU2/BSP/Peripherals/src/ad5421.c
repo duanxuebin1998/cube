@@ -19,7 +19,7 @@ static inline void AD5421_CS_HIGH(void)
     HAL_GPIO_WritePin(AD5421_CS_GPIO_PORT, AD5421_CS_PIN, GPIO_PIN_SET);
 }
 
-#define AD5421_SPI_TIMEOUT_MS 10U
+#define AD5421_SPI_TIMEOUT_MS 10U /* AD5421 SPI 传输超时时间，单位 ms。 */
 
 static volatile uint32_t ad5421_fault_flags = 0U;
 static volatile uint32_t ad5421_fault_register = 0U;

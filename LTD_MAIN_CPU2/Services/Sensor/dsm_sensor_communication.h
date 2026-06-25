@@ -26,7 +26,7 @@
 
 #define DSM_CMDREPLY "%\r\n"		 /* 开启命令返回 */
 
-#define RCVBUFFLEN 32
+#define RCVBUFFLEN 32 /* 传感器通信参数：接收缓冲长度。 */
 
 
 typedef struct

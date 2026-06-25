@@ -2,9 +2,9 @@
 #define sil__MB85RS16_H
 #include "main.h"
 
-#define FRAM_CS_Pin GPIO_PIN_11
-#define FRAM_CS_GPIO_Port GPIOE
-#define FRAM_SPI hspi4
+#define FRAM_CS_Pin GPIO_PIN_11 /* FRAM 片选 GPIO 引脚。 */
+#define FRAM_CS_GPIO_Port GPIOE /* FRAM 片选 GPIO 端口。 */
+#define FRAM_SPI hspi4 /* FRAM 使用的 SPI 句柄。 */
 
 #define MB_WRITEENABLE 0x06  /* Write enable */
 #define MB_WRITEDATA  0x02 /* Write data */

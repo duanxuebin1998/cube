@@ -1,13 +1,13 @@
 #include "motor_ctrl_internal.h"
 #include "error_log.h"
 
-#define MOTOR_DRIVER_INIT_POWER_READY_TIMEOUT_MS  3000U
-#define MOTOR_DRIVER_INIT_POWER_READY_POLL_MS     100U
-#define MOTOR_DRIVER_INIT_POWER_READY_LOG_MS      500U
-#define MOTOR_DRIVER_DRVSTATUS_CS_ACTUAL_MASK     0x001F0000UL
-#define MOTOR_DRIVER_DRVSTATUS_CS_ACTUAL_SHIFT    16U
-#define MOTOR_DRIVER_RAMPSTAT_VZERO_MASK          0x400U
-#define MOTOR_DRIVER_POSITION_TOLERANCE_TICKS     1024L
+#define MOTOR_DRIVER_INIT_POWER_READY_TIMEOUT_MS  3000U /* 电机驱动初始化等待功率级就绪超时，单位 ms。 */
+#define MOTOR_DRIVER_INIT_POWER_READY_POLL_MS     100U /* 电机驱动初始化功率级就绪轮询周期，单位 ms。 */
+#define MOTOR_DRIVER_INIT_POWER_READY_LOG_MS      500U /* 电机驱动初始化功率级等待日志间隔，单位 ms。 */
+#define MOTOR_DRIVER_DRVSTATUS_CS_ACTUAL_MASK     0x001F0000UL /* DRV_STATUS 中实际线圈电流档位 CS_ACTUAL 的掩码。 */
+#define MOTOR_DRIVER_DRVSTATUS_CS_ACTUAL_SHIFT    16U /* DRV_STATUS 中实际线圈电流档位 CS_ACTUAL 的右移位数。 */
+#define MOTOR_DRIVER_RAMPSTAT_VZERO_MASK          0x400U /* RAMPSTAT 中速度为零状态位掩码。 */
+#define MOTOR_DRIVER_POSITION_TOLERANCE_TICKS     1024L /* 电机驱动位置校验允许误差，单位 tick。 */
 
 /**
  * @file motor_ctrl_driver_param.c

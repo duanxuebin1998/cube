@@ -17,7 +17,7 @@
 #include <math.h>
 #include "density_analysis_calculation.h"
 
-#define double_t double
+#define double_t double /* 密度计算使用的双精度类型别名。 */
 
 static double_t truncd(double_t value, int32_t digits);
 static double_t pow1(double_t x, int32_t y);

@@ -93,6 +93,7 @@ void FaultManager_SetErrorState(uint32_t error_code,
                                 uint32_t line,
                                 const char *func);
 
+/* 统一错误检查宏，发现错误后进入故障处理出口。 */
 #define CHECK_ERROR(errorcode)                                                   \
     do {                                                                         \
         /* Step 1: 优先检查函数返回错误码 */                                      \
@@ -122,6 +123,7 @@ void FaultManager_SetErrorState(uint32_t error_code,
     } while (0)
 
 
+/* 统一错误返回宏，用于带返回值流程的故障退出。 */
 #define RETURN_ERROR(errorcode)                                                  \
     do {                                                                         \
         if ((errorcode) != NO_ERROR) {                                           \
@@ -138,6 +140,7 @@ void FaultManager_SetErrorState(uint32_t error_code,
     } while (0)
 
 
+/* 统一置故障状态宏，记录错误码并触发错误状态。 */
 #define SET_ERROR(errorcode)                                                     \
     do {                                                                         \
         uint32_t set_error_code = (uint32_t)(errorcode);                         \
@@ -151,6 +154,7 @@ void FaultManager_SetErrorState(uint32_t error_code,
     } while (0)
 
 
+/* 检查命令切换请求，命中时按指定返回值退出当前流程。 */
 #define CHECK_COMMAND_SWITCH(ret)                                                \
     do {                                                                         \
         if (HasEffectiveCommandSwitchRequest()) {                                \
@@ -164,6 +168,7 @@ void FaultManager_SetErrorState(uint32_t error_code,
         }                                                                        \
     } while (0)
 
+/* 检查命令切换请求，命中时直接退出 void 流程。 */
 #define CHECK_COMMAND_SWITCH_NO_RETURN()                                          \
     do {                                                                         \
         if (HasEffectiveCommandSwitchRequest()) {                                \

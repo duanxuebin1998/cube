@@ -26,25 +26,25 @@
 #include "ad5421.h"
 #include "encoder.h"
 #include <stddef.h>
-#define MOTOR_TEXT_ENCODER_MAX_ANGLE             4096.0f
-#define MOTOR_TEXT_ENCODER_POLL_MS               10U
-#define MOTOR_TEXT_ENCODER_START_GRACE_MS        500U
-#define MOTOR_TEXT_ENCODER_SENSOR_COMM_INTERVAL_MS 1000U
-#define MOTOR_TEXT_ENCODER_TIMEOUT_MARGIN_MS     5000U
-#define MOTOR_TEXT_ENCODER_TIMEOUT_MIN_MS        10000U
-#define MOTOR_TEXT_ENCODER_TIMEOUT_MAX_MS        120000U
-#define MOTOR_TEXT_ENCODER_TIMEOUT_SCALE         4U
-#define MOTOR_TEXT_ENCODER_MULTIPLIER_DEFAULT    1U
-#define MOTOR_TEXT_ENCODER_MULTIPLIER_MAX        20U
-#define MOTOR_TEXT_ENCODER_DEFAULT_A1            (10 * 32)
-#define MOTOR_TEXT_ENCODER_DEFAULT_AMAX          (20 * 32)
-#define MOTOR_TEXT_ENCODER_DEFAULT_D1            (10 * 32)
-#define MOTOR_TEXT_ENCODER_DEFAULT_DMAX          (20 * 32)
-#define MOTOR_TEXT_RETRY_DELAY_MS                200U
-#define MOTOR_TEXT_STOP_POLL_MS                  20U
-#define MOTOR_TEXT_RETRY_LOG_INTERVAL_MS         1000U
-#define MOTOR_TEXT_STOP_SETTLE_MS                50U
-#define MOTOR_TEXT_STOP_CONFIRM_MS               200U
+#define MOTOR_TEXT_ENCODER_MAX_ANGLE             4096.0f /* 串口 B/BE 编码器换算使用的一圈计数基准。 */
+#define MOTOR_TEXT_ENCODER_POLL_MS               10U /* 串口 B/BE 编码器轮询周期，单位 ms。 */
+#define MOTOR_TEXT_ENCODER_START_GRACE_MS        500U /* 串口 B/BE 启动后的编码器宽限时间，单位 ms。 */
+#define MOTOR_TEXT_ENCODER_SENSOR_COMM_INTERVAL_MS 1000U /* 串口 B/BE 运行中传感器通信保活间隔，单位 ms。 */
+#define MOTOR_TEXT_ENCODER_TIMEOUT_MARGIN_MS     5000U /* 串口 B/BE 编码器运行超时余量，单位 ms。 */
+#define MOTOR_TEXT_ENCODER_TIMEOUT_MIN_MS        10000U /* 串口 B/BE 编码器运行最小超时时间，单位 ms。 */
+#define MOTOR_TEXT_ENCODER_TIMEOUT_MAX_MS        120000U /* 串口 B/BE 编码器运行最大超时时间，单位 ms。 */
+#define MOTOR_TEXT_ENCODER_TIMEOUT_SCALE         4U /* 串口 B/BE 按目标距离估算超时的倍率。 */
+#define MOTOR_TEXT_ENCODER_MULTIPLIER_DEFAULT    1U /* 串口 B/BE 加减速倍率默认值。 */
+#define MOTOR_TEXT_ENCODER_MULTIPLIER_MAX        20U /* 串口 B/BE 加减速倍率上限。 */
+#define MOTOR_TEXT_ENCODER_DEFAULT_A1            (10 * 32) /* 串口 B/BE 第一段加速度默认寄存器值。 */
+#define MOTOR_TEXT_ENCODER_DEFAULT_AMAX          (20 * 32) /* 串口 B/BE 最大加速度默认寄存器值。 */
+#define MOTOR_TEXT_ENCODER_DEFAULT_D1            (10 * 32) /* 串口 B/BE 第一段减速度默认寄存器值。 */
+#define MOTOR_TEXT_ENCODER_DEFAULT_DMAX          (20 * 32) /* 串口 B/BE 最大减速度默认寄存器值。 */
+#define MOTOR_TEXT_RETRY_DELAY_MS                200U /* 串口电机测试失败重试前等待时间，单位 ms。 */
+#define MOTOR_TEXT_STOP_POLL_MS                  20U /* 串口电机测试等待停机的轮询周期，单位 ms。 */
+#define MOTOR_TEXT_RETRY_LOG_INTERVAL_MS         1000U /* 串口电机测试重试日志打印间隔，单位 ms。 */
+#define MOTOR_TEXT_STOP_SETTLE_MS                50U /* 串口电机测试停机后的状态稳定等待时间，单位 ms。 */
+#define MOTOR_TEXT_STOP_CONFIRM_MS               200U /* 串口电机测试停机确认等待时间，单位 ms。 */
 typedef struct {
     DeviceState device_state;
     uint32_t error_code;
@@ -1118,9 +1118,9 @@ static void Test_RestoreDebugDisplayState(TestCommandDebugDisplaySnapshot *snaps
 }
 
 
-#define TEST_COMMAND_BE_SPEED_DEFAULT      0U
-#define TEST_COMMAND_BE_MULTIPLIER_DEFAULT 1U
-#define TEST_COMMAND_BE_MULTIPLIER_MAX     20U
+#define TEST_COMMAND_BE_SPEED_DEFAULT      0U /* BE 测试命令默认速度参数。 */
+#define TEST_COMMAND_BE_MULTIPLIER_DEFAULT 1U /* BE 测试命令默认加减速倍率。 */
+#define TEST_COMMAND_BE_MULTIPLIER_MAX     20U /* BE 测试命令允许的最大加减速倍率。 */
 
 typedef struct {
     uint32_t speed_x100;
@@ -2073,9 +2073,9 @@ void Test_Params_Storage(void) {
 	save_device_params(); /* 存储 */
 }
 
-#define TEST_ENCODER_SLOT_SIZE  (0x40u)
-#define TEST_ENCODER_A_ADDRESS   FRAM_ANGLE_ADDRESS
-#define TEST_ENCODER_B_ADDRESS   (TEST_ENCODER_A_ADDRESS + TEST_ENCODER_SLOT_SIZE)
+#define TEST_ENCODER_SLOT_SIZE  (0x40u) /* 测试编码器参数 A/B 分区占用的 FRAM 字节数。 */
+#define TEST_ENCODER_A_ADDRESS   FRAM_ANGLE_ADDRESS /* 测试编码器参数 A 分区 FRAM 起始地址。 */
+#define TEST_ENCODER_B_ADDRESS   (TEST_ENCODER_A_ADDRESS + TEST_ENCODER_SLOT_SIZE) /* 测试编码器参数 B 分区 FRAM 起始地址。 */
 
 /**
  * @brief 执行本模块中的 Test_ParamEncoder_AB_Backup 逻辑。

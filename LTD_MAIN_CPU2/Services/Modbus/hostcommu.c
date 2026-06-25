@@ -10,10 +10,10 @@
 #include "stdio.h"
 #include "error_log.h"
 
-#define DEBUG_HOSTCOMMU 0
+#define DEBUG_HOSTCOMMU 0 /* 主机通信调试打印开关。 */
 /* 常量定义 */
 #define MAXRCVLENGTH 256 /* Modbus帧最大接收长度（RTU模式一般为256字节） */
-#define HOSTCOMMU_ERROR_LOG_INTERVAL_MS 1000U
+#define HOSTCOMMU_ERROR_LOG_INTERVAL_MS 1000U /* 主机通信错误日志限频间隔，单位 ms。 */
 
 typedef enum {
 	HOSTCOMMU_LOG_LENGTH = 0,

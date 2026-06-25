@@ -22,8 +22,8 @@
 
 /* -------------------- 可配置参数 -------------------- */
 #define WATER_INIT_UP_MM                 (100.0f)   /* 初始上行避让 */
-#define WATER_ROUGH_RETRY_MAX            (3)
-#define WATER_PRECISE_RETRY_MAX          (3)
+#define WATER_ROUGH_RETRY_MAX            (3) /* 水位粗找最大重试次数。 */
+#define WATER_PRECISE_RETRY_MAX          (3) /* 水位精找最大重试次数。 */
 #define WATER_ROUGH_CONFIRM_DELAY_MS     (3000)     /* 粗找停下后等待稳定 */
 #define WATER_FAIL_RECOVER_UP_MM         (100.0f)   /* 粗找失败上行回退 */
 
@@ -32,8 +32,8 @@
 #define WATER_OVERSHOOT_TH               (-100)     /* 走过头保护阈值 */
 
 /* 速度设置（沿用你 bottom 的写法） */
-#define WATER_VEL_MID                    (16 * 32 * 40)
-#define WATER_VEL_SLOW                   (16 * 32 * 2)
+#define WATER_VEL_MID                    (16 * 32 * 40) /* 水位测量中速运行寄存器值。 */
+#define WATER_VEL_SLOW                   (16 * 32 * 2) /* 水位测量低速运行寄存器值。 */
 
 /* #define WATER_FOLLOW_OFFSET (5.0f) / * 阈值 = air + 50 * / */
 /* #define WATER_FOLLOW_HYSTERESIS (0.3f) / * 滞回，防抖：可调 3~10 * / */

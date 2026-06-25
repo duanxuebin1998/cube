@@ -12,10 +12,10 @@
  #include <math.h>
 
 #ifndef DSM_V2_MAX_RETRY
-#define DSM_V2_MAX_RETRY   UART6_COMM_MAX_RETRY
+#define DSM_V2_MAX_RETRY   UART6_COMM_MAX_RETRY /* 传感器通信参数：传感器 V2 最大值 重试。 */
 #endif
 #ifndef DSM_V2_RX_TIMEOUT
-#define DSM_V2_RX_TIMEOUT  DSM_CMD_TIMEOUT
+#define DSM_V2_RX_TIMEOUT  DSM_CMD_TIMEOUT /* 传感器通信参数：传感器 V2 RX 超时。 */
 #endif
 
 /* 主机方向功能码 */

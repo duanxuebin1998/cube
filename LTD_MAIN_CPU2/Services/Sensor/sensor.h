@@ -16,8 +16,8 @@
 #include <string.h>
 #include "main.h"
 #include "stdio.h"
-#define DEBUG_DSM
-#define DEBUG_UART6 0
+#define DEBUG_DSM /* 调试开关宏：调试 传感器。 */
+#define DEBUG_UART6 0 /* 调试开关宏：调试 UART6。 */
 
 #define SENSOR_COMM_MAX_RETRY 10             /* 协议层默认通信重试次数 */
 #define UART6_COMM_MAX_RETRY 3U             /* UART6 传感器/无线链路统一通信重试次数 */
@@ -25,12 +25,12 @@
 #define SENSOR_COMM_ERROR_RETRY_DELAY_MS 300 /* 校验/设备错误后的退避延时 */
 #define SENSOR_LEVEL_MODE_SETTLE_MS 10000     /* 切换液位模式后的稳定等待时间 */
 
-#define DSM_MAX_RETRY UART6_COMM_MAX_RETRY
-#define DSM_BCC_DELAY SENSOR_COMM_ERROR_RETRY_DELAY_MS
-#define DSM_PRE_SEND_DELAY SENSOR_COMM_RETRY_DELAY_MS
+#define DSM_MAX_RETRY UART6_COMM_MAX_RETRY /* 传感器通信参数：传感器 最大值 重试。 */
+#define DSM_BCC_DELAY SENSOR_COMM_ERROR_RETRY_DELAY_MS /* 传感器通信参数：传感器 BCC 校验 延时。 */
+#define DSM_PRE_SEND_DELAY SENSOR_COMM_RETRY_DELAY_MS /* 传感器通信参数：传感器 前置 发送 延时。 */
 #define DSM_MIN_RESP_LEN 3 /* 接收数据最小长度 */
 #define DSM_CMD_TIMEOUT 1000  /* 接收字节间超时时间 */
-#define RX_BUF_LEN 128
+#define RX_BUF_LEN 128 /* 传感器串口接收缓冲区长度。 */
 
 /**
  * @brief 执行传感器数据中的 DetectSensorType 逻辑。

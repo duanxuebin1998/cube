@@ -3,7 +3,7 @@
 #include "main.h"
 /* #include "usart3.h" */
 /* #include "sd2421.h" */
-#define MAXREVEIVECNT 128
+#define MAXREVEIVECNT 128 /* HART 接收缓冲区最大字节数。 */
 
 #define HART_RTS1	PAout(1) 						/* HART模式控制引脚，0 - 发送;1 - 接收 */
 #define HART_RTS2	PCout(15) 						/* HART模式控制引脚，0 - 发送;1 - 接收 */
@@ -28,8 +28,8 @@
 #define	MANUFACTURER_ID	0X05	/* 制造商ID号 */
 #define	DEVICE_TYPE		0X55	/* 产品设备类型ID，由厂商定义，HCF 登记 */
 #define	DEVICE_ID_1		0X55	/* 设备ID，同种类型设备的序列号,每个设备都不一样 */
-#define	DEVICE_ID_2 	0X55
-#define	DEVICE_ID_3		0X55
+#define	DEVICE_ID_2 	0X55 /* HART 设备 ID 第 2 字节。 */
+#define	DEVICE_ID_3		0X55 /* HART 设备 ID 第 3 字节。 */
 
 
 typedef struct 

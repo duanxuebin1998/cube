@@ -9,7 +9,7 @@
 
 #include <stdint.h>
 
-#define CH9141_AT_RESPONSE_TEXT_SIZE 768U
+#define CH9141_AT_RESPONSE_TEXT_SIZE 768U /* CH9141K AT 指令参数：响应 文本 大小。 */
 
 typedef enum {
     CH9141_AT_WAIT_ACK = 0,

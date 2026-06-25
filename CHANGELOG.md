@@ -1561,3 +1561,31 @@ CPU2 参数加载会校验 FRAM 中的 `magic`、`struct_size`、`param_version`
 - 需要在 OLED 实机上逐项确认继电器 R1~R4 通道设置、报警配置和报警状态页的返回路径，以及尺带厚度型号选择和手输路径。
 - TIM4 中断直接执行继电器输出计算会增加中断内工作量，现场需重点观察 TIM4 周期、看门狗刷新、UART6 传感器通信和电机控制是否受影响。
 - `CHANGELOG.pdf` 已包含当前暂存区原有 PDF 更新；本次提交未重新生成 PDF。
+
+## 2026-06-25 - 补充 CPU2 宏定义中文注释（CPU2/CPU3 版本不变）
+
+版本：
+- CPU2: 保持 V1.17.0.0。
+- CPU3: 保持 V1.16.0.0。
+
+协议版本/兼容性：
+- `DEVICE_PROTOCOL_VERSION` 保持 10，不新增或变更 CPU2/CPU3 共享寄存器、命令码、输入寄存器尾段或保持寄存器地址。
+- CPU2 `DEVICE_PARAM_VERSION` 保持 3，`DeviceParameters` 结构大小不变，不会因本次提交触发恢复出厂参数。
+- 本次仅补充 `#define` 宏定义中文块注释，不修改宏值、函数逻辑、状态机、协议字段或构建配置。
+
+本次修改：
+- 为 CPU2 自编代码中的应用层、服务层和 BSP 外设层宏定义补充中文说明，覆盖测量流程、Modbus 寄存器映射、电机/编码器控制、错误日志文本、TMC5130、AD5421、FRAM、AO 输出和称重等定义。
+- 对多行宏使用前置块注释，对普通宏使用行尾块注释，保持 C/C++ 注释风格统一使用 `/* ... */`。
+- 暂存范围按注释行选择性暂存，未纳入工作区中已有的 AO 功能代码、Core 配置改动、文档改动或 PDF 改动。
+
+验证：
+- `git diff --cached --check`
+- 暂存 diff 只包含 `#define` 行和块注释变化
+- `git grep --cached -n "//" -- LTD_MAIN_CPU2/Application LTD_MAIN_CPU2/Services LTD_MAIN_CPU2/BSP/Peripherals` 无输出
+- `cmake --build build\LTD_MAIN_CPU2`
+- `py tools\check_version_bumped.py`
+
+未验证风险：
+- 注释-only 改动未做实物联调；不影响固件行为、对外协议或参数存储。
+- 本次不改变入口、状态机、命令分发、测量流程或结果上报，程序流程图无需更新。
+- 按项目 Markdown 规则，本次未重新生成或暂存 `CHANGELOG.pdf`。

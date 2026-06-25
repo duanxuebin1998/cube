@@ -7,7 +7,7 @@
 #include "fault_manager.h"
 #include "error_log.h"
 
-#define FAULT_RECOVERY_INTERVAL_MS 1000U
+#define FAULT_RECOVERY_INTERVAL_MS 1000U /* 故障自动恢复参数：故障 恢复 间隔 毫秒。 */
 
 typedef struct {
     uint8_t active;               /* 是否存在待恢复命令；为 0 时主循环不进入恢复轮询。 */

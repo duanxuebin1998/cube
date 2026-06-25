@@ -55,7 +55,7 @@ const char *error_codes[] = {
     "A+888.88B+888.88", /* 与CPU0通讯超时 */
     "A+999.99B+999.99"  /* 与CPU0通讯校验错误 */
 };
-#define ERROR_CODES_COUNT (sizeof(error_codes)/sizeof(error_codes[0]))
+#define ERROR_CODES_COUNT (sizeof(error_codes)/sizeof(error_codes[0])) /* 传感器错误码映射表元素数量。 */
 
 /**
  * @brief 执行DSM 传感器通信中的 DSM_LogLowVoltageFrame 逻辑。
@@ -87,7 +87,7 @@ int IsErrorResponse(const char *resp) {
     return 0; /* 正常 */
 }
 
-#define DSM_UART_MAX_RETRY UART6_COMM_MAX_RETRY
+#define DSM_UART_MAX_RETRY UART6_COMM_MAX_RETRY /* 传感器通信参数：传感器 UART 最大值 重试。 */
 static uint32_t s_uart6_last_error = HAL_UART_ERROR_NONE; /* DSM 传感器通信故障记录，供恢复、显示或日志链路使用。 */
 static uint8_t s_uart6_dma_rx_buf[RX_BUF_LEN]; /* DSM 传感器通信数据缓冲区，注意与中断或 DMA 访问边界保持一致。 */
 

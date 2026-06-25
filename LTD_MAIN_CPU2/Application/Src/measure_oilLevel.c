@@ -40,33 +40,33 @@ static uint32_t OilLevel_ClampLevelForReport(int32_t oil_level, const char *reas
 static void OilLevel_UpdateAoOutput(void);
 static void OilLevel_SyncCurrentPositionToResult(const char *reason);
 
-#define OIL_LEVEL_METHOD_RELATIVE_FREQ 0U
-#define OIL_LEVEL_METHOD_FIXED_FREQ    1U
-#define OIL_LEVEL_METHOD_DENSITY       2U
-#define OIL_LEVEL_METHOD_CONTINUOUS_RELATIVE_FREQ 4U
-#define OIL_LEVEL_METHOD_CONTINUOUS_FIXED_FREQ    5U
+#define OIL_LEVEL_METHOD_RELATIVE_FREQ 0U /* 液位测量方法枚举值：油品 液位 METHOD RELATIVE 频率。 */
+#define OIL_LEVEL_METHOD_FIXED_FREQ    1U /* 液位测量方法枚举值：油品 液位 METHOD FIXED 频率。 */
+#define OIL_LEVEL_METHOD_DENSITY       2U /* 液位测量方法枚举值：油品 液位 METHOD 密度。 */
+#define OIL_LEVEL_METHOD_CONTINUOUS_RELATIVE_FREQ 4U /* 液位测量方法枚举值：油品 液位 METHOD CONTINUOUS RELATIVE 频率。 */
+#define OIL_LEVEL_METHOD_CONTINUOUS_FIXED_FREQ    5U /* 液位测量方法枚举值：油品 液位 METHOD CONTINUOUS FIXED 频率。 */
 
-#define DENSITY_LEVEL_RUN_SEARCH              0U
-#define DENSITY_LEVEL_RUN_FOLLOW              1U
-#define DENSITY_LEVEL_DIR_NONE                (-1)
-#define DENSITY_LEVEL_MIN_SPEED_X100          10U
-#define DENSITY_LEVEL_SPEED_DELTA_X100        5U
-#define DENSITY_LEVEL_STABLE_COUNT            3U
-#define DENSITY_LEVEL_INVALID_DENSITY_LIMIT   5U
-#define DENSITY_LEVEL_SAMPLE_DELAY_MS         200U
-#define DENSITY_LEVEL_SEARCH_TIMEOUT_MS       600000U
-#define DENSITY_LEVEL_DEFAULT_DEADBAND_KGM3   0.5f
-#define DENSITY_LEVEL_KP_SPEED_X100_PER_KGM3  20.0f
+#define DENSITY_LEVEL_RUN_SEARCH              0U /* 密度法液位控制参数：运行 搜索。 */
+#define DENSITY_LEVEL_RUN_FOLLOW              1U /* 密度法液位控制参数：运行 跟随。 */
+#define DENSITY_LEVEL_DIR_NONE                (-1) /* 密度法液位控制参数：方向 无。 */
+#define DENSITY_LEVEL_MIN_SPEED_X100          10U /* 密度法液位控制参数：最小值 SPEED 放大 100 倍。 */
+#define DENSITY_LEVEL_SPEED_DELTA_X100        5U /* 密度法液位控制参数：SPEED 变化量 放大 100 倍。 */
+#define DENSITY_LEVEL_STABLE_COUNT            3U /* 密度法液位控制参数：稳定 数量。 */
+#define DENSITY_LEVEL_INVALID_DENSITY_LIMIT   5U /* 密度法液位控制参数：无效 密度 限值。 */
+#define DENSITY_LEVEL_SAMPLE_DELAY_MS         200U /* 密度法液位控制参数：SAMPLE 延时 毫秒。 */
+#define DENSITY_LEVEL_SEARCH_TIMEOUT_MS       600000U /* 密度法液位控制参数：搜索 超时 毫秒。 */
+#define DENSITY_LEVEL_DEFAULT_DEADBAND_KGM3   0.5f /* 密度法液位跟随默认死区，单位 kg/m3。 */
+#define DENSITY_LEVEL_KP_SPEED_X100_PER_KGM3  20.0f /* 密度法液位跟随比例速度系数，单位 0.01 速度每 kg/m3。 */
 
-#define FREQUENCY_LEVEL_RUN_SEARCH              0U
-#define FREQUENCY_LEVEL_RUN_FOLLOW              1U
-#define FREQUENCY_LEVEL_MIN_SPEED_X100          10U
-#define FREQUENCY_LEVEL_STABLE_COUNT            3U
-#define FREQUENCY_LEVEL_SAMPLE_DELAY_MS         200U
-#define FREQUENCY_LEVEL_SEARCH_TIMEOUT_MS       600000U
-#define FREQUENCY_LEVEL_DEFAULT_DEADBAND_HZ     15.0f
-#define FREQUENCY_LEVEL_KP_SPEED_X100_PER_HZ    0.10f
-#define FREQUENCY_LEVEL_RELATIVE_EDGE_MARGIN_HZ 200.0f
+#define FREQUENCY_LEVEL_RUN_SEARCH              0U /* 频率法液位控制参数：运行 搜索。 */
+#define FREQUENCY_LEVEL_RUN_FOLLOW              1U /* 频率法液位控制参数：运行 跟随。 */
+#define FREQUENCY_LEVEL_MIN_SPEED_X100          10U /* 频率法液位控制参数：最小值 SPEED 放大 100 倍。 */
+#define FREQUENCY_LEVEL_STABLE_COUNT            3U /* 频率法液位控制参数：稳定 数量。 */
+#define FREQUENCY_LEVEL_SAMPLE_DELAY_MS         200U /* 频率法液位控制参数：SAMPLE 延时 毫秒。 */
+#define FREQUENCY_LEVEL_SEARCH_TIMEOUT_MS       600000U /* 频率法液位控制参数：搜索 超时 毫秒。 */
+#define FREQUENCY_LEVEL_DEFAULT_DEADBAND_HZ     15.0f /* 频率法液位跟随默认死区，单位 Hz。 */
+#define FREQUENCY_LEVEL_KP_SPEED_X100_PER_HZ    0.10f /* 频率法液位跟随比例速度系数，单位 0.01 速度每 Hz。 */
+#define FREQUENCY_LEVEL_RELATIVE_EDGE_MARGIN_HZ 200.0f /* 相对频率法边界判定余量，单位 Hz。 */
 
 static uint32_t DensityLevel_StopAndReturn(uint32_t error_code, const char *reason);
 static uint32_t DensityLevel_RunClosedLoop(uint32_t follow_mode);

@@ -27,14 +27,14 @@ extern "C" {
 
 /* -------------------- 水位状态 -------------------- */
 #ifndef NORMAL
-#define NORMAL 0
+#define NORMAL 0 /* 水位状态枚举：未检测到水。 */
 #endif
 
 #ifndef WATER
-#define WATER  1
+#define WATER  1 /* 水位状态枚举：检测到水。 */
 #endif
 
-#define WATER_STABLE_WINDOW_DEFAULT_MS (30000u)
+#define WATER_STABLE_WINDOW_DEFAULT_MS (30000u) /* 水位稳定判断默认窗口，单位 ms。 */
 
 /* -------------------- 对外变量 -------------------- */
 /* water_value 的物理意义以 .c 内实现为准（当前实现为：水位高度/或位置的缓存值） */

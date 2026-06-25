@@ -15,24 +15,24 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define WIRELESS_PAIRING_PASSWORD              "000000"
-#define WIRELESS_PAIRING_MAX_CANDIDATES        8U
-#define WIRELESS_PAIRING_MAC_TEXT_SIZE         18U
-#define WIRELESS_PAIRING_NAME_TEXT_SIZE        19U
-#define WIRELESS_PAIRING_LINE_TEXT_SIZE        128U
-#define WIRELESS_PAIRING_SCAN_TIMEOUT_MS       12000U
-#define WIRELESS_PAIRING_LINK_TIMEOUT_MS       10000U
-#define WIRELESS_PAIRING_ACK_TIMEOUT_MS        1500U
-#define WIRELESS_PAIRING_RSSI_REPORT_PERIOD_MS 1000U
-#define WIRELESS_PAIRING_RSSI_ASYNC_TIMEOUT_MS  1500U
-#define WIRELESS_PAIRING_RESET_ACK_TIMEOUT_MS  800U
-#define WIRELESS_PAIRING_RESET_WAIT_MS         2500U
-#define WIRELESS_PAIRING_POST_RESET_IDLE_MS    500U
-#define WIRELESS_PAIRING_HOST_MODE             1U
-#define WIRELESS_PAIRING_HOST_CONNECTED_STATE  0x03U
-#define WIRELESS_PAIRING_SLAVE_CONNECTED_STATE 0x05U
-#define WIRELESS_PAIRING_RSSI_NEAR_THRESHOLD   (-55)
-#define WIRELESS_PAIRING_RSSI_MIN_GAP_DB       8
+#define WIRELESS_PAIRING_PASSWORD              "000000" /* 无线滑环 AT 配对密码。 */
+#define WIRELESS_PAIRING_MAX_CANDIDATES        8U /* 无线滑环扫描候选设备最大数量。 */
+#define WIRELESS_PAIRING_MAC_TEXT_SIZE         18U /* 无线滑环 MAC 地址文本缓冲区长度。 */
+#define WIRELESS_PAIRING_NAME_TEXT_SIZE        19U /* 无线滑环名称文本缓冲区长度。 */
+#define WIRELESS_PAIRING_LINE_TEXT_SIZE        128U /* 无线滑环 AT 响应行缓冲区长度。 */
+#define WIRELESS_PAIRING_SCAN_TIMEOUT_MS       12000U /* 无线滑环扫描超时时间，单位 ms。 */
+#define WIRELESS_PAIRING_LINK_TIMEOUT_MS       10000U /* 无线滑环连接超时时间，单位 ms。 */
+#define WIRELESS_PAIRING_ACK_TIMEOUT_MS        1500U /* 无线滑环 AT 应答超时时间，单位 ms。 */
+#define WIRELESS_PAIRING_RSSI_REPORT_PERIOD_MS 1000U /* 无线滑环 RSSI 上报周期，单位 ms。 */
+#define WIRELESS_PAIRING_RSSI_ASYNC_TIMEOUT_MS  1500U /* 无线滑环 RSSI 异步上报等待超时，单位 ms。 */
+#define WIRELESS_PAIRING_RESET_ACK_TIMEOUT_MS  800U /* 无线滑环复位应答超时时间，单位 ms。 */
+#define WIRELESS_PAIRING_RESET_WAIT_MS         2500U /* 无线滑环复位后等待时间，单位 ms。 */
+#define WIRELESS_PAIRING_POST_RESET_IDLE_MS    500U /* 无线滑环复位后串口空闲等待时间，单位 ms。 */
+#define WIRELESS_PAIRING_HOST_MODE             1U /* 无线滑环主机模式取值。 */
+#define WIRELESS_PAIRING_HOST_CONNECTED_STATE  0x03U /* 无线滑环主机已连接状态值。 */
+#define WIRELESS_PAIRING_SLAVE_CONNECTED_STATE 0x05U /* 无线滑环从机已连接状态值。 */
+#define WIRELESS_PAIRING_RSSI_NEAR_THRESHOLD   (-55) /* 无线滑环近场 RSSI 判定阈值，单位 dBm。 */
+#define WIRELESS_PAIRING_RSSI_MIN_GAP_DB       8 /* 无线滑环 RSSI 最小领先差值，单位 dB。 */
 
 typedef struct {
     uint8_t index;                                  /* CH9141K 扫描结果序号，优先用于 AT+LINK。 */

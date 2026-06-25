@@ -26,8 +26,8 @@
 #include "error_log.h"
 #include "motor_ctrl.h"
 
-#define SSI_FRAME_LENGTH     4u
-#define SSI_RETRY_LIMIT      3u
+#define SSI_FRAME_LENGTH     4u /* AS5145 SSI 单帧读取字节数。 */
+#define SSI_RETRY_LIMIT      3u /* AS5145 SSI 通信参数：SSI 重试 限值。 */
 
 /* SSI 通信状态：
  * retry_count   记录当前连续失败次数；

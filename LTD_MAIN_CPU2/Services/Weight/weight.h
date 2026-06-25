@@ -12,7 +12,7 @@
 #include "system_parameter.h"
 /* #include "motor_ctrl.h" */
 
-#define IMPACT_WEIGHT_THRESHOLD 4000.0
+#define IMPACT_WEIGHT_THRESHOLD 4000.0 /* 称重处理参数：冲击 称重 阈值。 */
 typedef enum {
 	NORMAL, IMPACT, ZERO, BOTTOM
 } Weight_StateTypeDef;

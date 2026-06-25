@@ -157,11 +157,11 @@ static float relay_alarm_raw_to_float(uint32_t raw)
 }
 
 #ifndef DEVICE_PARAMS_SAVE_DEBOUNCE_MS
-#define DEVICE_PARAMS_SAVE_DEBOUNCE_MS 100u
+#define DEVICE_PARAMS_SAVE_DEBOUNCE_MS 100u /* 参数存储配置：设备 PARAMS 保存 DEBOUNCE 毫秒。 */
 #endif
 
 /* param_version和 magic 常量 */
-#define DEVICE_PARAM_VERSION   (3u)
+#define DEVICE_PARAM_VERSION   (3u) /* 参数存储配置：设备 参数 版本。 */
 #define DEVICE_PARAM_MAGIC     (0x4C54444Du)  /* 'LTDM' */
 
 /*
@@ -169,9 +169,9 @@ static float relay_alarm_raw_to_float(uint32_t raw)
  *  - command 不参与掉电参数校验
  *  - 从 sensorType 起到 crc 前为持久化参数区
  */
-#define DEVICE_PARAM_PERSIST_OFFSET   (offsetof(DeviceParameters, sensorType))
-#define DEVICE_PARAM_PERSIST_LEN      (offsetof(DeviceParameters, crc) - DEVICE_PARAM_PERSIST_OFFSET)
-#define DEVICE_PARAM_PERSIST_START(p) ((uint8_t *)(p) + DEVICE_PARAM_PERSIST_OFFSET)
+#define DEVICE_PARAM_PERSIST_OFFSET   (offsetof(DeviceParameters, sensorType)) /* 参数结构中参与持久化校验的起始偏移。 */
+#define DEVICE_PARAM_PERSIST_LEN      (offsetof(DeviceParameters, crc) - DEVICE_PARAM_PERSIST_OFFSET) /* 参数结构中参与持久化校验的字节长度。 */
+#define DEVICE_PARAM_PERSIST_START(p) ((uint8_t *)(p) + DEVICE_PARAM_PERSIST_OFFSET) /* 参数存储配置：设备 参数 持久化 启动。 */
 
 /**
  * @brief 执行系统参数中的 relay_alarm_float_to_raw 逻辑。

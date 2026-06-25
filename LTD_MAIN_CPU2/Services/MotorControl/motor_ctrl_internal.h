@@ -34,7 +34,7 @@ extern "C" {
 /* ===================== 内部常量/配置 ===================== */
 
 #ifndef M_PI
-#define M_PI 3.14159265358979323846
+#define M_PI 3.14159265358979323846 /* 圆周率常量，供不提供 M_PI 的编译环境使用。 */
 #endif
 
 #define EPS_MM                   0.20f    /* 到位公差(±mm) */
@@ -46,60 +46,61 @@ extern "C" {
 #define LOST_STEP_MIN_AVG_SPEED_MM_S     0.5f    /* 低速档丢步判定绝对下限 */
 
 #ifndef C0_MIN_MM
-#define C0_MIN_MM (50.0)
+#define C0_MIN_MM (50.0) /* 卷筒初始周长允许最小值，单位 mm。 */
 #endif
 #ifndef C0_MAX_MM
-#define C0_MAX_MM (5000.0)
+#define C0_MAX_MM (5000.0) /* 卷筒初始周长允许最大值，单位 mm。 */
 #endif
 
-#define MOTOR_VELOCITY_BASE     (10000UL)
+#define MOTOR_VELOCITY_BASE     (10000UL) /* 电机速度换算基准值。 */
 
 #ifndef MOTOR_LINEAR_SPEED_MIN_X100
-#define MOTOR_LINEAR_SPEED_MIN_X100   10U
+#define MOTOR_LINEAR_SPEED_MIN_X100   10U /* 电机线速度最小值，单位 0.01m/min。 */
 #endif
 #ifndef MOTOR_LINEAR_SPEED_MAX_X100
-#define MOTOR_LINEAR_SPEED_MAX_X100   600U
+#define MOTOR_LINEAR_SPEED_MAX_X100   600U /* 电机线速度最大值，单位 0.01m/min。 */
 #endif
 
 #ifndef TMC5130_FCLK_HZ
-#define TMC5130_FCLK_HZ               (12000000.0)
+#define TMC5130_FCLK_HZ               (12000000.0) /* TMC5130 参考时钟频率，单位 Hz。 */
 #endif
 
 #ifndef MOTOR_LINEAR_SPEED_COMP_ENABLE
-#define MOTOR_LINEAR_SPEED_COMP_ENABLE       1
+#define MOTOR_LINEAR_SPEED_COMP_ENABLE       1 /* 电机线速度补偿开关。 */
 #endif
 #ifndef MOTOR_LINEAR_COMP_UPDATE_MS
-#define MOTOR_LINEAR_COMP_UPDATE_MS          200U
+#define MOTOR_LINEAR_COMP_UPDATE_MS          200U /* 电机线速度补偿更新周期，单位 ms。 */
 #endif
 #ifndef MOTOR_LINEAR_COMP_APPLY_DELTA_X100
-#define MOTOR_LINEAR_COMP_APPLY_DELTA_X100   3U
+#define MOTOR_LINEAR_COMP_APPLY_DELTA_X100   3U /* 电机线速度补偿最小应用变化量，单位 0.01m/min。 */
 #endif
 
 #ifndef TAPE_MIN_RADIUS_MM
-#define TAPE_MIN_RADIUS_MM   (40.0)
+#define TAPE_MIN_RADIUS_MM   (40.0) /* 尺带卷绕半径最小保护值，单位 mm。 */
 #endif
 
-#define MOTOR_MOVE_RETRY_MAX 3
+#define MOTOR_MOVE_RETRY_MAX 3 /* 电机运动失败最大重试次数。 */
 
 #ifndef MOTOR_STOP_WAIT_TIMEOUT_MS
-#define MOTOR_STOP_WAIT_TIMEOUT_MS          15000U
+#define MOTOR_STOP_WAIT_TIMEOUT_MS          15000U /* 等待电机停止超时时间，单位 ms。 */
 #endif
 
 #ifndef COMMAND_SWITCH_ABORT
-#define COMMAND_SWITCH_ABORT   STATE_SWITCH
+#define COMMAND_SWITCH_ABORT   STATE_SWITCH /* 命令切换时使用的流程中止返回码。 */
 #endif
 
 #define MOTOR_STORE_MAGIC            (0x4D4F544Fu) /* 'MOTO' */
-#define MOTOR_STORE_VERSION          (1u)
-#define FRAM_MOTOR_A_ADDRESS         (FRAM_ANGLE_ADDRESS + 0x80u)
-#define FRAM_MOTOR_SLOT_SIZE         (0x40u)
-#define FRAM_MOTOR_B_ADDRESS         (FRAM_MOTOR_A_ADDRESS + FRAM_MOTOR_SLOT_SIZE)
-#define MOTOR_PERSIST_DELTA_MM       (1.0)
+#define MOTOR_STORE_VERSION          (1u) /* 电机位置模型 FRAM 存储结构版本。 */
+#define FRAM_MOTOR_A_ADDRESS         (FRAM_ANGLE_ADDRESS + 0x80u) /* 电机参数 A 分区 FRAM 起始地址。 */
+#define FRAM_MOTOR_SLOT_SIZE         (0x40u) /* 电机参数单分区大小。 */
+#define FRAM_MOTOR_B_ADDRESS         (FRAM_MOTOR_A_ADDRESS + FRAM_MOTOR_SLOT_SIZE) /* 电机参数 B 分区 FRAM 起始地址。 */
+#define MOTOR_PERSIST_DELTA_MM       (1.0) /* 电机位置持久化最小变化量，单位 mm。 */
 
-#define MOTOR_TAPE_FIT_MAX_SAMPLES          (256)
-#define MOTOR_TAPE_FIT_AUTO_DELTA_TICKS     (1536000 / 4)
+#define MOTOR_TAPE_FIT_MAX_SAMPLES          (256) /* 尺带拟合最多采样点数。 */
+#define MOTOR_TAPE_FIT_AUTO_DELTA_TICKS     (1536000 / 4) /* 尺带拟合自动采样间隔，单位 tick。 */
 
 /* 非 void 函数：检测命令切换 -> 停止电机；停止失败返回实际错误码，停止成功返回 retcode。 */
+/* 检查命令切换请求，命中时先停电机再返回。 */
 #define CHECK_COMMAND_SWITCH_AND_STOP(retcode)                                    \
     do {                                                                          \
         if (HasEffectiveCommandSwitchRequest()) {                                 \
@@ -114,6 +115,7 @@ extern "C" {
     } while (0)
 
 /* void 函数：检测命令切换 -> 停止电机 -> return。 */
+/* 检查命令切换请求，命中时先停电机再退出 void 流程。 */
 #define CHECK_COMMAND_SWITCH_AND_STOP_NO_RETURN()                                 \
     do {                                                                          \
         if (HasEffectiveCommandSwitchRequest()) {                                 \

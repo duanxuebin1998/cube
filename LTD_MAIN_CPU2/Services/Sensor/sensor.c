@@ -18,10 +18,10 @@
 #include "abortable_delay.h"
 #include "wireless_pairing.h"
 
-#define SENSOR_LEVEL_FREQ_RECOVERY_LIFT_MM 1.0f
-#define SENSOR_DENSITY_MODE_SETTLE_MS 3000U
-#define READ_PART_PARAMS_REFRESH_INTERVAL_MS 1000U
-#define READ_PART_PARAMS_RSSI_REFRESH_INTERVAL_MS 5000U
+#define SENSOR_LEVEL_FREQ_RECOVERY_LIFT_MM 1.0f /* 传感器数据处理参数：传感器 液位 频率 恢复 抬升 MM。 */
+#define SENSOR_DENSITY_MODE_SETTLE_MS 3000U /* 传感器数据处理参数：传感器 密度 模式 稳定 毫秒。 */
+#define READ_PART_PARAMS_REFRESH_INTERVAL_MS 1000U /* 部件参数读取刷新间隔，单位 ms。 */
+#define READ_PART_PARAMS_RSSI_REFRESH_INTERVAL_MS 5000U /* 部件参数 RSSI 刷新间隔，单位 ms。 */
 
 static uint32_t Sensor_PositionToU01mmClamped(void);
 static uint32_t Sensor_UpdateWirelessRssiForPartParams(uint8_t force_update);

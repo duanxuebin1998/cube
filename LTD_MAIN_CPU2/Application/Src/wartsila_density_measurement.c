@@ -15,8 +15,8 @@
 
 uint32_t motorMoveUpToPositionOrAir(float target_mm, Level_StateTypeDef *final_state);
 
-#define WARTSILA_POINT_POSITION_TOLERANCE_MM 1.0f
-#define WARTSILA_POINT_POSITION_RETRY_MAX    1U
+#define WARTSILA_POINT_POSITION_TOLERANCE_MM 1.0f /* Wartsila 单点位置允许误差，单位 mm。 */
+#define WARTSILA_POINT_POSITION_RETRY_MAX    1U /* Wartsila 密度测量参数：测点 位置 重试 最大值。 */
 
 /**
  * @brief 将 mm 位置转换为 0.1mm 无符号结果，负位置按 0 上报，超范围按上限上报。
@@ -34,15 +34,15 @@ static uint32_t PositionMm_ToU01mmClamped(float pos_mm)
 }
 
 
-#define WARTSILA_AIR_DENSITY_THRESHOLD      100.0f
-#define WARTSILA_LEVEL_DOWN_SPEED_X100      50U
-#define WARTSILA_LEVEL_DOWN_POLL_MS         80U
-#define WARTSILA_LEVEL_DOWN_TIMEOUT_MS      (60U * 60U * 1000U)
-#define WARTSILA_DENSITY_SAMPLE_MS          200U
-#define WARTSILA_DENSITY_MAX_WAIT_MS        (5U * 60U * 1000U)
-#define WARTSILA_DENSITY_FREQ_EPS_HZ        1.0f
-#define WARTSILA_DENSITY_VALUE_EPS          0.1f
-#define WARTSILA_DENSITY_TEMP_EPS_C         0.2f
+#define WARTSILA_AIR_DENSITY_THRESHOLD      100.0f /* Wartsila 密度测量参数：空气 密度 阈值。 */
+#define WARTSILA_LEVEL_DOWN_SPEED_X100      50U /* Wartsila 密度测量参数：液位 下降 SPEED 放大 100 倍。 */
+#define WARTSILA_LEVEL_DOWN_POLL_MS         80U /* Wartsila 密度测量参数：液位 下降 轮询 毫秒。 */
+#define WARTSILA_LEVEL_DOWN_TIMEOUT_MS      (60U * 60U * 1000U) /* Wartsila 密度测量参数：液位 下降 超时 毫秒。 */
+#define WARTSILA_DENSITY_SAMPLE_MS          200U /* Wartsila 密度测量参数：密度 SAMPLE 毫秒。 */
+#define WARTSILA_DENSITY_MAX_WAIT_MS        (5U * 60U * 1000U) /* Wartsila 密度测量参数：密度 最大值 等待 毫秒。 */
+#define WARTSILA_DENSITY_FREQ_EPS_HZ        1.0f /* Wartsila 密度测量参数：密度 频率 允许误差 Hz。 */
+#define WARTSILA_DENSITY_VALUE_EPS          0.1f /* Wartsila 密度测量参数：密度 值 允许误差。 */
+#define WARTSILA_DENSITY_TEMP_EPS_C         0.2f /* Wartsila 密度测量参数：密度 温度 允许误差 C。 */
 
 typedef struct {
     DensityMeasurement measurement;

@@ -1,10 +1,10 @@
 #ifndef DEN_H__
 #define DEN_H__
 #include "main.h"
-#define DENSITY_AREA1 1
-#define DENSITY_AREA2 2
-#define DENSITY_AREA3 3
-#define DENSITY_AB	  4
+#define DENSITY_AREA1 1 /* 密度计算区间 1 编号。 */
+#define DENSITY_AREA2 2 /* 密度计算区间 2 编号。 */
+#define DENSITY_AREA3 3 /* 密度计算区间 3 编号。 */
+#define DENSITY_AB	  4 /* 密度计算 A/B 区间编号。 */
 enum OilCategoryofDensity20
 {
 	CRUDE = 0,
@@ -12,9 +12,9 @@ enum OilCategoryofDensity20
 	LUBRICATINGOIL = 2
 };
 
-#define	ERROR_DENSITY		-2.0
-#define	ERROR_TEMPERATURE	-3.0
-#define	ERROR_NORESULT		-4.0
+#define	ERROR_DENSITY		-2.0 /* 密度计算失败返回值：密度异常。 */
+#define	ERROR_TEMPERATURE	-3.0 /* 密度计算失败返回值：温度异常。 */
+#define	ERROR_NORESULT		-4.0 /* 密度计算失败返回值：无计算结果。 */
 
 
 /**

@@ -52,14 +52,14 @@
 
 /* 样机固定点监测开关：1=不读真实传感器，直接刷新虚拟温度/密度；0=恢复真实传感器流程。 */
 #ifndef ENABLE_SINGLE_POINT_MONITORING_PROTOTYPE
-#define ENABLE_SINGLE_POINT_MONITORING_PROTOTYPE 0U
+#define ENABLE_SINGLE_POINT_MONITORING_PROTOTYPE 0U /* 单点监测原型功能开关。 */
 #endif
 
-#define SINGLE_POINT_MONITORING_PROTO_PERIOD_MS      500U
+#define SINGLE_POINT_MONITORING_PROTO_PERIOD_MS      500U /* 单点监测原型刷新周期，单位 ms。 */
 #define SINGLE_POINT_MONITORING_PROTO_BASE_TEMP_RAW  22650U  /* 26.50℃：TEMP_TO_RAW(26.50) */
 #define SINGLE_POINT_MONITORING_PROTO_BASE_DENS_RAW  9995U   /* 999.5kg/m3：水密度样机值，DENSITY_TO_RAW(999.5) */
-#define SINGLE_POINT_MONITORING_PROTO_BASE_FREQ_HZ   121500U
-#define SINGLE_POINT_MONITORING_PROTO_BASE_VCF20     9995U
+#define SINGLE_POINT_MONITORING_PROTO_BASE_FREQ_HZ   121500U /* 单点监测原型基础频率，单位 Hz。 */
+#define SINGLE_POINT_MONITORING_PROTO_BASE_VCF20     9995U /* 单点监测原型基础 VCF20 值。 */
 
 /* ===================== 前置声明 ===================== */
 void Print_DensitySpreadResult(const DensityDistribution *dist);
@@ -958,7 +958,7 @@ void CMD_MeasureDensitySpread_Interval(void)
  *   - 若工程尚未计算 standard_density，可临时改为 density
  */
 #ifndef GB_COMPARE_USE_STANDARD_DENSITY
-#define GB_COMPARE_USE_STANDARD_DENSITY  1
+#define GB_COMPARE_USE_STANDARD_DENSITY  1 /* 国标比较时使用标准密度的开关。 */
 #endif
 
 /**

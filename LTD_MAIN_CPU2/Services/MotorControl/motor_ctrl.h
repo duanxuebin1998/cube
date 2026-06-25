@@ -31,10 +31,10 @@ extern "C" {
 /* ===================== 方向和基础类型 ===================== */
 
 /* * 下行放带：cable_length 增加。 */
-#define MOTOR_DIRECTION_DOWN   0
+#define MOTOR_DIRECTION_DOWN   0 /* 电机方向枚举：向下。 */
 
 /* * 上行收带：cable_length 减少。 */
-#define MOTOR_DIRECTION_UP     1
+#define MOTOR_DIRECTION_UP     1 /* 电机方向枚举：向上。 */
 
 /* * 当前换算后的 TMC5130 VMAX，主要供调试观察；业务层速度由参数和测量流程统一维护。 */
 extern uint32_t velocity;

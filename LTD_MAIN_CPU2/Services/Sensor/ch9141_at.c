@@ -13,15 +13,15 @@
 #include <stdio.h>
 #include <string.h>
 
-#define CH9141_AT_COMMAND_TX_TIMEOUT_MS 200U
-#define CH9141_AT_BYTE_RX_TIMEOUT_MS    20U
-#define CH9141_AT_PRE_COMMAND_IDLE_MS 30U
-#define CH9141_AT_SOFTWARE_IDLE_MS      500U
-#define CH9141_AT_ENTER_TIMEOUT_MS      1000U
+#define CH9141_AT_COMMAND_TX_TIMEOUT_MS 200U /* CH9141K AT 指令参数：命令 发送 超时 毫秒。 */
+#define CH9141_AT_BYTE_RX_TIMEOUT_MS    20U /* CH9141K AT 指令参数：字节 RX 超时 毫秒。 */
+#define CH9141_AT_PRE_COMMAND_IDLE_MS 30U /* CH9141K AT 指令参数：前置 命令 IDLE 毫秒。 */
+#define CH9141_AT_SOFTWARE_IDLE_MS      500U /* CH9141K AT 指令参数：SOFTWARE IDLE 毫秒。 */
+#define CH9141_AT_ENTER_TIMEOUT_MS      1000U /* CH9141K AT 指令参数：ENTER 超时 毫秒。 */
 
 /* 默认只打印业务摘要和失败 AT 详情；设为 1 可恢复逐条 AT 收发日志。 */
 #ifndef CH9141_AT_VERBOSE_LOG
-#define CH9141_AT_VERBOSE_LOG           0U
+#define CH9141_AT_VERBOSE_LOG           0U /* CH9141K AT 指令参数：详细日志 日志。 */
 #endif
 
 /**

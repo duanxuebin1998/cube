@@ -2,10 +2,10 @@
 #define __HOSTCOMMU_H
 #include "main.h"
 
-#define RS485_SET_RECV_MODE()  HAL_GPIO_WritePin(CPU2_485_SEL_GPIO_Port, CPU2_485_SEL_Pin, GPIO_PIN_SET)
-#define RS485_SET_SEND_MODE()  HAL_GPIO_WritePin(CPU2_485_SEL_GPIO_Port, CPU2_485_SEL_Pin, GPIO_PIN_RESET)
+#define RS485_SET_RECV_MODE()  HAL_GPIO_WritePin(CPU2_485_SEL_GPIO_Port, CPU2_485_SEL_Pin, GPIO_PIN_SET) /* RS485 收发控制切换为接收模式。 */
+#define RS485_SET_SEND_MODE()  HAL_GPIO_WritePin(CPU2_485_SEL_GPIO_Port, CPU2_485_SEL_Pin, GPIO_PIN_RESET) /* RS485 收发控制切换为发送模式。 */
 
-#define HOSTCOMMU_SENDLENGTH 1000
+#define HOSTCOMMU_SENDLENGTH 1000 /* 主机通信发送缓冲区长度。 */
 
 /**
  * @brief 执行主板通信中的 HostCommuInit 逻辑。

@@ -24,13 +24,13 @@ int32_t bottom_value = -100000000; /* 初始值设为较大数值作为无效状态标识 */
 
 static GyroZeroRef g_gyro_zero_ref = {0};
 
-#define BOTTOM_GYRO_REF_SAMPLE_COUNT      5U
-#define BOTTOM_GYRO_REF_SAMPLE_DELAY_MS 300U
-#define BOTTOM_GYRO_REF_MAX_SPREAD_DEG  2.0f
-#define BOTTOM_GYRO_REF_SAFE_LIFT_MM   100.0f
-#define BOTTOM_RELEASE_BEFORE_ROUGH_STEP_MM 100.0f
-#define BOTTOM_RELEASE_BEFORE_ROUGH_MAX_MM 1000.0f
-#define BOTTOM_RELEASE_BEFORE_ROUGH_DELAY_MS 500U
+#define BOTTOM_GYRO_REF_SAMPLE_COUNT      5U /* 罐底倾角基准采样次数。 */
+#define BOTTOM_GYRO_REF_SAMPLE_DELAY_MS 300U /* 罐底倾角基准采样间隔，单位 ms。 */
+#define BOTTOM_GYRO_REF_MAX_SPREAD_DEG  2.0f /* 罐底倾角基准允许的最大离散度，单位度。 */
+#define BOTTOM_GYRO_REF_SAFE_LIFT_MM   100.0f /* 罐底倾角基准采样前的安全抬升距离，单位 mm。 */
+#define BOTTOM_RELEASE_BEFORE_ROUGH_STEP_MM 100.0f /* 罐底粗找前每次释放距离，单位 mm。 */
+#define BOTTOM_RELEASE_BEFORE_ROUGH_MAX_MM 1000.0f /* 罐底粗找前最大释放距离，单位 mm。 */
+#define BOTTOM_RELEASE_BEFORE_ROUGH_DELAY_MS 500U /* 罐底释放动作后的等待时间，单位 ms。 */
 #define BOTTOM_NEAR_SENSOR_POSITION_01MM 10000  /* 1m，单位0.1mm */
 #define BOTTOM_NEAR_SPEED_X100           50U    /* 0.50m/min */
 /* 函数原型声明 */

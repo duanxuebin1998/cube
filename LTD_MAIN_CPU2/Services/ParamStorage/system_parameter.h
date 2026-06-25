@@ -15,7 +15,7 @@
 #include <stdbool.h>
 /* 无效值 */
 #define UNVALID_LEVEL 999999u /* 液位无效值 */
-#define UNVALID_CURRENT 3.5
+#define UNVALID_CURRENT 3.5 /* 无效电流哨兵值，单位 mA。 */
 #define LEVEL_DOWNLIMIT 100u               /* 盲区液位值 */
 #define UNVALID_TEMPERATURE_REALTIME 99999 /* 实时温度无效值 */
 #define UNVALID_TEMPERATURE_WIRELESS 9999  /* 无线温度无效值 */
@@ -26,10 +26,10 @@
 #define UNVALID_TOV 0                      /* 体积无效值 */
 #define UNVALID_GSW 0                      /* 质量无效值 */
 
-#define MAX_MEASUREMENT_POINTS 200 /* 密度分布测量最大点数 */
+#define MAX_MEASUREMENT_POINTS 200 /* 密度分布测量最大点数。 */
 #define DEVICE_PROTOCOL_VERSION 10u /* CPU2/CPU3共享协议版本；旧程序未写入时默认为0 */
-#define FAULT_AUTO_RECOVERY_RETRY_DEFAULT 3u
-#define FAULT_AUTO_RECOVERY_RETRY_MAX 10u
+#define FAULT_AUTO_RECOVERY_RETRY_DEFAULT 3u /* 故障自动恢复默认重试次数。 */
+#define FAULT_AUTO_RECOVERY_RETRY_MAX 10u /* 故障自动恢复最大重试次数。 */
 
 
 #define RELAY_ALARM_CHANNEL_COUNT 4u /* 当前项目只使用 RELAY1~RELAY4 */
@@ -113,8 +113,8 @@ typedef enum {
 
 #define TEMP_TO_RAW(t)  ((uint32_t)((t) * 100.0f + 20000.0f)) /* 温度存储到寄存器 */
 #define DENSITY_TO_RAW(d) ((uint32_t)((d) * 10.0f)) /* 密度存储到寄存器 */
-#define RAW_TO_TEMP(raw)    (((int32_t)(raw) - 20000) / 100.0f)
-#define RAW_TO_DENSITY(raw) ((raw) / 10.0f)
+#define RAW_TO_TEMP(raw)    (((int32_t)(raw) - 20000) / 100.0f) /* 寄存器原始温度值转换为工程温度。 */
+#define RAW_TO_DENSITY(raw) ((raw) / 10.0f) /* 寄存器原始密度值转换为工程密度。 */
 /**
  * @brief 系统错误码定义（2025-10修正版）
  * @note  错误码格式：0x00TT000N
@@ -708,25 +708,25 @@ typedef struct {
 } DeviceParameters;
 #pragma pack(pop)
 
-#define FRAM_PARAM_A_ADDRESS 0x0000u
-#define FRAM_PARAM_SLOT_SIZE 0x0800u
-#define FRAM_PARAM_B_ADDRESS (FRAM_PARAM_A_ADDRESS + FRAM_PARAM_SLOT_SIZE)
+#define FRAM_PARAM_A_ADDRESS 0x0000u /* 参数存储 A 分区 FRAM 起始地址。 */
+#define FRAM_PARAM_SLOT_SIZE 0x0800u /* 参数存储单个分区大小。 */
+#define FRAM_PARAM_B_ADDRESS (FRAM_PARAM_A_ADDRESS + FRAM_PARAM_SLOT_SIZE) /* 参数存储 B 分区 FRAM 起始地址。 */
 #define FRAM_PARAM_ADDRESS FRAM_PARAM_A_ADDRESS /* 兼容旧代码 */
 #define CRC_SEED 0xFFFFFFFF       /* CRC初始值 */
 
 /* 位置记步来源：0 使用编码轮，1 使用 TMC5130 XACTUAL 电机步进。 */
-#define POSITION_COUNT_MODE_ENCODER 0u
-#define POSITION_COUNT_MODE_MOTOR   1u
+#define POSITION_COUNT_MODE_ENCODER 0u /* 位置计数模式：使用编码器。 */
+#define POSITION_COUNT_MODE_MOTOR   1u /* 位置计数模式：使用电机步数。 */
 /* 流程是否允许自动切换位置源：0=不切换，1=自动切换。 */
-#define POSITION_SOURCE_AUTO_SWITCH_DISABLE 0u
-#define POSITION_SOURCE_AUTO_SWITCH_ENABLE  1u
+#define POSITION_SOURCE_AUTO_SWITCH_DISABLE 0u /* 位置计数配置枚举值：位置 来源 自动 切换 禁止。 */
+#define POSITION_SOURCE_AUTO_SWITCH_ENABLE  1u /* 位置来源自动切换：启用。 */
 /* 罐底测量完成后是否修正编码器当前值：0=不修正，1=修正。 */
-#define BOTTOM_ENCODER_CORRECTION_DISABLE 0u
-#define BOTTOM_ENCODER_CORRECTION_ENABLE  1u
+#define BOTTOM_ENCODER_CORRECTION_DISABLE 0u /* 罐底编码器校正：禁用。 */
+#define BOTTOM_ENCODER_CORRECTION_ENABLE  1u /* 罐底编码器校正：启用。 */
 /* TMC5130 电机运行电流编码值，异常值恢复为 16。 */
-#define MOTOR_CURRENT_DEFAULT       12u
-#define MOTOR_CURRENT_MIN           1u
-#define MOTOR_CURRENT_MAX           31u
+#define MOTOR_CURRENT_DEFAULT       12u /* 电机控制参数：电机 当前 默认值。 */
+#define MOTOR_CURRENT_MIN           1u /* TMC5130 电机运行电流编码最小值。 */
+#define MOTOR_CURRENT_MAX           31u /* TMC5130 电机运行电流编码最大值。 */
 
 /* **************** 全局变量 *************************** */
 

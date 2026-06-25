@@ -11,40 +11,40 @@
 
 
 #ifndef MOTOR_JOG_SLOWDOWN_DISTANCE_MM
-#define MOTOR_JOG_SLOWDOWN_DISTANCE_MM     2.0f
+#define MOTOR_JOG_SLOWDOWN_DISTANCE_MM     2.0f /* 电机点动控制参数：减速 距离 MM。 */
 #endif
 #ifndef MOTOR_JOG_CREEP_SPEED_X100
-#define MOTOR_JOG_CREEP_SPEED_X100         10U
+#define MOTOR_JOG_CREEP_SPEED_X100         10U /* 电机点动控制参数：低速爬行 SPEED 放大 100 倍。 */
 #endif
 #ifndef MOTOR_JOG_POSITION_EPS_MM
-#define MOTOR_JOG_POSITION_EPS_MM          0.1f
+#define MOTOR_JOG_POSITION_EPS_MM          0.1f /* 电机点动控制参数：位置 允许误差 MM。 */
 #endif
 #ifndef MOTOR_JOG_FINAL_ERROR_LIMIT_MM
-#define MOTOR_JOG_FINAL_ERROR_LIMIT_MM     10.0f
+#define MOTOR_JOG_FINAL_ERROR_LIMIT_MM     10.0f /* 电机点动控制参数：最终 错误 限值 MM。 */
 #endif
 #ifndef MOTOR_JOG_STOP_TRIGGER_MM
-#define MOTOR_JOG_STOP_TRIGGER_MM          0.45f
+#define MOTOR_JOG_STOP_TRIGGER_MM          0.45f /* 电机点动控制参数：停止 触发 MM。 */
 #endif
 #ifndef MOTOR_JOG_OVERSHOOT_LIMIT_MM
-#define MOTOR_JOG_OVERSHOOT_LIMIT_MM       0.1f
+#define MOTOR_JOG_OVERSHOOT_LIMIT_MM       0.1f /* 电机点动控制参数：越界 限值 MM。 */
 #endif
 #ifndef MOTOR_JOG_POLL_MS
-#define MOTOR_JOG_POLL_MS                  20U
+#define MOTOR_JOG_POLL_MS                  20U /* 电机点动控制参数：轮询 毫秒。 */
 #endif
 #ifndef MOTOR_JOG_MAX_RUN_MS
-#define MOTOR_JOG_MAX_RUN_MS               3600000U
+#define MOTOR_JOG_MAX_RUN_MS               3600000U /* 电机点动控制参数：最大值 运行 毫秒。 */
 #endif
 #ifndef MOTOR_JOG_START_GRACE_MS
-#define MOTOR_JOG_START_GRACE_MS           500U
+#define MOTOR_JOG_START_GRACE_MS           500U /* 电机点动控制参数：启动 宽限 毫秒。 */
 #endif
 #ifndef MOTOR_JOG_BRAKE_MARGIN_X100
-#define MOTOR_JOG_BRAKE_MARGIN_X100       130U
+#define MOTOR_JOG_BRAKE_MARGIN_X100       130U /* 电机点动控制参数：制动 余量 放大 100 倍。 */
 #endif
 #ifndef MOTOR_JOG_BRAKE_MAX_DISTANCE_MM
-#define MOTOR_JOG_BRAKE_MAX_DISTANCE_MM   1000.0f
+#define MOTOR_JOG_BRAKE_MAX_DISTANCE_MM   1000.0f /* 电机点动控制参数：制动 最大值 距离 MM。 */
 #endif
 #ifndef MOTOR_JOG_DECEL_DEFAULT_REG
-#define MOTOR_JOG_DECEL_DEFAULT_REG       (20U * 32U)
+#define MOTOR_JOG_DECEL_DEFAULT_REG       (20U * 32U) /* 电机点动默认减速度寄存器值。 */
 #endif
 /* ===================== 私有函数声明 ===================== */
 
