@@ -143,6 +143,9 @@ static void OilLevel_SyncCurrentPositionToResult(const char *reason)
 
     g_measurement.oil_measurement.oil_level = (uint32_t)oil_level;
     g_measurement.density_distribution.Density_oil_level = g_measurement.oil_measurement.oil_level;
+    /* 修正液位同步的是当前传感器位置，需要恢复液位有效标志。 */
+    g_measurement.oil_measurement.probe_at_liquid_level = 1U;
+    g_measurement.oil_measurement.liquid_stable = 1U;
     OilLevel_UpdateAoOutput();
 
     printf("液位流程\t%s后同步液位：%lu(0.1mm)\r\n",
@@ -1524,6 +1527,9 @@ static int determineTheSensorPositionAndUpdateTheLevelValue(void) {
 		/* 更新当前液位值 */
 		g_measurement.oil_measurement.oil_level = OilLevel_ClampLevelForReport(oil_level, "液位跟随");
 		g_measurement.density_distribution.Density_oil_level = g_measurement.oil_measurement.oil_level;
+		/* 正常跟随更新结果时恢复有效标志，覆盖前序清零状态。 */
+		g_measurement.oil_measurement.probe_at_liquid_level = 1U;
+		g_measurement.oil_measurement.liquid_stable = 1U;
 		OilLevel_UpdateAoOutput();
 		/* 打印正常液位值信息 */
 		printf("液位跟随\t液位值为%lu (0.1mm)", (unsigned long)g_measurement.oil_measurement.oil_level);

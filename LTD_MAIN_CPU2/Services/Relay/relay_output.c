@@ -329,7 +329,8 @@ static uint8_t RelayOutput_GetAlarmSourceValue(const RelayAlarmConfig *cfg,
         return 1U;
 
     case RELAY_ALARM_SOURCE_LIQUID_TEMP:
-        if ((snapshot->temperature == (int32_t)UNVALID_TEMPERATURE_REALTIME) ||
+        if ((snapshot->temperature == 0) ||
+            (snapshot->temperature == (int32_t)UNVALID_TEMPERATURE_REALTIME) ||
             (snapshot->temperature == (int32_t)UNVALID_TEMPERATURE_WIRELESS)) {
             return 0U;
         }

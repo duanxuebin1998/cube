@@ -49,6 +49,7 @@ CPU2 参数加载会校验 FRAM 中的 `magic`、`struct_size`、`param_version`
 | V1.16.0.0 | 3 | 存储版本不变；新增 AO 模拟电流输出运行态和 AO 输出使能，原 `reserved26` 语义改为 `AoOutputEnable`；旧存储升级到协议版本 10 时默认关闭 AO 输出，并保留启动阶段 AO/电机初始化错误 |
 | V1.16.0.1 | 3 | 存储版本不变；收紧罐底检测模式为 `0/1`，旧 FRAM 中异常值运行期归零，通常保留旧参数 |
 | V1.16.1.0 | 3 | 存储版本不变；修复继电器报警 float 阈值写入并补全参数打印，旧 FRAM 参数通常保留 |
+| V1.18.1.0 | 3 | 存储版本不变；修复继电器液位/温度报警数据源有效性和 CPU3 息屏开关运行期同步，旧 FRAM 参数通常保留 |
 
 历史说明：建立 CPU2 程序版本号前，2025-12-16 引入当前参数元信息时使用 `DEVICE_PARAM_VERSION=1`；2026-03-05 系统参数增加时提升到 `DEVICE_PARAM_VERSION=2`，从版本 1 升级到版本 2 会因旧参数版本不匹配恢复出厂参数。
 
@@ -1620,3 +1621,33 @@ CPU2 参数加载会校验 FRAM 中的 `magic`、`struct_size`、`param_version`
 - 未在本次提交流程重新做完整实物联调；需要现场覆盖丢步后零点标定、正常回零、罐底搜索、普通下行称重保护、AO 4/12/20/22mA 电流输出和 HART/万用表回读。
 - 当前现场日志曾出现 AD5421 写电流成功但 READFAULT 回读 `0xFFFF`；测试命令会保持输出便于测量，但正式运行仍会把 READFAULT 非 0 当故障处理，需继续结合电流环负载和硬件回读链路确认。
 - AO 延后刷新使用 PendSV 处理 SPI 和少量状态写入，已经避开 TIM4 直接阻塞，但仍属于异常上下文，需要现场观察主循环阻塞、电机运动、UART6 传感器通信和看门狗刷新是否受影响。
+
+## 2026-06-25 - 修复继电器报警数据源和息屏开关立即生效（CPU2 V1.18.1.0 / CPU3 V1.16.1.0）
+
+版本：
+- CPU2: V1.18.0.0 -> V1.18.1.0。
+- CPU3: V1.16.0.0 -> V1.16.1.0。
+
+协议版本/兼容性：
+- `DEVICE_PROTOCOL_VERSION` 保持 10，不新增或变更 CPU2/CPU3 共享寄存器、命令码、输入寄存器尾段或保持寄存器地址。
+- CPU2 `DEVICE_PARAM_VERSION` 保持 3，`DeviceParameters` 结构大小不变，不会因本次升级触发恢复出厂参数。
+- CPU3 本机显示参数存储结构和寄存器地址不变，只修复保存后的运行期同步时机。
+
+本次修改：
+- 修复修正液位和正常跟随更新液位后未恢复 `probe_at_liquid_level/liquid_stable` 的问题，避免继电器液位报警数据源被误判为 `99999` 无效值并长期不恢复。
+- 继电器温度报警源新增初始值 `0` 无效判定，避免上电或温度尚未刷新时把 `0.00` 当作真实温度参与报警。
+- CPU3 本机显示类参数写入后立即调用 `Cpu3Local_ApplyDisplayRuntimeParams()`，使息屏开关保存后立即更新 `screen_parameter.screenoff`，无需重启生效；亮度也统一走同一运行期同步路径。
+- 按用户要求，本次提交不纳入当前工作区里的 `CHANGELOG.pdf`，也不纳入 AO/电流输出专题改动。
+- 同步新增本版本改动与测试方案，并更新版本索引和 CPU2 参数存储升级清单。
+
+验证：
+- `git diff --check -- LTD_MAIN_CPU2\Services\Relay\relay_output.c LTD_MAIN_CPU2\Application\Src\measure_oilLevel.c`
+- GBK 编码检查：`relay_output.c`、`measure_oilLevel.c` 无替换字符和双问号。
+- `cmake --build build\LTD_MAIN_CPU2`
+- `cmake --build build\LTD_DISPLAY_CPU3`
+- `py tools\check_version_bumped.py`
+
+未验证风险：
+- 未做实物联调；需要现场确认液位修正后继电器液位报警值可恢复为真实液位，温度未刷新时不会触发低温误报警。
+- 需要现场确认 CPU3 菜单修改息屏开关后无需重启即可按新值息屏/唤醒。
+- 本次不改变报警策略中“非液位跟随状态是否强制报警”的业务语义，后续如要调整需要单独确认维护模式、手动运动和读参数场景。

@@ -372,28 +372,34 @@ int32_t Cpu3Local_ReadValue(OperatingNumber opera)
 /* 写 CPU3 本机参数（统一入口） */
 void Cpu3Local_WriteValue(OperatingNumber opera, int32_t v)
 {
+    bool display_runtime_changed = false;
+
     switch (opera)
     {
     /* 界面显示类 */
     case COM_NUM_PARA_LANG:
         g_cpu3_comm_display_params.language = (uint8_t)v;
+        display_runtime_changed = true;
         break;
 
     case COM_NUM_SCREEN_DECIMAL:
         g_cpu3_comm_display_params.screen_decimal = (uint8_t)v;
+        display_runtime_changed = true;
         break;
 
     case COM_NUM_SCREEN_PASSWARD:
         g_cpu3_comm_display_params.screen_password = (uint16_t)v;
+        display_runtime_changed = true;
         break;
 
     case COM_NUM_SCREEN_OFF:
         g_cpu3_comm_display_params.screen_off_time = (uint8_t)v;
+        display_runtime_changed = true;
         break;
 
     case COM_NUM_SCREEN_BRIGHTNESS:
         g_cpu3_comm_display_params.screen_brightness = (uint8_t)v;
-        OLED_SetBrightnessLevel(g_cpu3_comm_display_params.screen_brightness);
+        display_runtime_changed = true;
         break;
 
     case COM_NUM_SCREEN_SOURCE_OIL:
@@ -486,6 +492,10 @@ void Cpu3Local_WriteValue(OperatingNumber opera, int32_t v)
     if (Cpu3Local_IsUartParam(opera)) {
         /* 非协议字段允许现场覆盖；这里只兜底修正越界值，避免 UART 初始化异常。 */
         (void)Cpu3_SanitizeAllPortConfigs();
+    }
+
+    if (display_runtime_changed) {
+        Cpu3Local_ApplyDisplayRuntimeParams();
     }
 
     /* 这里可以顺手：重配串口 + 保存 FRAM */
