@@ -1,4 +1,4 @@
-<!doctype html>
+﻿﻿<!doctype html>
 <html lang="zh-CN">
 <head>
   <meta charset="utf-8">
@@ -212,8 +212,8 @@
   <main>
     <section class="card summary">
       <h2>结论</h2>
-      <p>推荐保持现有电机运行指令入口不变：用户仍在原有命令页下发纯电机指令，包括运行到指定位置、上行、下行、强制上行、强制下行和强制提零点。上述指令下发成功后不返回状态页，而是自动进入新的电机运行监控页。</p>
-      <p>运行监控页实时显示电机运行位置和称重值，并提供“一键停止当前运动”。纯电机指令自然完成、停止完成或取消完成后，CPU3 再自动切回状态页。</p>
+      <p>推荐保持现有电机运行指令入口不变：用户仍在原有命令页下发纯电机指令，包括运行到指定位置、上行、下行、强制上行、强制下行。上述指令下发成功后不返回状态页，而是自动进入新的电机运行监控页。</p>
+      <p>运行监控页实时显示电机运行位置和扭力值，并提供“一键停止当前运动”。纯电机指令自然完成、停止完成或取消完成后，CPU3 再自动切回状态页。</p>
       <p>“一键停止”仍定义为“停止当前动作”的受控停止功能，底层复用现有 <code>CMD_CANCEL_MEASUREMENT = 16</code> 语义，由 CPU2 统一取消当前命令、停止电机并回到待机。UI 上不使用“急停”字样，避免把受控慢停误认为安全急停。</p>
       <p>页面沟通原型见同目录 <code>2026-06-13_电机运行监控页UI预览.html</code>，用于确认小屏布局、按键提示和运行/停止/完成状态文案。</p>
     </section>
@@ -223,7 +223,7 @@
       <div class="card">
         <p><span class="tag ok">CPU3 已实现</span> 已在 <code>LTD_DISPLAY_CPU3/Application/display/display_tankopera.c</code> 增加电机运行监控页，指令下发成功后按命令类型决定是否进入该页。</p>
         <p><span class="tag ok">入口不变</span> 电机运行指令仍在原有命令页下发，不新增“电机控制”单独页面。</p>
-        <p><span class="tag ok">范围收敛</span> 仅 <code>CMD_RUN_TO_POSITION</code>、<code>CMD_MOVE_UP</code>、<code>CMD_MOVE_DOWN</code>、<code>CMD_FORCE_MOVE_UP</code>、<code>CMD_FORCE_MOVE_DOWN</code>、<code>CMD_FORCE_LIFT_ZERO</code> 进入监控页，其它测量或业务命令保持原退出策略。</p>
+        <p><span class="tag ok">范围收敛</span> 仅 <code>CMD_RUN_TO_POSITION</code>、<code>CMD_MOVE_UP</code>、<code>CMD_MOVE_DOWN</code>、<code>CMD_FORCE_MOVE_UP</code>、<code>CMD_FORCE_MOVE_DOWN</code> 进入监控页，其它测量或业务命令保持原退出策略。</p>
         <p><span class="tag ok">停止复用</span> 监控页“停止运动”确认后仍下发 <code>CMD_CANCEL_MEASUREMENT</code>，CPU2 复用既有取消当前命令与慢停逻辑。</p>
         <p><span class="tag warn">待硬件联调</span> 本地已通过 CPU3 构建验证；仍需台架确认运行态刷新、自然完成返回状态页、停止后不继续跑到原目标。</p>
       </div>
@@ -234,7 +234,7 @@
       <div class="grid">
         <div class="tile">
           <strong>操作目标</strong>
-          <p>现场人员沿用原有命令页下发纯电机运行或强制运动指令，随后自动进入运行监控页；监控页持续显示设备状态第一行、位置和称重，并提供停止运动入口。</p>
+          <p>现场人员沿用原有命令页下发纯电机运行或强制运动指令，随后自动进入运行监控页；监控页持续显示设备状态第一行、位置和扭力，并提供停止运动入口。</p>
         </div>
         <div class="tile">
           <strong>安全目标</strong>
@@ -261,7 +261,7 @@
           <tr>
             <td>CPU3 UI</td>
             <td>沿用原有命令页，新增“电机运行监控页”</td>
-            <td>运行到指定位置、上行、下行、强制上行、强制下行和强制提零点仍在原有命令页下发；CPU3 下发这些纯电机指令成功后自动进入运行监控页，监控页显示设备状态第一行、运行位置、称重值和停止运动入口。</td>
+            <td>运行到指定位置、上行、下行、强制上行、强制下行仍在原有命令页下发；CPU3 下发这些纯电机指令成功后自动进入运行监控页，监控页显示设备状态第一行、运行位置、扭力值和停止运动入口。</td>
           </tr>
           <tr>
             <td>CPU2 命令</td>
@@ -287,7 +287,7 @@
       <div class="flow">
         <div class="flow-row">
           <div class="flow-label">入口</div>
-          <div class="flow-body">不新增单独电机控制菜单；运行到指定位置、上行、下行、强制上行、强制下行和强制提零点仍从原有命令页下发。</div>
+          <div class="flow-body">不新增单独电机控制菜单；运行到指定位置、上行、下行、强制上行、强制下行仍从原有命令页下发。</div>
         </div>
         <div class="flow-row">
           <div class="flow-label">命令下发后</div>
@@ -295,7 +295,7 @@
         </div>
         <div class="flow-row">
           <div class="flow-label">运行监控页</div>
-          <div class="flow-body">第一行直接复用设备状态页第一行，例如“向下运行中”“运行到指定位置中”；下面显示当前位置、称重值和停止运动入口。</div>
+          <div class="flow-body">第一行直接复用设备状态页第一行，例如“向下运行中”“运行到指定位置中”；下面显示当前位置、扭力值和停止运动入口。</div>
         </div>
         <div class="flow-row">
           <div class="flow-label">一键停止</div>
@@ -313,7 +313,7 @@
           <li>入口：沿用原有电机运行和强制运动指令页面</li>
           <li>监控页标题：电机运行中</li>
           <li>第 1 行：复用设备状态页第一行</li>
-          <li>监控数据显示：位置、称重</li>
+          <li>监控数据显示：位置、扭力</li>
           <li>监控页操作：停止运动</li>
           <li>确认页标题：停止当前运动?</li>
           <li>确认键提示：确认停止</li>
@@ -343,7 +343,7 @@
           </tr>
           <tr>
             <td>强制运动</td>
-            <td>进入运行监控页：<code>CMD_FORCE_MOVE_UP</code>、<code>CMD_FORCE_MOVE_DOWN</code>、<code>CMD_FORCE_LIFT_ZERO</code></td>
+            <td>进入运行监控页：<code>CMD_FORCE_MOVE_UP</code>、<code>CMD_FORCE_MOVE_DOWN</code></td>
             <td>强制动作风险更高，停止入口应更容易触达，但仍需要确认。</td>
           </tr>
           <tr>
@@ -374,11 +374,11 @@
           <tr>
             <td>1</td>
             <td>CPU3 保持原有电机运行指令入口，仅纯电机指令下发成功后跳转到运行监控页。</td>
-            <td>不新增单独电机控制菜单；<code>CMD_RUN_TO_POSITION</code>、<code>CMD_MOVE_UP</code>、<code>CMD_MOVE_DOWN</code>、<code>CMD_FORCE_MOVE_UP</code>、<code>CMD_FORCE_MOVE_DOWN</code>、<code>CMD_FORCE_LIFT_ZERO</code> 能正常下发并进入监控页。</td>
+            <td>不新增单独电机控制菜单；<code>CMD_RUN_TO_POSITION</code>、<code>CMD_MOVE_UP</code>、<code>CMD_MOVE_DOWN</code>、<code>CMD_FORCE_MOVE_UP</code>、<code>CMD_FORCE_MOVE_DOWN</code> 能正常下发并进入监控页。</td>
           </tr>
           <tr>
             <td>2</td>
-            <td>运行监控页第一行复用设备状态页第一行，下方显示当前位置和称重值。</td>
+            <td>运行监控页第一行复用设备状态页第一行，下方显示当前位置和扭力值。</td>
             <td>监控页第一行和状态页一致，例如“向下运行中”“运行到指定位置中”。</td>
           </tr>
           <tr>
@@ -456,10 +456,10 @@
     <section>
       <h2>验证建议</h2>
       <ul>
-        <li>在原有电机运行指令页选择运行到指定位置、上行、下行、强制上行、强制下行或强制提零点，不新增单独电机控制页。</li>
+        <li>在原有电机运行指令页选择运行到指定位置、上行、下行、强制上行、强制下行，不新增单独电机控制页。</li>
         <li>上述纯电机指令下发成功后，CPU3 不返回状态页，而是自动进入电机运行监控页。</li>
         <li>找油、找水、找底、单点、分布、密度区间、瓦锡兰密度流程等业务命令不进入运行监控页。</li>
-        <li>运行监控页第一行复用设备状态页第一行，并持续刷新当前位置和称重值。</li>
+        <li>运行监控页第一行复用设备状态页第一行，并持续刷新当前位置和扭力值。</li>
         <li>在运行监控页选择停止并确认后，CPU2 收到 <code>CMD_CANCEL_MEASUREMENT</code>，电机慢停并回待机。</li>
         <li>纯电机指令自然完成后，运行监控页自动切换到状态页。</li>
         <li><code>CMD_RUN_TO_POSITION</code> 运行过程中停止，确认不会继续跑到原目标。</li>

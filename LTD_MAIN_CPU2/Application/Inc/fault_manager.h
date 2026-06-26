@@ -19,7 +19,7 @@ typedef enum {
 	FAULT_MOTOR = 11,          /* 电机类故障 */
 	FAULT_ENCODER,            /* 编码器类故障 */
 	FAULT_SENSOR,             /* 传感器类故障 */
-	FAULT_WEIGHT,             /* 称重故障 */
+	FAULT_WEIGHT,             /* 扭力故障 */
 	FAULT_MEASUREMENT,        /* 测量过程类错误 */
 	FAULT_WIRELESS_SLIPRING,  /* 无线滑环类故障 */
 	FAULT_PARAM_STORAGE,      /* 参数/存储错误 */

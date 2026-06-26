@@ -6,7 +6,7 @@
 #define ERROR_LOG_MODULE_MOTOR   "电机" /* 错误日志模块名文本：电机。 */
 #define ERROR_LOG_MODULE_ENCODER "编码器" /* 错误日志模块名文本：编码器。 */
 #define ERROR_LOG_MODULE_SENSOR  "传感器" /* 错误日志模块名文本：传感器。 */
-#define ERROR_LOG_MODULE_WEIGHT  "称重" /* 错误日志模块名文本：称重。 */
+#define ERROR_LOG_MODULE_WEIGHT  "扭力" /* 错误日志模块名文本：扭力。 */
 #define ERROR_LOG_MODULE_PARAM   "参数" /* 错误日志模块名文本：参数。 */
 #define ERROR_LOG_MODULE_COMM    "通信" /* 错误日志模块名文本：通信。 */
 #define ERROR_LOG_MODULE_SLIPRING_COMM "滑环通信" /* 错误日志模块名文本：滑环通信。 */
@@ -26,8 +26,8 @@
 #define ERROR_LOG_OP_READ_INT_PARAM   "读取整数参数" /* 错误日志操作名文本：读取 整数 参数。 */
 #define ERROR_LOG_OP_READ_LEVEL_FREQ  "读取液位频率" /* 错误日志操作名文本：读取 液位 频率。 */
 #define ERROR_LOG_OP_FRAM_FALLBACK    "FRAM参数分区回退" /* 错误日志操作名文本：FRAM 参数分区回退。 */
-#define ERROR_LOG_OP_SEARCH_OIL_LEVEL "搜索液位" /* 错误日志操作名文本：搜索油位。 */
-#define ERROR_LOG_OP_FOLLOW_OIL_LEVEL "跟随液位" /* 错误日志操作名文本：跟随油位。 */
+#define ERROR_LOG_OP_SEARCH_OIL_LEVEL "搜索液位" /* 错误日志操作名文本：搜索液位。 */
+#define ERROR_LOG_OP_FOLLOW_OIL_LEVEL "跟随液位" /* 错误日志操作名文本：跟随液位。 */
 #define ERROR_LOG_OP_ENABLE_LEVEL_MODE "启用液位模式" /* 错误日志操作名文本：启用液位模式。 */
 #define ERROR_LOG_OP_SEARCH_WATER_ROUGH "粗找水位" /* 错误日志操作名文本：粗找水位。 */
 #define ERROR_LOG_OP_SEARCH_WATER_PRECISE "精找水位" /* 错误日志操作名文本：搜索 水位 精找。 */
@@ -40,7 +40,7 @@
 #define ERROR_LOG_OP_COMM_DIAG        "通信诊断" /* 错误日志操作名文本：通信 诊断。 */
 #define ERROR_LOG_OP_WIRELESS_PROBE   "蓝牙链路检查" /* 错误日志操作名文本：蓝牙链路检查。 */
 #define ERROR_LOG_OP_PARAM_VALIDATE   "参数校验" /* 错误日志操作名文本：参数 校验。 */
-#define ERROR_LOG_OP_WEIGHT_COLLISION "称重碰撞检查" /* 错误日志操作名文本：称重 碰撞。 */
+#define ERROR_LOG_OP_WEIGHT_COLLISION "扭力碰撞检查" /* 错误日志操作名文本：扭力 碰撞。 */
 #define ERROR_LOG_OP_DRIVER_INIT      "驱动初始化" /* 错误日志操作名文本：驱动器 初始化。 */
 #define ERROR_LOG_OP_STEP_MOTION      "步进运动" /* 错误日志操作名文本：步进运动。 */
 #define ERROR_LOG_OP_WAIT_STOP        "等待电机停止" /* 错误日志操作名文本：等待 停止。 */
@@ -54,8 +54,8 @@
 #define ERROR_LOG_REASON_FRAM_FALLBACK  "A分区异常，使用B分区" /* 错误日志原因文本：FRAM 回退。 */
 #define ERROR_LOG_REASON_FRAM_ERROR     "FRAM参数分区异常" /* 错误日志原因文本：FRAM 错误。 */
 #define ERROR_LOG_REASON_PARAM_OVERFLOW "参数分区容量不足" /* 错误日志原因文本：参数 溢出。 */
-#define ERROR_LOG_REASON_WEIGHT_TIMEOUT "称重通信超时" /* 错误日志原因文本：称重 超时。 */
-#define ERROR_LOG_REASON_WEIGHT_RECOVER "称重通信恢复" /* 错误日志原因文本：称重 恢复。 */
+#define ERROR_LOG_REASON_WEIGHT_TIMEOUT "扭力通信超时" /* 错误日志原因文本：扭力 超时。 */
+#define ERROR_LOG_REASON_WEIGHT_RECOVER "扭力通信恢复" /* 错误日志原因文本：扭力 恢复。 */
 #define ERROR_LOG_REASON_SEARCH_FAIL    "搜索失败" /* 错误日志原因文本：搜索 失败。 */
 #define ERROR_LOG_REASON_FOLLOW_FAIL    "跟随失败" /* 错误日志原因文本：跟随 失败。 */
 #define ERROR_LOG_REASON_MODE_FAIL      "模式启用失败" /* 错误日志原因文本：模式 失败。 */
@@ -69,7 +69,7 @@
 #define ERROR_LOG_REASON_DRIVER_ALARM   "驱动报警" /* 错误日志原因文本：驱动器 报警。 */
 #define ERROR_LOG_REASON_DRIVER_UV      "电荷泵欠压" /* 错误日志原因文本：驱动器 UV。 */
 #define ERROR_LOG_REASON_INIT_FAIL      "初始化失败" /* 错误日志原因文本：初始化 失败。 */
-#define ERROR_LOG_REASON_WEIGHT_LIMIT   "称重超限" /* 错误日志原因文本：称重 限值。 */
+#define ERROR_LOG_REASON_WEIGHT_LIMIT   "扭力超限" /* 错误日志原因文本：扭力 限值。 */
 #define ERROR_LOG_REASON_COLLISION      "碰撞检测" /* 错误日志原因文本：碰撞。 */
 #define ERROR_LOG_REASON_VALIDATE_FAIL  "校验失败" /* 错误日志原因文本：校验 失败。 */
 #define ERROR_LOG_REASON_ADDRESS_ERROR  "地址错误" /* 错误日志原因文本：地址 错误。 */
@@ -94,8 +94,8 @@
 #define ERROR_LOG_REASON_PARAM_RANGE    "参数超限" /* 错误日志原因文本：参数 范围。 */
 #define ERROR_LOG_REASON_PARAM_UNINIT   "参数未初始化" /* 错误日志原因文本：参数未初始化。 */
 #define ERROR_LOG_REASON_PARAM_CALL     "参数调用错误" /* 错误日志原因文本：参数 调用。 */
-#define ERROR_LOG_REASON_WEIGHT_DRIFT   "称重漂移" /* 错误日志原因文本：称重 漂移。 */
-#define ERROR_LOG_REASON_WEIGHT_SATURATION "称重传感器饱和" /* 错误日志原因文本：称重 饱和。 */
+#define ERROR_LOG_REASON_WEIGHT_DRIFT   "扭力漂移" /* 错误日志原因文本：扭力 漂移。 */
+#define ERROR_LOG_REASON_WEIGHT_SATURATION "扭力传感器饱和" /* 错误日志原因文本：扭力 饱和。 */
 #define ERROR_LOG_REASON_POWER_FLUCTUATION "电源波动" /* 错误日志原因文本：电源波动。 */
 #define ERROR_LOG_REASON_UNKNOWN_FAULT  "未知故障" /* 错误日志原因文本：未知 故障。 */
 #define ERROR_LOG_REASON_LOST_STEP      "丢步检测" /* 错误日志原因文本：丢步检测。 */

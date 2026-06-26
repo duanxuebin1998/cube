@@ -1314,7 +1314,6 @@ uint32_t FollowWaterLevel(void)
     return FollowWaterLevelCore(WATER_RECOVER_BY_SEARCH);
 }
 
-#define WATER_TANK_HEIGHT_EPSILON   (1)   /* 0.1mm，避免边界抖动，可按需保留 */
 
 static uint32_t CorrectWaterTankHeightProcess(void)
 {
@@ -1327,8 +1326,7 @@ static uint32_t CorrectWaterTankHeightProcess(void)
 
     /* 核心公式：water_tank_height = cable_length_at_water + calibrateWaterLevel */
     new_height = (int32_t)g_measurement.debug_data.cable_length
-              + (int32_t)g_deviceParams.calibrateWaterLevel
-              + WATER_TANK_HEIGHT_EPSILON;
+              + (int32_t)g_deviceParams.calibrateWaterLevel;
 
     /* 合理性保护 */
     if (new_height <= 0 || new_height > 5000000) { /* 例：500m -> 5,000,000(0.1mm) */

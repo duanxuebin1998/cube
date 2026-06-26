@@ -217,7 +217,7 @@ void MotorLostStep_NoDetectRuntimeLogUpdate(void)
 
     uint32_t now = HAL_GetTick();
 
-    /* 1) 位置/尺带/称重 */
+    /* 1) 位置/尺带/扭力 */
     g_measurement.debug_data.current_weight = weight_parament.current_weight;
     g_measurement.debug_data.current_encoder_value = -g_encoder_count;
 
@@ -251,7 +251,7 @@ void MotorLostStep_NoDetectRuntimeLogUpdate(void)
     }
     last_log_tick = now;
 
-    printf("无检测运行 | 方向：%lu 称重=%lu 距离零点：%ld(0.1mm) 罐底距离=%ld "
+    printf("无检测运行 | 方向：%lu 扭力=%lu 距离零点：%ld(0.1mm) 罐底距离=%ld "
            "| X轴（X100）=%ld Y轴（X100）=%ld | 密度=%lu 温度=%lu 频率=%lu\r\n",
            (unsigned long)g_measurement.debug_data.motor_state,
            (unsigned long)g_measurement.debug_data.current_weight,

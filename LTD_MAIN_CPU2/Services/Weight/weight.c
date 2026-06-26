@@ -3,7 +3,7 @@
  *
  *  Created on: Jan 18, 2025
  *      Author: Duan Xuebin
- *  该文件实现了重量传感器的相关操作，包括获取空载称重、获取稳定重量、判断重量状态等功能。
+ *  该文件实现了扭力传感器的相关操作，包括获取空载扭力、获取稳定扭力、判断扭力状态等功能。
  */
 
 #include "main.h"
@@ -20,24 +20,24 @@
 #include "error_log.h"
 #include "system_parameter.h"
 #include "abortable_delay.h"
-#define WEIGHT_DEBUG /* 称重处理参数：称重 调试。 */
-#define MAX_WEIGHT 20000 /* 最大重量限制 */
-#define MIN_WEIGHT -2000 /* 最小重量限制 */
-#define MAX_EMPTY_WEIGHT 20000 /* 最大重量限制 */
+#define WEIGHT_DEBUG /* 扭力处理参数：扭力 调试。 */
+#define MAX_WEIGHT 20000 /* 最大扭力限制 */
+#define MIN_WEIGHT -2000 /* 最小扭力限制 */
+#define MAX_EMPTY_WEIGHT 20000 /* 最大扭力限制 */
 /* 采样和更新周期定义 */
-#define WEIGHT_SAMPLE_INTERVAL 200 /* 称重处理参数：称重 SAMPLE 间隔。 */
-#define WEIGHT_FILTER_OLD_FACTOR 8 /* 称重一阶滤波旧值权重。 */
-#define WEIGHT_FILTER_NEW_FACTOR 2 /* 称重一阶滤波新值权重。 */
-#define WEIGHT_FILTER_DIVISOR    (WEIGHT_FILTER_OLD_FACTOR + WEIGHT_FILTER_NEW_FACTOR) /* 称重一阶滤波权重除数。 */
-#define WEIGHT_COMM_TIMEOUT_MS 1000U /* 称重处理参数：称重 通信 超时 毫秒。 */
+#define WEIGHT_SAMPLE_INTERVAL 200 /* 扭力处理参数：扭力 SAMPLE 间隔。 */
+#define WEIGHT_FILTER_OLD_FACTOR 8 /* 扭力一阶滤波旧值权重。 */
+#define WEIGHT_FILTER_NEW_FACTOR 2 /* 扭力一阶滤波新值权重。 */
+#define WEIGHT_FILTER_DIVISOR    (WEIGHT_FILTER_OLD_FACTOR + WEIGHT_FILTER_NEW_FACTOR) /* 扭力一阶滤波权重除数。 */
+#define WEIGHT_COMM_TIMEOUT_MS 1000U /* 扭力处理参数：扭力 通信 超时 毫秒。 */
 
-/* 全局变量，存储当前称重传感器的原始重量值 */
-int16_t g_weight; /* 称重数据模块级变量，保存跨函数共享的业务状态。 */
+/* 全局变量，存储当前扭力传感器的原始扭力值 */
+int16_t g_weight; /* 扭力数据模块级变量，保存跨函数共享的业务状态。 */
 
-/* 全局结构体，存储称重相关参数（空载、稳定、当前重量等） */
+/* 全局结构体，存储扭力相关参数（空载、稳定、当前扭力等） */
 Weight_ParamentTypeDef weight_parament = { 0 };
-static uint32_t s_weight_last_rx_tick = 0U; /* 称重数据模块级变量，保存跨函数共享的业务状态。 */
-static uint8_t s_weight_timeout_reported = 0U; /* 称重数据模块级变量，保存跨函数共享的业务状态。 */
+static uint32_t s_weight_last_rx_tick = 0U; /* 扭力数据模块级变量，保存跨函数共享的业务状态。 */
+static uint8_t s_weight_timeout_reported = 0U; /* 扭力数据模块级变量，保存跨函数共享的业务状态。 */
 
 /**
  * @brief 判断当前是否处于允许零点搜索的设备状态。
@@ -52,7 +52,7 @@ static uint8_t Weight_IsZeroSearchState(void)
 }
 
 /**
- * @brief 执行称重数据中的 Weight_IsCommErrorCode 逻辑。
+ * @brief 执行扭力数据中的 Weight_IsCommErrorCode 逻辑。
  *
  * @param error_code 故障或错误码。
  * @return 状态码、计数值或协议数值，具体含义由调用点约定。
@@ -62,7 +62,7 @@ static uint8_t Weight_IsCommErrorCode(uint32_t error_code) {
 }
 
 /**
- * @brief 显示或打印称重数据中的 Weight_PrintCableRefs 逻辑。
+ * @brief 显示或打印扭力数据中的 Weight_PrintCableRefs 逻辑。
  *
  * @param cable_mm 业务参数。
  * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
@@ -74,10 +74,10 @@ static void Weight_PrintCableRefs(float cable_mm)
 	printf("\r\n");
 }
 
-/* 初始化称重 */
+/* 初始化扭力 */
 uint32_t weight_init() {
-	weight_parament.empty_weight = g_deviceParams.empty_weight;           /* 从设备参数中获取空载称重 */
-	weight_parament.full_weight = g_deviceParams.full_weight;           /* 从设备参数中获取满载称重 */
+	weight_parament.empty_weight = g_deviceParams.empty_weight;           /* 从设备参数中获取空载扭力 */
+	weight_parament.full_weight = g_deviceParams.full_weight;           /* 从设备参数中获取满载扭力 */
 	s_weight_last_rx_tick = HAL_GetTick();
 	s_weight_timeout_reported = 0U;
 	return NO_ERROR;
@@ -89,16 +89,16 @@ void Weight_RebaseStableWeight(void)
 }
 
 /**
- * @brief 接收称重数据中的 Weight_MarkFrameReceived 逻辑。
+ * @brief 接收扭力数据中的 Weight_MarkFrameReceived 逻辑。
  * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
  */
 void Weight_MarkFrameReceived(void) {
 	uint32_t now = HAL_GetTick();
 	s_weight_last_rx_tick = now;
 	s_weight_timeout_reported = 0U;
-	/* 先处理异常边界，避免称重数据状态机带故障继续运行。 */
+	/* 先处理异常边界，避免扭力数据状态机带故障继续运行。 */
 	if (Weight_IsCommErrorCode(g_measurement.device_status.error_code)) {
-		/* 错误 阶段：重试成功 模块：称重 操作：读取整数参数 原因：称重通信恢复 尝试：1U/1U */
+		/* 错误 阶段：重试成功 模块：扭力 操作：读取整数参数 原因：扭力通信恢复 尝试：1U/1U */
 		ErrorLog_Recover(ERROR_LOG_MODULE_WEIGHT,
 		                 ERROR_LOG_OP_READ_INT_PARAM,
 		                 ERROR_LOG_REASON_WEIGHT_RECOVER,
@@ -109,7 +109,7 @@ void Weight_MarkFrameReceived(void) {
 }
 
 /**
- * @brief 检查称重数据中的 Weight_CheckCommunicationTimeoutInternal 逻辑。
+ * @brief 检查扭力数据中的 Weight_CheckCommunicationTimeoutInternal 逻辑。
  *
  * @param keep_global_error 故障或错误码。
  * @return 状态码、计数值或协议数值，具体含义由调用点约定。
@@ -119,7 +119,7 @@ static uint32_t Weight_CheckCommunicationTimeoutInternal(uint8_t keep_global_err
 	uint32_t now = HAL_GetTick();
 	uint32_t error_code = g_measurement.device_status.error_code;
 
-	/* 先处理异常边界，避免称重数据状态机带故障继续运行。 */
+	/* 先处理异常边界，避免扭力数据状态机带故障继续运行。 */
 	if (keep_global_error &&
 		(error_code != NO_ERROR) &&
 		(error_code != STATE_SWITCH) &&
@@ -127,20 +127,20 @@ static uint32_t Weight_CheckCommunicationTimeoutInternal(uint8_t keep_global_err
 		return error_code;
 	}
 
-	/* 先处理异常边界，避免称重数据状态机带故障继续运行。 */
+	/* 先处理异常边界，避免扭力数据状态机带故障继续运行。 */
 	if ((now - s_weight_last_rx_tick) < WEIGHT_COMM_TIMEOUT_MS) {
 		return NO_ERROR;
 	}
 
-	/* 先处理异常边界，避免称重数据状态机带故障继续运行。 */
+	/* 先处理异常边界，避免扭力数据状态机带故障继续运行。 */
 	if (!s_weight_timeout_reported) {
 		s_weight_timeout_reported = 1U;
-		/* 错误 阶段：错误报警 模块：称重 操作：读取整数参数 原因：称重通信超时 处理：继续尝试 */
+		/* 错误 阶段：错误报警 模块：扭力 操作：读取整数参数 原因：扭力通信超时 处理：继续尝试 */
 		ErrorLog_Warn(ERROR_LOG_MODULE_WEIGHT,
 		              ERROR_LOG_OP_READ_INT_PARAM,
 		              ERROR_LOG_REASON_WEIGHT_TIMEOUT,
 		              ERROR_LOG_ACTION_CONTINUE);
-		printf("称重通信超时 | 超时阈值=%lums | 距上次接收=%lums\r\n",
+		printf("扭力通信超时 | 超时阈值=%lums | 距上次接收=%lums\r\n",
 		       (unsigned long)WEIGHT_COMM_TIMEOUT_MS,
 		       (unsigned long)(now - s_weight_last_rx_tick));
 	}
@@ -150,7 +150,7 @@ static uint32_t Weight_CheckCommunicationTimeoutInternal(uint8_t keep_global_err
 }
 
 /**
- * @brief 检查称重数据中的 Weight_CheckCommunicationTimeout 逻辑。
+ * @brief 检查扭力数据中的 Weight_CheckCommunicationTimeout 逻辑。
  * @return 状态码、计数值或协议数值，具体含义由调用点约定。
  */
 uint32_t Weight_CheckCommunicationTimeout(void)
@@ -159,7 +159,7 @@ uint32_t Weight_CheckCommunicationTimeout(void)
 }
 
 /**
- * @brief 检查称重数据中的 Weight_CheckOwnCommunicationTimeout 逻辑。
+ * @brief 检查扭力数据中的 Weight_CheckOwnCommunicationTimeout 逻辑。
  * @return 状态码、计数值或协议数值，具体含义由调用点约定。
  */
 uint32_t Weight_CheckOwnCommunicationTimeout(void)
@@ -169,63 +169,63 @@ uint32_t Weight_CheckOwnCommunicationTimeout(void)
 
 
 /**
- * @brief 获取空载称重
- *        延时5秒后，将当前重量值记录为空载称重
- *        并通过串口打印空载称重
+ * @brief 获取空载扭力
+ *        延时5秒后，将当前扭力值记录为空载扭力
+ *        并通过串口打印空载扭力
  */
 uint32_t get_empty_weight(void) {
-	printf("正在获取空载称重值...\r\n"); /* 打印获取空载称重信息 */
-	uint32_t wait_ret = AbortableDelay_CommandSwitch(5000U, 100U); /* 等待5秒，确保重量稳定 */
-	/* 先处理异常边界，避免称重数据状态机带故障继续运行。 */
+	printf("正在获取空载扭力值...\r\n"); /* 打印获取空载扭力信息 */
+	uint32_t wait_ret = AbortableDelay_CommandSwitch(5000U, 100U); /* 等待5秒，确保扭力稳定 */
+	/* 先处理异常边界，避免扭力数据状态机带故障继续运行。 */
 	if (wait_ret != NO_ERROR) {
 		return wait_ret;
 	}
-	weight_parament.empty_weight = g_weight; /* 记录空载称重 */
-	printf("空载称重值获取成功\t空载称重：\t%d\r\n", weight_parament.empty_weight); /* 打印空载称重 */
-	if (abs(weight_parament.empty_weight) > MAX_EMPTY_WEIGHT) { /* 检查空载称重是否在合理范围内 */
-		printf("空载称重值异常，请检查传感器或重新校准\r\n");
-		RETURN_ERROR(WEIGHT_DRIFT_ERROR); /* 如果空载称重不在合理范围内，打印错误信息并返回 */
+	weight_parament.empty_weight = g_weight; /* 记录空载扭力 */
+	printf("空载扭力值获取成功\t空载扭力：\t%d\r\n", weight_parament.empty_weight); /* 打印空载扭力 */
+	if (abs(weight_parament.empty_weight) > MAX_EMPTY_WEIGHT) { /* 检查空载扭力是否在合理范围内 */
+		printf("空载扭力值异常，请检查传感器或重新校准\r\n");
+		RETURN_ERROR(WEIGHT_DRIFT_ERROR); /* 如果空载扭力不在合理范围内，打印错误信息并返回 */
 	} else {
-		g_deviceParams.empty_weight = weight_parament.empty_weight; /* 更新设备参数中的空载称重 */
-		printf("空载称重值获取成功\t空载称重：\t%d\r\n", weight_parament.empty_weight); /* 打印空载称重 */
+		g_deviceParams.empty_weight = weight_parament.empty_weight; /* 更新设备参数中的空载扭力 */
+		printf("空载扭力值获取成功\t空载扭力：\t%d\r\n", weight_parament.empty_weight); /* 打印空载扭力 */
 		save_device_params(); /* 保存设备参数 */
 	}
-	return NO_ERROR; /* 获取空载称重成功，返回无错误状态 */
+	return NO_ERROR; /* 获取空载扭力成功，返回无错误状态 */
 }
 /**
- * @brief 获取满载称重
- *        延时5秒后，计算当前重量与空载称重的差值，作为满载称重
- *        并通过串口打印满载称重
+ * @brief 获取满载扭力
+ *        延时5秒后，计算当前扭力与空载扭力的差值，作为满载扭力
+ *        并通过串口打印满载扭力
  */
 uint32_t get_full_weight(void) {
-	printf("正在等待称重值稳定...\r\n"); /* 打印等待信息 */
-	uint32_t wait_ret = AbortableDelay_CommandSwitch(5000U, 100U); /* 等待5秒，确保重量稳定 */
-	/* 先处理异常边界，避免称重数据状态机带故障继续运行。 */
+	printf("正在等待扭力值稳定...\r\n"); /* 打印等待信息 */
+	uint32_t wait_ret = AbortableDelay_CommandSwitch(5000U, 100U); /* 等待5秒，确保扭力稳定 */
+	/* 先处理异常边界，避免扭力数据状态机带故障继续运行。 */
 	if (wait_ret != NO_ERROR) {
 		return wait_ret;
 	}
 
-	weight_parament.full_weight = weight_parament.current_weight; /* 计算满载称重 */
+	weight_parament.full_weight = weight_parament.current_weight; /* 计算满载扭力 */
 
 	if (weight_parament.full_weight < MIN_WEIGHT) {
-		printf("满载称重小于最小限制，可能需要重新校准\r\n");
+		printf("满载扭力小于最小限制，可能需要重新校准\r\n");
 		RETURN_ERROR(WEIGHT_UNDER_RANGE); /* 小于最小限制，报错 */
 	} else if (weight_parament.full_weight > MAX_WEIGHT) {
-		printf("满载称重超出范围，可能需要重新校准\r\n");
+		printf("满载扭力超出范围，可能需要重新校准\r\n");
 		RETURN_ERROR(WEIGHT_OUT_OF_RANGE); /* 超出范围，报错 */
 	} else {
-		g_deviceParams.full_weight = weight_parament.full_weight; /* 更新设备参数中的满载称重 */
-		printf("满载称重值获取成功\t满载的称重：\t%d\r\n", weight_parament.full_weight); /* 打印满载称重 */
+		g_deviceParams.full_weight = weight_parament.full_weight; /* 更新设备参数中的满载扭力 */
+		printf("满载扭力值获取成功\t满载的扭力：\t%d\r\n", weight_parament.full_weight); /* 打印满载扭力 */
 		save_device_params(); /* 保存设备参数 */
 	}
 
-	printf("满载称重值获取成功\t满载的称重：\t%d\r\n", weight_parament.full_weight); /* 打印满载称重 */
+	printf("满载扭力值获取成功\t满载的扭力：\t%d\r\n", weight_parament.full_weight); /* 打印满载扭力 */
 	return NO_ERROR; /* 获取成功 */
 }
 
 
 /**
- * @brief 零点状态检测（基于称重）
+ * @brief 零点状态检测（基于扭力）
  * @return ZERO（到达零点）或 NORMAL（未到零点）
  */
 Weight_StateTypeDef check_zero_point_status(void)
@@ -266,7 +266,7 @@ Weight_StateTypeDef check_zero_point_status(void)
 }
 
 /**
- * @brief 称重统一碰撞/极限检测
+ * @brief 扭力统一碰撞/极限检测
  *        上行: 先判零点阈值，再判变重阈值
  *        下行: 先判罐底阈值，再判变轻阈值
  *
@@ -277,7 +277,7 @@ Weight_StateTypeDef check_zero_point_status(void)
  *
  *  2) 零点/罐底阈值：
  *     - 零点：g_deviceParams.zero_weight_threshold_ratio（百分比，加在 full_weight 上）
- *     - 罐底：g_deviceParams.bottom_detect_mode==0 用称重阈值 g_deviceParams.bottom_weight_threshold
+ *     - 罐底：g_deviceParams.bottom_detect_mode==0 用扭力阈值 g_deviceParams.bottom_weight_threshold
  *            g_deviceParams.bottom_detect_mode!=0 用角度阈值 g_deviceParams.bottom_angle_threshold（不在此函数判定）
  *
  *  3) 保护：尺带长度 < g_deviceParams.max_zero_deviation_distance 时，不进行碰撞检测（直接 NO_ERROR）
@@ -287,7 +287,7 @@ Weight_StateTypeDef check_zero_point_status(void)
 uint32_t CheckWeightCollision(void)
 {
 	uint32_t comm_ret = Weight_CheckCommunicationTimeout();
-	/* 先处理异常边界，避免称重数据状态机带故障继续运行。 */
+	/* 先处理异常边界，避免扭力数据状态机带故障继续运行。 */
 	if (comm_ret != NO_ERROR) {
 		return comm_ret;
 	}
@@ -310,7 +310,7 @@ uint32_t CheckWeightCollision(void)
 	 * ========================== */
 	if (cable_mm < (float)g_deviceParams.weight_ignore_zone/10.0) {
 #ifdef WEIGHT_DEBUG
-		printf("称重跳过 | 原因:零点保护 | 方向：%lu 当前重量=%ld 稳定重量=%ld 差值：%+ld 满载称重=%ld 尺带长度：%.1f",
+		printf("扭力跳过 | 原因:零点保护 | 方向：%lu 当前扭力=%ld 稳定扭力=%ld 差值：%+ld 满载扭力=%ld 尺带长度：%.1f",
 				(unsigned long)motor_dir,
 				(long)cur_weight,
 				(long)stable_weight,
@@ -330,7 +330,7 @@ uint32_t CheckWeightCollision(void)
 	 * ========================== */
 	if ((motor_dir != 1U) && (motor_dir != 2U)) {
 #ifdef WEIGHT_DEBUG
-		printf("称重检测 | 方向：%lu(无效) 当前重量=%ld 稳定重量=%ld 差值：%+ld 满载称重=%ld 尺带长度：%.1f",
+		printf("扭力检测 | 方向：%lu(无效) 当前扭力=%ld 稳定扭力=%ld 差值：%+ld 满载扭力=%ld 尺带长度：%.1f",
 				(unsigned long)motor_dir,
 				(long)cur_weight,
 				(long)stable_weight,
@@ -357,7 +357,7 @@ uint32_t CheckWeightCollision(void)
 	int32_t zero_limit =
 		(int32_t)(((int64_t)full_weight * (int64_t)(100 + g_deviceParams.zero_weight_threshold_ratio)) / 100);
 
-	/* 罐底阈值：仅在“称重找底(mode==0)”时判定 */
+	/* 罐底阈值：仅在“扭力找底(mode==0)”时判定 */
 	int32_t bottom_limit = (int32_t)g_deviceParams.bottom_weight_threshold;
 
 	/* ==========================
@@ -371,14 +371,14 @@ uint32_t CheckWeightCollision(void)
 				/* 回零/标零上行时，超过零点阈值是正常到零点信号，不能被通用防撞抢先报 18-3。 */
 				return NO_ERROR;
 			}
-			printf("\r\n====== 称重碰撞报警(上行) ======\r\n");
+			printf("\r\n====== 扭力碰撞报警(上行) ======\r\n");
 			printf("原因: 超过零点阈值(认为已到零点)\r\n");
-			printf("当前重量 : %ld\r\n", (long)cur_weight);
+			printf("当前扭力 : %ld\r\n", (long)cur_weight);
 			printf("零点阈值 : %ld (full:%ld +%d%%)\r\n",
 					(long)zero_limit,
 					(long)full_weight,
 					(int)g_deviceParams.zero_weight_threshold_ratio);
-			printf("稳定重量 : %ld\r\n", (long)stable_weight);
+			printf("稳定扭力 : %ld\r\n", (long)stable_weight);
 			printf("差值     : %ld\r\n", (long)diff);
 			printf("上限阈值 : %ld (ratio:%ld%%)\r\n",
 					(long)upper_threshold,
@@ -398,7 +398,7 @@ uint32_t CheckWeightCollision(void)
                      (long)lower_threshold,
                      (double)cable_mm,
                      (double)sensor_mm);
-            /* 错误 阶段：错误报警 模块：称重 操作：称重碰撞检查 原因：碰撞检测 处理：停止电机 详情：detail */
+            /* 错误 阶段：错误报警 模块：扭力 操作：扭力碰撞检查 原因：碰撞检测 处理：停止电机 详情：detail */
             ErrorLog_WarnDetail(ERROR_LOG_MODULE_WEIGHT,
                                 ERROR_LOG_OP_WEIGHT_COLLISION,
                                 ERROR_LOG_REASON_COLLISION,
@@ -409,12 +409,12 @@ uint32_t CheckWeightCollision(void)
 
 		/* 2) 相对变重阈值 */
 		if (diff > upper_threshold) {
-			printf("\r\n====== 称重碰撞报警(上行) ======\r\n");
-			printf("原因: 重量增加超过上限阈值\r\n");
-			printf("当前重量 : %ld\r\n", (long)cur_weight);
-			printf("稳定重量 : %ld\r\n", (long)stable_weight);
-			printf("重量增加 : %ld (阈值:%ld)\r\n", (long)diff, (long)upper_threshold);
-			printf("满载称重 : %ld (ratio:%ld%%)\r\n",
+			printf("\r\n====== 扭力碰撞报警(上行) ======\r\n");
+			printf("原因: 扭力增加超过上限阈值\r\n");
+			printf("当前扭力 : %ld\r\n", (long)cur_weight);
+			printf("稳定扭力 : %ld\r\n", (long)stable_weight);
+			printf("扭力增加 : %ld (阈值:%ld)\r\n", (long)diff, (long)upper_threshold);
+			printf("满载扭力 : %ld (ratio:%ld%%)\r\n",
 					(long)full_weight,
 					(long)g_deviceParams.weight_upper_limit_ratio);
 			printf("零点阈值 : %ld (+%d%%)\r\n",
@@ -435,7 +435,7 @@ uint32_t CheckWeightCollision(void)
                      (long)lower_threshold,
                      (double)cable_mm,
                      (double)sensor_mm);
-            /* 错误 阶段：错误报警 模块：称重 操作：称重碰撞检查 原因：碰撞检测 处理：停止电机 详情：detail */
+            /* 错误 阶段：错误报警 模块：扭力 操作：扭力碰撞检查 原因：碰撞检测 处理：停止电机 详情：detail */
             ErrorLog_WarnDetail(ERROR_LOG_MODULE_WEIGHT,
                                 ERROR_LOG_OP_WEIGHT_COLLISION,
                                 ERROR_LOG_REASON_COLLISION,
@@ -445,7 +445,7 @@ uint32_t CheckWeightCollision(void)
 		}
 
 #ifdef WEIGHT_DEBUG
-		printf("称重正常 | 方向:上行 | 当前:%ld | 稳定:%ld | 变化:%+ld | 零点阈值:%ld | 上限阈值:%ld | 满载:%ld | 尺带:%.1fmm",
+		printf("扭力正常 | 方向:上行 | 当前:%ld | 稳定:%ld | 变化:%+ld | 零点阈值:%ld | 上限阈值:%ld | 满载:%ld | 尺带:%.1fmm",
 				(long)cur_weight,
 				(long)stable_weight,
 				(long)diff,
@@ -464,14 +464,14 @@ uint32_t CheckWeightCollision(void)
 	 *       下行检测
 	 * ========================== */
 	{
-		/* 1) 罐底阈值：仅称重找底时有效 */
+		/* 1) 罐底阈值：仅扭力找底时有效 */
 		if (g_deviceParams.bottom_detect_mode == 0) {
 			if (cur_weight < bottom_limit) {
-				printf("\r\n====== 称重碰撞报警(下行) ======\r\n");
+				printf("\r\n====== 扭力碰撞报警(下行) ======\r\n");
 				printf("原因: 低于触底阈值(认为已到罐底)\r\n");
-				printf("当前重量 : %ld\r\n", (long)cur_weight);
+				printf("当前扭力 : %ld\r\n", (long)cur_weight);
 				printf("触底阈值 : %ld\r\n", (long)bottom_limit);
-				printf("稳定重量 : %ld\r\n", (long)stable_weight);
+				printf("稳定扭力 : %ld\r\n", (long)stable_weight);
 				printf("差值     : %ld\r\n", (long)diff);
 				printf("下限阈值 : %ld (ratio:%ld%%)\r\n",
 						(long)lower_threshold,
@@ -491,7 +491,7 @@ uint32_t CheckWeightCollision(void)
                      (long)lower_threshold,
                      (double)cable_mm,
                      (double)sensor_mm);
-            /* 错误 阶段：错误报警 模块：称重 操作：称重碰撞检查 原因：碰撞检测 处理：停止电机 详情：detail */
+            /* 错误 阶段：错误报警 模块：扭力 操作：扭力碰撞检查 原因：碰撞检测 处理：停止电机 详情：detail */
             ErrorLog_WarnDetail(ERROR_LOG_MODULE_WEIGHT,
                                 ERROR_LOG_OP_WEIGHT_COLLISION,
                                 ERROR_LOG_REASON_COLLISION,
@@ -503,12 +503,12 @@ uint32_t CheckWeightCollision(void)
 
 		/* 2) 相对变轻阈值：diff 为负数，比较 -diff */
 		if (-diff > lower_threshold) {
-			printf("\r\n====== 称重碰撞报警(下行) ======\r\n");
-			printf("原因: 重量减少超过下限阈值\r\n");
-			printf("当前重量 : %ld\r\n", (long)cur_weight);
-			printf("稳定重量 : %ld\r\n", (long)stable_weight);
-			printf("重量减少 : %ld (阈值:%ld)\r\n", (long)(-diff), (long)lower_threshold);
-			printf("满载称重 : %ld (ratio:%ld%%)\r\n",
+			printf("\r\n====== 扭力碰撞报警(下行) ======\r\n");
+			printf("原因: 扭力减少超过下限阈值\r\n");
+			printf("当前扭力 : %ld\r\n", (long)cur_weight);
+			printf("稳定扭力 : %ld\r\n", (long)stable_weight);
+			printf("扭力减少 : %ld (阈值:%ld)\r\n", (long)(-diff), (long)lower_threshold);
+			printf("满载扭力 : %ld (ratio:%ld%%)\r\n",
 					(long)full_weight,
 					(long)g_deviceParams.weight_lower_limit_ratio);
 			Weight_PrintCableRefs(cable_mm);
@@ -526,7 +526,7 @@ uint32_t CheckWeightCollision(void)
                      (long)lower_threshold,
                      (double)cable_mm,
                      (double)sensor_mm);
-            /* 错误 阶段：错误报警 模块：称重 操作：称重碰撞检查 原因：碰撞检测 处理：停止电机 详情：detail */
+            /* 错误 阶段：错误报警 模块：扭力 操作：扭力碰撞检查 原因：碰撞检测 处理：停止电机 详情：detail */
             ErrorLog_WarnDetail(ERROR_LOG_MODULE_WEIGHT,
                                 ERROR_LOG_OP_WEIGHT_COLLISION,
                                 ERROR_LOG_REASON_COLLISION,
@@ -536,7 +536,7 @@ uint32_t CheckWeightCollision(void)
 		}
 
 #ifdef WEIGHT_DEBUG
-		printf("称重正常 | 方向:下行 | 当前:%ld | 稳定:%ld | 变化:%+ld | 触底阈值:%ld | 下限阈值:%ld | 满载:%ld | 尺带:%.1fmm",
+		printf("扭力正常 | 方向:下行 | 当前:%ld | 稳定:%ld | 变化:%+ld | 触底阈值:%ld | 下限阈值:%ld | 满载:%ld | 尺带:%.1fmm",
 				(long)cur_weight,
 				(long)stable_weight,
 				(long)diff,
@@ -555,7 +555,7 @@ uint32_t CheckWeightCollision(void)
 
 
 /* / ** */
-/* * @brief 称重统一碰撞/极限检测 */
+/* * @brief 扭力统一碰撞/极限检测 */
 /* * 上行: 先判零点阈值，再判变重阈值 */
 /* * 下行: 先判罐底阈值，再判变轻阈值 */
 /* * @return WEIGHT_COLLISION_DETECTED 表示检测到碰撞/到达极限；NO_ERROR 表示正常 */
@@ -572,7 +572,7 @@ uint32_t CheckWeightCollision(void)
 /* / * 方向: 0 下行, 1 上行 (以你当前 motor_state 的定义为准) * / */
 /* uint32_t motor_dir = g_measurement.debug_data.motor_state; */
 /* */
-/* / * 阈值 = 满载称重 * 比例 / 100，全部用整数计算 * / */
+/* / * 阈值 = 满载扭力 * 比例 / 100，全部用整数计算 * / */
 /* int32_t upper_threshold = */
 /* (int32_t)(((int64_t)full_weight * (int64_t)g_deviceParams.weight_upper_limit_ratio) / 100); */
 /* */
@@ -596,7 +596,7 @@ uint32_t CheckWeightCollision(void)
 /* { */
 /* #ifdef WEIGHT_DEBUG */
 /* / * 正常时一行输出（这里属于“非检测态”提示） * / */
-/* printf("称重检测 | 方向：%lu(无效) 当前：%ld 稳定：%ld 差值：%ld 满载=%ld 尺带：%.1f 传感器位置=%.1f\r\n", */
+/* printf("扭力检测 | 方向：%lu(无效) 当前：%ld 稳定：%ld 差值：%ld 满载=%ld 尺带：%.1f 传感器位置=%.1f\r\n", */
 /* (unsigned long)motor_dir, */
 /* (long)cur_weight, */
 /* (long)stable_weight, */
@@ -617,12 +617,12 @@ uint32_t CheckWeightCollision(void)
 /* / * 1) 零点阈值（统一在此处判断，不调用外部函数） * / */
 /* if (cur_weight > zero_limit) */
 /* { */
-/* printf("\r\n====== 称重碰撞报警(上行) ======\r\n"); */
+/* printf("\r\n====== 扭力碰撞报警(上行) ======\r\n"); */
 /* printf("原因: 超过零点阈值(认为已到零点)\r\n"); */
-/* printf("当前重量 : %ld\r\n", (long)cur_weight); */
+/* printf("当前扭力 : %ld\r\n", (long)cur_weight); */
 /* printf("零点阈值 : %ld (full:%ld +%d%%)\r\n", */
 /* (long)zero_limit, (long)full_weight, g_deviceParams.zero_weight_threshold_ratio); */
-/* printf("稳定重量 : %ld\r\n", (long)stable_weight); */
+/* printf("稳定扭力 : %ld\r\n", (long)stable_weight); */
 /* printf("差值 : %ld\r\n", (long)diff); */
 /* printf("上限阈值 : %ld (ratio:%ld%%)\r\n", */
 /* (long)upper_threshold, (long)g_deviceParams.weight_upper_limit_ratio); */
@@ -635,12 +635,12 @@ uint32_t CheckWeightCollision(void)
 /* / * 2) 相对变重阈值 * / */
 /* if (diff > upper_threshold) */
 /* { */
-/* printf("\r\n====== 称重碰撞报警(上行) ======\r\n"); */
-/* printf("原因: 重量增加超过上限阈值\r\n"); */
-/* printf("当前重量 : %ld\r\n", (long)cur_weight); */
-/* printf("稳定重量 : %ld\r\n", (long)stable_weight); */
-/* printf("重量增加 : %ld (阈值:%ld)\r\n", (long)diff, (long)upper_threshold); */
-/* printf("满载称重 : %ld (ratio:%ld%%)\r\n", */
+/* printf("\r\n====== 扭力碰撞报警(上行) ======\r\n"); */
+/* printf("原因: 扭力增加超过上限阈值\r\n"); */
+/* printf("当前扭力 : %ld\r\n", (long)cur_weight); */
+/* printf("稳定扭力 : %ld\r\n", (long)stable_weight); */
+/* printf("扭力增加 : %ld (阈值:%ld)\r\n", (long)diff, (long)upper_threshold); */
+/* printf("满载扭力 : %ld (ratio:%ld%%)\r\n", */
 /* (long)full_weight, (long)g_deviceParams.weight_upper_limit_ratio); */
 /* printf("零点阈值 : %ld (+%d%%)\r\n", (long)zero_limit, g_deviceParams.zero_weight_threshold_ratio); */
 /* printf("尺带长度 : %.1f mm\r\n", cable_mm); */
@@ -650,7 +650,7 @@ uint32_t CheckWeightCollision(void)
 /* } */
 /* */
 /* #ifdef WEIGHT_DEBUG */
-/* printf("称重正常 | 方向:上行 | 当前:%ld | 稳定:%ld | 变化:%+ld | 零点阈值:%ld | 上限阈值:%ld | 满载:%ld | 尺带:%.1fmm | 位置:%.1fmm\r\n", */
+/* printf("扭力正常 | 方向:上行 | 当前:%ld | 稳定:%ld | 变化:%+ld | 零点阈值:%ld | 上限阈值:%ld | 满载:%ld | 尺带:%.1fmm | 位置:%.1fmm\r\n", */
 /* (long)cur_weight, */
 /* (long)stable_weight, */
 /* (long)diff, */
@@ -672,11 +672,11 @@ uint32_t CheckWeightCollision(void)
 /* / * 1) 罐底阈值（统一在此处判断，不调用外部函数） * / */
 /* if (cur_weight < bottom_limit) */
 /* { */
-/* printf("\r\n====== 称重碰撞报警(下行) ======\r\n"); */
+/* printf("\r\n====== 扭力碰撞报警(下行) ======\r\n"); */
 /* printf("原因: 低于触底阈值(认为已到罐底)\r\n"); */
-/* printf("当前重量 : %ld\r\n", (long)cur_weight); */
+/* printf("当前扭力 : %ld\r\n", (long)cur_weight); */
 /* printf("触底阈值 : %ld\r\n", (long)bottom_limit); */
-/* printf("稳定重量 : %ld\r\n", (long)stable_weight); */
+/* printf("稳定扭力 : %ld\r\n", (long)stable_weight); */
 /* printf("差值 : %ld\r\n", (long)diff); */
 /* printf("下限阈值 : %ld (ratio:%ld%%)\r\n", */
 /* (long)lower_threshold, (long)g_deviceParams.weight_lower_limit_ratio); */
@@ -689,12 +689,12 @@ uint32_t CheckWeightCollision(void)
 /* / * 2) 相对变轻阈值：diff 为负数，比较 -diff * / */
 /* if (-diff > lower_threshold) */
 /* { */
-/* printf("\r\n====== 称重碰撞报警(下行) ======\r\n"); */
-/* printf("原因: 重量减少超过下限阈值\r\n"); */
-/* printf("当前重量 : %ld\r\n", (long)cur_weight); */
-/* printf("稳定重量 : %ld\r\n", (long)stable_weight); */
-/* printf("重量减少 : %ld (阈值:%ld)\r\n", (long)(-diff), (long)lower_threshold); */
-/* printf("满载称重 : %ld (ratio:%ld%%)\r\n", */
+/* printf("\r\n====== 扭力碰撞报警(下行) ======\r\n"); */
+/* printf("原因: 扭力减少超过下限阈值\r\n"); */
+/* printf("当前扭力 : %ld\r\n", (long)cur_weight); */
+/* printf("稳定扭力 : %ld\r\n", (long)stable_weight); */
+/* printf("扭力减少 : %ld (阈值:%ld)\r\n", (long)(-diff), (long)lower_threshold); */
+/* printf("满载扭力 : %ld (ratio:%ld%%)\r\n", */
 /* (long)full_weight, (long)g_deviceParams.weight_lower_limit_ratio); */
 /* printf("触底阈值 : %ld\r\n", (long)bottom_limit); */
 /* printf("尺带长度 : %.1f mm\r\n", cable_mm); */
@@ -704,7 +704,7 @@ uint32_t CheckWeightCollision(void)
 /* } */
 /* */
 /* #ifdef WEIGHT_DEBUG */
-/* printf("称重正常 | 方向:下行 | 当前:%ld | 稳定:%ld | 变化:%+ld | 触底阈值:%ld | 下限阈值:%ld | 满载:%ld | 尺带:%.1fmm | 位置:%.1fmm\r\n", */
+/* printf("扭力正常 | 方向:下行 | 当前:%ld | 稳定:%ld | 变化:%+ld | 触底阈值:%ld | 下限阈值:%ld | 满载:%ld | 尺带:%.1fmm | 位置:%.1fmm\r\n", */
 /* (long)cur_weight, */
 /* (long)stable_weight, */
 /* (long)diff, */
@@ -720,8 +720,8 @@ uint32_t CheckWeightCollision(void)
 
 
 /**
- * @brief 称重稳态更新（整数一阶低通）
- * @param currWeight 当前称重实时值
+ * @brief 扭力稳态更新（整数一阶低通）
+ * @param currWeight 当前扭力实时值
  *
  * 公式：stable = stable * 0.8 + curr * 0.2
  * 为避免浮点运算，按 8:2 的整数权重实现。
@@ -742,9 +742,9 @@ void Weight_Update(int32_t currWeight) {
 	} else {
 		weight_parament.stable_weight = (int32_t)((filtered_sum - (WEIGHT_FILTER_DIVISOR / 2)) / WEIGHT_FILTER_DIVISOR);
 	}
-	g_measurement.debug_data.current_weight = currWeight; /* 更新当前重量到调试数据 */
+	g_measurement.debug_data.current_weight = currWeight; /* 更新当前扭力到调试数据 */
 	/* 可选调试输出 */
-	/* printf("稳态称重: %ld\n", weightFilter.stableWeight); */
+	/* printf("稳态扭力: %ld\n", weightFilter.stableWeight); */
 
 	return;
 }

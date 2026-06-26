@@ -526,11 +526,16 @@ static void WirelessPairing_PublishConnectionStatus(const WirelessConnectionStat
     status->rssi = snapshot->rssi;
     status->connection_error_code = snapshot->error_code;
 
-    if (snapshot->mac_valid != 0U) {
+    if ((snapshot->connection_valid != 0U) && (snapshot->mac_valid != 0U)) {
         status->mac_valid = 1U;
         status->mac_high = snapshot->mac_high;
         status->mac_mid = snapshot->mac_mid;
         status->mac_low = snapshot->mac_low;
+    } else {
+        status->mac_valid = 0U;
+        status->mac_high = 0U;
+        status->mac_mid = 0U;
+        status->mac_low = 0U;
     }
 
     status->rssi_update_counter++;

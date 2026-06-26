@@ -842,7 +842,7 @@ static uint32_t Read_MotorState_Adapter(void)
     return g_measurement.debug_data.motor_state;
 }
 
-/* 4) 称重：通常 weight_parament.current_weight 已是实时值 */
+/* 4) 扭力：通常 weight_parament.current_weight 已是实时值 */
 static uint32_t Read_CurrentWeight_Adapter(void)
 {
     return (uint32_t)weight_parament.current_weight;
@@ -854,7 +854,7 @@ static uint32_t Read_CurrentWeight_Adapter(void)
  */
 static uint32_t Read_WeightParam_Adapter(void)
 {
-    /* TODO: 若你有称重系数/滤波参数等，可填这里；没有就保持原值 */
+    /* TODO: 若你有扭力系数/滤波参数等，可填这里；没有就保持原值 */
     return g_measurement.debug_data.weight_param;
 }
 
@@ -937,7 +937,7 @@ static uint32_t Sensor_ReadPartParamsInternal(uint8_t update_command_state)
     g_measurement.debug_data.motor_speed = Read_MotorSpeed_Adapter();
     g_measurement.debug_data.motor_state = Read_MotorState_Adapter();
 
-    /* ---------- 3) 称重类 ---------- */
+    /* ---------- 3) 扭力类 ---------- */
     ret = Weight_CheckOwnCommunicationTimeout();
 
     /* 先处理异常边界，避免传感器数据状态机带故障继续运行。 */

@@ -2,7 +2,7 @@
   "generated": "2026-06-12",
   "sourceRoot": "LTD_MAIN_CPU2",
   "totalFiles": 106,
-  "totalFunctions": 865,
+  "totalFunctions": 864,
   "note": "本清单由当前源码扫描生成，函数详情包含函数名、行号、签名、功能说明、下游自编调用、状态/命令/模式、重点全局参数和错误出口。",
   "domains": {
     "启动主循环与中断": {
@@ -716,7 +716,7 @@
               "name": "UART4_UpdateWeightFromFrame",
               "line": 26,
               "signature": "static void UART4_UpdateWeightFromFrame(uint16_t rx_len)",
-              "summary": "完成“UART4更新重量从帧”，负责帧、数据结构或协议字段的解析与组装。",
+              "summary": "完成“UART4更新扭力从帧”，负责帧、数据结构或协议字段的解析与组装。",
               "calls": [
                 "Weight_Update",
                 "Weight_MarkFrameReceived"
@@ -730,7 +730,7 @@
               ],
               "errors": [],
               "steps": [
-                "进入函数后执行“UART4更新重量从帧”相关处理。",
+                "进入函数后执行“UART4更新扭力从帧”相关处理。",
                 "按源码顺序调用 Weight_Update -> Weight_MarkFrameReceived。",
                 "读写或判断 全局/参数：weight_parament、current_weight。",
                 "最终把状态码、计算值或处理结果返回给上层调用者。"
@@ -1850,7 +1850,7 @@
                 "CMD_MOVE_DOWN",
                 "CMD_FORCE_MOVE_UP",
                 "CMD_FORCE_MOVE_DOWN",
-                "CMD_FORCE_LIFT_ZERO",
+                "CMD_RESERVED_CMD7",
                 "CMD_SET_EMPTY_WEIGHT",
                 "CMD_SET_FULL_WEIGHT",
                 "CMD_RESTORE_FACTORY",
@@ -2171,7 +2171,7 @@
               "name": "CMD_MeasureAndFollowOilLevel",
               "line": 608,
               "signature": "static void CMD_MeasureAndFollowOilLevel(void)",
-              "summary": "处理外部或内部测量指令，业务动作是“测量并跟随油液液位”。",
+              "summary": "处理外部或内部测量指令，业务动作是“测量并跟随液位”。",
               "calls": [
                 "MeasureStart",
                 "SearchZero",
@@ -2195,7 +2195,7 @@
                 "SET_ERROR"
               ],
               "steps": [
-                "进入函数后执行“指令入口：测量并跟随油液液位”相关处理。",
+                "进入函数后执行“指令入口：测量并跟随液位”相关处理。",
                 "按源码顺序调用 MeasureStart -> SearchZero -> SearchOilLevel -> MotorCtrl_IsPositionSourceMotor -> EnsureMotorPositionSourceBeforeFollow -> FollowOilLevel 等下游函数。",
                 "读写或判断 设备状态：STATE_FINDOIL、STATE_FLOWOIL；全局/参数：g_measurement、device_state、g_deviceParams。",
                 "异常和提前退出主要通过 SET_ERROR 传递。",
@@ -2206,7 +2206,7 @@
               "name": "CMD_CalibrateOilLevel",
               "line": 644,
               "signature": "static void CMD_CalibrateOilLevel(void)",
-              "summary": "处理外部或内部测量指令，业务动作是“标定油液液位”。",
+              "summary": "处理外部或内部测量指令，业务动作是“标定液位”。",
               "calls": [
                 "MeasureStart",
                 "CorrectOilLevelProcess",
@@ -2231,7 +2231,7 @@
                 "SET_ERROR"
               ],
               "steps": [
-                "进入函数后执行“指令入口：标定油液液位”相关处理。",
+                "进入函数后执行“指令入口：标定液位”相关处理。",
                 "按源码顺序调用 MeasureStart -> CorrectOilLevelProcess -> FollowOilLevel -> SearchBottom -> save_device_params -> SearchAndFollowOilLevel。",
                 "读写或判断 设备状态：STATE_FLOWOIL、STATE_CALIBRATIONOILING、STATE_FINDOIL；全局/参数：g_measurement、device_state、g_deviceParams。",
                 "异常和提前退出主要通过 SET_ERROR 传递。",
@@ -2242,7 +2242,7 @@
               "name": "CMD_CorrectOilLevel",
               "line": 674,
               "signature": "static void CMD_CorrectOilLevel(void)",
-              "summary": "处理外部或内部测量指令，业务动作是“修正油液液位”。",
+              "summary": "处理外部或内部测量指令，业务动作是“修正液位”。",
               "calls": [
                 "MeasureStart",
                 "CorrectOilLevelProcess",
@@ -2262,7 +2262,7 @@
                 "SET_ERROR"
               ],
               "steps": [
-                "进入函数后执行“指令入口：修正油液液位”相关处理。",
+                "进入函数后执行“指令入口：修正液位”相关处理。",
                 "按源码顺序调用 MeasureStart -> CorrectOilLevelProcess -> FollowOilLevel -> CMD_CalibrateOilLevel。",
                 "读写或判断 设备状态：STATE_FLOWOIL；全局/参数：g_measurement、device_state。",
                 "异常和提前退出主要通过 SET_ERROR 传递。",
@@ -2424,41 +2424,10 @@
               ]
             },
             {
-              "name": "CMD_ForceLiftZero",
-              "line": 849,
-              "signature": "static void CMD_ForceLiftZero(void)",
-              "summary": "处理外部或内部测量指令，业务动作是“强制Lift零点”。",
-              "calls": [
-                "MotorCtrl_MoveBlockingNoDetectForceDebug",
-                "MotorCtrl_GetDefaultSpeedX100"
-              ],
-              "states": [
-                "STATE_FORCE_LIFT_ZEROING",
-                "STATE_SWITCH",
-                "STATE_FORCE_LIFT_ZERO_OVER"
-              ],
-              "commands": [],
-              "modes": [],
-              "globals": [
-                "g_measurement",
-                "device_state"
-              ],
-              "errors": [
-                "SET_ERROR"
-              ],
-              "steps": [
-                "进入函数后执行“指令入口：强制Lift零点”相关处理。",
-                "按源码顺序调用 MotorCtrl_MoveBlockingNoDetectForceDebug -> MotorCtrl_GetDefaultSpeedX100。",
-                "读写或判断 设备状态：STATE_FORCE_LIFT_ZEROING、STATE_SWITCH、STATE_FORCE_LIFT_ZERO_OVER；全局/参数：g_measurement、device_state。",
-                "异常和提前退出主要通过 SET_ERROR 传递。",
-                "最终把状态码、计算值或处理结果返回给上层调用者。"
-              ]
-            },
-            {
               "name": "CMD_SetEmptyWeight",
               "line": 871,
               "signature": "static void CMD_SetEmptyWeight(void)",
-              "summary": "处理外部或内部测量指令，业务动作是“设置Empty重量”。",
+              "summary": "处理外部或内部测量指令，业务动作是“设置Empty扭力”。",
               "calls": [
                 "get_empty_weight"
               ],
@@ -2476,7 +2445,7 @@
                 "SET_ERROR"
               ],
               "steps": [
-                "进入函数后执行“指令入口：设置Empty重量”相关处理。",
+                "进入函数后执行“指令入口：设置Empty扭力”相关处理。",
                 "按源码顺序调用 get_empty_weight。",
                 "读写或判断 设备状态：STATE_GET_EMPTYWEIGHT、STATE_GET_EMPTYWEIGHT_OVER；全局/参数：g_measurement、device_state。",
                 "异常和提前退出主要通过 SET_ERROR 传递。",
@@ -2487,7 +2456,7 @@
               "name": "CMD_SetFullWeight",
               "line": 886,
               "signature": "static void CMD_SetFullWeight(void)",
-              "summary": "处理外部或内部测量指令，业务动作是“设置Full重量”。",
+              "summary": "处理外部或内部测量指令，业务动作是“设置Full扭力”。",
               "calls": [
                 "get_full_weight"
               ],
@@ -2505,7 +2474,7 @@
                 "SET_ERROR"
               ],
               "steps": [
-                "进入函数后执行“指令入口：设置Full重量”相关处理。",
+                "进入函数后执行“指令入口：设置Full扭力”相关处理。",
                 "按源码顺序调用 get_full_weight。",
                 "读写或判断 设备状态：STATE_GET_FULLWEIGHT、STATE_GET_FULLWEIGHT_OVER；全局/参数：g_measurement、device_state。",
                 "异常和提前退出主要通过 SET_ERROR 传递。",
@@ -3715,7 +3684,7 @@
               "name": "SearchAndFollowOilLevel",
               "line": 708,
               "signature": "uint32_t SearchAndFollowOilLevel(void)",
-              "summary": "执行“搜索并跟随油液液位”，推动“液位测量与跟随”中的动作型流程继续向下运行。",
+              "summary": "执行“搜索并跟随液位”，推动“液位测量与跟随”中的动作型流程继续向下运行。",
               "calls": [
                 "SearchZero",
                 "SearchOilLevel",
@@ -3745,7 +3714,7 @@
                 "ErrorLog_Retry"
               ],
               "steps": [
-                "进入函数后执行“搜索并跟随油液液位”相关处理。",
+                "进入函数后执行“搜索并跟随液位”相关处理。",
                 "按源码顺序调用 SearchZero -> SearchOilLevel -> ErrorLog_Recover -> ErrorLog_Retry -> MotorCtrl_SlowStop -> CorrectOilLevelProcess -> FollowOilLevel 等下游函数。",
                 "读写或判断 设备状态：STATE_SWITCH、STATE_CALIBRATIONOILING、STATE_FLOWOIL；全局/参数：g_measurement、g_deviceParams、weight_parament、device_state。",
                 "异常和提前退出主要通过 CHECK_ERROR、ErrorLog_Recover、ErrorLog_GetCodeName、ErrorLog_Retry 传递。",
@@ -3756,7 +3725,7 @@
               "name": "SearchOilLevel",
               "line": 805,
               "signature": "uint32_t SearchOilLevel(void)",
-              "summary": "执行“搜索油液液位”，推动“液位测量与跟随”中的动作型流程继续向下运行。",
+              "summary": "执行“搜索液位”，推动“液位测量与跟随”中的动作型流程继续向下运行。",
               "calls": [
                 "DensityLevel_RunClosedLoop",
                 "fault_info_init",
@@ -3792,7 +3761,7 @@
                 "RETURN_ERROR"
               ],
               "steps": [
-                "进入函数后执行“搜索油液液位”相关处理。",
+                "进入函数后执行“搜索液位”相关处理。",
                 "按源码顺序调用 DensityLevel_RunClosedLoop -> fault_info_init -> EnableLevelMode -> ErrorLog_Recover -> ErrorLog_Retry -> DSM_Get_LevelMode_Frequence_Avg -> MotorCtrl_MoveAndWait -> MotorCtrl_GetDefaultSpeedX100 -> SearchAir -> SearchOil 等下游函数。",
                 "读写或判断 设备状态：STATE_FINDOIL、STATE_SWITCH；全局/参数：g_deviceParams、g_measurement、device_state。",
                 "异常和提前退出主要通过 ErrorLog_Recover、ErrorLog_GetCodeName、ErrorLog_Retry、CHECK_ERROR、ErrorLog_GetReasonByCode、RETURN_ERROR 传递。",
@@ -3803,7 +3772,7 @@
               "name": "FollowOilLevel",
               "line": 970,
               "signature": "uint32_t FollowOilLevel(void)",
-              "summary": "执行“跟随油液液位”，推动“液位测量与跟随”中的动作型流程继续向下运行。",
+              "summary": "执行“跟随液位”，推动“液位测量与跟随”中的动作型流程继续向下运行。",
               "calls": [
                 "FrequencyLevel_RunClosedLoop",
                 "DensityLevel_RunClosedLoop",
@@ -3831,7 +3800,7 @@
                 "CHECK_COMMAND_SWITCH"
               ],
               "steps": [
-                "进入函数后执行“跟随油液液位”相关处理。",
+                "进入函数后执行“跟随液位”相关处理。",
                 "按源码顺序调用 FrequencyLevel_RunClosedLoop -> DensityLevel_RunClosedLoop -> DSM_Get_LevelMode_Frequence -> AbortableDelay_CommandSwitch -> SearchOilPrecise -> OilLevel_StopBeforeReturn -> determineTheSensorPositionAndUpdateTheLevelValue -> waitForTheLiquidLevelToExceedTheBlindZone。",
                 "读写或判断 设备状态：STATE_FLOWOIL、STATE_FINDOIL；全局/参数：g_measurement、device_state、g_deviceParams。",
                 "异常和提前退出主要通过 CHECK_ERROR、AbortableDelay_CommandSwitch、CHECK_COMMAND_SWITCH 传递。",
@@ -5572,7 +5541,7 @@
               "name": "Wartsila_TrimPointsByOilLevel",
               "line": 354,
               "signature": "static uint32_t Wartsila_TrimPointsByOilLevel(DensityDistribution *dist, uint32_t *valid_points, uint32_t *sum_temp, uint32_t *sum_density, float level_mm, uint32_t min_gap_surface)",
-              "summary": "在“密度与单点测量”功能域内负责“WartsilaTrimPoints按油液液位”，属于当前源码中的自编处理函数。",
+              "summary": "在“密度与单点测量”功能域内负责“WartsilaTrimPoints按液位”，属于当前源码中的自编处理函数。",
               "calls": [],
               "states": [],
               "commands": [],
@@ -5580,7 +5549,7 @@
               "globals": [],
               "errors": [],
               "steps": [
-                "进入函数后执行“WartsilaTrimPoints按油液液位”相关处理。",
+                "进入函数后执行“WartsilaTrimPoints按液位”相关处理。",
                 "最终把状态码、计算值或处理结果返回给上层调用者。"
               ]
             },
@@ -12296,7 +12265,7 @@
               "name": "Read_CurrentWeight_Adapter",
               "line": 717,
               "signature": "static uint32_t Read_CurrentWeight_Adapter(void)",
-              "summary": "完成“读取当前/电流重量Adapter”，从硬件、缓存或参数区读取数据并返回给上层。",
+              "summary": "完成“读取当前/电流扭力Adapter”，从硬件、缓存或参数区读取数据并返回给上层。",
               "calls": [],
               "states": [],
               "commands": [],
@@ -12307,7 +12276,7 @@
               ],
               "errors": [],
               "steps": [
-                "进入函数后执行“读取当前/电流重量Adapter”相关处理。",
+                "进入函数后执行“读取当前/电流扭力Adapter”相关处理。",
                 "读写或判断 全局/参数：weight_parament、current_weight。",
                 "最终把状态码、计算值或处理结果返回给上层调用者。"
               ]
@@ -12316,7 +12285,7 @@
               "name": "Read_WeightParam_Adapter",
               "line": 723,
               "signature": "static uint32_t Read_WeightParam_Adapter(void)",
-              "summary": "完成“读取重量参数Adapter”，从硬件、缓存或参数区读取数据并返回给上层。",
+              "summary": "完成“读取扭力参数Adapter”，从硬件、缓存或参数区读取数据并返回给上层。",
               "calls": [],
               "states": [],
               "commands": [],
@@ -12326,7 +12295,7 @@
               ],
               "errors": [],
               "steps": [
-                "进入函数后执行“读取重量参数Adapter”相关处理。",
+                "进入函数后执行“读取扭力参数Adapter”相关处理。",
                 "读写或判断 全局/参数：g_measurement。",
                 "最终把状态码、计算值或处理结果返回给上层调用者。"
               ]
@@ -15193,19 +15162,19 @@
         }
       ]
     },
-    "称重与继电器输出": {
+    "扭力与继电器输出": {
       "files": 4,
       "funcs": 38,
       "items": [
         {
           "file": "Services/Relay/relay_output.c",
-          "domain": "称重与继电器输出",
+          "domain": "扭力与继电器输出",
           "funcs": [
             {
               "name": "RelayOutput_RawToFloat",
               "line": 40,
               "signature": "static float RelayOutput_RawToFloat(uint32_t raw)",
-              "summary": "在“称重与继电器输出”功能域内负责“继电器输出Raw到浮点”，属于当前源码中的自编处理函数。",
+              "summary": "在“扭力与继电器输出”功能域内负责“继电器输出Raw到浮点”，属于当前源码中的自编处理函数。",
               "calls": [],
               "states": [],
               "commands": [],
@@ -15221,7 +15190,7 @@
               "name": "RelayOutput_Compare",
               "line": 49,
               "signature": "static uint8_t RelayOutput_Compare(float current, float target, float hysteresis, RelayCompareType type)",
-              "summary": "在“称重与继电器输出”功能域内负责“继电器输出Compare”，属于当前源码中的自编处理函数。",
+              "summary": "在“扭力与继电器输出”功能域内负责“继电器输出Compare”，属于当前源码中的自编处理函数。",
               "calls": [],
               "states": [],
               "commands": [],
@@ -15237,7 +15206,7 @@
               "name": "RelayOutput_EnterCritical",
               "line": 70,
               "signature": "static uint32_t RelayOutput_EnterCritical(void)",
-              "summary": "在“称重与继电器输出”功能域内负责“继电器输出进入Critical”，属于当前源码中的自编处理函数。",
+              "summary": "在“扭力与继电器输出”功能域内负责“继电器输出进入Critical”，属于当前源码中的自编处理函数。",
               "calls": [],
               "states": [],
               "commands": [],
@@ -15253,7 +15222,7 @@
               "name": "RelayOutput_ExitCritical",
               "line": 79,
               "signature": "static void RelayOutput_ExitCritical(uint32_t primask)",
-              "summary": "在“称重与继电器输出”功能域内负责“继电器输出ExitCritical”，属于当前源码中的自编处理函数。",
+              "summary": "在“扭力与继电器输出”功能域内负责“继电器输出ExitCritical”，属于当前源码中的自编处理函数。",
               "calls": [],
               "states": [],
               "commands": [],
@@ -15269,7 +15238,7 @@
               "name": "RelayOutput_CopyConfigSnapshot",
               "line": 85,
               "signature": "static void RelayOutput_CopyConfigSnapshot(uint32_t channel, RelayAlarmConfig *cfg)",
-              "summary": "完成“继电器输出复制配置Snapshot”准备，为后续“称重与继电器输出”流程建立硬件、缓存或运行参数。",
+              "summary": "完成“继电器输出复制配置Snapshot”准备，为后续“扭力与继电器输出”流程建立硬件、缓存或运行参数。",
               "calls": [
                 "RelayOutput_EnterCritical",
                 "RelayOutput_ExitCritical"
@@ -15292,7 +15261,7 @@
               "name": "RelayOutput_CopyMeasurementSnapshot",
               "line": 113,
               "signature": "static void RelayOutput_CopyMeasurementSnapshot(RelayOutputMeasurementSnapshot *snapshot)",
-              "summary": "在“称重与继电器输出”功能域内负责“继电器输出复制MeasurementSnapshot”，属于当前源码中的自编处理函数。",
+              "summary": "在“扭力与继电器输出”功能域内负责“继电器输出复制MeasurementSnapshot”，属于当前源码中的自编处理函数。",
               "calls": [
                 "RelayOutput_EnterCritical",
                 "RelayOutput_ExitCritical"
@@ -15315,7 +15284,7 @@
               "name": "RelayOutput_CopyRuntimeSnapshot",
               "line": 133,
               "signature": "static void RelayOutput_CopyRuntimeSnapshot(uint32_t channel, RelayAlarmRuntimeState *state)",
-              "summary": "执行“继电器输出复制RuntimeSnapshot”，推动“称重与继电器输出”中的动作型流程继续向下运行。",
+              "summary": "执行“继电器输出复制RuntimeSnapshot”，推动“扭力与继电器输出”中的动作型流程继续向下运行。",
               "calls": [
                 "RelayOutput_EnterCritical",
                 "RelayOutput_ExitCritical"
@@ -15338,7 +15307,7 @@
               "name": "RelayOutput_CommitRuntimeState",
               "line": 157,
               "signature": "static void RelayOutput_CommitRuntimeState(uint32_t channel, const RelayAlarmRuntimeState *state)",
-              "summary": "执行“继电器输出CommitRuntime状态”，推动“称重与继电器输出”中的动作型流程继续向下运行。",
+              "summary": "执行“继电器输出CommitRuntime状态”，推动“扭力与继电器输出”中的动作型流程继续向下运行。",
               "calls": [
                 "RelayOutput_EnterCritical",
                 "RelayOutput_ExitCritical"
@@ -15450,7 +15419,7 @@
               "name": "RelayOutput_JudgeAlarm",
               "line": 330,
               "signature": "static uint32_t RelayOutput_JudgeAlarm(float current, float target, float hysteresis, RelayCompareType compare_type, uint32_t current_state, uint32_t mode, RelayAlarmRuntimeState *state)",
-              "summary": "在“称重与继电器输出”功能域内负责“继电器输出JudgeAlarm”，属于当前源码中的自编处理函数。",
+              "summary": "在“扭力与继电器输出”功能域内负责“继电器输出JudgeAlarm”，属于当前源码中的自编处理函数。",
               "calls": [
                 "RelayOutput_Compare"
               ],
@@ -15488,7 +15457,7 @@
               "name": "RelayOutput_SelectDigitalState",
               "line": 405,
               "signature": "static uint32_t RelayOutput_SelectDigitalState(const RelayAlarmConfig *cfg, const RelayAlarmRuntimeState *state)",
-              "summary": "在“称重与继电器输出”功能域内负责“继电器输出选择Digital状态”，属于当前源码中的自编处理函数。",
+              "summary": "在“扭力与继电器输出”功能域内负责“继电器输出选择Digital状态”，属于当前源码中的自编处理函数。",
               "calls": [],
               "states": [],
               "commands": [],
@@ -15527,7 +15496,7 @@
               "name": "RelayOutput_UpdateChannel",
               "line": 452,
               "signature": "static uint8_t RelayOutput_UpdateChannel(uint32_t channel, const RelayOutputMeasurementSnapshot *measurement)",
-              "summary": "执行“继电器输出更新Channel”，推动“称重与继电器输出”中的动作型流程继续向下运行。",
+              "summary": "执行“继电器输出更新Channel”，推动“扭力与继电器输出”中的动作型流程继续向下运行。",
               "calls": [
                 "RelayOutput_CopyConfigSnapshot",
                 "RelayOutput_CopyRuntimeSnapshot",
@@ -15574,7 +15543,7 @@
               "name": "RelayOutput_Init",
               "line": 522,
               "signature": "void RelayOutput_Init(void)",
-              "summary": "完成“继电器输出初始化”准备，为后续“称重与继电器输出”流程建立硬件、缓存或运行参数。",
+              "summary": "完成“继电器输出初始化”准备，为后续“扭力与继电器输出”流程建立硬件、缓存或运行参数。",
               "calls": [
                 "RelayOutput_CopyConfigSnapshot",
                 "RelayOutput_ResetRuntimeState",
@@ -15595,7 +15564,7 @@
               "name": "RelayOutput_RequestUpdate",
               "line": 538,
               "signature": "void RelayOutput_RequestUpdate(void)",
-              "summary": "执行“继电器输出Request更新”，推动“称重与继电器输出”中的动作型流程继续向下运行。",
+              "summary": "执行“继电器输出Request更新”，推动“扭力与继电器输出”中的动作型流程继续向下运行。",
               "calls": [],
               "states": [],
               "commands": [],
@@ -15611,7 +15580,7 @@
               "name": "RelayOutput_ProcessPending",
               "line": 544,
               "signature": "void RelayOutput_ProcessPending(void)",
-              "summary": "在“称重与继电器输出”功能域内负责“继电器输出流程Pending”，属于当前源码中的自编处理函数。",
+              "summary": "在“扭力与继电器输出”功能域内负责“继电器输出流程Pending”，属于当前源码中的自编处理函数。",
               "calls": [
                 "RelayOutput_Update"
               ],
@@ -15630,7 +15599,7 @@
               "name": "RelayOutput_Update",
               "line": 555,
               "signature": "void RelayOutput_Update(void)",
-              "summary": "执行“继电器输出更新”，推动“称重与继电器输出”中的动作型流程继续向下运行。",
+              "summary": "执行“继电器输出更新”，推动“扭力与继电器输出”中的动作型流程继续向下运行。",
               "calls": [
                 "RelayOutput_BuildStateMask",
                 "RelayOutput_WriteMask"
@@ -15685,18 +15654,18 @@
         },
         {
           "file": "Services/Relay/relay_output.h",
-          "domain": "称重与继电器输出",
+          "domain": "扭力与继电器输出",
           "funcs": []
         },
         {
           "file": "Services/Weight/weight.c",
-          "domain": "称重与继电器输出",
+          "domain": "扭力与继电器输出",
           "funcs": [
             {
               "name": "Weight_IsZeroSearchState",
               "line": 34,
               "signature": "static uint8_t Weight_IsZeroSearchState(void)",
-              "summary": "执行“重量判断零点搜索状态”，推动“称重与继电器输出”中的动作型流程继续向下运行。",
+              "summary": "执行“扭力判断零点搜索状态”，推动“扭力与继电器输出”中的动作型流程继续向下运行。",
               "calls": [],
               "states": [
                 "STATE_BACKZEROING",
@@ -15710,7 +15679,7 @@
               ],
               "errors": [],
               "steps": [
-                "进入函数后执行“重量判断零点搜索状态”相关处理。",
+                "进入函数后执行“扭力判断零点搜索状态”相关处理。",
                 "读写或判断 设备状态：STATE_BACKZEROING、STATE_FINDZEROING；全局/参数：g_measurement、device_state。",
                 "最终把状态码、计算值或处理结果返回给上层调用者。"
               ]
@@ -15719,7 +15688,7 @@
               "name": "Weight_IsCommErrorCode",
               "line": 43,
               "signature": "static uint8_t Weight_IsCommErrorCode(uint32_t error_code)",
-              "summary": "在“称重与继电器输出”功能域内负责“重量判断Comm错误码”，属于当前源码中的自编处理函数。",
+              "summary": "在“扭力与继电器输出”功能域内负责“扭力判断Comm错误码”，属于当前源码中的自编处理函数。",
               "calls": [],
               "states": [],
               "commands": [],
@@ -15729,7 +15698,7 @@
               ],
               "errors": [],
               "steps": [
-                "进入函数后执行“重量判断Comm错误码”相关处理。",
+                "进入函数后执行“扭力判断Comm错误码”相关处理。",
                 "读写或判断 全局/参数：error_code。",
                 "最终把状态码、计算值或处理结果返回给上层调用者。"
               ]
@@ -15738,7 +15707,7 @@
               "name": "Weight_PrintCableRefs",
               "line": 48,
               "signature": "static void Weight_PrintCableRefs(float cable_mm)",
-              "summary": "在“称重与继电器输出”功能域内负责“重量打印尺带Refs”，属于当前源码中的自编处理函数。",
+              "summary": "在“扭力与继电器输出”功能域内负责“扭力打印尺带Refs”，属于当前源码中的自编处理函数。",
               "calls": [
                 "MotorCtrl_PrintPositionRefs"
               ],
@@ -15748,7 +15717,7 @@
               "globals": [],
               "errors": [],
               "steps": [
-                "进入函数后执行“重量打印尺带Refs”相关处理。",
+                "进入函数后执行“扭力打印尺带Refs”相关处理。",
                 "按源码顺序调用 MotorCtrl_PrintPositionRefs。"
               ]
             },
@@ -15756,7 +15725,7 @@
               "name": "weight_init",
               "line": 56,
               "signature": "uint32_t weight_init()",
-              "summary": "在“称重与继电器输出”功能域内负责“weightinit”，属于当前源码中的自编处理函数。",
+              "summary": "在“扭力与继电器输出”功能域内负责“weightinit”，属于当前源码中的自编处理函数。",
               "calls": [],
               "states": [],
               "commands": [],
@@ -15776,7 +15745,7 @@
               "name": "Weight_MarkFrameReceived",
               "line": 65,
               "signature": "void Weight_MarkFrameReceived(void)",
-              "summary": "完成“重量Mark帧Received”，负责帧、数据结构或协议字段的解析与组装。",
+              "summary": "完成“扭力Mark帧Received”，负责帧、数据结构或协议字段的解析与组装。",
               "calls": [
                 "Weight_IsCommErrorCode",
                 "ErrorLog_Recover"
@@ -15792,7 +15761,7 @@
                 "ErrorLog_Recover"
               ],
               "steps": [
-                "进入函数后执行“重量Mark帧Received”相关处理。",
+                "进入函数后执行“扭力Mark帧Received”相关处理。",
                 "按源码顺序调用 Weight_IsCommErrorCode -> ErrorLog_Recover。",
                 "读写或判断 全局/参数：g_measurement、error_code。",
                 "异常和提前退出主要通过 ErrorLog_Recover 传递。"
@@ -15802,7 +15771,7 @@
               "name": "Weight_CheckCommunicationTimeoutInternal",
               "line": 82,
               "signature": "static uint32_t Weight_CheckCommunicationTimeoutInternal(uint8_t keep_global_error)",
-              "summary": "完成“重量检查CommunicationTimeout内部”，为上层流程提供计算、校验或判断结果。",
+              "summary": "完成“扭力检查CommunicationTimeout内部”，为上层流程提供计算、校验或判断结果。",
               "calls": [
                 "Weight_IsCommErrorCode",
                 "ErrorLog_Warn"
@@ -15820,7 +15789,7 @@
                 "ErrorLog_Warn"
               ],
               "steps": [
-                "进入函数后执行“重量检查CommunicationTimeout内部”相关处理。",
+                "进入函数后执行“扭力检查CommunicationTimeout内部”相关处理。",
                 "按源码顺序调用 Weight_IsCommErrorCode -> ErrorLog_Warn。",
                 "读写或判断 设备状态：STATE_SWITCH；全局/参数：error_code、g_measurement。",
                 "异常和提前退出主要通过 ErrorLog_Warn 传递。",
@@ -15831,7 +15800,7 @@
               "name": "Weight_CheckCommunicationTimeout",
               "line": 118,
               "signature": "uint32_t Weight_CheckCommunicationTimeout(void)",
-              "summary": "完成“重量检查CommunicationTimeout”，为上层流程提供计算、校验或判断结果。",
+              "summary": "完成“扭力检查CommunicationTimeout”，为上层流程提供计算、校验或判断结果。",
               "calls": [
                 "Weight_CheckCommunicationTimeoutInternal"
               ],
@@ -15841,7 +15810,7 @@
               "globals": [],
               "errors": [],
               "steps": [
-                "进入函数后执行“重量检查CommunicationTimeout”相关处理。",
+                "进入函数后执行“扭力检查CommunicationTimeout”相关处理。",
                 "按源码顺序调用 Weight_CheckCommunicationTimeoutInternal。",
                 "最终把状态码、计算值或处理结果返回给上层调用者。"
               ]
@@ -15850,7 +15819,7 @@
               "name": "Weight_CheckOwnCommunicationTimeout",
               "line": 124,
               "signature": "uint32_t Weight_CheckOwnCommunicationTimeout(void)",
-              "summary": "完成“重量检查OwnCommunicationTimeout”，为上层流程提供计算、校验或判断结果。",
+              "summary": "完成“扭力检查OwnCommunicationTimeout”，为上层流程提供计算、校验或判断结果。",
               "calls": [
                 "Weight_CheckCommunicationTimeoutInternal"
               ],
@@ -15860,7 +15829,7 @@
               "globals": [],
               "errors": [],
               "steps": [
-                "进入函数后执行“重量检查OwnCommunicationTimeout”相关处理。",
+                "进入函数后执行“扭力检查OwnCommunicationTimeout”相关处理。",
                 "按源码顺序调用 Weight_CheckCommunicationTimeoutInternal。",
                 "最终把状态码、计算值或处理结果返回给上层调用者。"
               ]
@@ -15869,7 +15838,7 @@
               "name": "get_empty_weight",
               "line": 130,
               "signature": "uint32_t get_empty_weight(void)",
-              "summary": "在“称重与继电器输出”功能域内负责“getemptyweight”，属于当前源码中的自编处理函数。",
+              "summary": "在“扭力与继电器输出”功能域内负责“getemptyweight”，属于当前源码中的自编处理函数。",
               "calls": [
                 "AbortableDelay_CommandSwitch",
                 "save_device_params"
@@ -15897,7 +15866,7 @@
               "name": "get_full_weight",
               "line": 152,
               "signature": "uint32_t get_full_weight(void)",
-              "summary": "在“称重与继电器输出”功能域内负责“getfullweight”，属于当前源码中的自编处理函数。",
+              "summary": "在“扭力与继电器输出”功能域内负责“getfullweight”，属于当前源码中的自编处理函数。",
               "calls": [
                 "AbortableDelay_CommandSwitch",
                 "save_device_params"
@@ -15926,7 +15895,7 @@
               "name": "check_zero_point_status",
               "line": 178,
               "signature": "Weight_StateTypeDef check_zero_point_status(void)",
-              "summary": "在“称重与继电器输出”功能域内负责“checkzeropointstatus”，属于当前源码中的自编处理函数。",
+              "summary": "在“扭力与继电器输出”功能域内负责“checkzeropointstatus”，属于当前源码中的自编处理函数。",
               "calls": [],
               "states": [],
               "commands": [],
@@ -15947,7 +15916,7 @@
               "name": "CheckWeightCollision",
               "line": 217,
               "signature": "uint32_t CheckWeightCollision(void)",
-              "summary": "完成“检查重量碰撞”，为上层流程提供计算、校验或判断结果。",
+              "summary": "完成“检查扭力碰撞”，为上层流程提供计算、校验或判断结果。",
               "calls": [
                 "Weight_CheckCommunicationTimeout",
                 "MotorCtrl_PrintPositionRefs",
@@ -15968,7 +15937,7 @@
                 "ErrorLog_WarnDetail"
               ],
               "steps": [
-                "进入函数后执行“检查重量碰撞”相关处理。",
+                "进入函数后执行“检查扭力碰撞”相关处理。",
                 "按源码顺序调用 Weight_CheckCommunicationTimeout -> MotorCtrl_PrintPositionRefs -> Weight_IsZeroSearchState -> Weight_PrintCableRefs -> ErrorLog_WarnDetail 等下游函数。",
                 "读写或判断 全局/参数：weight_parament、current_weight、g_measurement、g_deviceParams。",
                 "异常和提前退出主要通过 ErrorLog_WarnDetail 传递。",
@@ -15979,7 +15948,7 @@
               "name": "Weight_Update",
               "line": 477,
               "signature": "void Weight_Update(int32_t currWeight)",
-              "summary": "执行“重量更新”，推动“称重与继电器输出”中的动作型流程继续向下运行。",
+              "summary": "执行“扭力更新”，推动“扭力与继电器输出”中的动作型流程继续向下运行。",
               "calls": [],
               "states": [],
               "commands": [],
@@ -15991,7 +15960,7 @@
               ],
               "errors": [],
               "steps": [
-                "进入函数后执行“重量更新”相关处理。",
+                "进入函数后执行“扭力更新”相关处理。",
                 "读写或判断 全局/参数：weight_parament、g_measurement、current_weight。",
                 "最终把状态码、计算值或处理结果返回给上层调用者。"
               ]
@@ -16000,7 +15969,7 @@
         },
         {
           "file": "Services/Weight/weight.h",
-          "domain": "称重与继电器输出",
+          "domain": "扭力与继电器输出",
           "funcs": []
         }
       ]
@@ -18800,7 +18769,7 @@
               "name": "Test_RunMeasureAndFollowOilLevelOnce",
               "line": 1224,
               "signature": "static void Test_RunMeasureAndFollowOilLevelOnce(void)",
-              "summary": "执行“测试运行测量并跟随油液液位Once”，推动“其它项目代码”中的动作型流程继续向下运行。",
+              "summary": "执行“测试运行测量并跟随液位Once”，推动“其它项目代码”中的动作型流程继续向下运行。",
               "calls": [
                 "MeasureStart",
                 "SearchZero",
@@ -18824,7 +18793,7 @@
                 "SET_ERROR"
               ],
               "steps": [
-                "进入函数后执行“测试运行测量并跟随油液液位Once”相关处理。",
+                "进入函数后执行“测试运行测量并跟随液位Once”相关处理。",
                 "按源码顺序调用 MeasureStart -> SearchZero -> SearchOilLevel -> MotorCtrl_IsPositionSourceMotor -> Test_EnsureMotorPositionSourceBeforeFollow -> FollowOilLevel 等下游函数。",
                 "读写或判断 设备状态：STATE_FINDOIL、STATE_FLOWOIL；全局/参数：g_measurement、device_state、g_deviceParams。",
                 "异常和提前退出主要通过 SET_ERROR 传递。"

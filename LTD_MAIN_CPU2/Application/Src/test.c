@@ -140,7 +140,7 @@ static void Test_MotorTextExit(const MotorTextErrorSnapshot *error_snapshot)
 
 /**
  * @brief A/B/BE测试专用命令切换检查，只停止并退出当前测试，不把错误码带给业务状态机。
- * @note  只在任务上下文调用；不会解析称重、电机驱动故障或其它业务错误。
+ * @note  只在任务上下文调用；不会解析扭力、电机驱动故障或其它业务错误。
  */
 static uint8_t Test_ShouldAbortForCommandSwitchNoError(void)
 {
@@ -696,7 +696,7 @@ static uint8_t Test_MotorTextConfirmStoppedNoError(const char *phase_name, uint8
     return 1U;
 }
 /**
- * @brief 等待电机停稳，只看RAMPSTAT.VZERO，不检测称重/过热等错误。
+ * @brief 等待电机停稳，只看RAMPSTAT.VZERO，不检测扭力/过热等错误。
  * @note  只在任务上下文调用；通信读失败会继续等待并周期打印。
  */
 static uint8_t Test_WaitMotorStoppedNoErrorCheck(const char *phase_name)
@@ -1946,7 +1946,7 @@ void motor_step_up_text(void) {
         if (Test_ShouldAbortForCommandSwitch()) {
             return;
         }
-        printf("%d\t{传感器位置}%.1f", i, (float)(g_measurement.debug_data.sensor_position) / 10.0f); MotorCtrl_PrintPositionRefs(); printf("\t{称重值}%d\r\n", weight_parament.current_weight);
+        printf("%d\t{传感器位置}%.1f", i, (float)(g_measurement.debug_data.sensor_position) / 10.0f); MotorCtrl_PrintPositionRefs(); printf("\t{扭力值}%d\r\n", weight_parament.current_weight);
         HAL_Delay(100);
         if (Test_ShouldAbortForCommandSwitch()) {
             return;
@@ -1979,7 +1979,7 @@ void motor_step_down_text(void) {
         if (Test_ShouldAbortForCommandSwitch()) {
             return;
         }
-        printf("%d\t{传感器位置}%.1f", i, (float)(g_measurement.debug_data.sensor_position) / 10.0f); MotorCtrl_PrintPositionRefs(); printf("\t{称重值}%d\r\n", weight_parament.current_weight);
+        printf("%d\t{传感器位置}%.1f", i, (float)(g_measurement.debug_data.sensor_position) / 10.0f); MotorCtrl_PrintPositionRefs(); printf("\t{扭力值}%d\r\n", weight_parament.current_weight);
         HAL_Delay(100);
         if (Test_ShouldAbortForCommandSwitch()) {
             return;
@@ -2015,7 +2015,7 @@ void motor_step_text(void) {
         if (Test_ShouldAbortForCommandSwitch()) {
             return;
         }
-        printf("%d\t{encoder}%d\t{weight}%d\t", i, (int)g_encoder_count, weight_parament.current_weight);
+        printf("%d\t{encoder}%d\t{torque}%d\t", i, (int)g_encoder_count, weight_parament.current_weight);
         HAL_Delay(100);
         if (Test_ShouldAbortForCommandSwitch()) {
             return;
@@ -2040,7 +2040,7 @@ void motor_step_text(void) {
         if (Test_ShouldAbortForCommandSwitch()) {
             return;
         }
-        printf("%d\t{encoder}%d\t{weight}%d\t", i, (int)g_encoder_count, weight_parament.current_weight);
+        printf("%d\t{encoder}%d\t{torque}%d\t", i, (int)g_encoder_count, weight_parament.current_weight);
         HAL_Delay(100);
         if (Test_ShouldAbortForCommandSwitch()) {
             return;
@@ -2065,7 +2065,7 @@ void motor_step_text(void) {
         if (Test_ShouldAbortForCommandSwitch()) {
             return;
         }
-        printf("%d\t{encoder}%d\t{weight}%d\t", i, (int)g_encoder_count, weight_parament.current_weight);
+        printf("%d\t{encoder}%d\t{torque}%d\t", i, (int)g_encoder_count, weight_parament.current_weight);
         HAL_Delay(100);
         if (Test_ShouldAbortForCommandSwitch()) {
             return;
@@ -2090,7 +2090,7 @@ void motor_step_text(void) {
         if (Test_ShouldAbortForCommandSwitch()) {
             return;
         }
-        printf("%d\t{encoder}%d\t{weight}%d\t", i, (int)g_encoder_count, weight_parament.current_weight);
+        printf("%d\t{encoder}%d\t{torque}%d\t", i, (int)g_encoder_count, weight_parament.current_weight);
         HAL_Delay(100);
         if (Test_ShouldAbortForCommandSwitch()) {
             return;
@@ -2115,7 +2115,7 @@ void motor_step_text(void) {
         if (Test_ShouldAbortForCommandSwitch()) {
             return;
         }
-        printf("%d\t{encoder}%d\t{weight}%d\t", i, (int)g_encoder_count, weight_parament.current_weight);
+        printf("%d\t{encoder}%d\t{torque}%d\t", i, (int)g_encoder_count, weight_parament.current_weight);
         HAL_Delay(100);
         if (Test_ShouldAbortForCommandSwitch()) {
             return;
@@ -2140,7 +2140,7 @@ void motor_step_text(void) {
         if (Test_ShouldAbortForCommandSwitch()) {
             return;
         }
-        printf("%d\t{encoder}%d\t{weight}%d\t", i, (int)g_encoder_count, weight_parament.current_weight);
+        printf("%d\t{encoder}%d\t{torque}%d\t", i, (int)g_encoder_count, weight_parament.current_weight);
         HAL_Delay(100);
         if (Test_ShouldAbortForCommandSwitch()) {
             return;
@@ -2373,7 +2373,7 @@ static void Test_SensorCommCheckAndPrintOnly(const char *tag)
 
 
 /**
- * @brief A指令测试专用：只下发停止寄存器，不判断称重、编码器或驱动错误。
+ * @brief A指令测试专用：只下发停止寄存器，不判断扭力、编码器或驱动错误。
  * @note  只在任务上下文调用；用于串口低检测调试，退出时恢复进入前错误状态。
  */
 void motor_text_manual_stop(void)
@@ -2392,7 +2392,7 @@ void motor_text_manual_stop(void)
 
 /**
  * @brief A指令测试专用：按指定方向执行一段低检测运动。
- * @note  运动期间只响应命令切换；不读取称重、编码器错误或全局错误退出。
+ * @note  运动期间只响应命令切换；不读取扭力、编码器错误或全局错误退出。
  */
 void motor_text_manual_once(float run_distance_mm, int dir)
 {

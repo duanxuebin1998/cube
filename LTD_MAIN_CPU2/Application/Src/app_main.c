@@ -170,7 +170,7 @@ void App_MainLoop(void) {
 	/* DSM_V2_Test_AllParams(); / / 二代传感器测试函数 */
 	/* Sensor_Test(); / / 传感器测试 */
 	/* Test_FRAM_ReadWrite(); */
-/* printf("{encoder}%d\r\n{weight}%d\r\n", (int) g_encoder_count, g_weight); */
+/* printf("{encoder}%d\r\n{torque}%d\r\n", (int) g_encoder_count, g_weight); */
 	/* printf("位置%d", g_measurement.debug_data.sensor_position); */
 	/* HAL_GPIO_WritePin(HART_RTS_GPIO_Port, HART_RTS_Pin, GPIO_PIN_RESET); */
 	/* HAL_UART_Transmit_DMA(&huart2, "123456", 6); / / 通过UART发送响应 */

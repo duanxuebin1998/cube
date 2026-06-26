@@ -382,7 +382,7 @@ static uint32_t BuildPoints_Spread_Exact(int32_t oil_level_01mm,
 
     int32_t high_min = high - top - floor;
 
-    /* 退化：油位不足、点数=1、有效高度不足 -> 只取 1 点（油位中点，且不低于盲区） */
+    /* 退化：液位不足、点数=1、有效高度不足 -> 只取 1 点（液位中点，且不低于盲区） */
     if (high <= distmin || N_req == 1 || high_min <= 0 || high_min < distmin) {
         NumOfPoints = 1;
         int32_t p = high / 2;
@@ -429,7 +429,7 @@ static uint32_t BuildPoints_Spread_Exact(int32_t oil_level_01mm,
 
 /* ---------- 2) 国标测（SpredState=3） ----------
  * 关键点：
- *   - 3m 以下：1 点（油位中点，且不低于盲区）
+ *   - 3m 以下：1 点（液位中点，且不低于盲区）
  *   - 3m~4.5m：最多 3 点（5/6、1/2、1/6），若点位低于盲区则退化
  *   - >4.5m：最多 5 点（1/6..5/6），若点位低于盲区则退化
  *   - 顺序按 spreadMeasurementOrder 决定（上->下 / 下->上）
@@ -1152,7 +1152,7 @@ void Print_DensitySpreadResult(const DensityDistribution *dist)
     printf("\r\n========== 密度分布测量结果 ==========\r\n");
 
     printf("测量点数量             : %lu\r\n", (unsigned long) dist->measurement_points);
-    printf("测量油位/罐高(0.1mm)   : %lu  =>  实际: %.1f mm\r\n",
+    printf("测量液位/罐高(0.1mm)   : %lu  =>  实际: %.1f mm\r\n",
            (unsigned long) dist->Density_oil_level,
            (double) dist->Density_oil_level / 10.0);
 

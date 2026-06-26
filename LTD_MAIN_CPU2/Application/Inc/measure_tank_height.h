@@ -9,7 +9,7 @@
 #define INC_MEASURE_TANK_HEIGHT_H_
 #include "system_parameter.h"
 
-#define BOTTOM_WEIGHT_THRESHOLD 0 /* 罐底测量参数：罐底 称重 阈值。 */
+#define BOTTOM_WEIGHT_THRESHOLD 0 /* 罐底测量参数：罐底 扭力 阈值。 */
 
 
 typedef enum {

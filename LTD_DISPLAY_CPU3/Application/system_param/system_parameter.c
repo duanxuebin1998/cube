@@ -176,19 +176,19 @@ struct ParameterMetadata param_meta[] = {
 {(uint8_t*)"记步模式",	0,	COM_NUM_DEVICEPARAM_POSITION_COUNT_MODE,	HOLDREGISTER_DEVICEPARAM_POSITION_COUNT_MODE,	2,	true,	0,	1,	NULL,	0,	0,	true,	TYPE_INT,	1,	ret_arr_word,	(uint8_t*)"CntMode"},
 {(uint8_t*)"电机局部周长",	0,	COM_NUM_DEVICEPARAM_MOTOR_COUNT_FIRST_LOOP_CIRC,	HOLDREGISTER_DEVICEPARAM_MOTOR_COUNT_FIRST_LOOP_CIRC,	2,	true,	50000,	5000000,	(uint8_t*)"mm",	3,	0,	true,	TYPE_INT,	7,	NULL,	(uint8_t*)"MotorCirc"},
 
-{(uint8_t*)"空载称重",	0,	COM_NUM_DEVICEPARAM_EMPTY_WEIGHT,	HOLDREGISTER_DEVICEPARAM_EMPTY_WEIGHT,	2,	false,	0,	0,	NULL,	0,	0,	true,	TYPE_INT,	7,	NULL,	(uint8_t*)"EmptyWt"},
-{(uint8_t*)"空载称重上限",	0,	COM_NUM_DEVICEPARAM_EMPTY_WEIGHT_UPPER_LIMIT,	HOLDREGISTER_DEVICEPARAM_EMPTY_WEIGHT_UPPER_LIMIT,	2,	false,	0,	0,	NULL,	0,	0,	true,	TYPE_INT,	7,	NULL,	(uint8_t*)"EmptyWtHi"},
-{(uint8_t*)"空载称重下限",	0,	COM_NUM_DEVICEPARAM_EMPTY_WEIGHT_LOWER_LIMIT,	HOLDREGISTER_DEVICEPARAM_EMPTY_WEIGHT_LOWER_LIMIT,	2,	false,	0,	0,	NULL,	0,	0,	true,	TYPE_INT,	7,	NULL,	(uint8_t*)"EmptyWtLo"},
-{(uint8_t*)"满载称重",	0,	COM_NUM_DEVICEPARAM_FULL_WEIGHT,	HOLDREGISTER_DEVICEPARAM_FULL_WEIGHT,	2,	false,	0,	0,	NULL,	0,	0,	true,	TYPE_INT,	7,	NULL,	(uint8_t*)"FullWt"},
-{(uint8_t*)"满载称重上限",	0,	COM_NUM_DEVICEPARAM_FULL_WEIGHT_UPPER_LIMIT,	HOLDREGISTER_DEVICEPARAM_FULL_WEIGHT_UPPER_LIMIT,	2,	false,	0,	0,	NULL,	0,	0,	true,	TYPE_INT,	7,	NULL,	(uint8_t*)"FullWtHi"},
-{(uint8_t*)"满载称重下限",	0,	COM_NUM_DEVICEPARAM_FULL_WEIGHT_LOWER_LIMIT,	HOLDREGISTER_DEVICEPARAM_FULL_WEIGHT_LOWER_LIMIT,	2,	false,	0,	0,	NULL,	0,	0,	true,	TYPE_INT,	7,	NULL,	(uint8_t*)"FullWtLo"},
+{(uint8_t*)"空载扭力",	0,	COM_NUM_DEVICEPARAM_EMPTY_WEIGHT,	HOLDREGISTER_DEVICEPARAM_EMPTY_WEIGHT,	2,	false,	0,	0,	NULL,	0,	0,	true,	TYPE_INT,	7,	NULL,	(uint8_t*)"EmptyTq"},
+{(uint8_t*)"空载扭力上限",	0,	COM_NUM_DEVICEPARAM_EMPTY_WEIGHT_UPPER_LIMIT,	HOLDREGISTER_DEVICEPARAM_EMPTY_WEIGHT_UPPER_LIMIT,	2,	false,	0,	0,	NULL,	0,	0,	true,	TYPE_INT,	7,	NULL,	(uint8_t*)"EmptyTqHi"},
+{(uint8_t*)"空载扭力下限",	0,	COM_NUM_DEVICEPARAM_EMPTY_WEIGHT_LOWER_LIMIT,	HOLDREGISTER_DEVICEPARAM_EMPTY_WEIGHT_LOWER_LIMIT,	2,	false,	0,	0,	NULL,	0,	0,	true,	TYPE_INT,	7,	NULL,	(uint8_t*)"EmptyTqLo"},
+{(uint8_t*)"满载扭力",	0,	COM_NUM_DEVICEPARAM_FULL_WEIGHT,	HOLDREGISTER_DEVICEPARAM_FULL_WEIGHT,	2,	false,	0,	0,	NULL,	0,	0,	true,	TYPE_INT,	7,	NULL,	(uint8_t*)"FullTq"},
+{(uint8_t*)"满载扭力上限",	0,	COM_NUM_DEVICEPARAM_FULL_WEIGHT_UPPER_LIMIT,	HOLDREGISTER_DEVICEPARAM_FULL_WEIGHT_UPPER_LIMIT,	2,	false,	0,	0,	NULL,	0,	0,	true,	TYPE_INT,	7,	NULL,	(uint8_t*)"FullTqHi"},
+{(uint8_t*)"满载扭力下限",	0,	COM_NUM_DEVICEPARAM_FULL_WEIGHT_LOWER_LIMIT,	HOLDREGISTER_DEVICEPARAM_FULL_WEIGHT_LOWER_LIMIT,	2,	false,	0,	0,	NULL,	0,	0,	true,	TYPE_INT,	7,	NULL,	(uint8_t*)"FullTqLo"},
 {(uint8_t*)"碰撞上限比率",	0,	COM_NUM_DEVICEPARAM_WEIGHT_UPPER_LIMIT_RATIO,	HOLDREGISTER_DEVICEPARAM_WEIGHT_UPPER_LIMIT_RATIO,	2,	false,	0,	0,	(uint8_t*)"%",	0,	0,	true,	TYPE_INT,	3,	NULL,	(uint8_t*)"UpperRatio"},
 {(uint8_t*)"碰撞下限比率",	0,	COM_NUM_DEVICEPARAM_WEIGHT_LOWER_LIMIT_RATIO,	HOLDREGISTER_DEVICEPARAM_WEIGHT_LOWER_LIMIT_RATIO,	2,	false,	0,	0,	(uint8_t*)"%",	0,	0,	true,	TYPE_INT,	3,	NULL,	(uint8_t*)"LowerRatio"},
 {(uint8_t*)"保留8",	0,	COM_NUM_DEVICEPARAM_RESERVED8,	HOLDREGISTER_DEVICEPARAM_RESERVED8,	2,	false,	0,	0,	NULL,	0,	0,	false,	TYPE_INT,	8,	NULL,	(uint8_t*)"Rsv8"},
 {(uint8_t*)"保留9",	0,	COM_NUM_DEVICEPARAM_RESERVED9,	HOLDREGISTER_DEVICEPARAM_RESERVED9,	2,	false,	0,	0,	NULL,	0,	0,	false,	TYPE_INT,	8,	NULL,	(uint8_t*)"Rsv9"},
 
 {(uint8_t*)"零点阈值比例",	0,	COM_NUM_DEVICEPARAM_ZERO_WEIGHT_THRESHOLD_RATIO,	HOLDREGISTER_DEVICEPARAM_ZERO_WEIGHT_THRESHOLD_RATIO,	2,	true,	0,	100,	(uint8_t*)"%",	0,	0,	true,	TYPE_INT,	3,	NULL,	(uint8_t*)"ZeroThRatio"},
-{(uint8_t*)"称重忽略区",	0,	COM_NUM_DEVICEPARAM_WEIGHT_IGNORE_ZONE,	HOLDREGISTER_DEVICEPARAM_WEIGHT_IGNORE_ZONE,	2,	false,	0,	0,	(uint8_t*)"mm",	1,	0,	true,	TYPE_INT,	7,	NULL,	(uint8_t*)"WeightIgnore"},
+{(uint8_t*)"扭力忽略区",	0,	COM_NUM_DEVICEPARAM_WEIGHT_IGNORE_ZONE,	HOLDREGISTER_DEVICEPARAM_WEIGHT_IGNORE_ZONE,	2,	false,	0,	0,	(uint8_t*)"mm",	1,	0,	true,	TYPE_INT,	7,	NULL,	(uint8_t*)"TorqueIgnore"},
 {(uint8_t*)"零点最大偏差",	0,	COM_NUM_DEVICEPARAM_MAX_ZERO_DEVIATION_DISTANCE,	HOLDREGISTER_DEVICEPARAM_MAX_ZERO_DEVIATION_DISTANCE,	2,	false,	0,	0,	(uint8_t*)"mm",	1,	0,	true,	TYPE_INT,	6,	NULL,	(uint8_t*)"MaxZeroDev"},
 {(uint8_t*)"找零下行距离",	0,	COM_NUM_DEVICEPARAM_FINDZERO_DOWN_DISTANCE,	HOLDREGISTER_DEVICEPARAM_FINDZERO_DOWN_DISTANCE,	2,	false,	0,	0,	(uint8_t*)"mm",	1,	0,	true,	TYPE_INT,	6,	NULL,	(uint8_t*)"FindZeroDown"},
 {(uint8_t*)"保留10",	0,	COM_NUM_DEVICEPARAM_RESERVED10,	HOLDREGISTER_DEVICEPARAM_RESERVED10,	2,	false,	0,	0,	NULL,	0,	0,	false,	TYPE_INT,	8,	NULL,	(uint8_t*)"Rsv10"},
@@ -216,7 +216,7 @@ struct ParameterMetadata param_meta[] = {
 
 {(uint8_t*)"罐底检测模式",	0,	COM_NUM_DEVICEPARAM_BOTTOM_DETECT_MODE,	HOLDREGISTER_DEVICEPARAM_BOTTOM_DETECT_MODE,	2,	true,	0,	1,	NULL,	0,	0,	true,	TYPE_INT,	1,	ret_arr_word,	(uint8_t*)"BottomMode"},
 {(uint8_t*)"探底角度阈值",	0,	COM_NUM_DEVICEPARAM_BOTTOM_ANGLE_THRESHOLD,	HOLDREGISTER_DEVICEPARAM_BOTTOM_ANGLE_THRESHOLD,	2,	false,	0,	0,	(uint8_t*)"°",	0,	0,	true,	TYPE_INT,	5,	NULL,	(uint8_t*)"BottomAngTh"},
-{(uint8_t*)"探底称重阈值",	0,	COM_NUM_DEVICEPARAM_BOTTOM_WEIGHT_THRESHOLD,	HOLDREGISTER_DEVICEPARAM_BOTTOM_WEIGHT_THRESHOLD,	2,	false,	0,	0,	NULL,	0,	0,	true,	TYPE_INT,	5,	NULL,	(uint8_t*)"BottomWtTh"},
+{(uint8_t*)"探底扭力阈值",	0,	COM_NUM_DEVICEPARAM_BOTTOM_WEIGHT_THRESHOLD,	HOLDREGISTER_DEVICEPARAM_BOTTOM_WEIGHT_THRESHOLD,	2,	false,	0,	0,	NULL,	0,	0,	true,	TYPE_INT,	5,	NULL,	(uint8_t*)"BottomTqTh"},
 {(uint8_t*)"更新罐高标志",	0,	COM_NUM_DEVICEPARAM_REFRESH_TANKHEIGHT_FLAG,	HOLDREGISTER_DEVICEPARAM_REFRESH_TANKHEIGHT_FLAG,	2,	true,	0,	1,	NULL,	0,	0,	true,	TYPE_INT,	1,	ret_arr_word,	(uint8_t*)"UpdTankHeight"},
 {(uint8_t*)"实测罐高最大偏差",	0,	COM_NUM_DEVICEPARAM_MAX_TANKHEIGHT_DEVIATION,	HOLDREGISTER_DEVICEPARAM_MAX_TANKHEIGHT_DEVIATION,	2,	false,	0,	0,	(uint8_t*)"mm",	1,	0,	true,	TYPE_INT,	4,	NULL,	(uint8_t*)"MaxDev"},
 {(uint8_t*)"初始罐高",	0,	COM_NUM_DEVICEPARAM_INITIAL_TANKHEIGHT,	HOLDREGISTER_DEVICEPARAM_INITIAL_TANKHEIGHT,	2,	false,	0,	0,	(uint8_t*)"mm",	1,	0,	false,	TYPE_INT,	7,	NULL,	(uint8_t*)"InitTankH"},
@@ -487,21 +487,21 @@ void print_device_params(void)
     printf("  %-32s : %lu\r\n", "记步模式", (unsigned long)params.position_count_mode);
     printf("  %-32s : %lu\r\n", "电机局部周长(0.001mm)", (unsigned long)params.motor_count_first_loop_circumference_mm);
 
-    /* 称重 */
-    printf("\r\n-- 称重参数 --\r\n");
-    printf("  %-32s : %ld\r\n", "空载称重", (long)params.empty_weight);
-    printf("  %-32s : %lu\r\n", "空载称重上限", (unsigned long)params.empty_weight_upper_limit);
-    printf("  %-32s : %lu\r\n", "空载称重下限", (unsigned long)params.empty_weight_lower_limit);
-    printf("  %-32s : %lu\r\n", "满载称重", (unsigned long)params.full_weight);
-    printf("  %-32s : %lu\r\n", "满载称重上限", (unsigned long)params.full_weight_upper_limit);
-    printf("  %-32s : %lu\r\n", "满载称重下限", (unsigned long)params.full_weight_lower_limit);
+    /* 扭力 */
+    printf("\r\n-- 扭力参数 --\r\n");
+    printf("  %-32s : %ld\r\n", "空载扭力", (long)params.empty_weight);
+    printf("  %-32s : %lu\r\n", "空载扭力上限", (unsigned long)params.empty_weight_upper_limit);
+    printf("  %-32s : %lu\r\n", "空载扭力下限", (unsigned long)params.empty_weight_lower_limit);
+    printf("  %-32s : %lu\r\n", "满载扭力", (unsigned long)params.full_weight);
+    printf("  %-32s : %lu\r\n", "满载扭力上限", (unsigned long)params.full_weight_upper_limit);
+    printf("  %-32s : %lu\r\n", "满载扭力下限", (unsigned long)params.full_weight_lower_limit);
     printf("  %-32s : %lu\r\n", "碰撞上限比率", (unsigned long)params.weight_upper_limit_ratio);
     printf("  %-32s : %lu\r\n", "碰撞下限比率", (unsigned long)params.weight_lower_limit_ratio);
 
     /* 零点 */
     printf("\r\n-- 零点参数 --\r\n");
     printf("  %-32s : %lu\r\n", "零点阈值比例", (unsigned long)params.zero_weight_threshold_ratio);
-    printf("  %-32s : %lu\r\n", "称重忽略区(0.1mm)", (unsigned long)params.weight_ignore_zone);
+    printf("  %-32s : %lu\r\n", "扭力忽略区(0.1mm)", (unsigned long)params.weight_ignore_zone);
     printf("  %-32s : %lu\r\n", "零点最大偏差(0.1mm)", (unsigned long)params.max_zero_deviation_distance);
     printf("  %-32s : %lu\r\n", "找零下行距离(0.1mm)", (unsigned long)params.findZeroDownDistance);
 
@@ -534,7 +534,7 @@ void print_device_params(void)
     printf("\r\n-- 罐底/罐高参数 --\r\n");
     printf("  %-32s : %lu\r\n", "罐底检测模式", (unsigned long)params.bottom_detect_mode);
     printf("  %-32s : %lu\r\n", "探底角度阈值", (unsigned long)params.bottom_angle_threshold);
-    printf("  %-32s : %lu\r\n", "探底称重阈值", (unsigned long)params.bottom_weight_threshold);
+    printf("  %-32s : %lu\r\n", "探底扭力阈值", (unsigned long)params.bottom_weight_threshold);
     printf("  %-32s : %lu\r\n", "更新罐高标志", (unsigned long)params.refreshTankHeightFlag);
     printf("  %-32s : %lu\r\n", "实测罐高最大偏差", (unsigned long)params.maxTankHeightDeviation);
     printf("  %-32s : %lu\r\n", "初始罐高", (unsigned long)params.initialTankHeight);
@@ -685,8 +685,8 @@ void PrintMeasurementResult(const MeasurementResult *m)
     printf("  幅值: %lu\r\n",          (unsigned long)m->debug_data.current_amplitude);
     printf("  水位电容快照(0.1pF): %lu\r\n",(unsigned long)m->debug_data.water_capacitance_x10);
 
-    printf("  当前称重值: %lu\r\n",    (unsigned long)m->debug_data.current_weight);
-    printf("  称重参数: %lu\r\n",      (unsigned long)m->debug_data.weight_param);
+    printf("  当前扭力值: %lu\r\n",    (unsigned long)m->debug_data.current_weight);
+    printf("  扭力参数: %lu\r\n",      (unsigned long)m->debug_data.weight_param);
 
     printf("  X角度: %ld\r\n", (long)m->debug_data.angle_x);
     printf("  Y角度: %ld\r\n", (long)m->debug_data.angle_y);

@@ -799,14 +799,14 @@
           <tr>
             <td><code>1335</code></td>
             <td>Up</td>
-            <td><code>CMD_FORCE_LIFT_ZERO</code> 或 <code>CMD_BACK_ZERO</code></td>
-            <td>需按现场“提浮子到原点”定义确认。</td>
+            <td><code>CMD_BACK_ZERO</code></td>
+            <td>命令 115 已保留，不再映射旧强制提零点；如现场需要“提浮子到原点”，需先确认是否等价回零。</td>
           </tr>
           <tr>
             <td><code>1336</code></td>
             <td>Stop</td>
             <td><code>CMD_CANCEL_MEASUREMENT</code></td>
-            <td>建议实现真正取消/停止，不照搬旧工程映射到取重量。</td>
+            <td>建议实现真正取消/停止，不照搬旧工程映射到取扭力。</td>
           </tr>
           <tr>
             <td><code>1374</code></td>
@@ -841,8 +841,8 @@
           <tr>
             <td><code>1715</code></td>
             <td>Release overtension</td>
-            <td><code>CMD_FORCE_LIFT_ZERO</code> 或独立释放过张力命令</td>
-            <td>如现场有过张力恢复流程，建议新增明确命令语义。</td>
+            <td>独立释放过张力命令</td>
+            <td>如现场有过张力恢复流程，建议新增明确命令语义，不复用已保留的命令 115。</td>
           </tr>
           <tr>
             <td><code>1778</code></td>

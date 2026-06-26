@@ -57,7 +57,7 @@ CPU2 模块按安全影响分为四级：
 | `LTD_MAIN_CPU2/Application/Src/measure.c` | 命令解析和测量入口 | 调试命令混入正式路径、命令切换错误 | 命令白名单、默认分支、测试入口 |
 | `LTD_MAIN_CPU2/Application/Src/measure_zero.c` | 零点测量 | 找零失败继续运行、碰撞风险 | 停机确认、边界和重试 |
 | `LTD_MAIN_CPU2/Application/Src/measure_tank_height.c` | 罐高/罐底测量 | 下行越界、撞底、速度过高 | 下行限位、速度限制、传感异常 |
-| `LTD_MAIN_CPU2/Application/Src/measure_oilLevel.c` | 油位测量 | 未找到液位继续运动 | 状态翻转、超时、停机 |
+| `LTD_MAIN_CPU2/Application/Src/measure_oilLevel.c` | 液位测量 | 未找到液位继续运动 | 状态翻转、超时、停机 |
 | `LTD_MAIN_CPU2/Application/Src/measure_waterLevel.c` | 水位测量和水位跟随 | 水位判断错误、跟随导致重复运动 | 定点阈值、稳定窗口、自动跟随条件 |
 | `LTD_MAIN_CPU2/Application/Src/measure_density.c` | 密度测量 | 浮点算法异常、点位越界 | 测点边界、数组长度、浮点偏离 |
 | `LTD_MAIN_CPU2/Application/Src/wartsila_density_measurement.c` | 瓦锡兰密度测量 | 分布点越界、液面判断错误 | 点数限制、目标位置范围 |
@@ -87,7 +87,7 @@ CPU2 模块按安全影响分为四级：
 | --- | --- | --- | --- |
 | `LTD_MAIN_CPU2/Services/Modbus/**` | CPU2 对外/内部寄存器协议 | 外部命令或参数影响安全动作 | 寄存器写入必须范围检查 |
 | `LTD_MAIN_CPU2/Services/Hart/**` | AD5421/HART 相关 | 输出电流错误影响故障指示 | 检查故障电流策略 |
-| `LTD_MAIN_CPU2/Services/Weight/**` | 称重和碰撞辅助判断 | 误触发或漏触发碰撞判断 | 阈值范围、方向判断 |
+| `LTD_MAIN_CPU2/Services/Weight/**` | 扭力和碰撞辅助判断 | 误触发或漏触发碰撞判断 | 阈值范围、方向判断 |
 | `LTD_MAIN_CPU2/BSP/Peripherals/src/TMC5130.c` | 电机驱动芯片底层访问 | 寄存器写错、读数异常 | 保留偏离，强化返回值 |
 | `LTD_MAIN_CPU2/BSP/Peripherals/src/AS5145.c` | 编码器底层访问 | 数据异常或 DMA 处理错误 | 保留偏离，强化错误传播 |
 | `LTD_MAIN_CPU2/BSP/Peripherals/src/mb85rs2m.c` | FRAM 访问 | 参数持久化失败 | 地址边界和返回值 |

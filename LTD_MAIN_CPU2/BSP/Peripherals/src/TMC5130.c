@@ -8,7 +8,7 @@
 #include "fault_manager.h"
 #include "error_log.h"
 
-#include "sensor.h"    /* 传感器相关接口（如称重、防撞检测等） */
+#include "sensor.h"    /* 传感器相关接口（如扭力、防撞检测等） */
 #include "motor_ctrl.h" /* 电机控制上层接口 */
 
 /* 保持电流固定为同一口径，运行时修改 motor_current 只改变 IRUN。 */
@@ -905,7 +905,7 @@ uint32_t stpr_waitMove(TMC5130TypeDef *tmc5130)
             return STATE_SWITCH;
         }
 
-        /* 在运动过程中周期性检查防撞（比如称重超限等） */
+        /* 在运动过程中周期性检查防撞（比如扭力超限等） */
         ret = CheckWeightCollision();
         /* 先处理异常边界，避免TMC5130 驱动状态机带故障继续运行。 */
         if (ret != NO_ERROR) {

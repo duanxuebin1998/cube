@@ -103,8 +103,8 @@ PAGE_DEFS: Dict[str, Dict[str, str]] = {
         "cpu": "CPU2",
     },
     "cpu2_13": {
-        "title": "称重与继电器输出",
-        "path": str(CPU2_DIR / "13_称重与继电器输出.html"),
+        "title": "扭力与继电器输出",
+        "path": str(CPU2_DIR / "13_扭力与继电器输出.html"),
         "cpu": "CPU2",
     },
     "cpu2_14": {
@@ -296,14 +296,14 @@ LEGACY_DOCS: Sequence[Dict[str, str]] = [
         "path": str(ROOT / "docs" / "03_问题分析与整改" / "2026-06-06_四路继电器报警输出逻辑对照与问题分析.html"),
         "status": "问题分析历史页",
         "current": "cpu2_13",
-        "note": "四路继电器报警输出逻辑的历史问题分析；当前权威流程以 CPU2 称重与继电器输出页为准。",
+        "note": "四路继电器报警输出逻辑的历史问题分析；当前权威流程以 CPU2 扭力与继电器输出页为准。",
     },
     {
         "title": "CPU2 电流输出问题与 v1.563 处理方式对比",
         "path": str(ROOT / "docs" / "03_问题分析与整改" / "2026-06-13_CPU2电流输出问题与CPU2_v1.563处理方式对比.html"),
         "status": "问题分析历史页",
         "current": "cpu2_13",
-        "note": "CPU2 电流输出问题和 v1.563 处理方式的历史对比；当前 AO 输出与运行态流程以 CPU2 称重与继电器输出页为准。",
+        "note": "CPU2 电流输出问题和 v1.563 处理方式的历史对比；当前 AO 输出与运行态流程以 CPU2 扭力与继电器输出页为准。",
         "route": "ao",
     },
     {
@@ -311,7 +311,7 @@ LEGACY_DOCS: Sequence[Dict[str, str]] = [
         "path": str(ROOT / "docs" / "03_问题分析与整改" / "2026-06-16_AD5421控制寄存器回读FFFF问题分析与现场验证.html"),
         "status": "问题分析历史页",
         "current": "cpu2_13",
-        "note": "AD5421 控制寄存器回读 FFFF 的历史现场验证；当前 AO/AD5421 输出流程以 CPU2 称重与继电器输出页为准。",
+        "note": "AD5421 控制寄存器回读 FFFF 的历史现场验证；当前 AO/AD5421 输出流程以 CPU2 扭力与继电器输出页为准。",
         "route": "ao",
     },
 ]
@@ -365,7 +365,7 @@ ROUTES = [
             ("CPU3 菜单入口", "cpu3_07", "读取部件参数位于测量/维护入口，下发 CMD_READ_PART_PARAMS"),
             ("CPU3 内部轮询", "cpu3_02", "运行轮询读取输入寄存器尾部 WirelessPairingStatus 和 AoOutputRuntime 字段"),
             ("CPU2 命令入口", "cpu2_02", "进入读取部件参数命令并保持 STATE_READPARAMETEROVER 持续刷新"),
-            ("CPU2 传感器快照", "cpu2_09", "每 1s 刷新位置、称重、温度、频率、电容、角度，每 5s 查询蓝牙 RSSI"),
+            ("CPU2 传感器快照", "cpu2_09", "每 1s 刷新位置、扭力、温度、频率、电容、角度，每 5s 查询蓝牙 RSSI"),
             ("CPU2 寄存器发布", "cpu2_10", "协议版本 10 起在继电器运行态后追加 RSSI，协议 11 起追加 AO 目标/实际/错误运行态"),
             ("CPU3 状态显示", "cpu3_06", "读取参数完成页显示 RSSI 或 N/A，状态页显示协议兼容和 AO/AD5421 故障原因"),
         ],
@@ -401,7 +401,7 @@ ROUTES = [
         "title": "故障、恢复和状态展示链路",
         "summary": "CPU2 是主要故障产生和恢复位置，CPU3 负责轮询状态、显示提示，并在外部协议里反馈故障结果。",
         "steps": [
-            ("故障产生", "cpu2_08", "电机、位置、称重碰撞或传感异常触发错误条件"),
+            ("故障产生", "cpu2_08", "电机、位置、扭力碰撞或传感异常触发错误条件"),
             ("CPU2 故障管理", "cpu2_07", "SET_ERROR、状态切换、恢复尝试和错误输出"),
             ("CPU2 通信发布", "cpu2_10", "设备状态、错误码和测量状态进入寄存器"),
             ("CPU3 轮询缓存", "cpu3_02", "输入寄存器刷新 g_measurement"),
@@ -511,7 +511,7 @@ RELATIONS: Dict[str, Dict[str, object]] = {
         "route": ["cross", "cpu3_07", "cpu3_02", "cpu2_10", "cpu2_12", "cpu2_04"],
     },
     "cpu2_13": {
-        "focus": "称重、继电器和 AO 电流输出把测量状态转换为硬件输出，是现场报警、模拟量输出和 AD5421 运行态发布的关键链路。",
+        "focus": "扭力、继电器和 AO 电流输出把测量状态转换为硬件输出，是现场报警、模拟量输出和 AD5421 运行态发布的关键链路。",
         "upstream": ["cpu2_01", "cpu2_04", "cpu2_05", "cpu2_06", "cpu2_12"],
         "downstream": ["cpu2_07", "cpu2_10", "cpu2_11"],
         "route": ["cross", "cpu3_07", "cpu2_12", "cpu2_13", "cpu2_10", "cpu3_06"],
@@ -1117,7 +1117,7 @@ def make_cross_route() -> str:
 <rect class="node cpu3" x="770" y="55" width="260" height="78" rx="10"/><text class="nt" x="900" y="88">CPU3 内部 Modbus 主站</text><text class="ns" x="900" y="111">写 CPU2 命令/参数，轮询输入结果</text>
 <rect class="node cpu2" x="770" y="215" width="260" height="82" rx="10"/><text class="nt" x="900" y="250">CPU2 通信寄存器入口</text><text class="ns" x="900" y="273">保持寄存器写入、输入寄存器发布</text>
 <rect class="node cpu2" x="390" y="215" width="260" height="82" rx="10"/><text class="nt" x="520" y="250">CPU2 测量命令入口</text><text class="ns" x="520" y="273">公共准备、命令分发、状态切换</text>
-<rect class="node cpu2" x="70" y="215" width="230" height="82" rx="10"/><text class="nt" x="185" y="250">CPU2 运动/传感支撑</text><text class="ns" x="185" y="273">电机、位置、传感、称重</text>
+<rect class="node cpu2" x="70" y="215" width="230" height="82" rx="10"/><text class="nt" x="185" y="250">CPU2 运动/传感支撑</text><text class="ns" x="185" y="273">电机、位置、传感、扭力</text>
 <rect class="node cpu2" x="160" y="395" width="260" height="92" rx="10"/><text class="nt" x="290" y="430">CPU2 测量执行</text><text class="ns" x="290" y="453">液位、水位、密度、回零、输出</text>
 <rect class="node error" x="490" y="395" width="230" height="92" rx="10"/><text class="nt" x="605" y="430">故障/异常出口</text><text class="ns" x="605" y="453">SET_ERROR、命令切换、状态恢复</text>
 <rect class="node state" x="800" y="395" width="250" height="92" rx="10"/><text class="nt" x="925" y="430">CPU2 状态发布</text><text class="ns" x="925" y="453">测量结果、设备状态、错误码</text>

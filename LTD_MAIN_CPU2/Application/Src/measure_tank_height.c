@@ -2,7 +2,7 @@
  * measureTankHeight.c - 罐体高度测量模块
  *
  * 功能说明：
- *   该模块控制电机运动，通过重量传感器检测罐底位置，实现罐体高度的精确测量。
+ *   该模块控制电机运动，通过扭力传感器检测罐底位置，实现罐体高度的精确测量。
  *   测量过程分为两个阶段：粗略搜索和精确搜索。
  *
  * 创建日期: Feb 27, 2025
@@ -302,7 +302,7 @@ uint32_t SearchBottom(void)
     ret = EnsureGyroZeroRefForBottomMeasurement();
     CHECK_ERROR(ret);
 
-    printf("罐底测量\t初始重量：%d\r\n", weight_parament.stable_weight);
+    printf("罐底测量\t初始扭力：%d\r\n", weight_parament.stable_weight);
 
     ret = EnsureBottomReleasedBeforeRoughSearch();
     CHECK_ERROR(ret);
@@ -522,7 +522,7 @@ static int SearchBottomRough() {
 
         ret = MotorCtrl_CheckLostStepAutoTiming(g_measurement.debug_data.cable_length);
         CHECK_ERROR(ret); /* 检查丢步检测是否成功 */
-        printf("罐底测量\t长距离寻找罐底\t{传感器位置}%.1f", (float)(g_measurement.debug_data.sensor_position)/10.0); MotorCtrl_PrintPositionRefs(); printf("\t{称重值}%d\t速度(0.01m/min)%lu\r\n", weight_parament.current_weight, (unsigned long)speed_x100);
+        printf("罐底测量\t长距离寻找罐底\t{传感器位置}%.1f", (float)(g_measurement.debug_data.sensor_position)/10.0); MotorCtrl_PrintPositionRefs(); printf("\t{扭力值}%d\t速度(0.01m/min)%lu\r\n", weight_parament.current_weight, (unsigned long)speed_x100);
     }
     ret = MotorCtrl_QuickStop(); /* 到达罐底后快速停止电机 */
     CHECK_ERROR(ret); /* 检查快速停止是否成功 */
@@ -549,7 +549,7 @@ static int SearchBottomRough() {
  * @brief 粗找前确认探头已经离开罐底。
  *
  * 如果进入找底流程时已经触底，先分段上行并复查触底状态，确保粗找从 NORMAL 状态开始。
- * 上行动作只用于离底，不做称重碰撞检测；超过最大离底距离仍触底则返回找底失败。
+ * 上行动作只用于离底，不做扭力碰撞检测；超过最大离底距离仍触底则返回找底失败。
  */
 static uint32_t EnsureBottomReleasedBeforeRoughSearch(void)
 {
@@ -599,7 +599,7 @@ static int SearchBottomPrecise() {
     uint32_t ret;
     Weight_StateTypeDef bottom_status = NORMAL;
     uint32_t speed_x100;
-    printf("罐底测量\t稳定重量：%d\r\n", weight_parament.stable_weight);
+    printf("罐底测量\t稳定扭力：%d\r\n", weight_parament.stable_weight);
     if (g_measurement.debug_data.cable_length > 2000)
     {
         ret = MotorCtrl_MoveBlockingNoDetect(200.0, MOTOR_DIRECTION_UP, MotorCtrl_GetDefaultSpeedX100());
@@ -792,11 +792,11 @@ uint32_t Bottom_SaveGyroZeroRef(void)
  * @return NO_ERROR 表示本次检测有效；其他错误码表示检测链路异常，需要上层停止探底并进入最终报错。
  *
  * 判定方式：
- *  - g_deviceParams.bottom_detect_mode == 0 : 称重阈值
+ *  - g_deviceParams.bottom_detect_mode == 0 : 扭力阈值
  *  - g_deviceParams.bottom_detect_mode != 0 : 陀螺仪角度阈值
  *
  * 阈值来源：
- *  - 称重阈值：g_deviceParams.bottom_weight_threshold
+ *  - 扭力阈值：g_deviceParams.bottom_weight_threshold
  *  - 角度阈值：g_deviceParams.bottom_angle_threshold
  */
 uint32_t check_bottom_status(Weight_StateTypeDef *status)
@@ -822,7 +822,7 @@ uint32_t check_bottom_status(Weight_StateTypeDef *status)
      *  保护：零点附近不做罐底检测
      * ========================== */
     if (cable_mm < (float)g_deviceParams.weight_ignore_zone/10.0) {
-        printf("称重跳过 | 原因:零点保护 | 方向：%lu 当前重量=%ld 稳定重量=%ld 差值：%+ld 满载称重=%ld 尺带长度：%.1f",
+        printf("扭力跳过 | 原因:零点保护 | 方向：%lu 当前扭力=%ld 稳定扭力=%ld 差值：%+ld 满载扭力=%ld 尺带长度：%.1f",
                 (unsigned long)motor_dir,
                 (long)cur_weight,
                 (long)stable_weight,
@@ -835,7 +835,7 @@ uint32_t check_bottom_status(Weight_StateTypeDef *status)
                 (unsigned long)g_deviceParams.weight_ignore_zone);
         return NO_ERROR;
     }
-    /* -------- 方式1：称重阈值（mode=0） -------- */
+    /* -------- 方式1：扭力阈值（mode=0） -------- */
     if (g_deviceParams.bottom_detect_mode == 0) {
 
         int lower_limit = (int)g_deviceParams.bottom_weight_threshold;
@@ -843,7 +843,7 @@ uint32_t check_bottom_status(Weight_StateTypeDef *status)
 
         Weight_StateTypeDef state = (current < lower_limit) ? BOTTOM : NORMAL;
 
-        printf("罐底检测(称重) | 当前:%d | 阈值:%d | 状态:%s | 尺带长度：%.1f",
+        printf("罐底检测(扭力) | 当前:%d | 阈值:%d | 状态:%s | 尺带长度：%.1f",
                 current,
                 lower_limit,
                 (state == BOTTOM) ? "到达罐底" : "正常",
@@ -877,7 +877,7 @@ uint32_t check_bottom_status(Weight_StateTypeDef *status)
 
     Weight_StateTypeDef state = (dsum > th) ? BOTTOM : NORMAL;
 
-    printf("罐底检测(称重)%d (陀螺仪) | 角度X=%.2f 角度Y=%.2f | 基准X=%.2f 基准Y=%.2f | "
+    printf("罐底检测(扭力)%d (陀螺仪) | 角度X=%.2f 角度Y=%.2f | 基准X=%.2f 基准Y=%.2f | "
            "差值X=%.2f 差值Y=%.2f 合计=%.2f | 阈值=%.2f | 状态:%s | 尺带长度：%.1f",
             (int)weight_parament.current_weight,
             ax, ay,

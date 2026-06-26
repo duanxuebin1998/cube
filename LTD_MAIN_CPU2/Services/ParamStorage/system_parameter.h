@@ -27,7 +27,7 @@
 #define UNVALID_GSW 0                      /* 质量无效值 */
 
 #define MAX_MEASUREMENT_POINTS 200 /* 密度分布测量最大点数。 */
-#define DEVICE_PROTOCOL_VERSION 11u /* CPU2/CPU3共享协议版本；旧程序未写入时默认为0 */
+#define DEVICE_PROTOCOL_VERSION 12u /* CPU2/CPU3共享协议版本；旧程序未写入时默认为0 */
 #define FAULT_AUTO_RECOVERY_RETRY_DEFAULT 3u /* 故障自动恢复默认重试次数。 */
 #define FAULT_AUTO_RECOVERY_RETRY_MAX 10u /* 故障自动恢复最大重试次数。 */
 
@@ -194,13 +194,13 @@ typedef enum {
     PARAM_ADDRESS_OVERFLOW = 0x00110004,         /* 地址越界 */
     PARAM_CRC_ERROR = 0x00110005,                /* 参数 CRC 错误 */
 	PARAM_ERROR = 0x00110006,                /* 程序内参数调用错误 */
-    /* ==================== 称重类故障 (0x00120000 - 0x0012FFFF) ==================== */
-    WEIGHT_OUT_OF_RANGE = 0x00120001,            /* 称重超上限 */
-    WEIGHT_UNDER_RANGE = 0x00120002,             /* 称重超下限 */
+    /* ==================== 扭力类故障 (0x00120000 - 0x0012FFFF) ==================== */
+    WEIGHT_OUT_OF_RANGE = 0x00120001,            /* 扭力超上限 */
+    WEIGHT_UNDER_RANGE = 0x00120002,             /* 扭力超下限 */
     WEIGHT_COLLISION_DETECTED = 0x00120003,      /* 检测到碰撞 */
-    WEIGHT_DRIFT_ERROR = 0x00120004,             /* 称重漂移异常 */
+    WEIGHT_DRIFT_ERROR = 0x00120004,             /* 扭力漂移异常 */
     WEIGHT_SENSOR_SATURATION = 0x00120005,       /* 传感器饱和 */
-    WEIGHT_COMM_TIMEOUT = 0x00120006,            /* 称重通信超时 */
+    WEIGHT_COMM_TIMEOUT = 0x00120006,            /* 扭力通信超时 */
 
     /* ==================== 其他错误 (0x00130000 - 0x0013FFFF) ==================== */
     OTHER_UNKNOWN_ERROR = 0x00130001,            /* 未知故障 */
@@ -266,15 +266,15 @@ typedef enum {
     CMD_MOVE_UP                    = 104,  /* 上行 */
     CMD_MOVE_DOWN                  = 105,  /* 下行 */
 
-    CMD_SET_EMPTY_WEIGHT           = 106,  /* 设置空载称重 */
-    CMD_SET_FULL_WEIGHT            = 107,  /* 设置满载称重 */
+    CMD_SET_EMPTY_WEIGHT           = 106,  /* 设置空载扭力 */
+    CMD_SET_FULL_WEIGHT            = 107,  /* 设置满载扭力 */
     CMD_RESTORE_FACTORY            = 108,  /* 恢复出厂设置 */
     CMD_MAINTENANCE_MODE           = 109,  /* 维护模式 */
 
     /* --- 强制运动 / 强制位置类（新增） --- */
     CMD_FORCE_MOVE_UP              = 113,  /* 电机强制上行（新增） */
     CMD_FORCE_MOVE_DOWN            = 114,  /* 电机强制下行（新增） */
-    CMD_FORCE_LIFT_ZERO            = 115,  /* 强制提零点（新增） */
+    CMD_RESERVED_CMD7              = 115,  /* reserved */
 
     /* --- 水位标定（新增，建议归类到标定类） --- */
     CMD_CALIBRATE_WATER            = 116,  /* 水位标定（新增） */
@@ -327,15 +327,15 @@ typedef enum {
     STATE_FOLLOW_WATER_POINT_SEARCHING = 0x0024, /* 寻找水位跟随点中 */
     STATE_METER_DENSITY = 0x0025,              /* 密度每米测量中 */
     STATE_INTERVAL_DENSITY = 0x0026,           /* 液位区间测量中 */
-    STATE_GET_FULLWEIGHT = 0x0027,             /* 获取满载称重中 */
-    STATE_GET_EMPTYWEIGHT = 0x0028,            /* 获取空载称重中 */
+    STATE_GET_FULLWEIGHT = 0x0027,             /* 获取满载扭力中 */
+    STATE_GET_EMPTYWEIGHT = 0x0028,            /* 获取空载扭力中 */
     STATE_MAINTENANCEMODE = 0x0029,            /* 维护模式中 */
     STATE_WARTSILA_DENSITY_START = 0x002A,     /* 瓦西莱密度梯度测量开始 */
     STATE_WARTSILA_DENSITY_MEASURING = 0x002B, /* 瓦西莱密度梯度测量中 */
     STATE_RUN_TO_POSITIONING = 0x002C,         /* 运行到指定位置中 */
     STATE_FORCE_RUNUPING = 0x002D,             /* 电机强制上行中 */
     STATE_FORCE_RUNDOWNING = 0x002E,           /* 电机强制下行中 */
-    STATE_FORCE_LIFT_ZEROING = 0x002F,         /* 强制提零点中 */
+    STATE_RESERVED_002F = 0x002F,              /* reserved */
     STATE_CALIBRATE_WATERING = 0x0030,         /* 水位标定中 */
     STATE_CALIBRATE_TANKHEIGHTING = 0x0031,     /* 罐高标定中 */
     STATE_WIRELESS_PAIRING = 0x0032,             /* 无线滑环匹配中 */
@@ -367,13 +367,13 @@ typedef enum {
     STATE_FOLLOW_WATERING = 0x8024,            /* 水位跟随中（沿用0x80xx状态码） */
     STATE_COM_METER_DENSITY_OVER = 0x8025,      /* 密度每米测量完成 */
     STATE_INTERVAL_DENSITY_OVER = 0x8026,       /* 液位区间测量完成 */
-    STATE_GET_FULLWEIGHT_OVER = 0x8027,         /* 获取满载称重完成 */
-    STATE_GET_EMPTYWEIGHT_OVER = 0x8028,        /* 获取空载称重完成 */
+    STATE_GET_FULLWEIGHT_OVER = 0x8027,         /* 获取满载扭力完成 */
+    STATE_GET_EMPTYWEIGHT_OVER = 0x8028,        /* 获取空载扭力完成 */
     STATE_WARTSILA_DENSITY_OVER = 0x8029,       /* 瓦西莱密度梯度测量完成 */
     STATE_RUN_TO_POSITION_OVER = 0x802C,        /* 运行到指定位置完成 */
     STATE_FORCE_RUNUP_OVER = 0x802D,            /* 强制上行完成 */
     STATE_FORCE_RUNDOWN_OVER = 0x802E,          /* 强制下行完成 */
-    STATE_FORCE_LIFT_ZERO_OVER = 0x802F,        /* 强制提零点完成 */
+    STATE_RESERVED_802F = 0x802F,              /* reserved */
     STATE_CALIBRATE_WATER_OVER = 0x8030,        /* 水位标定完成 */
     STATE_CALIBRATE_TANKHEIGHT_OVER = 0x8031,   /* 罐高标定完成 */
     STATE_WIRELESS_PAIRING_OVER = 0x8032,        /* 无线滑环匹配完成 */
@@ -443,9 +443,9 @@ typedef struct {
 	uint32_t current_amplitude;    /* /< 当前幅值 */
 	uint32_t water_capacitance_x10; /* /< 水位电容快照(单位: 0.1pF) */
 
-    /* 称重相关 */
-    uint32_t current_weight;       /* /< 当前称重值 */
-    uint32_t weight_param;         /* /< 称重参数 */
+    /* 扭力相关 */
+    uint32_t current_weight;       /* /< 当前扭力值 */
+    uint32_t weight_param;         /* /< 扭力参数 */
 
     /* 姿态角 */
     int32_t  angle_x;              /* /< X 轴角度 */
@@ -568,22 +568,22 @@ typedef struct {
     uint32_t position_count_mode;          /* 当前记步模式(0=编码轮,1=电机步进) */
     uint32_t motor_count_first_loop_circumference_mm; /* 电机记步局部首圈周长(0.001mm) */
 
-    /* ===================== 称重参数 ===================== */
-    int32_t empty_weight;                /* 空载称重 */
-    uint32_t empty_weight_upper_limit;    /* 空载称重上限 */
-    uint32_t empty_weight_lower_limit;    /* 空载称重下限 */
-    uint32_t full_weight;                 /* 满载称重 */
-    uint32_t full_weight_upper_limit;     /* 满载称重上限 */
-    uint32_t full_weight_lower_limit;     /* 满载称重下限 */
-    uint32_t weight_upper_limit_ratio;    /* 称重变化量检测上限比例 */
-    uint32_t weight_lower_limit_ratio;    /* 称重变化量检测下限比例 */
+    /* ===================== 扭力参数 ===================== */
+    int32_t empty_weight;                /* 空载扭力 */
+    uint32_t empty_weight_upper_limit;    /* 空载扭力上限 */
+    uint32_t empty_weight_lower_limit;    /* 空载扭力下限 */
+    uint32_t full_weight;                 /* 满载扭力 */
+    uint32_t full_weight_upper_limit;     /* 满载扭力上限 */
+    uint32_t full_weight_lower_limit;     /* 满载扭力下限 */
+    uint32_t weight_upper_limit_ratio;    /* 扭力变化量检测上限比例 */
+    uint32_t weight_lower_limit_ratio;    /* 扭力变化量检测下限比例 */
 
     uint32_t reserved8;                   /* 预留 */
     uint32_t reserved9;                   /* 预留（新增） */
 
     /* ===================== 零点测量 ===================== */
-    uint32_t zero_weight_threshold_ratio;     /* 零点称重阈值比例 */
-    uint32_t weight_ignore_zone;              /* 零点下称重不检测区域(建议 0.1mm) */
+    uint32_t zero_weight_threshold_ratio;     /* 零点扭力阈值比例 */
+    uint32_t weight_ignore_zone;              /* 零点下扭力不检测区域(建议 0.1mm) */
     uint32_t max_zero_deviation_distance;     /* 零点最大偏差距离(建议 0.1mm) */
     uint32_t findZeroDownDistance;            /* 找零点完成后下行距离(0.1mm) */
 
@@ -615,7 +615,7 @@ typedef struct {
     /* ===================== 罐高/罐底测量 ===================== */
     uint32_t bottom_detect_mode;          /* 罐底测量模式 */
     uint32_t bottom_angle_threshold;      /* 探底角度阈值（务必明确单位/倍率） */
-    uint32_t bottom_weight_threshold;     /* 探底称重阈值 */
+    uint32_t bottom_weight_threshold;     /* 探底扭力阈值 */
     uint32_t refreshTankHeightFlag;       /* 是否更新液位罐高 */
     uint32_t maxTankHeightDeviation;      /* 实测罐高最大偏差 */
     uint32_t initialTankHeight;           /* 初始实高 */

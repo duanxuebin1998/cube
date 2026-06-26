@@ -827,7 +827,7 @@ PAGES: list[dict] = [
                 "evidence": [
                     {"title": "AO 尾段定义", "text": f"{code('Application/system_param/stateformodbus.h:402-415')} 在 RSSI 更新计数之后定义 REG_AO_OUTPUT_RUNTIME_*，REG_ENG 顺延到 AO 尾段末尾。"},
                     {"title": "CPU3 尾段解析", "text": f"{code('dataanalysis_modbus.c:103-113,493-623')} 先解析 RSSI 字段，再调用 read_ao_output_runtime_from_regs 写入 g_measurement.ao_output_runtime。"},
-                    {"title": "协议版本", "text": f"{code('Application/system_param/system_parameter.h:29')} 当前 DEVICE_PROTOCOL_VERSION 为 11，CPU3 使用严格相等判断协议兼容。"},
+                    {"title": "协议版本", "text": f"{code('Application/system_param/system_parameter.h:29')} 当前 DEVICE_PROTOCOL_VERSION 为 12，CPU3 使用严格相等判断协议兼容。"},
                 ],
             },
         ],

@@ -129,11 +129,18 @@ static void Cpu3_FillProtocolSerialProfile(ComProtocolType protocol, ComPortConf
 
     switch (profile->protocol) {
     case COM_PROTO_DSM:
-    case COM_PROTO_WARTSILA:
-        /* 现场确认：计量仪/DSM、瓦锡兰均按 4800 8N1。 */
+        /* 计量仪/DSM 按 4800 8N1。 */
         profile->baudrate = 4800U;
         profile->databits = 8U;
         profile->parity = COM_PARITY_NONE;
+        profile->stopbits = COM_STOPBITS_1;
+        break;
+
+    case COM_PROTO_WARTSILA:
+        /* 瓦锡兰通信按现场要求使用 2400 8E1。 */
+        profile->baudrate = 2400U;
+        profile->databits = 8U;
+        profile->parity = COM_PARITY_EVEN;
         profile->stopbits = COM_STOPBITS_1;
         break;
 
@@ -193,6 +200,42 @@ static uint8_t Cpu3_ApplyProtocolSerialProfile(ComPortConfig *cfg)
         cfg->stopbits = profile.stopbits;
         changed = 1U;
     }
+
+    return changed;
+}
+
+/*
+ * 旧版本把瓦锡兰默认值写成 4800 无校验；加载 FRAM 时只迁移这一类旧默认值。
+ * 其它合法人工配置仍保留，避免升级后覆盖现场已确认的串口参数。
+ */
+static uint8_t Cpu3_MigrateLegacyWartsilaDefault(ComPortConfig *cfg)
+{
+    if (cfg == NULL) {
+        return 0U;
+    }
+
+    if ((cfg->protocol == COM_PROTO_WARTSILA)
+        && (cfg->baudrate == 4800U)
+        && (cfg->databits == 8U)
+        && (cfg->parity == COM_PARITY_NONE)
+        && ((cfg->stopbits == COM_STOPBITS_1) || (cfg->stopbits == COM_STOPBITS_2)))
+    {
+        return Cpu3_ApplyProtocolSerialProfile(cfg);
+    }
+
+    return 0U;
+}
+
+/*
+ * 对三路外部串口执行瓦锡兰旧默认值迁移。
+ */
+static uint8_t Cpu3_MigrateLegacyWartsilaDefaults(void)
+{
+    uint8_t changed = 0U;
+
+    changed |= Cpu3_MigrateLegacyWartsilaDefault(&g_cpu3_comm_display_params.com1);
+    changed |= Cpu3_MigrateLegacyWartsilaDefault(&g_cpu3_comm_display_params.com2);
+    changed |= Cpu3_MigrateLegacyWartsilaDefault(&g_cpu3_comm_display_params.com3);
 
     return changed;
 }
@@ -594,17 +637,17 @@ void Cpu3_Params_InitDefaults(void)
     g_cpu3_comm_display_params.com1.stopbits = COM_STOPBITS_1;
     g_cpu3_comm_display_params.com1.protocol = COM_PROTO_DSM;
 
-    /* COM2 = USART2: 4800 8N1 Modbus RTU */
-    g_cpu3_comm_display_params.com2.baudrate = 4800;
+    /* COM2 = USART2: 2400 8E1 Wartsila */
+    g_cpu3_comm_display_params.com2.baudrate = 2400;
     g_cpu3_comm_display_params.com2.databits = 8;
-    g_cpu3_comm_display_params.com2.parity   = COM_PARITY_NONE;
+    g_cpu3_comm_display_params.com2.parity   = COM_PARITY_EVEN;
     g_cpu3_comm_display_params.com2.stopbits = COM_STOPBITS_1;
     g_cpu3_comm_display_params.com2.protocol = COM_PROTO_WARTSILA;
 
-    /* COM3 = USART3: 4800 8N1 Wartsila */
-    g_cpu3_comm_display_params.com3.baudrate = 4800;
+    /* COM3 = USART3: 2400 8E1 Wartsila */
+    g_cpu3_comm_display_params.com3.baudrate = 2400;
     g_cpu3_comm_display_params.com3.databits = 8;
-    g_cpu3_comm_display_params.com3.parity   = COM_PARITY_NONE;
+    g_cpu3_comm_display_params.com3.parity   = COM_PARITY_EVEN;
     g_cpu3_comm_display_params.com3.stopbits = COM_STOPBITS_1;
     g_cpu3_comm_display_params.com3.protocol = COM_PROTO_WARTSILA;
 }
@@ -818,6 +861,7 @@ void Cpu3_Params_LoadFromFRAM(void)
             Cpu3_Params_MigrateFromV3(&legacy);
             (void)Cpu3_ApplyFirmwareVersionRuntime();
             (void)Cpu3_SanitizeAllPortConfigs();
+            (void)Cpu3_MigrateLegacyWartsilaDefaults();
             Cpu3Local_ApplyDisplayRuntimeParams();
             Cpu3_Params_SaveToFRAM();
             printf("CPU3 FRAM参数已从V3升级到V4，亮度使用默认挡位。\r\n");
@@ -857,6 +901,10 @@ void Cpu3_Params_LoadFromFRAM(void)
         }
         if (Cpu3_SanitizeAllPortConfigs() != 0U) {
             /* FRAM 参数加载后只修正非法串口字段，合法的人工串口配置必须原样保留。 */
+            need_save = 1U;
+        }
+        if (Cpu3_MigrateLegacyWartsilaDefaults() != 0U) {
+            /* 只修正历史瓦锡兰错误默认值，避免旧设备继续使用 4800 无校验。 */
             need_save = 1U;
         }
         Cpu3Local_ApplyDisplayRuntimeParams();

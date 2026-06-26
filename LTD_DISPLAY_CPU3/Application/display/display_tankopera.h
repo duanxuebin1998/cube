@@ -34,7 +34,7 @@ bool Display_EnterCancelMeasurementConfirm(void);
 bool DisplayTankOpera_IsMotorRunMonitorActive(void);
 /**
  * @brief 显示或打印屏幕菜单操作中的 DisplayTankOpera_IsDebugWeightWaitActive 逻辑。
- * @return true 表示当前前景页是称重获取等待页。
+ * @return true 表示当前前景页是扭力获取等待页。
  */
 bool DisplayTankOpera_IsDebugWeightWaitActive(void);
 
@@ -53,7 +53,7 @@ typedef enum {
     KEYNUM_MENU_CMD_MAIN,                /* 维护/调试指令主菜单 */
     KEYNUM_DEBUG_FLOAT_MOTION,           /* 调试指令 - 浮子运动控制 */
     KEYNUM_DEBUG_CALIBRATION,            /* 调试指令 - 标定修正 */
-    KEYNUM_DEBUG_WEIGHT,                 /* 调试指令 - 称重标定 */
+    KEYNUM_DEBUG_WEIGHT,                 /* 调试指令 - 扭力标定 */
     KEYNUM_DEBUG_WIRELESS,               /* 调试指令 - 无线维护 */
     KEYNUM_DEBUG_SYSTEM,                 /* 调试指令 - 系统维护 */
     KEYNUM_IFSENDCMD,                    /* 是否下发指令或参数 */
@@ -71,7 +71,7 @@ typedef enum {
     KEYNUM_MENU_PARA_RUN_POLICY,         /* 运行策略参数 */
     KEYNUM_MENU_PARA_DEV_INFO,           /* 设备信息参数 */
     KEYNUM_MENU_PARA_MECH,               /* 机械参数 */
-    KEYNUM_MENU_PARA_WEIGHT,             /* 称重参数（如果你确实有此页） */
+    KEYNUM_MENU_PARA_WEIGHT,             /* 扭力参数（如果你确实有此页） */
     KEYNUM_MENU_PARA_ZERO,               /* 零点参数 */
     KEYNUM_MENU_PARA_LIQUID,             /* 液位参数（如果你确实有此页） */
     KEYNUM_MENU_PARA_WATER,              /* 水位参数（如果你确实有此页） */
@@ -121,7 +121,7 @@ typedef enum {
     KEYNUM_MENU_CPU3_COM3,               /* CPU3 - COM3 */
     KEYNUM_IF_CANCEL_MEASUREMENT,        /* 是否取消当前测量 */
     KEYNUM_MOTOR_RUN_MONITOR,            /* 电机运行监控页 */
-    KEYNUM_DEBUG_WEIGHT_WAIT,            /* 称重获取等待页 */
+    KEYNUM_DEBUG_WEIGHT_WAIT,            /* 扭力获取等待页 */
     KEYNUM_ERROR_REASON,                 /* 故障原因查看页 */
 
     KEYNUM_END
@@ -136,7 +136,7 @@ typedef enum {
     MENU_GRP_ZERO,              /* 零点阈值/忽略区/最大偏差/找零下行距离 */
     MENU_GRP_LIQUID,            /* 罐高/液位距差/盲区/阈值/滞后/测量方式 */
     MENU_GRP_WATER,             /* 水罐高/水位距差/盲区/电容阈值/滞回/水位最大下行距离 */
-    MENU_GRP_BOTTOM_TANKH,      /* 罐底模式/角度阈值/称重阈值/更新罐高标志/实高偏差/初始/当前 */
+    MENU_GRP_BOTTOM_TANKH,      /* 罐底模式/角度阈值/扭力阈值/更新罐高标志/实高偏差/初始/当前 */
     MENU_GRP_CORR,              /* 密度修正/温度修正 */
     MENU_GRP_POLICY,            /* 是否测罐底/是否测水/是否测单点/顺序/模式/点数/间距/悬停/上下限 */
     MENU_GRP_WARTSILA,          /* Wartsila 上下限/步进/最高点液面距 */
@@ -200,9 +200,9 @@ typedef enum
     COM_NUM_DEBUGCMD_START,          /* 调试模式无参指令 - 开始 */
 
     COM_NUM_FIND_ZERO,               /* 标定零点（通常对应 CMD_CALIBRATE_ZERO 或旧流程） */
-    COM_NUM_FORCE_LIFT_ZERO,         /* 强制提零点（CMD_FORCE_LIFT_ZERO） */
-    COM_NUM_SET_EMPTY_WEIGHT,        /* 设置空载称重 */
-    COM_NUM_SET_FULL_WEIGHT,         /* 设置满载称重 */
+    COM_NUM_RESERVED_CMD7,            /* 保留：原115菜单已删除 */
+    COM_NUM_SET_EMPTY_WEIGHT,        /* 设置空载扭力 */
+    COM_NUM_SET_FULL_WEIGHT,         /* 设置满载扭力 */
     COM_NUM_RESTOR_EFACTORYSETTING,  /* 恢复出厂设置 */
     COM_NUM_MAINTENANCE_MODE,        /* 维护模式 */
     COM_NUM_PAIR_NEAREST_WIRELESS_SLIPRING = 1000, /* 匹配最近无线滑环；显式编号，不改变既有连续操作码 */
@@ -273,22 +273,22 @@ typedef enum
     COM_NUM_DEVICEPARAM_POSITION_COUNT_MODE,           /* 当前记步模式 */
     COM_NUM_DEVICEPARAM_MOTOR_COUNT_FIRST_LOOP_CIRC,    /* 电机记步局部首圈周长 */
 
-    /* ---------------- 称重参数 ---------------- */
-    COM_NUM_DEVICEPARAM_EMPTY_WEIGHT,                   /* 空载称重 */
-    COM_NUM_DEVICEPARAM_EMPTY_WEIGHT_UPPER_LIMIT,       /* 空载称重上限 */
-    COM_NUM_DEVICEPARAM_EMPTY_WEIGHT_LOWER_LIMIT,       /* 空载称重下限 */
-    COM_NUM_DEVICEPARAM_FULL_WEIGHT,                    /* 满载称重 */
-    COM_NUM_DEVICEPARAM_FULL_WEIGHT_UPPER_LIMIT,        /* 满载称重上限 */
-    COM_NUM_DEVICEPARAM_FULL_WEIGHT_LOWER_LIMIT,        /* 满载称重下限 */
-    COM_NUM_DEVICEPARAM_WEIGHT_UPPER_LIMIT_RATIO,       /* 称重上限比例 */
-    COM_NUM_DEVICEPARAM_WEIGHT_LOWER_LIMIT_RATIO,       /* 称重下限比例 */
+    /* ---------------- 扭力参数 ---------------- */
+    COM_NUM_DEVICEPARAM_EMPTY_WEIGHT,                   /* 空载扭力 */
+    COM_NUM_DEVICEPARAM_EMPTY_WEIGHT_UPPER_LIMIT,       /* 空载扭力上限 */
+    COM_NUM_DEVICEPARAM_EMPTY_WEIGHT_LOWER_LIMIT,       /* 空载扭力下限 */
+    COM_NUM_DEVICEPARAM_FULL_WEIGHT,                    /* 满载扭力 */
+    COM_NUM_DEVICEPARAM_FULL_WEIGHT_UPPER_LIMIT,        /* 满载扭力上限 */
+    COM_NUM_DEVICEPARAM_FULL_WEIGHT_LOWER_LIMIT,        /* 满载扭力下限 */
+    COM_NUM_DEVICEPARAM_WEIGHT_UPPER_LIMIT_RATIO,       /* 扭力上限比例 */
+    COM_NUM_DEVICEPARAM_WEIGHT_LOWER_LIMIT_RATIO,       /* 扭力下限比例 */
 
     COM_NUM_DEVICEPARAM_RESERVED8,                      /* 保留 8 */
     COM_NUM_DEVICEPARAM_RESERVED9,                      /* 保留 9 */
 
     /* ---------------- 零点测量参数 ---------------- */
-    COM_NUM_DEVICEPARAM_ZERO_WEIGHT_THRESHOLD_RATIO,    /* 零点称重阈值比例 */
-    COM_NUM_DEVICEPARAM_WEIGHT_IGNORE_ZONE,             /* 称重忽略区间（抗抖/滤波区） */
+    COM_NUM_DEVICEPARAM_ZERO_WEIGHT_THRESHOLD_RATIO,    /* 零点扭力阈值比例 */
+    COM_NUM_DEVICEPARAM_WEIGHT_IGNORE_ZONE,             /* 扭力忽略区间（抗抖/滤波区） */
     COM_NUM_DEVICEPARAM_MAX_ZERO_DEVIATION_DISTANCE,    /* 零点最大偏差距离 */
     COM_NUM_DEVICEPARAM_FINDZERO_DOWN_DISTANCE,         /* 找零点下行距离 */
 
@@ -321,7 +321,7 @@ typedef enum
     /* ---------------- 罐底/罐高测量参数 ---------------- */
     COM_NUM_DEVICEPARAM_BOTTOM_DETECT_MODE,             /* 罐底检测模式 */
     COM_NUM_DEVICEPARAM_BOTTOM_ANGLE_THRESHOLD,         /* 探底角度阈值 */
-    COM_NUM_DEVICEPARAM_BOTTOM_WEIGHT_THRESHOLD,        /* 探底称重阈值 */
+    COM_NUM_DEVICEPARAM_BOTTOM_WEIGHT_THRESHOLD,        /* 探底扭力阈值 */
     COM_NUM_DEVICEPARAM_REFRESH_TANKHEIGHT_FLAG,        /* 刷新罐高标志 */
     COM_NUM_DEVICEPARAM_MAX_TANKHEIGHT_DEVIATION,       /* 罐高最大偏差 */
     COM_NUM_DEVICEPARAM_INITIAL_TANKHEIGHT,             /* 初始罐高 */

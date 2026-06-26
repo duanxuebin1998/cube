@@ -121,6 +121,9 @@ def main() -> int:
 
     wireless_compact = compact(cpu2_wireless)
     require("WirelessPairing_ReadConnectionStatus(WirelessConnectionStatus*status)" in wireless_compact, "missing wireless connection status reader", failed)
+    require("AT+CCADD?" in cpu2_wireless, "wireless reader must query connected slave MAC", failed)
+    require("snapshot->connection_valid!=0U)&&(snapshot->mac_valid!=0U" in wireless_compact, "connection snapshot must publish MAC only when current link has a MAC", failed)
+    require("status->mac_valid=0U;status->mac_high=0U;status->mac_mid=0U;status->mac_low=0U;" in wireless_compact, "connection snapshot must clear invalid MAC fields", failed)
     require("AT+RSSI=ON,%lu" in cpu2_wireless, "wireless reader must enable RSSI reporting", failed)
     require("AT+RSSI=OFF" in cpu2_wireless, "wireless reader must disable RSSI reporting", failed)
 
@@ -132,6 +135,11 @@ def main() -> int:
     require("Para_wireless_rssi" in cpu3_display, "CPU3 display must include RSSI parameter slot", failed)
     require("DISPLAY_STATUS_SLOT_WIRELESS_RSSI" in cpu3_display, "CPU3 display must include RSSI highlight slot", failed)
     require("RSSI:N/A" in cpu3_display, "CPU3 display must show RSSI invalid state", failed)
+    require("Para_wireless_mac" in cpu3_display, "CPU3 display must include connected slave MAC parameter slot", failed)
+    require("DISPLAY_STATUS_SLOT_WIRELESS_MAC_COMPACT" in cpu3_display, "CPU3 display must include connected slave MAC highlight slot", failed)
+    require("Display_FormatWirelessConnectionMacCompact" in cpu3_display, "CPU3 display must format connected slave MAC", failed)
+    require("MAC:%02lX%02lX%02lX%02lX%02lX%02lX" in cpu3_display, "CPU3 display must show compact connected slave MAC", failed)
+    require("MAC N/A" in cpu3_display, "CPU3 display must show connected slave MAC invalid state", failed)
 
     require("### 协议版本 9" in protocol_doc, "protocol change record must document protocol version 9", failed)
     require("REG_WIRELESS_PAIRING_RSSI" in protocol_doc, "protocol change record must document RSSI register", failed)

@@ -144,7 +144,7 @@ void WriteDeviceParamsToHoldingRegisters(uint16_t *HoldingRegisterArray)
     write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_POSITION_COUNT_MODE, g_deviceParams.position_count_mode);
     write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_MOTOR_COUNT_FIRST_LOOP_CIRC, g_deviceParams.motor_count_first_loop_circumference_mm);
 
-    /* ===================== 称重参数 ===================== */
+    /* ===================== 扭力参数 ===================== */
     write_i32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_EMPTY_WEIGHT,             g_deviceParams.empty_weight);
     write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_EMPTY_WEIGHT_UPPER_LIMIT, g_deviceParams.empty_weight_upper_limit);
     write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_EMPTY_WEIGHT_LOWER_LIMIT, g_deviceParams.empty_weight_lower_limit);
@@ -333,7 +333,7 @@ void ReadDeviceParamsFromHoldingRegisters(uint16_t *HoldingRegisterArray)
     g_deviceParams.position_count_mode = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_POSITION_COUNT_MODE);
     g_deviceParams.motor_count_first_loop_circumference_mm = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_MOTOR_COUNT_FIRST_LOOP_CIRC);
 
-    /* ===================== 称重参数 ===================== */
+    /* ===================== 扭力参数 ===================== */
     g_deviceParams.empty_weight             = read_i32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_EMPTY_WEIGHT);
     g_deviceParams.empty_weight_upper_limit = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_EMPTY_WEIGHT_UPPER_LIMIT);
     g_deviceParams.empty_weight_lower_limit = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_EMPTY_WEIGHT_LOWER_LIMIT);
@@ -520,7 +520,7 @@ void write_measurement_result_to_InputRegisters(uint16_t *regs) {
 	write_u32_to_regs(regs, REG_DEBUG_CURRENT_AMPLITUDE, g_measurement.debug_data.current_amplitude);
 	write_u32_to_regs(regs, REG_DEBUG_WATER_CAPACITANCE_X10, g_measurement.debug_data.water_capacitance_x10);
 
-	/* 称重相关 */
+	/* 扭力相关 */
 	write_u32_to_regs(regs, REG_DEBUG_CURRENT_WEIGHT, g_measurement.debug_data.current_weight);
 	write_u32_to_regs(regs, REG_DEBUG_WEIGHT_PARAM, g_measurement.debug_data.weight_param);
 

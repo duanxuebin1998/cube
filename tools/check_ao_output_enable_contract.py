@@ -91,8 +91,8 @@ def main() -> int:
 
     failed: list[str] = []
 
-    require(parse_protocol_version(cpu2_param, CPU2_PARAM) == 11, "CPU2 DEVICE_PROTOCOL_VERSION must be 11", failed)
-    require(parse_protocol_version(cpu3_param, CPU3_PARAM) == 11, "CPU3 DEVICE_PROTOCOL_VERSION must be 11", failed)
+    require(parse_protocol_version(cpu2_param, CPU2_PARAM) >= 11, "CPU2 DEVICE_PROTOCOL_VERSION must include protocol 11 AO semantics", failed)
+    require(parse_protocol_version(cpu3_param, CPU3_PARAM) >= 11, "CPU3 DEVICE_PROTOCOL_VERSION must include protocol 11 AO semantics", failed)
 
     for text, name in ((cpu2_param, "CPU2"), (cpu3_param, "CPU3")):
         require("uint32_t AoOutputEnable;" in text, f"{name} DeviceParameters must expose AoOutputEnable", failed)

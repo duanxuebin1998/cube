@@ -63,6 +63,7 @@ enum { /* 用于记录每个参数显示在第几页第几行 */
     Para_position,
 	Para_tankheight, /* 新增：罐高 */
     Para_wireless_rssi, /* 新增：蓝牙连接 RSSI */
+    Para_wireless_mac, /* 新增：连接从机蓝牙 MAC */
     Para_wireless_t,
     Para_V,
     Para_VMax,
@@ -105,6 +106,7 @@ typedef enum {
     DISPLAY_STATUS_SLOT_TANK_HEIGHT,
     DISPLAY_STATUS_SLOT_WIRELESS_RSSI,
     DISPLAY_STATUS_SLOT_WIRELESS_RSSI_NA,
+    DISPLAY_STATUS_SLOT_WIRELESS_MAC_COMPACT,
     DISPLAY_STATUS_SLOT_WIRELESS_MAC_1,
     DISPLAY_STATUS_SLOT_WIRELESS_MAC_2,
     DISPLAY_STATUS_SLOT_WIRELESS_MAC_NA
@@ -216,8 +218,6 @@ static DisplayResultContext Display_GetResultContext(DeviceState state)
     case STATE_FORCE_RUNDOWN_OVER:
     case STATE_FORCEZERO:
     case STATE_FORCEZERO_OVER:
-    case STATE_FORCE_LIFT_ZEROING:
-    case STATE_FORCE_LIFT_ZERO_OVER:
     case STATE_MAINTENANCEMODE:
     case STATE_DEBUG_MODE:
         return DISPLAY_RESULT_CONTEXT_MOTION_DEBUG;
@@ -774,17 +774,17 @@ static const char *Display_GetErrorReasonByCode(uint32_t code)
     case PARAM_ERROR:
         return "程序参数调用错误";
     case WEIGHT_OUT_OF_RANGE:
-        return "称重超过上限";
+        return "扭力超过上限";
     case WEIGHT_UNDER_RANGE:
-        return "称重低于下限";
+        return "扭力低于下限";
     case WEIGHT_COLLISION_DETECTED:
-        return "称重检测到碰撞";
+        return "扭力检测到碰撞";
     case WEIGHT_DRIFT_ERROR:
-        return "称重数据漂移异常";
+        return "扭力数据漂移异常";
     case WEIGHT_SENSOR_SATURATION:
-        return "称重传感器饱和";
+        return "扭力传感器饱和";
     case WEIGHT_COMM_TIMEOUT:
-        return "称重通信无响应";
+        return "扭力通信无响应";
     case OTHER_UNKNOWN_ERROR:
         return "未知故障";
     case OTHER_ADDRESS_READ_ERROR:
@@ -819,7 +819,7 @@ static const char *Display_GetErrorReasonByCode(uint32_t code)
     case 0x00110000UL:
         return "参数故障";
     case 0x00120000UL:
-        return "称重故障";
+        return "扭力故障";
     case 0x00130000UL:
         return "系统故障";
     default:
@@ -1011,7 +1011,8 @@ static uint8_t GetMotorRunIconIndex(void)
 
 /* 字库索引数组 */
 /* StockMap 和 WordStock/WordStock2 必须一一对应；新增中文显示项时要同步追加点阵。 */
-static uint8_t StockMap[] = "通讯尝试中液位跟随密度温℃版本水测量完成寻找标定零点校正获取称重步进未知无线提浮子至置阈值"
+static uint8_t StockMap[] = "通讯尝试中液位跟随密度温℃版本水测量完成寻找标定零点校正获取称"
+                            "重步进未知无线提浮子至置阈值"
                             "向下运行上故障设备初始化罐底综合国满载空仪表配模式检修读实时区间每米自带宽拟静止电压效流速"
                             "力质体积磁致伸缩新老雷达计一机变送器算方轮询加转包抓主协议软件对外集超从待回检修单到监分布"
                             "部参数编码圈恢复出厂文份指令操作在←是否入返确认？退与显示换混相关据源气案改非法请输清写铁"
@@ -1021,7 +1022,7 @@ static uint8_t StockMap[] = "通讯尝试中液位跟随密度温℃版本水测
                             "误础界面程序减比股长介信号后限例权屏幕维护视终继状态最探头浸小第悬停禁用弦工固产反先动当前"
                             "大英更传层滞域使磨结束针总阻六级内息命感顺有阈值角导本整瓦锡兰厚首波特率验位奇偶预留默强差"
 							"义已碰撞寄存次菜忽略志构魔术望全过收为裁剪准除以跳飞频声稳记局切匹"
-							"馈被荷泵欠驱丢溢性弱响应格快越漂移饱和系统因尼组跑锁隔策亮控";
+							"馈被荷泵欠驱丢溢性弱响应格快越漂移饱和系统因尼组跑锁隔策亮控扭";
 static const int wordbyte      = 3; /* UTF-8 下汉字 3 字节 */
 static const int StockmapLength = (sizeof(StockMap) - 1) / wordbyte;
 static uint8_t WordStock[255 * 28] =
@@ -1490,6 +1491,7 @@ static uint8_t WordStock2[255 * 28] =
     0x10,0x40,0x1E,0x7C,0x28,0x90,0x45,0x08,0x01,0x00,0x7F,0xFC,0x01,0x00,0x3F,0xF8,0x21,0x08,0x23,0xB8,0x05,0x40,0x19,0x30,0x61,0x0C,0x01,0x00, /* "策",27 */
     0x01,0x00,0x7F,0xFC,0x00,0x00,0x1F,0xF0,0x10,0x10,0x1F,0xF0,0x00,0x00,0x7F,0xFC,0x40,0x04,0x4F,0xE4,0x08,0x20,0x08,0x20,0x10,0x24,0x60,0x1C, /* "亮",28 */
     0x21,0x00,0x20,0x80,0x27,0xF8,0xF4,0x08,0x21,0x20,0x22,0x10,0x24,0x08,0x30,0x00,0xE3,0xF0,0x20,0x80,0x20,0x80,0x20,0x80,0x20,0x80,0xE7,0xF8, /* "控",29 */
+    0x20,0x00,0x27,0xF0,0x21,0x10,0xF9,0x10,0x21,0x10,0x21,0x10,0x29,0x10,0x37,0xF0,0xE2,0x10,0x22,0x10,0x22,0x10,0x22,0x10,0x22,0x10,0xEF,0xF8, /* "扭",30 */
 };
 static uint8_t NumberStock[] = {
 
@@ -2102,6 +2104,39 @@ static void Display_FormatWirelessPairingMac(const volatile WirelessPairingStatu
 }
 
 /**
+ * @brief 格式化读取部件参数页的连接从机蓝牙 MAC。
+ *
+ * @param status 无线连接状态。
+ * @param line 输出显示文本。
+ * @param line_size 输出缓冲区长度。
+ */
+static void Display_FormatWirelessConnectionMacCompact(const volatile WirelessPairingStatus *status,
+                                                       char *line,
+                                                       size_t line_size)
+{
+    uint32_t mac_high;
+    uint32_t mac_mid;
+    uint32_t mac_low;
+
+    if ((status == NULL) || (line == NULL) || (line_size == 0U)) {
+        return;
+    }
+
+    mac_high = status->mac_high;
+    mac_mid = status->mac_mid;
+    mac_low = status->mac_low;
+    snprintf(line,
+             line_size,
+             "MAC:%02lX%02lX%02lX%02lX%02lX%02lX",
+             (unsigned long)((mac_high >> 8) & 0xFFU),
+             (unsigned long)(mac_high & 0xFFU),
+             (unsigned long)((mac_mid >> 8) & 0xFFU),
+             (unsigned long)(mac_mid & 0xFFU),
+             (unsigned long)((mac_low >> 8) & 0xFFU),
+             (unsigned long)(mac_low & 0xFFU));
+}
+
+/**
  * @brief 显示或打印屏幕显示中的 Display_SelectLanguageText 逻辑。
  *
  * @param name_cn 业务参数。
@@ -2369,7 +2404,7 @@ static void Display_AddCurrentPageValueStatusSlots(DisplayStatusSnapshot *snapsh
         Display_AddValueStatusSlot(snapshot,
                                    DISPLAY_STATUS_SLOT_WEIGHT,
                                    (uint8_t)ValidParaDisArr[Para_weight][PARA_X],
-                                   Display_GetLabelEndLine((uint8_t*)"称重:", (uint8_t*)"Weight:"),
+                                   Display_GetLabelEndLine((uint8_t*)"扭力:", (uint8_t*)"Torque:"),
                                    (int32_t)g_measurement.debug_data.current_weight,
                                    0U,
                                    (uint8_t*)" ");
@@ -2452,6 +2487,28 @@ static void Display_AddCurrentPageValueStatusSlots(DisplayStatusSnapshot *snapsh
                                       (uint8_t)ValidParaDisArr[Para_wireless_rssi][PARA_X],
                                       OLED_LINE8_1,
                                       "RSSI:N/A");
+        }
+    }
+
+    if ((ValidParaDisArr[Para_wireless_mac][PARA_VALID] == true) &&
+        (now_page == ValidParaDisArr[Para_wireless_mac][PARA_PAGE])) {
+        const volatile WirelessPairingStatus *status = &g_measurement.wireless_pairing_status;
+
+        if ((status->connection_valid != 0U) && (status->mac_valid != 0U)) {
+            char mac_line[17];
+
+            Display_FormatWirelessConnectionMacCompact(status, mac_line, sizeof(mac_line));
+            Display_AddTextStatusSlot(snapshot,
+                                      DISPLAY_STATUS_SLOT_WIRELESS_MAC_COMPACT,
+                                      (uint8_t)ValidParaDisArr[Para_wireless_mac][PARA_X],
+                                      OLED_LINE8_1,
+                                      mac_line);
+        } else {
+            Display_AddTextStatusSlot(snapshot,
+                                      DISPLAY_STATUS_SLOT_WIRELESS_MAC_NA,
+                                      (uint8_t)ValidParaDisArr[Para_wireless_mac][PARA_X],
+                                      OLED_LINE8_1,
+                                      "MAC N/A");
         }
     }
 }
@@ -3203,10 +3260,10 @@ static void oled_equipment(void)
                              (u8*)"mm");
         }
     }
-    /* 称重 */
+    /* 扭力 */
 	if (ValidParaDisArr[Para_weight][PARA_VALID] == true && now_page == ValidParaDisArr[Para_weight][PARA_PAGE]) {
 		row = ValidParaDisArr[Para_weight][PARA_X];
-		line = DisplayLangaugeLineWords((u8*) "称重:", OLED_LINE8_1, row, 0, (u8*) "Weight:");
+		line = DisplayLangaugeLineWords((u8*) "扭力:", OLED_LINE8_1, row, 0, (u8*) "Torque:");
 		OledValueDisplay(g_measurement.debug_data.current_weight,
                          line,
                          row,
@@ -3342,6 +3399,39 @@ static void oled_equipment(void)
                                                             "RSSI:N/A"));
         }
     }
+    /* 连接从机蓝牙 MAC */
+    if (ValidParaDisArr[Para_wireless_mac][PARA_VALID] == true &&
+        now_page == ValidParaDisArr[Para_wireless_mac][PARA_PAGE])
+    {
+        const volatile WirelessPairingStatus *status = &g_measurement.wireless_pairing_status;
+
+        row = ValidParaDisArr[Para_wireless_mac][PARA_X];
+        if ((status->connection_valid != 0U) && (status->mac_valid != 0U))
+        {
+            char mac_line[17];
+
+            Display_FormatWirelessConnectionMacCompact(status, mac_line, sizeof(mac_line));
+            OledDisplayLineWords((u8*)mac_line,
+                                 OLED_LINE8_1,
+                                 row,
+                                 Display_GetStatusSlotShift(DISPLAY_STATUS_SLOT_WIRELESS_MAC_COMPACT,
+                                                            row,
+                                                            0,
+                                                            true,
+                                                            mac_line));
+        }
+        else
+        {
+            OledDisplayLineWords((u8*)"MAC N/A",
+                                 OLED_LINE8_1,
+                                 row,
+                                 Display_GetStatusSlotShift(DISPLAY_STATUS_SLOT_WIRELESS_MAC_NA,
+                                                            row,
+                                                            0,
+                                                            true,
+                                                            "MAC N/A"));
+        }
+    }
 }
 /* 显示多个汉字或字符 - 带中英文选择 */
 uint8_t DisplayLangaugeLineWords(uint8_t* name1,uint8_t line,uint8_t row,uint8_t shift,uint8_t* name2)
@@ -3429,7 +3519,7 @@ static void CalculateValidPara(void)
     }
     else
         ValidParaDisArr[Para_position][PARA_VALID] = false;
-    /* 称重 */
+    /* 扭力 */
     if(Display_ShouldShowWeight(ctx))
     {
         ValidParaCnt++;
@@ -3500,9 +3590,13 @@ static void CalculateValidPara(void)
         ValidParaCnt++;
         ValidParaDisArr[Para_wireless_rssi][PARA_NUM] = ValidParaCnt;
         ValidParaDisArr[Para_wireless_rssi][PARA_VALID] = true;
+        ValidParaCnt++;
+        ValidParaDisArr[Para_wireless_mac][PARA_NUM] = ValidParaCnt;
+        ValidParaDisArr[Para_wireless_mac][PARA_VALID] = true;
     }
     else {
         ValidParaDisArr[Para_wireless_rssi][PARA_VALID] = false;
+        ValidParaDisArr[Para_wireless_mac][PARA_VALID] = false;
     }
     #if DEBUG_DISPLAY
     printf("ValidParaCnt = %d\n",ValidParaCnt);
@@ -3575,15 +3669,14 @@ static const EquipStateDisplay state_display_table[] = {
     { STATE_FOLLOW_WATER_POINT_SEARCHING, "寻找水位跟随点",             "Searching Water Follow Point" }, /* NEW */
     { STATE_METER_DENSITY,           "密度每米测量中",           "Meter Density Measuring" },
     { STATE_INTERVAL_DENSITY,        "液位区间测量中",           "Interval Density Measuring" },
-    { STATE_GET_FULLWEIGHT,          "获取满载称重中",           "Getting Full Weight" },
-    { STATE_GET_EMPTYWEIGHT,         "获取空载称重中",           "Getting Empty Weight" },
+    { STATE_GET_FULLWEIGHT,          "获取满载扭力中",           "Getting Full Torque" },
+    { STATE_GET_EMPTYWEIGHT,         "获取空载扭力中",           "Getting Empty Torque" },
     { STATE_MAINTENANCEMODE,         "维护模式中",               "Maintenance Mode" },
 
     /* ===== 运行控制类（NEW） ===== */
     { STATE_RUN_TO_POSITIONING,      "运行到指定位置中",         "Run to Position" },            /* NEW */
     { STATE_FORCE_RUNUPING,          "电机强制上行中",           "Force Running Up" },            /* NEW */
     { STATE_FORCE_RUNDOWNING,        "电机强制下行中",           "Force Running Down" },          /* NEW */
-    { STATE_FORCE_LIFT_ZEROING,      "强制提零点中",             "Force Lift Zero" },             /* NEW */
     { STATE_CALIBRATE_WATERING,      "水位标定中",               "Calibrating Water Level" },     /* NEW */
     { STATE_CALIBRATE_TANKHEIGHTING, "罐高标定中",               "Calibrating Tank Height" },     /* NEW */
     { STATE_WIRELESS_PAIRING,        "无线滑环匹配中",           "Wireless Pairing" },
@@ -3623,15 +3716,14 @@ static const EquipStateDisplay state_display_table[] = {
     { STATE_RUN_TO_POSITION_OVER,    "运行到指定位置完成",       "Run to Position Done" },        /* NEW */
     { STATE_FORCE_RUNUP_OVER,        "强制上行完成",             "Force Run Up Done" },            /* NEW */
     { STATE_FORCE_RUNDOWN_OVER,      "强制下行完成",             "Force Run Down Done" },          /* NEW */
-    { STATE_FORCE_LIFT_ZERO_OVER,    "强制提零点完成",           "Force Lift Zero Done" },         /* NEW */
     { STATE_CALIBRATE_WATER_OVER,    "水位标定完成",             "Water Calibration Done" },       /* NEW */
     { STATE_CALIBRATE_TANKHEIGHT_OVER,"罐高标定完成",             "Tank Height Calibration Done" }, /* NEW */
     { STATE_WIRELESS_PAIRING_OVER,   "无线滑环匹配完成",         "Wireless Pair Done" },
 
     { STATE_WARTSILA_DENSITY_OVER,   "LTD密度分布完成",          "Wartsila Density Done" },
 
-    { STATE_GET_FULLWEIGHT_OVER,     "获取满载称重完成",         "Get Full Weight Done" },
-    { STATE_GET_EMPTYWEIGHT_OVER,    "获取空载称重完成",         "Get Empty Weight Done" },
+    { STATE_GET_FULLWEIGHT_OVER,     "获取满载扭力完成",         "Get Full Torque Done" },
+    { STATE_GET_EMPTYWEIGHT_OVER,    "获取空载扭力完成",         "Get Empty Torque Done" },
 
     { STATE_ERROR,                   "故障",                     "Failure" },
 };

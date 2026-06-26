@@ -162,8 +162,8 @@ DSM V1.228 状态表对外定义如下关键状态：
 | `STATE_FOLLOW_WATER_POINT_SEARCHING` | `0x0024` | 寻找水位跟随点 |
 | `STATE_METER_DENSITY` | `0x0025` | 每米密度测量中 |
 | `STATE_INTERVAL_DENSITY` | `0x0026` | 区间密度测量中 |
-| `STATE_GET_FULLWEIGHT` | `0x0027` | 获取满载称重 |
-| `STATE_GET_EMPTYWEIGHT` | `0x0028` | 获取空载称重 |
+| `STATE_GET_FULLWEIGHT` | `0x0027` | 获取满载扭力 |
+| `STATE_GET_EMPTYWEIGHT` | `0x0028` | 获取空载扭力 |
 | `STATE_CALIBRATE_WATERING` | `0x0030` | 水位标定中 |
 | `STATE_CALIBRATE_TANKHEIGHTING` | `0x0031` | 罐高标定中 |
 
@@ -301,11 +301,11 @@ DSM V1.228 中 `0x0107` 是强制置零。
 COM_FORCE_ZERO -> CMD_CALIBRATE_ZERO
 ```
 
-这更像标定零点，不是二代计量仪现有的强制提零点/强制置零命令。
+这更像标定零点，不是二代计量仪现有的强制置零命令。
 
 建议方案：
 
-1. 如果二代强制置零等价于现有 `CMD_FORCE_LIFT_ZERO`，则 `0x0107` 映射到 `CMD_FORCE_LIFT_ZERO`。
+1. 命令 115 已在协议版本 12 中改为 `CMD_RESERVED_CMD7`，不得再把 `0x0107` 映射到旧强制提零点入口。
 2. 如果二代强制置零只是设置当前电机/编码器零点，不移动机构，则需要定义单独命令或复用现有业务函数。
 3. 不建议继续映射到 `CMD_CALIBRATE_ZERO`。
 

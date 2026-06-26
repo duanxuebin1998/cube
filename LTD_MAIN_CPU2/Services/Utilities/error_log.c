@@ -162,7 +162,7 @@ const char *ErrorLog_GetReasonByCode(uint32_t code)
     case WIRELESS_SLAVE_COMM_TIMEOUT:
         return "蓝牙从机未连接";
     case WEIGHT_COMM_TIMEOUT:
-        return "称重模块无响应";
+        return "扭力模块无响应";
     case SENSOR_BCC_ERROR:
         return "传感器校验失败";
     case SLIPRING_BCC_ERROR:
@@ -390,17 +390,17 @@ const char *ErrorLog_GetCodeName(uint32_t code)
     case PARAM_ERROR:
         return "程序参数调用错误";
     case WEIGHT_OUT_OF_RANGE:
-        return "称重超上限";
+        return "扭力超上限";
     case WEIGHT_UNDER_RANGE:
-        return "称重超下限";
+        return "扭力超下限";
     case WEIGHT_COLLISION_DETECTED:
         return "检测到碰撞";
     case WEIGHT_DRIFT_ERROR:
-        return "称重漂移异常";
+        return "扭力漂移异常";
     case WEIGHT_SENSOR_SATURATION:
-        return "称重传感器饱和";
+        return "扭力传感器饱和";
     case WEIGHT_COMM_TIMEOUT:
-        return "称重通信超时";
+        return "扭力通信超时";
     case OTHER_UNKNOWN_ERROR:
         return "其他未知错误";
     case OTHER_ADDRESS_READ_ERROR:

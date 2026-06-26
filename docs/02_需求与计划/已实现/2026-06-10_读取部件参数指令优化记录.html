@@ -236,7 +236,7 @@
           <tr>
             <td><code>CMD_READ_PART_PARAMS</code></td>
             <td><code>15</code></td>
-            <td>读取部件参数。CPU2 会采集位置、电机、称重、姿态角、密度/温度/频率、水位电容等调试数据。</td>
+            <td>读取部件参数。CPU2 会采集位置、电机、扭力、姿态角、密度/温度/频率、水位电容等调试数据。</td>
             <td><code>LTD_MAIN_CPU2/Services/ParamStorage/system_parameter.h</code><br><code>LTD_DISPLAY_CPU3/Application/system_param/system_parameter.h</code></td>
           </tr>
           <tr>
@@ -266,7 +266,7 @@
           <tr>
             <td><code>STATE_MAINTENANCEMODE</code></td>
             <td><code>0x0029</code></td>
-            <td>维护模式中。CPU3 状态页按运动/调试上下文显示位置、称重等，不等价于读取部件参数完成。</td>
+            <td>维护模式中。CPU3 状态页按运动/调试上下文显示位置、扭力等，不等价于读取部件参数完成。</td>
             <td><code>LTD_MAIN_CPU2/Application/Src/measure.c</code><br><code>LTD_DISPLAY_CPU3/Application/display/display.c</code></td>
           </tr>
         </tbody>
@@ -364,8 +364,8 @@
             <td><code>g_measurement.debug_data</code></td>
           </tr>
           <tr>
-            <td>称重</td>
-            <td>称重通信超时检查、当前称重、称重参数占位值。</td>
+            <td>扭力</td>
+            <td>扭力通信超时检查、当前扭力、扭力参数占位值。</td>
             <td><code>g_measurement.debug_data</code></td>
           </tr>
           <tr>

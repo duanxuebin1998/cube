@@ -352,11 +352,11 @@
   </ul>
   <p>建议动作：安全相关返回值改为统一错误处理；若确实为尽力清理，必须加局部说明并登记 deviation record；启动安全停机失败应进入安全错误或至少记录可追溯事件。</p>
 
-  <h3><span class="tag p1">P1</span> 浮点和强制类型转换集中在运动、测量、称重路径</h3>
-  <p>风险：当前 CPU2 显式强制类型转换 959 处，<code>float/double</code> 641 处。运动边界、测量阈值和称重碰撞判断如果依赖浮点比较或无范围证明的转换，会影响可分析性和复现性。</p>
+  <h3><span class="tag p1">P1</span> 浮点和强制类型转换集中在运动、测量、扭力路径</h3>
+  <p>风险：当前 CPU2 显式强制类型转换 959 处，<code>float/double</code> 641 处。运动边界、测量阈值和扭力碰撞判断如果依赖浮点比较或无范围证明的转换，会影响可分析性和复现性。</p>
   <ul class="evidence">
     <li><code>LTD_MAIN_CPU2/Services/MotorControl/motor_ctrl_position_model.c</code>：显式转换 100 处，<code>float/double</code> 123 处。</li>
-    <li><code>LTD_MAIN_CPU2/Services/Weight/weight.c</code>：显式转换 95 处，包含重量阈值、位置和打印转换。</li>
+    <li><code>LTD_MAIN_CPU2/Services/Weight/weight.c</code>：显式转换 95 处，包含扭力阈值、位置和打印转换。</li>
     <li><code>LTD_MAIN_CPU2/Application/Src/measure_density.c</code>：显式转换 87 处，密度测量算法涉及浮点。</li>
     <li><code>LTD_MAIN_CPU2/Application/Src/measure_tank_height.c</code>：显式转换 69 处，罐高/罐底测量路径涉及运动边界。</li>
   </ul>
@@ -441,7 +441,7 @@
       <tr>
         <td>4</td>
         <td>类型转换和浮点策略</td>
-        <td>电机位置模型、称重、密度测量、罐高测量</td>
+        <td>电机位置模型、扭力、密度测量、罐高测量</td>
         <td>安全阈值定点化；转换 helper 有范围检查；浮点保留项有偏离记录。</td>
       </tr>
       <tr>

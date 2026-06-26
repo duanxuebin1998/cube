@@ -31,6 +31,7 @@
 #define TAPE_THICKNESS_PEEK_001MM 500
 #define TAPE_THICKNESS_ETFE_001MM 1100
 #define TAPE_THICKNESS_CUSTOM_INDEX 3
+#define MOTOR_CURRENT_RMS_TABLE_OFFSET MOTOR_CURRENT_MIN
 extern volatile uint8_t g_cpu3_uart_reinit_pending; /* CPU3 串口重初始化标志 */
 
 typedef void (*pFunc_void)(void);
@@ -53,10 +54,9 @@ static int timeback = 0;					/* 按下返回键的次数 */
 static int debugmode_back = 0;				/* 进入调试模式返回到哪个菜单 */
 static uint32_t motor_run_monitor_enter_tick = 0U; /* 电机监控页进入时刻 */
 static bool motor_run_monitor_started = false; /* 电机监控页是否已观察到运行态 */
-static bool motor_run_monitor_stop_confirm_requested = false; /* 停止确认页是否来自电机监控页 */
-static int debug_weight_wait_opera = COM_NUM_NOOPERA; /* 称重等待页对应的指令 */
-static bool debug_weight_wait_started = false; /* 称重等待页是否已进入本次等待周期 */
-static bool debug_weight_wait_ignore_initial_done = false; /* 称重等待页是否忽略进入前残留完成态 */
+static int debug_weight_wait_opera = COM_NUM_NOOPERA; /* 扭力等待页对应的指令 */
+static bool debug_weight_wait_started = false; /* 扭力等待页是否已进入本次等待周期 */
+static bool debug_weight_wait_ignore_initial_done = false; /* 扭力等待页是否忽略进入前残留完成态 */
 static Cpu3DateTime rtc_menu_dt = {0};
 static uint8_t rtc_menu_field = 0U;
 
@@ -106,6 +106,48 @@ static uint8_t *arr_tape_thickness[][2] = {
 	{ (uint8_t*)"ETFE 1.100", (uint8_t*)"ETFE 1.100" },
 	{ (uint8_t*)"手输", (uint8_t*)"Custom" },
 	{ (uint8_t*)"非法配置", (uint8_t*)"Illegal CFG" },
+};
+
+static uint8_t *arr_motor_current[][2] = {
+	{ (uint8_t*)"01 0.08A", (uint8_t*)"01 0.08A" },
+	{ (uint8_t*)"02 0.13A", (uint8_t*)"02 0.13A" },
+	{ (uint8_t*)"03 0.17A", (uint8_t*)"03 0.17A" },
+	{ (uint8_t*)"04 0.21A", (uint8_t*)"04 0.21A" },
+	{ (uint8_t*)"05 0.25A", (uint8_t*)"05 0.25A" },
+	{ (uint8_t*)"06 0.30A", (uint8_t*)"06 0.30A" },
+	{ (uint8_t*)"07 0.34A", (uint8_t*)"07 0.34A" },
+	{ (uint8_t*)"08 0.38A", (uint8_t*)"08 0.38A" },
+	{ (uint8_t*)"09 0.42A", (uint8_t*)"09 0.42A" },
+	{ (uint8_t*)"10 0.46A", (uint8_t*)"10 0.46A" },
+	{ (uint8_t*)"11 0.51A", (uint8_t*)"11 0.51A" },
+	{ (uint8_t*)"12 0.55A", (uint8_t*)"12 0.55A" },
+	{ (uint8_t*)"13 0.59A", (uint8_t*)"13 0.59A" },
+	{ (uint8_t*)"14 0.63A", (uint8_t*)"14 0.63A" },
+	{ (uint8_t*)"15 0.68A", (uint8_t*)"15 0.68A" },
+	{ (uint8_t*)"16 0.72A", (uint8_t*)"16 0.72A" },
+	{ (uint8_t*)"17 0.76A", (uint8_t*)"17 0.76A" },
+	{ (uint8_t*)"18 0.80A", (uint8_t*)"18 0.80A" },
+	{ (uint8_t*)"19 0.84A", (uint8_t*)"19 0.84A" },
+	{ (uint8_t*)"20 0.89A", (uint8_t*)"20 0.89A" },
+	{ (uint8_t*)"21 0.93A", (uint8_t*)"21 0.93A" },
+	{ (uint8_t*)"22 0.97A", (uint8_t*)"22 0.97A" },
+	{ (uint8_t*)"23 1.01A", (uint8_t*)"23 1.01A" },
+	{ (uint8_t*)"24 1.06A", (uint8_t*)"24 1.06A" },
+	{ (uint8_t*)"25 1.10A", (uint8_t*)"25 1.10A" },
+	{ (uint8_t*)"26 1.14A", (uint8_t*)"26 1.14A" },
+	{ (uint8_t*)"27 1.18A", (uint8_t*)"27 1.18A" },
+	{ (uint8_t*)"28 1.23A", (uint8_t*)"28 1.23A" },
+	{ (uint8_t*)"29 1.27A", (uint8_t*)"29 1.27A" },
+	{ (uint8_t*)"30 1.31A", (uint8_t*)"30 1.31A" },
+	{ (uint8_t*)"31 1.35A", (uint8_t*)"31 1.35A" },
+	{ (uint8_t*)"非法配置", (uint8_t*)"Illegal CFG" },
+};
+
+static const uint16_t motor_current_rms_ma_table[] = {
+	84U, 127U, 169U, 211U, 253U, 296U, 338U, 380U,
+	422U, 465U, 507U, 549U, 591U, 634U, 676U, 718U,
+	760U, 803U, 845U, 887U, 929U, 972U, 1014U, 1056U,
+	1098U, 1141U, 1183U, 1225U, 1267U, 1310U, 1352U,
 };
 
 static uint8_t *arr_densitymode[][2] = {
@@ -170,7 +212,7 @@ static uint8_t *arr_protocol[][2] = {
 	{ (uint8_t*)"非法配置", (uint8_t*)"Illegal CFG" },
 };
 static uint8_t *arr_bottom[][2] = {
-	{ (uint8_t*)"称重", (uint8_t*)"weight" },
+	{ (uint8_t*)"扭力", (uint8_t*)"torque" },
 	{ (uint8_t*)"角度", (uint8_t*)"angle" },
 	{ (uint8_t*)"非法配置", (uint8_t*)"Illegal CFG" },
 };
@@ -268,7 +310,7 @@ static void menu_measure_density_distribution(void); /* 测量命令 - 密度分
 static void menu_cmdconfig_main(void);	/* 调试指令主菜单 */
 static void menu_debug_float_motion(void); /* 调试指令 - 浮子运动控制 */
 static void menu_debug_calibration(void); /* 调试指令 - 标定修正 */
-static void menu_debug_weight(void);	/* 调试指令 - 称重标定 */
+static void menu_debug_weight(void);	/* 调试指令 - 扭力标定 */
 static void menu_debug_wireless(void);	/* 调试指令 - 无线维护 */
 static void menu_debug_system(void);	/* 调试指令 - 系统维护 */
 
@@ -276,7 +318,7 @@ static void menu_debug_system(void);	/* 调试指令 - 系统维护 */
  *	各参数分类页面，仅负责“列出参数项 + 跳转到参数读写流程”
  */
 /* static void menu_tankbasicpara(void); / * 基础参数 * / */
-/* static void menu_weightpara(void); / * 称重/载荷相关参数 * / */
+/* static void menu_weightpara(void); / * 扭力/载荷相关参数 * / */
 /* static void menu_spreadpara(void); / * 分布测量参数 * / */
 /* static void menu_correctionpara(void); / * 密度/温度修正参数 * / */
 /* static void menu_realhighpara(void); / * 实高测量参数 * / */
@@ -358,17 +400,17 @@ static void motor_run_monitor_page(void); /* 电机运行监控页 */
 static void enter_motor_run_monitor_page(void); /* 进入电机运行监控页 */
 static void enter_motor_run_monitor_page_waiting_stop(void); /* 停止后回到监控页等待收敛 */
 static void motor_run_monitor_back_to_status(void); /* 监控页返回状态页 */
-static void motor_run_monitor_enter_stop_confirm(void); /* 从监控页进入停止确认 */
-static void motor_run_monitor_draw_values(void); /* 绘制监控页位置和称重 */
+static void motor_run_monitor_request_stop(void); /* 监控页确认键直接停止运动 */
+static void motor_run_monitor_draw_values(void); /* 绘制监控页位置和扭力 */
 static bool command_is_motor_monitor_command(uint32_t cmd); /* 纯电机指令范围判断 */
 static bool motor_run_monitor_state_is_active(DeviceState state); /* 电机监控运行态判断 */
 static bool motor_run_monitor_state_is_done(DeviceState state); /* 电机监控完成态判断 */
 static void motor_run_monitor_handle_sent_command(uint32_t cmd); /* 指令下发后页面跳转 */
-static void debug_weight_wait_page(void); /* 称重获取等待页 */
-static void enter_debug_weight_wait_page(int operaNum); /* 进入称重获取等待页 */
-static void debug_weight_wait_back_to_menu(void); /* 称重等待页返回称重标定菜单 */
-static bool debug_weight_wait_state_is_active(int operaNum, DeviceState state); /* 称重获取中状态判断 */
-static bool debug_weight_wait_state_is_done(int operaNum, DeviceState state); /* 称重获取完成状态判断 */
+static void debug_weight_wait_page(void); /* 扭力获取等待页 */
+static void enter_debug_weight_wait_page(int operaNum); /* 进入扭力获取等待页 */
+static void debug_weight_wait_back_to_menu(void); /* 扭力等待页返回扭力标定菜单 */
+static bool debug_weight_wait_state_is_active(int operaNum, DeviceState state); /* 扭力获取中状态判断 */
+static bool debug_weight_wait_state_is_done(int operaNum, DeviceState state); /* 扭力获取完成状态判断 */
 
 /* ---------- 3) 通用菜单渲染/选择器 ----------
  *	分页、上下移动、确认/返回等统一菜单交互
@@ -424,6 +466,10 @@ static void display_menu_item_with_value(const struct MenuData *item, uint8_t li
 static uint8_t display_split_title(uint8_t *name, uint8_t row1, uint8_t row2); /* 长标题拆成最多两行 */
 static void display_param_detail_value(const struct ParameterMetadata *meta, uint8_t row); /* 详情页当前值 */
 static void display_param_detail_range(const struct ParameterMetadata *meta, uint8_t row); /* 详情页范围 */
+static uint32_t motor_current_clamp_irun(uint32_t irun); /* 电机电流档位归一 */
+static uint16_t motor_current_rms_ma(uint32_t irun); /* 电机电流档位换算为 RMS mA */
+static void format_motor_current_label(uint32_t irun, char *buf, size_t buf_size); /* 电机电流档位显示 */
+static void display_motor_current_detail(uint32_t irun, uint8_t row); /* 电机电流详情页显示 */
 static uint8_t dtm_points(void);		/* 小数点位数 */
 static uint8_t *dtm_unit(void);		/* 单位字符串 */
 static uint8_t dtm_bits(void);			/* 显示/输入位数 */
@@ -439,7 +485,7 @@ static void password_enter_cmd(void);	/* 进入调试指令前输入密码 */
 static void ifentermainmenu(void);		/* 是否进入罐上操作 */
 static void ifexittankopera(void);		/* 是否退出罐上操作 */
 static void ifcancelmeasurement(void);  /* 是否取消当前测量 */
-static void cancel_confirm_back(void); /* 取消/停止确认页返回处理 */
+static void cancel_confirm_back(void); /* 取消测量确认页返回处理 */
 static void confirm_cancel_measurement(void); /* 确认取消当前测量 */
 
 /* ---------- 9) 语言设置 ----------
@@ -576,7 +622,7 @@ struct KeyMenu keymenu[KEYNUM_END] = {
         { menu_mech, menu_mech, menu_mech, menu_mech,
           USE_KEY_BACK | USE_KEY_UP | USE_KEY_DOWN | USE_KEY_SURE, menu_mech },
 
-    /* 13 - 称重参数（如果暂无此页，用 menu_dev_info 占位也行） */
+    /* 13 - 扭力参数（如果暂无此页，用 menu_dev_info 占位也行） */
     [KEYNUM_MENU_PARA_WEIGHT] =
         { menu_weight, menu_weight, menu_weight, menu_weight,
           USE_KEY_BACK | USE_KEY_UP | USE_KEY_DOWN | USE_KEY_SURE, menu_weight },
@@ -781,10 +827,10 @@ struct KeyMenu keymenu[KEYNUM_END] = {
 
     /* 纯电机指令下发后的运行监控页 */
     [KEYNUM_MOTOR_RUN_MONITOR] =
-        { motor_run_monitor_back_to_status, NULL, NULL, motor_run_monitor_enter_stop_confirm,
+        { motor_run_monitor_back_to_status, NULL, NULL, motor_run_monitor_request_stop,
           USE_KEY_BACK | USE_KEY_SURE, motor_run_monitor_page },
 
-    /* 获取空载/满载称重后的等待页 */
+    /* 获取空载/满载扭力后的等待页 */
     [KEYNUM_DEBUG_WEIGHT_WAIT] =
         { debug_weight_wait_back_to_menu, NULL, NULL, debug_weight_wait_back_to_menu,
           USE_KEY_BACK | USE_KEY_SURE, debug_weight_wait_page },
@@ -890,7 +936,7 @@ bool DisplayTankOpera_IsMotorRunMonitorActive(void)
 
 /**
  * @brief 显示或打印屏幕菜单操作中的 DisplayTankOpera_IsDebugWeightWaitActive 逻辑。
- * @return true 表示当前前景页是称重获取等待页。
+ * @return true 表示当前前景页是扭力获取等待页。
  */
 bool DisplayTankOpera_IsDebugWeightWaitActive(void)
 {
@@ -906,7 +952,6 @@ static void enter_motor_run_monitor_page(void)
 	func_index = KEYNUM_MOTOR_RUN_MONITOR;
 	motor_run_monitor_enter_tick = HAL_GetTick();
 	motor_run_monitor_started = false;
-	motor_run_monitor_stop_confirm_requested = false;
 	timesure = 0;
 	timeback = 0;
 	ClearPageNum();
@@ -922,7 +967,6 @@ static void enter_motor_run_monitor_page_waiting_stop(void)
 	func_index = KEYNUM_MOTOR_RUN_MONITOR;
 	motor_run_monitor_enter_tick = HAL_GetTick();
 	motor_run_monitor_started = true;
-	motor_run_monitor_stop_confirm_requested = false;
 	timesure = 0;
 	timeback = 0;
 	ClearPageNum();
@@ -936,13 +980,12 @@ static void motor_run_monitor_back_to_status(void)
 {
 	FlagofTankOpera = false;
 	HAL_TIM_Base_Stop_IT(&htim1);
-	motor_run_monitor_stop_confirm_requested = false;
 	oled_clear();
 	Display_RequestRefresh();
 }
 
 /**
- * @brief 绘制电机监控页的实时位置和称重，两行使用相同的数值起始列。
+ * @brief 绘制电机监控页的实时位置和扭力，两行使用相同的数值起始列。
  */
 static void motor_run_monitor_draw_values(void)
 {
@@ -958,7 +1001,7 @@ static void motor_run_monitor_draw_values(void)
 	                 1,
 	                 (uint8_t*)"mm");
 
-	DisplayLangaugeLineWords((uint8_t*)"称重", OLED_LINE8_1, OLED_ROW4_3, 0, (uint8_t*)"Weight");
+	DisplayLangaugeLineWords((uint8_t*)"扭力", OLED_LINE8_1, OLED_ROW4_3, 0, (uint8_t*)"Torque");
 	OledValueDisplay((int)g_measurement.debug_data.current_weight,
 	                 value_line,
 	                 OLED_ROW4_3,
@@ -1004,21 +1047,20 @@ static void motor_run_monitor_page(void)
 }
 
 /**
- * @brief 从电机监控页进入停止确认页。
+ * @brief 从电机监控页直接下发停止当前运动命令。
  */
-static void motor_run_monitor_enter_stop_confirm(void)
+static void motor_run_monitor_request_stop(void)
 {
-	if (DisplayTankOpera_IsMotorRunMonitorActive()) {
-		motor_run_monitor_stop_confirm_requested = true;
+	if (!DisplayTankOpera_IsMotorRunMonitorActive()) {
+		return;
 	}
-	if ((Display_EnterCancelMeasurementConfirm() == false) ||
-	    (func_index != KEYNUM_IF_CANCEL_MEASUREMENT)) {
-		motor_run_monitor_stop_confirm_requested = false;
-	}
+
+	Display_RequestCancelMeasurement();
+	enter_motor_run_monitor_page_waiting_stop();
 }
 
 /**
- * @brief 进入称重获取等待页。
+ * @brief 进入扭力获取等待页。
  */
 static void enter_debug_weight_wait_page(int operaNum)
 {
@@ -1035,7 +1077,7 @@ static void enter_debug_weight_wait_page(int operaNum)
 }
 
 /**
- * @brief 称重等待页返回称重标定菜单，不取消 CPU2 正在执行的称重获取。
+ * @brief 扭力等待页返回扭力标定菜单，不取消 CPU2 正在执行的扭力获取。
  */
 static void debug_weight_wait_back_to_menu(void)
 {
@@ -1050,7 +1092,7 @@ static void debug_weight_wait_back_to_menu(void)
 }
 
 /**
- * @brief 判断 CPU2 当前状态是否属于空载/满载称重获取中。
+ * @brief 判断 CPU2 当前状态是否属于空载/满载扭力获取中。
  */
 static bool debug_weight_wait_state_is_active(int operaNum, DeviceState state)
 {
@@ -1066,7 +1108,7 @@ static bool debug_weight_wait_state_is_active(int operaNum, DeviceState state)
 }
 
 /**
- * @brief 判断 CPU2 当前状态是否属于空载/满载称重获取完成。
+ * @brief 判断 CPU2 当前状态是否属于空载/满载扭力获取完成。
  */
 static bool debug_weight_wait_state_is_done(int operaNum, DeviceState state)
 {
@@ -1082,7 +1124,7 @@ static bool debug_weight_wait_state_is_done(int operaNum, DeviceState state)
 }
 
 /**
- * @brief 显示称重获取等待页，完成后直接回到调试指令的称重标定菜单。
+ * @brief 显示扭力获取等待页，完成后直接回到调试指令的扭力标定菜单。
  */
 static void debug_weight_wait_page(void)
 {
@@ -1127,15 +1169,15 @@ static void debug_weight_wait_page(void)
 	func_index = KEYNUM_DEBUG_WEIGHT_WAIT;
 
 	if (operaNum == COM_NUM_SET_FULL_WEIGHT) {
-		title_cn = (uint8_t*)"获取满载称重中";
+		title_cn = (uint8_t*)"获取满载扭力中";
 		title_en = (uint8_t*)"Getting Full";
 	} else {
-		title_cn = (uint8_t*)"获取空载称重中";
+		title_cn = (uint8_t*)"获取空载扭力中";
 		title_en = (uint8_t*)"Getting Empty";
 	}
 
 	DisplayLangaugeLineWords(title_cn, OLED_LINE8_1, OLED_ROW4_1, 0, title_en);
-	DisplayLangaugeLineWords((uint8_t*)"称重", OLED_LINE8_1, OLED_ROW4_3, 0, (uint8_t*)"Weight");
+	DisplayLangaugeLineWords((uint8_t*)"扭力", OLED_LINE8_1, OLED_ROW4_3, 0, (uint8_t*)"Torque");
 	OledValueDisplay((int)g_measurement.debug_data.current_weight,
 	                 OLED_LINE8_5,
 	                 OLED_ROW4_3,
@@ -1265,10 +1307,9 @@ static uint8_t *dtm_operaname(int num)
     /* 2) 无参调试指令（显式映射） */
     static const OperaNameMap_t debug_cmd_map[] = {
         { COM_NUM_FIND_ZERO,           (uint8_t*)"标定零点",       (uint8_t*)"Zero Calibration" },
-        { COM_NUM_FORCE_LIFT_ZERO,     (uint8_t*)"强制提零点",     (uint8_t*)"Force Lift Zero" },
 
-        { COM_NUM_SET_EMPTY_WEIGHT,    (uint8_t*)"获取空载称重",   (uint8_t*)"Set Empty Weight" },
-        { COM_NUM_SET_FULL_WEIGHT,     (uint8_t*)"获取满载称重",   (uint8_t*)"Set Full Weight" },
+        { COM_NUM_SET_EMPTY_WEIGHT,    (uint8_t*)"获取空载扭力",   (uint8_t*)"Set Empty Torque" },
+        { COM_NUM_SET_FULL_WEIGHT,     (uint8_t*)"获取满载扭力",   (uint8_t*)"Set Full Torque" },
         { COM_NUM_RESTOR_EFACTORYSETTING,(uint8_t*)"恢复出厂设置", (uint8_t*)"Factory Reset" },
         { COM_NUM_MAINTENANCE_MODE,    (uint8_t*)"进入维护模式",   (uint8_t*)"Maintenance Mode" },
         { COM_NUM_PAIR_NEAREST_WIRELESS_SLIPRING, (uint8_t*)"匹配无线滑环", (uint8_t*)"Pair Wireless" },
@@ -1417,8 +1458,8 @@ static uint8_t *dtm_operaname(int num)
 /* */
 /* / * 2) 无参调试指令 * / */
 /* static uint8_t *OperaNameArr_debug_cmd[][2] = { */
-/* { (uint8_t*)"设置空载称重", (uint8_t*)"Set Empty Weight" }, */
-/* { (uint8_t*)"设置满载称重", (uint8_t*)"Set Full Weight" }, */
+/* { (uint8_t*)"设置空载扭力", (uint8_t*)"Set Empty Torque" }, */
+/* { (uint8_t*)"设置满载扭力", (uint8_t*)"Set Full Torque" }, */
 /* { (uint8_t*)"恢复出厂设置", (uint8_t*)"Factory Reset" }, */
 /* { (uint8_t*)"维护模式", (uint8_t*)"Maintenance Mode" }, */
 /* }; */
@@ -1549,7 +1590,7 @@ static uint8_t *dtm_operaname_short(int num, uint8_t *fallback)
 		{ COM_NUM_DEVICEPARAM_WEIGHT_UPPER_LIMIT_RATIO, (uint8_t*)"碰撞上限", (uint8_t*)"UpperRatio" },
 		{ COM_NUM_DEVICEPARAM_WEIGHT_LOWER_LIMIT_RATIO, (uint8_t*)"碰撞下限", (uint8_t*)"LowerRatio" },
 		{ COM_NUM_DEVICEPARAM_ZERO_WEIGHT_THRESHOLD_RATIO, (uint8_t*)"零点阈值", (uint8_t*)"ZeroTh" },
-		{ COM_NUM_DEVICEPARAM_WEIGHT_IGNORE_ZONE, (uint8_t*)"称重忽略区", (uint8_t*)"Ignore" },
+		{ COM_NUM_DEVICEPARAM_WEIGHT_IGNORE_ZONE, (uint8_t*)"扭力忽略区", (uint8_t*)"Ignore" },
 		{ COM_NUM_DEVICEPARAM_MAX_ZERO_DEVIATION_DISTANCE, (uint8_t*)"零点偏差", (uint8_t*)"ZeroDev" },
 		{ COM_NUM_DEVICEPARAM_FINDZERO_DOWN_DISTANCE, (uint8_t*)"找零距离", (uint8_t*)"ZeroDown" },
 		{ COM_NUM_DEVICEPARAM_LIQUID_SENSOR_DISTANCE_DIFF, (uint8_t*)"探头距差", (uint8_t*)"SenDiff" },
@@ -1566,7 +1607,7 @@ static uint8_t *dtm_operaname_short(int num, uint8_t *fallback)
 		{ COM_NUM_DEVICEPARAM_WATER_LAG_CAP_THRESHOLD, (uint8_t*)"滞后阈值", (uint8_t*)"LagCap" },
 		{ COM_NUM_DEVICEPARAM_BOTTOM_DETECT_MODE, (uint8_t*)"罐底模式", (uint8_t*)"BotMode" },
 		{ COM_NUM_DEVICEPARAM_BOTTOM_ANGLE_THRESHOLD, (uint8_t*)"角度阈值", (uint8_t*)"AngleTh" },
-		{ COM_NUM_DEVICEPARAM_BOTTOM_WEIGHT_THRESHOLD, (uint8_t*)"称重阈值", (uint8_t*)"WeightTh" },
+		{ COM_NUM_DEVICEPARAM_BOTTOM_WEIGHT_THRESHOLD, (uint8_t*)"扭力阈值", (uint8_t*)"TorqueTh" },
 		{ COM_NUM_DEVICEPARAM_REFRESH_TANKHEIGHT_FLAG, (uint8_t*)"更新罐高", (uint8_t*)"UpdTank" },
 		{ COM_NUM_DEVICEPARAM_MAX_TANKHEIGHT_DEVIATION, (uint8_t*)"罐高偏差", (uint8_t*)"TankDev" },
 		{ COM_NUM_DEVICEPARAM_BOTTOM_ENCODER_CORRECTION_ENABLE, (uint8_t*)"探底后修正", (uint8_t*)"BotFix" },
@@ -1843,6 +1884,77 @@ static uint8_t *param_display_unit(int operaNum, const struct ParameterMetadata 
 	return relay_alarm_source_unit(g_deviceParams.relayAlarm[channel].alarm_source);
 }
 
+/*
+ * 函数用途：把电机电流参数归一到 TMC5130 IRUN 的合法档位。
+ * 调用场景：电机电流详情页、菜单列表和选择列表显示前调用。
+ * 关键约束：只修正显示侧口径，实际写入范围仍由参数范围检查和 CPU2 保护。
+ */
+static uint32_t motor_current_clamp_irun(uint32_t irun)
+{
+	if ((irun < MOTOR_CURRENT_MIN) || (irun > MOTOR_CURRENT_MAX)) {
+		return MOTOR_CURRENT_DEFAULT;
+	}
+
+	return irun;
+}
+
+/*
+ * 函数用途：按当前硬件 RSENSE=0.15Ω 和 TMC5130 vsense=0 的口径换算 RMS 电流。
+ * 调用场景：屏幕显示电机电流档位对应的相电流参考值。
+ * 关键约束：返回值只用于显示，不改变 motor_current 保存和通信语义。
+ */
+static uint16_t motor_current_rms_ma(uint32_t irun)
+{
+	uint32_t normalized = motor_current_clamp_irun(irun);
+	uint32_t index = normalized - MOTOR_CURRENT_RMS_TABLE_OFFSET;
+
+	if (index >= (sizeof(motor_current_rms_ma_table) / sizeof(motor_current_rms_ma_table[0]))) {
+		return motor_current_rms_ma_table[MOTOR_CURRENT_DEFAULT - MOTOR_CURRENT_RMS_TABLE_OFFSET];
+	}
+
+	return motor_current_rms_ma_table[index];
+}
+
+/*
+ * 函数用途：生成“IRUN档位 + RMS电流”的短显示文本。
+ * 调用场景：机械参数列表、参数详情页和选择确认后的显示刷新。
+ * 关键约束：电流值按 0.01A 四舍五入，保持与选择列表一致。
+ */
+static void format_motor_current_label(uint32_t irun, char *buf, size_t buf_size)
+{
+	uint32_t normalized = motor_current_clamp_irun(irun);
+	uint16_t rms_ma = motor_current_rms_ma(normalized);
+	uint16_t rms_centiamps = (uint16_t)((rms_ma + 5U) / 10U);
+
+	if ((buf == NULL) || (buf_size == 0U)) {
+		return;
+	}
+
+	snprintf(buf,
+	         buf_size,
+	         "%02lu %lu.%02luA",
+	         (unsigned long)normalized,
+	         (unsigned long)(rms_centiamps / 100U),
+	         (unsigned long)(rms_centiamps % 100U));
+}
+
+/*
+ * 函数用途：在参数详情页显示电机电流档位和对应 RMS 电流。
+ * 调用场景：查看“电机运行电流”参数时调用。
+ * 关键约束：第三行显示的是 IRUN 档位范围，不改变 Modbus 参数范围。
+ */
+static void display_motor_current_detail(uint32_t irun, uint8_t row)
+{
+	char label[16];
+	uint8_t line;
+
+	line = DisplayLangaugeLineWords((uint8_t*)"当前值:", OLED_LINE8_1, row, 0, (uint8_t*)"Value:");
+	format_motor_current_label(irun, label, sizeof(label));
+	OledDisplayLineWords((uint8_t*)label, line, row, 0);
+	line = DisplayLangaugeLineWords((uint8_t*)"RMS范围:", OLED_LINE8_1, OLED_ROW4_3, 0, (uint8_t*)"RMS Range:");
+	OledDisplayLineWords((uint8_t*)"01-31", line, OLED_ROW4_3, 0);
+}
+
 /**
  * @brief 显示或打印屏幕菜单操作中的 display_menu_item_with_value 逻辑。
  *
@@ -1889,6 +2001,19 @@ static void display_menu_item_with_value(const struct MenuData *item, uint8_t li
 
 	line = OledDisplayLineWords((uint8_t*)":", line, row, shift);
 	if (display_formatted_readonly_value(opera, param_meta[index].val, line, row, shift) != 0) {
+		return;
+	}
+
+	if (opera == COM_NUM_DEVICEPARAM_MOTOR_CURRENT) {
+		char label[16];
+		char *unit;
+
+		format_motor_current_label((uint32_t)param_meta[index].val, label, sizeof(label));
+		unit = strchr(label, 'A');
+		if (unit != NULL) {
+			*unit = '\0';
+		}
+		OledDisplayLineWords((uint8_t*)label, line, row, shift);
 		return;
 	}
 
@@ -2467,7 +2592,6 @@ static pFunc_void dtm_backtofunc(void)
         return menu_measure_density_single;
 
     /* 浮子运动控制子菜单 */
-    case COM_NUM_FORCE_LIFT_ZERO:
     case COM_NUM_RUNUP:
     case COM_NUM_RUNDOWN:
     case COM_NUM_FORCE_RUNUP:
@@ -2482,7 +2606,7 @@ static pFunc_void dtm_backtofunc(void)
     case COM_NUM_CALIBRATE_TANKHEIGHT:
         return menu_debug_calibration;
 
-    /* 称重标定子菜单 */
+    /* 扭力标定子菜单 */
     case COM_NUM_SET_EMPTY_WEIGHT:
     case COM_NUM_SET_FULL_WEIGHT:
         return menu_debug_weight;
@@ -2664,7 +2788,6 @@ static bool command_is_motor_monitor_command(uint32_t cmd)
 	case CMD_MOVE_DOWN:
 	case CMD_FORCE_MOVE_UP:
 	case CMD_FORCE_MOVE_DOWN:
-	case CMD_FORCE_LIFT_ZERO:
 		return true;
 	default:
 		return false;
@@ -2682,7 +2805,6 @@ static bool motor_run_monitor_state_is_active(DeviceState state)
 	case STATE_RUN_TO_POSITIONING:
 	case STATE_FORCE_RUNUPING:
 	case STATE_FORCE_RUNDOWNING:
-	case STATE_FORCE_LIFT_ZEROING:
 		return true;
 	default:
 		return false;
@@ -2700,7 +2822,6 @@ static bool motor_run_monitor_state_is_done(DeviceState state)
 	case STATE_RUN_TO_POSITION_OVER:
 	case STATE_FORCE_RUNUP_OVER:
 	case STATE_FORCE_RUNDOWN_OVER:
-	case STATE_FORCE_LIFT_ZERO_OVER:
 	case STATE_STANDBY:
 		return true;
 	default:
@@ -2826,7 +2947,6 @@ static void cmd_nopara_process(void)
 
         /* -------- 调试模式：无参指令 -------- */
         { COM_NUM_FIND_ZERO,          CMD_CALIBRATE_ZERO },
-        { COM_NUM_FORCE_LIFT_ZERO,    CMD_FORCE_LIFT_ZERO },           /* 新增 */
 
         { COM_NUM_SET_EMPTY_WEIGHT,   CMD_SET_EMPTY_WEIGHT },
         { COM_NUM_SET_FULL_WEIGHT,    CMD_SET_FULL_WEIGHT },
@@ -3108,6 +3228,8 @@ static void displaypara(void)
 			                                 OLED_ROW4_2,
 			                                 0);
 			DisplayLangaugeLineWords((uint8_t*)"范围:--", OLED_LINE8_1, OLED_ROW4_3, 0, (uint8_t*)"Range:--");
+		} else if (now_Opera_Num == COM_NUM_DEVICEPARAM_MOTOR_CURRENT) {
+			display_motor_current_detail((uint32_t)param_meta[index].val, OLED_ROW4_2);
 		} else {
 			display_param_detail_value(&param_meta[index], OLED_ROW4_2);
 			display_param_detail_range(&param_meta[index], OLED_ROW4_3);
@@ -3171,6 +3293,11 @@ static void parawritecheck(void)
 			return;
 		}
 
+		if (now_Opera_Num == COM_NUM_DEVICEPARAM_MOTOR_CURRENT) {
+			selectparaword();
+			return;
+		}
+
 		if (param_meta[index].pword == NULL) {
 			inputcmdpara();
 		} else {
@@ -3209,43 +3336,22 @@ static void ifcancelmeasurement(void)
 {
 	oled_clear();
 	func_index = KEYNUM_IF_CANCEL_MEASUREMENT;
-	if (motor_run_monitor_stop_confirm_requested) {
-		DisplayLangaugeLineWords((uint8_t*)"停止当前运动?", OLED_LINE8_1, OLED_ROW4_1, 0, (uint8_t*)"Stop movement?");
-		motor_run_monitor_draw_values();
-	} else {
-		DisplayLangaugeLineWords((uint8_t*)"是否停止测量?", OLED_LINE8_1, OLED_ROW4_1, 0, (uint8_t*)"Cancel measure?");
-	}
+	DisplayLangaugeLineWords((uint8_t*)"是否停止测量?", OLED_LINE8_1, OLED_ROW4_1, 0, (uint8_t*)"Cancel measure?");
 	DisplayLangaugeLineWords((uint8_t*)"返回", OLED_LINE8_1, OLED_ROW4_4, 0, (uint8_t*)"Back");
-	if (motor_run_monitor_stop_confirm_requested) {
-		DisplayLangaugeLineWords((uint8_t*)"确认停止", OLED_LINE8_5, OLED_ROW4_4, 0, (uint8_t*)"Stop");
-	} else {
-		DisplayLangaugeLineWords((uint8_t*)"确认", OLED_LINE8_8, OLED_ROW4_4, 0, (uint8_t*)"Ok");
-	}
+	DisplayLangaugeLineWords((uint8_t*)"确认", OLED_LINE8_8, OLED_ROW4_4, 0, (uint8_t*)"Ok");
 }
 
-/* 取消/停止确认页返回处理。 */
+/* 取消测量确认页返回处理。 */
 static void cancel_confirm_back(void)
 {
-	if (motor_run_monitor_stop_confirm_requested) {
-		motor_run_monitor_stop_confirm_requested = false;
-		enter_motor_run_monitor_page();
-	} else {
-		exitTankOpera();
-	}
+	exitTankOpera();
 }
 
 /* 确认取消测量：确认键触发后直接下发CPU2取消测量命令。 */
 static void confirm_cancel_measurement(void)
 {
-	bool from_motor_monitor = motor_run_monitor_stop_confirm_requested;
-
 	Display_RequestCancelMeasurement();
-	motor_run_monitor_stop_confirm_requested = false;
-	if (from_motor_monitor) {
-		enter_motor_run_monitor_page_waiting_stop();
-	} else {
-		exitTankOpera();
-	}
+	exitTankOpera();
 }
 
 /* 进入参数配置前的密码输入操作页 */
@@ -3552,6 +3658,16 @@ static int selection_index_to_value(int operaNum, int selectedIndex)
 		return protocol_values[selectedIndex];
 	}
 
+	if (operaNum == COM_NUM_DEVICEPARAM_MOTOR_CURRENT) {
+		if (selectedIndex < 0) {
+			return (int)MOTOR_CURRENT_DEFAULT;
+		}
+		if (selectedIndex >= (int)(MOTOR_CURRENT_MAX - MOTOR_CURRENT_MIN + 1U)) {
+			return (int)MOTOR_CURRENT_DEFAULT;
+		}
+		return selectedIndex + (int)MOTOR_CURRENT_MIN;
+	}
+
 	return selectedIndex;
 }
 
@@ -3766,6 +3882,17 @@ uint8_t *(*dtm_disarr(int *pindex, int *plen))[2]
 		index = param_meta[index].val;
 		len = (int)(sizeof(arr_position_count_mode) / sizeof(arr_position_count_mode[0]));
 		p = arr_position_count_mode;
+		break;
+	}
+	case COM_NUM_DEVICEPARAM_MOTOR_CURRENT: {
+		int value = param_meta[index].val;
+
+		if ((value < (int)MOTOR_CURRENT_MIN) || (value > (int)MOTOR_CURRENT_MAX)) {
+			value = (int)MOTOR_CURRENT_DEFAULT;
+		}
+		index = value - (int)MOTOR_CURRENT_MIN;
+		len = (int)(sizeof(arr_motor_current) / sizeof(arr_motor_current[0]));
+		p = arr_motor_current;
 		break;
 	}
 	case COM_NUM_DEVICEPARAM_SPREADMEASUREMENTMODE: {
@@ -4089,7 +4216,7 @@ static void menu_cmdconfig_main(void)
     static struct MenuData menu[] = {
         { (uint8_t*)"浮子运动控制", COM_NUM_NOOPERA, menu_debug_float_motion, COMMANE_NORW, (uint8_t*)"FloatMotion" },
         { (uint8_t*)"标定修正", COM_NUM_NOOPERA, menu_debug_calibration, COMMANE_NORW, (uint8_t*)"Calibration" },
-        { (uint8_t*)"称重标定", COM_NUM_NOOPERA, menu_debug_weight, COMMANE_NORW, (uint8_t*)"WeightCal" },
+        { (uint8_t*)"扭力标定", COM_NUM_NOOPERA, menu_debug_weight, COMMANE_NORW, (uint8_t*)"TorqueCal" },
         { (uint8_t*)"无线维护", COM_NUM_NOOPERA, menu_debug_wireless, COMMANE_NORW, (uint8_t*)"WirelessMaint" },
         { (uint8_t*)"系统维护", COM_NUM_NOOPERA, menu_debug_system, COMMANE_NORW, (uint8_t*)"SystemMaint" },
         { (uint8_t*)"退出", COM_NUM_NOOPERA, mainmenu, COMMANE_NORW, (uint8_t*)"Exit" },
@@ -4110,7 +4237,6 @@ static void menu_debug_float_motion(void)
         { (uint8_t*)"下行", COM_NUM_RUNDOWN, inputcmdpara, COMMANE_NORW, (uint8_t*)"MoveDown" },
         { (uint8_t*)"强制上行", COM_NUM_FORCE_RUNUP, inputcmdpara, COMMANE_NORW, (uint8_t*)"ForceMoveUp" },
         { (uint8_t*)"强制下行", COM_NUM_FORCE_RUNDOWN, inputcmdpara, COMMANE_NORW, (uint8_t*)"ForceMoveDown" },
-        { (uint8_t*)"强制提零点", COM_NUM_FORCE_LIFT_ZERO, ifsendcmd, COMMANE_NORW, (uint8_t*)"ForceLiftZero" },
         { (uint8_t*)"返回", COM_NUM_NOOPERA, menu_cmdconfig_main, COMMANE_NORW, (uint8_t*)"Back" },
     };
 
@@ -4140,8 +4266,8 @@ static void menu_debug_calibration(void)
 static void menu_debug_weight(void)
 {
     static struct MenuData menu[] = {
-        { (uint8_t*)"获取空载称重", COM_NUM_SET_EMPTY_WEIGHT, ifsendcmd, COMMANE_NORW, (uint8_t*)"SetEmptyWeight" },
-        { (uint8_t*)"获取满载称重", COM_NUM_SET_FULL_WEIGHT, ifsendcmd, COMMANE_NORW, (uint8_t*)"SetFullWeight" },
+        { (uint8_t*)"获取空载扭力", COM_NUM_SET_EMPTY_WEIGHT, ifsendcmd, COMMANE_NORW, (uint8_t*)"SetEmptyTorque" },
+        { (uint8_t*)"获取满载扭力", COM_NUM_SET_FULL_WEIGHT, ifsendcmd, COMMANE_NORW, (uint8_t*)"SetFullTorque" },
         { (uint8_t*)"返回", COM_NUM_NOOPERA, menu_cmdconfig_main, COMMANE_NORW, (uint8_t*)"Back" },
     };
 
@@ -4621,7 +4747,7 @@ static MenuGroup ParamGroupOf(int operaNum)
     case COM_NUM_DEVICEPARAM_MOTOR_COUNT_FIRST_LOOP_CIRC:
         return MENU_GRP_MECH;
 
-    /* 称重 */
+    /* 扭力 */
     case COM_NUM_DEVICEPARAM_EMPTY_WEIGHT:
     case COM_NUM_DEVICEPARAM_EMPTY_WEIGHT_UPPER_LIMIT:
     case COM_NUM_DEVICEPARAM_EMPTY_WEIGHT_LOWER_LIMIT:
@@ -5060,7 +5186,7 @@ static void menu_measure_config(void)
     static struct MenuData menu[] = {
         {(uint8_t*)"运行设置",      0, menu_run_policy,   COMMANE_NORW, (uint8_t*)"Run Policy"},
         {(uint8_t*)"电机与编码参数",0, menu_mech,         COMMANE_NORW, (uint8_t*)"Mechanism"},
-        {(uint8_t*)"称重参数",      0, menu_weight,       COMMANE_NORW, (uint8_t*)"Weight"},
+        {(uint8_t*)"扭力参数",      0, menu_weight,       COMMANE_NORW, (uint8_t*)"Torque"},
         {(uint8_t*)"零点参数",      0, menu_zero,         COMMANE_NORW, (uint8_t*)"Zero"},
         {(uint8_t*)"液位参数",      0, menu_liquid,       COMMANE_NORW, (uint8_t*)"Level"},
         {(uint8_t*)"水位参数",      0, menu_water,        COMMANE_NORW, (uint8_t*)"Water"},
@@ -5351,7 +5477,7 @@ static void menu_run_policy(void)   { menu_build_by_group(MENU_GRP_RUN_POLICY,  
 static void menu_dev_info(void)     { menu_build_by_group(MENU_GRP_DEV_INFO,     KEYNUM_MENU_PARA_DEV_INFO,     menu_maint_config); }
 /* * @brief 进入机械参数分组菜单。 */
 static void menu_mech(void)         { menu_build_by_group(MENU_GRP_MECH,         KEYNUM_MENU_PARA_MECH,         menu_measure_config); }
-/* * @brief 进入称重参数分组菜单。 */
+/* * @brief 进入扭力参数分组菜单。 */
 static void menu_weight(void)       { menu_build_by_group(MENU_GRP_WEIGHT,       KEYNUM_MENU_PARA_WEIGHT,       menu_measure_config); }
 /**
  * @brief 执行屏幕菜单操作中的 menu_zero 逻辑。

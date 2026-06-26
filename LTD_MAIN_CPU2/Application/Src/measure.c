@@ -70,7 +70,6 @@ static void CMD_MoveDown(void);
 static void CMD_MoveUp(void);
 static void CMD_ForceMoveUp(void);
 static void CMD_ForceMoveDown(void);
-static void CMD_ForceLiftZero(void);
 static void CMD_MeasurWater(void);
 static void CMD_FollowWaterLevel(void);
 static void CMD_MeasureZero(void);
@@ -245,19 +244,14 @@ void ProcessMeasureCmd(CommandType command)
         CMD_ForceMoveDown();
         break;
 
-    /* --- 新增：强制提零点 --- */
-    case CMD_FORCE_LIFT_ZERO:
-        printf("执行强制提零点指令\r\n");
-        CMD_ForceLiftZero();
-        break;
 
     case CMD_SET_EMPTY_WEIGHT:
-        printf("执行设置空载称重指令\r\n");
+        printf("执行设置空载扭力指令\r\n");
         CMD_SetEmptyWeight();
         break;
 
     case CMD_SET_FULL_WEIGHT:
-        printf("执行设置满载称重指令\r\n");
+        printf("执行设置满载扭力指令\r\n");
         CMD_SetFullWeight();
         break;
 
@@ -282,6 +276,7 @@ void ProcessMeasureCmd(CommandType command)
     case CMD_RESERVED_CMD3:
     case CMD_RESERVED_CMD5:
     case CMD_RESERVED_CMD6:
+    case CMD_RESERVED_CMD7:
     case CMD_UNKNOWN:
     default:
         printf("暂不支持该指令: %d\r\n", (int)command);
@@ -347,8 +342,8 @@ static void CMD_CancelMeasurement(void)
  *       - L：编码器和电机基准同时清零
  *       - M：电机高温循环测试
  *       - N：电机简单循环测试，300mm 下行/上行循环
- *       - O：获取空载称重
- *       - P：获取满载称重
+ *       - O：获取空载扭力
+ *       - P：获取满载扭力
  *       - Q：恢复出厂设置
  *       - R：分布测量
  *       - W：水位测量
@@ -962,33 +957,13 @@ static void CMD_ForceMoveDown(void)
     return;
 }
 
-/* 强制回零点：只控制电机上行，无检测重量/液位等 */
-static void CMD_ForceLiftZero(void)
-{
-    uint32_t ret;
 
-    printf("强制提零点操作\r\n");
-    g_measurement.device_status.device_state = STATE_FORCE_LIFT_ZEROING;
-
-    /* 长距离上行：不检测称重/丢步，底层可被命令切换打断 */
-    ret = MotorCtrl_MoveBlockingNoDetectForceDebug(
-        2000000.0f,  /* 300m, */
-        MOTOR_DIRECTION_UP,
-        MotorCtrl_GetDefaultSpeedX100());
-    if (ret == STATE_SWITCH) {
-        return;
-    }
-    SET_ERROR(ret);
-
-    g_measurement.device_status.device_state = STATE_FORCE_LIFT_ZERO_OVER;
-    return;
-}
-/* 设置空载称重指令 */
+/* 设置空载扭力指令 */
 static void CMD_SetEmptyWeight(void)
 {
     uint32_t ret = 0;
 
-    printf("执行设置空载称重指令\n");
+    printf("执行设置空载扭力指令\n");
     g_measurement.device_status.device_state = STATE_GET_EMPTYWEIGHT;
 
     ret = get_empty_weight();
@@ -998,12 +973,12 @@ static void CMD_SetEmptyWeight(void)
     g_measurement.device_status.device_state = STATE_GET_EMPTYWEIGHT_OVER;
     return;
 }
-/* 设置满载称重指令 */
+/* 设置满载扭力指令 */
 static void CMD_SetFullWeight(void)
 {
     uint32_t ret = 0;
 
-    printf("执行设置满载称重指令\n");
+    printf("执行设置满载扭力指令\n");
     g_measurement.device_status.device_state = STATE_GET_FULLWEIGHT;
 
     ret = get_full_weight();

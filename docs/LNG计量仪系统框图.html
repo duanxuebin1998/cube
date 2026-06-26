@@ -1,4 +1,4 @@
-<!doctype html>
+﻿﻿<!doctype html>
 <html lang="zh-CN">
 <head>
   <meta charset="utf-8">
@@ -326,7 +326,7 @@
         <div><span class="label">适用设备</span>LNG 二代计量仪双板固件</div>
         <div><span class="label">CPU2 主控板</span><code>V1.12.0.0</code></div>
         <div><span class="label">CPU3 显示通讯板</span><code>V1.10.0.0</code></div>
-        <div><span class="label">共享协议</span><code>DEVICE_PROTOCOL_VERSION = 7</code></div>
+        <div><span class="label">共享协议</span><code>DEVICE_PROTOCOL_VERSION = 12</code></div>
       </div>
     </div>
   </header>
@@ -365,7 +365,7 @@
       <div class="diagram">
         <svg viewBox="0 0 1180 640" role="img" aria-labelledby="overall-title overall-desc">
           <title id="overall-title">LNG计量仪整机系统框图</title>
-          <desc id="overall-desc">外部主站经 CPU3 COM 口接入，CPU3 通过内部 Modbus 轮询 CPU2，CPU2 控制电机、传感器、无线滑环、称重和模拟输出。</desc>
+          <desc id="overall-desc">外部主站经 CPU3 COM 口接入，CPU3 通过内部 Modbus 轮询 CPU2，CPU2 控制电机、传感器、无线滑环、扭力和模拟输出。</desc>
           <defs>
             <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
               <path d="M 0 0 L 10 5 L 0 10 z" fill="#526474"></path>
@@ -429,7 +429,7 @@
 
           <rect x="750" y="458" width="290" height="78" rx="6" fill="#ffffff" stroke="#b7d3f0"></rect>
           <text x="770" y="486" class="box-title">传感器与输出控制</text>
-          <text x="770" y="510" class="box-text">无线滑环 / 称重 / HART / 4-20mA / AD5421</text>
+          <text x="770" y="510" class="box-text">无线滑环 / 扭力 / HART / 4-20mA / AD5421</text>
 
           <rect x="1088" y="116" width="132" height="406" rx="8" fill="#fff3dc" stroke="#d6a55d" transform="translate(-56 0)"></rect>
           <text x="1054" y="148" class="box-title">现场外设</text>
@@ -437,7 +437,7 @@
           <text x="1054" y="214" class="box-text">编码轮</text>
           <text x="1054" y="244" class="box-text">探头传感器</text>
           <text x="1054" y="274" class="box-text">无线滑环</text>
-          <text x="1054" y="304" class="box-text">称重模块</text>
+          <text x="1054" y="304" class="box-text">扭力模块</text>
           <text x="1054" y="334" class="box-text">水位电容</text>
           <text x="1054" y="364" class="box-text">陀螺仪</text>
           <text x="1054" y="394" class="box-text">HART</text>
@@ -474,7 +474,7 @@
         </article>
         <article class="card">
           <h3>共享协议是边界</h3>
-          <p>固件版本只用于显示和追踪；CPU2/CPU3 是否兼容以 <code>DeviceParameters.protocolVersion</code> 严格相等为准，当前为协议版本 7。</p>
+          <p>固件版本只用于显示和追踪；CPU2/CPU3 是否兼容以 <code>DeviceParameters.protocolVersion</code> 严格相等为准，当前为协议版本 12。</p>
         </article>
       </div>
     </section>
@@ -746,7 +746,7 @@
           <text x="486" y="274" class="box-title">输入寄存器</text>
           <text x="486" y="298" class="box-text">MeasurementResult / 状态 / 结果</text>
           <rect x="466" y="344" width="246" height="44" rx="6" fill="#fff7e8" stroke="#d6a55d"></rect>
-          <text x="486" y="372" class="box-text">协议版本字段：当前值 7</text>
+          <text x="486" y="372" class="box-text">协议版本字段：当前值 12</text>
 
           <rect x="892" y="78" width="250" height="338" rx="8" fill="#e3f0ff" stroke="#8bb7e5"></rect>
           <text x="914" y="112" class="box-title">CPU2</text>
@@ -850,11 +850,11 @@
 
           <rect x="426" y="208" width="268" height="58" rx="6" fill="#ffffff" stroke="#a9d8dc"></rect>
           <text x="446" y="232" class="box-title">COM2 = USART2</text>
-          <text x="446" y="254" class="box-text">默认 4800 8N1 Wärtsilä</text>
+          <text x="446" y="254" class="box-text">默认 2400 8E1 Wärtsilä</text>
 
           <rect x="426" y="284" width="268" height="58" rx="6" fill="#ffffff" stroke="#a9d8dc"></rect>
           <text x="446" y="308" class="box-title">COM3 = USART3</text>
-          <text x="446" y="330" class="box-text">默认 4800 8N2 Wärtsilä</text>
+          <text x="446" y="330" class="box-text">默认 2400 8E1 Wärtsilä</text>
 
           <rect x="824" y="70" width="300" height="318" rx="8" fill="#e3f0ff" stroke="#8bb7e5"></rect>
           <text x="846" y="104" class="box-title">内部模型转换</text>
@@ -1008,8 +1008,8 @@
             </tr>
             <tr>
               <td>维护和调试</td>
-              <td>强制上行、强制下行、强制提零点、标定、匹配无线滑环</td>
-              <td>CPU2 调试/维护分支，部分命令不走通用测量初始化</td>
+              <td>强制上行、强制下行、标定、匹配无线滑环；命令 115 保留</td>
+              <td>CPU2 调试/维护分支，命令 115 不再提供菜单入口或执行电机动作</td>
               <td>状态页显示维护、调试、匹配中/完成；失败时保持故障页错误码。</td>
             </tr>
           </tbody>
@@ -1162,7 +1162,7 @@
       <ul>
         <li><code>README.md</code>：双板架构、通信拓扑、构建和代码主线。</li>
         <li><code>LTD_MAIN_CPU2/Application/Inc/app_version.h</code>、<code>LTD_DISPLAY_CPU3/Application/app_version.h</code>：当前 CPU2/CPU3 固件版本。</li>
-        <li><code>docs/01_协议与寄存器/CPU2_CPU3协议变更记录.md</code>：共享协议版本 7、状态和参数语义。</li>
+        <li><code>docs/01_协议与寄存器/CPU2_CPU3协议变更记录.md</code>：共享协议版本 12、状态和参数语义。</li>
         <li><code>LTD_DISPLAY_CPU3/Application/system_param/system_parameter.h</code>：命令、状态、共享结构和无线滑环运行态字段。</li>
         <li><code>LTD_DISPLAY_CPU3/Application/system_param/com_port_config.h</code>、<code>cpu3_comm_display_params.c</code>：COM1/2/3 协议配置和 SI7000 串口收敛规则。</li>
         <li><code>docs/02_需求与计划</code>、<code>docs/03_问题分析与整改</code>、<code>docs/04_界面与菜单</code>：自动恢复、启动安全、无线滑环和菜单说明。</li>

@@ -3,7 +3,7 @@
  *
  *  用于测量和校准设备的零点位置
  *  包含粗略和精确两步寻找零点的过程
- *  依赖外部的重量传感器和电机控制接口
+ *  依赖外部的扭力传感器和电机控制接口
  */
 
 #include "weight.h"
@@ -35,7 +35,7 @@ static uint32_t Zero_MoveDownWithoutWeightGuard(const char *phase_name, float di
 {
     uint32_t ret;
 
-    printf("零点测量    %s开始    下行距离=%.1fmm    当前称重=%ld", phase_name, (double)distance_mm, (long)weight_parament.current_weight);
+    printf("零点测量    %s开始    下行距离=%.1fmm    当前扭力=%ld", phase_name, (double)distance_mm, (long)weight_parament.current_weight);
     MotorCtrl_PrintPositionRefs();
     printf("\r\n");
     ret = MotorCtrl_MoveBlockingNoDetectQuiet(distance_mm,
@@ -43,7 +43,7 @@ static uint32_t Zero_MoveDownWithoutWeightGuard(const char *phase_name, float di
                                           MotorCtrl_GetDefaultSpeedX100());
     if (ret == NO_ERROR) {
         Weight_RebaseStableWeight();
-        printf("零点测量    %s完成    下行距离=%.1fmm    当前称重=%ld", phase_name, (double)distance_mm, (long)weight_parament.current_weight);
+        printf("零点测量    %s完成    下行距离=%.1fmm    当前扭力=%ld", phase_name, (double)distance_mm, (long)weight_parament.current_weight);
         MotorCtrl_PrintPositionRefs();
         printf("\r\n");
     }
@@ -101,7 +101,7 @@ int SearchZero(void) {
 		CHECK_ERROR(ret);
 	}
 
-	printf("零点测量    初始重量：%d\r\n", weight_parament.stable_weight);
+	printf("零点测量    初始扭力：%d\r\n", weight_parament.stable_weight);
 
     /* ************** 粗找阶段 - 带重试机制 ************** */
     try_times = 0;
@@ -122,7 +122,7 @@ int SearchZero(void) {
                 ret = MEASUREMENT_ZERO_OUT_OF_RANGE;
             } else {
                 /* SearchZeroRough() 已经在检测到 ZERO 后停机；粗找只负责进入零点区域，
-                 * 后续精找会再次确认，不再用 3 秒后的称重波动否定本次粗找。 */
+                 * 后续精找会再次确认，不再用 3 秒后的扭力波动否定本次粗找。 */
                 rough_ok = 1;
                 break;
             }
@@ -255,7 +255,7 @@ int SearchZero(void) {
 
 /**
  * @brief 粗略寻找零点
- *        电机上行，直到重量状态为ZERO
+ *        电机上行，直到扭力状态为ZERO
  *        记录此时编码器值为零点
  * @return 总是返回0
  */
@@ -265,7 +265,7 @@ static int SearchZeroRough() {
     int32_t distance_to_zero_01mm;
     uint32_t last_speed_x100 = 0U;
 
-    /* 循环直到重量状态为ZERO */
+    /* 循环直到扭力状态为ZERO */
     MotorCtrl_LostStepInit(); /* 重置丢步检测计数器 */
     while (check_zero_point_status() != ZERO) {
         ret = MotorCtrl_PollRuntimePosition(); /* 循环中同步运行期位置，同时识别 TMC 掉电或配置丢失。 */
@@ -288,7 +288,7 @@ static int SearchZeroRough() {
         /* 丢步检测 */
         ret = MotorCtrl_CheckLostStepAutoTiming(g_measurement.debug_data.cable_length);
         CHECK_ERROR(ret);
-        /* 实时打印编码器和重量信息 */
+        /* 实时打印编码器和扭力信息 */
         printf("零点测量    长距离寻找零点    {传感器位置}%.1f", (float) (g_measurement.debug_data.sensor_position) / 10.0); MotorCtrl_PrintPositionRefs(); printf("    距零点：%.1fmm    速度(0.01m/min)=%lu    ", (double)distance_to_zero_01mm / 10.0, (unsigned long)speed_x100);
     }
     zero_position = g_measurement.debug_data.cable_length;

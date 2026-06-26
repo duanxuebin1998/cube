@@ -112,7 +112,7 @@ static volatile uint32_t* get_deviceparam_ptr_by_operanum(int operanum)
     case COM_NUM_DEVICEPARAM_MOTOR_COUNT_FIRST_LOOP_CIRC:
         return &g_deviceParams.motor_count_first_loop_circumference_mm;
 
-    /* ===== 称重参数 ===== */
+    /* ===== 扭力参数 ===== */
     case COM_NUM_DEVICEPARAM_EMPTY_WEIGHT_UPPER_LIMIT:
         return &g_deviceParams.empty_weight_upper_limit;
     case COM_NUM_DEVICEPARAM_EMPTY_WEIGHT_LOWER_LIMIT:

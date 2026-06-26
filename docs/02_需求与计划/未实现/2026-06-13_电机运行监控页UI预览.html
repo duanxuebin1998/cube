@@ -1,4 +1,4 @@
-<!doctype html>
+﻿﻿<!doctype html>
 <html lang="zh-CN">
 <head>
   <meta charset="utf-8">
@@ -358,7 +358,7 @@
                 <span class="metric-unit" id="line2Unit">mm</span>
               </div>
               <div class="oled-row metric-row">
-                <span class="metric-label" id="line3Label">称重</span>
+                <span class="metric-label" id="line3Label">扭力</span>
                 <span class="metric-value" id="line3Value">18.6</span>
                 <span class="metric-unit" id="line3Unit">kg</span>
               </div>
@@ -378,7 +378,7 @@
         </div>
       </div>
 
-      <p class="caption">这个版本把页面重心放在 4 行屏幕内容上：状态、位置、称重、软键动作。网页里的彩色只用于沟通层级，实际 OLED 仍按单色文本落地。</p>
+      <p class="caption">这个版本把页面重心放在 4 行屏幕内容上：状态、位置、扭力、软键动作。网页里的彩色只用于沟通层级，实际 OLED 仍按单色文本落地。</p>
     </section>
 
     <section class="notes">
@@ -402,7 +402,7 @@
           </tr>
           <tr>
             <td>第 3 行</td>
-            <td>称重 + 右侧数值 + 单位</td>
+            <td>扭力 + 右侧数值 + 单位</td>
             <td>和位置行形成相同节奏，现场扫一眼就能比较趋势。</td>
           </tr>
           <tr>
@@ -416,8 +416,8 @@
       <div class="note ok">
         <h3>我建议采用的改法</h3>
         <ul class="compact-list">
-          <li>运行监控页保留当前 4 行结构，但让位置、称重的数值列固定，减少“乱”的感觉。</li>
-          <li>停止确认页不要只显示一句话，继续显示位置和称重，用户确认时还能看见电机当前状态。</li>
+          <li>运行监控页保留当前 4 行结构，但让位置、扭力的数值列固定，减少“乱”的感觉。</li>
+          <li>停止确认页不要只显示一句话，继续显示位置和扭力，用户确认时还能看见电机当前状态。</li>
           <li>底部右侧统一用动作词：运行页“停止运动”，确认页“确认停止”，停止中“停止中”。</li>
           <li>完成态可以短暂停留 1 到 2 秒显示“运行完成”，再自动返回状态页。</li>
         </ul>
@@ -425,12 +425,12 @@
 
       <div class="note warn">
         <h3>固件同步点</h3>
-        <p>当前优化版已同步到 CPU3 固件：<code>display_tankopera.c</code> 已将运行页和停止确认页统一为状态、位置、称重、软键四行节奏，并让位置和称重数值从固定列开始显示。</p>
+        <p>当前优化版已同步到 CPU3 固件：<code>display_tankopera.c</code> 已将运行页和停止确认页统一为状态、位置、扭力、软键四行节奏，并让位置和扭力数值从固定列开始显示。</p>
       </div>
 
       <div class="note ok">
         <h3>适用命令</h3>
-        <p>仍只针对 <code>CMD_RUN_TO_POSITION</code>、<code>CMD_MOVE_UP</code>、<code>CMD_MOVE_DOWN</code>、<code>CMD_FORCE_MOVE_UP</code>、<code>CMD_FORCE_MOVE_DOWN</code>、<code>CMD_FORCE_LIFT_ZERO</code>。找油、找水、找底、单点、分布、密度区间、瓦锡兰密度流程等业务命令不进入本页。</p>
+        <p>仍只针对 <code>CMD_RUN_TO_POSITION</code>、<code>CMD_MOVE_UP</code>、<code>CMD_MOVE_DOWN</code>、<code>CMD_FORCE_MOVE_UP</code>、<code>CMD_FORCE_MOVE_DOWN</code>。找油、找水、找底、单点、分布、密度区间、瓦锡兰密度流程等业务命令不进入本页。</p>
       </div>
 
       <div class="note danger">
@@ -449,7 +449,7 @@
         line2Label: "位置",
         line2Value: "1250.5",
         line2Unit: "mm",
-        line3Label: "称重",
+        line3Label: "扭力",
         line3Value: "18.6",
         line3Unit: "kg",
         line4Left: "返回",
@@ -464,7 +464,7 @@
         line2Label: "位置",
         line2Value: "1248.0",
         line2Unit: "mm",
-        line3Label: "称重",
+        line3Label: "扭力",
         line3Value: "19.1",
         line3Unit: "kg",
         line4Left: "返回",
@@ -479,7 +479,7 @@
         line2Label: "位置",
         line2Value: "1245.0",
         line2Unit: "mm",
-        line3Label: "称重",
+        line3Label: "扭力",
         line3Value: "19.0",
         line3Unit: "kg",
         line4Left: "返回",
@@ -494,7 +494,7 @@
         line2Label: "位置",
         line2Value: "1200.0",
         line2Unit: "mm",
-        line3Label: "称重",
+        line3Label: "扭力",
         line3Value: "17.9",
         line3Unit: "kg",
         line4Left: "自动返回",

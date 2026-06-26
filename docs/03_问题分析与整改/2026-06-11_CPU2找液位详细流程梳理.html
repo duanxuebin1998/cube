@@ -465,7 +465,7 @@
         <div class="step">
           <b>测量初始化</b>
           <code>MeasureStart()</code><br>
-          初始化电机和称重，清错误码和协议辅助状态。
+          初始化电机和扭力，清错误码和协议辅助状态。
         </div>
         <div class="step">
           <b>必要回零</b>
@@ -1031,7 +1031,7 @@
           </tr>
         </tbody>
       </table>
-      <p>运动中每 200ms 采样一次频率，并持续执行位置边界、称重碰撞和丢步检查。查找模式最长运行 600s；稳定后查找返回，跟随模式则继续长驻监控。</p>
+      <p>运动中每 200ms 采样一次频率，并持续执行位置边界、扭力碰撞和丢步检查。查找模式最长运行 600s；稳定后查找返回，跟随模式则继续长驻监控。</p>
 
       <div class="diagram">
         <p class="diagram-title">流程图 5：连续频率/密度速度闭环控制</p>
@@ -1143,8 +1143,8 @@
         <li>若 <code>debug_data.cable_length &gt; 1000</code>（0.1mm 单位，约 100mm），先上行 100mm，尽量保证探头在空气中。</li>
         <li>调用 <code>MotorCtrl_LostStepInit()</code> 重置丢步检测。</li>
         <li>循环调用 <code>determine_level_status_motion()</code>，若判定为 <code>OIL</code> 则退出循环。</li>
-        <li>未到油中时，下行运动，并持续打印传感器位置、记步参考和称重值。</li>
-        <li>每轮检查丢步 <code>MotorCtrl_CheckLostStepAutoTiming()</code> 和称重碰撞 <code>CheckWeightCollision()</code>。</li>
+        <li>未到油中时，下行运动，并持续打印传感器位置、记步参考和扭力值。</li>
+        <li>每轮检查丢步 <code>MotorCtrl_CheckLostStepAutoTiming()</code> 和扭力碰撞 <code>CheckWeightCollision()</code>。</li>
         <li>若传感器位置低于 <code>blindZone</code>，停止并返回 <code>MEASUREMENT_OILLEVEL_LOW</code>。</li>
         <li>到油中后慢停；若仍高于盲区 100mm，再下行 100mm，确保完全在油中。</li>
         <li>读取并保存 <code>oil_frequency</code>，随后调用 <code>SearchAir()</code> 找空气侧边界。</li>
@@ -1154,7 +1154,7 @@
       <ol>
         <li>调用 <code>MotorCtrl_LostStepInit()</code> 重置丢步检测。</li>
         <li>循环调用 <code>determine_level_status_motion()</code>，若判定为 <code>AIR</code> 则退出循环。</li>
-        <li>未到空气时，上行运动，并持续检查丢步和称重碰撞。</li>
+        <li>未到空气时，上行运动，并持续检查丢步和扭力碰撞。</li>
         <li>到空气后慢停；若尺带长度大于 100mm，再上行 100mm，确保探头全部在空气中。</li>
         <li>读取并保存 <code>air_frequency</code>。</li>
         <li>若传感器位置高于盲区 100mm，再下行 100mm，为后续精找回到液位附近。</li>
