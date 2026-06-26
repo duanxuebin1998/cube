@@ -235,14 +235,14 @@ void WriteDeviceParamsToHoldingRegisters(uint16_t *HoldingRegisterArray)
     write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_BOTTOM_ENCODER_CORRECTION_TANK_HEIGHT, g_deviceParams.bottom_encoder_correction_tank_height);
 
 
-    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_RESERVED24, g_deviceParams.reserved24);
-    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_RESERVED25, g_deviceParams.reserved25);
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_AO_START_LEVEL, g_deviceParams.AOStartLevel_01mm);
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_AO_END_LEVEL, g_deviceParams.AOEndLevel_01mm);
 
     /* ===================== 4-20mA Êä³ö ===================== */
-    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_CURRENT_RANGE_START_mA, g_deviceParams.CurrentRangeStart_mA);
-    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_CURRENT_RANGE_END_mA,   g_deviceParams.CurrentRangeEnd_mA);
-    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_ALARM_HIGH_AO,          g_deviceParams.AlarmHighAO);
-    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_ALARM_LOW_AO,           g_deviceParams.AlarmLowAO);
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_AO_NORMAL_CURRENT_START_mA, g_deviceParams.CurrentRangeStart_mA);
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_AO_NORMAL_CURRENT_END_mA,   g_deviceParams.CurrentRangeEnd_mA);
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_AO_HIGH_ALARM_LEVEL,          g_deviceParams.AlarmHighAO);
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_AO_LOW_ALARM_LEVEL,           g_deviceParams.AlarmLowAO);
     write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_INITIAL_CURRENT_mA,     g_deviceParams.InitialCurrent_mA);
     write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_AO_HIGH_CURRENT_mA,     g_deviceParams.AOHighCurrent_mA);
     write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_AO_LOW_CURRENT_mA,      g_deviceParams.AOLowCurrent_mA);
@@ -425,14 +425,14 @@ void ReadDeviceParamsFromHoldingRegisters(uint16_t *HoldingRegisterArray)
     g_deviceParams.bottom_encoder_correction_tank_height = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_BOTTOM_ENCODER_CORRECTION_TANK_HEIGHT);
 
 
-    g_deviceParams.reserved24 = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_RESERVED24);
-    g_deviceParams.reserved25 = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_RESERVED25);
+    g_deviceParams.AOStartLevel_01mm = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_AO_START_LEVEL);
+    g_deviceParams.AOEndLevel_01mm = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_AO_END_LEVEL);
 
     /* ===================== 4-20mA Êä³ö ===================== */
-    g_deviceParams.CurrentRangeStart_mA = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_CURRENT_RANGE_START_mA);
-    g_deviceParams.CurrentRangeEnd_mA   = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_CURRENT_RANGE_END_mA);
-    g_deviceParams.AlarmHighAO          = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_ALARM_HIGH_AO);
-    g_deviceParams.AlarmLowAO           = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_ALARM_LOW_AO);
+    g_deviceParams.CurrentRangeStart_mA = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_AO_NORMAL_CURRENT_START_mA);
+    g_deviceParams.CurrentRangeEnd_mA   = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_AO_NORMAL_CURRENT_END_mA);
+    g_deviceParams.AlarmHighAO          = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_AO_HIGH_ALARM_LEVEL);
+    g_deviceParams.AlarmLowAO           = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_AO_LOW_ALARM_LEVEL);
     g_deviceParams.InitialCurrent_mA    = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_INITIAL_CURRENT_mA);
     g_deviceParams.AOHighCurrent_mA     = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_AO_HIGH_CURRENT_mA);
     g_deviceParams.AOLowCurrent_mA      = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_AO_LOW_CURRENT_mA);

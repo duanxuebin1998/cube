@@ -269,6 +269,10 @@ int Response10Process(uint8_t const *revframe, uint8_t *sendframe)
 
     /* 3. 将 HoldingRegisterArray 中的数据重新读回到 g_deviceParams 中 */
     ReadDeviceParamsFromHoldingRegisters(HoldingRegisterArray);
+    if (normalize_ao_params_after_write() != 0) {
+        WriteDeviceParamsToHoldingRegisters(HoldingRegisterArray);
+        need_save = 1;
+    }
 
 
 /* printf("0x10 write startAddr=%u regCount=%u, COMMAND=%u, TANKHEIGHT=%u, CRC=%u\r\n", */

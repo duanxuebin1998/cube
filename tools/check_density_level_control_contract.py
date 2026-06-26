@@ -32,6 +32,13 @@ def forbid(text: str, pattern: str, note: str) -> None:
         raise AssertionError(note)
 
 
+def parse_protocol_version(text: str) -> int:
+    match = re.search(r"#define\s+DEVICE_PROTOCOL_VERSION\s+(\d+)u?\b", text)
+    if match is None:
+        raise AssertionError("missing DEVICE_PROTOCOL_VERSION")
+    return int(match.group(1))
+
+
 def main() -> int:
     source = SRC.read_text(encoding="gbk")
     header = HDR.read_text(encoding="gbk")
@@ -41,17 +48,14 @@ def main() -> int:
     cpu3_param_table = CPU3_PARAM_TABLE.read_text(encoding="utf-8")
     protocol_doc = PROTOCOL_DOC.read_text(encoding="utf-8")
 
+    cpu2_protocol_version = parse_protocol_version(cpu2_param_header)
+    cpu3_protocol_version = parse_protocol_version(cpu3_param_header)
+    if cpu2_protocol_version != cpu3_protocol_version:
+        raise AssertionError("CPU2/CPU3 protocol versions must match")
+    if cpu2_protocol_version < 8:
+        raise AssertionError("shared protocol version must include protocol 8 liquid-level method semantics")
+
     checks = [
-        (
-            cpu2_param_header,
-            r"#define\s+DEVICE_PROTOCOL_VERSION\s+10u",
-            "CPU2 protocol version must match current shared protocol version 10",
-        ),
-        (
-            cpu3_param_header,
-            r"#define\s+DEVICE_PROTOCOL_VERSION\s+10u",
-            "CPU3 protocol version must match current shared protocol version 10",
-        ),
         (
             cpu3_param_table,
             r'"液位测量方式"[\s\S]{0,240}COM_NUM_DEVICEPARAM_LIQUIDLEVELMEASUREMENTMETHOD[\s\S]{0,120}true,\s*0,\s*5',

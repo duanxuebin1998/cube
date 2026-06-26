@@ -354,14 +354,18 @@ static volatile uint32_t* get_deviceparam_ptr_by_operanum(int operanum)
     case COM_NUM_DEVICEPARAM_RELAY4_CLEAR_ALARM:
         return &g_deviceParams.relayAlarm[3U].clear_alarm;
 
-    /* ===== 4–20mA / 报警 AO ===== */
-    case COM_NUM_DEVICEPARAM_CURRENT_RANGE_START_mA:
+    /* ===== 4-20mA / 报警 AO ===== */
+    case COM_NUM_DEVICEPARAM_AO_START_LEVEL:
+        return &g_deviceParams.AOStartLevel_01mm;
+    case COM_NUM_DEVICEPARAM_AO_END_LEVEL:
+        return &g_deviceParams.AOEndLevel_01mm;
+    case COM_NUM_DEVICEPARAM_AO_NORMAL_CURRENT_START_mA:
         return &g_deviceParams.CurrentRangeStart_mA;
-    case COM_NUM_DEVICEPARAM_CURRENT_RANGE_END_mA:
+    case COM_NUM_DEVICEPARAM_AO_NORMAL_CURRENT_END_mA:
         return &g_deviceParams.CurrentRangeEnd_mA;
-    case COM_NUM_DEVICEPARAM_ALARM_HIGH_AO:
+    case COM_NUM_DEVICEPARAM_AO_HIGH_ALARM_LEVEL:
         return &g_deviceParams.AlarmHighAO;
-    case COM_NUM_DEVICEPARAM_ALARM_LOW_AO:
+    case COM_NUM_DEVICEPARAM_AO_LOW_ALARM_LEVEL:
         return &g_deviceParams.AlarmLowAO;
     case COM_NUM_DEVICEPARAM_INITIAL_CURRENT_mA:
         return &g_deviceParams.InitialCurrent_mA;

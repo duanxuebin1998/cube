@@ -251,18 +251,18 @@ struct ParameterMetadata param_meta[] = {
 {(uint8_t*)"瓦锡兰探底间隔",	0,	COM_NUM_DEVICEPARAM_WARTSILA_BOTTOM_DETECT_INTERVAL,	HOLDREGISTER_DEVICEPARAM_WARTSILA_BOTTOM_DETECT_INTERVAL,	2,	true,	0,	100,	(uint8_t*)"次",	0,	0,	true,	TYPE_INT,	3,	NULL,	(uint8_t*)"WBotFreq"},
 {(uint8_t*)"探底修正罐高",	0,	COM_NUM_DEVICEPARAM_BOTTOM_ENCODER_CORRECTION_TANK_HEIGHT,	HOLDREGISTER_DEVICEPARAM_BOTTOM_ENCODER_CORRECTION_TANK_HEIGHT,	2,	false,	0,	0,	(uint8_t*)"mm",	1,	0,	true,	TYPE_INT,	7,	NULL,	(uint8_t*)"BotFixH"},
 
-{(uint8_t*)"保留24",	0,	COM_NUM_DEVICEPARAM_RESERVED24,	HOLDREGISTER_DEVICEPARAM_RESERVED24,	2,	false,	0,	0,	NULL,	0,	0,	false,	TYPE_INT,	8,	NULL,	(uint8_t*)"Rsv24"},
-{(uint8_t*)"保留25",	0,	COM_NUM_DEVICEPARAM_RESERVED25,	HOLDREGISTER_DEVICEPARAM_RESERVED25,	2,	false,	0,	0,	NULL,	0,	0,	false,	TYPE_INT,	8,	NULL,	(uint8_t*)"Rsv25"},
+{(uint8_t*)"AO起点液位",	0,	COM_NUM_DEVICEPARAM_AO_START_LEVEL,	HOLDREGISTER_DEVICEPARAM_AO_START_LEVEL,	2,	false,	0,	0,	(uint8_t*)"mm",	1,	0,	true,	TYPE_INT,	7,	NULL,	(uint8_t*)"AOStartLvl"},
+{(uint8_t*)"AO终点液位",	0,	COM_NUM_DEVICEPARAM_AO_END_LEVEL,	HOLDREGISTER_DEVICEPARAM_AO_END_LEVEL,	2,	false,	0,	0,	(uint8_t*)"mm",	1,	0,	true,	TYPE_INT,	7,	NULL,	(uint8_t*)"AOEndLvl"},
 
-{(uint8_t*)"AO输出范围起点电流",	0,	COM_NUM_DEVICEPARAM_CURRENT_RANGE_START_mA,	HOLDREGISTER_DEVICEPARAM_CURRENT_RANGE_START_mA,	2,	true,	0,	3000,	(uint8_t*)"mA",	2,	0,	true,	TYPE_INT,	5,	NULL,	(uint8_t*)"RangeStart"},
-{(uint8_t*)"AO输出范围终点电流",	0,	COM_NUM_DEVICEPARAM_CURRENT_RANGE_END_mA,	HOLDREGISTER_DEVICEPARAM_CURRENT_RANGE_END_mA,	2,	true,	0,	3000,	(uint8_t*)"mA",	2,	0,	true,	TYPE_INT,	5,	NULL,	(uint8_t*)"RangeEnd"},
-{(uint8_t*)"AO高限报警电流",	0,	COM_NUM_DEVICEPARAM_ALARM_HIGH_AO,	HOLDREGISTER_DEVICEPARAM_ALARM_HIGH_AO,	2,	true,	0,	3000,	(uint8_t*)"mA",	2,	0,	true,	TYPE_INT,	5,	NULL,	(uint8_t*)"AlarmHiAO"},
-{(uint8_t*)"AO低限报警电流",	0,	COM_NUM_DEVICEPARAM_ALARM_LOW_AO,	HOLDREGISTER_DEVICEPARAM_ALARM_LOW_AO,	2,	true,	0,	3000,	(uint8_t*)"mA",	2,	0,	true,	TYPE_INT,	5,	NULL,	(uint8_t*)"AlarmLoAO"},
-{(uint8_t*)"AO初始电流",	0,	COM_NUM_DEVICEPARAM_INITIAL_CURRENT_mA,	HOLDREGISTER_DEVICEPARAM_INITIAL_CURRENT_mA,	2,	true,	0,	3000,	(uint8_t*)"mA",	2,	0,	true,	TYPE_INT,	5,	NULL,	(uint8_t*)"InitCurrent"},
-{(uint8_t*)"AO高位电流",	0,	COM_NUM_DEVICEPARAM_AO_HIGH_CURRENT_mA,	HOLDREGISTER_DEVICEPARAM_AO_HIGH_CURRENT_mA,	2,	true,	0,	3000,	(uint8_t*)"mA",	2,	0,	true,	TYPE_INT,	5,	NULL,	(uint8_t*)"HighCurrent"},
-{(uint8_t*)"AO低位电流",	0,	COM_NUM_DEVICEPARAM_AO_LOW_CURRENT_mA,	HOLDREGISTER_DEVICEPARAM_AO_LOW_CURRENT_mA,	2,	true,	0,	3000,	(uint8_t*)"mA",	2,	0,	true,	TYPE_INT,	5,	NULL,	(uint8_t*)"LowCurrent"},
-{(uint8_t*)"AO故障电流",	0,	COM_NUM_DEVICEPARAM_FAULT_CURRENT_mA,	HOLDREGISTER_DEVICEPARAM_FAULT_CURRENT_mA,	2,	true,	0,	3000,	(uint8_t*)"mA",	2,	0,	true,	TYPE_INT,	5,	NULL,	(uint8_t*)"FaultCurrent"},
-{(uint8_t*)"AO调试电流",	0,	COM_NUM_DEVICEPARAM_DEBUG_CURRENT_mA,	HOLDREGISTER_DEVICEPARAM_DEBUG_CURRENT_mA,	2,	true,	0,	3000,	(uint8_t*)"mA",	2,	0,	true,	TYPE_INT,	5,	NULL,	(uint8_t*)"DebugCurrent"},
+{(uint8_t*)"AO正常起点电流",	0,	COM_NUM_DEVICEPARAM_AO_NORMAL_CURRENT_START_mA,	HOLDREGISTER_DEVICEPARAM_AO_NORMAL_CURRENT_START_mA,	2,	true,	400,	2000,	(uint8_t*)"mA",	2,	0,	true,	TYPE_INT,	5,	NULL,	(uint8_t*)"AONormCurS"},
+{(uint8_t*)"AO正常终点电流",	0,	COM_NUM_DEVICEPARAM_AO_NORMAL_CURRENT_END_mA,	HOLDREGISTER_DEVICEPARAM_AO_NORMAL_CURRENT_END_mA,	2,	true,	400,	2000,	(uint8_t*)"mA",	2,	0,	true,	TYPE_INT,	5,	NULL,	(uint8_t*)"AONormCurE"},
+{(uint8_t*)"AO高报警液位",	0,	COM_NUM_DEVICEPARAM_AO_HIGH_ALARM_LEVEL,	HOLDREGISTER_DEVICEPARAM_AO_HIGH_ALARM_LEVEL,	2,	false,	0,	0,	(uint8_t*)"mm",	1,	0,	true,	TYPE_INT,	7,	NULL,	(uint8_t*)"AOHighLvl"},
+{(uint8_t*)"AO低报警液位",	0,	COM_NUM_DEVICEPARAM_AO_LOW_ALARM_LEVEL,	HOLDREGISTER_DEVICEPARAM_AO_LOW_ALARM_LEVEL,	2,	false,	0,	0,	(uint8_t*)"mm",	1,	0,	true,	TYPE_INT,	7,	NULL,	(uint8_t*)"AOLowLvl"},
+{(uint8_t*)"AO初始电流",	0,	COM_NUM_DEVICEPARAM_INITIAL_CURRENT_mA,	HOLDREGISTER_DEVICEPARAM_INITIAL_CURRENT_mA,	2,	true,	320,	2400,	(uint8_t*)"mA",	2,	0,	true,	TYPE_INT,	5,	NULL,	(uint8_t*)"AOInitCur"},
+{(uint8_t*)"AO高位电流",	0,	COM_NUM_DEVICEPARAM_AO_HIGH_CURRENT_mA,	HOLDREGISTER_DEVICEPARAM_AO_HIGH_CURRENT_mA,	2,	true,	320,	2400,	(uint8_t*)"mA",	2,	0,	true,	TYPE_INT,	5,	NULL,	(uint8_t*)"AOHighCur"},
+{(uint8_t*)"AO低位电流",	0,	COM_NUM_DEVICEPARAM_AO_LOW_CURRENT_mA,	HOLDREGISTER_DEVICEPARAM_AO_LOW_CURRENT_mA,	2,	true,	320,	2400,	(uint8_t*)"mA",	2,	0,	true,	TYPE_INT,	5,	NULL,	(uint8_t*)"AOLowCur"},
+{(uint8_t*)"AO故障电流",	0,	COM_NUM_DEVICEPARAM_FAULT_CURRENT_mA,	HOLDREGISTER_DEVICEPARAM_FAULT_CURRENT_mA,	2,	true,	320,	2400,	(uint8_t*)"mA",	2,	0,	true,	TYPE_INT,	5,	NULL,	(uint8_t*)"AOFaultCur"},
+{(uint8_t*)"AO调试电流",	0,	COM_NUM_DEVICEPARAM_DEBUG_CURRENT_mA,	HOLDREGISTER_DEVICEPARAM_DEBUG_CURRENT_mA,	2,	true,	320,	2400,	(uint8_t*)"mA",	2,	0,	true,	TYPE_INT,	5,	NULL,	(uint8_t*)"AODebugCur"},
 {(uint8_t*)"AO输出使能",	0,	COM_NUM_DEVICEPARAM_AO_OUTPUT_ENABLE,	HOLDREGISTER_DEVICEPARAM_AO_OUTPUT_ENABLE,	2,	true,	0,	1,	NULL,	0,	0,	true,	TYPE_INT,	1,	ret_arr_word,	(uint8_t*)"AOEnable"},
 {(uint8_t*)"保留27",	0,	COM_NUM_DEVICEPARAM_RESERVED27,	HOLDREGISTER_DEVICEPARAM_RESERVED27,	2,	false,	0,	0,	NULL,	0,	0,	false,	TYPE_INT,	8,	NULL,	(uint8_t*)"Rsv27"},
 
@@ -598,10 +598,12 @@ void print_device_params(void)
 
     /* AO */
     printf("\r\n-- 4-20mA/AO参数 --\r\n");
-    printf("  %-32s : %lu\r\n", "AO输出范围起点电流", (unsigned long)params.CurrentRangeStart_mA);
-    printf("  %-32s : %lu\r\n", "AO输出范围终点电流", (unsigned long)params.CurrentRangeEnd_mA);
-    printf("  %-32s : %lu\r\n", "AO高限报警电流", (unsigned long)params.AlarmHighAO);
-    printf("  %-32s : %lu\r\n", "AO低限报警电流", (unsigned long)params.AlarmLowAO);
+    printf("  %-32s : %lu\r\n", "AO起点液位", (unsigned long)params.AOStartLevel_01mm);
+    printf("  %-32s : %lu\r\n", "AO终点液位", (unsigned long)params.AOEndLevel_01mm);
+    printf("  %-32s : %lu\r\n", "AO正常起点电流", (unsigned long)params.CurrentRangeStart_mA);
+    printf("  %-32s : %lu\r\n", "AO正常终点电流", (unsigned long)params.CurrentRangeEnd_mA);
+    printf("  %-32s : %lu\r\n", "AO高报警液位", (unsigned long)params.AlarmHighAO);
+    printf("  %-32s : %lu\r\n", "AO低报警液位", (unsigned long)params.AlarmLowAO);
     printf("  %-32s : %lu\r\n", "AO初始电流", (unsigned long)params.InitialCurrent_mA);
     printf("  %-32s : %lu\r\n", "AO高位电流", (unsigned long)params.AOHighCurrent_mA);
     printf("  %-32s : %lu\r\n", "AO低位电流", (unsigned long)params.AOLowCurrent_mA);

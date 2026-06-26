@@ -27,7 +27,7 @@
 #define UNVALID_GSW 0                      /* 质量无效值 */
 
 #define MAX_MEASUREMENT_POINTS 200 /* 密度分布测量最大点数。 */
-#define DEVICE_PROTOCOL_VERSION 10u /* CPU2/CPU3共享协议版本；旧程序未写入时默认为0 */
+#define DEVICE_PROTOCOL_VERSION 11u /* CPU2/CPU3共享协议版本；旧程序未写入时默认为0 */
 #define FAULT_AUTO_RECOVERY_RETRY_DEFAULT 3u /* 故障自动恢复默认重试次数。 */
 #define FAULT_AUTO_RECOVERY_RETRY_MAX 10u /* 故障自动恢复最大重试次数。 */
 
@@ -657,14 +657,14 @@ typedef struct {
     uint32_t bottom_encoder_correction_tank_height; /* 探底修正罐高，仅用于罐底后编码器修正，0表示沿用液位罐高 */
 
 
-    uint32_t reserved24;                 /* 预留 */
-    uint32_t reserved25;                 /* 预留（新增） */
+    uint32_t AOStartLevel_01mm;                 /* AO起点液位(0.1mm) */
+    uint32_t AOEndLevel_01mm;                 /* AO终点液位(0.1mm) */
 
     /* ===================== 4-20mA 输出 ===================== */
-    uint32_t CurrentRangeStart_mA;       /* AO输出范围起点电流 */
-    uint32_t CurrentRangeEnd_mA;         /* AO输出范围终点电流 */
-    uint32_t AlarmHighAO;                /* 高液位报警输出 */
-    uint32_t AlarmLowAO;                 /* 低液位报警输出 */
+    uint32_t CurrentRangeStart_mA;       /* AO正常输出起点电流(0.01mA) */
+    uint32_t CurrentRangeEnd_mA;         /* AO正常输出终点电流(0.01mA) */
+    uint32_t AlarmHighAO;                /* AO高报警液位阈值(0.1mm) */
+    uint32_t AlarmLowAO;                 /* AO低报警液位阈值(0.1mm) */
     uint32_t InitialCurrent_mA;          /* AO初始电流 */
     uint32_t AOHighCurrent_mA;           /* AO高位电流 */
     uint32_t AOLowCurrent_mA;            /* AO低位电流 */
@@ -778,6 +778,11 @@ void save_device_params(void); /* Save device parameters to FRAM immediately */
  * @brief 保存系统参数中的 request_device_params_save 逻辑。
  */
 void request_device_params_save(void); /* Queue one deferred save request */
+/**
+ * @brief Modbus写参后归一化AO运行期参数。
+ * @return 1表示参数被修正，0表示未变化。
+ */
+int normalize_ao_params_after_write(void); /* 写参后修正AO运行期参数 */
 /**
  * @brief 处理系统参数中的 process_device_params_deferred_tasks 逻辑。
  */

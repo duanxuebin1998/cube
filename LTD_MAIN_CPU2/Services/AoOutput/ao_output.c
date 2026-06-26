@@ -2,7 +2,6 @@
 
 #include "ad5421.h"
 #include "main.h"
-#include "../Relay/relay_output.h"
 #include "system_parameter.h"
 #include <stddef.h>
 
@@ -262,6 +261,29 @@ static uint8_t AoOutput_IsDebugState(void)
 {
     return (g_measurement.device_status.device_state == STATE_DEBUG_MODE) ? 1U : 0U;
 }
+/*
+ * 函数用途：选择 AO 正常液位电流换算使用的液位量程。
+ * 调用场景：液位有效并准备计算 4-20mA 目标电流前调用。
+ * 关键约束：AOStartLevel_01mm/AOEndLevel_01mm 复用为 起点/终点液位，不改变参数存储结构大小。
+ */
+static uint32_t AoOutput_GetLevelRange(uint32_t *level_min_01mm, uint32_t *level_max_01mm)
+{
+    if ((level_min_01mm == NULL) || (level_max_01mm == NULL)) {
+        return PARAM_ERROR;
+    }
+
+    *level_min_01mm = g_deviceParams.AOStartLevel_01mm;
+    *level_max_01mm = g_deviceParams.AOEndLevel_01mm;
+    if (*level_max_01mm <= *level_min_01mm) {
+        *level_min_01mm = 0U;
+        *level_max_01mm = g_deviceParams.tankHeight;
+        if (*level_max_01mm == 0U) {
+            *level_max_01mm = 1U;
+        }
+    }
+
+    return NO_ERROR;
+}
 
 /*
  * 函数用途：根据液位和量程参数计算 AO 目标电流。
@@ -272,13 +294,14 @@ static uint32_t AoOutput_CalculateLevelCurrent(uint32_t level_01mm, uint32_t *ta
 {
     uint32_t start_mA_x100 = g_deviceParams.CurrentRangeStart_mA;
     uint32_t end_mA_x100 = g_deviceParams.CurrentRangeEnd_mA;
-    uint32_t level_min_01mm = g_deviceParams.blindZone;
-    uint32_t level_max_01mm = g_deviceParams.tankHeight;
+    uint32_t level_min_01mm;
+    uint32_t level_max_01mm;
     uint32_t level_span_01mm;
     int32_t current_delta_mA_x100;
     uint64_t offset_01mm;
     int64_t scaled;
     int64_t result_mA_x100;
+    uint32_t ret;
 
     if (target_mA_x100 == NULL) {
         return PARAM_ERROR;
@@ -288,8 +311,15 @@ static uint32_t AoOutput_CalculateLevelCurrent(uint32_t level_01mm, uint32_t *ta
     end_mA_x100 = AoOutput_NormalizeNormalCurrent(end_mA_x100);
     *target_mA_x100 = start_mA_x100;
 
-    if ((level_max_01mm <= level_min_01mm) || (end_mA_x100 <= start_mA_x100)) {
-        return PARAM_RANGE_ERROR;
+    ret = AoOutput_GetLevelRange(&level_min_01mm, &level_max_01mm);
+    if (ret != NO_ERROR) {
+        return ret;
+    }
+
+    if (end_mA_x100 == start_mA_x100) {
+        start_mA_x100 = AO_OUTPUT_NORMAL_MIN_MA_X100;
+        end_mA_x100 = AO_OUTPUT_NORMAL_MAX_MA_X100;
+        *target_mA_x100 = start_mA_x100;
     }
 
     if (level_01mm <= level_min_01mm) {
@@ -325,38 +355,41 @@ static uint32_t AoOutput_CalculateLevelCurrent(uint32_t level_01mm, uint32_t *ta
 }
 
 /*
- * 函数用途：根据继电器 HH/H 或 LL/L 报警覆盖 AO 目标电流。
- * 调用场景：液位电流计算完成后，输出前统一处理报警优先级。
- * 关键约束：只读取继电器运行态，不清报警、不修改继电器配置。
+ * 函数用途：根据独立 AO 高低报警液位覆盖目标电流。
+ * 调用场景：正常液位电流计算完成后，输出前处理 AO 报警优先级。
+ * 关键约束：不读取继电器报警状态，AO 报警阈值与继电器阈值相互独立。
  */
-static void AoOutput_ApplyAlarm(uint32_t *target_mA_x100, AoOutputSource *source)
+static void AoOutput_ApplyAlarm(uint32_t level_01mm, uint32_t *target_mA_x100, AoOutputSource *source)
 {
-    uint8_t high_active = 0U;
-    uint8_t low_active = 0U;
+    uint32_t high_alarm_01mm = g_deviceParams.AlarmHighAO;
+    uint32_t low_alarm_01mm = g_deviceParams.AlarmLowAO;
+    uint32_t tank_height_01mm = g_deviceParams.tankHeight;
 
     if ((target_mA_x100 == NULL) || (source == NULL)) {
         return;
     }
 
-    for (uint32_t channel = 0U; channel < RELAY_ALARM_CHANNEL_COUNT; channel++) {
-        const volatile RelayAlarmRuntimeState *state = RelayOutput_GetRuntimeState(channel);
-        if (state == NULL) {
-            continue;
+    if (tank_height_01mm != 0U) {
+        if (high_alarm_01mm > tank_height_01mm) {
+            high_alarm_01mm = 0U;
         }
-        if (state->HH_H_alarm == RELAY_ALARM_STATE_ACTIVE) {
-            high_active = 1U;
-        }
-        if (state->LL_L_alarm == RELAY_ALARM_STATE_ACTIVE) {
-            low_active = 1U;
+        if (low_alarm_01mm > tank_height_01mm) {
+            low_alarm_01mm = 0U;
         }
     }
 
-    if (high_active != 0U) {
-        *target_mA_x100 = AoOutput_NormalizeHardwareCurrent(g_deviceParams.AOHighCurrent_mA);
-        *source = AO_OUTPUT_SOURCE_ALARM_HIGH;
-    } else if (low_active != 0U) {
+    if ((high_alarm_01mm != 0U) &&
+        (low_alarm_01mm != 0U) &&
+        (low_alarm_01mm >= high_alarm_01mm)) {
+        return;
+    }
+
+    if ((low_alarm_01mm != 0U) && (level_01mm <= low_alarm_01mm)) {
         *target_mA_x100 = AoOutput_NormalizeHardwareCurrent(g_deviceParams.AOLowCurrent_mA);
         *source = AO_OUTPUT_SOURCE_ALARM_LOW;
+    } else if ((high_alarm_01mm != 0U) && (level_01mm >= high_alarm_01mm)) {
+        *target_mA_x100 = AoOutput_NormalizeHardwareCurrent(g_deviceParams.AOHighCurrent_mA);
+        *source = AO_OUTPUT_SOURCE_ALARM_HIGH;
     }
 }
 
@@ -398,7 +431,7 @@ static uint32_t AoOutput_SelectTarget(AoOutputSource *source, uint32_t *target_m
             *target_mA_x100 = AoOutput_NormalizeHardwareCurrent(g_deviceParams.FaultCurrent_mA);
             return ret;
         }
-        AoOutput_ApplyAlarm(target_mA_x100, source);
+        AoOutput_ApplyAlarm(level_01mm, target_mA_x100, source);
         *target_mA_x100 = AoOutput_NormalizeHardwareCurrent(*target_mA_x100);
         return NO_ERROR;
     }

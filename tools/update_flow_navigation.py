@@ -360,13 +360,13 @@ ROUTES = [
     {
         "id": "readparams",
         "title": "读取部件参数、RSSI 与 AO 运行态链路",
-        "summary": "读取部件参数由 CPU3 菜单下发，CPU2 周期刷新传感器快照并查询 CH9141K 当前连接 RSSI；协议 10 继续在 RSSI 后追加 AO 运行态，CPU3 轮询尾部输入寄存器后在状态页显示。",
+        "summary": "读取部件参数由 CPU3 菜单下发，CPU2 周期刷新传感器快照并查询 CH9141K 当前连接 RSSI；协议 10 起返回 RSSI，协议 11 起在 RSSI 后追加 AO 运行态，CPU3 轮询尾部输入寄存器后在状态页显示。",
         "steps": [
             ("CPU3 菜单入口", "cpu3_07", "读取部件参数位于测量/维护入口，下发 CMD_READ_PART_PARAMS"),
             ("CPU3 内部轮询", "cpu3_02", "运行轮询读取输入寄存器尾部 WirelessPairingStatus 和 AoOutputRuntime 字段"),
             ("CPU2 命令入口", "cpu2_02", "进入读取部件参数命令并保持 STATE_READPARAMETEROVER 持续刷新"),
             ("CPU2 传感器快照", "cpu2_09", "每 1s 刷新位置、称重、温度、频率、电容、角度，每 5s 查询蓝牙 RSSI"),
-            ("CPU2 寄存器发布", "cpu2_10", "协议版本 10 在继电器运行态后追加 RSSI，再追加 AO 目标/实际/错误运行态"),
+            ("CPU2 寄存器发布", "cpu2_10", "协议版本 10 起在继电器运行态后追加 RSSI，协议 11 起追加 AO 目标/实际/错误运行态"),
             ("CPU3 状态显示", "cpu3_06", "读取参数完成页显示 RSSI 或 N/A，状态页显示协议兼容和 AO/AD5421 故障原因"),
         ],
     },
@@ -380,7 +380,7 @@ ROUTES = [
             ("液位结果来源", "cpu2_04", "找液位/跟随更新液位结果时同步刷新 AO 输出目标"),
             ("AO 服务与硬件", "cpu2_13", "AoOutput_Update 计算目标、限幅、节流写 AD5421，并记录运行态"),
             ("HART/AD5421 接口", "cpu2_11", "HART 命令 2/3 返回 AO 电流和百分比，AD5421 错误进入故障码"),
-            ("CPU3 状态回读", "cpu3_06", "协议 10 输入尾段显示 AO 运行态和 AD5421 故障原因"),
+            ("CPU3 状态回读", "cpu3_06", "协议 11 起输入尾段显示 AO 运行态和 AD5421 故障原因"),
         ],
     },
     {
@@ -493,7 +493,7 @@ RELATIONS: Dict[str, Dict[str, object]] = {
         "route": ["cpu2_total", "cpu2_09", "cpu2_10", "cpu3_02", "cpu3_06"],
     },
     "cpu2_10": {
-        "focus": "CPU2 与 CPU3 的共享寄存器和 Modbus 接口，是 CPU2 测量结果、无线 RSSI、AO 运行态和协议版本 10 尾部字段返回 CPU3 的主通道。",
+        "focus": "CPU2 与 CPU3 的共享寄存器和 Modbus 接口，是 CPU2 测量结果、无线 RSSI、协议版本 11 起 AO 运行态尾部字段返回 CPU3 的主通道。",
         "upstream": ["cpu2_02", "cpu2_04", "cpu2_05", "cpu2_06", "cpu2_07", "cpu3_02"],
         "downstream": ["cpu3_02", "cpu3_04", "cpu3_05", "cpu3_06", "cpu2_12"],
         "route": ["cross", "cpu2_04", "cpu2_10", "cpu3_02", "cpu3_06"],
@@ -547,7 +547,7 @@ RELATIONS: Dict[str, Dict[str, object]] = {
         "route": ["cpu3_total", "cpu3_01", "cpu3_02"],
     },
     "cpu3_02": {
-        "focus": "CPU3 作为 CPU2 Modbus 主站，负责写指令/参数、读输入/保持寄存器、密度点分批回读，并解析协议版本 10 的 RSSI 与 AO 运行态尾部字段。",
+        "focus": "CPU3 作为 CPU2 Modbus 主站，负责写指令/参数、读输入/保持寄存器、密度点分批回读，并解析协议版本 10 起的 RSSI 和协议版本 11 起的 AO 运行态尾部字段。",
         "upstream": ["cpu3_01", "cpu3_03", "cpu3_04", "cpu3_05", "cpu3_07"],
         "downstream": ["cpu2_10", "cpu2_02", "cpu2_04", "cpu2_05", "cpu2_06", "cpu3_06"],
         "route": ["cross", "cpu3_07", "cpu3_02", "cpu2_02", "cpu2_04", "cpu2_10"],

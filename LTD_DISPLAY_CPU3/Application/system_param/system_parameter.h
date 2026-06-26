@@ -26,7 +26,7 @@
 #define UNVALID_POSITION 0
 #define UNVALID_TEMPERATURE 0
 #define MAX_MEASUREMENT_POINTS 200 /* 密度分布测量最大点数 */
-#define DEVICE_PROTOCOL_VERSION 10u /* CPU2/CPU3共享协议版本；旧程序未写入时默认为0 */
+#define DEVICE_PROTOCOL_VERSION 11u /* CPU2/CPU3共享协议版本；旧程序未写入时默认为0 */
 #define FAULT_AUTO_RECOVERY_RETRY_DEFAULT 3u
 #define FAULT_AUTO_RECOVERY_RETRY_MAX 10u
 
@@ -685,14 +685,14 @@ typedef struct {
     uint32_t wartsila_bottom_detect_interval; /* 瓦锡兰测量后探底频率：0不探底，N表示每N次测量后探底一次，范围0~100 */
     uint32_t bottom_encoder_correction_tank_height; /* 探底修正罐高，仅用于罐底后编码器修正，0表示沿用液位罐高 */
 
-    uint32_t reserved24;                 /* 预留 */
-    uint32_t reserved25;                 /* 预留（新增） */
+    uint32_t AOStartLevel_01mm;                 /* AO起点液位(0.1mm) */
+    uint32_t AOEndLevel_01mm;                 /* AO终点液位(0.1mm) */
 
     /* ===================== 4-20mA 输出 ===================== */
-    uint32_t CurrentRangeStart_mA;       /* 电流量程起始值 */
-    uint32_t CurrentRangeEnd_mA;         /* 电流量程结束值 */
-    uint32_t AlarmHighAO;                /* 高液位报警输出 */
-    uint32_t AlarmLowAO;                 /* 低液位报警输出 */
+    uint32_t CurrentRangeStart_mA;       /* AO正常输出起点电流(0.01mA) */
+    uint32_t CurrentRangeEnd_mA;         /* AO正常输出终点电流(0.01mA) */
+    uint32_t AlarmHighAO;                /* AO高报警液位阈值(0.1mm) */
+    uint32_t AlarmLowAO;                 /* AO低报警液位阈值(0.1mm) */
     uint32_t InitialCurrent_mA;          /* 初始化电流值 */
     uint32_t AOHighCurrent_mA;           /* AO高报电流值 */
     uint32_t AOLowCurrent_mA;            /* AO低报电流值 */

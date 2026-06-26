@@ -58,18 +58,19 @@ def read_text_with_fallback(path: Path, *encodings: str) -> str:
 
 
 def extract_update_disabled_branch(compact_text: str) -> str:
-    function_marker = "uint32_tAoOutput_Update(void){"
-    function_start = compact_text.find(function_marker)
-    if function_start < 0:
-        return ""
     marker = "if(AoOutput_IsEnabled()==0U){"
-    start = compact_text.find(marker, function_start)
-    if start < 0:
-        return ""
-    end = compact_text.find("returnNO_ERROR;}", start)
-    if end < 0:
-        return ""
-    return compact_text[start:end + len("returnNO_ERROR;}")]
+    start = 0
+    while True:
+        start = compact_text.find(marker, start)
+        if start < 0:
+            return ""
+        end = compact_text.find("returnNO_ERROR;}", start)
+        if end < 0:
+            return ""
+        branch = compact_text[start:end + len("returnNO_ERROR;}")]
+        if "ao_output_driver_ready=0U;" in branch:
+            return branch
+        start += len(marker)
 
 
 def main() -> int:
@@ -90,8 +91,8 @@ def main() -> int:
 
     failed: list[str] = []
 
-    require(parse_protocol_version(cpu2_param, CPU2_PARAM) == 10, "CPU2 DEVICE_PROTOCOL_VERSION must be 10", failed)
-    require(parse_protocol_version(cpu3_param, CPU3_PARAM) == 10, "CPU3 DEVICE_PROTOCOL_VERSION must be 10", failed)
+    require(parse_protocol_version(cpu2_param, CPU2_PARAM) == 11, "CPU2 DEVICE_PROTOCOL_VERSION must be 11", failed)
+    require(parse_protocol_version(cpu3_param, CPU3_PARAM) == 11, "CPU3 DEVICE_PROTOCOL_VERSION must be 11", failed)
 
     for text, name in ((cpu2_param, "CPU2"), (cpu3_param, "CPU3")):
         require("uint32_t AoOutputEnable;" in text, f"{name} DeviceParameters must expose AoOutputEnable", failed)
@@ -146,7 +147,7 @@ def main() -> int:
     disabled_branch = extract_update_disabled_branch(cpu2_ao_compact)
     require("AoOutput_IsEnabled" in cpu2_ao, "CPU2 AO service must check enable flag", failed)
     require("AO_OUTPUT_SOURCE_DISABLED" in cpu2_ao, "CPU2 AO runtime must expose disabled source", failed)
-    require("if(AoOutput_IsEnabled()==0U){AoOutput_SetDisabledRuntime(now);returnNO_ERROR;}" in cpu2_ao_compact, "CPU2 AO init must bypass AD5421 when disabled", failed)
+    require("if(AoOutput_IsEnabled()==0U){AoOutput_SetDisabledRuntime(now);AoOutput_LeaveUpdate();returnNO_ERROR;}" in cpu2_ao_compact, "CPU2 AO init must bypass AD5421 when disabled", failed)
     require("ao_output_driver_ready=0U;" in disabled_branch, "CPU2 AO update disabled branch must clear driver-ready state", failed)
     require("AoOutput_SetDisabledRuntime(now);" in disabled_branch, "CPU2 AO update disabled branch must publish disabled runtime", failed)
     require(("AD5421_" not in disabled_branch) and ("Ad5421Init" not in disabled_branch), "CPU2 AO update must bypass AD5421 when disabled", failed)

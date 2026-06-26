@@ -90,8 +90,9 @@ def main() -> int:
 
     cpu2_version = parse_protocol_version(cpu2_param, CPU2_PARAM)
     cpu3_version = parse_protocol_version(cpu3_param, CPU3_PARAM)
-    require(cpu2_version == 10, "CPU2 DEVICE_PROTOCOL_VERSION must be 10", failed)
-    require(cpu3_version == 10, "CPU3 DEVICE_PROTOCOL_VERSION must be 10", failed)
+    require(cpu2_version == cpu3_version, "CPU2/CPU3 DEVICE_PROTOCOL_VERSION must match", failed)
+    require(cpu2_version >= 9, "CPU2 DEVICE_PROTOCOL_VERSION must include protocol 9 RSSI fields", failed)
+    require(cpu3_version >= 9, "CPU3 DEVICE_PROTOCOL_VERSION must include protocol 9 RSSI fields", failed)
 
     cpu2_fields = field_order(extract_struct_body(cpu2_param, "WirelessPairingStatus", CPU2_PARAM))
     cpu3_fields = field_order(extract_struct_body(cpu3_param, "WirelessPairingStatus", CPU3_PARAM))

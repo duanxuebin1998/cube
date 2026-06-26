@@ -294,6 +294,38 @@
 - `cmake --build build\LTD_DISPLAY_CPU3`：通过。
 - 未做实物联调；需要现场验证 `AoOutputEnable=0` 且电流环未接时不上报 AO 故障，`AoOutputEnable=1` 时 4-20mA 输出、HART 电流值和 AD5421 故障诊断恢复正常。
 
+### 协议版本 11
+
+关联改动：
+- 保持寄存器地址不新增、不移动，`AOStartLevel_01mm/AOEndLevel_01mm` 复用原 `reserved24/reserved25` 参数位置作为 AO 正常输出液位量程端点。
+- `AOStartLevel_01mm` 复用原 `reserved24` 参数位置，语义为 AO 起点液位，单位 `0.1mm`，对应 `CurrentRangeStart_mA` 正常起点电流。
+- `AOEndLevel_01mm` 复用原 `reserved25` 参数位置，语义为 AO 终点液位，单位 `0.1mm`，对应 `CurrentRangeEnd_mA` 正常终点电流。
+- `CurrentRangeStart_mA/CurrentRangeEnd_mA` 保留为正常输出起点/终点电流，单位 `0.01mA`；允许起点电流大于终点电流以支持反向 20mA->4mA 输出，二者相等时 CPU2 归一化为默认 4.00mA/20.00mA。
+- `AlarmHighAO/AlarmLowAO` 语义改为 AO 独立高/低报警液位阈值，单位 `0.1mm`。
+- `AOHighCurrent_mA/AOLowCurrent_mA` 继续表示 AO 高/低报警触发后的输出电流，单位 `0.01mA`；`InitialCurrent_mA/AOHighCurrent_mA/AOLowCurrent_mA/FaultCurrent_mA/DebugCurrent_mA` 统一按 AD5421 硬件输出范围限制为 `3.20..24.00mA`。
+- CPU2 AO 输出不再读取继电器 `HH/H` 或 `L/LL` 运行态覆盖电流，改为按 `AlarmHighAO/AlarmLowAO` 独立判断 AO 报警；继电器报警继续使用各路 `relayAlarm[]` 阈值。
+- AO 高低报警阈值中任一项为 `0` 表示关闭对应报警；两者均非 `0` 时应保持低报警液位低于高报警液位。如果阈值重叠或超出罐高，CPU2 写参后会归一化为关闭 AO 报警覆盖。
+
+寄存器布局影响：
+- 保持寄存器地址和数量不变。
+- `HOLDREGISTER_DEVICEPARAM_AO_START_LEVEL` 和 `HOLDREGISTER_DEVICEPARAM_AO_END_LEVEL` 从保留字段变为 AO 液位量程端点。
+- `HOLDREGISTER_DEVICEPARAM_AO_NORMAL_CURRENT_START_mA`、`HOLDREGISTER_DEVICEPARAM_AO_NORMAL_CURRENT_END_mA` 地址不变，仅明确为电流端点。
+- `HOLDREGISTER_DEVICEPARAM_AO_HIGH_ALARM_LEVEL`、`HOLDREGISTER_DEVICEPARAM_AO_LOW_ALARM_LEVEL` 地址不变，字段单位从旧电流口径修正为液位阈值口径。
+- CPU3 操作号同步改为 `COM_NUM_DEVICEPARAM_AO_START_LEVEL`、`COM_NUM_DEVICEPARAM_AO_END_LEVEL`、`COM_NUM_DEVICEPARAM_AO_NORMAL_CURRENT_START_mA`、`COM_NUM_DEVICEPARAM_AO_NORMAL_CURRENT_END_mA`、`COM_NUM_DEVICEPARAM_AO_HIGH_ALARM_LEVEL`、`COM_NUM_DEVICEPARAM_AO_LOW_ALARM_LEVEL`。
+- `DeviceParameters` 结构体大小和 `DEVICE_PARAM_VERSION` 不变。
+
+兼容性影响：
+- CPU2/CPU3 必须同为协议版本 11，才能正确显示和写入 AO 液位量程端点、AO 独立报警液位阈值和状态电流值。
+- 协议版本 10 的 CPU3 会把 `reserved24/reserved25` 显示为保留字段，并把 `AlarmHighAO/AlarmLowAO` 显示为报警电流，不能与协议版本 11 的 CPU2 混用。
+- CPU2 从旧协议存储升级到协议版本 11 时，会把 `AOStartLevel_01mm=0`、`AOEndLevel_01mm=tankHeight`、`AlarmHighAO=0`、`AlarmLowAO=0` 写入运行参数，避免旧保留值或旧电流口径被误解释成液位报警阈值；运行期写参后也会把 AO 液位端点归一化到 `0..tankHeight` 且保持起点小于终点，并把特殊 AO 电流参数归一化到 `320..2400` 后回读。
+- `DEVICE_PARAM_VERSION` 保持不变，不会因本次升级触发恢复出厂参数；但协议语义变化后需要现场复核 AO起点/终点液位点、正常起点/终点电流方向和 AO 报警液位阈值。
+
+验证结果：
+- `git diff --check`：通过。
+- `cmake --build build\LTD_MAIN_CPU2`：通过。
+- `cmake --build build\LTD_DISPLAY_CPU3`：通过。
+- 未做实物联调；需要现场验证 AO起点/终点液位量程、正向和反向正常电流映射、AO 独立高/低报警电流覆盖，以及继电器报警阈值不再影响 AO 报警输出。
+
 ## 后续维护要求
 
 - 2026-06-10 CPU2 `V1.12.1.3` / CPU3 `V1.11.1.3` 同步 CPU2 系统参数出厂默认值和 CPU3 状态页显示参数矩阵，复用现有共享测量数据、设备状态和参数寄存器，不新增共享寄存器、命令码或参数语义，因此 `DEVICE_PROTOCOL_VERSION` 保持 `7`。

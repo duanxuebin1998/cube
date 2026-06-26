@@ -102,13 +102,20 @@ def normalize_expr(expr: str) -> str:
     return re.sub(r"\s+", "", expr)
 
 
+def strip_c_comments(expr: str) -> str:
+    """移除宏同一行中的 C 注释，避免注释风格影响寄存器表达式比较。"""
+
+    expr = re.sub(r"/\*.*?\*/", "", expr)
+    return expr.split("//", 1)[0]
+
+
 def parse_protocol_regs(text: str, path: Path) -> dict[str, str]:
     """提取 SI7000 共享状态依赖的寄存器宏及其地址表达式。"""
 
     regs: dict[str, str] = {}
     # 保留表达式文本用于 CPU2/CPU3 对比，确认两边不仅字段名一致，地址链也一致。
     for match in re.finditer(r"#define\s+(REG_(?:DEVICE_STATUS|OIL_MEASUREMENT|HEIGHT_MEASUREMENT|DENSITY_DIST)_[A-Z0-9_]+)\s+(.+)", text):
-        regs[match.group(1)] = normalize_expr(match.group(2).split("//", 1)[0].strip())
+        regs[match.group(1)] = normalize_expr(strip_c_comments(match.group(2)).strip())
     missing = [name for name in EXPECTED_REGS if name not in regs]
     if missing:
         raise AssertionError(f"{path}: missing register defines: {', '.join(missing)}")

@@ -363,14 +363,14 @@ typedef enum
     COM_NUM_DEVICEPARAM_WARTSILA_BOTTOM_DETECT_INTERVAL, /* 瓦锡兰测量后探底频率：0不探底，N表示每N次测量后探底一次，范围0~100 */
     COM_NUM_DEVICEPARAM_BOTTOM_ENCODER_CORRECTION_TANK_HEIGHT, /* 探底修正罐高 */
 
-    COM_NUM_DEVICEPARAM_RESERVED24,                     /* 保留 24 */
-    COM_NUM_DEVICEPARAM_RESERVED25,                     /* 保留 25 */
+    COM_NUM_DEVICEPARAM_AO_START_LEVEL,                     /* AO起点液位 */
+    COM_NUM_DEVICEPARAM_AO_END_LEVEL,                     /* AO终点液位 */
 
     /* ---------------- 4-20mA / 报警 AO ---------------- */
-    COM_NUM_DEVICEPARAM_CURRENT_RANGE_START_mA,         /* 电流量程起点 */
-    COM_NUM_DEVICEPARAM_CURRENT_RANGE_END_mA,           /* 电流量程终点 */
-    COM_NUM_DEVICEPARAM_ALARM_HIGH_AO,                  /* 高报警 AO */
-    COM_NUM_DEVICEPARAM_ALARM_LOW_AO,                   /* 低报警 AO */
+    COM_NUM_DEVICEPARAM_AO_NORMAL_CURRENT_START_mA,         /* 正常起点电流 */
+    COM_NUM_DEVICEPARAM_AO_NORMAL_CURRENT_END_mA,           /* 正常终点电流 */
+    COM_NUM_DEVICEPARAM_AO_HIGH_ALARM_LEVEL,                  /* AO 高报警液位 */
+    COM_NUM_DEVICEPARAM_AO_LOW_ALARM_LEVEL,                   /* AO 低报警液位 */
     COM_NUM_DEVICEPARAM_INITIAL_CURRENT_mA,             /* 初始化电流 */
     COM_NUM_DEVICEPARAM_AO_HIGH_CURRENT_mA,             /* AO 高报电流 */
     COM_NUM_DEVICEPARAM_AO_LOW_CURRENT_mA,              /* AO 低报电流 */

@@ -1641,15 +1641,17 @@ static uint8_t *dtm_operaname_short(int num, uint8_t *fallback)
 		{ COM_NUM_DEVICEPARAM_RELAY4_ALARM_HYSTERESIS, (uint8_t*)"报警滞回", (uint8_t*)"R4Hys" },
 		{ COM_NUM_DEVICEPARAM_RELAY4_DAMPING_FACTOR, (uint8_t*)"阻尼系数", (uint8_t*)"R4Damp" },
 		{ COM_NUM_DEVICEPARAM_RELAY4_CLEAR_ALARM, (uint8_t*)"清除锁存", (uint8_t*)"R4Clear" },
-		{ COM_NUM_DEVICEPARAM_CURRENT_RANGE_START_mA, (uint8_t*)"起点电流", (uint8_t*)"AOStart" },
-		{ COM_NUM_DEVICEPARAM_CURRENT_RANGE_END_mA, (uint8_t*)"终点电流", (uint8_t*)"AOEnd" },
-		{ COM_NUM_DEVICEPARAM_ALARM_HIGH_AO, (uint8_t*)"高限报警", (uint8_t*)"AOHighAlarm" },
-		{ COM_NUM_DEVICEPARAM_ALARM_LOW_AO, (uint8_t*)"低限报警", (uint8_t*)"AOLowAlarm" },
-		{ COM_NUM_DEVICEPARAM_INITIAL_CURRENT_mA, (uint8_t*)"初始电流", (uint8_t*)"InitCurrent" },
-		{ COM_NUM_DEVICEPARAM_AO_HIGH_CURRENT_mA, (uint8_t*)"高位电流", (uint8_t*)"HighCurrent" },
-		{ COM_NUM_DEVICEPARAM_AO_LOW_CURRENT_mA, (uint8_t*)"低位电流", (uint8_t*)"LowCurrent" },
-		{ COM_NUM_DEVICEPARAM_FAULT_CURRENT_mA, (uint8_t*)"故障电流", (uint8_t*)"FaultCurrent" },
-		{ COM_NUM_DEVICEPARAM_DEBUG_CURRENT_mA, (uint8_t*)"调试电流", (uint8_t*)"DebugCurrent" },
+		{ COM_NUM_DEVICEPARAM_AO_START_LEVEL, (uint8_t*)"起点液位", (uint8_t*)"AOStartLvl" },
+		{ COM_NUM_DEVICEPARAM_AO_END_LEVEL, (uint8_t*)"终点液位", (uint8_t*)"AOEndLvl" },
+		{ COM_NUM_DEVICEPARAM_AO_NORMAL_CURRENT_START_mA, (uint8_t*)"起点电流", (uint8_t*)"AONormCurS" },
+		{ COM_NUM_DEVICEPARAM_AO_NORMAL_CURRENT_END_mA, (uint8_t*)"终点电流", (uint8_t*)"AONormCurE" },
+		{ COM_NUM_DEVICEPARAM_AO_HIGH_ALARM_LEVEL, (uint8_t*)"高报液位", (uint8_t*)"AOHighLvl" },
+		{ COM_NUM_DEVICEPARAM_AO_LOW_ALARM_LEVEL, (uint8_t*)"低报液位", (uint8_t*)"AOLowLvl" },
+		{ COM_NUM_DEVICEPARAM_INITIAL_CURRENT_mA, (uint8_t*)"初始电流", (uint8_t*)"AOInitCur" },
+		{ COM_NUM_DEVICEPARAM_AO_HIGH_CURRENT_mA, (uint8_t*)"高位电流", (uint8_t*)"AOHighCur" },
+		{ COM_NUM_DEVICEPARAM_AO_LOW_CURRENT_mA, (uint8_t*)"低位电流", (uint8_t*)"AOLowCur" },
+		{ COM_NUM_DEVICEPARAM_FAULT_CURRENT_mA, (uint8_t*)"故障电流", (uint8_t*)"AOFaultCur" },
+		{ COM_NUM_DEVICEPARAM_DEBUG_CURRENT_mA, (uint8_t*)"调试电流", (uint8_t*)"AODebugCur" },
 		{ COM_NUM_DEVICEPARAM_AO_OUTPUT_ENABLE, (uint8_t*)"AO使能", (uint8_t*)"AOEnable" },
 		{ COM_NUM_DEVICEPARAM_OILLEVEL_HYSTERESIS_THRESHOLD, (uint8_t*)"滞后阈值", (uint8_t*)"HysTh" },
 		{ COM_NUM_DEVICEPARAM_SP_MEAS_POSITION, (uint8_t*)"测量位置", (uint8_t*)"SP_MeasPos" },
@@ -4707,10 +4709,12 @@ static MenuGroup ParamGroupOf(int operaNum)
         return MENU_GRP_WARTSILA;
 
     /* AO */
-    case COM_NUM_DEVICEPARAM_CURRENT_RANGE_START_mA:
-    case COM_NUM_DEVICEPARAM_CURRENT_RANGE_END_mA:
-    case COM_NUM_DEVICEPARAM_ALARM_HIGH_AO:
-    case COM_NUM_DEVICEPARAM_ALARM_LOW_AO:
+    case COM_NUM_DEVICEPARAM_AO_START_LEVEL:
+    case COM_NUM_DEVICEPARAM_AO_END_LEVEL:
+    case COM_NUM_DEVICEPARAM_AO_NORMAL_CURRENT_START_mA:
+    case COM_NUM_DEVICEPARAM_AO_NORMAL_CURRENT_END_mA:
+    case COM_NUM_DEVICEPARAM_AO_HIGH_ALARM_LEVEL:
+    case COM_NUM_DEVICEPARAM_AO_LOW_ALARM_LEVEL:
     case COM_NUM_DEVICEPARAM_INITIAL_CURRENT_mA:
     case COM_NUM_DEVICEPARAM_AO_HIGH_CURRENT_mA:
     case COM_NUM_DEVICEPARAM_AO_LOW_CURRENT_mA:

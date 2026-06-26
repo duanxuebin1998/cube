@@ -23,6 +23,10 @@ volatile MeasurementResult g_measurement = {0};   /* 测量结果 */
 volatile DeviceParameters  g_deviceParams = {0};  /* 设备参数 */
 static volatile uint8_t g_device_params_save_pending = 0; /* Deferred save request flag */
 static volatile uint32_t g_device_params_save_request_tick = 0; /* Last deferred save request tick */
+#define AO_NORMAL_CURRENT_MIN_MA_X100 400U /* AO正常输出电流最小值，单位0.01mA。 */
+#define AO_NORMAL_CURRENT_MAX_MA_X100 2000U /* AO正常输出电流最大值，单位0.01mA。 */
+#define AO_OUTPUT_CURRENT_MIN_MA_X100 320U /* AO特殊电流最小值，单位0.01mA。 */
+#define AO_OUTPUT_CURRENT_MAX_MA_X100 2400U /* AO特殊电流最大值，单位0.01mA。 */
 /* 将继电器报警输出枚举值转换成中文打印文本，便于现场调试查看。 */
 static const char * relay_operating_mode_str(uint32_t value)
 {
@@ -238,18 +242,148 @@ static int apply_firmware_version_runtime(void)
  * 旧程序没有该语义，原reserved1位置默认为0；新程序统一写入当前协议，供CPU3判断共享数据能力。 */
 static int apply_protocol_version_runtime(void)
 {
-    /* CPU2不和CPU3协商协议，只发布自身当前协议；存储值正确时不重复写入。 */
-    if (g_deviceParams.protocolVersion == DEVICE_PROTOCOL_VERSION) {
+    uint32_t old_protocol = g_deviceParams.protocolVersion;
+
+    if (old_protocol == DEVICE_PROTOCOL_VERSION) {
         return 0;
     }
 
-    /* 旧存储或异常写入导致协议不一致时，启动阶段恢复为CPU2当前协议。 */
-    g_deviceParams.bottom_encoder_correction_tank_height = 0U;
-    g_deviceParams.fault_auto_recovery_retry_limit = FAULT_AUTO_RECOVERY_RETRY_DEFAULT;
-    g_deviceParams.AoOutputEnable = 0U;
+    if ((old_protocol < 10U) || (old_protocol > DEVICE_PROTOCOL_VERSION)) {
+        g_deviceParams.bottom_encoder_correction_tank_height = 0U;
+        g_deviceParams.fault_auto_recovery_retry_limit = FAULT_AUTO_RECOVERY_RETRY_DEFAULT;
+        g_deviceParams.AoOutputEnable = 0U;
+    }
+
+    if ((old_protocol < 11U) || (old_protocol > DEVICE_PROTOCOL_VERSION)) {
+        g_deviceParams.AOStartLevel_01mm = 0U;
+        g_deviceParams.AOEndLevel_01mm = g_deviceParams.tankHeight;
+        g_deviceParams.AlarmHighAO = 0U;
+        g_deviceParams.AlarmLowAO = 0U;
+    }
+
     g_deviceParams.protocolVersion = DEVICE_PROTOCOL_VERSION;
     return 1;
 }
+
+/*
+ * 函数用途：按 AO 硬件输出范围归一化单个特殊电流参数。
+ * 调用场景：启动加载参数和 Modbus 写参后由 AO 参数归一化流程调用。
+ * 关键约束：沿用系统参数静默兜底风格，不新增错误码或日志。
+ */
+static int normalize_ao_output_current_runtime(volatile uint32_t *current_mA_x100)
+{
+    int changed = 0;
+
+    if (*current_mA_x100 < AO_OUTPUT_CURRENT_MIN_MA_X100) {
+        *current_mA_x100 = AO_OUTPUT_CURRENT_MIN_MA_X100;
+        changed = 1;
+    } else if (*current_mA_x100 > AO_OUTPUT_CURRENT_MAX_MA_X100) {
+        *current_mA_x100 = AO_OUTPUT_CURRENT_MAX_MA_X100;
+        changed = 1;
+    } else {
+        /* 范围内无需修正。 */
+    }
+
+    return changed;
+}
+/*
+ * 函数用途：归一化 AO 输出相关参数。
+ * 调用场景：启动加载参数和 Modbus 写参后调用。
+ * 关键约束：只修正 AO 参数，不处理继电器清报警等一次性命令。
+ */
+static int normalize_ao_params_runtime(void)
+{
+    int changed = 0;
+
+    if (g_deviceParams.AoOutputEnable > 1U) {
+        g_deviceParams.AoOutputEnable = 0U;
+        changed = 1;
+    }
+
+    if (g_deviceParams.CurrentRangeStart_mA < AO_NORMAL_CURRENT_MIN_MA_X100) {
+        g_deviceParams.CurrentRangeStart_mA = AO_NORMAL_CURRENT_MIN_MA_X100;
+        changed = 1;
+    } else if (g_deviceParams.CurrentRangeStart_mA > AO_NORMAL_CURRENT_MAX_MA_X100) {
+        g_deviceParams.CurrentRangeStart_mA = AO_NORMAL_CURRENT_MAX_MA_X100;
+        changed = 1;
+    } else {
+        /* 范围内无需修正。 */
+    }
+
+    if (g_deviceParams.CurrentRangeEnd_mA < AO_NORMAL_CURRENT_MIN_MA_X100) {
+        g_deviceParams.CurrentRangeEnd_mA = AO_NORMAL_CURRENT_MIN_MA_X100;
+        changed = 1;
+    } else if (g_deviceParams.CurrentRangeEnd_mA > AO_NORMAL_CURRENT_MAX_MA_X100) {
+        g_deviceParams.CurrentRangeEnd_mA = AO_NORMAL_CURRENT_MAX_MA_X100;
+        changed = 1;
+    } else {
+        /* 范围内无需修正。 */
+    }
+
+    if (g_deviceParams.CurrentRangeStart_mA == g_deviceParams.CurrentRangeEnd_mA) {
+        g_deviceParams.CurrentRangeStart_mA = AO_NORMAL_CURRENT_MIN_MA_X100;
+        g_deviceParams.CurrentRangeEnd_mA = AO_NORMAL_CURRENT_MAX_MA_X100;
+        changed = 1;
+    }
+
+    if (normalize_ao_output_current_runtime(&g_deviceParams.InitialCurrent_mA) != 0) {
+        changed = 1;
+    }
+    if (normalize_ao_output_current_runtime(&g_deviceParams.AOHighCurrent_mA) != 0) {
+        changed = 1;
+    }
+    if (normalize_ao_output_current_runtime(&g_deviceParams.AOLowCurrent_mA) != 0) {
+        changed = 1;
+    }
+    if (normalize_ao_output_current_runtime(&g_deviceParams.FaultCurrent_mA) != 0) {
+        changed = 1;
+    }
+    if (normalize_ao_output_current_runtime(&g_deviceParams.DebugCurrent_mA) != 0) {
+        changed = 1;
+    }
+
+    {
+        uint32_t ao_max_level = g_deviceParams.tankHeight;
+        if (ao_max_level == 0U) {
+            ao_max_level = 1U;
+        }
+
+        if (g_deviceParams.AOStartLevel_01mm > ao_max_level) {
+            g_deviceParams.AOStartLevel_01mm = 0U;
+            changed = 1;
+        }
+        if (g_deviceParams.AOEndLevel_01mm > ao_max_level) {
+            g_deviceParams.AOEndLevel_01mm = ao_max_level;
+            changed = 1;
+        }
+        if (g_deviceParams.AOEndLevel_01mm <= g_deviceParams.AOStartLevel_01mm) {
+            g_deviceParams.AOStartLevel_01mm = 0U;
+            g_deviceParams.AOEndLevel_01mm = ao_max_level;
+            changed = 1;
+        }
+
+        if ((g_deviceParams.AlarmHighAO != 0U) &&
+            (g_deviceParams.AlarmHighAO > ao_max_level)) {
+            g_deviceParams.AlarmHighAO = 0U;
+            changed = 1;
+        }
+        if ((g_deviceParams.AlarmLowAO != 0U) &&
+            (g_deviceParams.AlarmLowAO > ao_max_level)) {
+            g_deviceParams.AlarmLowAO = 0U;
+            changed = 1;
+        }
+        if ((g_deviceParams.AlarmHighAO != 0U) &&
+            (g_deviceParams.AlarmLowAO != 0U) &&
+            (g_deviceParams.AlarmLowAO >= g_deviceParams.AlarmHighAO)) {
+            g_deviceParams.AlarmHighAO = 0U;
+            g_deviceParams.AlarmLowAO = 0U;
+            changed = 1;
+        }
+    }
+
+    return changed;
+}
+
 /* 修正新增参数的非法值。
  * reserved6/reserved7 复用为position_count_mode和motor_count_first_loop_circumference_mm后，旧 FRAM 里可能残留任意非 0 值。
  * 这里既修正 RAM，又把是否修正返回给 load_device_params()，由加载流程决定是否写回 FRAM。 */
@@ -286,8 +420,7 @@ static int normalize_device_params_runtime(void)
         changed = 1;
     }
 
-    if (g_deviceParams.AoOutputEnable > 1U) {
-        g_deviceParams.AoOutputEnable = 0U;
+    if (normalize_ao_params_runtime() != 0) {
         changed = 1;
     }
 
@@ -324,6 +457,16 @@ static int normalize_device_params_runtime(void)
     }
 
     return changed;
+}
+
+/*
+ * 函数用途：Modbus 写参后归一化 AO 相关运行参数。
+ * 调用场景：0x10 写保持寄存器后，保存 FRAM 前调用。
+ * 关键约束：不处理继电器清报警等一次性命令；调用方负责同步保持寄存器和触发延后保存。
+ */
+int normalize_ao_params_after_write(void)
+{
+    return normalize_ao_params_runtime();
 }
 
 /* 内部通用读取接口：
@@ -805,10 +948,12 @@ void RestoreFactoryParamsConfig(void)
     }
 
     /* ---------------- 4~20mA 输出 ---------------- */
+    g_deviceParams.AOStartLevel_01mm            = 0U;     /* AO起点液位，0.1mm */
+    g_deviceParams.AOEndLevel_01mm            = g_deviceParams.tankHeight; /* AO终点液位，0.1mm */
     g_deviceParams.CurrentRangeStart_mA = 400;   /* 4.00mA (×0.01) */
     g_deviceParams.CurrentRangeEnd_mA   = 2000;  /* 20.00mA (×0.01) */
-    g_deviceParams.AlarmHighAO          = 2000;
-    g_deviceParams.AlarmLowAO           = 400;
+    g_deviceParams.AlarmHighAO          = 0U;    /* 默认关闭 AO 高报警 */
+    g_deviceParams.AlarmLowAO           = 0U;    /* 默认关闭 AO 低报警 */
     g_deviceParams.InitialCurrent_mA    = 400;
     g_deviceParams.AOHighCurrent_mA     = 2000;
     g_deviceParams.AOLowCurrent_mA      = 400;
@@ -997,10 +1142,12 @@ void print_device_params(void)
 
     /* AO */
     printf("\r\n-- 4-20mA/AO参数 --\r\n");
-    printf("  %-32s : %lu\r\n", "AO输出范围起点电流", (unsigned long)params.CurrentRangeStart_mA);
-    printf("  %-32s : %lu\r\n", "AO输出范围终点电流", (unsigned long)params.CurrentRangeEnd_mA);
-    printf("  %-32s : %lu\r\n", "AO高限报警电流", (unsigned long)params.AlarmHighAO);
-    printf("  %-32s : %lu\r\n", "AO低限报警电流", (unsigned long)params.AlarmLowAO);
+    printf("  %-32s : %lu\r\n", "AO起点液位", (unsigned long)params.AOStartLevel_01mm);
+    printf("  %-32s : %lu\r\n", "AO终点液位", (unsigned long)params.AOEndLevel_01mm);
+    printf("  %-32s : %lu\r\n", "AO正常起点电流", (unsigned long)params.CurrentRangeStart_mA);
+    printf("  %-32s : %lu\r\n", "AO正常终点电流", (unsigned long)params.CurrentRangeEnd_mA);
+    printf("  %-32s : %lu\r\n", "AO高报警液位", (unsigned long)params.AlarmHighAO);
+    printf("  %-32s : %lu\r\n", "AO低报警液位", (unsigned long)params.AlarmLowAO);
     printf("  %-32s : %lu\r\n", "AO初始电流", (unsigned long)params.InitialCurrent_mA);
     printf("  %-32s : %lu\r\n", "AO高位电流", (unsigned long)params.AOHighCurrent_mA);
     printf("  %-32s : %lu\r\n", "AO低位电流", (unsigned long)params.AOLowCurrent_mA);

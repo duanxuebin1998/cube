@@ -50,6 +50,7 @@ CPU2 参数加载会校验 FRAM 中的 `magic`、`struct_size`、`param_version`
 | V1.16.0.1 | 3 | 存储版本不变；收紧罐底检测模式为 `0/1`，旧 FRAM 中异常值运行期归零，通常保留旧参数 |
 | V1.16.1.0 | 3 | 存储版本不变；修复继电器报警 float 阈值写入并补全参数打印，旧 FRAM 参数通常保留 |
 | V1.18.1.0 | 3 | 存储版本不变；修复继电器液位/温度报警数据源有效性和 CPU3 息屏开关运行期同步，旧 FRAM 参数通常保留 |
+| V1.18.1.1 | 3 | 存储版本不变；协议版本升至 11，AO 液位量程、正常电流端点、独立报警阈值和特殊 AO 电流范围按新语义运行期归一化，旧 FRAM 参数通常保留并补齐 AO 液位量程默认值 |
 
 历史说明：建立 CPU2 程序版本号前，2025-12-16 引入当前参数元信息时使用 `DEVICE_PARAM_VERSION=1`；2026-03-05 系统参数增加时提升到 `DEVICE_PARAM_VERSION=2`，从版本 1 升级到版本 2 会因旧参数版本不匹配恢复出厂参数。
 
@@ -1651,3 +1652,38 @@ CPU2 参数加载会校验 FRAM 中的 `magic`、`struct_size`、`param_version`
 - 未做实物联调；需要现场确认液位修正后继电器液位报警值可恢复为真实液位，温度未刷新时不会触发低温误报警。
 - 需要现场确认 CPU3 菜单修改息屏开关后无需重启即可按新值息屏/唤醒。
 - 本次不改变报警策略中“非液位跟随状态是否强制报警”的业务语义，后续如要调整需要单独确认维护模式、手动运动和读参数场景。
+
+## 2026-06-26 - 完善 AO 参数量程和协议文档（CPU2 V1.18.1.1 / CPU3 V1.16.1.1）
+
+版本：
+- CPU2: V1.18.1.0 -> V1.18.1.1。
+- CPU3: V1.16.1.0 -> V1.16.1.1。
+
+协议版本/兼容性：
+- `DEVICE_PROTOCOL_VERSION` 从 10 升级到 11；不新增保持寄存器地址，但将原 `reserved24/reserved25` 参数位置重命名为 `AOStartLevel_01mm/AOEndLevel_01mm`，作为 AO 正常输出起点/终点液位，并修正 `AlarmHighAO/AlarmLowAO` 为 AO 独立报警液位阈值。
+- CPU2 `DEVICE_PARAM_VERSION` 保持 3，`DeviceParameters` 结构大小不变，不会因本次升级触发恢复出厂参数。
+- 旧协议参数升级到协议版本 11 时，CPU2 运行期补齐 `AOStartLevel_01mm=0`、`AOEndLevel_01mm=tankHeight`、`AlarmHighAO=0`、`AlarmLowAO=0`，避免旧保留值或旧电流口径误触发 AO 报警。
+- CPU3 本机参数存储结构不变；菜单和操作号名称按 AO 新语义同步，地址和值保持不变。
+
+本次修改：
+- AO 输出对齐参考程序：`CurrentRangeStart_mA/CurrentRangeEnd_mA` 保留为正常输出起点/终点电流，`AOStartLevel_01mm/AOEndLevel_01mm` 作为正常输出起点/终点液位，`AlarmHighAO/AlarmLowAO` 作为 AO 独立报警液位阈值；正常电流端点支持正向和反向映射。
+- AO 相关保持寄存器宏和 CPU3 操作号改为 AO 液位、正常电流和报警液位口径，移除 `RESERVED24/RESERVED25` 和旧 `ALARM_HIGH_AO/ALARM_LOW_AO` 命名在业务代码中的继续使用；寄存器地址和值保持不变。
+- AO 报警覆盖不再读取继电器 `HH/H` 或 `L/LL` 运行态；继电器报警阈值和 AO 报警阈值分开配置，AO 高/低报警触发后分别输出 `AOHighCurrent_mA/AOLowCurrent_mA`，重叠或越界 AO 报警阈值写参后关闭 AO 报警覆盖。
+- AO 初始/高位/低位/故障/调试电流菜单范围和 CPU2 写参归一化统一限制为 `3.20..24.00mA`，与 AD5421 硬件输出范围一致；Modbus 写参后回写保持寄存器，便于读回确认。
+- 同步 CPU3 菜单名称、参数范围、协议记录、说明书、程序流程文档和契约检查脚本；按用户要求，本次提交不纳入当前工作区里的 `CHANGELOG.pdf`。
+
+验证：
+- `git diff --cached --check`
+- `python tools/check_version_bumped.py`
+- `python tools/check_ao_output_enable_contract.py`
+- `python tools/check_si7000_protocol_contract.py`
+- `python tools/check_density_level_control_contract.py`
+- `python tools/check_wireless_rssi_contract.py`
+- `python tools/check_cpu3_menu_name_width.py`
+- `cmake --build build/LTD_MAIN_CPU2`
+- `cmake --build build/LTD_DISPLAY_CPU3`
+
+未验证风险：
+- 未做实物联调；需要现场确认 AO 正向/反向电流映射、非法 AO 参数写入后的归一化读回，以及特殊 AO 电流 `3.20..24.00mA` 边界输出。
+- 需要现场确认 AO 高/低报警阈值与继电器 HH/H/L/LL 阈值互不影响，重叠或越界阈值写入后不会误触发报警覆盖。
+- 本次保持寄存器地址不变但改变保留字段和报警字段语义，上位机和现场文档必须按协议版本 11 解释 AO 参数。
