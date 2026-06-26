@@ -1603,7 +1603,7 @@ static uint8_t *dtm_operaname_short(int num, uint8_t *fallback)
 		{ COM_NUM_DEVICEPARAM_WATER_CAP_THRESHOLD, (uint8_t*)"跟随阈值", (uint8_t*)"CapTh" },
 		{ COM_NUM_DEVICEPARAM_WATER_FIND_CAP_THRESHOLD, (uint8_t*)"寻找阈值", (uint8_t*)"FindCap" },
 		{ COM_NUM_DEVICEPARAM_MAXDOWNDISTANCE, (uint8_t*)"下行距离", (uint8_t*)"MaxDown" },
-		{ COM_NUM_DEVICEPARAM_WATER_STABLE_THRESHOLD, (uint8_t*)"稳定阈值", (uint8_t*)"WaterStb" },
+		{ COM_NUM_DEVICEPARAM_WATER_STABLE_THRESHOLD, (uint8_t*)"稳定距离", (uint8_t*)"WaterStb" },
 		{ COM_NUM_DEVICEPARAM_WATER_LAG_CAP_THRESHOLD, (uint8_t*)"滞后阈值", (uint8_t*)"LagCap" },
 		{ COM_NUM_DEVICEPARAM_BOTTOM_DETECT_MODE, (uint8_t*)"罐底模式", (uint8_t*)"BotMode" },
 		{ COM_NUM_DEVICEPARAM_BOTTOM_ANGLE_THRESHOLD, (uint8_t*)"角度阈值", (uint8_t*)"AngleTh" },
@@ -1630,58 +1630,58 @@ static uint8_t *dtm_operaname_short(int num, uint8_t *fallback)
 		{ COM_NUM_DEVICEPARAM_TANK_GAS_PHASE_TEMPERATURE, (uint8_t*)"气相温度", (uint8_t*)"GasTemp" },
 		{ COM_NUM_DEVICEPARAM_TAPE_EXPANSION_COEFFICIENT, (uint8_t*)"尺带伸缩率", (uint8_t*)"TapeExp" },
 		{ COM_NUM_DEVICEPARAM_TAPE_CALIBRATION_TEMPERATURE, (uint8_t*)"尺带温度", (uint8_t*)"TapeTemp" },
-		{ COM_NUM_DEVICEPARAM_RELAY1_OPERATING_MODE, (uint8_t*)"工作模式", (uint8_t*)"R1Mode" },
-		{ COM_NUM_DEVICEPARAM_RELAY1_DIGITAL_SOURCE, (uint8_t*)"报警组合", (uint8_t*)"R1AlarmSet" },
-		{ COM_NUM_DEVICEPARAM_RELAY1_CONTACT_TYPE, (uint8_t*)"接点类型", (uint8_t*)"R1Contact" },
-		{ COM_NUM_DEVICEPARAM_RELAY1_ALARM_MODE, (uint8_t*)"报警模式", (uint8_t*)"R1AlarmMode" },
-		{ COM_NUM_DEVICEPARAM_RELAY1_ERROR_VALUE, (uint8_t*)"无效报警", (uint8_t*)"R1Invalid" },
-		{ COM_NUM_DEVICEPARAM_RELAY1_ALARM_SOURCE, (uint8_t*)"报警源", (uint8_t*)"R1Src" },
-		{ COM_NUM_DEVICEPARAM_RELAY1_HH_ALARM_VALUE, (uint8_t*)"HH阈值", (uint8_t*)"R1HH" },
-		{ COM_NUM_DEVICEPARAM_RELAY1_H_ALARM_VALUE, (uint8_t*)"H阈值", (uint8_t*)"R1H" },
-		{ COM_NUM_DEVICEPARAM_RELAY1_L_ALARM_VALUE, (uint8_t*)"L阈值", (uint8_t*)"R1L" },
-		{ COM_NUM_DEVICEPARAM_RELAY1_LL_ALARM_VALUE, (uint8_t*)"LL阈值", (uint8_t*)"R1LL" },
-		{ COM_NUM_DEVICEPARAM_RELAY1_ALARM_HYSTERESIS, (uint8_t*)"报警滞回", (uint8_t*)"R1Hys" },
-		{ COM_NUM_DEVICEPARAM_RELAY1_DAMPING_FACTOR, (uint8_t*)"阻尼系数", (uint8_t*)"R1Damp" },
-		{ COM_NUM_DEVICEPARAM_RELAY1_CLEAR_ALARM, (uint8_t*)"清除锁存", (uint8_t*)"R1Clear" },
-		{ COM_NUM_DEVICEPARAM_RELAY2_OPERATING_MODE, (uint8_t*)"工作模式", (uint8_t*)"R2Mode" },
-		{ COM_NUM_DEVICEPARAM_RELAY2_DIGITAL_SOURCE, (uint8_t*)"报警组合", (uint8_t*)"R2AlarmSet" },
-		{ COM_NUM_DEVICEPARAM_RELAY2_CONTACT_TYPE, (uint8_t*)"接点类型", (uint8_t*)"R2Contact" },
-		{ COM_NUM_DEVICEPARAM_RELAY2_ALARM_MODE, (uint8_t*)"报警模式", (uint8_t*)"R2AlarmMode" },
-		{ COM_NUM_DEVICEPARAM_RELAY2_ERROR_VALUE, (uint8_t*)"无效报警", (uint8_t*)"R2Invalid" },
-		{ COM_NUM_DEVICEPARAM_RELAY2_ALARM_SOURCE, (uint8_t*)"报警源", (uint8_t*)"R2Src" },
-		{ COM_NUM_DEVICEPARAM_RELAY2_HH_ALARM_VALUE, (uint8_t*)"HH阈值", (uint8_t*)"R2HH" },
-		{ COM_NUM_DEVICEPARAM_RELAY2_H_ALARM_VALUE, (uint8_t*)"H阈值", (uint8_t*)"R2H" },
-		{ COM_NUM_DEVICEPARAM_RELAY2_L_ALARM_VALUE, (uint8_t*)"L阈值", (uint8_t*)"R2L" },
-		{ COM_NUM_DEVICEPARAM_RELAY2_LL_ALARM_VALUE, (uint8_t*)"LL阈值", (uint8_t*)"R2LL" },
-		{ COM_NUM_DEVICEPARAM_RELAY2_ALARM_HYSTERESIS, (uint8_t*)"报警滞回", (uint8_t*)"R2Hys" },
-		{ COM_NUM_DEVICEPARAM_RELAY2_DAMPING_FACTOR, (uint8_t*)"阻尼系数", (uint8_t*)"R2Damp" },
-		{ COM_NUM_DEVICEPARAM_RELAY2_CLEAR_ALARM, (uint8_t*)"清除锁存", (uint8_t*)"R2Clear" },
-		{ COM_NUM_DEVICEPARAM_RELAY3_OPERATING_MODE, (uint8_t*)"工作模式", (uint8_t*)"R3Mode" },
-		{ COM_NUM_DEVICEPARAM_RELAY3_DIGITAL_SOURCE, (uint8_t*)"报警组合", (uint8_t*)"R3AlarmSet" },
-		{ COM_NUM_DEVICEPARAM_RELAY3_CONTACT_TYPE, (uint8_t*)"接点类型", (uint8_t*)"R3Contact" },
-		{ COM_NUM_DEVICEPARAM_RELAY3_ALARM_MODE, (uint8_t*)"报警模式", (uint8_t*)"R3AlarmMode" },
-		{ COM_NUM_DEVICEPARAM_RELAY3_ERROR_VALUE, (uint8_t*)"无效报警", (uint8_t*)"R3Invalid" },
-		{ COM_NUM_DEVICEPARAM_RELAY3_ALARM_SOURCE, (uint8_t*)"报警源", (uint8_t*)"R3Src" },
-		{ COM_NUM_DEVICEPARAM_RELAY3_HH_ALARM_VALUE, (uint8_t*)"HH阈值", (uint8_t*)"R3HH" },
-		{ COM_NUM_DEVICEPARAM_RELAY3_H_ALARM_VALUE, (uint8_t*)"H阈值", (uint8_t*)"R3H" },
-		{ COM_NUM_DEVICEPARAM_RELAY3_L_ALARM_VALUE, (uint8_t*)"L阈值", (uint8_t*)"R3L" },
-		{ COM_NUM_DEVICEPARAM_RELAY3_LL_ALARM_VALUE, (uint8_t*)"LL阈值", (uint8_t*)"R3LL" },
-		{ COM_NUM_DEVICEPARAM_RELAY3_ALARM_HYSTERESIS, (uint8_t*)"报警滞回", (uint8_t*)"R3Hys" },
-		{ COM_NUM_DEVICEPARAM_RELAY3_DAMPING_FACTOR, (uint8_t*)"阻尼系数", (uint8_t*)"R3Damp" },
-		{ COM_NUM_DEVICEPARAM_RELAY3_CLEAR_ALARM, (uint8_t*)"清除锁存", (uint8_t*)"R3Clear" },
-		{ COM_NUM_DEVICEPARAM_RELAY4_OPERATING_MODE, (uint8_t*)"工作模式", (uint8_t*)"R4Mode" },
-		{ COM_NUM_DEVICEPARAM_RELAY4_DIGITAL_SOURCE, (uint8_t*)"报警组合", (uint8_t*)"R4AlarmSet" },
-		{ COM_NUM_DEVICEPARAM_RELAY4_CONTACT_TYPE, (uint8_t*)"接点类型", (uint8_t*)"R4Contact" },
-		{ COM_NUM_DEVICEPARAM_RELAY4_ALARM_MODE, (uint8_t*)"报警模式", (uint8_t*)"R4AlarmMode" },
-		{ COM_NUM_DEVICEPARAM_RELAY4_ERROR_VALUE, (uint8_t*)"无效报警", (uint8_t*)"R4Invalid" },
-		{ COM_NUM_DEVICEPARAM_RELAY4_ALARM_SOURCE, (uint8_t*)"报警源", (uint8_t*)"R4Src" },
-		{ COM_NUM_DEVICEPARAM_RELAY4_HH_ALARM_VALUE, (uint8_t*)"HH阈值", (uint8_t*)"R4HH" },
-		{ COM_NUM_DEVICEPARAM_RELAY4_H_ALARM_VALUE, (uint8_t*)"H阈值", (uint8_t*)"R4H" },
-		{ COM_NUM_DEVICEPARAM_RELAY4_L_ALARM_VALUE, (uint8_t*)"L阈值", (uint8_t*)"R4L" },
-		{ COM_NUM_DEVICEPARAM_RELAY4_LL_ALARM_VALUE, (uint8_t*)"LL阈值", (uint8_t*)"R4LL" },
-		{ COM_NUM_DEVICEPARAM_RELAY4_ALARM_HYSTERESIS, (uint8_t*)"报警滞回", (uint8_t*)"R4Hys" },
-		{ COM_NUM_DEVICEPARAM_RELAY4_DAMPING_FACTOR, (uint8_t*)"阻尼系数", (uint8_t*)"R4Damp" },
-		{ COM_NUM_DEVICEPARAM_RELAY4_CLEAR_ALARM, (uint8_t*)"清除锁存", (uint8_t*)"R4Clear" },
+		{ COM_NUM_DEVICEPARAM_RELAY1_OPERATING_MODE, (uint8_t*)"工作模式", (uint8_t*)"K1Mode" },
+		{ COM_NUM_DEVICEPARAM_RELAY1_DIGITAL_SOURCE, (uint8_t*)"报警组合", (uint8_t*)"K1AlarmSet" },
+		{ COM_NUM_DEVICEPARAM_RELAY1_CONTACT_TYPE, (uint8_t*)"接点类型", (uint8_t*)"K1Contact" },
+		{ COM_NUM_DEVICEPARAM_RELAY1_ALARM_MODE, (uint8_t*)"报警模式", (uint8_t*)"K1AlarmMode" },
+		{ COM_NUM_DEVICEPARAM_RELAY1_ERROR_VALUE, (uint8_t*)"无效报警", (uint8_t*)"K1Invalid" },
+		{ COM_NUM_DEVICEPARAM_RELAY1_ALARM_SOURCE, (uint8_t*)"报警源", (uint8_t*)"K1Src" },
+		{ COM_NUM_DEVICEPARAM_RELAY1_HH_ALARM_VALUE, (uint8_t*)"HH阈值", (uint8_t*)"K1HH" },
+		{ COM_NUM_DEVICEPARAM_RELAY1_H_ALARM_VALUE, (uint8_t*)"H阈值", (uint8_t*)"K1H" },
+		{ COM_NUM_DEVICEPARAM_RELAY1_L_ALARM_VALUE, (uint8_t*)"L阈值", (uint8_t*)"K1L" },
+		{ COM_NUM_DEVICEPARAM_RELAY1_LL_ALARM_VALUE, (uint8_t*)"LL阈值", (uint8_t*)"K1LL" },
+		{ COM_NUM_DEVICEPARAM_RELAY1_ALARM_HYSTERESIS, (uint8_t*)"报警滞回", (uint8_t*)"K1Hys" },
+		{ COM_NUM_DEVICEPARAM_RELAY1_DAMPING_FACTOR, (uint8_t*)"阻尼系数", (uint8_t*)"K1Damp" },
+		{ COM_NUM_DEVICEPARAM_RELAY1_CLEAR_ALARM, (uint8_t*)"清除锁存", (uint8_t*)"K1Clear" },
+		{ COM_NUM_DEVICEPARAM_RELAY2_OPERATING_MODE, (uint8_t*)"工作模式", (uint8_t*)"K2Mode" },
+		{ COM_NUM_DEVICEPARAM_RELAY2_DIGITAL_SOURCE, (uint8_t*)"报警组合", (uint8_t*)"K2AlarmSet" },
+		{ COM_NUM_DEVICEPARAM_RELAY2_CONTACT_TYPE, (uint8_t*)"接点类型", (uint8_t*)"K2Contact" },
+		{ COM_NUM_DEVICEPARAM_RELAY2_ALARM_MODE, (uint8_t*)"报警模式", (uint8_t*)"K2AlarmMode" },
+		{ COM_NUM_DEVICEPARAM_RELAY2_ERROR_VALUE, (uint8_t*)"无效报警", (uint8_t*)"K2Invalid" },
+		{ COM_NUM_DEVICEPARAM_RELAY2_ALARM_SOURCE, (uint8_t*)"报警源", (uint8_t*)"K2Src" },
+		{ COM_NUM_DEVICEPARAM_RELAY2_HH_ALARM_VALUE, (uint8_t*)"HH阈值", (uint8_t*)"K2HH" },
+		{ COM_NUM_DEVICEPARAM_RELAY2_H_ALARM_VALUE, (uint8_t*)"H阈值", (uint8_t*)"K2H" },
+		{ COM_NUM_DEVICEPARAM_RELAY2_L_ALARM_VALUE, (uint8_t*)"L阈值", (uint8_t*)"K2L" },
+		{ COM_NUM_DEVICEPARAM_RELAY2_LL_ALARM_VALUE, (uint8_t*)"LL阈值", (uint8_t*)"K2LL" },
+		{ COM_NUM_DEVICEPARAM_RELAY2_ALARM_HYSTERESIS, (uint8_t*)"报警滞回", (uint8_t*)"K2Hys" },
+		{ COM_NUM_DEVICEPARAM_RELAY2_DAMPING_FACTOR, (uint8_t*)"阻尼系数", (uint8_t*)"K2Damp" },
+		{ COM_NUM_DEVICEPARAM_RELAY2_CLEAR_ALARM, (uint8_t*)"清除锁存", (uint8_t*)"K2Clear" },
+		{ COM_NUM_DEVICEPARAM_RELAY3_OPERATING_MODE, (uint8_t*)"工作模式", (uint8_t*)"K3Mode" },
+		{ COM_NUM_DEVICEPARAM_RELAY3_DIGITAL_SOURCE, (uint8_t*)"报警组合", (uint8_t*)"K3AlarmSet" },
+		{ COM_NUM_DEVICEPARAM_RELAY3_CONTACT_TYPE, (uint8_t*)"接点类型", (uint8_t*)"K3Contact" },
+		{ COM_NUM_DEVICEPARAM_RELAY3_ALARM_MODE, (uint8_t*)"报警模式", (uint8_t*)"K3AlarmMode" },
+		{ COM_NUM_DEVICEPARAM_RELAY3_ERROR_VALUE, (uint8_t*)"无效报警", (uint8_t*)"K3Invalid" },
+		{ COM_NUM_DEVICEPARAM_RELAY3_ALARM_SOURCE, (uint8_t*)"报警源", (uint8_t*)"K3Src" },
+		{ COM_NUM_DEVICEPARAM_RELAY3_HH_ALARM_VALUE, (uint8_t*)"HH阈值", (uint8_t*)"K3HH" },
+		{ COM_NUM_DEVICEPARAM_RELAY3_H_ALARM_VALUE, (uint8_t*)"H阈值", (uint8_t*)"K3H" },
+		{ COM_NUM_DEVICEPARAM_RELAY3_L_ALARM_VALUE, (uint8_t*)"L阈值", (uint8_t*)"K3L" },
+		{ COM_NUM_DEVICEPARAM_RELAY3_LL_ALARM_VALUE, (uint8_t*)"LL阈值", (uint8_t*)"K3LL" },
+		{ COM_NUM_DEVICEPARAM_RELAY3_ALARM_HYSTERESIS, (uint8_t*)"报警滞回", (uint8_t*)"K3Hys" },
+		{ COM_NUM_DEVICEPARAM_RELAY3_DAMPING_FACTOR, (uint8_t*)"阻尼系数", (uint8_t*)"K3Damp" },
+		{ COM_NUM_DEVICEPARAM_RELAY3_CLEAR_ALARM, (uint8_t*)"清除锁存", (uint8_t*)"K3Clear" },
+		{ COM_NUM_DEVICEPARAM_RELAY4_OPERATING_MODE, (uint8_t*)"工作模式", (uint8_t*)"K4Mode" },
+		{ COM_NUM_DEVICEPARAM_RELAY4_DIGITAL_SOURCE, (uint8_t*)"报警组合", (uint8_t*)"K4AlarmSet" },
+		{ COM_NUM_DEVICEPARAM_RELAY4_CONTACT_TYPE, (uint8_t*)"接点类型", (uint8_t*)"K4Contact" },
+		{ COM_NUM_DEVICEPARAM_RELAY4_ALARM_MODE, (uint8_t*)"报警模式", (uint8_t*)"K4AlarmMode" },
+		{ COM_NUM_DEVICEPARAM_RELAY4_ERROR_VALUE, (uint8_t*)"无效报警", (uint8_t*)"K4Invalid" },
+		{ COM_NUM_DEVICEPARAM_RELAY4_ALARM_SOURCE, (uint8_t*)"报警源", (uint8_t*)"K4Src" },
+		{ COM_NUM_DEVICEPARAM_RELAY4_HH_ALARM_VALUE, (uint8_t*)"HH阈值", (uint8_t*)"K4HH" },
+		{ COM_NUM_DEVICEPARAM_RELAY4_H_ALARM_VALUE, (uint8_t*)"H阈值", (uint8_t*)"K4H" },
+		{ COM_NUM_DEVICEPARAM_RELAY4_L_ALARM_VALUE, (uint8_t*)"L阈值", (uint8_t*)"K4L" },
+		{ COM_NUM_DEVICEPARAM_RELAY4_LL_ALARM_VALUE, (uint8_t*)"LL阈值", (uint8_t*)"K4LL" },
+		{ COM_NUM_DEVICEPARAM_RELAY4_ALARM_HYSTERESIS, (uint8_t*)"报警滞回", (uint8_t*)"K4Hys" },
+		{ COM_NUM_DEVICEPARAM_RELAY4_DAMPING_FACTOR, (uint8_t*)"阻尼系数", (uint8_t*)"K4Damp" },
+		{ COM_NUM_DEVICEPARAM_RELAY4_CLEAR_ALARM, (uint8_t*)"清除锁存", (uint8_t*)"K4Clear" },
 		{ COM_NUM_DEVICEPARAM_AO_START_LEVEL, (uint8_t*)"起点液位", (uint8_t*)"AOStartLvl" },
 		{ COM_NUM_DEVICEPARAM_AO_END_LEVEL, (uint8_t*)"终点液位", (uint8_t*)"AOEndLvl" },
 		{ COM_NUM_DEVICEPARAM_AO_NORMAL_CURRENT_START_mA, (uint8_t*)"起点电流", (uint8_t*)"AONormCurS" },
@@ -4696,7 +4696,7 @@ static void menu_relay_status(uint32_t channel, keymenuNumber keynum, pFunc_void
     PageNum[keynum].menu_num = (PageNum[keynum].menu_cnt - 1) % RELAY_STATUS_FIELD_COUNT;
     first = (PageNum[keynum].menu_num / RELAY_STATUS_ROWS) * RELAY_STATUS_ROWS;
 
-    snprintf(title, sizeof(title), "R%lu%s",
+    snprintf(title, sizeof(title), "K%lu%s",
              (unsigned long)(channel + 1U),
              (screen_parameter.language == LANGUAGE_CHINESE) ? "报警状态" : " Alarm");
     OledDisplayLineWords((uint8_t*)title, OLED_LINE8_1, OLED_ROW4_1, 0);
@@ -4726,6 +4726,7 @@ static MenuGroup ParamGroupOf(int operaNum)
     case COM_NUM_DEVICEPARAM_SENSORID:
     case COM_NUM_DEVICEPARAM_SENSOR_SOFTWARE_VERSION:
     case COM_NUM_DEVICEPARAM_SOFTWAREVERSION:
+    case COM_NUM_PARA_LOCAL_LEDVERSION:
     case COM_NUM_DEVICEPARAM_PROTOCOL_VERSION:
         return MENU_GRP_DEV_INFO;
 
@@ -4734,7 +4735,6 @@ static MenuGroup ParamGroupOf(int operaNum)
     case COM_NUM_DEVICEPARAM_ERROR_AUTO_BACK_ZERO:
     case COM_NUM_DEVICEPARAM_ERROR_STOP_MEASUREMENT:
     case COM_NUM_DEVICEPARAM_RESERVED2:
-    case COM_NUM_DEVICEPARAM_POSITION_SOURCE_AUTO_SWITCH:
         return MENU_GRP_RUN_POLICY;
 
     /* 机械/电机/编码器 */
@@ -4743,6 +4743,7 @@ static MenuGroup ParamGroupOf(int operaNum)
     case COM_NUM_DEVICEPARAM_MAX_MOTOR_SPEED:
     case COM_NUM_DEVICEPARAM_FIRST_LOOP_CIRCUMFERENCE_MM:
     case COM_NUM_DEVICEPARAM_TAPE_THICKNESS_MM:
+    case COM_NUM_DEVICEPARAM_POSITION_SOURCE_AUTO_SWITCH:
     case COM_NUM_DEVICEPARAM_POSITION_COUNT_MODE:
     case COM_NUM_DEVICEPARAM_MOTOR_COUNT_FIRST_LOOP_CIRC:
         return MENU_GRP_MECH;
@@ -4878,7 +4879,6 @@ static MenuGroup ParamGroupOf(int operaNum)
         return MENU_GRP_PARAM_CHECK;
 
     /* CPU3 本机参数 */
-    case COM_NUM_PARA_LOCAL_LEDVERSION:
     case COM_NUM_PARA_LANG:
         return MENU_GRP_CPU3_BASE;
 
@@ -5119,7 +5119,6 @@ static int menu_filter_relay4_alarm(int operaNum)
 static int menu_filter_display_base(int operaNum)
 {
     switch (operaNum) {
-    case COM_NUM_PARA_LOCAL_LEDVERSION:
     case COM_NUM_PARA_LANG:
     case COM_NUM_SCREEN_DECIMAL:
     case COM_NUM_SCREEN_PASSWARD:
@@ -5541,10 +5540,10 @@ static void menu_output_config(void)
 static void menu_do_alarm(void)
 {
     static struct MenuData menu[] = {
-        {(uint8_t*)"R1继电器", 0, menu_relay1_main,  COMMANE_NORW, (uint8_t*)"Relay1"},
-        {(uint8_t*)"R2继电器", 0, menu_relay2_main,  COMMANE_NORW, (uint8_t*)"Relay2"},
-        {(uint8_t*)"R3继电器", 0, menu_relay3_main,  COMMANE_NORW, (uint8_t*)"Relay3"},
-        {(uint8_t*)"R4继电器", 0, menu_relay4_main,  COMMANE_NORW, (uint8_t*)"Relay4"},
+        {(uint8_t*)"K1继电器", 0, menu_relay1_main,  COMMANE_NORW, (uint8_t*)"Relay1"},
+        {(uint8_t*)"K2继电器", 0, menu_relay2_main,  COMMANE_NORW, (uint8_t*)"Relay2"},
+        {(uint8_t*)"K3继电器", 0, menu_relay3_main,  COMMANE_NORW, (uint8_t*)"Relay3"},
+        {(uint8_t*)"K4继电器", 0, menu_relay4_main,  COMMANE_NORW, (uint8_t*)"Relay4"},
         {(uint8_t*)"返回",     0, menu_output_config,COMMANE_NORW, (uint8_t*)"Back"},
     };
 

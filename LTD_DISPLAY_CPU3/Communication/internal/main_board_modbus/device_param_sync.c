@@ -42,7 +42,11 @@ static uint32_t DeviceParams_MetaValueToRaw(volatile struct ParameterMetadata *h
         memcpy(&raw, &value, sizeof(raw));
         return raw;
     }
-    return (h != NULL) ? (uint32_t)((int32_t)h->val) : 0U;
+    if (h == NULL) {
+        return 0U;
+    }
+    /* param_meta.val 保存菜单显示值，写回 CPU2 前恢复为协议原始值。 */
+    return (uint32_t)((int32_t)h->val - (int32_t)h->offset);
 }
 
 /**
@@ -61,7 +65,11 @@ static int32_t DeviceParams_RawToMetaValue(volatile struct ParameterMetadata *h,
         value *= DeviceParams_DecimalScale(h->point);
         return (int32_t)value;
     }
-    return (int32_t)raw;
+    if (h == NULL) {
+        return 0;
+    }
+    /* CPU2 下发的是协议原始值，缓存到菜单元数据时补回显示偏移。 */
+    return (int32_t)raw + (int32_t)h->offset;
 }
 
 /* ==================== 内部：operanum → g_deviceParams 字段映射 ==================== */

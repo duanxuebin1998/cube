@@ -1,4 +1,4 @@
-﻿﻿﻿# 升级日志
+﻿# 升级日志
 
 记录 CPU2/CPU3 固件版本变更。使用 `tools/bump_version.py` 升级版本时会自动追加记录；提交前应补充到与 Git 提交信息同等详细。
 
@@ -49,8 +49,13 @@ CPU2 参数加载会校验 FRAM 中的 `magic`、`struct_size`、`param_version`
 | V1.16.0.0 | 3 | 存储版本不变；新增 AO 模拟电流输出运行态和 AO 输出使能，原 `reserved26` 语义改为 `AoOutputEnable`；旧存储升级到协议版本 10 时默认关闭 AO 输出，并保留启动阶段 AO/电机初始化错误 |
 | V1.16.0.1 | 3 | 存储版本不变；收紧罐底检测模式为 `0/1`，旧 FRAM 中异常值运行期归零，通常保留旧参数 |
 | V1.16.1.0 | 3 | 存储版本不变；修复继电器报警 float 阈值写入并补全参数打印，旧 FRAM 参数通常保留 |
+| V1.16.2.0 | 3 | 存储版本不变；固定点、密度和瓦锡兰移动改用 Jog 两段减速定位，旧 FRAM 参数通常保留 |
+| V1.17.0.0 | 3 | 存储版本不变；旧无线主机/从机探测改为 CH9141K 蓝牙主从机状态查询并优化 CPU3 菜单，旧 FRAM 参数通常保留 |
+| V1.18.0.0 | 3 | 存储版本不变；修复零点标定脱离和 AO 正式回读刷新，旧 FRAM 参数通常保留 |
 | V1.18.1.0 | 3 | 存储版本不变；修复继电器液位/温度报警数据源有效性和 CPU3 息屏开关运行期同步，旧 FRAM 参数通常保留 |
 | V1.18.1.1 | 3 | 存储版本不变；协议版本升至 11，AO 液位量程、正常电流端点、独立报警阈值和特殊 AO 电流范围按新语义运行期归一化，旧 FRAM 参数通常保留并补齐 AO 液位量程默认值 |
+| V1.19.0.0 | 3 | 存储版本不变；命令 115 改为保留、修复液位/水位标定固定偏差、读取部件参数增加连接 MAC 快照并统一液位/扭力口径，旧 FRAM 参数通常保留 |
+| V1.20.0.0 | 3 | 存储版本不变；协议版本升至 13，内部密度 raw 升级到 `kg/m3 x100`，旧协议 FRAM 密度参数按运行期迁移，旧 FRAM 参数通常保留 |
 
 历史说明：建立 CPU2 程序版本号前，2025-12-16 引入当前参数元信息时使用 `DEVICE_PARAM_VERSION=1`；2026-03-05 系统参数增加时提升到 `DEVICE_PARAM_VERSION=2`，从版本 1 升级到版本 2 会因旧参数版本不匹配恢复出厂参数。
 
@@ -1726,3 +1731,43 @@ CPU2 参数加载会校验 FRAM 中的 `magic`、`struct_size`、`param_version`
 - 未做实物联调；需要现场覆盖命令 115 不再触发电机动作、CPU3 菜单无强制提零点入口、取消测量仍能停机、液位/水位标定无固定 `+1` 偏差。
 - 需要现场确认 Wartsila 2400 8E1 默认通信、旧 FRAM 默认串口参数迁移、读取部件参数 MAC 显示、电机电流档位设置和实际运行电流匹配。
 - 本次提交包含大量口径统一和文档重生成，后续如上位机或外部资料仍引用“重量/油高/强制提零点”，需要按协议版本 12 继续清理。
+
+## 2026-06-26 - 密度两位精度、参数菜单排序和外部协议兼容整理（CPU2 V1.20.0.0 / CPU3 V1.18.0.0）
+
+版本：
+- CPU2: V1.19.0.0 -> V1.20.0.0。
+- CPU3: V1.17.0.0 -> V1.18.0.0。
+
+协议版本/兼容性：
+- `DEVICE_PROTOCOL_VERSION` 从 12 升级到 13；内部密度 raw 从 `kg/m3 x10` 升级为 `kg/m3 x100`。
+- CPU2 `DEVICE_PARAM_VERSION` 保持 3，`DeviceParameters` 结构大小不变，不会因本次升级触发恢复出厂参数；旧 FRAM 中 `protocolVersion < 13` 时会一次性迁移 `oilLevelDensity`、`oilLevelThreshold`、`oilLevelHysteresisThreshold` 和 `densityCorrection`。
+- CPU3 本机参数存储版本升级到 `0x0005`，加载 `0x0003` 或 `0x0004` 时迁移本机手输密度 `screen_input_d`，并保留旧屏幕亮度默认值迁移路径。
+- CPU2/CPU3 必须同为协议版本 13；协议版本 12 和 13 的内部密度字段倍率不同，不建议混用。
+- DSM、Wartsila、SI7000 外部协议边界继续保持原对外密度口径，主站不需要随内部 raw 倍率调整。
+
+本次修改：
+- CPU2/CPU3 密度计算、参数存储、状态页显示和参数菜单统一支持两位小数密度口径。
+- CPU2 液位找液/滞后阈值兼容旧频率路径：内部按 `kg/m3 x100` 保存，频率找液方案按旧倍率折算回历史 Hz 阈值使用。
+- 修复液位频率跟随稳定判断中对 `frequency_difference` 使用整数 `abs()` 的问题，改用浮点绝对值比较。
+- CPU3 参数菜单按导出的拖拽排序结果重排，新增本地 `tools/cpu3_menu_sorter.html` 辅助后续菜单整理。
+- CPU3 继电器相关菜单和文档显示名由 R1~R4 统一为 K1~K4，内部 `RELAY*` 协议符号保持不变。
+- 默认 AO 高报警液位改为罐高，写参归一化时超罐高钳位到罐高，低报警异常或高低重叠时恢复高报警罐高、低报警 0。
+- DSM、Wartsila、SI7000 密度边界转换和协议文档同步整理，补充密度精度、综合测量密度模式和 SI7000 协议契约检查脚本。
+- 将密度两位小数改造方案从“未实现”移动到“已实现”，同步 README、默认值表、协议变更记录、菜单说明、设备说明书和相关工具文档。
+
+验证：
+- `py LTD_DISPLAY_CPU3\font_check.py`
+- `cmake --build build\LTD_DISPLAY_CPU3`
+- `cmake --build build\LTD_MAIN_CPU2`
+- `py tools\check_cpu3_menu_name_width.py`
+- `py tools\check_reserved_cmd7_contract.py`
+- `py tools\check_density_precision_contract.py`
+- `py tools\check_synthetic_density_mode_contract.py`
+- `py tools\check_si7000_modbus_frames.py`
+- `py tools\check_si7000_protocol_contract.py`
+- `git diff --check`
+
+未验证风险：
+- 未做实物联调；需要现场确认密度两位小数显示、LTD 自有协议密度读写、旧 FRAM 密度参数迁移和频率找液兼容折算。
+- 需要现场遍历 CPU3 参数菜单拖拽排序结果，确认跨菜单移动、K1~K4 命名和只读状态页路径符合最终操作习惯。
+- 需要现场确认 AO 高报警默认罐高和高低报警归一化策略符合输出电流报警预期。

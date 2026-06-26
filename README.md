@@ -1,6 +1,6 @@
 # CUBE 仓库导览与新人上手指南
 
-> 最后核对时间：2026-06-15
+> 最后核对时间：2026-06-26
 > 目标：帮助新同学在 1~2 天内建立“能编译、能跟流程、知道改哪里”的整体认知。
 
 ---
@@ -19,11 +19,11 @@
 
 当前文档核对基线：
 
-- CPU2 固件版本：`V1.16.0.0`
-- CPU3 固件版本：`V1.15.0.0`
-- CPU2/CPU3 共享协议版本：`DEVICE_PROTOCOL_VERSION = 12`
+- CPU2 固件版本：`V1.20.0.0`
+- CPU3 固件版本：`V1.18.0.0`
+- CPU2/CPU3 共享协议版本：`DEVICE_PROTOCOL_VERSION = 13`
 - CPU2 参数存储版本：`DEVICE_PARAM_VERSION = 3`
-- CPU3 本地显示/通信参数版本：`CPU3_PARAM_VERSION = 0x0004`
+- CPU3 本地显示/通信参数版本：`CPU3_PARAM_VERSION = 0x0005`
 
 ---
 

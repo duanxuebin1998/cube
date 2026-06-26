@@ -84,22 +84,22 @@ typedef enum {
     KEYNUM_MENU_PARA_CAL_SP,             /* 标定/单点参数 */
     KEYNUM_MENU_PARA_PARAM_CHECK,        /* 参数校验信息 */
     KEYNUM_MENU_OUTPUT_CONFIG,           /* 输出配置主菜单 */
-    KEYNUM_MENU_RELAY1_MAIN,             /* R1 继电器配置 */
-    KEYNUM_MENU_RELAY1_CHANNEL,          /* R1 通道设置 */
-    KEYNUM_MENU_RELAY1_ALARM,            /* R1 报警配置 */
-    KEYNUM_MENU_RELAY1_STATUS,           /* R1 报警状态 */
-    KEYNUM_MENU_RELAY2_MAIN,             /* R2 继电器配置 */
-    KEYNUM_MENU_RELAY2_CHANNEL,          /* R2 通道设置 */
-    KEYNUM_MENU_RELAY2_ALARM,            /* R2 报警配置 */
-    KEYNUM_MENU_RELAY2_STATUS,           /* R2 报警状态 */
-    KEYNUM_MENU_RELAY3_MAIN,             /* R3 继电器配置 */
-    KEYNUM_MENU_RELAY3_CHANNEL,          /* R3 通道设置 */
-    KEYNUM_MENU_RELAY3_ALARM,            /* R3 报警配置 */
-    KEYNUM_MENU_RELAY3_STATUS,           /* R3 报警状态 */
-    KEYNUM_MENU_RELAY4_MAIN,             /* R4 继电器配置 */
-    KEYNUM_MENU_RELAY4_CHANNEL,          /* R4 通道设置 */
-    KEYNUM_MENU_RELAY4_ALARM,            /* R4 报警配置 */
-    KEYNUM_MENU_RELAY4_STATUS,           /* R4 报警状态 */
+    KEYNUM_MENU_RELAY1_MAIN,             /* K1 继电器配置 */
+    KEYNUM_MENU_RELAY1_CHANNEL,          /* K1 通道设置 */
+    KEYNUM_MENU_RELAY1_ALARM,            /* K1 报警配置 */
+    KEYNUM_MENU_RELAY1_STATUS,           /* K1 报警状态 */
+    KEYNUM_MENU_RELAY2_MAIN,             /* K2 继电器配置 */
+    KEYNUM_MENU_RELAY2_CHANNEL,          /* K2 通道设置 */
+    KEYNUM_MENU_RELAY2_ALARM,            /* K2 报警配置 */
+    KEYNUM_MENU_RELAY2_STATUS,           /* K2 报警状态 */
+    KEYNUM_MENU_RELAY3_MAIN,             /* K3 继电器配置 */
+    KEYNUM_MENU_RELAY3_CHANNEL,          /* K3 通道设置 */
+    KEYNUM_MENU_RELAY3_ALARM,            /* K3 报警配置 */
+    KEYNUM_MENU_RELAY3_STATUS,           /* K3 报警状态 */
+    KEYNUM_MENU_RELAY4_MAIN,             /* K4 继电器配置 */
+    KEYNUM_MENU_RELAY4_CHANNEL,          /* K4 通道设置 */
+    KEYNUM_MENU_RELAY4_ALARM,            /* K4 报警配置 */
+    KEYNUM_MENU_RELAY4_STATUS,           /* K4 报警状态 */
     KEYNUM_MENU_COMM_CONFIG,             /* 通信设置主菜单 */
     KEYNUM_MENU_DISPLAY_CONFIG,          /* 显示设置主菜单 */
     KEYNUM_MENU_DISPLAY_BASE,            /* 显示基础参数 */

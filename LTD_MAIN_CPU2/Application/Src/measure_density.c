@@ -57,7 +57,7 @@
 
 #define SINGLE_POINT_MONITORING_PROTO_PERIOD_MS      500U /* 单点监测原型刷新周期，单位 ms。 */
 #define SINGLE_POINT_MONITORING_PROTO_BASE_TEMP_RAW  22650U  /* 26.50℃：TEMP_TO_RAW(26.50) */
-#define SINGLE_POINT_MONITORING_PROTO_BASE_DENS_RAW  9995U   /* 999.5kg/m3：水密度样机值，DENSITY_TO_RAW(999.5) */
+#define SINGLE_POINT_MONITORING_PROTO_BASE_DENS_RAW  99950U   /* 999.5kg/m3：水密度样机值，DENSITY_TO_RAW(999.5) */
 #define SINGLE_POINT_MONITORING_PROTO_BASE_FREQ_HZ   121500U /* 单点监测原型基础频率，单位 Hz。 */
 #define SINGLE_POINT_MONITORING_PROTO_BASE_VCF20     9995U /* 单点监测原型基础 VCF20 值。 */
 
@@ -191,7 +191,7 @@ static void SinglePointMonitoringPrototype_WriteSample(uint32_t sample_index)
     g_measurement.debug_data.motor_state = 0U;
     g_measurement.debug_data.motor_speed = 0U;
 
-    printf("固定点监测样机\t位置=%.1fmm\t温度=%.2f℃\t密度=%.1f\t标密=%.1f\tVCF20=%lu\t计重密度=%.1f\r\n",
+    printf("固定点监测样机\t位置=%.1fmm\t温度=%.2f℃\t密度=%.2f\t标密=%.2f\tVCF20=%lu\t计重密度=%.2f\r\n",
            (double)position_raw / 10.0,
            RAW_TO_TEMP(temperature_raw),
            RAW_TO_DENSITY(density_raw),
@@ -785,7 +785,7 @@ uint32_t Density_MeasureByMode_Exact(DensitySpreadModeId mode, DensityDistributi
      * oil_standard_th 建议接入 systemunion.systemparameter.Oil_Standard 或对应参数。
      */
     if (mode == DENS_MODE_GB) {
-        int32_t oil_standard_th = 10; /* TODO：替换为实际参数，例如 systemunion.systemparameter.Oil_Standard */
+        int32_t oil_standard_th = 100; /* TODO：替换为实际参数，例如 systemunion.systemparameter.Oil_Standard */
         GB_FilterPoints_ByDensity20(out_dist, oil_level_01mm, g_deviceParams.spreadMeasurementOrder, oil_standard_th);
     }
 
@@ -1161,17 +1161,17 @@ void Print_DensitySpreadResult(const DensityDistribution *dist)
            (unsigned long) dist->average_temperature,
            RAW_TO_TEMP(dist->average_temperature));
 
-    printf("平均密度 原始值    : %lu  =>  实际: %.1f\r\n",
+    printf("平均密度 原始值    : %lu  =>  实际: %.2f\r\n",
            (unsigned long) dist->average_density,
            RAW_TO_DENSITY(dist->average_density));
 
-    printf("标准密度 原始值    : %lu  =>  实际: %.1f\r\n",
+    printf("标准密度 原始值    : %lu  =>  实际: %.2f\r\n",
            (unsigned long) dist->average_standard_density,
            RAW_TO_DENSITY(dist->average_standard_density));
 
     printf("VCF20 原始值       : %lu\r\n", (unsigned long) dist->average_vcf20);
 
-    printf("计重密度 原始值    : %lu  =>  实际: %.1f\r\n",
+    printf("计重密度 原始值    : %lu  =>  实际: %.2f\r\n",
            (unsigned long) dist->average_weight_density,
            RAW_TO_DENSITY(dist->average_weight_density));
 
@@ -1188,7 +1188,7 @@ void Print_DensitySpreadResult(const DensityDistribution *dist)
         float temp_f = RAW_TO_TEMP(p->temperature);
         float temp_position = (float)(p->temperature_position) / 10.0f;
 
-        printf("%3lu   %.1f   %7lu   %8.1f   %7lu   %7.2f\r\n",
+        printf("%3lu   %.1f   %7lu   %8.2f   %7lu   %7.2f\r\n",
                (unsigned long) i,
                temp_position,
                (unsigned long) p->density,

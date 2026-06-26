@@ -26,13 +26,19 @@
 #define UNVALID_POSITION 0
 #define UNVALID_TEMPERATURE 0
 #define MAX_MEASUREMENT_POINTS 200 /* 密度分布测量最大点数 */
-#define DEVICE_PROTOCOL_VERSION 12u /* CPU2/CPU3共享协议版本；旧程序未写入时默认为0 */
+#define DEVICE_PROTOCOL_VERSION 13u /* CPU2/CPU3共享协议版本；旧程序未写入时默认为0 */
 #define FAULT_AUTO_RECOVERY_RETRY_DEFAULT 3u
 #define FAULT_AUTO_RECOVERY_RETRY_MAX 10u
 
+#define DENSITY_RAW_SCALE 100U /* 密度内部原始值倍率，单位 0.01kg/m3。 */
+#define DENSITY_EXTERNAL_SCALE_X10 10U /* 旧外部协议密度倍率，单位 0.1kg/m3。 */
+#define DENSITY_PARAM_MIGRATE_FACTOR 10U /* 旧 x10 密度参数迁移到 x100 的倍率。 */
+#define DENSITY_CORRECTION_OLD_BASE_RAW 10000U /* 旧密度修正零点，单位 0.1kg/m3。 */
+#define DENSITY_CORRECTION_BASE_RAW 100000U /* 密度修正零点，单位 0.01kg/m3。 */
 
 
-#define RELAY_ALARM_CHANNEL_COUNT 4u /* 当前项目使用 RELAY1~RELAY4 */
+
+#define RELAY_ALARM_CHANNEL_COUNT 4u /* 当前项目显示为 K1~K4，内部枚举仍使用 RELAY1~RELAY4 */
 #define RELAY_ALARM_FIELD_COUNT   13u /* 每路继电器报警输出配置占用的 32 位字段数 */
 
 typedef enum {
@@ -638,7 +644,7 @@ typedef struct {
     uint32_t water_find_cap_threshold;              /* 水位寻找电容阈值（建议明确倍率，如 x1000） */
     uint32_t maxDownDistance;                   /* 水位/罐底测量最大下行距离(0.1mm) */
     uint32_t zero_cap;                          /* 零点电容值 */
-    uint32_t water_stable_threshold;            /* 水位稳定阈值 */
+    uint32_t water_stable_threshold;            /* 水位稳定距离 */
     uint32_t waterLevelCorrection;              /* 水位修正值 */
 
     /* ===================== 罐高/罐底测量 ===================== */

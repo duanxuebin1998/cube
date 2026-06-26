@@ -27,7 +27,7 @@
 #define UNVALID_GSW 0                      /* 质量无效值 */
 
 #define MAX_MEASUREMENT_POINTS 200 /* 密度分布测量最大点数。 */
-#define DEVICE_PROTOCOL_VERSION 12u /* CPU2/CPU3共享协议版本；旧程序未写入时默认为0 */
+#define DEVICE_PROTOCOL_VERSION 13u /* CPU2/CPU3共享协议版本；旧程序未写入时默认为0 */
 #define FAULT_AUTO_RECOVERY_RETRY_DEFAULT 3u /* 故障自动恢复默认重试次数。 */
 #define FAULT_AUTO_RECOVERY_RETRY_MAX 10u /* 故障自动恢复最大重试次数。 */
 
@@ -112,9 +112,14 @@ typedef enum {
 } SENSOR_TYPE;
 
 #define TEMP_TO_RAW(t)  ((uint32_t)((t) * 100.0f + 20000.0f)) /* 温度存储到寄存器 */
-#define DENSITY_TO_RAW(d) ((uint32_t)((d) * 10.0f)) /* 密度存储到寄存器 */
+#define DENSITY_RAW_SCALE 100U /* 密度内部原始值倍率，单位 0.01kg/m3。 */
+#define DENSITY_EXTERNAL_SCALE_X10 10U /* 旧外部协议密度倍率，单位 0.1kg/m3。 */
+#define DENSITY_PARAM_MIGRATE_FACTOR 10U /* 旧 x10 密度参数迁移到 x100 的倍率。 */
+#define DENSITY_CORRECTION_OLD_BASE_RAW 10000U /* 旧密度修正零点，单位 0.1kg/m3。 */
+#define DENSITY_CORRECTION_BASE_RAW 100000U /* 密度修正零点，单位 0.01kg/m3。 */
+#define DENSITY_TO_RAW(d) ((uint32_t)(((d) * 100.0f) + 0.5f)) /* 密度存储到寄存器 */
 #define RAW_TO_TEMP(raw)    (((int32_t)(raw) - 20000) / 100.0f) /* 寄存器原始温度值转换为工程温度。 */
-#define RAW_TO_DENSITY(raw) ((raw) / 10.0f) /* 寄存器原始密度值转换为工程密度。 */
+#define RAW_TO_DENSITY(raw) ((raw) / 100.0f) /* 寄存器原始密度值转换为工程密度。 */
 /**
  * @brief 系统错误码定义（2025-10修正版）
  * @note  错误码格式：0x00TT000N

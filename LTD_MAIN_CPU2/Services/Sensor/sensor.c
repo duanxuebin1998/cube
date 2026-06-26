@@ -612,7 +612,7 @@ uint32_t Read_Density_text(float *frequency, float *density, float *temp) {
 static void Apply_Fixed_DensityTemp_Correction(float *density, float *temp)
 {
     if ((density)&&(*density>200.0)) {
-        *density = (*density) + ((float)g_deviceParams.densityCorrection-10000.0f) / 10.0f;
+        *density = (*density) + ((float)g_deviceParams.densityCorrection - (float)DENSITY_CORRECTION_BASE_RAW) / 100.0f;
     }
 
     if (temp) {

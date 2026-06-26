@@ -14,6 +14,51 @@
 #include "DSM_SlaveModbus_modbus2.h"
 #include "device_param_sync.h"
 
+static uint32_t DSM_DensityRawToExternalX10(uint32_t raw_density)
+{
+	if (raw_density == UNVALID_DENSITY) {
+		return 0U;
+	}
+	return (raw_density + (DENSITY_PARAM_MIGRATE_FACTOR / 2U)) / DENSITY_PARAM_MIGRATE_FACTOR;
+}
+
+static uint32_t DSM_DensityCorrectionRawToExternalX10(uint32_t raw_correction)
+{
+	int64_t delta = (int64_t)raw_correction - (int64_t)DENSITY_CORRECTION_BASE_RAW;
+	int64_t external = (int64_t)DENSITY_CORRECTION_OLD_BASE_RAW;
+
+	if (delta >= 0) {
+		external += (delta + ((int64_t)DENSITY_PARAM_MIGRATE_FACTOR / 2)) /
+		            (int64_t)DENSITY_PARAM_MIGRATE_FACTOR;
+	} else {
+		external += (delta - ((int64_t)DENSITY_PARAM_MIGRATE_FACTOR / 2)) /
+		            (int64_t)DENSITY_PARAM_MIGRATE_FACTOR;
+	}
+
+	if (external < 0) {
+		return 0U;
+	}
+	if (external > 0xFFFF) {
+		return 0xFFFFU;
+	}
+	return (uint32_t)external;
+}
+
+static uint32_t DSM_DensityCorrectionExternalX10ToRaw(uint32_t external_correction)
+{
+	int64_t delta = (int64_t)external_correction - (int64_t)DENSITY_CORRECTION_OLD_BASE_RAW;
+	int64_t raw = (int64_t)DENSITY_CORRECTION_BASE_RAW +
+	              (delta * (int64_t)DENSITY_PARAM_MIGRATE_FACTOR);
+
+	if (raw < 0) {
+		return 0U;
+	}
+	if (raw > 0xFFFFFFFFLL) {
+		return 0xFFFFFFFFUL;
+	}
+	return (uint32_t)raw;
+}
+
 
 
 
@@ -124,7 +169,7 @@ void SystemParameterSet(void)
 
 	WriteOneHoldingRegister(HOLDREGISTER_NUMOFDECIMALS, 1, 1);		/* 温度的有效点数默认是2位 */
 	WriteOneHoldingRegister(HOLDREGISTER_TEMCORRECTCALUE, 1, g_deviceParams.temperatureCorrection);		/* 温度的修正系数 温度+(修正-1000) */
-	WriteOneHoldingRegister(HOLDREGISTER_DENSITYCORRECTCALUE, 1, g_deviceParams.densityCorrection);		/* 密度的修正系数 密度+(修正-10000) */
+	WriteOneHoldingRegister(HOLDREGISTER_DENSITYCORRECTCALUE, 1, DSM_DensityCorrectionRawToExternalX10(g_deviceParams.densityCorrection));		/* 密度的修正系数 密度+(修正-10000) */
 	WriteOneHoldingRegister(HOLDREGISTER_DEVICENUM, 2, 0);						/* 传感器系数zzzzzzzzzzzzzzzzzzzzzz */
 	WriteOneHoldingRegister(HOLDREGISTER_OIL_MEASUR_POSITION, 2, 0); /* 综合指令发油口密度测量位置 */
 
@@ -444,7 +489,7 @@ int UpdateDeviceParamsFromLegacyRegs(int startadd, int reamount)
         (HOLDREGISTER_DENSITYCORRECTCALUE <= end))
     {
         temp = ReadOneHoldingRegister(HOLDREGISTER_DENSITYCORRECTCALUE, 1);
-        g_deviceParams.densityCorrection = (temp & 0xFFFF);
+        g_deviceParams.densityCorrection = DSM_DensityCorrectionExternalX10ToRaw((uint32_t)(temp & 0xFFFF));
     }
 
     /* 其它旧寄存器如果在新 DeviceParameters 中没有对应，就不处理 */
@@ -509,24 +554,24 @@ void Input_Write(void) {
 	WriteOneInputRegister(INPUTREGISTER_ERRORNUM, 2, g_measurement.device_status.error_code);
 	/* 故障代码 */
 	WriteOneInputRegister(INPUTREGISTER_SP_TEMPERATURE, 1, g_measurement.single_point_measurement.temperature);									/* 单点测量温度 */
-	WriteOneInputRegister(INPUTREGISTER_SP_DENSITY, 1, g_measurement.single_point_measurement.density);									/* 单点测量密度 */
+	WriteOneInputRegister(INPUTREGISTER_SP_DENSITY, 1, DSM_DensityRawToExternalX10(g_measurement.single_point_measurement.density));									/* 单点测量密度 */
 	WriteOneInputRegister(INPUTREGISTER_SP_POSITION, 2, g_measurement.single_point_measurement.temperature_position);								/* 单点测量密度点位置 */
-	WriteOneInputRegister(INPUTREGISTER_SP_STANDARDDENSITY, 1, g_measurement.single_point_measurement.standard_density);							/* 单点测量标准密度 */
+	WriteOneInputRegister(INPUTREGISTER_SP_STANDARDDENSITY, 1, DSM_DensityRawToExternalX10(g_measurement.single_point_measurement.standard_density));							/* 单点测量标准密度 */
 	WriteOneInputRegister(INPUTREGISTER_SP_VCF20, 2, g_measurement.single_point_measurement.vcf20);											/* 单点测量的VCF */
-	WriteOneInputRegister(INPUTREGISTER_SP_WEIGHTDENSITY, 1, g_measurement.single_point_measurement.weight_density);						/* 单点测量的计重密度 */
+	WriteOneInputRegister(INPUTREGISTER_SP_WEIGHTDENSITY, 1, DSM_DensityRawToExternalX10(g_measurement.single_point_measurement.weight_density));						/* 单点测量的计重密度 */
 
 	WriteOneInputRegister(INPUTREGISTER_SPT_TEMPERATURE, 1, g_measurement.single_point_monitoring.temperature);									/* 单点检测温度 */
-	WriteOneInputRegister(INPUTREGISTER_SPT_DENSITY, 1, g_measurement.single_point_monitoring.density);										/* 单点检测密度 */
+	WriteOneInputRegister(INPUTREGISTER_SPT_DENSITY, 1, DSM_DensityRawToExternalX10(g_measurement.single_point_monitoring.density));										/* 单点检测密度 */
 	WriteOneInputRegister(INPUTREGISTER_SPT_POSITION, 2, g_measurement.single_point_monitoring.temperature_position);								/* 单点检测密度点位置 */
-	WriteOneInputRegister(INPUTREGISTER_SPT_STANDARDDENSITY, 1, g_measurement.single_point_monitoring.standard_density);							/* 单点检测标准密度 */
+	WriteOneInputRegister(INPUTREGISTER_SPT_STANDARDDENSITY, 1, DSM_DensityRawToExternalX10(g_measurement.single_point_monitoring.standard_density));							/* 单点检测标准密度 */
 	WriteOneInputRegister(INPUTREGISTER_SPT_VCF20, 2, g_measurement.single_point_monitoring.vcf20);
-	WriteOneInputRegister(INPUTREGISTER_SPT_WEIGHTDENSITY, 1, g_measurement.single_point_monitoring.weight_density);
+	WriteOneInputRegister(INPUTREGISTER_SPT_WEIGHTDENSITY, 1, DSM_DensityRawToExternalX10(g_measurement.single_point_monitoring.weight_density));
 
 	WriteOneInputRegister(INPUTREGISTER_SPREAD_AVERAGETEMPERATURE, 1, g_measurement.density_distribution.average_temperature);					/* 平均温度 */
-	WriteOneInputRegister(INPUTREGISTER_SPREAD_AVERAGEDENSITY, 1, g_measurement.density_distribution.average_density);							/* 平均密度 */
-	WriteOneInputRegister(INPUTREGISTER_SPREAD_STANDARDDENSITY, 1, g_measurement.density_distribution.average_standard_density);					/* 分布测量标准密度 */
+	WriteOneInputRegister(INPUTREGISTER_SPREAD_AVERAGEDENSITY, 1, DSM_DensityRawToExternalX10(g_measurement.density_distribution.average_density));							/* 平均密度 */
+	WriteOneInputRegister(INPUTREGISTER_SPREAD_STANDARDDENSITY, 1, DSM_DensityRawToExternalX10(g_measurement.density_distribution.average_standard_density));					/* 分布测量标准密度 */
 	WriteOneInputRegister(INPUTREGISTER_SPREAD_VCF20, 2, g_measurement.density_distribution.average_vcf20);									/* 分布测量VCF */
-	WriteOneInputRegister(INPUTREGISTER_SPREAD_WEIGHTDENSITY, 1, g_measurement.density_distribution.average_weight_density);						/* 分布测量计重密度 */
+	WriteOneInputRegister(INPUTREGISTER_SPREAD_WEIGHTDENSITY, 1, DSM_DensityRawToExternalX10(g_measurement.density_distribution.average_weight_density));						/* 分布测量计重密度 */
 	WriteOneInputRegister(INPUTREGISTER_SPREAD_NUMOFDENSITY, 1, g_measurement.density_distribution.measurement_points);								/* 分布测量密度点数 */
 	WriteOneInputRegister(INPUTREGISTER_LIQUIDLEVEL, 2, g_measurement.density_distribution.Density_oil_level);				/* 分布测量液位值 */
 
@@ -540,48 +585,48 @@ void Input_Write(void) {
 	if (g_measurement.density_distribution.measurement_points > 16) {
 		for (i = 0; i < 16; i++) {
 			WriteOneInputRegister(INPUTREGISTER_SPREAD_TEMPERATURE1 + 8 * i, 1, g_measurement.density_distribution.single_density_data[i].temperature);
-			WriteOneInputRegister(INPUTREGISTER_SPREAD_DENSITY1 + 8 * i, 1, g_measurement.density_distribution.single_density_data[i].density);
+			WriteOneInputRegister(INPUTREGISTER_SPREAD_DENSITY1 + 8 * i, 1, DSM_DensityRawToExternalX10(g_measurement.density_distribution.single_density_data[i].density));
 			WriteOneInputRegister(INPUTREGISTER_SPREAD_POSITION1 + 8 * i, 2, g_measurement.density_distribution.single_density_data[i].temperature_position);
-			WriteOneInputRegister(INPUTREGISTER_SPREAD_STANDARDDENSITY1 + 8 * i, 1, g_measurement.density_distribution.single_density_data[i].standard_density);
+			WriteOneInputRegister(INPUTREGISTER_SPREAD_STANDARDDENSITY1 + 8 * i, 1, DSM_DensityRawToExternalX10(g_measurement.density_distribution.single_density_data[i].standard_density));
 			WriteOneInputRegister(INPUTREGISTER_SPREAD_VCF1 + 8 * i, 2, g_measurement.density_distribution.single_density_data[i].vcf20);
-			WriteOneInputRegister(INPUTREGISTER_SPREAD_WEIGHTDENSITY1 + 8 * i, 1, g_measurement.density_distribution.single_density_data[i].weight_density);
+			WriteOneInputRegister(INPUTREGISTER_SPREAD_WEIGHTDENSITY1 + 8 * i, 1, DSM_DensityRawToExternalX10(g_measurement.density_distribution.single_density_data[i].weight_density));
 		}
 
 		for (i = 0; i < 100 - 16; i++) {
 			point_index = i + 16;
 			WriteOneInputRegister(INPUTREGISTER_SPREAD_TEMPERATURE17 + 8 * i, 1, g_measurement.density_distribution.single_density_data[point_index].temperature);
-			WriteOneInputRegister(INPUTREGISTER_SPREAD_DENSITY17 + 8 * i, 1, g_measurement.density_distribution.single_density_data[point_index].density);
+			WriteOneInputRegister(INPUTREGISTER_SPREAD_DENSITY17 + 8 * i, 1, DSM_DensityRawToExternalX10(g_measurement.density_distribution.single_density_data[point_index].density));
 			WriteOneInputRegister(INPUTREGISTER_SPREAD_POSITION17 + 8 * i, 2, g_measurement.density_distribution.single_density_data[point_index].temperature_position);
-			WriteOneInputRegister(INPUTREGISTER_SPREAD_STANDARDDENSITY17 + 8 * i, 1, g_measurement.density_distribution.single_density_data[point_index].standard_density);
+			WriteOneInputRegister(INPUTREGISTER_SPREAD_STANDARDDENSITY17 + 8 * i, 1, DSM_DensityRawToExternalX10(g_measurement.density_distribution.single_density_data[point_index].standard_density));
 			WriteOneInputRegister(INPUTREGISTER_SPREAD_VCF17 + 8 * i, 2, g_measurement.density_distribution.single_density_data[point_index].vcf20);
-			WriteOneInputRegister(INPUTREGISTER_SPREAD_WEIGHTDENSITY17 + 8 * i, 1, g_measurement.density_distribution.single_density_data[point_index].weight_density);
+			WriteOneInputRegister(INPUTREGISTER_SPREAD_WEIGHTDENSITY17 + 8 * i, 1, DSM_DensityRawToExternalX10(g_measurement.density_distribution.single_density_data[point_index].weight_density));
 		}
 	} else {
 		for (i = 0; i < g_measurement.density_distribution.measurement_points; i++) {
 			WriteOneInputRegister(INPUTREGISTER_SPREAD_TEMPERATURE1 + 8 * i, 1, g_measurement.density_distribution.single_density_data[i].temperature);
-			WriteOneInputRegister(INPUTREGISTER_SPREAD_DENSITY1 + 8 * i, 1, g_measurement.density_distribution.single_density_data[i].density);
+			WriteOneInputRegister(INPUTREGISTER_SPREAD_DENSITY1 + 8 * i, 1, DSM_DensityRawToExternalX10(g_measurement.density_distribution.single_density_data[i].density));
 			WriteOneInputRegister(INPUTREGISTER_SPREAD_POSITION1 + 8 * i, 2, g_measurement.density_distribution.single_density_data[i].temperature_position);
-			WriteOneInputRegister(INPUTREGISTER_SPREAD_STANDARDDENSITY1 + 8 * i, 1, g_measurement.density_distribution.single_density_data[i].standard_density);
+			WriteOneInputRegister(INPUTREGISTER_SPREAD_STANDARDDENSITY1 + 8 * i, 1, DSM_DensityRawToExternalX10(g_measurement.density_distribution.single_density_data[i].standard_density));
 			WriteOneInputRegister(INPUTREGISTER_SPREAD_VCF1 + 8 * i, 2, g_measurement.density_distribution.single_density_data[i].vcf20);
-			WriteOneInputRegister(INPUTREGISTER_SPREAD_WEIGHTDENSITY1 + 8 * i, 1, g_measurement.density_distribution.single_density_data[i].weight_density);
+			WriteOneInputRegister(INPUTREGISTER_SPREAD_WEIGHTDENSITY1 + 8 * i, 1, DSM_DensityRawToExternalX10(g_measurement.density_distribution.single_density_data[i].weight_density));
 		}
 	}
 	WriteOneInputRegister(INPUTREGISTER_SPREAD_AVERAGETEMPERATURE_M, 1, g_measurement.density_distribution.average_temperature);					/* 平均温度 */
-	WriteOneInputRegister(INPUTREGISTER_SPREAD_AVERAGEDENSITY_M, 1, g_measurement.density_distribution.average_density);							/* 平均密度 */
-	WriteOneInputRegister(INPUTREGISTER_SPREAD_STANDARDDENSITY_M, 1, g_measurement.density_distribution.average_standard_density);					/* 分布测量标准密度 */
+	WriteOneInputRegister(INPUTREGISTER_SPREAD_AVERAGEDENSITY_M, 1, DSM_DensityRawToExternalX10(g_measurement.density_distribution.average_density));							/* 平均密度 */
+	WriteOneInputRegister(INPUTREGISTER_SPREAD_STANDARDDENSITY_M, 1, DSM_DensityRawToExternalX10(g_measurement.density_distribution.average_standard_density));					/* 分布测量标准密度 */
 	WriteOneInputRegister(INPUTREGISTER_SPREAD_VCF20_M, 2, g_measurement.density_distribution.average_vcf20);									/* 分布测量VCF */
-	WriteOneInputRegister(INPUTREGISTER_SPREAD_WEIGHTDENSITY_M, 1, g_measurement.density_distribution.average_weight_density);						/* 分布测量计重密度 */
+	WriteOneInputRegister(INPUTREGISTER_SPREAD_WEIGHTDENSITY_M, 1, DSM_DensityRawToExternalX10(g_measurement.density_distribution.average_weight_density));						/* 分布测量计重密度 */
 	WriteOneInputRegister(INPUTREGISTER_SPREAD_NUMOFDENSITY_M, 1, g_measurement.density_distribution.measurement_points);								/* 分布测量密度点数 */
 	WriteOneInputRegister(INPUTREGISTER_LIQUIDLEVEL_M, 2, g_measurement.density_distribution.Density_oil_level);				/* 分布测量液位值 */
 
 	for (i = 0; i < 100; i++) /* V1.116 dq2020.4.2 */
 			{
 		WriteOneInputRegister(INPUTREGISTER_SPREAD_TEMPERATURE_M1 + 8 * i, 1, g_measurement.density_distribution.single_density_data[i].temperature);
-		WriteOneInputRegister(INPUTREGISTER_SPREAD_DENSITY_M1 + 8 * i, 1, g_measurement.density_distribution.single_density_data[i].density);
+		WriteOneInputRegister(INPUTREGISTER_SPREAD_DENSITY_M1 + 8 * i, 1, DSM_DensityRawToExternalX10(g_measurement.density_distribution.single_density_data[i].density));
 		WriteOneInputRegister(INPUTREGISTER_SPREAD_POSITION_M1 + 8 * i, 2, g_measurement.density_distribution.single_density_data[i].temperature_position);
-		WriteOneInputRegister(INPUTREGISTER_SPREAD_STANDARDDENSITY_M1 + 8 * i, 1, g_measurement.density_distribution.single_density_data[i].standard_density);
+		WriteOneInputRegister(INPUTREGISTER_SPREAD_STANDARDDENSITY_M1 + 8 * i, 1, DSM_DensityRawToExternalX10(g_measurement.density_distribution.single_density_data[i].standard_density));
 		WriteOneInputRegister(INPUTREGISTER_SPREAD_VCF_M1 + 8 * i, 2, g_measurement.density_distribution.single_density_data[i].vcf20);
-		WriteOneInputRegister(INPUTREGISTER_SPREAD_WEIGHTDENSITY_M1 + 8 * i, 1, g_measurement.density_distribution.single_density_data[i].weight_density);
+		WriteOneInputRegister(INPUTREGISTER_SPREAD_WEIGHTDENSITY_M1 + 8 * i, 1, DSM_DensityRawToExternalX10(g_measurement.density_distribution.single_density_data[i].weight_density));
 	}
 	WriteOneInputRegister(INPUTREGISTER_ZEROCIRCLE, 1, 0);									/* 零点圈数 */
 	WriteOneInputRegister(INPUTREGISTER_ZEROANGLE, 1, 0);										/* 零点角度 */

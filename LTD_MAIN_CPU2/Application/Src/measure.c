@@ -76,6 +76,7 @@ static void CMD_MeasureZero(void);
 static void CMD_MeasureBottom(void);
 static void CMD_MeasureAndFollowOilLevel(void);
 static uint32_t EnsureMotorPositionSourceBeforeFollow(const char *follow_name, uint8_t *switched_to_motor);
+static DensitySpreadModeId CMD_SyntheticDensityModeFromParam(void);
 static void CMD_CalibrateZeroPoint(void);
 static void CMD_CalibrateOilLevel(void);
 static void CMD_SyntheticMeasurement(void);
@@ -1121,12 +1122,32 @@ static void CMD_WartsilaDensitySpread(void) {
     g_deviceParams.command = CMD_MONITOR_SINGLE; /* 切回单点监测状态，继续监测当前液位/密度 */
 	return;
 }
+/*
+ * 函数用途：将综合测量使用的分布测量模式参数转换为密度内核枚举。
+ * 调用场景：CMD_SYNTHETIC 执行分布密度子流程前调用。
+ * 关键约束：CPU3 菜单保存 0~3 索引，0 兼容默认普通分布测。
+ */
+static DensitySpreadModeId CMD_SyntheticDensityModeFromParam(void)
+{
+    switch (g_deviceParams.spreadMeasurementMode) {
+    case 1U:
+        return DENS_MODE_GB;
+    case 2U:
+        return DENS_MODE_METER;
+    case 3U:
+        return DENS_MODE_INTERVAL;
+    case 0U:
+    default:
+        return DENS_MODE_SPREAD;
+    }
+}
 /**
  * @brief 执行测量流程中的 CMD_SyntheticMeasurement 逻辑。
  * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
  */
 static void CMD_SyntheticMeasurement(void) {
 	uint32_t ret = 0;
+    DensitySpreadModeId density_mode = CMD_SyntheticDensityModeFromParam();
 	DensityDistribution temp = {0};   /* 本次测量结果临时缓存 */
 	/* 设置设备状态：分布测量中 */
 	g_measurement.device_status.device_state = STATE_SYNTHETICING;
@@ -1143,12 +1164,19 @@ static void CMD_SyntheticMeasurement(void) {
     /* 2. 切换到密度测量模式 */
     EnableDensityMode();
 
-    /* 3. 执行分布密度测量, 结果写入 temp */
-    ret = Density_MeasureByMode_Exact(DENS_MODE_SPREAD, &temp);
+    /* 3. 按参数选择分布密度测量模式, 结果写入 temp */
+    printf("综合测量\t分布测模式参数=%lu, 内核模式=%u\r\n",
+           (unsigned long)g_deviceParams.spreadMeasurementMode,
+           (unsigned int)density_mode);
+    ret = Density_MeasureByMode_Exact(density_mode, &temp);
+    if (ret == STATE_SWITCH) {
+        return;
+    }
     /* 先处理异常边界，避免测量流程状态机带故障继续运行。 */
     if (ret != NO_ERROR) {
-        printf("普通分布测\t失败，错误码：0x%08lX\r\n", (unsigned long)ret);
+        printf("综合测量\t分布密度测量失败，错误码：0x%08lX\r\n", (unsigned long)ret);
         SET_ERROR(ret);
+        return;
     }
 
 

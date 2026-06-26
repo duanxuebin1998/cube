@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 
@@ -27,6 +28,13 @@ def require(condition: bool, message: str, failed: list[str]) -> None:
         failed.append(message)
 
 
+def device_protocol_version(text: str) -> int | None:
+    match = re.search(r"#define\s+DEVICE_PROTOCOL_VERSION\s+([0-9]+)u?\b", text)
+    if match is None:
+        return None
+    return int(match.group(1))
+
+
 def main() -> int:
     failed: list[str] = []
     cpu2_param = read_text(CPU2_PARAM, "gbk")
@@ -37,13 +45,20 @@ def main() -> int:
     cpu3_menu_header = read_text(CPU3_MENU_HEADER)
     protocol_doc = read_text(PROTOCOL_DOC)
 
+    protocol_versions: list[int] = []
     for text, name in ((cpu2_param, "CPU2"), (cpu3_param, "CPU3")):
-        require("#define DEVICE_PROTOCOL_VERSION 12u" in text, f"{name} protocol version must be 12", failed)
+        protocol_version = device_protocol_version(text)
+        require(protocol_version is not None, f"{name} protocol version define must exist", failed)
+        if protocol_version is not None:
+            protocol_versions.append(protocol_version)
+            require(protocol_version >= 12, f"{name} protocol version must be at least 12", failed)
         require("CMD_RESERVED_CMD7" in text, f"{name} command 115 must be reserved", failed)
         require("CMD_FORCE_LIFT_ZERO" not in text, f"{name} must not expose CMD_FORCE_LIFT_ZERO", failed)
         require("STATE_RESERVED_002F" in text, f"{name} state 0x002F must be reserved", failed)
         require("STATE_RESERVED_802F" in text, f"{name} state 0x802F must be reserved", failed)
         require("STATE_FORCE_LIFT_ZERO" not in text, f"{name} must not expose force-lift-zero states", failed)
+
+    require(len(set(protocol_versions)) == 1, "CPU2 and CPU3 protocol versions must match", failed)
 
     require("CMD_ForceLiftZero" not in cpu2_measure, "CPU2 measure.c must not keep CMD_ForceLiftZero()", failed)
     require("case CMD_RESERVED_CMD7:" in cpu2_measure, "CPU2 must route command 115 to reserved handling", failed)
@@ -57,6 +72,13 @@ def main() -> int:
         require("ForceLiftZero" not in text, f"{name} must not expose ForceLiftZero menu text", failed)
 
     require("### 协议版本 12" in protocol_doc, "protocol change record must document protocol version 12", failed)
+    if protocol_versions:
+        current_protocol = protocol_versions[0]
+        require(
+            f"### 协议版本 {current_protocol}" in protocol_doc,
+            f"protocol change record must document current protocol version {current_protocol}",
+            failed,
+        )
     require("CMD_RESERVED_CMD7" in protocol_doc, "protocol change record must document command 115 reservation", failed)
 
     if failed:

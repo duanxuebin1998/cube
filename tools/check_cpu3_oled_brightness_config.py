@@ -41,6 +41,13 @@ def expect(condition: bool, message: str, errors: list[str]) -> None:
         errors.append(message)
 
 
+def macro_u16(source: str, name: str) -> int | None:
+    match = re.search(r"#define\s+" + re.escape(name) + r"\s+0x([0-9A-Fa-f]+)U", source)
+    if match is None:
+        return None
+    return int(match.group(1), 16)
+
+
 def main() -> int:
     errors: list[str] = []
 
@@ -67,9 +74,16 @@ def main() -> int:
         errors,
     )
     expect("screen_brightness" in cpu3_param_h, "Cpu3CommAndDisplayParams should persist screen_brightness", errors)
+    cpu3_param_version = macro_u16(cpu3_param_c, "CPU3_PARAM_VERSION")
+    cpu3_param_version_v4 = macro_u16(cpu3_param_c, "CPU3_PARAM_VERSION_V4")
     expect(
-        re.search(r"#define\s+CPU3_PARAM_VERSION\s+0x0004U", cpu3_param_c) is not None,
-        "CPU3 FRAM parameter version should be bumped to 0x0004 for the new persisted field",
+        cpu3_param_version is not None and cpu3_param_version >= 0x0004,
+        "CPU3 FRAM parameter version should be at least 0x0004 for the persisted brightness field",
+        errors,
+    )
+    expect(
+        cpu3_param_version_v4 == 0x0004,
+        "CPU3 FRAM parameter migration should keep 0x0004 as the brightness baseline version",
         errors,
     )
     expect(

@@ -25,6 +25,21 @@ static inline uint16_t WXL_STATE(uint8_t hi, uint8_t lo)
     return (uint16_t)(((uint16_t)hi << 8) | (uint16_t)lo);
 }
 
+static int16_t Wartsila_DensityRawToX10(uint32_t raw_density)
+{
+	uint32_t raw_x10;
+
+	if (raw_density == UNVALID_DENSITY) {
+		return 0;
+	}
+
+	raw_x10 = (raw_density + (DENSITY_PARAM_MIGRATE_FACTOR / 2U)) / DENSITY_PARAM_MIGRATE_FACTOR;
+	if (raw_x10 > 32767U) {
+		return 32767;
+	}
+	return (int16_t)raw_x10;
+}
+
 /**
  * @brief  澳邦 DeviceState -> Wartsila 设备工作状态（寄存器16bit，两字节复合码）
  * @note   映射依据：你提供的“设备工作状态对应表”
@@ -146,8 +161,8 @@ static void DSMToWartsila(const volatile MeasurementResult *DSM, wartsila_Device
 	WXL->temp1_c_x100 = (int32_t) DSM->single_point_monitoring.temperature;
 	WXL->temp1_state = 0;
 
-	/* 密度（同理，直接拿 DSM 里的数值） */
-	WXL->density_kgm3_x10 = (int32_t) DSM->single_point_monitoring.density;
+	/* 密度按 Wartsila x10 口径输出。 */
+	WXL->density_kgm3_x10 = (int32_t) Wartsila_DensityRawToX10(DSM->single_point_monitoring.density);
 	WXL->density_state = 0;
 
 	/* 指令/状态 */
@@ -184,8 +199,7 @@ static void DSMToWartsila(const volatile MeasurementResult *DSM, wartsila_Device
 	/* 密度点 100 组 */
 	for (int i = 0; i < 100; ++i) {
 		WXL->dens_points[i].pos_mm = (int16_t) (DSM->density_distribution.single_density_data[i].temperature_position/10);
-		/* 这里保持你当前的缩放方式：直接用 DSM 里的 density 值，不再额外 *10 */
-		WXL->dens_points[i].density_x10 = (int16_t) DSM->density_distribution.single_density_data[i].density;
+		WXL->dens_points[i].density_x10 = Wartsila_DensityRawToX10(DSM->density_distribution.single_density_data[i].density);
 		/* 温度同上，保持 ×100 的原始值 */
 		WXL->dens_points[i].temp_x100 = (int16_t) DSM->density_distribution.single_density_data[i].temperature;
 	}

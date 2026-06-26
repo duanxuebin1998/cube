@@ -2371,7 +2371,7 @@ static void Display_AddCurrentPageValueStatusSlots(DisplayStatusSnapshot *snapsh
                                    (uint8_t)ValidParaDisArr[Para_AveDensity][PARA_X],
                                    Display_GetLabelEndLine((uint8_t*)"密度:", (uint8_t*)"D:"),
                                    (int32_t)display_value,
-                                   1U,
+                                   2U,
                                    (uint8_t*)"kg/m3");
     }
 
@@ -3217,7 +3217,7 @@ static void oled_equipment(void)
                                                         (int32_t)display_value,
                                                         false,
                                                         NULL),
-                             1,
+                             2,
                              (u8*)"kg/m3");
         }
     }

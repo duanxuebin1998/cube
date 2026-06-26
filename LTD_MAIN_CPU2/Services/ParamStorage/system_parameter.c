@@ -167,6 +167,7 @@ static float relay_alarm_raw_to_float(uint32_t raw)
 /* param_version和 magic 常量 */
 #define DEVICE_PARAM_VERSION   (3u) /* 参数存储配置：设备 参数 版本。 */
 #define DEVICE_PARAM_MAGIC     (0x4C54444Du)  /* 'LTDM' */
+#define DENSITY_X100_PROTOCOL_VERSION (13u) /* 密度参数从协议13开始按 x100 存储。 */
 
 /*
  * 持久化区域说明:
@@ -229,6 +230,44 @@ static uint32_t device_params_default_motor_local_circ_001mm(void)
 }
 
 /* 软件版本跟随当前固件，避免被 FRAM 里的旧参数覆盖。 */
+static uint32_t density_param_scale_x10_to_x100(uint32_t raw)
+{
+    if (raw == 0U) {
+        return 0U;
+    }
+    if (raw > (0xFFFFFFFFUL / DENSITY_PARAM_MIGRATE_FACTOR)) {
+        return 0xFFFFFFFFUL;
+    }
+    return raw * DENSITY_PARAM_MIGRATE_FACTOR;
+}
+
+static uint32_t density_correction_scale_x10_to_x100(uint32_t raw)
+{
+    int64_t delta = (int64_t)raw - (int64_t)DENSITY_CORRECTION_OLD_BASE_RAW;
+    int64_t value = (int64_t)DENSITY_CORRECTION_BASE_RAW +
+                    (delta * (int64_t)DENSITY_PARAM_MIGRATE_FACTOR);
+
+    if (value < 0) {
+        return 0U;
+    }
+    if (value > 0xFFFFFFFFLL) {
+        return 0xFFFFFFFFUL;
+    }
+    return (uint32_t)value;
+}
+
+static int migrate_density_params_runtime(void)
+{
+    if (g_deviceParams.protocolVersion >= DENSITY_X100_PROTOCOL_VERSION) {
+        return 0;
+    }
+
+    g_deviceParams.oilLevelDensity = density_param_scale_x10_to_x100(g_deviceParams.oilLevelDensity);
+    g_deviceParams.oilLevelThreshold = density_param_scale_x10_to_x100(g_deviceParams.oilLevelThreshold);
+    g_deviceParams.oilLevelHysteresisThreshold = density_param_scale_x10_to_x100(g_deviceParams.oilLevelHysteresisThreshold);
+    g_deviceParams.densityCorrection = density_correction_scale_x10_to_x100(g_deviceParams.densityCorrection);
+    return 1;
+}
 static int apply_firmware_version_runtime(void)
 {
     if (g_deviceParams.softwareVersion == CPU2_APP_VERSION_U32) {
@@ -257,7 +296,7 @@ static int apply_protocol_version_runtime(void)
     if ((old_protocol < 11U) || (old_protocol > DEVICE_PROTOCOL_VERSION)) {
         g_deviceParams.AOStartLevel_01mm = 0U;
         g_deviceParams.AOEndLevel_01mm = g_deviceParams.tankHeight;
-        g_deviceParams.AlarmHighAO = 0U;
+        g_deviceParams.AlarmHighAO = g_deviceParams.tankHeight;
         g_deviceParams.AlarmLowAO = 0U;
     }
 
@@ -364,18 +403,19 @@ static int normalize_ao_params_runtime(void)
 
         if ((g_deviceParams.AlarmHighAO != 0U) &&
             (g_deviceParams.AlarmHighAO > ao_max_level)) {
-            g_deviceParams.AlarmHighAO = 0U;
+            g_deviceParams.AlarmHighAO = ao_max_level;
             changed = 1;
         }
         if ((g_deviceParams.AlarmLowAO != 0U) &&
             (g_deviceParams.AlarmLowAO > ao_max_level)) {
+            g_deviceParams.AlarmHighAO = ao_max_level;
             g_deviceParams.AlarmLowAO = 0U;
             changed = 1;
         }
         if ((g_deviceParams.AlarmHighAO != 0U) &&
             (g_deviceParams.AlarmLowAO != 0U) &&
             (g_deviceParams.AlarmLowAO >= g_deviceParams.AlarmHighAO)) {
-            g_deviceParams.AlarmHighAO = 0U;
+            g_deviceParams.AlarmHighAO = ao_max_level;
             g_deviceParams.AlarmLowAO = 0U;
             changed = 1;
         }
@@ -754,7 +794,8 @@ int load_device_params(void)
     memcpy((void * volatile)&g_deviceParams, &temp, sizeof(DeviceParameters));
 
     g_deviceParams.command = g_deviceParams.powerOnDefaultCommand;
-    params_normalized = normalize_device_params_runtime();
+    params_normalized = migrate_density_params_runtime();
+    params_normalized |= normalize_device_params_runtime();
     params_normalized |= apply_firmware_version_runtime();
     params_normalized |= apply_protocol_version_runtime();
 
@@ -871,8 +912,8 @@ void RestoreFactoryParamsConfig(void)
     g_deviceParams.liquid_sensor_distance_diff = 1500; /* 0.1mm => 150mm */
     g_deviceParams.blindZone                   = 3000; /* 0.1mm => 300mm */
 
-    g_deviceParams.oilLevelThreshold                     = 15;     /* 项目自定义倍率/单位 */
-    g_deviceParams.oilLevelHysteresisThreshold = 20;     /* 项目自定义倍率/单位 */
+    g_deviceParams.oilLevelThreshold                     = 150;     /* 项目自定义倍率/单位 */
+    g_deviceParams.oilLevelHysteresisThreshold = 200;     /* 项目自定义倍率/单位 */
     g_deviceParams.liquidLevelMeasurementMethod= 0;		/* 0 空气+液体频率/2 1：按设置频率步进跟随 2 密度连续跟随 3.根据振动管跟随 4 连续相对频率 5 连续定频 */
     g_deviceParams.oilLevelFrequency                = 5500;      /* oilLevelFrequency */
     g_deviceParams.oilLevelDensity                = 0;      /* oilLevelDensity */
@@ -900,7 +941,7 @@ void RestoreFactoryParamsConfig(void)
     g_deviceParams.bottom_encoder_correction_enable = BOTTOM_ENCODER_CORRECTION_DISABLE; /* 默认: 罐底测量后不修正编码器 */
 
     /* ---------------- 密度/温度修正 ---------------- */
-    g_deviceParams.densityCorrection       = 10000;
+    g_deviceParams.densityCorrection       = DENSITY_CORRECTION_BASE_RAW;
     g_deviceParams.temperatureCorrection   = 1000;
 
     /* ---------------- 分布/区间测量参数 ---------------- */
@@ -952,7 +993,7 @@ void RestoreFactoryParamsConfig(void)
     g_deviceParams.AOEndLevel_01mm            = g_deviceParams.tankHeight; /* AO终点液位，0.1mm */
     g_deviceParams.CurrentRangeStart_mA = 400;   /* 4.00mA (×0.01) */
     g_deviceParams.CurrentRangeEnd_mA   = 2000;  /* 20.00mA (×0.01) */
-    g_deviceParams.AlarmHighAO          = 0U;    /* 默认关闭 AO 高报警 */
+    g_deviceParams.AlarmHighAO          = g_deviceParams.tankHeight;    /* 默认同液位罐高 */
     g_deviceParams.AlarmLowAO           = 0U;    /* 默认关闭 AO 低报警 */
     g_deviceParams.InitialCurrent_mA    = 400;
     g_deviceParams.AOHighCurrent_mA     = 2000;

@@ -81,6 +81,7 @@ static uint32_t FrequencyLevel_StopAndReturn(uint32_t error_code, const char *re
 static uint32_t FrequencyLevel_RunClosedLoop(uint32_t follow_mode);
 static uint32_t FrequencyLevel_ComputeSpeedX100(float frequency_error, float deadband, uint32_t max_speed_x100);
 static float FrequencyLevel_GetDeadband(uint32_t raw_threshold);
+static uint32_t FrequencyLevel_GetCompatThresholdHz(uint32_t raw_threshold);
 static uint8_t FrequencyLevel_IsStableInsideBand(float frequency_error, float deadband);
 static int FrequencyLevel_CorrectRelativeEndpointDirection(int dir);
 static void FrequencyLevel_RecordCurrentPosition(const char *tag);
@@ -496,12 +497,22 @@ static uint32_t FrequencyLevel_StopAndReturn(uint32_t error_code, const char *re
 /**
  * @brief 获取频率闭环死区，参数未配置时使用保守默认值。
  */
-static float FrequencyLevel_GetDeadband(uint32_t raw_threshold)
+static uint32_t FrequencyLevel_GetCompatThresholdHz(uint32_t raw_threshold)
 {
     if (raw_threshold == 0U) {
+        return 0U;
+    }
+    return (raw_threshold + (DENSITY_PARAM_MIGRATE_FACTOR / 2U)) / DENSITY_PARAM_MIGRATE_FACTOR;
+}
+
+static float FrequencyLevel_GetDeadband(uint32_t raw_threshold)
+{
+    uint32_t threshold_hz = FrequencyLevel_GetCompatThresholdHz(raw_threshold);
+
+    if (threshold_hz == 0U) {
         return FREQUENCY_LEVEL_DEFAULT_DEADBAND_HZ;
     }
-    return (float)raw_threshold;
+    return (float)threshold_hz;
 }
 
 /**
@@ -1111,7 +1122,7 @@ uint32_t FollowOilLevel(void) {
 		ret = DSM_Get_LevelMode_Frequence(&g_measurement.oil_measurement.current_frequency);
 		CHECK_ERROR(ret);  /* 检查开启液位模式是否成功 */
 		/* 稳定性判断（频率波动在阈值内） */
-		if (fabs(frequency_difference) < g_deviceParams.oilLevelHysteresisThreshold) {
+		if (fabs(frequency_difference) < FrequencyLevel_GetCompatThresholdHz(g_deviceParams.oilLevelHysteresisThreshold)) {
 			/* 液位稳定时电机不动作，直接打印寄存器中保存的液位值 */
 			printf("液位稳定,电机不动作\t");
 			printf("液位跟随\t液位值为%ld (0.1mm)", g_measurement.oil_measurement.oil_level);
@@ -1431,7 +1442,7 @@ static int SearchOilPrecise(float per_mm_Frequency) {
 			lowerTime = 0;
 			runlenth = 4.0 * overTime + frequency_difference / per_mm_Frequency - 4.0;
 			dir = MOTOR_DIRECTION_DOWN;
-		} else if (frequency_difference > g_deviceParams.oilLevelThreshold) { /* 可接受正偏差 */
+		} else if (frequency_difference > (int)FrequencyLevel_GetCompatThresholdHz(g_deviceParams.oilLevelThreshold)) { /* 可接受正偏差 */
 			/* 标准向下移动 */
 			overTime = 0;
 			lowerTime = 0;
@@ -1444,7 +1455,7 @@ static int SearchOilPrecise(float per_mm_Frequency) {
 			overTime = 0;
 			runlenth = -(frequency_difference / per_mm_Frequency) + 4.0 * lowerTime - 4.0;
 			dir = MOTOR_DIRECTION_UP;
-		} else if (frequency_difference < -g_deviceParams.oilLevelThreshold) { /* 可接受负偏差 */
+		} else if (frequency_difference < -(int)FrequencyLevel_GetCompatThresholdHz(g_deviceParams.oilLevelThreshold)) { /* 可接受负偏差 */
 			/* 标准向上移动 */
 			overTime = 0;
 			lowerTime = 0;
@@ -1457,7 +1468,7 @@ static int SearchOilPrecise(float per_mm_Frequency) {
 		}
 
 		/* 稳定性检测（连续稳定计数） */
-		if ((abs(frequency_difference) <= g_deviceParams.oilLevelThreshold) && (g_measurement.oil_measurement.air_frequency - g_measurement.oil_measurement.current_frequency > 200)
+		if ((fabsf(frequency_difference) <= (float)FrequencyLevel_GetCompatThresholdHz(g_deviceParams.oilLevelThreshold)) && (g_measurement.oil_measurement.air_frequency - g_measurement.oil_measurement.current_frequency > 200)
 				&& (g_measurement.oil_measurement.current_frequency - g_measurement.oil_measurement.oil_frequency > 200)) {
 			followTime++;
 			runlenth = 0;
@@ -1522,7 +1533,7 @@ static int determineTheSensorPositionAndUpdateTheLevelValue(void) {
 	/* 条件1: 频率差在稳定阈值内（系统稳定） */
 	/* 条件2: 新旧液位值差异大于100（需要强制更新） */
 	/* 条件3：处在液位跟随状态 */
-	/* if (((abs(frequency_difference) < g_deviceParams.oilLevelThreshold) || (abs((int) oil_level - (int) g_measurement.oil_measurement.oil_level) > 100)) && (g_measurement.device_status.device_state == STATE_FLOWOIL)) { */
+	/* if (((fabsf(frequency_difference) < g_deviceParams.oilLevelThreshold) || (abs((int) oil_level - (int) g_measurement.oil_measurement.oil_level) > 100)) && (g_measurement.device_status.device_state == STATE_FLOWOIL)) { */
 	if  (g_measurement.device_status.device_state == STATE_FLOWOIL) {
 		/* 更新当前液位值 */
 		g_measurement.oil_measurement.oil_level = OilLevel_ClampLevelForReport(oil_level, "液位跟随");

@@ -15,6 +15,7 @@
 #include "app_version.h"
 #include "display.h"
 #include "hgs.h"
+#include "system_parameter.h"
 /* 这些在 usart.c 里定义 */
 extern UART_HandleTypeDef huart2;
 extern UART_HandleTypeDef huart3;
@@ -682,7 +683,8 @@ void Cpu3_ReinitAllUarts(void)
 
 #define CPU3_PARAM_MAGIC   0x43505533UL   /* 'CPU3' */
 #define CPU3_PARAM_VERSION_V3 0x0003U
-#define CPU3_PARAM_VERSION 0x0004U
+#define CPU3_PARAM_VERSION_V4 0x0004U
+#define CPU3_PARAM_VERSION 0x0005U
 
 typedef struct
 {
@@ -808,6 +810,17 @@ static void Cpu3_Params_MigrateFromV3(const Cpu3ParamStorageV3 *stor)
     g_cpu3_comm_display_params.com3 = stor->params.com3;
 }
 
+static int32_t Cpu3_MigrateDensityInputX10ToX100(int32_t raw)
+{
+    if (raw > (INT32_MAX / (int32_t)DENSITY_PARAM_MIGRATE_FACTOR)) {
+        return INT32_MAX;
+    }
+    if (raw < (INT32_MIN / (int32_t)DENSITY_PARAM_MIGRATE_FACTOR)) {
+        return INT32_MIN;
+    }
+    return raw * (int32_t)DENSITY_PARAM_MIGRATE_FACTOR;
+}
+
 /**
  * @brief 保存参数存储中的 Cpu3_Params_SaveToFRAM 逻辑。
  * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
@@ -859,18 +872,21 @@ void Cpu3_Params_LoadFromFRAM(void)
         ReadMultiData((uint8_t*)&legacy, FRAM_CPU3_PARAM_ADDRESS, sizeof(Cpu3ParamStorageV3));
         if (Cpu3_Params_StorageV3Valid(&legacy)) {
             Cpu3_Params_MigrateFromV3(&legacy);
+            g_cpu3_comm_display_params.screen_input_d =
+                Cpu3_MigrateDensityInputX10ToX100(g_cpu3_comm_display_params.screen_input_d);
             (void)Cpu3_ApplyFirmwareVersionRuntime();
             (void)Cpu3_SanitizeAllPortConfigs();
             (void)Cpu3_MigrateLegacyWartsilaDefaults();
             Cpu3Local_ApplyDisplayRuntimeParams();
             Cpu3_Params_SaveToFRAM();
-            printf("CPU3 FRAM参数已从V3升级到V4，亮度使用默认挡位。\r\n");
+            printf("CPU3 FRAM参数已从V3升级到V5，亮度使用默认挡位。\r\n");
             return;
         }
 
         printf("CPU3 FRAM V3参数CRC无效，使用默认值。\r\n");
         use_default = 1;
-    } else if ((stor.magic != CPU3_PARAM_MAGIC) || (stor.version != CPU3_PARAM_VERSION)) {
+    } else if ((stor.magic != CPU3_PARAM_MAGIC) ||
+               ((stor.version != CPU3_PARAM_VERSION) && (stor.version != CPU3_PARAM_VERSION_V4))) {
         printf("CPU3 FRAM参数魔术字/版本无效，使用默认值。\r\n");
         use_default = 1;
     } else {
@@ -896,6 +912,11 @@ void Cpu3_Params_LoadFromFRAM(void)
         uint8_t need_save = 0U;
 
         g_cpu3_comm_display_params = stor.params;
+        if (stor.version == CPU3_PARAM_VERSION_V4) {
+            g_cpu3_comm_display_params.screen_input_d =
+                Cpu3_MigrateDensityInputX10ToX100(g_cpu3_comm_display_params.screen_input_d);
+            need_save = 1U;
+        }
         if (Cpu3_ApplyFirmwareVersionRuntime()) {
             need_save = 1U;
         }

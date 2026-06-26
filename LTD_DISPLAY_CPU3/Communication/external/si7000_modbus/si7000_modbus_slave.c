@@ -227,7 +227,7 @@ static uint16_t si7000_temp_raw_to_si_s16(uint32_t raw_temperature)
 }
 
 /*
- * 将 CPU2 密度原始值转换为 SI7000 0.1 单位密度。
+ * 将 CPU2 密度原始值转换为 SI7000 0.01 单位密度。
  * 无效值输出 0，超范围按 16 位最大值饱和。
  */
 static uint16_t si7000_density_raw_to_si_u16(uint32_t raw_density)
@@ -235,11 +235,7 @@ static uint16_t si7000_density_raw_to_si_u16(uint32_t raw_density)
     if (raw_density == UNVALID_DENSITY) {
         return 0U;
     }
-    if (raw_density > (0xFFFFU / 10U)) {
-        return 0xFFFFU;
-    }
-
-    return (uint16_t)(raw_density * 10U);
+    return si7000_clamp_u16(raw_density);
 }
 
 /*

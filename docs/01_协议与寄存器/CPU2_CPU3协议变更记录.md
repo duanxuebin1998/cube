@@ -7,7 +7,7 @@
 - 字段位置：`HOLDREGISTER_DEVICEPARAM_PROTOCOL_VERSION`
 - 当前语义：CPU2/CPU3 共享协议版本
 - 旧程序语义：保留字段，默认值为 `0`
-- 当前程序语义：协议版本 `12`
+- 当前程序语义：协议版本 `13`
 
 该字段由原 `reserved1` 预留位正式替换而来，寄存器地址不移动，不新增存储字段。
 
@@ -28,6 +28,7 @@
 | 10 | V1.16.0.0 | V1.15.0.0 | 200 | 新增 AO 模拟电流输出服务和 AD5421 诊断；在 RSSI 运行态后追加 `AoOutputRuntime`；原 `reserved26` 正式替换为 `AoOutputEnable`，地址保持 `0x00C2-0x00C3` 不后移，CPU2/CPU3 同步支持 AO 输出启停，默认关闭。 |
 | 11 | V1.18.1.0 | V1.16.1.0 | 200 | 复用 AO 相关保留字段为 AO 正常输出液位量程端点和独立报警液位阈值；同步 CPU2/CPU3 参数菜单、保持寄存器和运行期归一化语义。 |
 | 12 | V1.19.0.0 | V1.17.0.0 | 200 | 删除共享命令 115 的强制提零点执行语义；命令码 115、状态码 `0x002F/0x802F` 改为保留，不再由 CPU3 菜单下发或由 CPU2 执行。 |
+| 13 | V1.20.0.0 | V1.18.0.0 | 200 | 内部密度 raw 从 `kg/m3 x10` 升级为 `kg/m3 x100`；CPU3 状态页、密度参数菜单和 LTD 自有协议支持两位小数；DSM/Wartsila/SI7000 外部协议在边界保持原对外口径。 |
 
 ## 兼容判断规则
 
@@ -118,6 +119,31 @@
 - `py tools\check_si7000_modbus_frames.py`：确认 SI7000 外部地址常量和 golden frame 一致。
 - `py tools\check_version_bumped.py`：确认 CPU2 V1.8.0.0、CPU3 V1.6.0.0 已匹配本次协议升级。
 - `cmake --build build\LTD_MAIN_CPU2`、`cmake --build build\LTD_DISPLAY_CPU3`：两端构建通过。
+
+### 协议版本 13
+
+关联改动：
+- CPU2 `DENSITY_TO_RAW()` / `RAW_TO_DENSITY()` 统一改为 `kg/m3 x100`。
+- CPU2 `DEVICE_PARAM_VERSION` 保持 `3`，通过旧 FRAM 中 `protocolVersion < 13` 识别一次性迁移 `oilLevelDensity`、`oilLevelThreshold`、`oilLevelHysteresisThreshold` 和 `densityCorrection`。
+- `densityCorrection` 零点从 `10000` 迁移到 `100000`，修正量从 `(raw - 10000) / 10` 改为 `(raw - 100000) / 100`。
+- CPU3 状态页密度显示小数位改为 2，尾零裁剪逻辑保留。
+- CPU3 参数菜单中 `液位找液阈值`、`液位滞后阈值`、`液位跟随密度`、`磁通量D`、`密度手输值` 改为两位密度口径。
+- CPU3 本机 FRAM 参数版本升级到 `0x0005`，读取 `0x0003` 或 `0x0004` 时迁移本机手输密度 `screen_input_d`。
+- DSM 外部协议输出密度和密度修正时保持原 `x10` 口径；外部写入密度修正时转换回内部 `x100`。
+- Wartsila 外部协议密度继续保持 `scale = 10` / `x10`。
+- SI7000 外部协议继续保持既有 `0.01 kg/m3` 口径，内部升级后取消原先从 `x10` 到 `x100` 的额外乘 10。
+
+兼容影响：
+- 协议版本 13 改变内部密度倍率语义，但不移动共享寄存器地址和字段长度。
+- CPU2/CPU3 必须同为协议版本 13 才能正确解释内部密度字段。
+- 旧 FRAM 参数由 CPU2 按旧协议版本标记迁移后写回 `protocolVersion = 13`，CPU3 本机 FRAM 写回 `0x0005`，避免按新倍率误读旧参数。
+- 除 LTD 自有协议外，DSM、Wartsila、SI7000 主站不需要修改密度倍率解析。
+
+验证：
+- `py tools\check_density_precision_contract.py`
+- `py tools\check_synthetic_density_mode_contract.py`
+- `py tools\check_si7000_modbus_frames.py`
+- `py tools\check_si7000_protocol_contract.py`
 ### 协议版本 5
 
 关联改动：
@@ -306,7 +332,7 @@
 - `AlarmHighAO/AlarmLowAO` 语义改为 AO 独立高/低报警液位阈值，单位 `0.1mm`。
 - `AOHighCurrent_mA/AOLowCurrent_mA` 继续表示 AO 高/低报警触发后的输出电流，单位 `0.01mA`；`InitialCurrent_mA/AOHighCurrent_mA/AOLowCurrent_mA/FaultCurrent_mA/DebugCurrent_mA` 统一按 AD5421 硬件输出范围限制为 `3.20..24.00mA`。
 - CPU2 AO 输出不再读取继电器 `HH/H` 或 `L/LL` 运行态覆盖电流，改为按 `AlarmHighAO/AlarmLowAO` 独立判断 AO 报警；继电器报警继续使用各路 `relayAlarm[]` 阈值。
-- AO 高低报警阈值中任一项为 `0` 表示关闭对应报警；两者均非 `0` 时应保持低报警液位低于高报警液位。如果阈值重叠或超出罐高，CPU2 写参后会归一化为关闭 AO 报警覆盖。
+- AO 高低报警阈值中任一项为 `0` 表示关闭对应报警；两者均非 `0` 时应保持低报警液位低于高报警液位。如果高报警超出罐高，CPU2 写参后钳位到罐高；如果低报警超出罐高或高低报警重叠，CPU2 写参后恢复为出厂默认高报 `tankHeight`、低报 `0`。
 
 寄存器布局影响：
 - 保持寄存器地址和数量不变。
@@ -319,7 +345,7 @@
 兼容性影响：
 - CPU2/CPU3 必须同为协议版本 11，才能正确显示和写入 AO 液位量程端点、AO 独立报警液位阈值和状态电流值。
 - 协议版本 10 的 CPU3 会把 `reserved24/reserved25` 显示为保留字段，并把 `AlarmHighAO/AlarmLowAO` 显示为报警电流，不能与协议版本 11 的 CPU2 混用。
-- CPU2 从旧协议存储升级到协议版本 11 时，会把 `AOStartLevel_01mm=0`、`AOEndLevel_01mm=tankHeight`、`AlarmHighAO=0`、`AlarmLowAO=0` 写入运行参数，避免旧保留值或旧电流口径被误解释成液位报警阈值；运行期写参后也会把 AO 液位端点归一化到 `0..tankHeight` 且保持起点小于终点，并把特殊 AO 电流参数归一化到 `320..2400` 后回读。
+- CPU2 从旧协议存储升级到协议版本 11 时，会把 `AOStartLevel_01mm=0`、`AOEndLevel_01mm=tankHeight`、`AlarmHighAO=tankHeight`、`AlarmLowAO=0` 写入运行参数，避免旧保留值或旧电流口径被误解释成液位报警阈值；运行期写参后也会把 AO 液位端点归一化到 `0..tankHeight` 且保持起点小于终点，并把特殊 AO 电流参数归一化到 `320..2400` 后回读。
 - `DEVICE_PARAM_VERSION` 保持不变，不会因本次升级触发恢复出厂参数；但协议语义变化后需要现场复核 AO起点/终点液位点、正常起点/终点电流方向和 AO 报警液位阈值。
 
 验证结果：
