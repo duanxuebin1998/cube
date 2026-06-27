@@ -944,6 +944,28 @@ bool DisplayTankOpera_IsDebugWeightWaitActive(void)
 }
 
 /**
+ * @brief 判断当前罐上操作页是否允许菜单空闲超时自动退出。
+ * @return true 表示可退回状态页，false 表示当前页有业务等待逻辑，不应被空闲超时打断。
+ */
+bool DisplayTankOpera_CanIdleExit(void)
+{
+	if (FlagofTankOpera != true) {
+		return false;
+	}
+
+	if ((func_index < 0) || (func_index >= KEYNUM_END)) {
+		return true;
+	}
+
+	if ((func_index == KEYNUM_MOTOR_RUN_MONITOR) ||
+	    (func_index == KEYNUM_DEBUG_WEIGHT_WAIT)) {
+		return false;
+	}
+
+	return true;
+}
+
+/**
  * @brief 进入电机运行监控页。
  */
 static void enter_motor_run_monitor_page(void)
@@ -2655,7 +2677,11 @@ static pFunc_void dtm_backtofunc(void)
         /* CPU3 分组 */
         case MENU_GRP_CPU3_BASE:
         case MENU_GRP_CPU3_SCREEN:
-            p = menu_display_base;
+            if ((now_Opera_Num == COM_NUM_PARA_LANG) || (now_Opera_Num == COM_NUM_SCREEN_PASSWARD)) {
+                p = menu_display_config;
+            } else {
+                p = menu_display_base;
+            }
             break;
         case MENU_GRP_CPU3_SOURCE:
         case MENU_GRP_CPU3_INPUT:
@@ -4360,14 +4386,17 @@ void exitTankOpera(void)
 
 
 /* -------------------- 可选：过滤“保留项” --------------------
- * 说明：
- * - 如果你的字符串是 GBK： "保留" 通常 2 个汉字 4 字节；UTF-8 是 6 字节
- * - 为避免编码差异，这里用 strncmp("保留",2) 做弱判断；若你发现无效，按编码改成 memcmp。
+ * 当前源码按 UTF-8 维护，比较完整“保留”前缀，避免只比对半个汉字。
  */
 static int is_reserved_cn(const uint8_t *name)
 {
-    if (name == NULL) return 0;
-    return (strncmp((const char*)name, "保留", 2) == 0);
+    static const char reserved_prefix[] = "保留";
+
+    if (name == NULL) {
+        return 0;
+    }
+
+    return (strncmp((const char*)name, reserved_prefix, sizeof(reserved_prefix) - 1U) == 0);
 }
 
 /* 每路继电器报警输出参数固定为 13 个字段。
@@ -5119,9 +5148,7 @@ static int menu_filter_relay4_alarm(int operaNum)
 static int menu_filter_display_base(int operaNum)
 {
     switch (operaNum) {
-    case COM_NUM_PARA_LANG:
     case COM_NUM_SCREEN_DECIMAL:
-    case COM_NUM_SCREEN_PASSWARD:
     case COM_NUM_SCREEN_OFF:
     case COM_NUM_SCREEN_BRIGHTNESS:
         return 1;
@@ -5226,9 +5253,11 @@ static void menu_comm_config(void)
 static void menu_display_config(void)
 {
     static struct MenuData menu[] = {
-        {(uint8_t*)"显示基础",      0, menu_display_base,  COMMANE_NORW, (uint8_t*)"Display"},
-        {(uint8_t*)"数据源与手输值",0, menu_display_data,  COMMANE_NORW, (uint8_t*)"Data Source"},
-        {(uint8_t*)"返回",          0, menu_paracfg_main, COMMANE_NORW, (uint8_t*)"Back"},
+        {(uint8_t*)"显示基础",      0, menu_display_base,  COMMANE_NORW,   (uint8_t*)"Display"},
+        {(uint8_t*)"语言",          COM_NUM_PARA_LANG, para_mainprocess, COMMAND_WRITE, (uint8_t*)"Lang"},
+        {(uint8_t*)"屏幕密码",      COM_NUM_SCREEN_PASSWARD, para_mainprocess, COMMAND_WRITE, (uint8_t*)"ScrPwd"},
+        {(uint8_t*)"数据源与手输值",0, menu_display_data,  COMMANE_NORW,   (uint8_t*)"Data Source"},
+        {(uint8_t*)"返回",          0, menu_paracfg_main, COMMANE_NORW,   (uint8_t*)"Back"},
     };
 
     oled_clear();
@@ -5739,7 +5768,7 @@ static void menu_relay4_status(void)
 static void menu_ao(void)           { menu_build_by_group(MENU_GRP_AO,           KEYNUM_MENU_PARA_AO,           menu_output_config); }
 /**
  * @brief 执行屏幕菜单操作中的 menu_cal_sp 逻辑。
- * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ * @note 标定、单点和运动距离参数随测量/调试指令输入，不挂入参数配置主菜单；该页仅保留为旧返回映射兜底。
  */
 static void menu_cal_sp(void)       { menu_build_by_group(MENU_GRP_CAL_SP,       KEYNUM_MENU_PARA_CAL_SP,       menu_paracfg_main); }
 
@@ -5749,7 +5778,7 @@ static void menu_cal_sp(void)       { menu_build_by_group(MENU_GRP_CAL_SP,      
  */
 static void menu_param_check(void)  { menu_build_by_group(MENU_GRP_PARAM_CHECK, KEYNUM_MENU_PARA_PARAM_CHECK,  menu_maint_config); }
 
-/* CPU3：同理，分组页 = 参数列表页 */
+/* CPU3 旧分组页仅作兼容兜底；现场入口使用显示设置/通信设置的静态菜单和过滤页。 */
 static void menu_cpu3_base(void)    { menu_build_by_group(MENU_GRP_CPU3_BASE,   KEYNUM_MENU_CPU3_BASE,   menu_paracfg_main); }
 /* * @brief 进入 CPU3 来源配置菜单。 */
 static void menu_cpu3_source(void)  { menu_build_by_group(MENU_GRP_CPU3_SOURCE, KEYNUM_MENU_CPU3_SOURCE, menu_paracfg_main); }

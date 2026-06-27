@@ -44,15 +44,17 @@ static int __attribute__((unused)) ResponseException(int exception, uint8_t  *se
 static int Compose03Package(uint8_t  *revframe, uint8_t  *sendframe);
 static int Compose04Package(uint8_t  *revframe, uint8_t  *sendframe);
 static int Compose10Package(uint8_t  const *revframe, uint8_t  *sendframe);
-
+static bool IsOnlyRelayClearAlarmWrite(uint16_t startAddr, uint16_t regCount);
+static bool IsPersistentDeviceParamWrite(uint16_t startAddr, uint16_t regCount);
 /* 接收到的数据包进行地址检查 */
 bool SlaveCheckAddress(uint8_t  const *revframe, int framelen) {
-	if (revframe[0] != SlaveAddress && revframe[0] != 0) {
-		return false;
-	} else {
-		return true;
-	}
+    if (revframe[0] != SlaveAddress && revframe[0] != 0) {
+        return false;
+    } else {
+        return true;
+    }
 }
+
 /* 设置从机地址对照量 作为数据包地址是否正确的判断依据 */
 void SetSlaveaddress(int address) {
 	SlaveAddress = address;
@@ -61,6 +63,28 @@ void SetSlaveaddress(int address) {
     #endif
 }
 
+
+/* 判断 0x10 写入是否落在需要持久化的设备参数区。
+ * 命令和继电器清锁存属于运行态写入，不触发 FRAM 保存和差异打印。 */
+static bool IsPersistentDeviceParamWrite(uint16_t startAddr, uint16_t regCount)
+{
+    uint32_t persist_start;
+    uint32_t persist_end;
+    uint32_t write_start;
+    uint32_t write_end;
+
+    if (((startAddr == HOLDREGISTER_DEVICEPARAM_COMMAND) && (regCount == 2U)) ||
+        IsOnlyRelayClearAlarmWrite(startAddr, regCount)) {
+        return false;
+    }
+
+    persist_start = (uint32_t)HOLDREGISTER_DEVICEPARAM_SENSORTYPE;
+    persist_end = (uint32_t)HOLDREGISTER_DEVICEPARAM_CRC + 1UL;
+    write_start = (uint32_t)startAddr;
+    write_end = (uint32_t)startAddr + (uint32_t)regCount;
+
+    return (write_end > persist_start) && (write_start < persist_end);
+}
 
 /* 清除锁存报警是运行期命令，单独写这些寄存器时不触发 FRAM 保存。 */
 static bool IsOnlyRelayClearAlarmWrite(uint16_t startAddr, uint16_t regCount)
@@ -256,6 +280,7 @@ int Response10Process(uint8_t const *revframe, uint8_t *sendframe)
     uint16_t startAddr;
     uint16_t regCount;
     int need_save = 0;
+    int persist_write = 0;
 
     /* 解析起始地址和寄存器数量 */
     startAddr = ((uint16_t)revframe[2] << 8) | revframe[3];
@@ -264,6 +289,10 @@ int Response10Process(uint8_t const *revframe, uint8_t *sendframe)
     /* 1. 先用当前设备参数填充保持寄存器数组，保证未被写到的寄存器保持最新值 */
     WriteDeviceParamsToHoldingRegisters(HoldingRegisterArray);
 
+    if (IsPersistentDeviceParamWrite(startAddr, regCount)) {
+        persist_write = 1;
+        DeviceParams_CaptureWriteSnapshot();
+    }
     /* 2. 处理主站写入，Compose10Package 内部应修改 HoldingRegisterArray 并组应答帧 */
     length = Compose10Package(revframe, sendframe);
 
@@ -284,21 +313,9 @@ int Response10Process(uint8_t const *revframe, uint8_t *sendframe)
      *    规则：只写 command（起始地址刚好是 COMMAND 且长度为 2 寄存器）不存储，
      *          其它涉及参数区的写操作统一认为需要持久化。
      */
-    if (!((startAddr == HOLDREGISTER_DEVICEPARAM_COMMAND) && (regCount == 2)) &&
-        !IsOnlyRelayClearAlarmWrite(startAddr, regCount)) {
-        /* 只要写的范围落在参数持久化区域内，就认为需要保存 */
-        uint16_t persist_start = HOLDREGISTER_DEVICEPARAM_SENSORTYPE;  /* 持久化起点：跳过 command */
-        uint16_t persist_end   = HOLDREGISTER_DEVICEPARAM_CRC + 1;     /* 持久化终点：到 CRC 结束 */
-
-        uint16_t write_start = startAddr;
-        uint16_t write_end   = startAddr + regCount;  /* 半开区间 [start, end) */
-
-        /* 区间有交集则需要保存 */
-        if ((write_end > persist_start) && (write_start < persist_end)) {
-            need_save = 1;
-        }
+    if (persist_write != 0) {
+        need_save = 1;
     }
-
     /* 5. 持久化参数到 FRAM（command 不参与 CRC） */
     if (need_save) {
         request_device_params_save();

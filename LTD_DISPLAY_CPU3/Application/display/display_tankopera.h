@@ -37,6 +37,11 @@ bool DisplayTankOpera_IsMotorRunMonitorActive(void);
  * @return true 表示当前前景页是扭力获取等待页。
  */
 bool DisplayTankOpera_IsDebugWeightWaitActive(void);
+/**
+ * @brief 判断当前前景菜单页是否允许空闲超时后自动退出。
+ * @return true 表示允许自动退出到状态页，false 表示应继续保持当前业务等待页。
+ */
+bool DisplayTankOpera_CanIdleExit(void);
 
 /* 菜单索引号 */
 typedef enum {

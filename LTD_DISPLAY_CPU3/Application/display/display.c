@@ -17,6 +17,7 @@
 #define DISPLAY_STATUS_MAX_SLOTS 6U
 #define DISPLAY_VALUE_AREA_HEIGHT 16U
 #define DISPLAY_SCREEN_OFF_IDLE_MS 30000U
+#define DISPLAY_MENU_IDLE_EXIT_MS 120000U
 #define DISPLAY_STATUS_PAGE_HOLD_REFRESHES 3U
 
 /* struct ScreenDisplay SDisPosi; */
@@ -31,6 +32,7 @@ static uint32_t display_last_spi_error_count = 0U; /* 屏幕显示计数值，�
 static uint32_t display_last_refresh_ms = 0U; /* 屏幕显示模块级变量，保存跨函数共享的业务状态。 */
 static uint32_t display_refresh_timeout_count = 0U; /* 屏幕显示计数值，用于节拍、统计或协议数量控制。 */
 static volatile uint32_t display_last_key_tick = 0U; /* 屏幕显示模块级变量，保存跨函数共享的业务状态。 */
+static uint32_t display_menu_last_activity_tick = 0U; /* 菜单最近一次有效操作时间，用于空闲自动退出。 */
 
 
 static int PageAmount = 0;                  /* 总共显示几页 */
@@ -1659,6 +1661,8 @@ static void Display_ClearBeforeDraw(void);
 static bool Display_ShouldRecoverBeforeDraw(void);
 static void Display_ProcessLongPressAction(uint8_t long_press_key);
 static void Display_ProcessPendingInput(void);
+static void Display_RecordMenuActivity(uint32_t now);
+static void Display_ProcessMenuIdleExit(void);
 
 
 /*
@@ -1999,6 +2003,7 @@ static void Display_ProcessLongPressAction(uint8_t long_press_key)
     if (long_press_key == LONG_PRESS_KEY_SURE) {
         uint32_t frame_spi_error_start = Display_PrepareForForegroundDraw();
         FlagofTankOpera = true;
+        Display_RecordMenuActivity(HAL_GetTick());
         useKey();
         keymenu[KEYNUM_IF_ENTER_MAINMENU].execute_opera();
         Display_FinishFrame(frame_spi_error_start);
@@ -2012,6 +2017,7 @@ static void Display_ProcessLongPressAction(uint8_t long_press_key)
             prepared = true;
         }
         if (Display_EnterCancelMeasurementConfirm()) {
+            Display_RecordMenuActivity(HAL_GetTick());
             Display_FinishFrame(frame_spi_error_start);
         } else if (prepared) {
             display_recover_before_draw = false;
@@ -2044,12 +2050,48 @@ static void Display_ProcessPendingInput(void)
                 prepared = true;
             }
             if (KeyProcess(keypress)) {
+                Display_RecordMenuActivity(HAL_GetTick());
                 Display_FinishFrame(frame_spi_error_start);
             } else if (prepared) {
                 display_recover_before_draw = false;
             }
         }
     } while (keypress != 0U);
+}
+
+/**
+ * @brief 记录菜单最近一次有效交互时间。
+ *
+ * @param now 当前 HAL tick。
+ * @note 仅在主循环处理菜单进入或有效按键后调用，不在中断中修改页面状态。
+ */
+static void Display_RecordMenuActivity(uint32_t now)
+{
+    display_menu_last_activity_tick = now;
+}
+
+/**
+ * @brief 菜单长时间无操作时自动退回状态页。
+ * @note 电机运行监控、扭力等待等业务等待页不参与普通菜单空闲退出。
+ */
+static void Display_ProcessMenuIdleExit(void)
+{
+    uint32_t now;
+
+    if (!DisplayTankOpera_CanIdleExit()) {
+        display_menu_last_activity_tick = HAL_GetTick();
+        return;
+    }
+
+    now = HAL_GetTick();
+    if ((uint32_t)(now - display_menu_last_activity_tick) < DISPLAY_MENU_IDLE_EXIT_MS) {
+        return;
+    }
+
+    exitTankOpera();
+    Display_ClearPendingKeys();
+    Display_RecordMenuActivity(now);
+    Display_RequestRefresh();
 }
 
 /**
@@ -2060,6 +2102,7 @@ void Display_Task(void)
 {
     Display_UpdateLongPressReleaseGuard();
     Display_ProcessPendingInput();
+    Display_ProcessMenuIdleExit();
 
     if (!display_refresh_pending && Display_ShouldRequestStatusHighlightRefresh()) {
         display_refresh_pending = true;

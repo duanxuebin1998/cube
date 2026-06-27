@@ -127,7 +127,7 @@
 - CPU2 `DEVICE_PARAM_VERSION` 保持 `3`，通过旧 FRAM 中 `protocolVersion < 13` 识别一次性迁移 `oilLevelDensity`、`oilLevelThreshold`、`oilLevelHysteresisThreshold` 和 `densityCorrection`。
 - `densityCorrection` 零点从 `10000` 迁移到 `100000`，修正量从 `(raw - 10000) / 10` 改为 `(raw - 100000) / 100`。
 - CPU3 状态页密度显示小数位改为 2，尾零裁剪逻辑保留。
-- CPU3 参数菜单中 `液位找液阈值`、`液位滞后阈值`、`液位跟随密度`、`磁通量D`、`密度手输值` 改为两位密度口径。
+- CPU3 参数菜单中 `液位跟随密度`、`磁通量D`、`密度手输值` 改为两位密度口径；`液位找液阈值`、`液位滞后阈值` 继续面向频率液位显示为 `Hz`，并通过 `point=1` 保持默认 `150/200` 对应 `15.0/20.0 Hz`。
 - CPU3 本机 FRAM 参数版本升级到 `0x0005`，读取 `0x0003` 或 `0x0004` 时迁移本机手输密度 `screen_input_d`。
 - DSM 外部协议输出密度和密度修正时保持原 `x10` 口径；外部写入密度修正时转换回内部 `x100`。
 - Wartsila 外部协议密度继续保持 `scale = 10` / `x10`。

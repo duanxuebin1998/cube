@@ -15,6 +15,7 @@ import sys
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "LTD_MAIN_CPU2" / "Application" / "Src" / "measure_oilLevel.c"
 HDR = ROOT / "LTD_MAIN_CPU2" / "Application" / "Inc" / "measure_oilLevel.h"
+DENSITY_SRC = ROOT / "LTD_MAIN_CPU2" / "Application" / "Src" / "measure_density.c"
 CPU3_DISPLAY = ROOT / "LTD_DISPLAY_CPU3" / "Application" / "display" / "display_tankopera.c"
 CPU2_PARAM_HEADER = ROOT / "LTD_MAIN_CPU2" / "Services" / "ParamStorage" / "system_parameter.h"
 CPU3_PARAM_HEADER = ROOT / "LTD_DISPLAY_CPU3" / "Application" / "system_param" / "system_parameter.h"
@@ -42,6 +43,7 @@ def parse_protocol_version(text: str) -> int:
 def main() -> int:
     source = SRC.read_text(encoding="gbk")
     header = HDR.read_text(encoding="gbk")
+    density_source = DENSITY_SRC.read_text(encoding="gbk")
     cpu3_display = CPU3_DISPLAY.read_text(encoding="utf-8")
     cpu2_param_header = CPU2_PARAM_HEADER.read_text(encoding="gbk")
     cpu3_param_header = CPU3_PARAM_HEADER.read_text(encoding="utf-8")
@@ -226,6 +228,11 @@ def main() -> int:
             r"连定频",
             "CPU3 menu must expose continuous fixed-frequency method",
         ),
+        (
+            density_source,
+            r"hover_time_s\s*=\s*g_deviceParams\.spreadPointHoverTime\s*;[\s\S]{0,120}hover_ms\s*=\s*hover_time_s\s*\*\s*1000U\s*;",
+            "density spread hover time must treat spreadPointHoverTime as seconds and convert to milliseconds",
+        ),
     ]
 
     for text, pattern, note in checks:
@@ -240,6 +247,11 @@ def main() -> int:
         source,
         r"case\s+OIL_LEVEL_METHOD_RELATIVE_FREQ\s*:\s*case\s+OIL_LEVEL_METHOD_FIXED_FREQ\s*:[\s\S]{0,500}FrequencyLevel_RunClosedLoop",
         "original relative/fixed frequency methods must not be replaced by continuous closed loop",
+    )
+    forbid(
+        density_source,
+        r"hover_ms\s*=\s*g_deviceParams\.spreadPointHoverTime\s*;",
+        "density spread hover time must not use spreadPointHoverTime directly as milliseconds",
     )
 
     print("continuous level control contract: ok")

@@ -387,11 +387,11 @@ HAL_StatusTypeDef Start_Encoder_Collection_TIM(void) {
 
     status = HAL_TIM_Base_Start_IT(&ENCODER_TIM_HANDLE);
     if (status != HAL_OK) {
-        printf("编码器定时器启动失败：%d\r\n", status);
+        printf("[编码器][初始化][失败] 定时器启动失败：%d\r\n", status);
         return status;
     }
 
-    printf("编码器定时器已启动，立即触发首帧读取\r\n");
+    printf("[编码器][初始化][成功] 定时器已启动，已触发首帧读取\r\n");
     /* 定时周期到来前先主动读一次，缩短上电后编码器不可用窗口。 */
     (void)Start_Read_SSI_Data();
     return status;

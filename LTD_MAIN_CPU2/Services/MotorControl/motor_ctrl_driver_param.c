@@ -8,6 +8,9 @@
 #define MOTOR_DRIVER_DRVSTATUS_CS_ACTUAL_SHIFT    16U /* DRV_STATUS 中实际线圈电流档位 CS_ACTUAL 的右移位数。 */
 #define MOTOR_DRIVER_RAMPSTAT_VZERO_MASK          0x400U /* RAMPSTAT 中速度为零状态位掩码。 */
 #define MOTOR_DRIVER_POSITION_TOLERANCE_TICKS     1024L /* 电机驱动位置校验允许误差，单位 tick。 */
+#ifndef MOTOR_INIT_POSITION_DETAIL_PRINT_ENABLE
+#define MOTOR_INIT_POSITION_DETAIL_PRINT_ENABLE      0U
+#endif
 
 /**
  * @file motor_ctrl_driver_param.c
@@ -576,9 +579,10 @@ uint32_t MotorCtrl_Init(void)
         }
         s_motor_driver.applied_velocity = velocity;
 
-        /* 上电读取 DeviceParameters 和电机 FRAM 记录后，立即打印一次电机/编码轮位置对比。
-         * 用于确认 XACTUAL、记步模式、局部周长、切换基准和编码轮位置是否一致。 */
+#if MOTOR_INIT_POSITION_DETAIL_PRINT_ENABLE
+        /* 初始化详细诊断仅在现场需要时打开，默认避免日志刷屏。 */
         MotorCtrl_PrintPositionCompare();
+#endif
     } else {
         uint32_t ret;
 
@@ -616,14 +620,12 @@ uint32_t MotorCtrl_Init(void)
     /* 完整初始化成功后同样视为旧运动状态已经清理，可开放后续运动入口。 */
     s_motor_driver.boot_safe_stop_done = true;
 
-    printf("电机初始化完成 | 方式=%s | 速度=%.2f m/min | 尺带=%.1fmm | 周长=%.1fmm | VMAX=%lu | 电流=%lu | 等效微步/s=%.1f\r\n",
+    printf("[电机][初始化][成功] 初始化完成 | 方式=%s | 速度=%.2f m/min | 尺带=%.1f mm | 周长=%.1f mm | 电流=%lu\r\n",
            init_mode,
            (double)MotorDriver_GetSpeedSetpointX100() / 100.0,
            g_measurement.debug_data.cable_length / 10.0,
            MotorPosition_TapeInstantCircumferenceFromLength((double)g_measurement.debug_data.cable_length * 0.1),
-           (unsigned long)velocity,
-           (unsigned long)motor_current,
-           MotorDriver_VmaxToUstepsPerSec(velocity));
+           (unsigned long)motor_current);
     return NO_ERROR;
 }
 

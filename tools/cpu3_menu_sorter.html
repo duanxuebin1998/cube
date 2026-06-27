@@ -355,6 +355,10 @@
       color: #6f3bb7;
     }
 
+    .badge.is-empty {
+      display: none;
+    }
+
     .path {
       color: var(--muted);
       font-size: 12px;
@@ -477,6 +481,12 @@
       border-radius: 6px;
     }
 
+    .node-row.drop-inside {
+      outline: 2px solid rgba(31, 111, 235, 0.45);
+      outline-offset: -2px;
+      background: #eef5ff;
+    }
+
     @media (max-width: 980px) {
       header {
         align-items: flex-start;
@@ -558,9 +568,9 @@
 
   <script>
     const SOURCE_INFO = {
-      source: "D:/CUBE LTD_DISPLAY_CPU3/Application/display/display_tankopera.c + system_parameter.c",
-      generatedAt: "2026-06-26",
-      note: "支持修改菜单/参数显示名，也支持把同一层级的项目移动到另一个菜单下；落地到固件时主要检查静态菜单数组、ParamGroupOf() 和 param_meta[] 显示顺序，优先避免改变协议寄存器和 DeviceParameters 语义。"
+      source: "D:/CUBE/LTD_DISPLAY_CPU3/Application/display/display_tankopera.c + system_parameter.c",
+      generatedAt: "2026-06-27",
+      note: "支持修改菜单/参数显示名，也支持跨层级把项目移动到另一个菜单下；落地到固件时主要检查静态菜单数组、ParamGroupOf() 和 param_meta[] 显示顺序，优先避免改变协议寄存器和 DeviceParameters 语义。"
     };
 
     const initialTree = {
@@ -591,8 +601,7 @@
                 param("pwr_on_cmd", "上电默认指令", "PwrOnCmd", "COM_NUM_DEVICEPARAM_POWER_ON_DEFAULT_COMMAND", "HOLDREGISTER_DEVICEPARAM_POWER_ON_DEFAULT_COMMAND", true),
                 param("err_auto_back_zero", "故障自动回零", "ErrAutoBackZero", "COM_NUM_DEVICEPARAM_ERROR_AUTO_BACK_ZERO", "HOLDREGISTER_DEVICEPARAM_ERROR_AUTO_BACK_ZERO", true),
                 param("err_stop_meas", "故障停止测量", "ErrStopMeas", "COM_NUM_DEVICEPARAM_ERROR_STOP_MEASUREMENT", "HOLDREGISTER_DEVICEPARAM_ERROR_STOP_MEASUREMENT", true),
-                param("fault_auto_recovery", "故障自动恢复重跑次数", "AutoRecover", "COM_NUM_DEVICEPARAM_RESERVED2", "HOLDREGISTER_DEVICEPARAM_FAULT_AUTO_RECOVERY_RETRY_LIMIT", true, "次"),
-                param("pos_auto_switch", "位置源自动切换", "PosAutoSw", "COM_NUM_DEVICEPARAM_POSITION_SOURCE_AUTO_SWITCH", "HOLDREGISTER_DEVICEPARAM_POSITION_SOURCE_AUTO_SWITCH", true)
+                param("fault_auto_recovery", "故障自动恢复重跑次数", "AutoRecover", "COM_NUM_DEVICEPARAM_RESERVED2", "HOLDREGISTER_DEVICEPARAM_FAULT_AUTO_RECOVERY_RETRY_LIMIT", true, "次")
               ]
             },
             {
@@ -609,6 +618,7 @@
                 param("max_motor_speed", "电机限速", "MaxMotorSpd", "COM_NUM_DEVICEPARAM_MAX_MOTOR_SPEED", "HOLDREGISTER_DEVICEPARAM_MAX_MOTOR_SPEED", true, "m/min"),
                 param("first_loop", "首圈周长", "FirstLoop", "COM_NUM_DEVICEPARAM_FIRST_LOOP_CIRCUMFERENCE_MM", "HOLDREGISTER_DEVICEPARAM_FIRST_LOOP_CIRCUMFERENCE_MM", true, "mm"),
                 param("tape_thickness", "尺带厚度", "TapeThick", "COM_NUM_DEVICEPARAM_TAPE_THICKNESS_MM", "HOLDREGISTER_DEVICEPARAM_TAPE_THICKNESS_MM", true, "mm"),
+                param("pos_auto_switch", "位置源自动切换", "PosAutoSw", "COM_NUM_DEVICEPARAM_POSITION_SOURCE_AUTO_SWITCH", "HOLDREGISTER_DEVICEPARAM_POSITION_SOURCE_AUTO_SWITCH", true),
                 param("count_mode", "记步模式", "CntMode", "COM_NUM_DEVICEPARAM_POSITION_COUNT_MODE", "HOLDREGISTER_DEVICEPARAM_POSITION_COUNT_MODE", true),
                 param("motor_circ", "电机局部周长", "MotorCirc", "COM_NUM_DEVICEPARAM_MOTOR_COUNT_FIRST_LOOP_CIRC", "HOLDREGISTER_DEVICEPARAM_MOTOR_COUNT_FIRST_LOOP_CIRC", true, "mm")
               ]
@@ -656,13 +666,13 @@
               keynum: "KEYNUM_MENU_PARA_LIQUID",
               group: "MENU_GRP_LIQUID",
               children: [
+                param("level_mode", "液位测量方式", "LvlMeasMode", "COM_NUM_DEVICEPARAM_LIQUIDLEVELMEASUREMENTMETHOD", "HOLDREGISTER_DEVICEPARAM_LIQUIDLEVELMEASUREMENTMETHOD", true),
                 param("tank_height", "液位罐高", "TankHeight", "COM_NUM_DEVICEPARAM_TANKHEIGHT", "HOLDREGISTER_DEVICEPARAM_TANKHEIGHT", true, "mm"),
                 param("lvl_sensor_diff", "液位探头距差", "LvlSenDiff", "COM_NUM_DEVICEPARAM_LIQUID_SENSOR_DISTANCE_DIFF", "HOLDREGISTER_DEVICEPARAM_LIQUID_SENSOR_DISTANCE_DIFF", true, "mm"),
                 param("blind_zone", "液位盲区", "BlindZone", "COM_NUM_DEVICEPARAM_BLINDZONE", "HOLDREGISTER_DEVICEPARAM_BLINDZONE", true, "mm"),
-                param("oil_lvl_th", "液位找液阈值", "OilLvlTh", "COM_NUM_DEVICEPARAM_OILLEVELTHRESHOLD", "HOLDREGISTER_DEVICEPARAM_OILLEVELTHRESHOLD", true, "kg/m3"),
-                param("oil_hys_th", "液位滞后阈值", "HysTh", "COM_NUM_DEVICEPARAM_OILLEVEL_HYSTERESIS_THRESHOLD", "HOLDREGISTER_DEVICEPARAM_OILLEVEL_HYSTERESIS_THRESHOLD", true, "kg/m3"),
-                param("level_mode", "液位测量方式", "LvlMeasMode", "COM_NUM_DEVICEPARAM_LIQUIDLEVELMEASUREMENTMETHOD", "HOLDREGISTER_DEVICEPARAM_LIQUIDLEVELMEASUREMENTMETHOD", true),
-                param("follow_freq", "液位跟随频率", "FollowFreq", "COM_NUM_DEVICEPARAM_OILLEVEL_FREQUENCY", "HOLDREGISTER_DEVICEPARAM_OILLEVEL_FREQUENCY", true, "HZ"),
+                param("oil_lvl_th", "液位找液阈值", "OilLvlTh", "COM_NUM_DEVICEPARAM_OILLEVELTHRESHOLD", "HOLDREGISTER_DEVICEPARAM_OILLEVELTHRESHOLD", true, "Hz"),
+                param("oil_hys_th", "液位滞后阈值", "HysTh", "COM_NUM_DEVICEPARAM_OILLEVEL_HYSTERESIS_THRESHOLD", "HOLDREGISTER_DEVICEPARAM_OILLEVEL_HYSTERESIS_THRESHOLD", true, "Hz"),
+                param("follow_freq", "液位跟随频率", "FollowFreq", "COM_NUM_DEVICEPARAM_OILLEVEL_FREQUENCY", "HOLDREGISTER_DEVICEPARAM_OILLEVEL_FREQUENCY", true, "Hz"),
                 param("follow_density", "液位跟随密度", "FollowDens", "COM_NUM_DEVICEPARAM_OILLEVEL_DENSITY", "HOLDREGISTER_DEVICEPARAM_OILLEVEL_DENSITY", true, "kg/m3"),
                 param("oil_hys_time", "液位滞后时间", "OilHysTime", "COM_NUM_DEVICEPARAM_OILLEVEL_HYSTERESIS_TIME", "HOLDREGISTER_DEVICEPARAM_OILLEVEL_HYSTERESIS_TIME", true, "s")
               ]
@@ -676,16 +686,16 @@
               keynum: "KEYNUM_MENU_PARA_WATER",
               group: "MENU_GRP_WATER",
               children: [
-                param("water_tank_h", "水位罐高", "WaterTankH", "COM_NUM_DEVICEPARAM_WATER_TANK_HEIGHT", "HOLDREGISTER_DEVICEPARAM_WATER_TANK_HEIGHT", true, "mm"),
                 param("water_mode", "水位测量方式", "WaterMode", "COM_NUM_DEVICEPARAM_WATER_LEVEL_MODE", "HOLDREGISTER_DEVICEPARAM_WATER_LEVEL_MODE", true),
+                param("water_tank_h", "水位罐高", "WaterTankH", "COM_NUM_DEVICEPARAM_WATER_TANK_HEIGHT", "HOLDREGISTER_DEVICEPARAM_WATER_TANK_HEIGHT", true, "mm"),
                 param("water_blind", "水位盲区", "WaterBlind", "COM_NUM_DEVICEPARAM_WATER_BLINDZONE", "HOLDREGISTER_DEVICEPARAM_WATER_BLINDZONE", true, "mm"),
                 param("water_cap_th", "水位跟随电容阈值", "WaterCapTh", "COM_NUM_DEVICEPARAM_WATER_CAP_THRESHOLD", "HOLDREGISTER_DEVICEPARAM_WATER_CAP_THRESHOLD", true, "pF"),
                 param("water_find_cap", "水位寻找电容阈值", "WaterFind", "COM_NUM_DEVICEPARAM_WATER_FIND_CAP_THRESHOLD", "HOLDREGISTER_DEVICEPARAM_WATER_FIND_CAP_THRESHOLD", true, "pF"),
-                param("max_down", "水位最大下行距离", "MaxDown", "COM_NUM_DEVICEPARAM_MAXDOWNDISTANCE", "HOLDREGISTER_DEVICEPARAM_MAXDOWNDISTANCE", true, "mm"),
-                param("zero_cap", "零点电容", "ZeroCap", "COM_NUM_DEVICEPARAM_ZERO_CAP", "HOLDREGISTER_DEVICEPARAM_ZERO_CAP", true, "pF"),
-                param("water_stable", "水位稳定阈值", "Rsv15", "COM_NUM_DEVICEPARAM_WATER_STABLE_THRESHOLD", "HOLDREGISTER_DEVICEPARAM_WATER_STABLE_THRESHOLD", true, "mm"),
                 param("water_lag_cap", "水位滞后电容阈值", "WaterLagCap", "COM_NUM_DEVICEPARAM_WATER_LAG_CAP_THRESHOLD", "HOLDREGISTER_DEVICEPARAM_WATER_LAG_CAP_THRESHOLD", true, "pF"),
-                param("water_corr", "水位修正值", "WaterCorr", "COM_NUM_DEVICEPARAM_WATER_LEVEL_CORRECTION", "HOLDREGISTER_DEVICEPARAM_WATER_LEVEL_CORRECTION", true, "mm")
+                param("water_stable", "水位稳定距离", "WaterStable", "COM_NUM_DEVICEPARAM_WATER_STABLE_THRESHOLD", "HOLDREGISTER_DEVICEPARAM_WATER_STABLE_THRESHOLD", true, "mm"),
+                param("water_corr", "水位修正值", "WaterCorr", "COM_NUM_DEVICEPARAM_WATER_LEVEL_CORRECTION", "HOLDREGISTER_DEVICEPARAM_WATER_LEVEL_CORRECTION", true, "mm"),
+                param("max_down", "水位最大下行距离", "MaxDown", "COM_NUM_DEVICEPARAM_MAXDOWNDISTANCE", "HOLDREGISTER_DEVICEPARAM_MAXDOWNDISTANCE", true, "mm"),
+                param("zero_cap", "零点电容", "ZeroCap", "COM_NUM_DEVICEPARAM_ZERO_CAP", "HOLDREGISTER_DEVICEPARAM_ZERO_CAP", true, "pF")
               ]
             },
             {
@@ -702,9 +712,9 @@
                 param("bottom_tq", "探底扭力阈值", "BottomTqTh", "COM_NUM_DEVICEPARAM_BOTTOM_WEIGHT_THRESHOLD", "HOLDREGISTER_DEVICEPARAM_BOTTOM_WEIGHT_THRESHOLD", true),
                 param("upd_tank_h", "更新罐高标志", "UpdTankHeight", "COM_NUM_DEVICEPARAM_REFRESH_TANKHEIGHT_FLAG", "HOLDREGISTER_DEVICEPARAM_REFRESH_TANKHEIGHT_FLAG", true),
                 param("max_tank_dev", "实测罐高最大偏差", "MaxDev", "COM_NUM_DEVICEPARAM_MAX_TANKHEIGHT_DEVIATION", "HOLDREGISTER_DEVICEPARAM_MAX_TANKHEIGHT_DEVIATION", true, "mm"),
+                param("bottom_enc_fix", "罐底后编码器修正", "BotEncFix", "COM_NUM_DEVICEPARAM_BOTTOM_ENCODER_CORRECTION_ENABLE", "HOLDREGISTER_DEVICEPARAM_BOTTOM_ENCODER_CORRECTION_ENABLE", true),
                 param("init_tank_h", "初始罐高", "InitTankH", "COM_NUM_DEVICEPARAM_INITIAL_TANKHEIGHT", "HOLDREGISTER_DEVICEPARAM_INITIAL_TANKHEIGHT", false, "mm"),
-                param("curr_tank_h", "当前罐高", "CurrTankH", "COM_NUM_DEVICEPARAM_CURRENT_TANKHEIGHT", "HOLDREGISTER_DEVICEPARAM_CURRENT_TANKHEIGHT", false, "mm"),
-                param("bottom_enc_fix", "罐底后编码器修正", "BotEncFix", "COM_NUM_DEVICEPARAM_BOTTOM_ENCODER_CORRECTION_ENABLE", "HOLDREGISTER_DEVICEPARAM_BOTTOM_ENCODER_CORRECTION_ENABLE", true)
+                param("curr_tank_h", "当前罐高", "CurrTankH", "COM_NUM_DEVICEPARAM_CURRENT_TANKHEIGHT", "HOLDREGISTER_DEVICEPARAM_CURRENT_TANKHEIGHT", false, "mm")
               ]
             },
             {
@@ -838,14 +848,13 @@
               code: "menu_display_base",
               keynum: "KEYNUM_MENU_DISPLAY_BASE",
               children: [
-                param("cpu3_fw", "CPU3程序版本", "CPU3FWVer", "COM_NUM_PARA_LOCAL_LEDVERSION", "HOLDREGISTER_CPU3_LED_VERSION", false),
-                param("lang", "语言", "Lang", "COM_NUM_PARA_LANG", "HOLDREGISTER_CPU3_LANGUAGE", true),
                 param("decimal", "小数点位数", "Decimal", "COM_NUM_SCREEN_DECIMAL", "HOLDREGISTER_CPU3_DECIMAL", true, "位"),
-                param("screen_pwd", "屏幕密码", "ScrPwd", "COM_NUM_SCREEN_PASSWARD", "HOLDREGISTER_CPU3_PASSWORD", true),
                 param("screen_off", "息屏开关", "ScreenOff", "COM_NUM_SCREEN_OFF", "HOLDREGISTER_CPU3_OFF_TIME", true),
                 param("brightness", "屏幕亮度", "Brightness", "COM_NUM_SCREEN_BRIGHTNESS", "HOLDREGISTER_CPU3_BRIGHTNESS", true)
               ]
             },
+            param("lang", "语言", "Lang", "COM_NUM_PARA_LANG", "HOLDREGISTER_CPU3_LANGUAGE", true),
+            param("screen_pwd", "屏幕密码", "ScrPwd", "COM_NUM_SCREEN_PASSWARD", "HOLDREGISTER_CPU3_PASSWORD", true),
             {
               id: "menu_display_data",
               type: "menu",
@@ -928,6 +937,7 @@
                 param("sensor_id", "传感器编号", "SensorID", "COM_NUM_DEVICEPARAM_SENSORID", "HOLDREGISTER_DEVICEPARAM_SENSORID", false),
                 param("sensor_sw", "传感器软件版本", "SenSWVer", "COM_NUM_DEVICEPARAM_SENSOR_SOFTWARE_VERSION", "HOLDREGISTER_DEVICEPARAM_SENSOR_SOFTWARE_VERSION", false),
                 param("cpu2_fw", "CPU2程序版本", "CPU2FWVer", "COM_NUM_DEVICEPARAM_SOFTWAREVERSION", "HOLDREGISTER_DEVICEPARAM_SOFTWAREVERSION", false),
+                param("cpu3_fw", "CPU3程序版本", "CPU3FWVer", "COM_NUM_PARA_LOCAL_LEDVERSION", "HOLDREGISTER_CPU3_LED_VERSION", false),
                 param("proto_ver", "协议版本", "ProtoVer", "COM_NUM_DEVICEPARAM_PROTOCOL_VERSION", "HOLDREGISTER_DEVICEPARAM_PROTOCOL_VERSION", false)
               ]
             },
@@ -965,6 +975,7 @@
     let draggingId = null;
     let dragOver = null;
     let collapsed = new Set();
+    const MAX_DISPLAY_LEVEL = 4;
 
     const treeRoot = document.getElementById("treeRoot");
     const editFormHost = document.getElementById("editFormHost");
@@ -1069,12 +1080,12 @@
     function relayParam(channel, id, nameSuffix, enSuffix, suffix, floatValue = false) {
       return param(
         "r" + channel + "_" + id,
-        "R" + channel + nameSuffix,
-        "R" + channel + enSuffix,
+        "K" + channel + nameSuffix,
+        "K" + channel + enSuffix,
         "COM_NUM_DEVICEPARAM_RELAY" + channel + "_" + suffix,
         "HOLDREGISTER_DEVICEPARAM_RELAY_" + suffix + "(" + (channel - 1) + "U)",
         true,
-        floatValue ? "动态" : ""
+        ""
       );
     }
 
@@ -1210,7 +1221,14 @@
 
       const count = document.createElement("span");
       count.className = "badge";
-      count.textContent = (node.children && node.children.length) ? String(node.children.length) : (node.unit || "");
+      if (node.children && node.children.length) {
+        count.textContent = String(node.children.length);
+      } else if (node.unit) {
+        count.textContent = node.unit;
+      } else {
+        count.classList.add("is-empty");
+        count.setAttribute("aria-hidden", "true");
+      }
 
       row.append(handle, name, badge, count);
       li.appendChild(row);
@@ -1249,8 +1267,19 @@
       if (shouldRender) render();
     }
 
-    function displayLevelOf(info) {
-      return Math.max(0, info.path.length - 1);
+    function canHaveChildren(node) {
+      return node && (node.type === "root" || node.type === "menu");
+    }
+
+    function canParentAccept(parentNode, childNode) {
+      if (!canHaveChildren(parentNode)) return false;
+      if (parentNode.type === "root" && childNode.type !== "menu") return false;
+      return true;
+    }
+
+    function subtreeDepth(node) {
+      if (!node.children || node.children.length === 0) return 0;
+      return 1 + Math.max(...node.children.map(subtreeDepth));
     }
 
     function allowedDrop(targetParentId, targetLevel) {
@@ -1258,7 +1287,8 @@
       const dragged = findNode(draggingId);
       const targetParent = findNode(targetParentId);
       if (!dragged || !targetParent || dragged.node.id === targetParentId) return false;
-      if (displayLevelOf(dragged) !== targetLevel) return false;
+      if (!canParentAccept(targetParent.node, dragged.node)) return false;
+      if (targetLevel + subtreeDepth(dragged.node) > MAX_DISPLAY_LEVEL) return false;
       let insideDragged = false;
       walk(dragged.node, (node) => {
         if (node.id === targetParentId) insideDragged = true;
@@ -1273,14 +1303,27 @@
       const targetId = row.dataset.nodeId;
       const target = findNode(targetId);
       if (!target || !target.parent) return;
+      const dragged = findNode(draggingId);
+      if (!dragged) return;
       const targetLevel = Number(row.dataset.level);
-      if (!allowedDrop(target.parent.id, targetLevel)) return;
-      event.preventDefault();
       const rect = row.getBoundingClientRect();
-      const after = event.clientY > rect.top + rect.height / 2;
-      dragOver = { parentId: target.parent.id, targetId, after };
+      const offset = (event.clientY - rect.top) / Math.max(rect.height, 1);
+      const canDropInside = offset > 0.25
+        && offset < 0.75
+        && canParentAccept(target.node, dragged.node)
+        && allowedDrop(targetId, targetLevel + 1);
+      const canDropBeside = allowedDrop(target.parent.id, targetLevel);
+      if (!canDropInside && !canDropBeside) return;
+      event.preventDefault();
       clearDropMarkers();
-      row.classList.add(after ? "drop-after" : "drop-before");
+      if (canDropInside) {
+        dragOver = { parentId: targetId, targetId: null, after: true };
+        row.classList.add("drop-inside");
+      } else {
+        const after = offset > 0.5;
+        dragOver = { parentId: target.parent.id, targetId, after };
+        row.classList.add(after ? "drop-after" : "drop-before");
+      }
     }
 
     function onDropRow(event) {
@@ -1323,8 +1366,8 @@
     }
 
     function clearDropMarkers() {
-      document.querySelectorAll(".drop-before,.drop-after,.drop-target").forEach((el) => {
-        el.classList.remove("drop-before", "drop-after", "drop-target");
+      document.querySelectorAll(".drop-before,.drop-after,.drop-inside,.drop-target").forEach((el) => {
+        el.classList.remove("drop-before", "drop-after", "drop-inside", "drop-target");
       });
     }
 
@@ -1417,7 +1460,7 @@
     function collectOrders(root) {
       const orders = [];
       walk(root, (node, parent, path) => {
-        if (!node.children || node.children.length === 0) return;
+        if (!canHaveChildren(node)) return;
         orders.push({
           parentId: node.id,
           parentName: node.name,
@@ -1634,24 +1677,55 @@
       if (!payload || !Array.isArray(payload.orders)) {
         throw new Error("导入文件缺少 orders。");
       }
-      const orderMap = new Map(payload.orders.map((entry) => [entry.parentId, entry.items.map((item) => item.id)]));
       tree = clone(initialTree);
-      applyOrders(tree, orderMap);
+      applyImportedOrders(tree, payload.orders);
       selectedId = "root";
       render();
     }
 
-    function applyOrders(node, orderMap) {
-      if (node.children && orderMap.has(node.id)) {
-        const desired = orderMap.get(node.id);
-        const byId = new Map(node.children.map((child) => [child.id, child]));
-        const next = desired.map((id) => byId.get(id)).filter(Boolean);
-        node.children.forEach((child) => {
-          if (!desired.includes(child.id)) next.push(child);
+    function applyImportedOrders(root, orders) {
+      const nodeMap = new Map();
+      const originalParent = new Map();
+      walk(root, (node, parent) => {
+        nodeMap.set(node.id, node);
+        if (parent) originalParent.set(node.id, parent.id);
+      });
+
+      nodeMap.forEach((node) => {
+        if (canHaveChildren(node)) node.children = [];
+      });
+
+      const assigned = new Set(["root"]);
+      orders.forEach((entry) => {
+        const parent = nodeMap.get(entry.parentId);
+        if (!canHaveChildren(parent) || !Array.isArray(entry.items)) return;
+        entry.items.forEach((item) => {
+          const child = nodeMap.get(item.id);
+          if (!child || assigned.has(child.id)) return;
+          if (!canParentAccept(parent, child)) return;
+          if (wouldCreateCycle(child, parent)) return;
+          parent.children.push(child);
+          assigned.add(child.id);
         });
-        node.children = next;
-      }
-      (node.children || []).forEach((child) => applyOrders(child, orderMap));
+      });
+
+      nodeMap.forEach((node) => {
+        if (node.id === "root" || assigned.has(node.id)) return;
+        const parent = nodeMap.get(originalParent.get(node.id)) || root;
+        if (canParentAccept(parent, node) && !wouldCreateCycle(node, parent)) {
+          parent.children.push(node);
+        } else {
+          root.children.push(node);
+        }
+      });
+    }
+
+    function wouldCreateCycle(child, parent) {
+      let found = false;
+      walk(child, (node) => {
+        if (node.id === parent.id) found = true;
+      });
+      return found;
     }
 
     function expandAll() {

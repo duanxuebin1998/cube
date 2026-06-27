@@ -90,9 +90,6 @@ void MotorCtrl_ApplyPositionSourceParams(void)
         g_measurement.debug_data.motor_distance = drum.motor_distance_01mm;
         MotorPosition_UpdatePositionFromMotorSource(&drum);
     }
-
-    printf("电机局部周长已按参数生效 | 局部周长=%.3fmm\r\n",
-           local_circumference_mm);
 }
 
 /**
@@ -886,7 +883,7 @@ uint32_t MotorPosition_RestorePersistedRegisters(TMC5130TypeDef *tmc5130)
             s_motor_restored_base_length_01mm = 0;
             s_motor_restored_base_step = 0;
             s_motor_restored_base_valid = false;
-            printf("电机持久化恢复失败：TMC5130寄存器写入失败\r\n");
+            printf("[电机][初始化][失败] 持久化位置恢复失败：TMC5130寄存器写入失败\r\n");
             return MOTOR_TMC_COMM_ERROR;
         }
         s_motor_restored_base_length_01mm = base_length_01mm;
@@ -894,7 +891,7 @@ uint32_t MotorPosition_RestorePersistedRegisters(TMC5130TypeDef *tmc5130)
         s_motor_restored_base_valid = true;
         MotorPosition_WritePersistAB(xactual, base_length_01mm, base_step);
         s_motor_saved_xactual = xactual;
-        printf("电机持久化已恢复: XACTUAL=%ld, 基准长度：%.1fmm, 基准步数=%ld\r\n",
+        printf("[电机][初始化][恢复] 持久化位置已恢复 | XACTUAL=%ld | 基准长度=%.1f mm | 基准步数=%ld\r\n",
                (long)xactual,
                (double)base_length_01mm * 0.1,
                (long)base_step);
@@ -904,7 +901,7 @@ uint32_t MotorPosition_RestorePersistedRegisters(TMC5130TypeDef *tmc5130)
     s_motor_restored_base_step = 0;
     s_motor_restored_base_valid = false;
     MotorPosition_StorePersistSnapshot(0);
-    printf("电机持久化: A/B槽均无效，复位为零\r\n");
+    printf("[电机][初始化][恢复] 未找到有效持久化位置，已复位为零\r\n");
     return NO_ERROR;
 }
 
@@ -997,7 +994,7 @@ void MotorPosition_RestorePositionSourceFromParams(void)
     }
 
     if (!MotorPosition_TryUpdateDrumStateFromXactual(&stepper, &drum)) {
-        printf("位置来源恢复跳过: XACTUAL读取失败\r\n");
+        printf("[电机][初始化][跳过] 位置源恢复跳过：XACTUAL读取失败\r\n");
         return;
     }
     g_measurement.debug_data.motor_step = drum.motor_step;
@@ -1023,7 +1020,7 @@ void MotorPosition_RestorePositionSourceFromParams(void)
             MotorPosition_TapeC0Mm(),
             MotorPosition_TapeThicknessMm());
         MotorPosition_UpdatePositionFromMotorSource(&drum);
-        printf("位置来源已恢复为电机记步 | 基准长度：%.1fmm | XACTUAL=%ld | 局部周长=%.3fmm\r\n",
+        printf("[电机][初始化][位置源] 已恢复为电机记步 | 基准长度=%.1f mm | XACTUAL=%ld | 局部周长=%.3f mm\r\n",
                (double)s_motor_position.count_base_length_01mm * 0.1,
                (long)s_motor_position.count_base_step,
                MotorPosition_GetLocalCircumferenceFromParams());
@@ -1043,7 +1040,7 @@ void MotorPosition_RestorePositionSourceFromParams(void)
             s_motor_position.count_base_turns = 0.0;
         }
         update_sensor_height_from_encoder();
-        printf("位置来源已恢复为编码轮 | 保存的电机基准长度：%.1fmm | 保存的电机基准步数=%ld\r\n",
+        printf("[电机][初始化][位置源] 已恢复为编码轮 | 电机基准长度=%.1f mm | 电机基准步数=%ld\r\n",
                (double)s_motor_position.count_base_length_01mm * 0.1,
                (long)s_motor_position.count_base_step);
     }

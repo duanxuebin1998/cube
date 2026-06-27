@@ -23,6 +23,13 @@ volatile MeasurementResult g_measurement = {0};   /* 测量结果 */
 volatile DeviceParameters  g_deviceParams = {0};  /* 设备参数 */
 static volatile uint8_t g_device_params_save_pending = 0; /* Deferred save request flag */
 static volatile uint32_t g_device_params_save_request_tick = 0; /* Last deferred save request tick */
+static volatile uint8_t g_device_params_write_snapshot_valid = 0U; /* 写参前快照是否有效。 */
+static DeviceParameters g_device_params_write_snapshot; /* 写参前快照，供主循环延后打印差异。 */
+static const char *g_device_params_last_load_source = "UNKNOWN";
+#ifndef DEVICE_PARAMS_BOOT_FULL_PRINT_ENABLE
+#define DEVICE_PARAMS_BOOT_FULL_PRINT_ENABLE 1U
+#endif
+static void print_device_params_event(DeviceParamPrintEvent event, const DeviceParameters *params, const char *reason, const char *source);
 #define AO_NORMAL_CURRENT_MIN_MA_X100 400U /* AO正常输出电流最小值，单位0.01mA。 */
 #define AO_NORMAL_CURRENT_MAX_MA_X100 2000U /* AO正常输出电流最大值，单位0.01mA。 */
 #define AO_OUTPUT_CURRENT_MIN_MA_X100 320U /* AO特殊电流最小值，单位0.01mA。 */
@@ -152,6 +159,18 @@ static const char * relay_error_value_str(uint32_t value)
     }
 }
 
+/* 将继电器清锁存命令转换成中文打印文本。 */
+static const char * relay_clear_alarm_str(uint32_t value)
+{
+    switch (value) {
+    case RELAY_ALARM_CLEAR_NO:
+        return "否";
+    case RELAY_ALARM_CLEAR_YES:
+        return "是";
+    default:
+        return "未定义";
+    }
+}
 static float relay_alarm_raw_to_float(uint32_t raw)
 {
     float value;
@@ -647,6 +666,46 @@ static int device_param_persist_equal(const DeviceParameters *lhs, const DeviceP
                   DEVICE_PARAM_PERSIST_LEN) == 0;
 }
 
+/* 清除写参前快照，避免一次写参的快照串到后续保存场景。 */
+static void clear_device_params_write_snapshot(void)
+{
+    g_device_params_write_snapshot_valid = 0U;
+}
+
+/* 打印本次保存的参数差异：
+ * Modbus 批量写参优先使用写入前快照，其它业务保存使用 FRAM 有效槽作为旧值。
+ * 该函数只在真正准备写 FRAM 前调用，保存跳过或自修复场景不会输出误导性差异。 */
+static void print_device_params_save_diff(const DeviceParameters *new_params,
+                                          const DeviceParameters *slot_a,
+                                          int slot_a_valid,
+                                          const DeviceParameters *slot_b,
+                                          int slot_b_valid,
+                                          int mark_updated)
+{
+    const DeviceParameters *old_params = NULL;
+
+    if (new_params == NULL) {
+        clear_device_params_write_snapshot();
+        return;
+    }
+
+    if (mark_updated != 0) {
+        if (g_device_params_write_snapshot_valid != 0U) {
+            old_params = &g_device_params_write_snapshot;
+        } else if ((slot_a_valid != 0) && (slot_a != NULL)) {
+            old_params = slot_a;
+        } else if ((slot_b_valid != 0) && (slot_b != NULL)) {
+            old_params = slot_b;
+        }
+    }
+
+    if (old_params != NULL) {
+        DeviceParams_PrintDiff(old_params, new_params);
+    }
+
+    clear_device_params_write_snapshot();
+}
+
 /* 统一的参数保存入口：
  * mark_updated=1：说明这是一次“真正的参数变更”，需要递增 parameter_update_flag，
  *                 让 CPU3 在后续轮询中检测到并补读保持寄存器。
@@ -665,6 +724,7 @@ static void save_device_params_internal(int mark_updated, int force_write)
                (unsigned long)sizeof(DeviceParameters),
                (unsigned long)FRAM_PARAM_SLOT_SIZE);
         g_measurement.device_status.error_code = PARAM_ADDRESS_OVERFLOW;
+        clear_device_params_write_snapshot();
         return;
     }
 
@@ -687,7 +747,8 @@ static void save_device_params_internal(int mark_updated, int force_write)
         && device_param_persist_equal(&slot_a, &params)
         && device_param_persist_equal(&slot_b, &params))
     {
-        printf("设备参数未变化，跳过保存\r\n");
+        clear_device_params_write_snapshot();
+        print_device_params_event(PARAM_PRINT_SAVE_SKIP, &params, NULL, NULL);
         return;
     }
 
@@ -697,17 +758,11 @@ static void save_device_params_internal(int mark_updated, int force_write)
         g_measurement.device_status.parameter_update_flag++;
     }
 
-    printf("保存设备参数: 版本：%lu, 大小=%lu, CRC=0x%08lX\r\n",
-           (unsigned long)params.param_version,
-           (unsigned long)params.struct_size,
-           (unsigned long)params.crc);
-
     WriteMultiData((uint8_t *)&params, (int)FRAM_PARAM_A_ADDRESS, sizeof(DeviceParameters));
     WriteMultiData((uint8_t *)&params, (int)FRAM_PARAM_B_ADDRESS, sizeof(DeviceParameters));
+    print_device_params_save_diff(&params, &slot_a, slot_a_valid, &slot_b, slot_b_valid, mark_updated);
 
-    printf("设备参数已保存到 FRAM A/B\r\n");
-
-    print_device_params();
+    print_device_params_event(PARAM_PRINT_SAVE_META, &params, NULL, "FRAM A/B");
 }
 
 /* 从指定分区读取并校验设备参数：返回1成功，0失败 */
@@ -807,7 +862,8 @@ int load_device_params(void)
         save_device_params_internal(0, 1);
     }
 
-    printf("设备参数加载成功 (来源=%s)\r\n", loaded_from_a ? "A" : "B");
+    g_device_params_last_load_source = loaded_from_a ? "FRAM A" : "FRAM B";
+    printf("[参数][上电][加载] 设备参数加载成功 | 来源=%s\r\n", g_device_params_last_load_source);
     return 1;
 }
 
@@ -826,7 +882,7 @@ void init_device_params(void)
             ok = 1;
             /* 上电成功读取参数后固定打印一次完整参数表，
              * 不再依赖保存、A/B 修复或恢复出厂等附带路径。 */
-            print_device_params();
+            print_device_params_event(PARAM_PRINT_BOOT_FULL, NULL, "上电参数加载完成", g_device_params_last_load_source);
             break;
         }
         /* 错误 阶段：错误重试 模块：参数 操作：FRAM参数分区回退 原因：FRAM参数分区异常 尝试：attempt/MAX_RETRY 错误码：PARAM_EEPROM_FAIL 错误名：ErrorLog_GetCodeName(PARAM_EEPROM_FAIL) */
@@ -1025,201 +1081,1104 @@ void RestoreFactoryParamsConfig(void)
     g_deviceParams.crc           = 0; /* save_device_params 内更新 */
 
     save_device_params();
+    print_device_params_event(PARAM_PRINT_FACTORY_RESET_FULL, NULL, "恢复出厂默认参数", NULL);
 }
 
 /* ========================= 参数打印 ========================= */
 
-/* 打印所有设备参数, 便于调试 */
-void print_device_params(void)
+typedef enum {
+    PARAM_PRINT_TYPE_U32 = 0,
+    PARAM_PRINT_TYPE_I32,
+    PARAM_PRINT_TYPE_U32_UNIT,
+    PARAM_PRINT_TYPE_I32_UNIT,
+    PARAM_PRINT_TYPE_HEX32,
+    PARAM_PRINT_TYPE_VERSION_TEXT,
+    PARAM_PRINT_TYPE_U32_01MM,
+    PARAM_PRINT_TYPE_U32_001MM,
+    PARAM_PRINT_TYPE_U32_01M_PER_MIN,
+    PARAM_PRINT_TYPE_U32_01MA,
+    PARAM_PRINT_TYPE_U32_001PF,
+    PARAM_PRINT_TYPE_U32_01PF,
+    PARAM_PRINT_TYPE_U32_DENSITY,
+    PARAM_PRINT_TYPE_U32_OIL_LEVEL_THRESHOLD,
+    PARAM_PRINT_TYPE_U32_DENSITY_OFFSET,
+    PARAM_PRINT_TYPE_U32_TEMP_OFFSET,
+    PARAM_PRINT_TYPE_U32_01C,
+    PARAM_PRINT_TYPE_U32_000001_RATIO,
+    PARAM_PRINT_TYPE_RELAY_BLOCK
+} ParamPrintType;
+
+typedef struct {
+    const char *group;
+    const char *name;
+    uint16_t offset;
+    ParamPrintType type;
+    const char *unit; /* 直接工程单位或原始存储倍率，仅用于统一打印格式。 */
+} ParamPrintItem;
+
+typedef enum {
+    RELAY_PARAM_PRINT_U32 = 0,
+    RELAY_PARAM_PRINT_FLOAT_RAW
+} RelayParamPrintType;
+
+typedef struct {
+    const char *name;
+    uint16_t offset;
+    RelayParamPrintType type;
+} RelayParamPrintItem;
+
+#define DEVICE_PARAM_ITEM(group_name, item_name, field_name, item_type, item_unit) \
+    { (group_name), (item_name), (uint16_t)offsetof(DeviceParameters, field_name), (item_type), (item_unit) }
+#define DEVICE_PARAM_RELAY_ITEM(group_name) \
+    { (group_name), "继电器报警", 0U, PARAM_PRINT_TYPE_RELAY_BLOCK, NULL }
+#define RELAY_PARAM_ITEM(item_name, field_name, item_type) \
+    { (item_name), (uint16_t)offsetof(RelayAlarmConfig, field_name), (item_type) }
+
+static const ParamPrintItem g_device_param_print_table[] = {
+    DEVICE_PARAM_ITEM("指令", "当前指令", command, PARAM_PRINT_TYPE_U32, NULL),
+    DEVICE_PARAM_ITEM("指令", "上电默认指令", powerOnDefaultCommand, PARAM_PRINT_TYPE_U32, NULL),
+    DEVICE_PARAM_ITEM("基础参数", "传感器类型", sensorType, PARAM_PRINT_TYPE_U32, NULL),
+    DEVICE_PARAM_ITEM("基础参数", "传感器编号", sensorID, PARAM_PRINT_TYPE_U32, NULL),
+    DEVICE_PARAM_ITEM("基础参数", "传感器软件版本", sensorSoftwareVersion, PARAM_PRINT_TYPE_HEX32, NULL),
+    DEVICE_PARAM_ITEM("基础参数", "软件版本", softwareVersion, PARAM_PRINT_TYPE_HEX32, NULL),
+    DEVICE_PARAM_ITEM("基础参数", "软件版本文本", softwareVersion, PARAM_PRINT_TYPE_VERSION_TEXT, NULL),
+    DEVICE_PARAM_ITEM("基础参数", "协议版本", protocolVersion, PARAM_PRINT_TYPE_U32, NULL),
+    DEVICE_PARAM_ITEM("基础参数", "故障自动回零", error_auto_back_zero, PARAM_PRINT_TYPE_U32, NULL),
+    DEVICE_PARAM_ITEM("基础参数", "故障停止测量", error_stop_measurement, PARAM_PRINT_TYPE_U32, NULL),
+    DEVICE_PARAM_ITEM("基础参数", "故障自动恢复重跑次数", fault_auto_recovery_retry_limit, PARAM_PRINT_TYPE_U32_UNIT, "次"),
+    DEVICE_PARAM_ITEM("基础参数", "位置源自动切换", position_source_auto_switch, PARAM_PRINT_TYPE_U32, NULL),
+    DEVICE_PARAM_ITEM("电机与编码器", "编码轮周长", encoder_wheel_circumference_mm, PARAM_PRINT_TYPE_U32_001MM, "0.001mm"),
+    DEVICE_PARAM_ITEM("电机与编码器", "电机限速", max_motor_speed, PARAM_PRINT_TYPE_U32_01M_PER_MIN, "0.01m/min"),
+    DEVICE_PARAM_ITEM("电机与编码器", "电机运行电流", motor_current, PARAM_PRINT_TYPE_U32_UNIT, "IRUN"),
+    DEVICE_PARAM_ITEM("电机与编码器", "首圈周长", first_loop_circumference_mm, PARAM_PRINT_TYPE_U32_01MM, "0.1mm"),
+    DEVICE_PARAM_ITEM("电机与编码器", "尺带厚度", tape_thickness_mm, PARAM_PRINT_TYPE_U32_001MM, "0.001mm"),
+    DEVICE_PARAM_ITEM("电机与编码器", "记步模式", position_count_mode, PARAM_PRINT_TYPE_U32, NULL),
+    DEVICE_PARAM_ITEM("电机与编码器", "电机局部周长", motor_count_first_loop_circumference_mm, PARAM_PRINT_TYPE_U32_001MM, "0.001mm"),
+    DEVICE_PARAM_ITEM("扭力参数", "空载扭力", empty_weight, PARAM_PRINT_TYPE_I32_UNIT, "计数"),
+    DEVICE_PARAM_ITEM("扭力参数", "空载扭力上限", empty_weight_upper_limit, PARAM_PRINT_TYPE_U32_UNIT, "计数"),
+    DEVICE_PARAM_ITEM("扭力参数", "空载扭力下限", empty_weight_lower_limit, PARAM_PRINT_TYPE_U32_UNIT, "计数"),
+    DEVICE_PARAM_ITEM("扭力参数", "满载扭力", full_weight, PARAM_PRINT_TYPE_U32_UNIT, "计数"),
+    DEVICE_PARAM_ITEM("扭力参数", "满载扭力上限", full_weight_upper_limit, PARAM_PRINT_TYPE_U32_UNIT, "计数"),
+    DEVICE_PARAM_ITEM("扭力参数", "满载扭力下限", full_weight_lower_limit, PARAM_PRINT_TYPE_U32_UNIT, "计数"),
+    DEVICE_PARAM_ITEM("扭力参数", "碰撞上限比率", weight_upper_limit_ratio, PARAM_PRINT_TYPE_U32_UNIT, "%"),
+    DEVICE_PARAM_ITEM("扭力参数", "碰撞下限比率", weight_lower_limit_ratio, PARAM_PRINT_TYPE_U32_UNIT, "%"),
+    DEVICE_PARAM_ITEM("零点参数", "零点阈值比例", zero_weight_threshold_ratio, PARAM_PRINT_TYPE_U32_UNIT, "%"),
+    DEVICE_PARAM_ITEM("零点参数", "扭力忽略区", weight_ignore_zone, PARAM_PRINT_TYPE_U32_01MM, "0.1mm"),
+    DEVICE_PARAM_ITEM("零点参数", "零点最大偏差", max_zero_deviation_distance, PARAM_PRINT_TYPE_U32_01MM, "0.1mm"),
+    DEVICE_PARAM_ITEM("零点参数", "找零下行距离", findZeroDownDistance, PARAM_PRINT_TYPE_U32_01MM, "0.1mm"),
+    DEVICE_PARAM_ITEM("液位参数", "液位罐高", tankHeight, PARAM_PRINT_TYPE_U32_01MM, "0.1mm"),
+    DEVICE_PARAM_ITEM("液位参数", "液位探头距差", liquid_sensor_distance_diff, PARAM_PRINT_TYPE_U32_01MM, "0.1mm"),
+    DEVICE_PARAM_ITEM("液位参数", "液位盲区", blindZone, PARAM_PRINT_TYPE_U32_01MM, "0.1mm"),
+    DEVICE_PARAM_ITEM("液位参数", "液位找液阈值", oilLevelThreshold, PARAM_PRINT_TYPE_U32_OIL_LEVEL_THRESHOLD, NULL),
+    DEVICE_PARAM_ITEM("液位参数", "液位滞后阈值", oilLevelHysteresisThreshold, PARAM_PRINT_TYPE_U32_OIL_LEVEL_THRESHOLD, NULL),
+    DEVICE_PARAM_ITEM("液位参数", "液位测量方式", liquidLevelMeasurementMethod, PARAM_PRINT_TYPE_U32, NULL),
+    DEVICE_PARAM_ITEM("液位参数", "液位跟随频率", oilLevelFrequency, PARAM_PRINT_TYPE_U32_UNIT, "Hz"),
+    DEVICE_PARAM_ITEM("液位参数", "液位跟随密度", oilLevelDensity, PARAM_PRINT_TYPE_U32_DENSITY, "0.01kg/m3"),
+    DEVICE_PARAM_ITEM("液位参数", "液位滞后时间", oilLevelHysteresisTime, PARAM_PRINT_TYPE_U32_UNIT, "s"),
+    DEVICE_PARAM_ITEM("水位参数", "水位罐高", water_tank_height, PARAM_PRINT_TYPE_U32_01MM, "0.1mm"),
+    DEVICE_PARAM_ITEM("水位参数", "水位测量方式", water_level_mode, PARAM_PRINT_TYPE_U32, NULL),
+    DEVICE_PARAM_ITEM("水位参数", "水位盲区", waterBlindZone, PARAM_PRINT_TYPE_U32_01MM, "0.1mm"),
+    DEVICE_PARAM_ITEM("水位参数", "水位电容阈值", water_cap_threshold, PARAM_PRINT_TYPE_U32_001PF, "0.001pF"),
+    DEVICE_PARAM_ITEM("水位参数", "水位寻找电容阈值", water_find_cap_threshold, PARAM_PRINT_TYPE_U32_001PF, "0.001pF"),
+    DEVICE_PARAM_ITEM("水位参数", "水位最大下行距离", maxDownDistance, PARAM_PRINT_TYPE_U32_01MM, "0.1mm"),
+    DEVICE_PARAM_ITEM("水位参数", "水位零点电容", zero_cap, PARAM_PRINT_TYPE_U32_01PF, "0.1pF"),
+    DEVICE_PARAM_ITEM("水位参数", "水位稳定阈值", water_stable_threshold, PARAM_PRINT_TYPE_U32_01MM, "0.1mm"),
+    DEVICE_PARAM_ITEM("水位参数", "水位滞后电容阈值", water_lag_cap_threshold, PARAM_PRINT_TYPE_U32_001PF, "0.001pF"),
+    DEVICE_PARAM_ITEM("水位参数", "水位修正值", waterLevelCorrection, PARAM_PRINT_TYPE_U32_01MM, "0.1mm"),
+    DEVICE_PARAM_ITEM("罐底/罐高参数", "罐底检测模式", bottom_detect_mode, PARAM_PRINT_TYPE_U32, NULL),
+    DEVICE_PARAM_ITEM("罐底/罐高参数", "探底角度阈值", bottom_angle_threshold, PARAM_PRINT_TYPE_U32_UNIT, "deg"),
+    DEVICE_PARAM_ITEM("罐底/罐高参数", "探底扭力阈值", bottom_weight_threshold, PARAM_PRINT_TYPE_U32_UNIT, "计数"),
+    DEVICE_PARAM_ITEM("罐底/罐高参数", "更新罐高标志", refreshTankHeightFlag, PARAM_PRINT_TYPE_U32, NULL),
+    DEVICE_PARAM_ITEM("罐底/罐高参数", "实测罐高最大偏差", maxTankHeightDeviation, PARAM_PRINT_TYPE_U32_01MM, "0.1mm"),
+    DEVICE_PARAM_ITEM("罐底/罐高参数", "初始罐高", initialTankHeight, PARAM_PRINT_TYPE_U32_01MM, "0.1mm"),
+    DEVICE_PARAM_ITEM("罐底/罐高参数", "当前罐高", currentTankHeight, PARAM_PRINT_TYPE_U32_01MM, "0.1mm"),
+    DEVICE_PARAM_ITEM("罐底/罐高参数", "罐底后编码器修正", bottom_encoder_correction_enable, PARAM_PRINT_TYPE_U32, NULL),
+    DEVICE_PARAM_ITEM("修正参数", "密度修正值", densityCorrection, PARAM_PRINT_TYPE_U32_DENSITY_OFFSET, "0.01kg/m3"),
+    DEVICE_PARAM_ITEM("修正参数", "温度修正值", temperatureCorrection, PARAM_PRINT_TYPE_U32_TEMP_OFFSET, "0.1C"),
+    DEVICE_PARAM_ITEM("分布/区间参数", "是否测罐底", requireBottomMeasurement, PARAM_PRINT_TYPE_U32, NULL),
+    DEVICE_PARAM_ITEM("分布/区间参数", "是否测水位", requireWaterMeasurement, PARAM_PRINT_TYPE_U32, NULL),
+    DEVICE_PARAM_ITEM("分布/区间参数", "是否测单点密度", requireSinglePointDensity, PARAM_PRINT_TYPE_U32, NULL),
+    DEVICE_PARAM_ITEM("分布/区间参数", "分布测顺序", spreadMeasurementOrder, PARAM_PRINT_TYPE_U32, NULL),
+    DEVICE_PARAM_ITEM("分布/区间参数", "分布测模式", spreadMeasurementMode, PARAM_PRINT_TYPE_U32, NULL),
+    DEVICE_PARAM_ITEM("分布/区间参数", "分布测点数", spreadMeasurementCount, PARAM_PRINT_TYPE_U32_UNIT, "点"),
+    DEVICE_PARAM_ITEM("分布/区间参数", "分布点间距", spreadMeasurementDistance, PARAM_PRINT_TYPE_U32_01MM, "0.1mm"),
+    DEVICE_PARAM_ITEM("分布/区间参数", "最高点距液面", spreadTopLimit, PARAM_PRINT_TYPE_U32_01MM, "0.1mm"),
+    DEVICE_PARAM_ITEM("分布/区间参数", "最低点距罐底", spreadBottomLimit, PARAM_PRINT_TYPE_U32_01MM, "0.1mm"),
+    DEVICE_PARAM_ITEM("分布/区间参数", "分布点悬停时间", spreadPointHoverTime, PARAM_PRINT_TYPE_U32_UNIT, "s"),
+    DEVICE_PARAM_ITEM("分布/区间参数", "区间测量上限", intervalMeasurementTopLimit, PARAM_PRINT_TYPE_U32_01MM, "0.1mm"),
+    DEVICE_PARAM_ITEM("分布/区间参数", "区间测量下限", intervalMeasurementBottomLimit, PARAM_PRINT_TYPE_U32_01MM, "0.1mm"),
+    DEVICE_PARAM_ITEM("瓦锡兰参数", "最高密度点", wartsila_upper_density_limit, PARAM_PRINT_TYPE_U32_UNIT, "mm"),
+    DEVICE_PARAM_ITEM("瓦锡兰参数", "最低密度点", wartsila_lower_density_limit, PARAM_PRINT_TYPE_U32_UNIT, "mm"),
+    DEVICE_PARAM_ITEM("瓦锡兰参数", "密度点间距", wartsila_density_interval, PARAM_PRINT_TYPE_U32_UNIT, "mm"),
+    DEVICE_PARAM_ITEM("瓦锡兰参数", "最高点液面距", wartsila_max_height_above_surface, PARAM_PRINT_TYPE_U32_UNIT, "mm"),
+    DEVICE_PARAM_ITEM("瓦锡兰参数", "瓦锡兰探底间隔", wartsila_bottom_detect_interval, PARAM_PRINT_TYPE_U32_UNIT, "次"),
+    DEVICE_PARAM_ITEM("瓦锡兰参数", "探底修正罐高", bottom_encoder_correction_tank_height, PARAM_PRINT_TYPE_U32_01MM, "0.1mm"),
+    DEVICE_PARAM_RELAY_ITEM("继电器报警输出参数"),
+    DEVICE_PARAM_ITEM("4-20mA/AO参数", "AO起点液位", AOStartLevel_01mm, PARAM_PRINT_TYPE_U32_01MM, "0.1mm"),
+    DEVICE_PARAM_ITEM("4-20mA/AO参数", "AO终点液位", AOEndLevel_01mm, PARAM_PRINT_TYPE_U32_01MM, "0.1mm"),
+    DEVICE_PARAM_ITEM("4-20mA/AO参数", "AO正常起点电流", CurrentRangeStart_mA, PARAM_PRINT_TYPE_U32_01MA, "0.01mA"),
+    DEVICE_PARAM_ITEM("4-20mA/AO参数", "AO正常终点电流", CurrentRangeEnd_mA, PARAM_PRINT_TYPE_U32_01MA, "0.01mA"),
+    DEVICE_PARAM_ITEM("4-20mA/AO参数", "AO高报警液位", AlarmHighAO, PARAM_PRINT_TYPE_U32_01MM, "0.1mm"),
+    DEVICE_PARAM_ITEM("4-20mA/AO参数", "AO低报警液位", AlarmLowAO, PARAM_PRINT_TYPE_U32_01MM, "0.1mm"),
+    DEVICE_PARAM_ITEM("4-20mA/AO参数", "AO初始电流", InitialCurrent_mA, PARAM_PRINT_TYPE_U32_01MA, "0.01mA"),
+    DEVICE_PARAM_ITEM("4-20mA/AO参数", "AO高位电流", AOHighCurrent_mA, PARAM_PRINT_TYPE_U32_01MA, "0.01mA"),
+    DEVICE_PARAM_ITEM("4-20mA/AO参数", "AO低位电流", AOLowCurrent_mA, PARAM_PRINT_TYPE_U32_01MA, "0.01mA"),
+    DEVICE_PARAM_ITEM("4-20mA/AO参数", "AO故障电流", FaultCurrent_mA, PARAM_PRINT_TYPE_U32_01MA, "0.01mA"),
+    DEVICE_PARAM_ITEM("4-20mA/AO参数", "AO调试电流", DebugCurrent_mA, PARAM_PRINT_TYPE_U32_01MA, "0.01mA"),
+    DEVICE_PARAM_ITEM("4-20mA/AO参数", "AO输出使能", AoOutputEnable, PARAM_PRINT_TYPE_U32, NULL),
+    DEVICE_PARAM_ITEM("指令参数", "标定液位值", calibrateOilLevel, PARAM_PRINT_TYPE_U32_01MM, "0.1mm"),
+    DEVICE_PARAM_ITEM("指令参数", "标定水位值", calibrateWaterLevel, PARAM_PRINT_TYPE_U32_01MM, "0.1mm"),
+    DEVICE_PARAM_ITEM("指令参数", "标定罐高值", calibrateTankHeight, PARAM_PRINT_TYPE_U32_01MM, "0.1mm"),
+    DEVICE_PARAM_ITEM("指令参数", "单点测量位置", singlePointMeasurementPosition, PARAM_PRINT_TYPE_U32_01MM, "0.1mm"),
+    DEVICE_PARAM_ITEM("指令参数", "单点监测位置", singlePointMonitoringPosition, PARAM_PRINT_TYPE_U32_01MM, "0.1mm"),
+    DEVICE_PARAM_ITEM("指令参数", "密度分布测量液位", densityDistributionOilLevel, PARAM_PRINT_TYPE_U32_01MM, "0.1mm"),
+    DEVICE_PARAM_ITEM("指令参数", "电机指令距离", motorCommandDistance, PARAM_PRINT_TYPE_U32_01MM, "0.1mm"),
+    DEVICE_PARAM_ITEM("尺带补偿参数", "上次液位修正液位", lastOilCorrectionLevel, PARAM_PRINT_TYPE_U32_01MM, "0.1mm"),
+    DEVICE_PARAM_ITEM("尺带补偿参数", "气相温度", tankGasPhaseTemperature, PARAM_PRINT_TYPE_U32_01C, "0.1C"),
+    DEVICE_PARAM_ITEM("尺带补偿参数", "尺带伸缩率", tapeExpansionCoefficient, PARAM_PRINT_TYPE_U32_000001_RATIO, "0.000001"),
+    DEVICE_PARAM_ITEM("尺带补偿参数", "尺带标定温度", tapeCalibrationTemperature, PARAM_PRINT_TYPE_U32_01C, "0.1C"),
+    DEVICE_PARAM_ITEM("元信息/CRC", "参数版本号", param_version, PARAM_PRINT_TYPE_U32, NULL),
+    DEVICE_PARAM_ITEM("元信息/CRC", "结构体大小", struct_size, PARAM_PRINT_TYPE_U32, NULL),
+    DEVICE_PARAM_ITEM("元信息/CRC", "魔术字", magic, PARAM_PRINT_TYPE_HEX32, NULL),
+    DEVICE_PARAM_ITEM("元信息/CRC", "参数CRC32", crc, PARAM_PRINT_TYPE_HEX32, NULL)
+};
+
+static const RelayParamPrintItem g_relay_param_print_table[] = {
+    RELAY_PARAM_ITEM("模式", operating_mode, RELAY_PARAM_PRINT_U32),
+    RELAY_PARAM_ITEM("报警位", digital_source, RELAY_PARAM_PRINT_U32),
+    RELAY_PARAM_ITEM("接点", contact_type, RELAY_PARAM_PRINT_U32),
+    RELAY_PARAM_ITEM("报警模式", alarm_mode, RELAY_PARAM_PRINT_U32),
+    RELAY_PARAM_ITEM("无效值", error_value, RELAY_PARAM_PRINT_U32),
+    RELAY_PARAM_ITEM("报警源", alarm_source, RELAY_PARAM_PRINT_U32),
+    RELAY_PARAM_ITEM("HH", HH_alarm_value, RELAY_PARAM_PRINT_FLOAT_RAW),
+    RELAY_PARAM_ITEM("H", H_alarm_value, RELAY_PARAM_PRINT_FLOAT_RAW),
+    RELAY_PARAM_ITEM("L", L_alarm_value, RELAY_PARAM_PRINT_FLOAT_RAW),
+    RELAY_PARAM_ITEM("LL", LL_alarm_value, RELAY_PARAM_PRINT_FLOAT_RAW),
+    RELAY_PARAM_ITEM("滞回", alarm_hysteresis, RELAY_PARAM_PRINT_FLOAT_RAW),
+    RELAY_PARAM_ITEM("阻尼", damping_factor, RELAY_PARAM_PRINT_U32),
+    RELAY_PARAM_ITEM("清锁存", clear_alarm, RELAY_PARAM_PRINT_U32)
+};
+
+static uint32_t device_param_item_read_u32(const DeviceParameters *params, const ParamPrintItem *item)
 {
-    DeviceParameters params;
-    /* 按结构或原始字节复制，保持系统参数协议/存储布局不被字段解释改变。 */
-    memcpy(&params, (void *)&g_deviceParams, sizeof(DeviceParameters));
+    uint32_t value;
+    const uint8_t *base;
 
-    printf("\r\n========================================\r\n");
-    printf("              设备参数\r\n");
-    printf("========================================\r\n");
+    if ((params == NULL) || (item == NULL)) {
+        return 0U;
+    }
 
-    /* 指令 */
-    printf("\r\n-- 指令 --\r\n");
-    printf("  %-32s : %u\r\n", "当前指令", (unsigned)params.command);
-    printf("  %-32s : %u\r\n", "上电默认指令", (unsigned)params.powerOnDefaultCommand);
+    if (item->offset == (uint16_t)offsetof(DeviceParameters, command)) {
+        return (uint32_t)params->command;
+    }
+    if (item->offset == (uint16_t)offsetof(DeviceParameters, powerOnDefaultCommand)) {
+        return (uint32_t)params->powerOnDefaultCommand;
+    }
 
-    /* 基础参数 */
-    printf("\r\n-- 基础参数 --\r\n");
-    printf("  %-32s : %lu\r\n", "传感器类型", (unsigned long)params.sensorType);
-    printf("  %-32s : %lu\r\n", "传感器编号", (unsigned long)params.sensorID);
-    printf("  %-32s : 0x%08lX\r\n", "传感器软件版本", (unsigned long)params.sensorSoftwareVersion);
-    printf("  %-32s : 0x%08lX\r\n", "软件版本", (unsigned long)params.softwareVersion);
-    printf("  %-32s : V%lu.%lu.%lu.%lu\r\n", "软件版本文本",
-           (unsigned long)((params.softwareVersion >> 24) & 0xFFU),
-           (unsigned long)((params.softwareVersion >> 16) & 0xFFU),
-           (unsigned long)((params.softwareVersion >> 8) & 0xFFU),
-           (unsigned long)(params.softwareVersion & 0xFFU));
-    printf("  %-32s : %lu\r\n", "协议版本", (unsigned long)params.protocolVersion);
-    printf("  %-32s : %lu\r\n", "故障自动回零", (unsigned long)params.error_auto_back_zero);
-    printf("  %-32s : %lu\r\n", "故障停止测量", (unsigned long)params.error_stop_measurement);
-    printf("  %-32s : %lu\r\n", "故障自动恢复重跑次数", (unsigned long)params.fault_auto_recovery_retry_limit);
-    printf("  %-32s : %lu\r\n", "位置源自动切换", (unsigned long)params.position_source_auto_switch);
+    base = (const uint8_t *)params;
+    memcpy(&value, base + item->offset, sizeof(value));
+    return value;
+}
 
-    /* 电机与编码器 */
-    printf("\r\n-- 电机与编码器 --\r\n");
-    printf("  %-32s : %lu\r\n", "编码轮周长(0.001mm)", (unsigned long)params.encoder_wheel_circumference_mm);
-    printf("  %-32s : %lu\r\n", "电机限速(0.01m/min)", (unsigned long)params.max_motor_speed);
-    printf("  %-32s : %lu\r\n", "电机运行电流(IRUN 1-31)", (unsigned long)params.motor_current);
-    printf("  %-32s : %lu\r\n", "首圈周长(0.1mm)", (unsigned long)params.first_loop_circumference_mm);
-    printf("  %-32s : %lu\r\n", "尺带厚度(0.001mm)", (unsigned long)params.tape_thickness_mm);
-    printf("  %-32s : %lu\r\n", "记步模式", (unsigned long)params.position_count_mode);
-    printf("  %-32s : %lu\r\n", "电机局部周长(0.001mm)", (unsigned long)params.motor_count_first_loop_circumference_mm);
+static int32_t device_param_item_read_i32(const DeviceParameters *params, const ParamPrintItem *item)
+{
+    int32_t value;
+    const uint8_t *base = (const uint8_t *)params;
+    memcpy(&value, base + item->offset, sizeof(value));
+    return value;
+}
 
-    /* 扭力 */
-    printf("\r\n-- 扭力参数 --\r\n");
-    printf("  %-32s : %ld\r\n", "空载扭力", (long)params.empty_weight);
-    printf("  %-32s : %lu\r\n", "空载扭力上限", (unsigned long)params.empty_weight_upper_limit);
-    printf("  %-32s : %lu\r\n", "空载扭力下限", (unsigned long)params.empty_weight_lower_limit);
-    printf("  %-32s : %lu\r\n", "满载扭力", (unsigned long)params.full_weight);
-    printf("  %-32s : %lu\r\n", "满载扭力上限", (unsigned long)params.full_weight_upper_limit);
-    printf("  %-32s : %lu\r\n", "满载扭力下限", (unsigned long)params.full_weight_lower_limit);
-    printf("  %-32s : %lu\r\n", "碰撞上限比率", (unsigned long)params.weight_upper_limit_ratio);
-    printf("  %-32s : %lu\r\n", "碰撞下限比率", (unsigned long)params.weight_lower_limit_ratio);
+static uint32_t relay_param_item_read_u32(const RelayAlarmConfig *cfg, const RelayParamPrintItem *item)
+{
+    uint32_t value;
+    const uint8_t *base = (const uint8_t *)cfg;
+    memcpy(&value, base + item->offset, sizeof(value));
+    return value;
+}
 
-    /* 零点 */
-    printf("\r\n-- 零点参数 --\r\n");
-    printf("  %-32s : %lu\r\n", "零点阈值比例", (unsigned long)params.zero_weight_threshold_ratio);
-    printf("  %-32s : %lu\r\n", "扭力忽略区(0.1mm)", (unsigned long)params.weight_ignore_zone);
-    printf("  %-32s : %lu\r\n", "零点最大偏差(0.1mm)", (unsigned long)params.max_zero_deviation_distance);
-    printf("  %-32s : %lu\r\n", "找零下行距离(0.1mm)", (unsigned long)params.findZeroDownDistance);
+/*
+ * 函数用途：返回继电器配置字段的枚举含义。
+ * 调用场景：继电器参数 diff 打印，和全量打印保持同一套中文解释。
+ * 关键约束：只解释枚举字段，阈值和阻尼等数值字段返回 NULL。
+ */
+static const char *relay_param_value_desc(const RelayParamPrintItem *item, uint32_t value)
+{
+    if (item == NULL) {
+        return NULL;
+    }
 
-    /* 液位 */
-    printf("\r\n-- 液位参数 --\r\n");
-    printf("  %-32s : %lu\r\n", "液位罐高(0.1mm)", (unsigned long)params.tankHeight);
-    printf("  %-32s : %lu\r\n", "液位探头距差(0.1mm)", (unsigned long)params.liquid_sensor_distance_diff);
-    printf("  %-32s : %lu\r\n", "液位盲区(0.1mm)", (unsigned long)params.blindZone);
-    printf("  %-32s : %lu\r\n", "液位找液阈值", (unsigned long)params.oilLevelThreshold);
-    printf("  %-32s : %lu\r\n", "液位滞后阈值", (unsigned long)params.oilLevelHysteresisThreshold);
-    printf("  %-32s : %lu\r\n", "液位测量方式", (unsigned long)params.liquidLevelMeasurementMethod);
-    printf("  %-32s : %lu\r\n", "液位跟随频率", (unsigned long)params.oilLevelFrequency);
-    printf("  %-32s : %lu\r\n", "液位跟随密度", (unsigned long)params.oilLevelDensity);
-    printf("  %-32s : %lu\r\n", "液位滞后时间", (unsigned long)params.oilLevelHysteresisTime);
+    switch (item->offset) {
+    case (uint16_t)offsetof(RelayAlarmConfig, operating_mode):
+        return relay_operating_mode_str(value);
+    case (uint16_t)offsetof(RelayAlarmConfig, digital_source):
+        return relay_digital_source_str(value);
+    case (uint16_t)offsetof(RelayAlarmConfig, contact_type):
+        return relay_contact_type_str(value);
+    case (uint16_t)offsetof(RelayAlarmConfig, alarm_mode):
+        return relay_alarm_mode_str(value);
+    case (uint16_t)offsetof(RelayAlarmConfig, error_value):
+        return relay_error_value_str(value);
+    case (uint16_t)offsetof(RelayAlarmConfig, alarm_source):
+        return relay_alarm_source_str(value);
+    case (uint16_t)offsetof(RelayAlarmConfig, clear_alarm):
+        return relay_clear_alarm_str(value);
+    default:
+        return NULL;
+    }
+}
+static int device_param_item_can_diff(const ParamPrintItem *item)
+{
+    if (item == NULL) {
+        return 0;
+    }
+    if ((item->type == PARAM_PRINT_TYPE_RELAY_BLOCK) ||
+        (item->type == PARAM_PRINT_TYPE_VERSION_TEXT)) {
+        return 0;
+    }
+    if ((item->offset == (uint16_t)offsetof(DeviceParameters, command)) ||
+        (item->offset == (uint16_t)offsetof(DeviceParameters, param_version)) ||
+        (item->offset == (uint16_t)offsetof(DeviceParameters, struct_size)) ||
+        (item->offset == (uint16_t)offsetof(DeviceParameters, magic)) ||
+        (item->offset == (uint16_t)offsetof(DeviceParameters, crc))) {
+        return 0;
+    }
+    return 1;
+}
 
-    /* 水位 */
-    printf("\r\n-- 水位参数 --\r\n");
-    printf("  %-32s : %lu\r\n", "水位罐高(0.1mm)", (unsigned long)params.water_tank_height);
-    printf("  %-32s : %lu\r\n", "水位测量方式", (unsigned long)params.water_level_mode);
-    printf("  %-32s : %lu\r\n", "水位盲区(0.1mm)", (unsigned long)params.waterBlindZone);
-    printf("  %-32s : %lu\r\n", "水位电容阈值", (unsigned long)params.water_cap_threshold);
-    printf("  %-32s : %lu\r\n", "水位寻找电容阈值", (unsigned long)params.water_find_cap_threshold);
-    printf("  %-32s : %lu\r\n", "水位最大下行距离(0.1mm)", (unsigned long)params.maxDownDistance);
-    printf("  %-32s : %lu\r\n", "水位零点电容", (unsigned long)params.zero_cap);
-    printf("  %-32s : %lu\r\n", "水位稳定阈值", (unsigned long)params.water_stable_threshold);
-    printf("  %-32s : %lu\r\n", "水位滞后电容阈值", (unsigned long)params.water_lag_cap_threshold);
-    printf("  %-32s : %lu\r\n", "水位修正值", (unsigned long)params.waterLevelCorrection);
-
-    /* 罐底/罐高 */
-    printf("\r\n-- 罐底/罐高参数 --\r\n");
-    printf("  %-32s : %lu\r\n", "罐底检测模式", (unsigned long)params.bottom_detect_mode);
-    printf("  %-32s : %lu\r\n", "探底角度阈值", (unsigned long)params.bottom_angle_threshold);
-    printf("  %-32s : %lu\r\n", "探底扭力阈值", (unsigned long)params.bottom_weight_threshold);
-    printf("  %-32s : %lu\r\n", "更新罐高标志", (unsigned long)params.refreshTankHeightFlag);
-    printf("  %-32s : %lu\r\n", "实测罐高最大偏差", (unsigned long)params.maxTankHeightDeviation);
-    printf("  %-32s : %lu\r\n", "初始罐高", (unsigned long)params.initialTankHeight);
-    printf("  %-32s : %lu\r\n", "当前罐高", (unsigned long)params.currentTankHeight);
-    printf("  %-32s : %lu\r\n", "罐底后编码器修正", (unsigned long)params.bottom_encoder_correction_enable);
-
-    /* 修正 */
-    printf("\r\n-- 修正参数 --\r\n");
-    printf("  %-32s : %lu\r\n", "密度修正值", (unsigned long)params.densityCorrection);
-    printf("  %-32s : %lu\r\n", "温度修正值", (unsigned long)params.temperatureCorrection);
-
-    /* 分布/区间 */
-    printf("\r\n-- 分布/区间参数 --\r\n");
-    printf("  %-32s : %lu\r\n", "是否测罐底", (unsigned long)params.requireBottomMeasurement);
-    printf("  %-32s : %lu\r\n", "是否测水位", (unsigned long)params.requireWaterMeasurement);
-    printf("  %-32s : %lu\r\n", "是否测单点密度", (unsigned long)params.requireSinglePointDensity);
-    printf("  %-32s : %lu\r\n", "分布测顺序", (unsigned long)params.spreadMeasurementOrder);
-    printf("  %-32s : %lu\r\n", "分布测模式", (unsigned long)params.spreadMeasurementMode);
-    printf("  %-32s : %lu\r\n", "分布测点数", (unsigned long)params.spreadMeasurementCount);
-    printf("  %-32s : %lu\r\n", "分布点间距", (unsigned long)params.spreadMeasurementDistance);
-    printf("  %-32s : %lu\r\n", "最高点距液面(0.1mm)", (unsigned long)params.spreadTopLimit);
-    printf("  %-32s : %lu\r\n", "最低点距罐底(0.1mm)", (unsigned long)params.spreadBottomLimit);
-    printf("  %-32s : %lu\r\n", "分布点悬停时间", (unsigned long)params.spreadPointHoverTime);
-    printf("  %-32s : %lu\r\n", "区间测量上限(0.1mm)", (unsigned long)params.intervalMeasurementTopLimit);
-    printf("  %-32s : %lu\r\n", "区间测量下限(0.1mm)", (unsigned long)params.intervalMeasurementBottomLimit);
-
-    /* Wartsila */
-    printf("\r\n-- 瓦锡兰参数 --\r\n");
-    printf("  %-32s : %lu\r\n", "最高密度点", (unsigned long)params.wartsila_upper_density_limit);
-    printf("  %-32s : %lu\r\n", "最低密度点", (unsigned long)params.wartsila_lower_density_limit);
-    printf("  %-32s : %lu\r\n", "密度点间距", (unsigned long)params.wartsila_density_interval);
-    printf("  %-32s : %lu\r\n", "最高点液面距", (unsigned long)params.wartsila_max_height_above_surface);
-    printf("  %-32s : %lu\r\n", "瓦锡兰探底间隔", (unsigned long)params.wartsila_bottom_detect_interval);
-    printf("  %-32s : %lu\r\n", "探底修正罐高", (unsigned long)params.bottom_encoder_correction_tank_height);
-
+static void print_relay_alarm_params(const DeviceParameters *params)
+{
     for (uint32_t channel = 0U; channel < RELAY_ALARM_CHANNEL_COUNT; channel++) {
-        const RelayAlarmConfig *cfg = &params.relayAlarm[channel];
-        printf("  继电器%lu报警: 模式=%s(%lu) 报警源=%s(%lu) 报警位=%s(%lu) 接点=%s(%lu) 报警模式=%s(%lu) 无效值=%s(%lu)\r\n",
-               (unsigned long)(channel + 1U),
-               relay_operating_mode_str(cfg->operating_mode),
+        const RelayAlarmConfig *cfg = &params->relayAlarm[channel];
+        printf("  继电器%lu报警\r\n", (unsigned long)(channel + 1U));
+        printf("    输出配置 : 模式=%lu(%s) 接点=%lu(%s)\r\n",
                (unsigned long)cfg->operating_mode,
-               relay_alarm_source_str(cfg->alarm_source),
-               (unsigned long)cfg->alarm_source,
-               relay_digital_source_str(cfg->digital_source),
-               (unsigned long)cfg->digital_source,
-               relay_contact_type_str(cfg->contact_type),
+               relay_operating_mode_str(cfg->operating_mode),
                (unsigned long)cfg->contact_type,
-               relay_alarm_mode_str(cfg->alarm_mode),
+               relay_contact_type_str(cfg->contact_type));
+        printf("    报警配置 : 报警源=%lu(%s) 报警位=%lu(%s) 报警模式=%lu(%s) 无效值=%lu(%s)\r\n",
+               (unsigned long)cfg->alarm_source,
+               relay_alarm_source_str(cfg->alarm_source),
+               (unsigned long)cfg->digital_source,
+               relay_digital_source_str(cfg->digital_source),
                (unsigned long)cfg->alarm_mode,
-               relay_error_value_str(cfg->error_value),
-               (unsigned long)cfg->error_value);
-        printf("    阈值: HH=%.1f H=%.1f L=%.1f LL=%.1f 滞回=%.1f 阻尼=%lu 清锁存=%lu\r\n",
+               relay_alarm_mode_str(cfg->alarm_mode),
+               (unsigned long)cfg->error_value,
+               relay_error_value_str(cfg->error_value));
+        printf("    阈值配置 : HH=%.1f H=%.1f L=%.1f LL=%.1f 滞回=%.1f 阻尼=%lu\r\n",
                relay_alarm_raw_to_float(cfg->HH_alarm_value),
                relay_alarm_raw_to_float(cfg->H_alarm_value),
                relay_alarm_raw_to_float(cfg->L_alarm_value),
                relay_alarm_raw_to_float(cfg->LL_alarm_value),
                relay_alarm_raw_to_float(cfg->alarm_hysteresis),
-               (unsigned long)cfg->damping_factor,
-               (unsigned long)cfg->clear_alarm);
+               (unsigned long)cfg->damping_factor);
+        printf("    运行命令 : 清锁存=%lu(%s)\r\n",
+               (unsigned long)cfg->clear_alarm,
+               relay_clear_alarm_str(cfg->clear_alarm));
+    }
+}
+
+static uint32_t device_param_frequency_compat_threshold_hz(uint32_t raw_threshold)
+{
+    if (raw_threshold == 0U) {
+        return 0U;
+    }
+    return (raw_threshold + (DENSITY_PARAM_MIGRATE_FACTOR / 2U)) / DENSITY_PARAM_MIGRATE_FACTOR;
+}
+
+static int device_param_is_density_level_method(const DeviceParameters *params)
+{
+    return ((params != NULL) && (params->liquidLevelMeasurementMethod == 2U)) ? 1 : 0;
+}
+
+/*
+ * 函数用途：返回和 CPU3 参数菜单一致的枚举含义。
+ * 调用场景：设备参数全量打印和写参差异打印。
+ * 关键约束：只解释数值，不修改参数，不参与参数范围归一化。
+ */
+static const char *device_param_value_desc(const ParamPrintItem *item, uint32_t value)
+{
+    if (item == NULL) {
+        return NULL;
     }
 
-    /* AO */
-    printf("\r\n-- 4-20mA/AO参数 --\r\n");
-    printf("  %-32s : %lu\r\n", "AO起点液位", (unsigned long)params.AOStartLevel_01mm);
-    printf("  %-32s : %lu\r\n", "AO终点液位", (unsigned long)params.AOEndLevel_01mm);
-    printf("  %-32s : %lu\r\n", "AO正常起点电流", (unsigned long)params.CurrentRangeStart_mA);
-    printf("  %-32s : %lu\r\n", "AO正常终点电流", (unsigned long)params.CurrentRangeEnd_mA);
-    printf("  %-32s : %lu\r\n", "AO高报警液位", (unsigned long)params.AlarmHighAO);
-    printf("  %-32s : %lu\r\n", "AO低报警液位", (unsigned long)params.AlarmLowAO);
-    printf("  %-32s : %lu\r\n", "AO初始电流", (unsigned long)params.InitialCurrent_mA);
-    printf("  %-32s : %lu\r\n", "AO高位电流", (unsigned long)params.AOHighCurrent_mA);
-    printf("  %-32s : %lu\r\n", "AO低位电流", (unsigned long)params.AOLowCurrent_mA);
-    printf("  %-32s : %lu\r\n", "AO故障电流", (unsigned long)params.FaultCurrent_mA);
-    printf("  %-32s : %lu\r\n", "AO调试电流", (unsigned long)params.DebugCurrent_mA);
-    printf("  %-32s : %lu\r\n", "AO输出使能", (unsigned long)params.AoOutputEnable);
+    switch (item->offset) {
+    case (uint16_t)offsetof(DeviceParameters, sensorType):
+        if (value == (uint32_t)DSM_SENSOR) {
+            return "一体机传感器";
+        }
+        if (value == (uint32_t)LTD_SENSOR) {
+            return "LTD传感器";
+        }
+        return "非法配置";
+    case (uint16_t)offsetof(DeviceParameters, command):
+        switch (value) {
+        case CMD_NONE:
+            return "无命令";
+        case CMD_BACK_ZERO:
+            return "回零点";
+        case CMD_FIND_OIL:
+            return "寻找液位";
+        case CMD_FIND_WATER:
+            return "寻找水位";
+        case CMD_FIND_BOTTOM:
+            return "寻找罐底";
+        case CMD_MEASURE_SINGLE:
+            return "单点测量";
+        case CMD_MONITOR_SINGLE:
+            return "单点监测";
+        case CMD_SYNTHETIC:
+            return "综合测量";
+        case CMD_FOLLOW_WATER:
+            return "水位跟随";
+        case CMD_RUN_TO_POSITION:
+            return "运行到指定位置";
+        case CMD_MEASURE_DISTRIBUTED:
+            return "普通分布测量";
+        case CMD_GB_MEASURE_DISTRIBUTED:
+            return "国标分布测量";
+        case CMD_MEASURE_DENSITY_METER:
+            return "密度每米测量";
+        case CMD_MEASURE_DENSITY_RANGE:
+            return "区间密度测量";
+        case CMD_WARTSILA_DENSITY_RANGE:
+            return "瓦锡兰区间密度测量";
+        case CMD_READ_PART_PARAMS:
+            return "读取部件参数";
+        case CMD_CANCEL_MEASUREMENT:
+            return "取消当前测量";
+        case CMD_DEBUG_MODE:
+            return "调试模式";
+        case CMD_CALIBRATE_ZERO:
+            return "标定零点";
+        case CMD_CALIBRATE_OIL:
+            return "标定液位";
+        case CMD_CORRECT_OIL:
+            return "修正液位";
+        case CMD_MOVE_UP:
+            return "上行";
+        case CMD_MOVE_DOWN:
+            return "下行";
+        case CMD_SET_EMPTY_WEIGHT:
+            return "设置空载扭力";
+        case CMD_SET_FULL_WEIGHT:
+            return "设置满载扭力";
+        case CMD_RESTORE_FACTORY:
+            return "恢复出厂设置";
+        case CMD_MAINTENANCE_MODE:
+            return "维护模式";
+        case CMD_CALIBRATE_TANKHEIGHT:
+            return "标定罐高";
+        case CMD_FORCE_MOVE_UP:
+            return "强制上行";
+        case CMD_FORCE_MOVE_DOWN:
+            return "强制下行";
+        case CMD_CALIBRATE_WATER:
+            return "标定水位";
+        case CMD_PAIR_NEAREST_WIRELESS_SLIPRING:
+            return "匹配最近无线滑环";
+        case CMD_UNKNOWN:
+            return "未知命令";
+        default:
+            return "非法配置";
+        }
+    case (uint16_t)offsetof(DeviceParameters, powerOnDefaultCommand):
+        switch (value) {
+        case CMD_NONE_DEF:
+            return "无";
+        case CMD_BACK_ZERO_DEF:
+            return "回零点";
+        case CMD_FIND_OIL_DEF:
+            return "寻找液位";
+        case CMD_MONITOR_SINGLE_DEF:
+            return "单点监测";
+        case CMD_FOLLOW_WATER_DEF:
+            return "水位跟随";
+        default:
+            return "非法配置";
+        }
+    case (uint16_t)offsetof(DeviceParameters, error_auto_back_zero):
+    case (uint16_t)offsetof(DeviceParameters, error_stop_measurement):
+    case (uint16_t)offsetof(DeviceParameters, refreshTankHeightFlag):
+    case (uint16_t)offsetof(DeviceParameters, bottom_encoder_correction_enable):
+    case (uint16_t)offsetof(DeviceParameters, requireBottomMeasurement):
+    case (uint16_t)offsetof(DeviceParameters, requireWaterMeasurement):
+    case (uint16_t)offsetof(DeviceParameters, requireSinglePointDensity):
+        if (value == 0U) {
+            return "否";
+        }
+        if (value == 1U) {
+            return "是";
+        }
+        return "非法配置";
+    case (uint16_t)offsetof(DeviceParameters, position_source_auto_switch):
+        if (value == 0U) {
+            return "禁用";
+        }
+        if (value == 1U) {
+            return "启用";
+        }
+        return "非法配置";
+    case (uint16_t)offsetof(DeviceParameters, position_count_mode):
+        if (value == 0U) {
+            return "编码器";
+        }
+        if (value == 1U) {
+            return "电机";
+        }
+        return "非法配置";
+    case (uint16_t)offsetof(DeviceParameters, liquidLevelMeasurementMethod):
+        switch (value) {
+        case 0U:
+            return "相对频率";
+        case 1U:
+            return "定频";
+        case 2U:
+            return "密度找液位";
+        case 3U:
+            return "超声预留";
+        case 4U:
+            return "连续相对频率";
+        case 5U:
+            return "连续定频";
+        default:
+            return "非法配置";
+        }
+    case (uint16_t)offsetof(DeviceParameters, water_level_mode):
+        return (value == 0U) ? "低速模式" : "快速模式";
+    case (uint16_t)offsetof(DeviceParameters, bottom_detect_mode):
+        if (value == 0U) {
+            return "扭力";
+        }
+        if (value == 1U) {
+            return "角度";
+        }
+        return "非法配置";
+    case (uint16_t)offsetof(DeviceParameters, spreadMeasurementOrder):
+        if (value == 0U) {
+            return "向上";
+        }
+        if (value == 1U) {
+            return "向下";
+        }
+        return "非法配置";
+    case (uint16_t)offsetof(DeviceParameters, spreadMeasurementMode):
+        switch (value) {
+        case 0U:
+            return "分布测量";
+        case 1U:
+            return "国标测量";
+        case 2U:
+            return "每米测量";
+        case 3U:
+            return "区间测量";
+        default:
+            return "非法配置";
+        }
+    case (uint16_t)offsetof(DeviceParameters, AoOutputEnable):
+        if (value == 0U) {
+            return "关闭";
+        }
+        if (value == 1U) {
+            return "启用";
+        }
+        return "非法配置";
+    default:
+        return NULL;
+    }
+}
 
-    /* 指令参数 */
-    printf("\r\n-- 指令参数 --\r\n");
-    printf("  %-32s : %lu\r\n", "标定液位值", (unsigned long)params.calibrateOilLevel);
-    printf("  %-32s : %lu\r\n", "标定水位值", (unsigned long)params.calibrateWaterLevel);
-    printf("  %-32s : %lu\r\n", "单点测量位置", (unsigned long)params.singlePointMeasurementPosition);
-    printf("  %-32s : %lu\r\n", "单点监测位置", (unsigned long)params.singlePointMonitoringPosition);
-    printf("  %-32s : %lu\r\n", "密度分布测量液位", (unsigned long)params.densityDistributionOilLevel);
-    printf("  %-32s : %lu\r\n", "电机指令距离", (unsigned long)params.motorCommandDistance);
-    printf("\r\n-- 尺带补偿参数 --\r\n");
-    printf("  %-32s : %lu\r\n", "上次液位修正液位", (unsigned long)params.lastOilCorrectionLevel);
-    printf("  %-32s : %lu\r\n", "气相温度", (unsigned long)params.tankGasPhaseTemperature);
-    printf("  %-32s : %lu\r\n", "尺带伸缩率", (unsigned long)params.tapeExpansionCoefficient);
-    printf("  %-32s : %lu\r\n", "尺带标定温度", (unsigned long)params.tapeCalibrationTemperature);
+/*
+ * 函数用途：把带枚举含义的参数格式化为“值(含义)”。
+ * 调用场景：复用在全量打印和 diff 打印中，保证同一字段显示一致。
+ * 关键约束：缓冲区不足时由 snprintf 截断，不影响主流程执行。
+ */
+static void format_device_param_u32_value(const ParamPrintItem *item, uint32_t value, char *buffer, size_t buffer_size)
+{
+    const char *desc;
 
-    /* 元信息/CRC */
-    printf("\r\n-- 元信息/CRC --\r\n");
-    printf("  %-32s : %lu\r\n", "参数版本号", (unsigned long)params.param_version);
-    printf("  %-32s : %lu\r\n", "结构体大小", (unsigned long)params.struct_size);
-    printf("  %-32s : 0x%08lX\r\n", "魔术字", (unsigned long)params.magic);
-    printf("  %-32s : 0x%08lX\r\n", "参数CRC32", (unsigned long)params.crc);
+    if ((buffer == NULL) || (buffer_size == 0U)) {
+        return;
+    }
 
+    desc = device_param_value_desc(item, value);
+    if (desc != NULL) {
+        (void)snprintf(buffer, buffer_size, "%lu(%s)", (unsigned long)value, desc);
+    } else {
+        (void)snprintf(buffer, buffer_size, "%lu", (unsigned long)value);
+    }
+}
+
+/*
+ * 函数用途：把带单位的参数格式化为工程值。
+ * 调用场景：普通 U32_UNIT 参数打印，补充电机电流和重跑次数的现场含义。
+ * 关键约束：只做显示换算，不改变实际 IRUN 档位或重跑次数。
+ */
+static void format_device_param_u32_unit_value(const ParamPrintItem *item, uint32_t value, char *buffer, size_t buffer_size)
+{
+    static const uint16_t motor_current_rms_ma_table[] = {
+        84U, 127U, 169U, 211U, 253U, 296U, 338U, 380U,
+        422U, 465U, 507U, 549U, 591U, 634U, 676U, 718U,
+        760U, 803U, 845U, 887U, 929U, 972U, 1014U, 1056U,
+        1098U, 1141U, 1183U, 1225U, 1267U, 1310U, 1352U,
+    };
+    uint32_t rms_ma;
+
+    if ((buffer == NULL) || (buffer_size == 0U)) {
+        return;
+    }
+    if (item == NULL) {
+        (void)snprintf(buffer, buffer_size, "%lu", (unsigned long)value);
+        return;
+    }
+
+    if (item->offset == (uint16_t)offsetof(DeviceParameters, motor_current)) {
+        if ((value >= MOTOR_CURRENT_MIN) && (value <= MOTOR_CURRENT_MAX)) {
+            rms_ma = motor_current_rms_ma_table[value - MOTOR_CURRENT_MIN];
+            (void)snprintf(buffer,
+                           buffer_size,
+                           "%lu IRUN(%.2f A)",
+                           (unsigned long)value,
+                           ((double)rms_ma) / 1000.0);
+        } else {
+            (void)snprintf(buffer, buffer_size, "%lu IRUN(非法配置)", (unsigned long)value);
+        }
+        return;
+    }
+
+    if (item->offset == (uint16_t)offsetof(DeviceParameters, fault_auto_recovery_retry_limit)) {
+        if (value == 0U) {
+            (void)snprintf(buffer, buffer_size, "0 次(关闭自动重跑)");
+        } else {
+            (void)snprintf(buffer, buffer_size, "%lu 次", (unsigned long)value);
+        }
+        return;
+    }
+
+    if (item->unit != NULL) {
+        (void)snprintf(buffer, buffer_size, "%lu %s", (unsigned long)value, item->unit);
+    } else {
+        format_device_param_u32_value(item, value, buffer, buffer_size);
+    }
+}
+
+static void build_device_param_print_label(const ParamPrintItem *item, const char *fallback_unit, char *label, size_t label_size)
+{
+    (void)fallback_unit;
+
+    if ((item == NULL) || (label == NULL) || (label_size == 0U)) {
+        return;
+    }
+
+    (void)snprintf(label, label_size, "%s", item->name);
+}
+
+static void print_device_param_item(const DeviceParameters *params, const ParamPrintItem *item)
+{
+    uint32_t raw;
+    int32_t signed_raw;
+    char label[80];
+    char value_text[96];
+
+    if ((params == NULL) || (item == NULL)) {
+        return;
+    }
+
+    if (item->type == PARAM_PRINT_TYPE_RELAY_BLOCK) {
+        print_relay_alarm_params(params);
+        return;
+    }
+
+    build_device_param_print_label(item, NULL, label, sizeof(label));
+
+    switch (item->type) {
+    case PARAM_PRINT_TYPE_U32:
+        raw = device_param_item_read_u32(params, item);
+        format_device_param_u32_value(item, raw, value_text, sizeof(value_text));
+        printf("  %-32s : %s\r\n", label, value_text);
+        break;
+    case PARAM_PRINT_TYPE_I32:
+        signed_raw = device_param_item_read_i32(params, item);
+        printf("  %-32s : %ld\r\n", label, (long)signed_raw);
+        break;
+    case PARAM_PRINT_TYPE_U32_UNIT:
+        raw = device_param_item_read_u32(params, item);
+        format_device_param_u32_unit_value(item, raw, value_text, sizeof(value_text));
+        printf("  %-32s : %s\r\n", label, value_text);
+        break;
+    case PARAM_PRINT_TYPE_I32_UNIT:
+        signed_raw = device_param_item_read_i32(params, item);
+        printf("  %-32s : %ld %s\r\n", label, (long)signed_raw, item->unit);
+        break;
+    case PARAM_PRINT_TYPE_HEX32:
+        raw = device_param_item_read_u32(params, item);
+        printf("  %-32s : 0x%08lX\r\n", label, (unsigned long)raw);
+        break;
+    case PARAM_PRINT_TYPE_VERSION_TEXT:
+        raw = device_param_item_read_u32(params, item);
+        printf("  %-32s : V%lu.%lu.%lu.%lu\r\n",
+               label,
+               (unsigned long)((raw >> 24) & 0xFFU),
+               (unsigned long)((raw >> 16) & 0xFFU),
+               (unsigned long)((raw >> 8) & 0xFFU),
+               (unsigned long)(raw & 0xFFU));
+        break;
+    case PARAM_PRINT_TYPE_U32_01MM:
+        raw = device_param_item_read_u32(params, item);
+        printf("  %-32s : %.1f mm\r\n", label, ((double)raw) / 10.0);
+        break;
+    case PARAM_PRINT_TYPE_U32_001MM:
+        raw = device_param_item_read_u32(params, item);
+        printf("  %-32s : %.3f mm\r\n", label, ((double)raw) / 1000.0);
+        break;
+    case PARAM_PRINT_TYPE_U32_01M_PER_MIN:
+        raw = device_param_item_read_u32(params, item);
+        printf("  %-32s : %.2f m/min\r\n", label, ((double)raw) / 100.0);
+        break;
+    case PARAM_PRINT_TYPE_U32_01MA:
+        raw = device_param_item_read_u32(params, item);
+        printf("  %-32s : %.2f mA\r\n", label, ((double)raw) / 100.0);
+        break;
+    case PARAM_PRINT_TYPE_U32_001PF:
+        raw = device_param_item_read_u32(params, item);
+        printf("  %-32s : %.3f pF\r\n", label, ((double)raw) / 1000.0);
+        break;
+    case PARAM_PRINT_TYPE_U32_01PF:
+        raw = device_param_item_read_u32(params, item);
+        printf("  %-32s : %.1f pF\r\n", label, ((double)raw) / 10.0);
+        break;
+    case PARAM_PRINT_TYPE_U32_DENSITY:
+        raw = device_param_item_read_u32(params, item);
+        printf("  %-32s : %.2f kg/m3\r\n", label, ((double)raw) / 100.0);
+        break;
+    case PARAM_PRINT_TYPE_U32_OIL_LEVEL_THRESHOLD:
+        raw = device_param_item_read_u32(params, item);
+        if (device_param_is_density_level_method(params) != 0) {
+            printf("  %-32s : %.2f kg/m3\r\n", label, ((double)raw) / 100.0);
+        } else {
+            printf("  %-32s : %lu Hz\r\n", label, (unsigned long)device_param_frequency_compat_threshold_hz(raw));
+        }
+        break;
+    case PARAM_PRINT_TYPE_U32_DENSITY_OFFSET:
+        raw = device_param_item_read_u32(params, item);
+        printf("  %-32s : %.2f kg/m3\r\n",
+               label,
+               (((double)raw) - (double)DENSITY_CORRECTION_BASE_RAW) / 100.0);
+        break;
+    case PARAM_PRINT_TYPE_U32_TEMP_OFFSET:
+        raw = device_param_item_read_u32(params, item);
+        printf("  %-32s : %.1f C\r\n", label, (((double)raw) - 1000.0) / 10.0);
+        break;
+    case PARAM_PRINT_TYPE_U32_01C:
+        raw = device_param_item_read_u32(params, item);
+        printf("  %-32s : %.1f C\r\n", label, ((double)raw) / 10.0);
+        break;
+    case PARAM_PRINT_TYPE_U32_000001_RATIO:
+        raw = device_param_item_read_u32(params, item);
+        printf("  %-32s : %.6f\r\n", label, ((double)raw) / 1000000.0);
+        break;
+    default:
+        break;
+    }
+}
+/*
+ * 函数用途：判断全量参数表是否打印该字段。
+ * 调用场景：上电、恢复出厂和人工全量打印。
+ * 关键约束：全量打印不再屏蔽运行态命令，继电器等特殊块也必须保留。
+ */
+static int device_param_item_can_full_print(const ParamPrintItem *item)
+{
+    return (item != NULL) ? 1 : 0;
+}
+static void print_device_params_items(const DeviceParameters *params)
+{
+    const char *current_group = NULL;
+    uint32_t item_count = (uint32_t)(sizeof(g_device_param_print_table) / sizeof(g_device_param_print_table[0]));
+
+    for (uint32_t index = 0U; index < item_count; index++) {
+        const ParamPrintItem *item = &g_device_param_print_table[index];
+        if (device_param_item_can_full_print(item) == 0) {
+            continue;
+        }
+        if ((current_group == NULL) || (strcmp(current_group, item->group) != 0)) {
+            current_group = item->group;
+            printf("\r\n-- %s --\r\n", current_group);
+        }
+        print_device_param_item(params, item);
+    }
+}
+
+static uint32_t count_relay_alarm_diff(const DeviceParameters *old_params, const DeviceParameters *new_params)
+{
+    uint32_t count = 0U;
+    uint32_t item_count = (uint32_t)(sizeof(g_relay_param_print_table) / sizeof(g_relay_param_print_table[0]));
+
+    for (uint32_t channel = 0U; channel < RELAY_ALARM_CHANNEL_COUNT; channel++) {
+        const RelayAlarmConfig *old_cfg = &old_params->relayAlarm[channel];
+        const RelayAlarmConfig *new_cfg = &new_params->relayAlarm[channel];
+        for (uint32_t index = 0U; index < item_count; index++) {
+            const RelayParamPrintItem *item = &g_relay_param_print_table[index];
+            if (relay_param_item_read_u32(old_cfg, item) != relay_param_item_read_u32(new_cfg, item)) {
+                count++;
+            }
+        }
+    }
+    return count;
+}
+
+static uint32_t count_device_params_diff(const DeviceParameters *old_params, const DeviceParameters *new_params)
+{
+    uint32_t count = 0U;
+    uint32_t item_count = (uint32_t)(sizeof(g_device_param_print_table) / sizeof(g_device_param_print_table[0]));
+
+    for (uint32_t index = 0U; index < item_count; index++) {
+        const ParamPrintItem *item = &g_device_param_print_table[index];
+        if (item->type == PARAM_PRINT_TYPE_RELAY_BLOCK) {
+            count += count_relay_alarm_diff(old_params, new_params);
+        } else if (device_param_item_can_diff(item) != 0) {
+            if ((item->type == PARAM_PRINT_TYPE_I32) ||
+                (item->type == PARAM_PRINT_TYPE_I32_UNIT)) {
+                if (device_param_item_read_i32(old_params, item) != device_param_item_read_i32(new_params, item)) {
+                    count++;
+                }
+            } else if (device_param_item_read_u32(old_params, item) != device_param_item_read_u32(new_params, item)) {
+                count++;
+            }
+        }
+    }
+    return count;
+}
+
+static void print_device_param_diff_item(const DeviceParameters *old_params, const DeviceParameters *new_params, const ParamPrintItem *item)
+{
+    uint32_t old_raw;
+    uint32_t new_raw;
+    int32_t old_signed;
+    int32_t new_signed;
+    char label[80];
+    char old_text[96];
+    char new_text[96];
+
+    build_device_param_print_label(item, NULL, label, sizeof(label));
+
+    if ((item->type == PARAM_PRINT_TYPE_I32) ||
+        (item->type == PARAM_PRINT_TYPE_I32_UNIT)) {
+        old_signed = device_param_item_read_i32(old_params, item);
+        new_signed = device_param_item_read_i32(new_params, item);
+        if (item->type == PARAM_PRINT_TYPE_I32_UNIT) {
+            printf("  %-32s : %ld %s -> %ld %s\r\n",
+                   label,
+                   (long)old_signed,
+                   item->unit,
+                   (long)new_signed,
+                   item->unit);
+        } else {
+            printf("  %-32s : %ld -> %ld\r\n", label, (long)old_signed, (long)new_signed);
+        }
+        return;
+    }
+
+    old_raw = device_param_item_read_u32(old_params, item);
+    new_raw = device_param_item_read_u32(new_params, item);
+
+    switch (item->type) {
+    case PARAM_PRINT_TYPE_U32:
+        format_device_param_u32_value(item, old_raw, old_text, sizeof(old_text));
+        format_device_param_u32_value(item, new_raw, new_text, sizeof(new_text));
+        printf("  %-32s : %s -> %s\r\n", label, old_text, new_text);
+        break;
+    case PARAM_PRINT_TYPE_U32_UNIT:
+        format_device_param_u32_unit_value(item, old_raw, old_text, sizeof(old_text));
+        format_device_param_u32_unit_value(item, new_raw, new_text, sizeof(new_text));
+        printf("  %-32s : %s -> %s\r\n", label, old_text, new_text);
+        break;
+    case PARAM_PRINT_TYPE_HEX32:
+        printf("  %-32s : 0x%08lX -> 0x%08lX\r\n", label, (unsigned long)old_raw, (unsigned long)new_raw);
+        break;
+    case PARAM_PRINT_TYPE_U32_01MM:
+        printf("  %-32s : %.1f mm -> %.1f mm\r\n",
+               label,
+               ((double)old_raw) / 10.0,
+               ((double)new_raw) / 10.0);
+        break;
+    case PARAM_PRINT_TYPE_U32_001MM:
+        printf("  %-32s : %.3f mm -> %.3f mm\r\n",
+               label,
+               ((double)old_raw) / 1000.0,
+               ((double)new_raw) / 1000.0);
+        break;
+    case PARAM_PRINT_TYPE_U32_01M_PER_MIN:
+        printf("  %-32s : %.2f m/min -> %.2f m/min\r\n",
+               label,
+               ((double)old_raw) / 100.0,
+               ((double)new_raw) / 100.0);
+        break;
+    case PARAM_PRINT_TYPE_U32_01MA:
+        printf("  %-32s : %.2f mA -> %.2f mA\r\n",
+               label,
+               ((double)old_raw) / 100.0,
+               ((double)new_raw) / 100.0);
+        break;
+    case PARAM_PRINT_TYPE_U32_001PF:
+        printf("  %-32s : %.3f pF -> %.3f pF\r\n",
+               label,
+               ((double)old_raw) / 1000.0,
+               ((double)new_raw) / 1000.0);
+        break;
+    case PARAM_PRINT_TYPE_U32_01PF:
+        printf("  %-32s : %.1f pF -> %.1f pF\r\n",
+               label,
+               ((double)old_raw) / 10.0,
+               ((double)new_raw) / 10.0);
+        break;
+    case PARAM_PRINT_TYPE_U32_DENSITY:
+        printf("  %-32s : %.2f kg/m3 -> %.2f kg/m3\r\n",
+               label,
+               ((double)old_raw) / 100.0,
+               ((double)new_raw) / 100.0);
+        break;
+    case PARAM_PRINT_TYPE_U32_OIL_LEVEL_THRESHOLD:
+        if (device_param_is_density_level_method(new_params) != 0) {
+            printf("  %-32s : %.2f kg/m3 -> %.2f kg/m3\r\n",
+                   label,
+                   ((double)old_raw) / 100.0,
+                   ((double)new_raw) / 100.0);
+        } else {
+            printf("  %-32s : %lu Hz -> %lu Hz\r\n",
+                   label,
+                   (unsigned long)device_param_frequency_compat_threshold_hz(old_raw),
+                   (unsigned long)device_param_frequency_compat_threshold_hz(new_raw));
+        }
+        break;
+    case PARAM_PRINT_TYPE_U32_DENSITY_OFFSET:
+        printf("  %-32s : %.2f kg/m3 -> %.2f kg/m3\r\n",
+               label,
+               (((double)old_raw) - (double)DENSITY_CORRECTION_BASE_RAW) / 100.0,
+               (((double)new_raw) - (double)DENSITY_CORRECTION_BASE_RAW) / 100.0);
+        break;
+    case PARAM_PRINT_TYPE_U32_TEMP_OFFSET:
+        printf("  %-32s : %.1f C -> %.1f C\r\n",
+               label,
+               (((double)old_raw) - 1000.0) / 10.0,
+               (((double)new_raw) - 1000.0) / 10.0);
+        break;
+    case PARAM_PRINT_TYPE_U32_01C:
+        printf("  %-32s : %.1f C -> %.1f C\r\n",
+               label,
+               ((double)old_raw) / 10.0,
+               ((double)new_raw) / 10.0);
+        break;
+    case PARAM_PRINT_TYPE_U32_000001_RATIO:
+        printf("  %-32s : %.6f -> %.6f\r\n",
+               label,
+               ((double)old_raw) / 1000000.0,
+               ((double)new_raw) / 1000000.0);
+        break;
+    default:
+        format_device_param_u32_value(item, old_raw, old_text, sizeof(old_text));
+        format_device_param_u32_value(item, new_raw, new_text, sizeof(new_text));
+        printf("  %-32s : %s -> %s\r\n", label, old_text, new_text);
+        break;
+    }
+}
+static void print_relay_alarm_diff(const DeviceParameters *old_params, const DeviceParameters *new_params)
+{
+    uint32_t item_count = (uint32_t)(sizeof(g_relay_param_print_table) / sizeof(g_relay_param_print_table[0]));
+
+    for (uint32_t channel = 0U; channel < RELAY_ALARM_CHANNEL_COUNT; channel++) {
+        const RelayAlarmConfig *old_cfg = &old_params->relayAlarm[channel];
+        const RelayAlarmConfig *new_cfg = &new_params->relayAlarm[channel];
+        for (uint32_t index = 0U; index < item_count; index++) {
+            const RelayParamPrintItem *item = &g_relay_param_print_table[index];
+            uint32_t old_raw = relay_param_item_read_u32(old_cfg, item);
+            uint32_t new_raw = relay_param_item_read_u32(new_cfg, item);
+            if (old_raw == new_raw) {
+                continue;
+            }
+            if (item->type == RELAY_PARAM_PRINT_FLOAT_RAW) {
+                printf("  继电器%lu.%-18s : %.1f -> %.1f\r\n",
+                       (unsigned long)(channel + 1U),
+                       item->name,
+                       relay_alarm_raw_to_float(old_raw),
+                       relay_alarm_raw_to_float(new_raw));
+            } else {
+                const char *old_desc = relay_param_value_desc(item, old_raw);
+                const char *new_desc = relay_param_value_desc(item, new_raw);
+                if ((old_desc != NULL) || (new_desc != NULL)) {
+                    printf("  继电器%lu.%-18s : %lu(%s) -> %lu(%s)\r\n",
+                           (unsigned long)(channel + 1U),
+                           item->name,
+                           (unsigned long)old_raw,
+                           (old_desc != NULL) ? old_desc : "未定义",
+                           (unsigned long)new_raw,
+                           (new_desc != NULL) ? new_desc : "未定义");
+                } else {
+                    printf("  继电器%lu.%-18s : %lu -> %lu\r\n",
+                           (unsigned long)(channel + 1U),
+                           item->name,
+                           (unsigned long)old_raw,
+                           (unsigned long)new_raw);
+                }
+            }
+        }
+    }
+}
+
+/*
+ * 函数用途：把参数打印场景转换成中文标签。
+ * 调用场景：上电、恢复出厂和人工全量打印的标题/结束行。
+ * 关键约束：只影响串口打印文本，不改变参数内容和保存流程。
+ */
+static const char *device_param_print_stage_name(const char *stage)
+{
+    if (stage == NULL) {
+        return "人工";
+    }
+    if (strcmp(stage, "BOOT") == 0) {
+        return "上电";
+    }
+    if (strcmp(stage, "FACTORY_RESET") == 0) {
+        return "恢复出厂";
+    }
+    if (strcmp(stage, "MANUAL") == 0) {
+        return "人工";
+    }
+    return stage;
+}
+static void print_device_params_full(const DeviceParameters *snapshot,
+                                     const char *stage,
+                                     const char *reason,
+                                     const char *source)
+{
+    DeviceParameters params;
+    if (snapshot != NULL) {
+        memcpy(&params, snapshot, sizeof(DeviceParameters));
+    } else {
+        memcpy(&params, (void *)&g_deviceParams, sizeof(DeviceParameters));
+    }
+
+    printf("\r\n========================================\r\n");
+    printf("[参数][%s][全量] 设备参数全量打印\r\n", device_param_print_stage_name(stage));
+    if (reason != NULL) {
+        printf("原因       : %s\r\n", reason);
+    }
+    if (source != NULL) {
+        printf("参数来源   : %s\r\n", source);
+    }
+    printf("              设备参数\r\n");
+    printf("========================================\r\n");
+    print_device_params_items(&params);
+    printf("========================================\r\n");
+    printf("[参数][%s][全量] 设备参数打印结束\r\n", device_param_print_stage_name(stage));
     printf("========================================\r\n");
 }
 
+static void print_device_params_save_meta(const DeviceParameters *params, const char *source)
+{
+    DeviceParameters snapshot;
+    const DeviceParameters *print_params = params;
+
+    if (print_params == NULL) {
+        memcpy(&snapshot, (void *)&g_deviceParams, sizeof(DeviceParameters));
+        print_params = &snapshot;
+    }
+
+    printf("[参数][保存][成功] 保存结果=成功 | 位置=%s | 版本=%lu | 大小=%lu | CRC32=0x%08lX\r\n",
+           (source != NULL) ? source : "未知",
+           (unsigned long)print_params->param_version,
+           (unsigned long)print_params->struct_size,
+           (unsigned long)print_params->crc);
+}
+
+static void print_device_params_event(DeviceParamPrintEvent event, const DeviceParameters *params, const char *reason, const char *source)
+{
+    switch (event) {
+    case PARAM_PRINT_BOOT_FULL:
+#if DEVICE_PARAMS_BOOT_FULL_PRINT_ENABLE
+        print_device_params_full(params, "BOOT", reason, source);
+#endif
+        break;
+    case PARAM_PRINT_FACTORY_RESET_FULL:
+        print_device_params_full(params, "FACTORY_RESET", reason, source);
+        break;
+    case PARAM_PRINT_MANUAL_FULL:
+        print_device_params_full(params, "MANUAL", reason, source);
+        break;
+    case PARAM_PRINT_SAVE_META:
+        print_device_params_save_meta(params, source);
+        break;
+    case PARAM_PRINT_SAVE_SKIP:
+        printf("[参数][保存][跳过] 设备参数未变化，跳过保存\r\n");
+        break;
+    default:
+        break;
+    }
+}
+
+/*
+ * 函数用途：按统一场景入口打印设备参数。
+ * 调用场景：上电、恢复出厂、保存摘要和人工调试入口。
+ * 关键约束：该函数会直接 printf，不应在中断上下文调用。
+ */
+void DeviceParams_PrintEvent(DeviceParamPrintEvent event)
+{
+    print_device_params_event(event, NULL, NULL, NULL);
+}
+
+/*
+ * 函数用途：打印两份设备参数之间的差异。
+ * 调用场景：保存入口拿到旧参数快照和新参数镜像后统一输出。
+ * 关键约束：该函数只打印、不修改参数、不写 FRAM。
+ */
+void DeviceParams_PrintDiff(const DeviceParameters *old_params, const DeviceParameters *new_params)
+{
+    uint32_t total_count;
+    uint32_t item_count;
+
+    if ((old_params == NULL) || (new_params == NULL)) {
+        return;
+    }
+
+    total_count = count_device_params_diff(old_params, new_params);
+    if (total_count == 0U) {
+        return;
+    }
+
+    printf("[参数][写入][成功] 参数写入完成，变更 %lu 项\r\n", (unsigned long)total_count);
+    item_count = (uint32_t)(sizeof(g_device_param_print_table) / sizeof(g_device_param_print_table[0]));
+    for (uint32_t index = 0U; index < item_count; index++) {
+        const ParamPrintItem *item = &g_device_param_print_table[index];
+        if (item->type == PARAM_PRINT_TYPE_RELAY_BLOCK) {
+            print_relay_alarm_diff(old_params, new_params);
+        } else if (device_param_item_can_diff(item) != 0) {
+            if ((item->type == PARAM_PRINT_TYPE_I32) ||
+                (item->type == PARAM_PRINT_TYPE_I32_UNIT)) {
+                if (device_param_item_read_i32(old_params, item) != device_param_item_read_i32(new_params, item)) {
+                    print_device_param_diff_item(old_params, new_params, item);
+                }
+            } else if (device_param_item_read_u32(old_params, item) != device_param_item_read_u32(new_params, item)) {
+                print_device_param_diff_item(old_params, new_params, item);
+            }
+        }
+    }
+}
+
+/*
+ * 函数用途：记录 Modbus 写参前的设备参数快照。
+ * 调用场景：0x10 写入持久化参数区之前调用，供主循环延后保存时打印差异。
+ * 关键约束：该函数只复制内存，不打印、不写 FRAM。
+ */
+void DeviceParams_CaptureWriteSnapshot(void)
+{
+    if (g_device_params_write_snapshot_valid == 0U) {
+        memcpy(&g_device_params_write_snapshot, (void *)&g_deviceParams, sizeof(DeviceParameters));
+        g_device_params_write_snapshot_valid = 1U;
+    }
+}
+
+void print_device_params(void)
+{
+    DeviceParams_PrintEvent(PARAM_PRINT_MANUAL_FULL);
+}
 /* ========================= 测量结果打印（可选） ========================= */
 /* 注: 该部分与参数结构无强耦合，仅保留你现有打印习惯；如果不需要可移除 */
 

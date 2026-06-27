@@ -51,6 +51,10 @@
 #define TEST_AO_HOLD_MS                          5000U /* 模拟量输出测试单点保持时间，单位 ms。 */
 #define TEST_AO_REFRESH_MS                       500U /* 模拟量输出测试刷新周期，单位 ms。 */
 #define TEST_AO_DIAG_DELAY_MS                   10U /* 模拟量输出测试写电流后等待 AD5421 状态稳定的时间。 */
+#define DEMO_SINGLE_POINT_DISPLAY_BASE_DENS_RAW 83521U /* 单点展示基础密度，单位 kg/m3 x100。 */
+#define DEMO_SINGLE_POINT_DISPLAY_STD_OFFSET_RAW 7U /* 单点展示标密偏移，单位 kg/m3 x100。 */
+#define DEMO_SINGLE_POINT_DISPLAY_WEIGHT_OFFSET_RAW 3U /* 单点展示计重密度偏移，单位 kg/m3 x100。 */
+#define DEMO_SINGLE_POINT_DISPLAY_APPROACH_DENS_RAW 83487U /* 单点展示到位前密度，单位 kg/m3 x100。 */
 typedef struct {
     DeviceState device_state;
     uint32_t error_code;
@@ -1623,7 +1627,7 @@ uint8_t Test_ProcessSerialCommand(uint8_t *command)
         return 1U;
     }
     /* A 指令走与 B/BE 一致的低检测电机路径；其它调试/恢复动作仍先执行 MeasureStart。 */
-    if (command[0] != 'A') {
+    if ((command[0] != 'A') && (command[0] != 'X')) {
         ret = (uint32_t)MeasureStart();
         /* 先处理异常边界，避免本模块状态机带故障继续运行。 */
         if (ret != NO_ERROR) {
@@ -2805,7 +2809,7 @@ void DSM_V2_Test_AllParams(void) {
 
 	/* 先处理异常边界，避免本模块状态机带故障继续运行。 */
 	if (DSM_V2_Read_Density(&rho) == NO_ERROR) {
-		g_measurement.single_point_monitoring.density = (int) (rho * 10);
+		g_measurement.single_point_monitoring.density = (int)DENSITY_TO_RAW(rho);
 		printf("密度值: %.3f\r\n", rho);
 	} else
 		printf("读取密度失败\r\n");
@@ -2947,7 +2951,7 @@ static void Demo_SinglePointDisplay_UpdateResult(volatile DensityMeasurement *re
 void Demo_SinglePointDisplayMock(void)
 {
     static const int16_t temp_wave_x100[]    = { 0, 6, 12, 18, 24, 18, 12, 6, 0, -4, -8, -4 };
-    static const int16_t density_wave_x10[]  = { 0, 1, 2, 3, 2, 1, 0, -1, -2, -1, 0, 1 };
+    static const int16_t density_wave_x100[] = { 0, 1, 2, 3, 4, 3, 2, 1, 0, -1, -2, -1 };
     static const int16_t pos_wave_01mm[]     = { 0, 2, 4, 6, 8, 6, 4, 2, 0, -2, -4, -2 };
     const uint32_t wave_count = (uint32_t)(sizeof(temp_wave_x100) / sizeof(temp_wave_x100[0]));
     uint32_t target_pos_01mm;
@@ -3007,18 +3011,18 @@ void Demo_SinglePointDisplayMock(void)
 
         Demo_SinglePointDisplay_UpdateResult(&g_measurement.single_point_measurement,
                                              22580U,
-                                             8348U,
+                                             DEMO_SINGLE_POINT_DISPLAY_APPROACH_DENS_RAW,
                                              current_pos_01mm,
-                                             8338U,
+                                             DEMO_SINGLE_POINT_DISPLAY_APPROACH_DENS_RAW - DEMO_SINGLE_POINT_DISPLAY_STD_OFFSET_RAW,
                                              9997U,
-                                             8342U);
+                                             DEMO_SINGLE_POINT_DISPLAY_APPROACH_DENS_RAW - DEMO_SINGLE_POINT_DISPLAY_WEIGHT_OFFSET_RAW);
         Demo_SinglePointDisplay_UpdateResult(&g_measurement.single_point_monitoring,
                                              22580U,
-                                             8348U,
+                                             DEMO_SINGLE_POINT_DISPLAY_APPROACH_DENS_RAW,
                                              current_pos_01mm,
-                                             8338U,
+                                             DEMO_SINGLE_POINT_DISPLAY_APPROACH_DENS_RAW - DEMO_SINGLE_POINT_DISPLAY_STD_OFFSET_RAW,
                                              9997U,
-                                             8342U);
+                                             DEMO_SINGLE_POINT_DISPLAY_APPROACH_DENS_RAW - DEMO_SINGLE_POINT_DISPLAY_WEIGHT_OFFSET_RAW);
 
         printf("单点展示\t运行到测量点 [%lu/6] 位置=%.1fmm\r\n",
                (unsigned long)(i + 1U),
@@ -3044,9 +3048,9 @@ void Demo_SinglePointDisplayMock(void)
         cable_01mm = (tank_height_01mm > current_pos_01mm) ? (tank_height_01mm - current_pos_01mm) : 0U;
 
         temperature_raw = (uint32_t)(20000 + 2650 + temp_wave_x100[idx]);
-        density_raw = (uint32_t)(8350 + density_wave_x10[idx]);
-        standard_density_raw = density_raw - 8U;
-        weight_density_raw = density_raw - 4U;
+        density_raw = (uint32_t)((int32_t)DEMO_SINGLE_POINT_DISPLAY_BASE_DENS_RAW + (int32_t)density_wave_x100[idx]);
+        standard_density_raw = density_raw - DEMO_SINGLE_POINT_DISPLAY_STD_OFFSET_RAW;
+        weight_density_raw = density_raw - DEMO_SINGLE_POINT_DISPLAY_WEIGHT_OFFSET_RAW;
         vcf20_raw = 9995U + (idx % 6U);
 
         g_measurement.device_status.device_state = STATE_SINGLEPOINTING;
@@ -3076,7 +3080,7 @@ void Demo_SinglePointDisplayMock(void)
                                              vcf20_raw,
                                              weight_density_raw);
 
-        printf("单点展示\t状态=固定点测量中 位置=%.1fmm 温度=%.2fC 密度=%.1f 标密=%.1f VCF20=%lu 重量密度=%.1f\r\n",
+        printf("单点展示\t状态=固定点测量中 位置=%.1fmm 温度=%.2fC 密度=%.2f 标密=%.2f VCF20=%lu 重量密度=%.2f\r\n",
                current_pos_01mm / 10.0f,
                RAW_TO_TEMP(temperature_raw),
                RAW_TO_DENSITY(density_raw),

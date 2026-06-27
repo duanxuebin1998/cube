@@ -104,8 +104,8 @@ CPU3 V1.11.1.1 起，K1~K4 的 HH/H/L/LL 报警阈值和报警滞回不在 `para
 | 运行态 X/Y 角 | 原始值为角度 `x100`；`123` 表示 `1.23°` | 读陀螺仪后写入 `angle_x = ax * 100`，显示侧 `point=2` | 已按 `°`、2 位小数显示，保持 |
 | 读取参数态 X/Y 角 | 与运行态 X/Y 角同口径；读取部件参数完成态直接按 `debug_data.angle_x/y` 显示，不依赖 `bottom_detect_mode` | `CMD_ReadPartParams()` 读取陀螺仪后刷新 `debug_data.angle_x/y`，CPU3 状态页读取参数上下文直接使用该快照 | 读取参数页保持 `°`、2 位小数；探底/罐高上下文仍按探底模式控制角度显示 |
 | 蓝牙连接 RSSI | 运行态原始值为 dB；`rssi_valid` 表示当前快照是否有效 | CPU2 发布 `wireless_pairing_status.rssi_valid/rssi`，CPU3 从协议 9 起读取 | 状态页只读显示 `RSSI:<value>dB` 或 `RSSI:N/A`；不是 `param_meta[]` 参数 |
-| 液位找液阈值 | 协议 13 起按密度阈值 `kg/m3 x100` 保存；兼容旧频率方案时 CPU2 内部折算回历史 Hz 阈值 | 密度连续找液位中按 `RAW_TO_DENSITY()` 比较密度差；旧 0/1 频率方案使用兼容折算值 | CPU3 按 `kg/m3`、`point=2` 显示 |
-| 液位滞后阈值 | 协议 13 起按密度滞后阈值 `kg/m3 x100` 保存；兼容旧频率方案时 CPU2 内部折算回历史 Hz 阈值 | 密度跟随中按 `RAW_TO_DENSITY()` 比较密度差；旧 0/1 频率方案使用兼容折算值 | CPU3 按 `kg/m3`、`point=2` 显示 |
+| 液位找液阈值 | 底层 raw 仍经协议 13 迁移为原值的 10 倍；频率液位路径通过 `FrequencyLevel_GetCompatThresholdHz(raw/10)` 折算为 Hz | 频率找液位按 Hz 死区比较；密度连续找液位复用同一 raw 时仍按 `RAW_TO_DENSITY()` 比较密度差 | CPU3 按 `Hz`、`point=1` 显示；默认 `150` 显示为 `15.0 Hz` |
+| 液位滞后阈值 | 底层 raw 仍经协议 13 迁移为原值的 10 倍；频率液位路径通过 `FrequencyLevel_GetCompatThresholdHz(raw/10)` 折算为 Hz | 频率跟随按 Hz 滞后死区比较；密度跟随复用同一 raw 时仍按 `RAW_TO_DENSITY()` 比较密度差 | CPU3 按 `Hz`、`point=1` 显示；默认 `200` 显示为 `20.0 Hz` |
 | 探底角度阈值 | 原始值为整度；默认 `12` 表示 `12°` | 默认值注释为“单位(度)/倍率*1”，探底判断中直接转 `float` 比较 | 可补单位 `°`，小数位保持 `0` |
 | 水位跟随电容阈值 | 原始值为 `pF x1000`；CPU2 V1.12.1.3 默认 `20000` 表示 `20.000pF` | `WaterCapRawToFloat(raw) = raw / 1000.0f`，跟随目标为 `air_cap + threshold` | 可显示单位 `pF`，`point=3` |
 | 水位寻找电容阈值 | 原始值为 `pF x1000`；CPU2 V1.12.1.3 默认 `10000` 表示 `10.000pF` | 与水位跟随阈值同用 `WaterCapRawToFloat()` | 可显示单位 `pF`，`point=3` |

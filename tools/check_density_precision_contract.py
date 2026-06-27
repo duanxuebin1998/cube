@@ -164,9 +164,19 @@ def check_cpu3_contract(cpu2_h: str, cpu3_h: str, cpu3_param_c: str, local_param
     require_re(local_param_c, r"stor\.version\s*==\s*CPU3_PARAM_VERSION_V4[\s\S]{0,220}Cpu3_MigrateDensityInputX10ToX100", "CPU3 V4 load must migrate screen_input_d to x100", errors)
     require_re(local_param_c, r"stor\.version\s*==\s*CPU3_PARAM_VERSION_V3[\s\S]{0,500}Cpu3_MigrateDensityInputX10ToX100", "CPU3 V3 load must migrate screen_input_d to x100", errors)
 
-    density_rows = {
+    frequency_threshold_rows = {
         "液位找液阈值": "COM_NUM_DEVICEPARAM_OILLEVELTHRESHOLD",
         "液位滞后阈值": "COM_NUM_DEVICEPARAM_OILLEVEL_HYSTERESIS_THRESHOLD",
+    }
+    for zh_name, enum_name in frequency_threshold_rows.items():
+        require_re(
+            cpu3_param_c,
+            rf'"{zh_name}"[\s\S]{{0,180}}{enum_name}[\s\S]{{0,220}}\(uint8_t\*\)"Hz",\s*1,\s*0',
+            f"CPU3 parameter {zh_name} must display Hz with point=1",
+            errors,
+        )
+
+    density_rows = {
         "液位跟随密度": "COM_NUM_DEVICEPARAM_OILLEVEL_DENSITY",
     }
     for zh_name, enum_name in density_rows.items():

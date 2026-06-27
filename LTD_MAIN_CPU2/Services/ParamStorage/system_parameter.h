@@ -4,7 +4,7 @@
  * @Author       : Aubon
  * @Date         : 2025-07-15 11:01:57
  * @LastEditors  : Duan Xuebin
- * @LastEditTime : 2026-05-15 15:01:10
+ * @LastEditTime : 2026-06-27 10:46:07
  * Copyright 2025 Aubon, All Rights Reserved.
  * 2025-07-15 11:01:57
  */
@@ -675,7 +675,6 @@ typedef struct {
     uint32_t AOLowCurrent_mA;            /* AO低位电流 */
     uint32_t FaultCurrent_mA;            /* AO故障电流 */
     uint32_t DebugCurrent_mA;            /* AO调试电流 */
-
     uint32_t AoOutputEnable;             /* AO输出使能：0=关闭，1=启用 */
     uint32_t reserved27;                 /* 预留（新增） */
 
@@ -712,6 +711,15 @@ typedef struct {
     uint32_t crc;                        /* CRC32 */
 } DeviceParameters;
 #pragma pack(pop)
+
+/* 设备参数打印场景。 */
+typedef enum {
+    PARAM_PRINT_BOOT_FULL = 0,
+    PARAM_PRINT_FACTORY_RESET_FULL,
+    PARAM_PRINT_SAVE_META,
+    PARAM_PRINT_MANUAL_FULL,
+    PARAM_PRINT_SAVE_SKIP
+} DeviceParamPrintEvent;
 
 #define FRAM_PARAM_A_ADDRESS 0x0000u /* 参数存储 A 分区 FRAM 起始地址。 */
 #define FRAM_PARAM_SLOT_SIZE 0x0800u /* 参数存储单个分区大小。 */
@@ -809,6 +817,21 @@ void RestoreFactoryParamsConfig(void); /* 恢复出厂默认参数配置 */
  * @brief 显示或打印系统参数中的 print_device_params 逻辑。
  */
 void print_device_params(void); /* 打印设备参数 */
+/**
+ * @brief 按统一场景入口打印设备参数。
+ * @note 可用于上电全量、恢复出厂全量、保存摘要和人工全量打印；调用点不再直接分散调用全量打印。
+ */
+void DeviceParams_PrintEvent(DeviceParamPrintEvent event);
+/**
+ * @brief 打印两份设备参数之间的差异。
+ * @note 只负责格式化输出，不修改参数、不保存 FRAM；调用方负责提供稳定的旧值和新值快照。
+ */
+void DeviceParams_PrintDiff(const DeviceParameters *old_params, const DeviceParameters *new_params);
+/**
+ * @brief 记录 Modbus 写参前的设备参数快照。
+ * @note 该函数只复制内存，不打印、不写 FRAM，可在通信写参路径调用；差异在主循环延后保存时统一打印。
+ */
+void DeviceParams_CaptureWriteSnapshot(void);
 /**
  * @brief 执行系统参数中的 DefaultCmd_To_MeasureCmd 逻辑。
  *

@@ -31,10 +31,7 @@
  *   - 状态码/宏：SET_ERROR、CHECK_ERROR、CHECK_COMMAND_SWITCH、CMD_NONE 等
  *
  * 重要注意：
- *   - g_deviceParams.spreadPointHoverTime 的“单位”在工程中存在两套使用方式：
- *       * Density_RunPoints01mm() 中按 ms 使用（HAL_Delay(hover_ms)）
- *       * SinglePoint_ReadSensor() 中按 s 使用（stable_win_ms = hover_time_s * 1000）
- *     若需要统一单位，应在参数定义侧统一；本文件保持现有逻辑不改动，仅在注释中明确差异。
+ *   - g_deviceParams.spreadPointHoverTime 的菜单单位为秒；执行延时前统一换算为毫秒。
  */
 
 #include "measure_density.h"
@@ -271,8 +268,9 @@ static uint32_t Density_RunPoints01mm(const int32_t *p01,
     uint64_t sum_temp_raw = 0;
     uint64_t sum_dens_raw = 0;
 
-    /* 悬停等待（此处按 ms 使用；与 SinglePoint_ReadSensor 的稳定窗口参数单位不同） */
-    uint32_t hover_ms = g_deviceParams.spreadPointHoverTime;
+    /* 悬停等待使用菜单单位秒，传入延时函数前换算为毫秒。 */
+    uint32_t hover_time_s = g_deviceParams.spreadPointHoverTime;
+    uint32_t hover_ms = hover_time_s * 1000U;
 
     for (uint32_t i = 0; i < n; i++) {
 
