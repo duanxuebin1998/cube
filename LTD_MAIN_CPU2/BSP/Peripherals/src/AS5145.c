@@ -10,10 +10,10 @@
  *    若检测到该模式，则直接按无响应处理，不进入正常角度累计流程。
  * 4. 正常帧到达后，会清零重试计数和错误上报锁存，并清除编码器类错误码；
  *    随后调用 Update_Encoder_Count() 完成跨零点修正、累计计数和位置换算。
- * 5. 当帧校验失败、OCF 未完成、COF 溢出或 SPI/DMA 本身异常时，会进入统一错误处理：
- *    - 前 3 次错误立即重试；
- *    - 超过 3 次只打印一次错误信息，但不会停止 TIM1，也不会停止后续通信；
- *    - 后续定时器仍持续拉起通信，直到再次收到有效帧后自动恢复。
+ * 5. 当帧校验失败、OCF 未完成、COF 溢出或 SPI/DMA 本身异常时，只在中断内记录状态：
+ *    - 单帧错误不打印、不立即重试；
+ *    - 连续错误达到阈值后才置全局编码器错误；
+ *    - 后续定时器仍持续拉起通信，直到再次收到稳定有效帧后自动恢复。
  * 6. 该实现的目标是：既能在编码器异常时给出全局错误，又不会因为一次持续异常把通信链路彻底锁死。
  */
 
@@ -26,12 +26,13 @@
 #include "error_log.h"
 #include "motor_ctrl.h"
 
-#define SSI_FRAME_LENGTH     4u /* AS5145 SSI 单帧读取字节数。 */
-#define SSI_RETRY_LIMIT      3u /* AS5145 SSI 通信参数：SSI 重试 限值。 */
+#define SSI_FRAME_LENGTH             4u /* AS5145 SSI 单帧读取字节数。 */
+#define SSI_STABLE_VALID_LIMIT       8u /* Stable valid frames required before encoder ready. */
+#define SSI_ERROR_REPORT_LIMIT       8u /* Consecutive errors required before global report. */
 
 /* SSI 通信状态：
  * retry_count   记录当前连续失败次数；
- * error_reported 用于限制持续故障期间只打印一次错误日志。
+ * error_reported 用于限制持续故障期间只上报一次全局错误。
  */
 typedef struct {
     uint8_t retry_count;
@@ -42,7 +43,17 @@ static SSI_State ssi_state = { .retry_count = 0, .error_reported = false };
 static volatile uint32_t ssi_last_error_code = NO_ERROR; /* AS5145 编码器故障记录，供恢复、显示或日志链路使用。 */
 /* 首帧有效数据锁存：定时器启动不等于位置可信，运动门控必须等到这里置位。 */
 static volatile bool ssi_first_valid_sample = false; /* AS5145 编码器模块级变量，保存跨函数共享的业务状态。 */
+static volatile uint8_t ssi_valid_streak = 0U; /* Consecutive valid frame count for startup gate. */
 static volatile uint32_t ssi_last_ok_tick = 0U; /* AS5145 编码器模块级变量，保存跨函数共享的业务状态。 */
+static volatile uint32_t ssi_sample_total_count = 0U;
+static volatile uint32_t ssi_parity_error_count = 0U;
+static volatile uint32_t ssi_ocf_incomplete_count = 0U;
+static volatile uint32_t ssi_cof_error_count = 0U;
+static volatile uint32_t ssi_timeout_error_count = 0U;
+static volatile uint32_t ssi_empty_frame_count = 0U;
+static volatile uint32_t ssi_spi_busy_count = 0U;
+static volatile uint32_t ssi_spi_start_fail_count = 0U;
+static uint8_t ssi_last_error_raw[SSI_FRAME_LENGTH] = { 0 };
 static uint8_t rxData[10] = { 0 };
 
 static uint8_t Calculate_Even_Parity(uint32_t data);
@@ -53,10 +64,10 @@ static bool Is_SSI_DisconnectedPattern(const uint8_t *rxData);
 static uint32_t Get_SSI_Error_Code(const SSI_Data_t *data);
 static bool Is_Encoder_Error_Code(uint32_t error_code);
 static void Recover_SSI_Bus(void);
+static void Capture_SSI_Error_Raw(const uint8_t *rx_data);
+static void Count_SSI_Error_Type(const SSI_Data_t *data);
 static HAL_StatusTypeDef Start_Read_SSI_Data(void);
 static void Handle_SSI_Error(const SSI_Data_t *data);
-static void Report_SSI_PersistentError(const SSI_Data_t *data);
-static void Print_SSI_Error(const SSI_Data_t *data);
 
 /**
  * @brief  计算 17 位有效数据的偶校验位
@@ -102,8 +113,11 @@ static SSI_Data_t Process_SSI_Frame(uint8_t *rx_data, GPIO_TypeDef *cs_port, uin
     SSI_Data_t parsed_data = { 0 };
 
     HAL_GPIO_WritePin(cs_port, cs_pin, GPIO_PIN_SET);
+    ssi_sample_total_count++;
 
     if (Is_SSI_DisconnectedPattern(rx_data)) {
+        Capture_SSI_Error_Raw(rx_data);
+        ssi_empty_frame_count++;
         Handle_SSI_Error(NULL);
         return parsed_data;
     }
@@ -112,13 +126,18 @@ static SSI_Data_t Process_SSI_Frame(uint8_t *rx_data, GPIO_TypeDef *cs_port, uin
 
     /* 先处理异常边界，避免AS5145 编码器状态机带故障继续运行。 */
     if (Check_SSI_Error_Condition(&parsed_data)) {
+        Capture_SSI_Error_Raw(rx_data);
         Handle_SSI_Error(&parsed_data);
     } else {
         ssi_state.retry_count = 0;
         ssi_state.error_reported = false;
         ssi_last_error_code = NO_ERROR;
-        /* 只有完整解析且无协议错误的帧，才能作为启动后的首个可信位置。 */
-        ssi_first_valid_sample = true;
+        if (ssi_valid_streak < SSI_STABLE_VALID_LIMIT) {
+            ssi_valid_streak++;
+        }
+        if (ssi_valid_streak >= SSI_STABLE_VALID_LIMIT) {
+            ssi_first_valid_sample = true;
+        }
         ssi_last_ok_tick = HAL_GetTick();
 
         /* 先处理异常边界，避免AS5145 编码器状态机带故障继续运行。 */
@@ -147,6 +166,35 @@ static bool Is_SSI_DisconnectedPattern(const uint8_t *rxData) {
             (rxData[2] == 0x00u) && (rxData[3] == 0x00u)) ||
            ((rxData[0] == 0xFFu) && (rxData[1] == 0xFFu) &&
             (rxData[2] == 0xFFu) && (rxData[3] == 0xFFu));
+}
+
+static void Capture_SSI_Error_Raw(const uint8_t *rx_data) {
+    uint8_t i;
+
+    if (rx_data == NULL) {
+        return;
+    }
+
+    for (i = 0U; i < SSI_FRAME_LENGTH; i++) {
+        ssi_last_error_raw[i] = rx_data[i];
+    }
+}
+
+static void Count_SSI_Error_Type(const SSI_Data_t *data) {
+    if (data == NULL) {
+        ssi_timeout_error_count++;
+        return;
+    }
+
+    if (!data->parity_ok) {
+        ssi_parity_error_count++;
+    }
+    if (!data->OCF) {
+        ssi_ocf_incomplete_count++;
+    }
+    if (data->COF) {
+        ssi_cof_error_count++;
+    }
 }
 
 /**
@@ -198,27 +246,17 @@ static void Handle_SSI_Error(const SSI_Data_t *data) {
     uint32_t err = Get_SSI_Error_Code(data);
 
     ssi_last_error_code = err;
-    if (!MotorCtrl_IsPositionSourceMotor()) {
-        g_measurement.device_status.error_code = err;
+    ssi_valid_streak = 0U;
+    Count_SSI_Error_Type(data);
+
+    if (ssi_state.retry_count < 255U) {
+        ssi_state.retry_count++;
     }
 
-    if (++ssi_state.retry_count <= SSI_RETRY_LIMIT) {
-        /* 错误 阶段：错误重试 模块：编码器 操作：通信诊断 原因：ErrorLog_GetReasonByCode(err) 尝试：ssi_state.retry_count/SSI_RETRY_LIMIT 错误码：err 错误名：ErrorLog_GetCodeName(err) */
-        ErrorLog_Retry(ERROR_LOG_MODULE_ENCODER,
-                       ERROR_LOG_OP_COMM_DIAG,
-                       ErrorLog_GetReasonByCode(err),
-                       (uint32_t)ssi_state.retry_count,
-                       SSI_RETRY_LIMIT,
-                       err);
-        (void)Start_Read_SSI_Data();
-        return;
-    }
-
-    /* 先处理异常边界，避免AS5145 编码器状态机带故障继续运行。 */
-    if (!ssi_state.error_reported) {
+    if ((ssi_state.retry_count >= SSI_ERROR_REPORT_LIMIT) && (!ssi_state.error_reported)) {
         ssi_state.error_reported = true;
         if (!MotorCtrl_IsPositionSourceMotor()) {
-            Report_SSI_PersistentError(data);
+            g_measurement.device_status.error_code = err;
         }
     }
 }
@@ -256,11 +294,8 @@ static HAL_StatusTypeDef Start_Read_SSI_Data(void) {
     if (HAL_SPI_GetState(&SSI) != HAL_SPI_STATE_READY) {
         Recover_SSI_Bus();
         if (HAL_SPI_GetState(&SSI) != HAL_SPI_STATE_READY) {
-            if (!MotorCtrl_IsPositionSourceMotor()) {
-                ssi_last_error_code = ENCODER_TIMEOUT;
-                g_measurement.device_status.error_code = ENCODER_TIMEOUT;
-                printf("SPI未就绪，当前状态: %d\n", HAL_SPI_GetState(&SSI));
-            }
+            ssi_spi_busy_count++;
+            Handle_SSI_Error(NULL);
             return HAL_BUSY;
         }
     } else if (SSI.hdmarx != NULL) {
@@ -271,13 +306,9 @@ static HAL_StatusTypeDef Start_Read_SSI_Data(void) {
     HAL_GPIO_WritePin(SSI_CSN_PORT, SSI_CSN_PIN, GPIO_PIN_RESET);
     status = HAL_SPI_Receive_DMA(&SSI, rxData, SSI_FRAME_LENGTH);
     if (status != HAL_OK) {
+        ssi_spi_start_fail_count++;
         Recover_SSI_Bus();
-        if (!MotorCtrl_IsPositionSourceMotor()) {
-            ssi_last_error_code = ENCODER_TIMEOUT;
-            g_measurement.device_status.error_code = ENCODER_TIMEOUT;
-            printf("SPI错误码: 0x%08lX\n", SSI.ErrorCode);
-            printf("SPI DMA 启动失败, 错误码: %d\n", status);
-        }
+        Handle_SSI_Error(NULL);
     }
 
     return status;
@@ -340,36 +371,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
     }
 }
 
-/**
- * @brief  持续错误首次超限时记录一次日志
- */
-static void Report_SSI_PersistentError(const SSI_Data_t *data) {
-    g_measurement.device_status.error_code = Get_SSI_Error_Code(data);
-    Print_SSI_Error(data);
-}
 
-/**
- * @brief  打印 SSI 错误详情
- */
-static void Print_SSI_Error(const SSI_Data_t *data) {
-    if (data == NULL) {
-        printf("编码器 SSI 无响应或数据线悬空，错误码: 0x%08lX\r\n", (unsigned long)SSI.ErrorCode);
-        return;
-    }
-
-    if (!data->parity_ok) {
-        printf("编码器 SSI 偶校验失败\r\n");
-    }
-    if (!data->OCF) {
-        printf("编码器 SSI OCF 未完成\r\n");
-    }
-    if (data->COF) {
-        printf("编码器 SSI CORDIC 溢出\r\n");
-    }
-    if (data->LIN) {
-        printf("编码器 SSI 线性度报警\r\n");
-    }
-}
 
 /**
  * @brief 执行AS5145 编码器中的 Start_Encoder_Collection_TIM 逻辑。
@@ -382,7 +384,16 @@ HAL_StatusTypeDef Start_Encoder_Collection_TIM(void) {
     ssi_state.error_reported = false;
     ssi_last_error_code = NO_ERROR;
     ssi_first_valid_sample = false;
+    ssi_valid_streak = 0U;
     ssi_last_ok_tick = 0U;
+    ssi_sample_total_count = 0U;
+    ssi_parity_error_count = 0U;
+    ssi_ocf_incomplete_count = 0U;
+    ssi_cof_error_count = 0U;
+    ssi_timeout_error_count = 0U;
+    ssi_empty_frame_count = 0U;
+    ssi_spi_busy_count = 0U;
+    ssi_spi_start_fail_count = 0U;
     HAL_GPIO_WritePin(SSI_CSN_PORT, SSI_CSN_PIN, GPIO_PIN_SET);
 
     status = HAL_TIM_Base_Start_IT(&ENCODER_TIM_HANDLE);

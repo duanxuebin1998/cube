@@ -24,6 +24,8 @@
 #define CH9141_AT_VERBOSE_LOG           0U /* CH9141K AT 指令参数：详细日志 日志。 */
 #endif
 
+static uint8_t ch9141_boot_percent_pending = 0U;
+
 /**
  * @brief 返回等待模式名称，便于现场日志确认当前 AT 命令在等什么结束条件。
  */
@@ -175,6 +177,44 @@ void CH9141_AT_ResetResponse(CH9141AtResponse *response)
     response->has_pair_err = 0U;
     response->has_scan_end = 0U;
     response->has_rssi = 0U;
+}
+/*
+ * 标记传感器重新上电后的首次百分号透传过滤机会。
+ * 调用场景：设备启动或明确重新给传感器供电后，由主循环任务调用。
+ * 关键约束：只允许首次进入 AT 失败且响应仅为百分号时重试一次。
+ */
+void CH9141_AT_NotifySensorPowerOn(void)
+{
+    ch9141_boot_percent_pending = 1U;
+}
+
+/*
+ * 判断 AT 响应是否只有一个百分号和可选 CR/LF。
+ * 其他任何字节都不能被忽略，避免掩盖真实 AT 异常或串口串扰。
+ */
+static uint8_t CH9141_AT_ResponseIsBootPercentOnly(const CH9141AtResponse *response)
+{
+    uint16_t index;
+    uint8_t percent_seen = 0U;
+
+    if (response == NULL) {
+        return 0U;
+    }
+
+    for (index = 0U; index < response->len; index++) {
+        char value = response->text[index];
+
+        if ((value == '\r') || (value == '\n')) {
+            continue;
+        }
+        if ((value == '%') && (percent_seen == 0U)) {
+            percent_seen = 1U;
+            continue;
+        }
+        return 0U;
+    }
+
+    return percent_seen;
 }
 
 /**
@@ -504,6 +544,7 @@ uint32_t CH9141_AT_PrepareUart6(uint32_t idle_ms)
 uint32_t CH9141_AT_EnterSoftwareMode(CH9141AtResponse *response)
 {
     uint32_t ret;
+    uint8_t boot_percent_retry_allowed = ch9141_boot_percent_pending;
 
     if (CH9141_AT_VERBOSE_LOG != 0U) {
         printf("CH9141K AT\t进入软件AT模式\r\n");
@@ -511,11 +552,21 @@ uint32_t CH9141_AT_EnterSoftwareMode(CH9141AtResponse *response)
     ret = CH9141_AT_PrepareUart6(CH9141_AT_SOFTWARE_IDLE_MS);
     /* 先处理异常边界，避免CH9141K AT 控制状态机带故障继续运行。 */
     if (ret != NO_ERROR) {
+        ch9141_boot_percent_pending = 0U;
         return ret;
     }
 
     /* CH9141K 软件 AT 入口命令为 AT...，协议不使用裸 AT 作为入口。 */
     ret = CH9141_AT_SendCommand("AT...", CH9141_AT_WAIT_ACK, CH9141_AT_ENTER_TIMEOUT_MS, response);
+    if ((ret != NO_ERROR) &&
+        (boot_percent_retry_allowed != 0U) &&
+        (CH9141_AT_ResponseIsBootPercentOnly(response) != 0U)) {
+        ch9141_boot_percent_pending = 0U;
+        printf("CH9141K AT\t上电百分号透传已忽略\t动作=重试进入AT\r\n");
+        ret = CH9141_AT_SendCommand("AT...", CH9141_AT_WAIT_ACK, CH9141_AT_ENTER_TIMEOUT_MS, response);
+    } else {
+        ch9141_boot_percent_pending = 0U;
+    }
     /* 入口失败时必须恢复透传和 UART6，避免后续传感器命令接在半截 AT 状态后面。 */
     if (ret != NO_ERROR) {
         uint8_t send_exit = 0U;

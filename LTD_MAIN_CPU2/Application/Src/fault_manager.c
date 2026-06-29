@@ -59,6 +59,46 @@ void FaultManager_ReportErrorExit(uint32_t error_code)
                           detail);
 }
 
+/*
+ * 函数用途：统一打印全局错误状态的最终报错日志。
+ * 调用场景：CHECK_ERROR 或主循环空闲兜底捕获到已有全局错误码时调用。
+ * 关键约束：只说明当前检查点捕获了全局错误，不把错误归因到当前测量返回值。
+ */
+static void FaultManager_ReportGlobalErrorExit(uint32_t error_code,
+                                               const char *file,
+                                               uint32_t line,
+                                               const char *func)
+{
+    char detail[192];
+
+    /* 先处理异常边界，避免故障处理状态机带故障继续运行。 */
+    if ((error_code == NO_ERROR) || (error_code == STATE_SWITCH)) {
+        return;
+    }
+
+    /* 先处理异常边界，避免故障处理状态机带故障继续运行。 */
+    if (ErrorLog_TakeRecentReport(error_code) != 0U) {
+        return;
+    }
+
+    snprintf(detail,
+             sizeof(detail),
+             "来源：全局错误状态,触发检查点：%s,行号：%lu,函数：%s,当前命令：%lu,当前状态：0x%04lX",
+             (file != NULL) ? file : "未知",
+             (unsigned long)line,
+             (func != NULL) ? func : "未知",
+             (unsigned long)g_measurement.device_status.current_command,
+             (unsigned long)g_measurement.device_status.device_state);
+
+    /* 错误 阶段：最终报错 模块：ErrorLog_GetModuleByCode(error_code) 操作：检查全局错误状态 原因：ErrorLog_GetReasonByCode(error_code) 错误码：error_code 错误名：ErrorLog_GetCodeName(error_code) 处理：停止测量 详情：detail */
+    ErrorLog_ReportDetail(ErrorLog_GetModuleByCode(error_code),
+                          "检查全局错误状态",
+                          ErrorLog_GetReasonByCode(error_code),
+                          error_code,
+                          ERROR_LOG_ACTION_STOP_MEASURE,
+                          detail);
+}
+
 /**
  * @brief CHECK_ERROR 宏的统一处理入口。
  * @note 记录文件、行号和函数名后输出最终报错，并执行停机处理。
@@ -78,6 +118,26 @@ uint32_t FaultManager_HandleCheckError(uint32_t error_code,
     return err.error_code;
 }
 
+/*
+ * 函数用途：处理 CHECK_ERROR 宏捕获到的全局错误状态。
+ * 调用场景：函数返回值正常，但 g_measurement.device_status.error_code 已有错误码。
+ * 关键约束：保持原停机行为，只把日志归因标记为全局错误状态检查点。
+ */
+uint32_t FaultManager_HandleGlobalError(uint32_t error_code,
+                                        const char *file,
+                                        uint32_t line,
+                                        const char *func)
+{
+    err.file = file;
+    err.line = line;
+    err.func = func;
+    err.error_code = error_code;
+
+    FaultManager_ReportGlobalErrorExit(err.error_code, file, line, func);
+    HandleError();
+    return err.error_code;
+}
+
 /**
  * @brief SET_ERROR 宏的统一处理入口。
  * @note 输出最终报错后把设备状态切换为错误态，并标记后续需要回零。
@@ -93,6 +153,28 @@ void FaultManager_SetErrorState(uint32_t error_code,
     err.error_code = error_code;
 
     FaultManager_ReportErrorExit(err.error_code);
+    HandleError();
+    g_measurement.device_status.device_state = STATE_ERROR;
+    g_measurement.device_status.error_code = error_code;
+    g_measurement.device_status.zero_point_status = 1;
+}
+
+/*
+ * 函数用途：处理主循环空闲兜底捕获到的全局错误状态。
+ * 调用场景：没有待执行命令且全局 error_code 已经非零时调用。
+ * 关键约束：保持原错误态和停机动作，只把最终报错详情标记为全局错误状态来源。
+ */
+void FaultManager_SetGlobalErrorState(uint32_t error_code,
+                                      const char *file,
+                                      uint32_t line,
+                                      const char *func)
+{
+    err.file = file;
+    err.line = line;
+    err.func = func;
+    err.error_code = error_code;
+
+    FaultManager_ReportGlobalErrorExit(err.error_code, file, line, func);
     HandleError();
     g_measurement.device_status.device_state = STATE_ERROR;
     g_measurement.device_status.error_code = error_code;

@@ -1,0 +1,1371 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CPU2 系统级通信异常与编码器校验失败整改方案</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #eef3f7;
+      --paper: #ffffff;
+      --panel: #f7fafc;
+      --panel-strong: #eef6f5;
+      --text: #1d2733;
+      --muted: #667085;
+      --line: #d9e0e8;
+      --line-soft: #e8edf3;
+      --accent: #0f766e;
+      --accent-strong: #0b5f59;
+      --warn: #b45309;
+      --warn-soft: #fff4df;
+      --bad: #b42318;
+      --bad-soft: #fff0ee;
+      --ok: #027a48;
+      --ok-soft: #ecfdf3;
+      --code: #0f172a;
+      --code-bg: #eef2f6;
+      --shadow: 0 18px 48px rgba(28, 43, 64, 0.12);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      margin: 0;
+      color: var(--text);
+      background:
+        linear-gradient(180deg, rgba(15, 118, 110, 0.09), rgba(15, 118, 110, 0) 280px),
+        var(--bg);
+      font-family: "Microsoft YaHei", "Segoe UI", Arial, sans-serif;
+      font-size: 15px;
+      line-height: 1.72;
+      letter-spacing: 0;
+    }
+
+    a {
+      color: var(--accent-strong);
+      text-decoration: none;
+    }
+
+    a:hover {
+      text-decoration: underline;
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: minmax(230px, 300px) minmax(0, 1fr);
+      gap: 26px;
+      max-width: 1380px;
+      margin: 0 auto;
+      padding: 28px;
+    }
+
+    aside {
+      position: sticky;
+      top: 22px;
+      align-self: start;
+      max-height: calc(100vh - 44px);
+      overflow: auto;
+      padding: 18px;
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      box-shadow: 0 10px 30px rgba(28, 43, 64, 0.08);
+    }
+
+    aside h2 {
+      margin: 0 0 12px;
+      padding: 0;
+      border: 0;
+      font-size: 16px;
+    }
+
+    aside a {
+      display: block;
+      padding: 7px 8px;
+      border-radius: 6px;
+      color: #344054;
+      font-size: 14px;
+    }
+
+    aside a:hover {
+      background: var(--panel-strong);
+      text-decoration: none;
+    }
+
+    main {
+      padding: 42px 52px 56px;
+      background: var(--paper);
+      border: 1px solid var(--line-soft);
+      border-radius: 8px;
+      box-shadow: var(--shadow);
+    }
+
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      margin: 0 0 18px;
+      padding: 5px 10px;
+      color: var(--accent-strong);
+      background: #e8f6f3;
+      border: 1px solid #cbe7e2;
+      border-radius: 999px;
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    h1, h2, h3, h4 {
+      color: #101828;
+      line-height: 1.28;
+      letter-spacing: 0;
+      scroll-margin-top: 24px;
+    }
+
+    h1 {
+      max-width: 980px;
+      margin: 0 0 12px;
+      font-size: 34px;
+    }
+
+    h2 {
+      margin: 38px 0 16px;
+      padding-top: 18px;
+      border-top: 1px solid var(--line);
+      font-size: 24px;
+    }
+
+    h3 {
+      margin: 26px 0 12px;
+      padding: 9px 12px;
+      background: var(--panel);
+      border-left: 4px solid var(--accent);
+      border-radius: 0 6px 6px 0;
+      font-size: 18px;
+    }
+
+    h4 {
+      margin: 18px 0 8px;
+      font-size: 16px;
+    }
+
+    p {
+      margin: 0.65em 0;
+    }
+
+    ul, ol {
+      margin: 0.55em 0 1em;
+      padding-left: 1.35em;
+    }
+
+    li {
+      margin: 0.22em 0;
+    }
+
+    code {
+      color: var(--code);
+      background: var(--code-bg);
+      border: 1px solid #d8e0ea;
+      border-radius: 4px;
+      padding: 0.08em 0.35em;
+      font-family: Consolas, "SFMono-Regular", monospace;
+      font-size: 0.92em;
+    }
+
+    pre {
+      overflow: auto;
+      margin: 12px 0 18px;
+      padding: 14px 16px;
+      background: #101828;
+      border-radius: 8px;
+    }
+
+    pre code {
+      color: #e5eef8;
+      background: transparent;
+      border: 0;
+      padding: 0;
+      font-size: 13px;
+    }
+
+    table {
+      width: 100%;
+      margin: 14px 0 22px;
+      border-collapse: collapse;
+      border: 1px solid var(--line);
+      font-size: 14px;
+    }
+
+    th, td {
+      padding: 9px 10px;
+      vertical-align: top;
+      border: 1px solid var(--line);
+      text-align: left;
+    }
+
+    th {
+      color: #102030;
+      background: #edf3f7;
+      font-weight: 700;
+    }
+
+    tbody tr:nth-child(even) td {
+      background: #fbfdff;
+    }
+
+    .meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin: 0 0 22px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .tag {
+      display: inline-flex;
+      align-items: center;
+      padding: 4px 9px;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 999px;
+    }
+
+    .summary {
+      margin: 20px 0 24px;
+      padding: 18px 20px;
+      background: var(--panel-strong);
+      border: 1px solid #cce5df;
+      border-left: 5px solid var(--accent);
+      border-radius: 8px;
+    }
+
+    .warning {
+      margin: 16px 0;
+      padding: 14px 16px;
+      background: var(--warn-soft);
+      border: 1px solid #f4d29b;
+      border-left: 5px solid var(--warn);
+      border-radius: 8px;
+    }
+
+    .danger {
+      margin: 16px 0;
+      padding: 14px 16px;
+      background: var(--bad-soft);
+      border: 1px solid #f4b8b1;
+      border-left: 5px solid var(--bad);
+      border-radius: 8px;
+    }
+
+    .ok {
+      margin: 16px 0;
+      padding: 14px 16px;
+      background: var(--ok-soft);
+      border: 1px solid #b7e4cb;
+      border-left: 5px solid var(--ok);
+      border-radius: 8px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 16px;
+      margin: 16px 0 22px;
+    }
+
+    .card {
+      padding: 16px 18px;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+    }
+
+    .card h3 {
+      margin-top: 0;
+    }
+
+    .flow {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 10px;
+      margin: 16px 0 22px;
+    }
+
+    .step {
+      min-height: 92px;
+      padding: 12px;
+      background: #f8fafc;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+    }
+
+    .step strong {
+      display: block;
+      margin-bottom: 6px;
+      color: var(--accent-strong);
+    }
+
+    .muted {
+      color: var(--muted);
+    }
+
+    .nowrap {
+      white-space: nowrap;
+    }
+
+    @media (max-width: 980px) {
+      .layout {
+        display: block;
+        padding: 16px;
+      }
+
+      aside {
+        position: static;
+        max-height: none;
+        margin-bottom: 16px;
+      }
+
+      main {
+        padding: 28px 22px 36px;
+      }
+
+      .grid,
+      .flow {
+        grid-template-columns: 1fr;
+      }
+
+      h1 {
+        font-size: 28px;
+      }
+    }
+
+    @media print {
+      body {
+        background: #ffffff;
+      }
+
+      .layout {
+        display: block;
+        max-width: none;
+        padding: 0;
+      }
+
+      aside {
+        display: none;
+      }
+
+      main {
+        box-shadow: none;
+        border: 0;
+        padding: 0;
+      }
+
+      h2 {
+        break-after: avoid;
+      }
+
+      table, pre, .card, .summary, .warning, .danger, .ok {
+        break-inside: avoid;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="layout">
+    <aside>
+      <h2>目录</h2>
+      <a href="#summary">结论摘要</a>
+      <a href="#phenomena">现场现象</a>
+      <a href="#evidence">代码证据</a>
+      <a href="#deep-scan">深入代码扫描</a>
+      <a href="#model">根因模型</a>
+      <a href="#strategy">整改总策略</a>
+      <a href="#phase0">阶段 0：诊断基线</a>
+      <a href="#phase1">阶段 1：低风险止血</a>
+      <a href="#ocf-plan">OCF 专项计划</a>
+      <a href="#phase2">阶段 2：结构整改</a>
+      <a href="#phase3">阶段 3：硬件排查</a>
+      <a href="#verification">验证计划</a>
+      <a href="#implementation">实施顺序</a>
+      <a href="#rollback">回滚策略</a>
+      <a href="#files">后续涉及文件</a>
+    </aside>
+
+    <main>
+      <p class="eyebrow">问题分析与整改方案</p>
+      <h1>CPU2 系统级通信异常与编码器校验失败整改方案</h1>
+      <div class="meta">
+        <span class="tag">日期：2026-06-27</span>
+        <span class="tag">状态：第一批低风险优化已实施，UART6 结构改造待后续</span>
+        <span class="tag">范围：CPU2 中断、UART6、AS5145、AO 后台刷新、CPU2/CPU3 轮询</span>
+        <span class="tag">约束：主循环阻塞且不能更改</span>
+      </div>
+
+      <section id="summary" class="summary">
+        <h2>结论摘要</h2>
+        <p>当前现象已经不能按“AO 电流输出单点问题”处理。AO 关闭后仍出现编码器校验失败，同时上电蓝牙 AT 通信也出现只收到响应尾部的情况，说明系统存在更基础的通信时序裕量不足或中断负载失控问题。</p>
+        <p>新增的 <code>0x000C000A 编码器 OCF 未完成</code> 与 parity 失败不同：它表示 AS5145 返回了“offset compensation 未完成”状态，更偏向编码器供电/复位、磁场裕量、上电稳定时间或采样过早问题。它应作为独立专项处理，不能只按通信丢 bit 处理。</p>
+        <p>推荐整改方向是：先建立诊断计数和原始帧证据，再进行中断优先级隔离、ISR 减重、UART6 AT 接收方式改造、AS5145 有效帧建立和错误处理去重载化。AO 只作为负载放大因素治理，不再作为唯一根因处理。</p>
+        <p>当前已落地第一批低风险优化：AS5145 错误回调去打印和去立即重读、编码器连续有效帧门槛、关键中断优先级分层、USART1 ISR 去打印、CPU3 空闲轮询恢复到 10Hz。UART6 ReceiveToIdle DMA 和 UART6 owner 仍属于后续结构改造。</p>
+      </section>
+
+      <section id="phenomena">
+        <h2>现场现象</h2>
+        <h3>1. 编码器校验失败</h3>
+        <ul>
+          <li>错误码：<code>0x000C0002</code>。</li>
+          <li>错误名：编码器校验失败，对应 AS5145 SSI 帧 parity 校验失败。</li>
+          <li>日志多次显示 <code>尝试：1/3</code>，说明大量情况是单帧异常后恢复，而不是始终连续失败到最终报错。</li>
+          <li>最初关闭 AO 电流输出后问题消失，后续又确认 AO 不使能时也会出现，说明 AO 不是唯一触发条件。</li>
+        </ul>
+
+        <h3>2. 编码器 OCF 未完成</h3>
+        <ul>
+          <li>错误码：<code>0x000C000A</code>。</li>
+          <li>错误名：编码器 OCF 未完成，对应 AS5145 返回的 <code>OCF</code> 位为 0。</li>
+          <li>代码中先判断 parity，再判断 OCF；若最终映射为 OCF 未完成，说明当前帧大概率不是普通 parity 失败，而是设备状态位明确提示数据未就绪。</li>
+          <li>该类错误应重点关联上电阶段、电机初始化、电源扰动、磁钢位置、采样启动时机和 AS5145 稳定帧建立策略。</li>
+        </ul>
+
+        <h3>3. 蓝牙主机 AT 通信失败</h3>
+        <p>上电传感器识别阶段，<code>AT+BLEMODE?</code> 查询失败，返回片段如下：</p>
+        <pre><code>CH9141K AT  结果  指令=AT+BLEMODE?  等待=ACK  超时=1500 ms  返回=0x000D0003  长度=5  OK=0
+CH9141K AT  响应原文开始
+1
+K
+
+CH9141K AT  响应原文结束
+错误  阶段：最终报错  模块：滑环通信  原因：蓝牙主机无响应  错误码：0x000D0010</code></pre>
+        <p>这个响应不像模块返回了完整错误，更像是 CPU2 只收到了响应尾部。例如正常响应中可能包含模式值 <code>1</code> 和结束 <code>OK</code>，但前面的回显、前缀和 <code>O</code> 被丢失或误清。</p>
+
+        <h3>4. 现象共同点</h3>
+        <ul>
+          <li>AS5145 使用 SPI5 + DMA + 中断回调。</li>
+          <li>CH9141K AT 使用 UART6 单字节轮询接收。</li>
+          <li>parity 失败和蓝牙 AT 截断都表现为通信帧局部损坏、字节丢失或时序窗口错过。</li>
+          <li>OCF 未完成表现为编码器设备状态未就绪，可能与供电、复位、磁场或采样过早有关。</li>
+          <li>这些问题都可能被高优先级中断、ISR 内打印、DMA 回调重处理、AO 后台 SPI 访问放大。</li>
+        </ul>
+      </section>
+
+      <section id="evidence">
+        <h2>代码证据</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>模块</th>
+              <th>当前实现</th>
+              <th>风险点</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>AS5145 编码器</td>
+              <td><code>LTD_MAIN_CPU2/BSP/Peripherals/src/AS5145.c</code> 使用 TIM1 周期触发、SPI5 DMA 接收 4 字节 SSI 帧。</td>
+              <td>DMA 完成回调中解析帧，校验失败后调用错误日志并立即重启一次 SSI 读取，ISR 链路偏重。</td>
+            </tr>
+            <tr>
+              <td>AS5145 OCF 判定</td>
+              <td><code>Check_SSI_Error_Condition()</code> 将 <code>!parity_ok || !OCF || COF</code> 视为异常，<code>Get_SSI_Error_Code()</code> 在 parity 通过后将 <code>!OCF</code> 映射为 <code>ENCODER_OCF_INCOMPLETE</code>。</td>
+              <td>OCF 未完成不是普通校验失败，必须记录状态位组合和发生时刻，判断是否是编码器未稳定或被扰动复位。</td>
+            </tr>
+            <tr>
+              <td>UART6 蓝牙 AT</td>
+              <td><code>ch9141_at.c</code> 中 <code>CH9141_AT_CollectResponse()</code> 使用 <code>HAL_UART_Receive()</code> 单字节轮询收响应。</td>
+              <td>没有提前启动 DMA 接收缓冲，若 CPU 被高优先级中断抢占，可能 ORE 或只收到响应尾部。</td>
+            </tr>
+            <tr>
+              <td>NVIC 优先级</td>
+              <td><code>TIM1</code>、<code>TIM4</code>、<code>USART1</code>、<code>USART2</code>、<code>USART6</code>、多路 DMA 都设置为优先级 0。</td>
+              <td>关键通信和非关键通信同级，任一同级 ISR 耗时变长都会阻塞其它同级中断。</td>
+            </tr>
+            <tr>
+              <td>USART1 中断</td>
+              <td><code>USART1_IRQHandler()</code> 中存在 <code>printf("receive ")</code> 和循环打印接收字节。</td>
+              <td>ISR 内打印是明确风险，会阻塞同优先级编码器 DMA、UART6 等中断。</td>
+            </tr>
+            <tr>
+              <td>AO 电流输出</td>
+              <td>TIM4 只置 AO 刷新标志，实际 AD5421 SPI 在 PendSV 中执行。</td>
+              <td>PendSV 优先级最低，不是直接根因；但 AD5421 初始化、诊断、SPI 超时会增加系统负载，是放大因素。</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="warning">
+          <strong>关键判断：</strong>如果只有编码器 parity 错，可以优先怀疑 SSI 线缆或 AO 干扰；现在蓝牙 AT 同时出现截断响应，应优先按系统级时序问题处理。新增 OCF 未完成后，还必须并行验证 AS5145 供电、复位、磁场和上电稳定时间。
+        </div>
+      </section>
+
+      <section id="deep-scan">
+        <h2>深入代码扫描</h2>
+        <p>本节按源码调用链整理，不代表已经实施修复。目的是把现场现象和具体函数边界对应起来，后续每个改动都能按证据验证，而不是靠扩大重试次数试错。</p>
+
+        <h3>1. AS5145 采样链路</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>位置</th>
+              <th>当前行为</th>
+              <th>判断</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>LTD_MAIN_CPU2/BSP/Peripherals/src/AS5145.c</code>：<code>HAL_TIM_PeriodElapsedCallback()</code></td>
+              <td>TIM1 周期到期后直接调用 <code>Start_Read_SSI_Data()</code>，发起 SPI5 DMA 接收。</td>
+              <td>TIM1 是编码器采样入口，应保持短路径和最高实时性。</td>
+            </tr>
+            <tr>
+              <td><code>HAL_SPI_RxCpltCallback()</code> / <code>Process_SSI_Frame()</code></td>
+              <td>DMA 完成回调中完成 CS 拉高、断线模式判断、帧解析、错误判定和位置累计。</td>
+              <td>成功路径可以接受，但错误路径不能继续叠加打印、重试和故障处理。</td>
+            </tr>
+            <tr>
+              <td><code>Handle_SSI_Error()</code></td>
+              <td>错误时调用 <code>ErrorLog_Retry()</code>，随后立即再次调用 <code>Start_Read_SSI_Data()</code>。</td>
+              <td>这是最高风险点：DMA IRQ 链路内执行阻塞串口打印，并在坏帧后立即重启 DMA，容易形成“坏帧越多，中断越重，越容易坏帧”的正反馈。</td>
+            </tr>
+            <tr>
+              <td><code>Check_SSI_Error_Condition()</code> / <code>Get_SSI_Error_Code()</code></td>
+              <td>判定顺序为 parity、OCF、COF；OCF=0 映射为 <code>ENCODER_OCF_INCOMPLETE</code>。</td>
+              <td>OCF 错误不是简单通信校验失败，应单独统计上电建立时间、运行中掉 OCF 的时刻和磁场状态位。</td>
+            </tr>
+            <tr>
+              <td><code>Start_Encoder_Collection_TIM()</code></td>
+              <td>启动 TIM1 后立即调用一次 <code>Start_Read_SSI_Data()</code>。</td>
+              <td>若 AS5145 上电或复位后 OCF 尚未稳定，首次主动读取可能过早，应由连续有效帧机制吸收。</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <h3>2. 编码器初始化和有效性判定</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>位置</th>
+              <th>当前行为</th>
+              <th>风险</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>LTD_MAIN_CPU2/Services/Encoder/encoder.c</code>：<code>ENCODER_BOOT_READY_TIMEOUT_MS</code></td>
+              <td>上电等待阈值为 300 ms。</td>
+              <td>若现场冷启动 OCF 建立超过 300 ms，会把“尚未稳定”当成故障；若第一帧偶然有效，又可能过早认为编码器可用。</td>
+            </tr>
+            <tr>
+              <td><code>Encoder_IsReady()</code></td>
+              <td>直接返回 <code>AS5145_HasValidSample()</code>。</td>
+              <td>当前含义接近“曾经收到过有效帧”，不是“当前连续稳定”。运行中 OCF/parity 退化时，ready 状态不能反映稳定性。</td>
+            </tr>
+            <tr>
+              <td><code>AS5145_WaitFirstValidSample()</code></td>
+              <td>轮询 <code>ssi_first_valid_sample</code>，每 5 ms 延时一次。</td>
+              <td>等待逻辑本身兼容阻塞主循环；问题在于有效条件太弱，需要改为连续 N 帧稳定。</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <h3>3. 上电初始化时序</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>位置</th>
+              <th>当前顺序</th>
+              <th>影响</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>LTD_MAIN_CPU2/Application/Src/app_main.c</code>：<code>App_Init()</code></td>
+              <td><code>Initialize_Encoder()</code> 后延时 1000 ms，然后初始化 HART、称重、HostCommu、继电器、AO、电机，最后 <code>DetectSensorType()</code>。</td>
+              <td>编码器 TIM1 在很早阶段就开始后台采样。等到电机初始化和蓝牙识别时，AS5145 错误日志已经可能在 DMA IRQ 中打印并抢占其它通信。</td>
+            </tr>
+            <tr>
+              <td><code>DetectSensorType()</code></td>
+              <td>第一步调用蓝牙链路检查；失败后直接置滑环通信错误并停止识别。</td>
+              <td>上电 AT 阶段对 UART6 接收完整性很敏感。若同一时间存在编码器 IRQ 重载，容易放大 <code>AT+BLEMODE?</code> 截断。</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <h3>4. UART6 / CH9141K AT 接收链路</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>位置</th>
+              <th>当前行为</th>
+              <th>判断</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>LTD_MAIN_CPU2/Services/Sensor/ch9141_at.c</code>：<code>CH9141_AT_SendCommand()</code></td>
+              <td>发送前 <code>HAL_UART_DMAStop(&amp;huart6)</code>，清 ORE，Drain RX，然后阻塞发送命令和 CRLF。</td>
+              <td>如果模块响应很快，发送完成到开始接收之间的窗口需要严格控制；残留清理也可能误清正在到来的响应。</td>
+            </tr>
+            <tr>
+              <td><code>CH9141_AT_CollectResponse()</code></td>
+              <td>循环调用 <code>HAL_UART_Receive(&amp;huart6, ..., 1, 20 ms)</code> 单字节接收。</td>
+              <td>9600 baud 下通常够用，但高优先级 ISR 长时间占用时，前台单字节轮询可能错过字节或触发 ORE。用户看到的 <code>1</code>、<code>K</code> 很像只收到尾部。</td>
+            </tr>
+            <tr>
+              <td><code>ltd_sensor_communication.c</code> / <code>dsm_sensor_communication.c</code></td>
+              <td>同一 UART6 也被 LTD/V2、DSM 等协议使用，各模块会 stop DMA、清 ORE、drain。</td>
+              <td>短期可先提高 AT 接收可靠性；长期要做 UART6 owner，避免多个模块各自操作同一硬件句柄。</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <h3>5. 中断优先级和 ISR 重操作</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>位置</th>
+              <th>当前行为</th>
+              <th>影响</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>LTD_MAIN_CPU2/Core/Src/dma.c</code>、<code>tim.c</code>、<code>usart.c</code></td>
+              <td>TIM1、TIM4、USART1、USART2、USART6、多路 DMA 均为 NVIC priority 0；UART5/UART4 IRQ 为 2，但相关 DMA 仍多为 0。</td>
+              <td>关键链路和非关键链路同级，任何同级 ISR 变长都会延迟编码器 DMA 完成、UART6 接收和其它 DMA。</td>
+            </tr>
+            <tr>
+              <td><code>LTD_MAIN_CPU2/Core/Src/stm32f4xx_it.c</code>：<code>USART1_IRQHandler()</code></td>
+              <td>IDLE 中断内存在 <code>printf("receive ")</code> 和逐字节打印。</td>
+              <td><code>printf</code> 最终走 USART1 阻塞发送；在 ISR 内打印会直接拉长不可抢占时间。</td>
+            </tr>
+            <tr>
+              <td><code>USART2_IRQHandler()</code> / <code>HartCommunicationProcess()</code></td>
+              <td>USART2 IDLE 中断内直接处理 HART 报文；HART 处理函数内还有多处 <code>printf</code>。</td>
+              <td>HART 收到异常或调试报文时，也可能在中断链路里阻塞调试串口。</td>
+            </tr>
+            <tr>
+              <td><code>UART5_IRQHandler()</code></td>
+              <td>CPU2 侧 UART5 IDLE 中断内直接调用 <code>HostCommuProcess()</code>。</td>
+              <td>CPU2/CPU3 通信处理仍在 ISR 边界内，虽然优先级低于 0，但会占用中断上下文并影响系统恢复弹性。</td>
+            </tr>
+            <tr>
+              <td><code>TIM4_IRQHandler()</code></td>
+              <td>中断内执行 <code>RelayOutput_Update()</code>，再请求 AO PendSV 刷新并喂狗。</td>
+              <td>AO 请求本身轻量，但 TIM4 与 TIM1 同级；继电器更新和其它 TIM4 动作不应与编码器采样同级。</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <h3>6. AO 和 CPU3 轮询负载</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>位置</th>
+              <th>当前行为</th>
+              <th>判断</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>LTD_MAIN_CPU2/Services/AoOutput/ao_output.c</code></td>
+              <td>TIM4 只挂起 PendSV，实际 AD5421 SPI 在 PendSV 中执行，PendSV 优先级为 15。</td>
+              <td>这说明电流刷新中断不是直接根因；但 PendSV 中做初始化、诊断和 SPI 访问会增加后台负载，可能放大供电或时序问题。</td>
+            </tr>
+            <tr>
+              <td><code>LTD_DISPLAY_CPU3/Application/app_main.c</code></td>
+              <td><code>CPU2_POLL_IDLE_DELAY_MS</code> 为 10 ms，但注释写 10Hz。</td>
+              <td>实际空闲轮询是约 100Hz，不是 10Hz；CPU2/CPU3 通信压力高于注释预期。</td>
+            </tr>
+            <tr>
+              <td><code>LTD_DISPLAY_CPU3/Communication/internal/main_board_modbus/cpu2_communicate.c</code></td>
+              <td>密度分布点读取在结果完成态可能按 chunk 连续读取多段输入寄存器。</td>
+              <td>该路径会在测量完成阶段形成突发通信压力，应加完成标志或缓存，避免重复整批读取。</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="warning">
+          <strong>扫描结论：</strong>最应先处理的不是 AO 电流刷新本身，而是 AS5145 错误回调里的打印和立即重试、NVIC 优先级扁平化、UART6 AT 单字节轮询接收、以及上电 OCF 稳定条件过弱。AO 和 CPU3 轮询是放大因素，应在第二层治理。
+        </div>
+      </section>
+
+      <section id="model">
+        <h2>根因模型</h2>
+        <div class="flow">
+          <div class="step">
+            <strong>负载增大</strong>
+            CPU2/CPU3 轮询、AO 后台刷新、调试串口、HART、继电器等任务增加中断压力。
+          </div>
+          <div class="step">
+            <strong>同级抢占不足</strong>
+            多数中断优先级为 0，同级中断不能互相抢占。
+          </div>
+          <div class="step">
+            <strong>ISR 链路过重</strong>
+            ISR 内打印、错误日志、立即重试拉长不可抢占时间。
+          </div>
+          <div class="step">
+            <strong>通信窗口错过</strong>
+            SPI5 DMA 回调延迟、UART6 轮询接收错过字节或 ORE。
+          </div>
+          <div class="step">
+            <strong>现场报错</strong>
+            AS5145 parity 错、OCF 未完成、CH9141K AT 只收到尾包、传感器识别失败。
+          </div>
+        </div>
+
+        <h3>优先级最高的假设</h3>
+        <ol>
+          <li>NVIC 优先级扁平化导致关键通信和非关键任务互相阻塞。</li>
+          <li>ISR 内打印、错误日志、立即重试导致中断执行时间不可控。</li>
+          <li>UART6 AT 使用单字节轮询接收，在中断压力下容易丢前半段响应。</li>
+          <li>AS5145 SSI 信号或设备状态本身裕量不足，被系统负载、电流输出、电机动作或继电器动作进一步放大。</li>
+          <li>AS5145 供电、复位、磁场或采样启动时机导致 OCF 偶发未完成。</li>
+        </ol>
+
+        <h3>不再优先采用的假设</h3>
+        <ul>
+          <li>不再把 AO 电流输出作为唯一根因。它仍要治理，但属于放大因素。</li>
+          <li>不建议简单增加编码器重试次数。这样会掩盖问题，还可能增加 ISR 内重试负担。</li>
+          <li>不建议先降低 CPU2/CPU3 轮询作为唯一修复。轮询可能增加负载，但不能解释上电 AT 只收到尾包的全部现象。</li>
+        </ul>
+      </section>
+
+      <section id="strategy">
+        <h2>整改总策略</h2>
+        <div class="grid">
+          <div class="card">
+            <h3>原则 1：先取证</h3>
+            <p>先加计数器和原始帧记录，确认是 ORE、截断、SPI busy、全 0/全 FF、单 bit 错还是磁编码器状态异常。</p>
+          </div>
+          <div class="card">
+            <h3>原则 2：关键通信优先</h3>
+            <p>TIM1、SPI5 DMA、UART6 接收应和调试串口、继电器、AO、普通 DMA 分层。</p>
+          </div>
+          <div class="card">
+            <h3>原则 3：ISR 只做轻量动作</h3>
+            <p>ISR 中只记录状态、复制数据、置标志。不要打印、不要复杂日志、不要立即执行多次通信重试。</p>
+          </div>
+          <div class="card">
+            <h3>原则 4：兼容阻塞主循环</h3>
+            <p>不能依赖普通主循环调度来处理实时通信。必要后台处理使用 DMA、硬件 IDLE、中断轻量回调或最低优先级延后机制。</p>
+          </div>
+        </div>
+
+        <h3>阻塞主循环约束下的落地边界</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>允许采用</th>
+              <th>不建议采用</th>
+              <th>理由</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>DMA / IDLE 接收，ISR 只置标志和复制数据。</td>
+              <td>把 UART6 或 AS5145 的实时收发依赖主循环频繁轮询。</td>
+              <td>用户已明确主循环是阻塞的且不能更改，实时通信必须靠硬件事件和轻量回调兜住。</td>
+            </tr>
+            <tr>
+              <td>错误计数、原始帧快照、连续失败窗口。</td>
+              <td>单帧错误立即打印、立即重试、立即改全局故障。</td>
+              <td>阻塞主循环场景下，ISR 打印和重试会进一步压缩通信窗口。</td>
+            </tr>
+            <tr>
+              <td>上电阶段阻塞等待“连续有效帧”建立。</td>
+              <td>启动 TIM1 后只凭第一帧有效就允许业务使用编码器。</td>
+              <td>阻塞等待本来就是现有设计的一部分，只需要把等待条件从“首帧有效”改成“稳定有效”。</td>
+            </tr>
+            <tr>
+              <td>PendSV 做低优先级、可被打断的后台补偿。</td>
+              <td>PendSV 中执行长时间初始化或频繁失败重试。</td>
+              <td>PendSV 可以解决主循环阻塞带来的后台刷新问题，但不能变成另一个长耗时任务。</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="phase0">
+        <h2>阶段 0：诊断基线</h2>
+        <p>目标是在不改变主要行为的前提下，确认错误类型和触发条件。这个阶段优先级最高，因为没有原始证据时很容易把问题修偏。</p>
+
+        <h3>AS5145 诊断计数器</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>计数器</th>
+              <th>含义</th>
+              <th>用途</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>sample_total</code></td>
+              <td>总采样帧数</td>
+              <td>计算错误比例，确认是否和时间、动作、负载相关。</td>
+            </tr>
+            <tr>
+              <td><code>parity_error_count</code></td>
+              <td>parity 失败次数</td>
+              <td>定位 bit 抖动或采样相位裕量不足。</td>
+            </tr>
+            <tr>
+              <td><code>ocf_incomplete_count</code></td>
+              <td>OCF 未完成次数</td>
+              <td>判断 AS5145 内部数据未准备好或采样过早。</td>
+            </tr>
+            <tr>
+              <td><code>cof_count</code></td>
+              <td>CORDIC overflow 次数</td>
+              <td>判断磁场或编码器状态异常。</td>
+            </tr>
+            <tr>
+              <td><code>all_zero_count</code> / <code>all_ff_count</code></td>
+              <td>全 0 或全 FF 空读模式</td>
+              <td>判断断线、CS 时序、MISO 悬空或 SPI 总线异常。</td>
+            </tr>
+            <tr>
+              <td><code>spi_busy_count</code></td>
+              <td>启动采样时 SPI5 非 READY</td>
+              <td>判断 DMA 回调或总线恢复是否跟不上 TIM1 周期。</td>
+            </tr>
+            <tr>
+              <td><code>last_error_rx[4]</code></td>
+              <td>最近一次错误原始 4 字节</td>
+              <td>判断是固定模式、随机毛刺还是位移错位。</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <h3>UART6 / CH9141K 诊断计数器</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>计数器或字段</th>
+              <th>含义</th>
+              <th>用途</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>at_cmd_total</code></td>
+              <td>AT 命令总数</td>
+              <td>计算失败比例。</td>
+            </tr>
+            <tr>
+              <td><code>at_timeout_count</code></td>
+              <td>AT 超时次数</td>
+              <td>判断模块无响应还是接收侧漏收。</td>
+            </tr>
+            <tr>
+              <td><code>uart_ore_count</code></td>
+              <td>UART overrun 次数</td>
+              <td>若大于 0，优先处理接收方式和中断优先级。</td>
+            </tr>
+            <tr>
+              <td><code>uart_fe_ne_pe_count</code></td>
+              <td>帧错误、噪声错误、奇偶错误次数</td>
+              <td>判断电气质量或波特率/线缆问题。</td>
+            </tr>
+            <tr>
+              <td><code>last_at_raw_hex[]</code></td>
+              <td>最近一次失败原始 HEX</td>
+              <td>区分只收到尾部、乱码、空响应、残留响应。</td>
+            </tr>
+            <tr>
+              <td><code>last_hal_error_code</code></td>
+              <td><code>huart6.ErrorCode</code> 快照</td>
+              <td>为后续定位提供 HAL 层证据。</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="ok">
+          <strong>阶段 0 完成标准：</strong>能够回答“编码器失败是 parity、OCF、COF、空读还是 SPI busy”，“蓝牙 AT 是 ORE、超时、截断尾包还是电气乱码”。
+        </div>
+      </section>
+
+      <section id="phase1">
+        <h2>阶段 1：低风险止血</h2>
+        <p>目标是在不重构主循环、不大改协议、不改变业务流程的前提下，减少通信被打断的概率。</p>
+
+        <h3>1. NVIC 优先级分层</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>对象</th>
+              <th>建议优先级</th>
+              <th>理由</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>TIM1_UP_TIM10_IRQn</code></td>
+              <td>0</td>
+              <td>编码器采样触发，保持最高。</td>
+            </tr>
+            <tr>
+              <td><code>DMA2_Stream3_IRQn</code>，SPI5 RX</td>
+              <td>0</td>
+              <td>AS5145 采样完成回调，和 TIM1 同为关键链路。</td>
+            </tr>
+            <tr>
+              <td><code>USART6_IRQn</code>、<code>DMA2_Stream1_IRQn</code>、<code>DMA2_Stream6_IRQn</code></td>
+              <td>1</td>
+              <td>UART6 承担传感器和 CH9141K AT，优先级应高于调试串口和普通后台任务。</td>
+            </tr>
+            <tr>
+              <td><code>UART5_IRQn</code> 及 CPU2/CPU3 Modbus 相关 DMA</td>
+              <td>2</td>
+              <td>保持内部通信及时，但不能阻塞编码器和 UART6。</td>
+            </tr>
+            <tr>
+              <td><code>TIM4_IRQn</code></td>
+              <td>3</td>
+              <td>继电器、AO 刷新请求、看门狗刷新不应和编码器同级。</td>
+            </tr>
+            <tr>
+              <td><code>USART1_IRQn</code>、<code>USART2_IRQn</code>、<code>USART6</code> 以外的调试或 HART 类中断</td>
+              <td>4 或更低</td>
+              <td>避免调试打印、HART 处理影响关键采样。</td>
+            </tr>
+            <tr>
+              <td><code>PendSV_IRQn</code></td>
+              <td>15</td>
+              <td>保持最低，只做可被打断的后台任务。</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="warning">
+          <strong>实施注意：</strong>优先级调整必须结合 NVIC priority grouping 确认实际抢占位数。若只有抢占优先级生效，表中的数值按抢占优先级使用。
+        </div>
+
+        <h3>2. 清理 ISR 内重操作</h3>
+        <ul>
+          <li>USART1 ISR 中的 <code>printf</code> 和循环打印先屏蔽或改为计数器。</li>
+          <li>AS5145 DMA 回调中不要直接调用 <code>ErrorLog_Retry()</code>。</li>
+          <li>AS5145 DMA 回调中不要在错误路径立即 <code>Start_Read_SSI_Data()</code> 重读。</li>
+          <li>所有 ISR 中只做“复制原始数据、更新计数器、置状态标志”。</li>
+        </ul>
+
+        <h3>3. AS5145 错误策略轻量化</h3>
+        <p>建议从“坏帧立即重试”改为“坏帧丢弃，等待下一次 TIM1 周期自然采样”。</p>
+        <table>
+          <thead>
+            <tr>
+              <th>当前策略</th>
+              <th>建议策略</th>
+              <th>收益</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>发现坏帧后在回调中打印重试日志并立即启动新 SPI DMA。</td>
+              <td>记录错误计数和原始帧，保持上一帧有效角度，下一周期自然采样。</td>
+              <td>避免坏帧触发 ISR 内正反馈，减少同级中断占用。</td>
+            </tr>
+            <tr>
+              <td>每个孤立错误都可能产生日志。</td>
+              <td>连续 N 帧失败后才进入统一错误上报；孤立错误只计数。</td>
+              <td>降低日志噪声，保留趋势证据。</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <h3>4. AS5145 有效帧建立</h3>
+        <p>OCF 未完成出现后，编码器不能只以“收到一帧且 parity 通过”作为有效条件。建议建立明确的有效帧窗口。</p>
+        <ul>
+          <li>上电或编码器恢复阶段，要求连续 N 帧满足 <code>parity_ok=1</code>、<code>OCF=1</code>、<code>COF=0</code> 后，才置 <code>ssi_first_valid_sample</code>。</li>
+          <li>运行中单帧 <code>OCF=0</code> 只计数并保持上一有效角度，不立即影响位置累计。</li>
+          <li>连续 M 帧 <code>OCF=0</code> 或超过指定时间窗口，才上报 <code>ENCODER_OCF_INCOMPLETE</code>。</li>
+          <li>OCF 连续恢复后输出一次恢复日志，便于现场判断是上电稳定问题还是持续故障。</li>
+        </ul>
+
+        <h3>5. AO 后台刷新降级</h3>
+        <ul>
+          <li>PendSV 中不允许 AD5421 初始化。</li>
+          <li>定时刷新只做必要写入，诊断读取降低频率。</li>
+          <li>AD5421 连续失败后加入退避，避免每秒访问异常外设。</li>
+          <li>AO 不再作为首要根因，但应避免继续放大系统负载。</li>
+        </ul>
+      </section>
+
+      <section id="ocf-plan">
+        <h2>OCF 专项计划</h2>
+        <p>OCF 未完成需要独立于 parity 失败处理。parity 失败优先关注通信采样质量；OCF 未完成优先关注 AS5145 内部状态是否稳定、磁场是否满足要求、供电或复位是否被扰动。</p>
+
+        <h3>诊断目标</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>目标</th>
+              <th>需要记录的数据</th>
+              <th>判断结果</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>确认是否采样过早</td>
+              <td>上电后首次 OCF=1 的 tick、连续有效帧建立耗时、TIM1 开始采样 tick。</td>
+              <td>若 OCF 错主要集中在上电前几百毫秒到数秒内，优先增加编码器稳定等待和连续有效帧门槛。</td>
+            </tr>
+            <tr>
+              <td>确认是否运行中复位</td>
+              <td>OCF 从 1 变 0 的 tick、同时刻 3.3V/5V 波形、电机/继电器/AO/通信动作。</td>
+              <td>若运行中突然 OCF=0，优先查供电跌落、地弹、线束耦合或 AS5145 复位脚/供电。</td>
+            </tr>
+            <tr>
+              <td>确认是否磁场裕量不足</td>
+              <td><code>LIN</code>、<code>MagINCn</code>、<code>MagDECn</code>、<code>COF</code> 和角度值变化。</td>
+              <td>若伴随 LIN/COF 或磁场增减位异常，优先查磁钢距离、偏心、安装晃动。</td>
+            </tr>
+            <tr>
+              <td>确认是否帧解析错位</td>
+              <td>OCF 错误时的原始 <code>rxData[0..3]</code>，以及相邻前后有效帧。</td>
+              <td>若原始帧呈规律性位移或固定异常模式，优先查 CS/CLK 时序和 SPI 模式。</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <h3>软件计划</h3>
+        <ol>
+          <li>增加 AS5145 原始帧环形缓冲，至少保存最近 16 帧：tick、raw[4]、angle、OCF、COF、LIN、MagINCn、MagDECn、parity、parity_ok。</li>
+          <li>增加 OCF 连续失败计数、连续恢复计数和首次有效帧建立耗时。</li>
+          <li>上电阶段新增编码器有效帧状态：未建立、建立中、已建立、运行中失效、恢复中。</li>
+          <li>错误日志从“每次 OCF 单帧失败立即重试日志”调整为“连续失败报警 + 恢复日志 + 计数可查询”。</li>
+          <li>保留最终故障，但最终故障触发条件改为连续失败阈值或超时阈值。</li>
+        </ol>
+
+        <h3>硬件计划</h3>
+        <ol>
+          <li>用示波器同时测 AS5145 供电、CS、CLK、MISO，触发条件设置为 OCF 错误发生时或电机/继电器/AO 动作时。</li>
+          <li>冷启动多次记录首次 OCF=1 时间，确认是否需要延后 TIM1 采样或延后业务使用编码器。</li>
+          <li>调整磁钢距离和同轴度，观察 OCF、COF、LIN、MagINCn、MagDECn 计数变化。</li>
+          <li>AO 开启/关闭、外部环路断开、假负载、现场负载分别测试 OCF 错误率，判断 AO 是否只作为干扰放大因素。</li>
+        </ol>
+
+        <h3>建议阈值初稿</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>参数</th>
+              <th>建议初值</th>
+              <th>说明</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>上电连续有效帧</td>
+              <td>8 帧</td>
+              <td>连续满足 parity、OCF、COF 条件后再认为编码器可用。</td>
+            </tr>
+            <tr>
+              <td>运行中 OCF 单帧处理</td>
+              <td>保持上一有效角度</td>
+              <td>单帧 OCF=0 不参与累计，避免位置跳变。</td>
+            </tr>
+            <tr>
+              <td>运行中 OCF 连续报警</td>
+              <td>8 到 16 帧</td>
+              <td>结合 TIM1 采样周期折算为时间，避免过慢或过敏。</td>
+            </tr>
+            <tr>
+              <td>上电等待超时</td>
+              <td>1 到 3 秒</td>
+              <td>若超时仍无法建立有效帧，再报 OCF 未完成或编码器不可用。</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="phase2">
+        <h2>阶段 2：结构整改</h2>
+        <p>阶段 1 可以降低故障概率，但 UART6 和 AS5145 的结构性风险仍然存在。阶段 2 面向长期稳定。</p>
+
+        <h3>1. CH9141K AT 改为接收缓冲模式</h3>
+        <p>推荐把 <code>CH9141_AT_CollectResponse()</code> 从单字节轮询改为接收缓冲解析。可选实现：</p>
+        <ul>
+          <li>优先使用 <code>HAL_UARTEx_ReceiveToIdle_DMA()</code>。当前 HAL 驱动已提供该接口。</li>
+          <li>发送 AT 命令前启动 RX buffer，避免模块快速响应时丢前几个字节。</li>
+          <li>IDLE 或超时后解析缓冲内容，识别 <code>OK</code>、<code>ERR</code>、<code>LINK OK</code>、<code>SCAN END</code>、<code>RSSI</code>。</li>
+          <li>关闭半传输中断，只保留 IDLE/完成事件，降低中断次数。</li>
+          <li>保留失败时原始 HEX 打印，避免只看字符串导致误判。</li>
+        </ul>
+
+        <h4>建议流程</h4>
+        <pre><code>PrepareUart6()
+  -> stop previous DMA
+  -> clear ORE/FE/NE/PE
+  -> drain only confirmed residual bytes
+
+SendCommand(cmd)
+  -> reset response
+  -> start ReceiveToIdle DMA buffer
+  -> transmit cmd + CRLF
+  -> wait for complete token or timeout
+  -> stop DMA
+  -> parse token and raw HEX
+  -> return detailed status</code></pre>
+
+        <h3>2. UART6 所有协议增加“所有权”</h3>
+        <p>UART6 同时承载 LTD/V2、DSM、CH9141K AT 和透传链路，后续需要统一所有权管理，避免不同模块互相 stop DMA、abort、drain。</p>
+        <ul>
+          <li>增加轻量 owner 状态，例如 <code>UART6_OWNER_NONE</code>、<code>UART6_OWNER_SENSOR</code>、<code>UART6_OWNER_CH9141_AT</code>。</li>
+          <li>切换 owner 时统一停止 DMA、清错误、清残留、记录切换原因。</li>
+          <li>禁止两个业务模块在同一时间直接操作 <code>huart6</code>。</li>
+        </ul>
+
+        <h3>3. AS5145 采样与错误上报解耦</h3>
+        <ul>
+          <li>DMA 回调只写入 <code>last_raw</code>、<code>last_angle</code>、错误计数、有效帧标志。</li>
+          <li>错误日志在非关键路径批量输出，或由读取状态接口查看计数器。</li>
+          <li>连续失败阈值与单帧错误计数分开，避免一个毛刺直接影响业务状态。</li>
+          <li>保留最终故障出口，但最终故障基于连续失败窗口，而不是孤立坏帧。</li>
+        </ul>
+
+        <h3>4. CPU2/CPU3 轮询压力治理</h3>
+        <ul>
+          <li>CPU3 空闲轮询间隔需要和注释一致，避免注释写 10Hz 但实际 10ms。</li>
+          <li>密度点读取应加一次性结果缓存或完成标志，避免结果完成态反复整批读取。</li>
+          <li>CPU2 输入寄存器尾部新增运行态字段后，确认 CPU3 是否每轮都读了不必要的大块区间。</li>
+          <li>CPU2 侧 UART5 IDLE 中断内的 <code>HostCommuProcess()</code> 后续应评估是否需要降重；若暂时不重构，也应避免在该路径增加打印。</li>
+        </ul>
+      </section>
+
+      <section id="phase3">
+        <h2>阶段 3：硬件排查</h2>
+        <p>软件整改不能替代硬件验证。若优先级和 ISR 减重后仍有 parity 错，必须看信号。</p>
+
+        <table>
+          <thead>
+            <tr>
+              <th>检查项</th>
+              <th>观察点</th>
+              <th>判断</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>AS5145 SSI</td>
+              <td>SPI5 CS、CLK、MISO，特别是出错时的 MISO 电平和边沿。</td>
+              <td>MISO 毛刺、幅值不足、边沿过慢会直接导致 parity 错。</td>
+            </tr>
+            <tr>
+              <td>编码器供电</td>
+              <td>3.3V/5V 纹波、地弹、上电阶段电压稳定时间。</td>
+              <td>若 OCF 或空读增多，优先查供电和磁编码器状态。</td>
+            </tr>
+            <tr>
+              <td>4-20mA 环路</td>
+              <td>AO 开启/关闭、断开外部环路、接 250Ω/500Ω 假负载。</td>
+              <td>若 AO 开启错误率大幅上升，说明电流环路或 24V 回流在放大干扰。</td>
+            </tr>
+            <tr>
+              <td>蓝牙 UART6</td>
+              <td>PC6/PC7 TX/RX 波形、模块供电、上电复位时序。</td>
+              <td>若软件无 ORE 但波形乱码，查波特率、电平、模块复位和线缆。</td>
+            </tr>
+            <tr>
+              <td>继电器和电机</td>
+              <td>继电器动作、电机初始化、电机运行时的通信错误率。</td>
+              <td>若与动作强相关，查电源隔离、续流、地线和线束走向。</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="verification">
+        <h2>验证计划</h2>
+        <h3>基础稳定性</h3>
+        <ul>
+          <li>冷启动 100 次，记录蓝牙链路检查成功率和 UART6 错误计数。</li>
+          <li>静止不动运行 2 小时，记录 AS5145 总帧数和各类错误计数。</li>
+          <li>冷启动 100 次，记录 AS5145 首次连续有效帧建立耗时和 OCF 失败次数。</li>
+          <li>电机初始化后空闲 30 分钟，确认无最终故障。</li>
+        </ul>
+
+        <h3>负载叠加</h3>
+        <ul>
+          <li>CPU3 正常连接并保持轮询，观察编码器和 UART6 错误率。</li>
+          <li>AO 关闭、AO 开启空载、AO 接假负载、AO 接现场负载分别测试。</li>
+          <li>继电器动作、HART 通信、CPU2/CPU3 高频读取同时进行。</li>
+          <li>电机低速、常速、启动、停止四种状态下分别统计。</li>
+          <li>磁钢距离和线束位置保持不变时，重复测试 parity、OCF、COF、LIN 计数，避免硬件变量干扰软件判断。</li>
+        </ul>
+
+        <h3>验收口径</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>项目</th>
+              <th>通过条件</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>蓝牙 AT</td>
+              <td>冷启动 100 次无 <code>WIRELESS_HOST_COMM_TIMEOUT</code>，失败时 raw HEX 可解释。</td>
+            </tr>
+            <tr>
+              <td>编码器</td>
+              <td>无连续失败导致最终故障；孤立 parity 错或 OCF 错可计数但不触发重载重试；上电阶段能在阈值内建立连续有效帧。</td>
+            </tr>
+            <tr>
+              <td>OCF 专项</td>
+              <td>OCF 失败若只出现在上电稳定窗口内，应被有效帧建立机制吸收；若运行中出现，应能关联到供电、磁场、动作或原始帧证据。</td>
+            </tr>
+            <tr>
+              <td>UART6 错误</td>
+              <td><code>ORE</code>、<code>FE</code>、<code>NE</code> 不再持续增长；若增长，必须能和硬件波形对应。</td>
+            </tr>
+            <tr>
+              <td>系统负载</td>
+              <td>CPU3 轮询、AO、HART、继电器叠加后无通信截断和最终故障。</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="implementation">
+        <h2>实施顺序</h2>
+        <ol>
+          <li>新增诊断计数器和失败原始帧记录，不改变业务动作；AS5145 和 UART6 同时取证。</li>
+          <li>增加 OCF 专项记录：首次有效帧建立耗时、OCF 连续失败、OCF 恢复、Mag/LIN/COF 状态组合。</li>
+          <li>调整 NVIC 优先级，确保编码器和 UART6 关键链路优先。</li>
+          <li>去掉 USART1 ISR 内打印，AS5145 回调内错误日志延后。</li>
+          <li>AS5145 坏帧不再立即重试，改为下一 TIM1 周期自然采样。</li>
+          <li>实现 AS5145 连续有效帧建立机制；上电和恢复阶段未稳定前不使用角度累计。</li>
+          <li>CH9141K AT 改为 ReceiveToIdle DMA 或等效接收缓冲。</li>
+          <li>清理 USART2/HART 和 UART5/HostCommu 的 ISR 重操作风险，至少禁止新增 ISR 内打印。</li>
+          <li>AO 后台刷新加入退避，禁止 PendSV 中初始化 AD5421。</li>
+          <li>CPU3 轮询节奏改到与注释一致，密度点读取加完成标志或缓存。</li>
+          <li>根据诊断结果处理硬件噪声、编码器供电/复位和磁场裕量问题。</li>
+        </ol>
+
+        <div class="danger">
+          <strong>不建议一次性大改：</strong>NVIC、AS5145、UART6、AO、CPU3 轮询不要一次全改，否则现场结果无法判断是哪一项真正起效。
+        </div>
+      </section>
+
+      <section id="rollback">
+        <h2>回滚策略</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>改动类型</th>
+              <th>回滚方式</th>
+              <th>风险</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>诊断计数器</td>
+              <td>保留或通过宏关闭打印。</td>
+              <td>低，通常不影响业务。</td>
+            </tr>
+            <tr>
+              <td>NVIC 优先级</td>
+              <td>按文件恢复原优先级。</td>
+              <td>中，需要确认是否影响 Modbus/HART 响应。</td>
+            </tr>
+            <tr>
+              <td>AS5145 错误策略</td>
+              <td>恢复立即重试路径。</td>
+              <td>中，回滚后可能重新放大 ISR 负载。</td>
+            </tr>
+            <tr>
+              <td>AS5145 有效帧机制</td>
+              <td>通过宏恢复为首帧有效即使用，保留诊断计数。</td>
+              <td>中，回滚后上电 OCF 未完成可能再次进入业务链路。</td>
+            </tr>
+            <tr>
+              <td>CH9141K DMA 接收</td>
+              <td>保留旧轮询实现，通过宏选择。</td>
+              <td>中高，涉及 UART6 共享资源。</td>
+            </tr>
+            <tr>
+              <td>AO 后台退避</td>
+              <td>恢复 1s 诊断和允许初始化。</td>
+              <td>中，回滚后可能增加负载。</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="files">
+        <h2>后续涉及文件</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>文件</th>
+              <th>可能改动</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>LTD_MAIN_CPU2/Core/Src/dma.c</code></td>
+              <td>DMA IRQ 优先级调整，SPI5 RX 和 UART6 RX/TX 分层。</td>
+            </tr>
+            <tr>
+              <td><code>LTD_MAIN_CPU2/Core/Src/tim.c</code></td>
+              <td>TIM1 和 TIM4 优先级分层。</td>
+            </tr>
+            <tr>
+              <td><code>LTD_MAIN_CPU2/Core/Src/usart.c</code></td>
+              <td>USART1/2/6 优先级调整，UART6 DMA 优先级调整。</td>
+            </tr>
+            <tr>
+              <td><code>LTD_MAIN_CPU2/Core/Src/stm32f4xx_it.c</code></td>
+              <td>删除或延后 ISR 内打印，评估 USART2/HART 和 UART5/HostCommu 的 ISR 重操作边界，保持中断处理轻量。</td>
+            </tr>
+            <tr>
+              <td><code>LTD_MAIN_CPU2/BSP/Peripherals/src/AS5145.c</code></td>
+              <td>增加诊断计数器，拆分 ISR 回调和错误上报，调整坏帧重试策略，新增连续有效帧建立和 OCF 专项状态。</td>
+            </tr>
+            <tr>
+              <td><code>LTD_MAIN_CPU2/Services/Sensor/ch9141_at.c</code></td>
+              <td>增加 UART6 错误计数、raw HEX 记录，后续改为 ReceiveToIdle DMA 接收。</td>
+            </tr>
+            <tr>
+              <td><code>LTD_MAIN_CPU2/Services/Sensor/wireless_pairing.c</code>、<code>sensor.c</code></td>
+              <td>蓝牙链路检查失败时保留 AT 原始响应、UART6 错误状态和识别阶段信息，便于和编码器错误时间线关联。</td>
+            </tr>
+            <tr>
+              <td><code>LTD_MAIN_CPU2/Services/Modbus/hostcommu.c</code></td>
+              <td>若后续治理 UART5 ISR 重操作，需要把接收处理从中断直接处理改为置标志或最小化处理；短期至少不增加中断内打印。</td>
+            </tr>
+            <tr>
+              <td><code>LTD_MAIN_CPU2/Services/AoOutput/ao_output.c</code></td>
+              <td>PendSV 后台刷新禁用初始化、降低诊断频率、增加失败退避。</td>
+            </tr>
+            <tr>
+              <td><code>LTD_DISPLAY_CPU3/Application/app_main.c</code></td>
+              <td>修正 CPU2 空闲轮询间隔和注释不一致问题，避免实际 100Hz 轮询。</td>
+            </tr>
+            <tr>
+              <td><code>LTD_DISPLAY_CPU3/Communication/internal/main_board_modbus/cpu2_communicate.c</code></td>
+              <td>如诊断确认 CPU3 轮询参与放大，再调整轮询节奏和密度点读取策略。</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <h3>版本和文档影响</h3>
+        <ul>
+          <li>本 HTML 文档本身不改变固件行为，不需要升级 CPU2/CPU3 固件版本。</li>
+          <li>后续若实施 NVIC、UART6、AS5145、AO 行为改动，需要评估 CPU2 固件版本。</li>
+          <li>若只增加内部诊断寄存器但不改变 CPU2/CPU3 共享协议，可不变更 <code>DEVICE_PROTOCOL_VERSION</code>；若新增 CPU3 可读寄存器，需要同步协议文档并评估协议版本。</li>
+        </ul>
+      </section>
+    </main>
+  </div>
+</body>
+</html>

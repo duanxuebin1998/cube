@@ -36,6 +36,11 @@ typedef struct {
  */
 void CH9141_AT_ResetResponse(CH9141AtResponse *response);
 
+/*
+ * 标记传感器重新上电，下一次进入 AT 失败且只收到百分号时允许重试一次。
+ */
+void CH9141_AT_NotifySensorPowerOn(void);
+
 /**
  * @brief 抢占 UART6 并等待串口空闲。
  *

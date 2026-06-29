@@ -33,7 +33,7 @@ typedef struct {
 #define FRAM_ENCODER_A_ADDRESS  FRAM_ANGLE_ADDRESS /* 编码器参数 A 分区 FRAM 起始地址。 */
 #define FRAM_ENCODER_SLOT_SIZE  (0x40u) /* 编码器参数单分区大小。 */
 #define FRAM_ENCODER_B_ADDRESS  (FRAM_ENCODER_A_ADDRESS + FRAM_ENCODER_SLOT_SIZE) /* 编码器参数 B 分区 FRAM 起始地址。 */
-#define ENCODER_BOOT_READY_TIMEOUT_MS 300U /* 编码器上电稳定等待超时时间，单位 ms。 */
+#define ENCODER_BOOT_READY_TIMEOUT_MS 1500U /* 编码器上电稳定等待超时时间，单位 ms。 */
 
 /**
  * @brief 计算校验本模块中的 EncoderRecordCRC 逻辑。

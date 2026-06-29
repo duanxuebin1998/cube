@@ -21,6 +21,7 @@
 #include "ad5421.h"
 #include "AoOutput/ao_output.h"
 #include "sensor.h"
+#include "ch9141_at.h"
 #include "fault_recovery.h"
 #include "../../Services/Relay/relay_output.h"
 
@@ -70,10 +71,10 @@ static uint8_t App_HandleIdleGlobalError(void) {
 		(error_code != STATE_SWITCH)) {
 		/* 先处理异常边界，避免应用主循环状态机带故障继续运行。 */
 		if (g_measurement.device_status.device_state != STATE_ERROR) {
-            FaultManager_SetErrorState(error_code,
-                                       GetShortFilename(__FILE__),
-                                       __LINE__,
-                                       __func__);
+            FaultManager_SetGlobalErrorState(error_code,
+                                             GetShortFilename(__FILE__),
+                                             __LINE__,
+                                             __func__);
 		} else {
 			/* 已经处于错误态时不再重复慢停，避免驱动失效后刷“电机被禁止”；恢复模块会负责重新初始化。 */
 			g_measurement.device_status.device_state = STATE_ERROR;
@@ -129,6 +130,7 @@ void App_Init(void) {
 	if (startup_init_error != NO_ERROR) {
 		g_measurement.device_status.error_code = startup_init_error;
 	}
+	CH9141_AT_NotifySensorPowerOn();
 	DetectSensorType(); /* 检测传感器类型 */
 	g_deviceParams.command = CMD_NONE; /* 清除命令 */
 	g_measurement.device_status.zero_point_status=1; /* 设置零点状态为需要回零点 */

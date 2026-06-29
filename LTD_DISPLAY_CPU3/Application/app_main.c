@@ -16,7 +16,7 @@
 
 #define DEBUG_APP_MAIN 0
 
-#define CPU2_POLL_IDLE_DELAY_MS 10u /* CPU2 idle polling period, 10Hz */
+#define CPU2_POLL_IDLE_DELAY_MS 100u /* CPU2 idle polling period, 10Hz */
 
 
 /* ====== 可调：TX 完成后额外延时（用于 RS485 电平恢复）====== */

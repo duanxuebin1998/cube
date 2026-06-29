@@ -1344,7 +1344,7 @@ static uint32_t MotorMotion_CheckErrorWithSpeedScope(uint32_t ret,
     /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
     if (g_measurement.device_status.error_code != NO_ERROR) {
         const uint32_t handled_ret =
-            FaultManager_HandleCheckError(g_measurement.device_status.error_code,
+            FaultManager_HandleGlobalError(g_measurement.device_status.error_code,
                                           file,
                                           line,
                                           func);

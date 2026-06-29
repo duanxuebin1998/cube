@@ -10,7 +10,9 @@ import sys
 from pathlib import Path
 
 
-SOURCE_PATH = Path("LTD_MAIN_CPU2/Services/MotorControl/motor_ctrl_motion_api.c")
+ROOT = Path(__file__).resolve().parents[1]
+SOURCE_RELATIVE_PATH = Path("LTD_MAIN_CPU2/Services/MotorControl/motor_ctrl_motion_api.c")
+SOURCE_PATH = ROOT / SOURCE_RELATIVE_PATH
 
 
 def decode_source(raw: bytes) -> str:
@@ -24,8 +26,8 @@ def decode_source(raw: bytes) -> str:
 
 def read_source(args: argparse.Namespace) -> str:
     if args.git_ref:
-        blob = f"{args.git_ref}:{SOURCE_PATH.as_posix()}"
-        raw = subprocess.check_output(["git", "show", blob])
+        blob = f"{args.git_ref}:{SOURCE_RELATIVE_PATH.as_posix()}"
+        raw = subprocess.check_output(["git", "show", blob], cwd=ROOT)
         return decode_source(raw)
     return decode_source(Path(args.source).read_bytes())
 

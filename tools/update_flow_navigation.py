@@ -19,8 +19,8 @@ ROOT = Path(__file__).resolve().parents[1]
 DOC_NAV_DIR = ROOT / "docs" / "00_程序流程导航"
 GLOBAL_INDEX = DOC_NAV_DIR / "index.html"
 CROSS_ROUTE = DOC_NAV_DIR / "跨CPU业务链路.html"
-CPU2_DIR = ROOT / "LTD_MAIN_CPU2" / "docs" / "00_程序流程"
-CPU3_DIR = ROOT / "LTD_DISPLAY_CPU3" / "docs" / "00_程序流程"
+CPU2_DIR = DOC_NAV_DIR / "CPU2"
+CPU3_DIR = DOC_NAV_DIR / "CPU3"
 
 STYLE_MARK = '<style id="cross-flow-nav-style">'
 NAV_START = "<!-- CROSS-FLOW-NAV-START -->"
@@ -208,49 +208,49 @@ LINEAR_ORDERS = {
 LEGACY_DOCS: Sequence[Dict[str, str]] = [
     {
         "title": "串口 B 指令程序流程梳理",
-        "path": str(ROOT / "LTD_MAIN_CPU2" / "docs" / "01_电机与编码器" / "串口B指令详细执行过程.html"),
+        "path": str(ROOT / "docs" / "03_问题分析与整改" / "CPU2电机与编码器" / "串口B指令详细执行过程.html"),
         "status": "专题历史页",
         "current": "cpu2_08",
         "note": "串口 B 入口和运动执行细节的旧专题梳理；当前权威流程以 CPU2 电机与位置模型页为准。",
     },
     {
         "title": "CPU2 电机程序、函数与运动流程综合梳理",
-        "path": str(ROOT / "LTD_MAIN_CPU2" / "docs" / "01_电机与编码器" / "电机程序与函数梳理.html"),
+        "path": str(ROOT / "docs" / "03_问题分析与整改" / "CPU2电机与编码器" / "电机程序与函数梳理.html"),
         "status": "专题历史页",
         "current": "cpu2_08",
         "note": "电机函数层次、运动入口和保护逻辑的历史综合页；当前权威流程以 CPU2 电机与位置模型页为准。",
     },
     {
         "title": "电机运动函数层次梳理已合并",
-        "path": str(ROOT / "LTD_MAIN_CPU2" / "docs" / "01_电机与编码器" / "电机运动函数层次梳理.html"),
+        "path": str(ROOT / "docs" / "03_问题分析与整改" / "CPU2电机与编码器" / "电机运动函数层次梳理.html"),
         "status": "已合并跳转页",
         "current": "cpu2_08",
         "note": "该页已指向电机综合梳理，当前流程体系统一指向 CPU2 电机与位置模型。",
     },
     {
         "title": "电机运动函数第一轮改动点梳理",
-        "path": str(ROOT / "LTD_MAIN_CPU2" / "docs" / "01_电机与编码器" / "电机运动函数本次改动点梳理.html"),
+        "path": str(ROOT / "docs" / "03_问题分析与整改" / "CPU2电机与编码器" / "电机运动函数本次改动点梳理.html"),
         "status": "改动记录页",
         "current": "cpu2_08",
         "note": "电机运动第一轮改动记录，保留改动背景；当前流程以 CPU2 电机与位置模型页为准。",
     },
     {
         "title": "电机运动程序详细流程图已合并",
-        "path": str(ROOT / "LTD_MAIN_CPU2" / "docs" / "01_电机与编码器" / "电机运动程序详细流程图.html"),
+        "path": str(ROOT / "docs" / "03_问题分析与整改" / "CPU2电机与编码器" / "电机运动程序详细流程图.html"),
         "status": "已合并跳转页",
         "current": "cpu2_08",
         "note": "该页为旧流程图跳转页，当前权威流程以 CPU2 电机与位置模型页为准。",
     },
     {
         "title": "CPU2 HART 接口程序梳理",
-        "path": str(ROOT / "LTD_MAIN_CPU2" / "docs" / "02_通信与解耦" / "CPU2_HART接口程序梳理.html"),
+        "path": str(ROOT / "docs" / "01_协议与寄存器" / "CPU2通信与解耦" / "CPU2_HART接口程序梳理.html"),
         "status": "专题历史页",
         "current": "cpu2_11",
         "note": "HART 接口旧专题梳理；当前权威流程以 CPU2 HART 接口程序流程页为准。",
     },
     {
         "title": "CPU2 HART 旧栈适配与 E+H 兼容方案",
-        "path": str(ROOT / "LTD_MAIN_CPU2" / "docs" / "02_通信与解耦" / "CPU2_HART旧栈适配与E+H兼容方案.html"),
+        "path": str(ROOT / "docs" / "01_协议与寄存器" / "CPU2通信与解耦" / "CPU2_HART旧栈适配与E+H兼容方案.html"),
         "status": "方案参考页",
         "current": "cpu2_11",
         "note": "HART 旧栈适配和兼容性方案，保留方案背景；当前流程以 CPU2 HART 接口程序流程页为准。",

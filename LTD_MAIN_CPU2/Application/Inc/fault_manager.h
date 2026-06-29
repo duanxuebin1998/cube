@@ -81,6 +81,19 @@ uint32_t FaultManager_HandleCheckError(uint32_t error_code,
                                        uint32_t line,
                                        const char *func);
 /**
+ * @brief 处理 CHECK_ERROR 宏捕获到的全局错误状态。
+ *
+ * @param error_code 全局设备错误码。
+ * @param file 捕获全局错误的检查点文件名。
+ * @param line 捕获全局错误的检查点行号。
+ * @param func 捕获全局错误的检查点函数名。
+ * @return 原全局错误码。
+ */
+uint32_t FaultManager_HandleGlobalError(uint32_t error_code,
+                                        const char *file,
+                                        uint32_t line,
+                                        const char *func);
+/**
  * @brief 执行故障处理中的 FaultManager_SetErrorState 逻辑。
  *
  * @param error_code 故障或错误码。
@@ -92,6 +105,18 @@ void FaultManager_SetErrorState(uint32_t error_code,
                                 const char *file,
                                 uint32_t line,
                                 const char *func);
+/**
+ * @brief 处理空闲兜底捕获到的全局错误状态。
+ *
+ * @param error_code 全局设备错误码。
+ * @param file 捕获全局错误的检查点文件名。
+ * @param line 捕获全局错误的检查点行号。
+ * @param func 捕获全局错误的检查点函数名。
+ */
+void FaultManager_SetGlobalErrorState(uint32_t error_code,
+                                      const char *file,
+                                      uint32_t line,
+                                      const char *func);
 
 /* 统一错误检查宏，发现错误后进入故障处理出口。 */
 #define CHECK_ERROR(errorcode)                                                   \
@@ -107,7 +132,7 @@ void FaultManager_SetErrorState(uint32_t error_code,
                                                                                  \
         /* Step 2: 检查全局设备错误状态 */                                        \
         if (g_measurement.device_status.error_code != NO_ERROR) {                \
-            return FaultManager_HandleCheckError(                                \
+            return FaultManager_HandleGlobalError(                               \
                 g_measurement.device_status.error_code,                          \
                 GetShortFilename(__FILE__),                                      \
                 __LINE__,                                                        \

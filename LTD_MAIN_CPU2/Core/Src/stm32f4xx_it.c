@@ -352,11 +352,9 @@ void USART1_IRQHandler(void)
 			temp = __HAL_DMA_GET_COUNTER(&hdma_usart1_rx);  // 获取DMA中未传输的数据个数
 			USART1_RX_LEN = USART1_RX_BUF_SIZE - temp;  // 计算已经接收到的数据个数
 
-			// 将接收到的数据添加到接收缓冲区
-			printf("receive ");
+			/* 将接收到的数据添加到接收缓冲区，中断内不做串口打印。 */
 			for (int i = 0; i < USART1_RX_LEN; i++) {
 				received_data = USART1_RX_BUF[i];
-				printf("%x ", received_data);
 				// 判断是否遇到终止符 \r\n
 				if (received_data == '\n' && buffer_index > 0 && received_buffer[buffer_index - 1] == '\r') {
 					received_buffer[buffer_index - 1] = '\0';

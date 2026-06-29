@@ -9,9 +9,9 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 CPU3 = ROOT / "LTD_DISPLAY_CPU3"
-DOC_DIR = CPU3 / "docs" / "00_程序流程"
+DOC_DIR = ROOT / "docs" / "00_程序流程导航" / "CPU3"
 ASSET_DIR = DOC_DIR / "assets"
-CPU2_ASSET_DIR = ROOT / "LTD_MAIN_CPU2" / "docs" / "00_程序流程" / "assets"
+CPU2_ASSET_DIR = ROOT / "docs" / "00_程序流程导航" / "CPU2" / "assets"
 CSS_VERSION = "cpu3-20260616-flow-audit"
 DOC_DATE = "2026-06-16"
 
@@ -545,7 +545,7 @@ def overview_page(pages: list[dict]) -> str:
         f'<div class="meta-grid"><div class="meta"><span>项目</span><strong>LTD_DISPLAY_CPU3 / CPU3 {esc(CPU3_VERSION)} / 协议 11</strong></div><div class="meta"><span>页面数量</span><strong>'
         + str(len(pages))
         + f'</strong></div><div class="meta"><span>整理日期</span><strong>{DOC_DATE}</strong></div><div class="meta"><span>文档风格</span><strong>业务级 SVG + 源码证据</strong></div></div></header>'
-        '<nav class="topnav"><a href="#overview">总览图</a><a href="#pages">页面入口</a><a href="#search">全文索引</a><a href="../README.md">CPU3 docs</a></nav>'
+        '<nav class="topnav"><a href="#overview">总览图</a><a href="#pages">页面入口</a><a href="#search">全文索引</a><a href="../../00_构建与版本/CPU3文档索引.md">CPU3 索引</a></nav>'
         '<section id="overview"><h2>1. CPU3 总体业务流</h2><p class="lead">CPU3 的核心职责不是直接测量，而是在显示端把 CPU2 状态、外部协议、菜单参数和本地持久化连接起来。</p>'
         + flow_svg("cpu3-all", "CPU3 总体业务流", nodes, edges, height=740)
         + '</section><section id="pages"><h2>2. 文档入口</h2><div class="overview-grid">'
@@ -1758,13 +1758,11 @@ def main() -> None:
     (DOC_DIR / "CPU3程序流程总览.html").write_text(overview_page(PAGES), encoding="utf-8", newline="\n")
     (DOC_DIR / "README.md").write_text(readme(PAGES), encoding="utf-8", newline="\n")
 
-    root_readme = CPU3 / "docs" / "README.md"
-    text = root_readme.read_text(encoding="utf-8", errors="replace")
-    row = "| `00_程序流程` | CPU3 启动主循环、CPU2 内部通信、外部协议、显示菜单、本机参数和外设恢复程序流程 HTML 文档 |\n"
-    if "`00_程序流程`" not in text:
-        text = text.replace("| `03_故障码` | CPU3 显示侧使用的 LTD 故障代码表、设备参数和保持寄存器辅助表 |\n", row + "| `03_故障码` | CPU3 显示侧使用的 LTD 故障代码表、设备参数和保持寄存器辅助表 |\n")
-    text = re.sub(r"更新日期：\d{4}-\d{2}-\d{2}", f"更新日期：{DOC_DATE}", text)
-    root_readme.write_text(text, encoding="utf-8", newline="\n")
+    root_readme = ROOT / "docs" / "00_构建与版本" / "CPU3文档索引.md"
+    if root_readme.exists():
+        text = root_readme.read_text(encoding="utf-8", errors="replace")
+        text = re.sub(r"更新日期：\d{4}-\d{2}-\d{2}", f"更新日期：{DOC_DATE}", text)
+        root_readme.write_text(text, encoding="utf-8", newline="\n")
 
 
 if __name__ == "__main__":
