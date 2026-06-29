@@ -1,0 +1,1011 @@
+﻿<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CPU2 HART接口程序梳理</title>
+  <style>
+    :root {
+      --bg: #eef3f8;
+      --panel: #ffffff;
+      --ink: #142033;
+      --muted: #5b6b83;
+      --line: #cbd8e8;
+      --blue: #1f5f99;
+      --teal: #17706f;
+      --green: #1d7f5c;
+      --amber: #b27313;
+      --red: #b73737;
+      --purple: #5a55a6;
+      --soft-blue: #e7f1ff;
+      --soft-green: #e8f6ef;
+      --soft-amber: #fff3db;
+      --soft-red: #fdecec;
+      --soft-purple: #eeeeff;
+      --shadow: 0 14px 34px rgba(24, 39, 75, 0.10);
+      --radius: 8px;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: "Microsoft YaHei", "Segoe UI", Arial, sans-serif;
+      line-height: 1.72;
+      font-size: 15px;
+    }
+
+    .wrap {
+      width: min(1360px, calc(100vw - 48px));
+      margin: 0 auto;
+      padding: 28px 0 52px;
+    }
+
+    .hero {
+      background: linear-gradient(135deg, #123052 0%, #1f5f99 52%, #15736d 100%);
+      border-radius: var(--radius);
+      color: #fff;
+      padding: 34px 40px 34px;
+      box-shadow: var(--shadow);
+    }
+
+    h1, h2, h3 {
+      margin: 0;
+      line-height: 1.25;
+    }
+
+    h1 {
+      font-size: clamp(28px, 3.2vw, 44px);
+      letter-spacing: 0;
+      font-weight: 800;
+    }
+
+    .hero p {
+      max-width: 1120px;
+      margin: 16px 0 0;
+      color: rgba(255, 255, 255, 0.92);
+      font-size: 16px;
+    }
+
+    .meta-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+      margin-top: 28px;
+    }
+
+    .meta {
+      min-height: 86px;
+      padding: 14px 16px;
+      border: 1px solid rgba(255, 255, 255, 0.23);
+      border-radius: var(--radius);
+      background: rgba(255, 255, 255, 0.08);
+    }
+
+    .meta span {
+      display: block;
+      color: rgba(255, 255, 255, 0.70);
+      font-size: 12px;
+      font-weight: 700;
+      margin-bottom: 6px;
+    }
+
+    .meta strong {
+      display: block;
+      color: #fff;
+      overflow-wrap: anywhere;
+      font-size: 14px;
+    }
+
+    .topnav {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      margin: 18px 0;
+      padding: 10px 12px;
+      display: flex;
+      gap: 8px;
+      overflow-x: auto;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: rgba(255, 255, 255, 0.94);
+      backdrop-filter: blur(8px);
+      box-shadow: 0 8px 20px rgba(24, 39, 75, 0.07);
+    }
+
+    .topnav a {
+      flex: 0 0 auto;
+      padding: 7px 11px;
+      border-radius: 6px;
+      color: #235783;
+      text-decoration: none;
+      font-size: 13px;
+      border: 1px solid transparent;
+      white-space: nowrap;
+    }
+
+    .topnav a:hover {
+      border-color: #b8d1ea;
+      background: #edf6ff;
+    }
+
+    section {
+      margin-top: 18px;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: 0 10px 26px rgba(24, 39, 75, 0.06);
+      padding: 26px;
+    }
+
+    section h2 {
+      font-size: 24px;
+      margin-bottom: 14px;
+      color: #101c2d;
+    }
+
+    section h3 {
+      font-size: 18px;
+      margin: 22px 0 10px;
+      color: #17273c;
+    }
+
+    p {
+      margin: 10px 0;
+    }
+
+    .lead {
+      color: #38506c;
+      margin-bottom: 16px;
+    }
+
+    .grid-2,
+    .grid-3,
+    .grid-4 {
+      display: grid;
+      gap: 14px;
+    }
+
+    .grid-2 {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .grid-3 {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .grid-4 {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+
+    .card {
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 16px;
+      background: #fbfdff;
+      min-width: 0;
+    }
+
+    .card h3 {
+      margin-top: 0;
+    }
+
+    .tag {
+      display: inline-block;
+      padding: 2px 7px;
+      border-radius: 5px;
+      background: #f0f5fb;
+      border: 1px solid #d4e0ee;
+      color: #243a54;
+      font-family: Consolas, "Courier New", monospace;
+      font-size: 12px;
+      line-height: 1.45;
+      vertical-align: baseline;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      min-height: 24px;
+      padding: 1px 8px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 700;
+      border: 1px solid currentColor;
+      white-space: nowrap;
+    }
+
+    .b-blue { color: var(--blue); background: var(--soft-blue); }
+    .b-green { color: var(--green); background: var(--soft-green); }
+    .b-amber { color: var(--amber); background: var(--soft-amber); }
+    .b-red { color: var(--red); background: var(--soft-red); }
+    .b-purple { color: var(--purple); background: var(--soft-purple); }
+
+    .note,
+    .warn,
+    .risk {
+      border-radius: var(--radius);
+      padding: 14px 16px;
+      margin: 14px 0;
+      border: 1px solid;
+    }
+
+    .note {
+      background: var(--soft-blue);
+      border-color: #b8d6f6;
+    }
+
+    .warn {
+      background: var(--soft-amber);
+      border-color: #f0c36e;
+    }
+
+    .risk {
+      background: var(--soft-red);
+      border-color: #efb3b3;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 14px 0;
+      table-layout: fixed;
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+
+    th,
+    td {
+      border: 1px solid var(--line);
+      padding: 10px 12px;
+      vertical-align: top;
+      text-align: left;
+      overflow-wrap: anywhere;
+    }
+
+    th {
+      background: #f3f7fb;
+      color: #1e324b;
+      font-weight: 800;
+    }
+
+    td small {
+      color: var(--muted);
+    }
+
+    ul,
+    ol {
+      margin: 10px 0 0;
+      padding-left: 22px;
+    }
+
+    li + li {
+      margin-top: 6px;
+    }
+
+    code {
+      font-family: Consolas, "Courier New", monospace;
+      font-size: 0.92em;
+      padding: 1px 5px;
+      border-radius: 4px;
+      background: #f1f5fa;
+      border: 1px solid #dce6f1;
+    }
+
+    .flow-box {
+      overflow-x: auto;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: #fbfdff;
+      padding: 16px;
+      margin-top: 14px;
+    }
+
+    svg {
+      display: block;
+      max-width: none;
+    }
+
+    .source-list {
+      columns: 2;
+      column-gap: 28px;
+      margin-top: 12px;
+    }
+
+    .source-list li {
+      break-inside: avoid;
+    }
+
+    .muted {
+      color: var(--muted);
+    }
+
+    .kbd {
+      font-family: Consolas, "Courier New", monospace;
+      background: #17273c;
+      color: #fff;
+      border-radius: 4px;
+      padding: 1px 5px;
+      font-size: 12px;
+    }
+
+    @media (max-width: 980px) {
+      .wrap {
+        width: min(100% - 24px, 1360px);
+        padding-top: 16px;
+      }
+
+      .hero {
+        padding: 26px 22px;
+      }
+
+      .meta-grid,
+      .grid-2,
+      .grid-3,
+      .grid-4 {
+        grid-template-columns: 1fr;
+      }
+
+      section {
+        padding: 20px;
+      }
+
+      .source-list {
+        columns: 1;
+      }
+    }
+
+    .flow-diagram svg, .command-matrix svg, svg[role="img"] {
+      display: block;
+      width: 100%;
+      max-width: 100%;
+      height: auto;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header class="hero">
+      <h1>CPU2 HART接口程序梳理</h1>
+      <p>本文按当前源码整理 CPU2 的 HART 接口：初始化入口、USART2 + DMA 收发、HART 帧解析、命令响应、AD5421 电流输出关系，以及当前实现中的问题点和后续优化建议。</p>
+      <div class="meta-grid">
+        <div class="meta">
+          <span>源码目录</span>
+          <strong>D:\CUBE\LTD_MAIN_CPU2</strong>
+        </div>
+        <div class="meta">
+          <span>核心模块</span>
+          <strong>Services/Hart/hart.c、hart.h</strong>
+        </div>
+        <div class="meta">
+          <span>接口资源</span>
+          <strong>USART2 + DMA + HART_RTS + AD5421</strong>
+        </div>
+        <div class="meta">
+          <span>整理日期</span>
+          <strong>2026-06-12</strong>
+        </div>
+      </div>
+    </header>
+<!-- FLOW-LEGACY-NOTICE-START -->
+<section class="flow-legacy-notice" style="margin:16px auto;padding:14px 16px;border:1px solid #bad8fb;border-radius:10px;background:#eef7ff;color:#17233a;font-size:14px;line-height:1.65;font-family:'Microsoft YaHei','Segoe UI',Arial,sans-serif;max-width:min(1180px,calc(100% - 32px));box-sizing:border-box"><b style="display:block;margin-bottom:4px">历史/专题流程提示</b><p style="margin:0 0 8px">HART 接口旧专题梳理；当前权威流程以 CPU2 HART 接口程序流程页为准。</p><div style="display:flex;flex-wrap:wrap;gap:8px"><a style="color:#1f65aa;font-weight:700;text-decoration:none" href="../../00_程序流程导航/CPU2/11_HART接口.html">当前权威流程：HART 接口</a><a style="color:#1f65aa;font-weight:700;text-decoration:none" href="../../00_程序流程导航/index.html">程序流程统一入口</a></div></section>
+<!-- FLOW-LEGACY-NOTICE-END -->
+
+<nav class="topnav" aria-label="目录">
+      <a href="#summary">1. 总览结论</a>
+      <a href="#flow">2. 完整流程图</a>
+      <a href="#hardware">3. 硬件与串口</a>
+      <a href="#frame">4. 帧格式</a>
+      <a href="#commands">5. 支持命令</a>
+      <a href="#data">6. 数据结构</a>
+      <a href="#timing">7. 收发时序</a>
+      <a href="#issues">8. 问题点</a>
+      <a href="#optimize">9. 优化建议</a>
+      <a href="#debug">10. 调试清单</a>
+      <a href="#source">11. 源码索引</a>
+    </nav>
+
+    <section id="summary">
+      <h2>1. 总览结论</h2>
+      <p class="lead">当前 HART 程序已经具备“接收上位机命令、校验帧、按命令组响应帧、通过 USART2 DMA 发送”的基本链路，但它更像一个早期样例或调试实现，尚未和真实测量值、设备状态、轮询地址管理、错误响应形成完整闭环。</p>
+      <div class="grid-3">
+        <div class="card">
+          <h3>入口链路</h3>
+          <p><span class="tag">App_Init()</span> 中调用 <span class="tag">HartInit()</span>，HART 初始化会先初始化 AD5421，再把 <span class="tag">HART_RTS</span> 拉高进入接收状态，最后初始化 HART 参数。</p>
+          <p class="muted">依据：Application/Src/app_main.c:97-108；Services/Hart/hart.c:52-58</p>
+        </div>
+        <div class="card">
+          <h3>通信链路</h3>
+          <p>USART2 配置为 1200 波特率、9 位字长、无校验、1 停止位，使用 DMA 接收和发送。接收帧结束依赖 <span class="tag">UART_FLAG_IDLE</span> 空闲中断。</p>
+          <p class="muted">依据：Core/Src/usart.c:231-255；Core/Src/stm32f4xx_it.c:382-420</p>
+        </div>
+        <div class="card">
+          <h3>命令处理</h3>
+          <p>目前只支持 HART 通用命令 0、1、2、3、6。响应数据通过本地结构体组包，BCC 为字节异或，最终加 6 个 <span class="tag">0xFF</span> 前导符。</p>
+          <p class="muted">依据：Services/Hart/hart.h:13-18；Services/Hart/hart.c:105-148</p>
+        </div>
+      </div>
+      <div class="warn">
+        <strong>关键提醒：</strong>命令 1、2、3 的液位、电流、温度、密度、压力当前在响应函数里直接写死为 1.5、4.0、1.1、2.2、3.3、1.0 等值，没有从液位测量、温度测量、压力或 AD5421 真实输出读取。
+      </div>
+    </section>
+
+    <section id="flow">
+      <h2>2. 完整程序流程图</h2>
+      <p class="lead">流程图优先写功能动作，括号内保留源码函数或中断名，便于对照源码。蓝色表示初始化，绿色表示接收，橙色表示解析/组包，红色表示异常或风险点，紫色表示发送完成后的方向切换。</p>
+      <div class="flow-box">
+        <svg class="responsive-svg" viewBox="0 0 1280 1180" role="img" aria-label="CPU2 HART完整程序流程图">
+          <defs>
+            <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+              <path d="M0,0 L0,6 L8,3 z" fill="#42556f"></path>
+            </marker>
+            <style>
+              .box { fill: #ffffff; stroke: #9fb4ce; stroke-width: 1.4; }
+              .start { fill: #e7f1ff; stroke: #1f5f99; stroke-width: 1.6; }
+              .recv { fill: #e8f6ef; stroke: #1d7f5c; stroke-width: 1.6; }
+              .proc { fill: #fff3db; stroke: #b27313; stroke-width: 1.6; }
+              .send { fill: #eeeeff; stroke: #5a55a6; stroke-width: 1.6; }
+              .err { fill: #fdecec; stroke: #b73737; stroke-width: 1.6; }
+              .line { stroke: #42556f; stroke-width: 1.6; fill: none; marker-end: url(#arrow); }
+              .dash { stroke: #8191a7; stroke-width: 1.4; fill: none; stroke-dasharray: 6 5; marker-end: url(#arrow); }
+              .txt { font: 14px "Microsoft YaHei", Arial, sans-serif; fill: #142033; }
+              .small { font: 12px Consolas, "Microsoft YaHei", monospace; fill: #4f627a; }
+              .label { font: 12px "Microsoft YaHei", Arial, sans-serif; fill: #33465f; }
+            </style>
+          </defs>
+
+          <rect x="500" y="18" width="280" height="58" rx="29" class="start"></rect>
+          <text x="640" y="42" text-anchor="middle" class="txt">系统启动并进入应用初始化</text>
+          <text x="640" y="62" text-anchor="middle" class="small">App_Init()</text>
+
+          <path d="M640 76 L640 112" class="line"></path>
+          <rect x="470" y="112" width="340" height="68" rx="8" class="start"></rect>
+          <text x="640" y="138" text-anchor="middle" class="txt">初始化 HART 电流环相关外设</text>
+          <text x="640" y="160" text-anchor="middle" class="small">HartInit(): AD5421 + RTS + 参数初值</text>
+
+          <path d="M640 180 L640 216" class="line"></path>
+          <rect x="470" y="216" width="340" height="70" rx="8" class="start"></rect>
+          <text x="640" y="242" text-anchor="middle" class="txt">USART2 启动 DMA 接收并打开空闲中断</text>
+          <text x="640" y="264" text-anchor="middle" class="small">1200 / 9B / NONE / DMA RX-TX</text>
+
+          <path d="M640 286 L640 322" class="line"></path>
+          <rect x="470" y="322" width="340" height="68" rx="8" class="recv"></rect>
+          <text x="640" y="348" text-anchor="middle" class="txt">等待 HART 主站下发一帧命令</text>
+          <text x="640" y="370" text-anchor="middle" class="small">USART2_RX_BUF</text>
+
+          <path d="M640 390 L640 430" class="line"></path>
+          <rect x="470" y="430" width="340" height="78" rx="8" class="recv"></rect>
+          <text x="640" y="458" text-anchor="middle" class="txt">检测到串口空闲，认为一帧接收结束</text>
+          <text x="640" y="480" text-anchor="middle" class="small">USART2_IRQHandler(): IDLE</text>
+
+          <path d="M640 508 L640 548" class="line"></path>
+          <rect x="470" y="548" width="340" height="78" rx="8" class="recv"></rect>
+          <text x="640" y="576" text-anchor="middle" class="txt">停止 DMA 并计算接收长度</text>
+          <text x="640" y="598" text-anchor="middle" class="small">USART2_RX_LEN = BUF_SIZE - DMA_COUNTER</text>
+
+          <path d="M640 626 L640 666" class="line"></path>
+          <rect x="470" y="666" width="340" height="78" rx="8" class="proc"></rect>
+          <text x="640" y="694" text-anchor="middle" class="txt">解析 HART 帧并校验定界符、地址、BCC</text>
+          <text x="640" y="716" text-anchor="middle" class="small">AnalyseRcvPackage()</text>
+
+          <path d="M470 704 L286 704 L286 792" class="line"></path>
+          <rect x="86" y="792" width="400" height="78" rx="8" class="err"></rect>
+          <text x="286" y="820" text-anchor="middle" class="txt">接收异常，打印错误并返回</text>
+          <text x="286" y="842" text-anchor="middle" class="small">返回 1 定界符 / 2 BCC / 3 地址错误</text>
+
+          <path d="M640 744 L640 790" class="line"></path>
+          <rect x="470" y="790" width="340" height="78" rx="8" class="proc"></rect>
+          <text x="640" y="818" text-anchor="middle" class="txt">按命令类型生成响应数据</text>
+          <text x="640" y="840" text-anchor="middle" class="small">命令 0 / 1 / 2 / 3 / 6</text>
+
+          <path d="M810 830 L968 830 L968 792" class="line"></path>
+          <rect x="862" y="704" width="212" height="88" rx="8" class="err"></rect>
+          <text x="968" y="734" text-anchor="middle" class="txt">不支持的命令</text>
+          <text x="968" y="756" text-anchor="middle" class="small">只打印，未明确清零发送长度</text>
+
+          <path d="M640 868 L640 904" class="line"></path>
+          <rect x="470" y="904" width="340" height="72" rx="8" class="proc"></rect>
+          <text x="640" y="930" text-anchor="middle" class="txt">若请求为短帧，则把响应转成短地址响应</text>
+          <text x="640" y="952" text-anchor="middle" class="small">ConvertToShortAddressResponsePacket()</text>
+
+          <path d="M640 976 L640 1012" class="line"></path>
+          <rect x="470" y="1012" width="340" height="66" rx="8" class="proc"></rect>
+          <text x="640" y="1038" text-anchor="middle" class="txt">计算响应 BCC 并添加 6 个前导符</text>
+          <text x="640" y="1060" text-anchor="middle" class="small">CalculateBCC() + AddPreamble()</text>
+
+          <path d="M810 1045 L1012 1045 L1012 930" class="line"></path>
+          <rect x="898" y="884" width="228" height="92" rx="8" class="send"></rect>
+          <text x="1012" y="914" text-anchor="middle" class="txt">有响应数据</text>
+          <text x="1012" y="936" text-anchor="middle" class="small">USART2_TX_LEN &gt; 0</text>
+          <text x="1012" y="958" text-anchor="middle" class="small">RTS 拉低切发送，DMA 发送</text>
+
+          <path d="M1012 884 L1012 828 L1108 828" class="line"></path>
+          <rect x="1108" y="788" width="142" height="80" rx="8" class="send"></rect>
+          <text x="1179" y="818" text-anchor="middle" class="txt">发送完成回调</text>
+          <text x="1179" y="840" text-anchor="middle" class="small">TxCpltCallback()</text>
+
+          <path d="M1179 788 L1179 650 L838 650 L838 356 L810 356" class="line"></path>
+          <text x="1018" y="642" text-anchor="middle" class="label">等待 TC、延时、RTS 拉高、重新启动 DMA 接收</text>
+
+          <path d="M898 930 L846 930 L846 1106 L640 1106 L640 1078" class="dash"></path>
+          <text x="876" y="1098" text-anchor="start" class="label">响应包来自上一步组包结果</text>
+
+          <path d="M470 1045 L346 1045 L346 910" class="line"></path>
+          <rect x="176" y="894" width="340" height="72" rx="8" class="recv"></rect>
+          <text x="346" y="920" text-anchor="middle" class="txt">无发送数据时直接重启 DMA 接收</text>
+          <text x="346" y="942" text-anchor="middle" class="small">HAL_UART_Receive_DMA()</text>
+
+          <path d="M346 894 L346 356 L470 356" class="line"></path>
+        </svg>
+      </div>
+
+      <h3>命令响应分支图</h3>
+      <div class="flow-box">
+        <svg class="responsive-svg" viewBox="0 0 1180 520" role="img" aria-label="HART命令响应分支图">
+          <defs>
+            <marker id="arrow2" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+              <path d="M0,0 L0,6 L8,3 z" fill="#42556f"></path>
+            </marker>
+            <style>
+              .cbox { fill: #ffffff; stroke: #9fb4ce; stroke-width: 1.4; }
+              .cmd { fill: #fff3db; stroke: #b27313; stroke-width: 1.6; }
+              .out { fill: #e7f1ff; stroke: #1f5f99; stroke-width: 1.6; }
+              .bad { fill: #fdecec; stroke: #b73737; stroke-width: 1.6; }
+              .cline { stroke: #42556f; stroke-width: 1.5; fill: none; marker-end: url(#arrow2); }
+              .ctxt { font: 14px "Microsoft YaHei", Arial, sans-serif; fill: #142033; }
+              .csmall { font: 12px Consolas, "Microsoft YaHei", monospace; fill: #4f627a; }
+            </style>
+          </defs>
+          <rect x="470" y="20" width="240" height="58" rx="29" class="cmd"></rect>
+          <text x="590" y="44" text-anchor="middle" class="ctxt">解析出命令号</text>
+          <text x="590" y="64" text-anchor="middle" class="csmall">HartCommand</text>
+
+          <path d="M590 78 L590 120" class="cline"></path>
+          <rect x="470" y="120" width="240" height="64" rx="8" class="cmd"></rect>
+          <text x="590" y="146" text-anchor="middle" class="ctxt">进入命令分支</text>
+          <text x="590" y="166" text-anchor="middle" class="csmall">switch(HartCommand)</text>
+
+          <path d="M470 152 L120 152 L120 226" class="cline"></path>
+          <path d="M540 184 L340 226" class="cline"></path>
+          <path d="M590 184 L590 226" class="cline"></path>
+          <path d="M640 184 L840 226" class="cline"></path>
+          <path d="M710 152 L1060 152 L1060 226" class="cline"></path>
+
+          <rect x="30" y="226" width="180" height="104" rx="8" class="out"></rect>
+          <text x="120" y="254" text-anchor="middle" class="ctxt">读唯一标识</text>
+          <text x="120" y="276" text-anchor="middle" class="csmall">命令0</text>
+          <text x="120" y="300" text-anchor="middle" class="csmall">厂商/设备类型/ID</text>
+
+          <rect x="250" y="226" width="180" height="104" rx="8" class="out"></rect>
+          <text x="340" y="254" text-anchor="middle" class="ctxt">读主变量</text>
+          <text x="340" y="276" text-anchor="middle" class="csmall">命令1</text>
+          <text x="340" y="300" text-anchor="middle" class="csmall">当前写死 1.5 mm</text>
+
+          <rect x="500" y="226" width="180" height="104" rx="8" class="out"></rect>
+          <text x="590" y="254" text-anchor="middle" class="ctxt">读环路电流</text>
+          <text x="590" y="276" text-anchor="middle" class="csmall">命令2</text>
+          <text x="590" y="300" text-anchor="middle" class="csmall">当前写死 4.0 mA</text>
+
+          <rect x="750" y="226" width="180" height="104" rx="8" class="out"></rect>
+          <text x="840" y="254" text-anchor="middle" class="ctxt">读动态变量和电流</text>
+          <text x="840" y="276" text-anchor="middle" class="csmall">命令3</text>
+          <text x="840" y="300" text-anchor="middle" class="csmall">液位/温度/密度/压力</text>
+
+          <rect x="970" y="226" width="180" height="104" rx="8" class="out"></rect>
+          <text x="1060" y="254" text-anchor="middle" class="ctxt">写轮询地址</text>
+          <text x="1060" y="276" text-anchor="middle" class="csmall">命令6</text>
+          <text x="1060" y="300" text-anchor="middle" class="csmall">PollingAddress</text>
+
+          <path d="M120 330 L120 384 L590 384" class="cline"></path>
+          <path d="M340 330 L340 384 L590 384" class="cline"></path>
+          <path d="M590 330 L590 384" class="cline"></path>
+          <path d="M840 330 L840 384 L590 384" class="cline"></path>
+          <path d="M1060 330 L1060 384 L590 384" class="cline"></path>
+
+          <rect x="470" y="384" width="240" height="74" rx="8" class="cmd"></rect>
+          <text x="590" y="412" text-anchor="middle" class="ctxt">统一补充 BCC 和前导符</text>
+          <text x="590" y="434" text-anchor="middle" class="csmall">XOR BCC + 6 个 0xFF</text>
+
+          <rect x="778" y="384" width="270" height="74" rx="8" class="bad"></rect>
+          <text x="913" y="412" text-anchor="middle" class="ctxt">其他命令只打印日志</text>
+          <text x="913" y="434" text-anchor="middle" class="csmall">未按 HART 错误响应返回</text>
+        </svg>
+      </div>
+    </section>
+
+    <section id="hardware">
+      <h2>3. 硬件与串口资源</h2>
+      <p class="lead">当前 HART 通道使用 USART2 作为数字调制数据通道，方向控制由 <span class="tag">HART_RTS</span> 控制，电流输出由 AD5421 负责。</p>
+      <table>
+        <thead>
+          <tr>
+            <th style="width: 18%">资源</th>
+            <th style="width: 20%">当前源码配置</th>
+            <th>说明</th>
+            <th style="width: 24%">依据</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>USART2</td>
+            <td><span class="tag">1200</span> baud，<span class="tag">9B</span>，<span class="tag">NONE</span>，1 stop</td>
+            <td>作为 HART 收发串口。当前源码配置不是常见串口表达里的 8 数据位 + 校验位写法，需要结合 HART 调制芯片和 STM32 9B 配置确认实际线格式。</td>
+            <td>Core/Src/usart.c:241-248</td>
+          </tr>
+          <tr>
+            <td>DMA RX</td>
+            <td>DMA1_Stream5 / Channel4</td>
+            <td>正常模式，接收一帧后由 IDLE 中断停止 DMA 并计算长度。</td>
+            <td>Core/Src/usart.c:531-547</td>
+          </tr>
+          <tr>
+            <td>DMA TX</td>
+            <td>DMA1_Stream6 / Channel4</td>
+            <td>发送响应包。发送前把 RTS 拉低，发送完成回调再拉高。</td>
+            <td>Core/Src/usart.c:549-565；Core/Src/stm32f4xx_it.c:401-409</td>
+          </tr>
+          <tr>
+            <td>USART2 引脚</td>
+            <td>PD5 = USART2_TX；PD6 = USART2_RX</td>
+            <td>CubeMX 标签里 PD5 名为 <span class="tag">HART_RXD2</span>、PD6 名为 <span class="tag">HART_TXD2</span>，与 USART 外设方向命名相反，容易接线和排查时误读。</td>
+            <td>Core/Src/usart.c:519-523；Core/Inc/main.h:128-131</td>
+          </tr>
+          <tr>
+            <td>方向控制</td>
+            <td>PB7 = HART_RTS</td>
+            <td>当前注释语义为 0 发送、1 接收。初始化阶段 GPIO 先置低，<span class="tag">HartInit()</span> 再置高。</td>
+            <td>Core/Src/gpio.c:79-107；Services/Hart/hart.c:54-56</td>
+          </tr>
+          <tr>
+            <td>电流输出</td>
+            <td>AD5421，SPI3 访问</td>
+            <td><span class="tag">Ad5421Init()</span> 复位、写控制寄存器并设置初始电流。应用初始化后又调用 <span class="tag">AD5421_SetCurrent(6.0)</span>。</td>
+            <td>BSP/Peripherals/src/ad5421.c:225-237；Application/Src/app_main.c:104-108</td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="warn">
+        <strong>命名风险：</strong>PD5 实际是 USART2_TX，但宏名是 <span class="tag">HART_RXD2_Pin</span>；PD6 实际是 USART2_RX，但宏名是 <span class="tag">HART_TXD2_Pin</span>。如果硬件图、线束、调试说明也跟着这个标签走，容易把 MCU 视角和外部 HART 模块视角混在一起。
+      </div>
+    </section>
+
+    <section id="frame">
+      <h2>4. HART 帧格式与收发处理</h2>
+      <div class="grid-2">
+        <div class="card">
+          <h3>接收短帧</h3>
+          <table>
+            <tbody>
+              <tr><th>定界符</th><td><span class="tag">0x02</span></td></tr>
+              <tr><th>地址</th><td>1 字节短地址，源码用 <span class="tag">data[1] &amp; 0x3F</span> 与轮询地址比较</td></tr>
+              <tr><th>命令号</th><td><span class="tag">data[2]</span></td></tr>
+              <tr><th>字节数</th><td><span class="tag">ShortFrame.BytesCount</span></td></tr>
+              <tr><th>BCC</th><td>位置为 <span class="tag">BytesCount + 4</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="card">
+          <h3>接收长帧</h3>
+          <table>
+            <tbody>
+              <tr><th>定界符</th><td><span class="tag">0x82</span></td></tr>
+              <tr><th>长地址</th><td>制造商 ID、设备类型、3 字节设备 ID，共 5 字节</td></tr>
+              <tr><th>命令号</th><td><span class="tag">data[6]</span></td></tr>
+              <tr><th>字节数</th><td><span class="tag">LongFrame.BytesCount</span></td></tr>
+              <tr><th>BCC</th><td>位置为 <span class="tag">BytesCount + 8</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <h3>解析规则</h3>
+      <ol>
+        <li>先看第 1 字节定界符，只接受 <span class="tag">0x02</span> 短帧和 <span class="tag">0x82</span> 长帧。</li>
+        <li>短帧校验轮询地址，长帧校验制造商 ID、设备类型和 3 字节设备 ID。</li>
+        <li>从定界符开始到数据结束逐字节异或，得到 BCC，与接收帧 BCC 比较。</li>
+        <li>解析成功返回 0；定界符异常返回 1；BCC 异常返回 2；地址异常返回 3。</li>
+      </ol>
+      <h3>发送规则</h3>
+      <ol>
+        <li>所有命令先按长地址响应格式组包，公共字段包括 <span class="tag">0x86</span> 定界符、5 字节地址、命令号、通信状态、设备状态。</li>
+        <li>如果主站请求是短帧，响应在发送前转换成短地址响应，定界符变成 <span class="tag">0x06</span>。</li>
+        <li>再计算响应 BCC，最后在响应包前面追加 6 个 <span class="tag">0xFF</span> 前导符。</li>
+      </ol>
+      <div class="note">
+        <strong>当前设备长地址：</strong><span class="tag">MANUFACTURER_ID = 0x05</span>、<span class="tag">DEVICE_TYPE = 0x55</span>、<span class="tag">DEVICE_ID_1/2/3 = 0x55</span>。源码注释说明“目前是 VEGA 液位计地址，正常需要 HCF 认证”。
+      </div>
+    </section>
+
+    <section id="commands">
+      <h2>5. 当前支持的 HART 命令</h2>
+      <p class="lead">命令分支位于 <span class="tag">HartCommunicationProcess()</span>，目前支持 0、1、2、3、6 五个命令。下面按源码实际响应整理。</p>
+      <table>
+        <thead>
+          <tr>
+            <th style="width: 10%">命令</th>
+            <th style="width: 20%">功能</th>
+            <th>响应内容</th>
+            <th style="width: 22%">当前数据来源</th>
+            <th style="width: 18%">源码位置</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><span class="badge b-blue">0</span></td>
+            <td>读唯一标识</td>
+            <td>固定值、制造商 ID、设备类型、最少前导码数量、通用命令版本、软件版本、设备版本、硬件版本、设备 ID、设备变量数量、配置变更计数等。</td>
+            <td>宏定义与硬编码字段。</td>
+            <td>hart.c:275-301</td>
+          </tr>
+          <tr>
+            <td><span class="badge b-amber">1</span></td>
+            <td>读主变量</td>
+            <td>单位代码为 <span class="tag">MILLIMETERS = 49</span>，主变量按 HART 大端 float 返回。</td>
+            <td><span class="tag">PrimaryVariable = 1.5</span>，当前写死。</td>
+            <td>hart.c:310-320</td>
+          </tr>
+          <tr>
+            <td><span class="badge b-amber">2</span></td>
+            <td>读环路电流和量程百分比</td>
+            <td>返回电流值和主变量量程百分比。百分比计算公式为 <span class="tag">(Current - 4.0) / 16.0</span>。</td>
+            <td><span class="tag">Current = 4.0</span>，当前写死；没有读取 AD5421 实际输出。</td>
+            <td>hart.c:329-339</td>
+          </tr>
+          <tr>
+            <td><span class="badge b-amber">3</span></td>
+            <td>读动态变量和环路电流</td>
+            <td>返回电流、主变量液位、第二变量温度、第三变量密度、第四变量压力。</td>
+            <td>电流 4.0、液位 1.1、温度 2.2、密度 3.3、压力 1.0 均写死。</td>
+            <td>hart.c:348-369</td>
+          </tr>
+          <tr>
+            <td><span class="badge b-purple">6</span></td>
+            <td>写轮询地址</td>
+            <td>从接收帧数据区读取轮询地址，响应轮询地址和环路电流使能标志。</td>
+            <td>使用 <span class="tag">revframe-&gt;LongFrame.Date[0]</span>；响应中 <span class="tag">EnableLoopCurrent = 3</span>。</td>
+            <td>hart.c:378-388</td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="risk">
+        <strong>功能缺口：</strong>命令 1/2/3 是上位机最常用的读数入口，但当前没有接入真实液位、温度、压力、密度、状态字或 AD5421 当前设定值。因此上位机看到的 HART 数据不能代表设备真实测量结果。
+      </div>
+    </section>
+
+    <section id="data">
+      <h2>6. 参数结构与数据含义</h2>
+      <div class="grid-2">
+        <div class="card">
+          <h3>HART 运行参数</h3>
+          <table>
+            <thead>
+              <tr><th>字段</th><th>含义</th><th>当前初始化</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>CommunicationStatus</td><td>通信状态</td><td>未在 <span class="tag">HartParameterInit()</span> 中显式初始化</td></tr>
+              <tr><td>DeviceStatus</td><td>设备状态</td><td>未显式初始化</td></tr>
+              <tr><td>PollingAddress</td><td>短地址轮询地址</td><td>未显式初始化，命令 6 可改写</td></tr>
+              <tr><td>Current</td><td>环路电流 mA</td><td>初始化为 1.0，响应命令 2/3 又写为 4.0</td></tr>
+              <tr><td>PrimaryVariable</td><td>主变量：液位</td><td>初始化为 1.0，命令 1 写 1.5，命令 3 写 1.1</td></tr>
+              <tr><td>SecondaryVariable</td><td>第二变量：温度</td><td>初始化为 1.0，命令 3 写 2.2</td></tr>
+              <tr><td>TertiaryVariable</td><td>第三变量：密度</td><td>初始化为 1.0，命令 3 写 3.3</td></tr>
+              <tr><td>FourthVariable</td><td>第四变量：压力</td><td>未在初始化中设置，命令 3 写 1.0</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="card">
+          <h3>单位代码</h3>
+          <table>
+            <thead>
+              <tr><th>宏</th><th>值</th><th>用途</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>MILLIMETERS</td><td>49</td><td>主变量液位，单位 mm</td></tr>
+              <tr><td>DEGREES_CELSIUS</td><td>32</td><td>第二变量温度，单位 ℃</td></tr>
+              <tr><td>KG_CUM</td><td>92</td><td>第三变量密度，单位 kg/m³</td></tr>
+              <tr><td>MEGAPASCALS</td><td>237</td><td>第四变量压力，单位 MPa</td></tr>
+            </tbody>
+          </table>
+          <p>HART float 按大端字节序传输，源码通过 <span class="tag">SetFloatData()</span> 对本机 float 的 4 字节顺序做翻转后写入响应结构。</p>
+        </div>
+      </div>
+    </section>
+
+    <section id="timing">
+      <h2>7. USART2 收发时序</h2>
+      <ol>
+        <li>系统初始化 USART2 后，立刻使能 IDLE 中断并启动 DMA 接收。</li>
+        <li>主站发送 HART 命令，数据进入 <span class="tag">USART2_RX_BUF</span>。</li>
+        <li>USART2 检测到空闲中断，认为本帧结束。</li>
+        <li>中断中停止 DMA，计算 <span class="tag">USART2_RX_LEN</span>。</li>
+        <li>直接在中断中调用 <span class="tag">HartCommunicationProcess()</span> 解析帧并组响应包。</li>
+        <li>如果 <span class="tag">USART2_TX_LEN &gt; 0</span>，把 <span class="tag">HART_RTS</span> 拉低切换发送模式，通过 DMA 发出响应。</li>
+        <li>发送完成回调等待 <span class="tag">UART_FLAG_TC</span>，再执行 180000 次空操作延时。</li>
+        <li>延时后把 <span class="tag">HART_RTS</span> 拉高切回接收模式，重新启动 DMA 接收。</li>
+      </ol>
+      <div class="warn">
+        <strong>实时性提醒：</strong>当前解析、组包、printf 调试输出都发生在 USART2 中断上下文内；发送完成回调里还有忙等和固定空循环。这会放大中断占用时间，对其他实时任务和串口响应都有影响。
+      </div>
+    </section>
+
+    <section id="issues">
+      <h2>8. 当前问题点与待确认项</h2>
+      <table>
+        <thead>
+          <tr>
+            <th style="width: 14%">类别</th>
+            <th style="width: 30%">问题</th>
+            <th>影响</th>
+            <th style="width: 20%">建议处理</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><span class="badge b-red">数据真实性</span></td>
+            <td>命令 1/2/3 响应值为硬编码，不来自测量链路。</td>
+            <td>HART 上位机读到的是演示值，不能用于真实液位、环路电流或诊断。</td>
+            <td>接入统一测量快照和 AD5421 当前设定值。</td>
+          </tr>
+          <tr>
+            <td><span class="badge b-red">边界保护</span></td>
+            <td>解析帧时按 <span class="tag">BytesCount</span> 推算 BCC 位置，但没有先验证接收长度是否足够。</td>
+            <td>异常短帧、畸形帧或噪声帧可能导致越界读取。</td>
+            <td>把 <span class="tag">USART2_RX_LEN</span> 传入解析函数，先做最小长度和最大长度检查。</td>
+          </tr>
+          <tr>
+            <td><span class="badge b-amber">协议响应</span></td>
+            <td>不支持的命令只打印日志，未构造 HART 错误响应，也未明确清零发送长度。</td>
+            <td>可能造成主站无响应，或在特定路径下沿用旧发送长度。</td>
+            <td>默认分支应生成标准错误响应或明确 <span class="tag">*Sendlen = 0</span>。</td>
+          </tr>
+          <tr>
+            <td><span class="badge b-amber">轮询地址</span></td>
+            <td>命令 6 固定从 <span class="tag">LongFrame.Date[0]</span> 取新地址。</td>
+            <td>如果命令 6 以短帧进入，字段解释可能不正确。</td>
+            <td>按实际帧类型分别读取短帧/长帧数据区。</td>
+          </tr>
+          <tr>
+            <td><span class="badge b-amber">参数初始化</span></td>
+            <td><span class="tag">CommunicationStatus</span>、<span class="tag">DeviceStatus</span>、<span class="tag">PollingAddress</span>、<span class="tag">FourthVariable</span> 未显式初始化。</td>
+            <td>虽然全局静态变量通常清零，但代码意图不清晰，后续改为局部或复位流程变化时风险增大。</td>
+            <td>在 <span class="tag">HartParameterInit()</span> 内全部显式赋值。</td>
+          </tr>
+          <tr>
+            <td><span class="badge b-red">中断负载</span></td>
+            <td>接收中断中执行 HART 解析、组包和 printf；发送完成回调里忙等 TC 和空循环。</td>
+            <td>可能拖慢其他中断响应，引入偶发通信延迟。</td>
+            <td>中断只搬运事件和长度，协议解析放到任务或主循环。</td>
+          </tr>
+          <tr>
+            <td><span class="badge b-purple">串口格式</span></td>
+            <td>源码配置为 <span class="tag">UART_WORDLENGTH_9B</span> + <span class="tag">UART_PARITY_NONE</span>。</td>
+            <td>是否满足目标 HART 主站/调制解调器要求需要实测确认。</td>
+            <td>用示波器/逻辑分析仪确认位宽、校验、停止位，并与 HART 芯片手册一致。</td>
+          </tr>
+          <tr>
+            <td><span class="badge b-purple">引脚命名</span></td>
+            <td>PD5/PD6 的宏名与 USART2 外设方向相反。</td>
+            <td>容易误接、误测或误写文档。</td>
+            <td>统一命名为 MCU 视角，或在文档和原理图中明确“外部模块视角”。</td>
+          </tr>
+          <tr>
+            <td><span class="badge b-amber">前导符搬移</span></td>
+            <td><span class="tag">AddPreamble()</span> 从 <span class="tag">i = datalen</span> 开始搬移，可能多复制一个未定义位置。</td>
+            <td>当前可能不一定触发可见问题，但属于边界不严谨。</td>
+            <td>从 <span class="tag">datalen - 1</span> 开始倒序搬移，并配合缓冲区容量检查。</td>
+          </tr>
+          <tr>
+            <td><span class="badge b-amber">电流一致性</span></td>
+            <td>AD5421 初始化后应用又设置 6.0mA，但 HART 命令 2/3 返回 4.0mA。</td>
+            <td>HART 报告电流和实际输出电流可能不一致。</td>
+            <td>维护一个唯一的环路电流状态源，设置 AD5421 和 HART 响应都从这里取值。</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="optimize">
+      <h2>9. 后续优化建议</h2>
+      <div class="grid-2">
+        <div class="card">
+          <h3>优先级一：让 HART 数据可信</h3>
+          <ul>
+            <li>把命令 1/3 的主变量接到当前液位测量结果，单位统一为 mm。</li>
+            <li>把命令 2/3 的电流值接到 AD5421 设定状态或电流输出管理模块。</li>
+            <li>设备状态、通信状态要从故障码、测量状态、输出报警状态映射到 HART 状态字。</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3>优先级二：补齐协议健壮性</h3>
+          <ul>
+            <li>解析函数增加接收长度参数，先检查最小长度、最大长度、数据区长度和 BCC 下标。</li>
+            <li>不支持命令、参数错误、地址错误应按协议返回可识别错误，而不是只 printf。</li>
+            <li>短帧和长帧的数据区访问分开写，避免命令 6 这类字段读取歧义。</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3>优先级三：降低中断复杂度</h3>
+          <ul>
+            <li>USART2 中断只记录接收长度并置位事件，主循环或通信任务里解析 HART。</li>
+            <li>删除中断里的 printf，改成可控的调试缓存或低频日志。</li>
+            <li>发送完成后的固定空循环改成基于波特率/定时器/状态机的方向切换延时。</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3>优先级四：便于维护和认证</h3>
+          <ul>
+            <li>把设备唯一标识、版本号、制造商 ID、设备类型集中配置，不要散落在响应函数中。</li>
+            <li>确认 HCF 认证相关 ID 和通用命令版本字段，避免沿用 VEGA 示例地址。</li>
+            <li>整理 HART 命令测试用例，固定输入帧、期望响应、BCC 和前导符数量。</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section id="debug">
+      <h2>10. 调试与验证清单</h2>
+      <div class="grid-3">
+        <div class="card">
+          <h3>波形验证</h3>
+          <ul>
+            <li>抓 PD5、PD6、PB7 三路波形。</li>
+            <li>确认 RTS 低电平只覆盖发送窗口，发送完成后能回到高电平接收。</li>
+            <li>确认 1200 波特率下的帧间空闲和 IDLE 触发时机。</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3>协议验证</h3>
+          <ul>
+            <li>逐个发送命令 0、1、2、3、6 的短帧和长帧。</li>
+            <li>核对定界符、地址、字节数、数据区、BCC 和前导符数量。</li>
+            <li>构造错误 BCC、错误地址、错误长度，验证设备响应或拒绝路径。</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3>业务验证</h3>
+          <ul>
+            <li>改变真实液位后，命令 1/3 的主变量应随测量值变化。</li>
+            <li>改变电流输出设定后，命令 2/3 的电流应与 AD5421 输出一致。</li>
+            <li>模拟设备故障后，HART 设备状态应能反映异常。</li>
+          </ul>
+        </div>
+      </div>
+      <div class="note">
+        <strong>推荐测试顺序：</strong>先只测命令 0 确认地址、前导符、BCC 和方向控制；再测命令 1/2/3 的数据字段；最后测命令 6 改地址，以及错误帧处理。
+      </div>
+    </section>
+
+    <section id="source">
+      <h2>11. 源码索引</h2>
+      <p class="lead">本文依据以下当前源码整理。若后续修改 HART 程序，应同步更新本 HTML。</p>
+      <ul class="source-list">
+        <li><span class="tag">Services/Hart/hart.h:6-18</span> 帧定界符、前导符数量和支持命令。</li>
+        <li><span class="tag">Services/Hart/hart.h:35-47</span> HART 参数结构体。</li>
+        <li><span class="tag">Services/Hart/hart.h:51-148</span> 接收/发送帧结构体和共用体。</li>
+        <li><span class="tag">Services/Hart/hart.c:52-74</span> HART 初始化和参数初始化。</li>
+        <li><span class="tag">Services/Hart/hart.c:82-148</span> HART 命令处理主入口。</li>
+        <li><span class="tag">Services/Hart/hart.c:161-208</span> 接收帧解析、地址校验和 BCC 校验。</li>
+        <li><span class="tag">Services/Hart/hart.c:222-267</span> 响应公共字段、BCC 和 float 字节序处理。</li>
+        <li><span class="tag">Services/Hart/hart.c:275-388</span> 命令 0、1、2、3、6 响应函数。</li>
+        <li><span class="tag">Services/Hart/hart.c:398-430</span> 短地址响应转换和前导符添加。</li>
+        <li><span class="tag">Core/Src/usart.c:37-40</span> USART2 收发缓冲区。</li>
+        <li><span class="tag">Core/Src/usart.c:70-80</span> USART2 发送完成回调。</li>
+        <li><span class="tag">Core/Src/usart.c:231-255</span> USART2 参数和 DMA 接收启动。</li>
+        <li><span class="tag">Core/Src/stm32f4xx_it.c:382-420</span> USART2 空闲中断接收处理。</li>
+        <li><span class="tag">BSP/Peripherals/src/ad5421.c:55-65</span> AD5421 电流设定。</li>
+        <li><span class="tag">BSP/Peripherals/src/ad5421.c:225-237</span> AD5421 初始化。</li>
+        <li><span class="tag">Application/Src/app_main.c:97-108</span> 应用初始化中的 HART/AD5421 调用。</li>
+      </ul>
+    </section>
+  </div>
+</body>
+</html>

@@ -41,6 +41,8 @@ Objects/
 __pycache__/
 old/
 .worktrees/
+tmp/
 
-# Local generated static documentation site. Regenerate with tools\build_static_docs_site.py.
+# Local documentation preview and legacy generated static documentation sites.
+docs-site/
 site/

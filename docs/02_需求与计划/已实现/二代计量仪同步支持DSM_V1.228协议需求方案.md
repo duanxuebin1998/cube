@@ -712,7 +712,11 @@ DSM 文档建议：
 
 目标：用脚本锁定 DSM V1.228 行为，避免后续回归。
 
-建议新增测试脚本：
+当前已有检查脚本：
+
+- `tools\check_dsm_compat_contract.py`：锁定 DSM 一代兼容口径中的关键寄存器转换。
+
+后续如继续补齐 DSM V1.228 全量协议回归，再新增：
 
 - `tools\check_dsm_modbus_frames.py`
 - `tools\check_dsm_protocol_contract.py`

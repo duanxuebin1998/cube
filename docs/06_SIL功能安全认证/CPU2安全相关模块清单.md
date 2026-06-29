@@ -70,8 +70,8 @@ CPU2 模块按安全影响分为四级：
 | `LTD_MAIN_CPU2/Services/Sensor/sensor.c` | 传感器统一读取和模式切换 | 传感器卡死、错误被清除、模式未稳定 | 超时、重试、状态保持 |
 | `LTD_MAIN_CPU2/Services/Sensor/dsm_sensor_communication.c` | DSM 传感器通信 | DMA 长度、字符串解析、BCC | 缓冲区边界、字符串终止 |
 | `LTD_MAIN_CPU2/Services/Sensor/ltd_sensor_communication.c` | LTD 传感器通信 | 协议帧错误、超时 | 帧长检查、错误码 |
-| `LTD_MAIN_CPU2/Services/Sensor/wireless_communication.c` | 无线滑环通信 | 外部参数不可信、重试逻辑 | 参数范围、超时、返回值 |
-| `LTD_MAIN_CPU2/Services/Sensor/wireless_pairing.c` | 无线匹配 | 匹配过程影响测量状态 | 状态隔离、人工命令抢占 |
+| `LTD_MAIN_CPU2/Services/Sensor/ch9141_at.c` | CH9141K AT 指令收发、UART6 AT 模式切换和透传恢复 | 外部响应不可信、超时、UART6 被 AT 模式占用后未恢复 | 响应长度、超时、错误恢复、返回值 |
+| `LTD_MAIN_CPU2/Services/Sensor/wireless_pairing.c` | 无线滑环匹配、连接状态和 RSSI 查询 | 匹配过程影响测量状态、RSSI/连接状态误判、命令切换后继续占用传感器链路 | 状态隔离、人工命令抢占、超时和错误码传播 |
 
 ### 3.3 参数存储和错误日志
 

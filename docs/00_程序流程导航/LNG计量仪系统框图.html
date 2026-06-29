@@ -1,0 +1,1173 @@
+﻿<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>LNG计量仪系统框图</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f4f6f8;
+      --paper: #ffffff;
+      --ink: #1f2933;
+      --muted: #657384;
+      --line: #d7dee8;
+      --head: #eef3f8;
+      --cpu3: #0f6b73;
+      --cpu2: #1f5f99;
+      --field: #7a4d11;
+      --safe: #197044;
+      --warn: #9a5b00;
+      --danger: #b42318;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font: 15px/1.68 "Microsoft YaHei", "Segoe UI", Arial, sans-serif;
+      letter-spacing: 0;
+    }
+
+    header {
+      background: #12202f;
+      color: #fff;
+      padding: 34px 0 28px;
+      border-bottom: 5px solid var(--cpu3);
+    }
+
+    main,
+    .wrap {
+      width: min(1220px, calc(100% - 32px));
+      margin: 0 auto;
+    }
+
+    main { padding: 22px 0 56px; }
+
+    h1,
+    h2,
+    h3 {
+      margin: 0;
+      line-height: 1.28;
+      letter-spacing: 0;
+    }
+
+    h1 {
+      font-size: 32px;
+      margin-bottom: 10px;
+    }
+
+    h2 {
+      font-size: 22px;
+      margin: 30px 0 12px;
+      padding-bottom: 8px;
+      border-bottom: 2px solid var(--line);
+    }
+
+    h3 {
+      font-size: 17px;
+      margin: 18px 0 8px;
+      color: #153d63;
+    }
+
+    p { margin: 8px 0; }
+
+    code {
+      padding: 1px 5px;
+      border-radius: 4px;
+      background: #e9eef5;
+      font-family: Consolas, "Courier New", monospace;
+      font-size: 0.94em;
+    }
+
+    a { color: #1d5fbf; }
+
+    .subtitle {
+      color: #d8e0ea;
+      max-width: 900px;
+      margin: 0;
+    }
+
+    .meta {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+      margin-top: 18px;
+    }
+
+    .meta div {
+      min-height: 62px;
+      padding: 10px 12px;
+      border: 1px solid rgba(255, 255, 255, 0.22);
+      background: rgba(255, 255, 255, 0.08);
+    }
+
+    .label {
+      display: block;
+      color: #aec1d4;
+      font-size: 12px;
+      margin-bottom: 4px;
+    }
+
+    .toc {
+      background: var(--paper);
+      border: 1px solid var(--line);
+      padding: 16px 18px;
+      margin: 18px 0 24px;
+    }
+
+    .toc ol {
+      columns: 2;
+      column-gap: 36px;
+      margin: 0;
+      padding-left: 22px;
+    }
+
+    .toc li {
+      margin: 4px 0;
+      break-inside: avoid;
+    }
+
+    .note,
+    .warn,
+    .panel {
+      background: var(--paper);
+      border: 1px solid var(--line);
+      padding: 13px 15px;
+      margin: 12px 0;
+    }
+
+    .note { border-left: 4px solid var(--cpu2); }
+    .warn { border-left: 4px solid var(--warn); }
+
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px 14px;
+      margin-top: 10px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .legend span {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      white-space: nowrap;
+    }
+
+    .dot {
+      width: 12px;
+      height: 12px;
+      display: inline-block;
+      border-radius: 3px;
+      border: 1px solid rgba(0, 0, 0, 0.12);
+    }
+
+    .dot.cpu3 { background: #dff5f7; }
+    .dot.cpu2 { background: #e3f0ff; }
+    .dot.field { background: #fff3dc; }
+    .dot.safe { background: #e7f6ee; }
+
+    .diagram {
+      background: var(--paper);
+      border: 1px solid var(--line);
+      padding: 12px;
+      margin: 12px 0 20px;
+      overflow-x: auto;
+    }
+
+    svg {
+      width: 100%;
+      min-width: 980px;
+      height: auto;
+      display: block;
+    }
+
+    .svg-title {
+      font-size: 20px;
+      font-weight: 700;
+      fill: #243447;
+    }
+
+    .box-title {
+      font-size: 16px;
+      font-weight: 700;
+      fill: #1f2933;
+    }
+
+    .box-text {
+      font-size: 13px;
+      fill: #394b5d;
+    }
+
+    .small-text {
+      font-size: 12px;
+      fill: #526474;
+    }
+
+    .muted-text {
+      font-size: 12px;
+      fill: #718096;
+    }
+
+    .line-label {
+      font-size: 12px;
+      fill: #34495e;
+      font-weight: 700;
+    }
+
+    .table-wrap {
+      overflow-x: auto;
+      margin: 12px 0 20px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: var(--paper);
+      border: 1px solid var(--line);
+    }
+
+    th,
+    td {
+      border: 1px solid var(--line);
+      padding: 9px 11px;
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th {
+      background: var(--head);
+      font-weight: 700;
+    }
+
+    ul,
+    ol {
+      margin: 8px 0 12px;
+      padding-left: 22px;
+    }
+
+    li + li { margin-top: 4px; }
+
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+      margin: 12px 0;
+    }
+
+    .card {
+      background: var(--paper);
+      border: 1px solid var(--line);
+      padding: 12px 14px;
+    }
+
+    .card h3 { margin-top: 0; }
+
+    .chip {
+      display: inline-block;
+      padding: 1px 8px;
+      border-radius: 999px;
+      background: #e8f1ff;
+      color: #164f9f;
+      font-size: 12px;
+      font-weight: 700;
+      white-space: nowrap;
+      margin: 2px 4px 2px 0;
+    }
+
+    .chip.green {
+      background: #e7f6ee;
+      color: #0b6b3a;
+    }
+
+    .chip.orange {
+      background: #fff3dc;
+      color: #805100;
+    }
+
+    .chip.red {
+      background: #ffe7e4;
+      color: #a32116;
+    }
+
+    @media (max-width: 900px) {
+      .meta,
+      .cards { grid-template-columns: 1fr; }
+      .toc ol { columns: 1; }
+      h1 { font-size: 27px; }
+    }
+
+    @media print {
+      body { background: #fff; }
+      header {
+        background: #fff;
+        color: #111;
+        border-bottom-color: #999;
+      }
+      .subtitle,
+      .label { color: #555; }
+      main,
+      .wrap { width: 100%; }
+      .diagram { break-inside: avoid; }
+      a { color: #111; text-decoration: none; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="wrap">
+      <h1>LNG计量仪系统框图</h1>
+      <p class="subtitle">依据当前 CUBE 工程整理的系统级硬件拓扑、硬件连接、CPU2/CPU3 数据闭环、外部协议适配和启动安全/故障恢复链路。</p>
+      <div class="meta">
+        <div><span class="label">适用设备</span>LNG 二代计量仪双板固件</div>
+        <div><span class="label">CPU2 主控板</span><code>V1.19.0.0</code></div>
+        <div><span class="label">CPU3 显示通讯板</span><code>V1.17.0.0</code></div>
+        <div><span class="label">共享协议</span><code>DEVICE_PROTOCOL_VERSION = 13</code></div>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <section class="toc" aria-labelledby="toc-title">
+      <h2 id="toc-title">目录</h2>
+      <ol>
+        <li><a href="#scope">阅读口径</a></li>
+        <li><a href="#overall">整机系统框图</a></li>
+        <li><a href="#hardware">硬件框图</a></li>
+        <li><a href="#data-loop">CPU2/CPU3 数据闭环</a></li>
+        <li><a href="#external">外部接口与协议适配</a></li>
+        <li><a href="#measurement">测量执行链路</a></li>
+        <li><a href="#safety">启动安全与故障恢复链路</a></li>
+        <li><a href="#module-table">模块职责速查</a></li>
+        <li><a href="#sources">资料来源</a></li>
+      </ol>
+    </section>
+
+    <section id="scope">
+      <h2>阅读口径</h2>
+      <div class="note">
+        <p>本图按“现场能接线、开发能定位、联调能追数据”的口径整理。CPU3 是显示和外部通讯入口，CPU2 是测量控制和底层硬件控制入口；两板之间用内部 Modbus RTU 同步参数、命令、状态和测量结果。</p>
+      </div>
+      <div class="legend" aria-label="图例">
+        <span><i class="dot cpu3"></i>CPU3 显示通讯板</span>
+        <span><i class="dot cpu2"></i>CPU2 主控测量板</span>
+        <span><i class="dot field"></i>外部主站或现场设备</span>
+        <span><i class="dot safe"></i>安全、恢复、维护链路</span>
+      </div>
+    </section>
+
+    <section id="overall">
+      <h2>整机系统框图</h2>
+      <div class="diagram">
+        <svg viewBox="0 0 1180 640" role="img" aria-labelledby="overall-title overall-desc">
+          <title id="overall-title">LNG计量仪整机系统框图</title>
+          <desc id="overall-desc">外部主站经 CPU3 COM 口接入，CPU3 通过内部 Modbus 轮询 CPU2，CPU2 控制电机、传感器、无线滑环、扭力和模拟输出。</desc>
+          <defs>
+            <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#526474"></path>
+            </marker>
+            <filter id="soft-shadow" x="-4%" y="-4%" width="108%" height="108%">
+              <feDropShadow dx="0" dy="1" stdDeviation="1.2" flood-color="#1b2733" flood-opacity="0.12"></feDropShadow>
+            </filter>
+          </defs>
+
+          <text x="24" y="34" class="svg-title">整机硬件与通信拓扑</text>
+
+          <rect x="24" y="72" width="210" height="470" rx="8" fill="#fff3dc" stroke="#d6a55d" filter="url(#soft-shadow)"></rect>
+          <text x="44" y="104" class="box-title">外部主站 / 现场设备</text>
+          <text x="44" y="134" class="box-text">PLC / DCS / 上位机</text>
+          <text x="44" y="158" class="box-text">DSM V1.228 主站</text>
+          <text x="44" y="182" class="box-text">SI7000 PLC</text>
+          <text x="44" y="206" class="box-text">Wärtsilä / LTD 主站</text>
+          <text x="44" y="246" class="box-text">现场操作人员</text>
+          <text x="44" y="270" class="small-text">通过按键和屏幕菜单操作</text>
+          <text x="44" y="310" class="box-text">维护工具</text>
+          <text x="44" y="334" class="small-text">串口日志 / 调试命令</text>
+
+          <rect x="308" y="58" width="330" height="512" rx="8" fill="#dff5f7" stroke="#70b8be" filter="url(#soft-shadow)"></rect>
+          <text x="330" y="92" class="box-title">CPU3 显示通讯板</text>
+          <text x="330" y="116" class="small-text">显示、菜单、外部协议转换、轮询 CPU2</text>
+
+          <rect x="332" y="146" width="282" height="72" rx="6" fill="#ffffff" stroke="#a9d8dc"></rect>
+          <text x="352" y="174" class="box-title">屏幕与菜单</text>
+          <text x="352" y="198" class="box-text">状态页 / 参数页 / 维护调试入口</text>
+
+          <rect x="332" y="238" width="282" height="98" rx="6" fill="#ffffff" stroke="#a9d8dc"></rect>
+          <text x="352" y="266" class="box-title">外部协议适配层</text>
+          <text x="352" y="290" class="box-text">DSM / Wärtsilä / LTD / SI7000</text>
+          <text x="352" y="314" class="small-text">按 COM1/COM2/COM3 配置分发</text>
+
+          <rect x="332" y="356" width="282" height="76" rx="6" fill="#ffffff" stroke="#a9d8dc"></rect>
+          <text x="352" y="384" class="box-title">CPU2 轮询与同步</text>
+          <text x="352" y="408" class="box-text">读输入寄存器 / 写保持寄存器</text>
+
+          <rect x="332" y="452" width="282" height="76" rx="6" fill="#ffffff" stroke="#a9d8dc"></rect>
+          <text x="352" y="480" class="box-title">CPU3 本机参数 FRAM</text>
+          <text x="352" y="504" class="box-text">COM 配置 / 显示配置 / 菜单缓存</text>
+
+          <rect x="726" y="58" width="338" height="512" rx="8" fill="#e3f0ff" stroke="#8bb7e5" filter="url(#soft-shadow)"></rect>
+          <text x="748" y="92" class="box-title">CPU2 主控测量板</text>
+          <text x="748" y="116" class="small-text">测量状态机、参数持久化、底层硬件控制</text>
+
+          <rect x="750" y="146" width="290" height="78" rx="6" fill="#ffffff" stroke="#b7d3f0"></rect>
+          <text x="770" y="174" class="box-title">命令调度与测量流程</text>
+          <text x="770" y="198" class="box-text">找液位 / 找水位 / 探底 / 单点 / 分布 / 跟随</text>
+
+          <rect x="750" y="244" width="290" height="82" rx="6" fill="#ffffff" stroke="#b7d3f0"></rect>
+          <text x="770" y="272" class="box-title">参数管理与内部 Modbus</text>
+          <text x="770" y="296" class="box-text">DeviceParameters / MeasurementResult</text>
+          <text x="770" y="318" class="small-text">FRAM 持久化、CRC、协议版本发布</text>
+
+          <rect x="750" y="346" width="290" height="92" rx="6" fill="#ffffff" stroke="#b7d3f0"></rect>
+          <text x="770" y="374" class="box-title">电机与位置控制</text>
+          <text x="770" y="398" class="box-text">TMC5130 / 编码器 AS5145 / 尺带位置</text>
+          <text x="770" y="420" class="small-text">启动安全停机、运动就绪门控</text>
+
+          <rect x="750" y="458" width="290" height="78" rx="6" fill="#ffffff" stroke="#b7d3f0"></rect>
+          <text x="770" y="486" class="box-title">传感器与输出控制</text>
+          <text x="770" y="510" class="box-text">无线滑环 / 扭力 / HART / 4-20mA / AD5421</text>
+
+          <rect x="1088" y="116" width="132" height="406" rx="8" fill="#fff3dc" stroke="#d6a55d" transform="translate(-56 0)"></rect>
+          <text x="1054" y="148" class="box-title">现场外设</text>
+          <text x="1054" y="184" class="box-text">电机机构</text>
+          <text x="1054" y="214" class="box-text">编码轮</text>
+          <text x="1054" y="244" class="box-text">探头传感器</text>
+          <text x="1054" y="274" class="box-text">无线滑环</text>
+          <text x="1054" y="304" class="box-text">扭力模块</text>
+          <text x="1054" y="334" class="box-text">水位电容</text>
+          <text x="1054" y="364" class="box-text">陀螺仪</text>
+          <text x="1054" y="394" class="box-text">HART</text>
+          <text x="1054" y="424" class="box-text">4-20mA</text>
+
+          <path d="M 234 286 C 258 286, 276 286, 308 286" stroke="#526474" stroke-width="2.2" fill="none" marker-end="url(#arrow)"></path>
+          <text x="244" y="266" class="line-label">COM1/2/3</text>
+          <text x="244" y="282" class="muted-text">RS485 / UART</text>
+
+          <path d="M 638 392 C 666 392, 696 392, 726 392" stroke="#526474" stroke-width="2.2" fill="none" marker-end="url(#arrow)"></path>
+          <path d="M 726 416 C 698 416, 668 416, 638 416" stroke="#526474" stroke-width="2.2" fill="none" marker-end="url(#arrow)"></path>
+          <text x="652" y="373" class="line-label">UART5 + RS485</text>
+          <text x="660" y="436" class="muted-text">内部 Modbus RTU</text>
+
+          <path d="M 1040 392 C 1060 392, 1068 392, 1080 392" stroke="#526474" stroke-width="2.2" fill="none" marker-end="url(#arrow)"></path>
+          <path d="M 1080 420 C 1068 420, 1060 420, 1040 420" stroke="#526474" stroke-width="2.2" fill="none" marker-end="url(#arrow)"></path>
+          <text x="1038" y="372" class="line-label">SPI / UART / GPIO / ADC</text>
+
+          <path d="M 234 170 C 270 170, 286 170, 332 176" stroke="#526474" stroke-width="2" fill="none" marker-end="url(#arrow)"></path>
+          <path d="M 614 176 C 654 176, 696 176, 750 176" stroke="#526474" stroke-width="2" fill="none" marker-end="url(#arrow)"></path>
+          <path d="M 750 202 C 704 202, 654 202, 614 202" stroke="#526474" stroke-width="2" fill="none" marker-end="url(#arrow)"></path>
+          <text x="642" y="154" class="line-label">菜单命令 / 状态显示</text>
+        </svg>
+      </div>
+
+      <div class="cards">
+        <article class="card">
+          <h3>CPU3 是入口层</h3>
+          <p>外部主站和现场人员主要接触 CPU3。CPU3 负责协议选择、串口参数归一化、屏幕显示、菜单参数写入，并通过内部链路把命令和参数同步到 CPU2。</p>
+        </article>
+        <article class="card">
+          <h3>CPU2 是执行层</h3>
+          <p>CPU2 承担测量流程、电机控制、传感器读取、参数 FRAM 持久化、故障自动恢复和运行态结果发布，是所有实际动作的最终执行端。</p>
+        </article>
+        <article class="card">
+          <h3>共享协议是边界</h3>
+          <p>固件版本只用于显示和追踪；CPU2/CPU3 是否兼容以 <code>DeviceParameters.protocolVersion</code> 严格相等为准，当前为协议版本 12。</p>
+        </article>
+      </div>
+    </section>
+
+    <section id="hardware">
+      <h2>硬件框图</h2>
+      <div class="note">
+        <p>两块板卡主控均为 <code>STM32F429ZGTx</code>。CPU3 侧负责显示、按键、外部 COM 口和到 CPU2 的内部 485；CPU2 侧负责电机驱动、编码器、传感器链路、HART/4-20mA、FRAM、继电器和电源检测。</p>
+      </div>
+      <div class="diagram">
+        <svg viewBox="0 0 1180 760" role="img" aria-labelledby="hardware-title hardware-desc">
+          <title id="hardware-title">LNG计量仪硬件框图</title>
+          <desc id="hardware-desc">CPU3 显示通讯板和 CPU2 主控测量板的 MCU、总线、外部接口、驱动芯片和现场外设连接关系。</desc>
+          <defs>
+            <marker id="arrow-hw" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#526474"></path>
+            </marker>
+          </defs>
+
+          <text x="24" y="34" class="svg-title">硬件连接总览</text>
+
+          <rect x="34" y="70" width="520" height="640" rx="8" fill="#dff5f7" stroke="#70b8be"></rect>
+          <text x="58" y="104" class="box-title">CPU3 显示通讯板</text>
+          <text x="58" y="128" class="small-text">STM32F429ZGTx，显示、菜单、COM 口、内部 485 主站</text>
+
+          <rect x="226" y="278" width="170" height="126" rx="8" fill="#ffffff" stroke="#70b8be"></rect>
+          <text x="250" y="316" class="box-title">STM32F429</text>
+          <text x="248" y="342" class="box-text">CPU3 MCU</text>
+          <text x="248" y="366" class="small-text">DMA + IDLE 串口接收</text>
+          <text x="248" y="388" class="small-text">CRC / IWDG / TIM1~4</text>
+
+          <rect x="62" y="166" width="148" height="68" rx="6" fill="#ffffff" stroke="#a9d8dc"></rect>
+          <text x="82" y="194" class="box-title">OLED 屏</text>
+          <text x="82" y="216" class="box-text">SPI1 + D/C + RST</text>
+
+          <rect x="62" y="260" width="148" height="80" rx="6" fill="#ffffff" stroke="#a9d8dc"></rect>
+          <text x="82" y="288" class="box-title">按键输入</text>
+          <text x="82" y="312" class="box-text">UP / DOWN / SURE / BACK</text>
+          <text x="82" y="332" class="small-text">EXTI1~4</text>
+
+          <rect x="62" y="366" width="148" height="86" rx="6" fill="#ffffff" stroke="#a9d8dc"></rect>
+          <text x="82" y="394" class="box-title">地址/模式拨码</text>
+          <text x="82" y="418" class="box-text">ADDRESS0~7</text>
+          <text x="82" y="438" class="box-text">MODE0~3</text>
+
+          <rect x="62" y="478" width="148" height="72" rx="6" fill="#ffffff" stroke="#a9d8dc"></rect>
+          <text x="82" y="506" class="box-title">本机 FRAM</text>
+          <text x="82" y="530" class="box-text">SPI4 参数存储</text>
+
+          <rect x="418" y="142" width="112" height="62" rx="6" fill="#ffffff" stroke="#a9d8dc"></rect>
+          <text x="436" y="168" class="box-title">COM1</text>
+          <text x="434" y="190" class="box-text">USART6 + SEL</text>
+
+          <rect x="418" y="222" width="112" height="62" rx="6" fill="#ffffff" stroke="#a9d8dc"></rect>
+          <text x="436" y="248" class="box-title">COM2</text>
+          <text x="434" y="270" class="box-text">USART2 + SEL</text>
+
+          <rect x="418" y="302" width="112" height="62" rx="6" fill="#ffffff" stroke="#a9d8dc"></rect>
+          <text x="436" y="328" class="box-title">COM3</text>
+          <text x="434" y="350" class="box-text">USART3 + SEL</text>
+
+          <rect x="418" y="382" width="112" height="74" rx="6" fill="#ffffff" stroke="#a9d8dc"></rect>
+          <text x="434" y="410" class="box-title">内部 485</text>
+          <text x="432" y="434" class="box-text">UART5 + SEL</text>
+
+          <rect x="418" y="482" width="112" height="68" rx="6" fill="#ffffff" stroke="#a9d8dc"></rect>
+          <text x="438" y="510" class="box-title">调试口</text>
+          <text x="434" y="534" class="box-text">USART1</text>
+
+          <path d="M 210 200 L 226 300" stroke="#526474" stroke-width="1.8" fill="none" marker-end="url(#arrow-hw)"></path>
+          <path d="M 210 302 L 226 330" stroke="#526474" stroke-width="1.8" fill="none" marker-end="url(#arrow-hw)"></path>
+          <path d="M 210 410 L 226 360" stroke="#526474" stroke-width="1.8" fill="none" marker-end="url(#arrow-hw)"></path>
+          <path d="M 210 516 L 226 386" stroke="#526474" stroke-width="1.8" fill="none" marker-end="url(#arrow-hw)"></path>
+          <path d="M 396 312 L 418 172" stroke="#526474" stroke-width="1.8" fill="none" marker-end="url(#arrow-hw)"></path>
+          <path d="M 396 330 L 418 252" stroke="#526474" stroke-width="1.8" fill="none" marker-end="url(#arrow-hw)"></path>
+          <path d="M 396 348 L 418 332" stroke="#526474" stroke-width="1.8" fill="none" marker-end="url(#arrow-hw)"></path>
+          <path d="M 396 366 L 418 420" stroke="#526474" stroke-width="1.8" fill="none" marker-end="url(#arrow-hw)"></path>
+          <path d="M 396 386 L 418 516" stroke="#526474" stroke-width="1.8" fill="none" marker-end="url(#arrow-hw)"></path>
+
+          <rect x="626" y="70" width="520" height="640" rx="8" fill="#e3f0ff" stroke="#8bb7e5"></rect>
+          <text x="650" y="104" class="box-title">CPU2 主控测量板</text>
+          <text x="650" y="128" class="small-text">STM32F429ZGTx，测量控制、运动控制、传感器和模拟输出</text>
+
+          <rect x="816" y="286" width="176" height="134" rx="8" fill="#ffffff" stroke="#8bb7e5"></rect>
+          <text x="842" y="326" class="box-title">STM32F429</text>
+          <text x="840" y="352" class="box-text">CPU2 MCU</text>
+          <text x="840" y="376" class="small-text">测量状态机和硬件调度</text>
+          <text x="840" y="398" class="small-text">CRC / IWDG / TIM1 / TIM4</text>
+
+          <rect x="652" y="150" width="142" height="72" rx="6" fill="#ffffff" stroke="#b7d3f0"></rect>
+          <text x="672" y="178" class="box-title">内部 485</text>
+          <text x="672" y="202" class="box-text">UART5 + SEL</text>
+
+          <rect x="652" y="248" width="142" height="72" rx="6" fill="#ffffff" stroke="#b7d3f0"></rect>
+          <text x="672" y="276" class="box-title">调试口</text>
+          <text x="672" y="300" class="box-text">USART1</text>
+
+          <rect x="652" y="346" width="142" height="82" rx="6" fill="#ffffff" stroke="#b7d3f0"></rect>
+          <text x="672" y="374" class="box-title">HART 通道</text>
+          <text x="672" y="398" class="box-text">USART2 1200</text>
+          <text x="672" y="418" class="small-text">RTS 控制</text>
+
+          <rect x="652" y="454" width="142" height="90" rx="6" fill="#ffffff" stroke="#b7d3f0"></rect>
+          <text x="672" y="482" class="box-title">电源/继电器</text>
+          <text x="672" y="506" class="box-text">24V/12V ADC</text>
+          <text x="672" y="526" class="box-text">RELAY1~4</text>
+
+          <rect x="1014" y="128" width="108" height="88" rx="6" fill="#ffffff" stroke="#b7d3f0"></rect>
+          <text x="1030" y="156" class="box-title">TMC5130</text>
+          <text x="1028" y="180" class="box-text">SPI2</text>
+          <text x="1028" y="200" class="small-text">DRV_ENN / IREF</text>
+
+          <rect x="1014" y="242" width="108" height="78" rx="6" fill="#ffffff" stroke="#b7d3f0"></rect>
+          <text x="1030" y="270" class="box-title">AS5145</text>
+          <text x="1028" y="294" class="box-text">SPI5 RX only</text>
+
+          <rect x="1014" y="346" width="108" height="78" rx="6" fill="#ffffff" stroke="#b7d3f0"></rect>
+          <text x="1032" y="374" class="box-title">传感器链路</text>
+          <text x="1028" y="398" class="box-text">USART6 9600</text>
+
+          <rect x="1014" y="450" width="108" height="78" rx="6" fill="#ffffff" stroke="#b7d3f0"></rect>
+          <text x="1030" y="478" class="box-title">AD5421</text>
+          <text x="1028" y="502" class="box-text">SPI3 + FAULT</text>
+
+          <rect x="1014" y="554" width="108" height="72" rx="6" fill="#ffffff" stroke="#b7d3f0"></rect>
+          <text x="1030" y="582" class="box-title">本机 FRAM</text>
+          <text x="1028" y="606" class="box-text">SPI4 参数存储</text>
+
+          <path d="M 794 186 L 816 320" stroke="#526474" stroke-width="1.8" fill="none" marker-end="url(#arrow-hw)"></path>
+          <path d="M 794 284 L 816 342" stroke="#526474" stroke-width="1.8" fill="none" marker-end="url(#arrow-hw)"></path>
+          <path d="M 794 388 L 816 368" stroke="#526474" stroke-width="1.8" fill="none" marker-end="url(#arrow-hw)"></path>
+          <path d="M 794 500 L 816 394" stroke="#526474" stroke-width="1.8" fill="none" marker-end="url(#arrow-hw)"></path>
+          <path d="M 992 322 L 1014 172" stroke="#526474" stroke-width="1.8" fill="none" marker-end="url(#arrow-hw)"></path>
+          <path d="M 992 344 L 1014 282" stroke="#526474" stroke-width="1.8" fill="none" marker-end="url(#arrow-hw)"></path>
+          <path d="M 992 368 L 1014 386" stroke="#526474" stroke-width="1.8" fill="none" marker-end="url(#arrow-hw)"></path>
+          <path d="M 992 390 L 1014 490" stroke="#526474" stroke-width="1.8" fill="none" marker-end="url(#arrow-hw)"></path>
+          <path d="M 992 412 L 1014 590" stroke="#526474" stroke-width="1.8" fill="none" marker-end="url(#arrow-hw)"></path>
+
+          <path d="M 530 420 C 568 420, 590 186, 652 186" stroke="#526474" stroke-width="2.4" fill="none" marker-end="url(#arrow-hw)"></path>
+          <path d="M 652 202 C 590 202, 568 438, 530 438" stroke="#526474" stroke-width="2.4" fill="none" marker-end="url(#arrow-hw)"></path>
+          <text x="548" y="306" class="line-label">UART5 + RS485</text>
+          <text x="552" y="326" class="muted-text">CPU3 轮询 CPU2</text>
+
+          <rect x="34" y="724" width="1112" height="26" rx="5" fill="#eef3f8" stroke="#d7dee8"></rect>
+          <text x="54" y="742" class="small-text">说明：框图按固件当前 .ioc 和驱动命名整理；未在图中展开的 UART4/USART3/UART8 等保留或专用链路，见下方速查表。</text>
+        </svg>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>板卡</th>
+              <th>硬件模块</th>
+              <th>MCU 接口/主要引脚</th>
+              <th>用途</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>CPU3</td>
+              <td>OLED 显示</td>
+              <td><code>SPI1</code>：PA4/PA5/PA6/PA7；控制脚 PA2 <code>OLED_D/C</code>、PF5 <code>OLED_NREST</code></td>
+              <td>状态页、菜单、故障页和维护操作显示。</td>
+            </tr>
+            <tr>
+              <td>CPU3</td>
+              <td>按键和拨码</td>
+              <td>PF1/PF2/PF3/PF4 为 DOWN/SURE/BACK/UP；ADDRESS0~7、MODE0~3 为 GPIO 输入</td>
+              <td>现场菜单操作、地址配置和模式选择。</td>
+            </tr>
+            <tr>
+              <td>CPU3</td>
+              <td>外部 COM 口</td>
+              <td>COM1 = <code>USART6</code> PC6/PC7 + PB9；COM2 = <code>USART2</code> PD5/PD6 + PB8；COM3 = <code>USART3</code> PD8/PD9 + PB12</td>
+              <td>外部 DSM、Wärtsilä、LTD、SI7000 等协议入口。</td>
+            </tr>
+            <tr>
+              <td>CPU3</td>
+              <td>CPU2 内部 485</td>
+              <td><code>UART5</code> PC12/PD2 + PG5 <code>MAIN_BOARD_485_SEL</code></td>
+              <td>CPU3 作为主站轮询 CPU2，读输入寄存器、写保持寄存器。</td>
+            </tr>
+            <tr>
+              <td>CPU3</td>
+              <td>本机 FRAM</td>
+              <td><code>SPI4</code> PE11/PE12/PE13/PE14</td>
+              <td>保存 COM 配置、显示配置和本机参数缓存。</td>
+            </tr>
+            <tr>
+              <td>CPU2</td>
+              <td>CPU3 内部 485</td>
+              <td><code>UART5</code> PC12/PD2 + PC13 <code>CPU2_485_SEL</code></td>
+              <td>CPU2 作为内部 Modbus 从站，发布参数、状态和测量结果。</td>
+            </tr>
+            <tr>
+              <td>CPU2</td>
+              <td>电机驱动</td>
+              <td><code>SPI2</code> PB12/PB13/PB14/PB15 连接 TMC5130；PD10 <code>DRV_ENN</code>；PA4 <code>MOTOR_IREF</code></td>
+              <td>控制电机运动、速度和电流；启动阶段通过禁用驱动和早期停机清除旧目标。</td>
+            </tr>
+            <tr>
+              <td>CPU2</td>
+              <td>编码器</td>
+              <td><code>SPI5</code> PF6/PF7/PF8 连接 AS5145，RX only；TIM1 周期采样</td>
+              <td>读取编码轮角度，维护尺带位置和运动门控。</td>
+            </tr>
+            <tr>
+              <td>CPU2</td>
+              <td>传感器/无线滑环链路</td>
+              <td><code>USART6</code> PC6/PC7，默认 9600；PG8 <code>SENSOR_ENN</code></td>
+              <td>连接探头传感器和 CH9141K 无线滑环透传链路，维护命令可执行最近匹配。</td>
+            </tr>
+            <tr>
+              <td>CPU2</td>
+              <td>4-20mA 与 HART</td>
+              <td>AD5421：<code>SPI3</code> PB3/PB4/PB5 + PB6 CS + PB8 FAULT；HART：<code>USART2</code> PD5/PD6，PB7 RTS</td>
+              <td>模拟电流输出、故障电流和 HART 通信。</td>
+            </tr>
+            <tr>
+              <td>CPU2</td>
+              <td>电源检测和继电器</td>
+              <td>PC2/PC3 为 24V/12V ADC；PG9~PG12 为 RELAY1~4 输出；NC/NO 反馈为 GPIO 输入</td>
+              <td>监测供电和继电器状态，支持现场输出和安全诊断。</td>
+            </tr>
+            <tr>
+              <td>CPU2</td>
+              <td>本机 FRAM</td>
+              <td><code>SPI4</code> PE11/PE12/PE13/PE14</td>
+              <td>保存设备参数、CRC、协议版本迁移后的默认值和持久化运行参数。</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="data-loop">
+      <h2>CPU2/CPU3 数据闭环</h2>
+      <div class="diagram">
+        <svg viewBox="0 0 1180 520" role="img" aria-labelledby="loop-title loop-desc">
+          <title id="loop-title">CPU2/CPU3 数据闭环框图</title>
+          <desc id="loop-desc">CPU3 菜单和外部协议写保持寄存器，CPU2 解包参数和命令；CPU2 发布输入寄存器，CPU3 显示并转换给外部协议。</desc>
+          <defs>
+            <marker id="arrow2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#526474"></path>
+            </marker>
+          </defs>
+
+          <text x="24" y="34" class="svg-title">内部 Modbus 数据闭环</text>
+
+          <rect x="42" y="78" width="250" height="338" rx="8" fill="#dff5f7" stroke="#70b8be"></rect>
+          <text x="64" y="112" class="box-title">CPU3</text>
+          <text x="64" y="138" class="box-text">外部协议转换</text>
+          <text x="64" y="162" class="box-text">屏幕菜单和参数页</text>
+          <text x="64" y="186" class="box-text">CPU2 轮询任务</text>
+          <rect x="66" y="226" width="204" height="62" rx="6" fill="#ffffff" stroke="#a9d8dc"></rect>
+          <text x="82" y="252" class="box-title">本地缓存</text>
+          <text x="82" y="276" class="box-text">菜单值 / 外部口配置</text>
+          <rect x="66" y="314" width="204" height="62" rx="6" fill="#ffffff" stroke="#a9d8dc"></rect>
+          <text x="82" y="340" class="box-title">显示和回包</text>
+          <text x="82" y="364" class="box-text">状态页 / Modbus 响应</text>
+
+          <rect x="438" y="78" width="304" height="338" rx="8" fill="#eef3f8" stroke="#c4cfdb"></rect>
+          <text x="462" y="112" class="box-title">内部共享寄存器</text>
+          <rect x="466" y="148" width="246" height="74" rx="6" fill="#ffffff" stroke="#d7dee8"></rect>
+          <text x="486" y="176" class="box-title">保持寄存器</text>
+          <text x="486" y="200" class="box-text">DeviceParameters / command</text>
+          <rect x="466" y="246" width="246" height="74" rx="6" fill="#ffffff" stroke="#d7dee8"></rect>
+          <text x="486" y="274" class="box-title">输入寄存器</text>
+          <text x="486" y="298" class="box-text">MeasurementResult / 状态 / 结果</text>
+          <rect x="466" y="344" width="246" height="44" rx="6" fill="#fff7e8" stroke="#d6a55d"></rect>
+          <text x="486" y="372" class="box-text">协议版本字段：当前值 12</text>
+
+          <rect x="892" y="78" width="250" height="338" rx="8" fill="#e3f0ff" stroke="#8bb7e5"></rect>
+          <text x="914" y="112" class="box-title">CPU2</text>
+          <text x="914" y="138" class="box-text">Modbus 从站解析</text>
+          <text x="914" y="162" class="box-text">参数归一化和保存</text>
+          <text x="914" y="186" class="box-text">测量流程状态机</text>
+          <rect x="916" y="226" width="202" height="62" rx="6" fill="#ffffff" stroke="#b7d3f0"></rect>
+          <text x="932" y="252" class="box-title">g_deviceParams</text>
+          <text x="932" y="276" class="box-text">控制参数 / 共享命令</text>
+          <rect x="916" y="314" width="202" height="62" rx="6" fill="#ffffff" stroke="#b7d3f0"></rect>
+          <text x="932" y="340" class="box-title">g_measurement</text>
+          <text x="932" y="364" class="box-text">状态 / 错误码 / 测量结果</text>
+
+          <path d="M 292 176 C 344 176, 384 176, 438 176" stroke="#526474" stroke-width="2.2" fill="none" marker-end="url(#arrow2)"></path>
+          <text x="318" y="154" class="line-label">0x10 写多个保持寄存器</text>
+          <text x="340" y="194" class="muted-text">菜单参数 / 外部写参数 / command</text>
+
+          <path d="M 742 176 C 794 176, 842 176, 892 176" stroke="#526474" stroke-width="2.2" fill="none" marker-end="url(#arrow2)"></path>
+          <text x="762" y="154" class="line-label">CPU2 解包</text>
+
+          <path d="M 892 294 C 842 294, 794 294, 742 294" stroke="#526474" stroke-width="2.2" fill="none" marker-end="url(#arrow2)"></path>
+          <text x="772" y="276" class="line-label">CPU2 打包输入区</text>
+
+          <path d="M 438 294 C 386 294, 344 294, 292 294" stroke="#526474" stroke-width="2.2" fill="none" marker-end="url(#arrow2)"></path>
+          <text x="318" y="276" class="line-label">0x04 读输入寄存器</text>
+          <text x="330" y="314" class="muted-text">状态页刷新 / 外部协议回包</text>
+
+          <path d="M 292 366 C 354 416, 830 416, 892 366" stroke="#197044" stroke-width="2.2" fill="none" marker-end="url(#arrow2)"></path>
+          <text x="478" y="454" class="line-label" fill="#197044">协议版本严格相等后才解释共享字段</text>
+        </svg>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>数据对象</th>
+              <th>主要方向</th>
+              <th>用途</th>
+              <th>维护重点</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>DeviceParameters</code></td>
+              <td>CPU3 写入，CPU2 保存和执行；CPU2 也发布当前参数</td>
+              <td>设备参数、算法参数、输出参数、协议版本和共享命令字段</td>
+              <td>参数单位、signedness、范围、默认值或语义变化时，需要同时检查 CPU2/CPU3 结构、寄存器映射、菜单元数据和协议版本。</td>
+            </tr>
+            <tr>
+              <td><code>MeasurementResult</code></td>
+              <td>CPU2 生成，CPU3 读取</td>
+              <td>设备状态、错误码、当前命令、液位/水位/密度/探底结果、无线滑环匹配结果等运行态数据</td>
+              <td>字段新增或顺序变化会影响输入寄存器布局；CPU2/CPU3 两端字段顺序必须一致。</td>
+            </tr>
+            <tr>
+              <td><code>command</code></td>
+              <td>CPU3 或外部协议写入 CPU2</td>
+              <td>触发回零、找液位、单点测量、分布测量、标定、无线滑环匹配等动作</td>
+              <td>新增共享命令属于协议可见变化，需评估并更新 <code>DEVICE_PROTOCOL_VERSION</code>。</td>
+            </tr>
+            <tr>
+              <td><code>protocolVersion</code></td>
+              <td>CPU2 发布，CPU3 判断</td>
+              <td>判断 CPU2/CPU3 共享协议是否兼容</td>
+              <td>当前协议版本为 7；固件版本号不参与兼容判断。</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="external">
+      <h2>外部接口与协议适配</h2>
+      <div class="diagram">
+        <svg viewBox="0 0 1180 470" role="img" aria-labelledby="external-title external-desc">
+          <title id="external-title">外部接口与协议适配框图</title>
+          <desc id="external-desc">CPU3 的 COM1、COM2、COM3 可配置 DSM、Wartsila、LTD、SI7000 等协议，并把外部地址和命令翻译到内部共享模型。</desc>
+          <defs>
+            <marker id="arrow3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#526474"></path>
+            </marker>
+          </defs>
+
+          <text x="24" y="34" class="svg-title">CPU3 外部协议入口</text>
+
+          <rect x="42" y="82" width="244" height="278" rx="8" fill="#fff3dc" stroke="#d6a55d"></rect>
+          <text x="64" y="116" class="box-title">外部主站</text>
+          <text x="64" y="150" class="box-text">DSM V1.228</text>
+          <text x="64" y="180" class="box-text">SI7000 PLC</text>
+          <text x="64" y="210" class="box-text">Wärtsilä 主站</text>
+          <text x="64" y="240" class="box-text">LTD / 其他 Modbus 主站</text>
+          <text x="64" y="294" class="small-text">功能码：0x03 / 0x04 / 0x05 / 0x10</text>
+
+          <rect x="400" y="70" width="322" height="318" rx="8" fill="#dff5f7" stroke="#70b8be"></rect>
+          <text x="422" y="104" class="box-title">CPU3 COM 口配置</text>
+
+          <rect x="426" y="132" width="268" height="58" rx="6" fill="#ffffff" stroke="#a9d8dc"></rect>
+          <text x="446" y="156" class="box-title">COM1 = USART6</text>
+          <text x="446" y="178" class="box-text">默认 4800 8N1 DSM</text>
+
+          <rect x="426" y="208" width="268" height="58" rx="6" fill="#ffffff" stroke="#a9d8dc"></rect>
+          <text x="446" y="232" class="box-title">COM2 = USART2</text>
+          <text x="446" y="254" class="box-text">默认 2400 8E1 Wärtsilä</text>
+
+          <rect x="426" y="284" width="268" height="58" rx="6" fill="#ffffff" stroke="#a9d8dc"></rect>
+          <text x="446" y="308" class="box-title">COM3 = USART3</text>
+          <text x="446" y="330" class="box-text">默认 2400 8E1 Wärtsilä</text>
+
+          <rect x="824" y="70" width="300" height="318" rx="8" fill="#e3f0ff" stroke="#8bb7e5"></rect>
+          <text x="846" y="104" class="box-title">内部模型转换</text>
+          <rect x="850" y="132" width="248" height="62" rx="6" fill="#ffffff" stroke="#b7d3f0"></rect>
+          <text x="870" y="158" class="box-title">地址和状态翻译</text>
+          <text x="870" y="180" class="box-text">外部寄存器映射到内部字段</text>
+          <rect x="850" y="214" width="248" height="62" rx="6" fill="#ffffff" stroke="#b7d3f0"></rect>
+          <text x="870" y="240" class="box-title">线圈或命令转换</text>
+          <text x="870" y="262" class="box-text">外部命令写入内部 command</text>
+          <rect x="850" y="296" width="248" height="62" rx="6" fill="#fff7e8" stroke="#d6a55d"></rect>
+          <text x="870" y="322" class="box-title">SI7000 串口收敛</text>
+          <text x="870" y="344" class="box-text">选择协议后自动归一为 9600 8O1</text>
+
+          <path d="M 286 220 C 332 220, 358 220, 400 220" stroke="#526474" stroke-width="2.2" fill="none" marker-end="url(#arrow3)"></path>
+          <text x="308" y="202" class="line-label">RS485 / UART</text>
+
+          <path d="M 722 220 C 766 220, 790 220, 824 220" stroke="#526474" stroke-width="2.2" fill="none" marker-end="url(#arrow3)"></path>
+          <text x="744" y="202" class="line-label">协议分发</text>
+
+          <path d="M 974 388 C 974 418, 670 424, 590 402 C 520 382, 520 364, 590 360" stroke="#526474" stroke-width="2" fill="none" marker-end="url(#arrow3)"></path>
+          <text x="624" y="430" class="muted-text">回包使用 CPU3 从 CPU2 轮询到的最新状态和结果</text>
+        </svg>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>协议/接口</th>
+              <th>所在层</th>
+              <th>整理后的定位</th>
+              <th>注意事项</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>DSM V1.228</td>
+              <td>CPU3 外部 Modbus</td>
+              <td>面向 PLC/上位机的外部协议兼容层，读取状态、结果、参数并通过线圈触发命令。</td>
+              <td>内部状态不能简单等同 DSM 状态，必要时由 CPU3 做状态码翻译。</td>
+            </tr>
+            <tr>
+              <td>SI7000</td>
+              <td>CPU3 外部协议层</td>
+              <td>将 SI7000 所需地址、状态位、线圈、缩放和异常响应映射到 CUBE 内部模型。</td>
+              <td>串口配置选择 SI7000 后自动收敛到 <code>9600 8O1</code>，避免菜单组合出 PLC 不兼容配置。</td>
+            </tr>
+            <tr>
+              <td>Wärtsilä</td>
+              <td>CPU3 外部协议层</td>
+              <td>面向瓦锡兰密度梯度、分布测量和测后探底场景。</td>
+              <td>外部流程依赖 CPU2 内部测量状态和密度分布结果。</td>
+            </tr>
+            <tr>
+              <td>内部 Modbus RTU</td>
+              <td>CPU3 与 CPU2 之间</td>
+              <td>CPU3 读写 CPU2 的共享保持/输入寄存器，是两板唯一稳定数据边界。</td>
+              <td>使用协议版本判断兼容性；共享字段变化必须两端同步。</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="measurement">
+      <h2>测量执行链路</h2>
+      <div class="diagram">
+        <svg viewBox="0 0 1180 390" role="img" aria-labelledby="measurement-title measurement-desc">
+          <title id="measurement-title">测量执行链路框图</title>
+          <desc id="measurement-desc">命令从外部主站或 CPU3 菜单进入，CPU2 执行测量流程并把结果返回 CPU3。</desc>
+          <defs>
+            <marker id="arrow4" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#526474"></path>
+            </marker>
+          </defs>
+
+          <text x="24" y="34" class="svg-title">从命令到结果的主链路</text>
+
+          <rect x="44" y="96" width="150" height="86" rx="7" fill="#fff3dc" stroke="#d6a55d"></rect>
+          <text x="68" y="128" class="box-title">命令来源</text>
+          <text x="68" y="154" class="box-text">外部主站</text>
+          <text x="68" y="174" class="box-text">屏幕菜单</text>
+
+          <rect x="264" y="96" width="158" height="86" rx="7" fill="#dff5f7" stroke="#70b8be"></rect>
+          <text x="286" y="128" class="box-title">CPU3 转换</text>
+          <text x="286" y="154" class="box-text">协议解析</text>
+          <text x="286" y="174" class="box-text">写 command</text>
+
+          <rect x="492" y="96" width="182" height="86" rx="7" fill="#e3f0ff" stroke="#8bb7e5"></rect>
+          <text x="514" y="128" class="box-title">CPU2 命令调度</text>
+          <text x="514" y="154" class="box-text">ProcessMeasureCmd</text>
+          <text x="514" y="174" class="box-text">current_command</text>
+
+          <rect x="744" y="72" width="194" height="134" rx="7" fill="#e3f0ff" stroke="#8bb7e5"></rect>
+          <text x="766" y="104" class="box-title">测量状态机</text>
+          <text x="766" y="132" class="box-text">找液位 / 找水位</text>
+          <text x="766" y="154" class="box-text">探底 / 单点 / 综合</text>
+          <text x="766" y="176" class="box-text">分布 / 区间 / 跟随</text>
+
+          <rect x="1010" y="72" width="138" height="134" rx="7" fill="#fff3dc" stroke="#d6a55d"></rect>
+          <text x="1032" y="104" class="box-title">现场硬件</text>
+          <text x="1032" y="132" class="box-text">电机机构</text>
+          <text x="1032" y="154" class="box-text">传感器</text>
+          <text x="1032" y="176" class="box-text">无线滑环</text>
+
+          <rect x="744" y="264" width="194" height="72" rx="7" fill="#ffffff" stroke="#b7d3f0"></rect>
+          <text x="766" y="292" class="box-title">CPU2 发布结果</text>
+          <text x="766" y="316" class="box-text">MeasurementResult 输入区</text>
+
+          <rect x="264" y="264" width="158" height="72" rx="7" fill="#dff5f7" stroke="#70b8be"></rect>
+          <text x="286" y="292" class="box-title">CPU3 显示/回包</text>
+          <text x="286" y="316" class="box-text">状态页 / 外部响应</text>
+
+          <path d="M 194 139 L 264 139" stroke="#526474" stroke-width="2.2" marker-end="url(#arrow4)"></path>
+          <path d="M 422 139 L 492 139" stroke="#526474" stroke-width="2.2" marker-end="url(#arrow4)"></path>
+          <path d="M 674 139 L 744 139" stroke="#526474" stroke-width="2.2" marker-end="url(#arrow4)"></path>
+          <path d="M 938 139 L 1010 139" stroke="#526474" stroke-width="2.2" marker-end="url(#arrow4)"></path>
+          <path d="M 1010 182 C 978 230, 950 264, 938 292" stroke="#526474" stroke-width="2.2" fill="none" marker-end="url(#arrow4)"></path>
+          <path d="M 744 300 C 640 300, 532 300, 422 300" stroke="#526474" stroke-width="2.2" fill="none" marker-end="url(#arrow4)"></path>
+
+          <text x="214" y="122" class="muted-text">命令码</text>
+          <text x="436" y="122" class="muted-text">内部 Modbus</text>
+          <text x="686" y="122" class="muted-text">调度执行</text>
+          <text x="956" y="122" class="muted-text">控制/采样</text>
+          <text x="506" y="326" class="muted-text">状态、错误码、测量值、分布点、MAC 结果</text>
+        </svg>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>命令类别</th>
+              <th>典型命令</th>
+              <th>执行模块</th>
+              <th>结果发布</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>基础测量</td>
+              <td>回零、找液位、找水位、找罐底、单点测量、综合测量</td>
+              <td>CPU2 测量状态机、电机控制、传感器采样</td>
+              <td>设备状态、错误码、液位/水位/实高/密度等结果写入输入寄存器。</td>
+            </tr>
+            <tr>
+              <td>密度分布</td>
+              <td>普通分布、国标分布、每米密度、区间密度、瓦锡兰密度区间</td>
+              <td>CPU2 分布测量流程，CPU3 外部协议按需重排或缩放</td>
+              <td>支持最多 200 个内部密度点；外部协议按自身地址表发布。</td>
+            </tr>
+            <tr>
+              <td>维护和调试</td>
+              <td>强制上行、强制下行、标定、匹配无线滑环；命令 115 保留</td>
+              <td>CPU2 调试/维护分支，命令 115 不再提供菜单入口或执行电机动作</td>
+              <td>状态页显示维护、调试、匹配中/完成；失败时保持故障页错误码。</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="safety">
+      <h2>启动安全与故障恢复链路</h2>
+      <div class="diagram">
+        <svg viewBox="0 0 1180 470" role="img" aria-labelledby="safety-title safety-desc">
+          <title id="safety-title">启动安全与故障恢复框图</title>
+          <desc id="safety-desc">CPU2 启动后先禁用驱动并清除 TMC5130 旧目标，等待编码器首帧有效，再允许业务命令；测量失败后按故障自动恢复重跑次数限制重跑。</desc>
+          <defs>
+            <marker id="arrow5" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#197044"></path>
+            </marker>
+          </defs>
+
+          <text x="24" y="34" class="svg-title">安全启动和错误恢复路径</text>
+
+          <rect x="44" y="84" width="170" height="74" rx="7" fill="#e7f6ee" stroke="#83c4a1"></rect>
+          <text x="66" y="112" class="box-title">CPU2 复位/上电</text>
+          <text x="66" y="136" class="box-text">GPIO 默认禁用驱动</text>
+
+          <rect x="270" y="84" width="190" height="74" rx="7" fill="#e7f6ee" stroke="#83c4a1"></rect>
+          <text x="292" y="112" class="box-title">早期安全停机</text>
+          <text x="292" y="136" class="box-text">MotorCtrl_BootSafeStop</text>
+
+          <rect x="516" y="84" width="190" height="74" rx="7" fill="#e7f6ee" stroke="#83c4a1"></rect>
+          <text x="538" y="112" class="box-title">编码器首帧门控</text>
+          <text x="538" y="136" class="box-text">位置源有效后才运动</text>
+
+          <rect x="762" y="84" width="190" height="74" rx="7" fill="#e7f6ee" stroke="#83c4a1"></rect>
+          <text x="784" y="112" class="box-title">业务命令放行</text>
+          <text x="784" y="136" class="box-text">默认命令和外部命令</text>
+
+          <rect x="1008" y="84" width="138" height="74" rx="7" fill="#e7f6ee" stroke="#83c4a1"></rect>
+          <text x="1030" y="112" class="box-title">正常测量</text>
+          <text x="1030" y="136" class="box-text">状态机执行</text>
+
+          <path d="M 214 121 L 270 121" stroke="#197044" stroke-width="2.2" marker-end="url(#arrow5)"></path>
+          <path d="M 460 121 L 516 121" stroke="#197044" stroke-width="2.2" marker-end="url(#arrow5)"></path>
+          <path d="M 706 121 L 762 121" stroke="#197044" stroke-width="2.2" marker-end="url(#arrow5)"></path>
+          <path d="M 952 121 L 1008 121" stroke="#197044" stroke-width="2.2" marker-end="url(#arrow5)"></path>
+
+          <rect x="44" y="254" width="206" height="86" rx="7" fill="#fff7e8" stroke="#d6a55d"></rect>
+          <text x="66" y="284" class="box-title">测量失败</text>
+          <text x="66" y="310" class="box-text">保持原错误状态和错误码</text>
+          <text x="66" y="330" class="small-text">屏幕和上位机继续显示故障</text>
+
+          <rect x="330" y="254" width="222" height="86" rx="7" fill="#fff7e8" stroke="#d6a55d"></rect>
+          <text x="352" y="284" class="box-title">1 秒周期恢复确认</text>
+          <text x="352" y="310" class="box-text">读取全部部件参数</text>
+          <text x="352" y="330" class="small-text">异常则继续保持故障态</text>
+
+          <rect x="632" y="254" width="220" height="86" rx="7" fill="#fff7e8" stroke="#d6a55d"></rect>
+          <text x="654" y="284" class="box-title">恢复成功</text>
+          <text x="654" y="310" class="box-text">清除错误并准备重跑</text>
+          <text x="654" y="330" class="small-text">不从失败步骤继续</text>
+
+          <rect x="932" y="254" width="214" height="86" rx="7" fill="#fff7e8" stroke="#d6a55d"></rect>
+          <text x="954" y="284" class="box-title">按参数限制重跑</text>
+          <text x="954" y="310" class="box-text">恢复重跑次数 0~10</text>
+          <text x="954" y="330" class="small-text">默认 3，0 表示关闭重跑</text>
+
+          <path d="M 250 298 L 330 298" stroke="#9a5b00" stroke-width="2.2" marker-end="url(#arrow5)"></path>
+          <path d="M 552 298 L 632 298" stroke="#9a5b00" stroke-width="2.2" marker-end="url(#arrow5)"></path>
+          <path d="M 852 298 L 932 298" stroke="#9a5b00" stroke-width="2.2" marker-end="url(#arrow5)"></path>
+          <path d="M 1040 254 C 1040 210, 1018 170, 952 139" stroke="#9a5b00" stroke-width="2.2" fill="none" marker-end="url(#arrow5)"></path>
+
+          <text x="50" y="408" class="line-label" fill="#197044">关键目的：</text>
+          <text x="126" y="408" class="box-text">复位后不沿用 TMC5130 旧目标继续运动；编码器未就绪时不启动普通业务运动；故障恢复成功后从完整测量入口重跑。</text>
+        </svg>
+      </div>
+
+      <div class="warn">
+        <p>安全链路关注的是“先确定硬件不会继续旧运动，再允许软件业务命令”。如果机械结构不能自锁，禁用驱动会取消保持电流，台架和现场需要单独确认负载不会产生危险位移。</p>
+      </div>
+    </section>
+
+    <section id="module-table">
+      <h2>模块职责速查</h2>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>层级</th>
+              <th>模块/对象</th>
+              <th>职责</th>
+              <th>常用定位路径</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><span class="chip">CPU3</span></td>
+              <td>屏幕、菜单、参数页</td>
+              <td>显示设备状态、测量结果、故障码；通过菜单写参数和触发维护命令。</td>
+              <td><code>LTD_DISPLAY_CPU3/Application</code>、<code>docs/04_界面与菜单</code></td>
+            </tr>
+            <tr>
+              <td><span class="chip">CPU3</span></td>
+              <td>外部协议适配</td>
+              <td>按 COM 口协议配置处理 DSM、Wärtsilä、LTD、SI7000 外部 Modbus 帧。</td>
+              <td><code>LTD_DISPLAY_CPU3/Communication/external</code>、<code>docs/01_协议与寄存器</code></td>
+            </tr>
+            <tr>
+              <td><span class="chip">CPU3</span></td>
+              <td>CPU2 轮询</td>
+              <td>通过 UART5/RS485 读 CPU2 输入寄存器、写保持寄存器、同步参数和命令。</td>
+              <td><code>LTD_DISPLAY_CPU3/Communication/internal/main_board_modbus</code></td>
+            </tr>
+            <tr>
+              <td><span class="chip green">CPU2</span></td>
+              <td>测量状态机</td>
+              <td>执行回零、找液位、找水位、探底、单点、综合、分布、跟随和标定流程。</td>
+              <td><code>LTD_MAIN_CPU2/Application</code>、<code>LTD_MAIN_CPU2/Services</code></td>
+            </tr>
+            <tr>
+              <td><span class="chip green">CPU2</span></td>
+              <td>参数与寄存器映射</td>
+              <td>维护 <code>DeviceParameters</code>、<code>MeasurementResult</code>、Modbus 地址和 FRAM 持久化。</td>
+              <td><code>LTD_MAIN_CPU2/Services/ParamStorage</code>、<code>LTD_MAIN_CPU2/Services/Modbus</code></td>
+            </tr>
+            <tr>
+              <td><span class="chip green">CPU2</span></td>
+              <td>电机与编码器</td>
+              <td>控制 TMC5130、采集 AS5145 编码器、维护尺带位置和运动安全门控。</td>
+              <td><code>LTD_MAIN_CPU2/Services/MotorControl</code>、<code>LTD_MAIN_CPU2/Services/Encoder</code></td>
+            </tr>
+            <tr>
+              <td><span class="chip orange">外设</span></td>
+              <td>无线滑环 / CH9141K</td>
+              <td>承载 UART6 传感器透传；维护命令可执行 RSSI 最近匹配并发布从机 MAC 结果。</td>
+              <td><code>docs/01_协议与寄存器/CPU2通信与解耦/无线滑环匹配</code></td>
+            </tr>
+            <tr>
+              <td><span class="chip red">安全</span></td>
+              <td>启动安全和自动恢复</td>
+              <td>复位后早期停机、编码器首帧门控、错误状态保持、部件恢复确认和原命令重跑限制。</td>
+              <td><code>docs/03_问题分析与整改</code>、<code>docs/02_需求与计划</code></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="sources">
+      <h2>资料来源</h2>
+      <ul>
+        <li><code>README.md</code>：双板架构、通信拓扑、构建和代码主线。</li>
+        <li><code>LTD_MAIN_CPU2/Application/Inc/app_version.h</code>、<code>LTD_DISPLAY_CPU3/Application/app_version.h</code>：当前 CPU2/CPU3 固件版本。</li>
+        <li><code>docs/01_协议与寄存器/CPU2_CPU3协议变更记录.md</code>：共享协议版本 12、状态和参数语义。</li>
+        <li><code>LTD_DISPLAY_CPU3/Application/system_param/system_parameter.h</code>：命令、状态、共享结构和无线滑环运行态字段。</li>
+        <li><code>LTD_DISPLAY_CPU3/Application/system_param/com_port_config.h</code>、<code>cpu3_comm_display_params.c</code>：COM1/2/3 协议配置和 SI7000 串口收敛规则。</li>
+        <li><code>docs/02_需求与计划</code>、<code>docs/03_问题分析与整改</code>、<code>docs/04_界面与菜单</code>：自动恢复、启动安全、无线滑环和菜单说明。</li>
+      </ul>
+    </section>
+  </main>
+</body>
+</html>

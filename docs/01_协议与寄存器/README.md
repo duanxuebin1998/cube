@@ -1,6 +1,6 @@
 # 协议与寄存器文档索引
 
-更新日期：2026-06-26
+更新日期：2026-06-27
 
 本目录用于保存 CPU2/CPU3 共享协议、外部 Modbus/DSM/SI7000 适配、寄存器表、协议版本和兼容性记录。凡是会影响通信地址、字段语义、命令、状态、缩放、补码解释或协议兼容性的资料，优先归入本目录。
 
@@ -10,6 +10,7 @@
 | --- | --- | --- |
 | CPU2/CPU3 共享协议 | `CPU2_CPU3协议变更记录.md` | 记录 `DEVICE_PROTOCOL_VERSION`、共享寄存器、参数语义、兼容影响和验证结果；当前共享协议版本为 `13` |
 | 系统参数默认值 | `系统参数出厂默认值.md` | 整理 CPU2 恢复出厂写入的 `DeviceParameters` 默认值、单位和小数位；当前 CPU2 参数存储版本为 `3` |
+| CPU2 通信与解耦 | `CPU2通信与解耦/` | CPU2 串口调试指令、通信异常影响、HART 旧栈适配、传感器无线链路和无线滑环匹配整理 |
 | DSM 外部协议 | `DSM寄存器说明V1.225.xlsx` | DSM 寄存器表、外部协议字段和现场联调参考 |
 | SI7000 协议适配 | `SI7000协议适配/` | SI7000 原始资料、需求、映射、改动记录和 PLC 联调检查 |
 
@@ -18,7 +19,7 @@
 | 主题 | 当前结论 | 依据 |
 | --- | --- | --- |
 | 共享协议版本 | `DEVICE_PROTOCOL_VERSION = 13`，CPU2/CPU3 严格相等才兼容 | `LTD_MAIN_CPU2/Services/ParamStorage/system_parameter.h`、`LTD_DISPLAY_CPU3/Application/system_param/system_parameter.h`、`CPU2_CPU3协议变更记录.md` |
-| CPU2 参数存储 | `DEVICE_PARAM_VERSION = 3`，CPU2 `V1.12.0.0` 到当前 `V1.20.0.0` 之间通常不清参数；协议 13 仅按旧协议版本标记迁移密度相关字段倍率 | `LTD_MAIN_CPU2/Services/ParamStorage/system_parameter.c`、`../00_构建与版本/CPU2参数存储升级清单.md` |
+| CPU2 参数存储 | `DEVICE_PARAM_VERSION = 3`，CPU2 `V1.12.0.0` 到当前 `V1.20.1.0` 之间通常不清参数；协议 13 仅按旧协议版本标记迁移密度相关字段倍率 | `LTD_MAIN_CPU2/Services/ParamStorage/system_parameter.c`、`../00_构建与版本/CPU2参数存储升级清单.md` |
 | CPU3 本地显示/通信参数 | `CPU3_PARAM_VERSION = 0x0005`，V3/V4 升级时迁移本机手输密度并写回 V5，V3 仍补默认屏幕亮度 | `LTD_DISPLAY_CPU3/Application/system_param/cpu3_comm_display_params.c`、`CPU2_CPU3协议变更记录.md` |
 | 读取部件参数与 DSM 调试区 | 共享协议为 9 起支持；`debug_data.water_capacitance_x10` 为水位电容快照，蓝牙 RSSI 通过 `WirelessPairingStatus` 尾部输入寄存器发布 | `../00_构建与版本/版本改动与测试/2026-06-13_CPU2_V1.15.0.0_CPU3_V1.14.0.0_读取部件参数蓝牙RSSI与CPU3菜单显示优化_改动与测试方案.md` |
 | AO 模拟电流输出运行态 | 共享协议为 10 起支持；RSSI 运行态后追加 `AoOutputRuntime`，发布目标电流、最近写入电流、来源、AD5421 故障标志和最近错误码；原 `reserved26` 同步替换为 `AoOutputEnable`，默认关闭 | `CPU2_CPU3协议变更记录.md`、`../00_构建与版本/版本改动与测试/2026-06-15_CPU2_V1.16.0.0_CPU3_V1.15.0.0_AO电流输出运行态与使能参数_改动与测试方案.md`、`../03_问题分析与整改/2026-06-13_CPU2电流输出问题与CPU2_v1.563处理方式对比.html` |
@@ -31,4 +32,7 @@
 - 修改 CPU2/CPU3 共享协议、共享参数语义、寄存器长度、命令码或跨 CPU 状态含义时，同步更新 `CPU2_CPU3协议变更记录.md`。
 - 修改 SI7000 外部可见行为时，同步更新 `SI7000协议适配/02_协议映射/`、`03_改动记录/` 和 `04_联调测试/`。
 - 外部供应商原始资料优先放入对应适配目录的 `00_原始资料/`，不要直接覆盖原始文件。
+- `DSM寄存器说明V1.225.xlsx` 作为外部寄存器表维护；如果形成项目内解释、兼容性结论或代码变更依据，应补 Markdown 摘要并回链本表。
 - 协议名、标准名、供应商资料名可保留英文；项目解释和执行计划优先使用中文文件名。
+- 本目录中 Markdown 是项目解释和兼容性结论的维护正文；Excel 表是寄存器或外部协议源表，修改前必须确认对应代码、协议版本和 README 口径。
+- 非 Markdown 附件的责任边界见 `../00_构建与版本/附件与源文件清单.md`；DSM、SI7000、无线滑环相关附件只作为源表或原始资料，项目实现口径必须回到本目录 Markdown 和源码依据。

@@ -120,30 +120,6 @@
 - `py tools\check_version_bumped.py`：确认 CPU2 V1.8.0.0、CPU3 V1.6.0.0 已匹配本次协议升级。
 - `cmake --build build\LTD_MAIN_CPU2`、`cmake --build build\LTD_DISPLAY_CPU3`：两端构建通过。
 
-### 协议版本 13
-
-关联改动：
-- CPU2 `DENSITY_TO_RAW()` / `RAW_TO_DENSITY()` 统一改为 `kg/m3 x100`。
-- CPU2 `DEVICE_PARAM_VERSION` 保持 `3`，通过旧 FRAM 中 `protocolVersion < 13` 识别一次性迁移 `oilLevelDensity`、`oilLevelThreshold`、`oilLevelHysteresisThreshold` 和 `densityCorrection`。
-- `densityCorrection` 零点从 `10000` 迁移到 `100000`，修正量从 `(raw - 10000) / 10` 改为 `(raw - 100000) / 100`。
-- CPU3 状态页密度显示小数位改为 2，尾零裁剪逻辑保留。
-- CPU3 参数菜单中 `液位跟随密度`、`磁通量D`、`密度手输值` 改为两位密度口径；`液位找液阈值`、`液位滞后阈值` 继续面向频率液位显示为 `Hz`，并通过 `point=1` 保持默认 `150/200` 对应 `15.0/20.0 Hz`。
-- CPU3 本机 FRAM 参数版本升级到 `0x0005`，读取 `0x0003` 或 `0x0004` 时迁移本机手输密度 `screen_input_d`。
-- DSM 外部协议输出密度和密度修正时保持原 `x10` 口径；外部写入密度修正时转换回内部 `x100`。
-- Wartsila 外部协议密度继续保持 `scale = 10` / `x10`。
-- SI7000 外部协议继续保持既有 `0.01 kg/m3` 口径，内部升级后取消原先从 `x10` 到 `x100` 的额外乘 10。
-
-兼容影响：
-- 协议版本 13 改变内部密度倍率语义，但不移动共享寄存器地址和字段长度。
-- CPU2/CPU3 必须同为协议版本 13 才能正确解释内部密度字段。
-- 旧 FRAM 参数由 CPU2 按旧协议版本标记迁移后写回 `protocolVersion = 13`，CPU3 本机 FRAM 写回 `0x0005`，避免按新倍率误读旧参数。
-- 除 LTD 自有协议外，DSM、Wartsila、SI7000 主站不需要修改密度倍率解析。
-
-验证：
-- `py tools\check_density_precision_contract.py`
-- `py tools\check_synthetic_density_mode_contract.py`
-- `py tools\check_si7000_modbus_frames.py`
-- `py tools\check_si7000_protocol_contract.py`
 ### 协议版本 5
 
 关联改动：
@@ -376,6 +352,31 @@
 - `git diff --cached --check`：通过。
 - `cmake --build build\LTD_MAIN_CPU2`：通过。
 - `cmake --build build\LTD_DISPLAY_CPU3`：通过。
+
+### 协议版本 13
+
+关联改动：
+- CPU2 `DENSITY_TO_RAW()` / `RAW_TO_DENSITY()` 统一改为 `kg/m3 x100`。
+- CPU2 `DEVICE_PARAM_VERSION` 保持 `3`，通过旧 FRAM 中 `protocolVersion < 13` 识别一次性迁移 `oilLevelDensity`、`oilLevelThreshold`、`oilLevelHysteresisThreshold` 和 `densityCorrection`。
+- `densityCorrection` 零点从 `10000` 迁移到 `100000`，修正量从 `(raw - 10000) / 10` 改为 `(raw - 100000) / 100`。
+- CPU3 状态页密度显示小数位改为 2，尾零裁剪逻辑保留。
+- CPU3 参数菜单中 `液位跟随密度`、`磁通量D`、`密度手输值` 改为两位密度口径；`液位找液阈值`、`液位滞后阈值` 继续面向频率液位显示为 `Hz`，并通过 `point=1` 保持默认 `150/200` 对应 `15.0/20.0 Hz`。
+- CPU3 本机 FRAM 参数版本升级到 `0x0005`，读取 `0x0003` 或 `0x0004` 时迁移本机手输密度 `screen_input_d`。
+- DSM 外部协议输出密度和密度修正时保持原 `x10` 口径；外部写入密度修正时转换回内部 `x100`。
+- Wartsila 外部协议密度继续保持 `scale = 10` / `x10`。
+- SI7000 外部协议继续保持既有 `0.01 kg/m3` 口径，内部升级后取消原先从 `x10` 到 `x100` 的额外乘 10。
+
+兼容影响：
+- 协议版本 13 改变内部密度倍率语义，但不移动共享寄存器地址和字段长度。
+- CPU2/CPU3 必须同为协议版本 13 才能正确解释内部密度字段。
+- 旧 FRAM 参数由 CPU2 按旧协议版本标记迁移后写回 `protocolVersion = 13`，CPU3 本机 FRAM 写回 `0x0005`，避免按新倍率误读旧参数。
+- 除 LTD 自有协议外，DSM、Wartsila、SI7000 主站不需要修改密度倍率解析。
+
+验证结果：
+- `py tools\check_density_precision_contract.py`：通过。
+- `py tools\check_synthetic_density_mode_contract.py`：通过。
+- `py tools\check_si7000_modbus_frames.py`：通过。
+- `py tools\check_si7000_protocol_contract.py`：通过。
 
 ## 后续维护要求
 

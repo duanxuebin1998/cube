@@ -1,8 +1,8 @@
 # CPU3状态页不同状态显示信息确认表
 
-日期：2026-06-17
+日期：2026-06-27
 
-适用版本：CPU2 `V1.16.0.1` / CPU3 `V1.15.0.1`，当前源码共享协议版本 `10`；读取部件参数页 RSSI 显示从协议版本 `9` 起支持
+适用版本：CPU2 `V1.20.1.0` / CPU3 `V1.18.1.0`，当前源码共享协议版本 `13`；读取部件参数页 RSSI 显示从协议版本 `9` 起支持，密度两位小数显示从协议版本 `13` 起支持
 
 源码依据：`LTD_DISPLAY_CPU3/Application/display/display.c`、`LTD_MAIN_CPU2/Services/Sensor/sensor.c`
 
@@ -14,7 +14,7 @@ CPU3 状态页第一行固定显示设备状态文字，并在右侧显示电机
 | --- | --- | --- | --- |
 | 液位 | 当前状态允许显示液位，且液位不是 `UNVALID_LEVEL` | 液位状态取 `oil_measurement.oil_level`；分布完成取 `density_distribution.Density_oil_level`；综合完成取 `oil_measurement.oil_level` | `0.1 mm`；值为 `OILLEVELDOWNLIMIT` / `LEVEL_DOWNLIMIT` 时显示“低于盲区” |
 | 水位 | 当前状态允许显示水位，且 `water_measurement.water_level != LEVEL_DOWNLIMITWATER` | `water_measurement.water_level` | `0.1 mm`；当前实现水位为 `0` 时隐藏，不显示“低于盲区” |
-| 密度 | 当前上下文有密度源，且密度不是 `UNVALID_DENSITY` | 单点测量、单点监测或分布平均密度；LTD 密度分布测量中显示 `density_distribution.average_density` | `0.1 kg/m3` |
+| 密度 | 当前上下文有密度源，且密度不是 `UNVALID_DENSITY` | 单点测量、单点监测或分布平均密度；LTD 密度分布测量中显示 `density_distribution.average_density` | `0.01 kg/m3`，内部 raw 为 `kg/m3 x100` |
 | 温度 | 当前上下文有温度源，且温度 `> 0` 且 `< 40000` | 单点测量、单点监测或分布平均温度；LTD 密度分布测量中显示 `density_distribution.average_temperature`；读取参数完成显示 `debug_data.temperature` | 显示值为 `temperature - 20000`，小数 2 位，单位 `℃` |
 | 位置 | 正常状态页路径下固定显示 | `debug_data.sensor_position` | `0.1 mm`；值为 `0` 时也显示 |
 | 扭力 | 正常状态页路径下固定显示 | `debug_data.current_weight` | 整数显示，无明确单位；值为 `0` 时也显示 |
@@ -121,3 +121,4 @@ CPU3 状态页第一行固定显示设备状态文字，并在右侧显示电机
 | 待机最近结果 | `STATE_STANDBY` 当前不显示最近测量结果 | 是否新增“最近”来源标签和本地缓存 |
 | 读取参数页分页 | 读取参数完成态当前包含位置、扭力、温度、频率、电容、X/Y角、RSSI，超过一屏时按状态页分页显示 | 现场确认翻页操作是否足够直观 |
 | RSSI 无效值 | `rssi_valid == 0` 时显示 `RSSI:N/A`；RSSI 查询只读当前连接，不扫描、不断开、不保存默认连接 | 现场确认是否需要在无效时额外显示错误码或连接状态 |
+| 设置菜单空闲退出 | CPU3 设置菜单 120 秒无按键后自动返回状态页，屏幕亮度/息屏等显示设置生效后仍按该超时规则处理 | 现场确认配置页长时间无人操作时退出状态页是否符合调试习惯 |

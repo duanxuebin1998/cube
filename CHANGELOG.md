@@ -1668,7 +1668,7 @@ CPU2 参数加载会校验 FRAM 中的 `magic`、`struct_size`、`param_version`
 协议版本/兼容性：
 - `DEVICE_PROTOCOL_VERSION` 从 10 升级到 11；不新增保持寄存器地址，但将原 `reserved24/reserved25` 参数位置重命名为 `AOStartLevel_01mm/AOEndLevel_01mm`，作为 AO 正常输出起点/终点液位，并修正 `AlarmHighAO/AlarmLowAO` 为 AO 独立报警液位阈值。
 - CPU2 `DEVICE_PARAM_VERSION` 保持 3，`DeviceParameters` 结构大小不变，不会因本次升级触发恢复出厂参数。
-- 旧协议参数升级到协议版本 11 时，CPU2 运行期补齐 `AOStartLevel_01mm=0`、`AOEndLevel_01mm=tankHeight`、`AlarmHighAO=0`、`AlarmLowAO=0`，避免旧保留值或旧电流口径误触发 AO 报警。
+- 旧协议参数升级到协议版本 11 时，CPU2 运行期补齐 `AOStartLevel_01mm=0`、`AOEndLevel_01mm=tankHeight`、`AlarmHighAO=tankHeight`、`AlarmLowAO=0`，避免旧保留值或旧电流口径误触发 AO 报警。
 - CPU3 本机参数存储结构不变；菜单和操作号名称按 AO 新语义同步，地址和值保持不变。
 
 本次修改：

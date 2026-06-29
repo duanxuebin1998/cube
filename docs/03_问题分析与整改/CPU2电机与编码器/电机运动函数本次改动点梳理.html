@@ -1,0 +1,596 @@
+﻿<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>电机运动函数第一轮改动点梳理</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f5f7fa;
+      --paper: #ffffff;
+      --ink: #1f2937;
+      --muted: #637083;
+      --line: #d7dee8;
+      --head: #eef3f8;
+      --blue: #155eef;
+      --green: #16794c;
+      --amber: #946200;
+      --red: #b42318;
+      --code: #e8eef5;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font: 15px/1.72 "Microsoft YaHei", "Segoe UI", Arial, sans-serif;
+    }
+
+    main {
+      width: min(1240px, calc(100% - 32px));
+      margin: 0 auto;
+      padding: 28px 0 60px;
+    }
+
+    header {
+      padding: 26px 0 20px;
+      border-bottom: 2px solid var(--line);
+      margin-bottom: 20px;
+    }
+
+    h1, h2, h3 {
+      margin: 0;
+      line-height: 1.3;
+      letter-spacing: 0;
+    }
+
+    h1 { font-size: 32px; margin-bottom: 10px; }
+    h2 {
+      font-size: 22px;
+      margin: 30px 0 12px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid var(--line);
+    }
+    h3 { font-size: 17px; margin: 18px 0 8px; }
+    p { margin: 8px 0; }
+
+    code {
+      padding: 1px 5px;
+      border-radius: 4px;
+      background: var(--code);
+      font-family: Consolas, "Courier New", monospace;
+      font-size: 0.94em;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: var(--paper);
+      border: 1px solid var(--line);
+      margin: 12px 0 18px;
+      table-layout: fixed;
+    }
+
+    th, td {
+      border: 1px solid var(--line);
+      padding: 8px 10px;
+      vertical-align: top;
+      word-break: break-word;
+    }
+
+    th {
+      background: var(--head);
+      text-align: left;
+      font-weight: 700;
+    }
+
+    ul { margin: 8px 0 8px 22px; padding: 0; }
+    li { margin: 4px 0; }
+
+    .meta {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+      margin-top: 18px;
+    }
+
+    .meta div, .note, .warn, .panel {
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+    }
+
+    .meta div {
+      padding: 10px 12px;
+      min-height: 62px;
+    }
+
+    .label {
+      display: block;
+      color: var(--muted);
+      font-size: 12px;
+      margin-bottom: 3px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .panel { padding: 14px 16px; }
+    .panel h3 { margin-top: 0; }
+
+    .note, .warn {
+      padding: 13px 15px;
+      margin: 12px 0;
+    }
+
+    .note { border-left: 4px solid var(--blue); }
+    .warn { border-left: 4px solid var(--amber); }
+
+    .tag {
+      display: inline-block;
+      padding: 1px 7px;
+      border-radius: 999px;
+      background: #e8eef5;
+      color: #344054;
+      font-size: 12px;
+      margin-right: 4px;
+      white-space: nowrap;
+    }
+
+    .tag.blue { background: #e7f0ff; color: var(--blue); }
+    .tag.green { background: #e7f6ee; color: var(--green); }
+    .tag.amber { background: #fff4df; color: var(--amber); }
+    .tag.red { background: #fdebea; color: var(--red); }
+
+    .toc {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+      margin: 14px 0;
+    }
+
+    .toc a {
+      display: block;
+      padding: 9px 11px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--paper);
+      color: var(--blue);
+      text-decoration: none;
+    }
+
+    @media (max-width: 900px) {
+      .meta, .grid, .toc { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>电机运动函数第一轮改动点梳理</h1>
+    <p>本文保留 <code>codex/motor-simplify</code> worktree 第一轮结构优化、安全修复和台架验证的历史改动清单。当前 <code>codex/motor-motion-structure</code> worktree 的第二轮等待收敛、第三轮策略评估和完成审计见本目录新增的计划、分层方案、策略评估和完成审计文档。</p>
+    <div class="meta">
+      <div><span class="label">资料日期</span>2026-06-11</div>
+      <div><span class="label">历史工作区</span><code>D:\CUBE\.worktrees\motor-simplify</code></div>
+      <div><span class="label">历史分支</span><code>codex/motor-simplify</code></div>
+      <div><span class="label">固件版本</span><code>V1.13.0.1</code>，本次未升版</div>
+    </div>
+  </header>
+<!-- FLOW-LEGACY-NOTICE-START -->
+<section class="flow-legacy-notice" style="margin:16px auto;padding:14px 16px;border:1px solid #bad8fb;border-radius:10px;background:#eef7ff;color:#17233a;font-size:14px;line-height:1.65;font-family:'Microsoft YaHei','Segoe UI',Arial,sans-serif;max-width:min(1180px,calc(100% - 32px));box-sizing:border-box"><b style="display:block;margin-bottom:4px">历史/专题流程提示</b><p style="margin:0 0 8px">电机运动第一轮改动记录，保留改动背景；当前流程以 CPU2 电机与位置模型页为准。</p><div style="display:flex;flex-wrap:wrap;gap:8px"><a style="color:#1f65aa;font-weight:700;text-decoration:none" href="../../00_程序流程导航/CPU2/08_电机与位置模型.html">当前权威流程：电机与位置模型</a><a style="color:#1f65aa;font-weight:700;text-decoration:none" href="../../00_程序流程导航/index.html">程序流程统一入口</a></div></section>
+<!-- FLOW-LEGACY-NOTICE-END -->
+
+<section>
+    <h2>目录</h2>
+    <div class="toc">
+      <a href="#summary">1. 总体结论</a>
+      <a href="#scope">2. 文件范围</a>
+      <a href="#motion">3. 电机运动 API 改动</a>
+      <a href="#recovery">4. 故障恢复改动</a>
+      <a href="#behavior">5. 行为变化和兼容性</a>
+      <a href="#bench">6. 台架验证结果</a>
+      <a href="#docs">7. 文档同步</a>
+      <a href="#release">8. 发布前处理</a>
+    </div>
+  </section>
+
+  <section id="summary">
+    <h2>1. 总体结论</h2>
+    <div class="note">
+      <p>本次改动从“电机运动函数简化”开始，最终形成两类结果：第一类是 <code>motor_ctrl_motion_api.c</code> 内部结构收敛，减少重复速度恢复、ticks 等待和 Jog 位置检查逻辑；第二类是台架复测暴露出的安全修复，即绝对目标越界在运动下发前被拒绝，并且参数类确定性错误不再进入自动恢复重跑。</p>
+    </div>
+    <div class="warn">
+      <p>注意：本 HTML 是第一轮历史清单，不代表当前 <code>motor-motion-structure</code> worktree 的完整 diff。当前分支新增的 <code>MotorMotionTargetPlan</code>、等待循环 helper、第三轮策略评估和计划完成审计，以《电机运动函数简化优化计划.md》《电机点动与位置模式分层优化方案.md》《电机运动第三轮策略评估记录.md》《电机运动当前计划完成审计.md》为准。</p>
+    </div>
+    <div class="grid">
+      <div class="panel">
+        <h3>结构简化</h3>
+        <p>新增 <code>MotorMotionSpeedScope</code>、ticks 起步/到位等待 helper、Jog 位置刷新检查 helper，删除 <code>MotorCtrl_MoveAndWait()</code> 中误导性的不可达重试框架。</p>
+      </div>
+      <div class="panel">
+        <h3>安全修复</h3>
+        <p>新增 <code>MotorMotion_CheckAbsoluteTargetRange()</code>，在正式距离、正式绝对位置、Jog 相对和 Jog 绝对入口下发运动前检查目标范围。</p>
+      </div>
+      <div class="panel">
+        <h3>恢复策略</h3>
+        <p>新增 <code>FaultRecovery_IsNonRecoverableError()</code>，过滤 <code>PARAM_RANGE_ERROR</code> 等确定性参数错误，避免自动恢复反复执行无效目标。</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="scope">
+    <h2>2. 文件范围</h2>
+    <table>
+      <thead>
+        <tr><th>文件</th><th>变更性质</th><th>说明</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>LTD_MAIN_CPU2/Services/MotorControl/motor_ctrl_motion_api.c</code></td>
+          <td><span class="tag blue">代码</span><span class="tag amber">行为变化</span></td>
+          <td>电机运动函数结构收敛；新增绝对目标范围检查；越界目标返回 <code>PARAM_RANGE_ERROR</code>。</td>
+        </tr>
+        <tr>
+          <td><code>LTD_MAIN_CPU2/Application/Src/fault_recovery.c</code></td>
+          <td><span class="tag blue">代码</span><span class="tag amber">恢复策略</span></td>
+          <td>自动恢复入口增加确定性参数错误过滤，避免越界目标自动重跑。</td>
+        </tr>
+        <tr>
+          <td><code>docs/03_问题分析与整改/CPU2电机与编码器/电机程序与函数梳理.html</code></td>
+          <td><span class="tag green">文档</span></td>
+          <td>同步当前函数结构、保护矩阵、行号定位和目标越界错误码。</td>
+        </tr>
+        <tr>
+          <td><code>docs/03_问题分析与整改/CPU2电机与编码器/电机运动函数简化优化计划.md</code></td>
+          <td><span class="tag green">文档</span><span class="tag red">新增</span></td>
+          <td>记录第一轮到第六轮完整优化路线、当前执行状态、后续计划和版本影响。</td>
+        </tr>
+        <tr>
+          <td><code>docs/03_问题分析与整改/CPU2电机与编码器/电机运动函数台架验证记录.md</code></td>
+          <td><span class="tag green">文档</span><span class="tag red">新增</span></td>
+          <td>记录 COM12 台架验证环境、T01-T16 矩阵、T01-T14 实测结果和未覆盖风险。</td>
+        </tr>
+        <tr>
+          <td><code>docs/03_问题分析与整改/CPU2电机与编码器/README.md</code></td>
+          <td><span class="tag green">文档</span></td>
+          <td>新增计划文档、台架记录和本文档入口。</td>
+        </tr>
+      </tbody>
+    </table>
+    <div class="warn">
+      <p>本节范围对应第一轮历史 worktree。当前 <code>motor-motion-structure</code> worktree 的未跟踪文档和检查脚本需按当前 `git status --short` 单独确认，提交时显式暂存目标文件。</p>
+    </div>
+  </section>
+
+  <section id="motion">
+    <h2>3. 电机运动 API 改动</h2>
+    <h3>3.1 临时速度恢复统一收口</h3>
+    <table>
+      <thead>
+        <tr><th>新增对象</th><th>当前行号</th><th>用途</th><th>影响入口</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>MotorMotionSpeedScope</code></td>
+          <td><code>motor_ctrl_motion_api.c:51</code></td>
+          <td>记录本次运动是否需要恢复临时速度，以及恢复到哪个默认速度。</td>
+          <td>ticks 运动、正式距离运动、绝对位置运动、Jog 内部运动、强制调试运动。</td>
+        </tr>
+        <tr>
+          <td><code>MotorMotion_BeginSpeedScope()</code></td>
+          <td><code>motor_ctrl_motion_api.c:1173</code></td>
+          <td>替代各入口重复调用 <code>MotorDriver_BeginTemporarySpeed()</code> 的散落代码。</td>
+          <td>统一开始临时速度。</td>
+        </tr>
+        <tr>
+          <td><code>MotorMotion_EndSpeedScope()</code></td>
+          <td><code>motor_ctrl_motion_api.c:1188</code></td>
+          <td>统一恢复默认速度；只有运动本身成功时，恢复失败才覆盖最终返回值。</td>
+          <td>统一正常收尾。</td>
+        </tr>
+        <tr>
+          <td><code>MotorMotion_ReturnWithSpeedScope()</code></td>
+          <td><code>motor_ctrl_motion_api.c:1198</code></td>
+          <td>错误提前返回前先恢复速度，并优先保留原始运动错误。</td>
+          <td>命令切换、驱动错误、位置异常等提前退出路径。</td>
+        </tr>
+        <tr>
+          <td><code>MotorMotion_CheckErrorWithSpeedScope()</code></td>
+          <td><code>motor_ctrl_motion_api.c:1210</code></td>
+          <td>在保持 <code>CHECK_ERROR</code> 语义的同时处理临时速度恢复。</td>
+          <td>需要走统一故障出口的速度 scope 错误。</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h3>3.2 ticks 运动拆分</h3>
+    <table>
+      <thead>
+        <tr><th>函数</th><th>当前行号</th><th>原问题</th><th>本次处理</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>MotorCtrl_MoveByTicksAndWait()</code></td>
+          <td><code>motor_ctrl_motion_api.c:177</code></td>
+          <td>下发目标、读取寄存器、确认起步、等待停止、确认到位和速度恢复集中在一个长函数中。</td>
+          <td>主函数保留流程编排，起步变化和目标窗口确认拆到 helper。</td>
+        </tr>
+        <tr>
+          <td><code>MotorMotion_WaitTicksStartChanged()</code></td>
+          <td><code>motor_ctrl_motion_api.c:978</code></td>
+          <td>起步后 <code>XACTUAL</code> 变化确认逻辑和故障日志散在主函数中。</td>
+          <td>集中处理 500ms 内 <code>XACTUAL</code> 是否变化、命令切换、健康检查和失败日志。</td>
+        </tr>
+        <tr>
+          <td><code>MotorMotion_WaitTicksReachTarget()</code></td>
+          <td><code>motor_ctrl_motion_api.c:1039</code></td>
+          <td>停稳后到位窗口确认和错误详情生成嵌在主流程内。</td>
+          <td>集中处理 <code>1024 ticks</code> 容差、超时和详细错误信息。</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h3>3.3 正式距离运动收敛</h3>
+    <table>
+      <thead>
+        <tr><th>函数</th><th>当前行号</th><th>本次改动</th><th>保持不变</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>MotorCtrl_MoveAndWait()</code></td>
+          <td><code>motor_ctrl_motion_api.c:394</code></td>
+          <td>删除 <code>attempt/remain_mm</code> 不可达重试框架；开始时刷新有效位置源；计算目标后调用绝对目标范围检查；速度收尾改用 scope。</td>
+          <td>仍为单次正式距离运动；不改变方向语义、等待停止策略、最终偏差丢步判断和命令切换停机语义。</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h3>3.4 绝对目标范围检查</h3>
+    <table>
+      <thead>
+        <tr><th>函数</th><th>当前行号</th><th>调用点</th><th>返回码</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>MotorMotion_CheckAbsoluteTargetRange()</code></td>
+          <td><code>motor_ctrl_motion_api.c:1558</code></td>
+          <td><code>MoveAndWait</code> 计算出的绝对目标、<code>MoveToPosition</code> 入参、<code>JogMoveAndWait</code> 计算出的绝对目标、<code>JogMoveToPosition</code> 入参。</td>
+          <td>目标非有限值、罐高异常、目标小于 0 或大于 <code>tankHeight / 10.0mm</code> 时返回 <code>PARAM_RANGE_ERROR</code>。</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h3>3.5 Jog 目标运动整理</h3>
+    <table>
+      <thead>
+        <tr><th>函数</th><th>当前行号</th><th>本次改动</th><th>边界</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>MotorCtrl_JogMoveAndWait()</code></td>
+          <td><code>motor_ctrl_motion_api.c:674</code></td>
+          <td>相对目标计算后复用绝对目标范围检查。</td>
+          <td>不改变 Jog 减速、提前停机、误差判断和速度模式。</td>
+        </tr>
+        <tr>
+          <td><code>MotorCtrl_JogMoveToPosition()</code></td>
+          <td><code>motor_ctrl_motion_api.c:717</code></td>
+          <td>入口先做绝对目标范围检查，越界时直接走统一错误出口。</td>
+          <td>合法目标仍按原 Jog 内部状态机执行。</td>
+        </tr>
+        <tr>
+          <td><code>MotorMotion_RefreshJogPositionChecked()</code></td>
+          <td><code>motor_ctrl_motion_api.c:1626</code></td>
+          <td>集中刷新有效位置、检查位置快照和越过目标保护。</td>
+          <td>位置快照异常和超限仍返回 <code>MEASUREMENT_POSITION_ERROR</code>。</td>
+        </tr>
+        <tr>
+          <td><code>MotorMotion_StopJogAndRestore()</code></td>
+          <td><code>motor_ctrl_motion_api.c:1850</code></td>
+          <td>收尾参数改为 <code>MotorMotionSpeedScope</code>，统一停机后速度恢复。</td>
+          <td>保留停止、复核终点和返回优先级。</td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="recovery">
+    <h2>4. 故障恢复改动</h2>
+    <table>
+      <thead>
+        <tr><th>函数</th><th>当前行号</th><th>本次改动</th><th>原因</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>FaultRecovery_IsNonRecoverableError()</code></td>
+          <td><code>fault_recovery.c:62</code></td>
+          <td>新增确定性配置/边界错误分类，当前过滤 <code>PARAM_RANGE_ERROR</code>、<code>PARAM_ADDRESS_OVERFLOW</code>、<code>PARAM_ERROR</code>。</td>
+          <td>这些错误不会通过重新初始化或重读部件参数恢复，自动重跑只会重复失败。</td>
+        </tr>
+        <tr>
+          <td><code>FaultRecovery_Start()</code></td>
+          <td><code>fault_recovery.c:226</code></td>
+          <td>在检查 retry limit 和命令白名单前，先排除不可恢复错误。</td>
+          <td>T05 复测曾暴露越界目标会被 <code>CMD_RUN_TO_POSITION</code> 自动恢复重跑 3 次。</td>
+        </tr>
+        <tr>
+          <td><code>FaultRecovery_IsRecoverableCommand()</code></td>
+          <td><code>fault_recovery.c:98</code></td>
+          <td>注释更新为“先排除确定性配置/边界错误，再按命令白名单恢复”。</td>
+          <td>让维护说明与代码行为一致。</td>
+        </tr>
+      </tbody>
+    </table>
+    <div class="note">
+      <p>本次最终没有过滤所有 <code>MEASUREMENT_POSITION_ERROR</code>。早期方案曾考虑直接把位置错误列为不可恢复，但复核后认为范围过大，可能影响其它位置异常路径；最终改为目标越界返回 <code>PARAM_RANGE_ERROR</code>，自动恢复只过滤参数类确定性错误。</p>
+    </div>
+  </section>
+
+  <section id="behavior">
+    <h2>5. 行为变化和兼容性</h2>
+    <table>
+      <thead>
+        <tr><th>项目</th><th>变化前</th><th>变化后</th><th>影响</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>绝对目标越界</td>
+          <td>部分路径只验证当前位置快照，未在运动下发前可靠拒绝目标本身越界。</td>
+          <td>目标小于 0 或大于罐高时，在下发运动前返回 <code>PARAM_RANGE_ERROR</code>。</td>
+          <td>CPU2 运行行为变化；提交/发布前应升 CPU2 patch 版本。</td>
+        </tr>
+        <tr>
+          <td>越界错误码</td>
+          <td>曾在复测中返回 <code>MEASUREMENT_POSITION_ERROR</code>。</td>
+          <td>最终返回 <code>PARAM_RANGE_ERROR = 0x00110003</code>。</td>
+          <td>错误归因更准确；未新增错误码，未改变 CPU2/CPU3 共享协议枚举。</td>
+        </tr>
+        <tr>
+          <td>自动恢复</td>
+          <td><code>CMD_RUN_TO_POSITION</code> 属于可恢复命令，越界目标失败后会进入自动重跑。</td>
+          <td>参数类确定性错误不进入自动恢复。</td>
+          <td>避免无效目标重复执行；硬件通信、驱动等非参数类错误仍按原白名单恢复。</td>
+        </tr>
+        <tr>
+          <td>运动策略</td>
+          <td>正式绝对运动和 Jog 运动保持各自策略。</td>
+          <td>仍保持各自策略；本次未把 <code>MoveToPosition</code> 替换为 Jog 反馈策略。</td>
+          <td>不改变默认运动算法，只补目标前置拒绝和内部结构整理。</td>
+        </tr>
+        <tr>
+          <td>台架下限</td>
+          <td>现场要求传感器位置不低于 <code>200mm</code>。</td>
+          <td>固件目标范围仍按 <code>0~tankHeight</code> 判断；本文档只记录 <code>200mm</code> 是台架限位。</td>
+          <td>是否固化 <code>200mm</code> 下限仍需产品/现场决策。</td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="bench">
+    <h2>6. 台架验证结果</h2>
+    <table>
+      <thead>
+        <tr><th>项目</th><th>条件</th><th>结果</th><th>结论</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>环境</td>
+          <td><code>COM12</code>、<code>115200</code>、GBK；ST-LINK 烧写；有效位置约 <code>699.5mm</code>。</td>
+          <td>HEX <code>build\LTD_MAIN_CPU2\LTD_MAIN_CPU2_V1.13.0.1.hex</code> 烧写 verify 通过。</td>
+          <td><span class="tag green">通过</span></td>
+        </tr>
+        <tr>
+          <td>T01-T04</td>
+          <td>正式上/下行、正式命令切换、正式绝对位置到位。</td>
+          <td>50mm 上下行、150mm 中断、680mm 绝对到位均符合预期。</td>
+          <td><span class="tag green">通过</span></td>
+        </tr>
+        <tr>
+          <td>T05</td>
+          <td><code>CMD_RUN_TO_POSITION</code>，目标 <code>1100.0mm</code>。</td>
+          <td>日志出现 <code>absolute target out of range</code>，返回 <code>0x00110003</code>；7s 内未出现自动恢复/重试日志；位置不动。</td>
+          <td><span class="tag green">通过</span></td>
+        </tr>
+        <tr>
+          <td>T06-T09</td>
+          <td>位置源切换、Jog 相对上下行、Jog 绝对到位。</td>
+          <td><code>YM</code>、<code>BJ+20</code>、<code>BJ-20</code>、<code>BJP650</code> 均按记录通过。</td>
+          <td><span class="tag green">通过</span></td>
+        </tr>
+        <tr>
+          <td>T10</td>
+          <td><code>BJP1100,1.0</code>。</td>
+          <td>返回 <code>0x00110003</code>，终点仍约 <code>699.5/699.6mm</code>；随后 <code>BJP700,1.0</code> 合法目标返回 <code>0x00000000</code>。</td>
+          <td><span class="tag green">通过</span></td>
+        </tr>
+        <tr>
+          <td>T11-T14</td>
+          <td>强制无检测运动、A/B/BE 命令切换。</td>
+          <td>强制路径仍做驱动就绪/健康检查；A/B/BE 切换后能退出并恢复。</td>
+          <td><span class="tag green">通过</span></td>
+        </tr>
+        <tr>
+          <td>T15-T16</td>
+          <td>编码器首帧缺失、TMC/24V 故障注入。</td>
+          <td>未制造人工故障条件。</td>
+          <td><span class="tag amber">未覆盖</span></td>
+        </tr>
+      </tbody>
+    </table>
+    <div class="warn">
+      <p>台架验证完整记录见《电机运动函数台架验证记录.md》。本文仅摘录结论，不能替代原始串口日志和单项记录。</p>
+    </div>
+  </section>
+
+  <section id="docs">
+    <h2>7. 文档同步</h2>
+    <table>
+      <thead>
+        <tr><th>文档</th><th>同步内容</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>电机程序与函数梳理.html</code></td>
+          <td>同步 <code>MotorMotionSpeedScope</code>、ticks helper、绝对目标检查、保护矩阵和源码定位表。</td>
+        </tr>
+        <tr>
+          <td><code>电机运动函数简化优化计划.md</code></td>
+          <td>记录第一轮结构优化、第四轮台架验证状态、后续 T15/T16 和 <code>200mm</code> 下限策略决策。</td>
+        </tr>
+        <tr>
+          <td><code>电机运动函数台架验证记录.md</code></td>
+          <td>记录 COM12 台架环境、T01-T16 执行矩阵、T01-T14 结果、T05/T10 越界返回码和剩余风险。</td>
+        </tr>
+        <tr>
+          <td><code>README.md</code></td>
+          <td>新增计划文档、台架记录和本文档入口。</td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="release">
+    <h2>8. 发布前处理</h2>
+    <table>
+      <thead>
+        <tr><th>项目</th><th>当前状态</th><th>提交/发布前动作</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>固件版本</td>
+          <td>仍为 <code>V1.13.0.1</code>。</td>
+          <td>本次改变 CPU2 运行行为，提交/发布前应按 bug 修复升 CPU2 patch，并同步 <code>CHANGELOG.md</code> 和版本改动与测试方案。</td>
+        </tr>
+        <tr>
+          <td>协议版本</td>
+          <td>未新增命令、寄存器、共享结构或错误码枚举。</td>
+          <td>预计不需要升级 <code>DEVICE_PROTOCOL_VERSION</code>；提交前仍需按最终 diff 复核。</td>
+        </tr>
+        <tr>
+          <td>参数存储</td>
+          <td>未修改 <code>DeviceParameters</code> 结构、参数地址或存储版本。</td>
+          <td>预计不触发 FRAM 参数恢复出厂。</td>
+        </tr>
+        <tr>
+          <td>暂存范围</td>
+          <td>当前仍有未暂存和未跟踪文件。</td>
+          <td>提交时显式暂存本次代码和文档，不使用 <code>git add .</code> 混入无关文件。</td>
+        </tr>
+        <tr>
+          <td>剩余验证</td>
+          <td>T01-T14 已台架覆盖；T15/T16 未覆盖。</td>
+          <td>发布级安全结论前补人工故障注入；决定是否把 <code>200mm</code> 台架下限固化为固件边界。</td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+</main>
+</body>
+</html>

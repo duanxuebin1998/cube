@@ -1,0 +1,824 @@
+﻿﻿<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>CPU2 电机与位置模型程序详细流程</title><link rel="stylesheet" href="assets/流程文档样式.css?v=cpu2-20260616-flow-audit"><style>
+:root{--ink:#17233a;--muted:#5a6b83;--card:#fff;--bg:#f4f7fb;}body{margin:0;background:var(--bg);color:var(--ink);font-family:"Microsoft YaHei","Segoe UI",Arial,sans-serif;line-height:1.7;overflow-x:hidden}.wrap{max-width:1380px;margin:0 auto;padding:28px 34px 56px}.hero{background:linear-gradient(135deg,#163052,#176d7a);color:#fff;border-radius:10px;padding:34px 38px;box-shadow:0 14px 32px rgba(28,58,96,.18)}.hero h1{margin:0 0 12px;font-size:30px;letter-spacing:0}.hero p{margin:0;max-width:1080px;color:#e8f4ff}.meta-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:28px}.meta{border:1px solid rgba(255,255,255,.22);border-radius:8px;padding:13px 15px;background:rgba(255,255,255,.08)}.meta span{display:block;font-size:12px;color:#cfe7f5}.meta strong{display:block;margin-top:6px}.topnav{position:sticky;top:0;z-index:3;margin:18px 0;display:flex;gap:8px;flex-wrap:wrap;background:rgba(244,247,251,.94);padding:10px 0;border-bottom:1px solid #dce7f3}.topnav a{font-size:13px;text-decoration:none;color:#1e5f9e;background:#fff;border:1px solid #d6e3f1;border-radius:999px;padding:6px 12px}.card{background:var(--card);border:1px solid #d9e5f1;border-radius:9px;margin:16px 0;padding:24px 26px;box-shadow:0 8px 22px rgba(30,64,100,.06);overflow-x:visible}.card::-webkit-scrollbar{height:10px}.card::-webkit-scrollbar-thumb{background:#b9cbe1;border-radius:999px}.card::-webkit-scrollbar-track{background:#eef4fb;border-radius:999px}h2{font-size:23px;margin:0 0 14px}.lead{color:#314765}.info-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:16px 0}.info-grid div{border:1px solid #dbe7f3;border-radius:8px;padding:12px;background:#fbfdff}.info-grid strong{display:block;margin-bottom:7px}.info-grid span{font-size:13px;color:#384e6b}.evidence-row{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}.evidence{display:inline-flex;align-items:center;gap:6px;border:1px solid #d8e5f1;background:#f7fbff;border-radius:7px;padding:6px 9px;font-size:12px;color:#435973}.biz-flow{display:block;width:100%;max-width:100%;height:auto;border:1px solid #d7e4f2;border-radius:10px;background:#fbfdff;margin:12px 0 4px}.biz-flow .canvas{fill:#fbfdff}.svg-title{font-size:18px;font-weight:700;fill:#18304d}.svg-subtitle{font-size:12px;fill:#5a6b83}.edge{fill:none;stroke:#526a84;stroke-width:2.1}.edge.error-edge{stroke:#c74d55}.edge.ok-edge{stroke:#2d8f69}.edge-label{font-size:12px;fill:#2f435b;font-weight:600}.node{stroke-width:1.5}.node-text{font-size:13px;fill:#13253c;text-anchor:middle;dominant-baseline:middle;font-weight:600}.node-text.small{font-size:12px}.issue-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.issue{border:1px solid #d9e5f1;border-radius:8px;padding:13px 14px;background:#fff}.issue.high{border-left:5px solid #d24a4a}.issue.medium{border-left:5px solid #d49328}.issue.low{border-left:5px solid #4b88d8}.issue-head{display:flex;gap:8px;align-items:center}.issue-head span{font-size:12px;border-radius:999px;padding:2px 8px;background:#f1f5f9}.issue p{font-size:13px;color:#324a66}.issue footer{font-size:12px;color:#62758e}table{width:100%;border-collapse:collapse;margin-top:10px;font-size:13px}th,td{border:1px solid #dbe7f3;padding:9px 10px;text-align:left;vertical-align:top}th{background:#f0f6fc}code{display:inline-block;max-width:100%;font-family:Consolas,"Courier New",monospace;background:#eef5fc;border:1px solid #d6e5f2;border-radius:4px;padding:1px 4px;color:#173b63;white-space:normal;overflow-wrap:anywhere;word-break:break-word}@media(max-width:900px){.wrap{padding:18px 14px}.meta-grid,.info-grid,.issue-list{grid-template-columns:1fr}.hero{padding:24px 20px}.topnav{position:static}.card{padding:18px 14px}.node-text{font-size:12px}.biz-flow{width:100%;max-width:100%;min-width:0}}
+.svg-flow-wrap{width:100%;max-width:100%;min-width:0;margin:12px 0 4px;overflow-x:visible;overflow-y:visible;border:1px solid #d7e4f2;border-radius:10px;background:#fbfdff;-webkit-overflow-scrolling:touch}.svg-flow-wrap::-webkit-scrollbar{height:10px}.svg-flow-wrap::-webkit-scrollbar-thumb{background:#b9cbe1;border-radius:999px}.svg-flow-wrap::-webkit-scrollbar-track{background:#eef4fb;border-radius:999px}.svg-flow-wrap .biz-flow{display:block;width:100%!important;min-width:0!important;max-width:100%!important;height:auto!important;margin:0!important;border:0!important;border-radius:0!important}@media(max-width:900px){.svg-flow-wrap .biz-flow{width:100%!important;min-width:0!important}}.biz-flow{overflow:visible}.biz-flow .edge-label,.biz-flow .el{paint-order:stroke;stroke:#fbfdff;stroke-width:4px;stroke-linejoin:round}.legend{display:none}</style>
+
+<style id="cross-flow-nav-style">
+.cross-flow-nav{margin:16px 0 20px;padding:16px 18px;border:1px solid #cfe0f2;border-radius:10px;background:#fff;box-shadow:0 8px 22px rgba(31,59,91,.07)}
+.cross-flow-nav *{box-sizing:border-box}
+.cross-flow-nav__head{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;margin-bottom:12px}
+.cross-flow-nav__kicker{display:block;color:#4f6b86;font-size:12px;font-weight:700;margin-bottom:3px}
+.cross-flow-nav__title{font-size:18px;font-weight:850;color:#17233a}
+.cross-flow-nav__crumbs{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:0 0 10px;color:#5a6f86;font-size:12px}
+.cross-flow-nav__crumbs a{color:#245d96;text-decoration:none;font-weight:700}
+.cross-flow-nav__crumbs span{overflow-wrap:anywhere}
+.cross-flow-nav__quick{display:flex;flex-wrap:wrap;gap:7px;justify-content:flex-end}
+.cross-flow-nav__quick a,.cross-flow-nav__links a{display:inline-flex;align-items:center;min-height:28px;padding:4px 9px;border:1px solid #d7e5f3;border-radius:999px;background:#f6faff;color:#245d96;text-decoration:none;font-size:12px;font-weight:700;max-width:100%;white-space:normal;overflow-wrap:anywhere;word-break:break-word}
+.cross-flow-nav__grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px}
+.cross-flow-nav__card{border:1px solid #dce7f2;border-radius:8px;background:#fbfdff;padding:12px}
+.cross-flow-nav__card b{display:block;margin-bottom:5px;color:#16263b}
+.cross-flow-nav__card p{margin:0 0 8px;color:#43556b;line-height:1.62;font-size:13px}
+.cross-flow-nav__links{display:flex;flex-wrap:wrap;gap:6px}
+.cross-flow-nav__linear{display:flex;justify-content:space-between;gap:10px;margin-top:12px;padding-top:12px;border-top:1px solid #e2ebf5}
+.cross-flow-nav__linear a{flex:1 1 0;min-width:0;padding:9px 11px;border:1px solid #d7e5f3;border-radius:8px;background:#f8fbff;color:#214f7d;text-decoration:none;font-size:13px;font-weight:800;overflow-wrap:anywhere}
+.cross-flow-nav__linear a:last-child{text-align:right}
+@media(max-width:720px){.cross-flow-nav{padding:14px;max-width:100%;overflow:hidden}.cross-flow-nav__head{display:block}.cross-flow-nav__title{font-size:16px}.cross-flow-nav__quick{justify-content:flex-start;margin-top:10px}.cross-flow-nav__grid{grid-template-columns:1fr}.cross-flow-nav__linear{flex-direction:column}.cross-flow-nav__linear a:last-child{text-align:left}}
+</style>
+</head><body><div class="wrap"><header class="hero"><h1>CPU2 电机与位置模型程序详细流程</h1><p>按当前源码重新整理电机正式指令、TMC5130 初始化、位置源切换、编码器计数、阻塞/点动/强制运动、运行期健康检查、丢步检测和 TFIT 尺带拟合。所有流程图均为业务级 SVG，节点写功能动作和判断条件。</p><div class="meta-grid"><div class="meta"><span>功能域</span><strong>电机与位置模型</strong></div><div class="meta"><span>正式指令</span><strong>运行到位置、手动上下行、强制运动</strong></div><div class="meta"><span>流程图数量</span><strong>12 张业务级 SVG</strong></div><div class="meta"><span>整理日期</span><strong>2026-06-12</strong></div></div></header><nav class="topnav"><a href="#scope">整理范围</a><a href="#overview">总体流程</a><a href="#cmd-entry">运动指令</a><a href="#init">初始化</a><a href="#position">位置模型</a><a href="#switch">位置源切换</a><a href="#move">阻塞运动</a><a href="#jog">绝对/Jog</a><a href="#force">强制运动</a><a href="#encoder">编码器</a><a href="#lost">丢步检测</a><a href="#health">停止健康</a><a href="#tfit">TFIT</a><a href="#issues">问题点</a><a href="#source">源码索引</a></nav>
+<!-- CROSS-FLOW-NAV-START -->
+<section class="cross-flow-nav" id="cross-flow-nav" aria-label="程序流程关联导航"><div class="cross-flow-nav__crumbs"><a href="../index.html">统一入口</a><span>/</span><a href="CPU2程序流程总览.html">CPU2 总览</a><span>/</span><span>电机与位置模型</span></div><div class="cross-flow-nav__head"><div><span class="cross-flow-nav__kicker">程序流程关联导航</span><div class="cross-flow-nav__title">电机与位置模型 在整机链路中的位置</div></div><div class="cross-flow-nav__quick"><a href="../index.html">统一入口</a><a href="../跨CPU业务链路.html">跨 CPU 链路</a><a href="CPU2程序流程总览.html">CPU2 总览</a><a href="../CPU3/CPU3程序流程总览.html">CPU3 总览</a></div></div><div class="cross-flow-nav__grid"><article class="cross-flow-nav__card"><b>上游入口</b><p>先看这些页面，可以知道本页由哪个菜单、协议、主循环或测量状态触发。</p><div class="cross-flow-nav__links"><a href="01_启动主循环与中断.html">启动主循环与中断</a><a href="02_测量命令总入口.html">测量命令总入口</a><a href="03_回零与罐底罐高.html">回零与罐底罐高</a><a href="04_液位测量与跟随.html">液位测量与跟随</a><a href="05_水位测量与跟随.html">水位测量与跟随</a><a href="06_密度与单点测量.html">密度与单点测量</a></div></article><article class="cross-flow-nav__card"><b>本页定位</b><p>电机方向、速度、位置源、记步和丢步/碰撞判断，为所有测量闭环提供运动基础。</p><div class="cross-flow-nav__links"><a href="08_电机与位置模型.html">电机与位置模型</a></div></article><article class="cross-flow-nav__card"><b>下游输出</b><p>本页处理完成后，通常会影响这些测量、通信、显示、故障或参数页面。</p><div class="cross-flow-nav__links"><a href="07_故障管理与恢复.html">故障管理与恢复</a><a href="10_Modbus与CPU3通信.html">Modbus 与 CPU3 通信</a><a href="14_BSP外设驱动.html">BSP 外设驱动</a><a href="问题点总表.html">CPU2 问题点总表</a></div></article><article class="cross-flow-nav__card"><b>建议阅读路线</b><p>按业务链路阅读时，建议按这些页面顺序前后跳转。</p><div class="cross-flow-nav__links"><a href="CPU2程序流程总览.html">CPU2 程序流程总览</a><a href="02_测量命令总入口.html">测量命令总入口</a><a href="08_电机与位置模型.html">电机与位置模型</a><a href="07_故障管理与恢复.html">故障管理与恢复</a></div></article></div><div class="cross-flow-nav__linear"><a href="07_故障管理与恢复.html">上一页：故障管理与恢复</a><a href="09_传感器与无线通信.html">下一页：传感器与无线通信</a></div></section>
+<!-- CROSS-FLOW-NAV-END -->
+
+<section id="scope" class="card"><h2>1. 整理范围</h2><p class="lead">本页按业务链路整理电机与位置模型，不再把 171 个函数拆成顺序卡片。阅读顺序是：正式指令入口、驱动初始化、位置源、运动执行、运行期保护、停止尾段、尺带拟合。</p><div class="info-grid"><div><strong>正式运动命令</strong><span><code>CMD_RUN_TO_POSITION</code>、<code>CMD_MOVE_UP/DOWN</code>、<code>CMD_FORCE_MOVE_UP/DOWN</code></span></div><div><strong>运动接口</strong><span><code>MotorCtrl_MoveAndWait</code>、<code>MotorCtrl_MoveToPosition</code>、<code>MotorCtrl_JogMoveToPosition</code>、<code>MotorCtrl_MoveBlockingNoDetectForceDebug</code>；固定点/密度正式定位当前使用 Jog 绝对定位</span></div><div><strong>位置模型</strong><span>编码轮模式与电机计数模式共用 <code>cable_length</code> / <code>sensor_position</code></span></div><div><strong>安全边界</strong><span>命令切换、驱动健康、电源状态、碰撞、丢步、目标越界、速度恢复</span></div></div><div class="evidence-row"><span class="evidence"><code>Application/Src/measure.c:92-111</code> 普通正式命令先执行 MeasureStart，再进入 switch。</span><span class="evidence"><code>Application/Src/measure.c:829-985</code> 手动和强制上/下行命令的上层状态与异常出口。</span><span class="evidence"><code>Services/MotorControl/motor_ctrl_motion_api.c:441-577</code> 普通阻塞运动的核心流程。</span><span class="evidence"><code>Services/MotorControl/motor_ctrl_position_model.c:403-558</code> 位置源切换和回滚逻辑。</span></div></section>
+<section id="overview" class="card"><h2>2. 总体业务流程图</h2><div class="svg-flow-wrap"><svg class="biz-flow" viewBox="0 0 1180 900" role="img" aria-labelledby="motor-overview-title motor-overview-desc" aria-label="CPU2 电机与位置模型程序详细流程 - 业务流程图 1">
+<title id="motor-overview-title">电机与位置模型总体链路</title><desc id="motor-overview-desc">从正式运动指令到位置源、驱动寄存器、运行监控和结果回写的业务闭环</desc><defs><marker id="arrow-motor-overview" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#46627f"/></marker><filter id="shadow-motor-overview" x="-10%" y="-15%" width="130%" height="140%"><feDropShadow dx="0" dy="7" stdDeviation="7" flood-color="#24415f" flood-opacity="0.14"/></filter></defs><rect class="canvas" x="1" y="1" width="1178" height="848" rx="14"/>
+<text class="svg-title" x="28" y="38">电机与位置模型总体链路</text>
+<text class="svg-subtitle" x="28" y="62">正式命令先做公共准备，再按运动类型进入三条分支，最终汇入位置源、驱动下发、运行期保护和停机回写。</text>
+<path class="edge" d="M 590 125 L 590 165" marker-end="url(#arrow-motor-overview)"/>
+<path class="edge" d="M 590 240 L 590 285" marker-end="url(#arrow-motor-overview)"/>
+<path class="edge" d="M 590 385 C 400 410 235 440 220 500" marker-end="url(#arrow-motor-overview)"/>
+<text class="edge-label" x="398" y="417">普通/手动</text>
+<path class="edge" d="M 590 385 L 590 500" marker-end="url(#arrow-motor-overview)"/>
+<text class="edge-label" x="620" y="438">绝对定位</text>
+<path class="edge" d="M 590 385 C 780 410 945 440 960 500" marker-end="url(#arrow-motor-overview)"/>
+<text class="edge-label" x="780" y="417">强制运动</text>
+<path class="edge" d="M 220 590 C 330 635 500 645 590 675" marker-end="url(#arrow-motor-overview)"/>
+<path class="edge" d="M 590 590 L 590 675" marker-end="url(#arrow-motor-overview)"/>
+<path class="edge" d="M 960 590 C 850 635 680 645 590 675" marker-end="url(#arrow-motor-overview)"/>
+<path class="edge" d="M 590 770 L 590 805" marker-end="url(#arrow-motor-overview)"/>
+<path class="edge" d="M 460 805 C 330 770 230 720 220 590" marker-end="url(#arrow-motor-overview)"/>
+<text class="edge-label" x="335" y="770">运行中循环刷新</text>
+<rect class="node node-start" x="430" y="80" width="320" height="70" rx="10" fill="#eaf8f1" stroke="#2c9872" filter="url(#shadow-motor-overview)"/>
+<text class="node-text" x="590" y="104">正式运动指令</text>
+<text class="node-text" x="590" y="126">运行到位置 / 手动上下行 / 强制</text>
+<rect class="node node-action" x="410" y="165" width="360" height="75" rx="10" fill="#eaf2ff" stroke="#4b88d8" filter="url(#shadow-motor-overview)"/>
+<text class="node-text" x="590" y="192">公共准备</text>
+<text class="node-text" x="590" y="215">MeasureStart 清故障、电机、扭力状态</text>
+<polygon class="node node-decision" points="590,285 720,335 590,385 460,335" fill="#fff5dd" stroke="#d49328" filter="url(#shadow-motor-overview)"/>
+<text class="node-text" x="590" y="335">运动类型？</text>
+<rect class="node node-action" x="80" y="500" width="280" height="90" rx="10" fill="#eaf2ff" stroke="#4b88d8" filter="url(#shadow-motor-overview)"/>
+<text class="node-text" x="220" y="523">普通相对运动</text>
+<text class="node-text" x="220" y="546">按命令距离计算</text>
+<text class="node-text" x="220" y="569">MoveAndWait</text>
+<rect class="node node-action" x="450" y="500" width="280" height="90" rx="10" fill="#eaf2ff" stroke="#4b88d8" filter="url(#shadow-motor-overview)"/>
+<text class="node-text" x="590" y="523">绝对定位</text>
+<text class="node-text" x="590" y="546">目标来自分布液位参数</text>
+<text class="node-text" x="590" y="569">MoveToPosition 逼近</text>
+<rect class="node node-action" x="820" y="500" width="280" height="90" rx="10" fill="#eaf2ff" stroke="#4b88d8" filter="url(#shadow-motor-overview)"/>
+<text class="node-text" x="960" y="523">强制/无检测运动</text>
+<text class="node-text" x="960" y="546">ForceDebug 接口</text>
+<text class="node-text" x="960" y="569">只保留底层安全检查</text>
+<rect class="node node-state" x="450" y="675" width="280" height="95" rx="10" fill="#ecf8ff" stroke="#38a3c7" filter="url(#shadow-motor-overview)"/>
+<text class="node-text" x="590" y="699">有效位置源</text>
+<text class="node-text" x="590" y="722">编码轮：AS5145 计数</text>
+<text class="node-text" x="590" y="745">电机：XACTUAL + 尺带模型</text>
+<rect class="node node-action" x="80" y="805" width="280" height="95" rx="10" fill="#eaf2ff" stroke="#4b88d8" filter="url(#shadow-motor-overview)"/>
+<text class="node-text" x="220" y="829">TMC5130 下发</text>
+<text class="node-text" x="220" y="852">速度换算 VMAX</text>
+<text class="node-text" x="220" y="875">moveBy / rotate / stop</text>
+<rect class="node node-wait" x="450" y="805" width="280" height="95" rx="10" fill="#f1efff" stroke="#7b68d6" filter="url(#shadow-motor-overview)"/>
+<text class="node-text" x="590" y="829">运行期循环</text>
+<text class="node-text" x="590" y="852">命令切换、碰撞、驱动健康</text>
+<text class="node-text" x="590" y="875">速度补偿、位置刷新、丢步检测</text>
+<rect class="node node-end" x="820" y="805" width="280" height="95" rx="10" fill="#eefbf5" stroke="#31a06f" filter="url(#shadow-motor-overview)"/>
+<text class="node-text" x="960" y="829">停机与状态回写</text>
+<text class="node-text" x="960" y="852">清 motor_state / 恢复临时速度</text>
+<text class="node-text" x="960" y="875">返回错误码</text>
+</svg></div></section>
+<section id="cmd-entry" class="card"><h2>3. 正式运动指令业务流程</h2><p>这里把测量命令入口和运动指令放在一起看：同样会先走公共准备，随后不同命令进入普通运动、绝对定位或强制运动分支。</p><div class="svg-flow-wrap"><svg class="biz-flow" viewBox="0 0 1320 759" role="img" aria-labelledby="motor-cmd-entry-title motor-cmd-entry-desc" aria-label="CPU2 电机与位置模型程序详细流程 - 业务流程图 2">
+<title id="motor-cmd-entry-title">正式运动指令入口流程</title><desc id="motor-cmd-entry-desc">五类外部运动命令在 measure.c 内的业务差异和共同异常出口</desc><defs><marker id="arrow-motor-cmd-entry" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#46627f"/></marker><filter id="shadow-motor-cmd-entry" x="-10%" y="-15%" width="130%" height="140%"><feDropShadow dx="0" dy="7" stdDeviation="7" flood-color="#24415f" flood-opacity="0.14"/></filter></defs><rect class="canvas" x="1" y="1" width="1318" height="658" rx="14"/>
+<text class="svg-title" x="28" y="38">正式运动指令入口流程</text>
+<text class="svg-subtitle" x="28" y="62">五类外部运动命令在 measure.c 内的业务差异和共同异常出口</text>
+<path class="edge " d="M 175 158 C 175 118, 470 118, 470 78" marker-end="url(#arrow-motor-cmd-entry)"/>
+<path class="edge " d="M 470 168 C 470 286.5, 175 286.5, 175 405" marker-end="url(#arrow-motor-cmd-entry)"/>
+<text class="edge-label" x="322.5" y="278.5">否</text>
+<path class="edge " d="M 470 168 C 470 123, 775 123, 775 78" marker-end="url(#arrow-motor-cmd-entry)"/>
+<text class="edge-label" x="622.5" y="115">是</text>
+<path class="edge " d="M 775 168 C 775 106.5, 1095 106.5, 1095 45" marker-end="url(#arrow-motor-cmd-entry)"/>
+<text class="edge-label" x="935" y="98.5">CMD_RUN_TO_POSITION</text>
+<path class="edge " d="M 775 168 C 775 161.5, 1095 161.5, 1095 155" marker-end="url(#arrow-motor-cmd-entry)"/>
+<text class="edge-label" x="935" y="153.5">CMD_MOVE_UP/DOWN</text>
+<path class="edge " d="M 775 168 C 775 216.5, 1095 216.5, 1095 265" marker-end="url(#arrow-motor-cmd-entry)"/>
+<text class="edge-label" x="935" y="208.5">CMD_FORCE_*</text>
+<path class="edge " d="M 1095 127 C 1095 266, 775 266, 775 405" marker-end="url(#arrow-motor-cmd-entry)"/>
+<path class="edge " d="M 1095 237 C 1095 321, 775 321, 775 405" marker-end="url(#arrow-motor-cmd-entry)"/>
+<path class="edge " d="M 1095 347 C 1095 376, 775 376, 775 405" marker-end="url(#arrow-motor-cmd-entry)"/>
+<path class="edge " d="M 775 495 C 775 457.5, 1095 457.5, 1095 420" marker-end="url(#arrow-motor-cmd-entry)"/>
+<text class="edge-label" x="935" y="449.5">是</text>
+<path class="edge " d="M 775 495 C 775 450, 470 450, 470 405" marker-end="url(#arrow-motor-cmd-entry)"/>
+<text class="edge-label" x="622.5" y="442">否</text>
+<path class="edge " d="M 470 495 C 470 525, 470 525, 470 555" marker-end="url(#arrow-motor-cmd-entry)"/>
+<text class="edge-label" x="470" y="517">是</text>
+<path class="edge " d="M 470 495 C 470 525, 775 525, 775 555" marker-end="url(#arrow-motor-cmd-entry)"/>
+<text class="edge-label" x="622.5" y="517">否</text>
+<path class="edge " d="M 1095 492 C 1095 523.5, 775 523.5, 775 555" marker-end="url(#arrow-motor-cmd-entry)"/>
+<rect class="node node-start" x="60" y="88" width="230" height="70" rx="10" fill="#eaf8f1" stroke="#2c9872" filter="url(#shadow-motor-cmd-entry)"/>
+<text class="node-text " x="175" y="112">ProcessMeasureCmd</text>
+<text class="node-text " x="175" y="134">收到 CMD_RUN_TO_POSITION / MOVE / FORCE</text>
+<polygon class="node node-decision" points="470,78 585,123 470,168 355,123" fill="#fff5dd" stroke="#d49328" filter="url(#shadow-motor-cmd-entry)"/>
+<text class="node-text " x="470" y="123">MeasureStart 成功？</text>
+<polygon class="node node-decision" points="775,78 890,123 775,168 660,123" fill="#fff5dd" stroke="#d49328" filter="url(#shadow-motor-cmd-entry)"/>
+<text class="node-text " x="775" y="123">switch 命令类型</text>
+<rect class="node node-action" x="965" y="45" width="260" height="82" rx="10" fill="#eaf2ff" stroke="#4b88d8" filter="url(#shadow-motor-cmd-entry)"/>
+<text class="node-text " x="1095" y="64">运行到指定位置</text>
+<text class="node-text " x="1095" y="86">状态=STATE_RUN_TO_POSITIONING</text>
+<text class="node-text " x="1095" y="108">目标=密度分布液位参数 /10</text>
+<rect class="node node-action" x="965" y="155" width="260" height="82" rx="10" fill="#eaf2ff" stroke="#4b88d8" filter="url(#shadow-motor-cmd-entry)"/>
+<text class="node-text " x="1095" y="163">手动上/下行</text>
+<text class="node-text " x="1095" y="185">置 manual_alarm_inhibit</text>
+<text class="node-text " x="1095" y="207">置 manual_level_update_inhibit</text>
+<text class="node-text " x="1095" y="229">MoveAndWait</text>
+<rect class="node node-action" x="965" y="265" width="260" height="82" rx="10" fill="#eaf2ff" stroke="#4b88d8" filter="url(#shadow-motor-cmd-entry)"/>
+<text class="node-text " x="1095" y="284">强制上/下行/强制回零</text>
+<text class="node-text " x="1095" y="306">无检测强制接口</text>
+<text class="node-text " x="1095" y="328">保留命令切换与驱动健康</text>
+<polygon class="node node-decision" points="775,405 890,450 775,495 660,450" fill="#fff5dd" stroke="#d49328" filter="url(#shadow-motor-cmd-entry)"/>
+<text class="node-text " x="775" y="450">返回 STATE_SWITCH？</text>
+<polygon class="node node-decision" points="470,405 585,450 470,495 355,450" fill="#fff5dd" stroke="#d49328" filter="url(#shadow-motor-cmd-entry)"/>
+<text class="node-text " x="470" y="450">返回真实错误？</text>
+<rect class="node node-state" x="965" y="420" width="260" height="72" rx="10" fill="#ecf8ff" stroke="#38a3c7" filter="url(#shadow-motor-cmd-entry)"/>
+<text class="node-text " x="1095" y="445">清手动抑制标志</text>
+<text class="node-text " x="1095" y="467">命令切换直接回上层</text>
+<rect class="node node-error" x="355" y="555" width="230" height="70" rx="10" fill="#ffecec" stroke="#d65353" filter="url(#shadow-motor-cmd-entry)"/>
+<text class="node-text " x="470" y="579">SET_ERROR(ret)</text>
+<text class="node-text " x="470" y="601">进入统一故障状态</text>
+<rect class="node node-end" x="660" y="555" width="230" height="70" rx="10" fill="#eefbf5" stroke="#31a06f" filter="url(#shadow-motor-cmd-entry)"/>
+<text class="node-text " x="775" y="579">完成状态</text>
+<text class="node-text " x="775" y="592">运行完成状态</text><text class="node-text " x="775" y="614">RUNUP / RUNDOWN / FORCE_OVER</text>
+<rect class="node node-error" x="60" y="405" width="230" height="70" rx="10" fill="#ffecec" stroke="#d65353" filter="url(#shadow-motor-cmd-entry)"/>
+<text class="node-text " x="175" y="429">公共准备失败</text>
+<text class="node-text " x="175" y="451">SET_ERROR(start_ret)</text>
+</svg></div><div class="evidence-row"><span class="evidence"><code>Application/Src/measure.c:104-111</code> ProcessMeasureCmd 调用 MeasureStart 并检查失败。</span><span class="evidence"><code>Application/Src/measure.c:227-251</code> 运动命令在 switch 中分支到各 CMD_* 函数。</span><span class="evidence"><code>Application/Src/measure.c:1197-1230</code> CMD_RUN_TO_POSITION 使用 densityDistributionOilLevel 作为目标位置。</span></div></section>
+<section id="init" class="card"><h2>4. 初始化与运动前准入</h2><div class="svg-flow-wrap"><svg class="biz-flow" viewBox="0 0 1320 709" role="img" aria-labelledby="motor-init-title motor-init-desc" aria-label="CPU2 电机与位置模型程序详细流程 - 业务流程图 3">
+<title id="motor-init-title">电机初始化与运动前准入流程</title><desc id="motor-init-desc">初始化并不只是写 TMC5130，还会恢复位置源、持久化位置和速度模型</desc><defs><marker id="arrow-motor-init" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#46627f"/></marker><filter id="shadow-motor-init" x="-10%" y="-15%" width="130%" height="140%"><feDropShadow dx="0" dy="7" stdDeviation="7" flood-color="#24415f" flood-opacity="0.14"/></filter></defs><rect class="canvas" x="1" y="1" width="1318" height="608" rx="14"/>
+<text class="svg-title" x="28" y="38">电机初始化与运动前准入流程</text>
+<text class="svg-subtitle" x="28" y="62">初始化并不只是写 TMC5130，还会恢复位置源、持久化位置和速度模型</text>
+<path class="edge " d="M 172.5 157 C 172.5 116, 475 116, 475 75" marker-end="url(#arrow-motor-init)"/>
+<path class="edge " d="M 475 157 C 475 113.5, 777.5 113.5, 777.5 70" marker-end="url(#arrow-motor-init)"/>
+<path class="edge " d="M 777.5 160 C 777.5 102.5, 1095 102.5, 1095 45" marker-end="url(#arrow-motor-init)"/>
+<text class="edge-label" x="936.25" y="94.5">否</text>
+<path class="edge " d="M 777.5 160 C 777.5 170, 1095 170, 1095 180" marker-end="url(#arrow-motor-init)"/>
+<text class="edge-label" x="936.25" y="162">是</text>
+<path class="edge " d="M 1095 141 C 1095 308, 1095 308, 1095 475" marker-end="url(#arrow-motor-init)"/>
+<path class="edge " d="M 1095 276 C 1095 375.5, 1095 375.5, 1095 475" marker-end="url(#arrow-motor-init)"/>
+<path class="edge " d="M 1095 555 C 1095 445, 777.5 445, 777.5 335" marker-end="url(#arrow-motor-init)"/>
+<path class="edge " d="M 777.5 425 C 777.5 380, 475 380, 475 335" marker-end="url(#arrow-motor-init)"/>
+<path class="edge " d="M 475 425 C 475 450, 475 450, 475 475" marker-end="url(#arrow-motor-init)"/>
+<text class="edge-label" x="475" y="442">是：电机模式不要求编码帧</text>
+<path class="edge " d="M 475 425 C 475 380, 172.5 380, 172.5 335" marker-end="url(#arrow-motor-init)"/>
+<text class="edge-label" x="323.75" y="372">否：编码轮模式</text>
+<path class="edge " d="M 172.5 425 C 172.5 450, 475 450, 475 475" marker-end="url(#arrow-motor-init)"/>
+<text class="edge-label" x="323.75" y="442">有有效帧</text>
+<path class="edge " d="M 172.5 425 C 172.5 450, 172.5 450, 172.5 475" marker-end="url(#arrow-motor-init)"/>
+<text class="edge-label" x="172.5" y="442">无有效帧且强制接口</text>
+<path class="edge " d="M 172.5 425 C 172.5 450, 777.5 450, 777.5 475" marker-end="url(#arrow-motor-init)"/>
+<text class="edge-label" x="610" y="459">无有效帧</text>
+<path class="edge " d="M 172.5 555 C 172.5 515, 475 515, 475 475" marker-end="url(#arrow-motor-init)"/>
+<path class="edge " d="M 777.5 425 C 777.5 450, 777.5 450, 777.5 475" marker-end="url(#arrow-motor-init)"/>
+<text class="edge-label" x="777.5" y="442">驱动未初始化/健康失败</text>
+<rect class="node node-start" x="55" y="85" width="235" height="72" rx="10" fill="#eaf8f1" stroke="#2c9872" filter="url(#shadow-motor-init)"/>
+<text class="node-text " x="172.5" y="110">MeasureStart 或恢复轮询</text>
+<text class="node-text " x="172.5" y="132">调用 MotorCtrl_Init</text>
+<rect class="node node-action" x="355" y="75" width="240" height="82" rx="10" fill="#eaf2ff" stroke="#4b88d8" filter="url(#shadow-motor-init)"/>
+<text class="node-text " x="475" y="83">规范参数</text>
+<text class="node-text " x="475" y="105">电流限幅</text>
+<text class="node-text " x="475" y="127">速度为空则取 max_motor_speed</text>
+<text class="node-text " x="475" y="149">根据当前尺带长度计算 velocity</text>
+<polygon class="node node-decision" points="777.5,70 895,115 777.5,160 660,115" fill="#fff5dd" stroke="#d49328" filter="url(#shadow-motor-init)"/>
+<text class="node-text " x="777.5" y="115">驱动已初始化？</text>
+<rect class="node node-action" x="970" y="45" width="250" height="96" rx="10" fill="#eaf2ff" stroke="#4b88d8" filter="url(#shadow-motor-init)"/>
+<text class="node-text " x="1095" y="60">首次初始化</text>
+<text class="node-text " x="1095" y="82">stpr_initStepper + enable</text>
+<text class="node-text " x="1095" y="104">健康检查 INIT_CHECK</text>
+<text class="node-text " x="1095" y="126">恢复 FRAM 位置记录和位置源</text>
+<rect class="node node-action" x="970" y="180" width="250" height="96" rx="10" fill="#eaf2ff" stroke="#4b88d8" filter="url(#shadow-motor-init)"/>
+<text class="node-text " x="1095" y="195">重复初始化</text>
+<text class="node-text " x="1095" y="217">重新下发寄存器配置</text>
+<text class="node-text " x="1095" y="239">不恢复 FRAM 位置源</text>
+<text class="node-text " x="1095" y="261">重新健康检查</text>
+<polygon class="node node-decision" points="777.5,335 895,380 777.5,425 660,380" fill="#fff5dd" stroke="#d49328" filter="url(#shadow-motor-init)"/>
+<text class="node-text " x="777.5" y="380">运动前 CheckMotionReady</text>
+<polygon class="node node-decision" points="475,335 595,380 475,425 355,380" fill="#fff5dd" stroke="#d49328" filter="url(#shadow-motor-init)"/>
+<text class="node-text " x="475" y="380">位置源是电机模式？</text>
+<polygon class="node node-decision" points="172.5,335 290,380 172.5,425 55,380" fill="#fff5dd" stroke="#d49328" filter="url(#shadow-motor-init)"/>
+<text class="node-text " x="172.5" y="380">编码轮有有效帧？</text>
+<rect class="node node-action" x="55" y="475" width="235" height="80" rx="10" fill="#eaf2ff" stroke="#4b88d8" filter="url(#shadow-motor-init)"/>
+<text class="node-text " x="172.5" y="493">强制调试接口</text>
+<text class="node-text " x="172.5" y="515">可忽略编码帧未就绪</text>
+<text class="node-text " x="172.5" y="537">但不跳过驱动初始化和健康检查</text>
+<rect class="node node-end" x="355" y="475" width="240" height="80" rx="10" fill="#eefbf5" stroke="#31a06f" filter="url(#shadow-motor-init)"/>
+<text class="node-text " x="475" y="504">允许写运动寄存器</text>
+<text class="node-text " x="475" y="526">清编码类旧错误或继续使用编码轮</text>
+<rect class="node node-error" x="660" y="475" width="235" height="80" rx="10" fill="#ffecec" stroke="#d65353" filter="url(#shadow-motor-init)"/>
+<text class="node-text " x="777.5" y="504">禁止运动</text>
+<text class="node-text " x="777.5" y="516">返回电机禁用、编码超时</text><text class="node-text " x="777.5" y="538">或 TMC 通信/电源错误</text>
+<rect class="node node-state" x="970" y="475" width="250" height="80" rx="10" fill="#ecf8ff" stroke="#38a3c7" filter="url(#shadow-motor-init)"/>
+<text class="node-text " x="1095" y="493">初始化完成后同步</text>
+<text class="node-text " x="1095" y="515">XACTUAL -&gt; motor_step/motor_distance</text>
+<text class="node-text " x="1095" y="537">位置源参数生效</text>
+</svg></div><div class="evidence-row"><span class="evidence"><code>Services/MotorControl/motor_ctrl_driver_param.c:519-625</code> MotorCtrl_Init 限幅电流/速度、初始化 TMC5130、健康检查、恢复位置源。</span><span class="evidence"><code>Services/MotorControl/motor_ctrl_driver_param.c:189-220</code> CheckMotionReady 根据位置源决定是否要求编码轮有效帧。</span><span class="evidence"><code>Services/MotorControl/motor_ctrl_driver_param.c:307-343</code> CheckHealth 检查 GSTAT/DRV_STATUS 和电源状态。</span></div></section>
+<section id="position" class="card"><h2>5. 位置源与尺带模型</h2><div class="svg-flow-wrap"><svg class="biz-flow" viewBox="0 0 1320 699" role="img" aria-labelledby="motor-position-title motor-position-desc" aria-label="CPU2 电机与位置模型程序详细流程 - 业务流程图 4">
+<title id="motor-position-title">位置源与尺带模型流程</title><desc id="motor-position-desc">编码轮模式和电机模式共用 cable_length/sensor_position，但计算来源不同</desc><defs><marker id="arrow-motor-position" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#46627f"/></marker><filter id="shadow-motor-position" x="-10%" y="-15%" width="130%" height="140%"><feDropShadow dx="0" dy="7" stdDeviation="7" flood-color="#24415f" flood-opacity="0.14"/></filter></defs><rect class="canvas" x="1" y="1" width="1318" height="598" rx="14"/>
+<text class="svg-title" x="28" y="38">位置源与尺带模型流程</text>
+<text class="svg-subtitle" x="28" y="62">编码轮模式和电机模式共用 cable_length/sensor_position，但计算来源不同</text>
+<path class="edge " d="M 175 158 C 175 118, 470 118, 470 78" marker-end="url(#arrow-motor-position)"/>
+<path class="edge " d="M 470 168 C 470 199, 180 199, 180 230" marker-end="url(#arrow-motor-position)"/>
+<text class="edge-label" x="325" y="191">编码轮</text>
+<path class="edge " d="M 470 168 C 470 199, 765 199, 765 230" marker-end="url(#arrow-motor-position)"/>
+<text class="edge-label" x="617.5" y="191">电机</text>
+<path class="edge " d="M 765 318 C 765 241.5, 1072.5 241.5, 1072.5 165" marker-end="url(#arrow-motor-position)"/>
+<path class="edge " d="M 1072.5 265 C 1072.5 297.5, 1072.5 297.5, 1072.5 330" marker-end="url(#arrow-motor-position)"/>
+<path class="edge " d="M 1072.5 430 C 1072.5 450, 765 450, 765 470" marker-end="url(#arrow-motor-position)"/>
+<path class="edge " d="M 180 318 C 180 394, 765 394, 765 470" marker-end="url(#arrow-motor-position)"/>
+<path class="edge " d="M 765 552 C 765 511, 470 511, 470 470" marker-end="url(#arrow-motor-position)"/>
+<path class="edge " d="M 470 552 C 470 511, 180 511, 180 470" marker-end="url(#arrow-motor-position)"/>
+<rect class="node node-start" x="60" y="88" width="230" height="70" rx="10" fill="#eaf8f1" stroke="#2c9872" filter="url(#shadow-motor-position)"/>
+<text class="node-text " x="175" y="112">需要刷新业务位置</text>
+<text class="node-text " x="175" y="134">运行期轮询 / 运动前快照 / 调试打印</text>
+<polygon class="node node-decision" points="470,78 590,123 470,168 350,123" fill="#fff5dd" stroke="#d49328" filter="url(#shadow-motor-position)"/>
+<text class="node-text " x="470" y="123">position_count_mode？</text>
+<rect class="node node-action" x="60" y="230" width="240" height="88" rx="10" fill="#eaf2ff" stroke="#4b88d8" filter="url(#shadow-motor-position)"/>
+<text class="node-text " x="180" y="241">编码轮模式</text>
+<text class="node-text " x="180" y="263">AS5145 角度累计 g_encoder_count</text>
+<text class="node-text " x="180" y="285">FRAM A/B 备份保存</text>
+<text class="node-text " x="180" y="307">长度=编码计数换算</text>
+<rect class="node node-action" x="640" y="230" width="250" height="88" rx="10" fill="#eaf2ff" stroke="#4b88d8" filter="url(#shadow-motor-position)"/>
+<text class="node-text " x="765" y="241">电机模式</text>
+<text class="node-text " x="765" y="263">读 TMC5130_XACTUAL</text>
+<text class="node-text " x="765" y="285">过滤单帧异常</text>
+<text class="node-text " x="765" y="307">构造卷筒状态</text>
+<rect class="node node-state" x="950" y="165" width="245" height="100" rx="10" fill="#ecf8ff" stroke="#38a3c7" filter="url(#shadow-motor-position)"/>
+<text class="node-text " x="1072.5" y="182">电机模式基准</text>
+<text class="node-text " x="1072.5" y="204">切换瞬间的编码轮长度</text>
+<text class="node-text " x="1072.5" y="226">切换瞬间的 XACTUAL</text>
+<text class="node-text " x="1072.5" y="248">局部一圈周长</text>
+<rect class="node node-action" x="950" y="330" width="245" height="100" rx="10" fill="#eaf2ff" stroke="#4b88d8" filter="url(#shadow-motor-position)"/>
+<text class="node-text " x="1072.5" y="347">尺带换算</text>
+<text class="node-text " x="1072.5" y="369">delta_step -&gt; delta_turns</text>
+<text class="node-text " x="1072.5" y="391">优先局部周长线性换算</text>
+<text class="node-text " x="1072.5" y="413">否则用 C0/t 二次模型</text>
+<rect class="node node-state" x="640" y="470" width="250" height="82" rx="10" fill="#ecf8ff" stroke="#38a3c7" filter="url(#shadow-motor-position)"/>
+<text class="node-text " x="765" y="489">写入统一业务位置</text>
+<text class="node-text " x="765" y="511">debug_data.cable_length</text>
+<text class="node-text " x="765" y="533">debug_data.sensor_position=tankHeight-length</text>
+<rect class="node node-log" x="350" y="470" width="240" height="82" rx="10" fill="#fff1e8" stroke="#de7c34" filter="url(#shadow-motor-position)"/>
+<text class="node-text " x="470" y="489">位置持久化</text>
+<text class="node-text " x="470" y="511">XACTUAL 变化超过约 1mm 等效 ticks</text>
+<text class="node-text " x="470" y="533">写 FRAM A/B</text>
+<rect class="node node-end" x="60" y="470" width="240" height="82" rx="10" fill="#eefbf5" stroke="#31a06f" filter="url(#shadow-motor-position)"/>
+<text class="node-text " x="180" y="500">上层读取统一位置</text>
+<text class="node-text " x="180" y="522">测量、跟随、密度、运动判断都读同一字段</text>
+</svg></div><div class="evidence-row"><span class="evidence"><code>Services/Encoder/encoder.c:190-241</code> 编码器按角度差累计计数并换算 cable_length/sensor_position。</span><span class="evidence"><code>Services/MotorControl/motor_ctrl_position_model.c:916-983</code> 电机模式通过 XACTUAL、局部周长或尺带模型更新业务位置。</span><span class="evidence"><code>Services/MotorControl/motor_ctrl_position_model.c:1098-1192</code> XACTUAL 单帧异常过滤避免污染位置缓存。</span></div></section>
+<section id="switch" class="card"><h2>6. 位置源切换到电机模式</h2><div class="svg-flow-wrap"><svg class="biz-flow" viewBox="0 0 1320 639" role="img" aria-labelledby="motor-switch-title motor-switch-desc" aria-label="CPU2 电机与位置模型程序详细流程 - 业务流程图 5">
+<title id="motor-switch-title">从编码轮切换到电机位置源流程</title><desc id="motor-switch-desc">切换电机模式时会自动走一圈，用编码轮实测当前局部周长，失败回滚旧模式</desc><defs><marker id="arrow-motor-switch" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#46627f"/></marker><filter id="shadow-motor-switch" x="-10%" y="-15%" width="130%" height="140%"><feDropShadow dx="0" dy="7" stdDeviation="7" flood-color="#24415f" flood-opacity="0.14"/></filter></defs><rect class="canvas" x="1" y="1" width="1318" height="538" rx="14"/>
+<text class="svg-title" x="28" y="38">从编码轮切换到电机位置源流程</text>
+<text class="svg-subtitle" x="28" y="62">切换电机模式时会自动走一圈，用编码轮实测当前局部周长，失败回滚旧模式</text>
+<path class="edge " d="M 180 158 C 180 118, 475 118, 475 78" marker-end="url(#arrow-motor-switch)"/>
+<path class="edge " d="M 475 168 C 475 279, 475 279, 475 390" marker-end="url(#arrow-motor-switch)"/>
+<text class="edge-label" x="475" y="271">否</text>
+<path class="edge " d="M 475 168 C 475 123, 775 123, 775 78" marker-end="url(#arrow-motor-switch)"/>
+<text class="edge-label" x="625" y="115">是</text>
+<path class="edge " d="M 775 168 C 775 279, 475 279, 475 390" marker-end="url(#arrow-motor-switch)"/>
+<text class="edge-label" x="625" y="271">失败</text>
+<path class="edge " d="M 775 168 C 775 120, 1085 120, 1085 72" marker-end="url(#arrow-motor-switch)"/>
+<text class="edge-label" x="930" y="112">成功</text>
+<path class="edge " d="M 1085 162 C 1085 188.5, 1085 188.5, 1085 215" marker-end="url(#arrow-motor-switch)"/>
+<path class="edge " d="M 1085 301 C 1085 260.5, 775 260.5, 775 220" marker-end="url(#arrow-motor-switch)"/>
+<path class="edge " d="M 775 306 C 775 263, 475 263, 475 220" marker-end="url(#arrow-motor-switch)"/>
+<path class="edge " d="M 475 310 C 475 350, 775 350, 775 390" marker-end="url(#arrow-motor-switch)"/>
+<text class="edge-label" x="625" y="342">周长越界或运动失败</text>
+<path class="edge " d="M 475 310 C 475 265, 180 265, 180 220" marker-end="url(#arrow-motor-switch)"/>
+<text class="edge-label" x="327.5" y="257">有效</text>
+<path class="edge " d="M 180 306 C 180 348, 180 348, 180 390" marker-end="url(#arrow-motor-switch)"/>
+<path class="edge " d="M 180 306 C 180 348, 775 348, 775 390" marker-end="url(#arrow-motor-switch)"/>
+<text class="edge-label" x="477.5" y="340">返回失败</text>
+<rect class="node node-start" x="65" y="88" width="230" height="70" rx="10" fill="#eaf8f1" stroke="#2c9872" filter="url(#shadow-motor-switch)"/>
+<text class="node-text " x="180" y="112">请求切换到电机位置源</text>
+<text class="node-text " x="180" y="134">MotorCtrl_SwitchPositionSourceToMotor</text>
+<polygon class="node node-decision" points="475,78 590,123 475,168 360,123" fill="#fff5dd" stroke="#d49328" filter="url(#shadow-motor-switch)"/>
+<text class="node-text " x="475" y="123">电机驱动已初始化？</text>
+<polygon class="node node-decision" points="775,78 890,123 775,168 660,123" fill="#fff5dd" stroke="#d49328" filter="url(#shadow-motor-switch)"/>
+<text class="node-text " x="775" y="123">XACTUAL 读取和过滤成功？</text>
+<rect class="node node-action" x="960" y="72" width="250" height="90" rx="10" fill="#eaf2ff" stroke="#4b88d8" filter="url(#shadow-motor-switch)"/>
+<text class="node-text " x="1085" y="84">保存旧状态和新基准</text>
+<text class="node-text " x="1085" y="106">base_encoder_count</text>
+<text class="node-text " x="1085" y="128">base_length_01mm</text>
+<text class="node-text " x="1085" y="150">base_step / base_turns</text>
+<rect class="node node-state" x="960" y="215" width="250" height="86" rx="10" fill="#ecf8ff" stroke="#38a3c7" filter="url(#shadow-motor-switch)"/>
+<text class="node-text " x="1085" y="236">临时切到电机模式</text>
+<text class="node-text " x="1085" y="258">清编码相关旧错误</text>
+<text class="node-text " x="1085" y="280">按基准更新业务位置</text>
+<rect class="node node-action" x="660" y="220" width="230" height="86" rx="10" fill="#eaf2ff" stroke="#4b88d8" filter="url(#shadow-motor-switch)"/>
+<text class="node-text " x="775" y="252">走一圈 ticks</text>
+<text class="node-text " x="775" y="274">MoveByTicksAndWait(one_rev)</text>
+<polygon class="node node-decision" points="475,220 590,265 475,310 360,265" fill="#fff5dd" stroke="#d49328" filter="url(#shadow-motor-switch)"/>
+<text class="node-text " x="475" y="265">实测一圈周长有效？</text>
+<rect class="node node-action" x="65" y="220" width="230" height="86" rx="10" fill="#eaf2ff" stroke="#4b88d8" filter="url(#shadow-motor-switch)"/>
+<text class="node-text " x="180" y="252">反向回到切换前位置</text>
+<text class="node-text " x="180" y="274">MoveByTicksAndWait(-one_rev)</text>
+<rect class="node node-end" x="65" y="390" width="230" height="80" rx="10" fill="#eefbf5" stroke="#31a06f" filter="url(#shadow-motor-switch)"/>
+<text class="node-text " x="180" y="419">保存位置源参数和 FRAM 快照</text>
+<text class="node-text " x="180" y="441">切换成功</text>
+<rect class="node node-error" x="660" y="390" width="230" height="88" rx="10" fill="#ffecec" stroke="#d65353" filter="url(#shadow-motor-switch)"/>
+<text class="node-text " x="775" y="423">任何失败都回滚</text>
+<text class="node-text " x="775" y="445">恢复旧模式、局部周长、基准、旧错误码</text>
+<rect class="node node-error" x="360" y="390" width="230" height="80" rx="10" fill="#ffecec" stroke="#d65353" filter="url(#shadow-motor-switch)"/>
+<text class="node-text " x="475" y="419">不允许切换</text>
+<text class="node-text " x="475" y="431">电机禁用、TMC 通信</text><text class="node-text " x="475" y="453">或参数错误</text>
+</svg></div><div class="evidence-row"><span class="evidence"><code>Services/MotorControl/motor_ctrl_position_model.c:419-558</code> 切换电机模式时记录基准、走一圈测局部周长、反向返回并保存。</span><span class="evidence"><code>Services/MotorControl/motor_ctrl_position_model.c:1540-1571</code> 切换失败回滚旧模式、基准、局部周长和旧错误码。</span></div></section>
+<section id="move" class="card"><h2>7. 普通阻塞运动</h2><div class="svg-flow-wrap"><svg class="biz-flow" viewBox="0 0 1280 1120" role="img" aria-labelledby="motor-move-title motor-move-desc" aria-label="CPU2 电机与位置模型程序详细流程 - 业务流程图 6">
+<title id="motor-move-title">普通阻塞相对运动流程</title><desc id="motor-move-desc">MoveAndWait 从参数准入、目标规划、下发相对运动、运行期等待到尾段偏差判定的完整业务流程</desc><defs><marker id="arrow-motor-move" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#46627f"/></marker><filter id="shadow-motor-move" x="-10%" y="-15%" width="130%" height="140%"><feDropShadow dx="0" dy="7" stdDeviation="7" flood-color="#24415f" flood-opacity="0.14"/></filter></defs><rect class="canvas" x="1" y="1" width="1278" height="1088" rx="14"/>
+<text class="svg-title" x="28" y="38">普通阻塞相对运动流程</text>
+<text class="svg-subtitle" x="28" y="62">主线从上到下；右侧只放提前返回和异常出口，错误连线从节点右侧留白区引出。</text>
+<text class="edge-label" x="955" y="94">提前返回/异常出口</text>
+<rect x="885" y="110" width="330" height="920" rx="12" fill="#fff8f8" stroke="#f0c7c7" stroke-dasharray="7 6"/>
+<path class="edge" d="M 360 138 L 360 180" marker-end="url(#arrow-motor-move)"/>
+<path class="edge" d="M 360 270 L 360 288" marker-end="url(#arrow-motor-move)"/>
+<path class="edge" d="M 360 386 L 360 430" marker-end="url(#arrow-motor-move)"/>
+<path class="edge" d="M 360 548 L 360 600" marker-end="url(#arrow-motor-move)"/>
+<path class="edge" d="M 360 720 L 360 770" marker-end="url(#arrow-motor-move)"/>
+<path class="edge" d="M 360 878 L 360 922" marker-end="url(#arrow-motor-move)"/>
+<path class="edge ok-edge" d="M 360 1010 L 360 1050" marker-end="url(#arrow-motor-move)"/>
+<path class="edge error-edge" d="M 520 225 L 885 225" marker-end="url(#arrow-motor-move)"/>
+<text class="edge-label" x="690" y="214">mm&lt;=0 或方向非法</text>
+<path class="edge error-edge" d="M 552 337 L 885 337" marker-end="url(#arrow-motor-move)"/>
+<rect x="604" y="312" width="172" height="26" rx="6" fill="#fbfdff" stroke="#f0c7c7"/>
+<text class="edge-label" x="685" y="326">驱动/编码首帧/命令切换失败</text>
+<path class="edge error-edge" d="M 552 489 L 885 489" marker-end="url(#arrow-motor-move)"/>
+<rect x="600" y="464" width="170" height="26" rx="6" fill="#fbfdff" stroke="#f0c7c7"/>
+<text class="edge-label" x="670" y="478">当前位置无效或目标越界</text>
+<path class="edge error-edge" d="M 552 660 L 885 660" marker-end="url(#arrow-motor-move)"/>
+<rect x="598" y="635" width="150" height="26" rx="6" fill="#fbfdff" stroke="#f0c7c7"/>
+<text class="edge-label" x="665" y="649">下发/启动观察失败</text>
+<path class="edge error-edge" d="M 552 826 L 885 826" marker-end="url(#arrow-motor-move)"/>
+<rect x="590" y="801" width="170" height="26" rx="6" fill="#fbfdff" stroke="#f0c7c7"/>
+<text class="edge-label" x="665" y="815">等待中切换/碰撞/健康/超时</text>
+<rect x="592" y="940" width="170" height="26" rx="6" fill="#fbfdff" stroke="#f0c7c7"/>
+<path class="edge error-edge" d="M 520 965 L 885 965" marker-end="url(#arrow-motor-move)"/>
+<text class="edge-label" x="665" y="954">偏差过大且编码轮位置源</text>
+<path class="edge" d="M 1045 242 L 1045 292" marker-end="url(#arrow-motor-move)"/>
+<path class="edge" d="M 1045 386 L 1045 444" marker-end="url(#arrow-motor-move)"/>
+<path class="edge" d="M 1045 528 L 1045 614" marker-end="url(#arrow-motor-move)"/>
+<path class="edge" d="M 1045 700 L 1045 780" marker-end="url(#arrow-motor-move)"/>
+<path class="edge" d="M 1045 866 L 1045 920" marker-end="url(#arrow-motor-move)"/>
+<rect class="node node-start" x="180" y="62" width="360" height="76" rx="10" fill="#eaf8f1" stroke="#2c9872" filter="url(#shadow-motor-move)"/>
+<text class="node-text" x="360" y="91">调用普通相对运动</text>
+<text class="node-text" x="360" y="115">MoveAndWait(mm, dir, speed)</text>
+<polygon class="node node-decision" points="360,180 520,225 360,270 200,225" fill="#fff5dd" stroke="#d49328" filter="url(#shadow-motor-move)"/>
+<text class="node-text" x="360" y="217">距离 &gt;0</text>
+<text class="node-text" x="360" y="239">方向合法？</text>
+<rect class="node node-action" x="180" y="288" width="360" height="98" rx="10" fill="#eaf2ff" stroke="#4b88d8" filter="url(#shadow-motor-move)"/>
+<text class="node-text" x="360" y="314">运动前准入</text>
+<text class="node-text" x="360" y="338">检查驱动、编码首帧、24V/通信</text>
+<text class="node-text" x="360" y="362">建立临时速度作用域并检查命令切换</text>
+<rect class="node node-action" x="180" y="430" width="360" height="118" rx="10" fill="#eaf2ff" stroke="#4b88d8" filter="url(#shadow-motor-move)"/>
+<text class="node-text" x="360" y="456">读取当前位置快照</text>
+<text class="node-text" x="360" y="480">按当前有效位置源刷新 sensor_position</text>
+<text class="node-text" x="360" y="504">生成相对目标：start、target、distance</text>
+<text class="node-text" x="360" y="528">目标超出 0~tankHeight 直接退出</text>
+<rect class="node node-action" x="180" y="600" width="360" height="120" rx="10" fill="#eaf2ff" stroke="#4b88d8" filter="url(#shadow-motor-move)"/>
+<text class="node-text" x="360" y="624">下发相对运动</text>
+<text class="node-text" x="360" y="648">MoveNoWait 计算 ticks 与 VMAX</text>
+<text class="node-text" x="360" y="672">stpr_moveBy 写 TMC5130</text>
+<text class="node-text" x="360" y="696">置 motor_state 上行/下行</text>
+<rect class="node node-wait" x="180" y="770" width="360" height="108" rx="10" fill="#f1efff" stroke="#7b68d6" filter="url(#shadow-motor-move)"/>
+<text class="node-text" x="360" y="794">运行等待闭环</text>
+<text class="node-text" x="360" y="818">先观察是否真正启动</text>
+<text class="node-text" x="360" y="842">等待到目标或停止</text>
+<text class="node-text" x="360" y="858">命令切换、速度刷新、位置同步</text>
+<text class="node-text" x="360" y="874">碰撞、健康和超时判定</text>
+<polygon class="node node-decision" points="360,922 520,965 360,1010 200,965" fill="#fff5dd" stroke="#d49328" filter="url(#shadow-motor-move)"/>
+<text class="node-text" x="360" y="958">移动偏差 &gt;70%</text>
+<text class="node-text" x="360" y="980">且目标 &gt;5mm？</text>
+<rect class="node node-end" x="180" y="1050" width="360" height="56" rx="10" fill="#eefbf5" stroke="#31a06f" filter="url(#shadow-motor-move)"/>
+<text class="node-text" x="360" y="1070">同步位置并恢复速度</text>
+<text class="node-text" x="360" y="1090">返回 NO_ERROR 或真实错误</text>
+<rect class="node node-state" x="905" y="154" width="280" height="88" rx="10" fill="#ecf8ff" stroke="#38a3c7" filter="url(#shadow-motor-move)"/>
+<text class="node-text" x="1045" y="184">早退</text>
+<text class="node-text" x="1045" y="206">mm&lt;=0 返回 NO_ERROR</text>
+<text class="node-text" x="1045" y="228">方向非法返回 PARAM_ERROR</text>
+<rect class="node node-error" x="905" y="292" width="280" height="94" rx="10" fill="#ffecec" stroke="#d65353" filter="url(#shadow-motor-move)"/>
+<text class="node-text" x="1045" y="318">准入失败</text>
+<text class="node-text" x="1045" y="342">恢复临时速度</text>
+<text class="node-text" x="1045" y="366">返回驱动/通信/命令切换错误</text>
+<rect class="node node-error" x="905" y="444" width="280" height="84" rx="10" fill="#ffecec" stroke="#d65353" filter="url(#shadow-motor-move)"/>
+<text class="node-text" x="1045" y="474">目标规划失败</text>
+<text class="node-text" x="1045" y="498">返回 PARAM_RANGE_ERROR 或位置错误</text>
+<rect class="node node-error" x="905" y="614" width="280" height="86" rx="10" fill="#ffecec" stroke="#d65353" filter="url(#shadow-motor-move)"/>
+<text class="node-text" x="1045" y="644">下发失败</text>
+<text class="node-text" x="1045" y="668">通过 CheckErrorWithSpeedScope</text>
+<text class="node-text" x="1045" y="690">统一恢复速度后退出</text>
+<rect class="node node-error" x="905" y="780" width="280" height="86" rx="10" fill="#ffecec" stroke="#d65353" filter="url(#shadow-motor-move)"/>
+<text class="node-text" x="1045" y="810">运行期异常</text>
+<text class="node-text" x="1045" y="834">命令切换会 StopAndMarkStopped</text>
+<text class="node-text" x="1045" y="856">其它错误直接返回</text>
+<rect class="node node-log" x="905" y="920" width="280" height="96" rx="10" fill="#fff1e8" stroke="#de7c34" filter="url(#shadow-motor-move)"/>
+<text class="node-text" x="1045" y="944">偏差过大处理</text>
+<text class="node-text" x="1045" y="968">电机位置源：只打印并继续</text>
+<text class="node-text" x="1045" y="992">编码轮位置源：先置 ENCODER_LOST_STEP</text>
+<text class="node-text" x="1045" y="1012">但后续 SyncPosition 可能覆盖 ret</text>
+</svg></div><div class="evidence-row"><span class="evidence"><code>Services/MotorControl/motor_ctrl_motion_api.c:441-577</code> MoveAndWait 参数、位置快照、目标检查、MoveNoWait、运行等待和偏差判断。</span><span class="evidence"><code>Services/MotorControl/motor_ctrl_motion_api.c:1406-1498</code> 启动观察与运行期命令切换、速度刷新、位置同步和健康检查。</span><span class="evidence"><code>Services/MotorControl/motor_ctrl_motion_api.c:2313-2385</code> 等待到目标、停止电机并在停止后复核状态。</span></div></section>
+<section id="jog" class="card"><h2>8. 绝对定位与 Jog 速度模式</h2><div class="svg-flow-wrap"><svg class="biz-flow" viewBox="0 0 1280 1120" role="img" aria-labelledby="motor-jog-title motor-jog-desc" aria-label="CPU2 电机与位置模型程序详细流程 - 业务流程图 7">
+<title id="motor-jog-title">绝对定位与 Jog 速度模式流程</title><desc id="motor-jog-desc">把普通绝对定位的 10 轮逼近和 Jog 速度模式拆成两条泳道，显示循环、减速、停止和异常出口</desc><defs><marker id="arrow-motor-jog" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#46627f"/></marker><filter id="shadow-motor-jog" x="-10%" y="-15%" width="130%" height="140%"><feDropShadow dx="0" dy="7" stdDeviation="7" flood-color="#24415f" flood-opacity="0.14"/></filter></defs><rect class="canvas" x="1" y="1" width="1278" height="1088" rx="14"/>
+<text class="svg-title" x="28" y="38">绝对定位与 Jog 速度模式流程</text>
+<text class="svg-subtitle" x="28" y="62">左侧是普通 MoveToPosition 的多轮逼近；右侧是 Jog 速度模式的持续运行和减速停机。</text>
+<rect x="60" y="275" width="560" height="805" rx="12" fill="#f7fbff" stroke="#d2e4f5" stroke-dasharray="7 6"/>
+<rect x="660" y="275" width="560" height="805" rx="12" fill="#fbfff9" stroke="#d8ead1" stroke-dasharray="7 6"/>
+<text class="edge-label" x="96" y="304">普通绝对定位泳道</text>
+<text class="edge-label" x="696" y="304">Jog 速度模式泳道</text>
+<path class="edge" d="M 640 148 L 640 155" marker-end="url(#arrow-motor-jog)"/>
+<path class="edge error-edge" d="M 785 200 L 930 200" marker-end="url(#arrow-motor-jog)"/>
+<text class="edge-label" x="833" y="188">不合法</text>
+<path class="edge ok-edge" d="M 640 245 L 640 285 L 345 285 L 345 330" marker-end="url(#arrow-motor-jog)"/>
+<text class="edge-label" x="445" y="273">MoveToPosition</text>
+<path class="edge ok-edge" d="M 640 245 L 640 285 L 895 285 L 895 330" marker-end="url(#arrow-motor-jog)"/>
+<text class="edge-label" x="765" y="273">JogMoveToPosition / JogMoveAndWait</text>
+<path class="edge" d="M 345 418 L 345 455" marker-end="url(#arrow-motor-jog)"/>
+<path class="edge" d="M 345 565 L 345 590" marker-end="url(#arrow-motor-jog)"/>
+<path class="edge ok-edge" d="M 185 645 L 110 645 L 110 790 L 130 790" marker-end="url(#arrow-motor-jog)"/>
+<text class="edge-label" x="128" y="635">是</text>
+<path class="edge" d="M 505 645 L 560 645 L 560 790 L 560 790" marker-end="url(#arrow-motor-jog)"/>
+<text class="edge-label" x="528" y="635">否</text>
+<path class="edge error-edge" d="M 580 790 L 620 790 L 620 1020 L 580 1020" marker-end="url(#arrow-motor-jog)"/>
+<text class="edge-label" x="585" y="948">MoveAndWait 返回错误</text>
+<path class="edge ok-edge" d="M 475 880 L 475 905" marker-end="url(#arrow-motor-jog)"/>
+<path class="edge" d="M 345 955 L 270 955 L 270 520 L 345 520" marker-end="url(#arrow-motor-jog)"/>
+<text class="edge-label" x="286" y="735">未满 10 轮，回到下一轮</text>
+<path class="edge ok-edge" d="M 605 955 L 605 1030 L 580 1030" marker-end="url(#arrow-motor-jog)"/>
+<text class="edge-label" x="608" y="994">10 轮耗尽</text>
+<path class="edge" d="M 895 418 L 895 455" marker-end="url(#arrow-motor-jog)"/>
+<path class="edge" d="M 895 543 L 895 580" marker-end="url(#arrow-motor-jog)"/>
+<path class="edge" d="M 895 668 L 895 710" marker-end="url(#arrow-motor-jog)"/>
+<path class="edge" d="M 895 806 L 895 825" marker-end="url(#arrow-motor-jog)"/>
+<path class="edge ok-edge" d="M 895 925 L 895 990" marker-end="url(#arrow-motor-jog)"/>
+<text class="edge-label" x="905" y="954">到位或进入停机距离</text>
+<path class="edge" d="M 1055 875 L 1095 875 L 1095 965" marker-end="url(#arrow-motor-jog)"/>
+<text class="edge-label" x="1068" y="858">未到</text>
+<path class="edge" d="M 1190 965 L 1210 965 L 1210 735 L 1180 735" marker-end="url(#arrow-motor-jog)"/>
+<text class="edge-label" x="1145" y="834" text-anchor="middle"><tspan x="1145" dy="0">保护检查后</tspan><tspan x="1145" dy="18">继续轮询</tspan></text>
+<rect class="node node-start" x="470" y="78" width="340" height="70" rx="10" fill="#eaf8f1" stroke="#2c9872" filter="url(#shadow-motor-jog)"/>
+<text class="node-text" x="640" y="102">收到绝对定位类入口</text>
+<text class="node-text" x="640" y="126">目标位置 mm / 相对距离 mm</text>
+<polygon class="node node-decision" points="640,155 785,200 640,245 495,200" fill="#fff5dd" stroke="#d49328" filter="url(#shadow-motor-jog)"/>
+<text class="node-text" x="640" y="192">目标范围、方向</text>
+<text class="node-text" x="640" y="214">和运动前准入合法？</text>
+<rect class="node node-error" x="930" y="155" width="260" height="90" rx="10" fill="#ffecec" stroke="#d65353" filter="url(#shadow-motor-jog)"/>
+<text class="node-text" x="1060" y="183">立即退出</text>
+<text class="node-text" x="1060" y="207">PARAM_RANGE_ERROR</text>
+<text class="node-text" x="1060" y="229">PARAM_ERROR / 驱动未就绪</text>
+<rect class="node node-action" x="110" y="330" width="470" height="88" rx="10" fill="#eaf2ff" stroke="#4b88d8" filter="url(#shadow-motor-jog)"/>
+<text class="node-text" x="345" y="354">普通定位准备</text>
+<text class="node-text" x="345" y="378">建立临时速度作用域</text>
+<text class="node-text" x="345" y="402">进入最多 10 轮逼近循环</text>
+<rect class="node node-wait" x="110" y="455" width="470" height="110" rx="10" fill="#f1efff" stroke="#7b68d6" filter="url(#shadow-motor-jog)"/>
+<text class="node-text" x="345" y="482">每轮先检查命令切换</text>
+<text class="node-text" x="345" y="506">刷新当前有效位置源到 sensor_position</text>
+<text class="node-text" x="345" y="530">按当前位置重新生成剩余距离和方向</text>
+<text class="node-text" x="345" y="554">避免位置刷新滞后造成一次性过冲</text>
+<polygon class="node node-decision" points="345,590 505,645 345,700 185,645" fill="#fff5dd" stroke="#d49328" filter="url(#shadow-motor-jog)"/>
+<text class="node-text" x="345" y="638">已经进入 EPS</text>
+<text class="node-text" x="345" y="660">目标窗口？</text>
+<rect class="node node-end" x="130" y="750" width="230" height="80" rx="10" fill="#eefbf5" stroke="#31a06f" filter="url(#shadow-motor-jog)"/>
+<text class="node-text" x="245" y="778">已到位</text>
+<text class="node-text" x="245" y="802">恢复速度并返回 NO_ERROR</text>
+<rect class="node node-action" x="370" y="735" width="210" height="90" rx="10" fill="#eaf2ff" stroke="#4b88d8" filter="url(#shadow-motor-jog)"/>
+<text class="node-text" x="475" y="756">按剩余距离</text>
+<text class="node-text" x="475" y="780">调用 MoveAndWait</text>
+<text class="node-text" x="475" y="804">错误立即退出</text>
+<polygon class="node node-decision" points="475,905 605,955 475,1005 345,955" fill="#fff5dd" stroke="#d49328" filter="url(#shadow-motor-jog)"/>
+<text class="node-text" x="475" y="948">循环次数</text>
+<text class="node-text" x="475" y="970">达到 10 轮？</text>
+<rect class="node node-state" x="360" y="1030" width="220" height="70" rx="10" fill="#ecf8ff" stroke="#38a3c7" filter="url(#shadow-motor-jog)"/>
+<text class="node-text" x="470" y="1054">10 轮结束</text>
+<text class="node-text" x="470" y="1076">当前代码仍返回 NO_ERROR</text>
+<rect class="node node-action" x="710" y="330" width="470" height="88" rx="10" fill="#eaf2ff" stroke="#4b88d8" filter="url(#shadow-motor-jog)"/>
+<text class="node-text" x="945" y="354">Jog 入口准备</text>
+<text class="node-text" x="945" y="378">相对入口先换算成绝对目标</text>
+<text class="node-text" x="945" y="402">绝对入口直接生成方向和目标</text>
+<rect class="node node-action" x="710" y="455" width="470" height="88" rx="10" fill="#eaf2ff" stroke="#4b88d8" filter="url(#shadow-motor-jog)"/>
+<text class="node-text" x="945" y="479">计算速度控制参数</text>
+<text class="node-text" x="945" y="503">快速度、降速距离、停机距离、剩余距离</text>
+<text class="node-text" x="945" y="527">若已到位则直接恢复速度返回</text>
+<rect class="node node-action" x="710" y="580" width="470" height="88" rx="10" fill="#eaf2ff" stroke="#4b88d8" filter="url(#shadow-motor-jog)"/>
+<text class="node-text" x="945" y="604">启动速度模式</text>
+<text class="node-text" x="945" y="628">必要时先切低速</text>
+<text class="node-text" x="945" y="652">stpr_rotate 后置运行状态和丢步窗口</text>
+<rect class="node node-wait" x="710" y="710" width="470" height="96" rx="10" fill="#f1efff" stroke="#7b68d6" filter="url(#shadow-motor-jog)"/>
+<text class="node-text" x="945" y="734">Jog 运行轮询</text>
+<text class="node-text" x="945" y="758">命令切换、同步位置和健康检查</text>
+<text class="node-text" x="945" y="782">刷新位置、计算剩余距离、检查碰撞/丢步/超时</text>
+<polygon class="node node-decision" points="895,825 1055,875 895,925 735,875" fill="#fff5dd" stroke="#d49328" filter="url(#shadow-motor-jog)"/>
+<text class="node-text" x="895" y="868">已到目标或</text>
+<text class="node-text" x="895" y="890">进入停机距离？</text>
+<rect class="node node-action" x="710" y="990" width="390" height="96" rx="10" fill="#eaf2ff" stroke="#4b88d8" filter="url(#shadow-motor-jog)"/>
+<text class="node-text" x="905" y="1014">SlowStop 并恢复速度</text>
+<text class="node-text" x="905" y="1038">停止后重新读取终点</text>
+<text class="node-text" x="905" y="1062">越过目标超过限制则返回位置错误</text>
+<rect class="node node-state" x="1095" y="965" width="95" height="100" rx="10" fill="#ecf8ff" stroke="#38a3c7" filter="url(#shadow-motor-jog)"/>
+<text class="node-text" x="1142.5" y="989">循环尾段</text>
+<text class="node-text" x="1142.5" y="1013">降速</text>
+<text class="node-text" x="1142.5" y="1037">刷新速度</text>
+<text class="node-text" x="1142.5" y="1059">延时轮询</text>
+</svg></div><div class="evidence-row"><span class="evidence"><code>Services/MotorControl/motor_ctrl_motion_api.c:660-724</code> MoveToPosition 先检查目标范围，最多 10 轮按剩余距离 MoveAndWait。</span><span class="evidence"><code>Services/MotorControl/motor_ctrl_motion_api.c:741-810</code> JogMoveAndWait/JogMoveToPosition 根据相对距离或目标位置生成绝对目标和方向。</span><span class="evidence"><code>Services/MotorControl/motor_ctrl_motion_api.c:1609-1761</code> Jog 内部循环处理降速、提前停机、健康、碰撞、丢步和超时。</span><span class="evidence"><code>Services/MotorControl/motor_ctrl_motion_api.c:2202-2270</code> Jog 速度模式启动、SlowStop、终点复核和速度恢复。</span></div></section>
+<section id="force" class="card"><h2>9. 强制无检测运动</h2><div class="svg-flow-wrap"><svg class="biz-flow" viewBox="0 0 1320 634" role="img" aria-labelledby="motor-force-title motor-force-desc" aria-label="CPU2 电机与位置模型程序详细流程 - 业务流程图 8">
+<title id="motor-force-title">强制无检测运动流程</title><desc id="motor-force-desc">强制运动不是无保护：只跳过编码帧就绪门槛，仍做驱动健康、命令切换和速度恢复</desc><defs><marker id="arrow-motor-force" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#46627f"/></marker><filter id="shadow-motor-force" x="-10%" y="-15%" width="130%" height="140%"><feDropShadow dx="0" dy="7" stdDeviation="7" flood-color="#24415f" flood-opacity="0.14"/></filter></defs><rect class="canvas" x="1" y="1" width="1318" height="533" rx="14"/>
+<text class="svg-title" x="28" y="38">强制无检测运动流程</text>
+<text class="svg-subtitle" x="28" y="62">强制运动不是无保护：只跳过编码帧就绪门槛，仍做驱动健康、命令切换和速度恢复</text>
+<path class="edge " d="M 175 158 C 175 118, 467.5 118, 467.5 78" marker-end="url(#arrow-motor-force)"/>
+<path class="edge " d="M 467.5 168 C 467.5 123, 772.5 123, 772.5 78" marker-end="url(#arrow-motor-force)"/>
+<path class="edge " d="M 772.5 168 C 772.5 123, 1082.5 123, 1082.5 78" marker-end="url(#arrow-motor-force)"/>
+<text class="edge-label" x="927.5" y="115">通过</text>
+<path class="edge " d="M 772.5 168 C 772.5 299, 772.5 299, 772.5 430" marker-end="url(#arrow-motor-force)"/>
+<text class="edge-label" x="772.5" y="291">失败</text>
+<path class="edge " d="M 1082.5 168 C 1082.5 199, 1082.5 199, 1082.5 230" marker-end="url(#arrow-motor-force)"/>
+<path class="edge " d="M 1082.5 316 C 1082.5 273, 772.5 273, 772.5 230" marker-end="url(#arrow-motor-force)"/>
+<path class="edge " d="M 772.5 330 C 772.5 290, 467.5 290, 467.5 250" marker-end="url(#arrow-motor-force)"/>
+<path class="edge " d="M 467.5 330 C 467.5 380, 467.5 380, 467.5 430" marker-end="url(#arrow-motor-force)"/>
+<path class="edge " d="M 772.5 330 C 772.5 380, 772.5 380, 772.5 430" marker-end="url(#arrow-motor-force)"/>
+<text class="edge-label" x="772.5" y="372">异常</text>
+<path class="edge " d="M 467.5 168 C 467.5 209, 175 209, 175 250" marker-end="url(#arrow-motor-force)"/>
+<rect class="node node-start" x="60" y="88" width="230" height="70" rx="10" fill="#eaf8f1" stroke="#2c9872" filter="url(#shadow-motor-force)"/>
+<text class="node-text " x="175" y="112">CMD_FORCE_MOVE_*</text>
+<text class="node-text " x="175" y="134">CMD_RESERVED_CMD7 保留</text>
+<rect class="node node-action" x="350" y="78" width="235" height="90" rx="10" fill="#eaf2ff" stroke="#4b88d8" filter="url(#shadow-motor-force)"/>
+<text class="node-text " x="467.5" y="90">设置维护状态</text>
+<text class="node-text " x="467.5" y="112">manual_alarm_inhibit</text>
+<text class="node-text " x="467.5" y="134">manual_level_update_inhibit</text>
+<text class="node-text " x="467.5" y="156">STATE_FORCE_*</text>
+<polygon class="node node-decision" points="772.5,78 890,123 772.5,168 655,123" fill="#fff5dd" stroke="#d49328" filter="url(#shadow-motor-force)"/>
+<text class="node-text " x="772.5" y="123">强制运动准入</text>
+<rect class="node node-action" x="960" y="78" width="245" height="90" rx="10" fill="#eaf2ff" stroke="#4b88d8" filter="url(#shadow-motor-force)"/>
+<text class="node-text " x="1082.5" y="101">仍然检查</text>
+<text class="node-text " x="1082.5" y="123">驱动初始化/安全停机</text>
+<text class="node-text " x="1082.5" y="145">TMC 健康、电源、通信</text>
+<rect class="node node-action" x="960" y="230" width="245" height="86" rx="10" fill="#eaf2ff" stroke="#4b88d8" filter="url(#shadow-motor-force)"/>
+<text class="node-text " x="1082.5" y="251">按模型计算 ticks</text>
+<text class="node-text " x="1082.5" y="273">根据当前 cable_length 计算 VMAX</text>
+<text class="node-text " x="1082.5" y="295">stpr_moveBy</text>
+<rect class="node node-wait" x="655" y="230" width="235" height="100" rx="10" fill="#f1efff" stroke="#7b68d6" filter="url(#shadow-motor-force)"/>
+<text class="node-text " x="772.5" y="236">等待运行结束</text>
+<text class="node-text " x="772.5" y="258">命令切换停止</text>
+<text class="node-text " x="772.5" y="280">速度补偿</text>
+<text class="node-text " x="772.5" y="302">位置/健康同步</text>
+<text class="node-text " x="772.5" y="324">打印无检测运行日志</text>
+<rect class="node node-state" x="350" y="250" width="235" height="80" rx="10" fill="#ecf8ff" stroke="#38a3c7" filter="url(#shadow-motor-force)"/>
+<text class="node-text " x="467.5" y="257">结束清理</text>
+<text class="node-text " x="467.5" y="279">清运动状态</text>
+<text class="node-text " x="467.5" y="301">恢复临时速度</text>
+<text class="node-text " x="467.5" y="323">清手动抑制标志</text>
+<rect class="node node-end" x="350" y="430" width="235" height="70" rx="10" fill="#eefbf5" stroke="#31a06f" filter="url(#shadow-motor-force)"/>
+<text class="node-text " x="467.5" y="465">完成或切换退出</text>
+<rect class="node node-error" x="655" y="430" width="235" height="70" rx="10" fill="#ffecec" stroke="#d65353" filter="url(#shadow-motor-force)"/>
+<text class="node-text " x="772.5" y="454">错误返回</text>
+<text class="node-text " x="772.5" y="476">PARAM_ERROR / TMC / 停止失败</text>
+<rect class="node node-log" x="60" y="250" width="230" height="92" rx="10" fill="#fff1e8" stroke="#de7c34" filter="url(#shadow-motor-force)"/>
+<text class="node-text " x="175" y="263">风险边界</text>
+<text class="node-text " x="175" y="285">不做编码跟随丢步判断</text>
+<text class="node-text " x="175" y="307">不做液位/扭力业务保护</text>
+<text class="node-text " x="175" y="329">应只用于维护调试</text>
+</svg></div><div class="evidence-row"><span class="evidence"><code>Application/Src/measure.c:895-985</code> 强制上/下行和强制回零的上层命令入口。</span><span class="evidence"><code>Services/MotorControl/motor_ctrl_motion_api.c:921-1068</code> 强制无检测接口只跳过编码帧门槛，仍检查驱动健康、命令切换、速度恢复。</span></div></section>
+<section id="encoder" class="card"><h2>10. 编码器计数与刷新</h2><div class="svg-flow-wrap"><svg class="biz-flow" viewBox="0 0 1320 654" role="img" aria-labelledby="motor-encoder-title motor-encoder-desc" aria-label="CPU2 电机与位置模型程序详细流程 - 业务流程图 9">
+<title id="motor-encoder-title">编码器计数与业务位置刷新流程</title><desc id="motor-encoder-desc">AS5145 角度累计、FRAM A/B 备份和位置更新的完整链路</desc><defs><marker id="arrow-motor-encoder" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#46627f"/></marker><filter id="shadow-motor-encoder" x="-10%" y="-15%" width="130%" height="140%"><feDropShadow dx="0" dy="7" stdDeviation="7" flood-color="#24415f" flood-opacity="0.14"/></filter></defs><rect class="canvas" x="1" y="1" width="1318" height="553" rx="14"/>
+<text class="svg-title" x="28" y="38">编码器计数与业务位置刷新流程</text>
+<text class="svg-subtitle" x="28" y="62">AS5145 角度累计、FRAM A/B 备份和位置更新的完整链路</text>
+<path class="edge " d="M 175 158 C 175 118, 467.5 118, 467.5 78" marker-end="url(#arrow-motor-encoder)"/>
+<path class="edge " d="M 467.5 168 C 467.5 113, 772.5 113, 772.5 58" marker-end="url(#arrow-motor-encoder)"/>
+<text class="edge-label" x="620" y="105">有效</text>
+<path class="edge " d="M 467.5 168 C 467.5 169, 772.5 169, 772.5 170" marker-end="url(#arrow-motor-encoder)"/>
+<text class="edge-label" x="620" y="161">无效</text>
+<path class="edge " d="M 772.5 136 C 772.5 107, 1082.5 107, 1082.5 78" marker-end="url(#arrow-motor-encoder)"/>
+<path class="edge " d="M 772.5 248 C 772.5 163, 1082.5 163, 1082.5 78" marker-end="url(#arrow-motor-encoder)"/>
+<path class="edge " d="M 1082.5 168 C 1082.5 206.5, 1082.5 206.5, 1082.5 245" marker-end="url(#arrow-motor-encoder)"/>
+<text class="edge-label" x="1082.5" y="198.5">采集有效</text>
+<path class="edge " d="M 1082.5 168 C 1082.5 169, 772.5 169, 772.5 170" marker-end="url(#arrow-motor-encoder)"/>
+<text class="edge-label" x="927.5" y="161">编码轮模式下等待失败</text>
+<path class="edge " d="M 1082.5 331 C 1082.5 298, 772.5 298, 772.5 265" marker-end="url(#arrow-motor-encoder)"/>
+<path class="edge " d="M 772.5 355 C 772.5 310, 467.5 310, 467.5 265" marker-end="url(#arrow-motor-encoder)"/>
+<text class="edge-label" x="620" y="302">是</text>
+<path class="edge " d="M 772.5 355 C 772.5 392.5, 467.5 392.5, 467.5 430" marker-end="url(#arrow-motor-encoder)"/>
+<text class="edge-label" x="620" y="384.5">否</text>
+<path class="edge " d="M 467.5 351 C 467.5 390.5, 467.5 390.5, 467.5 430" marker-end="url(#arrow-motor-encoder)"/>
+<path class="edge " d="M 467.5 520 C 467.5 475, 772.5 475, 772.5 430" marker-end="url(#arrow-motor-encoder)"/>
+<path class="edge " d="M 772.5 520 C 772.5 475, 1082.5 475, 1082.5 430" marker-end="url(#arrow-motor-encoder)"/>
+<text class="edge-label" x="927.5" y="467">是且非强制</text>
+<path class="edge " d="M 772.5 520 C 772.5 475, 175 475, 175 430" marker-end="url(#arrow-motor-encoder)"/>
+<text class="edge-label" x="473.75" y="467">否或强制</text>
+<rect class="node node-start" x="60" y="88" width="230" height="70" rx="10" fill="#eaf8f1" stroke="#2c9872" filter="url(#shadow-motor-encoder)"/>
+<text class="node-text " x="175" y="123">上电 Initialize_Encoder</text>
+<polygon class="node node-decision" points="467.5,78 585,123 467.5,168 350,123" fill="#fff5dd" stroke="#d49328" filter="url(#shadow-motor-encoder)"/>
+<text class="node-text " x="467.5" y="123">FRAM A/B 读取有效？</text>
+<rect class="node node-action" x="655" y="58" width="235" height="78" rx="10" fill="#eaf2ff" stroke="#4b88d8" filter="url(#shadow-motor-encoder)"/>
+<text class="node-text " x="772.5" y="86">恢复 g_encoder_count</text>
+<text class="node-text " x="772.5" y="108">恢复 prev_angle</text>
+<rect class="node node-error" x="655" y="170" width="235" height="78" rx="10" fill="#ffecec" stroke="#d65353" filter="url(#shadow-motor-encoder)"/>
+<text class="node-text " x="772.5" y="187">恢复默认 0</text>
+<text class="node-text " x="772.5" y="209">置 ENCODER_POWERON_FAIL</text>
+<text class="node-text " x="772.5" y="231">写回 A/B</text>
+<polygon class="node node-decision" points="1082.5,78 1205,123 1082.5,168 960,123" fill="#fff5dd" stroke="#d49328" filter="url(#shadow-motor-encoder)"/>
+<text class="node-text " x="1082.5" y="123">启动采集定时器并等待首帧？</text>
+<rect class="node node-wait" x="960" y="245" width="245" height="86" rx="10" fill="#f1efff" stroke="#7b68d6" filter="url(#shadow-motor-encoder)"/>
+<text class="node-text " x="1082.5" y="266">每次新角度</text>
+<text class="node-text " x="1082.5" y="288">计算跨圈 delta</text>
+<text class="node-text " x="1082.5" y="310">累加 g_encoder_count</text>
+<polygon class="node node-decision" points="772.5,265 890,310 772.5,355 655,310" fill="#fff5dd" stroke="#d49328" filter="url(#shadow-motor-encoder)"/>
+<text class="node-text " x="772.5" y="310">计数变化 &gt;3 或位置为 0？</text>
+<rect class="node node-log" x="350" y="265" width="235" height="86" rx="10" fill="#fff1e8" stroke="#de7c34" filter="url(#shadow-motor-encoder)"/>
+<text class="node-text " x="467.5" y="286">写 FRAM A/B</text>
+<text class="node-text " x="467.5" y="308">保存计数和角度</text>
+<text class="node-text " x="467.5" y="330">更新 g_encoder_saved</text>
+<rect class="node node-action" x="350" y="430" width="235" height="90" rx="10" fill="#eaf2ff" stroke="#4b88d8" filter="url(#shadow-motor-encoder)"/>
+<text class="node-text " x="467.5" y="442">换算长度和高度</text>
+<text class="node-text " x="467.5" y="464">current_encoder_value=-count</text>
+<text class="node-text " x="467.5" y="486">长度=周长*圈数</text>
+<text class="node-text " x="467.5" y="508">sensor_position=tankHeight-length</text>
+<polygon class="node node-decision" points="772.5,430 890,475 772.5,520 655,475" fill="#fff5dd" stroke="#d49328" filter="url(#shadow-motor-encoder)"/>
+<text class="node-text " x="772.5" y="475">当前是电机位置源？</text>
+<rect class="node node-state" x="960" y="430" width="245" height="78" rx="10" fill="#ecf8ff" stroke="#38a3c7" filter="url(#shadow-motor-encoder)"/>
+<text class="node-text " x="1082.5" y="458">普通刷新不改业务位置</text>
+<text class="node-text " x="1082.5" y="480">只更新 current_encoder_value</text>
+<rect class="node node-end" x="60" y="430" width="230" height="78" rx="10" fill="#eefbf5" stroke="#31a06f" filter="url(#shadow-motor-encoder)"/>
+<text class="node-text " x="175" y="458">强制刷新/编码轮模式</text>
+<text class="node-text " x="175" y="480">写 cable_length/sensor_position</text>
+</svg></div><div class="evidence-row"><span class="evidence"><code>Services/Encoder/encoder.c:60-130</code> 编码值 FRAM A/B 读取和回退修复。</span><span class="evidence"><code>Services/Encoder/encoder.c:152-188</code> 上电恢复编码器并等待首个有效帧。</span><span class="evidence"><code>Services/Encoder/encoder.c:190-328</code> 角度累计、持久化阈值、长度/高度换算和手动设定长度。</span></div></section>
+<section id="lost" class="card"><h2>11. 丢步与编码跟随检测</h2><div class="svg-flow-wrap"><svg class="biz-flow" viewBox="0 0 1320 634" role="img" aria-labelledby="motor-lost-title motor-lost-desc" aria-label="CPU2 电机与位置模型程序详细流程 - 业务流程图 10">
+<title id="motor-lost-title">运行期丢步与跟随异常检测流程</title><desc id="motor-lost-desc">普通运动中用位置窗口比较业务位置、电机模型位置和编码轮位置</desc><defs><marker id="arrow-motor-lost" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#46627f"/></marker><filter id="shadow-motor-lost" x="-10%" y="-15%" width="130%" height="140%"><feDropShadow dx="0" dy="7" stdDeviation="7" flood-color="#24415f" flood-opacity="0.14"/></filter></defs><rect class="canvas" x="1" y="1" width="1318" height="533" rx="14"/>
+<text class="svg-title" x="28" y="38">运行期丢步与跟随异常检测流程</text>
+<text class="svg-subtitle" x="28" y="62">普通运动中用位置窗口比较业务位置、电机模型位置和编码轮位置</text>
+<path class="edge " d="M 175 158 C 175 118, 467.5 118, 467.5 78" marker-end="url(#arrow-motor-lost)"/>
+<path class="edge " d="M 467.5 168 C 467.5 294, 772.5 294, 772.5 420" marker-end="url(#arrow-motor-lost)"/>
+<text class="edge-label" x="620" y="286">否</text>
+<path class="edge " d="M 467.5 168 C 467.5 123, 772.5 123, 772.5 78" marker-end="url(#arrow-motor-lost)"/>
+<text class="edge-label" x="620" y="115">是</text>
+<path class="edge " d="M 772.5 168 C 772.5 123, 1082.5 123, 1082.5 78" marker-end="url(#arrow-motor-lost)"/>
+<path class="edge " d="M 1082.5 168 C 1082.5 294, 772.5 294, 772.5 420" marker-end="url(#arrow-motor-lost)"/>
+<text class="edge-label" x="927.5" y="286">未满</text>
+<path class="edge " d="M 1082.5 168 C 1082.5 201.5, 1082.5 201.5, 1082.5 235" marker-end="url(#arrow-motor-lost)"/>
+<text class="edge-label" x="1082.5" y="193.5">已满</text>
+<path class="edge " d="M 1082.5 325 C 1082.5 280, 772.5 280, 772.5 235" marker-end="url(#arrow-motor-lost)"/>
+<text class="edge-label" x="927.5" y="272">是</text>
+<path class="edge " d="M 772.5 325 C 772.5 372.5, 175 372.5, 175 420" marker-end="url(#arrow-motor-lost)"/>
+<text class="edge-label" x="473.75" y="364.5">是</text>
+<path class="edge " d="M 772.5 325 C 772.5 280, 467.5 280, 467.5 235" marker-end="url(#arrow-motor-lost)"/>
+<text class="edge-label" x="620" y="272">否</text>
+<path class="edge " d="M 1082.5 325 C 1082.5 280, 467.5 280, 467.5 235" marker-end="url(#arrow-motor-lost)"/>
+<text class="edge-label" x="775" y="272">否</text>
+<path class="edge " d="M 467.5 325 C 467.5 280, 175 280, 175 235" marker-end="url(#arrow-motor-lost)"/>
+<text class="edge-label" x="321.25" y="272">是</text>
+<path class="edge " d="M 467.5 325 C 467.5 372.5, 772.5 372.5, 772.5 420" marker-end="url(#arrow-motor-lost)"/>
+<text class="edge-label" x="620" y="364.5">否</text>
+<path class="edge " d="M 175 325 C 175 372.5, 467.5 372.5, 467.5 420" marker-end="url(#arrow-motor-lost)"/>
+<text class="edge-label" x="321.25" y="364.5">电机源</text>
+<path class="edge " d="M 175 325 C 175 372.5, 175 372.5, 175 420" marker-end="url(#arrow-motor-lost)"/>
+<text class="edge-label" x="175" y="364.5">编码轮源</text>
+<path class="edge " d="M 467.5 498 C 467.5 459, 772.5 459, 772.5 420" marker-end="url(#arrow-motor-lost)"/>
+<rect class="node node-start" x="60" y="88" width="230" height="70" rx="10" fill="#eaf8f1" stroke="#2c9872" filter="url(#shadow-motor-lost)"/>
+<text class="node-text " x="175" y="112">每个运动阶段开始</text>
+<text class="node-text " x="175" y="134">MotorCtrl_LostStepInit 清窗口</text>
+<polygon class="node node-decision" points="467.5,78 585,123 467.5,168 350,123" fill="#fff5dd" stroke="#d49328" filter="url(#shadow-motor-lost)"/>
+<text class="node-text " x="467.5" y="123">距离上次检查 &gt;=1s？</text>
+<rect class="node node-action" x="655" y="78" width="235" height="90" rx="10" fill="#eaf2ff" stroke="#4b88d8" filter="url(#shadow-motor-lost)"/>
+<text class="node-text " x="772.5" y="79">采样窗口</text>
+<text class="node-text " x="772.5" y="101">当前业务位置</text>
+<text class="node-text " x="772.5" y="123">电机模型长度</text>
+<text class="node-text " x="772.5" y="145">编码轮长度</text>
+<text class="node-text " x="772.5" y="167">tick 时间</text>
+<polygon class="node node-decision" points="1082.5,78 1205,123 1082.5,168 960,123" fill="#fff5dd" stroke="#d49328" filter="url(#shadow-motor-lost)"/>
+<text class="node-text " x="1082.5" y="123">满 6 个样本？</text>
+<polygon class="node node-decision" points="1082.5,235 1205,280 1082.5,325 960,280" fill="#fff5dd" stroke="#d49328" filter="url(#shadow-motor-lost)"/>
+<text class="node-text " x="1082.5" y="280">电机模型移动 &gt;=5mm？</text>
+<polygon class="node node-decision" points="772.5,235 890,280 772.5,325 655,280" fill="#fff5dd" stroke="#d49328" filter="url(#shadow-motor-lost)"/>
+<text class="node-text " x="772.5" y="280">编码轮移动 &lt; 电机移动 20%？</text>
+<polygon class="node node-decision" points="467.5,235 585,280 467.5,325 350,280" fill="#fff5dd" stroke="#d49328" filter="url(#shadow-motor-lost)"/>
+<text class="node-text " x="467.5" y="280">中间段平均速度低于阈值？</text>
+<polygon class="node node-decision" points="175,235 290,280 175,325 60,280" fill="#fff5dd" stroke="#d49328" filter="url(#shadow-motor-lost)"/>
+<text class="node-text " x="175" y="280">当前是否电机位置源？</text>
+<rect class="node node-error" x="60" y="420" width="230" height="78" rx="10" fill="#ffecec" stroke="#d65353" filter="url(#shadow-motor-lost)"/>
+<text class="node-text " x="175" y="448">返回 ENCODER_LOST_STEP</text>
+<text class="node-text " x="175" y="470">1s 抑制重复报警</text>
+<rect class="node node-state" x="350" y="420" width="235" height="78" rx="10" fill="#ecf8ff" stroke="#38a3c7" filter="url(#shadow-motor-lost)"/>
+<text class="node-text " x="467.5" y="448">电机位置源只提示</text>
+<text class="node-text " x="467.5" y="470">不按编码轮丢步报错</text>
+<rect class="node node-end" x="655" y="420" width="235" height="78" rx="10" fill="#eefbf5" stroke="#31a06f" filter="url(#shadow-motor-lost)"/>
+<text class="node-text " x="772.5" y="448">NO_ERROR</text>
+<text class="node-text " x="772.5" y="470">继续运行</text>
+</svg></div><div class="evidence-row"><span class="evidence"><code>Services/MotorControl/motor_ctrl_lost_step_detect.c:45-204</code> 丢步检测使用 6 个 1 秒采样窗口、速度阈值和编码轮跟随比例。</span><span class="evidence"><code>Services/MotorControl/motor_ctrl_motion_api.c:1648-1663</code> Jog 运行循环中调用健康、碰撞和丢步检测。</span></div></section>
+<section id="health" class="card"><h2>12. 停止与健康检查</h2><div class="svg-flow-wrap"><svg class="biz-flow" viewBox="0 0 1320 639" role="img" aria-labelledby="motor-health-title motor-health-desc" aria-label="CPU2 电机与位置模型程序详细流程 - 业务流程图 11">
+<title id="motor-health-title">停止、健康检查与运行期同步流程</title><desc id="motor-health-desc">运动过程中不仅等停止，还持续检查驱动状态、电源状态和位置同步</desc><defs><marker id="arrow-motor-health" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#46627f"/></marker><filter id="shadow-motor-health" x="-10%" y="-15%" width="130%" height="140%"><feDropShadow dx="0" dy="7" stdDeviation="7" flood-color="#24415f" flood-opacity="0.14"/></filter></defs><rect class="canvas" x="1" y="1" width="1318" height="538" rx="14"/>
+<text class="svg-title" x="28" y="38">停止、健康检查与运行期同步流程</text>
+<text class="svg-subtitle" x="28" y="62">运动过程中不仅等停止，还持续检查驱动状态、电源状态和位置同步</text>
+<path class="edge " d="M 175 158 C 175 118, 467.5 118, 467.5 78" marker-end="url(#arrow-motor-health)"/>
+<path class="edge " d="M 467.5 168 C 467.5 123, 772.5 123, 772.5 78" marker-end="url(#arrow-motor-health)"/>
+<text class="edge-label" x="620" y="115">成功</text>
+<path class="edge " d="M 467.5 168 C 467.5 123, 1082.5 123, 1082.5 78" marker-end="url(#arrow-motor-health)"/>
+<text class="edge-label" x="775" y="115">失败时查健康</text>
+<path class="edge " d="M 772.5 168 C 772.5 123, 1082.5 123, 1082.5 78" marker-end="url(#arrow-motor-health)"/>
+<text class="edge-label" x="927.5" y="115">失败</text>
+<path class="edge " d="M 772.5 168 C 772.5 209, 772.5 209, 772.5 250" marker-end="url(#arrow-motor-health)"/>
+<text class="edge-label" x="772.5" y="201">成功</text>
+<path class="edge " d="M 1082.5 168 C 1082.5 299, 772.5 299, 772.5 430" marker-end="url(#arrow-motor-health)"/>
+<text class="edge-label" x="927.5" y="291">异常</text>
+<path class="edge " d="M 1082.5 168 C 1082.5 209, 772.5 209, 772.5 250" marker-end="url(#arrow-motor-health)"/>
+<text class="edge-label" x="927.5" y="201">正常</text>
+<path class="edge " d="M 772.5 340 C 772.5 295, 467.5 295, 467.5 250" marker-end="url(#arrow-motor-health)"/>
+<text class="edge-label" x="620" y="287">是</text>
+<path class="edge " d="M 772.5 340 C 772.5 295, 1082.5 295, 1082.5 250" marker-end="url(#arrow-motor-health)"/>
+<text class="edge-label" x="927.5" y="287">否且仍在运行</text>
+<path class="edge " d="M 467.5 340 C 467.5 385, 467.5 385, 467.5 430" marker-end="url(#arrow-motor-health)"/>
+<path class="edge " d="M 1082.5 340 C 1082.5 385, 1082.5 385, 1082.5 430" marker-end="url(#arrow-motor-health)"/>
+<path class="edge " d="M 467.5 510 C 467.5 470, 1082.5 470, 1082.5 430" marker-end="url(#arrow-motor-health)"/>
+<path class="edge " d="M 467.5 340 C 467.5 385, 772.5 385, 772.5 430" marker-end="url(#arrow-motor-health)"/>
+<text class="edge-label" x="620" y="377">停止失败</text>
+<rect class="node node-start" x="60" y="88" width="230" height="70" rx="10" fill="#eaf8f1" stroke="#2c9872" filter="url(#shadow-motor-health)"/>
+<text class="node-text " x="175" y="123">运行期或停机尾段</text>
+<polygon class="node node-decision" points="467.5,78 585,123 467.5,168 350,123" fill="#fff5dd" stroke="#d49328" filter="url(#shadow-motor-health)"/>
+<text class="node-text " x="467.5" y="123">读取运动状态成功？</text>
+<polygon class="node node-decision" points="772.5,78 890,123 772.5,168 655,123" fill="#fff5dd" stroke="#d49328" filter="url(#shadow-motor-health)"/>
+<text class="node-text " x="772.5" y="123">XACTUAL 同步成功？</text>
+<rect class="node node-action" x="960" y="78" width="245" height="90" rx="10" fill="#eaf2ff" stroke="#4b88d8" filter="url(#shadow-motor-health)"/>
+<text class="node-text " x="1082.5" y="90">驱动健康检查</text>
+<text class="node-text " x="1082.5" y="112">GSTAT / DRV_STATUS</text>
+<text class="node-text " x="1082.5" y="134">电源状态</text>
+<text class="node-text " x="1082.5" y="156">配置/复位标志</text>
+<polygon class="node node-decision" points="772.5,250 890,295 772.5,340 655,295" fill="#fff5dd" stroke="#d49328" filter="url(#shadow-motor-health)"/>
+<text class="node-text " x="772.5" y="295">有命令切换？</text>
+<rect class="node node-action" x="350" y="250" width="235" height="90" rx="10" fill="#eaf2ff" stroke="#4b88d8" filter="url(#shadow-motor-health)"/>
+<text class="node-text " x="467.5" y="262">StopAndMarkStopped</text>
+<text class="node-text " x="467.5" y="284">stpr_stop</text>
+<text class="node-text " x="467.5" y="306">等待 vzero/VACTUAL=0</text>
+<text class="node-text " x="467.5" y="328">XTARGET 对齐 XACTUAL</text>
+<rect class="node node-action" x="960" y="250" width="245" height="90" rx="10" fill="#eaf2ff" stroke="#4b88d8" filter="url(#shadow-motor-health)"/>
+<text class="node-text " x="1082.5" y="273">运行中速度补偿</text>
+<text class="node-text " x="1082.5" y="295">按当前尺带长度重算 VMAX</text>
+<text class="node-text " x="1082.5" y="317">差异超过阈值才写寄存器</text>
+<rect class="node node-state" x="350" y="430" width="235" height="80" rx="10" fill="#ecf8ff" stroke="#38a3c7" filter="url(#shadow-motor-health)"/>
+<text class="node-text " x="467.5" y="448">清运行状态</text>
+<text class="node-text " x="467.5" y="470">motion_command_active=false</text>
+<text class="node-text " x="467.5" y="492">motor_state=0</text>
+<rect class="node node-error" x="655" y="430" width="235" height="80" rx="10" fill="#ffecec" stroke="#d65353" filter="url(#shadow-motor-health)"/>
+<text class="node-text " x="772.5" y="459">错误返回</text>
+<text class="node-text " x="772.5" y="481">TMC 通信/欠压/超时/停止失败</text>
+<rect class="node node-end" x="960" y="430" width="245" height="80" rx="10" fill="#eefbf5" stroke="#31a06f" filter="url(#shadow-motor-health)"/>
+<text class="node-text " x="1082.5" y="470">继续等待或完成</text>
+</svg></div><div class="evidence-row"><span class="evidence"><code>Services/MotorControl/motor_ctrl_driver_param.c:705-760</code> StopAndMarkStopped 下发停止、等待 vzero 并对齐 XTARGET。</span><span class="evidence"><code>Services/MotorControl/motor_ctrl_driver_param.c:960-1018</code> 运行中按尺带长度刷新 VMAX。</span><span class="evidence"><code>Services/MotorControl/motor_ctrl_driver_param.c:1127-1135</code> 位置同步失败时转健康检查识别底层故障。</span></div></section>
+<section id="tfit" class="card"><h2>13. TFIT 尺带拟合</h2><div class="svg-flow-wrap"><svg class="biz-flow" viewBox="0 0 1320 644" role="img" aria-labelledby="motor-tape-title motor-tape-desc" aria-label="CPU2 电机与位置模型程序详细流程 - 业务流程图 12">
+<title id="motor-tape-title">TFIT 尺带拟合流程</title><desc id="motor-tape-desc">采集电机步数和编码轮长度，用全局或局部模型拟合 C0/厚度并可写入参数</desc><defs><marker id="arrow-motor-tape" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#46627f"/></marker><filter id="shadow-motor-tape" x="-10%" y="-15%" width="130%" height="140%"><feDropShadow dx="0" dy="7" stdDeviation="7" flood-color="#24415f" flood-opacity="0.14"/></filter></defs><rect class="canvas" x="1" y="1" width="1318" height="543" rx="14"/>
+<text class="svg-title" x="28" y="38">TFIT 尺带拟合流程</text>
+<text class="svg-subtitle" x="28" y="62">采集电机步数和编码轮长度，用全局或局部模型拟合 C0/厚度并可写入参数</text>
+<path class="edge " d="M 175 158 C 175 118, 467.5 118, 467.5 78" marker-end="url(#arrow-motor-tape)"/>
+<path class="edge " d="M 467.5 168 C 467.5 123, 772.5 123, 772.5 78" marker-end="url(#arrow-motor-tape)"/>
+<text class="edge-label" x="620" y="115">任一模式先采样</text>
+<path class="edge " d="M 772.5 168 C 772.5 123, 1082.5 123, 1082.5 78" marker-end="url(#arrow-motor-tape)"/>
+<path class="edge " d="M 1082.5 168 C 1082.5 299, 467.5 299, 467.5 430" marker-end="url(#arrow-motor-tape)"/>
+<text class="edge-label" x="775" y="291">不足</text>
+<path class="edge " d="M 1082.5 168 C 1082.5 204, 1082.5 204, 1082.5 240" marker-end="url(#arrow-motor-tape)"/>
+<text class="edge-label" x="1082.5" y="196">全局</text>
+<path class="edge " d="M 1082.5 168 C 1082.5 204, 772.5 204, 772.5 240" marker-end="url(#arrow-motor-tape)"/>
+<text class="edge-label" x="927.5" y="196">局部</text>
+<path class="edge " d="M 1082.5 330 C 1082.5 285, 467.5 285, 467.5 240" marker-end="url(#arrow-motor-tape)"/>
+<path class="edge " d="M 772.5 330 C 772.5 285, 467.5 285, 467.5 240" marker-end="url(#arrow-motor-tape)"/>
+<path class="edge " d="M 467.5 330 C 467.5 380, 467.5 380, 467.5 430" marker-end="url(#arrow-motor-tape)"/>
+<text class="edge-label" x="467.5" y="372">无效</text>
+<path class="edge " d="M 467.5 330 C 467.5 380, 772.5 380, 772.5 430" marker-end="url(#arrow-motor-tape)"/>
+<text class="edge-label" x="620" y="372">有效</text>
+<path class="edge " d="M 772.5 510 C 772.5 375, 175 375, 175 240" marker-end="url(#arrow-motor-tape)"/>
+<path class="edge " d="M 175 330 C 175 380, 175 380, 175 430" marker-end="url(#arrow-motor-tape)"/>
+<text class="edge-label" x="175" y="372">合法</text>
+<path class="edge " d="M 175 330 C 175 380, 467.5 380, 467.5 430" marker-end="url(#arrow-motor-tape)"/>
+<text class="edge-label" x="321.25" y="372">不合法</text>
+<rect class="node node-start" x="60" y="88" width="230" height="70" rx="10" fill="#eaf8f1" stroke="#2c9872" filter="url(#shadow-motor-tape)"/>
+<text class="node-text " x="175" y="112">启动 TFIT</text>
+<text class="node-text " x="175" y="134">全局或局部原点</text>
+<polygon class="node node-decision" points="467.5,78 585,123 467.5,168 350,123" fill="#fff5dd" stroke="#d49328" filter="url(#shadow-motor-tape)"/>
+<text class="node-text " x="467.5" y="123">局部原点模式？</text>
+<rect class="node node-action" x="655" y="78" width="235" height="90" rx="10" fill="#eaf2ff" stroke="#4b88d8" filter="url(#shadow-motor-tape)"/>
+<text class="node-text " x="772.5" y="90">采样</text>
+<text class="node-text " x="772.5" y="112">读取 XACTUAL 卷筒状态</text>
+<text class="node-text " x="772.5" y="134">读取编码轮长度</text>
+<text class="node-text " x="772.5" y="156">按 1/4 圈阈值自动采样</text>
+<polygon class="node node-decision" points="1082.5,78 1205,123 1082.5,168 960,123" fill="#fff5dd" stroke="#d49328" filter="url(#shadow-motor-tape)"/>
+<text class="node-text " x="1082.5" y="123">样本数 &gt;=6 且跨度足够？</text>
+<rect class="node node-action" x="960" y="240" width="245" height="90" rx="10" fill="#eaf2ff" stroke="#4b88d8" filter="url(#shadow-motor-tape)"/>
+<text class="node-text " x="1082.5" y="263">全局拟合</text>
+<text class="node-text " x="1082.5" y="285">y=a0+a1*n+a2*n^2</text>
+<text class="node-text " x="1082.5" y="307">C0=a1, t=-a2/pi</text>
+<rect class="node node-action" x="655" y="240" width="235" height="90" rx="10" fill="#eaf2ff" stroke="#4b88d8" filter="url(#shadow-motor-tape)"/>
+<text class="node-text " x="772.5" y="263">局部拟合</text>
+<text class="node-text " x="772.5" y="285">以当前步数/长度为原点</text>
+<text class="node-text " x="772.5" y="307">只求局部周长和厚度</text>
+<polygon class="node node-decision" points="467.5,240 585,285 467.5,330 350,285" fill="#fff5dd" stroke="#d49328" filter="url(#shadow-motor-tape)"/>
+<text class="node-text " x="467.5" y="285">拟合结果有效？</text>
+<polygon class="node node-decision" points="175,240 290,285 175,330 60,285" fill="#fff5dd" stroke="#d49328" filter="url(#shadow-motor-tape)"/>
+<text class="node-text " x="175" y="285">应用哪些参数？</text>
+<rect class="node node-end" x="60" y="430" width="230" height="80" rx="10" fill="#eefbf5" stroke="#31a06f" filter="url(#shadow-motor-tape)"/>
+<text class="node-text " x="175" y="448">保存设备参数</text>
+<text class="node-text " x="175" y="470">全局可写 C0/t</text>
+<text class="node-text " x="175" y="492">局部不能写全局 C0</text>
+<rect class="node node-error" x="350" y="430" width="235" height="80" rx="10" fill="#ffecec" stroke="#d65353" filter="url(#shadow-motor-tape)"/>
+<text class="node-text " x="467.5" y="459">PARAM_ERROR</text>
+<text class="node-text " x="467.5" y="481">样本不足、矩阵奇异、结果越界、应用不合法</text>
+<rect class="node node-state" x="655" y="430" width="235" height="80" rx="10" fill="#ecf8ff" stroke="#38a3c7" filter="url(#shadow-motor-tape)"/>
+<text class="node-text " x="772.5" y="448">保存拟合结果</text>
+<text class="node-text " x="772.5" y="470">rmse / max_abs_err</text>
+<text class="node-text " x="772.5" y="492">等待应用或打印</text>
+</svg></div><div class="evidence-row"><span class="evidence"><code>Services/MotorControl/motor_ctrl_tape_fit.c:42-120</code> TFIT 启停、局部原点和状态打印。</span><span class="evidence"><code>Services/MotorControl/motor_ctrl_tape_fit.c:131-320</code> 全局/局部拟合的样本、跨度和结果检查。</span><span class="evidence"><code>Services/MotorControl/motor_ctrl_tape_fit.c:330-389</code> 拟合结果应用到设备参数，局部结果不能写全局 C0。</span><span class="evidence"><code>Services/MotorControl/motor_ctrl_tape_fit.c:390-490</code> 运行期自动采样和样本阈值。</span></div></section>
+<section id="issues" class="card"><h2>14. 已整理问题点与优化建议</h2><div class="issue-list"><article class="issue high"><div class="issue-head"><span>高</span><strong>运行到指定位置复用 densityDistributionOilLevel 参数</strong></div><p>CMD_RunToPosition 把 densityDistributionOilLevel/10 作为目标位置，参数名与业务含义不一致，容易被误当成密度分布液位配置。</p><footer>Application/Src/measure.c:1206-1207</footer></article><article class="issue medium"><div class="issue-head"><span>中</span><strong>运动指令存在重复 MeasureStart</strong></div><p>ProcessMeasureCmd 已对普通命令执行 MeasureStart，CMD_RunToPosition 内部又调用一次；手动运动当前由公共入口准备，部分测量命令也有内部准备，初始化和状态清理可能重复。</p><footer>Application/Src/measure.c:104-109；Application/Src/measure.c:1202</footer></article><article class="issue medium"><div class="issue-head"><span>中</span><strong>强制无检测运动保护边界容易被误解</strong></div><p>ForceDebug 只绕过编码器首帧门槛，不绕过驱动初始化和健康检查；但也不会做普通运动中的编码跟随丢步/液位业务保护，应限制使用权限。</p><footer>Services/MotorControl/motor_ctrl_motion_api.c:921-1068</footer></article><article class="issue medium"><div class="issue-head"><span>中</span><strong>普通运动丢步返回值可能被覆盖</strong></div><p>MoveAndWait 在偏差大于 70% 且目标超过 5mm 时，编码轮位置源会先置 ENCODER_LOST_STEP；但随后 ret 被 MotorDriver_SyncPositionOrCheckHealth 的返回值重新赋值，如果同步成功，上层可能收到 NO_ERROR。电机位置源则明确只打印提示并继续。</p><footer>Services/MotorControl/motor_ctrl_motion_api.c:548-567；Services/MotorControl/motor_ctrl_lost_step_detect.c:187-190</footer></article><article class="issue medium"><div class="issue-head"><span>中</span><strong>位置源切换会自动走一圈</strong></div><p>切换到电机位置源时会先走一圈再走回，用编码轮实测当前局部周长；现场切换参数前应确认机械空间和命令切换处理。</p><footer>Services/MotorControl/motor_ctrl_position_model.c:489-535</footer></article><article class="issue medium"><div class="issue-head"><span>中</span><strong>XACTUAL 异常过滤依赖缓存与二次读取</strong></div><p>过滤能防止 SPI 单帧异常污染位置，但如果缓存本身已异常或连续异常一致，仍可能通过；建议调试时关注异常日志和 FRAM 快照。</p><footer>Services/MotorControl/motor_ctrl_position_model.c:1124-1192</footer></article><article class="issue low"><div class="issue-head"><span>低</span><strong>编码器长度单位链路复杂</strong></div><p>encoder_wheel_circumference_mm 实际按 0.001mm 参数使用，函数名带 mm，容易造成单位误解；文档和上位机界面要明确。</p><footer>Services/Encoder/encoder.c:232-240；Services/Encoder/encoder.c:314-317</footer></article><article class="issue low"><div class="issue-head"><span>低</span><strong>MoveToPosition 最多 10 轮后返回 NO_ERROR</strong></div><p>绝对定位循环最多 10 次，超出后直接通过 ReturnWithSpeedScope(NO_ERROR) 退出；如果每轮未收敛但无错误，上层会认为完成。</p><footer>Services/MotorControl/motor_ctrl_motion_api.c:678-729</footer></article></div></section>
+<section id="source" class="card"><h2>15. 源码索引</h2><table><thead><tr><th>文件</th><th>行号</th><th>对象</th><th>业务含义</th></tr></thead><tbody><tr><td><code>Application/Src/measure.c</code></td><td>92-111</td><td><code>ProcessMeasureCmd</code></td><td>正式命令公共准备和入口分发。</td></tr><tr><td><code>Application/Src/measure.c</code></td><td>829-985</td><td><code>CMD_Move*/CMD_Force*</code></td><td>手动、强制和强制回零命令流程。</td></tr><tr><td><code>Application/Src/measure.c</code></td><td>1197-1230</td><td><code>CMD_RunToPosition</code></td><td>运行到指定位置，目标来自 densityDistributionOilLevel，当前调用 Jog 绝对定位入口。</td></tr><tr><td><code>Services/MotorControl/motor_ctrl_driver_param.c</code></td><td>519-625</td><td><code>MotorCtrl_Init</code></td><td>电机初始化、健康检查、位置源恢复、速度下发。</td></tr><tr><td><code>Services/MotorControl/motor_ctrl_driver_param.c</code></td><td>189-220</td><td><code>MotorDriver_CheckMotionReadyInternal</code></td><td>运动前按位置源检查驱动和编码帧。</td></tr><tr><td><code>Services/MotorControl/motor_ctrl_driver_param.c</code></td><td>705-760</td><td><code>MotorDriver_StopAndMarkStopped</code></td><td>停止命令、等待停止、对齐目标和实际位置。</td></tr><tr><td><code>Services/MotorControl/motor_ctrl_motion_api.c</code></td><td>441-577</td><td><code>MotorCtrl_MoveAndWait</code></td><td>普通阻塞运动主流程。</td></tr><tr><td><code>Services/MotorControl/motor_ctrl_motion_api.c</code></td><td>660-729</td><td><code>MotorCtrl_MoveToPosition</code></td><td>绝对定位循环逼近。</td></tr><tr><td><code>Services/MotorControl/motor_ctrl_motion_api.c</code></td><td>741-810；1609-1761；2202-2270</td><td><code>Jog 速度模式</code></td><td>Jog 目标生成、速度模式运行循环、两段减速停机和终点复核。</td></tr><tr><td><code>Services/MotorControl/motor_ctrl_motion_api.c</code></td><td>921-1068</td><td><code>MotorMotion_MoveBlockingNoDetectInternal</code></td><td>强制无检测运动。</td></tr><tr><td><code>Services/MotorControl/motor_ctrl_position_model.c</code></td><td>403-558</td><td><code>MotorCtrl_SwitchPositionSourceToMotor</code></td><td>编码轮切换到电机位置源并测局部周长。</td></tr><tr><td><code>Services/MotorControl/motor_ctrl_position_model.c</code></td><td>916-1051</td><td><code>位置刷新与位置源恢复</code></td><td>XACTUAL 同步、业务位置更新和位置源恢复。</td></tr><tr><td><code>Services/Encoder/encoder.c</code></td><td>152-328</td><td><code>编码器模块</code></td><td>编码计数、FRAM A/B 备份和长度/高度换算。</td></tr><tr><td><code>Services/MotorControl/motor_ctrl_lost_step_detect.c</code></td><td>45-204</td><td><code>MotorCtrl_CheckLostStepAutoTiming</code></td><td>丢步和编码轮跟随检测。</td></tr><tr><td><code>Services/MotorControl/motor_ctrl_tape_fit.c</code></td><td>42-490</td><td><code>TFIT</code></td><td>采样、拟合、应用和自动采样。</td></tr></tbody></table></section></div></body></html>
