@@ -522,7 +522,7 @@ tools/check_si_protocol_contract.py
 
 | 项目 | 当前结果 |
 | --- | --- |
-| 共享协议版本 | `DEVICE_PROTOCOL_VERSION = 15` |
+| 共享协议版本 | `DEVICE_PROTOCOL_VERSION = 14` |
 | 新命令 | `CMD_SI_PROFILE = 20` |
 | CPU2 profile 参数 | `si_profile_first_point`、`si_profile_increment`、`si_profile_dwell_time`、`si_profile_bottom_detect_interval` |
 | CPU2 参数版本 | 复用原预留槽，`DEVICE_PARAM_VERSION` 保持 `3` |
@@ -564,7 +564,7 @@ CPU3 写 `00004 Profile ON` 时先锁存 profile 开始时间，再下发 `CMD_S
 
 - `tools/check_si_modbus_frames.py`
 - `tools/check_si_protocol_contract.py`
-- `docs/00_构建与版本/版本改动与测试/2026-07-01_待发布_SI协议进一步兼容_改动与测试方案.md`
+- `docs/00_构建与版本/版本改动与测试/2026-07-01_CPU2_V1.21.0.0_CPU3_V1.19.0.0_SI协议独立Profile兼容_改动与测试方案.md`
 - `docs/00_程序流程导航/CPU2/06_密度与单点测量.html`
 - `docs/00_程序流程导航/CPU3/05_Wartsila与SI协议适配.html`
 - `docs/01_协议与寄存器/CPU2_CPU3协议变更记录.md`

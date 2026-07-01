@@ -128,6 +128,10 @@ typedef enum {
     KEYNUM_MOTOR_RUN_MONITOR,            /* 电机运行监控页 */
     KEYNUM_DEBUG_WEIGHT_WAIT,            /* 扭力获取等待页 */
     KEYNUM_ERROR_REASON,                 /* 故障原因查看页 */
+    KEYNUM_MENU_SI_CONFIG,           /* SI 参数主菜单 */
+    KEYNUM_MENU_SI_PROFILE,              /* SI Profile 参数 */
+    KEYNUM_MENU_SI_AUTO_PROFILE,         /* SI 自动 Profile 参数 */
+    KEYNUM_MENU_SI_ALARM,                /* SI 报警限值参数 */
 
     KEYNUM_END
 } keymenuNumber;
@@ -145,6 +149,9 @@ typedef enum {
     MENU_GRP_CORR,              /* 密度修正/温度修正 */
     MENU_GRP_POLICY,            /* 是否测罐底/是否测水/是否测单点/顺序/模式/点数/间距/悬停/上下限 */
     MENU_GRP_WARTSILA,          /* Wartsila 上下限/步进/最高点液面距 */
+    MENU_GRP_SI_PROFILE,        /* SI Profile 首点/步距/停留/探底频次 */
+    MENU_GRP_CPU3_SI_AUTO,      /* SI 自动 Profile 调度 */
+    MENU_GRP_CPU3_SI_ALARM,     /* SI 报警限值 */
     MENU_GRP_DO_ALARM,          /* 继电器报警输出 */
     MENU_GRP_AO,                /* AO 输出/报警/故障电流/调试电流 */
     MENU_GRP_CAL_SP,            /* 标定液位(油/水)/单点位置/监测位置/分布液位/电机运行距离 */
@@ -197,6 +204,7 @@ typedef enum
     COM_NUM_METER_DENSITY,           /* 密度每米测量（CMD_MEASURE_DENSITY_METER） */
     COM_NUM_INTERVAL_DENSITY,        /* 区间密度测量（CMD_MEASURE_DENSITY_RANGE） */
     COM_NUM_WARTSILA_DENSITY,        /* Wartsila 密度区间测量（CMD_WARTSILA_DENSITY_RANGE） */
+    COM_NUM_SI_PROFILE,              /* SI Profile（CMD_SI_PROFILE） */
 	COM_NUM_READ_PART_PARAMS,        /* 读取部件参数（CMD_READ_PART_PARAMS / READ_COMPONENT_PARAMS） */
 
     COM_NUM_NOPARACMD_NORMAL_STOP,   /* 普通无参测量指令 - 结束 */
@@ -402,10 +410,15 @@ typedef enum
     COM_NUM_DEVICEPARAM_TAPE_EXPANSION_COEFFICIENT,    /* 尺带膨胀系数 */
     COM_NUM_DEVICEPARAM_TAPE_CALIBRATION_TEMPERATURE,  /* 标定尺带时温度 */
 
-    COM_NUM_DEVICEPARAM_RESERVED30,                     /* 保留 30 */
-    COM_NUM_DEVICEPARAM_RESERVED31,                     /* 保留 31 */
-    COM_NUM_DEVICEPARAM_RESERVED32,                     /* 保留 32 */
-    COM_NUM_DEVICEPARAM_RESERVED33,                     /* 保留 33 */
+    COM_NUM_DEVICEPARAM_SI_PROFILE_FIRST_POINT,     /* SI Profile首点 */
+    COM_NUM_DEVICEPARAM_SI_PROFILE_INCREMENT,       /* SI Profile步距 */
+    COM_NUM_DEVICEPARAM_SI_PROFILE_DWELL_TIME,      /* SI Profile停留时间 */
+    COM_NUM_DEVICEPARAM_SI_PROFILE_BOTTOM_DETECT_INTERVAL, /* SI Profile探底频次 */
+
+    COM_NUM_DEVICEPARAM_RESERVED30 = COM_NUM_DEVICEPARAM_SI_PROFILE_FIRST_POINT,
+    COM_NUM_DEVICEPARAM_RESERVED31 = COM_NUM_DEVICEPARAM_SI_PROFILE_INCREMENT,
+    COM_NUM_DEVICEPARAM_RESERVED32 = COM_NUM_DEVICEPARAM_SI_PROFILE_DWELL_TIME,
+    COM_NUM_DEVICEPARAM_RESERVED33 = COM_NUM_DEVICEPARAM_SI_PROFILE_BOTTOM_DETECT_INTERVAL,
 
     /* ---------------- 继电器报警输出配置（四路） ---------------- */
     COM_NUM_DEVICEPARAM_RELAY1_OPERATING_MODE,
@@ -517,6 +530,21 @@ typedef enum
     COM_NUM_CPU3_COM3_PROTOCOL,
 
     COM_NUM_SCREEN_BRIGHTNESS,        /* 屏幕亮度挡位 */
+
+    COM_NUM_CPU3_SI_AUTO_PROFILE_INTERVAL,          /* SI 自动 Profile 周期 */
+    COM_NUM_CPU3_SI_AUTO_PROFILE_ENABLE,            /* SI 自动 Profile 使能 */
+    COM_NUM_CPU3_SI_AUTO_PROFILE_HOUR,              /* SI 自动 Profile 起始小时 */
+    COM_NUM_CPU3_SI_AUTO_PROFILE_MINUTE,            /* SI 自动 Profile 起始分钟 */
+    COM_NUM_CPU3_SI_LOW_DENSITY_SETPOINT,           /* SI 低密度限值 */
+    COM_NUM_CPU3_SI_HIGH_DENSITY_SETPOINT,          /* SI 高密度限值 */
+    COM_NUM_CPU3_SI_LOW_TEMPERATURE_SETPOINT,       /* SI 低温限值 */
+    COM_NUM_CPU3_SI_HIGH_TEMPERATURE_SETPOINT,      /* SI 高温限值 */
+    COM_NUM_CPU3_SI_LL_LEVEL_SETPOINT,              /* SI LL 液位限值 */
+    COM_NUM_CPU3_SI_HH_LEVEL_SETPOINT,              /* SI HH 液位限值 */
+    COM_NUM_CPU3_SI_LOW_LEVEL_SETPOINT,             /* SI 低液位限值 */
+    COM_NUM_CPU3_SI_HIGH_LEVEL_SETPOINT,            /* SI 高液位限值 */
+    COM_NUM_CPU3_SI_TEMP_DEVIATION_SETPOINT,        /* SI Profile 温差限值 */
+    COM_NUM_CPU3_SI_DENSITY_DEVIATION_SETPOINT,     /* SI Profile 密差限值 */
 
     COM_NUM_PARA_LOCAL_STOP,          /* CPU3 本机参数 - 结束 */
 

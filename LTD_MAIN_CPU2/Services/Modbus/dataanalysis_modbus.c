@@ -268,10 +268,10 @@ void WriteDeviceParamsToHoldingRegisters(uint16_t *HoldingRegisterArray)
     write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_TAPE_EXPANSION_COEFFICIENT,  g_deviceParams.tapeExpansionCoefficient);
     write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_TAPE_CALIBRATION_TEMPERATURE,g_deviceParams.tapeCalibrationTemperature);
 
-    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_RESERVED30, g_deviceParams.reserved30);
-    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_RESERVED31, g_deviceParams.reserved31);
-    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_RESERVED32, g_deviceParams.reserved32);
-    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_RESERVED33, g_deviceParams.reserved33);
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_SI_PROFILE_FIRST_POINT, g_deviceParams.si_profile_first_point);
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_SI_PROFILE_INCREMENT, g_deviceParams.si_profile_increment);
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_SI_PROFILE_DWELL_TIME, g_deviceParams.si_profile_dwell_time);
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_SI_PROFILE_BOTTOM_DETECT_INTERVAL, g_deviceParams.si_profile_bottom_detect_interval);
 
     /* ===================== 继电器报警输出配置（四路） ===================== */
     for (uint32_t channel = 0U; channel < RELAY_ALARM_CHANNEL_COUNT; channel++) {
@@ -458,10 +458,10 @@ void ReadDeviceParamsFromHoldingRegisters(uint16_t *HoldingRegisterArray)
     g_deviceParams.tapeExpansionCoefficient= read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_TAPE_EXPANSION_COEFFICIENT);
     g_deviceParams.tapeCalibrationTemperature = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_TAPE_CALIBRATION_TEMPERATURE);
 
-    g_deviceParams.reserved30 = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_RESERVED30);
-    g_deviceParams.reserved31 = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_RESERVED31);
-    g_deviceParams.reserved32 = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_RESERVED32);
-    g_deviceParams.reserved33 = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_RESERVED33);
+    g_deviceParams.si_profile_first_point = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_SI_PROFILE_FIRST_POINT);
+    g_deviceParams.si_profile_increment = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_SI_PROFILE_INCREMENT);
+    g_deviceParams.si_profile_dwell_time = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_SI_PROFILE_DWELL_TIME);
+    g_deviceParams.si_profile_bottom_detect_interval = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_SI_PROFILE_BOTTOM_DETECT_INTERVAL);
 
     /* ===================== 继电器报警输出配置（四路） ===================== */
     for (uint32_t channel = 0U; channel < RELAY_ALARM_CHANNEL_COUNT; channel++) {
@@ -551,8 +551,8 @@ void write_measurement_result_to_InputRegisters(uint16_t *regs) {
 	write_u32_to_regs(regs, REG_HEIGHT_MEASUREMENT_CAL_LIQUID_LEVEL, g_measurement.height_measurement.calibrated_liquid_level);
 	write_u32_to_regs(regs, REG_HEIGHT_MEASUREMENT_CURRENT_REAL, g_measurement.height_measurement.current_real_height);
 
-	/* ==== SI7000 shared status ====
-	 * CPU2 将协议辅助状态写入共享输入寄存器，CPU3 再把它翻译成 SI7000 状态位。
+	/* ==== SI shared status ====
+	 * CPU2 将协议辅助状态写入共享输入寄存器，CPU3 再把它翻译成 SI 状态位。
 	 * 顺序必须和 CPU3 侧保持一致，协议契约脚本会检查这段顺序。
 	 */
 	write_u32_to_regs(regs, REG_HEIGHT_MEASUREMENT_BOTTOM_REFERENCE_VALID, g_measurement.height_measurement.bottom_reference_valid);
@@ -560,6 +560,7 @@ void write_measurement_result_to_InputRegisters(uint16_t *regs) {
 	write_u32_to_regs(regs, REG_OIL_MEASUREMENT_LIQUID_STABLE, g_measurement.oil_measurement.liquid_stable);
 	write_u32_to_regs(regs, REG_DENSITY_DIST_PROFILE_COMPLETE_LATCHED, g_measurement.density_distribution.profile_complete_latched);
 	write_u32_to_regs(regs, REG_DENSITY_DIST_PROFILE_COMPLETE_COUNTER, g_measurement.density_distribution.profile_complete_counter);
+	write_u32_to_regs(regs, REG_DENSITY_DIST_PROFILE_SOURCE, g_measurement.density_distribution.profile_source);
 	write_u32_to_regs(regs, REG_DENSITY_DIST_PROFILE_BLOCKED_BY_PROCESS, g_measurement.density_distribution.profile_blocked_by_process);
 	write_u32_to_regs(regs, REG_DEVICE_STATUS_LOADING_UNLOADING_ACTIVE, g_measurement.device_status.loading_unloading_active);
 	write_u32_to_regs(regs, REG_DEVICE_STATUS_MANUAL_ALARM_INHIBIT, g_measurement.device_status.manual_alarm_inhibit);

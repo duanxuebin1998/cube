@@ -274,7 +274,7 @@
         <tr>
           <td>Profile Timestamp</td>
           <td><span class="badge cpu3">CPU3</span></td>
-          <td><code>30007~30010</code> 改为 CPU3 收到手动 profile 或自动触发 profile 时的时间。</td>
+          <td><code>30007~30010</code> 改为 CPU3 收到 SI <code>00004 Profile</code>、屏幕 SI profile 或自动触发 profile 时的时间。</td>
           <td>不依赖 CPU2 start 事件。</td>
         </tr>
       </table>
@@ -340,7 +340,7 @@
     <section>
       <h2>5. Profile 测量流程</h2>
       <div class="flow">
-        <div class="step"><b>1. 触发</b>CPU3 收到手动 profile 或自动调度触发，锁存开始时间。</div>
+        <div class="step"><b>1. 触发</b>CPU3 收到 SI <code>00004 Profile</code>、屏幕 SI profile 或自动调度触发，锁存开始时间。</div>
         <div class="step"><b>2. 启动</b>CPU3 下发 <code>CMD_SI_PROFILE</code>，不携带 profile 参数上下文。</div>
         <div class="step"><b>3. 参数</b>CPU2 读取本机 SI profile 参数，并按进入 SI profile 入口的触发次数判断探底频次。</div>
         <div class="step"><b>4. Point0</b>运行到底部位置采集 Point0；无旧底部且探底失败时使用当前位置，但不刷新底部参考。</div>
@@ -389,7 +389,7 @@
     <section>
       <h2>7. 实施结果</h2>
       <ol>
-        <li>共享协议升到 <code>DEVICE_PROTOCOL_VERSION = 15</code>，新增 <code>CMD_SI_PROFILE = 20</code>，并通过 <code>profile_source</code> 隔离 SI profile 结果。</li>
+        <li>共享协议升到 <code>DEVICE_PROTOCOL_VERSION = 14</code>，新增 <code>CMD_SI_PROFILE = 20</code>，并通过 <code>profile_source</code> 隔离 SI profile 结果。</li>
         <li>CPU2 复用预留槽新增 SI profile 执行参数，覆盖 <code>40001~40003</code> 及探底频次；<code>DEVICE_PARAM_VERSION</code> 保持 <code>3</code>。</li>
         <li>CPU3 菜单和 SI Modbus 将 <code>40001~40003</code> 桥接到 CPU2 参数，不再桥接普通分布参数。</li>
         <li>CPU2 新增 SI profile 独立测量入口，执行时读取本机 profile 参数。</li>

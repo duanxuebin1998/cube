@@ -41,6 +41,22 @@ typedef struct
     uint8_t  screen_off_time;
     uint8_t  screen_brightness;
 
+    /* ---------- SI 专用参数 ---------- */
+    uint16_t si_auto_profile_interval;
+    uint8_t  si_auto_profile_enable;
+    uint8_t  si_auto_profile_hour;
+    uint8_t  si_auto_profile_minute;
+    uint16_t si_low_density_setpoint;
+    uint16_t si_high_density_setpoint;
+    int16_t  si_low_temperature_setpoint;
+    int16_t  si_high_temperature_setpoint;
+    uint16_t si_ll_level_setpoint;
+    uint16_t si_hh_level_setpoint;
+    uint16_t si_low_level_setpoint;
+    uint16_t si_high_level_setpoint;
+    uint16_t si_temp_deviation_setpoint;
+    uint16_t si_density_deviation_setpoint;
+
     /* ---------- 串口配置（每口一个结构体） ---------- */
     ComPortConfig com1;   /* COM1 = USART6 */
     ComPortConfig com2;   /* COM2 = USART2 */

@@ -7,7 +7,7 @@
 - 字段位置：`HOLDREGISTER_DEVICEPARAM_PROTOCOL_VERSION`
 - 当前语义：CPU2/CPU3 共享协议版本
 - 旧程序语义：保留字段，默认值为 `0`
-- 当前程序语义：协议版本 `15`
+- 当前程序语义：协议版本 `14`
 
 该字段由原 `reserved1` 预留位正式替换而来，寄存器地址不移动，不新增存储字段。
 
@@ -29,8 +29,7 @@
 | 11 | V1.18.1.0 | V1.16.1.0 | 200 | 复用 AO 相关保留字段为 AO 正常输出液位量程端点和独立报警液位阈值；同步 CPU2/CPU3 参数菜单、保持寄存器和运行期归一化语义。 |
 | 12 | V1.19.0.0 | V1.17.0.0 | 200 | 删除共享命令 115 的强制提零点执行语义；命令码 115、状态码 `0x002F/0x802F` 改为保留，不再由 CPU3 菜单下发或由 CPU2 执行。 |
 | 13 | V1.20.0.0 | V1.18.0.0 | 200 | 内部密度 raw 从 `kg/m3 x10` 升级为 `kg/m3 x100`；CPU3 状态页、密度参数菜单和 LTD 自有协议支持两位小数；DSM/Wartsila/SI协议在边界保持原对外口径。 |
-| 14 | V1.20.3.0 | V1.18.2.0 | 200 | 新增 `CMD_SI_PROFILE = 20` 和 CPU2 SI profile 执行参数，`40001~40003` 从普通分布参数解耦；CPU3 新增 SI 菜单、`40010~40023` 本机参数、自动 profile 调度、开始时间戳和状态/报警合成。 |
-| 15 | 待发布 | 待发布 | 200 | 新增 `density_distribution.profile_source` 共享状态，SI profile 完成态和点阵只认 `PROFILE_SOURCE_SI`；修正 SI 温度无效值、报警 0 阈值、负温度阈值、自动调度真实日历换算，以及 SI profile 不预先找液位、逐点判定液面以上后停止的流程语义。 |
+| 14 | V1.21.0.0 | V1.19.0.0 | 200 | 新增 `CMD_SI_PROFILE = 20`、CPU2 SI profile 执行参数和 `density_distribution.profile_source` 共享状态；`40001~40003` 从普通分布参数解耦；CPU3 新增 SI 菜单、`40010~40023` 本机参数、自动 profile 调度、开始时间戳、状态/报警合成；SI profile 完成态和点阵只认 `PROFILE_SOURCE_SI`，并修正温度无效值、报警 0 阈值、负温度阈值、自动调度真实日历换算和 SI profile 不预先找液位的流程语义。 |
 
 ## 兼容判断规则
 
@@ -394,30 +393,6 @@
 - CPU3 SI 层新增自动 profile 调度任务 `si_modbus_periodic_task()`，按 `40010~40013` 和 CPU3 RTC 从起始时间起周期触发，可跨天，同一分钟去重。
 - CPU3 SI协议状态口径调整：`10010 Probe Un-calibrated` 固定 `0`，`10002/10003` 按液位跟随稳定状态合成，`10001 Bottom Reference` 保持既有 `bottom_reference_valid` 映射。
 - CPU3 SI协议报警口径调整：`40014~40023` 独立保存，CPU3 合成当前值报警、profile 上下限报警和相邻点温度/密度偏差报警。
-- `30007~30010 Profile Timestamp` 改为 CPU3 收到手动 profile 或自动 profile 触发时锁存的测量开始时间。
-
-寄存器布局影响：
-- 共享保持寄存器数量不减少；原 `reserved30~reserved33` 对应地址变为 SI profile 参数地址，继电器等后续参数基址保持顺延关系不变。
-- CPU2 `DeviceParameters` 结构体大小和 `DEVICE_PARAM_VERSION` 不变，但字段语义从预留改为 SI profile 执行参数；旧协议存储通过 `protocolVersion < 14` 补默认值并写回当前协议版本。
-- CPU3 本机参数结构新增 SI 自动 profile 和报警限值字段；该变化只影响 CPU3 本机 FRAM 参数版本，不改变 CPU2/CPU3 共享输入寄存器点数上限。
-
-兼容影响：
-- CPU2/CPU3 必须同为协议版本 14，才能正确识别 `CMD_SI_PROFILE`、SI profile 参数字段和 `40001~40003` 的新语义。
-- 协议版本 13 的 CPU3 会把 `00004 Profile` 桥接到普通分布测量，并把 `40001~40003` 写入普通分布参数，不能与协议版本 14 的 CPU2 混用。
-- 协议版本 13 的 CPU2 不识别 `CMD_SI_PROFILE`，也不会按 SI Point0/探底频次执行 profile；协议版本不匹配应由 CPU3 严格相等检查拦截。
-- CPU2 参数存储不会因本次升级恢复出厂参数；但原预留槽会被赋予 SI profile 参数语义，现场升级后需要复核 SI 首点、步距、停留和探底频次。
-- CPU3 本机参数升级到 `0x0006` 后会新增自动 profile 和报警限值默认值；旧 V3/V4/V5 本机参数迁移后应复核 SI 自动调度和报警阈值。
-
-验证结果：
-- `py tools\check_si_modbus_frames.py --dump`：通过。
-- `py tools\check_si_protocol_contract.py`：通过。
-- `py LTD_DISPLAY_CPU3\font_check.py`：通过，未发现缺字。
-- `cmake --build build\LTD_MAIN_CPU2`：通过，Ninja 无需重建。
-- `cmake --build build\LTD_DISPLAY_CPU3`：通过，Ninja 无需重建。
-
-### 协议版本 15
-
-关联改动：
 - CPU2/CPU3 `DensityDistribution` 共享结构新增 `profile_source` 字段，位置在 `profile_complete_counter` 之后、`profile_blocked_by_process` 之前。
 - CPU2 在普通分布、国标、每米、间隔、Wärtsilä 和 SI profile 完成后分别写入 `PROFILE_SOURCE_STANDARD/GB/METER/INTERVAL/WARTSILA/SI`。
 - CPU3 SI 协议层读取 `10005 Profile Complete`、`30006 Number of Points` 和 `30021~30620` 点阵时，只认 `profile_source == PROFILE_SOURCE_SI`。
@@ -427,21 +402,30 @@
 - `40016/40017` 按有符号 `0.01°C` 保存和比较，Modbus 写入按 int16 补码解释，CPU3 菜单允许负温度限值。
 - `10025 Profile Temp Deviation Alarm` 的相邻点温差按 int16 温度值计算，避免负温度跨零时按无符号补码差值误报警。
 - 自动 profile 调度从近似日期索引改为真实日历分钟数，避免跨月或长 interval 漂移。
+- `30007~30010 Profile Timestamp` 改为 CPU3 收到 SI `00004 Profile`、屏幕 SI profile 或自动 profile 触发时锁存的测量开始时间。
 
 寄存器布局影响：
+- 共享保持寄存器数量不减少；原 `reserved30~reserved33` 对应地址变为 SI profile 参数地址，继电器等后续参数基址保持顺延关系不变。
 - 共享输入寄存器在密度分布结果区新增 `REG_DENSITY_DIST_PROFILE_SOURCE`，后续 `profile_blocked_by_process`、profile 偏差报警和点阵基址顺延。
 - SI 外部 Modbus 地址窗口不变，仍为 `00001~00016`、`10001~10032`、`40001~40023`、`30001~30620`。
-- CPU2 `DeviceParameters` 参数存储结构不变，本次不改变 `DEVICE_PARAM_VERSION`。
-- CPU3 本机参数结构未新增字段，但 `40016/40017` 的 CPU3 存储和菜单解释改为有符号温度阈值。
+- CPU2 `DeviceParameters` 结构体大小和 `DEVICE_PARAM_VERSION` 不变，但字段语义从预留改为 SI profile 执行参数；旧协议存储通过 `protocolVersion < 14` 补默认值并写回当前协议版本。
+- CPU3 本机参数结构新增 SI 自动 profile 和报警限值字段；该变化只影响 CPU3 本机 FRAM 参数版本，不改变 CPU2/CPU3 共享输入寄存器点数上限；`40016/40017` 的 CPU3 存储和菜单解释改为有符号温度阈值。
 
 兼容影响：
-- CPU2/CPU3 必须同为协议版本 15，才能正确解释 `profile_source` 后面的共享输入寄存器偏移。
-- 协议版本 14 的 CPU3 会把普通分布或 Wärtsilä 分布结果误认为 SI profile 结果；协议版本 15 修正为只认 SI profile 来源。
-- 协议版本 14 的 CPU3 菜单和 Modbus 侧不能正确保存负温度限值，并且报警阈值 0 会被视为未启用；协议版本 15 修正为 signed 温度和 0 有效阈值。
+- CPU2/CPU3 必须同为协议版本 14，才能正确识别 `CMD_SI_PROFILE`、SI profile 参数字段、`profile_source` 共享状态和 `40001~40003` 的新语义。
+- 协议版本 13 的 CPU3 会把 `00004 Profile` 桥接到普通分布测量，并把 `40001~40003` 写入普通分布参数，不能与协议版本 14 的 CPU2 混用。
+- 协议版本 13 的 CPU2 不识别 `CMD_SI_PROFILE`，也不会按 SI Point0/探底频次执行 profile；协议版本不匹配应由 CPU3 严格相等检查拦截。
+- CPU2 参数存储不会因本次升级恢复出厂参数；但原预留槽会被赋予 SI profile 参数语义，现场升级后需要复核 SI 首点、步距、停留和探底频次。
+- CPU3 本机参数升级到 `0x0006` 后会新增自动 profile 和报警限值默认值；旧 V3/V4/V5 本机参数迁移后应复核 SI 自动调度和报警阈值。
+- 协议版本 13 的 CPU3 会把普通分布或 Wärtsilä 分布结果误认为 SI profile 结果；协议版本 14 修正为只认 SI profile 来源。
+- 协议版本 13 的 CPU3 菜单和 Modbus 侧不能正确保存负温度限值，并且报警阈值 0 会被视为未启用；协议版本 14 修正为 signed 温度和 0 有效阈值。
 
 验证结果：
-- `py tools\check_si_modbus_frames.py`：通过。
+- `py tools\check_si_modbus_frames.py --dump`：通过。
 - `py tools\check_si_protocol_contract.py`：通过。
+- `py LTD_DISPLAY_CPU3\font_check.py`：通过，未发现缺字。
+- `cmake --build build\LTD_MAIN_CPU2`：通过，Ninja 无需重建。
+- `cmake --build build\LTD_DISPLAY_CPU3`：通过，Ninja 无需重建。
 
 ## 后续维护要求
 

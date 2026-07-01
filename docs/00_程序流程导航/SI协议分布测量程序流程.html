@@ -346,7 +346,7 @@ li{margin:4px 0}
 <tr><td><code>30003</code></td><td>当前密度，来自单点监测密度</td><td>无效密度输出 0。</td></tr>
 <tr><td><code>30004</code></td><td>当前液位，来自 CPU2 <code>oil_level</code></td><td>内部 0.1mm 转 mm。</td></tr>
 <tr><td><code>30006</code></td><td>profile 点数</td><td>只有完成锁存后非 0，最大 200。</td></tr>
-<tr><td><code>30007~30010</code></td><td>profile 开始时间戳</td><td>CPU3 在手动或自动 profile 触发时锁存。</td></tr>
+<tr><td><code>30007~30010</code></td><td>profile 开始时间戳</td><td>CPU3 在 SI <code>00004 Profile</code>、屏幕 SI profile 或自动 profile 触发时锁存。</td></tr>
 <tr><td><code>30011~30013</code></td><td>CPU3 当前 RTC 时间</td><td>只用于 SI 展示，不参与 CPU2 测量控制。</td></tr>
 <tr><td><code>30021~30620</code></td><td>Point0~Point199，每点 3 个寄存器</td><td>位置、温度、密度；有效点之外保持 0。</td></tr>
 </tbody>

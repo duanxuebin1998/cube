@@ -94,7 +94,7 @@
 | `30003` | Current Density | `0.01 kg/m3`；超过 16 位范围时钳位 |
 | `30004` | Liquid Level | 最近一次液位读数；官方建议结合 `10013` 判断是否为当前液位 |
 | `30006` | Number of Points | 官方采集过程中可递增；当前仅 SI profile 完成锁存后输出有效点数 |
-| `30007~30010` | Profile Timestamp | 官方语义为首个 profile 点采集时间；当前为 CPU3 收到手动 profile 或自动 profile 触发时锁存的开始时间 |
+| `30007~30010` | Profile Timestamp | 官方语义为首个 profile 点采集时间；当前为 CPU3 收到 SI `00004 Profile`、屏幕 SI profile 或自动 profile 触发时锁存的开始时间 |
 | `30011~30013` | Current Time | CPU3 RTC 当前时分秒，应持续变化；可作为通信活性检查 |
 | `30021~30620` | Profile 点阵 | 官方 DCS 地址表覆盖 200 点；超出有效点数返回 0，超过 200 点需扩展方案 |
 

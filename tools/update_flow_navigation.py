@@ -148,8 +148,8 @@ PAGE_DEFS: Dict[str, Dict[str, str]] = {
         "cpu": "CPU3",
     },
     "cpu3_05": {
-        "title": "Wartsila 与 SI7000 协议适配",
-        "path": str(CPU3_DIR / "05_Wartsila与SI7000协议适配.html"),
+        "title": "Wartsila 与 SI协议适配",
+        "path": str(CPU3_DIR / "05_Wartsila与SI协议适配.html"),
         "cpu": "CPU3",
     },
     "cpu3_06": {
@@ -267,7 +267,7 @@ LEGACY_DOCS: Sequence[Dict[str, str]] = [
         "path": str(ROOT / "docs" / "03_问题分析与整改" / "瓦锡兰分布测量详细流程梳理.html"),
         "status": "问题分析历史页",
         "current": "cpu2_06",
-        "note": "瓦锡兰分布测量专题梳理；当前 CPU2 执行流程看密度与单点测量，CPU3 协议入口看 Wartsila 与 SI7000 适配。",
+        "note": "瓦锡兰分布测量专题梳理；当前 CPU2 执行流程看密度与单点测量，CPU3 协议入口看 Wartsila 与 SI协议适配。",
     },
     {
         "title": "瓦锡兰分布测量改前流程与已实现优化方案对比",
@@ -328,7 +328,7 @@ ROUTES = [
             ("CPU2 命令入口", "cpu2_02", "统一进入测量公共准备和命令分发"),
             ("CPU2 测量核心", "cpu2_04", "完成粗找、精找、阈值确定和跟随闭环"),
             ("状态回读", "cpu2_10", "CPU2 更新输入寄存器和状态"),
-            ("CPU3 显示/协议", "cpu3_06", "状态页刷新，外部 DSM/Wartsila/SI7000 可读取结果"),
+            ("CPU3 显示/协议", "cpu3_06", "状态页刷新，外部 DSM/Wartsila/SI协议可读取结果"),
         ],
     },
     {
@@ -347,14 +347,14 @@ ROUTES = [
     {
         "id": "density",
         "title": "密度、单点和分布测量链路",
-        "summary": "密度链路同时涉及 CPU2 测量算法、分布点回读和 CPU3 的 Wartsila/SI7000 协议适配。",
+        "summary": "密度链路同时涉及 CPU2 测量算法、分布点回读和 CPU3 的 Wartsila/SI协议适配。",
         "steps": [
-            ("外部/菜单入口", "cpu3_05", "Wartsila/SI7000 或菜单触发密度类指令"),
+            ("外部/菜单入口", "cpu3_05", "Wartsila/SI协议或菜单触发密度类指令"),
             ("CPU3 内部通道", "cpu3_02", "写命令并在完成后分批读取密度分布点"),
             ("CPU2 命令入口", "cpu2_02", "按密度、单点、区间、瓦锡兰场景分发"),
             ("CPU2 测量核心", "cpu2_06", "完成单点、分布、区间密度测量和状态发布"),
             ("状态/点表回读", "cpu2_10", "结果、profile 完成标志和点表供 CPU3 读取"),
-            ("外部协议响应", "cpu3_05", "Wartsila/SI7000 将缓存结果映射给外部系统"),
+            ("外部协议响应", "cpu3_05", "Wartsila/SI协议将缓存结果映射给外部系统"),
         ],
     },
     {
@@ -406,7 +406,7 @@ ROUTES = [
             ("CPU2 通信发布", "cpu2_10", "设备状态、错误码和测量状态进入寄存器"),
             ("CPU3 轮询缓存", "cpu3_02", "输入寄存器刷新 g_measurement"),
             ("CPU3 显示", "cpu3_06", "状态页和菜单页展示设备状态"),
-            ("外部协议", "cpu3_04", "DSM/Wartsila/SI7000 读取缓存状态"),
+            ("外部协议", "cpu3_04", "DSM/Wartsila/SI 读取缓存状态"),
         ],
     },
     {
@@ -416,7 +416,7 @@ ROUTES = [
         "steps": [
             ("外部 COM", "cpu3_03", "COM1/COM2/COM3 按端口参数选择协议处理"),
             ("DSM 映射", "cpu3_04", "DSM 读写线圈/保持寄存器映射到缓存或 CPU2 指令"),
-            ("Wartsila/SI7000", "cpu3_05", "协议适配层映射参数、结果和密度点"),
+            ("Wartsila/SI", "cpu3_05", "协议适配层映射参数、结果和密度点"),
             ("CPU3 内部通道", "cpu3_02", "需要 CPU2 动作时通过内部 Modbus 下发"),
             ("CPU2 命令入口", "cpu2_02", "命令进入 CPU2 正式测量状态机"),
             ("CPU2 结果发布", "cpu2_10", "运行结果回到 CPU3 缓存并对外响应"),
@@ -565,7 +565,7 @@ RELATIONS: Dict[str, Dict[str, object]] = {
         "route": ["cross", "cpu3_03", "cpu3_04", "cpu3_02", "cpu2_02"],
     },
     "cpu3_05": {
-        "focus": "Wartsila 和 SI7000 协议适配，将 CPU2 测量结果、参数和密度点映射给外部系统。",
+        "focus": "Wartsila 和 SI协议适配，将 CPU2 测量结果、参数和密度点映射给外部系统。",
         "upstream": ["cpu3_03", "cpu3_02", "cpu2_10"],
         "downstream": ["cpu3_02", "cpu2_06", "cpu2_04", "cpu2_05"],
         "route": ["cross", "cpu3_05", "cpu3_02", "cpu2_06", "cpu3_05"],
@@ -1018,7 +1018,7 @@ def make_global_index() -> str:
 <p class="lead">不要从某个 HTML 孤立跳转。先按整机业务链路确定“谁触发、谁执行、谁上报”，再进入 CPU2/CPU3 的详细流程图。</p>
 <div class="grid">
 <article class="card"><strong>第一步：看整机链路</strong><p>用于判断某个功能跨了 CPU3 菜单、外部协议、CPU2 命令入口和 CPU2 测量核心中的哪些页面。</p><div class="links">{link_pill(from_file, "cross", "跨 CPU 业务链路")}</div></article>
-<article class="card"><strong>第二步：看 CPU3 入口</strong><p>如果入口来自按键菜单、DSM、Wartsila、SI7000 或外部 COM，先看 CPU3 侧如何映射到 CPU2。</p><div class="links">{link_pill(from_file, "cpu3_total", "CPU3 总览")}{link_pill(from_file, "cpu3_07", "菜单入口")}{link_pill(from_file, "cpu3_03", "外部 COM")}</div></article>
+<article class="card"><strong>第二步：看 CPU3 入口</strong><p>如果入口来自按键菜单、DSM、Wartsila、SI 或外部 COM，先看 CPU3 侧如何映射到 CPU2。</p><div class="links">{link_pill(from_file, "cpu3_total", "CPU3 总览")}{link_pill(from_file, "cpu3_07", "菜单入口")}{link_pill(from_file, "cpu3_03", "外部 COM")}</div></article>
 <article class="card"><strong>第三步：看 CPU2 执行</strong><p>确认 CPU2 命令入口、测量细节、故障出口、通信寄存器和问题点。</p><div class="links">{link_pill(from_file, "cpu2_total", "CPU2 总览")}{link_pill(from_file, "cpu2_02", "命令入口")}{link_pill(from_file, "cpu2_issue", "问题总表")}</div></article>
 </div>
 </section>
@@ -1112,7 +1112,7 @@ def make_cross_route() -> str:
 <marker id="route-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#61758e"/></marker>
 <marker id="route-arrow-red" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#b84a55"/></marker>
 </defs>
-<rect class="node ext" x="70" y="55" width="230" height="78" rx="10"/><text class="nt" x="185" y="88">用户/上位机</text><text class="ns" x="185" y="111">按键菜单、DSM、Wartsila、SI7000</text>
+<rect class="node ext" x="70" y="55" width="230" height="78" rx="10"/><text class="nt" x="185" y="88">用户/上位机</text><text class="ns" x="185" y="111">按键菜单、DSM、Wartsila、SI</text>
 <rect class="node cpu3" x="390" y="55" width="260" height="78" rx="10"/><text class="nt" x="520" y="88">CPU3 入口映射</text><text class="ns" x="520" y="111">菜单确认、协议解析、参数检查</text>
 <rect class="node cpu3" x="770" y="55" width="260" height="78" rx="10"/><text class="nt" x="900" y="88">CPU3 内部 Modbus 主站</text><text class="ns" x="900" y="111">写 CPU2 命令/参数，轮询输入结果</text>
 <rect class="node cpu2" x="770" y="215" width="260" height="82" rx="10"/><text class="nt" x="900" y="250">CPU2 通信寄存器入口</text><text class="ns" x="900" y="273">保持寄存器写入、输入寄存器发布</text>
@@ -1122,7 +1122,7 @@ def make_cross_route() -> str:
 <rect class="node error" x="490" y="395" width="230" height="92" rx="10"/><text class="nt" x="605" y="430">故障/异常出口</text><text class="ns" x="605" y="453">SET_ERROR、命令切换、状态恢复</text>
 <rect class="node state" x="800" y="395" width="250" height="92" rx="10"/><text class="nt" x="925" y="430">CPU2 状态发布</text><text class="ns" x="925" y="453">测量结果、设备状态、错误码</text>
 <rect class="node cpu3" x="800" y="575" width="250" height="82" rx="10"/><text class="nt" x="925" y="610">CPU3 缓存刷新</text><text class="ns" x="925" y="633">g_measurement、参数镜像、点表</text>
-<rect class="node cpu3" x="390" y="575" width="260" height="82" rx="10"/><text class="nt" x="520" y="610">显示和外部协议响应</text><text class="ns" x="520" y="633">状态页刷新、DSM/Wartsila/SI7000 读出</text>
+<rect class="node cpu3" x="390" y="575" width="260" height="82" rx="10"/><text class="nt" x="520" y="610">显示和外部协议响应</text><text class="ns" x="520" y="633">状态页刷新、DSM/Wartsila/SI 读出</text>
 <path class="edge" d="M300 94 L390 94" marker-end="url(#route-arrow)"/>
 <path class="edge" d="M650 94 L770 94" marker-end="url(#route-arrow)"/>
 <path class="edge" d="M900 133 L900 215" marker-end="url(#route-arrow)"/>

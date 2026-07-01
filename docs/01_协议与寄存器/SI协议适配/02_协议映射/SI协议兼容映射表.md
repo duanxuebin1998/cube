@@ -30,13 +30,13 @@
 
 | 项目 | 当前结论 |
 | --- | --- |
-| 协议契约 | CPU2/CPU3 共享协议基线为 `DEVICE_PROTOCOL_VERSION = 15` |
+| 协议契约 | CPU2/CPU3 共享协议基线为 `DEVICE_PROTOCOL_VERSION = 14` |
 | 外部协议入口 | CPU3 对外模拟 SI Modbus RTU 从站，CPU2 不承载 SI 地址、功能码或异常码 |
 | Profile 命令 | `00004 Profile` 写 ON 后锁存开始时间并下发 `CMD_SI_PROFILE` |
 | 屏幕 Profile 入口 | CPU3 屏幕“密度分布测量 -> SI Profile”确认后走同一启动入口，锁存开始时间并下发 `CMD_SI_PROFILE` |
 | Profile 参数 | `40001~40003` 独立存入 CPU2 SI profile 参数，不再复用普通分布测量参数 |
 | 自动 profile 与报警阈值 | `40010~40023` 独立存入 CPU3 SI 本机参数，用于 RTC 自动调度和报警合成 |
-| Profile 时间戳 | `30007~30010` 为 CPU3 收到手动 profile 或自动 profile 触发并下发指令时锁存的时间 |
+| Profile 时间戳 | `30007~30010` 为 CPU3 收到 SI `00004 Profile`、屏幕 SI profile 或自动 profile 触发并下发指令时锁存的时间 |
 | 液位传感器显示 | `10002` 固定表示下传感器在液体中；`10003` 液位跟随稳定时为空气，其它状态为液体 |
 | 探针可信 | `10010 Probe Un-calibrated` 固定输出 `0`，表示探针可信 |
 | Point0 和点阵 | Point0 固定为底部点；`40001` 表示底部之后的首个停点；profile 前不单独找液位，运行中遇到液面以上点停止，且不写入该点 |
@@ -314,7 +314,7 @@ SI协议对外无效值口径：
 | `30004` | Liquid Level | `g_measurement.oil_measurement.oil_level` | 已接 | 内部 `0.1mm` 转 `mm`；官方要求结合 `10013` 判断是否为当前液位 |
 | `30005` | 文档未重点定义/保留 | 无 | 固定 0 | 当前保留为 0 |
 | `30006` | Number Of Points | `g_measurement.density_distribution.measurement_points` | 已接 | 官方采集过程中可递增；当前仅在 SI profile 完成锁存有效后输出有效点数 |
-| `30007` | Profile Timestamp Month | CPU3 RTC 锁存时间 | 已接 | 官方语义为第一个 profile 点采集时间；当前在 CPU3 收到手动 profile 或自动 profile 触发时锁存 |
+| `30007` | Profile Timestamp Month | CPU3 RTC 锁存时间 | 已接 | 官方语义为第一个 profile 点采集时间；当前在 CPU3 收到 SI `00004 Profile`、屏幕 SI profile 或自动 profile 触发时锁存 |
 | `30008` | Profile Timestamp Day | CPU3 RTC 锁存时间 | 已接 | 同上 |
 | `30009` | Profile Timestamp Hour | CPU3 RTC 锁存时间 | 已接 | 同上 |
 | `30010` | Profile Timestamp Minute | CPU3 RTC 锁存时间 | 已接 | 同上 |

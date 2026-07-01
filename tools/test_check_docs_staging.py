@@ -111,8 +111,8 @@ class CheckDocsStagingTests(unittest.TestCase):
 
         report = module.build_staging_report(
             [
-                ("D", " ", "docs/01_协议与寄存器/SI7000协议适配/old.pdf"),
-                (" ", "D", "docs/01_协议与寄存器/SI7000协议适配/unstaged.pdf"),
+                ("D", " ", "docs/01_协议与寄存器/SI协议适配/old.pdf"),
+                (" ", "D", "docs/01_协议与寄存器/SI协议适配/unstaged.pdf"),
                 ("M", " ", "docs/README.md"),
                 ("?", "?", "tools/check_docs.py"),
             ]
@@ -120,8 +120,8 @@ class CheckDocsStagingTests(unittest.TestCase):
 
         self.assertEqual(
             [
-                "docs/01_协议与寄存器/SI7000协议适配/old.pdf",
-                "docs/01_协议与寄存器/SI7000协议适配/unstaged.pdf",
+                "docs/01_协议与寄存器/SI协议适配/old.pdf",
+                "docs/01_协议与寄存器/SI协议适配/unstaged.pdf",
                 "docs/README.md",
                 "tools/check_docs.py",
             ],
@@ -129,7 +129,7 @@ class CheckDocsStagingTests(unittest.TestCase):
         )
         self.assertEqual(
             [
-                "docs/01_协议与寄存器/SI7000协议适配/unstaged.pdf",
+                "docs/01_协议与寄存器/SI协议适配/unstaged.pdf",
                 "docs/README.md",
                 "tools/check_docs.py",
             ],

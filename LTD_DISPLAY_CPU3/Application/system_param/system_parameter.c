@@ -281,10 +281,10 @@ struct ParameterMetadata param_meta[] = {
 {(uint8_t*)"气相温度",	0,	COM_NUM_DEVICEPARAM_TANK_GAS_PHASE_TEMPERATURE,	HOLDREGISTER_DEVICEPARAM_TANK_GAS_PHASE_TEMPERATURE,	2,	false,	0,	0,	(uint8_t*)"℃",	1,	0,	true,	TYPE_INT,	6,	NULL,	(uint8_t*)"GasTemp"},
 {(uint8_t*)"尺带伸缩率",	0,	COM_NUM_DEVICEPARAM_TAPE_EXPANSION_COEFFICIENT,	HOLDREGISTER_DEVICEPARAM_TAPE_EXPANSION_COEFFICIENT,	2,	false,	0,	0,	NULL,	6,	0,	true,	TYPE_INT,	7,	NULL,	(uint8_t*)"TapeExpCoeff"},
 {(uint8_t*)"标定尺带温度",	0,	COM_NUM_DEVICEPARAM_TAPE_CALIBRATION_TEMPERATURE,	HOLDREGISTER_DEVICEPARAM_TAPE_CALIBRATION_TEMPERATURE,	2,	false,	0,	0,	(uint8_t*)"℃",	1,	0,	true,	TYPE_INT,	6,	NULL,	(uint8_t*)"TapeCalTemp"},
-{(uint8_t*)"保留30",	0,	COM_NUM_DEVICEPARAM_RESERVED30,	HOLDREGISTER_DEVICEPARAM_RESERVED30,	2,	false,	0,	0,	NULL,	0,	0,	false,	TYPE_INT,	8,	NULL,	(uint8_t*)"Rsv30"},
-{(uint8_t*)"保留31",	0,	COM_NUM_DEVICEPARAM_RESERVED31,	HOLDREGISTER_DEVICEPARAM_RESERVED31,	2,	false,	0,	0,	NULL,	0,	0,	false,	TYPE_INT,	8,	NULL,	(uint8_t*)"Rsv31"},
-{(uint8_t*)"保留32",	0,	COM_NUM_DEVICEPARAM_RESERVED32,	HOLDREGISTER_DEVICEPARAM_RESERVED32,	2,	false,	0,	0,	NULL,	0,	0,	false,	TYPE_INT,	8,	NULL,	(uint8_t*)"Rsv32"},
-{(uint8_t*)"保留33",	0,	COM_NUM_DEVICEPARAM_RESERVED33,	HOLDREGISTER_DEVICEPARAM_RESERVED33,	2,	false,	0,	0,	NULL,	0,	0,	false,	TYPE_INT,	8,	NULL,	(uint8_t*)"Rsv33"},
+{(uint8_t*)"SI首点",	0,	COM_NUM_DEVICEPARAM_SI_PROFILE_FIRST_POINT,	HOLDREGISTER_DEVICEPARAM_SI_PROFILE_FIRST_POINT,	2,	true,	10,	655350,	(uint8_t*)"mm",	1,	0,	true,	TYPE_INT,	7,	NULL,	(uint8_t*)"SI1stPt"},
+{(uint8_t*)"SI步距",	0,	COM_NUM_DEVICEPARAM_SI_PROFILE_INCREMENT,	HOLDREGISTER_DEVICEPARAM_SI_PROFILE_INCREMENT,	2,	true,	10,	655350,	(uint8_t*)"mm",	1,	0,	true,	TYPE_INT,	7,	NULL,	(uint8_t*)"SIInc"},
+{(uint8_t*)"SI停留",	0,	COM_NUM_DEVICEPARAM_SI_PROFILE_DWELL_TIME,	HOLDREGISTER_DEVICEPARAM_SI_PROFILE_DWELL_TIME,	2,	true,	1,	3600,	(uint8_t*)"s",	0,	0,	true,	TYPE_INT,	4,	NULL,	(uint8_t*)"SIDwell"},
+{(uint8_t*)"SI探底",	0,	COM_NUM_DEVICEPARAM_SI_PROFILE_BOTTOM_DETECT_INTERVAL,	HOLDREGISTER_DEVICEPARAM_SI_PROFILE_BOTTOM_DETECT_INTERVAL,	2,	true,	1,	1000,	(uint8_t*)"次",	0,	0,	true,	TYPE_INT,	4,	NULL,	(uint8_t*)"SIBtmInt"},
 
 /* ==================== 继电器报警输出配置（四路） ==================== */
 {(uint8_t*)"K1工作模式",	0,	COM_NUM_DEVICEPARAM_RELAY1_OPERATING_MODE,	HOLDREGISTER_DEVICEPARAM_RELAY_OPERATING_MODE(0U),	2,	true,	0,	1,	NULL,	0,	0,	true,	TYPE_INT,	1,	ret_arr_word,	(uint8_t*)"K1WorkMode"},
@@ -368,6 +368,20 @@ struct ParameterMetadata param_meta[] = {
 {(uint8_t*)"屏幕密码",	0,	COM_NUM_SCREEN_PASSWARD,	HOLDREGISTER_CPU3_PASSWORD,	2,	true,	0,	9999,	NULL,	0,	0,	true,	TYPE_INT,	4,	NULL,	(uint8_t*)"ScrPwd"},
 {(uint8_t*)"息屏开关",	0,	COM_NUM_SCREEN_OFF,	HOLDREGISTER_CPU3_OFF_TIME,	2,	true,	0,	1,	NULL,	0,	0,	true,	TYPE_INT,	1,	ret_arr_word,	(uint8_t*)"ScreenOff"},
 {(uint8_t*)"屏幕亮度",	0,	COM_NUM_SCREEN_BRIGHTNESS,	HOLDREGISTER_CPU3_BRIGHTNESS,	2,	true,	0,	4,	NULL,	0,	0,	true,	TYPE_INT,	1,	ret_arr_word,	(uint8_t*)"Brightness"},
+{(uint8_t*)"SI周期",	0,	COM_NUM_CPU3_SI_AUTO_PROFILE_INTERVAL,	HOLDREGISTER_CPU3_SI_AUTO_PROFILE_INTERVAL,	2,	true,	1,	65535,	(uint8_t*)"min",	0,	0,	true,	TYPE_INT,	5,	NULL,	(uint8_t*)"SIAutoInt"},
+{(uint8_t*)"SI自动",	0,	COM_NUM_CPU3_SI_AUTO_PROFILE_ENABLE,	HOLDREGISTER_CPU3_SI_AUTO_PROFILE_ENABLE,	2,	true,	0,	1,	NULL,	0,	0,	true,	TYPE_INT,	1,	ret_arr_word,	(uint8_t*)"SIAutoEn"},
+{(uint8_t*)"SI时",	0,	COM_NUM_CPU3_SI_AUTO_PROFILE_HOUR,	HOLDREGISTER_CPU3_SI_AUTO_PROFILE_HOUR,	2,	true,	0,	23,	(uint8_t*)"h",	0,	0,	true,	TYPE_INT,	2,	NULL,	(uint8_t*)"SIAutoHr"},
+{(uint8_t*)"SI分",	0,	COM_NUM_CPU3_SI_AUTO_PROFILE_MINUTE,	HOLDREGISTER_CPU3_SI_AUTO_PROFILE_MINUTE,	2,	true,	0,	59,	(uint8_t*)"min",	0,	0,	true,	TYPE_INT,	2,	NULL,	(uint8_t*)"SIAutoMin"},
+{(uint8_t*)"SI低密限",	0,	COM_NUM_CPU3_SI_LOW_DENSITY_SETPOINT,	HOLDREGISTER_CPU3_SI_LOW_DENSITY_SETPOINT,	2,	true,	0,	65535,	NULL,	2,	0,	true,	TYPE_INT,	5,	NULL,	(uint8_t*)"SILowDen"},
+{(uint8_t*)"SI高密限",	0,	COM_NUM_CPU3_SI_HIGH_DENSITY_SETPOINT,	HOLDREGISTER_CPU3_SI_HIGH_DENSITY_SETPOINT,	2,	true,	0,	65535,	NULL,	2,	0,	true,	TYPE_INT,	5,	NULL,	(uint8_t*)"SIHighDen"},
+{(uint8_t*)"SI低温限",	0,	COM_NUM_CPU3_SI_LOW_TEMPERATURE_SETPOINT,	HOLDREGISTER_CPU3_SI_LOW_TEMPERATURE_SETPOINT,	2,	true,	-32768,	32767,	(uint8_t*)"℃",	2,	0,	true,	TYPE_INT,	6,	NULL,	(uint8_t*)"SILowTemp"},
+{(uint8_t*)"SI高温限",	0,	COM_NUM_CPU3_SI_HIGH_TEMPERATURE_SETPOINT,	HOLDREGISTER_CPU3_SI_HIGH_TEMPERATURE_SETPOINT,	2,	true,	-32768,	32767,	(uint8_t*)"℃",	2,	0,	true,	TYPE_INT,	6,	NULL,	(uint8_t*)"SIHighTemp"},
+{(uint8_t*)"SI LL液位",	0,	COM_NUM_CPU3_SI_LL_LEVEL_SETPOINT,	HOLDREGISTER_CPU3_SI_LL_LEVEL_SETPOINT,	2,	true,	0,	65535,	(uint8_t*)"mm",	0,	0,	true,	TYPE_INT,	5,	NULL,	(uint8_t*)"SILLLevel"},
+{(uint8_t*)"SI HH液位",	0,	COM_NUM_CPU3_SI_HH_LEVEL_SETPOINT,	HOLDREGISTER_CPU3_SI_HH_LEVEL_SETPOINT,	2,	true,	0,	65535,	(uint8_t*)"mm",	0,	0,	true,	TYPE_INT,	5,	NULL,	(uint8_t*)"SIHHLevel"},
+{(uint8_t*)"SI低液位",	0,	COM_NUM_CPU3_SI_LOW_LEVEL_SETPOINT,	HOLDREGISTER_CPU3_SI_LOW_LEVEL_SETPOINT,	2,	true,	0,	65535,	(uint8_t*)"mm",	0,	0,	true,	TYPE_INT,	5,	NULL,	(uint8_t*)"SILowLvl"},
+{(uint8_t*)"SI高液位",	0,	COM_NUM_CPU3_SI_HIGH_LEVEL_SETPOINT,	HOLDREGISTER_CPU3_SI_HIGH_LEVEL_SETPOINT,	2,	true,	0,	65535,	(uint8_t*)"mm",	0,	0,	true,	TYPE_INT,	5,	NULL,	(uint8_t*)"SIHighLvl"},
+{(uint8_t*)"SI温差限",	0,	COM_NUM_CPU3_SI_TEMP_DEVIATION_SETPOINT,	HOLDREGISTER_CPU3_SI_TEMP_DEVIATION_SETPOINT,	2,	true,	0,	65535,	(uint8_t*)"℃",	2,	0,	true,	TYPE_INT,	5,	NULL,	(uint8_t*)"SITempDev"},
+{(uint8_t*)"SI密差限",	0,	COM_NUM_CPU3_SI_DENSITY_DEVIATION_SETPOINT,	HOLDREGISTER_CPU3_SI_DENSITY_DEVIATION_SETPOINT,	2,	true,	0,	65535,	NULL,	2,	0,	true,	TYPE_INT,	5,	NULL,	(uint8_t*)"SIDenDev"},
 {(uint8_t*)"语言",	0,	COM_NUM_PARA_LANG,	HOLDREGISTER_CPU3_LANGUAGE,	2,	true,	0,	1,	NULL,	0,	0,	true,	TYPE_INT,	1,	ret_arr_word,	(uint8_t*)"Lang"},
 
 {(uint8_t*)"液位数据源",	0,	COM_NUM_SCREEN_SOURCE_OIL,	HOLDREGISTER_CPU3_SRC_OIL,	2,	true,	0,	1,	NULL,	0,	0,	true,	TYPE_INT,	1,	ret_arr_word,	(uint8_t*)"SrcOil"},
@@ -381,7 +395,7 @@ struct ParameterMetadata param_meta[] = {
 {(uint8_t*)"上传手输密度",	0,	COM_NUM_SCREEN_INPUT_D_SWITCH,	HOLDREGISTER_CPU3_IN_D_SW,	2,	true,	0,	1,	NULL,	0,	0,	true,	TYPE_INT,	1,	ret_arr_word,	(uint8_t*)"InDSw"},
 {(uint8_t*)"温度手输值",	0,	COM_NUM_SCREEN_INPUT_T,	HOLDREGISTER_CPU3_IN_T,	2,	true,	-500,	2000,	(uint8_t*)"℃",	1,	0,	true,	TYPE_INT,	7,	NULL,	(uint8_t*)"InT"},
 
-/* 协议菜单最大值 5 包含 SI7000；修改协议时自动带出协议默认串口参数，后续允许单独覆盖。 */
+/* 协议菜单最大值 5 包含 SI；修改协议时自动带出协议默认串口参数，后续允许单独覆盖。 */
 {(uint8_t*)"COM1协议",	0,	COM_NUM_CPU3_COM1_PROTOCOL,	HOLDREGISTER_CPU3_COM1_PROTO,	2,	true,	0,	5,	NULL,	0,	0,	true,	TYPE_INT,	1,	ret_arr_word,	(uint8_t*)"C1Proto"},
 {(uint8_t*)"COM1波特率",	0,	COM_NUM_CPU3_COM1_BAUDRATE,	HOLDREGISTER_CPU3_COM1_BAUD,	2,	true,	0,	7,	NULL,	0,	0,	true,	TYPE_INT,	1,	ret_arr_word,	(uint8_t*)"C1Baud"},
 {(uint8_t*)"COM1数据位",	0,	COM_NUM_CPU3_COM1_DATABITS,	HOLDREGISTER_CPU3_COM1_DATABITS,	2,	true,	0,	1,	NULL,	0,	0,	true,	TYPE_INT,	1,	ret_arr_word,	(uint8_t*)"C1Data"},

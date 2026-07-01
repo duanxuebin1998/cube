@@ -51,6 +51,8 @@ void CMD_MeasureDensitySpread_Meter(void);
 
 /* 区间测 */
 void CMD_MeasureDensitySpread_Interval(void);
+/* SI 独立 Profile */
+void CMD_SiProfile(void);
 
 /* ===================== 公共工具接口（本文件 .c 内实现，可能被其他模块复用） ===================== */
 /* 打印分布测量结果（含点表与平均值） */

@@ -414,6 +414,14 @@ static volatile uint32_t* get_deviceparam_ptr_by_operanum(int operanum)
         return &g_deviceParams.tapeExpansionCoefficient;
     case COM_NUM_DEVICEPARAM_TAPE_CALIBRATION_TEMPERATURE:
         return &g_deviceParams.tapeCalibrationTemperature;
+    case COM_NUM_DEVICEPARAM_SI_PROFILE_FIRST_POINT:
+        return &g_deviceParams.si_profile_first_point;
+    case COM_NUM_DEVICEPARAM_SI_PROFILE_INCREMENT:
+        return &g_deviceParams.si_profile_increment;
+    case COM_NUM_DEVICEPARAM_SI_PROFILE_DWELL_TIME:
+        return &g_deviceParams.si_profile_dwell_time;
+    case COM_NUM_DEVICEPARAM_SI_PROFILE_BOTTOM_DETECT_INTERVAL:
+        return &g_deviceParams.si_profile_bottom_detect_interval;
 
     /* 兼容：旧调试指令仍然可能直接用这些 operanum 取指针 */
     case COM_NUM_CAL_OIL:

@@ -254,7 +254,7 @@ class CheckDocsStructureTests(unittest.TestCase):
                         "# 新增资料落位检查表",
                         "版本发布仍按既有 skill 规则新增 `docs/00_构建与版本/版本改动与测试/` 文档。",
                         "CPU2/CPU3 程序流程 -> `docs/00_程序流程导航/`",
-                        "CPU2/CPU3 共享协议、寄存器、DSM、SI7000 -> `docs/01_协议与寄存器/`",
+                        "CPU2/CPU3 共享协议、寄存器、DSM、SI -> `docs/01_协议与寄存器/`",
                         "问题现象、原因分析、整改方案、风险复查 -> `docs/03_问题分析与整改/`",
                         "SIL、MISRA/CERT、功能安全外部资料 -> `docs/06_SIL功能安全认证/`",
                         "不因为新增资料而手工维护 `docs-site/src/content/docs/`。",

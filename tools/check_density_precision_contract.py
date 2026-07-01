@@ -13,6 +13,8 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
+DENSITY_X100_PROTOCOL_VERSION = 13
+DENSITY_CPU3_PARAM_VERSION = 0x0005
 
 CPU2_PARAM_H = ROOT / "LTD_MAIN_CPU2/Services/ParamStorage/system_parameter.h"
 CPU2_PARAM_C = ROOT / "LTD_MAIN_CPU2/Services/ParamStorage/system_parameter.c"
@@ -26,7 +28,7 @@ CPU3_DEVICE_SYNC_C = ROOT / "LTD_DISPLAY_CPU3/Communication/internal/main_board_
 CPU3_DISPLAY_C = ROOT / "LTD_DISPLAY_CPU3/Application/display/display.c"
 DSM_C = ROOT / "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_DataAnalysis_modbus2.c"
 WARTSILA_C = ROOT / "LTD_DISPLAY_CPU3/Communication/external/wartsila_modbus/wartsila_modbus_data_analysis.c"
-SI7000_C = ROOT / "LTD_DISPLAY_CPU3/Communication/external/si7000_modbus/si7000_modbus_slave.c"
+SI_C = ROOT / "LTD_DISPLAY_CPU3/Communication/external/si_modbus/si_modbus_slave.c"
 PROTOCOL_DOC = ROOT / "docs/01_协议与寄存器/CPU2_CPU3协议变更记录.md"
 
 
@@ -116,7 +118,11 @@ def check_numeric_examples(errors: list[str]) -> None:
 
 def check_cpu2_contract(cpu2_h: str, cpu2_c: str, sensor_c: str, oil_level_c: str, errors: list[str]) -> None:
     cpu2_protocol = extract_macro_int(cpu2_h, "DEVICE_PROTOCOL_VERSION")
-    require(cpu2_protocol == 13, "CPU2 DEVICE_PROTOCOL_VERSION must be 13 for density x100 protocol", errors)
+    require(
+        cpu2_protocol is not None and cpu2_protocol >= DENSITY_X100_PROTOCOL_VERSION,
+        "CPU2 DEVICE_PROTOCOL_VERSION must not regress below 13 for density x100 protocol",
+        errors,
+    )
 
     expected_macros = {
         "DENSITY_RAW_SCALE": 100,
@@ -150,18 +156,28 @@ def check_cpu2_contract(cpu2_h: str, cpu2_c: str, sensor_c: str, oil_level_c: st
 def check_cpu3_contract(cpu2_h: str, cpu3_h: str, cpu3_param_c: str, local_param_c: str, sync_c: str, display_c: str, errors: list[str]) -> None:
     cpu2_protocol = extract_macro_int(cpu2_h, "DEVICE_PROTOCOL_VERSION")
     cpu3_protocol = extract_macro_int(cpu3_h, "DEVICE_PROTOCOL_VERSION")
-    require(cpu3_protocol == 13, "CPU3 DEVICE_PROTOCOL_VERSION must be 13 for density x100 protocol", errors)
+    require(
+        cpu3_protocol is not None and cpu3_protocol >= DENSITY_X100_PROTOCOL_VERSION,
+        "CPU3 DEVICE_PROTOCOL_VERSION must not regress below 13 for density x100 protocol",
+        errors,
+    )
     require(cpu2_protocol == cpu3_protocol, "CPU2 and CPU3 protocol versions must match", errors)
 
     cpu3_param_version = extract_macro_hex(local_param_c, "CPU3_PARAM_VERSION")
     cpu3_param_v3 = extract_macro_hex(local_param_c, "CPU3_PARAM_VERSION_V3")
     cpu3_param_v4 = extract_macro_hex(local_param_c, "CPU3_PARAM_VERSION_V4")
-    require(cpu3_param_version == 0x0005, "CPU3 local FRAM version must be 0x0005 for density input migration", errors)
+    cpu3_param_v5 = extract_macro_hex(local_param_c, "CPU3_PARAM_VERSION_V5")
+    require(
+        cpu3_param_version is not None and cpu3_param_version >= DENSITY_CPU3_PARAM_VERSION,
+        "CPU3 local FRAM version must not regress below 0x0005 for density input migration",
+        errors,
+    )
     require(cpu3_param_v3 == 0x0003, "CPU3 must keep V3 migration source version", errors)
     require(cpu3_param_v4 == 0x0004, "CPU3 must keep V4 migration source version", errors)
+    require(cpu3_param_v5 == DENSITY_CPU3_PARAM_VERSION, "CPU3 must keep V5 density migration source version", errors)
     require_re(local_param_c, r"static\s+int32_t\s+Cpu3_MigrateDensityInputX10ToX100\s*\(", "CPU3 local density input migration helper must exist", errors)
     require_re(local_param_c, r"raw\s*\*\s*\(int32_t\)DENSITY_PARAM_MIGRATE_FACTOR", "CPU3 local density input migration must multiply by factor 10", errors)
-    require_re(local_param_c, r"stor\.version\s*==\s*CPU3_PARAM_VERSION_V4[\s\S]{0,220}Cpu3_MigrateDensityInputX10ToX100", "CPU3 V4 load must migrate screen_input_d to x100", errors)
+    require_re(local_param_c, r"legacy\.version\s*==\s*CPU3_PARAM_VERSION_V4[\s\S]{0,220}Cpu3_MigrateDensityInputX10ToX100", "CPU3 V4 load must migrate screen_input_d to x100", errors)
     require_re(local_param_c, r"stor\.version\s*==\s*CPU3_PARAM_VERSION_V3[\s\S]{0,500}Cpu3_MigrateDensityInputX10ToX100", "CPU3 V3 load must migrate screen_input_d to x100", errors)
 
     frequency_threshold_rows = {
@@ -218,7 +234,7 @@ def check_cpu3_contract(cpu2_h: str, cpu3_h: str, cpu3_param_c: str, local_param
     )
 
 
-def check_external_protocol_contract(dsm_c: str, wartsila_c: str, si7000_c: str, errors: list[str]) -> None:
+def check_external_protocol_contract(dsm_c: str, wartsila_c: str, si_c: str, errors: list[str]) -> None:
     require_re(dsm_c, r"static\s+uint32_t\s+DSM_DensityRawToExternalX10\s*\(", "DSM density x100 to external x10 helper must exist", errors)
     require_re(dsm_c, r"return\s+\(raw_density\s*\+\s*\(DENSITY_PARAM_MIGRATE_FACTOR\s*/\s*2U\)\)\s*/\s*DENSITY_PARAM_MIGRATE_FACTOR", "DSM density helper must round x100 to x10", errors)
     require_re(dsm_c, r"DSM_DensityCorrectionRawToExternalX10\s*\(g_deviceParams\.densityCorrection\)", "DSM holding output must convert density correction back to external x10", errors)
@@ -232,8 +248,8 @@ def check_external_protocol_contract(dsm_c: str, wartsila_c: str, si7000_c: str,
     require_re(wartsila_c, r"density_kgm3_x10\s*=\s*\(int32_t\)\s*Wartsila_DensityRawToX10", "Wartsila current density must use x10 helper", errors)
     require_re(wartsila_c, r"density_x10\s*=\s*Wartsila_DensityRawToX10", "Wartsila distribution point density must use x10 helper", errors)
 
-    require_re(si7000_c, r"static\s+uint16_t\s+si7000_density_raw_to_si_u16\s*\(", "SI7000 density helper must exist", errors)
-    require_re(si7000_c, r"return\s+si7000_clamp_u16\(raw_density\)", "SI7000 must keep x100 density as 0.01 unit with u16 clamp", errors)
+    require_re(si_c, r"static\s+uint16_t\s+si_density_raw_to_si_u16\s*\(", "SI density helper must exist", errors)
+    require_re(si_c, r"return\s+si_clamp_u16\(raw_density\)", "SI must keep x100 density as 0.01 unit with u16 clamp", errors)
 
 
 def check_docs(protocol_doc: str, errors: list[str]) -> None:
@@ -257,13 +273,13 @@ def main() -> int:
     display_c = read(CPU3_DISPLAY_C)
     dsm_c = read(DSM_C)
     wartsila_c = read(WARTSILA_C)
-    si7000_c = read(SI7000_C)
+    si_c = read(SI_C)
     protocol_doc = read(PROTOCOL_DOC)
 
     check_numeric_examples(errors)
     check_cpu2_contract(cpu2_h, cpu2_c, sensor_c, oil_level_c, errors)
     check_cpu3_contract(cpu2_h, cpu3_h, cpu3_param_c, local_param_c, sync_c, display_c, errors)
-    check_external_protocol_contract(dsm_c, wartsila_c, si7000_c, errors)
+    check_external_protocol_contract(dsm_c, wartsila_c, si_c, errors)
     check_docs(protocol_doc, errors)
 
     if errors:

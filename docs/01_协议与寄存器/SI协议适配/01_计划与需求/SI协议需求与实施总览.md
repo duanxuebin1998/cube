@@ -68,7 +68,7 @@
 
 | 类别 | 已落地内容 | 关键文件 |
 | --- | --- | --- |
-| 共享协议 | `DEVICE_PROTOCOL_VERSION` 升至 `15`；新增 `CMD_SI_PROFILE = 20`，并增加 `profile_source` 隔离 SI profile 结果 | `LTD_MAIN_CPU2/Services/ParamStorage/system_parameter.h`、`LTD_DISPLAY_CPU3/Application/system_param/system_parameter.h` |
+| 共享协议 | `DEVICE_PROTOCOL_VERSION` 升至 `14`；新增 `CMD_SI_PROFILE = 20`，并增加 `profile_source` 隔离 SI profile 结果 | `LTD_MAIN_CPU2/Services/ParamStorage/system_parameter.h`、`LTD_DISPLAY_CPU3/Application/system_param/system_parameter.h` |
 | CPU2 profile 参数 | 复用原预留槽新增 `si_profile_first_point`、`si_profile_increment`、`si_profile_dwell_time`、`si_profile_bottom_detect_interval`；`DEVICE_PARAM_VERSION` 保持 `3`，通过协议版本迁移和运行期归一化补默认值 | `system_parameter.h/c`、`stateformodbus.h`、`dataanalysis_modbus.c` |
 | CPU2 profile 流程 | 新增 `CMD_SiProfile()`，支持探底频次、旧底部位置回退、Point0、最多 200 点、候选点运行中判定液面以上后停止、完成锁存和计数 | `LTD_MAIN_CPU2/Application/Src/measure_density.c`、`measure.c`、`fault_recovery.c` |
 | CPU3 本机参数 | 新增 `40010~40023` 对应 SI 参数，CPU3 本机参数 FRAM 版本升至 `0x0006`，支持 V3/V4/V5 迁移 | `cpu3_comm_display_params.h/c` |
@@ -90,7 +90,7 @@
 | CPU3 `40010 Automatic Profile Interval` | `60min` |
 | CPU3 `40011 Automatic Profile Enable` | `0`，默认关闭 |
 | CPU3 `40012/40013` | `00:00` |
-| CPU3 `40014~40023` | `0`，表示对应报警阈值未启用 |
+| CPU3 `40014~40023` | `0`，作为有效报警阈值参与比较；无效温度和无效密度不参与报警判断 |
 
 ## 4. 已确认的进一步兼容需求
 
@@ -328,7 +328,7 @@ CPU2 已新增独立入口 `CMD_SiProfile()`，流程如下：
 
 状态生成建议分两层：
 
-1. 当前值报警：CPU3 读取当前密度、温度、液位，按 `40014~40021` 计算 `10017~10024`；阈值为 `0` 时建议视为未启用。
+1. 当前值报警：CPU3 读取当前密度、温度、液位，按 `40014~40021` 计算 `10017~10024`；阈值 `0` 是有效值，不再作为禁用条件。
 2. Profile 报警：SI profile 完成后由 CPU3 扫描有效点阵，生成 `10029~10032`；`10025/10026` 按相邻点温度差和密度差分别与 `40022/40023` 比较生成。
 
 ## 11. Profile Timestamp
@@ -484,7 +484,7 @@ CPU3 菜单更新已作为 SI协议对外配置入口落地，不单独维护一
 | 自动 profile 调度 | 是 | CPU3 参数存储 | CPU3 调度本身在 CPU3；打断当前测量并下发新命令会改变命令/流程契约 |
 | 报警限值全部兼容 | 否 | CPU3 参数存储 | CPU3 独立保存限值并合成报警；如后续新增 CPU2 偏差结果再评估共享协议 |
 | profile 开始时间戳 | 否 | 否 | CPU3 收到或触发 profile 命令时锁存，不依赖 CPU2 start 事件 |
-| SI profile 结果来源隔离 | 是 | 否 | 协议版本 15 新增 `profile_source`，CPU3 SI协议 只认 `PROFILE_SOURCE_SI` |
+| SI profile 结果来源隔离 | 是 | 否 | 协议版本 14 新增 `profile_source`，CPU3 SI协议 只认 `PROFILE_SOURCE_SI` |
 | SI 温度无效值和报警阈值口径 | 否 | CPU3 参数 signedness | 温度无效值输出 `0xB1E0`，报警阈值 `0` 是有效值，`40016/40017` 允许负温度 |
 
 ## 16. 验证计划
@@ -495,7 +495,7 @@ CPU3 菜单更新已作为 SI协议对外配置入口落地，不单独维护一
 - `py tools\check_si_protocol_contract.py`
 - `git diff --check`
 - 如果新增命令、共享状态或 CPU2 参数字段，扩展检查脚本覆盖命令号、字段顺序、单位、范围和协议版本。
-- CPU2 本轮复用预留参数槽，`DEVICE_PARAM_VERSION` 不变；协议版本 15 只新增共享状态 `profile_source`，验证重点是 CPU2/CPU3 共享寄存器顺序一致和 SI profile 来源隔离。
+- CPU2 本轮复用预留参数槽，`DEVICE_PARAM_VERSION` 不变；协议版本 14 新增 `profile_source` 共享状态，验证重点是 CPU2/CPU3 共享寄存器顺序一致和 SI profile 来源隔离。
 
 协议帧验证：
 

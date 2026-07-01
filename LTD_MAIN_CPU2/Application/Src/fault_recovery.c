@@ -113,6 +113,7 @@ static uint8_t FaultRecovery_IsRecoverableCommand(CommandType command)
     case CMD_GB_MEASURE_DISTRIBUTED:
     case CMD_MEASURE_DENSITY_METER:
     case CMD_MEASURE_DENSITY_RANGE:
+    case CMD_SI_PROFILE:
     case CMD_WARTSILA_DENSITY_RANGE:
     case CMD_CALIBRATE_ZERO:
     case CMD_CALIBRATE_OIL:

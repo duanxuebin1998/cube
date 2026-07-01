@@ -144,7 +144,7 @@ NEW_MATERIAL_REQUIRED_RULES = (
         ("CPU2/CPU3 程序流程", "docs/00_程序流程导航/"),
     ),
     (
-        "CPU2/CPU3 共享协议、寄存器、DSM、SI7000",
+        "CPU2/CPU3 共享协议、寄存器、DSM、SI",
         ("CPU2/CPU3 共享协议", "docs/01_协议与寄存器/"),
     ),
     (

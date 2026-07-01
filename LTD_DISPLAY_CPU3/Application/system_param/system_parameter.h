@@ -26,7 +26,7 @@
 #define UNVALID_POSITION 0
 #define UNVALID_TEMPERATURE 0
 #define MAX_MEASUREMENT_POINTS 200 /* 密度分布测量最大点数 */
-#define DEVICE_PROTOCOL_VERSION 13u /* CPU2/CPU3共享协议版本；旧程序未写入时默认为0 */
+#define DEVICE_PROTOCOL_VERSION 14u /* CPU2/CPU3共享协议版本；旧程序未写入时默认为0 */
 #define FAULT_AUTO_RECOVERY_RETRY_DEFAULT 3u
 #define FAULT_AUTO_RECOVERY_RETRY_MAX 10u
 
@@ -35,6 +35,16 @@
 #define DENSITY_PARAM_MIGRATE_FACTOR 10U /* 旧 x10 密度参数迁移到 x100 的倍率。 */
 #define DENSITY_CORRECTION_OLD_BASE_RAW 10000U /* 旧密度修正零点，单位 0.1kg/m3。 */
 #define DENSITY_CORRECTION_BASE_RAW 100000U /* 密度修正零点，单位 0.01kg/m3。 */
+
+typedef enum {
+    PROFILE_SOURCE_NONE = 0u,
+    PROFILE_SOURCE_STANDARD = 1u,
+    PROFILE_SOURCE_GB = 2u,
+    PROFILE_SOURCE_METER = 3u,
+    PROFILE_SOURCE_INTERVAL = 4u,
+    PROFILE_SOURCE_WARTSILA = 5u,
+    PROFILE_SOURCE_SI = 6u
+} ProfileSource;
 
 
 
@@ -269,7 +279,7 @@ typedef enum {
     CMD_CANCEL_MEASUREMENT         = 16,   /* 取消当前测量并进入待机 */
 
     /* 普通指令预留 */
-    CMD_RESERVED_CMD1              = 20,
+    CMD_SI_PROFILE             = 20,
     CMD_RESERVED_CMD2              = 21,
     CMD_RESERVED_CMD3              = 22,
 
@@ -435,9 +445,10 @@ typedef struct {
 	uint32_t average_vcf20;                                         /* /< 体积修正系数 (VCF20) */
 	uint32_t average_weight_density;                                /* /< 计重密度 */
 	uint32_t measurement_points;                                    /* /< 实际测量点数 */
-	uint32_t Density_oil_level;                                     /* 密度分布测量时的液位值 */
+    uint32_t Density_oil_level;                                     /* 密度分布测量时的液位值 */
     uint32_t profile_complete_latched;        /* /< 分布测量完成锁存 */
     uint32_t profile_complete_counter;        /* /< 分布测量完成计数 */
+    uint32_t profile_source;                  /* profile 结果来源：0=无，1=普通，2=国标，3=每米，4=间隔，5=Wartsila，6=SI */
     uint32_t profile_blocked_by_process;      /* /< 分布测量是否被工况阻止 */
     uint32_t profile_temp_deviation_alarm;    /* /< 分布温度偏差报警 */
     uint32_t profile_density_deviation_alarm; /* /< 分布密度偏差报警 */
@@ -726,10 +737,10 @@ typedef struct {
     uint32_t tapeExpansionCoefficient;   /* 尺带膨胀系数 */
     uint32_t tapeCalibrationTemperature; /* 标定尺带时温度 */
 
-    uint32_t reserved30;                 /* 预留 */
-    uint32_t reserved31;                 /* 预留 */
-    uint32_t reserved32;                 /* 预留 */
-    uint32_t reserved33;                 /* 预留 */
+    uint32_t si_profile_first_point;              /* SI profile首个停点，单位0.1mm */
+    uint32_t si_profile_increment;                /* SI profile点间距，单位0.1mm */
+    uint32_t si_profile_dwell_time;               /* SI profile每点停稳等待时间，单位s */
+    uint32_t si_profile_bottom_detect_interval;   /* SI profile探底频次，1表示每次探底 */
 
     /* ===================== 继电器报警输出配置（四路） ===================== */
     RelayAlarmConfig relayAlarm[RELAY_ALARM_CHANNEL_COUNT];

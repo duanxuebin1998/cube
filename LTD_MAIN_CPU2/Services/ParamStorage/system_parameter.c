@@ -319,6 +319,12 @@ static int apply_protocol_version_runtime(void)
         g_deviceParams.AlarmLowAO = 0U;
     }
 
+    if ((old_protocol < 14U) || (old_protocol > DEVICE_PROTOCOL_VERSION)) {
+        g_deviceParams.si_profile_first_point = 1000U;
+        g_deviceParams.si_profile_increment = 10000U;
+        g_deviceParams.si_profile_dwell_time = 10U;
+        g_deviceParams.si_profile_bottom_detect_interval = 1U;
+    }
     g_deviceParams.protocolVersion = DEVICE_PROTOCOL_VERSION;
     return 1;
 }
@@ -508,6 +514,25 @@ static int normalize_device_params_runtime(void)
         changed = 1;
     }
 
+
+    if (g_deviceParams.si_profile_first_point == 0U) {
+        g_deviceParams.si_profile_first_point = 1000U;
+        changed = 1;
+    }
+    if (g_deviceParams.si_profile_increment == 0U) {
+        g_deviceParams.si_profile_increment = 10000U;
+        changed = 1;
+    }
+    if ((g_deviceParams.si_profile_dwell_time == 0U) ||
+        (g_deviceParams.si_profile_dwell_time > 3600U)) {
+        g_deviceParams.si_profile_dwell_time = 10U;
+        changed = 1;
+    }
+    if ((g_deviceParams.si_profile_bottom_detect_interval == 0U) ||
+        (g_deviceParams.si_profile_bottom_detect_interval > 1000U)) {
+        g_deviceParams.si_profile_bottom_detect_interval = 1U;
+        changed = 1;
+    }
     for (uint32_t channel = 0U; channel < RELAY_ALARM_CHANNEL_COUNT; channel++) {
         if (g_deviceParams.relayAlarm[channel].clear_alarm != RELAY_ALARM_CLEAR_NO) {
             g_deviceParams.relayAlarm[channel].clear_alarm = RELAY_ALARM_CLEAR_NO;
@@ -1024,6 +1049,12 @@ void RestoreFactoryParamsConfig(void)
     g_deviceParams.wartsila_bottom_detect_interval  = 0; /* 0: no bottom detect, N: every N measurements */
     g_deviceParams.bottom_encoder_correction_tank_height = 0; /* 0: 编码器修正沿用液位罐高 */
 
+
+    /* ---------------- SI Profile参数 ---------------- */
+    g_deviceParams.si_profile_first_point = 1000U;
+    g_deviceParams.si_profile_increment = 10000U;
+    g_deviceParams.si_profile_dwell_time = 10U;
+    g_deviceParams.si_profile_bottom_detect_interval = 1U;
     /* ---------------- 继电器报警输出（旧阈值兼容字段） ---------------- */
 
     /* ---------------- 继电器报警输出配置（三路） ---------------- */
@@ -1237,6 +1268,10 @@ static const ParamPrintItem g_device_param_print_table[] = {
     DEVICE_PARAM_ITEM("尺带补偿参数", "气相温度", tankGasPhaseTemperature, PARAM_PRINT_TYPE_U32_01C, "0.1C"),
     DEVICE_PARAM_ITEM("尺带补偿参数", "尺带伸缩率", tapeExpansionCoefficient, PARAM_PRINT_TYPE_U32_000001_RATIO, "0.000001"),
     DEVICE_PARAM_ITEM("尺带补偿参数", "尺带标定温度", tapeCalibrationTemperature, PARAM_PRINT_TYPE_U32_01C, "0.1C"),
+    DEVICE_PARAM_ITEM("SI参数", "Profile首点", si_profile_first_point, PARAM_PRINT_TYPE_U32_01MM, "0.1mm"),
+    DEVICE_PARAM_ITEM("SI参数", "Profile步距", si_profile_increment, PARAM_PRINT_TYPE_U32_01MM, "0.1mm"),
+    DEVICE_PARAM_ITEM("SI参数", "Profile停留", si_profile_dwell_time, PARAM_PRINT_TYPE_U32_UNIT, "s"),
+    DEVICE_PARAM_ITEM("SI参数", "Profile探底频次", si_profile_bottom_detect_interval, PARAM_PRINT_TYPE_U32_UNIT, "次"),
     DEVICE_PARAM_ITEM("元信息/CRC", "参数版本号", param_version, PARAM_PRINT_TYPE_U32, NULL),
     DEVICE_PARAM_ITEM("元信息/CRC", "结构体大小", struct_size, PARAM_PRINT_TYPE_U32, NULL),
     DEVICE_PARAM_ITEM("元信息/CRC", "魔术字", magic, PARAM_PRINT_TYPE_HEX32, NULL),

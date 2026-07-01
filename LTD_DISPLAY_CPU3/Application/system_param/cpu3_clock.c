@@ -61,7 +61,7 @@ static uint8_t cpu3_clock_days_in_month(uint16_t year, uint8_t month)
 
 /*
  * 校验 CPU3 时间结构体的字段范围。
- * 该检查是所有读写接口的统一入口，避免非法日期写入 RTC 或暴露给 SI7000。
+ * 该检查是所有读写接口的统一入口，避免非法日期写入 RTC 或暴露给 SI。
  */
 static uint8_t cpu3_clock_validate(const Cpu3DateTime *dt)
 {

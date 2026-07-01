@@ -37,6 +37,7 @@
 #include "measure_density.h"
 #include "sensor.h"
 #include "measure_oilLevel.h"
+#include "measure_tank_height.h"
 #include "motor_ctrl.h"
 #include "system_parameter.h"
 #include "error_log.h"
@@ -60,6 +61,8 @@
 
 /* ===================== 前置声明 ===================== */
 void Print_DensitySpreadResult(const DensityDistribution *dist);
+static uint32_t SinglePoint_ReadSensorWithStableWindow(volatile DensityMeasurement *result,
+                                                       uint32_t stable_win_ms);
 
 /* 国标过滤（按例程逻辑：Density20 差值阈值触发删点并搬移） */
 static void GB_FilterPoints_ByDensity20(DensityDistribution *dist,
@@ -248,15 +251,31 @@ static void PrintPoints01mm(const char *tag, const int32_t *p01, uint32_t n)
     printf("\r\n");
 }
 
+#define SI_PROFILE_DEFAULT_FIRST_POINT_01MM 1000U
+#define SI_PROFILE_DEFAULT_INCREMENT_01MM 10000U
+#define SI_PROFILE_DEFAULT_DWELL_TIME_S 10U
+#define SI_PROFILE_MAX_BOTTOM_DETECT_INTERVAL 1000U
+#define SI_PROFILE_AIR_DENSITY_THRESHOLD 100.0f
+#define SI_PROFILE_DENSITY_SAMPLE_MS 200U
+#define SI_PROFILE_DENSITY_MAX_WAIT_MS (5U * 60U * 1000U)
+#define SI_PROFILE_DENSITY_FREQ_EPS_HZ 1.0f
+#define SI_PROFILE_DENSITY_VALUE_EPS 0.1f
+#define SI_PROFILE_DENSITY_TEMP_EPS_C 0.2f
+static uint8_t s_si_profile_bottom_ref_valid = 0U;
+static int32_t s_si_profile_bottom_position_01mm = 0;
+static uint32_t s_si_profile_count_since_bottom = 0U;
+static uint8_t s_si_profile_first_run = 1U;
+
 /* =======================================================================
  * 通用执行器：按点位数组执行测量
  *  - 输入点位单位：0.1mm
  *  - 输出：dist 写入测点列表与平均值
  * ======================================================================= */
-static uint32_t Density_RunPoints01mm(const int32_t *p01,
+static uint32_t Density_RunPoints01mmWithDwell(const int32_t *p01,
                                       uint32_t n,
                                       int32_t oil_level_01mm,
-                                      DensityDistribution *dist)
+                                      DensityDistribution *dist,
+                                      uint32_t dwell_time_s)
 {
     if (!p01 || !dist) return PARAM_ADDRESS_OVERFLOW;
     /* 先处理异常边界，避免密度测量状态机带故障继续运行。 */
@@ -269,7 +288,7 @@ static uint32_t Density_RunPoints01mm(const int32_t *p01,
     uint64_t sum_dens_raw = 0;
 
     /* 悬停等待使用菜单单位秒，传入延时函数前换算为毫秒。 */
-    uint32_t hover_time_s = g_deviceParams.spreadPointHoverTime;
+    uint32_t hover_time_s = dwell_time_s;
     uint32_t hover_ms = hover_time_s * 1000U;
 
     for (uint32_t i = 0; i < n; i++) {
@@ -296,7 +315,7 @@ static uint32_t Density_RunPoints01mm(const int32_t *p01,
             }
         }
 
-        ret = SinglePoint_ReadSensor(&dist->single_density_data[valid]);
+        ret = SinglePoint_ReadSensorWithStableWindow(&dist->single_density_data[valid], hover_ms);
         if (ret == STATE_SWITCH) {
             /* 命令切换是正常打断，直接向上透传，不参与故障重试。 */
             return STATE_SWITCH;
@@ -314,7 +333,7 @@ static uint32_t Density_RunPoints01mm(const int32_t *p01,
         /* 命令切换退出：用于上位机/按键打断当前过程 */
         if (HasEffectiveCommandSwitchRequest()) {
             printf("检测到命令切换请求，停止当前分布测量\r\n");
-            break;
+            return STATE_SWITCH;
         }
 
         if (valid >= MAX_MEASUREMENT_POINTS) break;
@@ -338,6 +357,14 @@ static uint32_t Density_RunPoints01mm(const int32_t *p01,
     dist->average_weight_density   = dist->average_density;
 
     return NO_ERROR;
+}
+
+static uint32_t Density_RunPoints01mm(const int32_t *p01,
+                                      uint32_t n,
+                                      int32_t oil_level_01mm,
+                                      DensityDistribution *dist)
+{
+    return Density_RunPoints01mmWithDwell(p01, n, oil_level_01mm, dist, g_deviceParams.spreadPointHoverTime);
 }
 
 /* =======================================================================
@@ -790,6 +817,540 @@ uint32_t Density_MeasureByMode_Exact(DensitySpreadModeId mode, DensityDistributi
     return NO_ERROR;
 }
 
+/*
+ * 函数用途：返回 SI profile 参数快照，并补齐旧 FRAM 或非法写入产生的默认值。
+ * 调用场景：SI profile 每轮开始前，由 CPU2 独立 profile 流程调用。
+ * 关键约束：这里只做运行期兜底，不写回 FRAM；参数持久化归一化仍由参数存储层负责。
+ */
+static void SiProfile_GetParams(uint32_t *first_point_01mm,
+                                    uint32_t *increment_01mm,
+                                    uint32_t *dwell_time_s,
+                                    uint32_t *bottom_detect_interval)
+{
+    uint32_t first_point = g_deviceParams.si_profile_first_point;
+    uint32_t increment = g_deviceParams.si_profile_increment;
+    uint32_t dwell = g_deviceParams.si_profile_dwell_time;
+    uint32_t interval = g_deviceParams.si_profile_bottom_detect_interval;
+
+    if (first_point == 0U) {
+        first_point = SI_PROFILE_DEFAULT_FIRST_POINT_01MM;
+    }
+    if (increment == 0U) {
+        increment = SI_PROFILE_DEFAULT_INCREMENT_01MM;
+    }
+    if ((dwell == 0U) || (dwell > 3600U)) {
+        dwell = SI_PROFILE_DEFAULT_DWELL_TIME_S;
+    }
+    if ((interval == 0U) || (interval > SI_PROFILE_MAX_BOTTOM_DETECT_INTERVAL)) {
+        interval = 1U;
+    }
+
+    *first_point_01mm = first_point;
+    *increment_01mm = increment;
+    *dwell_time_s = dwell;
+    *bottom_detect_interval = interval;
+}
+
+/*
+ * 函数用途：按 SI 探底频次判断本轮 profile 是否需要重新探底。
+ * 调用场景：SI profile 开始阶段。
+ * 关键约束：首轮必须探底；interval=1 表示每次探底，N 表示每 N 次 profile 探底。
+ */
+static uint8_t SiProfile_ShouldDetectBottom(uint32_t bottom_detect_interval)
+{
+    if ((s_si_profile_first_run != 0U) ||
+        (s_si_profile_bottom_ref_valid == 0U) ||
+        (bottom_detect_interval <= 1U)) {
+        return 1U;
+    }
+
+    return ((s_si_profile_count_since_bottom + 1U) >= bottom_detect_interval) ? 1U : 0U;
+}
+
+static void SiProfile_AdvanceBottomDetectTriggerCount(uint8_t bottom_detect_required)
+{
+    if (bottom_detect_required != 0U) {
+        s_si_profile_count_since_bottom = 1U;
+    } else if (s_si_profile_count_since_bottom < UINT32_MAX) {
+        s_si_profile_count_since_bottom++;
+    }
+}
+
+/*
+ * 函数用途：确定 SI profile 的底部基准位置。
+ * 调用场景：探底成功、探底失败或本轮跳过探底后。
+ * 关键约束：探底失败时优先沿用旧底部；没有旧底部则使用当前位置继续本轮测量。
+ */
+static int32_t SiProfile_SelectBottomPosition(uint8_t bottom_search_done,
+                                                  uint32_t bottom_search_ret)
+{
+    int32_t current_position = g_measurement.debug_data.sensor_position;
+
+    if ((bottom_search_done != 0U) && (bottom_search_ret == NO_ERROR)) {
+        s_si_profile_bottom_position_01mm = current_position;
+        s_si_profile_bottom_ref_valid = 1U;
+        s_si_profile_first_run = 0U;
+        g_measurement.height_measurement.bottom_reference_valid = 1U;
+        return current_position;
+    }
+
+    if (s_si_profile_bottom_ref_valid != 0U) {
+        printf("SI Profile 探底未更新，沿用旧底部位置 %.1fmm\r\n",
+               (double)s_si_profile_bottom_position_01mm / 10.0);
+        return s_si_profile_bottom_position_01mm;
+    }
+
+    printf("SI Profile 无旧底部位置，使用当前位置 %.1fmm 继续\r\n",
+           (double)current_position / 10.0);
+    return current_position;
+}
+
+/*
+ * 函数用途：按 SI profile 语义生成 Point0 和后续候选停点。
+ * 调用场景：SI profile 确定底部基准后。
+ * 关键约束：不预先找液位；Point0 固定为底部点，后续点只按罐高和 200 点上限生成。
+ */
+static uint32_t SiProfile_BuildPoints(int32_t bottom_position_01mm,
+                                          uint32_t first_point_01mm,
+                                          uint32_t increment_01mm,
+                                          int32_t *points01,
+                                          uint32_t *point_count)
+{
+    uint32_t n = 0U;
+    int64_t target;
+    int64_t tank_height = (int64_t)g_deviceParams.tankHeight;
+    int64_t bottom = (int64_t)bottom_position_01mm;
+
+    if ((points01 == NULL) || (point_count == NULL)) {
+        return PARAM_ADDRESS_OVERFLOW;
+    }
+    if ((increment_01mm == 0U) || (first_point_01mm == 0U)) {
+        return PARAM_RANGE_ERROR;
+    }
+    if (bottom < 0) {
+        bottom = 0;
+    }
+    if (tank_height <= 0) {
+        tank_height = bottom + ((int64_t)MAX_MEASUREMENT_POINTS * (int64_t)increment_01mm);
+    }
+
+    points01[n++] = (int32_t)bottom;
+    target = bottom + (int64_t)first_point_01mm;
+
+    while ((n < MAX_MEASUREMENT_POINTS) && (target <= tank_height)) {
+        points01[n] = (int32_t)target;
+        n++;
+        target += (int64_t)increment_01mm;
+    }
+
+    *point_count = n;
+    return (n > 0U) ? NO_ERROR : MEASUREMENT_DENSITY_NO_VALID_POINT;
+}
+
+typedef struct {
+    DensityMeasurement measurement;
+    float frequency_hz;
+    float density_value;
+    float temperature_c;
+    uint8_t is_air;
+    const char *air_reason;
+} SiProfilePointSample;
+
+/*
+ * 函数用途：判断 SI profile 到点后的密度读数是否已经进入空气区。
+ * 调用场景：SI profile 逐点运行时，不预先找液位，依靠到点读数决定是否停止。
+ * 关键约束：空气点只作为停止条件，不写入 profile 有效点阵。
+ */
+static uint8_t SiProfile_IsAirPoint(float density_value, float frequency_hz, const char **air_reason)
+{
+    if (density_value < SI_PROFILE_AIR_DENSITY_THRESHOLD) {
+        if (air_reason != NULL) {
+            *air_reason = "density_low";
+        }
+        return 1U;
+    }
+
+    if ((g_deviceParams.oilLevelFrequency != 0U) &&
+        (frequency_hz > (float)g_deviceParams.oilLevelFrequency)) {
+        if (air_reason != NULL) {
+            *air_reason = "frequency_high";
+        }
+        return 1U;
+    }
+
+    if (air_reason != NULL) {
+        *air_reason = "liquid";
+    }
+    return 0U;
+}
+
+/*
+ * 函数用途：填充 SI profile 单点样本。
+ * 调用场景：SI profile 到点后完成空气/液体分类并生成可写入点阵的数据。
+ * 关键约束：调用方负责保证空气点不计入有效点数。
+ */
+static void SiProfile_FillPointSample(SiProfilePointSample *sample,
+                                          float frequency_hz,
+                                          float density_value,
+                                          float temperature_c,
+                                          uint8_t is_air,
+                                          const char *air_reason)
+{
+    if (sample == NULL) {
+        return;
+    }
+
+    memset(sample, 0, sizeof(*sample));
+    sample->frequency_hz = frequency_hz;
+    sample->density_value = density_value;
+    sample->temperature_c = temperature_c;
+    sample->is_air = is_air;
+    sample->air_reason = air_reason;
+
+    sample->measurement.density = DENSITY_TO_RAW(density_value);
+    sample->measurement.standard_density = DENSITY_TO_RAW(density_value);
+    sample->measurement.weight_density = DENSITY_TO_RAW(density_value);
+    sample->measurement.temperature = TEMP_TO_RAW(temperature_c);
+    sample->measurement.temperature_position = Density_CurrentPositionToU01mmClamped();
+    sample->measurement.vcf20 = 1U;
+}
+
+/*
+ * 函数用途：SI profile 到点后读取密度并判断该点是液体点还是液面以上点。
+ * 调用场景：SiProfile_RunPoints01mmWithDwell() 逐点调用。
+ * 关键约束：密度/频率立即满足空气条件时直接返回空气点，避免沿用普通单点测量的 5 分钟零密度等待。
+ */
+static uint32_t SiProfile_ReadPointAndClassify(SiProfilePointSample *sample,
+                                                   uint32_t stable_win_ms)
+{
+    uint32_t ret;
+    uint32_t start_tick;
+    uint32_t stable_start = 0U;
+    uint8_t first_sample = 1U;
+    uint8_t has_valid_frequency = 0U;
+    uint8_t current_frequency_invalid = 0U;
+    uint8_t have_last_liquid = 0U;
+    float ref_freq = 0.0f;
+    float ref_density = 0.0f;
+    float ref_temp = 0.0f;
+    float cur_freq = 0.0f;
+    float cur_density = 0.0f;
+    float cur_temp = 0.0f;
+    float last_liquid_freq = 0.0f;
+    float last_liquid_density = 0.0f;
+    float last_liquid_temp = 0.0f;
+
+    if (sample == NULL) {
+        return PARAM_ADDRESS_OVERFLOW;
+    }
+
+    ret = EnableDensityMode();
+    if (ret == STATE_SWITCH) {
+        return STATE_SWITCH;
+    }
+    CHECK_ERROR(ret);
+
+    if (stable_win_ms == 0U) {
+        stable_win_ms = 5000U;
+    }
+
+    start_tick = HAL_GetTick();
+    while (1) {
+        const char *air_reason = NULL;
+        uint32_t now;
+
+        if (HasEffectiveCommandSwitchRequest()) {
+            return STATE_SWITCH;
+        }
+
+        now = HAL_GetTick();
+        if ((now - start_tick) >= SI_PROFILE_DENSITY_MAX_WAIT_MS) {
+            if (have_last_liquid != 0U) {
+                SiProfile_FillPointSample(sample,
+                                              last_liquid_freq,
+                                              last_liquid_density,
+                                              last_liquid_temp,
+                                              0U,
+                                              "timeout_last_liquid");
+                return NO_ERROR;
+            }
+            if ((has_valid_frequency == 0U) || (current_frequency_invalid != 0U)) {
+                return SONIC_FREQ_ABNORMAL;
+            }
+            SiProfile_FillPointSample(sample,
+                                          cur_freq,
+                                          0.0f,
+                                          cur_temp,
+                                          1U,
+                                          "density_timeout_zero");
+            return NO_ERROR;
+        }
+
+        ret = Read_Density(&cur_freq, &cur_density, &cur_temp);
+        if (ret == STATE_SWITCH) {
+            return STATE_SWITCH;
+        }
+        if (ret != NO_ERROR) {
+            return ret;
+        }
+
+        if (cur_freq <= 0.0f) {
+            current_frequency_invalid = 1U;
+            first_sample = 1U;
+            ret = AbortableDelay_CommandSwitch(SI_PROFILE_DENSITY_SAMPLE_MS, 50U);
+            if (ret != NO_ERROR) {
+                return ret;
+            }
+            continue;
+        }
+        has_valid_frequency = 1U;
+        current_frequency_invalid = 0U;
+
+        if (SiProfile_IsAirPoint(cur_density, cur_freq, &air_reason) != 0U) {
+            SiProfile_FillPointSample(sample,
+                                          cur_freq,
+                                          cur_density,
+                                          cur_temp,
+                                          1U,
+                                          air_reason);
+            return NO_ERROR;
+        }
+
+        last_liquid_freq = cur_freq;
+        last_liquid_density = cur_density;
+        last_liquid_temp = cur_temp;
+        have_last_liquid = 1U;
+
+        if (first_sample != 0U) {
+            ref_freq = cur_freq;
+            ref_density = cur_density;
+            ref_temp = cur_temp;
+            stable_start = now;
+            first_sample = 0U;
+        } else {
+            float df = fabsf(cur_freq - ref_freq);
+            float dd = fabsf(cur_density - ref_density);
+            float dt = fabsf(cur_temp - ref_temp);
+            if ((df > SI_PROFILE_DENSITY_FREQ_EPS_HZ) ||
+                (dd > SI_PROFILE_DENSITY_VALUE_EPS) ||
+                (dt > SI_PROFILE_DENSITY_TEMP_EPS_C)) {
+                ref_freq = cur_freq;
+                ref_density = cur_density;
+                ref_temp = cur_temp;
+                stable_start = now;
+            }
+        }
+
+        if ((first_sample == 0U) && ((now - stable_start) >= stable_win_ms)) {
+            SiProfile_FillPointSample(sample,
+                                          ref_freq,
+                                          ref_density,
+                                          ref_temp,
+                                          0U,
+                                          "liquid");
+            return NO_ERROR;
+        }
+
+        ret = AbortableDelay_CommandSwitch(SI_PROFILE_DENSITY_SAMPLE_MS, 50U);
+        if (ret != NO_ERROR) {
+            return ret;
+        }
+    }
+}
+
+/*
+ * 函数用途：执行 SI profile 候选点阵，遇到液面以上点时停止且不写入该点。
+ * 调用场景：CMD_SiProfile() 已确定底部基准并生成候选停点后。
+ * 关键约束：至少 Point0 有效才认为本轮 profile 成功；完成后 Density_oil_level 记录最后一个有效 profile 点位置。
+ */
+static uint32_t SiProfile_RunPoints01mmWithDwell(const int32_t *p01,
+                                                     uint32_t n,
+                                                     DensityDistribution *dist,
+                                                     uint32_t dwell_time_s)
+{
+    uint32_t valid = 0U;
+    uint64_t sum_temp_raw = 0U;
+    uint64_t sum_dens_raw = 0U;
+    uint32_t dwell_ms = dwell_time_s * 1000U;
+    uint32_t last_valid_position_01mm = 0U;
+    uint8_t stopped_by_air = 0U;
+
+    if ((p01 == NULL) || (dist == NULL)) {
+        return PARAM_ADDRESS_OVERFLOW;
+    }
+    if ((n == 0U) || (n > MAX_MEASUREMENT_POINTS)) {
+        return PARAM_RANGE_ERROR;
+    }
+
+    memset(dist, 0, sizeof(*dist));
+
+    for (uint32_t i = 0U; i < n; i++) {
+        float pos_mm = (float)p01[i] / 10.0f;
+        uint32_t ret;
+        SiProfilePointSample sample;
+
+        printf("SI Profile 移动到候选点%lu 位置 %.1f mm\r\n",
+               (unsigned long)i,
+               pos_mm);
+
+        ret = MotorCtrl_JogMoveToPosition(pos_mm, MotorCtrl_GetDefaultSpeedX100());
+        if (ret == STATE_SWITCH) {
+            return STATE_SWITCH;
+        }
+        if (ret != NO_ERROR) {
+            printf("SI Profile 电机移动失败: 位置=%.1fmm 错误码=%lu\r\n", pos_mm, (unsigned long)ret);
+            return ret;
+        }
+
+        ret = SiProfile_ReadPointAndClassify(&sample, dwell_ms);
+        if (ret == STATE_SWITCH) {
+            return STATE_SWITCH;
+        }
+        if (ret != NO_ERROR) {
+            printf("SI Profile 单点读取失败: 位置=%.1fmm 错误码=%lu\r\n", pos_mm, (unsigned long)ret);
+            return ret;
+        }
+        if (sample.is_air != 0U) {
+            printf("SI Profile 候选点%lu 判定为液面以上: 位置=%.1fmm 密度=%.3f 频率=%.3f 原因=%s\r\n",
+                   (unsigned long)i,
+                   pos_mm,
+                   (double)sample.density_value,
+                   (double)sample.frequency_hz,
+                   (sample.air_reason != NULL) ? sample.air_reason : "air");
+            stopped_by_air = 1U;
+            break;
+        }
+
+        dist->single_density_data[valid] = sample.measurement;
+        sum_temp_raw += sample.measurement.temperature;
+        sum_dens_raw += sample.measurement.density;
+        last_valid_position_01mm = sample.measurement.temperature_position;
+        valid++;
+
+        if (HasEffectiveCommandSwitchRequest()) {
+            printf("检测到命令切换请求，停止当前 SI Profile\r\n");
+            return STATE_SWITCH;
+        }
+        if (valid >= MAX_MEASUREMENT_POINTS) {
+            break;
+        }
+    }
+
+    if (valid == 0U) {
+        printf("SI Profile 未得到任何有效测点\r\n");
+        return MEASUREMENT_DENSITY_NO_VALID_POINT;
+    }
+
+    dist->measurement_points = valid;
+    dist->Density_oil_level = last_valid_position_01mm;
+    dist->average_temperature = (uint32_t)(sum_temp_raw / valid);
+    dist->average_density = (uint32_t)(sum_dens_raw / valid);
+    dist->average_standard_density = dist->average_density;
+    dist->average_vcf20 = 0U;
+    dist->average_weight_density = dist->average_density;
+
+    printf("SI Profile 有效点数=%lu 最后有效点=%.1fmm 停止原因=%s\r\n",
+           (unsigned long)valid,
+           (double)last_valid_position_01mm / 10.0,
+           (stopped_by_air != 0U) ? "液面以上点" : "点数或上限");
+
+    return NO_ERROR;
+}
+/*
+ * 函数用途：执行 SI 独立 profile 测量。
+ * 调用场景：CPU3 SI Profile 线圈或自动调度下发 CMD_SI_PROFILE 后由命令分发调用。
+ * 关键约束：不复用普通分布测 profile 参数；失败不锁存完成态，命令切换直接退出。
+ */
+void CMD_SiProfile(void)
+{
+    uint32_t ret;
+    uint32_t first_point_01mm;
+    uint32_t increment_01mm;
+    uint32_t dwell_time_s;
+    uint32_t bottom_detect_interval;
+    uint8_t should_detect_bottom;
+    uint8_t bottom_search_done = 0U;
+    uint32_t bottom_search_ret = NO_ERROR;
+    int32_t bottom_position_01mm;
+    int32_t points01[MAX_MEASUREMENT_POINTS];
+    uint32_t point_count = 0U;
+    uint32_t previous_profile_complete_counter;
+    DensityDistribution temp;
+
+    memset(points01, 0, sizeof(points01));
+    memset(&temp, 0, sizeof(temp));
+
+    g_measurement.density_distribution.profile_complete_latched = 0U;
+    g_measurement.density_distribution.profile_source = PROFILE_SOURCE_NONE;
+    g_measurement.density_distribution.profile_blocked_by_process = 0U;
+    g_measurement.density_distribution.profile_temp_deviation_alarm = 0U;
+    g_measurement.density_distribution.profile_density_deviation_alarm = 0U;
+    g_measurement.device_status.device_state = STATE_SPREADPOINTING;
+
+    SiProfile_GetParams(&first_point_01mm,
+                            &increment_01mm,
+                            &dwell_time_s,
+                            &bottom_detect_interval);
+
+    printf("SI Profile 开始: first=%lu(0.1mm) increment=%lu(0.1mm) dwell=%lus bottomInterval=%lu\r\n",
+           (unsigned long)first_point_01mm,
+           (unsigned long)increment_01mm,
+           (unsigned long)dwell_time_s,
+           (unsigned long)bottom_detect_interval);
+
+    should_detect_bottom = SiProfile_ShouldDetectBottom(bottom_detect_interval);
+    SiProfile_AdvanceBottomDetectTriggerCount(should_detect_bottom);
+    if (should_detect_bottom != 0U) {
+        bottom_search_done = 1U;
+        bottom_search_ret = SearchBottom();
+        if (bottom_search_ret == STATE_SWITCH) {
+            return;
+        }
+        if (bottom_search_ret != NO_ERROR) {
+            printf("SI Profile 探底失败，错误码=0x%08lX，将按旧底部或当前位置继续\r\n",
+                   (unsigned long)bottom_search_ret);
+        }
+    }
+
+    bottom_position_01mm = SiProfile_SelectBottomPosition(bottom_search_done, bottom_search_ret);
+
+    ret = SiProfile_BuildPoints(bottom_position_01mm,
+                                    first_point_01mm,
+                                    increment_01mm,
+                                    points01,
+                                    &point_count);
+    if (ret != NO_ERROR) {
+        g_measurement.density_distribution.profile_blocked_by_process = 1U;
+        printf("SI Profile 生成点位失败，错误码=0x%08lX\r\n", (unsigned long)ret);
+        SET_ERROR(ret);
+        return;
+    }
+
+    PrintPoints01mm("SI Profile", points01, point_count);
+    ret = SiProfile_RunPoints01mmWithDwell(points01, point_count, &temp, dwell_time_s);
+    if (ret == STATE_SWITCH) {
+        return;
+    }
+    if (ret != NO_ERROR) {
+        g_measurement.density_distribution.profile_blocked_by_process = 1U;
+        printf("SI Profile 测量失败，错误码=0x%08lX\r\n", (unsigned long)ret);
+        SET_ERROR(ret);
+        return;
+    }
+
+    previous_profile_complete_counter = g_measurement.density_distribution.profile_complete_counter;
+    g_measurement.density_distribution = temp;
+    g_measurement.density_distribution.profile_complete_latched = 1U;
+    g_measurement.density_distribution.profile_complete_counter = previous_profile_complete_counter + 1U;
+    g_measurement.density_distribution.profile_source = PROFILE_SOURCE_SI;
+    g_measurement.density_distribution.profile_blocked_by_process = 0U;
+
+    Print_DensitySpreadResult(&temp);
+    g_measurement.device_status.device_state = STATE_SPREADPOINTOVER;
+    printf("SI Profile 完成: 点数=%lu 完成计数=%lu\r\n",
+           (unsigned long)temp.measurement_points,
+           (unsigned long)g_measurement.density_distribution.profile_complete_counter);
+}
 /* =======================================================================
  * 四种模式的对外入口
  * ======================================================================= */
@@ -801,6 +1362,7 @@ void CMD_MeasureDensitySpread_Spread(void)
 
     /* 分布测量开始前清除完成锁存和偏差报警，CPU3 只对本轮 profile 结果开放。 */
     g_measurement.density_distribution.profile_complete_latched = 0;
+    g_measurement.density_distribution.profile_source = PROFILE_SOURCE_NONE;
     g_measurement.density_distribution.profile_blocked_by_process = 0;
     g_measurement.density_distribution.profile_temp_deviation_alarm = 0;
     g_measurement.density_distribution.profile_density_deviation_alarm = 0;
@@ -822,9 +1384,10 @@ void CMD_MeasureDensitySpread_Spread(void)
     g_measurement.density_distribution = temp;
     Print_DensitySpreadResult(&temp);
 
-    /* 完成后锁存分布测量结果，CPU3 用计数变化生成 SI7000 profile 时间戳。 */
+    /* 完成后锁存分布测量结果，CPU3 用计数变化生成 SI profile 时间戳。 */
     g_measurement.density_distribution.profile_complete_latched = 1;
     g_measurement.density_distribution.profile_complete_counter = previous_profile_complete_counter + 1U;
+    g_measurement.density_distribution.profile_source = PROFILE_SOURCE_STANDARD;
 
     g_measurement.device_status.device_state = STATE_SPREADPOINTOVER;
 }
@@ -840,6 +1403,7 @@ void CMD_MeasureDensitySpread_GB(void)
 
     /* 分布测量开始前清除完成锁存和偏差报警，CPU3 只对本轮 profile 结果开放。 */
     g_measurement.density_distribution.profile_complete_latched = 0;
+    g_measurement.density_distribution.profile_source = PROFILE_SOURCE_NONE;
     g_measurement.density_distribution.profile_blocked_by_process = 0;
     g_measurement.density_distribution.profile_temp_deviation_alarm = 0;
     g_measurement.density_distribution.profile_density_deviation_alarm = 0;
@@ -861,9 +1425,10 @@ void CMD_MeasureDensitySpread_GB(void)
     g_measurement.density_distribution = temp;
     Print_DensitySpreadResult(&temp);
 
-    /* 完成后锁存分布测量结果，CPU3 用计数变化生成 SI7000 profile 时间戳。 */
+    /* 完成后锁存分布测量结果，CPU3 用计数变化生成 SI profile 时间戳。 */
     g_measurement.density_distribution.profile_complete_latched = 1;
     g_measurement.density_distribution.profile_complete_counter = previous_profile_complete_counter + 1U;
+    g_measurement.density_distribution.profile_source = PROFILE_SOURCE_GB;
 
     g_measurement.device_status.device_state = STATE_GB_SPREADPOINTOVER;
 }
@@ -879,6 +1444,7 @@ void CMD_MeasureDensitySpread_Meter(void)
 
     /* 分布测量开始前清除完成锁存和偏差报警，CPU3 只对本轮 profile 结果开放。 */
     g_measurement.density_distribution.profile_complete_latched = 0;
+    g_measurement.density_distribution.profile_source = PROFILE_SOURCE_NONE;
     g_measurement.density_distribution.profile_blocked_by_process = 0;
     g_measurement.density_distribution.profile_temp_deviation_alarm = 0;
     g_measurement.density_distribution.profile_density_deviation_alarm = 0;
@@ -900,9 +1466,10 @@ void CMD_MeasureDensitySpread_Meter(void)
     g_measurement.density_distribution = temp;
     Print_DensitySpreadResult(&temp);
 
-    /* 完成后锁存分布测量结果，CPU3 用计数变化生成 SI7000 profile 时间戳。 */
+    /* 完成后锁存分布测量结果，CPU3 用计数变化生成 SI profile 时间戳。 */
     g_measurement.density_distribution.profile_complete_latched = 1;
     g_measurement.density_distribution.profile_complete_counter = previous_profile_complete_counter + 1U;
+    g_measurement.density_distribution.profile_source = PROFILE_SOURCE_METER;
 
     g_measurement.device_status.device_state = STATE_COM_METER_DENSITY_OVER;
 }
@@ -918,6 +1485,7 @@ void CMD_MeasureDensitySpread_Interval(void)
 
     /* 分布测量开始前清除完成锁存和偏差报警，CPU3 只对本轮 profile 结果开放。 */
     g_measurement.density_distribution.profile_complete_latched = 0;
+    g_measurement.density_distribution.profile_source = PROFILE_SOURCE_NONE;
     g_measurement.density_distribution.profile_blocked_by_process = 0;
     g_measurement.density_distribution.profile_temp_deviation_alarm = 0;
     g_measurement.density_distribution.profile_density_deviation_alarm = 0;
@@ -939,9 +1507,10 @@ void CMD_MeasureDensitySpread_Interval(void)
     g_measurement.density_distribution = temp;
     Print_DensitySpreadResult(&temp);
 
-    /* 完成后锁存分布测量结果，CPU3 用计数变化生成 SI7000 profile 时间戳。 */
+    /* 完成后锁存分布测量结果，CPU3 用计数变化生成 SI profile 时间戳。 */
     g_measurement.density_distribution.profile_complete_latched = 1;
     g_measurement.density_distribution.profile_complete_counter = previous_profile_complete_counter + 1U;
+    g_measurement.density_distribution.profile_source = PROFILE_SOURCE_INTERVAL;
 
     g_measurement.device_status.device_state = STATE_INTERVAL_DENSITY_OVER;
 }
@@ -1220,7 +1789,8 @@ void Print_DensitySpreadResult(const DensityDistribution *dist)
  * @return NO_ERROR           成功（稳定或兜底）
  *         其他错误码        模式切换/通信等异常
  */
-uint32_t SinglePoint_ReadSensor(volatile DensityMeasurement *result)
+static uint32_t SinglePoint_ReadSensorWithStableWindow(volatile DensityMeasurement *result,
+                                                       uint32_t stable_win_ms)
 {
     uint32_t ret = 0;
 
@@ -1235,13 +1805,6 @@ uint32_t SinglePoint_ReadSensor(volatile DensityMeasurement *result)
     }
     CHECK_ERROR(ret);
 
-    /* ---------- 稳定窗口时间配置 ----------
-     * spreadPointHoverTime：
-     *   - 单位：秒
-     *   - 表示需要“连续稳定”多久，才认为单点数据可靠
-     */
-    uint32_t hover_time_s  = g_deviceParams.spreadPointHoverTime;
-    uint32_t stable_win_ms = hover_time_s * 1000U;
 
     /* 若参数未配置，使用默认 5 秒 */
     if (stable_win_ms == 0) {
@@ -1461,6 +2024,12 @@ uint32_t SinglePoint_ReadSensor(volatile DensityMeasurement *result)
             return ret;
         }
     }
+}
+
+uint32_t SinglePoint_ReadSensor(volatile DensityMeasurement *result)
+{
+    uint32_t stable_win_ms = g_deviceParams.spreadPointHoverTime * 1000U;
+    return SinglePoint_ReadSensorWithStableWindow(result, stable_win_ms);
 }
 
 

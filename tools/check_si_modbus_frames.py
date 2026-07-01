@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""检查 SI7000 Modbus 地址表常量和主机侧参考帧。"""
+"""检查 SI Modbus 地址表常量和主机侧参考帧。"""
 
 from __future__ import annotations
 
@@ -11,96 +11,96 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-HEADER = ROOT / "LTD_DISPLAY_CPU3/Communication/external/si7000_modbus/si7000_modbus_slave.h"
-SOURCE = ROOT / "LTD_DISPLAY_CPU3/Communication/external/si7000_modbus/si7000_modbus_slave.c"
+HEADER = ROOT / "LTD_DISPLAY_CPU3/Communication/external/si_modbus/si_modbus_slave.h"
+SOURCE = ROOT / "LTD_DISPLAY_CPU3/Communication/external/si_modbus/si_modbus_slave.c"
 
 # 这里固定的是协议地址窗口和功能码，不依赖运行时状态；一旦手册映射变化，应先改文档再改本表。
 EXPECTED_DEFINES = {
-    "SI7000_COIL_COUNT": 16,
-    "SI7000_DISCRETE_INPUT_COUNT": 32,
-    "SI7000_HOLDING_REG_COUNT": 23,
-    "SI7000_INPUT_REG_COUNT": 620,
-    "SI7000_FUNC_READ_COILS": 0x01,
-    "SI7000_FUNC_READ_DISCRETE_INPUTS": 0x02,
-    "SI7000_FUNC_READ_HOLDING_REGS": 0x03,
-    "SI7000_FUNC_READ_INPUT_REGS": 0x04,
-    "SI7000_FUNC_WRITE_SINGLE_COIL": 0x05,
-    "SI7000_FUNC_WRITE_SINGLE_REG": 0x06,
+    "SI_COIL_COUNT": 16,
+    "SI_DISCRETE_INPUT_COUNT": 32,
+    "SI_HOLDING_REG_COUNT": 23,
+    "SI_INPUT_REG_COUNT": 620,
+    "SI_FUNC_READ_COILS": 0x01,
+    "SI_FUNC_READ_DISCRETE_INPUTS": 0x02,
+    "SI_FUNC_READ_HOLDING_REGS": 0x03,
+    "SI_FUNC_READ_INPUT_REGS": 0x04,
+    "SI_FUNC_WRITE_SINGLE_COIL": 0x05,
+    "SI_FUNC_WRITE_SINGLE_REG": 0x06,
 }
 
-# 枚举值必须等于 SI7000 Modbus offset，不能因 C 代码整理而自动重排。
+# 枚举值必须等于 SI Modbus offset，不能因 C 代码整理而自动重排。
 EXPECTED_ENUMS = {
-    "SI7000_COIL_MANUAL": 0,
-    "SI7000_COIL_CALIBRATE": 1,
-    "SI7000_COIL_AUTO": 2,
-    "SI7000_COIL_PROFILE": 3,
-    "SI7000_COIL_STOP": 8,
-    "SI7000_COIL_UP_SLOW": 9,
-    "SI7000_COIL_UP_MEDIUM": 10,
-    "SI7000_COIL_UP_FAST": 11,
-    "SI7000_COIL_DOWN_SLOW": 12,
-    "SI7000_COIL_DOWN_MEDIUM": 13,
-    "SI7000_COIL_DOWN_FAST": 14,
-    "SI7000_DI_BOTTOM_REFERENCE": 0,
-    "SI7000_DI_LOWER_LEVEL_SENSOR": 1,
-    "SI7000_DI_UPPER_LEVEL_SENSOR": 2,
-    "SI7000_DI_INTERLOCK": 3,
-    "SI7000_DI_PROFILE_COMPLETE": 4,
-    "SI7000_DI_UNIT_IS_METRIC": 5,
-    "SI7000_DI_REEL_ALARM": 8,
-    "SI7000_DI_PROBE_UNCALIBRATED": 9,
-    "SI7000_DI_INTERVAL_TIMER": 11,
-    "SI7000_DI_PROBE_AT_LIQUID_LEVEL": 12,
-    "SI7000_DI_LOW_DENSITY_ALARM": 16,
-    "SI7000_DI_HIGH_DENSITY_ALARM": 17,
-    "SI7000_DI_LOW_TEMP_ALARM": 18,
-    "SI7000_DI_HIGH_TEMP_ALARM": 19,
-    "SI7000_DI_LL_LEVEL_ALARM": 20,
-    "SI7000_DI_HH_LEVEL_ALARM": 21,
-    "SI7000_DI_LOW_LEVEL_ALARM": 22,
-    "SI7000_DI_HIGH_LEVEL_ALARM": 23,
-    "SI7000_DI_PROFILE_TEMP_DEVIATION_ALARM": 24,
-    "SI7000_DI_PROFILE_DENSITY_DEVIATION_ALARM": 25,
-    "SI7000_DI_PROFILE_LOW_TEMP_ALARM": 28,
-    "SI7000_DI_PROFILE_HIGH_TEMP_ALARM": 29,
-    "SI7000_DI_PROFILE_LOW_DENSITY_ALARM": 30,
-    "SI7000_DI_PROFILE_HIGH_DENSITY_ALARM": 31,
-    "SI7000_IR_CURRENT_PROBE_POSITION": 0,
-    "SI7000_IR_CURRENT_TEMPERATURE": 1,
-    "SI7000_IR_CURRENT_DENSITY": 2,
-    "SI7000_IR_LIQUID_LEVEL": 3,
-    "SI7000_IR_NUMBER_OF_POINTS": 5,
-    "SI7000_IR_PROFILE_TIMESTAMP_MONTH": 6,
-    "SI7000_IR_PROFILE_TIMESTAMP_DAY": 7,
-    "SI7000_IR_PROFILE_TIMESTAMP_HOUR": 8,
-    "SI7000_IR_PROFILE_TIMESTAMP_MINUTE": 9,
-    "SI7000_IR_CURRENT_TIME_HOUR": 10,
-    "SI7000_IR_CURRENT_TIME_MINUTE": 11,
-    "SI7000_IR_CURRENT_TIME_SECOND": 12,
-    "SI7000_IR_PROFILE_POINT0_POSITION": 20,
-    "SI7000_HR_PROFILE_FIRST_POINT": 0,
-    "SI7000_HR_PROFILE_INCREMENT": 1,
-    "SI7000_HR_PROFILE_DWELL_TIME": 2,
-    "SI7000_HR_AUTO_PROFILE_INTERVAL": 9,
-    "SI7000_HR_AUTO_PROFILE_ENABLE": 10,
-    "SI7000_HR_AUTO_PROFILE_HOUR": 11,
-    "SI7000_HR_AUTO_PROFILE_MINUTE": 12,
-    "SI7000_HR_LOW_DENSITY_SETPOINT": 13,
-    "SI7000_HR_HIGH_DENSITY_SETPOINT": 14,
-    "SI7000_HR_LOW_TEMPERATURE_SETPOINT": 15,
-    "SI7000_HR_HIGH_TEMPERATURE_SETPOINT": 16,
-    "SI7000_HR_LL_LEVEL_SETPOINT": 17,
-    "SI7000_HR_HH_LEVEL_SETPOINT": 18,
-    "SI7000_HR_LOW_LEVEL_SETPOINT": 19,
-    "SI7000_HR_HIGH_LEVEL_SETPOINT": 20,
-    "SI7000_HR_TEMP_DEVIATION_SETPOINT": 21,
-    "SI7000_HR_DENSITY_DEVIATION_SETPOINT": 22,
+    "SI_COIL_MANUAL": 0,
+    "SI_COIL_CALIBRATE": 1,
+    "SI_COIL_AUTO": 2,
+    "SI_COIL_PROFILE": 3,
+    "SI_COIL_STOP": 8,
+    "SI_COIL_UP_SLOW": 9,
+    "SI_COIL_UP_MEDIUM": 10,
+    "SI_COIL_UP_FAST": 11,
+    "SI_COIL_DOWN_SLOW": 12,
+    "SI_COIL_DOWN_MEDIUM": 13,
+    "SI_COIL_DOWN_FAST": 14,
+    "SI_DI_BOTTOM_REFERENCE": 0,
+    "SI_DI_LOWER_LEVEL_SENSOR": 1,
+    "SI_DI_UPPER_LEVEL_SENSOR": 2,
+    "SI_DI_INTERLOCK": 3,
+    "SI_DI_PROFILE_COMPLETE": 4,
+    "SI_DI_UNIT_IS_METRIC": 5,
+    "SI_DI_REEL_ALARM": 8,
+    "SI_DI_PROBE_UNCALIBRATED": 9,
+    "SI_DI_INTERVAL_TIMER": 11,
+    "SI_DI_PROBE_AT_LIQUID_LEVEL": 12,
+    "SI_DI_LOW_DENSITY_ALARM": 16,
+    "SI_DI_HIGH_DENSITY_ALARM": 17,
+    "SI_DI_LOW_TEMP_ALARM": 18,
+    "SI_DI_HIGH_TEMP_ALARM": 19,
+    "SI_DI_LL_LEVEL_ALARM": 20,
+    "SI_DI_HH_LEVEL_ALARM": 21,
+    "SI_DI_LOW_LEVEL_ALARM": 22,
+    "SI_DI_HIGH_LEVEL_ALARM": 23,
+    "SI_DI_PROFILE_TEMP_DEVIATION_ALARM": 24,
+    "SI_DI_PROFILE_DENSITY_DEVIATION_ALARM": 25,
+    "SI_DI_PROFILE_LOW_TEMP_ALARM": 28,
+    "SI_DI_PROFILE_HIGH_TEMP_ALARM": 29,
+    "SI_DI_PROFILE_LOW_DENSITY_ALARM": 30,
+    "SI_DI_PROFILE_HIGH_DENSITY_ALARM": 31,
+    "SI_IR_CURRENT_PROBE_POSITION": 0,
+    "SI_IR_CURRENT_TEMPERATURE": 1,
+    "SI_IR_CURRENT_DENSITY": 2,
+    "SI_IR_LIQUID_LEVEL": 3,
+    "SI_IR_NUMBER_OF_POINTS": 5,
+    "SI_IR_PROFILE_TIMESTAMP_MONTH": 6,
+    "SI_IR_PROFILE_TIMESTAMP_DAY": 7,
+    "SI_IR_PROFILE_TIMESTAMP_HOUR": 8,
+    "SI_IR_PROFILE_TIMESTAMP_MINUTE": 9,
+    "SI_IR_CURRENT_TIME_HOUR": 10,
+    "SI_IR_CURRENT_TIME_MINUTE": 11,
+    "SI_IR_CURRENT_TIME_SECOND": 12,
+    "SI_IR_PROFILE_POINT0_POSITION": 20,
+    "SI_HR_PROFILE_FIRST_POINT": 0,
+    "SI_HR_PROFILE_INCREMENT": 1,
+    "SI_HR_PROFILE_DWELL_TIME": 2,
+    "SI_HR_AUTO_PROFILE_INTERVAL": 9,
+    "SI_HR_AUTO_PROFILE_ENABLE": 10,
+    "SI_HR_AUTO_PROFILE_HOUR": 11,
+    "SI_HR_AUTO_PROFILE_MINUTE": 12,
+    "SI_HR_LOW_DENSITY_SETPOINT": 13,
+    "SI_HR_HIGH_DENSITY_SETPOINT": 14,
+    "SI_HR_LOW_TEMPERATURE_SETPOINT": 15,
+    "SI_HR_HIGH_TEMPERATURE_SETPOINT": 16,
+    "SI_HR_LL_LEVEL_SETPOINT": 17,
+    "SI_HR_HH_LEVEL_SETPOINT": 18,
+    "SI_HR_LOW_LEVEL_SETPOINT": 19,
+    "SI_HR_HIGH_LEVEL_SETPOINT": 20,
+    "SI_HR_TEMP_DEVIATION_SETPOINT": 21,
+    "SI_HR_DENSITY_DEVIATION_SETPOINT": 22,
 }
 
 
 @dataclass(frozen=True)
 class FrameCase:
-    """一组 SI7000 参考帧，包含帧字节、期望十六进制和联调用途说明。"""
+    """一组 SI 参考帧，包含帧字节、期望十六进制和联调用途说明。"""
 
     name: str
     frame: list[int]
@@ -109,9 +109,9 @@ class FrameCase:
 
 
 def read_text(path: Path) -> str:
-    """按 UTF-8 读取新增 SI7000 源码，借此尽早发现编码异常。"""
+    """按 UTF-8 读取新增 SI 源码，借此尽早发现编码异常。"""
 
-    # 新增 SI7000 模块统一按 UTF-8 维护，脚本直接用 UTF-8 读取，便于发现编码异常。
+    # 新增 SI 模块统一按 UTF-8 维护，脚本直接用 UTF-8 读取，便于发现编码异常。
     return path.read_text(encoding="utf-8")
 
 
@@ -124,17 +124,17 @@ def parse_c_int(value: str) -> int:
 
 
 def parse_defines(text: str) -> dict[str, int]:
-    """提取 SI7000_* 宏常量，避免无关宏影响协议契约检查。"""
+    """提取 SI_* 宏常量，避免无关宏影响协议契约检查。"""
 
     values: dict[str, int] = {}
-    # 只解析 SI7000_* 常量，避免把无关宏纳入契约检查导致误报。
-    for match in re.finditer(r"#define\s+(SI7000_[A-Z0-9_]+)\s+([0-9A-Fa-fxXuUlL]+)\b", text):
+    # 只解析 SI_* 常量，避免把无关宏纳入契约检查导致误报。
+    for match in re.finditer(r"#define\s+(SI_[A-Z0-9_]+)\s+([0-9A-Fa-fxXuUlL]+)\b", text):
         values[match.group(1)] = parse_c_int(match.group(2))
     return values
 
 
 def parse_enums(text: str) -> dict[str, int]:
-    """提取 SI7000 枚举值，同时支持显式赋值和 C 语言隐式自增。"""
+    """提取 SI 枚举值，同时支持显式赋值和 C 语言隐式自增。"""
 
     values: dict[str, int] = {}
     for enum_body in re.findall(r"enum\s*\{(.*?)\};", text, re.S):
@@ -142,7 +142,7 @@ def parse_enums(text: str) -> dict[str, int]:
         for raw_line in enum_body.splitlines():
             # 支持显式赋值和隐式自增两种 C 枚举写法，保持脚本与源码写法解耦。
             line = raw_line.split("//", 1)[0].strip().rstrip(",")
-            if not line or not line.startswith("SI7000_"):
+            if not line or not line.startswith("SI_"):
                 continue
             if "=" in line:
                 name, raw_value = [part.strip() for part in line.split("=", 1)]
@@ -189,14 +189,16 @@ FRAME_CASES = [
     FrameCase("FC01 默认安全态响应", with_crc([0x01, 0x01, 0x02, 0x01, 0x01]), "01 01 02 01 01 79 AC", "Manual+Stop 位按 Modbus bit 顺序打包"),
     FrameCase("FC02 读 10001~10032 请求", with_crc([0x01, 0x02, 0x00, 0x00, 0x00, 0x20]), "01 02 00 00 00 20 79 D2", "读取全部离散输入"),
     FrameCase("FC02 默认公制响应", with_crc([0x01, 0x02, 0x04, 0x20, 0x00, 0x00, 0x00]), "01 02 04 20 00 00 00 F0 22", "Unit Is Metric 位为 1"),
-    FrameCase("FC03 读 40010~40013 请求", with_crc([0x01, 0x03, 0x00, 0x09, 0x00, 0x04]), "01 03 00 09 00 04 94 0B", "读取自动 profile 影子寄存器"),
-    FrameCase("FC03 影子寄存器零值响应", with_crc([0x01, 0x03, 0x08, 0, 0, 0, 0, 0, 0, 0, 0]), "01 03 08 00 00 00 00 00 00 00 00 95 D7", "未写入前为 0"),
+    FrameCase("FC03 读 40010~40013 请求", with_crc([0x01, 0x03, 0x00, 0x09, 0x00, 0x04]), "01 03 00 09 00 04 94 0B", "读取 CPU3 自动 profile 参数"),
+    FrameCase("FC03 自动 profile 默认响应", with_crc([0x01, 0x03, 0x08, 0x00, 0x3C, 0, 0, 0, 0, 0, 0]), "01 03 08 00 3C 00 00 00 00 00 00 69 D4", "默认周期 60min，默认关闭"),
     FrameCase("FC04 读 30001~30013 请求", with_crc([0x01, 0x04, 0x00, 0x00, 0x00, 0x0D]), "01 04 00 00 00 0D 31 CF", "读取实时值和时间寄存器"),
-    FrameCase("FC04 零快照响应", with_crc([0x01, 0x04, 0x1A] + [0] * 26), "01 04 1A 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 DF 82", "参考零快照，真实时间可非零"),
+    FrameCase("FC04 零快照响应", with_crc([0x01, 0x04, 0x1A, 0x00, 0x00, 0xB1, 0xE0] + [0] * 22), "01 04 1A 00 00 B1 E0 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 77 4B", "参考零快照，温度无效值为 -200.00C，真实时间可非零"),
     FrameCase("FC05 写 Profile ON 请求", with_crc([0x01, 0x05, 0x00, 0x03, 0xFF, 0x00]), "01 05 00 03 FF 00 7C 3A", "写单线圈标准格式"),
     FrameCase("FC05 写 Profile ON 回显", with_crc([0x01, 0x05, 0x00, 0x03, 0xFF, 0x00]), "01 05 00 03 FF 00 7C 3A", "回包显式重建功能码、地址和值"),
     FrameCase("FC06 写 40012=23 请求", with_crc([0x01, 0x06, 0x00, 0x0B, 0x00, 0x17]), "01 06 00 0B 00 17 B8 06", "Automatic Profile Hour 最大合法值"),
     FrameCase("FC06 写 40012=23 回显", with_crc([0x01, 0x06, 0x00, 0x0B, 0x00, 0x17]), "01 06 00 0B 00 17 B8 06", "合法值回显"),
+    FrameCase("FC06 写 40016=-20.00C 请求", with_crc([0x01, 0x06, 0x00, 0x0F, 0xF8, 0x30]), "01 06 00 0F F8 30 FA 1D", "低温限值按 int16 补码写入"),
+    FrameCase("FC06 写 40016=-20.00C 回显", with_crc([0x01, 0x06, 0x00, 0x0F, 0xF8, 0x30]), "01 06 00 0F F8 30 FA 1D", "合法负温度限值回显"),
     FrameCase("FC03 非法地址请求", with_crc([0x01, 0x03, 0x00, 0x17, 0x00, 0x01]), "01 03 00 17 00 01 34 0E", "40024 超出保持寄存器表"),
     FrameCase("FC03 非法地址响应", with_crc([0x01, 0x83, 0x02]), "01 83 02 C0 F1", "Illegal Data Address"),
     FrameCase("FC06 非法 40011=2 请求", with_crc([0x01, 0x06, 0x00, 0x0A, 0x00, 0x02]), "01 06 00 0A 00 02 28 09", "Automatic Profile Enable 只允许 0/1"),
@@ -239,7 +241,7 @@ def dump_frames() -> None:
 def main() -> int:
     """命令行入口，默认执行一致性检查，--dump 时额外输出参考帧。"""
 
-    parser = argparse.ArgumentParser(description="Check SI7000 Modbus constants and golden frames.")
+    parser = argparse.ArgumentParser(description="Check SI Modbus constants and golden frames.")
     parser.add_argument("--dump", action="store_true", help="print golden frames")
     args = parser.parse_args()
 
@@ -252,7 +254,7 @@ def main() -> int:
 
     if args.dump:
         dump_frames()
-    print("[OK] SI7000 Modbus constants and golden frames are consistent.")
+    print("[OK] SI Modbus constants and golden frames are consistent.")
     return 0
 
 

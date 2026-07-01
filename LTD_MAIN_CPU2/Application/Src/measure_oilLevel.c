@@ -1078,7 +1078,7 @@ uint32_t SearchOilLevel(void) {
     /* 打印测量结果 */
     printf("液位测量\t液位：%lu(0.1mm)\r\n", (unsigned long)g_measurement.oil_measurement.oil_level);
 
-    /* 成功找到液位后才置位 SI7000 的 Probe At Liquid Level 和液体稳定状态。 */
+    /* 成功找到液位后才置位 SI 的 Probe At Liquid Level 和液体稳定状态。 */
     g_measurement.oil_measurement.probe_at_liquid_level = 1;
     g_measurement.oil_measurement.liquid_stable = 1;
     OilLevel_UpdateAoOutput();
@@ -1564,7 +1564,7 @@ static int determineTheSensorPositionAndUpdateTheLevelValue(void) {
 	}
 	/* 步骤4: 负位置允许作为正常结果，上报时按0；非负且低于盲区才按下限处理。 */
 	else if ((oil_level_s64 >= 0) && (oil_level_s64 < (int64_t)g_deviceParams.blindZone)) {
-		/* 盲区内位置不作为 SI7000 的有效液位命中，避免 PLC 误判液位稳定。 */
+		/* 盲区内位置不作为 SI 的有效液位命中，避免 PLC 误判液位稳定。 */
 		g_measurement.oil_measurement.probe_at_liquid_level = 0;
 		g_measurement.oil_measurement.liquid_stable = 0;
 		printf("超声波找液位\t到达位置下限\r\n");

@@ -57,6 +57,7 @@ CPU2 参数加载会校验 FRAM 中的 `magic`、`struct_size`、`param_version`
 | V1.19.0.0 | 3 | 存储版本不变；命令 115 改为保留、修复液位/水位标定固定偏差、读取部件参数增加连接 MAC 快照并统一液位/扭力口径，旧 FRAM 参数通常保留 |
 | V1.20.0.0 | 3 | 存储版本不变；协议版本升至 13，内部密度 raw 升级到 `kg/m3 x100`，旧协议 FRAM 密度参数按运行期迁移，旧 FRAM 参数通常保留 |
 | V1.20.1.0 | 3 | 存储版本不变；参数打印、Modbus 写参差异、分布密度悬停单位和初始化日志整理，旧 FRAM 参数通常保留 |
+| V1.21.0.0 | 3 | 存储版本不变；协议版本升至 14，原 `reserved30~reserved33` 复用为 SI profile 首点、步距、停留和探底频次参数，旧 FRAM 参数通常保留并在协议迁移或运行期归一化补默认值 |
 
 历史说明：建立 CPU2 程序版本号前，2025-12-16 引入当前参数元信息时使用 `DEVICE_PARAM_VERSION=1`；2026-03-05 系统参数增加时提升到 `DEVICE_PARAM_VERSION=2`，从版本 1 升级到版本 2 会因旧参数版本不匹配恢复出厂参数。
 
@@ -1873,3 +1874,43 @@ CPU2 参数加载会校验 FRAM 中的 `magic`、`struct_size`、`param_version`
 - 未做实物联调；需要现场覆盖 AS5145 断线、空帧、OCF 未完成、COF 和偶发校验错误，确认 3 次重试后日志不刷屏且通信可在有效帧恢复后自恢复。
 - 未重新构建 CPU3；本次没有 CPU3 源码行为改动，CPU3 仅作为提交标题和文档资料的版本参照。
 - 本次包含文档和提交门禁工具整理，需要推送前按仓库要求运行 `py tools\check_commit_subject_versions.py --range origin/MAIN..HEAD`。
+
+## 2026-07-01 - 落地 SI协议独立 Profile 兼容（CPU2 V1.21.0.0 / CPU3 V1.19.0.0）
+
+版本：
+- CPU2: V1.20.3.0 -> V1.21.0.0。
+- CPU3: V1.18.2.0 -> V1.19.0.0。
+
+协议版本/兼容性：
+- `DEVICE_PROTOCOL_VERSION`: 13 -> 14。
+- CPU2 `DEVICE_PARAM_VERSION` 保持 3，`DeviceParameters` 结构大小和 FRAM 参数校验规则不变，不会因本次升级触发恢复出厂参数。
+- CPU2 复用原 `reserved30~reserved33` 作为 SI profile 首点、步距、停留和探底频次；旧协议存储会按 `protocolVersion < 14` 或运行期归一化补默认值。
+- CPU3 本机参数版本升至 `0x0006`，新增 SI 自动 profile 和报警限值参数，旧 V3/V4/V5 本机参数按迁移逻辑补默认值。
+- CPU2/CPU3 必须同为协议版本 14 才能正确识别 `CMD_SI_PROFILE`、SI profile 参数、`profile_source` 和输入寄存器偏移；协议 13 不能混用。
+
+本次修改：
+- 新增 `CMD_SI_PROFILE = 20`，SI `00004 Profile`、屏幕 SI Profile 和自动调度均下发独立 SI profile 命令，不再复用普通分布测量。
+- CPU2 新增 SI profile 执行流程，按探底频次处理上电首次探底、旧底部位置回退、Point0、最多 200 点和液面以上点停止。
+- CPU2 在普通分布、国标、每米、间隔、Wärtsilä 和 SI profile 完成后写入 `profile_source`，CPU3 SI 协议只认 `PROFILE_SOURCE_SI` 的完成态和点阵。
+- 修复 SI profile 逐点采样过程中命令切换仍可能用部分有效点进入完成态的问题，命令切换统一返回 `STATE_SWITCH`。
+- CPU3 将 `40001~40003` 桥接到 CPU2 SI profile 参数，将 `40010~40023` 保存为 CPU3 SI 本机参数，并落地自动 profile 调度。
+- CPU3 菜单新增 `SI参数`，包含 Profile 参数、自动 Profile 和报警限值；`SI首点/SI步距/SI停留/SI探底` 均启用屏幕侧范围校验。
+- SI 温度无效值统一输出 `-200.00°C`，密度无效值保持 `0`；温度限值按 signed int16 解释，报警阈值 `0` 作为有效值参与判断。
+- 同步 SI 协议映射、PLC 联调检查表、协议变更记录、程序流程页、版本测试方案和 Wartsila 原始资料 README。
+
+验证：
+- `py tools\check_si_protocol_contract.py`
+- `py tools\check_si_modbus_frames.py`
+- `py tools\check_cpu3_menu_name_width.py`
+- `py LTD_DISPLAY_CPU3\font_check.py`
+- `py tools\check_docs_structure.py`
+- `py tools\check_markdown_links.py docs\01_协议与寄存器\SI协议适配`
+- `cmake --build build\LTD_MAIN_CPU2`
+- `cmake --build build\LTD_DISPLAY_CPU3`
+- `git diff --cached --check`
+- `py tools\check_version_bumped.py`
+
+未验证风险：
+- 未做真实 SI PLC 或科学仪器主机联调；需要现场覆盖 `00004 Profile`、屏幕 SI Profile、自动 profile、报警限值和负温度限值。
+- 需要现场验证探底失败、无旧底部位置、旧底部位置回退、液面以上点停止和命令切换打断的完整测量过程。
+- SI 输入寄存器仍按 DCS 表输出 200 个 profile 点；超过 200 点需要另行设计扩展地址或分页机制。

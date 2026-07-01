@@ -105,7 +105,7 @@ static ComProtocolType Cpu3_NormalizeProtocol(int32_t protocol)
     case COM_PROTO_DSM:
     case COM_PROTO_WARTSILA:
     case COM_PROTO_LTD:
-    case COM_PROTO_SI7000:
+    case COM_PROTO_SI:
         return (ComProtocolType)protocol;
     default:
         return COM_PROTO_DSM;
@@ -153,8 +153,8 @@ static void Cpu3_FillProtocolSerialProfile(ComProtocolType protocol, ComPortConf
         profile->stopbits = COM_STOPBITS_1;
         break;
 
-    case COM_PROTO_SI7000:
-        /* SI7000 官方 Modbus 资料要求 9600 8O1。 */
+    case COM_PROTO_SI:
+        /* SI 官方 Modbus 资料要求 9600 8O1。 */
         profile->baudrate = 9600U;
         profile->databits = 8U;
         profile->parity = COM_PARITY_ODD;
@@ -319,6 +319,50 @@ static uint8_t Cpu3_SanitizeAllPortConfigs(void)
     return changed;
 }
 
+/*
+ * SI 自动 profile 和报警限值是 CPU3 本机协议参数。
+ * 这里统一补默认值，供恢复出厂和旧 FRAM 迁移复用。
+ */
+static void Cpu3_InitSiParams(void)
+{
+    g_cpu3_comm_display_params.si_auto_profile_interval = 60U;
+    g_cpu3_comm_display_params.si_auto_profile_enable = 0U;
+    g_cpu3_comm_display_params.si_auto_profile_hour = 0U;
+    g_cpu3_comm_display_params.si_auto_profile_minute = 0U;
+    g_cpu3_comm_display_params.si_low_density_setpoint = 0U;
+    g_cpu3_comm_display_params.si_high_density_setpoint = 0U;
+    g_cpu3_comm_display_params.si_low_temperature_setpoint = 0U;
+    g_cpu3_comm_display_params.si_high_temperature_setpoint = 0U;
+    g_cpu3_comm_display_params.si_ll_level_setpoint = 0U;
+    g_cpu3_comm_display_params.si_hh_level_setpoint = 0U;
+    g_cpu3_comm_display_params.si_low_level_setpoint = 0U;
+    g_cpu3_comm_display_params.si_high_level_setpoint = 0U;
+    g_cpu3_comm_display_params.si_temp_deviation_setpoint = 0U;
+    g_cpu3_comm_display_params.si_density_deviation_setpoint = 0U;
+}
+
+static uint16_t Cpu3_ClampU16Param(int32_t value)
+{
+    if (value <= 0) {
+        return 0U;
+    }
+    if (value > 65535) {
+        return 65535U;
+    }
+    return (uint16_t)value;
+}
+
+static int16_t Cpu3_ClampS16Param(int32_t value)
+{
+    if (value < -32768) {
+        return (int16_t)-32768;
+    }
+    if (value > 32767) {
+        return (int16_t)32767;
+    }
+    return (int16_t)value;
+}
+
 /* 读取 CPU3 本机参数当前值（统一入口） */
 int32_t Cpu3Local_ReadValue(OperatingNumber opera)
 {
@@ -407,6 +451,36 @@ int32_t Cpu3Local_ReadValue(OperatingNumber opera)
         return (int32_t)g_cpu3_comm_display_params.com3.stopbits;
     case COM_NUM_CPU3_COM3_PROTOCOL:
         return (int32_t)g_cpu3_comm_display_params.com3.protocol;
+
+    /* SI */
+    case COM_NUM_CPU3_SI_AUTO_PROFILE_INTERVAL:
+        return g_cpu3_comm_display_params.si_auto_profile_interval;
+    case COM_NUM_CPU3_SI_AUTO_PROFILE_ENABLE:
+        return g_cpu3_comm_display_params.si_auto_profile_enable;
+    case COM_NUM_CPU3_SI_AUTO_PROFILE_HOUR:
+        return g_cpu3_comm_display_params.si_auto_profile_hour;
+    case COM_NUM_CPU3_SI_AUTO_PROFILE_MINUTE:
+        return g_cpu3_comm_display_params.si_auto_profile_minute;
+    case COM_NUM_CPU3_SI_LOW_DENSITY_SETPOINT:
+        return g_cpu3_comm_display_params.si_low_density_setpoint;
+    case COM_NUM_CPU3_SI_HIGH_DENSITY_SETPOINT:
+        return g_cpu3_comm_display_params.si_high_density_setpoint;
+    case COM_NUM_CPU3_SI_LOW_TEMPERATURE_SETPOINT:
+        return g_cpu3_comm_display_params.si_low_temperature_setpoint;
+    case COM_NUM_CPU3_SI_HIGH_TEMPERATURE_SETPOINT:
+        return g_cpu3_comm_display_params.si_high_temperature_setpoint;
+    case COM_NUM_CPU3_SI_LL_LEVEL_SETPOINT:
+        return g_cpu3_comm_display_params.si_ll_level_setpoint;
+    case COM_NUM_CPU3_SI_HH_LEVEL_SETPOINT:
+        return g_cpu3_comm_display_params.si_hh_level_setpoint;
+    case COM_NUM_CPU3_SI_LOW_LEVEL_SETPOINT:
+        return g_cpu3_comm_display_params.si_low_level_setpoint;
+    case COM_NUM_CPU3_SI_HIGH_LEVEL_SETPOINT:
+        return g_cpu3_comm_display_params.si_high_level_setpoint;
+    case COM_NUM_CPU3_SI_TEMP_DEVIATION_SETPOINT:
+        return g_cpu3_comm_display_params.si_temp_deviation_setpoint;
+    case COM_NUM_CPU3_SI_DENSITY_DEVIATION_SETPOINT:
+        return g_cpu3_comm_display_params.si_density_deviation_setpoint;
 
     default:
         return 0;
@@ -529,6 +603,50 @@ void Cpu3Local_WriteValue(OperatingNumber opera, int32_t v)
         (void)Cpu3_ApplyProtocolSerialProfile(&g_cpu3_comm_display_params.com3);
         break;
 
+    /* SI */
+    case COM_NUM_CPU3_SI_AUTO_PROFILE_INTERVAL:
+        g_cpu3_comm_display_params.si_auto_profile_interval = (v <= 0) ? 1U : Cpu3_ClampU16Param(v);
+        break;
+    case COM_NUM_CPU3_SI_AUTO_PROFILE_ENABLE:
+        g_cpu3_comm_display_params.si_auto_profile_enable = (v != 0) ? 1U : 0U;
+        break;
+    case COM_NUM_CPU3_SI_AUTO_PROFILE_HOUR:
+        g_cpu3_comm_display_params.si_auto_profile_hour = (uint8_t)((v < 0) ? 0 : ((v > 23) ? 23 : v));
+        break;
+    case COM_NUM_CPU3_SI_AUTO_PROFILE_MINUTE:
+        g_cpu3_comm_display_params.si_auto_profile_minute = (uint8_t)((v < 0) ? 0 : ((v > 59) ? 59 : v));
+        break;
+    case COM_NUM_CPU3_SI_LOW_DENSITY_SETPOINT:
+        g_cpu3_comm_display_params.si_low_density_setpoint = Cpu3_ClampU16Param(v);
+        break;
+    case COM_NUM_CPU3_SI_HIGH_DENSITY_SETPOINT:
+        g_cpu3_comm_display_params.si_high_density_setpoint = Cpu3_ClampU16Param(v);
+        break;
+    case COM_NUM_CPU3_SI_LOW_TEMPERATURE_SETPOINT:
+        g_cpu3_comm_display_params.si_low_temperature_setpoint = Cpu3_ClampS16Param(v);
+        break;
+    case COM_NUM_CPU3_SI_HIGH_TEMPERATURE_SETPOINT:
+        g_cpu3_comm_display_params.si_high_temperature_setpoint = Cpu3_ClampS16Param(v);
+        break;
+    case COM_NUM_CPU3_SI_LL_LEVEL_SETPOINT:
+        g_cpu3_comm_display_params.si_ll_level_setpoint = Cpu3_ClampU16Param(v);
+        break;
+    case COM_NUM_CPU3_SI_HH_LEVEL_SETPOINT:
+        g_cpu3_comm_display_params.si_hh_level_setpoint = Cpu3_ClampU16Param(v);
+        break;
+    case COM_NUM_CPU3_SI_LOW_LEVEL_SETPOINT:
+        g_cpu3_comm_display_params.si_low_level_setpoint = Cpu3_ClampU16Param(v);
+        break;
+    case COM_NUM_CPU3_SI_HIGH_LEVEL_SETPOINT:
+        g_cpu3_comm_display_params.si_high_level_setpoint = Cpu3_ClampU16Param(v);
+        break;
+    case COM_NUM_CPU3_SI_TEMP_DEVIATION_SETPOINT:
+        g_cpu3_comm_display_params.si_temp_deviation_setpoint = Cpu3_ClampU16Param(v);
+        break;
+    case COM_NUM_CPU3_SI_DENSITY_DEVIATION_SETPOINT:
+        g_cpu3_comm_display_params.si_density_deviation_setpoint = Cpu3_ClampU16Param(v);
+        break;
+
     default:
         break;
     }
@@ -581,7 +699,7 @@ static void Cpu3_ReinitOneUart(UART_HandleTypeDef *huart, const ComPortConfig *c
     huart->Init.BaudRate = cfg->baudrate;
     /*
      * STM32 HAL 的有校验 8 数据位需要配置 9B，最高位由硬件作为校验位发送。
-     * 如果仍配置 8B，SI7000 的 8O1 会实际变成 7O1。
+     * 如果仍配置 8B，SI 的 8O1 会实际变成 7O1。
      */
     huart->Init.WordLength =
         ((cfg->databits == 9) || (cfg->parity != COM_PARITY_NONE)) ? UART_WORDLENGTH_9B : UART_WORDLENGTH_8B;
@@ -628,6 +746,7 @@ void Cpu3_Params_InitDefaults(void)
     /* 显示类默认 */
     g_cpu3_comm_display_params.screen_decimal  = 2;
     g_cpu3_comm_display_params.screen_brightness = OLED_BRIGHTNESS_LEVEL_LOW;
+    Cpu3_InitSiParams();
 
     /* ========== 串口默认：保持和你现在 usart.c 一致 ========== */
 
@@ -684,7 +803,8 @@ void Cpu3_ReinitAllUarts(void)
 #define CPU3_PARAM_MAGIC   0x43505533UL   /* 'CPU3' */
 #define CPU3_PARAM_VERSION_V3 0x0003U
 #define CPU3_PARAM_VERSION_V4 0x0004U
-#define CPU3_PARAM_VERSION 0x0005U
+#define CPU3_PARAM_VERSION_V5 0x0005U
+#define CPU3_PARAM_VERSION 0x0006U
 
 typedef struct
 {
@@ -715,6 +835,37 @@ typedef struct
     Cpu3CommAndDisplayParamsV3  params;
     uint32_t                    crc;
 } Cpu3ParamStorageV3;
+
+typedef struct
+{
+    uint32_t local_led_version;
+    uint8_t  language;
+    uint8_t screen_source_oil;
+    uint8_t screen_source_water;
+    uint8_t screen_source_d;
+    uint8_t screen_source_t;
+    int32_t screen_input_oil;
+    int32_t screen_input_water;
+    int32_t screen_input_d;
+    uint8_t screen_input_d_switch;
+    int32_t screen_input_t;
+    uint8_t  screen_decimal;
+    uint16_t screen_password;
+    uint8_t  screen_off_time;
+    uint8_t  screen_brightness;
+    ComPortConfig com1;
+    ComPortConfig com2;
+    ComPortConfig com3;
+} Cpu3CommAndDisplayParamsV5;
+
+typedef struct
+{
+    uint32_t                    magic;
+    uint16_t                    version;
+    uint16_t                    reserved;
+    Cpu3CommAndDisplayParamsV5  params;
+    uint32_t                    crc;
+} Cpu3ParamStorageV5;
 
 typedef struct
 {
@@ -780,6 +931,22 @@ static bool Cpu3_Params_StorageV3Valid(const Cpu3ParamStorageV3 *stor)
     return crc_calc == stor->crc;
 }
 
+static bool Cpu3_Params_StorageV5Valid(const Cpu3ParamStorageV5 *stor)
+{
+    uint32_t crc_len;
+    uint32_t crc_calc;
+
+    if ((stor->magic != CPU3_PARAM_MAGIC) ||
+        ((stor->version != CPU3_PARAM_VERSION_V4) && (stor->version != CPU3_PARAM_VERSION_V5)))
+    {
+        return false;
+    }
+
+    crc_len = sizeof(Cpu3ParamStorageV5) - sizeof(stor->crc);
+    crc_calc = CRC32_HAL((uint8_t*)stor, crc_len);
+    return crc_calc == stor->crc;
+}
+
 /**
  * @brief 执行参数存储中的 Cpu3_Params_MigrateFromV3 逻辑。
  *
@@ -808,6 +975,32 @@ static void Cpu3_Params_MigrateFromV3(const Cpu3ParamStorageV3 *stor)
     g_cpu3_comm_display_params.com1 = stor->params.com1;
     g_cpu3_comm_display_params.com2 = stor->params.com2;
     g_cpu3_comm_display_params.com3 = stor->params.com3;
+    Cpu3_InitSiParams();
+}
+
+static void Cpu3_Params_MigrateFromV5(const Cpu3ParamStorageV5 *stor)
+{
+    memset(&g_cpu3_comm_display_params, 0, sizeof(g_cpu3_comm_display_params));
+
+    g_cpu3_comm_display_params.local_led_version = stor->params.local_led_version;
+    g_cpu3_comm_display_params.language = stor->params.language;
+    g_cpu3_comm_display_params.screen_source_oil = stor->params.screen_source_oil;
+    g_cpu3_comm_display_params.screen_source_water = stor->params.screen_source_water;
+    g_cpu3_comm_display_params.screen_source_d = stor->params.screen_source_d;
+    g_cpu3_comm_display_params.screen_source_t = stor->params.screen_source_t;
+    g_cpu3_comm_display_params.screen_input_oil = stor->params.screen_input_oil;
+    g_cpu3_comm_display_params.screen_input_water = stor->params.screen_input_water;
+    g_cpu3_comm_display_params.screen_input_d = stor->params.screen_input_d;
+    g_cpu3_comm_display_params.screen_input_d_switch = stor->params.screen_input_d_switch;
+    g_cpu3_comm_display_params.screen_input_t = stor->params.screen_input_t;
+    g_cpu3_comm_display_params.screen_decimal = stor->params.screen_decimal;
+    g_cpu3_comm_display_params.screen_password = stor->params.screen_password;
+    g_cpu3_comm_display_params.screen_off_time = stor->params.screen_off_time;
+    g_cpu3_comm_display_params.screen_brightness = stor->params.screen_brightness;
+    g_cpu3_comm_display_params.com1 = stor->params.com1;
+    g_cpu3_comm_display_params.com2 = stor->params.com2;
+    g_cpu3_comm_display_params.com3 = stor->params.com3;
+    Cpu3_InitSiParams();
 }
 
 static int32_t Cpu3_MigrateDensityInputX10ToX100(int32_t raw)
@@ -879,14 +1072,38 @@ void Cpu3_Params_LoadFromFRAM(void)
             (void)Cpu3_MigrateLegacyWartsilaDefaults();
             Cpu3Local_ApplyDisplayRuntimeParams();
             Cpu3_Params_SaveToFRAM();
-            printf("CPU3 FRAM参数已从V3升级到V5，亮度使用默认挡位。\r\n");
+            printf("CPU3 FRAM参数已从V3升级到V6，亮度与SI参数使用默认值。\r\n");
             return;
         }
 
         printf("CPU3 FRAM V3参数CRC无效，使用默认值。\r\n");
         use_default = 1;
+    } else if ((stor.magic == CPU3_PARAM_MAGIC) &&
+               ((stor.version == CPU3_PARAM_VERSION_V4) || (stor.version == CPU3_PARAM_VERSION_V5))) {
+        Cpu3ParamStorageV5 legacy;
+
+        memset(&legacy, 0, sizeof(legacy));
+        ReadMultiData((uint8_t*)&legacy, FRAM_CPU3_PARAM_ADDRESS, sizeof(Cpu3ParamStorageV5));
+        if (Cpu3_Params_StorageV5Valid(&legacy)) {
+            Cpu3_Params_MigrateFromV5(&legacy);
+            if (legacy.version == CPU3_PARAM_VERSION_V4) {
+                g_cpu3_comm_display_params.screen_input_d =
+                    Cpu3_MigrateDensityInputX10ToX100(g_cpu3_comm_display_params.screen_input_d);
+            }
+            (void)Cpu3_ApplyFirmwareVersionRuntime();
+            (void)Cpu3_SanitizeAllPortConfigs();
+            (void)Cpu3_MigrateLegacyWartsilaDefaults();
+            Cpu3Local_ApplyDisplayRuntimeParams();
+            Cpu3_Params_SaveToFRAM();
+            printf("CPU3 FRAM参数已从V%u升级到V6，补入SI参数默认值。\r\n",
+                   (unsigned)legacy.version);
+            return;
+        }
+
+        printf("CPU3 FRAM V%u参数CRC无效，使用默认值。\r\n", (unsigned)stor.version);
+        use_default = 1;
     } else if ((stor.magic != CPU3_PARAM_MAGIC) ||
-               ((stor.version != CPU3_PARAM_VERSION) && (stor.version != CPU3_PARAM_VERSION_V4))) {
+               (stor.version != CPU3_PARAM_VERSION)) {
         printf("CPU3 FRAM参数魔术字/版本无效，使用默认值。\r\n");
         use_default = 1;
     } else {
@@ -912,11 +1129,6 @@ void Cpu3_Params_LoadFromFRAM(void)
         uint8_t need_save = 0U;
 
         g_cpu3_comm_display_params = stor.params;
-        if (stor.version == CPU3_PARAM_VERSION_V4) {
-            g_cpu3_comm_display_params.screen_input_d =
-                Cpu3_MigrateDensityInputX10ToX100(g_cpu3_comm_display_params.screen_input_d);
-            need_save = 1U;
-        }
         if (Cpu3_ApplyFirmwareVersionRuntime()) {
             need_save = 1U;
         }

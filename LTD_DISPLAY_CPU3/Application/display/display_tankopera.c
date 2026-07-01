@@ -20,6 +20,7 @@
 #include "system_parameter.h"
 #include "cpu3_comm_display_params.h"
 #include "cpu3_clock.h"
+#include "si_modbus_slave.h"
 #include "app_version.h"
 #include "system_parameter.h"
 #include <string.h>    /* for memset, memcpy, strcmp, strlen... */
@@ -208,7 +209,7 @@ static uint8_t *arr_protocol[][2] = {
 	{ (uint8_t*)"计量仪协议", (uint8_t*)"DSM" },
 	{ (uint8_t*)"瓦锡兰协议", (uint8_t*)"Wartsila LTD" },
 	{ (uint8_t*)"LTD协议", (uint8_t*)"LTD" },
-	{ (uint8_t*)"SI7000协议", (uint8_t*)"SI7000" }, /* 显示侧只暴露协议选择，具体串口参数由配置归一化自动处理。 */
+	{ (uint8_t*)"SI协议", (uint8_t*)"SI" }, /* 显示侧只暴露协议选择，具体串口参数由配置归一化自动处理。 */
 	{ (uint8_t*)"非法配置", (uint8_t*)"Illegal CFG" },
 };
 static uint8_t *arr_bottom[][2] = {
@@ -352,6 +353,10 @@ static void menu_bottom_tankh(void);
 static void menu_correct(void);
 static void menu_policy(void)  ;
 static void menu_wartsila(void)  ;
+static void menu_si_config(void);
+static void menu_si_profile(void);
+static void menu_si_auto_profile(void);
+static void menu_si_alarm(void);
 
 static void menu_output_config(void);
 static void menu_do_alarm(void)  ;
@@ -839,6 +844,22 @@ struct KeyMenu keymenu[KEYNUM_END] = {
     [KEYNUM_ERROR_REASON] =
         { exitTankOpera, NULL, NULL, exitTankOpera,
           USE_KEY_BACK | USE_KEY_SURE, Display_ShowErrorReasonPage },
+
+    [KEYNUM_MENU_SI_CONFIG] =
+        { menu_si_config, menu_si_config, menu_si_config, menu_si_config,
+          USE_KEY_BACK | USE_KEY_UP | USE_KEY_DOWN | USE_KEY_SURE, menu_si_config },
+
+    [KEYNUM_MENU_SI_PROFILE] =
+        { menu_si_profile, menu_si_profile, menu_si_profile, menu_si_profile,
+          USE_KEY_BACK | USE_KEY_UP | USE_KEY_DOWN | USE_KEY_SURE, menu_si_profile },
+
+    [KEYNUM_MENU_SI_AUTO_PROFILE] =
+        { menu_si_auto_profile, menu_si_auto_profile, menu_si_auto_profile, menu_si_auto_profile,
+          USE_KEY_BACK | USE_KEY_UP | USE_KEY_DOWN | USE_KEY_SURE, menu_si_auto_profile },
+
+    [KEYNUM_MENU_SI_ALARM] =
+        { menu_si_alarm, menu_si_alarm, menu_si_alarm, menu_si_alarm,
+          USE_KEY_BACK | USE_KEY_UP | USE_KEY_DOWN | USE_KEY_SURE, menu_si_alarm },
 };
 
 
@@ -1322,6 +1343,7 @@ static uint8_t *dtm_operaname(int num)
         { COM_NUM_METER_DENSITY,       (uint8_t*)"密度每米测量",   (uint8_t*)"DT-PerMeter-M" },
         { COM_NUM_INTERVAL_DENSITY,    (uint8_t*)"区间密度测量",   (uint8_t*)"Interval-M" },
         { COM_NUM_WARTSILA_DENSITY,    (uint8_t*)"瓦锡兰区间密度", (uint8_t*)"Wartsila Interval-M" },
+        { COM_NUM_SI_PROFILE,          (uint8_t*)"SI Profile",     (uint8_t*)"SI Profile" },
 
         { COM_NUM_READ_PART_PARAMS,    (uint8_t*)"读取部件参数",   (uint8_t*)"Read Component Params" },
     };
@@ -2606,6 +2628,7 @@ static pFunc_void dtm_backtofunc(void)
     case COM_NUM_METER_DENSITY:
     case COM_NUM_INTERVAL_DENSITY:
     case COM_NUM_WARTSILA_DENSITY:
+    case COM_NUM_SI_PROFILE:
         return menu_measure_density_distribution;
 
     /* 密度单点测量子菜单 */
@@ -2669,6 +2692,11 @@ static pFunc_void dtm_backtofunc(void)
         case MENU_GRP_CORR:          p = menu_correct;      break;
         case MENU_GRP_POLICY:        p = menu_policy;       break;
         case MENU_GRP_WARTSILA:      p = menu_wartsila;     break;
+        case MENU_GRP_SI_PROFILE:
+        case MENU_GRP_CPU3_SI_AUTO:
+        case MENU_GRP_CPU3_SI_ALARM:
+            p = menu_si_config;
+            break;
         case MENU_GRP_DO_ALARM:      p = RelayParam_BackToConfigMenu(now_Opera_Num); break;
         case MENU_GRP_AO:            p = menu_ao;           break;
         case MENU_GRP_CAL_SP:        p = menu_cal_sp;       break;
@@ -2968,6 +2996,7 @@ static void cmd_nopara_process(void)
         { COM_NUM_METER_DENSITY,      CMD_MEASURE_DENSITY_METER },
         { COM_NUM_INTERVAL_DENSITY,   CMD_MEASURE_DENSITY_RANGE },
         { COM_NUM_WARTSILA_DENSITY,   CMD_WARTSILA_DENSITY_RANGE },
+        { COM_NUM_SI_PROFILE,         CMD_SI_PROFILE },
 
         { COM_NUM_READ_PART_PARAMS,   CMD_READ_PART_PARAMS },          /* 新增 */
 
@@ -3009,7 +3038,11 @@ static void cmd_nopara_process(void)
 /* } */
 
     /* 下发命令 */
-    send_cpu2_command(cmd);
+    if (now_Opera_Num == COM_NUM_SI_PROFILE) {
+        si_profile_request_start();
+    } else {
+        send_cpu2_command(cmd);
+    }
 
     /* ---------- UI 反馈与退出策略（保留你现有行为） ---------- */
     if (now_Opera_Num == COM_NUM_RESTOR_EFACTORYSETTING) {
@@ -3654,7 +3687,7 @@ static int protocol_value_to_selection_index(int value)
 		return 1;
 	case COM_PROTO_LTD:
 		return 2;
-	case COM_PROTO_SI7000:
+	case COM_PROTO_SI:
 		return 3;
 	default:
 		return 0;
@@ -3674,7 +3707,7 @@ static int selection_index_to_value(int operaNum, int selectedIndex)
 		COM_PROTO_DSM,
 		COM_PROTO_WARTSILA,
 		COM_PROTO_LTD,
-		COM_PROTO_SI7000,
+		COM_PROTO_SI,
 	};
 
 	if (opera_is_com_protocol(operaNum)) {
@@ -4227,6 +4260,7 @@ static void menu_measure_density_distribution(void)
         { (uint8_t*)"密度每米测量", COM_NUM_METER_DENSITY, ifsendcmd, COMMANE_NORW, (uint8_t*)"MeterDensity" },
         { (uint8_t*)"区间密度测量", COM_NUM_INTERVAL_DENSITY, ifsendcmd, COMMANE_NORW, (uint8_t*)"RangeDensity" },
         { (uint8_t*)"瓦锡兰区间密度", COM_NUM_WARTSILA_DENSITY, ifsendcmd, COMMANE_NORW, (uint8_t*)"WartsilaRange" },
+        { (uint8_t*)"SI Profile", COM_NUM_SI_PROFILE, ifsendcmd, COMMANE_NORW, (uint8_t*)"SIProfile" },
         { (uint8_t*)"返回", COM_NUM_NOOPERA, measuremenu, COMMANE_NORW, (uint8_t*)"Back" },
     };
 
@@ -4864,6 +4898,12 @@ static MenuGroup ParamGroupOf(int operaNum)
     case COM_NUM_DEVICEPARAM_BOTTOM_ENCODER_CORRECTION_TANK_HEIGHT:
         return MENU_GRP_WARTSILA;
 
+    case COM_NUM_DEVICEPARAM_SI_PROFILE_FIRST_POINT:
+    case COM_NUM_DEVICEPARAM_SI_PROFILE_INCREMENT:
+    case COM_NUM_DEVICEPARAM_SI_PROFILE_DWELL_TIME:
+    case COM_NUM_DEVICEPARAM_SI_PROFILE_BOTTOM_DETECT_INTERVAL:
+        return MENU_GRP_SI_PROFILE;
+
     /* AO */
     case COM_NUM_DEVICEPARAM_AO_START_LEVEL:
     case COM_NUM_DEVICEPARAM_AO_END_LEVEL:
@@ -4950,6 +4990,24 @@ static MenuGroup ParamGroupOf(int operaNum)
     case COM_NUM_CPU3_COM3_STOPBITS:
     case COM_NUM_CPU3_COM3_PROTOCOL:
         return MENU_GRP_CPU3_COM3;
+
+    case COM_NUM_CPU3_SI_AUTO_PROFILE_INTERVAL:
+    case COM_NUM_CPU3_SI_AUTO_PROFILE_ENABLE:
+    case COM_NUM_CPU3_SI_AUTO_PROFILE_HOUR:
+    case COM_NUM_CPU3_SI_AUTO_PROFILE_MINUTE:
+        return MENU_GRP_CPU3_SI_AUTO;
+
+    case COM_NUM_CPU3_SI_LOW_DENSITY_SETPOINT:
+    case COM_NUM_CPU3_SI_HIGH_DENSITY_SETPOINT:
+    case COM_NUM_CPU3_SI_LOW_TEMPERATURE_SETPOINT:
+    case COM_NUM_CPU3_SI_HIGH_TEMPERATURE_SETPOINT:
+    case COM_NUM_CPU3_SI_LL_LEVEL_SETPOINT:
+    case COM_NUM_CPU3_SI_HH_LEVEL_SETPOINT:
+    case COM_NUM_CPU3_SI_LOW_LEVEL_SETPOINT:
+    case COM_NUM_CPU3_SI_HIGH_LEVEL_SETPOINT:
+    case COM_NUM_CPU3_SI_TEMP_DEVIATION_SETPOINT:
+    case COM_NUM_CPU3_SI_DENSITY_DEVIATION_SETPOINT:
+        return MENU_GRP_CPU3_SI_ALARM;
 
     default:
         /* 未分类项：避免丢失，统一放到“校验信息”或“基础信息”都可以 */
@@ -5219,6 +5277,7 @@ static void menu_measure_config(void)
         {(uint8_t*)"罐底与罐高",    0, menu_bottom_tankh, COMMANE_NORW, (uint8_t*)"Bottom/TankH"},
         {(uint8_t*)"密度测量参数",  0, menu_policy,       COMMANE_NORW, (uint8_t*)"Density"},
         {(uint8_t*)"Wartsila参数",  0, menu_wartsila,     COMMANE_NORW, (uint8_t*)"Wartsila"},
+        {(uint8_t*)"SI参数",        0, menu_si_config,COMMANE_NORW, (uint8_t*)"SI"},
         {(uint8_t*)"修正参数",      0, menu_correct,      COMMANE_NORW, (uint8_t*)"Correction"},
         {(uint8_t*)"返回",          0, menu_paracfg_main, COMMANE_NORW, (uint8_t*)"Back"},
     };
@@ -5544,6 +5603,35 @@ static void menu_policy(void)       { menu_build_by_group(MENU_GRP_POLICY,      
  * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
  */
 static void menu_wartsila(void)     { menu_build_by_group(MENU_GRP_WARTSILA,     KEYNUM_MENU_PARA_WARTSILA,     menu_measure_config); }
+
+static void menu_si_config(void)
+{
+    static struct MenuData menu[] = {
+        {(uint8_t*)"Profile参数", 0, menu_si_profile,       COMMANE_NORW, (uint8_t*)"Profile"},
+        {(uint8_t*)"自动Profile", 0, menu_si_auto_profile,  COMMANE_NORW, (uint8_t*)"Auto Profile"},
+        {(uint8_t*)"报警限值",    0, menu_si_alarm,         COMMANE_NORW, (uint8_t*)"Alarm Limit"},
+        {(uint8_t*)"返回",        0, menu_measure_config,   COMMANE_NORW, (uint8_t*)"Back"},
+    };
+
+    oled_clear();
+    func_index = KEYNUM_MENU_SI_CONFIG;
+    menuselect(menu, (int)(sizeof(menu) / sizeof(menu[0])));
+}
+
+static void menu_si_profile(void)
+{
+    menu_build_by_group(MENU_GRP_SI_PROFILE, KEYNUM_MENU_SI_PROFILE, menu_si_config);
+}
+
+static void menu_si_auto_profile(void)
+{
+    menu_build_by_group(MENU_GRP_CPU3_SI_AUTO, KEYNUM_MENU_SI_AUTO_PROFILE, menu_si_config);
+}
+
+static void menu_si_alarm(void)
+{
+    menu_build_by_group(MENU_GRP_CPU3_SI_ALARM, KEYNUM_MENU_SI_ALARM, menu_si_config);
+}
 
 /**
  * @brief 执行屏幕菜单操作中的 menu_output_config 逻辑。

@@ -169,6 +169,10 @@ void ProcessMeasureCmd(CommandType command)
         printf("执行分布测量指令\r\n");
         CMD_MeasureDensitySpread_Spread();
         break;
+    case CMD_SI_PROFILE:
+        printf("执行SI Profile指令\r\n");
+        CMD_SiProfile();
+        break;
 
     case CMD_GB_MEASURE_DISTRIBUTED:
         printf("执行国标分布测量指令\r\n");
@@ -272,7 +276,6 @@ void ProcessMeasureCmd(CommandType command)
 
     /* ================== 预留 / 未知 ================== */
 
-    case CMD_RESERVED_CMD1:
     case CMD_RESERVED_CMD2:
     case CMD_RESERVED_CMD3:
     case CMD_RESERVED_CMD5:
@@ -455,7 +458,7 @@ int MeasureStart(void) {
 	g_measurement.device_status.error_code = NO_ERROR; /* 故障代码清零 */
     /*
      * 外部协议适配辅助状态随新测量命令重新计算，避免上一次流程残留。
-     * 这些状态只给 CPU3/SI7000 做协议转换，不参与原测量流程控制。
+     * 这些状态只给 CPU3/SI 做协议转换，不参与原测量流程控制。
      */
     g_measurement.oil_measurement.probe_at_liquid_level = 0U;
     g_measurement.oil_measurement.liquid_stable = 0U;
@@ -691,7 +694,7 @@ static void CMD_MeasureBottom(void) {
                        (long)diff_real_height);
             }
 
-            /* 探底成功后置位罐底参考有效，CPU3 可据此点亮 SI7000 Bottom Reference 位。 */
+            /* 探底成功后置位罐底参考有效，CPU3 可据此点亮 SI Bottom Reference 位。 */
             g_measurement.height_measurement.bottom_reference_valid = 1U;
             g_measurement.device_status.device_state = STATE_FINDBOTTOM_OVER;
             return;
@@ -807,14 +810,14 @@ static void CMD_CorrectOilLevel(void) {
 static void CMD_EnterMaintenanceMode(void)
 {
     printf("进入维护模式\n");
-    /* 维护模式是 SI7000 Manual/Stop 的保守映射，手动期间抑制自动报警和液位自动更新。 */
+    /* 维护模式是 SI Manual/Stop 的保守映射，手动期间抑制自动报警和液位自动更新。 */
     g_measurement.device_status.manual_alarm_inhibit = 1U;
     g_measurement.oil_measurement.manual_level_update_inhibit = 1U;
     g_measurement.device_status.device_state = STATE_MAINTENANCEMODE;
     while (1) {
         if (HasEffectiveCommandSwitchRequest()) {
             printf("检测到命令切换请求，停止当前操作\r\n");
-            /* 命令切换退出时必须清除抑制位，避免 CPU3 长时间保持 SI7000 手动抑制状态。 */
+            /* 命令切换退出时必须清除抑制位，避免 CPU3 长时间保持 SI 手动抑制状态。 */
             g_measurement.device_status.manual_alarm_inhibit = 0U;
             g_measurement.oil_measurement.manual_level_update_inhibit = 0U;
             return;
@@ -860,7 +863,7 @@ static void CMD_MoveDown(void)
     uint32_t ret = 0;
 
     printf("电机下行操作\n");
-    /* 手动下行同样设置抑制位，CPU3 据此把 SI7000 报警/液位更新状态与自动测量隔离。 */
+    /* 手动下行同样设置抑制位，CPU3 据此把 SI 报警/液位更新状态与自动测量隔离。 */
     g_measurement.device_status.manual_alarm_inhibit = 1U;
     g_measurement.oil_measurement.manual_level_update_inhibit = 1U;
     g_measurement.device_status.device_state = STATE_RUNDOWNING;
@@ -1053,6 +1056,7 @@ static void CMD_WartsilaDensitySpread(void) {
 	g_measurement.density_distribution = temp;
 	g_measurement.density_distribution.profile_complete_latched = 1U;
 	g_measurement.density_distribution.profile_complete_counter = previous_profile_complete_counter + 1U;
+	g_measurement.density_distribution.profile_source = PROFILE_SOURCE_WARTSILA;
 
 	if (AbortableDelay_CommandSwitch(1000U, 100U) == STATE_SWITCH) {
 		return;
