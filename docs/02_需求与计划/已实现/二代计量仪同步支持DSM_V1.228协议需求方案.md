@@ -43,7 +43,7 @@
 
 - 重构整个 DSM_modbus 目录。
 - 改动 CUBE 内部通用 Modbus 协议。
-- 改动 Wartsila、SI7000 协议行为。
+- 改动 Wartsila、SI协议行为。
 - 改动屏幕菜单布局，除非某个 DSM 命令必须通过菜单同步触发。
 - 做真实硬件自检流程，除非确认 `0x0109 自检` 需要完整硬件动作。
 
@@ -173,7 +173,7 @@ DSM V1.228 状态表对外定义如下关键状态：
 
 1. 在 CPU3 DSM 外部协议层新增 `DSM_TranslateDeviceState()`。
 2. 只在 DSM 输入寄存器 `0x0001` 输出前做状态码翻译。
-3. 内部 `g_measurement.device_status.device_state` 不改，避免影响屏幕、SI7000、Wartsila 和 CPU2/CPU3 共享协议。
+3. 内部 `g_measurement.device_status.device_state` 不改，避免影响屏幕、SI、Wartsila 和 CPU2/CPU3 共享协议。
 4. 对无法映射的 CUBE 内部扩展状态，按需求确认后处理：
    - 方案 A：返回原始值，保持可诊断性。
    - 方案 B：归一为 `0x0022/0x8022` 罐上仪表操作或 `0xFFFF` 故障。

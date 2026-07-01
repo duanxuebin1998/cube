@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>读取部件参数增加蓝牙连接 RSSI 需求方案</title>
+  <title>读取部件参数增加蓝牙连接 RSSI协议需求方案</title>
   <style>
     :root {
       color-scheme: light;
@@ -228,7 +228,7 @@
 <body>
   <header>
     <div class="inner">
-      <h1>读取部件参数增加蓝牙连接 RSSI 需求方案</h1>
+      <h1>读取部件参数增加蓝牙连接 RSSI协议需求方案</h1>
       <p class="subtitle">面向 CPU2/CPU3 固件的落地方案：在现有读取部件参数命令中补充当前蓝牙连接 RSSI 读取、共享、显示和验证方案。</p>
       <div class="meta">
         <div><b>文档日期</b>2026-06-13</div>
@@ -318,7 +318,7 @@
           <tr>
             <td>对外可见性</td>
             <td>推荐通过 CPU2/CPU3 共享输入寄存器发布，CPU3 可显示，上位机也可读取。</td>
-            <td>是否需要同步映射到 DSM、SI7000 或其他外部协议。</td>
+            <td>是否需要同步映射到 DSM、SI 或其他外部协议。</td>
           </tr>
         </tbody>
       </table>
@@ -489,7 +489,7 @@
         <li>蓝牙未连接或 RSSI 读取失败时，读取部件参数是否仍然显示完成。当前推荐为仍完成。</li>
         <li>RSSI 刷新周期已采用独立 5 秒节流；读取部件参数主页面仍按现有 1 秒周期刷新。</li>
         <li>显示单位最终写作 <code>dB</code> 还是 <code>dBm</code>，需要以 CH9141K 手册或现场约定为准。</li>
-        <li>是否需要把 RSSI 映射到 DSM、SI7000 或其他外部协议；当前推荐先仅做 CPU2/CPU3 共享输入寄存器和 CPU3 显示。</li>
+        <li>是否需要把 RSSI 映射到 DSM、SI 或其他外部协议；当前推荐先仅做 CPU2/CPU3 共享输入寄存器和 CPU3 显示。</li>
       </ol>
     </section>
 

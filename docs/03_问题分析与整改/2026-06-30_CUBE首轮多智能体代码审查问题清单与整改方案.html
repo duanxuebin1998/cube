@@ -510,7 +510,7 @@
           <h4>验证建议</h4>
           <ul>
             <li>构造电机实际移动距离明显小于目标距离的仿真或 HIL 场景，确认返回 <code>ENCODER_LOST_STEP</code>。</li>
-            <li>确认 CPU2 输入寄存器、CPU3 故障页、外部 DSM/SI7000 状态均能看到该错误码。</li>
+            <li>确认 CPU2 输入寄存器、CPU3 故障页、外部 DSM/SI 状态均能看到该错误码。</li>
             <li>补单元测试或静态测试，锁定“健康检查成功不能覆盖失步错误”。</li>
           </ul>
         </article>
@@ -847,7 +847,7 @@
           </p>
           <h4>影响</h4>
           <p>
-            CPU2 短响应、异常残留帧或 DMA 缓冲旧数据可能污染 CPU3 的 <code>InputRegisterArray</code> 和 <code>g_measurement</code>，随后外部 DSM/Wartsila/SI7000 会对外发布错误测量值。
+            CPU2 短响应、异常残留帧或 DMA 缓冲旧数据可能污染 CPU3 的 <code>InputRegisterArray</code> 和 <code>g_measurement</code>，随后外部 DSM/Wartsila/SI 会对外发布错误测量值。
           </p>
           <h4>整改方案</h4>
           <ul>
@@ -1129,7 +1129,7 @@
             <span class="badge p2">P2</span>
           </div>
           <div class="evidence">
-            <strong>证据位置：</strong><code>LTD_DISPLAY_CPU3/Application/app_main.c:408</code>、<code>LTD_DISPLAY_CPU3/Communication/internal/main_board_modbus/cpu2_communicate.c:342</code>、<code>LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c:903</code>、<code>LTD_DISPLAY_CPU3/Communication/external/si7000_modbus/si7000_modbus_slave.c:351</code>。
+            <strong>证据位置：</strong><code>LTD_DISPLAY_CPU3/Application/app_main.c:408</code>、<code>LTD_DISPLAY_CPU3/Communication/internal/main_board_modbus/cpu2_communicate.c:342</code>、<code>LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c:903</code>、<code>LTD_DISPLAY_CPU3/Communication/external/si_modbus/si_modbus_slave.c:351</code>。
           </div>
           <h4>问题原因</h4>
           <p>
@@ -1146,7 +1146,7 @@
             <li>通过状态寄存器暴露 CPU2 下发中、成功、失败和失败原因。</li>
           </ul>
           <h4>验证建议</h4>
-          <p>模拟 CPU2 不响应，连续写 DSM/SI7000/Wartsila 参数，确认外部响应时间仍满足主站超时配置。</p>
+          <p>模拟 CPU2 不响应，连续写 DSM/SI/Wartsila 参数，确认外部响应时间仍满足主站超时配置。</p>
         </article>
 
         <article class="issue p2" id="issue-p2-08">

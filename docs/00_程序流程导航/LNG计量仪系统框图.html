@@ -381,7 +381,7 @@
           <text x="44" y="104" class="box-title">外部主站 / 现场设备</text>
           <text x="44" y="134" class="box-text">PLC / DCS / 上位机</text>
           <text x="44" y="158" class="box-text">DSM V1.228 主站</text>
-          <text x="44" y="182" class="box-text">SI7000 PLC</text>
+          <text x="44" y="182" class="box-text">SI PLC</text>
           <text x="44" y="206" class="box-text">Wärtsilä / LTD 主站</text>
           <text x="44" y="246" class="box-text">现场操作人员</text>
           <text x="44" y="270" class="small-text">通过按键和屏幕菜单操作</text>
@@ -398,7 +398,7 @@
 
           <rect x="332" y="238" width="282" height="98" rx="6" fill="#ffffff" stroke="#a9d8dc"></rect>
           <text x="352" y="266" class="box-title">外部协议适配层</text>
-          <text x="352" y="290" class="box-text">DSM / Wärtsilä / LTD / SI7000</text>
+          <text x="352" y="290" class="box-text">DSM / Wärtsilä / LTD / SI</text>
           <text x="352" y="314" class="small-text">按 COM1/COM2/COM3 配置分发</text>
 
           <rect x="332" y="356" width="282" height="76" rx="6" fill="#ffffff" stroke="#a9d8dc"></rect>
@@ -650,7 +650,7 @@
               <td>CPU3</td>
               <td>外部 COM 口</td>
               <td>COM1 = <code>USART6</code> PC6/PC7 + PB9；COM2 = <code>USART2</code> PD5/PD6 + PB8；COM3 = <code>USART3</code> PD8/PD9 + PB12</td>
-              <td>外部 DSM、Wärtsilä、LTD、SI7000 等协议入口。</td>
+              <td>外部 DSM、Wärtsilä、LTD、SI 等协议入口。</td>
             </tr>
             <tr>
               <td>CPU3</td>
@@ -824,7 +824,7 @@
       <div class="diagram">
         <svg viewBox="0 0 1180 470" role="img" aria-labelledby="external-title external-desc">
           <title id="external-title">外部接口与协议适配框图</title>
-          <desc id="external-desc">CPU3 的 COM1、COM2、COM3 可配置 DSM、Wartsila、LTD、SI7000 等协议，并把外部地址和命令翻译到内部共享模型。</desc>
+          <desc id="external-desc">CPU3 的 COM1、COM2、COM3 可配置 DSM、Wartsila、LTD、SI 等协议，并把外部地址和命令翻译到内部共享模型。</desc>
           <defs>
             <marker id="arrow3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
               <path d="M 0 0 L 10 5 L 0 10 z" fill="#526474"></path>
@@ -836,7 +836,7 @@
           <rect x="42" y="82" width="244" height="278" rx="8" fill="#fff3dc" stroke="#d6a55d"></rect>
           <text x="64" y="116" class="box-title">外部主站</text>
           <text x="64" y="150" class="box-text">DSM V1.228</text>
-          <text x="64" y="180" class="box-text">SI7000 PLC</text>
+          <text x="64" y="180" class="box-text">SI PLC</text>
           <text x="64" y="210" class="box-text">Wärtsilä 主站</text>
           <text x="64" y="240" class="box-text">LTD / 其他 Modbus 主站</text>
           <text x="64" y="294" class="small-text">功能码：0x03 / 0x04 / 0x05 / 0x10</text>
@@ -865,7 +865,7 @@
           <text x="870" y="240" class="box-title">线圈或命令转换</text>
           <text x="870" y="262" class="box-text">外部命令写入内部 command</text>
           <rect x="850" y="296" width="248" height="62" rx="6" fill="#fff7e8" stroke="#d6a55d"></rect>
-          <text x="870" y="322" class="box-title">SI7000 串口收敛</text>
+          <text x="870" y="322" class="box-title">SI 串口收敛</text>
           <text x="870" y="344" class="box-text">选择协议后自动归一为 9600 8O1</text>
 
           <path d="M 286 220 C 332 220, 358 220, 400 220" stroke="#526474" stroke-width="2.2" fill="none" marker-end="url(#arrow3)"></path>
@@ -897,10 +897,10 @@
               <td>内部状态不能简单等同 DSM 状态，必要时由 CPU3 做状态码翻译。</td>
             </tr>
             <tr>
-              <td>SI7000</td>
+              <td>SI</td>
               <td>CPU3 外部协议层</td>
-              <td>将 SI7000 所需地址、状态位、线圈、缩放和异常响应映射到 CUBE 内部模型。</td>
-              <td>串口配置选择 SI7000 后自动收敛到 <code>9600 8O1</code>，避免菜单组合出 PLC 不兼容配置。</td>
+              <td>将 SI 所需地址、状态位、线圈、缩放和异常响应映射到 CUBE 内部模型。</td>
+              <td>串口配置选择 SI 后自动收敛到 <code>9600 8O1</code>，避免菜单组合出 PLC 不兼容配置。</td>
             </tr>
             <tr>
               <td>Wärtsilä</td>
@@ -1113,7 +1113,7 @@
             <tr>
               <td><span class="chip">CPU3</span></td>
               <td>外部协议适配</td>
-              <td>按 COM 口协议配置处理 DSM、Wärtsilä、LTD、SI7000 外部 Modbus 帧。</td>
+              <td>按 COM 口协议配置处理 DSM、Wärtsilä、LTD、SI 外部 Modbus 帧。</td>
               <td><code>LTD_DISPLAY_CPU3/Communication/external</code>、<code>docs/01_协议与寄存器</code></td>
             </tr>
             <tr>
@@ -1164,7 +1164,7 @@
         <li><code>LTD_MAIN_CPU2/Application/Inc/app_version.h</code>、<code>LTD_DISPLAY_CPU3/Application/app_version.h</code>：当前 CPU2/CPU3 固件版本。</li>
         <li><code>docs/01_协议与寄存器/CPU2_CPU3协议变更记录.md</code>：共享协议版本 12、状态和参数语义。</li>
         <li><code>LTD_DISPLAY_CPU3/Application/system_param/system_parameter.h</code>：命令、状态、共享结构和无线滑环运行态字段。</li>
-        <li><code>LTD_DISPLAY_CPU3/Application/system_param/com_port_config.h</code>、<code>cpu3_comm_display_params.c</code>：COM1/2/3 协议配置和 SI7000 串口收敛规则。</li>
+        <li><code>LTD_DISPLAY_CPU3/Application/system_param/com_port_config.h</code>、<code>cpu3_comm_display_params.c</code>：COM1/2/3 协议配置和 SI 串口收敛规则。</li>
         <li><code>docs/02_需求与计划</code>、<code>docs/03_问题分析与整改</code>、<code>docs/04_界面与菜单</code>：自动恢复、启动安全、无线滑环和菜单说明。</li>
       </ul>
     </section>

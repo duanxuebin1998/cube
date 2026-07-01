@@ -204,7 +204,7 @@
       "domain": "回零与罐底罐高",
       "order": 4,
       "h1": "CMD_FIND_BOTTOM 罐底测量流程",
-      "purpose": "寻找罐底/实高，给液位、密度和 SI7000 Bottom Reference 提供基准。",
+      "purpose": "寻找罐底/实高，给液位、密度和 SI Bottom Reference 提供基准。",
       "value": "4",
       "category": "普通测量指令",
       "entry": "ProcessMeasureCmd() -> CMD_MeasureBottom()",
@@ -513,7 +513,7 @@
       "domain": "密度与单点测量",
       "order": 10,
       "h1": "CMD_MEASURE_DISTRIBUTED 普通分布密度测量流程",
-      "purpose": "生成一组普通分布密度点，供 CPU3/SI7000 读取 profile。",
+      "purpose": "生成一组普通分布密度点，供 CPU3/SI 读取 profile。",
       "value": "10",
       "category": "密度分布指令",
       "entry": "ProcessMeasureCmd() -> CMD_MeasureDensitySpread_Spread()",
@@ -532,7 +532,7 @@
       "params": [
         "spreadMeasurementOrder、点位构建参数：决定普通分布采样点。",
         "Density_oil_level：由找液位结果提供。",
-        "profile_*：CPU3 读取 SI7000 profile 的完成沿。"
+        "profile_*：CPU3 读取 SI profile 的完成沿。"
       ],
       "states": [
         "device_state 按左侧状态表变化。",
@@ -1428,7 +1428,7 @@
       "domain": "参数存储与系统配置",
       "order": 30,
       "h1": "CMD_MAINTENANCE_MODE 维护模式流程",
-      "purpose": "让 CPU3/SI7000 呈现手动/停用语义，并暂停自动液位更新。",
+      "purpose": "让 CPU3/SI 呈现手动/停用语义，并暂停自动液位更新。",
       "value": "109",
       "category": "系统/维护指令",
       "entry": "ProcessMeasureCmd() -> CMD_EnterMaintenanceMode()",

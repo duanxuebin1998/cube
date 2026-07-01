@@ -1,0 +1,528 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SI协议进一步兼容改动点与实施结果</title>
+  <style>
+    :root {
+      --ink: #1f2933;
+      --muted: #64748b;
+      --line: #d8dee9;
+      --panel: #f7f9fc;
+      --accent: #0f766e;
+      --accent-soft: #e6f4f1;
+      --warn: #a16207;
+      --warn-soft: #fff7db;
+      --risk: #b91c1c;
+      --risk-soft: #fff1f1;
+      --cpu2: #1d4ed8;
+      --cpu3: #047857;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      color: var(--ink);
+      background: #ffffff;
+      font-family: "Microsoft YaHei", "Segoe UI", Arial, sans-serif;
+      line-height: 1.62;
+    }
+    header {
+      padding: 34px 42px 24px;
+      border-bottom: 1px solid var(--line);
+      background: linear-gradient(180deg, #f8fafc 0%, #ffffff 100%);
+    }
+    main {
+      max-width: 1180px;
+      margin: 0 auto;
+      padding: 28px 34px 56px;
+    }
+    h1 {
+      margin: 0 0 10px;
+      font-size: 30px;
+      line-height: 1.25;
+      letter-spacing: 0;
+    }
+    h2 {
+      margin: 34px 0 14px;
+      padding-top: 10px;
+      border-top: 2px solid var(--line);
+      font-size: 22px;
+      letter-spacing: 0;
+    }
+    h3 {
+      margin: 24px 0 10px;
+      font-size: 18px;
+      letter-spacing: 0;
+    }
+    p { margin: 8px 0 12px; }
+    a { color: var(--accent); }
+    code {
+      padding: 1px 5px;
+      border-radius: 4px;
+      background: #eef2f7;
+      font-family: Consolas, "Cascadia Mono", monospace;
+      font-size: 0.94em;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 12px 0 22px;
+      table-layout: fixed;
+    }
+    th, td {
+      border: 1px solid var(--line);
+      padding: 9px 10px;
+      vertical-align: top;
+      word-break: break-word;
+    }
+    th {
+      background: #edf2f7;
+      text-align: left;
+      font-weight: 700;
+    }
+    ul, ol { padding-left: 24px; }
+    li { margin: 5px 0; }
+    .meta {
+      color: var(--muted);
+      font-size: 14px;
+    }
+    .summary {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+      margin-top: 20px;
+    }
+    .metric {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 14px;
+      background: #ffffff;
+    }
+    .metric strong {
+      display: block;
+      margin-bottom: 4px;
+      font-size: 20px;
+      color: var(--accent);
+    }
+    .note {
+      border-left: 4px solid var(--accent);
+      background: var(--accent-soft);
+      padding: 12px 14px;
+      margin: 14px 0;
+    }
+    .warn {
+      border-left: 4px solid var(--warn);
+      background: var(--warn-soft);
+      padding: 12px 14px;
+      margin: 14px 0;
+    }
+    .risk {
+      border-left: 4px solid var(--risk);
+      background: var(--risk-soft);
+      padding: 12px 14px;
+      margin: 14px 0;
+    }
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 700;
+      color: #ffffff;
+      white-space: nowrap;
+    }
+    .badge.cpu2 { background: var(--cpu2); }
+    .badge.cpu3 { background: var(--cpu3); }
+    .badge.shared { background: #7c3aed; }
+    .badge.doc { background: #475569; }
+    .flow {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 10px;
+      margin: 14px 0 22px;
+    }
+    .step {
+      min-height: 100px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 12px;
+      background: var(--panel);
+    }
+    .step b {
+      display: block;
+      margin-bottom: 6px;
+      color: var(--accent);
+    }
+    .cols {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+    .panel {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 14px 16px;
+      background: var(--panel);
+    }
+    @media (max-width: 900px) {
+      header { padding: 26px 20px 18px; }
+      main { padding: 20px 16px 42px; }
+      .summary, .flow, .cols { grid-template-columns: 1fr; }
+      table { table-layout: auto; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>SI协议进一步兼容改动点与实施结果</h1>
+    <div class="meta">
+      日期：2026-07-01 ｜ 维护源：
+      <code>SI协议需求与实施总览.md</code>、
+      <code>SI协议待确认与后续清单.md</code>
+    </div>
+    <div class="summary">
+      <div class="metric"><strong>协议 14</strong>CPU2/CPU3 共享协议</div>
+      <div class="metric"><strong>40001~40003</strong>CPU2 profile 执行参数</div>
+      <div class="metric"><strong>200</strong>官方 DCS profile 点数上限</div>
+      <div class="metric"><strong>40010~40023</strong>CPU3 调度和报警参数</div>
+    </div>
+  </header>
+
+  <main>
+    <section>
+      <h2>1. 目标和边界</h2>
+      <p>本页记录 2026-07-01 SI协议进一步兼容的实际落地结果：当前已把 SI 基础协议兼容版推进到按 Scientific Instruments SI profile 行为独立执行的版本。核心原则是：CPU3 承担 SI协议和参数外观，CPU2 承担真实测量、电机动作和必要状态。</p>
+      <div class="note">
+        CPU2 不保存 SI Modbus 地址号、线圈、功能码、异常码和缩放规则，但保存 SI profile 执行参数。CPU3 负责把外部寄存器读写桥接到 CPU2 参数或 CPU3 本机参数，并下发 profile 启动命令。
+      </div>
+      <table>
+        <tr>
+          <th>范围</th>
+          <th>本次处理</th>
+          <th>不做或后续处理</th>
+        </tr>
+        <tr>
+          <td>SI profile 流程</td>
+          <td>新增独立命令、独立流程、Point0、探底频次、200 点上限。</td>
+          <td>不再复用普通分布密度测量流程。</td>
+        </tr>
+        <tr>
+          <td>SI 参数</td>
+          <td><code>40001~40003</code> 存入 CPU2 profile 执行参数，<code>40010~40023</code> 存入 CPU3 SI 参数。</td>
+          <td>CPU2 仍不处理 SI Modbus 地址和功能码。</td>
+        </tr>
+        <tr>
+          <td>状态和报警</td>
+          <td>CPU3 负责 SI 状态语义合成和报警限值判断。</td>
+          <td>只有必须依赖 CPU2 原始过程数据时，才新增最小共享结果。</td>
+        </tr>
+      </table>
+    </section>
+
+    <section>
+      <h2>2. 改动点总览</h2>
+      <table>
+        <tr>
+          <th style="width: 18%;">改动点</th>
+          <th style="width: 12%;">归属</th>
+          <th>实施方案</th>
+          <th style="width: 20%;">影响</th>
+        </tr>
+        <tr>
+          <td>新增 SI profile 命令</td>
+          <td><span class="badge shared">共享协议</span></td>
+          <td>新增 <code>CMD_SI_PROFILE</code>，CPU3 的 <code>00004 Profile</code> 不再桥接 <code>CMD_MEASURE_DISTRIBUTED</code>。</td>
+          <td>影响 <code>DEVICE_PROTOCOL_VERSION</code>。</td>
+        </tr>
+        <tr>
+          <td>新增 CPU2 profile 参数</td>
+          <td><span class="badge cpu2">CPU2</span></td>
+          <td>新增 <code>si_profile_first_point</code>、<code>si_profile_increment</code>、<code>si_profile_dwell_time</code> 和 <code>si_profile_bottom_detect_interval</code>，复用原预留参数槽并掉电保存。</td>
+          <td>影响共享协议版本；CPU2 <code>DEVICE_PARAM_VERSION</code> 保持 3。</td>
+        </tr>
+        <tr>
+          <td>解耦 <code>40001~40003</code></td>
+          <td><span class="badge shared">CPU2/CPU3</span></td>
+          <td>CPU3 对外仍暴露 SI 保持寄存器和菜单项，但底层桥接 CPU2 profile 参数，不再写普通分布测量参数。</td>
+          <td>避免影响普通分布测量。</td>
+        </tr>
+        <tr>
+          <td>独立 profile 测量流程</td>
+          <td><span class="badge cpu2">CPU2</span></td>
+          <td>新增独立入口，执行时读取 CPU2 保存的 profile 参数，完成探底、到底、Point0、逐点采样和点阵写入。</td>
+          <td>影响 CPU2 测量流程和流程图。</td>
+        </tr>
+        <tr>
+          <td>自动 profile 调度</td>
+          <td><span class="badge cpu3">CPU3</span></td>
+          <td>基于 <code>40010~40013</code> 和 CPU3 RTC，从起始时间开始按周期跨天触发；到点后直接覆盖当前命令。</td>
+          <td>影响 CPU3 调度流程。</td>
+        </tr>
+        <tr>
+          <td>状态合成</td>
+          <td><span class="badge cpu3">CPU3</span></td>
+          <td><code>10010=0</code> 固定可信；<code>10002/10003</code> 按液位跟随稳定状态合成；<code>10001</code> 保持现有逻辑。</td>
+          <td>影响 SI FC02 输出。</td>
+        </tr>
+        <tr>
+          <td>报警限值</td>
+          <td><span class="badge cpu3">CPU3</span></td>
+          <td><code>40014~40023</code> 不复用现有限值，CPU3 独立保存并合成 <code>10017~10026</code>、<code>10029~10032</code>。</td>
+          <td>影响报警寄存器和测试用例。</td>
+        </tr>
+        <tr>
+          <td>Profile Timestamp</td>
+          <td><span class="badge cpu3">CPU3</span></td>
+          <td><code>30007~30010</code> 改为 CPU3 收到手动 profile 或自动触发 profile 时的时间。</td>
+          <td>不依赖 CPU2 start 事件。</td>
+        </tr>
+      </table>
+    </section>
+
+    <section>
+      <h2>3. CPU2 / CPU3 详细职责</h2>
+      <div class="cols">
+        <div class="panel">
+          <h3><span class="badge cpu2">CPU2</span> 真实测量和状态来源</h3>
+          <ul>
+            <li>新增 <code>CMD_SI_PROFILE</code> 独立执行入口。</li>
+            <li>持久保存 SI profile 执行参数，不保存 SI Modbus 地址号。</li>
+            <li>维护底部位置有效性、按 SI profile 入口触发次数推进的探底计数、Point0 采集和 profile 点阵。</li>
+            <li>保留 <code>probe_at_liquid_level</code>、<code>liquid_stable</code>、<code>profile_complete_latched</code>、<code>profile_complete_counter</code> 等真实状态。</li>
+            <li>提供测量失败、阻挡、完成锁存和点阵数据给 CPU3 映射。</li>
+          </ul>
+        </div>
+        <div class="panel">
+          <h3><span class="badge cpu3">CPU3</span> 协议外观和参数合成</h3>
+          <ul>
+            <li>维护 SI Modbus RTU 从站、地址表、缩放和异常响应。</li>
+            <li>将 <code>40001~40003</code> 和菜单 profile 参数桥接到 CPU2 参数。</li>
+            <li>持久化 <code>40010~40023</code> 自动调度和报警限值。</li>
+            <li>将 <code>00004 Profile</code> 转为 <code>CMD_SI_PROFILE</code> 启动命令。</li>
+            <li>负责自动 profile 调度、时间戳锁存、状态位和报警位合成。</li>
+            <li>复用 <code>SlaveAddress</code> 作为 Tank ID，保持当前密度缩放和钳位。</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>4. 参数存储和状态回传</h2>
+      <table>
+        <tr>
+          <th>层级</th>
+          <th>字段</th>
+          <th>存放/传递</th>
+          <th>说明</th>
+        </tr>
+        <tr>
+          <td>CPU2 profile 执行参数</td>
+          <td><code>profile_first_point</code>、<code>profile_increment</code>、<code>profile_dwell_time</code>、<code>bottom_detect_frequency</code></td>
+          <td>CPU2 掉电保存</td>
+          <td>与 <code>40001~40003</code> 和探底频次对应，执行时直接读取。</td>
+        </tr>
+        <tr>
+          <td>CPU3 SI 参数</td>
+          <td><code>auto_profile_interval</code>、<code>auto_profile_enable</code>、<code>auto_profile_hour</code>、<code>auto_profile_minute</code>、<code>alarm_limit_*</code></td>
+          <td>CPU3 掉电保存</td>
+          <td>与 <code>40010~40023</code> 对应，负责调度和报警合成。</td>
+        </tr>
+        <tr>
+          <td>状态回传</td>
+          <td>profile lifecycle、Point0 captured、complete latch/counter、点阵、液位跟随稳定状态、失败/阻挡状态</td>
+          <td>CPU2 产生，CPU3 读取</td>
+          <td>CPU3 再映射为 <code>100xx</code>、<code>300xx</code> 和报警状态。</td>
+        </tr>
+      </table>
+    </section>
+
+    <section>
+      <h2>5. Profile 测量流程</h2>
+      <div class="flow">
+        <div class="step"><b>1. 触发</b>CPU3 收到手动 profile 或自动调度触发，锁存开始时间。</div>
+        <div class="step"><b>2. 启动</b>CPU3 下发 <code>CMD_SI_PROFILE</code>，不携带 profile 参数上下文。</div>
+        <div class="step"><b>3. 参数</b>CPU2 读取本机 SI profile 参数，并按进入 SI profile 入口的触发次数判断探底频次。</div>
+        <div class="step"><b>4. Point0</b>运行到底部位置采集 Point0；无旧底部且探底失败时使用当前位置，但不刷新底部参考。</div>
+        <div class="step"><b>5. 点阵</b>按 first point、increment、dwell time 生成候选点并逐点采样，最多 200 点；到点判定为液面以上时停止且不写入该点。</div>
+      </div>
+      <ol>
+        <li>探底频次默认 <code>1</code>；<code>1</code> 表示每次 profile 前探底，更大值表示每 N 次触发探底一次；计数按进入 CPU2 SI profile 入口推进，不按成功完成次数推进。</li>
+        <li>不探底时也必须运行到上次探底保存的底部位置读取 Point0。</li>
+        <li>停止条件包括当前候选点被判定为液面以上、达到上限位置或达到 200 点上限；液面以上点不写入有效点阵。</li>
+        <li>profile 完成后保持完成态，不自动回液位跟随。</li>
+      </ol>
+    </section>
+
+    <section>
+      <h2>6. 寄存器和状态改动</h2>
+      <h3>保持寄存器</h3>
+      <table>
+        <tr>
+          <th>地址</th>
+          <th>名称</th>
+          <th>改动方案</th>
+        </tr>
+        <tr><td><code>40001</code></td><td>Profile First Point</td><td>桥接 CPU2 profile 执行参数，表示 Point0 后首个停点。</td></tr>
+        <tr><td><code>40002</code></td><td>Profile Increment</td><td>桥接 CPU2 profile 执行参数，从底部向上递增。</td></tr>
+        <tr><td><code>40003</code></td><td>Profile Dwell Time</td><td>桥接 CPU2 profile 执行参数，表示停稳后的等待时间。</td></tr>
+        <tr><td><code>40010</code></td><td>Automatic Profile Interval</td><td>独立参数，禁止写入 0；关闭自动 profile 使用 <code>40011=0</code>。</td></tr>
+        <tr><td><code>40011~40013</code></td><td>自动 profile 使能和起始时间</td><td>CPU3 RTC 调度使用，可跨天。</td></tr>
+        <tr><td><code>40014~40023</code></td><td>报警限值</td><td>CPU3 独立保存和判断，不复用现有限值。</td></tr>
+      </table>
+
+      <h3>离散输入和输入寄存器</h3>
+      <table>
+        <tr>
+          <th>地址</th>
+          <th>改动方案</th>
+        </tr>
+        <tr><td><code>10001</code></td><td>Bottom Reference 保持现有逻辑，不在本轮固定覆盖。</td></tr>
+        <tr><td><code>10002/10003</code></td><td>液位跟随稳定后下传感器液体、上传感器空气；其它状态均显示液体。</td></tr>
+        <tr><td><code>10010</code></td><td>Probe Un-calibrated 固定返回可信，即 <code>0</code>。</td></tr>
+        <tr><td><code>10025/10026</code></td><td>按相邻点温度差和密度差生成 profile 偏差报警。</td></tr>
+        <tr><td><code>30007~30010</code></td><td>Profile Timestamp 改为 CPU3 收到或触发 profile 命令的时间。</td></tr>
+        <tr><td><code>30021~30620</code></td><td>输出 200 个 profile 点，每点位置、温度、密度三元组。</td></tr>
+      </table>
+    </section>
+
+    <section>
+      <h2>7. 实施结果</h2>
+      <ol>
+        <li>共享协议升到 <code>DEVICE_PROTOCOL_VERSION = 15</code>，新增 <code>CMD_SI_PROFILE = 20</code>，并通过 <code>profile_source</code> 隔离 SI profile 结果。</li>
+        <li>CPU2 复用预留槽新增 SI profile 执行参数，覆盖 <code>40001~40003</code> 及探底频次；<code>DEVICE_PARAM_VERSION</code> 保持 <code>3</code>。</li>
+        <li>CPU3 菜单和 SI Modbus 将 <code>40001~40003</code> 桥接到 CPU2 参数，不再桥接普通分布参数。</li>
+        <li>CPU2 新增 SI profile 独立测量入口，执行时读取本机 profile 参数。</li>
+        <li>CPU3 将 <code>00004 Profile</code> 改为锁存开始时间并下发 <code>CMD_SI_PROFILE</code>。</li>
+        <li>CPU3 落地自动 profile 调度、状态合成、报警合成和 timestamp 锁存；CPU3 本机参数 FRAM 版本升至 <code>0x0006</code>。</li>
+        <li>同步映射表、PLC 联调表、CPU2/CPU3 协议变更记录和 golden frame/契约检查脚本。</li>
+      </ol>
+      <h3>CPU3 菜单更新</h3>
+      <table>
+        <tr>
+          <th>菜单页</th>
+          <th>菜单项</th>
+          <th>存储归属</th>
+          <th>实现要求</th>
+        </tr>
+        <tr>
+          <td>SI Profile</td>
+          <td>SI首点、SI步距、SI停留、SI探底</td>
+          <td>CPU2 参数</td>
+          <td>新增 CPU2 参数操作号和参数同步；菜单写入后 CPU2 掉电保存，不能改普通分布参数。</td>
+        </tr>
+        <tr>
+          <td>自动 Profile</td>
+          <td>SI自动、SI周期、SI时、SI分</td>
+          <td>CPU3 本机参数</td>
+          <td>写入后保存 FRAM 并重算下一次触发；周期禁止为 0，关闭使用使能项。</td>
+        </tr>
+        <tr>
+          <td>SI 报警</td>
+          <td>低/高密度、低/高温、LL/HH 液位、低/高液位、温差、密差</td>
+          <td>CPU3 本机参数</td>
+          <td>与 <code>40014~40023</code> 同源，菜单、PLC 写入和报警合成使用同一套限值。</td>
+        </tr>
+        <tr>
+          <td>SI 状态</td>
+          <td>下次时间、触发源、完成计数</td>
+          <td>只读运行态</td>
+          <td>可作为第二阶段诊断页；不作为 SI协议必需项。</td>
+        </tr>
+      </table>
+      <ul>
+        <li><code>display_tankopera.c</code> 在参数配置下新增 <code>SI参数</code> 入口，拆分 Profile、自动 Profile、报警三个配置页。</li>
+        <li><code>display_tankopera.h</code> 同步新增 CPU2 参数操作号和 CPU3 本机操作号，避免把 CPU2-backed 菜单项误放入 CPU3 本机参数区。</li>
+        <li><code>cpu3_comm_display_params.c</code> 只保存 <code>40010~40023</code>；<code>40001~40003</code> 通过内部主板参数同步写 CPU2。</li>
+        <li>菜单显示已收敛为 128x64 OLED 可容纳的短名：<code>SI首点</code>、<code>SI步距</code>、<code>SI停留</code>、<code>SI探底</code>、<code>SI周期</code>、<code>SI自动</code>、<code>SI时</code>、<code>SI分</code>；修改后需重新运行菜单宽度和字库检查。</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>8. 版本、兼容和风险</h2>
+      <table>
+        <tr>
+          <th>事项</th>
+          <th>影响</th>
+          <th>处理</th>
+        </tr>
+        <tr>
+          <td>新增 <code>CMD_SI_PROFILE</code></td>
+          <td>CPU2/CPU3 共享协议变化。</td>
+          <td>升级 <code>DEVICE_PROTOCOL_VERSION</code>，更新协议变更记录。</td>
+        </tr>
+        <tr>
+          <td>新增 CPU2 SI profile 参数</td>
+          <td>CPU2 参数存储变化。</td>
+          <td>CPU2 复用原预留槽，<code>DEVICE_PARAM_VERSION</code> 保持 3；通过协议版本迁移补默认值并同步 CPU3 参数镜像。</td>
+        </tr>
+        <tr>
+          <td>CPU3 SI协议调度和报警参数持久化</td>
+          <td>CPU3 本机参数存储变化。</td>
+          <td>CPU3 本机参数版本升至 <code>0x0006</code>，补 V3/V4/V5 迁移、默认值和恢复默认行为。</td>
+        </tr>
+        <tr>
+          <td>自动 profile 直接覆盖当前命令</td>
+          <td>可能影响当前测量状态清理。</td>
+          <td>增加状态机和中止残留回归测试。</td>
+        </tr>
+        <tr>
+          <td>密度 16 位上限</td>
+          <td><code>0.01 kg/m3</code> 下 16 位最大表达 <code>655.35 kg/m3</code>。</td>
+          <td>已确认接受当前缩放和钳位口径。</td>
+        </tr>
+      </table>
+    </section>
+
+    <section>
+      <h2>9. 验证计划</h2>
+      <h3>静态和协议检查</h3>
+      <ul>
+        <li><code>py tools\check_si_modbus_frames.py</code></li>
+        <li><code>py tools\check_si_protocol_contract.py</code></li>
+        <li><code>git diff --check</code></li>
+        <li>新增命令和 CPU2 参数字段后，扩展脚本覆盖命令号、参数顺序、单位、范围和协议版本。</li>
+      </ul>
+      <h3>本轮已执行验证</h3>
+      <ul>
+        <li><code>cmake --build build\LTD_MAIN_CPU2</code></li>
+        <li><code>cmake --build build\LTD_DISPLAY_CPU3</code></li>
+        <li><code>py LTD_DISPLAY_CPU3\font_check.py</code></li>
+        <li><code>py tools\check_si_modbus_frames.py --dump</code></li>
+        <li><code>py tools\check_si_protocol_contract.py</code></li>
+      </ul>
+      <h3>重点用例</h3>
+      <table>
+        <tr>
+          <th>用例</th>
+          <th>预期结果</th>
+        </tr>
+        <tr><td>写入 <code>40001~40003</code></td><td>可回读，CPU2 参数镜像一致，不改变普通分布测量参数。</td></tr>
+        <tr><td>写入 <code>40010=0</code></td><td>返回非法数据值；关闭自动 profile 使用 <code>40011=0</code>。</td></tr>
+        <tr><td>自动 profile 到点且正在其它测量</td><td>直接覆盖当前命令并执行 SI profile。</td></tr>
+        <tr><td>上电后首次 profile</td><td>必须探底并采集 Point0。</td></tr>
+        <tr><td>探底失败且无旧底部位置</td><td>使用当前位置采集 Point0，不刷新底部参考、不标记底部可信、不清首次探底状态。</td></tr>
+        <tr><td>液面停止条件</td><td>profile 前不单独找液位；候选点到点采样判定为液面以上时停止，不输出该液面以上 profile 点。</td></tr>
+        <tr><td>Profile 完成</td><td>保持完成态，<code>10005</code> 和点阵有效。</td></tr>
+        <tr><td>读取 <code>30007~30010</code></td><td>返回 profile 开始时间，而非完成时间。</td></tr>
+        <tr><td>读取 <code>10002/10003</code></td><td>液位跟随稳定时 <code>10002=1,10003=0</code>；其它状态均为液体。</td></tr>
+      </table>
+    </section>
+
+    <section>
+      <h2>10. 文档同步清单</h2>
+      <ul>
+        <li><code>docs/01_协议与寄存器/SI协议适配/02_协议映射/SI协议兼容映射表.md</code></li>
+        <li><code>docs/01_协议与寄存器/SI协议适配/04_联调测试/SI协议_PLC联调检查表.md</code></li>
+        <li><code>docs/01_协议与寄存器/SI协议适配/03_改动记录/SI协议适配改动整理.md</code></li>
+        <li><code>docs/01_协议与寄存器/CPU2_CPU3协议变更记录.md</code></li>
+        <li>CPU2 profile 流程变化后，更新对应 CPU2 程序流程 HTML/SVG。</li>
+        <li>CPU3 自动调度或 SI 映射流程变化后，更新对应 CPU3 程序流程 HTML/SVG。</li>
+      </ul>
+      <div class="warn">
+        本 HTML 是阅读版派生文档。需求维护源仍为 <code>SI协议需求与实施总览.md</code> 和 <code>SI协议待确认与后续清单.md</code>。
+      </div>
+    </section>
+  </main>
+</body>
+</html>

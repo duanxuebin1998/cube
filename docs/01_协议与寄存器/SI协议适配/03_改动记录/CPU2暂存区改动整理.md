@@ -9,14 +9,14 @@
 | 文件 | 暂存改动规模 | 主要目的 |
 | --- | ---: | --- |
 | `LTD_MAIN_CPU2/Application/Inc/app_version.h` | 3 行新增 / 3 行删除 | CPU2 固件版本从 `V1.7.3.0` 升级到 `V1.8.0.0`。 |
-| `LTD_MAIN_CPU2/Services/ParamStorage/system_parameter.h` | 多处结构字段调整 | 协议版本升到 4，并把 SI7000 需要的补充状态融合进既有测量结构。 |
+| `LTD_MAIN_CPU2/Services/ParamStorage/system_parameter.h` | 多处结构字段调整 | 协议版本升到 4，并把 SI 需要的补充状态融合进既有测量结构。 |
 | `LTD_MAIN_CPU2/Services/Modbus/stateformodbus.h` | 多处寄存器地址调整 | 按设备状态、液位、实高和密度分布分配共享输入寄存器地址。 |
 | `LTD_MAIN_CPU2/Services/Modbus/dataanalysis_modbus.c` | 31 行新增 | 将协议辅助状态写入/回读共享输入寄存器。 |
 | `LTD_MAIN_CPU2/Application/Src/measure.c` | 87 行新增 / 11 行删除 | 在测量入口、探底、维护模式和手动/强制电机动作中维护协议辅助状态。 |
 | `LTD_MAIN_CPU2/Application/Src/measure_density.c` | 40 行新增 | 在分布/profile 测量生命周期中维护完成锁存和完成计数。 |
 | `LTD_MAIN_CPU2/Application/Src/measure_oilLevel.c` | 15 行新增 | 在找液位流程中维护探头到达液位和液体稳定状态。 |
 
-整体目标是让 CPU2 只发布通用、可复用的测量生命周期状态，CPU3 再把这些状态转换成 SI7000 外部协议的线圈、离散输入和输入寄存器语义。CPU2 不引入 SI7000 地址、功能码、缩放规则或异常响应逻辑。
+整体目标是让 CPU2 只发布通用、可复用的测量生命周期状态，CPU3 再把这些状态转换成 SI协议的线圈、离散输入和输入寄存器语义。CPU2 不引入 SI 地址、功能码、缩放规则或异常响应逻辑。
 
 ## 2. 协议和版本改动
 
@@ -36,7 +36,7 @@
 
 - `DEVICE_PROTOCOL_VERSION`: `3u` -> `4u`
 
-原因是 `MeasurementResult` 的既有子结构新增了 SI7000 需要的补充状态字段，CPU2/CPU3 共享输入寄存器布局发生变化。CPU3 必须按协议版本 4 读取对应地址，否则后续测量数据会错位。
+原因是 `MeasurementResult` 的既有子结构新增了 SI 需要的补充状态字段，CPU2/CPU3 共享输入寄存器布局发生变化。CPU3 必须按协议版本 4 读取对应地址，否则后续测量数据会错位。
 
 ### 2.3 状态字段融合方式
 
@@ -44,19 +44,19 @@
 
 字段如下：
 
-| 字段 | 类型 | CPU2侧语义 | CPU3/SI7000用途 |
+| 字段 | 类型 | CPU2侧语义 | CPU3/SI用途 |
 | --- | --- | --- | --- |
-| `bottom_reference_valid` | `uint32_t` | 已经获得有效罐底参考。 | 映射 SI7000 Bottom Reference 状态。 |
+| `bottom_reference_valid` | `uint32_t` | 已经获得有效罐底参考。 | 映射 SI Bottom Reference 状态。 |
 | `probe_at_liquid_level` | `uint32_t` | 探头当前已经到达有效液位点。 | 映射 Probe At Liquid Level。 |
 | `liquid_stable` | `uint32_t` | 液位结果当前可视为稳定。 | 支撑外部协议液位稳定/间隔状态判断。 |
 | `profile_complete_latched` | `uint32_t` | 本轮分布/profile 测量结果已完成并锁存。 | 控制 CPU3 是否向 PLC 开放 profile 点阵。 |
 | `profile_complete_counter` | `uint32_t` | 每次 profile 完成后递增。 | CPU3 用计数变化锁存 profile 完成时间戳。 |
-| `profile_blocked_by_process` | `uint32_t` | profile 被工况阻止。 | 预留给 SI7000 工况阻止或流程不可用状态。 |
-| `loading_unloading_active` | `uint32_t` | 当前处于装卸液过程。 | 预留给 SI7000 装卸液相关状态。 |
+| `profile_blocked_by_process` | `uint32_t` | profile 被工况阻止。 | 预留给 SI 工况阻止或流程不可用状态。 |
+| `loading_unloading_active` | `uint32_t` | 当前处于装卸液过程。 | 预留给 SI 装卸液相关状态。 |
 | `manual_alarm_inhibit` | `uint32_t` | 手动/强制动作期间抑制自动报警语义。 | 避免 CPU3 把手动动作误映射成自动测量报警。 |
 | `manual_level_update_inhibit` | `uint32_t` | 手动/强制动作期间抑制液位自动更新语义。 | 避免外部协议在手动运行中误读自动液位更新。 |
-| `profile_temp_deviation_alarm` | `uint32_t` | profile 温度偏差报警。 | 映射 SI7000 profile 温度偏差报警位。 |
-| `profile_density_deviation_alarm` | `uint32_t` | profile 密度偏差报警。 | 映射 SI7000 profile 密度偏差报警位。 |
+| `profile_temp_deviation_alarm` | `uint32_t` | profile 温度偏差报警。 | 映射 SI profile 温度偏差报警位。 |
+| `profile_density_deviation_alarm` | `uint32_t` | profile 密度偏差报警。 | 映射 SI profile 密度偏差报警位。 |
 
 当前暂存改动已经维护了部分字段的运行期赋值；`profile_blocked_by_process`、`loading_unloading_active`、`profile_temp_deviation_alarm`、`profile_density_deviation_alarm` 主要作为后续扩展或由其他流程继续补齐。
 
@@ -82,7 +82,7 @@
 
 ## 4. 共享寄存器读写改动
 
-`LTD_MAIN_CPU2/Services/Modbus/dataanalysis_modbus.c` 在两个路径中加入 `SI7000 状态字段`：
+`LTD_MAIN_CPU2/Services/Modbus/dataanalysis_modbus.c` 在两个路径中加入 `SI 状态字段`：
 
 ### 4.1 写入输入寄存器
 
@@ -116,7 +116,7 @@
 - `profile_temp_deviation_alarm = 0`
 - `profile_density_deviation_alarm = 0`
 
-目的：每个新测量命令开始时重新计算外部协议辅助状态，避免 CPU3/SI7000 读到上一轮测量残留。
+目的：每个新测量命令开始时重新计算外部协议辅助状态，避免 CPU3/SI 读到上一轮测量残留。
 
 注意：当前入口没有清理 `bottom_reference_valid` 和 `profile_complete_latched/profile_complete_counter`。这表示罐底参考和 profile 结果锁存具备跨命令保留语义，是否符合现场期望需要在联调时确认。
 
@@ -127,7 +127,7 @@
 - 快速返回成功路径：置位 `bottom_reference_valid = 1`
 - 普通探底完成且 `ret == NO_ERROR`：置位 `bottom_reference_valid = 1`
 
-目的：CPU3 可据此映射 SI7000 Bottom Reference 状态，表示 CPU2 当前已有有效罐底参考。
+目的：CPU3 可据此映射 SI Bottom Reference 状态，表示 CPU2 当前已有有效罐底参考。
 
 ### 5.3 维护模式改动
 
@@ -140,7 +140,7 @@
   - `manual_level_update_inhibit = 1`
 - 检测到命令切换时打印提示，清除两个抑制位并返回。
 
-目的：维护模式作为 SI7000 Manual/Stop 的保守映射，手动期间抑制自动报警和液位自动更新语义；退出时必须恢复，避免 CPU3 长时间保持手动抑制状态。
+目的：维护模式作为 SI Manual/Stop 的保守映射，手动期间抑制自动报警和液位自动更新语义；退出时必须恢复，避免 CPU3 长时间保持手动抑制状态。
 
 行为影响：原逻辑依赖 `CHECK_COMMAND_SWITCH_NO_RETURN()` 在循环内处理命令切换；新逻辑改为函数返回。需要确认调用链对维护模式返回后的状态处理符合预期。
 
@@ -237,7 +237,7 @@
 - 到达位置上限时清除 `probe_at_liquid_level` 和 `liquid_stable`
 - 处于盲区内下限时清除 `probe_at_liquid_level` 和 `liquid_stable`
 
-目的：上下限和盲区不是有效液位点，不能让 CPU3/SI7000 误判为液位命中。
+目的：上下限和盲区不是有效液位点，不能让 CPU3/SI 误判为液位命中。
 
 ### 7.4 等待脱离盲区期间清理
 
@@ -252,11 +252,11 @@
 
 本次暂存区中的 CPU2 改动遵循以下边界：
 
-- CPU2 只发布通用状态，不发布 SI7000 专用地址语义。
-- CPU2 不处理 SI7000 Modbus 功能码、CRC、异常码、线圈互斥和寄存器缩放。
-- CPU2 不持久化 SI7000 影子寄存器或报警阈值。
+- CPU2 只发布通用状态，不发布 SI 专用地址语义。
+- CPU2 不处理 SI Modbus 功能码、CRC、异常码、线圈互斥和寄存器缩放。
+- CPU2 不持久化 SI 影子寄存器或报警阈值。
 - CPU2 现有测量命令、状态机和参数存储只做最小必要补充。
-- CPU3 负责把融合后的测量状态字段映射到 SI7000 的 `000xx`、`100xx`、`300xx`、`400xx` 语义。
+- CPU3 负责把融合后的测量状态字段映射到 SI 的 `000xx`、`100xx`、`300xx`、`400xx` 语义。
 
 这样的分层可以避免外部 PLC 协议细节反向污染 CPU2 测量流程。
 
@@ -269,11 +269,11 @@
 不兼容组合风险：
 
 - CPU2 V1.8.0.0 + 旧 CPU3：旧 CPU3 会按旧地址读取后续单点/分布测量数据，可能字段错位。
-- 旧 CPU2 + CPU3 V1.6.0.0：CPU3 读不到融合后的新增状态字段，SI7000 状态位无法完整映射，且协议检查应提示不兼容。
+- 旧 CPU2 + CPU3 V1.6.0.0：CPU3 读不到融合后的新增状态字段，SI 状态位无法完整映射，且协议检查应提示不兼容。
 
 ### 9.2 外部协议行为影响
 
-CPU2 新增状态会影响 CPU3 对 SI7000 的外部表现：
+CPU2 新增状态会影响 CPU3 对 SI 的外部表现：
 
 - 探底成功后才有 Bottom Reference。
 - 找液位成功后才有 Probe At Liquid Level 和 Liquid Stable。
@@ -295,7 +295,7 @@ CPU2 新增状态会影响 CPU3 对 SI7000 的外部表现：
 建议至少运行：
 
 ```powershell
-py tools\check_si7000_protocol_contract.py
+py tools\check_si_protocol_contract.py
 py tools\check_version_bumped.py
 git diff --cached --check
 ```

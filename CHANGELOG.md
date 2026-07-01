@@ -423,40 +423,40 @@ CPU2 参数加载会校验 FRAM 中的 `magic`、`struct_size`、`param_version`
 - `git diff --check`
 - `git diff --cached --check`
 
-<## 2026-05-16 - 适配 SI7000 协议和共享协议版本 4
+<## 2026-05-16 - 适配 SI协议和共享协议版本 4
 
 版本：
 - CPU2: V1.7.3.0 -> V1.8.0.0
 - CPU3: V1.5.0.0 -> V1.6.0.0
 
 兼容性：
-- 本次将 SI7000 所需补充状态融合进 CPU2/CPU3 既有测量结构，`DEVICE_PROTOCOL_VERSION` 从 3 升级到 4。
+- 本次将 SI 所需补充状态融合进 CPU2/CPU3 既有测量结构，`DEVICE_PROTOCOL_VERSION` 从 3 升级到 4。
 - CPU2/CPU3 必须同为协议版本 4，CPU3 才能完整获得外部协议转换所需的 profile 完成、探底参考、液位到达和偏差报警状态。
 
 本次修改：
-- 合并 `wip/si7000-protocol-assist` 中的外部协议辅助状态、CPU2 测量状态维护、CPU3 外部 SI7000 Modbus 从站基础实现和协议映射文档。
-- 收紧 CPU2/CPU3 职责边界：CPU2 只保留通用业务状态和命令，SI7000 地址、线圈、缩放、影子寄存器和异常响应集中在 CPU3 转换层。
-- CPU3 主分发路径和 `com_manager` 兼容路径统一调用 `si7000_modbus_process_for_dispatch()`，避免异常响应帧处理语义重复。
-- CPU3 新增 SI7000 协议选择项，并接入 COM1/COM2/COM3 协议分发。
-- CPU3 新增本地 RTC 时钟接口，SI7000 `30011-30013` 返回当前时分秒，profile 完成计数变化时锁存 `30007-30010` 月日时分。
-- SI7000 `FC05` 写线圈增加模式/动作影子区互斥，避免连续写入后读回多个互斥命令位。
-- SI7000 `FC05` 对协议保留线圈写入返回非法地址，避免 PLC 误写保留位时收到成功 echo。
-- SI7000 profile 时间戳在 RTC 暂不可读时允许后续读寄存器继续尝试锁存，避免偶发初始化窗口丢失时间戳。
-- SI7000 `FC06` 对自动 profile 使能、小时、分钟做基础值域检查，非法值返回 Modbus 异常而不进入影子寄存器。
-- SI7000 `FC06` 对 `40004-40009` 保留寄存器写入返回非法地址，读取仍保持 0。
-- SI7000 profile 点阵只输出 `Number Of Points` 范围内的有效测点，范围外保持 0，避免 PLC 读到旧 profile 残留数据。
-- SI7000 输入寄存器按协议单位输出位置、液位、温度和密度；密度由内部 `kg/m3 x10` 转为协议 `kg/m3 x100`，超出 16 位时钳位。
-- SI7000 `10012` 和阈值报警位由 `40011`、`40014-40021` 影子寄存器合成，阈值为 0 时视为未启用。
-- 修正 CPU3 串口有校验位时的 WordLength 配置，支持 SI7000 要求的 9600 8O1，并在 SI7000 协议选中后自动锁定端口配置。
-- 更新 SI7000 执行计划、兼容映射表、CPU2 暂存区逐文件改动整理和 CPU2/CPU3 协议变更记录。
+- 合并 `wip/si-protocol-assist` 中的外部协议辅助状态、CPU2 测量状态维护、CPU3 外部 SI Modbus 从站基础实现和协议映射文档。
+- 收紧 CPU2/CPU3 职责边界：CPU2 只保留通用业务状态和命令，SI 地址、线圈、缩放、影子寄存器和异常响应集中在 CPU3 转换层。
+- CPU3 主分发路径和 `com_manager` 兼容路径统一调用 `si_modbus_process_for_dispatch()`，避免异常响应帧处理语义重复。
+- CPU3 新增 SI协议选择项，并接入 COM1/COM2/COM3 协议分发。
+- CPU3 新增本地 RTC 时钟接口，SI `30011-30013` 返回当前时分秒，profile 完成计数变化时锁存 `30007-30010` 月日时分。
+- SI `FC05` 写线圈增加模式/动作影子区互斥，避免连续写入后读回多个互斥命令位。
+- SI `FC05` 对协议保留线圈写入返回非法地址，避免 PLC 误写保留位时收到成功 echo。
+- SI profile 时间戳在 RTC 暂不可读时允许后续读寄存器继续尝试锁存，避免偶发初始化窗口丢失时间戳。
+- SI `FC06` 对自动 profile 使能、小时、分钟做基础值域检查，非法值返回 Modbus 异常而不进入影子寄存器。
+- SI `FC06` 对 `40004-40009` 保留寄存器写入返回非法地址，读取仍保持 0。
+- SI profile 点阵只输出 `Number Of Points` 范围内的有效测点，范围外保持 0，避免 PLC 读到旧 profile 残留数据。
+- SI 输入寄存器按协议单位输出位置、液位、温度和密度；密度由内部 `kg/m3 x10` 转为协议 `kg/m3 x100`，超出 16 位时钳位。
+- SI `10012` 和阈值报警位由 `40011`、`40014-40021` 影子寄存器合成，阈值为 0 时视为未启用。
+- 修正 CPU3 串口有校验位时的 WordLength 配置，支持 SI协议要求的 9600 8O1，并在 SI协议选中后自动锁定端口配置。
+- 更新 SI协议执行计划、兼容映射表、CPU2 暂存区逐文件改动整理和 CPU2/CPU3 协议变更记录。
 
 验证：
 - `git diff --check`
 - `cmake -S LTD_MAIN_CPU2 -B build/LTD_MAIN_CPU2 -G Ninja "-DCMAKE_TOOLCHAIN_FILE=D:/CUBE/cmake/toolchain-arm-none-eabi.cmake" -DCMAKE_BUILD_TYPE=Debug`
 - `cmake --build build\LTD_MAIN_CPU2`
 - `cmake --build build\LTD_DISPLAY_CPU3`
-- `py tools\check_si7000_modbus_frames.py`
-- `py tools\check_si7000_protocol_contract.py`
+- `py tools\check_si_modbus_frames.py`
+- `py tools\check_si_protocol_contract.py`
 - `py tools\check_version_bumped.py`
 
 ## 2026-05-23 - 调整串口 B/BE 低检测执行流程
@@ -466,7 +466,7 @@ CPU2 参数加载会校验 FRAM 中的 `magic`、`struct_size`、`param_version`
 - CPU3: 未变化，保持 V1.6.0.0
 
 协议版本/兼容性：
-- 本次仅调整 CPU2 串口 B/BE 调试指令执行流程，不修改 Modbus、SI7000、CPU2/CPU3 共享寄存器映射、参数存储布局或协议版本。
+- 本次仅调整 CPU2 串口 B/BE 调试指令执行流程，不修改 Modbus、SI、CPU2/CPU3 共享寄存器映射、参数存储布局或协议版本。
 - B/BE 属于现场调试入口，兼容既有命令格式：`B<mm>`、`BE<mm>`、`S` 后缀和 `,1` 后缀仍可使用。
 
 本次修改：
@@ -609,11 +609,11 @@ CPU2 参数加载会校验 FRAM 中的 `magic`、`struct_size`、`param_version`
 - CPU3 设备状态页新增 `STATE_DEBUG_MODE` 显示为“调试模式中”，英文为 `Debug Mode`；字库已有“调试模式中”和“自动恢复次数”所需汉字，无需新增点阵。
 - CPU3 参数页将原 `reserved2` 菜单项显示为“自动恢复次数”，范围 `0~10`，写入同一保持寄存器地址。
 - CPU3 外部 DSM 状态转换层将内部调试模式对外映射为既有维护模式，避免外部 DSM 主站收到未知 `0x0033`。
-- 同步补充 CPU2/CPU3 协议版本 6 记录、CPU3 参数菜单与故障自动恢复次数说明、串口调试指令梳理、SI7000 指令映射资料、重启旧运动问题分析、SIL/MISRA 准备资料和 Markdown 转 PDF 工具。
+- 同步补充 CPU2/CPU3 协议版本 6 记录、CPU3 参数菜单与故障自动恢复次数说明、串口调试指令梳理、SI 指令映射资料、重启旧运动问题分析、SIL/MISRA 准备资料和 Markdown 转 PDF 工具。
 
 验证：
-- `py tools\check_si7000_protocol_contract.py`
-- `py tools\check_si7000_modbus_frames.py`
+- `py tools\check_si_protocol_contract.py`
+- `py tools\check_si_modbus_frames.py`
 - `cmake --build build\LTD_MAIN_CPU2`，生成 `LTD_MAIN_CPU2_V1.10.0.0.hex`
 - `cmake --build build\LTD_DISPLAY_CPU3`，生成 `LTD_DISPLAY_CPU3_V1.9.0.0.hex`
 - `py LTD_DISPLAY_CPU3\font_check.py`
@@ -728,23 +728,23 @@ CPU2 参数加载会校验 FRAM 中的 `magic`、`struct_size`、`param_version`
 
 协议版本/兼容性：
 - `DEVICE_PROTOCOL_VERSION` 保持 7，不改变 CPU2/CPU3 共享寄存器地址、字段含义、命令码、参数解释口径或外部协议响应语义。
-- 本次删除的是已确认未用、未进入正式调用链的旧接口、备用调试入口和历史兼容路径；CPU2 写入测量结果、CPU3 读取 CPU2 输入寄存器、SI7000 主分发和 DSM 主协议路径保留。
+- 本次删除的是已确认未用、未进入正式调用链的旧接口、备用调试入口和历史兼容路径；CPU2 写入测量结果、CPU3 读取 CPU2 输入寄存器、SI 主分发和 DSM 主协议路径保留。
 - 删除源码后 CPU2/CPU3 `.hex` 哈希发生变化，按构建产物变化升级 CPU2/CPU3 build 版本，用于交付追踪和回溯。
 
 本次修改：
 - 删除 CPU3 旧 `com_manager.c/.h` 兼容分发模块，保留 `app_main` 现有主分发路径。
 - 删除 CPU2 旧 `CH9141EVT.c/.h` AT 初始化备用入口。
 - 删除 CPU2 `fault_manager` 旧全局故障接口、水位辅助接口、`AS5145_GetLastOkTick()`、`TMC5130 stpr_readInt()`、输入寄存器反向解析链路、`MotorCtrl_SetSpeed()`、`WIRELESS_Read_IntParam()` 和 `ErrorLog_Report()`。
-- 删除 CPU3 OLED 未用接口、CPU3 时钟设置入口、设备状态错误设置、DSM 备用发送/输入寄存器单读写接口、SI7000 站号 get/set、CPU2 通信初始化、测量结果写输入寄存器和单参数同步入口。
-- 调整 `tools/check_si7000_protocol_contract.py`，继续强制校验保留的 CPU2 写入测量结果和 CPU3 读取 CPU2 输入寄存器方向；对已删除的 CPU2 反向读取和 CPU3 写入死接口改为仅在源码存在时校验。
+- 删除 CPU3 OLED 未用接口、CPU3 时钟设置入口、设备状态错误设置、DSM 备用发送/输入寄存器单读写接口、SI 站号 get/set、CPU2 通信初始化、测量结果写输入寄存器和单参数同步入口。
+- 调整 `tools/check_si_protocol_contract.py`，继续强制校验保留的 CPU2 写入测量结果和 CPU3 读取 CPU2 输入寄存器方向；对已删除的 CPU2 反向读取和 CPU3 写入死接口改为仅在源码存在时校验。
 - 同步记录当前文档和资料整理改动，包括需求计划 PDF、自动恢复需求 PDF 替换，以及 SIL 功能安全资料 PDF。
 
 验证：
 - `rg` 检查确认删除符号在 `.c/.h` 中清零；仅保留 CPU2 正常写输入寄存器和 CPU3 正常读取 CPU2 输入寄存器接口。
 - `cmake --build build\LTD_MAIN_CPU2`
 - `cmake --build build\LTD_DISPLAY_CPU3`
-- `py tools\check_si7000_modbus_frames.py`
-- `py tools\check_si7000_protocol_contract.py`
+- `py tools\check_si_modbus_frames.py`
+- `py tools\check_si_protocol_contract.py`
 - `git diff --check`
 - 暂存后运行 `py tools\check_version_bumped.py`
 - 已对比删除前后 CPU2/CPU3 `.hex` 哈希，确认构建产物变化，因此本次升级 build 版本；尚未做现场实物联调。
@@ -796,7 +796,7 @@ CPU2 参数加载会校验 FRAM 中的 `magic`、`struct_size`、`param_version`
 - `cmake -S LTD_DISPLAY_CPU3 -B build/LTD_DISPLAY_CPU3 -G Ninja "-DCMAKE_TOOLCHAIN_FILE=D:/CUBE/cmake/toolchain-arm-none-eabi.cmake" -DCMAKE_BUILD_TYPE=Debug`
 - `cmake --build build\LTD_DISPLAY_CPU3`
 - `git diff --check`：未发现空白错误，仅有工作区 LF 后续转换为 CRLF 的 Git warning。
-- 尚未做实物按键联调；需现场确认进入选择型参数时当前值高亮、上下键循环、确认写回、返回取消，以及 COM 协议可选择到 SI7000 但不能选择“非法配置”。
+- 尚未做实物按键联调；需现场确认进入选择型参数时当前值高亮、上下键循环、确认写回、返回取消，以及 COM 协议可选择到 SI 但不能选择“非法配置”。
 
 ## 2026-06-09 - 修复电机停止等待被目标位置差值卡死（CPU2 V1.12.1.0）
 
@@ -838,8 +838,8 @@ CPU2 参数加载会校验 FRAM 中的 `magic`、`struct_size`、`param_version`
 - 标定液位值、修正液位值、标定水位值、标定罐高值、单点测量位置、单点监测位置和电机调试位置继续随指令输入，不再作为参数配置菜单项展示。
 - 带参指令菜单项和下发确认页只显示指令名，不在指令名后追加参数值；参数值仅在输入页和参数写入确认页显示。
 - 水位测量方式改为选择式编辑，屏幕显示为“低速模式/快速模式”，写入范围收敛为 0/1；CPU2 侧仍兼容原 0/非0 语义。
-- COM 协议菜单只显示计量仪、瓦锡兰、LTD、SI7000 四个有效选项；SI7000 仍保存为真实协议值 5，不再向现场暴露预留协议项。
-- 写任一 COM 串口参数后按协议自动收敛串口配置：计量仪/DSM 4800 8N1，瓦锡兰 4800 8N1，LTD 115200 8N1，SI7000 9600 8O1。
+- COM 协议菜单只显示计量仪、瓦锡兰、LTD、SI 四个有效选项；SI 仍保存为真实协议值 5，不再向现场暴露预留协议项。
+- 写任一 COM 串口参数后按协议自动收敛串口配置：计量仪/DSM 4800 8N1，瓦锡兰 4800 8N1，LTD 115200 8N1，SI 9600 8O1。
 - 对运行策略、电机/编码换算、罐高/罐底、水位关键阈值、通信串口参数和恢复出厂设置增加“参数保护”额外确认页；不新增维护权限或更高等级密码。
 - 继电器 R1~R4 子页新增只读“报警状态”入口，显示报警值、HH/H/HH-H/L/LL/LL-L、任意报警和清锁存运行态；数据来自 CPU2 输入寄存器快照，不触发参数写入。
 - CPU3 状态页新增显示上下文归类，密度、温度、液位、水位、频率、电容和罐高按设备状态选择数据源，避免待机、运动、维护或故障状态混入旧业务结果。
@@ -1323,7 +1323,7 @@ CPU2 参数加载会校验 FRAM 中的 `magic`、`struct_size`、`param_version`
 
 验证：
 - `py tools\check_wireless_rssi_contract.py`
-- `py tools\check_si7000_protocol_contract.py`
+- `py tools\check_si_protocol_contract.py`
 - `py tools\check_density_level_control_contract.py`
 - `py tools\check_read_part_params_refresh_contract.py`
 - `py LTD_DISPLAY_CPU3\font_check.py`
@@ -1363,7 +1363,7 @@ CPU2 参数加载会校验 FRAM 中的 `magic`、`struct_size`、`param_version`
 
 验证：
 - `py -3 tools\check_ao_output_enable_contract.py`
-- `py -3 tools\check_si7000_protocol_contract.py`
+- `py -3 tools\check_si_protocol_contract.py`
 - `py -3 tools\check_density_level_control_contract.py`
 - `py -3 tools\check_wireless_rssi_contract.py`
 - `py -3 tools\check_read_part_params_refresh_contract.py`
@@ -1428,7 +1428,7 @@ CPU2 参数加载会校验 FRAM 中的 `magic`、`struct_size`、`param_version`
 - `Cpu3Clock_Init()` 改为 LSE 优先、LSI 兜底；仅在备份标记无效、RTC 未初始化或时间非法时写入默认时间，避免每次上电覆盖电池保持时间。
 - 新增 `Cpu3Clock_SetDateTime()`、`Cpu3Clock_GetState()` 和 `Cpu3Clock_GetSource()`，用于屏幕校时和显示 RTC 状态。
 - CPU3 维护设置菜单新增 `RTC设置` 页面，可编辑年、月、日、时、分、秒，保存成功后写入已校时备份标记。
-- SI7000 现有 profile 完成时间锁存和当前时分秒实时输出逻辑保持不变，第一阶段不新增对外校时寄存器。
+- SI 现有 profile 完成时间锁存和当前时分秒实时输出逻辑保持不变，第一阶段不新增对外校时寄存器。
 - 同步更新 CPU3 程序流程文档和本版本改动与测试方案。
 - 本次提交按用户要求包含当前工作区全部改动，其中 CPU2 现有差异为中文注释编码形式变化，不改变 CPU2 版本号和运行逻辑。
 
@@ -1458,10 +1458,10 @@ CPU2 参数加载会校验 FRAM 中的 `magic`、`struct_size`、`param_version`
 - 旧 FRAM 中已有的合法 COM1/COM2/COM3 串口参数会原样保留；只有协议字段被用户修改时，才按新协议带出默认串口参数。
 
 本次修改：
-- CPU3 COM1/COM2/COM3 协议字段修改时，自动带出对应协议默认串口参数：DSM/Wartsila 为 `4800 8N1`，LTD 为 `115200 8N1`，SI7000 为 `9600 8O1`。
+- CPU3 COM1/COM2/COM3 协议字段修改时，自动带出对应协议默认串口参数：DSM/Wartsila 为 `4800 8N1`，LTD 为 `115200 8N1`，SI 为 `9600 8O1`。
 - CPU3 波特率、数据位、校验和停止位允许后续单独修改，保存和上电加载时只修正非法值，不再被当前协议持续覆盖。
 - CPU3 COM 配置菜单顺序调整为“协议、波特率、数据位、校验、停止位”，让现场先选协议再确认或覆盖物理串口参数。
-- 同步更新 SI7000 协议枚举注释和本版本改动与测试方案。
+- 同步更新 SI协议枚举注释和本版本改动与测试方案。
 
 验证：
 - `cmake --build build\LTD_DISPLAY_CPU3`
@@ -1470,7 +1470,7 @@ CPU2 参数加载会校验 FRAM 中的 `magic`、`struct_size`、`param_version`
 
 未验证风险：
 - 未做实物联调；需要在 OLED 菜单中验证 COM1/COM2/COM3 修改协议后默认值立即带出，随后单独修改波特率、校验和停止位能够保存并重启后保持。
-- 如果现场依赖“选择 SI7000 后始终强制 9600 8O1”的旧行为，需要升级说明中明确新版本允许人工覆盖，避免误判为配置异常。
+- 如果现场依赖“选择 SI 后始终强制 9600 8O1”的旧行为，需要升级说明中明确新版本允许人工覆盖，避免误判为配置异常。
 - 本次不改变主循环、状态机、命令分发、CPU2 内部通信链路或外部协议寄存器映射，程序流程图无需更新。
 
 ## 2026-06-23 - 修复继电器报警限值写入和参数打印（CPU2 V1.16.1.0 / CPU3 V1.15.2.0）
@@ -1682,7 +1682,7 @@ CPU2 参数加载会校验 FRAM 中的 `magic`、`struct_size`、`param_version`
 - `git diff --cached --check`
 - `python tools/check_version_bumped.py`
 - `python tools/check_ao_output_enable_contract.py`
-- `python tools/check_si7000_protocol_contract.py`
+- `python tools/check_si_protocol_contract.py`
 - `python tools/check_density_level_control_contract.py`
 - `python tools/check_wireless_rssi_contract.py`
 - `python tools/check_cpu3_menu_name_width.py`
@@ -1744,7 +1744,7 @@ CPU2 参数加载会校验 FRAM 中的 `magic`、`struct_size`、`param_version`
 - CPU2 `DEVICE_PARAM_VERSION` 保持 3，`DeviceParameters` 结构大小不变，不会因本次升级触发恢复出厂参数；旧 FRAM 中 `protocolVersion < 13` 时会一次性迁移 `oilLevelDensity`、`oilLevelThreshold`、`oilLevelHysteresisThreshold` 和 `densityCorrection`。
 - CPU3 本机参数存储版本升级到 `0x0005`，加载 `0x0003` 或 `0x0004` 时迁移本机手输密度 `screen_input_d`，并保留旧屏幕亮度默认值迁移路径。
 - CPU2/CPU3 必须同为协议版本 13；协议版本 12 和 13 的内部密度字段倍率不同，不建议混用。
-- DSM、Wartsila、SI7000 外部协议边界继续保持原对外密度口径，主站不需要随内部 raw 倍率调整。
+- DSM、Wartsila、SI协议边界继续保持原对外密度口径，主站不需要随内部 raw 倍率调整。
 
 本次修改：
 - CPU2/CPU3 密度计算、参数存储、状态页显示和参数菜单统一支持两位小数密度口径。
@@ -1753,7 +1753,7 @@ CPU2 参数加载会校验 FRAM 中的 `magic`、`struct_size`、`param_version`
 - CPU3 参数菜单按导出的拖拽排序结果重排，新增本地 `tools/cpu3_menu_sorter.html` 辅助后续菜单整理。
 - CPU3 继电器相关菜单和文档显示名由 R1~R4 统一为 K1~K4，内部 `RELAY*` 协议符号保持不变。
 - 默认 AO 高报警液位改为罐高，写参归一化时超罐高钳位到罐高，低报警异常或高低重叠时恢复高报警罐高、低报警 0。
-- DSM、Wartsila、SI7000 密度边界转换和协议文档同步整理，补充密度精度、综合测量密度模式和 SI7000 协议契约检查脚本。
+- DSM、Wartsila、SI协议密度边界转换和协议文档同步整理，补充密度精度、综合测量密度模式和 SI协议契约检查脚本。
 - 将密度两位小数改造方案从“未实现”移动到“已实现”，同步 README、默认值表、协议变更记录、菜单说明、设备说明书和相关工具文档。
 
 验证：
@@ -1764,8 +1764,8 @@ CPU2 参数加载会校验 FRAM 中的 `magic`、`struct_size`、`param_version`
 - `py tools\check_reserved_cmd7_contract.py`
 - `py tools\check_density_precision_contract.py`
 - `py tools\check_synthetic_density_mode_contract.py`
-- `py tools\check_si7000_modbus_frames.py`
-- `py tools\check_si7000_protocol_contract.py`
+- `py tools\check_si_modbus_frames.py`
+- `py tools\check_si_protocol_contract.py`
 - `git diff --check`
 
 未验证风险：
@@ -1860,7 +1860,7 @@ CPU2 参数加载会校验 FRAM 中的 `magic`、`struct_size`、`param_version`
 - CPU2 清理编码器错误诊断中的未使用统计计数和原始帧缓存，减少中断路径共享状态。
 - CPU2 SPI busy 和 DMA 启动失败路径改为记录编码器超时错误和一次性诊断输出，不再递归进入 SSI 错误重试流程。
 - 同步提交标题版本号门禁脚本、本地 commit-msg 钩子、AGENTS 和版本测试 README 的提交流程说明。
-- 整理 SI7000 进一步兼容需求、CPU2 全局错误响应滞后分析、LNG 菜单核对资料和 SIL 外部资料索引。
+- 整理 SI协议进一步兼容需求、CPU2 全局错误响应滞后分析、LNG 菜单核对资料和 SIL 外部资料索引。
 
 验证：
 - `git diff --cached --check`

@@ -286,7 +286,7 @@
 
   <section id="scope">
     <h2>一、适用范围</h2>
-    <p>本说明书适用于当前工程主线中的 `LTD_MAIN_CPU2` 主控测量板和 `LTD_DISPLAY_CPU3` 显示通讯板。设备用于液位、罐底/罐高、水位、密度单点、密度分布、瓦锡兰区间密度等测量，并通过 CPU3 外部串口对接 DSM、Wartsila、LTD、SI7000 等协议。</p>
+    <p>本说明书适用于当前工程主线中的 `LTD_MAIN_CPU2` 主控测量板和 `LTD_DISPLAY_CPU3` 显示通讯板。设备用于液位、罐底/罐高、水位、密度单点、密度分布、瓦锡兰区间密度等测量，并通过 CPU3 外部串口对接 DSM、Wartsila、LTD、SI 等协议。</p>
     <div class="note">
       <strong>版本要求：</strong>CPU2 和 CPU3 必须成对使用协议版本 12。固件版本只用于显示和发布追踪，跨 CPU 能力兼容以 `DeviceParameters.protocolVersion` 是否等于当前 `DEVICE_PROTOCOL_VERSION` 为准。
     </div>
@@ -333,7 +333,7 @@
       <section class="panel">
         <h3>CPU3 显示通讯板</h3>
         <p>CPU3 是人机界面和外部通讯入口。它显示设备状态和参数菜单，通过 UART5/RS485 轮询 CPU2，同时在 COM1/2/3 上响应外部协议。</p>
-        <p><span class="tag green">屏幕菜单</span><span class="tag green">DSM</span><span class="tag green">Wartsila</span><span class="tag green">LTD</span><span class="tag green">SI7000</span><span class="tag green">本机 FRAM</span></p>
+        <p><span class="tag green">屏幕菜单</span><span class="tag green">DSM</span><span class="tag green">Wartsila</span><span class="tag green">LTD</span><span class="tag green">SI</span><span class="tag green">本机 FRAM</span></p>
       </section>
     </div>
 
@@ -343,7 +343,7 @@
         <tr><th>链路</th><th>用途</th><th>主要协议或数据</th></tr>
       </thead>
       <tbody>
-        <tr><td>CPU3 COM1/COM2/COM3</td><td>外部上位机或 PLC 接入</td><td>DSM、Wartsila、LTD、SI7000 等外部协议。</td></tr>
+        <tr><td>CPU3 COM1/COM2/COM3</td><td>外部上位机或 PLC 接入</td><td>DSM、Wartsila、LTD、SI 等外部协议。</td></tr>
         <tr><td>CPU3 UART5/RS485 到 CPU2</td><td>内部主板通信</td><td>Modbus RTU，读保持寄存器、读输入寄存器、写多个保持寄存器。</td></tr>
         <tr><td>CPU2 UART6</td><td>传感器和无线滑环链路</td><td>DSM 一代文本协议、LTD/V2 二进制协议、CH9141K 无线主从透传和 AT 配置。</td></tr>
         <tr><td>CPU2 USART1</td><td>调试串口</td><td>ASCII 调试命令、中文现场日志和错误日志。</td></tr>
@@ -383,7 +383,7 @@
         <tr><td>1</td><td>V1.5.0.0</td><td>V1.2.0.0</td><td>密度分布最大点数扩展到 200。</td></tr>
         <tr><td>2</td><td>V1.6.0.0</td><td>V1.4.0.0</td><td>新增取消测量命令。</td></tr>
         <tr><td>3</td><td>V1.7.0.0</td><td>V1.5.0.0</td><td>新增探底修正罐高语义。</td></tr>
-        <tr><td>4</td><td>V1.8.0.0</td><td>V1.6.0.0</td><td>新增 SI7000 所需通用状态字段。</td></tr>
+        <tr><td>4</td><td>V1.8.0.0</td><td>V1.6.0.0</td><td>新增 SI 所需通用状态字段。</td></tr>
         <tr><td>5</td><td>V1.9.0.0</td><td>V1.7.0.0</td><td>新增无线滑环最近匹配命令和匹配结果输入区。</td></tr>
         <tr><td>6</td><td>V1.10.0.0</td><td>V1.9.0.0</td><td>新增调试模式状态、故障自动恢复重跑次数、空载扭力有符号解释。</td></tr>
         <tr><td>7</td><td>V1.12.0.0</td><td>V1.10.0.0</td><td>新增四路继电器报警输出配置、继电器报警输出菜单和运行态输入区。</td></tr>
@@ -499,7 +499,7 @@
       </thead>
       <tbody>
         <tr><td>初始化</td><td>执行测量初始化，确认电机和传感器可用，处理必要回零。</td></tr>
-        <tr><td>找液位</td><td>按当前液位测量方式搜索液位，成功后更新液位结果和 SI7000 辅助状态。</td></tr>
+        <tr><td>找液位</td><td>按当前液位测量方式搜索液位，成功后更新液位结果和 SI 辅助状态。</td></tr>
         <tr><td>位置源处理</td><td>若允许自动切换并处于长期跟随类流程，切到电机步进记步后重新找点。</td></tr>
         <tr><td>跟随/监测</td><td>长期稳定状态下维持液位跟随，并允许命令切换中断。</td></tr>
       </tbody>
@@ -525,7 +525,7 @@
       <li>单点测量使用单点测量位置，执行前会校验目标在 <code>blindZone <= target <= tankHeight</code> 范围内。</li>
       <li>固定点监测使用单点监测位置，属于长期运行态，CPU3 会限制参数写入。</li>
       <li>分布测量支持最多 200 个测点，测点数量、间距、上下限、悬停时间由密度测量参数决定。</li>
-      <li>SI7000 协议输出 profile 数据时，只在 profile 完成锁存后输出点数和有效点阵，范围外保持 0。</li>
+      <li>SI协议输出 profile 数据时，只在 profile 完成锁存后输出点数和有效点阵，范围外保持 0。</li>
     </ul>
 
     <h3>瓦锡兰区间密度</h3>
@@ -554,7 +554,7 @@
         <tr><td>编码轮周长、尺带厚度、电机局部周长</td><td>0.001 mm</td><td>用于位置换算和电机步进记步。</td></tr>
         <tr><td>电机速度</td><td>0.01 m/min</td><td>参数和调试日志常使用速度 x100 的整数表达。</td></tr>
         <tr><td>温度</td><td>原始值或 0.01 C</td><td>外部协议可能按不同倍率输出，需按协议说明解析。</td></tr>
-        <tr><td>密度</td><td>kg/m3 x10 或协议侧 x100</td><td>内部常用 kg/m3 x10，SI7000 会转为协议 kg/m3 x100 并做 16 位钳位。</td></tr>
+        <tr><td>密度</td><td>kg/m3 x10 或协议侧 x100</td><td>内部常用 kg/m3 x10，SI 会转为协议 kg/m3 x100 并做 16 位钳位。</td></tr>
         <tr><td>水位电容阈值</td><td>x1000</td><td>实际电容值 = 参数值 / 1000。</td></tr>
       </tbody>
     </table>
@@ -576,7 +576,7 @@
         <tr><td>密度测量参数</td><td>是否测罐底、是否测水位、分布测点数、点间距、最高点距液面、最低点距罐底、悬停时间。</td><td>分布测量和区间测量策略。</td><td>分布测点数范围 1~200，悬停时间范围 0~600 s。</td></tr>
         <tr><td>Wartsila 参数</td><td>最高密度点、最低密度点、密度点间距、最高点液面距、瓦锡兰探底间隔、探底修正罐高。</td><td>瓦锡兰区间测量和测后探底。</td><td>探底修正罐高为 0 时沿用液位罐高。</td></tr>
         <tr><td>继电器/AO 输出</td><td>四路继电器报警输出配置、只读报警状态、输出范围、报警电流、故障电流、调试电流。</td><td>继电器和 4-20 mA 输出。</td><td>继电器报警输出包含 HH/H/L/LL 阈值、滞回、接点类型、无效值策略和锁存清除；每路继电器子页可只读查看报警值、HH/H/HH-H/L/LL/LL-L、任意报警和清锁存运行态；旧 DO 报警入口已删除；AO 正常起点/终点电流范围为 4.00~20.00mA，状态/报警/故障/调试电流范围为 3.20~24.00mA，菜单按 mA 小数 2 位显示。</td></tr>
-        <tr><td>CPU3 本机参数</td><td>语言、数据源、手输值、小数位、屏幕密码、息屏、COM1/2/3 配置。</td><td>显示端、外部串口和手输数据源。</td><td>选择 SI7000 协议后串口会自动收敛为 9600 8O1。</td></tr>
+        <tr><td>CPU3 本机参数</td><td>语言、数据源、手输值、小数位、屏幕密码、息屏、COM1/2/3 配置。</td><td>显示端、外部串口和手输数据源。</td><td>选择 SI协议后串口会自动收敛为 9600 8O1。</td></tr>
       </tbody>
     </table>
 
@@ -614,7 +614,7 @@
         <tr><td>COM3</td><td>USART3</td><td>2400 8E1</td><td>Wartsila</td></tr>
       </tbody>
     </table>
-    <p>可选协议包括 DSM、Wartsila、LTD、预留协议 1、预留协议 2 和 SI7000。SI7000 被选中后，固件会把对应串口归一化为 9600 8O1，避免菜单组合出 PLC 不兼容配置。</p>
+    <p>可选协议包括 DSM、Wartsila、LTD、预留协议 1、预留协议 2 和 SI。SI 被选中后，固件会把对应串口归一化为 9600 8O1，避免菜单组合出 PLC 不兼容配置。</p>
 
     <h3>DSM V1.228 外部协议</h3>
     <ul>
@@ -625,13 +625,13 @@
       <li>调试模式在 DSM 外部状态中映射为维护模式，避免上位机收到未知内部状态 <code>0x0033</code>。</li>
     </ul>
 
-    <h3>SI7000 外部协议</h3>
+    <h3>SI协议</h3>
     <table>
       <thead>
         <tr><th>区域</th><th>当前实现</th><th>限制</th></tr>
       </thead>
       <tbody>
-        <tr><td>串口要求</td><td>Modbus RTU，9600 8O1，站号优先使用现有从站地址。</td><td>选择 SI7000 协议后自动收敛串口配置。</td></tr>
+        <tr><td>串口要求</td><td>Modbus RTU，9600 8O1，站号优先使用现有从站地址。</td><td>选择 SI协议后自动收敛串口配置。</td></tr>
         <tr><td>功能码</td><td>支持 FC01/FC02/FC03/FC04/FC05/FC06。</td><td>保留线圈写入返回非法地址，避免误写。</td></tr>
         <tr><td>输入寄存器</td><td>位置、温度、密度、液位、profile 点阵、时间戳和当前时间。</td><td>密度按协议 kg/m3 x100 输出，超过 16 位会钳位。</td></tr>
         <tr><td>保持寄存器</td><td><code>40001~40003</code> 桥接到分布测量参数，其余自动 profile 和报警设定点为影子回读。</td><td>影子寄存器当前不写入 CPU2 参数存储，掉电保持需后续新增参数。</td></tr>
@@ -772,7 +772,7 @@
     <ul>
       <li>COM 口波特率、数据位、校验和停止位与外部主站一致。</li>
       <li>DSM 主站读取设备状态时得到 DSM V1.228 对外状态码，不直接解析内部状态。</li>
-      <li>SI7000 协议端口被自动归一化到 9600 8O1。</li>
+      <li>SI协议端口被自动归一化到 9600 8O1。</li>
       <li>Wartsila 主站读取密度点数、点阵和测后探底结果时，CPU2/CPU3 版本成对匹配。</li>
     </ul>
 
@@ -798,10 +798,10 @@
       <li><code>docs/01_协议与寄存器/CPU2通信与解耦/CPU2串口调试指令与打印信息梳理.md</code>：CPU2 串口调试命令。</li>
       <li><code>docs/03_问题分析与整改/水位跟随流程梳理.md</code>：水位跟随流程。</li>
       <li><code>docs/03_问题分析与整改/罐底测量下行保护改动说明.md</code>：罐底最大下行保护。</li>
-      <li><code>docs/01_协议与寄存器/SI7000协议适配/02_协议映射/SI7000兼容映射表.md</code>：SI7000 协议映射。</li>
+      <li><code>docs/01_协议与寄存器/SI协议适配/02_协议映射/SI协议兼容映射表.md</code>：SI协议映射。</li>
       <li><code>docs/02_需求与计划/已实现/二代计量仪同步支持DSM_V1.228协议需求方案.md</code>：DSM V1.228 兼容边界。</li>
       <li><code>LTD_MAIN_CPU2/Services/ParamStorage/system_parameter.h</code> 和 <code>LTD_DISPLAY_CPU3/Application/system_param/system_parameter.h</code>：命令、状态、错误码、参数结构。</li>
-      <li><code>LTD_DISPLAY_CPU3/Application/system_param/cpu3_comm_display_params.c</code>：CPU3 串口默认配置和 SI7000 串口归一化。</li>
+      <li><code>LTD_DISPLAY_CPU3/Application/system_param/cpu3_comm_display_params.c</code>：CPU3 串口默认配置和 SI 串口归一化。</li>
     </ul>
     <div class="warn">
       <strong>未替代项：</strong>本文是根据当前工程生成的设备说明草案。真实硬件电气安全、机械限位、现场工艺流程、客户协议验收、第三方认证和最终出版版式仍需人工复核。

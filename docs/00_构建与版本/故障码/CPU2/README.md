@@ -1,12 +1,13 @@
 # CPU2 故障码资料索引
 
-更新日期：2026-06-27
+更新日期：2026-07-01
 
 本目录保存 CPU2 侧 LTD 故障代码、设备参数和测量结果辅助表。当前 `LTD故障代码表.xlsx` 是故障码表格维护入口，定义口径以 CPU2 源码为准。
 
 | 文档 | 内容 |
 | --- | --- |
-| `LTD故障代码表.xlsx` | CPU2 故障代码总表、整理说明、设备参数和测量结果字段；已按当前 `ErrorCode` 补齐 `AD5421_*` 错误码 |
+| `LTD故障代码表.xlsx` | CPU2 故障代码总表、整理说明、设备参数和测量结果字段；当前总表 73 项，和 CPU2 `ErrorCode` 无缺失、无多余 |
+| `../当前程序故障代码清单.md` | 可检索 Markdown 清单，列出 73 项故障码、分类区间、上报路径和维护检查项 |
 
 维护时优先对照 `LTD_MAIN_CPU2/Services/ParamStorage/system_parameter.h` 的 `ErrorCode`、`LTD_MAIN_CPU2/Services/Utilities/error_log.c` 的 `ErrorLog_GetCodeName()` / `ErrorLog_GetReasonByCode()`，以及 `LTD_MAIN_CPU2/Services/Modbus/` 的错误码上报位置。
 

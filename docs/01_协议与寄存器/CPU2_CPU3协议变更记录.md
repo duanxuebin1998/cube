@@ -7,7 +7,7 @@
 - 字段位置：`HOLDREGISTER_DEVICEPARAM_PROTOCOL_VERSION`
 - 当前语义：CPU2/CPU3 共享协议版本
 - 旧程序语义：保留字段，默认值为 `0`
-- 当前程序语义：协议版本 `13`
+- 当前程序语义：协议版本 `15`
 
 该字段由原 `reserved1` 预留位正式替换而来，寄存器地址不移动，不新增存储字段。
 
@@ -19,7 +19,7 @@
 | 1 | V1.5.0.0 | V1.2.0.0 | 200 | 原 `reserved1` 正式替换为协议版本，密度分布测量、内部输入寄存器和 Wärtsilä 外部密度点扩展到 200 点。 |
 | 2 | V1.6.0.0 | V1.4.0.0 | 200 | 新增 `CMD_CANCEL_MEASUREMENT = 16`，用于 CPU3 状态显示界面长按返回键取消当前测量并让 CPU2 进入待机。 |
 | 3 | V1.7.0.0 | V1.5.0.0 | 200 | 原 `reserved23` 正式替换为探底修正罐高，用于罐底测量后编码器修正；瓦锡兰分布测后探底前先回固定点监测位置。 |
-| 4 | V1.8.0.0 | V1.6.0.0 | 200 | 将 SI7000 所需补充状态融合进既有测量结构，并通过共享输入寄存器发布给 CPU3 外部协议转换层。 |
+| 4 | V1.8.0.0 | V1.6.0.0 | 200 | 将 SI 所需补充状态融合进既有测量结构，并通过共享输入寄存器发布给 CPU3 外部协议转换层。 |
 | 5 | V1.9.0.0 | V1.7.0.0 | 200 | 新增 `CMD_PAIR_NEAREST_WIRELESS_SLIPRING = 117`，用于 CPU3 菜单或共享命令通道触发 CPU2 执行无线滑环 RSSI 最近匹配；新增无线滑环匹配中/完成设备状态；输入寄存器末尾追加无线滑环匹配结果和从机 MAC 状态。 |
 | 6 | V1.10.0.0 | V1.9.0.0 | 200 | 新增 `STATE_DEBUG_MODE = 0x0033`，用于 CPU2 串口调试指令执行期间通过 CPU3 显示“调试模式中”；原 `reserved2` 参数槽复用为故障自动恢复重跑上限；`empty_weight` 空载扭力按 `int32_t` 有符号 32 位解释，寄存器地址和后续字段不移动。 |
 | 7 | V1.12.0.0 | V1.10.0.0 | 200 | 新增四路继电器报警输出配置和运行态共享区；CPU3 可显示、写入四路继电器报警输出配置，CPU2 执行 HH/H/L/LL、滞回、锁存清除和无效值策略。 |
@@ -28,7 +28,9 @@
 | 10 | V1.16.0.0 | V1.15.0.0 | 200 | 新增 AO 模拟电流输出服务和 AD5421 诊断；在 RSSI 运行态后追加 `AoOutputRuntime`；原 `reserved26` 正式替换为 `AoOutputEnable`，地址保持 `0x00C2-0x00C3` 不后移，CPU2/CPU3 同步支持 AO 输出启停，默认关闭。 |
 | 11 | V1.18.1.0 | V1.16.1.0 | 200 | 复用 AO 相关保留字段为 AO 正常输出液位量程端点和独立报警液位阈值；同步 CPU2/CPU3 参数菜单、保持寄存器和运行期归一化语义。 |
 | 12 | V1.19.0.0 | V1.17.0.0 | 200 | 删除共享命令 115 的强制提零点执行语义；命令码 115、状态码 `0x002F/0x802F` 改为保留，不再由 CPU3 菜单下发或由 CPU2 执行。 |
-| 13 | V1.20.0.0 | V1.18.0.0 | 200 | 内部密度 raw 从 `kg/m3 x10` 升级为 `kg/m3 x100`；CPU3 状态页、密度参数菜单和 LTD 自有协议支持两位小数；DSM/Wartsila/SI7000 外部协议在边界保持原对外口径。 |
+| 13 | V1.20.0.0 | V1.18.0.0 | 200 | 内部密度 raw 从 `kg/m3 x10` 升级为 `kg/m3 x100`；CPU3 状态页、密度参数菜单和 LTD 自有协议支持两位小数；DSM/Wartsila/SI协议在边界保持原对外口径。 |
+| 14 | V1.20.3.0 | V1.18.2.0 | 200 | 新增 `CMD_SI_PROFILE = 20` 和 CPU2 SI profile 执行参数，`40001~40003` 从普通分布参数解耦；CPU3 新增 SI 菜单、`40010~40023` 本机参数、自动 profile 调度、开始时间戳和状态/报警合成。 |
+| 15 | 待发布 | 待发布 | 200 | 新增 `density_distribution.profile_source` 共享状态，SI profile 完成态和点阵只认 `PROFILE_SOURCE_SI`；修正 SI 温度无效值、报警 0 阈值、负温度阈值、自动调度真实日历换算，以及 SI profile 不预先找液位、逐点判定液面以上后停止的流程语义。 |
 
 ## 兼容判断规则
 
@@ -80,9 +82,9 @@
 ### 协议版本 4
 
 关联改动：
-<- 将 SI7000 所需补充状态按业务含义融合到 CPU2/CPU3 既有测量结构：`DeviceStatus`、`OilMeasurement`、`ActualHeightMeasurement` 和 `DensityDistribution`。
+<- 将 SI 所需补充状态按业务含义融合到 CPU2/CPU3 既有测量结构：`DeviceStatus`、`OilMeasurement`、`ActualHeightMeasurement` 和 `DensityDistribution`。
 - CPU2 发布探底参考有效、探头位于液位、液位稳定、profile 完成锁存、profile 完成计数、profile 被工况阻止、装卸液状态、手动报警抑制、手动液位更新抑制、profile 温度偏差报警、profile 密度偏差报警。
-- CPU3 读取该状态区后供外部协议转换层使用，SI7000 地址、线圈、缩放和异常响应只存在于 CPU3 外部协议模块，避免外部协议直接反推或污染 CPU2 内部流程状态。
+- CPU3 读取该状态区后供外部协议转换层使用，SI 地址、线圈、缩放和异常响应只存在于 CPU3 外部协议模块，避免外部协议直接反推或污染 CPU2 内部流程状态。
 - 没有新增独立 `ProtocolAssistStatus` 结构，避免在 `MeasurementResult` 里再维护一套外部协议专用镜像；所有字段都落在原业务结构尾部，并由 CPU2/CPU3 两侧同名结构同步。
 
 新增共享字段明细：
@@ -91,12 +93,12 @@
 | --- | --- | --- | --- |
 | `DeviceStatus` | `loading_unloading_active` | `REG_DEVICE_STATUS_LOADING_UNLOADING_ACTIVE` | 当前是否处于装卸液过程，供外部协议判断工况。 |
 | `DeviceStatus` | `manual_alarm_inhibit` | `REG_DEVICE_STATUS_MANUAL_ALARM_INHIBIT` | 手动/强制动作期间抑制自动报警语义，避免 CPU3 将手动过程误判为自动测量结果。 |
-| `OilMeasurement` | `probe_at_liquid_level` | `REG_OIL_MEASUREMENT_PROBE_AT_LIQUID_LEVEL` | 找液位成功后置位，SI7000 可映射为 Probe At Liquid Level。 |
+| `OilMeasurement` | `probe_at_liquid_level` | `REG_OIL_MEASUREMENT_PROBE_AT_LIQUID_LEVEL` | 找液位成功后置位，SI 可映射为 Probe At Liquid Level。 |
 | `OilMeasurement` | `liquid_stable` | `REG_OIL_MEASUREMENT_LIQUID_STABLE` | 找液位成功后置位，表示当前液位结果可认为稳定。 |
 | `OilMeasurement` | `manual_level_update_inhibit` | `REG_OIL_MEASUREMENT_MANUAL_LEVEL_UPDATE_INHIBIT` | 手动/强制动作期间抑制液位自动更新语义。 |
-| `ActualHeightMeasurement` | `bottom_reference_valid` | `REG_HEIGHT_MEASUREMENT_BOTTOM_REFERENCE_VALID` | 探底成功或使用有效回退罐高后置位，SI7000 可映射为 Bottom Reference。 |
+| `ActualHeightMeasurement` | `bottom_reference_valid` | `REG_HEIGHT_MEASUREMENT_BOTTOM_REFERENCE_VALID` | 探底成功或使用有效回退罐高后置位，SI 可映射为 Bottom Reference。 |
 | `DensityDistribution` | `profile_complete_latched` | `REG_DENSITY_DIST_PROFILE_COMPLETE_LATCHED` | 分布测量成功后锁存完成状态，失败或命令切换不置位。 |
-| `DensityDistribution` | `profile_complete_counter` | `REG_DENSITY_DIST_PROFILE_COMPLETE_COUNTER` | 每次 profile 成功完成后递增，CPU3 用计数变化锁存 SI7000 profile 时间戳。 |
+| `DensityDistribution` | `profile_complete_counter` | `REG_DENSITY_DIST_PROFILE_COMPLETE_COUNTER` | 每次 profile 成功完成后递增，CPU3 用计数变化锁存 SI profile 时间戳。 |
 | `DensityDistribution` | `profile_blocked_by_process` | `REG_DENSITY_DIST_PROFILE_BLOCKED_BY_PROCESS` | profile 被当前工况阻止时置位，供 CPU3 转换为外部协议互锁/阻止状态。 |
 | `DensityDistribution` | `profile_temp_deviation_alarm` | `REG_DENSITY_DIST_PROFILE_TEMP_DEVIATION_ALARM` | 分布温度偏差报警状态。 |
 | `DensityDistribution` | `profile_density_deviation_alarm` | `REG_DENSITY_DIST_PROFILE_DENSITY_DEVIATION_ALARM` | 分布密度偏差报警状态。 |
@@ -109,14 +111,14 @@
 - CPU2 与 CPU3 的结构字段顺序、寄存器宏表达式和读写打包顺序必须完全一致，否则后续寄存器会错位。
 
 兼容影响：
-- CPU2/CPU3 必须同为协议版本 4 才能正确同步融合后的 SI7000 状态字段。
-- 旧 CPU3 不识别新增状态寄存器，不能完整支持 SI7000 的离散输入状态映射。
-- 旧 CPU2 不发布这些新增状态字段，CPU3 V1.6.0.0 不能依赖旧协议数据生成完整 SI7000 状态。
+- CPU2/CPU3 必须同为协议版本 4 才能正确同步融合后的 SI 状态字段。
+- 旧 CPU3 不识别新增状态寄存器，不能完整支持 SI 的离散输入状态映射。
+- 旧 CPU2 不发布这些新增状态字段，CPU3 V1.6.0.0 不能依赖旧协议数据生成完整 SI 状态。
 - 由于多个分组尾部寄存器顺延，协议版本 4 与协议版本 3 不能混用；必须依赖 `DEVICE_PROTOCOL_VERSION` 严格相等检查拦截。
 
 验证结果：
-- `py tools\check_si7000_protocol_contract.py`：确认 CPU2/CPU3 的结构字段、寄存器宏和读写打包顺序一致。
-- `py tools\check_si7000_modbus_frames.py`：确认 SI7000 外部地址常量和 golden frame 一致。
+- `py tools\check_si_protocol_contract.py`：确认 CPU2/CPU3 的结构字段、寄存器宏和读写打包顺序一致。
+- `py tools\check_si_modbus_frames.py`：确认 SI 外部地址常量和 golden frame 一致。
 - `py tools\check_version_bumped.py`：确认 CPU2 V1.8.0.0、CPU3 V1.6.0.0 已匹配本次协议升级。
 - `cmake --build build\LTD_MAIN_CPU2`、`cmake --build build\LTD_DISPLAY_CPU3`：两端构建通过。
 
@@ -138,7 +140,7 @@
 
 兼容影响：
 - CPU2/CPU3 必须同为协议版本 5 才能通过 CPU3 菜单触发无线滑环最近匹配并正确读取 MAC 状态。
-- 协议版本 4 仅包含 SI7000 辅助状态，不包含命令 117 和 `WirelessPairingStatus`；CPU3 V1.7.0.0 不应与协议版本 4 的 CPU2 混用。
+- 协议版本 4 仅包含 SI 辅助状态，不包含命令 117 和 `WirelessPairingStatus`；CPU3 V1.7.0.0 不应与协议版本 4 的 CPU2 混用。
 - 旧 CPU3 不提供该菜单入口，但不影响 CPU2 新版本通过调试串口 `SPR` 执行匹配。
 - 旧协议 CPU3 不知道追加的 `WirelessPairingStatus` 字段；协议版本不匹配时不应继续解释匹配结果。
 
@@ -245,7 +247,7 @@
 - 协议版本 8 的 CPU2 不发布 RSSI 快照，协议版本不匹配应由 CPU3 严格相等检查拦截。
 
 验证结果：
-- `py -3 tools\check_si7000_protocol_contract.py`：通过。
+- `py -3 tools\check_si_protocol_contract.py`：通过。
 - `py -3 tools\check_density_level_control_contract.py`：通过。
 - `py -3 tools\check_read_part_params_refresh_contract.py`：通过。
 - `cmake --build build\LTD_MAIN_CPU2`：通过。
@@ -290,7 +292,7 @@
 
 验证结果：
 - `py -3 tools\check_ao_output_enable_contract.py`：通过。
-- `py -3 tools\check_si7000_protocol_contract.py`：通过。
+- `py -3 tools\check_si_protocol_contract.py`：通过。
 - `py -3 tools\check_density_level_control_contract.py`：通过。
 - `py -3 tools\check_wireless_rssi_contract.py`：通过。
 - `py -3 tools\check_read_part_params_refresh_contract.py`：通过。
@@ -364,19 +366,82 @@
 - CPU3 本机 FRAM 参数版本升级到 `0x0005`，读取 `0x0003` 或 `0x0004` 时迁移本机手输密度 `screen_input_d`。
 - DSM 外部协议输出密度和密度修正时保持原 `x10` 口径；外部写入密度修正时转换回内部 `x100`。
 - Wartsila 外部协议密度继续保持 `scale = 10` / `x10`。
-- SI7000 外部协议继续保持既有 `0.01 kg/m3` 口径，内部升级后取消原先从 `x10` 到 `x100` 的额外乘 10。
+- SI协议继续保持既有 `0.01 kg/m3` 口径，内部升级后取消原先从 `x10` 到 `x100` 的额外乘 10。
 
 兼容影响：
 - 协议版本 13 改变内部密度倍率语义，但不移动共享寄存器地址和字段长度。
 - CPU2/CPU3 必须同为协议版本 13 才能正确解释内部密度字段。
 - 旧 FRAM 参数由 CPU2 按旧协议版本标记迁移后写回 `protocolVersion = 13`，CPU3 本机 FRAM 写回 `0x0005`，避免按新倍率误读旧参数。
-- 除 LTD 自有协议外，DSM、Wartsila、SI7000 主站不需要修改密度倍率解析。
+- 除 LTD 自有协议外，DSM、Wartsila、SI 主站不需要修改密度倍率解析。
 
 验证结果：
 - `py tools\check_density_precision_contract.py`：通过。
 - `py tools\check_synthetic_density_mode_contract.py`：通过。
-- `py tools\check_si7000_modbus_frames.py`：通过。
-- `py tools\check_si7000_protocol_contract.py`：通过。
+- `py tools\check_si_modbus_frames.py`：通过。
+- `py tools\check_si_protocol_contract.py`：通过。
+
+### 协议版本 14
+
+关联改动：
+- 新增共享命令 `CMD_SI_PROFILE = 20`，CPU3 的 SI `00004 Profile` 写 ON 后锁存 profile 开始时间，并通过 CPU2 命令保持寄存器下发该命令。
+- CPU2 新增 SI profile 执行参数：`si_profile_first_point`、`si_profile_increment`、`si_profile_dwell_time`、`si_profile_bottom_detect_interval`。
+- CPU2 复用原 `reserved30~reserved33` 预留参数槽，`DEVICE_PARAM_VERSION` 保持 `3`，但 `protocolVersion < 14` 或运行期归一化时会补默认值：首点 `1000`、步距 `10000`、停留 `10`、探底频次 `1`。
+- CPU2 新增 `CMD_SiProfile()` 独立测量入口，执行时直接读取本机 SI profile 参数，支持探底频次、旧底部位置回退、Point0、最多 200 点、候选点运行中判定液面以上后停止、完成锁存和完成计数。
+- 探底失败且无旧底部位置时，CPU2 使用当前位置采集 Point0 并继续本轮 profile，但不刷新 SI 内部底部位置、不置底部位置有效、不清首次探底状态。
+- CPU3 参数同步链路新增 SI profile 参数读写，`40001~40003` 不再桥接 `spreadTopLimit`、`spreadMeasurementDistance`、`spreadPointHoverTime`。
+- CPU3 本机参数新增 `40010~40023` 对应的 SI 自动 profile 和报警限值参数，CPU3 本机 FRAM 参数版本从 `0x0005` 升级到 `0x0006`，并提供 V3/V4/V5 迁移。
+- CPU3 菜单新增 `SI参数` 入口，并拆分 `Profile参数`、`自动Profile`、`报警限值` 三个子页。
+- CPU3 SI 层新增自动 profile 调度任务 `si_modbus_periodic_task()`，按 `40010~40013` 和 CPU3 RTC 从起始时间起周期触发，可跨天，同一分钟去重。
+- CPU3 SI协议状态口径调整：`10010 Probe Un-calibrated` 固定 `0`，`10002/10003` 按液位跟随稳定状态合成，`10001 Bottom Reference` 保持既有 `bottom_reference_valid` 映射。
+- CPU3 SI协议报警口径调整：`40014~40023` 独立保存，CPU3 合成当前值报警、profile 上下限报警和相邻点温度/密度偏差报警。
+- `30007~30010 Profile Timestamp` 改为 CPU3 收到手动 profile 或自动 profile 触发时锁存的测量开始时间。
+
+寄存器布局影响：
+- 共享保持寄存器数量不减少；原 `reserved30~reserved33` 对应地址变为 SI profile 参数地址，继电器等后续参数基址保持顺延关系不变。
+- CPU2 `DeviceParameters` 结构体大小和 `DEVICE_PARAM_VERSION` 不变，但字段语义从预留改为 SI profile 执行参数；旧协议存储通过 `protocolVersion < 14` 补默认值并写回当前协议版本。
+- CPU3 本机参数结构新增 SI 自动 profile 和报警限值字段；该变化只影响 CPU3 本机 FRAM 参数版本，不改变 CPU2/CPU3 共享输入寄存器点数上限。
+
+兼容影响：
+- CPU2/CPU3 必须同为协议版本 14，才能正确识别 `CMD_SI_PROFILE`、SI profile 参数字段和 `40001~40003` 的新语义。
+- 协议版本 13 的 CPU3 会把 `00004 Profile` 桥接到普通分布测量，并把 `40001~40003` 写入普通分布参数，不能与协议版本 14 的 CPU2 混用。
+- 协议版本 13 的 CPU2 不识别 `CMD_SI_PROFILE`，也不会按 SI Point0/探底频次执行 profile；协议版本不匹配应由 CPU3 严格相等检查拦截。
+- CPU2 参数存储不会因本次升级恢复出厂参数；但原预留槽会被赋予 SI profile 参数语义，现场升级后需要复核 SI 首点、步距、停留和探底频次。
+- CPU3 本机参数升级到 `0x0006` 后会新增自动 profile 和报警限值默认值；旧 V3/V4/V5 本机参数迁移后应复核 SI 自动调度和报警阈值。
+
+验证结果：
+- `py tools\check_si_modbus_frames.py --dump`：通过。
+- `py tools\check_si_protocol_contract.py`：通过。
+- `py LTD_DISPLAY_CPU3\font_check.py`：通过，未发现缺字。
+- `cmake --build build\LTD_MAIN_CPU2`：通过，Ninja 无需重建。
+- `cmake --build build\LTD_DISPLAY_CPU3`：通过，Ninja 无需重建。
+
+### 协议版本 15
+
+关联改动：
+- CPU2/CPU3 `DensityDistribution` 共享结构新增 `profile_source` 字段，位置在 `profile_complete_counter` 之后、`profile_blocked_by_process` 之前。
+- CPU2 在普通分布、国标、每米、间隔、Wärtsilä 和 SI profile 完成后分别写入 `PROFILE_SOURCE_STANDARD/GB/METER/INTERVAL/WARTSILA/SI`。
+- CPU3 SI 协议层读取 `10005 Profile Complete`、`30006 Number of Points` 和 `30021~30620` 点阵时，只认 `profile_source == PROFILE_SOURCE_SI`。
+- CPU3 SI 协议层读回 `00004 Profile` 运行态时，同时要求 CPU2 当前命令为 `CMD_SI_PROFILE`，普通分布和 Wärtsilä 分布运行中不再误置 SI Profile 模式线圈。
+- SI 温度无效值对外统一为 `-200.00°C`，即寄存器补码 `0xB1E0`；密度无效值保持 `0`。
+- SI 报警阈值 `0` 改为有效阈值，不再作为禁用条件；无效温度和无效密度仍不参与报警判断。
+- `40016/40017` 按有符号 `0.01°C` 保存和比较，Modbus 写入按 int16 补码解释，CPU3 菜单允许负温度限值。
+- `10025 Profile Temp Deviation Alarm` 的相邻点温差按 int16 温度值计算，避免负温度跨零时按无符号补码差值误报警。
+- 自动 profile 调度从近似日期索引改为真实日历分钟数，避免跨月或长 interval 漂移。
+
+寄存器布局影响：
+- 共享输入寄存器在密度分布结果区新增 `REG_DENSITY_DIST_PROFILE_SOURCE`，后续 `profile_blocked_by_process`、profile 偏差报警和点阵基址顺延。
+- SI 外部 Modbus 地址窗口不变，仍为 `00001~00016`、`10001~10032`、`40001~40023`、`30001~30620`。
+- CPU2 `DeviceParameters` 参数存储结构不变，本次不改变 `DEVICE_PARAM_VERSION`。
+- CPU3 本机参数结构未新增字段，但 `40016/40017` 的 CPU3 存储和菜单解释改为有符号温度阈值。
+
+兼容影响：
+- CPU2/CPU3 必须同为协议版本 15，才能正确解释 `profile_source` 后面的共享输入寄存器偏移。
+- 协议版本 14 的 CPU3 会把普通分布或 Wärtsilä 分布结果误认为 SI profile 结果；协议版本 15 修正为只认 SI profile 来源。
+- 协议版本 14 的 CPU3 菜单和 Modbus 侧不能正确保存负温度限值，并且报警阈值 0 会被视为未启用；协议版本 15 修正为 signed 温度和 0 有效阈值。
+
+验证结果：
+- `py tools\check_si_modbus_frames.py`：通过。
+- `py tools\check_si_protocol_contract.py`：通过。
 
 ## 后续维护要求
 

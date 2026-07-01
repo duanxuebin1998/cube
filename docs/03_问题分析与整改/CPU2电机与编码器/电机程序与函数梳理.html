@@ -1416,7 +1416,7 @@
         <tr><td><code>T1/T2/T0/TA/TS/TR/TV/TP/TU</code></td><td><code>measure.c</code></td><td>TFIT 卷筒参数拟合命令，分别用于采样、状态、求解和应用首圈周长/尺带厚度。</td></tr>
         <tr><td><code>YM/YE/YS/YC/YT</code></td><td><code>measure.c</code></td><td>位置源切换、位置源状态打印、电机记步诊断和 TMC5130 静态 SPI 测试。</td></tr>
         <tr><td><code>CMD_MoveUp()</code> / <code>CMD_MoveDown()</code></td><td><code>measure.c</code></td><td>正式手动上/下行命令，设置手动抑制位后调用 <code>MotorCtrl_MoveAndWait()</code>。</td></tr>
-        <tr><td><code>CMD_ForceMoveUp()</code> / <code>CMD_ForceMoveDown()</code></td><td><code>measure.c</code></td><td>正式强制上/下行，调用 <code>MotorCtrl_MoveBlockingNoDetectForceDebug()</code>，并通过抑制位隔离 CPU3/SI7000 自动报警和液位更新语义。</td></tr>
+        <tr><td><code>CMD_ForceMoveUp()</code> / <code>CMD_ForceMoveDown()</code></td><td><code>measure.c</code></td><td>正式强制上/下行，调用 <code>MotorCtrl_MoveBlockingNoDetectForceDebug()</code>，并通过抑制位隔离 CPU3/SI 自动报警和液位更新语义。</td></tr>
       </tbody>
     </table>
   </section>

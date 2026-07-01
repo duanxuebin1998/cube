@@ -276,7 +276,7 @@
           <tr>
             <td>外部协议</td>
             <td>后续统一 STOP 语义</td>
-            <td>SI7000 当前 STOP 线圈映射到维护模式，建议后续评估是否改为同样下发取消当前动作，或区分 Manual 与 Stop。</td>
+            <td>SI 当前 STOP 线圈映射到维护模式，建议后续评估是否改为同样下发取消当前动作，或区分 Manual 与 Stop。</td>
           </tr>
         </tbody>
       </table>
@@ -414,7 +414,7 @@
       <h2>协议与版本影响</h2>
       <div class="card">
         <p><span class="tag ok">推荐方案</span> 不新增保持寄存器、不新增命令枚举、不改变 <code>DeviceParameters</code> 布局时，通常不需要升级 <code>DEVICE_PROTOCOL_VERSION</code>。</p>
-        <p><span class="tag warn">需要评估</span> 如果后续把外部协议 STOP 线圈从维护模式改为取消当前动作，属于外部协议行为变化，应同步更新 SI7000 映射文档、联调检查表和版本测试方案。</p>
+        <p><span class="tag warn">需要评估</span> 如果后续把外部协议 STOP 线圈从维护模式改为取消当前动作，属于外部协议行为变化，应同步更新 SI 映射文档、联调检查表和版本测试方案。</p>
         <p><span class="tag warn">固件版本</span> 本次初版仅改变 CPU3 UI 行为并复用 CPU2 已有取消命令，未新增 CPU2 协议或寄存器；合入版本时需要评估 CPU3 固件版本，CPU2 无新增改动则不单独升版。</p>
       </div>
     </section>
@@ -442,7 +442,7 @@
             <td>取消命令返回值按用户动作处理，不进入最终报错；停止失败才记录告警或故障。</td>
           </tr>
           <tr>
-            <td>SI7000 STOP 与本机 UI STOP 语义不一致</td>
+            <td>SI STOP 与本机 UI STOP 语义不一致</td>
             <td>短期文档说明差异；后续按外部协议需求统一 Manual 与 Stop 的映射。</td>
           </tr>
           <tr>
@@ -477,7 +477,7 @@
         <p><code>LTD_MAIN_CPU2/Application/Src/measure.c</code>：已有 <code>CMD_CancelMeasurement()</code>，会取消自动恢复、清命令/错误码、调用 <code>MotorCtrl_SlowStop()</code> 并回待机。</p>
         <p><code>LTD_DISPLAY_CPU3/Application/display/display.c</code>：现有长按返回取消页可作为确认页和绘制逻辑参考，但本方案不再把状态页作为主要控制入口。</p>
         <p><code>LTD_DISPLAY_CPU3/Application/display/display_tankopera.c</code>：已有菜单框架和 <code>Display_RequestCancelMeasurement()</code>，可复用其下发 <code>CMD_CANCEL_MEASUREMENT</code> 的能力。</p>
-        <p><code>LTD_DISPLAY_CPU3/Communication/external/si7000_modbus/si7000_modbus_slave.c</code>：SI7000 STOP 当前映射到 <code>CMD_MAINTENANCE_MODE</code>，后续需要单独评估是否统一。</p>
+        <p><code>LTD_DISPLAY_CPU3/Communication/external/si_modbus/si_modbus_slave.c</code>：SI STOP 当前映射到 <code>CMD_MAINTENANCE_MODE</code>，后续需要单独评估是否统一。</p>
       </div>
     </section>
   </main>

@@ -311,7 +311,7 @@
   <main>
     <header>
       <h1>CPU3 RTC 真实时间兼容电路修改方案</h1>
-      <p class="subtitle">结合当前 CPU3 原理图、SI7000 寄存器需求和 STM32F429 RTC 资源整理。整理日期：2026-06-13。</p>
+      <p class="subtitle">结合当前 CPU3 原理图、SI 寄存器需求和 STM32F429 RTC 资源整理。整理日期：2026-06-13。</p>
     </header>
 
     <section>
@@ -499,7 +499,7 @@ WLED1 改接其他背光控制网络或固定供电</pre>
           <tr>
             <td><code>INT/SQW</code></td>
             <td>可不接；如需 1 Hz 校准或闹钟唤醒，可接一个空闲 GPIO。</td>
-            <td>当前 SI7000 时间寄存器不强制需要中断。</td>
+            <td>当前 SI 时间寄存器不强制需要中断。</td>
           </tr>
           <tr>
             <td><code>GND</code></td>
@@ -541,7 +541,7 @@ WLED1 改接其他背光控制网络或固定供电</pre>
     </section>
 
     <section>
-      <h2>6. SI7000 寄存器输出关系</h2>
+      <h2>6. SI 寄存器输出关系</h2>
       <table>
         <thead>
           <tr>
@@ -594,7 +594,7 @@ WLED1 改接其他背光控制网络或固定供电</pre>
         <li>硬件评审先确认 <code>WLED1</code> 是否必须由 MCU 控制。如果不是必须，优先释放 <code>PC15</code>。</li>
         <li>新板修订采用 <code>PC14/PC15 + 32.768 kHz LSE + VBAT</code>，同时把 <code>VBAT</code> 从当前 <code>3V3</code> 直连改为可选备份电源域。</li>
         <li>如果 <code>WLED1</code> 不能释放，改走外接 RTC，先定两根不冲突的 CPU3 GPIO/I2C 线，再更新 <code>.ioc</code> 和驱动。</li>
-        <li>固件把 <code>Cpu3Clock</code> 抽象成统一时间源：LSE RTC、外接 RTC 同步、PLC/菜单校时都通过同一接口输出给 SI7000。</li>
+        <li>固件把 <code>Cpu3Clock</code> 抽象成统一时间源：LSE RTC、外接 RTC 同步、PLC/菜单校时都通过同一接口输出给 SI。</li>
         <li>联调时验证：断主电再上电，<code>30011~30013</code> 不回到默认时间；完成一次 profile 后，<code>30007~30010</code> 保持完成时刻，不随当前时间滚动。</li>
       </ol>
     </section>
@@ -619,10 +619,10 @@ WLED1 改接其他背光控制网络或固定供电</pre>
           </tr>
           <tr>
             <td><code>LTD_DISPLAY_CPU3/Application/system_param/cpu3_clock.c</code></td>
-            <td>确认当前 CPU3 RTC 使用 LSI，且时间只用于 SI7000 展示和 profile 时间戳。</td>
+            <td>确认当前 CPU3 RTC 使用 LSI，且时间只用于 SI 展示和 profile 时间戳。</td>
           </tr>
           <tr>
-            <td><code>LTD_DISPLAY_CPU3/Communication/external/si7000_modbus/si7000_modbus_slave.c</code></td>
+            <td><code>LTD_DISPLAY_CPU3/Communication/external/si_modbus/si_modbus_slave.c</code></td>
             <td>确认 <code>30007~30010</code> profile 完成时刻锁存和 <code>30011~30013</code> 当前时间输出路径。</td>
           </tr>
           <tr>
