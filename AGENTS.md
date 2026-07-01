@@ -5,4 +5,6 @@
 - `docs-site/` 仅作为本机预览工具，内容从 `docs/` 同步生成，不作为业务资料来源，不纳入 Git 跟踪。
 - 旧 `site/` 已淘汰；不要恢复为维护入口或发布目标。
 - 后续版本提交生成的新文档仍放在 `docs/00_构建与版本/版本改动与测试/`，人工索引可后补，不应阻塞版本提交。
+- 创建、修改或改写 Git 提交标题时，标题必须包含受影响固件版本号；整机、文档、工具或跨 CPU 改动写 `（CPU2 Vx.x.x.x / CPU3 Vy.y.y.y）`，单 CPU 改动至少写对应 CPU 版本；提交后推送前运行 `py tools\check_commit_subject_versions.py --range origin/MAIN..HEAD`。
+- 本仓库提交标题门禁放在 `tools/git-hooks/commit-msg`；当前工作区应保持 `git config core.hooksPath tools/git-hooks`，新克隆或配置丢失时先恢复该设置再提交。
 - 不修改 `C:\Users\admin\.codex\skills` 下的 skill；本仓库的文档结构边界以本文件和 `docs/00_构建与版本/文档库治理清单.md` 为准。

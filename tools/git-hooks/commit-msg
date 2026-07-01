@@ -1,0 +1,13 @@
+#!/bin/sh
+set -eu
+
+if command -v py >/dev/null 2>&1; then
+    exec py tools/check_commit_subject_versions.py --commit-msg-file "$1"
+fi
+
+if command -v python >/dev/null 2>&1; then
+    exec python tools/check_commit_subject_versions.py --commit-msg-file "$1"
+fi
+
+echo "Python was not found; cannot validate commit subject versions." >&2
+exit 1

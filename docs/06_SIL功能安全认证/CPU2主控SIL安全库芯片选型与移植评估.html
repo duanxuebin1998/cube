@@ -1,0 +1,626 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CPU2 主控 SIL 安全库芯片选型与移植评估</title>
+  <style>
+    :root {
+      --bg: #f5f7fa;
+      --paper: #ffffff;
+      --ink: #1f2933;
+      --muted: #5d6878;
+      --line: #d8dee8;
+      --head: #203040;
+      --accent: #1f6f78;
+      --accent-soft: #e7f3f4;
+      --warn: #9a5b00;
+      --warn-soft: #fff6df;
+      --risk: #a3372a;
+      --risk-soft: #fff0ed;
+      --ok: #276749;
+      --ok-soft: #edf7f1;
+      --code: #f0f3f7;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: "Microsoft YaHei", "Segoe UI", Arial, sans-serif;
+      line-height: 1.65;
+    }
+
+    main {
+      width: min(1180px, calc(100% - 40px));
+      margin: 28px auto 48px;
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 30px;
+      box-shadow: 0 8px 24px rgba(31, 41, 51, 0.08);
+    }
+
+    h1, h2, h3 {
+      color: var(--head);
+      line-height: 1.3;
+      margin: 0;
+    }
+
+    h1 {
+      font-size: 28px;
+      margin-bottom: 8px;
+    }
+
+    h2 {
+      font-size: 21px;
+      margin-top: 30px;
+      padding-top: 18px;
+      border-top: 1px solid var(--line);
+    }
+
+    h3 {
+      font-size: 17px;
+      margin-top: 20px;
+      margin-bottom: 8px;
+    }
+
+    p {
+      margin: 8px 0;
+    }
+
+    a {
+      color: var(--accent);
+      text-decoration: none;
+    }
+
+    a:hover {
+      text-decoration: underline;
+    }
+
+    code {
+      background: var(--code);
+      border-radius: 4px;
+      padding: 1px 5px;
+      font-family: Consolas, "Courier New", monospace;
+      font-size: 0.95em;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 12px 0 20px;
+      font-size: 14px;
+    }
+
+    th, td {
+      border: 1px solid var(--line);
+      padding: 9px 10px;
+      vertical-align: top;
+    }
+
+    th {
+      background: #eef2f7;
+      color: var(--head);
+      text-align: left;
+      font-weight: 600;
+    }
+
+    tr:nth-child(even) td {
+      background: #fbfcfe;
+    }
+
+    ul, ol {
+      margin: 8px 0 14px 22px;
+      padding: 0;
+    }
+
+    li {
+      margin: 4px 0;
+    }
+
+    .meta {
+      color: var(--muted);
+      font-size: 14px;
+      margin-bottom: 18px;
+    }
+
+    .summary,
+    .warning,
+    .risk,
+    .ok {
+      border-radius: 4px;
+      padding: 14px 16px;
+      margin: 18px 0;
+    }
+
+    .summary {
+      background: var(--accent-soft);
+      border-left: 4px solid var(--accent);
+    }
+
+    .warning {
+      background: var(--warn-soft);
+      border-left: 4px solid var(--warn);
+    }
+
+    .risk {
+      background: var(--risk-soft);
+      border-left: 4px solid var(--risk);
+    }
+
+    .ok {
+      background: var(--ok-soft);
+      border-left: 4px solid var(--ok);
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+      margin: 18px 0;
+    }
+
+    .metric {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 14px;
+      background: #fbfcfe;
+    }
+
+    .metric strong {
+      display: block;
+      font-size: 22px;
+      color: var(--head);
+      line-height: 1.25;
+      margin-bottom: 4px;
+    }
+
+    .metric span {
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .tag {
+      display: inline-block;
+      border-radius: 999px;
+      padding: 1px 8px;
+      font-size: 12px;
+      line-height: 1.7;
+      white-space: nowrap;
+      border: 1px solid var(--line);
+      background: #fff;
+      color: var(--muted);
+    }
+
+    .tag-ok {
+      border-color: #9fd3b4;
+      background: var(--ok-soft);
+      color: var(--ok);
+    }
+
+    .tag-warn {
+      border-color: #e0be73;
+      background: var(--warn-soft);
+      color: var(--warn);
+    }
+
+    .tag-risk {
+      border-color: #e0a39b;
+      background: var(--risk-soft);
+      color: var(--risk);
+    }
+
+    .small {
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    @media (max-width: 900px) {
+      main {
+        width: min(100% - 20px, 1180px);
+        margin: 12px auto 28px;
+        padding: 18px;
+      }
+
+      .grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      table {
+        display: block;
+        overflow-x: auto;
+        white-space: nowrap;
+      }
+    }
+
+    @media (max-width: 560px) {
+      .grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+<main>
+  <h1>CPU2 主控 SIL 安全库芯片选型与移植评估</h1>
+  <div class="meta">整理日期：2026-06-30｜对象：CUBE CPU2 主控从 STM32F429ZGT6 迁移到带 IEC 61508/SIL 安全资料的 GD 芯片｜结论基于公开资料初筛，需 FAE 确认证书适用料号</div>
+
+  <div class="summary">
+    <p><strong>结论：</strong>在“必须有安全库/安全资料方向、外设必须够用、不够直接淘汰”的约束下，公开资料初筛建议首选 <strong>GD32F527ZMT7</strong>，备选 <strong>GD32H737ZIT6</strong>。GD32F3 虽然在 GD 功能安全页面中属于 IEC 61508 SC3 方向，但常见 LQFP144 型号只有 <code>USART+UART 3+2</code>、<code>SPI 3</code>，不能覆盖当前 CPU2 的 7 路串口和 4 路 SPI，直接淘汰。</p>
+    <p><strong>改动判断：</strong>无论选 GD32F527 还是 GD32H737，都不是“小改兼容替换”。当前工程是 STM32F429ZGTx + STM32F4 HAL/CubeMX 体系，迁移到 GD 平台需要重建硬件引脚矩阵、启动文件、链接脚本、外设初始化、BSP 适配层、安全库集成和 SIL 证据包。</p>
+  </div>
+
+  <div class="grid">
+    <div class="metric">
+      <strong>首选</strong>
+      <span>GD32F527ZMT7：LQFP144，串口 4+4，SPI 6</span>
+    </div>
+    <div class="metric">
+      <strong>备选</strong>
+      <span>GD32H737ZIT6：LQFP144，串口 8，SPI 4</span>
+    </div>
+    <div class="metric">
+      <strong>当前硬门槛</strong>
+      <span>至少 7 路串口、4 路 SPI、ADC、DAC、足够 GPIO</span>
+    </div>
+    <div class="metric">
+      <strong>移植等级</strong>
+      <span>平台级移植，预计 8 到 14 周起步</span>
+    </div>
+  </div>
+
+  <h2>一、当前 CPU2 主控资源需求</h2>
+  <p>当前 CPU2 工程目标芯片为 <code>STM32F429ZGTx</code>，工程配置为 <code>LQFP144</code>。选型不是只看主频和 Flash，而是必须覆盖现有硬件链路。下面是从 <code>LTD_MAIN_CPU2.ioc</code>、<code>Core/Src/main.c</code>、<code>Core/Inc/main.h</code> 提取的最低资源需求。</p>
+  <table>
+    <thead>
+      <tr>
+        <th>类别</th>
+        <th>当前 CPU2 使用情况</th>
+        <th>选型门槛</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>封装/I/O</td>
+        <td><code>STM32F429ZGTx</code>，<code>LQFP144</code>；<code>Mcu.PinsNb=58</code>；<code>main.h</code> 中定义了大量 GPIO 信号，覆盖 CPU2_485、编码器、FRAM、电机、传感器、继电器、HART、AD5421 等。</td>
+        <td>优先 LQFP144；若改为 LQFP176/BGA，需要改 PCB，不作为首选。</td>
+      </tr>
+      <tr>
+        <td>串口</td>
+        <td>初始化 <code>UART4</code>、<code>UART5</code>、<code>UART8</code>、<code>USART1</code>、<code>USART2</code>、<code>USART3</code>、<code>USART6</code>，共 7 路。</td>
+        <td>至少 7 路 USART/UART。低于 7 路直接淘汰，除非改硬件增加桥接芯片，但这会引入新的安全和验证工作。</td>
+      </tr>
+      <tr>
+        <td>SPI</td>
+        <td>初始化 <code>SPI2</code>、<code>SPI3</code>、<code>SPI4</code>、<code>SPI5</code>，共 4 路。当前分别用于电机 TMC5130、AD5421/4-20mA、FRAM、AS5145 编码器 SSI/DMA 采集等链路。</td>
+        <td>至少 4 路 SPI。低于 4 路直接淘汰，除非重分配片选和总线时序并重新做安全论证。</td>
+      </tr>
+      <tr>
+        <td>DMA</td>
+        <td>当前配置 9 项 DMA 请求：<code>UART4_RX</code>、<code>SPI5_RX</code>、<code>USART1_RX</code>、<code>USART2_RX/TX</code>、<code>UART5_RX/TX</code>、<code>USART6_RX/TX</code>。</td>
+        <td>必须支持多路串口 DMA 和 SPI RX DMA；通道映射需逐项验证。</td>
+      </tr>
+      <tr>
+        <td>ADC/DAC</td>
+        <td>使用 ADC1 采样通道；使用 DAC 输出 <code>MOTOR_IREF</code>。</td>
+        <td>至少 1 路 ADC 和 1 路 DAC；DAC 不足会影响电机电流参考或需要改外部电路。</td>
+      </tr>
+      <tr>
+        <td>定时器/看门狗/CRC</td>
+        <td>初始化 <code>TIM1</code>、<code>TIM4</code>、<code>IWDG</code>、<code>CRC</code>；TIM1 和 SPI5 编码器采集相关，TIM4 与周期刷新链路相关。</td>
+        <td>必须具备可替代定时器、独立看门狗和 CRC；安全库集成后还要重新设计诊断周期。</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="warning">
+    <p><strong>筛选原则：</strong>本次选型先不接受“外设不够但可以软件复用”的方案。CPU2 有电机、编码器、FRAM、4-20mA/HART、内部 485、外部通信和传感器链路，安全认证路线下不应为了省 MCU 外设而显著增加总线复用复杂度。</p>
+  </div>
+
+  <h2>二、带 IEC 61508/SIL 安全资料方向的 GD 系列初筛</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>系列</th>
+        <th>GD 功能安全公开资料方向</th>
+        <th>当前 CPU2 外设门槛</th>
+        <th>初筛结论</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>GD32F5 / GD32G5</td>
+        <td>GD 功能安全页列出 GD32F5 &amp; GD32G5 的 IEC 61508 SC3(SIL2/SIL3) 软件测试库证书方向。GD32F5xx 系列页也明确提到 IEC 61508 SIL2 安全包、Safety Manual、FMEDA、自检库等方向。</td>
+        <td>F527ZMT7 满足 7 串口、4 SPI、ADC、DAC、LQFP144 和资源余量。</td>
+        <td><span class="tag tag-ok">进入候选</span></td>
+      </tr>
+      <tr>
+        <td>GD32H7</td>
+        <td>GD 功能安全页列出 GD32H7 IEC 61508 SC3(SIL2/SIL3) 软件测试库证书方向。</td>
+        <td>H737ZIT6 满足 8 串口、4 SPI、ADC、DAC、LQFP144；H759IGT6 满足外设但为 LQFP176。</td>
+        <td><span class="tag tag-ok">H737 进入备选</span></td>
+      </tr>
+      <tr>
+        <td>GD32F3</td>
+        <td>GD 功能安全页列出 GD32F3 IEC 61508 SC3 软件测试库证书方向。</td>
+        <td>GD32F307ZGT6 为 <code>USART+UART 3+2</code>、<code>SPI 3</code>；GD32F303ZGT6 同样为 <code>USART+UART 3+2</code>，无法覆盖当前 CPU2 7 串口/4 SPI。</td>
+        <td><span class="tag tag-risk">直接淘汰</span></td>
+      </tr>
+      <tr>
+        <td>GD32F4，包括 GD32F450/GD32F470</td>
+        <td>公开资料主要归到 IEC/UL 60730 Class B 家电类自检库方向，不等同于 IEC 61508 SIL 安全包。</td>
+        <td>GD32F450ZGT6 外设数量接近当前 CPU2，但安全资料方向不满足本次“带 SIL 安全库”前提。</td>
+        <td><span class="tag tag-risk">不作为 SIL 主路线</span></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>三、候选/淘汰型号对比</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>型号</th>
+        <th>安全资料方向</th>
+        <th>封装/资源</th>
+        <th>USART+UART</th>
+        <th>SPI</th>
+        <th>ADC/DAC</th>
+        <th>结论</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>GD32F527ZMT7</strong></td>
+        <td>GD32F5 IEC 61508 SC3/SIL2 资料方向，需确认具体料号在证书适用清单内。</td>
+        <td>LQFP144，200 MHz，4608K Flash，1088K SRAM，最多 114 I/O。</td>
+        <td>4+4，共 8 路，满足。</td>
+        <td>6 路，满足。</td>
+        <td>3(24) ADC，2 DAC，满足。</td>
+        <td><span class="tag tag-ok">首选</span></td>
+      </tr>
+      <tr>
+        <td><strong>GD32H737ZIT6</strong></td>
+        <td>GD32H7 IEC 61508 SC3/SIL2/SIL3 资料方向，需确认具体料号和安全包版本。</td>
+        <td>LQFP144，600 MHz，2048K Flash，1024K SRAM，最多 113 I/O。</td>
+        <td>8 路，满足。</td>
+        <td>4 路，刚好满足。</td>
+        <td>12bit ADC 1(12)，1 DAC；满足最低门槛，但 ADC/DAC 余量小于 F527。</td>
+        <td><span class="tag tag-warn">备选</span></td>
+      </tr>
+      <tr>
+        <td>GD32H759IGT6</td>
+        <td>GD32H7 IEC 61508 SC3/SIL2/SIL3 资料方向。</td>
+        <td>LQFP176，600 MHz，1024K Flash，1024K SRAM，最多 121 I/O。</td>
+        <td>8 路，满足。</td>
+        <td>4 路，刚好满足。</td>
+        <td>12bit ADC 1(12)，1 DAC；满足最低门槛。</td>
+        <td><span class="tag tag-warn">外设够，但改板更大</span></td>
+      </tr>
+      <tr>
+        <td>GD32F307ZGT6</td>
+        <td>GD32F3 IEC 61508 SC3 资料方向。</td>
+        <td>LQFP144，120 MHz，1024K Flash，96K SRAM，最多 112 I/O。</td>
+        <td>3+2，共 5 路，不够。</td>
+        <td>3 路，不够。</td>
+        <td>2(16) ADC，2 DAC。</td>
+        <td><span class="tag tag-risk">淘汰：串口和 SPI 不够</span></td>
+      </tr>
+      <tr>
+        <td>GD32F303ZGT6</td>
+        <td>GD32F3 IEC 61508 SC3 资料方向。</td>
+        <td>LQFP144，120 MHz，1024K Flash，96K SRAM，最多 112 I/O。</td>
+        <td>3+2，共 5 路，不够。</td>
+        <td>3 路，不够。</td>
+        <td>3(21) ADC，2 DAC。</td>
+        <td><span class="tag tag-risk">淘汰：串口和 SPI 不够</span></td>
+      </tr>
+      <tr>
+        <td>GD32F450ZGT6</td>
+        <td>公开资料主要是 60730 Class B 方向，不按 IEC 61508 SIL 安全库首选。</td>
+        <td>LQFP144，200 MHz，1024K Flash，256K SRAM，最多 114 I/O。</td>
+        <td>4+4，共 8 路，满足。</td>
+        <td>6 路，满足。</td>
+        <td>3(24) ADC，2 DAC。</td>
+        <td><span class="tag tag-risk">淘汰：安全资料方向不满足</span></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="ok">
+    <p><strong>推荐排序：</strong>1. <code>GD32F527ZMT7</code>；2. <code>GD32H737ZIT6</code>；3. <code>GD32H759IGT6</code> 仅在接受 LQFP176 改板时考虑。GD32F3 直接淘汰，GD32F450ZGT6 因 SIL 安全资料方向不足不作为本次目标。</p>
+  </div>
+
+  <h2>四、为什么首选 GD32F527ZMT7</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>维度</th>
+        <th>GD32F527ZMT7</th>
+        <th>对 CPU2 的意义</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>外设数量</td>
+        <td>USART+UART 为 4+4，SPI 为 6，ADC 为 3(24)，DAC 为 2。</td>
+        <td>能覆盖当前 CPU2 的 7 串口、4 SPI、ADC、DAC，而且 SPI 和串口还有余量。</td>
+      </tr>
+      <tr>
+        <td>封装</td>
+        <td>LQFP144，最多 114 I/O。</td>
+        <td>与当前 STM32F429ZGTx 的封装等级一致，改板风险小于 LQFP176/BGA 方案。</td>
+      </tr>
+      <tr>
+        <td>资源余量</td>
+        <td>4608K Flash，1088K SRAM。</td>
+        <td>比现有 STM32F429ZGTx 和 GD32F450ZGT6 余量大，利于加入 STL、安全日志、诊断任务和测试代码。</td>
+      </tr>
+      <tr>
+        <td>安全资料方向</td>
+        <td>属于 GD32F5xx，和 GD 官方 IEC 61508 SC3/SIL2 安全资料方向一致。</td>
+        <td>比 GD32F450ZGT6 更适合走 SIL 证据链，但必须让 FAE 确认具体料号覆盖。</td>
+      </tr>
+      <tr>
+        <td>移植难度</td>
+        <td>Cortex-M33，200 MHz。</td>
+        <td>比 H7/M7 600 MHz 平台复杂度低一些，但仍需重建启动、链接、外设库、时钟和中断。</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>五、备选 GD32H737ZIT6 的定位</h2>
+  <p><code>GD32H737ZIT6</code> 外设数量满足最低门槛，封装也是 LQFP144，因此可以作为备选。但它是 Cortex-M7、600 MHz 平台，缓存、MPU、TCM/AXI/AHB 总线、DMA 一致性和实时性验证工作会明显增加。对 CPU2 这种以测量控制、串口、SPI 和安全诊断为主的应用，H7 的性能不是第一诉求。</p>
+  <table>
+    <thead>
+      <tr>
+        <th>优点</th>
+        <th>代价</th>
+        <th>建议</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>有 H7 IEC 61508 安全资料方向；LQFP144；8 路串口；4 路 SPI；资源充足。</td>
+        <td>平台复杂度高于 F527；SPI 数量刚好 4 路无余量；ADC/DAC 余量小于 F527；M7 缓存和 DMA 一致性需要额外验证。</td>
+        <td>仅当 GD32F527ZMT7 的安全包适用范围、供货、成本或引脚复用无法满足时，再进入二选。</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>六、移植工作量估算</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>工作包</th>
+        <th>GD32F527ZMT7 估算</th>
+        <th>GD32H737ZIT6 估算</th>
+        <th>说明</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>资料确认和选型冻结</td>
+        <td>3 到 5 天</td>
+        <td>3 到 5 天</td>
+        <td>取得证书适用清单、Safety Manual、FMEDA、STL、安全包版本和工具链限制。</td>
+      </tr>
+      <tr>
+        <td>引脚矩阵和原理图改版</td>
+        <td>1 到 2 周</td>
+        <td>1 到 2 周</td>
+        <td>逐脚比对 STM32F429ZGTx 到目标 GD 芯片，确认 SPI/UART/DMA/ADC/DAC/定时器复用。</td>
+      </tr>
+      <tr>
+        <td>最小工程和 BSP 底座</td>
+        <td>1 到 2 周</td>
+        <td>2 到 3 周</td>
+        <td>启动文件、链接脚本、时钟树、GPIO、UART 日志、CRC、IWDG、基础 DMA。</td>
+      </tr>
+      <tr>
+        <td>关键外设移植</td>
+        <td>2 到 3 周</td>
+        <td>3 到 4 周</td>
+        <td>TMC5130、AS5145、FRAM、AD5421、HART、CPU2/CPU3 485、传感器 USART6、继电器和电源检测。</td>
+      </tr>
+      <tr>
+        <td>应用层适配和回归</td>
+        <td>2 到 3 周</td>
+        <td>2 到 4 周</td>
+        <td>测量状态机、参数存储、错误日志、Modbus/HART、CPU3 共享协议和异常恢复。</td>
+      </tr>
+      <tr>
+        <td>安全库集成和故障响应</td>
+        <td>2 到 4 周</td>
+        <td>3 到 5 周</td>
+        <td>启动自检、运行时自检、故障注入、安全态、看门狗策略、诊断覆盖率和证据记录。</td>
+      </tr>
+      <tr>
+        <td>总体估算</td>
+        <td><strong>8 到 14 周</strong></td>
+        <td><strong>10 到 18 周</strong></td>
+        <td>不含认证机构正式审查周期，不含 PCB 多轮打样延期。</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>七、移植风险清单</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>风险</th>
+        <th>影响</th>
+        <th>控制措施</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>安全包不覆盖具体料号</td>
+        <td>即使系列支持 IEC 61508，也不能直接作为该料号证据。</td>
+        <td>立项前必须拿到证书适用清单，明确 <code>GD32F527ZMT7</code> 或最终料号在范围内。</td>
+      </tr>
+      <tr>
+        <td>引脚复用无法覆盖当前硬件</td>
+        <td>可能导致 SPI/UART/DMA/定时器链路重排，甚至改 PCB。</td>
+        <td>先做 pin-to-pin 矩阵，再决定原理图，不先写代码。</td>
+      </tr>
+      <tr>
+        <td>DMA/中断行为变化</td>
+        <td>AS5145 编码器 SPI DMA、串口 DMA 接收、HART/485 实时性受影响。</td>
+        <td>为每条 DMA 链路做独立联调和异常恢复测试。</td>
+      </tr>
+      <tr>
+        <td>安全库占用 CPU 时间和 Flash/RAM</td>
+        <td>可能影响测量周期、电机控制、串口响应和看门狗喂狗策略。</td>
+        <td>在安全版中建立诊断调度表，测试最坏执行时间。</td>
+      </tr>
+      <tr>
+        <td>GD 外设库与 STM32 HAL 差异</td>
+        <td>现有应用层大量调用 HAL 接口，直接替换成本高。</td>
+        <td>先建立 CPU2 硬件抽象层，应用层不要直接依赖具体厂商 HAL。</td>
+      </tr>
+      <tr>
+        <td>H7/M7 缓存一致性</td>
+        <td>DMA 数据可能出现缓存一致性问题，调试难度高。</td>
+        <td>H737 作为备选时必须加入 cache/MPU/DMA 一致性专项测试。</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>八、建议执行顺序</h2>
+  <ol>
+    <li>向 GD FAE 发出资料确认：指定 <code>GD32F527ZMT7</code> 和 <code>GD32H737ZIT6</code>，要求确认 IEC 61508 证书、Safety Manual、FMEDA、STL、自检库、工具链适用范围。</li>
+    <li>冻结筛选门槛：7 路 UART/USART、4 路 SPI、ADC、DAC、CRC/IWDG、DMA、LQFP144 优先，低于门槛直接淘汰。</li>
+    <li>制作 CPU2 引脚矩阵：以当前 STM32F429ZGTx 的所有使用引脚为输入，逐项匹配 GD32F527ZMT7。</li>
+    <li>做 GD32F527 最小验证板或评估板验证：时钟、调试、串口日志、SPI、DMA、ADC/DAC、IWDG、CRC。</li>
+    <li>建立 CPU2 BSP 适配层，再移植业务代码，避免业务逻辑继续直接绑定厂商 HAL。</li>
+    <li>按 Safety Manual 集成 STL，设计自检失败后的 CPU2 安全态、错误码、CPU3 上报和现场恢复策略。</li>
+  </ol>
+
+  <h2>九、最终建议</h2>
+  <div class="summary">
+    <p><strong>最终选型建议：</strong>首选 <code>GD32F527ZMT7</code>。它满足当前 CPU2 外设数量，LQFP144 封装接近现有主控，资源余量大，且属于 GD32F5 IEC 61508 安全资料方向。下一步不是写代码，而是让 GD FAE 确认具体料号安全包覆盖，并完成 CPU2 引脚矩阵。</p>
+    <p><strong>直接淘汰：</strong>GD32F303ZGT6、GD32F307ZGT6 等 F3 方案外设不够；GD32F450ZGT6 外设够但不满足“带 IEC 61508/SIL 安全库”前提；LQFP176/BGA 方案只有在接受大改板时才考虑。</p>
+  </div>
+
+  <h2>十、参考资料</h2>
+  <ul>
+    <li>GigaDevice：<a href="https://www.gigadevice.com/solution/key-technologies/functional-safety">Functional Safety 页面</a></li>
+    <li>GigaDevice：<a href="https://www.gigadevice.com/product/mcu/mcus-product-selector/gd32f527zmt7">GD32F527ZMT7 产品选择器</a></li>
+    <li>GigaDevice：<a href="https://www.gigadevice.com/product/mcu/mcus-product-selector/gd32h737zit6">GD32H737ZIT6 产品选择器</a></li>
+    <li>GigaDevice：<a href="https://www.gigadevice.com/product/mcu/mcus-product-selector/gd32h759igt6">GD32H759IGT6 产品选择器</a></li>
+    <li>GigaDevice：<a href="https://www.gigadevice.com/product/mcu/mcus-product-selector/gd32f307zgt6">GD32F307ZGT6 产品选择器</a></li>
+    <li>GigaDevice：<a href="https://www.gigadevice.com/product/mcu/mcus-product-selector/gd32f303zgt6">GD32F303ZGT6 产品选择器</a></li>
+    <li>本地工程：<code>LTD_MAIN_CPU2/LTD_MAIN_CPU2.ioc</code></li>
+    <li>本地工程：<code>LTD_MAIN_CPU2/Core/Src/main.c</code></li>
+    <li>本地工程：<code>LTD_MAIN_CPU2/Core/Inc/main.h</code></li>
+  </ul>
+
+  <p class="small">本文件为 2026-06-30 的公开资料和当前工程快照初筛结果。正式选型必须以 GD FAE 提供的证书适用清单、Safety Manual、FMEDA、STL 包和最新数据手册为准。</p>
+</main>
+</body>
+</html>

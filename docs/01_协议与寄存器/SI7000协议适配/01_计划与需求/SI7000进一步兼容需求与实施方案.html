@@ -1,0 +1,784 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SI7000 进一步兼容需求与实施方案</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #eef3f7;
+      --paper: #ffffff;
+      --ink: #17202a;
+      --muted: #5c6b7a;
+      --line: #ccd8e4;
+      --head: #13283d;
+      --blue: #145cc7;
+      --green: #137a4b;
+      --amber: #986200;
+      --red: #b3261e;
+      --soft-blue: #e8f1ff;
+      --soft-green: #e8f6ef;
+      --soft-amber: #fff3d6;
+      --soft-red: #ffe8e7;
+      --soft-gray: #f3f6f9;
+      --code: #eef2f6;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font: 15px/1.68 "Microsoft YaHei", "Segoe UI", Arial, sans-serif;
+    }
+
+    main {
+      width: min(1260px, calc(100% - 32px));
+      margin: 0 auto;
+      padding: 28px 0 56px;
+    }
+
+    header {
+      padding: 26px 0 18px;
+      border-bottom: 2px solid var(--line);
+    }
+
+    h1,
+    h2,
+    h3 {
+      margin: 0;
+      color: var(--head);
+      line-height: 1.28;
+      letter-spacing: 0;
+    }
+
+    h1 {
+      font-size: 32px;
+      margin-bottom: 8px;
+    }
+
+    h2 {
+      font-size: 22px;
+      margin: 30px 0 12px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    h3 {
+      font-size: 17px;
+      margin: 18px 0 8px;
+    }
+
+    p {
+      margin: 8px 0;
+    }
+
+    code {
+      padding: 1px 5px;
+      border-radius: 4px;
+      background: var(--code);
+      font-family: Consolas, "SFMono-Regular", monospace;
+      font-size: 0.92em;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 12px 0 20px;
+      background: var(--paper);
+      border: 1px solid var(--line);
+    }
+
+    th,
+    td {
+      padding: 10px 12px;
+      border: 1px solid var(--line);
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th {
+      background: var(--soft-gray);
+      color: var(--head);
+      font-weight: 700;
+    }
+
+    ul,
+    ol {
+      margin: 8px 0 12px 22px;
+      padding: 0;
+    }
+
+    li {
+      margin: 4px 0;
+    }
+
+    .meta {
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .note,
+    .decision,
+    .warning {
+      margin: 14px 0;
+      padding: 12px 14px;
+      border-left: 4px solid var(--blue);
+      background: var(--soft-blue);
+    }
+
+    .decision {
+      border-left-color: var(--green);
+      background: var(--soft-green);
+    }
+
+    .warning {
+      border-left-color: var(--amber);
+      background: var(--soft-amber);
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+      margin: 14px 0 22px;
+    }
+
+    .card {
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 14px;
+      min-height: 100%;
+    }
+
+    .card strong {
+      display: block;
+      margin-bottom: 6px;
+      color: var(--head);
+    }
+
+    .pill {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 999px;
+      color: var(--head);
+      background: var(--soft-gray);
+      font-size: 13px;
+      white-space: nowrap;
+    }
+
+    .pill.todo {
+      color: var(--amber);
+      background: var(--soft-amber);
+    }
+
+    .pill.ok {
+      color: var(--green);
+      background: var(--soft-green);
+    }
+
+    .pill.fixed {
+      color: var(--blue);
+      background: var(--soft-blue);
+    }
+
+    .pill.risk {
+      color: var(--red);
+      background: var(--soft-red);
+    }
+
+    @media (max-width: 900px) {
+      main {
+        width: min(100% - 20px, 1260px);
+      }
+
+      h1 {
+        font-size: 26px;
+      }
+
+      .grid {
+        grid-template-columns: 1fr;
+      }
+
+      table {
+        display: block;
+        overflow-x: auto;
+      }
+    }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>SI7000 进一步兼容需求与实施方案</h1>
+    <p class="meta">日期：2026-07-01 ｜ 范围：需求整理、当前兼容基线、进一步兼容方案、验证计划；本文不修改固件代码。</p>
+  </header>
+
+  <section id="summary">
+    <h2>1. 需求结论</h2>
+    <div class="decision">
+      <strong>本轮目标：</strong>SI7000 兼容从“地址表和基础读写兼容”升级为“按 Scientific Instruments SI7000 profile 行为做独立测量流程兼容”。
+    </div>
+    <div class="grid">
+      <div class="card">
+        <strong>Profile 独立化</strong>
+        <span class="pill todo">需实施</span>
+        <p><code>00004 Profile</code> 需要触发新的 SI7000 专用 CPU2 命令，不再复用普通分布测量 <code>CMD_MEASURE_DISTRIBUTED</code>。</p>
+      </div>
+      <div class="card">
+        <strong>科学仪器测量过程</strong>
+        <span class="pill todo">需实施</span>
+        <p>profile 前按探底频次决定是否真实探底；不探底时也必须运行到底部位置，采集 <code>Point 0</code> 密度。</p>
+      </div>
+      <div class="card">
+        <strong>状态输出口径固定</strong>
+        <span class="pill fixed">已明确</span>
+        <p><code>10001 Bottom Reference</code> 始终为未到底；<code>10010 Probe Un-calibrated</code> 始终为可信。</p>
+      </div>
+      <div class="card">
+        <strong>上下液位传感器</strong>
+        <span class="pill fixed">已明确</span>
+        <p>液位跟随时下传感器为液体、上传感器为空气；其它状态两个传感器均显示在液体。</p>
+      </div>
+      <div class="card">
+        <strong>自动 Profile 调度</strong>
+        <span class="pill todo">需实施</span>
+        <p><code>40010~40013</code> 需要作为独立保持寄存器驱动真实自动 profile 调度。</p>
+      </div>
+      <div class="card">
+        <strong>报警限值和时间戳</strong>
+        <span class="pill todo">需实施</span>
+        <p>兼容全部报警限值和状态；<code>30007~30010 Profile Timestamp</code> 改为 profile 测量开始时间。</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="baseline">
+    <h2>2. 当前兼容基线</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>项目</th>
+          <th>当前实现</th>
+          <th>进一步兼容要求</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>SI7000 Profile 线圈</td>
+          <td>CPU3 <code>00004</code> 写入后下发 <code>CMD_MEASURE_DISTRIBUTED</code>。</td>
+          <td>改为下发新的 SI7000 专用 profile 命令。</td>
+        </tr>
+        <tr>
+          <td>profile 测量流程</td>
+          <td>复用普通分布测量流程，profile 点阵来自现有分布测量结果。</td>
+          <td>新增独立流程，按底部点 <code>Point 0</code> 加后续停点生成点阵。</td>
+        </tr>
+        <tr>
+          <td>探底频次</td>
+          <td>已有 Wärtsilä 探底间隔参数和流程可参考。</td>
+          <td>新增 SI7000 专用探底频次，不复用 Wärtsilä 参数名和业务语义。</td>
+        </tr>
+        <tr>
+          <td><code>10001</code></td>
+          <td>当前按内部 <code>bottom_reference_valid</code> 映射。</td>
+          <td>固定返回 <code>0</code>，对外显示未到底。</td>
+        </tr>
+        <tr>
+          <td><code>10010</code></td>
+          <td>当前按内部 <code>zero_point_status</code> 简化映射。</td>
+          <td>固定返回 <code>0</code>，对外显示可信。</td>
+        </tr>
+        <tr>
+          <td><code>10002/10003</code></td>
+          <td>当前固定 <code>0</code>，尚无独立来源。</td>
+          <td>按液位跟随状态合成下液体/上空气或两者均在液体。</td>
+        </tr>
+        <tr>
+          <td><code>40001~40003</code></td>
+          <td>当前桥接 <code>spreadTopLimit</code>、<code>spreadMeasurementDistance</code>、<code>spreadPointHoverTime</code>。</td>
+          <td>改为 SI7000 独立保持寄存器，不再直接复用普通分布测量参数。</td>
+        </tr>
+        <tr>
+          <td><code>40010~40013</code></td>
+          <td>当前为 CPU3 影子回读，不触发真实自动 profile 调度。</td>
+          <td>改为 SI7000 独立保持寄存器并驱动真实调度。</td>
+        </tr>
+        <tr>
+          <td><code>40014~40023</code></td>
+          <td>当前为 CPU3 影子回读，并参与部分报警合成。</td>
+          <td>补齐全部报警限值设置和状态，计算逻辑尽量复用，参数语义保持独立。</td>
+        </tr>
+        <tr>
+          <td>Profile Timestamp</td>
+          <td>当前按完成计数变化锁存完成时刻。</td>
+          <td>改为 profile 测量开始时间。</td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="principles">
+    <h2>3. 设计原则</h2>
+    <ul>
+      <li>CPU3 继续负责 SI7000 Modbus RTU 地址、功能码、异常响应、缩放、保持寄存器和自动调度。</li>
+      <li>CPU2 只新增真实测量所需的通用命令、流程和必要状态，不在 CPU2 中引入 SI7000 地址号或 Modbus 细节。</li>
+      <li>SI7000 profile 与普通分布测量、Wärtsilä 密度测量互相隔离，避免改 SI7000 时影响其它业务。</li>
+      <li><code>40001~40003</code>、<code>40010~40013</code> 必须按 SI7000 独立保持寄存器处理。</li>
+      <li>报警限值优先复用现有比较逻辑和运行态能力；只有单位、方向、阈值含义、持久化语义完全一致时才复用现有参数。</li>
+      <li>对外协议状态以本轮确认口径为准，<code>10001</code> 和 <code>10010</code> 不再等同内部真实探底或校准状态。</li>
+    </ul>
+  </section>
+
+  <section id="profile-flow">
+    <h2>4. SI7000 Profile 独立测量流程</h2>
+
+    <h3>4.1 新增命令</h3>
+    <table>
+      <thead>
+        <tr>
+          <th>建议命令</th>
+          <th>建议编号</th>
+          <th>用途</th>
+          <th>影响</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>CMD_SI7000_PROFILE</code></td>
+          <td>建议使用普通命令预留区，例如 <code>20~22</code> 中一个空位</td>
+          <td>执行 SI7000 专用 profile 测量</td>
+          <td>新增 CPU2/CPU3 共享命令，需要升级共享协议版本并更新契约检查。</td>
+        </tr>
+      </tbody>
+    </table>
+    <p>CPU3 <code>si7000_apply_coil_write()</code> 中 <code>SI7000_COIL_PROFILE</code> 不再发送 <code>CMD_MEASURE_DISTRIBUTED</code>，改为发送 <code>CMD_SI7000_PROFILE</code>。</p>
+
+    <h3>4.2 测量步骤</h3>
+    <ol>
+      <li>CPU2 收到 <code>CMD_SI7000_PROFILE</code>。</li>
+      <li>进入 SI7000 profile 运行状态，清除上一轮完成锁存、点阵和 profile 报警状态。</li>
+      <li>锁存 profile 测量开始事件，供 CPU3 输出 <code>30007~30010</code>。</li>
+      <li>根据 SI7000 探底频次计数判断本轮是否真实探底。</li>
+      <li>达到探底频次时先执行真实探底，成功后刷新内部底部参考；探底失败则本轮 profile 失败。</li>
+      <li>未达到探底频次时不真实探底，但必须按已有底部参考、罐高、盲区或专用底部位置参数运行到底部测量位置。</li>
+      <li>在底部测量位置等待稳定，采集 <code>Point 0</code> 的位置、温度、密度。</li>
+      <li>按 <code>40001 Profile First Point</code>、<code>40002 Profile Increment</code>、<code>40003 Profile Dwell Time</code> 生成后续停点。</li>
+      <li>逐点运行、等待、采集温度和密度，直到达到点数上限、液位边界或其它停止条件。</li>
+      <li>扫描 profile 点阵生成报警状态，写入分布测量共享数据，置位完成锁存并递增完成计数。</li>
+      <li>进入 SI7000 profile 完成状态，并按策略回到自动液位跟随或单点监测。</li>
+    </ol>
+
+    <h3>4.3 探底频次</h3>
+    <table>
+      <thead>
+        <tr>
+          <th>参数</th>
+          <th>含义</th>
+          <th>范围建议</th>
+          <th>默认值建议</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>si7000_profile_bottom_detect_interval</code></td>
+          <td>SI7000 profile 探底频次；<code>0</code> 表示不自动探底，<code>N</code> 表示每 N 次 SI7000 profile 前探底一次。</td>
+          <td><code>0~100</code></td>
+          <td><code>0</code> 或按现场要求确认</td>
+        </tr>
+      </tbody>
+    </table>
+    <div class="warning">
+      <strong>不建议复用 Wärtsilä 探底频次：</strong>Wärtsilä 参数已经有专用业务语义，SI7000 profile 的点阵、底部点和调度行为不同，复用参数会导致现场配置互相影响。
+    </div>
+
+    <h3>4.4 底部点和真实探底分离</h3>
+    <table>
+      <thead>
+        <tr>
+          <th>动作</th>
+          <th>含义</th>
+          <th>是否刷新底部参考</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>真实探底</td>
+          <td>用扭力、角度或现有底部检测方式确认罐底。</td>
+          <td>是，内部可刷新底部参考。</td>
+        </tr>
+        <tr>
+          <td>运行到底部测量位置</td>
+          <td>按已有底部参考或配置位置运行到 <code>Point 0</code> 采样位置。</td>
+          <td>否，不改变内部探底可信状态。</td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="status">
+    <h2>5. 状态位输出方案</h2>
+
+    <h3>5.1 Lower/Upper Level Sensor</h3>
+    <table>
+      <thead>
+        <tr>
+          <th>设备状态</th>
+          <th><code>10002 Lower Level Sensor</code></th>
+          <th><code>10003 Upper Level Sensor</code></th>
+          <th>对外含义</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>液位跟随状态</td>
+          <td><code>1</code></td>
+          <td><code>0</code></td>
+          <td>下传感器在液体，上传感器在空气。</td>
+        </tr>
+        <tr>
+          <td>其它状态</td>
+          <td><code>1</code></td>
+          <td><code>1</code></td>
+          <td>两个传感器均显示在液体。</td>
+        </tr>
+      </tbody>
+    </table>
+    <p>第一版建议由 CPU3 根据 CPU2 当前状态合成：<code>STATE_FLOWOIL</code> 或后续明确的液位跟随状态按“下液体、上空气”输出，其它状态按“两者均在液体”输出。</p>
+
+    <h3>5.2 固定状态</h3>
+    <table>
+      <thead>
+        <tr>
+          <th>地址</th>
+          <th>名称</th>
+          <th>输出口径</th>
+          <th>内部状态处理</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>10001</code></td>
+          <td>Bottom Reference</td>
+          <td>固定返回 <code>0</code>，一直显示未到底。</td>
+          <td>内部真实探底状态继续维护，用于测量流程、底部位置和故障判断。</td>
+        </tr>
+        <tr>
+          <td><code>10010</code></td>
+          <td>Probe Un-calibrated</td>
+          <td>固定返回 <code>0</code>，一直显示可信。</td>
+          <td>内部零点、编码器可信状态和探底失败仍用于本机保护和测量错误处理。</td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="holding-registers">
+    <h2>6. 独立保持寄存器方案</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>地址</th>
+          <th>名称</th>
+          <th>独立参数含义</th>
+          <th>单位/范围建议</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>40001</code></td>
+          <td>Profile First Point</td>
+          <td>底部点 <code>Point 0</code> 之后的首个停点。</td>
+          <td>mm，<code>0~65535</code></td>
+        </tr>
+        <tr>
+          <td><code>40002</code></td>
+          <td>Profile Increment</td>
+          <td>后续 profile 每点步距。</td>
+          <td>mm，<code>1~65535</code></td>
+        </tr>
+        <tr>
+          <td><code>40003</code></td>
+          <td>Profile Dwell Time</td>
+          <td>每点停留时间。</td>
+          <td>秒，建议 <code>1~3600</code></td>
+        </tr>
+        <tr>
+          <td><code>40010</code></td>
+          <td>Automatic Profile Interval</td>
+          <td>自动 profile 周期。</td>
+          <td>分钟，建议 <code>0~1440</code> 或按现场确认</td>
+        </tr>
+        <tr>
+          <td><code>40011</code></td>
+          <td>Automatic Profile Enable</td>
+          <td>自动 profile 使能。</td>
+          <td><code>0/1</code></td>
+        </tr>
+        <tr>
+          <td><code>40012</code></td>
+          <td>Automatic Profile Hour</td>
+          <td>自动 profile 起始小时。</td>
+          <td><code>0~23</code></td>
+        </tr>
+        <tr>
+          <td><code>40013</code></td>
+          <td>Automatic Profile Minute</td>
+          <td>自动 profile 起始分钟。</td>
+          <td><code>0~59</code></td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="note">
+      <strong>存储建议：</strong><code>40010~40013</code> 由 CPU3 持久化最自然，因为自动调度依赖 CPU3 RTC；<code>40001~40003</code> 影响 CPU2 测量动作，推荐正式加入 CPU2 可见的 SI7000 专用参数，或在 CPU3 触发 profile 前同步给 CPU2。若写入 CPU2 <code>DeviceParameters</code>，需要升级参数版本并处理升级默认值。
+    </div>
+  </section>
+
+  <section id="schedule">
+    <h2>7. 自动 Profile 调度</h2>
+    <p>建议自动 profile 调度放在 CPU3：CPU3 持有 SI7000 外部协议、独立保持寄存器和 RTC，到点后向 CPU2 下发 <code>CMD_SI7000_PROFILE</code>，CPU2 只负责执行真实测量。</p>
+    <table>
+      <thead>
+        <tr>
+          <th>规则</th>
+          <th>建议口径</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>使能</td>
+          <td><code>40011 = 0</code> 时不自动触发；<code>40011 = 1</code> 时启用。</td>
+        </tr>
+        <tr>
+          <td>首次触发</td>
+          <td>第一次触发时间为 <code>40012:40013</code>。</td>
+        </tr>
+        <tr>
+          <td>周期触发</td>
+          <td>后续按 <code>40010</code> 分钟周期触发；<code>40010 = 0</code> 的语义需联调前确认。</td>
+        </tr>
+        <tr>
+          <td>忙碌处理</td>
+          <td>设备忙、手动动作、关键故障或当前 profile 运行中时不强行触发，记录跳过或延后原因。</td>
+        </tr>
+        <tr>
+          <td><code>10012 Interval Timer</code></td>
+          <td>建议表示自动 profile 使能且调度器有效，而不是简单等于 <code>40011</code>。</td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="alarms">
+    <h2>8. 报警限值和状态兼容</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>限值地址</th>
+          <th>状态地址</th>
+          <th>含义</th>
+          <th>建议处理</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>40014</code></td>
+          <td><code>10017</code>、<code>10031</code></td>
+          <td>Low Density / Profile Low Density</td>
+          <td>当前值和 profile 点阵分别比较，阈值为 0 时建议视为未启用。</td>
+        </tr>
+        <tr>
+          <td><code>40015</code></td>
+          <td><code>10018</code>、<code>10032</code></td>
+          <td>High Density / Profile High Density</td>
+          <td>复用密度比较逻辑，参数保持 SI7000 独立。</td>
+        </tr>
+        <tr>
+          <td><code>40016</code></td>
+          <td><code>10019</code>、<code>10029</code></td>
+          <td>Low Temperature / Profile Low Temperature</td>
+          <td>按当前温度和 profile 点阵温度比较。</td>
+        </tr>
+        <tr>
+          <td><code>40017</code></td>
+          <td><code>10020</code>、<code>10030</code></td>
+          <td>High Temperature / Profile High Temperature</td>
+          <td>按当前温度和 profile 点阵温度比较。</td>
+        </tr>
+        <tr>
+          <td><code>40018~40021</code></td>
+          <td><code>10021~10024</code></td>
+          <td>LL、HH、Low、High Level Alarm</td>
+          <td>可复用液位比较逻辑，不建议直接复用 AO 或继电器报警参数。</td>
+        </tr>
+        <tr>
+          <td><code>40022</code></td>
+          <td><code>10025</code></td>
+          <td>Profile Temp Deviation Alarm</td>
+          <td>profile 完成后按相邻点温度差扫描生成。</td>
+        </tr>
+        <tr>
+          <td><code>40023</code></td>
+          <td><code>10026</code></td>
+          <td>Profile Density Deviation Alarm</td>
+          <td>profile 完成后按相邻点密度差扫描生成。</td>
+        </tr>
+      </tbody>
+    </table>
+    <div class="decision">
+      <strong>复用边界：</strong>“尽量复用”优先复用计算函数、状态字段和比较口径；除非确认完全同义，不建议让 PLC 写 SI7000 限值时同时改变 AO、继电器、Wärtsilä 或普通分布测量参数。
+    </div>
+  </section>
+
+  <section id="timestamp">
+    <h2>9. Profile Timestamp</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>地址</th>
+          <th>新含义</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>30007</code></td>
+          <td>profile 测量开始月份。</td>
+        </tr>
+        <tr>
+          <td><code>30008</code></td>
+          <td>profile 测量开始日期。</td>
+        </tr>
+        <tr>
+          <td><code>30009</code></td>
+          <td>profile 测量开始小时。</td>
+        </tr>
+        <tr>
+          <td><code>30010</code></td>
+          <td>profile 测量开始分钟。</td>
+        </tr>
+      </tbody>
+    </table>
+    <p>第一版建议 CPU3 在下发 <code>CMD_SI7000_PROFILE</code> 的时刻锁存开始时间；更严格版本可由 CPU2 新增 profile started 事件，CPU3 收到事件后再锁存。</p>
+  </section>
+
+  <section id="impact">
+    <h2>10. 版本和兼容影响</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>改动项</th>
+          <th>共享协议影响</th>
+          <th>参数存储影响</th>
+          <th>说明</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>新增 <code>CMD_SI7000_PROFILE</code></td>
+          <td>是</td>
+          <td>否</td>
+          <td>新增 CPU2/CPU3 共享命令，必须升级 <code>DEVICE_PROTOCOL_VERSION</code>。</td>
+        </tr>
+        <tr>
+          <td><code>00004</code> 改下发新命令</td>
+          <td>是</td>
+          <td>否</td>
+          <td>命令语义变化，需要更新映射表、联调表和 golden frame/契约检查。</td>
+        </tr>
+        <tr>
+          <td><code>10001/10010</code> 固定输出</td>
+          <td>否</td>
+          <td>否</td>
+          <td>只影响 CPU3 SI7000 映射行为。</td>
+        </tr>
+        <tr>
+          <td><code>40001~40013</code> 独立保持寄存器</td>
+          <td>视同步方式而定</td>
+          <td>可能</td>
+          <td>若 CPU2 持久化 profile 参数，需要升级 CPU2 参数版本；若 CPU3 持久化调度参数，需要处理 CPU3 本机参数。</td>
+        </tr>
+        <tr>
+          <td>自动 profile 调度</td>
+          <td>否</td>
+          <td>可能</td>
+          <td>CPU3 调度本身不改共享协议，但调度参数掉电保存会影响参数存储。</td>
+        </tr>
+        <tr>
+          <td>报警限值全部兼容</td>
+          <td>视算法位置而定</td>
+          <td>可能</td>
+          <td>当前值报警可在 CPU3 计算；profile 偏差若放 CPU2 生成，可能影响共享字段。</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h3>建议实施阶段</h3>
+    <ol>
+      <li>先完成 CPU3 映射和独立参数阶段：<code>10001/10010/10002/10003</code>、<code>40010~40013</code>、时间戳和当前值报警。</li>
+      <li>再完成 CPU2 独立 SI7000 profile 阶段：新增命令、独立流程、<code>Point 0</code>、探底频次、profile 点阵和偏差报警。</li>
+    </ol>
+  </section>
+
+  <section id="validation">
+    <h2>11. 验证计划</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>类别</th>
+          <th>验证点</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>静态检查</td>
+          <td>运行 <code>py tools\check_si7000_modbus_frames.py</code>、<code>py tools\check_si7000_protocol_contract.py</code>；新增命令或共享字段后扩展脚本覆盖命令号和协议版本。</td>
+        </tr>
+        <tr>
+          <td>状态位</td>
+          <td><code>10001</code> 任意状态为 <code>0</code>；<code>10010</code> 任意状态为 <code>0</code>；液位跟随时 <code>10002=1,10003=0</code>，其它状态 <code>10002=1,10003=1</code>。</td>
+        </tr>
+        <tr>
+          <td>保持寄存器</td>
+          <td><code>40001~40003</code> 写入后可回读且不改变普通分布测量参数；<code>40010~40013</code> 合法值可写可回读，非法小时、分钟、使能值返回异常。</td>
+        </tr>
+        <tr>
+          <td>自动调度</td>
+          <td>到点后下发 SI7000 profile；设备忙、故障、手动状态时不误触发；<code>10012</code> 与调度有效状态一致。</td>
+        </tr>
+        <tr>
+          <td>测量流程</td>
+          <td>探底频次为 <code>0</code> 时不真实探底但采集 <code>Point 0</code>；频次为 <code>1</code> 时每次探底；频次为 <code>N</code> 时第 N 次探底。</td>
+        </tr>
+        <tr>
+          <td>点阵语义</td>
+          <td><code>Point 0</code> 必须写入第一组三元组；<code>40001</code> 是 <code>Point 0</code> 之后首个停点，不能覆盖底部点。</td>
+        </tr>
+        <tr>
+          <td>报警和时间戳</td>
+          <td>当前值报警、profile 上下限报警、profile 偏差报警均按限值置位和恢复；<code>30007~30010</code> 显示 profile 开始时间。</td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="todo">
+    <h2>12. 实施前确认项</h2>
+    <ol>
+      <li>SI7000 探底频次默认值使用 <code>0</code> 还是 <code>1</code>。</li>
+      <li>不探底时“底部位置”使用已有底部参考、罐高/盲区，还是新增 SI7000 底部偏移参数。</li>
+      <li><code>40010 = 0</code> 时，自动 profile 是禁用周期只按每日时刻触发，还是完全不触发。</li>
+      <li><code>40014~40023</code> 是否必须掉电保存。</li>
+      <li>报警限值参数是否允许只在 CPU3 存储，还是必须让 CPU2 侧也可见。</li>
+      <li>自动 profile 到点但设备忙时，是跳过本次、延后到空闲立即执行，还是等待下一个周期。</li>
+      <li>profile 完成后是否自动回到液位跟随。</li>
+    </ol>
+  </section>
+</main>
+</body>
+</html>

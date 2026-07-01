@@ -1841,3 +1841,35 @@ CPU2 参数加载会校验 FRAM 中的 `magic`、`struct_size`、`param_version`
 - 未做实物联调；需要现场长时间运行确认编码器校验失败、OCF 未完成和蓝牙主机无响应是否收敛。
 - 需要现场覆盖传感器断电后首次上电 `%` 透传场景，确认首次进入 AT 会立即重试且不影响 RSSI 扫描、普通 AT 查询和运行中通信时效。
 - 需要示波器或现场日志复核中断优先级调整后编码器采样、串口 DMA、TIM4 电流刷新和 CPU2/CPU3 轮询之间没有新的实时性回归。
+
+## 2026-07-01 - 调整 AS5145 编码器 SSI 错误重试和持续故障上报（CPU2 V1.20.3.0 / CPU3 V1.18.2.0）
+
+版本：
+- CPU2: V1.20.2.0 -> V1.20.3.0。
+- CPU3: V1.18.2.0 保持不变。
+
+协议版本/兼容性：
+- `DEVICE_PROTOCOL_VERSION` 保持 13，不新增共享命令、共享寄存器、输入寄存器长度或跨 CPU 状态字段。
+- CPU2 `DEVICE_PARAM_VERSION` 保持 3，`DeviceParameters` 结构大小和 FRAM 参数校验规则不变，不会因本次升级触发恢复出厂参数。
+- CPU3 本机参数存储版本保持 `0x0005`，不改变本机 FRAM 布局。
+- 本次只调整 CPU2 AS5145 编码器 SSI 错误重试、持续故障日志和有效帧门控策略；CPU3 固件行为不变，可继续使用 V1.18.2.0。
+
+本次修改：
+- CPU2 AS5145 SSI 错误处理恢复前 3 次立即重试，超过阈值后只记录一次持续故障详情，不停止 TIM1，也不阻断后续定时采样。
+- CPU2 有效帧门控改为单帧完整解析且无协议错误后即标记首个可信位置，避免旧连续有效帧门控导致上电后可用位置迟滞。
+- CPU2 清理编码器错误诊断中的未使用统计计数和原始帧缓存，减少中断路径共享状态。
+- CPU2 SPI busy 和 DMA 启动失败路径改为记录编码器超时错误和一次性诊断输出，不再递归进入 SSI 错误重试流程。
+- 同步提交标题版本号门禁脚本、本地 commit-msg 钩子、AGENTS 和版本测试 README 的提交流程说明。
+- 整理 SI7000 进一步兼容需求、CPU2 全局错误响应滞后分析、LNG 菜单核对资料和 SIL 外部资料索引。
+
+验证：
+- `git diff --cached --check`
+- `py tools\check_version_bumped.py`
+- `py -m unittest tools.test_check_commit_subject_versions`
+- `py tools\check_commit_subject_versions.py --subject "fix: 调整 AS5145 编码器 SSI 错误重试和持续故障上报（CPU2 V1.20.3.0 / CPU3 V1.18.2.0）"`
+- `cmake --build build\LTD_MAIN_CPU2`
+
+未验证风险：
+- 未做实物联调；需要现场覆盖 AS5145 断线、空帧、OCF 未完成、COF 和偶发校验错误，确认 3 次重试后日志不刷屏且通信可在有效帧恢复后自恢复。
+- 未重新构建 CPU3；本次没有 CPU3 源码行为改动，CPU3 仅作为提交标题和文档资料的版本参照。
+- 本次包含文档和提交门禁工具整理，需要推送前按仓库要求运行 `py tools\check_commit_subject_versions.py --range origin/MAIN..HEAD`。

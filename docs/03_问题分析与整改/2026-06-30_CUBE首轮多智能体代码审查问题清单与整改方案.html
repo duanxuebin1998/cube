@@ -1,0 +1,1479 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CUBE 首轮多智能体代码审查问题清单与整改方案</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #eef3f7;
+      --paper: #ffffff;
+      --panel: #f7fafc;
+      --panel-strong: #eef6f5;
+      --text: #1d2733;
+      --muted: #667085;
+      --line: #d9e0e8;
+      --line-soft: #e8edf3;
+      --accent: #0f766e;
+      --accent-strong: #0b5f59;
+      --blue: #1d4ed8;
+      --blue-soft: #eff6ff;
+      --bad: #b42318;
+      --bad-soft: #fff0ee;
+      --warn: #b45309;
+      --warn-soft: #fff7ed;
+      --ok: #027a48;
+      --ok-soft: #ecfdf3;
+      --code: #0f172a;
+      --code-bg: #eef2f6;
+      --shadow: 0 18px 48px rgba(28, 43, 64, 0.12);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      margin: 0;
+      color: var(--text);
+      background:
+        linear-gradient(180deg, rgba(15, 118, 110, 0.10), rgba(15, 118, 110, 0) 300px),
+        var(--bg);
+      font-family: "Microsoft YaHei", "Segoe UI", Arial, sans-serif;
+      font-size: 15px;
+      line-height: 1.72;
+      letter-spacing: 0;
+    }
+
+    a {
+      color: var(--accent-strong);
+      text-decoration: none;
+    }
+
+    a:hover {
+      text-decoration: underline;
+    }
+
+    code {
+      padding: 0.12rem 0.34rem;
+      color: var(--code);
+      background: var(--code-bg);
+      border: 1px solid var(--line-soft);
+      border-radius: 5px;
+      font-family: Consolas, "Courier New", monospace;
+      font-size: 0.92em;
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: minmax(250px, 320px) minmax(0, 1fr);
+      gap: 26px;
+      max-width: 1480px;
+      margin: 0 auto;
+      padding: 28px;
+    }
+
+    aside {
+      position: sticky;
+      top: 22px;
+      align-self: start;
+      max-height: calc(100vh - 44px);
+      overflow: auto;
+      padding: 18px;
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      box-shadow: 0 10px 30px rgba(28, 43, 64, 0.08);
+    }
+
+    aside h2 {
+      margin: 0 0 12px;
+      font-size: 16px;
+      color: var(--accent-strong);
+    }
+
+    aside ul {
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    aside li {
+      margin: 7px 0;
+    }
+
+    aside a {
+      display: block;
+      padding: 6px 8px;
+      color: #344054;
+      border-radius: 6px;
+    }
+
+    aside a:hover {
+      background: var(--panel-strong);
+      text-decoration: none;
+    }
+
+    main {
+      min-width: 0;
+    }
+
+    .hero {
+      padding: 34px 38px;
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      box-shadow: var(--shadow);
+    }
+
+    h1 {
+      margin: 0 0 12px;
+      font-size: clamp(28px, 4vw, 44px);
+      line-height: 1.18;
+      letter-spacing: 0;
+      color: #102a43;
+    }
+
+    .subtitle {
+      max-width: 980px;
+      margin: 0;
+      color: var(--muted);
+      font-size: 16px;
+    }
+
+    .meta-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+      margin-top: 24px;
+    }
+
+    .meta-item {
+      padding: 13px 14px;
+      background: var(--panel);
+      border: 1px solid var(--line-soft);
+      border-radius: 8px;
+    }
+
+    .meta-item strong {
+      display: block;
+      margin-bottom: 3px;
+      color: var(--accent-strong);
+      font-size: 13px;
+    }
+
+    section {
+      margin-top: 26px;
+      padding: 28px;
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      box-shadow: 0 8px 24px rgba(28, 43, 64, 0.07);
+    }
+
+    h2 {
+      margin: 0 0 16px;
+      font-size: 24px;
+      color: #102a43;
+    }
+
+    h3 {
+      margin: 0 0 12px;
+      font-size: 19px;
+      color: #182536;
+    }
+
+    h4 {
+      margin: 18px 0 8px;
+      font-size: 15px;
+      color: var(--accent-strong);
+    }
+
+    p {
+      margin: 8px 0;
+    }
+
+    ul, ol {
+      margin: 8px 0 0 22px;
+      padding: 0;
+    }
+
+    li {
+      margin: 6px 0;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 14px 0 0;
+      font-size: 14px;
+      background: var(--paper);
+    }
+
+    th, td {
+      padding: 10px 12px;
+      border: 1px solid var(--line);
+      vertical-align: top;
+      text-align: left;
+    }
+
+    th {
+      background: var(--panel-strong);
+      color: #0b5f59;
+      white-space: nowrap;
+    }
+
+    .issue {
+      margin-top: 18px;
+      padding: 22px;
+      border: 1px solid var(--line);
+      border-left-width: 5px;
+      border-radius: 8px;
+      background: #fff;
+    }
+
+    .issue.p0 {
+      border-left-color: var(--bad);
+      background: linear-gradient(90deg, var(--bad-soft), #fff 260px);
+    }
+
+    .issue.p1 {
+      border-left-color: var(--warn);
+      background: linear-gradient(90deg, var(--warn-soft), #fff 260px);
+    }
+
+    .issue.p2 {
+      border-left-color: var(--blue);
+      background: linear-gradient(90deg, var(--blue-soft), #fff 260px);
+    }
+
+    .issue.p3 {
+      border-left-color: var(--ok);
+      background: linear-gradient(90deg, var(--ok-soft), #fff 260px);
+    }
+
+    .issue-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 14px;
+      margin-bottom: 12px;
+    }
+
+    .issue-title {
+      margin: 0;
+      font-size: 20px;
+      line-height: 1.35;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 48px;
+      padding: 3px 10px;
+      border-radius: 999px;
+      font-weight: 700;
+      font-size: 13px;
+      white-space: nowrap;
+    }
+
+    .badge.p0 {
+      color: #8a1f14;
+      background: #ffe4e0;
+      border: 1px solid #f3b8b1;
+    }
+
+    .badge.p1 {
+      color: #8a4b00;
+      background: #ffedd5;
+      border: 1px solid #f3c57f;
+    }
+
+    .badge.p2 {
+      color: #1d4ed8;
+      background: #dbeafe;
+      border: 1px solid #b9d4ff;
+    }
+
+    .badge.p3 {
+      color: #027a48;
+      background: #d1fadf;
+      border: 1px solid #a6e8bd;
+    }
+
+    .evidence {
+      margin: 10px 0 14px;
+      padding: 12px 14px;
+      background: rgba(248, 250, 252, 0.88);
+      border: 1px solid var(--line-soft);
+      border-radius: 8px;
+    }
+
+    .split {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      gap: 16px;
+    }
+
+    .note {
+      padding: 14px 16px;
+      background: var(--panel-strong);
+      border: 1px solid #c6e6e2;
+      border-radius: 8px;
+    }
+
+    .muted {
+      color: var(--muted);
+    }
+
+    .tagline {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 12px;
+    }
+
+    .tag {
+      padding: 3px 8px;
+      color: #344054;
+      background: var(--panel);
+      border: 1px solid var(--line-soft);
+      border-radius: 999px;
+      font-size: 13px;
+    }
+
+    .priority-list td:first-child {
+      width: 80px;
+      font-weight: 700;
+    }
+
+    @media (max-width: 980px) {
+      .layout {
+        display: block;
+        padding: 18px;
+      }
+
+      aside {
+        position: static;
+        max-height: none;
+        margin-bottom: 18px;
+      }
+
+      .meta-grid,
+      .split {
+        grid-template-columns: 1fr;
+      }
+
+      .hero,
+      section {
+        padding: 22px;
+      }
+    }
+
+    @media print {
+      body {
+        background: #fff;
+      }
+
+      .layout {
+        display: block;
+        max-width: none;
+        padding: 0;
+      }
+
+      aside {
+        display: none;
+      }
+
+      .hero,
+      section,
+      .issue {
+        box-shadow: none;
+        break-inside: avoid;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="layout">
+    <aside>
+      <h2>目录</h2>
+      <ul>
+        <li><a href="#summary">审查概览</a></li>
+        <li><a href="#priority">优先级定义</a></li>
+        <li><a href="#p0">P0 阻断级问题</a></li>
+        <li><a href="#p1">P1 高优先级问题</a></li>
+        <li><a href="#p2">P2 中优先级问题</a></li>
+        <li><a href="#p3">P3 低优先级问题</a></li>
+        <li><a href="#fix-order">建议整改顺序</a></li>
+        <li><a href="#verification">验证建议</a></li>
+      </ul>
+    </aside>
+
+    <main>
+      <div class="hero">
+        <h1>CUBE 首轮多智能体代码审查问题清单与整改方案</h1>
+        <p class="subtitle">
+          本报告根据 2026-06-30 对 <code>D:\CUBE</code> 的首轮只读深度审查整理，覆盖 CPU2 主流程、CPU2 Modbus 与参数存储、CPU3 显示、CPU3 通信、故障恢复、日志、中断边界和构建文档治理。报告只记录源码证据、问题原因、影响和建议方案，不表示已经完成代码修复。
+        </p>
+        <div class="meta-grid">
+          <div class="meta-item"><strong>审查方式</strong>多智能体并行只读审查</div>
+          <div class="meta-item"><strong>审查日期</strong>2026-06-30</div>
+          <div class="meta-item"><strong>范围</strong>CPU2 / CPU3 / 协议 / 显示 / 故障 / 文档工具</div>
+          <div class="meta-item"><strong>限制</strong>未做硬件联调，未运行固件构建</div>
+        </div>
+      </div>
+
+      <section id="summary">
+        <h2>审查概览</h2>
+        <p>
+          本轮共整理 34 个问题，其中 P0 3 个、P1 14 个、P2 14 个、P3 3 个。最高风险集中在三条主线：CPU2 Modbus 边界校验不足、电机安全错误被覆盖或清除、CPU3 对 CPU2 数据和外部协议的帧校验不足。
+        </p>
+        <div class="tagline">
+          <span class="tag">CPU2 Modbus 边界</span>
+          <span class="tag">电机失步与停机安全</span>
+          <span class="tag">命令切换状态一致性</span>
+          <span class="tag">CPU3 内外协议帧校验</span>
+          <span class="tag">显示参数保存后不生效</span>
+          <span class="tag">版本与提交门禁追溯</span>
+        </div>
+        <div class="note">
+          <strong>处理原则：</strong>先封住会造成内存破坏、错误漏报和现场误动作的 P0/P1，再处理参数语义、显示一致性、文档门禁和诊断体验。涉及 CPU2/CPU3 共享协议、参数语义或错误码传递的修复，需要同步评估 <code>DEVICE_PROTOCOL_VERSION</code>、CPU2/CPU3 固件版本、版本文档和回归用例。
+        </div>
+      </section>
+
+      <section id="priority">
+        <h2>优先级定义</h2>
+        <table class="priority-list">
+          <tbody>
+            <tr>
+              <td>P0</td>
+              <td>可能造成内存破坏、安全边界漏报、参数被错误持久化，或直接阻断现场发布的问题。建议作为第一批修复并补回归测试。</td>
+            </tr>
+            <tr>
+              <td>P1</td>
+              <td>可能导致测量状态误报、主机协议不可用、关键错误被吞掉、现场数据错位或用户配置不生效的问题。建议紧随 P0 处理。</td>
+            </tr>
+            <tr>
+              <td>P2</td>
+              <td>会降低可靠性、诊断性、兼容性或现场维护效率的问题。建议在 P0/P1 稳定后按模块排期。</td>
+            </tr>
+            <tr>
+              <td>P3</td>
+              <td>一致性、可维护性、文档追溯或低概率兼容问题。可以随相关模块改动一起处理。</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="p0">
+        <h2>P0 阻断级问题</h2>
+
+        <article class="issue p0" id="issue-p0-01">
+          <div class="issue-head">
+            <h3 class="issue-title">P0-01 电机位移偏差检测到失步后被后续健康检查覆盖</h3>
+            <span class="badge p0">P0</span>
+          </div>
+          <div class="evidence">
+            <strong>证据位置：</strong><code>LTD_MAIN_CPU2/Services/MotorControl/motor_ctrl_motion_api.c:545-577</code>，调用点 <code>LTD_MAIN_CPU2/Application/Src/measure.c:835-882</code>。
+          </div>
+          <div class="split">
+            <div>
+              <h4>问题原因</h4>
+              <p>
+                <code>MotorCtrl_MoveAndWait()</code> 在检测到实际位移与目标位移偏差超过 70% 时，将 <code>ret</code> 设置为 <code>ENCODER_LOST_STEP</code>。随后函数又立即执行 <code>MotorDriver_SyncPositionOrCheckHealth(&stepper)</code>，并把返回值重新赋给同一个 <code>ret</code>。如果驱动健康检查返回 <code>NO_ERROR</code>，前面已经识别出的失步错误会被覆盖。
+              </p>
+              <p>
+                调用层通常只根据最终返回值决定是否 <code>SET_ERROR(ret)</code>。因此“检测到失步”和“函数最终返回成功”之间出现冲突。
+              </p>
+            </div>
+            <div>
+              <h4>影响</h4>
+              <p>
+                大幅位移异常可能不上报、不进入故障、不触发恢复，CPU3 和外部主机看到的是正常状态。该问题属于电机安全边界漏报，现场风险高。
+              </p>
+            </div>
+          </div>
+          <h4>整改方案</h4>
+          <ul>
+            <li>将位移偏差结果保存为独立变量，例如 <code>motion_ret</code>，驱动健康检查保存为 <code>health_ret</code>，不得覆盖首个具体运动错误。</li>
+            <li>返回优先级建议为：运动安全错误优先，其次驱动健康错误，最后速度恢复错误。</li>
+            <li>当 <code>motion_ret == ENCODER_LOST_STEP</code> 时，强制进入故障路径并记录错误日志；如果还需要同步驱动状态，把健康检查结果作为附加诊断信息。</li>
+            <li>同步检查 <code>MotorCtrl_MoveUp/Down</code>、手动移动、油位/水位/密度路径是否都正确传播该返回值。</li>
+          </ul>
+          <h4>验证建议</h4>
+          <ul>
+            <li>构造电机实际移动距离明显小于目标距离的仿真或 HIL 场景，确认返回 <code>ENCODER_LOST_STEP</code>。</li>
+            <li>确认 CPU2 输入寄存器、CPU3 故障页、外部 DSM/SI7000 状态均能看到该错误码。</li>
+            <li>补单元测试或静态测试，锁定“健康检查成功不能覆盖失步错误”。</li>
+          </ul>
+        </article>
+
+        <article class="issue p0" id="issue-p0-02">
+          <div class="issue-head">
+            <h3 class="issue-title">P0-02 CPU2 FC04 输入寄存器大范围读可能写爆响应缓冲区</h3>
+            <span class="badge p0">P0</span>
+          </div>
+          <div class="evidence">
+            <strong>证据位置：</strong><code>LTD_MAIN_CPU2/Services/Modbus/hostcommu_modbus.c:137</code>、<code>hostcommu_modbus.c:244-260</code>、<code>LTD_MAIN_CPU2/Services/Modbus/hostcommu.h:8</code>、<code>stateformodbus.h:374</code>。
+          </div>
+          <div class="split">
+            <div>
+              <h4>问题原因</h4>
+              <p>
+                <code>JudgeStartAddress()</code> 只校验起始地址和寄存器数量是否落在 <code>INPUTREGISTER_AMOUNT</code> 范围内，没有限制 Modbus 单帧读寄存器数量。<code>Compose04Package()</code> 根据 <code>RCV_registercnt</code> 直接写 <code>sendframe[3...]</code>，响应长度为 <code>3 + RCV_registercnt * 2</code>。
+              </p>
+              <p>
+                CPU2 的 <code>HCOM_SendBuff</code> 只有 1000 字节，而输入寄存器总量约 2570 个。一次大范围 FC04 请求可以通过地址校验，但响应组包会超过缓冲区，并且 <code>sendframe[2]</code> 的 byte count 只有 1 字节，超过 255 后还会截断。
+              </p>
+            </div>
+            <div>
+              <h4>影响</h4>
+              <p>
+                外部主站或 CPU3 内部主站发出大范围读取时，CPU2 可能发生内存破坏、响应 CRC 错乱、协议失步或运行异常。该问题不应依赖主站“正常不会这么读”来规避。
+              </p>
+            </div>
+          </div>
+          <h4>整改方案</h4>
+          <ul>
+            <li>FC04 寄存器数量必须限制为 <code>1..125</code>，超限返回异常码 <code>0x03</code>。</li>
+            <li>增加响应缓冲长度保护：<code>5 + 2 * RCV_registercnt <= HOSTCOMMU_SENDLENGTH</code>，包含地址、功能码、byte count、数据和 CRC。</li>
+            <li>把 FC03/FC04 的数量限制统一封装，避免保持寄存器和输入寄存器口径不同。</li>
+            <li>对 <code>RCV_registercnt == 0</code> 也要返回非法数据值，不能生成空成功响应。</li>
+          </ul>
+          <h4>验证建议</h4>
+          <ul>
+            <li>增加 FC04 数量边界测试：0、1、125、126、500、全表数量。</li>
+            <li>确认 126 及以上返回异常响应，且不写响应缓冲越界。</li>
+            <li>用地址靠近输入寄存器末尾的合法/非法组合测试半开区间边界。</li>
+          </ul>
+        </article>
+
+        <article class="issue p0" id="issue-p0-03">
+          <div class="issue-head">
+            <h3 class="issue-title">P0-03 CPU2 FC10 未校验 byte count 和实际帧长，短帧可污染并持久化参数</h3>
+            <span class="badge p0">P0</span>
+          </div>
+          <div class="evidence">
+            <strong>证据位置：</strong><code>LTD_MAIN_CPU2/Services/Modbus/hostcommu.c:209-320</code>、<code>LTD_MAIN_CPU2/Services/Modbus/hostcommu_modbus.c:277-337</code>。
+          </div>
+          <div class="split">
+            <div>
+              <h4>问题原因</h4>
+              <p>
+                CPU2 接收层只做了最小长度、地址、功能码、CRC 等基础检查。FC10 处理时解析 <code>startAddr</code> 和 <code>regCount</code> 后，<code>Compose10Package()</code> 没有检查 <code>revframe[6]</code> 是否等于 <code>regCount * 2</code>，也没有检查实际接收长度是否等于 <code>9 + byteCount</code>。
+              </p>
+              <p>
+                组包函数直接按 <code>RCV_registercnt</code> 循环读取 <code>revframe[j + 7]</code> 和 <code>revframe[j + 8]</code>。短帧情况下，读取内容可能落到 CRC 字节或 DMA 缓冲旧数据，随后写入 <code>HoldingRegisterArray</code>，再由 <code>ReadDeviceParamsFromHoldingRegisters()</code> 回灌到 <code>g_deviceParams</code> 并触发延迟保存。
+              </p>
+            </div>
+            <div>
+              <h4>影响</h4>
+              <p>
+                构造一个 CRC 对短帧有效的 FC10 请求，就可能把错误数据写入参数区并持久化。影响范围包括命令、罐高、密度参数、报警参数、电流输出参数等所有可写保持寄存器。
+              </p>
+            </div>
+          </div>
+          <h4>整改方案</h4>
+          <ul>
+            <li>在进入 <code>Response10Process()</code> 前按功能码做精确长度校验。</li>
+            <li>FC10 规则：<code>regCount >= 1</code>，<code>regCount <= 123</code>，<code>byteCount == regCount * 2</code>，<code>frameLen == 9 + byteCount</code>。</li>
+            <li>长度或 byte count 非法时返回异常码 <code>0x03</code>，不得调用 <code>Compose10Package()</code>、不得回灌参数、不得请求保存。</li>
+            <li>把 <code>Compose10Package()</code> 改成只负责“已验证帧”的寄存器写入，函数入口用断言或显式参数说明前置条件。</li>
+          </ul>
+          <h4>验证建议</h4>
+          <ul>
+            <li>构造 FC10 正常写 1/2/123 个寄存器的 golden frame。</li>
+            <li>构造 byte count 少 1、多 1、帧长短、帧长长但 CRC 有效的异常帧，确认全部拒绝且参数快照不变。</li>
+            <li>验证异常帧不会触发 <code>request_device_params_save()</code>。</li>
+          </ul>
+        </article>
+      </section>
+
+      <section id="p1">
+        <h2>P1 高优先级问题</h2>
+
+        <article class="issue p1" id="issue-p1-01">
+          <div class="issue-head">
+            <h3 class="issue-title">P1-01 CPU2 保持寄存器边界 off-by-one，末尾地址可越界读写</h3>
+            <span class="badge p1">P1</span>
+          </div>
+          <div class="evidence">
+            <strong>证据位置：</strong><code>LTD_MAIN_CPU2/Services/Modbus/hostcommu_modbus.c:25-27</code>、<code>hostcommu_modbus.c:131</code>、<code>stateformodbus.h:200</code>。
+          </div>
+          <h4>问题原因</h4>
+          <p>
+            <code>HoldingRegisterArray</code> 定义为 <code>HoldingRegisterArray[HOLEREGISTER_STOP]</code>，合法下标是 <code>0..HOLEREGISTER_STOP-1</code>。但 <code>HoldingregisterAmount</code> 被定义为 <code>HOLEREGISTER_STOP + 1</code>，地址校验因此允许访问 <code>HOLEREGISTER_STOP</code> 对应的越界位置。
+          </p>
+          <h4>影响</h4>
+          <p>
+            FC03 可越界读一个保持寄存器，FC10 可越界写一个保持寄存器。虽然越界宽度小，但位置靠近静态数据区，可能污染相邻状态或导致不可预测问题。
+          </p>
+          <h4>整改方案</h4>
+          <ul>
+            <li>把保持寄存器数量定义统一为 <code>HOLEREGISTER_STOP</code>，不要加 1。</li>
+            <li>边界判断改为半开区间：<code>start >= base</code> 且 <code>start + count <= base + amount</code>。</li>
+            <li>使用无溢出的范围判断，避免 <code>start + count - 1</code> 在 count 为 0 时下溢。</li>
+          </ul>
+          <h4>验证建议</h4>
+          <p>补边界测试：最后一个合法地址读写成功，<code>HOLEREGISTER_STOP</code> 地址读写返回非法地址。</p>
+        </article>
+
+        <article class="issue p1" id="issue-p1-02">
+          <div class="issue-head">
+            <h3 class="issue-title">P1-02 CPU2 FC03 保持寄存器读未限制 125 个寄存器，byte count 会截断</h3>
+            <span class="badge p1">P1</span>
+          </div>
+          <div class="evidence">
+            <strong>证据位置：</strong><code>LTD_MAIN_CPU2/Services/Modbus/hostcommu_modbus.c:218-232</code>。
+          </div>
+          <h4>问题原因</h4>
+          <p>
+            <code>Compose03Package()</code> 与 FC04 一样使用 <code>sendframe[2] = RCV_registercnt * 2</code>，但没有限制 <code>RCV_registercnt <= 125</code>。保持寄存器总长度虽然通常不会超过 1000 字节缓冲，但超过 125 后已违反标准 Modbus RTU 响应长度，超过 127 后 byte count 可能接近或超过单字节边界。
+          </p>
+          <h4>影响</h4>
+          <p>
+            外部主站或 CPU3 大块读保持寄存器时，可能收到非标准响应，造成解析错位、CRC 不一致或后续通信失步。
+          </p>
+          <h4>整改方案</h4>
+          <ul>
+            <li>FC03 和 FC04 共用数量校验函数，统一限制 <code>1..125</code>。</li>
+            <li>数量非法返回异常码 <code>0x03</code>，地址越界返回 <code>0x02</code>。</li>
+            <li>在文档中说明大范围读取需要拆分多帧。</li>
+          </ul>
+          <h4>验证建议</h4>
+          <p>用 125 和 126 个保持寄存器分别测试，确认 125 成功、126 异常。</p>
+        </article>
+
+        <article class="issue p1" id="issue-p1-03">
+          <div class="issue-head">
+            <h3 class="issue-title">P1-03 多个测量命令重复调用 MeasureStart 且不检查返回值</h3>
+            <span class="badge p1">P1</span>
+          </div>
+          <div class="evidence">
+            <strong>证据位置：</strong><code>LTD_MAIN_CPU2/Application/Src/measure.c:104</code>、<code>measure.c:446-467</code>、<code>measure.c:511</code>、<code>measure.c:571</code>、<code>measure.c:613</code>、<code>measure_density.c:1474</code>、<code>measure_waterLevel.c:1355</code>。
+          </div>
+          <h4>问题原因</h4>
+          <p>
+            调度入口 <code>ProcessMeasureCmd()</code> 已经调用并检查 <code>MeasureStart()</code>。但多个 <code>CMD_*</code> 函数内部再次调用 <code>MeasureStart();</code>，且不保存返回值。<code>MeasureStart()</code> 中 <code>MotorCtrl_Init()</code> 失败时会返回错误，但内部调用方没有处理该错误。
+          </p>
+          <h4>影响</h4>
+          <p>
+            第二次初始化失败时，流程仍可能继续进入找水、找底、密度、重量等动作，造成基于无效电机状态的后续操作。该问题还会让错误日志和 CPU3 状态无法反映真正失败原因。
+          </p>
+          <h4>整改方案</h4>
+          <ul>
+            <li>优先采用单入口初始化：只在调度层执行 <code>MeasureStart()</code>，删除子命令内重复调用。</li>
+            <li>如果某些测试命令确实需要独立初始化，应改为 <code>ret = MeasureStart(); SET_ERROR(ret);</code> 并在失败时立即返回。</li>
+            <li>梳理所有 <code>MeasureStart();</code> 未检查调用点，明确正式命令、调试命令和测试命令的不同策略。</li>
+          </ul>
+          <h4>验证建议</h4>
+          <p>模拟 <code>MotorCtrl_Init()</code> 返回错误，确认所有正式命令都会停在错误态，不继续执行测量动作。</p>
+        </article>
+
+        <article class="issue p1" id="issue-p1-04">
+          <div class="issue-head">
+            <h3 class="issue-title">P1-04 取消测量时电机停机失败只打印，仍强制进入待机</h3>
+            <span class="badge p1">P1</span>
+          </div>
+          <div class="evidence">
+            <strong>证据位置：</strong><code>LTD_MAIN_CPU2/Application/Src/measure.c:294-314</code>、<code>LTD_MAIN_CPU2/Services/MotorControl/motor_ctrl_motion_api.c:840-847</code>。
+          </div>
+          <h4>问题原因</h4>
+          <p>
+            <code>CMD_CancelMeasurement()</code> 在用户取消时先清命令和错误码，然后调用 <code>MotorCtrl_SlowStop()</code>。如果停机返回真实错误，代码只打印日志，随后仍设置 <code>device_state = STATE_STANDBY</code>。
+          </p>
+          <h4>影响</h4>
+          <p>
+            用户取消本身不是故障，但取消过程中的停机失败是安全问题。当前逻辑会把“停止失败”对 CPU3 和外部主站隐藏起来，现场可能以为设备已经安全待机。
+          </p>
+          <h4>整改方案</h4>
+          <ul>
+            <li>先执行停机，确认停机成功后再清取消相关状态。</li>
+            <li>如果 <code>MotorCtrl_SlowStop()</code> 返回真实错误，调用 <code>FaultManager_SetErrorState()</code> 或等效路径进入 <code>STATE_ERROR</code>。</li>
+            <li>取消成功和取消失败分别记录不同日志，便于现场判断。</li>
+          </ul>
+          <h4>验证建议</h4>
+          <p>注入 TMC 停机失败或通信失败，执行取消命令，确认 CPU2/CPU3/外部协议均显示具体错误而不是待机。</p>
+        </article>
+
+        <article class="issue p1" id="issue-p1-05">
+          <div class="issue-head">
+            <h3 class="issue-title">P1-05 STATE_SWITCH 被 SET_ERROR 吞掉后，包装函数继续写完成态</h3>
+            <span class="badge p1">P1</span>
+          </div>
+          <div class="evidence">
+            <strong>证据位置：</strong><code>LTD_MAIN_CPU2/Application/Inc/fault_manager.h:168-178</code>、<code>LTD_MAIN_CPU2/Application/Src/measure.c:509-518</code>、<code>measure.c:569-578</code>、<code>measure.c:611-700</code>、<code>measure.c:963</code>。
+          </div>
+          <h4>问题原因</h4>
+          <p>
+            <code>SET_ERROR()</code> 对 <code>STATE_SWITCH</code> 不进入错误路径，也不返回。水位、回零、找底、空/满载重量等命令包装层在子流程返回 <code>STATE_SWITCH</code> 后继续执行后续语句，最终写入 <code>STATE_FINDWATER_OVER</code>、<code>STATE_STANDBY</code>、<code>STATE_FINDBOTTOM_OVER</code> 等完成态。
+          </p>
+          <h4>影响</h4>
+          <p>
+            命令切换或取消发生时，CPU2 可能短暂或持续报告“完成”，CPU3 和外部主站可能将中断流程的结果当作有效结果。
+          </p>
+          <h4>整改方案</h4>
+          <ul>
+            <li>在所有可能返回 <code>STATE_SWITCH</code> 的调用后增加显式判断：<code>if (ret == STATE_SWITCH) return;</code>。</li>
+            <li>新增专用宏，例如 <code>SET_ERROR_OR_SWITCH_RETURN(ret)</code>，避免 void 包装函数遗漏。</li>
+            <li>对测量完成态写入做统一保护：只有 <code>ret == NO_ERROR</code> 才能写完成态。</li>
+          </ul>
+          <h4>验证建议</h4>
+          <p>在水位、找底、回零、密度过程中注入新命令，确认旧命令不会发布完成态或有效结果。</p>
+        </article>
+
+        <article class="issue p1" id="issue-p1-06">
+          <div class="issue-head">
+            <h3 class="issue-title">P1-06 区间密度点数循环变量为 int8_t，点数超过 127 有越界风险</h3>
+            <span class="badge p1">P1</span>
+          </div>
+          <div class="evidence">
+            <strong>证据位置：</strong><code>LTD_MAIN_CPU2/Application/Src/measure_density.c:643-714</code>、<code>LTD_MAIN_CPU2/Application/Inc/measure_density.h:15</code>。
+          </div>
+          <h4>问题原因</h4>
+          <p>
+            区间点数 <code>c_num</code> 最大被钳到 <code>MAX_MEASUREMENT_POINTS</code>，当前为 200。但循环变量 <code>i</code> 使用 <code>int8_t</code>。当点数大于 127 时，<code>i++</code> 会溢出为负数，仍满足 <code>i < c_num</code>，并继续作为数组下标。
+          </p>
+          <h4>影响</h4>
+          <p>
+            配置 128 到 200 个区间密度点时，可能出现栈越界、死循环、测量卡死或结果数组污染。
+          </p>
+          <h4>整改方案</h4>
+          <ul>
+            <li>循环变量改为 <code>int</code> 或 <code>uint32_t</code>。</li>
+            <li>参数写入阶段限制 <code>spreadMeasurementCount</code> 的业务上限。</li>
+            <li>明确 Wartsila/DSM/内部协议对最大密度点数的统一口径。</li>
+          </ul>
+          <h4>验证建议</h4>
+          <p>补 127、128、200 三组区间密度点数测试，确认不会越界且结果点数正确。</p>
+        </article>
+
+        <article class="issue p1" id="issue-p1-07">
+          <div class="issue-head">
+            <h3 class="issue-title">P1-07 密度测量命令切换后，部分点位可能被当作完整剖面发布</h3>
+            <span class="badge p1">P1</span>
+          </div>
+          <div class="evidence">
+            <strong>证据位置：</strong><code>LTD_MAIN_CPU2/Application/Src/measure_density.c:275-330</code>、<code>measure_density.c:821-944</code>。
+          </div>
+          <h4>问题原因</h4>
+          <p>
+            <code>Density_RunPoints01mm()</code> 在已经采到有效点后，如果检测到命令切换，只执行 <code>break</code>。只要 <code>valid > 0</code>，函数最终仍返回 <code>NO_ERROR</code>。外层命令随后复制临时结果、置 <code>profile_complete_latched = 1</code>，并递增完整完成计数。
+          </p>
+          <h4>影响</h4>
+          <p>
+            新命令插入时，CPU2 可能把未测完的密度剖面发布为完整结果，外部主机和 CPU3 难以识别数据只有部分点位。
+          </p>
+          <h4>整改方案</h4>
+          <ul>
+            <li>命令切换时返回 <code>STATE_SWITCH</code>，不要返回 <code>NO_ERROR</code>。</li>
+            <li>如果业务允许保留部分结果，应新增 <code>partial</code> 或 <code>aborted</code> 标志，不递增完整完成计数。</li>
+            <li>外部协议导出密度剖面时同步增加有效点数和完整性标志。</li>
+          </ul>
+          <h4>验证建议</h4>
+          <p>在密度测量第 1 个点、第 N/2 个点后插入新命令，确认旧剖面不会被标为完成。</p>
+        </article>
+
+        <article class="issue p1" id="issue-p1-08">
+          <div class="issue-head">
+            <h3 class="issue-title">P1-08 扭力通信超时可被命令启动流程清掉并重置计时</h3>
+            <span class="badge p1">P1</span>
+          </div>
+          <div class="evidence">
+            <strong>证据位置：</strong><code>LTD_MAIN_CPU2/Application/Src/app_main.c:181-227</code>、<code>LTD_MAIN_CPU2/Application/Src/measure.c:446-455</code>、<code>LTD_MAIN_CPU2/Services/Weight/weight.c:78-149</code>。
+          </div>
+          <h4>问题原因</h4>
+          <p>
+            主循环先执行 <code>Weight_CheckCommunicationTimeout()</code>，但如果随后有正式命令，流程会进入 <code>MeasureStart()</code>。<code>MeasureStart()</code> 调用 <code>fault_info_init()</code> 清错误，再调用 <code>weight_init()</code>，后者把 <code>s_weight_last_rx_tick</code> 重置为当前 tick。接下来 1000ms 内超时检查会认为通信暂时正常。
+          </p>
+          <h4>影响</h4>
+          <p>
+            已存在的 <code>WEIGHT_COMM_TIMEOUT</code> 可能在新命令开始时消失，运动开始前短时间内没有有效扭力通信保护，电机可能使用旧扭力值继续动作。
+          </p>
+          <h4>整改方案</h4>
+          <ul>
+            <li><code>weight_init()</code> 不应在未收到新帧时重置通信健康时间。</li>
+            <li><code>MeasureStart()</code> 不应无条件清全局故障，至少不能清除仍未恢复的通信类故障。</li>
+            <li>正式运动前增加扭力通信有效性门禁，要求最近一帧有效且未超时。</li>
+          </ul>
+          <h4>验证建议</h4>
+          <p>断开扭力通信，等待超时后下发找底/找水/密度命令，确认命令被拒绝或进入故障，不启动运动。</p>
+        </article>
+
+        <article class="issue p1" id="issue-p1-09">
+          <div class="issue-head">
+            <h3 class="issue-title">P1-09 编码器类全局错误可被有效 SSI 帧或位置源策略异步清除</h3>
+            <span class="badge p1">P1</span>
+          </div>
+          <div class="evidence">
+            <strong>证据位置：</strong><code>LTD_MAIN_CPU2/BSP/Peripherals/src/AS5145.c:143-146</code>、<code>AS5145.c:225-272</code>、<code>LTD_MAIN_CPU2/Application/Src/app_main.c:61-94</code>、<code>LTD_MAIN_CPU2/Services/MotorControl/motor_ctrl_driver_param.c:202-207</code>。
+          </div>
+          <h4>问题原因</h4>
+          <p>
+            <code>Is_Encoder_Error_Code()</code> 使用一个连续范围判断编码器错误，范围内包含 <code>ENCODER_LOST_STEP</code>。任意有效 SSI 帧或电机位置源模式下的清错逻辑，都可能把该范围内全局错误清为 <code>NO_ERROR</code>。
+          </p>
+          <h4>影响</h4>
+          <p>
+            运行失步、编码器上电异常、运动校验失败等锁存故障可能被后台采集帧清掉。如果设备处于 <code>STATE_ERROR</code>，错误码被清后主循环还可能回到待机。
+          </p>
+          <h4>整改方案</h4>
+          <ul>
+            <li>区分“后台 SSI 通信瞬态错误”和“运动安全锁存故障”。</li>
+            <li>清错逻辑改为白名单，只允许清除明确可恢复的采集通信类错误。</li>
+            <li><code>ENCODER_LOST_STEP</code>、位置差异过大、运动校验类错误必须由故障恢复或人工复位路径清除。</li>
+          </ul>
+          <h4>验证建议</h4>
+          <p>注入失步错误后继续输入有效 SSI 帧，确认错误不会被异步清除。</p>
+        </article>
+
+        <article class="issue p1" id="issue-p1-10">
+          <div class="issue-head">
+            <h3 class="issue-title">P1-10 CPU3 内部 CPU2 FC04 响应未校验 byte count 和实际长度</h3>
+            <span class="badge p1">P1</span>
+          </div>
+          <div class="evidence">
+            <strong>证据位置：</strong><code>LTD_DISPLAY_CPU3/Communication/internal/main_board_modbus/cpu2_communicate.c:414-423</code>、<code>LTD_DISPLAY_CPU3/Core/Src/stm32f4xx_it.c:211-245</code>。
+          </div>
+          <h4>问题原因</h4>
+          <p>
+            UART5 IDLE 接收只要长度达到最小值就解除等待，随后 <code>HostCommuProcess()</code> 只做基础 CRC、地址、功能码检查。<code>CPU2_Response04Process()</code> 没有校验 <code>revframe[2] == RCV_registercnt * 2</code>，也没有根据实际长度判断循环读取是否越界。
+          </p>
+          <h4>影响</h4>
+          <p>
+            CPU2 短响应、异常残留帧或 DMA 缓冲旧数据可能污染 CPU3 的 <code>InputRegisterArray</code> 和 <code>g_measurement</code>，随后外部 DSM/Wartsila/SI7000 会对外发布错误测量值。
+          </p>
+          <h4>整改方案</h4>
+          <ul>
+            <li>把实际接收长度传入 03/04 响应解析函数。</li>
+            <li>统一检查 <code>bytecount == RCV_registercnt * 2</code> 和 <code>len == 3 + bytecount + 2</code>。</li>
+            <li>解析失败时丢弃本帧并保持旧缓存，必要时置 CPU2 通信错误或增加统计计数。</li>
+          </ul>
+          <h4>验证建议</h4>
+          <p>构造 CPU2 FC04 短帧、byte count 错误帧、长度多余帧，确认 CPU3 不更新测量缓存。</p>
+        </article>
+
+        <article class="issue p1" id="issue-p1-11">
+          <div class="issue-head">
+            <h3 class="issue-title">P1-11 Wartsila FC16 byteCount 校验错误，标准写帧会被拒绝</h3>
+            <span class="badge p1">P1</span>
+          </div>
+          <div class="evidence">
+            <strong>证据位置：</strong><code>LTD_DISPLAY_CPU3/Communication/external/wartsila_modbus/wartsila_modbus_communication.c:104-145</code>。
+          </div>
+          <h4>问题原因</h4>
+          <p>
+            标准 Modbus FC16 的 <code>byteCount</code> 应等于 <code>qty * 2</code>，PDU 长度应等于 <code>6 + byteCount</code>。当前代码却检查 <code>bytes == qty</code>，并检查 <code>pdu_len == 6 + 2 * bytes</code>。
+          </p>
+          <h4>影响</h4>
+          <p>
+            Wartsila 外部主站按标准发送写多个寄存器帧时会被拒绝，参数/命令无法写入；非标准帧反而可能通过部分校验。
+          </p>
+          <h4>整改方案</h4>
+          <ul>
+            <li>改为 <code>bytes == qty * 2U</code>。</li>
+            <li>改为 <code>pdu_len == 6U + bytes</code>。</li>
+            <li>同时确认 <code>qty <= 123</code>，避免响应和请求超出 RTU 单帧合理上限。</li>
+          </ul>
+          <h4>验证建议</h4>
+          <p>补 Wartsila FC16 golden frame，覆盖命令地址和参数地址，确认标准帧成功、错误 byte count 帧异常。</p>
+        </article>
+
+        <article class="issue p1" id="issue-p1-12">
+          <div class="issue-head">
+            <h3 class="issue-title">P1-12 CPU2/CPU3 协议版本不匹配只做显示提示，通信解析仍继续</h3>
+            <span class="badge p1">P1</span>
+          </div>
+          <div class="evidence">
+            <strong>证据位置：</strong><code>LTD_DISPLAY_CPU3/Application/display/display.c:650-655</code>、<code>LTD_DISPLAY_CPU3/Application/app_main.c:527</code>、<code>LTD_DISPLAY_CPU3/Communication/internal/main_board_modbus/cpu2_communicate.c:156</code>。
+          </div>
+          <h4>问题原因</h4>
+          <p>
+            CPU3 有 <code>IsCpu2ProtocolCompatible()</code> 判断 CPU2 上报的协议版本是否等于本地 <code>DEVICE_PROTOCOL_VERSION</code>，但该判断只用于显示层提示。内部轮询、寄存器解析、外部协议响应和写命令仍按当前布局继续执行。
+          </p>
+          <h4>影响</h4>
+          <p>
+            CPU2 旧协议或错配协议下，CPU3 可能把错位字段当成液位、密度、状态或命令依据，并继续对外响应，风险比单纯显示报警更高。
+          </p>
+          <h4>整改方案</h4>
+          <ul>
+            <li>上电读取 CPU2 保持寄存器后建立全局 <code>cpu2_protocol_compatible</code> 运行态门禁。</li>
+            <li>不兼容时停止解析高风险共享区，禁止外部写命令/参数下发 CPU2。</li>
+            <li>外部协议返回明确故障状态、busy 状态或异常响应，避免发布错位数据。</li>
+          </ul>
+          <h4>验证建议</h4>
+          <p>模拟 CPU2 协议版本低于/高于 CPU3，确认 CPU3 显示报警且外部命令、参数写入和高风险数据发布被阻断。</p>
+        </article>
+
+        <article class="issue p1" id="issue-p1-13">
+          <div class="issue-head">
+            <h3 class="issue-title">P1-13 CPU3 数据源/手输值菜单保存后未被状态页消费</h3>
+            <span class="badge p1">P1</span>
+          </div>
+          <div class="evidence">
+            <strong>证据位置：</strong><code>LTD_DISPLAY_CPU3/Application/system_param/system_parameter.c:373-382</code>、<code>cpu3_comm_display_params.c:449-475</code>、<code>LTD_DISPLAY_CPU3/Application/display/display.c:341-492</code>。
+          </div>
+          <h4>问题原因</h4>
+          <p>
+            CPU3 菜单提供液位、水位、密度、温度的数据源选择和手输值参数，写入后会保存到 <code>g_cpu3_comm_display_params</code> 和 FRAM。但状态页取值函数仍直接读取 <code>g_measurement.*</code>，未根据 <code>screen_source_*</code> 切换到手输值。
+          </p>
+          <h4>影响</h4>
+          <p>
+            现场用户选择“手工输入”或修改手输值后，菜单可读回、FRAM 也能保存，但状态页显示不变，属于“参数存在但运行态无效”。如果外部协议也期望消费这些值，会造成配置和上报语义不一致。
+          </p>
+          <h4>整改方案</h4>
+          <ul>
+            <li>确认这些参数的正式业务归属：OLED 状态页覆盖、外部协议上传，或预留字段。</li>
+            <li>如果用于 OLED 状态页，应在 <code>Display_GetOilLevelValue()</code>、<code>Display_GetWaterValue()</code>、<code>Display_GetDensityValue()</code>、<code>Display_GetTemperatureValue()</code> 中按数据源选择测量值或手输值。</li>
+            <li>如果是预留参数，应从菜单隐藏或标注未启用，避免误导现场。</li>
+          </ul>
+          <h4>验证建议</h4>
+          <p>分别设置液位/水位/密度/温度为手工输入，重启后确认状态页和外部协议按预期显示或明确不支持。</p>
+        </article>
+
+        <article class="issue p1" id="issue-p1-14">
+          <div class="issue-head">
+            <h3 class="issue-title">P1-14 CPU3 小数点位数参数写入运行态但状态页没有消费</h3>
+            <span class="badge p1">P1</span>
+          </div>
+          <div class="evidence">
+            <strong>证据位置：</strong><code>LTD_DISPLAY_CPU3/Application/system_param/system_parameter.c:367</code>、<code>cpu3_comm_display_params.c:429-432</code>、<code>cpu3_comm_display_params.c:566</code>、<code>LTD_DISPLAY_CPU3/Application/display/display.c:3217</code>。
+          </div>
+          <h4>问题原因</h4>
+          <p>
+            <code>COM_NUM_SCREEN_DECIMAL</code> 是可写显示参数，范围 <code>0..4</code>，写入后同步到 <code>screen_parameter.decimalplaces</code>。但状态页数值显示仍在各处硬编码小数位，例如液位/水位 1 位、密度/温度 2 位、频率 0 位。
+          </p>
+          <h4>影响</h4>
+          <p>
+            用户保存“小数点位数”后菜单读回正常，但状态页格式无变化，现场会判断参数不生效。
+          </p>
+          <h4>整改方案</h4>
+          <ul>
+            <li>确认该参数是否应控制全局精度，还是遗留未启用参数。</li>
+            <li>如果应生效，集中封装状态页数值显示精度策略，避免各处硬编码。</li>
+            <li>如果物理量精度必须固定，应隐藏该参数或改成具体受控字段，避免“全局小数位”语义。</li>
+          </ul>
+          <h4>验证建议</h4>
+          <p>设置 0、1、2、4 位小数，检查状态页所有相关数值是否按设计变化；若不支持，确认菜单不可配置。</p>
+        </article>
+      </section>
+
+      <section id="p2">
+        <h2>P2 中优先级问题</h2>
+
+        <article class="issue p2" id="issue-p2-01">
+          <div class="issue-head">
+            <h3 class="issue-title">P2-01 32 位参数寄存器允许奇地址或单半字写入</h3>
+            <span class="badge p2">P2</span>
+          </div>
+          <div class="evidence">
+            <strong>证据位置：</strong><code>LTD_MAIN_CPU2/Services/Modbus/stateformodbus.h:14</code>、<code>LTD_MAIN_CPU2/Services/Modbus/dataanalysis_modbus.c:16</code>、<code>LTD_MAIN_CPU2/Services/Modbus/hostcommu_modbus.c:277</code>。
+          </div>
+          <h4>问题原因</h4>
+          <p>
+            协议中多数参数以 2 个 16 位寄存器表达 32 位值，但 FC10 地址校验只看范围，不要求起始地址和长度按字段边界对齐。写单个高 16 位或低 16 位时，会与旧半字拼接成新的 32 位参数。
+          </p>
+          <h4>影响</h4>
+          <p>
+            外部主站误写半个字段可能生成异常大值并持久化，后续运行态才暴露问题，定位困难。
+          </p>
+          <h4>整改方案</h4>
+          <ul>
+            <li>参数区 FC10 要求起始地址落在字段边界，长度为字段完整宽度。</li>
+            <li>对确实允许半字写入的字段单独列白名单。</li>
+            <li>非法半字写入返回异常，不进入全表回灌和保存。</li>
+          </ul>
+          <h4>验证建议</h4>
+          <p>对罐高、密度间隔、报警限值等 32 位字段测试奇地址、单寄存器写入，确认被拒绝。</p>
+        </article>
+
+        <article class="issue p2" id="issue-p2-02">
+          <div class="issue-head">
+            <h3 class="issue-title">P2-02 CPU2 直接 Modbus 写参缺少统一范围校验</h3>
+            <span class="badge p2">P2</span>
+          </div>
+          <div class="evidence">
+            <strong>证据位置：</strong><code>LTD_MAIN_CPU2/Services/Modbus/dataanalysis_modbus.c:359-407</code>、<code>LTD_MAIN_CPU2/Services/Modbus/hostcommu_modbus.c:300</code>。
+          </div>
+          <h4>问题原因</h4>
+          <p>
+            CPU2 <code>ReadDeviceParamsFromHoldingRegisters()</code> 直接把保持寄存器回灌到 <code>g_deviceParams</code>，只对少数字段做归一化。CPU3 菜单元数据有范围，但外部直连 CPU2 或协议桥接写入时可以绕过这些菜单校验。
+          </p>
+          <h4>影响</h4>
+          <p>
+            超范围参数可被保存到 FRAM，后续电机、AO、密度、水位等模块可能使用异常值，形成运行风险或现场误报。
+          </p>
+          <h4>整改方案</h4>
+          <ul>
+            <li>CPU2 增加集中式参数校验/钳位函数，规则来源与 CPU3 参数表和正式协议文档一致。</li>
+            <li>非法写入建议返回 Modbus 异常，而不是静默保存后再局部修正。</li>
+            <li>保存前再次校验全量 <code>g_deviceParams</code>，避免旧版本或工具写入脏数据。</li>
+          </ul>
+          <h4>验证建议</h4>
+          <p>对关键参数写入低于最小值、高于最大值、非法枚举值，确认 CPU2 拒绝或钳位策略符合文档。</p>
+        </article>
+
+        <article class="issue p2" id="issue-p2-03">
+          <div class="issue-head">
+            <h3 class="issue-title">P2-03 waterLevelCorrection 字段与协议映射语义不一致</h3>
+            <span class="badge p2">P2</span>
+          </div>
+          <div class="evidence">
+            <strong>证据位置：</strong><code>LTD_MAIN_CPU2/Services/ParamStorage/system_parameter.h:618</code>、<code>LTD_MAIN_CPU2/Services/Modbus/dataanalysis_modbus.c:190</code>、<code>dataanalysis_modbus.c:381</code>、<code>dataanalysis_modbus.c:446</code>。
+          </div>
+          <h4>问题原因</h4>
+          <p>
+            结构体中存在 <code>waterLevelCorrection</code> 字段，但 Modbus 的 <code>HOLDREGISTER_DEVICEPARAM_WATER_LEVEL_CORRECTION</code> 实际读写的是 <code>calibrateWaterLevel</code>。同一值又与水位标定流程绑定。
+          </p>
+          <h4>影响</h4>
+          <p>
+            外部主站认为写的是“水位修正值”，实际影响的是“一次性标定值”；该值还可能被标定流程消费并清零。真正的 <code>waterLevelCorrection</code> 无法通过协议访问。
+          </p>
+          <h4>整改方案</h4>
+          <ul>
+            <li>确认正式契约：这是兼容别名还是映射错误。</li>
+            <li>若是别名，文档和字段名应明确废弃/兼容含义。</li>
+            <li>若是错误，修正寄存器映射并设计旧版本参数迁移策略。</li>
+          </ul>
+          <h4>验证建议</h4>
+          <p>写入水位修正相关寄存器，确认 CPU2 参数、CPU3 菜单、运行态水位计算和文档描述一致。</p>
+        </article>
+
+        <article class="issue p2" id="issue-p2-04">
+          <div class="issue-head">
+            <h3 class="issue-title">P2-04 罐底搜索失败在 error_stop_measurement 分支下会用参考值报完成</h3>
+            <span class="badge p2">P2</span>
+          </div>
+          <div class="evidence">
+            <strong>证据位置：</strong><code>LTD_MAIN_CPU2/Application/Src/measure.c:611-700</code>。
+          </div>
+          <h4>问题原因</h4>
+          <p>
+            <code>SearchBottom()</code> 返回错误后，如果 <code>error_stop_measurement == 1</code> 且存在参考高度，代码会写入 <code>fallback_real_height</code>，清 <code>error_code</code>，记录 warning，然后设置 <code>STATE_FINDBOTTOM_OVER</code> 并返回，绕过后面的 <code>SET_ERROR(ret)</code>。
+          </p>
+          <h4>影响</h4>
+          <p>
+            真实找底失败被降级为“完成”，CPU3 和外部协议可能接受一个非实测高度，现场难以区分真实测量值和降级参考值。
+          </p>
+          <h4>整改方案</h4>
+          <ul>
+            <li>如果业务允许降级，新增明确的“降级完成”状态或标志，保留原始错误码。</li>
+            <li>不要把真实搜索失败直接清为 <code>NO_ERROR</code>。</li>
+            <li>CPU3 和外部协议应能显示“使用参考值”而不是普通完成。</li>
+          </ul>
+          <h4>验证建议</h4>
+          <p>模拟找底失败且有参考高度，确认状态、错误码、日志和外部上报符合降级策略。</p>
+        </article>
+
+        <article class="issue p2" id="issue-p2-05">
+          <div class="issue-head">
+            <h3 class="issue-title">P2-05 自动恢复健康检查复用宽松参数读取，可能误报恢复成功</h3>
+            <span class="badge p2">P2</span>
+          </div>
+          <div class="evidence">
+            <strong>证据位置：</strong><code>LTD_MAIN_CPU2/Application/Src/fault_recovery.c:421-457</code>、<code>LTD_MAIN_CPU2/Services/Sensor/sensor.c:977-999</code>。
+          </div>
+          <h4>问题原因</h4>
+          <p>
+            <code>FaultRecovery_Poll()</code> 使用 <code>Sensor_CheckAllPartParams()</code> 判断恢复是否成功。但 LTD 传感器路径中，密度或频率读取失败时存在把 <code>ret</code> 改回 <code>NO_ERROR</code> 的降级逻辑。
+          </p>
+          <h4>影响</h4>
+          <p>
+            自动恢复可能提前打印“恢复成功”、清全局错误并安排重跑命令；实际传感器故障仍在，现场看到的是反复恢复/失败而非清晰根因。
+          </p>
+          <h4>整改方案</h4>
+          <ul>
+            <li>自动恢复使用严格健康检查接口，不复用会降级成功的参数读取接口。</li>
+            <li>全局错误码应在重跑命令实际成功后再清除。</li>
+            <li>恢复日志区分“通信恢复”“健康检查通过”“业务重跑成功”。</li>
+          </ul>
+          <h4>验证建议</h4>
+          <p>模拟 LTD 密度读取失败，确认恢复模块不会提前清错或标记恢复成功。</p>
+        </article>
+
+        <article class="issue p2" id="issue-p2-06">
+          <div class="issue-head">
+            <h3 class="issue-title">P2-06 CPU2/CPU3 中断边界存在业务处理、日志打印和忙等</h3>
+            <span class="badge p2">P2</span>
+          </div>
+          <div class="evidence">
+            <strong>证据位置：</strong><code>LTD_MAIN_CPU2/Core/Src/stm32f4xx_it.c:64-79</code>、<code>stm32f4xx_it.c:400</code>、<code>stm32f4xx_it.c:457-458</code>、<code>LTD_MAIN_CPU2/Core/Src/usart.c:70-91</code>、<code>LTD_DISPLAY_CPU3/Application/app_main.c:30</code>、<code>app_main.c:557-630</code>。
+          </div>
+          <h4>问题原因</h4>
+          <p>
+            CPU2 USART IDLE 中断内直接执行 HART 或扭力帧处理，扭力恢复路径可能调用日志和清错；UART 发送完成回调中存在等待 TC 和 NOP 忙等。CPU3 Tx 完成回调也在中断上下文执行 <code>uart_post_tx_delay()</code>。
+          </p>
+          <h4>影响</h4>
+          <p>
+            中断占用时间不可控，可能延迟其它 UART、定时器或 DMA 事件；中断路径直接修改全局故障状态会和主循环故障管理竞争，造成日志和恢复时序难以解释。
+          </p>
+          <h4>整改方案</h4>
+          <ul>
+            <li>IRQ/回调只搬运数据、置位事件、记录最小原始状态。</li>
+            <li>协议解析、日志打印、全局错误清除、恢复判断放到主循环或 deferred worker。</li>
+            <li>RS485 方向切换使用硬件 TC、定时器或主循环状态机，避免 ISR 忙等。</li>
+          </ul>
+          <h4>验证建议</h4>
+          <p>用高频串口收发压力测试观察丢帧、IDLE 延迟和错误状态竞争，迁移后对比中断耗时。</p>
+        </article>
+
+        <article class="issue p2" id="issue-p2-07">
+          <div class="issue-head">
+            <h3 class="issue-title">P2-07 Wartsila 外部写操作同步等待 CPU2，可能拖长主站响应时间</h3>
+            <span class="badge p2">P2</span>
+          </div>
+          <div class="evidence">
+            <strong>证据位置：</strong><code>LTD_DISPLAY_CPU3/Application/app_main.c:408</code>、<code>LTD_DISPLAY_CPU3/Communication/internal/main_board_modbus/cpu2_communicate.c:342</code>、<code>LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c:903</code>、<code>LTD_DISPLAY_CPU3/Communication/external/si7000_modbus/si7000_modbus_slave.c:351</code>。
+          </div>
+          <h4>问题原因</h4>
+          <p>
+            外部 COM 请求处理函数在返回前直接调用 <code>CPU2_CombinatePackage_Send()</code> 下发命令或参数，而该函数会等待 CPU2 响应，最坏约 1000ms。批量参数同步会进一步放大等待时间。
+          </p>
+          <h4>影响</h4>
+          <p>
+            PLC 或上位机可能因 CPU3 响应超时而重试；多串口处理也会被阻塞，造成外部通信抖动。
+          </p>
+          <h4>整改方案</h4>
+          <ul>
+            <li>外部协议层先完成合法性校验并快速响应。</li>
+            <li>CPU2 下发改为主循环异步队列，队列记录最后一次下发结果。</li>
+            <li>通过状态寄存器暴露 CPU2 下发中、成功、失败和失败原因。</li>
+          </ul>
+          <h4>验证建议</h4>
+          <p>模拟 CPU2 不响应，连续写 DSM/SI7000/Wartsila 参数，确认外部响应时间仍满足主站超时配置。</p>
+        </article>
+
+        <article class="issue p2" id="issue-p2-08">
+          <div class="issue-head">
+            <h3 class="issue-title">P2-08 Wartsila 可写范围过宽，非目标地址也会触发 CPU2 参数转发</h3>
+            <span class="badge p2">P2</span>
+          </div>
+          <div class="evidence">
+            <strong>证据位置：</strong><code>LTD_DISPLAY_CPU3/Communication/external/wartsila_modbus/wartsila_modbus_communication.c:128</code>、<code>wartsila_modbus_communication.c:223-249</code>。
+          </div>
+          <h4>问题原因</h4>
+          <p>
+            只要写地址落在 <code>HOLDREG_START_ADDR..HOLDREG_END_ADDR</code> 范围内就更新 <code>g_holding_regs</code>。原本用于限制目标参数地址的 <code>need_forward</code> 返回逻辑被注释，非命令写入统一调用 <code>ForwardParamsToLowerDevice()</code>。
+          </p>
+          <h4>影响</h4>
+          <p>
+            外部主站写测量区、密度点区或预留区也会触发 CPU2 参数下发，可能造成写放大、覆盖参数或制造难以追踪的刷新。
+          </p>
+          <h4>整改方案</h4>
+          <ul>
+            <li>定义 Wartsila 可写白名单，仅允许命令和确认可写的参数地址。</li>
+            <li>非白名单地址返回非法地址，或只更新本地影子但不下发 CPU2。</li>
+            <li>把白名单写入协议文档和自动化测试。</li>
+          </ul>
+          <h4>验证建议</h4>
+          <p>写入密度点区、只读测量区、预留区，确认不会触发 CPU2 参数转发。</p>
+        </article>
+
+        <article class="issue p2" id="issue-p2-09">
+          <div class="issue-head">
+            <h3 class="issue-title">P2-09 CPU3 FRAM 显示类参数缺少合法化，非法语言值可能导致数组越界</h3>
+            <span class="badge p2">P2</span>
+          </div>
+          <div class="evidence">
+            <strong>证据位置：</strong><code>LTD_DISPLAY_CPU3/Application/system_param/cpu3_comm_display_params.c:858-925</code>、<code>cpu3_comm_display_params.c:566-568</code>、<code>LTD_DISPLAY_CPU3/Application/display/display_tankopera.c:3810-3812</code>。
+          </div>
+          <h4>问题原因</h4>
+          <p>
+            CPU3 从 FRAM 正常加载参数时，只对 UART 参数做 sanitize，显示类参数如语言、小数位、亮度、息屏未统一 clamp。<code>screen_parameter.language</code> 被直接用于二维文案数组下标。
+          </p>
+          <h4>影响</h4>
+          <p>
+            如果 FRAM 中存在 CRC 有效但语言值越界的数据，菜单文案读取可能数组越界。息屏、小数位、亮度等也可能进入脏运行态。
+          </p>
+          <h4>整改方案</h4>
+          <ul>
+            <li>新增 <code>Cpu3_SanitizeDisplayParams()</code>，在 FRAM 加载、迁移和写入前统一合法化。</li>
+            <li>语言限制为 0/1，息屏限制为 0/1，小数位限制为 0..4，亮度限制为 0..4。</li>
+            <li>所有文案数组索引使用安全语言值，而不是裸用 <code>screen_parameter.language</code>。</li>
+          </ul>
+          <h4>验证建议</h4>
+          <p>构造 CRC 有效但显示参数越界的 FRAM 数据，确认启动后被合法化且菜单不越界。</p>
+        </article>
+
+        <article class="issue p2" id="issue-p2-10">
+          <div class="issue-head">
+            <h3 class="issue-title">P2-10 CPU3 长标题数值输入页存在 4 行覆盖风险</h3>
+            <span class="badge p2">P2</span>
+          </div>
+          <div class="evidence">
+            <strong>证据位置：</strong><code>LTD_DISPLAY_CPU3/Application/display/display_tankopera.c:1233</code>、<code>display_tankopera.c:2065</code>、<code>LTD_DISPLAY_CPU3/Application/system_param/system_parameter.c:168</code>。
+          </div>
+          <h4>问题原因</h4>
+          <p>
+            输入页第 1 行显示提示，第 2/3 行显示标题。长标题超过一行时，<code>display_split_title()</code> 可能返回第 4 行作为数值显示行，而底部软键也固定绘制在第 4 行。
+          </p>
+          <h4>影响</h4>
+          <p>
+            长中文参数输入时，数值和“返回/确认”软键可能重叠，128x64 OLED 上可读性差，现场设置风险增加。
+          </p>
+          <h4>整改方案</h4>
+          <ul>
+            <li>输入页优先使用短标题或 <code>oled_fit_text()</code>，标题最多占一行。</li>
+            <li>两行标题场景改为独立详情页或短标题确认页，不把数值画到软键行。</li>
+            <li>对所有可写长标题参数做一次长度扫描。</li>
+          </ul>
+          <h4>验证建议</h4>
+          <p>在模拟器或实机上打开“故障自动恢复重跑次数”等长标题参数，确认输入值和软键不重叠。</p>
+        </article>
+
+        <article class="issue p2" id="issue-p2-11">
+          <div class="issue-head">
+            <h3 class="issue-title">P2-11 传感器“读取部分参数”存在 TODO 适配器复用旧 debug_data</h3>
+            <span class="badge p2">P2</span>
+          </div>
+          <div class="evidence">
+            <strong>证据位置：</strong><code>LTD_MAIN_CPU2/Services/Sensor/sensor.c:782-858</code>、<code>sensor.c:890-1076</code>。
+          </div>
+          <h4>问题原因</h4>
+          <p>
+            <code>Sensor_ReadPartParamsInternal()</code> 会通过一组适配器填充 <code>g_measurement.debug_data</code>。其中多个适配器仍是 TODO 状态，直接返回旧的 <code>debug_data</code> 字段，而不是读取编码器、电机模型、重量参数等真实来源。
+          </p>
+          <h4>影响</h4>
+          <p>
+            “读取部分参数”路径可能输出陈旧的传感器位置、电机步数、速度、重量参数等调试数据，误导现场诊断。若该路径被恢复检查或外部协议依赖，影响会扩大。
+          </p>
+          <h4>整改方案</h4>
+          <ul>
+            <li>逐个 TODO 适配器接入真实数据源，例如编码器服务、电机位置模型、重量服务。</li>
+            <li>无法获取的字段应输出无效标志或明确错误码，不能静默复用旧值。</li>
+            <li>关闭正式路径中的无条件调试打印，或改成受编译开关和日志级别控制。</li>
+          </ul>
+          <h4>验证建议</h4>
+          <p>改变电机位置、编码器值和重量通信状态后读取部分参数，确认返回值随真实状态变化。</p>
+        </article>
+
+        <article class="issue p2" id="issue-p2-12">
+          <div class="issue-head">
+            <h3 class="issue-title">P2-12 维护模式前台忙等，阻塞主循环后台任务</h3>
+            <span class="badge p2">P2</span>
+          </div>
+          <div class="evidence">
+            <strong>证据位置：</strong><code>LTD_MAIN_CPU2/Application/Src/measure.c:807-815</code>。
+          </div>
+          <h4>问题原因</h4>
+          <p>
+            <code>CMD_EnterMaintenanceMode()</code> 进入 <code>while(1)</code> 后只轮询命令切换，没有延时，也没有推进主循环里的重量超时、日志、延迟保存、恢复等后台任务。
+          </p>
+          <h4>影响</h4>
+          <p>
+            维护模式期间 CPU 空转，后台状态维护停滞。长时间停留可能导致通信、日志或保存行为异常。
+          </p>
+          <h4>整改方案</h4>
+          <ul>
+            <li>加入小粒度可中断延时，例如基于 <code>AbortableDelay_CommandSwitch()</code>。</li>
+            <li>必要时在维护模式循环中调用最小后台轮询函数。</li>
+            <li>更好的方案是把维护模式改为主循环状态，而不是阻塞式命令函数。</li>
+          </ul>
+          <h4>验证建议</h4>
+          <p>进入维护模式后保持一段时间，确认通信超时、错误日志、延迟保存等后台任务仍能推进。</p>
+        </article>
+
+        <article class="issue p2" id="issue-p2-13">
+          <div class="issue-head">
+            <h3 class="issue-title">P2-13 版本追溯入口和提交门禁文件状态不一致</h3>
+            <span class="badge p2">P2</span>
+          </div>
+          <div class="evidence">
+            <strong>证据位置：</strong><code>README.md</code>、<code>docs/00_构建与版本/版本总览.md</code>、<code>tools/check_commit_subject_versions.py</code>、<code>tools/git-hooks/commit-msg</code>。
+          </div>
+          <h4>问题原因</h4>
+          <p>
+            源码版本头已显示 CPU2 <code>V1.20.2.0</code>、CPU3 <code>V1.18.2.0</code>，但 README 和部分版本文档仍停在旧版本。AGENTS 要求提交标题门禁使用 <code>tools/git-hooks/commit-msg</code>，但相关脚本和 hook 当前仍是未跟踪文件。
+          </p>
+          <h4>影响</h4>
+          <p>
+            新克隆仓库可能没有门禁脚本；版本入口文档误导发布、升级和现场追溯。提交检查结果也可能因为未暂存而不能证明本次改动有效。
+          </p>
+          <h4>整改方案</h4>
+          <ul>
+            <li>把提交标题检查脚本、hook、测试和文档规则纳入同一提交。</li>
+            <li>同步更新 README、版本总览、参数存储升级清单中的当前版本。</li>
+            <li>扩展提交标题检查脚本路径覆盖：README、CMake、.gitignore、根级构建治理文件等应按跨 CPU 改动要求双版本标题。</li>
+          </ul>
+          <h4>验证建议</h4>
+          <p>暂存目标文件后运行 <code>py tools\check_commit_subject_versions.py --range origin/MAIN..HEAD</code> 和对应 unittest，确认门禁可复现。</p>
+        </article>
+
+        <article class="issue p2" id="issue-p2-14">
+          <div class="issue-head">
+            <h3 class="issue-title">P2-14 Wartsila 密度点能力定义不一致，地址表 200 点但刷新只写 100 点</h3>
+            <span class="badge p2">P2</span>
+          </div>
+          <div class="evidence">
+            <strong>证据位置：</strong><code>LTD_DISPLAY_CPU3/Communication/external/wartsila_modbus/wartsila_register_map.h:78</code>、<code>LTD_DISPLAY_CPU3/Communication/external/wartsila_modbus/wartsila_modbus_data_analysis.c:257-258</code>。
+          </div>
+          <h4>问题原因</h4>
+          <p>
+            Wartsila 寄存器映射宏 <code>REG_DENSITY_POINT_COUNT</code> 定义为 200，但数据刷新逻辑只循环写前 100 个密度点。注释和实际能力口径也存在 100/200 不一致。
+          </p>
+          <h4>影响</h4>
+          <p>
+            主站读取第 101 到 200 点时可能得到零值或旧值；如果 CPU2 实际测量点数超过 100，外部声明和数据内容不一致。
+          </p>
+          <h4>整改方案</h4>
+          <ul>
+            <li>确认 Wartsila 正式协议到底支持 100 点还是 200 点。</li>
+            <li>若只支持 100 点，收窄宏、地址范围和点数上限。</li>
+            <li>若支持 200 点，刷新循环改为 200，并检查响应长度和主站读取策略。</li>
+          </ul>
+          <h4>验证建议</h4>
+          <p>构造 120/200 点密度剖面，读取 Wartsila 点位寄存器，确认第 101 点以后数据符合正式契约。</p>
+        </article>
+      </section>
+
+      <section id="p3">
+        <h2>P3 低优先级问题</h2>
+
+        <article class="issue p3" id="issue-p3-01">
+          <div class="issue-head">
+            <h3 class="issue-title">P3-01 非法 Modbus 命令值被静默消费，排障信息不足</h3>
+            <span class="badge p3">P3</span>
+          </div>
+          <div class="evidence">
+            <strong>证据位置：</strong><code>LTD_MAIN_CPU2/Services/Modbus/dataanalysis_modbus.c:293</code>、<code>LTD_MAIN_CPU2/Application/Src/measure.c:425</code>。
+          </div>
+          <h4>问题原因</h4>
+          <p>
+            Modbus 保持寄存器写入命令值后直接 cast 为 <code>CommandType</code>。调度入口遇到不支持命令时主要打印提示，没有设置参数错误或可观测状态。
+          </p>
+          <h4>影响</h4>
+          <p>
+            主站写错命令值时，现场只能看到命令没有执行，无法从 CPU3 或外部状态明确判断是非法命令。
+          </p>
+          <h4>整改方案</h4>
+          <ul>
+            <li>命令寄存器写入时做枚举白名单校验。</li>
+            <li>非法命令返回参数错误或设置可观测错误码。</li>
+            <li>文档列出合法命令值和保留值处理策略。</li>
+          </ul>
+          <h4>验证建议</h4>
+          <p>写入未定义命令值，确认 CPU2 不执行动作，并能通过状态或错误码看到非法命令。</p>
+        </article>
+
+        <article class="issue p3" id="issue-p3-02">
+          <div class="issue-head">
+            <h3 class="issue-title">P3-02 CPU2 错误日志原因表比错误码和 CPU3 显示表少</h3>
+            <span class="badge p3">P3</span>
+          </div>
+          <div class="evidence">
+            <strong>证据位置：</strong><code>LTD_MAIN_CPU2/Services/ParamStorage/system_parameter.h:139-193</code>、<code>LTD_MAIN_CPU2/Services/Utilities/error_log.c:139-268</code>、<code>LTD_DISPLAY_CPU3/Application/display/display.c:663-807</code>。
+          </div>
+          <h4>问题原因</h4>
+          <p>
+            CPU2 <code>ErrorLog_GetReasonByCode()</code> 对多个细分错误码没有专用原因，只回退为电机、设备、搜索失败等大类；CPU3 显示表中已有更细的文案。
+          </p>
+          <h4>影响</h4>
+          <p>
+            如果 CPU3 没及时显示或错误码后续被清，串口/现场日志只剩泛化原因，降低诊断效率。
+          </p>
+          <h4>整改方案</h4>
+          <ul>
+            <li>CPU2/CPU3 使用同源错误码原因表，或生成式检查两端覆盖率。</li>
+            <li>补齐所有 enum 中业务错误码的中文原因。</li>
+            <li>新增错误码时让脚本检查 CPU2 日志和 CPU3 显示表是否同步。</li>
+          </ul>
+          <h4>验证建议</h4>
+          <p>遍历错误码枚举，确认 CPU2 日志和 CPU3 显示均有明确文案。</p>
+        </article>
+
+        <article class="issue p3" id="issue-p3-03">
+          <div class="issue-head">
+            <h3 class="issue-title">P3-03 DSM 接受地址 0 并回包，疑似不符合 Modbus 广播习惯</h3>
+            <span class="badge p3">P3</span>
+          </div>
+          <div class="evidence">
+            <strong>证据位置：</strong><code>LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_communication.c:60-61</code>、<code>LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c:630</code>。
+          </div>
+          <h4>问题原因</h4>
+          <p>
+            DSM 地址检查允许 <code>rcvbuff[0] == 0</code>，响应函数仍使用本机从站地址组帧回包。标准 Modbus 中地址 0 通常作为广播地址，广播写不响应，广播读也不应正常响应。
+          </p>
+          <h4>影响</h4>
+          <p>
+            多从站总线上如果主站使用广播地址，CPU3 可能参与回包，造成总线冲突。若旧上位机把 0 当普通地址使用，则改动也有兼容风险。
+          </p>
+          <h4>整改方案</h4>
+          <ul>
+            <li>先确认 DSM 现场协议是否有“地址 0 当普通地址”的历史兼容要求。</li>
+            <li>若按标准 Modbus，地址 0 写操作可执行但不响应，读操作不响应或直接丢弃。</li>
+            <li>把广播行为写入协议文档和兼容说明。</li>
+          </ul>
+          <h4>验证建议</h4>
+          <p>发送地址 0 的读/写帧，确认响应策略符合最终协议口径。</p>
+        </article>
+      </section>
+
+      <section id="fix-order">
+        <h2>建议整改顺序</h2>
+        <ol>
+          <li>第一批：修复 P0 三项。重点是 CPU2 FC04/FC10 帧边界和电机失步错误传播，这三项影响内存安全和运动安全。</li>
+          <li>第二批：修复 P1 中的协议边界问题，包括保持寄存器 off-by-one、FC03 数量限制、CPU3 内部 FC04 短帧校验、Wartsila FC16 校验。</li>
+          <li>第三批：修复测量状态一致性，包括 <code>MeasureStart()</code> 重复调用、取消停机失败、<code>STATE_SWITCH</code> 完成态、密度部分结果完整性。</li>
+          <li>第四批：修复故障和恢复可靠性，包括扭力通信超时、编码器错误异步清除、罐底 fallback、自动恢复严格健康检查。</li>
+          <li>第五批：修复 CPU3 显示参数实际生效、FRAM 参数合法化、长标题布局和 Wartsila/DSM 协议一致性。</li>
+          <li>最后处理版本文档、提交门禁、错误文案表等追溯和维护类问题，并在提交前统一评估版本影响。</li>
+        </ol>
+      </section>
+
+      <section id="verification">
+        <h2>验证建议</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>验证类别</th>
+              <th>建议用例</th>
+              <th>目标</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>CPU2 Modbus</td>
+              <td>FC03/FC04 数量 0、1、125、126、全表；FC10 byte count 错误、短帧、奇地址、半字写。</td>
+              <td>确认非法帧返回异常，参数不回灌、不保存，响应缓冲不越界。</td>
+            </tr>
+            <tr>
+              <td>电机安全</td>
+              <td>失步偏差、取消时停机失败、扭力断线后下发运动命令、编码器错误后有效 SSI 帧。</td>
+              <td>确认安全错误锁存、传递、显示和恢复路径正确。</td>
+            </tr>
+            <tr>
+              <td>命令切换</td>
+              <td>找水、找底、回零、密度测量过程中插入新命令或取消命令。</td>
+              <td>确认旧命令不写完成态，不发布部分结果为完整结果。</td>
+            </tr>
+            <tr>
+              <td>CPU3 通信</td>
+              <td>CPU2 FC04 短响应、协议版本不匹配、Wartsila FC16 标准帧/错误帧、DSM 地址 0。</td>
+              <td>确认 CPU3 不解析错帧，不对外发布错位数据，外部协议行为符合契约。</td>
+            </tr>
+            <tr>
+              <td>CPU3 显示</td>
+              <td>手输液位/水位/密度/温度，小数点位数，非法 FRAM 显示参数，长标题输入页。</td>
+              <td>确认保存参数能生效或被隐藏，显示不越界、不重叠。</td>
+            </tr>
+            <tr>
+              <td>文档与门禁</td>
+              <td>暂存目标文件后运行提交标题版本检查、相关 unittest、版本文档交叉检查。</td>
+              <td>确认发布追溯入口和提交门禁在新克隆仓库可复现。</td>
+            </tr>
+          </tbody>
+        </table>
+        <p class="muted">
+          本报告为问题整理和整改方案，不包含代码修改。执行修复时建议按批次提交，每批只包含同一风险域的改动，并在提交标题中按项目规则写明 CPU2/CPU3 固件版本。
+        </p>
+      </section>
+    </main>
+  </div>
+</body>
+</html>
