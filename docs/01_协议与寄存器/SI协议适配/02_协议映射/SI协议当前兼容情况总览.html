@@ -1,0 +1,3352 @@
+﻿<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SI协议当前兼容情况与进一步兼容方案</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #17212b;
+      --muted: #5f6b7a;
+      --soft: #eef2f5;
+      --line: #d9e1e8;
+      --panel: #ffffff;
+      --paper: #fbfcfd;
+      --navy: #182434;
+      --navy-2: #223248;
+      --blue: #235ebc;
+      --green: #13734c;
+      --amber: #9f6500;
+      --red: #b33b3b;
+      --slate: #334155;
+      --shadow: 0 1px 2px rgba(23, 32, 42, 0.06);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      margin: 0;
+      color: var(--ink);
+      font-family: "Microsoft YaHei", "Segoe UI", Arial, sans-serif;
+      background: var(--soft);
+      line-height: 1.62;
+    }
+
+    a {
+      color: var(--blue);
+      text-decoration: none;
+    }
+
+    a:hover {
+      text-decoration: underline;
+    }
+
+    .page {
+      width: min(1320px, calc(100% - 36px));
+      margin: 0 auto;
+    }
+
+    .hero {
+      padding: 28px 0 22px;
+      color: #f8fafc;
+      border-bottom: 4px solid #2f80ed;
+      background: var(--navy);
+    }
+
+    .hero h1 {
+      margin: 0 0 10px;
+      font-size: clamp(28px, 3.2vw, 40px);
+      line-height: 1.14;
+      letter-spacing: 0;
+    }
+
+    .subtitle {
+      max-width: 980px;
+      margin: 0;
+      color: #cbd5e1;
+      font-size: 15px;
+    }
+
+    .meta-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 16px;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      min-height: 28px;
+      padding: 3px 10px;
+      border: 1px solid rgba(203, 213, 225, 0.24);
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.08);
+      color: #e2e8f0;
+      font-size: 13px;
+      font-weight: 600;
+    }
+
+    .pill.ok {
+      border-color: rgba(74, 222, 128, 0.30);
+      color: #bbf7d0;
+    }
+
+    .pill.warn {
+      border-color: rgba(251, 191, 36, 0.35);
+      color: #fde68a;
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 238px minmax(0, 1fr);
+      gap: 20px;
+      align-items: start;
+      padding: 20px 0 54px;
+    }
+
+    .toc {
+      position: sticky;
+      top: 14px;
+      padding: 14px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: var(--panel);
+      box-shadow: var(--shadow);
+    }
+
+    .toc h2 {
+      margin: 0 0 8px;
+      color: var(--slate);
+      font-size: 14px;
+    }
+
+    .toc a {
+      display: block;
+      padding: 6px 8px;
+      color: #475569;
+      font-size: 13px;
+      border-radius: 4px;
+    }
+
+    .toc a:hover {
+      background: #eef4ff;
+      text-decoration: none;
+    }
+
+    main {
+      min-width: 0;
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 6px;
+    }
+
+    section {
+      margin: 0;
+      padding: 26px 30px;
+      border: 0;
+      border-bottom: 1px solid var(--line);
+      border-radius: 0;
+      background: transparent;
+      box-shadow: none;
+    }
+
+    section:last-child {
+      border-bottom: 0;
+    }
+
+    section h2 {
+      margin: 0 0 14px;
+      padding-bottom: 9px;
+      color: var(--navy);
+      font-size: 22px;
+      line-height: 1.25;
+      letter-spacing: 0;
+      border-bottom: 2px solid #dbe6f3;
+    }
+
+    section h3 {
+      margin: 24px 0 10px;
+      color: var(--slate);
+      font-size: 17px;
+    }
+
+    .lead {
+      margin: 0 0 16px;
+      color: var(--muted);
+      font-size: 15px;
+    }
+
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .metric {
+      padding: 14px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: #ffffff;
+    }
+
+    .metric strong {
+      display: block;
+      margin-bottom: 5px;
+      color: var(--ink);
+      font-size: 18px;
+      line-height: 1.15;
+    }
+
+    .metric span {
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .status {
+      display: inline-flex;
+      align-items: center;
+      min-height: 22px;
+      padding: 1px 8px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .status.done {
+      background: rgba(18, 138, 85, 0.12);
+      color: var(--green);
+    }
+
+    .status.partial {
+      background: rgba(184, 110, 0, 0.13);
+      color: var(--amber);
+    }
+
+    .status.risk {
+      background: rgba(200, 62, 62, 0.12);
+      color: var(--red);
+    }
+
+    .status.info {
+      background: rgba(31, 111, 235, 0.12);
+      color: var(--blue);
+    }
+
+    .flow {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 8px;
+      align-items: stretch;
+      margin-top: 12px;
+    }
+
+    .flow-step {
+      position: relative;
+      min-height: 108px;
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: #ffffff;
+    }
+
+    .flow-step:not(:last-child)::after {
+      content: "→";
+      position: absolute;
+      right: -15px;
+      top: 42px;
+      color: var(--muted);
+      font-weight: 700;
+      z-index: 1;
+    }
+
+    .flow-step b {
+      display: block;
+      margin-bottom: 6px;
+      color: var(--slate);
+      font-size: 15px;
+    }
+
+    .flow-step p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .callout {
+      margin: 16px 0;
+      padding: 12px 14px;
+      border-left: 4px solid var(--blue);
+      border-radius: 4px;
+      background: #eef5ff;
+      color: #24415f;
+    }
+
+    .callout.warning {
+      border-left-color: var(--amber);
+      background: #fff8ed;
+      color: #6b4500;
+    }
+
+    .callout.danger {
+      border-left-color: var(--red);
+      background: #fff2f2;
+      color: #743030;
+    }
+
+    table {
+      width: 100%;
+      table-layout: fixed;
+      border-collapse: collapse;
+      margin: 10px 0 2px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      font-size: 13px;
+    }
+
+    th,
+    td {
+      padding: 8px 10px;
+      border-bottom: 1px solid var(--line);
+      vertical-align: top;
+      text-align: left;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
+
+    th {
+      background: #eaf0f6;
+      color: var(--slate);
+      font-weight: 700;
+    }
+
+    tbody tr:nth-child(even) td {
+      background: #f8fafc;
+    }
+
+    tbody tr:hover td {
+      background: #eef6ff;
+    }
+
+    tr:last-child td {
+      border-bottom: 0;
+    }
+
+    code {
+      padding: 1px 5px;
+      border: 1px solid #d7e0e8;
+      border-radius: 5px;
+      background: #f4f7fa;
+      color: #24415f;
+      font-family: Consolas, "Courier New", monospace;
+      font-size: 0.92em;
+    }
+
+    .two-col {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .card {
+      padding: 14px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: #ffffff;
+    }
+
+    .card h3 {
+      margin-top: 0;
+    }
+
+    .checklist {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+      margin-top: 12px;
+    }
+
+    .check {
+      padding: 11px 12px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: #ffffff;
+      color: var(--slate);
+      font-size: 14px;
+    }
+
+    .check b {
+      color: var(--ink);
+    }
+
+
+    .table-frame {
+      width: 100%;
+      margin: 10px 0 2px;
+    }
+
+    .table-frame table {
+      margin: 0;
+    }
+
+    .address-table th:first-child,
+    .address-table td:first-child {
+      background: #f5f8fc;
+      font-weight: 700;
+      width: 88px;
+    }
+
+    .address-table th:first-child {
+      background: #eaf0f6;
+    }
+
+    .register-note {
+      margin: 8px 0 14px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .muted-cell {
+      display: block;
+      margin-top: 4px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .register-block {
+      margin: 16px 0;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: #ffffff;
+    }
+
+    .register-block > h3 {
+      margin: 0;
+      padding: 13px 16px;
+      border-bottom: 1px solid var(--line);
+      background: #f2f6fb;
+      color: var(--slate);
+      font-size: 16px;
+      font-weight: 700;
+    }
+
+    .block-inner {
+      padding: 0 16px 16px;
+    }
+
+    .footer-note {
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    @media (max-width: 980px) {
+      .layout {
+        grid-template-columns: 1fr;
+      }
+
+      .toc {
+        position: static;
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .toc h2 {
+        grid-column: 1 / -1;
+      }
+
+      .summary-grid,
+      .two-col,
+      .checklist {
+        grid-template-columns: 1fr;
+      }
+
+      .flow {
+        grid-template-columns: 1fr;
+      }
+
+      .flow-step:not(:last-child)::after {
+        content: "↓";
+        right: auto;
+        left: 18px;
+        top: auto;
+        bottom: -18px;
+      }
+    }
+
+    @media print {
+      body {
+        background: #fff;
+      }
+
+      .hero {
+        color: #111827;
+        border-bottom: 2px solid #111827;
+        background: #fff;
+      }
+
+      .subtitle,
+      .pill {
+        color: #374151;
+      }
+
+      .toc {
+        display: none;
+        box-shadow: none;
+      }
+
+      .layout {
+        display: block;
+        padding: 0;
+      }
+
+      main {
+        border: 0;
+      }
+
+      section,
+      .toc {
+        box-shadow: none;
+        break-inside: avoid;
+      }
+
+      .register-block {
+        break-inside: auto;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header class="hero">
+    <div class="page">
+      <h1>SI协议当前兼容情况与进一步兼容方案</h1>
+      <p class="subtitle">
+        面向 PLC 联调、固件维护和现场实施的可视化报告。本文参考旧版“当前兼容情况与进一步兼容方案”结构，并基于当前源码、SI协议映射表和联调检查表更新，重点说明已兼容范围、逐地址兼容方式、简化实现、剩余差异和进一步兼容方案。
+      </p>
+      <div class="meta-row">
+        <span class="pill ok">核对日期：2026-07-02</span>
+        <span class="pill ok">共享协议：DEVICE_PROTOCOL_VERSION = 14</span>
+        <span class="pill">外部入口：CPU3 SI Modbus RTU</span>
+        <span class="pill warn">定位：兼容层，不是 SI 原设备完整复刻</span>
+      </div>
+    </div>
+  </header>
+
+  <div class="page layout">
+    <nav class="toc" aria-label="目录">
+      <h2>目录</h2>
+      <a href="#summary">一页结论</a>
+      <a href="#sources">资料依据</a>
+      <a href="#manual-requirements">说明书要求</a>
+      <a href="#architecture">职责边界</a>
+      <a href="#protocol">协议面兼容</a>
+      <a href="#registers">寄存器覆盖</a>
+      <a href="#address-check">逐地址兼容</a>
+      <a href="#profile">SI Profile 流程</a>
+      <a href="#requirements">需求对照</a>
+      <a href="#gaps">差异与风险</a>
+      <a href="#compat-plan">进一步方案</a>
+      <a href="#evidence">源码证据</a>
+    </nav>
+
+    <main>
+      <section id="summary">
+        <h2>一页结论</h2>
+        <p class="lead">
+          当前实现已经达到“SI DCS 地址表可通信、关键状态可读、Profile 可独立执行、参数可从 PLC 和屏幕配置”的阶段。需要注意的是，当前目标是兼容 SI 协议外观和关键业务流程，不是复刻 SI 原设备全部内部行为。
+        </p>
+
+        <div class="summary-grid">
+          <div class="metric">
+            <strong>FC01~FC06</strong>
+            <span>已支持读线圈、读离散输入、读保持寄存器、读输入寄存器、写单线圈、写单寄存器。</span>
+          </div>
+          <div class="metric">
+            <strong>200 点</strong>
+            <span>当前 DCS 地址表覆盖 Point 0~199，输入寄存器窗口为 <code>30021~30620</code>。</span>
+          </div>
+          <div class="metric">
+            <strong>独立 Profile</strong>
+            <span><code>00004 Profile</code>、屏幕入口和自动调度均下发 <code>CMD_SI_PROFILE</code>。</span>
+          </div>
+          <div class="metric">
+            <strong>CPU2 参数</strong>
+            <span><code>40001~40003</code> 存入 CPU2 SI profile 执行参数，不污染普通分布测量参数。</span>
+          </div>
+          <div class="metric">
+            <strong>CPU3 参数</strong>
+            <span><code>40010~40023</code> 存入 CPU3 SI 本机参数，用于自动调度和报警合成。</span>
+          </div>
+          <div class="metric">
+            <strong>9600 8O1</strong>
+            <span>选择 SI 协议后，CPU3 外部串口按官方 Modbus 口径配置。</span>
+          </div>
+        </div>
+
+        <div class="callout">
+          关键口径：SI 分布测量不先找液位。CPU2 以底部采样目标作为 Point0 的实际运动位置，但 Point0 对外位置字段固定写 <code>0</code>；Point1 按 <code>40001</code> 绝对位置运行和输出，后续按 <code>40002</code> 递增。运行中遇到液面以上点即停止，并且不把该空气点写入 profile 点阵。
+        </div>
+      </section>
+
+      <section id="sources">
+        <h2>资料依据</h2>
+        <p class="lead">
+          本文以当前工程源码为准，同时参考旧版 HTML 报告的组织方式和原始资料来源。原始附件文件名保留现场或官方命名，正文统一使用“SI协议”口径。
+        </p>
+
+        <div class="two-col">
+          <div class="card">
+            <h3>官方操作手册</h3>
+            <p><code>docs/01_协议与寄存器/SI协议适配/00_原始资料/SI7000官方操作手册.pdf</code></p>
+            <p>用于复核 Auto、Cal、Profile、Manual、Power-up、液位传感器、报警和维护语义。</p>
+          </div>
+          <div class="card">
+            <h3>DCS Modbus 规范</h3>
+            <p><code>docs/01_协议与寄存器/SI协议适配/00_原始资料/SI7000_modbus_官方.pdf</code></p>
+            <p>用于确认功能码、地址窗口、保留地址、缩放、200 点 profile 表和异常响应。</p>
+          </div>
+          <div class="card">
+            <h3>PLC 对接说明</h3>
+            <p><code>SI7000协议.docx</code>、<code>SI7000_PLC协议及软件需求说明.docx</code></p>
+            <p>用于确认 PLC 轮询、可信液位、profile 读取、HMI 显示和现场调试口径。</p>
+          </div>
+          <div class="card">
+            <h3>当前源码和正式映射</h3>
+            <p><code>si_modbus_slave.c</code>、<code>measure_density.c</code>、<code>SI协议兼容映射表.md</code></p>
+            <p>用于确认当前真实行为，避免把旧版报告中过期的设计方案误写成已实现状态。</p>
+          </div>
+        </div>
+
+        <div class="callout warning">
+          旧版报告中的若干结论已经过期：当前协议枚举已统一为 SI；Profile 不再桥接普通分布测量，而是下发 <code>CMD_SI_PROFILE</code>；<code>40001~40003</code> 已独立为 CPU2 SI profile 参数；<code>40010~40023</code> 已由 CPU3 持久化；Profile Timestamp 当前为触发并下发命令的时间。
+        </div>
+      </section>
+
+      <section id="manual-requirements">
+        <h2>说明书和 DCS 规范的核心要求</h2>
+        <p class="lead">
+          这一节按旧版报告的“说明书要求 -> 对兼容层含义”方式整理，但落地状态按当前实现更新。
+        </p>
+
+        <table>
+          <thead>
+            <tr>
+              <th>领域</th>
+              <th>说明书/规范要求</th>
+              <th>当前 CUBE 落地口径</th>
+              <th>兼容判断</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>通信</td>
+              <td>RS-485，Modbus RTU，9600 bps，8 data bits，Odd parity，1 stop bit；同一总线站号唯一。</td>
+              <td>选择 <code>COM_PROTO_SI</code> 后按 <code>9600 8O1</code> 配置；站号复用当前 <code>SlaveAddress</code>。</td>
+              <td><span class="status done">已兼容</span></td>
+            </tr>
+            <tr>
+              <td>功能码</td>
+              <td>FC01、FC02、FC03、FC04、FC05、FC06；未支持功能码返回标准异常。</td>
+              <td>官方列出的六个功能码已支持；FC15/FC16 不在官方清单内，按 Illegal Function 拒绝属于正确异常响应。</td>
+              <td><span class="status done">已兼容</span></td>
+            </tr>
+            <tr>
+              <td>模式线圈</td>
+              <td>Manual、Cal、Auto、Profile 互斥；手动动作会中断自动行为并进入手动。</td>
+              <td>线圈写入由 CPU3 桥接到 CPU2 命令；读回以 CPU2 状态刷新；速度档当前不区分快慢。</td>
+              <td><span class="status partial">简化兼容</span></td>
+            </tr>
+            <tr>
+              <td>Auto</td>
+              <td>探头定位并跟踪液/气界面；Lower 在液中、Upper 在气相时表示探头位于界面。</td>
+              <td>CPU2 发布液位跟随稳定状态，CPU3 合成 <code>10002/10003</code>：稳定后上空气下液体，其它均液体。</td>
+              <td><span class="status done">按确认口径兼容</span></td>
+            </tr>
+            <tr>
+              <td>Cal</td>
+              <td>标定流程建立 bottom reference，再返回液位界面或 Auto。</td>
+              <td><code>00002</code> 当前保守桥接 <code>CMD_CALIBRATE_ZERO</code>，未完整复刻 SI 原设备 Cal 生命周期。</td>
+              <td><span class="status partial">简化兼容</span></td>
+            </tr>
+            <tr>
+              <td>Profile</td>
+              <td>先到罐底采集 Point0，再按 First Point 绝对位置、Increment、Dwell Time 逐点采集。</td>
+              <td>CPU2 <code>CMD_SI_PROFILE</code> 独立执行：Point0 在底部采样且对外位置字段为 0；Point1=40001；不先找液位；遇空气候选点停止且不写入该点。</td>
+              <td><span class="status done">已兼容</span></td>
+            </tr>
+            <tr>
+              <td>Manual</td>
+              <td>Manual 用于维护；原设备可能屏蔽部分报警并保持液位读数。</td>
+              <td>当前 Manual/Stop 近似为维护模式；SI 输出层未实现完整 Manual 报警屏蔽模型。</td>
+              <td><span class="status partial">待增强</span></td>
+            </tr>
+            <tr>
+              <td>报警</td>
+              <td>Reel Alarm、Probe Un-calibrated、Deviation Alarm 等各有独立语义。</td>
+              <td>当前报警由 CPU3 基于错误码、SI 阈值和 profile 点阵即时合成；<code>10010</code> 固定可信。</td>
+              <td><span class="status partial">第一版兼容</span></td>
+            </tr>
+            <tr>
+              <td>数据范围</td>
+              <td>DCS 地址表覆盖 <code>30001~30620</code>，profile 点阵从 <code>30021</code> 开始，Point0~Point199。</td>
+              <td>当前严格按 200 点 DCS 表输出；超过 200 点不扩展，不越界。</td>
+              <td><span class="status done">已兼容</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="architecture">
+        <h2>职责边界</h2>
+        <p class="lead">
+          当前架构把协议外观留在 CPU3，把真实运动和采样闭环放在 CPU2。这样 CPU2 不需要理解 SI 地址、功能码和异常码，但仍能保存和执行 SI profile 需要的参数。
+        </p>
+
+        <div class="flow">
+          <div class="flow-step">
+            <b>PLC / DCS</b>
+            <p>按 SI Modbus RTU 访问线圈、离散输入、保持寄存器和输入寄存器。</p>
+          </div>
+          <div class="flow-step">
+            <b>CPU3 SI 层</b>
+            <p>处理地址、功能码、CRC、异常响应、缩放和状态合成。</p>
+          </div>
+          <div class="flow-step">
+            <b>CPU3 参数/调度</b>
+            <p>保存 <code>40010~40023</code>，根据 RTC 触发自动 profile。</p>
+          </div>
+          <div class="flow-step">
+            <b>CPU2 命令/参数</b>
+            <p>接收 <code>CMD_SI_PROFILE</code>，保存 <code>40001~40003</code> 对应执行参数。</p>
+          </div>
+          <div class="flow-step">
+            <b>CPU2 测量闭环</b>
+            <p>探底、运动、停稳等待、采样、空气判定、点阵锁存。</p>
+          </div>
+        </div>
+
+        <table>
+          <thead>
+            <tr>
+              <th>层级</th>
+              <th>当前职责</th>
+              <th>明确不承担</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>CPU3</code></td>
+              <td>SI Modbus RTU 从站、地址表、异常码、缩放、状态合成、自动调度、报警合成、时间戳锁存、屏幕菜单入口。</td>
+              <td>不执行真实电机闭环，不把 SI 地址号下沉给 CPU2。</td>
+            </tr>
+            <tr>
+              <td><code>CPU2</code></td>
+              <td>保存 SI profile 执行参数，执行探底、Point0、逐点运动、密度/温度采样和结果锁存。</td>
+              <td>不处理 SI Modbus 帧、功能码、CRC、异常响应。</td>
+            </tr>
+            <tr>
+              <td><code>CPU2 &lt;-&gt; CPU3</code></td>
+              <td>通过共享协议传递命令、参数、状态、profile 点阵和测量结果。</td>
+              <td>不承载 PLC 专用的地址编号语义。</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="protocol">
+        <h2>协议面兼容</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>项目</th>
+              <th>当前兼容情况</th>
+              <th>状态</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>串口格式</td>
+              <td><code>9600</code> baud、Odd parity、8 data bits、1 stop bit、RTU。</td>
+              <td><span class="status done">已兼容</span></td>
+            </tr>
+            <tr>
+              <td>从站地址</td>
+              <td>优先使用当前 <code>SlaveAddress</code>，非法时回落默认地址 <code>1</code>。</td>
+              <td><span class="status done">已兼容</span></td>
+            </tr>
+            <tr>
+              <td>功能码</td>
+              <td>支持 <code>FC01</code>、<code>FC02</code>、<code>FC03</code>、<code>FC04</code>、<code>FC05</code>、<code>FC06</code>。</td>
+              <td><span class="status done">已兼容</span></td>
+            </tr>
+            <tr>
+              <td>官方未列功能码</td>
+              <td><code>FC15</code>、<code>FC16</code> 等不在 SI 官方功能码清单内，应返回 Illegal Function。</td>
+              <td><span class="status done">已兼容</span></td>
+            </tr>
+            <tr>
+              <td>地址窗口</td>
+              <td>线圈 <code>00001~00016</code>，离散输入 <code>10001~10032</code>，保持寄存器 <code>40001~40023</code>，输入寄存器 <code>30001~30620</code>。</td>
+              <td><span class="status done">已兼容</span></td>
+            </tr>
+            <tr>
+              <td>异常响应</td>
+              <td>非法功能、非法地址、非法数据值分别返回 <code>0x01</code>、<code>0x02</code>、<code>0x03</code>。</td>
+              <td><span class="status done">已兼容</span></td>
+            </tr>
+            <tr>
+              <td>缩放单位</td>
+              <td>位置/液位按 mm；温度按有符号 <code>0.01°C</code>；密度按 <code>0.01 kg/m3</code>，超 16 位钳位。</td>
+              <td><span class="status done">已兼容</span></td>
+            </tr>
+            <tr>
+              <td>无效值</td>
+              <td>温度无效输出 <code>-200.00°C</code> / <code>0xB1E0</code>，密度无效输出 <code>0</code>，有效点外输出 <code>0</code>。</td>
+              <td><span class="status done">已兼容</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="registers">
+        <h2>寄存器覆盖</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>区域</th>
+              <th>覆盖范围</th>
+              <th>当前实现重点</th>
+              <th>状态</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>线圈 <code>00001~00016</code></td>
+              <td>Manual、Calibrate、Auto、Profile、Stop、上/下行 Slow/Medium/Fast。</td>
+              <td><code>00004</code> 启动 SI profile；保留线圈拒写；模式和动作线圈在快照区互斥。</td>
+              <td><span class="status partial">部分简化</span></td>
+            </tr>
+            <tr>
+              <td>离散输入 <code>10001~10032</code></td>
+              <td>Bottom Reference、上下液位传感器、Interlock、Profile Complete、报警位等。</td>
+              <td><code>10010</code> 固定可信；上下传感器按液位跟随稳定状态合成；报警位由 CPU3 扫描合成。</td>
+              <td><span class="status done">已接入</span></td>
+            </tr>
+            <tr>
+              <td>保持寄存器 <code>40001~40023</code></td>
+              <td>Profile 参数、自动 profile 参数、报警阈值。</td>
+              <td><code>40001~40003</code> 桥接 CPU2；<code>40010~40023</code> 保存 CPU3；<code>40004~40009</code> 保留拒写。</td>
+              <td><span class="status done">已接入</span></td>
+            </tr>
+            <tr>
+              <td>输入寄存器 <code>30001~30620</code></td>
+              <td>实时位置/温度/密度/液位、点数、profile 时间戳、当前时间、profile 点阵。</td>
+              <td>SI profile 完成前点数为 0，点阵清 0；完成后输出 Point0~Point199。</td>
+              <td><span class="status done">已接入</span></td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="callout warning">
+          当前对外点阵最多 200 点。官方资料里提到过内部 500 点，但当前 DCS Modbus 地址窗口没有直接覆盖 500 点；如现场要求超过 200 点，需要新增扩展地址或分页机制。
+        </div>
+      </section>
+
+
+      <section id="address-check">
+        <h2>逐地址兼容对照</h2>
+        <p class="lead">
+          本节按 SI 地址说明原协议功能、当前兼容方式、已知差异和下一步处理方向，不再整理具体测试动作。
+        </p>
+
+        <div class="register-block">
+          <h3>FC01 / FC05 线圈 00001~00016 兼容对照</h3>
+          <div class="block-inner">
+            <p class="register-note">原协议线圈区：FC01 读取系统模式、电机方向和速度，FC05 写单线圈。当前保留线圈按官方保留处理；OFF 写入只更新影子位，不主动停止 CPU2。</p>
+        <div class="table-frame">
+          <table class="address-table">
+            <thead>
+              <tr>
+                <th>SI 地址</th>
+                <th>原协议功能</th>
+                <th>当前兼容方式</th>
+                <th>问题/差异</th>
+                <th>下一步</th>
+              </tr>
+            </thead>
+            <tbody>
+            <tr>
+              <td><code>00001</code></td>
+              <td>Manual<span class="muted-cell">FC01 读；FC05 可写 ON/OFF</span></td>
+              <td>读：非 Auto/Cal/Profile 且无其它模式时置 1；写 ON 桥接 CMD_MAINTENANCE_MODE；写 OFF 仅更新影子位</td>
+              <td>可用维护模式近似 Manual；OFF 不主动停止 CPU2。</td>
+              <td>如现场需要完整 Manual/Stop 生命周期，再补 SI 模式状态机；当前保持维护模式桥接。</td>
+            </tr>
+            <tr>
+              <td><code>00002</code></td>
+              <td>Calibrate<span class="muted-cell">FC01 读；FC05 可写 ON/OFF</span></td>
+              <td>读：CPU2 标定状态时置 1；写 ON 桥接 CMD_CALIBRATE_ZERO</td>
+              <td>只覆盖零点标定，不等同 SI 完整标定流程。</td>
+              <td>如 PLC 依赖 SI 完整标定流程，再新增独立标定状态和命令映射；当前保持零点标定桥接。</td>
+            </tr>
+            <tr>
+              <td><code>00003</code></td>
+              <td>Auto<span class="muted-cell">FC01 读；FC05 可写 ON/OFF</span></td>
+              <td>读：STATE_FLOWOIL 时置 1；写 ON 桥接 CMD_FIND_OIL</td>
+              <td>无明显兼容问题；液位跟随稳定状态另见 10013 与 10002/10003。</td>
+              <td>保持当前实现；后续协议或源码变化时同步更新文档。</td>
+            </tr>
+            <tr>
+              <td><code>00004</code></td>
+              <td>Profile<span class="muted-cell">FC01 读；FC05 可写 ON/OFF</span></td>
+              <td>读：SI profile 运行态且 current_command=CMD_SI_PROFILE 时置 1；写 ON 锁存时间并下发 CMD_SI_PROFILE</td>
+              <td>无明显兼容问题；普通分布、国标、Wärtsilä 分布不会误置 SI Profile。</td>
+              <td>保持当前 SI Profile 独立入口；如现场需要更多 SI 原设备模式生命周期，再补专用状态。</td>
+            </tr>
+            <tr>
+              <td><code>00005</code></td>
+              <td>Reserved<span class="muted-cell">FC01 可读；FC05 拒写</span></td>
+              <td>读 0；写返回 Illegal Data Address</td>
+              <td>官方保留，无业务功能。</td>
+              <td>保持保留地址处理：读 0，禁止写入，不新增业务语义。</td>
+            </tr>
+            <tr>
+              <td><code>00006</code></td>
+              <td>Reserved<span class="muted-cell">FC01 可读；FC05 拒写</span></td>
+              <td>读 0；写返回 Illegal Data Address</td>
+              <td>官方保留，无业务功能。</td>
+              <td>保持保留地址处理：读 0，禁止写入，不新增业务语义。</td>
+            </tr>
+            <tr>
+              <td><code>00007</code></td>
+              <td>Reserved<span class="muted-cell">FC01 可读；FC05 拒写</span></td>
+              <td>读 0；写返回 Illegal Data Address</td>
+              <td>官方保留，无业务功能。</td>
+              <td>保持保留地址处理：读 0，禁止写入，不新增业务语义。</td>
+            </tr>
+            <tr>
+              <td><code>00008</code></td>
+              <td>Reserved<span class="muted-cell">FC01 可读；FC05 拒写</span></td>
+              <td>读 0；写返回 Illegal Data Address</td>
+              <td>官方保留，无业务功能。</td>
+              <td>保持保留地址处理：读 0，禁止写入，不新增业务语义。</td>
+            </tr>
+            <tr>
+              <td><code>00009</code></td>
+              <td>Stop<span class="muted-cell">FC01 读；FC05 可写 ON/OFF</span></td>
+              <td>读：电机非上/下行时置 1；写 ON 桥接 CMD_MAINTENANCE_MODE</td>
+              <td>当前用维护模式承担停止/手动语义。</td>
+              <td>如现场需要完整 Manual/Stop 生命周期，再补 SI 模式状态机；当前保持维护模式桥接。</td>
+            </tr>
+            <tr>
+              <td><code>00010</code></td>
+              <td>Up Slow<span class="muted-cell">FC01 读；FC05 可写 ON/OFF</span></td>
+              <td>读：当前只在上行时统一读回 Up Medium；写 ON 桥接 CMD_FORCE_MOVE_UP</td>
+              <td>不区分慢速。</td>
+              <td>如现场需要慢/中/快三档真实速度，再补速度档参数和电机控制映射。</td>
+            </tr>
+            <tr>
+              <td><code>00011</code></td>
+              <td>Up Medium<span class="muted-cell">FC01 读；FC05 可写 ON/OFF</span></td>
+              <td>读：motor_state=1 时置 1；写 ON 桥接 CMD_FORCE_MOVE_UP</td>
+              <td>上行三档统一执行默认强制上行速度。</td>
+              <td>如现场需要慢/中/快三档真实速度，再补速度档参数和电机控制映射。</td>
+            </tr>
+            <tr>
+              <td><code>00012</code></td>
+              <td>Up Fast<span class="muted-cell">FC01 读；FC05 可写 ON/OFF</span></td>
+              <td>读：当前只在上行时统一读回 Up Medium；写 ON 桥接 CMD_FORCE_MOVE_UP</td>
+              <td>不区分快速。</td>
+              <td>如现场需要慢/中/快三档真实速度，再补速度档参数和电机控制映射。</td>
+            </tr>
+            <tr>
+              <td><code>00013</code></td>
+              <td>Down Slow<span class="muted-cell">FC01 读；FC05 可写 ON/OFF</span></td>
+              <td>读：当前只在下行时统一读回 Down Medium；写 ON 桥接 CMD_FORCE_MOVE_DOWN</td>
+              <td>不区分慢速。</td>
+              <td>如现场需要慢/中/快三档真实速度，再补速度档参数和电机控制映射。</td>
+            </tr>
+            <tr>
+              <td><code>00014</code></td>
+              <td>Down Medium<span class="muted-cell">FC01 读；FC05 可写 ON/OFF</span></td>
+              <td>读：motor_state=2 时置 1；写 ON 桥接 CMD_FORCE_MOVE_DOWN</td>
+              <td>下行三档统一执行默认强制下行速度。</td>
+              <td>如现场需要慢/中/快三档真实速度，再补速度档参数和电机控制映射。</td>
+            </tr>
+            <tr>
+              <td><code>00015</code></td>
+              <td>Down Fast<span class="muted-cell">FC01 读；FC05 可写 ON/OFF</span></td>
+              <td>读：当前只在下行时统一读回 Down Medium；写 ON 桥接 CMD_FORCE_MOVE_DOWN</td>
+              <td>不区分快速。</td>
+              <td>如现场需要慢/中/快三档真实速度，再补速度档参数和电机控制映射。</td>
+            </tr>
+            <tr>
+              <td><code>00016</code></td>
+              <td>Reserved<span class="muted-cell">FC01 可读；FC05 拒写</span></td>
+              <td>读 0；写返回 Illegal Data Address</td>
+              <td>官方保留，无业务功能。</td>
+              <td>保持保留地址处理：读 0，禁止写入，不新增业务语义。</td>
+            </tr>
+            </tbody>
+          </table>
+        </div>
+          </div>
+        </div>
+
+        <div class="register-block">
+          <h3>FC02 离散输入 10001~10032 兼容对照</h3>
+          <div class="block-inner">
+            <p class="register-note">原协议离散输入区：FC02 只读状态位和报警位。当前保留位固定 0，报警位由 CPU3 根据实时值、SI 阈值和 SI profile 点阵合成。</p>
+        <div class="table-frame">
+          <table class="address-table">
+            <thead>
+              <tr>
+                <th>SI 地址</th>
+                <th>原协议功能</th>
+                <th>当前兼容方式</th>
+                <th>问题/差异</th>
+                <th>下一步</th>
+              </tr>
+            </thead>
+            <tbody>
+            <tr>
+              <td><code>10001</code></td>
+              <td>Bottom Reference<span class="muted-cell">FC02 读</span></td>
+              <td>来自 CPU2 bottom_reference_valid；探底成功或现有底部参考有效时置 1</td>
+              <td>无明显兼容问题；保持现有逻辑，不固定覆盖。</td>
+              <td>保持当前实现；后续协议或源码变化时同步更新文档。</td>
+            </tr>
+            <tr>
+              <td><code>10002</code></td>
+              <td>Lower Level Sensor<span class="muted-cell">FC02 读</span></td>
+              <td>固定输出 1，表示下传感器在液体中</td>
+              <td>无明显兼容问题。</td>
+              <td>如需要真实双传感器语义，需新增硬件/CPU2 状态源；当前按 SI 显示语义合成。</td>
+            </tr>
+            <tr>
+              <td><code>10003</code></td>
+              <td>Upper Level Sensor<span class="muted-cell">FC02 读</span></td>
+              <td>液位跟随稳定时输出 0，表示上传感器空气；其它状态输出 1</td>
+              <td>无明显兼容问题；CPU3 合成，不是真实双传感器输入。</td>
+              <td>如需要真实双传感器语义，需新增硬件/CPU2 状态源；当前按 SI 显示语义合成。</td>
+            </tr>
+            <tr>
+              <td><code>10004</code></td>
+              <td>Interlock<span class="muted-cell">FC02 读</span></td>
+              <td>error_code != NO_ERROR 或 profile_blocked_by_process 时置 1</td>
+              <td>未细分外部联锁硬件。</td>
+              <td>如 PLC 需要更细报警或联锁来源，再拆分故障分类和维护状态；当前保持合成输出。</td>
+            </tr>
+            <tr>
+              <td><code>10005</code></td>
+              <td>Profile Complete<span class="muted-cell">FC02 读</span></td>
+              <td>SI profile 完成锁存且 profile_source=PROFILE_SOURCE_SI 时置 1</td>
+              <td>无明显兼容问题；普通分布结果不会置位。</td>
+              <td>保持 SI profile 完成锁存；如现场需要复位/确认语义，再补清除条件。</td>
+            </tr>
+            <tr>
+              <td><code>10006</code></td>
+              <td>Metric/English<span class="muted-cell">FC02 读</span></td>
+              <td>固定输出 1，表示公制</td>
+              <td>无明显兼容问题；当前不支持英制切换。</td>
+              <td>如现场要求英制，再增加单位参数和缩放转换；当前保持公制。</td>
+            </tr>
+            <tr>
+              <td><code>10007</code></td>
+              <td>Reserved<span class="muted-cell">FC02 读</span></td>
+              <td>固定 0</td>
+              <td>官方保留，无业务功能。</td>
+              <td>保持保留地址处理：读 0，禁止写入，不新增业务语义。</td>
+            </tr>
+            <tr>
+              <td><code>10008</code></td>
+              <td>Reel Alarm Disable<span class="muted-cell">FC02 读</span></td>
+              <td>固定 0</td>
+              <td>官方保留，无业务功能。</td>
+              <td>保持保留地址处理：读 0，禁止写入，不新增业务语义。</td>
+            </tr>
+            <tr>
+              <td><code>10009</code></td>
+              <td>Reel Alarm<span class="muted-cell">FC02 读</span></td>
+              <td>error_code != NO_ERROR 时置 1</td>
+              <td>简化为设备故障汇总。</td>
+              <td>如 PLC 需要更细报警或联锁来源，再拆分故障分类和维护状态；当前保持合成输出。</td>
+            </tr>
+            <tr>
+              <td><code>10010</code></td>
+              <td>Probe Un-calibrated<span class="muted-cell">FC02 读</span></td>
+              <td>固定 0，表示探针可信</td>
+              <td>无明显兼容问题；无条件固定可信。</td>
+              <td>保持当前实现；后续协议或源码变化时同步更新文档。</td>
+            </tr>
+            <tr>
+              <td><code>10011</code></td>
+              <td>Reserved<span class="muted-cell">FC02 读</span></td>
+              <td>固定 0</td>
+              <td>官方保留，无业务功能。</td>
+              <td>保持保留地址处理：读 0，禁止写入，不新增业务语义。</td>
+            </tr>
+            <tr>
+              <td><code>10012</code></td>
+              <td>Interval Timer<span class="muted-cell">FC02 读</span></td>
+              <td>40011 自动 profile 使能非 0 时置 1</td>
+              <td>无明显兼容问题；40010 禁止写 0，因此使能即认为调度有效。</td>
+              <td>保持当前实现；后续协议或源码变化时同步更新文档。</td>
+            </tr>
+            <tr>
+              <td><code>10013</code></td>
+              <td>Probe At Liquid Level<span class="muted-cell">FC02 读</span></td>
+              <td>来自 oil_measurement.probe_at_liquid_level</td>
+              <td>无明显兼容问题；用于判断 30004 液位是否当前有效。</td>
+              <td>保持当前实现；后续协议或源码变化时同步更新文档。</td>
+            </tr>
+            <tr>
+              <td><code>10014</code></td>
+              <td>Reserved<span class="muted-cell">FC02 读</span></td>
+              <td>固定 0</td>
+              <td>官方保留，无业务功能。</td>
+              <td>保持保留地址处理：读 0，禁止写入，不新增业务语义。</td>
+            </tr>
+            <tr>
+              <td><code>10015</code></td>
+              <td>Reserved<span class="muted-cell">FC02 读</span></td>
+              <td>固定 0</td>
+              <td>官方保留，无业务功能。</td>
+              <td>保持保留地址处理：读 0，禁止写入，不新增业务语义。</td>
+            </tr>
+            <tr>
+              <td><code>10016</code></td>
+              <td>Reserved<span class="muted-cell">FC02 读</span></td>
+              <td>固定 0</td>
+              <td>官方保留，无业务功能。</td>
+              <td>保持保留地址处理：读 0，禁止写入，不新增业务语义。</td>
+            </tr>
+            <tr>
+              <td><code>10017</code></td>
+              <td>Low Density Alarm<span class="muted-cell">FC02 读</span></td>
+              <td>当前密度有效且 CurrentDensity < 40014 时置 1</td>
+              <td>当前由 CPU3 即时合成；未实现 SI 原设备可能存在的报警锁存、确认或消音生命周期。</td>
+              <td>如果 DCS 需要报警锁存、确认或消音模型，再新增报警生命周期；当前保持即时合成。</td>
+            </tr>
+            <tr>
+              <td><code>10018</code></td>
+              <td>High Density Alarm<span class="muted-cell">FC02 读</span></td>
+              <td>当前密度有效且 CurrentDensity > 40015 时置 1</td>
+              <td>当前由 CPU3 即时合成；未实现 SI 原设备可能存在的报警锁存、确认或消音生命周期。</td>
+              <td>如果 DCS 需要报警锁存、确认或消音模型，再新增报警生命周期；当前保持即时合成。</td>
+            </tr>
+            <tr>
+              <td><code>10019</code></td>
+              <td>Low Temp Alarm<span class="muted-cell">FC02 读</span></td>
+              <td>当前温度有效且 CurrentTemp < 40016 时置 1</td>
+              <td>当前由 CPU3 即时合成；未实现 SI 原设备可能存在的报警锁存、确认或消音生命周期。</td>
+              <td>如果 DCS 需要报警锁存、确认或消音模型，再新增报警生命周期；当前保持即时合成。</td>
+            </tr>
+            <tr>
+              <td><code>10020</code></td>
+              <td>High Temp Alarm<span class="muted-cell">FC02 读</span></td>
+              <td>当前温度有效且 CurrentTemp > 40017 时置 1</td>
+              <td>当前由 CPU3 即时合成；未实现 SI 原设备可能存在的报警锁存、确认或消音生命周期。</td>
+              <td>如果 DCS 需要报警锁存、确认或消音模型，再新增报警生命周期；当前保持即时合成。</td>
+            </tr>
+            <tr>
+              <td><code>10021</code></td>
+              <td>LL Level Alarm<span class="muted-cell">FC02 读</span></td>
+              <td>液位有效且 LiquidLevel < 40018 时置 1</td>
+              <td>当前由 CPU3 即时合成；未实现 SI 原设备可能存在的报警锁存、确认或消音生命周期。</td>
+              <td>如果 DCS 需要报警锁存、确认或消音模型，再新增报警生命周期；当前保持即时合成。</td>
+            </tr>
+            <tr>
+              <td><code>10022</code></td>
+              <td>HH Level Alarm<span class="muted-cell">FC02 读</span></td>
+              <td>液位有效且 LiquidLevel > 40019 时置 1</td>
+              <td>当前由 CPU3 即时合成；未实现 SI 原设备可能存在的报警锁存、确认或消音生命周期。</td>
+              <td>如果 DCS 需要报警锁存、确认或消音模型，再新增报警生命周期；当前保持即时合成。</td>
+            </tr>
+            <tr>
+              <td><code>10023</code></td>
+              <td>Low Level Alarm<span class="muted-cell">FC02 读</span></td>
+              <td>液位有效且 LiquidLevel < 40020 时置 1</td>
+              <td>当前由 CPU3 即时合成；未实现 SI 原设备可能存在的报警锁存、确认或消音生命周期。</td>
+              <td>如果 DCS 需要报警锁存、确认或消音模型，再新增报警生命周期；当前保持即时合成。</td>
+            </tr>
+            <tr>
+              <td><code>10024</code></td>
+              <td>High Level Alarm<span class="muted-cell">FC02 读</span></td>
+              <td>液位有效且 LiquidLevel > 40021 时置 1</td>
+              <td>当前由 CPU3 即时合成；未实现 SI 原设备可能存在的报警锁存、确认或消音生命周期。</td>
+              <td>如果 DCS 需要报警锁存、确认或消音模型，再新增报警生命周期；当前保持即时合成。</td>
+            </tr>
+            <tr>
+              <td><code>10025</code></td>
+              <td>Profile Temp Deviation Alarm<span class="muted-cell">FC02 读</span></td>
+              <td>SI profile 完成后，相邻点温差 > 40022 时置 1</td>
+              <td>当前由 CPU3 即时合成；未实现 SI 原设备可能存在的报警锁存、确认或消音生命周期。</td>
+              <td>如果 DCS 需要报警锁存、确认或消音模型，再新增报警生命周期；当前保持即时合成。</td>
+            </tr>
+            <tr>
+              <td><code>10026</code></td>
+              <td>Profile Density Deviation Alarm<span class="muted-cell">FC02 读</span></td>
+              <td>SI profile 完成后，相邻点密差 > 40023 时置 1</td>
+              <td>当前由 CPU3 即时合成；未实现 SI 原设备可能存在的报警锁存、确认或消音生命周期。</td>
+              <td>如果 DCS 需要报警锁存、确认或消音模型，再新增报警生命周期；当前保持即时合成。</td>
+            </tr>
+            <tr>
+              <td><code>10027</code></td>
+              <td>Reserved<span class="muted-cell">FC02 读</span></td>
+              <td>固定 0</td>
+              <td>官方保留，无业务功能。</td>
+              <td>保持保留地址处理：读 0，禁止写入，不新增业务语义。</td>
+            </tr>
+            <tr>
+              <td><code>10028</code></td>
+              <td>Reserved<span class="muted-cell">FC02 读</span></td>
+              <td>固定 0</td>
+              <td>官方保留，无业务功能。</td>
+              <td>保持保留地址处理：读 0，禁止写入，不新增业务语义。</td>
+            </tr>
+            <tr>
+              <td><code>10029</code></td>
+              <td>Profile Low Temp Alarm<span class="muted-cell">FC02 读</span></td>
+              <td>任一 SI profile 点温度 < 40016 时置 1</td>
+              <td>当前由 CPU3 即时合成；未实现 SI 原设备可能存在的报警锁存、确认或消音生命周期。</td>
+              <td>如果 DCS 需要报警锁存、确认或消音模型，再新增报警生命周期；当前保持即时合成。</td>
+            </tr>
+            <tr>
+              <td><code>10030</code></td>
+              <td>Profile High Temp Alarm<span class="muted-cell">FC02 读</span></td>
+              <td>任一 SI profile 点温度 > 40017 时置 1</td>
+              <td>当前由 CPU3 即时合成；未实现 SI 原设备可能存在的报警锁存、确认或消音生命周期。</td>
+              <td>如果 DCS 需要报警锁存、确认或消音模型，再新增报警生命周期；当前保持即时合成。</td>
+            </tr>
+            <tr>
+              <td><code>10031</code></td>
+              <td>Profile Low Density Alarm<span class="muted-cell">FC02 读</span></td>
+              <td>任一 SI profile 点密度 < 40014 时置 1</td>
+              <td>当前由 CPU3 即时合成；未实现 SI 原设备可能存在的报警锁存、确认或消音生命周期。</td>
+              <td>如果 DCS 需要报警锁存、确认或消音模型，再新增报警生命周期；当前保持即时合成。</td>
+            </tr>
+            <tr>
+              <td><code>10032</code></td>
+              <td>Profile High Density Alarm<span class="muted-cell">FC02 读</span></td>
+              <td>任一 SI profile 点密度 > 40015 时置 1</td>
+              <td>当前由 CPU3 即时合成；未实现 SI 原设备可能存在的报警锁存、确认或消音生命周期。</td>
+              <td>如果 DCS 需要报警锁存、确认或消音模型，再新增报警生命周期；当前保持即时合成。</td>
+            </tr>
+            </tbody>
+          </table>
+        </div>
+          </div>
+        </div>
+
+        <div class="register-block">
+          <h3>FC03 / FC06 保持寄存器 40001~40023 兼容对照</h3>
+          <div class="block-inner">
+            <p class="register-note">原协议保持寄存器区：FC03 读取 profile/报警配置，FC06 写单个配置寄存器。当前 40001~40003 归 CPU2 SI profile 参数，40010~40023 归 CPU3 SI 参数。</p>
+        <div class="table-frame">
+          <table class="address-table">
+            <thead>
+              <tr>
+                <th>SI 地址</th>
+                <th>原协议功能</th>
+                <th>当前兼容方式</th>
+                <th>问题/差异</th>
+                <th>下一步</th>
+              </tr>
+            </thead>
+            <tbody>
+            <tr>
+              <td><code>40001</code></td>
+              <td>Profile First Point<span class="muted-cell">FC03 读；FC06 写</span></td>
+              <td>CPU2 g_deviceParams.si_profile_first_point<span class="muted-cell">mm；CPU2 内部 0.1mm</span><span class="muted-cell">CUBE 默认 100mm；写 0 非法；Point0 位置字段固定 0，40001 是 Point1 绝对位置</span></td>
+              <td>官方资料未给出完整出厂默认值；当前使用 CUBE 工程默认。</td>
+              <td>保持当前实现；后续协议或源码变化时同步更新文档。</td>
+            </tr>
+            <tr>
+              <td><code>40002</code></td>
+              <td>Profile Increment<span class="muted-cell">FC03 读；FC06 写</span></td>
+              <td>CPU2 g_deviceParams.si_profile_increment<span class="muted-cell">mm；CPU2 内部 0.1mm</span><span class="muted-cell">CUBE 默认 1000mm；写 0 非法；从底部向上递增</span></td>
+              <td>官方资料未给出完整出厂默认值；当前使用 CUBE 工程默认。</td>
+              <td>保持当前实现；后续协议或源码变化时同步更新文档。</td>
+            </tr>
+            <tr>
+              <td><code>40003</code></td>
+              <td>Profile Dwell Time<span class="muted-cell">FC03 读；FC06 写</span></td>
+              <td>CPU2 g_deviceParams.si_profile_dwell_time<span class="muted-cell">s</span><span class="muted-cell">CUBE 默认 10s；写 0 非法；运行期限制 1~3600s</span></td>
+              <td>官方资料未给出完整出厂默认值；当前使用 CUBE 工程默认。</td>
+              <td>保持当前实现；后续协议或源码变化时同步更新文档。</td>
+            </tr>
+            <tr>
+              <td><code>40004</code></td>
+              <td>Reserved<span class="muted-cell">FC03 读；FC06 拒写</span></td>
+              <td>无<span class="muted-cell">无</span><span class="muted-cell">读 0；写返回 Illegal Data Address</span></td>
+              <td>官方保留，无业务功能。</td>
+              <td>保持保留地址处理：读 0，禁止写入，不新增业务语义。</td>
+            </tr>
+            <tr>
+              <td><code>40005</code></td>
+              <td>Reserved<span class="muted-cell">FC03 读；FC06 拒写</span></td>
+              <td>无<span class="muted-cell">无</span><span class="muted-cell">读 0；写返回 Illegal Data Address</span></td>
+              <td>官方保留，无业务功能。</td>
+              <td>保持保留地址处理：读 0，禁止写入，不新增业务语义。</td>
+            </tr>
+            <tr>
+              <td><code>40006</code></td>
+              <td>Reserved<span class="muted-cell">FC03 读；FC06 拒写</span></td>
+              <td>无<span class="muted-cell">无</span><span class="muted-cell">读 0；写返回 Illegal Data Address</span></td>
+              <td>官方保留，无业务功能。</td>
+              <td>保持保留地址处理：读 0，禁止写入，不新增业务语义。</td>
+            </tr>
+            <tr>
+              <td><code>40007</code></td>
+              <td>Reserved<span class="muted-cell">FC03 读；FC06 拒写</span></td>
+              <td>无<span class="muted-cell">无</span><span class="muted-cell">读 0；写返回 Illegal Data Address</span></td>
+              <td>官方保留，无业务功能。</td>
+              <td>保持保留地址处理：读 0，禁止写入，不新增业务语义。</td>
+            </tr>
+            <tr>
+              <td><code>40008</code></td>
+              <td>Reserved<span class="muted-cell">FC03 读；FC06 拒写</span></td>
+              <td>无<span class="muted-cell">无</span><span class="muted-cell">读 0；写返回 Illegal Data Address</span></td>
+              <td>官方保留，无业务功能。</td>
+              <td>保持保留地址处理：读 0，禁止写入，不新增业务语义。</td>
+            </tr>
+            <tr>
+              <td><code>40009</code></td>
+              <td>Reserved<span class="muted-cell">FC03 读；FC06 拒写</span></td>
+              <td>无<span class="muted-cell">无</span><span class="muted-cell">读 0；写返回 Illegal Data Address</span></td>
+              <td>官方保留，无业务功能。</td>
+              <td>保持保留地址处理：读 0，禁止写入，不新增业务语义。</td>
+            </tr>
+            <tr>
+              <td><code>40010</code></td>
+              <td>Automatic Profile Interval<span class="muted-cell">FC03 读；FC06 写</span></td>
+              <td>CPU3 si_auto_profile_interval<span class="muted-cell">min</span><span class="muted-cell">CUBE 默认 60；写 0 非法；每天一次建议 1440</span></td>
+              <td>官方资料未给出完整出厂默认值；当前使用 CUBE 工程默认。</td>
+              <td>保持当前实现；后续协议或源码变化时同步更新文档。</td>
+            </tr>
+            <tr>
+              <td><code>40011</code></td>
+              <td>Automatic Profile Enable<span class="muted-cell">FC03 读；FC06 写</span></td>
+              <td>CPU3 si_auto_profile_enable<span class="muted-cell">0/1</span><span class="muted-cell">默认 0；仅接受 0/1；0 禁用、1 启用</span></td>
+              <td>无明显兼容问题。</td>
+              <td>保持当前实现；后续协议或源码变化时同步更新文档。</td>
+            </tr>
+            <tr>
+              <td><code>40012</code></td>
+              <td>Automatic Profile Hour<span class="muted-cell">FC03 读；FC06 写</span></td>
+              <td>CPU3 si_auto_profile_hour<span class="muted-cell">h</span><span class="muted-cell">默认 0；仅接受 0~23</span></td>
+              <td>无明显兼容问题。</td>
+              <td>保持当前实现；后续协议或源码变化时同步更新文档。</td>
+            </tr>
+            <tr>
+              <td><code>40013</code></td>
+              <td>Automatic Profile Minute<span class="muted-cell">FC03 读；FC06 写</span></td>
+              <td>CPU3 si_auto_profile_minute<span class="muted-cell">min</span><span class="muted-cell">默认 0；仅接受 0~59</span></td>
+              <td>无明显兼容问题。</td>
+              <td>保持当前实现；后续协议或源码变化时同步更新文档。</td>
+            </tr>
+            <tr>
+              <td><code>40014</code></td>
+              <td>Low Density Setpoint<span class="muted-cell">FC03 读；FC06 写</span></td>
+              <td>CPU3 si_low_density_setpoint<span class="muted-cell">0.01 kg/m3</span><span class="muted-cell">默认 0；0 是有效阈值；当前密度/profile 点低于该值报警</span></td>
+              <td>无明显兼容问题。</td>
+              <td>如 DCS 需要报警锁存、确认或消音模型，再新增报警生命周期；当前保持阈值配置和即时合成。</td>
+            </tr>
+            <tr>
+              <td><code>40015</code></td>
+              <td>High Density Setpoint<span class="muted-cell">FC03 读；FC06 写</span></td>
+              <td>CPU3 si_high_density_setpoint<span class="muted-cell">0.01 kg/m3</span><span class="muted-cell">默认 0；0 是有效阈值；当前密度/profile 点高于该值报警</span></td>
+              <td>无明显兼容问题。</td>
+              <td>如 DCS 需要报警锁存、确认或消音模型，再新增报警生命周期；当前保持阈值配置和即时合成。</td>
+            </tr>
+            <tr>
+              <td><code>40016</code></td>
+              <td>Low Temperature Setpoint<span class="muted-cell">FC03 读；FC06 写</span></td>
+              <td>CPU3 si_low_temperature_setpoint<span class="muted-cell">有符号 0.01°C</span><span class="muted-cell">默认 0；允许负值；温度低于该值报警</span></td>
+              <td>无明显兼容问题。</td>
+              <td>如 DCS 需要报警锁存、确认或消音模型，再新增报警生命周期；当前保持阈值配置和即时合成。</td>
+            </tr>
+            <tr>
+              <td><code>40017</code></td>
+              <td>High Temperature Setpoint<span class="muted-cell">FC03 读；FC06 写</span></td>
+              <td>CPU3 si_high_temperature_setpoint<span class="muted-cell">有符号 0.01°C</span><span class="muted-cell">默认 0；允许负值；温度高于该值报警</span></td>
+              <td>无明显兼容问题。</td>
+              <td>如 DCS 需要报警锁存、确认或消音模型，再新增报警生命周期；当前保持阈值配置和即时合成。</td>
+            </tr>
+            <tr>
+              <td><code>40018</code></td>
+              <td>LL Level Setpoint<span class="muted-cell">FC03 读；FC06 写</span></td>
+              <td>CPU3 si_ll_level_setpoint<span class="muted-cell">mm</span><span class="muted-cell">默认 0；0 是有效阈值；当前液位低于该值报警</span></td>
+              <td>无明显兼容问题。</td>
+              <td>如 DCS 需要报警锁存、确认或消音模型，再新增报警生命周期；当前保持阈值配置和即时合成。</td>
+            </tr>
+            <tr>
+              <td><code>40019</code></td>
+              <td>HH Level Setpoint<span class="muted-cell">FC03 读；FC06 写</span></td>
+              <td>CPU3 si_hh_level_setpoint<span class="muted-cell">mm</span><span class="muted-cell">默认 0；0 是有效阈值；当前液位高于该值报警</span></td>
+              <td>无明显兼容问题。</td>
+              <td>如 DCS 需要报警锁存、确认或消音模型，再新增报警生命周期；当前保持阈值配置和即时合成。</td>
+            </tr>
+            <tr>
+              <td><code>40020</code></td>
+              <td>Low Level Setpoint<span class="muted-cell">FC03 读；FC06 写</span></td>
+              <td>CPU3 si_low_level_setpoint<span class="muted-cell">mm</span><span class="muted-cell">默认 0；0 是有效阈值；当前液位低于该值报警</span></td>
+              <td>无明显兼容问题。</td>
+              <td>如 DCS 需要报警锁存、确认或消音模型，再新增报警生命周期；当前保持阈值配置和即时合成。</td>
+            </tr>
+            <tr>
+              <td><code>40021</code></td>
+              <td>High Level Setpoint<span class="muted-cell">FC03 读；FC06 写</span></td>
+              <td>CPU3 si_high_level_setpoint<span class="muted-cell">mm</span><span class="muted-cell">默认 0；0 是有效阈值；当前液位高于该值报警</span></td>
+              <td>无明显兼容问题。</td>
+              <td>如 DCS 需要报警锁存、确认或消音模型，再新增报警生命周期；当前保持阈值配置和即时合成。</td>
+            </tr>
+            <tr>
+              <td><code>40022</code></td>
+              <td>Temp Deviation Setpoint<span class="muted-cell">FC03 读；FC06 写</span></td>
+              <td>CPU3 si_temp_deviation_setpoint<span class="muted-cell">0.01°C 差值</span><span class="muted-cell">默认 0；0 是有效偏差阈值；相邻 profile 点温差大于该值报警</span></td>
+              <td>无明显兼容问题。</td>
+              <td>如 DCS 需要报警锁存、确认或消音模型，再新增报警生命周期；当前保持阈值配置和即时合成。</td>
+            </tr>
+            <tr>
+              <td><code>40023</code></td>
+              <td>Density Deviation Setpoint<span class="muted-cell">FC03 读；FC06 写</span></td>
+              <td>CPU3 si_density_deviation_setpoint<span class="muted-cell">0.01 kg/m3 差值</span><span class="muted-cell">默认 0；0 是有效偏差阈值；相邻 profile 点密差大于该值报警</span></td>
+              <td>无明显兼容问题。</td>
+              <td>如 DCS 需要报警锁存、确认或消音模型，再新增报警生命周期；当前保持阈值配置和即时合成。</td>
+            </tr>
+            </tbody>
+          </table>
+        </div>
+          </div>
+        </div>
+
+        <div class="register-block">
+          <h3>FC04 输入寄存器 30001~30020 兼容对照</h3>
+          <div class="block-inner">
+            <p class="register-note">原协议输入寄存器区：FC04 读取实时测量、profile 时间和 profile 点阵。当前 30001~30020 输出实时值、点数、时间和保留区。</p>
+        <div class="table-frame">
+          <table class="address-table">
+            <thead>
+              <tr>
+                <th>SI 地址</th>
+                <th>原协议功能</th>
+                <th>当前兼容方式</th>
+                <th>问题/差异</th>
+                <th>下一步</th>
+              </tr>
+            </thead>
+            <tbody>
+            <tr>
+              <td><code>30001</code></td>
+              <td>Current Probe Position<span class="muted-cell">FC04 读</span></td>
+              <td>g_measurement.debug_data.sensor_position<span class="muted-cell">mm</span><span class="muted-cell">内部 0.1mm 转 mm；负位置输出 0</span></td>
+              <td>无明显兼容问题。</td>
+              <td>保持当前实现；后续协议或源码变化时同步更新文档。</td>
+            </tr>
+            <tr>
+              <td><code>30002</code></td>
+              <td>Current Temperature<span class="muted-cell">FC04 读</span></td>
+              <td>g_measurement.debug_data.temperature<span class="muted-cell">有符号 0.01°C</span><span class="muted-cell">无效输出 -200.00°C / 0xB1E0</span></td>
+              <td>无明显兼容问题。</td>
+              <td>保持当前实现；后续协议或源码变化时同步更新文档。</td>
+            </tr>
+            <tr>
+              <td><code>30003</code></td>
+              <td>Current Density<span class="muted-cell">FC04 读</span></td>
+              <td>g_measurement.single_point_monitoring.density<span class="muted-cell">0.01 kg/m3</span><span class="muted-cell">无效输出 0；超 16 位钳位</span></td>
+              <td>无明显兼容问题。</td>
+              <td>保持当前实现；后续协议或源码变化时同步更新文档。</td>
+            </tr>
+            <tr>
+              <td><code>30004</code></td>
+              <td>Liquid Level<span class="muted-cell">FC04 读</span></td>
+              <td>g_measurement.oil_measurement.oil_level<span class="muted-cell">mm</span><span class="muted-cell">内部 0.1mm 转 mm；需结合 10013 判断是否当前有效</span></td>
+              <td>无明显兼容问题。</td>
+              <td>保持当前实现；后续协议或源码变化时同步更新文档。</td>
+            </tr>
+            <tr>
+              <td><code>30005</code></td>
+              <td>Reserved<span class="muted-cell">FC04 读</span></td>
+              <td>无<span class="muted-cell">无</span><span class="muted-cell">固定 0</span></td>
+              <td>官方保留，无业务功能。</td>
+              <td>保持保留地址处理：读 0，禁止写入，不新增业务语义。</td>
+            </tr>
+            <tr>
+              <td><code>30006</code></td>
+              <td>Number Of Points<span class="muted-cell">FC04 读</span></td>
+              <td>density_distribution.measurement_points<span class="muted-cell">点数</span><span class="muted-cell">仅 SI profile 完成锁存后输出有效点数；未完成输出 0</span></td>
+              <td>无明显兼容问题。</td>
+              <td>保持完成后输出有效点数、未完成输出 0；如需要手动清空点阵，再新增清除命令或状态。</td>
+            </tr>
+            <tr>
+              <td><code>30007</code></td>
+              <td>Profile Timestamp Month<span class="muted-cell">FC04 读</span></td>
+              <td>CPU3 RTC 锁存时间<span class="muted-cell">month</span><span class="muted-cell">触发并下发 CMD_SI_PROFILE 时锁存</span></td>
+              <td>无明显兼容问题。</td>
+              <td>保持由 CPU3 在触发 SI profile 时锁存开始时间；如需更精确时间源，再补测量开始事件回传。</td>
+            </tr>
+            <tr>
+              <td><code>30008</code></td>
+              <td>Profile Timestamp Day<span class="muted-cell">FC04 读</span></td>
+              <td>CPU3 RTC 锁存时间<span class="muted-cell">day</span><span class="muted-cell">同 30007</span></td>
+              <td>无明显兼容问题。</td>
+              <td>保持由 CPU3 在触发 SI profile 时锁存开始时间；如需更精确时间源，再补测量开始事件回传。</td>
+            </tr>
+            <tr>
+              <td><code>30009</code></td>
+              <td>Profile Timestamp Hour<span class="muted-cell">FC04 读</span></td>
+              <td>CPU3 RTC 锁存时间<span class="muted-cell">hour</span><span class="muted-cell">同 30007</span></td>
+              <td>无明显兼容问题。</td>
+              <td>保持由 CPU3 在触发 SI profile 时锁存开始时间；如需更精确时间源，再补测量开始事件回传。</td>
+            </tr>
+            <tr>
+              <td><code>30010</code></td>
+              <td>Profile Timestamp Minute<span class="muted-cell">FC04 读</span></td>
+              <td>CPU3 RTC 锁存时间<span class="muted-cell">minute</span><span class="muted-cell">同 30007</span></td>
+              <td>无明显兼容问题。</td>
+              <td>保持由 CPU3 在触发 SI profile 时锁存开始时间；如需更精确时间源，再补测量开始事件回传。</td>
+            </tr>
+            <tr>
+              <td><code>30011</code></td>
+              <td>Current Time Hour<span class="muted-cell">FC04 读</span></td>
+              <td>CPU3 RTC 当前时间<span class="muted-cell">hour</span><span class="muted-cell">仅用于 SI 显示，不参与 CPU2 测量调度</span></td>
+              <td>无明显兼容问题。</td>
+              <td>保持 Profile Complete Counter 输出；如现场要求清零或持久化，再新增明确操作。</td>
+            </tr>
+            <tr>
+              <td><code>30012</code></td>
+              <td>Current Time Minute<span class="muted-cell">FC04 读</span></td>
+              <td>CPU3 RTC 当前时间<span class="muted-cell">minute</span><span class="muted-cell">同 30011</span></td>
+              <td>无明显兼容问题。</td>
+              <td>保持当前实现；后续协议或源码变化时同步更新文档。</td>
+            </tr>
+            <tr>
+              <td><code>30013</code></td>
+              <td>Current Time Second<span class="muted-cell">FC04 读</span></td>
+              <td>CPU3 RTC 当前时间<span class="muted-cell">second</span><span class="muted-cell">同 30011</span></td>
+              <td>无明显兼容问题。</td>
+              <td>保持当前实现；后续协议或源码变化时同步更新文档。</td>
+            </tr>
+            <tr>
+              <td><code>30014</code></td>
+              <td>Reserved<span class="muted-cell">FC04 读</span></td>
+              <td>无<span class="muted-cell">无</span><span class="muted-cell">固定 0</span></td>
+              <td>官方保留，无业务功能。</td>
+              <td>保持保留地址处理：读 0，禁止写入，不新增业务语义。</td>
+            </tr>
+            <tr>
+              <td><code>30015</code></td>
+              <td>Reserved<span class="muted-cell">FC04 读</span></td>
+              <td>无<span class="muted-cell">无</span><span class="muted-cell">固定 0</span></td>
+              <td>官方保留，无业务功能。</td>
+              <td>保持保留地址处理：读 0，禁止写入，不新增业务语义。</td>
+            </tr>
+            <tr>
+              <td><code>30016</code></td>
+              <td>Reserved<span class="muted-cell">FC04 读</span></td>
+              <td>无<span class="muted-cell">无</span><span class="muted-cell">固定 0</span></td>
+              <td>官方保留，无业务功能。</td>
+              <td>保持保留地址处理：读 0，禁止写入，不新增业务语义。</td>
+            </tr>
+            <tr>
+              <td><code>30017</code></td>
+              <td>Reserved<span class="muted-cell">FC04 读</span></td>
+              <td>无<span class="muted-cell">无</span><span class="muted-cell">固定 0</span></td>
+              <td>官方保留，无业务功能。</td>
+              <td>保持保留地址处理：读 0，禁止写入，不新增业务语义。</td>
+            </tr>
+            <tr>
+              <td><code>30018</code></td>
+              <td>Reserved<span class="muted-cell">FC04 读</span></td>
+              <td>无<span class="muted-cell">无</span><span class="muted-cell">固定 0</span></td>
+              <td>官方保留，无业务功能。</td>
+              <td>保持保留地址处理：读 0，禁止写入，不新增业务语义。</td>
+            </tr>
+            <tr>
+              <td><code>30019</code></td>
+              <td>Reserved<span class="muted-cell">FC04 读</span></td>
+              <td>无<span class="muted-cell">无</span><span class="muted-cell">固定 0</span></td>
+              <td>官方保留，无业务功能。</td>
+              <td>保持保留地址处理：读 0，禁止写入，不新增业务语义。</td>
+            </tr>
+            <tr>
+              <td><code>30020</code></td>
+              <td>Reserved<span class="muted-cell">FC04 读</span></td>
+              <td>无<span class="muted-cell">无</span><span class="muted-cell">固定 0</span></td>
+              <td>官方保留，无业务功能。</td>
+              <td>保持保留地址处理：读 0，禁止写入，不新增业务语义。</td>
+            </tr>
+            </tbody>
+          </table>
+        </div>
+          </div>
+        </div>
+
+        <div class="register-block">
+          <h3>FC04 Profile 点阵 30021~30620：Point0~Point199 逐点三元组</h3>
+          <div class="block-inner">
+            <p class="register-note">原协议 profile 点阵区：每点 3 个寄存器，依次为位置、温度、密度。当前按 DCS 地址表输出 Point0~Point199，共 200 点；Point0 位置字段固定为 0，Point1 起按 40001/40002 输出绝对位置。</p>
+        <div class="table-frame">
+          <table class="address-table">
+            <thead>
+              <tr>
+                <th>点号</th>
+                <th>原协议功能</th>
+                <th>当前兼容方式</th>
+                <th>问题/差异</th>
+                <th>下一步</th>
+              </tr>
+            </thead>
+            <tbody>
+            <tr>
+              <td>Point 0</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30021</code>；温度寄存器 <code>30022</code>；密度寄存器 <code>30023</code></span></td>
+              <td>仅 SI profile 完成且 Point0 有效时输出；否则三寄存器保持 0<span class="muted-cell">位置固定 0mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>位置字段不是实际底部高度；实际运动目标来自探底、旧底部或 fallback 当前位置。</td>
+              <td>保持 Point0 位置字段固定 0；如需诊断实际底部高度，另定诊断寄存器，不改变 SI 点阵。</td>
+            </tr>
+            <tr>
+              <td>Point 1</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30024</code>；温度寄存器 <code>30025</code>；密度寄存器 <code>30026</code></span></td>
+              <td>仅 SI profile 完成且 Point1 有效时输出；否则三寄存器保持 0<span class="muted-cell">位置 = 40001；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>Point1 使用绝对位置 40001，不因实际底部高于 40001 而跳过。</td>
+              <td>保持 40001 作为首个可编程测点；现场联调重点核对 30024 是否等于 40001。</td>
+            </tr>
+            <tr>
+              <td>Point 2</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30027</code>；温度寄存器 <code>30028</code>；密度寄存器 <code>30029</code></span></td>
+              <td>仅 SI profile 完成且 Point2 有效时输出；否则三寄存器保持 0<span class="muted-cell">位置 = 40001+40002；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>后续点按 40002 从 40001 绝对位置递增；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 3</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30030</code>；温度寄存器 <code>30031</code>；密度寄存器 <code>30032</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 4</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30033</code>；温度寄存器 <code>30034</code>；密度寄存器 <code>30035</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 5</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30036</code>；温度寄存器 <code>30037</code>；密度寄存器 <code>30038</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 6</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30039</code>；温度寄存器 <code>30040</code>；密度寄存器 <code>30041</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 7</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30042</code>；温度寄存器 <code>30043</code>；密度寄存器 <code>30044</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 8</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30045</code>；温度寄存器 <code>30046</code>；密度寄存器 <code>30047</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 9</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30048</code>；温度寄存器 <code>30049</code>；密度寄存器 <code>30050</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 10</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30051</code>；温度寄存器 <code>30052</code>；密度寄存器 <code>30053</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 11</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30054</code>；温度寄存器 <code>30055</code>；密度寄存器 <code>30056</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 12</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30057</code>；温度寄存器 <code>30058</code>；密度寄存器 <code>30059</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 13</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30060</code>；温度寄存器 <code>30061</code>；密度寄存器 <code>30062</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 14</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30063</code>；温度寄存器 <code>30064</code>；密度寄存器 <code>30065</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 15</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30066</code>；温度寄存器 <code>30067</code>；密度寄存器 <code>30068</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 16</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30069</code>；温度寄存器 <code>30070</code>；密度寄存器 <code>30071</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 17</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30072</code>；温度寄存器 <code>30073</code>；密度寄存器 <code>30074</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 18</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30075</code>；温度寄存器 <code>30076</code>；密度寄存器 <code>30077</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 19</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30078</code>；温度寄存器 <code>30079</code>；密度寄存器 <code>30080</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 20</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30081</code>；温度寄存器 <code>30082</code>；密度寄存器 <code>30083</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 21</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30084</code>；温度寄存器 <code>30085</code>；密度寄存器 <code>30086</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 22</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30087</code>；温度寄存器 <code>30088</code>；密度寄存器 <code>30089</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 23</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30090</code>；温度寄存器 <code>30091</code>；密度寄存器 <code>30092</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 24</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30093</code>；温度寄存器 <code>30094</code>；密度寄存器 <code>30095</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 25</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30096</code>；温度寄存器 <code>30097</code>；密度寄存器 <code>30098</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 26</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30099</code>；温度寄存器 <code>30100</code>；密度寄存器 <code>30101</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 27</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30102</code>；温度寄存器 <code>30103</code>；密度寄存器 <code>30104</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 28</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30105</code>；温度寄存器 <code>30106</code>；密度寄存器 <code>30107</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 29</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30108</code>；温度寄存器 <code>30109</code>；密度寄存器 <code>30110</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 30</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30111</code>；温度寄存器 <code>30112</code>；密度寄存器 <code>30113</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 31</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30114</code>；温度寄存器 <code>30115</code>；密度寄存器 <code>30116</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 32</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30117</code>；温度寄存器 <code>30118</code>；密度寄存器 <code>30119</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 33</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30120</code>；温度寄存器 <code>30121</code>；密度寄存器 <code>30122</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 34</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30123</code>；温度寄存器 <code>30124</code>；密度寄存器 <code>30125</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 35</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30126</code>；温度寄存器 <code>30127</code>；密度寄存器 <code>30128</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 36</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30129</code>；温度寄存器 <code>30130</code>；密度寄存器 <code>30131</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 37</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30132</code>；温度寄存器 <code>30133</code>；密度寄存器 <code>30134</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 38</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30135</code>；温度寄存器 <code>30136</code>；密度寄存器 <code>30137</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 39</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30138</code>；温度寄存器 <code>30139</code>；密度寄存器 <code>30140</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 40</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30141</code>；温度寄存器 <code>30142</code>；密度寄存器 <code>30143</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 41</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30144</code>；温度寄存器 <code>30145</code>；密度寄存器 <code>30146</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 42</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30147</code>；温度寄存器 <code>30148</code>；密度寄存器 <code>30149</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 43</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30150</code>；温度寄存器 <code>30151</code>；密度寄存器 <code>30152</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 44</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30153</code>；温度寄存器 <code>30154</code>；密度寄存器 <code>30155</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 45</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30156</code>；温度寄存器 <code>30157</code>；密度寄存器 <code>30158</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 46</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30159</code>；温度寄存器 <code>30160</code>；密度寄存器 <code>30161</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 47</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30162</code>；温度寄存器 <code>30163</code>；密度寄存器 <code>30164</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 48</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30165</code>；温度寄存器 <code>30166</code>；密度寄存器 <code>30167</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 49</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30168</code>；温度寄存器 <code>30169</code>；密度寄存器 <code>30170</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 50</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30171</code>；温度寄存器 <code>30172</code>；密度寄存器 <code>30173</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 51</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30174</code>；温度寄存器 <code>30175</code>；密度寄存器 <code>30176</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 52</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30177</code>；温度寄存器 <code>30178</code>；密度寄存器 <code>30179</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 53</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30180</code>；温度寄存器 <code>30181</code>；密度寄存器 <code>30182</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 54</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30183</code>；温度寄存器 <code>30184</code>；密度寄存器 <code>30185</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 55</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30186</code>；温度寄存器 <code>30187</code>；密度寄存器 <code>30188</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 56</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30189</code>；温度寄存器 <code>30190</code>；密度寄存器 <code>30191</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 57</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30192</code>；温度寄存器 <code>30193</code>；密度寄存器 <code>30194</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 58</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30195</code>；温度寄存器 <code>30196</code>；密度寄存器 <code>30197</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 59</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30198</code>；温度寄存器 <code>30199</code>；密度寄存器 <code>30200</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 60</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30201</code>；温度寄存器 <code>30202</code>；密度寄存器 <code>30203</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 61</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30204</code>；温度寄存器 <code>30205</code>；密度寄存器 <code>30206</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 62</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30207</code>；温度寄存器 <code>30208</code>；密度寄存器 <code>30209</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 63</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30210</code>；温度寄存器 <code>30211</code>；密度寄存器 <code>30212</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 64</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30213</code>；温度寄存器 <code>30214</code>；密度寄存器 <code>30215</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 65</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30216</code>；温度寄存器 <code>30217</code>；密度寄存器 <code>30218</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 66</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30219</code>；温度寄存器 <code>30220</code>；密度寄存器 <code>30221</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 67</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30222</code>；温度寄存器 <code>30223</code>；密度寄存器 <code>30224</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 68</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30225</code>；温度寄存器 <code>30226</code>；密度寄存器 <code>30227</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 69</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30228</code>；温度寄存器 <code>30229</code>；密度寄存器 <code>30230</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 70</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30231</code>；温度寄存器 <code>30232</code>；密度寄存器 <code>30233</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 71</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30234</code>；温度寄存器 <code>30235</code>；密度寄存器 <code>30236</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 72</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30237</code>；温度寄存器 <code>30238</code>；密度寄存器 <code>30239</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 73</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30240</code>；温度寄存器 <code>30241</code>；密度寄存器 <code>30242</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 74</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30243</code>；温度寄存器 <code>30244</code>；密度寄存器 <code>30245</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 75</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30246</code>；温度寄存器 <code>30247</code>；密度寄存器 <code>30248</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 76</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30249</code>；温度寄存器 <code>30250</code>；密度寄存器 <code>30251</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 77</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30252</code>；温度寄存器 <code>30253</code>；密度寄存器 <code>30254</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 78</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30255</code>；温度寄存器 <code>30256</code>；密度寄存器 <code>30257</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 79</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30258</code>；温度寄存器 <code>30259</code>；密度寄存器 <code>30260</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 80</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30261</code>；温度寄存器 <code>30262</code>；密度寄存器 <code>30263</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 81</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30264</code>；温度寄存器 <code>30265</code>；密度寄存器 <code>30266</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 82</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30267</code>；温度寄存器 <code>30268</code>；密度寄存器 <code>30269</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 83</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30270</code>；温度寄存器 <code>30271</code>；密度寄存器 <code>30272</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 84</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30273</code>；温度寄存器 <code>30274</code>；密度寄存器 <code>30275</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 85</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30276</code>；温度寄存器 <code>30277</code>；密度寄存器 <code>30278</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 86</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30279</code>；温度寄存器 <code>30280</code>；密度寄存器 <code>30281</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 87</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30282</code>；温度寄存器 <code>30283</code>；密度寄存器 <code>30284</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 88</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30285</code>；温度寄存器 <code>30286</code>；密度寄存器 <code>30287</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 89</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30288</code>；温度寄存器 <code>30289</code>；密度寄存器 <code>30290</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 90</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30291</code>；温度寄存器 <code>30292</code>；密度寄存器 <code>30293</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 91</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30294</code>；温度寄存器 <code>30295</code>；密度寄存器 <code>30296</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 92</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30297</code>；温度寄存器 <code>30298</code>；密度寄存器 <code>30299</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 93</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30300</code>；温度寄存器 <code>30301</code>；密度寄存器 <code>30302</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 94</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30303</code>；温度寄存器 <code>30304</code>；密度寄存器 <code>30305</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 95</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30306</code>；温度寄存器 <code>30307</code>；密度寄存器 <code>30308</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 96</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30309</code>；温度寄存器 <code>30310</code>；密度寄存器 <code>30311</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 97</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30312</code>；温度寄存器 <code>30313</code>；密度寄存器 <code>30314</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 98</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30315</code>；温度寄存器 <code>30316</code>；密度寄存器 <code>30317</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 99</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30318</code>；温度寄存器 <code>30319</code>；密度寄存器 <code>30320</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 100</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30321</code>；温度寄存器 <code>30322</code>；密度寄存器 <code>30323</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 101</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30324</code>；温度寄存器 <code>30325</code>；密度寄存器 <code>30326</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 102</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30327</code>；温度寄存器 <code>30328</code>；密度寄存器 <code>30329</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 103</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30330</code>；温度寄存器 <code>30331</code>；密度寄存器 <code>30332</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 104</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30333</code>；温度寄存器 <code>30334</code>；密度寄存器 <code>30335</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 105</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30336</code>；温度寄存器 <code>30337</code>；密度寄存器 <code>30338</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 106</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30339</code>；温度寄存器 <code>30340</code>；密度寄存器 <code>30341</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 107</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30342</code>；温度寄存器 <code>30343</code>；密度寄存器 <code>30344</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 108</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30345</code>；温度寄存器 <code>30346</code>；密度寄存器 <code>30347</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 109</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30348</code>；温度寄存器 <code>30349</code>；密度寄存器 <code>30350</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 110</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30351</code>；温度寄存器 <code>30352</code>；密度寄存器 <code>30353</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 111</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30354</code>；温度寄存器 <code>30355</code>；密度寄存器 <code>30356</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 112</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30357</code>；温度寄存器 <code>30358</code>；密度寄存器 <code>30359</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 113</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30360</code>；温度寄存器 <code>30361</code>；密度寄存器 <code>30362</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 114</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30363</code>；温度寄存器 <code>30364</code>；密度寄存器 <code>30365</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 115</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30366</code>；温度寄存器 <code>30367</code>；密度寄存器 <code>30368</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 116</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30369</code>；温度寄存器 <code>30370</code>；密度寄存器 <code>30371</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 117</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30372</code>；温度寄存器 <code>30373</code>；密度寄存器 <code>30374</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 118</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30375</code>；温度寄存器 <code>30376</code>；密度寄存器 <code>30377</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 119</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30378</code>；温度寄存器 <code>30379</code>；密度寄存器 <code>30380</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 120</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30381</code>；温度寄存器 <code>30382</code>；密度寄存器 <code>30383</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 121</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30384</code>；温度寄存器 <code>30385</code>；密度寄存器 <code>30386</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 122</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30387</code>；温度寄存器 <code>30388</code>；密度寄存器 <code>30389</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 123</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30390</code>；温度寄存器 <code>30391</code>；密度寄存器 <code>30392</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 124</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30393</code>；温度寄存器 <code>30394</code>；密度寄存器 <code>30395</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 125</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30396</code>；温度寄存器 <code>30397</code>；密度寄存器 <code>30398</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 126</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30399</code>；温度寄存器 <code>30400</code>；密度寄存器 <code>30401</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 127</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30402</code>；温度寄存器 <code>30403</code>；密度寄存器 <code>30404</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 128</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30405</code>；温度寄存器 <code>30406</code>；密度寄存器 <code>30407</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 129</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30408</code>；温度寄存器 <code>30409</code>；密度寄存器 <code>30410</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 130</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30411</code>；温度寄存器 <code>30412</code>；密度寄存器 <code>30413</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 131</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30414</code>；温度寄存器 <code>30415</code>；密度寄存器 <code>30416</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 132</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30417</code>；温度寄存器 <code>30418</code>；密度寄存器 <code>30419</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 133</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30420</code>；温度寄存器 <code>30421</code>；密度寄存器 <code>30422</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 134</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30423</code>；温度寄存器 <code>30424</code>；密度寄存器 <code>30425</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 135</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30426</code>；温度寄存器 <code>30427</code>；密度寄存器 <code>30428</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 136</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30429</code>；温度寄存器 <code>30430</code>；密度寄存器 <code>30431</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 137</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30432</code>；温度寄存器 <code>30433</code>；密度寄存器 <code>30434</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 138</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30435</code>；温度寄存器 <code>30436</code>；密度寄存器 <code>30437</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 139</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30438</code>；温度寄存器 <code>30439</code>；密度寄存器 <code>30440</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 140</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30441</code>；温度寄存器 <code>30442</code>；密度寄存器 <code>30443</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 141</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30444</code>；温度寄存器 <code>30445</code>；密度寄存器 <code>30446</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 142</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30447</code>；温度寄存器 <code>30448</code>；密度寄存器 <code>30449</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 143</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30450</code>；温度寄存器 <code>30451</code>；密度寄存器 <code>30452</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 144</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30453</code>；温度寄存器 <code>30454</code>；密度寄存器 <code>30455</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 145</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30456</code>；温度寄存器 <code>30457</code>；密度寄存器 <code>30458</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 146</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30459</code>；温度寄存器 <code>30460</code>；密度寄存器 <code>30461</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 147</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30462</code>；温度寄存器 <code>30463</code>；密度寄存器 <code>30464</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 148</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30465</code>；温度寄存器 <code>30466</code>；密度寄存器 <code>30467</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 149</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30468</code>；温度寄存器 <code>30469</code>；密度寄存器 <code>30470</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 150</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30471</code>；温度寄存器 <code>30472</code>；密度寄存器 <code>30473</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 151</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30474</code>；温度寄存器 <code>30475</code>；密度寄存器 <code>30476</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 152</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30477</code>；温度寄存器 <code>30478</code>；密度寄存器 <code>30479</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 153</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30480</code>；温度寄存器 <code>30481</code>；密度寄存器 <code>30482</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 154</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30483</code>；温度寄存器 <code>30484</code>；密度寄存器 <code>30485</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 155</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30486</code>；温度寄存器 <code>30487</code>；密度寄存器 <code>30488</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 156</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30489</code>；温度寄存器 <code>30490</code>；密度寄存器 <code>30491</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 157</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30492</code>；温度寄存器 <code>30493</code>；密度寄存器 <code>30494</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 158</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30495</code>；温度寄存器 <code>30496</code>；密度寄存器 <code>30497</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 159</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30498</code>；温度寄存器 <code>30499</code>；密度寄存器 <code>30500</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 160</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30501</code>；温度寄存器 <code>30502</code>；密度寄存器 <code>30503</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 161</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30504</code>；温度寄存器 <code>30505</code>；密度寄存器 <code>30506</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 162</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30507</code>；温度寄存器 <code>30508</code>；密度寄存器 <code>30509</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 163</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30510</code>；温度寄存器 <code>30511</code>；密度寄存器 <code>30512</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 164</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30513</code>；温度寄存器 <code>30514</code>；密度寄存器 <code>30515</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 165</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30516</code>；温度寄存器 <code>30517</code>；密度寄存器 <code>30518</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 166</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30519</code>；温度寄存器 <code>30520</code>；密度寄存器 <code>30521</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 167</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30522</code>；温度寄存器 <code>30523</code>；密度寄存器 <code>30524</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 168</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30525</code>；温度寄存器 <code>30526</code>；密度寄存器 <code>30527</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 169</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30528</code>；温度寄存器 <code>30529</code>；密度寄存器 <code>30530</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 170</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30531</code>；温度寄存器 <code>30532</code>；密度寄存器 <code>30533</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 171</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30534</code>；温度寄存器 <code>30535</code>；密度寄存器 <code>30536</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 172</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30537</code>；温度寄存器 <code>30538</code>；密度寄存器 <code>30539</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 173</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30540</code>；温度寄存器 <code>30541</code>；密度寄存器 <code>30542</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 174</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30543</code>；温度寄存器 <code>30544</code>；密度寄存器 <code>30545</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 175</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30546</code>；温度寄存器 <code>30547</code>；密度寄存器 <code>30548</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 176</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30549</code>；温度寄存器 <code>30550</code>；密度寄存器 <code>30551</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 177</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30552</code>；温度寄存器 <code>30553</code>；密度寄存器 <code>30554</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 178</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30555</code>；温度寄存器 <code>30556</code>；密度寄存器 <code>30557</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 179</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30558</code>；温度寄存器 <code>30559</code>；密度寄存器 <code>30560</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 180</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30561</code>；温度寄存器 <code>30562</code>；密度寄存器 <code>30563</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 181</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30564</code>；温度寄存器 <code>30565</code>；密度寄存器 <code>30566</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 182</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30567</code>；温度寄存器 <code>30568</code>；密度寄存器 <code>30569</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 183</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30570</code>；温度寄存器 <code>30571</code>；密度寄存器 <code>30572</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 184</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30573</code>；温度寄存器 <code>30574</code>；密度寄存器 <code>30575</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 185</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30576</code>；温度寄存器 <code>30577</code>；密度寄存器 <code>30578</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 186</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30579</code>；温度寄存器 <code>30580</code>；密度寄存器 <code>30581</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 187</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30582</code>；温度寄存器 <code>30583</code>；密度寄存器 <code>30584</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 188</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30585</code>；温度寄存器 <code>30586</code>；密度寄存器 <code>30587</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 189</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30588</code>；温度寄存器 <code>30589</code>；密度寄存器 <code>30590</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 190</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30591</code>；温度寄存器 <code>30592</code>；密度寄存器 <code>30593</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 191</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30594</code>；温度寄存器 <code>30595</code>；密度寄存器 <code>30596</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 192</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30597</code>；温度寄存器 <code>30598</code>；密度寄存器 <code>30599</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 193</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30600</code>；温度寄存器 <code>30601</code>；密度寄存器 <code>30602</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 194</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30603</code>；温度寄存器 <code>30604</code>；密度寄存器 <code>30605</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 195</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30606</code>；温度寄存器 <code>30607</code>；密度寄存器 <code>30608</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 196</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30609</code>；温度寄存器 <code>30610</code>；密度寄存器 <code>30611</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 197</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30612</code>；温度寄存器 <code>30613</code>；密度寄存器 <code>30614</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 198</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30615</code>；温度寄存器 <code>30616</code>；密度寄存器 <code>30617</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            <tr>
+              <td>Point 199</td>
+              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30618</code>；温度寄存器 <code>30619</code>；密度寄存器 <code>30620</code></span></td>
+              <td>仅 SI profile 完成且 n < 30006 时输出；否则三寄存器保持 0<span class="muted-cell">位置 mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
+              <td>单点映射无额外差异；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
+              <td>保持 200 点 DCS 窗口；如需超过 200 点，另定扩展地址或分页机制。</td>
+            </tr>
+            </tbody>
+          </table>
+        </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="profile">
+        <h2>SI Profile 流程</h2>
+        <p class="lead">
+          当前 SI profile 是独立测量流程，不再映射到普通分布密度测量。关键目标是满足 SI 点阵语义：Point0 在底部采样但对外位置字段固定为 0，后续可编程点从 40001 绝对位置开始按步距采样。
+        </p>
+
+        <div class="flow">
+          <div class="flow-step">
+            <b>触发</b>
+            <p><code>00004</code>、屏幕 SI Profile 或自动调度触发，CPU3 锁存开始时间。</p>
+          </div>
+          <div class="flow-step">
+            <b>探底判断</b>
+            <p>上电首次、无底部参考、频次命中或频次为 1 时执行真实探底。</p>
+          </div>
+          <div class="flow-step">
+            <b>底部选择</b>
+            <p>探底成功用当前底部；失败时有旧底部用旧底部，没有旧底部用当前位置。</p>
+          </div>
+          <div class="flow-step">
+            <b>生成点位</b>
+            <p>Point0 对外位置 = 0；Point1 = first 绝对位置；Point2 = first + increment。</p>
+          </div>
+          <div class="flow-step">
+            <b>逐点采样</b>
+            <p>移动、等待稳定窗口、采样温度密度；遇到空气点停止且不写入。</p>
+          </div>
+        </div>
+
+        <table>
+          <thead>
+            <tr>
+              <th>Profile 细节</th>
+              <th>当前口径</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>是否先找液位</td>
+              <td><strong>不先找液位。</strong>运行到候选点后通过密度和频率判断是否已经到液面以上。</td>
+            </tr>
+            <tr>
+              <td>Point0</td>
+              <td>实际运动/采样目标优先来自本轮探底结果；没有本轮有效底部时按 fallback 逻辑选择。写入 SI 点阵时位置字段固定为 <code>0</code>。</td>
+            </tr>
+            <tr>
+              <td><code>40001</code></td>
+              <td>表示 Point1 的绝对位置，不覆盖 Point0；即使实际底部高于 <code>40001</code>，也不跳过 Point1。</td>
+            </tr>
+            <tr>
+              <td><code>40003</code></td>
+              <td>单位为秒，当前作为停稳后的稳定等待窗口使用。</td>
+            </tr>
+            <tr>
+              <td>停止条件</td>
+              <td>空气点、达到 200 点、达到罐高/上限、命令切换或测量错误。</td>
+            </tr>
+            <tr>
+              <td>完成态</td>
+              <td>至少 Point0 有效才认为本轮成功；成功后锁存 <code>PROFILE_SOURCE_SI</code> 并递增完成计数。</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="requirements">
+        <h2>需求对照</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>需求项</th>
+              <th>当前实现</th>
+              <th>结论</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Profile 单独增加 SI 指令，测量过程完全独立</td>
+              <td>新增 <code>CMD_SI_PROFILE</code>，CPU2 独立流程执行；屏幕和协议入口均调用同一启动函数。</td>
+              <td><span class="status done">满足</span></td>
+            </tr>
+            <tr>
+              <td>探底频次：1 表示每次探底，N 表示每 N 次探底</td>
+              <td>CPU2 保存 <code>si_profile_bottom_detect_interval</code>，上电首次 profile 必探底。</td>
+              <td><span class="status done">满足</span></td>
+            </tr>
+            <tr>
+              <td>不探底时仍运行到底部位置读取 Point0</td>
+              <td>使用已保存底部位置作为底部采样运动目标，逐点执行时会先运行到该位置；写入 SI 点阵时 Point0 位置字段固定为 0。</td>
+              <td><span class="status done">满足</span></td>
+            </tr>
+            <tr>
+              <td>上下液位传感器显示：跟随稳定时上空气下液体，其它均液体</td>
+              <td>CPU3 离散输入合成中已按该语义输出。</td>
+              <td><span class="status done">满足</span></td>
+            </tr>
+            <tr>
+              <td><code>Probe Un-calibrated</code> 一直可信</td>
+              <td><code>10010</code> 固定输出 <code>0</code>。</td>
+              <td><span class="status done">满足</span></td>
+            </tr>
+            <tr>
+              <td><code>Bottom Reference</code> 保持现有逻辑</td>
+              <td><code>10001</code> 仍来自 CPU2 通用底部参考状态，不强制固定覆盖。</td>
+              <td><span class="status done">满足</span></td>
+            </tr>
+            <tr>
+              <td>落地自动 profile 调度</td>
+              <td>CPU3 使用 RTC、<code>40010~40013</code> 计算触发时间；同一分钟去重。</td>
+              <td><span class="status done">满足</span></td>
+            </tr>
+            <tr>
+              <td>兼容所有报警限值设置和状态</td>
+              <td><code>40014~40023</code> 作为 CPU3 SI 参数保存，离散输入报警由 CPU3 合成。</td>
+              <td><span class="status partial">满足第一版</span></td>
+            </tr>
+            <tr>
+              <td>Profile Timestamp 改为测量开始时间</td>
+              <td>CPU3 在收到或触发 profile 并下发 <code>CMD_SI_PROFILE</code> 时锁存。</td>
+              <td><span class="status done">满足确认口径</span></td>
+            </tr>
+            <tr>
+              <td>CPU3 菜单可配置 SI 参数</td>
+              <td>SI Profile、SI 自动、SI 报警已进入屏幕参数体系；探底修正罐高也可在 SI Profile 页看到。</td>
+              <td><span class="status done">满足</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="gaps">
+        <h2>差异与风险</h2>
+        <div class="two-col">
+          <div class="card">
+            <h3><span class="status partial">简化</span> 手动速度档</h3>
+            <p>Up/Down Slow、Medium、Fast 当前没有真实速度差异，统一桥接到强制上行或强制下行。用户已确认不要求三档真实速度，但 PLC 联调文档仍应说明。</p>
+          </div>
+          <div class="card">
+            <h3><span class="status partial">简化</span> 标定线圈</h3>
+            <p>Calibrate 当前保守映射到零点标定，不等同于 SI 原设备完整标定工作流。若 PLC 依赖更细的标定步骤，需要另立需求。</p>
+          </div>
+          <div class="card">
+            <h3><span class="status risk">限制</span> 500 点 Profile</h3>
+            <p>当前按 DCS 地址表输出 200 点。超过 200 点会涉及外部地址扩展、点阵缓存和 PLC 读取方式变更。</p>
+          </div>
+          <div class="card">
+            <h3><span class="status partial">待复核</span> 官方默认值</h3>
+            <p>本地原始资料没有找到 <code>40001~40023</code> 的完整出厂默认值和非法值总表。当前代码使用 CUBE 工程默认和保守范围。</p>
+          </div>
+          <div class="card">
+            <h3><span class="status partial">待复核</span> 报警锁存语义</h3>
+            <p>当前报警状态由 CPU3 即时合成，不是完整 SI 原设备报警锁存、确认、消音模型。若 DCS 对报警保持有严格要求，需要进一步确认。</p>
+          </div>
+        </div>
+
+        <h3>问题优先级排序</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>优先级</th>
+              <th>差异/风险</th>
+              <th>为什么重要</th>
+              <th>当前建议</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><span class="status risk">P0</span></td>
+              <td>Profile 点位解释</td>
+              <td>Point0 位置字段是否固定为 0、<code>40001</code> 是否为 Point1 绝对位置，会直接影响 DCS 对密度剖面的高度解释。</td>
+              <td>按当前实现统一口径：Point0 在底部采样但位置字段固定 0，Point1=40001 绝对位置，空气点不写入。</td>
+            </tr>
+            <tr>
+              <td><span class="status partial">P1</span></td>
+              <td>Cal、Stop、Manual 原设备生命周期未完整复刻</td>
+              <td>PLC 若把这些模式作为自动流程闭环的一部分，简化桥接可能导致状态提示不同。</td>
+              <td>现场先确认 PLC 是否只用 Profile/Auto；如依赖 Cal 生命周期，再新增 CPU2 通用状态。</td>
+            </tr>
+            <tr>
+              <td><span class="status partial">P1</span></td>
+              <td>Reel Alarm、Interlock、Manual 报警屏蔽语义偏简化</td>
+              <td>这些状态通常用于维修提示或安全联锁，泛化映射可能误报警或漏判。</td>
+              <td>当前先保持既有合成；后续按故障分类和维护状态细化。</td>
+            </tr>
+            <tr>
+              <td><span class="status partial">P1</span></td>
+              <td>200 点与 500 点口径</td>
+              <td>DCS 表只覆盖 200 点，但部分资料提到设备内部更多点数，现场可能误以为能直接读取 500 点。</td>
+              <td>当前对外明确最多 200 点；若现场要求更多，另定扩展地址或分页协议。</td>
+            </tr>
+            <tr>
+              <td><span class="status info">P2</span></td>
+              <td>诊断可观测性不足</td>
+              <td>现场定位 CRC 错、站号不匹配、非法地址和非法值时，需要快速判断是 PLC 配置还是设备响应问题。</td>
+              <td>如联调反复出现通信问题，可新增 CPU3 SI 诊断计数和最后异常码页面。</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="compat-plan">
+        <h2>进一步兼容实施方案</h2>
+        <p class="lead">
+          旧版报告提出的分阶段方案仍有参考价值，但当前已有多项能力落地，因此下面按最新实现重新排序。原则是：先保证 PLC 按当前地址表稳定联调，再按现场真实依赖补 SI 原设备语义。
+        </p>
+
+        <div class="two-col">
+          <div class="card">
+            <h3>阶段 0：联调基线和资料确认</h3>
+            <p>确认 PLC 使用官方清单内的 FC01~FC06；确认是否接受 200 点上限、密度 16 位钳位、时间戳为触发下发时间、速度档不区分。</p>
+            <p><strong>下一步：</strong>保持官方地址表和功能码边界；如果现场协议口径变化，先补映射文档再改实现。</p>
+          </div>
+
+          <div class="card">
+            <h3>阶段 1：固定官方功能码边界</h3>
+            <p>保持只支持官方列出的 FC01~FC06。FC15/FC16 等官方未列功能码不作为待兼容目标，只作为 Illegal Function 异常响应验证项。</p>
+            <p><strong>下一步：</strong>保持 FC15/FC16 等官方未列功能码拒绝策略，不列入待兼容目标。</p>
+          </div>
+
+          <div class="card">
+            <h3>阶段 2：细化 SI 状态语义</h3>
+            <p>按现场需要细化 Reel/Drive 故障分类、Interlock、Manual 报警屏蔽、液位保持、Cal 生命周期和 Stop/Abort 语义。</p>
+            <p><strong>下一步：</strong>如果 PLC/HMI 需要更细状态，再补 <code>10004</code>、<code>10009</code> 和 Manual 相关状态源。</p>
+          </div>
+
+          <div class="card">
+            <h3>阶段 3：扩展 Profile 能力</h3>
+            <p>仅在现场明确需要时，设计超过 200 点的扩展读取机制，例如分页寄存器、扩展地址区或专用读取命令；避免破坏现有 DCS 表。</p>
+            <p><strong>下一步：</strong>原 <code>30021~30620</code> 保持 200 点；超过 200 点另定扩展地址或分页机制。</p>
+          </div>
+
+          <div class="card">
+            <h3>阶段 4：诊断和现场可维护性</h3>
+            <p>增加 SI 通信诊断计数：合法帧、CRC 错、地址不匹配、非法功能、非法地址、非法值、最后异常码。</p>
+            <p><strong>下一步：</strong>如现场定位成本高，再增加 SI 通信诊断计数和最后异常码页面。</p>
+          </div>
+
+          <div class="card">
+            <h3>阶段 5：文档和回归闭环</h3>
+            <p>每次改变 SI 可见行为时，同步更新映射表、联调检查表、协议契约脚本和本 HTML；若改变 CPU2/CPU3 共享协议，按版本规则升级协议版本。</p>
+            <p><strong>下一步：</strong>每次改协议外观时，同步源码、映射表、联调检查表和协议脚本。</p>
+          </div>
+        </div>
+
+        <h3>推荐落地顺序</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>顺序</th>
+              <th>改动包</th>
+              <th>涉及方向</th>
+              <th>下一步/处理原则</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>1</td>
+              <td>按当前逐地址表完成 PLC 基线联调</td>
+              <td>文档、联调脚本、现场 PLC 工具</td>
+              <td>保持 FC01~FC06、异常响应、Profile 点阵和报警阈值口径一致。</td>
+            </tr>
+            <tr>
+              <td>2</td>
+              <td>固定非法功能码边界</td>
+              <td>CPU3 SI Modbus 处理层、协议脚本、联调检查表</td>
+              <td>FC15/FC16 等官方未列功能码返回 Illegal Function，不列为待支持项。</td>
+            </tr>
+            <tr>
+              <td>3</td>
+              <td>细化状态语义</td>
+              <td>CPU2 状态源、CPU3 SI 映射</td>
+              <td>Interlock、Reel Alarm、Manual 抑制等状态和 PLC/HMI 口径一致。</td>
+            </tr>
+            <tr>
+              <td>4</td>
+              <td>扩展点数或诊断寄存器</td>
+              <td>扩展协议、文档、PLC 侧约定</td>
+              <td>不破坏现有 DCS 200 点地址表；新增行为有独立版本和联调记录。</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+<section id="evidence">
+        <h2>源码证据</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>文件</th>
+              <th>用途</th>
+              <th>重点证据</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>LTD_DISPLAY_CPU3/Communication/external/si_modbus/si_modbus_slave.c</code></td>
+              <td>SI Modbus RTU 兼容层</td>
+              <td>功能码、地址窗口、线圈写入、保持寄存器写入、离散输入合成、输入寄存器点阵、自动 profile 调度。</td>
+            </tr>
+            <tr>
+              <td><code>LTD_DISPLAY_CPU3/Communication/external/si_modbus/si_modbus_slave.h</code></td>
+              <td>SI 四类区大小和外部入口声明</td>
+              <td><code>SI_COIL_COUNT=16</code>、<code>SI_DISCRETE_INPUT_COUNT=32</code>、<code>SI_HOLDING_REG_COUNT=23</code>、<code>SI_INPUT_REG_COUNT=620</code>。</td>
+            </tr>
+            <tr>
+              <td><code>LTD_MAIN_CPU2/Application/Src/measure_density.c</code></td>
+              <td>CPU2 SI profile 独立测量流程</td>
+              <td>探底频次、底部 fallback、Point0、候选点生成、稳定等待、空气点停止、完成锁存。</td>
+            </tr>
+            <tr>
+              <td><code>LTD_DISPLAY_CPU3/Application/system_param/cpu3_comm_display_params.c</code></td>
+              <td>CPU3 本机参数和串口模板</td>
+              <td><code>COM_PROTO_SI</code> 对应 <code>9600 8O1</code>，SI 自动 profile 和报警参数由 CPU3 保存。</td>
+            </tr>
+            <tr>
+              <td><code>LTD_DISPLAY_CPU3/Application/display/display_tankopera.c</code></td>
+              <td>屏幕菜单和命令入口</td>
+              <td>屏幕 <code>SI Profile</code> 入口调用统一启动函数；探底修正罐高可出现在多个菜单。</td>
+            </tr>
+            <tr>
+              <td><code>docs/01_协议与寄存器/SI协议适配/02_协议映射/SI协议兼容映射表.md</code></td>
+              <td>正式协议映射源</td>
+              <td>本 HTML 的详细地址、缩放、状态位和限制说明均应与该 Markdown 保持一致。</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <p class="footer-note">
+          维护规则：本 HTML 是可视化阅读件；外部协议行为、寄存器语义或状态合成发生变化时，应先更新正式 Markdown 映射表，再同步刷新本文。
+        </p>
+      </section>
+    </main>
+  </div>
+</body>
+</html>

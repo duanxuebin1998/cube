@@ -1,4 +1,4 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8">
@@ -106,7 +106,7 @@ li{margin:4px 0}
 <p class="lead">本文只梳理 SI Profile 分布测量。普通分布测、国标测、每米测、区间测和 Wartsila 分布测仍以 CPU2 密度流程页为准。</p>
 <div class="grid">
 <article class="card"><strong>CPU3 负责</strong><p>外部 COM 协议分发、SI RTU 从站、屏幕菜单触发、地址窗口、功能码、异常响应、保持寄存器快照、CPU3 本机 SI 参数、自动 profile 调度、时间戳、报警合成和对 CPU2 的命令/参数桥接。</p><div><span class="tag cpu3">CPU3</span></div></article>
-<article class="card"><strong>CPU2 负责</strong><p>真实运动、探底、Point0 与后续 profile 候选点生成、逐点按 dwell 稳定采样、运行中判定液面以上点、完成锁存、完成计数、错误码和点阵结果发布。</p><div><span class="tag cpu2">CPU2</span></div></article>
+<article class="card"><strong>CPU2 负责</strong><p>真实运动、探底、底部采样目标与后续 profile 候选点生成、Point0 对外位置字段处理、逐点按 dwell 稳定采样、运行中判定液面以上点、完成锁存、完成计数、错误码和点阵结果发布。</p><div><span class="tag cpu2">CPU2</span></div></article>
 <article class="card"><strong>外部系统看到</strong><p>SI Modbus RTU 地址表：线圈 00001~00016、离散输入 10001~10032、保持寄存器 40001~40023、输入寄存器 30001~30620。</p><div><span class="tag ext">PLC / DCS</span></div></article>
 </div>
 <div class="note warn">
@@ -147,7 +147,7 @@ li{margin:4px 0}
 <div class="step"><b>1. 外部帧进入</b><span>CPU3 外部 COM 端口选择 <code>COM_PROTO_SI</code> 后，端口分发调用 <code>si_modbus_process_for_dispatch()</code>。</span></div>
 <div class="step"><b>2. CPU3 翻译</b><span>地址和 CRC 正确后，CPU3 刷新线圈、保持寄存器、离散输入和输入寄存器快照，再按功能码读写。</span></div>
 <div class="step"><b>3. 触发 profile</b><span><code>00004 Profile</code> 写 ON、CPU3 屏幕选择 <code>SI Profile</code> 或自动调度到点时，CPU3 锁存 profile 开始时间并向 CPU2 写 <code>CMD_SI_PROFILE</code>。</span></div>
-<div class="step"><b>4. CPU2 执行</b><span>CPU2 主循环取走命令，进入 <code>CMD_SiProfile()</code>，读取 CPU2 保存的 SI profile 参数，执行探底、Point0 和后续候选点采样；profile 前不单独执行 <code>SearchOilLevel()</code>。</span></div>
+<div class="step"><b>4. CPU2 执行</b><span>CPU2 主循环取走命令，进入 <code>CMD_SiProfile()</code>，读取 CPU2 保存的 SI profile 参数，执行探底、底部采样和后续候选点采样；profile 前不单独执行 <code>SearchOilLevel()</code>，Point0 对外位置字段固定写 0。</span></div>
 <div class="step"><b>5. 结果回读</b><span>CPU2 把点阵和完成状态写入输入寄存器，CPU3 周期读回后，SI 层再映射为 100xx 和 300xx。</span></div>
 </div>
 </section>
@@ -158,8 +158,8 @@ li{margin:4px 0}
 <table>
 <thead><tr><th>SI 地址</th><th>当前用途</th><th>归属</th><th>落地动作</th></tr></thead>
 <tbody>
-<tr><td><code>40001</code></td><td>Profile First Point，Point0 之后第一个停点，单位 mm</td><td>CPU2 持久化参数</td><td>CPU3 写入时转成 0.1mm，写 <code>HOLDREGISTER_DEVICEPARAM_SI_PROFILE_FIRST_POINT</code></td></tr>
-<tr><td><code>40002</code></td><td>Profile Increment，点间距，单位 mm</td><td>CPU2 持久化参数</td><td>CPU3 写入时转成 0.1mm，写 <code>HOLDREGISTER_DEVICEPARAM_SI_PROFILE_INCREMENT</code></td></tr>
+<tr><td><code>40001</code></td><td>Profile First Point，Point1 绝对位置，单位 mm</td><td>CPU2 持久化参数</td><td>CPU3 写入时转成 0.1mm，写 <code>HOLDREGISTER_DEVICEPARAM_SI_PROFILE_FIRST_POINT</code></td></tr>
+<tr><td><code>40002</code></td><td>Profile Increment，从 40001 开始逐点递增的点间距，单位 mm</td><td>CPU2 持久化参数</td><td>CPU3 写入时转成 0.1mm，写 <code>HOLDREGISTER_DEVICEPARAM_SI_PROFILE_INCREMENT</code></td></tr>
 <tr><td><code>40003</code></td><td>Profile Dwell Time，每点停留秒数</td><td>CPU2 持久化参数</td><td>CPU3 直接写 <code>HOLDREGISTER_DEVICEPARAM_SI_PROFILE_DWELL_TIME</code></td></tr>
 <tr><td>内部菜单参数</td><td>探底频次，1 表示每次 profile 前探底，N 按进入 CPU2 SI profile 入口的触发次数计数</td><td>CPU2 持久化参数</td><td>CPU3 菜单或内部同步写 <code>si_profile_bottom_detect_interval</code></td></tr>
 <tr><td><code>40010~40013</code></td><td>自动 profile 周期、使能、小时、分钟</td><td>CPU3 本机参数</td><td>写入 <code>g_cpu3_comm_display_params</code> 并保存到 CPU3 FRAM</td></tr>
@@ -243,7 +243,7 @@ li{margin:4px 0}
 
 <section id="cpu2-exec">
 <h2>5. CPU2 独立 profile 执行流程</h2>
-<p class="lead">CPU2 的 SI profile 不再复用普通分布测量参数，也不走 Wartsila 测后探底流程。它读取独立 SI 参数，先确定底部基准，再按底部、首点、步距和罐高生成候选点；不预先找液位，逐点采样时遇到液面以上点即停止且不写入该点。</p>
+<p class="lead">CPU2 的 SI profile 不再复用普通分布测量参数，也不走 Wartsila 测后探底流程。它读取独立 SI 参数，先确定底部采样运动目标，再按底部点、绝对首点、步距和罐高生成候选点；不预先找液位，逐点采样时遇到液面以上点即停止且不写入该点。对外点阵中 Point0 的位置字段固定写 0，Point1 的位置字段固定等于 40001。</p>
 <div class="flow-wrap">
 <svg class="flow-svg" viewBox="0 0 1120 1260" role="img" aria-label="CPU2 SI profile 执行流程">
 <defs><marker id="arrow3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10z" fill="#61758e"/></marker><marker id="arrow3r" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10z" fill="#b84a55"/></marker></defs>
@@ -255,7 +255,7 @@ li{margin:4px 0}
 <rect class="node cpu2" x="110" y="765" width="300" height="88" rx="8"/><text class="nt" x="260" y="795"><tspan x="260">执行 SearchBottom()</tspan><tspan class="ns" x="260" dy="22">成功则刷新旧底部位置</tspan><tspan class="ns" x="260" dy="18">并置 bottom_reference_valid</tspan></text>
 <rect class="node state" x="710" y="765" width="300" height="88" rx="8"/><text class="nt" x="860" y="795"><tspan x="860">跳过探底</tspan><tspan class="ns" x="860" dy="22">使用上次有效底部位置</tspan><tspan class="ns" x="860" dy="18">无旧底时前置判断会要求探底</tspan></text>
 <rect class="node cpu2" x="390" y="915" width="340" height="76" rx="8"/><text class="nt" x="560" y="945"><tspan x="560">生成候选点阵</tspan><tspan class="ns" x="560" dy="22">不调用 SearchOilLevel()</tspan></text>
-<rect class="node cpu2" x="390" y="1040" width="340" height="92" rx="8"/><text class="nt" x="560" y="1070"><tspan x="560">逐点判断液面以上</tspan><tspan class="ns" x="560" dy="22">Point0 = bottom</tspan><tspan class="ns" x="560" dy="18">空气/无效密度点不写入</tspan></text>
+<rect class="node cpu2" x="390" y="1040" width="340" height="92" rx="8"/><text class="nt" x="560" y="1070"><tspan x="560">逐点判断液面以上</tspan><tspan class="ns" x="560" dy="22">Point0 output = 0</tspan><tspan class="ns" x="560" dy="18">空气/无效密度点不写入</tspan></text>
 <rect class="node cpu2" x="390" y="1180" width="340" height="76" rx="8"/><text class="nt" x="560" y="1210"><tspan x="560">逐点执行</tspan><tspan class="ns" x="560" dy="22">移动、悬停、稳定采样、累加平均</tspan></text>
 <rect class="node error" x="790" y="1040" width="260" height="92" rx="8"/><text class="nt" x="920" y="1073"><tspan x="920">失败出口</tspan><tspan class="ns" x="920" dy="22">profile_blocked_by_process=1</tspan><tspan class="ns" x="920" dy="18">SET_ERROR(ret)</tspan></text>
 <path class="edge" d="M560 121 L560 170" marker-end="url(#arrow3)"/>
@@ -289,14 +289,15 @@ li{margin:4px 0}
 <tr><td>触发次数达到 interval</td><td>本轮探底</td><td>本次触发计为新一轮第 1 次；探底成功只刷新底部位置，不再清零计数。</td></tr>
 <tr><td>本轮不探底</td><td>使用旧底部位置</td><td>进入 CPU2 SI profile 入口后触发次数加 1，不等待 profile 成功完成。</td></tr>
 <tr><td>探底失败但有旧底部</td><td>沿用旧底部继续本轮 profile</td><td>不刷新底部参考。</td></tr>
-<tr><td>探底失败且无旧底部</td><td>使用当前位置继续，并把当前位置作为 Point0</td><td>不刷新底部参考，不清首次状态。</td></tr>
+<tr><td>探底失败且无旧底部</td><td>使用当前位置作为底部采样运动目标继续；对外 Point0 位置字段仍写 0</td><td>不刷新底部参考，不清首次状态。</td></tr>
 </tbody>
 </table>
 <h3>5.3 点位生成规则</h3>
 <ol>
 <li>先把底部位置负值压到 0；如果罐高无效，则按 <code>MAX_MEASUREMENT_POINTS * increment</code> 做运行期兜底上限。</li>
-<li>第 0 点固定为底部点，也就是 <code>points01[0] = bottom</code>。</li>
-<li>后续第 1 点从 <code>bottom + first_point</code> 开始，之后每点增加 <code>increment</code>。</li>
+<li>第 0 个运动/采样目标为底部位置，也就是 <code>points01[0] = bottom</code>；写入 SI 点阵时 Point0 的位置字段固定为 <code>0</code>。</li>
+<li>后续可编程点从 <code>first_point</code> 绝对位置开始，之后每点增加 <code>increment</code>；Point1 对外位置等于 <code>40001</code>，Point2 等于 <code>40001 + 40002</code>，PointN 等于 <code>40001 + (N-1) * 40002</code>。</li>
+<li>候选点生成不因实际底部位置高于 <code>first_point</code> 而跳过首点；如果 <code>40001=500mm</code>，第一个可编程测点仍按 500mm 运行和输出。</li>
 <li>候选点生成时只按罐高和 200 点上限停止，不依赖预先测得的液位。</li>
 <li>逐点采样时如果当前候选点被判定为液面以上点，则停止本轮 profile，且不把该点写入有效点阵。</li>
 <li>这套点位不使用普通分布测的 <code>spreadTopLimit</code>、<code>spreadMeasurementDistance</code>、<code>spreadMeasurementCount</code>。</li>
@@ -384,7 +385,7 @@ li{margin:4px 0}
 <tr><td>profile 成功</td><td>写点阵，置 <code>profile_complete_latched=1</code>，<code>counter+1</code>，状态 <code>STATE_SPREADPOINTOVER</code></td><td><code>10005=1</code>，<code>30006</code> 有点数，<code>30021~</code> 输出点阵。</td></tr>
 <tr><td>命令切换打断</td><td>直接返回，不 <code>SET_ERROR</code>，不锁存完成</td><td>外部读到的点阵仍取决于上一轮完成锁存；本轮没有新的完成计数。</td></tr>
 <tr><td>探底失败但有旧底</td><td>沿用旧底继续 profile，不刷新底部参考</td><td>如后续测量成功，仍可完成 profile；<code>10001</code> 不因本次失败刷新。</td></tr>
-<tr><td>探底失败且无旧底</td><td>使用当前位置作为 Point0 继续，不刷新底部参考，不清首次状态</td><td>如后续测量成功，点阵可输出，但 Bottom Reference 仍可能为 0。</td></tr>
+<tr><td>探底失败且无旧底</td><td>使用当前位置作为底部采样运动目标继续；对外 Point0 位置字段仍写 0，不刷新底部参考，不清首次状态</td><td>如后续测量成功，点阵可输出，但 Bottom Reference 仍可能为 0。</td></tr>
 <tr><td>点位/移动/读数失败</td><td><code>profile_blocked_by_process=1</code>，<code>SET_ERROR(ret)</code></td><td><code>10004 Interlock</code> 可置位，<code>10005 Profile Complete</code> 不因本轮置位。</td></tr>
 </tbody>
 </table>
@@ -417,7 +418,7 @@ li{margin:4px 0}
 <article class="source-card"><h4>CPU2 主循环命令执行</h4><p><code>LTD_MAIN_CPU2/Application/Src/app_main.c:197</code></p><p>取走 <code>g_deviceParams.command</code> 后调用 <code>ProcessMeasureCmd()</code>。</p></article>
 <article class="source-card"><h4>CPU2 命令分发</h4><p><code>LTD_MAIN_CPU2/Application/Src/measure.c:172</code></p><p><code>CMD_SI_PROFILE</code> 分发到 <code>CMD_SiProfile()</code>。</p></article>
 <article class="source-card"><h4>CPU2 SI profile 执行</h4><p><code>LTD_MAIN_CPU2/Application/Src/measure_density.c:1266</code></p><p>读取 SI profile 参数、探底、生成候选点、逐点测量并判定液面以上点、发布完成态。</p></article>
-<article class="source-card"><h4>CPU2 点位生成</h4><p><code>LTD_MAIN_CPU2/Application/Src/measure_density.c:900</code></p><p>Point0 固定为底部，后续候选点按 first 和 increment 上行到罐高或 200 点上限。</p></article>
+<article class="source-card"><h4>CPU2 点位生成</h4><p><code>LTD_MAIN_CPU2/Application/Src/measure_density.c:900</code></p><p>第 0 个运动目标为底部，Point0 对外位置字段固定 0；后续候选点按绝对 first 和 increment 上行到罐高或 200 点上限，首点不因实际底部更高而被跳过。</p></article>
 <article class="source-card"><h4>CPU2 结果发布</h4><p><code>LTD_MAIN_CPU2/Services/Modbus/dataanalysis_modbus.c:554</code></p><p>写 SI 辅助状态、分布平均值、点数和 200 点点阵到输入寄存器。</p></article>
 <article class="source-card"><h4>CPU3 结果读回</h4><p><code>LTD_DISPLAY_CPU3/Communication/internal/main_board_modbus/dataanalysis_modbus.c:551</code></p><p>CPU3 从 CPU2 输入寄存器恢复 SI 状态、完成锁存、完成计数和点阵。</p></article>
 <article class="source-card"><h4>协议映射说明</h4><p><code>docs/01_协议与寄存器/SI协议适配/02_协议映射/SI协议兼容映射表.md</code></p><p>维护 SI协议地址表、缩放、无效值和当前实现口径。</p></article>

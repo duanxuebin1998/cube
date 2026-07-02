@@ -1,4 +1,4 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="zh-CN">
 <head>
   <meta charset="utf-8">
@@ -343,12 +343,13 @@
         <div class="step"><b>1. 触发</b>CPU3 收到 SI <code>00004 Profile</code>、屏幕 SI profile 或自动调度触发，锁存开始时间。</div>
         <div class="step"><b>2. 启动</b>CPU3 下发 <code>CMD_SI_PROFILE</code>，不携带 profile 参数上下文。</div>
         <div class="step"><b>3. 参数</b>CPU2 读取本机 SI profile 参数，并按进入 SI profile 入口的触发次数判断探底频次。</div>
-        <div class="step"><b>4. Point0</b>运行到底部位置采集 Point0；无旧底部且探底失败时使用当前位置，但不刷新底部参考。</div>
-        <div class="step"><b>5. 点阵</b>按 first point、increment、dwell time 生成候选点并逐点采样，最多 200 点；到点判定为液面以上时停止且不写入该点。</div>
+        <div class="step"><b>4. Point0</b>运行到底部位置采集 Point0；无旧底部且探底失败时使用当前位置，但不刷新底部参考；对外位置字段固定为 0。</div>
+        <div class="step"><b>5. 点阵</b>按 Point1=first point 绝对位置、increment、dwell time 生成候选点并逐点采样，最多 200 点；到点判定为液面以上时停止且不写入该点。</div>
       </div>
       <ol>
         <li>探底频次默认 <code>1</code>；<code>1</code> 表示每次 profile 前探底，更大值表示每 N 次触发探底一次；计数按进入 CPU2 SI profile 入口推进，不按成功完成次数推进。</li>
-        <li>不探底时也必须运行到上次探底保存的底部位置读取 Point0。</li>
+        <li>不探底时也必须运行到上次探底保存的底部位置读取 Point0；Point0 对外位置字段仍固定为 <code>0</code>。</li>
+        <li><code>40001</code> 是 Point1 的绝对位置，<code>40002</code> 从该绝对位置开始递增；即使实际底部高于 <code>40001</code>，也不跳过 Point1。</li>
         <li>停止条件包括当前候选点被判定为液面以上、达到上限位置或达到 200 点上限；液面以上点不写入有效点阵。</li>
         <li>profile 完成后保持完成态，不自动回液位跟随。</li>
       </ol>
@@ -363,8 +364,8 @@
           <th>名称</th>
           <th>改动方案</th>
         </tr>
-        <tr><td><code>40001</code></td><td>Profile First Point</td><td>桥接 CPU2 profile 执行参数，表示 Point0 后首个停点。</td></tr>
-        <tr><td><code>40002</code></td><td>Profile Increment</td><td>桥接 CPU2 profile 执行参数，从底部向上递增。</td></tr>
+        <tr><td><code>40001</code></td><td>Profile First Point</td><td>桥接 CPU2 profile 执行参数，表示 Point1 绝对位置；Point0 位置字段固定为 0。</td></tr>
+        <tr><td><code>40002</code></td><td>Profile Increment</td><td>桥接 CPU2 profile 执行参数，从 40001 绝对位置开始逐点递增。</td></tr>
         <tr><td><code>40003</code></td><td>Profile Dwell Time</td><td>桥接 CPU2 profile 执行参数，表示停稳后的等待时间。</td></tr>
         <tr><td><code>40010</code></td><td>Automatic Profile Interval</td><td>独立参数，禁止写入 0；关闭自动 profile 使用 <code>40011=0</code>。</td></tr>
         <tr><td><code>40011~40013</code></td><td>自动 profile 使能和起始时间</td><td>CPU3 RTC 调度使用，可跨天。</td></tr>
@@ -500,8 +501,8 @@
         <tr><td>写入 <code>40001~40003</code></td><td>可回读，CPU2 参数镜像一致，不改变普通分布测量参数。</td></tr>
         <tr><td>写入 <code>40010=0</code></td><td>返回非法数据值；关闭自动 profile 使用 <code>40011=0</code>。</td></tr>
         <tr><td>自动 profile 到点且正在其它测量</td><td>直接覆盖当前命令并执行 SI profile。</td></tr>
-        <tr><td>上电后首次 profile</td><td>必须探底并采集 Point0。</td></tr>
-        <tr><td>探底失败且无旧底部位置</td><td>使用当前位置采集 Point0，不刷新底部参考、不标记底部可信、不清首次探底状态。</td></tr>
+        <tr><td>上电后首次 profile</td><td>必须探底并采集 Point0，且 Point0 对外位置字段为 0。</td></tr>
+        <tr><td>探底失败且无旧底部位置</td><td>使用当前位置作为底部采样目标，Point0 对外位置字段仍为 0，不刷新底部参考、不标记底部可信、不清首次探底状态。</td></tr>
         <tr><td>液面停止条件</td><td>profile 前不单独找液位；候选点到点采样判定为液面以上时停止，不输出该液面以上 profile 点。</td></tr>
         <tr><td>Profile 完成</td><td>保持完成态，<code>10005</code> 和点阵有效。</td></tr>
         <tr><td>读取 <code>30007~30010</code></td><td>返回 profile 开始时间，而非完成时间。</td></tr>

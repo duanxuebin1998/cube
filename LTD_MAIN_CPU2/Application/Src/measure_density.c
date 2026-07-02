@@ -935,7 +935,7 @@ static uint32_t SiProfile_BuildPoints(int32_t bottom_position_01mm,
     }
 
     points01[n++] = (int32_t)bottom;
-    target = bottom + (int64_t)first_point_01mm;
+    target = (int64_t)first_point_01mm;
 
     while ((n < MAX_MEASUREMENT_POINTS) && (target <= tank_height)) {
         points01[n] = (int32_t)target;
@@ -945,6 +945,15 @@ static uint32_t SiProfile_BuildPoints(int32_t bottom_position_01mm,
 
     *point_count = n;
     return (n > 0U) ? NO_ERROR : MEASUREMENT_DENSITY_NO_VALID_POINT;
+}
+
+static uint32_t SiProfile_ReportPosition01mm(uint32_t point_index, int32_t movement_position_01mm)
+{
+    if (point_index == 0U) {
+        return 0U;
+    }
+
+    return Density_ValueToU01mmClamped(movement_position_01mm, "SI Profile position");
 }
 
 typedef struct {
@@ -1094,6 +1103,16 @@ static uint32_t SiProfile_ReadPointAndClassify(SiProfilePointSample *sample,
             return ret;
         }
 
+        if (SiProfile_IsAirPoint(cur_density, cur_freq, &air_reason) != 0U) {
+            SiProfile_FillPointSample(sample,
+                                          cur_freq,
+                                          cur_density,
+                                          cur_temp,
+                                          1U,
+                                          air_reason);
+            return NO_ERROR;
+        }
+
         if (cur_freq <= 0.0f) {
             current_frequency_invalid = 1U;
             first_sample = 1U;
@@ -1105,16 +1124,6 @@ static uint32_t SiProfile_ReadPointAndClassify(SiProfilePointSample *sample,
         }
         has_valid_frequency = 1U;
         current_frequency_invalid = 0U;
-
-        if (SiProfile_IsAirPoint(cur_density, cur_freq, &air_reason) != 0U) {
-            SiProfile_FillPointSample(sample,
-                                          cur_freq,
-                                          cur_density,
-                                          cur_temp,
-                                          1U,
-                                          air_reason);
-            return NO_ERROR;
-        }
 
         last_liquid_freq = cur_freq;
         last_liquid_density = cur_density;
@@ -1188,6 +1197,7 @@ static uint32_t SiProfile_RunPoints01mmWithDwell(const int32_t *p01,
         float pos_mm = (float)p01[i] / 10.0f;
         uint32_t ret;
         SiProfilePointSample sample;
+        uint32_t report_position_01mm;
 
         printf("SI Profile 移动到候选点%lu 位置 %.1f mm\r\n",
                (unsigned long)i,
@@ -1221,7 +1231,10 @@ static uint32_t SiProfile_RunPoints01mmWithDwell(const int32_t *p01,
             break;
         }
 
+        report_position_01mm = SiProfile_ReportPosition01mm(i, p01[i]);
+        sample.measurement.temperature_position = report_position_01mm;
         dist->single_density_data[valid] = sample.measurement;
+        dist->single_density_data[valid].temperature_position = report_position_01mm;
         sum_temp_raw += sample.measurement.temperature;
         sum_dens_raw += sample.measurement.density;
         last_valid_position_01mm = sample.measurement.temperature_position;

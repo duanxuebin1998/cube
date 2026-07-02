@@ -3341,11 +3341,19 @@ static bool state_allows_param_write(DeviceState state)
 static void parawritecheck(void)
 {
 	int index;
+	bool allow_write = false;
 
 	index = getHoldValueNum(now_Opera_Num);
-	if (index != -1
-		&& param_meta[index].authority_write
-		&& state_allows_param_write(g_measurement.device_status.device_state)) {
+	if (index != -1 && param_meta[index].authority_write) {
+		/* CPU3 本机参数只写本地 FRAM，不受 CPU2 测量状态限制。 */
+		if (Cpu3Local_IsParam((OperatingNumber)now_Opera_Num)) {
+			allow_write = true;
+		} else {
+			allow_write = state_allows_param_write(g_measurement.device_status.device_state);
+		}
+	}
+
+	if (allow_write) {
 
 		if (now_Opera_Num == COM_NUM_DEVICEPARAM_TAPE_THICKNESS_MM) {
 			tape_thickness_select();
@@ -3919,6 +3927,7 @@ uint8_t *(*dtm_disarr(int *pindex, int *plen))[2]
 	case COM_NUM_DEVICEPARAM_ERROR_STOP_MEASUREMENT:
 	case COM_NUM_DEVICEPARAM_REFRESH_TANKHEIGHT_FLAG:
 	case COM_NUM_DEVICEPARAM_BOTTOM_ENCODER_CORRECTION_ENABLE:
+	case COM_NUM_CPU3_SI_AUTO_PROFILE_ENABLE:
 	case COM_NUM_SCREEN_OFF: {
 		index = param_meta[index].val;
 		len = (int)(sizeof(arr_IF) / sizeof(arr_IF[0]));
@@ -5015,6 +5024,26 @@ static MenuGroup ParamGroupOf(int operaNum)
     }
 }
 
+/*
+ * 函数用途：判断参数是否应显示在指定菜单分组。
+ * 调用场景：自动构造参数菜单时使用；允许少数跨业务参数在多个入口出现。
+ * 关键约束：只影响屏幕菜单入口，不复制参数元数据，也不改变寄存器和写回路径。
+ */
+static bool ParamVisibleInGroup(int operaNum, MenuGroup grp)
+{
+    if (ParamGroupOf(operaNum) == grp) {
+        return true;
+    }
+
+    if (operaNum == COM_NUM_DEVICEPARAM_BOTTOM_ENCODER_CORRECTION_TANK_HEIGHT) {
+        return (grp == MENU_GRP_BOTTOM_TANKH) ||
+               (grp == MENU_GRP_WARTSILA) ||
+               (grp == MENU_GRP_SI_PROFILE);
+    }
+
+    return false;
+}
+
 /* -------------------- 自动生成菜单列表 -------------------- */
 #define AUTO_MENU_MAX_ITEMS  90
 
@@ -5034,7 +5063,7 @@ static void menu_build_by_group(MenuGroup grp, int key_index, void (*backFunc)(v
         const struct ParameterMetadata *m = &param_meta[i];
 
         /* 分组过滤 */
-        if (ParamGroupOf(m->operanum) != grp) continue;
+        if (!ParamVisibleInGroup(m->operanum, grp)) continue;
 
         /* 不展示“设备指令寄存器” */
         if (m->operanum == COM_NUM_DEVICEPARAM_COMMAND) continue;

@@ -917,7 +917,7 @@ uint32_t MotorCtrl_GetDisplayState(void)
  */
 uint32_t MotorCtrl_MoveBlockingNoDetect(float mm, int dir, uint32_t speed_x100)
 {
-    return MotorMotion_MoveBlockingNoDetectInternal(mm, dir, speed_x100, false, true);
+    return MotorMotion_MoveBlockingNoDetectInternal(mm, dir, speed_x100, false, false);
 }
 
 uint32_t MotorCtrl_MoveBlockingNoDetectQuiet(float mm, int dir, uint32_t speed_x100)

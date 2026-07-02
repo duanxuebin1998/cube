@@ -58,6 +58,7 @@ CPU2 参数加载会校验 FRAM 中的 `magic`、`struct_size`、`param_version`
 | V1.20.0.0 | 3 | 存储版本不变；协议版本升至 13，内部密度 raw 升级到 `kg/m3 x100`，旧协议 FRAM 密度参数按运行期迁移，旧 FRAM 参数通常保留 |
 | V1.20.1.0 | 3 | 存储版本不变；参数打印、Modbus 写参差异、分布密度悬停单位和初始化日志整理，旧 FRAM 参数通常保留 |
 | V1.21.0.0 | 3 | 存储版本不变；协议版本升至 14，原 `reserved30~reserved33` 复用为 SI profile 首点、步距、停留和探底频次参数，旧 FRAM 参数通常保留并在协议迁移或运行期归一化补默认值 |
+| V1.21.1.0 | 3 | 存储版本不变；修复 SI Profile 点位输出、空气点判定和无检测运行通信策略，旧 FRAM 参数通常保留 |
 
 历史说明：建立 CPU2 程序版本号前，2025-12-16 引入当前参数元信息时使用 `DEVICE_PARAM_VERSION=1`；2026-03-05 系统参数增加时提升到 `DEVICE_PARAM_VERSION=2`，从版本 1 升级到版本 2 会因旧参数版本不匹配恢复出厂参数。
 
@@ -1914,3 +1915,40 @@ CPU2 参数加载会校验 FRAM 中的 `magic`、`struct_size`、`param_version`
 - 未做真实 SI PLC 或科学仪器主机联调；需要现场覆盖 `00004 Profile`、屏幕 SI Profile、自动 profile、报警限值和负温度限值。
 - 需要现场验证探底失败、无旧底部位置、旧底部位置回退、液面以上点停止和命令切换打断的完整测量过程。
 - SI 输入寄存器仍按 DCS 表输出 200 个 profile 点；超过 200 点需要另行设计扩展地址或分页机制。
+
+## 2026-07-02 - 修复 SI Profile 点位和无检测运行通信（CPU2 V1.21.1.0 / CPU3 V1.19.1.0）
+
+版本：
+- CPU2: V1.21.0.0 -> V1.21.1.0。
+- CPU3: V1.19.0.0 -> V1.19.1.0。
+
+协议版本/兼容性：
+- `DEVICE_PROTOCOL_VERSION` 保持 14，不新增共享命令、共享寄存器、输入寄存器长度或跨 CPU 状态字段。
+- CPU2 `DEVICE_PARAM_VERSION` 保持 3，`DeviceParameters` 结构大小和 FRAM 参数校验规则不变，不会因本次升级触发恢复出厂参数。
+- CPU3 本机参数存储版本保持 `0x0006`，不改变本机 FRAM 布局。
+- 仍要求 CPU2/CPU3 同为协议版本 14 才能正确使用独立 SI Profile 命令、参数和输入寄存器点阵。
+
+本次修改：
+- CPU2 SI Profile 首点按 `40001` 配置的绝对位置执行，不再叠加罐底位置。
+- CPU2 SI Profile 点 0 上报位置固定为 0，后续点上报实际绝对运动位置，并同步到存储结果中的温度位置字段。
+- CPU2 SI Profile 到点后先按低密度频率判定空气点，再等待无效频率，避免空气点因零频或无效频率等待被误判为失败。
+- CPU2 普通无检测阻塞运动不再启用带密度传感器通信的运行日志；只有强制调试无检测运行继续启用该通信路径。串口测试命令 `B/BE` 的 `S`/`,1` 单独控制路径保持独立。
+- CPU3 本机参数写入绕过 CPU2 测量状态限制，CPU2 状态禁止普通参数写入时仍允许保存 CPU3 本机参数。
+- CPU3 将 SI 自动 Profile 使能显示为布尔选项，并在探底、Wärtsilä 和 SI Profile 相关菜单中显示探底修正罐高参数。
+- 同步 SI 协议契约检查脚本、SI 官方资料中文整理、故障码统一表、LNG 菜单文档和相关 README/索引。
+
+验证：
+- `git diff --cached --check`
+- `py tools\check_si_protocol_contract.py`
+- `py tools\check_version_bumped.py`
+- `py tools\check_docs_structure.py`
+- `py tools\check_markdown_links.py docs\01_协议与寄存器\SI协议适配`
+- `py tools\check_cpu3_menu_name_width.py`
+- `py LTD_DISPLAY_CPU3\font_check.py`
+- `cmake --build build\LTD_MAIN_CPU2`
+- `cmake --build build\LTD_DISPLAY_CPU3`
+
+未验证风险：
+- 未做真实 SI PLC 或科学仪器主机联调；需要现场覆盖 `00004 Profile`、屏幕 SI Profile、自动 Profile、点 0 输出、绝对位置输出和空气点停止。
+- 未做真实密度传感器运行抓包；需要现场确认普通无检测运行不再产生密度通信，强制调试无检测和串口测试命令仍按预期通信。
+- 未做 CPU3 实机 FRAM 保存和 OLED 菜单逐项验证；需要现场确认 CPU2 忙态下 CPU3 本机参数可保存，新增菜单项显示不截断。

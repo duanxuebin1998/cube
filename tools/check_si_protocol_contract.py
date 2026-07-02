@@ -342,8 +342,65 @@ def check_si_profile_contract() -> None:
         raise AssertionError(f"{CPU2_DENSITY}: SI profile must not pre-run SearchOilLevel before profile")
     reject_re(cpu2_density, r"SiProfile_BuildPoints\s*\([^)]*oil_level_01mm", "SI point generation clipped by pre-found oil level", CPU2_DENSITY)
     reject_re(cpu2_density, r"target\s*<=\s*oil_level", "SI point generation depends on pre-found oil level", CPU2_DENSITY)
+    build_points_match = re.search(
+        r"static\s+uint32_t\s+SiProfile_BuildPoints\s*\([^)]*\)\s*\{(?P<body>.*?)\n\}",
+        cpu2_density,
+        re.S,
+    )
+    if build_points_match is None:
+        raise AssertionError(f"{CPU2_DENSITY}: missing SiProfile_BuildPoints body")
+    build_points_body = build_points_match.group("body")
+    if re.search(r"target\s*=\s*bottom\s*\+\s*\(int64_t\)\s*first_point_01mm\s*;", build_points_body):
+        raise AssertionError(
+            f"{CPU2_DENSITY}: SI 40001 Profile First Point must be absolute, not bottom-relative"
+        )
+    require_re(
+        build_points_body,
+        r"target\s*=\s*\(int64_t\)\s*first_point_01mm\s*;",
+        "SI 40001 Profile First Point is used as an absolute point",
+        CPU2_DENSITY,
+    )
+    reject_re(
+        build_points_body,
+        r"while\s*\(\s*target\s*<=\s*bottom\s*\)",
+        "SI configured first point skipped by real bottom position",
+        CPU2_DENSITY,
+    )
     require_re(cpu2_density, r"SiProfile_RunPoints01mmWithDwell\s*\(", "SI runtime point runner", CPU2_DENSITY)
+    require_re(cpu2_density, r"SiProfile_ReportPosition01mm\s*\(", "SI output position coordinate mapping", CPU2_DENSITY)
+    require_re(
+        cpu2_density,
+        r"if\s*\(\s*point_index\s*==\s*0U\s*\)\s*\{[\s\S]{0,80}return\s+0U\s*;",
+        "SI Point0 reported position is fixed to zero",
+        CPU2_DENSITY,
+    )
+    require_re(
+        cpu2_density,
+        r"return\s+Density_ValueToU01mmClamped\s*\(\s*movement_position_01mm\s*,\s*\"SI Profile position\"\s*\)\s*;",
+        "SI nonzero points report movement position",
+        CPU2_DENSITY,
+    )
+    require_re(
+        cpu2_density,
+        r"single_density_data\[valid\]\.temperature_position\s*=\s*report_position_01mm\s*;",
+        "SI profile output point position uses reported coordinate",
+        CPU2_DENSITY,
+    )
     require_re(cpu2_density, r"SiProfile_ReadPointAndClassify\s*\(", "SI runtime above-liquid detection", CPU2_DENSITY)
+    si_read_match = re.search(
+        r"static\s+uint32_t\s+SiProfile_ReadPointAndClassify\s*\([^)]*\)\s*\{(?P<body>.*?)\n\}",
+        cpu2_density,
+        re.S,
+    )
+    if si_read_match is None:
+        raise AssertionError(f"{CPU2_DENSITY}: missing SiProfile_ReadPointAndClassify body")
+    si_read_body = si_read_match.group("body")
+    air_index = si_read_body.find("SiProfile_IsAirPoint(cur_density, cur_freq, &air_reason)")
+    invalid_freq_index = si_read_body.find("if (cur_freq <= 0.0f)")
+    if (air_index < 0) or (invalid_freq_index < 0) or (air_index > invalid_freq_index):
+        raise AssertionError(
+            f"{CPU2_DENSITY}: SI profile must classify density-low air before waiting on invalid frequency"
+        )
     require_re(cpu2_density, r"SiProfile_AdvanceBottomDetectTriggerCount\s*\(", "SI bottom-detect interval counts accepted profile triggers", CPU2_DENSITY)
     require_re(
         cpu2_density,

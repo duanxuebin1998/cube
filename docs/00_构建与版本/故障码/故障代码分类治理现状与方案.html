@@ -115,12 +115,12 @@ footer{color:#617287;font-size:13px;margin:24px 2px 0}
 <div class="wrap">
 <header class="hero">
 <h1>CUBE 故障代码分类治理现状与方案</h1>
-<p>本文基于当前 CPU2/CPU3 源码、故障码清单和符号使用统计，整理现有故障代码的权威来源、上报链路、分类问题、可统一项、可拆分项，以及后续可选择的改动包。目标是先形成决策口径，再决定是否修改固件行为。</p>
+<p>本文基于当前 CPU2/CPU3 源码、故障码清单和符号使用统计，整理现有故障代码的权威来源、上报链路、分类结果、可统一项、可拆分项，以及后续可选择的改动包。当前已完成分类治理基线和预留/历史保留标注，下一步进入高频通用码调用点评审。</p>
 <div class="meta-grid">
-<div class="meta"><span>更新日期</span><strong>2026-07-01</strong></div>
+<div class="meta"><span>更新日期</span><strong>2026-07-02</strong></div>
 <div class="meta"><span>权威定义</span><strong>CPU2 ErrorCode</strong></div>
-<div class="meta"><span>当前规模</span><strong>73 项，含 2 个非故障状态</strong></div>
-<div class="meta"><span>本页性质</span><strong>现状分析 + 治理方案</strong></div>
+<div class="meta"><span>当前规模</span><strong>54 项运行使用 + 17 项预留</strong></div>
+<div class="meta"><span>当前阶段</span><strong>分类基线已落表</strong></div>
 </div>
 </header>
 
@@ -138,13 +138,23 @@ footer{color:#617287;font-size:13px;margin:24px 2px 0}
 
 <section id="status">
 <h2>1. 当前现状</h2>
-<p class="lead">故障码定义当前已经具备统一枚举、CPU2 日志名称、CPU3 显示文案和协议上报链路，但分类粒度仍以早期大类为主，部分码承担了过多语义。</p>
+<p class="lead">故障码定义当前已经具备统一枚举、CPU2 日志名称、CPU3 显示文案和协议上报链路。2026-07-02 已在统一表补充分类规则、链路复查和治理摘要，分类基线已经落表。</p>
 <div class="grid">
 <div class="card"><strong>总量</strong><div class="stat">73</div><p>CPU2 <code>ErrorCode</code> 当前 73 项，包含 <code>NO_ERROR</code> 和 <code>STATE_SWITCH</code> 两个非故障状态。</p></div>
 <div class="card"><strong>权威来源</strong><div class="stat">CPU2</div><p><code>LTD_MAIN_CPU2/Services/ParamStorage/system_parameter.h</code> 是最终定义来源。</p></div>
 <div class="card"><strong>显示侧同步</strong><div class="stat">CPU3</div><p>CPU3 保持同值枚举，并额外保留 <code>SENSOR_COMM_TIMEOUT</code> 兼容别名。</p></div>
-<div class="card"><strong>表格口径</strong><div class="stat">XLSX</div><p>CPU2 故障码表当前与 CPU2 enum 一致；CPU3 表只作为显示和寄存器辅助资料。</p></div>
+<div class="card"><strong>表格口径</strong><div class="stat">XLSX</div><p>统一表当前与 CPU2 enum 一致，并新增“分类规则”“链路复查”“治理摘要”三个工作表。</p></div>
 </div>
+
+<h3>1.0 分类治理进度</h3>
+<table>
+<thead><tr><th>项目</th><th>结果</th><th>说明</th></tr></thead>
+<tbody>
+<tr><td>使用状态</td><td>运行使用 54 项、非故障状态 2 项、预留/历史保留 17 项</td><td>统计排除 enum 定义、CPU2 日志映射和 CPU3 显示映射。</td></tr>
+<tr><td>治理阶段</td><td>保持 5 项、统一归类 60 项、第 3 阶段评审 8 项</td><td>第 3 阶段评审不代表已经改代码，只表示后续需要逐调用点确认。</td></tr>
+<tr><td>链路复查</td><td>完整 41 项、非故障 2 项、CPU2 原因兜底 13 项、未见运行触发 16 项、两者重叠 1 项</td><td>未见运行触发项按预留/历史保留处理，不删除、不复用旧值。</td></tr>
+</tbody>
+</table>
 
 <h3>1.1 当前类型区间</h3>
 <table>
@@ -170,7 +180,7 @@ footer{color:#617287;font-size:13px;margin:24px 2px 0}
 <tr><td>CPU3 兼容枚举</td><td><code>LTD_DISPLAY_CPU3/Application/system_param/system_parameter.h</code></td><td>影响 CPU3 解析和显示侧编译一致性。</td></tr>
 <tr><td>CPU3 屏幕显示</td><td><code>LTD_DISPLAY_CPU3/Application/display/display.c</code></td><td>影响状态页和故障详情显示。</td></tr>
 <tr><td>故障码清单</td><td><code>docs/00_构建与版本/故障码/当前程序故障代码清单.md</code></td><td>当前可检索的源码对照清单。</td></tr>
-<tr><td>CPU2 表格</td><td><code>docs/00_构建与版本/故障码/CPU2/LTD故障代码表.xlsx</code></td><td>故障码表格维护入口。</td></tr>
+<tr><td>统一表格</td><td><code>docs/00_构建与版本/故障码/LTD故障代码统一表.xlsx</code></td><td>唯一故障码表格维护入口，包含故障代码总表、治理字段和 CPU3 辅助页。</td></tr>
 </tbody>
 </table>
 </section>
@@ -195,7 +205,7 @@ footer{color:#617287;font-size:13px;margin:24px 2px 0}
 <div class="grid">
 <div class="card"><strong>大类混合责任域</strong><p><code>0x0D</code> 同时包含传感器、密度、无线滑环和蓝牙链路；<code>0x13</code> 同时包含其他系统错误和 AD5421。</p></div>
 <div class="card"><strong>通用码承担过多语义</strong><p><code>PARAM_ERROR</code>、<code>PARAM_ADDRESS_OVERFLOW</code>、<code>SENSOR_RESP_FORMAT_ERROR</code>、<code>SENSOR_DEVICE_COMM_TIMEOUT</code>、<code>MOTOR_TMC_COMM_ERROR</code> 都存在定位粒度偏粗的问题。</p></div>
-<div class="card"><strong>预留码和运行码混在一起</strong><p>部分码当前只在 enum、日志和显示映射中存在，未看到明确运行触发点，建议标注为历史保留或预留。</p></div>
+<div class="card"><strong>预留码和运行码已标注</strong><p>17 项当前未见运行触发点，已在统一表标注为预留/历史保留，原则是不删除、不复用旧值。</p></div>
 <div class="card"><strong>外部协议口径偏二值</strong><p>SI 的 <code>10004 Interlock</code> 和 <code>10009 Reel Alarm</code> 当前主要判断是否存在故障，没有进一步按故障族细分。</p></div>
 </div>
 
@@ -204,14 +214,26 @@ footer{color:#617287;font-size:13px;margin:24px 2px 0}
 <table>
 <thead><tr><th>符号</th><th>源码出现次数</th><th>治理判断</th></tr></thead>
 <tbody>
-<tr><td><code>PARAM_ERROR</code></td><td>104</td><td>参数调用兜底过宽，优先梳理调用场景，再决定是否拆分。</td></tr>
-<tr><td><code>PARAM_ADDRESS_OVERFLOW</code></td><td>47</td><td>可能混入地址越界、指针异常、缓冲区边界等不同问题。</td></tr>
-<tr><td><code>MOTOR_TMC_COMM_ERROR</code></td><td>43</td><td>TMC 通信、读回和运行期健康检查可进一步分层。</td></tr>
+<tr><td><code>PARAM_ERROR</code></td><td>72</td><td>参数调用兜底过宽，优先梳理调用场景，再决定是否拆分。</td></tr>
+<tr><td><code>PARAM_ADDRESS_OVERFLOW</code></td><td>48</td><td>可能混入地址越界、指针异常、缓冲区边界等不同问题。</td></tr>
+<tr><td><code>MOTOR_TMC_COMM_ERROR</code></td><td>39</td><td>TMC 通信、读回和运行期健康检查可进一步分层。</td></tr>
 <tr><td><code>SENSOR_RESP_FORMAT_ERROR</code></td><td>40</td><td>格式错误、AT 响应异常、字段解析异常可能需要拆开。</td></tr>
-<tr><td><code>PARAM_RANGE_ERROR</code></td><td>30</td><td>目前语义相对清晰，但要避免拿来表示非范围类错误。</td></tr>
-<tr><td><code>ENCODER_TIMEOUT</code></td><td>24</td><td>属于明确链路错误，适合保留现状并完善恢复策略。</td></tr>
-<tr><td><code>SENSOR_DEVICE_COMM_TIMEOUT</code></td><td>18</td><td>与无线主机/从机超时存在语义重叠，建议优先复用已有专用码。</td></tr>
 <tr><td><code>OTHER_PERIPHERAL_CONFIG_ERROR</code></td><td>17</td><td>外设配置兜底偏宽，建议减少新调用。</td></tr>
+<tr><td><code>SENSOR_DEVICE_COMM_TIMEOUT</code></td><td>18</td><td>与无线主机/从机超时存在语义重叠，建议优先复用已有专用码。</td></tr>
+<tr><td><code>MEASUREMENT_POSITION_ERROR</code></td><td>7</td><td>位置错误语义偏宽，后续确认是否拆成目标越界、位置源异常或最终偏差。</td></tr>
+<tr><td><code>AD5421_READFAULT_ERROR</code></td><td>2</td><td>故障寄存器读取失败和故障状态异常容易混淆，后续可评审拆分。</td></tr>
+</tbody>
+</table>
+
+<h3>3.2 链路复查结果</h3>
+<table>
+<thead><tr><th>复查结果</th><th>项数</th><th>治理判断</th></tr></thead>
+<tbody>
+<tr><td>完整</td><td>41</td><td>有运行调用点，且 CPU2 日志名称、CPU2 日志原因、CPU3 枚举和 CPU3 显示均有精确覆盖。</td></tr>
+<tr><td>非故障返回</td><td>2</td><td><code>NO_ERROR</code>、<code>STATE_SWITCH</code> 保留为状态返回，不进入最终故障出口。</td></tr>
+<tr><td>CPU2 日志原因大类兜底</td><td>13</td><td>当前运行链路可用，但串口日志原因仍偏粗，后续可作为包 C 文案优化对象。</td></tr>
+<tr><td>当前未见运行触发</td><td>16</td><td>保留 enum、日志和显示映射，按预留/历史保留处理。</td></tr>
+<tr><td>原因兜底且未见触发</td><td>1</td><td>同时属于日志原因兜底和未见运行触发，仍按历史保留处理。</td></tr>
 </tbody>
 </table>
 </section>
@@ -325,12 +347,12 @@ footer{color:#617287;font-size:13px;margin:24px 2px 0}
 <div class="card package">
 <strong>包 A：文档分类治理</strong>
 <p>更新故障码 Markdown 和 CPU2 Excel，增加责任域、层级、处理策略、使用状态、治理意见字段。</p>
-<p><span class="tag green">推荐先做</span><span class="tag">不改固件</span></p>
+<p><span class="tag green">已完成</span><span class="tag">不改固件</span></p>
 </div>
 <div class="card package green">
 <strong>包 B：预留/历史保留标注</strong>
 <p>对当前未见运行触发的码标注“预留”“历史保留”“硬件未接入”，保留编号和映射。</p>
-<p><span class="tag green">推荐先做</span><span class="tag">低风险</span></p>
+<p><span class="tag green">已完成</span><span class="tag">17 项</span></p>
 </div>
 <div class="card package amber">
 <strong>包 C：日志和显示口径统一</strong>
@@ -358,10 +380,10 @@ footer{color:#617287;font-size:13px;margin:24px 2px 0}
 <table>
 <thead><tr><th>阶段</th><th>动作</th><th>产出</th><th>是否影响固件</th></tr></thead>
 <tbody>
-<tr><td>第 1 阶段</td><td>执行包 A + B。</td><td>故障码分类基线、预留状态清单、治理意见表。</td><td>否。</td></tr>
-<tr><td>第 2 阶段</td><td>选择性执行包 C。</td><td>CPU2 日志和 CPU3 显示更贴近真实故障。</td><td>只影响用户可见文案。</td></tr>
-<tr><td>第 3 阶段</td><td>对无线、传感器格式、参数调用等高频通用码做调用点评审。</td><td>拆分清单和复用现有码清单。</td><td>评审阶段不影响。</td></tr>
-<tr><td>第 4 阶段</td><td>执行包 D 或 E。</td><td>运行时错误码更精准。</td><td>影响错误码语义，需要同步版本资料。</td></tr>
+<tr><td>已完成</td><td>执行包 A + B。</td><td>故障码分类基线、预留状态清单、治理意见表。</td><td>否。</td></tr>
+<tr><td>下一步</td><td>对 8 个第 3 阶段候选做调用点评审。</td><td>拆分清单、复用现有码清单、日志文案优化清单。</td><td>评审阶段不影响。</td></tr>
+<tr><td>可选后续</td><td>选择性执行包 C。</td><td>CPU2 日志和 CPU3 显示更贴近真实故障。</td><td>只影响用户可见文案。</td></tr>
+<tr><td>代码治理</td><td>确认后执行包 D 或 E。</td><td>运行时错误码更精准。</td><td>影响错误码语义，需要同步版本资料。</td></tr>
 </tbody>
 </table>
 </section>
@@ -380,7 +402,7 @@ footer{color:#617287;font-size:13px;margin:24px 2px 0}
 </table>
 
 <div class="note ok">
-<strong>本页建议决策：</strong>优先确认是否先执行包 A + B。这样可以先得到完整分类基线和预留状态，不会改变固件行为；后续再按现场定位需求决定是否执行 C、D、E。
+<strong>本页建议决策：</strong>包 A + B 已完成，下一步建议进入 8 个第 3 阶段候选的调用点评审。评审只产出拆分/复用/文案优化建议，不直接改变固件行为；确认后再决定是否执行 C、D、E。
 </div>
 </section>
 
