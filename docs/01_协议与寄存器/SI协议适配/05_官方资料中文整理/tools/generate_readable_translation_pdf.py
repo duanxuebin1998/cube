@@ -19,6 +19,7 @@ from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.platypus import (
     Image,
+    KeepTogether,
     LongTable,
     PageBreak,
     Paragraph,
@@ -32,7 +33,7 @@ from reportlab.platypus import (
 ROOT = Path(__file__).resolve().parents[1]
 ASSET_DIR = ROOT / "assets"
 OUTPUT_MD = ROOT / "SI7000官方资料包_中文全文翻译_优化排版源稿.md"
-OUTPUT_PDF = ROOT / "SI7000官方资料包_中文全文翻译_优化排版_无附录.pdf"
+OUTPUT_PDF = ROOT / "SI7000设备手册.pdf"
 SOURCE_PDF = "../00_原始资料/SI7000官方资料包_含Modbus规范.pdf"
 
 INPUT_DOCS = [
@@ -409,10 +410,21 @@ def table_flowable(rows: list[list[str]], available_width: float, styles, font_n
 def append_paragraph(buffer: list[str], story: list, styles):
     if not buffer:
         return
-    text = " ".join(line.strip() for line in buffer if line.strip())
+    text = paragraph_text_from_buffer(buffer)
     if text:
         story.append(Paragraph(paragraph_xml(text), styles["body"]))
     buffer.clear()
+
+
+def paragraph_text_from_buffer(buffer: list[str]) -> str:
+    return " ".join(line.strip() for line in buffer if line.strip())
+
+
+def short_label_from_buffer(buffer: list[str]) -> str | None:
+    text = paragraph_text_from_buffer(buffer)
+    if text and len(text) <= 32 and text.endswith((":", "：")):
+        return text
+    return None
 
 
 def markdown_to_story(markdown_text: str, doc_width: float, doc_height: float, styles, font_name: str, tmp_dir: Path):
@@ -467,7 +479,11 @@ def markdown_to_story(markdown_text: str, doc_width: float, doc_height: float, s
             continue
 
         if i + 1 < len(lines) and line.strip().startswith("|") and is_table_separator(lines[i + 1]):
-            append_paragraph(paragraph_buffer, story, styles)
+            label_text = short_label_from_buffer(paragraph_buffer)
+            if label_text:
+                paragraph_buffer.clear()
+            else:
+                append_paragraph(paragraph_buffer, story, styles)
             table_lines = [line]
             i += 1
             table_lines.append(lines[i])
@@ -477,7 +493,13 @@ def markdown_to_story(markdown_text: str, doc_width: float, doc_height: float, s
                 i += 1
             rows = [split_table_row(row) for idx, row in enumerate(table_lines) if idx != 1]
             if rows:
-                story.extend(table_flowable(rows, doc_width, styles, font_name))
+                table_items = table_flowable(rows, doc_width, styles, font_name)
+                if label_text and len(rows) <= 8:
+                    story.append(KeepTogether([Paragraph(paragraph_xml(label_text), styles["body"]), *table_items]))
+                else:
+                    if label_text:
+                        story.append(Paragraph(paragraph_xml(label_text), styles["body"]))
+                    story.extend(table_items)
             continue
 
         refs = image_references(line)
@@ -493,6 +515,9 @@ def markdown_to_story(markdown_text: str, doc_width: float, doc_height: float, s
 
         stripped = line.strip()
         if not stripped:
+            if short_label_from_buffer(paragraph_buffer):
+                i += 1
+                continue
             append_paragraph(paragraph_buffer, story, styles)
             i += 1
             continue

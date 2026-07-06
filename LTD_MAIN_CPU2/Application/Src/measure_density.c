@@ -1360,6 +1360,12 @@ void CMD_SiProfile(void)
 
     Print_DensitySpreadResult(&temp);
     g_measurement.device_status.device_state = STATE_SPREADPOINTOVER;
+    if (!HasEffectiveCommandSwitchRequest()) {
+        g_deviceParams.command = CMD_FIND_OIL;
+        printf("SI Profile done: queued CMD_FIND_OIL\r\n");
+    } else {
+        printf("SI Profile done: pending command %d kept\r\n", (int)g_deviceParams.command);
+    }
     printf("SI Profile 完成: 点数=%lu 完成计数=%lu\r\n",
            (unsigned long)temp.measurement_points,
            (unsigned long)g_measurement.density_distribution.profile_complete_counter);

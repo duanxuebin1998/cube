@@ -243,9 +243,9 @@ li{margin:4px 0}
 
 <section id="cpu2-exec">
 <h2>5. CPU2 独立 profile 执行流程</h2>
-<p class="lead">CPU2 的 SI profile 不再复用普通分布测量参数，也不走 Wartsila 测后探底流程。它读取独立 SI 参数，先确定底部采样运动目标，再按底部点、绝对首点、步距和罐高生成候选点；不预先找液位，逐点采样时遇到液面以上点即停止且不写入该点。对外点阵中 Point0 的位置字段固定写 0，Point1 的位置字段固定等于 40001。</p>
+<p class="lead">CPU2 的 SI profile 不再复用普通分布测量参数，也不走 Wartsila 测后探底流程。它读取独立 SI 参数，先确定底部采样运动目标，再按底部点、绝对首点、步距和罐高生成候选点；不预先找液位，逐点采样时遇到液面以上点即停止且不写入该点。对外点阵中 Point0 的位置字段固定写 0，Point1 的位置字段固定等于 40001。profile 成功锁存后，CPU2 会排队 CMD_FIND_OIL，在下一轮主循环恢复液位跟随。</p>
 <div class="flow-wrap">
-<svg class="flow-svg" viewBox="0 0 1120 1260" role="img" aria-label="CPU2 SI profile 执行流程">
+<svg class="flow-svg" viewBox="0 0 1120 1400" role="img" aria-label="CPU2 SI profile 执行流程">
 <defs><marker id="arrow3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10z" fill="#61758e"/></marker><marker id="arrow3r" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10z" fill="#b84a55"/></marker></defs>
 <rect class="node cpu2" x="390" y="45" width="340" height="76" rx="8"/><text class="nt" x="560" y="75"><tspan x="560">CPU2 主循环取到命令 20</tspan><tspan class="ns" x="560" dy="22">App_ExecuteMeasureCommand()</tspan></text>
 <rect class="node cpu2" x="390" y="170" width="340" height="76" rx="8"/><text class="nt" x="560" y="200"><tspan x="560">测量公共初始化</tspan><tspan class="ns" x="560" dy="22">MeasureStart() 清辅助状态</tspan></text>
@@ -257,6 +257,7 @@ li{margin:4px 0}
 <rect class="node cpu2" x="390" y="915" width="340" height="76" rx="8"/><text class="nt" x="560" y="945"><tspan x="560">生成候选点阵</tspan><tspan class="ns" x="560" dy="22">不调用 SearchOilLevel()</tspan></text>
 <rect class="node cpu2" x="390" y="1040" width="340" height="92" rx="8"/><text class="nt" x="560" y="1070"><tspan x="560">逐点判断液面以上</tspan><tspan class="ns" x="560" dy="22">Point0 output = 0</tspan><tspan class="ns" x="560" dy="18">空气/无效密度点不写入</tspan></text>
 <rect class="node cpu2" x="390" y="1180" width="340" height="76" rx="8"/><text class="nt" x="560" y="1210"><tspan x="560">逐点执行</tspan><tspan class="ns" x="560" dy="22">移动、悬停、稳定采样、累加平均</tspan></text>
+<rect class="node state" x="390" y="1305" width="340" height="78" rx="8"/><text class="nt" x="560" y="1333"><tspan x="560">成功后排队找液位</tspan><tspan class="ns" x="560" dy="22">g_deviceParams.command = CMD_FIND_OIL</tspan></text>
 <rect class="node error" x="790" y="1040" width="260" height="92" rx="8"/><text class="nt" x="920" y="1073"><tspan x="920">失败出口</tspan><tspan class="ns" x="920" dy="22">profile_blocked_by_process=1</tspan><tspan class="ns" x="920" dy="18">SET_ERROR(ret)</tspan></text>
 <path class="edge" d="M560 121 L560 170" marker-end="url(#arrow3)"/>
 <path class="edge" d="M560 246 L560 295" marker-end="url(#arrow3)"/>
@@ -268,6 +269,7 @@ li{margin:4px 0}
 <path class="edge" d="M860 853 C800 895 675 905 560 915" marker-end="url(#arrow3)"/>
 <path class="edge" d="M560 991 L560 1040" marker-end="url(#arrow3)"/>
 <path class="edge" d="M560 1132 L560 1180" marker-end="url(#arrow3)"/>
+<path class="edge" d="M560 1256 L560 1305" marker-end="url(#arrow3)"/>
 <path class="edge-red" d="M730 953 C840 970 895 1010 920 1040" marker-end="url(#arrow3r)"/>
 <path class="edge-red" d="M730 1086 L790 1086" marker-end="url(#arrow3r)"/>
 </svg>
@@ -300,6 +302,7 @@ li{margin:4px 0}
 <li>候选点生成不因实际底部位置高于 <code>first_point</code> 而跳过首点；如果 <code>40001=500mm</code>，第一个可编程测点仍按 500mm 运行和输出。</li>
 <li>候选点生成时只按罐高和 200 点上限停止，不依赖预先测得的液位。</li>
 <li>逐点采样时如果当前候选点被判定为液面以上点，则停止本轮 profile，且不把该点写入有效点阵。</li>
+<li>profile 成功锁存后，若没有其它待执行命令，则排队 <code>CMD_FIND_OIL</code>，由下一轮主循环恢复液位跟随；失败或命令切换不排队。</li>
 <li>这套点位不使用普通分布测的 <code>spreadTopLimit</code>、<code>spreadMeasurementDistance</code>、<code>spreadMeasurementCount</code>。</li>
 </ol>
 <h3>5.4 逐点采样</h3>
@@ -326,6 +329,7 @@ li{margin:4px 0}
 <li>把 <code>profile_complete_counter</code> 加 1。</li>
 <li>清 <code>profile_blocked_by_process</code>。</li>
 <li>设备状态置 <code>STATE_SPREADPOINTOVER</code>。</li>
+<li>若 <code>g_deviceParams.command == CMD_NONE</code>，排队 <code>CMD_FIND_OIL</code>，下一轮主循环执行找液位和液位跟随。</li>
 </ol>
 </div>
 <div>

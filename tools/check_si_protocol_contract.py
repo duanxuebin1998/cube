@@ -338,8 +338,15 @@ def check_si_profile_contract() -> None:
     cmd_match = re.search(r"void\s+CMD_SiProfile\s*\([^)]*\)\s*\{(?P<body>.*?)\n\}", cpu2_density, re.S)
     if cmd_match is None:
         raise AssertionError(f"{CPU2_DENSITY}: missing CMD_SiProfile body")
-    if "SearchOilLevel(" in cmd_match.group("body"):
+    si_profile_body = cmd_match.group("body")
+    if "SearchOilLevel(" in si_profile_body:
         raise AssertionError(f"{CPU2_DENSITY}: SI profile must not pre-run SearchOilLevel before profile")
+    require_re(
+        si_profile_body,
+        r"!\s*HasEffectiveCommandSwitchRequest\s*\(\s*\)[\s\S]{0,160}g_deviceParams\.command\s*=\s*CMD_FIND_OIL\s*;",
+        "SI profile queues CMD_FIND_OIL only after successful completion",
+        CPU2_DENSITY,
+    )
     reject_re(cpu2_density, r"SiProfile_BuildPoints\s*\([^)]*oil_level_01mm", "SI point generation clipped by pre-found oil level", CPU2_DENSITY)
     reject_re(cpu2_density, r"target\s*<=\s*oil_level", "SI point generation depends on pre-found oil level", CPU2_DENSITY)
     build_points_match = re.search(

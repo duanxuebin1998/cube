@@ -1,0 +1,405 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<opml version="2.0">
+  <head>
+    <title>CPU3当前屏幕菜单树</title>
+  </head>
+  <body>
+    <outline text="CPU3屏幕菜单">
+      <outline text="测量命令">
+        <outline text="提零点" />
+        <outline text="液位测量" />
+        <outline text="水位测量">
+          <outline text="水位单次测量" />
+          <outline text="水位跟随" />
+        </outline>
+        <outline text="罐高测量" />
+        <outline text="综合测量" />
+        <outline text="读取部件参数" />
+        <outline text="密度单点测量">
+          <outline text="密度单点测量（输入位置）" />
+          <outline text="密度单点监测（输入位置）" />
+        </outline>
+        <outline text="密度分布测量">
+          <outline text="分布测量" />
+          <outline text="国标分布测量" />
+          <outline text="密度每米测量" />
+          <outline text="区间密度测量" />
+          <outline text="瓦锡兰区间密度" />
+          <outline text="SI Profile" />
+        </outline>
+        <outline text="浮子运行到高度（输入高度）" />
+      </outline>
+      <outline text="参数配置（密码进入）">
+        <outline text="测量参数">
+          <outline text="运行设置">
+            <outline text="上电默认指令" />
+            <outline text="故障自动回零" />
+            <outline text="故障停止测量" />
+            <outline text="故障自动恢复重跑次数" />
+          </outline>
+          <outline text="电机与编码参数">
+            <outline text="电机运行电流" />
+            <outline text="编码轮周长" />
+            <outline text="电机限速" />
+            <outline text="首圈周长" />
+            <outline text="尺带厚度" />
+            <outline text="位置源自动切换" />
+            <outline text="记步模式" />
+            <outline text="电机局部周长" />
+          </outline>
+          <outline text="扭力参数">
+            <outline text="空载扭力" />
+            <outline text="空载扭力上限" />
+            <outline text="空载扭力下限" />
+            <outline text="满载扭力" />
+            <outline text="满载扭力上限" />
+            <outline text="满载扭力下限" />
+            <outline text="碰撞上限比率" />
+            <outline text="碰撞下限比率" />
+          </outline>
+          <outline text="零点参数">
+            <outline text="零点阈值比例" />
+            <outline text="扭力忽略区" />
+            <outline text="零点最大偏差" />
+            <outline text="找零下行距离" />
+          </outline>
+          <outline text="液位参数">
+            <outline text="液位测量方式" />
+            <outline text="液位罐高" />
+            <outline text="液位探头距差" />
+            <outline text="液位盲区" />
+            <outline text="液位找液阈值" />
+            <outline text="液位滞后阈值" />
+            <outline text="液位跟随频率" />
+            <outline text="液位跟随密度" />
+            <outline text="液位滞后时间" />
+          </outline>
+          <outline text="水位参数">
+            <outline text="水位测量方式" />
+            <outline text="水位罐高" />
+            <outline text="水位盲区" />
+            <outline text="水位跟随电容阈值" />
+            <outline text="水位寻找电容阈值" />
+            <outline text="水位滞后电容阈值" />
+            <outline text="水位稳定距离" />
+            <outline text="水位修正值" />
+            <outline text="水位最大下行距离" />
+            <outline text="零点电容" />
+          </outline>
+          <outline text="罐底与罐高">
+            <outline text="罐底检测模式" />
+            <outline text="探底角度阈值" />
+            <outline text="探底扭力阈值" />
+            <outline text="更新罐高标志" />
+            <outline text="实测罐高最大偏差" />
+            <outline text="罐底后编码器修正" />
+            <outline text="初始罐高 [只读]" />
+            <outline text="当前罐高 [只读]" />
+            <outline text="探底修正罐高" />
+          </outline>
+          <outline text="密度测量参数">
+            <outline text="是否测罐底" />
+            <outline text="是否测水位" />
+            <outline text="是否测单点密度" />
+            <outline text="分布测顺序" />
+            <outline text="分布测模式" />
+            <outline text="分布测点数" />
+            <outline text="分布点间距" />
+            <outline text="最高点距液面" />
+            <outline text="最低点距罐底" />
+            <outline text="分布点悬停(s)" />
+            <outline text="区间测量上限" />
+            <outline text="区间测量下限" />
+          </outline>
+          <outline text="Wartsila参数">
+            <outline text="最高密度点" />
+            <outline text="最低密度点" />
+            <outline text="密度点间距" />
+            <outline text="最高点液面距" />
+            <outline text="瓦锡兰探底间隔" />
+            <outline text="探底修正罐高" />
+          </outline>
+          <outline text="SI参数">
+            <outline text="Profile参数">
+              <outline text="SI首点" />
+              <outline text="SI步距" />
+              <outline text="SI停留" />
+              <outline text="SI探底" />
+              <outline text="探底修正罐高" />
+            </outline>
+            <outline text="自动Profile">
+              <outline text="SI周期" />
+              <outline text="SI自动" />
+              <outline text="SI时" />
+              <outline text="SI分" />
+            </outline>
+            <outline text="报警限值">
+              <outline text="SI低密限" />
+              <outline text="SI高密限" />
+              <outline text="SI低温限" />
+              <outline text="SI高温限" />
+              <outline text="SI LL液位" />
+              <outline text="SI HH液位" />
+              <outline text="SI低液位" />
+              <outline text="SI高液位" />
+              <outline text="SI温差限" />
+              <outline text="SI密差限" />
+            </outline>
+          </outline>
+          <outline text="修正参数">
+            <outline text="磁通量D" />
+            <outline text="磁通量T" />
+            <outline text="上次液位修正液位" />
+            <outline text="气相温度" />
+            <outline text="尺带伸缩率" />
+            <outline text="标定尺带温度" />
+          </outline>
+        </outline>
+        <outline text="输出配置">
+          <outline text="继电器报警输出">
+            <outline text="K1继电器">
+              <outline text="通道设置">
+                <outline text="K1工作模式" />
+                <outline text="K1输出报警组合" />
+                <outline text="K1接点类型" />
+                <outline text="K1清除锁存报警" />
+              </outline>
+              <outline text="报警配置">
+                <outline text="K1报警模式" />
+                <outline text="K1无效值报警策略" />
+                <outline text="K1报警取值源" />
+                <outline text="K1高高报警阈值" />
+                <outline text="K1高报警阈值" />
+                <outline text="K1低报警阈值" />
+                <outline text="K1低低报警阈值" />
+                <outline text="K1报警滞回" />
+                <outline text="K1阻尼系数" />
+              </outline>
+              <outline text="报警状态">
+                <outline text="报警值 [只读]" />
+                <outline text="HH [只读]" />
+                <outline text="H [只读]" />
+                <outline text="HH/H [只读]" />
+                <outline text="L [只读]" />
+                <outline text="LL [只读]" />
+                <outline text="LL/L [只读]" />
+                <outline text="Any [只读]" />
+                <outline text="清锁存 [只读]" />
+              </outline>
+            </outline>
+            <outline text="K2继电器">
+              <outline text="通道设置">
+                <outline text="K2工作模式" />
+                <outline text="K2输出报警组合" />
+                <outline text="K2接点类型" />
+                <outline text="K2清除锁存报警" />
+              </outline>
+              <outline text="报警配置">
+                <outline text="K2报警模式" />
+                <outline text="K2无效值报警策略" />
+                <outline text="K2报警取值源" />
+                <outline text="K2高高报警阈值" />
+                <outline text="K2高报警阈值" />
+                <outline text="K2低报警阈值" />
+                <outline text="K2低低报警阈值" />
+                <outline text="K2报警滞回" />
+                <outline text="K2阻尼系数" />
+              </outline>
+              <outline text="报警状态">
+                <outline text="报警值 [只读]" />
+                <outline text="HH [只读]" />
+                <outline text="H [只读]" />
+                <outline text="HH/H [只读]" />
+                <outline text="L [只读]" />
+                <outline text="LL [只读]" />
+                <outline text="LL/L [只读]" />
+                <outline text="Any [只读]" />
+                <outline text="清锁存 [只读]" />
+              </outline>
+            </outline>
+            <outline text="K3继电器">
+              <outline text="通道设置">
+                <outline text="K3工作模式" />
+                <outline text="K3输出报警组合" />
+                <outline text="K3接点类型" />
+                <outline text="K3清除锁存报警" />
+              </outline>
+              <outline text="报警配置">
+                <outline text="K3报警模式" />
+                <outline text="K3无效值报警策略" />
+                <outline text="K3报警取值源" />
+                <outline text="K3高高报警阈值" />
+                <outline text="K3高报警阈值" />
+                <outline text="K3低报警阈值" />
+                <outline text="K3低低报警阈值" />
+                <outline text="K3报警滞回" />
+                <outline text="K3阻尼系数" />
+              </outline>
+              <outline text="报警状态">
+                <outline text="报警值 [只读]" />
+                <outline text="HH [只读]" />
+                <outline text="H [只读]" />
+                <outline text="HH/H [只读]" />
+                <outline text="L [只读]" />
+                <outline text="LL [只读]" />
+                <outline text="LL/L [只读]" />
+                <outline text="Any [只读]" />
+                <outline text="清锁存 [只读]" />
+              </outline>
+            </outline>
+            <outline text="K4继电器">
+              <outline text="通道设置">
+                <outline text="K4工作模式" />
+                <outline text="K4输出报警组合" />
+                <outline text="K4接点类型" />
+                <outline text="K4清除锁存报警" />
+              </outline>
+              <outline text="报警配置">
+                <outline text="K4报警模式" />
+                <outline text="K4无效值报警策略" />
+                <outline text="K4报警取值源" />
+                <outline text="K4高高报警阈值" />
+                <outline text="K4高报警阈值" />
+                <outline text="K4低报警阈值" />
+                <outline text="K4低低报警阈值" />
+                <outline text="K4报警滞回" />
+                <outline text="K4阻尼系数" />
+              </outline>
+              <outline text="报警状态">
+                <outline text="报警值 [只读]" />
+                <outline text="HH [只读]" />
+                <outline text="H [只读]" />
+                <outline text="HH/H [只读]" />
+                <outline text="L [只读]" />
+                <outline text="LL [只读]" />
+                <outline text="LL/L [只读]" />
+                <outline text="Any [只读]" />
+                <outline text="清锁存 [只读]" />
+              </outline>
+            </outline>
+          </outline>
+          <outline text="AO输出">
+            <outline text="AO起点液位" />
+            <outline text="AO终点液位" />
+            <outline text="AO正常起点电流" />
+            <outline text="AO正常终点电流" />
+            <outline text="AO高报警液位" />
+            <outline text="AO低报警液位" />
+            <outline text="AO初始电流" />
+            <outline text="AO高位电流" />
+            <outline text="AO低位电流" />
+            <outline text="AO故障电流" />
+            <outline text="AO调试电流" />
+            <outline text="AO输出使能" />
+          </outline>
+        </outline>
+        <outline text="通信设置">
+          <outline text="COM1配置">
+            <outline text="COM1协议" />
+            <outline text="COM1波特率" />
+            <outline text="COM1数据位" />
+            <outline text="COM1校验" />
+            <outline text="COM1停止位" />
+          </outline>
+          <outline text="COM2配置">
+            <outline text="COM2协议" />
+            <outline text="COM2波特率" />
+            <outline text="COM2数据位" />
+            <outline text="COM2校验" />
+            <outline text="COM2停止位" />
+          </outline>
+          <outline text="COM3配置">
+            <outline text="COM3协议" />
+            <outline text="COM3波特率" />
+            <outline text="COM3数据位" />
+            <outline text="COM3校验" />
+            <outline text="COM3停止位" />
+          </outline>
+        </outline>
+        <outline text="显示设置">
+          <outline text="显示基础">
+            <outline text="小数点位数" />
+            <outline text="息屏开关" />
+            <outline text="屏幕亮度" />
+          </outline>
+          <outline text="语言" />
+          <outline text="屏幕密码" />
+          <outline text="数据源与手输值">
+            <outline text="液位">
+              <outline text="液位数据源" />
+              <outline text="液位手输值" />
+            </outline>
+            <outline text="水位">
+              <outline text="水位数据源" />
+              <outline text="水位手输值" />
+            </outline>
+            <outline text="密度">
+              <outline text="密度数据源" />
+              <outline text="密度手输值" />
+              <outline text="上传手输密度" />
+            </outline>
+            <outline text="温度">
+              <outline text="温度数据源" />
+              <outline text="温度手输值" />
+            </outline>
+          </outline>
+        </outline>
+        <outline text="维护设置">
+          <outline text="设备信息">
+            <outline text="传感器类型 [只读]" />
+            <outline text="传感器编号 [只读]" />
+            <outline text="传感器软件版本 [只读]" />
+            <outline text="CPU2程序版本 [只读]" />
+            <outline text="CPU3程序版本 [只读]" />
+            <outline text="协议版本 [只读]" />
+          </outline>
+          <outline text="参数校验">
+            <outline text="参数版本号 [只读]" />
+            <outline text="结构体大小 [只读]" />
+            <outline text="魔术字 [只读]" />
+            <outline text="参数CRC32 [只读]" />
+          </outline>
+          <outline text="RTC设置">
+            <outline text="年" />
+            <outline text="月" />
+            <outline text="日" />
+            <outline text="时" />
+            <outline text="分" />
+            <outline text="秒" />
+          </outline>
+        </outline>
+      </outline>
+      <outline text="调试指令（密码进入）">
+        <outline text="浮子运动控制">
+          <outline text="上行（输入距离）" />
+          <outline text="下行（输入距离）" />
+          <outline text="强制上行（输入距离）" />
+          <outline text="强制下行（输入距离）" />
+        </outline>
+        <outline text="标定修正">
+          <outline text="标定零点" />
+          <outline text="标定液位（输入标定值）" />
+          <outline text="修正液位（输入修正值）" />
+          <outline text="标定水位（输入标定值）" />
+          <outline text="标定罐高（输入标定值）" />
+        </outline>
+        <outline text="扭力标定">
+          <outline text="获取空载扭力" />
+          <outline text="获取满载扭力" />
+        </outline>
+        <outline text="无线维护">
+          <outline text="匹配无线滑环" />
+        </outline>
+        <outline text="系统维护">
+          <outline text="进入维护模式" />
+          <outline text="恢复出厂设置" />
+        </outline>
+      </outline>
+      <outline text="语言">
+        <outline text="中文" />
+        <outline text="英文" />
+      </outline>
+      <outline text="退出" />
+    </outline>
+  </body>
+</opml>

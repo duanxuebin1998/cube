@@ -1952,3 +1952,36 @@ CPU2 参数加载会校验 FRAM 中的 `magic`、`struct_size`、`param_version`
 - 未做真实 SI PLC 或科学仪器主机联调；需要现场覆盖 `00004 Profile`、屏幕 SI Profile、自动 Profile、点 0 输出、绝对位置输出和空气点停止。
 - 未做真实密度传感器运行抓包；需要现场确认普通无检测运行不再产生密度通信，强制调试无检测和串口测试命令仍按预期通信。
 - 未做 CPU3 实机 FRAM 保存和 OLED 菜单逐项验证；需要现场确认 CPU2 忙态下 CPU3 本机参数可保存，新增菜单项显示不截断。
+
+## 2026-07-06 - 补齐 SI Profile 完成后自动回液位跟随（CPU2 V1.21.2.0 / CPU3 V1.19.1.0）
+
+版本：
+- CPU2: V1.21.1.0 -> V1.21.2.0。
+- CPU3: V1.19.1.0 保持不变。
+
+协议版本/兼容性：
+- `DEVICE_PROTOCOL_VERSION` 保持 14，不新增共享命令、共享寄存器、输入寄存器长度或跨 CPU 状态字段。
+- CPU2 `DEVICE_PARAM_VERSION` 保持 3，`DeviceParameters` 结构大小和 FRAM 参数校验规则不变，不会因本次升级触发恢复出厂参数。
+- CPU3 本机参数存储版本保持 `0x0006`，不改变本机 FRAM 布局。
+- 仍要求 CPU2/CPU3 同为协议版本 14 才能正确使用独立 SI Profile 命令、参数和输入寄存器点阵。
+
+本次修改：
+- CPU2 SI Profile 成功锁存并进入完成态后，如没有其它待执行命令，自动排队 `CMD_FIND_OIL`，下一轮主循环恢复找液位和液位跟随。
+- CPU2 SI Profile 失败或执行期间检测到有效命令切换时，不覆盖外部待执行命令。
+- SI 协议契约脚本新增静态断言，检查 `CMD_SiProfile()` 完成后只在无命令切换时排队 `CMD_FIND_OIL`。
+- 同步 SI 协议需求总览、兼容映射表、PLC 联调检查表和程序流程页，补齐 Profile 完成后回 Auto 的生命周期说明。
+- 整理传感器新一代安全通信协议卷、SI 官方资料中文整理、SIL 功能安全外部资料、CPU3 当前屏幕菜单树和相关 README/索引。
+
+验证：
+- `git diff --cached --check`
+- `py tools\check_si_protocol_contract.py`
+- `py tools\check_si_modbus_frames.py`
+- `py tools\check_docs_structure.py`
+- `py tools\check_markdown_links.py docs\01_协议与寄存器\SI协议适配`
+- `py tools\check_version_bumped.py`
+- `cmake --build build\LTD_MAIN_CPU2`
+
+未验证风险：
+- 未做真实 SI PLC 或科学仪器主机联调；需要现场覆盖 `00004 Profile`、屏幕 SI Profile 和自动 Profile 完成后自动回液位跟随。
+- 未做真实液位跟随长时间运行；需要现场确认 SI Profile 完成态可被外部读取到，随后自动找液位不会覆盖新的手动/维护命令。
+- 本次包含既有暂存区中的 PDF、docx、xmind、opml 等资料整理，二进制文档未在本轮逐页视觉复核。

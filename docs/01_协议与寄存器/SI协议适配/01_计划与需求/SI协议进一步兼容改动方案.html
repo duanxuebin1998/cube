@@ -351,7 +351,7 @@
         <li>不探底时也必须运行到上次探底保存的底部位置读取 Point0；Point0 对外位置字段仍固定为 <code>0</code>。</li>
         <li><code>40001</code> 是 Point1 的绝对位置，<code>40002</code> 从该绝对位置开始递增；即使实际底部高于 <code>40001</code>，也不跳过 Point1。</li>
         <li>停止条件包括当前候选点被判定为液面以上、达到上限位置或达到 200 点上限；液面以上点不写入有效点阵。</li>
-        <li>profile 完成后保持完成态，不自动回液位跟随。</li>
+        <li>profile 成功锁存后排队 <code>CMD_FIND_OIL</code>，下一轮主循环自动找液位并回液位跟随；失败或命令切换不触发。</li>
       </ol>
     </section>
 
@@ -504,7 +504,7 @@
         <tr><td>上电后首次 profile</td><td>必须探底并采集 Point0，且 Point0 对外位置字段为 0。</td></tr>
         <tr><td>探底失败且无旧底部位置</td><td>使用当前位置作为底部采样目标，Point0 对外位置字段仍为 0，不刷新底部参考、不标记底部可信、不清首次探底状态。</td></tr>
         <tr><td>液面停止条件</td><td>profile 前不单独找液位；候选点到点采样判定为液面以上时停止，不输出该液面以上 profile 点。</td></tr>
-        <tr><td>Profile 完成</td><td>保持完成态，<code>10005</code> 和点阵有效。</td></tr>
+        <tr><td>Profile 完成</td><td>先进入完成态，<code>10005</code> 和 SI 点阵有效；随后排队 <code>CMD_FIND_OIL</code> 回液位跟随。</td></tr>
         <tr><td>读取 <code>30007~30010</code></td><td>返回 profile 开始时间，而非完成时间。</td></tr>
         <tr><td>读取 <code>10002/10003</code></td><td>液位跟随稳定时 <code>10002=1,10003=0</code>；其它状态均为液体。</td></tr>
       </table>
