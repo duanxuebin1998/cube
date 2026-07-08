@@ -1,6 +1,6 @@
 # 协议与寄存器文档索引
 
-更新日期：2026-07-01
+更新日期：2026-07-06
 
 本目录用于保存 CPU2/CPU3 共享协议、外部 Modbus/DSM/SI协议适配、寄存器表、协议版本和兼容性记录。凡是会影响通信地址、字段语义、命令、状态、缩放、补码解释或协议兼容性的资料，优先归入本目录。
 
@@ -8,7 +8,7 @@
 
 | 分类 | 资料 | 用途 |
 | --- | --- | --- |
-| CPU2/CPU3 共享协议 | `CPU2_CPU3协议变更记录.md` | 记录 `DEVICE_PROTOCOL_VERSION`、共享寄存器、参数语义、兼容影响和验证结果；当前共享协议版本为 `13` |
+| CPU2/CPU3 共享协议 | `CPU2_CPU3协议变更记录.md` | 记录 `DEVICE_PROTOCOL_VERSION`、共享寄存器、参数语义、兼容影响和验证结果；当前共享协议版本为 `14` |
 | 系统参数默认值 | `系统参数出厂默认值.md` | 整理 CPU2 恢复出厂写入的 `DeviceParameters` 默认值、单位和小数位；当前 CPU2 参数存储版本为 `3` |
 | CPU2 通信与解耦 | `CPU2通信与解耦/` | CPU2 串口调试指令、通信异常影响、HART 旧栈适配、传感器无线链路和无线滑环匹配整理 |
 | 传感器通信协议 | `传感器通信协议/` | CPU2 与传感器之间的新一代安全通信协议卷，覆盖设计理由、标准映射、单向周期上报、双向切回和验证矩阵 |
@@ -20,14 +20,15 @@
 
 | 主题 | 当前结论 | 依据 |
 | --- | --- | --- |
-| 共享协议版本 | `DEVICE_PROTOCOL_VERSION = 13`，CPU2/CPU3 严格相等才兼容 | `LTD_MAIN_CPU2/Services/ParamStorage/system_parameter.h`、`LTD_DISPLAY_CPU3/Application/system_param/system_parameter.h`、`CPU2_CPU3协议变更记录.md` |
-| CPU2 参数存储 | `DEVICE_PARAM_VERSION = 3`，CPU2 `V1.12.0.0` 到当前 `V1.20.1.0` 之间通常不清参数；协议 13 仅按旧协议版本标记迁移密度相关字段倍率 | `LTD_MAIN_CPU2/Services/ParamStorage/system_parameter.c`、`../00_构建与版本/CPU2参数存储升级清单.md` |
-| CPU3 本地显示/通信参数 | `CPU3_PARAM_VERSION = 0x0005`，V3/V4 升级时迁移本机手输密度并写回 V5，V3 仍补默认屏幕亮度 | `LTD_DISPLAY_CPU3/Application/system_param/cpu3_comm_display_params.c`、`CPU2_CPU3协议变更记录.md` |
+| 共享协议版本 | `DEVICE_PROTOCOL_VERSION = 14`，CPU2/CPU3 严格相等才兼容 | `LTD_MAIN_CPU2/Services/ParamStorage/system_parameter.h`、`LTD_DISPLAY_CPU3/Application/system_param/system_parameter.h`、`CPU2_CPU3协议变更记录.md` |
+| CPU2 参数存储 | `DEVICE_PARAM_VERSION = 3`，CPU2 `V1.12.0.0` 到当前 `V1.21.2.0` 之间通常不清参数；协议 13 迁移密度倍率，协议 14 补齐 SI Profile 默认参数 | `LTD_MAIN_CPU2/Services/ParamStorage/system_parameter.c`、`../00_构建与版本/CPU2参数存储升级清单.md` |
+| CPU3 本地显示/通信参数 | `CPU3_PARAM_VERSION = 0x0006`，V3/V4/V5 升级时迁移屏幕亮度、手输密度、SI 自动 profile 和报警限值参数 | `LTD_DISPLAY_CPU3/Application/system_param/cpu3_comm_display_params.c`、`CPU2_CPU3协议变更记录.md` |
 | 读取部件参数与 DSM 调试区 | 共享协议为 9 起支持；`debug_data.water_capacitance_x10` 为水位电容快照，蓝牙 RSSI 通过 `WirelessPairingStatus` 尾部输入寄存器发布 | `../00_构建与版本/版本改动与测试/2026-06-13_CPU2_V1.15.0.0_CPU3_V1.14.0.0_读取部件参数蓝牙RSSI与CPU3菜单显示优化_改动与测试方案.md` |
 | AO 模拟电流输出运行态 | 共享协议为 10 起支持；RSSI 运行态后追加 `AoOutputRuntime`，发布目标电流、最近写入电流、来源、AD5421 故障标志和最近错误码；原 `reserved26` 同步替换为 `AoOutputEnable`，默认关闭 | `CPU2_CPU3协议变更记录.md`、`../00_构建与版本/版本改动与测试/2026-06-15_CPU2_V1.16.0.0_CPU3_V1.15.0.0_AO电流输出运行态与使能参数_改动与测试方案.md`、`../03_问题分析与整改/2026-06-13_CPU2电流输出问题与CPU2_v1.563处理方式对比.html` |
 | AO 液位量程与独立报警阈值 | 共享协议为 11 起支持；`AOStartLevel_01mm/AOEndLevel_01mm` 复用原参数位置作为 AO 正常输出起点/终点液位，`AlarmHighAO/AlarmLowAO` 为 AO 独立报警液位阈值；寄存器宏和 CPU3 操作号同步改为 AO 液位/正常电流/报警液位口径，继电器报警阈值不再影响 AO 报警电流覆盖 | `CPU2_CPU3协议变更记录.md`、`系统参数出厂默认值.md` |
 | 命令 115 保留 | 共享协议为 12 起支持；命令 115 和状态 `0x002F/0x802F` 均改为保留，不再执行或显示强制提零点 | `CPU2_CPU3协议变更记录.md`、`../00_构建与版本/版本改动与测试/2026-06-26_CPU2_V1.19.0.0_CPU3_V1.17.0.0_测量流程显示参数与协议语义汇总_改动与测试方案.md` |
 | 密度两位小数 | 共享协议为 13 起支持；CPU2/CPU3 内部密度 raw 统一为 `kg/m3 x100`，CPU3 密度参数和状态页显示两位小数，DSM/Wartsila/SI协议外部边界保持各自原有口径 | `CPU2_CPU3协议变更记录.md`、`系统参数出厂默认值.md`、`../00_构建与版本/版本改动与测试/2026-06-26_CPU2_V1.20.0.0_CPU3_V1.18.0.0_密度两位精度与菜单协议整理_改动与测试方案.md` |
+| SI Profile 独立兼容 | 共享协议为 14 起支持；新增 `CMD_SI_PROFILE`、CPU2 SI profile 参数、`profile_source` 来源隔离和 SI 输入寄存器点阵，CPU3 本机参数版本升至 `0x0006` | `CPU2_CPU3协议变更记录.md`、`SI协议适配/02_协议映射/SI协议兼容映射表.md`、`../00_构建与版本/版本改动与测试/2026-07-01_CPU2_V1.21.0.0_CPU3_V1.19.0.0_SI协议独立Profile兼容_改动与测试方案.md` |
 | Wartsila 现场抓包协议 | 2026-01-27 莆田抓包确认 Wartsila 使用 Modbus RTU；地址 `1` 为主 LTD/密度分布控制与结果区，`2/3/4` 为原系统辅助数据块；`0x10` 写多个寄存器的 byte count 字段等于寄存器数量而不是标准 `qty*2` | `Wartsila协议适配/2026-01-27_莆田现场Wartsila抓包协议整理.md` |
 
 ## 维护规则

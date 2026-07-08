@@ -1,4 +1,4 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="zh-CN">
 <head>
   <meta charset="utf-8">
@@ -374,7 +374,7 @@
       </div>
       <div class="card">
         <strong>核心分流</strong>
-        <code>0/1</code> 保留旧步进精找，<code>2</code> 走密度连续闭环，<code>4/5</code> 走频率连续闭环。
+        <code>0/1</code> 保留旧步进精找，<code>2</code> 走密度连续闭环，<code>4</code> 走相对频率速度闭环，<code>5</code> 直接走定频速度闭环。
       </div>
       <div class="card">
         <strong>结果字段</strong>
@@ -423,10 +423,10 @@
             <td><code>FrequencyLevel_RunClosedLoop(...FOLLOW)</code> 长驻跟随。</td>
           </tr>
           <tr>
-            <td><code>5</code> 连续绝对频率</td>
-            <td>沿用方式 1 的频率粗找。</td>
-            <td><code>follow_frequency=oilLevelFrequency</code>，进入 <code>FrequencyLevel_RunClosedLoop(...SEARCH)</code>。</td>
-            <td><code>FrequencyLevel_RunClosedLoop(...FOLLOW)</code> 长驻跟随。</td>
+            <td><code>5</code> 连续固定频率</td>
+            <td>不执行频率粗找，直接检查 <code>oilLevelFrequency</code> 是否在 1..6500 Hz。</td>
+            <td><code>FrequencyLevel_RunFixedClosedLoop(...SEARCH)</code> 先校验并设置固定目标，再复用频率速度闭环。</td>
+            <td><code>FrequencyLevel_RunFixedClosedLoop(...FOLLOW)</code> 长驻跟随。</td>
           </tr>
           <tr>
             <td>其他未识别方式</td>
@@ -445,7 +445,7 @@
         </thead>
         <tbody>
           <tr><td>流程图 1</td><td>看 <code>CMD_FIND_OIL</code> 如何进入找液位、是否回零、是否切换记步源、如何进入跟随。</td></tr>
-          <tr><td>流程图 2</td><td>看 <code>SearchOilLevel()</code> 内部如何按方式 2、4、5、0/1 分流。</td></tr>
+          <tr><td>流程图 2</td><td>看 <code>SearchOilLevel()</code> 如何通过 helper 按方式 2、3、5、0/1/4 分流。</td></tr>
           <tr><td>流程图 3</td><td>看频率粗找如何在空气和油中之间找边界。</td></tr>
           <tr><td>流程图 4</td><td>看原有方式 0/1 的 <code>SearchOilPrecise(100)</code> 步进精找。</td></tr>
           <tr><td>流程图 5</td><td>看密度/频率连续方案的速度闭环。</td></tr>
@@ -552,7 +552,7 @@
 
       <div class="note">
         <strong>当前主命令路径的重试层级：</strong>
-        <code>CMD_MeasureAndFollowOilLevel()</code> 对 <code>SearchOilLevel()</code> 和 <code>FollowOilLevel()</code> 是单次调用；高层 3 次搜索/3 次跟随重试存在于 <code>SearchAndFollowOilLevel()</code>，主要被标定等其他入口复用。<code>SearchOilLevel()</code> 内部仍有启用液位模式和粗找阶段的局部重试。
+        <code>CMD_MeasureAndFollowOilLevel()</code> 对 <code>SearchOilLevel()</code> 和 <code>FollowOilLevel()</code> 是单次调用；高层 3 次搜索/3 次跟随重试存在于 <code>SearchAndFollowOilLevel()</code>，主要被标定等其他入口复用。<code>SearchOilLevel()</code> 内部只有方式 <code>0/1/4</code> 和未知配置会进入启用液位模式与粗找阶段的局部重试。
       </div>
     </section>
 
@@ -569,13 +569,13 @@
         <tbody>
           <tr>
             <td><code>oilLevelFrequency</code></td>
-            <td>空气/油中粗判定阈值；绝对频率和连续绝对频率方式下也作为目标频率。</td>
-            <td><code>INAIR</code> 为当前频率大于该值，<code>INOIL</code> 为当前频率小于该值。</td>
+            <td>空气/油中粗判定阈值；方式 <code>1</code> 固定频率步进和方式 <code>5</code> 固定频率速度闭环下也作为目标频率。</td>
+            <td><code>OilLevel_IsCurrentFrequencyInAir()</code> 为当前频率大于该值，<code>OilLevel_IsCurrentFrequencyInOil()</code> 为当前频率小于该值。</td>
           </tr>
           <tr>
             <td><code>liquidLevelMeasurementMethod</code></td>
-            <td>本分支 CPU2 已区分 <code>0</code>、<code>1</code>、<code>2</code>、<code>4</code>、<code>5</code> 和其他未识别方式。</td>
-            <td><code>0</code>/<code>1</code> 保留原有步进式频率找液位；<code>2</code> 走密度连续闭环；<code>4</code>/<code>5</code> 是新增频率连续闭环方案。</td>
+            <td>本分支 CPU2 已区分 <code>0</code>、<code>1</code>、<code>2</code>、<code>3</code>、<code>4</code>、<code>5</code> 和其他未识别方式。</td>
+            <td><code>0</code>/<code>1</code> 保留原有步进式频率找液位；<code>2</code> 走密度连续闭环；<code>3</code> 为超声预留；<code>4</code> 是相对频率速度闭环；<code>5</code> 是固定频率速度闭环。</td>
           </tr>
           <tr>
             <td><code>oilLevelThreshold</code></td>
@@ -613,7 +613,7 @@
 
     <section>
       <h2>4. 单次找液位：SearchOilLevel</h2>
-      <p class="note">本节只看一次 <code>SearchOilLevel()</code> 的执行路径：先处理方式 <code>2</code> 的密度闭环提前分支；其余频率方式先做液位模式启用和粗找，再按方式 <code>0/1/4/5</code> 选择旧步进精找或新增连续频率闭环。</p>
+      <p class="note">本节只看一次 <code>SearchOilLevel()</code> 的执行路径：当前主函数只负责调度，直接方式由 <code>OilLevel_TryRunDirectSearchMethod()</code> 分流；方式 <code>2</code> 直接进入密度闭环，方式 <code>3</code> 作为超声预留直接返回参数错误，方式 <code>5</code> 先校验 1..6500 Hz 定频目标再进入定频速度闭环；只有方式 <code>0/1/4</code> 和未知配置会继续调用运行态复位、液位模式启用、粗找、目标解析和搜索执行 helper。</p>
 
       <div class="diagram">
         <p class="diagram-title">流程图 2：SearchOilLevel 完整分支</p>
@@ -627,12 +627,13 @@
           <text class="small" x="125" y="92" text-anchor="middle">进入找液位</text>
 
           <polygon class="decision" points="330,25 445,75 330,125 215,75" />
-          <text x="330" y="69" text-anchor="middle">方法 == 2?</text>
-          <text class="small" x="330" y="91" text-anchor="middle">密度找液位</text>
+          <text x="330" y="69" text-anchor="middle">方法 == 2/3/5?</text>
+          <text class="small" x="330" y="91" text-anchor="middle">提前分流</text>
 
           <rect class="okbox" x="505" y="40" width="190" height="70" />
-          <text x="600" y="70" text-anchor="middle">DensityLevel_RunClosedLoop</text>
-          <text class="small" x="600" y="92" text-anchor="middle">密度速度模式查找</text>
+          <text x="600" y="62" text-anchor="middle">2: DensityLevel_RunClosedLoop</text>
+          <text class="small" x="600" y="84" text-anchor="middle">3: PARAM_ERROR</text>
+          <text class="small" x="600" y="102" text-anchor="middle">5: RunFixedClosedLoop</text>
 
           <rect class="box" x="245" y="165" width="170" height="70" />
           <text x="330" y="194" text-anchor="middle">清状态/清故障</text>
@@ -657,11 +658,11 @@
           <rect class="box" x="515" y="500" width="190" height="82" />
           <text x="610" y="528" text-anchor="middle">计算 follow_frequency</text>
           <text class="small" x="610" y="550" text-anchor="middle">0/4: 空气油中均值</text>
-          <text class="small" x="610" y="568" text-anchor="middle">1/5/其他: oilLevelFrequency</text>
+          <text class="small" x="610" y="568" text-anchor="middle">1/其他: oilLevelFrequency</text>
 
           <polygon class="decision" points="845,490 990,545 845,600 700,545" />
-          <text x="845" y="533" text-anchor="middle">方法 == 4 或 5?</text>
-          <text class="small" x="845" y="555" text-anchor="middle">新增连续频率</text>
+          <text x="845" y="533" text-anchor="middle">方法 == 4?</text>
+          <text class="small" x="845" y="555" text-anchor="middle">连续相对频率</text>
 
           <rect class="okbox" x="1030" y="505" width="170" height="80" />
           <text x="1115" y="535" text-anchor="middle">FrequencyLevel</text>
@@ -697,17 +698,17 @@
         </svg>
       </div>
 
-      <h3>4.1 清状态并启用液位模式</h3>
+      <h3>4.1 运行态复位并启用液位模式</h3>
       <ol>
-        <li>清除 <code>probe_at_liquid_level</code> 和 <code>liquid_stable</code>，避免 CPU3 读到上一轮结果。</li>
+        <li><code>OilLevel_ResetSearchRuntimeState()</code> 清除 <code>probe_at_liquid_level</code> 和 <code>liquid_stable</code>，避免 CPU3 读到上一轮结果。</li>
         <li>调用 <code>fault_info_init()</code> 清故障信息。</li>
-        <li>最多 3 次调用 <code>EnableLevelMode()</code>。</li>
+        <li><code>OilLevel_EnableLevelModeWithRetry()</code> 最多 3 次调用 <code>EnableLevelMode()</code>。</li>
         <li>若返回 <code>STATE_SWITCH</code>，说明有新命令切换，直接返回，不记录为故障重试。</li>
         <li>若液位模式启用失败，写入传感器模块的错误重试日志，延时 500ms 后重试。</li>
       </ol>
 
       <h3>4.2 粗找阶段：先判断探头当前在空气中还是油中</h3>
-      <p>粗找阶段最多循环 3 次。每次先用 <code>DSM_Get_LevelMode_Frequence_Avg()</code> 读取当前平均频率，再根据 <code>oilLevelFrequency</code> 判断探头位置。</p>
+      <p><code>OilLevel_RunFrequencyCoarseSearch()</code> 承担粗找阶段，最多循环 3 次，只服务于方式 <code>0/1/4</code> 和未知配置。方式 <code>2</code>、<code>3</code>、<code>5</code> 已在入口提前返回，不会执行本阶段。每次先用 <code>DSM_Get_LevelMode_Frequence_Avg()</code> 读取当前平均频率，再根据 <code>oilLevelFrequency</code> 判断探头位置。</p>
       <table>
         <thead>
           <tr>
@@ -720,7 +721,7 @@
           <tr>
             <td><code>current_frequency &lt; oilLevelFrequency</code></td>
             <td>认为探头在油中。</td>
-            <td>若传感器位置高于盲区 100mm，先下行 100mm 确保完全在油中；读取 <code>oil_frequency</code>；再调用 <code>SearchAir()</code> 上行找空气。</td>
+            <td>若传感器位置高于盲区 100mm，先下行 100mm 确保完全在油中；通过 <code>OilLevel_ReadAverageFrequencyWithRetry()</code> 读取 <code>oil_frequency</code>；再调用 <code>SearchAir()</code> 上行找空气。</td>
           </tr>
           <tr>
             <td><code>current_frequency &gt; oilLevelFrequency</code></td>
@@ -737,7 +738,7 @@
 
       <div class="warn">
         <strong>粗找重试的实际覆盖范围：</strong>
-        粗找循环能重试平均频率读取失败和入口判定；但 <code>SearchOil()</code>、<code>SearchAir()</code> 内部错误通过 <code>CHECK_ERROR()</code> 直接向上返回，不会回到粗找循环继续尝试。
+        粗找循环能重试入口平均频率读取失败和入口判定；油中/空气端点平均频率读取通过 <code>OilLevel_ReadAverageFrequencyWithRetry()</code> 局部重试。<code>SearchOil()</code>、<code>SearchAir()</code> 内部的运动、安全和命令切换错误仍通过 <code>CHECK_ERROR()</code> 直接向上返回，不会回到粗找循环继续尝试。
       </div>
 
       <div class="diagram">
@@ -782,7 +783,7 @@
 
           <rect class="warnbox" x="805" y="70" width="220" height="82" />
           <text x="915" y="100" text-anchor="middle">等于阈值</text>
-          <text class="small" x="915" y="122" text-anchor="middle">INAIR/INOIL 都不命中</text>
+          <text class="small" x="915" y="122" text-anchor="middle">空气/油中 helper 都不命中</text>
           <text class="small" x="915" y="140" text-anchor="middle">3 次后返回 NOTFOUND</text>
 
           <rect class="okbox" x="1035" y="335" width="120" height="70" />
@@ -842,8 +843,8 @@
           </tr>
           <tr>
             <td><code>liquidLevelMeasurementMethod == 5</code></td>
-            <td><code>follow_frequency = oilLevelFrequency</code>，然后 <code>FrequencyLevel_RunClosedLoop()</code></td>
-            <td>新增连续绝对频率方案，保留原粗找流程，再用速度模式连续逼近固定目标频率。</td>
+            <td><code>FrequencyLevel_RunFixedClosedLoop()</code></td>
+            <td>连续固定频率方案在 <code>SearchOilLevel()</code> 入口提前返回，不执行粗找；先用 <code>FrequencyLevel_SetFixedTarget()</code> 校验 <code>oilLevelFrequency</code> 是否在 1..6500 Hz 并写入固定目标，再用速度模式连续逼近固定目标频率。</td>
           </tr>
           <tr>
             <td>其他未识别方式</td>
@@ -988,8 +989,8 @@
       </div>
 
       <h3>4.6 连续速度闭环：方式 2/4/5</h3>
-      <p>方式 <code>2</code> 在 <code>SearchOilLevel()</code> 入口直接进入 <code>DensityLevel_RunClosedLoop(DENSITY_LEVEL_RUN_SEARCH)</code>；新增方式 <code>4</code> 和 <code>5</code> 粗找完成后进入 <code>FrequencyLevel_RunClosedLoop(FREQUENCY_LEVEL_RUN_SEARCH)</code>。这两类闭环都使用电机速度模式，不再按步长调用 <code>MotorCtrl_MoveAndWait()</code>。</p>
-      <pre>frequency_difference = current_frequency - follow_frequency</pre>
+      <p>方式 <code>2</code> 在 <code>SearchOilLevel()</code> 入口直接进入 <code>DensityLevel_RunClosedLoop(DENSITY_LEVEL_RUN_SEARCH)</code>；方式 <code>4</code> 粗找完成后进入 <code>FrequencyLevel_RunClosedLoop(FREQUENCY_LEVEL_RUN_SEARCH)</code>；方式 <code>5</code> 直接进入 <code>FrequencyLevel_RunFixedClosedLoop(FREQUENCY_LEVEL_RUN_SEARCH)</code>。这三类闭环都使用电机速度模式，不再按步长调用 <code>MotorCtrl_MoveAndWait()</code>。</p>
+      <pre>OilLevel_GetFrequencyDifference() = current_frequency - follow_frequency</pre>
       <table>
         <thead>
           <tr>
@@ -1147,7 +1148,7 @@
         <li>每轮检查丢步 <code>MotorCtrl_CheckLostStepAutoTiming()</code> 和扭力碰撞 <code>CheckWeightCollision()</code>。</li>
         <li>若传感器位置低于 <code>blindZone</code>，停止并返回 <code>MEASUREMENT_OILLEVEL_LOW</code>。</li>
         <li>到油中后慢停；若仍高于盲区 100mm，再下行 100mm，确保完全在油中。</li>
-        <li>读取并保存 <code>oil_frequency</code>，随后调用 <code>SearchAir()</code> 找空气侧边界。</li>
+        <li>通过 <code>OilLevel_ReadAverageFrequencyWithRetry()</code> 读取并保存 <code>oil_frequency</code>，随后调用 <code>SearchAir()</code> 找空气侧边界。</li>
       </ol>
 
       <h3>SearchAir：从油中上行找空气</h3>
@@ -1156,7 +1157,7 @@
         <li>循环调用 <code>determine_level_status_motion()</code>，若判定为 <code>AIR</code> 则退出循环。</li>
         <li>未到空气时，上行运动，并持续检查丢步和扭力碰撞。</li>
         <li>到空气后慢停；若尺带长度大于 100mm，再上行 100mm，确保探头全部在空气中。</li>
-        <li>读取并保存 <code>air_frequency</code>。</li>
+        <li>通过 <code>OilLevel_ReadAverageFrequencyWithRetry()</code> 读取并保存 <code>air_frequency</code>。</li>
         <li>若传感器位置高于盲区 100mm，再下行 100mm，为后续精找回到液位附近。</li>
       </ol>
 
@@ -1185,12 +1186,12 @@
 
           <polygon class="decision" points="350,35 485,95 350,155 215,95" />
           <text x="350" y="82" text-anchor="middle">方法分支</text>
-          <text class="small" x="350" y="105" text-anchor="middle">2 / 4 / 5 / 其他</text>
+          <text class="small" x="350" y="105" text-anchor="middle">2 / 3 / 4 / 5 / 0/1</text>
 
           <rect class="okbox" x="545" y="35" width="210" height="80" />
-          <text x="650" y="65" text-anchor="middle">方法 4/5</text>
-          <text class="small" x="650" y="87" text-anchor="middle">FrequencyLevel_RunClosedLoop</text>
-          <text class="small" x="650" y="105" text-anchor="middle">频率速度模式跟随</text>
+          <text x="650" y="65" text-anchor="middle">频率速度方式</text>
+          <text class="small" x="650" y="87" text-anchor="middle">4: RunClosedLoop</text>
+          <text class="small" x="650" y="105" text-anchor="middle">5: RunFixedClosedLoop</text>
 
           <rect class="okbox" x="545" y="145" width="210" height="80" />
           <text x="650" y="175" text-anchor="middle">方法 2</text>
@@ -1238,7 +1239,7 @@
           <path class="line-warn" d="M470 510 H420" />
           <path class="line" d="M332 475 C332 390 430 330 535 305" />
           <path class="line" d="M590 455 C610 380 630 335 630 325" />
-          <text class="label" x="510" y="61">4/5</text>
+          <text class="label" x="510" y="61">4 或 5</text>
           <text class="label" x="510" y="171">2</text>
           <text class="label" x="362" y="180">0/1/未知</text>
           <text class="label" x="1038" y="277">是</text>
@@ -1250,7 +1251,7 @@
 
       <ol>
         <li>将设备状态设为 <code>STATE_FLOWOIL</code>。</li>
-        <li>方式 <code>4</code> 和 <code>5</code> 进入 <code>FrequencyLevel_RunClosedLoop(FREQUENCY_LEVEL_RUN_FOLLOW)</code>，按频率偏差连续调速。</li>
+        <li>方式 <code>4</code> 进入 <code>FrequencyLevel_RunClosedLoop(FREQUENCY_LEVEL_RUN_FOLLOW)</code>，方式 <code>5</code> 进入 <code>FrequencyLevel_RunFixedClosedLoop(FREQUENCY_LEVEL_RUN_FOLLOW)</code>，二者都按频率偏差连续调速。</li>
         <li>方式 <code>2</code> 进入 <code>DensityLevel_RunClosedLoop(DENSITY_LEVEL_RUN_FOLLOW)</code>，按密度偏差连续调速。</li>
         <li>方式 <code>0</code>/<code>1</code> 以及未识别方式保留旧循环：读取当前频率，超过滞后阈值后重新调用 <code>SearchOilPrecise(100)</code>。</li>
       </ol>
@@ -1332,10 +1333,10 @@
     <section>
       <h2>9. 风险和后续关注点</h2>
       <ul>
-        <li><span class="ok-text">原有液位方式 0/1 已保留：</span>方式 0/1 仍使用原来的粗找 + <code>SearchOilPrecise(100)</code> 步进式精找；方式 2 使用密度连续闭环；新增方式 4/5 使用频率偏差速度控制；方式 3 仍未实现独立超声算法。</li>
-        <li><span class="warn-text">粗找循环不是完整三次业务重试：</span><code>SearchOil()</code>、<code>SearchAir()</code> 内部错误会直接返回，粗找循环不会重新从入口读频率再试。</li>
+        <li><span class="ok-text">原有液位方式 0/1 已保留：</span>方式 0/1 仍使用原来的粗找 + <code>SearchOilPrecise(100)</code> 步进式精找；方式 2 使用密度连续闭环；方式 4 粗找后使用相对频率速度闭环；方式 5 不粗找，校验 1..6500 Hz 固定目标后直接使用固定频率速度闭环；方式 3 作为超声预留直接返回 <code>PARAM_ERROR</code>。当前 <code>SearchOilLevel()</code> 已拆为调度函数和私有 helper，便于维护方式边界。</li>
+        <li><span class="warn-text">粗找循环不是完整三次业务重试：</span>入口读频率和端点平均频率读取可重试；<code>SearchOil()</code>、<code>SearchAir()</code> 内部运动、安全类错误仍会直接返回，粗找循环不会重新从入口读频率再试。</li>
         <li><span class="warn-text">旧精找循环保护不返回错误：</span>未识别测量方式的 <code>SearchOilPrecise()</code> 兜底中，<code>loopTime &gt; 100</code> 后跳出循环并返回 <code>NO_ERROR</code>。</li>
-        <li><span class="warn-text">频率等于阈值的入口边界：</span><code>SearchOilLevel()</code> 粗找入口对 <code>current_frequency == oilLevelFrequency</code> 没有明确分支。</li>
+        <li><span class="warn-text">频率等于阈值的入口边界：</span><code>SearchOilLevel()</code> 的方式 <code>0/1/4</code> 粗找入口对 <code>current_frequency == oilLevelFrequency</code> 没有明确分支。</li>
         <li><span class="warn-text">主找液命令没有高层 3 次重试：</span><code>CMD_FIND_OIL</code> 的主路径是 <code>CMD_MeasureAndFollowOilLevel()</code>，不同于 <code>SearchAndFollowOilLevel()</code> 的高层重试封装。</li>
       </ul>
     </section>
@@ -1359,42 +1360,45 @@
   FollowOilLevel()
 
 SearchOilLevel:
-  clear probe_at_liquid_level/liquid_stable
-  if liquidLevelMeasurementMethod == 2:
-      DensityLevel_RunClosedLoop(search)
-      oil_level = clamp_negative_to_zero(sensor_position)
-      Density_oil_level = oil_level
-      probe_at_liquid_level = 1
-      liquid_stable = 1
-      return
+  ret, direct_handled = OilLevel_TryRunDirectSearchMethod()
+  if direct_handled:
+      return ret
 
-  EnableLevelMode() up to 3 attempts
+  OilLevel_ResetSearchRuntimeState()
+  OilLevel_EnableLevelModeWithRetry()
+  OilLevel_RunFrequencyCoarseSearch()
+  OilLevel_ResolveSearchTargetFrequency()
 
-  read current average level frequency
+  ret, result_recorded = OilLevel_RunResolvedSearchMethod()
+  if result_recorded:
+      return ret
+
+  OilLevel_RecordSearchResult()
+
+OilLevel_TryRunDirectSearchMethod:
+  if method == 2: DensityLevel_RunClosedLoop(search)
+  if method == 3: return PARAM_ERROR
+  if method == 5:
+      reset runtime state
+      validate oilLevelFrequency in 1..6500 Hz
+      FrequencyLevel_RunFixedClosedLoop(search)
+
+OilLevel_RunFrequencyCoarseSearch:
+  read current average level frequency, up to 3 attempts
   if current_frequency &lt; oilLevelFrequency:
       ensure probe fully in oil
-      read oil_frequency
+      read oil_frequency with retry
       SearchAir()
   else if current_frequency &gt; oilLevelFrequency:
       SearchOil()
 
-  if liquidLevelMeasurementMethod == 4:
-      follow_frequency = (air_frequency + oil_frequency) / 2
+OilLevel_RunResolvedSearchMethod:
+  if method == 4:
       FrequencyLevel_RunClosedLoop(search)
-  else if liquidLevelMeasurementMethod == 5:
-      follow_frequency = oilLevelFrequency
-      FrequencyLevel_RunClosedLoop(search)
-  else if liquidLevelMeasurementMethod == 0:
-      follow_frequency = (air_frequency + oil_frequency) / 2
-      SearchOilPrecise(100)
+      result_recorded = true
   else:
-      follow_frequency = oilLevelFrequency
       SearchOilPrecise(100)
-
-  oil_level = clamp_negative_to_zero(sensor_position)
-  Density_oil_level = oil_level
-  probe_at_liquid_level = 1
-  liquid_stable = 1</pre>
+      result_recorded = false</pre>
     </section>
 
     <section>
@@ -1410,17 +1414,17 @@ SearchOilLevel:
         <tbody>
           <tr>
             <td><code>LTD_MAIN_CPU2/Application/Src/measure.c</code></td>
-            <td><code>ProcessCommand()</code>、<code>CMD_MeasureAndFollowOilLevel()</code>、<code>EnsureMotorPositionSourceBeforeFollow()</code></td>
+            <td><code>ProcessMeasureCmd()</code>、<code>CMD_MeasureAndFollowOilLevel()</code>、<code>EnsureMotorPositionSourceBeforeFollow()</code></td>
             <td>命令入口、测量前初始化、自动切换电机记步和重找液位。</td>
           </tr>
           <tr>
             <td><code>LTD_MAIN_CPU2/Application/Src/measure_oilLevel.c</code></td>
-            <td><code>SearchOilLevel()</code>、<code>SearchOil()</code>、<code>SearchAir()</code>、<code>SearchOilPrecise()</code>、<code>FollowOilLevel()</code></td>
-            <td>找液位和跟随液位的核心状态机。</td>
+            <td><code>SearchOilLevel()</code>、<code>OilLevel_TryRunDirectSearchMethod()</code>、<code>OilLevel_ResetSearchRuntimeState()</code>、<code>OilLevel_EnableLevelModeWithRetry()</code>、<code>OilLevel_RunFrequencyCoarseSearch()</code>、<code>OilLevel_ResolveSearchTargetFrequency()</code>、<code>OilLevel_RunResolvedSearchMethod()</code>、<code>OilLevel_RecordSearchResult()</code>、<code>OilLevel_GetFrequencyDifference()</code>、<code>OilLevel_IsCurrentFrequencyInAir()</code>、<code>OilLevel_IsCurrentFrequencyInOil()</code>、<code>SearchOil()</code>、<code>SearchAir()</code>、<code>OilLevel_ReadAverageFrequencyWithRetry()</code>、<code>SearchOilPrecise()</code>、<code>OilLevel_ComputePreciseStep()</code>、<code>OilLevel_IsPreciseStable()</code>、<code>OilLevel_RunPreciseMove()</code>、<code>OilLevel_HandlePrecisePositionUpdate()</code>、<code>OilLevel_PublishFollowPosition()</code>、<code>OilLevel_CheckPositionLimit()</code>、<code>FollowOilLevel()</code>、<code>DensityLevel_RunClosedLoop()</code>、<code>FrequencyLevel_RunClosedLoop()</code>、<code>FrequencyLevel_RunFixedClosedLoop()</code>、<code>LevelVelocity_StartOrUpdateMotion()</code></td>
+            <td>找液位和跟随液位的核心状态机，SearchOilLevel 只做调度，helper 分别覆盖直接方式、粗找、目标解析、步进精找拆分、结果发布、边界保护、密度速度闭环、相对频率速度闭环和固定频率速度闭环。</td>
           </tr>
           <tr>
             <td><code>LTD_MAIN_CPU2/Application/Inc/measure_oilLevel.h</code></td>
-            <td><code>frequency_difference</code>、<code>INAIR</code>、<code>INOIL</code>、<code>MAX_TIMES_WHEN_FRE_FOLLOW</code></td>
+            <td><code>OilLevel_GetFrequencyDifference()</code>、<code>OilLevel_IsCurrentFrequencyInAir()</code>、<code>OilLevel_IsCurrentFrequencyInOil()</code>、<code>MAX_TIMES_WHEN_FRE_FOLLOW</code></td>
             <td>频率差、空气/油中判定和精找超限阈值。</td>
           </tr>
           <tr>

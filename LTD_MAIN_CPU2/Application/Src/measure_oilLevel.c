@@ -39,12 +39,35 @@ static uint32_t OilLevel_StopBeforeReturn(uint32_t error_code, const char *reaso
 static uint32_t OilLevel_ClampLevelForReport(int32_t oil_level, const char *reason);
 static void OilLevel_UpdateAoOutput(void);
 static void OilLevel_SyncCurrentPositionToResult(const char *reason);
-
-#define OIL_LEVEL_METHOD_RELATIVE_FREQ 0U /* 液位测量方法枚举值：油品 液位 METHOD RELATIVE 频率。 */
-#define OIL_LEVEL_METHOD_FIXED_FREQ    1U /* 液位测量方法枚举值：油品 液位 METHOD FIXED 频率。 */
-#define OIL_LEVEL_METHOD_DENSITY       2U /* 液位测量方法枚举值：油品 液位 METHOD 密度。 */
-#define OIL_LEVEL_METHOD_CONTINUOUS_RELATIVE_FREQ 4U /* 液位测量方法枚举值：油品 液位 METHOD CONTINUOUS RELATIVE 频率。 */
-#define OIL_LEVEL_METHOD_CONTINUOUS_FIXED_FREQ    5U /* 液位测量方法枚举值：油品 液位 METHOD CONTINUOUS FIXED 频率。 */
+static uint32_t OilLevel_TryRunDirectSearchMethod(uint8_t *handled);
+static void OilLevel_ResetSearchRuntimeState(void);
+static uint32_t OilLevel_EnableLevelModeWithRetry(void);
+static uint32_t OilLevel_RunFrequencyCoarseSearch(void);
+static void OilLevel_ResolveSearchTargetFrequency(void);
+static uint32_t OilLevel_RunResolvedSearchMethod(uint8_t *result_recorded);
+static uint32_t OilLevel_RecordSearchResult(void);
+static float OilLevel_GetFrequencyDifference(void);
+static uint8_t OilLevel_IsCurrentFrequencyInAir(void);
+static uint8_t OilLevel_IsCurrentFrequencyInOil(void);
+static void OilLevel_ComputePreciseStep(float per_mm_frequency,
+                                        float frequency_error,
+                                        int *over_time,
+                                        int *lower_time,
+                                        float *run_length,
+                                        uint32_t *dir);
+static uint8_t OilLevel_IsPreciseStable(float frequency_error);
+static uint32_t OilLevel_RunPreciseMove(float run_length, uint32_t dir);
+static int OilLevel_HandlePrecisePositionUpdate(void);
+static uint32_t OilLevel_GetFollowChangeConfirmTimeMs(void);
+static uint8_t OilLevel_ConfirmFollowDeviation(uint32_t *ret_code);
+static void OilLevel_PublishFollowPosition(int32_t oil_level);
+static uint32_t OilLevel_CheckPositionLimit(int32_t oil_level);
+#define OIL_LEVEL_METHOD_RELATIVE_FREQ 0U /* 液位测量方法枚举值：相对频率步进法，粗找后按中点步进精找。 */
+#define OIL_LEVEL_METHOD_FIXED_FREQ    1U /* 液位测量方法枚举值：固定频率步进法，目标为 oilLevelFrequency。 */
+#define OIL_LEVEL_METHOD_DENSITY       2U /* 液位测量方法枚举值：密度速度闭环法，目标为 oilLevelDensity。 */
+#define OIL_LEVEL_METHOD_ULTRASONIC_RESERVED 3U /* 液位测量方法枚举值：超声波预留。 */
+#define OIL_LEVEL_METHOD_CONTINUOUS_RELATIVE_FREQ 4U /* 液位测量方法枚举值：连续相对频率速度法，粗找后按中点速度闭环。 */
+#define OIL_LEVEL_METHOD_CONTINUOUS_FIXED_FREQ    5U /* 液位测量方法枚举值：连续固定频率速度法，直接按 oilLevelFrequency 闭环。 */
 
 #define DENSITY_LEVEL_RUN_SEARCH              0U /* 密度法液位控制参数：运行 搜索。 */
 #define DENSITY_LEVEL_RUN_FOLLOW              1U /* 密度法液位控制参数：运行 跟随。 */
@@ -67,17 +90,23 @@ static void OilLevel_SyncCurrentPositionToResult(const char *reason);
 #define FREQUENCY_LEVEL_DEFAULT_DEADBAND_HZ     15.0f /* 频率法液位跟随默认死区，单位 Hz。 */
 #define FREQUENCY_LEVEL_KP_SPEED_X100_PER_HZ    0.10f /* 频率法液位跟随比例速度系数，单位 0.01 速度每 Hz。 */
 #define FREQUENCY_LEVEL_RELATIVE_EDGE_MARGIN_HZ 200.0f /* 相对频率法边界判定余量，单位 Hz。 */
+#define FREQUENCY_LEVEL_VALID_MAX_HZ             6500U /* 频率法液位控制参数：传感器有效频率上限，单位 Hz。 */
+#define OIL_LEVEL_FOLLOW_CONFIRM_POLL_MS        200U /* 液位跟随确认液位变化的采样周期，单位 ms。 */
+#define OIL_LEVEL_HYSTERESIS_TIME_MAX_S         60U /* 液位滞后时间最大生效秒数。 */
+#define OIL_LEVEL_CLOSED_LOOP_STABLE_DELAY_MS   1000U /* 速度闭环进入死区后的固定等待时间，不复用液位滞后时间。 */
 
 static uint32_t DensityLevel_StopAndReturn(uint32_t error_code, const char *reason);
 static uint32_t DensityLevel_RunClosedLoop(uint32_t follow_mode);
 static uint32_t DensityLevel_ReadCurrent(float *density, float *frequency, float *temperature);
 static uint32_t DensityLevel_ComputeSpeedX100(float density_error, float deadband, uint32_t max_speed_x100);
-static uint32_t DensityLevel_StartOrUpdateMotion(int dir, uint32_t speed_x100, int *active_dir, uint32_t *active_speed_x100);
+static uint32_t LevelVelocity_StartOrUpdateMotion(int dir, uint32_t speed_x100, int *active_dir, uint32_t *active_speed_x100);
 static float DensityLevel_GetDeadband(uint32_t raw_threshold);
 static uint32_t DensityLevel_GetStableDelayMs(void);
 static void DensityLevel_RecordCurrentPosition(const char *tag);
 
 static uint32_t FrequencyLevel_StopAndReturn(uint32_t error_code, const char *reason);
+static uint32_t FrequencyLevel_SetFixedTarget(void);
+static uint32_t FrequencyLevel_RunFixedClosedLoop(uint32_t follow_mode);
 static uint32_t FrequencyLevel_RunClosedLoop(uint32_t follow_mode);
 static uint32_t FrequencyLevel_ComputeSpeedX100(float frequency_error, float deadband, uint32_t max_speed_x100);
 static float FrequencyLevel_GetDeadband(uint32_t raw_threshold);
@@ -85,6 +114,82 @@ static uint32_t FrequencyLevel_GetCompatThresholdHz(uint32_t raw_threshold);
 static uint8_t FrequencyLevel_IsStableInsideBand(float frequency_error, float deadband);
 static int FrequencyLevel_CorrectRelativeEndpointDirection(int dir);
 static void FrequencyLevel_RecordCurrentPosition(const char *tag);
+
+/*
+ * 函数用途：把液位滞后时间参数转换为旧步进跟随的变化确认窗口。
+ * 调用场景：方法0/1在液位跟随中发现频率偏差超滞后阈值后调用。
+ * 关键约束：参数为0表示不等待，立即确认液位变化并重找液位。
+ */
+static uint32_t OilLevel_GetFollowChangeConfirmTimeMs(void)
+{
+    if (g_deviceParams.oilLevelHysteresisTime == 0U) {
+        return 0U;
+    }
+    if (g_deviceParams.oilLevelHysteresisTime > OIL_LEVEL_HYSTERESIS_TIME_MAX_S) {
+        return OIL_LEVEL_HYSTERESIS_TIME_MAX_S * 1000U;
+    }
+    return g_deviceParams.oilLevelHysteresisTime * 1000U;
+}
+
+/*
+ * 函数用途：液位跟随检测到偏差后，连续确认偏差是否持续存在。
+ * 调用场景：方法0/1旧步进跟随准备执行 SearchOilPrecise() 前调用。
+ * 关键约束：确认期间命令切换和读频率错误通过 ret_code 透传给上层。
+ */
+static uint8_t OilLevel_ConfirmFollowDeviation(uint32_t *ret_code)
+{
+    uint32_t confirm_time_ms;
+    uint32_t start_tick;
+    uint32_t threshold_hz;
+
+    if (ret_code == NULL) {
+        return 0U;
+    }
+
+    *ret_code = NO_ERROR;
+    confirm_time_ms = OilLevel_GetFollowChangeConfirmTimeMs();
+    if (confirm_time_ms == 0U) {
+        return 1U;
+    }
+
+    threshold_hz = FrequencyLevel_GetCompatThresholdHz(g_deviceParams.oilLevelHysteresisThreshold);
+    start_tick = HAL_GetTick();
+    printf("液位跟随\t偏差超阈值\t连续确认%lu秒\r\n",
+           (unsigned long)g_deviceParams.oilLevelHysteresisTime);
+
+    while (1) {
+        uint32_t elapsed_ms = HAL_GetTick() - start_tick;
+        uint32_t remain_ms;
+        uint32_t wait_ms;
+        float frequency_error;
+
+        if (elapsed_ms >= confirm_time_ms) {
+            break;
+        }
+        remain_ms = confirm_time_ms - elapsed_ms;
+        wait_ms = (remain_ms > OIL_LEVEL_FOLLOW_CONFIRM_POLL_MS) ?
+                  OIL_LEVEL_FOLLOW_CONFIRM_POLL_MS : remain_ms;
+
+        *ret_code = AbortableDelay_CommandSwitch(wait_ms, 50U);
+        if (*ret_code != NO_ERROR) {
+            return 0U;
+        }
+
+        *ret_code = DSM_Get_LevelMode_Frequence(&g_measurement.oil_measurement.current_frequency);
+        if (*ret_code != NO_ERROR) {
+            return 0U;
+        }
+
+        frequency_error = OilLevel_GetFrequencyDifference();
+        if (fabsf(frequency_error) < (float)threshold_hz) {
+            printf("液位跟随\t确认期间回到稳定区\t取消重找\r\n");
+            return 0U;
+        }
+    }
+
+    printf("液位跟随\t连续偏差确认完成\t重找液位\r\n");
+    return 1U;
+}
 
 static void OilLevel_PrintFollowPositionInfo(void);
 uint32_t FollowOilLevel(void);
@@ -102,6 +207,7 @@ static uint32_t OilLevel_StopBeforeReturn(uint32_t error_code, const char *reaso
 
     return error_code;
 }
+
 
 
 
@@ -172,6 +278,37 @@ static void OilLevel_PrintFollowPositionInfo(void)
            encoder_cable_mm);
 }
 
+/*
+ * 函数用途：集中计算当前频率和跟随目标频率的偏差。
+ * 调用场景：旧步进精找、盲区等待和兼容跟随循环中读取频率差。
+ * 关键约束：只读全局测量缓存，不触发传感器读取或状态改变。
+ */
+static float OilLevel_GetFrequencyDifference(void)
+{
+    return (float)g_measurement.oil_measurement.current_frequency -
+           (float)g_measurement.oil_measurement.follow_frequency;
+}
+
+/*
+ * 函数用途：判断当前平均频率是否属于空气侧。
+ * 调用场景：粗找入口和液位状态判定。
+ * 关键约束：保持原空气侧判定口径，等于阈值时不判为空气。
+ */
+static uint8_t OilLevel_IsCurrentFrequencyInAir(void)
+{
+    return (g_measurement.oil_measurement.current_frequency > g_deviceParams.oilLevelFrequency) ? 1U : 0U;
+}
+
+/*
+ * 函数用途：判断当前平均频率是否属于油中侧。
+ * 调用场景：粗找入口判断探头是否已在油中。
+ * 关键约束：保持原油中侧判定口径，等于阈值时不判为油中。
+ */
+static uint8_t OilLevel_IsCurrentFrequencyInOil(void)
+{
+    return (g_measurement.oil_measurement.current_frequency < g_deviceParams.oilLevelFrequency) ? 1U : 0U;
+}
+
 
 static uint32_t DensityLevel_StopAndReturn(uint32_t error_code, const char *reason)
 {
@@ -197,10 +334,7 @@ static float DensityLevel_GetDeadband(uint32_t raw_threshold)
 
 static uint32_t DensityLevel_GetStableDelayMs(void)
 {
-    if (g_deviceParams.oilLevelHysteresisTime == 0U) {
-        return 1000U;
-    }
-    return g_deviceParams.oilLevelHysteresisTime * 1000U;
+    return OIL_LEVEL_CLOSED_LOOP_STABLE_DELAY_MS;
 }
 
 static uint32_t DensityLevel_ReadCurrent(float *density, float *frequency, float *temperature)
@@ -259,7 +393,7 @@ static uint32_t DensityLevel_ComputeSpeedX100(float density_error, float deadban
     return speed_x100;
 }
 
-static uint32_t DensityLevel_StartOrUpdateMotion(int dir,
+static uint32_t LevelVelocity_StartOrUpdateMotion(int dir,
                                                  uint32_t speed_x100,
                                                  int *active_dir,
                                                  uint32_t *active_speed_x100)
@@ -407,7 +541,7 @@ static uint32_t DensityLevel_RunClosedLoop(uint32_t follow_mode)
         }
 
         if (dir == DENSITY_LEVEL_DIR_NONE) {
-            ret = DensityLevel_StartOrUpdateMotion(dir, 0U, &active_dir, &active_speed_x100);
+            ret = LevelVelocity_StartOrUpdateMotion(dir, 0U, &active_dir, &active_speed_x100);
             if (ret != NO_ERROR) {
                 return DensityLevel_StopAndReturn(ret, "停止确认失败");
             }
@@ -437,7 +571,7 @@ static uint32_t DensityLevel_RunClosedLoop(uint32_t follow_mode)
                MotorCtrl_DirectionText(dir),
                (double)speed_x100 / 100.0);
 
-        ret = DensityLevel_StartOrUpdateMotion(dir, speed_x100, &active_dir, &active_speed_x100);
+        ret = LevelVelocity_StartOrUpdateMotion(dir, speed_x100, &active_dir, &active_speed_x100);
         if (ret != NO_ERROR) {
             return DensityLevel_StopAndReturn(ret, "启动速度模式失败");
         }
@@ -492,6 +626,84 @@ static uint32_t FrequencyLevel_StopAndReturn(uint32_t error_code, const char *re
     }
     (void)MotorCtrl_SlowStop();
     return error_code;
+}
+
+static uint32_t FrequencyLevel_SetFixedTarget(void)
+{
+    if (g_deviceParams.oilLevelFrequency == 0U) {
+        printf("固定频率找液位\t目标频率为0\r\n");
+        return PARAM_ERROR;
+    }
+    if (g_deviceParams.oilLevelFrequency > FREQUENCY_LEVEL_VALID_MAX_HZ) {
+        printf("固定频率找液位\t目标频率超出有效范围：%lu Hz\r\n",
+               (unsigned long)g_deviceParams.oilLevelFrequency);
+        return PARAM_ERROR;
+    }
+    g_measurement.oil_measurement.follow_frequency = g_deviceParams.oilLevelFrequency;
+    return NO_ERROR;
+}
+
+static uint32_t FrequencyLevel_RunFixedClosedLoop(uint32_t follow_mode)
+{
+    uint32_t ret = FrequencyLevel_SetFixedTarget();
+    if (ret != NO_ERROR) {
+        return ret;
+    }
+    return FrequencyLevel_RunClosedLoop(follow_mode);
+}
+/*
+ * 函数用途：端点频率需要写入油中/空气基准，读取失败时做局部重试。
+ * 调用场景：SearchOilLevel、SearchOil、SearchAir 记录端点平均频率时调用。
+ * 关键约束：只重试传感器平均读数；命令切换和延时中断直接透传。
+ */
+static uint32_t OilLevel_ReadAverageFrequencyWithRetry(volatile uint32_t *frequency_out,
+                                                       const char *stage_text)
+{
+    uint32_t try_times;
+    uint32_t last_ret = PARAM_ADDRESS_OVERFLOW;
+
+    if (frequency_out == NULL) {
+        return PARAM_ADDRESS_OVERFLOW;
+    }
+
+    for (try_times = 1U; try_times <= 3U; try_times++) {
+        uint32_t read_ret = DSM_Get_LevelMode_Frequence_Avg(frequency_out);
+        if (read_ret == NO_ERROR) {
+            if (try_times > 1U) {
+                /* 错误 阶段：重试成功 模块：传感器 操作：读取液位频率 原因：恢复成功 尝试：try_times/3U */
+                ErrorLog_Recover(ERROR_LOG_MODULE_SENSOR,
+                                 ERROR_LOG_OP_READ_LEVEL_FREQ,
+                                 ERROR_LOG_REASON_RECOVER_OK,
+                                 try_times,
+                                 3U);
+            }
+            return NO_ERROR;
+        }
+        if (read_ret == STATE_SWITCH) {
+            return STATE_SWITCH;
+        }
+
+        last_ret = read_ret;
+        printf("液位测量\t%s读取平均频率失败\t第%lu/3次\t错误码=0x%08lX\r\n",
+               (stage_text != NULL) ? stage_text : "端点频率",
+               (unsigned long)try_times,
+               (unsigned long)read_ret);
+        /* 错误 阶段：错误重试 模块：传感器 操作：读取液位频率 原因：ErrorLog_GetReasonByCode(read_ret) 尝试：try_times/3U 错误码：read_ret 错误名：ErrorLog_GetCodeName(read_ret) */
+        ErrorLog_Retry(ERROR_LOG_MODULE_SENSOR,
+                       ERROR_LOG_OP_READ_LEVEL_FREQ,
+                       ErrorLog_GetReasonByCode(read_ret),
+                       try_times,
+                       3U,
+                       read_ret);
+        if (try_times < 3U) {
+            uint32_t delay_ret = AbortableDelay_CommandSwitch(500U, 100U);
+            if (delay_ret != NO_ERROR) {
+                return delay_ret;
+            }
+        }
+    }
+
+    return last_ret;
 }
 
 /**
@@ -622,7 +834,7 @@ static void FrequencyLevel_RecordCurrentPosition(const char *tag)
 }
 
 /**
- * @brief 相对频率和绝对频率共用的速度模式连续找液位/跟随闭环。
+ * @brief 相对频率和固定频率共用的速度模式连续找液位/跟随闭环。
  */
 static uint32_t FrequencyLevel_RunClosedLoop(uint32_t follow_mode)
 {
@@ -636,10 +848,6 @@ static uint32_t FrequencyLevel_RunClosedLoop(uint32_t follow_mode)
     uint32_t method = g_deviceParams.liquidLevelMeasurementMethod;
     const char *method_text = "频率";
 
-    if ((method == OIL_LEVEL_METHOD_CONTINUOUS_FIXED_FREQ) &&
-        (g_measurement.oil_measurement.follow_frequency == 0U)) {
-        g_measurement.oil_measurement.follow_frequency = g_deviceParams.oilLevelFrequency;
-    }
     if (g_measurement.oil_measurement.follow_frequency == 0U) {
         printf("频率找液位\t目标频率未配置\r\n");
         return PARAM_ERROR;
@@ -648,7 +856,7 @@ static uint32_t FrequencyLevel_RunClosedLoop(uint32_t follow_mode)
     if (method == OIL_LEVEL_METHOD_CONTINUOUS_RELATIVE_FREQ) {
         method_text = "连续相对频率";
     } else if (method == OIL_LEVEL_METHOD_CONTINUOUS_FIXED_FREQ) {
-        method_text = "连续绝对频率";
+        method_text = "连续固定频率";
     }
 
     deadband = FrequencyLevel_GetDeadband(g_deviceParams.oilLevelThreshold);
@@ -703,7 +911,7 @@ static uint32_t FrequencyLevel_RunClosedLoop(uint32_t follow_mode)
         dir = FrequencyLevel_CorrectRelativeEndpointDirection(dir);
 
         if (FrequencyLevel_IsStableInsideBand(frequency_error, deadband) != 0U) {
-            ret = DensityLevel_StartOrUpdateMotion(DENSITY_LEVEL_DIR_NONE, 0U, &active_dir, &active_speed_x100);
+            ret = LevelVelocity_StartOrUpdateMotion(DENSITY_LEVEL_DIR_NONE, 0U, &active_dir, &active_speed_x100);
             if (ret != NO_ERROR) {
                 return FrequencyLevel_StopAndReturn(ret, "停止确认失败");
             }
@@ -736,7 +944,7 @@ static uint32_t FrequencyLevel_RunClosedLoop(uint32_t follow_mode)
                MotorCtrl_DirectionText(dir),
                (double)speed_x100 / 100.0);
 
-        ret = DensityLevel_StartOrUpdateMotion(dir, speed_x100, &active_dir, &active_speed_x100);
+        ret = LevelVelocity_StartOrUpdateMotion(dir, speed_x100, &active_dir, &active_speed_x100);
         if (ret != NO_ERROR) {
             return FrequencyLevel_StopAndReturn(ret, "启动速度模式失败");
         }
@@ -893,58 +1101,62 @@ uint32_t SearchAndFollowOilLevel(void) {
 	return NO_ERROR;
 }
 
-/**
- * @brief 搜索液位高度
- *
- * 该函数通过粗找和精找两个阶段完成液位高度的测量。粗找阶段判断传感器当前状态（在油中或在空气中），
- * 并执行相应的搜索操作；精找阶段根据设定的目标频率进行精确液位定位。
- *
- * @return uint32_t 返回状态码：
- *                  - NO_ERROR: 液位测量成功
- *                  - MEASUREMENT_WEIGHT_DOWN_FAIL: 粗找液位失败（超过最大尝试次数）
- *                  - 其他错误码: 具体错误状态
- *
- * @note 函数执行流程：
- *       1. 启用液位模式（最多尝试3次）
- *       2. 粗找阶段：判断传感器在油中或空气中，执行SearchAir或SearchOil
- *       3. 精找阶段：根据测量方法计算目标频率，调用SearchOilPrecise
- *       4. 记录最终液位位置
- *
- * @note 依赖函数：
- *       - EnableLevelMode(): 启用液位模式
- *       - determine_level_status(): 判断液位状态
- *       - fault_info_init(): 清除故障信息
- *       - DSM_Get_LevelMode_Frequence_Avg(): 获取平均频率
- *       - MotorCtrl_MoveAndWait(): 电机移动
- *       - SearchAir(): 寻找空气
- *       - SearchOil(): 寻找液位
- *       - SearchOilPrecise(): 精确搜索液位
+/*
+ * 函数用途：清理单次找液位开始前的命中和稳定状态。
+ * 调用场景：SearchOilLevel() 的方法 0/1/4/未知路径，以及方法 5 直接闭环入口。
+ * 关键约束：只清运行态标志和故障缓存，不修改目标频率和测量方法。
  */
-uint32_t SearchOilLevel(void) {
+static void OilLevel_ResetSearchRuntimeState(void)
+{
+    g_measurement.oil_measurement.probe_at_liquid_level = 0U;
+    g_measurement.oil_measurement.liquid_stable = 0U;
+    fault_info_init();
+}
+
+/*
+ * 函数用途：处理不需要空气/油中粗找的直接找液位方式。
+ * 调用场景：SearchOilLevel() 入口按测量方法分流方法 2、3、5 时调用。
+ * 关键约束：方法 5 保持固定频率速度闭环，方法 0/1/4 继续交给后续粗找和精找。
+ */
+static uint32_t OilLevel_TryRunDirectSearchMethod(uint8_t *handled)
+{
+    if (handled == NULL) {
+        return PARAM_ADDRESS_OVERFLOW;
+    }
+
+    *handled = 1U;
     switch (g_deviceParams.liquidLevelMeasurementMethod) {
     case OIL_LEVEL_METHOD_DENSITY:
         g_measurement.device_status.device_state = STATE_FINDOIL;
         return DensityLevel_RunClosedLoop(DENSITY_LEVEL_RUN_SEARCH);
+    case OIL_LEVEL_METHOD_ULTRASONIC_RESERVED:
+        printf("液位测量\t方法3为超声波预留\r\n");
+        return PARAM_ERROR;
+    case OIL_LEVEL_METHOD_CONTINUOUS_FIXED_FREQ:
+        /* 方法5固定频率速度法：不粗找空气/油面，校验后直接按 oilLevelFrequency 闭环。 */
+        g_measurement.device_status.device_state = STATE_FINDOIL;
+        OilLevel_ResetSearchRuntimeState();
+        return FrequencyLevel_RunFixedClosedLoop(FREQUENCY_LEVEL_RUN_SEARCH);
     default:
-        break;
+        *handled = 0U;
+        return NO_ERROR;
     }
+}
 
-    uint32_t ret;
-    uint32_t last_coarse_ret = MEASUREMENT_OILLEVEL_NOTFOUND;
-    uint8_t coarse_found = 0U;
+/*
+ * 函数用途：按既有重试策略启用液位模式。
+ * 调用场景：SearchOilLevel() 中方法 0/1/4/未知路径进入频率粗找前调用。
+ * 关键约束：命令切换直接透传；普通错误在本函数内按 CHECK_ERROR 统一出口处理。
+ */
+static uint32_t OilLevel_EnableLevelModeWithRetry(void)
+{
+    uint32_t ret = MEASUREMENT_OILLEVEL_NOTFOUND;
     int mode_try_times = 0;
-    int coarse_try_times = 0;
-    /* 找液位开始时先清除液位命中/稳定状态，防止 CPU3 读到上一轮结果。 */
-    g_measurement.oil_measurement.probe_at_liquid_level = 0;
-    g_measurement.oil_measurement.liquid_stable = 0;
-    fault_info_init();  /* 清除故障信息 */
-    /* ************** Step 1: 启用液位模式 ************** */
+
     while (mode_try_times < 3) {
         mode_try_times++;
 
         ret = EnableLevelMode();
-
-        /* 先处理异常边界，避免液位测量状态机带故障继续运行。 */
         if (ret == NO_ERROR) {
             if (mode_try_times > 1) {
                 /* 错误 阶段：重试成功 模块：传感器 操作：启用液位模式 原因：恢复成功 尝试：mode_try_times/3U */
@@ -956,9 +1168,9 @@ uint32_t SearchOilLevel(void) {
             }
             break;
         } else if (ret == STATE_SWITCH) {
-			/* 命令切换是正常打断，直接向上透传，不参与故障重试。 */
-			return STATE_SWITCH;
-		} else {
+            /* 命令切换是正常打断，直接向上透传，不参与故障重试。 */
+            return STATE_SWITCH;
+        } else {
             /* 错误 阶段：错误重试 模块：传感器 操作：启用液位模式 原因：模式启用失败 尝试：mode_try_times/3U 错误码：ret 错误名：ErrorLog_GetCodeName(ret) */
             ErrorLog_Retry(ERROR_LOG_MODULE_SENSOR,
                            ERROR_LOG_OP_ENABLE_LEVEL_MODE,
@@ -969,21 +1181,34 @@ uint32_t SearchOilLevel(void) {
             HAL_Delay(500);
         }
     }
-    /* 先处理异常边界，避免液位测量状态机带故障继续运行。 */
+
     if (ret != NO_ERROR) {
         CHECK_ERROR(ret);
     }
 
-    /* ************** 粗找阶段 - 带重试机制 ************** */
-    while (coarse_try_times < 3) {  /* 这里重试没有起作用 */
+    return NO_ERROR;
+}
+
+/*
+ * 函数用途：完成方法 0/1/4/未知路径共用的空气/油中端点粗找。
+ * 调用场景：SearchOilLevel() 启用液位模式成功后调用。
+ * 关键约束：入口读频率失败最多重试 3 次；运动安全错误和端点搜索错误保持原有 CHECK_ERROR 出口。
+ */
+static uint32_t OilLevel_RunFrequencyCoarseSearch(void)
+{
+    uint32_t ret;
+    uint32_t last_coarse_ret = MEASUREMENT_OILLEVEL_NOTFOUND;
+    uint8_t coarse_found = 0U;
+    int coarse_try_times = 0;
+
+    while (coarse_try_times < 3) {
         coarse_try_times++;
-        fault_info_init(); /* 清除故障信息 */
+        fault_info_init();
         ret = DSM_Get_LevelMode_Frequence_Avg(&g_measurement.oil_measurement.current_frequency);
         if (ret == STATE_SWITCH) {
             /* 命令切换是正常打断，直接向上透传，不参与故障重试。 */
             return STATE_SWITCH;
         }
-        /* 先处理异常边界，避免液位测量状态机带故障继续运行。 */
         if (ret != NO_ERROR) {
             last_coarse_ret = ret;
             /* 错误 阶段：错误重试 模块：传感器 操作：读取液位频率 原因：ErrorLog_GetReasonByCode(ret) 尝试：coarse_try_times/3U 错误码：ret 错误名：ErrorLog_GetCodeName(ret) */
@@ -996,31 +1221,31 @@ uint32_t SearchOilLevel(void) {
             HAL_Delay(500);
             continue;
         }
-        if (INOIL) {
-            /* 如果当前传感器在盲区以上100mm */
+        if (OilLevel_IsCurrentFrequencyInOil() != 0U) {
+            /* 当前传感器在盲区以上 100mm 时，先下行确保传感器完全在油中。 */
             if (g_measurement.debug_data.sensor_position > (g_deviceParams.blindZone + 1000)) {
-                /* 向下运行保证传感器全部在油 */
                 ret = MotorCtrl_MoveAndWait(100.0, MOTOR_DIRECTION_DOWN, MotorCtrl_GetDefaultSpeedX100());
-                CHECK_ERROR(ret); /* 检查下行是否成功 */
+                CHECK_ERROR(ret);
             }
-            /* 取油中频率 */
-            ret = DSM_Get_LevelMode_Frequence_Avg(&g_measurement.oil_measurement.oil_frequency);
+
+            ret = OilLevel_ReadAverageFrequencyWithRetry(&g_measurement.oil_measurement.oil_frequency, "油中端点");
+            CHECK_ERROR(ret);
             printf("液位测量\t油中频率：%ld\r\n", g_measurement.oil_measurement.oil_frequency);
-            CHECK_ERROR(ret);  /* 检查获取油中频率是否成功 */
 
             printf("液位测量\t传感器已在液位中，向上寻找空气\r\n");
             ret = SearchAir();
-            CHECK_ERROR(ret); /* 检查寻找空气是否成功 */
+            CHECK_ERROR(ret);
             coarse_found = 1U;
             break;
-        } else if (INAIR) {
+        } else if (OilLevel_IsCurrentFrequencyInAir() != 0U) {
             printf("液位测量\t传感器在空气中，向下寻找液位\r\n");
             ret = SearchOil();
-            CHECK_ERROR(ret); /* 检查寻找液位是否成功 */
+            CHECK_ERROR(ret);
             coarse_found = 1U;
             break;
         }
     }
+
     if (coarse_found == 0U) {
         RETURN_ERROR(last_coarse_ret);
     }
@@ -1033,8 +1258,17 @@ uint32_t SearchOilLevel(void) {
                          3U);
     }
     printf("液位测量\t粗找液位完成\r\n");
-    /* ************** 精找阶段 ************** */
-    /* 精确找液位 */
+
+    return NO_ERROR;
+}
+
+/*
+ * 函数用途：根据测量方法解析本次找液位目标频率。
+ * 调用场景：SearchOilLevel() 粗找空气/油中端点完成后调用。
+ * 关键约束：方法 0/4 使用端点中点；方法 1 保持固定目标但仍走步进精找。
+ */
+static void OilLevel_ResolveSearchTargetFrequency(void)
+{
     switch (g_deviceParams.liquidLevelMeasurementMethod) {
     case OIL_LEVEL_METHOD_RELATIVE_FREQ:
     case OIL_LEVEL_METHOD_CONTINUOUS_RELATIVE_FREQ:
@@ -1042,7 +1276,7 @@ uint32_t SearchOilLevel(void) {
                 (g_measurement.oil_measurement.air_frequency + g_measurement.oil_measurement.oil_frequency) / 2U;
         break;
     case OIL_LEVEL_METHOD_FIXED_FREQ:
-    case OIL_LEVEL_METHOD_CONTINUOUS_FIXED_FREQ:
+        /* 方法1固定频率步进法：目标固定，但仍使用 SearchOilPrecise 步进精找。 */
         g_measurement.oil_measurement.follow_frequency = g_deviceParams.oilLevelFrequency;
         break;
     default:
@@ -1051,38 +1285,124 @@ uint32_t SearchOilLevel(void) {
     }
     printf("液位查找\t目标频率：%lu Hz\r\n",
            (unsigned long)g_measurement.oil_measurement.follow_frequency);
+}
+
+/*
+ * 函数用途：按解析后的目标执行精找或相对频率速度闭环搜索。
+ * 调用场景：SearchOilLevel() 目标频率确定后调用。
+ * 关键约束：方法 4 的闭环函数会自行记录结果；方法 0/1 继续使用 SearchOilPrecise 离散步进。
+ */
+static uint32_t OilLevel_RunResolvedSearchMethod(uint8_t *result_recorded)
+{
+    uint32_t ret;
+
+    if (result_recorded == NULL) {
+        RETURN_ERROR(PARAM_ADDRESS_OVERFLOW);
+    }
+    *result_recorded = 0U;
 
     switch (g_deviceParams.liquidLevelMeasurementMethod) {
     case OIL_LEVEL_METHOD_CONTINUOUS_RELATIVE_FREQ:
-    case OIL_LEVEL_METHOD_CONTINUOUS_FIXED_FREQ:
         ret = FrequencyLevel_RunClosedLoop(FREQUENCY_LEVEL_RUN_SEARCH);
         if (ret != NO_ERROR) {
             CHECK_ERROR(ret);
         }
-        return NO_ERROR;
+        *result_recorded = 1U;
+        break;
     case OIL_LEVEL_METHOD_RELATIVE_FREQ:
     case OIL_LEVEL_METHOD_FIXED_FREQ:
     default:
         ret = SearchOilPrecise(100);
-        /* 旧频率方式和未识别方法保留原有步进式精找路径。 */
+        /* 方法0/1为旧步进频率方式，保留 SearchOilPrecise 离散步进路径。 */
         if (ret != NO_ERROR) {
             CHECK_ERROR(ret);
         }
         break;
     }
-    /* ************** 最终校验与记录 ************** */
-    /* 记录最终液位位置 */
+
+    return NO_ERROR;
+}
+
+/*
+ * 函数用途：记录步进精找成功后的液位结果并刷新 AO 输出。
+ * 调用场景：SearchOilLevel() 的方法 0/1/未知配置精找成功后调用。
+ * 关键约束：方法 4/5 和密度闭环由各自闭环记录当前位置，不再重复覆盖。
+ */
+static uint32_t OilLevel_RecordSearchResult(void)
+{
     g_measurement.oil_measurement.oil_level =
             OilLevel_ClampLevelForReport(g_measurement.debug_data.sensor_position, "液位测量");
     g_measurement.density_distribution.Density_oil_level = g_measurement.oil_measurement.oil_level;
-    /* 打印测量结果 */
     printf("液位测量\t液位：%lu(0.1mm)\r\n", (unsigned long)g_measurement.oil_measurement.oil_level);
 
     /* 成功找到液位后才置位 SI 的 Probe At Liquid Level 和液体稳定状态。 */
-    g_measurement.oil_measurement.probe_at_liquid_level = 1;
-    g_measurement.oil_measurement.liquid_stable = 1;
+    g_measurement.oil_measurement.probe_at_liquid_level = 1U;
+    g_measurement.oil_measurement.liquid_stable = 1U;
     OilLevel_UpdateAoOutput();
-    return NO_ERROR;  /* 返回成功状态 */
+
+    return NO_ERROR;
+}
+/**
+ * @brief 搜索液位高度
+ *
+ * 该函数通过粗找和精找两个阶段完成液位高度的测量。粗找阶段判断传感器当前状态（在油中或在空气中），
+ * 并执行相应的搜索操作；精找阶段根据设定的目标频率进行精确液位定位。
+ *
+ * @return uint32_t 返回状态码：
+ *                  - NO_ERROR: 液位测量成功
+ *                  - MEASUREMENT_WEIGHT_DOWN_FAIL: 粗找液位失败（超过最大尝试次数）
+ *                  - 其他错误码: 具体错误状态
+ *
+ * @note 函数执行流程：
+ *       1. 方法 2/3/5 先直接分流：密度速度闭环、超声预留、固定频率速度闭环
+ *       2. 方法 0/1/4/未知配置复位运行态并启用液位模式
+ *       3. 粗找阶段：判断传感器在油中或空气中，执行 SearchAir() 或 SearchOil()
+ *       4. 解析目标频率：相对法取端点中点，固定频率步进法取参数频率
+ *       5. 执行搜索：方法 4 走频率速度闭环，方法 0/1 走 SearchOilPrecise() 离散步进
+ *       6. 步进路径记录最终液位位置；速度闭环路径由闭环函数记录结果
+ *
+ * @note 依赖函数：
+ *       - OilLevel_TryRunDirectSearchMethod(): 处理方法 2/3/5 直接入口
+ *       - OilLevel_EnableLevelModeWithRetry(): 启用液位模式并保留重试
+ *       - OilLevel_RunFrequencyCoarseSearch(): 执行空气/油中端点粗找
+ *       - OilLevel_ResolveSearchTargetFrequency(): 解析本次目标频率
+ *       - OilLevel_RunResolvedSearchMethod(): 执行步进精找或方法 4 速度闭环
+ *       - OilLevel_RecordSearchResult(): 记录步进精找成功结果
+ */
+uint32_t SearchOilLevel(void)
+{
+    uint32_t ret;
+    uint8_t direct_handled = 0U;
+    uint8_t result_recorded = 0U;
+
+    ret = OilLevel_TryRunDirectSearchMethod(&direct_handled);
+    if ((ret != NO_ERROR) || (direct_handled != 0U)) {
+        return ret;
+    }
+
+    OilLevel_ResetSearchRuntimeState();
+
+    ret = OilLevel_EnableLevelModeWithRetry();
+    if (ret != NO_ERROR) {
+        return ret;
+    }
+
+    ret = OilLevel_RunFrequencyCoarseSearch();
+    if (ret != NO_ERROR) {
+        return ret;
+    }
+
+    OilLevel_ResolveSearchTargetFrequency();
+
+    ret = OilLevel_RunResolvedSearchMethod(&result_recorded);
+    if (ret != NO_ERROR) {
+        return ret;
+    }
+    if (result_recorded != 0U) {
+        return NO_ERROR;
+    }
+
+    return OilLevel_RecordSearchResult();
 }
 /**
  * @brief 液位跟随函数，用于持续监测并跟踪液位变化
@@ -1105,10 +1425,14 @@ uint32_t FollowOilLevel(void) {
 
 	switch (g_deviceParams.liquidLevelMeasurementMethod) {
 	case OIL_LEVEL_METHOD_CONTINUOUS_RELATIVE_FREQ:
-	case OIL_LEVEL_METHOD_CONTINUOUS_FIXED_FREQ:
 		return FrequencyLevel_RunClosedLoop(FREQUENCY_LEVEL_RUN_FOLLOW);
+	case OIL_LEVEL_METHOD_CONTINUOUS_FIXED_FREQ:
+		return FrequencyLevel_RunFixedClosedLoop(FREQUENCY_LEVEL_RUN_FOLLOW);
 	case OIL_LEVEL_METHOD_DENSITY:
 		return DensityLevel_RunClosedLoop(DENSITY_LEVEL_RUN_FOLLOW);
+	case OIL_LEVEL_METHOD_ULTRASONIC_RESERVED:
+		printf("液位测量\t方法3为超声波预留\r\n");
+		return PARAM_ERROR;
 	default:
 		break;
 	}
@@ -1122,22 +1446,26 @@ uint32_t FollowOilLevel(void) {
 		ret = DSM_Get_LevelMode_Frequence(&g_measurement.oil_measurement.current_frequency);
 		CHECK_ERROR(ret);  /* 检查开启液位模式是否成功 */
 		/* 稳定性判断（频率波动在阈值内） */
-		if (fabs(frequency_difference) < FrequencyLevel_GetCompatThresholdHz(g_deviceParams.oilLevelHysteresisThreshold)) {
+		if (fabs(OilLevel_GetFrequencyDifference()) < FrequencyLevel_GetCompatThresholdHz(g_deviceParams.oilLevelHysteresisThreshold)) {
 			/* 液位稳定时电机不动作，直接打印寄存器中保存的液位值 */
 			printf("液位稳定,电机不动作\t");
 			printf("液位跟随\t液位值为%ld (0.1mm)", g_measurement.oil_measurement.oil_level);
 			ret = (int)AbortableDelay_CommandSwitch(3000U, 100U);
 			CHECK_COMMAND_SWITCH(ret);
 		} else {
-			/* 检测到液位变动，重新跟踪 */
+			/* 检测到液位变动，先按滞后时间确认，避免瞬时波动触发重找。 */
 			printf("识别到液位变动\t");
-			g_measurement.device_status.device_state = STATE_FINDOIL;
+			if (OilLevel_ConfirmFollowDeviation(&ret) == 0U) {
+				CHECK_COMMAND_SWITCH(ret);
+				CHECK_ERROR(ret);
+				continue;
+			}
+			/* 0/1跟随重找期间保持跟随态，按设计允许中间液位继续发布到 AO 和继电器。 */
 			ret = SearchOilPrecise(100);
 			/* 先处理异常边界，避免液位测量状态机带故障继续运行。 */
 			if (ret != NO_ERROR) {
 				return OilLevel_StopBeforeReturn((uint32_t)ret, "液位流程故障");
 			} else {
-				g_measurement.device_status.device_state = STATE_FLOWOIL;
 				ret = determineTheSensorPositionAndUpdateTheLevelValue();
 				if (ret == MEASUREMENT_OILLEVEL_LOW) {
 					/* 处理盲区状态 */
@@ -1228,9 +1556,9 @@ static int SearchOil() {
 		CHECK_ERROR(ret); /* 检查下行是否成功 */
 	}
 	/* 取油中频率 */
-	ret = DSM_Get_LevelMode_Frequence_Avg(&g_measurement.oil_measurement.oil_frequency);
-	printf("液位测量\t油中频率：%ld\r\n", g_measurement.oil_measurement.oil_frequency);
+	ret = OilLevel_ReadAverageFrequencyWithRetry(&g_measurement.oil_measurement.oil_frequency, "油中端点");
 	CHECK_ERROR(ret);  /* 检查获取油中频率是否成功 */
+	printf("液位测量\t油中频率：%ld\r\n", g_measurement.oil_measurement.oil_frequency);
 
 	printf("液位测量\t传感器已在液位中，向上寻找空气\r\n");
 	ret = SearchAir();
@@ -1299,9 +1627,9 @@ static int SearchAir() {
 		CHECK_ERROR(ret); /* 检查上行是否成功 */
 	}
 	/* 取空气中频率 */
-	ret = DSM_Get_LevelMode_Frequence_Avg(&g_measurement.oil_measurement.air_frequency);
-	printf("液位测量\t空气中频率：%ld\r\n", g_measurement.oil_measurement.air_frequency);
+	ret = OilLevel_ReadAverageFrequencyWithRetry(&g_measurement.oil_measurement.air_frequency, "空气端点");
 	CHECK_ERROR(ret);  /* 检查获取空气中频率是否成功 */
+	printf("液位测量\t空气中频率：%ld\r\n", g_measurement.oil_measurement.air_frequency);
 	if (g_measurement.debug_data.sensor_position > (g_deviceParams.blindZone + 1000)) {
 		/* 向下运行保证传感器全部在油 */
 		ret = MotorCtrl_MoveAndWait(100.0, MOTOR_DIRECTION_DOWN, MotorCtrl_GetDefaultSpeedX100());
@@ -1353,7 +1681,7 @@ static uint32_t determine_level_status_internal(Level_StateTypeDef *state_out, u
     }
 
     printf("液位状态检测[%s]\t当前频率\t%ld\t", mode_text, g_measurement.oil_measurement.current_frequency);
-    if (INAIR) {
+    if (OilLevel_IsCurrentFrequencyInAir() != 0U) {
         printf("传感器在空气中\r\n");
         *state_out = AIR;
     } else {
@@ -1382,6 +1710,103 @@ uint32_t determine_level_status(Level_StateTypeDef *state_out) {
 uint32_t determine_level_status_motion(Level_StateTypeDef *state_out) {
     return determine_level_status_internal(state_out, 0U);
 }
+/*
+ * 函数用途：按旧步进算法计算本轮移动方向和步长。
+ * 调用场景：SearchOilPrecise() 每次读取频率后调用。
+ * 关键约束：保持原超大偏差、接近端点和标准偏差四段判定顺序。
+ */
+static void OilLevel_ComputePreciseStep(float per_mm_frequency,
+                                        float frequency_error,
+                                        int *over_time,
+                                        int *lower_time,
+                                        float *run_length,
+                                        uint32_t *dir)
+{
+    if ((over_time == NULL) || (lower_time == NULL) || (run_length == NULL) || (dir == NULL)) {
+        return;
+    }
+
+    if ((frequency_error > 500.0f) ||
+        ((g_measurement.oil_measurement.air_frequency - g_measurement.oil_measurement.current_frequency) < 200U)) {
+        (*over_time)++;
+        *lower_time = 0;
+        *run_length = 4.0f * (float)(*over_time) + frequency_error / per_mm_frequency - 4.0f;
+        *dir = MOTOR_DIRECTION_DOWN;
+    } else if (frequency_error > (float)FrequencyLevel_GetCompatThresholdHz(g_deviceParams.oilLevelThreshold)) {
+        *over_time = 0;
+        *lower_time = 0;
+        *run_length = frequency_error / per_mm_frequency;
+        *dir = MOTOR_DIRECTION_DOWN;
+    } else if ((frequency_error < -500.0f) ||
+               ((g_measurement.oil_measurement.current_frequency - g_measurement.oil_measurement.oil_frequency) < 200U)) {
+        (*lower_time)++;
+        *over_time = 0;
+        *run_length = -(frequency_error / per_mm_frequency) + 4.0f * (float)(*lower_time) - 4.0f;
+        *dir = MOTOR_DIRECTION_UP;
+    } else if (frequency_error < -(float)FrequencyLevel_GetCompatThresholdHz(g_deviceParams.oilLevelThreshold)) {
+        *over_time = 0;
+        *lower_time = 0;
+        *run_length = -(frequency_error / per_mm_frequency);
+        *dir = MOTOR_DIRECTION_UP;
+    } else {
+        *run_length = 0.0f;
+        *over_time = 0;
+        *lower_time = 0;
+    }
+}
+
+/*
+ * 函数用途：判断旧步进精找是否已处于可稳定计数区间。
+ * 调用场景：SearchOilPrecise() 计算步长后决定是否累计 followTime。
+ * 关键约束：保持原端点 200Hz 保护，避免停在空气或油中端点附近。
+ */
+static uint8_t OilLevel_IsPreciseStable(float frequency_error)
+{
+    if ((fabsf(frequency_error) <= (float)FrequencyLevel_GetCompatThresholdHz(g_deviceParams.oilLevelThreshold)) &&
+        ((g_measurement.oil_measurement.air_frequency - g_measurement.oil_measurement.current_frequency) > 200U) &&
+        ((g_measurement.oil_measurement.current_frequency - g_measurement.oil_measurement.oil_frequency) > 200U)) {
+        return 1U;
+    }
+    return 0U;
+}
+
+/*
+ * 函数用途：执行旧步进精找本轮电机移动。
+ * 调用场景：SearchOilPrecise() 稳定判断后仍需移动时调用。
+ * 关键约束：保持原小步长折半和最小 0.1mm 移动口径。
+ */
+static uint32_t OilLevel_RunPreciseMove(float run_length, uint32_t dir)
+{
+    if (run_length == 0.0f) {
+        return NO_ERROR;
+    }
+
+    if (run_length < 5.0f) {
+        run_length = run_length / 2.0f;
+    }
+    if (run_length < 0.3f) {
+        run_length = 0.1f;
+    }
+    printf("频率跟随\t电机移动\t距离%f\t方向%s\r\n", run_length, (dir == MOTOR_DIRECTION_UP) ? "上" : "下");
+
+    return MotorCtrl_MoveAndWait(run_length, dir, MotorCtrl_GetDefaultSpeedX100());
+}
+
+/*
+ * 函数用途：执行旧步进精找每轮结束后的当前位置更新和盲区等待。
+ * 调用场景：SearchOilPrecise() 完成本轮移动和超限检查后调用。
+ * 关键约束：命令切换直接透传；其他错误由上层按旧逻辑统一停机返回。
+ */
+static int OilLevel_HandlePrecisePositionUpdate(void)
+{
+    int ret = determineTheSensorPositionAndUpdateTheLevelValue();
+    if (ret == MEASUREMENT_OILLEVEL_LOW) {
+        ret = waitForTheLiquidLevelToExceedTheBlindZone();
+        CHECK_COMMAND_SWITCH(ret);
+    }
+    return ret;
+}
+
 /**
  * @func: SearchOilPrecise
  * @brief 通过频率跟随策略定位液位界面
@@ -1391,7 +1816,7 @@ uint32_t determine_level_status_motion(Level_StateTypeDef *state_out) {
  * 算法原理：
  * 1. 持续比较当前频率与目标频率(空气/油频率均值)
  * 2. 根据频率偏差计算电机移动距离：
- *    - 小偏差：按线性关系移动 (frequency_difference / per_mm_Frequency)
+ *    - 小偏差：按线性关系移动
  *    - 大偏差：采用补偿步长 (4 * overTime + ...)
  * 3. 达到稳定条件（连续10次频率波动<阈值）时退出
  *
@@ -1399,181 +1824,144 @@ uint32_t determine_level_status_motion(Level_StateTypeDef *state_out) {
  * - 死循环保护：超过100次循环强制退出
  * - 超限保护：连续加速移动仍无法跟踪时报错
  */
-static int SearchOilPrecise(float per_mm_Frequency) {
-	/* 初始化状态变量 */
-	int ret;
-	uint32_t dir;
-	float runlenth;
-	int followTime = 0, overTime = 0, lowerTime = 0, loopTime = 0;
+static int SearchOilPrecise(float per_mm_Frequency)
+{
+    int ret;
+    uint32_t dir = MOTOR_DIRECTION_DOWN;
+    float runlenth = 0.0f;
+    int followTime = 0;
+    int overTime = 0;
+    int lowerTime = 0;
+    int loopTime = 0;
 
-	printf("进入频率跟随区间\r\n");
+    printf("进入频率跟随区间\r\n");
 
-	/* 主跟随循环（需满足连续10次稳定） */
-	while (followTime < 10) {
-		/* 延时保证传感器稳定性（总延时3秒） */
-		ret = (int)AbortableDelay_CommandSwitch(2000U, 100U);
-		if (ret == STATE_SWITCH) {
-			/* 命令切换是正常打断，直接向上透传，不参与故障重试。 */
-			return STATE_SWITCH;
-		}
+    while (followTime < 10) {
+        float frequency_error;
 
-		/* 获取当前传感器频率 */
-		ret = DSM_Get_LevelMode_Frequence(&g_measurement.oil_measurement.current_frequency);
-		/* 先处理异常边界，避免液位测量状态机带故障继续运行。 */
-		if (ret != NO_ERROR)
-			return OilLevel_StopBeforeReturn((uint32_t)ret, "液位流程故障");
+        ret = (int)AbortableDelay_CommandSwitch(2000U, 100U);
+        if (ret == STATE_SWITCH) {
+            /* 命令切换是正常打断，直接向上透传，不参与故障重试。 */
+            return STATE_SWITCH;
+        }
 
-		/* 死循环保护（>100次循环退出） */
-		if (loopTime++ > 100) {
-			printf("频率跟随可能陷入循环，跳出频率跟随\r\n");
-			break;
-		}
+        ret = DSM_Get_LevelMode_Frequence(&g_measurement.oil_measurement.current_frequency);
+        if (ret != NO_ERROR) {
+            return OilLevel_StopBeforeReturn((uint32_t)ret, "液位流程故障");
+        }
 
-		/* 计算当前频率与目标频率差值 */
-/* float frequency_difference = g_measurement.oil_measurement.follow_frequency - g_measurement.oil_measurement.current_frequency; */
-		printf("当前频率%ld\t频率阈值%ld\t阈值差%f\r\n", g_measurement.oil_measurement.current_frequency, g_measurement.oil_measurement.follow_frequency,
-		frequency_difference);
+        if (loopTime++ > 100) {
+            printf("频率跟随可能陷入循环，跳出频率跟随\r\n");
+            break;
+        }
 
-		/* 方向决策树（基于频率偏差） */
-		if (frequency_difference > 500 ||  /* 超大正偏差 */
-				(g_measurement.oil_measurement.air_frequency - g_measurement.oil_measurement.current_frequency < 200)) { /* 接近空气频率 */
-			/* 向下加速移动（补偿步长） */
-			overTime++;
-			lowerTime = 0;
-			runlenth = 4.0 * overTime + frequency_difference / per_mm_Frequency - 4.0;
-			dir = MOTOR_DIRECTION_DOWN;
-		} else if (frequency_difference > (int)FrequencyLevel_GetCompatThresholdHz(g_deviceParams.oilLevelThreshold)) { /* 可接受正偏差 */
-			/* 标准向下移动 */
-			overTime = 0;
-			lowerTime = 0;
-			runlenth = frequency_difference / per_mm_Frequency;
-			dir = MOTOR_DIRECTION_DOWN;
-		} else if (frequency_difference < -500 ||  /* 超大负偏差 */
-				(g_measurement.oil_measurement.current_frequency - g_measurement.oil_measurement.oil_frequency < 200)) { /* 接近油中频率 */
-			/* 向上加速移动 */
-			lowerTime++;
-			overTime = 0;
-			runlenth = -(frequency_difference / per_mm_Frequency) + 4.0 * lowerTime - 4.0;
-			dir = MOTOR_DIRECTION_UP;
-		} else if (frequency_difference < -(int)FrequencyLevel_GetCompatThresholdHz(g_deviceParams.oilLevelThreshold)) { /* 可接受负偏差 */
-			/* 标准向上移动 */
-			overTime = 0;
-			lowerTime = 0;
-			runlenth = -(frequency_difference / per_mm_Frequency);
-			dir = MOTOR_DIRECTION_UP;
-		} else {  /* 频率在稳定范围内 */
-			runlenth = 0;
-			overTime = 0;
-			lowerTime = 0;
-		}
+        frequency_error = OilLevel_GetFrequencyDifference();
+        printf("当前频率%ld\t频率阈值%ld\t阈值差%f\r\n",
+               g_measurement.oil_measurement.current_frequency,
+               g_measurement.oil_measurement.follow_frequency,
+               (double)frequency_error);
 
-		/* 稳定性检测（连续稳定计数） */
-		if ((fabsf(frequency_difference) <= (float)FrequencyLevel_GetCompatThresholdHz(g_deviceParams.oilLevelThreshold)) && (g_measurement.oil_measurement.air_frequency - g_measurement.oil_measurement.current_frequency > 200)
-				&& (g_measurement.oil_measurement.current_frequency - g_measurement.oil_measurement.oil_frequency > 200)) {
-			followTime++;
-			runlenth = 0;
-			printf("频率跟随\t电机不动作\t等待频率稳定\t频率稳定次数%d\r\n", followTime);
-		} else {
-			followTime = 0;  /* 重置连续稳定计数 */
-		}
+        OilLevel_ComputePreciseStep(per_mm_Frequency, frequency_error, &overTime, &lowerTime, &runlenth, &dir);
 
-		/* 电机移动控制 */
-		if (runlenth != 0) {
-			/* 步长微调策略 */
-			if (runlenth < 5)
-				runlenth = runlenth / 2;
-			if (runlenth < 0.3)
-				runlenth = 0.1;
-			printf("频率跟随\t电机移动\t距离%f\t方向%s\r\n", runlenth, (dir == MOTOR_DIRECTION_UP) ? "上" : "下");
-			/* 执行电机移动（带丢步检测） */
-			ret = MotorCtrl_MoveAndWait(runlenth, dir, MotorCtrl_GetDefaultSpeedX100());
-			/* 先处理异常边界，避免液位测量状态机带故障继续运行。 */
-			if (NO_ERROR != ret)
-				return OilLevel_StopBeforeReturn((uint32_t)ret, "液位流程故障");
-		}
+        if (OilLevel_IsPreciseStable(frequency_error) != 0U) {
+            followTime++;
+            runlenth = 0.0f;
+            printf("频率跟随\t电机不动作\t等待频率稳定\t频率稳定次数%d\r\n", followTime);
+        } else {
+            followTime = 0;
+        }
 
-		/* 超限保护（连续多次加速仍无法跟踪） */
-		if (overTime > MAX_TIMES_WHEN_FRE_FOLLOW || lowerTime > MAX_TIMES_WHEN_FRE_FOLLOW) {
-			return OilLevel_StopBeforeReturn(MEASUREMENT_OVERSPEED, "探头频率异常");
-		}
+        ret = (int)OilLevel_RunPreciseMove(runlenth, dir);
+        if (ret != NO_ERROR) {
+            return OilLevel_StopBeforeReturn((uint32_t)ret, "液位流程故障");
+        }
 
-		/* 更新传感器位置及液位值 */
-		ret = determineTheSensorPositionAndUpdateTheLevelValue();
-		if (ret == MEASUREMENT_OILLEVEL_LOW) {
-			/* 处理液位过低（进入盲区） */
-			ret = waitForTheLiquidLevelToExceedTheBlindZone();
-			CHECK_COMMAND_SWITCH(ret);
-		}
-		/* 先处理异常边界，避免液位测量状态机带故障继续运行。 */
-		if (ret != NO_ERROR)
-			return OilLevel_StopBeforeReturn((uint32_t)ret, "液位流程故障");
-	}
-	return NO_ERROR;  /* 成功定位液位界面 */
+        if ((overTime > MAX_TIMES_WHEN_FRE_FOLLOW) || (lowerTime > MAX_TIMES_WHEN_FRE_FOLLOW)) {
+            return OilLevel_StopBeforeReturn(MEASUREMENT_OVERSPEED, "探头频率异常");
+        }
+
+        ret = OilLevel_HandlePrecisePositionUpdate();
+        if (ret == STATE_SWITCH) {
+            return STATE_SWITCH;
+        }
+        if (ret != NO_ERROR) {
+            return OilLevel_StopBeforeReturn((uint32_t)ret, "液位流程故障");
+        }
+    }
+
+    return NO_ERROR;
+}
+/*
+ * 函数用途：按当前设备状态发布液位跟随位置。
+ * 调用场景：速度闭环和旧步进精找每轮刷新当前位置后调用。
+ * 关键约束：非跟随态只打印动态位置，不覆盖最终液位结果。
+ */
+static void OilLevel_PublishFollowPosition(int32_t oil_level)
+{
+    if (g_measurement.device_status.device_state == STATE_FLOWOIL) {
+        g_measurement.oil_measurement.oil_level = OilLevel_ClampLevelForReport(oil_level, "液位跟随");
+        g_measurement.density_distribution.Density_oil_level = g_measurement.oil_measurement.oil_level;
+        /* 正常跟随更新结果时恢复有效标志，覆盖前序清零状态。 */
+        g_measurement.oil_measurement.probe_at_liquid_level = 1U;
+        g_measurement.oil_measurement.liquid_stable = 1U;
+        OilLevel_UpdateAoOutput();
+        printf("液位跟随\t液位值为%lu (0.1mm)", (unsigned long)g_measurement.oil_measurement.oil_level);
+        OilLevel_PrintFollowPositionInfo();
+        printf("\r\n");
+    } else {
+        printf("液位跟随\t动态液位值为%.1f", (float)g_measurement.debug_data.sensor_position / 10.0f);
+        MotorCtrl_PrintPositionRefs();
+        printf("\r\n");
+    }
+}
+
+/*
+ * 函数用途：检查当前位置是否越过液位上下边界。
+ * 调用场景：位置发布后统一判断罐高上限和盲区下限。
+ * 关键约束：边界位置不是有效液位点，必须清除外部协议命中和稳定标志。
+ */
+static uint32_t OilLevel_CheckPositionLimit(int32_t oil_level)
+{
+    int64_t oil_level_s64 = (int64_t)oil_level;
+    int64_t upper_limit_01mm = (int64_t)g_deviceParams.tankHeight - 1000;
+
+    if (((int64_t)g_deviceParams.tankHeight > 1000) &&
+        (oil_level_s64 >= upper_limit_01mm)) {
+        g_measurement.oil_measurement.probe_at_liquid_level = 0U;
+        g_measurement.oil_measurement.liquid_stable = 0U;
+        printf("超声波找液位\t到达位置上限\r\n");
+        return OilLevel_StopBeforeReturn(MEASUREMENT_OILLEVEL_HIGH, "到达液位上限");
+    }
+    if ((oil_level_s64 >= 0) && (oil_level_s64 < (int64_t)g_deviceParams.blindZone)) {
+        g_measurement.oil_measurement.probe_at_liquid_level = 0U;
+        g_measurement.oil_measurement.liquid_stable = 0U;
+        printf("超声波找液位\t到达位置下限\r\n");
+        return OilLevel_StopBeforeReturn(MEASUREMENT_OILLEVEL_LOW, "到达液位下限");
+    }
+
+    return NO_ERROR;
 }
 
 /**
  * @func: int determineTheSensorPositionAndUpdateTheLevelValue(void)
  * @description: 判断传感器位置并更新液位值
  * 主要功能：
- *  1. 根据磁角度计算当前液位值
- *  2. 根据稳定性条件更新液位测量值
+ *  1. 从当前传感器位置取得液位位置
+ *  2. 跟随态发布液位结果，非跟随态只打印动态位置
  *  3. 检查液位是否超出上下限范围
  *  4. 当超限时停止电机并返回状态
  * @return:
  *  正常范围：NO_ERROR
- *  到达下限：MEASURE_DOWNLIMIT
- *  到达上限：MEASURE_UPLIMIT
+ *  到达下限：MEASUREMENT_OILLEVEL_LOW
+ *  到达上限：MEASUREMENT_OILLEVEL_HIGH
  */
-static int determineTheSensorPositionAndUpdateTheLevelValue(void) {
-	int32_t oil_level;         /* 计算得到的当前液位高度（从参考点起算） */
-/* int32_t ret; / / ret: 操作返回值 */
+static int determineTheSensorPositionAndUpdateTheLevelValue(void)
+{
+    int32_t oil_level = g_measurement.debug_data.sensor_position;
 
-	oil_level = g_measurement.debug_data.sensor_position; /* 从传感器位置获取当前液位高度 */
-	/* 判断是否需要更新液位值 */
-	/* 条件1: 频率差在稳定阈值内（系统稳定） */
-	/* 条件2: 新旧液位值差异大于100（需要强制更新） */
-	/* 条件3：处在液位跟随状态 */
-	/* if (((fabsf(frequency_difference) < g_deviceParams.oilLevelThreshold) || (abs((int) oil_level - (int) g_measurement.oil_measurement.oil_level) > 100)) && (g_measurement.device_status.device_state == STATE_FLOWOIL)) { */
-	if  (g_measurement.device_status.device_state == STATE_FLOWOIL) {
-		/* 更新当前液位值 */
-		g_measurement.oil_measurement.oil_level = OilLevel_ClampLevelForReport(oil_level, "液位跟随");
-		g_measurement.density_distribution.Density_oil_level = g_measurement.oil_measurement.oil_level;
-		/* 正常跟随更新结果时恢复有效标志，覆盖前序清零状态。 */
-		g_measurement.oil_measurement.probe_at_liquid_level = 1U;
-		g_measurement.oil_measurement.liquid_stable = 1U;
-		OilLevel_UpdateAoOutput();
-		/* 打印正常液位值信息 */
-		printf("液位跟随\t液位值为%lu (0.1mm)", (unsigned long)g_measurement.oil_measurement.oil_level);
-		OilLevel_PrintFollowPositionInfo();
-		printf("\r\n");
-	} else {
-		/* 系统不稳定时仅打印动态液位值（不更新测量值） */
-		printf("液位跟随\t动态液位值为%.1f", (float)g_measurement.debug_data.sensor_position / 10.0f); MotorCtrl_PrintPositionRefs(); printf("\r\n");
-	}
-
-    int64_t oil_level_s64 = (int64_t)oil_level;
-    int64_t upper_limit_01mm = (int64_t)g_deviceParams.tankHeight - 1000;
-
-	if (((int64_t)g_deviceParams.tankHeight > 1000) &&
-        (oil_level_s64 >= upper_limit_01mm)) {
-		/* 到达上下限不是有效液位点，必须清除给外部协议看的命中状态。 */
-		g_measurement.oil_measurement.probe_at_liquid_level = 0;
-		g_measurement.oil_measurement.liquid_stable = 0;
-		printf("超声波找液位\t到达位置上限\r\n");
-		return OilLevel_StopBeforeReturn(MEASUREMENT_OILLEVEL_HIGH, "到达液位上限");
-	}
-	/* 步骤4: 负位置允许作为正常结果，上报时按0；非负且低于盲区才按下限处理。 */
-	else if ((oil_level_s64 >= 0) && (oil_level_s64 < (int64_t)g_deviceParams.blindZone)) {
-		/* 盲区内位置不作为 SI 的有效液位命中，避免 PLC 误判液位稳定。 */
-		g_measurement.oil_measurement.probe_at_liquid_level = 0;
-		g_measurement.oil_measurement.liquid_stable = 0;
-		printf("超声波找液位\t到达位置下限\r\n");
-		return OilLevel_StopBeforeReturn(MEASUREMENT_OILLEVEL_LOW, "到达液位下限");
-	}
-	/* 步骤5: 正常返回（无错误） */
-	return NO_ERROR;
+    OilLevel_PublishFollowPosition(oil_level);
+    return (int)OilLevel_CheckPositionLimit(oil_level);
 }
-
 /**
  * @func: int waitForTheLiquidLevelToExceedTheBlindZone(void)
  * @description:在盲区等待，直到液位超过盲区退出
@@ -1596,7 +1984,7 @@ static int waitForTheLiquidLevelToExceedTheBlindZone(void) {
         CHECK_COMMAND_SWITCH(ret);
         CHECK_ERROR(ret);    /* 检查开启液位模式是否成功 */
         printf("盲区等待\t频率阈值\t%ld\t当前频率\t%ld\t阈值差\t%f\r\n", g_measurement.oil_measurement.follow_frequency, g_measurement.oil_measurement.current_frequency,
-        frequency_difference);
+        (double)OilLevel_GetFrequencyDifference());
         if (g_measurement.oil_measurement.current_frequency > g_measurement.oil_measurement.follow_frequency) {
             break;
         }

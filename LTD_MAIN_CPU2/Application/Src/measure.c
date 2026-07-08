@@ -716,7 +716,8 @@ static void CMD_MeasureBottom(void) {
  */
 static void CMD_MeasureAndFollowOilLevel(void) {
     uint32_t ret = 0;
-    MeasureStart();
+    ret = (uint32_t)MeasureStart();
+    SET_ERROR(ret);
 
     g_measurement.device_status.device_state = STATE_FINDOIL;
     if ((g_measurement.device_status.zero_point_status == 1) &&
@@ -753,7 +754,8 @@ static void CMD_MeasureAndFollowOilLevel(void) {
 /* 标定液位 */
 static void CMD_CalibrateOilLevel(void) {
 	uint32_t ret = 0;
-	MeasureStart();
+	ret = (uint32_t)MeasureStart();
+	SET_ERROR(ret);
 
     if (g_measurement.device_status.device_state == STATE_FLOWOIL) {
 		printf("当前处于液位跟随状态，执行液位修正操作\r\n");
@@ -787,7 +789,8 @@ static void CMD_CorrectOilLevel(void) {
 	uint32_t ret = 0;
 
 	/* 测量前准备 */
-	MeasureStart();
+	ret = (uint32_t)MeasureStart();
+	SET_ERROR(ret);
 
 	/* 如果当前正在跟随液位，则直接执行修正 */
 	if (g_measurement.device_status.device_state == STATE_FLOWOIL) {
