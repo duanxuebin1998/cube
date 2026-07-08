@@ -10,7 +10,8 @@
 #define AO_OUTPUT_NORMAL_MIN_MA_X100   400U /* 4-20mA 模拟量输出参数：正常 最小值 MA 放大 100 倍。 */
 #define AO_OUTPUT_NORMAL_MAX_MA_X100   2000U /* 4-20mA 模拟量输出参数：正常 最大值 MA 放大 100 倍。 */
 #define AO_OUTPUT_REFRESH_INTERVAL_MS  1000U /* 4-20mA 模拟量输出参数：刷新 间隔 毫秒。 */
-#define AO_OUTPUT_DIAG_INTERVAL_MS     1000U /* 4-20mA 模拟量输出参数：诊断 间隔 毫秒。 */
+#define AO_OUTPUT_DIAG_INTERVAL_MS     1000U /* 4-20mA 模拟量输出芯片诊断检查间隔，单位毫秒。 */
+#define AO_OUTPUT_RECOVER_INTERVAL_MS  1000U /* AD5421 诊断异常后的最小恢复重试间隔，单位毫秒。 */
 
 static AoOutputRuntime ao_output_runtime = {
     AO_OUTPUT_NORMAL_MIN_MA_X100,
@@ -35,9 +36,13 @@ static uint8_t ao_output_write_attempt_valid = 0U;
 static uint32_t ao_output_last_driver_retry_tick = 0U;
 static uint32_t ao_output_last_diag_tick = 0U;
 static uint32_t ao_output_last_diag_error = NO_ERROR;
+static uint8_t ao_output_recover_valid = 0U;
+static uint32_t ao_output_last_recover_tick = 0U;
 static uint32_t ao_output_last_write_attempt_tick = 0U;
 static uint32_t ao_output_last_write_attempt_mA_x100 = 0U;
+static uint32_t ao_output_last_recover_target_mA_x100 = 0U;
 static uint32_t AoOutput_UpdateInternal(uint8_t allow_driver_init);
+static uint32_t AoOutput_NormalizeHardwareCurrent(uint32_t current_mA_x100);
 /*
  * 函数用途：挂起最低优先级 AO 延后刷新。
  * 调用场景：TIM4 请求 AO 刷新或测试流程恢复自动刷新时调用。
@@ -93,6 +98,69 @@ static void AoOutput_LeaveUpdate(void)
 static uint8_t AoOutput_IsEnabled(void)
 {
     return (g_deviceParams.AoOutputEnable == 0U) ? 0U : 1U;
+}
+
+/*
+ * 函数用途：清除 AD5421 诊断恢复节流状态。
+ * 调用场景：AO 初始化、禁用或驱动状态重建时调用。
+ * 关键约束：只更新本模块恢复状态，不访问 AD5421。
+ */
+static void AoOutput_ResetRecoverState(void)
+{
+    ao_output_recover_valid = 0U;
+    ao_output_last_recover_tick = 0U;
+    ao_output_last_recover_target_mA_x100 = 0U;
+}
+
+/*
+ * 函数用途：判断当前是否允许执行一次 AD5421 恢复序列。
+ * 调用场景：诊断发现异常后，在写入故障电流前尝试恢复。
+ * 关键约束：使用 HAL tick 差值判断节流窗口，允许计数回绕。
+ */
+static uint8_t AoOutput_ShouldRecover(uint32_t now)
+{
+    if (ao_output_recover_valid == 0U) {
+        return 1U;
+    }
+
+    return ((now - ao_output_last_recover_tick) >= AO_OUTPUT_RECOVER_INTERVAL_MS) ? 1U : 0U;
+}
+/*
+ * 函数用途：判断 AO 运行期驱动错误是否只记录到 AO 运行态。
+ * 调用场景：自动刷新或测量刷新遇到 AD5421 诊断、恢复、写入异常后调用。
+ * 关键约束：启动初始化失败仍由 AoOutput_Init() 原样上报，运行期错误不拉起整机最终错误。
+ */
+static uint8_t AoOutput_IsRuntimeDriverError(uint32_t error_code)
+{
+    if ((error_code == AD5421_INIT_ERROR) ||
+        (error_code == AD5421_WRITE_CURRENT_ERROR) ||
+        (error_code == AD5421_FAULT_PIN_ERROR) ||
+        (error_code == AD5421_READFAULT_ERROR) ||
+        (error_code == AD5421_READBACK_ERROR) ||
+        (error_code == OTHER_PERIPHERAL_CONFIG_ERROR)) {
+        return 1U;
+    }
+
+    return 0U;
+}
+
+/*
+ * 函数用途：记录 AO 运行期 AD5421 驱动错误并保持服务返回成功。
+ * 调用场景：AO 已初始化后，后台或测量刷新发现 AD5421 暂时不可用。
+ * 关键约束：错误保存在 AO 运行态和驱动故障标志中，不写全局错误码。
+ */
+static uint32_t AoOutput_RecordRuntimeDriverError(uint32_t now, uint32_t error_code)
+{
+    ao_output_driver_ready = 0U;
+    ao_output_runtime.target_mA_x100 = AoOutput_NormalizeHardwareCurrent(g_deviceParams.FaultCurrent_mA);
+    ao_output_runtime.source = AO_OUTPUT_SOURCE_DRIVER_ERROR;
+    ao_output_runtime.driver_fault_flags = AD5421_GetFaultFlags();
+    ao_output_runtime.driver_fault_register = AD5421_GetFaultRegister();
+    ao_output_runtime.last_update_tick = now;
+    ao_output_runtime.last_error_code = error_code;
+    ao_output_runtime.update_counter++;
+
+    return NO_ERROR;
 }
 
 /*
@@ -156,6 +224,8 @@ static uint32_t AoOutput_EnsureDriverReady(uint32_t now, uint8_t allow_init)
         ao_output_diag_valid = 0U;
         ao_output_last_diag_tick = 0U;
         ao_output_last_diag_error = NO_ERROR;
+        AoOutput_ResetRecoverState();
+        ao_output_last_recover_target_mA_x100 = AoOutput_NormalizeHardwareCurrent(g_deviceParams.InitialCurrent_mA);
     }
 
     return ret;
@@ -442,6 +512,39 @@ static uint32_t AoOutput_SelectTarget(AoOutputSource *source, uint32_t *target_m
 }
 
 /*
+ * 函数用途：选择 AD5421 恢复后应写回的目标电流。
+ * 调用场景：诊断异常触发恢复序列前调用。
+ * 关键约束：优先使用当前有效目标，其次使用上次成功输出，最后回退到初始电流。
+ */
+static void AoOutput_GetRecoverTarget(AoOutputSource *source, uint32_t *target_mA_x100)
+{
+    uint32_t select_ret;
+
+    if ((source == NULL) || (target_mA_x100 == NULL)) {
+        return;
+    }
+
+    select_ret = AoOutput_SelectTarget(source, target_mA_x100);
+    if (select_ret == NO_ERROR) {
+        *target_mA_x100 = AoOutput_NormalizeHardwareCurrent(*target_mA_x100);
+        return;
+    }
+
+    *source = (AoOutputSource)ao_output_runtime.source;
+    if ((*source == AO_OUTPUT_SOURCE_DISABLED) ||
+        (*source == AO_OUTPUT_SOURCE_DRIVER_ERROR)) {
+        *source = AO_OUTPUT_SOURCE_INIT;
+    }
+
+    if (ao_output_last_recover_target_mA_x100 != 0U) {
+        *target_mA_x100 = AoOutput_NormalizeHardwareCurrent(ao_output_last_recover_target_mA_x100);
+    } else if (ao_output_runtime.last_sent_mA_x100 != 0U) {
+        *target_mA_x100 = AoOutput_NormalizeHardwareCurrent(ao_output_runtime.last_sent_mA_x100);
+    } else {
+        *target_mA_x100 = AoOutput_NormalizeHardwareCurrent(g_deviceParams.InitialCurrent_mA);
+    }
+}
+/*
  * 函数用途：初始化 AO 输出服务并发布初始运行态。
  * 调用场景：系统参数加载后由主流程调用。
  * 关键约束：AO 未使能时不访问 AD5421；AO 使能时会走 SPI 初始化和诊断，不应在中断中调用。
@@ -517,25 +620,57 @@ static uint32_t AoOutput_UpdateInternal(uint8_t allow_driver_init)
         ao_output_last_diag_error = NO_ERROR;
         ao_output_last_write_attempt_tick = 0U;
         ao_output_last_write_attempt_mA_x100 = 0U;
+        AoOutput_ResetRecoverState();
         AoOutput_SetDisabledRuntime(now);
         return NO_ERROR;
     }
 
     ret = AoOutput_EnsureDriverReady(now, allow_driver_init);
     if (ret != NO_ERROR) {
-        ao_output_runtime.target_mA_x100 = AoOutput_NormalizeHardwareCurrent(g_deviceParams.FaultCurrent_mA);
-        ao_output_runtime.source = AO_OUTPUT_SOURCE_DRIVER_ERROR;
-        ao_output_runtime.last_update_tick = now;
-        ao_output_runtime.last_error_code = ret;
-        ao_output_runtime.update_counter++;
-        return ret;
+        return AoOutput_RecordRuntimeDriverError(now, ret);
     }
 
     diag_ret = AoOutput_PollDiagnosticsThrottled(now);
     if (diag_ret != NO_ERROR) {
+        uint32_t recover_ret = diag_ret;
+
+        if (AoOutput_ShouldRecover(now) != 0U) {
+            AoOutputSource recover_source = source;
+            uint32_t recover_target_mA_x100;
+
+            AoOutput_GetRecoverTarget(&recover_source, &recover_target_mA_x100);
+            ao_output_recover_valid = 1U;
+            ao_output_last_recover_tick = now;
+            recover_ret = AD5421_RecoverCurrentX100(recover_target_mA_x100);
+            ao_output_runtime.driver_fault_flags = AD5421_GetFaultFlags();
+            ao_output_runtime.driver_fault_register = AD5421_GetFaultRegister();
+
+            if (recover_ret == NO_ERROR) {
+                ao_output_diag_valid = 0U;
+                ao_output_last_diag_error = NO_ERROR;
+                ao_output_write_attempt_valid = 0U;
+                ao_output_last_recover_target_mA_x100 = recover_target_mA_x100;
+                ao_output_runtime.target_mA_x100 = recover_target_mA_x100;
+                ao_output_runtime.last_sent_mA_x100 = recover_target_mA_x100;
+                ao_output_runtime.source = (uint32_t)recover_source;
+                ao_output_runtime.last_update_tick = now;
+                ao_output_runtime.last_sent_tick = now;
+                ao_output_runtime.last_error_code = NO_ERROR;
+                ao_output_runtime.update_counter++;
+                return NO_ERROR;
+            }
+
+            ao_output_diag_valid = 1U;
+            ao_output_last_diag_tick = now;
+            ao_output_last_diag_error = recover_ret;
+            if (recover_ret != AD5421_READFAULT_ERROR) {
+                return AoOutput_RecordRuntimeDriverError(now, recover_ret);
+            }
+        }
+
         source = AO_OUTPUT_SOURCE_DRIVER_ERROR;
         target_mA_x100 = AoOutput_NormalizeHardwareCurrent(g_deviceParams.FaultCurrent_mA);
-        ret = diag_ret;
+        ret = recover_ret;
     } else {
         select_ret = AoOutput_SelectTarget(&source, &target_mA_x100);
         if (select_ret != NO_ERROR) {
@@ -563,6 +698,9 @@ static uint32_t AoOutput_UpdateInternal(uint8_t allow_driver_init)
         if (write_ret == NO_ERROR) {
             ao_output_runtime.last_sent_mA_x100 = target_mA_x100;
             ao_output_runtime.last_sent_tick = now;
+            if (source != AO_OUTPUT_SOURCE_DRIVER_ERROR) {
+                ao_output_last_recover_target_mA_x100 = target_mA_x100;
+            }
         } else {
             ret = write_ret;
             target_mA_x100 = AoOutput_NormalizeHardwareCurrent(g_deviceParams.FaultCurrent_mA);
@@ -570,6 +708,9 @@ static uint32_t AoOutput_UpdateInternal(uint8_t allow_driver_init)
             ao_output_runtime.source = AO_OUTPUT_SOURCE_DRIVER_ERROR;
         }
         ao_output_runtime.last_error_code = ret;
+    }
+    if (AoOutput_IsRuntimeDriverError(ret) != 0U) {
+        return NO_ERROR;
     }
 
     return ret;
@@ -585,7 +726,11 @@ uint32_t AoOutput_Update(void)
     uint32_t ret;
 
     if (AoOutput_TryEnterUpdate() == 0U) {
-        return ao_output_runtime.last_error_code;
+        ret = ao_output_runtime.last_error_code;
+        if (AoOutput_IsRuntimeDriverError(ret) != 0U) {
+            return NO_ERROR;
+        }
+        return ret;
     }
 
     ret = AoOutput_UpdateInternal(1U);

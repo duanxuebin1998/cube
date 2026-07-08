@@ -111,9 +111,8 @@ void App_Init(void) {
 	RelayOutput_Init(); /* 初始化继电器报警输出，默认全部释放 */
     ao_init_ret = AoOutput_Init();
     if (ao_init_ret != NO_ERROR) {
-        g_measurement.device_status.error_code = ao_init_ret;
-        startup_init_error = ao_init_ret;
-        printf("AO初始化失败：0x%08lX\r\n", (unsigned long)ao_init_ret);
+        /* AO 输出是辅助输出服务，启动期 AD5421 暂时不可读只记录运行态，不阻塞整机测量。 */
+        printf("AO初始化失败，仅记录AO运行态：0x%08lX\r\n", (unsigned long)ao_init_ret);
     }
 	motor_init_ret = MotorCtrl_Init();
 	/* 先处理异常边界，避免应用主循环状态机带故障继续运行。 */

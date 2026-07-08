@@ -19,6 +19,7 @@ static inline void AD5421_CS_HIGH(void)
 }
 
 #define AD5421_SPI_TIMEOUT_MS 10U /* AD5421 SPI 传输超时时间，单位 ms。 */
+#define AD5421_DAC_FULL_SCALE 65535.0f /* AD5421 16 位 DAC 满量程换算系数。 */
 static volatile uint32_t ad5421_fault_flags = 0U;
 static volatile uint32_t ad5421_fault_register = 0U;
 static volatile uint8_t ad5421_trace_suppressed = 0U;
@@ -159,6 +160,11 @@ static uint32_t AD5421_WriteRegRaw(uint8_t reg, uint16_t value)
     return NO_ERROR;
 }
 
+/*
+ * 函数用途：按 AD5421 两帧读时序读取寄存器原始值。
+ * 调用场景：控制寄存器回读和故障寄存器诊断的底层实现。
+ * 关键约束：调用方必须已经持有 access 窗口；本函数只负责 SPI 帧时序和错误标志。
+ */
 static uint32_t AD5421_ReadRegCheckedRaw(uint8_t reg, uint16_t *value)
 {
     HAL_StatusTypeDef status;
@@ -198,6 +204,11 @@ static uint32_t AD5421_ReadRegCheckedRaw(uint8_t reg, uint16_t *value)
     *value = ((uint16_t)rxData[1] << 8) | rxData[2];
     return NO_ERROR;
 }
+/*
+ * 函数用途：带 access 保护地写入 AD5421 单个寄存器。
+ * 调用场景：旧接口、复位接口和 DAC 原始写入路径。
+ * 关键约束：会占用 SPI 访问窗口，不应在中断中调用。
+ */
 uint32_t AD5421_WriteReg(uint8_t reg, uint16_t value)
 {
     uint32_t ret;
@@ -271,15 +282,15 @@ uint32_t AD5421_SetCurrent(float mA)
     float scale;
     uint16_t dacValue;
 
-    if (mA < 3.2f) {
-        mA = 3.2f;
+    if (mA < (float)STARTFULLSCALE) {
+        mA = (float)STARTFULLSCALE;
     }
-    if (mA > 24.0f) {
-        mA = 24.0f;
+    if (mA > (float)STOPFULLSCALE) {
+        mA = (float)STOPFULLSCALE;
     }
 
-    scale = (mA - 3.2f) / (24.0f - 3.2f);
-    dacValue = (uint16_t)((scale * 65535.0f) + 0.5f);
+    scale = (mA - (float)STARTFULLSCALE) / ((float)STOPFULLSCALE - (float)STARTFULLSCALE);
+    dacValue = (uint16_t)((scale * AD5421_DAC_FULL_SCALE) + 0.5f);
 
     return AD5421_SetDacRaw(dacValue);
 }
@@ -394,41 +405,6 @@ void ResetAD5421(void)
     HAL_Delay(1);
 }
 
-/*******************************************************
-* Name    ReadControlRegister
-* brief
-* param   readbackcontrol:
-* retval  ERRORCODE
-* author  AUBON
-* Data    2023-06-08
-******************************************************/
-/* */
-/* static void ReadControlRegister(uint16_t * readbackcontrol) */
-/* { */
-/* uint32_t i; */
-/* uint16_t readback; */
-/* */
-/* for(i=0u;i<5u;i++) */
-/* { */
-/* SYNC = 0; */
-/* DELAY30US; */
-/* (void)SPI2_ReadWriteByte(READCONTROL); */
-/* readback = SPI2WRITE00; */
-/* readback <<= 8; */
-/* readback += SPI2WRITE00; */
-/* DELAY30US; */
-/* SYNC = 1; */
-/* DELAY30US; */
-/* */
-/* if((readback!=0u)&&(readback!=0xFFFFu)) */
-/* { */
-/* break; */
-/* } */
-/* } */
-/* *readbackcontrol = readback; */
-/* } */
-
-
 /*
  * 函数用途：写入 AD5421 控制寄存器并回读校验。
  * 调用场景：AD5421 初始化时配置 SPI 看门狗模式。
@@ -450,7 +426,7 @@ static uint32_t WriteControlRegister(uint16_t controldata)
         if (AD5421_CanPrint() != 0U) {
             printf("AD5421 control write fail: ret=0x%08lX\r\n", (unsigned long)ret);
         }
-        return AD5421_INIT_ERROR;
+        return ret;
     }
 
     ret = AD5421_ReadRegCheckedRaw(READCONTROL, &readback);
@@ -459,7 +435,7 @@ static uint32_t WriteControlRegister(uint16_t controldata)
         if (AD5421_CanPrint() != 0U) {
             printf("AD5421 control read fail: ret=0x%08lX\r\n", (unsigned long)ret);
         }
-        return AD5421_INIT_ERROR;
+        return ret;
     }
 
     if (readback != controldata) {
@@ -478,109 +454,57 @@ static uint32_t WriteControlRegister(uint16_t controldata)
     return NO_ERROR;
 }
 
-/*******************************************************
-* Name    CalculateCurrentCRC
-* brief
-* param   data:
-* retval  ERRORCODE
-* author  AUBON
-* Data    2023-06-08
-******************************************************/
-
-/* static uint16_t CalculateCurrentCRC(uint32_t data) */
-/* { */
-/* uint32_t divisor = 0x107u; */
-/* uint32_t res; */
-/* uint32_t bitcount = 23u; */
-/* uint32_t fir; */
-/* */
-/* for(;bitcount!=0u;bitcount--) */
-/* { */
-/* fir = ((data>>bitcount)&0x100u); */
-/* if(fir!=0u) */
-/* { */
-/* break; */
-/* } */
-/* } */
-/* */
-/* res = (data>>bitcount)^divisor; */
-/* for(;bitcount!=0u;bitcount--) */
-/* { */
-/* res = (res<<1u)+((data>>(bitcount-1u))&0x01u); */
-/* if((res&0x100u)!=0u) */
-/* { */
-/* res ^= divisor; */
-/* } */
-/* } */
-/* */
-/* return (uint16_t )res; */
-/* } */
-
 /*
- * 函数用途：复位并初始化 AD5421，建立 AO 驱动可用状态。
- * 调用场景：AO 输出使能后首次刷新或初始化时调用。
- * 关键约束：会访问 SPI 和片选 GPIO，并读取诊断状态，不应在中断中调用。
+ * 函数用途：执行 AD5421 复位、控制寄存器回读、目标电流写入和故障诊断公共序列。
+ * 调用场景：Ad5421Init() 和 AD5421_RecoverCurrentX100() 共用。
+ * 关键约束：会占用 sequence 并访问 SPI/GPIO，不应在中断中调用。
  */
-uint32_t Ad5421Init(void)
+static uint32_t AD5421_RunCurrentStartupSequence(uint32_t target_mA_x100)
 {
     uint32_t ret;
 
     if (AD5421_TryBeginSequence() == 0U) {
+        ad5421_fault_flags |= AD5421_FAULT_FLAG_SPI_WRITE;
         return AD5421_INIT_ERROR;
     }
 
     ad5421_fault_flags = 0U;
     ad5421_fault_register = 0U;
+
     ResetAD5421();
 
     ret = WriteControlRegister(CUR_SPIOFF_READBACK_COMMAND);
-    if (ret != NO_ERROR) {
-        AD5421_EndSequence();
-        return ret;
+    if (ret == NO_ERROR) {
+        ret = AD5421_SetCurrentX100(target_mA_x100);
+    }
+    if (ret == NO_ERROR) {
+        HAL_Delay(10);
+        ret = AD5421_PollDiagnostics();
     }
 
-    ret = AD5421_SetCurrentX100(g_deviceParams.InitialCurrent_mA);
-    if (ret != NO_ERROR) {
-        AD5421_EndSequence();
-        return ret;
-    }
-    HAL_Delay(10);
-
-    ret = AD5421_PollDiagnostics();
     AD5421_EndSequence();
     return ret;
 }
 
-/*******************************************************
-* Name    CurrentSelfTest
-* brief
-* param   None
-* retval  ERRORCODE
-* author  AUBON
-* Data    2023-06-08
-******************************************************/
-/* */
-/* static uint32_t CurrentSelfTest(void) */
-/* { */
-/* uint32_t ret; */
-/* if(FAULT_5421!=0u) */
-/* { */
-/* ReadFaultRegister();/ *read fault register* / */
-/* } */
-/* */
-/* if(FAULT_5421!=0u) */
-/* { */
-/* ret = 1; */
-/* (void)printf("AD5421 alarm!\r\n"); */
-/* } */
-/* else */
-/* { */
-/* ret = NO_ERROR; */
-/* } */
-/* */
-/* return ret; */
-/* } */
+/*
+ * 函数用途：复位并初始化 AD5421，建立 AO 驱动可用状态。
+ * 调用场景：AO 输出使能后首次刷新或初始化时调用。
+ * 关键约束：使用参数中的初始电流作为目标，且不应在中断中调用。
+ */
+uint32_t Ad5421Init(void)
+{
+    return AD5421_RunCurrentStartupSequence(g_deviceParams.InitialCurrent_mA);
+}
 
+/*
+ * 函数用途：按指定目标电流恢复 AD5421 输出。
+ * 调用场景：AO 运行期 READFAULT 异常后的自动恢复。
+ * 关键约束：复位芯片后直接写回目标电流，保留控制回读和故障回读诊断。
+ */
+uint32_t AD5421_RecoverCurrentX100(uint32_t target_mA_x100)
+{
+    return AD5421_RunCurrentStartupSequence(target_mA_x100);
+}
 
 
 

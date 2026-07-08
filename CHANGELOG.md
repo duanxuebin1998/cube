@@ -2039,3 +2039,36 @@ CPU2 参数加载会校验 FRAM 中的 `magic`、`struct_size`、`param_version`
 未验证风险：
 - 未做真实 55 m 下行复测；现场需要确认 `模式=编码轮` 时 `使用尺带` 跟随 `业务尺带`，不再等于接近 0 的 `电机尺带`。
 - 未做长时间连续速度模式实机复测；本次覆盖运行刷新和运行中改速路径，连续速度模式仍需现场按实际命令入口确认刷新节奏。
+
+## 2026-07-08 - 修复 AD5421 断环重接恢复与 AO 运行态错误处理（CPU2 V1.21.5.0 / CPU3 V1.19.1.0）
+
+版本：
+- CPU2: V1.21.4.0 -> V1.21.5.0。
+- CPU3: V1.19.1.0 保持不变。
+
+协议版本/兼容性：
+- `DEVICE_PROTOCOL_VERSION` 保持 14，不新增共享命令、寄存器地址、输入寄存器长度或跨 CPU 状态字段。
+- CPU2 `DEVICE_PARAM_VERSION` 保持 3，`DeviceParameters` 结构大小和 FRAM 校验规则不变，从 V1.21.4.0 升级不会因参数存储版本恢复出厂参数。
+- 本次只改变 CPU2 AO/AD5421 运行期恢复和错误处理，不改变 CPU3 菜单、外部寄存器契约或参数语义。
+
+本次修改：
+- AD5421 驱动新增按目标电流恢复接口，恢复序列保持复位、控制寄存器写入与回读校验、目标电流写入和 `READFAULT` 诊断。
+- AO 运行期发现 AD5421 诊断异常后，按 1 秒节流尝试恢复到当前目标或最近一次有效目标；恢复成功后不再写入故障电流。
+- AO 运行期 AD5421 读写或恢复异常只记录 AO 运行态和驱动故障标志，不再由后台刷新直接触发整机最终错误。
+- 启动期 AO 初始化异常只打印并保留 AO 运行态，不再阻塞整机测量流程。
+- 修正 CubeMX 生成标签中 PB4/PB5、PB14/PB15、PD5/PD6 的 MISO/MOSI/TX/RX 命名，保留 AD5421 CS 独立初始置高，避免 PB6 PinState 生成合并写影响 AD5421 回读。
+- 同步 AD5421 断环重接问题分析文档，记录手册依据、代码落地、PB6 配置根因定位和 `AO400` 台架验证结果。
+
+验证：
+- `cmake --build build\LTD_MAIN_CPU2`
+- `STM32_Programmer_CLI -c port=SWD mode=UR -w D:\CUBE\build\LTD_MAIN_CPU2\LTD_MAIN_CPU2_V1.21.5.0.hex -v -rst`
+- 串口 `COM12` 自动发送 `AO400`，0ms 到 4500ms 持续 `fault=0x0000`、`flags=0x00000000`，未出现 AD5421 控制寄存器回读失败或 `0xFFFF`。
+- `V1.21.5.0` 烧写校验后，提交前串口复测因 `COM12` 被占用未重跑；`AO400` 结果来自同一代码逻辑升版前的台架验证。
+- `cmd /c fc /b D:\CUBE\build\debug-logs\LTD_MAIN_CPU2_V1.21.4.0_ao_logic_only_working.hex D:\CUBE\build\LTD_MAIN_CPU2\LTD_MAIN_CPU2_V1.21.4.0.hex`
+- `git diff --cached --check`
+- `py tools\check_version_bumped.py`
+
+未验证风险：
+- 已验证 `AO400` 正常回读和输出刷新，尚未做真实断环、重接、自动恢复到断环前目标电流的连续 10 次台架循环。
+- 尚未接入 HART 通信场景验证断环恢复瞬态对 HART 通信的影响。
+- 尚未用逻辑分析仪抓取断环恢复周期内 `WRITECONTROL`、`READCONTROL`、`WRITEDAC`、`READFAULT` 帧。

@@ -34,7 +34,6 @@
 #define AD5421_FAULT_FLAG_STATUS       0x00000010u /* AD5421 故障位标志：AD5421 故障 FLAG 状态。 */
 
 
-
 /* 电流设置 */
 #define CURRENT_INIT 				3.5 /* AD5421 初始化阶段输出电流，单位 mA。 */
 #define CURRENT_UNDERAOL 			3.6 /* 模拟量低于量程报警时输出电流，单位 mA。 */
@@ -46,17 +45,11 @@
 #define CURRENT_MEAMODE 			21.5 /* 测量模式默认输出电流，单位 mA。 */
 
 
-
-/* 电流设置 */
-#define CURRENT_CHECKMODE_MIN 3.5 /* 校验模式最小输出电流，单位 mA。 */
-#define CURRENT_CHECKMODE_MAX 24.0 /* 校验模式最大输出电流，单位 mA。 */
-
-
-
 /* void CurrentStateJudgeAndSend(void); */
 uint32_t Ad5421Init(void);
 uint32_t AD5421_SetCurrent(float mA);
 uint32_t AD5421_SetCurrentX100(uint32_t mA_x100);
+uint32_t AD5421_RecoverCurrentX100(uint32_t target_mA_x100);
 uint32_t AD5421_PollDiagnostics(void);
 uint32_t AD5421_GetFaultFlags(void);
 uint32_t AD5421_GetFaultRegister(void);
