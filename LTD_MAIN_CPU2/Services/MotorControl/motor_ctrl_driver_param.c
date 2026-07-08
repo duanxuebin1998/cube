@@ -33,6 +33,9 @@ static double MotorDriver_VmaxToMotorRevPerSec(uint32_t vmax);
 static uint32_t MotorDriver_ClampVelocityU64(uint64_t v);
 static uint32_t MotorDriver_UstepsPerSecToVmax(double usteps_per_s);
 static uint32_t MotorDriver_ComputeBaseVelocityFromParams(void);
+static double MotorDriver_GetVelocityReferenceLengthMm(TMC5130TypeDef *tmc5130,
+                                                       double *business_length_mm,
+                                                       double *motor_length_mm);
 static uint32_t MotorDriver_GetDefaultSpeedSetpointX100(void);
 static uint32_t MotorDriver_ClearInitResetFlag(void);
 static uint32_t MotorDriver_CheckInitPowerReadyWithRetry(void);
@@ -372,14 +375,7 @@ static uint32_t MotorDriver_SetSpeedInternal(uint32_t speed_x100, bool print_res
     }
 
     if (is_running) {
-        /* 电机正在跑时，优先用 XACTUAL 推当前卷筒长度。
-         * 这样可以避免外部 cable_length 刷新滞后导致本次改速不准。 */
-        MotorDrumState drum;
-        MotorCtrl_UpdateDrumStateFromXActual(&stepper, &drum);
-        MotorPosition_UpdatePositionFromMotorSource(&drum);
-        Lcur_mm = (g_deviceParams.position_count_mode == POSITION_COUNT_MODE_MOTOR) ?
-                  ((double)g_measurement.debug_data.cable_length * 0.1) :
-                  ((double)drum.motor_distance_01mm * 0.1);
+        Lcur_mm = MotorDriver_GetVelocityReferenceLengthMm(&stepper, NULL, NULL);
     }
 
     /* 把“线速度设定”转换成当前卷径下的 TMC5130 VMAX。 */
@@ -972,13 +968,11 @@ void MotorDriver_RefreshVelocityDuringRun(TMC5130TypeDef *tmc5130,
         return;
     }
 
-    /* 优先用 XACTUAL 推当前长度，避免依赖外部变量刷新滞后 */
-    MotorDrumState drum;
-    MotorCtrl_UpdateDrumStateFromXActual(tmc5130, &drum);
-    MotorPosition_UpdatePositionFromMotorSource(&drum);
-    const double Lcur_mm = (g_deviceParams.position_count_mode == POSITION_COUNT_MODE_MOTOR) ?
-                           ((double)g_measurement.debug_data.cable_length * 0.1) :
-                           ((double)drum.motor_distance_01mm * 0.1);
+    double business_length_mm = 0.0;
+    double motor_length_mm = 0.0;
+    const double Lcur_mm = MotorDriver_GetVelocityReferenceLengthMm(tmc5130,
+                                                                    &business_length_mm,
+                                                                    &motor_length_mm);
 
     const uint32_t new_v = MotorDriver_ComputeUniformVelocityFromLength(Lcur_mm);
     const uint32_t old_v = (s_motor_driver.applied_velocity != 0U) ? s_motor_driver.applied_velocity : velocity;
@@ -1002,8 +996,11 @@ void MotorDriver_RefreshVelocityDuringRun(TMC5130TypeDef *tmc5130,
         s_motor_driver.applied_velocity = new_v;
         velocity = new_v;
 
-        printf("速度刷新 | 线速度=%.2f m/min | 尺带长度：%.1f mm | 周长=%.1f mm | 旧VMAX=%lu | 新VMAX=%lu | 输出轴=%.3f->%.3f r/s | 电机=%.3f->%.3f r/s | 微步/s=%.1f->%.1f\r\n",
+        printf("速度刷新 | 模式=%s | 线速度=%.2f m/min | 业务尺带=%.1f mm | 电机尺带=%.1f mm | 使用尺带=%.1f mm | 周长=%.1f mm | 旧VMAX=%lu | 新VMAX=%lu | 输出轴=%.3f->%.3f r/s | 电机=%.3f->%.3f r/s | 微步/s=%.1f->%.1f\r\n",
+               (g_deviceParams.position_count_mode == POSITION_COUNT_MODE_MOTOR) ? "电机" : "编码轮",
                (double)MotorDriver_GetSpeedSetpointX100() / 100.0,
+               business_length_mm,
+               motor_length_mm,
                Lcur_mm,
                MotorPosition_TapeInstantCircumferenceFromLength(Lcur_mm),
                (unsigned long)old_v,
@@ -1271,6 +1268,41 @@ static uint32_t MotorDriver_ComputeBaseVelocityFromParams(void)
 
     /* 再换成 TMC5130 VMAX */
     return MotorDriver_UstepsPerSecToVmax(usteps_per_s);
+}
+
+/**
+ * @brief 获取线速度补偿使用的当前尺带长度。
+ *
+ * 编码轮记步时，电机 XACTUAL 只能反映本段运动的局部卷筒长度，不能作为实际尺带
+ * 长度参与 VMAX 计算；因此先按当前记步源刷新业务位置，再统一使用 cable_length。
+ */
+static double MotorDriver_GetVelocityReferenceLengthMm(TMC5130TypeDef *tmc5130,
+                                                       double *business_length_mm,
+                                                       double *motor_length_mm)
+{
+    double business_mm;
+
+    if (tmc5130 != NULL) {
+        MotorDrumState drum;
+
+        MotorCtrl_UpdateDrumStateFromXActual(tmc5130, &drum);
+        if (motor_length_mm != NULL) {
+            *motor_length_mm = (double)drum.motor_distance_01mm * 0.1;
+        }
+
+        if (g_deviceParams.position_count_mode == POSITION_COUNT_MODE_MOTOR) {
+            MotorPosition_UpdatePositionFromMotorSource(&drum);
+        } else {
+            MotorCtrl_RefreshPositionFromActiveSource();
+        }
+    }
+
+    business_mm = (double)g_measurement.debug_data.cable_length * 0.1;
+    if (business_length_mm != NULL) {
+        *business_length_mm = business_mm;
+    }
+
+    return business_mm;
 }
 
 /**
