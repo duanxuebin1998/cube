@@ -367,7 +367,7 @@ bool Display_CanEnterCancelMeasurementConfirm(void);
 ```text
 py tools\check_cpu3_display_isr_boundaries.py
 cmake --build build\LTD_DISPLAY_CPU3
-git diff --check -- LTD_DISPLAY_CPU3/Application/display/display.c LTD_DISPLAY_CPU3/Application/display/hgs.c LTD_DISPLAY_CPU3/Application/display/hgs.h tools/check_cpu3_display_isr_boundaries.py docs/03_问题分析与整改/CPU3屏幕驱动与刷新问题分析及整改方案.md
+git diff --check -- LTD_DISPLAY_CPU3/Application/display/display.c LTD_DISPLAY_CPU3/Application/display/hgs.c LTD_DISPLAY_CPU3/Application/display/hgs.h tools/check_cpu3_display_isr_boundaries.py docs/03_问题分析与整改/已闭环/CPU3屏幕驱动与刷新问题分析及整改方案.md
 ```
 
 构建产物生成在 `build\LTD_DISPLAY_CPU3` 下，当前文档不记录或整理构建产物。
