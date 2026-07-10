@@ -45,6 +45,7 @@ void CH9141_AT_NotifySensorPowerOn(void);
  * @brief 抢占 UART6 并等待串口空闲。
  *
  * 该函数会停止 UART6 DMA、清除硬件错误和残留数据，只能在主循环任务上下文调用。
+ * 持续收包时达到固定总时限后返回通信超时，避免主循环无限等待。
  */
 uint32_t CH9141_AT_PrepareUart6(uint32_t idle_ms);
 

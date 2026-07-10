@@ -1,16 +1,22 @@
 # -*- coding: utf-8 -*-
 """Update cross-document navigation for CPU2/CPU3 flow HTML docs.
 
-The script is intentionally data-driven and idempotent.  It creates the global
-program-flow entrance, creates the cross-CPU business route page, and injects a
-small relationship navigator into every CPU2/CPU3 flow page.
+The script is intentionally data-driven and idempotent. It plans the global
+program-flow entrance, the cross-CPU business route page, and each relationship
+navigator in memory. The default mode only checks; ``--write`` explicitly
+applies a fully validated plan.
 """
 
 from __future__ import annotations
 
+import argparse
+import codecs
 import html
 import os
 import re
+import tempfile
+import time
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, Iterable, List, Mapping, Sequence, Tuple
 
@@ -22,11 +28,233 @@ CROSS_ROUTE = DOC_NAV_DIR / "跨CPU业务链路.html"
 CPU2_DIR = DOC_NAV_DIR / "CPU2"
 CPU3_DIR = DOC_NAV_DIR / "CPU3"
 
+REPLACE_RETRY_DELAYS_SECONDS = (0.05, 0.1, 0.2, 0.4, 0.8)
+
 STYLE_MARK = '<style id="cross-flow-nav-style">'
+EMBED_STYLESHEET_NAME = "网站嵌入增强.css"
 NAV_START = "<!-- CROSS-FLOW-NAV-START -->"
 NAV_END = "<!-- CROSS-FLOW-NAV-END -->"
 LEGACY_START = "<!-- FLOW-LEGACY-NOTICE-START -->"
 LEGACY_END = "<!-- FLOW-LEGACY-NOTICE-END -->"
+SVG_METADATA_RE = re.compile(
+    r'(?P<opening><svg\b[^>]*>)'
+    r'(?P<metadata>\s*<title\b[^>]*\bid\s*=\s*(?P<title_quote>["\'])'
+    r'(?P<title_id>[^"\']+)(?P=title_quote)[^>]*>.*?</title>'
+    r'\s*<desc\b[^>]*\bid\s*=\s*(?P<desc_quote>["\'])'
+    r'(?P<desc_id>[^"\']+)(?P=desc_quote)[^>]*>.*?</desc>)',
+    re.IGNORECASE | re.DOTALL,
+)
+SVG_OPENING_TAG_RE = re.compile(r"<svg\b[^>]*>", re.IGNORECASE | re.DOTALL)
+ARIA_LABEL_ATTR_RE = re.compile(
+    r"\s+aria-label\s*=\s*(?P<quote>[\"'])(?P<value>.*?)(?P=quote)",
+    re.IGNORECASE | re.DOTALL,
+)
+ARIA_ACCESSIBILITY_ATTR_RE = re.compile(
+    r"\s+aria-(?:label|labelledby|describedby)\s*=\s*"
+    r"(?P<quote>[\"'])(?P<value>.*?)(?P=quote)",
+    re.IGNORECASE | re.DOTALL,
+)
+ARIA_REFERENCE_ATTR_RE = re.compile(
+    r"\s+(?P<name>aria-(?:labelledby|describedby))\s*=\s*"
+    r"(?P<quote>[\"'])(?P<value>.*?)(?P=quote)",
+    re.IGNORECASE | re.DOTALL,
+)
+HEADING_RE = re.compile(
+    r"<h(?P<level>[1-6])\b[^>]*>(?P<body>.*?)</h(?P=level)\s*>",
+    re.IGNORECASE | re.DOTALL,
+)
+HEADING_NUMBER_PREFIX_RE = re.compile(
+    r"^(?:(?:\d+(?:\.\d+)*\.?)|(?:[一二三四五六七八九十百]+、))\s*"
+)
+SOURCE_CARD_H4_RE = re.compile(
+    r"(?P<prefix><(?:article|div)\b[^>]*\bclass\s*=\s*[\"'][^\"']*"
+    r"\bsource-card\b[^\"']*[\"'][^>]*>\s*)"
+    r"<h4(?P<attrs>\b[^>]*)>(?P<body>.*?)</h4\s*>",
+    re.IGNORECASE | re.DOTALL,
+)
+TABLE_RE = re.compile(
+    r"(?P<opening><table\b[^>]*>)(?P<body>.*?)(?P<closing></table\s*>)",
+    re.IGNORECASE | re.DOTALL,
+)
+TABLE_OPENING_RE = re.compile(r"<table\b", re.IGNORECASE)
+CAPTION_RE = re.compile(
+    r"<caption\b(?P<attrs>[^>]*)>(?P<body>.*?)</caption\s*>",
+    re.IGNORECASE | re.DOTALL,
+)
+THEAD_RE = re.compile(
+    r"(?P<opening><thead\b[^>]*>)(?P<body>.*?)(?P<closing></thead\s*>)",
+    re.IGNORECASE | re.DOTALL,
+)
+TH_OPENING_RE = re.compile(r"<th\b(?P<attrs>[^>]*)>", re.IGNORECASE | re.DOTALL)
+SCOPE_ATTR_RE = re.compile(r"\bscope\s*=", re.IGNORECASE)
+COLSPAN_ATTR_RE = re.compile(
+    r"\bcolspan\s*=\s*(?:[\"']\s*)?(?P<value>\d+)",
+    re.IGNORECASE,
+)
+HTML_TAG_RE = re.compile(r"<[^>]+>", re.DOTALL)
+
+
+class ConcurrentSourceChangeError(RuntimeError):
+    """Raised when a planned target changed after it was read."""
+
+
+@dataclass(frozen=True)
+class FileSnapshot:
+    path: Path
+    original_bytes: bytes | None
+    newline: str
+    trailing_newline_count: int
+    has_utf8_bom: bool
+
+
+def _decode_utf8(raw: bytes, path: Path) -> tuple[str, bool]:
+    has_bom = raw.startswith(codecs.BOM_UTF8)
+    payload = raw[len(codecs.BOM_UTF8) :] if has_bom else raw
+    try:
+        return payload.decode("utf-8"), has_bom
+    except UnicodeDecodeError as exc:
+        raise RuntimeError(f"File is not valid UTF-8: {path}") from exc
+
+
+def _normalize_newlines(text: str) -> str:
+    return text.replace("\r\n", "\n").replace("\r", "\n")
+
+
+def _detect_newline(text: str) -> str:
+    crlf_count = text.count("\r\n")
+    without_crlf = text.replace("\r\n", "")
+    lf_count = without_crlf.count("\n")
+    cr_count = without_crlf.count("\r")
+    counts = {"\r\n": crlf_count, "\n": lf_count, "\r": cr_count}
+    if not any(counts.values()):
+        return "\n"
+    return max(counts, key=counts.__getitem__)
+
+
+def _trailing_newline_count(text: str) -> int:
+    normalized = _normalize_newlines(text)
+    return len(normalized) - len(normalized.rstrip("\n"))
+
+
+class InMemoryUpdatePlan:
+    """Collect every generated result before validating or touching the disk."""
+
+    def __init__(self) -> None:
+        self._snapshots: dict[Path, FileSnapshot] = {}
+        self._planned_bytes: dict[Path, bytes] = {}
+
+    def _snapshot(self, path: Path) -> FileSnapshot:
+        path = Path(path)
+        if path not in self._snapshots:
+            raw = path.read_bytes() if path.exists() else None
+            if raw is None:
+                snapshot = FileSnapshot(path, None, "\n", 1, False)
+            else:
+                text, has_bom = _decode_utf8(raw, path)
+                snapshot = FileSnapshot(
+                    path=path,
+                    original_bytes=raw,
+                    newline=_detect_newline(text),
+                    trailing_newline_count=_trailing_newline_count(text),
+                    has_utf8_bom=has_bom,
+                )
+            self._snapshots[path] = snapshot
+        return self._snapshots[path]
+
+    def exists(self, path: Path) -> bool:
+        path = Path(path)
+        snapshot = self._snapshot(path)
+        return path in self._planned_bytes or snapshot.original_bytes is not None
+
+    def read_text(self, path: Path) -> str:
+        path = Path(path)
+        snapshot = self._snapshot(path)
+        raw = self._planned_bytes.get(path, snapshot.original_bytes)
+        if raw is None:
+            raise FileNotFoundError(path)
+        text, _ = _decode_utf8(raw, path)
+        return _normalize_newlines(text)
+
+    def stage_text(self, path: Path, text: str) -> None:
+        path = Path(path)
+        snapshot = self._snapshot(path)
+        normalized = _normalize_newlines(text)
+        if snapshot.original_bytes is not None:
+            original_text, _ = _decode_utf8(snapshot.original_bytes, path)
+            if normalized == _normalize_newlines(original_text):
+                self._planned_bytes.pop(path, None)
+                return
+            normalized = normalized.rstrip("\n")
+            normalized += "\n" * snapshot.trailing_newline_count
+        rendered = normalized.replace("\n", snapshot.newline)
+        payload = rendered.encode("utf-8")
+        if snapshot.has_utf8_bom:
+            payload = codecs.BOM_UTF8 + payload
+        if payload == snapshot.original_bytes:
+            self._planned_bytes.pop(path, None)
+        else:
+            self._planned_bytes[path] = payload
+
+    @property
+    def changed_paths(self) -> tuple[Path, ...]:
+        return tuple(sorted(self._planned_bytes, key=lambda item: str(item).casefold()))
+
+    def _assert_sources_unchanged(self) -> None:
+        changed_sources = []
+        for path in self.changed_paths:
+            current = path.read_bytes() if path.exists() else None
+            if current != self._snapshots[path].original_bytes:
+                changed_sources.append(path)
+        if changed_sources:
+            joined = ", ".join(str(path) for path in changed_sources)
+            raise ConcurrentSourceChangeError(
+                "Source files changed while the update was being planned: " + joined
+            )
+
+    def apply(self) -> tuple[Path, ...]:
+        changed_paths = self.changed_paths
+        if not changed_paths:
+            return ()
+
+        self._assert_sources_unchanged()
+        temporary_paths: dict[Path, Path] = {}
+        try:
+            for path in changed_paths:
+                path.parent.mkdir(parents=True, exist_ok=True)
+                descriptor, temporary_name = tempfile.mkstemp(
+                    prefix=f".{path.name}.", suffix=".tmp", dir=path.parent
+                )
+                temporary_path = Path(temporary_name)
+                temporary_paths[path] = temporary_path
+                with os.fdopen(descriptor, "wb") as stream:
+                    stream.write(self._planned_bytes[path])
+                    stream.flush()
+                    os.fsync(stream.fileno())
+
+            # Detect every stale source before replacing the first target. This
+            # prevents a known concurrent edit from producing a partial update.
+            self._assert_sources_unchanged()
+            for path in changed_paths:
+                temporary_path = temporary_paths[path]
+                self._replace_with_retry(temporary_path, path)
+                del temporary_paths[path]
+        finally:
+            for temporary_path in temporary_paths.values():
+                try:
+                    temporary_path.unlink()
+                except FileNotFoundError:
+                    pass
+        return changed_paths
+
+    @staticmethod
+    def _replace_with_retry(temporary_path: Path, path: Path) -> None:
+        for delay_seconds in REPLACE_RETRY_DELAYS_SECONDS:
+            try:
+                os.replace(temporary_path, path)
+                return
+            except PermissionError:
+                time.sleep(delay_seconds)
+        os.replace(temporary_path, path)
 
 
 PAGE_DEFS: Dict[str, Dict[str, str]] = {
@@ -208,35 +436,35 @@ LINEAR_ORDERS = {
 LEGACY_DOCS: Sequence[Dict[str, str]] = [
     {
         "title": "串口 B 指令程序流程梳理",
-        "path": str(ROOT / "docs" / "03_问题分析与整改" / "CPU2电机与编码器" / "串口B指令详细执行过程.html"),
+        "path": str(ROOT / "docs" / "03_问题分析与整改" / "已闭环" / "串口B指令详细执行过程.html"),
         "status": "专题历史页",
         "current": "cpu2_08",
         "note": "串口 B 入口和运动执行细节的旧专题梳理；当前权威流程以 CPU2 电机与位置模型页为准。",
     },
     {
         "title": "CPU2 电机程序、函数与运动流程综合梳理",
-        "path": str(ROOT / "docs" / "03_问题分析与整改" / "CPU2电机与编码器" / "电机程序与函数梳理.html"),
+        "path": str(ROOT / "docs" / "03_问题分析与整改" / "已闭环" / "电机程序与函数梳理.html"),
         "status": "专题历史页",
         "current": "cpu2_08",
         "note": "电机函数层次、运动入口和保护逻辑的历史综合页；当前权威流程以 CPU2 电机与位置模型页为准。",
     },
     {
         "title": "电机运动函数层次梳理已合并",
-        "path": str(ROOT / "docs" / "03_问题分析与整改" / "CPU2电机与编码器" / "电机运动函数层次梳理.html"),
+        "path": str(ROOT / "docs" / "03_问题分析与整改" / "已闭环" / "电机运动函数层次梳理.html"),
         "status": "已合并跳转页",
         "current": "cpu2_08",
         "note": "该页已指向电机综合梳理，当前流程体系统一指向 CPU2 电机与位置模型。",
     },
     {
         "title": "电机运动函数第一轮改动点梳理",
-        "path": str(ROOT / "docs" / "03_问题分析与整改" / "CPU2电机与编码器" / "电机运动函数本次改动点梳理.html"),
+        "path": str(ROOT / "docs" / "03_问题分析与整改" / "已闭环" / "电机运动函数本次改动点梳理.html"),
         "status": "改动记录页",
         "current": "cpu2_08",
         "note": "电机运动第一轮改动记录，保留改动背景；当前流程以 CPU2 电机与位置模型页为准。",
     },
     {
         "title": "电机运动程序详细流程图已合并",
-        "path": str(ROOT / "docs" / "03_问题分析与整改" / "CPU2电机与编码器" / "电机运动程序详细流程图.html"),
+        "path": str(ROOT / "docs" / "03_问题分析与整改" / "已闭环" / "电机运动程序详细流程图.html"),
         "status": "已合并跳转页",
         "current": "cpu2_08",
         "note": "该页为旧流程图跳转页，当前权威流程以 CPU2 电机与位置模型页为准。",
@@ -257,14 +485,14 @@ LEGACY_DOCS: Sequence[Dict[str, str]] = [
     },
     {
         "title": "CPU2 找液位详细流程梳理",
-        "path": str(ROOT / "docs" / "03_问题分析与整改" / "2026-06-11_CPU2找液位详细流程梳理.html"),
+        "path": str(ROOT / "docs" / "03_问题分析与整改" / "已闭环" / "2026-06-11_CPU2找液位详细流程梳理.html"),
         "status": "问题分析历史页",
         "current": "cpu2_04",
         "note": "找液位问题分析和旧流程梳理；当前权威流程以 CPU2 液位测量与跟随页为准。",
     },
     {
         "title": "瓦锡兰分布测量详细流程梳理",
-        "path": str(ROOT / "docs" / "03_问题分析与整改" / "瓦锡兰分布测量详细流程梳理.html"),
+        "path": str(ROOT / "docs" / "03_问题分析与整改" / "未处理" / "瓦锡兰分布测量详细流程梳理.html"),
         "status": "问题分析历史页",
         "current": "cpu2_06",
         "note": "瓦锡兰分布测量专题梳理；当前 CPU2 执行流程看密度与单点测量，CPU3 协议入口看 Wartsila 与 SI协议适配。",
@@ -293,14 +521,14 @@ LEGACY_DOCS: Sequence[Dict[str, str]] = [
     },
     {
         "title": "四路继电器报警输出逻辑对照与问题分析",
-        "path": str(ROOT / "docs" / "03_问题分析与整改" / "2026-06-06_四路继电器报警输出逻辑对照与问题分析.html"),
+        "path": str(ROOT / "docs" / "03_问题分析与整改" / "已闭环" / "2026-06-06_四路继电器报警输出逻辑对照与问题分析.html"),
         "status": "问题分析历史页",
         "current": "cpu2_13",
         "note": "四路继电器报警输出逻辑的历史问题分析；当前权威流程以 CPU2 扭力与继电器输出页为准。",
     },
     {
         "title": "CPU2 电流输出问题与 v1.563 处理方式对比",
-        "path": str(ROOT / "docs" / "03_问题分析与整改" / "2026-06-13_CPU2电流输出问题与CPU2_v1.563处理方式对比.html"),
+        "path": str(ROOT / "docs" / "03_问题分析与整改" / "已闭环" / "2026-06-13_CPU2电流输出问题与CPU2_v1.563处理方式对比.html"),
         "status": "问题分析历史页",
         "current": "cpu2_13",
         "note": "CPU2 电流输出问题和 v1.563 处理方式的历史对比；当前 AO 输出与运行态流程以 CPU2 扭力与继电器输出页为准。",
@@ -308,7 +536,7 @@ LEGACY_DOCS: Sequence[Dict[str, str]] = [
     },
     {
         "title": "AD5421 控制寄存器回读 FFFF 问题分析与现场验证",
-        "path": str(ROOT / "docs" / "03_问题分析与整改" / "2026-06-16_AD5421控制寄存器回读FFFF问题分析与现场验证.html"),
+        "path": str(ROOT / "docs" / "03_问题分析与整改" / "未处理" / "2026-06-16_AD5421控制寄存器回读FFFF问题分析与现场验证.html"),
         "status": "问题分析历史页",
         "current": "cpu2_13",
         "note": "AD5421 控制寄存器回读 FFFF 的历史现场验证；当前 AO/AD5421 输出流程以 CPU2 扭力与继电器输出页为准。",
@@ -399,12 +627,13 @@ ROUTES = [
     {
         "id": "fault",
         "title": "故障、恢复和状态展示链路",
-        "summary": "CPU2 是主要故障产生和恢复位置，CPU3 负责轮询状态、显示提示，并在外部协议里反馈故障结果。",
+        "summary": "CPU2 是测量和硬件故障的主要产生与恢复位置；CPU3 除轮询和展示 CPU2 故障外，还会在连续第 10 个请求未获得合法响应后产生本机通信故障。",
         "steps": [
             ("故障产生", "cpu2_08", "电机、位置、扭力碰撞或传感异常触发错误条件"),
             ("CPU2 故障管理", "cpu2_07", "SET_ERROR、状态切换、恢复尝试和错误输出"),
             ("CPU2 通信发布", "cpu2_10", "设备状态、错误码和测量状态进入寄存器"),
             ("CPU3 轮询缓存", "cpu3_02", "输入寄存器刷新 g_measurement"),
+            ("CPU3 本机通信诊断", "cpu3_02", "超时、非法帧和 UART/TX 失败统一累计，连续第 10 次置 CPU2_COMM_TIMEOUT"),
             ("CPU3 显示", "cpu3_06", "状态页和菜单页展示设备状态"),
             ("外部协议", "cpu3_04", "DSM/Wartsila/SI 读取缓存状态"),
         ],
@@ -547,7 +776,7 @@ RELATIONS: Dict[str, Dict[str, object]] = {
         "route": ["cpu3_total", "cpu3_01", "cpu3_02"],
     },
     "cpu3_02": {
-        "focus": "CPU3 作为 CPU2 Modbus 主站，负责写指令/参数、读输入/保持寄存器、密度点分批回读，并解析协议版本 10 起的 RSSI 和协议版本 11 起的 AO 运行态尾部字段。",
+        "focus": "CPU3 作为 CPU2 Modbus 主站，负责写指令/参数、读输入/保持寄存器、密度点分批回读；状态、参数、当前连接协议快照、连续请求失败和故障恢复锁存独立，非命令写失败会立即关闭参数门禁并强制补读，连续第 10 个请求未获得合法响应时置本机通信故障。",
         "upstream": ["cpu3_01", "cpu3_03", "cpu3_04", "cpu3_05", "cpu3_07"],
         "downstream": ["cpu2_10", "cpu2_02", "cpu2_04", "cpu2_05", "cpu2_06", "cpu3_06"],
         "route": ["cross", "cpu3_07", "cpu3_02", "cpu2_02", "cpu2_04", "cpu2_10"],
@@ -571,7 +800,7 @@ RELATIONS: Dict[str, Dict[str, object]] = {
         "route": ["cross", "cpu3_05", "cpu3_02", "cpu2_06", "cpu3_05"],
     },
     "cpu3_06": {
-        "focus": "显示刷新、按键事件、状态页展示和调试等待页，负责把 CPU2 状态、读取部件参数 RSSI、AO/AD5421 运行态和 CPU3 本机交互变成现场可见界面。",
+        "focus": "显示刷新、按键事件、状态页展示和调试等待页；状态与当前连接协议快照均建立前保持通讯尝试页，第 10 次请求失败切换 CPU2 通信故障页，已建立通信后偶发失败不回退，恢复同步完成前不显示伪协议结果或失败请求的成功反馈。",
         "upstream": ["cpu3_01", "cpu3_02", "cpu3_07", "cpu3_08", "cpu2_10"],
         "downstream": ["cpu3_07", "cpu2_02", "cpu2_12"],
         "route": ["cross", "cpu2_10", "cpu3_02", "cpu3_06", "cpu3_07"],
@@ -667,14 +896,170 @@ h3{margin:16px 0 8px;font-size:18px}
 """.strip()
 
 
-def read_text(path: Path) -> str:
-    return path.read_text(encoding="utf-8")
+def replace_legacy_svg_labels(text: str) -> str:
+    def replace(match):  # noqa: ANN001, ANN202
+        opening = match.group("opening")
+        if ARIA_LABEL_ATTR_RE.search(opening) is None:
+            return match.group(0)
+        cleaned_opening = ARIA_ACCESSIBILITY_ATTR_RE.sub("", opening)
+        cleaned_opening = cleaned_opening[:-1].rstrip()
+        title_id = match.group("title_id")
+        desc_id = match.group("desc_id")
+        return (
+            f'{cleaned_opening} aria-labelledby="{title_id} {desc_id}">'
+            f'{match.group("metadata")}'
+        )
+
+    return SVG_METADATA_RE.sub(replace, text)
 
 
-def write_text(path: Path, text: str) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w", encoding="utf-8", newline="\n") as fp:
-        fp.write(text)
+def normalize_duplicate_svg_references(text: str, source: Path | None = None) -> str:
+    def normalize_opening(match):  # noqa: ANN001, ANN202
+        opening = match.group(0)
+        seen: dict[str, str] = {}
+        duplicate_spans: list[tuple[int, int]] = []
+        for attribute in ARIA_REFERENCE_ATTR_RE.finditer(opening):
+            name = attribute.group("name").lower()
+            value = attribute.group("value")
+            if name not in seen:
+                seen[name] = value
+                continue
+            if seen[name] != value:
+                location = f" in {source}" if source is not None else ""
+                raise RuntimeError(
+                    f"Conflicting duplicate {name}{location}: "
+                    f'{seen[name]!r} != {value!r}'
+                )
+            duplicate_spans.append(attribute.span())
+
+        if not duplicate_spans:
+            return opening
+        parts = []
+        cursor = 0
+        for start, end in duplicate_spans:
+            parts.append(opening[cursor:start])
+            cursor = end
+        parts.append(opening[cursor:])
+        return "".join(parts)
+
+    return SVG_OPENING_TAG_RE.sub(normalize_opening, text)
+
+
+def _plain_html_text(fragment: str) -> str:
+    """提取短标题文字，仅用于已有标题派生表格 caption。"""
+
+    return " ".join(html.unescape(HTML_TAG_RE.sub(" ", fragment)).split())
+
+
+def _caption_from_heading(fragment: str) -> str:
+    heading = _plain_html_text(fragment)
+    concise = HEADING_NUMBER_PREFIX_RE.sub("", heading).strip()
+    return concise or heading
+
+
+def normalize_source_card_headings(text: str) -> str:
+    """源码卡片是章节的直接子主题，统一使用 h3，避免 h2 跳到 h4。"""
+
+    def replace(match):  # noqa: ANN001, ANN202
+        return (
+            f'{match.group("prefix")}<h3{match.group("attrs")}>'
+            f'{match.group("body")}</h3>'
+        )
+
+    return SOURCE_CARD_H4_RE.sub(replace, text)
+
+
+def _add_column_scope(match):  # noqa: ANN001, ANN202
+    opening = match.group(0)
+    if SCOPE_ATTR_RE.search(opening):
+        return opening
+    colspan = COLSPAN_ATTR_RE.search(opening)
+    if colspan and int(colspan.group("value")) > 1:
+        # 跨多列的表头可能是 colgroup，也可能需要 headers/id；留给作者判断。
+        return opening
+    return opening[:-1].rstrip() + ' scope="col">'
+
+
+def normalize_table_semantics(text: str, source: Path | None = None) -> str:
+    """从紧邻章节标题补 caption，并为确定的列表头补 scope。"""
+
+    tables = list(TABLE_RE.finditer(text))
+    if not tables:
+        return text
+
+    headings = list(HEADING_RE.finditer(text))
+    contexts: list[tuple[int, str]] = []
+    for table in tables:
+        if TABLE_OPENING_RE.search(table.group("body")):
+            location = f" in {source}" if source is not None else ""
+            raise RuntimeError(f"Nested table needs author review{location}")
+        heading = next(
+            (candidate for candidate in reversed(headings) if candidate.end() <= table.start()),
+            None,
+        )
+        if heading is None:
+            location = f" in {source}" if source is not None else ""
+            raise RuntimeError(f"Table has no preceding heading{location}")
+        caption = _caption_from_heading(heading.group("body"))
+        if not caption:
+            location = f" in {source}" if source is not None else ""
+            raise RuntimeError(f"Table heading is empty{location}")
+        contexts.append((heading.start(), caption))
+
+    context_totals: dict[int, int] = {}
+    for heading_start, _ in contexts:
+        context_totals[heading_start] = context_totals.get(heading_start, 0) + 1
+    context_ordinals: dict[int, int] = {}
+    table_index = 0
+
+    def replace_table(match):  # noqa: ANN001, ANN202
+        nonlocal table_index
+        heading_start, caption = contexts[table_index]
+        table_index += 1
+        context_ordinals[heading_start] = context_ordinals.get(heading_start, 0) + 1
+        if context_totals[heading_start] > 1:
+            caption += f'（表 {context_ordinals[heading_start]}）'
+
+        body = match.group("body")
+        caption_matches = list(CAPTION_RE.finditer(body))
+        if not caption_matches:
+            body = f'<caption>{html.escape(caption)}</caption>' + body
+        elif len(caption_matches) == 1 and not _plain_html_text(
+            caption_matches[0].group("body")
+        ):
+            empty_caption = caption_matches[0]
+            replacement = (
+                f'<caption{empty_caption.group("attrs")}>'
+                f'{html.escape(caption)}</caption>'
+            )
+            body = (
+                body[: empty_caption.start()]
+                + replacement
+                + body[empty_caption.end() :]
+            )
+
+        def normalize_thead(thead_match):  # noqa: ANN001, ANN202
+            normalized_body = TH_OPENING_RE.sub(
+                _add_column_scope,
+                thead_match.group("body"),
+            )
+            return (
+                thead_match.group("opening")
+                + normalized_body
+                + thead_match.group("closing")
+            )
+
+        body = THEAD_RE.sub(normalize_thead, body)
+        return match.group("opening") + body + match.group("closing")
+
+    return TABLE_RE.sub(replace_table, text)
+
+
+def normalize_flow_semantics(text: str, source: Path | None = None) -> str:
+    """幂等规范化标题和表格语义；不推断跨列表头等含糊结构。"""
+
+    text = normalize_source_card_headings(text)
+    return normalize_table_semantics(text, source)
 
 
 def page_path(key: str) -> Path:
@@ -745,7 +1130,20 @@ def ensure_style(text: str) -> str:
     style = f"\n<style id=\"cross-flow-nav-style\">\n{INJECT_CSS}\n</style>"
     if "</head>" not in text:
         raise RuntimeError("HTML page has no </head> marker")
-    return text.replace("</head>", style + "\n</head>", 1)
+    enhancement_link = re.search(
+        rf'<link\b[^>]*\bhref=["\'][^"\']*{re.escape(EMBED_STYLESHEET_NAME)}(?:\?[^"\']*)?["\'][^>]*>',
+        text,
+        flags=re.I,
+    )
+    if enhancement_link:
+        return (
+            text[: enhancement_link.start()].rstrip()
+            + style
+            + "\n"
+            + text[enhancement_link.start() :]
+        )
+    head_end = text.find("</head>")
+    return text[:head_end].rstrip() + style + "\n" + text[head_end:]
 
 
 def remove_nav_block(text: str) -> str:
@@ -866,11 +1264,12 @@ def make_relation_block(key: str) -> str:
     )
 
 
-def inject_page(key: str) -> None:
+def inject_page(plan: InMemoryUpdatePlan, key: str) -> None:
     path = page_path(key)
-    if not path.exists():
+    if not plan.exists(path):
         return
-    text = read_text(path)
+    text = replace_legacy_svg_labels(plan.read_text(path))
+    text = normalize_duplicate_svg_references(text, path)
     text = ensure_style(remove_nav_block(text))
     block = make_relation_block(key)
     updated = insert_after_first(text, "</nav>", block)
@@ -878,7 +1277,7 @@ def inject_page(key: str) -> None:
         updated = insert_after_first(text, "</header>", block)
     if not updated:
         raise RuntimeError(f"Cannot find insertion point in {path}")
-    write_text(path, updated)
+    plan.stage_text(path, updated)
 
 
 def make_legacy_notice(item: Mapping[str, str]) -> str:
@@ -925,11 +1324,12 @@ def insert_after_opening_body(text: str, block: str) -> str:
     return text[: match.end()] + block + text[match.end() :]
 
 
-def inject_legacy_notice(item: Mapping[str, str]) -> None:
+def inject_legacy_notice(plan: InMemoryUpdatePlan, item: Mapping[str, str]) -> None:
     path = Path(item["path"])
-    if not path.exists():
+    if not plan.exists(path):
         return
-    text = remove_legacy_notice(read_text(path))
+    text = remove_legacy_notice(plan.read_text(path))
+    text = normalize_duplicate_svg_references(text, path)
     block = make_legacy_notice(item)
     updated = insert_after_first(text, "</header>", block)
     if not updated:
@@ -938,12 +1338,22 @@ def inject_legacy_notice(item: Mapping[str, str]) -> None:
         updated = insert_after_opening_body(text, block)
     if not updated:
         raise RuntimeError(f"Cannot find legacy notice insertion point in {path}")
-    write_text(path, updated)
+    plan.stage_text(path, updated)
 
 
-def inject_legacy_notices() -> None:
+def inject_legacy_notices(plan: InMemoryUpdatePlan) -> None:
     for item in LEGACY_DOCS:
-        inject_legacy_notice(item)
+        inject_legacy_notice(plan, item)
+
+
+def normalize_all_flow_documents(plan: InMemoryUpdatePlan) -> None:
+    """规范化正式流程源；docs-site 仍只通过同步消费这些结果。"""
+
+    paths = set(DOC_NAV_DIR.rglob("*.html")) | {GLOBAL_INDEX, CROSS_ROUTE}
+    for path in sorted(paths, key=lambda item: str(item).casefold()):
+        if not plan.exists(path):
+            continue
+        plan.stage_text(path, normalize_flow_semantics(plan.read_text(path), path))
 
 
 def route_steps(from_file: Path, route: Mapping[str, object]) -> str:
@@ -992,8 +1402,9 @@ def make_global_index() -> str:
 <style>
 {GLOBAL_CSS}
 </style>
+<link rel="stylesheet" href="assets/网站嵌入增强.css">
 </head>
-<body>
+<body class="cube-flow-page" data-cube-flow-page="cube-flow-index">
 <div class="wrap">
 <header class="hero">
 <h1>CUBE 程序流程统一入口</h1>
@@ -1013,6 +1424,7 @@ def make_global_index() -> str:
 <a href="#legacy">历史/专题流程</a>
 <a href="#maintain">维护规则</a>
 </nav>
+<!-- CUBE_EMBED_START -->
 <section id="path">
 <h2>1. 推荐阅读路径</h2>
 <p class="lead">不要从某个 HTML 孤立跳转。先按整机业务链路确定“谁触发、谁执行、谁上报”，再进入 CPU2/CPU3 的详细流程图。</p>
@@ -1051,9 +1463,10 @@ def make_global_index() -> str:
 <div class="grid">
 <article class="card"><strong>单页继续按源码单独整理</strong><p>每个功能页仍需要独立阅读源码、单独画业务级 SVG，不用统一模板批量凑图。</p></article>
 <article class="card"><strong>跨页只表达业务关系</strong><p>统一入口和跨 CPU 链路页不替代详细流程图，只说明上下游、触发源和结果去向。</p></article>
-<article class="card"><strong>重新生成后恢复导航</strong><p>如果 CPU2/CPU3 流程 HTML 被重新生成，执行 <code>py tools/update_flow_navigation.py</code> 恢复统一入口和页面关联导航。</p></article>
+<article class="card"><strong>重新生成后恢复导航</strong><p>如果 CPU2/CPU3 流程 HTML 被重新生成，执行 <code>py tools/update_flow_navigation.py --write</code> 恢复统一入口和页面关联导航。</p></article>
 </div>
 </section>
+<!-- CUBE_EMBED_END -->
 </div>
 </body>
 </html>
@@ -1080,8 +1493,9 @@ def make_cross_route() -> str:
 <style>
 {GLOBAL_CSS}
 </style>
+<link rel="stylesheet" href="assets/网站嵌入增强.css">
 </head>
-<body>
+<body class="cube-flow-page" data-cube-flow-page="cube-flow-跨cpu业务链路">
 <div class="wrap">
 <header class="hero">
 <h1>跨 CPU 业务链路导航</h1>
@@ -1103,11 +1517,13 @@ def make_cross_route() -> str:
 <a href="#fault">故障</a>
 <a href="#external">外部协议</a>
 </nav>
+<!-- CUBE_EMBED_START -->
 <section id="map">
 <h2>1. 整机业务闭环图</h2>
 <p class="lead">图中只写业务动作，不写函数名。函数名和源码证据保留在各自详细页面里。</p>
-<div class="flow-wrap">
-<svg class="route-svg" viewBox="0 0 1200 760" role="img" aria-label="CPU2 CPU3 跨 CPU 业务闭环">
+<figure class="cube-flow-figure"><figcaption id="cube-flow-跨cpu业务链路-diagram-01-caption">CPU2 CPU3 跨 CPU 业务闭环</figcaption><div class="flow-wrap cube-flow__viewport" data-flow-width="standard" tabindex="0" role="region" aria-labelledby="cube-flow-跨cpu业务链路-diagram-01-caption">
+<svg class="route-svg" viewBox="0 0 1200 760" role="img" aria-labelledby="cube-flow-跨cpu业务链路-diagram-01-title cube-flow-跨cpu业务链路-diagram-01-desc">
+<title id="cube-flow-跨cpu业务链路-diagram-01-title">CPU2 CPU3 跨 CPU 业务闭环</title><desc id="cube-flow-跨cpu业务链路-diagram-01-desc">用户或上位机发起的菜单、DSM、Wartsila 或 SI 请求先由 CPU3 完成入口映射和参数检查，再通过内部 Modbus 写入 CPU2 命令或参数；CPU2 通信入口分发命令，结合电机、位置、传感和扭力执行液位、水位、密度等测量。异常进入 SET_ERROR 和状态恢复，正常结果与错误码写入输入寄存器；CPU3 轮询刷新 g_measurement、参数镜像和点表后用于状态页及外部协议响应，并继续下一轮交互。</desc>
 <defs>
 <marker id="route-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#61758e"/></marker>
 <marker id="route-arrow-red" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#b84a55"/></marker>
@@ -1137,7 +1553,7 @@ def make_cross_route() -> str:
 <path class="edge" d="M520 575 C470 505 370 485 290 487" marker-end="url(#route-arrow)"/>
 <path class="edge" d="M900 575 C1010 505 1030 300 1030 133" marker-end="url(#route-arrow)"/>
 </svg>
-</div>
+</div></figure>
 </section>
 <section>
 <h2>2. 分业务路线</h2>
@@ -1154,17 +1570,18 @@ def make_cross_route() -> str:
 <article class="card"><strong>查参数为什么没生效</strong><p>区分 CPU3 本机参数、CPU2 设备参数和协议缓存，按参数链路逐页核对。</p></article>
 </div>
 </section>
+<!-- CUBE_EMBED_END -->
 </div>
 </body>
 </html>
 """
 
 
-def update_root_readme() -> None:
+def update_root_readme(plan: InMemoryUpdatePlan) -> None:
     path = ROOT / "docs" / "README.md"
-    if not path.exists():
+    if not plan.exists(path):
         return
-    text = read_text(path)
+    text = plan.read_text(path)
     if "`00_程序流程导航`" not in text:
         text = text.replace(
             "| `00_构建与版本` | CPU2/CPU3 构建说明、升级日志、版本改动与测试方案等版本交付资料 |",
@@ -1179,50 +1596,107 @@ def update_root_readme() -> None:
             "| `00_程序流程导航/跨CPU业务链路.html` | 液位、水位、密度、参数、故障和外部协议的跨 CPU 路线图 |\n"
         )
         text = text.replace(marker, marker + entry, 1)
-    write_text(path, text)
+    plan.stage_text(path, text)
 
 
-def generate_pages() -> None:
-    write_text(GLOBAL_INDEX, make_global_index())
-    write_text(CROSS_ROUTE, make_cross_route())
+def generate_pages(plan: InMemoryUpdatePlan) -> None:
+    plan.stage_text(
+        GLOBAL_INDEX,
+        normalize_duplicate_svg_references(make_global_index(), GLOBAL_INDEX),
+    )
+    plan.stage_text(
+        CROSS_ROUTE,
+        normalize_duplicate_svg_references(make_cross_route(), CROSS_ROUTE),
+    )
 
 
-def inject_all_pages() -> None:
+def inject_all_pages(plan: InMemoryUpdatePlan) -> None:
     keys = ["cpu2_total", "cpu2_issue", *CPU2_ORDER, "cpu3_total", *CPU3_ORDER]
     for key in keys:
-        inject_page(key)
-    inject_legacy_notices()
+        inject_page(plan, key)
+    inject_legacy_notices(plan)
 
 
-def validate_files() -> None:
-    missing = [key for key, meta in PAGE_DEFS.items() if key not in {"global", "cross"} and not Path(meta["path"]).exists()]
+def validate_files(plan: InMemoryUpdatePlan) -> None:
+    missing = [
+        key
+        for key, meta in PAGE_DEFS.items()
+        if key not in {"global", "cross"} and not plan.exists(Path(meta["path"]))
+    ]
     if missing:
         raise RuntimeError("Missing expected pages: " + ", ".join(missing))
     bad_encoding = []
     for path in [GLOBAL_INDEX, CROSS_ROUTE, *[page_path(key) for key in ["cpu2_total", "cpu2_issue", *CPU2_ORDER, "cpu3_total", *CPU3_ORDER]]]:
-        text = read_text(path)
+        text = plan.read_text(path)
         if "\ufffd" in text or "锟" in text:
             bad_encoding.append(str(path))
     if bad_encoding:
         raise RuntimeError("Encoding replacement characters found: " + ", ".join(bad_encoding))
     missing_nav = []
     for key in ["cpu2_total", "cpu2_issue", *CPU2_ORDER, "cpu3_total", *CPU3_ORDER]:
-        text = read_text(page_path(key))
+        text = plan.read_text(page_path(key))
         if NAV_START not in text:
             missing_nav.append(key)
     if missing_nav:
         raise RuntimeError("Missing cross-flow navigation block: " + ", ".join(missing_nav))
 
 
-def main() -> None:
-    generate_pages()
-    inject_all_pages()
-    update_root_readme()
-    validate_files()
-    print(f"updated flow navigation: {GLOBAL_INDEX}")
-    print(f"updated cross cpu routes: {CROSS_ROUTE}")
-    print("injected relation navigator into CPU2/CPU3 flow pages")
+def build_update_plan() -> InMemoryUpdatePlan:
+    plan = InMemoryUpdatePlan()
+    generate_pages(plan)
+    inject_all_pages(plan)
+    normalize_all_flow_documents(plan)
+    update_root_readme(plan)
+    validate_files(plan)
+    return plan
+
+
+def _display_path(path: Path) -> str:
+    try:
+        return str(path.relative_to(ROOT))
+    except ValueError:
+        return str(path)
+
+
+def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="Check or update cross-document flow navigation."
+    )
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument(
+        "--check",
+        action="store_true",
+        help="check whether generated navigation is current (default)",
+    )
+    mode.add_argument(
+        "--write",
+        action="store_true",
+        help="write validated changes using atomic file replacement",
+    )
+    return parser.parse_args(argv)
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    args = parse_args(argv)
+    plan = build_update_plan()
+    changed_paths = plan.changed_paths
+    if not changed_paths:
+        print("flow navigation is up to date")
+        return 0
+
+    if not args.write:
+        print(f"flow navigation needs update: {len(changed_paths)} file(s)")
+        for path in changed_paths:
+            print(f"  {_display_path(path)}")
+        print("run with --write to apply the validated update")
+        return 1
+
+    written_paths = plan.apply()
+    print(f"updated flow navigation: {len(written_paths)} file(s)")
+    for path in written_paths:
+        print(f"  {_display_path(path)}")
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

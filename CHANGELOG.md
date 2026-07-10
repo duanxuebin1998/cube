@@ -57,10 +57,15 @@ CPU2 参数加载会校验 FRAM 中的 `magic`、`struct_size`、`param_version`
 | V1.19.0.0 | 3 | 存储版本不变；命令 115 改为保留、修复液位/水位标定固定偏差、读取部件参数增加连接 MAC 快照并统一液位/扭力口径，旧 FRAM 参数通常保留 |
 | V1.20.0.0 | 3 | 存储版本不变；协议版本升至 13，内部密度 raw 升级到 `kg/m3 x100`，旧协议 FRAM 密度参数按运行期迁移，旧 FRAM 参数通常保留 |
 | V1.20.1.0 | 3 | 存储版本不变；参数打印、Modbus 写参差异、分布密度悬停单位和初始化日志整理，旧 FRAM 参数通常保留 |
+| V1.20.2.0 | 3 | 存储版本不变；编码器通信诊断、传感器上电 AT 干扰过滤、全局错误归因和中断优先级调整，旧 FRAM 参数通常保留 |
+| V1.20.3.0 | 3 | 存储版本不变；AS5145 SSI 错误重试、持续故障一次性上报和有效帧门控调整，旧 FRAM 参数通常保留 |
 | V1.21.0.0 | 3 | 存储版本不变；协议版本升至 14，原 `reserved30~reserved33` 复用为 SI profile 首点、步距、停留和探底频次参数，旧 FRAM 参数通常保留并在协议迁移或运行期归一化补默认值 |
 | V1.21.1.0 | 3 | 存储版本不变；修复 SI Profile 点位输出、空气点判定和无检测运行通信策略，旧 FRAM 参数通常保留 |
 | V1.21.2.0 | 3 | 存储版本不变；SI Profile 成功完成后自动排队找液位并恢复液位跟随，旧 FRAM 参数通常保留 |
 | V1.21.3.0 | 3 | 存储版本不变；优化液位跟随滞后确认、方法 0/1 跟随重找保持跟随态和方法 5 定频速度闭环边界，旧 FRAM 参数通常保留 |
+| V1.21.4.0 | 3 | 存储版本不变；修复编码轮模式运行期速度补偿参考长度，旧 FRAM 参数通常保留 |
+| V1.21.5.0 | 3 | 存储版本不变；修复 AD5421 断环重接恢复与 AO 运行态错误处理，旧 FRAM 参数通常保留 |
+| V1.21.6.0 | 3 | 存储版本不变；修复 DSM 传感器编号响应解析、无符号 32 位溢出和上电蓝牙持续收包永久等待，并清理未用代码，旧 FRAM 参数通常保留 |
 
 历史说明：建立 CPU2 程序版本号前，2025-12-16 引入当前参数元信息时使用 `DEVICE_PARAM_VERSION=1`；2026-03-05 系统参数增加时提升到 `DEVICE_PARAM_VERSION=2`，从版本 1 升级到版本 2 会因旧参数版本不匹配恢复出厂参数。
 
@@ -2072,3 +2077,72 @@ CPU2 参数加载会校验 FRAM 中的 `magic`、`struct_size`、`param_version`
 - 已验证 `AO400` 正常回读和输出刷新，尚未做真实断环、重接、自动恢复到断环前目标电流的连续 10 次台架循环。
 - 尚未接入 HART 通信场景验证断环恢复瞬态对 HART 通信的影响。
 - 尚未用逻辑分析仪抓取断环恢复周期内 `WRITECONTROL`、`READCONTROL`、`WRITEDAC`、`READFAULT` 帧。
+
+## 2026-07-10 - 修复传感器编号和上电蓝牙等待并闭环 CPU2 通信与外部写失败反馈（CPU2 V1.21.6.0 / CPU3 V1.20.0.0）
+
+版本：
+- CPU2: V1.21.5.0 -> V1.21.6.0。
+- CPU3: V1.19.1.0 -> V1.20.0.0。
+
+协议版本/兼容性：
+- `DEVICE_PROTOCOL_VERSION` 保持 14；本次不新增或调整 CPU2/CPU3 共享命令、寄存器地址、结构体字段、字段长度或内部参数语义。
+- CPU2 `DEVICE_PARAM_VERSION` 保持 3，`DeviceParameters` / `struct_size`、FRAM A/B 地址和校验范围不变；从 V1.21.5.0 升级不会因本次版本变化恢复出厂参数。
+- CPU3 本机参数存储版本保持 `0x0006`，本机 FRAM 布局不变；从 V1.19.1.0 升级不会因本次升版重建本机参数，无需重新下发，升级后回读核对 `40010~40023`。
+- CPU3 依赖 CPU2 的普通命令和参数写入口新增完整状态快照、完整参数快照及当前连接协议快照三重门禁；只有合法 `0x03` 实际覆盖协议字段并读回版本 14 后，协议快照才有效。协议不匹配时仍允许轮询和状态显示，但禁止共享命令或参数写入。参数刷新期间仅屏幕 `CMD_CANCEL_MEASUREMENT` 停止/取消入口保持可达，且仍要求状态快照、当前连接协议快照、协议 14 和无通信故障；SI `00009 Stop` 仍映射维护模式，不使用该绕过。
+- DSM、SI、Wartsila 对 CPU2 相关写入在链路未就绪、协议不匹配或 CPU2 未确认时返回 Modbus 异常 `0x06`；DSM FC03 第 1～5 段在参数快照无效期间同样返回 `0x06`，第 6 段全零占位继续正常响应。这是 CPU3 外部适配层行为变化，不提升 CPU2/CPU3 共享协议版本；外部主站需等待补读完成后重试并回读确认。
+
+本次修改：
+- CPU2 DSM 文本响应接受 `N`、`E`、`e` 编号前缀，修复低电压响应在上电阶段误报 `13-11`；十进制编号解析增加 `uint32_t` 上界保护，接受 `4294967295`，拒绝 `4294967296` 和超长数字串。
+- CPU2 清理无调用的 Modbus 异常封装、AO 旧包装入口、Wartsila 旧运动入口和液位状态旧导出包装，保留仍用于台架测试的水位电容曲线入口。
+- CPU2 CH9141 UART6 清空同时使用连续空闲和固定总时限：上电/退出准备要求连续空闲 `500 ms`、总时限 `1000 ms`，每条 AT 命令前及失败恢复要求连续空闲 `30 ms`、总时限 `200 ms`；从机持续透传或命令切换时返回既有状态码，不再把 `DetectSensorType()` 永久卡在蓝牙链路检查，也不新增错误码或 CPU2/CPU3 协议字段。
+- CPU3 使用独立连续失败计数归一统计响应超时、非法长度/CRC/地址/功能码/写回显、UART 错误和 TX DMA 启动失败；连续第 10 次失败锁存本机故障 `CPU2_COMM_TIMEOUT (0x0013000A)`。
+- CPU3 任一合法 `0x03`/`0x04`/`0x10` 响应均清连续失败计数；但只有完整覆盖设备状态和错误码的合法 `0x04` 才建立首次状态快照并解除已锁存通信故障，其它 `0x04` 不得解除故障。通讯尝试页要等状态快照和当前连接协议快照都建立后才退出，避免协议字段尚未读回时短暂显示伪 `ProtoErr` 或掉线前兼容结果。通信故障会同时清除参数快照和协议快照；状态 `0x04` 恢复后仍需重建完整参数快照，并重新收到覆盖协议字段且值为 14 的合法 `0x03`，才重新开放普通写入口。
+- CPU3 参数刷新期间临时关闭普通写门禁，补读完成后同步刷新 Wartsila 寄存器镜像；任何已发起的非命令 FC16 未获得合法响应时，都立即使参数快照失效并强制全量补读，覆盖 CPU2 已生效但 ACK 丢失、DSM/SI/菜单单参数失败和多字段部分成功场景。屏幕 `CMD_CANCEL_MEASUREMENT` 在状态快照、当前连接协议快照有效、协议兼容且无通信故障时仍可下发，避免参数刷新阻断停止运动。批量参数同步永久跳过命令字段，禁止旧命令跨协议重放。
+- CPU3 外部 COM 持续有流量时仍按主循环 100 ms 调度门限检查 CPU2 轮询，UART5 ISR 只记录错误并由主循环统一处理。
+- CPU3 菜单命令、参数下发和运动停止请求失败时不再进入成功页或运动监控页；参数读回失败走失败出口，已经处于取消/空闲状态的取消请求按幂等成功收口。
+- CPU3 同时清理未使用的 AUBON Logo 位图、旧调试命令判定 helper 和旧共享通信计数变量；OLED CRC/刷新序号注释按实际语义修正，不改变运行行为。
+- CPU3 `cpu2_communicate.h` 显式引入 `CommandType` 所在的 `system_parameter.h`，修复新增命令门禁原型在部分编译单元中先被包含时的 `unknown type name` clean-first 编译失败。
+- CPU2/CPU3 CMake 把固定名 HEX、当前版本 HEX 和 BIN 声明为 `POST_BUILD BYPRODUCTS`；`clean`/`clean-first` 会先移除本配置当前产物，避免本轮编译或链接失败后误拿同名旧固件。历史版本 HEX 不在自动清理范围内，仍按版本归档保留。
+- DSM FC05 动作线圈 ON、非第 6 段占位的 FC16、SI FC05 ON 与 `40001~40003`、Wartsila `0x0006` 与 `0x005A~0x005D` 均依赖 CPU2 ACK；DSM FC16 写前保存已确认参数和本次寄存器镜像，中途失败时先回滚 CPU3 本地影子、关闭参数快照并强制补读，补读完成前 FC03 第 1～5 段返回 `0x06`，不得把未确认请求值或分组混合值伪装成成功回读。CPU2 端多字段提交仍非原子，最终以补读后的实际值为准。SI 影子值只在 ACK 后提交，CPU3 本机参数 `40010~40023` 仍可独立保存。
+- DSM 分发层在地址和 CRC 通过后、进入无长度参数的响应函数前校验实际 RTU 帧长：FC01/03/04/05 必须为 8 字节，FC16 必须满足实际长度等于 `9 + byteCount`；截短、超长或声明长度不一致的合法 CRC 帧返回 `0x03`，不得把 CRC 或尾随字节误作参数数据。FC06 仍保持非法功能 `0x86/0x01`。
+- SI 自动 Profile 下发失败后按 5 s 节流重试，失败不锁存本分钟成功标记；只有 CPU2 接受命令后才对本分钟去重。
+- Wartsila 跨区 FC16 先同步参数再下发命令，任一步失败返回 `0x06`；参数阶段失败时恢复 CPU3 写前四参数镜像、清除命令影子、立即关闭普通命令门禁并强制补读 CPU2 实际值，补读完成前读取 `0x005A~0x005D` 也返回 `0x06`，不得把未确认目标值伪装成成功回读。命令尝试结束后同样清除非零命令影子，CPU2 拒绝后写 0 或其它协议参数同步均不会重放旧命令。多字段同步仍为非原子过程，失败前已确认字段不自动回滚，最终以补读后的 CPU2 实际值为准。
+- 同步故障码 Excel、LNG 菜单维护版 Word、DSM/SI/Wartsila 协议资料、状态页确认表、问题整改记录、CPU2/CPU3 程序流程页和版本改动与测试方案；修正 CPU2 传感器流程页中仍沿用的密度修正 `x10` 旧公式，使其与当前 `x100` 源码口径一致。
+- 流程文档工具链改为可复现生成：CPU3 生成器直接产出统一网站包装、稳定页面/图形 ID、嵌入标记、figure/viewport 结构及 SVG title/desc/ARIA，并动态解析关键函数源码行号；每个 SVG `desc` 使用独立业务摘要，不得只重复 `title` 或 `figcaption`。导航工具增加幂等安全更新、重复 ARIA 属性治理和 Windows 瞬时文件占用下的原子替换有界重试，新增流程 HTML 契约检查、生成器摘要契约测试、格式规范及单元测试并接入文档总门禁。同步修复 CPU2 页面重复 `aria-labelledby`，将 CPU3 FRAM 流程口径更正为 V3/V4/V5 迁移至当前 V6（`0x0006`）。
+
+验证：
+- `cmake --build build\LTD_MAIN_CPU2 --clean-first`
+- `cmake --build build\LTD_DISPLAY_CPU3 --clean-first`
+- `py tools\check_wireless_rssi_contract.py`
+- `py tools\test_dsm_cn_low_voltage_response.py`
+- `py tools\check_dsm_compat_contract.py`（覆盖 DSM FC03 参数快照门禁、第 6 段豁免、FC16 写前双快照与失败回滚顺序、实际 RTU 帧长及 FC06 非法功能边界）
+- `py tools\check_density_precision_contract.py`
+- `py tools\check_cpu3_cpu2_comm_timeout_fault_contract.py`
+- `py tools\check_cpu3_display_isr_boundaries.py`
+- `py tools\check_cpu3_fault_reason_visibility.py`
+- `py tools\check_si_protocol_contract.py`
+- `py tools\check_si_modbus_frames.py`
+- `py tools\check_wartsila_distribution_logic.py`
+- `py tools\check_cpu3_menu_name_width.py`
+- `py LTD_DISPLAY_CPU3\font_check.py`
+- `py tools\test_generate_cpu3_flow_docs.py`
+- `py tools\test_check_flow_docs.py`
+- `py tools\check_flow_docs.py`
+- `py tools\test_update_flow_navigation.py`
+- `py tools\test_check_docs.py`
+- `py tools\check_docs.py`
+- `py tools\check_docs_structure.py`
+- `py tools\check_markdown_links.py`
+- CPU3 流程生成器与导航连续执行两遍，44 个目标文件 SHA-256 变化为 0；流程契约覆盖 32 页、178 张 SVG 和 47 张表格。
+- `git diff HEAD --check`、`git diff --check`、`git diff --cached --check`
+- 通过本地 HTTP 预览复核 CPU3“CPU2 内部通信与轮询”“DSM 协议与命令映射”“本机参数 FRAM 时钟与外设恢复”和“跨 CPU 业务链路”页面；桌面布局、文字显示、SVG 溢出、重复 ID、导航锚点及控制台均未发现异常。故障码 Excel 15 个工作表公式错误扫描为 0 并完成分段渲染检查；LNG 菜单 Word 已完成 29 页逐页渲染检查。
+
+未验证风险：
+- 尚未完成真实 DSM `E/e` 低电压响应、首次烧写冷启动、蓝牙从机持续透传、CPU2 延迟上线、持续外部流量和 UART 干扰实测；CH9141 有界退出需台架按 `10/100/400 ms` 上报周期确认实际时延和恢复状态。
+- 尚未使用真实 PLC 验证 DSM/SI/Wartsila 对 `0x06` 的重试与回读策略，也未通过真实串口注入 CRC 正确的 DSM 截短/超长帧；DSM FC16 和 Wartsila 多字段写会回滚 CPU3 本地影子并门禁未确认读，但 CPU2 端仍可能在失败前部分生效，最终值需等强制补读后确认。
+- CPU2 单次同步请求最长可阻塞约 1000 ms，外部请求峰值延迟仍需实机评估。
+- 主循环空闲延时由约 100 ms 缩短为 1 ms 后，显示任务和 SI 自动调度检查频率提高，需在实机观察 CPU 占用、OLED 刷新和 RTC 访问负载。
+- Modbus RTU 独立 t1.5/t3.5 帧间隔处理未在本版本实现，后续应按专项方案整改和验证。
+- `BYPRODUCTS` 只清理当前配置的固定名和当前版本固件，构建目录中的历史版本 HEX 不会自动删除；发布仍应按版本名、链接成功状态、生成时间和哈希选择产物。
+- Wartsila 点表 100/200 点及完成态等既有兼容问题不在本轮范围。
+- 暂存区尚未按最终清单重建；正式提交前需重新运行 `py tools\check_version_bumped.py` 和暂存区差异检查。

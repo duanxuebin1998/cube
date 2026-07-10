@@ -16,7 +16,6 @@ typedef enum {
 
 #define MAX_TIMES_WHEN_FRE_FOLLOW				15 /* 频率跟随时的最大加速次数 */
 
-uint32_t determine_level_status(Level_StateTypeDef *state_out);
 /**
  * @brief 执行液位测量中的 determine_level_status_motion 逻辑。
  *

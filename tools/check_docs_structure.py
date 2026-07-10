@@ -37,6 +37,7 @@ REQUIRED_PATHS = (
     "AGENTS.md",
     "docs/README.md",
     "docs/00_程序流程导航/README.md",
+    "docs/00_程序流程导航/流程图网站嵌入格式规范.md",
     "docs/00_构建与版本/README.md",
     f"{VERSION_OUTPUT_DIR}/README.md",
     "docs/00_构建与版本/文档库使用指南.md",

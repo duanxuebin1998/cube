@@ -249,8 +249,10 @@
       table { font-size: 14px; }
     }
   </style>
+
+<link rel="stylesheet" href="assets/网站嵌入增强.css">
 </head>
-<body>
+<body class="cube-flow-page" data-cube-flow-page="cube-flow-lng计量仪设备说明书">
 <header>
   <div class="wrap">
     <h1>LNG计量仪设备说明书</h1>
@@ -264,7 +266,8 @@
   </div>
 </header>
 
-<main>
+<main class="wrap">
+<!-- CUBE_EMBED_START -->
   <section class="toc" aria-label="目录">
     <strong>目录</strong>
     <ol>
@@ -290,9 +293,9 @@
     <div class="note">
       <strong>版本要求：</strong>CPU2 和 CPU3 必须成对使用协议版本 12。固件版本只用于显示和发布追踪，跨 CPU 能力兼容以 `DeviceParameters.protocolVersion` 是否等于当前 `DEVICE_PROTOCOL_VERSION` 为准。
     </div>
-    <table>
+    <table><caption>适用范围</caption>
       <thead>
-        <tr><th>项目</th><th>当前基线</th><th>说明</th></tr>
+        <tr><th scope="col">项目</th><th scope="col">当前基线</th><th scope="col">说明</th></tr>
       </thead>
       <tbody>
         <tr><td>CPU2</td><td><code>V1.12.0.0</code></td><td>主控测量板，负责测量流程、电机、编码器、扭力、传感器、参数 FRAM、继电器报警输出和内部 Modbus。</td></tr>
@@ -308,9 +311,9 @@
     <div class="danger">
       <strong>机械运动风险：</strong>设备会驱动电机、尺带、浮子或传感器动作。执行上行、下行、强制运动、罐底测量、液位/水位跟随、B/BE 往返诊断、无线滑环匹配前，必须确认现场机械行程、人员位置、罐内工况和传感器连接安全。
     </div>
-    <table>
+    <table><caption>安全注意事项</caption>
       <thead>
-        <tr><th>场景</th><th>要求</th><th>原因</th></tr>
+        <tr><th scope="col">场景</th><th scope="col">要求</th><th scope="col">原因</th></tr>
       </thead>
       <tbody>
         <tr><td>上电或复位</td><td>确认电机 24V、TMC5130、CPU2 复位链路状态，观察启动安全停机日志。</td><td>CPU2 V1.10.0.0 起已加入启动安全停机和编码器首帧门控；当前 V1.12.0.0 仍需现场确认真实保持力和机械自锁。</td></tr>
@@ -338,9 +341,9 @@
     </div>
 
     <h3>通信拓扑</h3>
-    <table>
+    <table><caption>通信拓扑</caption>
       <thead>
-        <tr><th>链路</th><th>用途</th><th>主要协议或数据</th></tr>
+        <tr><th scope="col">链路</th><th scope="col">用途</th><th scope="col">主要协议或数据</th></tr>
       </thead>
       <tbody>
         <tr><td>CPU3 COM1/COM2/COM3</td><td>外部上位机或 PLC 接入</td><td>DSM、Wartsila、LTD、SI 等外部协议。</td></tr>
@@ -351,9 +354,9 @@
     </table>
 
     <h3>内部数据对象</h3>
-    <table>
+    <table><caption>内部数据对象</caption>
       <thead>
-        <tr><th>对象</th><th>位置</th><th>说明</th></tr>
+        <tr><th scope="col">对象</th><th scope="col">位置</th><th scope="col">说明</th></tr>
       </thead>
       <tbody>
         <tr><td><code>DeviceParameters</code></td><td>保持寄存器</td><td>命令、传感器、罐高、液位、水位、密度、Wartsila、报警、AO、显示和串口配置等参数。多数 32 位字段占 2 个 16 位寄存器。</td></tr>
@@ -375,9 +378,9 @@
     </div>
 
     <h3>协议版本记录摘要</h3>
-    <table>
+    <table><caption>协议版本记录摘要</caption>
       <thead>
-        <tr><th>协议版本</th><th>首个 CPU2</th><th>首个 CPU3</th><th>关键能力</th></tr>
+        <tr><th scope="col">协议版本</th><th scope="col">首个 CPU2</th><th scope="col">首个 CPU3</th><th scope="col">关键能力</th></tr>
       </thead>
       <tbody>
         <tr><td>1</td><td>V1.5.0.0</td><td>V1.2.0.0</td><td>密度分布最大点数扩展到 200。</td></tr>
@@ -394,9 +397,9 @@
   <section id="screen">
     <h2>五、屏幕与菜单</h2>
     <h3>进入方式与按键</h3>
-    <table>
+    <table><caption>进入方式与按键</caption>
       <thead>
-        <tr><th>项目</th><th>说明</th></tr>
+        <tr><th scope="col">项目</th><th scope="col">说明</th></tr>
       </thead>
       <tbody>
         <tr><td>菜单入口</td><td>非罐区操作界面下长按确认键约 3 秒进入菜单。</td></tr>
@@ -408,9 +411,9 @@
     </table>
 
     <h3>主界面显示项</h3>
-    <table>
+    <table><caption>主界面显示项</caption>
       <thead>
-        <tr><th>显示项</th><th>说明</th></tr>
+        <tr><th scope="col">显示项</th><th scope="col">说明</th></tr>
       </thead>
       <tbody>
         <tr><td>运行状态</td><td>显示待机、测量中、完成态、故障、维护模式、调试模式中、无线滑环匹配中/完成等状态。</td></tr>
@@ -427,9 +430,9 @@
     </table>
 
     <h3>菜单总览</h3>
-    <table>
+    <table><caption>菜单总览</caption>
       <thead>
-        <tr><th>一级菜单</th><th>下级内容</th><th>说明</th></tr>
+        <tr><th scope="col">一级菜单</th><th scope="col">下级内容</th><th scope="col">说明</th></tr>
       </thead>
       <tbody>
         <tr><td>测量命令</td><td>16 个测量命令</td><td>液位、水位、罐高、密度、区间密度、读取部件参数等流程。</td></tr>
@@ -456,9 +459,9 @@
     </ol>
 
     <h3>测量命令菜单</h3>
-    <table>
+    <table><caption>测量命令菜单</caption>
       <thead>
-        <tr><th>菜单项</th><th>对应命令</th><th>用途</th><th>注意事项</th></tr>
+        <tr><th scope="col">菜单项</th><th scope="col">对应命令</th><th scope="col">用途</th><th scope="col">注意事项</th></tr>
       </thead>
       <tbody>
         <tr><td>提零点</td><td><code>CMD_BACK_ZERO</code></td><td>执行回零点流程。</td><td>用于建立零点或恢复零点位置。</td></tr>
@@ -493,9 +496,9 @@
 
     <h3>液位测量和液位跟随</h3>
     <p>液位测量依赖液位传感器信号、罐高、盲区、液位阈值、滞后阈值和测量方式。长期液位跟随流程会在进入跟随前确认位置源，必要时从编码轮记步切换到电机步进记步，并重新寻找液位点。</p>
-    <table>
+    <table><caption>液位测量和液位跟随</caption>
       <thead>
-        <tr><th>阶段</th><th>说明</th></tr>
+        <tr><th scope="col">阶段</th><th scope="col">说明</th></tr>
       </thead>
       <tbody>
         <tr><td>初始化</td><td>执行测量初始化，确认电机和传感器可用，处理必要回零。</td></tr>
@@ -507,9 +510,9 @@
 
     <h3>水位测量和水位跟随</h3>
     <p>水位跟随以水位电容为闭环判断依据。水位目标电容等于零点电容加水位跟随电容阈值；寻找电容阈值用于闭环稳定带，滞后电容阈值用于稳定监测中判断是否需要重新寻找水位。</p>
-    <table>
+    <table><caption>水位测量和水位跟随</caption>
       <thead>
-        <tr><th>参数</th><th>单位/倍率</th><th>用途</th></tr>
+        <tr><th scope="col">参数</th><th scope="col">单位/倍率</th><th scope="col">用途</th></tr>
       </thead>
       <tbody>
         <tr><td><code>water_cap_threshold</code></td><td>x1000</td><td>水位目标电容增量。</td></tr>
@@ -522,7 +525,7 @@
 
     <h3>密度单点、固定点和分布测量</h3>
     <ul>
-      <li>单点测量使用单点测量位置，执行前会校验目标在 <code>blindZone <= target <= tankHeight</code> 范围内。</li>
+      <li>单点测量使用单点测量位置，执行前会校验目标在 <code>blindZone &lt;= target &lt;= tankHeight</code> 范围内。</li>
       <li>固定点监测使用单点监测位置，属于长期运行态，CPU3 会限制参数写入。</li>
       <li>分布测量支持最多 200 个测点，测点数量、间距、上下限、悬停时间由密度测量参数决定。</li>
       <li>SI协议输出 profile 数据时，只在 profile 完成锁存后输出点数和有效点阵，范围外保持 0。</li>
@@ -530,9 +533,9 @@
 
     <h3>瓦锡兰区间密度</h3>
     <p>瓦锡兰区间密度测量完成后，会等待 CPU3 读取结果，再根据“瓦锡兰探底间隔”判断是否执行测后探底。需要探底时，流程先回到固定点监测位置，只移动不读取密度；固定点移动失败时跳过后续探底，不通过最终错误出口置错误态。</p>
-    <table>
+    <table><caption>瓦锡兰区间密度</caption>
       <thead>
-        <tr><th>参数</th><th>说明</th></tr>
+        <tr><th scope="col">参数</th><th scope="col">说明</th></tr>
       </thead>
       <tbody>
         <tr><td>瓦锡兰探底间隔</td><td>0 表示不探底；1~100 表示每 N 次瓦锡兰分布测后探底一次；大于 100 按 1 处理。</td></tr>
@@ -545,9 +548,9 @@
   <section id="parameters">
     <h2>八、参数配置说明</h2>
     <h3>单位和倍率口径</h3>
-    <table>
+    <table><caption>单位和倍率口径</caption>
       <thead>
-        <tr><th>类别</th><th>常见单位/倍率</th><th>说明</th></tr>
+        <tr><th scope="col">类别</th><th scope="col">常见单位/倍率</th><th scope="col">说明</th></tr>
       </thead>
       <tbody>
         <tr><td>位置、液位、水位、罐高</td><td>0.1 mm 或菜单显示 mm 小数 1 位</td><td>内部多数字段以 0.1 mm 存储，菜单显示时换算为 mm。</td></tr>
@@ -560,9 +563,9 @@
     </table>
 
     <h3>参数组速查</h3>
-    <table>
+    <table><caption>参数组速查</caption>
       <thead>
-        <tr><th>参数组</th><th>典型参数</th><th>现场用途</th><th>注意事项</th></tr>
+        <tr><th scope="col">参数组</th><th scope="col">典型参数</th><th scope="col">现场用途</th><th scope="col">注意事项</th></tr>
       </thead>
       <tbody>
         <tr><td>基础信息</td><td>传感器类型、CPU2 程序版本、协议版本、故障自动恢复重跑次数、标定值、单点位置、电机运行位置。</td><td>版本核对、命令参数和基础标定。</td><td>故障自动恢复重跑次数 0 表示关闭；1~10 为最多重跑次数；默认 3。</td></tr>
@@ -592,9 +595,9 @@
   <section id="communication">
     <h2>九、通信与外部协议</h2>
     <h3>内部 CPU2/CPU3 Modbus</h3>
-    <table>
+    <table><caption>内部 CPU2/CPU3 Modbus</caption>
       <thead>
-        <tr><th>功能码</th><th>用途</th><th>说明</th></tr>
+        <tr><th scope="col">功能码</th><th scope="col">用途</th><th scope="col">说明</th></tr>
       </thead>
       <tbody>
         <tr><td><code>0x03</code></td><td>读保持寄存器</td><td>读取 CPU2 参数和命令相关字段。</td></tr>
@@ -604,9 +607,9 @@
     </table>
 
     <h3>CPU3 外部串口默认值</h3>
-    <table>
+    <table><caption>CPU3 外部串口默认值</caption>
       <thead>
-        <tr><th>端口</th><th>硬件串口</th><th>默认串口参数</th><th>默认协议</th></tr>
+        <tr><th scope="col">端口</th><th scope="col">硬件串口</th><th scope="col">默认串口参数</th><th scope="col">默认协议</th></tr>
       </thead>
       <tbody>
         <tr><td>COM1</td><td>USART6</td><td>4800 8N1</td><td>DSM</td></tr>
@@ -626,9 +629,9 @@
     </ul>
 
     <h3>SI协议</h3>
-    <table>
+    <table><caption>SI协议</caption>
       <thead>
-        <tr><th>区域</th><th>当前实现</th><th>限制</th></tr>
+        <tr><th scope="col">区域</th><th scope="col">当前实现</th><th scope="col">限制</th></tr>
       </thead>
       <tbody>
         <tr><td>串口要求</td><td>Modbus RTU，9600 8O1，站号优先使用现有从站地址。</td><td>选择 SI协议后自动收敛串口配置。</td></tr>
@@ -646,9 +649,9 @@
   <section id="faults">
     <h2>十、故障、日志与自动恢复</h2>
     <h3>错误码分类</h3>
-    <table>
+    <table><caption>错误码分类</caption>
       <thead>
-        <tr><th>范围</th><th>类别</th><th>典型含义</th></tr>
+        <tr><th scope="col">范围</th><th scope="col">类别</th><th scope="col">典型含义</th></tr>
       </thead>
       <tbody>
         <tr><td><code>0x000B0000</code></td><td>电机类</td><td>TMC5130 通信、驱动报警、过温、运行超时、步进异常。</td></tr>
@@ -664,9 +667,9 @@
     <h3>统一错误日志</h3>
     <p>CPU2 日志字段使用制表符分隔，现场建议优先搜索 <code>错误</code>。再按阶段过滤：</p>
     <p><span class="tag">阶段：错误重试</span><span class="tag green">阶段：重试成功</span><span class="tag orange">阶段：错误报警</span><span class="tag">阶段：最终报错</span></p>
-    <table>
+    <table><caption>统一错误日志</caption>
       <thead>
-        <tr><th>阶段</th><th>含义</th></tr>
+        <tr><th scope="col">阶段</th><th scope="col">含义</th></tr>
       </thead>
       <tbody>
         <tr><td>错误重试</td><td>当前操作失败，但流程还会继续尝试。</td></tr>
@@ -678,9 +681,9 @@
 
     <h3>测量失败自动恢复</h3>
     <p>任意测量类指令失败后，系统保持原错误状态和错误码，并进入自动恢复检查。恢复检查每 1 秒读取一次部件参数，只有所有部件恢复正常后，才清除错误并从头重新执行失败前的完整测量命令。</p>
-    <table>
+    <table><caption>测量失败自动恢复</caption>
       <thead>
-        <tr><th>参数</th><th>行为</th></tr>
+        <tr><th scope="col">参数</th><th scope="col">行为</th></tr>
       </thead>
       <tbody>
         <tr><td><code>fault_auto_recovery_retry_limit = 0</code></td><td>关闭恢复确认成功后的原命令自动重跑。</td></tr>
@@ -694,9 +697,9 @@
   <section id="maintenance">
     <h2>十一、维护与调试</h2>
     <h3>调试指令菜单</h3>
-    <table>
+    <table><caption>调试指令菜单</caption>
       <thead>
-        <tr><th>菜单项</th><th>用途</th><th>注意事项</th></tr>
+        <tr><th scope="col">菜单项</th><th scope="col">用途</th><th scope="col">注意事项</th></tr>
       </thead>
       <tbody>
         <tr><td>上行/下行</td><td>点动或执行指定距离移动。</td><td>执行期间显示调试模式中。</td></tr>
@@ -710,9 +713,9 @@
     </table>
 
     <h3>CPU2 调试串口常用命令</h3>
-    <table>
+    <table><caption>CPU2 调试串口常用命令</caption>
       <thead>
-        <tr><th>命令</th><th>用途</th><th>显示状态</th></tr>
+        <tr><th scope="col">命令</th><th scope="col">用途</th><th scope="col">显示状态</th></tr>
       </thead>
       <tbody>
         <tr><td><code>I/G/K/R/W/O/P/Q</code></td><td>正式业务命令入口，转成 <code>CommandType</code> 后交给主循环。</td><td>对应业务状态。</td></tr>
@@ -738,9 +741,9 @@
     <p>匹配成功后 CPU3 显示无线滑环匹配完成和两行 MAC；匹配失败时 CPU2 进入故障态，CPU3 按错误码显示，详细失败阶段看 CPU2 串口日志。</p>
 
     <h3>固件构建维护</h3>
-    <table>
+    <table><caption>固件构建维护</caption>
       <thead>
-        <tr><th>目标</th><th>推荐命令</th><th>产物</th></tr>
+        <tr><th scope="col">目标</th><th scope="col">推荐命令</th><th scope="col">产物</th></tr>
       </thead>
       <tbody>
         <tr><td>CPU2</td><td><code>cmake --build build\LTD_MAIN_CPU2</code></td><td><code>LTD_MAIN_CPU2.elf</code>、<code>.hex</code>、<code>_V1.12.0.0.hex</code>、<code>.bin</code>、<code>.map</code></td></tr>
@@ -807,6 +810,8 @@
       <strong>未替代项：</strong>本文是根据当前工程生成的设备说明草案。真实硬件电气安全、机械限位、现场工艺流程、客户协议验收、第三方认证和最终出版版式仍需人工复核。
     </div>
   </section>
+
+<!-- CUBE_EMBED_END -->
 </main>
 </body>
 </html>

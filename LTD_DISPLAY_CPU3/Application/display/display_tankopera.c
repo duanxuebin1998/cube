@@ -406,6 +406,7 @@ static void enter_motor_run_monitor_page(void); /* 进入电机运行监控页 *
 static void enter_motor_run_monitor_page_waiting_stop(void); /* 停止后回到监控页等待收敛 */
 static void motor_run_monitor_back_to_status(void); /* 监控页返回状态页 */
 static void motor_run_monitor_request_stop(void); /* 监控页确认键直接停止运动 */
+static void display_cpu2_comm_failure(void); /* CPU2 请求失败统一提示 */
 static void motor_run_monitor_draw_values(void); /* 绘制监控页位置和扭力 */
 static bool command_is_motor_monitor_command(uint32_t cmd); /* 纯电机指令范围判断 */
 static bool motor_run_monitor_state_is_active(DeviceState state); /* 电机监控运行态判断 */
@@ -1098,7 +1099,11 @@ static void motor_run_monitor_request_stop(void)
 		return;
 	}
 
-	Display_RequestCancelMeasurement();
+	if (!Display_RequestCancelMeasurement()) {
+		display_cpu2_comm_failure();
+		motor_run_monitor_page();
+		return;
+	}
 	enter_motor_run_monitor_page_waiting_stop();
 }
 
@@ -2789,44 +2794,33 @@ typedef struct {
 } NoParaCmdMap_t;
 
 /**
- * @brief 执行屏幕菜单操作中的 __attribute__ 逻辑。
- *
- * @param opera 业务参数。
- * @return 状态码、计数值或协议数值，具体含义由调用点约定。
- */
-static uint8_t __attribute__((unused)) is_debug_cmd(uint32_t opera)
-{
-    return ((opera > COM_NUM_DEBUGCMD_START) && (opera < COM_NUM_DEBUGCMD_STOP)) ||
-           (opera == COM_NUM_PAIR_NEAREST_WIRELESS_SLIPRING);
-}
-
-/* 统一的“调试指令允许条件”判定（按你现有逻辑扩展） */
-static uint8_t __attribute__((unused)) debug_cmd_is_allowed(void)
-{
-    uint32_t st = g_measurement.device_status.device_state;
-
-    /* 你当前对恢复出厂的限制：允许 STANDBY / ERROR / MAINTENANCEMODE
-       这里建议把调试类都统一到同一套口径，避免口径不一致 */
-    /* 先处理异常边界，避免屏幕菜单操作状态机带故障继续运行。 */
-    if ((st == STATE_STANDBY) || (st == STATE_ERROR) || (st == STATE_MAINTENANCEMODE)) {
-        return 1;
-    }
-    return 0;
-}
-
-/**
  * @brief 发送屏幕菜单操作中的 send_cpu2_command 逻辑。
  *
  * @param cmd 命令值。
- * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ * @return true 表示 CPU2 返回合法写响应，false 表示本次请求失败。
  */
-static void send_cpu2_command(uint32_t cmd)
+static bool send_cpu2_command(uint32_t cmd)
 {
+    if (!CPU2_CommCanSendCommand((CommandType)cmd)) {
+        return false;
+    }
     /* 写 2 个寄存器：如果协议定义为 command 占 32bit，这里保持 2 不动。 */
-    CPU2_CombinatePackage_Send(FUNCTIONCODE_WRITE_MULREGISTER,
-                              HOLDREGISTER_DEVICEPARAM_COMMAND,
-                              2,
-                              &cmd);
+    return CPU2_CombinatePackage_Send(FUNCTIONCODE_WRITE_MULREGISTER,
+                                     HOLDREGISTER_DEVICEPARAM_COMMAND,
+                                     2,
+                                     &cmd);
+}
+
+/*
+ * 函数用途：统一显示 CPU2 请求未获得合法响应的菜单提示。
+ * 调用场景：CPU2 参数读取、写入或命令下发失败后调用。
+ * 关键约束：不得继续进入成功页、运动监控页或参数确认页。
+ */
+static void display_cpu2_comm_failure(void)
+{
+    oled_clear();
+    DisplayLangaugeLineWords((uint8_t*)"与CPU2通讯故障!", OLED_LINE8_1, OLED_ROW3_2, 0, (uint8_t*)"Cpu2 CF!");
+    HAL_Delay(800);
 }
 
 /**
@@ -2937,18 +2931,21 @@ bool Display_CanEnterCancelMeasurementConfirm(void)
 
 /**
  * @brief 显示或打印屏幕菜单操作中的 Display_RequestCancelMeasurement 逻辑。
- * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ * @return true 表示无需取消或取消命令获得合法响应，false 表示通信失败。
  */
-void Display_RequestCancelMeasurement(void)
+bool Display_RequestCancelMeasurement(void)
 {
     DeviceState state = g_measurement.device_status.device_state;
 
-    /* 只在确实有测量/运动过程时下发取消命令，避免待机页误触发。 */
+    /* 确认期间流程可能已自然结束，此时按幂等成功处理，避免误报通信故障。 */
     if (!display_state_can_cancel_measurement(state)) {
-        return;
+        return true;
     }
 
-    send_cpu2_command(CMD_CANCEL_MEASUREMENT);
+    if (!CPU2_CommCanSendCommand(CMD_CANCEL_MEASUREMENT)) {
+        return false;
+    }
+    return send_cpu2_command(CMD_CANCEL_MEASUREMENT);
 }
 
 /**
@@ -3027,21 +3024,23 @@ static void cmd_nopara_process(void)
         return;
     }
 
-    /* 调试类命令：统一加权限/状态限制（你也可以只限制“危险指令”子集） */
-/* if (is_debug_cmd((uint32_t)now_Opera_Num)) { */
-/* if (!debug_cmd_is_allowed()) { */
-/* oled_clear(); */
-/* DisplayLangaugeLineWords((uint8_t*)"失败", OLED_LINE8_1, OLED_ROW4_2, 0, (uint8_t*)"Failed"); */
-/* DisplayLangaugeLineWords((uint8_t*)"请先进入调试模式", OLED_LINE8_1, OLED_ROW4_3, 0, (uint8_t*)"Enter debug mode"); */
-/* return; */
-/* } */
-/* } */
+    if (!CPU2_CommCanSendCommand((CommandType)cmd)) {
+        display_cpu2_comm_failure();
+        exitTankOpera();
+        return;
+    }
 
     /* 下发命令 */
+    bool request_ok;
     if (now_Opera_Num == COM_NUM_SI_PROFILE) {
-        si_profile_request_start();
+        request_ok = si_profile_request_start();
     } else {
-        send_cpu2_command(cmd);
+        request_ok = send_cpu2_command(cmd);
+    }
+    if (!request_ok) {
+        display_cpu2_comm_failure();
+        exitTankOpera();
+        return;
     }
 
     /* ---------- UI 反馈与退出策略（保留你现有行为） ---------- */
@@ -3138,10 +3137,15 @@ static void cmd_onepara_process(void)
             hold32[i >> 2] |= ((uint32_t)paraarr[i]) << (8u * (uint32_t)(i & 3));
         }
 
-        CPU2_CombinatePackage_Send(FUNCTIONCODE_WRITE_MULREGISTER,
-                                  param_meta[index].startadd,
-                                  param_meta[index].rgstcnt,
-                                  hold32);
+        if (!CPU2_CommIsAvailable() ||
+            !CPU2_CombinatePackage_Send(FUNCTIONCODE_WRITE_MULREGISTER,
+                                       param_meta[index].startadd,
+                                       param_meta[index].rgstcnt,
+                                       hold32)) {
+            display_cpu2_comm_failure();
+            exitTankOpera();
+            return;
+        }
     }
 
     /* 3) 下发命令 */
@@ -3170,10 +3174,14 @@ static void cmd_onepara_process(void)
         }
 
         /* 2 个寄存器写入：把 cmd 作为 32bit 写入 command 寄存器 */
-        CPU2_CombinatePackage_Send(FUNCTIONCODE_WRITE_MULREGISTER,
-                                  HOLDREGISTER_DEVICEPARAM_COMMAND,
-                                  2,
-                                  (uint32_t *)&cmd);
+        if (!CPU2_CombinatePackage_Send(FUNCTIONCODE_WRITE_MULREGISTER,
+                                       HOLDREGISTER_DEVICEPARAM_COMMAND,
+                                       2,
+                                       (uint32_t *)&cmd)) {
+            display_cpu2_comm_failure();
+            exitTankOpera();
+            return;
+        }
         motor_run_monitor_handle_sent_command(cmd);
         return;
     }
@@ -3417,7 +3425,11 @@ static void cancel_confirm_back(void)
 /* 确认取消测量：确认键触发后直接下发CPU2取消测量命令。 */
 static void confirm_cancel_measurement(void)
 {
-	Display_RequestCancelMeasurement();
+	if (!Display_RequestCancelMeasurement()) {
+		display_cpu2_comm_failure();
+		ifcancelmeasurement();
+		return;
+	}
 	exitTankOpera();
 }
 
@@ -3447,20 +3459,21 @@ static int get_para_data(void)
 	}
 	else  /* CPU2 参数 */
 	{
-		/* 先处理异常边界，避免屏幕菜单操作状态机带故障继续运行。 */
-		if (cnt_commutoCPU2 >= COMMU_ERROR_MAX) {
-			oled_clear();
-			DisplayLangaugeLineWords((uint8_t*)"与CPU2通讯故障!", OLED_LINE8_1, OLED_ROW3_2, 0, (uint8_t*)"Cpu2 CF!");
-			HAL_Delay(800);
+		/* 首次状态快照前或本机通信故障尚未由状态帧恢复时，禁止读取 CPU2 参数。 */
+		if (!CPU2_CommIsAvailable()) {
+			display_cpu2_comm_failure();
 			return -1;
 		}
 		oled_clear();
 		DisplayLangaugeLineWords((uint8_t*)"正在读取参数", OLED_LINE8_1, OLED_ROW3_2, 0, (uint8_t*)"Reading Para");
 
-		CPU2_CombinatePackage_Send(FUNCTIONCODE_READ_HOLDREGISTER,
+		if (!CPU2_CombinatePackage_Send(FUNCTIONCODE_READ_HOLDREGISTER,
 				param_meta[index].startadd,
 				param_meta[index].rgstcnt,
-				NULL);
+				NULL) || !CPU2_CommIsAvailable()) {
+			display_cpu2_comm_failure();
+			return -1;
+		}
 		HAL_Delay(150);
 
 		return 0;
@@ -3544,6 +3557,12 @@ static void cmd_configpara_process(void)
 	    int raw_value;
 
 
+	    if (!CPU2_CommIsAvailable()) {
+	        display_cpu2_comm_failure();
+	        mainmenu();
+	        return;
+	    }
+
 	    memset(hold32, 0, sizeof(hold32));
 
 	    /* 直接组织 32 位原始值，字序统一交给 CPU2_CombinatePackage_Send 处理。 */
@@ -3561,15 +3580,19 @@ static void cmd_configpara_process(void)
 	        hold32[0] = (uint32_t)((int32_t)raw_value);
 	    }
 
-	    CPU2_CombinatePackage_Send(FUNCTIONCODE_WRITE_MULREGISTER,
-	                              param_meta[index].startadd,
-	                              param_meta[index].rgstcnt,
-	                              hold32);
-
-	    CPU2_CombinatePackage_Send(FUNCTIONCODE_READ_HOLDREGISTER,
-	                              param_meta[index].startadd,
-	                              param_meta[index].rgstcnt,
-	                              NULL);
+	    if (!CPU2_CombinatePackage_Send(FUNCTIONCODE_WRITE_MULREGISTER,
+	                                    param_meta[index].startadd,
+	                                    param_meta[index].rgstcnt,
+	                                    hold32) ||
+	        !CPU2_CombinatePackage_Send(FUNCTIONCODE_READ_HOLDREGISTER,
+	                                    param_meta[index].startadd,
+	                                    param_meta[index].rgstcnt,
+	                                    NULL) ||
+	        !CPU2_CommIsAvailable()) {
+	        display_cpu2_comm_failure();
+	        mainmenu();
+	        return;
+	    }
 	}
 	HAL_Delay(800);
 	displaypara();

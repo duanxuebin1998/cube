@@ -879,13 +879,3 @@ float AoOutput_GetPercentOfRange(void)
 
     return percent;
 }
-
-/*
- * 函数用途：兼容旧 AD5421 电流决策入口，转调 AO 服务更新。
- * 调用场景：保留给旧调用链或历史接口。
- * 关键约束：内部会进入 AO 更新流程，不应在中断中调用。
- */
-void CurrentStateJudgeAndSend(void)
-{
-    (void)AoOutput_Update();
-}

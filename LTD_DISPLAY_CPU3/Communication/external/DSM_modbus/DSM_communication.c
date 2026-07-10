@@ -10,6 +10,39 @@
 #include "address.h"
 
 #define DEBUG_COMM 0
+
+/*
+ * 函数用途：校验 DSM 请求帧的实际长度是否与功能码和 byteCount 一致。
+ * 调用场景：地址和 CRC 通过后、分发到各 Response 函数前调用。
+ * 关键约束：FC10 读取 byteCount 前必须先确认缓冲区至少包含该字段。
+ */
+static bool DSM_IsRequestLengthValid(const unsigned char *rcvbuff, int rcvcount)
+{
+	if ((rcvbuff == NULL) || (rcvcount < 2))
+	{
+		return false;
+	}
+
+	switch (rcvbuff[1])
+	{
+	case FUNCTIONCODE_READ_COIL:
+	case FUNCTIONCODE_READ_HOLDREGISTER:
+	case FUNCTIONCODE_READ_INPUTREGISTER:
+	case FUNCTIONCODE_WRITE_COIL:
+		return (rcvcount == 8);
+
+	case FUNCTIONCODE_WRITE_MULREGISTER:
+		if (rcvcount < 9)
+		{
+			return false;
+		}
+		return (rcvcount == (9 + (int)rcvbuff[6]));
+
+	default:
+		return true;
+	}
+}
+
 /**********************************************************************************************
  **函数名称：	CommunicationInit()
  **函数功能：	与上位机通信初始化:串口4初始化；DMA初始化；定时器2初始化；地址初始化并读取当前地址
@@ -63,6 +96,10 @@ int DSM_CommunicationProcess(unsigned char *rcvbuff, int rcvcount, uint8_t* tx, 
 	}
 	if (SlaveCheckCRC(rcvbuff, rcvcount) == false) {
 		return -1;
+	}
+	if (!DSM_IsRequestLengthValid(rcvbuff, rcvcount)) {
+		*tx_len = (uint16_t)ResponseException(rcvbuff[1], EXCEPTIONCODE_ERRORDATA, tx);
+		return 0;
 	}
 
 	if (GetFunctioncode(rcvbuff, &functioncode) == false) {

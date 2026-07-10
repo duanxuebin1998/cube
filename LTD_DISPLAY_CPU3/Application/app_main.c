@@ -16,7 +16,7 @@
 
 #define DEBUG_APP_MAIN 0
 
-#define CPU2_POLL_IDLE_DELAY_MS 100u /* CPU2 idle polling period, 10Hz */
+#define CPU2_POLL_PERIOD_MS 100u /* CPU2 轮询调度门限；主循环阻塞时实际请求间隔可大于 100 ms。 */
 
 
 /* ====== 可调：TX 完成后额外延时（用于 RS485 电平恢复）====== */
@@ -392,6 +392,7 @@ void App_MainLoop(void)
     static uint8_t sendbuff1[256] = {0};
     static uint8_t sendbuff2[256] = {0};
     static uint8_t sendbuff3[256] = {0};
+    static uint32_t last_cpu2_poll_tick = 0U;
 
     uint8_t did_work = 0;
 
@@ -525,11 +526,15 @@ void App_MainLoop(void)
         }
     }
 
-    /* ========= 空闲才做轮询任务 ========= */
-    if (!did_work) {
+    /* 主循环可调度时按 100 ms 门限轮询，避免外部流量永久饿死 CPU2；同步请求阻塞期间不保证实际间隔。 */
+    if ((HAL_GetTick() - last_cpu2_poll_tick) >= CPU2_POLL_PERIOD_MS) {
         PollingInputData();
-/* PrintMeasurementResult(); */
-        HAL_Delay(CPU2_POLL_IDLE_DELAY_MS);
+        last_cpu2_poll_tick = HAL_GetTick();
+        did_work = 1U;
+    }
+
+    if (!did_work) {
+        HAL_Delay(1U);
     }
 }
 /**
@@ -654,7 +659,7 @@ void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
  *       - USART6: 调用 cpu3_uart_recover_tx 进行发送恢复
  *       - USART2: 调用 cpu3_uart_recover_tx 进行发送恢复
  *       - USART3: 调用 cpu3_uart_recover_tx 进行发送恢复
- *       - UART5: 重置等待响应标志，清空接收长度，重启 DMA 接收
+ *       - UART5: 仅记录待处理错误并解除等待，由主循环统一累计通信失败
  *
  * @note 函数内部会调用以下函数：
  *       - cpu3_uart_recover_tx(): UART 发送恢复
@@ -690,7 +695,7 @@ void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)
     }
 
     if (huart->Instance == UART5) {
-        wait_response = false;
+        CPU2_CommNotifyUartErrorFromISR();
         UART5_RX_LEN = 0;
         uart_restart_rx_dma(&huart5, UART5_RX_BUF, UART5_RX_BUF_SIZE, RS485_RecvMode);
     }

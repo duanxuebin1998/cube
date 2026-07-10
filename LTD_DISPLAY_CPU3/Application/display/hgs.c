@@ -200,8 +200,8 @@ uint32_t OLED_GetSpiErrorCount(void)
 }
 
 /**
- * @brief 计算校验屏幕显示中的 OLED_GetShadowCrc 逻辑。
- * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ * @brief 获取最近一次完整刷新后的 OLED 影子缓冲区 CRC。
+ * @return 影子缓冲区 CRC32，用于软件一致性检查。
  */
 uint32_t OLED_GetShadowCrc(void)
 {
@@ -209,8 +209,8 @@ uint32_t OLED_GetShadowCrc(void)
 }
 
 /**
- * @brief 更新屏幕显示中的 OLED_GetRefreshSeq 逻辑。
- * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ * @brief 获取无 SPI 错误的完整刷新序号。
+ * @return 完整刷新累计次数，用于刷新活性检查。
  */
 uint32_t OLED_GetRefreshSeq(void)
 {

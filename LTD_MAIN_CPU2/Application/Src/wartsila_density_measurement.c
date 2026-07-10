@@ -13,8 +13,6 @@
 #include "measure_density.h"
 #include "abortable_delay.h"
 
-uint32_t motorMoveUpToPositionOrAir(float target_mm, Level_StateTypeDef *final_state);
-
 #define WARTSILA_POINT_POSITION_TOLERANCE_MM 1.0f /* Wartsila 单点位置允许误差，单位 mm。 */
 #define WARTSILA_POINT_POSITION_RETRY_MAX    1U /* Wartsila 密度测量参数：测点 位置 重试 最大值。 */
 
@@ -611,127 +609,6 @@ uint32_t Wartsila_Density_SpreadMeasurement(DensityDistribution *dist)
            RAW_TO_DENSITY(dist->average_density),
            (unsigned long)dist->average_temperature,
            RAW_TO_TEMP(dist->average_temperature));
-
-    return NO_ERROR;
-}
-
-/**
- * @brief 电机向上运行到指定目标位置，途中若检测到传感器进入空气立即停止
- *
- * @param target_mm      目标绝对位置（单位：mm）
- * @param final_state    [可选] 最终状态输出（AIR / OIL），可为 NULL
- *
- * @return NO_ERROR 表示正常结束（到达目标或遇到空气）
- *         其他错误码表示电机或硬件异常
- */
-uint32_t motorMoveUpToPositionOrAir(float target_mm, Level_StateTypeDef *final_state)
-{
-	uint32_t hz = 0;
-	uint32_t ret = NO_ERROR;
-    bool is_moving = true;
-    if (final_state) {
-        *final_state = OIL;
-    }
-
-    /* 读取当前高度（mm） */
-    float cur_mm;
-    MotorCtrl_SnapshotSensorPositionMm(&cur_mm);
-
-    printf("上行到目标或空气：当前：%.3fmm, 目标：%.3fmm\r\n",
-           cur_mm, target_mm);
-
-    /* 如果当前就超过目标，不需要移动 */
-    if (cur_mm >= target_mm) {
-        printf("当前位置已高于目标点，无需上行。\r\n");
-        return NO_ERROR;
-    }
-    /* 切换频率模式 */
-    ret = EnableLevelMode();
-    CHECK_ERROR(ret);
-    printf("上行到目标或空气：液位测量模式已稳定，开始上行检测。\r\n");
-    /* 下发上行运动指令（长度设为足够大） */
-    float max_move = target_mm - cur_mm;   /* 理论需要跑的距离 */
-
-    ret = MotorCtrl_MoveNoWait(3*max_move, MOTOR_DIRECTION_UP, MotorCtrl_GetDefaultSpeedX100()); /* 走三倍距离保证一定会跑到 */
-    CHECK_ERROR(ret);
-
-    /* 进入循环检测：空气 + 到位 + 安全检查 */
-    uint32_t start_tick = HAL_GetTick();
-    const uint32_t MAX_WAIT_MS = 60*60000;    /* 最长等待 60s*60 =1小时，防止死循环 */
-
-    while (1) {
-        ret = MotorCtrl_IsDriverMoving(&stepper, &is_moving);
-        /* 先处理异常边界，避免测量流程状态机带故障继续运行。 */
-        if (ret != NO_ERROR) {
-            (void)MotorCtrl_SlowStop();
-            return ret;
-        }
-        if (!is_moving) {
-            break;
-        }
-
-        /* 1) 检测空气状态 */
-        /* 如果传感器是 LTD 传感器 */
-        /* 这里处于电机运动监测环节，只允许做轻量频率读取；
-           不走 DSM_Get_LevelMode_Frequence() 的重恢复逻辑，
-           否则异常时会停电机、重切模式并等待，破坏当前运动流程。 */
-		if (g_deviceParams.sensorType == LTD_SENSOR) {
-	    	ret = DSM_V2_Read_LevelFrequency(&hz);
-			/* 先处理异常边界，避免测量流程状态机带故障继续运行。 */
-	    	if (ret != NO_ERROR) {
-				(void)MotorCtrl_SlowStop();
-				return ret;  /* 读取失败前先停止电机 */
-	    	}
-	    	if (hz == 0 || hz > g_deviceParams.oilLevelFrequency) {
-			if (final_state) *final_state = AIR; /* 读到0或者异常频率认为是空气 */
-	            printf("上行到目标或空气：频率检测到到达液面，立即停止电机！\r\n");
-	            ret = MotorCtrl_SlowStop();
-	            CHECK_ERROR(ret);
-			break;  /* 读到0也返回 */
-	    	}
-	    	 HAL_Delay(80);
-		}
-        Level_StateTypeDef st = OIL;
-        ret = determine_level_status_motion(&st);
-        CHECK_ERROR(ret);
-        if (final_state) *final_state = st;
-
-        if (st == AIR) {
-            printf("上行到目标或空气：检测到进入空气，立即停止电机！\r\n");
-            ret = MotorCtrl_SlowStop();
-            CHECK_ERROR(ret);
-            break;
-        }
-
-        /* 2) 检测当前位置是否已经到达目标点 */
-        MotorCtrl_SnapshotSensorPositionMm(&cur_mm);
-
-        if (cur_mm >= target_mm - 0.05f) {   /* 加一点浮动允许 */
-            printf("上行到目标或空气：已到达目标位置 %.3fmm\r\n", cur_mm);
-            ret = MotorCtrl_SlowStop();
-            CHECK_ERROR(ret);
-            break;
-        }
-
-        /* 3) 其他安全检测 */
-        ret = CheckWeightCollision();
-        CHECK_ERROR(ret);
-
-        ret = MotorCtrl_CheckDriverGstat(); /* 电机状态检测 */
-        CHECK_ERROR(ret);
-
-        /* 4) 超时保护 */
-        if (HAL_GetTick() - start_tick > MAX_WAIT_MS) {
-            printf("上行到目标或空气：运行超时！\r\n");
-            RETURN_ERROR(MOTOR_RUN_TIMEOUT);
-        }
-
-        HAL_Delay(80);
-    }
-
-    /* 结束后，再读一次最终位置 */
-    MotorCtrl_SnapshotSensorPositionMm(&cur_mm);
-    printf("上行到目标或空气结束：最终位置 %.3fmm\r\n", cur_mm);
 
     return NO_ERROR;
 }

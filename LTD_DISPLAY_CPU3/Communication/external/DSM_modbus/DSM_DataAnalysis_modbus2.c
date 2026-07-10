@@ -216,6 +216,12 @@ int UpdateDeviceParamsFromLegacyRegs(int startadd, int reamount)
 {
     u32 temp;
     int end = startadd + reamount - 1;
+
+    /* 外部写入必须基于已建立且未锁存故障的 CPU2 链路。 */
+    if (!CPU2_CommIsAvailable()) {
+        return PARAMETER_WRITE_FAIL;
+    }
+
     /* ************** 固定点测量位置 -> g_deviceParams.tankHeight *************** */
     if ((HOLDREGISTER_SP_POSITION >= startadd) &&
         ((HOLDREGISTER_SP_POSITION + 1) <= end))
@@ -494,8 +500,10 @@ int UpdateDeviceParamsFromLegacyRegs(int startadd, int reamount)
 
     /* 其它旧寄存器如果在新 DeviceParameters 中没有对应，就不处理 */
 
-    /* 同步修改过的 DeviceParameters → CPU2 */
-    DeviceParams_SyncAllToCPU2();
+    /* 同步失败时返回设备忙，禁止外部主站把未落到 CPU2 的参数当作成功。 */
+    if (!DeviceParams_SyncAllToCPU2()) {
+        return PARAMETER_WRITE_FAIL;
+    }
     return 0;
 }
 

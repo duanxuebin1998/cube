@@ -30,6 +30,7 @@ DSM_C = ROOT / "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_DataAnaly
 WARTSILA_C = ROOT / "LTD_DISPLAY_CPU3/Communication/external/wartsila_modbus/wartsila_modbus_data_analysis.c"
 SI_C = ROOT / "LTD_DISPLAY_CPU3/Communication/external/si_modbus/si_modbus_slave.c"
 PROTOCOL_DOC = ROOT / "docs/01_协议与寄存器/CPU2_CPU3协议变更记录.md"
+CPU2_SENSOR_FLOW_DOC = ROOT / "docs/00_程序流程导航/CPU2/09_传感器与无线通信.html"
 
 
 def read(path: Path, encoding: str = "utf-8") -> str:
@@ -216,7 +217,7 @@ def check_cpu3_contract(cpu2_h: str, cpu3_h: str, cpu3_param_c: str, local_param
     )
 
     compact_sync = normalize(sync_c)
-    require("return(uint32_t)((int32_t)h->val-(int32_t)h->offset);" in compact_sync, "CPU3 MetaValueToRaw must subtract TYPE_INT offset", errors)
+    require("return(uint32_t)(meta_value-(int32_t)h->offset);" in compact_sync, "CPU3 MetaValueToRaw must subtract TYPE_INT offset from the requested value", errors)
     require("return(int32_t)raw+(int32_t)h->offset;" in compact_sync, "CPU3 RawToMetaValue must add TYPE_INT offset", errors)
     require_nearby(
         display_c,
@@ -252,11 +253,21 @@ def check_external_protocol_contract(dsm_c: str, wartsila_c: str, si_c: str, err
     require_re(si_c, r"return\s+si_clamp_u16\(raw_density\)", "SI must keep x100 density as 0.01 unit with u16 clamp", errors)
 
 
-def check_docs(protocol_doc: str, errors: list[str]) -> None:
+def check_docs(protocol_doc: str, sensor_flow_doc: str, errors: list[str]) -> None:
     require_re(protocol_doc, r"\|\s*13\s*\|[\s\S]{0,240}内部密度 raw 从 `kg/m3 x10` 升级为 `kg/m3 x100`", "protocol table must document density protocol 13", errors)
     require_re(protocol_doc, r"###\s+协议版本\s+13[\s\S]{0,900}CPU3 本机 FRAM 参数版本升级到 `0x0005`", "protocol version 13 section must document CPU3 V5 migration", errors)
     require_re(protocol_doc, r"DSM 外部协议输出密度和密度修正时保持原 `x10` 口径", "protocol version 13 section must document DSM x10 compatibility", errors)
     require_re(protocol_doc, r"Wartsila 外部协议密度继续保持 `scale = 10` / `x10`", "protocol version 13 section must document Wartsila x10 compatibility", errors)
+    require(
+        "density += (densityCorrection - 100000) / 100" in sensor_flow_doc,
+        "CPU2 sensor flow doc must use density correction base 100000 and divisor 100",
+        errors,
+    )
+    require(
+        "density += (densityCorrection - 10000) / 10" not in sensor_flow_doc,
+        "CPU2 sensor flow doc must not retain the old density correction formula",
+        errors,
+    )
 
 
 def main() -> int:
@@ -275,12 +286,13 @@ def main() -> int:
     wartsila_c = read(WARTSILA_C)
     si_c = read(SI_C)
     protocol_doc = read(PROTOCOL_DOC)
+    sensor_flow_doc = read(CPU2_SENSOR_FLOW_DOC)
 
     check_numeric_examples(errors)
     check_cpu2_contract(cpu2_h, cpu2_c, sensor_c, oil_level_c, errors)
     check_cpu3_contract(cpu2_h, cpu3_h, cpu3_param_c, local_param_c, sync_c, display_c, errors)
     check_external_protocol_contract(dsm_c, wartsila_c, si_c, errors)
-    check_docs(protocol_doc, errors)
+    check_docs(protocol_doc, sensor_flow_doc, errors)
 
     if errors:
         print("density precision contract check failed:")

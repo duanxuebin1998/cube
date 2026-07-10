@@ -45,7 +45,6 @@
 #define CURRENT_MEAMODE 			21.5 /* 测量模式默认输出电流，单位 mA。 */
 
 
-/* void CurrentStateJudgeAndSend(void); */
 uint32_t Ad5421Init(void);
 uint32_t AD5421_SetCurrent(float mA);
 uint32_t AD5421_SetCurrentX100(uint32_t mA_x100);

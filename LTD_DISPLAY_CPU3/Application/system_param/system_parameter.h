@@ -122,7 +122,6 @@ typedef struct {
 } RelayAlarmConfig;
 
 #define REPEATMAX 3 /* 重复性测试次数 */
-#define COMMU_ERROR_MAX 10 /* 通讯连续错误最多次数 */
 #define REALTEMPMAXSPOT 16 /* 实时温度计最多测量点数 */
 /* 液位盲区值 */
 #define OILLEVELDOWNLIMIT 100
@@ -241,7 +240,8 @@ typedef enum {
     AD5421_WRITE_CURRENT_ERROR = 0x00130006,     /* AD5421写电流失败 */
     AD5421_FAULT_PIN_ERROR = 0x00130007,         /* AD5421故障报警 */
     AD5421_READFAULT_ERROR = 0x00130008,         /* AD5421故障寄存器异常 */
-    AD5421_READBACK_ERROR = 0x00130009           /* AD5421控制寄存器回读失败 */
+    AD5421_READBACK_ERROR = 0x00130009,          /* AD5421控制寄存器回读失败 */
+    CPU2_COMM_TIMEOUT = 0x0013000A               /* CPU2通信超时 */
 
 } ErrorCode;
 
@@ -819,7 +819,6 @@ typedef enum { /* 数据源取自 */
 #define MOTOR_CURRENT_MAX           31u
 
 /* **************** 全局变量 *************************** */
-extern int cnt_commutoCPU2;
 extern volatile MeasurementResult g_measurement; /* 测量结果 */
 extern volatile DeviceParameters g_deviceParams; /* 设备参数 */
 extern const int param_metaAmount;

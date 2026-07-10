@@ -25,18 +25,15 @@ const int readinputregisterfuncode = 0x04;		/* 读输入寄存器功能码 */
 const int presetsinglecoilfuncode = 0x05;		/* 写单个线圈功能码 */
 const int presetmultipleregisterfuncode = 0x10; /* 写多个寄存器功能码 */
 
-const int HoldingregisterAddress = 0X00; /* 已定义保持寄存器的起始地址 */
-const int InputregisterAddress = 0X00;	 /* 已定义输入寄存器的起始地址 */
-
-const int IllegalFunction = 0X01;	 /* 已定义异常码0x01 */
-const int IllegalDataAddress = 0X02; /* 已定义异常码0x02 */
-const int IllegalDataValue = 0X03;	 /* 已定义异常码0x03 */
-const int SlaveFailure = 0X04;		 /* 已定义异常码0x04 */
-const int SlaveBusy = 0X06;			 /* 已定义异常码0x06 */
-
 int TempBuffer[1675]; /* V1.116 dq2020.4.2 */
 
 static uint8_t s_dsm_self_check_placeholder_step = 0U; /* Modbus 协议模块级变量，保存跨函数共享的业务状态。 */
+
+#define DSM_MAX_WRITE_REGISTER_COUNT 123U
+
+/* FC16 同步失败时恢复最后一次已确认的参数与 DSM 保持寄存器镜像。 */
+static DeviceParameters s_dsm_parameter_snapshot;
+static int s_dsm_holding_register_snapshot[DSM_MAX_WRITE_REGISTER_COUNT];
 
 /*
  * 函数功能：判断保持寄存器访问是否落在 DSM V1.228 第6段占位区。
@@ -625,6 +622,15 @@ int Response03(unsigned char *revframe, unsigned char *sendframe)
 		sendframe[2] = 0x02; /* 超出自定义范围 */
 		framelen = 3;
 	}
+	else if (!IsHoldingRegisterZeroSegment((unsigned int)startaddress, (unsigned int)registeramount) &&
+			 !CPU2_CommIsAvailable())
+	{
+		/* CPU2 参数快照无效时禁止返回未确认值，第6段全零占位不受影响。 */
+		sendframe[0] = SlaveAddress;
+		sendframe[1] = 0x80 + readholdingregisterfuncode;
+		sendframe[2] = EXCEPTIONCODE_ERRORDEVIVEBUSY;
+		framelen = 3;
+	}
 	else
 	{
 		sendframe[0] = SlaveAddress;
@@ -891,17 +897,27 @@ int Response05(unsigned char *revframe, unsigned char *sendframe)
 		}
 	}
 
-	crc = CRC16_Calculate(sendframe, framelen);
-	sendframe[framelen] = crc & 0xff;
-	sendframe[framelen + 1] = (crc >> 8) & 0xff;
 	printf("startaddress=%04X,coilvalue=%04X\r\n", startaddress, coilvalue);
 
 	if (should_send_cmd)
 	{
 		/* 只有合法动作线圈写入 0xFF00 时才下发 CPU2，避免异常帧或 0x0000 误动作。 */
 		printf("cmd=%lu\r\n", cmd);
-		CPU2_CombinatePackage_Send(FUNCTIONCODE_WRITE_MULREGISTER, HOLDREGISTER_DEVICEPARAM_COMMAND, 2, &cmd);
+		if (!CPU2_CommCanSendCommand((CommandType)cmd) ||
+			!CPU2_CombinatePackage_Send(FUNCTIONCODE_WRITE_MULREGISTER,
+									  HOLDREGISTER_DEVICEPARAM_COMMAND,
+									  2,
+									  &cmd))
+		{
+			sendframe[0] = SlaveAddress;
+			sendframe[1] = 0x80 + presetsinglecoilfuncode;
+			sendframe[2] = EXCEPTIONCODE_ERRORDEVIVEBUSY;
+			framelen = 3;
+		}
 	}
+	crc = CRC16_Calculate(sendframe, framelen);
+	sendframe[framelen] = crc & 0xff;
+	sendframe[framelen + 1] = (crc >> 8) & 0xff;
 	return (framelen + 2);
 }
 /******************************************************
@@ -929,6 +945,7 @@ int Response16(unsigned char *revframe, unsigned char *sendframe)
 	int i;
 	int j;
 	unsigned short crc;
+	bool parameter_snapshot_taken = false;
 
 	functioncode = revframe[1];
 	startaddress = ((revframe[2] & 0x00ff) << 8) + revframe[3];
@@ -1006,19 +1023,50 @@ int Response16(unsigned char *revframe, unsigned char *sendframe)
 	}
 	else
 	{
-		if (!WriteHoldingRegister(startaddress, registeramount, TempBuffer))
+		if (!IsHoldingRegisterZeroSegment((unsigned int)startaddress, (unsigned int)registeramount) &&
+			!CPU2_CommIsAvailable())
 		{
-			ret = PARAMETER_ERROR;
+			/* 已知链路不可用时先返回设备忙，不提交 DSM 保持寄存器影子。 */
+			ret = PARAMETER_WRITE_FAIL;
 		}
 		else if (IsHoldingRegisterZeroSegment((unsigned int)startaddress, (unsigned int)registeramount))
 		{
 			/* 第6段当前只做协议占位：写请求回成功，但不落参数、不下发CPU2。 */
 			ret = 0;
 		}
+		else if (!ReadHoldingRegister(startaddress, registeramount, s_dsm_holding_register_snapshot))
+		{
+			ret = PARAMETER_ERROR;
+		}
 		else
 		{
-			/* 解析保持寄存器到设备参数，并下发到CPU2 */
-			ret = UpdateDeviceParamsFromLegacyRegs(startaddress, registeramount);
+			/* 写前保存最后一次确认值，避免 CPU2 ACK 失败后暴露请求影子。 */
+			memcpy(&s_dsm_parameter_snapshot,
+				   (const void *)&g_deviceParams,
+				   sizeof(s_dsm_parameter_snapshot));
+			parameter_snapshot_taken = true;
+
+			if (!WriteHoldingRegister(startaddress, registeramount, TempBuffer))
+			{
+				ret = PARAMETER_ERROR;
+			}
+			else
+			{
+				/* 解析保持寄存器到设备参数，并下发到CPU2。 */
+				ret = UpdateDeviceParamsFromLegacyRegs(startaddress, registeramount);
+			}
+		}
+
+		if ((ret != 0) && parameter_snapshot_taken)
+		{
+			/* 同步结果不确定时先回滚本地影子，CPU2 实值由强制补读重新确认。 */
+			memcpy((void *)&g_deviceParams,
+				   &s_dsm_parameter_snapshot,
+				   sizeof(g_deviceParams));
+			(void)WriteHoldingRegister(startaddress,
+								   registeramount,
+								   s_dsm_holding_register_snapshot);
+			SystemParameterSet();
 		}
 
 		/* 先处理异常边界，避免Modbus 协议状态机带故障继续运行。 */

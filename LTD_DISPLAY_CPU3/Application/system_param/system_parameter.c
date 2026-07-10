@@ -12,7 +12,6 @@
 #include <string.h>
 #include <stdio.h>
 #include <math.h>
-int cnt_commutoCPU2 = COMMU_ERROR_MAX; /* 系统参数模块级变量，保存跨函数共享的业务状态。 */
 volatile MeasurementResult g_measurement = { 0 }; /* 测量结果 */
 volatile DeviceParameters g_deviceParams = { 0 }; /* 设备参数 */
 

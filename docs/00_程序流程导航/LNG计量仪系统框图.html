@@ -316,8 +316,10 @@
       a { color: #111; text-decoration: none; }
     }
   </style>
+
+<link rel="stylesheet" href="assets/网站嵌入增强.css">
 </head>
-<body>
+<body class="cube-flow-page" data-cube-flow-page="cube-flow-lng计量仪系统框图">
   <header>
     <div class="wrap">
       <h1>LNG计量仪系统框图</h1>
@@ -331,7 +333,8 @@
     </div>
   </header>
 
-  <main>
+  <main class="wrap">
+  <!-- CUBE_EMBED_START -->
     <section class="toc" aria-labelledby="toc-title">
       <h2 id="toc-title">目录</h2>
       <ol>
@@ -362,7 +365,7 @@
 
     <section id="overall">
       <h2>整机系统框图</h2>
-      <div class="diagram">
+      <figure class="cube-flow-figure"><figcaption id="cube-flow-lng计量仪系统框图-diagram-01-caption">LNG计量仪整机系统框图</figcaption><div class="diagram cube-flow__viewport" data-flow-width="standard" tabindex="0" role="region" aria-labelledby="cube-flow-lng计量仪系统框图-diagram-01-caption">
         <svg viewBox="0 0 1180 640" role="img" aria-labelledby="overall-title overall-desc">
           <title id="overall-title">LNG计量仪整机系统框图</title>
           <desc id="overall-desc">外部主站经 CPU3 COM 口接入，CPU3 通过内部 Modbus 轮询 CPU2，CPU2 控制电机、传感器、无线滑环、扭力和模拟输出。</desc>
@@ -461,7 +464,7 @@
           <path d="M 750 202 C 704 202, 654 202, 614 202" stroke="#526474" stroke-width="2" fill="none" marker-end="url(#arrow)"></path>
           <text x="642" y="154" class="line-label">菜单命令 / 状态显示</text>
         </svg>
-      </div>
+      </div></figure>
 
       <div class="cards">
         <article class="card">
@@ -484,7 +487,7 @@
       <div class="note">
         <p>两块板卡主控均为 <code>STM32F429ZGTx</code>。CPU3 侧负责显示、按键、外部 COM 口和到 CPU2 的内部 485；CPU2 侧负责电机驱动、编码器、传感器链路、HART/4-20mA、FRAM、继电器和电源检测。</p>
       </div>
-      <div class="diagram">
+      <figure class="cube-flow-figure"><figcaption id="cube-flow-lng计量仪系统框图-diagram-02-caption">LNG计量仪硬件框图</figcaption><div class="diagram cube-flow__viewport" data-flow-width="standard" tabindex="0" role="region" aria-labelledby="cube-flow-lng计量仪系统框图-diagram-02-caption">
         <svg viewBox="0 0 1180 760" role="img" aria-labelledby="hardware-title hardware-desc">
           <title id="hardware-title">LNG计量仪硬件框图</title>
           <desc id="hardware-desc">CPU3 显示通讯板和 CPU2 主控测量板的 MCU、总线、外部接口、驱动芯片和现场外设连接关系。</desc>
@@ -621,16 +624,16 @@
           <rect x="34" y="724" width="1112" height="26" rx="5" fill="#eef3f8" stroke="#d7dee8"></rect>
           <text x="54" y="742" class="small-text">说明：框图按固件当前 .ioc 和驱动命名整理；未在图中展开的 UART4/USART3/UART8 等保留或专用链路，见下方速查表。</text>
         </svg>
-      </div>
+      </div></figure>
 
       <div class="table-wrap">
-        <table>
+        <table><caption>硬件框图</caption>
           <thead>
             <tr>
-              <th>板卡</th>
-              <th>硬件模块</th>
-              <th>MCU 接口/主要引脚</th>
-              <th>用途</th>
+              <th scope="col">板卡</th>
+              <th scope="col">硬件模块</th>
+              <th scope="col">MCU 接口/主要引脚</th>
+              <th scope="col">用途</th>
             </tr>
           </thead>
           <tbody>
@@ -713,7 +716,7 @@
 
     <section id="data-loop">
       <h2>CPU2/CPU3 数据闭环</h2>
-      <div class="diagram">
+      <figure class="cube-flow-figure"><figcaption id="cube-flow-lng计量仪系统框图-diagram-03-caption">CPU2/CPU3 数据闭环框图</figcaption><div class="diagram cube-flow__viewport" data-flow-width="standard" tabindex="0" role="region" aria-labelledby="cube-flow-lng计量仪系统框图-diagram-03-caption">
         <svg viewBox="0 0 1180 520" role="img" aria-labelledby="loop-title loop-desc">
           <title id="loop-title">CPU2/CPU3 数据闭环框图</title>
           <desc id="loop-desc">CPU3 菜单和外部协议写保持寄存器，CPU2 解包参数和命令；CPU2 发布输入寄存器，CPU3 显示并转换给外部协议。</desc>
@@ -777,16 +780,16 @@
           <path d="M 292 366 C 354 416, 830 416, 892 366" stroke="#197044" stroke-width="2.2" fill="none" marker-end="url(#arrow2)"></path>
           <text x="478" y="454" class="line-label" fill="#197044">协议版本严格相等后才解释共享字段</text>
         </svg>
-      </div>
+      </div></figure>
 
       <div class="table-wrap">
-        <table>
+        <table><caption>CPU2/CPU3 数据闭环</caption>
           <thead>
             <tr>
-              <th>数据对象</th>
-              <th>主要方向</th>
-              <th>用途</th>
-              <th>维护重点</th>
+              <th scope="col">数据对象</th>
+              <th scope="col">主要方向</th>
+              <th scope="col">用途</th>
+              <th scope="col">维护重点</th>
             </tr>
           </thead>
           <tbody>
@@ -821,7 +824,7 @@
 
     <section id="external">
       <h2>外部接口与协议适配</h2>
-      <div class="diagram">
+      <figure class="cube-flow-figure"><figcaption id="cube-flow-lng计量仪系统框图-diagram-04-caption">外部接口与协议适配框图</figcaption><div class="diagram cube-flow__viewport" data-flow-width="standard" tabindex="0" role="region" aria-labelledby="cube-flow-lng计量仪系统框图-diagram-04-caption">
         <svg viewBox="0 0 1180 470" role="img" aria-labelledby="external-title external-desc">
           <title id="external-title">外部接口与协议适配框图</title>
           <desc id="external-desc">CPU3 的 COM1、COM2、COM3 可配置 DSM、Wartsila、LTD、SI 等协议，并把外部地址和命令翻译到内部共享模型。</desc>
@@ -877,16 +880,16 @@
           <path d="M 974 388 C 974 418, 670 424, 590 402 C 520 382, 520 364, 590 360" stroke="#526474" stroke-width="2" fill="none" marker-end="url(#arrow3)"></path>
           <text x="624" y="430" class="muted-text">回包使用 CPU3 从 CPU2 轮询到的最新状态和结果</text>
         </svg>
-      </div>
+      </div></figure>
 
       <div class="table-wrap">
-        <table>
+        <table><caption>外部接口与协议适配</caption>
           <thead>
             <tr>
-              <th>协议/接口</th>
-              <th>所在层</th>
-              <th>整理后的定位</th>
-              <th>注意事项</th>
+              <th scope="col">协议/接口</th>
+              <th scope="col">所在层</th>
+              <th scope="col">整理后的定位</th>
+              <th scope="col">注意事项</th>
             </tr>
           </thead>
           <tbody>
@@ -921,7 +924,7 @@
 
     <section id="measurement">
       <h2>测量执行链路</h2>
-      <div class="diagram">
+      <figure class="cube-flow-figure"><figcaption id="cube-flow-lng计量仪系统框图-diagram-05-caption">测量执行链路框图</figcaption><div class="diagram cube-flow__viewport" data-flow-width="standard" tabindex="0" role="region" aria-labelledby="cube-flow-lng计量仪系统框图-diagram-05-caption">
         <svg viewBox="0 0 1180 390" role="img" aria-labelledby="measurement-title measurement-desc">
           <title id="measurement-title">测量执行链路框图</title>
           <desc id="measurement-desc">命令从外部主站或 CPU3 菜单进入，CPU2 执行测量流程并把结果返回 CPU3。</desc>
@@ -981,16 +984,16 @@
           <text x="956" y="122" class="muted-text">控制/采样</text>
           <text x="506" y="326" class="muted-text">状态、错误码、测量值、分布点、MAC 结果</text>
         </svg>
-      </div>
+      </div></figure>
 
       <div class="table-wrap">
-        <table>
+        <table><caption>测量执行链路</caption>
           <thead>
             <tr>
-              <th>命令类别</th>
-              <th>典型命令</th>
-              <th>执行模块</th>
-              <th>结果发布</th>
+              <th scope="col">命令类别</th>
+              <th scope="col">典型命令</th>
+              <th scope="col">执行模块</th>
+              <th scope="col">结果发布</th>
             </tr>
           </thead>
           <tbody>
@@ -1019,7 +1022,7 @@
 
     <section id="safety">
       <h2>启动安全与故障恢复链路</h2>
-      <div class="diagram">
+      <figure class="cube-flow-figure"><figcaption id="cube-flow-lng计量仪系统框图-diagram-06-caption">启动安全与故障恢复框图</figcaption><div class="diagram cube-flow__viewport" data-flow-width="standard" tabindex="0" role="region" aria-labelledby="cube-flow-lng计量仪系统框图-diagram-06-caption">
         <svg viewBox="0 0 1180 470" role="img" aria-labelledby="safety-title safety-desc">
           <title id="safety-title">启动安全与故障恢复框图</title>
           <desc id="safety-desc">CPU2 启动后先禁用驱动并清除 TMC5130 旧目标，等待编码器首帧有效，再允许业务命令；测量失败后按故障自动恢复重跑次数限制重跑。</desc>
@@ -1084,7 +1087,7 @@
           <text x="50" y="408" class="line-label" fill="#197044">关键目的：</text>
           <text x="126" y="408" class="box-text">复位后不沿用 TMC5130 旧目标继续运动；编码器未就绪时不启动普通业务运动；故障恢复成功后从完整测量入口重跑。</text>
         </svg>
-      </div>
+      </div></figure>
 
       <div class="warn">
         <p>安全链路关注的是“先确定硬件不会继续旧运动，再允许软件业务命令”。如果机械结构不能自锁，禁用驱动会取消保持电流，台架和现场需要单独确认负载不会产生危险位移。</p>
@@ -1094,13 +1097,13 @@
     <section id="module-table">
       <h2>模块职责速查</h2>
       <div class="table-wrap">
-        <table>
+        <table><caption>模块职责速查</caption>
           <thead>
             <tr>
-              <th>层级</th>
-              <th>模块/对象</th>
-              <th>职责</th>
-              <th>常用定位路径</th>
+              <th scope="col">层级</th>
+              <th scope="col">模块/对象</th>
+              <th scope="col">职责</th>
+              <th scope="col">常用定位路径</th>
             </tr>
           </thead>
           <tbody>
@@ -1168,6 +1171,8 @@
         <li><code>docs/02_需求与计划</code>、<code>docs/03_问题分析与整改</code>、<code>docs/04_界面与菜单</code>：自动恢复、启动安全、无线滑环和菜单说明。</li>
       </ul>
     </section>
+
+  <!-- CUBE_EMBED_END -->
   </main>
 </body>
 </html>

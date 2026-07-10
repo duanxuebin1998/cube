@@ -30,13 +30,15 @@ static float DeviceParams_DecimalScale(uint8_t point)
 /**
  * @brief 执行参数存储中的 DeviceParams_MetaValueToRaw 逻辑。
  *
- * @param h 业务参数。
+ * @param h 参数元数据。
+ * @param meta_value 待转换的菜单显示值。
  * @return 状态码、计数值或协议数值，具体含义由调用点约定。
  */
-static uint32_t DeviceParams_MetaValueToRaw(volatile struct ParameterMetadata *h)
+static uint32_t DeviceParams_MetaValueToRaw(volatile struct ParameterMetadata *h,
+                                            int32_t meta_value)
 {
     if ((h != NULL) && (h->data_type == TYPE_FLOAT)) {
-        float value = ((float)h->val) / DeviceParams_DecimalScale(h->point);
+        float value = ((float)meta_value) / DeviceParams_DecimalScale(h->point);
         uint32_t raw;
         /* 按结构或原始字节复制，保持参数存储协议/存储布局不被字段解释改变。 */
         memcpy(&raw, &value, sizeof(raw));
@@ -46,7 +48,7 @@ static uint32_t DeviceParams_MetaValueToRaw(volatile struct ParameterMetadata *h
         return 0U;
     }
     /* param_meta.val 保存菜单显示值，写回 CPU2 前恢复为协议原始值。 */
-    return (uint32_t)((int32_t)h->val - (int32_t)h->offset);
+    return (uint32_t)(meta_value - (int32_t)h->offset);
 }
 
 /**
@@ -454,14 +456,10 @@ static volatile uint32_t* get_deviceparam_ptr_by_operanum(int operanum)
 
 /* ==================== 内部：把 param_meta[i].val 下发到 CPU2（10 功能码） ==================== */
 
-static void DeviceParams_SendHoldValueToCPU2(volatile struct ParameterMetadata *h)
+static bool DeviceParams_SendHoldValueToCPU2(volatile struct ParameterMetadata *h,
+                                             int32_t target_value)
 {
-    if (h == NULL) return;
-
-    if (!h->authority_write) {
-        /* 屏幕不可写的参数通常不需要同步到 CPU2 */
-        return;
-    }
+    if (h == NULL) return false;
 
     /* CPU2_CombinatePackage_Send 是按 32bit + word swap 来发的， */
     /* 每个参数占两个寄存器，因此这里只支持 rgstcnt == 2 的情况。 */
@@ -469,23 +467,28 @@ static void DeviceParams_SendHoldValueToCPU2(volatile struct ParameterMetadata *
         /* 如果以后有 1 寄存器参数，再单独处理 */
         printf("设备参数警告: %s 寄存器数=%u 暂不支持同步\n",
                h->name ? (char*)h->name : "noname", h->rgstcnt);
-        return;
+        return false;
     }
 
     /* TYPE_FLOAT 菜单值是显示缩放后的整数，下发前恢复为 IEEE754 原始位。 */
-    uint32_t u32_temp = DeviceParams_MetaValueToRaw(h);
+    uint32_t u32_temp = DeviceParams_MetaValueToRaw(h, target_value);
 
-    CPU2_CombinatePackage_Send(FUNCTIONCODE_WRITE_MULREGISTER,
-                               h->startadd,
-                               h->rgstcnt,
-                               &u32_temp);
+    return CPU2_CombinatePackage_Send(FUNCTIONCODE_WRITE_MULREGISTER,
+                                      h->startadd,
+                                      h->rgstcnt,
+                                      &u32_temp);
 }
 
 /* ==================== 内部：同步一个 ParameterMetadata 项 ==================== */
 
-static void DeviceParams_SyncOneHold(volatile struct ParameterMetadata *h)
+static bool DeviceParams_SyncOneHold(volatile struct ParameterMetadata *h)
 {
-    if (h == NULL) return;
+    if (h == NULL) return false;
+
+    if (!h->authority_write) {
+        /* 屏幕不可写的参数不参与向 CPU2 的反向同步。 */
+        return true;
+    }
 
     /* g_deviceParams 中的源值 */
     int32_t dev_val;
@@ -495,47 +498,54 @@ static void DeviceParams_SyncOneHold(volatile struct ParameterMetadata *h)
         volatile uint32_t *p_dev = get_deviceparam_ptr_by_operanum(h->operanum);
         if (p_dev == NULL) {
             /* 不属于 DeviceParameters 的项（例如测量结果），跳过 */
-            return;
+            return true;
         }
         dev_val = DeviceParams_RawToMetaValue(h, *p_dev);
     }
 
     if (h->val == dev_val) {
         /* 与 CPU2 当前值一致，不需要更新 */
-        return;
+        return true;
     }
 
-    printf("设备参数差异: %s, CPU2=%d, 本地=%ld -> 更新并发送\r\n",
+    printf("设备参数差异: %s, CPU2=%d, 本地=%ld -> 准备发送\r\n",
            h->name ? (char*)h->name : "noname",
            h->val, dev_val);
 
-    /* 1) 把 g_deviceParams 的值写回 param_meta[i].val */
-    h->val = dev_val;
+    /* 先确认 CPU2 已接受新值，避免失败后本地缓存伪装成同步成功。 */
+    if (!DeviceParams_SendHoldValueToCPU2(h, dev_val)) {
+        return false;
+    }
 
-    /* 2) 按寄存器信息下发 10 指令给 CPU2 */
-    DeviceParams_SendHoldValueToCPU2(h);
+    h->val = dev_val;
+    return true;
 }
 
 /* 批量同步通常由外部协议写入旧寄存器后触发。
+ * 命令只允许走一次性命令入口，禁止随参数批量同步重放。
  * 位置源模式和电机局部周长可能由 CPU2 在 YM 切换/标定流程中自动更新，
  * 如果 CPU3 本地缓存尚未补读完成，批量同步会把旧值覆盖回 CPU2。
- * 因此这两个字段不参与批量同步；菜单单项读写仍然直接走对应保持寄存器。 */
+ * 因此这些字段不参与批量同步；菜单单项读写仍然直接走对应保持寄存器。 */
 static bool DeviceParams_ShouldSkipBulkSync(int operanum)
 {
-    return (operanum == COM_NUM_DEVICEPARAM_POSITION_COUNT_MODE) ||
+    return (operanum == COM_NUM_DEVICEPARAM_COMMAND) ||
+           (operanum == COM_NUM_DEVICEPARAM_POSITION_COUNT_MODE) ||
            (operanum == COM_NUM_DEVICEPARAM_MOTOR_COUNT_FIRST_LOOP_CIRC);
 }
 
 /* ==================== 对外接口 ==================== */
 
 /* 同步所有 DeviceParameters → CPU2 */
-void DeviceParams_SyncAllToCPU2(void)
+bool DeviceParams_SyncAllToCPU2(void)
 {
     for (uint32_t i = 0; i < param_metaAmount; ++i) {
         if (DeviceParams_ShouldSkipBulkSync(param_meta[i].operanum)) {
             continue;
         }
         /* 需要判定一下是否是CPU2的可写参数 */
-        DeviceParams_SyncOneHold(&param_meta[i]);
+        if (!DeviceParams_SyncOneHold(&param_meta[i])) {
+            return false;
+        }
     }
+    return true;
 }

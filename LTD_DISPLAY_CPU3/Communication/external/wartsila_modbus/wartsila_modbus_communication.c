@@ -13,12 +13,12 @@
 #include "address.h"
 #include "cpu2_communicate.h"
 
-static void modbus_on_holding_written(uint16_t start, uint16_t qty);
+static bool modbus_on_holding_written(uint16_t start, uint16_t qty);
 /**
  * @brief 将瓦锡兰保持寄存器中的参数整理后下发到 CPU2。
  * @note 只在外部协议写入参数后调用，保持 CPU3 对外缓存和 CPU2 参数一致。
  */
-static void ForwardParamsToLowerDevice(void);
+static bool ForwardParamsToLowerDevice(void);
 /* ================= 寄存器池 ================= */
 uint16_t g_holding_regs[HOLDREG_COUNT] = {0};   /* 应用层可定期把你的参数写进/读出这个数组 */
 
@@ -30,6 +30,31 @@ static inline uint16_t be16(const uint8_t* p) {
 static inline void wr_be16(uint8_t* p, uint16_t v) {
     p[0] = (uint8_t)(v >> 8);
     p[1] = (uint8_t)(v & 0xFF);
+}
+
+/* 判断 [start, start+qty-1] 是否覆盖了某个地址。 */
+static inline int range_contains(uint16_t start, uint16_t qty, uint16_t addr)
+{
+    return (addr >= start) && (addr <= (uint16_t)(start + qty - 1U));
+}
+
+/* 只有命令和四个分布参数地址需要桥接到 CPU2。 */
+static bool wartsila_write_targets_cpu2(uint16_t start, uint16_t qty)
+{
+    return (range_contains(start, qty, 0x0006U) != 0) ||
+           (range_contains(start, qty, REG_SPREAD_LOWEST_POINT) != 0) ||
+           (range_contains(start, qty, REG_SPREAD_HIGHEST_POINT) != 0) ||
+           (range_contains(start, qty, REG_SPREAD_INTERVAL) != 0) ||
+           (range_contains(start, qty, REG_SPREAD_DIST_TO_SURFACE) != 0);
+}
+
+/* 四个分布参数必须来自已确认的 CPU2 参数快照，不能返回失败写入留下的本地影子。 */
+static bool wartsila_read_targets_cpu2_parameters(uint16_t start, uint16_t qty)
+{
+    return (range_contains(start, qty, REG_SPREAD_LOWEST_POINT) != 0) ||
+           (range_contains(start, qty, REG_SPREAD_HIGHEST_POINT) != 0) ||
+           (range_contains(start, qty, REG_SPREAD_INTERVAL) != 0) ||
+           (range_contains(start, qty, REG_SPREAD_DIST_TO_SURFACE) != 0);
 }
 
 /* ============== 异常应答（功能码|0x80, 异常码）============== */
@@ -83,6 +108,9 @@ static uint8_t handle_0x03(uint8_t addr, const uint8_t* pdu, uint16_t pdu_len,
     if (start < HOLDREG_START_ADDR || (start + qty - 1) > HOLDREG_END_ADDR)
         return build_exception(addr, 0x03, 0x02, tx, tx_len); /* ILLEGAL DATA ADDRESS */
 
+    if (wartsila_read_targets_cpu2_parameters(start, qty) && !CPU2_CommIsAvailable())
+        return build_exception(addr, 0x03, 0x06, tx, tx_len);
+
     /* 构建应答 */
     tx[0] = addr;
     tx[1] = 0x03;
@@ -102,8 +130,10 @@ static uint8_t handle_0x03(uint8_t addr, const uint8_t* pdu, uint16_t pdu_len,
 
 /* ============== 处理 0x10 写多个保持寄存器 =============== */
 static uint8_t handle_0x10(uint8_t addr, const uint8_t* pdu, uint16_t pdu_len,
-                           uint8_t* tx, uint16_t* tx_len)
+                           uint8_t* tx, uint16_t* tx_len, bool *write_applied)
 {
+    if (write_applied == NULL) return 0U;
+    *write_applied = false;
     /* pdu: [func(1)=0x10][startHi][startLo][qtyHi][qtyLo][byteCount][data...] */
     if (pdu_len < 6) return build_exception(addr, 0x10, 0x03, tx, tx_len); /* 长度不足 */
 
@@ -128,12 +158,16 @@ static uint8_t handle_0x10(uint8_t addr, const uint8_t* pdu, uint16_t pdu_len,
     if (start < HOLDREG_START_ADDR || (start + qty - 1) > HOLDREG_END_ADDR)
         return build_exception(addr, 0x10, 0x02, tx, tx_len);
 
+    if (wartsila_write_targets_cpu2(start, qty) && !CPU2_CommIsAvailable())
+        return build_exception(addr, 0x10, 0x06, tx, tx_len);
+
     /* 写入寄存器池 */
     uint16_t base = start - HOLDREG_START_ADDR;
     const uint8_t* pdata = &pdu[6];
     for (uint16_t i = 0; i < qty; ++i) {
         g_holding_regs[base + i] = be16(&pdata[2*i]);
     }
+    *write_applied = true;
 
     /* 正常应答（回显起始地址与数量） */
     tx[0] = addr;
@@ -185,10 +219,13 @@ ModbusResult modbus_rtu_process(const uint8_t* rx, uint16_t rx_len,
             }
             uint16_t start = (uint16_t)((pdu[1] << 8) | pdu[2]);
             uint16_t qty   = (uint16_t)((pdu[3] << 8) | pdu[4]);
+            bool write_applied = false;
 
-            if (handle_0x10(addr, pdu, pdu_len, tx, tx_len)) {
-                /* 写寄存器成功后，触发回调 */
-                modbus_on_holding_written(start, qty);
+            if (handle_0x10(addr, pdu, pdu_len, tx, tx_len, &write_applied)) {
+                if (write_applied && !modbus_on_holding_written(start, qty)) {
+                    /* CPU2 未确认时覆盖成功回显，明确要求外部主机重试。 */
+                    build_exception(addr, func, 0x06, tx, tx_len);
+                }
                 return MODBUS_OK;
             }
             break;
@@ -201,52 +238,73 @@ ModbusResult modbus_rtu_process(const uint8_t* rx, uint16_t rx_len,
 
     return MODBUS_OK;
 }
-/* 判断 [start, start+qty-1] 是否覆盖了某个地址 */
-static inline int range_contains(uint16_t start, uint16_t qty, uint16_t addr)
+/* 命令影子只允许消费一次；清零后同步刷新 Wartsila 寄存器池。 */
+static void Wartsila_ClearCommandShadow(void)
 {
-    return (addr >= start) && (addr <= (uint16_t)(start + qty - 1));
+	g_deviceParams.command = CMD_NONE;
+	DeviceParams_StoreToRegisters(g_holding_regs);
 }
 
 /* 把写入的寄存器转成设备参数并“往下发” */
-static void modbus_on_holding_written(uint16_t start, uint16_t qty)
+static bool modbus_on_holding_written(uint16_t start, uint16_t qty)
 {
-    int __attribute__((unused)) need_forward = 0;
+    uint32_t confirmed_upper_density_limit = g_deviceParams.wartsila_upper_density_limit;
+    uint32_t confirmed_lower_density_limit = g_deviceParams.wartsila_lower_density_limit;
+    uint32_t confirmed_density_interval = g_deviceParams.wartsila_density_interval;
+    uint32_t confirmed_max_height_above_surface = g_deviceParams.wartsila_max_height_above_surface;
+    bool command_write = range_contains(start, qty, 0x0006U) != 0;
+    bool parameter_write =
+        (range_contains(start, qty, REG_SPREAD_LOWEST_POINT) != 0) ||
+        (range_contains(start, qty, REG_SPREAD_HIGHEST_POINT) != 0) ||
+        (range_contains(start, qty, REG_SPREAD_INTERVAL) != 0) ||
+        (range_contains(start, qty, REG_SPREAD_DIST_TO_SURFACE) != 0);
 
-    /* 只关心 0x0006、0x005A~0x005D 这几个写寄存器 */
-    if (range_contains(start, qty, 0x005A) ||
-        range_contains(start, qty, 0x005B) ||
-        range_contains(start, qty, 0x005C) ||
-        range_contains(start, qty, 0x005D)) {
-        need_forward = 1;
+    if (!command_write && !parameter_write) {
+        return true;
     }
-
-/* if (!need_forward) { */
-/* return; / / 其它地址的写操作，直接忽略 */
-/* } */
 
     /* 1）先从 g_holding_regs 解析到 g_deviceParams */
     DeviceParams_LoadFromRegisters(g_holding_regs);
 
-    if(range_contains(start, qty, 0x0006)) /* 指令单独处理 */
+	/* 同一帧跨命令和参数区时先同步参数，避免测量命令使用旧参数启动。 */
+	if (parameter_write && !ForwardParamsToLowerDevice())
 	{
-		uint32_t cmd32 = (uint32_t)g_deviceParams.command;   /* 如果原来是 uint16_t，也没问题 */
-		printf("接收到下发指令：%d\r\n", g_deviceParams.command);
-		/* 将 CMD_xxx 写入 HOLDREGISTER_DEVICEPARAM_COMMAND（2 个保持寄存器） */
-		CPU2_CombinatePackage_Send(FUNCTIONCODE_WRITE_MULREGISTER, HOLDREGISTER_DEVICEPARAM_COMMAND, 2, &cmd32 );
-		g_deviceParams.command = CMD_NONE;
-		DeviceParams_StoreToRegisters(g_holding_regs);
+		/* 底层已关闭参数门禁并请求补读；本地先恢复最后确认镜像，避免暴露伪成功值。 */
+		g_deviceParams.wartsila_upper_density_limit = confirmed_upper_density_limit;
+		g_deviceParams.wartsila_lower_density_limit = confirmed_lower_density_limit;
+		g_deviceParams.wartsila_density_interval = confirmed_density_interval;
+		g_deviceParams.wartsila_max_height_above_surface = confirmed_max_height_above_surface;
+		Wartsila_ClearCommandShadow();
+		return false;
 	}
-    else /* 下发参数 */
-    {
-        /* 2）再把这些参数按下级设备的协议发送出去 */
-        ForwardParamsToLowerDevice();
-    }
+
+	if (command_write)
+	{
+		bool command_sent = true;
+		if (g_deviceParams.command != CMD_NONE)
+		{
+			uint32_t cmd32 = (uint32_t)g_deviceParams.command;
+			printf("接收到下发指令：%d\r\n", g_deviceParams.command);
+			/* 将 CMD_xxx 写入 HOLDREGISTER_DEVICEPARAM_COMMAND（2 个保持寄存器） */
+			command_sent = CPU2_CombinatePackage_Send(FUNCTIONCODE_WRITE_MULREGISTER,
+												 HOLDREGISTER_DEVICEPARAM_COMMAND,
+												 2,
+												 &cmd32);
+		}
+		Wartsila_ClearCommandShadow();
+		if (!command_sent)
+		{
+			return false;
+		}
+	}
+
+	return true;
 }
 /**
  * @brief 将瓦锡兰外部协议参数同步下发到 CPU2 参数区。
  * @note 由外部 Modbus 写保持寄存器后触发，避免 CPU3 缓存和 CPU2 参数脱节。
  */
-static void ForwardParamsToLowerDevice(void)
+static bool ForwardParamsToLowerDevice(void)
 {
 	uint32_t upper_density_limit = g_deviceParams.wartsila_upper_density_limit;
 	uint32_t lower_density_limit = g_deviceParams.wartsila_lower_density_limit;
@@ -261,10 +319,22 @@ static void ForwardParamsToLowerDevice(void)
 /* g_deviceParams.command = CMD_NONE; */
 /* DeviceParams_StoreToRegisters(g_holding_regs); */
 /* } */
-	CPU2_CombinatePackage_Send(FUNCTIONCODE_WRITE_MULREGISTER, HOLDREGISTER_DEVICEPARAM_WARTSILA_UPPER_DENSITY_LIMIT, 2, &upper_density_limit);
-	CPU2_CombinatePackage_Send(FUNCTIONCODE_WRITE_MULREGISTER, HOLDREGISTER_DEVICEPARAM_WARTSILA_LOWER_DENSITY_LIMIT, 2, &lower_density_limit);
-	CPU2_CombinatePackage_Send(FUNCTIONCODE_WRITE_MULREGISTER, HOLDREGISTER_DEVICEPARAM_WARTSILA_DENSITY_INTERVAL, 2, &density_interval);
-	CPU2_CombinatePackage_Send(FUNCTIONCODE_WRITE_MULREGISTER, HOLDREGISTER_DEVICEPARAM_WARTSILA_MAX_HEIGHT_ABOVE_SURFACE, 2, &max_height_above_surface);
+	return CPU2_CombinatePackage_Send(FUNCTIONCODE_WRITE_MULREGISTER,
+									  HOLDREGISTER_DEVICEPARAM_WARTSILA_UPPER_DENSITY_LIMIT,
+									  2,
+									  &upper_density_limit) &&
+		   CPU2_CombinatePackage_Send(FUNCTIONCODE_WRITE_MULREGISTER,
+									  HOLDREGISTER_DEVICEPARAM_WARTSILA_LOWER_DENSITY_LIMIT,
+									  2,
+									  &lower_density_limit) &&
+		   CPU2_CombinatePackage_Send(FUNCTIONCODE_WRITE_MULREGISTER,
+									  HOLDREGISTER_DEVICEPARAM_WARTSILA_DENSITY_INTERVAL,
+									  2,
+									  &density_interval) &&
+		   CPU2_CombinatePackage_Send(FUNCTIONCODE_WRITE_MULREGISTER,
+									  HOLDREGISTER_DEVICEPARAM_WARTSILA_MAX_HEIGHT_ABOVE_SURFACE,
+									  2,
+									  &max_height_above_surface);
 }
 
 

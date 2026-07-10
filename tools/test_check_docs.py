@@ -25,7 +25,7 @@ def load_module():
 
 
 class CheckDocsTests(unittest.TestCase):
-    def test_runs_structure_then_markdown_links(self) -> None:
+    def test_runs_structure_navigation_flow_contract_then_markdown_links(self) -> None:
         module = load_module()
         calls: list[tuple[str, ...]] = []
         encodings: list[tuple[str | None, str | None]] = []
@@ -41,12 +41,19 @@ class CheckDocsTests(unittest.TestCase):
         self.assertEqual(
             [
                 (sys.executable, "tools/check_docs_structure.py"),
+                (sys.executable, "tools/update_flow_navigation.py"),
+                (sys.executable, "tools/check_flow_docs.py"),
                 (sys.executable, "tools/check_markdown_links.py"),
             ],
             calls,
         )
         self.assertEqual(
-            [(module.OUTPUT_ENCODING, "replace"), (module.OUTPUT_ENCODING, "replace")],
+            [
+                (module.OUTPUT_ENCODING, "replace"),
+                (module.OUTPUT_ENCODING, "replace"),
+                (module.OUTPUT_ENCODING, "replace"),
+                (module.OUTPUT_ENCODING, "replace"),
+            ],
             encodings,
         )
 

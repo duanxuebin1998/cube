@@ -1,8 +1,8 @@
 {
-  "generated": "2026-06-12",
+  "generated": "2026-07-10",
   "sourceRoot": "LTD_MAIN_CPU2",
   "totalFiles": 106,
-  "totalFunctions": 864,
+  "totalFunctions": 861,
   "note": "本清单由当前源码扫描生成，函数详情包含函数名、行号、签名、功能说明、下游自编调用、状态/命令/模式、重点全局参数和错误出口。",
   "domains": {
     "启动主循环与中断": {
@@ -3913,25 +3913,6 @@
               ]
             },
             {
-              "name": "determine_level_status",
-              "line": 1171,
-              "signature": "uint32_t determine_level_status(Level_StateTypeDef *state_out)",
-              "summary": "在“液位测量与跟随”功能域内负责“判断当前液位状态”，属于当前源码中的自编处理函数。",
-              "calls": [
-                "determine_level_status_internal"
-              ],
-              "states": [],
-              "commands": [],
-              "modes": [],
-              "globals": [],
-              "errors": [],
-              "steps": [
-                "进入函数后执行“判断当前液位状态”相关处理。",
-                "按源码顺序调用 determine_level_status_internal。",
-                "最终把状态码、计算值或处理结果返回给上层调用者。"
-              ]
-            },
-            {
               "name": "determine_level_status_motion",
               "line": 1176,
               "signature": "uint32_t determine_level_status_motion(Level_StateTypeDef *state_out)",
@@ -5581,42 +5562,6 @@
                 "按源码顺序调用 Wartsila_MoveToDensityPoint -> Wartsila_ReadPointAndClassify -> Wartsila_MoveDownToLiquidAfterAirPoint -> Wartsila_TrimPointsByOilLevel -> PositionMm_ToU01mmClamped。",
                 "读写或判断 设备状态：STATE_SWITCH；全局/参数：g_deviceParams。",
                 "异常和提前退出主要通过 CHECK_ERROR 传递。",
-                "最终把状态码、计算值或处理结果返回给上层调用者。"
-              ]
-            },
-            {
-              "name": "motorMoveUpToPositionOrAir",
-              "line": 537,
-              "signature": "uint32_t motorMoveUpToPositionOrAir(float target_mm, Level_StateTypeDef *final_state)",
-              "summary": "执行“motor移动上行到位置或Air”，推动“密度与单点测量”中的动作型流程继续向下运行。",
-              "calls": [
-                "MotorCtrl_SnapshotSensorPositionMm",
-                "EnableLevelMode",
-                "MotorCtrl_MoveNoWait",
-                "MotorCtrl_GetDefaultSpeedX100",
-                "MotorCtrl_IsDriverMoving",
-                "MotorCtrl_SlowStop",
-                "DSM_Get_LevelMode_Frequence",
-                "DSM_V2_Read_LevelFrequency",
-                "determine_level_status_motion",
-                "CheckWeightCollision",
-                "MotorCtrl_CheckDriverGstat"
-              ],
-              "states": [],
-              "commands": [],
-              "modes": [],
-              "globals": [
-                "g_deviceParams"
-              ],
-              "errors": [
-                "CHECK_ERROR",
-                "RETURN_ERROR"
-              ],
-              "steps": [
-                "进入函数后执行“motor移动上行到位置或Air”相关处理。",
-                "按源码顺序调用 MotorCtrl_SnapshotSensorPositionMm -> EnableLevelMode -> MotorCtrl_MoveNoWait -> MotorCtrl_GetDefaultSpeedX100 -> MotorCtrl_IsDriverMoving -> MotorCtrl_SlowStop -> DSM_Get_LevelMode_Frequence -> DSM_V2_Read_LevelFrequency -> determine_level_status_motion -> CheckWeightCollision 等下游函数。",
-                "读写或判断 全局/参数：g_deviceParams。",
-                "异常和提前退出主要通过 CHECK_ERROR、RETURN_ERROR 传递。",
                 "最终把状态码、计算值或处理结果返回给上层调用者。"
               ]
             }
@@ -16231,22 +16176,6 @@
                 "进入函数后执行“写入控制寄存器”相关处理。",
                 "按源码顺序调用 AD5421_WriteReg。",
                 "最终把状态码、计算值或处理结果返回给上层调用者。"
-              ]
-            },
-            {
-              "name": "CurrentStateJudgeAndSend",
-              "line": 150,
-              "signature": "void CurrentStateJudgeAndSend(void)",
-              "summary": "在“BSP外设驱动”功能域内负责“当前/电流状态Judge并Send”，属于当前源码中的自编处理函数。",
-              "calls": [],
-              "states": [],
-              "commands": [],
-              "modes": [],
-              "globals": [],
-              "errors": [],
-              "steps": [
-                "进入函数后执行“当前/电流状态Judge并Send”相关处理。",
-                "该函数主要完成局部计算、封装或空实现，未发现明显的自编下游函数调用。"
               ]
             },
             {

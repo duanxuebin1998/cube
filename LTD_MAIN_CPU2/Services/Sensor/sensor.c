@@ -176,7 +176,13 @@ static uint32_t Sensor_ParseDsmTextId(const char *id_text, uint32_t *sensor_id_o
 
     while (*id_text != '\0') {
         if ((*id_text >= '0') && (*id_text <= '9')) {
-            value = (value * 10U) + (uint32_t)(*id_text - '0');
+            uint32_t digit = (uint32_t)(*id_text - '0');
+
+            /* 超长编号不得回绕成伪造的 uint32_t 传感器编号。 */
+            if (value > ((UINT32_MAX - digit) / 10U)) {
+                return SENSOR_RESP_FORMAT_ERROR;
+            }
+            value = (value * 10U) + digit;
             has_digit = 1U;
         }
         id_text++;

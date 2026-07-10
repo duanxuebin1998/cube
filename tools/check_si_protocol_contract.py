@@ -434,8 +434,12 @@ def check_si_profile_contract() -> None:
     require_re(cpu3_si, r"SI_COIL_PROFILE:[\s\S]{0,200}si_profile_request_start\s*\(\s*\)", "Profile coil requests CMD_SI_PROFILE through shared API", CPU3_SI)
     reject_re(cpu3_si, r"SI_COIL_PROFILE:[\s\S]{0,200}CMD_MEASURE_DISTRIBUTED", "Profile coil bridging to CMD_MEASURE_DISTRIBUTED", CPU3_SI)
     require_re(cpu3_si, r"current_command\s*==\s*CMD_SI_PROFILE", "Profile coil state is gated by SI profile command", CPU3_SI)
-    require_re(cpu3_si_h, r"void\s+si_profile_request_start\s*\(\s*void\s*\)\s*;", "shared SI profile request API", CPU3_SI_H)
-    require_re(cpu3_si, r"void\s+si_profile_request_start\s*\(\s*void\s*\)\s*\{[\s\S]{0,220}si_lock_profile_timestamp_now\s*\(\s*\)\s*;[\s\S]{0,120}si_send_cpu2_command\s*\(\s*CMD_SI_PROFILE\s*\)", "shared SI profile request locks timestamp and sends command", CPU3_SI)
+    require_re(cpu3_si_h, r"bool\s+si_profile_request_start\s*\(\s*void\s*\)\s*;", "shared SI profile request API", CPU3_SI_H)
+    require_re(cpu3_si, r"bool\s+si_profile_request_start\s*\(\s*void\s*\)\s*\{[\s\S]{0,220}si_lock_profile_timestamp_now\s*\(\s*\)\s*;[\s\S]{0,180}si_send_cpu2_command\s*\(\s*CMD_SI_PROFILE\s*\)", "shared SI profile request locks timestamp and sends command", CPU3_SI)
+    require_re(cpu3_si, r"#define\s+SI_EX_SLAVE_DEVICE_BUSY\s+0x06U", "SI CPU2 write failure exception code", CPU3_SI)
+    require_re(cpu3_si, r"if\s*\(\s*!si_apply_coil_write\s*\([^)]*\)\s*\)\s*\{[\s\S]{0,180}SI_EX_SLAVE_DEVICE_BUSY", "SI FC05 returns busy when CPU2 rejects command", CPU3_SI)
+    require_re(cpu3_si, r"if\s*\(\s*!si_apply_holding_write\s*\([^)]*\)\s*\)\s*\{[\s\S]{0,180}SI_EX_SLAVE_DEVICE_BUSY", "SI FC06 returns busy when CPU2 rejects parameter", CPU3_SI)
+    require_re(cpu3_si, r"static\s+bool\s+si_write_device_param_u32[\s\S]{0,700}CPU2_CombinatePackage_Send[\s\S]{0,300}\*shadow\s*=\s*value", "SI parameter shadow commits after CPU2 response", CPU3_SI)
     require_re(cpu3_display, r"#include\s+\"si_modbus_slave\.h\"", "screen can call shared SI profile request API", CPU3_DISPLAY)
     require_re(cpu3_display_h, r"\bCOM_NUM_SI_PROFILE\b", "screen operation number for SI profile command", CPU3_DISPLAY_H)
     require_re(cpu3_display, r"\{\s*\(uint8_t\*\)\"SI Profile\"\s*,\s*COM_NUM_SI_PROFILE\s*,\s*ifsendcmd", "screen SI profile command menu item", CPU3_DISPLAY)
@@ -451,6 +455,23 @@ def check_si_profile_contract() -> None:
     reject_re(cpu3_si, r"STATE_WARTSILA_DENSITY_OVER:[\s\S]{0,120}s_discrete_inputs\[SI_DI_PROFILE_COMPLETE\]\s*=\s*1U", "generic profile-over state forcing SI profile complete", CPU3_SI)
     require_re(cpu3_si, r"si_lock_profile_timestamp_now\s*\(", "profile start timestamp latch", CPU3_SI)
     require_re(cpu3_si, r"si_modbus_periodic_task\s*\(", "SI automatic profile scheduler tick", CPU3_SI)
+    require_re(cpu3_si, r"#define\s+SI_AUTO_PROFILE_RETRY_DELAY_MS\s+5000U", "SI automatic profile retry delay", CPU3_SI)
+    require_re(
+        cpu3_si,
+        r"s_si_auto_last_attempt_valid\s*&&\s*"
+        r"\(\(now_tick\s*-\s*s_si_auto_last_attempt_tick\)\s*<\s*SI_AUTO_PROFILE_RETRY_DELAY_MS\)",
+        "SI automatic profile retries are throttled for five seconds",
+        CPU3_SI,
+    )
+    require_re(
+        cpu3_si,
+        r"s_si_auto_last_attempt_tick\s*=\s*now_tick\s*;\s*"
+        r"s_si_auto_last_attempt_valid\s*=\s*true\s*;\s*"
+        r"if\s*\(\s*si_profile_request_start\s*\(\s*\)\s*\)\s*\{\s*"
+        r"s_si_auto_last_trigger_minute\s*=\s*now_minute\s*;",
+        "SI automatic profile locks the minute only after a successful request",
+        CPU3_SI,
+    )
     require_re(cpu3_si, r"si_is_leap_year\s*\(", "real calendar schedule conversion", CPU3_SI)
     reject_re(cpu3_si, r"\*\s*372U", "synthetic 31-day month schedule index", CPU3_SI)
 

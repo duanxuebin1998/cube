@@ -1497,7 +1497,7 @@ uint32_t FollowOilLevel(void) {
  *             - 其他错误码: 电机操作、丢步检测或碰撞检测失败
  *
  * @note 函数内部会调用以下辅助函数：
- *       - determine_level_status(): 判断当前扭力状态
+ *       - determine_level_status_motion(): 判断当前扭力状态
  *       - MotorCtrl_MoveDown(): 电机下行
  *       - MotorCtrl_CheckLostStepAutoTiming(): 丢步检测
  *       - CheckWeightCollision(): 碰撞检测
@@ -1579,7 +1579,7 @@ static int SearchOil() {
  *             - 其他错误码: 具体错误状态
  *
  * @note 函数内部会调用以下辅助函数：
- *       - determine_level_status(): 判断当前液位状态（空气/油中）
+ *       - determine_level_status_motion(): 判断当前液位状态（空气/油中）
  *       - MotorCtrl_MoveUp(): 以指定速度控制电机上行
  *       - MotorCtrl_CheckLostStepAutoTiming(): 自动定时检测电机丢步
  *       - CheckWeightCollision(): 检测扭力碰撞
@@ -1691,15 +1691,6 @@ static uint32_t determine_level_status_internal(Level_StateTypeDef *state_out, u
     return NO_ERROR;
 }
 
-/**
- * @brief 执行液位测量中的 determine_level_status 逻辑。
- *
- * @param state_out 状态值。
- * @return 状态码、计数值或协议数值，具体含义由调用点约定。
- */
-uint32_t determine_level_status(Level_StateTypeDef *state_out) {
-    return determine_level_status_internal(state_out, 1U);
-}
 
 /**
  * @brief 执行液位测量中的 determine_level_status_motion 逻辑。

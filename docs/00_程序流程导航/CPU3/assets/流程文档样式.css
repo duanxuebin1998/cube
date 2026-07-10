@@ -991,7 +991,6 @@ details.func-detail > .detail-body {
   .func-meta { grid-template-columns: 1fr; }
   .svg-flow-wrap { padding: 8px; }
   .svg-flow-wrap .biz-flow { width: 100% !important; max-width: 100% !important; min-width: 0 !important; }
-  .biz-flow text { font-size: 13px; }
   .topnav { position: static; }
 }
 

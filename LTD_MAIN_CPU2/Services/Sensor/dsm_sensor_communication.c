@@ -714,8 +714,8 @@ uint32_t Read_VibrationTube_ID(char *id_out, size_t id_out_size)
         p++;
     }
 
-    /* 按协议，一般以 'N' 开头，例如 N2009924H */
-    if (*p != 'N') {
+    /* CN 低电压响应可能以 E/e 开头，但仍携带编号数字，继续解析。 */
+    if ((*p != 'N') && (*p != 'E') && (*p != 'e')) {
         return SENSOR_RESP_FORMAT_ERROR;
     }
 

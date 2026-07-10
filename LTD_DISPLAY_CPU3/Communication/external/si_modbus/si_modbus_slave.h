@@ -1,6 +1,7 @@
 #ifndef SI_MODBUS_SLAVE_H_
 #define SI_MODBUS_SLAVE_H_
 
+#include <stdbool.h>
 #include <stdint.h>
 
 /* 当前兼容的 SI 地址窗口大小，必须与 .c 中枚举和 golden frame 脚本保持一致。 */
@@ -37,6 +38,6 @@ void si_modbus_sync_from_system(void);
 void si_modbus_periodic_task(void);
 
 /* 请求启动 SI Profile；统一锁存开始时间并向 CPU2 下发 CMD_SI_PROFILE。 */
-void si_profile_request_start(void);
+bool si_profile_request_start(void);
 
 #endif /* SI_MODBUS_SLAVE_H_ */

@@ -16,7 +16,9 @@
 #define CH9141_AT_COMMAND_TX_TIMEOUT_MS 200U /* CH9141K AT 指令参数：命令 发送 超时 毫秒。 */
 #define CH9141_AT_BYTE_RX_TIMEOUT_MS    20U /* CH9141K AT 指令参数：字节 RX 超时 毫秒。 */
 #define CH9141_AT_PRE_COMMAND_IDLE_MS 30U /* CH9141K AT 指令参数：前置 命令 IDLE 毫秒。 */
+#define CH9141_AT_PRE_COMMAND_DRAIN_TIMEOUT_MS 200U /* CH9141K AT 指令参数：命令前清空总超时毫秒。 */
 #define CH9141_AT_SOFTWARE_IDLE_MS      500U /* CH9141K AT 指令参数：SOFTWARE IDLE 毫秒。 */
+#define CH9141_AT_PREPARE_DRAIN_TIMEOUT_MS 1000U /* CH9141K AT 指令参数：准备串口清空总超时毫秒。 */
 #define CH9141_AT_ENTER_TIMEOUT_MS      1000U /* CH9141K AT 指令参数：ENTER 超时 毫秒。 */
 
 /* 默认只打印业务摘要和失败 AT 详情；设为 1 可恢复逐条 AT 收发日志。 */
@@ -139,20 +141,36 @@ static void CH9141_AT_ClearUartError(void)
 }
 
 /**
- * @brief 丢弃 UART6 历史残留，直到连续 idle_ms 没有新字节。
+ * @brief 丢弃 UART6 历史残留，直到连续 idle_ms 没有新字节或达到固定总时限。
  *
  * 匹配会暂时把 UART6 从透传业务切到 AT 配置，进入前必须清掉旧半包。
+ * 持续收包时返回通信超时，避免上电检测永久占住主循环。
  */
-static void CH9141_AT_DrainRxUntilIdle(uint32_t idle_ms)
+static uint32_t CH9141_AT_DrainRxUntilIdle(uint32_t idle_ms, uint32_t total_timeout_ms)
 {
     uint8_t dump;
-    uint32_t last_rx_tick = HAL_GetTick();
+    uint32_t start_tick = HAL_GetTick();
+    uint32_t last_rx_tick = start_tick;
 
     for (;;) {
+        uint32_t now_tick;
+
         if (HAL_UART_Receive(&huart6, &dump, 1U, 1U) == HAL_OK) {
-            last_rx_tick = HAL_GetTick();
-        } else if ((HAL_GetTick() - last_rx_tick) >= idle_ms) {
-            break;
+            now_tick = HAL_GetTick();
+            last_rx_tick = now_tick;
+        } else {
+            now_tick = HAL_GetTick();
+            if ((now_tick - last_rx_tick) >= idle_ms) {
+                return NO_ERROR;
+            }
+        }
+
+        if (HasEffectiveCommandSwitchRequest()) {
+            return STATE_SWITCH;
+        }
+        /* 持续透传数据会不断刷新空闲计时，必须用固定总时限保证主循环能够退出。 */
+        if ((now_tick - start_tick) >= total_timeout_ms) {
+            return SENSOR_DEVICE_COMM_TIMEOUT;
         }
     }
 }
@@ -507,11 +525,13 @@ static void CH9141_AT_RecoverTransparentMode(uint8_t send_exit)
                                 (uint8_t *)exit_cmd,
                                 (uint16_t)(sizeof(exit_cmd) - 1U),
                                 CH9141_AT_COMMAND_TX_TIMEOUT_MS);
-        CH9141_AT_DrainRxUntilIdle(CH9141_AT_PRE_COMMAND_IDLE_MS);
+        (void)CH9141_AT_DrainRxUntilIdle(CH9141_AT_PRE_COMMAND_IDLE_MS,
+                                         CH9141_AT_PRE_COMMAND_DRAIN_TIMEOUT_MS);
     }
     (void)HAL_UART_Abort(&huart6);
     CH9141_AT_ClearUartError();
-    CH9141_AT_DrainRxUntilIdle(CH9141_AT_PRE_COMMAND_IDLE_MS);
+    (void)CH9141_AT_DrainRxUntilIdle(CH9141_AT_PRE_COMMAND_IDLE_MS,
+                                     CH9141_AT_PRE_COMMAND_DRAIN_TIMEOUT_MS);
     CH9141_AT_ClearUartError();
 }
 /**
@@ -522,6 +542,8 @@ static void CH9141_AT_RecoverTransparentMode(uint8_t send_exit)
  */
 uint32_t CH9141_AT_PrepareUart6(uint32_t idle_ms)
 {
+    uint32_t ret;
+
     if (CH9141_AT_VERBOSE_LOG != 0U) {
         printf("CH9141K AT\t准备UART6\t停止DMA并等待空闲=%lu ms\r\n", (unsigned long)idle_ms);
     }
@@ -529,9 +551,9 @@ uint32_t CH9141_AT_PrepareUart6(uint32_t idle_ms)
     (void)HAL_UART_DMAStop(&huart6);
     (void)HAL_UART_Abort(&huart6);
     CH9141_AT_ClearUartError();
-    CH9141_AT_DrainRxUntilIdle(idle_ms);
+    ret = CH9141_AT_DrainRxUntilIdle(idle_ms, CH9141_AT_PREPARE_DRAIN_TIMEOUT_MS);
     CH9141_AT_ClearUartError();
-    return NO_ERROR;
+    return ret;
 }
 
 
@@ -646,8 +668,13 @@ uint32_t CH9141_AT_SendCommand(const char *cmd,
     (void)HAL_UART_DMAStop(&huart6);
     CH9141_AT_ClearUartError();
     /* 上一条命令可能遗留 RSSI 等异步尾包，发送新 AT 前先短暂清空。 */
-    CH9141_AT_DrainRxUntilIdle(CH9141_AT_PRE_COMMAND_IDLE_MS);
+    ret = CH9141_AT_DrainRxUntilIdle(CH9141_AT_PRE_COMMAND_IDLE_MS,
+                                     CH9141_AT_PRE_COMMAND_DRAIN_TIMEOUT_MS);
     CH9141_AT_ClearUartError();
+    if (ret != NO_ERROR) {
+        CH9141_AT_PrintResult(cmd, wait_mode, timeout_ms, ret, response);
+        return ret;
+    }
 
     if (CH9141_AT_VERBOSE_LOG != 0U) {
         printf("CH9141K AT\t发送\t指令=%s\t等待=%s\t超时=%lu ms\r\n",

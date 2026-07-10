@@ -27,9 +27,11 @@
 #define SI_EX_ILLEGAL_FUNCTION         0x01U
 #define SI_EX_ILLEGAL_ADDRESS          0x02U
 #define SI_EX_ILLEGAL_VALUE            0x03U
+#define SI_EX_SLAVE_DEVICE_BUSY        0x06U
 
 #define SI_INVALID_TEMP_RAW_CPU2       9999U
 #define SI_TEMP_INVALID_REGISTER       0xB1E0U
+#define SI_AUTO_PROFILE_RETRY_DELAY_MS 5000U
 
 /* 线圈地址保持 SI协议手册编号，数组下标即协议 offset。 */
 enum {
@@ -122,6 +124,8 @@ static Cpu3DateTime s_profile_timestamp; /* Modbus 协议模块级变量，保�
 static uint32_t s_seen_profile_counter = 0U; /* Modbus 协议计数值，用于节拍、统计或协议数量控制。 */
 static uint8_t s_profile_timestamp_valid = 0U; /* Modbus 协议模块级变量，保存跨函数共享的业务状态。 */
 static uint32_t s_si_auto_last_trigger_minute = 0xFFFFFFFFUL;
+static uint32_t s_si_auto_last_attempt_tick = 0U;
+static bool s_si_auto_last_attempt_valid = false;
 
 /*
  * 从 Modbus PDU 中读取大端 16 位值。
@@ -369,18 +373,24 @@ static void si_lock_profile_timestamp_now(void)
  * @brief 发送Modbus 协议中的 si_send_cpu2_command 逻辑。
  *
  * @param cmd 命令值。
- * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ * @return true 表示 CPU2 返回合法写响应，false 表示本次请求失败。
  */
-static void si_send_cpu2_command(CommandType cmd)
+static bool si_send_cpu2_command(CommandType cmd)
 {
     uint32_t cmd32 = (uint32_t)cmd;
+    bool request_ok;
+
+    if (!CPU2_CommCanSendCommand(cmd)) {
+        return false;
+    }
 
     /* 通过 CPU2 既有命令保持寄存器下发，CPU3 不直接改 CPU2 状态机。 */
-    CPU2_CombinatePackage_Send(FUNCTIONCODE_WRITE_MULREGISTER,
-                               HOLDREGISTER_DEVICEPARAM_COMMAND,
-                               2U,
-                               &cmd32);
+    request_ok = CPU2_CombinatePackage_Send(FUNCTIONCODE_WRITE_MULREGISTER,
+                                            HOLDREGISTER_DEVICEPARAM_COMMAND,
+                                            2U,
+                                            &cmd32);
     g_deviceParams.command = CMD_NONE;
+    return request_ok;
 }
 
 /**
@@ -391,10 +401,14 @@ static void si_send_cpu2_command(CommandType cmd)
  * 关键约束：先锁存 Profile Timestamp，再通过既有 CPU2 命令寄存器
  * 下发 CMD_SI_PROFILE，保证三类触发入口时间口径一致。
  */
-void si_profile_request_start(void)
+bool si_profile_request_start(void)
 {
     si_lock_profile_timestamp_now();
-    si_send_cpu2_command(CMD_SI_PROFILE);
+    if (!si_send_cpu2_command(CMD_SI_PROFILE)) {
+        s_profile_timestamp_valid = 0U;
+        return false;
+    }
+    return true;
 }
 
 /**
@@ -403,24 +417,27 @@ void si_profile_request_start(void)
  * @param hold_addr 地址参数。
  * @param shadow 业务参数。
  * @param value 待处理数值。
- * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ * @return true 表示 CPU2 已接受参数，false 表示链路不可用或本次请求失败。
  */
-static void si_write_device_param_u32(uint16_t hold_addr,
-                                          volatile uint32_t *shadow,
-                                          uint32_t value)
+static bool si_write_device_param_u32(uint16_t hold_addr,
+                                      volatile uint32_t *shadow,
+                                      uint32_t value)
 {
     uint32_t value32 = value;
 
-    if (shadow != NULL) {
-        /* 先更新 CPU3 影子值，保证 PLC 写后立即回读能看到新配置。 */
-        *shadow = value;
+    if (!CPU2_CommIsAvailable() ||
+        !CPU2_CombinatePackage_Send(FUNCTIONCODE_WRITE_MULREGISTER,
+                                    hold_addr,
+                                    2U,
+                                    &value32)) {
+        return false;
     }
 
-    /* 真正持久化和业务生效仍交给 CPU2 原参数通道处理。 */
-    CPU2_CombinatePackage_Send(FUNCTIONCODE_WRITE_MULREGISTER,
-                               hold_addr,
-                               2U,
-                               &value32);
+    if (shadow != NULL) {
+        /* 只有 CPU2 确认写入后才提交 CPU3 影子，避免 PLC 读回伪成功配置。 */
+        *shadow = value;
+    }
+    return true;
 }
 
 static OperatingNumber si_holding_offset_to_cpu3_param(uint16_t offset)
@@ -813,6 +830,7 @@ void si_modbus_periodic_task(void)
     uint32_t now_minute;
     uint32_t base_minute;
     uint32_t elapsed;
+    uint32_t now_tick;
 
     if (g_cpu3_comm_display_params.si_auto_profile_enable == 0U) {
         return;
@@ -843,8 +861,17 @@ void si_modbus_periodic_task(void)
         return;
     }
 
-    s_si_auto_last_trigger_minute = now_minute;
-    si_profile_request_start();
+    now_tick = HAL_GetTick();
+    if (s_si_auto_last_attempt_valid &&
+        ((now_tick - s_si_auto_last_attempt_tick) < SI_AUTO_PROFILE_RETRY_DELAY_MS)) {
+        return;
+    }
+    s_si_auto_last_attempt_tick = now_tick;
+    s_si_auto_last_attempt_valid = true;
+
+    if (si_profile_request_start()) {
+        s_si_auto_last_trigger_minute = now_minute;
+    }
 }
 
 /*
@@ -912,14 +939,55 @@ static void si_refresh_input_registers_from_measurement(void)
  * 应用 PLC 对线圈的写入。
  * ON 写入会转成 CPU2 命令；OFF 写入只更新影子位，不主动停止 CPU2。
  */
-static void si_apply_coil_write(uint16_t offset, uint8_t is_on)
+static bool si_apply_coil_write(uint16_t offset, uint8_t is_on)
 {
+    bool request_ok = true;
+
     if (!is_on) {
-        return;
+        return true;
+    }
+
+    switch (offset) {
+    case SI_COIL_MANUAL:
+        /* 当前系统里最接近 SI Manual 的入口是维护模式。 */
+        request_ok = si_send_cpu2_command(CMD_MAINTENANCE_MODE);
+        break;
+    case SI_COIL_CALIBRATE:
+        /* 先保守映射到零点标定，后续再细分为零点/液位/水位等标定流程。 */
+        request_ok = si_send_cpu2_command(CMD_CALIBRATE_ZERO);
+        break;
+    case SI_COIL_AUTO:
+        request_ok = si_send_cpu2_command(CMD_FIND_OIL);
+        break;
+    case SI_COIL_PROFILE:
+        request_ok = si_profile_request_start();
+        break;
+    case SI_COIL_STOP:
+        /* 现阶段用维护模式承担“停当前动作并进入手动态”的作用。 */
+        request_ok = si_send_cpu2_command(CMD_MAINTENANCE_MODE);
+        break;
+    case SI_COIL_UP_SLOW:
+    case SI_COIL_UP_MEDIUM:
+    case SI_COIL_UP_FAST:
+        /* 速度档位后续再细分，先统一桥到可被命令切换打断的强制上行。 */
+        request_ok = si_send_cpu2_command(CMD_FORCE_MOVE_UP);
+        break;
+    case SI_COIL_DOWN_SLOW:
+    case SI_COIL_DOWN_MEDIUM:
+    case SI_COIL_DOWN_FAST:
+        /* 速度档位后续再细分，先统一桥到可被命令切换打断的强制下行。 */
+        request_ok = si_send_cpu2_command(CMD_FORCE_MOVE_DOWN);
+        break;
+    default:
+        break;
+    }
+
+    if (!request_ok) {
+        return false;
     }
 
     if (offset <= SI_COIL_PROFILE) {
-        /* SI 模式线圈互斥，影子区先收口，真实状态随后由 CPU2 状态刷新。 */
+        /* CPU2 确认后再收口模式影子，避免失败请求显示为已执行。 */
         for (uint16_t i = SI_COIL_MANUAL; i <= SI_COIL_PROFILE; ++i) {
             s_coils[i] = 0U;
         }
@@ -931,67 +999,28 @@ static void si_apply_coil_write(uint16_t offset, uint8_t is_on)
         }
         s_coils[offset] = 1U;
     }
-
-    switch (offset) {
-    case SI_COIL_MANUAL:
-        /* 当前系统里最接近 SI Manual 的入口是维护模式。 */
-        si_send_cpu2_command(CMD_MAINTENANCE_MODE);
-        break;
-    case SI_COIL_CALIBRATE:
-        /* 先保守映射到零点标定，后续再细分为零点/液位/水位等标定流程。 */
-        si_send_cpu2_command(CMD_CALIBRATE_ZERO);
-        break;
-    case SI_COIL_AUTO:
-        si_send_cpu2_command(CMD_FIND_OIL);
-        break;
-    case SI_COIL_PROFILE:
-        si_profile_request_start();
-        break;
-    case SI_COIL_STOP:
-        /* 现阶段用维护模式承担“停当前动作并进入手动态”的作用。 */
-        si_send_cpu2_command(CMD_MAINTENANCE_MODE);
-        break;
-    case SI_COIL_UP_SLOW:
-    case SI_COIL_UP_MEDIUM:
-    case SI_COIL_UP_FAST:
-        /* 速度档位后续再细分，先统一桥到可被命令切换打断的强制上行。 */
-        si_send_cpu2_command(CMD_FORCE_MOVE_UP);
-        break;
-    case SI_COIL_DOWN_SLOW:
-    case SI_COIL_DOWN_MEDIUM:
-    case SI_COIL_DOWN_FAST:
-        /* 速度档位后续再细分，先统一桥到可被命令切换打断的强制下行。 */
-        si_send_cpu2_command(CMD_FORCE_MOVE_DOWN);
-        break;
-    default:
-        break;
-    }
+    return true;
 }
 
 /*
  * 应用 PLC 对保持寄存器的写入。
  * profile 基础参数通过 CPU2 参数通道落地，自动 profile 和报警限值保存在 CPU3。
  */
-static void si_apply_holding_write(uint16_t offset, uint16_t value)
+static bool si_apply_holding_write(uint16_t offset, uint16_t value)
 {
-    s_holding_regs[offset] = value;
-
     switch (offset) {
     case SI_HR_PROFILE_FIRST_POINT:
-        si_write_device_param_u32(HOLDREGISTER_DEVICEPARAM_SI_PROFILE_FIRST_POINT,
-                                      &g_deviceParams.si_profile_first_point,
-                                      si_mm_to_u01mm(value));
-        break;
+        return si_write_device_param_u32(HOLDREGISTER_DEVICEPARAM_SI_PROFILE_FIRST_POINT,
+                                         &g_deviceParams.si_profile_first_point,
+                                         si_mm_to_u01mm(value));
     case SI_HR_PROFILE_INCREMENT:
-        si_write_device_param_u32(HOLDREGISTER_DEVICEPARAM_SI_PROFILE_INCREMENT,
-                                      &g_deviceParams.si_profile_increment,
-                                      si_mm_to_u01mm(value));
-        break;
+        return si_write_device_param_u32(HOLDREGISTER_DEVICEPARAM_SI_PROFILE_INCREMENT,
+                                         &g_deviceParams.si_profile_increment,
+                                         si_mm_to_u01mm(value));
     case SI_HR_PROFILE_DWELL_TIME:
-        si_write_device_param_u32(HOLDREGISTER_DEVICEPARAM_SI_PROFILE_DWELL_TIME,
-                                      &g_deviceParams.si_profile_dwell_time,
-                                      value);
-        break;
+        return si_write_device_param_u32(HOLDREGISTER_DEVICEPARAM_SI_PROFILE_DWELL_TIME,
+                                         &g_deviceParams.si_profile_dwell_time,
+                                         value);
     case SI_HR_AUTO_PROFILE_INTERVAL:
     case SI_HR_AUTO_PROFILE_ENABLE:
     case SI_HR_AUTO_PROFILE_HOUR:
@@ -1023,6 +1052,7 @@ static void si_apply_holding_write(uint16_t offset, uint16_t value)
     default:
         break;
     }
+    return true;
 }
 
 /*
@@ -1167,8 +1197,13 @@ static uint8_t si_handle_write_single_coil(const uint8_t *pdu,
     }
 
     is_on = (value == 0xFF00U) ? 1U : 0U;
+    if (!si_apply_coil_write(offset, is_on)) {
+        return si_build_exception(SI_FUNC_WRITE_SINGLE_COIL,
+                                  SI_EX_SLAVE_DEVICE_BUSY,
+                                  tx,
+                                  tx_len);
+    }
     s_coils[offset] = is_on;
-    si_apply_coil_write(offset, is_on);
 
     si_build_write_echo(SI_FUNC_WRITE_SINGLE_COIL, offset, value, tx, tx_len);
     return 1U;
@@ -1210,8 +1245,13 @@ static uint8_t si_handle_write_single_reg(const uint8_t *pdu,
                                       tx_len);
     }
 
+    if (!si_apply_holding_write(offset, value)) {
+        return si_build_exception(SI_FUNC_WRITE_SINGLE_REG,
+                                  SI_EX_SLAVE_DEVICE_BUSY,
+                                  tx,
+                                  tx_len);
+    }
     s_holding_regs[offset] = value;
-    si_apply_holding_write(offset, value);
 
     si_build_write_echo(SI_FUNC_WRITE_SINGLE_REG, offset, value, tx, tx_len);
     return 1U;

@@ -14,8 +14,17 @@
 
 #define DEBUG_COMMUCPU2 0
 #define ADERSS 0X01
+#define CPU2_RESPONSE_TIMEOUT_MS 1000U /* CPU2 单次响应等待超时，单位 ms。 */
+#define CPU2_COMM_FAILURE_LIMIT 10U /* CPU2 连续请求未获得合法响应的置错阈值。 */
 
 volatile bool wait_response = false; /* 主控板响应标志位 */
+static bool s_cpu2_has_status_snapshot = false; /* CPU3 本次上电是否收到过覆盖状态和错误码的 CPU2 响应。 */
+static bool s_cpu2_has_parameter_snapshot = false; /* CPU3 是否已完整读取 CPU2 保持寄存器参数。 */
+static bool s_cpu2_has_protocol_snapshot = false; /* 当前 CPU2 连接是否已读回共享协议版本。 */
+static uint32_t s_cpu2_consecutive_failure_count = 0U; /* CPU2 连续请求失败次数。 */
+static bool s_cpu2_comm_fault_active = false; /* CPU3 本机通信故障是否等待状态帧恢复。 */
+static bool s_cpu2_parameter_refresh_requested = false; /* 外部写失败后是否要求重新确认 CPU2 参数。 */
+static volatile bool s_cpu2_uart_error_pending = false; /* UART5 中断仅置位，主循环统一计入失败。 */
 
 /* 保持寄存器 */
 uint16_t HoldingRegisterArray[HOLEREGISTER_STOP] = { 0 }; /* 保持寄存器数组 */
@@ -33,11 +42,193 @@ static void CPU2_Response03Process(uint8_t const *revframe);
 static void CPU2_Response04Process(uint8_t const *revframe);
 static void CPU2_Response10Process(uint8_t *arr, uint16_t len);
 static void PresetRegister(bool registertype, int const *registervalue);
+static bool CPU2_ResponseFrameIsValid(uint8_t const *rcv, int len);
+static bool CPU2_ResponseContainsDeviceStatus(void);
+static bool CPU2_ResponseContainsProtocolVersion(void);
+static void CPU2_CommMarkValidResponse(void);
+static void CPU2_CommRecordFailure(void);
 
 static void RequestDensityDistPoints_ByCount(void);
 
+/*
+ * 函数用途：校验 CPU2 响应是否与当前请求的功能码、长度和回显字段一致。
+ * 调用场景：CRC 和从机地址校验通过后、清除连续请求失败计数前调用。
+ * 关键约束：异常响应、错功能码和不完整数据帧均不得刷新通信有效状态。
+ */
+static bool CPU2_ResponseFrameIsValid(uint8_t const *rcv, int len)
+{
+	uint32_t expected_byte_count;
+
+	if ((rcv == NULL) || (len < 5) ||
+		(rcv[1] != (uint8_t)RCV_functioncode)) {
+		return false;
+	}
+
+	switch (RCV_functioncode) {
+	case FUNCTIONCODE_READ_HOLDREGISTER:
+	case FUNCTIONCODE_READ_INPUTREGISTER:
+		expected_byte_count = (uint32_t)RCV_registercnt * 2U;
+		return (expected_byte_count <= UINT8_MAX) &&
+			   (rcv[2] == (uint8_t)expected_byte_count) &&
+			   (len == (int)(expected_byte_count + 5U));
+
+	case FUNCTIONCODE_WRITE_MULREGISTER:
+		return (len == 8) &&
+			   (rcv[2] == (uint8_t)((uint16_t)RCV_startaddress >> 8)) &&
+			   (rcv[3] == (uint8_t)RCV_startaddress) &&
+			   (rcv[4] == (uint8_t)((uint16_t)RCV_registercnt >> 8)) &&
+			   (rcv[5] == (uint8_t)RCV_registercnt);
+
+	default:
+		return false;
+	}
+}
+
+/*
+ * 函数用途：判断当前 0x04 响应是否完整覆盖设备状态和错误码字段。
+ * 调用场景：输入寄存器响应写入缓存后决定是否允许恢复本机通信故障。
+ * 关键约束：非状态分组不得用掉线前的旧缓存提前清除通信故障。
+ */
+static bool CPU2_ResponseContainsDeviceStatus(void)
+{
+	uint32_t response_start = (uint32_t)RCV_startaddress;
+	uint32_t response_end = response_start + (uint32_t)RCV_registercnt;
+	uint32_t required_end = (uint32_t)REG_DEVICE_STATUS_ERROR_CODE + REG_SIZE_U32;
+
+	return (RCV_functioncode == FUNCTIONCODE_READ_INPUTREGISTER) &&
+		   (response_start <= (uint32_t)REG_DEVICE_STATUS_DEVICE_STATE) &&
+		   (response_end >= required_end);
+}
+
+/*
+ * 函数用途：判断当前 0x03 响应是否完整覆盖共享协议版本字段。
+ * 调用场景：保持寄存器响应解析完成后确认当前 CPU2 连接的协议版本来源。
+ * 关键约束：通信故障恢复后必须重新读回该字段，不能沿用掉线前缓存开放写入口。
+ */
+static bool CPU2_ResponseContainsProtocolVersion(void)
+{
+	uint32_t response_start = (uint32_t)RCV_startaddress;
+	uint32_t response_end = response_start + (uint32_t)RCV_registercnt;
+	uint32_t required_end = (uint32_t)HOLDREGISTER_DEVICEPARAM_PROTOCOL_VERSION + REG_SIZE_U32;
+
+	return (RCV_functioncode == FUNCTIONCODE_READ_HOLDREGISTER) &&
+		   (response_start <= (uint32_t)HOLDREGISTER_DEVICEPARAM_PROTOCOL_VERSION) &&
+		   (response_end >= required_end);
+}
+
+/*
+ * 函数用途：记录 CPU2 合法响应并清除连续请求失败计数。
+ * 调用场景：响应通过长度、CRC 和从机地址校验后由主循环调用。
+ * 关键约束：本函数不建立状态快照；只有包含状态和错误码的 0x04 响应才开放写入口。
+ */
+static void CPU2_CommMarkValidResponse(void)
+{
+	s_cpu2_consecutive_failure_count = 0U;
+}
+
+/*
+ * 函数用途：记录一次未获得合法 CPU2 响应的请求，并在连续第十次失败后置本机故障。
+ * 调用场景：主循环处理响应超时、非法响应、UART 错误或 TX DMA 启动失败时调用。
+ * 关键约束：计数饱和在阈值；ISR 只置待处理标志，不直接修改设备故障状态。
+ */
+static void CPU2_CommRecordFailure(void)
+{
+	if (s_cpu2_consecutive_failure_count < CPU2_COMM_FAILURE_LIMIT) {
+		s_cpu2_consecutive_failure_count++;
+	}
+
+	if (s_cpu2_consecutive_failure_count >= CPU2_COMM_FAILURE_LIMIT) {
+		s_cpu2_comm_fault_active = true;
+		s_cpu2_has_parameter_snapshot = false;
+		s_cpu2_has_protocol_snapshot = false;
+	}
+
+	if (s_cpu2_comm_fault_active) {
+		g_measurement.device_status.device_state = STATE_ERROR;
+		g_measurement.device_status.error_code = CPU2_COMM_TIMEOUT;
+	}
+}
+
+/*
+ * 函数用途：记录 UART5 错误并解除当前同步等待。
+ * 调用场景：HAL UART 错误回调中调用。
+ * 关键约束：本函数可能处于 ISR 上下文，只置标志，不打印、不计数、不改设备状态。
+ */
+void CPU2_CommNotifyUartErrorFromISR(void)
+{
+	if (wait_response) {
+		s_cpu2_uart_error_pending = true;
+		wait_response = false;
+	}
+}
+
+/*
+ * 函数用途：判断是否仍处于等待 CPU2 首次状态和当前连接协议快照的同步阶段。
+ * 调用场景：CPU3 状态页选择通讯尝试页前调用。
+ * 关键约束：协议字段未实际读回时不得用默认值或掉线前缓存显示协议不匹配/兼容；
+ *           连续第十次请求未获得合法响应后返回 false，让故障页接管显示。
+ */
+bool CPU2_CommShouldShowStartup(void)
+{
+	return ((!s_cpu2_has_status_snapshot) || (!s_cpu2_has_protocol_snapshot)) &&
+		   (!s_cpu2_comm_fault_active);
+}
+
+/*
+ * 函数用途：判断 CPU2 状态和参数快照是否完整、协议是否兼容且通信故障未锁存。
+ * 调用场景：CPU3 菜单或外部协议访问 CPU2 参数和命令前调用。
+ * 关键约束：冷启动补读、参数刷新、协议不匹配和通信故障期间均禁止写入。
+ */
+bool CPU2_CommIsAvailable(void)
+{
+	return s_cpu2_has_status_snapshot &&
+		   s_cpu2_has_parameter_snapshot &&
+		   s_cpu2_has_protocol_snapshot &&
+		   (!s_cpu2_comm_fault_active) &&
+		   (g_deviceParams.protocolVersion == DEVICE_PROTOCOL_VERSION);
+}
+
+/*
+ * 函数用途：判断指定 CPU2 命令在当前通信状态下是否允许下发。
+ * 调用场景：菜单或外部协议准备写命令寄存器前调用。
+ * 关键约束：普通命令继续依赖完整参数快照；取消命令在参数刷新期间保持可达，
+ *           但仍要求状态快照、协议兼容且通信故障未锁存。
+ */
+bool CPU2_CommCanSendCommand(CommandType cmd)
+{
+	if (cmd != CMD_CANCEL_MEASUREMENT) {
+		return CPU2_CommIsAvailable();
+	}
+
+	return s_cpu2_has_status_snapshot &&
+		   s_cpu2_has_protocol_snapshot &&
+		   (!s_cpu2_comm_fault_active) &&
+		   (g_deviceParams.protocolVersion == DEVICE_PROTOCOL_VERSION);
+}
+
+/*
+ * 函数用途：使当前参数快照失效并请求重新读取 CPU2 全部保持寄存器参数。
+ * 调用场景：外部协议多字段写未获得完整 CPU2 ACK，实际生效范围无法由本次响应确定。
+ * 关键约束：刷新完成前普通写和依赖 CPU2 参数的外部读均不得返回成功。
+ */
+static void CPU2_CommRequestParameterRefresh(void)
+{
+	s_cpu2_has_parameter_snapshot = false;
+	s_cpu2_parameter_refresh_requested = true;
+}
+
+/* 已发起的非命令写失败时，CPU2 是否实际应用无法由响应确定，必须重新确认参数。 */
+static bool CPU2_CommFinishFailedRequest(bool parameter_write_attempted)
+{
+	CPU2_CommRecordFailure();
+	if (parameter_write_attempted) {
+		CPU2_CommRequestParameterRefresh();
+	}
+	return false;
+}
+
 /* 与CPU2通讯接收包主处理过程 */
-void HostCommuProcess(uint8_t *rcv, int len) {
+bool HostCommuProcess(uint8_t *rcv, int len) {
 #if DEBUG_COMMUCPU2
     int i;
     printf("收到CPU2数据 %d 字节: ",len);
@@ -46,18 +237,21 @@ void HostCommuProcess(uint8_t *rcv, int len) {
     printf("\r\n");
 #endif
 	if (len <= 3)
-		return;
+		return false;
 	if (!SlaveCheckCRC(rcv, len)) {
 		printf("CPU3 CRC校验错误");
-		return;
+		return false;
 	}
 	/* 解析数据 */
 	if (rcv[0] != ADERSS) {
 		printf("CPU3地址错误");
-		return;
+		return false;
 	}
-	RCV_functioncode = rcv[1];
-	cnt_commutoCPU2 = 0;
+	if (!CPU2_ResponseFrameIsValid(rcv, len)) {
+		printf("CPU3响应格式错误");
+		return false;
+	}
+	CPU2_CommMarkValidResponse();
 	switch (RCV_functioncode) {
 	case FUNCTIONCODE_READ_HOLDREGISTER: {
 		CPU2_Response03Process(rcv);
@@ -83,6 +277,7 @@ void HostCommuProcess(uint8_t *rcv, int len) {
 		break;
 	}
 	}
+	return true;
 }
 
 typedef struct {
@@ -166,17 +361,36 @@ void PollingInputData(void) {
 	static uint32_t last_param_update_flag = 0;
 	static uint32_t refresh_target_flag = 0;
 
+	/* 通信故障恢复必须先取得包含设备状态的 0x04 响应，禁止旧缓存提前清故障。 */
+	if (s_cpu2_comm_fault_active) {
+		const PollGroup *status_group = &runtime_groups[0];
+		poweron_done = false;
+		poweron_index = 0;
+		hold_refresh_pending = false;
+		hold_refresh_index = 0;
+		param_flag_valid = false;
+		(void)CPU2_CombinatePackage_Send(status_group->func,
+									   status_group->start,
+									   status_group->len,
+									   NULL);
+		return;
+	}
+
 	/* ---------- 上电阶段：每次调用发一个 poweron_groups ---------- */
 	if (!poweron_done) {
 		if (poweron_index < POWERON_GROUP_COUNT) {
 			const PollGroup *g = &poweron_groups[poweron_index];
 
-			CPU2_CombinatePackage_Send(g->func, g->start, g->len, NULL);
+			if (!CPU2_CombinatePackage_Send(g->func, g->start, g->len, NULL)) {
+				return;
+			}
 
 			poweron_index++;
 
 			if (poweron_index >= POWERON_GROUP_COUNT) {
 				poweron_done = true; /* 上电读取全部完成 */
+				s_cpu2_has_parameter_snapshot = true;
+				s_cpu2_parameter_refresh_requested = false;
 				 DeviceParams_StoreToRegisters(g_holding_regs); /* 把读取到的设备参数存入瓦锡兰保持寄存器 */
 				 last_param_update_flag = g_measurement.device_status.parameter_update_flag;
 				 refresh_target_flag = last_param_update_flag;
@@ -187,11 +401,20 @@ void PollingInputData(void) {
 		return; /* 上电阶段结束本次调用，不再发 runtime 组 */
 	}
 
+	/* 外部多字段写失败后，不能等待 CPU2 参数更新标志，必须主动重读确认实际值。 */
+	if (s_cpu2_parameter_refresh_requested) {
+		hold_refresh_pending = true;
+		hold_refresh_index = 0;
+		s_cpu2_parameter_refresh_requested = false;
+	}
+
 	/* ---------- 参数更新后：一次性补读保持寄存器 ---------- */
 	if (hold_refresh_pending) {
 		if (hold_refresh_index < REFRESH_HOLD_GROUP_COUNT) {
 			const PollGroup *g = &refresh_hold_groups[hold_refresh_index];
-			CPU2_CombinatePackage_Send(g->func, g->start, g->len, NULL);
+			if (!CPU2_CombinatePackage_Send(g->func, g->start, g->len, NULL)) {
+				return;
+			}
 			hold_refresh_index++;
 		}
 
@@ -200,6 +423,8 @@ void PollingInputData(void) {
 			hold_refresh_index = 0;
 			last_param_update_flag = refresh_target_flag;
 			param_flag_valid = true;
+			DeviceParams_StoreToRegisters(g_holding_regs);
+			s_cpu2_has_parameter_snapshot = true;
 		}
 		return;
 	}
@@ -214,7 +439,9 @@ void PollingInputData(void) {
 	{
 		const PollGroup *g = &runtime_groups[runtime_index];
 
-		CPU2_CombinatePackage_Send(g->func, g->start, g->len, NULL);
+		if (!CPU2_CombinatePackage_Send(g->func, g->start, g->len, NULL)) {
+			return;
+		}
 
 		runtime_index++;
 		if (runtime_index >= RUNTIME_GROUP_COUNT) {
@@ -230,6 +457,7 @@ void PollingInputData(void) {
 		refresh_target_flag = g_measurement.device_status.parameter_update_flag;
 		hold_refresh_pending = true;
 		hold_refresh_index = 0;
+		s_cpu2_has_parameter_snapshot = false;
 		return;
 	}
 
@@ -286,10 +514,12 @@ static void RequestDensityDistPoints_ByCount(void)
         }
 
         /* 这里用读输入寄存器功能码（假设你把这些点映射到 04 号） */
-        CPU2_CombinatePackage_Send(FUNCTIONCODE_READ_INPUTREGISTER,
-                                   start,
-                                   this_len,
-                                   NULL);
+		if (!CPU2_CombinatePackage_Send(FUNCTIONCODE_READ_INPUTREGISTER,
+									start,
+									this_len,
+									NULL)) {
+			return;
+		}
 
         start      += this_len;
         total_regs -= this_len;
@@ -297,7 +527,26 @@ static void RequestDensityDistPoints_ByCount(void)
 }
 
 /* 由屏幕向CPU2发送指令包 */
-void CPU2_CombinatePackage_Send(uint8_t f_code, uint16_t startadd, uint16_t registercnt, uint32_t *holddata) {
+bool CPU2_CombinatePackage_Send(uint8_t f_code, uint16_t startadd, uint16_t registercnt, uint32_t *holddata) {
+	bool cancel_command_allowed = false;
+	bool parameter_write_attempted = false;
+
+	/* 普通写必须通过完整快照门禁；参数刷新期间只放行协议兼容的取消命令。 */
+	if ((f_code == FUNCTIONCODE_WRITE_MULREGISTER) &&
+		(startadd == HOLDREGISTER_DEVICEPARAM_COMMAND) &&
+		(registercnt == 2U) &&
+		(holddata != NULL)) {
+		cancel_command_allowed = CPU2_CommCanSendCommand((CommandType)(*holddata));
+	}
+	if ((f_code == FUNCTIONCODE_WRITE_MULREGISTER) &&
+		!((startadd == HOLDREGISTER_DEVICEPARAM_COMMAND) && (registercnt == 2U))) {
+		parameter_write_attempted = true;
+	}
+	if ((f_code == FUNCTIONCODE_WRITE_MULREGISTER) && !CPU2_CommIsAvailable()) {
+		if (!cancel_command_allowed) {
+			return false;
+		}
+	}
 	uint8_t arr[1024];
 	int len = 0;
 	uint16_t crc;
@@ -331,29 +580,39 @@ void CPU2_CombinatePackage_Send(uint8_t f_code, uint16_t startadd, uint16_t regi
 #if DEBUG_COMMUCPU2
 	printf("发送到CPU2 %d 字节:", len);
 #endif
-	if (!sendToCPU2(arr, len, false)) {
-		return;
-	}
-	/* 全局变量赋值，用于接收CPU2的响应包处理 */
+	/* 先发布本次期望字段，避免极快响应到达时仍沿用上一请求。 */
 	RCV_functioncode = f_code;
 	RCV_startaddress = startadd;
 	RCV_registercnt = registercnt;
+	UART5_RX_LEN = 0U;
+	s_cpu2_uart_error_pending = false;
+	if (!sendToCPU2(arr, len, false)) {
+		return CPU2_CommFinishFailedRequest(parameter_write_attempted);
+	}
 	/* 等待接收完成 */
 	uint32_t timeout = HAL_GetTick();
 	while (wait_response) {
 		/* 先处理异常边界，避免Modbus 协议状态机带故障继续运行。 */
-		if (HAL_GetTick() - timeout > 1000) /* 100ms超时 */
+		if ((HAL_GetTick() - timeout) > CPU2_RESPONSE_TIMEOUT_MS)
 				{
 			printf("等待响应超时！\n");
 			wait_response = false;    /* 防止一直 True */
-			return;
+			return CPU2_CommFinishFailedRequest(parameter_write_attempted);
 		}
 	}
-	HostCommuProcess(UART5_RX_BUF, UART5_RX_LEN);  /* 处理接收到的数据 */
+	if (s_cpu2_uart_error_pending) {
+		s_cpu2_uart_error_pending = false;
+		return CPU2_CommFinishFailedRequest(parameter_write_attempted);
+	}
+	if (!HostCommuProcess(UART5_RX_BUF, UART5_RX_LEN)) {
+		return CPU2_CommFinishFailedRequest(parameter_write_attempted);
+	}
+	return true;
 }
 /* 向CPU2发送数据包 */
 bool sendToCPU2(uint8_t *arr, uint16_t len, bool flag_fromhost) {
 	RS485_SET_SEND_MODE();  /* switch to transmit */
+	wait_response = true; /* wait for CPU2 response */
 	if (HAL_UART_Transmit_DMA(&huart5, arr, len) != HAL_OK) {
 		/* Fall back to RX immediately if TX DMA cannot start. */
 		RS485_SET_RECV_MODE();
@@ -363,8 +622,6 @@ bool sendToCPU2(uint8_t *arr, uint16_t len, bool flag_fromhost) {
 		wait_response = false;
 		return false;
 	}
-	wait_response = true; /* wait for CPU2 response */
-	cnt_commutoCPU2++;
 #if DEBUG_COMMUCPU2
     {
         int i;
@@ -379,6 +636,7 @@ bool sendToCPU2(uint8_t *arr, uint16_t len, bool flag_fromhost) {
 static void CPU2_Response03Process(uint8_t const *revframe) {
 	int i;
 	int byteamount;
+	bool response_contains_protocol = CPU2_ResponseContainsProtocolVersion();
 
 	/* Modbus RTU: revframe[0]=地址, revframe[1]=功能码(0x03), revframe[2]=字节数 */
 	byteamount = revframe[2];
@@ -408,11 +666,15 @@ static void CPU2_Response03Process(uint8_t const *revframe) {
 	/* 4. 解析保持寄存器并刷新 g_deviceParams */
 	AnalysisHoldRegister();
 	ReadDeviceParamsFromHoldingRegisters(HoldingRegisterArray);
+	if (response_contains_protocol) {
+		s_cpu2_has_protocol_snapshot = true;
+	}
 }
 
 /* 解析CPU2的响应包0x04功能码 */
 static void CPU2_Response04Process(uint8_t const *revframe) {
 	int i, j;
+	bool response_contains_status = CPU2_ResponseContainsDeviceStatus();
 	memset(SlaveTempBuffer, 0, sizeof(SlaveTempBuffer));
 	for (i = 0, j = 0; i < RCV_registercnt; i++, j = j + 2) {
 		SlaveTempBuffer[i] = (revframe[j + 3] << 8) + revframe[j + 4];
@@ -421,6 +683,17 @@ static void CPU2_Response04Process(uint8_t const *revframe) {
 	/* 写保持寄存器 */
 	PresetRegister(true, SlaveTempBuffer);
 	read_measurement_result_from_InputRegisters(InputRegisterArray);
+	if (response_contains_status) {
+		s_cpu2_has_status_snapshot = true;
+	}
+	if (s_cpu2_comm_fault_active) {
+		if (response_contains_status) {
+			s_cpu2_comm_fault_active = false;
+		} else {
+			g_measurement.device_status.device_state = STATE_ERROR;
+			g_measurement.device_status.error_code = CPU2_COMM_TIMEOUT;
+		}
+	}
 }
 
 /**

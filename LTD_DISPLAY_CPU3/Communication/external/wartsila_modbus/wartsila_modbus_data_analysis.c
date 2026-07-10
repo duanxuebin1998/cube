@@ -100,6 +100,7 @@ uint16_t AubonState_To_WartsilaWorkState(DeviceState s)
  */
 static void WartsilaToDSM(const wartsila_DeviceParameters *wxl, volatile DeviceParameters *dsm) {
 
+	dsm->command = CMD_NONE;
 	if (wxl->down_command != 0) {
 		switch (wxl->down_command) {
 		case 5:

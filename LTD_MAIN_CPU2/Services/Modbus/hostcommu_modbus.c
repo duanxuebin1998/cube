@@ -40,7 +40,6 @@ static bool JudgeFunctioncode(void);
 static bool JudgeStartAddress(void);
 static void ReadRegister(bool registertype, int *registervalue); /* 读寄存器 */
 static void PresetRegister(bool registertype, int const *registervalue); /* 写寄存器 */
-static int __attribute__((unused)) ResponseException(int exception, uint8_t  *sendframe);
 static int Compose03Package(uint8_t  *revframe, uint8_t  *sendframe);
 static int Compose04Package(uint8_t  *revframe, uint8_t  *sendframe);
 static int Compose10Package(uint8_t  const *revframe, uint8_t  *sendframe);
@@ -258,20 +257,6 @@ static int Compose04Package(uint8_t  *revframe, uint8_t  *sendframe) {
 	return sendlength;
 }
 
-/**
- * @brief 执行主板通信中的 __attribute__ 逻辑。
- *
- * @param sendframe 业务参数。
- * @return 状态码、计数值或协议数值，具体含义由调用点约定。
- */
-static int __attribute__((unused)) ResponseException(int exception, uint8_t *sendframe) {
-	int framelen;
-	sendframe[0] = SlaveAddress;
-	sendframe[1] = RCV_functioncode + 0x80;
-	sendframe[2] = exception;
-	framelen = 3;
-	return framelen;
-}
 
 /* 功能码 0x10：写多个保持寄存器处理 */
 int Response10Process(uint8_t const *revframe, uint8_t *sendframe)

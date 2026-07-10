@@ -18,15 +18,17 @@
 extern "C" {
 #endif
 
-/* 同步所有 DeviceParameters → CPU2
+/* 同步所有允许批量同步的 DeviceParameters → CPU2
  * 步骤：
  *  1) 遍历 param_meta[]
- *  2) 使用 operanum 在 g_deviceParams 中找到对应字段
- *  3) 如果 h->val 与 g_deviceParams 不同：
- *       - h->val = g_deviceParams 中的值
+ *  2) 跳过一次性命令和由 CPU2 运行期维护的参数
+ *  3) 使用 operanum 在 g_deviceParams 中找到对应字段
+ *  4) 如果 h->val 与 g_deviceParams 不同：
  *       - 调用 10 功能码下发到 CPU2
+ *       - 仅在 CPU2 成功响应后更新 h->val
+ * 返回：全部差异参数同步成功或无需同步时为 true，否则为 false。
  */
-void DeviceParams_SyncAllToCPU2(void);
+bool DeviceParams_SyncAllToCPU2(void);
 
 /* 只同步一个 operanum 对应的参数
  *  - 用于某个菜单参数修改后，只下发该参数

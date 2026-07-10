@@ -18,6 +18,8 @@
 
 文档目录整理已单独提交为 `a5a65cb docs: 整理项目文档目录`。本文件记录该提交之后剩余的 SI协议适配改动，包括代码、版本、验证脚本、SI协议专项文档和从 `docs/SI协议.docx` 迁移到 `../00_原始资料/SI7000协议.docx` 的原始协议文档。
 
+阅读口径：第 1～14 节保留 2026-05 第一版适配过程；第 15 节记录协议 14 的进一步兼容结果，第 16 节记录 2026-07-10 CPU2 通信门禁和写失败反馈。涉及当前地址归属、时间戳、RTC、状态或失败响应时，以第 15～16 节和当前源码为准。
+
 ## 2. 改动范围概览
 
 本轮剩余改动主要分为以下几类：
@@ -71,7 +73,7 @@
 | 功能码 | FC01、FC02、FC03、FC04、FC05、FC06 | 已实现 |
 | Coil 地址 | 00001-00016 | 运行模式、停止和手动上下行命令 |
 | Discrete Input 地址 | 10001-10032 | 状态、报警和协议辅助状态 |
-| Holding Register 地址 | 40001-40023 | 剖面参数和报警阈值影子寄存器 |
+| Holding Register 地址 | 40001-40023 | 当前 `40001~40003` 桥接 CPU2 SI profile 参数，`40010~40023` 为 CPU3 本机持久化参数；`40004~40009` 保留 |
 | Input Register 地址 | 30001-30620 | 位置、温度、密度、液位、时间和剖面点 |
 
 协议文档中密度缩放写为 `0.01 kg/m3`，示例 `450.00 -> 45000`。协议 13 前适配层曾将内部 `kg/m3 x10` 转为协议 `kg/m3 x100` 输出；协议 13 后 CPU2/CPU3 内部密度 raw 已统一为 `kg/m3 x100`，SI 层不再额外乘 10。由于 16 位寄存器最高只能表示 `655.35 kg/m3`，超过范围时钳位到 `65535`，该限制仍需 PLC 侧确认。
@@ -168,15 +170,15 @@
 
 - CPU3 启动时调用 `Cpu3Clock_Init()`。
 - 使用 CMSIS RTC 寄存器直接初始化和读写时间，避免依赖当前工程没有启用的 HAL RTC 模块。
-- 使用 LSI 作为 RTC 时钟源。
+- 当前实现优先使用 LSE，启动失败或旧板缺少 LSE 时回退 LSI。
 - 使用 `RTC->BKP0R` 作为初始化标记。
 - RTC 未初始化时写入默认时间 `2026-01-01 00:00:00`。
-- 提供 `Cpu3Clock_GetDateTime()` 和 `Cpu3Clock_SetDateTime()`，供 SI 当前时间和剖面完成时间戳读取。
+- 提供 `Cpu3Clock_GetDateTime()` 和 `Cpu3Clock_SetDateTime()`，供 SI 当前时间和 profile 命令触发时间戳读取。
 
 注意事项：
 
-- LSI 精度有限，长期计时会有漂移。
-- 当前仅提供底层时间读写能力，尚未新增显示菜单或 PLC 写时间接口。
+- 回退 LSI 时长期计时仍会有漂移；状态和联调需区分当前 LSE/LSI 时钟源。
+- CPU3 已提供屏幕 RTC 设置入口；SI 当前未定义 PLC 写时间寄存器。
 
 ### 6.4 CPU3共享协议结构
 
@@ -224,7 +226,7 @@
 实现方式：
 
 - FC01 从 CPU2 的 `device_state`、`motor_state` 和 SI 影子状态生成线圈状态。
-- FC05 支持单线圈写入，并桥接到 CPU2 命令；`00005~00008` 和 `00016` 保留线圈写入返回 Illegal Data Address。
+- FC05 支持单线圈写入，并桥接到 CPU2 命令；`00005~00008` 和 `00016` 保留线圈写入返回 Illegal Data Address。`FC05=ON` 在 CPU2 不可用或 ACK 失败时返回设备忙 `0x06`，动作影子只在 ACK 成功后提交。
 
 主要命令映射：
 
@@ -233,7 +235,7 @@
 | `00001` | Manual | `CMD_MAINTENANCE_MODE` |
 | `00002` | Calibrate | `CMD_CALIBRATE_ZERO` |
 | `00003` | Auto | `CMD_FIND_OIL` |
-| `00004` | Profile | `CMD_MEASURE_DISTRIBUTED` |
+| `00004` | Profile | `CMD_SI_PROFILE` |
 | `00009` | Stop | `CMD_MAINTENANCE_MODE` |
 | `00010/00011/00012` | Up Slow/Medium/Fast | `CMD_FORCE_MOVE_UP` |
 | `00013/00014/00015` | Down Slow/Medium/Fast | `CMD_FORCE_MOVE_DOWN` |
@@ -243,6 +245,7 @@
 - `00001-00004` 模式线圈在影子状态中互斥。
 - `00009-00015` 停止/方向线圈在影子状态中互斥。
 - 写入 `OFF` 时只清除对应影子状态，不主动派生命令。
+- 写入 `ON` 时只有 CPU2 ACK 成功才提交对应影子；状态/参数/当前连接协议快照未完成、共享协议不兼容、参数刷新中、通信故障锁存或本次请求失败均返回 `0x06`。
 - 当前 CPU2 只有统一的强制上/下行命令，SI 的 slow/medium/fast 速度档位暂映射为同一方向命令。
 
 ### 7.3 FC02 Discrete Input
@@ -254,11 +257,12 @@
 | SI 地址 | 含义 | 数据来源 |
 | --- | --- | --- |
 | `10001` | Bottom Reference | `既有测量子结构状态字段.bottom_reference_valid` |
+| `10002/10003` | Lower/Upper Level Sensor | CPU3 按液位跟随稳定状态合成，不接入真实双液位传感器硬件 |
 | `10004` | Interlock | CPU2 错误码或 `profile_blocked_by_process` |
-| `10005` | Profile Complete | `profile_complete_latched`，并结合状态回退 |
+| `10005` | Profile Complete | `profile_complete_latched` 且 `profile_source == PROFILE_SOURCE_SI` |
 | `10006` | Unit Is Metric | 固定为 1 |
 | `10009` | Reel Alarm | CPU2 错误码非 `NO_ERROR` |
-| `10010` | Probe Un-calibrated | `zero_point_status != 0` |
+| `10010` | Probe Un-calibrated | 兼容固定返回 `0`，不能作为物理位置可信证明 |
 | `10013` | Probe At Liquid Level | `oil_measurement.probe_at_liquid_level` |
 | `10025` | Temperature Deviation Alarm | `profile_temp_deviation_alarm` |
 | `10026` | Density Deviation Alarm | `profile_density_deviation_alarm` |
@@ -273,10 +277,10 @@
 
 | SI 地址 | 含义 | 实现 |
 | --- | --- | --- |
-| `40001` | Profile First Point | 写入 CPU2 `spreadTopLimit`，协议 mm 转 CPU2 0.1mm |
-| `40002` | Profile Increment | 写入 CPU2 `spreadMeasurementDistance`，协议 mm 转 CPU2 0.1mm |
-| `40003` | Profile Dwell Time | 写入 CPU2 `spreadPointHoverTime` |
-| `40010-40023` | 自动剖面参数和报警设定 | 影子寄存器保存 |
+| `40001` | Profile First Point | 写入 CPU2 `si_profile_first_point`，协议 mm 转 CPU2 0.1mm；CPU2 ACK 后提交影子 |
+| `40002` | Profile Increment | 写入 CPU2 `si_profile_increment`，协议 mm 转 CPU2 0.1mm；CPU2 ACK 后提交影子 |
+| `40003` | Profile Dwell Time | 写入 CPU2 `si_profile_dwell_time`，单位秒；CPU2 ACK 后提交影子 |
+| `40010-40023` | 自动 profile 参数和报警设定 | CPU3 本机参数，FRAM 持久化，不依赖 CPU2 在线状态 |
 
 处理细节：
 
@@ -286,6 +290,7 @@
 - `40014/40015` 不直接写入瓦锡兰密度参数，避免 SI协议写入影响既有瓦锡兰协议行为。
 - `40004~40009` 为文档保留区，FC06 写入返回 Illegal Data Address，读取保持 0。
 - FC06 写响应使用显式 echo 构造，不依赖对请求缓冲区的反向写入。
+- `40001~40003` 在 CPU2 不可用或 ACK 失败时返回设备忙 `0x06` 并保留原影子；`40010~40023` 合法写入不受 CPU2 通信门禁影响。
 
 ### 7.5 FC04 Input Register
 
@@ -300,14 +305,14 @@
 | `30003` | Current Density | 协议 13 后内部与 SI协议均按 `kg/m3 x100`，超过 16 位时钳位 |
 | `30004` | Liquid Level | CPU2 0.1mm 转 mm，无效值输出 0 |
 | `30006` | Number Of Points | 剖面完成锁存后的有效剖面点数量 |
-| `30007-30010` | Profile Timestamp | 剖面完成计数变化时锁存 CPU3 RTC |
+| `30007-30010` | Profile Timestamp | CPU3 收到 SI `00004`、屏幕或自动 profile 触发时锁存的开始时间 |
 | `30011-30013` | Current Time | 每次读取 CPU3 RTC 当前时间 |
 | `30021+3n` | Profile Point | 剖面点位置、温度、密度 |
 
 处理细节：
 
-- 剖面时间戳由 `profile_complete_counter` 变化触发锁存。
-- 如果 RTC 暂时读取失败，后续仍会重试锁存，避免永久丢失本次剖面时间。
+- profile 时间戳在命令触发入口锁存；SI `00004`、屏幕和自动调度使用同一入口。
+- 如果 RTC 暂时读取失败，本次时间戳保持无效；后续触发重新尝试，不能把旧完成时间冒充本次开始时间。
 - 剖面未完成锁存时 `Number Of Points` 和点阵数据保持 0；完成锁存后只输出 `Number Of Points` 指示的有效点数，超出部分返回 0，避免 PLC 读取到上一轮残留剖面数据。
 
 ## 8. 复查后修正和优化
@@ -414,36 +419,36 @@ py tools\check_version_bumped.py
 | `py tools\check_si_modbus_frames.py` | 通过 |
 | `py tools\check_si_protocol_contract.py` | 通过 |
 
-## 11. 当前限制和后续确认项
+## 11. 第一版限制和后续状态（历史）
 
-以下事项不是当前实现的阻塞问题，已单独记录到 `docs/01_协议与寄存器/SI协议适配/01_计划与需求/SI协议待确认与后续清单.md`。当前分支只记录，不实现这些需求：
+下表原用于记录 2026-05 第一版限制。已在协议 14 或后续工作中解决的项目直接标注当前结果；仍未解决的项目继续由 `docs/01_协议与寄存器/SI协议适配/01_计划与需求/SI协议待确认与后续清单.md` 维护。
 
 | 项目 | 当前处理 | 后续建议 |
 | --- | --- | --- |
 | 从站地址/Tank ID | 优先使用现有 `SlaveAddress`，无效时使用 SI 默认地址 | 确认 PLC 的 Tank ID 是否等同现有从站地址，必要时新增 SI 专用地址参数 |
-| Profile 参数语义 | `40001~40003` 已桥接到现有分布测量参数 | 确认 First Point、Increment、Dwell Time 与当前方向、单位、边界是否完全一致 |
+| Profile 参数语义 | 已改为 CPU2 独立 `si_profile_*` 参数，不再复用普通分布参数 | 继续按当前绝对首点、步距、秒单位和 Point0 固定位置口径联调 |
 | 密度缩放 | 已按协议示例输出 `0.01 kg/m3`，超过 16 位时钳位 | 与 PLC 确认实际密度范围是否会超过 `655.35 kg/m3`，必要时另定兼容倍率 |
 | 手动速度档位 | slow/medium/fast 均映射为 CPU2 统一强制上/下行命令 | 如现场需要速度差异，CPU2 需提供可指定速度的命令或参数 |
-| 报警设定寄存器 | `40010-40023` 部分为 SI 影子寄存器 | 确认是否需要落盘保存或映射到现有报警参数 |
+| 报警设定寄存器 | `40010~40023` 已作为 CPU3 SI 本机参数落盘保存 | 继续验证掉电恢复和报警合成，不映射到 Wartsila 或继电器报警参数 |
 | 报警语义细分 | Reel Alarm、Probe Un-calibrated 和 profile 偏差报警为第一版简化/通用字段映射 | 确认 PLC 是否需要更细的卷尺、电机、校准和 profile 偏差算法 |
-| Lower/Upper Level Sensor | 暂无可靠数据源，返回 0 | 确认硬件信号或 CPU2 状态字段后补齐 |
+| Lower/Upper Level Sensor | 当前按液位跟随稳定状态合成 | 真实双液位传感器硬件仍未接入，保持受控偏差 |
 | Interval Timer | `10012` 当前由 `40011` 影子使能合成 | 确认现场是否还需要独立“计时器正在运行/到时”状态 |
 | 液位/profile 刷新 | profile 未完成时点阵输出 0，完成后输出有效点；液位使用 CPU2 最近液位值 | 确认 PLC 是否需要 profile 期间液位保持、profile 数据读取后清除或握手机制 |
-| CPU3 RTC 精度 | 使用 LSI，默认时间为 `2026-01-01 00:00:00` | 若要求长期准确时间，建议评估 LSE、上位机校时或 PLC 写时接口 |
-| 时间设置入口 | 已提供 `Cpu3Clock_SetDateTime()`，未接菜单/协议写入 | 如 PLC 要求可远程校时，需要定义 Holding Register 或命令入口 |
+| CPU3 RTC 精度 | 优先 LSE，失败回退 LSI，默认时间为 `2026-01-01 00:00:00` | LSI 回退场景仍需评估长期精度；PLC 写时接口未定义 |
+| 时间设置入口 | 已提供 CPU3 屏幕 RTC 设置入口 | 如 PLC 要求远程校时，需要另行定义 Holding Register 或命令入口 |
 | 现场协议节奏 | 从站按请求响应，不主动限制请求频率 | PLC 侧需遵守请求间隔不小于 1s |
 | 协议诊断 | 当前只按 Modbus 响应返回异常，不保存统计 | 后续增加 CRC 错误、地址不匹配、非法地址/值等 CPU3 本地诊断计数 |
 | 主机侧帧测试 | 已新增 `tools/check_si_modbus_frames.py` 作为参考帧检查入口 | 后续在需求确认后继续扩展真实状态快照、缩放边界和报警合成用例 |
 | SI 模块结构 | 协议从站逻辑集中在一个实现文件 | 后续可拆分地址表、缩放、状态快照、功能码处理和诊断统计 |
 | 共享协议回归检查 | 已新增 `tools/check_si_protocol_contract.py` | 后续协议变更时纳入提交前检查 |
 | 兼容分发路径 | 主路径使用 `app_main.c`，旧 `com_manager` 已加专用枚举前缀 | 后续确认保留、删除或收敛为主分发薄封装 |
-| 官方 profile 时序 | 当前按完成时刻锁存 profile 时间戳，点阵按完成后有效点输出 | 后续按官方资料改为首点采集时间戳，并确认第 0 点为罐底点、`40001` 为罐底后的第一停点 |
+| 官方 profile 时序 | 当前按收到或触发 profile 命令的时刻锁存开始时间，点阵按完成后有效点输出 | 这是已确认兼容偏差；如要求首点采集时刻，需新增 CPU2 首点事件 |
 | 官方点数口径 | 当前按 DCS 地址表输出 200 个点 | 若 PLC 要求 250+ 或更多点，需要定义扩展地址或分页机制 |
 
 ## 12. 建议后续执行顺序
 
 1. 先和 PLC/现场确认 P0 项：Tank ID、`40001~40003` profile 参数语义、密度缩放范围。
-2. 再确认 P1 项：`40010~40023` 是否落盘、自动剖面调度、报警语义、RTC 校时、手动速度档位和上下液位传感器来源。
+2. 再确认 P1 项：报警启用语义、Manual 期间的自动剖面调度与报警抑制、Cal 完整回 Auto、上下液位传感器来源和官方默认值/完整值域。
 3. 主机侧参考帧检查和共享协议静态检查已经具备，需求口径确认后先扩展测试快照，再实现对应代码。
 4. 官方资料复核后，把上下液位传感器、profile 首点时间戳、profile 第 0 点罐底语义和 Manual 抑制作为下一轮 P0/P1 优先项。
 5. 最后做结构性优化：SI协议模块拆分、协议诊断计数、`com_manager` 兼容路径取舍。
@@ -512,7 +517,7 @@ tools/check_si_protocol_contract.py
 
 ## 14. 总结
 
-本次 SI协议适配已经完成从协议需求拆解、前期分支合并、CPU2 状态补齐、CPU3 外部从站协议实现、CPU3 时钟引入、协议/版本文档同步，到构建、静态检查和参考帧验证的完整闭环。当前仍需现场或 PLC 侧进一步确认的重点是 Tank ID、profile 参数口径、密度 16 位范围限制、手动速度档位、报警设定是否需要落盘、报警语义细分和 RTC 校时策略；工程侧后续建议在确认需求后扩展真实状态快照测试、诊断计数和 SI 模块结构拆分。
+本次 SI协议适配已经完成从协议需求拆解、前期分支合并、CPU2 状态补齐、CPU3 外部从站协议实现、CPU3 时钟引入、协议/版本文档同步，到构建、静态检查和参考帧验证的完整闭环。`40010~40023` 已作为 CPU3 本机参数持久化，不再属于待确认项。当前仍需现场或 PLC 侧进一步确认和验证的重点是 SI 官方默认值及完整非法值范围、报警启用方式和默认阈值、Manual 期间的报警与自动 Profile 抑制、Cal 完整回 Auto，以及 Probe Un-calibrated 与探底失败口径；真实双液位传感器、Interlock/Reel Alarm 细分和首点时间戳继续按受控偏差评估。工程侧后续建议扩展真实状态快照测试、诊断计数和 SI 模块结构拆分。
 
 ## 15. 2026-07-01 进一步兼容实施更新
 
@@ -543,7 +548,9 @@ CPU2 SI profile 流程已从普通分布测量解耦。执行时直接读取 CPU
 | 子菜单 | `Profile参数`、`自动Profile`、`报警限值` |
 | 自动调度 | `si_modbus_periodic_task()` 基于 `40010~40013` 和 CPU3 RTC 周期触发 |
 
-CPU3 写 `00004 Profile ON` 时先锁存 profile 开始时间，再下发 `CMD_SI_PROFILE`。自动 profile 按起始时分和 interval 周期跨天触发，同一分钟去重；到点后按已确认口径直接覆盖当前命令并执行 SI profile。
+写入边界：`FC05=ON` 和 `40001~40003` 依赖 CPU2 ACK，失败返回设备忙 `0x06`，相关影子只在 ACK 成功后提交；`40010~40023` 是 CPU3 本机持久化参数，不依赖 CPU2 在线状态。
+
+CPU3 写 `00004 Profile ON` 时先锁存 profile 开始时间，再下发 `CMD_SI_PROFILE`。自动 profile 按起始时分和 interval 周期跨天触发；到点下发失败时按 5 s 门限节流重试，不记录本分钟成功状态，只有下发成功后才在同一分钟去重。到点后仍按已确认口径直接覆盖当前命令并执行 SI profile。
 
 ### 15.3 状态、报警和时间戳
 
@@ -580,3 +587,15 @@ CPU3 写 `00004 Profile ON` 时先锁存 profile 开始时间，再下发 `CMD_S
 - `10009 Reel Alarm` 仍按设备错误简化合成，若 PLC 需要卷尺/电机/校准细分，需要下一轮补充。
 - `10002/10003` 当前按液位跟随稳定状态合成，不接入真实双液位传感器硬件。
 - 超过 200 点 profile 扩展、独立 Tank ID、三档真实手动速度仍不在本轮实现范围。
+
+## 16. 2026-07-10 CPU2 通信门禁和失败反馈更新
+
+CPU3 `V1.20.0.0` 对 SI 写入口补齐以下行为，`DEVICE_PROTOCOL_VERSION` 保持 `14`：
+
+- `FC05=ON` 在状态/参数/当前连接协议快照未完成、共享协议不兼容、参数刷新中、CPU2 通信故障锁存或本次命令 ACK 失败时返回 Slave Device Busy `0x06`，不提交模式或动作线圈影子。
+- `FC05=OFF` 只清对应本地影子，不派生 CPU2 命令，合法请求正常回显。
+- `FC06 40001~40003` 只有 CPU2 参数 ACK 成功后才更新 `g_deviceParams` 和 SI 保持寄存器影子；失败返回 `0x06` 并保留原值。已发起的参数写若超时、响应非法或 ACK 丢失，内部参数快照立即失效并强制补读四组，补读完成前普通命令保持关闭。
+- `FC06 40010~40023` 只写 CPU3 本机参数和 FRAM，合法写入不依赖 CPU2 在线状态。
+- PLC 收到 `0x06` 后应等待 CPU2 状态、参数和当前连接协议快照完整恢复，重试原目标值并通过 FC01/FC03 回读确认。
+
+本轮已执行 `py tools\check_si_modbus_frames.py` 和 `py tools\check_si_protocol_contract.py`，结果通过；真实 PLC 离线重试、延迟上线和串口干扰仍需硬件联调。

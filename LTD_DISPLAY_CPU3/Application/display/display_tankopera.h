@@ -15,11 +15,12 @@ struct KeyMenu {
 extern struct KeyMenu keymenu[];
 /**
  * @brief 显示或打印屏幕菜单操作中的 Display_RequestCancelMeasurement 逻辑。
+ * @return true 表示无需取消或取消命令获得合法响应，false 表示通信失败。
  */
-void Display_RequestCancelMeasurement(void);
+bool Display_RequestCancelMeasurement(void);
 /**
  * @brief 显示或打印屏幕菜单操作中的 Display_CanEnterCancelMeasurementConfirm 逻辑。
- * @return true 表示条件满足或处理成功，false 表示条件不满足或处理失败。
+ * @return true 表示可进入取消确认或故障详情页，false 表示当前状态无需入口。
  */
 bool Display_CanEnterCancelMeasurementConfirm(void);
 /**

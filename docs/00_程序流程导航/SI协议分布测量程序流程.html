@@ -73,8 +73,10 @@ li{margin:4px 0}
 .small{font-size:13px;color:#5a6f86}
 @media(max-width:860px){.wrap{padding:16px}.hero{padding:24px 22px}.hero h1{font-size:24px}.meta-grid,.split{grid-template-columns:1fr}.topnav{position:static}section{padding:18px}.step{grid-template-columns:1fr}.flow-svg{min-width:900px}}
 </style>
+
+<link rel="stylesheet" href="assets/网站嵌入增强.css">
 </head>
-<body>
+<body class="cube-flow-page" data-cube-flow-page="cube-flow-si协议分布测量程序流程">
 <div class="wrap">
 <header class="hero">
 <h1>SI 分布测量程序流程</h1>
@@ -100,6 +102,7 @@ li{margin:4px 0}
 <a href="#errors">异常</a>
 <a href="#source">源码索引</a>
 </nav>
+<!-- CUBE_EMBED_START -->
 
 <section id="scope">
 <h2>1. 文档边界</h2>
@@ -117,8 +120,8 @@ li{margin:4px 0}
 <section id="overview">
 <h2>2. 跨 CPU 总体流程</h2>
 <p class="lead">SI 分布测量被拆成两段：CPU3 负责协议入口和触发，CPU2 执行独立 profile，结果再经 CPU2 输入寄存器回到 CPU3，最后转换成 SI 的 100xx/300xx 状态和点阵。</p>
-<div class="flow-wrap">
-<svg class="flow-svg" viewBox="0 0 1120 760" role="img" aria-label="SI 分布测量跨 CPU 总体流程">
+<figure class="cube-flow-figure"><figcaption id="cube-flow-si协议分布测量程序流程-diagram-01-caption">SI 分布测量跨 CPU 总体流程</figcaption><div class="flow-wrap cube-flow__viewport" data-flow-width="standard" tabindex="0" role="region" aria-labelledby="cube-flow-si协议分布测量程序流程-diagram-01-caption">
+<svg class="flow-svg" viewBox="0 0 1120 760" role="img" aria-label="SI 分布测量跨 CPU 总体流程" aria-labelledby="cube-flow-si协议分布测量程序流程-diagram-01-title cube-flow-si协议分布测量程序流程-diagram-01-desc"><title id="cube-flow-si协议分布测量程序流程-diagram-01-title">SI 分布测量跨 CPU 总体流程</title><desc id="cube-flow-si协议分布测量程序流程-diagram-01-desc">PLC/DCS 请求经 CPU3 SI 从站校验，屏幕请求走同一 profile 触发入口；CPU3 锁存开始时间并经内部 Modbus 下发 CMD_SI_PROFILE。CPU2 主循环执行探底、候选点生成及逐点液面判定；异常返回 Modbus 响应或 SET_ERROR，成功则发布点阵、完成锁存和计数，由 CPU3 轮询并映射为 SI 100xx 状态及 300xx 实时值和点阵。</desc>
 <defs>
 <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10z" fill="#61758e"/></marker>
 <marker id="arrow-red" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10z" fill="#b84a55"/></marker>
@@ -142,7 +145,7 @@ li{margin:4px 0}
 <text class="label" x="595" y="226">内部 0x10 写命令</text>
 <text class="label" x="884" y="275">测量失败</text>
 </svg>
-</div>
+</div></figure>
 <div class="step-list">
 <div class="step"><b>1. 外部帧进入</b><span>CPU3 外部 COM 端口选择 <code>COM_PROTO_SI</code> 后，端口分发调用 <code>si_modbus_process_for_dispatch()</code>。</span></div>
 <div class="step"><b>2. CPU3 翻译</b><span>地址和 CRC 正确后，CPU3 刷新线圈、保持寄存器、离散输入和输入寄存器快照，再按功能码读写。</span></div>
@@ -155,8 +158,8 @@ li{margin:4px 0}
 <section id="parameters">
 <h2>3. 参数、命令和单位口径</h2>
 <h3>3.1 SI 保持寄存器归属</h3>
-<table>
-<thead><tr><th>SI 地址</th><th>当前用途</th><th>归属</th><th>落地动作</th></tr></thead>
+<table><caption>SI 保持寄存器归属</caption>
+<thead><tr><th scope="col">SI 地址</th><th scope="col">当前用途</th><th scope="col">归属</th><th scope="col">落地动作</th></tr></thead>
 <tbody>
 <tr><td><code>40001</code></td><td>Profile First Point，Point1 绝对位置，单位 mm</td><td>CPU2 持久化参数</td><td>CPU3 写入时转成 0.1mm，写 <code>HOLDREGISTER_DEVICEPARAM_SI_PROFILE_FIRST_POINT</code></td></tr>
 <tr><td><code>40002</code></td><td>Profile Increment，从 40001 开始逐点递增的点间距，单位 mm</td><td>CPU2 持久化参数</td><td>CPU3 写入时转成 0.1mm，写 <code>HOLDREGISTER_DEVICEPARAM_SI_PROFILE_INCREMENT</code></td></tr>
@@ -167,8 +170,8 @@ li{margin:4px 0}
 </tbody>
 </table>
 <h3>3.2 默认值和运行期兜底</h3>
-<table>
-<thead><tr><th>参数</th><th>当前默认/兜底</th><th>说明</th></tr></thead>
+<table><caption>默认值和运行期兜底</caption>
+<thead><tr><th scope="col">参数</th><th scope="col">当前默认/兜底</th><th scope="col">说明</th></tr></thead>
 <tbody>
 <tr><td><code>si_profile_first_point</code></td><td><code>1000</code>，单位 0.1mm，也就是 100mm</td><td>CPU2 参数初始化和 profile 运行期都会兜底 0 值。</td></tr>
 <tr><td><code>si_profile_increment</code></td><td><code>10000</code>，单位 0.1mm，也就是 1000mm</td><td>0 值会按默认步距执行。</td></tr>
@@ -178,8 +181,8 @@ li{margin:4px 0}
 </tbody>
 </table>
 <h3>3.3 单位转换</h3>
-<table>
-<thead><tr><th>数据</th><th>CPU2 内部</th><th>SI协议对外</th><th>转换位置</th></tr></thead>
+<table><caption>单位转换</caption>
+<thead><tr><th scope="col">数据</th><th scope="col">CPU2 内部</th><th scope="col">SI协议对外</th><th scope="col">转换位置</th></tr></thead>
 <tbody>
 <tr><td>位置和液位</td><td>0.1mm，无效液位为 <code>UNVALID_LEVEL</code></td><td>mm，16 位无符号，负位置和无效值输出 0</td><td>CPU3 SI 层</td></tr>
 <tr><td>温度</td><td>内部 raw，按 <code>raw - 20000</code> 表示 0.01°C</td><td>16 位有符号 0.01°C；无效温度输出 -200.00°C，对应 <code>0xB1E0</code></td><td>CPU3 SI 层</td></tr>
@@ -192,8 +195,8 @@ li{margin:4px 0}
 <section id="cpu3-trigger">
 <h2>4. CPU3 触发和调度流程</h2>
 <p class="lead">CPU3 既处理外部 PLC 手动 profile，也负责按 RTC 周期自动触发 profile。两条路径最终都下发同一条 CPU2 命令。</p>
-<div class="flow-wrap">
-<svg class="flow-svg" viewBox="0 0 1120 860" role="img" aria-label="CPU3 SI协议触发和调度流程">
+<figure class="cube-flow-figure"><figcaption id="cube-flow-si协议分布测量程序流程-diagram-02-caption">CPU3 SI协议触发和调度流程</figcaption><div class="flow-wrap cube-flow__viewport" data-flow-width="standard" tabindex="0" role="region" aria-labelledby="cube-flow-si协议分布测量程序流程-diagram-02-caption">
+<svg class="flow-svg" viewBox="0 0 1120 860" role="img" aria-label="CPU3 SI协议触发和调度流程" aria-labelledby="cube-flow-si协议分布测量程序流程-diagram-02-title cube-flow-si协议分布测量程序流程-diagram-02-desc"><title id="cube-flow-si协议分布测量程序流程-diagram-02-title">CPU3 SI协议触发和调度流程</title><desc id="cube-flow-si协议分布测量程序流程-diagram-02-desc">CPU3 主循环仅在自动 profile 已使能、RTC 可读、周期分钟到点、同一分钟未重复且不处于重试间隔时发起请求；PLC 写 FC05 00004=FF00 或屏幕确认也进入同一入口。有效触发先锁存时间再下发 CMD_SI_PROFILE；未到点或写 OFF 不下发，FC06 参数仅在地址和值域合法时写入 CPU2 或 CPU3，否则返回 Modbus 异常。</desc>
 <defs><marker id="arrow2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10z" fill="#61758e"/></marker><marker id="arrow2r" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10z" fill="#b84a55"/></marker></defs>
 <rect class="node cpu3" x="75" y="60" width="270" height="82" rx="8"/><text class="nt" x="210" y="92"><tspan x="210">主循环先跑 SI 周期任务</tspan><tspan class="ns" x="210" dy="22">si_modbus_periodic_task()</tspan></text>
 <path class="node neutral" d="M210 190 L365 245 L210 300 L55 245 Z"/><text class="nt" x="210" y="241"><tspan x="210">自动使能且到达</tspan><tspan x="210" dy="20">周期分钟？</tspan></text>
@@ -215,7 +218,7 @@ li{margin:4px 0}
 <path class="edge-red" d="M410 245 C335 390 335 595 230 690" marker-end="url(#arrow2r)"/><text class="label" x="365" y="365">否</text>
 <path class="edge-red" d="M1075 245 C1115 410 1030 595 890 690" marker-end="url(#arrow2r)"/><text class="label" x="1038" y="365">否</text>
 </svg>
-</div>
+</div></figure>
 <h3>4.1 手动 profile</h3>
 <ol>
 <li>手动入口包括外部主机通过 <code>FC05</code> 写 <code>00004</code>，以及 CPU3 屏幕在密度分布测量菜单中选择 <code>SI Profile</code>。</li>
@@ -244,8 +247,8 @@ li{margin:4px 0}
 <section id="cpu2-exec">
 <h2>5. CPU2 独立 profile 执行流程</h2>
 <p class="lead">CPU2 的 SI profile 不再复用普通分布测量参数，也不走 Wartsila 测后探底流程。它读取独立 SI 参数，先确定底部采样运动目标，再按底部点、绝对首点、步距和罐高生成候选点；不预先找液位，逐点采样时遇到液面以上点即停止且不写入该点。对外点阵中 Point0 的位置字段固定写 0，Point1 的位置字段固定等于 40001。profile 成功锁存后，CPU2 会排队 CMD_FIND_OIL，在下一轮主循环恢复液位跟随。</p>
-<div class="flow-wrap">
-<svg class="flow-svg" viewBox="0 0 1120 1400" role="img" aria-label="CPU2 SI profile 执行流程">
+<figure class="cube-flow-figure"><figcaption id="cube-flow-si协议分布测量程序流程-diagram-03-caption">CPU2 SI profile 执行流程</figcaption><div class="flow-wrap cube-flow__viewport" data-flow-width="standard" tabindex="0" role="region" aria-labelledby="cube-flow-si协议分布测量程序流程-diagram-03-caption">
+<svg class="flow-svg" viewBox="0 0 1120 1400" role="img" aria-label="CPU2 SI profile 执行流程" aria-labelledby="cube-flow-si协议分布测量程序流程-diagram-03-title cube-flow-si协议分布测量程序流程-diagram-03-desc"><title id="cube-flow-si协议分布测量程序流程-diagram-03-title">CPU2 SI profile 执行流程</title><desc id="cube-flow-si协议分布测量程序流程-diagram-03-desc">CPU2 主循环取走 CMD_SI_PROFILE 后执行 MeasureStart 并读取 SI 独立参数；依据首次运行、旧底有效性和探底间隔决定执行 SearchBottom 或复用旧底，再生成底部点及绝对首点、步距候选点，不预先执行 SearchOilLevel。逐点移动、悬停并采样，液面以上点不写入；生成或采样失败置阻塞标志并 SET_ERROR，成功则锁存 SI 点阵和完成计数并排队 CMD_FIND_OIL。</desc>
 <defs><marker id="arrow3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10z" fill="#61758e"/></marker><marker id="arrow3r" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10z" fill="#b84a55"/></marker></defs>
 <rect class="node cpu2" x="390" y="45" width="340" height="76" rx="8"/><text class="nt" x="560" y="75"><tspan x="560">CPU2 主循环取到命令 20</tspan><tspan class="ns" x="560" dy="22">App_ExecuteMeasureCommand()</tspan></text>
 <rect class="node cpu2" x="390" y="170" width="340" height="76" rx="8"/><text class="nt" x="560" y="200"><tspan x="560">测量公共初始化</tspan><tspan class="ns" x="560" dy="22">MeasureStart() 清辅助状态</tspan></text>
@@ -273,7 +276,7 @@ li{margin:4px 0}
 <path class="edge-red" d="M730 953 C840 970 895 1010 920 1040" marker-end="url(#arrow3r)"/>
 <path class="edge-red" d="M730 1086 L790 1086" marker-end="url(#arrow3r)"/>
 </svg>
-</div>
+</div></figure>
 <h3>5.1 公共命令入口</h3>
 <ol>
 <li>CPU2 主循环优先处理原始串口命令，其次处理 <code>g_deviceParams.command</code> 中已挂起的正式命令。</li>
@@ -282,8 +285,8 @@ li{margin:4px 0}
 <li>命令分发遇到 <code>CMD_SI_PROFILE</code> 后进入 <code>CMD_SiProfile()</code>。</li>
 </ol>
 <h3>5.2 探底策略</h3>
-<table>
-<thead><tr><th>判断条件</th><th>动作</th><th>状态影响</th></tr></thead>
+<table><caption>探底策略</caption>
+<thead><tr><th scope="col">判断条件</th><th scope="col">动作</th><th scope="col">状态影响</th></tr></thead>
 <tbody>
 <tr><td>首次 profile</td><td>必须尝试 <code>SearchBottom()</code></td><td>成功后记录 <code>s_si_profile_bottom_position_01mm</code>，清首次标志。</td></tr>
 <tr><td>没有旧底部参考</td><td>必须尝试探底</td><td>成功后置 <code>bottom_reference_valid=1</code>。</td></tr>
@@ -343,8 +346,8 @@ li{margin:4px 0}
 </div>
 </div>
 <h3>6.3 SI 输入寄存器输出</h3>
-<table>
-<thead><tr><th>SI 地址</th><th>当前输出来源</th><th>注意事项</th></tr></thead>
+<table><caption>SI 输入寄存器输出</caption>
+<thead><tr><th scope="col">SI 地址</th><th scope="col">当前输出来源</th><th scope="col">注意事项</th></tr></thead>
 <tbody>
 <tr><td><code>30001</code></td><td>当前探头位置，来自 CPU2 <code>sensor_position</code></td><td>负值按 0 输出，单位 mm。</td></tr>
 <tr><td><code>30002</code></td><td>当前温度，来自 CPU2 <code>debug_data.temperature</code></td><td>无效温度输出 -200.00°C，对应寄存器 <code>0xB1E0</code>。</td></tr>
@@ -357,8 +360,8 @@ li{margin:4px 0}
 </tbody>
 </table>
 <h3>6.4 SI 离散输入输出</h3>
-<table>
-<thead><tr><th>SI 状态</th><th>当前映射</th><th>说明</th></tr></thead>
+<table><caption>SI 离散输入输出</caption>
+<thead><tr><th scope="col">SI 状态</th><th scope="col">当前映射</th><th scope="col">说明</th></tr></thead>
 <tbody>
 <tr><td><code>10001 Bottom Reference</code></td><td>CPU2 <code>bottom_reference_valid</code></td><td>探底成功或有效回退罐高后置位。</td></tr>
 <tr><td><code>10002 Lower Level Sensor</code></td><td>固定为液体中</td><td>当前没有独立下传感器硬件来源。</td></tr>
@@ -383,8 +386,8 @@ li{margin:4px 0}
 <article class="card"><strong>逐点测量失败</strong><p>电机移动失败、稳定采样窗口异常、读数失败都会向上返回错误，CPU2 设置错误并阻止本轮 profile 完成。</p></article>
 </div>
 <h3>7.1 成功和失败的判定差异</h3>
-<table>
-<thead><tr><th>场景</th><th>CPU2 行为</th><th>CPU3 对外表现</th></tr></thead>
+<table><caption>成功和失败的判定差异</caption>
+<thead><tr><th scope="col">场景</th><th scope="col">CPU2 行为</th><th scope="col">CPU3 对外表现</th></tr></thead>
 <tbody>
 <tr><td>profile 成功</td><td>写点阵，置 <code>profile_complete_latched=1</code>，<code>counter+1</code>，状态 <code>STATE_SPREADPOINTOVER</code></td><td><code>10005=1</code>，<code>30006</code> 有点数，<code>30021~</code> 输出点阵。</td></tr>
 <tr><td>命令切换打断</td><td>直接返回，不 <code>SET_ERROR</code>，不锁存完成</td><td>外部读到的点阵仍取决于上一轮完成锁存；本轮没有新的完成计数。</td></tr>
@@ -411,24 +414,26 @@ li{margin:4px 0}
 <section id="source">
 <h2>9. 关键源码索引</h2>
 <div class="source-grid">
-<article class="source-card"><h4>CPU3 外部协议分发</h4><p><code>LTD_DISPLAY_CPU3/Application/app_main.c:297</code></p><p>SI 端口处理入口，转交 <code>si_modbus_process_for_dispatch()</code>。</p></article>
-<article class="source-card"><h4>CPU3 主循环自动调度</h4><p><code>LTD_DISPLAY_CPU3/Application/app_main.c:399</code></p><p>每轮主循环先调用 <code>si_modbus_periodic_task()</code>。</p></article>
-<article class="source-card"><h4>CPU3 屏幕触发</h4><p><code>LTD_DISPLAY_CPU3/Application/display/display_tankopera.c:3041,4263</code></p><p>密度分布测量菜单新增 <code>SI Profile</code>，确认后由 <code>cmd_nopara_process()</code> 映射为 <code>CMD_SI_PROFILE</code> 并调用 <code>si_profile_request_start()</code>。</p></article>
-<article class="source-card"><h4>SI 地址和功能码</h4><p><code>LTD_DISPLAY_CPU3/Communication/external/si_modbus/si_modbus_slave.c:19</code></p><p>定义 FC01/02/03/04/05/06 和线圈、离散输入、保持寄存器、输入寄存器 offset。</p></article>
-<article class="source-card"><h4>SI 快照刷新</h4><p><code>LTD_DISPLAY_CPU3/Communication/external/si_modbus/si_modbus_slave.c:1153</code></p><p>处理请求前刷新线圈、保持寄存器、离散输入和输入寄存器。</p></article>
-<article class="source-card"><h4>Profile 线圈触发</h4><p><code>LTD_DISPLAY_CPU3/Communication/external/si_modbus/si_modbus_slave.c:394,948</code></p><p>FC05 写线圈后，Profile 写 ON 会调用 <code>si_profile_request_start()</code>，锁存时间并下发 <code>CMD_SI_PROFILE</code>。</p></article>
-<article class="source-card"><h4>保持寄存器写入</h4><p><code>LTD_DISPLAY_CPU3/Communication/external/si_modbus/si_modbus_slave.c:909</code></p><p><code>40001~40003</code> 写 CPU2 profile 参数，<code>40010~40023</code> 写 CPU3 本机参数。</p></article>
-<article class="source-card"><h4>CPU2 命令枚举</h4><p><code>LTD_MAIN_CPU2/Services/ParamStorage/system_parameter.h:225</code></p><p><code>CMD_SI_PROFILE = 20</code>，最大 profile 点数 <code>MAX_MEASUREMENT_POINTS = 200</code>。</p></article>
-<article class="source-card"><h4>CPU2 主循环命令执行</h4><p><code>LTD_MAIN_CPU2/Application/Src/app_main.c:197</code></p><p>取走 <code>g_deviceParams.command</code> 后调用 <code>ProcessMeasureCmd()</code>。</p></article>
-<article class="source-card"><h4>CPU2 命令分发</h4><p><code>LTD_MAIN_CPU2/Application/Src/measure.c:172</code></p><p><code>CMD_SI_PROFILE</code> 分发到 <code>CMD_SiProfile()</code>。</p></article>
-<article class="source-card"><h4>CPU2 SI profile 执行</h4><p><code>LTD_MAIN_CPU2/Application/Src/measure_density.c:1266</code></p><p>读取 SI profile 参数、探底、生成候选点、逐点测量并判定液面以上点、发布完成态。</p></article>
-<article class="source-card"><h4>CPU2 点位生成</h4><p><code>LTD_MAIN_CPU2/Application/Src/measure_density.c:900</code></p><p>第 0 个运动目标为底部，Point0 对外位置字段固定 0；后续候选点按绝对 first 和 increment 上行到罐高或 200 点上限，首点不因实际底部更高而被跳过。</p></article>
-<article class="source-card"><h4>CPU2 结果发布</h4><p><code>LTD_MAIN_CPU2/Services/Modbus/dataanalysis_modbus.c:554</code></p><p>写 SI 辅助状态、分布平均值、点数和 200 点点阵到输入寄存器。</p></article>
-<article class="source-card"><h4>CPU3 结果读回</h4><p><code>LTD_DISPLAY_CPU3/Communication/internal/main_board_modbus/dataanalysis_modbus.c:551</code></p><p>CPU3 从 CPU2 输入寄存器恢复 SI 状态、完成锁存、完成计数和点阵。</p></article>
-<article class="source-card"><h4>协议映射说明</h4><p><code>docs/01_协议与寄存器/SI协议适配/02_协议映射/SI协议兼容映射表.md</code></p><p>维护 SI协议地址表、缩放、无效值和当前实现口径。</p></article>
+<article class="source-card"><h3>CPU3 外部协议分发</h3><p><code>LTD_DISPLAY_CPU3/Application/app_main.c:297</code></p><p>SI 端口处理入口，转交 <code>si_modbus_process_for_dispatch()</code>。</p></article>
+<article class="source-card"><h3>CPU3 主循环自动调度</h3><p><code>LTD_DISPLAY_CPU3/Application/app_main.c:399</code></p><p>每轮主循环先调用 <code>si_modbus_periodic_task()</code>。</p></article>
+<article class="source-card"><h3>CPU3 屏幕触发</h3><p><code>LTD_DISPLAY_CPU3/Application/display/display_tankopera.c:3041,4263</code></p><p>密度分布测量菜单新增 <code>SI Profile</code>，确认后由 <code>cmd_nopara_process()</code> 映射为 <code>CMD_SI_PROFILE</code> 并调用 <code>si_profile_request_start()</code>。</p></article>
+<article class="source-card"><h3>SI 地址和功能码</h3><p><code>LTD_DISPLAY_CPU3/Communication/external/si_modbus/si_modbus_slave.c:19</code></p><p>定义 FC01/02/03/04/05/06 和线圈、离散输入、保持寄存器、输入寄存器 offset。</p></article>
+<article class="source-card"><h3>SI 快照刷新</h3><p><code>LTD_DISPLAY_CPU3/Communication/external/si_modbus/si_modbus_slave.c:1153</code></p><p>处理请求前刷新线圈、保持寄存器、离散输入和输入寄存器。</p></article>
+<article class="source-card"><h3>Profile 线圈触发</h3><p><code>LTD_DISPLAY_CPU3/Communication/external/si_modbus/si_modbus_slave.c:394,948</code></p><p>FC05 写线圈后，Profile 写 ON 会调用 <code>si_profile_request_start()</code>，锁存时间并下发 <code>CMD_SI_PROFILE</code>。</p></article>
+<article class="source-card"><h3>保持寄存器写入</h3><p><code>LTD_DISPLAY_CPU3/Communication/external/si_modbus/si_modbus_slave.c:909</code></p><p><code>40001~40003</code> 写 CPU2 profile 参数，<code>40010~40023</code> 写 CPU3 本机参数。</p></article>
+<article class="source-card"><h3>CPU2 命令枚举</h3><p><code>LTD_MAIN_CPU2/Services/ParamStorage/system_parameter.h:225</code></p><p><code>CMD_SI_PROFILE = 20</code>，最大 profile 点数 <code>MAX_MEASUREMENT_POINTS = 200</code>。</p></article>
+<article class="source-card"><h3>CPU2 主循环命令执行</h3><p><code>LTD_MAIN_CPU2/Application/Src/app_main.c:197</code></p><p>取走 <code>g_deviceParams.command</code> 后调用 <code>ProcessMeasureCmd()</code>。</p></article>
+<article class="source-card"><h3>CPU2 命令分发</h3><p><code>LTD_MAIN_CPU2/Application/Src/measure.c:172</code></p><p><code>CMD_SI_PROFILE</code> 分发到 <code>CMD_SiProfile()</code>。</p></article>
+<article class="source-card"><h3>CPU2 SI profile 执行</h3><p><code>LTD_MAIN_CPU2/Application/Src/measure_density.c:1266</code></p><p>读取 SI profile 参数、探底、生成候选点、逐点测量并判定液面以上点、发布完成态。</p></article>
+<article class="source-card"><h3>CPU2 点位生成</h3><p><code>LTD_MAIN_CPU2/Application/Src/measure_density.c:900</code></p><p>第 0 个运动目标为底部，Point0 对外位置字段固定 0；后续候选点按绝对 first 和 increment 上行到罐高或 200 点上限，首点不因实际底部更高而被跳过。</p></article>
+<article class="source-card"><h3>CPU2 结果发布</h3><p><code>LTD_MAIN_CPU2/Services/Modbus/dataanalysis_modbus.c:554</code></p><p>写 SI 辅助状态、分布平均值、点数和 200 点点阵到输入寄存器。</p></article>
+<article class="source-card"><h3>CPU3 结果读回</h3><p><code>LTD_DISPLAY_CPU3/Communication/internal/main_board_modbus/dataanalysis_modbus.c:551</code></p><p>CPU3 从 CPU2 输入寄存器恢复 SI 状态、完成锁存、完成计数和点阵。</p></article>
+<article class="source-card"><h3>协议映射说明</h3><p><code>docs/01_协议与寄存器/SI协议适配/02_协议映射/SI协议兼容映射表.md</code></p><p>维护 SI协议地址表、缩放、无效值和当前实现口径。</p></article>
 </div>
 </section>
 
+
+<!-- CUBE_EMBED_END -->
 </div>
 </body>
 </html>
