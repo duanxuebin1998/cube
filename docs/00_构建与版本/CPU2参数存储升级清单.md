@@ -62,6 +62,7 @@
 | CPU2 `V1.21.4.0` | 不清参数 | 修复编码轮模式速度补偿参考长度；`DEVICE_PARAM_VERSION`、`DeviceParameters` 大小、元信息和 CRC 范围不变，旧 FRAM 参数保留 |
 | CPU2 `V1.21.5.0` | 不清参数 | 修复 AD5421 断环重接恢复与 AO 运行态错误处理；`DEVICE_PARAM_VERSION`、`DeviceParameters` 大小、元信息和 CRC 范围不变，旧 FRAM 参数保留 |
 | CPU2 `V1.21.6.0` | 不清参数 | 修复 DSM `CN` 编号响应解析并增加 `uint32_t` 溢出保护，同时清理未用代码；`DEVICE_PARAM_VERSION`、`DeviceParameters` 大小、元信息和 CRC 范围不变，旧 FRAM 参数保留 |
+| CPU2 `V1.22.0.0` | 不清参数 | 新增 USART1 串口严格收帧、命令解析、查询和停止入口；`DEVICE_PARAM_VERSION=3`、`DeviceParameters` 大小、元信息和 CRC 范围不变，旧 FRAM 参数保留 |
 
 ## 后续版本文档填写要求
 

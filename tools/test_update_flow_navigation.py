@@ -6,6 +6,7 @@ from __future__ import annotations
 import codecs
 import importlib.util
 import io
+import json
 import os
 import sys
 import tempfile
@@ -29,6 +30,142 @@ def load_module():
 
 
 class UpdateFlowNavigationTests(unittest.TestCase):
+    def test_route_manifest_is_the_only_cross_cpu_route_source(self) -> None:
+        module = load_module()
+
+        manifest = module.load_route_manifest()
+        routes = manifest["routes"]
+        self.assertEqual(2, manifest["schemaVersion"])
+        self.assertEqual(
+            list(module.CLOSURE_ROLE_IDS),
+            [role["id"] for role in manifest["closureRoles"]],
+        )
+        self.assertEqual(
+            ["oil", "water", "density", "readparams", "ao", "param", "fault", "external"],
+            [route["id"] for route in routes],
+        )
+        self.assertTrue(
+            all(sum(step["map"] is True for step in route["steps"]) == 4 for route in routes)
+        )
+        self.assertTrue(
+            all(set(route["closure"]) == set(module.CLOSURE_ROLE_IDS) for route in routes)
+        )
+        self.assertFalse(hasattr(module, "_INLINE_ROUTES"))
+
+    def test_route_manifest_rejects_unknown_formal_page(self) -> None:
+        module = load_module()
+        manifest = json.loads(json.dumps(module.ROUTE_MANIFEST_DATA, ensure_ascii=False))
+        manifest["routes"][0]["steps"][0]["pageKey"] = "missing_page"
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "routes.json"
+            path.write_text(json.dumps(manifest, ensure_ascii=False), encoding="utf-8")
+            with self.assertRaisesRegex(RuntimeError, "unknown pageKey"):
+                module.load_route_manifest(path)
+
+    def test_route_manifest_rejects_missing_closure_role(self) -> None:
+        module = load_module()
+        manifest = json.loads(json.dumps(module.ROUTE_MANIFEST_DATA, ensure_ascii=False))
+        del manifest["routes"][0]["closure"]["exception"]
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "routes.json"
+            path.write_text(json.dumps(manifest, ensure_ascii=False), encoding="utf-8")
+            with self.assertRaisesRegex(RuntimeError, "all six required roles"):
+                module.load_route_manifest(path)
+
+    def test_route_manifest_rejects_closure_page_outside_formal_steps(self) -> None:
+        module = load_module()
+        manifest = json.loads(json.dumps(module.ROUTE_MANIFEST_DATA, ensure_ascii=False))
+        manifest["routes"][0]["closure"]["exception"] = ["cpu2_08"]
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "routes.json"
+            path.write_text(json.dumps(manifest, ensure_ascii=False), encoding="utf-8")
+            with self.assertRaisesRegex(RuntimeError, "outside formal steps"):
+                module.load_route_manifest(path)
+
+    def test_evidence_manifest_covers_every_core_route_page(self) -> None:
+        module = load_module()
+
+        manifest = module.load_evidence_manifest()
+        core_keys = {
+            step["pageKey"]
+            for route in module.ROUTES
+            for step in route["steps"]
+            if step.get("formal") is True
+        }
+        self.assertEqual(core_keys, {page["pageKey"] for page in manifest["pages"]})
+        self.assertEqual("V1.22.0.0", manifest["firmwareBaseline"]["cpu2"]["version"])
+        self.assertEqual("V1.21.0.0", manifest["firmwareBaseline"]["cpu3"]["version"])
+
+    def test_evidence_manifest_rejects_missing_core_page(self) -> None:
+        module = load_module()
+        manifest = json.loads(json.dumps(module.EVIDENCE_MANIFEST_DATA, ensure_ascii=False))
+        manifest["pages"] = manifest["pages"][1:]
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "evidence.json"
+            path.write_text(json.dumps(manifest, ensure_ascii=False), encoding="utf-8")
+            with self.assertRaisesRegex(RuntimeError, "coverage must exactly match"):
+                module.load_evidence_manifest(path)
+
+    def test_evidence_manifest_rejects_stale_firmware_baseline(self) -> None:
+        module = load_module()
+        manifest = json.loads(json.dumps(module.EVIDENCE_MANIFEST_DATA, ensure_ascii=False))
+        manifest["firmwareBaseline"]["cpu2"]["version"] = "V1.21.5.0"
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "evidence.json"
+            path.write_text(json.dumps(manifest, ensure_ascii=False), encoding="utf-8")
+            with self.assertRaisesRegex(RuntimeError, "baseline is stale"):
+                module.load_evidence_manifest(path)
+
+    def test_evidence_manifest_rejects_missing_source_file(self) -> None:
+        module = load_module()
+        manifest = json.loads(json.dumps(module.EVIDENCE_MANIFEST_DATA, ensure_ascii=False))
+        manifest["pages"][0]["sourcePaths"] = ["LTD_MAIN_CPU2/Application/Src/not-found.c"]
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "evidence.json"
+            path.write_text(json.dumps(manifest, ensure_ascii=False), encoding="utf-8")
+            with self.assertRaisesRegex(RuntimeError, "does not exist"):
+                module.load_evidence_manifest(path)
+
+    def test_flow_governance_distinguishes_risk_from_intentional_reuse(self) -> None:
+        module = load_module()
+
+        report = module.analyze_flow_governance()
+        self.assertEqual(18, report["metrics"]["corePages"])
+        self.assertEqual(48, report["metrics"]["closureRoles"])
+        self.assertEqual(0, report["metrics"]["blockingIssues"])
+        self.assertEqual(0, report["metrics"]["warnings"])
+        self.assertEqual(2, len(report["intentionalReuse"]))
+
+        routes = json.loads(json.dumps(module.ROUTES, ensure_ascii=False))
+        routes[0]["steps"].append(dict(routes[0]["steps"][0]))
+        duplicate_report = module.analyze_flow_governance(routes=routes)
+        self.assertTrue(
+            any(issue["rule"] == "duplicate-step" for issue in duplicate_report["issues"])
+        )
+
+        relations = json.loads(json.dumps(module.RELATIONS, ensure_ascii=False))
+        relations["cpu2_02"]["upstream"] = []
+        relation_report = module.analyze_flow_governance(relations=relations)
+        self.assertTrue(
+            any(issue["rule"] == "relation-gap" for issue in relation_report["issues"])
+        )
+
+    def test_core_page_navigation_contains_generated_evidence_head(self) -> None:
+        module = load_module()
+
+        output = module.make_relation_block("cpu2_02")
+
+        self.assertIn('data-evidence-page="cpu2_02"', output)
+        self.assertIn("CPU2 V1.22.0.0 / CPU3 V1.21.0.0", output)
+        self.assertIn("LTD_MAIN_CPU2/Application/Src/measure.c", output)
+        self.assertIn("当前版本验证", output)
+
     def test_legacy_svg_label_conversion_is_idempotent(self) -> None:
         module = load_module()
         source = (
@@ -40,14 +177,47 @@ class UpdateFlowNavigationTests(unittest.TestCase):
         converted = module.replace_legacy_svg_labels(source)
         converted = module.normalize_duplicate_svg_references(converted)
 
-        self.assertEqual(1, converted.count('aria-labelledby="title desc"'))
+        self.assertEqual(1, converted.count('aria-hidden="true"'))
+        self.assertEqual(1, converted.count('focusable="false"'))
+        self.assertNotIn('role="img"', converted)
         self.assertNotIn("aria-label=", converted)
+        self.assertNotIn("aria-labelledby=", converted)
         self.assertNotIn("aria-describedby=", converted)
         self.assertEqual(converted, module.replace_legacy_svg_labels(converted))
         self.assertEqual(
             converted,
             module.normalize_duplicate_svg_references(converted),
         )
+
+    def test_cross_route_exposes_summary_on_viewport_and_hides_svg_canvas(self) -> None:
+        module = load_module()
+
+        output = module.make_cross_route()
+
+        self.assertIn(
+            'aria-describedby="cube-flow-跨cpu业务链路-diagram-01-desc"',
+            output,
+        )
+        self.assertIn('aria-hidden="true" focusable="false"', output)
+        self.assertNotIn('role="img"', output)
+        self.assertIn(
+            '<script src="assets/网站嵌入增强.js"></script>',
+            output,
+        )
+        self.assertEqual(8, output.count('class="route-closure"'))
+        self.assertEqual(48, output.count('class="route-closure__item"'))
+        self.assertIn("异常出口", output)
+        self.assertIn("验证证据", output)
+
+    def test_generated_navigation_pages_share_the_standalone_embed_controller(self) -> None:
+        module = load_module()
+
+        for output in (module.make_global_index(), module.make_cross_route()):
+            self.assertEqual(1, output.count(module.EMBED_SCRIPT_NAME))
+            self.assertLess(
+                output.index(module.EMBED_SCRIPT_NAME),
+                output.index("</body>"),
+            )
 
     def test_collapses_matching_duplicate_svg_references(self) -> None:
         module = load_module()

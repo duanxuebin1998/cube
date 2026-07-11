@@ -254,6 +254,34 @@ body.cube-flow-page > header .meta > div strong {
   line-height: 1.45;
 }
 
+.cube-flow-page .cross-flow-evidence {
+  gap: 0.55rem;
+  margin-bottom: 0.9rem;
+  padding: 0.65rem;
+  border-color: var(--cube-flow-line);
+  border-radius: var(--cube-flow-radius-sm);
+  background: var(--cube-flow-surface-muted);
+}
+
+.cube-flow-page .cross-flow-evidence__item {
+  padding: 0.6rem 0.7rem;
+  border-left-color: var(--cube-flow-accent);
+  background: var(--cube-flow-surface);
+}
+
+.cube-flow-page .cross-flow-evidence__item span {
+  color: var(--cube-flow-muted);
+}
+
+.cube-flow-page .cross-flow-evidence__item strong,
+.cube-flow-page .cross-flow-evidence__links {
+  color: var(--cube-flow-ink);
+}
+
+.cube-flow-page .cross-flow-evidence__links a {
+  color: var(--cube-flow-accent-strong);
+}
+
 .cube-flow-page .card:hover,
 .cube-flow-page .cross-flow-nav__card:hover {
   border-color: var(--cube-flow-line-strong);
@@ -333,20 +361,24 @@ body.cube-flow-page > header .meta > div strong {
 
 .cube-flow-page .svg-flow-wrap[data-flow-width]::-webkit-scrollbar,
 .cube-flow-page .cube-flow__viewport::-webkit-scrollbar,
-.cube-flow-page table::-webkit-scrollbar {
+.cube-flow-page .cube-flow-table__viewport::-webkit-scrollbar {
   height: 10px;
 }
 
 .cube-flow-page .svg-flow-wrap[data-flow-width]::-webkit-scrollbar-thumb,
 .cube-flow-page .cube-flow__viewport::-webkit-scrollbar-thumb,
-.cube-flow-page table::-webkit-scrollbar-thumb {
+.cube-flow-page .cube-flow-table__viewport::-webkit-scrollbar-thumb {
   border: 3px solid #fff;
   border-radius: 999px;
   background: #647a73;
 }
 
 .cube-flow-page .svg-flow-wrap[data-flow-width]:focus-visible,
-.cube-flow-page .cube-flow__viewport:focus-visible,
+.cube-flow-page .cube-flow__viewport:focus-visible {
+  outline: 3px solid #087e69;
+  outline-offset: -3px;
+}
+
 .cube-flow-page a:focus-visible,
 .cube-flow-page button:focus-visible,
 .cube-flow-page input:focus-visible,
@@ -355,8 +387,8 @@ body.cube-flow-page > header .meta > div strong {
   outline-offset: 2px;
 }
 
-.cube-flow-page .svg-flow-wrap[data-flow-width] > svg[role="img"],
-.cube-flow-page .cube-flow__viewport > svg[role="img"] {
+.cube-flow-page .svg-flow-wrap[data-flow-width] > svg[aria-hidden="true"],
+.cube-flow-page .cube-flow__viewport > svg[aria-hidden="true"] {
   display: block !important;
   width: 100% !important;
   max-width: none !important;
@@ -364,18 +396,18 @@ body.cube-flow-page > header .meta > div strong {
   margin-inline: auto;
 }
 
-.cube-flow-page .svg-flow-wrap[data-flow-width="compact"] > svg[role="img"],
-.cube-flow-page .cube-flow__viewport[data-flow-width="compact"] > svg[role="img"] {
+.cube-flow-page .svg-flow-wrap[data-flow-width="compact"] > svg[aria-hidden="true"],
+.cube-flow-page .cube-flow__viewport[data-flow-width="compact"] > svg[aria-hidden="true"] {
   min-width: 44rem !important;
 }
 
-.cube-flow-page .svg-flow-wrap[data-flow-width="standard"] > svg[role="img"],
-.cube-flow-page .cube-flow__viewport[data-flow-width="standard"] > svg[role="img"] {
+.cube-flow-page .svg-flow-wrap[data-flow-width="standard"] > svg[aria-hidden="true"],
+.cube-flow-page .cube-flow__viewport[data-flow-width="standard"] > svg[aria-hidden="true"] {
   min-width: 58rem !important;
 }
 
-.cube-flow-page .svg-flow-wrap[data-flow-width="wide"] > svg[role="img"],
-.cube-flow-page .cube-flow__viewport[data-flow-width="wide"] > svg[role="img"] {
+.cube-flow-page .svg-flow-wrap[data-flow-width="wide"] > svg[aria-hidden="true"],
+.cube-flow-page .cube-flow__viewport[data-flow-width="wide"] > svg[aria-hidden="true"] {
   min-width: 70rem !important;
 }
 
@@ -396,17 +428,54 @@ body.cube-flow-page > header .meta > div strong {
   stroke-width: 4px;
 }
 
-.cube-flow-page table {
-  display: block;
-  overflow-x: auto;
+.cube-flow-page .cube-flow-table {
+  position: relative;
   width: 100%;
   max-width: 100%;
-  border-collapse: separate;
-  border-spacing: 0;
+  margin: 1rem 0;
+  overflow: hidden;
   border: 1px solid var(--cube-flow-line);
   border-radius: var(--cube-flow-radius-sm);
   background: var(--cube-flow-surface);
+}
+
+.cube-flow-page .cube-flow-table__hint {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.cube-flow-page .cube-flow-table__viewport {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
   scrollbar-gutter: stable;
+  -webkit-overflow-scrolling: touch;
+}
+
+.cube-flow-page .cube-flow-table__viewport:focus-visible {
+  outline: 3px solid var(--cube-flow-accent);
+  outline-offset: -3px;
+}
+
+.cube-flow-page table {
+  display: table;
+  width: 100%;
+  min-width: 42rem;
+  max-width: none;
+  margin: 0;
+  border-collapse: separate;
+  border-spacing: 0;
+  table-layout: auto;
+  border: 0;
+  border-radius: 0;
+  background: var(--cube-flow-surface);
 }
 
 .cube-flow-page table > caption {
@@ -429,7 +498,16 @@ body.cube-flow-page > header .meta > div strong {
 
 .cube-flow-page th,
 .cube-flow-page td {
+  min-width: 7rem;
   border-color: var(--cube-flow-line);
+}
+
+.cube-flow-page :is(th, td):first-child {
+  min-width: 10rem;
+}
+
+.cube-flow-page :is(th, td):last-child {
+  min-width: 14rem;
 }
 
 .cube-flow-page details {
@@ -466,7 +544,9 @@ body.cube-flow-page > header .meta > div strong {
     flex-wrap: wrap;
   }
 
-  .cube-flow-page .cube-flow-figure > figcaption::after {
+  .cube-flow-page
+    .cube-flow-figure[data-cube-flow-overflow="true"]
+    > figcaption::after {
     display: inline-flex;
   }
 }
@@ -497,6 +577,27 @@ body.cube-flow-page > header .meta > div strong {
     padding: 1rem;
   }
 
+  .cube-flow-page
+    .cube-flow-table[data-cube-table-overflow="true"]
+    > .cube-flow-table__hint {
+    position: static;
+    display: block;
+    width: auto;
+    height: auto;
+    margin: 0;
+    padding: 0.55rem 0.75rem;
+    overflow: visible;
+    clip: auto;
+    clip-path: none;
+    border-bottom: 1px solid var(--cube-flow-line);
+    background: var(--cube-flow-surface-muted);
+    color: var(--cube-flow-muted);
+    font-size: 0.78rem;
+    font-weight: 700;
+    line-height: 1.4;
+    white-space: normal;
+  }
+
   .cube-flow-page .meta-grid,
   .cube-flow-page .metric-strip,
   .cube-flow-page .grid,
@@ -506,6 +607,7 @@ body.cube-flow-page > header .meta > div strong {
   .cube-flow-page .func-grid,
   .cube-flow-page .source-grid,
   .cube-flow-page .flow-evidence,
+  .cube-flow-page .cross-flow-evidence,
   .cube-flow-page .cross-flow-nav__grid {
     grid-template-columns: 1fr;
   }
@@ -520,6 +622,75 @@ body.cube-flow-page > header .meta > div strong {
     transition-duration: 0.01ms !important;
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
+  }
+}
+
+@media (forced-colors: active) {
+  .cube-flow-page .cube-flow-figure,
+  .cube-flow-page .cube-flow-figure > figcaption,
+  .cube-flow-page .cube-flow-figure > figcaption::after {
+    border-color: CanvasText;
+  }
+
+  .cube-flow-page .cube-flow-figure > figcaption::after {
+    color: ButtonText;
+  }
+
+  .cube-flow-page .cube-flow-table,
+  .cube-flow-page .cube-flow-table__hint {
+    border-color: CanvasText;
+  }
+
+  .cube-flow-page .cube-flow-table__hint,
+  .cube-flow-page table,
+  .cube-flow-page table :is(caption, th, td) {
+    border-color: CanvasText;
+    background: Canvas;
+    color: CanvasText;
+  }
+
+  .cube-flow-page .svg-flow-wrap[data-flow-width]:focus-visible,
+  .cube-flow-page .cube-flow__viewport:focus-visible,
+  .cube-flow-page .cube-flow-table__viewport:focus-visible,
+  .cube-flow-page a:focus-visible,
+  .cube-flow-page button:focus-visible,
+  .cube-flow-page input:focus-visible,
+  .cube-flow-page summary:focus-visible {
+    outline-color: Highlight;
+  }
+
+  .cube-flow-page .svg-flow-wrap[data-flow-width],
+  .cube-flow-page .cube-flow__viewport {
+    scrollbar-color: ButtonText Canvas;
+  }
+
+  .cube-flow-page .cube-flow-table__viewport {
+    scrollbar-color: ButtonText Canvas;
+  }
+
+  .cube-flow-page .svg-flow-wrap[data-flow-width] > svg :is(rect, circle, ellipse, polygon),
+  .cube-flow-page .cube-flow__viewport > svg :is(rect, circle, ellipse, polygon),
+  .cube-flow-page .svg-flow-wrap[data-flow-width] > svg :is(.node-shape, .node > path),
+  .cube-flow-page .cube-flow__viewport > svg :is(.node-shape, .node > path) {
+    fill: Canvas !important;
+    stroke: CanvasText !important;
+  }
+
+  .cube-flow-page .svg-flow-wrap[data-flow-width] > svg text,
+  .cube-flow-page .cube-flow__viewport > svg text {
+    fill: CanvasText !important;
+  }
+
+  .cube-flow-page .svg-flow-wrap[data-flow-width] > svg
+    :is(.edge, line, polyline, path[marker-start], path[marker-mid], path[marker-end]),
+  .cube-flow-page .cube-flow__viewport > svg
+    :is(.edge, line, polyline, path[marker-start], path[marker-mid], path[marker-end]) {
+    stroke: CanvasText !important;
+  }
+
+  .cube-flow-page .svg-flow-wrap[data-flow-width] > svg marker path,
+  .cube-flow-page .cube-flow__viewport > svg marker path {
+    fill: CanvasText !important;
   }
 }
 
@@ -566,6 +737,20 @@ body.cube-flow-page > header .meta > div strong {
   .cube-flow-page [data-collapse-all],
   .cube-flow-page .cube-flow-figure > figcaption::after {
     display: none !important;
+  }
+
+  .cube-flow-page .cube-flow-table__hint {
+    display: none !important;
+  }
+
+  .cube-flow-page .cube-flow-table,
+  .cube-flow-page .cube-flow-table__viewport {
+    width: 100%;
+    max-width: none;
+    margin: 0;
+    overflow: visible;
+    border: 0;
+    border-radius: 0;
   }
 
   .cube-flow-page section,
@@ -628,8 +813,8 @@ body.cube-flow-page > header .meta > div strong {
     scrollbar-gutter: auto;
   }
 
-  .cube-flow-page .svg-flow-wrap[data-flow-width] > svg[role="img"],
-  .cube-flow-page .cube-flow__viewport > svg[role="img"] {
+  .cube-flow-page .svg-flow-wrap[data-flow-width] > svg[aria-hidden="true"],
+  .cube-flow-page .cube-flow__viewport > svg[aria-hidden="true"] {
     width: 100% !important;
     min-width: 0 !important;
     max-width: 100% !important;
@@ -640,9 +825,9 @@ body.cube-flow-page > header .meta > div strong {
   }
 
   .cube-flow-page :is(section, .section):has(.cube-flow__viewport[data-flow-width="wide"])
-    .cube-flow__viewport > svg[role="img"],
+    .cube-flow__viewport > svg[aria-hidden="true"],
   .cube-flow-page .cube-flow-figure:has(.cube-flow__viewport[data-flow-width="wide"])
-    .cube-flow__viewport > svg[role="img"] {
+    .cube-flow__viewport > svg[aria-hidden="true"] {
     max-height: 160mm !important;
   }
 
@@ -668,6 +853,8 @@ body.cube-flow-page > header .meta > div strong {
     display: table;
     overflow: visible;
     width: 100%;
+    min-width: 0;
+    max-width: none;
     border: 0.75pt solid var(--cube-flow-line-strong);
     border-collapse: collapse;
     border-radius: 0;

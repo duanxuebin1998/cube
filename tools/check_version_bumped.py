@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import subprocess
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -42,6 +43,7 @@ CPU3 = FirmwareArea(
 )
 
 CHANGELOG_PATH = "CHANGELOG.md"
+FLOW_IMPACT_SCRIPT = "tools/check_flow_impact.py"
 
 
 def repo_root() -> Path:
@@ -83,6 +85,26 @@ def check_changelog(paths: list[str]) -> str | None:
     return None
 
 
+def report_staged_flow_impact(runner=subprocess.run) -> str | None:  # noqa: B008
+    result = runner(
+        [sys.executable, "-X", "utf8", FLOW_IMPACT_SCRIPT, "--staged"],
+        cwd=repo_root(),
+        check=False,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    if result.stdout:
+        print(result.stdout.rstrip())
+    if result.stderr:
+        print(result.stderr.rstrip(), file=sys.stderr)
+    if result.returncode != 0:
+        return f"Flow impact analysis failed with exit code {result.returncode}."
+    return None
+
+
 def main() -> int:
     paths = staged_files()
     if not paths:
@@ -93,6 +115,9 @@ def main() -> int:
     changelog_error = check_changelog(paths)
     if changelog_error:
         errors.append(changelog_error)
+    impact_error = report_staged_flow_impact()
+    if impact_error:
+        errors.append(impact_error)
     if errors:
         print("Version bump check failed:")
         for error in errors:

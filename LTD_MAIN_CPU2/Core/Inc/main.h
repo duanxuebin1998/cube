@@ -159,11 +159,6 @@ void Error_Handler(void);
 extern int16_t g_weight;//绉伴����
 extern volatile int32_t g_encoder_count ;
 
-//usart1�ユ�舵�版��缂��插��
-// 瀛��ㄦ�ユ�跺�扮���版��
-extern uint8_t received_buffer[64];
-extern uint16_t buffer_index;  // 褰����ユ�剁���版��绱㈠�
-// ��蹇�锛�琛ㄧず���板�戒护寰�澶���
 extern volatile uint8_t new_command_ready;
 
 /* USER CODE END Private defines */

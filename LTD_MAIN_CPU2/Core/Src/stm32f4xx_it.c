@@ -26,6 +26,7 @@
 #include "hart.h"
 #include "hostcommu.h"
 #include "iwdg.h"
+#include "serial_command.h"
 #include "../../Services/Relay/relay_output.h"
 #include "../../Services/AoOutput/ao_output.h"
 /* USER CODE END Includes */
@@ -98,11 +99,7 @@ extern UART_HandleTypeDef huart1;
 extern UART_HandleTypeDef huart2;
 extern UART_HandleTypeDef huart6;
 /* USER CODE BEGIN EV */
-//usart1接收数据缓冲区
-uint8_t received_buffer[64];
-uint16_t buffer_index = 0;  // 当前接收的数据索引
-// 标志，表示有新命令待处理
-volatile uint8_t new_command_ready = 0;
+
 /* USER CODE END EV */
 
 /******************************************************************************/
@@ -352,23 +349,10 @@ void USART1_IRQHandler(void)
 			temp = __HAL_DMA_GET_COUNTER(&hdma_usart1_rx);  // 获取DMA中未传输的数据个数
 			USART1_RX_LEN = USART1_RX_BUF_SIZE - temp;  // 计算已经接收到的数据个数
 
-			/* 将接收到的数据添加到接收缓冲区，中断内不做串口打印。 */
+			/* 中断只转交字节；完整帧、超长丢弃和延后报错由串口命令模块统一处理。 */
 			for (int i = 0; i < USART1_RX_LEN; i++) {
 				received_data = USART1_RX_BUF[i];
-				// 判断是否遇到终止符 \r\n
-				if (received_data == '\n' && buffer_index > 0 && received_buffer[buffer_index - 1] == '\r') {
-					received_buffer[buffer_index - 1] = '\0';
-					// 完整命令接收完毕，标记有新命令
-					new_command_ready = 1;
-					// 通过串口1重新发送接收到的所有数据
-//					HAL_UART_Transmit(&huart1, USART1_RX_BUF, USART1_RX_LEN, HAL_MAX_DELAY);  // 发送接收到的所有数据
-					buffer_index = 0;  // 清空接收缓冲区，准备接收下一条命令
-				} else {
-					// 存储接收到的数据
-					if (buffer_index < 64 - 1) {
-						received_buffer[buffer_index++] = received_data;
-					}
-				}
+				SerialCommand_RxByteFromIsr(received_data);
 			}
 			HAL_UART_Receive_DMA(&huart1, USART1_RX_BUF, USART1_RX_BUF_SIZE); // 重新启用DMA接收
 		}

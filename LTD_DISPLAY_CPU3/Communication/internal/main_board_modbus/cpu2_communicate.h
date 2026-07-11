@@ -55,6 +55,30 @@ bool CPU2_CommIsAvailable(void);
  */
 bool CPU2_CommCanSendCommand(CommandType cmd);
 /**
+ * @brief 从已确认的 CPU2 参数快照复制保持寄存器。
+ * @param startadd 起始寄存器地址。
+ * @param registercnt 寄存器数量。
+ * @param out_regs 接收寄存器数据的缓冲区。
+ * @return true 表示快照有效且复制成功，false 表示通信不可用或范围非法。
+ */
+bool CPU2_CommReadHoldingSnapshot(uint16_t startadd, uint16_t registercnt, uint16_t *out_regs);
+/**
+ * @brief 从已确认的 CPU2 状态快照复制输入寄存器。
+ * @param startadd 起始寄存器地址。
+ * @param registercnt 寄存器数量。
+ * @param out_regs 接收寄存器数据的缓冲区。
+ * @return true 表示快照有效且复制成功，false 表示通信不可用或范围非法。
+ */
+bool CPU2_CommReadInputSnapshot(uint16_t startadd, uint16_t registercnt, uint16_t *out_regs);
+/**
+ * @brief 按 LTD 共享 Modbus 线序向 CPU2 写入完整 32 位字段。
+ * @param startadd 起始保持寄存器地址，必须按 2 个寄存器对齐。
+ * @param registercnt 寄存器数量，必须为非零偶数。
+ * @param wire_regs 按 Modbus 高字在前、低字在后的寄存器数据。
+ * @return true 表示 CPU2 已返回合法 ACK，false 表示门禁、范围或通信失败。
+ */
+bool CPU2_CommWriteHoldingRegisters(uint16_t startadd, uint16_t registercnt, const uint16_t *wire_regs);
+/**
  * @brief 在 UART5 错误中断中记录待处理标志并解除当前等待。
  * @note 仅允许在 ISR 中置标志，不在中断内打印、计数或修改设备故障状态。
  */

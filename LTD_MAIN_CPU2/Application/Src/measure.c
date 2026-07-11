@@ -24,6 +24,7 @@
 #include "error_log.h"
 #include "abortable_delay.h"
 #include "fault_recovery.h"
+#include "serial_command.h"
 
 static void CMD_CorrectOilLevel(void);
 static void CMD_CancelMeasurement(void);
@@ -376,71 +377,14 @@ static void CMD_CancelMeasurement(void)
  *       - YC：电机记步诊断，额外打印 XTARGET/VACTUAL/RAMPSTAT/GSTAT 和显示状态校验
  */
 /**
- * @brief 将串口单字母正式业务命令映射到统一 CommandType。
- * @note 这些命令必须走主循环的正式入口，才能统一维护 current_command、命令切换和故障恢复。
- */
-static uint8_t ProcessCommand_MapFormalCommand(uint8_t command_char, CommandType *formal_command)
-{
-    if (formal_command == NULL) {
-        return 0U;
-    }
-
-    switch (command_char) {
-    case 'I':
-        *formal_command = CMD_BACK_ZERO;
-        return 1U;
-    case 'G':
-        *formal_command = CMD_FIND_BOTTOM;
-        return 1U;
-    case 'K':
-        *formal_command = CMD_FIND_OIL;
-        return 1U;
-    case 'R':
-        *formal_command = CMD_MEASURE_DISTRIBUTED;
-        return 1U;
-    case 'W':
-        *formal_command = CMD_FIND_WATER;
-        return 1U;
-    case 'O':
-        *formal_command = CMD_SET_EMPTY_WEIGHT;
-        return 1U;
-    case 'P':
-        *formal_command = CMD_SET_FULL_WEIGHT;
-        return 1U;
-    case 'Q':
-        *formal_command = CMD_RESTORE_FACTORY;
-        return 1U;
-    default:
-        return 0U;
-    }
-}
-/**
  * @brief 处理测量流程中的 process_command 逻辑。
  *
  * @param command 命令值。
  * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
  */
-void process_command(uint8_t *command) {
-    CommandType formal_command = CMD_NONE;
-
-    printf("串口命令\t收到处理请求\r\n");
-    if ((command == NULL) || (command[0] == '\0')) {
-        printf("串口命令\t空命令，忽略\r\n");
-        return;
-    }
-
-    if (ProcessCommand_MapFormalCommand(command[0], &formal_command)) {
-        /* 串口正式业务命令只挂到主循环执行，避免绕过 current_command 和自动恢复调度。 */
-        g_deviceParams.command = formal_command;
-        printf("串口正式命令\t已转主循环执行\t命令=%lu\r\n", (unsigned long)formal_command);
-        return;
-    }
-
-    if (Test_ProcessSerialCommand(command)) {
-        return;
-    }
-
-    printf("Serial command\tunsupported\tcmd=%s\r\n", (const char *)command);
+void process_command(uint8_t *command)
+{
+    SerialCommand_Process(command);
 }
 /**
  * @brief 执行测量流程中的 MeasureStart 逻辑。

@@ -1,0 +1,478 @@
+{
+  "groups": [],
+  "items": [
+    {
+      "type": "group",
+      "name": "00 系统查询与安全控制",
+      "repeatCount": 0,
+      "commands": [
+        {
+          "comment": "查看命令帮助",
+          "payload": "HELP",
+          "sendMode": "text",
+          "delayMs": 100
+        },
+        {
+          "comment": "读取 CPU2/协议/参数版本",
+          "payload": "VER?",
+          "sendMode": "text",
+          "delayMs": 100
+        },
+        {
+          "comment": "读取设备状态与当前命令",
+          "payload": "STAT?",
+          "sendMode": "text",
+          "delayMs": 100
+        },
+        {
+          "comment": "读取当前错误码与原因",
+          "payload": "ERR?",
+          "sendMode": "text",
+          "delayMs": 100
+        },
+        {
+          "comment": "[安全] 通用停止并取消当前测量/调试",
+          "payload": "STOP",
+          "sendMode": "text",
+          "delayMs": 100
+        }
+      ]
+    },
+    {
+      "type": "group",
+      "name": "01 正式测量与标定",
+      "repeatCount": 0,
+      "commands": [
+        {
+          "comment": "回零点（正式命令）",
+          "payload": "I",
+          "sendMode": "text",
+          "delayMs": 100
+        },
+        {
+          "comment": "测罐底（正式命令）",
+          "payload": "G",
+          "sendMode": "text",
+          "delayMs": 100
+        },
+        {
+          "comment": "液位测量（正式命令）",
+          "payload": "K",
+          "sendMode": "text",
+          "delayMs": 100
+        },
+        {
+          "comment": "分布测量（正式命令）",
+          "payload": "R",
+          "sendMode": "text",
+          "delayMs": 100
+        },
+        {
+          "comment": "水位测量（正式命令）",
+          "payload": "W",
+          "sendMode": "text",
+          "delayMs": 100
+        },
+        {
+          "comment": "标定空载扭力",
+          "payload": "O",
+          "sendMode": "text",
+          "delayMs": 100
+        },
+        {
+          "comment": "标定满载扭力",
+          "payload": "P",
+          "sendMode": "text",
+          "delayMs": 100
+        },
+        {
+          "comment": "编码器零点清零（不清电机记步基准）",
+          "payload": "L",
+          "sendMode": "text",
+          "delayMs": 100
+        }
+      ]
+    },
+    {
+      "type": "group",
+      "name": "02 通信与无线配对",
+      "repeatCount": 0,
+      "commands": [
+        {
+          "comment": "传感器与无线通信综合测试",
+          "payload": "SC",
+          "sendMode": "text",
+          "delayMs": 100
+        },
+        {
+          "comment": "读取当前无线连接状态",
+          "payload": "SPC",
+          "sendMode": "text",
+          "delayMs": 100
+        },
+        {
+          "comment": "扫描 CH9141K 从机列表",
+          "payload": "SPS",
+          "sendMode": "text",
+          "delayMs": 100
+        },
+        {
+          "comment": "按 RSSI 连接信号最好的设备",
+          "payload": "SPR",
+          "sendMode": "text",
+          "delayMs": 100
+        },
+        {
+          "comment": "[模板-先编辑] 按蓝牙名称精确匹配",
+          "payload": "SPN=DEVICE_NAME",
+          "sendMode": "text",
+          "delayMs": 100
+        }
+      ]
+    },
+    {
+      "type": "group",
+      "name": "03 手动运动（先小距离）",
+      "repeatCount": 0,
+      "commands": [
+        {
+          "comment": "停止手动运动",
+          "payload": "A0",
+          "sendMode": "text",
+          "delayMs": 100
+        },
+        {
+          "comment": "上行 10 mm",
+          "payload": "A+10",
+          "sendMode": "text",
+          "delayMs": 100
+        },
+        {
+          "comment": "下行 10 mm",
+          "payload": "A-10",
+          "sendMode": "text",
+          "delayMs": 100
+        },
+        {
+          "comment": "上行 100 mm",
+          "payload": "A+100",
+          "sendMode": "text",
+          "delayMs": 100
+        },
+        {
+          "comment": "下行 100 mm",
+          "payload": "A-100",
+          "sendMode": "text",
+          "delayMs": 100
+        },
+        {
+          "comment": "上行 500 mm",
+          "payload": "A+500",
+          "sendMode": "text",
+          "delayMs": 100
+        },
+        {
+          "comment": "下行 500 mm",
+          "payload": "A-500",
+          "sendMode": "text",
+          "delayMs": 100
+        },
+        {
+          "comment": "上行 1000 mm",
+          "payload": "A+1000",
+          "sendMode": "text",
+          "delayMs": 100
+        },
+        {
+          "comment": "下行 1000 mm",
+          "payload": "A-1000",
+          "sendMode": "text",
+          "delayMs": 100
+        }
+      ]
+    },
+    {
+      "type": "group",
+      "name": "04 点动与绝对定位测试",
+      "repeatCount": 0,
+      "commands": [
+        {
+          "comment": "点动上行 100 mm，1.5 m/min",
+          "payload": "BJ+100,1.5",
+          "sendMode": "text",
+          "delayMs": 100
+        },
+        {
+          "comment": "点动下行 100 mm，1.5 m/min",
+          "payload": "BJ-100,1.5",
+          "sendMode": "text",
+          "delayMs": 100
+        },
+        {
+          "comment": "绝对定位 1420 mm，1.5 m/min",
+          "payload": "BJP1420,1.5",
+          "sendMode": "text",
+          "delayMs": 100
+        },
+        {
+          "comment": "绝对定位 1450 mm，1.5 m/min",
+          "payload": "BJP1450,1.5",
+          "sendMode": "text",
+          "delayMs": 100
+        }
+      ]
+    },
+    {
+      "type": "group",
+      "name": "05 往返、重复性与耐久测试（循环命令）",
+      "repeatCount": 0,
+      "commands": [
+        {
+          "comment": "电机模型往返 200 mm",
+          "payload": "B200",
+          "sendMode": "text",
+          "delayMs": 100
+        },
+        {
+          "comment": "电机模型往返 200 mm + 传感器通信",
+          "payload": "B200S",
+          "sendMode": "text",
+          "delayMs": 100
+        },
+        {
+          "comment": "编码器往返 200 mm（默认速度/加速度）",
+          "payload": "BE200",
+          "sendMode": "text",
+          "delayMs": 100
+        },
+        {
+          "comment": "编码器往返 200 mm + 传感器通信",
+          "payload": "BE200S",
+          "sendMode": "text",
+          "delayMs": 100
+        },
+        {
+          "comment": "编码器往返 200 mm，2 m/min，加速度 5 倍",
+          "payload": "BE200,2,5",
+          "sendMode": "text",
+          "delayMs": 100
+        },
+        {
+          "comment": "编码器往返 200 mm，2 m/min，加速度 5 倍 + 通信",
+          "payload": "BE200,2,5,S",
+          "sendMode": "text",
+          "delayMs": 100
+        },
+        {
+          "comment": "[循环] 4 步进分辨率测试",
+          "payload": "C",
+          "sendMode": "text",
+          "delayMs": 100
+        },
+        {
+          "comment": "[循环] 4 步进下行触底测试",
+          "payload": "D",
+          "sendMode": "text",
+          "delayMs": 100
+        },
+        {
+          "comment": "[循环] 4 步进上行碰零点测试",
+          "payload": "E",
+          "sendMode": "text",
+          "delayMs": 100
+        },
+        {
+          "comment": "[循环] 罐底测量重复性测试",
+          "payload": "F",
+          "sendMode": "text",
+          "delayMs": 100
+        },
+        {
+          "comment": "[循环] 零点/罐底重复性测试",
+          "payload": "H",
+          "sendMode": "text",
+          "delayMs": 100
+        },
+        {
+          "comment": "[循环] 液位测量重复性测试",
+          "payload": "J",
+          "sendMode": "text",
+          "delayMs": 100
+        },
+        {
+          "comment": "[循环] 电机高温耐久测试",
+          "payload": "M",
+          "sendMode": "text",
+          "delayMs": 100
+        },
+        {
+          "comment": "[循环] 电机 300 mm 往返测试",
+          "payload": "N",
+          "sendMode": "text",
+          "delayMs": 100
+        },
+        {
+          "comment": "[安全] 通用停止上述循环/运动",
+          "payload": "STOP",
+          "sendMode": "text",
+          "delayMs": 100
+        }
+      ]
+    },
+    {
+      "type": "group",
+      "name": "06 位置源切换与电机诊断",
+      "repeatCount": 0,
+      "commands": [
+        {
+          "comment": "读取位置源及尺带位置对比",
+          "payload": "YS",
+          "sendMode": "text",
+          "delayMs": 100
+        },
+        {
+          "comment": "读取电机记步详细诊断",
+          "payload": "YC",
+          "sendMode": "text",
+          "delayMs": 100
+        },
+        {
+          "comment": "TMC5130 静态 SPI 通信测试",
+          "payload": "YT",
+          "sendMode": "text",
+          "delayMs": 100
+        },
+        {
+          "comment": "切换到电机记步（自动标定一周）",
+          "payload": "YM",
+          "sendMode": "text",
+          "delayMs": 100
+        },
+        {
+          "comment": "切换回编码轮记步",
+          "payload": "YE",
+          "sendMode": "text",
+          "delayMs": 100
+        }
+      ]
+    },
+    {
+      "type": "group",
+      "name": "07 卷筒拟合（按流程操作）",
+      "repeatCount": 0,
+      "commands": [
+        {
+          "comment": "开始全局自动采样（原零点为基准）",
+          "payload": "T1",
+          "sendMode": "text",
+          "delayMs": 100
+        },
+        {
+          "comment": "开始局部自动采样（当前位置为零圈）",
+          "payload": "T2",
+          "sendMode": "text",
+          "delayMs": 100
+        },
+        {
+          "comment": "停止自动采样",
+          "payload": "T0",
+          "sendMode": "text",
+          "delayMs": 100
+        },
+        {
+          "comment": "手动添加当前样本",
+          "payload": "TA",
+          "sendMode": "text",
+          "delayMs": 100
+        },
+        {
+          "comment": "读取拟合状态与样本",
+          "payload": "TS",
+          "sendMode": "text",
+          "delayMs": 100
+        },
+        {
+          "comment": "执行全局拟合求解",
+          "payload": "TR",
+          "sendMode": "text",
+          "delayMs": 100
+        },
+        {
+          "comment": "执行局部拟合求解",
+          "payload": "TV",
+          "sendMode": "text",
+          "delayMs": 100
+        },
+        {
+          "comment": "应用拟合尺带厚度",
+          "payload": "TP",
+          "sendMode": "text",
+          "delayMs": 100
+        },
+        {
+          "comment": "应用首圈周长和尺带厚度",
+          "payload": "TU",
+          "sendMode": "text",
+          "delayMs": 100
+        }
+      ]
+    },
+    {
+      "type": "group",
+      "name": "08 AO 电流输出测试（单位 0.01 mA）",
+      "repeatCount": 0,
+      "commands": [
+        {
+          "comment": "AO 输出 4.00 mA",
+          "payload": "AO400",
+          "sendMode": "text",
+          "delayMs": 100
+        },
+        {
+          "comment": "AO 输出 12.00 mA",
+          "payload": "AO1200",
+          "sendMode": "text",
+          "delayMs": 100
+        },
+        {
+          "comment": "AO 输出 20.00 mA",
+          "payload": "AO2000",
+          "sendMode": "text",
+          "delayMs": 100
+        },
+        {
+          "comment": "AO 输出 22.00 mA",
+          "payload": "AO2200",
+          "sendMode": "text",
+          "delayMs": 100
+        },
+        {
+          "comment": "AO 扫描 4/12/20/22 mA",
+          "payload": "AOS",
+          "sendMode": "text",
+          "delayMs": 100
+        }
+      ]
+    },
+    {
+      "type": "group",
+      "name": "09 高风险与界面演示",
+      "repeatCount": 0,
+      "commands": [
+        {
+          "comment": "[高风险-会覆盖参数] 恢复出厂参数",
+          "payload": "Q",
+          "sendMode": "text",
+          "delayMs": 100
+        },
+        {
+          "comment": "单点测量界面模拟展示（非真实测量）",
+          "payload": "X",
+          "sendMode": "text",
+          "delayMs": 100
+        }
+      ]
+    }
+  ],
+  "rootCommands": []
+}

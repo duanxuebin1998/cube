@@ -365,8 +365,8 @@
 
     <section id="overall">
       <h2>整机系统框图</h2>
-      <figure class="cube-flow-figure"><figcaption id="cube-flow-lng计量仪系统框图-diagram-01-caption">LNG计量仪整机系统框图</figcaption><div class="diagram cube-flow__viewport" data-flow-width="standard" tabindex="0" role="region" aria-labelledby="cube-flow-lng计量仪系统框图-diagram-01-caption">
-        <svg viewBox="0 0 1180 640" role="img" aria-labelledby="overall-title overall-desc">
+      <figure class="cube-flow-figure"><figcaption id="cube-flow-lng计量仪系统框图-diagram-01-caption">LNG计量仪整机系统框图</figcaption><div class="diagram cube-flow__viewport" data-flow-width="standard" tabindex="0" role="region" aria-labelledby="cube-flow-lng计量仪系统框图-diagram-01-caption" aria-describedby="overall-desc">
+        <svg viewBox="0 0 1180 640" aria-hidden="true" focusable="false">
           <title id="overall-title">LNG计量仪整机系统框图</title>
           <desc id="overall-desc">外部主站经 CPU3 COM 口接入，CPU3 通过内部 Modbus 轮询 CPU2，CPU2 控制电机、传感器、无线滑环、扭力和模拟输出。</desc>
           <defs>
@@ -487,8 +487,8 @@
       <div class="note">
         <p>两块板卡主控均为 <code>STM32F429ZGTx</code>。CPU3 侧负责显示、按键、外部 COM 口和到 CPU2 的内部 485；CPU2 侧负责电机驱动、编码器、传感器链路、HART/4-20mA、FRAM、继电器和电源检测。</p>
       </div>
-      <figure class="cube-flow-figure"><figcaption id="cube-flow-lng计量仪系统框图-diagram-02-caption">LNG计量仪硬件框图</figcaption><div class="diagram cube-flow__viewport" data-flow-width="standard" tabindex="0" role="region" aria-labelledby="cube-flow-lng计量仪系统框图-diagram-02-caption">
-        <svg viewBox="0 0 1180 760" role="img" aria-labelledby="hardware-title hardware-desc">
+      <figure class="cube-flow-figure"><figcaption id="cube-flow-lng计量仪系统框图-diagram-02-caption">LNG计量仪硬件框图</figcaption><div class="diagram cube-flow__viewport" data-flow-width="standard" tabindex="0" role="region" aria-labelledby="cube-flow-lng计量仪系统框图-diagram-02-caption" aria-describedby="hardware-desc">
+        <svg viewBox="0 0 1180 760" aria-hidden="true" focusable="false">
           <title id="hardware-title">LNG计量仪硬件框图</title>
           <desc id="hardware-desc">CPU3 显示通讯板和 CPU2 主控测量板的 MCU、总线、外部接口、驱动芯片和现场外设连接关系。</desc>
           <defs>
@@ -627,7 +627,7 @@
       </div></figure>
 
       <div class="table-wrap">
-        <table><caption>硬件框图</caption>
+        <div class="cube-flow-table"><div class="cube-flow-table__hint" id="cube-flow-lng计量仪系统框图-table-01-hint">横向滚动，键盘 ← → 查看完整表格</div><div class="cube-flow-table__viewport" tabindex="0" role="region" aria-labelledby="cube-flow-lng计量仪系统框图-table-01-caption" aria-describedby="cube-flow-lng计量仪系统框图-table-01-hint"><table><caption id="cube-flow-lng计量仪系统框图-table-01-caption">硬件框图</caption>
           <thead>
             <tr>
               <th scope="col">板卡</th>
@@ -710,14 +710,14 @@
               <td>保存设备参数、CRC、协议版本迁移后的默认值和持久化运行参数。</td>
             </tr>
           </tbody>
-        </table>
+        </table></div></div>
       </div>
     </section>
 
     <section id="data-loop">
       <h2>CPU2/CPU3 数据闭环</h2>
-      <figure class="cube-flow-figure"><figcaption id="cube-flow-lng计量仪系统框图-diagram-03-caption">CPU2/CPU3 数据闭环框图</figcaption><div class="diagram cube-flow__viewport" data-flow-width="standard" tabindex="0" role="region" aria-labelledby="cube-flow-lng计量仪系统框图-diagram-03-caption">
-        <svg viewBox="0 0 1180 520" role="img" aria-labelledby="loop-title loop-desc">
+      <figure class="cube-flow-figure"><figcaption id="cube-flow-lng计量仪系统框图-diagram-03-caption">CPU2/CPU3 数据闭环框图</figcaption><div class="diagram cube-flow__viewport" data-flow-width="standard" tabindex="0" role="region" aria-labelledby="cube-flow-lng计量仪系统框图-diagram-03-caption" aria-describedby="loop-desc">
+        <svg viewBox="0 0 1180 520" aria-hidden="true" focusable="false">
           <title id="loop-title">CPU2/CPU3 数据闭环框图</title>
           <desc id="loop-desc">CPU3 菜单和外部协议写保持寄存器，CPU2 解包参数和命令；CPU2 发布输入寄存器，CPU3 显示并转换给外部协议。</desc>
           <defs>
@@ -783,7 +783,7 @@
       </div></figure>
 
       <div class="table-wrap">
-        <table><caption>CPU2/CPU3 数据闭环</caption>
+        <div class="cube-flow-table"><div class="cube-flow-table__hint" id="cube-flow-lng计量仪系统框图-table-02-hint">横向滚动，键盘 ← → 查看完整表格</div><div class="cube-flow-table__viewport" tabindex="0" role="region" aria-labelledby="cube-flow-lng计量仪系统框图-table-02-caption" aria-describedby="cube-flow-lng计量仪系统框图-table-02-hint"><table><caption id="cube-flow-lng计量仪系统框图-table-02-caption">CPU2/CPU3 数据闭环</caption>
           <thead>
             <tr>
               <th scope="col">数据对象</th>
@@ -818,14 +818,14 @@
               <td>当前协议版本为 7；固件版本号不参与兼容判断。</td>
             </tr>
           </tbody>
-        </table>
+        </table></div></div>
       </div>
     </section>
 
     <section id="external">
       <h2>外部接口与协议适配</h2>
-      <figure class="cube-flow-figure"><figcaption id="cube-flow-lng计量仪系统框图-diagram-04-caption">外部接口与协议适配框图</figcaption><div class="diagram cube-flow__viewport" data-flow-width="standard" tabindex="0" role="region" aria-labelledby="cube-flow-lng计量仪系统框图-diagram-04-caption">
-        <svg viewBox="0 0 1180 470" role="img" aria-labelledby="external-title external-desc">
+      <figure class="cube-flow-figure"><figcaption id="cube-flow-lng计量仪系统框图-diagram-04-caption">外部接口与协议适配框图</figcaption><div class="diagram cube-flow__viewport" data-flow-width="standard" tabindex="0" role="region" aria-labelledby="cube-flow-lng计量仪系统框图-diagram-04-caption" aria-describedby="external-desc">
+        <svg viewBox="0 0 1180 470" aria-hidden="true" focusable="false">
           <title id="external-title">外部接口与协议适配框图</title>
           <desc id="external-desc">CPU3 的 COM1、COM2、COM3 可配置 DSM、Wartsila、LTD、SI 等协议，并把外部地址和命令翻译到内部共享模型。</desc>
           <defs>
@@ -883,7 +883,7 @@
       </div></figure>
 
       <div class="table-wrap">
-        <table><caption>外部接口与协议适配</caption>
+        <div class="cube-flow-table"><div class="cube-flow-table__hint" id="cube-flow-lng计量仪系统框图-table-03-hint">横向滚动，键盘 ← → 查看完整表格</div><div class="cube-flow-table__viewport" tabindex="0" role="region" aria-labelledby="cube-flow-lng计量仪系统框图-table-03-caption" aria-describedby="cube-flow-lng计量仪系统框图-table-03-hint"><table><caption id="cube-flow-lng计量仪系统框图-table-03-caption">外部接口与协议适配</caption>
           <thead>
             <tr>
               <th scope="col">协议/接口</th>
@@ -918,14 +918,14 @@
               <td>使用协议版本判断兼容性；共享字段变化必须两端同步。</td>
             </tr>
           </tbody>
-        </table>
+        </table></div></div>
       </div>
     </section>
 
     <section id="measurement">
       <h2>测量执行链路</h2>
-      <figure class="cube-flow-figure"><figcaption id="cube-flow-lng计量仪系统框图-diagram-05-caption">测量执行链路框图</figcaption><div class="diagram cube-flow__viewport" data-flow-width="standard" tabindex="0" role="region" aria-labelledby="cube-flow-lng计量仪系统框图-diagram-05-caption">
-        <svg viewBox="0 0 1180 390" role="img" aria-labelledby="measurement-title measurement-desc">
+      <figure class="cube-flow-figure"><figcaption id="cube-flow-lng计量仪系统框图-diagram-05-caption">测量执行链路框图</figcaption><div class="diagram cube-flow__viewport" data-flow-width="standard" tabindex="0" role="region" aria-labelledby="cube-flow-lng计量仪系统框图-diagram-05-caption" aria-describedby="measurement-desc">
+        <svg viewBox="0 0 1180 390" aria-hidden="true" focusable="false">
           <title id="measurement-title">测量执行链路框图</title>
           <desc id="measurement-desc">命令从外部主站或 CPU3 菜单进入，CPU2 执行测量流程并把结果返回 CPU3。</desc>
           <defs>
@@ -987,7 +987,7 @@
       </div></figure>
 
       <div class="table-wrap">
-        <table><caption>测量执行链路</caption>
+        <div class="cube-flow-table"><div class="cube-flow-table__hint" id="cube-flow-lng计量仪系统框图-table-04-hint">横向滚动，键盘 ← → 查看完整表格</div><div class="cube-flow-table__viewport" tabindex="0" role="region" aria-labelledby="cube-flow-lng计量仪系统框图-table-04-caption" aria-describedby="cube-flow-lng计量仪系统框图-table-04-hint"><table><caption id="cube-flow-lng计量仪系统框图-table-04-caption">测量执行链路</caption>
           <thead>
             <tr>
               <th scope="col">命令类别</th>
@@ -1016,14 +1016,14 @@
               <td>状态页显示维护、调试、匹配中/完成；失败时保持故障页错误码。</td>
             </tr>
           </tbody>
-        </table>
+        </table></div></div>
       </div>
     </section>
 
     <section id="safety">
       <h2>启动安全与故障恢复链路</h2>
-      <figure class="cube-flow-figure"><figcaption id="cube-flow-lng计量仪系统框图-diagram-06-caption">启动安全与故障恢复框图</figcaption><div class="diagram cube-flow__viewport" data-flow-width="standard" tabindex="0" role="region" aria-labelledby="cube-flow-lng计量仪系统框图-diagram-06-caption">
-        <svg viewBox="0 0 1180 470" role="img" aria-labelledby="safety-title safety-desc">
+      <figure class="cube-flow-figure"><figcaption id="cube-flow-lng计量仪系统框图-diagram-06-caption">启动安全与故障恢复框图</figcaption><div class="diagram cube-flow__viewport" data-flow-width="standard" tabindex="0" role="region" aria-labelledby="cube-flow-lng计量仪系统框图-diagram-06-caption" aria-describedby="safety-desc">
+        <svg viewBox="0 0 1180 470" aria-hidden="true" focusable="false">
           <title id="safety-title">启动安全与故障恢复框图</title>
           <desc id="safety-desc">CPU2 启动后先禁用驱动并清除 TMC5130 旧目标，等待编码器首帧有效，再允许业务命令；测量失败后按故障自动恢复重跑次数限制重跑。</desc>
           <defs>
@@ -1097,7 +1097,7 @@
     <section id="module-table">
       <h2>模块职责速查</h2>
       <div class="table-wrap">
-        <table><caption>模块职责速查</caption>
+        <div class="cube-flow-table"><div class="cube-flow-table__hint" id="cube-flow-lng计量仪系统框图-table-05-hint">横向滚动，键盘 ← → 查看完整表格</div><div class="cube-flow-table__viewport" tabindex="0" role="region" aria-labelledby="cube-flow-lng计量仪系统框图-table-05-caption" aria-describedby="cube-flow-lng计量仪系统框图-table-05-hint"><table><caption id="cube-flow-lng计量仪系统框图-table-05-caption">模块职责速查</caption>
           <thead>
             <tr>
               <th scope="col">层级</th>
@@ -1156,7 +1156,7 @@
               <td><code>docs/03_问题分析与整改</code>、<code>docs/02_需求与计划</code></td>
             </tr>
           </tbody>
-        </table>
+        </table></div></div>
       </div>
     </section>
 
@@ -1174,5 +1174,7 @@
 
   <!-- CUBE_EMBED_END -->
   </main>
+
+<script src="assets/网站嵌入增强.js"></script>
 </body>
 </html>

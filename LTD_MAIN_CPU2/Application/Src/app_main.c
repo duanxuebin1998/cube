@@ -23,6 +23,7 @@
 #include "sensor.h"
 #include "ch9141_at.h"
 #include "fault_recovery.h"
+#include "serial_command.h"
 #include "../../Services/Relay/relay_output.h"
 
 /**
@@ -186,10 +187,9 @@ void App_MainLoop(void) {
 	 * 这一层通常来自调试口/串口缓存，process_command() 会把字符命令翻译成具体动作，
 	 * 必要时再写入 g_deviceParams.command。 */
 	if (new_command_ready) {
-		/* 新串口命令优先级最高，先取消等待中的自动恢复，避免恢复命令和新命令竞争。 */
+		/* 新串口帧优先级最高，先取消等待中的自动恢复，再复制并处理完整帧。 */
 		FaultRecovery_Cancel("serial command");
-		new_command_ready = 0;  /* 本轮已经接管这条新命令，先清标志避免重复处理 */
-		process_command(received_buffer);
+		SerialCommand_ProcessReady();
 	}
 	/* 第二优先级：执行已经挂起的正式命令。
 	 * 这类命令通常来自上位机、参数区或其他控制入口，是系统真正的业务入口。 */

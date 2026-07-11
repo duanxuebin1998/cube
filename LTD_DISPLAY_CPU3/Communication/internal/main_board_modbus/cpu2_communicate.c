@@ -16,6 +16,7 @@
 #define ADERSS 0X01
 #define CPU2_RESPONSE_TIMEOUT_MS 1000U /* CPU2 单次响应等待超时，单位 ms。 */
 #define CPU2_COMM_FAILURE_LIMIT 10U /* CPU2 连续请求未获得合法响应的置错阈值。 */
+#define CPU2_MAX_EXTERNAL_WRITE_REGISTERS 122U /* RTU 最大 123 个寄存器；共享字段按 32 位对齐后取最大偶数。 */
 
 volatile bool wait_response = false; /* 主控板响应标志位 */
 static bool s_cpu2_has_status_snapshot = false; /* CPU3 本次上电是否收到过覆盖状态和错误码的 CPU2 响应。 */
@@ -23,7 +24,7 @@ static bool s_cpu2_has_parameter_snapshot = false; /* CPU3 是否已完整读取
 static bool s_cpu2_has_protocol_snapshot = false; /* 当前 CPU2 连接是否已读回共享协议版本。 */
 static uint32_t s_cpu2_consecutive_failure_count = 0U; /* CPU2 连续请求失败次数。 */
 static bool s_cpu2_comm_fault_active = false; /* CPU3 本机通信故障是否等待状态帧恢复。 */
-static bool s_cpu2_parameter_refresh_requested = false; /* 外部写失败后是否要求重新确认 CPU2 参数。 */
+static bool s_cpu2_parameter_refresh_requested = false; /* 外部参数写后是否要求重新确认 CPU2 参数。 */
 static volatile bool s_cpu2_uart_error_pending = false; /* UART5 中断仅置位，主循环统一计入失败。 */
 
 /* 保持寄存器 */
@@ -207,14 +208,104 @@ bool CPU2_CommCanSendCommand(CommandType cmd)
 }
 
 /*
+ * 函数用途：从 CPU3 已确认的参数快照复制 LTD 保持寄存器。
+ * 调用场景：CPU3 对外以 LTD 协议独立响应 FC03 读请求时调用。
+ * 关键约束：同步未完成、协议不匹配、通信故障或地址越界时不得返回旧缓存。
+ */
+bool CPU2_CommReadHoldingSnapshot(uint16_t startadd, uint16_t registercnt, uint16_t *out_regs)
+{
+	if ((out_regs == NULL) || (registercnt == 0U) ||
+		(startadd >= HOLEREGISTER_STOP) ||
+		(registercnt > (uint16_t)(HOLEREGISTER_STOP - startadd)) ||
+		(!CPU2_CommIsAvailable())) {
+		return false;
+	}
+
+	/* g_deviceParams 只在 CPU2 快照或成功写入后更新，组表后再复制可覆盖菜单成功写入的新值。 */
+	WriteDeviceParamsToHoldingRegisters(HoldingRegisterArray);
+	memcpy(out_regs,
+	       &HoldingRegisterArray[startadd],
+	       (size_t)registercnt * sizeof(out_regs[0]));
+	return true;
+}
+
+/*
+ * 函数用途：从 CPU3 已确认的状态快照复制 LTD 输入寄存器。
+ * 调用场景：CPU3 对外以 LTD 协议独立响应 FC04 读请求时调用。
+ * 关键约束：只复制 CPU2 最近一次合法响应形成的数组，不用默认结构生成伪状态。
+ */
+bool CPU2_CommReadInputSnapshot(uint16_t startadd, uint16_t registercnt, uint16_t *out_regs)
+{
+	if ((out_regs == NULL) || (registercnt == 0U) ||
+		(startadd >= INPUTREGISTER_AMOUNT) ||
+		(registercnt > (uint16_t)(INPUTREGISTER_AMOUNT - startadd)) ||
+		(!CPU2_CommIsAvailable())) {
+		return false;
+	}
+
+	memcpy(out_regs,
+	       &InputRegisterArray[startadd],
+	       (size_t)registercnt * sizeof(out_regs[0]));
+	return true;
+}
+
+/*
  * 函数用途：使当前参数快照失效并请求重新读取 CPU2 全部保持寄存器参数。
- * 调用场景：外部协议多字段写未获得完整 CPU2 ACK，实际生效范围无法由本次响应确定。
+ * 调用场景：外部协议写参数成功或失败后，重新确认 CPU2 的实际生效值。
  * 关键约束：刷新完成前普通写和依赖 CPU2 参数的外部读均不得返回成功。
  */
 static void CPU2_CommRequestParameterRefresh(void)
 {
 	s_cpu2_has_parameter_snapshot = false;
 	s_cpu2_parameter_refresh_requested = true;
+}
+
+/*
+ * 函数用途：把 LTD 外部 FC10 的寄存器序列写穿到 CPU2，并以 CPU2 ACK 作为成功依据。
+ * 调用场景：CPU3 外部 LTD Modbus 从站处理写多个保持寄存器请求时调用。
+ * 关键约束：共享参数均为 32 位字段，只接受偶数地址和偶数数量；参数写成功后也使快照失效，
+ *           下一次对外读取必须等待 CPU2 全量补读确认，不能把请求影子当作 CPU2 实际值。
+ */
+bool CPU2_CommWriteHoldingRegisters(uint16_t startadd,
+										uint16_t registercnt,
+										const uint16_t *wire_regs)
+{
+	uint32_t host_values[CPU2_MAX_EXTERNAL_WRITE_REGISTERS / 2U];
+	uint32_t command_value;
+	bool command_only;
+	bool ret;
+
+	if ((wire_regs == NULL) || (registercnt == 0U) ||
+		(registercnt > CPU2_MAX_EXTERNAL_WRITE_REGISTERS) ||
+		((startadd & 1U) != 0U) || ((registercnt & 1U) != 0U) ||
+		(startadd >= HOLEREGISTER_STOP) ||
+		(registercnt > (uint16_t)(HOLEREGISTER_STOP - startadd))) {
+		return false;
+	}
+
+	/* 现有发送入口接收本机 uint32_t 值，并负责转换为共享协议的高字在前线序。 */
+	for (uint16_t i = 0U; i < registercnt; i += 2U) {
+		host_values[i / 2U] = ((uint32_t)wire_regs[i] << 16) |
+									 (uint32_t)wire_regs[i + 1U];
+	}
+
+	command_only = (startadd == HOLDREGISTER_DEVICEPARAM_COMMAND) && (registercnt == 2U);
+	command_value = ((uint32_t)wire_regs[0] << 16) | (uint32_t)wire_regs[1];
+	ret = CPU2_CombinatePackage_Send(FUNCTIONCODE_WRITE_MULREGISTER,
+										startadd,
+										registercnt,
+										host_values);
+	if (!ret) {
+		return false;
+	}
+
+	if (command_only) {
+		g_deviceParams.command = (CommandType)command_value;
+		WriteDeviceParamsToHoldingRegisters(HoldingRegisterArray);
+	} else {
+		CPU2_CommRequestParameterRefresh();
+	}
+	return true;
 }
 
 /* 已发起的非命令写失败时，CPU2 是否实际应用无法由响应确定，必须重新确认参数。 */
@@ -401,7 +492,7 @@ void PollingInputData(void) {
 		return; /* 上电阶段结束本次调用，不再发 runtime 组 */
 	}
 
-	/* 外部多字段写失败后，不能等待 CPU2 参数更新标志，必须主动重读确认实际值。 */
+	/* 外部参数写后不能依赖本地影子，必须主动重读确认 CPU2 实际值。 */
 	if (s_cpu2_parameter_refresh_requested) {
 		hold_refresh_pending = true;
 		hold_refresh_index = 0;

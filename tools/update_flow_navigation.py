@@ -12,11 +12,13 @@ from __future__ import annotations
 import argparse
 import codecs
 import html
+import json
 import os
 import re
 import tempfile
 import time
 from dataclasses import dataclass
+from datetime import date
 from pathlib import Path
 from typing import Dict, Iterable, List, Mapping, Sequence, Tuple
 
@@ -25,13 +27,17 @@ ROOT = Path(__file__).resolve().parents[1]
 DOC_NAV_DIR = ROOT / "docs" / "00_程序流程导航"
 GLOBAL_INDEX = DOC_NAV_DIR / "index.html"
 CROSS_ROUTE = DOC_NAV_DIR / "跨CPU业务链路.html"
+ROUTE_MANIFEST = DOC_NAV_DIR / "业务链路清单.json"
+EVIDENCE_MANIFEST = DOC_NAV_DIR / "流程证据清单.json"
 CPU2_DIR = DOC_NAV_DIR / "CPU2"
 CPU3_DIR = DOC_NAV_DIR / "CPU3"
 
 REPLACE_RETRY_DELAYS_SECONDS = (0.05, 0.1, 0.2, 0.4, 0.8)
+CLOSURE_ROLE_IDS = ("entry", "dispatch", "execution", "readback", "exception", "verification")
 
 STYLE_MARK = '<style id="cross-flow-nav-style">'
 EMBED_STYLESHEET_NAME = "网站嵌入增强.css"
+EMBED_SCRIPT_NAME = "网站嵌入增强.js"
 NAV_START = "<!-- CROSS-FLOW-NAV-START -->"
 NAV_END = "<!-- CROSS-FLOW-NAV-END -->"
 LEGACY_START = "<!-- FLOW-LEGACY-NOTICE-START -->"
@@ -50,8 +56,12 @@ ARIA_LABEL_ATTR_RE = re.compile(
     re.IGNORECASE | re.DOTALL,
 )
 ARIA_ACCESSIBILITY_ATTR_RE = re.compile(
-    r"\s+aria-(?:label|labelledby|describedby)\s*=\s*"
+    r"\s+aria-(?:hidden|label|labelledby|describedby)\s*=\s*"
     r"(?P<quote>[\"'])(?P<value>.*?)(?P=quote)",
+    re.IGNORECASE | re.DOTALL,
+)
+SVG_ROOT_PRESENTATION_ATTR_RE = re.compile(
+    r"\s+(?:role|focusable|tabindex)\s*=\s*(?P<quote>[\"'])(?P<value>.*?)(?P=quote)",
     re.IGNORECASE | re.DOTALL,
 )
 ARIA_REFERENCE_ATTR_RE = re.compile(
@@ -545,113 +555,296 @@ LEGACY_DOCS: Sequence[Dict[str, str]] = [
 ]
 
 
-ROUTES = [
-    {
-        "id": "oil",
-        "title": "液位测量与跟随链路",
-        "summary": "从 CPU3 菜单或外部协议发起找液位/液位跟随，CPU2 执行找液位、闭环跟随和状态上报，CPU3 再显示或对外响应。",
-        "steps": [
-            ("CPU3 指令来源", "cpu3_07", "菜单发找液位、标定或修正指令"),
-            ("CPU3 内部通道", "cpu3_02", "通过 UART5/Modbus 写 CPU2 命令或参数"),
-            ("CPU2 命令入口", "cpu2_02", "统一进入测量公共准备和命令分发"),
-            ("CPU2 测量核心", "cpu2_04", "完成粗找、精找、阈值确定和跟随闭环"),
-            ("状态回读", "cpu2_10", "CPU2 更新输入寄存器和状态"),
-            ("CPU3 显示/协议", "cpu3_06", "状态页刷新，外部 DSM/Wartsila/SI协议可读取结果"),
-        ],
-    },
-    {
-        "id": "water",
-        "title": "水位测量与跟随链路",
-        "summary": "水位链路与液位类似，但传感模式、阈值和盲区策略不同，建议从命令入口一路跟到 CPU2 水位详细流程。",
-        "steps": [
-            ("CPU3 指令来源", "cpu3_07", "菜单或外部协议选择找水/水位跟随"),
-            ("CPU3 内部通道", "cpu3_02", "写 CPU2 命令，运行期轮询输入寄存器"),
-            ("CPU2 命令入口", "cpu2_02", "统一公共准备后分发到水位流程"),
-            ("CPU2 测量核心", "cpu2_05", "找水、跟随、盲区和错误出口"),
-            ("状态回读", "cpu2_10", "水位状态、错误码和结果进入通信寄存器"),
-            ("CPU3 显示/协议", "cpu3_06", "显示端刷新水位状态或等待下一轮"),
-        ],
-    },
-    {
-        "id": "density",
-        "title": "密度、单点和分布测量链路",
-        "summary": "密度链路同时涉及 CPU2 测量算法、分布点回读和 CPU3 的 Wartsila/SI协议适配。",
-        "steps": [
-            ("外部/菜单入口", "cpu3_05", "Wartsila/SI协议或菜单触发密度类指令"),
-            ("CPU3 内部通道", "cpu3_02", "写命令并在完成后分批读取密度分布点"),
-            ("CPU2 命令入口", "cpu2_02", "按密度、单点、区间、瓦锡兰场景分发"),
-            ("CPU2 测量核心", "cpu2_06", "完成单点、分布、区间密度测量和状态发布"),
-            ("状态/点表回读", "cpu2_10", "结果、profile 完成标志和点表供 CPU3 读取"),
-            ("外部协议响应", "cpu3_05", "Wartsila/SI协议将缓存结果映射给外部系统"),
-        ],
-    },
-    {
-        "id": "readparams",
-        "title": "读取部件参数、RSSI 与 AO 运行态链路",
-        "summary": "读取部件参数由 CPU3 菜单下发，CPU2 周期刷新传感器快照并查询 CH9141K 当前连接 RSSI；协议 10 起返回 RSSI，协议 11 起在 RSSI 后追加 AO 运行态，CPU3 轮询尾部输入寄存器后在状态页显示。",
-        "steps": [
-            ("CPU3 菜单入口", "cpu3_07", "读取部件参数位于测量/维护入口，下发 CMD_READ_PART_PARAMS"),
-            ("CPU3 内部轮询", "cpu3_02", "运行轮询读取输入寄存器尾部 WirelessPairingStatus 和 AoOutputRuntime 字段"),
-            ("CPU2 命令入口", "cpu2_02", "进入读取部件参数命令并保持 STATE_READPARAMETEROVER 持续刷新"),
-            ("CPU2 传感器快照", "cpu2_09", "每 1s 刷新位置、扭力、温度、频率、电容、角度，每 5s 查询蓝牙 RSSI"),
-            ("CPU2 寄存器发布", "cpu2_10", "协议版本 10 起在继电器运行态后追加 RSSI，协议 11 起追加 AO 目标/实际/错误运行态"),
-            ("CPU3 状态显示", "cpu3_06", "读取参数完成页显示 RSSI 或 N/A，状态页显示协议兼容和 AO/AD5421 故障原因"),
-        ],
-    },
-    {
-        "id": "ao",
-        "title": "AO 模拟电流输出与 HART 链路",
-        "summary": "AO 输出由 CPU3 菜单参数使能，CPU2 根据液位/故障/调试状态刷新 AoOutput 运行态，AD5421 输出电流，HART 和 CPU3 状态页读取同一运行数据。",
-        "steps": [
-            ("CPU3 AO 菜单", "cpu3_07", "AO使能为 0/1 设备参数，确认后通过内部 Modbus 写 CPU2"),
-            ("CPU2 参数生效", "cpu2_12", "AoOutputEnable 默认关闭，写入后作为 AoOutput_Update 的硬开关"),
-            ("液位结果来源", "cpu2_04", "找液位/跟随更新液位结果时同步刷新 AO 输出目标"),
-            ("AO 服务与硬件", "cpu2_13", "AoOutput_Update 计算目标、限幅、节流写 AD5421，并记录运行态"),
-            ("HART/AD5421 接口", "cpu2_11", "HART 命令 2/3 返回 AO 电流和百分比，AD5421 错误进入故障码"),
-            ("CPU3 状态回读", "cpu3_06", "协议 11 起输入尾段显示 AO 运行态和 AD5421 故障原因"),
-        ],
-    },
-    {
-        "id": "param",
-        "title": "参数修改、保存和同步链路",
-        "summary": "CPU3 菜单和外部协议都可能修改参数，必须区分 CPU3 本机参数、CPU2 设备参数和共享寄存器缓存。",
-        "steps": [
-            ("显示/协议入口", "cpu3_07", "用户输入参数或外部协议写保持寄存器"),
-            ("本机参数支撑", "cpu3_08", "CPU3 通信/显示参数保存到 FRAM 并触发串口重配"),
-            ("内部写入", "cpu3_02", "CPU2 设备参数通过 0x10 写入 CPU2"),
-            ("CPU2 通信入口", "cpu2_10", "CPU2 接收保持寄存器写入并更新参数结构"),
-            ("CPU2 参数存储", "cpu2_12", "延后保存、默认值、范围和系统配置"),
-            ("业务生效", "cpu2_04", "测量流程在下一次执行时读取新参数"),
-        ],
-    },
-    {
-        "id": "fault",
-        "title": "故障、恢复和状态展示链路",
-        "summary": "CPU2 是测量和硬件故障的主要产生与恢复位置；CPU3 除轮询和展示 CPU2 故障外，还会在连续第 10 个请求未获得合法响应后产生本机通信故障。",
-        "steps": [
-            ("故障产生", "cpu2_08", "电机、位置、扭力碰撞或传感异常触发错误条件"),
-            ("CPU2 故障管理", "cpu2_07", "SET_ERROR、状态切换、恢复尝试和错误输出"),
-            ("CPU2 通信发布", "cpu2_10", "设备状态、错误码和测量状态进入寄存器"),
-            ("CPU3 轮询缓存", "cpu3_02", "输入寄存器刷新 g_measurement"),
-            ("CPU3 本机通信诊断", "cpu3_02", "超时、非法帧和 UART/TX 失败统一累计，连续第 10 次置 CPU2_COMM_TIMEOUT"),
-            ("CPU3 显示", "cpu3_06", "状态页和菜单页展示设备状态"),
-            ("外部协议", "cpu3_04", "DSM/Wartsila/SI 读取缓存状态"),
-        ],
-    },
-    {
-        "id": "external",
-        "title": "外部协议到 CPU2 测量链路",
-        "summary": "外部 COM 先在 CPU3 分发，协议层只做映射和缓存，真正测量动作仍由 CPU2 命令入口完成。",
-        "steps": [
-            ("外部 COM", "cpu3_03", "COM1/COM2/COM3 按端口参数选择协议处理"),
-            ("DSM 映射", "cpu3_04", "DSM 读写线圈/保持寄存器映射到缓存或 CPU2 指令"),
-            ("Wartsila/SI", "cpu3_05", "协议适配层映射参数、结果和密度点"),
-            ("CPU3 内部通道", "cpu3_02", "需要 CPU2 动作时通过内部 Modbus 下发"),
-            ("CPU2 命令入口", "cpu2_02", "命令进入 CPU2 正式测量状态机"),
-            ("CPU2 结果发布", "cpu2_10", "运行结果回到 CPU3 缓存并对外响应"),
-        ],
-    },
-]
+def load_route_manifest(path: Path = ROUTE_MANIFEST) -> Dict[str, object]:
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except FileNotFoundError as exc:
+        raise RuntimeError(f"Route manifest does not exist: {path}") from exc
+    except json.JSONDecodeError as exc:
+        raise RuntimeError(f"Route manifest is not valid JSON: {path}: {exc}") from exc
+
+    if not isinstance(data, dict) or data.get("schemaVersion") != 2:
+        raise RuntimeError(f"Route manifest schemaVersion must be 2: {path}")
+    closure_roles = data.get("closureRoles")
+    if not isinstance(closure_roles, list) or len(closure_roles) != len(CLOSURE_ROLE_IDS):
+        raise RuntimeError(f"Route manifest must define six closureRoles: {path}")
+    closure_role_ids = []
+    for index, role in enumerate(closure_roles, start=1):
+        if not isinstance(role, dict):
+            raise RuntimeError(f"Closure role {index} must be an object: {path}")
+        role_id = role.get("id")
+        label = role.get("label")
+        if not isinstance(role_id, str) or not isinstance(label, str) or not label.strip():
+            raise RuntimeError(f"Closure role {index} is invalid: {path}")
+        closure_role_ids.append(role_id)
+    if tuple(closure_role_ids) != CLOSURE_ROLE_IDS:
+        raise RuntimeError(
+            "Route manifest closureRoles must use the required order: "
+            + ", ".join(CLOSURE_ROLE_IDS)
+        )
+    routes = data.get("routes")
+    if not isinstance(routes, list) or not routes:
+        raise RuntimeError(f"Route manifest must contain a non-empty routes array: {path}")
+
+    allowed_owners = {"external", "cpu3", "cpu2", "evidence"}
+    route_ids: set[str] = set()
+    for route_index, route in enumerate(routes, start=1):
+        if not isinstance(route, dict):
+            raise RuntimeError(f"Route {route_index} must be an object: {path}")
+        route_id = route.get("id")
+        if not isinstance(route_id, str) or re.fullmatch(r"[a-z][a-z0-9-]*", route_id) is None:
+            raise RuntimeError(f"Route {route_index} has an invalid id: {route_id!r}")
+        if route_id in route_ids:
+            raise RuntimeError(f"Route manifest has duplicate id: {route_id}")
+        route_ids.add(route_id)
+        for field in ("title", "tag", "summary"):
+            if not isinstance(route.get(field), str) or not route[field].strip():
+                raise RuntimeError(f"Route {route_id} has an empty {field}")
+
+        steps = route.get("steps")
+        if not isinstance(steps, list) or not steps:
+            raise RuntimeError(f"Route {route_id} must contain steps")
+        map_steps = 0
+        formal_steps = 0
+        formal_page_keys: set[str] = set()
+        for step_index, step in enumerate(steps, start=1):
+            if not isinstance(step, dict):
+                raise RuntimeError(f"Route {route_id} step {step_index} must be an object")
+            owner = step.get("owner")
+            if owner not in allowed_owners:
+                raise RuntimeError(f"Route {route_id} step {step_index} has invalid owner: {owner!r}")
+            for field in ("role", "label", "detail"):
+                if not isinstance(step.get(field), str) or not step[field].strip():
+                    raise RuntimeError(f"Route {route_id} step {step_index} has an empty {field}")
+
+            formal = step.get("formal") is True
+            map_visible = step.get("map") is True
+            if not formal and not map_visible:
+                raise RuntimeError(f"Route {route_id} step {step_index} is not visible in any output")
+            if formal:
+                formal_steps += 1
+                page_key = step.get("pageKey")
+                if page_key not in PAGE_DEFS:
+                    raise RuntimeError(
+                        f"Route {route_id} step {step_index} references unknown pageKey: {page_key!r}"
+                    )
+                page = Path(PAGE_DEFS[page_key]["path"])
+                formal_page_keys.add(page_key)
+                if not page.is_file():
+                    raise RuntimeError(
+                        f"Route {route_id} step {step_index} references missing page: {page}"
+                    )
+            if map_visible:
+                map_steps += 1
+                site_href = step.get("siteHref")
+                if not isinstance(site_href, str) or not site_href.startswith("/"):
+                    raise RuntimeError(
+                        f"Route {route_id} step {step_index} has invalid siteHref: {site_href!r}"
+                    )
+
+        if formal_steps < 2:
+            raise RuntimeError(f"Route {route_id} must contain at least two formal steps")
+        if map_steps != 4:
+            raise RuntimeError(f"Route {route_id} must expose exactly four map steps, found {map_steps}")
+        closure = route.get("closure")
+        if not isinstance(closure, dict) or set(closure) != set(CLOSURE_ROLE_IDS):
+            raise RuntimeError(f"Route {route_id} closure must define all six required roles")
+        for role_id in CLOSURE_ROLE_IDS:
+            page_keys = closure.get(role_id)
+            if not isinstance(page_keys, list) or not page_keys:
+                raise RuntimeError(f"Route {route_id} closure role {role_id} must be a non-empty array")
+            if not all(isinstance(page_key, str) for page_key in page_keys):
+                raise RuntimeError(f"Route {route_id} closure role {role_id} must contain page keys")
+            if len(page_keys) != len(set(page_keys)):
+                raise RuntimeError(f"Route {route_id} closure role {role_id} contains duplicate page keys")
+            unknown_page_keys = [
+                page_key
+                for page_key in page_keys
+                if page_key not in formal_page_keys
+            ]
+            if unknown_page_keys:
+                raise RuntimeError(
+                    f"Route {route_id} closure role {role_id} references pages outside formal steps: "
+                    + ", ".join(repr(item) for item in unknown_page_keys)
+                )
+        if not any(str(page_key).startswith("cpu2_") for page_key in closure["execution"]):
+            raise RuntimeError(f"Route {route_id} closure execution must include a CPU2 page")
+
+    return data
+
+
+ROUTE_MANIFEST_DATA = load_route_manifest()
+ROUTES: List[Dict[str, object]] = ROUTE_MANIFEST_DATA["routes"]  # type: ignore[assignment]
+
+
+def _repo_file(relative_path: str, *, field: str) -> Path:
+    candidate = Path(relative_path)
+    if candidate.is_absolute() or ".." in candidate.parts:
+        raise RuntimeError(f"Evidence {field} must be a repository-relative path: {relative_path!r}")
+    resolved = (ROOT / candidate).resolve()
+    try:
+        resolved.relative_to(ROOT.resolve())
+    except ValueError as exc:
+        raise RuntimeError(f"Evidence {field} escapes the repository: {relative_path!r}") from exc
+    if not resolved.is_file():
+        raise RuntimeError(f"Evidence {field} does not exist: {relative_path}")
+    return resolved
+
+
+def _firmware_version_from_header(path: Path, macro_prefix: str) -> str:
+    raw = path.read_bytes()
+    parts: list[int] = []
+    for suffix in ("MAJOR", "MINOR", "PATCH", "BUILD"):
+        pattern = rb"#define\s+" + re.escape(f"{macro_prefix}_{suffix}".encode("ascii")) + rb"\s+(\d+)u?\b"
+        match = re.search(pattern, raw)
+        if match is None:
+            raise RuntimeError(f"Cannot read {macro_prefix}_{suffix} from {path}")
+        parts.append(int(match.group(1)))
+    return "V" + ".".join(str(part) for part in parts)
+
+
+def load_evidence_manifest(
+    path: Path = EVIDENCE_MANIFEST,
+    routes: Sequence[Mapping[str, object]] = ROUTES,
+) -> Dict[str, object]:
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except FileNotFoundError as exc:
+        raise RuntimeError(f"Evidence manifest does not exist: {path}") from exc
+    except json.JSONDecodeError as exc:
+        raise RuntimeError(f"Evidence manifest is not valid JSON: {path}: {exc}") from exc
+
+    if not isinstance(data, dict) or data.get("schemaVersion") != 1:
+        raise RuntimeError(f"Evidence manifest schemaVersion must be 1: {path}")
+
+    firmware = data.get("firmwareBaseline")
+    if not isinstance(firmware, dict) or set(firmware) != {"cpu2", "cpu3"}:
+        raise RuntimeError(f"Evidence manifest firmwareBaseline must define cpu2 and cpu3: {path}")
+    firmware_specs = {
+        "cpu2": ("CPU2_APP_VERSION", "LTD_MAIN_CPU2/"),
+        "cpu3": ("CPU3_APP_VERSION", "LTD_DISPLAY_CPU3/"),
+    }
+    for cpu, (macro_prefix, expected_root) in firmware_specs.items():
+        item = firmware[cpu]
+        if not isinstance(item, dict):
+            raise RuntimeError(f"Evidence firmwareBaseline.{cpu} must be an object")
+        version = item.get("version")
+        source_path = item.get("sourcePath")
+        if not isinstance(version, str) or re.fullmatch(r"V\d+\.\d+\.\d+\.\d+", version) is None:
+            raise RuntimeError(f"Evidence firmwareBaseline.{cpu}.version is invalid: {version!r}")
+        if not isinstance(source_path, str) or not source_path.startswith(expected_root):
+            raise RuntimeError(f"Evidence firmwareBaseline.{cpu}.sourcePath is invalid: {source_path!r}")
+        current_version = _firmware_version_from_header(
+            _repo_file(source_path, field=f"firmwareBaseline.{cpu}.sourcePath"),
+            macro_prefix,
+        )
+        if current_version != version:
+            raise RuntimeError(
+                f"Evidence firmware baseline is stale for {cpu}: manifest {version}, source {current_version}"
+            )
+
+    default_validations = data.get("defaultValidationPaths")
+    if not isinstance(default_validations, list) or not default_validations:
+        raise RuntimeError("Evidence manifest defaultValidationPaths must be a non-empty array")
+    _validate_evidence_paths(
+        default_validations,
+        field="defaultValidationPaths",
+        expected_root="docs/",
+        allowed_suffixes={".md", ".html"},
+    )
+
+    pages = data.get("pages")
+    if not isinstance(pages, list) or not pages:
+        raise RuntimeError("Evidence manifest pages must be a non-empty array")
+    core_page_keys = {
+        str(step["pageKey"])
+        for route in routes
+        for step in route["steps"]  # type: ignore[index]
+        if isinstance(step, dict) and step.get("formal") is True
+    }
+    page_keys: set[str] = set()
+    for index, page in enumerate(pages, start=1):
+        if not isinstance(page, dict):
+            raise RuntimeError(f"Evidence page {index} must be an object")
+        page_key = page.get("pageKey")
+        if not isinstance(page_key, str) or page_key not in PAGE_DEFS:
+            raise RuntimeError(f"Evidence page {index} has unknown pageKey: {page_key!r}")
+        if page_key in page_keys:
+            raise RuntimeError(f"Evidence manifest has duplicate pageKey: {page_key}")
+        page_keys.add(page_key)
+        if page.get("status") not in {"verified", "needs-review", "draft"}:
+            raise RuntimeError(f"Evidence page {page_key} has invalid status: {page.get('status')!r}")
+        reviewed_at = page.get("reviewedAt")
+        if not isinstance(reviewed_at, str) or re.fullmatch(r"\d{4}-\d{2}-\d{2}", reviewed_at) is None:
+            raise RuntimeError(f"Evidence page {page_key} has invalid reviewedAt: {reviewed_at!r}")
+
+        cpu = PAGE_DEFS[page_key]["cpu"]
+        expected_root = "LTD_MAIN_CPU2/" if cpu == "CPU2" else "LTD_DISPLAY_CPU3/"
+        source_paths = page.get("sourcePaths")
+        if not isinstance(source_paths, list) or not source_paths:
+            raise RuntimeError(f"Evidence page {page_key} must contain sourcePaths")
+        _validate_evidence_paths(
+            source_paths,
+            field=f"pages.{page_key}.sourcePaths",
+            expected_root=expected_root,
+            allowed_suffixes={".c", ".h"},
+        )
+        validation_paths = page.get("validationPaths")
+        if not isinstance(validation_paths, list):
+            raise RuntimeError(f"Evidence page {page_key} validationPaths must be an array")
+        _validate_evidence_paths(
+            validation_paths,
+            field=f"pages.{page_key}.validationPaths",
+            expected_root="docs/",
+            allowed_suffixes={".md", ".html"},
+        )
+
+    missing = sorted(core_page_keys - page_keys)
+    extra = sorted(page_keys - core_page_keys)
+    if missing or extra:
+        raise RuntimeError(
+            "Evidence page coverage must exactly match formal route pages; "
+            f"missing={missing or 'none'}, extra={extra or 'none'}"
+        )
+    pages_by_key = {str(page["pageKey"]): page for page in pages}
+    for route in routes:
+        route_id = str(route["id"])
+        closure = route.get("closure")
+        if not isinstance(closure, dict):
+            raise RuntimeError(f"Route {route_id} is missing closure metadata")
+        for page_key in closure.get("verification", []):
+            page = pages_by_key.get(str(page_key))
+            if page is None or page.get("status") != "verified":
+                raise RuntimeError(
+                    f"Route {route_id} verification page is not verified: {page_key!r}"
+                )
+    return data
+
+
+def _validate_evidence_paths(
+    paths: Sequence[object],
+    *,
+    field: str,
+    expected_root: str,
+    allowed_suffixes: set[str],
+) -> None:
+    seen: set[str] = set()
+    for relative_path in paths:
+        if not isinstance(relative_path, str) or not relative_path.startswith(expected_root):
+            raise RuntimeError(f"Evidence {field} has invalid path: {relative_path!r}")
+        if relative_path in seen:
+            raise RuntimeError(f"Evidence {field} has duplicate path: {relative_path}")
+        seen.add(relative_path)
+        if Path(relative_path).suffix.lower() not in allowed_suffixes:
+            raise RuntimeError(f"Evidence {field} has unsupported file type: {relative_path}")
+        _repo_file(relative_path, field=field)
+
+
+EVIDENCE_MANIFEST_DATA = load_evidence_manifest()
+EVIDENCE_PAGES_BY_KEY: Dict[str, Dict[str, object]] = {
+    str(item["pageKey"]): item
+    for item in EVIDENCE_MANIFEST_DATA["pages"]  # type: ignore[index]
+}
 
 
 RELATIONS: Dict[str, Dict[str, object]] = {
@@ -820,6 +1013,123 @@ RELATIONS: Dict[str, Dict[str, object]] = {
 }
 
 
+def analyze_flow_governance(
+    routes: Sequence[Mapping[str, object]] = ROUTES,
+    evidence: Mapping[str, object] = EVIDENCE_MANIFEST_DATA,
+    relations: Mapping[str, Mapping[str, object]] = RELATIONS,
+    *,
+    review_window_days: int = 90,
+) -> Dict[str, object]:
+    """Return high-level flow governance findings without duplicating business data."""
+    core_page_keys: set[str] = set()
+    duplicate_steps: list[dict[str, str]] = []
+    intentional_reuse: list[dict[str, object]] = []
+    closure_issues: list[dict[str, str]] = []
+    for route in routes:
+        route_id = str(route.get("id", "unknown"))
+        steps = route.get("steps", [])
+        formal_steps = [
+            step
+            for step in steps
+            if isinstance(step, dict)
+            and step.get("formal") is True
+            and isinstance(step.get("pageKey"), str)
+        ] if isinstance(steps, list) else []
+        formal_page_keys = {str(step["pageKey"]) for step in formal_steps}
+        core_page_keys.update(formal_page_keys)
+
+        signatures_by_page: dict[str, list[tuple[str, ...]]] = {}
+        for step in formal_steps:
+            page_key = str(step["pageKey"])
+            signature = tuple(str(step.get(field, "")) for field in ("owner", "role", "label", "detail", "siteHref"))
+            signatures_by_page.setdefault(page_key, []).append(signature)
+        for page_key, signatures in signatures_by_page.items():
+            if len(signatures) < 2:
+                continue
+            if len(set(signatures)) == len(signatures):
+                intentional_reuse.append({"routeId": route_id, "pageKey": page_key, "count": len(signatures)})
+            else:
+                duplicate_steps.append({"routeId": route_id, "pageKey": page_key})
+
+        closure = route.get("closure")
+        if not isinstance(closure, dict):
+            closure_issues.append({"routeId": route_id, "roleId": "all"})
+            continue
+        for role_id in CLOSURE_ROLE_IDS:
+            page_keys = closure.get(role_id)
+            if not isinstance(page_keys, list) or not page_keys:
+                closure_issues.append({"routeId": route_id, "roleId": role_id})
+                continue
+            if any(str(page_key) not in formal_page_keys for page_key in page_keys):
+                closure_issues.append({"routeId": route_id, "roleId": role_id})
+
+    evidence_pages = evidence.get("pages", [])
+    evidence_page_keys = {
+        str(page["pageKey"])
+        for page in evidence_pages
+        if isinstance(page, dict) and isinstance(page.get("pageKey"), str)
+    } if isinstance(evidence_pages, list) else set()
+    orphan_pages = sorted(evidence_page_keys - core_page_keys)
+    missing_evidence = sorted(core_page_keys - evidence_page_keys)
+
+    relation_gaps: list[dict[str, object]] = []
+    for page_key in sorted(core_page_keys):
+        relation = relations.get(page_key)
+        upstream = relation.get("upstream") if isinstance(relation, Mapping) else None
+        downstream = relation.get("downstream") if isinstance(relation, Mapping) else None
+        missing_upstream = not isinstance(upstream, list) or not upstream
+        missing_downstream = not isinstance(downstream, list) or not downstream
+        if missing_upstream or missing_downstream:
+            relation_gaps.append(
+                {
+                    "pageKey": page_key,
+                    "missingUpstream": missing_upstream,
+                    "missingDownstream": missing_downstream,
+                }
+            )
+
+    updated = evidence.get("updated")
+    try:
+        reference_date = date.fromisoformat(str(updated))
+    except ValueError:
+        reference_date = date.today()
+    stale_reviews: list[str] = []
+    if isinstance(evidence_pages, list):
+        for page in evidence_pages:
+            if not isinstance(page, dict):
+                continue
+            try:
+                reviewed_at = date.fromisoformat(str(page.get("reviewedAt")))
+            except ValueError:
+                continue
+            if (reference_date - reviewed_at).days > review_window_days:
+                stale_reviews.append(str(page.get("pageKey")))
+
+    issues: list[dict[str, str]] = []
+    issues.extend({"rule": "orphan-page", "message": f"{page_key} is not used by any route"} for page_key in orphan_pages)
+    issues.extend({"rule": "missing-evidence", "message": f"{page_key} has no evidence entry"} for page_key in missing_evidence)
+    issues.extend({"rule": "duplicate-step", "message": f"{item['routeId']} duplicates {item['pageKey']}"} for item in duplicate_steps)
+    issues.extend({"rule": "closure", "message": f"{item['routeId']} has invalid {item['roleId']} closure"} for item in closure_issues)
+    issues.extend({"rule": "relation-gap", "message": f"{item['pageKey']} has an upstream/downstream gap"} for item in relation_gaps)
+    issues.extend({"rule": "stale-review", "message": f"{page_key} review is older than {review_window_days} days"} for page_key in stale_reviews)
+    return {
+        "issues": issues,
+        "intentionalReuse": intentional_reuse,
+        "metrics": {
+            "routes": len(routes),
+            "corePages": len(core_page_keys),
+            "closureRoles": len(routes) * len(CLOSURE_ROLE_IDS),
+            "verifiedPages": sum(
+                1
+                for page in evidence_pages
+                if isinstance(page, dict) and page.get("status") == "verified"
+            ) if isinstance(evidence_pages, list) else 0,
+            "blockingIssues": len(issues) - len(stale_reviews),
+            "warnings": len(stale_reviews),
+        },
+    }
+
+
 INJECT_CSS = """
 .cross-flow-nav{margin:16px 0 20px;padding:16px 18px;border:1px solid #cfe0f2;border-radius:10px;background:#fff;box-shadow:0 8px 22px rgba(31,59,91,.07)}
 .cross-flow-nav *{box-sizing:border-box}
@@ -829,6 +1139,12 @@ INJECT_CSS = """
 .cross-flow-nav__crumbs{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:0 0 10px;color:#5a6f86;font-size:12px}
 .cross-flow-nav__crumbs a{color:#245d96;text-decoration:none;font-weight:700}
 .cross-flow-nav__crumbs span{overflow-wrap:anywhere}
+.cross-flow-evidence{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin:0 0 14px;padding:10px;border:1px solid #cfe0f2;border-radius:8px;background:#f5f9fd}
+.cross-flow-evidence__item{min-width:0;padding:8px 9px;border-left:3px solid #248b70;background:#fff}
+.cross-flow-evidence__item span{display:block;margin-bottom:4px;color:#5a6f86;font-size:11px;font-weight:700}
+.cross-flow-evidence__item strong,.cross-flow-evidence__links{display:block;color:#17233a;font-size:12px;line-height:1.55;overflow-wrap:anywhere}
+.cross-flow-evidence__links a{color:#245d96;text-decoration:none;font-weight:700}
+.cross-flow-evidence__links a+a::before{content:" · ";color:#8393a5}
 .cross-flow-nav__quick{display:flex;flex-wrap:wrap;gap:7px;justify-content:flex-end}
 .cross-flow-nav__quick a,.cross-flow-nav__links a{display:inline-flex;align-items:center;min-height:28px;padding:4px 9px;border:1px solid #d7e5f3;border-radius:999px;background:#f6faff;color:#245d96;text-decoration:none;font-size:12px;font-weight:700;max-width:100%;white-space:normal;overflow-wrap:anywhere;word-break:break-word}
 .cross-flow-nav__grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px}
@@ -839,7 +1155,8 @@ INJECT_CSS = """
 .cross-flow-nav__linear{display:flex;justify-content:space-between;gap:10px;margin-top:12px;padding-top:12px;border-top:1px solid #e2ebf5}
 .cross-flow-nav__linear a{flex:1 1 0;min-width:0;padding:9px 11px;border:1px solid #d7e5f3;border-radius:8px;background:#f8fbff;color:#214f7d;text-decoration:none;font-size:13px;font-weight:800;overflow-wrap:anywhere}
 .cross-flow-nav__linear a:last-child{text-align:right}
-@media(max-width:720px){.cross-flow-nav{padding:14px;max-width:100%;overflow:hidden}.cross-flow-nav__head{display:block}.cross-flow-nav__title{font-size:16px}.cross-flow-nav__quick{justify-content:flex-start;margin-top:10px}.cross-flow-nav__grid{grid-template-columns:1fr}.cross-flow-nav__linear{flex-direction:column}.cross-flow-nav__linear a:last-child{text-align:left}}
+@media(max-width:920px){.cross-flow-evidence{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:720px){.cross-flow-nav{padding:14px;max-width:100%;overflow:hidden}.cross-flow-nav__head{display:block}.cross-flow-nav__title{font-size:16px}.cross-flow-nav__quick{justify-content:flex-start;margin-top:10px}.cross-flow-evidence{grid-template-columns:1fr}.cross-flow-nav__grid{grid-template-columns:1fr}.cross-flow-nav__linear{flex-direction:column}.cross-flow-nav__linear a:last-child{text-align:left}}
 """.strip()
 
 
@@ -891,8 +1208,13 @@ h3{margin:16px 0 8px;font-size:18px}
 .step b{font-size:13px;color:#28476a}
 .step span,.step b{overflow-wrap:anywhere;word-break:break-word}
 .step span{display:block;color:#4d6076;font-size:13px}
+.route-closure{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:12px 0;padding:10px;border:1px solid #d7e2ef;border-radius:8px;background:#f5f9fd}
+.route-closure__item{min-width:0;padding:8px 9px;border-left:3px solid #248b70;background:#fff}
+.route-closure__item b{display:block;margin-bottom:4px;color:#28476a;font-size:12px}
+.route-closure__item span{display:flex;flex-wrap:wrap;gap:4px;color:#4d6076;font-size:12px;line-height:1.5}
+.route-closure__item a{font-weight:700}
 .note{border:1px solid #bad8fb;background:#eef7ff;border-radius:8px;padding:11px 13px}
-@media(max-width:800px){.wrap{padding:16px;max-width:100vw}.hero{padding:24px 22px;overflow:hidden}.hero h1{font-size:24px}.meta-grid,.split{grid-template-columns:1fr}.meta{min-width:0;overflow-wrap:anywhere;word-break:break-word}section{padding:18px;max-width:100%}.step{grid-template-columns:1fr}.topnav{position:static}.topnav a{white-space:normal;overflow-wrap:anywhere}.flow-wrap{overflow-x:visible}.route-svg{width:100%!important;min-width:0!important;max-width:100%!important}.nt{font-size:13px}.ns{font-size:10px}}
+@media(max-width:800px){.wrap{padding:16px;max-width:100vw}.hero{padding:24px 22px;overflow:hidden}.hero h1{font-size:24px}.meta-grid,.split,.route-closure{grid-template-columns:1fr}.meta{min-width:0;overflow-wrap:anywhere;word-break:break-word}section{padding:18px;max-width:100%}.step{grid-template-columns:1fr}.topnav{position:static}.topnav a{white-space:normal;overflow-wrap:anywhere}.flow-wrap{overflow-x:visible}.route-svg{width:100%!important;min-width:0!important;max-width:100%!important}.nt{font-size:13px}.ns{font-size:10px}}
 """.strip()
 
 
@@ -902,11 +1224,10 @@ def replace_legacy_svg_labels(text: str) -> str:
         if ARIA_LABEL_ATTR_RE.search(opening) is None:
             return match.group(0)
         cleaned_opening = ARIA_ACCESSIBILITY_ATTR_RE.sub("", opening)
+        cleaned_opening = SVG_ROOT_PRESENTATION_ATTR_RE.sub("", cleaned_opening)
         cleaned_opening = cleaned_opening[:-1].rstrip()
-        title_id = match.group("title_id")
-        desc_id = match.group("desc_id")
         return (
-            f'{cleaned_opening} aria-labelledby="{title_id} {desc_id}">'
+            f'{cleaned_opening} aria-hidden="true" focusable="false">'
             f'{match.group("metadata")}'
         )
 
@@ -1112,6 +1433,56 @@ def breadcrumb(from_file: Path, key: str) -> str:
     return '<div class="cross-flow-nav__crumbs">' + "<span>/</span>".join(parts) + "</div>"
 
 
+def _evidence_links(from_file: Path, paths: Sequence[str], labels: Sequence[str] | None = None) -> str:
+    anchors = []
+    for index, relative_path in enumerate(paths):
+        target = ROOT / relative_path
+        label = labels[index] if labels is not None else relative_path.split("/", 1)[-1]
+        anchors.append(
+            f'<a href="{html.escape(rel_path_to_file(from_file, target))}" '
+            f'title="{html.escape(relative_path)}">{html.escape(label)}</a>'
+        )
+    return '<span class="cross-flow-evidence__links">' + "".join(anchors) + "</span>"
+
+
+def make_evidence_head(from_file: Path, key: str) -> str:
+    evidence = EVIDENCE_PAGES_BY_KEY.get(key)
+    if evidence is None:
+        return ""
+    status_labels = {
+        "verified": "已核对",
+        "needs-review": "需复核",
+        "draft": "草稿",
+    }
+    status = str(evidence["status"])
+    reviewed_at = str(evidence["reviewedAt"])
+    firmware = EVIDENCE_MANIFEST_DATA["firmwareBaseline"]
+    cpu2_version = str(firmware["cpu2"]["version"])  # type: ignore[index]
+    cpu3_version = str(firmware["cpu3"]["version"])  # type: ignore[index]
+    source_paths = [str(item) for item in evidence["sourcePaths"]]  # type: ignore[index]
+    validation_paths = [
+        *[str(item) for item in EVIDENCE_MANIFEST_DATA["defaultValidationPaths"]],  # type: ignore[index]
+        *[str(item) for item in evidence["validationPaths"]],  # type: ignore[index]
+    ]
+    validation_labels = ["当前版本验证"] + [
+        f"专项验证 {index}"
+        for index in range(1, len(validation_paths))
+    ]
+    return (
+        f'<div class="cross-flow-evidence" data-evidence-page="{html.escape(key)}" '
+        f'data-evidence-status="{html.escape(status)}">'
+        '<div class="cross-flow-evidence__item"><span>可信状态</span>'
+        f'<strong>{html.escape(status_labels[status])} · {html.escape(reviewed_at)}</strong></div>'
+        '<div class="cross-flow-evidence__item"><span>适用固件基线</span>'
+        f'<strong>CPU2 {html.escape(cpu2_version)} / CPU3 {html.escape(cpu3_version)}</strong></div>'
+        '<div class="cross-flow-evidence__item"><span>主源码入口</span>'
+        + _evidence_links(from_file, source_paths)
+        + '</div><div class="cross-flow-evidence__item"><span>验证资料</span>'
+        + _evidence_links(from_file, validation_paths, validation_labels)
+        + "</div></div>"
+    )
+
+
 def pills(from_file: Path, keys: Sequence[str]) -> str:
     return "".join(link_pill(from_file, key) for key in keys)
 
@@ -1256,6 +1627,7 @@ def make_relation_block(key: str) -> str:
         f"\n{NAV_START}\n"
         '<section class="cross-flow-nav" id="cross-flow-nav" aria-label="程序流程关联导航">'
         + breadcrumb(from_file, key)
+        + make_evidence_head(from_file, key)
         + head
         + grid
         + linear
@@ -1356,9 +1728,19 @@ def normalize_all_flow_documents(plan: InMemoryUpdatePlan) -> None:
         plan.stage_text(path, normalize_flow_semantics(plan.read_text(path), path))
 
 
+def formal_route_steps(route: Mapping[str, object]) -> List[Mapping[str, object]]:
+    steps = route.get("steps")
+    if not isinstance(steps, list):
+        return []
+    return [step for step in steps if isinstance(step, dict) and step.get("formal") is True]
+
+
 def route_steps(from_file: Path, route: Mapping[str, object]) -> str:
     items = []
-    for index, (stage, key, desc) in enumerate(route["steps"], start=1):  # type: ignore[index]
+    for index, step in enumerate(formal_route_steps(route), start=1):
+        stage = str(step["role"])
+        key = str(step["pageKey"])
+        desc = str(step["detail"])
         items.append(
             '<div class="step">'
             f"<b>{index}. {html.escape(stage)}</b>"
@@ -1368,18 +1750,49 @@ def route_steps(from_file: Path, route: Mapping[str, object]) -> str:
     return "".join(items)
 
 
+def route_closure(from_file: Path, route: Mapping[str, object]) -> str:
+    closure = route.get("closure")
+    if not isinstance(closure, dict):
+        return ""
+    items = []
+    closure_roles = ROUTE_MANIFEST_DATA.get("closureRoles", [])
+    for role in closure_roles:
+        if not isinstance(role, dict):
+            continue
+        role_id = str(role["id"])
+        page_keys = closure.get(role_id, [])
+        role_links = "".join(
+            link(from_file, str(page_key))
+            for page_key in page_keys
+            if str(page_key) in PAGE_DEFS
+        )
+        items.append(
+            '<div class="route-closure__item">'
+            f'<b>{html.escape(str(role["label"]))}</b>'
+            f"<span>{role_links}</span>"
+            "</div>"
+        )
+    return (
+        f'<div class="route-closure" aria-label="{html.escape(str(route["title"]))}闭环覆盖">'
+        + "".join(items)
+        + "</div>"
+    )
+
+
 def make_global_index() -> str:
     from_file = GLOBAL_INDEX
     cpu2_links = "".join(link_pill(from_file, key) for key in CPU2_ORDER)
     cpu3_links = "".join(link_pill(from_file, key) for key in CPU3_ORDER)
     route_cards = []
     for route in ROUTES:
+        first_steps = formal_route_steps(route)[:2]
         route_cards.append(
             '<article class="card route-card">'
             f'<strong>{html.escape(route["title"])}</strong>'
+            '<span class="badge green">闭环 6/6</span>'
             f'<p>{html.escape(route["summary"])}</p>'
             f'<div class="links"><a class="pill" href="{html.escape(rel_href(from_file, "cross", "#" + str(route["id"])))}">查看链路</a>'
-            + "".join(link_pill(from_file, step[1]) for step in route["steps"][0:2])  # type: ignore[index]
+            + "".join(link_pill(from_file, str(step["pageKey"])) for step in first_steps)
             + "</div></article>"
         )
     legacy_cards = []
@@ -1468,6 +1881,7 @@ def make_global_index() -> str:
 </section>
 <!-- CUBE_EMBED_END -->
 </div>
+<script src="assets/{EMBED_SCRIPT_NAME}"></script>
 </body>
 </html>
 """
@@ -1481,6 +1895,7 @@ def make_cross_route() -> str:
             f'<article class="card route-card" id="{html.escape(str(route["id"]))}">'
             f'<h3>{html.escape(route["title"])}</h3>'
             f'<p>{html.escape(route["summary"])}</p>'
+            f'{route_closure(from_file, route)}'
             f'<div class="steps">{route_steps(from_file, route)}</div>'
             "</article>"
         )
@@ -1504,7 +1919,7 @@ def make_cross_route() -> str:
 <div class="meta"><span>入口侧</span><strong>菜单 / 外部协议 / 显示</strong></div>
 <div class="meta"><span>通道</span><strong>CPU3 UART5 Modbus</strong></div>
 <div class="meta"><span>执行侧</span><strong>CPU2 测量状态机</strong></div>
-<div class="meta"><span>回读侧</span><strong>寄存器 / 显示 / 协议响应</strong></div>
+<div class="meta"><span>闭环契约</span><strong>入口 / 分发 / 执行 / 回读 / 异常 / 验证</strong></div>
 </div>
 </header>
 <nav class="topnav">
@@ -1521,8 +1936,8 @@ def make_cross_route() -> str:
 <section id="map">
 <h2>1. 整机业务闭环图</h2>
 <p class="lead">图中只写业务动作，不写函数名。函数名和源码证据保留在各自详细页面里。</p>
-<figure class="cube-flow-figure"><figcaption id="cube-flow-跨cpu业务链路-diagram-01-caption">CPU2 CPU3 跨 CPU 业务闭环</figcaption><div class="flow-wrap cube-flow__viewport" data-flow-width="standard" tabindex="0" role="region" aria-labelledby="cube-flow-跨cpu业务链路-diagram-01-caption">
-<svg class="route-svg" viewBox="0 0 1200 760" role="img" aria-labelledby="cube-flow-跨cpu业务链路-diagram-01-title cube-flow-跨cpu业务链路-diagram-01-desc">
+<figure class="cube-flow-figure"><figcaption id="cube-flow-跨cpu业务链路-diagram-01-caption">CPU2 CPU3 跨 CPU 业务闭环</figcaption><div class="flow-wrap cube-flow__viewport" data-flow-width="standard" tabindex="0" role="region" aria-labelledby="cube-flow-跨cpu业务链路-diagram-01-caption" aria-describedby="cube-flow-跨cpu业务链路-diagram-01-desc">
+<svg class="route-svg" viewBox="0 0 1200 760" aria-hidden="true" focusable="false">
 <title id="cube-flow-跨cpu业务链路-diagram-01-title">CPU2 CPU3 跨 CPU 业务闭环</title><desc id="cube-flow-跨cpu业务链路-diagram-01-desc">用户或上位机发起的菜单、DSM、Wartsila 或 SI 请求先由 CPU3 完成入口映射和参数检查，再通过内部 Modbus 写入 CPU2 命令或参数；CPU2 通信入口分发命令，结合电机、位置、传感和扭力执行液位、水位、密度等测量。异常进入 SET_ERROR 和状态恢复，正常结果与错误码写入输入寄存器；CPU3 轮询刷新 g_measurement、参数镜像和点表后用于状态页及外部协议响应，并继续下一轮交互。</desc>
 <defs>
 <marker id="route-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#61758e"/></marker>
@@ -1572,6 +1987,7 @@ def make_cross_route() -> str:
 </section>
 <!-- CUBE_EMBED_END -->
 </div>
+<script src="assets/{EMBED_SCRIPT_NAME}"></script>
 </body>
 </html>
 """
@@ -1618,6 +2034,17 @@ def inject_all_pages(plan: InMemoryUpdatePlan) -> None:
 
 
 def validate_files(plan: InMemoryUpdatePlan) -> None:
+    governance = analyze_flow_governance()
+    blocking_issues = [
+        issue
+        for issue in governance["issues"]  # type: ignore[index]
+        if isinstance(issue, dict) and issue.get("rule") != "stale-review"
+    ]
+    if blocking_issues:
+        raise RuntimeError(
+            "Flow governance checks failed: "
+            + "; ".join(str(issue.get("message")) for issue in blocking_issues)
+        )
     missing = [
         key
         for key, meta in PAGE_DEFS.items()
@@ -1639,6 +2066,13 @@ def validate_files(plan: InMemoryUpdatePlan) -> None:
             missing_nav.append(key)
     if missing_nav:
         raise RuntimeError("Missing cross-flow navigation block: " + ", ".join(missing_nav))
+    missing_evidence = []
+    for key in EVIDENCE_PAGES_BY_KEY:
+        text = plan.read_text(page_path(key))
+        if f'data-evidence-page="{key}"' not in text:
+            missing_evidence.append(key)
+    if missing_evidence:
+        raise RuntimeError("Missing generated evidence head: " + ", ".join(missing_evidence))
 
 
 def build_update_plan() -> InMemoryUpdatePlan:

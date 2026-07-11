@@ -66,6 +66,7 @@ CPU2 参数加载会校验 FRAM 中的 `magic`、`struct_size`、`param_version`
 | V1.21.4.0 | 3 | 存储版本不变；修复编码轮模式运行期速度补偿参考长度，旧 FRAM 参数通常保留 |
 | V1.21.5.0 | 3 | 存储版本不变；修复 AD5421 断环重接恢复与 AO 运行态错误处理，旧 FRAM 参数通常保留 |
 | V1.21.6.0 | 3 | 存储版本不变；修复 DSM 传感器编号响应解析、无符号 32 位溢出和上电蓝牙持续收包永久等待，并清理未用代码，旧 FRAM 参数通常保留 |
+| V1.22.0.0 | 3 | 存储版本不变；新增 CPU2 串口命令严格收帧、解析、查询和停止入口，未改变 `DeviceParameters` 布局、元信息或 CRC 范围，旧 FRAM 参数通常保留 |
 
 历史说明：建立 CPU2 程序版本号前，2025-12-16 引入当前参数元信息时使用 `DEVICE_PARAM_VERSION=1`；2026-03-05 系统参数增加时提升到 `DEVICE_PARAM_VERSION=2`，从版本 1 升级到版本 2 会因旧参数版本不匹配恢复出厂参数。
 
@@ -2146,3 +2147,46 @@ CPU2 参数加载会校验 FRAM 中的 `magic`、`struct_size`、`param_version`
 - `BYPRODUCTS` 只清理当前配置的固定名和当前版本固件，构建目录中的历史版本 HEX 不会自动删除；发布仍应按版本名、链接成功状态、生成时间和哈希选择产物。
 - Wartsila 点表 100/200 点及完成态等既有兼容问题不在本轮范围。
 - 暂存区尚未按最终清单重建；正式提交前需重新运行 `py tools\check_version_bumped.py` 和暂存区差异检查。
+
+## 2026-07-11 - 新增 LTD 共享 Modbus、CPU2 串口命令严检和流程影响门禁（CPU2 V1.22.0.0 / CPU3 V1.21.0.0）
+
+版本：
+- CPU2: V1.21.6.0 -> V1.22.0.0（MINOR）。
+- CPU3: V1.20.0.0 -> V1.21.0.0（MINOR）。
+
+协议版本/兼容性：
+- `DEVICE_PROTOCOL_VERSION` 保持 14；CPU2/CPU3 共享命令、保持寄存器、输入寄存器、字段长度、32 位线序和字段语义不变。CPU3 的外部 `COM_PROTO_LTD` 从不回包占位改为响应既有共享协议，不属于板间共享契约变更。
+- CPU2 `DEVICE_PARAM_VERSION` 保持 3，`DeviceParameters`、`struct_size`、FRAM A/B 地址、magic 和 CRC 范围不变；从 V1.21.6.0 升级不会因本次改动恢复出厂参数。
+- CPU3 本机参数存储版本保持 `0x0006`，COM 口配置和本机 FRAM 布局不变；原已配置为 LTD 的端口升级后会开始响应 FC03/FC04/FC10，外部主机需要按共享寄存器 32 位高字在前的标准 Modbus 口径访问。
+
+本次修改：
+- CPU3 新增独立 LTD Modbus 从站，接入 COM1/COM2/COM3 协议分发表；支持 FC03 读保持寄存器、FC04 读输入寄存器和 FC10 写多个保持寄存器，地址不匹配或 CRC 错误静默，非法功能/地址/值分别返回 `0x01/0x02/0x03`。
+- LTD FC03/FC04 只读取 CPU2 已确认快照；状态、参数、协议快照未建立、协议不匹配或 CPU2 通信故障时返回 `0x06`，不把默认值或旧缓存伪装为实时数据。
+- LTD FC10 强制偶数起始地址、偶数寄存器数量、标准 `byteCount=qty*2` 和实际帧长一致；CPU3 将高字在前的寄存器对还原为本机 `uint32_t` 后转发 CPU2，只有合法 ACK 才回写成功。
+- 参数 FC10 成功后关闭 CPU3 参数快照并主动全量补读，补读完成前外部读取返回设备忙；命令字段单独写入成功后只更新命令镜像，避免把请求影子当作 CPU2 已确认参数。
+- CPU2 USART1 IDLE 中断不再拼接和执行文本命令，只把 DMA 字节交给定长收帧器；支持 CRLF/LF，正文上限 63 字节，超长帧整行丢弃并在主循环报告，不在 ISR 打印或阻塞。
+- CPU2 主循环先复制完整串口帧、取消待执行自动恢复，再开放下一帧接收；正式业务命令仍只写入 `g_deviceParams.command`，由统一命令调度执行。
+- 新增严格串口命令解析器，正式单字母、固定测试命令和数值命令都要求完整匹配；拒绝 `Qxxxx`、`Ixxxx`、`T1abc`、`A+10abc` 等前缀误执行，并校验距离、速度、倍率、AO 电流和蓝牙名称范围。
+- 新增 `STOP/HELP/VER?/STAT?/ERR?`；STOP 映射统一取消测量命令，四个查询入口只读取版本、共享协议、参数版本、状态和错误信息。
+- 旧串口测试动作继续由 `Test_ProcessSerialCommand()` 执行，但进入旧分发前必须由新解析器判定为合法测试命令；`measure.c` 仅保留兼容包装并转交新模块。
+- 新增 10 组 67 个按钮的 CPU2 串口助手配置生成器、导入配置、维护说明和主机侧 C 回归测试，覆盖合法命令、尾随垃圾、越界参数、CRLF/LF、超长丢弃和恢复。
+- 新增 LTD 协议契约脚本，校验分发表连接、CPU2 快照/ACK/补读闭环、共享协议版本 14 和 11 组 golden frame。
+- 新增流程影响反向索引与检查脚本，根据暂存固件源码定位受影响流程页、业务链路和验证资料；版本门禁自动调用暂存区影响分析。
+- 流程 HTML 契约增加表格可聚焦横向滚动区、caption/提示 ARIA 关联、SVG 视觉层隐藏和统一键盘滚动脚本；CPU3 流程生成器直接输出同一 SVG/viewport/脚本位置契约，导航生成器与测试同步更新并保持幂等生成，避免重新生成后回退旧属性。
+- 同步 CPU2 串口协议卷、LTD 共享 Modbus 协议卷、流程证据清单、跨 CPU 流程页、索引和本版本改动与测试方案。
+
+验证：
+- `cmake --build build\LTD_MAIN_CPU2 --clean-first`：通过，生成 `LTD_MAIN_CPU2_V1.22.0.0.hex`。
+- `cmake --build build\LTD_DISPLAY_CPU3 --clean-first`：通过，生成 `LTD_DISPLAY_CPU3_V1.21.0.0.hex`。
+- `py -X utf8 tools\check_ltd_modbus_contract.py`：通过。
+- `gcc -std=c11 -Wall -Wextra -Werror -I LTD_MAIN_CPU2\Application\Inc tools\test_serial_command_parser.c LTD_MAIN_CPU2\Application\Src\serial_command_parser.c -lm -o build\test_serial_command_parser.exe` 及生成程序：通过。
+- `py -X utf8 tools\generate_cpu2_serial_command_panel.py --check`：通过，10 组 67 个按钮一致。
+- `py -X utf8 -m unittest tools.test_check_docs tools.test_check_flow_docs tools.test_check_flow_impact tools.test_check_version_bumped tools.test_update_flow_navigation tools.test_generate_cpu3_flow_docs`：57 项通过。
+- `py -X utf8 tools\check_docs.py`、`py -X utf8 tools\update_flow_navigation.py --check`、`py -X utf8 tools\check_flow_docs.py`：通过；流程契约覆盖 32 页、178 张 SVG、47 张表格。
+- `py -X utf8 tools\check_flow_impact.py --staged --strict`：通过；命中 6 个核心流程、8 条业务链路，待复核流程 0 个。
+- `py tools\check_version_bumped.py`、`git diff --cached --check`：通过。
+
+未验证风险：
+- 尚未使用真实 PLC/RS485 验证 LTD 长帧、CPU2 掉线、协议不匹配、ACK 丢失、参数补读窗口和主站重试策略。
+- 尚未在真实 USART1 DMA/IDLE 中断环境验证连续粘贴、多行高速输入、63/64 字节边界和长时间测试中的 STOP 响应时延；当前接收器为单帧槽，上一帧未被主循环取走时后续字节会被丢弃。
+- 串口查询命令仅证明解析和打印路径可构建，未在实机核对串口工具编码、换行设置和现场状态值。

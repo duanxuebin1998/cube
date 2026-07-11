@@ -68,6 +68,7 @@ target_include_directories(${TARGET} PRIVATE
     ${CMAKE_CURRENT_LIST_DIR}/Application/system_param
     ${CMAKE_CURRENT_LIST_DIR}/Communication/common
     ${CMAKE_CURRENT_LIST_DIR}/Communication/external/DSM_modbus
+    ${CMAKE_CURRENT_LIST_DIR}/Communication/external/ltd_modbus
     ${CMAKE_CURRENT_LIST_DIR}/Communication/external/si_modbus
     ${CMAKE_CURRENT_LIST_DIR}/Communication/external/wartsila_modbus
     ${CMAKE_CURRENT_LIST_DIR}/Communication/internal/main_board_modbus

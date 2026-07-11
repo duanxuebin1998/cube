@@ -42,6 +42,7 @@ class CheckDocsTests(unittest.TestCase):
             [
                 (sys.executable, "tools/check_docs_structure.py"),
                 (sys.executable, "tools/update_flow_navigation.py"),
+                (sys.executable, "tools/check_flow_impact.py"),
                 (sys.executable, "tools/check_flow_docs.py"),
                 (sys.executable, "tools/check_markdown_links.py"),
             ],
@@ -49,6 +50,7 @@ class CheckDocsTests(unittest.TestCase):
         )
         self.assertEqual(
             [
+                (module.OUTPUT_ENCODING, "replace"),
                 (module.OUTPUT_ENCODING, "replace"),
                 (module.OUTPUT_ENCODING, "replace"),
                 (module.OUTPUT_ENCODING, "replace"),

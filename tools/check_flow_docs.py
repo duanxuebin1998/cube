@@ -18,6 +18,7 @@ OUTPUT_ENCODING = "utf-8"
 EMBED_START = "CUBE_EMBED_START"
 EMBED_END = "CUBE_EMBED_END"
 ENHANCEMENT_STYLESHEET = "网站嵌入增强.css"
+ENHANCEMENT_SCRIPT = "网站嵌入增强.js"
 FLOW_WIDTHS = {"compact", "standard", "wide"}
 VOID_TAGS = {
     "area",
@@ -49,6 +50,7 @@ VIEWBOX_PATTERN = re.compile(
 URL_FRAGMENT_PATTERN = re.compile(r"url\(\s*['\"]?#([^)'\"\s]+)['\"]?\s*\)", re.IGNORECASE)
 MIN_NORMALIZED_SUMMARY_LENGTH = 12
 MIN_DISTINCT_SUMMARY_LENGTH = 6
+TABLE_SCROLL_HINT = "横向滚动，键盘 ← → 查看完整表格"
 
 
 @dataclass
@@ -332,6 +334,17 @@ def validate_flow_html(text: str, path: Path) -> FlowPageAudit:
         page_identifier = body.attrs.get("data-cube-flow-page", "").strip()
         if not page_identifier:
             add_error("body 缺少稳定的 data-cube-flow-page 标识", body)
+        body_children = [parser.elements[index] for index in body.children]
+        final_element = body_children[-1] if body_children else None
+        final_src = final_element.attrs.get("src", "") if final_element else ""
+        if (
+            final_element is None
+            or final_element.tag != "script"
+            or not final_src.split("?", 1)[0].replace("\\", "/").endswith(
+                f"assets/{ENHANCEMENT_SCRIPT}"
+            )
+        ):
+            add_error("统一增强脚本必须是 body 的最后一个元素", body)
 
     h1_nodes = by_tag.get("h1", [])
     if len(h1_nodes) != 1:
@@ -433,6 +446,50 @@ def validate_flow_html(text: str, path: Path) -> FlowPageAudit:
             if not table.children or table.children[0] != caption_index:
                 add_error("table caption 必须是首个元素子节点", parser.elements[caption_index])
 
+            caption = parser.elements[caption_index]
+            caption_id = caption.attrs.get("id", "").strip()
+            viewport_index = table.parent
+            viewport = (
+                parser.elements[viewport_index]
+                if viewport_index is not None
+                else None
+            )
+            frame_index = viewport.parent if viewport is not None else None
+            frame = parser.elements[frame_index] if frame_index is not None else None
+            if (
+                not caption_id
+                or viewport is None
+                or "cube-flow-table__viewport" not in class_tokens(viewport)
+                or viewport.attrs.get("tabindex") != "0"
+                or viewport.attrs.get("role") != "region"
+                or viewport.attrs.get("aria-labelledby", "").split() != [caption_id]
+                or frame is None
+                or "cube-flow-table" not in class_tokens(frame)
+            ):
+                add_error(
+                    "table 必须位于可聚焦的 cube-flow-table__viewport 中，"
+                    "并通过 aria-labelledby 关联 caption",
+                    table,
+                )
+            else:
+                hints = [
+                    index
+                    for index in frame.children
+                    if "cube-flow-table__hint" in class_tokens(parser.elements[index])
+                ]
+                if len(hints) != 1:
+                    add_error(
+                        f"table 滚动容器必须有一个操作提示，当前为 {len(hints)} 个",
+                        frame,
+                    )
+                else:
+                    hint = parser.elements[hints[0]]
+                    hint_id = hint.attrs.get("id", "").strip()
+                    if not hint_id or node_text(parser, hints[0]) != TABLE_SCROLL_HINT:
+                        add_error("table 滚动操作提示的 ID 或文字无效", hint)
+                    if viewport.attrs.get("aria-describedby", "").split() != [hint_id]:
+                        add_error("table viewport 必须通过 aria-describedby 关联操作提示", viewport)
+
         table_headers = []
         for index in descendant_indices(parser, table_index):
             node = parser.elements[index]
@@ -481,8 +538,20 @@ def validate_flow_html(text: str, path: Path) -> FlowPageAudit:
             add_error("SVG 缺少有效且宽高为正的 viewBox", svg)
         if "width" in svg.attrs or "height" in svg.attrs:
             add_error("SVG 不应使用固定 width/height，尺寸应由 viewBox 和容器控制", svg)
-        if svg.attrs.get("role", "").lower() != "img":
-            add_error('SVG 缺少 role="img"', svg)
+        if svg.attrs.get("aria-hidden", "").lower() != "true":
+            add_error('SVG 视觉画布缺少 aria-hidden="true"', svg)
+        if svg.attrs.get("focusable", "").lower() != "false":
+            add_error('SVG 视觉画布缺少 focusable="false"', svg)
+        exposed_svg_attrs = {
+            name
+            for name in ("role", "aria-label", "aria-labelledby", "aria-describedby", "tabindex")
+            if name in svg.attrs
+        }
+        if exposed_svg_attrs:
+            add_error(
+                "SVG 视觉画布不应直接暴露辅助技术属性：" + ", ".join(sorted(exposed_svg_attrs)),
+                svg,
+            )
 
         direct_titles = [index for index in svg.children if parser.elements[index].tag == "title"]
         direct_descriptions = [index for index in svg.children if parser.elements[index].tag == "desc"]
@@ -564,14 +633,6 @@ def validate_flow_html(text: str, path: Path) -> FlowPageAudit:
                     parser.elements[direct_descriptions[0]],
                 )
 
-        svg_labelled_by = svg.attrs.get("aria-labelledby", "").split()
-        if not svg_labelled_by:
-            add_error("SVG 必须用 aria-labelledby 关联 title 与 desc", svg)
-        else:
-            for required_id, label in ((title_id, "title"), (description_id, "desc")):
-                if required_id and required_id not in svg_labelled_by:
-                    add_error(f"SVG aria-labelledby 未关联 {label}：{required_id}", svg)
-
         viewport_index = svg.parent
         viewport = parser.elements[viewport_index] if viewport_index is not None else None
         if viewport is None or "cube-flow__viewport" not in class_tokens(viewport):
@@ -583,6 +644,9 @@ def validate_flow_html(text: str, path: Path) -> FlowPageAudit:
             add_error('viewport 缺少 role="region"', viewport)
         if viewport.attrs.get("tabindex", "") != "0":
             add_error('viewport 缺少 tabindex="0"', viewport)
+        viewport_descriptions = viewport.attrs.get("aria-describedby", "").split()
+        if not description_id or description_id not in viewport_descriptions:
+            add_error("viewport 必须通过 aria-describedby 关联 SVG desc", viewport)
 
         figure_index = next(
             (

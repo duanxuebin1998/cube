@@ -7,6 +7,7 @@
 
 #include <ltd_sensor_communication.h>
 #include "test.h"
+#include "serial_command_parser.h"
 #include "measure.h"
 #include "motor_ctrl.h"
 #include "motor_ctrl_internal.h"
@@ -1533,6 +1534,11 @@ uint8_t Test_ProcessSerialCommand(uint8_t *command)
     TestCommandDebugDisplaySnapshot debug_display = { STATE_STANDBY, 0U };
 
     if ((command == NULL) || (command[0] == '\0')) {
+        return 0U;
+    }
+
+    /* 只有通过严格校验的测试命令才能进入旧动作分发器，避免前缀误执行。 */
+    if (SerialCommandParser_Parse(command).kind != SERIAL_COMMAND_KIND_TEST) {
         return 0U;
     }
 

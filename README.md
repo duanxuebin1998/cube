@@ -1,6 +1,6 @@
 # CUBE 仓库导览与新人上手指南
 
-> 最后核对时间：2026-07-06
+> 最后核对时间：2026-07-11
 > 目标：帮助新同学在 1~2 天内建立“能编译、能跟流程、知道改哪里”的整体认知。
 
 ---
@@ -19,8 +19,8 @@
 
 当前文档核对基线：
 
-- CPU2 固件版本：`V1.21.3.0`
-- CPU3 固件版本：`V1.19.1.0`
+- CPU2 固件版本：`V1.22.0.0`
+- CPU3 固件版本：`V1.21.0.0`
 - CPU2/CPU3 共享协议版本：`DEVICE_PROTOCOL_VERSION = 14`
 - CPU2 参数存储版本：`DEVICE_PARAM_VERSION = 3`
 - CPU3 本地显示/通信参数版本：`CPU3_PARAM_VERSION = 0x0006`
@@ -155,9 +155,11 @@ cmake --build build/LTD_DISPLAY_CPU3
 - `Application/app_main.c`
   - 协议分发入口（按每个 COM 口配置）
   - 串口 busy/pending 发送控制
-  - 空闲时执行 `PollingInputData()` 轮询 CPU2
+  - 按 100 ms 调度门限执行 `PollingInputData()` 轮询 CPU2，持续外部流量不能永久饿死内部轮询
 - `Communication/internal/main_board_modbus/cpu2_communicate.c`
   - 组包发送、等待响应、解析 CPU2 返回
+  - 分别维护状态、完整参数和当前连接协议快照；连续 10 次请求未获得合法响应时锁存 CPU2 通信故障
+  - 依赖 CPU2 的普通命令和参数写入只有在三类快照完整、协议匹配且无通信故障时开放，写入成功以合法 CPU2 ACK 为准
 - `Application/system_param/cpu3_comm_display_params.c`
   - CPU3 本地参数加载/保存 FRAM
   - COM1/2/3 运行时重配（波特率、校验、协议）
@@ -225,8 +227,8 @@ CPU2 全局对象：
 
 ### Day 1：编译打通
 
-- 成功构建 `cpu2-debug` 和 `cpu3-debug`
-- 确认输出 `elf/hex/bin/map`
+- 成功构建 `build/LTD_MAIN_CPU2` 和 `build/LTD_DISPLAY_CPU3`
+- 确认分别生成 `LTD_MAIN_CPU2.elf`、`LTD_DISPLAY_CPU3.elf` 以及对应 `hex/bin/map` 产物
 
 ### Day 2：跑通一条命令链路
 

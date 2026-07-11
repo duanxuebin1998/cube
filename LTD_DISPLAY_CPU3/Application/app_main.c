@@ -11,6 +11,7 @@
 #include "wartsila_modbus_communication.h"
 #include "cpu3_comm_display_params.h"
 #include "cpu3_clock.h"
+#include "ltd_modbus_slave.h"
 #include "si_modbus_slave.h"
 #include <string.h>
 
@@ -301,13 +302,14 @@ static uint32_t proto_si_process(const uint8_t* rx, uint16_t rx_len,
     return si_modbus_process_for_dispatch(rx, rx_len, tx, tx_len);
 }
 
-/* 未实现的协议：安全兜底，不回包 */
-static uint32_t proto_no_reply(const uint8_t* rx, uint16_t rx_len,
-                               uint8_t* tx, uint16_t* tx_len)
+/*
+ * 处理 LTD 共享 Modbus 协议帧。
+ * 读取由 CPU3 已确认快照响应，写入由 LTD 模块等待 CPU2 ACK 后再决定外部响应。
+ */
+static uint32_t proto_ltd_process(const uint8_t* rx, uint16_t rx_len,
+                                  uint8_t* tx, uint16_t* tx_len)
 {
-    (void)rx; (void)rx_len; (void)tx;
-    *tx_len = 0;
-    return 0;
+    return ltd_modbus_process_for_dispatch(rx, rx_len, tx, tx_len);
 }
 
 /* 关键：用你现有枚举做索引。若枚举不是从 0 连续增长，别用这种表，改 switch（见下） */
@@ -315,7 +317,7 @@ static const ComProtocolHandler g_handlers[] = {
     [COM_PROTO_DSM]      = { proto_dsm_process,      NULL },
     [COM_PROTO_WARTSILA] = { proto_wartsila_process, NULL },
     [COM_PROTO_SI]   = { proto_si_process,   NULL },
-    [COM_PROTO_LTD]      = { proto_no_reply,         NULL },  /* 先占位 */
+    [COM_PROTO_LTD]      = { proto_ltd_process,      NULL },
 };
 
 /* 按端口号取配置：你这里的 com1/com2/com3 结构来自 cpu3_comm_display_params.h */

@@ -42,16 +42,18 @@ def valid_page(
 <!-- CUBE_EMBED_START -->
 <main>
 <h2>1. 示例参数</h2>
+<div class="cube-flow-table"><div class="cube-flow-table__hint" id="demo-table-hint">横向滚动，键盘 ← → 查看完整表格</div>
+<div class="cube-flow-table__viewport" tabindex="0" role="region" aria-labelledby="demo-table-caption" aria-describedby="demo-table-hint">
 <table>
-<caption>示例参数表</caption>
+<caption id="demo-table-caption">示例参数表</caption>
 <thead><tr><th scope="col">参数</th><th scope="col">说明</th></tr></thead>
 <tbody><tr><td>示例值</td><td>示例说明</td></tr></tbody>
-</table>
+</table></div></div>
 <figure class="cube-flow-figure">
 <figcaption id="demo-caption">示例流程图</figcaption>
 <div class="cube-flow__viewport" data-flow-width="standard" role="region"
-     aria-labelledby="demo-caption" tabindex="0">
-<svg viewBox="0 0 1120 640" role="img" aria-labelledby="demo-title demo-desc">
+     aria-labelledby="demo-caption" aria-describedby="demo-desc" tabindex="0">
+<svg viewBox="0 0 1120 640" aria-hidden="true" focusable="false">
 <title id="demo-title">示例流程图</title>
 <desc id="demo-desc">{description}</desc>
 <defs><marker id="arrow"><path d="M0 0 L10 5 L0 10"></path></marker></defs>
@@ -62,6 +64,7 @@ def valid_page(
 </main>
 <!-- CUBE_EMBED_END -->
 </div>
+<script src="../assets/网站嵌入增强.js"></script>
 </body>
 </html>"""
 
@@ -80,15 +83,14 @@ class CheckFlowDocsTests(unittest.TestCase):
     def test_rejects_missing_viewbox_and_unreferenced_description(self) -> None:
         module = load_module()
         html = valid_page().replace(' viewBox="0 0 1120 640"', "").replace(
-            'aria-labelledby="demo-title demo-desc"',
-            'aria-labelledby="demo-title"',
+            ' aria-describedby="demo-desc"', ""
         )
 
         audit = module.validate_flow_html(html, Path("docs/示例.html"))
 
         joined = "\n".join(audit.errors)
         self.assertIn("缺少有效且宽高为正的 viewBox", joined)
-        self.assertIn("aria-labelledby 未关联 desc", joined)
+        self.assertIn("viewport 必须通过 aria-describedby 关联 SVG desc", joined)
 
     def test_rejects_script_controls_inside_embed_region(self) -> None:
         module = load_module()
@@ -106,17 +108,30 @@ class CheckFlowDocsTests(unittest.TestCase):
     def test_rejects_duplicate_html_attributes_even_when_values_match(self) -> None:
         module = load_module()
         html = valid_page().replace(
-            'role="img" aria-labelledby="demo-title demo-desc"',
-            'role="img" aria-labelledby="demo-title demo-desc" '
-            'aria-labelledby="demo-title demo-desc"',
+            'aria-hidden="true" focusable="false"',
+            'aria-hidden="true" focusable="false" aria-hidden="true"',
         )
 
         audit = module.validate_flow_html(html, Path("docs/示例.html"))
 
         self.assertIn(
-            "svg 属性重复：aria-labelledby（值：demo-title demo-desc）",
+            "svg 属性重复：aria-hidden（值：true）",
             "\n".join(audit.errors),
         )
+
+    def test_rejects_svg_exposed_directly_to_assistive_technology(self) -> None:
+        module = load_module()
+        html = valid_page().replace(
+            'aria-hidden="true" focusable="false"',
+            'role="img" aria-labelledby="demo-title demo-desc"',
+        )
+
+        audit = module.validate_flow_html(html, Path("docs/示例.html"))
+
+        joined = "\n".join(audit.errors)
+        self.assertIn('SVG 视觉画布缺少 aria-hidden="true"', joined)
+        self.assertIn('SVG 视觉画布缺少 focusable="false"', joined)
+        self.assertIn("SVG 视觉画布不应直接暴露辅助技术属性", joined)
 
     def test_reports_duplicate_page_identifiers_across_files(self) -> None:
         module = load_module()
@@ -135,7 +150,7 @@ class CheckFlowDocsTests(unittest.TestCase):
         html = (
             valid_page()
             .replace("<h2>1. 示例参数</h2>", "<h4>1. 示例参数</h4>")
-            .replace("<caption>示例参数表</caption>\n", "")
+            .replace('<caption id="demo-table-caption">示例参数表</caption>\n', "")
             .replace(' scope="col"', "")
         )
 
@@ -145,6 +160,41 @@ class CheckFlowDocsTests(unittest.TestCase):
         self.assertIn("标题层级跳级：h1 后直接使用 h4", joined)
         self.assertIn("table 必须有一个直接 caption，当前为 0 个", joined)
         self.assertIn("th 缺少 scope", joined)
+
+    def test_rejects_table_without_labelled_keyboard_scroll_viewport(self) -> None:
+        module = load_module()
+        html = (
+            valid_page()
+            .replace(
+                '<div class="cube-flow-table"><div class="cube-flow-table__hint" '
+                'id="demo-table-hint">横向滚动，键盘 ← → 查看完整表格</div>\n'
+                '<div class="cube-flow-table__viewport" tabindex="0" role="region" '
+                'aria-labelledby="demo-table-caption" aria-describedby="demo-table-hint">\n',
+                "",
+            )
+            .replace("</table></div></div>", "</table>")
+        )
+
+        audit = module.validate_flow_html(html, Path("docs/示例.html"))
+
+        self.assertIn(
+            "table 必须位于可聚焦的 cube-flow-table__viewport 中",
+            "\n".join(audit.errors),
+        )
+
+    def test_rejects_missing_shared_keyboard_scroll_script(self) -> None:
+        module = load_module()
+        html = valid_page().replace(
+            '<script src="../assets/网站嵌入增强.js"></script>\n',
+            "",
+        )
+
+        audit = module.validate_flow_html(html, Path("docs/示例.html"))
+
+        self.assertIn(
+            "统一增强脚本必须是 body 的最后一个元素",
+            "\n".join(audit.errors),
+        )
 
     def test_rejects_column_scope_on_body_row_header(self) -> None:
         module = load_module()

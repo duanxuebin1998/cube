@@ -15,6 +15,7 @@ OUTPUT_ENCODING = "utf-8"
 CHECKS = (
     ("文档结构", "tools/check_docs_structure.py"),
     ("程序流程导航同步", "tools/update_flow_navigation.py"),
+    ("程序流程变更影响", "tools/check_flow_impact.py"),
     ("程序流程 HTML 契约", "tools/check_flow_docs.py"),
     ("Markdown 链接", "tools/check_markdown_links.py"),
 )

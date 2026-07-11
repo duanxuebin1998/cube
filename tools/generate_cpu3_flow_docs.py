@@ -349,8 +349,8 @@ class SvgBuilder:
         desc_id = f"{self.accessible_id}-desc"
         return (
             f'<svg class="biz-flow" '
-            f'viewBox="0 0 {self.width} {self.height}" role="img" '
-            f'aria-labelledby="{esc(title_id)} {esc(desc_id)}">'
+            f'viewBox="0 0 {self.width} {self.height}" '
+            'aria-hidden="true" focusable="false">'
             f'<title id="{esc(title_id)}">{esc(title)}</title>'
             f'<desc id="{esc(desc_id)}">{esc(description)}</desc>'
             f"{self.defs()}{''.join(self.parts)}</svg>"
@@ -397,12 +397,13 @@ def flow_svg(
     for edge in edges:
         b.add_edge(edge["d"], edge.get("label"), edge.get("red", False))
     caption_id = f"{accessible_id}-caption"
+    desc_id = f"{accessible_id}-desc"
     return (
         '<figure class="cube-flow-figure">'
         f'<figcaption id="{esc(caption_id)}">{esc(title)}</figcaption>'
         '<div class="svg-flow-wrap cube-flow__viewport" '
         'data-flow-width="standard" tabindex="0" role="region" '
-        f'aria-labelledby="{esc(caption_id)}">'
+        f'aria-labelledby="{esc(caption_id)}" aria-describedby="{esc(desc_id)}">'
         f"{b.render(title, description)}</div></figure>"
     )
 
@@ -544,7 +545,8 @@ def page_html(page: dict, all_pages: list[dict]) -> str:
         + risk
         + src
         + '\n<!-- CUBE_EMBED_END -->\n'
-        + '<script src="assets/流程文档交互.js"></script></div></body></html>'
+        + '</div><script src="assets/流程文档交互.js"></script>'
+        + '<script src="../assets/网站嵌入增强.js"></script></body></html>'
     )
 
 
@@ -659,7 +661,8 @@ def overview_page(pages: list[dict]) -> str:
         + '</div></section><section id="search"><h2>3. 全文索引</h2><input class="doc-search" data-global-search placeholder="输入指令、函数、文件、状态或问题关键词"><div class="search-results" data-global-search-results></div></section>'
         '\n<!-- CUBE_EMBED_END -->\n'
         f'<script type="application/json" id="doc-search-data">{json.dumps(search_data, ensure_ascii=False).replace("</", "<\\/")}</script>'
-        '<script src="assets/流程文档交互.js"></script></div></body></html>'
+        '</div><script src="assets/流程文档交互.js"></script>'
+        '<script src="../assets/网站嵌入增强.js"></script></body></html>'
     )
 
 
@@ -968,17 +971,17 @@ def external_com_page() -> dict:
         "short": "外部 COM 协议分发",
         "hero": "梳理 COM1/COM2/COM3 从 DMA 空闲收帧、按端口协议分发，到 DMA 发送、单帧 pending 队列和错误恢复的完整流程。",
         "entry": "USART6/USART2/USART3 空闲中断置 comX_rx_ready，App_MainLoop 读取端口配置并调用对应协议处理器。",
-        "summary": "三路外部 COM 共用一套分发和发送逻辑，端口协议由 CPU3 本地参数决定，可选择 DSM、Wartsila、SI 或占位 LTD。",
+        "summary": "三路外部 COM 共用一套分发和发送逻辑，端口协议由 CPU3 本地参数决定，可选择 DSM、Wartsila、SI 或 LTD；LTD 使用 CPU2/CPU3 共享 Modbus 协议。",
         "overview_text": "外部 COM 是 CPU3 对上位系统的主要入口。CPU3 先按端口配置选择协议，再决定是否通过 DMA 回包。",
-        "overview_description": "COM1/2/3 收到完整 RTU 帧后，CPU3 先检查串口重配安全点，再按本机端口配置选择 DSM、Wartsila、SI 或占位处理器。处理器产生响应时尝试 DMA 发送，通道忙则保存一帧 pending；无处理器、处理失败或无响应时不回包并恢复 DMA 接收，发送完成后也切回接收。",
+        "overview_description": "COM1/2/3 收到完整 RTU 帧后，CPU3 先检查串口重配安全点，再按本机端口配置选择 DSM、Wartsila、SI 或 LTD 处理器。LTD 的 FC03/FC04 读取 CPU2 快照，FC10 转发到 CPU2 并等待合法 ACK；快照不可用或写失败时返回设备忙异常 0x06。处理器产生响应时尝试 DMA 发送，通道忙则保存一帧 pending；无处理器、处理失败或无响应时不回包并恢复 DMA 接收，发送完成后也切回接收。",
         "commands": ["COM_PROTO_DSM", "COM_PROTO_WARTSILA", "COM_PROTO_SI", "COM_PROTO_LTD"],
-        "source_files": ["Application/app_main.c", "Application/system_param/cpu3_comm_display_params.c", "Core/Src/stm32f4xx_it.c"],
+        "source_files": ["Application/app_main.c", "Communication/external/ltd_modbus/ltd_modbus_slave.c", "Application/system_param/cpu3_comm_display_params.c", "Core/Src/stm32f4xx_it.c"],
         "overview_nodes": [
             {"id": "a", "kind": "start", "x": 430, "y": 40, "w": 260, "h": 62, "label": "COM1/2/3 收到完整 RTU 帧"},
             {"id": "b", "kind": "process", "x": 350, "y": 150, "w": 420, "h": 82, "label": "先检查挂起重配安全点\n再读取端口协议配置"},
             {"id": "c", "kind": "decision", "x": 405, "y": 285, "w": 310, "h": 108, "label": "协议处理器是否存在？"},
             {"id": "d", "kind": "error", "x": 790, "y": 300, "w": 250, "h": 82, "label": "无协议/越界：不回包并恢复接收"},
-            {"id": "e", "kind": "process", "x": 350, "y": 450, "w": 420, "h": 82, "label": "调用 DSM/Wartsila/SI 生成响应帧"},
+            {"id": "e", "kind": "process", "x": 350, "y": 450, "w": 420, "h": 82, "label": "调用 DSM/Wartsila/SI/LTD 生成响应帧"},
             {"id": "f", "kind": "decision", "x": 405, "y": 585, "w": 310, "h": 108, "label": "tx_len 是否大于 0？"},
             {"id": "g", "kind": "process", "x": 90, "y": 750, "w": 300, "h": 82, "label": "无响应：立即切接收并重启 DMA"},
             {"id": "h", "kind": "process", "x": 730, "y": 750, "w": 300, "h": 82, "label": "有响应：尝试 DMA 发送，忙则进入单帧 pending"},
@@ -1003,7 +1006,7 @@ def external_com_page() -> dict:
                     {"id": "p2", "kind": "process", "x": 350, "y": 260, "w": 420, "h": 82, "label": "读取当前端口协议配置"},
                     {"id": "d1", "kind": "decision", "x": 405, "y": 400, "w": 310, "h": 108, "label": "协议号越界或 handler 为空？"},
                     {"id": "err", "kind": "error", "x": 790, "y": 415, "w": 250, "h": 82, "label": "处理失败：打印结果并恢复接收 DMA"},
-                    {"id": "p3", "kind": "process", "x": 350, "y": 560, "w": 420, "h": 82, "label": "执行协议处理：DSM / Wartsila / SI / LTD占位"},
+                    {"id": "p3", "kind": "process", "x": 350, "y": 560, "w": 420, "h": 82, "label": "执行协议处理：DSM / Wartsila / SI / LTD"},
                     {"id": "d2", "kind": "decision", "x": 405, "y": 700, "w": 310, "h": 108, "label": "是否生成响应帧？"},
                     {"id": "p4", "kind": "process", "x": 90, "y": 860, "w": 300, "h": 82, "label": "无响应：切回接收模式并重启 DMA"},
                     {"id": "p5", "kind": "process", "x": 730, "y": 860, "w": 300, "h": 82, "label": "有响应：立即发送或进入待发队列"},
@@ -1021,7 +1024,7 @@ def external_com_page() -> dict:
                 "evidence": [
                     {"title": "分发入口", "text": f"{code('Application/app_main.c:342-360')} cpu3_port_process 根据端口 protocol 索引 g_handlers。"},
                     {"title": "COM 主循环", "text": f"{code('Application/app_main.c:398-545')} COM1/2/3 均按 ret 和 send_len 分支处理。"},
-                    {"title": "协议表", "text": f"{code('Application/app_main.c:318-323')} g_handlers 将 DSM、Wartsila、SI、LTD 占位绑定到处理函数。"},
+                    {"title": "协议表", "text": f"{code('Application/app_main.c:318-323')} g_handlers 将 DSM、Wartsila、SI、LTD 分别绑定到处理函数；LTD 处理器提供共享 Modbus 读写。"},
                 ],
             },
             {
@@ -1098,11 +1101,11 @@ def external_com_page() -> dict:
             {"level": "mid", "title": "pending 队列只有一帧且覆盖旧帧", "desc": "外部请求密集时，新响应会覆盖旧 pending，虽然有覆盖计数，但上位机只会丢响应。", "suggest": "将单帧 pending 改成环形队列，或在忙时直接返回设备忙异常帧。", "ref": "Application/app_main.c:226-279"},
             {"level": "mid", "title": "协议号依赖枚举连续作为数组下标", "desc": "g_handlers 用 COM_PROTO_* 作为数组下标，若枚举不连续或后续新增值未同步表项，会进入不回包路径。", "suggest": "改成 switch 分发或增加编译期断言/默认错误响应。", "ref": "Application/app_main.c:318-360"},
             {"level": "low", "title": "UART_TX_POST_DELAY_LOOP 是固定空转延时", "desc": "发送完成后用固定 NOP 循环等待 RS485 电平方向恢复，和主频/优化级别相关。", "suggest": "优先使用 TC 标志或定时器，固定循环只作为最后兜底。", "ref": "Application/app_main.c:18-31"},
-            {"level": "low", "title": "LTD 协议当前是不回包占位", "desc": "COM_PROTO_LTD 绑定 proto_no_reply，如果现场配置为 LTD，上位机会表现为无响应。", "suggest": "在菜单中标注未实现，或配置层禁止选择 LTD。", "ref": "Application/app_main.c:298-323"},
             {"level": "low", "title": "串口重配可能被持续外部流量推迟", "desc": "重配只在三路接收 ready、发送 busy 和 pending 都为空时执行；如果外部请求持续不断，g_cpu3_uart_reinit_pending 会一直保留。", "suggest": "增加重配延期计数或维护窗口，在现场能看到串口参数已保存但尚未生效的原因。", "ref": "Application/app_main.c:182-205"},
         ],
         "sources": [
             {"title": "cpu3_port_process", "desc": "按端口配置选择协议处理器。", "refs": ["Application/app_main.c:342-360"]},
+            {"title": "ltd_modbus_process", "desc": "LTD 共享 Modbus 的 FC03/FC04 快照读取、FC10 转发和异常响应。", "refs": ["Communication/external/ltd_modbus/ltd_modbus_slave.c:68-232"]},
             {"title": "uart_try_send_or_queue", "desc": "三路外部 COM 的发送和单帧 pending 管理。", "refs": ["Application/app_main.c:226-279"]},
             {"title": "HAL_UART_TxCpltCallback", "desc": "发送完成后续发 pending 或恢复接收。", "refs": ["Application/app_main.c:559-660"]},
             {"title": "Cpu3_ReinitAllUarts", "desc": "按本地参数重配三路外部 COM。", "refs": [func_line(FRAM_SOURCE, "Cpu3_ReinitAllUarts")]},
