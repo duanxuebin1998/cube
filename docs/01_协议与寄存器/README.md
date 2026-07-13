@@ -1,6 +1,6 @@
 # 协议与寄存器文档索引
 
-更新日期：2026-07-11
+更新日期：2026-07-12
 
 本目录用于保存 CPU2/CPU3 共享协议、外部 Modbus/DSM/SI协议适配、寄存器表、协议版本和兼容性记录。凡是会影响通信地址、字段语义、命令、状态、缩放、补码解释或协议兼容性的资料，优先归入本目录。
 
@@ -8,10 +8,11 @@
 
 | 分类 | 资料 | 用途 |
 | --- | --- | --- |
-| CPU2/CPU3 共享协议 | `CPU2_CPU3协议变更记录.md` | 记录 `DEVICE_PROTOCOL_VERSION`、共享寄存器、参数语义、兼容影响和验证结果；当前共享协议版本为 `14` |
+| CPU2/CPU3 共享协议 | `CPU2_CPU3协议变更记录.md` | 记录 `DEVICE_PROTOCOL_VERSION`、共享寄存器、参数语义、兼容影响和验证结果；当前共享协议版本为 `15` |
 | LTD 共享 Modbus | `LTD共享Modbus协议/` | CPU2/CPU3 共用的当前寄存器、命令、帧格式、CPU3 快照响应/CPU2 ACK 写入和联调帧 |
 | 系统参数默认值 | `系统参数出厂默认值.md` | 整理 CPU2 恢复出厂写入的 `DeviceParameters` 默认值、单位和小数位；当前 CPU2 参数存储版本为 `3` |
 | CPU2 通信与解耦 | `CPU2通信与解耦/` | CPU2 串口调试指令、通信异常影响、HART 旧栈适配、传感器无线链路和无线滑环匹配整理 |
+| CPU3 外部 COM 协议切换 | `CPU3外部COM协议切换帧.md` | 定义上位机轮询标准串口参数、统一管理帧、旧参数回显和单端口切换时序 |
 | 传感器通信协议 | `传感器通信协议/` | CPU2 与传感器之间的新一代安全通信协议卷，覆盖设计理由、标准映射、单向周期上报、双向切回和验证矩阵 |
 | DSM 外部协议 | `DSM协议适配/`、`DSM寄存器说明V1.225.xlsx` | DSM V1.228 一代协议源表、二代兼容边界、历史寄存器表和现场联调参考 |
 | SI协议适配 | `SI协议适配/` | SI协议原始资料、需求、映射、改动记录和 PLC 联调检查 |
@@ -21,8 +22,8 @@
 
 | 主题 | 当前结论 | 依据 |
 | --- | --- | --- |
-| 共享协议版本 | `DEVICE_PROTOCOL_VERSION = 14`，CPU2/CPU3 严格相等才兼容 | `LTD_MAIN_CPU2/Services/ParamStorage/system_parameter.h`、`LTD_DISPLAY_CPU3/Application/system_param/system_parameter.h`、`CPU2_CPU3协议变更记录.md` |
-| LTD 对外协议 | CPU3 菜单中的 LTD 与 CPU2/CPU3 板间协议按同一套协议管理；CPU3 读缓存快照，FC10 等待 CPU2 合法 ACK 后回成功；共享协议仍为 14 | `LTD共享Modbus协议/LTD共享Modbus协议卷.md` |
+| 共享协议版本 | `DEVICE_PROTOCOL_VERSION = 15`，CPU2/CPU3 严格相等才兼容；协议 14 与协议 15 的故障码编号不能混用 | `LTD_MAIN_CPU2/Services/ParamStorage/system_parameter.h`、`LTD_DISPLAY_CPU3/Application/system_param/system_parameter.h`、`CPU2_CPU3协议变更记录.md` |
+| LTD 对外协议 | CPU3 菜单中的 LTD 与 CPU2/CPU3 板间协议按同一套协议管理；CPU3 读缓存快照，FC10 等待 CPU2 合法 ACK 后回成功；32 位故障码按协议 15 的统一表解释 | `LTD共享Modbus协议/LTD共享Modbus协议卷.md` |
 | CPU2 参数存储 | `DEVICE_PARAM_VERSION = 3`，CPU2 `V1.12.0.0` 到当前 `V1.22.0.0` 之间通常不清参数；协议 13 迁移密度倍率，协议 14 补齐 SI Profile 默认参数 | `LTD_MAIN_CPU2/Services/ParamStorage/system_parameter.c`、`../00_构建与版本/CPU2参数存储升级清单.md` |
 | CPU3 本地显示/通信参数 | `CPU3_PARAM_VERSION = 0x0006`，V3/V4/V5 升级时迁移屏幕亮度、手输密度、SI 自动 profile 和报警限值参数 | `LTD_DISPLAY_CPU3/Application/system_param/cpu3_comm_display_params.c`、`CPU2_CPU3协议变更记录.md` |
 | 读取部件参数与 DSM 调试区 | 共享协议为 9 起支持；`debug_data.water_capacitance_x10` 为水位电容快照，蓝牙 RSSI 通过 `WirelessPairingStatus` 尾部输入寄存器发布 | `../00_构建与版本/版本改动与测试/2026-06-13_CPU2_V1.15.0.0_CPU3_V1.14.0.0_读取部件参数蓝牙RSSI与CPU3菜单显示优化_改动与测试方案.md` |
@@ -31,7 +32,8 @@
 | 命令 115 保留 | 共享协议为 12 起支持；命令 115 和状态 `0x002F/0x802F` 均改为保留，不再执行或显示强制提零点 | `CPU2_CPU3协议变更记录.md`、`../00_构建与版本/版本改动与测试/2026-06-26_CPU2_V1.19.0.0_CPU3_V1.17.0.0_测量流程显示参数与协议语义汇总_改动与测试方案.md` |
 | 密度两位小数 | 共享协议为 13 起支持；CPU2/CPU3 内部密度 raw 统一为 `kg/m3 x100`，CPU3 密度参数和状态页显示两位小数，DSM/Wartsila/SI协议外部边界保持各自原有口径 | `CPU2_CPU3协议变更记录.md`、`系统参数出厂默认值.md`、`../00_构建与版本/版本改动与测试/2026-06-26_CPU2_V1.20.0.0_CPU3_V1.18.0.0_密度两位精度与菜单协议整理_改动与测试方案.md` |
 | SI Profile 独立兼容 | 共享协议为 14 起支持；新增 `CMD_SI_PROFILE`、CPU2 SI profile 参数、`profile_source` 来源隔离和 SI 输入寄存器点阵，CPU3 本机参数版本升至 `0x0006` | `CPU2_CPU3协议变更记录.md`、`SI协议适配/02_协议映射/SI协议兼容映射表.md`、`../00_构建与版本/版本改动与测试/2026-07-01_CPU2_V1.21.0.0_CPU3_V1.19.0.0_SI协议独立Profile兼容_改动与测试方案.md` |
-| CPU2 通信快照与外部写反馈 | CPU3 `V1.20.0.0` 分离状态、完整参数和当前连接协议快照，普通写需三类快照完整、协议匹配且无通信故障；DSM/SI/Wartsila 的 CPU2 相关写失败返回设备忙 `0x06`，共享协议仍保持 14 | `CPU2通信与解耦/README.md`、`DSM协议适配/02_协议映射/DSM_V1.228一代协议卷整理.md`、`SI协议适配/03_改动记录/SI协议适配改动整理.md`、`Wartsila协议适配/当前兼容情况与协议栈.md`、`../00_构建与版本/版本改动与测试/2026-07-10_CPU2_V1.21.6.0_CPU3_V1.20.0.0_传感器编号与CPU2通信失败闭环_改动与测试方案.md` |
+| 故障码责任域和编号 | 共享协议 15 将故障码统一为 11～19 九类责任域，LTD、DSM 和 CPU2 串口日志中的完整 32 位故障码均按新版统一表解释；协议 14 及以前的编号只用于历史记录 | `CPU2_CPU3协议变更记录.md`、`../00_构建与版本/故障码/README.md`、`../00_构建与版本/故障码/LTD故障代码统一表.xlsx` |
+| CPU2 通信快照与外部写反馈 | CPU3 `V1.20.0.0` 起分离状态、完整参数和当前连接协议快照，普通写需三类快照完整、协议匹配且无通信故障；DSM/SI/Wartsila 的 CPU2 相关写失败返回设备忙 `0x06`；当前共享协议为 15 | `CPU2通信与解耦/README.md`、`DSM协议适配/02_协议映射/DSM_V1.228一代协议卷整理.md`、`SI协议适配/03_改动记录/SI协议适配改动整理.md`、`Wartsila协议适配/当前兼容情况与协议栈.md`、`../00_构建与版本/版本改动与测试/2026-07-10_CPU2_V1.21.6.0_CPU3_V1.20.0.0_传感器编号与CPU2通信失败闭环_改动与测试方案.md` |
 | DSM V1.228 一代协议兼容 | `在线一体机对外Modbus协议V1.228.xlsx` 已归档为一代协议源表；二代通过 CPU3 外部 DSM 层兼容，`0x0110` 标定罐高等一代不支持项作为二代扩展单独说明；CPU2 写失败返回设备忙 `0x06`，多字段同步不保证原子回滚 | `DSM协议适配/02_协议映射/DSM_V1.228一代协议卷整理.md`、`../02_需求与计划/已实现/二代计量仪同步支持DSM_V1.228协议需求方案.md`、`../00_构建与版本/版本改动与测试/2026-06-02_CPU3_V1.8.0.0_DSM_V1.228外部协议兼容_改动与测试方案.md` |
 | Wartsila 现场抓包协议 | 2026-01-27 莆田抓包确认 Wartsila 使用 Modbus RTU；地址 `1` 为主 LTD/密度分布控制与结果区，`2/3/4` 为原系统辅助数据块；`0x10` 写多个寄存器的 byte count 字段等于寄存器数量而不是标准 `qty*2` | `Wartsila协议适配/2026-01-27_莆田现场Wartsila抓包协议整理.md` |
 

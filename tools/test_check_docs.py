@@ -25,14 +25,16 @@ def load_module():
 
 
 class CheckDocsTests(unittest.TestCase):
-    def test_runs_structure_navigation_flow_contract_then_markdown_links(self) -> None:
+    def test_runs_structure_navigation_flow_contract_metadata_baseline_policy_then_markdown_links(self) -> None:
         module = load_module()
         calls: list[tuple[str, ...]] = []
         encodings: list[tuple[str | None, str | None]] = []
+        child_output_encodings: list[str | None] = []
 
         def fake_run(command, **kwargs):  # noqa: ANN001
             calls.append(tuple(str(part) for part in command))
             encodings.append((kwargs.get("encoding"), kwargs.get("errors")))
+            child_output_encodings.append(kwargs.get("env", {}).get("PYTHONIOENCODING"))
             return subprocess.CompletedProcess(command, 0, stdout="ok\n", stderr="")
 
         result = module.run_checks(fake_run)
@@ -44,19 +46,27 @@ class CheckDocsTests(unittest.TestCase):
                 (sys.executable, "tools/update_flow_navigation.py"),
                 (sys.executable, "tools/check_flow_impact.py"),
                 (sys.executable, "tools/check_flow_docs.py"),
+                (sys.executable, "tools/check_validation_result_metadata.py"),
+                (sys.executable, "tools/check_delivery_evidence_coverage.py"),
+                (sys.executable, "tools/check_delivery_evidence_gaps.py"),
+                (sys.executable, "tools/check_validation_work_packages.py"),
+                (sys.executable, "tools/check_validation_runs.py"),
+                (sys.executable, "tools/check_validation_batches.py"),
+                (sys.executable, "tools/check_governance_items.py"),
+                (sys.executable, "tools/check_knowledge_governance_snapshots.py"),
+                (sys.executable, "tools/check_delivery_evidence_baselines.py"),
+                (sys.executable, "tools/check_delivery_evidence_regression.py"),
                 (sys.executable, "tools/check_markdown_links.py"),
             ],
             calls,
         )
         self.assertEqual(
-            [
-                (module.OUTPUT_ENCODING, "replace"),
-                (module.OUTPUT_ENCODING, "replace"),
-                (module.OUTPUT_ENCODING, "replace"),
-                (module.OUTPUT_ENCODING, "replace"),
-                (module.OUTPUT_ENCODING, "replace"),
-            ],
+            [(module.OUTPUT_ENCODING, "replace")] * len(module.CHECKS),
             encodings,
+        )
+        self.assertEqual(
+            [module.OUTPUT_ENCODING] * len(module.CHECKS),
+            child_output_encodings,
         )
 
     def test_returns_failure_when_a_check_fails(self) -> None:

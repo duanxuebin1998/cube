@@ -168,7 +168,7 @@ def main() -> int:
     checks = [
         (
             "dedicated CPU2 communication timeout error code",
-            "CPU2_COMM_TIMEOUT = 0x0013000A" in param_h,
+            "CPU2_COMM_TIMEOUT = 0x000E000C" in param_h,
         ),
         (
             "failure threshold is ten and private counter starts from zero",
@@ -401,11 +401,11 @@ def main() -> int:
             "fault code Markdown records CPU3-local timeout code",
             "CPU3 本机扩展故障码" in fault_code_doc
             and "CPU2_COMM_TIMEOUT" in fault_code_doc
-            and "0x0013000A" in fault_code_doc,
+            and "0x000E000C" in fault_code_doc,
         ),
         (
             "fault code workbook records CPU3-local timeout code",
-            workbook_xml_contains("CPU3本机故障码", "CPU2_COMM_TIMEOUT", "0x0013000A"),
+            workbook_xml_contains("14-12", "主控单元通信超时", "显示单元连续十次"),
         ),
         (
             "remediation document records cold-start tenth-failure boundary",

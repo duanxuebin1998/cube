@@ -9,6 +9,38 @@
 #include "TMC5130_Pins.h"
 #include "TMC5130_Register.h"
 
+/* TMC5130 通信诊断阶段。 */
+#define TMC5130_DIAG_STAGE_NONE               0U
+#define TMC5130_DIAG_STAGE_PARAMETER          1U
+#define TMC5130_DIAG_STAGE_ACCESS_BUSY        2U
+#define TMC5130_DIAG_STAGE_SPI_READ_TRIGGER   3U
+#define TMC5130_DIAG_STAGE_SPI_READ_DATA      4U
+#define TMC5130_DIAG_STAGE_SPI_WRITE          5U
+#define TMC5130_DIAG_STAGE_XACTUAL_UNSTABLE   6U
+#define TMC5130_DIAG_STAGE_CONFIGURATION_LOST 7U
+#define TMC5130_DIAG_STAGE_CHIP_RESET         8U
+
+/* TMC5130 诊断访问方向。 */
+#define TMC5130_DIAG_DIRECTION_NONE  0U
+#define TMC5130_DIAG_DIRECTION_WRITE 1U
+#define TMC5130_DIAG_DIRECTION_READ  2U
+
+/* 保存最后一次有效 TMC5130 故障现场，供最终错误日志和测试读取。 */
+typedef struct {
+    uint32_t sequence;
+    uint32_t error_code;
+    uint32_t hal_status;
+    uint32_t expected_value;
+    uint32_t actual_value;
+    int32_t sample_first;
+    int32_t sample_second;
+    int32_t sample_third;
+    uint8_t stage;
+    uint8_t direction;
+    uint8_t address;
+    uint8_t response_status;
+} TMC5130DiagnosticSnapshot;
+
 /* TMC5130 单电机驱动句柄：只保留 SPI、片选和使能脚等真实硬件资源。 */
 typedef struct
 {
@@ -53,6 +85,9 @@ bool stpr_writeInt(TMC5130TypeDef *tmc5130, uint8_t address, int32_t value);
 
 /* * 带成功/失败返回值的寄存器读取接口，避免 SPI 失败时把寄存器值误判为 0。 */
 bool stpr_tryReadInt(TMC5130TypeDef *tmc5130, uint8_t address, int32_t *value);
+
+/* 复制最后一次有效 TMC5130 故障现场，不访问 SPI。 */
+void TMC5130_GetDiagnosticSnapshot(TMC5130DiagnosticSnapshot *snapshot);
 
 /* ---------- 运动控制 ---------- */
 

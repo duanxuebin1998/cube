@@ -34,6 +34,7 @@ CPU3_DIR = DOC_NAV_DIR / "CPU3"
 
 REPLACE_RETRY_DELAYS_SECONDS = (0.05, 0.1, 0.2, 0.4, 0.8)
 CLOSURE_ROLE_IDS = ("entry", "dispatch", "execution", "readback", "exception", "verification")
+SEMANTIC_SYMBOL_KINDS = {"function", "state", "command", "register", "error-exit"}
 
 STYLE_MARK = '<style id="cross-flow-nav-style">'
 EMBED_STYLESHEET_NAME = "网站嵌入增强.css"
@@ -714,8 +715,40 @@ def load_evidence_manifest(
     except json.JSONDecodeError as exc:
         raise RuntimeError(f"Evidence manifest is not valid JSON: {path}: {exc}") from exc
 
-    if not isinstance(data, dict) or data.get("schemaVersion") != 1:
-        raise RuntimeError(f"Evidence manifest schemaVersion must be 1: {path}")
+    if not isinstance(data, dict) or data.get("schemaVersion") != 2:
+        raise RuntimeError(f"Evidence manifest schemaVersion must be 2: {path}")
+
+    governance = data.get("governancePolicy")
+    if not isinstance(governance, dict):
+        raise RuntimeError("Evidence manifest governancePolicy must be an object")
+    authority = governance.get("authority")
+    if (
+        not isinstance(authority, dict)
+        or authority.get("formalRoot") != "docs/"
+        or authority.get("derivedRoot") != "docs-site/"
+        or not isinstance(authority.get("label"), str)
+        or not str(authority["label"]).strip()
+    ):
+        raise RuntimeError("Evidence manifest authority policy is invalid")
+    review_window_days = governance.get("reviewWindowDays")
+    if not isinstance(review_window_days, int) or isinstance(review_window_days, bool) or review_window_days < 1:
+        raise RuntimeError("Evidence manifest reviewWindowDays is invalid")
+    responsibilities = governance.get("responsibilities")
+    if not isinstance(responsibilities, dict):
+        raise RuntimeError("Evidence manifest responsibilities must be an object")
+    for responsibility_id in ("cpu2", "cpu3", "validation", "delivery", "docs"):
+        responsibility = responsibilities.get(responsibility_id)
+        if (
+            not isinstance(responsibility, dict)
+            or not isinstance(responsibility.get("owner"), str)
+            or not str(responsibility["owner"]).strip()
+            or not isinstance(responsibility.get("scope"), str)
+            or not str(responsibility["scope"]).strip()
+        ):
+            raise RuntimeError(f"Evidence manifest responsibility is invalid: {responsibility_id}")
+    boundary = governance.get("unconfirmedBoundary")
+    if not isinstance(boundary, str) or not boundary.strip():
+        raise RuntimeError("Evidence manifest unconfirmedBoundary is invalid")
 
     firmware = data.get("firmwareBaseline")
     if not isinstance(firmware, dict) or set(firmware) != {"cpu2", "cpu3"}:
@@ -789,6 +822,12 @@ def load_evidence_manifest(
             expected_root=expected_root,
             allowed_suffixes={".c", ".h"},
         )
+        source_symbols = page.get("sourceSymbols", [])
+        _validate_source_symbols(
+            source_symbols,
+            source_paths=source_paths,
+            field=f"pages.{page_key}.sourceSymbols",
+        )
         validation_paths = page.get("validationPaths")
         if not isinstance(validation_paths, list):
             raise RuntimeError(f"Evidence page {page_key} validationPaths must be an array")
@@ -838,6 +877,50 @@ def _validate_evidence_paths(
         if Path(relative_path).suffix.lower() not in allowed_suffixes:
             raise RuntimeError(f"Evidence {field} has unsupported file type: {relative_path}")
         _repo_file(relative_path, field=field)
+
+
+def _validate_source_symbols(
+    groups: object,
+    *,
+    source_paths: Sequence[object],
+    field: str,
+) -> None:
+    if not isinstance(groups, list):
+        raise RuntimeError(f"Evidence {field} must be an array")
+    allowed_paths = {str(value) for value in source_paths}
+    seen_paths: set[str] = set()
+    for group in groups:
+        if not isinstance(group, dict):
+            raise RuntimeError(f"Evidence {field} items must be objects")
+        relative_path = group.get("path")
+        symbols = group.get("symbols")
+        if not isinstance(relative_path, str) or relative_path not in allowed_paths:
+            raise RuntimeError(f"Evidence {field} path must also exist in sourcePaths: {relative_path!r}")
+        if relative_path in seen_paths:
+            raise RuntimeError(f"Evidence {field} has duplicate path: {relative_path}")
+        if not isinstance(symbols, list) or not symbols:
+            raise RuntimeError(f"Evidence {field}.{relative_path} must contain symbols")
+        seen_paths.add(relative_path)
+        source_bytes = _repo_file(relative_path, field=field).read_bytes()
+        seen_names: set[str] = set()
+        for symbol in symbols:
+            if not isinstance(symbol, dict):
+                raise RuntimeError(f"Evidence {field}.{relative_path} symbols must be objects")
+            name = symbol.get("name")
+            kind = symbol.get("kind")
+            label = symbol.get("label")
+            if not isinstance(name, str) or re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", name) is None:
+                raise RuntimeError(f"Evidence {field}.{relative_path} has invalid symbol name: {name!r}")
+            if name in seen_names:
+                raise RuntimeError(f"Evidence {field}.{relative_path} has duplicate symbol: {name}")
+            if kind not in SEMANTIC_SYMBOL_KINDS:
+                raise RuntimeError(f"Evidence {field}.{relative_path}.{name} has invalid kind: {kind!r}")
+            if not isinstance(label, str) or not label.strip():
+                raise RuntimeError(f"Evidence {field}.{relative_path}.{name} must have a label")
+            token = re.compile(rb"(?<![A-Za-z0-9_])" + re.escape(name.encode("ascii")) + rb"(?![A-Za-z0-9_])")
+            if token.search(source_bytes) is None:
+                raise RuntimeError(f"Evidence {field}.{relative_path} symbol does not exist: {name}")
+            seen_names.add(name)
 
 
 EVIDENCE_MANIFEST_DATA = load_evidence_manifest()
@@ -1143,6 +1226,7 @@ INJECT_CSS = """
 .cross-flow-evidence__item{min-width:0;padding:8px 9px;border-left:3px solid #248b70;background:#fff}
 .cross-flow-evidence__item span{display:block;margin-bottom:4px;color:#5a6f86;font-size:11px;font-weight:700}
 .cross-flow-evidence__item strong,.cross-flow-evidence__links{display:block;color:#17233a;font-size:12px;line-height:1.55;overflow-wrap:anywhere}
+.cross-flow-evidence__item--boundary{grid-column:span 2;border-left-color:#b6782b;background:#fffaf1}
 .cross-flow-evidence__links a{color:#245d96;text-decoration:none;font-weight:700}
 .cross-flow-evidence__links a+a::before{content:" · ";color:#8393a5}
 .cross-flow-nav__quick{display:flex;flex-wrap:wrap;gap:7px;justify-content:flex-end}
@@ -1156,7 +1240,7 @@ INJECT_CSS = """
 .cross-flow-nav__linear a{flex:1 1 0;min-width:0;padding:9px 11px;border:1px solid #d7e5f3;border-radius:8px;background:#f8fbff;color:#214f7d;text-decoration:none;font-size:13px;font-weight:800;overflow-wrap:anywhere}
 .cross-flow-nav__linear a:last-child{text-align:right}
 @media(max-width:920px){.cross-flow-evidence{grid-template-columns:repeat(2,minmax(0,1fr))}}
-@media(max-width:720px){.cross-flow-nav{padding:14px;max-width:100%;overflow:hidden}.cross-flow-nav__head{display:block}.cross-flow-nav__title{font-size:16px}.cross-flow-nav__quick{justify-content:flex-start;margin-top:10px}.cross-flow-evidence{grid-template-columns:1fr}.cross-flow-nav__grid{grid-template-columns:1fr}.cross-flow-nav__linear{flex-direction:column}.cross-flow-nav__linear a:last-child{text-align:left}}
+@media(max-width:720px){.cross-flow-nav{padding:14px;max-width:100%;overflow:hidden}.cross-flow-nav__head{display:block}.cross-flow-nav__title{font-size:16px}.cross-flow-nav__quick{justify-content:flex-start;margin-top:10px}.cross-flow-evidence{grid-template-columns:1fr}.cross-flow-evidence__item--boundary{grid-column:auto}.cross-flow-nav__grid{grid-template-columns:1fr}.cross-flow-nav__linear{flex-direction:column}.cross-flow-nav__linear a:last-child{text-align:left}}
 """.strip()
 
 
@@ -1468,10 +1552,22 @@ def make_evidence_head(from_file: Path, key: str) -> str:
         f"专项验证 {index}"
         for index in range(1, len(validation_paths))
     ]
+    governance = EVIDENCE_MANIFEST_DATA["governancePolicy"]  # type: ignore[index]
+    authority = governance["authority"]  # type: ignore[index]
+    responsibility_id = "cpu2" if key.startswith("cpu2_") else "cpu3"
+    responsibility = governance["responsibilities"][responsibility_id]  # type: ignore[index]
+    boundary = str(governance["unconfirmedBoundary"])  # type: ignore[index]
     return (
         f'<div class="cross-flow-evidence" data-evidence-page="{html.escape(key)}" '
-        f'data-evidence-status="{html.escape(status)}">'
-        '<div class="cross-flow-evidence__item"><span>可信状态</span>'
+        f'data-evidence-status="{html.escape(status)}" '
+        f'data-evidence-owner="{html.escape(str(responsibility["owner"]))}">'
+        '<div class="cross-flow-evidence__item"><span>正式来源与派生</span>'
+        f'<strong>{html.escape(str(authority["formalRoot"]))} 正式源 · '
+        f'{html.escape(str(authority["derivedRoot"]))} 仅同步预览</strong></div>'
+        '<div class="cross-flow-evidence__item"><span>内容责任</span>'
+        f'<strong>{html.escape(str(responsibility["owner"]))} · '
+        f'{html.escape(str(responsibility["scope"]))}</strong></div>'
+        '<div class="cross-flow-evidence__item"><span>可信状态与最近核对</span>'
         f'<strong>{html.escape(status_labels[status])} · {html.escape(reviewed_at)}</strong></div>'
         '<div class="cross-flow-evidence__item"><span>适用固件基线</span>'
         f'<strong>CPU2 {html.escape(cpu2_version)} / CPU3 {html.escape(cpu3_version)}</strong></div>'
@@ -1479,6 +1575,8 @@ def make_evidence_head(from_file: Path, key: str) -> str:
         + _evidence_links(from_file, source_paths)
         + '</div><div class="cross-flow-evidence__item"><span>验证资料</span>'
         + _evidence_links(from_file, validation_paths, validation_labels)
+        + '</div><div class="cross-flow-evidence__item cross-flow-evidence__item--boundary"><span>未确认边界</span>'
+        + f'<strong>{html.escape(boundary)}</strong>'
         + "</div></div>"
     )
 

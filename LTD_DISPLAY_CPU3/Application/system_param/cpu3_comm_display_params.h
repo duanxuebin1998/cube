@@ -85,6 +85,13 @@ int32_t Cpu3Local_ReadValue(OperatingNumber opera);
  */
 void    Cpu3Local_WriteValue(OperatingNumber opera, int32_t v);
 /**
+ * @brief 写入 CPU3 本地参数并返回 FRAM 写后读回校验结果。
+ * @param opera 参数操作号。
+ * @param v 待写入值。
+ * @return true 表示参数已持久化，false 表示 FRAM 写后读回不一致。
+ */
+bool    Cpu3Local_WriteValueChecked(OperatingNumber opera, int32_t v);
+/**
  * @brief 显示或打印参数存储中的 Cpu3Local_ApplyDisplayRuntimeParams 逻辑。
  */
 void    Cpu3Local_ApplyDisplayRuntimeParams(void);
@@ -98,6 +105,13 @@ void Cpu3_Params_InitDefaults(void);
 /* 根据 g_cpu3_comm_display_params.com1/com2/com3 重配置 3 个串口 */
 void Cpu3_ReinitAllUarts(void);
 
+/*
+ * @brief 根据已保存的端口配置只重初始化一个外部 COM 口并恢复 DMA 接收。
+ * @param port_idx 外部端口编号，1=COM1，2=COM2，3=COM3。
+ * @return true 表示 UART 初始化和 DMA 接收启动成功，false 表示端口号无效或启动失败。
+ */
+bool Cpu3_ReinitPortUart(uint8_t port_idx);
+
 /* ========= FRAM 存储接口 ========= */
 
 /**
@@ -108,8 +122,9 @@ void Cpu3_Params_LoadFromFRAM(void);
 
 /**
  * @brief 将当前 g_cpu3_comm_display_params 保存到 FRAM（带 CRC）
+ * @return true 表示现有镜像一致或写后读回校验通过，false 表示持久化失败。
  */
-void Cpu3_Params_SaveToFRAM(void);
+bool Cpu3_Params_SaveToFRAM(void);
 
 
 #ifdef __cplusplus

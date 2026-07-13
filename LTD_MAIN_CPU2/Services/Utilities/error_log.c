@@ -94,23 +94,40 @@ static const char *ErrorLog_ActionText(const char *text)
     return (text != NULL) ? text : ERROR_LOG_ACTION_UNKNOWN;
 }
 
+typedef struct {
+    uint32_t code;
+    const char *module;
+} ErrorLogModuleOverride;
+
+/*
+ * 函数用途：登记不能仅按编号高位判断的主责任模块。
+ * 调用场景：最终报错需要区分无线通信、软件内部和模拟量输出时使用。
+ * 关键约束：无线专用码仍显示滑环通信模块，其余故障按新版编号责任域归类。
+ */
+static const ErrorLogModuleOverride s_error_log_module_overrides[] = {
+    {SLIPRING_COMM_FAIL, ERROR_LOG_MODULE_SLIPRING_COMM},
+    {SLIPRING_BCC_ERROR, ERROR_LOG_MODULE_SLIPRING_COMM},
+    {SLIPRING_PACKET_LOSS, ERROR_LOG_MODULE_SLIPRING_COMM},
+    {SLIPRING_SIGNAL_WEAK, ERROR_LOG_MODULE_SLIPRING_COMM},
+    {WIRELESS_HOST_COMM_TIMEOUT, ERROR_LOG_MODULE_SLIPRING_COMM},
+    {WIRELESS_SLAVE_COMM_TIMEOUT, ERROR_LOG_MODULE_SLIPRING_COMM},
+    {WIRELESS_RESP_FORMAT_ERROR, ERROR_LOG_MODULE_SLIPRING_COMM},
+};
+
 /**
- * @brief 根据错误码高位分类返回中文模块名。
+ * @brief 根据逐码责任域和编号高位返回中文模块名。
  */
 const char *ErrorLog_GetModuleByCode(uint32_t code)
 {
-    switch (code) {
-    case SLIPRING_COMM_FAIL:
-    case SLIPRING_BCC_ERROR:
-    case SLIPRING_PACKET_LOSS:
-    case SLIPRING_SIGNAL_WEAK:
-    case WIRELESS_HOST_COMM_TIMEOUT:
-    case WIRELESS_SLAVE_COMM_TIMEOUT:
-        return ERROR_LOG_MODULE_SLIPRING_COMM;
-    default:
-        break;
-    }
+    uint32_t index;
 
+    for (index = 0U;
+         index < (uint32_t)(sizeof(s_error_log_module_overrides) / sizeof(s_error_log_module_overrides[0]));
+         index++) {
+        if (s_error_log_module_overrides[index].code == code) {
+            return s_error_log_module_overrides[index].module;
+        }
+    }
 
     switch (code & 0xFFFF0000UL) {
     case 0x000B0000UL:
@@ -119,8 +136,12 @@ const char *ErrorLog_GetModuleByCode(uint32_t code)
         return ERROR_LOG_MODULE_ENCODER;
     case 0x000D0000UL:
         return ERROR_LOG_MODULE_SENSOR;
+    case 0x000E0000UL:
+        return ERROR_LOG_MODULE_COMM;
     case 0x000F0000UL:
         return ERROR_LOG_MODULE_MEASURE;
+    case 0x00100000UL:
+        return ERROR_LOG_MODULE_AO_OUTPUT;
     case 0x00110000UL:
         return ERROR_LOG_MODULE_PARAM;
     case 0x00120000UL:
@@ -141,12 +162,18 @@ const char *ErrorLog_GetReasonByCode(uint32_t code)
     switch (code) {
     case MOTOR_FAIL_SETTING:
         return ERROR_LOG_REASON_SETTING_FAIL;
+    case MOTOR_UNKNOWN_FEEDBACK:
+        return "电机反馈状态未知";
+    case MOTOR_RESET_FAIL:
+        return "电机复位未完成";
     case MOTOR_DISABLED:
         return ERROR_LOG_REASON_DRIVER_DISABLED;
     case MOTOR_ALARM_TRIGGERED:
         return ERROR_LOG_REASON_DRIVER_ALARM;
     case MOTOR_TMC_COMM_ERROR:
         return "TMC5130寄存器通信失败";
+    case MOTOR_TMC_CONFIG_LOST:
+        return "TMC5130关键配置丢失";
     case MOTOR_RUN_TIMEOUT:
         return ERROR_LOG_REASON_MOTOR_TIMEOUT;
     case MOTOR_CHARGE_PUMP_UNDER_VOLTAGE:
@@ -170,9 +197,21 @@ const char *ErrorLog_GetReasonByCode(uint32_t code)
     case ENCODER_PARITY_ERROR:
         return "编码器校验失败";
     case SENSOR_RESP_FORMAT_ERROR:
-        return "传感器响应格式错误";
+        return "传感器响应格式异常";
+    case COMM_UART_TRANSFER_ERROR:
+        return "串口或DMA传输异常";
+    case WIRELESS_RESP_FORMAT_ERROR:
+        return "无线模块响应格式异常";
+    case SENSOR_DEVICE_REPORTED_ERROR:
+        return "传感器设备主动上报内部错误";
     case ENCODER_INVALID_DATA:
         return "编码器数据无效";
+    case ENCODER_CORDIC_OVERFLOW:
+        return "编码器CORDIC计算溢出";
+    case ENCODER_LINEARITY_WARNING:
+        return "编码器线性度报警";
+    case ENCODER_OCF_INCOMPLETE:
+        return "编码器状态未完成";
     case MOTOR_STEP_ERROR:
     case ENCODER_LOST_STEP:
     case ENCODER_DIFF_EXCESS:
@@ -205,7 +244,9 @@ const char *ErrorLog_GetReasonByCode(uint32_t code)
     case AD5421_FAULT_PIN_ERROR:
         return "AD5421故障管脚报警";
     case AD5421_READFAULT_ERROR:
-        return "AD5421故障寄存器异常";
+        return "AD5421故障寄存器读取失败";
+    case AD5421_FAULT_STATUS_ERROR:
+        return "AD5421故障寄存器报告异常";
     case AD5421_READBACK_ERROR:
         return "AD5421控制寄存器回读失败";
     case PARAM_EEPROM_FAIL:
@@ -215,14 +256,15 @@ const char *ErrorLog_GetReasonByCode(uint32_t code)
     case PARAM_RANGE_ERROR:
         return ERROR_LOG_REASON_PARAM_RANGE;
     case PARAM_ADDRESS_OVERFLOW:
+        return "数据地址或输出位置异常";
     case OTHER_ADDRESS_READ_ERROR:
         return ERROR_LOG_REASON_ADDRESS_ERROR;
     case PARAM_CRC_ERROR:
         return ERROR_LOG_REASON_PARAM_CRC;
     case PARAM_ERROR:
-        return ERROR_LOG_REASON_PARAM_CALL;
+        return "参数组合或内部调用条件异常";
     case MEASUREMENT_POSITION_ERROR:
-        return ERROR_LOG_REASON_POSITION_ERROR;
+        return "位置反馈或到位结果异常";
     case MEASUREMENT_TIMEOUT:
         return ERROR_LOG_REASON_MEASURE_TIMEOUT;
     case MEASUREMENT_ZERO_OUT_OF_RANGE:
@@ -230,10 +272,26 @@ const char *ErrorLog_GetReasonByCode(uint32_t code)
     case MEASUREMENT_ZERO_REPEAT_FAIL:
     case MEASUREMENT_HEIGHT_DEVIATION:
         return ERROR_LOG_REASON_VALIDATE_FAIL;
+    case MEASUREMENT_OILLEVEL_HIGH:
+        return "液位测量结果超过罐高";
+    case MEASUREMENT_OILLEVEL_LOW:
+        return "下行测量未找到液位";
+    case MEASUREMENT_OILLEVEL_NOTFOUND:
+        return "上行测量未找到液位";
+    case MEASUREMENT_WEIGHT_DOWN_FAIL:
+        return "下行寻重失败";
+    case MEASUREMENT_WEIGHT_UP_FAIL:
+        return "上行寻重失败";
+    case MEASUREMENT_WATERLEVEL_LOW:
+        return "下行测量未找到水位";
     case MEASUREMENT_OVERSPEED:
         return ERROR_LOG_REASON_LEVEL_OVERSPEED;
     case MEASUREMENT_DENSITY_RANGE_INVALID:
         return ERROR_LOG_REASON_DENSITY_RANGE;
+    case MEASUREMENT_DENSITY_NO_VALID_POINT:
+        return "密度分布测量无有效测点";
+    case MEASUREMENT_DENSITY_SURFACE_NOTFOUND:
+        return "密度分布测量未找到油面";
     case WEIGHT_OUT_OF_RANGE:
     case WEIGHT_UNDER_RANGE:
         return ERROR_LOG_REASON_WEIGHT_LIMIT;
@@ -258,10 +316,16 @@ const char *ErrorLog_GetReasonByCode(uint32_t code)
     case 0x000D0000UL:
     case 0x00120000UL:
         return ERROR_LOG_REASON_DEVICE_ERROR;
+    case 0x000E0000UL:
+        return ERROR_LOG_REASON_COMM_FAIL;
     case 0x000F0000UL:
         return ERROR_LOG_REASON_SEARCH_FAIL;
+    case 0x00100000UL:
+        return ERROR_LOG_REASON_DEVICE_ERROR;
     case 0x00110000UL:
         return ERROR_LOG_REASON_VALIDATE_FAIL;
+    case 0x00130000UL:
+        return ERROR_LOG_REASON_UNKNOWN_FAULT;
     default:
         return ERROR_LOG_REASON_UNKNOWN;
     }
@@ -297,6 +361,8 @@ const char *ErrorLog_GetCodeName(uint32_t code)
         return "电机运行超时";
     case MOTOR_TMC_COMM_ERROR:
         return "TMC5130通信异常";
+    case MOTOR_TMC_CONFIG_LOST:
+        return "电机驱动配置丢失";
     case ENCODER_TIMEOUT:
         return "编码器通信超时";
     case ENCODER_PARITY_ERROR:
@@ -338,7 +404,11 @@ const char *ErrorLog_GetCodeName(uint32_t code)
     case SLIPRING_SIGNAL_WEAK:
         return "滑环信号弱";
     case SENSOR_RESP_FORMAT_ERROR:
-        return "传感器响应格式错误";
+        return "传感器响应格式异常";
+    case COMM_UART_TRANSFER_ERROR:
+        return "串口传输异常";
+    case WIRELESS_RESP_FORMAT_ERROR:
+        return "无线响应格式异常";
     case DENSITY_UNSTABLE:
         return "密度值不稳定";
     case SENSOR_DEVICE_REPORTED_ERROR:
@@ -348,7 +418,7 @@ const char *ErrorLog_GetCodeName(uint32_t code)
     case WIRELESS_SLAVE_COMM_TIMEOUT:
         return "蓝牙从机未连接";
     case MEASUREMENT_POSITION_ERROR:
-        return "位置测量错误";
+        return "定位结果异常";
     case MEASUREMENT_TIMEOUT:
         return "测量超时";
     case MEASUREMENT_ZERO_OUT_OF_RANGE:
@@ -382,13 +452,13 @@ const char *ErrorLog_GetCodeName(uint32_t code)
     case PARAM_UNINITIALIZED:
         return "参数未初始化";
     case PARAM_RANGE_ERROR:
-        return "参数超限";
+        return "参数值超出范围";
     case PARAM_ADDRESS_OVERFLOW:
-        return "参数地址越界";
+        return "数据位置异常";
     case PARAM_CRC_ERROR:
         return "参数CRC错误";
     case PARAM_ERROR:
-        return "程序参数调用错误";
+        return "调用条件异常";
     case WEIGHT_OUT_OF_RANGE:
         return "扭力超上限";
     case WEIGHT_UNDER_RANGE:
@@ -416,7 +486,9 @@ const char *ErrorLog_GetCodeName(uint32_t code)
     case AD5421_FAULT_PIN_ERROR:
         return "AD5421故障管脚报警";
     case AD5421_READFAULT_ERROR:
-        return "AD5421故障寄存器异常";
+        return "AD5421故障寄存器读取失败";
+    case AD5421_FAULT_STATUS_ERROR:
+        return "AD5421芯片状态异常";
     case AD5421_READBACK_ERROR:
         return "AD5421控制回读失败";
     default:

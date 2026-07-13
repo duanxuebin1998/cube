@@ -499,7 +499,7 @@ static uint32_t CH9141_AT_CollectResponse(CH9141AtWaitMode wait_mode,
             }
         } else if (status == HAL_ERROR) {
             CH9141_AT_ClearUartError();
-            return SLIPRING_COMM_FAIL;
+            return COMM_UART_TRANSFER_ERROR;
         } else {
             /* 读 1 字节超时是轮询过程的正常空窗，清掉可能残留的硬件错误后继续等。 */
             CH9141_AT_ClearUartError();
@@ -687,14 +687,14 @@ uint32_t CH9141_AT_SendCommand(const char *cmd,
     /* 先处理异常边界，避免CH9141K AT 控制状态机带故障继续运行。 */
     if (HAL_UART_Transmit(&huart6, (uint8_t *)cmd, cmd_len, CH9141_AT_COMMAND_TX_TIMEOUT_MS) != HAL_OK) {
         CH9141_AT_ClearUartError();
-        ret = OTHER_PERIPHERAL_CONFIG_ERROR;
+        ret = COMM_UART_TRANSFER_ERROR;
         CH9141_AT_PrintResult(cmd, wait_mode, timeout_ms, ret, response);
         return ret;
     }
     /* 先处理异常边界，避免CH9141K AT 控制状态机带故障继续运行。 */
     if (HAL_UART_Transmit(&huart6, (uint8_t *)line_end, 2U, CH9141_AT_COMMAND_TX_TIMEOUT_MS) != HAL_OK) {
         CH9141_AT_ClearUartError();
-        ret = OTHER_PERIPHERAL_CONFIG_ERROR;
+        ret = COMM_UART_TRANSFER_ERROR;
         CH9141_AT_PrintResult(cmd, wait_mode, timeout_ms, ret, response);
         return ret;
     }

@@ -12,6 +12,7 @@
 .cross-flow-evidence__item{min-width:0;padding:8px 9px;border-left:3px solid #248b70;background:#fff}
 .cross-flow-evidence__item span{display:block;margin-bottom:4px;color:#5a6f86;font-size:11px;font-weight:700}
 .cross-flow-evidence__item strong,.cross-flow-evidence__links{display:block;color:#17233a;font-size:12px;line-height:1.55;overflow-wrap:anywhere}
+.cross-flow-evidence__item--boundary{grid-column:span 2;border-left-color:#b6782b;background:#fffaf1}
 .cross-flow-evidence__links a{color:#245d96;text-decoration:none;font-weight:700}
 .cross-flow-evidence__links a+a::before{content:" · ";color:#8393a5}
 .cross-flow-nav__quick{display:flex;flex-wrap:wrap;gap:7px;justify-content:flex-end}
@@ -25,7 +26,7 @@
 .cross-flow-nav__linear a{flex:1 1 0;min-width:0;padding:9px 11px;border:1px solid #d7e5f3;border-radius:8px;background:#f8fbff;color:#214f7d;text-decoration:none;font-size:13px;font-weight:800;overflow-wrap:anywhere}
 .cross-flow-nav__linear a:last-child{text-align:right}
 @media(max-width:920px){.cross-flow-evidence{grid-template-columns:repeat(2,minmax(0,1fr))}}
-@media(max-width:720px){.cross-flow-nav{padding:14px;max-width:100%;overflow:hidden}.cross-flow-nav__head{display:block}.cross-flow-nav__title{font-size:16px}.cross-flow-nav__quick{justify-content:flex-start;margin-top:10px}.cross-flow-evidence{grid-template-columns:1fr}.cross-flow-nav__grid{grid-template-columns:1fr}.cross-flow-nav__linear{flex-direction:column}.cross-flow-nav__linear a:last-child{text-align:left}}
+@media(max-width:720px){.cross-flow-nav{padding:14px;max-width:100%;overflow:hidden}.cross-flow-nav__head{display:block}.cross-flow-nav__title{font-size:16px}.cross-flow-nav__quick{justify-content:flex-start;margin-top:10px}.cross-flow-evidence{grid-template-columns:1fr}.cross-flow-evidence__item--boundary{grid-column:auto}.cross-flow-nav__grid{grid-template-columns:1fr}.cross-flow-nav__linear{flex-direction:column}.cross-flow-nav__linear a:last-child{text-align:left}}
 </style>
 <link rel="stylesheet" href="../assets/网站嵌入增强.css">
 </head><body class="cube-flow-page" data-cube-flow-page="cube-flow-cpu2-15-公共工具与算法"><div class="wrap"><header class="hero"><h1>15. 公共工具与算法程序流程</h1><p>本页按源码整理 CRC16/CRC32、错误日志、可中断延时和密度公共换算/缓存链路。</p><div class="meta"><div><b>项目</b><span>LTD_MAIN_CPU2 / CPU2 V1.16.0.0</span></div><div><b>业务域</b><span>公共工具与算法</span></div><div><b>核心源码</b><span>Services/Utilities、Services/Sensor</span></div><div><b>本页流程图</b><span>6 张业务级 SVG</span></div></div></header><nav class="topnav"><a href="#scope">1. 整理范围</a><a href="#flows">2. 详细业务流程图</a><a href="#evidence">3. 源码证据</a><a href="#issues">4. 问题点与优化建议</a><a href="#sources">5. 关键源码索引</a></nav>

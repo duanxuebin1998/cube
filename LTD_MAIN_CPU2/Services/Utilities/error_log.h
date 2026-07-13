@@ -11,6 +11,7 @@
 #define ERROR_LOG_MODULE_COMM    "通信" /* 错误日志模块名文本：通信。 */
 #define ERROR_LOG_MODULE_SLIPRING_COMM "滑环通信" /* 错误日志模块名文本：滑环通信。 */
 #define ERROR_LOG_MODULE_MEASURE "测量" /* 错误日志模块名文本：测量。 */
+#define ERROR_LOG_MODULE_AO_OUTPUT "模拟量输出" /* 错误日志模块名文本：模拟量输出。 */
 #define ERROR_LOG_MODULE_SYSTEM  "系统" /* 错误日志模块名文本：系统。 */
 #define ERROR_LOG_MODULE_UNKNOWN "未知" /* 错误日志模块名文本：未知。 */
 #define ERROR_LOG_TEXT_UNKNOWN   "未知文本" /* 错误日志兜底文本：未知文本。 */

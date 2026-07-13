@@ -143,14 +143,14 @@ static uint32_t UART6_WaitTransmitDmaDone(uint32_t timeout)
         if (huart6.ErrorCode != HAL_UART_ERROR_NONE) {
             s_uart6_last_error = huart6.ErrorCode;
             UART6_StopDmaReceive();
-            return OTHER_PERIPHERAL_CONFIG_ERROR;
+            return COMM_UART_TRANSFER_ERROR;
         }
         /* DSM 传感器通信与外设通信之间保留等待时间，避免硬件或对端协议尚未准备好。 */
         HAL_Delay(1);
     }
 
     UART6_StopDmaReceive();
-    return SENSOR_DEVICE_COMM_TIMEOUT;
+    return COMM_UART_TRANSFER_ERROR;
 }
 
 /**
@@ -176,7 +176,7 @@ static uint32_t UART6_StartTextReceiveDma(uint16_t maxLen, uint16_t *dma_len_out
     UART6_StopDmaReceive();
     if (HAL_UART_Receive_DMA(&huart6, s_uart6_dma_rx_buf, dma_len) != HAL_OK) {
         UART6_StopDmaReceive();
-        return OTHER_PERIPHERAL_CONFIG_ERROR;
+        return COMM_UART_TRANSFER_ERROR;
     }
     return NO_ERROR;
 }
@@ -210,7 +210,7 @@ static uint32_t UART6_WaitTextReceiveDma(char *response,
         if (huart6.ErrorCode != HAL_UART_ERROR_NONE) {
             s_uart6_last_error = huart6.ErrorCode;
             UART6_StopDmaReceive();
-            return SENSOR_RESP_FORMAT_ERROR;
+            return COMM_UART_TRANSFER_ERROR;
         }
 
         for (uint16_t i = 0U; i < recvLen; i++) {
@@ -372,7 +372,7 @@ static int UART6_SendCommand(const char *cmd,
         if (recv_len_out != NULL) {
             *recv_len_out = 0U;
         }
-        return OTHER_PERIPHERAL_CONFIG_ERROR;
+        return COMM_UART_TRANSFER_ERROR;
     }
 
     rx_ret = UART6_WaitTransmitDmaDone(100);
@@ -401,7 +401,7 @@ static int UART6_SendCommand(const char *cmd,
     uart_error = UART6_TakeHardwareError();
     /* 先处理异常边界，避免DSM 传感器通信状态机带故障继续运行。 */
     if (uart_error != HAL_UART_ERROR_NONE) {
-        return SENSOR_RESP_FORMAT_ERROR;
+        return COMM_UART_TRANSFER_ERROR;
     }
     if (recvLen == 0) {
         return SENSOR_DEVICE_COMM_TIMEOUT;

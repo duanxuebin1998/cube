@@ -236,7 +236,7 @@ uint32_t MotorDriver_StopIfCommandSwitchRequested(void);
  *
  * @param tmc5130 TMC5130 device object.
  * @param is_moving Output moving state when return is NO_ERROR.
- * @return NO_ERROR, PARAM_ERROR or MOTOR_TMC_COMM_ERROR.
+ * @return NO_ERROR, PARAM_ADDRESS_OVERFLOW or MOTOR_TMC_COMM_ERROR.
  */
 uint32_t MotorDriver_ReadMovingState(TMC5130TypeDef *tmc5130, bool *is_moving);
 

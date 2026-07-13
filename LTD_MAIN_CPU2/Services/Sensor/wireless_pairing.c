@@ -637,7 +637,7 @@ static void WirelessPairing_PublishStatus(uint32_t result,
         } else {
             status->mac_valid = 0U;
             publish_result = WIRELESS_PAIRING_RESULT_FAILED;
-            publish_error = SENSOR_RESP_FORMAT_ERROR;
+            publish_error = WIRELESS_RESP_FORMAT_ERROR;
         }
     } else if (result == WIRELESS_PAIRING_RESULT_RUNNING) {
         publish_error = NO_ERROR;
@@ -652,7 +652,7 @@ static void WirelessPairing_PublishStatus(uint32_t result,
     } else if (publish_result == WIRELESS_PAIRING_RESULT_FAILED) {
         /* 先处理异常边界，避免无线滑环匹配状态机带故障继续运行。 */
         if (publish_error == NO_ERROR) {
-            publish_error = SENSOR_RESP_FORMAT_ERROR;
+            publish_error = WIRELESS_RESP_FORMAT_ERROR;
         }
         g_measurement.device_status.error_code = publish_error;
         g_measurement.device_status.device_state = STATE_ERROR;
@@ -1210,7 +1210,7 @@ static uint32_t WirelessPairing_EnterAtAndHostMode(void)
 
     if (WirelessPairing_ParseModeResponse(&response, &mode, NULL, 0U) == 0U) {
         printf("无线滑环匹配\tBLEMODE解析失败\t响应=%s\r\n", response.text);
-        return SENSOR_RESP_FORMAT_ERROR;
+        return WIRELESS_RESP_FORMAT_ERROR;
     }
     printf("无线滑环匹配\tBLEMODE\t模式=0x%02X(%s)\r\n",
            (unsigned)mode,
@@ -1575,7 +1575,7 @@ uint32_t WirelessPairing_ReadConnectionStatus(WirelessConnectionStatus *status)
         goto finish;
     }
     if (WirelessPairing_ParseModeResponse(&response, &mode, data_line, sizeof(data_line)) == 0U) {
-        ret = SENSOR_RESP_FORMAT_ERROR;
+        ret = WIRELESS_RESP_FORMAT_ERROR;
         status->error_code = ret;
         goto finish;
     }
@@ -1589,7 +1589,7 @@ uint32_t WirelessPairing_ReadConnectionStatus(WirelessConnectionStatus *status)
         goto finish;
     }
     if (WirelessPairing_ParseStatusResponse(&response, &ble_status, data_line, sizeof(data_line)) == 0U) {
-        ret = SENSOR_RESP_FORMAT_ERROR;
+        ret = WIRELESS_RESP_FORMAT_ERROR;
         status->error_code = ret;
         goto finish;
     }
@@ -1618,7 +1618,7 @@ uint32_t WirelessPairing_ReadConnectionStatus(WirelessConnectionStatus *status)
     }
     if ((WirelessPairing_CopyMacFromLine(response.text, mac) == 0U) ||
         (WirelessPairing_FillConnectionMac(status, mac) == 0U)) {
-        ret = SENSOR_RESP_FORMAT_ERROR;
+        ret = WIRELESS_RESP_FORMAT_ERROR;
         status->error_code = ret;
         goto finish;
     }
@@ -1638,7 +1638,7 @@ uint32_t WirelessPairing_ReadConnectionStatus(WirelessConnectionStatus *status)
             status->rssi_valid = 1U;
             status->rssi = (int32_t)rssi;
         } else if (rssi_ret == NO_ERROR) {
-            rssi_ret = SENSOR_RESP_FORMAT_ERROR;
+            rssi_ret = WIRELESS_RESP_FORMAT_ERROR;
         }
     }
 
@@ -1739,7 +1739,7 @@ uint32_t WirelessPairing_PrintConnectionStatus(void)
     }
     if (WirelessPairing_ParseModeResponse(&response, &mode, data_line, sizeof(data_line)) == 0U) {
         printf("无线滑环连接状态\tBLEMODE解析失败\t响应=%s\r\n", response.text);
-        ret = SENSOR_RESP_FORMAT_ERROR;
+        ret = WIRELESS_RESP_FORMAT_ERROR;
         goto finish;
     }
     printf("无线滑环连接状态\tBLEMODE\t原始=%s\t模式=0x%02X(%s)\r\n",
@@ -1758,7 +1758,7 @@ uint32_t WirelessPairing_PrintConnectionStatus(void)
     }
     if (WirelessPairing_ParseStatusResponse(&response, &status, data_line, sizeof(data_line)) == 0U) {
         printf("无线滑环连接状态\tBLESTA解析失败\t响应=%s\r\n", response.text);
-        ret = SENSOR_RESP_FORMAT_ERROR;
+        ret = WIRELESS_RESP_FORMAT_ERROR;
         goto finish;
     }
     printf("无线滑环连接状态\tBLESTA\t原始=%s\t状态=0x%02X(%s)\r\n",
@@ -1787,7 +1787,7 @@ uint32_t WirelessPairing_PrintConnectionStatus(void)
     }
     if (WirelessPairing_CopyMacFromLine(response.text, mac) == 0U) {
         printf("无线滑环连接状态\tCCADD解析失败\tBLESTA已连接但未读到MAC\t响应=%s\r\n", response.text);
-        ret = SENSOR_RESP_FORMAT_ERROR;
+        ret = WIRELESS_RESP_FORMAT_ERROR;
         goto finish;
     }
     printf("无线滑环连接状态\tCCADD\tMAC=%s\r\n", mac);
@@ -1817,7 +1817,7 @@ uint32_t WirelessPairing_PrintConnectionStatus(void)
         } else {
             /* 先处理异常边界，避免无线滑环匹配状态机带故障继续运行。 */
             if (rssi_ret == NO_ERROR) {
-                rssi_ret = SENSOR_RESP_FORMAT_ERROR;
+                rssi_ret = WIRELESS_RESP_FORMAT_ERROR;
                 printf("无线滑环连接状态\tRSSI解析失败\t说明=收到异步数据但未解析到RSSI数值\r\n");
             } else if (rssi_ret == SENSOR_DEVICE_COMM_TIMEOUT) {
                 printf("无线滑环连接状态\tRSSI异步上报超时\t说明=模块已ACK但等待窗口内未输出RSSI，连接状态仍按已连接处理\r\n");
@@ -1974,7 +1974,7 @@ uint32_t WirelessPairing_RunByName(const char *target_name)
     if (ret == NO_ERROR) {
         if (scan.scan_has_name_field == 0U) {
             printf("无线滑环匹配\t扫描结果未包含名称字段，不能按名称匹配\r\n");
-            ret = SENSOR_RESP_FORMAT_ERROR;
+            ret = WIRELESS_RESP_FORMAT_ERROR;
         } else if (WirelessPairing_SelectByName(&scan, target_name, &selected) == 0U) {
             printf("无线滑环匹配\t未找到唯一名称匹配项：%s\r\n", target_name);
             ret = WIRELESS_SLAVE_COMM_TIMEOUT;

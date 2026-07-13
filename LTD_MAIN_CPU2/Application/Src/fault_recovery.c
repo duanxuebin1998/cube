@@ -43,6 +43,7 @@ static uint8_t FaultRecovery_IsMotorDriverError(uint32_t error_code)
     switch (error_code) {
     /* 这些错误都可能通过重新下发 TMC5130 配置恢复，所以恢复检查前先 MotorCtrl_Init()。 */
     case MOTOR_TMC_COMM_ERROR:
+    case MOTOR_TMC_CONFIG_LOST:
     case MOTOR_CHARGE_PUMP_UNDER_VOLTAGE:
     case MOTOR_DISABLED:
     case MOTOR_RUN_TIMEOUT:

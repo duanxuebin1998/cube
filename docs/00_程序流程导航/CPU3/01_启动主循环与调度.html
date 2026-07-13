@@ -12,6 +12,7 @@
 .cross-flow-evidence__item{min-width:0;padding:8px 9px;border-left:3px solid #248b70;background:#fff}
 .cross-flow-evidence__item span{display:block;margin-bottom:4px;color:#5a6f86;font-size:11px;font-weight:700}
 .cross-flow-evidence__item strong,.cross-flow-evidence__links{display:block;color:#17233a;font-size:12px;line-height:1.55;overflow-wrap:anywhere}
+.cross-flow-evidence__item--boundary{grid-column:span 2;border-left-color:#b6782b;background:#fffaf1}
 .cross-flow-evidence__links a{color:#245d96;text-decoration:none;font-weight:700}
 .cross-flow-evidence__links a+a::before{content:" · ";color:#8393a5}
 .cross-flow-nav__quick{display:flex;flex-wrap:wrap;gap:7px;justify-content:flex-end}
@@ -25,7 +26,7 @@
 .cross-flow-nav__linear a{flex:1 1 0;min-width:0;padding:9px 11px;border:1px solid #d7e5f3;border-radius:8px;background:#f8fbff;color:#214f7d;text-decoration:none;font-size:13px;font-weight:800;overflow-wrap:anywhere}
 .cross-flow-nav__linear a:last-child{text-align:right}
 @media(max-width:920px){.cross-flow-evidence{grid-template-columns:repeat(2,minmax(0,1fr))}}
-@media(max-width:720px){.cross-flow-nav{padding:14px;max-width:100%;overflow:hidden}.cross-flow-nav__head{display:block}.cross-flow-nav__title{font-size:16px}.cross-flow-nav__quick{justify-content:flex-start;margin-top:10px}.cross-flow-evidence{grid-template-columns:1fr}.cross-flow-nav__grid{grid-template-columns:1fr}.cross-flow-nav__linear{flex-direction:column}.cross-flow-nav__linear a:last-child{text-align:left}}
+@media(max-width:720px){.cross-flow-nav{padding:14px;max-width:100%;overflow:hidden}.cross-flow-nav__head{display:block}.cross-flow-nav__title{font-size:16px}.cross-flow-nav__quick{justify-content:flex-start;margin-top:10px}.cross-flow-evidence{grid-template-columns:1fr}.cross-flow-evidence__item--boundary{grid-column:auto}.cross-flow-nav__grid{grid-template-columns:1fr}.cross-flow-nav__linear{flex-direction:column}.cross-flow-nav__linear a:last-child{text-align:left}}
 </style>
 <link rel="stylesheet" href="../assets/网站嵌入增强.css"></head><body class="cube-flow-page" data-cube-flow-page="cube-flow-cpu3-01-启动主循环与调度"><div class="wrap"><header class="hero"><h1>CPU3 启动主循环与调度程序流程</h1><p>梳理 CPU3 从 HAL/CubeMX 初始化到 App_Init、App_MainLoop 的调度顺序，以及显示任务、外部 COM 和 CPU2 轮询之间的优先级。</p><div class="meta-grid"><div class="meta"><span>项目</span><strong>LTD_DISPLAY_CPU3 / CPU3 V1.21.0.0</strong></div><div class="meta"><span>功能域</span><strong>启动主循环与调度</strong></div><div class="meta"><span>核心源码</span><strong>Core/Src/main.c, Application/app_main.c</strong></div><div class="meta"><span>本页流程图</span><strong>3 张业务级 SVG</strong></div></div></header><nav class="topnav"><a href="CPU3程序流程总览.html">总览</a><a href="#layer">系统边界</a><a href="#flow">功能总览</a><a href="#detailflows">详细流程图</a><a href="#risk">问题点</a><a href="#source">源码索引</a></nav>
 <!-- CROSS-FLOW-NAV-START -->

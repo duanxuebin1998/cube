@@ -64,6 +64,7 @@ static uint8_t Zero_IsMotorDriverRecoveryError(uint32_t error_code)
 {
     switch (error_code) {
     case MOTOR_TMC_COMM_ERROR:
+    case MOTOR_TMC_CONFIG_LOST:
     case MOTOR_CHARGE_PUMP_UNDER_VOLTAGE:
     case MOTOR_DISABLED:
     case MOTOR_RUN_TIMEOUT:

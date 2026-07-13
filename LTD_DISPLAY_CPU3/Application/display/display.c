@@ -684,6 +684,8 @@ static const char *Display_GetErrorReasonByCode(uint32_t code)
         return "电机运行超时未停";
     case MOTOR_TMC_COMM_ERROR:
         return "TMC寄存器通信失败";
+    case MOTOR_TMC_CONFIG_LOST:
+        return "驱动配置丢失";
     case ENCODER_TIMEOUT:
         return "编码器通信无响应";
     case ENCODER_PARITY_ERROR:
@@ -725,7 +727,11 @@ static const char *Display_GetErrorReasonByCode(uint32_t code)
     case SLIPRING_SIGNAL_WEAK:
         return "信号弱";
     case SENSOR_RESP_FORMAT_ERROR:
-        return "响应格式错误";
+        return "传感器格式异常";
+    case COMM_UART_TRANSFER_ERROR:
+        return "通信发送异常";
+    case WIRELESS_RESP_FORMAT_ERROR:
+        return "无线格式异常";
     case DENSITY_UNSTABLE:
         return "密度不稳定";
     case SENSOR_DEVICE_REPORTED_ERROR:
@@ -735,7 +741,7 @@ static const char *Display_GetErrorReasonByCode(uint32_t code)
     case WIRELESS_SLAVE_COMM_TIMEOUT:
         return "BT从机未连接";
     case MEASUREMENT_POSITION_ERROR:
-        return "位置测量值异常";
+        return "定位异常";
     case MEASUREMENT_TIMEOUT:
         return "测量流程超时";
     case MEASUREMENT_ZERO_OUT_OF_RANGE:
@@ -771,11 +777,11 @@ static const char *Display_GetErrorReasonByCode(uint32_t code)
     case PARAM_RANGE_ERROR:
         return "参数超出范围";
     case PARAM_ADDRESS_OVERFLOW:
-        return "参数地址越界";
+        return "数据位置异常";
     case PARAM_CRC_ERROR:
         return "参数CRC校验失败";
     case PARAM_ERROR:
-        return "程序参数调用错误";
+        return "调用异常";
     case WEIGHT_OUT_OF_RANGE:
         return "扭力超过上限";
     case WEIGHT_UNDER_RANGE:
@@ -803,7 +809,9 @@ static const char *Display_GetErrorReasonByCode(uint32_t code)
     case AD5421_FAULT_PIN_ERROR:
         return "AD5421故障报警";
     case AD5421_READFAULT_ERROR:
-        return "AD5421故障寄存器异常";
+        return "AD5421故障读取失败";
+    case AD5421_FAULT_STATUS_ERROR:
+        return "AD5421设备报警";
     case AD5421_READBACK_ERROR:
         return "AD5421控制回读失败";
     case CPU2_COMM_TIMEOUT:
@@ -819,14 +827,18 @@ static const char *Display_GetErrorReasonByCode(uint32_t code)
         return "编码器故障";
     case 0x000D0000UL:
         return "传感器故障";
+    case 0x000E0000UL:
+        return "通信故障";
     case 0x000F0000UL:
         return "测量故障";
+    case 0x00100000UL:
+        return "模拟输出故障";
     case 0x00110000UL:
         return "参数故障";
     case 0x00120000UL:
         return "扭力故障";
     case 0x00130000UL:
-        return "系统故障";
+        return "系统软件故障";
     default:
         return "未知原因";
     }

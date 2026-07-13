@@ -2227,14 +2227,14 @@ void Test_ParamEncoder_AB_Backup(void)
         printf("[失败] 参数区: A损坏后未能回退到B\r\n");
     }
 
-    /* Case-2: 参数A/B都损坏，读取应报错 */
+    /* Case-2: 参数A/B魔术字都损坏，读取应判定为参数未初始化 */
     g_measurement.device_status.error_code = NO_ERROR;
     WriteSingleData(0u, FRAM_PARAM_A_ADDRESS + param_magic_offset);
     WriteSingleData(0u, FRAM_PARAM_B_ADDRESS + param_magic_offset);
 
     /* 先处理异常边界，避免本模块状态机带故障继续运行。 */
-    if ((!load_device_params()) && (g_measurement.device_status.error_code == PARAM_EEPROM_FAIL)) {
-        printf("[通过] 参数区: A/B都损坏时已报错 PARAM_EEPROM_FAIL\r\n");
+    if ((!load_device_params()) && (g_measurement.device_status.error_code == PARAM_UNINITIALIZED)) {
+        printf("[通过] 参数区: A/B魔术字都损坏时已报错 PARAM_UNINITIALIZED\r\n");
     } else {
         printf("[失败] 参数区: A/B都损坏时报错不符合预期, 错误码：0x%08lX\r\n",
                (unsigned long)g_measurement.device_status.error_code);

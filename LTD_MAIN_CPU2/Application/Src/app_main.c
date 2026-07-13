@@ -182,6 +182,7 @@ void App_MainLoop(void) {
 	(void)MotorCtrl_PollRuntimePosition();
 	(void)Weight_CheckCommunicationTimeout();
 	HostCommu_ProcessDeferredLogs();
+	AoOutput_ProcessDeferredDiagnostics();
 
 	/* 第一优先级：处理刚收到的原始命令。
 	 * 这一层通常来自调试口/串口缓存，process_command() 会把字符命令翻译成具体动作，

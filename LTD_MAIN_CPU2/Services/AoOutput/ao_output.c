@@ -1,9 +1,11 @@
 #include "ao_output.h"
 
 #include "ad5421.h"
+#include "error_log.h"
 #include "main.h"
 #include "system_parameter.h"
 #include <stddef.h>
+#include <stdio.h>
 
 #define AO_OUTPUT_MIN_MA_X100          320U /* 4-20mA 模拟量输出参数：最小值 MA 放大 100 倍。 */
 #define AO_OUTPUT_MAX_MA_X100          2400U /* 4-20mA 模拟量输出参数：最大值 MA 放大 100 倍。 */
@@ -41,8 +43,107 @@ static uint32_t ao_output_last_recover_tick = 0U;
 static uint32_t ao_output_last_write_attempt_tick = 0U;
 static uint32_t ao_output_last_write_attempt_mA_x100 = 0U;
 static uint32_t ao_output_last_recover_target_mA_x100 = 0U;
+static volatile uint8_t ao_output_diag_error_pending = 0U;
+static volatile uint8_t ao_output_diag_recover_pending = 0U;
+static volatile uint8_t ao_output_diag_fault_active = 0U;
+static uint32_t ao_output_diag_active_error_code = NO_ERROR;
+static uint32_t ao_output_diag_pending_error_code = NO_ERROR;
+static uint32_t ao_output_diag_pending_recover_code = NO_ERROR;
+static AD5421DiagnosticSnapshot ao_output_diag_active_snapshot = {0U};
+static AD5421DiagnosticSnapshot ao_output_diag_pending_error_snapshot = {0U};
+static AD5421DiagnosticSnapshot ao_output_diag_pending_recover_snapshot = {0U};
 static uint32_t AoOutput_UpdateInternal(uint8_t allow_driver_init);
 static uint32_t AoOutput_NormalizeHardwareCurrent(uint32_t current_mA_x100);
+
+/*
+ * 函数用途：判断两次 AD5421 故障是否属于同一故障现场。
+ * 调用场景：AO 诊断日志入队前抑制持续故障的重复打印。
+ * 关键约束：忽略快照序号，只比较实际定位信息。
+ */
+static uint8_t AoOutput_IsSameDiagnostic(const AD5421DiagnosticSnapshot *left,
+                                         const AD5421DiagnosticSnapshot *right,
+                                         uint32_t left_error,
+                                         uint32_t right_error)
+{
+    if ((left == NULL) || (right == NULL) || (left_error != right_error)) {
+        return 0U;
+    }
+
+    if ((left->root_error_code == right->root_error_code) &&
+        (left->fault_flags == right->fault_flags) &&
+        (left->fault_register == right->fault_register) &&
+        (left->hal_status == right->hal_status) &&
+        (left->expected_value == right->expected_value) &&
+        (left->actual_value == right->actual_value) &&
+        (left->stage == right->stage) &&
+        (left->direction == right->direction) &&
+        (left->reg == right->reg)) {
+        return 1U;
+    }
+
+    return 0U;
+}
+
+/*
+ * 函数用途：把 AD5421 故障快照放入主循环延后日志槽。
+ * 调用场景：AO 初始化、诊断、恢复或写电流失败后调用。
+ * 关键约束：只复制数值并置位，不打印；相同持续故障只保留一次。
+ */
+static void AoOutput_QueueDriverError(uint32_t error_code)
+{
+    AD5421DiagnosticSnapshot snapshot;
+    uint32_t primask;
+    uint8_t same_fault;
+
+    AD5421_GetDiagnosticSnapshot(&snapshot);
+    if (snapshot.sequence == 0U) {
+        snapshot.error_code = error_code;
+        snapshot.root_error_code = error_code;
+    }
+
+    primask = __get_PRIMASK();
+    __disable_irq();
+    same_fault = 0U;
+    if (ao_output_diag_fault_active != 0U) {
+        same_fault = AoOutput_IsSameDiagnostic(&snapshot,
+                                               &ao_output_diag_active_snapshot,
+                                               error_code,
+                                               ao_output_diag_active_error_code);
+    }
+    if (same_fault == 0U) {
+        if (ao_output_diag_fault_active == 0U) {
+            ao_output_diag_recover_pending = 0U;
+        }
+        ao_output_diag_active_snapshot = snapshot;
+        ao_output_diag_active_error_code = error_code;
+        ao_output_diag_pending_error_snapshot = snapshot;
+        ao_output_diag_pending_error_code = error_code;
+        ao_output_diag_error_pending = 1U;
+        ao_output_diag_fault_active = 1U;
+    }
+    __set_PRIMASK(primask);
+}
+
+/*
+ * 函数用途：记录 AD5421 故障已恢复，交由主循环统一打印。
+ * 调用场景：驱动重新初始化、恢复序列或正常电流写入成功后调用。
+ * 关键约束：只有之前记录过有效故障时才生成恢复日志。
+ */
+static void AoOutput_QueueDriverRecovery(void)
+{
+    uint32_t primask;
+
+    primask = __get_PRIMASK();
+    __disable_irq();
+    if (ao_output_diag_fault_active != 0U) {
+        ao_output_diag_pending_recover_snapshot = ao_output_diag_active_snapshot;
+        ao_output_diag_pending_recover_code = ao_output_diag_active_error_code;
+        ao_output_diag_recover_pending = 1U;
+        ao_output_diag_fault_active = 0U;
+        ao_output_diag_active_error_code = NO_ERROR;
+    }
+    __set_PRIMASK(primask);
+}
 /*
  * 函数用途：挂起最低优先级 AO 延后刷新。
  * 调用场景：TIM4 请求 AO 刷新或测试流程恢复自动刷新时调用。
@@ -136,8 +237,8 @@ static uint8_t AoOutput_IsRuntimeDriverError(uint32_t error_code)
         (error_code == AD5421_WRITE_CURRENT_ERROR) ||
         (error_code == AD5421_FAULT_PIN_ERROR) ||
         (error_code == AD5421_READFAULT_ERROR) ||
-        (error_code == AD5421_READBACK_ERROR) ||
-        (error_code == OTHER_PERIPHERAL_CONFIG_ERROR)) {
+        (error_code == AD5421_FAULT_STATUS_ERROR) ||
+        (error_code == AD5421_READBACK_ERROR)) {
         return 1U;
     }
 
@@ -159,6 +260,7 @@ static uint32_t AoOutput_RecordRuntimeDriverError(uint32_t now, uint32_t error_c
     ao_output_runtime.last_update_tick = now;
     ao_output_runtime.last_error_code = error_code;
     ao_output_runtime.update_counter++;
+    AoOutput_QueueDriverError(error_code);
 
     return NO_ERROR;
 }
@@ -226,6 +328,7 @@ static uint32_t AoOutput_EnsureDriverReady(uint32_t now, uint8_t allow_init)
         ao_output_last_diag_error = NO_ERROR;
         AoOutput_ResetRecoverState();
         ao_output_last_recover_target_mA_x100 = AoOutput_NormalizeHardwareCurrent(g_deviceParams.InitialCurrent_mA);
+        AoOutput_QueueDriverRecovery();
     }
 
     return ret;
@@ -339,7 +442,7 @@ static uint8_t AoOutput_IsDebugState(void)
 static uint32_t AoOutput_GetLevelRange(uint32_t *level_min_01mm, uint32_t *level_max_01mm)
 {
     if ((level_min_01mm == NULL) || (level_max_01mm == NULL)) {
-        return PARAM_ERROR;
+        return PARAM_ADDRESS_OVERFLOW;
     }
 
     *level_min_01mm = g_deviceParams.AOStartLevel_01mm;
@@ -374,7 +477,7 @@ static uint32_t AoOutput_CalculateLevelCurrent(uint32_t level_01mm, uint32_t *ta
     uint32_t ret;
 
     if (target_mA_x100 == NULL) {
-        return PARAM_ERROR;
+        return PARAM_ADDRESS_OVERFLOW;
     }
 
     start_mA_x100 = AoOutput_NormalizeNormalCurrent(start_mA_x100);
@@ -474,7 +577,7 @@ static uint32_t AoOutput_SelectTarget(AoOutputSource *source, uint32_t *target_m
     uint32_t ret;
 
     if ((source == NULL) || (target_mA_x100 == NULL)) {
-        return PARAM_ERROR;
+        return PARAM_ADDRESS_OVERFLOW;
     }
 
     *target_mA_x100 = AoOutput_NormalizeHardwareCurrent(g_deviceParams.InitialCurrent_mA);
@@ -581,6 +684,7 @@ uint32_t AoOutput_Init(void)
     if (ret != NO_ERROR) {
         ao_output_runtime.source = AO_OUTPUT_SOURCE_DRIVER_ERROR;
         ao_output_runtime.target_mA_x100 = AoOutput_NormalizeHardwareCurrent(g_deviceParams.FaultCurrent_mA);
+        AoOutput_QueueDriverError(ret);
         AoOutput_LeaveUpdate();
         return ret;
     }
@@ -657,13 +761,14 @@ static uint32_t AoOutput_UpdateInternal(uint8_t allow_driver_init)
                 ao_output_runtime.last_sent_tick = now;
                 ao_output_runtime.last_error_code = NO_ERROR;
                 ao_output_runtime.update_counter++;
+                AoOutput_QueueDriverRecovery();
                 return NO_ERROR;
             }
 
             ao_output_diag_valid = 1U;
             ao_output_last_diag_tick = now;
             ao_output_last_diag_error = recover_ret;
-            if (recover_ret != AD5421_READFAULT_ERROR) {
+            if (recover_ret != AD5421_FAULT_STATUS_ERROR) {
                 return AoOutput_RecordRuntimeDriverError(now, recover_ret);
             }
         }
@@ -700,6 +805,7 @@ static uint32_t AoOutput_UpdateInternal(uint8_t allow_driver_init)
             ao_output_runtime.last_sent_tick = now;
             if (source != AO_OUTPUT_SOURCE_DRIVER_ERROR) {
                 ao_output_last_recover_target_mA_x100 = target_mA_x100;
+                AoOutput_QueueDriverRecovery();
             }
         } else {
             ret = write_ret;
@@ -710,6 +816,7 @@ static uint32_t AoOutput_UpdateInternal(uint8_t allow_driver_init)
         ao_output_runtime.last_error_code = ret;
     }
     if (AoOutput_IsRuntimeDriverError(ret) != 0U) {
+        AoOutput_QueueDriverError(ret);
         return NO_ERROR;
     }
 
@@ -837,6 +944,126 @@ uint32_t AoOutput_ProcessPendingTimerRefresh(void)
     }
 
     return ret;
+}
+
+/* 返回 AD5421 故障快照中的阶段中文名称。 */
+static const char *AoOutput_GetDiagnosticStageText(uint8_t stage)
+{
+    switch (stage) {
+    case AD5421_DIAG_STAGE_ACCESS_BUSY:
+        return "访问冲突";
+    case AD5421_DIAG_STAGE_SPI_WRITE:
+        return "SPI写入";
+    case AD5421_DIAG_STAGE_SPI_READ_COMMAND:
+        return "SPI读命令";
+    case AD5421_DIAG_STAGE_SPI_READ_DATA:
+        return "SPI读数据";
+    case AD5421_DIAG_STAGE_CONTROL_READBACK:
+        return "控制寄存器核对";
+    case AD5421_DIAG_STAGE_FAULT_STATUS:
+        return "芯片故障状态";
+    default:
+        return "未记录";
+    }
+}
+
+/* 返回 AD5421 故障快照中的访问方向中文名称。 */
+static const char *AoOutput_GetDiagnosticDirectionText(uint8_t direction)
+{
+    if (direction == AD5421_DIAG_DIRECTION_WRITE) {
+        return "写";
+    }
+    if (direction == AD5421_DIAG_DIRECTION_READ) {
+        return "读";
+    }
+    return "无";
+}
+
+/* 返回 HAL 外设访问状态的中文名称。 */
+static const char *AoOutput_GetHalStatusText(uint32_t hal_status)
+{
+    switch (hal_status) {
+    case (uint32_t)HAL_OK:
+        return "正常";
+    case (uint32_t)HAL_ERROR:
+        return "访问错误";
+    case (uint32_t)HAL_BUSY:
+        return "总线忙";
+    case (uint32_t)HAL_TIMEOUT:
+        return "访问超时";
+    default:
+        return "未知状态";
+    }
+}
+
+/*
+ * 函数用途：在主循环任务态统一输出 AD5421 故障和恢复日志。
+ * 调用场景：App_MainLoop 每轮后台轻量检查阶段调用。
+ * 关键约束：不得在 ISR 或 PendSV 中调用；持续相同故障不会重复刷屏。
+ */
+void AoOutput_ProcessDeferredDiagnostics(void)
+{
+    AD5421DiagnosticSnapshot error_snapshot = {0U};
+    AD5421DiagnosticSnapshot recover_snapshot = {0U};
+    uint32_t error_code = NO_ERROR;
+    uint32_t recover_code = NO_ERROR;
+    uint32_t primask;
+    uint8_t error_pending;
+    uint8_t recover_pending;
+    char detail[256];
+
+    primask = __get_PRIMASK();
+    __disable_irq();
+    error_pending = (uint8_t)ao_output_diag_error_pending;
+    recover_pending = (uint8_t)ao_output_diag_recover_pending;
+    if (error_pending != 0U) {
+        error_snapshot = ao_output_diag_pending_error_snapshot;
+        error_code = ao_output_diag_pending_error_code;
+        ao_output_diag_error_pending = 0U;
+    }
+    if (recover_pending != 0U) {
+        recover_snapshot = ao_output_diag_pending_recover_snapshot;
+        recover_code = ao_output_diag_pending_recover_code;
+        ao_output_diag_recover_pending = 0U;
+    }
+    __set_PRIMASK(primask);
+
+    if (error_pending != 0U) {
+        (void)snprintf(detail,
+                       sizeof(detail),
+                       "阶段=%s，方向=%s，寄存器=0x%02X，底层状态=%s(%lu)，根因码=%lu，故障寄存器=0x%04lX，故障标志=0x%08lX，期望值=0x%04lX，实际值=0x%04lX",
+                       AoOutput_GetDiagnosticStageText(error_snapshot.stage),
+                       AoOutput_GetDiagnosticDirectionText(error_snapshot.direction),
+                       (unsigned int)error_snapshot.reg,
+                       AoOutput_GetHalStatusText(error_snapshot.hal_status),
+                       (unsigned long)error_snapshot.hal_status,
+                       (unsigned long)error_snapshot.root_error_code,
+                       (unsigned long)error_snapshot.fault_register,
+                       (unsigned long)error_snapshot.fault_flags,
+                       (unsigned long)error_snapshot.expected_value,
+                       (unsigned long)error_snapshot.actual_value);
+        ErrorLog_WarnDetail("模拟量输出",
+                            "AD5421故障定位",
+                            ErrorLog_GetReasonByCode(error_code),
+                            "保持主流程并后台恢复",
+                            detail);
+    }
+
+    if (recover_pending != 0U) {
+        (void)snprintf(detail,
+                       sizeof(detail),
+                       "原故障=%s，原阶段=%s，寄存器=0x%02X，故障寄存器=0x%04lX",
+                       ErrorLog_GetCodeName(recover_code),
+                       AoOutput_GetDiagnosticStageText(recover_snapshot.stage),
+                       (unsigned int)recover_snapshot.reg,
+                       (unsigned long)recover_snapshot.fault_register);
+        ErrorLog_RecoverDetail("模拟量输出",
+                               "AD5421自动恢复",
+                               "通信及芯片诊断恢复",
+                               1U,
+                               1U,
+                               detail);
+    }
 }
 /*
  * 函数用途：返回 AO 运行态只读指针。

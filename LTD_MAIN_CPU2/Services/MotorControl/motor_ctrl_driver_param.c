@@ -433,7 +433,7 @@ static uint32_t MotorDriver_ReadTargetPositionOpen(TMC5130TypeDef *tmc5130, bool
     int64_t diff;
 
     if ((tmc5130 == NULL) || (target_open == NULL)) {
-        return PARAM_ERROR;
+        return PARAM_ADDRESS_OVERFLOW;
     }
 
     if (!stpr_tryReadInt(tmc5130, TMC5130_XACTUAL, &xactual)) {
@@ -463,7 +463,7 @@ static uint32_t MotorDriver_AlignTargetToActual(TMC5130TypeDef *tmc5130)
     int32_t xactual = 0;
 
     if (tmc5130 == NULL) {
-        return PARAM_ERROR;
+        return PARAM_ADDRESS_OVERFLOW;
     }
 
     if (!stpr_tryReadInt(tmc5130, TMC5130_XACTUAL, &xactual)) {
@@ -630,7 +630,7 @@ uint32_t MotorCtrl_Init(void)
  *
  * @param tmc5130 TMC5130 device object.
  * @param is_moving Output moving state when return is NO_ERROR.
- * @return NO_ERROR, PARAM_ERROR or MOTOR_TMC_COMM_ERROR.
+ * @return NO_ERROR, PARAM_ADDRESS_OVERFLOW or MOTOR_TMC_COMM_ERROR.
  */
 uint32_t MotorCtrl_IsDriverMoving(TMC5130TypeDef *tmc5130, bool *is_moving)
 {
@@ -785,7 +785,7 @@ uint32_t MotorDriver_StopIfCommandSwitchRequested(void)
  *
  * @param tmc5130 TMC5130 device object.
  * @param is_moving Output moving state when return is NO_ERROR.
- * @return NO_ERROR, PARAM_ERROR or MOTOR_TMC_COMM_ERROR.
+ * @return NO_ERROR, PARAM_ADDRESS_OVERFLOW or MOTOR_TMC_COMM_ERROR.
  */
 uint32_t MotorDriver_ReadMovingState(TMC5130TypeDef *tmc5130, bool *is_moving)
 {
@@ -796,7 +796,7 @@ uint32_t MotorDriver_ReadMovingState(TMC5130TypeDef *tmc5130, bool *is_moving)
     uint32_t ret;
 
     if ((tmc5130 == NULL) || (is_moving == NULL)) {
-        return PARAM_ERROR;
+        return PARAM_ADDRESS_OVERFLOW;
     }
 
     *is_moving = true;
@@ -851,7 +851,7 @@ uint32_t MotorDriver_ReadStoppingState(TMC5130TypeDef *tmc5130, bool *is_moving)
     int32_t vactual = 0;
 
     if ((tmc5130 == NULL) || (is_moving == NULL)) {
-        return PARAM_ERROR;
+        return PARAM_ADDRESS_OVERFLOW;
     }
 
     *is_moving = true;

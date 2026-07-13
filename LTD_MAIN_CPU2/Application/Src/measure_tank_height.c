@@ -802,7 +802,7 @@ uint32_t Bottom_SaveGyroZeroRef(void)
 uint32_t check_bottom_status(Weight_StateTypeDef *status)
 {
     if (status == NULL) {
-        return PARAM_ERROR;
+        return PARAM_ADDRESS_OVERFLOW;
     }
     *status = NORMAL;
 
@@ -858,7 +858,7 @@ uint32_t check_bottom_status(Weight_StateTypeDef *status)
     /* -------- 方式2：陀螺仪角度变化（mode!=0，不锁存） -------- */
     if (!g_gyro_zero_ref.valid) {
         printf("罐底检测(陀螺仪) | 角度基准无效，停止本次探底\r\n");
-        return OTHER_PERIPHERAL_CONFIG_ERROR;
+        return MEASUREMENT_ZERO_REPEAT_FAIL;
     }
 
     float ax = 0.0f, ay = 0.0f;

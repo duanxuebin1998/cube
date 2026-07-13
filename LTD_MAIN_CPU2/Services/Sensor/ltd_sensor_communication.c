@@ -9,7 +9,8 @@
 #include "system_parameter.h"
 #include "sensor.h"
 #include "error_log.h"
- #include <math.h>
+#include <math.h>
+#include <stdio.h>
 
 #ifndef DSM_V2_MAX_RETRY
 #define DSM_V2_MAX_RETRY   UART6_COMM_MAX_RETRY /* 传感器通信参数：传感器 V2 最大值 重试。 */
@@ -64,6 +65,43 @@ static void UART6_DrainRX_UntilIdle(uint32_t idle_ms) {
 }
 
 static uint8_t s_dsm_v2_dma_rx_buf[8]; /* LTD 传感器通信数据缓冲区，注意与中断或 DMA 访问边界保持一致。 */
+static const char *s_dsm_v2_last_stage = "未开始";
+static uint32_t s_dsm_v2_last_uart_error = HAL_UART_ERROR_NONE;
+static uint16_t s_dsm_v2_last_received_length = 0U;
+
+/* 保存 LTD/V2 最近一次失败阶段，供重试日志定位。 */
+static void DSM_V2_RecordDiagnostic(const char *stage, uint16_t received_length)
+{
+    s_dsm_v2_last_stage = (stage != NULL) ? stage : "未知阶段";
+    s_dsm_v2_last_uart_error = huart6.ErrorCode;
+    s_dsm_v2_last_received_length = received_length;
+}
+
+/* 在统一重试日志中附带完整的 8 字节请求和当前应答。 */
+static void DSM_V2_LogRetry(const char *operation,
+                            uint32_t error_code,
+                            uint32_t attempt,
+                            const uint8_t tx[8],
+                            const uint8_t rx[8])
+{
+    char detail[256];
+
+    (void)snprintf(detail,
+                   sizeof(detail),
+                   "阶段=%s,UART错误=0x%08lX,接收长度=%u,发送=%02X %02X %02X %02X %02X %02X %02X %02X,接收=%02X %02X %02X %02X %02X %02X %02X %02X",
+                   s_dsm_v2_last_stage,
+                   (unsigned long)s_dsm_v2_last_uart_error,
+                   (unsigned int)s_dsm_v2_last_received_length,
+                   tx[0], tx[1], tx[2], tx[3], tx[4], tx[5], tx[6], tx[7],
+                   rx[0], rx[1], rx[2], rx[3], rx[4], rx[5], rx[6], rx[7]);
+    ErrorLog_RetryDetail(ERROR_LOG_MODULE_SENSOR,
+                         operation,
+                         ErrorLog_GetReasonByCode(error_code),
+                         attempt,
+                         DSM_V2_MAX_RETRY,
+                         error_code,
+                         detail);
+}
 
 /**
  * @brief 停止 UART6 DMA 接收并清理固定 8 字节协议的硬件错误状态。
@@ -115,15 +153,17 @@ static uint32_t DSM_V2_WaitTransmitDmaDone(uint32_t timeout)
         }
         /* 先处理异常边界，避免LTD 传感器通信状态机带故障继续运行。 */
         if (huart6.ErrorCode != HAL_UART_ERROR_NONE) {
+            DSM_V2_RecordDiagnostic("发送DMA硬件错误", 0U);
             DSM_V2_StopDmaReceive();
-            return OTHER_PERIPHERAL_CONFIG_ERROR;
+            return COMM_UART_TRANSFER_ERROR;
         }
         /* LTD 传感器通信与外设通信之间保留等待时间，避免硬件或对端协议尚未准备好。 */
         HAL_Delay(1);
     }
 
+    DSM_V2_RecordDiagnostic("发送DMA等待超时", 0U);
     DSM_V2_StopDmaReceive();
-    return SENSOR_DEVICE_COMM_TIMEOUT;
+    return COMM_UART_TRANSFER_ERROR;
 }
 
 /**
@@ -145,8 +185,9 @@ static uint32_t DSM_V2_StartFixedReceiveDma(uint8_t rx[8])
 
     DSM_V2_StopDmaReceive();
     if (HAL_UART_Receive_DMA(&huart6, s_dsm_v2_dma_rx_buf, expect_len) != HAL_OK) {
+        DSM_V2_RecordDiagnostic("接收DMA启动失败", 0U);
         DSM_V2_StopDmaReceive();
-        return OTHER_PERIPHERAL_CONFIG_ERROR;
+        return COMM_UART_TRANSFER_ERROR;
     }
     return NO_ERROR;
 }
@@ -175,8 +216,9 @@ static uint32_t DSM_V2_WaitFixedReceiveDma(uint8_t rx[8], uint32_t timeout)
         }
         /* 先处理异常边界，避免LTD 传感器通信状态机带故障继续运行。 */
         if (huart6.ErrorCode != HAL_UART_ERROR_NONE) {
+            DSM_V2_RecordDiagnostic("接收DMA硬件错误", got);
             DSM_V2_StopDmaReceive();
-            return SENSOR_RESP_FORMAT_ERROR;
+            return COMM_UART_TRANSFER_ERROR;
         }
         if (got >= expect_len) {
             for (uint16_t i = 0U; i < expect_len; i++) {
@@ -194,6 +236,7 @@ static uint32_t DSM_V2_WaitFixedReceiveDma(uint8_t rx[8], uint32_t timeout)
         for (uint16_t i = 0U; (i < got) && (i < expect_len); i++) {
             rx[i] = s_dsm_v2_dma_rx_buf[i];
         }
+        DSM_V2_RecordDiagnostic((got == 0U) ? "等待应答超时" : "应答长度不足", got);
         DSM_V2_StopDmaReceive();
         return (got == 0U) ? SENSOR_DEVICE_COMM_TIMEOUT : SENSOR_RESP_FORMAT_ERROR;
     }
@@ -222,8 +265,9 @@ static int DSM_V2_Transceive(const uint8_t tx[8], uint8_t rx[8]) {
 	if (HAL_UART_Transmit_DMA(&huart6, (uint8_t*) tx, 8) != HAL_OK) {
 #ifdef DEBUG_DSM
 #endif
+		DSM_V2_RecordDiagnostic("发送DMA启动失败", 0U);
 		DSM_V2_StopDmaReceive();
-		return OTHER_PERIPHERAL_CONFIG_ERROR;
+		return COMM_UART_TRANSFER_ERROR;
 	}
 
 	rx_ret = DSM_V2_WaitTransmitDmaDone(DSM_CMD_TIMEOUT);
@@ -247,6 +291,7 @@ static int DSM_V2_Transceive(const uint8_t tx[8], uint8_t rx[8]) {
 	if (DSM_V2_CalcSum(rx) != rx[7]) {
 #ifdef DEBUG_DSM
 #endif
+		DSM_V2_RecordDiagnostic("应答求和校验错误", 8U);
 		return SENSOR_BCC_ERROR;
 	}
 	return NO_ERROR;
@@ -262,6 +307,7 @@ static int DSM_V2_CheckReply(const uint8_t tx[8], const uint8_t rx[8]) {
 #ifdef DEBUG_DSM
 		printf("V2接收功能码不匹配: 期望：%02X, 实际=%02X\r\n", expect_func, rx[1]);
 #endif
+		DSM_V2_RecordDiagnostic("应答功能码不匹配", 8U);
 		return SENSOR_RESP_FORMAT_ERROR;
 	}
 	if (rx[6] == 0xFFU) {
@@ -273,6 +319,7 @@ static int DSM_V2_CheckReply(const uint8_t tx[8], const uint8_t rx[8]) {
 #ifdef DEBUG_DSM
 		printf("V2接收参数不匹配: 期望：%02X, 实际=%02X\r\n", expect_param, rx[6]);
 #endif
+		DSM_V2_RecordDiagnostic("应答参数码不匹配", 8U);
 		return SENSOR_RESP_FORMAT_ERROR;
 	}
 	return NO_ERROR;
@@ -295,7 +342,7 @@ static inline float DSM_V2_ParseFloat_LE(const uint8_t *d) {
 /* === 对外：切换模式（param=0x00） === */
 int DSM_V2_SwitchMode(dsm_v2_mode_t mode) {
 	uint8_t tx[8], rx[8];
-	int last_err = OTHER_PERIPHERAL_CONFIG_ERROR;
+	int last_err = SENSOR_DEVICE_COMM_TIMEOUT;
 
 	DSM_V2_MakeFrame(tx, (uint8_t) mode, 0x00000000u, 0x00U); /* 模式切换帧参数码固定为 0x00 */
 
@@ -314,13 +361,11 @@ int DSM_V2_SwitchMode(dsm_v2_mode_t mode) {
 		/* 先处理异常边界，避免LTD 传感器通信状态机带故障继续运行。 */
 		if (ret != NO_ERROR) {
 			last_err = ret;
-			/* 错误 阶段：错误重试 模块：传感器 操作：切换模式 原因：ErrorLog_GetReasonByCode((uint32_t)ret) 尝试：(attempt + 1)/DSM_V2_MAX_RETRY 错误码：ret 错误名：ErrorLog_GetCodeName(ret) */
-			ErrorLog_Retry(ERROR_LOG_MODULE_SENSOR,
-			               ERROR_LOG_OP_SWITCH_MODE,
-			               ErrorLog_GetReasonByCode((uint32_t)ret),
-			               (uint32_t)(attempt + 1),
-			               DSM_V2_MAX_RETRY,
-			               (uint32_t)ret);
+			DSM_V2_LogRetry(ERROR_LOG_OP_SWITCH_MODE,
+			                (uint32_t)ret,
+			                (uint32_t)(attempt + 1),
+			                tx,
+			                rx);
 			continue;
 		}
 
@@ -345,13 +390,11 @@ int DSM_V2_SwitchMode(dsm_v2_mode_t mode) {
 			return NO_ERROR;
 		}
 		last_err = ret;
-		/* 错误 阶段：错误重试 模块：传感器 操作：切换模式 原因：ErrorLog_GetReasonByCode((uint32_t)ret) 尝试：(attempt + 1)/DSM_V2_MAX_RETRY 错误码：ret 错误名：ErrorLog_GetCodeName(ret) */
-		ErrorLog_Retry(ERROR_LOG_MODULE_SENSOR,
-		               ERROR_LOG_OP_SWITCH_MODE,
-		               ErrorLog_GetReasonByCode((uint32_t)ret),
-		               (uint32_t)(attempt + 1),
-		               DSM_V2_MAX_RETRY,
-		               (uint32_t)ret);
+		DSM_V2_LogRetry(ERROR_LOG_OP_SWITCH_MODE,
+		                (uint32_t)ret,
+		                (uint32_t)(attempt + 1),
+		                tx,
+		                rx);
 		/* LTD 传感器通信与外设通信之间保留等待时间，避免硬件或对端协议尚未准备好。 */
 		HAL_Delay(DSM_BCC_DELAY);
 	}
@@ -381,7 +424,7 @@ int DSM_V2_Read_FloatParam(uint8_t param, float *out_value) {
 		return PARAM_ADDRESS_OVERFLOW;
 
 	uint8_t tx[8], rx[8];
-	int last_err = OTHER_PERIPHERAL_CONFIG_ERROR;
+	int last_err = SENSOR_DEVICE_COMM_TIMEOUT;
 
 	DSM_V2_MakeFrame(tx, (uint8_t) DSM_V2_FUNC_R, 0x00000000u, param);
 
@@ -400,13 +443,11 @@ int DSM_V2_Read_FloatParam(uint8_t param, float *out_value) {
 		/* 先处理异常边界，避免LTD 传感器通信状态机带故障继续运行。 */
 		if (ret != NO_ERROR) {
 			last_err = ret;
-			/* 错误 阶段：错误重试 模块：传感器 操作：读取浮点参数 原因：ErrorLog_GetReasonByCode((uint32_t)ret) 尝试：(attempt + 1)/DSM_V2_MAX_RETRY 错误码：ret 错误名：ErrorLog_GetCodeName(ret) */
-			ErrorLog_Retry(ERROR_LOG_MODULE_SENSOR,
-			               ERROR_LOG_OP_READ_FLOAT_PARAM,
-			               ErrorLog_GetReasonByCode((uint32_t)ret),
-			               (uint32_t)(attempt + 1),
-			               DSM_V2_MAX_RETRY,
-			               (uint32_t)ret);
+			DSM_V2_LogRetry(ERROR_LOG_OP_READ_FLOAT_PARAM,
+			                (uint32_t)ret,
+			                (uint32_t)(attempt + 1),
+			                tx,
+			                rx);
 			continue;
 		}
 
@@ -433,13 +474,11 @@ int DSM_V2_Read_FloatParam(uint8_t param, float *out_value) {
 			return NO_ERROR;
 		}
 		last_err = ret;
-		/* 错误 阶段：错误重试 模块：传感器 操作：读取浮点参数 原因：ErrorLog_GetReasonByCode((uint32_t)ret) 尝试：(attempt + 1)/DSM_V2_MAX_RETRY 错误码：ret 错误名：ErrorLog_GetCodeName(ret) */
-		ErrorLog_Retry(ERROR_LOG_MODULE_SENSOR,
-		               ERROR_LOG_OP_READ_FLOAT_PARAM,
-		               ErrorLog_GetReasonByCode((uint32_t)ret),
-		               (uint32_t)(attempt + 1),
-		               DSM_V2_MAX_RETRY,
-		               (uint32_t)ret);
+		DSM_V2_LogRetry(ERROR_LOG_OP_READ_FLOAT_PARAM,
+		                (uint32_t)ret,
+		                (uint32_t)(attempt + 1),
+		                tx,
+		                rx);
 		/* LTD 传感器通信与外设通信之间保留等待时间，避免硬件或对端协议尚未准备好。 */
 		HAL_Delay(DSM_BCC_DELAY);
 	}
@@ -463,7 +502,7 @@ static int DSM_V2_Read_IntParamInternal(uint8_t param, int32_t *out_value, uint8
 		return PARAM_ADDRESS_OVERFLOW;
 
 	uint8_t tx[8], rx[8];
-	int last_err = OTHER_PERIPHERAL_CONFIG_ERROR;
+	int last_err = SENSOR_DEVICE_COMM_TIMEOUT;
 
 	DSM_V2_MakeFrame(tx, (uint8_t) DSM_V2_FUNC_R, 0x00000000u, param);
 
@@ -483,13 +522,11 @@ static int DSM_V2_Read_IntParamInternal(uint8_t param, int32_t *out_value, uint8
 		if (ret != NO_ERROR) {
 			last_err = ret;
 			if (log_retry != 0U) {
-				/* 错误 阶段：错误重试 模块：传感器 操作：读取整数参数 原因：ErrorLog_GetReasonByCode((uint32_t)ret) 尝试：(attempt + 1)/DSM_V2_MAX_RETRY 错误码：ret 错误名：ErrorLog_GetCodeName(ret) */
-				ErrorLog_Retry(ERROR_LOG_MODULE_SENSOR,
-				               ERROR_LOG_OP_READ_INT_PARAM,
-				               ErrorLog_GetReasonByCode((uint32_t)ret),
-				               (uint32_t)(attempt + 1),
-				               DSM_V2_MAX_RETRY,
-				               (uint32_t)ret);
+				DSM_V2_LogRetry(ERROR_LOG_OP_READ_INT_PARAM,
+				                (uint32_t)ret,
+				                (uint32_t)(attempt + 1),
+				                tx,
+				                rx);
 			}
 			continue;
 		}
@@ -518,13 +555,11 @@ static int DSM_V2_Read_IntParamInternal(uint8_t param, int32_t *out_value, uint8
 		}
 		last_err = ret;
 		if (log_retry != 0U) {
-			/* 错误 阶段：错误重试 模块：传感器 操作：读取整数参数 原因：ErrorLog_GetReasonByCode((uint32_t)ret) 尝试：(attempt + 1)/DSM_V2_MAX_RETRY 错误码：ret 错误名：ErrorLog_GetCodeName(ret) */
-			ErrorLog_Retry(ERROR_LOG_MODULE_SENSOR,
-			               ERROR_LOG_OP_READ_INT_PARAM,
-			               ErrorLog_GetReasonByCode((uint32_t)ret),
-			               (uint32_t)(attempt + 1),
-			               DSM_V2_MAX_RETRY,
-			               (uint32_t)ret);
+			DSM_V2_LogRetry(ERROR_LOG_OP_READ_INT_PARAM,
+			                (uint32_t)ret,
+			                (uint32_t)(attempt + 1),
+			                tx,
+			                rx);
 		}
 		/* LTD 传感器通信与外设通信之间保留等待时间，避免硬件或对端协议尚未准备好。 */
 		HAL_Delay(DSM_BCC_DELAY);

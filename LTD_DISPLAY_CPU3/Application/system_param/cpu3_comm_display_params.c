@@ -487,8 +487,12 @@ int32_t Cpu3Local_ReadValue(OperatingNumber opera)
     }
 }
 
-/* 写 CPU3 本机参数（统一入口） */
-void Cpu3Local_WriteValue(OperatingNumber opera, int32_t v)
+/*
+ * 函数用途：写入 CPU3 本机参数并返回 FRAM 持久化校验结果。
+ * 调用场景：协议切换需要根据返回值决定是否启用新串口参数。
+ * 关键约束：普通菜单入口可忽略返回值，协议切换入口必须处理失败并恢复旧配置。
+ */
+bool Cpu3Local_WriteValueChecked(OperatingNumber opera, int32_t v)
 {
     bool display_runtime_changed = false;
 
@@ -662,7 +666,17 @@ void Cpu3Local_WriteValue(OperatingNumber opera, int32_t v)
 
     /* 这里可以顺手：重配串口 + 保存 FRAM */
     /* Cpu3_Comm_ReInitAll(); / / 你自己实现 */
-    Cpu3_Params_SaveToFRAM();     /* 你自己实现 */
+    return Cpu3_Params_SaveToFRAM();
+}
+
+/*
+ * 函数用途：保持现有菜单和参数写入口的无返回值接口。
+ * 调用场景：不需要同步处理 FRAM 写入结果的既有调用方。
+ * 关键约束：需要确认持久化结果时必须调用 Cpu3Local_WriteValueChecked。
+ */
+void Cpu3Local_WriteValue(OperatingNumber opera, int32_t v)
+{
+    (void)Cpu3Local_WriteValueChecked(opera, v);
 }
 
 /**
@@ -789,6 +803,51 @@ void Cpu3_ReinitAllUarts(void)
     Cpu3_ReinitOneUart(&huart3, &g_cpu3_comm_display_params.com3);
     __HAL_UART_ENABLE_IT(&huart3, UART_IT_IDLE);
     HAL_UART_Receive_DMA(&huart3, UART3_RX_BUF, UART3_RX_BUF_SIZE);
+}
+
+/*
+ * 函数用途：按当前 CPU3 本机参数只重初始化指定的外部 COM 口。
+ * 调用场景：协议切换应答发送完成后，由主循环保存新协议并调用。
+ * 关键约束：不影响其它外部 COM 口；调用前应确保目标端口发送已经完成。
+ */
+bool Cpu3_ReinitPortUart(uint8_t port_idx)
+{
+    UART_HandleTypeDef *huart;
+    const ComPortConfig *cfg;
+    uint8_t *rx_buf;
+    uint16_t rx_buf_size;
+
+    switch (port_idx)
+    {
+    case 1U:
+        huart = &huart6;
+        cfg = &g_cpu3_comm_display_params.com1;
+        rx_buf = UART6_RX_BUF;
+        rx_buf_size = UART6_RX_BUF_SIZE;
+        break;
+
+    case 2U:
+        huart = &huart2;
+        cfg = &g_cpu3_comm_display_params.com2;
+        rx_buf = UART2_RX_BUF;
+        rx_buf_size = UART2_RX_BUF_SIZE;
+        break;
+
+    case 3U:
+        huart = &huart3;
+        cfg = &g_cpu3_comm_display_params.com3;
+        rx_buf = UART3_RX_BUF;
+        rx_buf_size = UART3_RX_BUF_SIZE;
+        break;
+
+    default:
+        return false;
+    }
+
+    (void)HAL_UART_DMAStop(huart);
+    Cpu3_ReinitOneUart(huart, cfg);
+    __HAL_UART_ENABLE_IT(huart, UART_IT_IDLE);
+    return HAL_UART_Receive_DMA(huart, rx_buf, rx_buf_size) == HAL_OK;
 }
 
 /* ==================== FRAM 存储结构定义 ==================== */
@@ -1015,13 +1074,14 @@ static int32_t Cpu3_MigrateDensityInputX10ToX100(int32_t raw)
 }
 
 /**
- * @brief 保存参数存储中的 Cpu3_Params_SaveToFRAM 逻辑。
- * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ * @brief 将当前 CPU3 本机参数保存到 FRAM，并执行写后读回校验。
+ * @return true 表示现有镜像一致或写后读回校验通过，false 表示持久化失败。
  */
-void Cpu3_Params_SaveToFRAM(void)
+bool Cpu3_Params_SaveToFRAM(void)
 {
     Cpu3ParamStorage stor;
     Cpu3ParamStorage current;
+    Cpu3ParamStorage verify;
 
     /* 先构造“准备写入 FRAM 的目标镜像”，后续判重和真实写入都基于它。 */
     Cpu3_Params_BuildStorage(&stor);
@@ -1036,12 +1096,22 @@ void Cpu3_Params_SaveToFRAM(void)
         && memcmp(&current.params, &stor.params, sizeof(stor.params)) == 0)
     {
         printf("CPU3参数未变化，跳过保存。\r\n");
-        return;
+        return true;
     }
 
     WriteMultiData((uint8_t*)&stor, FRAM_CPU3_PARAM_ADDRESS, sizeof(Cpu3ParamStorage));
 
+    memset(&verify, 0, sizeof(verify));
+    ReadMultiData((uint8_t*)&verify, FRAM_CPU3_PARAM_ADDRESS, sizeof(Cpu3ParamStorage));
+    if ((!Cpu3_Params_StorageValid(&verify))
+        || (memcmp(&verify.params, &stor.params, sizeof(stor.params)) != 0))
+    {
+        printf("CPU3参数写入FRAM后读回校验失败。\r\n");
+        return false;
+    }
+
     printf("CPU3参数已保存到FRAM，CRC=0x%08lX\r\n", (unsigned long)stor.crc);
+    return true;
 }
 
 /**
@@ -1147,4 +1217,3 @@ void Cpu3_Params_LoadFromFRAM(void)
         printf("CPU3参数已从FRAM加载，CRC=0x%08lX\r\n", (unsigned long)stor.crc);
     }
 }
-

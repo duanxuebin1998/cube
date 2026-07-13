@@ -54,6 +54,9 @@ void AoOutput_RequestTimerRefreshFromTim4Isr(void);
  */
 uint32_t AoOutput_ProcessPendingTimerRefresh(void);
 
+/* 在主循环任务态输出由 PendSV 或前台刷新保存的 AD5421 诊断日志。 */
+void AoOutput_ProcessDeferredDiagnostics(void);
+
 /*
  * 函数用途：暂停或恢复定时触发的 AO 自动刷新。
  * 调用场景：串口 AO 测试直接访问 AD5421 期间使用。

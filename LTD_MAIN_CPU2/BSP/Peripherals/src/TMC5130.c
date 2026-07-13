@@ -149,7 +149,11 @@ TMC5130TypeDef stepper = {
 };
 
 /* => SPI 底层封装（仅本文件内部使用） */
-static bool tmc5130_tryReadArray(TMC5130TypeDef *tmc5130, uint8_t *data, size_t length, uint32_t *value);
+static bool tmc5130_tryReadArray(TMC5130TypeDef *tmc5130,
+                                 uint8_t *data,
+                                 size_t length,
+                                 uint32_t *value,
+                                 uint8_t stage);
 static bool tmc5130_writeArray(TMC5130TypeDef *tmc5130, uint8_t *data, size_t length);
 static bool tmc5130_readRegisterOnce(TMC5130TypeDef *tmc5130, uint8_t address, int32_t *value);
 static bool tmc5130_readXactualStable(TMC5130TypeDef *tmc5130, int32_t *value);
@@ -166,6 +170,67 @@ static void tmc5130_initWrite(TMC5130TypeDef *tmc5130,
 /* < = SPI 底层封装 */
 
 static volatile uint8_t s_tmc5130_spi_busy = 0U; /* TMC5130 驱动模块级变量，保存跨函数共享的业务状态。 */
+static TMC5130DiagnosticSnapshot s_tmc5130_diagnostic = {0U};
+
+/*
+ * 函数用途：保存最后一次有效 TMC5130 故障现场。
+ * 调用场景：SPI 访问失败、XACTUAL 连续读数不稳定或配置丢失时调用。
+ * 关键约束：只保存数值，不打印日志，不改变原有错误码和停机行为。
+ */
+static void tmc5130_saveDiagnostic(uint8_t stage,
+                                   uint8_t direction,
+                                   uint8_t address,
+                                   uint8_t response_status,
+                                   uint32_t hal_status,
+                                   uint32_t error_code,
+                                   uint32_t expected_value,
+                                   uint32_t actual_value,
+                                   int32_t sample_first,
+                                   int32_t sample_second,
+                                   int32_t sample_third)
+{
+    uint32_t primask;
+    uint32_t sequence;
+
+    primask = __get_PRIMASK();
+    __disable_irq();
+    sequence = s_tmc5130_diagnostic.sequence + 1U;
+    if (sequence == 0U) {
+        sequence = 1U;
+    }
+    s_tmc5130_diagnostic.sequence = sequence;
+    s_tmc5130_diagnostic.error_code = error_code;
+    s_tmc5130_diagnostic.hal_status = hal_status;
+    s_tmc5130_diagnostic.expected_value = expected_value;
+    s_tmc5130_diagnostic.actual_value = actual_value;
+    s_tmc5130_diagnostic.sample_first = sample_first;
+    s_tmc5130_diagnostic.sample_second = sample_second;
+    s_tmc5130_diagnostic.sample_third = sample_third;
+    s_tmc5130_diagnostic.stage = stage;
+    s_tmc5130_diagnostic.direction = direction;
+    s_tmc5130_diagnostic.address = address;
+    s_tmc5130_diagnostic.response_status = response_status;
+    __set_PRIMASK(primask);
+}
+
+/*
+ * 函数用途：复制最后一次有效 TMC5130 故障现场。
+ * 调用场景：故障管理最终出口和故障注入测试读取。
+ * 关键约束：使用短临界区保证所有字段来自同一次故障，不访问 SPI。
+ */
+void TMC5130_GetDiagnosticSnapshot(TMC5130DiagnosticSnapshot *snapshot)
+{
+    uint32_t primask;
+
+    if (snapshot == NULL) {
+        return;
+    }
+
+    primask = __get_PRIMASK();
+    __disable_irq();
+    *snapshot = s_tmc5130_diagnostic;
+    __set_PRIMASK(primask);
+}
 
 static void tmc5130_delayCsGuard(void)
 /* TMC5130 驱动与外设通信之间保留等待时间，避免硬件或对端协议尚未准备好。 */
@@ -228,16 +293,45 @@ static void tmc5130_leaveSpiAccess(void)
 static bool tmc5130_tryReadArray(TMC5130TypeDef *tmc5130,
                                  uint8_t *data,
                                  size_t length,
-                                 uint32_t *value)
+                                 uint32_t *value,
+                                 uint8_t stage)
 {
     uint8_t rxBuff[5] = { 0, 0, 0, 0, 0 };
     HAL_StatusTypeDef status;
+    uint8_t address = 0U;
+
+    if (data != NULL) {
+        address = data[0] & 0x7FU;
+    }
 
     if ((tmc5130 == NULL) || (data == NULL) || (value == NULL) ||
+        (tmc5130->spi == NULL) || (tmc5130->cs_port == NULL) ||
         (length == 0U) || (length > sizeof(rxBuff))) {
+        tmc5130_saveDiagnostic(TMC5130_DIAG_STAGE_PARAMETER,
+                               TMC5130_DIAG_DIRECTION_READ,
+                               address,
+                               0U,
+                               (uint32_t)HAL_ERROR,
+                               PARAM_ADDRESS_OVERFLOW,
+                               0U,
+                               0U,
+                               0,
+                               0,
+                               0);
         return false;
     }
     if (!tmc5130_enterSpiAccess()) {
+        tmc5130_saveDiagnostic(TMC5130_DIAG_STAGE_ACCESS_BUSY,
+                               TMC5130_DIAG_DIRECTION_READ,
+                               address,
+                               0U,
+                               (uint32_t)HAL_BUSY,
+                               MOTOR_TMC_COMM_ERROR,
+                               0U,
+                               0U,
+                               0,
+                               0,
+                               0);
         return false;
     }
 
@@ -253,6 +347,17 @@ static bool tmc5130_tryReadArray(TMC5130TypeDef *tmc5130,
     tmc5130_leaveSpiAccess();
 
     if (status != HAL_OK) {
+        tmc5130_saveDiagnostic(stage,
+                               TMC5130_DIAG_DIRECTION_READ,
+                               address,
+                               rxBuff[0],
+                               (uint32_t)status,
+                               MOTOR_TMC_COMM_ERROR,
+                               0U,
+                               0U,
+                               0,
+                               0,
+                               0);
         return false;
     }
 
@@ -274,13 +379,47 @@ static bool tmc5130_tryReadArray(TMC5130TypeDef *tmc5130,
 static bool tmc5130_writeArray(TMC5130TypeDef *tmc5130, uint8_t *data, size_t length)
 {
     HAL_StatusTypeDef status;
+    uint8_t address = 0U;
+    uint32_t expected_value = 0U;
+
+    if (data != NULL) {
+        address = data[0] & 0x7FU;
+        if (length >= 5U) {
+            expected_value = (((uint32_t)data[1] << 24) |
+                              ((uint32_t)data[2] << 16) |
+                              ((uint32_t)data[3] << 8) |
+                              ((uint32_t)data[4]));
+        }
+    }
 
     if ((tmc5130 == NULL) || (data == NULL) ||
         (tmc5130->spi == NULL) || (tmc5130->cs_port == NULL) ||
         (length == 0U)) {
+        tmc5130_saveDiagnostic(TMC5130_DIAG_STAGE_PARAMETER,
+                               TMC5130_DIAG_DIRECTION_WRITE,
+                               address,
+                               0U,
+                               (uint32_t)HAL_ERROR,
+                               PARAM_ADDRESS_OVERFLOW,
+                               expected_value,
+                               0U,
+                               0,
+                               0,
+                               0);
         return false;
     }
     if (!tmc5130_enterSpiAccess()) {
+        tmc5130_saveDiagnostic(TMC5130_DIAG_STAGE_ACCESS_BUSY,
+                               TMC5130_DIAG_DIRECTION_WRITE,
+                               address,
+                               0U,
+                               (uint32_t)HAL_BUSY,
+                               MOTOR_TMC_COMM_ERROR,
+                               expected_value,
+                               0U,
+                               0,
+                               0,
+                               0);
         return false;
     }
 
@@ -292,7 +431,22 @@ static bool tmc5130_writeArray(TMC5130TypeDef *tmc5130, uint8_t *data, size_t le
     tmc5130_delayCsGuard();
     tmc5130_leaveSpiAccess();
 
-    return (status == HAL_OK);
+    if (status != HAL_OK) {
+        tmc5130_saveDiagnostic(TMC5130_DIAG_STAGE_SPI_WRITE,
+                               TMC5130_DIAG_DIRECTION_WRITE,
+                               address,
+                               0U,
+                               (uint32_t)status,
+                               MOTOR_TMC_COMM_ERROR,
+                               expected_value,
+                               0U,
+                               0,
+                               0,
+                               0);
+        return false;
+    }
+
+    return true;
 }
 
 /* *********************** 寄存器级读写 *********************** */
@@ -396,12 +550,20 @@ static bool tmc5130_readRegisterOnce(TMC5130TypeDef *tmc5130, uint8_t address, i
     }
 
     data[0] = address;
-    if (!tmc5130_tryReadArray(tmc5130, data, 5, &raw)) { /* 第一次触发读取（数据无效） */
+    if (!tmc5130_tryReadArray(tmc5130,
+                              data,
+                              5,
+                              &raw,
+                              TMC5130_DIAG_STAGE_SPI_READ_TRIGGER)) { /* 第一次触发读取（数据无效） */
         return false;
     }
 
     data[0] = address;
-    if (!tmc5130_tryReadArray(tmc5130, data, 5, &raw)) { /* 第二次才是真正数据 */
+    if (!tmc5130_tryReadArray(tmc5130,
+                              data,
+                              5,
+                              &raw,
+                              TMC5130_DIAG_STAGE_SPI_READ_DATA)) { /* 第二次才是真正数据 */
         return false;
     }
 
@@ -481,6 +643,17 @@ static bool tmc5130_readXactualStable(TMC5130TypeDef *tmc5130, int32_t *value)
                         ERROR_LOG_REASON_COMM_FAIL,
                         ERROR_LOG_ACTION_STOP_MOTOR,
                         detail);
+    tmc5130_saveDiagnostic(TMC5130_DIAG_STAGE_XACTUAL_UNSTABLE,
+                           TMC5130_DIAG_DIRECTION_READ,
+                           TMC5130_XACTUAL,
+                           0U,
+                           (uint32_t)HAL_OK,
+                           MOTOR_TMC_COMM_ERROR,
+                           (uint32_t)first,
+                           (uint32_t)third,
+                           first,
+                           second,
+                           third);
     return false;
 }
 
@@ -493,6 +666,17 @@ static bool tmc5130_readXactualStable(TMC5130TypeDef *tmc5130, int32_t *value)
 bool stpr_tryReadInt(TMC5130TypeDef *tmc5130, uint8_t address, int32_t *value)
 {
     if (value == NULL) {
+        tmc5130_saveDiagnostic(TMC5130_DIAG_STAGE_PARAMETER,
+                               TMC5130_DIAG_DIRECTION_READ,
+                               address,
+                               0U,
+                               (uint32_t)HAL_ERROR,
+                               PARAM_ADDRESS_OVERFLOW,
+                               0U,
+                               0U,
+                               0,
+                               0,
+                               0);
         return false;
     }
 
@@ -675,8 +859,19 @@ uint32_t stpr_checkDriverStatus(TMC5130TypeDef *tmc5130)
                                 ERROR_LOG_REASON_COMM_FAIL,
                                 ERROR_LOG_ACTION_STOP_MOTOR,
                                 detail);
+            tmc5130_saveDiagnostic(TMC5130_DIAG_STAGE_CONFIGURATION_LOST,
+                                   TMC5130_DIAG_DIRECTION_READ,
+                                   TMC5130_CHOPCONF,
+                                   0U,
+                                   (uint32_t)HAL_OK,
+                                   MOTOR_TMC_CONFIG_LOST,
+                                   1U,
+                                   0U,
+                                   0,
+                                   0,
+                                   0);
             MotorCtrl_InvalidateDriverInit();
-            return MOTOR_TMC_COMM_ERROR;
+            return MOTOR_TMC_CONFIG_LOST;
         }
         return NO_ERROR;
     }
@@ -804,6 +999,17 @@ uint32_t stpr_checkDriverStatus(TMC5130TypeDef *tmc5130)
                             ERROR_LOG_REASON_COMM_FAIL,
                             ERROR_LOG_ACTION_STOP_MOTOR,
                             detail);
+        tmc5130_saveDiagnostic(TMC5130_DIAG_STAGE_CHIP_RESET,
+                               TMC5130_DIAG_DIRECTION_READ,
+                               TMC5130_GSTAT,
+                               0U,
+                               (uint32_t)HAL_OK,
+                               MOTOR_TMC_COMM_ERROR,
+                               0U,
+                               gstat_raw,
+                               0,
+                               0,
+                               0);
         MotorCtrl_InvalidateDriverInit();
         return MOTOR_TMC_COMM_ERROR;
     }

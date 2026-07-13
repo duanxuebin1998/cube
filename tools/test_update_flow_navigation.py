@@ -96,8 +96,8 @@ class UpdateFlowNavigationTests(unittest.TestCase):
             if step.get("formal") is True
         }
         self.assertEqual(core_keys, {page["pageKey"] for page in manifest["pages"]})
-        self.assertEqual("V1.22.0.0", manifest["firmwareBaseline"]["cpu2"]["version"])
-        self.assertEqual("V1.21.0.0", manifest["firmwareBaseline"]["cpu3"]["version"])
+        self.assertEqual("V1.23.0.0", manifest["firmwareBaseline"]["cpu2"]["version"])
+        self.assertEqual("V1.22.0.0", manifest["firmwareBaseline"]["cpu3"]["version"])
 
     def test_evidence_manifest_rejects_missing_core_page(self) -> None:
         module = load_module()
@@ -108,6 +108,28 @@ class UpdateFlowNavigationTests(unittest.TestCase):
             path = Path(temp_dir) / "evidence.json"
             path.write_text(json.dumps(manifest, ensure_ascii=False), encoding="utf-8")
             with self.assertRaisesRegex(RuntimeError, "coverage must exactly match"):
+                module.load_evidence_manifest(path)
+
+    def test_evidence_manifest_rejects_missing_governance_policy(self) -> None:
+        module = load_module()
+        manifest = json.loads(json.dumps(module.EVIDENCE_MANIFEST_DATA, ensure_ascii=False))
+        del manifest["governancePolicy"]
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "evidence.json"
+            path.write_text(json.dumps(manifest, ensure_ascii=False), encoding="utf-8")
+            with self.assertRaisesRegex(RuntimeError, "governancePolicy"):
+                module.load_evidence_manifest(path)
+
+    def test_evidence_manifest_rejects_missing_responsibility_owner(self) -> None:
+        module = load_module()
+        manifest = json.loads(json.dumps(module.EVIDENCE_MANIFEST_DATA, ensure_ascii=False))
+        manifest["governancePolicy"]["responsibilities"]["validation"]["owner"] = ""
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "evidence.json"
+            path.write_text(json.dumps(manifest, ensure_ascii=False), encoding="utf-8")
+            with self.assertRaisesRegex(RuntimeError, "responsibility is invalid: validation"):
                 module.load_evidence_manifest(path)
 
     def test_evidence_manifest_rejects_stale_firmware_baseline(self) -> None:
@@ -130,6 +152,18 @@ class UpdateFlowNavigationTests(unittest.TestCase):
             path = Path(temp_dir) / "evidence.json"
             path.write_text(json.dumps(manifest, ensure_ascii=False), encoding="utf-8")
             with self.assertRaisesRegex(RuntimeError, "does not exist"):
+                module.load_evidence_manifest(path)
+
+    def test_evidence_manifest_rejects_missing_semantic_symbol(self) -> None:
+        module = load_module()
+        manifest = json.loads(json.dumps(module.EVIDENCE_MANIFEST_DATA, ensure_ascii=False))
+        semantic_page = next(page for page in manifest["pages"] if page.get("sourceSymbols"))
+        semantic_page["sourceSymbols"][0]["symbols"][0]["name"] = "SymbolThatDoesNotExist"
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "evidence.json"
+            path.write_text(json.dumps(manifest, ensure_ascii=False), encoding="utf-8")
+            with self.assertRaisesRegex(RuntimeError, "symbol does not exist"):
                 module.load_evidence_manifest(path)
 
     def test_flow_governance_distinguishes_risk_from_intentional_reuse(self) -> None:
@@ -162,9 +196,13 @@ class UpdateFlowNavigationTests(unittest.TestCase):
         output = module.make_relation_block("cpu2_02")
 
         self.assertIn('data-evidence-page="cpu2_02"', output)
-        self.assertIn("CPU2 V1.22.0.0 / CPU3 V1.21.0.0", output)
+        self.assertIn("CPU2 V1.23.0.0 / CPU3 V1.22.0.0", output)
         self.assertIn("LTD_MAIN_CPU2/Application/Src/measure.c", output)
         self.assertIn("当前版本验证", output)
+        self.assertIn("正式来源与派生", output)
+        self.assertIn("内容责任", output)
+        self.assertIn("未确认边界", output)
+        self.assertIn('data-evidence-owner="CPU2 固件责任人"', output)
 
     def test_legacy_svg_label_conversion_is_idempotent(self) -> None:
         module = load_module()

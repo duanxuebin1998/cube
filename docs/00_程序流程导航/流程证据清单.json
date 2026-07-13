@@ -1,14 +1,45 @@
 {
-  "schemaVersion": 1,
-  "updated": "2026-07-11",
+  "schemaVersion": 2,
+  "updated": "2026-07-12",
   "description": "八条核心业务链路所涉及流程页的统一证据定义。正式 HTML、预览站和检查脚本共同读取。",
+  "governancePolicy": {
+    "authority": {
+      "formalRoot": "docs/",
+      "derivedRoot": "docs-site/",
+      "label": "正式文档源"
+    },
+    "reviewWindowDays": 90,
+    "responsibilities": {
+      "cpu2": {
+        "owner": "CPU2 固件责任人",
+        "scope": "CPU2 源码行为、流程关系、状态与异常出口"
+      },
+      "cpu3": {
+        "owner": "CPU3 固件责任人",
+        "scope": "CPU3 交互、通信、显示、参数与异常反馈"
+      },
+      "validation": {
+        "owner": "测试执行责任人",
+        "scope": "自动、台架、实机、现场用例的真实运行与原始记录"
+      },
+      "delivery": {
+        "owner": "交付决策责任人",
+        "scope": "验证批次、交付基线、退化解释与人工决策"
+      },
+      "docs": {
+        "owner": "文档治理责任人",
+        "scope": "正式来源、关系映射、核对日期与派生页面一致性"
+      }
+    },
+    "unconfirmedBoundary": "“已核对”只表示流程页已按当前源码和正式关系复核，不代表台架、实机、现场测试通过，也不代表已形成验证批次、交付基线或发布批准。"
+  },
   "firmwareBaseline": {
     "cpu2": {
-      "version": "V1.22.0.0",
+      "version": "V1.23.0.0",
       "sourcePath": "LTD_MAIN_CPU2/Application/Inc/app_version.h"
     },
     "cpu3": {
-      "version": "V1.21.0.0",
+      "version": "V1.22.0.0",
       "sourcePath": "LTD_DISPLAY_CPU3/Application/app_version.h"
     }
   },
@@ -29,7 +60,42 @@
         "LTD_MAIN_CPU2/Application/Inc/serial_command.h",
         "LTD_MAIN_CPU2/Application/Inc/serial_command_parser.h",
         "LTD_MAIN_CPU2/Core/Inc/main.h",
-        "LTD_MAIN_CPU2/Core/Src/stm32f4xx_it.c"
+        "LTD_MAIN_CPU2/Core/Src/stm32f4xx_it.c",
+        "LTD_MAIN_CPU2/Services/ParamStorage/system_parameter.h"
+      ],
+      "sourceSymbols": [
+        {
+          "path": "LTD_MAIN_CPU2/Application/Src/measure.c",
+          "symbols": [
+            { "name": "ProcessMeasureCmd", "kind": "function", "label": "正式测量命令总分发" },
+            { "name": "MeasureStart", "kind": "function", "label": "公共测量准备入口" },
+            { "name": "CMD_CancelMeasurement", "kind": "error-exit", "label": "取消测量安全出口" }
+          ]
+        },
+        {
+          "path": "LTD_MAIN_CPU2/Application/Src/app_main.c",
+          "symbols": [
+            { "name": "App_MainLoop", "kind": "function", "label": "命令消费与恢复调度主循环" }
+          ]
+        },
+        {
+          "path": "LTD_MAIN_CPU2/Application/Src/serial_command.c",
+          "symbols": [
+            { "name": "SerialCommand_Process", "kind": "function", "label": "串口命令分类与 ACK 分发" }
+          ]
+        },
+        {
+          "path": "LTD_MAIN_CPU2/Application/Src/serial_command_parser.c",
+          "symbols": [
+            { "name": "SerialCommandParser_Parse", "kind": "command", "label": "串口命令严格解析契约" }
+          ]
+        },
+        {
+          "path": "LTD_MAIN_CPU2/Services/ParamStorage/system_parameter.h",
+          "symbols": [
+            { "name": "CommandType", "kind": "command", "label": "正式命令枚举集合" }
+          ]
+        }
       ],
       "validationPaths": [
         "docs/00_构建与版本/版本改动与测试/2026-06-12_CPU2_V1.14.0.0_CPU3_V1.13.0.0_连续找液位方式与协议版本8_改动与测试方案.md"
@@ -55,7 +121,9 @@
         "LTD_MAIN_CPU2/Application/Src/measure_waterLevel.c",
         "LTD_MAIN_CPU2/Application/Src/measure.c"
       ],
-      "validationPaths": []
+      "validationPaths": [
+        "docs/00_程序流程导航/验证工作包/CPU2_05_水位测量与跟随验证工作包.md"
+      ]
     },
     {
       "pageKey": "cpu2_06",
@@ -75,7 +143,42 @@
       "reviewedAt": "2026-07-11",
       "sourcePaths": [
         "LTD_MAIN_CPU2/Application/Src/fault_manager.c",
-        "LTD_MAIN_CPU2/Application/Src/fault_recovery.c"
+        "LTD_MAIN_CPU2/Application/Src/fault_recovery.c",
+        "LTD_MAIN_CPU2/Application/Src/app_main.c",
+        "LTD_MAIN_CPU2/Application/Inc/fault_manager.h"
+      ],
+      "sourceSymbols": [
+        {
+          "path": "LTD_MAIN_CPU2/Application/Src/fault_manager.c",
+          "symbols": [
+            { "name": "FaultManager_ReportErrorExit", "kind": "error-exit", "label": "最终故障上报出口" },
+            { "name": "FaultManager_HandleCheckError", "kind": "error-exit", "label": "检查错误停机入口" },
+            { "name": "FaultManager_SetErrorState", "kind": "state", "label": "设备故障状态写入" }
+          ]
+        },
+        {
+          "path": "LTD_MAIN_CPU2/Application/Src/fault_recovery.c",
+          "symbols": [
+            { "name": "FaultRecovery_Start", "kind": "state", "label": "自动恢复上下文建立" },
+            { "name": "FaultRecovery_UpdateAfterCommand", "kind": "state", "label": "命令结束后的恢复决策" },
+            { "name": "FaultRecovery_Cancel", "kind": "error-exit", "label": "新命令取消恢复出口" },
+            { "name": "FaultRecovery_Poll", "kind": "state", "label": "自动恢复状态机轮询" }
+          ]
+        },
+        {
+          "path": "LTD_MAIN_CPU2/Application/Src/app_main.c",
+          "symbols": [
+            { "name": "App_MainLoop", "kind": "function", "label": "恢复重试与新命令仲裁" }
+          ]
+        },
+        {
+          "path": "LTD_MAIN_CPU2/Application/Inc/fault_manager.h",
+          "symbols": [
+            { "name": "CHECK_ERROR", "kind": "error-exit", "label": "返回码统一检查宏" },
+            { "name": "SET_ERROR", "kind": "error-exit", "label": "故障状态统一写入宏" },
+            { "name": "CHECK_COMMAND_SWITCH", "kind": "error-exit", "label": "命令切换提前退出宏" }
+          ]
+        }
       ],
       "validationPaths": [
         "docs/00_构建与版本/故障码/故障码整体治理执行、当前进度与窗口交接计划.md"
@@ -113,7 +216,29 @@
         "LTD_MAIN_CPU2/Services/Modbus/hostcommu_modbus.c",
         "LTD_MAIN_CPU2/Services/Modbus/dataanalysis_modbus.c"
       ],
-      "validationPaths": []
+      "sourceSymbols": [
+        {
+          "path": "LTD_MAIN_CPU2/Services/Modbus/hostcommu_modbus.c",
+          "symbols": [
+            { "name": "JudgeFunctioncode", "kind": "function", "label": "Modbus 功能码准入" },
+            { "name": "Response03Process", "kind": "function", "label": "保持寄存器读取响应" },
+            { "name": "Response04Process", "kind": "function", "label": "输入寄存器读取响应" },
+            { "name": "Response10Process", "kind": "function", "label": "多保持寄存器写入响应" },
+            { "name": "PresetRegister", "kind": "register", "label": "写寄存器落地与参数生效" }
+          ]
+        },
+        {
+          "path": "LTD_MAIN_CPU2/Services/Modbus/dataanalysis_modbus.c",
+          "symbols": [
+            { "name": "WriteDeviceParamsToHoldingRegisters", "kind": "register", "label": "参数到保持寄存器映射" },
+            { "name": "ReadDeviceParamsFromHoldingRegisters", "kind": "register", "label": "保持寄存器到运行参数映射" },
+            { "name": "write_measurement_result_to_InputRegisters", "kind": "register", "label": "测量结果输入寄存器回读" }
+          ]
+        }
+      ],
+      "validationPaths": [
+        "docs/00_程序流程导航/验证工作包/CPU2_10_Modbus与CPU3通信验证工作包.md"
+      ]
     },
     {
       "pageKey": "cpu2_11",
@@ -121,7 +246,45 @@
       "reviewedAt": "2026-07-11",
       "sourcePaths": [
         "LTD_MAIN_CPU2/Services/Hart/hart.c",
-        "LTD_MAIN_CPU2/Services/AoOutput/ao_output.c"
+        "LTD_MAIN_CPU2/Services/AoOutput/ao_output.c",
+        "LTD_MAIN_CPU2/Services/AoOutput/ao_output.h",
+        "LTD_MAIN_CPU2/BSP/Peripherals/src/ad5421.c",
+        "LTD_MAIN_CPU2/BSP/Peripherals/inc/ad5421.h"
+      ],
+      "sourceSymbols": [
+        {
+          "path": "LTD_MAIN_CPU2/Services/Hart/hart.c",
+          "symbols": [
+            { "name": "HartCommunicationProcess", "kind": "command", "label": "HART 命令包总入口" },
+            { "name": "ResponseCommand1", "kind": "command", "label": "主变量读取响应" },
+            { "name": "ResponseCommand2", "kind": "command", "label": "环路电流与量程百分比响应" },
+            { "name": "ResponseCommand3", "kind": "command", "label": "动态变量与环路电流响应" }
+          ]
+        },
+        {
+          "path": "LTD_MAIN_CPU2/Services/AoOutput/ao_output.c",
+          "symbols": [
+            { "name": "AoOutput_GetRuntime", "kind": "state", "label": "AO 运行态快照读取" }
+          ]
+        },
+        {
+          "path": "LTD_MAIN_CPU2/Services/AoOutput/ao_output.h",
+          "symbols": [
+            { "name": "AoOutput_GetRuntime", "kind": "state", "label": "AO 运行态对外契约" }
+          ]
+        },
+        {
+          "path": "LTD_MAIN_CPU2/BSP/Peripherals/src/ad5421.c",
+          "symbols": [
+            { "name": "AD5421_PollDiagnostics", "kind": "error-exit", "label": "AD5421 诊断与断环状态采集" }
+          ]
+        },
+        {
+          "path": "LTD_MAIN_CPU2/BSP/Peripherals/inc/ad5421.h",
+          "symbols": [
+            { "name": "AD5421_PollDiagnostics", "kind": "error-exit", "label": "AD5421 诊断接口契约" }
+          ]
+        }
       ],
       "validationPaths": [
         "docs/00_构建与版本/版本改动与测试/2026-07-08_CPU2_V1.21.5.0_CPU3_V1.19.1.0_AD5421断环恢复与AO运行态_改动与测试方案.md"
@@ -135,7 +298,28 @@
         "LTD_MAIN_CPU2/Services/ParamStorage/system_parameter.c",
         "LTD_MAIN_CPU2/Services/ParamStorage/system_parameter.h"
       ],
-      "validationPaths": []
+      "sourceSymbols": [
+        {
+          "path": "LTD_MAIN_CPU2/Services/ParamStorage/system_parameter.c",
+          "symbols": [
+            { "name": "normalize_device_params_runtime", "kind": "state", "label": "参数加载后的运行态归一" },
+            { "name": "save_device_params", "kind": "function", "label": "参数持久化入口" },
+            { "name": "load_device_params", "kind": "function", "label": "参数双槽加载入口" },
+            { "name": "init_device_params", "kind": "state", "label": "上电参数初始化状态流" },
+            { "name": "request_device_params_save", "kind": "state", "label": "延迟保存请求状态" },
+            { "name": "DEVICE_PARAM_VERSION", "kind": "state", "label": "参数存储版本契约" }
+          ]
+        },
+        {
+          "path": "LTD_MAIN_CPU2/Services/ParamStorage/system_parameter.h",
+          "symbols": [
+            { "name": "DeviceParameters", "kind": "state", "label": "CPU2 参数存储结构契约" }
+          ]
+        }
+      ],
+      "validationPaths": [
+        "docs/00_程序流程导航/验证工作包/CPU2_12_参数存储与系统配置验证工作包.md"
+      ]
     },
     {
       "pageKey": "cpu2_13",
@@ -143,7 +327,51 @@
       "reviewedAt": "2026-07-11",
       "sourcePaths": [
         "LTD_MAIN_CPU2/Services/AoOutput/ao_output.c",
+        "LTD_MAIN_CPU2/Services/AoOutput/ao_output.h",
+        "LTD_MAIN_CPU2/BSP/Peripherals/src/ad5421.c",
+        "LTD_MAIN_CPU2/BSP/Peripherals/inc/ad5421.h",
         "LTD_MAIN_CPU2/Services/Relay/relay_output.c"
+      ],
+      "sourceSymbols": [
+        {
+          "path": "LTD_MAIN_CPU2/Services/AoOutput/ao_output.c",
+          "symbols": [
+            { "name": "AoOutput_UpdateInternal", "kind": "state", "label": "AO 输出与恢复主状态流" },
+            { "name": "AoOutput_SelectTarget", "kind": "state", "label": "测量值与固定电流目标选择" },
+            { "name": "AoOutput_ApplyAlarm", "kind": "error-exit", "label": "AO 报警电流覆盖" },
+            { "name": "AoOutput_ProcessDeferredDiagnostics", "kind": "error-exit", "label": "主循环延迟诊断与恢复" }
+          ]
+        },
+        {
+          "path": "LTD_MAIN_CPU2/Services/AoOutput/ao_output.h",
+          "symbols": [
+            { "name": "AoOutput_ProcessDeferredDiagnostics", "kind": "error-exit", "label": "AO 延迟诊断对外契约" }
+          ]
+        },
+        {
+          "path": "LTD_MAIN_CPU2/BSP/Peripherals/src/ad5421.c",
+          "symbols": [
+            { "name": "Ad5421Init", "kind": "state", "label": "AD5421 初始化状态流" },
+            { "name": "AD5421_RecoverCurrentX100", "kind": "error-exit", "label": "断环后的目标电流恢复" },
+            { "name": "AD5421_SetCurrentX100", "kind": "function", "label": "目标电流写入" }
+          ]
+        },
+        {
+          "path": "LTD_MAIN_CPU2/BSP/Peripherals/inc/ad5421.h",
+          "symbols": [
+            { "name": "Ad5421Init", "kind": "state", "label": "AD5421 初始化接口契约" },
+            { "name": "AD5421_RecoverCurrentX100", "kind": "error-exit", "label": "AD5421 恢复接口契约" },
+            { "name": "AD5421_SetCurrentX100", "kind": "function", "label": "AD5421 电流写入接口契约" }
+          ]
+        },
+        {
+          "path": "LTD_MAIN_CPU2/Services/Relay/relay_output.c",
+          "symbols": [
+            { "name": "RelayOutput_UpdateChannel", "kind": "state", "label": "单通道报警与继电器状态更新" },
+            { "name": "RelayOutput_Update", "kind": "state", "label": "继电器输出总更新入口" },
+            { "name": "RelayOutput_WriteMask", "kind": "function", "label": "继电器 GPIO 状态落地" }
+          ]
+        }
       ],
       "validationPaths": [
         "docs/00_构建与版本/版本改动与测试/2026-07-08_CPU2_V1.21.5.0_CPU3_V1.19.1.0_AD5421断环恢复与AO运行态_改动与测试方案.md"
@@ -157,7 +385,29 @@
         "LTD_DISPLAY_CPU3/Communication/internal/main_board_modbus/cpu2_communicate.c",
         "LTD_DISPLAY_CPU3/Communication/internal/main_board_modbus/dataanalysis_modbus.c"
       ],
-      "validationPaths": []
+      "sourceSymbols": [
+        {
+          "path": "LTD_DISPLAY_CPU3/Communication/internal/main_board_modbus/cpu2_communicate.c",
+          "symbols": [
+            { "name": "CPU2_CommCanSendCommand", "kind": "command", "label": "CPU2 命令下发门禁" },
+            { "name": "CPU2_CommWriteHoldingRegisters", "kind": "register", "label": "CPU2 保持寄存器写入与 ACK" },
+            { "name": "HostCommuProcess", "kind": "function", "label": "CPU2 响应帧总分发" },
+            { "name": "PollingInputData", "kind": "state", "label": "内部通信轮询状态机" },
+            { "name": "CPU2_CombinatePackage_Send", "kind": "function", "label": "内部 Modbus 请求组包" },
+            { "name": "CPU2_CommRecordFailure", "kind": "error-exit", "label": "内部通信失败锁存" }
+          ]
+        },
+        {
+          "path": "LTD_DISPLAY_CPU3/Communication/internal/main_board_modbus/dataanalysis_modbus.c",
+          "symbols": [
+            { "name": "ReadDeviceParamsFromHoldingRegisters", "kind": "register", "label": "CPU2 参数快照回读" },
+            { "name": "read_measurement_result_from_InputRegisters", "kind": "register", "label": "CPU2 测量状态与结果回读" }
+          ]
+        }
+      ],
+      "validationPaths": [
+        "docs/00_程序流程导航/验证工作包/CPU3_02_CPU2内部通信与轮询验证工作包.md"
+      ]
     },
     {
       "pageKey": "cpu3_03",
@@ -166,8 +416,58 @@
       "sourcePaths": [
         "LTD_DISPLAY_CPU3/Application/app_main.c",
         "LTD_DISPLAY_CPU3/Application/system_param/cpu3_comm_display_params.c",
+        "LTD_DISPLAY_CPU3/Application/system_param/cpu3_comm_display_params.h",
+        "LTD_DISPLAY_CPU3/Communication/common/protocol_switch_frame.c",
+        "LTD_DISPLAY_CPU3/Communication/common/protocol_switch_frame.h",
         "LTD_DISPLAY_CPU3/Communication/external/ltd_modbus/ltd_modbus_slave.c",
         "LTD_DISPLAY_CPU3/Communication/external/ltd_modbus/ltd_modbus_slave.h"
+      ],
+      "sourceSymbols": [
+        {
+          "path": "LTD_DISPLAY_CPU3/Application/app_main.c",
+          "symbols": [
+            { "name": "cpu3_port_process", "kind": "function", "label": "外部串口按协议分发" },
+            { "name": "proto_dsm_process", "kind": "function", "label": "DSM 协议适配入口" },
+            { "name": "proto_wartsila_process", "kind": "function", "label": "Wartsila 协议适配入口" },
+            { "name": "proto_si_process", "kind": "function", "label": "SI 协议适配入口" },
+            { "name": "proto_ltd_process", "kind": "function", "label": "LTD 协议适配入口" }
+          ]
+        },
+        {
+          "path": "LTD_DISPLAY_CPU3/Application/system_param/cpu3_comm_display_params.c",
+          "symbols": [
+            { "name": "Cpu3_FillProtocolSerialProfile", "kind": "state", "label": "协议默认串口画像" },
+            { "name": "Cpu3_ReinitAllUarts", "kind": "state", "label": "通信参数运行态重配" }
+          ]
+        },
+        {
+          "path": "LTD_DISPLAY_CPU3/Application/system_param/cpu3_comm_display_params.h",
+          "symbols": [
+            { "name": "Cpu3_ReinitPortUart", "kind": "state", "label": "单外部端口运行态重配契约" }
+          ]
+        },
+        {
+          "path": "LTD_DISPLAY_CPU3/Communication/common/protocol_switch_frame.c",
+          "symbols": [
+            { "name": "ProtocolSwitchFrame_Process", "kind": "command", "label": "统一外部协议切换帧处理" },
+            { "name": "ProtocolSwitchFrame_IsTargetSupported", "kind": "error-exit", "label": "目标协议合法性门禁" }
+          ]
+        },
+        {
+          "path": "LTD_DISPLAY_CPU3/Communication/common/protocol_switch_frame.h",
+          "symbols": [
+            { "name": "PROTOCOL_SWITCH_FUNCTION_CODE", "kind": "command", "label": "协议切换功能码契约" },
+            { "name": "ProtocolSwitchFrameResult", "kind": "state", "label": "协议切换处理结果状态" }
+          ]
+        },
+        {
+          "path": "LTD_DISPLAY_CPU3/Communication/external/ltd_modbus/ltd_modbus_slave.c",
+          "symbols": [
+            { "name": "ltd_modbus_process_for_dispatch", "kind": "function", "label": "LTD Modbus 总入口" },
+            { "name": "ltd_handle_write", "kind": "register", "label": "LTD 写寄存器分发" },
+            { "name": "ltd_build_exception", "kind": "error-exit", "label": "LTD Modbus 异常响应" }
+          ]
+        }
       ],
       "validationPaths": [
         "docs/00_构建与版本/版本改动与测试/2026-06-02_CPU3_V1.8.0.0_DSM_V1.228外部协议兼容_改动与测试方案.md"
@@ -179,7 +479,35 @@
       "reviewedAt": "2026-07-11",
       "sourcePaths": [
         "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_DataAnalysis_modbus2.c",
+        "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_communication.c",
+        "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c",
         "LTD_DISPLAY_CPU3/Communication/internal/main_board_modbus/cpu2_communicate.c"
+      ],
+      "sourceSymbols": [
+        {
+          "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_communication.c",
+          "symbols": [
+            { "name": "DSM_CommunicationProcess", "kind": "function", "label": "DSM 功能码总分发" },
+            { "name": "DSM_IsRequestLengthValid", "kind": "error-exit", "label": "DSM 请求长度严检" }
+          ]
+        },
+        {
+          "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c",
+          "symbols": [
+            { "name": "Response03", "kind": "function", "label": "DSM 保持寄存器读取" },
+            { "name": "Response04", "kind": "function", "label": "DSM 输入寄存器读取" },
+            { "name": "Response05", "kind": "command", "label": "DSM 单线圈命令写入" },
+            { "name": "Response16", "kind": "register", "label": "DSM 多寄存器参数写入" },
+            { "name": "ResponseException", "kind": "error-exit", "label": "DSM 异常响应出口" }
+          ]
+        },
+        {
+          "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_DataAnalysis_modbus2.c",
+          "symbols": [
+            { "name": "UpdateDeviceParamsFromLegacyRegs", "kind": "register", "label": "DSM 参数映射到内部参数" },
+            { "name": "Input_Write", "kind": "register", "label": "内部测量结果映射到 DSM" }
+          ]
+        }
       ],
       "validationPaths": [
         "docs/00_构建与版本/版本改动与测试/2026-06-02_CPU3_V1.8.0.0_DSM_V1.228外部协议兼容_改动与测试方案.md"
@@ -193,6 +521,27 @@
         "LTD_DISPLAY_CPU3/Communication/external/wartsila_modbus/wartsila_modbus_communication.c",
         "LTD_DISPLAY_CPU3/Communication/external/si_modbus/si_modbus_slave.c"
       ],
+      "sourceSymbols": [
+        {
+          "path": "LTD_DISPLAY_CPU3/Communication/external/wartsila_modbus/wartsila_modbus_communication.c",
+          "symbols": [
+            { "name": "modbus_rtu_process", "kind": "function", "label": "Wartsila Modbus 总入口" },
+            { "name": "modbus_on_holding_written", "kind": "register", "label": "Wartsila 参数与命令写入" },
+            { "name": "ForwardParamsToLowerDevice", "kind": "register", "label": "Wartsila 参数转发到 CPU2" },
+            { "name": "build_exception", "kind": "error-exit", "label": "Wartsila 异常响应出口" }
+          ]
+        },
+        {
+          "path": "LTD_DISPLAY_CPU3/Communication/external/si_modbus/si_modbus_slave.c",
+          "symbols": [
+            { "name": "si_modbus_process", "kind": "function", "label": "SI Modbus 总入口" },
+            { "name": "si_send_cpu2_command", "kind": "command", "label": "SI 命令转发到 CPU2" },
+            { "name": "si_apply_coil_write", "kind": "command", "label": "SI 线圈命令映射" },
+            { "name": "si_apply_holding_write", "kind": "register", "label": "SI 保持寄存器参数映射" },
+            { "name": "si_build_exception", "kind": "error-exit", "label": "SI 异常响应出口" }
+          ]
+        }
+      ],
       "validationPaths": [
         "docs/00_构建与版本/版本改动与测试/2026-07-01_CPU2_V1.21.0.0_CPU3_V1.19.0.0_SI协议独立Profile兼容_改动与测试方案.md"
       ]
@@ -205,7 +554,9 @@
         "LTD_DISPLAY_CPU3/Application/display/display.c",
         "LTD_DISPLAY_CPU3/Application/display/display_tankopera.c"
       ],
-      "validationPaths": []
+      "validationPaths": [
+        "docs/00_程序流程导航/验证工作包/CPU3_06_显示刷新与按键事件验证工作包.md"
+      ]
     },
     {
       "pageKey": "cpu3_07",
@@ -214,6 +565,25 @@
       "sourcePaths": [
         "LTD_DISPLAY_CPU3/Application/display/display_tankopera.c",
         "LTD_DISPLAY_CPU3/Communication/internal/main_board_modbus/device_param_sync.c"
+      ],
+      "sourceSymbols": [
+        {
+          "path": "LTD_DISPLAY_CPU3/Application/display/display_tankopera.c",
+          "symbols": [
+            { "name": "cmd_nopara_process", "kind": "command", "label": "无参命令确认与下发" },
+            { "name": "cmd_onepara_process", "kind": "command", "label": "带参命令写参后下发" },
+            { "name": "cmd_configpara_process", "kind": "register", "label": "菜单参数写入与回读" },
+            { "name": "protected_operation_process", "kind": "command", "label": "保护操作二次确认出口" },
+            { "name": "display_cpu2_comm_failure", "kind": "error-exit", "label": "CPU2 请求失败统一反馈" }
+          ]
+        },
+        {
+          "path": "LTD_DISPLAY_CPU3/Communication/internal/main_board_modbus/device_param_sync.c",
+          "symbols": [
+            { "name": "DeviceParams_SendHoldValueToCPU2", "kind": "register", "label": "单参数下发与 ACK" },
+            { "name": "DeviceParams_SyncAllToCPU2", "kind": "state", "label": "全量参数同步状态流" }
+          ]
+        }
       ],
       "validationPaths": [
         "docs/00_构建与版本/版本改动与测试/2026-06-27_CPU2_V1.20.1.0_CPU3_V1.18.1.0_参数打印分布悬停与菜单空闲退出_改动与测试方案.md"
@@ -225,7 +595,26 @@
       "reviewedAt": "2026-07-11",
       "sourcePaths": [
         "LTD_DISPLAY_CPU3/Application/system_param/cpu3_clock.c",
-        "LTD_DISPLAY_CPU3/Application/system_param/cpu3_comm_display_params.c"
+        "LTD_DISPLAY_CPU3/Application/system_param/cpu3_comm_display_params.c",
+        "LTD_DISPLAY_CPU3/Application/system_param/cpu3_comm_display_params.h"
+      ],
+      "sourceSymbols": [
+        {
+          "path": "LTD_DISPLAY_CPU3/Application/system_param/cpu3_comm_display_params.c",
+          "symbols": [
+            { "name": "Cpu3Local_WriteValue", "kind": "register", "label": "本机参数写入入口" },
+            { "name": "Cpu3Local_ApplyDisplayRuntimeParams", "kind": "state", "label": "显示参数运行态生效" },
+            { "name": "Cpu3_ReinitAllUarts", "kind": "state", "label": "全部外部串口运行态重配" },
+            { "name": "Cpu3_Params_SaveToFRAM", "kind": "function", "label": "CPU3 参数持久化" },
+            { "name": "Cpu3_Params_LoadFromFRAM", "kind": "state", "label": "CPU3 参数加载与迁移" }
+          ]
+        },
+        {
+          "path": "LTD_DISPLAY_CPU3/Application/system_param/cpu3_comm_display_params.h",
+          "symbols": [
+            { "name": "Cpu3_ReinitPortUart", "kind": "state", "label": "单外部端口运行态重配契约" }
+          ]
+        }
       ],
       "validationPaths": [
         "docs/00_构建与版本/版本改动与测试/2026-06-17_CPU3_V1.15.0.2_RTC_LSE电池保持与屏幕校时_改动与测试方案.md"

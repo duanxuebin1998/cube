@@ -1,0 +1,6 @@
+{
+  "schemaVersion": 1,
+  "kind": "cube-validation-run-registry",
+  "description": "记录验证工作包用例的追加式真实执行身份和原始记录完整性；空清单表示尚无真实运行，不表示通过。",
+  "runs": []
+}

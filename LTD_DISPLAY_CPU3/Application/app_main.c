@@ -13,6 +13,8 @@
 #include "cpu3_clock.h"
 #include "ltd_modbus_slave.h"
 #include "si_modbus_slave.h"
+#include "protocol_switch_frame.h"
+#include "address.h"
 #include <string.h>
 
 #define DEBUG_APP_MAIN 0
@@ -65,6 +67,20 @@ static uint32_t g_tx_pending_overwrite_com3 = 0; /* 屏幕显示状态标志，�
 
 /* UI/参数修改后置位，主循环应用 */
 volatile uint8_t g_cpu3_uart_reinit_pending = 0; /* 屏幕显示状态标志，通常由主循环或中断回调共同检查。 */
+
+typedef enum
+{
+    PROTOCOL_SWITCH_PENDING_NONE = 0,
+    PROTOCOL_SWITCH_PENDING_TX,
+    PROTOCOL_SWITCH_PENDING_APPLY
+} ProtocolSwitchPendingState;
+
+static volatile uint8_t g_protocol_switch_pending_state[3] = {0U, 0U, 0U};
+static ComProtocolType g_protocol_switch_target[3] = {
+    COM_PROTO_DSM,
+    COM_PROTO_DSM,
+    COM_PROTO_DSM
+};
 
 /**
  * @brief 重启UART接收DMA
@@ -223,8 +239,9 @@ static void cpu3_apply_uart_reinit_if_pending(void)
  *
  * @note 当发送通道忙碌时，新数据会覆盖待发送队列中的旧数据，且最大缓存长度为 256 字节
  * @note 发送失败时会立即回退到接收模式，但不负责重启接收 DMA
+ * @return true 表示已启动或排队发送，false 表示参数为空或启动发送失败。
  */
-static void uart_try_send_or_queue(UART_HandleTypeDef *huart,
+static bool uart_try_send_or_queue(UART_HandleTypeDef *huart,
                                   volatile uint8_t *tx_busy,
                                   uint8_t *txbuf, uint16_t txlen,
                                   uint16_t *pending_len, uint8_t *pending_buf,
@@ -233,7 +250,7 @@ static void uart_try_send_or_queue(UART_HandleTypeDef *huart,
                                   void (*set_recv_mode)(void))
 {
     if (txlen == 0) {
-        return;
+        return false;
     }
 
     if (*tx_busy == 0) {
@@ -246,6 +263,7 @@ static void uart_try_send_or_queue(UART_HandleTypeDef *huart,
             *tx_busy = 0;
             set_recv_mode();
             /* 注意：接收 DMA 的重启在上层 handle 里做（保持策略一致） */
+            return false;
         }
     } else {
         /* busy：放入 pending（单帧），新来的覆盖旧的 */
@@ -256,6 +274,8 @@ static void uart_try_send_or_queue(UART_HandleTypeDef *huart,
         memcpy(pending_buf, txbuf, txlen);
         *pending_len = txlen;
     }
+
+    return true;
 }
 /* ================== 协议分发 ================== */
 
@@ -331,6 +351,194 @@ static const ComPortConfig* cpu3_get_port_cfg(uint8_t port_idx)
     }
 }
 
+/*
+ * 函数用途：记录某个外部 COM 口已经接受的协议切换目标。
+ * 调用场景：统一切换帧校验成功且目标协议不同于当前协议时调用。
+ * 关键约束：只暂存 RAM 状态，必须等旧串口参数下的应答发送完成后才能保存和重配。
+ */
+static void cpu3_stage_protocol_switch(uint8_t port_idx, ComProtocolType target_protocol)
+{
+    uint8_t index;
+
+    if ((port_idx < 1U) || (port_idx > 3U)) {
+        return;
+    }
+
+    index = (uint8_t)(port_idx - 1U);
+    g_protocol_switch_target[index] = target_protocol;
+    g_protocol_switch_pending_state[index] = PROTOCOL_SWITCH_PENDING_TX;
+}
+
+/*
+ * 函数用途：取消尚未完成应答的协议切换请求。
+ * 调用场景：DMA 发送启动失败或 UART 错误恢复时调用。
+ * 关键约束：只清除对应 COM 口，不影响其它端口已经排队的切换请求。
+ */
+static void cpu3_cancel_protocol_switch(uint8_t port_idx)
+{
+    if ((port_idx >= 1U) && (port_idx <= 3U) &&
+        (g_protocol_switch_pending_state[port_idx - 1U] == PROTOCOL_SWITCH_PENDING_TX))
+    {
+        g_protocol_switch_pending_state[port_idx - 1U] = PROTOCOL_SWITCH_PENDING_NONE;
+    }
+}
+
+/*
+ * 函数用途：在发送完成中断中标记切换应答已经使用旧串口参数完整发出。
+ * 调用场景：COM1、COM2 或 COM3 最后一帧 DMA 发送完成后调用。
+ * 关键约束：中断内只改状态，不保存 FRAM、不重初始化 UART。
+ */
+static bool cpu3_mark_protocol_switch_tx_complete(uint8_t port_idx)
+{
+    uint8_t index;
+
+    if ((port_idx < 1U) || (port_idx > 3U)) {
+        return false;
+    }
+
+    index = (uint8_t)(port_idx - 1U);
+    if (g_protocol_switch_pending_state[index] == PROTOCOL_SWITCH_PENDING_TX) {
+        g_protocol_switch_pending_state[index] = PROTOCOL_SWITCH_PENDING_APPLY;
+        return true;
+    }
+
+    return false;
+}
+
+/*
+ * 函数用途：把一个端口切回 RS485 接收方向，并按保存后的参数只重初始化该端口。
+ * 调用场景：协议切换应答发送完成且新协议已经写入 CPU3 本机参数后调用。
+ * 关键约束：不得重配其它端口，避免中断无关的外部通信。
+ */
+static bool cpu3_reinit_protocol_switch_port(uint8_t port_idx)
+{
+    switch (port_idx)
+    {
+    case 1U:
+        com1_rx_ready = 0U;
+        UART6_RX_LEN = 0U;
+        COM1_RecvMode();
+        break;
+
+    case 2U:
+        com2_rx_ready = 0U;
+        UART2_RX_LEN = 0U;
+        COM2_RecvMode();
+        break;
+
+    case 3U:
+        com3_rx_ready = 0U;
+        UART3_RX_LEN = 0U;
+        COM3_RecvMode();
+        break;
+
+    default:
+        return false;
+    }
+
+    return Cpu3_ReinitPortUart(port_idx);
+}
+
+/*
+ * 函数用途：协议切换持久化失败时恢复指定端口的旧配置镜像。
+ * 调用场景：新协议写入 FRAM 后读回校验失败时调用。
+ * 关键约束：只恢复目标端口，不修改其它外部 COM 口。
+ */
+static bool cpu3_restore_protocol_switch_port_config(uint8_t port_idx,
+                                                     const ComPortConfig *config)
+{
+    if (config == NULL) {
+        return false;
+    }
+
+    switch (port_idx)
+    {
+    case 1U:
+        g_cpu3_comm_display_params.com1 = *config;
+        return true;
+
+    case 2U:
+        g_cpu3_comm_display_params.com2 = *config;
+        return true;
+
+    case 3U:
+        g_cpu3_comm_display_params.com3 = *config;
+        return true;
+
+    default:
+        return false;
+    }
+}
+
+/*
+ * 函数用途：在主循环中保存已确认发送完成的协议切换，并应用目标协议默认串口参数。
+ * 调用场景：每轮主循环处理普通通信前调用。
+ * 关键约束：保存和 HAL 重初始化均在主循环执行，禁止放入 UART 中断。
+ */
+static void cpu3_apply_ready_protocol_switches(void)
+{
+    uint8_t port_idx;
+
+    for (port_idx = 1U; port_idx <= 3U; port_idx++) {
+        uint8_t index = (uint8_t)(port_idx - 1U);
+        OperatingNumber opera;
+        ComProtocolType target_protocol;
+        const ComPortConfig *current_config;
+        ComPortConfig previous_config;
+
+        if (g_protocol_switch_pending_state[index] != PROTOCOL_SWITCH_PENDING_APPLY) {
+            continue;
+        }
+
+        target_protocol = g_protocol_switch_target[index];
+        g_protocol_switch_pending_state[index] = PROTOCOL_SWITCH_PENDING_NONE;
+        current_config = cpu3_get_port_cfg(port_idx);
+        if (current_config == NULL) {
+            continue;
+        }
+        previous_config = *current_config;
+
+        switch (port_idx)
+        {
+        case 1U:
+            opera = COM_NUM_CPU3_COM1_PROTOCOL;
+            break;
+
+        case 2U:
+            opera = COM_NUM_CPU3_COM2_PROTOCOL;
+            break;
+
+        case 3U:
+            opera = COM_NUM_CPU3_COM3_PROTOCOL;
+            break;
+
+        default:
+            continue;
+        }
+
+        if (!Cpu3Local_WriteValueChecked(opera, (int32_t)target_protocol)) {
+            (void)cpu3_restore_protocol_switch_port_config(port_idx, &previous_config);
+            if (!Cpu3_Params_SaveToFRAM()) {
+                printf("COM%u协议切换失败后旧配置回写FRAM失败\r\n",
+                       (unsigned int)port_idx);
+            }
+            (void)cpu3_reinit_protocol_switch_port(port_idx);
+            printf("COM%u协议切换持久化失败，已保持原协议%u\r\n",
+                   (unsigned int)port_idx,
+                   (unsigned int)previous_config.protocol);
+            continue;
+        }
+
+        if (cpu3_reinit_protocol_switch_port(port_idx)) {
+            printf("COM%u协议已切换为%u\r\n",
+                   (unsigned int)port_idx,
+                   (unsigned int)target_protocol);
+        } else {
+            printf("COM%u协议切换后串口重初始化失败\r\n", (unsigned int)port_idx);
+        }
+    }
+}
+
 /**
  * @brief 处理屏幕显示中的 cpu3_port_process 逻辑。
  *
@@ -346,9 +554,28 @@ static uint32_t cpu3_port_process(uint8_t port_idx,
                                  uint8_t* tx, uint16_t* tx_len)
 {
     const ComPortConfig *cfg = cpu3_get_port_cfg(port_idx);
+    ComProtocolType target_protocol;
+    ProtocolSwitchFrameResult switch_result;
+
     if (cfg == NULL) {
         *tx_len = 0;
         return 1; /* 参数错误 */
+    }
+
+    target_protocol = cfg->protocol;
+    switch_result = ProtocolSwitchFrame_Process((uint8_t)SlaveAddress,
+                                                rx,
+                                                rx_len,
+                                                tx,
+                                                tx_len,
+                                                &target_protocol);
+    if (switch_result != PROTOCOL_SWITCH_FRAME_NOT_MATCHED) {
+        if ((switch_result == PROTOCOL_SWITCH_FRAME_ACCEPTED) &&
+            (target_protocol != cfg->protocol))
+        {
+            cpu3_stage_protocol_switch(port_idx, target_protocol);
+        }
+        return 0U;
     }
 
     /* 防御：protocol 越界或 handler 未配置 */
@@ -398,6 +625,7 @@ void App_MainLoop(void)
 
     uint8_t did_work = 0;
 
+    cpu3_apply_ready_protocol_switches();
     cpu3_apply_uart_reinit_if_pending(); /* 如果有待重配的串口，先重配 */
     si_modbus_periodic_task();
     Display_Task();
@@ -423,14 +651,14 @@ void App_MainLoop(void)
                 for (int i = 0; i < send_len; i++) printf("%02X ", sendbuff1[i]);
                 printf("\r\n");
 #endif
-                uart_try_send_or_queue(&huart6,
-                                      &g_tx_busy_com1,
-                                      sendbuff1, send_len,
-                                      &g_tx_pending_len_com1, g_tx_pending_buf_com1,
-                                      &g_tx_pending_overwrite_com1,
-                                      COM1_SendMode, COM1_RecvMode);
-
-                if (g_tx_busy_com1 == 0) {
+                if (!uart_try_send_or_queue(&huart6,
+                                            &g_tx_busy_com1,
+                                            sendbuff1, send_len,
+                                            &g_tx_pending_len_com1, g_tx_pending_buf_com1,
+                                            &g_tx_pending_overwrite_com1,
+                                            COM1_SendMode, COM1_RecvMode))
+                {
+                    cpu3_cancel_protocol_switch(1U);
                     uart_restart_rx_dma(&huart6, UART6_RX_BUF, UART6_RX_BUF_SIZE, COM1_RecvMode);
                 }
 
@@ -467,14 +695,14 @@ void App_MainLoop(void)
                 for (int i = 0; i < send_len; i++) printf("%02X ", sendbuff2[i]);
                 printf("\r\n");
 #endif
-                uart_try_send_or_queue(&huart2,
-                                      &g_tx_busy_com2,
-                                      sendbuff2, send_len,
-                                      &g_tx_pending_len_com2, g_tx_pending_buf_com2,
-                                      &g_tx_pending_overwrite_com2,
-                                      COM2_SendMode, COM2_RecvMode);
-
-                if (g_tx_busy_com2 == 0) {
+                if (!uart_try_send_or_queue(&huart2,
+                                            &g_tx_busy_com2,
+                                            sendbuff2, send_len,
+                                            &g_tx_pending_len_com2, g_tx_pending_buf_com2,
+                                            &g_tx_pending_overwrite_com2,
+                                            COM2_SendMode, COM2_RecvMode))
+                {
+                    cpu3_cancel_protocol_switch(2U);
                     uart_restart_rx_dma(&huart2, UART2_RX_BUF, UART2_RX_BUF_SIZE, COM2_RecvMode);
                 }
             } else {
@@ -511,14 +739,14 @@ void App_MainLoop(void)
                 for (int i = 0; i < send_len; i++) printf("%02X ", sendbuff3[i]);
                 printf("\r\n");
 #endif
-                uart_try_send_or_queue(&huart3,
-                                      &g_tx_busy_com3,
-                                      sendbuff3, send_len,
-                                      &g_tx_pending_len_com3, g_tx_pending_buf_com3,
-                                      &g_tx_pending_overwrite_com3,
-                                      COM3_SendMode, COM3_RecvMode);
-
-                if (g_tx_busy_com3 == 0) {
+                if (!uart_try_send_or_queue(&huart3,
+                                            &g_tx_busy_com3,
+                                            sendbuff3, send_len,
+                                            &g_tx_pending_len_com3, g_tx_pending_buf_com3,
+                                            &g_tx_pending_overwrite_com3,
+                                            COM3_SendMode, COM3_RecvMode))
+                {
+                    cpu3_cancel_protocol_switch(3U);
                     uart_restart_rx_dma(&huart3, UART3_RX_BUF, UART3_RX_BUF_SIZE, COM3_RecvMode);
                 }
             } else {
@@ -556,8 +784,8 @@ void App_MainLoop(void)
  * @note 发送流程：
  *       1. 检查是否有待发送帧（g_tx_pending_len_comX > 0）
  *       2. 如果有待发送帧，直接启动 DMA 发送，不切换到接收模式
- *       3. 如果是最后一帧，等待发送完成，延时后切换回接收模式
- *       4. 清除发送忙标志（g_tx_busy_comX），重启 DMA 接收
+ *       3. 普通响应最后一帧完成后恢复 DMA 接收
+ *       4. 协议切换 ACK 完成后只标记 APPLY 并保持 RX 停止，由主循环按新参数恢复
  *
  * @note 错误处理：
  *       - 如果续发失败，调用 cpu3_uart_recover_tx() 恢复接收模式并释放资源
@@ -577,6 +805,7 @@ void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
             /* 注意：这里不做 TC+延时+切接收，因为还要继续发 */
             if (HAL_UART_Transmit_DMA(&huart6, g_tx_pending_buf_com1, len) != HAL_OK) {
                 /* 续发失败：回退接收并释放 busy */
+                cpu3_cancel_protocol_switch(1U);
                 cpu3_uart_recover_tx(&huart6,
                                      &g_tx_busy_com1, &g_tx_pending_len_com1,
                                      &com1_rx_ready, &UART6_RX_LEN,
@@ -590,6 +819,10 @@ void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
         uart_post_tx_delay();
 
         g_tx_busy_com1 = 0;
+        if (cpu3_mark_protocol_switch_tx_complete(1U)) {
+            COM1_RecvMode();
+            return;
+        }
         uart_restart_rx_dma(&huart6, UART6_RX_BUF, UART6_RX_BUF_SIZE, COM1_RecvMode);
         return;
     }
@@ -602,6 +835,7 @@ void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
             g_tx_pending_len_com2 = 0;
             COM2_SET_SEND_MODE();
             if (HAL_UART_Transmit_DMA(&huart2, g_tx_pending_buf_com2, len) != HAL_OK) {
+                cpu3_cancel_protocol_switch(2U);
                 cpu3_uart_recover_tx(&huart2,
                                      &g_tx_busy_com2, &g_tx_pending_len_com2,
                                      &com2_rx_ready, &UART2_RX_LEN,
@@ -614,6 +848,10 @@ void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
         uart_post_tx_delay();
 
         g_tx_busy_com2 = 0;
+        if (cpu3_mark_protocol_switch_tx_complete(2U)) {
+            COM2_RecvMode();
+            return;
+        }
         uart_restart_rx_dma(&huart2, UART2_RX_BUF, UART2_RX_BUF_SIZE, COM2_RecvMode);
         return;
     }
@@ -626,6 +864,7 @@ void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
             g_tx_pending_len_com3 = 0;
             COM3_SET_SEND_MODE();
             if (HAL_UART_Transmit_DMA(&huart3, g_tx_pending_buf_com3, len) != HAL_OK) {
+                cpu3_cancel_protocol_switch(3U);
                 cpu3_uart_recover_tx(&huart3,
                                      &g_tx_busy_com3, &g_tx_pending_len_com3,
                                      &com3_rx_ready, &UART3_RX_LEN,
@@ -638,6 +877,10 @@ void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
         uart_post_tx_delay();
 
         g_tx_busy_com3 = 0;
+        if (cpu3_mark_protocol_switch_tx_complete(3U)) {
+            COM3_RecvMode();
+            return;
+        }
         uart_restart_rx_dma(&huart3, UART3_RX_BUF, UART3_RX_BUF_SIZE, COM3_RecvMode);
         return;
     }
@@ -670,6 +913,7 @@ void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
 void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)
 {
     if (huart->Instance == USART6) {
+        cpu3_cancel_protocol_switch(1U);
         cpu3_uart_recover_tx(&huart6,
                              &g_tx_busy_com1, &g_tx_pending_len_com1,
                              &com1_rx_ready, &UART6_RX_LEN,
@@ -679,6 +923,7 @@ void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)
     }
 
     if (huart->Instance == USART2) {
+        cpu3_cancel_protocol_switch(2U);
         cpu3_uart_recover_tx(&huart2,
                              &g_tx_busy_com2, &g_tx_pending_len_com2,
                              &com2_rx_ready, &UART2_RX_LEN,
@@ -688,6 +933,7 @@ void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)
     }
 
     if (huart->Instance == USART3) {
+        cpu3_cancel_protocol_switch(3U);
         cpu3_uart_recover_tx(&huart3,
                              &g_tx_busy_com3, &g_tx_pending_len_com3,
                              &com3_rx_ready, &UART3_RX_LEN,

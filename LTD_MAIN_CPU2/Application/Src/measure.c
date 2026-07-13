@@ -38,7 +38,7 @@ static void CMD_CalibrateTankHeight(void)
 
     if (g_deviceParams.calibrateTankHeight == 0) {
         printf("标定罐高值为0，无法执行罐高标定\r\n");
-        SET_ERROR(PARAM_ERROR);
+        SET_ERROR(PARAM_RANGE_ERROR);
     }
 
     g_measurement.device_status.device_state = STATE_CALIBRATE_TANKHEIGHTING;
@@ -50,7 +50,7 @@ static void CMD_CalibrateTankHeight(void)
                                          : g_measurement.debug_data.cable_length;
     if (raw_real_height == 0U) {
         printf("原始实高为0，无法执行实高校正\r\n");
-        SET_ERROR(PARAM_ERROR);
+        SET_ERROR(MEASUREMENT_POSITION_ERROR);
     }
 
     g_deviceParams.initialTankHeight = raw_real_height;

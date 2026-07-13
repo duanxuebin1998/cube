@@ -9,10 +9,93 @@
 #include <stdio.h>
 #include <string.h>
 #include "motor_ctrl.h"
+#include "TMC5130.h"
 #include "error_log.h"
 
 ErrorInfo err; /* 全局错误信息变量 */
 static uint8_t s_handle_error_skip_logged = 0U; /* 故障处理故障记录，供恢复、显示或日志链路使用。 */
+
+/* 返回 TMC5130 故障快照中的阶段中文名称。 */
+static const char *FaultManager_GetTmcStageText(uint8_t stage)
+{
+    switch (stage) {
+    case TMC5130_DIAG_STAGE_PARAMETER:
+        return "参数无效";
+    case TMC5130_DIAG_STAGE_ACCESS_BUSY:
+        return "SPI访问冲突";
+    case TMC5130_DIAG_STAGE_SPI_READ_TRIGGER:
+        return "寄存器读触发帧";
+    case TMC5130_DIAG_STAGE_SPI_READ_DATA:
+        return "寄存器读数据帧";
+    case TMC5130_DIAG_STAGE_SPI_WRITE:
+        return "寄存器写入";
+    case TMC5130_DIAG_STAGE_XACTUAL_UNSTABLE:
+        return "位置连续读数不稳定";
+    case TMC5130_DIAG_STAGE_CONFIGURATION_LOST:
+        return "驱动配置丢失";
+    case TMC5130_DIAG_STAGE_CHIP_RESET:
+        return "驱动芯片复位";
+    default:
+        return "未记录";
+    }
+}
+
+/* 返回 TMC5130 故障快照中的访问方向中文名称。 */
+static const char *FaultManager_GetTmcDirectionText(uint8_t direction)
+{
+    if (direction == TMC5130_DIAG_DIRECTION_WRITE) {
+        return "写";
+    }
+    if (direction == TMC5130_DIAG_DIRECTION_READ) {
+        return "读";
+    }
+    return "无";
+}
+
+/*
+ * 函数用途：把最后一次 TMC5130 故障现场附加到最终错误详情。
+ * 调用场景：TMC5130 通信异常或配置丢失进入普通或全局最终错误出口时调用。
+ * 关键约束：只读取已保存快照，不访问 SPI，不覆盖原文件和函数定位信息。
+ */
+static void FaultManager_AppendTmcDiagnostic(uint32_t error_code,
+                                             char *detail,
+                                             size_t detail_size)
+{
+    TMC5130DiagnosticSnapshot snapshot;
+    size_t used;
+
+    if (((error_code != MOTOR_TMC_COMM_ERROR) &&
+         (error_code != MOTOR_TMC_CONFIG_LOST)) ||
+        (detail == NULL) ||
+        (detail_size == 0U)) {
+        return;
+    }
+
+    TMC5130_GetDiagnosticSnapshot(&snapshot);
+    if (snapshot.sequence == 0U) {
+        return;
+    }
+
+    used = strlen(detail);
+    if (used >= detail_size) {
+        return;
+    }
+
+    (void)snprintf(detail + used,
+                   detail_size - used,
+                   ",TMC阶段：%s,方向：%s,寄存器：0x%02X,底层状态：%lu,响应状态：0x%02X,快照错误码：%lu,期望值：0x%08lX,实际值：0x%08lX,连续读数：%ld/%ld/%ld",
+                   FaultManager_GetTmcStageText(snapshot.stage),
+                   FaultManager_GetTmcDirectionText(snapshot.direction),
+                   (unsigned int)snapshot.address,
+                   (unsigned long)snapshot.hal_status,
+                   (unsigned int)snapshot.response_status,
+                   (unsigned long)snapshot.error_code,
+                   (unsigned long)snapshot.expected_value,
+                   (unsigned long)snapshot.actual_value,
+                   (long)snapshot.sample_first,
+                   (long)snapshot.sample_second,
+                   (long)snapshot.sample_third);
+}
 
 /**
  * @brief 错误打印函数
@@ -32,7 +115,7 @@ void printError(const ErrorInfo* err)
  */
 void FaultManager_ReportErrorExit(uint32_t error_code)
 {
-    char detail[96];
+    char detail[320];
 
     /* 先处理异常边界，避免故障处理状态机带故障继续运行。 */
     if ((error_code == NO_ERROR) || (error_code == STATE_SWITCH)) {
@@ -49,6 +132,7 @@ void FaultManager_ReportErrorExit(uint32_t error_code)
              (err.file != NULL) ? err.file : "未知",
              (unsigned long)err.line,
              (err.func != NULL) ? err.func : "未知");
+    FaultManager_AppendTmcDiagnostic(error_code, detail, sizeof(detail));
 
     /* 错误 阶段：最终报错 模块：ErrorLog_GetModuleByCode(error_code) 操作：错误出口 原因：ErrorLog_GetReasonByCode(error_code) 错误码：error_code 错误名：ErrorLog_GetCodeName(error_code) 处理：停止测量 详情：detail */
     ErrorLog_ReportDetail(ErrorLog_GetModuleByCode(error_code),
@@ -69,7 +153,7 @@ static void FaultManager_ReportGlobalErrorExit(uint32_t error_code,
                                                uint32_t line,
                                                const char *func)
 {
-    char detail[192];
+    char detail[384];
 
     /* 先处理异常边界，避免故障处理状态机带故障继续运行。 */
     if ((error_code == NO_ERROR) || (error_code == STATE_SWITCH)) {
@@ -89,6 +173,7 @@ static void FaultManager_ReportGlobalErrorExit(uint32_t error_code,
              (func != NULL) ? func : "未知",
              (unsigned long)g_measurement.device_status.current_command,
              (unsigned long)g_measurement.device_status.device_state);
+    FaultManager_AppendTmcDiagnostic(error_code, detail, sizeof(detail));
 
     /* 错误 阶段：最终报错 模块：ErrorLog_GetModuleByCode(error_code) 操作：检查全局错误状态 原因：ErrorLog_GetReasonByCode(error_code) 错误码：error_code 错误名：ErrorLog_GetCodeName(error_code) 处理：停止测量 详情：detail */
     ErrorLog_ReportDetail(ErrorLog_GetModuleByCode(error_code),

@@ -553,14 +553,22 @@ int normalize_ao_params_after_write(void)
     return normalize_ao_params_runtime();
 }
 
+typedef enum {
+    DEVICE_PARAM_SLOT_VALID = 0,
+    DEVICE_PARAM_SLOT_UNINITIALIZED,
+    DEVICE_PARAM_SLOT_SIZE_MISMATCH,
+    DEVICE_PARAM_SLOT_VERSION_MISMATCH,
+    DEVICE_PARAM_SLOT_CRC_ERROR
+} DeviceParamSlotLoadResult;
+
 /* 内部通用读取接口：
  * 1. 统一对 FRAM 槽位做 magic/version/CRC 校验；
  * 2. verbose=0 时用于静默判重，避免因为每次保存前判重而打大量日志；
  * 3. verbose=1 时用于正常加载诊断，保留详细失败原因。 */
-static int load_device_params_from_slot_impl(uint32_t base_addr,
-                                             DeviceParameters *out,
-                                             const char *slot_name,
-                                             int verbose)
+static DeviceParamSlotLoadResult load_device_params_from_slot_impl(uint32_t base_addr,
+                                                                   DeviceParameters *out,
+                                                                   const char *slot_name,
+                                                                   int verbose)
 {
     DeviceParameters temp;
     char detail[128];
@@ -585,7 +593,7 @@ static int load_device_params_from_slot_impl(uint32_t base_addr,
                                 ERROR_LOG_ACTION_CONTINUE,
                                 detail);
         }
-        return 0;
+        return DEVICE_PARAM_SLOT_UNINITIALIZED;
     }
 
     if (temp.struct_size != sizeof(DeviceParameters))
@@ -609,7 +617,7 @@ static int load_device_params_from_slot_impl(uint32_t base_addr,
                                 ERROR_LOG_ACTION_CONTINUE,
                                 detail);
         }
-        return 0;
+        return DEVICE_PARAM_SLOT_SIZE_MISMATCH;
     }
 
     if (temp.param_version != DEVICE_PARAM_VERSION)
@@ -633,7 +641,7 @@ static int load_device_params_from_slot_impl(uint32_t base_addr,
                                 ERROR_LOG_ACTION_CONTINUE,
                                 detail);
         }
-        return 0;
+        return DEVICE_PARAM_SLOT_VERSION_MISMATCH;
     }
 
     {
@@ -659,12 +667,29 @@ static int load_device_params_from_slot_impl(uint32_t base_addr,
                                     ERROR_LOG_ACTION_CONTINUE,
                                     detail);
             }
-            return 0;
+            return DEVICE_PARAM_SLOT_CRC_ERROR;
         }
     }
 
     *out = temp;
-    return 1;
+    return DEVICE_PARAM_SLOT_VALID;
+}
+
+/* 两个参数分区均不可用时，优先返回能够直接定位的校验原因。 */
+static uint32_t device_param_error_from_slot_results(DeviceParamSlotLoadResult slot_a_result,
+                                                     DeviceParamSlotLoadResult slot_b_result)
+{
+    if ((slot_a_result == DEVICE_PARAM_SLOT_CRC_ERROR) ||
+        (slot_b_result == DEVICE_PARAM_SLOT_CRC_ERROR)) {
+        return PARAM_CRC_ERROR;
+    }
+
+    if ((slot_a_result == DEVICE_PARAM_SLOT_UNINITIALIZED) &&
+        (slot_b_result == DEVICE_PARAM_SLOT_UNINITIALIZED)) {
+        return PARAM_UNINITIALIZED;
+    }
+
+    return PARAM_EEPROM_FAIL;
 }
 
 /* 把当前内存里的 g_deviceParams 整理成“准备写入 FRAM 的完整镜像”。
@@ -740,6 +765,8 @@ static void save_device_params_internal(int mark_updated, int force_write)
     DeviceParameters params;
     DeviceParameters slot_a;
     DeviceParameters slot_b;
+    DeviceParamSlotLoadResult slot_a_result;
+    DeviceParamSlotLoadResult slot_b_result;
     int slot_a_valid;
     int slot_b_valid;
 
@@ -760,8 +787,10 @@ static void save_device_params_internal(int mark_updated, int force_write)
     g_deviceParams.magic = params.magic;
     g_deviceParams.crc = params.crc;
 
-    slot_a_valid = load_device_params_from_slot_impl(FRAM_PARAM_A_ADDRESS, &slot_a, "A", 0);
-    slot_b_valid = load_device_params_from_slot_impl(FRAM_PARAM_B_ADDRESS, &slot_b, "B", 0);
+    slot_a_result = load_device_params_from_slot_impl(FRAM_PARAM_A_ADDRESS, &slot_a, "A", 0);
+    slot_b_result = load_device_params_from_slot_impl(FRAM_PARAM_B_ADDRESS, &slot_b, "B", 0);
+    slot_a_valid = (slot_a_result == DEVICE_PARAM_SLOT_VALID) ? 1 : 0;
+    slot_b_valid = (slot_b_result == DEVICE_PARAM_SLOT_VALID) ? 1 : 0;
 
     /* 仅当 A/B 两份 FRAM 都有效，且持久化区和本次待保存内容完全一致时，
      * 才真正跳过写入。
@@ -791,7 +820,9 @@ static void save_device_params_internal(int mark_updated, int force_write)
 }
 
 /* 从指定分区读取并校验设备参数：返回1成功，0失败 */
-static int load_device_params_from_slot(uint32_t base_addr, DeviceParameters *out, const char *slot_name)
+static DeviceParamSlotLoadResult load_device_params_from_slot(uint32_t base_addr,
+                                                              DeviceParameters *out,
+                                                              const char *slot_name)
 {
     return load_device_params_from_slot_impl(base_addr, out, slot_name, 1);
 }
@@ -841,6 +872,8 @@ void process_device_params_deferred_tasks(void)
 int load_device_params(void)
 {
     DeviceParameters temp;
+    DeviceParamSlotLoadResult slot_a_result;
+    DeviceParamSlotLoadResult slot_b_result;
     int loaded_from_a = 0;
     int params_normalized = 0;
 
@@ -851,23 +884,26 @@ int load_device_params(void)
         return 0;
     }
 
-    if (load_device_params_from_slot(FRAM_PARAM_A_ADDRESS, &temp, "A"))
+    slot_a_result = load_device_params_from_slot(FRAM_PARAM_A_ADDRESS, &temp, "A");
+    if (slot_a_result == DEVICE_PARAM_SLOT_VALID)
     {
         loaded_from_a = 1;
     }
-    else if (load_device_params_from_slot(FRAM_PARAM_B_ADDRESS, &temp, "B"))
-    {
-        /* 错误 阶段：重试成功 模块：参数 操作：FRAM参数分区回退 原因：A分区异常，使用B分区 尝试：1U/1U */
-        ErrorLog_Recover(ERROR_LOG_MODULE_PARAM,
-                         ERROR_LOG_OP_FRAM_FALLBACK,
-                         ERROR_LOG_REASON_FRAM_FALLBACK,
-                         1U,
-                         1U);
-    }
     else
     {
-        g_measurement.device_status.error_code = PARAM_EEPROM_FAIL;
-        return 0;
+        slot_b_result = load_device_params_from_slot(FRAM_PARAM_B_ADDRESS, &temp, "B");
+        if (slot_b_result == DEVICE_PARAM_SLOT_VALID) {
+            /* 错误 阶段：重试成功 模块：参数 操作：FRAM参数分区回退 原因：A分区异常，使用B分区 尝试：1U/1U */
+            ErrorLog_Recover(ERROR_LOG_MODULE_PARAM,
+                             ERROR_LOG_OP_FRAM_FALLBACK,
+                             ERROR_LOG_REASON_FRAM_FALLBACK,
+                             1U,
+                             1U);
+        } else {
+            g_measurement.device_status.error_code =
+                device_param_error_from_slot_results(slot_a_result, slot_b_result);
+            return 0;
+        }
     }
 
     /* 按结构或原始字节复制，保持系统参数协议/存储布局不被字段解释改变。 */
@@ -898,6 +934,7 @@ int load_device_params(void)
 void init_device_params(void)
 {
     const int MAX_RETRY = 3;
+    uint32_t load_error_code = PARAM_EEPROM_FAIL;
     int ok = 0;
 
     for (int attempt = 1; attempt <= MAX_RETRY; attempt++)
@@ -910,13 +947,14 @@ void init_device_params(void)
             print_device_params_event(PARAM_PRINT_BOOT_FULL, NULL, "上电参数加载完成", g_device_params_last_load_source);
             break;
         }
-        /* 错误 阶段：错误重试 模块：参数 操作：FRAM参数分区回退 原因：FRAM参数分区异常 尝试：attempt/MAX_RETRY 错误码：PARAM_EEPROM_FAIL 错误名：ErrorLog_GetCodeName(PARAM_EEPROM_FAIL) */
+        load_error_code = g_measurement.device_status.error_code;
+        /* 错误 阶段：错误重试 模块：参数 操作：FRAM参数分区回退 原因：ErrorLog_GetReasonByCode(load_error_code) 尝试：attempt/MAX_RETRY 错误码：load_error_code 错误名：ErrorLog_GetCodeName(load_error_code) */
         ErrorLog_Retry(ERROR_LOG_MODULE_PARAM,
                        ERROR_LOG_OP_FRAM_FALLBACK,
-                       ERROR_LOG_REASON_FRAM_ERROR,
+                       ErrorLog_GetReasonByCode(load_error_code),
                        (uint32_t)attempt,
                        (uint32_t)MAX_RETRY,
-                       PARAM_EEPROM_FAIL);
+                       load_error_code);
         HAL_Delay(100);
     }
 
@@ -926,11 +964,11 @@ void init_device_params(void)
         memset((void * volatile)&g_deviceParams, 0, sizeof(DeviceParameters));
         RestoreFactoryParamsConfig(); /* 内部会调用 save_device_params() */
 
-        g_measurement.device_status.error_code = PARAM_EEPROM_FAIL;
-        /* 错误 阶段：错误报警 模块：参数 操作：FRAM参数分区回退 原因：FRAM参数分区异常 处理：使用默认参数 */
+        g_measurement.device_status.error_code = load_error_code;
+        /* 错误 阶段：错误报警 模块：参数 操作：FRAM参数分区回退 原因：ErrorLog_GetReasonByCode(load_error_code) 处理：使用默认参数 */
         ErrorLog_Warn(ERROR_LOG_MODULE_PARAM,
                       ERROR_LOG_OP_FRAM_FALLBACK,
-                      ERROR_LOG_REASON_FRAM_ERROR,
+                      ErrorLog_GetReasonByCode(load_error_code),
                       ERROR_LOG_ACTION_USE_DEFAULT_PARAM);
     }
 }

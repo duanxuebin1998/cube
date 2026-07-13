@@ -1216,7 +1216,7 @@ static uint32_t MotorMotion_DistanceToTicks(float move_mm,
     int64_t ticks64;
 
     if (ticks == NULL) {
-        return PARAM_ERROR;
+        return PARAM_ADDRESS_OVERFLOW;
     }
     *ticks = 0;
 
@@ -1278,7 +1278,7 @@ static uint32_t MotorMotion_BeginSpeedScope(MotorMotionSpeedScope *scope,
                                             uint32_t speed_x100)
 {
     if (scope == NULL) {
-        return PARAM_ERROR;
+        return PARAM_ADDRESS_OVERFLOW;
     }
 
     return MotorDriver_BeginTemporarySpeed(speed_x100,
@@ -1292,7 +1292,7 @@ static uint32_t MotorMotion_BeginSpeedScope(MotorMotionSpeedScope *scope,
 static uint32_t MotorMotion_EndSpeedScope(const MotorMotionSpeedScope *scope)
 {
     if (scope == NULL) {
-        return PARAM_ERROR;
+        return PARAM_ADDRESS_OVERFLOW;
     }
 
     return MotorDriver_EndTemporarySpeed(scope->restore_needed,
@@ -1310,7 +1310,7 @@ static uint32_t MotorMotion_ReturnWithSpeedScope(uint32_t ret,
                                                  const MotorMotionSpeedScope *scope)
 {
     if (scope == NULL) {
-        return (ret != NO_ERROR) ? ret : PARAM_ERROR;
+        return (ret != NO_ERROR) ? ret : PARAM_ADDRESS_OVERFLOW;
     }
 
     return MotorDriver_ReturnAfterTemporarySpeed(ret,
@@ -1455,7 +1455,7 @@ static uint32_t MotorMotion_CheckAbortRefreshAndHealth(TMC5130TypeDef *tmc5130,
     uint32_t ret;
 
     if ((tmc5130 == NULL) || (last_vel_refresh_tick == NULL)) {
-        return PARAM_ERROR;
+        return PARAM_ADDRESS_OVERFLOW;
     }
 
     ret = MotorDriver_StopIfCommandSwitchRequested();
@@ -1482,7 +1482,7 @@ static uint32_t MotorMotion_CheckStoppedAndRefresh(TMC5130TypeDef *tmc5130)
     uint32_t ret;
 
     if (tmc5130 == NULL) {
-        return PARAM_ERROR;
+        return PARAM_ADDRESS_OVERFLOW;
     }
 
     ret = MotorDriver_SyncPositionOrCheckHealth(tmc5130);
@@ -1774,7 +1774,7 @@ static uint32_t MotorMotion_JogMoveToTargetInternal(float target_mm,
 static uint32_t MotorMotion_RefreshActivePositionMm(float *pos_mm)
 {
     if (pos_mm == NULL) {
-        return PARAM_ERROR;
+        return PARAM_ADDRESS_OVERFLOW;
     }
 
     MotorCtrl_RefreshPositionFromActiveSource();
@@ -1813,7 +1813,7 @@ static uint32_t MotorMotion_BuildRelativeTargetPlan(float start_mm,
     uint32_t ret;
 
     if (plan == NULL) {
-        return PARAM_ERROR;
+        return PARAM_ADDRESS_OVERFLOW;
     }
 
     plan->start_mm = start_mm;
@@ -1858,7 +1858,7 @@ static uint32_t MotorMotion_BuildAbsoluteTargetPlan(float current_mm,
     uint32_t ret;
 
     if (plan == NULL) {
-        return PARAM_ERROR;
+        return PARAM_ADDRESS_OVERFLOW;
     }
 
     plan->start_mm = current_mm;
@@ -1998,7 +1998,7 @@ static uint32_t MotorMotion_CheckJogRuntimeGuards(uint32_t start_tick,
     uint32_t ret;
 
     if (is_moving == NULL) {
-        return PARAM_ERROR;
+        return PARAM_ADDRESS_OVERFLOW;
     }
 
     ret = MotorDriver_CheckHealth(MOTOR_DRIVER_HEALTH_RUNNING);
@@ -2055,7 +2055,7 @@ static uint32_t MotorMotion_CalcJogSlowdownDistanceMm(float current_mm,
     double tape_length_mm;
 
     if (slowdown_mm == NULL) {
-        return PARAM_ERROR;
+        return PARAM_ADDRESS_OVERFLOW;
     }
 
     *slowdown_mm = MOTOR_JOG_SLOWDOWN_DISTANCE_MM;

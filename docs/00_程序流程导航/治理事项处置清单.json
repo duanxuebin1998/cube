@@ -1,0 +1,6 @@
+{
+  "schemaVersion": 1,
+  "kind": "cube-governance-item-registry",
+  "description": "以稳定治理身份追加记录责任接手、执行、外部等待和机器事实清零后的关闭事件；空清单表示当前尚未有人正式接手，不表示治理项不存在或已经完成。",
+  "items": []
+}

@@ -13,6 +13,7 @@
 .cross-flow-evidence__item{min-width:0;padding:8px 9px;border-left:3px solid #248b70;background:#fff}
 .cross-flow-evidence__item span{display:block;margin-bottom:4px;color:#5a6f86;font-size:11px;font-weight:700}
 .cross-flow-evidence__item strong,.cross-flow-evidence__links{display:block;color:#17233a;font-size:12px;line-height:1.55;overflow-wrap:anywhere}
+.cross-flow-evidence__item--boundary{grid-column:span 2;border-left-color:#b6782b;background:#fffaf1}
 .cross-flow-evidence__links a{color:#245d96;text-decoration:none;font-weight:700}
 .cross-flow-evidence__links a+a::before{content:" · ";color:#8393a5}
 .cross-flow-nav__quick{display:flex;flex-wrap:wrap;gap:7px;justify-content:flex-end}
@@ -26,7 +27,7 @@
 .cross-flow-nav__linear a{flex:1 1 0;min-width:0;padding:9px 11px;border:1px solid #d7e5f3;border-radius:8px;background:#f8fbff;color:#214f7d;text-decoration:none;font-size:13px;font-weight:800;overflow-wrap:anywhere}
 .cross-flow-nav__linear a:last-child{text-align:right}
 @media(max-width:920px){.cross-flow-evidence{grid-template-columns:repeat(2,minmax(0,1fr))}}
-@media(max-width:720px){.cross-flow-nav{padding:14px;max-width:100%;overflow:hidden}.cross-flow-nav__head{display:block}.cross-flow-nav__title{font-size:16px}.cross-flow-nav__quick{justify-content:flex-start;margin-top:10px}.cross-flow-evidence{grid-template-columns:1fr}.cross-flow-nav__grid{grid-template-columns:1fr}.cross-flow-nav__linear{flex-direction:column}.cross-flow-nav__linear a:last-child{text-align:left}}
+@media(max-width:720px){.cross-flow-nav{padding:14px;max-width:100%;overflow:hidden}.cross-flow-nav__head{display:block}.cross-flow-nav__title{font-size:16px}.cross-flow-nav__quick{justify-content:flex-start;margin-top:10px}.cross-flow-evidence{grid-template-columns:1fr}.cross-flow-evidence__item--boundary{grid-column:auto}.cross-flow-nav__grid{grid-template-columns:1fr}.cross-flow-nav__linear{flex-direction:column}.cross-flow-nav__linear a:last-child{text-align:left}}
 </style>
 <link rel="stylesheet" href="../assets/网站嵌入增强.css">
 </head><body class="cube-flow-page" data-cube-flow-page="cube-flow-cpu2-03-回零与罐底罐高"><div class="wrap"><header class="hero"><h1>CPU2 回零与罐底罐高程序流程</h1><p>本页按当前源码重新整理回零、零点标定、罐底测量和罐高标定。流程图只使用业务级 SVG，重点展开重试、命令切换、错误出口、基准写入、罐底失败兜底和编码器修正。</p><div class="meta-grid"><div class="meta"><span>功能域</span><strong>回零与罐底罐高</strong></div><div class="meta"><span>核心文件</span><strong>measure_zero.c / measure_tank_height.c</strong></div><div class="meta"><span>相关命令</span><strong>回零、罐底、零点标定、罐高标定</strong></div><div class="meta"><span>整理日期</span><strong>2026-06-12</strong></div></div></header><nav class="topnav"><a href="CPU2程序流程总览.html">总览</a><a href="问题点总表.html">问题总表</a><a href="#layer">系统边界</a><a href="#flow">业务总览</a><a href="#detailflows">详细流程图</a><a href="#state">状态异常</a><a href="#risk">问题点</a><a href="#source">源码索引</a></nav>

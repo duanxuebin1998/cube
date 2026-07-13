@@ -1,0 +1,109 @@
+{
+  "schemaVersion": 1,
+  "kind": "cube-validation-evidence-identity-registry",
+  "description": "为流程证据清单引用的正式验证资料分配稳定身份，并声明资料实际定义的验证层；流程与资料关系仍只维护在流程证据清单中。",
+  "documents": [
+    {
+      "id": "ev-dsm-v1228-compat",
+      "path": "docs/00_构建与版本/版本改动与测试/2026-06-02_CPU3_V1.8.0.0_DSM_V1.228外部协议兼容_改动与测试方案.md",
+      "documentKind": "validation-plan",
+      "declaredLayers": ["bench", "field"]
+    },
+    {
+      "id": "ev-continuous-level-protocol-v8",
+      "path": "docs/00_构建与版本/版本改动与测试/2026-06-12_CPU2_V1.14.0.0_CPU3_V1.13.0.0_连续找液位方式与协议版本8_改动与测试方案.md",
+      "documentKind": "validation-plan",
+      "declaredLayers": ["automatic", "field"]
+    },
+    {
+      "id": "ev-component-rssi-display",
+      "path": "docs/00_构建与版本/版本改动与测试/2026-06-13_CPU2_V1.15.0.0_CPU3_V1.14.0.0_读取部件参数蓝牙RSSI与CPU3菜单显示优化_改动与测试方案.md",
+      "documentKind": "validation-plan",
+      "declaredLayers": ["automatic", "device", "field"]
+    },
+    {
+      "id": "ev-rtc-lse-clock",
+      "path": "docs/00_构建与版本/版本改动与测试/2026-06-17_CPU3_V1.15.0.2_RTC_LSE电池保持与屏幕校时_改动与测试方案.md",
+      "documentKind": "validation-plan",
+      "declaredLayers": ["automatic", "device", "field"]
+    },
+    {
+      "id": "ev-param-print-hover-menu-timeout",
+      "path": "docs/00_构建与版本/版本改动与测试/2026-06-27_CPU2_V1.20.1.0_CPU3_V1.18.1.0_参数打印分布悬停与菜单空闲退出_改动与测试方案.md",
+      "documentKind": "validation-plan",
+      "declaredLayers": ["automatic", "device", "field"]
+    },
+    {
+      "id": "ev-si-profile-compat",
+      "path": "docs/00_构建与版本/版本改动与测试/2026-07-01_CPU2_V1.21.0.0_CPU3_V1.19.0.0_SI协议独立Profile兼容_改动与测试方案.md",
+      "documentKind": "validation-plan",
+      "declaredLayers": ["automatic", "field"]
+    },
+    {
+      "id": "ev-si-profile-return-follow",
+      "path": "docs/00_构建与版本/版本改动与测试/2026-07-06_CPU2_V1.21.2.0_CPU3_V1.19.1.0_SIProfile完成后回液位跟随_改动与测试方案.md",
+      "documentKind": "validation-plan",
+      "declaredLayers": ["automatic", "device", "field"]
+    },
+    {
+      "id": "ev-oil-follow-speed-loop",
+      "path": "docs/00_构建与版本/版本改动与测试/2026-07-08_CPU2_V1.21.3.0_CPU3_V1.19.1.0_液位跟随滞后确认与定频速度闭环_改动与测试方案.md",
+      "documentKind": "validation-plan",
+      "declaredLayers": ["automatic", "device", "field"]
+    },
+    {
+      "id": "ev-encoder-speed-reference",
+      "path": "docs/00_构建与版本/版本改动与测试/2026-07-08_CPU2_V1.21.4.0_CPU3_V1.19.1.0_编码轮速度补偿参考长度_改动与测试方案.md",
+      "documentKind": "validation-plan",
+      "declaredLayers": ["automatic", "device", "field"]
+    },
+    {
+      "id": "ev-ad5421-ao-runtime",
+      "path": "docs/00_构建与版本/版本改动与测试/2026-07-08_CPU2_V1.21.5.0_CPU3_V1.19.1.0_AD5421断环恢复与AO运行态_改动与测试方案.md",
+      "documentKind": "validation-plan",
+      "declaredLayers": ["automatic", "bench", "field"]
+    },
+    {
+      "id": "ev-ltd-modbus-command-gate",
+      "path": "docs/00_构建与版本/版本改动与测试/2026-07-11_CPU2_V1.22.0.0_CPU3_V1.21.0.0_LTD共享Modbus与串口命令严检及流程门禁_改动与测试方案.md",
+      "documentKind": "validation-plan",
+      "declaredLayers": ["automatic", "bench", "device", "field"]
+    },
+    {
+      "id": "ev-fault-code-governance",
+      "path": "docs/00_构建与版本/故障码/故障码整体治理执行、当前进度与窗口交接计划.md",
+      "documentKind": "governance-record",
+      "declaredLayers": ["automatic", "bench", "device", "field"]
+    },
+    {
+      "id": "ev-wp-cpu2-05-water-level",
+      "path": "docs/00_程序流程导航/验证工作包/CPU2_05_水位测量与跟随验证工作包.md",
+      "documentKind": "validation-plan",
+      "declaredLayers": ["automatic", "bench", "device", "field"]
+    },
+    {
+      "id": "ev-wp-cpu2-10-modbus-cpu3",
+      "path": "docs/00_程序流程导航/验证工作包/CPU2_10_Modbus与CPU3通信验证工作包.md",
+      "documentKind": "validation-plan",
+      "declaredLayers": ["automatic", "bench", "device", "field"]
+    },
+    {
+      "id": "ev-wp-cpu2-12-parameter-storage",
+      "path": "docs/00_程序流程导航/验证工作包/CPU2_12_参数存储与系统配置验证工作包.md",
+      "documentKind": "validation-plan",
+      "declaredLayers": ["automatic", "bench", "device", "field"]
+    },
+    {
+      "id": "ev-wp-cpu3-02-internal-communication",
+      "path": "docs/00_程序流程导航/验证工作包/CPU3_02_CPU2内部通信与轮询验证工作包.md",
+      "documentKind": "validation-plan",
+      "declaredLayers": ["automatic", "bench", "device", "field"]
+    },
+    {
+      "id": "ev-wp-cpu3-06-display-input",
+      "path": "docs/00_程序流程导航/验证工作包/CPU3_06_显示刷新与按键事件验证工作包.md",
+      "documentKind": "validation-plan",
+      "declaredLayers": ["automatic", "bench", "device", "field"]
+    }
+  ]
+}

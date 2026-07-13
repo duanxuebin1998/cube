@@ -12,6 +12,7 @@
 .cross-flow-evidence__item{min-width:0;padding:8px 9px;border-left:3px solid #248b70;background:#fff}
 .cross-flow-evidence__item span{display:block;margin-bottom:4px;color:#5a6f86;font-size:11px;font-weight:700}
 .cross-flow-evidence__item strong,.cross-flow-evidence__links{display:block;color:#17233a;font-size:12px;line-height:1.55;overflow-wrap:anywhere}
+.cross-flow-evidence__item--boundary{grid-column:span 2;border-left-color:#b6782b;background:#fffaf1}
 .cross-flow-evidence__links a{color:#245d96;text-decoration:none;font-weight:700}
 .cross-flow-evidence__links a+a::before{content:" · ";color:#8393a5}
 .cross-flow-nav__quick{display:flex;flex-wrap:wrap;gap:7px;justify-content:flex-end}
@@ -25,7 +26,7 @@
 .cross-flow-nav__linear a{flex:1 1 0;min-width:0;padding:9px 11px;border:1px solid #d7e5f3;border-radius:8px;background:#f8fbff;color:#214f7d;text-decoration:none;font-size:13px;font-weight:800;overflow-wrap:anywhere}
 .cross-flow-nav__linear a:last-child{text-align:right}
 @media(max-width:920px){.cross-flow-evidence{grid-template-columns:repeat(2,minmax(0,1fr))}}
-@media(max-width:720px){.cross-flow-nav{padding:14px;max-width:100%;overflow:hidden}.cross-flow-nav__head{display:block}.cross-flow-nav__title{font-size:16px}.cross-flow-nav__quick{justify-content:flex-start;margin-top:10px}.cross-flow-evidence{grid-template-columns:1fr}.cross-flow-nav__grid{grid-template-columns:1fr}.cross-flow-nav__linear{flex-direction:column}.cross-flow-nav__linear a:last-child{text-align:left}}
+@media(max-width:720px){.cross-flow-nav{padding:14px;max-width:100%;overflow:hidden}.cross-flow-nav__head{display:block}.cross-flow-nav__title{font-size:16px}.cross-flow-nav__quick{justify-content:flex-start;margin-top:10px}.cross-flow-evidence{grid-template-columns:1fr}.cross-flow-evidence__item--boundary{grid-column:auto}.cross-flow-nav__grid{grid-template-columns:1fr}.cross-flow-nav__linear{flex-direction:column}.cross-flow-nav__linear a:last-child{text-align:left}}
 </style>
 <link rel="stylesheet" href="../assets/网站嵌入增强.css">
 </head><body class="cube-flow-page" data-cube-flow-page="cube-flow-cpu2-14-bsp外设驱动"><div class="wrap"><header class="hero"><h1>14. BSP 外设驱动程序流程</h1><p>本页按源码整理 TMC5130、AS5145、FRAM 和 AD5421 的外设驱动流程，重点体现访问保护、错误分支、重试和上层错误传递。</p><div class="meta"><div><b>项目</b><span>LTD_MAIN_CPU2 / CPU2 V1.16.0.0</span></div><div><b>业务域</b><span>BSP 外设驱动</span></div><div><b>核心源码</b><span>BSP/Peripherals/src</span></div><div><b>本页流程图</b><span>9 张业务级 SVG</span></div></div></header><nav class="topnav"><a href="#scope">1. 整理范围</a><a href="#flows">2. 详细业务流程图</a><a href="#evidence">3. 源码证据</a><a href="#issues">4. 问题点与优化建议</a><a href="#sources">5. 关键源码索引</a></nav>

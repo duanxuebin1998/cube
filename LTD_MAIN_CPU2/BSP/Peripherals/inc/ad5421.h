@@ -2,6 +2,36 @@
 #define sil__AD5421_H
 #include "main.h"
 
+/* AD5421 诊断阶段，用于区分总线访问失败和芯片主动报警。 */
+#define AD5421_DIAG_STAGE_NONE             0U
+#define AD5421_DIAG_STAGE_ACCESS_BUSY      1U
+#define AD5421_DIAG_STAGE_SPI_WRITE        2U
+#define AD5421_DIAG_STAGE_SPI_READ_COMMAND 3U
+#define AD5421_DIAG_STAGE_SPI_READ_DATA    4U
+#define AD5421_DIAG_STAGE_CONTROL_READBACK 5U
+#define AD5421_DIAG_STAGE_FAULT_STATUS     6U
+
+/* AD5421 诊断访问方向。 */
+#define AD5421_DIAG_DIRECTION_NONE  0U
+#define AD5421_DIAG_DIRECTION_WRITE 1U
+#define AD5421_DIAG_DIRECTION_READ  2U
+
+/* 保存最后一次有效 AD5421 故障现场，供任务态日志和测试读取。 */
+typedef struct {
+    uint32_t sequence;
+    uint32_t error_code;
+    uint32_t root_error_code;
+    uint32_t fault_flags;
+    uint32_t fault_register;
+    uint32_t hal_status;
+    uint32_t expected_value;
+    uint32_t actual_value;
+    uint8_t stage;
+    uint8_t direction;
+    uint8_t reg;
+    uint8_t reserved;
+} AD5421DiagnosticSnapshot;
+
 #define AD5421_CS_GPIO_PORT   GPIOB /* AD5421 片选 GPIO 端口。 */
 #define AD5421_CS_PIN         GPIO_PIN_6 /* AD5421 片选 GPIO 引脚。 */
 
@@ -52,6 +82,7 @@ uint32_t AD5421_RecoverCurrentX100(uint32_t target_mA_x100);
 uint32_t AD5421_PollDiagnostics(void);
 uint32_t AD5421_GetFaultFlags(void);
 uint32_t AD5421_GetFaultRegister(void);
+void AD5421_GetDiagnosticSnapshot(AD5421DiagnosticSnapshot *snapshot);
 uint8_t AD5421_SetTraceSuppressed(uint8_t suppress);
 uint8_t AD5421_IsAccessBusy(void);
 

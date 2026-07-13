@@ -1,6 +1,6 @@
 # SI协议映射索引
 
-更新日期：2026-07-01
+更新日期：2026-07-12
 
 本目录保存 SI协议地址表与当前 CUBE 变量、命令、状态、限制和兼容策略的映射关系。
 
@@ -8,7 +8,7 @@
 
 - `SI协议兼容映射表.md` 是本目录当前正式维护源；协议地址、缩放、命令、状态和限制以该文件为准。
 - 旧 HTML 阅读件和 Word 导出件已合并清理，不再作为维护对象；需要对外传阅时从 Markdown 重新导出。
-- 当前映射基线：`DEVICE_PROTOCOL_VERSION = 14`，`00004 Profile` 下发 `CMD_SI_PROFILE`，`40001~40003` 为 CPU2 SI profile 参数，`40010~40023` 为 CPU3 SI 本机持久化参数，SI profile 完成态和点阵只认 `PROFILE_SOURCE_SI`。
+- 当前映射基线：`DEVICE_PROTOCOL_VERSION = 15`。SI Profile 功能从协议 14 起支持；协议 15 只调整设备内部故障码的责任域和编号，不改变 SI 地址、命令、状态、报警和 Profile 数据格式。`00004 Profile` 下发 `CMD_SI_PROFILE`，`40001~40003` 为 CPU2 SI profile 参数，`40010~40023` 为 CPU3 SI 本机持久化参数，SI profile 完成态和点阵只认 `PROFILE_SOURCE_SI`。
 
 ## 文件清单
 
