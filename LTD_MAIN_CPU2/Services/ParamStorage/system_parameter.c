@@ -1482,6 +1482,9 @@ static const char *device_param_value_desc(const ParamPrintItem *item, uint32_t 
         if (value == (uint32_t)LTD_SENSOR) {
             return "LTD传感器";
         }
+        if (value == (uint32_t)SAFE_SENSOR) {
+            return "安全协议传感器";
+        }
         return "非法配置";
     case (uint16_t)offsetof(DeviceParameters, command):
         switch (value) {

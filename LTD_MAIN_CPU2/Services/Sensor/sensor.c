@@ -17,6 +17,7 @@
 #include "motor_ctrl.h"
 #include "abortable_delay.h"
 #include "wireless_pairing.h"
+#include "sensor_safe_legacy_adapter.h"
 
 #define SENSOR_LEVEL_FREQ_RECOVERY_LIFT_MM 1.0f /* 传感器数据处理参数：传感器 液位 频率 恢复 抬升 MM。 */
 #define SENSOR_DENSITY_MODE_SETTLE_MS 3000U /* 传感器数据处理参数：传感器 密度 模式 稳定 毫秒。 */
@@ -34,8 +35,13 @@ static void Sensor_PrintBluetoothLinkSnapshot(const WirelessConnectionStatus *st
  *
  * 优先保留协议格式、校验等具体错误；只有两路都是无响应时才归并为传感器通信超时。
  */
-static uint32_t Sensor_SelectProbeError(uint32_t ltd_ret, uint32_t dsm_ret)
+static uint32_t Sensor_SelectProbeError(uint32_t safe_ret,
+                                        uint32_t ltd_ret,
+                                        uint32_t dsm_ret)
 {
+    if ((safe_ret != NO_ERROR) && (safe_ret != SENSOR_DEVICE_COMM_TIMEOUT)) {
+        return safe_ret;
+    }
     /* 先处理异常边界，避免传感器数据状态机带故障继续运行。 */
     if ((ltd_ret != NO_ERROR) && (ltd_ret != SENSOR_DEVICE_COMM_TIMEOUT)) {
         return ltd_ret;
@@ -45,7 +51,9 @@ static uint32_t Sensor_SelectProbeError(uint32_t ltd_ret, uint32_t dsm_ret)
         return dsm_ret;
     }
     /* 先处理异常边界，避免传感器数据状态机带故障继续运行。 */
-    if ((ltd_ret == SENSOR_DEVICE_COMM_TIMEOUT) || (dsm_ret == SENSOR_DEVICE_COMM_TIMEOUT)) {
+    if ((safe_ret == SENSOR_DEVICE_COMM_TIMEOUT) ||
+        (ltd_ret == SENSOR_DEVICE_COMM_TIMEOUT) ||
+        (dsm_ret == SENSOR_DEVICE_COMM_TIMEOUT)) {
         return SENSOR_DEVICE_COMM_TIMEOUT;
     }
     /* 先处理异常边界，避免传感器数据状态机带故障继续运行。 */
@@ -248,13 +256,30 @@ static uint32_t Sensor_ProbeDsmSensor(uint32_t *sensor_id_out)
     return NO_ERROR;
 }
 
-/**
- * @brief 执行传感器数据中的 Sensor_SupportsAuxDsmChannels 逻辑。
- * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+/*
+ * 函数用途：判断当前传感器是否提供水位电容通道。
+ * 调用场景：水位电容读取、部件参数和回零流程。
+ * 关键约束：安全传感器只检查水位电容能力，不依赖姿态能力。
  */
-static int Sensor_SupportsAuxDsmChannels(void)
+static int Sensor_SupportsWaterCapChannel(void)
 {
-    return (g_deviceParams.sensorType == DSM_SENSOR);
+    return (int)(((g_deviceParams.sensorType == DSM_SENSOR) ||
+                  ((g_deviceParams.sensorType == SAFE_SENSOR) &&
+                   (SensorSafeAdapter_IsActive() != 0U) &&
+                   (SensorSafeAdapter_SupportsWaterCap() != 0U))) ? 1 : 0);
+}
+
+/*
+ * 函数用途：判断当前传感器是否提供姿态角通道。
+ * 调用场景：姿态读取、部件参数和回零流程。
+ * 关键约束：安全传感器只检查姿态能力，不依赖水位电容能力。
+ */
+static int Sensor_SupportsGyroChannel(void)
+{
+    return (int)(((g_deviceParams.sensorType == DSM_SENSOR) ||
+                  ((g_deviceParams.sensorType == SAFE_SENSOR) &&
+                   (SensorSafeAdapter_IsActive() != 0U) &&
+                   (SensorSafeAdapter_SupportsGyro() != 0U))) ? 1 : 0);
 }
 
 /**
@@ -267,11 +292,12 @@ uint32_t DetectSensorType(void) {
 	uint32_t ret = NO_ERROR;
 	uint32_t ltd_ret;
 	uint32_t dsm_ret;
+	uint32_t safe_ret;
 	uint32_t sensor_id = 0U;
 	WirelessConnectionStatus bluetooth_status;
 
 	printf("========== 传感器识别开始 ==========\r\n");
-	printf("[1/3] 检查蓝牙链路\r\n");
+	printf("[1/4] 检查蓝牙链路\r\n");
 
 	ret = Sensor_ProbeWirelessLink(&bluetooth_status);
 	/* 先处理异常边界，避免传感器数据状态机带故障继续运行。 */
@@ -281,7 +307,21 @@ uint32_t DetectSensorType(void) {
 	}
 	Sensor_PrintBluetoothLinkSnapshot(&bluetooth_status);
 
-	printf("[2/3] 尝试LTD协议\r\n");
+	printf("[2/4] 尝试安全协议\r\n");
+	safe_ret = SensorSafeAdapter_Probe(&sensor_id);
+	if (safe_ret == NO_ERROR) {
+		g_deviceParams.sensorType = SAFE_SENSOR;
+		g_deviceParams.sensorID = sensor_id;
+		save_device_params();
+		printf("识别成功：安全协议传感器 | 编号=%lu\r\n", (unsigned long)sensor_id);
+		printf("====================================\r\n");
+		return NO_ERROR;
+	}
+	printf("探测结果：未匹配安全协议 | 原因：%s | 继续尝试LTD/V2协议\r\n",
+	       ErrorLog_GetReasonByCode(safe_ret));
+	SensorSafeAdapter_Deactivate();
+
+	printf("[3/4] 尝试LTD协议\r\n");
 	ltd_ret = Sensor_ProbeLtdSensor(&sensor_id);
 	/* 先处理异常边界，避免传感器数据状态机带故障继续运行。 */
 	if (ltd_ret == NO_ERROR) {
@@ -298,7 +338,7 @@ uint32_t DetectSensorType(void) {
 
 	printf("探测结果：未匹配LTD/V2协议 | 原因：%s | 继续尝试DSM一代协议\r\n",
 	       ErrorLog_GetReasonByCode(ltd_ret));
-	printf("[3/3] 尝试DSM一代协议\r\n");
+	printf("[4/4] 尝试DSM一代协议\r\n");
 	dsm_ret = Sensor_ProbeDsmSensor(&sensor_id);
 	/* 先处理异常边界，避免传感器数据状态机带故障继续运行。 */
 	if (dsm_ret == NO_ERROR) {
@@ -314,7 +354,7 @@ uint32_t DetectSensorType(void) {
 
 	printf("探测结果：未匹配DSM一代协议 | 原因：%s\r\n",
 	       ErrorLog_GetReasonByCode(dsm_ret));
-	ret = Sensor_SelectProbeError(ltd_ret, dsm_ret);
+	ret = Sensor_SelectProbeError(safe_ret, ltd_ret, dsm_ret);
 	printf("识别失败：未匹配支持的传感器 | LTD原因：%s | DSM原因：%s\r\n",
 	       ErrorLog_GetReasonByCode(ltd_ret),
 	       ErrorLog_GetReasonByCode(dsm_ret));
@@ -335,6 +375,8 @@ uint32_t EnableDensityMode(void) {
 	uint32_t ret;
 	if (g_deviceParams.sensorType == DSM_SENSOR) {
 		ret = DSM_EnableDensityMode();
+	} else if (g_deviceParams.sensorType == SAFE_SENSOR) {
+		ret = SensorSafeAdapter_EnableDensityMode();
 	} else {
 		ret = DSM_V2_SwitchToDensityMode();
 	}
@@ -372,6 +414,8 @@ uint32_t EnableLevelMode(void) {
 
 	if (g_deviceParams.sensorType == DSM_SENSOR) {
 		ret = DSM_EnableLevelMode();
+	} else if (g_deviceParams.sensorType == SAFE_SENSOR) {
+		ret = SensorSafeAdapter_EnableLevelMode();
 	} else {
 		ret = DSM_V2_SwitchToLevelMode();
 	}
@@ -482,6 +526,8 @@ uint32_t DSM_Get_LevelMode_Frequence(volatile uint32_t *frequency_out) {
 		for (int attempt = 0; attempt < MAX_INVALID_FREQ_RETRY; attempt++) {
 			if (g_deviceParams.sensorType == DSM_SENSOR) {
 				ret = Read_Level_Frequency(&hz);
+			} else if (g_deviceParams.sensorType == SAFE_SENSOR) {
+				ret = SensorSafeAdapter_ReadLevelFrequency(&hz);
 			} else {
 				ret = DSM_V2_Read_LevelFrequency(&hz);
 			}
@@ -642,6 +688,8 @@ uint32_t Read_Density(float *frequency, float *density, float *temp) {
 	uint32_t ret = NO_ERROR;
 	if (g_deviceParams.sensorType == DSM_SENSOR) {
 		ret = DSM_Read_Frequency_Density_Temp(frequency, density, temp);
+	} else if (g_deviceParams.sensorType == SAFE_SENSOR) {
+		ret = SensorSafeAdapter_ReadDensity(frequency, density, temp);
 	} else {
 		ret = DSM_V2_Read_Temperature(temp);
 		/* 先处理异常边界，避免传感器数据状态机带故障继续运行。 */
@@ -729,12 +777,14 @@ static uint32_t Sensor_PositionToU01mmClamped(void)
  */
 uint32_t Sensor_ReadWaterCapacitance(float *cap_out)
 {
-    if (!Sensor_SupportsAuxDsmChannels()) {
+    if (!Sensor_SupportsWaterCapChannel()) {
         printf("当前传感器类型不支持读取水位电容\r\n");
         return PARAM_ERROR;
     }
 
-    uint32_t ret = Read_Water_Capacitance(cap_out);
+    uint32_t ret = (g_deviceParams.sensorType == SAFE_SENSOR)
+                       ? SensorSafeAdapter_ReadWaterCapacitance(cap_out)
+                       : Read_Water_Capacitance(cap_out);
     return Sensor_DiagnoseCommTimeout(ret, "读取水位电容");
 }
 
@@ -747,12 +797,14 @@ uint32_t Sensor_ReadWaterCapacitance(float *cap_out)
  */
 uint32_t Sensor_ReadGyroAngle(float *angle_x_deg, float *angle_y_deg)
 {
-    if (!Sensor_SupportsAuxDsmChannels()) {
+    if (!Sensor_SupportsGyroChannel()) {
         printf("当前传感器类型不支持读取姿态角\r\n");
         return PARAM_ERROR;
     }
 
-    uint32_t ret = Read_Gyro_Angle(angle_x_deg, angle_y_deg);
+    uint32_t ret = (g_deviceParams.sensorType == SAFE_SENSOR)
+                       ? SensorSafeAdapter_ReadGyroAngle(angle_x_deg, angle_y_deg)
+                       : Read_Gyro_Angle(angle_x_deg, angle_y_deg);
     return Sensor_DiagnoseCommTimeout(ret, "读取陀螺仪");
 }
 
@@ -896,7 +948,7 @@ static uint32_t Sensor_UpdateWirelessRssiForPartParams(uint8_t force_update)
 static uint32_t Sensor_ReadPartParamsInternal(uint8_t update_command_state)
 {
     uint32_t ret = NO_ERROR;
-    uint8_t is_ltd_sensor = (g_deviceParams.sensorType != DSM_SENSOR) ? 1U : 0U;
+    uint8_t is_ltd_sensor = (g_deviceParams.sensorType == LTD_SENSOR) ? 1U : 0U;
 
     float ax = 0.0f, ay = 0.0f;
     float freq = 0.0f, dens = 0.0f, temp = 0.0f;
@@ -959,7 +1011,7 @@ static uint32_t Sensor_ReadPartParamsInternal(uint8_t update_command_state)
         return STATE_SWITCH;
     }
 
-    if (Sensor_SupportsAuxDsmChannels()) {
+    if (Sensor_SupportsGyroChannel()) {
         ret = Sensor_ReadGyroAngle(&ax, &ay);
         /* 先处理异常边界，避免传感器数据状态机带故障继续运行。 */
         if (ret != NO_ERROR) {
@@ -1016,7 +1068,7 @@ static uint32_t Sensor_ReadPartParamsInternal(uint8_t update_command_state)
         return STATE_SWITCH;
     }
 
-    if (Sensor_SupportsAuxDsmChannels()) {
+    if (Sensor_SupportsWaterCapChannel()) {
         ret = Sensor_ReadWaterCapacitance(&cap);
         /* 先处理异常边界，避免传感器数据状态机带故障继续运行。 */
         if (ret != NO_ERROR) {

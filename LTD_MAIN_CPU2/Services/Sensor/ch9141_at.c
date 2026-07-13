@@ -5,6 +5,7 @@
  */
 
 #include "ch9141_at.h"
+#include "sensor_safe_transport_uart6.h"
 
 #include "sensor.h"
 #include "system_parameter.h"
@@ -542,6 +543,8 @@ static void CH9141_AT_RecoverTransparentMode(uint8_t send_exit)
  */
 uint32_t CH9141_AT_PrepareUart6(uint32_t idle_ms)
 {
+    /* 切换到 CH9141 AT 前先清除安全协议同步传输状态，避免共享 UART6 保留忙标志。 */
+    SensorSafeTransportUart6_Abort();
     uint32_t ret;
 
     if (CH9141_AT_VERBOSE_LOG != 0U) {

@@ -119,6 +119,7 @@ typedef struct {
 typedef enum {
 	DSM_SENSOR = 12,   /* 一体机传感器 */
 	LTD_SENSOR = 13,   /* LTD传感器 */
+	SAFE_SENSOR = 14,  /* 新一代安全协议传感器 */
 } SENSOR_TYPE;
 
 #define TEMP_TO_RAW(t)  ((uint32_t)((t) * 100.0f + 20000.0f)) /* 温度存储到寄存器 */

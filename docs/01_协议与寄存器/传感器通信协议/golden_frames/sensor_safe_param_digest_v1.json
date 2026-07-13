@@ -1,0 +1,41 @@
+{
+  "schema": "sensor-safe-param-digest-v1",
+  "byte_order": "little-endian",
+  "crc": {
+    "name": "CRC-32C",
+    "poly_reflected": "0x82F63B78",
+    "init": "0xFFFFFFFF",
+    "xor_out": "0xFFFFFFFF"
+  },
+  "param_records": [
+    {
+      "name": "negative_i64_and_negative_scale",
+      "normalized_hex": "0200010100000303FEFF0100C01DFEFFFFFFFFFF",
+      "crc32c": "0x07C11B18"
+    },
+    {
+      "name": "positive_i64_and_positive_scale",
+      "normalized_hex": "020002020100040103000200B168DE3A00000000",
+      "crc32c": "0x239E432A"
+    }
+  ],
+  "safety_param_sets": [
+    {
+      "name": "empty_safety_parameter_set",
+      "normalized_hex": "0100010078563412FF0300000100040002000000",
+      "crc32c": "0x6F0C56A6"
+    },
+    {
+      "name": "two_sorted_safety_records",
+      "normalized_hex": "0100010078563412FF03000001000400020002000200010100000303FEFF0100C01DFEFFFFFFFFFF020002020100040103000200B168DE3A00000000",
+      "crc32c": "0x088631A6"
+    },
+    {
+      "name": "invalid_record_order_example",
+      "normalized_hex": "0100010078563412FF0300000100040002000200020002020100040103000200B168DE3A000000000200010100000303FEFF0100C01DFEFFFFFFFFFF",
+      "crc32c": "0xB771651F",
+      "valid": false,
+      "expected": "records_must_be_sorted_by_param_id_and_param_index"
+    }
+  ]
+}

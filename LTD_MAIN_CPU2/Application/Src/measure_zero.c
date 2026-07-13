@@ -16,6 +16,7 @@
 #include "measure_water_level.h"
 #include "encoder.h"
 #include "error_log.h"
+#include "sensor_safe_legacy_adapter.h"
 
 #define ZERO_SEARCH_RETRY_MAX  3  /* 可通过宏配置最大重试次数 */
 #define ZERO_ROUGH_SLOW_DISTANCE_01MM     2000  /* 粗找零点提前 200mm 降到低速 */
@@ -230,16 +231,20 @@ int SearchZero(void) {
 		CHECK_ERROR(ret);
 		ret = Zero_MoveDownWithoutWeightGuard("标零后下行", (float)g_deviceParams.findZeroDownDistance/10.0f);
 		CHECK_ERROR(ret);
-		if (g_deviceParams.sensorType == DSM_SENSOR) {
-			/* 零点电容只是一代 DSM 水位通道的空气基准，LTD/V2 不支持时不能阻断回零点。 */
+		if ((g_deviceParams.sensorType == DSM_SENSOR) ||
+		    ((g_deviceParams.sensorType == SAFE_SENSOR) &&
+		     (SensorSafeAdapter_SupportsWaterCap() != 0U))) {
+			/* 零点电容仅在传感器声明水位电容能力时读取，不支持时不能阻断回零点。 */
 			ret = read_zero_capacitance(); /* 读取零点电容值 */
 			CHECK_ERROR(ret);
 		} else {
 			printf("零点测量    当前传感器类型不支持零点电容读取，已跳过\r\n");
 		}
 		if (g_deviceParams.bottom_detect_mode == BOTTOM_DET_BY_GYRO) {
-			if (g_deviceParams.sensorType == DSM_SENSOR) {
-				/* 陀螺仪基准只对 DSM 一代辅助通道有效，LTD/V2 回零点不因该通道缺失失败。 */
+			if ((g_deviceParams.sensorType == DSM_SENSOR) ||
+			    ((g_deviceParams.sensorType == SAFE_SENSOR) &&
+			     (SensorSafeAdapter_SupportsGyro() != 0U))) {
+				/* 陀螺仪基准仅在传感器声明姿态能力时读取，不支持时不阻断回零点。 */
 				ret = Bottom_SaveGyroZeroRef(); /* 保存陀螺仪零点参考 */
 				CHECK_ERROR(ret);
 			} else {

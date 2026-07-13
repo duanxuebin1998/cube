@@ -22,6 +22,7 @@
 #include "weight.h"
 #include "system_parameter.h"
 #include "sensor.h"
+#include "sensor_safe_legacy_adapter.h"
 #include <mb85rs2m.h>
 #include "my_crc.h"
 #include "ad5421.h"
@@ -2346,6 +2347,24 @@ static void __attribute__((unused)) Sensor_CommCheckAndLog(const char *tag)
         return;
     }
 
+    if (g_deviceParams.sensorType == SAFE_SENSOR) {
+        printf("[传感器] %s 类型=安全协议(%lu)，单次通信=读取频率/密度/温度\r\n",
+               tag,
+               (unsigned long)g_deviceParams.sensorType);
+
+        ret = SensorSafeAdapter_ReadDensity(&frequency, &density, &temp);
+        Test_SensorCommPrintResult(tag, "安全协议读取频率/密度/温度", ret, &comm_fail_cnt);
+        /* 先处理异常边界，避免本模块状态机带故障继续运行。 */
+        if (ret == NO_ERROR) {
+            printf("[传感器][正常] %s 安全协议 频率=%.3f Hz 密度=%.3f 温度=%.3f C\r\n",
+                   tag,
+                   frequency,
+                   density,
+                   temp);
+        }
+        return;
+    }
+
     if (g_deviceParams.sensorType == LTD_SENSOR) {
         printf("[传感器] %s 类型=LTD/V2(%lu)，单次通信=读取密度\r\n",
                tag,
@@ -2888,6 +2907,11 @@ void SensorWireless_CommTest(void)
         ret = (uint32_t)DSM_Read_Frequency_Density_Temp(&frequency, &density, &temp);
         if (Test_CommRecordResult("DSM一代单次读取频率/密度/温度", ret, &ok_count, &fail_count)) {
             printf("DSM一代密度数据: 频率=%.3f Hz 密度=%.3f 温度=%.3f\r\n", frequency, density, temp);
+        }
+    } else if (g_deviceParams.sensorType == SAFE_SENSOR) {
+        ret = SensorSafeAdapter_ReadDensity(&frequency, &density, &temp);
+        if (Test_CommRecordResult("安全协议单次读取频率/密度/温度", ret, &ok_count, &fail_count)) {
+            printf("安全协议密度数据: 频率=%.3f Hz 密度=%.3f 温度=%.3f\r\n", frequency, density, temp);
         }
     } else if (g_deviceParams.sensorType == LTD_SENSOR) {
         ret = (uint32_t)DSM_V2_Read_Density(&density);

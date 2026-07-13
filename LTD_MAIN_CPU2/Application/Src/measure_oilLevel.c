@@ -18,6 +18,7 @@
 #include "measure_oilLevel.h"
 #include "motor_ctrl.h"
 #include "sensor.h"
+#include "sensor_safe_legacy_adapter.h"
 #include "weight.h"
 #include "measure_zero.h"
 #include "system_parameter.h"
@@ -1666,6 +1667,8 @@ static uint32_t determine_level_status_internal(Level_StateTypeDef *state_out, u
         ret = DSM_Get_LevelMode_Frequence(&g_measurement.oil_measurement.current_frequency);
     } else if (g_deviceParams.sensorType == DSM_SENSOR) {
         ret = Read_Level_Frequency(&current_frequency);
+    } else if (g_deviceParams.sensorType == SAFE_SENSOR) {
+        ret = SensorSafeAdapter_ReadLevelFrequency(&current_frequency);
     } else {
         ret = DSM_V2_Read_LevelFrequency(&current_frequency);
     }
