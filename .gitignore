@@ -48,6 +48,7 @@ desktop.ini
 *.zip
 *.pyc
 __pycache__/
+node_modules/
 old/
 .worktrees/
 tmp/
@@ -58,3 +59,15 @@ docs/01_*/SI*/05_*/assets/
 # Local documentation preview and legacy generated static documentation sites.
 docs-site/
 site/
+
+# Local-only flow navigation and maintenance scripts. Keep them updated and
+# synchronized on this machine, but do not add them to Git commits.
+docs/00_程序流程导航/
+tools/
+
+# Local audit, intermediate fault-code, and validation execution artifacts.
+outputs/????????-????-????-????-????????????/
+outputs/docs-site-audit-*/
+outputs/fault-code-optimization-*/
+outputs/fault-code-renumbering-*/
+outputs/validation-execution-kits/

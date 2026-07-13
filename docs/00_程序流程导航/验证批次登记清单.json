@@ -1,6 +1,0 @@
-{
-  "schemaVersion": 1,
-  "kind": "cube-validation-batch-registry",
-  "description": "以稳定批次身份冻结验证范围、固件基线、责任、窗口和退出条件，并用追加式事件保存里程碑决策；空清单表示尚未建立真实验证批次。",
-  "batches": []
-}
