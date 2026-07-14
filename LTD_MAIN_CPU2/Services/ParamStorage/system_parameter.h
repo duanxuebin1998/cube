@@ -27,7 +27,7 @@
 #define UNVALID_GSW 0                      /* 质量无效值 */
 
 #define MAX_MEASUREMENT_POINTS 200 /* 密度分布测量最大点数。 */
-#define DEVICE_PROTOCOL_VERSION 15u /* CPU2/CPU3共享协议版本；旧程序未写入时默认为0 */
+#define DEVICE_PROTOCOL_VERSION 17u /* CPU2/CPU3共享协议版本；旧程序未写入时默认为0 */
 #define FAULT_AUTO_RECOVERY_RETRY_DEFAULT 3u /* 故障自动恢复默认重试次数。 */
 #define FAULT_AUTO_RECOVERY_RETRY_MAX 10u /* 故障自动恢复最大重试次数。 */
 
@@ -147,97 +147,87 @@ typedef enum {
     STATE_SWITCH = 1,                /* 状态切换（非故障） */
 
     /* ==================== 11 电机驱动故障 (0x000B0000 - 0x000BFFFF) ==================== */
-    MOTOR_FAIL_SETTING = 0x000B0001,             /* 电机设置失败 */
-    MOTOR_UNKNOWN_FEEDBACK = 0x000B0002,         /* 未知反馈 */
-    MOTOR_RESET_FAIL = 0x000B0003,               /* 复位失败 */
-    MOTOR_DISABLED = 0x000B0004,                 /* 电机被禁止 */
-    MOTOR_ALARM_TRIGGERED = 0x000B0005,          /* 电机报警 */
-    MOTOR_STEP_ERROR = 0x000B0006,               /* 步进数错误 */
-    MOTOR_CHARGE_PUMP_UNDER_VOLTAGE = 0x000B0007, /* 电荷泵欠压 */
-    MOTOR_OVERTEMPERATURE = 0x000B0008,          /* 电机过温 */
-    MOTOR_RUN_TIMEOUT = 0x000B0009,              /* 电机运行超时 */
-    MOTOR_TMC_COMM_ERROR = 0x000B000A,           /* TMC5130寄存器通信异常 */
-    MOTOR_TMC_CONFIG_LOST = 0x000B000B,          /* TMC5130关键配置丢失 */
+    MOTOR_TMC_COMM_ERROR = 0x000B0002,            /* 电机驱动寄存器通信异常 */
+    MOTOR_DISABLED = 0x000B0004,                  /* 电机驱动未使能 */
+    MOTOR_UNKNOWN_FEEDBACK = 0x000B0005,          /* 电机反馈状态未知 */
+    MOTOR_ALARM_TRIGGERED = 0x000B0007,           /* 电机驱动报警 */
+    MOTOR_STEP_ERROR = 0x000B000A,                /* 电机运动无有效位移 */
+    MOTOR_CHARGE_PUMP_UNDER_VOLTAGE = 0x000B0010, /* 电机驱动电荷泵欠压 */
+    MOTOR_OVERTEMPERATURE = 0x000B0011,           /* 电机驱动过温 */
+    MOTOR_RUN_TIMEOUT = 0x000B0012,               /* 电机运行超时 */
+    MOTOR_TMC_CONFIG_LOST = 0x000B0013,           /* 电机驱动关键配置丢失 */
 
     /* ==================== 12 编码器故障 (0x000C0000 - 0x000CFFFF) ==================== */
-    ENCODER_TIMEOUT = 0x000C0001,                /* 编码器通信超时 */
-    ENCODER_PARITY_ERROR = 0x000C0002,           /* 校验失败 */
-    ENCODER_LOST_STEP = 0x000C0003,              /* 编码器丢步 */
-    ENCODER_INVALID_DATA = 0x000C0004,           /* 持续无效数据 */
-    ENCODER_POWERON_FAIL = 0x000C0005,           /* 上电初始化失败 */
-    ENCODER_POWERON_CHANGE = 0x000C0006,         /* 上电编码值变化 */
-    ENCODER_CORDIC_OVERFLOW = 0x000C0007,        /* CORDIC 溢出 */
-    ENCODER_LINEARITY_WARNING = 0x000C0008,      /* 线性度报警 */
-    ENCODER_DIFF_EXCESS = 0x000C0009,            /* 相邻编码差值过大 */
-    ENCODER_OCF_INCOMPLETE = 0x000C000A,         /* OCF 未完成 */
+    ENCODER_TIMEOUT = 0x000C0001,                 /* 编码器通信超时 */
+    ENCODER_PARITY_ERROR = 0x000C0002,            /* 编码器校验失败 */
+    ENCODER_LOST_STEP = 0x000C0003,               /* 编码器检测到丢步 */
+    ENCODER_POWERON_FAIL = 0x000C0005,            /* 编码器上电初始化失败 */
+    ENCODER_POWERON_CHANGE = 0x000C0006,          /* 编码器上电值变化，保留 */
+    ENCODER_DIFF_EXCESS = 0x000C000A,             /* 编码器相邻差值过大 */
+    ENCODER_INVALID_DATA = 0x000C000B,            /* 编码器连续返回无效数据 */
+    ENCODER_CORDIC_OVERFLOW = 0x000C000C,         /* 编码器内部运算溢出 */
+    ENCODER_LINEARITY_WARNING = 0x000C000D,       /* 编码器线性度报警 */
+    ENCODER_OCF_INCOMPLETE = 0x000C000E,          /* 编码器角度计算未完成 */
 
     /* ==================== 13 传感器与密度故障 (0x000D0000 - 0x000DFFFF) ==================== */
-    SONIC_FREQ_ABNORMAL = 0x000D0001,            /* 震动管频率异常 */
-    DENSITY_INVALID = 0x000D0002,                /* 密度值异常 */
-    SENSOR_TEMPERATURE_ERROR = 0x000D0003,       /* 温度异常 */
-    SENSOR_VOLTAGE_ERROR = 0x000D0004,           /* 电压异常 */
-    DENSITY_UNSTABLE = 0x000D0005,               /* 密度值不稳定 */
-    SENSOR_DEVICE_REPORTED_ERROR = 0x000D0006,   /* 传感器返回设备内部错误 */
+    SENSOR_BCC_ERROR = 0x000D0001,                /* 传感器数据校验失败 */
+    SONIC_FREQ_ABNORMAL = 0x000D0002,             /* 震动管频率异常 */
+    SENSOR_DEVICE_COMM_TIMEOUT = 0x000D0003,      /* 传感器设备通信超时 */
+    SENSOR_DEVICE_REPORTED_ERROR = 0x000D0005,    /* 传感器主动上报内部错误 */
+    DENSITY_INVALID = 0x000D001A,                 /* 密度值超出有效范围 */
+    SENSOR_RESP_FORMAT_ERROR = 0x000D001B,        /* 传感器响应格式异常 */
 
-    /* ==================== 14 通信链路故障 (0x000E0000 - 0x000EFFFF) ==================== */
-    SENSOR_BCC_ERROR = 0x000E0001,               /* 传感器数据校验错误 */
-    SENSOR_DEVICE_COMM_TIMEOUT = 0x000E0002,     /* 传感器设备通信超时 */
-    SENSOR_RESP_FORMAT_ERROR = 0x000E0003,       /* 传感器响应格式异常 */
-    COMM_UART_TRANSFER_ERROR = 0x000E0004,       /* 串口或DMA传输异常 */
-    SLIPRING_COMM_FAIL = 0x000E0005,             /* 无线滑环通信失败 */
-    SLIPRING_BCC_ERROR = 0x000E0006,             /* 无线滑环校验错误 */
-    SLIPRING_PACKET_LOSS = 0x000E0007,           /* 数据包丢失 */
-    SLIPRING_SIGNAL_WEAK = 0x000E0008,           /* 信号强度不足 */
-    WIRELESS_HOST_COMM_TIMEOUT = 0x000E0009,     /* 与蓝牙主机通信无响应 */
-    WIRELESS_SLAVE_COMM_TIMEOUT = 0x000E000A,    /* 蓝牙从机未连接或无响应 */
-    WIRELESS_RESP_FORMAT_ERROR = 0x000E000B,     /* 无线模块响应格式异常 */
+    /* ==================== 14 零点与位置检测故障 (0x000E0000 - 0x000EFFFF) ==================== */
+    MEASUREMENT_ZERO_OUT_OF_RANGE = 0x000E0009,   /* 零点位置超出允许范围 */
+    MEASUREMENT_POSITION_ERROR = 0x000E000B,      /* 位置反馈或到位结果异常 */
+    MEASUREMENT_ZERO_REPEAT_FAIL = 0x000E000C,    /* 零点重复性不符合要求 */
 
-    /* ==================== 15 测量流程故障 (0x000F0000 - 0x000FFFFF) ==================== */
-    MEASUREMENT_POSITION_ERROR = 0x000F0001,     /* 定位结果异常 */
-    MEASUREMENT_TIMEOUT = 0x000F0002,            /* 测量超时 */
-    MEASUREMENT_ZERO_OUT_OF_RANGE = 0x000F0003,  /* 零点超限 */
-    MEASUREMENT_ZERO_REPEAT_FAIL = 0x000F0004,   /* 零点重复性差 */
-    MEASUREMENT_HEIGHT_DEVIATION = 0x000F0005,   /* 实高偏差过大 */
-    MEASUREMENT_OILLEVEL_HIGH = 0x000F0006,      /* 液位超过罐高 */
-    MEASUREMENT_OILLEVEL_LOW = 0x000F0007,       /* 下行未找到液位 */
-    MEASUREMENT_OILLEVEL_NOTFOUND = 0x000F0008,  /* 上行未找到液位 */
-    MEASUREMENT_WEIGHT_DOWN_FAIL = 0x000F0009,   /* 下行寻重失败 */
-    MEASUREMENT_WEIGHT_UP_FAIL = 0x000F000A,     /* 上行寻重失败 */
-    MEASUREMENT_WATERLEVEL_LOW = 0x000F000B,     /* 下行未找到水位 */
-    MEASUREMENT_OVERSPEED = 0x000F000C,          /* 液位变化过快 */
-    MEASUREMENT_DENSITY_NO_VALID_POINT = 0x000F000D, /* 密度测量无有效测点 */
-    MEASUREMENT_DENSITY_SURFACE_NOTFOUND = 0x000F000E, /* 密度测量未找到油面 */
-    MEASUREMENT_DENSITY_RANGE_INVALID = 0x000F000F, /* 密度测量范围异常 */
+    /* ==================== 15 测量过程故障 (0x000F0000 - 0x000FFFFF) ==================== */
+    MEASUREMENT_OILLEVEL_HIGH = 0x000F0006,       /* 液位搜索超过罐高 */
+    MEASUREMENT_OVERSPEED = 0x000F000F,           /* 液位变化速度异常 */
+    MEASUREMENT_HEIGHT_DEVIATION = 0x000F0010,    /* 实高偏差过大，保留 */
+    MEASUREMENT_TIMEOUT = 0x000F0011,             /* 测量过程超时 */
+    MEASUREMENT_OILLEVEL_LOW = 0x000F0012,        /* 下行未找到液位 */
+    MEASUREMENT_OILLEVEL_NOTFOUND = 0x000F0013,   /* 上行未找到液位 */
+    MEASUREMENT_WEIGHT_DOWN_FAIL = 0x000F0014,    /* 下行寻重失败 */
+    MEASUREMENT_WEIGHT_UP_FAIL = 0x000F0015,      /* 上行寻重失败 */
+    MEASUREMENT_WATERLEVEL_LOW = 0x000F0016,      /* 下行未找到水位 */
+    MEASUREMENT_DENSITY_NO_VALID_POINT = 0x000F0017, /* 密度测量无有效测点 */
+    MEASUREMENT_DENSITY_SURFACE_NOTFOUND = 0x000F0018, /* 密度测量未找到油面 */
 
-    /* ==================== 16 模拟量输出故障 (0x00100000 - 0x0010FFFF) ==================== */
-    AD5421_INIT_ERROR = 0x00100001,              /* AD5421初始化失败 */
-    AD5421_WRITE_CURRENT_ERROR = 0x00100002,     /* AD5421写电流失败 */
-    AD5421_FAULT_PIN_ERROR = 0x00100003,         /* AD5421故障管脚报警 */
-    AD5421_READFAULT_ERROR = 0x00100004,         /* AD5421故障寄存器读取失败 */
-    AD5421_FAULT_STATUS_ERROR = 0x00100005,      /* AD5421故障寄存器报告异常 */
-    AD5421_READBACK_ERROR = 0x00100006,          /* AD5421控制寄存器回读失败 */
+    /* ==================== 17 参数与存储故障 (0x00110000 - 0x0011FFFF) ==================== */
+    PARAM_EEPROM_FAIL = 0x00110001,               /* 参数存储读写失败 */
+    PARAM_UNINITIALIZED = 0x00110002,             /* 参数存储未初始化 */
+    PARAM_RANGE_ERROR = 0x00110005,               /* 参数值超出允许范围 */
+    PARAM_CRC_ERROR = 0x00110006,                 /* 参数完整性校验失败 */
 
-    /* ==================== 17 参数存储故障 (0x00110000 - 0x0011FFFF) ==================== */
-    PARAM_EEPROM_FAIL = 0x00110001,              /* 参数存储读写失败 */
-    PARAM_UNINITIALIZED = 0x00110002,            /* 参数未初始化 */
-    PARAM_RANGE_ERROR = 0x00110003,              /* 参数值超出允许范围 */
-    PARAM_CRC_ERROR = 0x00110004,                /* 参数 CRC 错误 */
+    /* ==================== 18 模拟输出与自检故障 (0x00120000 - 0x0012FFFF) ==================== */
+    AD5421_WRITE_CURRENT_ERROR = 0x00120001,      /* 模拟输出电流写入失败 */
+    AD5421_INIT_ERROR = 0x00120002,               /* 模拟输出芯片初始化失败 */
+    AD5421_FAULT_STATUS_ERROR = 0x00120003,       /* 模拟输出芯片报告故障状态 */
+    AD5421_READBACK_ERROR = 0x00120006,           /* 模拟输出配置回读不一致 */
+    AD5421_READFAULT_ERROR = 0x00120009,          /* 模拟输出故障信息读取失败 */
 
-    /* ==================== 18 扭力检测故障 (0x00120000 - 0x0012FFFF) ==================== */
-    WEIGHT_OUT_OF_RANGE = 0x00120001,            /* 扭力超上限 */
-    WEIGHT_UNDER_RANGE = 0x00120002,             /* 扭力超下限 */
-    WEIGHT_COLLISION_DETECTED = 0x00120003,      /* 检测到碰撞 */
-    WEIGHT_DRIFT_ERROR = 0x00120004,             /* 扭力漂移异常 */
-    WEIGHT_SENSOR_SATURATION = 0x00120005,       /* 传感器饱和 */
-    WEIGHT_COMM_TIMEOUT = 0x00120006,            /* 扭力通信超时 */
+    /* ==================== 20 设备通信链路故障 (0x00140000 - 0x0014FFFF) ==================== */
+    COMM_UART_TRANSFER_ERROR = 0x00140001,        /* 串口或DMA传输异常 */
+    SLIPRING_COMM_FAIL = 0x00140002,              /* 无线滑环通信失败 */
+    SLIPRING_SIGNAL_WEAK = 0x00140003,            /* 无线滑环信号强度不足 */
+    WIRELESS_HOST_COMM_TIMEOUT = 0x00140004,      /* 无线主机通信超时 */
+    WIRELESS_SLAVE_COMM_TIMEOUT = 0x00140005,     /* 无线从机未连接或无响应 */
+    WIRELESS_RESP_FORMAT_ERROR = 0x00140006,      /* 无线模块响应格式异常 */
 
-    /* ==================== 19 系统与软件故障 (0x00130000 - 0x0013FFFF) ==================== */
-    OTHER_UNKNOWN_ERROR = 0x00130001,            /* 未知故障 */
-    PARAM_ADDRESS_OVERFLOW = 0x00130002,         /* 数据地址或输出位置异常 */
-    PARAM_ERROR = 0x00130003,                    /* 参数组合或内部调用条件异常 */
-    OTHER_ADDRESS_READ_ERROR = 0x00130004,       /* 地址读取错误 */
-    OTHER_POWER_FLUCTUATION = 0x00130005,        /* 电源波动异常 */
-    OTHER_PERIPHERAL_CONFIG_ERROR = 0x00130006   /* 外设配置错误 */
+    /* ==================== 21 扭力检测故障 (0x00150000 - 0x0015FFFF) ==================== */
+    WEIGHT_OUT_OF_RANGE = 0x00150001,             /* 扭力超过上限 */
+    WEIGHT_UNDER_RANGE = 0x00150002,              /* 扭力低于下限 */
+    WEIGHT_COLLISION_DETECTED = 0x00150003,       /* 检测到碰撞 */
+    WEIGHT_DRIFT_ERROR = 0x00150004,              /* 扭力漂移异常 */
+    WEIGHT_SENSOR_SATURATION = 0x00150005,        /* 扭力传感器饱和，保留 */
+    WEIGHT_COMM_TIMEOUT = 0x00150006,             /* 扭力通信超时 */
+
+    /* ==================== 22 系统与软件故障 (0x00160000 - 0x0016FFFF) ==================== */
+    PARAM_ADDRESS_OVERFLOW = 0x00160001,          /* 数据地址或输出位置异常 */
+    PARAM_ERROR = 0x00160002,                     /* 参数组合或内部调用条件异常 */
+    OTHER_PERIPHERAL_CONFIG_ERROR = 0x00160003    /* 外设配置错误 */
 
 } ErrorCode;
 

@@ -235,7 +235,6 @@ static uint8_t AoOutput_IsRuntimeDriverError(uint32_t error_code)
 {
     if ((error_code == AD5421_INIT_ERROR) ||
         (error_code == AD5421_WRITE_CURRENT_ERROR) ||
-        (error_code == AD5421_FAULT_PIN_ERROR) ||
         (error_code == AD5421_READFAULT_ERROR) ||
         (error_code == AD5421_FAULT_STATUS_ERROR) ||
         (error_code == AD5421_READBACK_ERROR)) {

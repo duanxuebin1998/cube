@@ -1,6 +1,6 @@
 ﻿# SI协议兼容映射表
 
-更新日期：2026-07-12
+更新日期：2026-07-14
 
 资料依据：`docs/01_协议与寄存器/SI协议适配/00_原始资料/SI7000_modbus_官方.pdf`，即 SI-7000 DCS Modbus Interface Specification `020-701 Rev B`。本文区分“官方手册口径”和“当前 CUBE 兼容实现”，避免把兼容偏差误写成 SI协议原生行为。
 
@@ -32,7 +32,7 @@
 
 | 项目 | 当前结论 |
 | --- | --- |
-| 协议契约 | CPU2/CPU3 当前共享协议基线为 `DEVICE_PROTOCOL_VERSION = 15`；SI Profile 从协议 14 起支持，协议 15 不改变 SI 对外地址、命令、状态和数据格式 |
+| 协议契约 | CPU2/CPU3当前共享协议基线为 `DEVICE_PROTOCOL_VERSION = 17`；SI Profile从协议14起支持，协议17只重新分类、删减并重编号内部故障码，不改变SI对外地址、命令、状态和数据格式 |
 | 外部协议入口 | CPU3 对外模拟 SI Modbus RTU 从站，CPU2 不承载 SI 地址、功能码或异常码 |
 | Profile 命令 | `00004 Profile` 写 ON 后锁存开始时间并下发 `CMD_SI_PROFILE` |
 | 屏幕 Profile 入口 | CPU3 屏幕“密度分布测量 -> SI Profile”确认后走同一启动入口，锁存开始时间并下发 `CMD_SI_PROFILE` |

@@ -83,21 +83,16 @@
 #define ERROR_LOG_REASON_PARAM_CRC      "CRC不匹配" /* 错误日志原因文本：CRC 不匹配。 */
 #define ERROR_LOG_REASON_FREQ_ABNORMAL  "频率异常" /* 错误日志原因文本：频率异常。 */
 #define ERROR_LOG_REASON_DENSITY_INVALID "密度值异常" /* 错误日志原因文本：密度 无效。 */
-#define ERROR_LOG_REASON_DENSITY_UNSTABLE "密度值不稳定" /* 错误日志原因文本：密度值不稳定。 */
-#define ERROR_LOG_REASON_TEMP_ERROR     "温度异常" /* 错误日志原因文本：温度 错误。 */
-#define ERROR_LOG_REASON_VOLTAGE_ERROR  "电压异常" /* 错误日志原因文本：电压 错误。 */
 #define ERROR_LOG_REASON_POSITION_ERROR "位置异常" /* 错误日志原因文本：位置 错误。 */
 #define ERROR_LOG_REASON_ZERO_RANGE     "零点超限" /* 错误日志原因文本：零点 范围。 */
 #define ERROR_LOG_REASON_MEASURE_TIMEOUT "测量超时" /* 错误日志原因文本：测量 超时。 */
 #define ERROR_LOG_REASON_MOTOR_TIMEOUT "电机运行超时" /* 错误日志原因文本：电机 超时。 */
 #define ERROR_LOG_REASON_LEVEL_OVERSPEED "液位变化过快" /* 错误日志原因文本：液位变化过快。 */
-#define ERROR_LOG_REASON_DENSITY_RANGE  "密度测量范围异常" /* 错误日志原因文本：密度 范围。 */
 #define ERROR_LOG_REASON_PARAM_RANGE    "参数超限" /* 错误日志原因文本：参数 范围。 */
 #define ERROR_LOG_REASON_PARAM_UNINIT   "参数未初始化" /* 错误日志原因文本：参数未初始化。 */
 #define ERROR_LOG_REASON_PARAM_CALL     "参数调用错误" /* 错误日志原因文本：参数 调用。 */
 #define ERROR_LOG_REASON_WEIGHT_DRIFT   "扭力漂移" /* 错误日志原因文本：扭力 漂移。 */
 #define ERROR_LOG_REASON_WEIGHT_SATURATION "扭力传感器饱和" /* 错误日志原因文本：扭力 饱和。 */
-#define ERROR_LOG_REASON_POWER_FLUCTUATION "电源波动" /* 错误日志原因文本：电源波动。 */
 #define ERROR_LOG_REASON_UNKNOWN_FAULT  "未知故障" /* 错误日志原因文本：未知 故障。 */
 #define ERROR_LOG_REASON_LOST_STEP      "丢步检测" /* 错误日志原因文本：丢步检测。 */
 #define ERROR_LOG_REASON_DRIVER_DISABLED "电机被禁止" /* 错误日志原因文本：驱动器 被禁止。 */

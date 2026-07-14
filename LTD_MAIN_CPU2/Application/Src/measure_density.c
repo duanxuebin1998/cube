@@ -27,7 +27,7 @@
  *   - SinglePoint_ReadSensor(volatile DensityMeasurement *result)
  *   - g_measurement / g_deviceParams
  *   - DensityDistribution / DensityMeasurement
- *   - 错误码宏/定义：NO_ERROR、PARAM_RANGE_ERROR、PARAM_ADDRESS_OVERFLOW、OTHER_UNKNOWN_ERROR、DENSITY_UNSTABLE 等
+ *   - 错误码宏/定义：NO_ERROR、PARAM_RANGE_ERROR、PARAM_ADDRESS_OVERFLOW 等
  *   - 状态码/宏：SET_ERROR、CHECK_ERROR、CHECK_COMMAND_SWITCH、CMD_NONE 等
  *
  * 重要注意：

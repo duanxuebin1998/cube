@@ -664,14 +664,12 @@ static bool IsCpu2ProtocolCompatible(void)
 static const char *Display_GetErrorReasonByCode(uint32_t code)
 {
     switch (code) {
-    case MOTOR_FAIL_SETTING:
-        return "电机参数设置失败";
-    case MOTOR_UNKNOWN_FEEDBACK:
-        return "电机反馈未知";
-    case MOTOR_RESET_FAIL:
-        return "电机复位未完成";
+    case MOTOR_TMC_COMM_ERROR:
+        return "TMC寄存器通信失败";
     case MOTOR_DISABLED:
         return "电机已被禁用";
+    case MOTOR_UNKNOWN_FEEDBACK:
+        return "电机反馈未知";
     case MOTOR_ALARM_TRIGGERED:
         return "电机驱动报警";
     case MOTOR_STEP_ERROR:
@@ -682,8 +680,6 @@ static const char *Display_GetErrorReasonByCode(uint32_t code)
         return "电机驱动过温";
     case MOTOR_RUN_TIMEOUT:
         return "电机运行超时未停";
-    case MOTOR_TMC_COMM_ERROR:
-        return "TMC寄存器通信失败";
     case MOTOR_TMC_CONFIG_LOST:
         return "驱动配置丢失";
     case ENCODER_TIMEOUT:
@@ -692,18 +688,18 @@ static const char *Display_GetErrorReasonByCode(uint32_t code)
         return "编码器校验位错误";
     case ENCODER_LOST_STEP:
         return "编码器检测到丢步";
-    case ENCODER_INVALID_DATA:
-        return "编码器多次无效数据";
     case ENCODER_POWERON_FAIL:
         return "编码器初始化失败";
     case ENCODER_POWERON_CHANGE:
         return "编码器上电变化";
+    case ENCODER_DIFF_EXCESS:
+        return "编码器差值过大";
+    case ENCODER_INVALID_DATA:
+        return "编码器多次无效数据";
     case ENCODER_CORDIC_OVERFLOW:
         return "编码器计算溢出";
     case ENCODER_LINEARITY_WARNING:
         return "编码器线性报警";
-    case ENCODER_DIFF_EXCESS:
-        return "编码器差值过大";
     case ENCODER_OCF_INCOMPLETE:
         return "编码器状态未完成";
     case SENSOR_BCC_ERROR:
@@ -712,46 +708,26 @@ static const char *Display_GetErrorReasonByCode(uint32_t code)
         return "声波频率异常";
     case SENSOR_DEVICE_COMM_TIMEOUT:
         return "传感器通信无响应";
-    case DENSITY_INVALID:
-        return "密度值异常无效";
-    case SENSOR_TEMPERATURE_ERROR:
-        return "传感器温度异常";
-    case SENSOR_VOLTAGE_ERROR:
-        return "传感器电压异常";
-    case SLIPRING_COMM_FAIL:
-        return "滑环通信失败";
-    case SLIPRING_BCC_ERROR:
-        return "滑环数据校验失败";
-    case SLIPRING_PACKET_LOSS:
-        return "滑环数据包丢失";
-    case SLIPRING_SIGNAL_WEAK:
-        return "信号弱";
-    case SENSOR_RESP_FORMAT_ERROR:
-        return "传感器格式异常";
-    case COMM_UART_TRANSFER_ERROR:
-        return "通信发送异常";
-    case WIRELESS_RESP_FORMAT_ERROR:
-        return "无线格式异常";
-    case DENSITY_UNSTABLE:
-        return "密度不稳定";
     case SENSOR_DEVICE_REPORTED_ERROR:
         return "传感器设备内部错误";
-    case WIRELESS_HOST_COMM_TIMEOUT:
-        return "BT主机无响应";
-    case WIRELESS_SLAVE_COMM_TIMEOUT:
-        return "BT从机未连接";
-    case MEASUREMENT_POSITION_ERROR:
-        return "定位异常";
-    case MEASUREMENT_TIMEOUT:
-        return "测量流程超时";
+    case DENSITY_INVALID:
+        return "密度值异常无效";
+    case SENSOR_RESP_FORMAT_ERROR:
+        return "传感器格式异常";
     case MEASUREMENT_ZERO_OUT_OF_RANGE:
         return "零点超出范围";
+    case MEASUREMENT_POSITION_ERROR:
+        return "定位异常";
     case MEASUREMENT_ZERO_REPEAT_FAIL:
         return "零点重复性差";
-    case MEASUREMENT_HEIGHT_DEVIATION:
-        return "实高偏差过大";
     case MEASUREMENT_OILLEVEL_HIGH:
         return "液位超过罐高";
+    case MEASUREMENT_OVERSPEED:
+        return "液位变化过快";
+    case MEASUREMENT_HEIGHT_DEVIATION:
+        return "实高偏差过大";
+    case MEASUREMENT_TIMEOUT:
+        return "测量流程超时";
     case MEASUREMENT_OILLEVEL_LOW:
         return "下行未找到液位";
     case MEASUREMENT_OILLEVEL_NOTFOUND:
@@ -762,26 +738,42 @@ static const char *Display_GetErrorReasonByCode(uint32_t code)
         return "上行寻重失败";
     case MEASUREMENT_WATERLEVEL_LOW:
         return "下行未找到水位";
-    case MEASUREMENT_OVERSPEED:
-        return "液位变化过快";
     case MEASUREMENT_DENSITY_NO_VALID_POINT:
         return "密度测量无有效点";
     case MEASUREMENT_DENSITY_SURFACE_NOTFOUND:
         return "密度测量未找到油面";
-    case MEASUREMENT_DENSITY_RANGE_INVALID:
-        return "密度范围异常";
     case PARAM_EEPROM_FAIL:
         return "参数存储读写失败";
     case PARAM_UNINITIALIZED:
         return "参数未初始化";
     case PARAM_RANGE_ERROR:
         return "参数超出范围";
-    case PARAM_ADDRESS_OVERFLOW:
-        return "数据位置异常";
     case PARAM_CRC_ERROR:
         return "参数CRC校验失败";
-    case PARAM_ERROR:
-        return "调用异常";
+    case AD5421_WRITE_CURRENT_ERROR:
+        return "AD5421写电流失败";
+    case AD5421_INIT_ERROR:
+        return "AD5421初始化失败";
+    case AD5421_FAULT_STATUS_ERROR:
+        return "AD5421设备报警";
+    case AD5421_READBACK_ERROR:
+        return "AD5421控制回读失败";
+    case AD5421_READFAULT_ERROR:
+        return "AD5421故障读取失败";
+    case COMM_UART_TRANSFER_ERROR:
+        return "通信发送异常";
+    case SLIPRING_COMM_FAIL:
+        return "滑环通信失败";
+    case SLIPRING_SIGNAL_WEAK:
+        return "信号弱";
+    case WIRELESS_HOST_COMM_TIMEOUT:
+        return "BT主机无响应";
+    case WIRELESS_SLAVE_COMM_TIMEOUT:
+        return "BT从机未连接";
+    case WIRELESS_RESP_FORMAT_ERROR:
+        return "无线格式异常";
+    case CPU2_COMM_TIMEOUT:
+        return "CPU2通信超时";
     case WEIGHT_OUT_OF_RANGE:
         return "扭力超过上限";
     case WEIGHT_UNDER_RANGE:
@@ -794,28 +786,12 @@ static const char *Display_GetErrorReasonByCode(uint32_t code)
         return "扭力传感器饱和";
     case WEIGHT_COMM_TIMEOUT:
         return "扭力通信无响应";
-    case OTHER_UNKNOWN_ERROR:
-        return "未知故障";
-    case OTHER_ADDRESS_READ_ERROR:
-        return "地址读取错误";
-    case OTHER_POWER_FLUCTUATION:
-        return "电源波动异常";
+    case PARAM_ADDRESS_OVERFLOW:
+        return "数据位置异常";
+    case PARAM_ERROR:
+        return "调用异常";
     case OTHER_PERIPHERAL_CONFIG_ERROR:
         return "外设配置错误";
-    case AD5421_INIT_ERROR:
-        return "AD5421初始化失败";
-    case AD5421_WRITE_CURRENT_ERROR:
-        return "AD5421写电流失败";
-    case AD5421_FAULT_PIN_ERROR:
-        return "AD5421故障报警";
-    case AD5421_READFAULT_ERROR:
-        return "AD5421故障读取失败";
-    case AD5421_FAULT_STATUS_ERROR:
-        return "AD5421设备报警";
-    case AD5421_READBACK_ERROR:
-        return "AD5421控制回读失败";
-    case CPU2_COMM_TIMEOUT:
-        return "CPU2通信超时";
     default:
         break;
     }
@@ -828,16 +804,18 @@ static const char *Display_GetErrorReasonByCode(uint32_t code)
     case 0x000D0000UL:
         return "传感器故障";
     case 0x000E0000UL:
-        return "通信故障";
+        return "位置故障";
     case 0x000F0000UL:
         return "测量故障";
-    case 0x00100000UL:
-        return "模拟输出故障";
     case 0x00110000UL:
         return "参数故障";
     case 0x00120000UL:
+        return "模拟输出故障";
+    case 0x00140000UL:
+        return "通信故障";
+    case 0x00150000UL:
         return "扭力故障";
-    case 0x00130000UL:
+    case 0x00160000UL:
         return "系统软件故障";
     default:
         return "未知原因";

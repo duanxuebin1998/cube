@@ -7,7 +7,7 @@
 - 字段位置：`HOLDREGISTER_DEVICEPARAM_PROTOCOL_VERSION`
 - 当前语义：CPU2/CPU3 共享协议版本
 - 旧程序语义：保留字段，默认值为 `0`
-- 当前程序语义：协议版本 `15`
+- 当前程序语义：协议版本 `17`
 
 该字段由原 `reserved1` 预留位正式替换而来，寄存器地址不移动，不新增存储字段。
 
@@ -31,6 +31,8 @@
 | 13 | V1.20.0.0 | V1.18.0.0 | 200 | 内部密度 raw 从 `kg/m3 x10` 升级为 `kg/m3 x100`；CPU3 状态页、密度参数菜单和 LTD 自有协议支持两位小数；DSM/Wartsila/SI协议在边界保持原对外口径。 |
 | 14 | V1.21.0.0 | V1.19.0.0 | 200 | 新增 `CMD_SI_PROFILE = 20`、CPU2 SI profile 执行参数和 `density_distribution.profile_source` 共享状态；`40001~40003` 从普通分布参数解耦；CPU3 新增 SI 菜单、`40010~40023` 本机参数、自动 profile 调度、开始时间戳、状态/报警合成；SI profile 完成态和点阵只认 `PROFILE_SOURCE_SI`，并修正温度无效值、报警 0 阈值、负温度阈值、自动调度真实日历换算和 SI profile 不预先找液位的流程语义。 |
 | 15 | V1.23.0.0 | V1.22.0.0 | 200 | 共享故障码按9个责任域重新分类和编号，新增TMC配置丢失、串口传输异常、无线响应格式异常和AD5421主动报警4项故障；CPU3本机主控通信故障调整为14-12。故障寄存器地址和宽度不变，但数值解释与协议14不兼容。 |
+| 16 | 未单独发布（CPU2 V1.24.0.0开发过渡） | 未单独发布（CPU3 V1.22.0.0开发过渡） | 200 | 互换故障类别13和14：通信链路改为13类，传感器与密度改为14类；两类内部子码和故障语义不变。CPU3本机主控通信故障由14-12调整为13-12。故障寄存器地址和宽度不变，但数值解释与协议15及更早版本不兼容。 |
+| 17 | V1.25.0.0 | V1.23.0.0 | 200 | 按二代计量仪责任域重新分类、删减并重编号故障码：CPU2保留63项共享故障，CPU3另有1项本机故障；正式表61项使用中、3项保留。CPU3本机主控通信故障由13-12调整为20-7。故障寄存器地址和宽度不变，但数值解释与协议16及更早版本不兼容。 |
 
 ## 兼容判断规则
 
@@ -451,7 +453,7 @@
 - 协议版本15与14及更早版本的故障码数值不兼容，CPU2和CPU3必须成对升级。
 - 协议版本14的CPU3会按旧值显示错误类别和原因，不能与协议版本15的CPU2混用；协议版本15的CPU3也不能按新版表解释协议版本14的CPU2错误值。
 - 上位机、日志分析工具或售后资料如果按数值解析故障码，必须同步新版编号表。
-- 旧日志继续按产生时的协议版本和旧编号表解释，不对历史记录做数值转换。
+- 旧日志继续按产生时的CPU2程序版本和旧编号表解释，不对历史记录做数值转换；CPU3本机故障按CPU3程序版本单独确认。
 - 首个使用协议版本15的CPU2固件为 `V1.23.0.0`，CPU3固件为 `V1.22.0.0`；协议14及更早版本不得与协议15交叉烧写或混用。
 
 验证结果：
@@ -460,9 +462,68 @@
 - `py tools\check_cpu3_fault_reason_visibility.py`、`check_cpu3_cpu2_comm_timeout_fault_contract.py`：通过。
 - `py LTD_DISPLAY_CPU3\font_check.py`：通过，缺字0个。
 - `py tools\check_docs.py`、`py tools\check_markdown_links.py`、`git diff --check`：通过。
-- `cmake --build build\LTD_MAIN_CPU2`：通过，生成 `LTD_MAIN_CPU2_V1.22.0.0.hex`。
-- `cmake --build build\LTD_DISPLAY_CPU3`：通过，生成 `LTD_DISPLAY_CPU3_V1.21.0.0.hex`。
+- `cmake --build build\LTD_MAIN_CPU2 --clean-first`：协议 15 代码范围构建通过；升版前产物为 `LTD_MAIN_CPU2_V1.22.0.0.hex`，版本修正后应为 `LTD_MAIN_CPU2_V1.23.0.0.hex`，本记录不把升版前文件名写成最终产物证据。
+- `cmake --build build\LTD_DISPLAY_CPU3 --clean-first`：协议 15 代码范围构建通过；升版前产物为 `LTD_DISPLAY_CPU3_V1.21.0.0.hex`，版本修正后应为 `LTD_DISPLAY_CPU3_V1.22.0.0.hex`，本记录不把升版前文件名写成最终产物证据。
 - 实物故障注入和协议14/15交叉烧写拦截仍需台架验证。
+
+### 协议版本 16
+
+关联改动：
+- 共享故障码13类和14类互换：13类改为通信链路，14类改为传感器与密度。
+- 通信链路完整码由 `0x000E0001`～`0x000E000B` 调整为 `0x000D0001`～`0x000D000B`；各枚举的低16位子码、名称、原因和处理语义不变。
+- 传感器与密度完整码由 `0x000D0001`～`0x000D0006` 调整为 `0x000E0001`～`0x000E0006`；各枚举的低16位子码、名称、原因和处理语义不变。
+- CPU3本机 `CPU2_COMM_TIMEOUT` 由 `0x000E000C`（屏幕 `14-12`）调整为 `0x000D000C`（屏幕 `13-12`），产生条件和恢复口径不变。
+- CPU2错误日志的类别模块和兜底原因映射随高16位类别号同步；CPU3类别显示同步为 `0x000D` 通信故障、`0x000E` 传感器故障。
+
+寄存器布局影响：
+- 不新增、不删除、不移动故障状态寄存器，错误码仍按32位值传递。
+- 不改变类别内部子码、故障语义、触发条件和恢复策略。
+- `DeviceParameters` 结构大小、CPU2 `DEVICE_PARAM_VERSION` 和CPU3本机参数存储布局不变。
+
+兼容性影响：
+- 协议版本16与15及更早版本的故障码数值解释不兼容，CPU2和CPU3必须成对升级。
+- 上位机、日志分析工具和资料如果按数值解析故障码，必须同步协议16编号表。
+- 旧日志继续按产生时的CPU2程序版本选择对应代码表；旧版 `13-x`、`14-x` 不做原地改写。CPU3本机故障按CPU3程序版本单独确认。
+- `LTD故障代码统一表.xlsx` 的“历史故障代码_CPU2V1.24.0.0”工作表冻结CPU2 V1.24.0.0开发基线编号。该工作表按CPU2程序版本归档；`DEVICE_PROTOCOL_VERSION` 仍用于CPU2/CPU3通信兼容判断，但不作为正式故障码表的现场选择依据。后续删除、合并或重编号不得回写该历史表，旧日志按产生时的CPU2程序版本查询；CPU3本机13-12按CPU3程序版本单独确认。
+- 协议16仅作为故障类别互换的开发过渡基线保留，未形成独立发布固件；正式发布直接使用协议17。
+
+验证结果：
+- `py tools\check_fault_code_catalog_contract.py`：通过，共享码77个、CPU3本机码1个，正式表使用中61项、保留15项。
+- `py tools\check_cpu3_cpu2_comm_timeout_fault_contract.py`、`check_cpu3_fault_reason_visibility.py`：通过，CPU3本机故障为 `13-12 / 0x000D000C`，13类和14类显示原因完整。
+- `py tools\check_sensor_fault_contract.py`、`check_parameter_measurement_fault_contract.py`、`check_tmc5130_diagnostic_contract.py`、`check_ad5421_diagnostic_contract.py`：通过。
+- `py tools\check_sensor_safe_protocol_contract.py`、`check_ltd_modbus_contract.py`、`check_dsm_compat_contract.py`、`check_si_protocol_contract.py`：通过，共享协议版本和相关外部映射一致。
+- `py LTD_DISPLAY_CPU3\font_check.py`：通过，缺字0个。
+- CPU2、CPU3 clean-first构建曾在协议16开发基线通过，分别生成 `LTD_MAIN_CPU2_V1.24.0.0.hex`、`LTD_DISPLAY_CPU3_V1.22.0.0.hex`；该结果只作为过渡阶段证据，不作为协议17发布产物。
+- `py tools\check_docs.py`、`py tools\check_markdown_links.py`、`git diff --check`：通过。
+- 实物故障注入和协议15/16交叉烧写拦截仍需台架验证。
+
+### 协议版本 17
+
+关联改动：
+- 二代计量仪故障码按一代类别延续关系和二代新增责任域重新归档；当前CPU2共享故障为63项，CPU3同步共享定义并额外保留1项本机通信故障。
+- 正式表共64个故障项目，其中61项标记“使用中”，仅保留 `12-6 编码器上电值变化`、`15-16 实高偏差过大`、`21-5 扭力传感器饱和` 3项未启用预留码。
+- 从当前枚举移出12项低价值或被具体故障替代的项目：电机设置失败、电机复位失败、滑环校验错误、滑环丢包、传感器温度异常、传感器电压异常、密度不稳定、密度范围无效、AD5421故障管脚报警、未知错误、地址读取错误和电源波动。
+- 这12项仅保留在 `LTD故障代码统一表.xlsx` 的“历史故障代码_CPU2V1.24.0.0”工作表中，不再进入当前CPU2/CPU3枚举、日志映射和CPU3显示映射。
+- CPU3本机 `CPU2_COMM_TIMEOUT` 由 `0x000D000C`（屏幕 `13-12`）调整为 `0x00140007`（屏幕 `20-7`）；产生条件、连续失败门槛和恢复口径不变。
+
+寄存器与参数存储影响：
+- 不新增、不删除、不移动故障状态寄存器，错误码仍按32位值传递，高16位为类别、低16位为类别内编号。
+- CPU2 `DeviceParameters` 结构大小、`DEVICE_PARAM_VERSION = 3`、元信息和CRC覆盖范围均不变；本次升级不会因为参数结构变化而恢复出厂参数。
+- CPU3本机参数存储布局和版本不变。
+
+兼容性影响：
+- 协议版本17与16及更早版本的故障码数值解释不兼容，CPU2和CPU3必须使用相同 `DEVICE_PROTOCOL_VERSION`；外部主站、日志分析工具和资料应同步当前编号表。
+- 现场选择共享故障码表时仍按CPU2程序版本，不按CPU2/CPU3共享协议版本选表；共享协议版本只用于CPU2与CPU3严格配套判断。
+- CPU3本机故障不属于CPU2共享故障码表，应按CPU3程序版本单独确认。
+- 首个正式使用协议17的固件为CPU2 `V1.25.0.0`、CPU3 `V1.23.0.0`。本次参数存储结构兼容且不会清参，因此按功能级变更提升次版本，不提升软件主版本。
+
+验证状态：
+- `check_fault_code_catalog_contract.py`、`check_cpu3_cpu2_comm_timeout_fault_contract.py`、`check_cpu3_fault_reason_visibility.py`、`check_sensor_fault_contract.py`、`check_parameter_measurement_fault_contract.py`、`check_tmc5130_diagnostic_contract.py`、`check_ad5421_diagnostic_contract.py` 全部通过。
+- `check_sensor_safe_protocol_contract.py`、`check_ltd_modbus_contract.py`、`check_dsm_compat_contract.py`、`check_si_protocol_contract.py` 全部通过，故障码调整未改变相关外部协议地址和数据格式。
+- `py LTD_DISPLAY_CPU3\font_check.py` 通过，显示缺字为0。
+- `cmake --build build\LTD_MAIN_CPU2 --clean-first`、`cmake --build build\LTD_DISPLAY_CPU3 --clean-first` 通过；发布产物分别为CPU2 `V1.25.0.0`、CPU3 `V1.23.0.0`。
+- `py tools\check_docs.py`、`py tools\check_markdown_links.py`、`git diff --check` 通过。
+- 实物故障注入、协议16/17交叉烧写拦截和现场恢复路径仍需台架验证。
 
 ## 后续维护要求
 
