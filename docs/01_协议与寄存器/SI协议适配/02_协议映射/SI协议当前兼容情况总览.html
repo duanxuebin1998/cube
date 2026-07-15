@@ -528,17 +528,17 @@
 <body>
   <header class="hero">
     <div class="page">
-      <h1>SI协议当前兼容情况与进一步兼容方案</h1>
+      <h1>SI协议18兼容实现总览</h1>
       <p class="subtitle">
-        面向 PLC 联调、固件维护和现场实施的可视化报告。本文基于当前源码、SI协议映射表、联调检查表和官方中文全文译稿更新，重点说明已兼容范围、逐地址兼容方式、官方语义偏差、测量过程风险和进一步确认项。
+        面向 PLC 联调、固件维护和发布评审的当前状态页。本文以 2026-07-14 工作区源码为准，说明协议18已实现的 SI Profile 生命周期、快照发布、私有地址兼容、参数事务和存储迁移；2026-07-13站2抓包仅作为历史依据，不再代表当前不兼容状态。
       </p>
       <div class="meta-row">
-        <span class="pill ok">核对日期：2026-07-12</span>
-        <span class="pill ok">共享协议：DEVICE_PROTOCOL_VERSION = 15</span>
-        <span class="pill">SI Profile：协议 14 起支持，协议 15 对外格式不变</span>
-        <span class="pill">外部入口：CPU3 SI Modbus RTU</span>
-        <span class="pill warn">定位：兼容层，不是 SI 原设备完整复刻</span>
-        <span class="pill warn">官方复核：R-01~R-09 待决策</span>
+        <span class="pill ok">核对日期：2026-07-14</span>
+        <span class="pill ok">共享协议：DEVICE_PROTOCOL_VERSION = 18</span>
+        <span class="pill ok">状态：代码已实现</span>
+        <span class="pill">CPU2：V1.26.0.0</span>
+        <span class="pill">CPU3：V1.24.0.0</span>
+        <span class="pill warn">真实站2与掉电场景待硬件验收</span>
       </div>
     </div>
   </header>
@@ -547,17 +547,14 @@
     <nav class="toc" aria-label="目录">
       <h2>目录</h2>
       <a href="#summary">一页结论</a>
-      <a href="#sources">资料依据</a>
-      <a href="#manual-requirements">说明书要求</a>
-      <a href="#architecture">职责边界</a>
-      <a href="#protocol">协议面兼容</a>
-      <a href="#registers">寄存器覆盖</a>
-      <a href="#address-check">逐地址兼容</a>
-      <a href="#profile">SI Profile 流程</a>
-      <a href="#requirements">需求对照</a>
-      <a href="#official-gaps">官方偏差</a>
-      <a href="#gaps">差异与风险</a>
-      <a href="#compat-plan">进一步方案</a>
+      <a href="#status">协议18状态矩阵</a>
+      <a href="#lifecycle">Profile 生命周期</a>
+      <a href="#restart">冷启动与异常恢复</a>
+      <a href="#registers">地址与参数</a>
+      <a href="#transaction">写事务与存储迁移</a>
+      <a href="#field-snapshot">2026-07-13历史抓包</a>
+      <a href="#remaining">受控偏差与待验收</a>
+      <a href="#acceptance">硬件验收重点</a>
       <a href="#evidence">源码证据</a>
     </nav>
 
@@ -565,1400 +562,631 @@
       <section id="summary">
         <h2>一页结论</h2>
         <p class="lead">
-          当前实现已经达到“SI DCS 地址表可通信、关键状态可读、Profile 可独立执行、参数可从 PLC 和屏幕配置”的阶段。2026-07-02 按官方全文复核后，确认仍存在 Manual、Auto、Cal、Profile 生命周期和测量可信性偏差；这些偏差需要在联调前决定是改代码、作为受控偏差接受，还是由 PLC/现场规程规避。
+          协议18兼容实现已经落地到 CPU2 和 CPU3：SI Profile 使用独立生命周期；Point0 前保留上一轮完整 SI 结果，Point0 有效样本建立新周期并把点数置为1，随后只按有效液体点递增；活动期对外点阵保持全0；返回液位稳定并完成 CPU3 分块拉取和代际复核后，才一次同代发布 Complete、最终点数、点阵和六项 Profile 报警。原 C-01~C-09 抓包差异均已在协议18关闭或冻结为明确兼容口径。
         </p>
 
         <div class="summary-grid">
           <div class="metric">
-            <strong>FC01~FC06</strong>
-            <span>已支持读线圈、读离散输入、读保持寄存器、读输入寄存器、写单线圈、写单寄存器。</span>
+            <strong>协议18</strong>
+            <span>CPU2/CPU3 共享契约同步升级；旧协议组合继续由严格版本门禁拦截。</span>
           </div>
           <div class="metric">
-            <strong>200 点</strong>
-            <span>当前 DCS 地址表覆盖 Point 0~199，输入寄存器窗口为 <code>30021~30620</code>。</span>
+            <strong>7个阶段</strong>
+            <span><code>IDLE / PREPARING / MEASURING / RETURNING_LEVEL / COMPLETE / ABORTED / FAILED</code>。</span>
           </div>
           <div class="metric">
-            <strong>独立 Profile</strong>
-            <span><code>00004 Profile</code>、屏幕入口和自动调度均下发 <code>CMD_SI_PROFILE</code>。</span>
+            <strong>Point0建代</strong>
+            <span>Point0有效样本到达时清旧发布态、置 <code>N=1</code> 并锁存本轮时间。</span>
           </div>
           <div class="metric">
-            <strong>CPU2 参数</strong>
-            <span><code>40001~40003</code> 存入 CPU2 SI profile 执行参数，不污染普通分布测量参数。</span>
+            <strong>最终点数未知</strong>
+            <span>只统计已提交的有效液体点；空气点、失败样本和重试不计数。</span>
           </div>
           <div class="metric">
-            <strong>CPU3 参数</strong>
-            <span><code>40010~40023</code> 存入 CPU3 SI 本机参数，用于自动调度和报警合成。</span>
+            <strong>点阵活动期隐藏</strong>
+            <span><code>30021~30620</code> 在本轮活动期全部读0，避免读取半成品。</span>
           </div>
           <div class="metric">
-            <strong>9600 8O1</strong>
-            <span>选择 SI 协议后，CPU3 外部串口按官方 Modbus 口径配置。</span>
+            <strong>同代最终发布</strong>
+            <span>回液位满足门禁后，CPU3分块读取并复核代际，再发布完整不可变快照。</span>
           </div>
           <div class="metric">
-            <strong>9 项偏差</strong>
-            <span>R-01~R-09 已纳入待确认清单；SI Profile 成功后已回 Auto，剩余重点是 Manual 抑制、自动 Profile、Cal、Probe Uncal 和报警默认值。</span>
+            <strong>私有区已兼容</strong>
+            <span><code>30014~30016</code>镜像FC01/FC02；<code>40004~40009</code>可读写并持久化。</span>
           </div>
           <div class="metric">
-            <strong>P0 决策</strong>
-            <span>Manual 报警/自动 Profile、Cal 回 Auto、10010 可信性和 40014~40023 默认值需要优先确认。</span>
-          </div>
-          <div class="metric">
-            <strong>联调门控</strong>
-            <span>PLC 读取液位必须结合 <code>10013</code>；不能只凭 <code>30004</code> 或 <code>10010=0</code> 判断当前液位可信。</span>
+            <strong>FRAM V7</strong>
+            <span>从V6显式迁移，保留既有SI参数和合法三路串口配置。</span>
           </div>
         </div>
 
         <div class="callout">
-          关键口径：SI 分布测量不先找液位。CPU2 以底部采样目标作为 Point0 的实际运动位置，但 Point0 对外位置字段固定写 <code>0</code>；Point1 按 <code>40001</code> 绝对位置运行和输出，后续按 <code>40002</code> 递增。运行中遇到液面以上点即停止，并且不把该空气点写入 profile 点阵。
+          上位机完成判据：不能在发出 Profile 命令后只等待 <code>10005=1</code>，因为 Point0 前可能仍看到上一轮 Complete。必须先确认已进入 Profile，并观察本轮建代边沿（Complete清0或 <code>30006=1</code>），再等待最终 <code>Auto + Stop + Complete + AtLevel</code> 组合及同代最终数据。
         </div>
-        <div class="callout danger">
-          关键风险：当前 <code>10010 Probe Un-calibrated</code> 固定为 0，Manual 下 SI 报警未完全按官方语义清零，自动 Profile 可能在 Manual 下触发，Cal 仍不是完整 Level Calibration。SI Profile 成功后已排队 <code>CMD_FIND_OIL</code> 回液位跟随，PLC 联调必须验证 <code>10013</code> 恢复。
-        </div>
-      </section>
-
-      <section id="sources">
-        <h2>资料依据</h2>
-        <p class="lead">
-          本文以当前工程源码为准，同时参考旧版 HTML 报告的组织方式和原始资料来源。原始附件文件名保留现场或官方命名，正文统一使用“SI协议”口径。
-        </p>
-
-        <div class="two-col">
-          <div class="card">
-            <h3>官方操作手册</h3>
-            <p><code>docs/01_协议与寄存器/SI协议适配/00_原始资料/SI7000官方操作手册.pdf</code></p>
-            <p>用于复核 Auto、Cal、Profile、Manual、Power-up、液位传感器、报警和维护语义。</p>
-          </div>
-          <div class="card">
-            <h3>DCS Modbus 规范</h3>
-            <p><code>docs/01_协议与寄存器/SI协议适配/00_原始资料/SI7000_modbus_官方.pdf</code></p>
-            <p>用于确认功能码、地址窗口、保留地址、缩放、200 点 profile 表和异常响应。</p>
-          </div>
-          <div class="card">
-            <h3>PLC 对接说明</h3>
-            <p><code>SI7000协议.docx</code>、<code>SI7000_PLC协议及软件需求说明.docx</code></p>
-            <p>用于确认 PLC 轮询、可信液位、profile 读取、HMI 显示和现场调试口径。</p>
-          </div>
-          <div class="card">
-            <h3>当前源码和正式映射</h3>
-            <p><code>si_modbus_slave.c</code>、<code>measure_density.c</code>、<code>SI协议兼容映射表.md</code></p>
-            <p>用于确认当前真实行为，避免把旧版报告中过期的设计方案误写成已实现状态。</p>
-          </div>
-        </div>
-
         <div class="callout warning">
-          旧版报告中的若干结论已经过期：当前协议枚举已统一为 SI；Profile 不再桥接普通分布测量，而是下发 <code>CMD_SI_PROFILE</code>；<code>40001~40003</code> 已独立为 CPU2 SI profile 参数；<code>40010~40023</code> 已由 CPU3 持久化；Profile Timestamp 当前为触发并下发命令的时间。
+          发布状态：协议18首个正式匹配组合为CPU2 V1.26.0.0、CPU3 V1.24.0.0。代码构建和静态契约检查不能替代真实站2 RS485、真实FRAM镜像、掉电、快速重启、跨日调度和故障注入验收；未修复风险见《SI协议待确认与后续清单》第7节。
         </div>
       </section>
 
-      <section id="manual-requirements">
-        <h2>说明书和 DCS 规范的核心要求</h2>
-        <p class="lead">
-          这一节按旧版报告的“说明书要求 -> 对兼容层含义”方式整理，但落地状态按当前实现更新。
-        </p>
-
-        <table>
-          <thead>
-            <tr>
-              <th>领域</th>
-              <th>说明书/规范要求</th>
-              <th>当前 CUBE 落地口径</th>
-              <th>兼容判断</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td>通信</td>
-              <td>RS-485，Modbus RTU，9600 bps，8 data bits，Odd parity，1 stop bit；同一总线站号唯一。</td>
-              <td>选择 <code>COM_PROTO_SI</code> 后按 <code>9600 8O1</code> 配置；站号复用当前 <code>SlaveAddress</code>。</td>
-              <td><span class="status done">已兼容</span></td>
-            </tr>
-            <tr>
-              <td>功能码</td>
-              <td>FC01、FC02、FC03、FC04、FC05、FC06；未支持功能码返回标准异常。</td>
-              <td>官方列出的六个功能码已支持；FC15/FC16 不在官方清单内，按 Illegal Function 拒绝属于正确异常响应。</td>
-              <td><span class="status done">已兼容</span></td>
-            </tr>
-            <tr>
-              <td>模式线圈</td>
-              <td>Manual、Cal、Auto、Profile 互斥；手动动作会中断自动行为并进入手动。</td>
-              <td>线圈写入由 CPU3 桥接到 CPU2 命令；读回以 CPU2 状态刷新；速度档当前不区分快慢。</td>
-              <td><span class="status partial">简化兼容</span></td>
-            </tr>
-            <tr>
-              <td>Auto</td>
-              <td>探头定位并跟踪液/气界面；Lower 在液中、Upper 在气相时表示探头位于界面。</td>
-              <td>CPU2 发布液位跟随稳定状态，CPU3 合成 <code>10002/10003</code>：稳定后上空气下液体，其它均液体。</td>
-              <td><span class="status done">按确认口径兼容</span></td>
-            </tr>
-            <tr>
-              <td>Cal</td>
-              <td>官方 Cal 会触底建立 bottom reference，然后返回液位并进入 Auto。</td>
-              <td><code>00002</code> 当前保守桥接 <code>CMD_CALIBRATE_ZERO</code>，不是完整 SI Level Calibration；是否改为触底后自动找液位仍需确认。</td>
-              <td><span class="status risk">P0 待确认</span></td>
-            </tr>
-            <tr>
-              <td>Profile</td>
-              <td>先到罐底采集 Point0，再按 First Point 绝对位置、Increment、Dwell Time 逐点采集。</td>
-              <td>CPU2 <code>CMD_SI_PROFILE</code> 独立执行：Point0 在底部采样且对外位置字段为 0；Point1=40001；不先找液位；遇空气候选点停止且不写入该点。</td>
-              <td><span class="status done">已兼容</span></td>
-            </tr>
-            <tr>
-              <td>Manual</td>
-              <td>Manual 用于维护；官方明确 Manual 下不报告报警、不更新液位，自动 Profile 到点也不启动。</td>
-              <td>当前 Manual/Stop 近似为维护模式；CPU2 本机继电器报警会看抑制标志，但 CPU3 SI 报警位和自动调度未完全按 Manual 语义门控。</td>
-              <td><span class="status risk">P0 待确认</span></td>
-            </tr>
-            <tr>
-              <td>报警</td>
-              <td>Reel Alarm、Probe Un-calibrated、Deviation Alarm 等各有独立语义；<code>Probe At Liquid Level</code> 和 <code>Probe Un-calibrated</code> 是液位可信性关键位。</td>
-              <td>当前报警由 CPU3 基于错误码、SI 阈值和 profile 点阵即时合成；<code>10010</code> 固定可信，不能证明物理底部参考或探针位置一定可靠。</td>
-              <td><span class="status partial">受控偏差</span></td>
-            </tr>
-            <tr>
-              <td>数据范围</td>
-              <td>DCS 地址表覆盖 <code>30001~30620</code>，profile 点阵从 <code>30021</code> 开始，Point0~Point199。</td>
-              <td>当前严格按 200 点 DCS 表输出；超过 200 点不扩展，不越界。</td>
-              <td><span class="status done">已兼容</span></td>
-            </tr>
-          </tbody>
-        </table>
-      </section>
-
-      <section id="architecture">
-        <h2>职责边界</h2>
-        <p class="lead">
-          当前架构把协议外观留在 CPU3，把真实运动和采样闭环放在 CPU2。这样 CPU2 不需要理解 SI 地址、功能码和异常码，但仍能保存和执行 SI profile 需要的参数。
-        </p>
-
-        <div class="flow">
-          <div class="flow-step">
-            <b>PLC / DCS</b>
-            <p>按 SI Modbus RTU 访问线圈、离散输入、保持寄存器和输入寄存器。</p>
-          </div>
-          <div class="flow-step">
-            <b>CPU3 SI 层</b>
-            <p>处理地址、功能码、CRC、异常响应、缩放和状态合成。</p>
-          </div>
-          <div class="flow-step">
-            <b>CPU3 参数/调度</b>
-            <p>保存 <code>40010~40023</code>，根据 RTC 触发自动 profile。</p>
-          </div>
-          <div class="flow-step">
-            <b>CPU2 命令/参数</b>
-            <p>接收 <code>CMD_SI_PROFILE</code>，保存 <code>40001~40003</code> 对应执行参数。</p>
-          </div>
-          <div class="flow-step">
-            <b>CPU2 测量闭环</b>
-            <p>探底、运动、停稳等待、采样、空气判定、点阵锁存。</p>
-          </div>
-        </div>
-
-        <table>
-          <thead>
-            <tr>
-              <th>层级</th>
-              <th>当前职责</th>
-              <th>明确不承担</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td><code>CPU3</code></td>
-              <td>SI Modbus RTU 从站、地址表、异常码、缩放、状态合成、自动调度、报警合成、时间戳锁存、屏幕菜单入口。</td>
-              <td>不执行真实电机闭环，不把 SI 地址号下沉给 CPU2。</td>
-            </tr>
-            <tr>
-              <td><code>CPU2</code></td>
-              <td>保存 SI profile 执行参数，执行探底、Point0、逐点运动、密度/温度采样和结果锁存。</td>
-              <td>不处理 SI Modbus 帧、功能码、CRC、异常响应。</td>
-            </tr>
-            <tr>
-              <td><code>CPU2 &lt;-&gt; CPU3</code></td>
-              <td>通过共享协议传递命令、参数、状态、profile 点阵和测量结果。</td>
-              <td>不承载 PLC 专用的地址编号语义。</td>
-            </tr>
-          </tbody>
-        </table>
-      </section>
-
-      <section id="protocol">
-        <h2>协议面兼容</h2>
+      <section id="status">
+        <h2>协议18状态矩阵</h2>
         <table>
           <thead>
             <tr>
               <th>项目</th>
-              <th>当前兼容情况</th>
-              <th>状态</th>
+              <th>协议18当前行为</th>
+              <th>实施状态</th>
+              <th>联调关注点</th>
             </tr>
           </thead>
           <tbody>
             <tr>
-              <td>串口格式</td>
-              <td><code>9600</code> baud、Odd parity、8 data bits、1 stop bit、RTU。</td>
-              <td><span class="status done">已兼容</span></td>
+              <td>SI独立生命周期</td>
+              <td>CPU2发布阶段、周期号、完成计数、来源和点数；CPU3按SI专用状态机投影外部寄存器。</td>
+              <td><span class="status done">已实现</span></td>
+              <td>普通分布、国标、每米、区间和Wärtsilä测量不得覆盖已发布SI快照。</td>
             </tr>
             <tr>
-              <td>从站地址</td>
-              <td>优先使用当前 <code>SlaveAddress</code>，非法时回落默认地址 <code>1</code>。</td>
-              <td><span class="status done">已兼容</span></td>
+              <td>Point0前旧结果</td>
+              <td>保留上一轮 Complete、最终N、时间、点阵和六项Profile报警，直到本轮Point0有效样本建立新周期。</td>
+              <td><span class="status done">已实现</span></td>
+              <td>主机不能把命令后仍为1的旧Complete误判成本轮完成。</td>
             </tr>
             <tr>
-              <td>功能码</td>
-              <td>支持 <code>FC01</code>、<code>FC02</code>、<code>FC03</code>、<code>FC04</code>、<code>FC05</code>、<code>FC06</code>。</td>
-              <td><span class="status done">已兼容</span></td>
+              <td>Point0建代与进度</td>
+              <td>Point0输出本轮实际采用的底部位置；建代时 <code>N=1</code>，后续仅有效液体点提交后递增。</td>
+              <td><span class="status done">已实现</span></td>
+              <td>最终点数由液位位置决定，事先未知。</td>
             </tr>
             <tr>
-              <td>官方未列功能码</td>
-              <td><code>FC15</code>、<code>FC16</code> 等不在 SI 官方功能码清单内，应返回 Illegal Function。</td>
-              <td><span class="status done">已兼容</span></td>
+              <td>活动期点阵</td>
+              <td>Point0建代后到最终发布前，<code>30021~30620</code>始终为0；候选点阵只保留在内部缓冲。</td>
+              <td><span class="status done">已实现</span></td>
+              <td>活动N是进度，不表示对应点阵已开放。</td>
             </tr>
             <tr>
-              <td>地址窗口</td>
-              <td>线圈 <code>00001~00016</code>，离散输入 <code>10001~10032</code>，保持寄存器 <code>40001~40023</code>，输入寄存器 <code>30001~30620</code>。</td>
-              <td><span class="status done">已兼容</span></td>
+              <td>最终发布门禁</td>
+              <td>液位稳定、电机停止、Interlock=0后，CPU3按100寄存器分块拉取，并在前后复核周期、完成计数、N、Source和Phase。</td>
+              <td><span class="status done">已实现</span></td>
+              <td>任一代际字段变化即丢弃候选并节流重试，不发布混代数据。</td>
             </tr>
             <tr>
-              <td>异常响应</td>
-              <td>非法功能、非法地址、非法数据值分别返回 <code>0x01</code>、<code>0x02</code>、<code>0x03</code>。</td>
-              <td><span class="status done">已兼容</span></td>
+              <td>最终组合</td>
+              <td>完整候选复核通过后，同代发布Complete、最终N、时间、点阵、FC01/FC02投影和六项Profile报警。</td>
+              <td><span class="status done">已实现</span></td>
+              <td><code>profile_complete_counter</code>变化是连续在线场景的提交边沿。</td>
             </tr>
             <tr>
-              <td>缩放单位</td>
-              <td>位置/液位按 mm；温度按有符号 <code>0.01°C</code>；密度按 <code>0.01 kg/m3</code>，超 16 位钳位。</td>
-              <td><span class="status done">已兼容</span></td>
+              <td>取消与失败</td>
+              <td>Point0前可继续保留完整旧SI；Point0后清Complete、N、点阵和Profile报警，不恢复旧Complete。</td>
+              <td><span class="status done">已实现</span></td>
+              <td>分别覆盖PREPARING、MEASURING、RETURNING_LEVEL三个阶段。</td>
             </tr>
             <tr>
-              <td>无效值</td>
-              <td>温度无效输出 <code>-200.00°C</code> / <code>0xB1E0</code>，密度无效输出 <code>0</code>，有效点外输出 <code>0</code>。</td>
-              <td><span class="status done">已兼容</span></td>
+              <td>探底失败回退</td>
+              <td>优先使用可信旧底；无可信旧底时使用当前位置继续，不按失败或Interlock处理，Point0输出实际采用位置。</td>
+              <td><span class="status done">已实现</span></td>
+              <td>当前位置是兼容回退值，不等同于已证明的物理罐底。</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="lifecycle">
+        <h2>SI Profile 生命周期与对外可见值</h2>
+        <p class="lead">
+          CPU2负责真实运动、采样和权威生命周期；CPU3负责外部SI寄存器投影、时间语义、候选拉取和不可变发布快照。两端通过协议18共享字段协作。
+        </p>
+
+        <div class="flow">
+          <div class="flow-step">
+            <b>PREPARING</b>
+            <p>接受 <code>CMD_SI_PROFILE</code>，探底或选取回退底部；对外继续保留完整旧SI。</p>
+          </div>
+          <div class="flow-step">
+            <b>MEASURING</b>
+            <p>Point0有效样本建代；N从1开始增长，活动点阵始终隐藏。</p>
+          </div>
+          <div class="flow-step">
+            <b>RETURNING_LEVEL</b>
+            <p>采点停止后排队找液位；候选结果尚未对外发布。</p>
+          </div>
+          <div class="flow-step">
+            <b>COMPLETE</b>
+            <p>液位和电机门禁满足，CPU3分块复核后同代发布最终快照。</p>
+          </div>
+        </div>
+
+        <table>
+          <thead>
+            <tr>
+              <th>阶段</th>
+              <th><code>10005 Complete</code></th>
+              <th><code>30006 N</code></th>
+              <th><code>30007~30010</code></th>
+              <th><code>30021~30620</code></th>
+              <th>说明</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>IDLE</code></td>
+              <td>有完整已发布SI则为1</td>
+              <td>上一轮最终N</td>
+              <td>上一轮时间</td>
+              <td>上一轮最终点阵</td>
+              <td>尚未进入新SI周期。</td>
+            </tr>
+            <tr>
+              <td><code>PREPARING</code></td>
+              <td>保留旧值</td>
+              <td>保留旧值</td>
+              <td>保留旧值</td>
+              <td>保留旧值</td>
+              <td>Point0前不提前破坏上一轮完整结果。</td>
+            </tr>
+            <tr>
+              <td><code>MEASURING</code></td>
+              <td>0</td>
+              <td>从1逐步递增</td>
+              <td>观察到Point0时锁存</td>
+              <td>全0</td>
+              <td>只统计有效液体点；空气、失败和重试不计数。</td>
+            </tr>
+            <tr>
+              <td><code>RETURNING_LEVEL</code></td>
+              <td>0</td>
+              <td>本轮当前/最终N</td>
+              <td>本轮Point0时间</td>
+              <td>全0</td>
+              <td>等待液位稳定、电机停止和Interlock清除。</td>
+            </tr>
+            <tr>
+              <td><code>COMPLETE</code></td>
+              <td>1</td>
+              <td>最终N</td>
+              <td>本轮Point0时间；无法重建则全0</td>
+              <td>完整最终点阵</td>
+              <td>仅在CPU3候选分块拉取和代际复核通过后对外生效。</td>
+            </tr>
+            <tr>
+              <td><code>ABORTED / FAILED</code></td>
+              <td colspan="4">Point0前仅可恢复完整旧SI；Point0后全部清空且不恢复旧Complete。</td>
+              <td>防止把已被新周期替换的旧结果重新伪装为当前完成。</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="callout danger">
+          禁止用“达到预期点数”判断完成：本轮最终点数必须等测量遇到液面后才知道。活动期N只用于展示已确认有效液体点进度，最终完成仍以新周期建代边沿、返回液位门禁和最终Complete组合为准。
+        </div>
+      </section>
+
+      <section id="restart">
+        <h2>冷启动、重连与异常恢复</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>场景</th>
+              <th>协议18处理</th>
+              <th>时间语义</th>
+              <th>防错目标</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>CPU3冷启动时CPU2已COMPLETE</td>
+              <td>允许接管CPU2当前完整SI最终N、点阵和六项Profile报警。</td>
+              <td><code>30007~30010</code>全0</td>
+              <td>没有观察到Point0，不能用重启时刻冒充测量时间。</td>
+            </tr>
+            <tr>
+              <td>CPU3冷启动/重连时CPU2处于PREPARING</td>
+              <td>仅当可确认存在完整旧SI时恢复旧Complete、N、点阵和报警。</td>
+              <td>恢复组合的时间全0</td>
+              <td>避免把不完整缓存或普通分布数据当成旧SI。</td>
+            </tr>
+            <tr>
+              <td>Point0前ABORTED/FAILED</td>
+              <td>仅完整旧SI可恢复；没有完整旧SI则保持空。</td>
+              <td>冷启动/重连恢复时全0</td>
+              <td>旧结果必须满足来源和完整性门禁。</td>
+            </tr>
+            <tr>
+              <td>Point0后ABORTED/FAILED</td>
+              <td>Complete、N、点阵和Profile报警保持清空，不恢复旧结果。</td>
+              <td>本轮时间不作为完成结果发布</td>
+              <td>新周期已经替换旧周期，禁止回退代际。</td>
+            </tr>
+            <tr>
+              <td>候选拉取中断或代际变化</td>
+              <td>候选失效，至少间隔1秒重试完整分块拉取和复核。</td>
+              <td>不改变已发布快照</td>
+              <td>对外始终读取不可变的最后一次完整发布。</td>
+            </tr>
+            <tr>
+              <td>普通分布测量复用共享区</td>
+              <td>已发布SI快照继续保留；仅未发布候选在来源或代际不一致时失效。</td>
+              <td>最后SI时间保持原值</td>
+              <td>防止普通/国标/每米/区间/Wärtsilä结果清掉SI历史。</td>
             </tr>
           </tbody>
         </table>
       </section>
 
       <section id="registers">
-        <h2>寄存器覆盖</h2>
-        <table>
-          <thead>
-            <tr>
-              <th>区域</th>
-              <th>覆盖范围</th>
-              <th>当前实现重点</th>
-              <th>状态</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td>线圈 <code>00001~00016</code></td>
-              <td>Manual、Calibrate、Auto、Profile、Stop、上/下行 Slow/Medium/Fast。</td>
-              <td><code>00004</code> 启动 SI profile；保留线圈拒写；模式和动作线圈在快照区互斥。</td>
-              <td><span class="status partial">部分简化</span></td>
-            </tr>
-            <tr>
-              <td>离散输入 <code>10001~10032</code></td>
-              <td>Bottom Reference、上下液位传感器、Interlock、Profile Complete、报警位等。</td>
-              <td><code>10010</code> 固定可信但只是兼容固定值；上下传感器按液位跟随稳定状态合成；报警位由 CPU3 扫描合成，Manual 抑制尚需决策。</td>
-              <td><span class="status partial">受控偏差</span></td>
-            </tr>
-            <tr>
-              <td>保持寄存器 <code>40001~40023</code></td>
-              <td>Profile 参数、自动 profile 参数、报警阈值。</td>
-              <td><code>40001~40003</code> 桥接 CPU2；<code>40010~40023</code> 保存 CPU3；<code>40004~40009</code> 保留拒写。</td>
-              <td><span class="status done">已接入</span></td>
-            </tr>
-            <tr>
-              <td>输入寄存器 <code>30001~30620</code></td>
-              <td>实时位置/温度/密度/液位、点数、profile 时间戳、当前时间、profile 点阵。</td>
-              <td>SI profile 完成前点数为 0，点阵清 0；完成后输出 Point0~Point199。<code>30004</code> 必须结合 <code>10013</code> 判断是否为当前液位。</td>
-              <td><span class="status done">已接入</span></td>
-            </tr>
-          </tbody>
-        </table>
-
-        <div class="callout warning">
-          当前对外点阵最多 200 点。官方资料里提到过内部 500 点，但当前 DCS Modbus 地址窗口没有直接覆盖 500 点；如现场要求超过 200 点，需要新增扩展地址或分页机制。
-        </div>
-      </section>
-
-
-      <section id="address-check">
-        <h2>逐地址兼容对照</h2>
+        <h2>地址与参数兼容结果</h2>
         <p class="lead">
-          本节按 SI 地址说明原协议功能、当前兼容方式、已知差异和下一步处理方向，不再整理具体测试动作。
+          外部SI从站保持FC01、FC02、FC03、FC04、FC05和FC06边界；FC03/FC04支持在合法窗口内一次读取多个连续寄存器。以下是协议18新增或改写语义的重点地址。
         </p>
 
-        <div class="register-block">
-          <h3>FC01 / FC05 线圈 00001~00016 兼容对照</h3>
-          <div class="block-inner">
-            <p class="register-note">原协议线圈区：FC01 读取系统模式、电机方向和速度，FC05 写单线圈。当前保留线圈按官方保留处理；OFF 写入只更新影子位，不主动停止 CPU2。</p>
         <div class="table-frame">
-          <table class="address-table">
+          <table>
             <thead>
               <tr>
-                <th>SI 地址</th>
-                <th>原协议功能</th>
-                <th>当前兼容方式</th>
-                <th>问题/差异</th>
-                <th>下一步</th>
+                <th>地址</th>
+                <th>协议18语义</th>
+                <th>读写/默认值</th>
+                <th>状态</th>
               </tr>
             </thead>
             <tbody>
-            <tr>
-              <td><code>00001</code></td>
-              <td>Manual<span class="muted-cell">FC01 读；FC05 可写 ON/OFF</span></td>
-              <td>读：非 Auto/Cal/Profile 且无其它模式时置 1；写 ON 桥接 CMD_MAINTENANCE_MODE；写 OFF 仅更新影子位</td>
-              <td>可用维护模式近似 Manual；OFF 不主动停止 CPU2。</td>
-              <td>如现场需要完整 Manual/Stop 生命周期，再补 SI 模式状态机；当前保持维护模式桥接。</td>
-            </tr>
-            <tr>
-              <td><code>00002</code></td>
-              <td>Calibrate<span class="muted-cell">FC01 读；FC05 可写 ON/OFF</span></td>
-              <td>读：CPU2 标定状态时置 1；写 ON 桥接 CMD_CALIBRATE_ZERO</td>
-              <td>只覆盖零点标定，不等同 SI 完整标定流程。</td>
-              <td>如 PLC 依赖 SI 完整标定流程，再新增独立标定状态和命令映射；当前保持零点标定桥接。</td>
-            </tr>
-            <tr>
-              <td><code>00003</code></td>
-              <td>Auto<span class="muted-cell">FC01 读；FC05 可写 ON/OFF</span></td>
-              <td>读：STATE_FLOWOIL 时置 1；写 ON 桥接 CMD_FIND_OIL</td>
-              <td>无明显兼容问题；液位跟随稳定状态另见 10013 与 10002/10003。</td>
-              <td>保持当前实现；后续协议或源码变化时同步更新文档。</td>
-            </tr>
-            <tr>
-              <td><code>00004</code></td>
-              <td>Profile<span class="muted-cell">FC01 读；FC05 可写 ON/OFF</span></td>
-              <td>读：SI profile 运行态且 current_command=CMD_SI_PROFILE 时置 1；写 ON 锁存时间并下发 CMD_SI_PROFILE</td>
-              <td>无明显兼容问题；普通分布、国标、Wärtsilä 分布不会误置 SI Profile。</td>
-              <td>保持当前 SI Profile 独立入口；如现场需要更多 SI 原设备模式生命周期，再补专用状态。</td>
-            </tr>
-            <tr>
-              <td><code>00005~00008</code></td>
-              <td>Reserved<span class="muted-cell">FC01 可读；FC05 拒写</span></td>
-              <td>保留线圈区间<span class="muted-cell">读 0；写返回 Illegal Data Address</span></td>
-              <td>官方保留，无业务功能；逐地址展开会重复同一语义。</td>
-              <td>保持区间化描述：读 0，禁止写入，不新增业务语义。</td>
-            </tr>
-            <tr>
-              <td><code>00009</code></td>
-              <td>Stop<span class="muted-cell">FC01 读；FC05 可写 ON/OFF</span></td>
-              <td>读：电机非上/下行时置 1；写 ON 桥接 CMD_MAINTENANCE_MODE</td>
-              <td>当前用维护模式承担停止/手动语义。</td>
-              <td>如现场需要完整 Manual/Stop 生命周期，再补 SI 模式状态机；当前保持维护模式桥接。</td>
-            </tr>
-            <tr>
-              <td><code>00010</code></td>
-              <td>Up Slow<span class="muted-cell">FC01 读；FC05 可写 ON/OFF</span></td>
-              <td>读：当前只在上行时统一读回 Up Medium；写 ON 桥接 CMD_FORCE_MOVE_UP</td>
-              <td>不区分慢速。</td>
-              <td>如现场需要慢/中/快三档真实速度，再补速度档参数和电机控制映射。</td>
-            </tr>
-            <tr>
-              <td><code>00011</code></td>
-              <td>Up Medium<span class="muted-cell">FC01 读；FC05 可写 ON/OFF</span></td>
-              <td>读：motor_state=1 时置 1；写 ON 桥接 CMD_FORCE_MOVE_UP</td>
-              <td>上行三档统一执行默认强制上行速度。</td>
-              <td>如现场需要慢/中/快三档真实速度，再补速度档参数和电机控制映射。</td>
-            </tr>
-            <tr>
-              <td><code>00012</code></td>
-              <td>Up Fast<span class="muted-cell">FC01 读；FC05 可写 ON/OFF</span></td>
-              <td>读：当前只在上行时统一读回 Up Medium；写 ON 桥接 CMD_FORCE_MOVE_UP</td>
-              <td>不区分快速。</td>
-              <td>如现场需要慢/中/快三档真实速度，再补速度档参数和电机控制映射。</td>
-            </tr>
-            <tr>
-              <td><code>00013</code></td>
-              <td>Down Slow<span class="muted-cell">FC01 读；FC05 可写 ON/OFF</span></td>
-              <td>读：当前只在下行时统一读回 Down Medium；写 ON 桥接 CMD_FORCE_MOVE_DOWN</td>
-              <td>不区分慢速。</td>
-              <td>如现场需要慢/中/快三档真实速度，再补速度档参数和电机控制映射。</td>
-            </tr>
-            <tr>
-              <td><code>00014</code></td>
-              <td>Down Medium<span class="muted-cell">FC01 读；FC05 可写 ON/OFF</span></td>
-              <td>读：motor_state=2 时置 1；写 ON 桥接 CMD_FORCE_MOVE_DOWN</td>
-              <td>下行三档统一执行默认强制下行速度。</td>
-              <td>如现场需要慢/中/快三档真实速度，再补速度档参数和电机控制映射。</td>
-            </tr>
-            <tr>
-              <td><code>00015</code></td>
-              <td>Down Fast<span class="muted-cell">FC01 读；FC05 可写 ON/OFF</span></td>
-              <td>读：当前只在下行时统一读回 Down Medium；写 ON 桥接 CMD_FORCE_MOVE_DOWN</td>
-              <td>不区分快速。</td>
-              <td>如现场需要慢/中/快三档真实速度，再补速度档参数和电机控制映射。</td>
-            </tr>
-            <tr>
-              <td><code>00016</code></td>
-              <td>Reserved<span class="muted-cell">FC01 可读；FC05 拒写</span></td>
-              <td>读 0；写返回 Illegal Data Address</td>
-              <td>官方保留，无业务功能。</td>
-              <td>保持保留地址处理：读 0，禁止写入，不新增业务语义。</td>
-            </tr>
+              <tr>
+                <td><code>30006</code></td>
+                <td>Point0前保留旧最终N；Point0建代后从1递增；最终点数未知。</td>
+                <td>FC04只读</td>
+                <td><span class="status done">已实现</span></td>
+              </tr>
+              <tr>
+                <td><code>30007~30010</code></td>
+                <td>观察到Point0新周期事件时锁存；重启或重连无法重建时四项全0。</td>
+                <td>FC04只读</td>
+                <td><span class="status done">已实现</span></td>
+              </tr>
+              <tr>
+                <td><code>30014</code></td>
+                <td>镜像FC01位图：<code>(FC01 byte1 &lt;&lt; 8) | FC01 byte0</code>。</td>
+                <td>FC04只读</td>
+                <td><span class="status done">已实现</span></td>
+              </tr>
+              <tr>
+                <td><code>30015</code></td>
+                <td>镜像FC02前16位：<code>(FC02 byte1 &lt;&lt; 8) | FC02 byte0</code>。</td>
+                <td>FC04只读</td>
+                <td><span class="status done">已实现</span></td>
+              </tr>
+              <tr>
+                <td><code>30016</code></td>
+                <td>镜像FC02后16位：<code>(FC02 byte3 &lt;&lt; 8) | FC02 byte2</code>。</td>
+                <td>FC04只读</td>
+                <td><span class="status done">已实现</span></td>
+              </tr>
+              <tr>
+                <td><code>30017~30020</code></td>
+                <td>保持0；无控制语义，不参与完成判断。</td>
+                <td>FC04只读固定0</td>
+                <td><span class="status done">已冻结</span></td>
+              </tr>
+              <tr>
+                <td><code>30021~30620</code></td>
+                <td>Point0~Point199三元组；活动期全0，最终快照发布后一次开放。</td>
+                <td>FC04只读</td>
+                <td><span class="status done">已实现</span></td>
+              </tr>
+              <tr>
+                <td><code>40001~40003</code></td>
+                <td>CPU2 SI Profile执行参数：First Point、Increment、Dwell Time。</td>
+                <td>FC03/FC06；CPU2 ACK门禁</td>
+                <td><span class="status done">已实现</span></td>
+              </tr>
+              <tr>
+                <td><code>40004~40009</code></td>
+                <td>CPU3本地原始 <code>uint16_t</code> 兼容槽，语义未知且不参与控制。</td>
+                <td>默认 <code>0 / 50 / 1000 / 0 / 5 / 1</code>；FC03/FC06；掉电保存</td>
+                <td><span class="status done">已实现</span></td>
+              </tr>
+              <tr>
+                <td><code>40010~40023</code></td>
+                <td>CPU3本地自动Profile与报警参数；FC06按整份本地参数事务提交。</td>
+                <td>合法性检查、持久化、失败回滚</td>
+                <td><span class="status done">已实现</span></td>
+              </tr>
             </tbody>
           </table>
-        </div>
-          </div>
         </div>
 
-        <div class="register-block">
-          <h3>FC02 离散输入 10001~10032 兼容对照</h3>
-          <div class="block-inner">
-            <p class="register-note">原协议离散输入区：FC02 只读状态位和报警位。当前保留位固定 0，报警位由 CPU3 根据实时值、SI 阈值和 SI profile 点阵合成。</p>
-        <div class="table-frame">
-          <table class="address-table">
-            <thead>
-              <tr>
-                <th>SI 地址</th>
-                <th>原协议功能</th>
-                <th>当前兼容方式</th>
-                <th>问题/差异</th>
-                <th>下一步</th>
-              </tr>
-            </thead>
-            <tbody>
-            <tr>
-              <td><code>10001</code></td>
-              <td>Bottom Reference<span class="muted-cell">FC02 读</span></td>
-              <td>来自 CPU2 bottom_reference_valid；探底成功或现有底部参考有效时置 1</td>
-              <td>无明显兼容问题；保持现有逻辑，不固定覆盖。</td>
-              <td>保持当前实现；后续协议或源码变化时同步更新文档。</td>
-            </tr>
-            <tr>
-              <td><code>10002</code></td>
-              <td>Lower Level Sensor<span class="muted-cell">FC02 读</span></td>
-              <td>固定输出 1，表示下传感器在液体中</td>
-              <td>无明显兼容问题。</td>
-              <td>如需要真实双传感器语义，需新增硬件/CPU2 状态源；当前按 SI 显示语义合成。</td>
-            </tr>
-            <tr>
-              <td><code>10003</code></td>
-              <td>Upper Level Sensor<span class="muted-cell">FC02 读</span></td>
-              <td>液位跟随稳定时输出 0，表示上传感器空气；其它状态输出 1</td>
-              <td>无明显兼容问题；CPU3 合成，不是真实双传感器输入。</td>
-              <td>如需要真实双传感器语义，需新增硬件/CPU2 状态源；当前按 SI 显示语义合成。</td>
-            </tr>
-            <tr>
-              <td><code>10004</code></td>
-              <td>Interlock<span class="muted-cell">FC02 读</span></td>
-              <td>error_code != NO_ERROR 或 profile_blocked_by_process 时置 1</td>
-              <td>未细分外部联锁硬件。</td>
-              <td>如 PLC 需要更细报警或联锁来源，再拆分故障分类和维护状态；当前保持合成输出。</td>
-            </tr>
-            <tr>
-              <td><code>10005</code></td>
-              <td>Profile Complete<span class="muted-cell">FC02 读</span></td>
-              <td>SI profile 完成锁存且 profile_source=PROFILE_SOURCE_SI 时置 1</td>
-              <td>无明显兼容问题；普通分布结果不会置位。</td>
-              <td>保持 SI profile 完成锁存；如现场需要复位/确认语义，再补清除条件。</td>
-            </tr>
-            <tr>
-              <td><code>10006</code></td>
-              <td>Metric/English<span class="muted-cell">FC02 读</span></td>
-              <td>固定输出 1，表示公制</td>
-              <td>无明显兼容问题；当前不支持英制切换。</td>
-              <td>如现场要求英制，再增加单位参数和缩放转换；当前保持公制。</td>
-            </tr>
-            <tr>
-              <td><code>10007</code></td>
-              <td>Reserved<span class="muted-cell">FC02 读</span></td>
-              <td>固定 0</td>
-              <td>官方保留，无业务功能。</td>
-              <td>保持保留地址处理：读 0，禁止写入，不新增业务语义。</td>
-            </tr>
-            <tr>
-              <td><code>10008</code></td>
-              <td>Reel Alarm Disable<span class="muted-cell">FC02 读</span></td>
-              <td>固定 0</td>
-              <td>官方保留，无业务功能。</td>
-              <td>保持保留地址处理：读 0，禁止写入，不新增业务语义。</td>
-            </tr>
-            <tr>
-              <td><code>10009</code></td>
-              <td>Reel Alarm<span class="muted-cell">FC02 读</span></td>
-              <td>error_code != NO_ERROR 时置 1</td>
-              <td>简化为设备故障汇总。</td>
-              <td>如 PLC 需要更细报警或联锁来源，再拆分故障分类和维护状态；当前保持合成输出。</td>
-            </tr>
-            <tr>
-              <td><code>10010</code></td>
-              <td>Probe Un-calibrated<span class="muted-cell">FC02 读</span></td>
-              <td>固定 0，表示探针可信</td>
-              <td>受控偏差；该固定值不能证明底部参考、零点或探针位置在物理上可靠。</td>
-              <td>需要确认是否继续固定为 0；若 PLC 依赖可信性判断，应重新定义 <code>10001/10010/Profile Complete</code> 的组合语义。</td>
-            </tr>
-            <tr>
-              <td><code>10011</code></td>
-              <td>Reserved<span class="muted-cell">FC02 读</span></td>
-              <td>固定 0</td>
-              <td>官方保留，无业务功能。</td>
-              <td>保持保留地址处理：读 0，禁止写入，不新增业务语义。</td>
-            </tr>
-            <tr>
-              <td><code>10012</code></td>
-              <td>Interval Timer<span class="muted-cell">FC02 读</span></td>
-              <td>40011 自动 profile 使能非 0 时置 1</td>
-              <td>无明显兼容问题；40010 禁止写 0，因此使能即认为调度有效。</td>
-              <td>保持当前实现；后续协议或源码变化时同步更新文档。</td>
-            </tr>
-            <tr>
-              <td><code>10013</code></td>
-              <td>Probe At Liquid Level<span class="muted-cell">FC02 读</span></td>
-              <td>来自 oil_measurement.probe_at_liquid_level</td>
-              <td>无明显兼容问题；用于判断 30004 液位是否当前有效。</td>
-              <td>保持当前实现；后续协议或源码变化时同步更新文档。</td>
-            </tr>
-            <tr>
-              <td><code>10014~10016</code></td>
-              <td>Reserved<span class="muted-cell">FC02 读</span></td>
-              <td>保留离散输入区间<span class="muted-cell">全部固定输出 0</span></td>
-              <td>官方保留，无业务功能；逐地址展开会重复同一语义。</td>
-              <td>保持区间化描述：读 0，不新增业务语义。</td>
-            </tr>
-            <tr>
-              <td><code>10017</code></td>
-              <td>Low Density Alarm<span class="muted-cell">FC02 读</span></td>
-              <td>当前密度有效且 CurrentDensity < 40014 时置 1</td>
-              <td>当前由 CPU3 即时合成；未实现 SI 原设备可能存在的报警锁存、确认或消音生命周期。</td>
-              <td>如果 DCS 需要报警锁存、确认或消音模型，再新增报警生命周期；当前保持即时合成。</td>
-            </tr>
-            <tr>
-              <td><code>10018</code></td>
-              <td>High Density Alarm<span class="muted-cell">FC02 读</span></td>
-              <td>当前密度有效且 CurrentDensity > 40015 时置 1</td>
-              <td>当前由 CPU3 即时合成；未实现 SI 原设备可能存在的报警锁存、确认或消音生命周期。</td>
-              <td>如果 DCS 需要报警锁存、确认或消音模型，再新增报警生命周期；当前保持即时合成。</td>
-            </tr>
-            <tr>
-              <td><code>10019</code></td>
-              <td>Low Temp Alarm<span class="muted-cell">FC02 读</span></td>
-              <td>当前温度有效且 CurrentTemp < 40016 时置 1</td>
-              <td>当前由 CPU3 即时合成；未实现 SI 原设备可能存在的报警锁存、确认或消音生命周期。</td>
-              <td>如果 DCS 需要报警锁存、确认或消音模型，再新增报警生命周期；当前保持即时合成。</td>
-            </tr>
-            <tr>
-              <td><code>10020</code></td>
-              <td>High Temp Alarm<span class="muted-cell">FC02 读</span></td>
-              <td>当前温度有效且 CurrentTemp > 40017 时置 1</td>
-              <td>当前由 CPU3 即时合成；未实现 SI 原设备可能存在的报警锁存、确认或消音生命周期。</td>
-              <td>如果 DCS 需要报警锁存、确认或消音模型，再新增报警生命周期；当前保持即时合成。</td>
-            </tr>
-            <tr>
-              <td><code>10021</code></td>
-              <td>LL Level Alarm<span class="muted-cell">FC02 读</span></td>
-              <td>液位有效且 LiquidLevel < 40018 时置 1</td>
-              <td>当前由 CPU3 即时合成；未实现 SI 原设备可能存在的报警锁存、确认或消音生命周期。</td>
-              <td>如果 DCS 需要报警锁存、确认或消音模型，再新增报警生命周期；当前保持即时合成。</td>
-            </tr>
-            <tr>
-              <td><code>10022</code></td>
-              <td>HH Level Alarm<span class="muted-cell">FC02 读</span></td>
-              <td>液位有效且 LiquidLevel > 40019 时置 1</td>
-              <td>当前由 CPU3 即时合成；未实现 SI 原设备可能存在的报警锁存、确认或消音生命周期。</td>
-              <td>如果 DCS 需要报警锁存、确认或消音模型，再新增报警生命周期；当前保持即时合成。</td>
-            </tr>
-            <tr>
-              <td><code>10023</code></td>
-              <td>Low Level Alarm<span class="muted-cell">FC02 读</span></td>
-              <td>液位有效且 LiquidLevel < 40020 时置 1</td>
-              <td>当前由 CPU3 即时合成；未实现 SI 原设备可能存在的报警锁存、确认或消音生命周期。</td>
-              <td>如果 DCS 需要报警锁存、确认或消音模型，再新增报警生命周期；当前保持即时合成。</td>
-            </tr>
-            <tr>
-              <td><code>10024</code></td>
-              <td>High Level Alarm<span class="muted-cell">FC02 读</span></td>
-              <td>液位有效且 LiquidLevel > 40021 时置 1</td>
-              <td>当前由 CPU3 即时合成；未实现 SI 原设备可能存在的报警锁存、确认或消音生命周期。</td>
-              <td>如果 DCS 需要报警锁存、确认或消音模型，再新增报警生命周期；当前保持即时合成。</td>
-            </tr>
-            <tr>
-              <td><code>10025</code></td>
-              <td>Profile Temp Deviation Alarm<span class="muted-cell">FC02 读</span></td>
-              <td>SI profile 完成后，相邻点温差 > 40022 时置 1</td>
-              <td>当前由 CPU3 即时合成；未实现 SI 原设备可能存在的报警锁存、确认或消音生命周期。</td>
-              <td>如果 DCS 需要报警锁存、确认或消音模型，再新增报警生命周期；当前保持即时合成。</td>
-            </tr>
-            <tr>
-              <td><code>10026</code></td>
-              <td>Profile Density Deviation Alarm<span class="muted-cell">FC02 读</span></td>
-              <td>SI profile 完成后，相邻点密差 > 40023 时置 1</td>
-              <td>当前由 CPU3 即时合成；未实现 SI 原设备可能存在的报警锁存、确认或消音生命周期。</td>
-              <td>如果 DCS 需要报警锁存、确认或消音模型，再新增报警生命周期；当前保持即时合成。</td>
-            </tr>
-            <tr>
-              <td><code>10027~10028</code></td>
-              <td>Reserved<span class="muted-cell">FC02 读</span></td>
-              <td>保留离散输入区间<span class="muted-cell">全部固定输出 0</span></td>
-              <td>官方保留，无业务功能；逐地址展开会重复同一语义。</td>
-              <td>保持区间化描述：读 0，不新增业务语义。</td>
-            </tr>
-            <tr>
-              <td><code>10029</code></td>
-              <td>Profile Low Temp Alarm<span class="muted-cell">FC02 读</span></td>
-              <td>任一 SI profile 点温度 < 40016 时置 1</td>
-              <td>当前由 CPU3 即时合成；未实现 SI 原设备可能存在的报警锁存、确认或消音生命周期。</td>
-              <td>如果 DCS 需要报警锁存、确认或消音模型，再新增报警生命周期；当前保持即时合成。</td>
-            </tr>
-            <tr>
-              <td><code>10030</code></td>
-              <td>Profile High Temp Alarm<span class="muted-cell">FC02 读</span></td>
-              <td>任一 SI profile 点温度 > 40017 时置 1</td>
-              <td>当前由 CPU3 即时合成；未实现 SI 原设备可能存在的报警锁存、确认或消音生命周期。</td>
-              <td>如果 DCS 需要报警锁存、确认或消音模型，再新增报警生命周期；当前保持即时合成。</td>
-            </tr>
-            <tr>
-              <td><code>10031</code></td>
-              <td>Profile Low Density Alarm<span class="muted-cell">FC02 读</span></td>
-              <td>任一 SI profile 点密度 < 40014 时置 1</td>
-              <td>当前由 CPU3 即时合成；未实现 SI 原设备可能存在的报警锁存、确认或消音生命周期。</td>
-              <td>如果 DCS 需要报警锁存、确认或消音模型，再新增报警生命周期；当前保持即时合成。</td>
-            </tr>
-            <tr>
-              <td><code>10032</code></td>
-              <td>Profile High Density Alarm<span class="muted-cell">FC02 读</span></td>
-              <td>任一 SI profile 点密度 > 40015 时置 1</td>
-              <td>当前由 CPU3 即时合成；未实现 SI 原设备可能存在的报警锁存、确认或消音生命周期。</td>
-              <td>如果 DCS 需要报警锁存、确认或消音模型，再新增报警生命周期；当前保持即时合成。</td>
-            </tr>
-            </tbody>
-          </table>
-        </div>
-          </div>
-        </div>
-
-        <div class="register-block">
-          <h3>FC03 / FC06 保持寄存器 40001~40023 兼容对照</h3>
-          <div class="block-inner">
-            <p class="register-note">原协议保持寄存器区：FC03 读取 profile/报警配置，FC06 写单个配置寄存器。当前 40001~40003 归 CPU2 SI profile 参数，40010~40023 归 CPU3 SI 参数。</p>
-        <div class="table-frame">
-          <table class="address-table">
-            <thead>
-              <tr>
-                <th>SI 地址</th>
-                <th>原协议功能</th>
-                <th>当前兼容方式</th>
-                <th>问题/差异</th>
-                <th>下一步</th>
-              </tr>
-            </thead>
-            <tbody>
-            <tr>
-              <td><code>40001</code></td>
-              <td>Profile First Point<span class="muted-cell">FC03 读；FC06 写</span></td>
-              <td>CPU2 g_deviceParams.si_profile_first_point<span class="muted-cell">mm；CPU2 内部 0.1mm</span><span class="muted-cell">CUBE 默认 100mm；写 0 非法；Point0 位置字段固定 0，40001 是 Point1 绝对位置</span></td>
-              <td>官方资料未给出完整出厂默认值；当前使用 CUBE 工程默认。</td>
-              <td>保持当前实现；后续协议或源码变化时同步更新文档。</td>
-            </tr>
-            <tr>
-              <td><code>40002</code></td>
-              <td>Profile Increment<span class="muted-cell">FC03 读；FC06 写</span></td>
-              <td>CPU2 g_deviceParams.si_profile_increment<span class="muted-cell">mm；CPU2 内部 0.1mm</span><span class="muted-cell">CUBE 默认 1000mm；写 0 非法；从底部向上递增</span></td>
-              <td>官方资料未给出完整出厂默认值；当前使用 CUBE 工程默认。</td>
-              <td>保持当前实现；后续协议或源码变化时同步更新文档。</td>
-            </tr>
-            <tr>
-              <td><code>40003</code></td>
-              <td>Profile Dwell Time<span class="muted-cell">FC03 读；FC06 写</span></td>
-              <td>CPU2 g_deviceParams.si_profile_dwell_time<span class="muted-cell">s</span><span class="muted-cell">CUBE 默认 10s；写 0 非法；运行期限制 1~3600s</span></td>
-              <td>官方资料未给出完整出厂默认值；当前使用 CUBE 工程默认。</td>
-              <td>保持当前实现；后续协议或源码变化时同步更新文档。</td>
-            </tr>
-            <tr>
-              <td><code>40004~40009</code></td>
-              <td>Reserved<span class="muted-cell">FC03 读；FC06 拒写</span></td>
-              <td>保留保持寄存器区间<span class="muted-cell">读 0；写返回 Illegal Data Address</span></td>
-              <td>官方保留，无业务功能；逐地址展开会重复同一语义。</td>
-              <td>保持区间化描述：读 0，禁止写入，不新增业务语义。</td>
-            </tr>
-            <tr>
-              <td><code>40010</code></td>
-              <td>Automatic Profile Interval<span class="muted-cell">FC03 读；FC06 写</span></td>
-              <td>CPU3 si_auto_profile_interval<span class="muted-cell">min</span><span class="muted-cell">CUBE 默认 60；写 0 非法；每天一次建议 1440</span></td>
-              <td>官方资料未给出完整出厂默认值；当前使用 CUBE 工程默认。</td>
-              <td>保持当前实现；后续协议或源码变化时同步更新文档。</td>
-            </tr>
-            <tr>
-              <td><code>40011</code></td>
-              <td>Automatic Profile Enable<span class="muted-cell">FC03 读；FC06 写</span></td>
-              <td>CPU3 si_auto_profile_enable<span class="muted-cell">0/1</span><span class="muted-cell">默认 0；仅接受 0/1；0 禁用、1 启用</span></td>
-              <td>无明显兼容问题。</td>
-              <td>保持当前实现；后续协议或源码变化时同步更新文档。</td>
-            </tr>
-            <tr>
-              <td><code>40012</code></td>
-              <td>Automatic Profile Hour<span class="muted-cell">FC03 读；FC06 写</span></td>
-              <td>CPU3 si_auto_profile_hour<span class="muted-cell">h</span><span class="muted-cell">默认 0；仅接受 0~23</span></td>
-              <td>无明显兼容问题。</td>
-              <td>保持当前实现；后续协议或源码变化时同步更新文档。</td>
-            </tr>
-            <tr>
-              <td><code>40013</code></td>
-              <td>Automatic Profile Minute<span class="muted-cell">FC03 读；FC06 写</span></td>
-              <td>CPU3 si_auto_profile_minute<span class="muted-cell">min</span><span class="muted-cell">默认 0；仅接受 0~59</span></td>
-              <td>无明显兼容问题。</td>
-              <td>保持当前实现；后续协议或源码变化时同步更新文档。</td>
-            </tr>
-            <tr>
-              <td><code>40014</code></td>
-              <td>Low Density Setpoint<span class="muted-cell">FC03 读；FC06 写</span></td>
-              <td>CPU3 si_low_density_setpoint<span class="muted-cell">0.01 kg/m3</span><span class="muted-cell">默认 0；0 是有效阈值；当前密度/profile 点低于该值报警</span></td>
-              <td>无明显兼容问题。</td>
-              <td>如 DCS 需要报警锁存、确认或消音模型，再新增报警生命周期；当前保持阈值配置和即时合成。</td>
-            </tr>
-            <tr>
-              <td><code>40015</code></td>
-              <td>High Density Setpoint<span class="muted-cell">FC03 读；FC06 写</span></td>
-              <td>CPU3 si_high_density_setpoint<span class="muted-cell">0.01 kg/m3</span><span class="muted-cell">默认 0；0 是有效阈值；当前密度/profile 点高于该值报警</span></td>
-              <td>无明显兼容问题。</td>
-              <td>如 DCS 需要报警锁存、确认或消音模型，再新增报警生命周期；当前保持阈值配置和即时合成。</td>
-            </tr>
-            <tr>
-              <td><code>40016</code></td>
-              <td>Low Temperature Setpoint<span class="muted-cell">FC03 读；FC06 写</span></td>
-              <td>CPU3 si_low_temperature_setpoint<span class="muted-cell">有符号 0.01°C</span><span class="muted-cell">默认 0；允许负值；温度低于该值报警</span></td>
-              <td>无明显兼容问题。</td>
-              <td>如 DCS 需要报警锁存、确认或消音模型，再新增报警生命周期；当前保持阈值配置和即时合成。</td>
-            </tr>
-            <tr>
-              <td><code>40017</code></td>
-              <td>High Temperature Setpoint<span class="muted-cell">FC03 读；FC06 写</span></td>
-              <td>CPU3 si_high_temperature_setpoint<span class="muted-cell">有符号 0.01°C</span><span class="muted-cell">默认 0；允许负值；温度高于该值报警</span></td>
-              <td>无明显兼容问题。</td>
-              <td>如 DCS 需要报警锁存、确认或消音模型，再新增报警生命周期；当前保持阈值配置和即时合成。</td>
-            </tr>
-            <tr>
-              <td><code>40018</code></td>
-              <td>LL Level Setpoint<span class="muted-cell">FC03 读；FC06 写</span></td>
-              <td>CPU3 si_ll_level_setpoint<span class="muted-cell">mm</span><span class="muted-cell">默认 0；0 是有效阈值；当前液位低于该值报警</span></td>
-              <td>无明显兼容问题。</td>
-              <td>如 DCS 需要报警锁存、确认或消音模型，再新增报警生命周期；当前保持阈值配置和即时合成。</td>
-            </tr>
-            <tr>
-              <td><code>40019</code></td>
-              <td>HH Level Setpoint<span class="muted-cell">FC03 读；FC06 写</span></td>
-              <td>CPU3 si_hh_level_setpoint<span class="muted-cell">mm</span><span class="muted-cell">默认 0；0 是有效阈值；当前液位高于该值报警</span></td>
-              <td>无明显兼容问题。</td>
-              <td>如 DCS 需要报警锁存、确认或消音模型，再新增报警生命周期；当前保持阈值配置和即时合成。</td>
-            </tr>
-            <tr>
-              <td><code>40020</code></td>
-              <td>Low Level Setpoint<span class="muted-cell">FC03 读；FC06 写</span></td>
-              <td>CPU3 si_low_level_setpoint<span class="muted-cell">mm</span><span class="muted-cell">默认 0；0 是有效阈值；当前液位低于该值报警</span></td>
-              <td>无明显兼容问题。</td>
-              <td>如 DCS 需要报警锁存、确认或消音模型，再新增报警生命周期；当前保持阈值配置和即时合成。</td>
-            </tr>
-            <tr>
-              <td><code>40021</code></td>
-              <td>High Level Setpoint<span class="muted-cell">FC03 读；FC06 写</span></td>
-              <td>CPU3 si_high_level_setpoint<span class="muted-cell">mm</span><span class="muted-cell">默认 0；0 是有效阈值；当前液位高于该值报警</span></td>
-              <td>无明显兼容问题。</td>
-              <td>如 DCS 需要报警锁存、确认或消音模型，再新增报警生命周期；当前保持阈值配置和即时合成。</td>
-            </tr>
-            <tr>
-              <td><code>40022</code></td>
-              <td>Temp Deviation Setpoint<span class="muted-cell">FC03 读；FC06 写</span></td>
-              <td>CPU3 si_temp_deviation_setpoint<span class="muted-cell">0.01°C 差值</span><span class="muted-cell">默认 0；0 是有效偏差阈值；相邻 profile 点温差大于该值报警</span></td>
-              <td>无明显兼容问题。</td>
-              <td>如 DCS 需要报警锁存、确认或消音模型，再新增报警生命周期；当前保持阈值配置和即时合成。</td>
-            </tr>
-            <tr>
-              <td><code>40023</code></td>
-              <td>Density Deviation Setpoint<span class="muted-cell">FC03 读；FC06 写</span></td>
-              <td>CPU3 si_density_deviation_setpoint<span class="muted-cell">0.01 kg/m3 差值</span><span class="muted-cell">默认 0；0 是有效偏差阈值；相邻 profile 点密差大于该值报警</span></td>
-              <td>无明显兼容问题。</td>
-              <td>如 DCS 需要报警锁存、确认或消音模型，再新增报警生命周期；当前保持阈值配置和即时合成。</td>
-            </tr>
-            </tbody>
-          </table>
-        </div>
-          </div>
-        </div>
-
-        <div class="register-block">
-          <h3>FC04 输入寄存器 30001~30020 兼容对照</h3>
-          <div class="block-inner">
-            <p class="register-note">原协议输入寄存器区：FC04 读取实时测量、profile 时间和 profile 点阵。当前 30001~30020 输出实时值、点数、时间和保留区。</p>
-        <div class="table-frame">
-          <table class="address-table">
-            <thead>
-              <tr>
-                <th>SI 地址</th>
-                <th>原协议功能</th>
-                <th>当前兼容方式</th>
-                <th>问题/差异</th>
-                <th>下一步</th>
-              </tr>
-            </thead>
-            <tbody>
-            <tr>
-              <td><code>30001</code></td>
-              <td>Current Probe Position<span class="muted-cell">FC04 读</span></td>
-              <td>g_measurement.debug_data.sensor_position<span class="muted-cell">mm</span><span class="muted-cell">内部 0.1mm 转 mm；负位置输出 0</span></td>
-              <td>无明显兼容问题。</td>
-              <td>保持当前实现；后续协议或源码变化时同步更新文档。</td>
-            </tr>
-            <tr>
-              <td><code>30002</code></td>
-              <td>Current Temperature<span class="muted-cell">FC04 读</span></td>
-              <td>g_measurement.debug_data.temperature<span class="muted-cell">有符号 0.01°C</span><span class="muted-cell">无效输出 -200.00°C / 0xB1E0</span></td>
-              <td>无明显兼容问题。</td>
-              <td>保持当前实现；后续协议或源码变化时同步更新文档。</td>
-            </tr>
-            <tr>
-              <td><code>30003</code></td>
-              <td>Current Density<span class="muted-cell">FC04 读</span></td>
-              <td>g_measurement.single_point_monitoring.density<span class="muted-cell">0.01 kg/m3</span><span class="muted-cell">无效输出 0；超 16 位钳位</span></td>
-              <td>无明显兼容问题。</td>
-              <td>保持当前实现；后续协议或源码变化时同步更新文档。</td>
-            </tr>
-            <tr>
-              <td><code>30004</code></td>
-              <td>Liquid Level<span class="muted-cell">FC04 读</span></td>
-              <td>g_measurement.oil_measurement.oil_level<span class="muted-cell">mm</span><span class="muted-cell">内部 0.1mm 转 mm；需结合 10013 判断是否当前有效</span></td>
-              <td>无明显兼容问题。</td>
-              <td>保持当前实现；后续协议或源码变化时同步更新文档。</td>
-            </tr>
-            <tr>
-              <td><code>30005</code></td>
-              <td>Reserved<span class="muted-cell">FC04 读</span></td>
-              <td>无<span class="muted-cell">无</span><span class="muted-cell">固定 0</span></td>
-              <td>官方保留，无业务功能。</td>
-              <td>保持保留地址处理：读 0，禁止写入，不新增业务语义。</td>
-            </tr>
-            <tr>
-              <td><code>30006</code></td>
-              <td>Number Of Points<span class="muted-cell">FC04 读</span></td>
-              <td>density_distribution.measurement_points<span class="muted-cell">点数</span><span class="muted-cell">仅 SI profile 完成锁存后输出有效点数；未完成输出 0</span></td>
-              <td>无明显兼容问题。</td>
-              <td>保持完成后输出有效点数、未完成输出 0；如需要手动清空点阵，再新增清除命令或状态。</td>
-            </tr>
-            <tr>
-              <td><code>30007</code></td>
-              <td>Profile Timestamp Month<span class="muted-cell">FC04 读</span></td>
-              <td>CPU3 RTC 锁存时间<span class="muted-cell">month</span><span class="muted-cell">触发并下发 CMD_SI_PROFILE 时锁存</span></td>
-              <td>无明显兼容问题。</td>
-              <td>保持由 CPU3 在触发 SI profile 时锁存开始时间；如需更精确时间源，再补测量开始事件回传。</td>
-            </tr>
-            <tr>
-              <td><code>30008</code></td>
-              <td>Profile Timestamp Day<span class="muted-cell">FC04 读</span></td>
-              <td>CPU3 RTC 锁存时间<span class="muted-cell">day</span><span class="muted-cell">同 30007</span></td>
-              <td>无明显兼容问题。</td>
-              <td>保持由 CPU3 在触发 SI profile 时锁存开始时间；如需更精确时间源，再补测量开始事件回传。</td>
-            </tr>
-            <tr>
-              <td><code>30009</code></td>
-              <td>Profile Timestamp Hour<span class="muted-cell">FC04 读</span></td>
-              <td>CPU3 RTC 锁存时间<span class="muted-cell">hour</span><span class="muted-cell">同 30007</span></td>
-              <td>无明显兼容问题。</td>
-              <td>保持由 CPU3 在触发 SI profile 时锁存开始时间；如需更精确时间源，再补测量开始事件回传。</td>
-            </tr>
-            <tr>
-              <td><code>30010</code></td>
-              <td>Profile Timestamp Minute<span class="muted-cell">FC04 读</span></td>
-              <td>CPU3 RTC 锁存时间<span class="muted-cell">minute</span><span class="muted-cell">同 30007</span></td>
-              <td>无明显兼容问题。</td>
-              <td>保持由 CPU3 在触发 SI profile 时锁存开始时间；如需更精确时间源，再补测量开始事件回传。</td>
-            </tr>
-            <tr>
-              <td><code>30011</code></td>
-              <td>Current Time Hour<span class="muted-cell">FC04 读</span></td>
-              <td>CPU3 RTC 当前时间<span class="muted-cell">hour</span><span class="muted-cell">仅用于 SI 显示，不参与 CPU2 测量调度</span></td>
-              <td>无明显兼容问题。</td>
-              <td>保持 Profile Complete Counter 输出；如现场要求清零或持久化，再新增明确操作。</td>
-            </tr>
-            <tr>
-              <td><code>30012</code></td>
-              <td>Current Time Minute<span class="muted-cell">FC04 读</span></td>
-              <td>CPU3 RTC 当前时间<span class="muted-cell">minute</span><span class="muted-cell">同 30011</span></td>
-              <td>无明显兼容问题。</td>
-              <td>保持当前实现；后续协议或源码变化时同步更新文档。</td>
-            </tr>
-            <tr>
-              <td><code>30013</code></td>
-              <td>Current Time Second<span class="muted-cell">FC04 读</span></td>
-              <td>CPU3 RTC 当前时间<span class="muted-cell">second</span><span class="muted-cell">同 30011</span></td>
-              <td>无明显兼容问题。</td>
-              <td>保持当前实现；后续协议或源码变化时同步更新文档。</td>
-            </tr>
-            <tr>
-              <td><code>30014~30020</code></td>
-              <td>Reserved<span class="muted-cell">FC04 读</span></td>
-              <td>保留输入寄存器区间<span class="muted-cell">全部固定输出 0</span></td>
-              <td>官方保留，无业务功能；逐地址展开会重复同一语义。</td>
-              <td>保持区间化描述：读 0，禁止写入，不新增业务语义。</td>
-            </tr>
-            </tbody>
-          </table>
-        </div>
-          </div>
-        </div>
-
-        <div class="register-block">
-          <h3>FC04 Profile 点阵 30021~30620：Point0~Point199 三元组索引规则</h3>
-          <div class="block-inner">
-            <p class="register-note">原协议 profile 点阵区：每点 3 个寄存器，依次为位置、温度、密度。当前按 DCS 地址表输出 Point0~Point199，共 200 点；除 Point0/Point1 的特殊语义外，其余点按统一公式索引，不再逐点重复展开。</p>
-        <div class="table-frame">
-          <table class="address-table">
-            <thead>
-              <tr>
-                <th>点号/范围</th>
-                <th>原协议功能</th>
-                <th>当前兼容方式</th>
-                <th>问题/差异</th>
-                <th>下一步</th>
-              </tr>
-            </thead>
-            <tbody>
-            <tr>
-              <td>Point 0</td>
-              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30021</code>；温度寄存器 <code>30022</code>；密度寄存器 <code>30023</code></span></td>
-              <td>仅 SI profile 完成且 Point0 有效时输出；否则三寄存器保持 0<span class="muted-cell">位置固定 0mm；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
-              <td>位置字段不是实际底部高度；实际运动目标来自探底、旧底部或 fallback 当前位置。</td>
-              <td>保持 Point0 位置字段固定 0；如需诊断实际底部高度，另定诊断寄存器，不改变 SI 点阵。</td>
-            </tr>
-            <tr>
-              <td>Point 1</td>
-              <td>Profile 点阵三元组<span class="muted-cell">位置寄存器 <code>30024</code>；温度寄存器 <code>30025</code>；密度寄存器 <code>30026</code></span></td>
-              <td>仅 SI profile 完成且 Point1 有效时输出；否则三寄存器保持 0<span class="muted-cell">位置 = 40001；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
-              <td>Point1 使用绝对位置 40001，不因实际底部高于 40001 而跳过。</td>
-              <td>保持 40001 作为首个可编程测点；现场联调重点核对 30024 是否等于 40001。</td>
-            </tr>
-            <tr>
-              <td>Point 2~199</td>
-              <td>Profile 点阵三元组<span class="muted-cell">Point n 地址公式：位置 <code>30021 + 3n</code>；温度 <code>30022 + 3n</code>；密度 <code>30023 + 3n</code></span><span class="muted-cell">示例：Point2 = <code>30027/30028/30029</code>；Point199 = <code>30618/30619/30620</code></span></td>
-              <td>仅 SI profile 完成且 <code>n &lt; 30006</code> 时输出；否则三寄存器保持 0<span class="muted-cell">位置 = <code>40001 + (n - 1) * 40002</code>；温度有符号 0.01°C；密度 0.01 kg/m3</span></td>
-              <td>后续点按 40002 从 40001 绝对位置递增；整体受 DCS 地址窗口限制，只覆盖 Point0~Point199。</td>
-              <td>保持 200 点 DCS 窗口；DCS 按 30006 判断有效点数，若需要超过 200 点，另定扩展地址或分页机制。</td>
-            </tr>
-            <tr>
-              <td>无效点/未完成</td>
-              <td>适用于整个点阵窗口<span class="muted-cell">Point0~Point199 的任意三元组</span></td>
-              <td>SI profile 未完成、点号超出 30006 有效点数、或采样点未生成时，对应位置/温度/密度均输出 0。</td>
-              <td>0 既可能表示真实数值，也可能表示无效占位；必须结合 30006 和 Profile 完成状态判断。</td>
-              <td>联调时要求 DCS 先读取 30006，再按有效点数解析点阵，避免把补零尾部当作真实采样点。</td>
-            </tr>
-            </tbody>
-          </table>
-        </div>
-          </div>
+        <div class="callout">
+          六项Profile报警为 <code>10025</code>、<code>10026</code>、<code>10029~10032</code>。它们与最终N和点阵使用同一已发布SI快照计算；活动期不会提前用候选点阵改写已发布报警。
         </div>
       </section>
 
-      <section id="profile">
-        <h2>SI Profile 流程</h2>
-        <p class="lead">
-          当前 SI profile 是独立测量流程，不再映射到普通分布密度测量。关键目标是满足 SI 点阵语义：Point0 在底部采样但对外位置字段固定为 0，后续可编程点从 40001 绝对位置开始按步距采样。
-        </p>
-
-        <div class="flow">
-          <div class="flow-step">
-            <b>触发</b>
-            <p><code>00004</code>、屏幕 SI Profile 或自动调度触发，CPU3 锁存开始时间。</p>
-          </div>
-          <div class="flow-step">
-            <b>探底判断</b>
-            <p>上电首次、无底部参考、频次命中或频次为 1 时执行真实探底。</p>
-          </div>
-          <div class="flow-step">
-            <b>底部选择</b>
-            <p>探底成功用当前底部；失败时有旧底部用旧底部，没有旧底部用当前位置。</p>
-          </div>
-          <div class="flow-step">
-            <b>生成点位</b>
-            <p>Point0 对外位置 = 0；Point1 = first 绝对位置；Point2 = first + increment。</p>
-          </div>
-          <div class="flow-step">
-            <b>逐点采样</b>
-            <p>移动、等待稳定窗口、采样温度密度；遇到空气点停止且不写入。</p>
-          </div>
-        </div>
-
-        <table>
-          <thead>
-            <tr>
-              <th>Profile 细节</th>
-              <th>当前口径</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td>是否先找液位</td>
-              <td><strong>不先找液位。</strong>运行到候选点后通过密度和频率判断是否已经到液面以上。</td>
-            </tr>
-            <tr>
-              <td>Point0</td>
-              <td>实际运动/采样目标优先来自本轮探底结果；没有本轮有效底部时按 fallback 逻辑选择。写入 SI 点阵时位置字段固定为 <code>0</code>。</td>
-            </tr>
-            <tr>
-              <td><code>40001</code></td>
-              <td>表示 Point1 的绝对位置，不覆盖 Point0；即使实际底部高于 <code>40001</code>，也不跳过 Point1。</td>
-            </tr>
-            <tr>
-              <td><code>40003</code></td>
-              <td>单位为秒，当前作为停稳后的稳定等待窗口使用。</td>
-            </tr>
-            <tr>
-              <td>停止条件</td>
-              <td>空气点、达到 200 点、达到罐高/上限、命令切换或测量错误。</td>
-            </tr>
-            <tr>
-              <td>完成态</td>
-              <td>至少 Point0 有效才认为本轮成功；成功后锁存 <code>PROFILE_SOURCE_SI</code> 并递增完成计数。</td>
-            </tr>
-          </tbody>
-        </table>
-      </section>
-
-      <section id="requirements">
-        <h2>需求对照</h2>
-        <table>
-          <thead>
-            <tr>
-              <th>需求项</th>
-              <th>当前实现</th>
-              <th>结论</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td>Profile 单独增加 SI 指令，测量过程完全独立</td>
-              <td>新增 <code>CMD_SI_PROFILE</code>，CPU2 独立流程执行；屏幕和协议入口均调用同一启动函数。</td>
-              <td><span class="status done">满足</span></td>
-            </tr>
-            <tr>
-              <td>探底频次：1 表示每次探底，N 表示每 N 次探底</td>
-              <td>CPU2 保存 <code>si_profile_bottom_detect_interval</code>，上电首次 profile 必探底。</td>
-              <td><span class="status done">满足</span></td>
-            </tr>
-            <tr>
-              <td>不探底时仍运行到底部位置读取 Point0</td>
-              <td>使用已保存底部位置作为底部采样运动目标，逐点执行时会先运行到该位置；写入 SI 点阵时 Point0 位置字段固定为 0。</td>
-              <td><span class="status done">满足</span></td>
-            </tr>
-            <tr>
-              <td>上下液位传感器显示：跟随稳定时上空气下液体，其它均液体</td>
-              <td>CPU3 离散输入合成中已按该语义输出。</td>
-              <td><span class="status done">满足</span></td>
-            </tr>
-            <tr>
-              <td><code>Probe Un-calibrated</code> 当前固定可信</td>
-              <td><code>10010</code> 固定输出 <code>0</code>，这是当前兼容固定值；官方全文复核后需重新确认是否隐藏校准/底部参考风险。</td>
-              <td><span class="status risk">P0 待确认</span></td>
-            </tr>
-            <tr>
-              <td><code>Bottom Reference</code> 保持现有逻辑</td>
-              <td><code>10001</code> 仍来自 CPU2 通用底部参考状态，不强制固定覆盖。</td>
-              <td><span class="status done">满足</span></td>
-            </tr>
-            <tr>
-              <td>落地自动 profile 调度</td>
-              <td>CPU3 使用 RTC、<code>40010~40013</code> 计算触发时间；同一分钟去重。</td>
-              <td><span class="status done">满足</span></td>
-            </tr>
-            <tr>
-              <td>兼容所有报警限值设置和状态</td>
-              <td><code>40014~40023</code> 作为 CPU3 SI 参数保存，离散输入报警由 CPU3 合成。</td>
-              <td><span class="status partial">满足第一版</span></td>
-            </tr>
-            <tr>
-              <td>Profile Timestamp 改为测量开始时间</td>
-              <td>CPU3 在收到或触发 profile 并下发 <code>CMD_SI_PROFILE</code> 时锁存。</td>
-              <td><span class="status done">满足确认口径</span></td>
-            </tr>
-            <tr>
-              <td>CPU3 菜单可配置 SI 参数</td>
-              <td>SI Profile、SI 自动、SI 报警已进入屏幕参数体系；探底修正罐高也可在 SI Profile 页看到。</td>
-              <td><span class="status done">满足</span></td>
-            </tr>
-          </tbody>
-        </table>
-      </section>
-
-      <section id="official-gaps">
-        <h2>官方语义偏差和待确认需求</h2>
-        <p class="lead">
-          本节同步自 2026-07-02 的官方全文复核结论。它不是新增实现清单，而是当前 SI 兼容层与 SI 原设备语义之间需要进一步确认或受控接受的差异。若现场要求严格等同 SI 原机，应优先处理 P0 项。
-        </p>
-
-        <table>
-          <thead>
-            <tr>
-              <th>编号</th>
-              <th>官方语义</th>
-              <th>当前 CUBE 口径</th>
-              <th>影响</th>
-              <th>处理建议</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td><span class="status risk">R-01 / P0</span></td>
-              <td>Manual mode 下不报告任何报警，液位读数也不更新。</td>
-              <td>CPU2 本机继电器报警会使用 <code>manual_alarm_inhibit</code>；CPU3 SI 报警位仍按 <code>40014~40023</code> 合成。</td>
-              <td>PLC 可能在维护或强制移动期间看到 SI 报警，并误用旧液位。</td>
-              <td>确认是否在 CPU3 SI 层按 Manual 清除 <code>10017~10026/10029~10032</code>；PLC 必须以 <code>10013=1</code> 门控当前液位。</td>
-            </tr>
-            <tr>
-              <td><span class="status risk">R-02 / P0</span></td>
-              <td>自动 Profile 到点时，如果系统处于 Manual，Profile run 不会开始。</td>
-              <td><code>si_modbus_periodic_task()</code> 到点后直接调用 SI profile 启动入口。</td>
-              <td>维护人员将设备置于 Manual 后，仍可能被自动 Profile 打断。</td>
-              <td>确认是否增加 Manual/维护状态跳过条件和跳过计数；如不改代码，现场需禁用自动 Profile。</td>
-            </tr>
-            <tr>
-              <td><span class="status risk">R-03 / P0</span></td>
-              <td>Profile run 和 Cal run 完成后返回 Auto，探头回液位界面继续跟踪。</td>
-              <td>SI profile 成功后先进入 <code>STATE_SPREADPOINTOVER</code> 并排队 <code>CMD_FIND_OIL</code>；<code>00002 Calibrate</code> 当前仍桥接 <code>CMD_CALIBRATE_ZERO</code>。</td>
-              <td>Profile 后需等待自动找液位完成；找液位完成前 <code>10013</code> 仍可能为 0，<code>30004</code> 不能当当前液位。</td>
-              <td>验证 Profile 成功后是否自动进入 <code>CMD_FIND_OIL</code> 并恢复 <code>10013=1</code>；Cal 完整回 Auto 语义仍待确认。</td>
-            </tr>
-            <tr>
-              <td><span class="status risk">R-04 / P0</span></td>
-              <td><code>Probe Un-calibrated</code> 表示当前位置/液位是否可信。</td>
-              <td><code>10010</code> 固定输出 0；探底失败且无旧底时可用当前位置继续 profile。</td>
-              <td>外部 SI 主机看不到位置不可信风险，Point0 可能被误认为真实罐底样本。</td>
-              <td>确认 <code>10001/10010/Profile Complete</code> 在无底部参考和探底失败时的最终对外策略。</td>
-            </tr>
-            <tr>
-              <td><span class="status partial">R-05 / P1</span></td>
-              <td>上下 level sensor 是 SI 原机判断液/气界面的核心硬件状态。</td>
-              <td><code>10002/10003</code> 由 CPU3 根据液位跟随稳定状态合成。</td>
-              <td>PLC 若当作真实传感器开关，会误判液面、气相或异常状态。</td>
-              <td>确认 PLC 是否接受合成状态；如不接受，需要硬件或映射来源扩展。</td>
-            </tr>
-            <tr>
-              <td><span class="status partial">R-06 / P1</span></td>
-              <td><code>Interlock</code> 是高限互锁；<code>Reel Alarm</code> 是卷盘或物理驱动故障。</td>
-              <td><code>10004</code> 和 <code>10009</code> 当前由错误码或阻塞状态概括合成。</td>
-              <td>无法区分高限互锁、卷盘故障、普通测量错误和工况阻止。</td>
-              <td>若 PLC 用于安全联锁或维护派工，应细分错误来源或新增诊断位。</td>
-            </tr>
-            <tr>
-              <td><span class="status partial">R-07 / P1</span></td>
-              <td><code>30007~30010</code> 更接近首个 profile 点采集时间。</td>
-              <td>当前在 CPU3 收到或触发 <code>CMD_SI_PROFILE</code> 时锁存。</td>
-              <td>不能用于严格计算 Point0 或每点采样时间。</td>
-              <td>接受为“profile 命令启动时间”，或新增 CPU2 Point0 采集事件。</td>
-            </tr>
-            <tr>
-              <td><span class="status partial">R-08 / P1</span></td>
-              <td>缺少 bottom reference 时应通过 Cal/Profile 重新建立可信基准。</td>
-              <td>探底失败且无旧底时可用当前位置继续 profile，Point0 对外仍为 0。</td>
-              <td>数据可用但底部坐标和全部点位可能偏移。</td>
-              <td>确认是继续输出低可信数据，还是改为 profile 失败并置位未校准/互锁状态。</td>
-            </tr>
-            <tr>
-              <td><span class="status risk">R-09 / P0</span></td>
-              <td>报警阈值是实际设定点，官方资料未给独立 enable 位。</td>
-              <td><code>40014~40023</code> 默认 0，且 0 是有效阈值。</td>
-              <td>默认参数下可能一有有效数据就报警。</td>
-              <td>现场必须下发合理默认阈值，或确认新增独立报警 enable/disable 方案。</td>
-            </tr>
-          </tbody>
-        </table>
-
-        <div class="callout warning">
-          当前最需要现场确认的需求：Manual 是否严格按官方语义做；Cal 是否实现完整 Level Calibration 并回 Auto；<code>10010</code> 是否还能固定为 0；报警默认值和启用方式如何定义；探底失败且无旧底时是否允许继续输出 profile。
-        </div>
-      </section>
-
-      <section id="gaps">
-        <h2>差异与风险</h2>
+      <section id="transaction">
+        <h2>FC06事务写与FRAM迁移</h2>
         <div class="two-col">
           <div class="card">
-            <h3><span class="status risk">P0</span> Manual 抑制未贯通</h3>
-            <p>Manual 下官方要求不报告报警、不更新液位、自动 Profile 不启动；当前 CPU3 SI 报警和自动调度尚未完全按该语义门控。</p>
+            <h3><span class="status done">40004~40009 本地原始槽</span></h3>
+            <p>站2抓包值已作为默认值：<code>0、50、1000、0、5、1</code>。字段保持原始16位，不猜测业务含义，也不参与测量控制。</p>
+            <p>FC06成功必须完成合法性检查、运行态候选更新、FRAM写入和写后读回，随后才更新holding镜像。</p>
           </div>
           <div class="card">
-            <h3><span class="status partial">P0</span> Cal 完整语义未落地</h3>
-            <p>SI Profile 成功后已排队找液位并回 Auto；Cal 仍只桥接零点标定，不是官方完整 Level Calibration。</p>
+            <h3><span class="status done">40010~40023 事务写</span></h3>
+            <p>每次FC06按完整CPU3 SI参数结构执行事务。CPU2离线不阻塞本地参数写，但FRAM写入或读回失败会对外返回设备忙 <code>0x06</code>。</p>
+            <p>失败时恢复整份写前运行态，不更新holding；同时尽力把旧结构修复写回FRAM。</p>
           </div>
           <div class="card">
-            <h3><span class="status risk">P0</span> Probe Uncal 固定可信</h3>
-            <p><code>10010</code> 固定 0 会隐藏底部参考、零点或探头位置不可信风险；尤其在探底失败且无旧底时必须专项确认。</p>
+            <h3><span class="status done">FRAM V6 → V7</span></h3>
+            <p>CPU3本地参数存储版本提升到V7，显式识别V6布局并迁移。V6已有SI自动Profile、报警参数和合法三路串口配置必须原值保留；V6迁移和V7重载不再把合法Wartsila 4800 8N1/8N2猜成历史默认值后改写。</p>
+            <p>新增加的 <code>40004~40009</code> 只补协议18默认值，不用恢复出厂覆盖旧参数。</p>
           </div>
           <div class="card">
-            <h3><span class="status risk">P0</span> 报警阈值默认 0</h3>
-            <p><code>40014~40023</code> 的 0 是有效阈值，不是禁用值；默认 0 可能导致首次有效数据后立即报警。</p>
-          </div>
-          <div class="card">
-            <h3><span class="status partial">P1</span> 传感器和报警来源合成</h3>
-            <p><code>10002/10003</code> 不是真实双 level sensor；<code>10004/10009</code> 也未区分高限、卷盘、电机和普通错误。</p>
+            <h3><span class="status partial">硬件验收边界</span></h3>
+            <p>静态布局断言和代码路径已覆盖，但真实V6 FRAM镜像迁移、写中断、写后读回失败、掉电后复读仍需在目标板验证。</p>
           </div>
         </div>
 
-        <h3>问题优先级排序</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>FC06结果</th>
+              <th>运行态</th>
+              <th>FRAM</th>
+              <th>holding读回</th>
+              <th>Modbus响应</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>合法且保存/读回成功</td>
+              <td>提交新整份参数</td>
+              <td>新值已验证</td>
+              <td>更新为新值</td>
+              <td>正常回显</td>
+            </tr>
+            <tr>
+              <td>值非法</td>
+              <td>保持旧值</td>
+              <td>不写</td>
+              <td>保持旧值</td>
+              <td>Illegal Data Value</td>
+            </tr>
+            <tr>
+              <td>写入或写后读回失败</td>
+              <td>恢复整份旧运行态</td>
+              <td>尽力修回旧镜像</td>
+              <td>不更新</td>
+              <td><code>0x06 Device Busy</code></td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="field-snapshot">
+        <h2>2026-07-13站2抓包历史快照与协议18关闭状态</h2>
+        <p class="lead">
+          本节只保留当日真实SI设备的现场证据。表中“历史差异”描述的是抓包当日CUBE旧实现，不是协议18当前状态；所有抓包均来自站2，不能自动上升为SI官方公开契约。
+        </p>
+
+        <table>
+          <thead>
+            <tr>
+              <th>历史编号</th>
+              <th>2026-07-13现场证据</th>
+              <th>当时差异</th>
+              <th>协议18关闭状态</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>C-01</td>
+              <td><code>30014~30016</code>与FC01/FC02位图重复一致。</td>
+              <td>旧实现固定0。</td>
+              <td><span class="status done">已关闭</span> 按同一FC01/FC02快照镜像。</td>
+            </tr>
+            <tr>
+              <td>C-02</td>
+              <td><code>40004~40009 = 0、50、1000、0、5、1</code>。</td>
+              <td>旧实现读0且拒写。</td>
+              <td><span class="status done">已关闭</span> 本地原始槽可读写、持久化并失败回滚。</td>
+            </tr>
+            <tr>
+              <td>C-03</td>
+              <td>Point0位置输出本轮真实采用底部位置。</td>
+              <td>旧实现固定0。</td>
+              <td><span class="status done">已关闭</span> 输出实际采用的可信旧底或当前位置回退值。</td>
+            </tr>
+            <tr>
+              <td>C-04</td>
+              <td>时间戳在Point0建立新周期时更新。</td>
+              <td>旧实现命令触发时锁存。</td>
+              <td><span class="status done">已关闭</span> 观察到Point0事件才锁存；无法重建时全0。</td>
+            </tr>
+            <tr>
+              <td>C-05</td>
+              <td>旧N保留到Point0，随后从1逐点增长，最终N事先未知。</td>
+              <td>旧实现完成前0、完成后一次性点数。</td>
+              <td><span class="status done">已关闭</span> Point0建代并只按有效液体点递增。</td>
+            </tr>
+            <tr>
+              <td>C-06</td>
+              <td>抓包当时未直接证明活动期点阵是否开放。</td>
+              <td>缺少明确产品口径。</td>
+              <td><span class="status done">已冻结</span> 协议18规定活动期全0，最终同代一次发布。</td>
+            </tr>
+            <tr>
+              <td>C-07</td>
+              <td>旧Complete经历1→0→1，最终与Auto、AtLevel组合后读取点阵。</td>
+              <td>旧实现完成锁存和回液位分阶段可见。</td>
+              <td><span class="status done">已关闭</span> 回液位门禁和候选复核通过后发布最终组合。</td>
+            </tr>
+            <tr>
+              <td>C-08</td>
+              <td>Point0表达本轮实际采用的底部位置。</td>
+              <td>无旧底探底失败时位置和可信性口径不一致。</td>
+              <td><span class="status done">已关闭</span> 可信旧底优先，无旧底用当前位置继续且不置失败/Interlock。</td>
+            </tr>
+            <tr>
+              <td>C-09</td>
+              <td>到液位稳定后才同帧出现Auto+Stop、Complete、AtLevel和最终报警。</td>
+              <td>旧实现先完成、再回液位。</td>
+              <td><span class="status done">已关闭</span> 最终发布延后到回液位和CPU3代际复核完成。</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="callout warning">
+          历史抓包仍有价值：它用于证明私有镜像、默认原始槽、Point0建代、逐步N和最终组合。但协议18验收必须重新抓CUBE站2全流程，不能直接用2026-07-13真实SI帧替代当前固件验证。
+        </div>
+      </section>
+
+      <section id="remaining">
+        <h2>仍保留的受控偏差与未发布边界</h2>
+        <p class="lead">
+          下列项目不属于C-01~C-09生命周期兼容包的未完成项；它们是SI原机语义、当前硬件来源或发布验证上的独立边界。没有新增现场决定前，不应把它们写成协议18已经完全复刻SI原机。
+        </p>
+
+        <div class="two-col">
+          <div class="card">
+            <h3>Manual与自动调度</h3>
+            <p>仍需按PLC实际依赖验证Manual下报警、液位保持和自动Profile抑制是否符合现场要求。</p>
+          </div>
+          <div class="card">
+            <h3>Cal完整语义</h3>
+            <p><code>00002 Calibrate</code> 与SI原机完整触底建基准、回Auto流程不是本次生命周期兼容包的验收结论。</p>
+          </div>
+          <div class="card">
+            <h3>硬件状态来源</h3>
+            <p><code>10002/10003</code>是合成液位传感器状态；Interlock和Reel Alarm也可能是错误状态归纳，不等同SI原机独立硬件触点。</p>
+          </div>
+          <div class="card">
+            <h3>底部可信性</h3>
+            <p>无可信旧底且探底失败时使用当前位置继续是已确认兼容策略，但该Point0位置不能作为物理罐底校准证明。</p>
+          </div>
+          <div class="card">
+            <h3>地址与功能边界</h3>
+            <p>维持官方DCS 200点窗口和FC01~FC06；FC15/FC16及超过200点不是当前支持范围。</p>
+          </div>
+          <div class="card">
+            <h3>发布边界</h3>
+            <p>协议18代码已实现但尚未形成正式发布组合；CPU2和CPU3必须成对使用，协议17/18混搭应被版本门禁拦截。</p>
+          </div>
+        </div>
+      </section>
+
+      <section id="acceptance">
+        <h2>下一步硬件验收重点</h2>
         <table>
           <thead>
             <tr>
               <th>优先级</th>
-              <th>差异/风险</th>
-              <th>为什么重要</th>
-              <th>当前建议</th>
+              <th>用例</th>
+              <th>关键观察</th>
+              <th>通过标准</th>
             </tr>
           </thead>
           <tbody>
             <tr>
               <td><span class="status risk">P0</span></td>
-              <td>Manual 报警、液位和自动 Profile</td>
-              <td>官方 Manual 下报警不报告、液位不更新、自动 Profile 不启动；当前 SI 层未完全做到。</td>
-              <td>先决定是否按官方语义改 CPU3 SI 层；若保留偏差，PLC 侧必须禁用或规避。</td>
+              <td>真实站2 RS485完整Profile</td>
+              <td>命令前、PREPARING、Point0、逐点、RETURNING_LEVEL、最终COMPLETE同步读取FC01/FC02/FC04。</td>
+              <td>旧结果、建代、活动N、点阵隐藏和最终同代组合完全符合协议18。</td>
             </tr>
             <tr>
               <td><span class="status risk">P0</span></td>
-              <td>Cal 完整语义和回 Auto</td>
-              <td>SI Profile 已自动排队找液位；Cal 仍不是官方触底建立 bottom reference 后回液位的流程。</td>
-              <td>确认是否重做 <code>00002 Calibrate</code> 语义；Profile 联调需验证自动找液位和 <code>10013=1</code>。</td>
+              <td>Point0前后取消/失败</td>
+              <td>分别在PREPARING、首点后、上行中和回液位中注入。</td>
+              <td>Point0前仅恢复完整旧SI；Point0后不恢复旧Complete。</td>
             </tr>
             <tr>
               <td><span class="status risk">P0</span></td>
-              <td><code>10010</code> 和探底失败可信性</td>
-              <td><code>10010=0</code> 不能再直接解释为物理校准可靠；无旧底探底失败继续 profile 会降低数据可信性。</td>
-              <td>确认 <code>10001/10010/10005</code> 在探底失败场景下的最终对外策略。</td>
+              <td>CPU3重启/重连</td>
+              <td>覆盖CPU2处于PREPARING、MEASURING、RETURNING_LEVEL、COMPLETE和终态。</td>
+              <td>可接管的完整结果时间为0；不能把重启时刻冒充Point0时间。</td>
             </tr>
             <tr>
               <td><span class="status risk">P0</span></td>
-              <td>报警默认值和启用方式</td>
-              <td>阈值 0 是有效设定点，默认 0 可能直接引发报警。</td>
-              <td>确认现场默认阈值表，或新增独立报警 enable/disable 方案。</td>
+              <td>FRAM V6实镜像迁移</td>
+              <td>迁移前后核对既有SI参数和三路合法串口配置，至少覆盖Wartsila 4800 8N1与8N2。</td>
+              <td>旧合法值完整保留，新原始槽补默认值，版本升级后再次上电仍不得把Wartsila配置改成2400 8E1。</td>
+            </tr>
+            <tr>
+              <td><span class="status risk">P0</span></td>
+              <td>FC06掉电与故障注入</td>
+              <td>覆盖写入失败、读回失败、事务中断和掉电复读。</td>
+              <td>失败返回0x06，运行态和holding保持旧值，旧FRAM镜像尽力修复。</td>
             </tr>
             <tr>
               <td><span class="status partial">P1</span></td>
-              <td>双 level sensor、Interlock、Reel Alarm 合成</td>
-              <td>这些位可能被 PLC 用于联锁或维护派工，当前合成值不等同真实 SI 硬件来源。</td>
-              <td>确认 PLC 是否接受合成语义；不接受时补硬件来源、错误分类或诊断位。</td>
+              <td>1 / 30 / 200点边界</td>
+              <td>核对N、分块拉取边界、地址末端和六项Profile报警。</td>
+              <td>无越界、无混代、无空气点计数，最终点阵长度正确。</td>
+            </tr>
+            <tr>
+              <td><span class="status partial">P1</span></td>
+              <td>普通分布与SI快照隔离</td>
+              <td>完成SI后依次执行普通、国标、每米、区间和Wärtsilä测量。</td>
+              <td>已发布SI Complete、N、时间、点阵和报警不被非SI结果清除或替换。</td>
+            </tr>
+            <tr>
+              <td><span class="status partial">P1</span></td>
+              <td>协议17/18混搭</td>
+              <td>分别使用CPU2旧/CPU3新和CPU2新/CPU3旧组合。</td>
+              <td>共享版本严格不等时拦截，不以错误字段解释继续运行。</td>
             </tr>
           </tbody>
         </table>
       </section>
 
-      <section id="compat-plan">
-        <h2>进一步兼容实施方案</h2>
-        <p class="lead">
-          旧版报告提出的分阶段方案仍有参考价值，但当前已有多项能力落地。下一步不应继续扩大地址表，而应先完成官方语义偏差决策：哪些必须改成 SI 原机行为，哪些作为受控偏差交给 PLC 和现场规程处理。
-        </p>
-
-        <div class="two-col">
-          <div class="card">
-            <h3>阶段 0：锁定当前协议基线</h3>
-            <p>确认 PLC 使用官方清单内的 FC01~FC06；确认接受 200 点 DCS 表、密度 16 位钳位、Profile Timestamp 为触发下发时间、速度档不区分。</p>
-            <p><strong>下一步：</strong>保持官方地址表和功能码边界；不要在 P0 偏差未决前继续扩展协议面。</p>
-          </div>
-
-          <div class="card">
-            <h3>阶段 1：决策 Manual 语义</h3>
-            <p>明确 Manual 下 SI 报警是否全部清零、自动 Profile 是否跳过、液位是否只作为旧值保留。</p>
-            <p><strong>下一步：</strong>若按官方语义，修改 CPU3 SI 报警合成和自动调度门控；若接受偏差，联调表记录 PLC 规避规则。</p>
-          </div>
-
-          <div class="card">
-            <h3>阶段 2：验证回 Auto 生命周期</h3>
-            <p>SI Profile 成功后已由 CPU2 排队 <code>CMD_FIND_OIL</code>；Cal 是否也要做完整 Level Calibration 并回 Auto 仍需决策。</p>
-            <p><strong>下一步：</strong>联调验证 Profile 完成后 <code>00003 Auto</code> 和 <code>10013</code> 恢复；再决定是否重做 <code>00002 Calibrate</code>。</p>
-          </div>
-
-          <div class="card">
-            <h3>阶段 3：决策可信性状态</h3>
-            <p>明确 <code>10010 Probe Un-calibrated</code> 是否继续固定为 0，以及无底部参考、探底失败、维护后应如何对外表达。</p>
-            <p><strong>下一步：</strong>若需要真实可信性，重新定义 <code>10001/10010/10005</code> 的组合语义。</p>
-          </div>
-
-          <div class="card">
-            <h3>阶段 4：决策报警默认值</h3>
-            <p>明确 <code>40014~40023</code> 出厂/现场默认值，或者新增独立报警 enable/disable 方案。</p>
-            <p><strong>下一步：</strong>不能再用阈值 0 表示禁用；需要现场默认阈值表或协议扩展。</p>
-          </div>
-
-          <div class="card">
-            <h3>阶段 5：P1 状态源和诊断增强</h3>
-            <p>按 PLC 真实依赖决定是否细化真实 level sensor、Interlock、Reel Alarm、通信诊断计数和超过 200 点扩展。</p>
-            <p><strong>下一步：</strong>每次改变 SI 可见行为时，同步映射表、联调检查表、协议契约脚本和本 HTML。</p>
-          </div>
-        </div>
-
-        <h3>推荐落地顺序</h3>
-        <table>
-          <thead>
-            <tr>
-              <th>顺序</th>
-              <th>改动包</th>
-              <th>涉及方向</th>
-              <th>下一步/处理原则</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td>1</td>
-              <td>冻结当前 FC01~FC06 和地址窗口</td>
-              <td>CPU3 SI Modbus、联调脚本、PLC 工具</td>
-              <td>保持官方功能码和 200 点 DCS 表，先不扩展 FC15/FC16 或 500 点读取。</td>
-            </tr>
-            <tr>
-              <td>2</td>
-              <td>处理 P0 官方语义偏差</td>
-              <td>Manual、自动 Profile、Profile/Cal 回 Auto、Probe Uncal、报警默认值</td>
-              <td>逐项决定改代码或接受受控偏差，并同步联调判据。</td>
-            </tr>
-            <tr>
-              <td>3</td>
-              <td>处理 P1 状态源差异</td>
-              <td>真实 level sensor、Interlock、Reel Alarm、Point0 时间戳</td>
-              <td>根据 PLC 是否依赖这些位决定是否新增状态源或诊断位。</td>
-            </tr>
-            <tr>
-              <td>4</td>
-              <td>后续扩展能力</td>
-              <td>超过 200 点、通信诊断、菜单诊断页</td>
-              <td>只在现场明确需要后做扩展；新增行为必须有独立版本和联调记录。</td>
-            </tr>
-          </tbody>
-        </table>
-      </section>
-<section id="evidence">
-        <h2>源码证据</h2>
+      <section id="evidence">
+        <h2>当前源码与正式资料证据</h2>
         <table>
           <thead>
             <tr>
               <th>文件</th>
               <th>用途</th>
-              <th>重点证据</th>
+              <th>协议18重点</th>
             </tr>
           </thead>
           <tbody>
             <tr>
-              <td><code>LTD_DISPLAY_CPU3/Communication/external/si_modbus/si_modbus_slave.c</code></td>
-              <td>SI Modbus RTU 兼容层</td>
-              <td>功能码、地址窗口、线圈写入、保持寄存器写入、离散输入合成、输入寄存器点阵、自动 profile 调度。</td>
-            </tr>
-            <tr>
-              <td><code>LTD_DISPLAY_CPU3/Communication/external/si_modbus/si_modbus_slave.h</code></td>
-              <td>SI 四类区大小和外部入口声明</td>
-              <td><code>SI_COIL_COUNT=16</code>、<code>SI_DISCRETE_INPUT_COUNT=32</code>、<code>SI_HOLDING_REG_COUNT=23</code>、<code>SI_INPUT_REG_COUNT=620</code>。</td>
-            </tr>
-            <tr>
               <td><code>LTD_MAIN_CPU2/Application/Src/measure_density.c</code></td>
-              <td>CPU2 SI profile 独立测量流程</td>
-              <td>探底频次、底部 fallback、Point0、候选点生成、稳定等待、空气点停止、完成锁存。</td>
+              <td>SI Profile权威流程</td>
+              <td>探底回退、Point0建代、有效点递增、候选缓冲、回液位和最终提交。</td>
+            </tr>
+            <tr>
+              <td><code>LTD_MAIN_CPU2/Services/Modbus/dataanalysis_modbus.c</code></td>
+              <td>CPU2共享发布</td>
+              <td>生命周期、周期号、完成计数、来源、点数、候选点阵和状态共享。</td>
+            </tr>
+            <tr>
+              <td><code>LTD_DISPLAY_CPU3/Communication/external/si_modbus/si_modbus_slave.c</code></td>
+              <td>SI外部从站和发布投影</td>
+              <td>Point0时间、私有镜像、活动期隐藏、冷启动恢复、最终快照和FC06事务反馈。</td>
+            </tr>
+            <tr>
+              <td><code>LTD_DISPLAY_CPU3/Communication/internal/main_board_modbus/cpu2_communicate.c</code></td>
+              <td>CPU3分块拉取与复核</td>
+              <td>按100寄存器分块读取，并复核cycle、完成计数、N、Source和Phase。</td>
             </tr>
             <tr>
               <td><code>LTD_DISPLAY_CPU3/Application/system_param/cpu3_comm_display_params.c</code></td>
-              <td>CPU3 本机参数和串口模板</td>
-              <td><code>COM_PROTO_SI</code> 对应 <code>9600 8O1</code>，SI 自动 profile 和报警参数由 CPU3 保存。</td>
-            </tr>
-            <tr>
-              <td><code>LTD_DISPLAY_CPU3/Application/display/display_tankopera.c</code></td>
-              <td>屏幕菜单和命令入口</td>
-              <td>屏幕 <code>SI Profile</code> 入口调用统一启动函数；探底修正罐高可出现在多个菜单。</td>
+              <td>CPU3本地参数与FRAM</td>
+              <td><code>40004~40023</code>事务保存、失败回滚及FRAM V6→V7迁移。</td>
             </tr>
             <tr>
               <td><code>docs/01_协议与寄存器/SI协议适配/02_协议映射/SI协议兼容映射表.md</code></td>
-              <td>正式协议映射源</td>
-              <td>本 HTML 的详细地址、缩放、状态位和限制说明均应与该 Markdown 保持一致。</td>
+              <td>正式地址映射源</td>
+              <td>功能码、地址、缩放、读写限制和当前受控偏差。</td>
+            </tr>
+            <tr>
+              <td><code>docs/01_协议与寄存器/SI协议适配/04_联调测试/SI协议_PLC联调检查表.md</code></td>
+              <td>可执行验收入口</td>
+              <td>协议18生命周期、重启恢复、FRAM、FC06和硬件边界用例。</td>
             </tr>
           </tbody>
         </table>
 
         <p class="footer-note">
-          维护规则：本 HTML 是可视化阅读件；外部协议行为、寄存器语义或状态合成发生变化时，应先更新正式 Markdown 映射表，再同步刷新本文。
+          维护规则：本文描述当前工作区协议18实现，不代表已发布固件。外部SI行为、共享契约、参数存储或恢复语义变化时，应同步更新正式映射表、联调检查表、协议变更记录和本页。
         </p>
       </section>
     </main>

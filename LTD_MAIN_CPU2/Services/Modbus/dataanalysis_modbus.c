@@ -637,4 +637,9 @@ void write_measurement_result_to_InputRegisters(uint16_t *regs) {
 	write_u32_to_regs(regs, REG_AO_OUTPUT_RUNTIME_UPDATE_COUNTER, ao_runtime->update_counter);
 	write_u32_to_regs(regs, REG_AO_OUTPUT_RUNTIME_LAST_UPDATE_TICK, ao_runtime->last_update_tick);
 	write_u32_to_regs(regs, REG_AO_OUTPUT_RUNTIME_LAST_SENT_TICK, ao_runtime->last_sent_tick);
+
+	/* SI Profile生命周期字段最后打包，寄存器地址追加在AO运行态之后。 */
+	write_u32_to_regs(regs, REG_DENSITY_DIST_SI_PROFILE_PHASE, g_measurement.si_profile_runtime.phase);
+	write_u32_to_regs(regs, REG_DENSITY_DIST_SI_PROFILE_CYCLE_COUNTER, g_measurement.si_profile_runtime.cycle_counter);
+	write_u32_to_regs(regs, REG_DENSITY_DIST_SI_PROFILE_PROGRESS_POINTS, g_measurement.si_profile_runtime.progress_points);
 }

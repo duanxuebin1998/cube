@@ -189,6 +189,14 @@ bool CPU2_CommIsAvailable(void)
 		   (g_deviceParams.protocolVersion == DEVICE_PROTOCOL_VERSION);
 }
 
+bool CPU2_CommHasRuntimeSnapshot(void)
+{
+	return s_cpu2_has_status_snapshot &&
+		   s_cpu2_has_protocol_snapshot &&
+		   (!s_cpu2_comm_fault_active) &&
+		   (g_deviceParams.protocolVersion == DEVICE_PROTOCOL_VERSION);
+}
+
 /*
  * 函数用途：判断指定 CPU2 命令在当前通信状态下是否允许下发。
  * 调用场景：菜单或外部协议准备写命令寄存器前调用。
@@ -615,6 +623,146 @@ static void RequestDensityDistPoints_ByCount(void)
         start      += this_len;
         total_regs -= this_len;
     }
+}
+
+/*
+ * 函数用途：刷新SI候选结果的紧凑头和生命周期尾部。
+ * 调用场景：分块拉取点阵前后各调用一次。
+ * 关键约束：两个区域任一读取失败时不得继续使用缓存中的旧头部。
+ */
+static bool CPU2_ReadSiProfileCandidateHeader(void)
+{
+	uint16_t header_count = (uint16_t)(REG_DENSITY_DIST_POINT_BASE - REG_DENSITY_DIST_AVG_TEMP);
+	uint16_t runtime_count = (uint16_t)(REG_ENG - REG_DENSITY_DIST_SI_PROFILE_PHASE);
+
+	if (!CPU2_CombinatePackage_Send(FUNCTIONCODE_READ_INPUTREGISTER,
+									  REG_DENSITY_DIST_AVG_TEMP,
+									  header_count,
+									  NULL)) {
+		return false;
+	}
+
+	return CPU2_CombinatePackage_Send(FUNCTIONCODE_READ_INPUTREGISTER,
+									 REG_DENSITY_DIST_SI_PROFILE_PHASE,
+									 runtime_count,
+									 NULL);
+}
+
+static Cpu2SiProfileCandidateKey CPU2_GetSiProfileCandidateKey(void)
+{
+	Cpu2SiProfileCandidateKey key;
+
+	key.cycle_counter = g_measurement.si_profile_runtime.cycle_counter;
+	key.complete_counter = g_measurement.density_distribution.profile_complete_counter;
+	key.measurement_points = g_measurement.density_distribution.measurement_points;
+	key.profile_source = g_measurement.density_distribution.profile_source;
+	key.phase = g_measurement.si_profile_runtime.phase;
+	return key;
+}
+
+static bool CPU2_SiProfileCandidateKeyEqual(const Cpu2SiProfileCandidateKey *left,
+											const Cpu2SiProfileCandidateKey *right)
+{
+	return (left->cycle_counter == right->cycle_counter) &&
+		   (left->complete_counter == right->complete_counter) &&
+		   (left->measurement_points == right->measurement_points) &&
+		   (left->profile_source == right->profile_source) &&
+		   (left->phase == right->phase);
+}
+
+/*
+ * 函数用途：判断SI点阵拉取时允许接受的生命周期阶段。
+ * 调用场景：区分正常Complete候选和CPU3重启后Point0前遗留的上一轮快照。
+ * 关键约束：上一轮快照只允许PREPARING、ABORTED或FAILED，不能放宽到Point0后的活动阶段。
+ */
+static bool CPU2_SiProfileFetchPhaseAllowed(uint32_t phase, bool previous_snapshot)
+{
+	if (!previous_snapshot) {
+		return phase == (uint32_t)SI_PROFILE_PHASE_COMPLETE;
+	}
+
+	return (phase == (uint32_t)SI_PROFILE_PHASE_PREPARING) ||
+		   (phase == (uint32_t)SI_PROFILE_PHASE_ABORTED) ||
+		   (phase == (uint32_t)SI_PROFILE_PHASE_FAILED);
+}
+
+/*
+ * 函数用途：读取一代完整SI Profile点阵并执行分块前后代际复核。
+ * 调用场景：正常Complete候选拉取，或CPU3重启后恢复Point0前仍保留的上一轮结果。
+ * 关键约束：本函数同步分块读取；失败时调用方不得发布部分点阵，并应从头节流重试。
+ */
+static bool CPU2_CommFetchSiProfilePayload(Cpu2SiProfileCandidateKey *out_key,
+											bool previous_snapshot)
+{
+	Cpu2SiProfileCandidateKey before;
+	Cpu2SiProfileCandidateKey after;
+	uint16_t start;
+	uint32_t remaining;
+
+	if ((out_key == NULL) || (!CPU2_CommIsAvailable())) {
+		return false;
+	}
+
+	if (!CPU2_ReadSiProfileCandidateHeader()) {
+		return false;
+	}
+	before = CPU2_GetSiProfileCandidateKey();
+	if ((g_measurement.density_distribution.profile_complete_latched == 0U) ||
+		(before.profile_source != (uint32_t)PROFILE_SOURCE_SI) ||
+		(!CPU2_SiProfileFetchPhaseAllowed(before.phase, previous_snapshot)) ||
+		(before.measurement_points == 0U) ||
+		(before.measurement_points > MAX_MEASUREMENT_POINTS)) {
+		return false;
+	}
+
+	start = REG_DENSITY_DIST_POINT_BASE;
+	remaining = before.measurement_points * (uint32_t)REG_DENSITY_DIST_POINT_SIZE;
+	while (remaining > 0U) {
+		uint16_t read_count = (remaining > MAX_REGS_PER_READ) ?
+			(uint16_t)MAX_REGS_PER_READ : (uint16_t)remaining;
+
+		if (!CPU2_CombinatePackage_Send(FUNCTIONCODE_READ_INPUTREGISTER,
+										  start,
+										  read_count,
+										  NULL)) {
+			return false;
+		}
+
+		start = (uint16_t)(start + read_count);
+		remaining -= read_count;
+	}
+
+	if (!CPU2_ReadSiProfileCandidateHeader()) {
+		return false;
+	}
+	after = CPU2_GetSiProfileCandidateKey();
+	if ((g_measurement.density_distribution.profile_complete_latched == 0U) ||
+		(!CPU2_SiProfileCandidateKeyEqual(&before, &after))) {
+		return false;
+	}
+
+	*out_key = after;
+	return true;
+}
+
+/*
+ * 函数用途：拉取CPU2当前Complete阶段的SI候选点阵。
+ * 调用场景：CPU3观察到本周期完成计数沿后执行最终发布。
+ * 关键约束：只接受Complete阶段，并沿用完整分块前后代际复核。
+ */
+bool CPU2_CommFetchSiProfileCandidate(Cpu2SiProfileCandidateKey *out_key)
+{
+	return CPU2_CommFetchSiProfilePayload(out_key, false);
+}
+
+/*
+ * 函数用途：拉取CPU2在Point0前仍保留的上一轮完整SI点阵。
+ * 调用场景：CPU3冷启动时处于PREPARING，或Point0前已经ABORTED/FAILED。
+ * 关键约束：只接受旧SI来源、完成锁存、有效点数和稳定代际，不重建Profile时间。
+ */
+bool CPU2_CommFetchSiPreviousSnapshot(Cpu2SiProfileCandidateKey *out_key)
+{
+	return CPU2_CommFetchSiProfilePayload(out_key, true);
 }
 
 /* 由屏幕向CPU2发送指令包 */

@@ -10,6 +10,7 @@ extern "C" {
 #endif
 
 #define FRAM_CPU3_PARAM_ADDRESS   0x00001000U   /* CPU3参数存储地址 */
+#define CPU3_SI_COMPAT_HOLDING_COUNT 6U
 
 
 /* ==================== Cpu3 通讯 + 显示参数（含每口配置） ==================== */
@@ -62,6 +63,9 @@ typedef struct
     ComPortConfig com2;   /* COM2 = USART2 */
     ComPortConfig com3;   /* COM3 = USART3 */
 
+    /* ---------- SI 40004～40009原始兼容槽 ---------- */
+    uint16_t si_compat_holding[CPU3_SI_COMPAT_HOLDING_COUNT];
+
 } Cpu3CommAndDisplayParams;
 
 /* 全局实例 */
@@ -85,12 +89,24 @@ int32_t Cpu3Local_ReadValue(OperatingNumber opera);
  */
 void    Cpu3Local_WriteValue(OperatingNumber opera, int32_t v);
 /**
- * @brief 写入 CPU3 本地参数并返回 FRAM 写后读回校验结果。
+ * @brief 事务式写入 CPU3 本地参数并返回 FRAM 写后读回校验结果。
  * @param opera 参数操作号。
  * @param v 待写入值。
- * @return true 表示参数已持久化，false 表示 FRAM 写后读回不一致。
+ * @return true 表示参数已持久化；false 表示 FRAM 校验失败且运行态已回滚。
  */
 bool    Cpu3Local_WriteValueChecked(OperatingNumber opera, int32_t v);
+/*
+ * 函数用途：读取SI 40004～40009原始兼容槽。
+ * 调用场景：SI Modbus FC03刷新保持寄存器快照。
+ * 关键约束：字段只做原值保存，不参与测量、报警或控制。
+ */
+uint16_t Cpu3Local_ReadSiCompatHolding(uint8_t index);
+/*
+ * 函数用途：写入SI原始兼容槽并校验FRAM持久化结果。
+ * 调用场景：SI Modbus FC06写40004～40009。
+ * 关键约束：持久化失败时恢复运行态旧值，禁止回显伪成功。
+ */
+bool Cpu3Local_WriteSiCompatHoldingChecked(uint8_t index, uint16_t value);
 /**
  * @brief 显示或打印参数存储中的 Cpu3Local_ApplyDisplayRuntimeParams 逻辑。
  */

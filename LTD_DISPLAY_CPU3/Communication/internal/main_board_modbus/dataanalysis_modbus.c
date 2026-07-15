@@ -622,6 +622,11 @@ void read_measurement_result_from_InputRegisters(uint16_t *regs) {
 
 	/* ==== AO模拟电流输出运行态，追加在 RSSI 运行态之后 ==== */
 	read_ao_output_runtime_from_regs(cregs, &g_measurement.ao_output_runtime);
+
+	/* ==== SI Profile生命周期运行态，追加在全部既有输入寄存器之后 ==== */
+	g_measurement.si_profile_runtime.phase = read_u32_from_regs(cregs, REG_DENSITY_DIST_SI_PROFILE_PHASE);
+	g_measurement.si_profile_runtime.cycle_counter = read_u32_from_regs(cregs, REG_DENSITY_DIST_SI_PROFILE_CYCLE_COUNTER);
+	g_measurement.si_profile_runtime.progress_points = read_u32_from_regs(cregs, REG_DENSITY_DIST_SI_PROFILE_PROGRESS_POINTS);
 }
 
 /* 解析03功能码保持寄存器数据 */

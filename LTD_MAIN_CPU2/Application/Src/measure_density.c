@@ -257,6 +257,7 @@ static void PrintPoints01mm(const char *tag, const int32_t *p01, uint32_t n)
 #define SI_PROFILE_MAX_BOTTOM_DETECT_INTERVAL 1000U
 #define SI_PROFILE_AIR_DENSITY_THRESHOLD 100.0f
 #define SI_PROFILE_DENSITY_SAMPLE_MS 200U
+#define SI_PROFILE_DENSITY_STABLE_WINDOW_MS 5000U
 #define SI_PROFILE_DENSITY_MAX_WAIT_MS (5U * 60U * 1000U)
 #define SI_PROFILE_DENSITY_FREQ_EPS_HZ 1.0f
 #define SI_PROFILE_DENSITY_VALUE_EPS 0.1f
@@ -265,6 +266,8 @@ static uint8_t s_si_profile_bottom_ref_valid = 0U;
 static int32_t s_si_profile_bottom_position_01mm = 0;
 static uint32_t s_si_profile_count_since_bottom = 0U;
 static uint8_t s_si_profile_first_run = 1U;
+static DensityDistribution s_si_profile_candidate;
+static uint8_t s_si_profile_candidate_valid = 0U;
 
 /* =======================================================================
  * 通用执行器：按点位数组执行测量
@@ -818,6 +821,176 @@ uint32_t Density_MeasureByMode_Exact(DensitySpreadModeId mode, DensityDistributi
 }
 
 /*
+ * 函数用途：清除尚未完成的 SI Profile 候选结果。
+ * 调用场景：新一轮准备、取消、失败或最终结果提交后。
+ * 关键约束：候选缓冲不直接发布给 CPU3，清除动作不改变已发布完成计数。
+ */
+static void SiProfile_ClearCandidate(void)
+{
+    memset(&s_si_profile_candidate, 0, sizeof(s_si_profile_candidate));
+    s_si_profile_candidate_valid = 0U;
+}
+
+/*
+ * 函数用途：清空对外发布的分布结果载荷，同时保留完成计数。
+ * 调用场景：Point0 建立新周期，或 Point0 后取消、失败。
+ * 关键约束：完成计数是最终提交边沿，不得在中间态清零或提前递增。
+ */
+static void SiProfile_ClearPublishedPayload(uint32_t blocked_by_process)
+{
+    DensityMeasurement empty_point = {0};
+
+    g_measurement.density_distribution.average_temperature = 0U;
+    g_measurement.density_distribution.average_density = 0U;
+    g_measurement.density_distribution.average_standard_density = 0U;
+    g_measurement.density_distribution.average_vcf20 = 0U;
+    g_measurement.density_distribution.average_weight_density = 0U;
+    g_measurement.density_distribution.measurement_points = 0U;
+    g_measurement.density_distribution.Density_oil_level = 0U;
+    g_measurement.density_distribution.profile_complete_latched = 0U;
+    g_measurement.density_distribution.profile_source = PROFILE_SOURCE_NONE;
+    g_measurement.density_distribution.profile_blocked_by_process = blocked_by_process;
+    g_measurement.density_distribution.profile_temp_deviation_alarm = 0U;
+    g_measurement.density_distribution.profile_density_deviation_alarm = 0U;
+
+    for (uint32_t i = 0U; i < MAX_MEASUREMENT_POINTS; i++) {
+        g_measurement.density_distribution.single_density_data[i] = empty_point;
+    }
+}
+
+/*
+ * 函数用途：Point0 有效样本写入候选缓冲后建立新的 SI Profile 周期。
+ * 调用场景：SI Profile 第一个有效液体点完成写入后。
+ * 关键约束：载荷和阶段先发布，内存屏障后最后递增周期计数。
+ */
+static void SiProfile_BeginCycleAtPoint0(void)
+{
+    SiProfile_ClearPublishedPayload(0U);
+    g_measurement.si_profile_runtime.progress_points = 1U;
+    g_measurement.si_profile_runtime.phase = SI_PROFILE_PHASE_MEASURING;
+    __DMB();
+    g_measurement.si_profile_runtime.cycle_counter++;
+}
+
+/*
+ * 函数用途：发布 SI Profile 已完成写入的有效液体点数。
+ * 调用场景：Point0 之后每个有效液体点写入候选缓冲后。
+ * 关键约束：空气点、失败样本和重试不得调用本函数。
+ */
+static void SiProfile_UpdateProgress(uint32_t valid_points)
+{
+    __DMB();
+    g_measurement.si_profile_runtime.progress_points = valid_points;
+}
+
+/*
+ * 函数用途：按当前 SI Profile 阶段处理显式取消或命令切换。
+ * 调用场景：取消命令入口，以及 SI Profile 相关流程返回 STATE_SWITCH 时。
+ * 关键约束：Point0 前保留旧结果；Point0 后清除不完整载荷且不增加完成计数。
+ */
+void SiProfile_HandleCancel(void)
+{
+    uint32_t phase = g_measurement.si_profile_runtime.phase;
+
+    if (phase == SI_PROFILE_PHASE_PREPARING) {
+        SiProfile_ClearCandidate();
+        g_measurement.si_profile_runtime.progress_points = 0U;
+        __DMB();
+        g_measurement.si_profile_runtime.phase = SI_PROFILE_PHASE_ABORTED;
+    } else if ((phase == SI_PROFILE_PHASE_MEASURING) ||
+               (phase == SI_PROFILE_PHASE_RETURNING_LEVEL)) {
+        SiProfile_ClearCandidate();
+        SiProfile_ClearPublishedPayload(0U);
+        g_measurement.si_profile_runtime.progress_points = 0U;
+        __DMB();
+        g_measurement.si_profile_runtime.phase = SI_PROFILE_PHASE_ABORTED;
+    }
+}
+
+/*
+ * 函数用途：按当前 SI Profile 阶段处理真实测量失败。
+ * 调用场景：SI 采点错误，以及回液位流程的真实错误出口。
+ * 关键约束：Point0 前保留旧结果；Point0 后清除不完整载荷并保留原错误上报链路。
+ */
+void SiProfile_HandleFailure(void)
+{
+    uint32_t phase = g_measurement.si_profile_runtime.phase;
+    uint8_t profile_start_failed =
+            (g_measurement.device_status.current_command == CMD_SI_PROFILE) ? 1U : 0U;
+
+    if ((phase == SI_PROFILE_PHASE_PREPARING) ||
+        ((profile_start_failed != 0U) &&
+         (phase != SI_PROFILE_PHASE_MEASURING) &&
+         (phase != SI_PROFILE_PHASE_RETURNING_LEVEL))) {
+        SiProfile_ClearCandidate();
+        g_measurement.density_distribution.profile_blocked_by_process = 1U;
+        g_measurement.si_profile_runtime.progress_points = 0U;
+        __DMB();
+        g_measurement.si_profile_runtime.phase = SI_PROFILE_PHASE_FAILED;
+    } else if ((phase == SI_PROFILE_PHASE_MEASURING) ||
+               (phase == SI_PROFILE_PHASE_RETURNING_LEVEL)) {
+        SiProfile_ClearCandidate();
+        SiProfile_ClearPublishedPayload(1U);
+        g_measurement.si_profile_runtime.progress_points = 0U;
+        __DMB();
+        g_measurement.si_profile_runtime.phase = SI_PROFILE_PHASE_FAILED;
+    }
+}
+
+/*
+ * 函数用途：回到稳定液位后一次性提交 SI Profile 候选结果。
+ * 调用场景：找液位成功且完成可选位置源切换后的二次定位，在进入液位跟随前。
+ * 关键约束：完整载荷、Complete 和阶段先写完，内存屏障后最后递增完成计数。
+ */
+uint32_t SiProfile_CompleteAfterReturnToLevel(void)
+{
+    uint32_t previous_complete_counter;
+    uint32_t final_points;
+
+    if (g_measurement.si_profile_runtime.phase != SI_PROFILE_PHASE_RETURNING_LEVEL) {
+        return NO_ERROR;
+    }
+    if (s_si_profile_candidate_valid == 0U) {
+        return MEASUREMENT_DENSITY_NO_VALID_POINT;
+    }
+    if ((g_measurement.oil_measurement.probe_at_liquid_level == 0U) ||
+        (g_measurement.oil_measurement.liquid_stable == 0U)) {
+        return MEASUREMENT_OILLEVEL_NOTFOUND;
+    }
+    if (g_measurement.debug_data.motor_state != 0U) {
+        return MEASUREMENT_POSITION_ERROR;
+    }
+
+    previous_complete_counter =
+            g_measurement.density_distribution.profile_complete_counter;
+    final_points = s_si_profile_candidate.measurement_points;
+    s_si_profile_candidate.Density_oil_level =
+            g_measurement.oil_measurement.oil_level;
+    s_si_profile_candidate.profile_complete_counter = previous_complete_counter;
+    s_si_profile_candidate.profile_complete_latched = 0U;
+    s_si_profile_candidate.profile_source = PROFILE_SOURCE_NONE;
+    s_si_profile_candidate.profile_blocked_by_process = 0U;
+
+    g_measurement.density_distribution = s_si_profile_candidate;
+    g_measurement.density_distribution.profile_complete_counter =
+            previous_complete_counter;
+    g_measurement.density_distribution.measurement_points = final_points;
+    g_measurement.density_distribution.Density_oil_level =
+            g_measurement.oil_measurement.oil_level;
+    g_measurement.density_distribution.profile_source = PROFILE_SOURCE_SI;
+    g_measurement.density_distribution.profile_complete_latched = 1U;
+    g_measurement.density_distribution.profile_blocked_by_process = 0U;
+    g_measurement.si_profile_runtime.progress_points = final_points;
+    g_measurement.si_profile_runtime.phase = SI_PROFILE_PHASE_COMPLETE;
+    s_si_profile_candidate_valid = 0U;
+    __DMB();
+    g_measurement.density_distribution.profile_complete_counter =
+            previous_complete_counter + 1U;
+
+    return NO_ERROR;
+}
+
+/*
  * 函数用途：返回 SI profile 参数快照，并补齐旧 FRAM 或非法写入产生的默认值。
  * 调用场景：SI profile 每轮开始前，由 CPU2 独立 profile 流程调用。
  * 关键约束：这里只做运行期兜底，不写回 FRAM；参数持久化归一化仍由参数存储层负责。
@@ -877,6 +1050,43 @@ static void SiProfile_AdvanceBottomDetectTriggerCount(uint8_t bottom_detect_requ
 }
 
 /*
+ * 函数用途：把探底记录的尺带长度换算为 SI Profile 的底部坐标。
+ * 调用场景：复用普通探底参考或本轮 SI 新探底成功后。
+ * 关键约束：使用 tankHeight-bottom_value，并钳位到有符号位置可表达范围。
+ */
+static int32_t SiProfile_ResolveBottomPositionFromCable(int32_t bottom_cable_01mm)
+{
+    int64_t resolved_bottom =
+            (int64_t)g_deviceParams.tankHeight - (int64_t)bottom_cable_01mm;
+
+    if (resolved_bottom < 0) {
+        resolved_bottom = 0;
+    } else if (resolved_bottom > INT32_MAX) {
+        resolved_bottom = INT32_MAX;
+    }
+
+    return (int32_t)resolved_bottom;
+}
+
+/*
+ * 函数用途：在本轮新探底前快照普通探底流程已经建立的可信底部参考。
+ * 调用场景：SI Profile 每轮探底判断之前。
+ * 关键约束：只在静态旧底无效且共享有效标志置位时采纳；失败后不得重读可能改写的 bottom_value。
+ */
+static void SiProfile_CaptureSharedBottomReference(void)
+{
+    if ((s_si_profile_bottom_ref_valid == 0U) &&
+        (g_measurement.height_measurement.bottom_reference_valid != 0U)) {
+        s_si_profile_bottom_position_01mm =
+                SiProfile_ResolveBottomPositionFromCable(bottom_value);
+        s_si_profile_bottom_ref_valid = 1U;
+        printf("SI Profile 已快照普通探底参考: 尺带=%ld(0.1mm) Point0=%.1fmm\r\n",
+               (long)bottom_value,
+               (double)s_si_profile_bottom_position_01mm / 10.0);
+    }
+}
+
+/*
  * 函数用途：确定 SI profile 的底部基准位置。
  * 调用场景：探底成功、探底失败或本轮跳过探底后。
  * 关键约束：探底失败时优先沿用旧底部；没有旧底部则使用当前位置继续本轮测量。
@@ -887,11 +1097,16 @@ static int32_t SiProfile_SelectBottomPosition(uint8_t bottom_search_done,
     int32_t current_position = g_measurement.debug_data.sensor_position;
 
     if ((bottom_search_done != 0U) && (bottom_search_ret == NO_ERROR)) {
-        s_si_profile_bottom_position_01mm = current_position;
+        s_si_profile_bottom_position_01mm =
+                SiProfile_ResolveBottomPositionFromCable(bottom_value);
         s_si_profile_bottom_ref_valid = 1U;
         s_si_profile_first_run = 0U;
         g_measurement.height_measurement.bottom_reference_valid = 1U;
-        return current_position;
+        printf("SI Profile 新探底基准: 罐高=%lu(0.1mm) 尺带=%ld(0.1mm) Point0=%.1fmm\r\n",
+               (unsigned long)g_deviceParams.tankHeight,
+               (long)bottom_value,
+               (double)s_si_profile_bottom_position_01mm / 10.0);
+        return s_si_profile_bottom_position_01mm;
     }
 
     if (s_si_profile_bottom_ref_valid != 0U) {
@@ -949,10 +1164,7 @@ static uint32_t SiProfile_BuildPoints(int32_t bottom_position_01mm,
 
 static uint32_t SiProfile_ReportPosition01mm(uint32_t point_index, int32_t movement_position_01mm)
 {
-    if (point_index == 0U) {
-        return 0U;
-    }
-
+    (void)point_index;
     return Density_ValueToU01mmClamped(movement_position_01mm, "SI Profile position");
 }
 
@@ -1212,7 +1424,19 @@ static uint32_t SiProfile_RunPoints01mmWithDwell(const int32_t *p01,
             return ret;
         }
 
-        ret = SiProfile_ReadPointAndClassify(&sample, dwell_ms);
+        /*
+         * 40003表示到点停稳后的纯等待时间，不兼作传感器稳定判定窗口；
+         * 等待结束后再用固定稳定窗口读取，保证1～3600秒配置都按原值执行。
+         */
+        if (dwell_ms > 0U) {
+            ret = AbortableDelay_CommandSwitch(dwell_ms, 100U);
+            if (ret != NO_ERROR) {
+                return ret;
+            }
+        }
+
+        ret = SiProfile_ReadPointAndClassify(&sample,
+                                             SI_PROFILE_DENSITY_STABLE_WINDOW_MS);
         if (ret == STATE_SWITCH) {
             return STATE_SWITCH;
         }
@@ -1239,6 +1463,13 @@ static uint32_t SiProfile_RunPoints01mmWithDwell(const int32_t *p01,
         sum_dens_raw += sample.measurement.density;
         last_valid_position_01mm = sample.measurement.temperature_position;
         valid++;
+        dist->measurement_points = valid;
+
+        if (valid == 1U) {
+            SiProfile_BeginCycleAtPoint0();
+        } else {
+            SiProfile_UpdateProgress(valid);
+        }
 
         if (HasEffectiveCommandSwitchRequest()) {
             printf("检测到命令切换请求，停止当前 SI Profile\r\n");
@@ -1287,17 +1518,14 @@ void CMD_SiProfile(void)
     int32_t bottom_position_01mm;
     int32_t points01[MAX_MEASUREMENT_POINTS];
     uint32_t point_count = 0U;
-    uint32_t previous_profile_complete_counter;
-    DensityDistribution temp;
+    uint32_t primask;
+    uint8_t queue_conflict = 0U;
+    uint8_t queued_find_oil = 0U;
 
     memset(points01, 0, sizeof(points01));
-    memset(&temp, 0, sizeof(temp));
-
-    g_measurement.density_distribution.profile_complete_latched = 0U;
-    g_measurement.density_distribution.profile_source = PROFILE_SOURCE_NONE;
-    g_measurement.density_distribution.profile_blocked_by_process = 0U;
-    g_measurement.density_distribution.profile_temp_deviation_alarm = 0U;
-    g_measurement.density_distribution.profile_density_deviation_alarm = 0U;
+    SiProfile_ClearCandidate();
+    g_measurement.si_profile_runtime.progress_points = 0U;
+    g_measurement.si_profile_runtime.phase = SI_PROFILE_PHASE_PREPARING;
     g_measurement.device_status.device_state = STATE_SPREADPOINTING;
 
     SiProfile_GetParams(&first_point_01mm,
@@ -1311,12 +1539,14 @@ void CMD_SiProfile(void)
            (unsigned long)dwell_time_s,
            (unsigned long)bottom_detect_interval);
 
+    SiProfile_CaptureSharedBottomReference();
     should_detect_bottom = SiProfile_ShouldDetectBottom(bottom_detect_interval);
     SiProfile_AdvanceBottomDetectTriggerCount(should_detect_bottom);
     if (should_detect_bottom != 0U) {
         bottom_search_done = 1U;
         bottom_search_ret = SearchBottom();
         if (bottom_search_ret == STATE_SWITCH) {
+            SiProfile_HandleCancel();
             return;
         }
         if (bottom_search_ret != NO_ERROR) {
@@ -1333,42 +1563,65 @@ void CMD_SiProfile(void)
                                     points01,
                                     &point_count);
     if (ret != NO_ERROR) {
-        g_measurement.density_distribution.profile_blocked_by_process = 1U;
+        SiProfile_HandleFailure();
         printf("SI Profile 生成点位失败，错误码=0x%08lX\r\n", (unsigned long)ret);
         SET_ERROR(ret);
         return;
     }
 
     PrintPoints01mm("SI Profile", points01, point_count);
-    ret = SiProfile_RunPoints01mmWithDwell(points01, point_count, &temp, dwell_time_s);
+    ret = SiProfile_RunPoints01mmWithDwell(points01,
+                                           point_count,
+                                           &s_si_profile_candidate,
+                                           dwell_time_s);
     if (ret == STATE_SWITCH) {
+        SiProfile_HandleCancel();
         return;
     }
     if (ret != NO_ERROR) {
-        g_measurement.density_distribution.profile_blocked_by_process = 1U;
+        SiProfile_HandleFailure();
         printf("SI Profile 测量失败，错误码=0x%08lX\r\n", (unsigned long)ret);
         SET_ERROR(ret);
         return;
     }
 
-    previous_profile_complete_counter = g_measurement.density_distribution.profile_complete_counter;
-    g_measurement.density_distribution = temp;
-    g_measurement.density_distribution.profile_complete_latched = 1U;
-    g_measurement.density_distribution.profile_complete_counter = previous_profile_complete_counter + 1U;
-    g_measurement.density_distribution.profile_source = PROFILE_SOURCE_SI;
-    g_measurement.density_distribution.profile_blocked_by_process = 0U;
-
-    Print_DensitySpreadResult(&temp);
-    g_measurement.device_status.device_state = STATE_SPREADPOINTOVER;
-    if (!HasEffectiveCommandSwitchRequest()) {
-        g_deviceParams.command = CMD_FIND_OIL;
-        printf("SI Profile done: queued CMD_FIND_OIL\r\n");
+    /* 采点收尾和命令排队采用同一临界区，避免覆盖并发到达的其他命令。 */
+    primask = __get_PRIMASK();
+    __disable_irq();
+    if ((new_command_ready != 0U) ||
+        ((g_deviceParams.command != CMD_NONE) &&
+         (g_deviceParams.command != CMD_FIND_OIL))) {
+        queue_conflict = 1U;
     } else {
-        printf("SI Profile done: pending command %d kept\r\n", (int)g_deviceParams.command);
+        s_si_profile_candidate_valid = 1U;
+        g_measurement.si_profile_runtime.progress_points =
+                s_si_profile_candidate.measurement_points;
+        g_measurement.si_profile_runtime.phase = SI_PROFILE_PHASE_RETURNING_LEVEL;
+        __DMB();
+        if (g_deviceParams.command == CMD_NONE) {
+            g_deviceParams.command = CMD_FIND_OIL;
+            queued_find_oil = 1U;
+        }
     }
-    printf("SI Profile 完成: 点数=%lu 完成计数=%lu\r\n",
-           (unsigned long)temp.measurement_points,
-           (unsigned long)g_measurement.density_distribution.profile_complete_counter);
+    if (primask == 0U) {
+        __enable_irq();
+    }
+
+    if (queue_conflict != 0U) {
+        printf("SI Profile 采点结束时已有其他命令，取消未完成候选结果\r\n");
+        SiProfile_HandleCancel();
+        return;
+    }
+
+    Print_DensitySpreadResult(&s_si_profile_candidate);
+    if (queued_find_oil != 0U) {
+        printf("SI Profile 采点完成，已排队回液位命令\r\n");
+    } else {
+        printf("SI Profile 采点完成，沿用已排队的回液位命令\r\n");
+    }
+    printf("SI Profile 等待回液位: 点数=%lu 周期=%lu\r\n",
+           (unsigned long)s_si_profile_candidate.measurement_points,
+           (unsigned long)g_measurement.si_profile_runtime.cycle_counter);
 }
 /* =======================================================================
  * 四种模式的对外入口

@@ -8,6 +8,7 @@
 
 #include "cpu3_comm_display_params.h"
 #include "usart.h"
+#include <stddef.h>
 #include <string.h>
 #include "mb85rs2m.h"     /* WriteMultiData / ReadMultiData */
 #include "my_crc.h"
@@ -30,6 +31,10 @@ Cpu3CommAndDisplayParams g_cpu3_comm_display_params = {
     .local_led_version = CPU3_APP_VERSION_U32,
     .screen_decimal = 2U,
     .screen_brightness = OLED_BRIGHTNESS_LEVEL_LOW,
+};
+
+static const uint16_t s_cpu3_si_compat_holding_defaults[CPU3_SI_COMPAT_HOLDING_COUNT] = {
+    0U, 50U, 1000U, 0U, 5U, 1U
 };
 
 /* ================= CPU3 本机参数描述表 ================= */
@@ -320,6 +325,18 @@ static uint8_t Cpu3_SanitizeAllPortConfigs(void)
 }
 
 /*
+ * 函数用途：恢复SI 40004～40009原始兼容槽的现场默认值。
+ * 调用场景：恢复出厂、旧FRAM迁移和V6到V7升级。
+ * 关键约束：这些值没有业务含义，只允许原样读写和持久化。
+ */
+static void Cpu3_InitSiCompatHolding(void)
+{
+    memcpy(g_cpu3_comm_display_params.si_compat_holding,
+           s_cpu3_si_compat_holding_defaults,
+           sizeof(g_cpu3_comm_display_params.si_compat_holding));
+}
+
+/*
  * SI 自动 profile 和报警限值是 CPU3 本机协议参数。
  * 这里统一补默认值，供恢复出厂和旧 FRAM 迁移复用。
  */
@@ -339,6 +356,7 @@ static void Cpu3_InitSiParams(void)
     g_cpu3_comm_display_params.si_high_level_setpoint = 0U;
     g_cpu3_comm_display_params.si_temp_deviation_setpoint = 0U;
     g_cpu3_comm_display_params.si_density_deviation_setpoint = 0U;
+    Cpu3_InitSiCompatHolding();
 }
 
 static uint16_t Cpu3_ClampU16Param(int32_t value)
@@ -487,13 +505,47 @@ int32_t Cpu3Local_ReadValue(OperatingNumber opera)
     }
 }
 
+uint16_t Cpu3Local_ReadSiCompatHolding(uint8_t index)
+{
+    if (index >= CPU3_SI_COMPAT_HOLDING_COUNT) {
+        return 0U;
+    }
+
+    return g_cpu3_comm_display_params.si_compat_holding[index];
+}
+
 /*
- * 函数用途：写入 CPU3 本机参数并返回 FRAM 持久化校验结果。
- * 调用场景：协议切换需要根据返回值决定是否启用新串口参数。
- * 关键约束：普通菜单入口可忽略返回值，协议切换入口必须处理失败并恢复旧配置。
+ * 函数用途：事务式写入 SI 兼容保持寄存器并校验 FRAM 持久化结果。
+ * 调用场景：SI FC06 写入 40004～40009 时同步更新运行态和掉电参数。
+ * 关键约束：即使写入值未变化也执行持久化；失败时恢复整份旧镜像并尽力修复 FRAM。
+ */
+bool Cpu3Local_WriteSiCompatHoldingChecked(uint8_t index, uint16_t value)
+{
+    Cpu3CommAndDisplayParams old_params = g_cpu3_comm_display_params;
+
+    if (index >= CPU3_SI_COMPAT_HOLDING_COUNT) {
+        return false;
+    }
+
+    g_cpu3_comm_display_params.si_compat_holding[index] = value;
+    if (!Cpu3_Params_SaveToFRAM()) {
+        g_cpu3_comm_display_params = old_params;
+        /* 首次校验失败时 FRAM 可能已部分改变，尽力恢复完整旧镜像。 */
+        (void)Cpu3_Params_SaveToFRAM();
+        return false;
+    }
+
+    return true;
+}
+
+/*
+ * 函数用途：事务式写入 CPU3 本机参数并返回 FRAM 持久化校验结果。
+ * 调用场景：协议切换和 SI FC06 写入需要根据返回值决定是否应答成功。
+ * 关键约束：FRAM 写后读回失败时恢复整份旧运行态，不允许伪成功或保留未持久化的新值。
  */
 bool Cpu3Local_WriteValueChecked(OperatingNumber opera, int32_t v)
 {
+    Cpu3CommAndDisplayParams old_params = g_cpu3_comm_display_params;
     bool display_runtime_changed = false;
 
     switch (opera)
@@ -664,9 +716,17 @@ bool Cpu3Local_WriteValueChecked(OperatingNumber opera, int32_t v)
         Cpu3Local_ApplyDisplayRuntimeParams();
     }
 
-    /* 这里可以顺手：重配串口 + 保存 FRAM */
-    /* Cpu3_Comm_ReInitAll(); / / 你自己实现 */
-    return Cpu3_Params_SaveToFRAM();
+    if (!Cpu3_Params_SaveToFRAM()) {
+        g_cpu3_comm_display_params = old_params;
+        if (display_runtime_changed) {
+            Cpu3Local_ApplyDisplayRuntimeParams();
+        }
+        /* 首次校验失败时 FRAM 可能已部分改变，尽力恢复完整旧镜像。 */
+        (void)Cpu3_Params_SaveToFRAM();
+        return false;
+    }
+
+    return true;
 }
 
 /*
@@ -863,7 +923,8 @@ bool Cpu3_ReinitPortUart(uint8_t port_idx)
 #define CPU3_PARAM_VERSION_V3 0x0003U
 #define CPU3_PARAM_VERSION_V4 0x0004U
 #define CPU3_PARAM_VERSION_V5 0x0005U
-#define CPU3_PARAM_VERSION 0x0006U
+#define CPU3_PARAM_VERSION_V6 0x0006U
+#define CPU3_PARAM_VERSION 0x0007U
 
 typedef struct
 {
@@ -925,6 +986,97 @@ typedef struct
     Cpu3CommAndDisplayParamsV5  params;
     uint32_t                    crc;
 } Cpu3ParamStorageV5;
+
+/*
+ * V6结构必须保持升级前的精确字段顺序和类型。
+ * 当前V7只在该结构末尾追加六个uint16_t兼容槽。
+ */
+typedef struct
+{
+    uint32_t local_led_version;
+    uint8_t  language;
+    uint8_t  screen_source_oil;
+    uint8_t  screen_source_water;
+    uint8_t  screen_source_d;
+    uint8_t  screen_source_t;
+    int32_t  screen_input_oil;
+    int32_t  screen_input_water;
+    int32_t  screen_input_d;
+    uint8_t  screen_input_d_switch;
+    int32_t  screen_input_t;
+    uint8_t  screen_decimal;
+    uint16_t screen_password;
+    uint8_t  screen_off_time;
+    uint8_t  screen_brightness;
+    uint16_t si_auto_profile_interval;
+    uint8_t  si_auto_profile_enable;
+    uint8_t  si_auto_profile_hour;
+    uint8_t  si_auto_profile_minute;
+    uint16_t si_low_density_setpoint;
+    uint16_t si_high_density_setpoint;
+    int16_t  si_low_temperature_setpoint;
+    int16_t  si_high_temperature_setpoint;
+    uint16_t si_ll_level_setpoint;
+    uint16_t si_hh_level_setpoint;
+    uint16_t si_low_level_setpoint;
+    uint16_t si_high_level_setpoint;
+    uint16_t si_temp_deviation_setpoint;
+    uint16_t si_density_deviation_setpoint;
+    ComPortConfig com1;
+    ComPortConfig com2;
+    ComPortConfig com3;
+} Cpu3CommAndDisplayParamsV6;
+
+/* 编译期逐字段确认V6布局就是V7兼容槽之前的完整前缀。 */
+#define CPU3_ASSERT_V6_FIELD_OFFSET(field) \
+    _Static_assert(offsetof(Cpu3CommAndDisplayParamsV6, field) == \
+                   offsetof(Cpu3CommAndDisplayParams, field), \
+                   "CPU3 V6参数字段偏移不兼容")
+CPU3_ASSERT_V6_FIELD_OFFSET(local_led_version);
+CPU3_ASSERT_V6_FIELD_OFFSET(language);
+CPU3_ASSERT_V6_FIELD_OFFSET(screen_source_oil);
+CPU3_ASSERT_V6_FIELD_OFFSET(screen_source_water);
+CPU3_ASSERT_V6_FIELD_OFFSET(screen_source_d);
+CPU3_ASSERT_V6_FIELD_OFFSET(screen_source_t);
+CPU3_ASSERT_V6_FIELD_OFFSET(screen_input_oil);
+CPU3_ASSERT_V6_FIELD_OFFSET(screen_input_water);
+CPU3_ASSERT_V6_FIELD_OFFSET(screen_input_d);
+CPU3_ASSERT_V6_FIELD_OFFSET(screen_input_d_switch);
+CPU3_ASSERT_V6_FIELD_OFFSET(screen_input_t);
+CPU3_ASSERT_V6_FIELD_OFFSET(screen_decimal);
+CPU3_ASSERT_V6_FIELD_OFFSET(screen_password);
+CPU3_ASSERT_V6_FIELD_OFFSET(screen_off_time);
+CPU3_ASSERT_V6_FIELD_OFFSET(screen_brightness);
+CPU3_ASSERT_V6_FIELD_OFFSET(si_auto_profile_interval);
+CPU3_ASSERT_V6_FIELD_OFFSET(si_auto_profile_enable);
+CPU3_ASSERT_V6_FIELD_OFFSET(si_auto_profile_hour);
+CPU3_ASSERT_V6_FIELD_OFFSET(si_auto_profile_minute);
+CPU3_ASSERT_V6_FIELD_OFFSET(si_low_density_setpoint);
+CPU3_ASSERT_V6_FIELD_OFFSET(si_high_density_setpoint);
+CPU3_ASSERT_V6_FIELD_OFFSET(si_low_temperature_setpoint);
+CPU3_ASSERT_V6_FIELD_OFFSET(si_high_temperature_setpoint);
+CPU3_ASSERT_V6_FIELD_OFFSET(si_ll_level_setpoint);
+CPU3_ASSERT_V6_FIELD_OFFSET(si_hh_level_setpoint);
+CPU3_ASSERT_V6_FIELD_OFFSET(si_low_level_setpoint);
+CPU3_ASSERT_V6_FIELD_OFFSET(si_high_level_setpoint);
+CPU3_ASSERT_V6_FIELD_OFFSET(si_temp_deviation_setpoint);
+CPU3_ASSERT_V6_FIELD_OFFSET(si_density_deviation_setpoint);
+CPU3_ASSERT_V6_FIELD_OFFSET(com1);
+CPU3_ASSERT_V6_FIELD_OFFSET(com2);
+CPU3_ASSERT_V6_FIELD_OFFSET(com3);
+#undef CPU3_ASSERT_V6_FIELD_OFFSET
+_Static_assert(sizeof(Cpu3CommAndDisplayParamsV6) ==
+               offsetof(Cpu3CommAndDisplayParams, si_compat_holding),
+               "CPU3 V6参数前缀长度不兼容");
+
+typedef struct
+{
+    uint32_t                    magic;
+    uint16_t                    version;
+    uint16_t                    reserved;
+    Cpu3CommAndDisplayParamsV6  params;
+    uint32_t                    crc;
+} Cpu3ParamStorageV6;
 
 typedef struct
 {
@@ -1006,6 +1158,20 @@ static bool Cpu3_Params_StorageV5Valid(const Cpu3ParamStorageV5 *stor)
     return crc_calc == stor->crc;
 }
 
+static bool Cpu3_Params_StorageV6Valid(const Cpu3ParamStorageV6 *stor)
+{
+    uint32_t crc_len;
+    uint32_t crc_calc;
+
+    if ((stor->magic != CPU3_PARAM_MAGIC) || (stor->version != CPU3_PARAM_VERSION_V6)) {
+        return false;
+    }
+
+    crc_len = sizeof(Cpu3ParamStorageV6) - sizeof(stor->crc);
+    crc_calc = CRC32_HAL((uint8_t*)stor, crc_len);
+    return crc_calc == stor->crc;
+}
+
 /**
  * @brief 执行参数存储中的 Cpu3_Params_MigrateFromV3 逻辑。
  *
@@ -1060,6 +1226,18 @@ static void Cpu3_Params_MigrateFromV5(const Cpu3ParamStorageV5 *stor)
     g_cpu3_comm_display_params.com2 = stor->params.com2;
     g_cpu3_comm_display_params.com3 = stor->params.com3;
     Cpu3_InitSiParams();
+}
+
+/*
+ * 函数用途：把完整V6参数前缀迁移到V7并补入六个SI原始兼容槽。
+ * 调用场景：上电发现FRAM版本为V6且CRC有效。
+ * 关键约束：V6已有SI参数和三路合法串口配置保持不变；非法串口字段仍按既有加载规则归一化。
+ */
+static void Cpu3_Params_MigrateFromV6(const Cpu3ParamStorageV6 *stor)
+{
+    memset(&g_cpu3_comm_display_params, 0, sizeof(g_cpu3_comm_display_params));
+    memcpy(&g_cpu3_comm_display_params, &stor->params, sizeof(stor->params));
+    Cpu3_InitSiCompatHolding();
 }
 
 static int32_t Cpu3_MigrateDensityInputX10ToX100(int32_t raw)
@@ -1142,7 +1320,7 @@ void Cpu3_Params_LoadFromFRAM(void)
             (void)Cpu3_MigrateLegacyWartsilaDefaults();
             Cpu3Local_ApplyDisplayRuntimeParams();
             Cpu3_Params_SaveToFRAM();
-            printf("CPU3 FRAM参数已从V3升级到V6，亮度与SI参数使用默认值。\r\n");
+            printf("CPU3 FRAM参数已从V3升级到V7，亮度、SI参数与兼容槽使用默认值。\r\n");
             return;
         }
 
@@ -1165,12 +1343,37 @@ void Cpu3_Params_LoadFromFRAM(void)
             (void)Cpu3_MigrateLegacyWartsilaDefaults();
             Cpu3Local_ApplyDisplayRuntimeParams();
             Cpu3_Params_SaveToFRAM();
-            printf("CPU3 FRAM参数已从V%u升级到V6，补入SI参数默认值。\r\n",
+            printf("CPU3 FRAM参数已从V%u升级到V7，补入SI参数与兼容槽默认值。\r\n",
                    (unsigned)legacy.version);
             return;
         }
 
         printf("CPU3 FRAM V%u参数CRC无效，使用默认值。\r\n", (unsigned)stor.version);
+        use_default = 1;
+    } else if ((stor.magic == CPU3_PARAM_MAGIC) && (stor.version == CPU3_PARAM_VERSION_V6)) {
+        Cpu3ParamStorageV6 legacy;
+
+        memset(&legacy, 0, sizeof(legacy));
+        ReadMultiData((uint8_t*)&legacy, FRAM_CPU3_PARAM_ADDRESS, sizeof(Cpu3ParamStorageV6));
+        if (Cpu3_Params_StorageV6Valid(&legacy)) {
+            Cpu3_Params_MigrateFromV6(&legacy);
+            (void)Cpu3_ApplyFirmwareVersionRuntime();
+            (void)Cpu3_SanitizeAllPortConfigs();
+            /*
+             * V6已经是当前发布基线，不能再按“旧默认值”猜测并改写合法串口参数。
+             * 尤其要保留现场可能主动配置的Wartsila 4800 8N1/8N2组合。
+             */
+            Cpu3Local_ApplyDisplayRuntimeParams();
+            if (!Cpu3_Params_SaveToFRAM()) {
+                /* 运行态继续使用已迁移参数，但不得把未通过校验的FRAM误报为升级成功。 */
+                printf("CPU3 FRAM参数从V6迁移到V7后保存校验失败，本次不报告升级成功，下次上电将按FRAM实际镜像重新判定。\r\n");
+                return;
+            }
+            printf("CPU3 FRAM参数已从V6升级到V7，旧SI参数与串口参数已保留。\r\n");
+            return;
+        }
+
+        printf("CPU3 FRAM V6参数CRC无效，使用默认值。\r\n");
         use_default = 1;
     } else if ((stor.magic != CPU3_PARAM_MAGIC) ||
                (stor.version != CPU3_PARAM_VERSION)) {
@@ -1206,10 +1409,7 @@ void Cpu3_Params_LoadFromFRAM(void)
             /* FRAM 参数加载后只修正非法串口字段，合法的人工串口配置必须原样保留。 */
             need_save = 1U;
         }
-        if (Cpu3_MigrateLegacyWartsilaDefaults() != 0U) {
-            /* 只修正历史瓦锡兰错误默认值，避免旧设备继续使用 4800 无校验。 */
-            need_save = 1U;
-        }
+        /* V7不再依据合法物理参数猜测历史默认值，避免改写现场串口配置。 */
         Cpu3Local_ApplyDisplayRuntimeParams();
         if (need_save != 0U) {
             Cpu3_Params_SaveToFRAM();

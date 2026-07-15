@@ -3,527 +3,1082 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>SI协议进一步兼容改动点与实施结果</title>
+  <title>SI协议适配总方案</title>
   <style>
     :root {
-      --ink: #1f2933;
+      --ink: #172033;
       --muted: #64748b;
-      --line: #d8dee9;
-      --panel: #f7f9fc;
-      --accent: #0f766e;
-      --accent-soft: #e6f4f1;
-      --warn: #a16207;
-      --warn-soft: #fff7db;
-      --risk: #b91c1c;
-      --risk-soft: #fff1f1;
-      --cpu2: #1d4ed8;
-      --cpu3: #047857;
+      --line: #d9e1ec;
+      --paper: #ffffff;
+      --page: #f3f6fa;
+      --navy: #172a46;
+      --blue: #2563eb;
+      --blue-soft: #eaf2ff;
+      --green: #087f5b;
+      --green-soft: #e8f7f1;
+      --amber: #a85d00;
+      --amber-soft: #fff5df;
+      --red: #b42318;
+      --red-soft: #fff0ee;
+      --violet: #6d3ac8;
+      --violet-soft: #f2edff;
     }
     * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
     body {
       margin: 0;
       color: var(--ink);
-      background: #ffffff;
+      background: var(--page);
       font-family: "Microsoft YaHei", "Segoe UI", Arial, sans-serif;
-      line-height: 1.62;
+      line-height: 1.65;
     }
-    header {
-      padding: 34px 42px 24px;
-      border-bottom: 1px solid var(--line);
-      background: linear-gradient(180deg, #f8fafc 0%, #ffffff 100%);
-    }
-    main {
-      max-width: 1180px;
-      margin: 0 auto;
-      padding: 28px 34px 56px;
-    }
-    h1 {
-      margin: 0 0 10px;
-      font-size: 30px;
-      line-height: 1.25;
-      letter-spacing: 0;
-    }
-    h2 {
-      margin: 34px 0 14px;
-      padding-top: 10px;
-      border-top: 2px solid var(--line);
-      font-size: 22px;
-      letter-spacing: 0;
-    }
-    h3 {
-      margin: 24px 0 10px;
-      font-size: 18px;
-      letter-spacing: 0;
-    }
-    p { margin: 8px 0 12px; }
-    a { color: var(--accent); }
+    a { color: var(--blue); text-decoration: none; }
+    a:hover { text-decoration: underline; }
     code {
       padding: 1px 5px;
       border-radius: 4px;
       background: #eef2f7;
       font-family: Consolas, "Cascadia Mono", monospace;
-      font-size: 0.94em;
+      font-size: 0.93em;
+    }
+    .hero {
+      color: #fff;
+      background: linear-gradient(125deg, #10233e 0%, #1d3d67 72%, #25558b 100%);
+      padding: 34px 40px 30px;
+    }
+    .hero-inner {
+      max-width: 1320px;
+      margin: 0 auto;
+    }
+    .eyebrow {
+      margin-bottom: 8px;
+      color: #a9c7f2;
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+    }
+    h1 {
+      margin: 0;
+      font-size: 32px;
+      line-height: 1.25;
+    }
+    .subtitle {
+      max-width: 880px;
+      margin: 10px 0 0;
+      color: #dbe8f8;
+      font-size: 16px;
+    }
+    .hero-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px 18px;
+      margin-top: 18px;
+      color: #c6d6ea;
+      font-size: 13px;
+    }
+    .hero-meta strong { color: #fff; }
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+      max-width: 1320px;
+      margin: -18px auto 0;
+      padding: 0 28px;
+      position: relative;
+      z-index: 2;
+    }
+    .summary-card {
+      min-height: 104px;
+      padding: 15px 16px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: var(--paper);
+      box-shadow: 0 6px 18px rgba(32, 50, 78, 0.08);
+    }
+    .summary-card small {
+      display: block;
+      margin-bottom: 5px;
+      color: var(--muted);
+      font-weight: 700;
+    }
+    .summary-card strong {
+      display: block;
+      margin-bottom: 3px;
+      color: var(--navy);
+      font-size: 20px;
+    }
+    .summary-card span { color: #475569; font-size: 13px; }
+    .layout {
+      display: grid;
+      grid-template-columns: 220px minmax(0, 1fr);
+      gap: 22px;
+      max-width: 1320px;
+      margin: 22px auto 60px;
+      padding: 0 28px;
+    }
+    .side-nav {
+      position: sticky;
+      top: 18px;
+      align-self: start;
+      padding: 14px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: var(--paper);
+    }
+    .side-nav strong {
+      display: block;
+      margin: 2px 7px 8px;
+      color: var(--navy);
+      font-size: 14px;
+    }
+    .side-nav a {
+      display: block;
+      padding: 7px 8px;
+      border-radius: 6px;
+      color: #475569;
+      font-size: 13px;
+    }
+    .side-nav a:hover {
+      color: var(--blue);
+      background: var(--blue-soft);
+      text-decoration: none;
+    }
+    main { min-width: 0; }
+    section {
+      margin-bottom: 18px;
+      padding: 24px 26px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: var(--paper);
+      box-shadow: 0 2px 8px rgba(32, 50, 78, 0.04);
+    }
+    h2 {
+      margin: 0 0 16px;
+      color: var(--navy);
+      font-size: 23px;
+      line-height: 1.35;
+    }
+    h3 {
+      margin: 24px 0 10px;
+      color: #263b59;
+      font-size: 18px;
+    }
+    p { margin: 8px 0 12px; }
+    ul, ol { margin: 9px 0; padding-left: 23px; }
+    li { margin: 5px 0; }
+    .lead {
+      margin: -5px 0 18px;
+      color: #475569;
+      font-size: 16px;
+    }
+    .decision-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+    }
+    .decision {
+      padding: 15px 16px;
+      border-radius: 8px;
+      border: 1px solid var(--line);
+    }
+    .decision.keep { background: var(--green-soft); border-color: #b9e3d4; }
+    .decision.must { background: var(--amber-soft); border-color: #efd49c; }
+    .decision.stop { background: var(--red-soft); border-color: #efc4bf; }
+    .decision h3 { margin: 0 0 8px; font-size: 17px; }
+    .decision ul { margin-bottom: 0; }
+    .callout {
+      margin: 16px 0 0;
+      padding: 12px 14px;
+      border-left: 4px solid var(--blue);
+      background: var(--blue-soft);
+    }
+    .callout.warn { border-color: var(--amber); background: var(--amber-soft); }
+    .callout.risk { border-color: var(--red); background: var(--red-soft); }
+    .status {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 999px;
+      white-space: nowrap;
+      font-size: 12px;
+      font-weight: 700;
+    }
+    .status.done { color: var(--green); background: var(--green-soft); }
+    .status.must { color: var(--violet); background: var(--violet-soft); }
+    .status.plan { color: var(--amber); background: var(--amber-soft); }
+    .status.open { color: var(--red); background: var(--red-soft); }
+    .basis, .impl {
+      display: inline-block;
+      margin: 1px 2px 1px 0;
+      padding: 2px 7px;
+      border-radius: 999px;
+      white-space: nowrap;
+      font-size: 11px;
+      font-weight: 700;
+    }
+    .basis.source { color: #334155; background: #e9eef5; }
+    .basis.capture { color: #165bb5; background: #e7f1ff; }
+    .basis.user { color: var(--violet); background: var(--violet-soft); }
+    .basis.recommend { color: var(--amber); background: var(--amber-soft); }
+    .basis.unknown { color: var(--red); background: var(--red-soft); }
+    .impl.done { color: var(--green); background: var(--green-soft); }
+    .impl.partial { color: #165bb5; background: #e7f1ff; }
+    .impl.todo { color: var(--violet); background: var(--violet-soft); }
+    .impl.hold { color: var(--red); background: var(--red-soft); }
+    .table-wrap {
+      width: 100%;
+      overflow-x: auto;
+      border: 1px solid var(--line);
+      border-radius: 8px;
     }
     table {
       width: 100%;
       border-collapse: collapse;
-      margin: 12px 0 22px;
-      table-layout: fixed;
+      background: #fff;
     }
     th, td {
-      border: 1px solid var(--line);
       padding: 9px 10px;
+      border-right: 1px solid var(--line);
+      border-bottom: 1px solid var(--line);
       vertical-align: top;
+      text-align: left;
       word-break: break-word;
     }
+    th:last-child, td:last-child { border-right: 0; }
+    tr:last-child td { border-bottom: 0; }
     th {
+      color: #31435c;
       background: #edf2f7;
-      text-align: left;
+      font-size: 13px;
+    }
+    td { font-size: 13px; }
+    .matrix { min-width: 1180px; table-layout: fixed; }
+    .matrix th:nth-child(1) { width: 12%; }
+    .matrix th:nth-child(2) { width: 20%; }
+    .matrix th:nth-child(3) { width: 20%; }
+    .matrix th:nth-child(4) { width: 28%; }
+    .matrix th:nth-child(5) { width: 10%; }
+    .matrix th:nth-child(6) { width: 10%; }
+    .timeline {
+      display: grid;
+      grid-template-columns: repeat(6, minmax(0, 1fr));
+      gap: 9px;
+      padding: 0;
+      list-style: none;
+      counter-reset: step;
+    }
+    .timeline li {
+      position: relative;
+      min-height: 152px;
+      margin: 0;
+      padding: 42px 12px 12px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #f8fafc;
+      font-size: 13px;
+    }
+    .timeline li::before {
+      counter-increment: step;
+      content: counter(step);
+      position: absolute;
+      top: 11px;
+      left: 12px;
+      width: 23px;
+      height: 23px;
+      border-radius: 50%;
+      color: #fff;
+      background: var(--blue);
+      line-height: 23px;
+      text-align: center;
       font-weight: 700;
     }
-    ul, ol { padding-left: 24px; }
-    li { margin: 5px 0; }
-    .meta {
-      color: var(--muted);
-      font-size: 14px;
+    .timeline b {
+      display: block;
+      margin-bottom: 5px;
+      color: var(--navy);
     }
-    .summary {
+    .host-flow {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 7px;
+      align-items: center;
+      margin: 12px 0;
+    }
+    .host-flow span {
+      padding: 7px 9px;
+      border: 1px solid #bfd2ec;
+      border-radius: 6px;
+      background: var(--blue-soft);
+      font-size: 13px;
+    }
+    .host-flow i { color: var(--muted); font-style: normal; }
+    details {
+      margin: 10px 0;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fff;
+    }
+    summary {
+      cursor: pointer;
+      padding: 11px 13px;
+      color: var(--navy);
+      background: #f8fafc;
+      font-weight: 700;
+    }
+    .details-body { padding: 2px 13px 13px; }
+    .package-grid {
       display: grid;
-      grid-template-columns: repeat(4, minmax(0, 1fr));
+      grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 12px;
-      margin-top: 20px;
     }
-    .metric {
+    .package {
+      padding: 16px;
       border: 1px solid var(--line);
+      border-top: 4px solid var(--blue);
       border-radius: 8px;
-      padding: 14px;
-      background: #ffffff;
+      background: #fff;
     }
-    .metric strong {
-      display: block;
-      margin-bottom: 4px;
-      font-size: 20px;
-      color: var(--accent);
+    .package h3 { margin: 0 0 8px; }
+    .package .meta {
+      margin-bottom: 8px;
+      color: var(--muted);
+      font-size: 13px;
     }
-    .note {
-      border-left: 4px solid var(--accent);
-      background: var(--accent-soft);
-      padding: 12px 14px;
-      margin: 14px 0;
-    }
-    .warn {
-      border-left: 4px solid var(--warn);
-      background: var(--warn-soft);
-      padding: 12px 14px;
-      margin: 14px 0;
-    }
-    .risk {
-      border-left: 4px solid var(--risk);
-      background: var(--risk-soft);
-      padding: 12px 14px;
-      margin: 14px 0;
-    }
-    .badge {
-      display: inline-block;
-      padding: 2px 8px;
-      border-radius: 999px;
-      font-size: 12px;
-      font-weight: 700;
-      color: #ffffff;
-      white-space: nowrap;
-    }
-    .badge.cpu2 { background: var(--cpu2); }
-    .badge.cpu3 { background: var(--cpu3); }
-    .badge.shared { background: #7c3aed; }
-    .badge.doc { background: #475569; }
-    .flow {
+    .package ul { margin-bottom: 0; }
+    .small { color: var(--muted); font-size: 13px; }
+    .source-links {
       display: grid;
-      grid-template-columns: repeat(5, minmax(0, 1fr));
-      gap: 10px;
-      margin: 14px 0 22px;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
     }
-    .step {
-      min-height: 100px;
+    .source-links a {
+      padding: 9px 10px;
       border: 1px solid var(--line);
-      border-radius: 8px;
-      padding: 12px;
-      background: var(--panel);
+      border-radius: 7px;
+      background: #f8fafc;
     }
-    .step b {
-      display: block;
-      margin-bottom: 6px;
-      color: var(--accent);
+    @media (max-width: 1050px) {
+      .summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .layout { grid-template-columns: 1fr; }
+      .side-nav { position: static; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+      .side-nav strong { grid-column: 1 / -1; }
+      .timeline { grid-template-columns: repeat(3, minmax(0, 1fr)); }
     }
-    .cols {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 16px;
-    }
-    .panel {
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      padding: 14px 16px;
-      background: var(--panel);
-    }
-    @media (max-width: 900px) {
-      header { padding: 26px 20px 18px; }
-      main { padding: 20px 16px 42px; }
-      .summary, .flow, .cols { grid-template-columns: 1fr; }
-      table { table-layout: auto; }
+    @media (max-width: 700px) {
+      .hero { padding: 26px 18px 28px; }
+      h1 { font-size: 27px; }
+      .summary-grid { grid-template-columns: 1fr; padding: 0 14px; }
+      .layout { padding: 0 14px; }
+      section { padding: 20px 16px; }
+      .side-nav { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .decision-grid, .package-grid, .source-links { grid-template-columns: 1fr; }
+      .timeline { grid-template-columns: 1fr; }
+      .timeline li { min-height: 0; }
     }
   </style>
 </head>
 <body>
-  <header>
-    <h1>SI协议进一步兼容改动点与实施结果</h1>
-    <div class="meta">
-      日期：2026-07-01 ｜ 维护源：
-      <code>SI协议需求与实施总览.md</code>、
-      <code>SI协议待确认与后续清单.md</code>
-    </div>
-    <div class="summary">
-      <div class="metric"><strong>协议 14</strong>CPU2/CPU3 共享协议</div>
-      <div class="metric"><strong>40001~40003</strong>CPU2 profile 执行参数</div>
-      <div class="metric"><strong>200</strong>官方 DCS profile 点数上限</div>
-      <div class="metric"><strong>40010~40023</strong>CPU3 调度和报警参数</div>
+  <header class="hero">
+    <div class="hero-inner">
+      <div class="eyebrow">SI7000 · 站2现场兼容 · 协议18实施评审稿</div>
+      <h1>SI协议适配总方案</h1>
+      <p class="subtitle">本页回答三个问题：协议18已经落地什么、与站2真实SI还保留哪些受控差异、提交和台架验收还缺什么。</p>
+      <div class="hero-meta">
+        <span>整理日期：<strong>2026-07-14</strong></span>
+        <span>证据范围：<strong>站2全部抓包</strong></span>
+        <span>文档状态：<strong>源码已实现，契约/参考帧/双端clean-first构建通过；待真实台架和发布升版</strong></span>
+      </div>
     </div>
   </header>
 
-  <main>
-    <section>
-      <h2>1. 目标和边界</h2>
-      <p>本页记录 2026-07-01 SI协议进一步兼容的实际落地结果：当前已把 SI 基础协议兼容版推进到按 Scientific Instruments SI profile 行为独立执行的版本。核心原则是：CPU3 承担 SI协议和参数外观，CPU2 承担真实测量、电机动作和必要状态。</p>
-      <div class="note">
-        CPU2 不保存 SI Modbus 地址号、线圈、功能码、异常码和缩放规则，但保存 SI profile 执行参数。CPU3 负责把外部寄存器读写桥接到 CPU2 参数或 CPU3 本机参数，并下发 profile 启动命令。
-      </div>
-      <table>
-        <tr>
-          <th>范围</th>
-          <th>本次处理</th>
-          <th>不做或后续处理</th>
-        </tr>
-        <tr>
-          <td>SI profile 流程</td>
-          <td>新增独立命令、独立流程、Point0、探底频次、200 点上限。</td>
-          <td>不再复用普通分布密度测量流程。</td>
-        </tr>
-        <tr>
-          <td>SI 参数</td>
-          <td><code>40001~40003</code> 存入 CPU2 profile 执行参数，<code>40010~40023</code> 存入 CPU3 SI 参数。</td>
-          <td>CPU2 仍不处理 SI Modbus 地址和功能码。</td>
-        </tr>
-        <tr>
-          <td>状态和报警</td>
-          <td>CPU3 负责 SI 状态语义合成和报警限值判断。</td>
-          <td>只有必须依赖 CPU2 原始过程数据时，才新增最小共享结果。</td>
-        </tr>
-      </table>
-    </section>
+  <div class="summary-grid">
+    <div class="summary-card"><small>首个正式匹配组合</small><strong>共享协议18</strong><span>CPU2 V1.26.0.0 / CPU3 V1.24.0.0；协议17及更早版本不得混搭</span></div>
+    <div class="summary-card"><small>已实现</small><strong>40004～40023事务写</strong><span>六项站2默认值、FC03/FC06、FRAM写后校验、整份回滚、FRAM V7</span></div>
+    <div class="summary-card"><small>已实现</small><strong>镜像 + Profile生命周期</strong><span>Point0、递增N、活动点阵清零、回液位后最终同代发布</span></div>
+    <div class="summary-card"><small>仍缺证据</small><strong>原SI采中点阵 / 最终20秒</strong><span>不阻塞已确认基线；Manual、报警Enable和硬件语义仍待取证</span></div>
+  </div>
 
-    <section>
-      <h2>2. 改动点总览</h2>
-      <table>
-        <tr>
-          <th style="width: 18%;">改动点</th>
-          <th style="width: 12%;">归属</th>
-          <th>实施方案</th>
-          <th style="width: 20%;">影响</th>
-        </tr>
-        <tr>
-          <td>新增 SI profile 命令</td>
-          <td><span class="badge shared">共享协议</span></td>
-          <td>新增 <code>CMD_SI_PROFILE</code>，CPU3 的 <code>00004 Profile</code> 不再桥接 <code>CMD_MEASURE_DISTRIBUTED</code>。</td>
-          <td>影响 <code>DEVICE_PROTOCOL_VERSION</code>。</td>
-        </tr>
-        <tr>
-          <td>新增 CPU2 profile 参数</td>
-          <td><span class="badge cpu2">CPU2</span></td>
-          <td>新增 <code>si_profile_first_point</code>、<code>si_profile_increment</code>、<code>si_profile_dwell_time</code> 和 <code>si_profile_bottom_detect_interval</code>，复用原预留参数槽并掉电保存。</td>
-          <td>影响共享协议版本；CPU2 <code>DEVICE_PARAM_VERSION</code> 保持 3。</td>
-        </tr>
-        <tr>
-          <td>解耦 <code>40001~40003</code></td>
-          <td><span class="badge shared">CPU2/CPU3</span></td>
-          <td>CPU3 对外仍暴露 SI 保持寄存器和菜单项，但底层桥接 CPU2 profile 参数，不再写普通分布测量参数。</td>
-          <td>避免影响普通分布测量。</td>
-        </tr>
-        <tr>
-          <td>独立 profile 测量流程</td>
-          <td><span class="badge cpu2">CPU2</span></td>
-          <td>新增独立入口，执行时读取 CPU2 保存的 profile 参数，完成探底、到底、Point0、逐点采样和点阵写入。</td>
-          <td>影响 CPU2 测量流程和流程图。</td>
-        </tr>
-        <tr>
-          <td>自动 profile 调度</td>
-          <td><span class="badge cpu3">CPU3</span></td>
-          <td>基于 <code>40010~40013</code> 和 CPU3 RTC，从起始时间开始按周期跨天触发；到点后直接覆盖当前命令。</td>
-          <td>影响 CPU3 调度流程。</td>
-        </tr>
-        <tr>
-          <td>状态合成</td>
-          <td><span class="badge cpu3">CPU3</span></td>
-          <td><code>10010=0</code> 固定可信；<code>10002/10003</code> 按液位跟随稳定状态合成；<code>10001</code> 保持现有逻辑。</td>
-          <td>影响 SI FC02 输出。</td>
-        </tr>
-        <tr>
-          <td>报警限值</td>
-          <td><span class="badge cpu3">CPU3</span></td>
-          <td><code>40014~40023</code> 不复用现有限值，CPU3 独立保存并合成 <code>10017~10026</code>、<code>10029~10032</code>。</td>
-          <td>影响报警寄存器和测试用例。</td>
-        </tr>
-        <tr>
-          <td>Profile Timestamp</td>
-          <td><span class="badge cpu3">CPU3</span></td>
-          <td><code>30007~30010</code> 改为 CPU3 收到 SI <code>00004 Profile</code>、屏幕 SI profile 或自动触发 profile 时的时间。</td>
-          <td>不依赖 CPU2 start 事件。</td>
-        </tr>
-      </table>
-    </section>
+  <div class="layout">
+    <nav class="side-nav">
+      <strong>页面导航</strong>
+      <a href="#decision">1. 一页结论</a>
+      <a href="#matrix">2. 总适配矩阵</a>
+      <a href="#lifecycle">3. 已确认兼容设计</a>
+      <a href="#registers">4. 地址级方案</a>
+      <a href="#implementation">5. 四个实施包</a>
+      <a href="#verification">6. 验收门禁</a>
+      <a href="#pending">7. 已确认设计与补抓包</a>
+      <a href="#evidence">8. 证据与文档</a>
+    </nav>
 
-    <section>
-      <h2>3. CPU2 / CPU3 详细职责</h2>
-      <div class="cols">
-        <div class="panel">
-          <h3><span class="badge cpu2">CPU2</span> 真实测量和状态来源</h3>
-          <ul>
-            <li>新增 <code>CMD_SI_PROFILE</code> 独立执行入口。</li>
-            <li>持久保存 SI profile 执行参数，不保存 SI Modbus 地址号。</li>
-            <li>维护底部位置有效性、按 SI profile 入口触发次数推进的探底计数、Point0 采集和 profile 点阵。</li>
-            <li>保留 <code>probe_at_liquid_level</code>、<code>liquid_stable</code>、<code>profile_complete_latched</code>、<code>profile_complete_counter</code> 等真实状态。</li>
-            <li>提供测量失败、阻挡、完成锁存和点阵数据给 CPU3 映射。</li>
-          </ul>
+    <main>
+      <section id="decision">
+        <h2>1. 一页结论</h2>
+        <p class="lead">现有SI协议栈没有重做。协议18已经按两条链路落地：CPU3补齐镜像和私有保持寄存器；CPU2与CPU3联合完成不可拆分的Point0、进度和最终发布生命周期。</p>
+        <div class="decision-grid">
+          <div class="decision keep">
+            <h3>源码已实现，保持不动</h3>
+            <ul>
+              <li>RS485、9600、8O1和Slave Address。</li>
+              <li>FC01～FC06及现有地址窗口。</li>
+              <li>CPU3做外部协议、CPU2做真实测量。</li>
+              <li>最大200点及现有数据缩放。</li>
+              <li>FC05和 <code>40001～40003</code>依赖CPU2 ACK；<code>40004～40023</code>依赖CPU3 FRAM事务成功。</li>
+            </ul>
+          </div>
+          <div class="decision must">
+            <h3>用户已批准，源码已实现</h3>
+            <ul>
+              <li><code>40004～40009</code>默认 <code>0、50、1000、0、5、1</code>。</li>
+              <li>允许FC03连续读取、FC06单寄存器写入。</li>
+              <li>由CPU3本地持久化，不交给CPU2。</li>
+              <li>字段含义未知，不参与测量、报警或控制。</li>
+              <li>CPU3 FRAM已由V6→V7，并显式迁移保留V6参数。</li>
+            </ul>
+          </div>
+          <div class="decision must">
+            <h3>用户已确认兼容，协议18已实现</h3>
+            <ul>
+              <li><code>30014～30016</code>镜像FC01/FC02。</li>
+              <li>Point0输出本轮实际采用的底部参考；正常探底时即真实底部。</li>
+              <li>Point0时建立新周期并更新点数/时间。</li>
+              <li>点数逐步增加，最终点数事先未知。</li>
+              <li>回液位后再发布最终Complete组合。</li>
+            </ul>
+            <p class="small"><strong>范围和核心出口均已落地；</strong>第3、5、6、7节给出实现边界、失败/取消行为、已通过的静态检查和仍需台架验证项。</p>
+          </div>
+          <div class="decision stop">
+            <h3>待取证或明确暂缓</h3>
+            <ul>
+              <li>不给 <code>40004～40009</code>编造业务含义。</li>
+              <li>原SI采集中点阵是否开放仍可补抓；CUBE已确定活动期不提前开放。</li>
+              <li>不把约20秒直接等同于40003控制。</li>
+              <li>不主动增加FC16、超过200点或独立Tank ID。</li>
+              <li>Cal、双传感器和三档速度进入单独需求包。</li>
+            </ul>
+          </div>
         </div>
-        <div class="panel">
-          <h3><span class="badge cpu3">CPU3</span> 协议外观和参数合成</h3>
-          <ul>
-            <li>维护 SI Modbus RTU 从站、地址表、缩放和异常响应。</li>
-            <li>将 <code>40001~40003</code> 和菜单 profile 参数桥接到 CPU2 参数。</li>
-            <li>持久化 <code>40010~40023</code> 自动调度和报警限值。</li>
-            <li>将 <code>00004 Profile</code> 转为 <code>CMD_SI_PROFILE</code> 启动命令。</li>
-            <li>负责自动 profile 调度、时间戳锁存、状态位和报警位合成。</li>
-            <li>复用 <code>SlaveAddress</code> 作为 Tank ID，保持当前密度缩放和钳位。</li>
-          </ul>
+        <div class="callout">
+          <strong>完成定义：</strong>既有上位机不需要知道本轮最终点数，能够先识别“新一轮已经建立”，再识别“最终状态已经统一发布”，随后按实际 <code>30006</code> 读取完整点阵。
         </div>
-      </div>
-    </section>
+        <h3>状态图例：依据和实施分开看</h3>
+        <p>
+          依据：<span class="basis source">源码事实</span>
+          <span class="basis capture">抓包事实</span>
+          <span class="basis user">用户已确认</span>
+          <span class="basis recommend">工程推荐</span>
+          <span class="basis unknown">待取证</span>
+        </p>
+        <p>
+          实施：<span class="impl done">已实现</span>
+          <span class="impl partial">部分实现</span>
+          <span class="impl todo">未实现</span>
+          <span class="impl hold">暂缓</span>
+        </p>
+      </section>
 
-    <section>
-      <h2>4. 参数存储和状态回传</h2>
-      <table>
-        <tr>
-          <th>层级</th>
-          <th>字段</th>
-          <th>存放/传递</th>
-          <th>说明</th>
-        </tr>
-        <tr>
-          <td>CPU2 profile 执行参数</td>
-          <td><code>profile_first_point</code>、<code>profile_increment</code>、<code>profile_dwell_time</code>、<code>bottom_detect_frequency</code></td>
-          <td>CPU2 掉电保存</td>
-          <td>与 <code>40001~40003</code> 和探底频次对应，执行时直接读取。</td>
-        </tr>
-        <tr>
-          <td>CPU3 SI 参数</td>
-          <td><code>auto_profile_interval</code>、<code>auto_profile_enable</code>、<code>auto_profile_hour</code>、<code>auto_profile_minute</code>、<code>alarm_limit_*</code></td>
-          <td>CPU3 掉电保存</td>
-          <td>与 <code>40010~40023</code> 对应，负责调度和报警合成。</td>
-        </tr>
-        <tr>
-          <td>状态回传</td>
-          <td>profile lifecycle、Point0 captured、complete latch/counter、点阵、液位跟随稳定状态、失败/阻挡状态</td>
-          <td>CPU2 产生，CPU3 读取</td>
-          <td>CPU3 再映射为 <code>100xx</code>、<code>300xx</code> 和报警状态。</td>
-        </tr>
-      </table>
-    </section>
+      <section id="matrix">
+        <h2>2. 总适配矩阵</h2>
+        <p class="lead">这是全文唯一的全量清单。每项同时标明来源依据和实施状态，后续章节只引用项目ID，不再另建一套清单。</p>
+        <div class="table-wrap">
+          <table class="matrix">
+            <tr>
+              <th>ID / 模块</th>
+              <th>当前CUBE</th>
+              <th>站2事实 / 已确认需求</th>
+              <th>目标契约</th>
+              <th>依据</th>
+              <th>实施</th>
+            </tr>
+            <tr>
+              <td><strong>COM-01</strong><br>通信制式</td>
+              <td>RS485、9600、8O1；Tank ID复用Slave Address。</td>
+              <td>站2抓包未发现制式和地址冲突。</td>
+              <td>保持现有制式和地址来源。</td>
+              <td><span class="basis source">源码</span><span class="basis capture">抓包 E01</span></td>
+              <td><span class="impl done">已实现</span></td>
+            </tr>
+            <tr>
+              <td><strong>COM-02</strong><br>功能码与窗口</td>
+              <td>支持FC01～FC06；按各自窗口连续读取；不支持FC16。</td>
+              <td>SI支持FC03一次读取多个保持寄存器；未发现FC16需求。</td>
+              <td>FC03可连续读取 <code>40001～40023</code>；无证据时不扩FC16。</td>
+              <td><span class="basis source">源码</span><span class="basis capture">抓包 E03</span></td>
+              <td><span class="impl done">已实现</span></td>
+            </tr>
+            <tr>
+              <td><strong>COM-03</strong><br>写入门禁</td>
+              <td><code>FC05=ON</code>及 <code>40001～40003</code>依赖CPU2 ACK；<code>40004～40023</code>依赖FRAM写后校验；失败均返回 <code>0x06</code>。</td>
+              <td>现场未提出不同的写失败语义。</td>
+              <td>桥接写保持ACK后提交；CPU3本地参数不受CPU2在线门禁影响，但只有FRAM事务成功才回显，失败整份回滚。</td>
+              <td><span class="basis source">源码</span></td>
+              <td><span class="impl done">已实现</span></td>
+            </tr>
+            <tr>
+              <td><strong>COIL-01</strong><br>模式与动作</td>
+              <td>Manual/Cal/Auto/Profile和Stop/上下行已映射；三档速度合并为同一方向命令。</td>
+              <td>抓包能证明模式变化，不能证明完整Manual/Cal/三档语义。</td>
+              <td>保持互斥和现有动作映射；未确认语义放入实施包D。</td>
+              <td><span class="basis source">源码</span><span class="basis unknown">待取证</span></td>
+              <td><span class="impl partial">部分实现</span></td>
+            </tr>
+            <tr>
+              <td><strong>CMD-01</strong><br>Profile命令</td>
+              <td><code>00004</code>已映射独立 <code>CMD_SI_PROFILE=20</code>。</td>
+              <td>站2有独立Profile模式。</td>
+              <td>保持独立入口，并继续隔离普通分布测量结果。</td>
+              <td><span class="basis source">源码</span><span class="basis capture">抓包 E01</span></td>
+              <td><span class="impl done">已实现</span></td>
+            </tr>
+            <tr>
+              <td><strong>DI-01</strong><br>公开状态位</td>
+              <td>Profile Complete隔离SI来源；上下液位、Interlock和Reel Alarm为软件合成。</td>
+              <td>站2状态可通过私有镜像观察，但抓包不能证明真实硬件来源。</td>
+              <td>保持已可靠状态；底部可信性和最终发布随B/C包收敛，硬件细分暂缓。</td>
+              <td><span class="basis source">源码</span><span class="basis capture">抓包 E02/E06</span></td>
+              <td><span class="impl partial">部分实现</span></td>
+            </tr>
+            <tr>
+              <td><strong>HR-01</strong><br><code>40001～40003</code></td>
+              <td>CPU2持久化首点、步距、停留时间；写入依赖ACK。</td>
+              <td>站2读回 <code>1000、1000、20</code>。</td>
+              <td>保持CPU2真实执行参数和现有单位；站2数值是配置，不硬编码。</td>
+              <td><span class="basis source">源码</span><span class="basis capture">抓包 E03</span></td>
+              <td><span class="impl done">已实现</span></td>
+            </tr>
+            <tr>
+              <td><strong>HR-02</strong><br><code>40004～40009</code></td>
+              <td>CPU3本地原始兼容槽，默认 <code>0、50、1000、0、5、1</code>；FC03/FC06及掉电保存已实现。</td>
+              <td>站2为 <code>0、50、1000、0、5、1</code>；用户已批准按这些默认值可读写。</td>
+              <td>CPU3原始 <code>uint16</code>兼容槽；FC03批读、FC06单写、FRAM持久化；不参与控制。</td>
+              <td><span class="basis capture">抓包 E03</span><span class="basis user">用户确认</span></td>
+              <td><span class="impl done">已实现 A</span></td>
+            </tr>
+            <tr>
+              <td><strong>HR-03</strong><br><code>40010～40023</code></td>
+              <td>CPU3本地自动调度和报警参数，FRAM V7；V6可迁移；FC06走事务式写入和整份回滚。</td>
+              <td>站2数值已抓取，未发现地址冲突。</td>
+              <td>保持现有语义；实施A包的V7迁移不得丢失旧值，FRAM失败不得留下未持久化运行态。</td>
+              <td><span class="basis source">源码</span><span class="basis capture">抓包 E03</span></td>
+              <td><span class="impl done">已实现</span></td>
+            </tr>
+            <tr>
+              <td><strong>IR-01</strong><br><code>30001～30013</code></td>
+              <td>当前值和RTC已实现；Point0新周期锁存时间；活动点数从1递增，最终发布后为完整长度。</td>
+              <td>Point0时更新时间和点数，随后点数递增。</td>
+              <td>当前值和RTC保持；时间与点数随C包改为Point0事件和活动进度。</td>
+               <td><span class="basis source">源码</span><span class="basis capture">抓包 E04/E05</span><span class="basis user">用户确认</span></td>
+               <td><span class="impl done">已实现 C</span></td>
+            </tr>
+            <tr>
+              <td><strong>IR-02</strong><br><code>30014～30016</code></td>
+              <td>三个寄存器已从同一FC01/FC02位图派生。</td>
+              <td>逐帧对应FC01前16位和FC02前32位；上位机Profile期间主要轮询这里。</td>
+              <td>从同一FC01/FC02位图实时派生，禁止维护第二份状态。</td>
+               <td><span class="basis source">源码</span><span class="basis capture">抓包 E02</span><span class="basis user">用户确认</span></td>
+               <td><span class="impl done">已实现 A</span></td>
+            </tr>
+            <tr>
+              <td><strong>IR-03</strong><br><code>30017～30020</code></td>
+              <td>固定0。</td>
+              <td>6265组站2样本全部为0，含义未知。</td>
+              <td>继续返回0并标为站2观察下的保留字段。</td>
+              <td><span class="basis source">源码</span><span class="basis capture">抓包 E07</span></td>
+              <td><span class="impl done">已实现</span></td>
+            </tr>
+            <tr>
+              <td><strong>IR-04</strong><br><code>30021～30620</code></td>
+              <td>Point0前保留上一轮；Point0后活动期全0；最终代际复核通过后开放最多200点。</td>
+              <td>既有上位机只在最终状态后读取；采集中是否开放未知。</td>
+              <td>Point0前保留上一轮完整点阵；Point0后至最终发布前全0；最终校验通过后整体开放新点阵。</td>
+              <td><span class="basis source">源码</span><span class="basis user">用户确认</span><span class="basis unknown">原SI行为待取证</span></td>
+              <td><span class="impl done">已实现 C</span></td>
+            </tr>
+            <tr>
+              <td><strong>PRO-01</strong><br>Point0</td>
+              <td>输出本轮实际采用底部参考：新底、可信旧底或当前位置降级。</td>
+              <td>站2输出真实底部345mm。</td>
+              <td>输出本轮采用的底部参考：新探底或可信旧底优先；两者都没有时使用当前探头位置继续，并保留降级诊断。</td>
+               <td><span class="basis source">源码</span><span class="basis capture">抓包 E04</span><span class="basis user">用户确认</span></td>
+               <td><span class="impl done">已实现 B/C</span></td>
+            </tr>
+            <tr>
+              <td><strong>PRO-02</strong><br>周期和进度</td>
+              <td>Point0前保留旧结果；Point0建立新周期，活动点数递增。</td>
+              <td>命令后短暂保留旧值；Point0后Complete清0、点数1；随后递增。</td>
+              <td>保留已发布结果；Point0建立新周期；活动点数独立增长。</td>
+               <td><span class="basis source">源码</span><span class="basis capture">抓包 E05</span><span class="basis user">用户确认</span></td>
+               <td><span class="impl done">已实现 C</span></td>
+            </tr>
+            <tr>
+              <td><strong>PRO-03</strong><br>最终发布</td>
+              <td>回液位稳定后CPU2提交候选，CPU3分块读取和代际复核后一次发布最终组合。</td>
+              <td>轮询观察到回液位处理后才出现Profile=0、Auto=1、Stop=1、Complete=1、AtLevel=1和最终报警组合。</td>
+              <td>以CPU3本地 <code>final_snapshot_ready</code>门禁开放同一对外快照；不声称实机内部一定原子执行。</td>
+               <td><span class="basis source">源码</span><span class="basis capture">抓包 E06</span><span class="basis user">用户确认</span><span class="basis recommend">工程推荐</span></td>
+               <td><span class="impl done">已实现 C</span></td>
+            </tr>
+            <tr>
+              <td><strong>SCH-01</strong><br>自动Profile</td>
+              <td>支持起始时分、周期、跨天、同分钟去重和5秒失败节流。</td>
+              <td>站2自动参数已读取；Manual期间规则未取证。</td>
+              <td>保持现有调度；Manual优先级独立决策。</td>
+              <td><span class="basis source">源码</span><span class="basis unknown">待取证</span></td>
+              <td><span class="impl partial">部分实现</span></td>
+            </tr>
+            <tr>
+              <td><strong>ALM-01</strong><br>报警</td>
+              <td>当前值、Profile上下限和相邻点差报警已由CPU3合成。</td>
+              <td>站2最终密差报警非零；阈值0是有效值；独立Enable未知。</td>
+              <td>保持阈值计算；最终报警随PRO-03发布；Enable和Manual抑制另行确认。</td>
+               <td><span class="basis source">源码</span><span class="basis capture">抓包 E02/E06</span><span class="basis user">最终发布已确认</span><span class="basis unknown">Enable待取证</span></td>
+               <td><span class="impl done">阈值及最终同代发布已实现 C</span></td>
+            </tr>
+            <tr>
+              <td><strong>STO-01</strong><br>CPU3存储</td>
+              <td>FRAM V7持久化 <code>40004～40023</code>；V6旧SI参数和串口参数完整迁移；所有FC06本地写均写后校验并可整份回滚。</td>
+              <td>用户批准新增六个私有兼容参数。</td>
+              <td>升级V7；保留旧参数并补六项默认值；恢复出厂同样恢复六项。</td>
+              <td><span class="basis source">源码</span><span class="basis user">用户确认</span><span class="basis recommend">工程推荐</span></td>
+              <td><span class="impl done">已实现 A</span></td>
+            </tr>
+            <tr>
+              <td><strong>SAFE-01</strong><br>探底失败</td>
+              <td>有可信旧底优先沿用；无可信旧底时用当前位置继续，不按失败处理并保留诊断。</td>
+              <td>抓包只证明成功轮次的Point0为可信实际底部。</td>
+              <td>有可信旧底优先沿用；无旧底时使用当前探头位置作为本轮Point0继续测量，不按失败处理、不置Interlock，仅保留内部诊断。</td>
+              <td><span class="basis source">源码</span><span class="basis user">用户确认</span></td>
+              <td><span class="impl done">已实现 B</span></td>
+            </tr>
+            <tr>
+              <td><strong>CAL-01</strong><br>校准</td>
+              <td><code>00002</code>当前只是零点校准。</td>
+              <td>没有完整Level Calibration抓包。</td>
+              <td>需求确认后单独实现完整校准和完成后回Auto。</td>
+              <td><span class="basis source">源码</span><span class="basis unknown">待取证</span></td>
+              <td><span class="impl hold">暂缓 D</span></td>
+            </tr>
+            <tr>
+              <td><strong>HW-01</strong><br>硬件语义</td>
+              <td>双液位传感器、Interlock/Reel细分和三档速度均为软件兼容。</td>
+              <td>现有抓包不能证明硬件来源或真实速度档位。</td>
+              <td>有硬件和PLC需求后单独设计，不在前三包伪实现。</td>
+              <td><span class="basis source">源码</span><span class="basis unknown">待取证</span></td>
+              <td><span class="impl hold">暂缓 D</span></td>
+            </tr>
+            <tr>
+              <td><strong>DIAG-01</strong><br>诊断</td>
+              <td>Modbus异常通过响应反馈，没有完整本地统计页。</td>
+              <td>抓包不要求诊断地址。</td>
+              <td>可选增加触发来源、跳过原因、完成计数、CRC/非法地址/设备忙统计。</td>
+              <td><span class="basis recommend">工程推荐</span></td>
+              <td><span class="impl hold">可选 D</span></td>
+            </tr>
+          </table>
+        </div>
+      </section>
 
-    <section>
-      <h2>5. Profile 测量流程</h2>
-      <div class="flow">
-        <div class="step"><b>1. 触发</b>CPU3 收到 SI <code>00004 Profile</code>、屏幕 SI profile 或自动调度触发，锁存开始时间。</div>
-        <div class="step"><b>2. 启动</b>CPU3 下发 <code>CMD_SI_PROFILE</code>，不携带 profile 参数上下文。</div>
-        <div class="step"><b>3. 参数</b>CPU2 读取本机 SI profile 参数，并按进入 SI profile 入口的触发次数判断探底频次。</div>
-        <div class="step"><b>4. Point0</b>运行到底部位置采集 Point0；无旧底部且探底失败时使用当前位置，但不刷新底部参考；对外位置字段固定为 0。</div>
-        <div class="step"><b>5. 点阵</b>按 Point1=first point 绝对位置、increment、dwell time 生成候选点并逐点采样，最多 200 点；到点判定为液面以上时停止且不写入该点。</div>
-      </div>
-      <ol>
-        <li>探底频次默认 <code>1</code>；<code>1</code> 表示每次 profile 前探底，更大值表示每 N 次触发探底一次；计数按进入 CPU2 SI profile 入口推进，不按成功完成次数推进。</li>
-        <li>不探底时也必须运行到上次探底保存的底部位置读取 Point0；Point0 对外位置字段仍固定为 <code>0</code>。</li>
-        <li><code>40001</code> 是 Point1 的绝对位置，<code>40002</code> 从该绝对位置开始递增；即使实际底部高于 <code>40001</code>，也不跳过 Point1。</li>
-        <li>停止条件包括当前候选点被判定为液面以上、达到上限位置或达到 200 点上限；液面以上点不写入有效点阵。</li>
-        <li>profile 成功锁存后排队 <code>CMD_FIND_OIL</code>，下一轮主循环自动找液位并回液位跟随；失败或命令切换不触发。</li>
-      </ol>
-    </section>
+      <section id="lifecycle">
+        <h2>3. 已确认兼容项实施结果</h2>
+        <p class="lead">五项兼容范围及核心设计已经按CPU2→CPU3→SI链路落地。本节记录当前实现、异常出口和可判定验收边界；静态检查已通过，真实硬件场景仍需第6节台架验证。</p>
+        <div class="callout">
+          <strong>发布边界：</strong><code>30014～30016</code>镜像可作为CPU3独立改动；Point0底部参考、Point0新周期、递增点数和回液位后Complete必须作为同一生命周期版本发布，不能拆成互不一致的半兼容状态。
+        </div>
 
-    <section>
-      <h2>6. 寄存器和状态改动</h2>
-      <h3>保持寄存器</h3>
-      <table>
-        <tr>
-          <th>地址</th>
-          <th>名称</th>
-          <th>改动方案</th>
-        </tr>
-        <tr><td><code>40001</code></td><td>Profile First Point</td><td>桥接 CPU2 profile 执行参数，表示 Point1 绝对位置；Point0 位置字段固定为 0。</td></tr>
-        <tr><td><code>40002</code></td><td>Profile Increment</td><td>桥接 CPU2 profile 执行参数，从 40001 绝对位置开始逐点递增。</td></tr>
-        <tr><td><code>40003</code></td><td>Profile Dwell Time</td><td>桥接 CPU2 profile 执行参数，表示停稳后的等待时间。</td></tr>
-        <tr><td><code>40010</code></td><td>Automatic Profile Interval</td><td>独立参数，禁止写入 0；关闭自动 profile 使用 <code>40011=0</code>。</td></tr>
-        <tr><td><code>40011~40013</code></td><td>自动 profile 使能和起始时间</td><td>CPU3 RTC 调度使用，可跨天。</td></tr>
-        <tr><td><code>40014~40023</code></td><td>报警限值</td><td>CPU3 独立保存和判断，不复用现有限值。</td></tr>
-      </table>
+        <h3>3.1 已确认范围与设计落点</h3>
+        <div class="table-wrap">
+          <table>
+            <tr><th>确认项</th><th>设计落点</th><th>外部可观察结果</th><th>发布约束</th></tr>
+            <tr><td><strong>IR-02</strong><br><code>30014～30016</code>镜像</td><td>CPU3从本轮已经生成的FC01/FC02位图直接打包，不复制业务判断。</td><td>镜像与公开状态位同源、同刷新周期，<code>30017～30020</code>继续为0。</td><td>可独立发布；不改变CPU2/CPU3共享协议。</td></tr>
+            <tr><td><strong>PRO-01</strong><br>Point0底部参考</td><td>CPU2把本轮实际采用的底部参考写入第一个有效点，沿用现有单位转换和非负钳位；优先级为新探底、可信旧底、当前探头位置降级。</td><td>正常探底时输出真实底部；沿用旧底时输出实际采用的旧底；两者都没有时输出当前位置并保留内部诊断，此降级Point0不保证等于物理罐底。</td><td>必须与生命周期包同版发布，避免坐标已变而周期仍是旧语义。</td></tr>
+            <tr><td><strong>IR-01 / PRO-02</strong><br>Point0建立周期与递增点数</td><td>新增共享运行态，Point0有效样本提交时递增周期计数；每个有效点提交后更新进度。</td><td>Point0时新时间、<code>30006=1</code>、Complete=0；之后点数单调增加。</td><td>CPU2和CPU3同步升级共享协议。</td></tr>
+            <tr><td><strong>PRO-03 / ALM-01</strong><br>回液位后最终发布</td><td>CPU2形成候选结果；CPU3完整拉取、复核代际、计算报警并满足液位门禁后才开放最终快照。</td><td>Profile=0、Auto=1、Stop=1、Complete=1、AtLevel=1、Interlock=0、最终N、点阵和最终报警属于同一发布代。</td><td>不得让CPU2的候选Complete直接穿透到SI侧。</td></tr>
+          </table>
+        </div>
 
-      <h3>离散输入和输入寄存器</h3>
-      <table>
-        <tr>
-          <th>地址</th>
-          <th>改动方案</th>
-        </tr>
-        <tr><td><code>10001</code></td><td>Bottom Reference 保持现有逻辑，不在本轮固定覆盖。</td></tr>
-        <tr><td><code>10002/10003</code></td><td>液位跟随稳定后下传感器液体、上传感器空气；其它状态均显示液体。</td></tr>
-        <tr><td><code>10010</code></td><td>Probe Un-calibrated 固定返回可信，即 <code>0</code>。</td></tr>
-        <tr><td><code>10025/10026</code></td><td>按相邻点温度差和密度差生成 profile 偏差报警。</td></tr>
-        <tr><td><code>30007~30010</code></td><td>Profile Timestamp 改为 CPU3 收到或触发 profile 命令的时间。</td></tr>
-        <tr><td><code>30021~30620</code></td><td>输出 200 个 profile 点，每点位置、温度、密度三元组。</td></tr>
-      </table>
-    </section>
+        <h3>3.2 数据流与缓冲边界</h3>
+        <div class="host-flow">
+          <span>CPU2工作缓冲</span><i>→</i>
+          <span>共享生命周期头</span><i>→</i>
+          <span>CPU2候选结果提交</span><i>→</i>
+          <span>CPU3分块拉取并复核</span><i>→</i>
+          <span>CPU3 SI发布快照</span>
+        </div>
+        <ul>
+          <li><strong>CPU2工作缓冲：</strong>继续使用本轮局部 <code>DensityDistribution temp</code>，采集中不覆盖上一轮已发布点阵。</li>
+          <li><strong>共享生命周期头：</strong>只传递阶段、Point0事件代次和有效点进度，不传“预期点数”。</li>
+          <li><strong>CPU2候选结果：</strong>回液位成功并稳定后，先复制完整点阵、最终点数、液位和来源，最后递增现有完成计数；CPU2不拥有SI私有阈值。</li>
+          <li><strong>CPU3发布快照：</strong>FC01、FC02、FC04及镜像都读取同一个本地SI投影；候选结果未校验完成时对外Complete必须保持0。快照发布后保持不可变，普通、国标、每米、间隔和Wärtsilä分布不会清除或改写它。</li>
+        </ul>
 
-    <section>
-      <h2>7. 实施结果</h2>
-      <ol>
-        <li>共享协议升到 <code>DEVICE_PROTOCOL_VERSION = 14</code>，新增 <code>CMD_SI_PROFILE = 20</code>，并通过 <code>profile_source</code> 隔离 SI profile 结果。</li>
-        <li>CPU2 复用预留槽新增 SI profile 执行参数，覆盖 <code>40001~40003</code> 及探底频次；<code>DEVICE_PARAM_VERSION</code> 保持 <code>3</code>。</li>
-        <li>CPU3 菜单和 SI Modbus 将 <code>40001~40003</code> 桥接到 CPU2 参数，不再桥接普通分布参数。</li>
-        <li>CPU2 新增 SI profile 独立测量入口，执行时读取本机 profile 参数。</li>
-        <li>CPU3 将 <code>00004 Profile</code> 改为锁存开始时间并下发 <code>CMD_SI_PROFILE</code>。</li>
-        <li>CPU3 落地自动 profile 调度、状态合成、报警合成和 timestamp 锁存；CPU3 本机参数 FRAM 版本升至 <code>0x0006</code>。</li>
-        <li>同步映射表、PLC 联调表、CPU2/CPU3 协议变更记录和 golden frame/契约检查脚本。</li>
-      </ol>
-      <h3>CPU3 菜单更新</h3>
-      <table>
-        <tr>
-          <th>菜单页</th>
-          <th>菜单项</th>
-          <th>存储归属</th>
-          <th>实现要求</th>
-        </tr>
-        <tr>
-          <td>SI Profile</td>
-          <td>SI首点、SI步距、SI停留、SI探底</td>
-          <td>CPU2 参数</td>
-          <td>新增 CPU2 参数操作号和参数同步；菜单写入后 CPU2 掉电保存，不能改普通分布参数。</td>
-        </tr>
-        <tr>
-          <td>自动 Profile</td>
-          <td>SI自动、SI周期、SI时、SI分</td>
-          <td>CPU3 本机参数</td>
-          <td>写入后保存 FRAM 并重算下一次触发；周期禁止为 0，关闭使用使能项。</td>
-        </tr>
-        <tr>
-          <td>SI 报警</td>
-          <td>低/高密度、低/高温、LL/HH 液位、低/高液位、温差、密差</td>
-          <td>CPU3 本机参数</td>
-          <td>与 <code>40014~40023</code> 同源，菜单、PLC 写入和报警合成使用同一套限值。</td>
-        </tr>
-        <tr>
-          <td>SI 状态</td>
-          <td>下次时间、触发源、完成计数</td>
-          <td>只读运行态</td>
-          <td>可作为第二阶段诊断页；不作为 SI协议必需项。</td>
-        </tr>
-      </table>
-      <ul>
-        <li><code>display_tankopera.c</code> 在参数配置下新增 <code>SI参数</code> 入口，拆分 Profile、自动 Profile、报警三个配置页。</li>
-        <li><code>display_tankopera.h</code> 同步新增 CPU2 参数操作号和 CPU3 本机操作号，避免把 CPU2-backed 菜单项误放入 CPU3 本机参数区。</li>
-        <li><code>cpu3_comm_display_params.c</code> 只保存 <code>40010~40023</code>；<code>40001~40003</code> 通过内部主板参数同步写 CPU2。</li>
-        <li>菜单显示已收敛为 128x64 OLED 可容纳的短名：<code>SI首点</code>、<code>SI步距</code>、<code>SI停留</code>、<code>SI探底</code>、<code>SI周期</code>、<code>SI自动</code>、<code>SI时</code>、<code>SI分</code>；修改后需重新运行菜单宽度和字库检查。</li>
-      </ul>
-    </section>
+        <h3>3.3 最小共享契约</h3>
+        <div class="table-wrap">
+          <table>
+            <tr><th>字段</th><th>类型</th><th>写入时机</th><th>用途</th></tr>
+            <tr><td><code>si_profile_phase</code></td><td><code>uint32_t</code></td><td>阶段转换时</td><td>区分准备、采集、回液位、候选完成、取消和失败。</td></tr>
+            <tr><td><code>si_profile_cycle_counter</code></td><td><code>uint32_t</code></td><td>Point0第一个有效样本提交后最后递增</td><td>可靠标识新周期；CPU3据此只尝试一次Point0 RTC锁存。比较必须使用“不相等”，兼容自然回绕；本次锁存失败则本周期时间始终全0，下一周期再重新锁存。</td></tr>
+            <tr><td><code>si_profile_progress_points</code></td><td><code>uint32_t</code></td><td>每个有效点的数据写完后最后更新</td><td>驱动采集中的 <code>30006</code>；范围1～200，不包含失败样本、重试和液面以上候选点。</td></tr>
+            <tr><td>现有 <code>profile_complete_counter</code></td><td><code>uint32_t</code></td><td>完整候选结果提交后最后递增</td><td>CPU3开始一次且仅一次的最终点阵拉取；不新增重复的result-ready字段。</td></tr>
+            <tr><td>现有Complete / Source / Blocked / Alarm</td><td><code>uint32_t</code></td><td>Point0或最终提交时</td><td>复用Complete、来源隔离和失败诊断；现有共享报警字段保留给其它模式/诊断，SI对外Profile报警仍由CPU3依据本地阈值计算。</td></tr>
+          </table>
+        </div>
+        <p class="small"><strong>阶段枚举：</strong><code>0=IDLE</code>、<code>1=PREPARING</code>、<code>2=MEASURING</code>、<code>3=RETURNING_LEVEL</code>、<code>4=COMPLETE</code>、<code>5=ABORTED</code>、<code>6=FAILED</code>。枚举值进入共享协议18后不得在同一协议版本内重排。</p>
+        <p>三个新增运行态字段追加在AO运行态之后、<code>REG_ENG</code>之前，不插入点阵头部，因此不移动现有点阵、无线、继电器和AO地址。CPU2/CPU3的 <code>DEVICE_PROTOCOL_VERSION</code>已经由 <strong>17升至18</strong>，两端必须严格配套。</p>
+        <p class="small">已确认不新增Point0位置共享字段：本轮采用的底部参考保存在CPU2工作缓冲第0点，并在最终点阵中发布；活动期只发布递增的 <code>30006</code>，<code>30021～30620</code>保持全0，因此无需额外增加 <code>si_profile_point0_position_01mm</code>。</p>
 
-    <section>
-      <h2>8. 版本、兼容和风险</h2>
-      <table>
-        <tr>
-          <th>事项</th>
-          <th>影响</th>
-          <th>处理</th>
-        </tr>
-        <tr>
-          <td>新增 <code>CMD_SI_PROFILE</code></td>
-          <td>CPU2/CPU3 共享协议变化。</td>
-          <td>升级 <code>DEVICE_PROTOCOL_VERSION</code>，更新协议变更记录。</td>
-        </tr>
-        <tr>
-          <td>新增 CPU2 SI profile 参数</td>
-          <td>CPU2 参数存储变化。</td>
-          <td>CPU2 复用原预留槽，<code>DEVICE_PARAM_VERSION</code> 保持 3；通过协议版本迁移补默认值并同步 CPU3 参数镜像。</td>
-        </tr>
-        <tr>
-          <td>CPU3 SI协议调度和报警参数持久化</td>
-          <td>CPU3 本机参数存储变化。</td>
-          <td>CPU3 本机参数版本升至 <code>0x0006</code>，补 V3/V4/V5 迁移、默认值和恢复默认行为。</td>
-        </tr>
-        <tr>
-          <td>自动 profile 直接覆盖当前命令</td>
-          <td>可能影响当前测量状态清理。</td>
-          <td>增加状态机和中止残留回归测试。</td>
-        </tr>
-        <tr>
-          <td>密度 16 位上限</td>
-          <td><code>0.01 kg/m3</code> 下 16 位最大表达 <code>655.35 kg/m3</code>。</td>
-          <td>已确认接受当前缩放和钳位口径。</td>
-        </tr>
-      </table>
-    </section>
+        <h3>3.4 阶段定义和对外状态</h3>
+        <div class="table-wrap">
+          <table>
+            <tr><th>阶段</th><th>CPU2内部动作</th><th>CPU3对SI发布</th><th>关键门禁</th></tr>
+            <tr><td><code>IDLE</code><br>空闲/旧结果</td><td>保留上一轮SI结果。</td><td>旧时间、旧点数、旧点阵和旧Profile报警有效；Complete按上一轮SI结果。</td><td>普通、国标、每米、间隔或Wärtsilä分布不得冒充、清除或改写已发布SI结果。</td></tr>
+            <tr><td><code>PREPARING</code><br>命令成功至Point0前</td><td>下行并确定本轮底部参考：新探底优先，其次可信旧底，最后允许使用当前位置降级；不清旧结果。</td><td>Profile=1；继续保留上一轮时间、点数、Complete、点阵和Profile报警。</td><td>Profile=1只表示命令已进入，不表示本轮已建立。</td></tr>
+            <tr><td><code>MEASURING</code><br>Point0提交</td><td>写入本轮采用的Point0底部参考，清CPU2候选Complete，进度置1，最后递增cycle。</td><td>CPU3收到cycle事件后清本地旧Profile报警；同一投影中Complete=0、<code>30006=1</code>、Point0时间更新，<code>30021～30620</code>全部为0。</td><td>边界是“Point0有效样本已写入”，不是电机刚到罐底。</td></tr>
+            <tr><td><code>MEASURING</code><br>逐点采集</td><td>每接受一个有效液体点才增加progress。</td><td>Complete=0；<code>30006</code>单调增加或保持，可以因上位机轮询跨过中间值。</td><td>不预设最终N；失败样本和空气点不计数。</td></tr>
+            <tr><td><code>RETURNING_LEVEL</code><br>回液位</td><td>最终N在内部冻结，继续找液位并等待稳定。</td><td>Profile保持1、Complete保持0、进度冻结；不得提前宣告最终结果。</td><td>至少要求找液位成功、AtLevel、Stable、电机停止和候选结果准备完成。</td></tr>
+            <tr><td><code>COMPLETE</code><br>候选结果</td><td>复制完整temp，写Source/最终N/液位，最后递增完成计数；保持COMPLETE及候选数据，直到下一条SI Profile命令。</td><td>CPU3仍保持Complete=0，分块拉取点阵、计算SI Profile报警并复读头部。</td><td>cycle、complete counter、N、Source和Phase复核不变才可发布；CPU3拉取完成前CPU2不得自动回IDLE。</td></tr>
+            <tr><td>最终SI发布</td><td>进入稳定液位跟随。</td><td>同一发布代开放Profile=0、Auto=1、Stop=1、Complete=1、AtLevel=1、Interlock=0、最终N、完整点阵和最终报警。</td><td>这是“同一对外投影/快照”，不声称厂家内部一定原子执行。</td></tr>
+            <tr><td><code>ABORTED / FAILED</code><br>取消或失败</td><td>不增加完成计数；Point0前不建立新周期；Point0后清零共享进度并丢弃本轮候选点阵。</td><td>Point0前显式取消保留旧结果；Point0后两类出口均发布Complete=0、<code>30006=0</code>和全0点阵。显式取消以取消ACK为终态且不置Interlock；真实测量失败沿用现有错误/Interlock出口。</td><td>不得恢复旧Complete或保留活动点数；真实失败不得静默伪装成取消。</td></tr>
+          </table>
+        </div>
 
-    <section>
-      <h2>9. 验证计划</h2>
-      <h3>静态和协议检查</h3>
-      <ul>
-        <li><code>py tools\check_si_modbus_frames.py</code></li>
-        <li><code>py tools\check_si_protocol_contract.py</code></li>
-        <li><code>git diff --check</code></li>
-        <li>新增命令和 CPU2 参数字段后，扩展脚本覆盖命令号、参数顺序、单位、范围和协议版本。</li>
-      </ul>
-      <h3>本轮已执行验证</h3>
-      <ul>
-        <li><code>cmake --build build\LTD_MAIN_CPU2</code></li>
-        <li><code>cmake --build build\LTD_DISPLAY_CPU3</code></li>
-        <li><code>py LTD_DISPLAY_CPU3\font_check.py</code></li>
-        <li><code>py tools\check_si_modbus_frames.py --dump</code></li>
-        <li><code>py tools\check_si_protocol_contract.py</code></li>
-      </ul>
-      <h3>重点用例</h3>
-      <table>
-        <tr>
-          <th>用例</th>
-          <th>预期结果</th>
-        </tr>
-        <tr><td>写入 <code>40001~40003</code></td><td>可回读，CPU2 参数镜像一致，不改变普通分布测量参数。</td></tr>
-        <tr><td>写入 <code>40010=0</code></td><td>返回非法数据值；关闭自动 profile 使用 <code>40011=0</code>。</td></tr>
-        <tr><td>自动 profile 到点且正在其它测量</td><td>直接覆盖当前命令并执行 SI profile。</td></tr>
-        <tr><td>上电后首次 profile</td><td>必须探底并采集 Point0，且 Point0 对外位置字段为 0。</td></tr>
-        <tr><td>探底失败且无旧底部位置</td><td>使用当前位置作为底部采样目标，Point0 对外位置字段仍为 0，不刷新底部参考、不标记底部可信、不清首次探底状态。</td></tr>
-        <tr><td>液面停止条件</td><td>profile 前不单独找液位；候选点到点采样判定为液面以上时停止，不输出该液面以上 profile 点。</td></tr>
-        <tr><td>Profile 完成</td><td>先进入完成态，<code>10005</code> 和 SI 点阵有效；随后排队 <code>CMD_FIND_OIL</code> 回液位跟随。</td></tr>
-        <tr><td>读取 <code>30007~30010</code></td><td>返回 profile 开始时间，而非完成时间。</td></tr>
-        <tr><td>读取 <code>10002/10003</code></td><td>液位跟随稳定时 <code>10002=1,10003=0</code>；其它状态均为液体。</td></tr>
-      </table>
-    </section>
+        <h3>3.5 Point0提交顺序与点数语义</h3>
+        <ol>
+          <li>把本轮实际采用的底部位置写入 <code>temp.single_density_data[0]</code>，完成Point0温度和密度有效性判断。</li>
+          <li>CPU2清本轮候选Complete；CPU3在观察到cycle事件时清本地上一轮Profile报警。当前值报警仍按实时测量刷新。</li>
+          <li>写 <code>progress_points=1</code>，写 <code>phase=MEASURING</code>。</li>
+          <li>使用必要的内存可见性保证后，最后执行 <code>cycle_counter++</code>；CPU3只把这个计数变化视为Point0提交事件。</li>
+          <li>后续点先写数据和累计结果，再更新进度；<code>30006</code>在Complete=0时表示采集进度，在Complete=1时才表示最终点阵长度。</li>
+        </ol>
+        <div class="callout warn"><strong>Point0点阵契约已确认：</strong>Point0前保留上一轮完整点阵；Point0后至最终发布前，<code>30021～30620</code>固定返回0，只允许 <code>30006</code>随有效点递增；最终校验完成后一次开放完整新点阵。第0点届时输出本轮实际采用的底部参考，不提前开放 <code>30021</code>。</div>
 
-    <section>
-      <h2>10. 文档同步清单</h2>
-      <ul>
-        <li><code>docs/01_协议与寄存器/SI协议适配/02_协议映射/SI协议兼容映射表.md</code></li>
-        <li><code>docs/01_协议与寄存器/SI协议适配/04_联调测试/SI协议_PLC联调检查表.md</code></li>
-        <li><code>docs/01_协议与寄存器/SI协议适配/03_改动记录/SI协议适配改动整理.md</code></li>
-        <li><code>docs/01_协议与寄存器/CPU2_CPU3协议变更记录.md</code></li>
-        <li>CPU2 profile 流程变化后，更新对应 CPU2 程序流程 HTML/SVG。</li>
-        <li>CPU3 自动调度或 SI 映射流程变化后，更新对应 CPU3 程序流程 HTML/SVG。</li>
-      </ul>
-      <div class="warn">
-        本 HTML 是阅读版派生文档。需求维护源仍为 <code>SI协议需求与实施总览.md</code> 和 <code>SI协议待确认与后续清单.md</code>。
-      </div>
-    </section>
-  </main>
+        <h3>3.6 CPU3最终快照门禁</h3>
+        <div class="host-flow">
+          <span>发现新完成计数</span><i>→</i>
+          <span>校验SI来源与COMPLETE阶段</span><i>→</i>
+          <span>按最终N分块拉取</span><i>→</i>
+          <span>复读紧凑头</span><i>→</i>
+          <span>液位/稳定/停止门禁</span><i>→</i>
+          <span>一次发布SI快照</span>
+        </div>
+        <ul>
+          <li>拉取前记录 <code>cycle_counter、profile_complete_counter、measurement_points</code>，并校验 <code>source=SI、phase=COMPLETE、1≤N≤200</code>。</li>
+          <li>按内部Modbus帧长分块读取全部点阵；完成后重读紧凑Profile头。任一代次或N变化、任一分块失败，均不得置对外Complete，稍后从头重试。</li>
+          <li>CPU3维护 <code>active_cycle、seen_complete_counter、timestamp_valid、final_snapshot_ready</code>等本地投影状态；完成态不得每100ms重复拉取全部点阵。冷启动或重连时若CPU2已处于同代COMPLETE，允许接管最终数据，但因未观察到Point0事件，时间四项必须保持0。</li>
+          <li>刷新顺序调整为：先更新SI生命周期投影，再刷新FC01线圈、保持寄存器、FC02离散量、FC04输入寄存器，确保镜像和公开位读取同一投影。</li>
+          <li>CPU3使用候选点阵和 <code>40018～40023</code>本地阈值计算SI Profile报警；找液位成功、AtLevel、Stable、电机停止、CPU2候选完成、点阵代际复核成功且Interlock=0后，才一次开放Profile=0、Auto=1、Stop=1、Complete=1、AtLevel=1、Interlock=0及最终N、点阵和报警。Point0时清的是CPU3本地上一轮Profile报警，不影响实时“当前值”报警。</li>
+        </ul>
+
+        <h3>3.7 上位机完成判断</h3>
+        <div class="host-flow">
+          <span>保存旧Complete/N/时间</span><i>→</i>
+          <span>写Profile ON</span><i>→</i>
+          <span>旧C=1等1→0；旧C=0直接武装</span><i>→</i>
+          <span>等待最终组合</span><i>→</i>
+          <span>读取实际3×N</span><i>→</i>
+          <span>复读确认</span>
+        </div>
+        <ul>
+          <li><strong>命令前Complete=1：</strong>Profile=1只证明命令已进入；必须先观察Complete由1→0或等价Point0签名，才能武装本轮0→1完成沿。</li>
+          <li><strong>命令前Complete=0：</strong>Profile命令ACK成功且Profile=1后即可武装下一次0→1；Point0时间和N只用于显示进度与辅助诊断，不能作为唯一门禁。</li>
+          <li>最终完成沿必须同时满足Profile=0、Auto=1、Stop=1、Complete=1、AtLevel=1且Interlock=0；Stop是站2最终稳定组合的硬条件，不只是辅助检查。</li>
+          <li>等待期间若出现Profile=0、Stop=1、Interlock=1且Complete=0，立即结束等待并判本轮失败；显式取消则以取消命令ACK结束等待。</li>
+          <li>最终N只能从 <code>30006</code>读取并校验 <code>1≤N≤200</code>，随后读取 <code>30021</code>起的 <code>3×N</code>个SI寄存器；上位机不得等待预期点数。</li>
+          <li>分块读取后再次读取状态、N和Point0时间；任一项变化则丢弃本次结果并重读。</li>
+        </ul>
+        <div class="callout risk"><strong>禁止：</strong>写Profile后直接等待Complete=1。真实SI在Point0前会保留上一轮Complete，这会把旧结果误判为本轮完成。</div>
+
+        <h3>3.8 失败、取消和重启出口</h3>
+        <div class="table-wrap">
+          <table>
+            <tr><th>场景</th><th>推荐行为</th><th>禁止行为</th></tr>
+            <tr><td>Point0前显式取消或命令切换</td><td>取消ACK成功后进入ABORTED、Profile=0、Stop=1；不增加cycle/complete counter，完整保留上一轮结果，主站以该ACK结束等待。</td><td>仅因Profile曾变1就制造新完成沿。</td></tr>
+            <tr><td>探底失败但有可信旧底</td><td>沿用实际采用的旧底作为Point0，并保留内部诊断；继续本轮测量。</td><td>改用无关的默认常量，或把旧底说成当轮重新探得的底部。</td></tr>
+            <tr><td>探底失败且无可信旧底</td><td>使用当前探头位置作为本轮Point0继续测量，不按失败处理、不置Interlock，仅保留内部诊断；该Point0只表示采用的底部参考，不承诺等于物理罐底。</td><td>因此直接进入FAILED，或对外宣称该位置已经由本轮可靠探底确认。</td></tr>
+            <tr><td>Point0后显式取消</td><td>进入ABORTED，Profile=0、Stop=1、Complete=0、<code>30006=0</code>、点阵全0；不增加完成计数、不置Interlock，以取消ACK结束等待。</td><td>恢复上一轮Complete，或保留本轮活动点数/半成品点阵。</td></tr>
+            <tr><td>Point0后采样失败或回液位失败</td><td>进入FAILED，Profile=0、Stop=1、Complete=0、<code>30006=0</code>、点阵全0；不增加完成计数，并沿用现有错误/Interlock。</td><td>静默转为取消，或保留本轮活动点数/半成品点阵。</td></tr>
+            <tr><td>点阵分块读取失败或CPU2通信中断</td><td>CPU3保持Complete=0，从头重试并重新复核代次。</td><td>先开放Complete、稍后再补点阵。</td></tr>
+            <tr><td>CPU3在Point0后重启</td><td>不得误置Complete；Point0时间无法重建时把 <code>30007～30010</code>全部置0，并保持本地 <code>timestamp_valid=false</code>。</td><td>把上一轮时间配给本轮周期，或要求上位机读取不存在的“时间有效位”。</td></tr>
+          </table>
+        </div>
+        <div class="callout warn">两轮抓包中，回到液位后约19.224s和20.439s才出现最终状态，与 <code>40003=20s</code>相关，但不能据此直接复用40003。第一版完整门禁为“找液位成功 + AtLevel + Stable + 电机停止 + CPU2候选完成 + CPU3点阵/代际复核成功 + Interlock=0”，并一次发布Profile=0、Auto=1、Stop=1、Complete=1、AtLevel=1、Interlock=0及最终数据；额外稳定时窗待专项抓包决定。</div>
+      </section>
+
+      <section id="registers">
+        <h2>4. 地址级适配方案</h2>
+        <p class="lead">主线之外的地址细节放在可展开区，便于按地址复核实施边界。</p>
+
+        <details open>
+          <summary>保持寄存器：40001～40023</summary>
+          <div class="details-body">
+            <div class="table-wrap">
+              <table>
+                <tr><th>范围</th><th>所有者</th><th>读写</th><th>持久化/规则</th></tr>
+                <tr><td><code>40001～40003</code></td><td>CPU2</td><td>FC03批读，FC06单写；写入依赖CPU2 ACK。</td><td>首点、步距、停留时间；CPU2持久化。</td></tr>
+                <tr><td><code>40004～40009</code></td><td>CPU3</td><td>FC03批读，FC06单写；接受完整 <code>uint16</code>；FRAM失败整份回滚并返回 <code>0x06</code>。</td><td>默认 <code>0、50、1000、0、5、1</code>；不参与控制；FRAM V7。</td></tr>
+                <tr><td><code>40010～40013</code></td><td>CPU3</td><td>保持现有值域检查；FRAM失败整份回滚并返回 <code>0x06</code>。</td><td>自动Profile周期、使能、时、分。</td></tr>
+                <tr><td><code>40014～40023</code></td><td>CPU3</td><td>保持现有有符号/无符号解释；FRAM失败整份回滚并返回 <code>0x06</code>。</td><td>当前值、Profile上下限和相邻点偏差报警。</td></tr>
+              </table>
+            </div>
+          </div>
+        </details>
+
+        <details>
+          <summary>输入寄存器：30001～30620</summary>
+          <div class="details-body">
+            <div class="table-wrap">
+              <table>
+                <tr><th>范围</th><th>目标内容</th><th>关键约束</th></tr>
+                <tr><td><code>30001～30006</code></td><td>当前探头位置、温度、密度、液位和Profile点数。</td><td><code>Complete=0</code>且本轮已建立时，30006表示有效点进度；<code>Complete=1</code>时才表示最终点阵长度。点数不作为预期完成条件。</td></tr>
+                <tr><td><code>30007～30010</code></td><td>Point0采集时间。</td><td>CPU3仅在Point0事件到达时读取一次本机RTC；锁存失败或重启后无法重建时，本周期四个寄存器始终返回0，下一周期Point0再尝试锁存，0即外部无效编码。</td></tr>
+                <tr><td><code>30011～30013</code></td><td>CPU3当前RTC。</td><td>保持现有实现。</td></tr>
+                <tr><td><code>30014</code></td><td>FC01前16位镜像。</td><td><code>30014=(FC01_byte1&lt;&lt;8)|FC01_byte0</code>；从同一线圈位图派生。</td></tr>
+                <tr><td><code>30015～30016</code></td><td>FC02前32位镜像。</td><td><code>30015=(FC02_byte1&lt;&lt;8)|FC02_byte0</code>；<code>30016=(FC02_byte3&lt;&lt;8)|FC02_byte2</code>；从同一离散量位图派生。</td></tr>
+                <tr><td><code>30017～30020</code></td><td>0。</td><td>站2全程为0，继续保留。</td></tr>
+                <tr><td><code>30021～30620</code></td><td>最多200个Profile点，每点位置、温度、密度；最终第0点为本轮采用的底部参考。</td><td>Point0后至最终发布前固定返回0，最终校验通过后一次开放，读取长度为 <code>3×N</code>；不提前开放30021。</td></tr>
+              </table>
+            </div>
+            <p class="small">镜像例：FC01数据 <code>04 01</code>对应 <code>30014=0x0104</code>；FC02数据 <code>32 10 00 00</code>对应 <code>30015=0x1032、30016=0</code>；密差报警最终对应 <code>30016=0x0200</code>。</p>
+          </div>
+        </details>
+
+        <details>
+          <summary>线圈、状态和报警</summary>
+          <div class="details-body">
+            <ul>
+              <li>Manual、Calibrate、Auto、Profile模式位保持互斥；Stop和方向动作位保持互斥。</li>
+              <li><code>FC05=OFF</code>只清影子，不自动派生Stop；<code>FC05=ON</code>必须ACK成功后提交。</li>
+              <li>Profile Complete只接受SI来源，不能被普通、国标、每米、间隔或Wärtsilä分布污染；已发布SI快照也不会被这些后续测量清除。CPU2候选Complete必须经过CPU3点阵和代际校验后才能对外开放。</li>
+              <li>SI COMPLETE/ABORTED/FAILED终态只有在当前仍属于SI收尾上下文时才覆盖FC01终态线圈；旧SI终态不得把后续非SI动作强制显示为Stop。</li>
+              <li>Lower/Upper Level Sensor当前为软件合成；Interlock/Reel Alarm当前为简化合成。</li>
+              <li>Metric固定1；Probe Un-calibrated第一版继续固定0。无可信底部时的当前位置降级只保留内部诊断，不映射为Interlock或对外失败。</li>
+              <li>阈值0是有效值，不得作为报警禁用标志；旧Profile报警保留到Point0，Point0清旧报警，最终报警与新Complete同一发布代开放。</li>
+            </ul>
+          </div>
+        </details>
+
+        <details>
+          <summary>数据单位和无效值</summary>
+          <div class="details-body">
+            <ul>
+              <li>位置/液位：内部 <code>0.1mm</code>转协议 <code>mm</code>；负值或无效位置清0。</li>
+              <li>温度：有符号 <code>0.01°C</code>；无效温度 <code>-200.00°C / 0xB1E0</code>。</li>
+              <li>密度：<code>0.01kg/m³</code>；无效密度0；超过16位范围钳位到65535。</li>
+              <li>有效点数以外的点阵寄存器清0。</li>
+            </ul>
+          </div>
+        </details>
+      </section>
+
+      <section id="implementation">
+        <h2>5. 四个实施包落地状态</h2>
+        <p class="lead">A、B、C已经在同一开发基线落地；B和C仍必须在同一固件组合中发布。D继续等待明确需求，不纳入协议18主体。</p>
+        <div class="package-grid">
+          <article class="package">
+            <h3>实施包A：CPU3外部兼容</h3>
+            <div class="meta">已实现并通过静态契约｜ID：HR-02、IR-02、STO-01｜CPU3｜随协议18整体评审</div>
+            <ul>
+              <li><code>si_modbus_slave.c</code>：在状态位刷新后，从同一FC01/FC02位图派生 <code>30014～30016</code>，不维护第二套状态。</li>
+              <li><code>si_modbus_slave.c</code>：开放 <code>40004～40009</code>的FC03/FC06。</li>
+              <li><code>cpu3_comm_display_params.h/.c</code>：增加六个字段和默认值。</li>
+              <li>CPU3 FRAM V6→V7；迁移保留 <code>40010～40023</code>和三路合法串口配置，仅补 <code>40004～40009</code>默认值；V6迁移和V7重载不得按值猜测并改写合法Wartsila 4800 8N1/8N2。</li>
+              <li><code>40004～40023</code>统一使用事务式FC06写入口；FRAM写入或写后读回失败时恢复整份写前运行态、尽力恢复旧FRAM镜像并返回 <code>0x06</code>。</li>
+              <li>扩展golden frame和协议契约检查。</li>
+            </ul>
+            <p><strong>通过标准：</strong>镜像与同一时刻FC01/FC02逐位一致；六项读写、掉电、迁移和恢复默认均正确。</p>
+          </article>
+
+          <article class="package">
+            <h3>实施包B：Point0与可信性</h3>
+            <div class="meta">已实现并通过构建｜ID：PRO-01、SAFE-01｜CPU2为主｜禁止脱离C包单独发布</div>
+            <ul>
+              <li><code>measure_density.c</code>：第0点统一输出本轮实际采用、经过钳位的底部参考。</li>
+              <li>Point0有效样本提交是新周期边界；不是探头到达底部或停留刚开始。</li>
+              <li>有可信旧底时允许探底失败后沿用，并保留诊断状态。</li>
+              <li>无可信旧底且探底失败时使用当前探头位置继续，不按失败处理、不置Interlock，仅保留内部诊断。</li>
+              <li>文档和诊断必须区分“可靠探得的真实底部”与“为继续测量而采用的当前位置参考”。</li>
+            </ul>
+            <p><strong>通过标准：</strong>不同底部位置能正确反映到Point0；新底、可信旧底和当前位置降级三条路径都按既定优先级输出，降级路径可诊断但不触发失败/Interlock。</p>
+          </article>
+
+          <article class="package">
+            <h3>实施包C：Profile生命周期</h3>
+            <div class="meta">已实现并通过静态契约与双端clean-first构建｜ID：IR-01、PRO-02、PRO-03、ALM-01｜CPU2+CPU3｜共享协议已17→18</div>
+            <ul>
+              <li>新增最小共享运行态：阶段、Point0周期计数、有效点进度；复用现有完成计数。</li>
+              <li>区分活动采集缓冲区和已发布结果缓冲区。</li>
+              <li>Point0有效样本提交时建立新周期，并由CPU3在计数变化时锁存RTC。</li>
+              <li>点数随有效点递增，不依赖预期点数；活动期只开放 <code>30006</code>，不开放 <code>30021～30620</code>。</li>
+              <li>把回液位稳定、电机停止、最终报警和点阵代际校验纳入发布门禁。</li>
+              <li>Point0后取消/失败统一清 <code>30006</code>和点阵；显式取消不置Interlock，真实失败沿用现有错误/Interlock。</li>
+              <li>最终由CPU3本地投影发布Profile=0、Auto=1、Stop=1、Complete=1、AtLevel=1、Interlock=0、最终N、点阵和报警。</li>
+            </ul>
+            <p><strong>通过标准：</strong>完整复现“旧结果→Point0→逐点→回液位→最终组合”，上位机不会误读旧Complete。</p>
+          </article>
+
+          <article class="package">
+            <h3>实施包D：语义和硬件完善</h3>
+            <div class="meta">ID：COIL-01、SCH-01、ALM-01、CAL-01、HW-01、DIAG-01｜待确认｜不阻塞A/B/C主体兼容</div>
+            <ul>
+              <li>Manual期间自动Profile和报警抑制的完整规则。</li>
+              <li><code>00002</code>完整Level Calibration及完成后回Auto。</li>
+              <li>真实双液位传感器和Interlock/Reel Alarm细分。</li>
+              <li>真实三档手动速度。</li>
+              <li>可选FC16、独立Tank ID、远程RTC和超过200点扩展。</li>
+            </ul>
+            <p><strong>启动条件：</strong>厂家资料、PLC明确需求或专项抓包至少满足一项。</p>
+          </article>
+        </div>
+        <div class="callout risk"><strong>联合发布门禁：</strong>实施包B和C不允许只发布其中一项。否则会出现“Point0底部参考已采用新语义，但Complete、时间或点数仍按旧生命周期变化”的不兼容中间版本。</div>
+
+        <h3>5.1 实施顺序与当前状态</h3>
+        <div class="table-wrap">
+          <table>
+            <tr><th>顺序</th><th>工作内容</th><th>当前状态 / 退出条件</th></tr>
+            <tr><td>1. 实施准备</td><td>按第7.2节已确认结论拆分任务，并把共享协议17→18、取消/失败清理和最终发布门禁列入双端改动清单。</td><td><strong>已完成：</strong>CPU2、CPU3、SI投影和验证脚本修改点均可追踪。</td></tr>
+            <tr><td>2. 实施A</td><td>镜像、40004～40009、FRAM V7迁移和golden frames。</td><td><strong>源码与静态检查完成：</strong>真实V6镜像迁移、掉电和写失败回滚仍待台架。</td></tr>
+            <tr><td>3. 实施B/C</td><td>共享契约18、CPU2状态机/候选缓冲、CPU3候选分块拉取和SI发布投影。</td><td><strong>源码、静态契约和双端clean-first构建完成：</strong>生命周期异常用例仍待台架。</td></tr>
+            <tr><td>4. 联调回归</td><td>真实RS485按站2轮询顺序跑两轮以上，覆盖1点、30点、200点、失败、重启和通信中断。</td><td><strong>未执行：</strong>无旧Complete误判、无混合代点阵、无未决严重问题后才可关闭。</td></tr>
+          </table>
+        </div>
+
+        <h3>5.2 预计修改面和版本影响</h3>
+        <div class="table-wrap">
+          <table>
+            <tr><th>范围</th><th>预计文件/模块</th><th>版本判断</th></tr>
+            <tr><td>CPU2生命周期</td><td><code>system_parameter.h</code>、<code>stateformodbus.h</code>、<code>dataanalysis_modbus.c</code>、<code>measure_density.c</code>、<code>measure.c</code>，必要时小幅调整找液位流程。</td><td>固件评估MINOR升级；参数存储版本不因运行态字段变化。</td></tr>
+            <tr><td>CPU3共享与拉取</td><td>对应共享结构与寄存器、<code>cpu2_communicate.c/.h</code>、<code>si_modbus_slave.c</code>。</td><td>固件评估MINOR升级；与CPU2共同把共享协议17→18。</td></tr>
+            <tr><td>CPU3私有参数</td><td><code>40004～40009</code>配置结构、FRAM加载/保存/默认恢复。</td><td>FRAM V6→V7；不影响CPU2参数存储。</td></tr>
+            <tr><td>验证与文档</td><td><code>check_si_modbus_frames.py</code>、<code>check_si_protocol_contract.py</code>、共享协议记录、CPU2/CPU3程序流程文档。</td><td>静态脚本和双端clean-first构建已通过；当前固件版本号未随本轮升级，提交阶段必须按最终diff升双端固件版本。</td></tr>
+          </table>
+        </div>
+      </section>
+
+      <section id="verification">
+        <h2>6. 验收门禁</h2>
+        <div class="table-wrap">
+          <table>
+            <tr><th>验收域</th><th>必须覆盖</th><th>通过标准</th></tr>
+            <tr><td>Modbus基础</td><td>FC01～FC06、CRC、地址边界、非法功能码、非法地址和非法值。</td><td>响应长度、异常码、寄存器顺序和CRC均符合契约。</td></tr>
+            <tr><td>写门禁</td><td>CPU2离线、协议不匹配、快照未完成、参数刷新、ACK超时；以及CPU3 FRAM写入/写后读回失败。</td><td>桥接写失败返回 <code>0x06</code>且影子不变；CPU3本地参数不受CPU2在线门禁，但FRAM事务失败同样返回 <code>0x06</code>并整份回滚。</td></tr>
+            <tr><td>实施包A</td><td>FC01/FC02与镜像同步；完整FC03读取23个寄存器；六项FC06写入；V6→V7迁移，覆盖Wartsila 4800 8N1/8N2旧配置。</td><td>逐帧一致，掉电不丢，旧自动调度、报警参数和合法三路串口参数不丢；再次上电后Wartsila旧值不被改成2400 8E1。</td></tr>
+            <tr><td>实施包B</td><td>新底、旧底、探底失败有旧底、探底失败无旧底。</td><td>Point0按新底→可信旧底→当前位置的优先级输出；无旧底降级不报失败、不置Interlock且留有诊断。</td></tr>
+            <tr><td>实施包C</td><td>命令前、Point0、逐点、液面停止、回液位、点阵拉取、最终发布及Point0前后取消/失败。</td><td>活动期只递增30006且点阵为0；候选结果校验前不开放Complete；Point0后异常出口清N和点阵，无半更新结果和旧Complete误判。</td></tr>
+            <tr><td>边界数据</td><td>1点、30点、200点、液面以上候选点、负温、无效温度、密度钳位、阈值0。</td><td>点数、单位、补码、钳位、报警和无效区清零均正确。</td></tr>
+            <tr><td>自动调度</td><td>首次时间、跨天、同分钟去重、5秒失败节流、Manual跳过。</td><td>无重复触发、无残留命令，触发来源和跳过原因可追踪。</td></tr>
+            <tr><td>上位机兼容</td><td>使用第3节算法读取点阵，并在读取后复核状态。</td><td>最终N未知也能完成；结果读取期间快照保持一致。</td></tr>
+            <tr><td>跨测量隔离</td><td>完成一轮SI后运行普通、国标、每米、间隔和Wärtsilä分布；覆盖旧SI COMPLETE/ABORTED/FAILED终态。</td><td>已发布SI快照不变；当前非SI模式和动作不被旧SI终态线圈遮住。</td></tr>
+          </table>
+        </div>
+        <h3>6.1 已确认兼容项的可判定验收矩阵</h3>
+        <div class="table-wrap">
+          <table>
+            <tr><th>ID</th><th>场景与操作</th><th>必须观察</th><th>通过标准</th></tr>
+            <tr><td>MIR-01</td><td>FC01前16位逐位扫描，并在同一轮询周期读取30014。</td><td>FC01字节0/1与30014。</td><td><code>30014=(byte1&lt;&lt;8)|byte0</code>；示例 <code>04 01→0x0104</code>、<code>08 40→0x4008</code>。</td></tr>
+            <tr><td>MIR-02</td><td>FC02前32位逐位扫描，覆盖无报警和密差报警。</td><td>FC02字节0～3与30015/30016。</td><td><code>32 10 00 00→0x1032/0x0000</code>；密差报警时30016为 <code>0x0200</code>；30017～30020仍为0。</td></tr>
+            <tr><td>OLD-01</td><td>已有一轮SI完成结果后再次启动Profile。</td><td>命令ACK、下行、Point0前的时间/N/Complete/点阵/Profile报警。</td><td>Point0前完整保留上一轮已发布结果；只把Profile置1。</td></tr>
+            <tr><td>P0-01</td><td>在已知底部345.0mm条件下完成Point0有效采样。</td><td>cycle、Complete、30006、时间、最终第0点。</td><td>cycle只增加1次；Complete=0、N=1、时间锁存；最终Point0位置为345mm而非0。</td></tr>
+            <tr><td>P0-02</td><td>两轮在同一分钟内触发；另让本轮Point0锁存RTC失败、周期中恢复，再启动下一轮。</td><td>内部cycle事件和外部 <code>30007～30010</code>。</td><td>即使时间字段相同，CPU3仍凭cycle不相等识别新周期；失败轮全程四项全0，不用恢复时刻冒充Point0；下一轮Point0才重新锁存。</td></tr>
+            <tr><td>CNT-01</td><td>正常多点采集，轮询频率低于采样频率。</td><td>全过程30006。</td><td>从1到最终N单调增加或保持，允许轮询跨值，不回退、不超过200。</td></tr>
+            <tr><td>CNT-02</td><td>插入样本失败、重试和液面以上候选点。</td><td>数据接受结果与30006。</td><td>只有有效液体点提交后才增加；失败、重试和空气点不计数。</td></tr>
+            <tr><td>CNT-03</td><td>分别测试最终1点、约30点和200点。</td><td>最终N及读取长度。</td><td>N等于实际有效点数；上位机不使用液位推算或预期点数，严格读取3×N。</td></tr>
+            <tr><td>RET-01</td><td>最后一个有效点完成，但探头尚未回到稳定液位。</td><td>Profile、Auto、Complete、AtLevel、进度。</td><td>Profile仍为1、Complete为0，进度冻结；不得提前切最终组合。</td></tr>
+            <tr><td>RET-02</td><td>回液位并稳定，CPU3正常完成点阵拉取。</td><td>FC01、FC02、30006、点阵、报警。</td><td>Profile=0、Auto=1、Stop=1、Complete=1、AtLevel=1、Interlock=0、最终N、完整点阵和最终报警属于同一SI发布代。</td></tr>
+            <tr><td>RET-03</td><td>在点阵分块读取中制造超时、CRC错误或CPU2短断。</td><td>CPU3候选状态和对外Complete。</td><td>Complete始终为0；从头重试且读前/读后代次一致后，只发布一次。</td></tr>
+            <tr><td>ALM-01</td><td>先完成有密差报警的一轮，再启动无报警新一轮。</td><td>Point0前、Point0时和最终30016/FC02。</td><td>Point0前保留旧Profile报警；Point0清旧报警；新最终报警与Complete同代发布。</td></tr>
+            <tr><td>ARR-01</td><td>分别在Point0前、Point0后、中间点和最终发布后读取点阵。</td><td>30006及30021起点阵内容。</td><td>Point0前为上一轮完整点阵；Point0后30006递增但点阵全0；最终校验完成后一次变为新完整点阵，绝不出现本轮N配上一轮或半更新点阵。</td></tr>
+            <tr><td>ABT-01</td><td>Point0前显式取消或切换命令。</td><td>取消ACK、Profile/Stop、cycle/complete counter和旧结果。</td><td>取消ACK成功后Profile=0、Stop=1；两个计数均不增加，不产生新完成沿，旧Complete和结果保持，主站以取消ACK结束等待。</td></tr>
+            <tr><td>ABT-02</td><td>Point0后分别执行显式取消、制造采样失败或回液位失败。</td><td>Profile、Stop、Complete、30006、30021起点阵、Interlock和完成计数。</td><td>显式取消：Profile=0、Stop=1、Complete=0、30006=0、点阵全0，不置Interlock并以取消ACK结束；真实失败：相同清理且沿用现有Interlock。两者均不增加完成计数。</td></tr>
+            <tr><td>SAFE-01</td><td>探底失败且无可信旧底。</td><td>内部降级诊断、Point0、cycle、Profile、Complete和Interlock。</td><td>使用当前探头位置建立Point0并继续正常测量；cycle只增加一次，不因该降级置Interlock或判失败，最终Point0等于采用时的探头位置。</td></tr>
+            <tr><td>RST-01</td><td>CPU3在Point0前、Point0后、点阵拉取中重启；覆盖计数器自然回绕。</td><td>周期识别、时间、Complete和点阵。</td><td>使用“不相等”识别代次；不误置Complete、不混合点阵；无法重建Point0时间时30007～30010严格全0。</td></tr>
+            <tr><td>RST-02</td><td>CPU2已处于同代SI COMPLETE时冷启动或重连CPU3。</td><td>最终N、点阵、报警和时间。</td><td>允许恢复最终快照；因未观察到Point0事件，30007～30010必须全0，不得写入启动或重连时刻。</td></tr>
+            <tr><td>ISO-01</td><td>SI完成后依次执行普通、国标、每米、间隔和Wärtsilä分布，并进入非SI动作。</td><td>旧SI Complete/N/时间/点阵/报警及当前FC01动作。</td><td>旧SI快照完整保持；旧SI终态不覆盖当前非SI动作。</td></tr>
+            <tr><td>HOST-01</td><td>上位机按第3.7节读取，并在分块读取期间触发新命令。</td><td>读取前后Complete/N/时间及结果代。</td><td>任何变化均丢弃重读；稳定时得到恰好3×N个同代寄存器。</td></tr>
+          </table>
+        </div>
+        <h3>已执行静态检查与后续台架入口</h3>
+        <ul>
+          <li><code>py tools\check_si_modbus_frames.py</code>：已通过。</li>
+          <li><code>py tools\check_si_protocol_contract.py</code>：已通过。</li>
+          <li>CPU2、CPU3 clean-first构建：已通过；最终提交前需在升版后的最终源码上复跑。</li>
+          <li>真实RS485、V6真实FRAM迁移、<code>40004～40023</code>掉电/FRAM故障注入、取消/失败/重启/通信中断、跨测量快照隔离以及1/30/200点：尚未执行。</li>
+        </ul>
+        <div class="callout"><strong>状态边界：</strong>“已实现”表示当前源码已落地；“静态通过”表示契约脚本和构建已通过；不等于真实台架已经通过。协议18首个正式匹配组合为CPU2 V1.26.0.0 / CPU3 V1.24.0.0；提交前审查确认的未修复风险见《SI协议待确认与后续清单》第7节。</div>
+      </section>
+
+      <section id="pending">
+        <h2>7. 已确认设计、补强抓包和明确暂缓</h2>
+        <div class="callout"><strong>方案已锁定：</strong>镜像、Point0底部参考、Point0新周期、递增点数、活动期隐藏点阵、取消/失败清理和回液位后最终Complete均已确认。补强抓包只用于理解原SI细节，不阻塞A/B/C实施。</div>
+        <h3>7.1 补强抓包（不阻塞主体方案）</h3>
+        <div class="table-wrap">
+          <table>
+            <tr><th>ID</th><th>要补强的问题</th><th>当前证据</th><th>对主体方案影响</th><th>下一步</th></tr>
+            <tr><td>IR-04</td><td>真实SI采集中是否开放部分点阵</td><td>既有上位机只在最终状态后读取点阵，无法证明采集中的内容。</td><td>不影响CUBE已确认的“活动期全0、最终整体开放”契约。</td><td>如需继续研究厂家行为，可在Point0前、Point0后、中期和最终前分别抽读 <code>30021～30032</code>。</td></tr>
+            <tr><td>TIM-01</td><td>最终约20秒是否由40003控制</td><td>两轮约19.224s和20.439s；站2 <code>40003=20s</code>，只有相关性。</td><td>不阻塞液位稳定门禁，只影响是否增加额外固定时窗。</td><td>把40003分别设为5、20、30秒，测底部停留和回液位后发布两个区间。</td></tr>
+            <tr><td>MIR-03</td><td>报警非零时FC02与30016的直接同帧对照</td><td>已有轮询序列可推断 <code>30016=0x0200</code>，但直接FC02样本较少。</td><td>不阻塞同源镜像设计。</td><td>在密差报警稳定态直接读取FC02和30014～30020。</td></tr>
+            <tr><td>P0-04</td><td>不同真实底部位置下的Point0</td><td>站2本次均观察到345mm。</td><td>不阻塞“输出实际采用底部”的设计。</td><td>改变安全可控的底部基准后再跑一轮，排除固定常量。</td></tr>
+            <tr><td>COIL-01 / SCH-01</td><td>Manual优先级和自动Profile抑制</td><td>现有抓包未覆盖完整切换。</td><td>只阻塞D包。</td><td>抓Manual进入、退出、自动到点和Profile运行中切换。</td></tr>
+            <tr><td>ALM-D</td><td>独立报警Enable和Manual报警抑制</td><td>阈值0是有效值，不能代替禁用。</td><td>只阻塞D包报警语义，不阻塞最终报警同代发布。</td><td>补厂家资料或PLC需求，并抓Manual期间报警。</td></tr>
+          </table>
+        </div>
+
+        <h3>7.2 已确认设计结论</h3>
+        <div class="table-wrap">
+          <table>
+            <tr><th>ID / 设计项</th><th>已确认方案</th><th>影响与边界</th><th>结论</th></tr>
+            <tr><td>D01<br>无可信底部</td><td>有可信旧底时沿用旧底；没有旧底时使用当前探头位置作为Point0继续测量，不按失败处理、不置Interlock，仅保留内部诊断。</td><td>降级Point0表示“本轮采用的底部参考”，不保证等于物理罐底；对外不得宣称本轮已可靠探底。</td><td><strong>已确认：降级继续</strong></td></tr>
+            <tr><td>D02<br>Point0后失败/取消</td><td>Complete保持0且不恢复旧值，同时清 <code>30006</code>和 <code>30021～30620</code>。显式取消以取消ACK为终态且不置Interlock；真实失败沿用现有错误/Interlock。</td><td>恢复旧Complete会制造假的0→1完成沿；保留活动N或点阵会形成无完成态的半成品。</td><td><strong>已确认：清N和点阵</strong></td></tr>
+            <tr><td>D03<br>活动期点阵</td><td>Point0前保留旧完整点阵；Point0后只允许 <code>30006</code>递增，点阵全0；最终校验完成后一次开放完整新点阵。</td><td>原SI采集中点阵内容未知，但不影响CUBE契约；无需增加Point0位置共享字段。</td><td><strong>已确认：不提前开放</strong></td></tr>
+            <tr><td>D04<br>最终液位门禁</td><td>找液位成功 + AtLevel + Stable + 电机停止 + CPU2候选完成 + CPU3点阵/代际复核成功 + Interlock=0。</td><td>最终同一投影必须为Profile=0、Auto=1、Stop=1、Complete=1、AtLevel=1、Interlock=0，并同时开放最终N、点阵和报警。</td><td><strong>已确认</strong></td></tr>
+            <tr><td>D05<br>额外约20秒</td><td>第一版不硬编码、不直接复用40003；以D04门禁完成。</td><td>专项抓包证明固定时窗和明确控制参数后，再单独增加。</td><td><strong>采用当前方案</strong></td></tr>
+            <tr><td>D06<br>CPU3在Point0后重启</td><td>不伪造时间；无法重建时本周期 <code>30007～30010</code>全部置0，并保留本地诊断。</td><td>如PLC以后强制要求精确恢复，需要新增Point0时间持久化或由CPU2提供时间源。</td><td><strong>采用当前方案</strong></td></tr>
+            <tr><td>D07<br>共享协议版本</td><td>三个运行态字段已加入，<code>DEVICE_PROTOCOL_VERSION 17→18</code>已在CPU2/CPU3同步。</td><td>共享协议已完成；CPU2/CPU3固件版本号仍未随本轮提升，提交前必须完成双端固件升版和CHANGELOG/版本测试资料同步。</td><td><strong>协议已实现；发布升版待处理</strong></td></tr>
+            <tr><td>D08<br>实施包D</td><td>先不启动。</td><td>待Manual、Cal、双传感器、三档速度或厂家资料明确后单独立项。</td><td><strong>暂缓</strong></td></tr>
+          </table>
+        </div>
+
+        <h3>7.3 明确暂缓或不扩展</h3>
+        <div class="table-wrap">
+          <table>
+            <tr><th>项目</th><th>当前处理</th><th>重新启动条件</th></tr>
+            <tr><td><code>40004～40009</code>业务含义</td><td>仅作为站2原始兼容槽，不参与任何控制。</td><td>厂家给出名称、单位、值域和作用。</td></tr>
+            <tr><td>FC16、独立Tank ID、远程RTC、超过200点</td><td>不扩展。</td><td>PLC明确要求并提供可验收契约。</td></tr>
+            <tr><td>完整Cal、真实双传感器、真实三档速度</td><td>不伪实现。</td><td>硬件具备且厂家/PLC语义确认。</td></tr>
+            <tr><td>SI诊断页</td><td>可选增强，不作为协议兼容门禁。</td><td>A/B/C完成后按调试需要安排。</td></tr>
+          </table>
+        </div>
+        <div class="callout warn">
+          下一轮专项查询必须暂停原上位机，或把请求加入同一个主站调度队列。禁止两个无仲裁主站同时发送，否则帧穿插不能作为设备不支持或超时的证据。
+        </div>
+      </section>
+
+      <section id="evidence">
+        <h2>8. 现场证据和文档关系</h2>
+        <h3>证据索引</h3>
+        <div class="table-wrap">
+          <table>
+            <tr><th>ID</th><th>可直接支持的结论</th><th>强度</th><th>适用范围/限制</th></tr>
+            <tr><td>E01</td><td>两轮完整Profile，共6265组站2 FC04 <code>30001～30020</code>采样。</td><td>高</td><td>只代表站2和本次两轮。</td></tr>
+            <tr><td>E02</td><td><code>30014～30016</code>与FC01/FC02逐帧对应，密差报警可对应 <code>30016=0x0200</code>。</td><td>高</td><td>空闲和Profile阶段有直接对照；不说明厂家内部实现方式。</td></tr>
+            <tr><td>E03</td><td><code>40001～40023</code>两次读值一致；<code>40004～40009=0、50、1000、0、5、1</code>。</td><td>高</td><td>证明站2数值，不证明私有字段名称和单位。</td></tr>
+            <tr><td>E04</td><td>Point0位置为实际底部345mm，Point0时更新时间并建立1点结果。</td><td>高</td><td>只观察到同一底部位置；不同底部值仍建议复测。</td></tr>
+            <tr><td>E05</td><td>命令后短暂保留旧点数/Complete；Point0后清Complete，点数从1逐步增加。</td><td>高</td><td>证明外部可观察生命周期，不证明内部缓冲结构。</td></tr>
+            <tr><td>E06</td><td>最终轮询观察到Profile=0、Auto=1、Stop=1、Complete=1、AtLevel=1和最终报警形成同一稳定组合后，上位机读取点阵。</td><td>高</td><td>只能证明外部观察顺序，不能声称厂家内部“原子执行”。</td></tr>
+            <tr><td>E07</td><td><code>30017～30020</code>在6265组样本中全部为0。</td><td>高</td><td>不等于这些寄存器永久无定义。</td></tr>
+            <tr><td>E08</td><td>到液位后约19.224s/20.439s才出现最终状态，和 <code>40003=20s</code>接近。</td><td>中</td><td>只有相关性，不能认定延时完全由40003控制。</td></tr>
+            <tr><td>E09</td><td>用户确认镜像、真实Point0、Point0新周期、递增点数和回液位后最终Complete均需兼容。</td><td>需求确认</td><td>锁定兼容范围；具体实现按第7.2节已确认结论执行。</td></tr>
+            <tr><td>E10</td><td>用户进一步确认：无可信底部不按失败处理；Point0后取消/失败清Complete、30006和点阵；采集中只让30006递增，30021起点阵待最终校验完成后整体开放。</td><td>设计确认</td><td>这是CUBE目标契约，不冒充原SI失败/取消或采中点阵行为的抓包证据。</td></tr>
+          </table>
+        </div>
+
+        <h3>相关文档</h3>
+        <div class="source-links">
+          <a href="SI协议需求与实施总览.md">SI协议需求与实施总览.md</a>
+          <a href="../02_协议映射/SI协议兼容映射表.md">SI协议兼容映射表.md</a>
+          <a href="../04_联调测试/2026-07-13_站2_SI_Profile全流程分析.html">站2 SI Profile全流程分析.html</a>
+          <a href="../04_联调测试/SI协议_PLC联调检查表.md">SI协议 PLC联调检查表.md</a>
+        </div>
+        <p class="small">本HTML是实施评审入口。地址级契约以映射表为准，现场事实以站2抓包分析为准；协议18源码和静态契约已落地，正式需求总览、映射表、联调表、共享协议记录和程序流程资料需要保持同步。抓包文档中的“当时CUBE行为”不倒改，只附协议18现状后记。</p>
+      </section>
+    </main>
+  </div>
 </body>
 </html>

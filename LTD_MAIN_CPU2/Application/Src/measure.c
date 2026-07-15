@@ -96,6 +96,14 @@ void ProcessMeasureCmd(CommandType command)
         CMD_CancelMeasurement();
         return;
     }
+    /*
+     * SI Profile采点后只允许回液位命令消费候选；其它正式命令覆盖回液位流程时，
+     * 必须先清除候选并进入取消态，避免以后一次找液位误发布旧候选。
+     */
+    if ((g_measurement.si_profile_runtime.phase == SI_PROFILE_PHASE_RETURNING_LEVEL) &&
+        (command != CMD_FIND_OIL)) {
+        SiProfile_HandleCancel();
+    }
     if (command == CMD_PAIR_NEAREST_WIRELESS_SLIPRING) {
         printf("无线滑环匹配\t触发=正式命令\r\n");
         (void)WirelessPairing_RunByRssi();
@@ -103,8 +111,13 @@ void ProcessMeasureCmd(CommandType command)
     }
 
     uint32_t start_ret = (uint32_t)MeasureStart(); /* 测量初始化 */
-    /* 先处理异常边界，避免测量流程状态机带故障继续运行。 */
+    /* SI Profile 回液位期间的启动失败必须关闭候选态，避免阶段永久停在 RETURNING_LEVEL。 */
+    if (start_ret == STATE_SWITCH) {
+        SiProfile_HandleCancel();
+        return;
+    }
     if (start_ret != NO_ERROR) {
+        SiProfile_HandleFailure();
         printf("测量启动失败，电机初始化错误码：0x%08lX\r\n", (unsigned long)start_ret);
         SET_ERROR(start_ret);
     }
@@ -301,6 +314,7 @@ static void CMD_CancelMeasurement(void)
 
     printf("执行取消当前测量指令\r\n");
     FaultRecovery_Cancel("cancel measurement");
+    SiProfile_HandleCancel();
 
     /* 用户主动取消不是故障：清掉当前命令和错误码，再把状态切到待机。 */
     g_deviceParams.command = CMD_NONE;
@@ -659,39 +673,93 @@ static void CMD_MeasureBottom(void) {
  * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
  */
 static void CMD_MeasureAndFollowOilLevel(void) {
-    uint32_t ret = 0;
+    uint32_t ret = 0U;
+
     ret = (uint32_t)MeasureStart();
-    SET_ERROR(ret);
+    if (ret == STATE_SWITCH) {
+        SiProfile_HandleCancel();
+        return;
+    }
+    if (ret != NO_ERROR) {
+        SiProfile_HandleFailure();
+        SET_ERROR(ret);
+    }
 
     g_measurement.device_status.device_state = STATE_FINDOIL;
     if ((g_measurement.device_status.zero_point_status == 1) &&
         (g_deviceParams.error_auto_back_zero == 1)) {
         printf("液位测量	设备需要回零点\r\n");
         ret = SearchZero();
-        SET_ERROR(ret);
+        if (ret == STATE_SWITCH) {
+            SiProfile_HandleCancel();
+            return;
+        }
+        if (ret != NO_ERROR) {
+            SiProfile_HandleFailure();
+            SET_ERROR(ret);
+        }
         printf("液位测量	回零点完成\r\n");
     }
 
     /* 先按当前记步来源找一次液位，随后再决定是否切到电机记步。 */
     ret = SearchOilLevel();
-    SET_ERROR(ret);
+    if (ret == STATE_SWITCH) {
+        SiProfile_HandleCancel();
+        return;
+    }
+    if (ret != NO_ERROR) {
+        SiProfile_HandleFailure();
+        SET_ERROR(ret);
+    }
 
     if (!MotorCtrl_IsPositionSourceMotor()) {
         uint8_t switched_to_motor = 0U;
         ret = EnsureMotorPositionSourceBeforeFollow("液位跟随", &switched_to_motor);
-        SET_ERROR(ret);
+        if (ret == STATE_SWITCH) {
+            SiProfile_HandleCancel();
+            return;
+        }
+        if (ret != NO_ERROR) {
+            SiProfile_HandleFailure();
+            SET_ERROR(ret);
+        }
 
         if (switched_to_motor) {
             g_measurement.device_status.device_state = STATE_FINDOIL;
             /* 切到电机记步后重新找液位，后续闭环跟随以电机位置为基准。 */
             ret = SearchOilLevel();
-            SET_ERROR(ret);
+            if (ret == STATE_SWITCH) {
+                SiProfile_HandleCancel();
+                return;
+            }
+            if (ret != NO_ERROR) {
+                SiProfile_HandleFailure();
+                SET_ERROR(ret);
+            }
         }
+    }
+
+    /* SI Profile 只有回到稳定液位且电机停止后才发布最终 Complete 组合。 */
+    ret = SiProfile_CompleteAfterReturnToLevel();
+    if (ret == STATE_SWITCH) {
+        SiProfile_HandleCancel();
+        return;
+    }
+    if (ret != NO_ERROR) {
+        SiProfile_HandleFailure();
+        SET_ERROR(ret);
     }
 
     g_measurement.device_status.device_state = STATE_FLOWOIL;
     ret = FollowOilLevel();
-    SET_ERROR(ret);
+    if (ret == STATE_SWITCH) {
+        SiProfile_HandleCancel();
+        return;
+    }
+    if (ret != NO_ERROR) {
+        SiProfile_HandleFailure();
+        SET_ERROR(ret);
+    }
     return;
 }
 

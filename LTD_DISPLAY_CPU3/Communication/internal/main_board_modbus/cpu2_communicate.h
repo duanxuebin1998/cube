@@ -7,6 +7,14 @@ extern uint16_t HoldingRegisterArray[HOLEREGISTER_STOP]; /* 保持寄存器数�
 
 extern volatile bool wait_response;
 
+typedef struct {
+    uint32_t cycle_counter;
+    uint32_t complete_counter;
+    uint32_t measurement_points;
+    uint32_t profile_source;
+    uint32_t phase;
+} Cpu2SiProfileCandidateKey;
+
 #define COM1_SET_RECV_MODE()  HAL_GPIO_WritePin(COM1_SEL_GPIO_Port, COM1_SEL_Pin, GPIO_PIN_SET)
 #define COM1_SET_SEND_MODE()  HAL_GPIO_WritePin(COM1_SEL_GPIO_Port, COM1_SEL_Pin, GPIO_PIN_RESET)
 #define COM2_SET_RECV_MODE()  HAL_GPIO_WritePin(COM2_SEL_GPIO_Port, COM2_SEL_Pin, GPIO_PIN_SET)
@@ -48,6 +56,12 @@ bool CPU2_CommShouldShowStartup(void);
  * @return true 表示允许访问 CPU2 参数和普通命令，false 表示同步未完成、协议不兼容或故障已锁存。
  */
 bool CPU2_CommIsAvailable(void);
+/*
+ * 函数用途：判断SI生命周期运行态是否来自连续、兼容的CPU2快照。
+ * 调用场景：CPU3本地SI投影识别首次上线和通信重连。
+ * 关键约束：参数补读期间不打断运行态连续性，通信故障和协议不匹配必须返回false。
+ */
+bool CPU2_CommHasRuntimeSnapshot(void);
 /**
  * @brief 判断指定 CPU2 命令是否可下发；取消命令在当前连接协议已确认后可绕过其余参数刷新。
  * @param cmd 待下发命令。
@@ -70,6 +84,18 @@ bool CPU2_CommReadHoldingSnapshot(uint16_t startadd, uint16_t registercnt, uint1
  * @return true 表示快照有效且复制成功，false 表示通信不可用或范围非法。
  */
 bool CPU2_CommReadInputSnapshot(uint16_t startadd, uint16_t registercnt, uint16_t *out_regs);
+/*
+ * 函数用途：按最终点数分块拉取SI Profile候选并复核前后代际。
+ * 调用场景：CPU3观察到新的SI完成计数后调用。
+ * 关键约束：任一分块失败或cycle、完成计数、点数、来源、阶段变化均返回false。
+ */
+bool CPU2_CommFetchSiProfileCandidate(Cpu2SiProfileCandidateKey *out_key);
+/*
+ * 函数用途：分块拉取CPU2在Point0前仍保留的上一轮完整SI快照。
+ * 调用场景：CPU3冷启动后处于PREPARING，或Point0前已经ABORTED/FAILED。
+ * 关键约束：接口只负责完整代际复核，不生成或恢复Profile时间。
+ */
+bool CPU2_CommFetchSiPreviousSnapshot(Cpu2SiProfileCandidateKey *out_key);
 /**
  * @brief 按 LTD 共享 Modbus 线序向 CPU2 写入完整 32 位字段。
  * @param startadd 起始保持寄存器地址，必须按 2 个寄存器对齐。

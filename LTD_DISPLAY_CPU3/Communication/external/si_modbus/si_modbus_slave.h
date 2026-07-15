@@ -37,7 +37,7 @@ void si_modbus_sync_from_system(void);
 /* 自动 profile 调度入口；由主循环周期调用，内部按 RTC 分钟去重。 */
 void si_modbus_periodic_task(void);
 
-/* 请求启动 SI Profile；统一锁存开始时间并向 CPU2 下发 CMD_SI_PROFILE。 */
+/* 请求启动 SI Profile；只向CPU2下发命令，时间由后续Point0周期事件锁存。 */
 bool si_profile_request_start(void);
 
 #endif /* SI_MODBUS_SLAVE_H_ */

@@ -26,7 +26,7 @@
 #define UNVALID_POSITION 0
 #define UNVALID_TEMPERATURE 0
 #define MAX_MEASUREMENT_POINTS 200 /* 密度分布测量最大点数 */
-#define DEVICE_PROTOCOL_VERSION 17u /* CPU2/CPU3共享协议版本；旧程序未写入时默认为0 */
+#define DEVICE_PROTOCOL_VERSION 18u /* CPU2/CPU3共享协议版本；旧程序未写入时默认为0 */
 #define FAULT_AUTO_RECOVERY_RETRY_DEFAULT 3u
 #define FAULT_AUTO_RECOVERY_RETRY_MAX 10u
 
@@ -45,6 +45,22 @@ typedef enum {
     PROFILE_SOURCE_WARTSILA = 5u,
     PROFILE_SOURCE_SI = 6u
 } ProfileSource;
+
+typedef enum {
+    SI_PROFILE_PHASE_IDLE = 0u,
+    SI_PROFILE_PHASE_PREPARING = 1u,
+    SI_PROFILE_PHASE_MEASURING = 2u,
+    SI_PROFILE_PHASE_RETURNING_LEVEL = 3u,
+    SI_PROFILE_PHASE_COMPLETE = 4u,
+    SI_PROFILE_PHASE_ABORTED = 5u,
+    SI_PROFILE_PHASE_FAILED = 6u
+} SiProfilePhase;
+
+typedef struct {
+    uint32_t phase;
+    uint32_t cycle_counter;
+    uint32_t progress_points;
+} SiProfileRuntime;
 
 
 
@@ -574,6 +590,7 @@ typedef struct {
 	DensityMeasurement single_point_measurement; /* /< 单点测量数据 */
 	DensityMeasurement single_point_monitoring;  /* /< 单点监测数据 */
 	DensityDistribution density_distribution;    /* /< 密度分布测量数据 */
+	SiProfileRuntime si_profile_runtime;          /* /< SI Profile生命周期运行态 */
 	WirelessPairingStatus wireless_pairing_status; /* /< 无线滑环匹配状态 */
 	RelayAlarmRuntimeState relay_alarm_runtime[RELAY_ALARM_CHANNEL_COUNT]; /* /< 继电器报警输出每路运行态 */
 	AoOutputRuntime ao_output_runtime;           /* /< AO模拟电流输出运行态 */

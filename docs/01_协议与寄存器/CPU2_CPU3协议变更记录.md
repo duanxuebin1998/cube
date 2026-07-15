@@ -7,7 +7,7 @@
 - 字段位置：`HOLDREGISTER_DEVICEPARAM_PROTOCOL_VERSION`
 - 当前语义：CPU2/CPU3 共享协议版本
 - 旧程序语义：保留字段，默认值为 `0`
-- 当前程序语义：协议版本 `17`
+- 当前开发程序语义：协议版本 `18`
 
 该字段由原 `reserved1` 预留位正式替换而来，寄存器地址不移动，不新增存储字段。
 
@@ -33,6 +33,7 @@
 | 15 | V1.23.0.0 | V1.22.0.0 | 200 | 共享故障码按9个责任域重新分类和编号，新增TMC配置丢失、串口传输异常、无线响应格式异常和AD5421主动报警4项故障；CPU3本机主控通信故障调整为14-12。故障寄存器地址和宽度不变，但数值解释与协议14不兼容。 |
 | 16 | 未单独发布（CPU2 V1.24.0.0开发过渡） | 未单独发布（CPU3 V1.22.0.0开发过渡） | 200 | 互换故障类别13和14：通信链路改为13类，传感器与密度改为14类；两类内部子码和故障语义不变。CPU3本机主控通信故障由14-12调整为13-12。故障寄存器地址和宽度不变，但数值解释与协议15及更早版本不兼容。 |
 | 17 | V1.25.0.0 | V1.23.0.0 | 200 | 按二代计量仪责任域重新分类、删减并重编号故障码：CPU2保留63项共享故障，CPU3另有1项本机故障；正式表61项使用中、3项保留。CPU3本机主控通信故障由13-12调整为20-7。故障寄存器地址和宽度不变，但数值解释与协议16及更早版本不兼容。 |
+| 18 | V1.26.0.0 | V1.24.0.0 | 200 | 在既有输入寄存器尾部、`REG_ENG` 前追加 `si_profile_runtime.phase`、`cycle_counter`、`progress_points` 三个32位运行态字段；用于 Point0 建立周期、有效点进度和回液位后最终快照门禁。SI 外部兼容同时增加 `30014~30016` 镜像、`40004~40009` CPU3 本地持久化槽和 CPU3 FRAM V7。 |
 
 ## 兼容判断规则
 
@@ -524,6 +525,48 @@
 - `cmake --build build\LTD_MAIN_CPU2 --clean-first`、`cmake --build build\LTD_DISPLAY_CPU3 --clean-first` 通过；发布产物分别为CPU2 `V1.25.0.0`、CPU3 `V1.23.0.0`。
 - `py tools\check_docs.py`、`py tools\check_markdown_links.py`、`git diff --check` 通过。
 - 实物故障注入、协议16/17交叉烧写拦截和现场恢复路径仍需台架验证。
+
+### 协议版本 18
+
+关联改动：
+
+- 新增独立 `SiProfileRuntime` 运行态，字段为 `phase`、`cycle_counter` 和 `progress_points`。阶段值固定为 `0=IDLE`、`1=PREPARING`、`2=MEASURING`、`3=RETURNING_LEVEL`、`4=COMPLETE`、`5=ABORTED`、`6=FAILED`。
+- 三个字段追加在 AO 运行态之后、`REG_ENG` 之前；现有 Profile 点阵、无线、继电器、AO 及其它前序寄存器地址均不移动。
+- CPU2 在 Point0 有效样本提交后最后递增 `cycle_counter`，并从 `progress_points=1` 开始按有效液体点递增；空气点、失败样本和重试不计数，不预设最终点数。
+- CPU2 在 Point0 前保留上一轮已发布结果；Point0 后活动期以及取消/失败出口不发布半成品点阵。回液位成功、液位稳定且电机停止后，CPU2提交候选结果并最后递增原有完成计数。
+- CPU3根据新运行态维护本地SI投影：完整分块读取候选点阵，复核周期、完成计数、点数、来源和阶段，再一次开放最终 `Complete/N/点阵/Profile报警` 组合；CPU2候选Complete不再直接穿透SI侧。
+- CPU3首次启动或重连时不能把当前RTC冒充Point0时间；无法重建时，当前周期 `30007~30010` 返回0。若CPU2已处于同代SI COMPLETE，CPU3仍允许恢复最终N、点阵和报警，但时间保持0。
+- CPU3已发布SI快照独立保存在本地投影中；后续普通分布、国标、每米、间隔或Wärtsilä分布不会清除或改写旧SI的Complete、N、时间、点阵和Profile报警。旧SI COMPLETE/ABORTED/FAILED只有在SI收尾上下文中才覆盖FC01终态线圈，不得遮住当前非SI动作。
+
+SI外部兼容和存储影响：
+
+- `30014=(FC01 byte1<<8)|FC01 byte0`；`30015=(FC02 byte1<<8)|FC02 byte0`；`30016=(FC02 byte3<<8)|FC02 byte2`。`30017~30020`继续固定为0。
+- `40004~40009`作为CPU3本地原始 `uint16_t` 兼容槽，默认值依次为 `0、50、1000、0、5、1`；支持FC03连续读取和FC06单寄存器写入。这六个槽不参与测量、报警或控制。
+- `40004~40023`统一使用CPU3本机参数事务写入口：只有FRAM写入及写后读回校验成功才向FC06正常回显；失败时恢复整份写前运行态、尽力恢复旧FRAM镜像，并返回设备故障 `0x06`，避免局部参数或运行态/持久化不一致。
+- CPU3本机参数存储版本从 `V6 / 0x0006` 提升到 `V7 / 0x0007`。V6迁移使用显式旧结构和CRC校验，完整保留V6的SI自动调度、报警阈值和三路串口参数，只为六个兼容槽补默认值。
+- CPU2 `DeviceParameters` 结构、`DEVICE_PARAM_VERSION = 3`、元信息和CRC范围不因这三个运行态字段变化；本次共享运行态扩展不会触发CPU2参数恢复出厂。
+
+SI Profile外部生命周期：
+
+1. `PREPARING`：Profile进入但Point0尚未建立，保留上一轮Complete、最终点数、Point0时间、点阵和Profile报警。
+2. Point0有效样本：建立新周期，Complete清0，`30006=1`，锁存Point0时间；Point0位置为本轮实际采用的底部参考。
+3. 活动采集：`30006`只按有效液体点单调递增，`30021~30620`全部为0。
+4. 回液位：保持Profile=1、Complete=0，最终点数冻结但不提前发布点阵。
+5. 最终发布：CPU3完成分块读取和代际复核，且满足AtLevel、Stable、电机停止和Interlock=0后，一次发布Profile=0、Auto=1、Stop=1、Complete=1、AtLevel=1、最终N、点阵和Profile报警。
+6. Point0前显式取消保留上一轮结果；Point0后取消或真实失败均清Complete、N和点阵且不恢复旧Complete。显式取消不置Interlock，真实失败沿用既有错误/Interlock链路。
+
+兼容性和发布门禁：
+
+- 协议18与17及更早版本的输入寄存器总长度和SI生命周期契约不同，CPU2/CPU3必须成对使用协议18；严格相等检查会拦截混搭。
+- 首个正式使用协议18的固件为CPU2 `V1.26.0.0`、CPU3 `V1.24.0.0`。CPU2参数存储版本保持3且结构大小不变；CPU3本机参数存储由V6升级为V7。协议18与17及更早版本不得交叉烧写或混用。
+- 提交前审查确认3项P1、2项P2和2项既有问题，本次按用户决定只记录、不修改。详细失效机制见`SI协议适配/01_计划与需求/SI协议待确认与后续清单.md`第7节；其中V6→V7迁移写失败、CPU2快速重启和CPU3非整日周期重启属于优先修复项。
+
+验证状态：
+
+- 已实现并通过静态契约检查：`py tools\check_si_protocol_contract.py`、`py tools\check_si_modbus_frames.py --dump`、`py tools\check_wireless_rssi_contract.py`。
+- `cmake --build build\LTD_MAIN_CPU2 --clean-first`通过，生成`LTD_MAIN_CPU2_V1.26.0.0.hex`，`text=297396 data=2336 bss=33864`。
+- `cmake --build build\LTD_DISPLAY_CPU3 --clean-first`通过，生成`LTD_DISPLAY_CPU3_V1.24.0.0.hex`，`text=167144 data=37396 bss=61764`。
+- 尚未完成真实RS485台架、协议17/18交叉烧写拦截、V6真实FRAM镜像迁移及写失败注入、`40004~40023`掉电/故障注入、CPU2快速重启、CPU3跨日重启、200点PLC响应时延、完成边沿高频轮询、取消/失败、通信中断、非SI分布与已发布SI快照隔离以及1点、30点、200点边界验证。
 
 ## 后续维护要求
 

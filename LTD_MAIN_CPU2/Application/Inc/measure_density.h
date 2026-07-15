@@ -54,6 +54,11 @@ void CMD_MeasureDensitySpread_Interval(void);
 /* SI 独立 Profile */
 void CMD_SiProfile(void);
 
+/* SI Profile取消、失败和回液位候选提交钩子。 */
+void SiProfile_HandleCancel(void);
+void SiProfile_HandleFailure(void);
+uint32_t SiProfile_CompleteAfterReturnToLevel(void);
+
 /* ===================== 公共工具接口（本文件 .c 内实现，可能被其他模块复用） ===================== */
 /* 打印分布测量结果（含点表与平均值） */
 void Print_DensitySpreadResult(const DensityDistribution *dist);

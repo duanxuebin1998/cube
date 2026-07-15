@@ -32,6 +32,9 @@
 #define SI_INVALID_TEMP_RAW_CPU2       9999U
 #define SI_TEMP_INVALID_REGISTER       0xB1E0U
 #define SI_AUTO_PROFILE_RETRY_DELAY_MS 5000U
+#define SI_PROFILE_FETCH_RETRY_DELAY_MS 1000U
+#define SI_PROFILE_DWELL_TIME_MAX_S    3600U
+#define SI_PROFILE_POINT_REG_COUNT     (MAX_MEASUREMENT_POINTS * 3U)
 
 /* 线圈地址保持 SI协议手册编号，数组下标即协议 offset。 */
 enum {
@@ -90,6 +93,9 @@ enum {
     SI_IR_CURRENT_TIME_HOUR,
     SI_IR_CURRENT_TIME_MINUTE,
     SI_IR_CURRENT_TIME_SECOND,
+    SI_IR_COIL_MIRROR,
+    SI_IR_DISCRETE_MIRROR_LOW,
+    SI_IR_DISCRETE_MIRROR_HIGH,
     SI_IR_PROFILE_POINT0_POSITION = 20
 };
 
@@ -98,6 +104,12 @@ enum {
     SI_HR_PROFILE_FIRST_POINT = 0,
     SI_HR_PROFILE_INCREMENT,
     SI_HR_PROFILE_DWELL_TIME,
+    SI_HR_COMPAT_RAW_40004,
+    SI_HR_COMPAT_RAW_40005,
+    SI_HR_COMPAT_RAW_40006,
+    SI_HR_COMPAT_RAW_40007,
+    SI_HR_COMPAT_RAW_40008,
+    SI_HR_COMPAT_RAW_40009,
     SI_HR_AUTO_PROFILE_INTERVAL = 9,
     SI_HR_AUTO_PROFILE_ENABLE,
     SI_HR_AUTO_PROFILE_HOUR,
@@ -114,6 +126,34 @@ enum {
     SI_HR_DENSITY_DEVIATION_SETPOINT
 };
 
+typedef struct {
+    uint8_t initialized;
+    uint8_t connected;
+    uint8_t cycle_established;
+    uint8_t candidate_valid;
+    uint8_t final_snapshot_ready;
+    uint8_t published_key_valid;
+    uint8_t fetch_attempt_valid;
+    uint8_t complete_baseline_valid;
+    uint32_t active_cycle;
+    uint32_t last_phase;
+    uint32_t cycle_complete_baseline;         /* PREPARING、初始化或重连时冻结的完成计数 */
+    uint32_t fetch_cycle;
+    uint32_t fetch_complete_counter;
+    uint32_t last_fetch_tick;
+    Cpu2SiProfileCandidateKey candidate_key;
+    Cpu2SiProfileCandidateKey published_key;
+    uint16_t progress_points;
+    uint16_t final_points;
+    uint16_t point_regs[SI_PROFILE_POINT_REG_COUNT];
+    uint8_t profile_temp_deviation_alarm;
+    uint8_t profile_density_deviation_alarm;
+    uint8_t profile_low_temp_alarm;
+    uint8_t profile_high_temp_alarm;
+    uint8_t profile_low_density_alarm;
+    uint8_t profile_high_density_alarm;
+} SiProfileProjection;
+
 static uint8_t s_slave_address = 1U; /* Modbus 协议地址配置，影响协议寻址或硬件访问。 */
 /* 四类寄存器区都是 CPU3 侧快照，收到请求前由 si_modbus_sync_from_system 刷新。 */
 static uint8_t s_coils[SI_COIL_COUNT]; /* Modbus 协议模块级变量，保存跨函数共享的业务状态。 */
@@ -121,11 +161,20 @@ static uint8_t s_discrete_inputs[SI_DISCRETE_INPUT_COUNT]; /* Modbus 协议模�
 static uint16_t s_holding_regs[SI_HOLDING_REG_COUNT]; /* Modbus 协议模块级变量，保存跨函数共享的业务状态。 */
 static uint16_t s_input_regs[SI_INPUT_REG_COUNT]; /* Modbus 协议模块级变量，保存跨函数共享的业务状态。 */
 static Cpu3DateTime s_profile_timestamp; /* Modbus 协议模块级变量，保存跨函数共享的业务状态。 */
-static uint32_t s_seen_profile_counter = 0U; /* Modbus 协议计数值，用于节拍、统计或协议数量控制。 */
 static uint8_t s_profile_timestamp_valid = 0U; /* Modbus 协议模块级变量，保存跨函数共享的业务状态。 */
+static SiProfileProjection s_profile_projection;
 static uint32_t s_si_auto_last_trigger_minute = 0xFFFFFFFFUL;
 static uint32_t s_si_auto_last_attempt_tick = 0U;
+static uint32_t s_si_auto_schedule_anchor_minute = 0U;
+static uint16_t s_si_auto_cached_interval = 0U;
+static uint8_t s_si_auto_cached_enable = 0U;
+static uint8_t s_si_auto_cached_hour = 0U;
+static uint8_t s_si_auto_cached_minute = 0U;
 static bool s_si_auto_last_attempt_valid = false;
+static bool s_si_auto_boot_guard_pending = true;
+static bool s_si_auto_config_valid = false;
+static bool s_si_auto_schedule_anchor_valid = false;
+static bool s_si_auto_anchor_from_next_start = false;
 
 /*
  * 从 Modbus PDU 中读取大端 16 位值。
@@ -307,6 +356,10 @@ static uint8_t si_is_holding_writeable(uint16_t offset)
     if (offset <= SI_HR_PROFILE_DWELL_TIME) {
         return 1U;
     }
+    if ((offset >= SI_HR_COMPAT_RAW_40004) &&
+        (offset <= SI_HR_COMPAT_RAW_40009)) {
+        return 1U;
+    }
     if ((offset >= SI_HR_AUTO_PROFILE_INTERVAL) &&
         (offset <= SI_HR_DENSITY_DEVIATION_SETPOINT)) {
         return 1U;
@@ -337,27 +390,65 @@ static uint8_t si_high_alarm_s16(int16_t value, uint16_t setpoint)
 
 static uint8_t si_is_si_profile_result_valid(void)
 {
-    return ((g_measurement.density_distribution.profile_complete_latched != 0U) &&
-            (g_measurement.density_distribution.profile_source == (uint32_t)PROFILE_SOURCE_SI)) ? 1U : 0U;
+    return (s_profile_projection.final_snapshot_ready != 0U) ? 1U : 0U;
 }
 
-/*
- * 刷新 profile 完成时间戳。
- * 由 FC04 读输入寄存器路径调用，不打印、不阻塞；如果 RTC 短暂不可读，
- * 保持未锁存状态，后续读寄存器时继续尝试，避免丢失本次完成事件。
- */
-static void si_refresh_profile_timestamp(void)
+static uint16_t si_profile_clamp_points(uint32_t points)
 {
-    uint32_t counter = g_measurement.density_distribution.profile_complete_counter;
-
-    if (counter == 0U) {
-        s_seen_profile_counter = 0U;
-        return;
+    if (points > MAX_MEASUREMENT_POINTS) {
+        return MAX_MEASUREMENT_POINTS;
     }
 
-    if (counter != s_seen_profile_counter) {
-        s_seen_profile_counter = counter;
+    return (uint16_t)points;
+}
+
+static uint8_t si_profile_key_equal(const Cpu2SiProfileCandidateKey *left,
+                                    const Cpu2SiProfileCandidateKey *right)
+{
+    return ((left->cycle_counter == right->cycle_counter) &&
+            (left->complete_counter == right->complete_counter) &&
+            (left->measurement_points == right->measurement_points) &&
+            (left->profile_source == right->profile_source) &&
+            (left->phase == right->phase)) ? 1U : 0U;
+}
+
+static Cpu2SiProfileCandidateKey si_profile_current_key(void)
+{
+    Cpu2SiProfileCandidateKey key;
+
+    key.cycle_counter = g_measurement.si_profile_runtime.cycle_counter;
+    key.complete_counter = g_measurement.density_distribution.profile_complete_counter;
+    key.measurement_points = g_measurement.density_distribution.measurement_points;
+    key.profile_source = g_measurement.density_distribution.profile_source;
+    key.phase = g_measurement.si_profile_runtime.phase;
+    return key;
+}
+
+static uint8_t si_profile_interlock_active(void)
+{
+    return ((g_measurement.device_status.error_code != NO_ERROR) ||
+            (g_measurement.density_distribution.profile_blocked_by_process != 0U)) ? 1U : 0U;
+}
+
+/* 将FC01或FC02连续状态位按Modbus低位优先规则打包成一个镜像寄存器。 */
+static uint16_t si_pack_bits_u16(const uint8_t *bits, uint16_t start)
+{
+    uint16_t value = 0U;
+    uint16_t i;
+
+    for (i = 0U; i < 16U; ++i) {
+        if (bits[start + i] != 0U) {
+            value |= (uint16_t)(1UL << i);
+        }
     }
+
+    return value;
+}
+
+static void si_invalidate_profile_timestamp(void)
+{
+    memset(&s_profile_timestamp, 0, sizeof(s_profile_timestamp));
+    s_profile_timestamp_valid = 0U;
 }
 
 static void si_lock_profile_timestamp_now(void)
@@ -367,6 +458,411 @@ static void si_lock_profile_timestamp_now(void)
     } else {
         s_profile_timestamp_valid = 0U;
     }
+}
+
+static void si_profile_clear_alarms(void)
+{
+    s_profile_projection.profile_temp_deviation_alarm = 0U;
+    s_profile_projection.profile_density_deviation_alarm = 0U;
+    s_profile_projection.profile_low_temp_alarm = 0U;
+    s_profile_projection.profile_high_temp_alarm = 0U;
+    s_profile_projection.profile_low_density_alarm = 0U;
+    s_profile_projection.profile_high_density_alarm = 0U;
+}
+
+/* 清除CPU3本地发布结果；调用方单独决定是否保留Point0时间和活动进度。 */
+static void si_profile_clear_result(void)
+{
+    s_profile_projection.candidate_valid = 0U;
+    s_profile_projection.final_snapshot_ready = 0U;
+    s_profile_projection.published_key_valid = 0U;
+    s_profile_projection.fetch_attempt_valid = 0U;
+    s_profile_projection.final_points = 0U;
+    memset(s_profile_projection.point_regs, 0, sizeof(s_profile_projection.point_regs));
+    si_profile_clear_alarms();
+}
+
+/* 把已通过代际复核的CPU2候选转换为SI寄存器格式，并在本地计算六项Profile报警。 */
+static void si_profile_cache_candidate(const Cpu2SiProfileCandidateKey *key)
+{
+    uint16_t points = si_profile_clamp_points(key->measurement_points);
+    uint16_t i;
+
+    memset(s_profile_projection.point_regs, 0, sizeof(s_profile_projection.point_regs));
+    si_profile_clear_alarms();
+
+    for (i = 0U; i < points; ++i) {
+        const volatile DensityMeasurement *point =
+            &g_measurement.density_distribution.single_density_data[i];
+        uint16_t base = (uint16_t)(i * 3U);
+        uint8_t temp_valid = (si_is_invalid_temp_raw(point->temperature) == 0U) ? 1U : 0U;
+        uint8_t density_valid = (point->density != UNVALID_DENSITY) ? 1U : 0U;
+        uint16_t density = si_density_raw_to_si_u16(point->density);
+
+        s_profile_projection.point_regs[base] =
+            si_u01mm_to_mm_u16(point->temperature_position);
+        s_profile_projection.point_regs[base + 1U] =
+            si_temp_raw_to_si_s16(point->temperature);
+        s_profile_projection.point_regs[base + 2U] = density;
+
+        if (temp_valid != 0U) {
+            int16_t temperature = (int16_t)s_profile_projection.point_regs[base + 1U];
+
+            if (temperature < g_cpu3_comm_display_params.si_low_temperature_setpoint) {
+                s_profile_projection.profile_low_temp_alarm = 1U;
+            }
+            if (temperature > g_cpu3_comm_display_params.si_high_temperature_setpoint) {
+                s_profile_projection.profile_high_temp_alarm = 1U;
+            }
+        }
+        if (density_valid != 0U) {
+            if (density < g_cpu3_comm_display_params.si_low_density_setpoint) {
+                s_profile_projection.profile_low_density_alarm = 1U;
+            }
+            if (density > g_cpu3_comm_display_params.si_high_density_setpoint) {
+                s_profile_projection.profile_high_density_alarm = 1U;
+            }
+        }
+
+        if (i > 0U) {
+            const volatile DensityMeasurement *previous =
+                &g_measurement.density_distribution.single_density_data[i - 1U];
+
+            if ((temp_valid != 0U) &&
+                (si_is_invalid_temp_raw(previous->temperature) == 0U) &&
+                (si_absdiff_s16((int16_t)si_temp_raw_to_si_s16(point->temperature),
+                                (int16_t)si_temp_raw_to_si_s16(previous->temperature)) >
+                 g_cpu3_comm_display_params.si_temp_deviation_setpoint)) {
+                s_profile_projection.profile_temp_deviation_alarm = 1U;
+            }
+            if ((density_valid != 0U) &&
+                (previous->density != UNVALID_DENSITY) &&
+                (si_absdiff_u16(density,
+                                si_density_raw_to_si_u16(previous->density)) >
+                 g_cpu3_comm_display_params.si_density_deviation_setpoint)) {
+                s_profile_projection.profile_density_deviation_alarm = 1U;
+            }
+        }
+    }
+
+    s_profile_projection.candidate_key = *key;
+    s_profile_projection.candidate_valid = 1U;
+}
+
+static uint8_t si_profile_final_gate_open(void)
+{
+    return ((s_profile_projection.candidate_valid != 0U) &&
+            (s_profile_projection.candidate_key.phase == (uint32_t)SI_PROFILE_PHASE_COMPLETE) &&
+            (g_measurement.oil_measurement.probe_at_liquid_level != 0U) &&
+            (g_measurement.oil_measurement.liquid_stable != 0U) &&
+            (g_measurement.debug_data.motor_state == 0U) &&
+            (si_profile_interlock_active() == 0U)) ? 1U : 0U;
+}
+
+static uint8_t si_profile_phase_is_active(uint32_t phase)
+{
+    if ((phase == (uint32_t)SI_PROFILE_PHASE_PREPARING) ||
+        (phase == (uint32_t)SI_PROFILE_PHASE_MEASURING) ||
+        (phase == (uint32_t)SI_PROFILE_PHASE_RETURNING_LEVEL)) {
+        return 1U;
+    }
+    if ((phase == (uint32_t)SI_PROFILE_PHASE_COMPLETE) &&
+        (s_profile_projection.final_snapshot_ready == 0U)) {
+        return 1U;
+    }
+
+    return 0U;
+}
+
+/*
+ * 判断当前共享头是否仍表示本周期可拉取的SI完成候选。
+ * 普通分布测量会复用共享缓冲区，来源或代际不匹配时不得把旧SI阶段投影成Profile运行态。
+ */
+static uint8_t si_profile_current_complete_candidate_is_si(void)
+{
+    Cpu2SiProfileCandidateKey current = si_profile_current_key();
+
+    return ((current.cycle_counter == s_profile_projection.active_cycle) &&
+            ((s_profile_projection.complete_baseline_valid == 0U) ||
+             (current.complete_counter != s_profile_projection.cycle_complete_baseline)) &&
+            (current.profile_source == (uint32_t)PROFILE_SOURCE_SI) &&
+            (current.phase == (uint32_t)SI_PROFILE_PHASE_COMPLETE) &&
+            (current.measurement_points > 0U) &&
+            (current.measurement_points <= MAX_MEASUREMENT_POINTS) &&
+            (g_measurement.density_distribution.profile_complete_latched != 0U)) ? 1U : 0U;
+}
+
+/* Point0前只有PREPARING及其取消/失败终态允许保留上一轮完整SI结果。 */
+static uint8_t si_profile_phase_keeps_previous_result(uint32_t phase)
+{
+    return ((phase == (uint32_t)SI_PROFILE_PHASE_PREPARING) ||
+            (phase == (uint32_t)SI_PROFILE_PHASE_ABORTED) ||
+            (phase == (uint32_t)SI_PROFILE_PHASE_FAILED)) ? 1U : 0U;
+}
+
+/*
+ * 判断FC01是否仍需输出本轮SI最终组合。
+ * 已发布结果可以长期保留，但只有共享代际未被其它分布测量覆盖、且设备仍处于SI收尾上下文时才覆盖实时线圈。
+ */
+static uint8_t si_profile_final_coil_projection_allowed(void)
+{
+    Cpu2SiProfileCandidateKey current;
+    CommandType command = g_measurement.device_status.current_command;
+
+    if ((s_profile_projection.final_snapshot_ready == 0U) ||
+        (s_profile_projection.published_key_valid == 0U) ||
+        (s_profile_projection.last_phase != (uint32_t)SI_PROFILE_PHASE_COMPLETE)) {
+        return 0U;
+    }
+
+    current = si_profile_current_key();
+    if (si_profile_key_equal(&current, &s_profile_projection.published_key) == 0U) {
+        return 0U;
+    }
+
+    if ((command != CMD_SI_PROFILE) &&
+        (command != CMD_FIND_OIL) &&
+        ((command != CMD_NONE) ||
+         (g_measurement.device_status.device_state != STATE_FLOWOIL))) {
+        return 0U;
+    }
+
+    return ((g_measurement.oil_measurement.probe_at_liquid_level != 0U) &&
+            (g_measurement.oil_measurement.liquid_stable != 0U) &&
+            (g_measurement.debug_data.motor_state == 0U) &&
+            (si_profile_interlock_active() == 0U)) ? 1U : 0U;
+}
+
+static void si_profile_publish_candidate(void)
+{
+    s_profile_projection.final_points =
+        si_profile_clamp_points(s_profile_projection.candidate_key.measurement_points);
+    s_profile_projection.progress_points = s_profile_projection.final_points;
+    s_profile_projection.published_key = s_profile_projection.candidate_key;
+    s_profile_projection.published_key_valid = 1U;
+    s_profile_projection.final_snapshot_ready = 1U;
+    /* 候选已经转为不可变发布快照，后续共享分布头变化不得再走候选清空路径。 */
+    s_profile_projection.candidate_valid = 0U;
+    s_profile_projection.cycle_complete_baseline =
+        s_profile_projection.candidate_key.complete_counter;
+    s_profile_projection.complete_baseline_valid = 1U;
+    s_profile_projection.cycle_established = 0U;
+}
+
+/*
+ * CPU3冷启动后尝试重建Point0前仍留在CPU2共享区的上一轮SI快照。
+ * 只恢复Complete、N、点阵和报警；本函数不锁存RTC，无法重建的Profile时间继续保持0。
+ */
+static void si_profile_try_restore_previous_snapshot(uint32_t phase, uint8_t allow_fetch)
+{
+    Cpu2SiProfileCandidateKey current;
+    Cpu2SiProfileCandidateKey fetched;
+    uint32_t now_tick;
+
+    if ((allow_fetch == 0U) ||
+        (s_profile_projection.final_snapshot_ready != 0U) ||
+        (s_profile_projection.complete_baseline_valid == 0U) ||
+        (si_profile_phase_keeps_previous_result(phase) == 0U)) {
+        return;
+    }
+
+    current = si_profile_current_key();
+    if ((current.cycle_counter != s_profile_projection.active_cycle) ||
+        (current.complete_counter != s_profile_projection.cycle_complete_baseline) ||
+        (current.profile_source != (uint32_t)PROFILE_SOURCE_SI) ||
+        (current.phase != phase) ||
+        (current.measurement_points == 0U) ||
+        (current.measurement_points > MAX_MEASUREMENT_POINTS) ||
+        (g_measurement.density_distribution.profile_complete_latched == 0U)) {
+        return;
+    }
+
+    now_tick = HAL_GetTick();
+    if ((s_profile_projection.fetch_attempt_valid != 0U) &&
+        (s_profile_projection.fetch_cycle == current.cycle_counter) &&
+        (s_profile_projection.fetch_complete_counter == current.complete_counter) &&
+        ((now_tick - s_profile_projection.last_fetch_tick) < SI_PROFILE_FETCH_RETRY_DELAY_MS)) {
+        return;
+    }
+
+    s_profile_projection.fetch_attempt_valid = 1U;
+    s_profile_projection.fetch_cycle = current.cycle_counter;
+    s_profile_projection.fetch_complete_counter = current.complete_counter;
+    s_profile_projection.last_fetch_tick = now_tick;
+
+    if (CPU2_CommFetchSiPreviousSnapshot(&fetched) &&
+        (fetched.cycle_counter == s_profile_projection.active_cycle) &&
+        (fetched.complete_counter == s_profile_projection.cycle_complete_baseline) &&
+        (fetched.profile_source == (uint32_t)PROFILE_SOURCE_SI) &&
+        (fetched.phase == phase) &&
+        (fetched.measurement_points > 0U) &&
+        (fetched.measurement_points <= MAX_MEASUREMENT_POINTS) &&
+        (g_measurement.density_distribution.profile_complete_latched != 0U)) {
+        si_profile_cache_candidate(&fetched);
+        si_profile_publish_candidate();
+    }
+}
+
+/*
+ * 更新CPU3本地SI生命周期投影。
+ * allow_fetch仅在周期任务中置1，外部Modbus响应路径只做轻量状态更新。
+ */
+static void si_update_profile_projection(uint8_t allow_fetch)
+{
+    Cpu2SiProfileCandidateKey current;
+    uint32_t phase;
+    uint32_t cycle;
+    uint32_t complete_counter;
+
+    if (!CPU2_CommHasRuntimeSnapshot()) {
+        s_profile_projection.connected = 0U;
+        return;
+    }
+
+    phase = g_measurement.si_profile_runtime.phase;
+    cycle = g_measurement.si_profile_runtime.cycle_counter;
+    complete_counter = g_measurement.density_distribution.profile_complete_counter;
+
+    if (s_profile_projection.initialized == 0U) {
+        s_profile_projection.initialized = 1U;
+        s_profile_projection.connected = 1U;
+        s_profile_projection.active_cycle = cycle;
+        s_profile_projection.last_phase = phase;
+        s_profile_projection.cycle_complete_baseline = complete_counter;
+        s_profile_projection.complete_baseline_valid =
+            (phase == (uint32_t)SI_PROFILE_PHASE_COMPLETE) ? 0U : 1U;
+        s_profile_projection.cycle_established =
+            ((phase == (uint32_t)SI_PROFILE_PHASE_MEASURING) ||
+             (phase == (uint32_t)SI_PROFILE_PHASE_RETURNING_LEVEL) ||
+             (phase == (uint32_t)SI_PROFILE_PHASE_COMPLETE)) ? 1U : 0U;
+        s_profile_projection.progress_points =
+            si_profile_clamp_points(g_measurement.si_profile_runtime.progress_points);
+        si_profile_clear_result();
+        si_invalidate_profile_timestamp();
+    } else if (s_profile_projection.connected == 0U) {
+        s_profile_projection.connected = 1U;
+        if (cycle != s_profile_projection.active_cycle) {
+            s_profile_projection.active_cycle = cycle;
+            s_profile_projection.cycle_complete_baseline = complete_counter;
+            s_profile_projection.complete_baseline_valid =
+                (phase == (uint32_t)SI_PROFILE_PHASE_COMPLETE) ? 0U : 1U;
+            s_profile_projection.cycle_established = 1U;
+            s_profile_projection.progress_points =
+                si_profile_clamp_points(g_measurement.si_profile_runtime.progress_points);
+            si_profile_clear_result();
+            si_invalidate_profile_timestamp();
+        } else if (phase == (uint32_t)SI_PROFILE_PHASE_PREPARING) {
+            s_profile_projection.cycle_complete_baseline = complete_counter;
+            s_profile_projection.complete_baseline_valid = 1U;
+            s_profile_projection.cycle_established = 0U;
+            s_profile_projection.candidate_valid = 0U;
+            s_profile_projection.fetch_attempt_valid = 0U;
+        }
+        s_profile_projection.last_phase = phase;
+    } else {
+        if ((phase == (uint32_t)SI_PROFILE_PHASE_PREPARING) &&
+            (s_profile_projection.last_phase != (uint32_t)SI_PROFILE_PHASE_PREPARING)) {
+            s_profile_projection.cycle_complete_baseline = complete_counter;
+            s_profile_projection.complete_baseline_valid = 1U;
+            s_profile_projection.cycle_established = 0U;
+            s_profile_projection.candidate_valid = 0U;
+            s_profile_projection.fetch_attempt_valid = 0U;
+        }
+
+        if (cycle != s_profile_projection.active_cycle) {
+            s_profile_projection.active_cycle = cycle;
+            s_profile_projection.cycle_established = 1U;
+            s_profile_projection.progress_points =
+                si_profile_clamp_points(g_measurement.si_profile_runtime.progress_points);
+            si_profile_clear_result();
+            si_invalidate_profile_timestamp();
+            si_lock_profile_timestamp_now();
+            if ((s_profile_projection.complete_baseline_valid == 0U) &&
+                (phase != (uint32_t)SI_PROFILE_PHASE_COMPLETE)) {
+                s_profile_projection.cycle_complete_baseline = complete_counter;
+                s_profile_projection.complete_baseline_valid = 1U;
+            }
+        }
+    }
+
+    si_profile_try_restore_previous_snapshot(phase, allow_fetch);
+
+    if ((phase == (uint32_t)SI_PROFILE_PHASE_MEASURING) ||
+        (phase == (uint32_t)SI_PROFILE_PHASE_RETURNING_LEVEL) ||
+        (phase == (uint32_t)SI_PROFILE_PHASE_COMPLETE)) {
+        uint16_t progress =
+            si_profile_clamp_points(g_measurement.si_profile_runtime.progress_points);
+
+        if (progress > s_profile_projection.progress_points) {
+            s_profile_projection.progress_points = progress;
+        }
+    }
+
+    if (((phase == (uint32_t)SI_PROFILE_PHASE_ABORTED) ||
+         (phase == (uint32_t)SI_PROFILE_PHASE_FAILED)) &&
+        (s_profile_projection.cycle_established != 0U)) {
+        si_profile_clear_result();
+        s_profile_projection.progress_points = 0U;
+        s_profile_projection.cycle_established = 0U;
+    }
+
+    if (phase == (uint32_t)SI_PROFILE_PHASE_COMPLETE) {
+        uint32_t now_tick;
+        uint8_t fetch_due = 0U;
+
+        current = si_profile_current_key();
+        /*
+         * 已发布SI快照只由下一轮SI Point0或本轮取消/失败清除。
+         * 普通分布测量会复用共享分布头并改变完成计数/来源，不能据此撤销已确认的SI结果。
+         */
+        if ((s_profile_projection.final_snapshot_ready == 0U) &&
+            (s_profile_projection.candidate_valid != 0U) &&
+            (si_profile_key_equal(&current, &s_profile_projection.candidate_key) == 0U)) {
+            s_profile_projection.candidate_valid = 0U;
+            memset(s_profile_projection.point_regs, 0, sizeof(s_profile_projection.point_regs));
+            si_profile_clear_alarms();
+        }
+
+        if ((current.cycle_counter == s_profile_projection.active_cycle) &&
+            ((s_profile_projection.complete_baseline_valid == 0U) ||
+             (current.complete_counter != s_profile_projection.cycle_complete_baseline)) &&
+            (current.profile_source == (uint32_t)PROFILE_SOURCE_SI) &&
+            (current.measurement_points > 0U) &&
+            (current.measurement_points <= MAX_MEASUREMENT_POINTS) &&
+            (g_measurement.density_distribution.profile_complete_latched != 0U) &&
+            (s_profile_projection.final_snapshot_ready == 0U) &&
+            ((s_profile_projection.candidate_valid == 0U) ||
+             (si_profile_key_equal(&current, &s_profile_projection.candidate_key) == 0U)) &&
+            (allow_fetch != 0U)) {
+            now_tick = HAL_GetTick();
+            if ((s_profile_projection.fetch_attempt_valid == 0U) ||
+                (s_profile_projection.fetch_cycle != current.cycle_counter) ||
+                (s_profile_projection.fetch_complete_counter != current.complete_counter) ||
+                ((now_tick - s_profile_projection.last_fetch_tick) >= SI_PROFILE_FETCH_RETRY_DELAY_MS)) {
+                fetch_due = 1U;
+            }
+
+            if (fetch_due != 0U) {
+                Cpu2SiProfileCandidateKey fetched;
+
+                s_profile_projection.fetch_attempt_valid = 1U;
+                s_profile_projection.fetch_cycle = current.cycle_counter;
+                s_profile_projection.fetch_complete_counter = current.complete_counter;
+                s_profile_projection.last_fetch_tick = now_tick;
+                if (CPU2_CommFetchSiProfileCandidate(&fetched) &&
+                    (fetched.cycle_counter == s_profile_projection.active_cycle)) {
+                    si_profile_cache_candidate(&fetched);
+                }
+            }
+        }
+
+        if ((s_profile_projection.final_snapshot_ready == 0U) &&
+            (si_profile_final_gate_open() != 0U)) {
+            si_profile_publish_candidate();
+        }
+    }
+
+    s_profile_projection.last_phase = phase;
 }
 
 /**
@@ -398,17 +894,11 @@ static bool si_send_cpu2_command(CommandType cmd)
  *
  * 调用场景：外部 00004 Profile 线圈、自动 profile 调度和 CPU3 屏幕
  * SI Profile 菜单入口共用。
- * 关键约束：先锁存 Profile Timestamp，再通过既有 CPU2 命令寄存器
- * 下发 CMD_SI_PROFILE，保证三类触发入口时间口径一致。
+ * 关键约束：这里只下发命令；Profile Timestamp必须等CPU2发布Point0 cycle事件后锁存。
  */
 bool si_profile_request_start(void)
 {
-    si_lock_profile_timestamp_now();
-    if (!si_send_cpu2_command(CMD_SI_PROFILE)) {
-        s_profile_timestamp_valid = 0U;
-        return false;
-    }
-    return true;
+    return si_send_cpu2_command(CMD_SI_PROFILE);
 }
 
 /**
@@ -423,18 +913,23 @@ static bool si_write_device_param_u32(uint16_t hold_addr,
                                       volatile uint32_t *shadow,
                                       uint32_t value)
 {
-    uint32_t value32 = value;
+    uint16_t wire_regs[2];
+
+    wire_regs[0] = (uint16_t)(value >> 16);
+    wire_regs[1] = (uint16_t)(value & 0xFFFFU);
 
     if (!CPU2_CommIsAvailable() ||
-        !CPU2_CombinatePackage_Send(FUNCTIONCODE_WRITE_MULREGISTER,
-                                    hold_addr,
-                                    2U,
-                                    &value32)) {
+        !CPU2_CommWriteHoldingRegisters(hold_addr,
+                                        2U,
+                                        wire_regs)) {
         return false;
     }
 
     if (shadow != NULL) {
-        /* 只有 CPU2 确认写入后才提交 CPU3 影子，避免 PLC 读回伪成功配置。 */
+        /*
+         * 只有 CPU2 确认写入后才提交 CPU3 影子；通用桥接入口同时会让参数
+         * 快照失效并主动补读，补读完成前后续参数读写不会把请求影子当成实值。
+         */
         *shadow = value;
     }
     return true;
@@ -536,9 +1031,11 @@ static uint8_t si_is_holding_value_valid(uint16_t offset, uint16_t value)
     switch (offset) {
     case SI_HR_PROFILE_FIRST_POINT:
     case SI_HR_PROFILE_INCREMENT:
-    case SI_HR_PROFILE_DWELL_TIME:
     case SI_HR_AUTO_PROFILE_INTERVAL:
         return (value != 0U) ? 1U : 0U;
+    case SI_HR_PROFILE_DWELL_TIME:
+        return ((value >= 1U) &&
+                (value <= SI_PROFILE_DWELL_TIME_MAX_S)) ? 1U : 0U;
     case SI_HR_AUTO_PROFILE_ENABLE:
         return (value <= 1U) ? 1U : 0U;
     case SI_HR_AUTO_PROFILE_HOUR:
@@ -597,6 +1094,35 @@ static void si_refresh_coils_from_state(void)
         s_coils[SI_COIL_STOP] = 1U;
         break;
     }
+
+    /* 生命周期投影覆盖通用状态，避免CPU2候选Complete提前穿透为最终组合。 */
+    if ((si_profile_phase_is_active(s_profile_projection.last_phase) != 0U) &&
+        ((s_profile_projection.last_phase != (uint32_t)SI_PROFILE_PHASE_COMPLETE) ||
+         (si_profile_current_complete_candidate_is_si() != 0U))) {
+        s_coils[SI_COIL_MANUAL] = 0U;
+        s_coils[SI_COIL_CALIBRATE] = 0U;
+        s_coils[SI_COIL_AUTO] = 0U;
+        s_coils[SI_COIL_PROFILE] = 1U;
+    } else if (si_profile_final_coil_projection_allowed() != 0U) {
+        s_coils[SI_COIL_MANUAL] = 0U;
+        s_coils[SI_COIL_CALIBRATE] = 0U;
+        s_coils[SI_COIL_AUTO] = 1U;
+        s_coils[SI_COIL_PROFILE] = 0U;
+        memset(&s_coils[SI_COIL_STOP],
+               0,
+               (size_t)(SI_COIL_DOWN_FAST - SI_COIL_STOP + 1U));
+        s_coils[SI_COIL_STOP] = 1U;
+    } else if ((s_profile_projection.last_phase == (uint32_t)SI_PROFILE_PHASE_ABORTED) ||
+               (s_profile_projection.last_phase == (uint32_t)SI_PROFILE_PHASE_FAILED)) {
+        s_coils[SI_COIL_PROFILE] = 0U;
+        /* 终态只在电机真实停止时合成Stop，避免旧SI失败阶段遮住后续非SI上/下行动作。 */
+        if (g_measurement.debug_data.motor_state == 0U) {
+            memset(&s_coils[SI_COIL_STOP],
+                   0,
+                   (size_t)(SI_COIL_DOWN_FAST - SI_COIL_STOP + 1U));
+            s_coils[SI_COIL_STOP] = 1U;
+        }
+    }
 }
 
 /*
@@ -607,8 +1133,6 @@ static void si_refresh_discrete_inputs_from_state(void)
 {
     uint16_t current_density;
     uint16_t liquid_level;
-    uint16_t point_count;
-    uint16_t i;
     uint8_t current_density_valid;
     uint8_t liquid_level_valid;
     uint8_t current_temp_valid;
@@ -620,10 +1144,6 @@ static void si_refresh_discrete_inputs_from_state(void)
     liquid_level_valid = (g_measurement.oil_measurement.oil_level != UNVALID_LEVEL) ? 1U : 0U;
     current_temp_valid = (si_is_invalid_temp_raw(g_measurement.debug_data.temperature) == 0U) ? 1U : 0U;
     current_temp = (int16_t)si_temp_raw_to_si_s16(g_measurement.debug_data.temperature);
-    point_count = si_clamp_u16(g_measurement.density_distribution.measurement_points);
-    if (point_count > MAX_MEASUREMENT_POINTS) {
-        point_count = MAX_MEASUREMENT_POINTS;
-    }
 
     memset(s_discrete_inputs, 0, sizeof(s_discrete_inputs));
 
@@ -633,9 +1153,7 @@ static void si_refresh_discrete_inputs_from_state(void)
         (si_is_probe_follow_stable() != 0U) ? 0U : 1U;
     s_discrete_inputs[SI_DI_BOTTOM_REFERENCE] =
         (g_measurement.height_measurement.bottom_reference_valid != 0U) ? 1U : 0U;
-    s_discrete_inputs[SI_DI_INTERLOCK] =
-        ((g_measurement.device_status.error_code != NO_ERROR) ||
-         (g_measurement.density_distribution.profile_blocked_by_process != 0U)) ? 1U : 0U;
+    s_discrete_inputs[SI_DI_INTERLOCK] = si_profile_interlock_active();
     s_discrete_inputs[SI_DI_PROFILE_COMPLETE] =
         (si_is_si_profile_result_valid() != 0U) ? 1U : 0U;
     s_discrete_inputs[SI_DI_UNIT_IS_METRIC] = 1U;
@@ -668,60 +1186,21 @@ static void si_refresh_discrete_inputs_from_state(void)
         s_discrete_inputs[SI_DI_HIGH_LEVEL_ALARM] =
             si_high_alarm_u16(liquid_level, s_holding_regs[SI_HR_HIGH_LEVEL_SETPOINT]);
     }
-    /* profile 点位报警只在 SI profile 完成锁存后计算，未完成时不扫描旧点位数据。 */
-    if (si_is_si_profile_result_valid() != 0U) {
-        for (i = 0U; i < point_count; ++i) {
-            const volatile DensityMeasurement *p = &g_measurement.density_distribution.single_density_data[i];
-            uint16_t point_density = si_density_raw_to_si_u16(p->density);
-            uint8_t point_density_valid = (p->density != UNVALID_DENSITY) ? 1U : 0U;
-
-            if (i > 0U) {
-                const volatile DensityMeasurement *prev = &g_measurement.density_distribution.single_density_data[i - 1U];
-
-                if ((si_is_invalid_temp_raw(p->temperature) == 0U) &&
-                    (si_is_invalid_temp_raw(prev->temperature) == 0U))
-                {
-                    uint16_t temp_delta = si_absdiff_s16((int16_t)si_temp_raw_to_si_s16(p->temperature),
-                                                             (int16_t)si_temp_raw_to_si_s16(prev->temperature));
-                    if (temp_delta > s_holding_regs[SI_HR_TEMP_DEVIATION_SETPOINT]) {
-                        s_discrete_inputs[SI_DI_PROFILE_TEMP_DEVIATION_ALARM] = 1U;
-                    }
-                }
-
-                if ((p->density != UNVALID_DENSITY) &&
-                    (prev->density != UNVALID_DENSITY))
-                {
-                    uint16_t density_delta = si_absdiff_u16(si_density_raw_to_si_u16(p->density),
-                                                                si_density_raw_to_si_u16(prev->density));
-                    if (density_delta > s_holding_regs[SI_HR_DENSITY_DEVIATION_SETPOINT]) {
-                        s_discrete_inputs[SI_DI_PROFILE_DENSITY_DEVIATION_ALARM] = 1U;
-                    }
-                }
-            }
-
-            /* 先处理异常边界，避免Modbus 协议状态机带故障继续运行。 */
-            if (si_is_invalid_temp_raw(p->temperature) == 0U) {
-                int16_t point_temp = (int16_t)si_temp_raw_to_si_s16(p->temperature);
-
-                if (si_low_alarm_s16(point_temp, s_holding_regs[SI_HR_LOW_TEMPERATURE_SETPOINT]) != 0U) {
-                    s_discrete_inputs[SI_DI_PROFILE_LOW_TEMP_ALARM] = 1U;
-                }
-                if (si_high_alarm_s16(point_temp, s_holding_regs[SI_HR_HIGH_TEMPERATURE_SETPOINT]) != 0U) {
-                    s_discrete_inputs[SI_DI_PROFILE_HIGH_TEMP_ALARM] = 1U;
-                }
-            }
-
-            if (point_density_valid != 0U) {
-                if (si_low_alarm_u16(point_density, s_holding_regs[SI_HR_LOW_DENSITY_SETPOINT]) != 0U) {
-                    s_discrete_inputs[SI_DI_PROFILE_LOW_DENSITY_ALARM] = 1U;
-                }
-                if (si_high_alarm_u16(point_density, s_holding_regs[SI_HR_HIGH_DENSITY_SETPOINT]) != 0U) {
-                    s_discrete_inputs[SI_DI_PROFILE_HIGH_DENSITY_ALARM] = 1U;
-                }
-            }
-        }
+    /* Profile报警只读取已发布候选的本地缓存，和Complete、N及点阵保持同一代。 */
+    if (s_profile_projection.final_snapshot_ready != 0U) {
+        s_discrete_inputs[SI_DI_PROFILE_TEMP_DEVIATION_ALARM] =
+            s_profile_projection.profile_temp_deviation_alarm;
+        s_discrete_inputs[SI_DI_PROFILE_DENSITY_DEVIATION_ALARM] =
+            s_profile_projection.profile_density_deviation_alarm;
+        s_discrete_inputs[SI_DI_PROFILE_LOW_TEMP_ALARM] =
+            s_profile_projection.profile_low_temp_alarm;
+        s_discrete_inputs[SI_DI_PROFILE_HIGH_TEMP_ALARM] =
+            s_profile_projection.profile_high_temp_alarm;
+        s_discrete_inputs[SI_DI_PROFILE_LOW_DENSITY_ALARM] =
+            s_profile_projection.profile_low_density_alarm;
+        s_discrete_inputs[SI_DI_PROFILE_HIGH_DENSITY_ALARM] =
+            s_profile_projection.profile_high_density_alarm;
     }
-
 }
 
 /*
@@ -730,12 +1209,18 @@ static void si_refresh_discrete_inputs_from_state(void)
  */
 static void si_refresh_holding_registers_from_config(void)
 {
+    uint8_t i;
+
     s_holding_regs[SI_HR_PROFILE_FIRST_POINT] =
         si_u01mm_to_mm_u16(g_deviceParams.si_profile_first_point);
     s_holding_regs[SI_HR_PROFILE_INCREMENT] =
         si_u01mm_to_mm_u16(g_deviceParams.si_profile_increment);
     s_holding_regs[SI_HR_PROFILE_DWELL_TIME] =
         si_clamp_u16(g_deviceParams.si_profile_dwell_time);
+    for (i = 0U; i < CPU3_SI_COMPAT_HOLDING_COUNT; ++i) {
+        s_holding_regs[SI_HR_COMPAT_RAW_40004 + i] =
+            Cpu3Local_ReadSiCompatHolding(i);
+    }
     s_holding_regs[SI_HR_AUTO_PROFILE_INTERVAL] =
         g_cpu3_comm_display_params.si_auto_profile_interval;
     s_holding_regs[SI_HR_AUTO_PROFILE_ENABLE] =
@@ -823,42 +1308,122 @@ static uint32_t si_datetime_to_schedule_minute(const Cpu3DateTime *dt)
     return (day_index * 1440U) + ((uint32_t)dt->hour * 60U) + (uint32_t)dt->minute;
 }
 
+/*
+ * 观察自动Profile配置变化并重建运行期调度锚点。
+ * 冷启动且自动调度原本已启用时，从当天起始时分恢复周期；运行中启用或改参时，
+ * 第一次触发重新对齐到当前或下一次起始时分，随后再按间隔连续跨天运行。
+ */
+static void si_auto_profile_refresh_schedule_config(void)
+{
+    uint16_t interval = g_cpu3_comm_display_params.si_auto_profile_interval;
+    uint8_t enable = g_cpu3_comm_display_params.si_auto_profile_enable;
+    uint8_t hour = g_cpu3_comm_display_params.si_auto_profile_hour;
+    uint8_t minute = g_cpu3_comm_display_params.si_auto_profile_minute;
+    bool had_config = s_si_auto_config_valid;
+    bool was_enabled = had_config && (s_si_auto_cached_enable != 0U);
+
+    if (had_config &&
+        (s_si_auto_cached_interval == interval) &&
+        (s_si_auto_cached_enable == enable) &&
+        (s_si_auto_cached_hour == hour) &&
+        (s_si_auto_cached_minute == minute)) {
+        return;
+    }
+
+    s_si_auto_cached_interval = interval;
+    s_si_auto_cached_enable = enable;
+    s_si_auto_cached_hour = hour;
+    s_si_auto_cached_minute = minute;
+    s_si_auto_config_valid = true;
+    s_si_auto_schedule_anchor_valid = false;
+    s_si_auto_anchor_from_next_start = had_config;
+    s_si_auto_last_trigger_minute = 0xFFFFFFFFUL;
+    s_si_auto_last_attempt_valid = false;
+
+    if ((enable != 0U) && (!had_config || !was_enabled)) {
+        /* 启动或重新启用时先取得CPU2运行态，避免在同一计划分钟重复覆盖活动SI周期。 */
+        s_si_auto_boot_guard_pending = true;
+    }
+}
+
 void si_modbus_periodic_task(void)
 {
     Cpu3DateTime now;
     uint32_t interval;
     uint32_t now_minute;
-    uint32_t base_minute;
+    uint32_t day_start_minute;
+    uint32_t configured_start_minute;
     uint32_t elapsed;
     uint32_t now_tick;
+    uint8_t check_boot_guard = 0U;
+
+    /* 候选点阵的多帧拉取只允许在周期任务中执行，避免阻塞外部Modbus响应。 */
+    si_update_profile_projection(1U);
+    si_auto_profile_refresh_schedule_config();
 
     if (g_cpu3_comm_display_params.si_auto_profile_enable == 0U) {
+        s_si_auto_schedule_anchor_valid = false;
         return;
     }
 
     interval = g_cpu3_comm_display_params.si_auto_profile_interval;
     if (interval == 0U) {
+        s_si_auto_schedule_anchor_valid = false;
+        return;
+    }
+
+    /*
+     * 自动调度在CPU3重启后先等到CPU2生命周期快照恢复；若首个可判定分钟
+     * 正好是计划分钟，后续会用当前SI阶段阻止同一分钟重复启动同一轮Profile。
+     */
+    if (s_si_auto_boot_guard_pending && !CPU2_CommHasRuntimeSnapshot()) {
         return;
     }
 
     if (Cpu3Clock_GetDateTime(&now) == 0U) {
         return;
     }
-
-    now_minute = si_datetime_to_schedule_minute(&now);
-    base_minute = now_minute - (((uint32_t)now.hour * 60U) + (uint32_t)now.minute);
-    base_minute += ((uint32_t)g_cpu3_comm_display_params.si_auto_profile_hour * 60U) +
-                   (uint32_t)g_cpu3_comm_display_params.si_auto_profile_minute;
-    if (now_minute < base_minute) {
-        base_minute -= 1440U;
+    if (s_si_auto_boot_guard_pending) {
+        s_si_auto_boot_guard_pending = false;
+        check_boot_guard = 1U;
     }
 
-    elapsed = now_minute - base_minute;
+    now_minute = si_datetime_to_schedule_minute(&now);
+    if (!s_si_auto_schedule_anchor_valid) {
+        day_start_minute = now_minute -
+                           (((uint32_t)now.hour * 60U) + (uint32_t)now.minute);
+        configured_start_minute = day_start_minute +
+                                  ((uint32_t)g_cpu3_comm_display_params.si_auto_profile_hour * 60U) +
+                                  (uint32_t)g_cpu3_comm_display_params.si_auto_profile_minute;
+        if (s_si_auto_anchor_from_next_start &&
+            (now_minute > configured_start_minute)) {
+            configured_start_minute += 1440U;
+        }
+        s_si_auto_schedule_anchor_minute = configured_start_minute;
+        s_si_auto_schedule_anchor_valid = true;
+        s_si_auto_anchor_from_next_start = false;
+    }
+    if (now_minute < s_si_auto_schedule_anchor_minute) {
+        return;
+    }
+
+    /* 锚点建立后不再按日期重算，因此61/1000min等非整日周期可连续跨午夜。 */
+    elapsed = now_minute - s_si_auto_schedule_anchor_minute;
     if ((elapsed % interval) != 0U) {
         return;
     }
     if (s_si_auto_last_trigger_minute == now_minute) {
         return;
+    }
+    if (check_boot_guard != 0U) {
+        uint32_t phase = g_measurement.si_profile_runtime.phase;
+
+        if ((phase == (uint32_t)SI_PROFILE_PHASE_PREPARING) ||
+            (phase == (uint32_t)SI_PROFILE_PHASE_MEASURING) ||
+            (phase == (uint32_t)SI_PROFILE_PHASE_RETURNING_LEVEL)) {
+            s_si_auto_last_trigger_minute = now_minute;
+            return;
+        }
     }
 
     now_tick = HAL_GetTick();
@@ -883,13 +1448,15 @@ static void si_refresh_input_registers_from_measurement(void)
     Cpu3DateTime now;
     uint16_t i;
     uint16_t point_count = 0U;
+    uint32_t phase = s_profile_projection.last_phase;
 
-    if (si_is_si_profile_result_valid() != 0U) {
-        point_count = si_clamp_u16(g_measurement.density_distribution.measurement_points);
-    }
-
-    if (point_count > MAX_MEASUREMENT_POINTS) {
-        point_count = MAX_MEASUREMENT_POINTS;
+    if (s_profile_projection.final_snapshot_ready != 0U) {
+        point_count = s_profile_projection.final_points;
+    } else if ((s_profile_projection.cycle_established != 0U) &&
+               ((phase == (uint32_t)SI_PROFILE_PHASE_MEASURING) ||
+                (phase == (uint32_t)SI_PROFILE_PHASE_RETURNING_LEVEL) ||
+                (phase == (uint32_t)SI_PROFILE_PHASE_COMPLETE))) {
+        point_count = s_profile_projection.progress_points;
     }
 
     memset(s_input_regs, 0, sizeof(s_input_regs));
@@ -905,7 +1472,6 @@ static void si_refresh_input_registers_from_measurement(void)
         si_u01mm_to_mm_u16(g_measurement.oil_measurement.oil_level);
     s_input_regs[SI_IR_NUMBER_OF_POINTS] = point_count;
 
-    si_refresh_profile_timestamp();
     if (s_profile_timestamp_valid != 0U) {
         s_input_regs[SI_IR_PROFILE_TIMESTAMP_MONTH] = s_profile_timestamp.month;
         s_input_regs[SI_IR_PROFILE_TIMESTAMP_DAY] = s_profile_timestamp.day;
@@ -920,18 +1486,26 @@ static void si_refresh_input_registers_from_measurement(void)
         s_input_regs[SI_IR_CURRENT_TIME_SECOND] = now.second;
     }
 
-    /* 只有完成锁存后的 profile 数据才对 PLC 开放，范围外保持 0，避免读到旧点阵残留。 */
-    for (i = 0U; i < point_count; ++i) {
-        uint16_t base = (uint16_t)(SI_IR_PROFILE_POINT0_POSITION + (3U * i));
-        const volatile DensityMeasurement *p = &g_measurement.density_distribution.single_density_data[i];
+    s_input_regs[SI_IR_COIL_MIRROR] =
+        si_pack_bits_u16(s_coils, 0U);
+    s_input_regs[SI_IR_DISCRETE_MIRROR_LOW] =
+        si_pack_bits_u16(s_discrete_inputs, 0U);
+    s_input_regs[SI_IR_DISCRETE_MIRROR_HIGH] =
+        si_pack_bits_u16(s_discrete_inputs, 16U);
 
-        if ((uint32_t)base + 2U >= SI_INPUT_REG_COUNT) {
+    /* 候选校验和最终门禁完成前不开放点阵，30017～30020依靠整区清零保持0。 */
+    for (i = 0U; i < s_profile_projection.final_points; ++i) {
+        uint16_t base = (uint16_t)(SI_IR_PROFILE_POINT0_POSITION + (3U * i));
+        uint16_t source = (uint16_t)(3U * i);
+
+        if ((s_profile_projection.final_snapshot_ready == 0U) ||
+            ((uint32_t)base + 2U >= SI_INPUT_REG_COUNT)) {
             break;
         }
 
-        s_input_regs[base] = si_u01mm_to_mm_u16(p->temperature_position);
-        s_input_regs[base + 1U] = si_temp_raw_to_si_s16(p->temperature);
-        s_input_regs[base + 2U] = si_density_raw_to_si_u16(p->density);
+        s_input_regs[base] = s_profile_projection.point_regs[source];
+        s_input_regs[base + 1U] = s_profile_projection.point_regs[source + 1U];
+        s_input_regs[base + 2U] = s_profile_projection.point_regs[source + 2U];
     }
 }
 
@@ -1021,6 +1595,15 @@ static bool si_apply_holding_write(uint16_t offset, uint16_t value)
         return si_write_device_param_u32(HOLDREGISTER_DEVICEPARAM_SI_PROFILE_DWELL_TIME,
                                          &g_deviceParams.si_profile_dwell_time,
                                          value);
+    case SI_HR_COMPAT_RAW_40004:
+    case SI_HR_COMPAT_RAW_40005:
+    case SI_HR_COMPAT_RAW_40006:
+    case SI_HR_COMPAT_RAW_40007:
+    case SI_HR_COMPAT_RAW_40008:
+    case SI_HR_COMPAT_RAW_40009:
+        return Cpu3Local_WriteSiCompatHoldingChecked(
+            (uint8_t)(offset - SI_HR_COMPAT_RAW_40004),
+            value);
     case SI_HR_AUTO_PROFILE_INTERVAL:
     case SI_HR_AUTO_PROFILE_ENABLE:
     case SI_HR_AUTO_PROFILE_HOUR:
@@ -1035,19 +1618,20 @@ static bool si_apply_holding_write(uint16_t offset, uint16_t value)
     case SI_HR_DENSITY_DEVIATION_SETPOINT:
     {
         OperatingNumber opera = si_holding_offset_to_cpu3_param(offset);
-        if (opera != COM_NUM_NOOPERA) {
-            Cpu3Local_WriteValue(opera, value);
+        if (opera == COM_NUM_NOOPERA) {
+            return false;
         }
-        break;
+        return Cpu3Local_WriteValueChecked(opera, value);
     }
     case SI_HR_LOW_TEMPERATURE_SETPOINT:
     case SI_HR_HIGH_TEMPERATURE_SETPOINT:
     {
         OperatingNumber opera = si_holding_offset_to_cpu3_param(offset);
-        if (opera != COM_NUM_NOOPERA) {
-            Cpu3Local_WriteValue(opera, (int32_t)si_holding_to_s16(value));
+        if (opera == COM_NUM_NOOPERA) {
+            return false;
         }
-        break;
+        return Cpu3Local_WriteValueChecked(opera,
+                                           (int32_t)si_holding_to_s16(value));
     }
     default:
         break;
@@ -1139,6 +1723,15 @@ static uint8_t si_handle_read_regs(uint8_t func,
     }
     if ((uint32_t)start + qty > reg_count) {
         return si_build_exception(func, SI_EX_ILLEGAL_ADDRESS, tx, tx_len);
+    }
+    if ((func == SI_FUNC_READ_HOLDING_REGS) &&
+        (start <= SI_HR_PROFILE_DWELL_TIME) &&
+        !CPU2_CommIsAvailable()) {
+        /*
+         * 40001～40003来自CPU2参数快照。只要请求与该段相交，快照补读完成前
+         * 就返回设备忙；40004～40023仍是CPU3本机参数，可在CPU2离线时读取。
+         */
+        return si_build_exception(func, SI_EX_SLAVE_DEVICE_BUSY, tx, tx_len);
     }
 
     /* 寄存器响应逐项转为大端，保持 Modbus RTU 标准字节序。 */
@@ -1265,7 +1858,8 @@ static uint8_t si_handle_write_single_reg(const uint8_t *pdu,
  */
 void si_modbus_sync_from_system(void)
 {
-    /* 每次处理请求前统一刷新快照，保证读请求和写后回读看到同一套状态口径。 */
+    /* 请求路径只更新轻量投影，不在外部响应期间执行CPU2多帧候选拉取。 */
+    si_update_profile_projection(0U);
     si_refresh_coils_from_state();
     si_refresh_holding_registers_from_config();
     si_refresh_discrete_inputs_from_state();

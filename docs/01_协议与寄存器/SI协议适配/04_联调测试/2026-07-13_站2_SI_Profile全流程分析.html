@@ -1,0 +1,897 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>站2 SI Profile 原始打印复盘</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #162238;
+      --muted: #62708a;
+      --line: #dce4ef;
+      --paper: #ffffff;
+      --bg: #f4f7fb;
+      --navy: #15335f;
+      --blue: #1769aa;
+      --cyan: #0c8f9e;
+      --green: #1f7a58;
+      --amber: #b26400;
+      --red: #b23a48;
+      --soft-blue: #edf5ff;
+      --soft-green: #edf8f3;
+      --soft-amber: #fff6e7;
+      --soft-red: #fff0f1;
+      --shadow: 0 18px 50px rgba(28, 52, 84, .09);
+    }
+
+    * { box-sizing: border-box; }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      margin: 0;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at 8% 0%, rgba(23, 105, 170, .11), transparent 28rem),
+        radial-gradient(circle at 96% 14%, rgba(12, 143, 158, .08), transparent 24rem),
+        var(--bg);
+      font-family: "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
+      line-height: 1.68;
+    }
+
+    a { color: inherit; }
+
+    code, pre {
+      font-family: Consolas, "SFMono-Regular", monospace;
+    }
+
+    code {
+      padding: .12rem .35rem;
+      border-radius: .32rem;
+      color: #0f4f7f;
+      background: #edf4fb;
+    }
+
+    .hero {
+      color: #fff;
+      background:
+        linear-gradient(125deg, rgba(9, 32, 63, .96), rgba(21, 64, 105, .94)),
+        repeating-linear-gradient(90deg, transparent 0 42px, rgba(255,255,255,.03) 43px 44px);
+      border-bottom: 4px solid #36b6c8;
+    }
+
+    .hero-inner,
+    .page {
+      width: min(1180px, calc(100% - 34px));
+      margin: 0 auto;
+    }
+
+    .hero-inner {
+      padding: 54px 0 42px;
+    }
+
+    .eyebrow {
+      margin: 0 0 10px;
+      color: #7de2ea;
+      font-size: .82rem;
+      font-weight: 800;
+      letter-spacing: .16em;
+      text-transform: uppercase;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(2rem, 5vw, 3.7rem);
+      line-height: 1.1;
+      letter-spacing: -.035em;
+    }
+
+    .subtitle {
+      max-width: 880px;
+      margin: 18px 0 0;
+      color: #dbe8f6;
+      font-size: 1.04rem;
+    }
+
+    .hero-tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 9px;
+      margin-top: 24px;
+    }
+
+    .hero-tag {
+      padding: 6px 11px;
+      border: 1px solid rgba(255,255,255,.22);
+      border-radius: 999px;
+      background: rgba(255,255,255,.08);
+      font-size: .82rem;
+    }
+
+    .page {
+      padding: 24px 0 64px;
+    }
+
+    nav {
+      position: sticky;
+      top: 0;
+      z-index: 5;
+      display: flex;
+      gap: 8px;
+      margin-bottom: 20px;
+      padding: 12px;
+      overflow-x: auto;
+      border: 1px solid rgba(220, 228, 239, .9);
+      border-radius: 15px;
+      background: rgba(255,255,255,.93);
+      box-shadow: 0 8px 26px rgba(28,52,84,.08);
+      backdrop-filter: blur(10px);
+    }
+
+    nav a {
+      flex: 0 0 auto;
+      padding: 7px 11px;
+      border-radius: 9px;
+      color: #41506a;
+      text-decoration: none;
+      font-size: .84rem;
+      font-weight: 700;
+    }
+
+    nav a:hover {
+      color: #fff;
+      background: var(--blue);
+    }
+
+    section {
+      margin: 18px 0;
+      padding: clamp(22px, 4vw, 38px);
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      background: var(--paper);
+      box-shadow: var(--shadow);
+      scroll-margin-top: 82px;
+    }
+
+    h2 {
+      margin: 0 0 18px;
+      color: var(--navy);
+      font-size: clamp(1.35rem, 3vw, 1.85rem);
+      line-height: 1.25;
+    }
+
+    h3 {
+      margin: 28px 0 10px;
+      color: #28476e;
+      font-size: 1.08rem;
+    }
+
+    p { margin: 10px 0; }
+
+    .lead {
+      color: #34435d;
+      font-size: 1.04rem;
+    }
+
+    .metrics {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+      margin: 20px 0;
+    }
+
+    .metric {
+      padding: 16px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: linear-gradient(145deg, #fff, #f7f9fc);
+    }
+
+    .metric span,
+    .metric small {
+      display: block;
+      color: var(--muted);
+    }
+
+    .metric strong {
+      display: block;
+      margin: 4px 0;
+      color: var(--navy);
+      font-size: 1.55rem;
+      line-height: 1.2;
+    }
+
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+      margin: 16px 0;
+    }
+
+    .card {
+      padding: 17px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: #fbfcfe;
+    }
+
+    .card h3 { margin: 0 0 8px; }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 3px 8px;
+      border-radius: 999px;
+      font-size: .76rem;
+      font-weight: 800;
+      white-space: nowrap;
+    }
+
+    .direct { color: var(--green); background: var(--soft-green); }
+    .cross { color: var(--blue); background: var(--soft-blue); }
+    .infer { color: var(--amber); background: var(--soft-amber); }
+    .risk { color: var(--red); background: var(--soft-red); }
+
+    .callout {
+      margin: 16px 0;
+      padding: 14px 16px;
+      border-left: 4px solid var(--blue);
+      border-radius: 10px;
+      background: var(--soft-blue);
+    }
+
+    .callout.ok {
+      border-left-color: var(--green);
+      background: var(--soft-green);
+    }
+
+    .callout.warn {
+      border-left-color: var(--amber);
+      background: var(--soft-amber);
+    }
+
+    .callout.risk {
+      border-left-color: var(--red);
+      background: var(--soft-red);
+    }
+
+    .table-wrap {
+      width: 100%;
+      margin: 14px 0;
+      overflow-x: auto;
+      border: 1px solid var(--line);
+      border-radius: 13px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: #fff;
+      font-size: .9rem;
+    }
+
+    th, td {
+      padding: 10px 11px;
+      border-bottom: 1px solid var(--line);
+      text-align: left;
+      vertical-align: top;
+      white-space: nowrap;
+    }
+
+    th {
+      color: #344969;
+      background: #f0f4f9;
+      font-weight: 800;
+    }
+
+    tr:last-child td { border-bottom: 0; }
+
+    tbody tr:hover { background: #f8fbff; }
+
+    .alert-row {
+      color: #842936;
+      background: #fff0f1;
+      font-weight: 800;
+    }
+
+    .wrap { white-space: normal; min-width: 230px; }
+
+    pre {
+      margin: 14px 0;
+      padding: 16px;
+      overflow-x: auto;
+      border-radius: 13px;
+      color: #eaf5ff;
+      background: #11233c;
+      font-size: .84rem;
+      line-height: 1.65;
+    }
+
+    .chain {
+      display: grid;
+      grid-template-columns: 1fr auto 1fr auto 1fr;
+      align-items: center;
+      gap: 10px;
+      margin: 14px 0;
+    }
+
+    .node {
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: #f8fafc;
+      text-align: center;
+      font-weight: 750;
+    }
+
+    .arrow {
+      color: var(--cyan);
+      font-size: 1.35rem;
+      font-weight: 900;
+    }
+
+    .timeline {
+      margin: 14px 0 10px;
+      padding-left: 19px;
+      border-left: 3px solid #c9d8e8;
+    }
+
+    .event {
+      position: relative;
+      display: grid;
+      grid-template-columns: 112px 1fr;
+      gap: 14px;
+      padding: 0 0 18px 15px;
+    }
+
+    .event::before {
+      position: absolute;
+      top: .44rem;
+      left: -26px;
+      width: 11px;
+      height: 11px;
+      border: 3px solid #fff;
+      border-radius: 50%;
+      background: var(--blue);
+      box-shadow: 0 0 0 2px var(--blue);
+      content: "";
+    }
+
+    .event time {
+      color: var(--blue);
+      font-family: Consolas, monospace;
+      font-weight: 800;
+    }
+
+    .event b { color: #263e61; }
+
+    .event p {
+      margin: 3px 0 0;
+      color: var(--muted);
+    }
+
+    .state-flow {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 8px;
+      margin: 16px 0;
+    }
+
+    .state {
+      position: relative;
+      min-height: 118px;
+      padding: 13px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: #fbfcfe;
+    }
+
+    .state:not(:last-child)::after {
+      position: absolute;
+      top: 45%;
+      right: -10px;
+      z-index: 2;
+      color: var(--cyan);
+      content: "→";
+      font-weight: 900;
+    }
+
+    .state strong,
+    .state span {
+      display: block;
+    }
+
+    .state span {
+      margin-top: 5px;
+      color: var(--muted);
+      font-size: .83rem;
+    }
+
+    details {
+      margin: 12px 0;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: #fbfcfe;
+    }
+
+    summary {
+      padding: 12px 14px;
+      cursor: pointer;
+      color: #28476e;
+      font-weight: 800;
+    }
+
+    details > div { padding: 0 14px 14px; }
+
+    ul, ol { padding-left: 1.35rem; }
+    li + li { margin-top: 7px; }
+
+    .foot {
+      margin-top: 20px;
+      color: var(--muted);
+      text-align: center;
+      font-size: .82rem;
+    }
+
+    @media (max-width: 900px) {
+      .metrics { grid-template-columns: repeat(2, 1fr); }
+      .cards { grid-template-columns: 1fr; }
+      .state-flow { grid-template-columns: 1fr; }
+      .state:not(:last-child)::after { display: none; }
+      .chain { grid-template-columns: 1fr; }
+      .arrow { transform: rotate(90deg); text-align: center; }
+    }
+
+    @media (max-width: 560px) {
+      .hero-inner, .page { width: min(100% - 20px, 1180px); }
+      .hero-inner { padding: 38px 0 30px; }
+      section { padding: 20px 16px; border-radius: 16px; }
+      .metrics { grid-template-columns: 1fr; }
+      .event { grid-template-columns: 1fr; gap: 2px; }
+    }
+
+    @media print {
+      body { background: #fff; }
+      nav { display: none; }
+      section { box-shadow: none; break-inside: avoid; }
+      .hero { background: #15335f !important; print-color-adjust: exact; }
+      .table-wrap { overflow: visible; }
+      th, td { white-space: normal; }
+    }
+  </style>
+</head>
+<body>
+  <header class="hero">
+    <div class="hero-inner">
+      <p class="eyebrow">RAW PRINT RECONSTRUCTION · STATION 2</p>
+      <h1>站2 SI Profile 原始打印复盘</h1>
+      <p class="subtitle">本页从 2026-07-13 六个串口打印文件、现场截图和单帧粘贴内容重新整理。旧版章节、兼容性编号和既有推断不作为输入；只保留能够由 Modbus 帧、CRC、时间戳和两轮点阵相互验证的结论。</p>
+      <div class="hero-tags">
+        <span class="hero-tag">站号 02</span>
+        <span class="hero-tag">Modbus RTU · 9600 8O1</span>
+        <span class="hero-tag">两条独立累计记录</span>
+        <span class="hero-tag">两轮完整 Profile</span>
+        <span class="hero-tag">更新日期 2026-07-14</span>
+      </div>
+    </div>
+  </header>
+
+  <main class="page">
+    <nav aria-label="文档目录">
+      <a href="#scope">01 输入与方法</a>
+      <a href="#frame">02 单帧重组</a>
+      <a href="#round1">03 第一轮</a>
+      <a href="#round2">04 第二轮</a>
+      <a href="#repeat">05 两轮复现</a>
+      <a href="#mirror">06 私有镜像</a>
+      <a href="#params">07 保持参数</a>
+      <a href="#points">08 点阵对比</a>
+      <a href="#completion">09 完成判断</a>
+      <a href="#boundary">10 结论边界</a>
+    </nav>
+
+    <section id="scope">
+      <h2>01｜先去重：六个文件只是两条累计记录</h2>
+      <p class="lead">六个 TXT 不是六次独立抓包。按文件原始字节逐一比较，上午三个文件形成严格前缀链，下午三个文件形成另一条严格前缀链。因此统计时只解析两条最长文件，其余四个文件只用于确认“保存到哪个阶段”。</p>
+
+      <div class="chain" aria-label="上午文件累计关系">
+        <div class="node">11-13-50<br><small>122,852 bytes</small></div>
+        <div class="arrow">→</div>
+        <div class="node">11-18-54<br><small>264,300 bytes</small></div>
+        <div class="arrow">→</div>
+        <div class="node">12-21-21<br><small>1,949,951 bytes</small></div>
+      </div>
+      <div class="chain" aria-label="下午文件累计关系">
+        <div class="node">15-43-41<br><small>83,135 bytes</small></div>
+        <div class="arrow">→</div>
+        <div class="node">15-46-44<br><small>166,401 bytes</small></div>
+        <div class="arrow">→</div>
+        <div class="node">16-36-16<br><small>1,532,506 bytes</small></div>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>保存文件</th><th>覆盖时间</th><th>站2内容</th><th>在本报告中的角色</th></tr></thead>
+          <tbody>
+            <tr><td><code>11-13-50</code></td><td>11:09:48.380～11:13:50.326</td><td>175 组常规 FC04</td><td class="wrap">上午基线；开头存在不可解析字节，稳定段用于确认正常轮询格式。</td></tr>
+            <tr><td><code>11-18-54</code></td><td>累计至 11:18:54.385</td><td>新增 11:17:21.419 Profile ON 和初始下行</td><td class="wrap">现场截图所示启动阶段。</td></tr>
+            <tr><td><code>12-21-21</code></td><td>累计至 12:20:53.196</td><td>3503 组常规 FC04、1 次命令、5 块点阵</td><td class="wrap"><strong>上午唯一统计源：</strong>第一轮完整 Profile。</td></tr>
+            <tr><td><code>15-43-41</code></td><td>15:40:41.491～15:43:41.370</td><td>FC03 参数读取、149 组常规 FC04</td><td class="wrap">下午参数查询阶段。</td></tr>
+            <tr><td><code>15-46-44</code></td><td>累计至 15:46:44.806</td><td>新增空闲态 FC01/FC02 直接读取</td><td class="wrap">确认空闲态状态镜像。</td></tr>
+            <tr><td><code>16-36-16</code></td><td>累计至 16:36:16.651</td><td>2762 组常规 FC04、动态 FC01/FC02/FC03、1 次命令、5 块点阵</td><td class="wrap"><strong>下午唯一统计源：</strong>第二轮完整 Profile 与动态镜像验证。</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="metrics">
+        <div class="metric"><span>去重后独立字节流</span><strong>2</strong><small>上午 + 下午</small></div>
+        <div class="metric"><span>站2常规 FC04</span><strong>6265</strong><small>3503 + 2762</small></div>
+        <div class="metric"><span>完整 Profile</span><strong>2</strong><small>均得到 30 点</small></div>
+        <div class="metric"><span>Modbus 异常响应</span><strong>0</strong><small>已恢复的站2合法帧中</small></div>
+      </div>
+
+      <h3>重组方法</h3>
+      <ol>
+        <li>只提取每行时间戳之后的十六进制字节；发送/接收中文标记不参与帧边界判断。</li>
+        <li>按时间顺序拼接被串口工具拆行的片段，再用 CRC16/MODBUS 验证请求和响应。</li>
+        <li>常规轮询只认站2 <code>02 04 00 00 00 14 F0 36</code> 与 40 字节数据响应。</li>
+        <li>点阵读取按请求起始地址与数量配对；五块各读 120 个寄存器，覆盖 <code>30021～30620</code>。</li>
+        <li>FC01/FC02/FC03 专项查询与原轮询主站发生过穿插，只把结构和 CRC 均成立的响应作为证据。</li>
+      </ol>
+
+      <div class="cards">
+        <div class="card"><h3><span class="badge direct">直接证据</span></h3><p>完整请求/响应、CRC 正确，字段可从原始字节直接解码。</p></div>
+        <div class="card"><h3><span class="badge cross">交叉验证</span></h3><p>两个功能码、两轮过程或点阵与阈值给出一致结果。</p></div>
+        <div class="card"><h3><span class="badge infer">时序推断</span></h3><p>只能由上位机行为反推，无法证明其程序内部唯一判断条件。</p></div>
+      </div>
+    </section>
+
+    <section id="frame">
+      <h2>02｜粘贴帧不是“空数据”，而是一组被拆行的完整 FC04</h2>
+      <p>你粘贴的 <code>15:43:40.168</code> 数据前面还有一行 <code>15:43:40.141</code> 的三个字节。两行必须连续拼接：</p>
+      <pre>[15:43:40.141] 02 04 00
+[15:43:40.168] 00 00 14 F0 36
+                 02 04 28 6F 5E C2 06 AD 24 6F 5E
+                 00 01 00 1E 00 07 00 0D 00 05 00 3B
+                 00 0A 00 0B 00 0B 01 04 10 32 00 00
+                 00 00 00 00 00 00 00 00 26 D3
+
+重组请求：02 04 00 00 00 14 F0 36
+重组响应：02 04 28 [40 bytes data] 26 D3</pre>
+
+      <div class="callout ok"><strong>直接结论：</strong>请求是站2读取起始偏移 0、数量 20，即 <code>30001～30020</code>；响应字节数 <code>0x28=40</code>，请求和响应 CRC 都成立。串口工具换行不代表 Modbus 分帧，也不代表前几个寄存器为空。</div>
+
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>寄存器</th><th>原始值</th><th>解码</th><th>本帧含义</th></tr></thead>
+          <tbody>
+            <tr><td>30001</td><td><code>0x6F5E</code></td><td>28510 mm</td><td>当前探头位置</td></tr>
+            <tr><td>30002</td><td><code>0xC206</code></td><td>-158.66°C</td><td>有符号 0.01°C</td></tr>
+            <tr><td>30003</td><td><code>0xAD24</code></td><td>443.24 kg/m³</td><td>无符号 0.01 kg/m³</td></tr>
+            <tr><td>30004</td><td><code>0x6F5E</code></td><td>28510 mm</td><td>液位，与当前位置相同</td></tr>
+            <tr><td>30005</td><td><code>0x0001</code></td><td>1</td><td><span class="badge infer">语义未证实</span> 两条记录中稳定为 1</td></tr>
+            <tr><td>30006</td><td><code>0x001E</code></td><td>30</td><td>上一轮/最近一轮 Profile 点数</td></tr>
+            <tr><td>30007～30010</td><td><code>7, 13, 5, 59</code></td><td>07-13 05:59</td><td>最近 Profile 时间戳</td></tr>
+            <tr><td>30011～30013</td><td><code>10, 11, 11</code></td><td>10:11:11</td><td>仪器当前时间</td></tr>
+            <tr><td>30014</td><td><code>0x0104</code></td><td>Auto + Stop</td><td>FC01 的 16 位打包镜像</td></tr>
+            <tr><td>30015</td><td><code>0x1032</code></td><td>Complete + AtLevel 等</td><td>FC02 的 10001～10016 镜像</td></tr>
+            <tr><td>30016</td><td><code>0x0000</code></td><td>无后半报警位</td><td>FC02 的 10017～10032 镜像</td></tr>
+            <tr><td>30017～30020</td><td><code>0, 0, 0, 0</code></td><td>全 0</td><td>本帧无业务数据；全样本结论见第 06 节</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="round1">
+      <h2>03｜第一轮 Profile：上午完整过程</h2>
+      <div class="metrics">
+        <div class="metric"><span>命令到最终发布</span><strong>46:39.192</strong><small>2799.192 s</small></div>
+        <div class="metric"><span>命令到底部</span><strong>14:28.045</strong><small>底部 345 mm</small></div>
+        <div class="metric"><span>底部到 Point0</span><strong>19.228 s</strong><small>接近 20 s 停留</small></div>
+        <div class="metric"><span>稳定液位到最终发布</span><strong>19.224 s</strong><small>不是 44.469 s 的首次过液面</small></div>
+      </div>
+
+      <div class="timeline">
+        <div class="event"><time>11:17:21.419</time><div><b>Profile ON 请求并回显</b><p><code>02 05 00 03 FF 00 7C 09</code> 连续出现两次，写线圈 00004 ON 成功。</p></div></div>
+        <div class="event"><time>11:17:21.829</time><div><b>进入 Profile 下行</b><p>位置 28482 mm；仍保留旧点数 30、旧时间 07-13 01:31、旧报警 <code>30016=0x0200</code>。</p></div></div>
+        <div class="event"><time>11:31:49.464</time><div><b>首次到达底部</b><p>位置 345 mm；<code>30014=0x0108</code> 表示 Profile + Stop，进入底部停留。</p></div></div>
+        <div class="event"><time>11:32:08.692</time><div><b>Point0 发布</b><p>点数从旧 30 变为 1，Profile 时间戳从 01:31 更新为 05:59，Complete 位清零。</p></div></div>
+        <div class="event"><time>11:34～12:02</time><div><b>逐点上行</b><p>点数逐步增加至 28；每个整米位置经历 Stop 与上行切换。</p></div></div>
+        <div class="event"><time>12:03:41.387</time><div><b>回到液位并稳定停止</b><p>位置和液位都为 28489 mm；点数仍为 28，仍处于 Profile。</p></div></div>
+        <div class="event"><time>12:04:00.611</time><div><b>最终结果同帧发布</b><p>点数 30；<code>30014=0x0104</code>、<code>30015=0x1032</code>、<code>30016=0</code>。</p></div></div>
+        <div class="event"><time>12:04:01.814</time><div><b>开始读取点阵</b><p>最终发布后 1.203 s，主站发起第一块 120 寄存器读取。</p></div></div>
+      </div>
+
+      <div class="callout warn"><strong>重新划定“仪器处理”起点：</strong>探头在 12:03:16.142 第一次经过旧液位，但之后还有上冲、回调和液位刷新。真正稳定 Stop 且位置等于最新液位是在 12:03:41.387，因此本轮稳定停留到最终发布是 19.224 s。</div>
+    </section>
+
+    <section id="round2">
+      <h2>04｜第二轮 Profile：下午完整过程</h2>
+      <div class="metrics">
+        <div class="metric"><span>命令到最终发布</span><strong>46:45.597</strong><small>2805.597 s</small></div>
+        <div class="metric"><span>命令到底部</span><strong>14:28.429</strong><small>底部仍为 345 mm</small></div>
+        <div class="metric"><span>底部到 Point0</span><strong>19.235 s</strong><small>再次接近 20 s</small></div>
+        <div class="metric"><span>稳定液位到最终发布</span><strong>20.439 s</strong><small>最终置密差报警</small></div>
+      </div>
+
+      <div class="timeline">
+        <div class="event"><time>15:49:03.814</time><div><b>Profile ON 请求并回显</b><p>与第一轮完全相同的 FC05 帧。</p></div></div>
+        <div class="event"><time>15:49:04.615</time><div><b>进入 Profile 下行</b><p>位置 28487 mm；旧点数 30、旧 Profile 时间 05:59，本轮开始时 <code>30016=0</code>。</p></div></div>
+        <div class="event"><time>16:03:32.243</time><div><b>到达底部</b><p>位置 345 mm，Profile + Stop。</p></div></div>
+        <div class="event"><time>16:03:51.478</time><div><b>Point0 发布</b><p>点数 1，Profile 时间更新为 07-13 10:31，Complete 清零。</p></div></div>
+        <div class="event"><time>16:05～16:34</time><div><b>逐点上行</b><p>点数递增到 28，整米点节奏与第一轮基本一致。</p></div></div>
+        <div class="event"><time>16:35:28.972</time><div><b>回到液位并稳定停止</b><p>位置和液位均为 28514 mm，点数仍为 28，<code>30016=0</code>。</p></div></div>
+        <div class="event"><time>16:35:49.411</time><div><b>最终结果同帧发布</b><p>点数 30；Auto + Stop；Complete + AtLevel；<code>30016=0x0200</code>。</p></div></div>
+        <div class="event"><time>16:35:53.006</time><div><b>开始读取点阵</b><p>最终发布后 3.595 s，读取五块完整窗口。</p></div></div>
+      </div>
+
+      <div class="callout ok"><strong>直接复现：</strong>两轮到底部的时间只差 0.384 s，底部停留只差 0.007 s，底部位置都为 345 mm。稳定回到液位后才发布最后两点、完成状态与最终报警，这一顺序在两轮中一致。</div>
+    </section>
+
+    <section id="repeat">
+      <h2>05｜两轮对照：20 秒是停留/采样发布窗口，不是纯计算时间</h2>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>阶段</th><th>第一轮</th><th>第二轮</th><th>差值</th><th>证据判断</th></tr></thead>
+          <tbody>
+            <tr><td>Profile ON → 底部 345 mm</td><td>868.045 s</td><td>868.429 s</td><td>+0.384 s</td><td><span class="badge direct">高度复现</span></td></tr>
+            <tr><td>底部 Stop → Point0 发布</td><td>19.228 s</td><td>19.235 s</td><td>+0.007 s</td><td><span class="badge direct">高度复现</span></td></tr>
+            <tr><td>稳定液位 Stop → 最终发布</td><td>19.224 s</td><td>20.439 s</td><td>+1.215 s</td><td><span class="badge cross">约一个轮询周期</span></td></tr>
+            <tr><td>命令 → 最终发布</td><td>2799.192 s</td><td>2805.597 s</td><td>+6.405 s</td><td><span class="badge cross">流程稳定</span></td></tr>
+            <tr><td>最终发布 → 首块点阵请求</td><td>1.203 s</td><td>3.595 s</td><td>+2.392 s</td><td><span class="badge infer">上位机调度差异</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="callout"><strong>与 FC03 参数交叉验证：</strong><code>40003=20 s</code>。底部 Point0 发布前的 19.23 s、最终结果发布前的 19.22/20.44 s 都与该设定一致，并受约 1.2 s 常规轮询采样边界影响。因此“仪器处理”更准确的描述是<strong>稳定停留、最终点采样、状态/报警计算与结果发布的组合窗口</strong>。</div>
+
+      <h3><code>30006</code> 只适合当进度，不适合当预期完成点数</h3>
+      <ul>
+        <li>命令刚开始时仍保持上一轮 30；Point0 发布后才变成 1。</li>
+        <li>上行过程中大约每完成一个测量节奏增加一次，但数值变化时探头已位于相应整米位置附近，不能把它解释为严格同步的“当前点已写完”事件。</li>
+        <li>两轮最终都是 30，是因为两次液位都约 28.5 m；液位测完之前，上位机不能预先知道本轮最终点数。</li>
+      </ul>
+    </section>
+
+    <section id="mirror">
+      <h2>06｜30014～30016：空闲态和 Profile 动态态均有直接镜像证据</h2>
+      <p class="lead">下午长文件不只包含空闲态专项查询，还包含第二轮下行期间的成功 FC01/FC02 响应。把专项响应与相邻常规 FC04 对照，可以直接确认镜像在动态过程中仍成立。</p>
+
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>状态</th><th>相邻 FC04</th><th>专项响应</th><th>对应关系</th><th>证据</th></tr></thead>
+          <tbody>
+            <tr>
+              <td>空闲 Auto</td>
+              <td>15:45:22.686<br><code>30014=0x0104</code></td>
+              <td>15:45:23.057<br><code>02 01 02 04 01 3E FC</code></td>
+              <td><code>04 01 → 0x0104</code></td>
+              <td><span class="badge direct">直接，重复2次</span></td>
+            </tr>
+            <tr>
+              <td>空闲完成态</td>
+              <td>15:46:08.752<br><code>30015/16=0x1032/0</code></td>
+              <td>15:46:09.782<br><code>02 02 04 32 10 00 00 C7 9F</code></td>
+              <td><code>32 10 / 00 00 → 0x1032 / 0</code></td>
+              <td><span class="badge direct">直接，重复2次</span></td>
+            </tr>
+            <tr>
+              <td>Profile 下行</td>
+              <td>15:54:02.637<br><code>30014=0x4008</code></td>
+              <td>15:54:02.836<br><code>02 01 02 08 40 FB CC</code></td>
+              <td><code>08 40 → 0x4008</code></td>
+              <td><span class="badge direct">动态直接证据</span></td>
+            </tr>
+            <tr>
+              <td>Profile 下行</td>
+              <td>15:58:09.378<br><code>30015/16=0x0036/0</code></td>
+              <td>15:58:09.051<br><code>02 02 04 36 00 00 00 C7 6A</code></td>
+              <td><code>36 00 / 00 00 → 0x0036 / 0</code></td>
+              <td><span class="badge cross">穿插帧，后续干净重复</span></td>
+            </tr>
+            <tr>
+              <td>Profile 下行复核</td>
+              <td>15:58:41.429 / 15:58:42.632<br><code>30015/16=0x0036/0</code></td>
+              <td>15:58:42.390<br><code>02 02 04 36 00 00 00 C7 6A</code></td>
+              <td><code>0x0036 / 0</code> 再次一致</td>
+              <td><span class="badge direct">动态干净重复</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="cards">
+        <div class="card"><h3><code>30014</code></h3><p>FC01 的 <code>00001～00016</code> 位打包。空闲时 <code>0x0104</code>，Profile 快速下行时 <code>0x4008</code>。</p></div>
+        <div class="card"><h3><code>30015</code></h3><p>FC02 的 <code>10001～10016</code> 位打包。空闲完成态 <code>0x1032</code>，下行阶段 <code>0x0036</code>。</p></div>
+        <div class="card"><h3><code>30016</code></h3><p>FC02 的 <code>10017～10032</code> 位打包。第二轮最终值为 <code>0x0200</code>，但完成后没有再专项读取非零 FC02。</p></div>
+      </div>
+
+      <h3>30017～30020 是否为空</h3>
+      <div class="callout ok"><strong>样本结论：</strong>两个去重时段共 6265 组站2合法 <code>FC04 30001～30020</code> 响应，<code>30017～30020</code> 始终都是 0。它们在本批打印中没有可观察的业务作用；这只能证明“这些场景未使用”，不能证明所有固件版本、故障场景或厂家私有功能下永久为 0。</div>
+    </section>
+
+    <section id="params">
+      <h2>07｜FC03：四次成功读取完全一致</h2>
+      <p>下午记录中有 5 次 FC03 请求、4 次合法响应。成功响应分别位于 15:42:31.124、15:43:21.182、15:52:08.265 和 15:52:23.499；前两次在 Profile 前，后两次在第二轮下行期间，23 个寄存器逐字一致。</p>
+
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>地址</th><th>原始值</th><th>按公开定义解码</th><th>打印能够证明的内容</th></tr></thead>
+          <tbody>
+            <tr><td>40001</td><td>1000</td><td>Point1 = 1000 mm</td><td>与点阵 Point1 一致</td></tr>
+            <tr><td>40002</td><td>1000</td><td>Increment = 1000 mm</td><td>Point1～Point28 均为整米</td></tr>
+            <tr><td>40003</td><td>20</td><td>Dwell = 20 s</td><td>与底部和最终发布前停留时间吻合</td></tr>
+            <tr><td>40004～40009</td><td><code>0, 50, 1000, 0, 5, 1</code></td><td><span class="badge infer">厂家私有，名称未知</span></td><td>读值确定；含义、单位、范围和可写性均不能从本抓包推出</td></tr>
+            <tr><td>40010</td><td>1440</td><td>自动间隔 1440 min</td><td>一天</td></tr>
+            <tr><td>40011</td><td>0</td><td>自动 Profile 禁用</td><td>本次命令为手动 FC05</td></tr>
+            <tr><td>40012～40013</td><td><code>14, 0</code></td><td>自动时刻 14:00</td><td>配置存在但自动功能关闭</td></tr>
+            <tr><td>40014～40015</td><td><code>39999, 50000</code></td><td>密度低/高限 399.99 / 500.00 kg/m³</td><td>两轮点阵除 P25 外均处于范围内</td></tr>
+            <tr><td>40016～40017</td><td><code>0xBD98, 0xC568</code></td><td>温度低/高限 -170.00 / -150.00°C</td><td>必须按 int16 解码</td></tr>
+            <tr><td>40018～40021</td><td><code>1620, 33799, 1650, 33650</code></td><td>四级液位报警设定</td><td>单位为 mm</td></tr>
+            <tr><td>40022</td><td>40</td><td>相邻温差阈值 0.40°C</td><td>两轮没有相邻温差越限</td></tr>
+            <tr><td>40023</td><td>80</td><td>相邻密差阈值 0.80 kg/m³</td><td>第二轮 P25 前后均越限</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="points">
+      <h2>08｜两轮 30 点点阵对比</h2>
+      <div class="metrics">
+        <div class="metric"><span>共同 Point0</span><strong>345 mm</strong><small>两轮底部一致</small></div>
+        <div class="metric"><span>第一轮最终点</span><strong>28489 mm</strong><small>443.17 kg/m³</small></div>
+        <div class="metric"><span>第二轮最终点</span><strong>28514 mm</strong><small>443.16 kg/m³</small></div>
+        <div class="metric"><span>第二轮最大异常</span><strong>P25 -1.30</strong><small>相对第一轮 kg/m³</small></div>
+      </div>
+
+      <p>除 P25 外，两轮同点密度差绝对值最大仅 0.04 kg/m³，平均绝对差约 0.014 kg/m³。P25 从第一轮 443.27 降到第二轮 441.97 kg/m³，是唯一明显脱离整体重复性的点。</p>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th rowspan="2">点号</th>
+              <th colspan="3">第一轮</th>
+              <th colspan="3">第二轮</th>
+              <th rowspan="2">密度差<br>第二轮-第一轮</th>
+            </tr>
+            <tr><th>位置 mm</th><th>温度 °C</th><th>密度 kg/m³</th><th>位置 mm</th><th>温度 °C</th><th>密度 kg/m³</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>0</td><td>345</td><td>-158.63</td><td>443.58</td><td>345</td><td>-158.61</td><td>443.58</td><td>+0.00</td></tr>
+            <tr><td>1</td><td>1000</td><td>-158.64</td><td>443.57</td><td>1000</td><td>-158.64</td><td>443.57</td><td>+0.00</td></tr>
+            <tr><td>2</td><td>2000</td><td>-158.62</td><td>443.57</td><td>2000</td><td>-158.60</td><td>443.56</td><td>-0.01</td></tr>
+            <tr><td>3</td><td>3000</td><td>-158.62</td><td>443.57</td><td>3000</td><td>-158.67</td><td>443.55</td><td>-0.02</td></tr>
+            <tr><td>4</td><td>4000</td><td>-158.64</td><td>443.56</td><td>4000</td><td>-158.70</td><td>443.55</td><td>-0.01</td></tr>
+            <tr><td>5</td><td>5000</td><td>-158.62</td><td>443.55</td><td>5000</td><td>-158.65</td><td>443.56</td><td>+0.01</td></tr>
+            <tr><td>6</td><td>6000</td><td>-158.63</td><td>443.55</td><td>6000</td><td>-158.58</td><td>443.55</td><td>+0.00</td></tr>
+            <tr><td>7</td><td>7000</td><td>-158.63</td><td>443.54</td><td>7000</td><td>-158.65</td><td>443.56</td><td>+0.02</td></tr>
+            <tr><td>8</td><td>8000</td><td>-158.61</td><td>443.53</td><td>8000</td><td>-158.59</td><td>443.55</td><td>+0.02</td></tr>
+            <tr><td>9</td><td>9000</td><td>-158.69</td><td>443.53</td><td>9000</td><td>-158.64</td><td>443.54</td><td>+0.01</td></tr>
+            <tr><td>10</td><td>10000</td><td>-158.62</td><td>443.52</td><td>10000</td><td>-158.59</td><td>443.53</td><td>+0.01</td></tr>
+            <tr><td>11</td><td>11000</td><td>-158.64</td><td>443.51</td><td>11000</td><td>-158.66</td><td>443.52</td><td>+0.01</td></tr>
+            <tr><td>12</td><td>12000</td><td>-158.62</td><td>443.50</td><td>12000</td><td>-158.62</td><td>443.50</td><td>+0.00</td></tr>
+            <tr><td>13</td><td>13000</td><td>-158.62</td><td>443.50</td><td>13000</td><td>-158.65</td><td>443.49</td><td>-0.01</td></tr>
+            <tr><td>14</td><td>14000</td><td>-158.60</td><td>443.48</td><td>14000</td><td>-158.65</td><td>443.48</td><td>+0.00</td></tr>
+            <tr><td>15</td><td>15000</td><td>-158.60</td><td>443.48</td><td>15000</td><td>-158.66</td><td>443.48</td><td>+0.00</td></tr>
+            <tr><td>16</td><td>16000</td><td>-158.67</td><td>443.46</td><td>16000</td><td>-158.70</td><td>443.47</td><td>+0.01</td></tr>
+            <tr><td>17</td><td>17000</td><td>-158.58</td><td>443.45</td><td>17000</td><td>-158.64</td><td>443.46</td><td>+0.01</td></tr>
+            <tr><td>18</td><td>18000</td><td>-158.59</td><td>443.43</td><td>18000</td><td>-158.59</td><td>443.45</td><td>+0.02</td></tr>
+            <tr><td>19</td><td>19000</td><td>-158.65</td><td>443.42</td><td>19000</td><td>-158.67</td><td>443.43</td><td>+0.01</td></tr>
+            <tr><td>20</td><td>20000</td><td>-158.66</td><td>443.40</td><td>20000</td><td>-158.67</td><td>443.42</td><td>+0.02</td></tr>
+            <tr><td>21</td><td>21000</td><td>-158.63</td><td>443.39</td><td>21000</td><td>-158.63</td><td>443.41</td><td>+0.02</td></tr>
+            <tr><td>22</td><td>22000</td><td>-158.62</td><td>443.36</td><td>22000</td><td>-158.64</td><td>443.39</td><td>+0.03</td></tr>
+            <tr><td>23</td><td>23000</td><td>-158.67</td><td>443.33</td><td>23000</td><td>-158.64</td><td>443.37</td><td>+0.04</td></tr>
+            <tr><td>24</td><td>24000</td><td>-158.65</td><td>443.30</td><td>24000</td><td>-158.63</td><td>443.34</td><td>+0.04</td></tr>
+            <tr class="alert-row"><td>25</td><td>25000</td><td>-158.67</td><td>443.27</td><td>25000</td><td>-158.64</td><td>441.97</td><td>-1.30</td></tr>
+            <tr><td>26</td><td>26000</td><td>-158.64</td><td>443.23</td><td>26000</td><td>-158.59</td><td>443.26</td><td>+0.03</td></tr>
+            <tr><td>27</td><td>27000</td><td>-158.62</td><td>443.18</td><td>27000</td><td>-158.65</td><td>443.21</td><td>+0.03</td></tr>
+            <tr><td>28</td><td>28000</td><td>-158.67</td><td>443.13</td><td>28000</td><td>-158.64</td><td>443.15</td><td>+0.02</td></tr>
+            <tr><td>29</td><td>28489</td><td>-158.65</td><td>443.17</td><td>28514</td><td>-158.64</td><td>443.16</td><td>-0.01</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="callout risk"><strong>P25 报警闭环：</strong>第二轮 P24→P25 密差为 1.37 kg/m³，P25→P26 为 1.29 kg/m³，都超过 <code>40023=0.80 kg/m³</code>。最终同帧 <code>30016=0x0200</code>，即后半 16 位中的 bit9，按 FC02 位序对应 <code>10026 Profile Density Deviation</code>。这是“位序 + 阈值 + 点阵”的强交叉证据；尚缺完成后再读一次 FC02、直接得到数据字节 <code>00 02</code>。</div>
+
+      <details>
+        <summary>五块点阵读取范围</summary>
+        <div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>块</th><th>请求起始偏移</th><th>寄存器范围</th><th>数量</th><th>内容</th></tr></thead>
+              <tbody>
+                <tr><td>1</td><td><code>0x0014</code></td><td>30021～30140</td><td>120</td><td>Point0～Point39；仅前30点非零</td></tr>
+                <tr><td>2</td><td><code>0x008C</code></td><td>30141～30260</td><td>120</td><td>全 0</td></tr>
+                <tr><td>3</td><td><code>0x0104</code></td><td>30261～30380</td><td>120</td><td>全 0</td></tr>
+                <tr><td>4</td><td><code>0x017C</code></td><td>30381～30500</td><td>120</td><td>全 0</td></tr>
+                <tr><td>5</td><td><code>0x01F4</code></td><td>30501～30620</td><td>120</td><td>全 0</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </details>
+    </section>
+
+    <section id="completion">
+      <h2>09｜上位机如何判断本轮完成</h2>
+      <p class="lead">抓包只能看到总线行为，不能反编译上位机程序。但两轮都出现相同状态序列，且主站在最终状态出现前不读取点阵，最终状态出现后立即切换到五块点阵读取。</p>
+
+      <div class="state-flow">
+        <div class="state"><strong>1. 命令成功</strong><span>FC05 Profile ON 得到相同回显。</span></div>
+        <div class="state"><strong>2. 确认进入本轮</strong><span><code>30014</code> Profile 位为 1；不能直接使用旧 Complete。</span></div>
+        <div class="state"><strong>3. 等待旧完成位清零</strong><span>Point0 发布时 <code>30015</code> Complete 从旧 1 变为 0。</span></div>
+        <div class="state"><strong>4. 等待新完成组合</strong><span>Profile 清零、Auto 置位、Complete 重新置位。</span></div>
+        <div class="state"><strong>5. 读取实际结果</strong><span>先读 <code>30006</code>，再按实际点数处理点阵。</span></div>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>阶段</th><th>30014</th><th>30015</th><th>30006</th><th>上位机可采取的动作</th></tr></thead>
+          <tbody>
+            <tr><td>命令前</td><td><code>0x0104</code><br>Auto + Stop</td><td><code>0x1032</code><br>旧 Complete=1</td><td>30（旧结果）</td><td class="wrap">记录基线，不能把当前 Complete=1 当成本轮完成。</td></tr>
+            <tr><td>下行初期</td><td><code>0x4008</code><br>Profile + Down Fast</td><td><code>0x0032/0x0036</code><br>旧 Complete 仍可能为1</td><td>30（旧结果）</td><td class="wrap">看到 Profile 位后，本轮流程才真正建立。</td></tr>
+            <tr><td>Point0 发布</td><td><code>0x0208</code><br>Profile + Up Slow</td><td><code>0x0023</code><br>Complete=0</td><td>1</td><td class="wrap">完成判断“武装”；时间戳也在此时更新。</td></tr>
+            <tr><td>逐点测量</td><td>主要为 <code>0x0408/0x0108</code></td><td>主要为 <code>0x0026/0x0022</code></td><td>逐步增加</td><td class="wrap">继续轮询，不预设最终点数。</td></tr>
+            <tr><td>最终发布</td><td><code>0x0104</code><br>Auto + Stop</td><td><code>0x1032</code><br>Complete + AtLevel</td><td>30（本轮实际）</td><td class="wrap">两轮主站随后开始读取五块点阵。</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="callout risk"><strong>不能只等待 Complete=1：</strong>命令后到底部 Point0 发布前，Complete 仍保留上一轮的 1；这样会在刚启动时误判完成。也不能等待预期点数，因为最终液位和最终点数是在本轮测量结束时才确定。</div>
+
+      <div class="callout warn"><strong>证据边界：</strong>“Profile 已退出 + Auto 已恢复 + Complete 由 0 重新变 1”是最符合两轮时序的完成门禁，也是安全的实现建议；但抓包不能证明原上位机内部究竟用了全部条件、其中两个条件，还是还叠加了 AtLevel。能够直接证明的是：它在最终组合出现前持续读 30001～30020，组合出现后才读点阵。</div>
+    </section>
+
+    <section id="boundary">
+      <h2>10｜本轮可以确认什么，仍不能确认什么</h2>
+      <div class="cards">
+        <div class="card">
+          <h3><span class="badge direct">已确认</span></h3>
+          <ul>
+            <li>六个文件是两条累计记录的六个保存节点。</li>
+            <li>两轮 Profile 的底部、运动时长、停留节奏和最终 30 点高度复现。</li>
+            <li>Point0 是实际底部 345 mm。</li>
+            <li>Profile 时间戳在 Point0 发布时更新。</li>
+            <li><code>30014/30015/30016</code> 是 FC01/FC02 打包镜像，且动态态直接成立。</li>
+            <li><code>30017～30020</code> 在 6265 个样本中全部为 0。</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3><span class="badge cross">强交叉证据</span></h3>
+          <ul>
+            <li><code>40003=20 s</code> 对应底部与最终发布前的停留/处理窗口。</li>
+            <li>第二轮 P25 相邻密差越过 <code>40023</code>，最终 <code>30016 bit9</code> 置位。</li>
+            <li>主站依赖最终状态组合后才开始读取点阵。</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3><span class="badge infer">仍待确认</span></h3>
+          <ul>
+            <li>原上位机内部完成判断的唯一布尔表达式。</li>
+            <li><code>30005=1</code> 的厂家私有含义。</li>
+            <li><code>30017～30020</code> 在其它故障/功能场景是否使用。</li>
+            <li><code>40004～40009</code> 的名称、单位、范围和写权限。</li>
+            <li>报警非零完成态下 FC02 是否直接返回后半字节 <code>00 02</code>。</li>
+          </ul>
+        </div>
+      </div>
+
+      <h3>下一次只需要补的关键打印</h3>
+      <ol>
+        <li>保证总线上只有一个主站，避免专项请求与原轮询帧穿插。</li>
+        <li>从命令前开始同步轮询 FC01、FC02 与 <code>FC04 30001～30020</code>，直到点阵读取结束。</li>
+        <li>报警非零完成后立刻再读一次 FC02，验证后半四字节是否为 <code>…… 00 02</code>。</li>
+        <li>在 Point0、任一中间点和最终点发布前后抽读点阵，确认点阵开放时间及 <code>30006</code> 与已写点数的精确关系。</li>
+        <li>若要研究 <code>40004～40009</code>，必须先取得厂家定义；不要在生产设备上盲目 FC06 试写。</li>
+      </ol>
+
+      <div class="callout"><strong>文档定位：</strong>本页只复盘真实 SI 站2原始打印，不评价当前 CUBE 代码实现，也不把厂家私有行为提升为官方公开协议。任何兼容实现都应在本证据基础上另行评审。</div>
+    </section>
+
+    <p class="foot">数据日期：2026-07-13 · 重新解析日期：2026-07-14 · 范围：站2 · 权威输入：原始 TXT / 截图 / CRC 正确 Modbus 帧</p>
+  </main>
+</body>
+</html>

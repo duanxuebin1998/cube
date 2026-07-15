@@ -374,8 +374,13 @@ typedef enum
 #define REG_AO_OUTPUT_RUNTIME_LAST_UPDATE_TICK      (REG_AO_OUTPUT_RUNTIME_UPDATE_COUNTER + REG_SIZE_U32) /* 模拟量输出最后状态更新时间输入寄存器偏移。 */
 #define REG_AO_OUTPUT_RUNTIME_LAST_SENT_TICK        (REG_AO_OUTPUT_RUNTIME_LAST_UPDATE_TICK + REG_SIZE_U32) /* 模拟量输出最后下发时间输入寄存器偏移。 */
 
+/* SI Profile生命周期追加在AO运行态之后，不移动现有点阵及前序寄存器。 */
+#define REG_DENSITY_DIST_SI_PROFILE_PHASE           (REG_AO_OUTPUT_RUNTIME_LAST_SENT_TICK + REG_SIZE_U32) /* SI Profile阶段输入寄存器偏移。 */
+#define REG_DENSITY_DIST_SI_PROFILE_CYCLE_COUNTER   (REG_DENSITY_DIST_SI_PROFILE_PHASE + REG_SIZE_U32) /* SI Profile周期计数输入寄存器偏移。 */
+#define REG_DENSITY_DIST_SI_PROFILE_PROGRESS_POINTS (REG_DENSITY_DIST_SI_PROFILE_CYCLE_COUNTER + REG_SIZE_U32) /* SI Profile有效点进度输入寄存器偏移。 */
+
 /* ==== 输入寄存器最终数量 ==== */
-#define REG_ENG                                  (REG_AO_OUTPUT_RUNTIME_BASE + REG_AO_OUTPUT_RUNTIME_REG_COUNT) /* 输入寄存器偏移：REG 结束地址。 */
+#define REG_ENG                                  (REG_DENSITY_DIST_SI_PROFILE_PROGRESS_POINTS + REG_SIZE_U32) /* 输入寄存器偏移：REG 结束地址。 */
 #define INPUTREGISTER_AMOUNT                     (REG_ENG) /* 输入寄存器总数量。 */
 
 /* 其他状态码（保留你原定义） */
