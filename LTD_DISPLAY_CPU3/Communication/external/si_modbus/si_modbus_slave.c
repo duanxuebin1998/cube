@@ -136,6 +136,7 @@ typedef struct {
     uint8_t published_key_valid;
     uint8_t fetch_attempt_valid;
     uint8_t complete_baseline_valid;
+    uint32_t cpu2_snapshot_generation;
     uint32_t active_cycle;
     uint32_t last_phase;
     uint32_t cycle_complete_baseline;         /* PREPARING、初始化或重连时冻结的完成计数 */
@@ -714,6 +715,7 @@ static void si_update_profile_projection(uint8_t allow_fetch)
     uint32_t phase;
     uint32_t cycle;
     uint32_t complete_counter;
+    uint32_t snapshot_generation;
 
     if (!CPU2_CommHasRuntimeSnapshot()) {
         s_profile_projection.connected = 0U;
@@ -723,10 +725,12 @@ static void si_update_profile_projection(uint8_t allow_fetch)
     phase = g_measurement.si_profile_runtime.phase;
     cycle = g_measurement.si_profile_runtime.cycle_counter;
     complete_counter = g_measurement.density_distribution.profile_complete_counter;
+    snapshot_generation = CPU2_CommGetSnapshotGeneration();
 
     if (s_profile_projection.initialized == 0U) {
         s_profile_projection.initialized = 1U;
         s_profile_projection.connected = 1U;
+        s_profile_projection.cpu2_snapshot_generation = snapshot_generation;
         s_profile_projection.active_cycle = cycle;
         s_profile_projection.last_phase = phase;
         s_profile_projection.cycle_complete_baseline = complete_counter;
@@ -740,25 +744,23 @@ static void si_update_profile_projection(uint8_t allow_fetch)
             si_profile_clamp_points(g_measurement.si_profile_runtime.progress_points);
         si_profile_clear_result();
         si_invalidate_profile_timestamp();
-    } else if (s_profile_projection.connected == 0U) {
+    } else if ((s_profile_projection.connected == 0U) ||
+               (snapshot_generation != s_profile_projection.cpu2_snapshot_generation)) {
+        /* CPU2快照会话已切换，旧SI点阵、Complete和时间均不得跨会话复用。 */
         s_profile_projection.connected = 1U;
-        if (cycle != s_profile_projection.active_cycle) {
-            s_profile_projection.active_cycle = cycle;
-            s_profile_projection.cycle_complete_baseline = complete_counter;
-            s_profile_projection.complete_baseline_valid =
-                (phase == (uint32_t)SI_PROFILE_PHASE_COMPLETE) ? 0U : 1U;
-            s_profile_projection.cycle_established = 1U;
-            s_profile_projection.progress_points =
-                si_profile_clamp_points(g_measurement.si_profile_runtime.progress_points);
-            si_profile_clear_result();
-            si_invalidate_profile_timestamp();
-        } else if (phase == (uint32_t)SI_PROFILE_PHASE_PREPARING) {
-            s_profile_projection.cycle_complete_baseline = complete_counter;
-            s_profile_projection.complete_baseline_valid = 1U;
-            s_profile_projection.cycle_established = 0U;
-            s_profile_projection.candidate_valid = 0U;
-            s_profile_projection.fetch_attempt_valid = 0U;
-        }
+        s_profile_projection.cpu2_snapshot_generation = snapshot_generation;
+        s_profile_projection.active_cycle = cycle;
+        s_profile_projection.cycle_complete_baseline = complete_counter;
+        s_profile_projection.complete_baseline_valid =
+            (phase == (uint32_t)SI_PROFILE_PHASE_COMPLETE) ? 0U : 1U;
+        s_profile_projection.cycle_established =
+            ((phase == (uint32_t)SI_PROFILE_PHASE_MEASURING) ||
+             (phase == (uint32_t)SI_PROFILE_PHASE_RETURNING_LEVEL) ||
+             (phase == (uint32_t)SI_PROFILE_PHASE_COMPLETE)) ? 1U : 0U;
+        s_profile_projection.progress_points =
+            si_profile_clamp_points(g_measurement.si_profile_runtime.progress_points);
+        si_profile_clear_result();
+        si_invalidate_profile_timestamp();
         s_profile_projection.last_phase = phase;
     } else {
         if ((phase == (uint32_t)SI_PROFILE_PHASE_PREPARING) &&

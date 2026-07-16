@@ -26,13 +26,15 @@
 #define UNVALID_POSITION 0
 #define UNVALID_TEMPERATURE 0
 #define MAX_MEASUREMENT_POINTS 200 /* 密度分布测量最大点数 */
-#define DEVICE_PROTOCOL_VERSION 21u /* CPU2/CPU3共享协议版本；协议21增加固定点结果代际 */
+#define DEVICE_PROTOCOL_VERSION 23u /* CPU2/CPU3共享协议版本；协议23收敛AO故障动作与非跟随输出语义 */
 #define FAULT_AUTO_RECOVERY_RETRY_DEFAULT 3u
 #define FAULT_AUTO_RECOVERY_RETRY_MAX 10u
 
 #define AO_DISABLED_CURRENT_MA_X100        340U
-#define AO_POWER_ON_CURRENT_MIN_MA_X100    340U
-#define AO_POWER_ON_CURRENT_MAX_MA_X100    2260U
+#define AO_NON_FOLLOW_CURRENT_MIN_MA_X100  340U
+#define AO_NON_FOLLOW_CURRENT_MAX_MA_X100  2260U
+#define AO_POWER_ON_CURRENT_MIN_MA_X100    AO_NON_FOLLOW_CURRENT_MIN_MA_X100
+#define AO_POWER_ON_CURRENT_MAX_MA_X100    AO_NON_FOLLOW_CURRENT_MAX_MA_X100
 #define AO_FIXED_CURRENT_MIN_MA_X100       400U
 #define AO_FIXED_CURRENT_MAX_MA_X100       2250U
 #define AO_FAULT_CURRENT_MIN_MA_X100       340U
@@ -168,18 +170,9 @@ typedef enum {
 } AoProcessSource;
 
 typedef enum {
-    AO_FAULT_MODE_MINIMUM = 0u,
-    AO_FAULT_MODE_MAXIMUM = 1u,
-    AO_FAULT_MODE_LAST_VALID = 2u,
-    AO_FAULT_MODE_ACTUAL_VALUE = 3u,
-    AO_FAULT_MODE_SET_VALUE = 4u
-} AoFaultMode;
-
-typedef enum {
-    AO_ERROR_LEVEL_NONE = 0u,
-    AO_ERROR_LEVEL_WARNING = 1u,
-    AO_ERROR_LEVEL_ALARM = 2u
-} AoErrorLevel;
+    AO_FAULT_ACTION_OUTPUT_CURRENT = 0u,
+    AO_FAULT_ACTION_HOLD_LAST_VALID = 1u
+} AoFaultAction;
 
 typedef struct {
     uint32_t work_mode;
@@ -190,10 +183,10 @@ typedef struct {
     int32_t range_0_01mm;
     int32_t range_100_01mm;
     uint32_t damping_x10_s;
-    uint32_t fault_mode;
+    uint32_t fault_mode;                    /* 故障动作：0输出故障电流，1保持上次有效过程电流 */
     uint32_t fault_current_mA_x100;
-    uint32_t error_level;
-    uint32_t power_on_current_mA_x100;
+    uint32_t error_level;                   /* 隐藏预留槽位，固定为0 */
+    uint32_t power_on_current_mA_x100;      /* 非跟随电流，保留原字段名和槽位 */
     uint32_t simulation_current_mA_x100;
 } AoOutputConfig;
 
@@ -240,14 +233,14 @@ typedef enum {
     MOTOR_CHARGE_PUMP_UNDER_VOLTAGE = 0x000B0010, /* 电机驱动电荷泵欠压 */
     MOTOR_OVERTEMPERATURE = 0x000B0011,           /* 电机驱动过温关断 */
     MOTOR_RUN_TIMEOUT = 0x000B0012,               /* 电机整段运行超时 */
-    MOTOR_TMC_CONFIG_LOST = 0x000B0013,           /* 电机驱动运行期复位或关键配置丢失 */
-    MOTOR_STALL_ERROR = 0x000B0014,               /* 电机堵转 */
-    MOTOR_PHASE_SHORT_ERROR = 0x000B0015,         /* 电机相线短路 */
-    MOTOR_PHASE_OPEN_ERROR = 0x000B0016,          /* 电机相线断路 */
-    MOTOR_DRIVER_OVERTEMP_WARNING = 0x000B0017,   /* 电机驱动过温预警 */
-    MOTOR_DRIVER_NOT_INITIALIZED = 0x000B0018,    /* 电机驱动未初始化 */
-    MOTOR_STOP_WAIT_TIMEOUT = 0x000B0019,         /* 电机停止等待超时 */
-    MOTOR_ARRIVAL_WAIT_TIMEOUT = 0x000B001A,      /* 电机等待到达目标位置超时 */
+    MOTOR_TMC_CONFIG_LOST = 0x000B0003,           /* 电机驱动运行期复位或关键配置丢失 */
+    MOTOR_STALL_ERROR = 0x000B000B,               /* 电机堵转 */
+    MOTOR_PHASE_SHORT_ERROR = 0x000B0013,         /* 电机相线短路 */
+    MOTOR_PHASE_OPEN_ERROR = 0x000B0014,          /* 电机相线断路 */
+    MOTOR_DRIVER_OVERTEMP_WARNING = 0x000B0015,   /* 电机驱动过温预警 */
+    MOTOR_DRIVER_NOT_INITIALIZED = 0x000B0016,    /* 电机驱动未初始化 */
+    MOTOR_STOP_WAIT_TIMEOUT = 0x000B0017,         /* 电机停止等待超时 */
+    MOTOR_ARRIVAL_WAIT_TIMEOUT = 0x000B0018,      /* 电机等待到达目标位置超时 */
 
     /* ==================== 12 编码器故障 (0x000C0000 - 0x000CFFFF) ==================== */
     ENCODER_TIMEOUT = 0x000C0001,                 /* 编码器SPI或DMA采集接口异常 */
@@ -305,11 +298,11 @@ typedef enum {
 
     /* ==================== 14 零点与位置检测故障 (0x000E0000 - 0x000EFFFF) ==================== */
     MEASUREMENT_ZERO_OUT_OF_RANGE = 0x000E0009,   /* 零点位置超出允许范围 */
-    MEASUREMENT_ZERO_REPEAT_FAIL = 0x000E000C,    /* 零点重复性不符合要求 */
-    POSITION_DATA_INVALID = 0x000E000D,           /* 当前位置数据无效 */
-    POSITION_TARGET_OVERRUN = 0x000E000E,         /* 运动越过目标位置 */
-    POSITION_ARRIVAL_DEVIATION = 0x000E000F,      /* 停稳后到位偏差过大 */
-    POSITION_MOTOR_NOT_STOPPED = 0x000E0010,      /* 结果提交时电机仍未停止 */
+    MEASUREMENT_ZERO_REPEAT_FAIL = 0x000E000B,    /* 零点重复性不符合要求 */
+    POSITION_DATA_INVALID = 0x000E000C,           /* 当前位置数据无效 */
+    POSITION_TARGET_OVERRUN = 0x000E000D,         /* 运动越过目标位置 */
+    POSITION_ARRIVAL_DEVIATION = 0x000E000E,      /* 停稳后到位偏差过大 */
+    POSITION_MOTOR_NOT_STOPPED = 0x000E000F,      /* 结果提交时电机仍未停止 */
 
     /* ==================== 15 测量过程故障 (0x000F0000 - 0x000FFFFF) ==================== */
     MEASUREMENT_OILLEVEL_HIGH = 0x000F0006,       /* 液位搜索超过罐高 */
@@ -322,14 +315,14 @@ typedef enum {
     MEASUREMENT_WATERLEVEL_LOW = 0x000F0016,      /* 下行未找到水位 */
     MEASUREMENT_DENSITY_NO_VALID_POINT = 0x000F0017, /* 密度测量无有效测点 */
     MEASUREMENT_DENSITY_SURFACE_NOTFOUND = 0x000F0018, /* 密度测量未找到油面 */
-    MEASUREMENT_DENSITY_LEVEL_TIMEOUT = 0x000F0019, /* 密度闭环找液位超时 */
-    MEASUREMENT_FREQUENCY_LEVEL_TIMEOUT = 0x000F001A, /* 频率闭环找液位超时 */
-    MEASUREMENT_BOTTOM_RELEASE_FAIL = 0x000F001B, /* 粗找罐底前离底失败 */
-    MEASUREMENT_TANK_HEIGHT_NOT_CONFIGURED = 0x000F001C, /* 未设置罐高标定值 */
-    MEASUREMENT_WATER_CALIBRATION_NOT_CONFIGURED = 0x000F001D, /* 未设置水位标定值 */
-    MEASUREMENT_DENSITY_PLAN_INVALID = 0x000F001F, /* 密度测点规划失败 */
-    MEASUREMENT_TANK_HEIGHT_RESULT_INVALID = 0x000F0020, /* 罐高测量结果无效 */
-    MEASUREMENT_WATER_CALC_OUT_OF_RANGE = 0x000F0021, /* 水位标定计算结果越界 */
+    MEASUREMENT_DENSITY_LEVEL_TIMEOUT = 0x000F0011, /* 密度闭环找液位超时 */
+    MEASUREMENT_FREQUENCY_LEVEL_TIMEOUT = 0x000F0019, /* 频率闭环找液位超时 */
+    MEASUREMENT_BOTTOM_RELEASE_FAIL = 0x000F001A, /* 粗找罐底前离底失败 */
+    MEASUREMENT_TANK_HEIGHT_NOT_CONFIGURED = 0x000F001B, /* 未设置罐高标定值 */
+    MEASUREMENT_WATER_CALIBRATION_NOT_CONFIGURED = 0x000F001C, /* 未设置水位标定值 */
+    MEASUREMENT_DENSITY_PLAN_INVALID = 0x000F001D, /* 密度测点规划失败 */
+    MEASUREMENT_TANK_HEIGHT_RESULT_INVALID = 0x000F001E, /* 罐高测量结果无效 */
+    MEASUREMENT_WATER_CALC_OUT_OF_RANGE = 0x000F001F, /* 水位标定计算结果越界 */
 
     /* ==================== 17 参数与存储故障 (0x00110000 - 0x0011FFFF) ==================== */
     PARAM_EEPROM_FAIL = 0x00110001,               /* 参数存储读写失败 */
@@ -346,14 +339,14 @@ typedef enum {
     /* ==================== 18 模拟输出与自检故障 (0x00120000 - 0x0012FFFF) ==================== */
     AD5421_INIT_ERROR = 0x00120002,               /* 模拟输出芯片初始化兜底失败 */
     AD5421_READBACK_ERROR = 0x00120006,           /* 模拟输出控制寄存器回读不一致 */
-    AD5421_INTERNAL_COMM_ERROR = 0x0012000A,      /* 模拟输出芯片内部通信异常 */
-    AD5421_LOOP_CURRENT_HIGH = 0x0012000B,        /* 模拟输出环路电流过高 */
-    AD5421_LOOP_CURRENT_LOW = 0x0012000C,         /* 模拟输出环路电流过低或断环 */
-    AD5421_LOOP_VOLTAGE_LOW = 0x0012000D,         /* 模拟输出环路供电电压不足 */
-    AD5421_SPI_TRANSFER_ERROR = 0x0012000E,       /* 模拟输出SPI传输失败 */
-    AD5421_ACCESS_BUSY = 0x0012000F,              /* 模拟输出访问冲突 */
-    AD5421_OVERTEMP_SHUTDOWN = 0x00120010,        /* 模拟输出芯片过温关断 */
-    AD5421_OVERTEMP_WARNING = 0x00120011,         /* 模拟输出芯片过温预警 */
+    AD5421_INTERNAL_COMM_ERROR = 0x00120009,      /* 模拟输出芯片内部通信异常 */
+    AD5421_LOOP_CURRENT_HIGH = 0x0012000A,        /* 模拟输出环路电流过高 */
+    AD5421_LOOP_CURRENT_LOW = 0x0012000B,         /* 模拟输出环路电流过低或断环 */
+    AD5421_LOOP_VOLTAGE_LOW = 0x0012000C,         /* 模拟输出环路供电电压不足 */
+    AD5421_SPI_TRANSFER_ERROR = 0x0012000D,       /* 模拟输出SPI传输失败 */
+    AD5421_ACCESS_BUSY = 0x0012000E,              /* 模拟输出访问冲突 */
+    AD5421_OVERTEMP_SHUTDOWN = 0x0012000F,        /* 模拟输出芯片过温关断 */
+    AD5421_OVERTEMP_WARNING = 0x00120010,         /* 模拟输出芯片过温预警 */
 
     /* ==================== 20 设备通信链路故障 (0x00140000 - 0x0014FFFF) ==================== */
     COMM_UART_TRANSFER_ERROR = 0x00140001,        /* 串口或DMA传输异常 */
@@ -368,6 +361,7 @@ typedef enum {
     WIRELESS_NAME_INVALID = 0x0014000A,           /* 无线名称参数无效 */
     WIRELESS_NOT_HOST_MODE = 0x0014000B,          /* 无线模块未处于主机模式 */
     WIRELESS_NAME_NOT_FOUND = 0x0014000C,         /* 无线名称未找到 */
+    CPU2_PROFILE_SYNC_FAILED = 0x0014000D,         /* CPU3本机分布结果同步三轮仍不一致 */
 
     /* ==================== 21 扭力检测故障 (0x00150000 - 0x0015FFFF) ==================== */
     WEIGHT_OUT_OF_RANGE = 0x00150001,             /* 扭力超过上限 */
@@ -378,9 +372,9 @@ typedef enum {
     WEIGHT_COMM_TIMEOUT = 0x00150006,             /* 扭力通信超时 */
 
     /* ==================== 22 系统与软件故障 (0x00160000 - 0x0016FFFF) ==================== */
-    SYSTEM_BUFFER_CAPACITY_ERROR = 0x00160004,    /* 内部缓冲区或存储分区容量不足 */
-    SYSTEM_CALL_CONDITION_ERROR = 0x00160005,     /* 内部调用参数或前置条件异常 */
-    SYSTEM_CALCULATION_ERROR = 0x00160006         /* 内部计算无法得到有效结果 */
+    SYSTEM_BUFFER_CAPACITY_ERROR = 0x00160001,    /* 内部缓冲区或存储分区容量不足 */
+    SYSTEM_CALL_CONDITION_ERROR = 0x00160002,     /* 内部调用参数或前置条件异常 */
+    SYSTEM_CALCULATION_ERROR = 0x00160003         /* 内部计算无法得到有效结果 */
 
 } ErrorCode;
 

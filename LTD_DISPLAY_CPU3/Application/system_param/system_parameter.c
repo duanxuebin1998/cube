@@ -251,19 +251,19 @@ struct ParameterMetadata param_meta[] = {
 {(uint8_t*)"瓦锡兰探底间隔",	0,	COM_NUM_DEVICEPARAM_WARTSILA_BOTTOM_DETECT_INTERVAL,	HOLDREGISTER_DEVICEPARAM_WARTSILA_BOTTOM_DETECT_INTERVAL,	2,	true,	0,	100,	(uint8_t*)"次",	0,	0,	true,	TYPE_INT,	3,	NULL,	(uint8_t*)"WBotFreq"},
 {(uint8_t*)"探底修正罐高",	0,	COM_NUM_DEVICEPARAM_BOTTOM_ENCODER_CORRECTION_TANK_HEIGHT,	HOLDREGISTER_DEVICEPARAM_BOTTOM_ENCODER_CORRECTION_TANK_HEIGHT,	2,	false,	0,	0,	(uint8_t*)"mm",	1,	0,	true,	TYPE_INT,	7,	NULL,	(uint8_t*)"BotFixH"},
 
-{(uint8_t*)"AO工作模式",	0,	COM_NUM_DEVICEPARAM_AO_WORK_MODE,	HOLDREGISTER_DEVICEPARAM_AO_WORK_MODE,	2,	true,	0,	2,	NULL,	0,	0,	true,	TYPE_INT,	1,	ret_arr_word,	(uint8_t*)"AOWorkMode"},
-{(uint8_t*)"AO电流模式",	0,	COM_NUM_DEVICEPARAM_AO_CURRENT_MODE,	HOLDREGISTER_DEVICEPARAM_AO_CURRENT_MODE,	2,	true,	0,	3,	NULL,	0,	0,	true,	TYPE_INT,	1,	ret_arr_word,	(uint8_t*)"AOCurMode"},
-{(uint8_t*)"AO输出源",	0,	COM_NUM_DEVICEPARAM_AO_OUTPUT_SOURCE,	HOLDREGISTER_DEVICEPARAM_AO_OUTPUT_SOURCE,	2,	true,	0,	2,	NULL,	0,	0,	true,	TYPE_INT,	1,	ret_arr_word,	(uint8_t*)"AOSource"},
-{(uint8_t*)"AO SIL/WHG预留",	0,	COM_NUM_DEVICEPARAM_AO_SIL_WHG_RESERVED,	HOLDREGISTER_DEVICEPARAM_AO_SIL_WHG_RESERVED,	2,	true,	0,	0,	NULL,	0,	0,	false,	TYPE_INT,	1,	NULL,	(uint8_t*)"AOSilWhg"},
-{(uint8_t*)"AO固定电流",	0,	COM_NUM_DEVICEPARAM_AO_FIXED_CURRENT_MA_X100,	HOLDREGISTER_DEVICEPARAM_AO_FIXED_CURRENT_MA_X100,	2,	true,	AO_FIXED_CURRENT_MIN_MA_X100,	AO_FIXED_CURRENT_MAX_MA_X100,	(uint8_t*)"mA",	2,	0,	true,	TYPE_INT,	5,	NULL,	(uint8_t*)"AOFixCur"},
-{(uint8_t*)"AO 0%对应值",	0,	COM_NUM_DEVICEPARAM_AO_RANGE_0_01MM,	HOLDREGISTER_DEVICEPARAM_AO_RANGE_0_01MM,	2,	true,	0,	2147483647,	(uint8_t*)"mm",	1,	0,	true,	TYPE_INT,	7,	NULL,	(uint8_t*)"AORange0"},
-{(uint8_t*)"AO 100%对应值",	0,	COM_NUM_DEVICEPARAM_AO_RANGE_100_01MM,	HOLDREGISTER_DEVICEPARAM_AO_RANGE_100_01MM,	2,	true,	0,	2147483647,	(uint8_t*)"mm",	1,	0,	true,	TYPE_INT,	7,	NULL,	(uint8_t*)"AORange100"},
-{(uint8_t*)"AO阻尼系数",	0,	COM_NUM_DEVICEPARAM_AO_DAMPING_X10_S,	HOLDREGISTER_DEVICEPARAM_AO_DAMPING_X10_S,	2,	true,	0,	AO_DAMPING_MAX_X10_S,	(uint8_t*)"s",	1,	0,	true,	TYPE_INT,	4,	NULL,	(uint8_t*)"AODamping"},
-{(uint8_t*)"AO故障模式",	0,	COM_NUM_DEVICEPARAM_AO_FAULT_MODE,	HOLDREGISTER_DEVICEPARAM_AO_FAULT_MODE,	2,	true,	0,	4,	NULL,	0,	0,	true,	TYPE_INT,	1,	ret_arr_word,	(uint8_t*)"AOFaultMode"},
-{(uint8_t*)"AO故障电流",	0,	COM_NUM_DEVICEPARAM_AO_FAULT_CURRENT_MA_X100,	HOLDREGISTER_DEVICEPARAM_AO_FAULT_CURRENT_MA_X100,	2,	true,	AO_FAULT_CURRENT_MIN_MA_X100,	AO_FAULT_CURRENT_MAX_MA_X100,	(uint8_t*)"mA",	2,	0,	true,	TYPE_INT,	5,	NULL,	(uint8_t*)"AOFaultCur"},
-{(uint8_t*)"AO错误等级",	0,	COM_NUM_DEVICEPARAM_AO_ERROR_LEVEL,	HOLDREGISTER_DEVICEPARAM_AO_ERROR_LEVEL,	2,	true,	0,	2,	NULL,	0,	0,	true,	TYPE_INT,	1,	ret_arr_word,	(uint8_t*)"AOErrLevel"},
-{(uint8_t*)"AO上电电流",	0,	COM_NUM_DEVICEPARAM_AO_POWER_ON_CURRENT_MA_X100,	HOLDREGISTER_DEVICEPARAM_AO_POWER_ON_CURRENT_MA_X100,	2,	true,	AO_POWER_ON_CURRENT_MIN_MA_X100,	AO_POWER_ON_CURRENT_MAX_MA_X100,	(uint8_t*)"mA",	2,	0,	true,	TYPE_INT,	5,	NULL,	(uint8_t*)"AOPowerCur"},
-{(uint8_t*)"AO模拟电流",	0,	COM_NUM_DEVICEPARAM_AO_SIMULATION_CURRENT_MA_X100,	HOLDREGISTER_DEVICEPARAM_AO_SIMULATION_CURRENT_MA_X100,	2,	true,	AO_SIMULATION_CURRENT_MIN_MA_X100,	AO_SIMULATION_CURRENT_MAX_MA_X100,	(uint8_t*)"mA",	2,	0,	true,	TYPE_INT,	5,	NULL,	(uint8_t*)"AOSimCur"},
+{(uint8_t*)"工作模式",	0,	COM_NUM_DEVICEPARAM_AO_WORK_MODE,	HOLDREGISTER_DEVICEPARAM_AO_WORK_MODE,	2,	true,	0,	2,	NULL,	0,	0,	true,	TYPE_INT,	1,	ret_arr_word,	(uint8_t*)"WorkMode"},
+{(uint8_t*)"电流模式",	0,	COM_NUM_DEVICEPARAM_AO_CURRENT_MODE,	HOLDREGISTER_DEVICEPARAM_AO_CURRENT_MODE,	2,	true,	0,	3,	NULL,	0,	0,	true,	TYPE_INT,	1,	ret_arr_word,	(uint8_t*)"CurrentMode"},
+{(uint8_t*)"输出源",	0,	COM_NUM_DEVICEPARAM_AO_OUTPUT_SOURCE,	HOLDREGISTER_DEVICEPARAM_AO_OUTPUT_SOURCE,	2,	true,	0,	2,	NULL,	0,	0,	true,	TYPE_INT,	1,	ret_arr_word,	(uint8_t*)"Source"},
+{(uint8_t*)"保留AO SIL/WHG",	0,	COM_NUM_DEVICEPARAM_AO_SIL_WHG_RESERVED,	HOLDREGISTER_DEVICEPARAM_AO_SIL_WHG_RESERVED,	2,	true,	0,	0,	NULL,	0,	0,	false,	TYPE_INT,	1,	NULL,	(uint8_t*)"AOSilWhgRsv"},
+{(uint8_t*)"固定电流",	0,	COM_NUM_DEVICEPARAM_AO_FIXED_CURRENT_MA_X100,	HOLDREGISTER_DEVICEPARAM_AO_FIXED_CURRENT_MA_X100,	2,	true,	AO_FIXED_CURRENT_MIN_MA_X100,	AO_FIXED_CURRENT_MAX_MA_X100,	(uint8_t*)"mA",	2,	0,	true,	TYPE_INT,	5,	NULL,	(uint8_t*)"FixedCur"},
+{(uint8_t*)"0%对应值",	0,	COM_NUM_DEVICEPARAM_AO_RANGE_0_01MM,	HOLDREGISTER_DEVICEPARAM_AO_RANGE_0_01MM,	2,	true,	0,	2147483647,	(uint8_t*)"mm",	1,	0,	true,	TYPE_INT,	7,	NULL,	(uint8_t*)"Range0"},
+{(uint8_t*)"100%对应值",	0,	COM_NUM_DEVICEPARAM_AO_RANGE_100_01MM,	HOLDREGISTER_DEVICEPARAM_AO_RANGE_100_01MM,	2,	true,	0,	2147483647,	(uint8_t*)"mm",	1,	0,	true,	TYPE_INT,	7,	NULL,	(uint8_t*)"Range100"},
+{(uint8_t*)"阻尼系数",	0,	COM_NUM_DEVICEPARAM_AO_DAMPING_X10_S,	HOLDREGISTER_DEVICEPARAM_AO_DAMPING_X10_S,	2,	true,	0,	AO_DAMPING_MAX_X10_S,	(uint8_t*)"s",	1,	0,	true,	TYPE_INT,	4,	NULL,	(uint8_t*)"Damping"},
+{(uint8_t*)"故障动作",	0,	COM_NUM_DEVICEPARAM_AO_FAULT_MODE,	HOLDREGISTER_DEVICEPARAM_AO_FAULT_MODE,	2,	true,	0,	1,	NULL,	0,	0,	true,	TYPE_INT,	1,	ret_arr_word,	(uint8_t*)"FaultAction"},
+{(uint8_t*)"故障电流",	0,	COM_NUM_DEVICEPARAM_AO_FAULT_CURRENT_MA_X100,	HOLDREGISTER_DEVICEPARAM_AO_FAULT_CURRENT_MA_X100,	2,	true,	AO_FAULT_CURRENT_MIN_MA_X100,	AO_FAULT_CURRENT_MAX_MA_X100,	(uint8_t*)"mA",	2,	0,	true,	TYPE_INT,	5,	NULL,	(uint8_t*)"FaultCur"},
+{(uint8_t*)"保留AO错误等级",	0,	COM_NUM_DEVICEPARAM_AO_ERROR_LEVEL,	HOLDREGISTER_DEVICEPARAM_AO_ERROR_LEVEL,	2,	true,	0,	0,	NULL,	0,	0,	false,	TYPE_INT,	1,	NULL,	(uint8_t*)"AOErrLvlRsv"},
+{(uint8_t*)"非跟随电流",	0,	COM_NUM_DEVICEPARAM_AO_POWER_ON_CURRENT_MA_X100,	HOLDREGISTER_DEVICEPARAM_AO_POWER_ON_CURRENT_MA_X100,	2,	true,	AO_NON_FOLLOW_CURRENT_MIN_MA_X100,	AO_NON_FOLLOW_CURRENT_MAX_MA_X100,	(uint8_t*)"mA",	2,	0,	true,	TYPE_INT,	5,	NULL,	(uint8_t*)"NonFollowCur"},
+{(uint8_t*)"模拟电流",	0,	COM_NUM_DEVICEPARAM_AO_SIMULATION_CURRENT_MA_X100,	HOLDREGISTER_DEVICEPARAM_AO_SIMULATION_CURRENT_MA_X100,	2,	true,	AO_SIMULATION_CURRENT_MIN_MA_X100,	AO_SIMULATION_CURRENT_MAX_MA_X100,	(uint8_t*)"mA",	2,	0,	true,	TYPE_INT,	5,	NULL,	(uint8_t*)"SimCur"},
 
 {(uint8_t*)"标定液位值",	0,	COM_NUM_DEVICEPARAM_CALIBRATE_OIL_LEVEL,	HOLDREGISTER_DEVICEPARAM_CALIBRATE_OIL_LEVEL,	2,	false,	0,	0,	(uint8_t*)"mm",	1,	0,	true,	TYPE_INT,	6,	NULL,	(uint8_t*)"CalOilLvl"},
 {(uint8_t*)"标定水位值",	0,	COM_NUM_DEVICEPARAM_CALIBRATE_WATER_LEVEL,	HOLDREGISTER_DEVICEPARAM_CALIBRATE_WATER_LEVEL,	2,	false,	0,	0,	(uint8_t*)"mm",	1,	0,	true,	TYPE_INT,	6,	NULL,	(uint8_t*)"CalWaterLvl"},
@@ -616,10 +616,10 @@ void print_device_params(void)
     printf("  %-32s : %ld\r\n", "AO 0%对应值(x0.1mm)", (long)params.ao_output.range_0_01mm);
     printf("  %-32s : %ld\r\n", "AO 100%对应值(x0.1mm)", (long)params.ao_output.range_100_01mm);
     printf("  %-32s : %lu\r\n", "AO阻尼(x0.1s)", (unsigned long)params.ao_output.damping_x10_s);
-    printf("  %-32s : %lu\r\n", "AO故障模式", (unsigned long)params.ao_output.fault_mode);
+    printf("  %-32s : %lu\r\n", "AO故障动作", (unsigned long)params.ao_output.fault_mode);
     printf("  %-32s : %lu\r\n", "AO故障电流(x0.01mA)", (unsigned long)params.ao_output.fault_current_mA_x100);
-    printf("  %-32s : %lu\r\n", "AO错误级别", (unsigned long)params.ao_output.error_level);
-    printf("  %-32s : %lu\r\n", "AO上电电流(x0.01mA)", (unsigned long)params.ao_output.power_on_current_mA_x100);
+    printf("  %-32s : %lu\r\n", "AO预留槽位", (unsigned long)params.ao_output.error_level);
+    printf("  %-32s : %lu\r\n", "AO非跟随电流(x0.01mA)", (unsigned long)params.ao_output.power_on_current_mA_x100);
     printf("  %-32s : %lu\r\n", "AO仿真电流(x0.01mA)", (unsigned long)params.ao_output.simulation_current_mA_x100);
 
     /* 指令参数 */

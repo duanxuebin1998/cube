@@ -375,7 +375,7 @@ static void ao_load_default_range(const DeviceParameters *params, AoOutputConfig
     config->range_100_01mm = ao_source_range_max_01mm(params, config->output_source);
 }
 
-/* 建立协议20 AO出厂配置，供恢复默认和旧协议迁移共用。 */
+/* 建立协议23 AO出厂配置，供恢复默认和旧协议迁移共用。 */
 static void ao_load_default_config(const DeviceParameters *params, AoOutputConfig *config)
 {
     if (config == NULL) {
@@ -390,14 +390,14 @@ static void ao_load_default_config(const DeviceParameters *params, AoOutputConfi
     config->fixed_current_mA_x100 = 400U;
     ao_load_default_range(params, config);
     config->damping_x10_s = 0U;
-    config->fault_mode = AO_FAULT_MODE_MAXIMUM;
+    config->fault_mode = AO_FAULT_ACTION_OUTPUT_CURRENT;
     config->fault_current_mA_x100 = 2200U;
-    config->error_level = AO_ERROR_LEVEL_WARNING;
+    config->error_level = 0U;
     config->power_on_current_mA_x100 = 400U;
     config->simulation_current_mA_x100 = 1200U;
 }
 
-/* 检查协议20 AO配置是否满足全部枚举、范围和量程约束。 */
+/* 检查协议23 AO配置是否满足全部枚举、范围和量程约束。 */
 static int ao_config_is_valid(const DeviceParameters *params, const AoOutputConfig *config)
 {
     int32_t range_max_01mm;
@@ -409,16 +409,16 @@ static int ao_config_is_valid(const DeviceParameters *params, const AoOutputConf
         (config->current_mode > AO_CURRENT_MODE_FIXED) ||
         (config->output_source > AO_PROCESS_SOURCE_WATER_LEVEL) ||
         (config->sil_whg_reserved != 0U) ||
-        (config->fault_mode > AO_FAULT_MODE_SET_VALUE) ||
-        (config->error_level > AO_ERROR_LEVEL_ALARM)) {
+        (config->fault_mode > AO_FAULT_ACTION_HOLD_LAST_VALID) ||
+        (config->error_level != 0U)) {
         return 0;
     }
     if ((config->fixed_current_mA_x100 < AO_FIXED_CURRENT_MIN_MA_X100) ||
         (config->fixed_current_mA_x100 > AO_FIXED_CURRENT_MAX_MA_X100) ||
         (config->fault_current_mA_x100 < AO_FAULT_CURRENT_MIN_MA_X100) ||
         (config->fault_current_mA_x100 > AO_FAULT_CURRENT_MAX_MA_X100) ||
-        (config->power_on_current_mA_x100 < AO_POWER_ON_CURRENT_MIN_MA_X100) ||
-        (config->power_on_current_mA_x100 > AO_POWER_ON_CURRENT_MAX_MA_X100) ||
+        (config->power_on_current_mA_x100 < AO_NON_FOLLOW_CURRENT_MIN_MA_X100) ||
+        (config->power_on_current_mA_x100 > AO_NON_FOLLOW_CURRENT_MAX_MA_X100) ||
         (config->simulation_current_mA_x100 < AO_SIMULATION_CURRENT_MIN_MA_X100) ||
         (config->simulation_current_mA_x100 > AO_SIMULATION_CURRENT_MAX_MA_X100) ||
         (config->damping_x10_s > AO_DAMPING_MAX_X10_S)) {
@@ -436,7 +436,7 @@ static int ao_config_is_valid(const DeviceParameters *params, const AoOutputConf
     return 1;
 }
 
-/* 将协议19及更早版本的AO字段迁移为协议20配置，不清除其它现场参数。 */
+/* 将协议19及更早版本的AO字段迁移为当前配置，不清除其它现场参数。 */
 static int migrate_ao_params_runtime(void)
 {
     AoOutputLegacyV19 legacy;
@@ -463,8 +463,8 @@ static int migrate_ao_params_runtime(void)
         migrated.range_0_01mm = (int32_t)legacy.range_start_01mm;
         migrated.range_100_01mm = (int32_t)legacy.range_end_01mm;
     }
-    if ((legacy.initial_current_mA_x100 >= AO_POWER_ON_CURRENT_MIN_MA_X100) &&
-        (legacy.initial_current_mA_x100 <= AO_POWER_ON_CURRENT_MAX_MA_X100)) {
+    if ((legacy.initial_current_mA_x100 >= AO_NON_FOLLOW_CURRENT_MIN_MA_X100) &&
+        (legacy.initial_current_mA_x100 <= AO_NON_FOLLOW_CURRENT_MAX_MA_X100)) {
         migrated.power_on_current_mA_x100 = legacy.initial_current_mA_x100;
     }
     if ((legacy.fault_current_mA_x100 >= AO_FAULT_CURRENT_MIN_MA_X100) &&
@@ -478,6 +478,82 @@ static int migrate_ao_params_runtime(void)
 
     g_deviceParams.ao_output = migrated;
     return 1;
+}
+
+typedef enum {
+    AO_LEGACY_FAULT_MINIMUM = 0U,
+    AO_LEGACY_FAULT_MAXIMUM = 1U,
+    AO_LEGACY_FAULT_LAST_VALID = 2U,
+    AO_LEGACY_FAULT_ACTUAL_VALUE = 3U,
+    AO_LEGACY_FAULT_SET_VALUE = 4U
+} AoLegacyFaultMode;
+
+/* 返回协议22及更早故障最小值/最大值对应的实际电流。 */
+static uint32_t ao_legacy_fault_boundary_mA_x100(uint32_t current_mode, uint8_t maximum)
+{
+    uint32_t minimum = 350U;
+    uint32_t maximum_value = 2260U;
+
+    if (current_mode == AO_CURRENT_MODE_FIXED) {
+        minimum = 400U;
+        maximum_value = 2250U;
+    } else if (current_mode == AO_CURRENT_MODE_US) {
+        maximum_value = 2200U;
+    }
+    return (maximum != 0U) ? maximum_value : minimum;
+}
+
+/*
+ * 函数用途：把协议20至22的五种故障模式迁移成协议23的两种故障动作。
+ * 调用场景：FRAM旧布局迁移完成后、AO严格归一化之前调用。
+ * 关键约束：不改变13槽位结构；旧最小/最大值固化到故障电流，旧最近有效值迁移为保持动作。
+ */
+static int migrate_ao_fault_action_runtime(void)
+{
+    AoOutputConfig *config = (AoOutputConfig *)&g_deviceParams.ao_output;
+    uint32_t old_protocol = g_deviceParams.protocolVersion;
+    uint32_t old_action = config->fault_mode;
+    uint32_t old_fault_current = config->fault_current_mA_x100;
+    uint32_t old_reserved = config->error_level;
+
+    if (old_protocol == DEVICE_PROTOCOL_VERSION) {
+        return 0;
+    }
+
+    if (old_protocol < 20U) {
+        /* 前一步旧布局迁移已按协议23默认语义重建AO配置。 */
+        config->error_level = 0U;
+    } else if (old_protocol <= 22U) {
+        switch ((AoLegacyFaultMode)old_action) {
+        case AO_LEGACY_FAULT_MINIMUM:
+            config->fault_mode = AO_FAULT_ACTION_OUTPUT_CURRENT;
+            config->fault_current_mA_x100 =
+                    ao_legacy_fault_boundary_mA_x100(config->current_mode, 0U);
+            break;
+        case AO_LEGACY_FAULT_MAXIMUM:
+            config->fault_mode = AO_FAULT_ACTION_OUTPUT_CURRENT;
+            config->fault_current_mA_x100 =
+                    ao_legacy_fault_boundary_mA_x100(config->current_mode, 1U);
+            break;
+        case AO_LEGACY_FAULT_LAST_VALID:
+            config->fault_mode = AO_FAULT_ACTION_HOLD_LAST_VALID;
+            break;
+        case AO_LEGACY_FAULT_ACTUAL_VALUE:
+        case AO_LEGACY_FAULT_SET_VALUE:
+        default:
+            config->fault_mode = AO_FAULT_ACTION_OUTPUT_CURRENT;
+            break;
+        }
+        config->error_level = 0U;
+    } else {
+        /* 新于当前固件的未知语义按安全默认动作收敛，剩余范围交给归一化处理。 */
+        config->fault_mode = AO_FAULT_ACTION_OUTPUT_CURRENT;
+        config->error_level = 0U;
+    }
+
+    return ((config->fault_mode != old_action) ||
+            (config->fault_current_mA_x100 != old_fault_current) ||
+            (config->error_level != old_reserved)) ? 1 : 0;
 }
 
 /* 启动加载时归一化AO配置；用户写参走严格拒绝路径，不调用本函数兜底。 */
@@ -505,18 +581,18 @@ static int normalize_ao_params_runtime(void)
     if (normalized.damping_x10_s > AO_DAMPING_MAX_X10_S) {
         normalized.damping_x10_s = defaults.damping_x10_s;
     }
-    if (normalized.fault_mode > AO_FAULT_MODE_SET_VALUE) {
+    if (normalized.fault_mode > AO_FAULT_ACTION_HOLD_LAST_VALID) {
         normalized.fault_mode = defaults.fault_mode;
     }
     if ((normalized.fault_current_mA_x100 < AO_FAULT_CURRENT_MIN_MA_X100) ||
         (normalized.fault_current_mA_x100 > AO_FAULT_CURRENT_MAX_MA_X100)) {
         normalized.fault_current_mA_x100 = defaults.fault_current_mA_x100;
     }
-    if (normalized.error_level > AO_ERROR_LEVEL_ALARM) {
-        normalized.error_level = defaults.error_level;
+    if (normalized.error_level != 0U) {
+        normalized.error_level = 0U;
     }
-    if ((normalized.power_on_current_mA_x100 < AO_POWER_ON_CURRENT_MIN_MA_X100) ||
-        (normalized.power_on_current_mA_x100 > AO_POWER_ON_CURRENT_MAX_MA_X100)) {
+    if ((normalized.power_on_current_mA_x100 < AO_NON_FOLLOW_CURRENT_MIN_MA_X100) ||
+        (normalized.power_on_current_mA_x100 > AO_NON_FOLLOW_CURRENT_MAX_MA_X100)) {
         normalized.power_on_current_mA_x100 = defaults.power_on_current_mA_x100;
     }
     if ((normalized.simulation_current_mA_x100 < AO_SIMULATION_CURRENT_MIN_MA_X100) ||
@@ -1072,6 +1148,7 @@ int load_device_params(void)
     g_deviceParams.command = g_deviceParams.powerOnDefaultCommand;
     params_normalized = migrate_density_params_runtime();
     params_normalized |= migrate_ao_params_runtime();
+    params_normalized |= migrate_ao_fault_action_runtime();
     params_normalized |= normalize_device_params_runtime();
     params_normalized |= apply_firmware_version_runtime();
     params_normalized |= apply_protocol_version_runtime();
@@ -1441,10 +1518,10 @@ static const ParamPrintItem g_device_param_print_table[] = {
     DEVICE_PARAM_ITEM("4-20mA/AO参数", "0%量程", ao_output.range_0_01mm, PARAM_PRINT_TYPE_U32_01MM, "0.1mm"),
     DEVICE_PARAM_ITEM("4-20mA/AO参数", "100%量程", ao_output.range_100_01mm, PARAM_PRINT_TYPE_U32_01MM, "0.1mm"),
     DEVICE_PARAM_ITEM("4-20mA/AO参数", "阻尼", ao_output.damping_x10_s, PARAM_PRINT_TYPE_U32_01C, "0.1s"),
-    DEVICE_PARAM_ITEM("4-20mA/AO参数", "故障模式", ao_output.fault_mode, PARAM_PRINT_TYPE_U32, NULL),
+    DEVICE_PARAM_ITEM("4-20mA/AO参数", "故障动作", ao_output.fault_mode, PARAM_PRINT_TYPE_U32, NULL),
     DEVICE_PARAM_ITEM("4-20mA/AO参数", "故障电流", ao_output.fault_current_mA_x100, PARAM_PRINT_TYPE_U32_01MA, "0.01mA"),
-    DEVICE_PARAM_ITEM("4-20mA/AO参数", "错误级别", ao_output.error_level, PARAM_PRINT_TYPE_U32, NULL),
-    DEVICE_PARAM_ITEM("4-20mA/AO参数", "上电电流", ao_output.power_on_current_mA_x100, PARAM_PRINT_TYPE_U32_01MA, "0.01mA"),
+    DEVICE_PARAM_ITEM("4-20mA/AO参数", "隐藏预留", ao_output.error_level, PARAM_PRINT_TYPE_U32, NULL),
+    DEVICE_PARAM_ITEM("4-20mA/AO参数", "非跟随电流", ao_output.power_on_current_mA_x100, PARAM_PRINT_TYPE_U32_01MA, "0.01mA"),
     DEVICE_PARAM_ITEM("4-20mA/AO参数", "仿真电流", ao_output.simulation_current_mA_x100, PARAM_PRINT_TYPE_U32_01MA, "0.01mA"),
     DEVICE_PARAM_ITEM("指令参数", "标定液位值", calibrateOilLevel, PARAM_PRINT_TYPE_U32_01MM, "0.1mm"),
     DEVICE_PARAM_ITEM("指令参数", "标定水位值", calibrateWaterLevel, PARAM_PRINT_TYPE_U32_01MM, "0.1mm"),

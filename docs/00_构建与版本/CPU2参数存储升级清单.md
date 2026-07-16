@@ -1,6 +1,6 @@
 # CPU2 参数存储升级清单
 
-更新日期：2026-07-13
+更新日期：2026-07-16
 
 本文用于发布前和现场升级前判断 CPU2 固件升级是否会恢复出厂参数。CPU2 参数保存在 FRAM A/B 两个分区，加载时会同时校验 `magic`、`struct_size`、`param_version` 和 `crc`。两份分区都连续读取失败时，CPU2 会执行 `RestoreFactoryParamsConfig()`，恢复出厂默认参数并重新写入 FRAM。
 
@@ -24,7 +24,7 @@
 | 2026-03-05 系统参数增加 | 2 | 从版本 1 升级会清 | `DEVICE_PARAM_VERSION` 从 1 提升到 2，旧 FRAM 参数版本不匹配 |
 | CPU2 `V1.1.0.0` 到 `V1.11.0.1` | 2 | 版本 2 内通常不清 | 多数新增字段复用保留位或运行期补默认值，不提升存储版本 |
 | CPU2 `V1.12.0.0` 四路继电器报警输出 | 3 | 从版本 2 升级会清 | `DeviceParameters` 增加四路 `RelayAlarmConfig`，元信息寄存器顺延，`DEVICE_PARAM_VERSION` 从 2 提升到 3 |
-| CPU2 `V1.12.0.1` 到当前版本头 `V1.27.0.0` | 3 | 版本 3 内通常不清 | 当前未改变参数存储结构总尺寸；期间新增字段优先复用原槽位或追加运行态，`DEVICE_PARAM_VERSION`、`DeviceParameters`大小、元信息和CRC范围保持不变 |
+| CPU2 `V1.12.0.1` 到当前版本头 `V1.28.0.0` | 3 | 版本 3 内通常不清 | 当前未改变参数存储结构总尺寸；期间新增字段优先复用原槽位或追加运行态，`DEVICE_PARAM_VERSION`、`DeviceParameters`大小、元信息和CRC范围保持不变 |
 
 ## 不清参数但需要关注语义的版本
 

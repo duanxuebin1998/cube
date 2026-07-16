@@ -51,6 +51,18 @@ void PollingInputData(void);
  * @return true 表示继续显示通讯尝试页，false 表示进入正常状态页或故障页。
  */
 bool CPU2_CommShouldShowStartup(void);
+/*
+ * 函数用途：判断当前连接是否已读回协议版本且与 CPU3 共享协议严格一致。
+ * 调用场景：CPU3 显示、命令门禁、外部协议和运行期快照访问。
+ * 关键约束：协议快照无效时必须返回 false，不能使用默认值或掉线前缓存。
+ */
+bool CPU2_CommIsProtocolCompatible(void);
+/*
+ * 函数用途：判断当前连接是否已确认存在共享协议版本不匹配。
+ * 调用场景：CPU3 状态页区分协议不匹配、同步未完成和通信超时。
+ * 关键约束：协议快照尚未建立时返回 false，不能把未知状态误报为不匹配。
+ */
+bool CPU2_CommIsProtocolMismatch(void);
 /**
  * @brief 判断 CPU2 状态/参数/协议快照是否完整、共享协议是否兼容且通信故障未锁存。
  * @return true 表示允许访问 CPU2 参数和普通命令，false 表示同步未完成、协议不兼容或故障已锁存。
@@ -68,6 +80,12 @@ void CPU2_CommRequestParameterRefresh(void);
  * 关键约束：参数补读期间不打断运行态连续性，通信故障和协议不匹配必须返回false。
  */
 bool CPU2_CommHasRuntimeSnapshot(void);
+/*
+ * 函数用途：读取CPU3本机维护的CPU2公开快照会话代际。
+ * 调用场景：外部协议本地投影判断通信恢复后是否需要丢弃旧缓存。
+ * 关键约束：返回值不属于共享寄存器协议，不改变DEVICE_PROTOCOL_VERSION。
+ */
+uint32_t CPU2_CommGetSnapshotGeneration(void);
 /**
  * @brief 判断指定 CPU2 命令是否可下发；取消命令在当前连接协议已确认后可绕过其余参数刷新。
  * @param cmd 待下发命令。
@@ -91,15 +109,15 @@ bool CPU2_CommReadHoldingSnapshot(uint16_t startadd, uint16_t registercnt, uint1
  */
 bool CPU2_CommReadInputSnapshot(uint16_t startadd, uint16_t registercnt, uint16_t *out_regs);
 /*
- * 函数用途：按最终点数分块拉取SI Profile候选并复核前后代际。
+ * 函数用途：读取统一异步状态机已经确认发布的SI Profile候选代际。
  * 调用场景：CPU3观察到新的SI完成计数后调用。
- * 关键约束：任一分块失败或cycle、完成计数、点数、来源、阶段变化均返回false。
+ * 关键约束：本接口不发起UART请求；点阵未完整发布或生命周期不匹配时返回false。
  */
 bool CPU2_CommFetchSiProfileCandidate(Cpu2SiProfileCandidateKey *out_key);
 /*
- * 函数用途：分块拉取CPU2在Point0前仍保留的上一轮完整SI快照。
+ * 函数用途：读取CPU3已确认的、Point0前仍允许保留的上一轮完整SI快照。
  * 调用场景：CPU3冷启动后处于PREPARING，或Point0前已经ABORTED/FAILED。
- * 关键约束：接口只负责完整代际复核，不生成或恢复Profile时间。
+ * 关键约束：接口不发起UART请求，也不生成或恢复Profile时间。
  */
 bool CPU2_CommFetchSiPreviousSnapshot(Cpu2SiProfileCandidateKey *out_key);
 /**

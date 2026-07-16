@@ -22,7 +22,7 @@ typedef struct {
 } AoCurrentModeLimits;
 
 static AoOutputRuntime ao_output_runtime = {
-    400U, 400U, AO_OUTPUT_SOURCE_POWER_ON, 0U, 0U, NO_ERROR,
+    400U, 400U, AO_OUTPUT_SOURCE_NON_FOLLOW, 0U, 0U, NO_ERROR,
     0U, 0U, 0U, 0, 0, 0U, 0U, 0U, 0U
 };
 static AoProcessSample ao_process_samples[AO_PROCESS_SOURCE_COUNT] = {0};
@@ -32,7 +32,6 @@ static volatile uint8_t ao_output_timer_refresh_pending = 0U;
 static volatile uint32_t ao_output_timer_suspend_count = 0U;
 static volatile uint32_t ao_simulation_enabled = 0U;
 static uint8_t ao_output_driver_ready = 0U;
-static uint8_t ao_output_power_on_pending = 0U;
 static uint8_t ao_output_driver_retry_valid = 0U;
 static uint8_t ao_output_diag_valid = 0U;
 static uint8_t ao_output_write_attempt_valid = 0U;
@@ -46,6 +45,8 @@ static uint32_t ao_output_last_write_attempt_mA_x100 = 0U;
 static uint32_t ao_output_last_recover_target_mA_x100 = 0U;
 static uint8_t ao_last_normal_current_valid = 0U;
 static uint32_t ao_last_normal_current_mA_x100 = 0U;
+static uint8_t ao_config_snapshot_valid = 0U;
+static AoOutputConfig ao_last_config_snapshot = {0};
 static uint8_t ao_filter_initialized = 0U;
 static uint32_t ao_filter_source = AO_PROCESS_SOURCE_TANK_LEVEL;
 static uint32_t ao_filter_tick = 0U;
@@ -439,43 +440,129 @@ static int32_t AoOutput_FilterProcess(const AoOutputConfig *config,
     return (int32_t)((ao_filter_value_x1000 - 500LL) / 1000LL);
 }
 
-/* 判断整机报警级业务错误是否需要优先进入AO故障模式。 */
-static uint8_t AoOutput_ShouldUseBusinessFault(const AoOutputConfig *config)
+/* 判断液位或空高源是否处于允许AO跟随的命令。 */
+static uint8_t AoOutput_IsLiquidFollowCommand(CommandType command)
 {
-    uint32_t error_code = g_measurement.device_status.error_code;
+    return ((command == CMD_FIND_OIL) ||
+            (command == CMD_CALIBRATE_OIL) ||
+            (command == CMD_CORRECT_OIL)) ? 1U : 0U;
+}
 
-    if ((error_code != NO_ERROR) &&
-        (error_code != STATE_SWITCH) &&
-        (config->error_level == AO_ERROR_LEVEL_ALARM)) {
-        return 1U;
+/* 判断水位源是否处于允许AO跟随的命令。 */
+static uint8_t AoOutput_IsWaterFollowCommand(CommandType command)
+{
+    return ((command == CMD_FOLLOW_WATER) ||
+            (command == CMD_CALIBRATE_WATER)) ? 1U : 0U;
+}
+
+/*
+ * 函数用途：判断所选过程源是否正处于与其匹配的连续跟随状态。
+ * 调用场景：AO每轮选择目标电流前只读整机状态、当前命令和待切换命令。
+ * 关键约束：存在待处理命令时立即退出跟随，函数不调用任何会修改状态的接口。
+ */
+static uint8_t AoOutput_IsSelectedProcessFollowing(const AoOutputConfig *config)
+{
+    DeviceState state;
+    CommandType current_command;
+    CommandType pending_command;
+    uint32_t primask;
+
+    if (config == NULL) {
+        return 0U;
+    }
+
+    primask = __get_PRIMASK();
+    __disable_irq();
+    state = g_measurement.device_status.device_state;
+    current_command = g_measurement.device_status.current_command;
+    pending_command = g_deviceParams.command;
+    __set_PRIMASK(primask);
+
+    if (pending_command != CMD_NONE) {
+        return 0U;
+    }
+    if ((config->output_source == AO_PROCESS_SOURCE_TANK_LEVEL) ||
+        (config->output_source == AO_PROCESS_SOURCE_ULLAGE)) {
+        return ((state == STATE_FLOWOIL) &&
+                (AoOutput_IsLiquidFollowCommand(current_command) != 0U)) ? 1U : 0U;
+    }
+    if (config->output_source == AO_PROCESS_SOURCE_WATER_LEVEL) {
+        return ((state == STATE_FOLLOW_WATERING) &&
+                (AoOutput_IsWaterFollowCommand(current_command) != 0U)) ? 1U : 0U;
     }
     return 0U;
 }
 
-/* 按故障模式选择旁路阻尼的电流值。 */
-static uint32_t AoOutput_SelectFaultCurrent(const AoOutputConfig *config,
-                                             const AoProcessSample *sample)
+/*
+ * 函数用途：处理会改变过程电流解释的AO配置切换。
+ * 调用场景：AO初始化及每轮取得一致配置快照后调用。
+ * 关键约束：禁用、输出源、电流模式或量程变化会清除上次有效过程电流；阻尼变化只重置滤波。
+ */
+static void AoOutput_HandleConfigTransition(const AoOutputConfig *config)
 {
-    AoCurrentModeLimits limits = AoOutput_GetModeLimits(config->current_mode);
-    uint32_t fault_mode = config->fault_mode;
+    uint8_t clear_last_valid = 0U;
+    uint8_t reset_filter = 0U;
 
-    if (fault_mode == AO_FAULT_MODE_MINIMUM) {
-        return limits.fault_min_mA_x100;
+    if (config == NULL) {
+        return;
     }
-    if (fault_mode == AO_FAULT_MODE_LAST_VALID) {
-        return (ao_last_normal_current_valid != 0U) ?
-               ao_last_normal_current_mA_x100 : limits.fault_max_mA_x100;
-    }
-    if (fault_mode == AO_FAULT_MODE_ACTUAL_VALUE) {
-        if ((sample != NULL) && (sample->valid != 0U)) {
-            return AoOutput_MapProcessToCurrent(config, sample->value_01mm, NULL);
+
+    if (ao_config_snapshot_valid != 0U) {
+        if ((config->output_source != ao_last_config_snapshot.output_source) ||
+            (config->current_mode != ao_last_config_snapshot.current_mode) ||
+            (config->range_0_01mm != ao_last_config_snapshot.range_0_01mm) ||
+            (config->range_100_01mm != ao_last_config_snapshot.range_100_01mm)) {
+            clear_last_valid = 1U;
+            reset_filter = 1U;
+        } else if (config->damping_x10_s != ao_last_config_snapshot.damping_x10_s) {
+            reset_filter = 1U;
         }
-        return limits.fault_max_mA_x100;
     }
-    if (fault_mode == AO_FAULT_MODE_SET_VALUE) {
-        return AoOutput_ClampHardwareCurrent(config->fault_current_mA_x100);
+    if (config->work_mode == AO_WORK_MODE_DISABLED) {
+        clear_last_valid = 1U;
+        reset_filter = 1U;
     }
-    return limits.fault_max_mA_x100;
+
+    if (clear_last_valid != 0U) {
+        ao_last_normal_current_valid = 0U;
+        ao_last_normal_current_mA_x100 = 0U;
+    }
+    if (reset_filter != 0U) {
+        ao_filter_initialized = 0U;
+    }
+    ao_last_config_snapshot = *config;
+    ao_config_snapshot_valid = 1U;
+}
+
+/* 仅整机明确进入错误态且带真实错误码时执行AO故障动作。 */
+static uint8_t AoOutput_IsDeviceFault(void)
+{
+    DeviceState state;
+    uint32_t error_code;
+    uint32_t primask;
+
+    primask = __get_PRIMASK();
+    __disable_irq();
+    state = g_measurement.device_status.device_state;
+    error_code = g_measurement.device_status.error_code;
+    __set_PRIMASK(primask);
+
+    return ((state == STATE_ERROR) &&
+            (error_code != NO_ERROR) &&
+            (error_code != STATE_SWITCH)) ? 1U : 0U;
+}
+
+/* 按故障动作选择旁路阻尼的电流；保持动作无历史时回退非跟随电流。 */
+static uint32_t AoOutput_SelectFaultCurrent(const AoOutputConfig *config)
+{
+    if ((config->fault_mode == AO_FAULT_ACTION_HOLD_LAST_VALID) &&
+        (ao_last_normal_current_valid != 0U)) {
+        return ao_last_normal_current_mA_x100;
+    }
+    if (config->fault_mode == AO_FAULT_ACTION_HOLD_LAST_VALID) {
+        return config->power_on_current_mA_x100;
+    }
+    return config->fault_current_mA_x100;
 }
 
 /* 按固定优先级选择本轮目标，只有正常过程输出进入阻尼。 */
@@ -497,54 +584,42 @@ static uint32_t AoOutput_SelectTarget(const AoOutputConfig *config,
     }
 
     (void)AoOutput_ReadProcessSample((AoProcessSource)config->output_source, &sample);
-    *process_value_01mm = sample.value_01mm;
-    *process_valid = (sample.valid == 0U) ? 0U : 1U;
+    *process_value_01mm = 0;
+    *process_valid = 0U;
     *percent_x100 = 0;
-    if (sample.valid != 0U) {
-        (void)AoOutput_MapProcessToCurrent(config, sample.value_01mm, percent_x100);
-    } else {
-        ao_filter_initialized = 0U;
-    }
 
     if (config->work_mode == AO_WORK_MODE_DISABLED) {
-        ao_output_power_on_pending = 0U;
         *source = AO_OUTPUT_SOURCE_DISABLED;
         *target_mA_x100 = AO_DISABLED_CURRENT_MA_X100;
         return NO_ERROR;
     }
     if (ao_simulation_enabled != 0U) {
-        ao_output_power_on_pending = 0U;
         *source = AO_OUTPUT_SOURCE_SIMULATION;
         *target_mA_x100 = config->simulation_current_mA_x100;
         return NO_ERROR;
     }
-    if (AoOutput_ShouldUseBusinessFault(config) != 0U) {
-        ao_output_power_on_pending = 0U;
+    if (AoOutput_IsDeviceFault() != 0U) {
         *source = AO_OUTPUT_SOURCE_FAULT;
-        *target_mA_x100 = AoOutput_SelectFaultCurrent(config, &sample);
+        *target_mA_x100 = AoOutput_SelectFaultCurrent(config);
         return NO_ERROR;
     }
     if (config->current_mode == AO_CURRENT_MODE_FIXED) {
-        ao_output_power_on_pending = 0U;
         *source = AO_OUTPUT_SOURCE_FIXED;
         *target_mA_x100 = config->fixed_current_mA_x100;
         return NO_ERROR;
     }
-    if (ao_output_power_on_pending != 0U) {
-        if (sample.update_counter == 0U) {
-            *source = AO_OUTPUT_SOURCE_POWER_ON;
-            *target_mA_x100 = config->power_on_current_mA_x100;
-            return NO_ERROR;
-        }
-        ao_output_power_on_pending = 0U;
-    }
-    if (sample.valid == 0U) {
-        *source = AO_OUTPUT_SOURCE_FAULT;
-        *target_mA_x100 = AoOutput_SelectFaultCurrent(config, &sample);
+    if ((AoOutput_IsSelectedProcessFollowing(config) == 0U) ||
+        (sample.valid == 0U)) {
+        ao_filter_initialized = 0U;
+        *source = AO_OUTPUT_SOURCE_NON_FOLLOW;
+        *target_mA_x100 = config->power_on_current_mA_x100;
         return NO_ERROR;
     }
 
     filtered_01mm = AoOutput_FilterProcess(config, sample.value_01mm, now);
+    /* 运行态输入值与换算比例必须使用同一阻尼后过程量。 */
+    *process_value_01mm = filtered_01mm;
+    *process_valid = 1U;
     *source = AO_OUTPUT_SOURCE_PROCESS;
     *target_mA_x100 = AoOutput_MapProcessToCurrent(config, filtered_01mm, percent_x100);
     return NO_ERROR;
@@ -598,8 +673,13 @@ static uint8_t AoOutput_IsRuntimeDriverError(uint32_t error_code)
     return 0U;
 }
 
-/* 记录AO运行期硬件故障，不把后台故障升级为整机最终错误。 */
+/*
+ * 函数用途：记录AO运行期硬件故障，不把后台故障升级为整机最终错误。
+ * 调用场景：初始化或诊断失败传NULL；写电流失败传本轮待发布快照。
+ * 关键约束：保留最近成功下发电流，写失败时仍发布本轮过程输入和比例。
+ */
 static uint32_t AoOutput_RecordRuntimeDriverError(const AoOutputConfig *config,
+                                                   const AoOutputRuntime *runtime_base,
                                                    uint32_t now,
                                                    uint32_t error_code,
                                                    uint8_t preserve_driver_ready)
@@ -607,7 +687,11 @@ static uint32_t AoOutput_RecordRuntimeDriverError(const AoOutputConfig *config,
     AoOutputRuntime next;
     AoCurrentModeLimits limits = AoOutput_GetModeLimits(config->current_mode);
 
-    AoOutput_GetRuntimeSnapshot(&next);
+    if (runtime_base != NULL) {
+        next = *runtime_base;
+    } else {
+        AoOutput_GetRuntimeSnapshot(&next);
+    }
     if (preserve_driver_ready == 0U) {
         ao_output_driver_ready = 0U;
     }
@@ -626,7 +710,7 @@ static uint32_t AoOutput_RecordRuntimeDriverError(const AoOutputConfig *config,
     return NO_ERROR;
 }
 
-/* 按当前工作模式选择芯片初始化时应保持的电流。 */
+/* 按当前工作模式选择芯片初始化时应保持的禁用、固定或非跟随电流。 */
 static uint32_t AoOutput_GetInitialCurrent(const AoOutputConfig *config)
 {
     if (config->work_mode == AO_WORK_MODE_DISABLED) {
@@ -702,7 +786,7 @@ static uint8_t AoOutput_ShouldWriteCurrent(uint32_t now, uint32_t target_mA_x100
     return ((now - ao_output_runtime.last_sent_tick) >= AO_OUTPUT_REFRESH_INTERVAL_MS) ? 1U : 0U;
 }
 
-/* 初始化AO并锁存一次上电等待状态，直到所选过程源首次明确发布。 */
+/* 初始化AO并按当前配置写入禁用、固定或非跟随电流。 */
 uint32_t AoOutput_Init(void)
 {
     AoOutputConfig config;
@@ -721,22 +805,21 @@ uint32_t AoOutput_Init(void)
     ao_output_diag_valid = 0U;
     ao_output_write_attempt_valid = 0U;
     ao_last_normal_current_valid = 0U;
+    ao_last_normal_current_mA_x100 = 0U;
+    ao_config_snapshot_valid = 0U;
     ao_filter_initialized = 0U;
     memset(ao_process_samples, 0, sizeof(ao_process_samples));
     ao_simulation_enabled = 0U;
 
     AoOutput_GetConfigSnapshot(&config);
-    ao_output_power_on_pending =
-            (((config.work_mode == AO_WORK_MODE_CURRENT_OUTPUT) ||
-              (config.work_mode == AO_WORK_MODE_HART_SLAVE_OUTPUT)) &&
-             (config.current_mode != AO_CURRENT_MODE_FIXED)) ? 1U : 0U;
+    AoOutput_HandleConfigTransition(&config);
     initial_mA_x100 = AoOutput_GetInitialCurrent(&config);
     next.target_mA_x100 = initial_mA_x100;
     next.last_sent_mA_x100 = 0U;
     next.source = (config.work_mode == AO_WORK_MODE_DISABLED) ?
                   AO_OUTPUT_SOURCE_DISABLED :
                   ((config.current_mode == AO_CURRENT_MODE_FIXED) ?
-                   AO_OUTPUT_SOURCE_FIXED : AO_OUTPUT_SOURCE_POWER_ON);
+                   AO_OUTPUT_SOURCE_FIXED : AO_OUTPUT_SOURCE_NON_FOLLOW);
     next.last_update_tick = now;
     next.last_error_code = NO_ERROR;
     next.simulation_enabled = 0U;
@@ -768,7 +851,7 @@ static uint32_t AoOutput_UpdateInternal(uint8_t allow_driver_init)
 {
     AoOutputConfig config;
     AoOutputRuntime next;
-    AoOutputSource source = AO_OUTPUT_SOURCE_POWER_ON;
+    AoOutputSource source = AO_OUTPUT_SOURCE_NON_FOLLOW;
     uint32_t now;
     uint32_t initial_mA_x100;
     uint32_t target_mA_x100 = 400U;
@@ -778,16 +861,19 @@ static uint32_t AoOutput_UpdateInternal(uint8_t allow_driver_init)
     int32_t process_value_01mm = 0;
     int32_t percent_x100 = 0;
     uint8_t should_send;
+    uint8_t process_write_succeeded = 0U;
 
     if (ao_output_initialized == 0U) {
         return NO_ERROR;
     }
     AoOutput_GetConfigSnapshot(&config);
+    AoOutput_HandleConfigTransition(&config);
     now = HAL_GetTick();
     initial_mA_x100 = AoOutput_GetInitialCurrent(&config);
     ret = AoOutput_EnsureDriverReady(now, allow_driver_init, initial_mA_x100);
     if (ret != NO_ERROR) {
         return AoOutput_RecordRuntimeDriverError(&config,
+                                                  NULL,
                                                   now,
                                                   ret,
                                                   AoOutput_IsOvertemperatureError(ret));
@@ -820,6 +906,7 @@ static uint32_t AoOutput_UpdateInternal(uint8_t allow_driver_init)
                     (AoOutput_IsOvertemperatureError(diag_ret) != 0U) ? 1U : 0U;
 
             return AoOutput_RecordRuntimeDriverError(&config,
+                                                      NULL,
                                                       now,
                                                       recover_ret,
                                                       preserve_driver_ready);
@@ -852,7 +939,6 @@ static uint32_t AoOutput_UpdateInternal(uint8_t allow_driver_init)
     next.simulation_enabled = ao_simulation_enabled;
     next.dac_readback_mA_x100 = 0U;
     next.dac_readback_valid = 0U;
-    next.update_counter++;
 
     if (should_send != 0U) {
         ret = AD5421_SetCurrentX100(target_mA_x100);
@@ -864,21 +950,25 @@ static uint32_t AoOutput_UpdateInternal(uint8_t allow_driver_init)
         if (ret == NO_ERROR) {
             next.last_sent_mA_x100 = target_mA_x100;
             next.last_sent_tick = now;
+            if (source == AO_OUTPUT_SOURCE_PROCESS) {
+                process_write_succeeded = 1U;
+            }
             ao_output_last_recover_target_mA_x100 = target_mA_x100;
             AoOutput_QueueDriverRecovery();
         } else {
             return AoOutput_RecordRuntimeDriverError(&config,
+                                                      &next,
                                                       now,
                                                       ret,
                                                       AoOutput_IsOvertemperatureError(ret));
         }
     }
 
-    if ((source == AO_OUTPUT_SOURCE_PROCESS) &&
-        (next.last_sent_mA_x100 == target_mA_x100)) {
+    if (process_write_succeeded != 0U) {
         ao_last_normal_current_mA_x100 = target_mA_x100;
         ao_last_normal_current_valid = 1U;
     }
+    next.update_counter++;
     AoOutput_CommitRuntime(&next);
     return NO_ERROR;
 }

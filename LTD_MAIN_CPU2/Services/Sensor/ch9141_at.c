@@ -8,6 +8,7 @@
 #include "sensor_safe_transport_uart6.h"
 
 #include "sensor.h"
+#include "error_log.h"
 #include "system_parameter.h"
 #include "usart.h"
 
@@ -589,6 +590,38 @@ uint32_t CH9141_AT_EnterSoftwareMode(CH9141AtResponse *response)
         ch9141_boot_percent_pending = 0U;
         printf("CH9141K AT\t上电百分号透传已忽略\t动作=重试进入AT\r\n");
         ret = CH9141_AT_SendCommand("AT...", CH9141_AT_WAIT_ACK, CH9141_AT_ENTER_TIMEOUT_MS, response);
+    } else if ((ret == SENSOR_DEVICE_COMM_TIMEOUT) &&
+               (boot_percent_retry_allowed != 0U) &&
+               (response != NULL) &&
+               (response->len != 0U) &&
+               (response->has_ok == 0U) &&
+               (response->has_err == 0U)) {
+        ch9141_boot_percent_pending = 0U;
+        /* 错误 阶段：错误重试 模块：滑环通信 操作：进入蓝牙AT模式 原因：ErrorLog_GetReasonByCode(ret) 尝试：1/1 错误码：ret 错误名：ErrorLog_GetCodeName(ret) */
+        ErrorLog_Retry(ERROR_LOG_MODULE_SLIPRING_COMM,
+                       "进入蓝牙AT模式",
+                       ErrorLog_GetReasonByCode(ret),
+                       1U,
+                       1U,
+                       ret);
+        /* 首次上电收到非完整响应时先恢复透明模式和 UART6，再从空闲等待开始完整重试一次。 */
+        CH9141_AT_RecoverTransparentMode(1U);
+        CH9141_AT_ResetResponse(response);
+        ret = CH9141_AT_PrepareUart6(CH9141_AT_SOFTWARE_IDLE_MS);
+        if (ret == NO_ERROR) {
+            ret = CH9141_AT_SendCommand("AT...",
+                                        CH9141_AT_WAIT_ACK,
+                                        CH9141_AT_ENTER_TIMEOUT_MS,
+                                        response);
+        }
+        if (ret == NO_ERROR) {
+            /* 错误 阶段：重试成功 模块：滑环通信 操作：进入蓝牙AT模式 原因：上电AT响应恢复 尝试：1/1 */
+            ErrorLog_Recover(ERROR_LOG_MODULE_SLIPRING_COMM,
+                             "进入蓝牙AT模式",
+                             "上电AT响应恢复",
+                             1U,
+                             1U);
+        }
     } else {
         ch9141_boot_percent_pending = 0U;
     }

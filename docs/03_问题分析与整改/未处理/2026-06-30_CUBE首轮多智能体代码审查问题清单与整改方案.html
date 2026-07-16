@@ -861,28 +861,28 @@
 
         <article class="issue p1" id="issue-p1-11">
           <div class="issue-head">
-            <h3 class="issue-title">P1-11 Wartsila FC16 byteCount 校验错误，标准写帧会被拒绝</h3>
-            <span class="badge p1">P1</span>
+            <h3 class="issue-title">P1-11 Wartsila FC16 现场特殊 byteCount 兼容被误判</h3>
+            <span class="badge p1">已闭环</span>
           </div>
           <div class="evidence">
-            <strong>证据位置：</strong><code>LTD_DISPLAY_CPU3/Communication/external/wartsila_modbus/wartsila_modbus_communication.c:104-145</code>。
+            <strong>证据位置：</strong><code>docs/01_协议与寄存器/Wartsila协议适配/2026-01-27_莆田现场Wartsila抓包协议整理.md</code>、<code>LTD_DISPLAY_CPU3/Communication/external/external_read_freshness.h</code>。
           </div>
           <h4>问题原因</h4>
           <p>
-            标准 Modbus FC16 的 <code>byteCount</code> 应等于 <code>qty * 2</code>，PDU 长度应等于 <code>6 + byteCount</code>。当前代码却检查 <code>bytes == qty</code>，并检查 <code>pdu_len == 6 + 2 * bytes</code>。
+            原审查只按标准 Modbus 判断，未纳入莆田现场抓包证据。现场 Wartsila 主机的 <code>byteCount</code> 等于 <code>qty</code>，但数据区仍包含 <code>2 * qty</code> 字节；直接改成只接受 <code>qty * 2</code> 会破坏现场主机兼容。
           </p>
           <h4>影响</h4>
           <p>
-            Wartsila 外部主站按标准发送写多个寄存器帧时会被拒绝，参数/命令无法写入；非标准帧反而可能通过部分校验。
+            只保留现场格式会拒绝标准调试工具；只保留标准格式则会拒绝真实 Wartsila 主机，并返回 FC16 异常码 <code>0x03</code>。两种单边实现都会造成参数或命令无法写入。
           </p>
           <h4>整改方案</h4>
           <ul>
-            <li>改为 <code>bytes == qty * 2U</code>。</li>
-            <li>改为 <code>pdu_len == 6U + bytes</code>。</li>
-            <li>同时确认 <code>qty <= 123</code>，避免响应和请求超出 RTU 单帧合理上限。</li>
+            <li><strong>现场兼容特例：</strong>同时接受 <code>byteCount == qty</code> 和 <code>byteCount == qty * 2U</code>，禁止后续通用 Modbus 整改删除前一分支。</li>
+            <li>两种格式的数据区都必须严格为 <code>2 * qty</code> 字节，因此 PDU 长度统一检查 <code>6U + 2U * qty</code>，不得按现场 <code>byteCount</code> 直接推导长度。</li>
+            <li>保持 <code>1 &lt;= qty &lt;= 123</code>，避免请求超出 RTU 单帧合理上限。</li>
           </ul>
           <h4>验证建议</h4>
-          <p>补 Wartsila FC16 golden frame，覆盖命令地址和参数地址，确认标准帧成功、错误 byte count 帧异常。</p>
+          <p>已补生产共享契约测试，覆盖现场格式、标准格式、单寄存器、四寄存器、最大数量、截短、超长和其它 byte count；现场命令帧 <code>01 10 00 06 00 01 01 00 05 96 35</code> 必须保持成功。</p>
         </article>
 
         <article class="issue p1" id="issue-p1-12">
@@ -1418,7 +1418,7 @@
         <h2>建议整改顺序</h2>
         <ol>
           <li>第一批：修复 P0 三项。重点是 CPU2 FC04/FC10 帧边界和电机失步错误传播，这三项影响内存安全和运动安全。</li>
-          <li>第二批：修复 P1 中的协议边界问题，包括保持寄存器 off-by-one、FC03 数量限制、CPU3 内部 FC04 短帧校验、Wartsila FC16 校验。</li>
+          <li>第二批：修复 P1 中的协议边界问题，包括保持寄存器 off-by-one、FC03 数量限制和 CPU3 内部 FC04 短帧校验；Wartsila FC16 已依据现场抓包改为现场/标准双格式兼容并闭环。</li>
           <li>第三批：修复测量状态一致性，包括 <code>MeasureStart()</code> 重复调用、取消停机失败、<code>STATE_SWITCH</code> 完成态、密度部分结果完整性。</li>
           <li>第四批：修复故障和恢复可靠性，包括扭力通信超时、编码器错误异步清除、罐底 fallback、自动恢复严格健康检查。</li>
           <li>第五批：修复 CPU3 显示参数实际生效、FRAM 参数合法化、长标题布局和 Wartsila/DSM 协议一致性。</li>
@@ -1454,7 +1454,7 @@
             </tr>
             <tr>
               <td>CPU3 通信</td>
-              <td>CPU2 FC04 短响应、协议版本不匹配、Wartsila FC16 标准帧/错误帧、DSM 地址 0。</td>
+              <td>CPU2 FC04 短响应、协议版本不匹配、Wartsila FC16 现场帧/标准帧/错误帧、DSM 地址 0。</td>
               <td>确认 CPU3 不解析错帧，不对外发布错位数据，外部协议行为符合契约。</td>
             </tr>
             <tr>

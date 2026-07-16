@@ -278,28 +278,36 @@ static inline uint8_t CPU3_ExternalWartsilaCommandIsSupported(uint16_t command)
 }
 
 /*
+ * 【Wärtsilä 现场兼容特例，禁止仅按通用 Modbus 规则收紧】
  * 函数用途：校验 Wärtsilä FC10 的数量、字节数和 PDU 长度关系。
  * 调用场景：FC10 解析头部后、访问数据区或寄存器池之前调用。
- * 关键约束：标准 Modbus 要求 byteCount=2*quantity，PDU 长度为 6+byteCount。
+ * 关键约束：莆田现场主机使用 byteCount=quantity，但数据区仍为
+ *           2*quantity 字节；同时兼容标准 Modbus 的 byteCount=2*quantity。
+ *           两种格式的 PDU 长度都必须严格等于 6+2*quantity，不能按现场
+ *           byteCount 字段直接推导数据区长度。
  */
 static inline uint8_t CPU3_ExternalWartsilaWriteShapeIsValid(uint16_t quantity,
                                                              uint8_t byte_count,
                                                              uint16_t pdu_length)
 {
-    uint16_t expected_bytes;
+    uint16_t expected_data_bytes;
+    uint8_t byte_count_is_wartsila;
+    uint8_t byte_count_is_standard;
 
     if ((quantity < 1U) || (quantity > 0x007BU))
     {
         return 0U;
     }
 
-    expected_bytes = (uint16_t)(quantity * 2U);
-    if ((uint16_t)byte_count != expected_bytes)
+    expected_data_bytes = (uint16_t)(quantity * 2U);
+    byte_count_is_wartsila = ((uint16_t)byte_count == quantity) ? 1U : 0U;
+    byte_count_is_standard = ((uint16_t)byte_count == expected_data_bytes) ? 1U : 0U;
+    if ((byte_count_is_wartsila == 0U) && (byte_count_is_standard == 0U))
     {
         return 0U;
     }
 
-    return (pdu_length == (uint16_t)(6U + expected_bytes)) ? 1U : 0U;
+    return (pdu_length == (uint16_t)(6U + expected_data_bytes)) ? 1U : 0U;
 }
 
 /*

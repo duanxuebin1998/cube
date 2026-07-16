@@ -1,2 +1,6 @@
+/.gitattributes text eol=lf
 *.pdf binary
 tools/git-hooks/* text eol=lf
+docs/05_测试记录/协议台架验收/*.json text eol=lf
+docs/05_测试记录/协议台架验收/*.md text eol=lf
+docs/05_测试记录/协议台架验收/*.csv text eol=lf

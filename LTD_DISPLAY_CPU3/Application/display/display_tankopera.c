@@ -34,6 +34,15 @@
 #define TAPE_THICKNESS_CUSTOM_INDEX 3
 #define MOTOR_CURRENT_RMS_TABLE_OFFSET MOTOR_CURRENT_MIN
 #define AO_RANGE_PAIR_REGISTER_COUNT 4U
+#define AO_RUNTIME_SOURCE_NON_FOLLOW  0U
+#define AO_RUNTIME_SOURCE_PROCESS     1U
+#define AO_RUNTIME_SOURCE_FAULT       2U
+#define AO_RUNTIME_SOURCE_SIMULATION  3U
+#define AO_RUNTIME_SOURCE_FIXED       4U
+#define AO_RUNTIME_SOURCE_DISABLED    5U
+#define AO_RUNTIME_SOURCE_DRIVER_ERR  6U
+#define AO_RUNTIME_SOURCE_COUNT       7U
+#define AO_RUNTIME_SOURCE_UNAVAILABLE AO_RUNTIME_SOURCE_COUNT
 #define AO_CONFIG_REGISTER_COUNT ((uint16_t)(HOLDREGISTER_DEVICEPARAM_AO_SIMULATION_CURRENT_MA_X100 - \
                                              HOLDREGISTER_DEVICEPARAM_AO_WORK_MODE + REG_STRIDE))
 extern volatile uint8_t g_cpu3_uart_reinit_pending; /* CPU3 串口重初始化标志 */
@@ -96,14 +105,14 @@ static uint8_t *arr_position_source_auto_switch[][2] = {
 static uint8_t *arr_ao_work_mode[][2] = {
 	{ (uint8_t*)"禁用", (uint8_t*)"Disabled" },
 	{ (uint8_t*)"4-20mA输出", (uint8_t*)"4-20mA Output" },
-	{ (uint8_t*)"HART从机+输出", (uint8_t*)"HART+Output" },
+	{ (uint8_t*)"HART从站+输出", (uint8_t*)"HART+Output" },
 	{ (uint8_t*)"非法配置", (uint8_t*)"Illegal CFG" },
 };
 
 static uint8_t *arr_ao_current_mode[][2] = {
 	{ (uint8_t*)"NE 4-20mA", (uint8_t*)"NE 4-20mA" },
 	{ (uint8_t*)"US 4-20mA", (uint8_t*)"US 4-20mA" },
-	{ (uint8_t*)"正常4-20mA", (uint8_t*)"Normal 4-20mA" },
+	{ (uint8_t*)"普通4-20mA", (uint8_t*)"Normal 4-20mA" },
 	{ (uint8_t*)"固定电流", (uint8_t*)"Fixed Current" },
 	{ (uint8_t*)"非法配置", (uint8_t*)"Illegal CFG" },
 };
@@ -116,19 +125,20 @@ static uint8_t *arr_ao_output_source[][2] = {
 };
 
 static uint8_t *arr_ao_fault_mode[][2] = {
-	{ (uint8_t*)"最小值", (uint8_t*)"Minimum" },
-	{ (uint8_t*)"最大值", (uint8_t*)"Maximum" },
-	{ (uint8_t*)"上次有效值", (uint8_t*)"Last Valid" },
-	{ (uint8_t*)"实时值", (uint8_t*)"Actual Value" },
-	{ (uint8_t*)"设定值", (uint8_t*)"Set Value" },
+	{ (uint8_t*)"故障电流", (uint8_t*)"Fault Current" },
+	{ (uint8_t*)"保持上次", (uint8_t*)"Hold Last" },
 	{ (uint8_t*)"非法配置", (uint8_t*)"Illegal CFG" },
 };
 
-static uint8_t *arr_ao_error_level[][2] = {
-	{ (uint8_t*)"无", (uint8_t*)"None" },
-	{ (uint8_t*)"提示", (uint8_t*)"Warning" },
-	{ (uint8_t*)"报警", (uint8_t*)"Alarm" },
-	{ (uint8_t*)"非法配置", (uint8_t*)"Illegal CFG" },
+static uint8_t *arr_ao_runtime_source[][2] = {
+	{ (uint8_t*)"AO:非跟随", (uint8_t*)"AO:Non-follow" },
+	{ (uint8_t*)"AO:过程", (uint8_t*)"AO:Process" },
+	{ (uint8_t*)"AO:故障", (uint8_t*)"AO:Fault" },
+	{ (uint8_t*)"AO:模拟", (uint8_t*)"AO:Simulation" },
+	{ (uint8_t*)"AO:固定", (uint8_t*)"AO:Fixed" },
+	{ (uint8_t*)"AO:禁用", (uint8_t*)"AO:Disabled" },
+	{ (uint8_t*)"AO:驱动故障", (uint8_t*)"AO:Driver Err" },
+	{ (uint8_t*)"AO:N/A", (uint8_t*)"AO:Unavailable" },
 };
 
 static uint8_t *arr_ao_simulation_enable[][2] = {
@@ -1047,7 +1057,7 @@ bool DisplayTankOpera_IsDebugWeightWaitActive(void)
 
 /**
  * @brief 判断当前是否显示 AO 运行状态页。
- * @return true 表示周期刷新应重绘 AO 输入值与输入百分比。
+ * @return true 表示周期刷新应重绘 AO 输入值、输入百分比与输出电流。
  */
 bool DisplayTankOpera_IsAoRuntimeActive(void)
 {
@@ -1429,6 +1439,8 @@ static uint8_t *dtm_operaname(int num)
         return returnWordType((uint8_t*)"输入值", (uint8_t*)"Input Value");
     case COM_NUM_AO_RUNTIME_PERCENT:
         return returnWordType((uint8_t*)"输入比例", (uint8_t*)"Input Percent");
+    case COM_NUM_AO_RUNTIME_OUTPUT_CURRENT:
+        return returnWordType((uint8_t*)"输出电流", (uint8_t*)"Output Current");
     default:
         break;
     }
@@ -1839,14 +1851,15 @@ static uint8_t *dtm_operaname_short(int num, uint8_t *fallback)
 		{ COM_NUM_DEVICEPARAM_AO_RANGE_0_01MM, (uint8_t*)"0%对应值", (uint8_t*)"0% Value" },
 		{ COM_NUM_DEVICEPARAM_AO_RANGE_100_01MM, (uint8_t*)"100%值", (uint8_t*)"100% Value" },
 		{ COM_NUM_DEVICEPARAM_AO_DAMPING_X10_S, (uint8_t*)"阻尼系数", (uint8_t*)"Damping" },
-		{ COM_NUM_DEVICEPARAM_AO_FAULT_MODE, (uint8_t*)"故障模式", (uint8_t*)"Fault Mode" },
+		{ COM_NUM_DEVICEPARAM_AO_FAULT_MODE, (uint8_t*)"故障动作", (uint8_t*)"Fault Action" },
 		{ COM_NUM_DEVICEPARAM_AO_FAULT_CURRENT_MA_X100, (uint8_t*)"故障电流", (uint8_t*)"Fault Current" },
-		{ COM_NUM_DEVICEPARAM_AO_ERROR_LEVEL, (uint8_t*)"错误等级", (uint8_t*)"Error Level" },
-		{ COM_NUM_DEVICEPARAM_AO_POWER_ON_CURRENT_MA_X100, (uint8_t*)"上电电流", (uint8_t*)"Power-on Cur" },
+		{ COM_NUM_DEVICEPARAM_AO_ERROR_LEVEL, (uint8_t*)"隐藏预留", (uint8_t*)"Reserved" },
+		{ COM_NUM_DEVICEPARAM_AO_POWER_ON_CURRENT_MA_X100, (uint8_t*)"非跟随电流", (uint8_t*)"Non-follow Cur" },
 		{ COM_NUM_DEVICEPARAM_AO_SIMULATION_CURRENT_MA_X100, (uint8_t*)"模拟电流", (uint8_t*)"Sim Current" },
 		{ COM_NUM_AO_SIMULATION_ENABLE, (uint8_t*)"输出模拟", (uint8_t*)"Simulation" },
 		{ COM_NUM_AO_RUNTIME_PROCESS_VALUE, (uint8_t*)"输入值", (uint8_t*)"Input Value" },
 		{ COM_NUM_AO_RUNTIME_PERCENT, (uint8_t*)"输入比例", (uint8_t*)"Input Percent" },
+		{ COM_NUM_AO_RUNTIME_OUTPUT_CURRENT, (uint8_t*)"输出电流", (uint8_t*)"Output Current" },
 		{ COM_NUM_DEVICEPARAM_OILLEVEL_HYSTERESIS_THRESHOLD, (uint8_t*)"滞后阈值", (uint8_t*)"HysTh" },
 		{ COM_NUM_DEVICEPARAM_SP_MEAS_POSITION, (uint8_t*)"测量位置", (uint8_t*)"SP_MeasPos" },
 		{ COM_NUM_DEVICEPARAM_SP_MONITOR_POSITION, (uint8_t*)"监测位置", (uint8_t*)"SP_MonPos" },
@@ -3487,7 +3500,7 @@ static bool ao_work_mode_is_output(void)
 	       (g_deviceParams.ao_output.work_mode == AO_WORK_MODE_HART_SLAVE_OUTPUT);
 }
 
-/* 判断操作码是否属于协议20的13项AO持久化配置。 */
+/* 判断操作码是否属于协议23沿用的13项AO持久化配置。 */
 static bool ao_param_is_config(int operaNum)
 {
 	switch (operaNum) {
@@ -3523,7 +3536,6 @@ static bool ao_param_is_editable(int operaNum)
 	case COM_NUM_DEVICEPARAM_AO_DAMPING_X10_S:
 	case COM_NUM_DEVICEPARAM_AO_FAULT_MODE:
 	case COM_NUM_DEVICEPARAM_AO_FAULT_CURRENT_MA_X100:
-	case COM_NUM_DEVICEPARAM_AO_ERROR_LEVEL:
 	case COM_NUM_DEVICEPARAM_AO_POWER_ON_CURRENT_MA_X100:
 	case COM_NUM_DEVICEPARAM_AO_SIMULATION_CURRENT_MA_X100:
 		return true;
@@ -4361,12 +4373,6 @@ uint8_t *(*dtm_disarr(int *pindex, int *plen))[2]
 		index = param_meta[index].val;
 		len = (int)(sizeof(arr_ao_fault_mode) / sizeof(arr_ao_fault_mode[0]));
 		p = arr_ao_fault_mode;
-		break;
-	}
-	case COM_NUM_DEVICEPARAM_AO_ERROR_LEVEL: {
-		index = param_meta[index].val;
-		len = (int)(sizeof(arr_ao_error_level) / sizeof(arr_ao_error_level[0]));
-		p = arr_ao_error_level;
 		break;
 	}
 	case COM_NUM_DEVICEPARAM_POSITION_COUNT_MODE: {
@@ -5352,7 +5358,6 @@ static MenuGroup ParamGroupOf(int operaNum)
     /* AO故障设置 */
     case COM_NUM_DEVICEPARAM_AO_FAULT_MODE:
     case COM_NUM_DEVICEPARAM_AO_FAULT_CURRENT_MA_X100:
-    case COM_NUM_DEVICEPARAM_AO_ERROR_LEVEL:
     case COM_NUM_DEVICEPARAM_AO_POWER_ON_CURRENT_MA_X100:
         return MENU_GRP_AO_FAULT;
 
@@ -5362,9 +5367,11 @@ static MenuGroup ParamGroupOf(int operaNum)
 
     case COM_NUM_AO_RUNTIME_PROCESS_VALUE:
     case COM_NUM_AO_RUNTIME_PERCENT:
+    case COM_NUM_AO_RUNTIME_OUTPUT_CURRENT:
         return MENU_GRP_AO_RUNTIME;
 
     case COM_NUM_DEVICEPARAM_AO_SIL_WHG_RESERVED:
+    case COM_NUM_DEVICEPARAM_AO_ERROR_LEVEL:
         return MENU_GRP_AO_RESERVED;
 
     /* 标定/单点/位置 */
@@ -6323,7 +6330,7 @@ static void menu_relay4_status(void)
 static void menu_ao(void)
 {
 	static struct MenuData menu[] = {
-		{(uint8_t*)"通道设置", 0, menu_ao_channel,    COMMANE_NORW, (uint8_t*)"Channel"},
+		{(uint8_t*)"基本设置", 0, menu_ao_channel,    COMMANE_NORW, (uint8_t*)"Basic"},
 		{(uint8_t*)"量程设置", 0, menu_ao_range,      COMMANE_NORW, (uint8_t*)"Range"},
 		{(uint8_t*)"故障设置", 0, menu_ao_fault,      COMMANE_NORW, (uint8_t*)"Fault"},
 		{(uint8_t*)"运行状态", 0, menu_ao_runtime,    COMMANE_NORW, (uint8_t*)"Runtime"},
@@ -6336,7 +6343,7 @@ static void menu_ao(void)
 	menuselect(menu, (int)(sizeof(menu) / sizeof(menu[0])));
 }
 
-/* AO通道设置：工作模式、电流模式、输出源。 */
+/* AO基本设置：工作模式、电流模式、输出源。 */
 static void menu_ao_channel(void)
 {
 	menu_build_by_group(MENU_GRP_AO_CHANNEL, KEYNUM_MENU_AO_CHANNEL, menu_ao);
@@ -6348,17 +6355,85 @@ static void menu_ao_range(void)
 	menu_build_by_group(MENU_GRP_AO_RANGE, KEYNUM_MENU_AO_RANGE, menu_ao);
 }
 
-/* AO故障设置：故障模式、故障电流、错误级别、上电电流。 */
+/* AO故障设置：故障动作、故障电流、非跟随电流。 */
 static void menu_ao_fault(void)
 {
 	menu_build_by_group(MENU_GRP_AO_FAULT, KEYNUM_MENU_AO_FAULT, menu_ao);
 }
 
-/* AO运行状态同时从同一份快照显示输入值和输入百分比。 */
+/*
+ * 函数用途：安全格式化AO有符号百分比，避免对INT32_MIN直接取绝对值。
+ * 调用场景：AO运行状态页显示CPU2快照中的0.01%定点数。
+ * 关键约束：优先保留有效小数，空间不足时逐级降精度，仍放不下则显示OVER。
+ */
+static void ao_format_percent_x100(int32_t percent_x100,
+								   uint8_t max_width,
+								   char *text,
+								   size_t text_size)
+{
+	uint32_t magnitude;
+	uint32_t fraction;
+	uint8_t points;
+	const char *sign;
+	int written;
+
+	if ((text == NULL) || (text_size == 0U)) {
+		return;
+	}
+
+	magnitude = (percent_x100 < 0) ?
+	            (uint32_t)(-(int64_t)percent_x100) : (uint32_t)percent_x100;
+	fraction = magnitude % 100U;
+	sign = (percent_x100 < 0) ? "-" : "";
+	points = (fraction == 0U) ? 0U : (((fraction % 10U) == 0U) ? 1U : 2U);
+
+	for (;;) {
+		if (points >= 2U) {
+			written = snprintf(text,
+			                   text_size,
+			                   "%s%lu.%02lu%%",
+			                   sign,
+			                   (unsigned long)(magnitude / 100U),
+			                   (unsigned long)fraction);
+		} else if (points == 1U) {
+			written = snprintf(text,
+			                   text_size,
+			                   "%s%lu.%01lu%%",
+			                   sign,
+			                   (unsigned long)(magnitude / 100U),
+			                   (unsigned long)(fraction / 10U));
+		} else {
+			written = snprintf(text,
+			                   text_size,
+			                   "%s%lu%%",
+			                   sign,
+			                   (unsigned long)(magnitude / 100U));
+		}
+
+		if ((written >= 0) &&
+		    ((size_t)written < text_size) &&
+		    (oled_text_width((const uint8_t *)text) <= max_width)) {
+			return;
+		}
+		if (points == 0U) {
+			break;
+		}
+		points--;
+	}
+
+	(void)snprintf(text, text_size, "OVER");
+}
+
+/* AO运行状态从同一份CPU2快照显示过程输入、输入比例和最近成功下发电流。 */
 static void menu_ao_runtime(void)
 {
 	AoOutputRuntime snapshot;
-	bool value_valid;
+	bool runtime_valid;
+	bool process_valid;
+	bool current_valid;
+	uint32_t source_index;
+	char percent_text[16];
+	char current_text[16];
 	uint8_t line;
 
 	if (NowKeyPress == USE_KEY_BACK) {
@@ -6370,27 +6445,54 @@ static void menu_ao_runtime(void)
 	}
 
 	memcpy(&snapshot, (const void *)&g_measurement.ao_output_runtime, sizeof(snapshot));
-	value_valid = ao_work_mode_is_output() &&
-	              (g_deviceParams.ao_output.current_mode != AO_CURRENT_MODE_FIXED) &&
-	              (snapshot.process_valid != 0U);
+	runtime_valid = CPU2_CommIsAvailable();
+	source_index = (runtime_valid && (snapshot.source < AO_RUNTIME_SOURCE_COUNT)) ?
+	               snapshot.source : AO_RUNTIME_SOURCE_UNAVAILABLE;
+	process_valid = runtime_valid &&
+	                ao_work_mode_is_output() &&
+	                (snapshot.source == AO_RUNTIME_SOURCE_PROCESS) &&
+	                (snapshot.process_valid != 0U);
+	current_valid = runtime_valid &&
+	                ao_work_mode_is_output() &&
+	                (snapshot.source != AO_RUNTIME_SOURCE_DISABLED) &&
+	                (snapshot.last_sent_mA_x100 != 0U);
 
 	oled_clear();
 	func_index = KEYNUM_MENU_AO_RUNTIME;
-	DisplayLangaugeLineWords((uint8_t*)"AO运行状态", OLED_LINE8_1, OLED_ROW4_1, 0, (uint8_t*)"AO Runtime");
+	OledDisplayLineWords(arr_ao_runtime_source[source_index][screen_parameter.language],
+	                     OLED_LINE8_1,
+	                     OLED_ROW4_1,
+	                     0);
 	line = DisplayLangaugeLineWords((uint8_t*)"输入值:", OLED_LINE8_1, OLED_ROW4_2, 0, (uint8_t*)"Input:");
-	if (value_valid) {
+	if (process_valid) {
 		OledValueDisplay((int)snapshot.process_value_01mm, line, OLED_ROW4_2, 0, 1, (uint8_t*)"mm");
 	} else {
 		OledDisplayLineWords((uint8_t*)"N/A", line, OLED_ROW4_2, 0);
 	}
 
 	line = DisplayLangaugeLineWords((uint8_t*)"输入比例:", OLED_LINE8_1, OLED_ROW4_3, 0, (uint8_t*)"Percent:");
-	if (value_valid) {
-		OledValueDisplay((int)snapshot.percent_x100, line, OLED_ROW4_3, 0, 2, (uint8_t*)"%");
+	if (process_valid) {
+		ao_format_percent_x100(snapshot.percent_x100,
+		                       (uint8_t)((OLED_LINE8_END + 1U) - line),
+		                       percent_text,
+		                       sizeof(percent_text));
+		OledDisplayLineWords((uint8_t*)percent_text, line, OLED_ROW4_3, 0);
 	} else {
 		OledDisplayLineWords((uint8_t*)"N/A", line, OLED_ROW4_3, 0);
 	}
-	DisplayLangaugeLineWords((uint8_t*)"返回", OLED_LINE8_1, OLED_ROW4_4, 0, (uint8_t*)"Back");
+
+	/* 第4行用于显示输出电流，物理返回键仍由运行状态页按键表处理。 */
+	line = DisplayLangaugeLineWords((uint8_t*)"输出电流:", OLED_LINE8_1, OLED_ROW4_4, 0, (uint8_t*)"Output:");
+	if (current_valid) {
+		(void)snprintf(current_text,
+		               sizeof(current_text),
+		               "%lu.%02lumA",
+		               (unsigned long)(snapshot.last_sent_mA_x100 / 100U),
+		               (unsigned long)(snapshot.last_sent_mA_x100 % 100U));
+		OledDisplayLineWords((uint8_t*)current_text, line, OLED_ROW4_4, 0);
+	} else {
+		OledDisplayLineWords((uint8_t*)"N/A", line, OLED_ROW4_4, 0);
+	}
 }
 
 /* AO诊断仿真仅显示非持久化仿真开关和已持久化的仿真电流。 */

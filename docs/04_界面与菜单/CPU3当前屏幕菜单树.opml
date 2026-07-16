@@ -279,7 +279,7 @@
             </outline>
           </outline>
           <outline text="AO输出">
-            <outline text="通道设置">
+            <outline text="基本设置">
               <outline text="工作模式" />
               <outline text="电流模式" />
               <outline text="输出源" />
@@ -291,14 +291,15 @@
               <outline text="阻尼系数" />
             </outline>
             <outline text="故障设置">
-              <outline text="故障模式" />
+              <outline text="故障动作" />
               <outline text="故障电流" />
-              <outline text="错误等级" />
-              <outline text="上电电流" />
+              <outline text="非跟随电流" />
             </outline>
             <outline text="运行状态">
+              <outline text="输出状态 [只读]" />
               <outline text="输入值 [只读]" />
               <outline text="输入比例 [只读]" />
+              <outline text="输出电流 [只读]" />
             </outline>
             <outline text="模拟设置">
               <outline text="输出模拟" />

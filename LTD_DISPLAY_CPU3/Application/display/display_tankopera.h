@@ -92,7 +92,7 @@ typedef enum {
     KEYNUM_MENU_PARA_WARTSILA,           /* Wartsila 参数（如果你确实有此页） */
     KEYNUM_MENU_PARA_DO,                 /* 继电器报警输出参数入口 */
     KEYNUM_MENU_PARA_AO,                 /* AO 五分组入口 */
-    KEYNUM_MENU_AO_CHANNEL,              /* AO 通道设置 */
+    KEYNUM_MENU_AO_CHANNEL,              /* AO 基本设置 */
     KEYNUM_MENU_AO_RANGE,                /* AO 量程设置 */
     KEYNUM_MENU_AO_FAULT,                /* AO 故障设置 */
     KEYNUM_MENU_AO_RUNTIME,              /* AO 运行状态 */
@@ -165,10 +165,10 @@ typedef enum {
     MENU_GRP_CPU3_SI_AUTO,      /* SI 自动 Profile 调度 */
     MENU_GRP_CPU3_SI_ALARM,     /* SI 报警限值 */
     MENU_GRP_DO_ALARM,          /* 继电器报警输出 */
-    MENU_GRP_AO_CHANNEL,        /* AO 工作模式/电流模式/输出源 */
+    MENU_GRP_AO_CHANNEL,        /* AO 基本设置：工作模式/电流模式/输出源 */
     MENU_GRP_AO_RANGE,          /* AO 固定电流/量程/阻尼 */
-    MENU_GRP_AO_FAULT,          /* AO 故障模式/故障电流/错误级别/上电电流 */
-    MENU_GRP_AO_RUNTIME,        /* AO 输入值/输入百分比，只读运行态 */
+    MENU_GRP_AO_FAULT,          /* AO 故障动作/故障电流/非跟随电流 */
+    MENU_GRP_AO_RUNTIME,        /* AO 输出状态/输入值/输入百分比/输出电流，只读运行态 */
     MENU_GRP_AO_DIAGNOSTIC,     /* AO 输出仿真/仿真电流 */
     MENU_GRP_AO_RESERVED,       /* AO SIL/WHG 与 DAC 回读隐藏预留 */
     MENU_GRP_CAL_SP,            /* 标定液位(油/水)/单点位置/监测位置/分布液位/电机运行距离 */
@@ -239,6 +239,7 @@ typedef enum
     COM_NUM_AO_SIMULATION_ENABLE = 1001,    /* AO 非持久化仿真开关，仅用于 CPU3 菜单 */
     COM_NUM_AO_RUNTIME_PROCESS_VALUE = 1002,/* AO 输入值，只读运行态 */
     COM_NUM_AO_RUNTIME_PERCENT = 1003,      /* AO 输入百分比，只读运行态 */
+    COM_NUM_AO_RUNTIME_OUTPUT_CURRENT = 1004, /* AO 最近成功下发电流，只读运行态 */
 
     COM_NUM_DEBUGCMD_STOP = COM_NUM_MAINTENANCE_MODE + 1, /* 调试模式无参指令 - 结束 */
 
@@ -405,10 +406,10 @@ typedef enum
     COM_NUM_DEVICEPARAM_AO_RANGE_0_01MM,                /* AO 0%对应值 */
     COM_NUM_DEVICEPARAM_AO_RANGE_100_01MM,              /* AO 100%对应值 */
     COM_NUM_DEVICEPARAM_AO_DAMPING_X10_S,               /* AO阻尼 */
-    COM_NUM_DEVICEPARAM_AO_FAULT_MODE,                  /* AO故障模式 */
+    COM_NUM_DEVICEPARAM_AO_FAULT_MODE,                  /* AO故障动作，保留原槽位 */
     COM_NUM_DEVICEPARAM_AO_FAULT_CURRENT_MA_X100,       /* AO故障电流 */
-    COM_NUM_DEVICEPARAM_AO_ERROR_LEVEL,                 /* AO错误级别 */
-    COM_NUM_DEVICEPARAM_AO_POWER_ON_CURRENT_MA_X100,    /* AO上电电流 */
+    COM_NUM_DEVICEPARAM_AO_ERROR_LEVEL,                 /* AO隐藏预留槽位，固定为0 */
+    COM_NUM_DEVICEPARAM_AO_POWER_ON_CURRENT_MA_X100,    /* AO非跟随电流，保留原槽位 */
     COM_NUM_DEVICEPARAM_AO_SIMULATION_CURRENT_MA_X100,  /* AO仿真电流 */
 
     /* ---------------- 指令参数（用于带参命令） ---------------- */
