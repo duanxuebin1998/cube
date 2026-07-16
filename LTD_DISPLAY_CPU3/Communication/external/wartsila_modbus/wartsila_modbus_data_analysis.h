@@ -72,4 +72,10 @@ void DeviceParams_LoadFromRegisters(uint16_t *reg) ;
  */
 void DeviceParams_StoreToRegisters(uint16_t *reg) ;
 
+/*
+ * @brief 刷新 Wärtsilä 可离线读取的 CPU3 本地静态寄存器。
+ * @param reg Wärtsilä 保持寄存器池。
+ */
+void Wartsila_StoreLocalStaticRegisters(uint16_t *reg);
+
 #endif /* WARTSILA_MODBUS_WARTSILA_MODBUS_DATA_ANALYSIS_H_ */

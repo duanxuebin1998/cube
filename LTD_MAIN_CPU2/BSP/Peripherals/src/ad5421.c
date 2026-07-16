@@ -193,6 +193,32 @@ static uint8_t AD5421_CanPrint(void)
     return (ad5421_trace_suppressed == 0U) ? 1U : 0U;
 }
 
+/* 按 AD5421 READFAULT 高字节位定义返回唯一故障原因。 */
+static uint32_t AD5421_MapFaultRegister(uint16_t fault_reg)
+{
+    /* 多位同时置位时，先返回内部通信和过温关断，再返回环路硬故障，
+     * 过温预警优先级最低，避免预警覆盖已经发生的电流或电压异常。 */
+    if ((fault_reg & 0xC000U) != 0U) {
+        return AD5421_INTERNAL_COMM_ERROR;
+    }
+    if ((fault_reg & 0x0800U) != 0U) {
+        return AD5421_OVERTEMP_SHUTDOWN;
+    }
+    if ((fault_reg & 0x2000U) != 0U) {
+        return AD5421_LOOP_CURRENT_HIGH;
+    }
+    if ((fault_reg & 0x1000U) != 0U) {
+        return AD5421_LOOP_CURRENT_LOW;
+    }
+    if ((fault_reg & 0x0300U) != 0U) {
+        return AD5421_LOOP_VOLTAGE_LOW;
+    }
+    if ((fault_reg & 0x0400U) != 0U) {
+        return AD5421_OVERTEMP_WARNING;
+    }
+    return NO_ERROR;
+}
+
 /*
  * 函数用途：向 AD5421 写入 24 位寄存器数据。
  * 调用场景：AD5421 初始化、复位和 DAC 电流更新。
@@ -217,11 +243,11 @@ static uint32_t AD5421_WriteRegRaw(uint8_t reg, uint16_t value)
                               AD5421_DIAG_DIRECTION_WRITE,
                               reg,
                               (uint32_t)status,
-                              OTHER_PERIPHERAL_CONFIG_ERROR,
-                              OTHER_PERIPHERAL_CONFIG_ERROR,
+                              AD5421_SPI_TRANSFER_ERROR,
+                              AD5421_SPI_TRANSFER_ERROR,
                               (uint32_t)value,
                               0U);
-        return OTHER_PERIPHERAL_CONFIG_ERROR;
+        return AD5421_SPI_TRANSFER_ERROR;
     }
 
     return NO_ERROR;
@@ -244,11 +270,11 @@ static uint32_t AD5421_ReadRegCheckedRaw(uint8_t reg, uint16_t *value)
                               AD5421_DIAG_DIRECTION_READ,
                               reg,
                               (uint32_t)HAL_ERROR,
-                              PARAM_ADDRESS_OVERFLOW,
-                              PARAM_ADDRESS_OVERFLOW,
+                              SYSTEM_CALL_CONDITION_ERROR,
+                              SYSTEM_CALL_CONDITION_ERROR,
                               0U,
                               0U);
-        return PARAM_ADDRESS_OVERFLOW;
+        return SYSTEM_CALL_CONDITION_ERROR;
     }
 
     commandData[0] = reg | 0x80u;
@@ -265,11 +291,11 @@ static uint32_t AD5421_ReadRegCheckedRaw(uint8_t reg, uint16_t *value)
                               AD5421_DIAG_DIRECTION_READ,
                               reg,
                               (uint32_t)status,
-                              OTHER_PERIPHERAL_CONFIG_ERROR,
-                              OTHER_PERIPHERAL_CONFIG_ERROR,
+                              AD5421_SPI_TRANSFER_ERROR,
+                              AD5421_SPI_TRANSFER_ERROR,
                               0U,
                               0U);
-        return OTHER_PERIPHERAL_CONFIG_ERROR;
+        return AD5421_SPI_TRANSFER_ERROR;
     }
 
     AD5421_CS_LOW();
@@ -282,11 +308,11 @@ static uint32_t AD5421_ReadRegCheckedRaw(uint8_t reg, uint16_t *value)
                               AD5421_DIAG_DIRECTION_READ,
                               reg,
                               (uint32_t)status,
-                              OTHER_PERIPHERAL_CONFIG_ERROR,
-                              OTHER_PERIPHERAL_CONFIG_ERROR,
+                              AD5421_SPI_TRANSFER_ERROR,
+                              AD5421_SPI_TRANSFER_ERROR,
                               0U,
                               0U);
-        return OTHER_PERIPHERAL_CONFIG_ERROR;
+        return AD5421_SPI_TRANSFER_ERROR;
     }
 
     ad5421_last_rx_data[0] = rxData[0];
@@ -310,11 +336,11 @@ uint32_t AD5421_WriteReg(uint8_t reg, uint16_t value)
                               AD5421_DIAG_DIRECTION_WRITE,
                               reg,
                               (uint32_t)HAL_BUSY,
-                              OTHER_PERIPHERAL_CONFIG_ERROR,
-                              OTHER_PERIPHERAL_CONFIG_ERROR,
+                              AD5421_ACCESS_BUSY,
+                              AD5421_ACCESS_BUSY,
                               (uint32_t)value,
                               0U);
-        return OTHER_PERIPHERAL_CONFIG_ERROR;
+        return AD5421_ACCESS_BUSY;
     }
 
     ret = AD5421_WriteRegRaw(reg, value);
@@ -336,11 +362,11 @@ static uint32_t AD5421_ReadRegChecked(uint8_t reg, uint16_t *value)
                               AD5421_DIAG_DIRECTION_READ,
                               reg,
                               (uint32_t)HAL_ERROR,
-                              PARAM_ADDRESS_OVERFLOW,
-                              PARAM_ADDRESS_OVERFLOW,
+                              SYSTEM_CALL_CONDITION_ERROR,
+                              SYSTEM_CALL_CONDITION_ERROR,
                               0U,
                               0U);
-        return PARAM_ADDRESS_OVERFLOW;
+        return SYSTEM_CALL_CONDITION_ERROR;
     }
     if (AD5421_TryBeginAccess() == 0U) {
         *value = 0U;
@@ -349,11 +375,11 @@ static uint32_t AD5421_ReadRegChecked(uint8_t reg, uint16_t *value)
                               AD5421_DIAG_DIRECTION_READ,
                               reg,
                               (uint32_t)HAL_BUSY,
-                              OTHER_PERIPHERAL_CONFIG_ERROR,
-                              OTHER_PERIPHERAL_CONFIG_ERROR,
+                              AD5421_ACCESS_BUSY,
+                              AD5421_ACCESS_BUSY,
                               0U,
                               0U);
-        return OTHER_PERIPHERAL_CONFIG_ERROR;
+        return AD5421_ACCESS_BUSY;
     }
 
     ret = AD5421_ReadRegCheckedRaw(reg, value);
@@ -380,12 +406,7 @@ uint16_t AD5421_ReadReg(uint8_t reg)
  */
 uint32_t AD5421_SetDacRaw(uint16_t value)
 {
-    uint32_t ret = AD5421_WriteReg(WRITEDAC, value);
-    if (ret != NO_ERROR) {
-        AD5421_PromoteDiagnostic(AD5421_WRITE_CURRENT_ERROR, ret);
-        return AD5421_WRITE_CURRENT_ERROR;
-    }
-    return NO_ERROR;
+    return AD5421_WriteReg(WRITEDAC, value);
 }
 
 /*
@@ -469,38 +490,36 @@ uint32_t AD5421_PollDiagnostics(void)
 {
     uint16_t fault_reg = 0U;
     uint32_t ret;
+    uint32_t fault_error;
 
     ret = AD5421_ReadRegChecked(READFAULT, &fault_reg);
     if (ret != NO_ERROR) {
-        AD5421_PromoteDiagnostic(AD5421_READFAULT_ERROR, ret);
-        return AD5421_READFAULT_ERROR;
+        return ret;
     }
 
     ad5421_fault_register = fault_reg;
-    /* 当前硬件 PB8 悬空，保留历史 PIN 位清零，避免误污染运行状态。 */
     ad5421_fault_flags &= ~(AD5421_FAULT_FLAG_PIN | AD5421_FAULT_FLAG_STATUS);
-
-    if (fault_reg != 0U) {
-        ad5421_fault_flags |= AD5421_FAULT_FLAG_STATUS;
+    fault_error = AD5421_MapFaultRegister((uint16_t)(fault_reg & 0xFF00U));
+    if (fault_error == NO_ERROR) {
+        return NO_ERROR;
     }
 
-    if ((ad5421_fault_flags & AD5421_FAULT_FLAG_STATUS) != 0U) {
-        AD5421_SaveDiagnostic(AD5421_DIAG_STAGE_FAULT_STATUS,
-                              AD5421_DIAG_DIRECTION_READ,
-                              READFAULT,
-                              (uint32_t)HAL_OK,
-                              AD5421_FAULT_STATUS_ERROR,
-                              AD5421_FAULT_STATUS_ERROR,
-                              0U,
-                              (uint32_t)fault_reg);
-        if (AD5421_CanPrint() != 0U) {
-            printf("AD5421 fault diag: fault=0x%04X flags=0x%08lX\r\n",
-                   (unsigned int)fault_reg,
-                   (unsigned long)ad5421_fault_flags);
-        }
-        return AD5421_FAULT_STATUS_ERROR;
+    ad5421_fault_flags |= AD5421_FAULT_FLAG_STATUS;
+    AD5421_SaveDiagnostic(AD5421_DIAG_STAGE_FAULT_STATUS,
+                          AD5421_DIAG_DIRECTION_READ,
+                          READFAULT,
+                          (uint32_t)HAL_OK,
+                          fault_error,
+                          fault_error,
+                          0U,
+                          (uint32_t)fault_reg);
+    if (AD5421_CanPrint() != 0U) {
+        printf("AD5421 fault diag: fault=0x%04X code=0x%08lX flags=0x%08lX\r\n",
+               (unsigned int)fault_reg,
+               (unsigned long)fault_error,
+               (unsigned long)ad5421_fault_flags);
     }
-    return NO_ERROR;
+    return fault_error;
 }
 
 /* ============================== */
@@ -662,13 +681,23 @@ static uint32_t AD5421_RunCurrentStartupSequence(uint32_t target_mA_x100)
 }
 
 /*
- * 函数用途：复位并初始化 AD5421，建立 AO 驱动可用状态。
- * 调用场景：AO 输出使能后首次刷新或初始化时调用。
- * 关键约束：使用参数中的初始电流作为目标，且不应在中断中调用。
+ * 函数用途：按0.01mA目标复位并初始化AD5421。
+ * 调用场景：AO服务根据禁用、固定或上电电流选择初始输出时调用。
+ * 关键约束：会访问SPI并等待芯片稳定，不应在中断中调用。
+ */
+uint32_t AD5421_InitCurrentX100(uint32_t initial_mA_x100)
+{
+    return AD5421_RunCurrentStartupSequence(initial_mA_x100);
+}
+
+/*
+ * 函数用途：保留历史无参数初始化接口，供旧测试和调用点兼容使用。
+ * 调用场景：尚未迁移到AO服务显式初始电流接口的旧调用点。
+ * 关键约束：默认采用当前AO上电电流参数，不改变旧接口返回语义。
  */
 uint32_t Ad5421Init(void)
 {
-    return AD5421_RunCurrentStartupSequence(g_deviceParams.InitialCurrent_mA);
+    return AD5421_InitCurrentX100(g_deviceParams.ao_output.power_on_current_mA_x100);
 }
 
 /*

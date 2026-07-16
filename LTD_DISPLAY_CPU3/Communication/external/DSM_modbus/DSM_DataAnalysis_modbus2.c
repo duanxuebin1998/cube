@@ -73,8 +73,9 @@ static uint32_t DSM_DensityCorrectionExternalX10ToRaw(uint32_t external_correcti
 void SystemParameterSet(void)
 {
 	/* 无需权限读取的 */
-	WriteOneHoldingRegister(HOLDREGISTER_SP_POSITION, 1,g_deviceParams.singlePointMonitoringPosition);						 /* 固定点监测测量位置 */
-	WriteOneHoldingRegister(HOLDREGISTER_SPT_POSITION, 1, g_deviceParams.singlePointMeasurementPosition);						 /* 单点测量的测量位置 */
+	WriteOneHoldingRegister(HOLDREGISTER_SP_POSITION, 2, g_deviceParams.singlePointMeasurementPosition); /* 单点测量位置，DSM原始值为0.1mm */
+	WriteOneHoldingRegister(HOLDREGISTER_SPT_POSITION, 2, g_deviceParams.singlePointMonitoringPosition); /* 单点监测位置，DSM原始值为0.1mm */
+	WriteOneHoldingRegister(HOLDREGISTER_SRREAD_POSITION, 2, g_deviceParams.densityDistributionOilLevel); /* 分布测量液位，DSM原始值为0.1mm */
 	WriteOneHoldingRegister(HOLDREGISTER_SYNTHETIC_BOTTOM_FREE, 1, g_deviceParams.requireBottomMeasurement);			 /* 无需权限综合指令是否需要测罐底默认为0不测V1.105 */
 	WriteOneHoldingRegister(HOLDREGISTER_SYNTHETIC_WATER_FREE, 1, g_deviceParams.requireWaterMeasurement);			 /* 无需权限综合指令是否需要测水位默认为0不测V1.105 */
 	WriteOneHoldingRegister(HOLDREGISTER_SYNTHETIC_SINGLEPOINT_FREE, 1, g_deviceParams.requireSinglePointDensity);	 /* 无需权限综合指令是否需要测水位默认为0不测V1.105 */
@@ -87,8 +88,8 @@ void SystemParameterSet(void)
 	WriteOneHoldingRegister(HOLDREGISTER_MEASREMENT_METER, 1, g_deviceParams.spreadMeasurementOrder);						 /* 密度每米测量方向 */
 	WriteOneHoldingRegister(HOLDREGISTER_INTERVAL_POINT, 1, g_deviceParams.spreadMeasurementCount);							 /* 密度液位区间测量点数 */
 	WriteOneHoldingRegister(HOLDREGISTER_INTERVAL_DIREDION, 1, g_deviceParams.spreadMeasurementOrder);						 /* 密度液位区间测量方向 */
-	WriteOneHoldingRegister(HOLDREGISTER_INTERVAL_OIL_A, 2, 0);							 /* 密度液位区间测量液位点A */
-	WriteOneHoldingRegister(HOLDREGISTER_INTERVAL_OIL_B, 2, 0);							 /* 密度液位区间测量液位点B */
+	WriteOneHoldingRegister(HOLDREGISTER_INTERVAL_OIL_A, 2, g_deviceParams.intervalMeasurementTopLimit); /* 区间测量上限，DSM原始值为0.1mm */
+	WriteOneHoldingRegister(HOLDREGISTER_INTERVAL_OIL_B, 2, g_deviceParams.intervalMeasurementBottomLimit); /* 区间测量下限，DSM原始值为0.1mm */
 	WriteOneHoldingRegister(HOLDREGISTER_D_CORRECTION_TEM1, 1, 0);	 /* 密度分段修正温度阈值1 */
 	WriteOneHoldingRegister(HOLDREGISTER_D_CORRECTION_TEM2, 1, 0);	 /* 密度分段修正温度阈值2 */
 	WriteOneHoldingRegister(HOLDREGISTER_D_CORRECTION_TEM3, 1, 0);	 /* 密度分段修正温度阈值3 */
@@ -131,6 +132,7 @@ void SystemParameterSet(void)
 	WriteOneHoldingRegister(HOLDREGISTER_THRESHOLD_A, 1,0);				   /* 密度分层加测密度点A */
 	WriteOneHoldingRegister(HOLDREGISTER_THRESHOLD_B, 1,0);				   /* 密度分层加测密度点B */
 	WriteOneHoldingRegister(HOLDREGISTER_THRESHOLD_STANDARD, 1,0);		   /* 国标密度测量阈值 */
+	WriteOneHoldingRegister(HOLDREGISTER_RUNTODISTANCE, 2, g_deviceParams.motorCommandDistance); /* 电机运行距离，DSM原始值为0.1mm */
 	WriteOneHoldingRegister(HOLDREGISTER_ZEROCIRCLE, 1, 0);				   /* 预设零点编码圈数 */
 	WriteOneHoldingRegister(HOLDREGISTER_ZEROANGLE, 1, 0);					   /* 预设零点编码角度 */
 	/* WriteOneHoldingRegister(HOLDREGISTER_GIRTH_USELESS,1,systemunion.systemparameter.Girth); / /导论周长 */
@@ -192,9 +194,6 @@ void SystemParameterSet(void)
 	WriteOneHoldingRegister(HOLDREGISTER_K19, 2, 0);						 /* K19_H */
 	WriteOneHoldingRegister(HOLDREGISTER_K19 + 2, 2, 0);					 /* K19_L */
 
-	/* V1.225：0x0006/0x0008 需分别回读单点测量位置、单点监测位置。 */
-	WriteOneHoldingRegister(HOLDREGISTER_SP_POSITION, 1, g_deviceParams.singlePointMeasurementPosition);
-	WriteOneHoldingRegister(HOLDREGISTER_SPT_POSITION, 1, g_deviceParams.singlePointMonitoringPosition);
 	WriteOneHoldingRegister(HOLDREGISTER_CALIBRATE_WATER_LEVEL, 2, g_deviceParams.calibrateWaterLevel);
 	WriteOneHoldingRegister(HOLDREGISTER_CALIBRATE_TANK_HEIGHT, 2, g_deviceParams.calibrateTankHeight);
 }
@@ -234,6 +233,13 @@ int UpdateDeviceParamsFromLegacyRegs(int startadd, int reamount)
     {
         temp = ReadOneHoldingRegister(HOLDREGISTER_SPT_POSITION, 2);
         g_deviceParams.singlePointMonitoringPosition = temp;
+    }
+    /* DSM位置字段保持0.1mm原始值，不在协议桥接层二次缩放。 */
+    if ((HOLDREGISTER_SRREAD_POSITION >= startadd) &&
+        ((HOLDREGISTER_SRREAD_POSITION + 1) <= end))
+    {
+        temp = ReadOneHoldingRegister(HOLDREGISTER_SRREAD_POSITION, 2);
+        g_deviceParams.densityDistributionOilLevel = temp;
     }
     /* ************** 罐高 -> g_deviceParams.tankHeight *************** */
     if ((HOLDREGISTER_TANKHIGHT >= startadd) &&
@@ -289,6 +295,20 @@ int UpdateDeviceParamsFromLegacyRegs(int startadd, int reamount)
     {
         temp = ReadOneHoldingRegister(HOLDREGISTER_INTERVAL_DIREDION, 1);
         g_deviceParams.spreadMeasurementOrder = temp & 0xFFFF;
+    }
+
+    if ((HOLDREGISTER_INTERVAL_OIL_A >= startadd) &&
+        ((HOLDREGISTER_INTERVAL_OIL_A + 1) <= end))
+    {
+        temp = ReadOneHoldingRegister(HOLDREGISTER_INTERVAL_OIL_A, 2);
+        g_deviceParams.intervalMeasurementTopLimit = temp;
+    }
+
+    if ((HOLDREGISTER_INTERVAL_OIL_B >= startadd) &&
+        ((HOLDREGISTER_INTERVAL_OIL_B + 1) <= end))
+    {
+        temp = ReadOneHoldingRegister(HOLDREGISTER_INTERVAL_OIL_B, 2);
+        g_deviceParams.intervalMeasurementBottomLimit = temp;
     }
 
     /* ************** 分布测量模式 -> spreadMeasurementMode *********** */
@@ -429,6 +449,14 @@ int UpdateDeviceParamsFromLegacyRegs(int startadd, int reamount)
     {
         temp = ReadOneHoldingRegister(HOLDREGISTER_GIRTH_YITI, 2);
         g_deviceParams.encoder_wheel_circumference_mm = temp;
+    }
+
+    /* DSM 0x0180运行距离同样保持0.1mm原始值。 */
+    if ((HOLDREGISTER_RUNTODISTANCE >= startadd) &&
+        ((HOLDREGISTER_RUNTODISTANCE + 1) <= end))
+    {
+        temp = ReadOneHoldingRegister(HOLDREGISTER_RUNTODISTANCE, 2);
+        g_deviceParams.motorCommandDistance = temp;
     }
 
     /* ************** 最大下行距离 -> maxDownDistance ***************** */

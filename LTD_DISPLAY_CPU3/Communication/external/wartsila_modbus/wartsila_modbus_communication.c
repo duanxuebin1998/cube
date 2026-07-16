@@ -12,6 +12,7 @@
 #include <string.h>
 #include "address.h"
 #include "cpu2_communicate.h"
+#include "../external_read_freshness.h"
 
 static bool modbus_on_holding_written(uint16_t start, uint16_t qty);
 /**
@@ -48,15 +49,6 @@ static bool wartsila_write_targets_cpu2(uint16_t start, uint16_t qty)
            (range_contains(start, qty, REG_SPREAD_DIST_TO_SURFACE) != 0);
 }
 
-/* 四个分布参数必须来自已确认的 CPU2 参数快照，不能返回失败写入留下的本地影子。 */
-static bool wartsila_read_targets_cpu2_parameters(uint16_t start, uint16_t qty)
-{
-    return (range_contains(start, qty, REG_SPREAD_LOWEST_POINT) != 0) ||
-           (range_contains(start, qty, REG_SPREAD_HIGHEST_POINT) != 0) ||
-           (range_contains(start, qty, REG_SPREAD_INTERVAL) != 0) ||
-           (range_contains(start, qty, REG_SPREAD_DIST_TO_SURFACE) != 0);
-}
-
 /* ============== 异常应答（功能码|0x80, 异常码）============== */
 static uint8_t build_exception(uint8_t addr, uint8_t func, uint8_t ex_code,
                                uint8_t* tx, uint16_t* tx_len)
@@ -85,7 +77,10 @@ static uint8_t handle_0x03(uint8_t addr, const uint8_t* pdu, uint16_t pdu_len,
         return build_exception(addr, 0x03, 0x03, tx, tx_len); /* ILLEGAL DATA VALUE */
 
     /* 如果遇到特殊包，返回定制的数据 */
-    if (start == 0x0672) {  /* 特定地址处理 */
+    if (CPU3_ExternalWartsilaIsSignatureAddress(start) != 0U) {  /* 特定地址处理 */
+        if (CPU3_ExternalWartsilaSignatureQuantityIsValid(qty) == 0U)
+            return build_exception(addr, 0x03, 0x03, tx, tx_len);
+
         /* 填充响应数据 */
         tx[0] = addr;  /* 从站地址 */
         tx[1] = 0x03;  /* 功能码 */
@@ -108,8 +103,18 @@ static uint8_t handle_0x03(uint8_t addr, const uint8_t* pdu, uint16_t pdu_len,
     if (start < HOLDREG_START_ADDR || (start + qty - 1) > HOLDREG_END_ADDR)
         return build_exception(addr, 0x03, 0x02, tx, tx_len); /* ILLEGAL DATA ADDRESS */
 
-    if (wartsila_read_targets_cpu2_parameters(start, qty) && !CPU2_CommIsAvailable())
+    uint8_t requirements = CPU3_ExternalWartsilaReadRequirements(start, qty);
+    if (((requirements & (uint8_t)CPU3_EXTERNAL_READ_RUNTIME) != 0U) &&
+        !CPU2_CommHasRuntimeSnapshot())
         return build_exception(addr, 0x03, 0x06, tx, tx_len);
+    if (((requirements & (uint8_t)CPU3_EXTERNAL_READ_PARAMETERS) != 0U) &&
+        !CPU2_CommIsAvailable())
+        return build_exception(addr, 0x03, 0x06, tx, tx_len);
+
+    /* 静态白名单始终本地重建；其余字段只在对应快照门禁通过后投影。 */
+    Wartsila_StoreLocalStaticRegisters(g_holding_regs);
+    if (requirements != (uint8_t)CPU3_EXTERNAL_READ_LOCAL)
+        DeviceParams_StoreToRegisters(g_holding_regs);
 
     /* 构建应答 */
     tx[0] = addr;
@@ -141,22 +146,22 @@ static uint8_t handle_0x10(uint8_t addr, const uint8_t* pdu, uint16_t pdu_len,
     uint16_t qty   = be16(&pdu[3]);
     uint8_t  bytes = pdu[5]; /* */
 
-    if (qty < 1 || qty > 0x007B) /* 推荐单次最多123寄存器（字节数<=246） */
+    if (CPU3_ExternalWartsilaWriteShapeIsValid(qty, bytes, pdu_len) == 0U)
     {
-    	printf("qty=%d\r\n", qty);
-        return build_exception(addr, 0x10, 0x03, tx, tx_len);
-    }
-    if (bytes != (uint8_t)(qty)){
-    	printf("bytes=%d, qty*2=%d\r\n", bytes, qty*2);
-        return build_exception(addr, 0x10, 0x03, tx, tx_len);
-    }
-    if (pdu_len != (uint16_t)(6 + 2*bytes)){
-    	printf("pdu_len=%d, 6+bytes=%d\r\n", pdu_len, 6+2*bytes);
         return build_exception(addr, 0x10, 0x03, tx, tx_len);
     }
 
     if (start < HOLDREG_START_ADDR || (start + qty - 1) > HOLDREG_END_ADDR)
         return build_exception(addr, 0x10, 0x02, tx, tx_len);
+
+    if (range_contains(start, qty, REG_DOWN_COMMAND) != 0)
+    {
+        uint16_t command_index = (uint16_t)(REG_DOWN_COMMAND - start);
+        uint16_t requested_command = be16(&pdu[6U + (2U * command_index)]);
+
+        if (CPU3_ExternalWartsilaCommandIsSupported(requested_command) == 0U)
+            return build_exception(addr, 0x10, 0x03, tx, tx_len);
+    }
 
     if (wartsila_write_targets_cpu2(start, qty) && !CPU2_CommIsAvailable())
         return build_exception(addr, 0x10, 0x06, tx, tx_len);
@@ -205,9 +210,6 @@ ModbusResult modbus_rtu_process(const uint8_t* rx, uint16_t rx_len,
 
     switch (func) {
         case 0x03:
-            /* 读之前把设备测量值刷到寄存器 */
-/* printf("分布测量起始点：%d\r\n",g_deviceParams..measurement_points); */
-            DeviceParams_StoreToRegisters(g_holding_regs);
             if (handle_0x03(addr, pdu, pdu_len, tx, tx_len)) return MODBUS_OK;
             break;
 

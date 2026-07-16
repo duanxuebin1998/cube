@@ -175,7 +175,7 @@ static uint32_t Get_SSI_Error_Code(const SSI_Data_t *data) {
  * @brief  ÅÐ¶Ï´íÎóÂëÊÇ·ñÊôÓÚ±àÂëÆ÷Í¨ÐÅ´íÎó·¶Î§
  */
 static bool Is_Encoder_Error_Code(uint32_t error_code) {
-    return (error_code >= ENCODER_TIMEOUT) && (error_code <= ENCODER_OCF_INCOMPLETE);
+    return (error_code >= ENCODER_TIMEOUT) && (error_code <= ENCODER_FIRST_SAMPLE_TIMEOUT);
 }
 
 /**
@@ -325,7 +325,7 @@ uint32_t AS5145_WaitFirstValidSample(uint32_t timeout_ms) {
     if (ssi_last_error_code != NO_ERROR) {
         return ssi_last_error_code;
     }
-    return ENCODER_TIMEOUT;
+    return ENCODER_FIRST_SAMPLE_TIMEOUT;
 }
 
 /**

@@ -26,9 +26,20 @@
 #define UNVALID_POSITION 0
 #define UNVALID_TEMPERATURE 0
 #define MAX_MEASUREMENT_POINTS 200 /* 密度分布测量最大点数 */
-#define DEVICE_PROTOCOL_VERSION 18u /* CPU2/CPU3共享协议版本；旧程序未写入时默认为0 */
+#define DEVICE_PROTOCOL_VERSION 21u /* CPU2/CPU3共享协议版本；协议21增加固定点结果代际 */
 #define FAULT_AUTO_RECOVERY_RETRY_DEFAULT 3u
 #define FAULT_AUTO_RECOVERY_RETRY_MAX 10u
+
+#define AO_DISABLED_CURRENT_MA_X100        340U
+#define AO_POWER_ON_CURRENT_MIN_MA_X100    340U
+#define AO_POWER_ON_CURRENT_MAX_MA_X100    2260U
+#define AO_FIXED_CURRENT_MIN_MA_X100       400U
+#define AO_FIXED_CURRENT_MAX_MA_X100       2250U
+#define AO_FAULT_CURRENT_MIN_MA_X100       340U
+#define AO_FAULT_CURRENT_MAX_MA_X100       2260U
+#define AO_SIMULATION_CURRENT_MIN_MA_X100  340U
+#define AO_SIMULATION_CURRENT_MAX_MA_X100  2300U
+#define AO_DAMPING_MAX_X10_S               9999U
 
 #define DENSITY_RAW_SCALE 100U /* 密度内部原始值倍率，单位 0.01kg/m3。 */
 #define DENSITY_EXTERNAL_SCALE_X10 10U /* 旧外部协议密度倍率，单位 0.1kg/m3。 */
@@ -137,6 +148,55 @@ typedef struct {
     uint32_t clear_alarm;        /* 清除锁存报警命令，CPU2 消费后清零 */
 } RelayAlarmConfig;
 
+typedef enum {
+    AO_WORK_MODE_DISABLED = 0u,
+    AO_WORK_MODE_CURRENT_OUTPUT = 1u,
+    AO_WORK_MODE_HART_SLAVE_OUTPUT = 2u
+} AoWorkMode;
+
+typedef enum {
+    AO_CURRENT_MODE_NE = 0u,
+    AO_CURRENT_MODE_US = 1u,
+    AO_CURRENT_MODE_NORMAL = 2u,
+    AO_CURRENT_MODE_FIXED = 3u
+} AoCurrentMode;
+
+typedef enum {
+    AO_PROCESS_SOURCE_TANK_LEVEL = 0u,
+    AO_PROCESS_SOURCE_ULLAGE = 1u,
+    AO_PROCESS_SOURCE_WATER_LEVEL = 2u
+} AoProcessSource;
+
+typedef enum {
+    AO_FAULT_MODE_MINIMUM = 0u,
+    AO_FAULT_MODE_MAXIMUM = 1u,
+    AO_FAULT_MODE_LAST_VALID = 2u,
+    AO_FAULT_MODE_ACTUAL_VALUE = 3u,
+    AO_FAULT_MODE_SET_VALUE = 4u
+} AoFaultMode;
+
+typedef enum {
+    AO_ERROR_LEVEL_NONE = 0u,
+    AO_ERROR_LEVEL_WARNING = 1u,
+    AO_ERROR_LEVEL_ALARM = 2u
+} AoErrorLevel;
+
+typedef struct {
+    uint32_t work_mode;
+    uint32_t current_mode;
+    uint32_t output_source;
+    uint32_t sil_whg_reserved;
+    uint32_t fixed_current_mA_x100;
+    int32_t range_0_01mm;
+    int32_t range_100_01mm;
+    uint32_t damping_x10_s;
+    uint32_t fault_mode;
+    uint32_t fault_current_mA_x100;
+    uint32_t error_level;
+    uint32_t power_on_current_mA_x100;
+    uint32_t simulation_current_mA_x100;
+} AoOutputConfig;
+
 #define REPEATMAX 3 /* 重复性测试次数 */
 #define REALTEMPMAXSPOT 16 /* 实时温度计最多测量点数 */
 /* 液位盲区值 */
@@ -174,17 +234,23 @@ typedef enum {
 
     /* ==================== 11 电机驱动故障 (0x000B0000 - 0x000BFFFF) ==================== */
     MOTOR_TMC_COMM_ERROR = 0x000B0002,            /* 电机驱动寄存器通信异常 */
-    MOTOR_DISABLED = 0x000B0004,                  /* 电机驱动未使能 */
+    MOTOR_DISABLED = 0x000B0004,                  /* 电机驱动输出未使能 */
     MOTOR_UNKNOWN_FEEDBACK = 0x000B0005,          /* 电机反馈状态未知 */
-    MOTOR_ALARM_TRIGGERED = 0x000B0007,           /* 电机驱动报警 */
     MOTOR_STEP_ERROR = 0x000B000A,                /* 电机运动无有效位移 */
     MOTOR_CHARGE_PUMP_UNDER_VOLTAGE = 0x000B0010, /* 电机驱动电荷泵欠压 */
-    MOTOR_OVERTEMPERATURE = 0x000B0011,           /* 电机驱动过温 */
-    MOTOR_RUN_TIMEOUT = 0x000B0012,               /* 电机运行超时 */
-    MOTOR_TMC_CONFIG_LOST = 0x000B0013,           /* 电机驱动关键配置丢失 */
+    MOTOR_OVERTEMPERATURE = 0x000B0011,           /* 电机驱动过温关断 */
+    MOTOR_RUN_TIMEOUT = 0x000B0012,               /* 电机整段运行超时 */
+    MOTOR_TMC_CONFIG_LOST = 0x000B0013,           /* 电机驱动运行期复位或关键配置丢失 */
+    MOTOR_STALL_ERROR = 0x000B0014,               /* 电机堵转 */
+    MOTOR_PHASE_SHORT_ERROR = 0x000B0015,         /* 电机相线短路 */
+    MOTOR_PHASE_OPEN_ERROR = 0x000B0016,          /* 电机相线断路 */
+    MOTOR_DRIVER_OVERTEMP_WARNING = 0x000B0017,   /* 电机驱动过温预警 */
+    MOTOR_DRIVER_NOT_INITIALIZED = 0x000B0018,    /* 电机驱动未初始化 */
+    MOTOR_STOP_WAIT_TIMEOUT = 0x000B0019,         /* 电机停止等待超时 */
+    MOTOR_ARRIVAL_WAIT_TIMEOUT = 0x000B001A,      /* 电机等待到达目标位置超时 */
 
     /* ==================== 12 编码器故障 (0x000C0000 - 0x000CFFFF) ==================== */
-    ENCODER_TIMEOUT = 0x000C0001,                 /* 编码器通信超时 */
+    ENCODER_TIMEOUT = 0x000C0001,                 /* 编码器SPI或DMA采集接口异常 */
     ENCODER_PARITY_ERROR = 0x000C0002,            /* 编码器校验失败 */
     ENCODER_LOST_STEP = 0x000C0003,               /* 编码器检测到丢步 */
     ENCODER_POWERON_FAIL = 0x000C0005,            /* 编码器上电初始化失败 */
@@ -194,25 +260,61 @@ typedef enum {
     ENCODER_CORDIC_OVERFLOW = 0x000C000C,         /* 编码器内部运算溢出 */
     ENCODER_LINEARITY_WARNING = 0x000C000D,       /* 编码器线性度报警 */
     ENCODER_OCF_INCOMPLETE = 0x000C000E,          /* 编码器角度计算未完成 */
+    ENCODER_FIRST_SAMPLE_TIMEOUT = 0x000C000F,    /* 启动后首个有效位置等待超时 */
+    ENCODER_CIRCUMFERENCE_CALIBRATION_ERROR = 0x000C0010, /* 编码轮周长标定异常 */
 
     /* ==================== 13 传感器与密度故障 (0x000D0000 - 0x000DFFFF) ==================== */
     SENSOR_BCC_ERROR = 0x000D0001,                /* 传感器数据校验失败 */
     SONIC_FREQ_ABNORMAL = 0x000D0002,             /* 震动管频率异常 */
     SENSOR_DEVICE_COMM_TIMEOUT = 0x000D0003,      /* 传感器设备通信超时 */
-    SENSOR_DEVICE_REPORTED_ERROR = 0x000D0005,    /* 传感器主动上报内部错误 */
+    SENSOR_INTERNAL_CPU_COMM_TIMEOUT = 0x000D0005, /* 传感器内部处理单元通信超时 */
+    SENSOR_GYRO_ANGLE_ERROR = 0x000D000E,         /* 传感器姿态角异常 */
+    SENSOR_INTERNAL_COMM_CHECK_ERROR = 0x000D0010, /* 传感器内部通信校验异常 */
+    SENSOR_NO_RESONANCE = 0x000D0015,             /* 传感器无谐振 */
     DENSITY_INVALID = 0x000D001A,                 /* 密度值超出有效范围 */
     SENSOR_RESP_FORMAT_ERROR = 0x000D001B,        /* 传感器响应格式异常 */
+    SENSOR_POWER_SUPPLY_ERROR = 0x000D001C,       /* 传感器供电异常 */
+    SENSOR_GYRO_COMM_TIMEOUT = 0x000D001D,        /* 传感器姿态模块通信超时 */
+    SENSOR_SELF_TEST_FAILED = 0x000D001E,         /* 传感器自检失败 */
+    SENSOR_IDENTITY_MISMATCH = 0x000D001F,        /* 传感器身份不匹配 */
+    SENSOR_PROTOCOL_VERSION_INCOMPATIBLE = 0x000D0020, /* 传感器协议版本不兼容 */
+    SENSOR_MODE_NOT_READY = 0x000D0021,           /* 传感器模式未就绪 */
+    SENSOR_CONFIG_EPOCH_MISMATCH = 0x000D0022,    /* 传感器配置代次不一致 */
+    SENSOR_STREAM_STATE_ERROR = 0x000D0023,       /* 传感器周期上报状态不一致 */
+    SENSOR_DATA_STALE = 0x000D0024,               /* 传感器数据已过期 */
+    SENSOR_TEMPERATURE_RANGE_ERROR = 0x000D0025,  /* 传感器温度超出工作范围 */
+    SENSOR_REMOTE_INTERNAL_ERROR = 0x000D0026,    /* 传感器远端内部故障 */
+    SENSOR_ADDRESS_MISMATCH = 0x000D0027,         /* 传感器通信地址不匹配 */
+    SENSOR_SESSION_INVALID = 0x000D0028,          /* 传感器会话失效 */
+    SENSOR_SEQUENCE_ERROR = 0x000D0029,           /* 传感器报文序号异常 */
+    SENSOR_HANDSHAKE_REQUIRED = 0x000D002A,       /* 传感器需要重新握手 */
+    SENSOR_REPLAY_DETECTED = 0x000D002B,          /* 检测到传感器重复报文 */
+    SENSOR_CAPABILITY_UNSUPPORTED = 0x000D002C,   /* 传感器能力不支持 */
+    SENSOR_COMMAND_UNSUPPORTED = 0x000D002D,      /* 传感器命令不支持 */
+    SENSOR_ARGUMENT_REJECTED = 0x000D002E,        /* 传感器拒绝命令参数 */
+    SENSOR_MODE_MISMATCH = 0x000D002F,            /* 传感器测量模式不一致 */
+    SENSOR_MODE_NOT_ALLOWED = 0x000D0030,         /* 传感器当前模式不允许该操作 */
+    SENSOR_TRANSACTION_PENDING = 0x000D0031,      /* 传感器通信事务尚未完成 */
+    SENSOR_DEVICE_BUSY = 0x000D0032,              /* 传感器设备忙 */
+    SENSOR_PARAM_CRC_ERROR = 0x000D0033,          /* 传感器参数校验失败 */
+    SENSOR_SAMPLE_COUNTER_ERROR = 0x000D0034,     /* 传感器采样计数异常 */
+    SENSOR_STREAM_STOPPED = 0x000D0035,           /* 传感器周期上报意外停止 */
+    SENSOR_STREAM_NOT_ACTIVE = 0x000D0036,        /* 传感器周期上报未启动 */
+    SENSOR_STREAM_ALREADY_ACTIVE = 0x000D0037,    /* 传感器周期上报重复启动 */
+    SENSOR_STREAM_EXIT_FAILED = 0x000D0038,       /* 传感器周期上报退出失败 */
 
     /* ==================== 14 零点与位置检测故障 (0x000E0000 - 0x000EFFFF) ==================== */
     MEASUREMENT_ZERO_OUT_OF_RANGE = 0x000E0009,   /* 零点位置超出允许范围 */
-    MEASUREMENT_POSITION_ERROR = 0x000E000B,      /* 位置反馈或到位结果异常 */
     MEASUREMENT_ZERO_REPEAT_FAIL = 0x000E000C,    /* 零点重复性不符合要求 */
+    POSITION_DATA_INVALID = 0x000E000D,           /* 当前位置数据无效 */
+    POSITION_TARGET_OVERRUN = 0x000E000E,         /* 运动越过目标位置 */
+    POSITION_ARRIVAL_DEVIATION = 0x000E000F,      /* 停稳后到位偏差过大 */
+    POSITION_MOTOR_NOT_STOPPED = 0x000E0010,      /* 结果提交时电机仍未停止 */
 
     /* ==================== 15 测量过程故障 (0x000F0000 - 0x000FFFFF) ==================== */
     MEASUREMENT_OILLEVEL_HIGH = 0x000F0006,       /* 液位搜索超过罐高 */
     MEASUREMENT_OVERSPEED = 0x000F000F,           /* 液位变化速度异常 */
     MEASUREMENT_HEIGHT_DEVIATION = 0x000F0010,    /* 实高偏差过大，保留 */
-    MEASUREMENT_TIMEOUT = 0x000F0011,             /* 测量过程超时 */
     MEASUREMENT_OILLEVEL_LOW = 0x000F0012,        /* 下行未找到液位 */
     MEASUREMENT_OILLEVEL_NOTFOUND = 0x000F0013,   /* 上行未找到液位 */
     MEASUREMENT_WEIGHT_DOWN_FAIL = 0x000F0014,    /* 下行寻重失败 */
@@ -220,19 +322,38 @@ typedef enum {
     MEASUREMENT_WATERLEVEL_LOW = 0x000F0016,      /* 下行未找到水位 */
     MEASUREMENT_DENSITY_NO_VALID_POINT = 0x000F0017, /* 密度测量无有效测点 */
     MEASUREMENT_DENSITY_SURFACE_NOTFOUND = 0x000F0018, /* 密度测量未找到油面 */
+    MEASUREMENT_DENSITY_LEVEL_TIMEOUT = 0x000F0019, /* 密度闭环找液位超时 */
+    MEASUREMENT_FREQUENCY_LEVEL_TIMEOUT = 0x000F001A, /* 频率闭环找液位超时 */
+    MEASUREMENT_BOTTOM_RELEASE_FAIL = 0x000F001B, /* 粗找罐底前离底失败 */
+    MEASUREMENT_TANK_HEIGHT_NOT_CONFIGURED = 0x000F001C, /* 未设置罐高标定值 */
+    MEASUREMENT_WATER_CALIBRATION_NOT_CONFIGURED = 0x000F001D, /* 未设置水位标定值 */
+    MEASUREMENT_DENSITY_PLAN_INVALID = 0x000F001F, /* 密度测点规划失败 */
+    MEASUREMENT_TANK_HEIGHT_RESULT_INVALID = 0x000F0020, /* 罐高测量结果无效 */
+    MEASUREMENT_WATER_CALC_OUT_OF_RANGE = 0x000F0021, /* 水位标定计算结果越界 */
 
     /* ==================== 17 参数与存储故障 (0x00110000 - 0x0011FFFF) ==================== */
     PARAM_EEPROM_FAIL = 0x00110001,               /* 参数存储读写失败 */
     PARAM_UNINITIALIZED = 0x00110002,             /* 参数存储未初始化 */
-    PARAM_RANGE_ERROR = 0x00110005,               /* 参数值超出允许范围 */
+    PARAM_RANGE_ERROR = 0x00110005,               /* 单个参数值超出允许范围 */
     PARAM_CRC_ERROR = 0x00110006,                 /* 参数完整性校验失败 */
+    PARAM_CONFIG_MISSING = 0x00110007,            /* 必需配置缺失 */
+    PARAM_COMBINATION_CONFLICT = 0x00110008,      /* 参数组合互相冲突 */
+    PARAM_FEATURE_UNSUPPORTED = 0x00110009,       /* 当前配置不支持所选功能 */
+    PARAM_STORAGE_SIZE_MISMATCH = 0x0011000A,     /* 参数存储结构大小不匹配 */
+    PARAM_STORAGE_VERSION_MISMATCH = 0x0011000B,  /* 参数存储版本不匹配 */
+    PARAM_STORAGE_WRITE_VERIFY_FAILED = 0x0011000C, /* 参数写入后校验失败 */
 
     /* ==================== 18 模拟输出与自检故障 (0x00120000 - 0x0012FFFF) ==================== */
-    AD5421_WRITE_CURRENT_ERROR = 0x00120001,      /* 模拟输出电流写入失败 */
-    AD5421_INIT_ERROR = 0x00120002,               /* 模拟输出芯片初始化失败 */
-    AD5421_FAULT_STATUS_ERROR = 0x00120003,       /* 模拟输出芯片报告故障状态 */
-    AD5421_READBACK_ERROR = 0x00120006,           /* 模拟输出配置回读不一致 */
-    AD5421_READFAULT_ERROR = 0x00120009,          /* 模拟输出故障信息读取失败 */
+    AD5421_INIT_ERROR = 0x00120002,               /* 模拟输出芯片初始化兜底失败 */
+    AD5421_READBACK_ERROR = 0x00120006,           /* 模拟输出控制寄存器回读不一致 */
+    AD5421_INTERNAL_COMM_ERROR = 0x0012000A,      /* 模拟输出芯片内部通信异常 */
+    AD5421_LOOP_CURRENT_HIGH = 0x0012000B,        /* 模拟输出环路电流过高 */
+    AD5421_LOOP_CURRENT_LOW = 0x0012000C,         /* 模拟输出环路电流过低或断环 */
+    AD5421_LOOP_VOLTAGE_LOW = 0x0012000D,         /* 模拟输出环路供电电压不足 */
+    AD5421_SPI_TRANSFER_ERROR = 0x0012000E,       /* 模拟输出SPI传输失败 */
+    AD5421_ACCESS_BUSY = 0x0012000F,              /* 模拟输出访问冲突 */
+    AD5421_OVERTEMP_SHUTDOWN = 0x00120010,        /* 模拟输出芯片过温关断 */
+    AD5421_OVERTEMP_WARNING = 0x00120011,         /* 模拟输出芯片过温预警 */
 
     /* ==================== 20 设备通信链路故障 (0x00140000 - 0x0014FFFF) ==================== */
     COMM_UART_TRANSFER_ERROR = 0x00140001,        /* 串口或DMA传输异常 */
@@ -242,6 +363,11 @@ typedef enum {
     WIRELESS_SLAVE_COMM_TIMEOUT = 0x00140005,     /* 无线从机未连接或无响应 */
     WIRELESS_RESP_FORMAT_ERROR = 0x00140006,      /* 无线模块响应格式异常 */
     CPU2_COMM_TIMEOUT = 0x00140007,               /* CPU3本机检测到CPU2通信连续失败 */
+    WIRELESS_SCAN_NO_DEVICE = 0x00140008,         /* 无线扫描未发现设备 */
+    WIRELESS_NAME_NOT_UNIQUE = 0x00140009,        /* 无线名称重复 */
+    WIRELESS_NAME_INVALID = 0x0014000A,           /* 无线名称参数无效 */
+    WIRELESS_NOT_HOST_MODE = 0x0014000B,          /* 无线模块未处于主机模式 */
+    WIRELESS_NAME_NOT_FOUND = 0x0014000C,         /* 无线名称未找到 */
 
     /* ==================== 21 扭力检测故障 (0x00150000 - 0x0015FFFF) ==================== */
     WEIGHT_OUT_OF_RANGE = 0x00150001,             /* 扭力超过上限 */
@@ -252,9 +378,9 @@ typedef enum {
     WEIGHT_COMM_TIMEOUT = 0x00150006,             /* 扭力通信超时 */
 
     /* ==================== 22 系统与软件故障 (0x00160000 - 0x0016FFFF) ==================== */
-    PARAM_ADDRESS_OVERFLOW = 0x00160001,          /* 数据地址或输出位置异常 */
-    PARAM_ERROR = 0x00160002,                     /* 参数组合或内部调用条件异常 */
-    OTHER_PERIPHERAL_CONFIG_ERROR = 0x00160003    /* 外设配置错误 */
+    SYSTEM_BUFFER_CAPACITY_ERROR = 0x00160004,    /* 内部缓冲区或存储分区容量不足 */
+    SYSTEM_CALL_CONDITION_ERROR = 0x00160005,     /* 内部调用参数或前置条件异常 */
+    SYSTEM_CALCULATION_ERROR = 0x00160006         /* 内部计算无法得到有效结果 */
 
 } ErrorCode;
 
@@ -578,6 +704,12 @@ typedef struct {
     uint32_t update_counter;                 /* AO运行态更新计数 */
     uint32_t last_update_tick;               /* AO最近一次更新tick */
     uint32_t last_sent_tick;                 /* AO最近一次成功写入tick */
+    int32_t process_value_01mm;               /* 当前选中过程量，单位0.1mm */
+    int32_t percent_x100;                     /* 当前过程百分比，单位0.01% */
+    uint32_t process_valid;                   /* 当前选中过程量有效标志 */
+    uint32_t simulation_enabled;              /* AO仿真运行态开关，上电强制关闭 */
+    uint32_t dac_readback_mA_x100;            /* DAC回读预留值，单位0.01mA */
+    uint32_t dac_readback_valid;              /* DAC回读预留有效标志，当前固定为0 */
 } AoOutputRuntime;
 
 /* 测量结果结构体，输入寄存器 */
@@ -594,6 +726,8 @@ typedef struct {
 	WirelessPairingStatus wireless_pairing_status; /* /< 无线滑环匹配状态 */
 	RelayAlarmRuntimeState relay_alarm_runtime[RELAY_ALARM_CHANNEL_COUNT]; /* /< 继电器报警输出每路运行态 */
 	AoOutputRuntime ao_output_runtime;           /* /< AO模拟电流输出运行态 */
+	uint32_t measurement_complete_counter;       /* /< 单点测量真实稳定结果代际 */
+	uint32_t monitoring_sample_counter;          /* /< 固定点监测真实稳定样本代际 */
 
 } MeasurementResult;
 
@@ -716,22 +850,8 @@ typedef struct {
     uint32_t wartsila_bottom_detect_interval; /* 瓦锡兰测量后探底频率：0不探底，N表示每N次测量后探底一次，范围0~100 */
     uint32_t bottom_encoder_correction_tank_height; /* 探底修正罐高，仅用于罐底后编码器修正，0表示沿用液位罐高 */
 
-    uint32_t AOStartLevel_01mm;                 /* AO起点液位(0.1mm) */
-    uint32_t AOEndLevel_01mm;                 /* AO终点液位(0.1mm) */
-
     /* ===================== 4-20mA 输出 ===================== */
-    uint32_t CurrentRangeStart_mA;       /* AO正常输出起点电流(0.01mA) */
-    uint32_t CurrentRangeEnd_mA;         /* AO正常输出终点电流(0.01mA) */
-    uint32_t AlarmHighAO;                /* AO高报警液位阈值(0.1mm) */
-    uint32_t AlarmLowAO;                 /* AO低报警液位阈值(0.1mm) */
-    uint32_t InitialCurrent_mA;          /* 初始化电流值 */
-    uint32_t AOHighCurrent_mA;           /* AO高报电流值 */
-    uint32_t AOLowCurrent_mA;            /* AO低报电流值 */
-    uint32_t FaultCurrent_mA;            /* 故障模式电流值 */
-    uint32_t DebugCurrent_mA;            /* 调试模式电流值 */
-
-    uint32_t AoOutputEnable;             /* AO输出使能：0=关闭，1=启用 */
-    uint32_t reserved27;                 /* 预留（新增） */
+    AoOutputConfig ao_output;            /* 协议20 AO配置，保持原连续13字段尺寸 */
 
     /* ===================== 指令参数 ===================== */
     uint32_t calibrateOilLevel;              /* 标定液位值 */

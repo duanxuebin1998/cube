@@ -664,70 +664,155 @@ static bool IsCpu2ProtocolCompatible(void)
 static const char *Display_GetErrorReasonByCode(uint32_t code)
 {
     switch (code) {
+
     case MOTOR_TMC_COMM_ERROR:
-        return "TMC寄存器通信失败";
+        return "TMC5130通信异常";
     case MOTOR_DISABLED:
-        return "电机已被禁用";
+        return "电机驱动未使能";
     case MOTOR_UNKNOWN_FEEDBACK:
         return "电机反馈未知";
-    case MOTOR_ALARM_TRIGGERED:
-        return "电机驱动报警";
     case MOTOR_STEP_ERROR:
-        return "电机步进数错误";
+        return "电机无有效位移";
     case MOTOR_CHARGE_PUMP_UNDER_VOLTAGE:
-        return "电荷泵电压过低";
+        return "电荷泵欠压";
     case MOTOR_OVERTEMPERATURE:
-        return "电机驱动过温";
+        return "电机驱动过温停止";
     case MOTOR_RUN_TIMEOUT:
-        return "电机运行超时未停";
+        return "电机运行超时";
     case MOTOR_TMC_CONFIG_LOST:
-        return "驱动配置丢失";
+        return "电机驱动配置丢失";
+    case MOTOR_STALL_ERROR:
+        return "电机运行阻力大";
+    case MOTOR_PHASE_SHORT_ERROR:
+        return "电机相线短路";
+    case MOTOR_PHASE_OPEN_ERROR:
+        return "电机相线开路";
+    case MOTOR_DRIVER_OVERTEMP_WARNING:
+        return "电机驱动过温预警";
+    case MOTOR_DRIVER_NOT_INITIALIZED:
+        return "电机驱动未初始化";
+    case MOTOR_STOP_WAIT_TIMEOUT:
+        return "电机停止等待超时";
+    case MOTOR_ARRIVAL_WAIT_TIMEOUT:
+        return "电机到位等待超时";
     case ENCODER_TIMEOUT:
-        return "编码器通信无响应";
+        return "编码器读取异常";
     case ENCODER_PARITY_ERROR:
-        return "编码器校验位错误";
+        return "编码器校验失败";
     case ENCODER_LOST_STEP:
         return "编码器检测到丢步";
     case ENCODER_POWERON_FAIL:
-        return "编码器初始化失败";
+        return "编码器上电初始化失败";
     case ENCODER_POWERON_CHANGE:
-        return "编码器上电变化";
+        return "编码器上电值变化";
     case ENCODER_DIFF_EXCESS:
-        return "编码器差值过大";
+        return "编码器相邻差值过大";
     case ENCODER_INVALID_DATA:
         return "编码器多次无效数据";
     case ENCODER_CORDIC_OVERFLOW:
-        return "编码器计算溢出";
+        return "编码器角度运算溢出";
     case ENCODER_LINEARITY_WARNING:
-        return "编码器线性报警";
+        return "编码器线性度报警";
     case ENCODER_OCF_INCOMPLETE:
-        return "编码器状态未完成";
+        return "编码器角度计算未完成";
+    case ENCODER_FIRST_SAMPLE_TIMEOUT:
+        return "编码器首次读取超时";
+    case ENCODER_CIRCUMFERENCE_CALIBRATION_ERROR:
+        return "编码轮周长标定异常";
     case SENSOR_BCC_ERROR:
-        return "传感器数据校验失败";
+        return "传感器校验错误";
     case SONIC_FREQ_ABNORMAL:
-        return "声波频率异常";
+        return "测量管频率异常";
     case SENSOR_DEVICE_COMM_TIMEOUT:
-        return "传感器通信无响应";
-    case SENSOR_DEVICE_REPORTED_ERROR:
-        return "传感器设备内部错误";
+        return "传感器通信超时";
+    case SENSOR_INTERNAL_CPU_COMM_TIMEOUT:
+        return "传感器内部通信超时";
+    case SENSOR_GYRO_ANGLE_ERROR:
+        return "传感器角度异常";
+    case SENSOR_INTERNAL_COMM_CHECK_ERROR:
+        return "传感器内部校验异常";
+    case SENSOR_NO_RESONANCE:
+        return "传感器频率异常";
     case DENSITY_INVALID:
-        return "密度值异常无效";
+        return "密度值异常";
     case SENSOR_RESP_FORMAT_ERROR:
-        return "传感器格式异常";
+        return "传感器响应格式异常";
+    case SENSOR_POWER_SUPPLY_ERROR:
+        return "传感器电源异常";
+    case SENSOR_GYRO_COMM_TIMEOUT:
+        return "角度单元通信超时";
+    case SENSOR_SELF_TEST_FAILED:
+        return "传感器自检失败";
+    case SENSOR_IDENTITY_MISMATCH:
+        return "传感器身份不一致";
+    case SENSOR_PROTOCOL_VERSION_INCOMPATIBLE:
+        return "传感器协议版本不匹配";
+    case SENSOR_MODE_NOT_READY:
+        return "传感器模式未准备";
+    case SENSOR_CONFIG_EPOCH_MISMATCH:
+        return "传感器配置代次不一致";
+    case SENSOR_STREAM_STATE_ERROR:
+        return "传感器上报状态不一致";
+    case SENSOR_DATA_STALE:
+        return "传感器数据过期";
+    case SENSOR_TEMPERATURE_RANGE_ERROR:
+        return "传感器温度超限";
+    case SENSOR_REMOTE_INTERNAL_ERROR:
+        return "传感器内部故障";
+    case SENSOR_ADDRESS_MISMATCH:
+        return "传感器地址不匹配";
+    case SENSOR_SESSION_INVALID:
+        return "传感器会话失效";
+    case SENSOR_SEQUENCE_ERROR:
+        return "传感器报文序号异常";
+    case SENSOR_HANDSHAKE_REQUIRED:
+        return "传感器需要重新握手";
+    case SENSOR_REPLAY_DETECTED:
+        return "传感器收到重复报文";
+    case SENSOR_CAPABILITY_UNSUPPORTED:
+        return "传感器能力不支持";
+    case SENSOR_COMMAND_UNSUPPORTED:
+        return "传感器命令不支持";
+    case SENSOR_ARGUMENT_REJECTED:
+        return "传感器拒绝命令参数";
+    case SENSOR_MODE_MISMATCH:
+        return "传感器测量模式不一致";
+    case SENSOR_MODE_NOT_ALLOWED:
+        return "传感器当前模式不允许";
+    case SENSOR_TRANSACTION_PENDING:
+        return "传感器通信尚未完成";
+    case SENSOR_DEVICE_BUSY:
+        return "传感器设备忙";
+    case SENSOR_PARAM_CRC_ERROR:
+        return "传感器参数校验失败";
+    case SENSOR_SAMPLE_COUNTER_ERROR:
+        return "传感器采样计数异常";
+    case SENSOR_STREAM_STOPPED:
+        return "传感器周期上报已停止";
+    case SENSOR_STREAM_NOT_ACTIVE:
+        return "传感器周期上报未启动";
+    case SENSOR_STREAM_ALREADY_ACTIVE:
+        return "传感器周期上报已启动";
+    case SENSOR_STREAM_EXIT_FAILED:
+        return "传感器周期上报退出失败";
     case MEASUREMENT_ZERO_OUT_OF_RANGE:
-        return "零点超出范围";
-    case MEASUREMENT_POSITION_ERROR:
-        return "定位异常";
+        return "零点超限";
     case MEASUREMENT_ZERO_REPEAT_FAIL:
         return "零点重复性差";
+    case POSITION_DATA_INVALID:
+        return "位置数据无效";
+    case POSITION_TARGET_OVERRUN:
+        return "运动位置超过设定";
+    case POSITION_ARRIVAL_DEVIATION:
+        return "到位偏差过大";
+    case POSITION_MOTOR_NOT_STOPPED:
+        return "电机未停止";
     case MEASUREMENT_OILLEVEL_HIGH:
         return "液位超过罐高";
     case MEASUREMENT_OVERSPEED:
         return "液位变化过快";
     case MEASUREMENT_HEIGHT_DEVIATION:
         return "实高偏差过大";
-    case MEASUREMENT_TIMEOUT:
-        return "测量流程超时";
     case MEASUREMENT_OILLEVEL_LOW:
         return "下行未找到液位";
     case MEASUREMENT_OILLEVEL_NOTFOUND:
@@ -742,56 +827,104 @@ static const char *Display_GetErrorReasonByCode(uint32_t code)
         return "密度测量无有效点";
     case MEASUREMENT_DENSITY_SURFACE_NOTFOUND:
         return "密度测量未找到油面";
+    case MEASUREMENT_DENSITY_LEVEL_TIMEOUT:
+        return "密度找液位超时";
+    case MEASUREMENT_FREQUENCY_LEVEL_TIMEOUT:
+        return "频率找液位超时";
+    case MEASUREMENT_BOTTOM_RELEASE_FAIL:
+        return "探底前离底失败";
+    case MEASUREMENT_TANK_HEIGHT_NOT_CONFIGURED:
+        return "未设置罐高标定值";
+    case MEASUREMENT_WATER_CALIBRATION_NOT_CONFIGURED:
+        return "未设置水位标定值";
+    case MEASUREMENT_DENSITY_PLAN_INVALID:
+        return "密度测点设置失败";
+    case MEASUREMENT_TANK_HEIGHT_RESULT_INVALID:
+        return "罐高测量结果无效";
+    case MEASUREMENT_WATER_CALC_OUT_OF_RANGE:
+        return "水位标定计算超限";
     case PARAM_EEPROM_FAIL:
         return "参数存储读写失败";
     case PARAM_UNINITIALIZED:
         return "参数未初始化";
     case PARAM_RANGE_ERROR:
-        return "参数超出范围";
+        return "参数值超出范围";
     case PARAM_CRC_ERROR:
-        return "参数CRC校验失败";
-    case AD5421_WRITE_CURRENT_ERROR:
-        return "AD5421写电流失败";
+        return "参数完整性校验失败";
+    case PARAM_CONFIG_MISSING:
+        return "基础配置未设置";
+    case PARAM_COMBINATION_CONFLICT:
+        return "参数组合错误";
+    case PARAM_FEATURE_UNSUPPORTED:
+        return "功能无法使用";
+    case PARAM_STORAGE_SIZE_MISMATCH:
+        return "参数存储结构不匹配";
+    case PARAM_STORAGE_VERSION_MISMATCH:
+        return "参数存储版本不匹配";
+    case PARAM_STORAGE_WRITE_VERIFY_FAILED:
+        return "参数存储写入校验失败";
     case AD5421_INIT_ERROR:
-        return "AD5421初始化失败";
-    case AD5421_FAULT_STATUS_ERROR:
-        return "AD5421设备报警";
+        return "模拟输出初始化失败";
     case AD5421_READBACK_ERROR:
-        return "AD5421控制回读失败";
-    case AD5421_READFAULT_ERROR:
-        return "AD5421故障读取失败";
+        return "模拟输出控制回读不一致";
+    case AD5421_INTERNAL_COMM_ERROR:
+        return "模拟输出内部通信异常";
+    case AD5421_LOOP_CURRENT_HIGH:
+        return "模拟输出电流过高";
+    case AD5421_LOOP_CURRENT_LOW:
+        return "模拟输出电流过低";
+    case AD5421_LOOP_VOLTAGE_LOW:
+        return "模拟输出环路电压低";
+    case AD5421_SPI_TRANSFER_ERROR:
+        return "模拟输出通信失败";
+    case AD5421_ACCESS_BUSY:
+        return "模拟输出状态异常";
+    case AD5421_OVERTEMP_SHUTDOWN:
+        return "模拟输出过温停止";
+    case AD5421_OVERTEMP_WARNING:
+        return "模拟输出过温预警";
     case COMM_UART_TRANSFER_ERROR:
-        return "通信发送异常";
+        return "通信传输异常";
     case SLIPRING_COMM_FAIL:
         return "滑环通信失败";
     case SLIPRING_SIGNAL_WEAK:
-        return "信号弱";
+        return "滑环信号弱";
     case WIRELESS_HOST_COMM_TIMEOUT:
-        return "BT主机无响应";
+        return "无线主机通信超时";
     case WIRELESS_SLAVE_COMM_TIMEOUT:
-        return "BT从机未连接";
+        return "无线从机未连接";
     case WIRELESS_RESP_FORMAT_ERROR:
-        return "无线格式异常";
+        return "无线响应格式异常";
     case CPU2_COMM_TIMEOUT:
-        return "CPU2通信超时";
+        return "主控通信超时";
+    case WIRELESS_SCAN_NO_DEVICE:
+        return "无线扫描无设备";
+    case WIRELESS_NAME_NOT_UNIQUE:
+        return "无线名称重复";
+    case WIRELESS_NAME_NOT_FOUND:
+        return "无线名称未找到";
+    case WIRELESS_NAME_INVALID:
+        return "无线名称无效";
+    case WIRELESS_NOT_HOST_MODE:
+        return "无线非主机模式";
     case WEIGHT_OUT_OF_RANGE:
-        return "扭力超过上限";
+        return "扭力超上限";
     case WEIGHT_UNDER_RANGE:
-        return "扭力低于下限";
+        return "扭力超下限";
     case WEIGHT_COLLISION_DETECTED:
-        return "扭力检测到碰撞";
+        return "检测到碰撞";
     case WEIGHT_DRIFT_ERROR:
-        return "扭力数据漂移异常";
+        return "扭力漂移异常";
     case WEIGHT_SENSOR_SATURATION:
         return "扭力传感器饱和";
     case WEIGHT_COMM_TIMEOUT:
-        return "扭力通信无响应";
-    case PARAM_ADDRESS_OVERFLOW:
-        return "数据位置异常";
-    case PARAM_ERROR:
-        return "调用异常";
-    case OTHER_PERIPHERAL_CONFIG_ERROR:
-        return "外设配置错误";
+        return "扭力通信超时";
+    case SYSTEM_BUFFER_CAPACITY_ERROR:
+        return "系统容量过小";
+    case SYSTEM_CALL_CONDITION_ERROR:
+        return "系统输入异常";
+    case SYSTEM_CALCULATION_ERROR:
+        return "系统计算异常";
     default:
         break;
     }
@@ -1017,7 +1150,8 @@ static uint8_t StockMap[] = "通讯尝试中液位跟随密度温℃版本水测
                             "误础界面程序减比股长介信号后限例权屏幕维护视终继状态最探头浸小第悬停禁用弦工固产反先动当前"
                             "大英更传层滞域使磨结束针总阻六级内息命感顺有阈值角导本整瓦锡兰厚首波特率验位奇偶预留默强差"
 							"义已碰撞寄存次菜忽略志构魔术望全过收为裁剪准除以跳飞频声稳记局切匹"
-							"馈被荷泵欠驱丢溢性弱响应格快越漂移饱和系统因尼组跑锁隔策亮控扭";
+							"馈被荷泵欠驱丢溢性弱响应格快越漂移饱和系统因尼组跑锁隔策亮控扭"
+                            "持身代会话需要握拒绝允许尚忙采样果名";
 static const int wordbyte      = 3; /* UTF-8 下汉字 3 字节 */
 static const int StockmapLength = (sizeof(StockMap) - 1) / wordbyte;
 static uint8_t WordStock[255 * 28] =
@@ -1487,6 +1621,24 @@ static uint8_t WordStock2[255 * 28] =
     0x01,0x00,0x7F,0xFC,0x00,0x00,0x1F,0xF0,0x10,0x10,0x1F,0xF0,0x00,0x00,0x7F,0xFC,0x40,0x04,0x4F,0xE4,0x08,0x20,0x08,0x20,0x10,0x24,0x60,0x1C, /* "亮",28 */
     0x21,0x00,0x20,0x80,0x27,0xF8,0xF4,0x08,0x21,0x20,0x22,0x10,0x24,0x08,0x30,0x00,0xE3,0xF0,0x20,0x80,0x20,0x80,0x20,0x80,0x20,0x80,0xE7,0xF8, /* "控",29 */
     0x20,0x00,0x27,0xF0,0x21,0x10,0xF9,0x10,0x21,0x10,0x21,0x10,0x29,0x10,0x37,0xF0,0xE2,0x10,0x22,0x10,0x22,0x10,0x22,0x10,0x22,0x10,0xEF,0xF8, /* "扭",30 */
+    0x20,0x80,0x20,0x80,0x23,0xF0,0xF8,0x80,0x20,0x80,0x27,0xF8,0x28,0x20,0x30,0x20,0xE7,0xF8,0x20,0x20,0x22,0x20,0x21,0x20,0x20,0x20,0xE0,0xE0, /* "持",31 */
+    0x04,0x00,0x08,0x00,0x3F,0xE0,0x20,0x20,0x3F,0xE0,0x20,0x20,0x3F,0xE8,0x20,0x30,0xFF,0xE0,0x01,0xA0,0x06,0x20,0x18,0x20,0xE0,0x20,0x00,0xE0, /* "身",32 */
+    0x11,0x00,0x11,0x20,0x11,0x10,0x21,0x10,0x21,0x38,0x6F,0xC0,0xA1,0x00,0x21,0x00,0x20,0x80,0x20,0x80,0x20,0x48,0x20,0x28,0x20,0x18,0x20,0x08, /* "代",33 */
+    0x02,0x00,0x05,0x00,0x08,0x80,0x10,0x40,0x20,0x20,0xDF,0xD8,0x00,0x00,0x00,0x00,0x7F,0xF0,0x04,0x00,0x08,0x80,0x10,0x40,0x3F,0xE0,0x00,0x20, /* "会",34 */
+    0x40,0x00,0x20,0x70,0x27,0x80,0x00,0x80,0x00,0x80,0xEF,0xF8,0x20,0x80,0x20,0x80,0x27,0xF0,0x24,0x10,0x2C,0x10,0x34,0x10,0x27,0xF0,0x04,0x10, /* "话",35 */
+    0x3F,0xE0,0x02,0x00,0xFF,0xF8,0x82,0x08,0xBA,0xE8,0x02,0x00,0x3A,0xE0,0x00,0x00,0xFF,0xF8,0x04,0x00,0x7F,0xF0,0x49,0x10,0x49,0x10,0x40,0x70, /* "需",36 */
+    0xFF,0xF8,0x08,0x80,0x08,0x80,0x7F,0xF0,0x48,0x90,0x48,0x90,0x7F,0xF0,0x04,0x00,0xFF,0xF8,0x08,0x40,0x18,0x80,0x07,0x00,0x18,0xE0,0xE0,0x10, /* "要",37 */
+    0x20,0x00,0x27,0xF8,0x24,0x08,0xF4,0x08,0x27,0xF8,0x24,0x00,0x25,0xF8,0x34,0x80,0xE5,0x10,0x25,0xF8,0x24,0x40,0x25,0xF8,0x24,0x40,0xEB,0xF8, /* "握",38 */
+    0x20,0x00,0x23,0xF8,0x22,0x00,0xFA,0x00,0x22,0x00,0x23,0xF0,0x2A,0x10,0x32,0x10,0xE2,0x10,0x23,0xF0,0x22,0x00,0x22,0x00,0x22,0x00,0xE3,0xF8, /* "拒",39 */
+    0x21,0x00,0x21,0x00,0x49,0xF0,0x4A,0x10,0xF4,0x20,0x13,0xF8,0x22,0x48,0x42,0x48,0xFA,0x48,0x03,0xF8,0x02,0x00,0x1A,0x08,0xE2,0x08,0x01,0xF8, /* "绝",40 */
+    0x04,0x00,0x04,0x00,0x08,0x80,0x10,0x40,0x20,0x20,0x7F,0xF0,0x08,0x90,0x08,0x80,0x08,0x80,0x08,0x80,0x08,0x80,0x10,0x88,0x20,0x88,0xC0,0x78, /* "允",41 */
+    0x42,0x00,0x22,0x00,0x27,0xF0,0x04,0x80,0x08,0x80,0xE0,0x80,0x20,0x80,0x2F,0xF8,0x20,0x80,0x20,0x80,0x28,0x80,0x30,0x80,0x20,0x80,0x00,0x80, /* "许",42 */
+    0x02,0x00,0x42,0x10,0x22,0x20,0x12,0x40,0x7F,0xF0,0x40,0x10,0x40,0x10,0x4F,0x90,0x48,0x90,0x48,0x90,0x4F,0x90,0x40,0x10,0x40,0x10,0x40,0x70, /* "尚",43 */
+    0x20,0x80,0x20,0x40,0x20,0x40,0x20,0x00,0xB7,0xF8,0xAA,0x00,0xA2,0x00,0xA2,0x00,0x22,0x00,0x22,0x00,0x22,0x00,0x22,0x00,0x22,0x00,0x23,0xF8, /* "忙",44 */
+    0x00,0xF0,0x7F,0x00,0x04,0x20,0x22,0x20,0x10,0x40,0x02,0x00,0x02,0x00,0xFF,0xF8,0x07,0x00,0x0A,0x80,0x12,0x40,0x22,0x20,0xC2,0x18,0x02,0x00, /* "采",45 */
+    0x24,0x10,0x22,0x20,0x20,0x00,0xF7,0xF0,0x20,0x80,0x20,0x80,0x77,0xF0,0x68,0x80,0xA0,0x80,0x2F,0xF8,0x20,0x80,0x20,0x80,0x20,0x80,0x20,0x80, /* "样",46 */
+    0x3F,0xE0,0x22,0x20,0x22,0x20,0x3F,0xE0,0x22,0x20,0x22,0x20,0x3F,0xE0,0x02,0x00,0xFF,0xF8,0x0A,0x80,0x12,0x40,0x22,0x20,0xC2,0x18,0x02,0x00, /* "果",47 */
+    0x04,0x00,0x04,0x00,0x0F,0xF0,0x10,0x20,0x68,0x40,0x04,0x80,0x03,0x00,0x0C,0x00,0x3F,0xF0,0xD0,0x10,0x10,0x10,0x10,0x10,0x1F,0xF0,0x10,0x10, /* "名",48 */
 };
 static uint8_t NumberStock[] = {
 
@@ -3026,7 +3178,8 @@ void RefreshScreen(void)
 
     if (FlagofTankOpera == true) {
         if (DisplayTankOpera_IsMotorRunMonitorActive() ||
-            DisplayTankOpera_IsDebugWeightWaitActive()) {
+            DisplayTankOpera_IsDebugWeightWaitActive() ||
+            DisplayTankOpera_IsAoRuntimeActive()) {
             frame_spi_error_start = Display_PrepareForForegroundDraw();
             if (DisplayTankOpera_RedrawCurrentPage()) {
                 Display_FinishFrame(frame_spi_error_start);
@@ -3749,12 +3902,34 @@ static void DIS_Equipment(void)
     int row, line;
     uint16_t state = g_measurement.device_status.device_state;
     uint8_t lang = screen_parameter.language;
+    bool protocol_compatible = IsCpu2ProtocolCompatible();
+    bool ao_simulation_active = protocol_compatible &&
+                                (g_measurement.ao_output_runtime.simulation_enabled != 0U);
+    static bool ao_simulation_badge_visible = false;
+    static uint8_t ao_simulation_badge_row = OLED_ROW4_1;
 
     if (lang > 1) lang = 1;
     row = FlagofTotalTwoRow ? OLED_ROW4_2 : OLED_ROW4_1;
 
+    /*
+     * 仿真开启期间在状态栏持续反显“模拟”，占用原电机图标区域。
+     * 切换行或关闭仿真时先清除旧徽标，避免增量刷新残留维护态提示。
+     */
+    if (ao_simulation_badge_visible && (ao_simulation_badge_row != (uint8_t)row)) {
+        OLED_ClearArea(OLED_LINE8_8,
+                       ao_simulation_badge_row,
+                       (uint8_t)(OLED_LINE8_END - OLED_LINE8_8 + 1U),
+                       OLED_ROW4_2);
+    }
+    OLED_ClearArea((ao_simulation_active || ao_simulation_badge_visible) ? OLED_LINE8_8 : OLED_LINE8_9,
+                   (uint8_t)row,
+                   (uint8_t)(OLED_LINE8_END -
+                             ((ao_simulation_active || ao_simulation_badge_visible) ? OLED_LINE8_8 : OLED_LINE8_9) +
+                             1U),
+                   OLED_ROW4_2);
+
     /* 协议不匹配是整机状态问题，优先覆盖普通运行状态，避免用户只在参数页才看到。 */
-    const char *disp_str = IsCpu2ProtocolCompatible()
+    const char *disp_str = protocol_compatible
                            ? GetStateString(state, lang)
                            : ((lang == LANGUAGE_CHINESE) ? "CPU3版本不匹配" : "ProtoErr");
     line = OledDisplayLineWords((uint8_t*)disp_str, OLED_LINE8_1, row, 0);
@@ -3768,11 +3943,18 @@ static void DIS_Equipment(void)
 		line = OledDisplayLineWords((uint8_t*)err_text, line, row, 0);
     }
 
-    {
+    if (ao_simulation_active) {
+        OledDisplayLineWords((uint8_t*)((lang == LANGUAGE_CHINESE) ? "模拟" : "SIM"),
+                             OLED_LINE8_8,
+                             (uint8_t)row,
+                             1U);
+    } else {
         uint8_t motor_icon_index = GetMotorRunIconIndex();
         write_hanzi16(OLED_LINE8_9, row, (uint8_t*)MotorRunIcon16Stock,
                       motor_icon_index, motor_icon_index + 1U, 0);
     }
+    ao_simulation_badge_visible = ao_simulation_active;
+    ao_simulation_badge_row = (uint8_t)row;
 }
 
 

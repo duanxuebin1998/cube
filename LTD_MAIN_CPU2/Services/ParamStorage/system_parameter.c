@@ -309,14 +309,6 @@ static int apply_protocol_version_runtime(void)
     if ((old_protocol < 10U) || (old_protocol > DEVICE_PROTOCOL_VERSION)) {
         g_deviceParams.bottom_encoder_correction_tank_height = 0U;
         g_deviceParams.fault_auto_recovery_retry_limit = FAULT_AUTO_RECOVERY_RETRY_DEFAULT;
-        g_deviceParams.AoOutputEnable = 0U;
-    }
-
-    if ((old_protocol < 11U) || (old_protocol > DEVICE_PROTOCOL_VERSION)) {
-        g_deviceParams.AOStartLevel_01mm = 0U;
-        g_deviceParams.AOEndLevel_01mm = g_deviceParams.tankHeight;
-        g_deviceParams.AlarmHighAO = g_deviceParams.tankHeight;
-        g_deviceParams.AlarmLowAO = 0U;
     }
 
     if ((old_protocol < 14U) || (old_protocol > DEVICE_PROTOCOL_VERSION)) {
@@ -329,124 +321,248 @@ static int apply_protocol_version_runtime(void)
     return 1;
 }
 
-/*
- * 函数用途：按 AO 硬件输出范围归一化单个特殊电流参数。
- * 调用场景：启动加载参数和 Modbus 写参后由 AO 参数归一化流程调用。
- * 关键约束：沿用系统参数静默兜底风格，不新增错误码或日志。
- */
-static int normalize_ao_output_current_runtime(volatile uint32_t *current_mA_x100)
-{
-    int changed = 0;
+/* 协议19及更早版本的AO原始布局，仅用于一次性FRAM迁移。 */
+typedef struct {
+    uint32_t range_start_01mm;
+    uint32_t range_end_01mm;
+    uint32_t normal_current_start_mA_x100;
+    uint32_t normal_current_end_mA_x100;
+    uint32_t alarm_high_01mm;
+    uint32_t alarm_low_01mm;
+    uint32_t initial_current_mA_x100;
+    uint32_t high_current_mA_x100;
+    uint32_t low_current_mA_x100;
+    uint32_t fault_current_mA_x100;
+    uint32_t debug_current_mA_x100;
+    uint32_t output_enable;
+    uint32_t reserved27;
+} AoOutputLegacyV19;
 
-    if (*current_mA_x100 < AO_OUTPUT_CURRENT_MIN_MA_X100) {
-        *current_mA_x100 = AO_OUTPUT_CURRENT_MIN_MA_X100;
-        changed = 1;
-    } else if (*current_mA_x100 > AO_OUTPUT_CURRENT_MAX_MA_X100) {
-        *current_mA_x100 = AO_OUTPUT_CURRENT_MAX_MA_X100;
-        changed = 1;
-    } else {
-        /* 范围内无需修正。 */
+/* 返回输出源允许的默认量程上限，单位0.1mm。 */
+static int32_t ao_source_range_max_01mm(const DeviceParameters *params, uint32_t source)
+{
+    uint32_t max_01mm;
+
+    if (params == NULL) {
+        return 1;
     }
 
-    return changed;
+    if (source == AO_PROCESS_SOURCE_WATER_LEVEL) {
+        max_01mm = params->water_tank_height;
+        if (max_01mm == 0U) {
+            max_01mm = params->tankHeight;
+        }
+    } else {
+        max_01mm = params->tankHeight;
+    }
+
+    if (max_01mm == 0U) {
+        max_01mm = 1U;
+    }
+    if (max_01mm > 0x7FFFFFFFUL) {
+        max_01mm = 0x7FFFFFFFUL;
+    }
+    return (int32_t)max_01mm;
 }
-/*
- * 函数用途：归一化 AO 输出相关参数。
- * 调用场景：启动加载参数和 Modbus 写参后调用。
- * 关键约束：只修正 AO 参数，不处理继电器清报警等一次性命令。
- */
+
+/* 为指定输出源装载0%和100%的默认量程。 */
+static void ao_load_default_range(const DeviceParameters *params, AoOutputConfig *config)
+{
+    if (config == NULL) {
+        return;
+    }
+    config->range_0_01mm = 0;
+    config->range_100_01mm = ao_source_range_max_01mm(params, config->output_source);
+}
+
+/* 建立协议20 AO出厂配置，供恢复默认和旧协议迁移共用。 */
+static void ao_load_default_config(const DeviceParameters *params, AoOutputConfig *config)
+{
+    if (config == NULL) {
+        return;
+    }
+
+    memset(config, 0, sizeof(*config));
+    config->work_mode = AO_WORK_MODE_DISABLED;
+    config->current_mode = AO_CURRENT_MODE_NE;
+    config->output_source = AO_PROCESS_SOURCE_TANK_LEVEL;
+    config->sil_whg_reserved = 0U;
+    config->fixed_current_mA_x100 = 400U;
+    ao_load_default_range(params, config);
+    config->damping_x10_s = 0U;
+    config->fault_mode = AO_FAULT_MODE_MAXIMUM;
+    config->fault_current_mA_x100 = 2200U;
+    config->error_level = AO_ERROR_LEVEL_WARNING;
+    config->power_on_current_mA_x100 = 400U;
+    config->simulation_current_mA_x100 = 1200U;
+}
+
+/* 检查协议20 AO配置是否满足全部枚举、范围和量程约束。 */
+static int ao_config_is_valid(const DeviceParameters *params, const AoOutputConfig *config)
+{
+    int32_t range_max_01mm;
+
+    if ((params == NULL) || (config == NULL)) {
+        return 0;
+    }
+    if ((config->work_mode > AO_WORK_MODE_HART_SLAVE_OUTPUT) ||
+        (config->current_mode > AO_CURRENT_MODE_FIXED) ||
+        (config->output_source > AO_PROCESS_SOURCE_WATER_LEVEL) ||
+        (config->sil_whg_reserved != 0U) ||
+        (config->fault_mode > AO_FAULT_MODE_SET_VALUE) ||
+        (config->error_level > AO_ERROR_LEVEL_ALARM)) {
+        return 0;
+    }
+    if ((config->fixed_current_mA_x100 < AO_FIXED_CURRENT_MIN_MA_X100) ||
+        (config->fixed_current_mA_x100 > AO_FIXED_CURRENT_MAX_MA_X100) ||
+        (config->fault_current_mA_x100 < AO_FAULT_CURRENT_MIN_MA_X100) ||
+        (config->fault_current_mA_x100 > AO_FAULT_CURRENT_MAX_MA_X100) ||
+        (config->power_on_current_mA_x100 < AO_POWER_ON_CURRENT_MIN_MA_X100) ||
+        (config->power_on_current_mA_x100 > AO_POWER_ON_CURRENT_MAX_MA_X100) ||
+        (config->simulation_current_mA_x100 < AO_SIMULATION_CURRENT_MIN_MA_X100) ||
+        (config->simulation_current_mA_x100 > AO_SIMULATION_CURRENT_MAX_MA_X100) ||
+        (config->damping_x10_s > AO_DAMPING_MAX_X10_S)) {
+        return 0;
+    }
+
+    range_max_01mm = ao_source_range_max_01mm(params, config->output_source);
+    if ((config->range_0_01mm < 0) ||
+        (config->range_100_01mm < 0) ||
+        (config->range_0_01mm > range_max_01mm) ||
+        (config->range_100_01mm > range_max_01mm) ||
+        (config->range_0_01mm == config->range_100_01mm)) {
+        return 0;
+    }
+    return 1;
+}
+
+/* 将协议19及更早版本的AO字段迁移为协议20配置，不清除其它现场参数。 */
+static int migrate_ao_params_runtime(void)
+{
+    AoOutputLegacyV19 legacy;
+    AoOutputConfig migrated;
+    uint32_t old_protocol = g_deviceParams.protocolVersion;
+    int32_t range_max_01mm;
+
+    if (old_protocol >= 20U) {
+        return 0;
+    }
+
+    memcpy(&legacy, (const void *)&g_deviceParams.ao_output, sizeof(legacy));
+    ao_load_default_config((const DeviceParameters *)&g_deviceParams, &migrated);
+    if ((old_protocol >= 10U) && (legacy.output_enable != 0U)) {
+        migrated.work_mode = AO_WORK_MODE_CURRENT_OUTPUT;
+    }
+
+    range_max_01mm = ao_source_range_max_01mm((const DeviceParameters *)&g_deviceParams,
+                                              AO_PROCESS_SOURCE_TANK_LEVEL);
+    if ((old_protocol >= 11U) &&
+        (legacy.range_start_01mm <= (uint32_t)range_max_01mm) &&
+        (legacy.range_end_01mm <= (uint32_t)range_max_01mm) &&
+        (legacy.range_start_01mm != legacy.range_end_01mm)) {
+        migrated.range_0_01mm = (int32_t)legacy.range_start_01mm;
+        migrated.range_100_01mm = (int32_t)legacy.range_end_01mm;
+    }
+    if ((legacy.initial_current_mA_x100 >= AO_POWER_ON_CURRENT_MIN_MA_X100) &&
+        (legacy.initial_current_mA_x100 <= AO_POWER_ON_CURRENT_MAX_MA_X100)) {
+        migrated.power_on_current_mA_x100 = legacy.initial_current_mA_x100;
+    }
+    if ((legacy.fault_current_mA_x100 >= AO_FAULT_CURRENT_MIN_MA_X100) &&
+        (legacy.fault_current_mA_x100 <= AO_FAULT_CURRENT_MAX_MA_X100)) {
+        migrated.fault_current_mA_x100 = legacy.fault_current_mA_x100;
+    }
+    if ((legacy.debug_current_mA_x100 >= AO_SIMULATION_CURRENT_MIN_MA_X100) &&
+        (legacy.debug_current_mA_x100 <= AO_SIMULATION_CURRENT_MAX_MA_X100)) {
+        migrated.simulation_current_mA_x100 = legacy.debug_current_mA_x100;
+    }
+
+    g_deviceParams.ao_output = migrated;
+    return 1;
+}
+
+/* 启动加载时归一化AO配置；用户写参走严格拒绝路径，不调用本函数兜底。 */
 static int normalize_ao_params_runtime(void)
 {
+    AoOutputConfig normalized = g_deviceParams.ao_output;
+    AoOutputConfig defaults;
     int changed = 0;
 
-    if (g_deviceParams.AoOutputEnable > 1U) {
-        g_deviceParams.AoOutputEnable = 0U;
-        changed = 1;
+    ao_load_default_config((const DeviceParameters *)&g_deviceParams, &defaults);
+    if (normalized.work_mode > AO_WORK_MODE_HART_SLAVE_OUTPUT) {
+        normalized.work_mode = defaults.work_mode;
+    }
+    if (normalized.current_mode > AO_CURRENT_MODE_FIXED) {
+        normalized.current_mode = defaults.current_mode;
+    }
+    if (normalized.output_source > AO_PROCESS_SOURCE_WATER_LEVEL) {
+        normalized.output_source = defaults.output_source;
+    }
+    normalized.sil_whg_reserved = 0U;
+    if ((normalized.fixed_current_mA_x100 < AO_FIXED_CURRENT_MIN_MA_X100) ||
+        (normalized.fixed_current_mA_x100 > AO_FIXED_CURRENT_MAX_MA_X100)) {
+        normalized.fixed_current_mA_x100 = defaults.fixed_current_mA_x100;
+    }
+    if (normalized.damping_x10_s > AO_DAMPING_MAX_X10_S) {
+        normalized.damping_x10_s = defaults.damping_x10_s;
+    }
+    if (normalized.fault_mode > AO_FAULT_MODE_SET_VALUE) {
+        normalized.fault_mode = defaults.fault_mode;
+    }
+    if ((normalized.fault_current_mA_x100 < AO_FAULT_CURRENT_MIN_MA_X100) ||
+        (normalized.fault_current_mA_x100 > AO_FAULT_CURRENT_MAX_MA_X100)) {
+        normalized.fault_current_mA_x100 = defaults.fault_current_mA_x100;
+    }
+    if (normalized.error_level > AO_ERROR_LEVEL_ALARM) {
+        normalized.error_level = defaults.error_level;
+    }
+    if ((normalized.power_on_current_mA_x100 < AO_POWER_ON_CURRENT_MIN_MA_X100) ||
+        (normalized.power_on_current_mA_x100 > AO_POWER_ON_CURRENT_MAX_MA_X100)) {
+        normalized.power_on_current_mA_x100 = defaults.power_on_current_mA_x100;
+    }
+    if ((normalized.simulation_current_mA_x100 < AO_SIMULATION_CURRENT_MIN_MA_X100) ||
+        (normalized.simulation_current_mA_x100 > AO_SIMULATION_CURRENT_MAX_MA_X100)) {
+        normalized.simulation_current_mA_x100 = defaults.simulation_current_mA_x100;
+    }
+    if (ao_config_is_valid((const DeviceParameters *)&g_deviceParams, &normalized) == 0) {
+        ao_load_default_range((const DeviceParameters *)&g_deviceParams, &normalized);
     }
 
-    if (g_deviceParams.CurrentRangeStart_mA < AO_NORMAL_CURRENT_MIN_MA_X100) {
-        g_deviceParams.CurrentRangeStart_mA = AO_NORMAL_CURRENT_MIN_MA_X100;
-        changed = 1;
-    } else if (g_deviceParams.CurrentRangeStart_mA > AO_NORMAL_CURRENT_MAX_MA_X100) {
-        g_deviceParams.CurrentRangeStart_mA = AO_NORMAL_CURRENT_MAX_MA_X100;
-        changed = 1;
-    } else {
-        /* 范围内无需修正。 */
-    }
-
-    if (g_deviceParams.CurrentRangeEnd_mA < AO_NORMAL_CURRENT_MIN_MA_X100) {
-        g_deviceParams.CurrentRangeEnd_mA = AO_NORMAL_CURRENT_MIN_MA_X100;
-        changed = 1;
-    } else if (g_deviceParams.CurrentRangeEnd_mA > AO_NORMAL_CURRENT_MAX_MA_X100) {
-        g_deviceParams.CurrentRangeEnd_mA = AO_NORMAL_CURRENT_MAX_MA_X100;
-        changed = 1;
-    } else {
-        /* 范围内无需修正。 */
-    }
-
-    if (g_deviceParams.CurrentRangeStart_mA == g_deviceParams.CurrentRangeEnd_mA) {
-        g_deviceParams.CurrentRangeStart_mA = AO_NORMAL_CURRENT_MIN_MA_X100;
-        g_deviceParams.CurrentRangeEnd_mA = AO_NORMAL_CURRENT_MAX_MA_X100;
+    if (memcmp(&normalized, (const void *)&g_deviceParams.ao_output, sizeof(normalized)) != 0) {
+        g_deviceParams.ao_output = normalized;
         changed = 1;
     }
-
-    if (normalize_ao_output_current_runtime(&g_deviceParams.InitialCurrent_mA) != 0) {
-        changed = 1;
-    }
-    if (normalize_ao_output_current_runtime(&g_deviceParams.AOHighCurrent_mA) != 0) {
-        changed = 1;
-    }
-    if (normalize_ao_output_current_runtime(&g_deviceParams.AOLowCurrent_mA) != 0) {
-        changed = 1;
-    }
-    if (normalize_ao_output_current_runtime(&g_deviceParams.FaultCurrent_mA) != 0) {
-        changed = 1;
-    }
-    if (normalize_ao_output_current_runtime(&g_deviceParams.DebugCurrent_mA) != 0) {
-        changed = 1;
-    }
-
-    {
-        uint32_t ao_max_level = g_deviceParams.tankHeight;
-        if (ao_max_level == 0U) {
-            ao_max_level = 1U;
-        }
-
-        if (g_deviceParams.AOStartLevel_01mm > ao_max_level) {
-            g_deviceParams.AOStartLevel_01mm = 0U;
-            changed = 1;
-        }
-        if (g_deviceParams.AOEndLevel_01mm > ao_max_level) {
-            g_deviceParams.AOEndLevel_01mm = ao_max_level;
-            changed = 1;
-        }
-        if (g_deviceParams.AOEndLevel_01mm <= g_deviceParams.AOStartLevel_01mm) {
-            g_deviceParams.AOStartLevel_01mm = 0U;
-            g_deviceParams.AOEndLevel_01mm = ao_max_level;
-            changed = 1;
-        }
-
-        if ((g_deviceParams.AlarmHighAO != 0U) &&
-            (g_deviceParams.AlarmHighAO > ao_max_level)) {
-            g_deviceParams.AlarmHighAO = ao_max_level;
-            changed = 1;
-        }
-        if ((g_deviceParams.AlarmLowAO != 0U) &&
-            (g_deviceParams.AlarmLowAO > ao_max_level)) {
-            g_deviceParams.AlarmHighAO = ao_max_level;
-            g_deviceParams.AlarmLowAO = 0U;
-            changed = 1;
-        }
-        if ((g_deviceParams.AlarmHighAO != 0U) &&
-            (g_deviceParams.AlarmLowAO != 0U) &&
-            (g_deviceParams.AlarmLowAO >= g_deviceParams.AlarmHighAO)) {
-            g_deviceParams.AlarmHighAO = ao_max_level;
-            g_deviceParams.AlarmLowAO = 0U;
-            changed = 1;
-        }
-    }
-
     return changed;
+}
+
+/* 对FC10候选配置执行源切换、非法旧量程回退和严格校验。 */
+int prepare_ao_params_for_write(const DeviceParameters *current, DeviceParameters *candidate)
+{
+    int32_t current_range_max_01mm;
+    int32_t candidate_range_max_01mm;
+
+    if ((current == NULL) || (candidate == NULL)) {
+        return -1;
+    }
+    if (candidate->ao_output.output_source != current->ao_output.output_source) {
+        ao_load_default_range(candidate, &candidate->ao_output);
+    } else {
+        current_range_max_01mm = ao_source_range_max_01mm(current,
+                                                          current->ao_output.output_source);
+        candidate_range_max_01mm = ao_source_range_max_01mm(candidate,
+                                                            candidate->ao_output.output_source);
+        if ((candidate_range_max_01mm != current_range_max_01mm) &&
+            (candidate->ao_output.range_0_01mm == current->ao_output.range_0_01mm) &&
+            (candidate->ao_output.range_100_01mm == current->ao_output.range_100_01mm) &&
+            ((candidate->ao_output.range_0_01mm < 0) ||
+             (candidate->ao_output.range_100_01mm < 0) ||
+             (candidate->ao_output.range_0_01mm > candidate_range_max_01mm) ||
+             (candidate->ao_output.range_100_01mm > candidate_range_max_01mm) ||
+             (candidate->ao_output.range_0_01mm == candidate->ao_output.range_100_01mm))) {
+            /* 单独改罐高且旧量程已非法时才成对回默认，保留仍有效的自定义量程。 */
+            ao_load_default_range(candidate, &candidate->ao_output);
+        }
+    }
+    return (ao_config_is_valid(candidate, &candidate->ao_output) != 0) ? 0 : -1;
 }
 
 /* 修正新增参数的非法值。
@@ -684,6 +800,16 @@ static uint32_t device_param_error_from_slot_results(DeviceParamSlotLoadResult s
         return PARAM_CRC_ERROR;
     }
 
+    if ((slot_a_result == DEVICE_PARAM_SLOT_SIZE_MISMATCH) ||
+        (slot_b_result == DEVICE_PARAM_SLOT_SIZE_MISMATCH)) {
+        return PARAM_STORAGE_SIZE_MISMATCH;
+    }
+
+    if ((slot_a_result == DEVICE_PARAM_SLOT_VERSION_MISMATCH) ||
+        (slot_b_result == DEVICE_PARAM_SLOT_VERSION_MISMATCH)) {
+        return PARAM_STORAGE_VERSION_MISMATCH;
+    }
+
     if ((slot_a_result == DEVICE_PARAM_SLOT_UNINITIALIZED) &&
         (slot_b_result == DEVICE_PARAM_SLOT_UNINITIALIZED)) {
         return PARAM_UNINITIALIZED;
@@ -765,17 +891,22 @@ static void save_device_params_internal(int mark_updated, int force_write)
     DeviceParameters params;
     DeviceParameters slot_a;
     DeviceParameters slot_b;
+    DeviceParameters verify_a;
+    DeviceParameters verify_b;
     DeviceParamSlotLoadResult slot_a_result;
     DeviceParamSlotLoadResult slot_b_result;
+    DeviceParamSlotLoadResult verify_a_result;
+    DeviceParamSlotLoadResult verify_b_result;
     int slot_a_valid;
     int slot_b_valid;
+    char detail[128];
 
     if (sizeof(DeviceParameters) > FRAM_PARAM_SLOT_SIZE)
     {
         printf("参数大小超出分区容量: 大小=%lu, 分区：%lu\r\n",
                (unsigned long)sizeof(DeviceParameters),
                (unsigned long)FRAM_PARAM_SLOT_SIZE);
-        g_measurement.device_status.error_code = PARAM_ADDRESS_OVERFLOW;
+        g_measurement.device_status.error_code = SYSTEM_BUFFER_CAPACITY_ERROR;
         clear_device_params_write_snapshot();
         return;
     }
@@ -814,8 +945,37 @@ static void save_device_params_internal(int mark_updated, int force_write)
 
     WriteMultiData((uint8_t *)&params, (int)FRAM_PARAM_A_ADDRESS, sizeof(DeviceParameters));
     WriteMultiData((uint8_t *)&params, (int)FRAM_PARAM_B_ADDRESS, sizeof(DeviceParameters));
-    print_device_params_save_diff(&params, &slot_a, slot_a_valid, &slot_b, slot_b_valid, mark_updated);
 
+    /* A/B 两个分区均需重新读回并与本次写入镜像一致，防止写操作静默失败。 */
+    verify_a_result = load_device_params_from_slot_impl(FRAM_PARAM_A_ADDRESS, &verify_a, "A", 0);
+    verify_b_result = load_device_params_from_slot_impl(FRAM_PARAM_B_ADDRESS, &verify_b, "B", 0);
+    if ((verify_a_result != DEVICE_PARAM_SLOT_VALID) ||
+        (verify_b_result != DEVICE_PARAM_SLOT_VALID) ||
+        (memcmp(&verify_a, &params, sizeof(DeviceParameters)) != 0) ||
+        (memcmp(&verify_b, &params, sizeof(DeviceParameters)) != 0)) {
+        snprintf(detail, sizeof(detail),
+                 "A读取结果：%u,B读取结果：%u",
+                 (unsigned int)verify_a_result,
+                 (unsigned int)verify_b_result);
+        /* 错误 阶段：错误报警 模块：参数 操作：参数校验 原因：ErrorLog_GetReasonByCode(PARAM_STORAGE_WRITE_VERIFY_FAILED) 处理：继续尝试 详情：detail */
+        ErrorLog_WarnDetail(ERROR_LOG_MODULE_PARAM,
+                            ERROR_LOG_OP_PARAM_VALIDATE,
+                            ErrorLog_GetReasonByCode(PARAM_STORAGE_WRITE_VERIFY_FAILED),
+                            ERROR_LOG_ACTION_CONTINUE,
+                            detail);
+        if (g_measurement.device_status.error_code == NO_ERROR) {
+            g_measurement.device_status.error_code = PARAM_STORAGE_WRITE_VERIFY_FAILED;
+        }
+        print_device_params_save_diff(&params, &slot_a, slot_a_valid, &slot_b, slot_b_valid, mark_updated);
+        return;
+    }
+
+    /* 仅清除上一轮写后校验故障，不覆盖测量、电机或传感器等其它故障。 */
+    if (g_measurement.device_status.error_code == PARAM_STORAGE_WRITE_VERIFY_FAILED) {
+        g_measurement.device_status.error_code = NO_ERROR;
+    }
+
+    print_device_params_save_diff(&params, &slot_a, slot_a_valid, &slot_b, slot_b_valid, mark_updated);
     print_device_params_event(PARAM_PRINT_SAVE_META, &params, NULL, "FRAM A/B");
 }
 
@@ -880,7 +1040,7 @@ int load_device_params(void)
     if (sizeof(DeviceParameters) > FRAM_PARAM_SLOT_SIZE)
     {
         printf("设备参数超出单分区容量: 大小=%lu, 分区：%lu\r\n", (unsigned long)sizeof(DeviceParameters), (unsigned long)FRAM_PARAM_SLOT_SIZE);
-        g_measurement.device_status.error_code = PARAM_ADDRESS_OVERFLOW;
+        g_measurement.device_status.error_code = SYSTEM_BUFFER_CAPACITY_ERROR;
         return 0;
     }
 
@@ -911,6 +1071,7 @@ int load_device_params(void)
 
     g_deviceParams.command = g_deviceParams.powerOnDefaultCommand;
     params_normalized = migrate_density_params_runtime();
+    params_normalized |= migrate_ao_params_runtime();
     params_normalized |= normalize_device_params_runtime();
     params_normalized |= apply_firmware_version_runtime();
     params_normalized |= apply_protocol_version_runtime();
@@ -1114,18 +1275,7 @@ void RestoreFactoryParamsConfig(void)
     }
 
     /* ---------------- 4~20mA 输出 ---------------- */
-    g_deviceParams.AOStartLevel_01mm            = 0U;     /* AO起点液位，0.1mm */
-    g_deviceParams.AOEndLevel_01mm            = g_deviceParams.tankHeight; /* AO终点液位，0.1mm */
-    g_deviceParams.CurrentRangeStart_mA = 400;   /* 4.00mA (×0.01) */
-    g_deviceParams.CurrentRangeEnd_mA   = 2000;  /* 20.00mA (×0.01) */
-    g_deviceParams.AlarmHighAO          = g_deviceParams.tankHeight;    /* 默认同液位罐高 */
-    g_deviceParams.AlarmLowAO           = 0U;    /* 默认关闭 AO 低报警 */
-    g_deviceParams.InitialCurrent_mA    = 400;
-    g_deviceParams.AOHighCurrent_mA     = 2000;
-    g_deviceParams.AOLowCurrent_mA      = 400;
-    g_deviceParams.FaultCurrent_mA      = 2200;  /* 22.00mA */
-    g_deviceParams.DebugCurrent_mA      = 1200;  /* 12.00mA */
-    g_deviceParams.AoOutputEnable       = 0U;    /* 默认关闭 */
+    ao_load_default_config((const DeviceParameters *)&g_deviceParams, (AoOutputConfig *)&g_deviceParams.ao_output);
 
     /* ---------------- 指令参数 ---------------- */
     g_deviceParams.calibrateOilLevel                      = 0;
@@ -1283,18 +1433,19 @@ static const ParamPrintItem g_device_param_print_table[] = {
     DEVICE_PARAM_ITEM("瓦锡兰参数", "瓦锡兰探底间隔", wartsila_bottom_detect_interval, PARAM_PRINT_TYPE_U32_UNIT, "次"),
     DEVICE_PARAM_ITEM("瓦锡兰参数", "探底修正罐高", bottom_encoder_correction_tank_height, PARAM_PRINT_TYPE_U32_01MM, "0.1mm"),
     DEVICE_PARAM_RELAY_ITEM("继电器报警输出参数"),
-    DEVICE_PARAM_ITEM("4-20mA/AO参数", "AO起点液位", AOStartLevel_01mm, PARAM_PRINT_TYPE_U32_01MM, "0.1mm"),
-    DEVICE_PARAM_ITEM("4-20mA/AO参数", "AO终点液位", AOEndLevel_01mm, PARAM_PRINT_TYPE_U32_01MM, "0.1mm"),
-    DEVICE_PARAM_ITEM("4-20mA/AO参数", "AO正常起点电流", CurrentRangeStart_mA, PARAM_PRINT_TYPE_U32_01MA, "0.01mA"),
-    DEVICE_PARAM_ITEM("4-20mA/AO参数", "AO正常终点电流", CurrentRangeEnd_mA, PARAM_PRINT_TYPE_U32_01MA, "0.01mA"),
-    DEVICE_PARAM_ITEM("4-20mA/AO参数", "AO高报警液位", AlarmHighAO, PARAM_PRINT_TYPE_U32_01MM, "0.1mm"),
-    DEVICE_PARAM_ITEM("4-20mA/AO参数", "AO低报警液位", AlarmLowAO, PARAM_PRINT_TYPE_U32_01MM, "0.1mm"),
-    DEVICE_PARAM_ITEM("4-20mA/AO参数", "AO初始电流", InitialCurrent_mA, PARAM_PRINT_TYPE_U32_01MA, "0.01mA"),
-    DEVICE_PARAM_ITEM("4-20mA/AO参数", "AO高位电流", AOHighCurrent_mA, PARAM_PRINT_TYPE_U32_01MA, "0.01mA"),
-    DEVICE_PARAM_ITEM("4-20mA/AO参数", "AO低位电流", AOLowCurrent_mA, PARAM_PRINT_TYPE_U32_01MA, "0.01mA"),
-    DEVICE_PARAM_ITEM("4-20mA/AO参数", "AO故障电流", FaultCurrent_mA, PARAM_PRINT_TYPE_U32_01MA, "0.01mA"),
-    DEVICE_PARAM_ITEM("4-20mA/AO参数", "AO调试电流", DebugCurrent_mA, PARAM_PRINT_TYPE_U32_01MA, "0.01mA"),
-    DEVICE_PARAM_ITEM("4-20mA/AO参数", "AO输出使能", AoOutputEnable, PARAM_PRINT_TYPE_U32, NULL),
+    DEVICE_PARAM_ITEM("4-20mA/AO参数", "工作模式", ao_output.work_mode, PARAM_PRINT_TYPE_U32, NULL),
+    DEVICE_PARAM_ITEM("4-20mA/AO参数", "电流模式", ao_output.current_mode, PARAM_PRINT_TYPE_U32, NULL),
+    DEVICE_PARAM_ITEM("4-20mA/AO参数", "输出源", ao_output.output_source, PARAM_PRINT_TYPE_U32, NULL),
+    DEVICE_PARAM_ITEM("4-20mA/AO参数", "SIL/WHG预留", ao_output.sil_whg_reserved, PARAM_PRINT_TYPE_U32, NULL),
+    DEVICE_PARAM_ITEM("4-20mA/AO参数", "固定电流", ao_output.fixed_current_mA_x100, PARAM_PRINT_TYPE_U32_01MA, "0.01mA"),
+    DEVICE_PARAM_ITEM("4-20mA/AO参数", "0%量程", ao_output.range_0_01mm, PARAM_PRINT_TYPE_U32_01MM, "0.1mm"),
+    DEVICE_PARAM_ITEM("4-20mA/AO参数", "100%量程", ao_output.range_100_01mm, PARAM_PRINT_TYPE_U32_01MM, "0.1mm"),
+    DEVICE_PARAM_ITEM("4-20mA/AO参数", "阻尼", ao_output.damping_x10_s, PARAM_PRINT_TYPE_U32_01C, "0.1s"),
+    DEVICE_PARAM_ITEM("4-20mA/AO参数", "故障模式", ao_output.fault_mode, PARAM_PRINT_TYPE_U32, NULL),
+    DEVICE_PARAM_ITEM("4-20mA/AO参数", "故障电流", ao_output.fault_current_mA_x100, PARAM_PRINT_TYPE_U32_01MA, "0.01mA"),
+    DEVICE_PARAM_ITEM("4-20mA/AO参数", "错误级别", ao_output.error_level, PARAM_PRINT_TYPE_U32, NULL),
+    DEVICE_PARAM_ITEM("4-20mA/AO参数", "上电电流", ao_output.power_on_current_mA_x100, PARAM_PRINT_TYPE_U32_01MA, "0.01mA"),
+    DEVICE_PARAM_ITEM("4-20mA/AO参数", "仿真电流", ao_output.simulation_current_mA_x100, PARAM_PRINT_TYPE_U32_01MA, "0.01mA"),
     DEVICE_PARAM_ITEM("指令参数", "标定液位值", calibrateOilLevel, PARAM_PRINT_TYPE_U32_01MM, "0.1mm"),
     DEVICE_PARAM_ITEM("指令参数", "标定水位值", calibrateWaterLevel, PARAM_PRINT_TYPE_U32_01MM, "0.1mm"),
     DEVICE_PARAM_ITEM("指令参数", "标定罐高值", calibrateTankHeight, PARAM_PRINT_TYPE_U32_01MM, "0.1mm"),
@@ -1650,12 +1801,15 @@ static const char *device_param_value_desc(const ParamPrintItem *item, uint32_t 
         default:
             return "非法配置";
         }
-    case (uint16_t)offsetof(DeviceParameters, AoOutputEnable):
+    case (uint16_t)offsetof(DeviceParameters, ao_output.work_mode):
         if (value == 0U) {
-            return "关闭";
+            return "禁用";
         }
         if (value == 1U) {
-            return "启用";
+            return "4-20mA输出";
+        }
+        if (value == 2U) {
+            return "HART从站+输出";
         }
         return "非法配置";
     default:
@@ -2243,10 +2397,10 @@ void DeviceParams_PrintDiff(const DeviceParameters *old_params, const DevicePara
  * 调用场景：0x10 写入持久化参数区之前调用，供主循环延后保存时打印差异。
  * 关键约束：该函数只复制内存，不打印、不写 FRAM。
  */
-void DeviceParams_CaptureWriteSnapshot(void)
+void DeviceParams_CaptureWriteSnapshot(const DeviceParameters *params)
 {
-    if (g_device_params_write_snapshot_valid == 0U) {
-        memcpy(&g_device_params_write_snapshot, (void *)&g_deviceParams, sizeof(DeviceParameters));
+    if ((g_device_params_write_snapshot_valid == 0U) && (params != NULL)) {
+        memcpy(&g_device_params_write_snapshot, params, sizeof(DeviceParameters));
         g_device_params_write_snapshot_valid = 1U;
     }
 }

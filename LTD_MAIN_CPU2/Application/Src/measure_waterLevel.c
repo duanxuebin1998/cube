@@ -17,6 +17,7 @@
 #include "measure_zero.h"
 #include "sensor.h"
 #include "error_log.h"
+#include "AoOutput/ao_output.h"
 /* TODO: 这里替换为你的水位检测头文件 */
 /* #include "water.h" / / 提供 check_water_status() */
 
@@ -156,6 +157,7 @@ static inline void WaterLevelSetAndLog(int32_t lvl)
 
     g_measurement.water_measurement.water_level = report_lvl;
     water_value = lvl;
+    AoOutput_PublishProcessSample(AO_PROCESS_SOURCE_WATER_LEVEL, (int32_t)report_lvl, 1U);
 
     if (lvl < 0) {
         printf("水位更新\t计算水位为负：%ld(0.1mm)，按0上报\r\n", (long)lvl);
@@ -274,6 +276,7 @@ uint32_t SearchWaterLevel(void)
     uint8_t  try_times   = 0;
     uint8_t  water_state = NORMAL;
 
+    AoOutput_InvalidateProcessSample(AO_PROCESS_SOURCE_WATER_LEVEL);
     fault_info_init();
     printf("水位测量\t开始\r\n");
 
@@ -710,7 +713,7 @@ uint32_t check_water_status(uint8_t *water_state)
     float    th;
 
     if (water_state == NULL) {
-        return PARAM_ADDRESS_OVERFLOW;
+        return SYSTEM_CALL_CONDITION_ERROR;
     }
 
     ret = Sensor_ReadWaterCapacitance(&cap);
@@ -819,6 +822,7 @@ uint32_t FindWaterLevel_FastByStateFlip_StableExit(uint32_t stable_win_ms)
     /* 翻转缓存 */
     static uint8_t have_last_flip = 0;
     static int32_t last_flip_lvl  = 0;
+    AoOutput_InvalidateProcessSample(AO_PROCESS_SOURCE_WATER_LEVEL);
     have_last_flip = 0; /* 每次调用都重置，确保独立测量 */
     /* -------------------- 零点检查 -------------------- */
     if (g_measurement.water_measurement.zero_capacitance == 0)
@@ -1302,7 +1306,12 @@ static uint32_t FollowWaterLevelCore(WaterRecoverStrategy recover_strategy)
  */
 uint32_t FollowWaterLevel_fast(void)
 {
-    return FollowWaterLevelCore(WATER_RECOVER_BY_STATE_FLIP);
+    uint32_t ret = FollowWaterLevelCore(WATER_RECOVER_BY_STATE_FLIP);
+
+    if (ret != NO_ERROR) {
+        AoOutput_InvalidateProcessSample(AO_PROCESS_SOURCE_WATER_LEVEL);
+    }
+    return ret;
 }
 
 /**
@@ -1311,7 +1320,12 @@ uint32_t FollowWaterLevel_fast(void)
  */
 uint32_t FollowWaterLevel(void)
 {
-    return FollowWaterLevelCore(WATER_RECOVER_BY_SEARCH);
+    uint32_t ret = FollowWaterLevelCore(WATER_RECOVER_BY_SEARCH);
+
+    if (ret != NO_ERROR) {
+        AoOutput_InvalidateProcessSample(AO_PROCESS_SOURCE_WATER_LEVEL);
+    }
+    return ret;
 }
 
 
@@ -1331,7 +1345,7 @@ static uint32_t CorrectWaterTankHeightProcess(void)
     /* 合理性保护 */
     if (new_height <= 0 || new_height > 5000000) { /* 例：500m -> 5,000,000(0.1mm) */
         printf("水位标定\t计算得到水位罐高非法：%ld(0.1mm)\r\n", new_height);
-        RETURN_ERROR(PARAM_ERROR);
+        RETURN_ERROR(MEASUREMENT_WATER_CALC_OUT_OF_RANGE);
     }
 
     g_deviceParams.water_tank_height = new_height;
@@ -1362,7 +1376,7 @@ static uint32_t CorrectWaterTankHeightProcess(void)
      */
     if (g_deviceParams.calibrateWaterLevel == 0) {
         printf("水位标定\t未设置标定水位真值(标定水位=0)，无法标定\r\n");
-        SET_ERROR(PARAM_ERROR);
+        SET_ERROR(MEASUREMENT_WATER_CALIBRATION_NOT_CONFIGURED);
     }
 
     g_measurement.device_status.device_state = STATE_CALIBRATE_WATERING;

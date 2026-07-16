@@ -17,20 +17,38 @@
 #define CPU2_RESPONSE_TIMEOUT_MS 1000U /* CPU2 单次响应等待超时，单位 ms。 */
 #define CPU2_COMM_FAILURE_LIMIT 10U /* CPU2 连续请求未获得合法响应的置错阈值。 */
 #define CPU2_MAX_EXTERNAL_WRITE_REGISTERS 122U /* RTU 最大 123 个寄存器；共享字段按 32 位对齐后取最大偶数。 */
+#define CPU2_FIXED_POINT_RESULT_REGISTER_COUNT (REG_DENSITY_DIST_AVG_TEMP - REG_SINGLE_POINT_MEAS_TEMP)
+#define CPU2_FIXED_POINT_COUNTER_REGISTER_COUNT (REG_ENG - REG_SINGLE_POINT_MEAS_COMPLETE_COUNTER)
 
 volatile bool wait_response = false; /* 主控板响应标志位 */
 static bool s_cpu2_has_status_snapshot = false; /* CPU3 本次上电是否收到过覆盖状态和错误码的 CPU2 响应。 */
 static bool s_cpu2_has_parameter_snapshot = false; /* CPU3 是否已完整读取 CPU2 保持寄存器参数。 */
 static bool s_cpu2_has_protocol_snapshot = false; /* 当前 CPU2 连接是否已读回共享协议版本。 */
+static bool s_cpu2_has_fixed_point_snapshot = false; /* 固定点结果与双代际是否已通过前后双读校验。 */
 static uint32_t s_cpu2_consecutive_failure_count = 0U; /* CPU2 连续请求失败次数。 */
 static bool s_cpu2_comm_fault_active = false; /* CPU3 本机通信故障是否等待状态帧恢复。 */
 static bool s_cpu2_parameter_refresh_requested = false; /* 外部参数写后是否要求重新确认 CPU2 参数。 */
+static bool s_cpu2_snapshot_resync_requested = false; /* 内部通信失败后是否要求完整重同步。 */
 static volatile bool s_cpu2_uart_error_pending = false; /* UART5 中断仅置位，主循环统一计入失败。 */
 
 /* 保持寄存器 */
 uint16_t HoldingRegisterArray[HOLEREGISTER_STOP] = { 0 }; /* 保持寄存器数组 */
 /* 输入寄存器 */
 static uint16_t InputRegisterArray[INPUTREGISTER_AMOUNT] = { 0 };    /* 输入寄存器数组 */
+
+typedef enum {
+	CPU2_FIXED_POINT_READ_COUNTER_BEFORE = 0,
+	CPU2_FIXED_POINT_READ_RESULTS,
+	CPU2_FIXED_POINT_READ_COUNTER_AFTER
+} Cpu2FixedPointSnapshotStage;
+
+static Cpu2FixedPointSnapshotStage s_cpu2_fixed_point_stage = CPU2_FIXED_POINT_READ_COUNTER_BEFORE;
+static uint16_t s_cpu2_fixed_point_results[CPU2_FIXED_POINT_RESULT_REGISTER_COUNT];
+static uint16_t s_cpu2_fixed_point_counter_before[CPU2_FIXED_POINT_COUNTER_REGISTER_COUNT];
+static uint16_t s_cpu2_fixed_point_counter_after[CPU2_FIXED_POINT_COUNTER_REGISTER_COUNT];
+static uint16_t *s_cpu2_private_input_destination = NULL;
+static uint16_t s_cpu2_private_input_capacity = 0U;
+static bool s_cpu2_private_input_captured = false;
 
 /* 接收到的命令包数据暂存变量 */
 static int RCV_functioncode = 0; /* Modbus 协议模块级变量，保存跨函数共享的业务状态。 */
@@ -47,7 +65,11 @@ static bool CPU2_ResponseFrameIsValid(uint8_t const *rcv, int len);
 static bool CPU2_ResponseContainsDeviceStatus(void);
 static bool CPU2_ResponseContainsProtocolVersion(void);
 static void CPU2_CommMarkValidResponse(void);
+static void CPU2_InvalidatePublicSnapshotFreshness(void);
 static void CPU2_CommRecordFailure(void);
+static void CPU2_ResetFixedPointSnapshotHandshake(bool invalidate_snapshot);
+static bool CPU2_ReadInputRegistersPrivate(uint16_t startadd, uint16_t registercnt, uint16_t *out_regs);
+static bool CPU2_PollFixedPointSnapshotHandshake(void);
 
 static void RequestDensityDistPoints_ByCount(void);
 
@@ -128,20 +150,34 @@ static void CPU2_CommMarkValidResponse(void)
 }
 
 /*
- * 函数用途：记录一次未获得合法 CPU2 响应的请求，并在连续第十次失败后置本机故障。
+ * 函数用途：内部请求未获得合法响应时，立即关闭所有对外公开快照门禁。
+ * 调用场景：响应超时、非法响应、UART错误或TX DMA启动失败。
+ * 关键约束：只处理数据新鲜度和完整重同步请求；连续十次报警计数由独立逻辑维护。
+ */
+static void CPU2_InvalidatePublicSnapshotFreshness(void)
+{
+	s_cpu2_has_status_snapshot = false;
+	s_cpu2_has_parameter_snapshot = false;
+	s_cpu2_has_protocol_snapshot = false;
+	CPU2_ResetFixedPointSnapshotHandshake(true);
+	s_cpu2_snapshot_resync_requested = true;
+}
+
+/*
+ * 函数用途：先使公开快照失效，再记录一次未获得合法 CPU2 响应的请求。
  * 调用场景：主循环处理响应超时、非法响应、UART 错误或 TX DMA 启动失败时调用。
- * 关键约束：计数饱和在阈值；ISR 只置待处理标志，不直接修改设备故障状态。
+ * 关键约束：首次失败即关闭新鲜度门禁；计数仍饱和在十次报警阈值，ISR 只置待处理标志。
  */
 static void CPU2_CommRecordFailure(void)
 {
+	CPU2_InvalidatePublicSnapshotFreshness();
+
 	if (s_cpu2_consecutive_failure_count < CPU2_COMM_FAILURE_LIMIT) {
 		s_cpu2_consecutive_failure_count++;
 	}
 
 	if (s_cpu2_consecutive_failure_count >= CPU2_COMM_FAILURE_LIMIT) {
 		s_cpu2_comm_fault_active = true;
-		s_cpu2_has_parameter_snapshot = false;
-		s_cpu2_has_protocol_snapshot = false;
 	}
 
 	if (s_cpu2_comm_fault_active) {
@@ -171,7 +207,13 @@ void CPU2_CommNotifyUartErrorFromISR(void)
  */
 bool CPU2_CommShouldShowStartup(void)
 {
-	return ((!s_cpu2_has_status_snapshot) || (!s_cpu2_has_protocol_snapshot)) &&
+	bool fixed_point_snapshot_pending = s_cpu2_has_protocol_snapshot &&
+		(g_deviceParams.protocolVersion == DEVICE_PROTOCOL_VERSION) &&
+		(!s_cpu2_has_fixed_point_snapshot);
+
+	return ((!s_cpu2_has_status_snapshot) ||
+			(!s_cpu2_has_protocol_snapshot) ||
+			fixed_point_snapshot_pending) &&
 		   (!s_cpu2_comm_fault_active);
 }
 
@@ -185,6 +227,7 @@ bool CPU2_CommIsAvailable(void)
 	return s_cpu2_has_status_snapshot &&
 		   s_cpu2_has_parameter_snapshot &&
 		   s_cpu2_has_protocol_snapshot &&
+		   s_cpu2_has_fixed_point_snapshot &&
 		   (!s_cpu2_comm_fault_active) &&
 		   (g_deviceParams.protocolVersion == DEVICE_PROTOCOL_VERSION);
 }
@@ -193,6 +236,7 @@ bool CPU2_CommHasRuntimeSnapshot(void)
 {
 	return s_cpu2_has_status_snapshot &&
 		   s_cpu2_has_protocol_snapshot &&
+		   s_cpu2_has_fixed_point_snapshot &&
 		   (!s_cpu2_comm_fault_active) &&
 		   (g_deviceParams.protocolVersion == DEVICE_PROTOCOL_VERSION);
 }
@@ -262,7 +306,7 @@ bool CPU2_CommReadInputSnapshot(uint16_t startadd, uint16_t registercnt, uint16_
  * 调用场景：外部协议写参数成功或失败后，重新确认 CPU2 的实际生效值。
  * 关键约束：刷新完成前普通写和依赖 CPU2 参数的外部读均不得返回成功。
  */
-static void CPU2_CommRequestParameterRefresh(void)
+void CPU2_CommRequestParameterRefresh(void)
 {
 	s_cpu2_has_parameter_snapshot = false;
 	s_cpu2_parameter_refresh_requested = true;
@@ -326,6 +370,155 @@ static bool CPU2_CommFinishFailedRequest(bool parameter_write_attempted)
 	return false;
 }
 
+/*
+ * 函数用途：重置固定点私有读取阶段，并按需使已确认快照失效。
+ * 调用场景：冷启动、通信故障、三阶段任一读取失败或前后计数变化时。
+ * 关键约束：候选缓冲从不直接暴露；失效后必须完成一轮全新握手才能再次开放。
+ */
+static void CPU2_ResetFixedPointSnapshotHandshake(bool invalidate_snapshot)
+{
+	s_cpu2_fixed_point_stage = CPU2_FIXED_POINT_READ_COUNTER_BEFORE;
+	s_cpu2_private_input_destination = NULL;
+	s_cpu2_private_input_capacity = 0U;
+	s_cpu2_private_input_captured = false;
+	memset(s_cpu2_fixed_point_results, 0, sizeof(s_cpu2_fixed_point_results));
+	memset(s_cpu2_fixed_point_counter_before, 0, sizeof(s_cpu2_fixed_point_counter_before));
+	memset(s_cpu2_fixed_point_counter_after, 0, sizeof(s_cpu2_fixed_point_counter_after));
+	if (invalidate_snapshot) {
+		s_cpu2_has_fixed_point_snapshot = false;
+	}
+}
+
+/*
+ * 函数用途：把一次CPU2输入寄存器响应捕获到调用方私有缓冲，不写公开缓存。
+ * 调用场景：固定点计数前读、24个结果寄存器候选读取和计数后读。
+ * 关键约束：发送入口同步返回，退出前无条件撤销捕获目标，失败不得留下半帧目的地。
+ */
+static bool CPU2_ReadInputRegistersPrivate(uint16_t startadd,
+											uint16_t registercnt,
+											uint16_t *out_regs)
+{
+	bool request_ok;
+	bool captured;
+
+	if ((out_regs == NULL) || (registercnt == 0U) ||
+		(startadd >= INPUTREGISTER_AMOUNT) ||
+		(registercnt > (uint16_t)(INPUTREGISTER_AMOUNT - startadd)) ||
+		(s_cpu2_private_input_destination != NULL)) {
+		return false;
+	}
+
+	s_cpu2_private_input_destination = out_regs;
+	s_cpu2_private_input_capacity = registercnt;
+	s_cpu2_private_input_captured = false;
+	request_ok = CPU2_CombinatePackage_Send(FUNCTIONCODE_READ_INPUTREGISTER,
+												 startadd,
+												 registercnt,
+												 NULL);
+	captured = s_cpu2_private_input_captured;
+	s_cpu2_private_input_destination = NULL;
+	s_cpu2_private_input_capacity = 0U;
+	s_cpu2_private_input_captured = false;
+	return request_ok && captured;
+}
+
+static uint32_t CPU2_ReadU32FromPrivateRegs(const uint16_t *regs, uint16_t offset)
+{
+	return ((uint32_t)regs[offset] << 16) | (uint32_t)regs[offset + 1U];
+}
+
+/*
+ * 函数用途：把已验证同代的24个固定点结果寄存器与两个代际一次提交到公开缓存。
+ * 调用场景：计数后读与计数前读完全一致后。
+ * 关键约束：公开寄存器和g_measurement在同一短临界区更新，外部读者不会看到六字段混代。
+ */
+static void CPU2_CommitFixedPointSnapshot(void)
+{
+	uint32_t primask;
+	uint32_t measurement_counter = CPU2_ReadU32FromPrivateRegs(s_cpu2_fixed_point_counter_after, 0U);
+	uint32_t monitoring_counter = CPU2_ReadU32FromPrivateRegs(s_cpu2_fixed_point_counter_after, REG_SIZE_U32);
+
+	primask = __get_PRIMASK();
+	__disable_irq();
+	memcpy(&InputRegisterArray[REG_SINGLE_POINT_MEAS_TEMP],
+		   s_cpu2_fixed_point_results,
+		   sizeof(s_cpu2_fixed_point_results));
+	memcpy(&InputRegisterArray[REG_SINGLE_POINT_MEAS_COMPLETE_COUNTER],
+		   s_cpu2_fixed_point_counter_after,
+		   sizeof(s_cpu2_fixed_point_counter_after));
+
+	g_measurement.single_point_measurement.temperature = CPU2_ReadU32FromPrivateRegs(s_cpu2_fixed_point_results, 0U);
+	g_measurement.single_point_measurement.density = CPU2_ReadU32FromPrivateRegs(s_cpu2_fixed_point_results, 2U);
+	g_measurement.single_point_measurement.temperature_position = CPU2_ReadU32FromPrivateRegs(s_cpu2_fixed_point_results, 4U);
+	g_measurement.single_point_measurement.standard_density = CPU2_ReadU32FromPrivateRegs(s_cpu2_fixed_point_results, 6U);
+	g_measurement.single_point_measurement.vcf20 = CPU2_ReadU32FromPrivateRegs(s_cpu2_fixed_point_results, 8U);
+	g_measurement.single_point_measurement.weight_density = CPU2_ReadU32FromPrivateRegs(s_cpu2_fixed_point_results, 10U);
+	g_measurement.single_point_monitoring.temperature = CPU2_ReadU32FromPrivateRegs(s_cpu2_fixed_point_results, 12U);
+	g_measurement.single_point_monitoring.density = CPU2_ReadU32FromPrivateRegs(s_cpu2_fixed_point_results, 14U);
+	g_measurement.single_point_monitoring.temperature_position = CPU2_ReadU32FromPrivateRegs(s_cpu2_fixed_point_results, 16U);
+	g_measurement.single_point_monitoring.standard_density = CPU2_ReadU32FromPrivateRegs(s_cpu2_fixed_point_results, 18U);
+	g_measurement.single_point_monitoring.vcf20 = CPU2_ReadU32FromPrivateRegs(s_cpu2_fixed_point_results, 20U);
+	g_measurement.single_point_monitoring.weight_density = CPU2_ReadU32FromPrivateRegs(s_cpu2_fixed_point_results, 22U);
+	g_measurement.measurement_complete_counter = measurement_counter;
+	g_measurement.monitoring_sample_counter = monitoring_counter;
+	s_cpu2_has_fixed_point_snapshot = true;
+	__DMB();
+	if (primask == 0U) {
+		__enable_irq();
+	}
+}
+
+/*
+ * 函数用途：每次调用推进固定点快照握手的一个Modbus请求。
+ * 调用场景：上电全量同步尾部，以及每轮普通运行轮询之后。
+ * 关键约束：顺序固定为计数前读、私有结果读、计数后读；失败或变化从第一阶段重来。
+ */
+static bool CPU2_PollFixedPointSnapshotHandshake(void)
+{
+	switch (s_cpu2_fixed_point_stage) {
+	case CPU2_FIXED_POINT_READ_COUNTER_BEFORE:
+		if (!CPU2_ReadInputRegistersPrivate(REG_SINGLE_POINT_MEAS_COMPLETE_COUNTER,
+											 CPU2_FIXED_POINT_COUNTER_REGISTER_COUNT,
+											 s_cpu2_fixed_point_counter_before)) {
+			CPU2_ResetFixedPointSnapshotHandshake(true);
+			return false;
+		}
+		s_cpu2_fixed_point_stage = CPU2_FIXED_POINT_READ_RESULTS;
+		return false;
+
+	case CPU2_FIXED_POINT_READ_RESULTS:
+		if (!CPU2_ReadInputRegistersPrivate(REG_SINGLE_POINT_MEAS_TEMP,
+											 CPU2_FIXED_POINT_RESULT_REGISTER_COUNT,
+											 s_cpu2_fixed_point_results)) {
+			CPU2_ResetFixedPointSnapshotHandshake(true);
+			return false;
+		}
+		s_cpu2_fixed_point_stage = CPU2_FIXED_POINT_READ_COUNTER_AFTER;
+		return false;
+
+	case CPU2_FIXED_POINT_READ_COUNTER_AFTER:
+		if (!CPU2_ReadInputRegistersPrivate(REG_SINGLE_POINT_MEAS_COMPLETE_COUNTER,
+											 CPU2_FIXED_POINT_COUNTER_REGISTER_COUNT,
+											 s_cpu2_fixed_point_counter_after)) {
+			CPU2_ResetFixedPointSnapshotHandshake(true);
+			return false;
+		}
+		if (memcmp(s_cpu2_fixed_point_counter_before,
+				   s_cpu2_fixed_point_counter_after,
+				   sizeof(s_cpu2_fixed_point_counter_before)) != 0) {
+			CPU2_ResetFixedPointSnapshotHandshake(true);
+			return false;
+		}
+		CPU2_CommitFixedPointSnapshot();
+		CPU2_ResetFixedPointSnapshotHandshake(false);
+		return true;
+
+	default:
+		CPU2_ResetFixedPointSnapshotHandshake(true);
+		return false;
+	}
+}
+
 /* 与CPU2通讯接收包主处理过程 */
 bool HostCommuProcess(uint8_t *rcv, int len) {
 #if DEBUG_COMMUCPU2
@@ -386,7 +579,7 @@ typedef struct {
 } PollGroup;
 #include <stdbool.h>
 
-#define INPUT_TAIL_REGISTER_COUNT ((uint16_t)(REG_ENG - REG_WIRELESS_PAIRING_RESULT))
+#define INPUT_TAIL_REGISTER_COUNT ((uint16_t)(REG_SINGLE_POINT_MEAS_COMPLETE_COUNTER - REG_WIRELESS_PAIRING_RESULT))
 
 /* 上电阶段要读取的组：
  * - 包含设备参数（保持寄存器）
@@ -397,7 +590,7 @@ static const PollGroup poweron_groups[] = {
 {FUNCTIONCODE_READ_INPUTREGISTER, REG_DEVICE_STATUS_WORK_MODE, (uint16_t) (REG_SINGLE_POINT_MEAS_TEMP - REG_DEVICE_STATUS_WORK_MODE) },
 
 /* 输入寄存器组 2：单点 / 分布测量结果 */
-{FUNCTIONCODE_READ_INPUTREGISTER, REG_SINGLE_POINT_MEAS_TEMP, (uint16_t) (REG_DENSITY_DIST_POINT_BASE - REG_SINGLE_POINT_MEAS_TEMP) },
+{FUNCTIONCODE_READ_INPUTREGISTER, REG_DENSITY_DIST_AVG_TEMP, (uint16_t) (REG_DENSITY_DIST_POINT_BASE - REG_DENSITY_DIST_AVG_TEMP) },
 
 /* 输入寄存器组 3：无线滑环匹配状态与继电器报警输出运行态 */
 {FUNCTIONCODE_READ_INPUTREGISTER, REG_WIRELESS_PAIRING_RESULT, INPUT_TAIL_REGISTER_COUNT },
@@ -406,10 +599,10 @@ static const PollGroup poweron_groups[] = {
 {FUNCTIONCODE_READ_HOLDREGISTER, HOLDREGISTER_DEVICEPARAM_COMMAND, (uint16_t) (HOLDREGISTER_DEVICEPARAM_RESERVED11 - HOLDREGISTER_DEVICEPARAM_COMMAND) },
 
 /* 保持寄存器组 5：设备参数中段 */
-{FUNCTIONCODE_READ_HOLDREGISTER, HOLDREGISTER_DEVICEPARAM_RESERVED11, (uint16_t) (HOLDREGISTER_DEVICEPARAM_AO_START_LEVEL - HOLDREGISTER_DEVICEPARAM_RESERVED11) },
+{FUNCTIONCODE_READ_HOLDREGISTER, HOLDREGISTER_DEVICEPARAM_RESERVED11, (uint16_t) (HOLDREGISTER_DEVICEPARAM_AO_WORK_MODE - HOLDREGISTER_DEVICEPARAM_RESERVED11) },
 
 /* 保持寄存器组 6：AO/指令参数/尺带补偿 */
-{FUNCTIONCODE_READ_HOLDREGISTER, HOLDREGISTER_DEVICEPARAM_AO_START_LEVEL, (uint16_t) (HOLDREGISTER_DEVICEPARAM_RELAY_ALARM_BASE - HOLDREGISTER_DEVICEPARAM_AO_START_LEVEL) },
+{FUNCTIONCODE_READ_HOLDREGISTER, HOLDREGISTER_DEVICEPARAM_AO_WORK_MODE, (uint16_t) (HOLDREGISTER_DEVICEPARAM_RELAY_ALARM_BASE - HOLDREGISTER_DEVICEPARAM_AO_WORK_MODE) },
 
 /* 保持寄存器组 7：继电器报警输出配置与元信息 */
 {FUNCTIONCODE_READ_HOLDREGISTER, HOLDREGISTER_DEVICEPARAM_RELAY_ALARM_BASE, (uint16_t) (HOLEREGISTER_STOP - HOLDREGISTER_DEVICEPARAM_RELAY_ALARM_BASE) }
@@ -427,7 +620,7 @@ FUNCTIONCODE_READ_INPUTREGISTER, REG_DEVICE_STATUS_WORK_MODE, (uint16_t) (REG_SI
 
 /* 输入寄存器组 2：单点 / 密度测量结果 */
 {
-FUNCTIONCODE_READ_INPUTREGISTER, REG_SINGLE_POINT_MEAS_TEMP, (uint16_t) (REG_DENSITY_DIST_POINT_BASE - REG_SINGLE_POINT_MEAS_TEMP) },
+FUNCTIONCODE_READ_INPUTREGISTER, REG_DENSITY_DIST_AVG_TEMP, (uint16_t) (REG_DENSITY_DIST_POINT_BASE - REG_DENSITY_DIST_AVG_TEMP) },
 
 /* 输入寄存器组 3：无线滑环匹配状态与继电器报警输出运行态 */
 {
@@ -439,8 +632,8 @@ FUNCTIONCODE_READ_INPUTREGISTER, REG_WIRELESS_PAIRING_RESULT, INPUT_TAIL_REGISTE
 /* 参数更新时，一次性补读系统参数。 */
 static const PollGroup refresh_hold_groups[] = {
 {FUNCTIONCODE_READ_HOLDREGISTER, HOLDREGISTER_DEVICEPARAM_COMMAND, (uint16_t) (HOLDREGISTER_DEVICEPARAM_RESERVED11 - HOLDREGISTER_DEVICEPARAM_COMMAND) },
-{FUNCTIONCODE_READ_HOLDREGISTER, HOLDREGISTER_DEVICEPARAM_RESERVED11, (uint16_t) (HOLDREGISTER_DEVICEPARAM_AO_START_LEVEL - HOLDREGISTER_DEVICEPARAM_RESERVED11) },
-{FUNCTIONCODE_READ_HOLDREGISTER, HOLDREGISTER_DEVICEPARAM_AO_START_LEVEL, (uint16_t) (HOLDREGISTER_DEVICEPARAM_RELAY_ALARM_BASE - HOLDREGISTER_DEVICEPARAM_AO_START_LEVEL) },
+{FUNCTIONCODE_READ_HOLDREGISTER, HOLDREGISTER_DEVICEPARAM_RESERVED11, (uint16_t) (HOLDREGISTER_DEVICEPARAM_AO_WORK_MODE - HOLDREGISTER_DEVICEPARAM_RESERVED11) },
+{FUNCTIONCODE_READ_HOLDREGISTER, HOLDREGISTER_DEVICEPARAM_AO_WORK_MODE, (uint16_t) (HOLDREGISTER_DEVICEPARAM_RELAY_ALARM_BASE - HOLDREGISTER_DEVICEPARAM_AO_WORK_MODE) },
 {FUNCTIONCODE_READ_HOLDREGISTER, HOLDREGISTER_DEVICEPARAM_RELAY_ALARM_BASE, (uint16_t) (HOLEREGISTER_STOP - HOLDREGISTER_DEVICEPARAM_RELAY_ALARM_BASE) }
 };
 
@@ -454,17 +647,34 @@ void PollingInputData(void) {
 
 	/* 正常轮询阶段当前组索引 */
 	static uint8_t runtime_index = 0;
+	static bool runtime_fixed_snapshot_pending = false;
 	static bool hold_refresh_pending = false;
 	static uint8_t hold_refresh_index = 0;
 	static bool param_flag_valid = false;
 	static uint32_t last_param_update_flag = 0;
 	static uint32_t refresh_target_flag = 0;
 
+	/* 首次失败即废弃旧公开快照；下一轮从状态、参数和协议开始完整重同步。 */
+	if (s_cpu2_snapshot_resync_requested) {
+		poweron_done = false;
+		poweron_index = 0;
+		runtime_index = 0;
+		runtime_fixed_snapshot_pending = false;
+		hold_refresh_pending = false;
+		hold_refresh_index = 0;
+		param_flag_valid = false;
+		s_cpu2_parameter_refresh_requested = false;
+		CPU2_ResetFixedPointSnapshotHandshake(true);
+		s_cpu2_snapshot_resync_requested = false;
+	}
+
 	/* 通信故障恢复必须先取得包含设备状态的 0x04 响应，禁止旧缓存提前清故障。 */
 	if (s_cpu2_comm_fault_active) {
 		const PollGroup *status_group = &runtime_groups[0];
 		poweron_done = false;
 		poweron_index = 0;
+		runtime_fixed_snapshot_pending = false;
+		CPU2_ResetFixedPointSnapshotHandshake(true);
 		hold_refresh_pending = false;
 		hold_refresh_index = 0;
 		param_flag_valid = false;
@@ -475,7 +685,7 @@ void PollingInputData(void) {
 		return;
 	}
 
-	/* ---------- 上电阶段：每次调用发一个 poweron_groups ---------- */
+	/* ---------- 上电阶段：普通组完成后再执行固定点私有快照握手 ---------- */
 	if (!poweron_done) {
 		if (poweron_index < POWERON_GROUP_COUNT) {
 			const PollGroup *g = &poweron_groups[poweron_index];
@@ -483,21 +693,37 @@ void PollingInputData(void) {
 			if (!CPU2_CombinatePackage_Send(g->func, g->start, g->len, NULL)) {
 				return;
 			}
-
 			poweron_index++;
-
-			if (poweron_index >= POWERON_GROUP_COUNT) {
-				poweron_done = true; /* 上电读取全部完成 */
-				s_cpu2_has_parameter_snapshot = true;
-				s_cpu2_parameter_refresh_requested = false;
-				 DeviceParams_StoreToRegisters(g_holding_regs); /* 把读取到的设备参数存入瓦锡兰保持寄存器 */
-				 last_param_update_flag = g_measurement.device_status.parameter_update_flag;
-				 refresh_target_flag = last_param_update_flag;
-				 param_flag_valid = true;
-/* print_device_params(); */
-			}
+			return;
 		}
-		return; /* 上电阶段结束本次调用，不再发 runtime 组 */
+
+		/* 已确认旧协议时不读取协议21新增地址，保留严格版本不匹配门禁。 */
+		if ((!s_cpu2_has_protocol_snapshot) ||
+			(g_deviceParams.protocolVersion != DEVICE_PROTOCOL_VERSION)) {
+			poweron_done = true;
+			s_cpu2_has_parameter_snapshot = true;
+			s_cpu2_parameter_refresh_requested = false;
+			DeviceParams_StoreToRegisters(g_holding_regs);
+			last_param_update_flag = g_measurement.device_status.parameter_update_flag;
+			refresh_target_flag = last_param_update_flag;
+			param_flag_valid = true;
+			return;
+		}
+
+		if (!CPU2_PollFixedPointSnapshotHandshake()) {
+			return;
+		}
+
+		poweron_done = true;
+		s_cpu2_has_parameter_snapshot = true;
+		s_cpu2_parameter_refresh_requested = false;
+		runtime_fixed_snapshot_pending = false;
+		DeviceParams_StoreToRegisters(g_holding_regs);
+		last_param_update_flag = g_measurement.device_status.parameter_update_flag;
+		refresh_target_flag = last_param_update_flag;
+		param_flag_valid = true;
+/* print_device_params(); */
+		return;
 	}
 
 	/* 外部参数写后不能依赖本地影子，必须主动重读确认 CPU2 实际值。 */
@@ -528,7 +754,13 @@ void PollingInputData(void) {
 		return;
 	}
 
-	/* ---------- 正常运行阶段：只轮询输入寄存器 ---------- */
+	/* ---------- 正常运行阶段：固定点握手与普通输入组交替推进 ---------- */
+	if (runtime_fixed_snapshot_pending) {
+		if (CPU2_PollFixedPointSnapshotHandshake()) {
+			runtime_fixed_snapshot_pending = false;
+		}
+		return;
+	}
 
 	/* 如果某些状态不需要轮询，可以在这里加条件，例如：
 	 * if (g_measurement.device_status.device_state == STATE_AI_SPREADPOINTOVER)
@@ -545,6 +777,8 @@ void PollingInputData(void) {
 		runtime_index++;
 		if (runtime_index >= RUNTIME_GROUP_COUNT) {
 			runtime_index = 0;
+			runtime_fixed_snapshot_pending = s_cpu2_has_protocol_snapshot &&
+				(g_deviceParams.protocolVersion == DEVICE_PROTOCOL_VERSION);
 		}
 	}
 
@@ -633,7 +867,7 @@ static void RequestDensityDistPoints_ByCount(void)
 static bool CPU2_ReadSiProfileCandidateHeader(void)
 {
 	uint16_t header_count = (uint16_t)(REG_DENSITY_DIST_POINT_BASE - REG_DENSITY_DIST_AVG_TEMP);
-	uint16_t runtime_count = (uint16_t)(REG_ENG - REG_DENSITY_DIST_SI_PROFILE_PHASE);
+	uint16_t runtime_count = (uint16_t)(REG_SINGLE_POINT_MEAS_COMPLETE_COUNTER - REG_DENSITY_DIST_SI_PROFILE_PHASE);
 
 	if (!CPU2_CombinatePackage_Send(FUNCTIONCODE_READ_INPUTREGISTER,
 									  REG_DENSITY_DIST_AVG_TEMP,
@@ -855,6 +1089,10 @@ bool sendToCPU2(uint8_t *arr, uint16_t len, bool flag_fromhost) {
 	if (HAL_UART_Transmit_DMA(&huart5, arr, len) != HAL_OK) {
 		/* Fall back to RX immediately if TX DMA cannot start. */
 		RS485_SET_RECV_MODE();
+		if (__HAL_UART_GET_FLAG(&huart5, UART_FLAG_PE) != RESET) __HAL_UART_CLEAR_PEFLAG(&huart5);
+		if (__HAL_UART_GET_FLAG(&huart5, UART_FLAG_ORE) != RESET) __HAL_UART_CLEAR_OREFLAG(&huart5);
+		if (__HAL_UART_GET_FLAG(&huart5, UART_FLAG_FE) != RESET) __HAL_UART_CLEAR_FEFLAG(&huart5);
+		if (__HAL_UART_GET_FLAG(&huart5, UART_FLAG_NE) != RESET) __HAL_UART_CLEAR_NEFLAG(&huart5);
 		__HAL_UART_CLEAR_IDLEFLAG(&huart5);
 		HAL_UART_DMAStop(&huart5);
 		HAL_UART_Receive_DMA(&huart5, UART5_RX_BUF, UART5_RX_BUF_SIZE);
@@ -918,6 +1156,19 @@ static void CPU2_Response04Process(uint8_t const *revframe) {
 	for (i = 0, j = 0; i < RCV_registercnt; i++, j = j + 2) {
 		SlaveTempBuffer[i] = (revframe[j + 3] << 8) + revframe[j + 4];
 	}
+
+	/* 固定点三阶段读取只写私有候选，任何中间响应都不得触碰公开输入缓存。 */
+	if (s_cpu2_private_input_destination != NULL) {
+		if ((uint16_t)RCV_registercnt > s_cpu2_private_input_capacity) {
+			return;
+		}
+		for (i = 0; i < RCV_registercnt; i++) {
+			s_cpu2_private_input_destination[i] = (uint16_t)SlaveTempBuffer[i];
+		}
+		s_cpu2_private_input_captured = true;
+		return;
+	}
+
 /* printf("CPU2_Response04Process: RCV_registercnt = %d\r\n", RCV_registercnt); */
 	/* 写保持寄存器 */
 	PresetRegister(true, SlaveTempBuffer);

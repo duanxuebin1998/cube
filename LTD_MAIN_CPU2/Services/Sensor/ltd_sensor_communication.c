@@ -421,7 +421,7 @@ int DSM_V2_SwitchToDensityMode(void) {
 /* === 对外：通用读取 === */
 int DSM_V2_Read_FloatParam(uint8_t param, float *out_value) {
 	if (!out_value)
-		return PARAM_ADDRESS_OVERFLOW;
+		return SYSTEM_CALL_CONDITION_ERROR;
 
 	uint8_t tx[8], rx[8];
 	int last_err = SENSOR_DEVICE_COMM_TIMEOUT;
@@ -499,7 +499,7 @@ int DSM_V2_Read_FloatParam(uint8_t param, float *out_value) {
  */
 static int DSM_V2_Read_IntParamInternal(uint8_t param, int32_t *out_value, uint8_t log_retry) {
 	if (!out_value)
-		return PARAM_ADDRESS_OVERFLOW;
+		return SYSTEM_CALL_CONDITION_ERROR;
 
 	uint8_t tx[8], rx[8];
 	int last_err = SENSOR_DEVICE_COMM_TIMEOUT;
@@ -631,7 +631,7 @@ int DSM_V2_Read_MeanSquare22p5(float *msq22p5) {
 /* R04 液位频率（整型） */
 int DSM_V2_Read_LevelFrequency(uint32_t *freq_hz) {
 	if (!freq_hz)
-		return PARAM_ADDRESS_OVERFLOW;
+		return SYSTEM_CALL_CONDITION_ERROR;
 	int32_t v = 0;
 	int ret = DSM_V2_Read_IntParam(0x04, &v);   /* 参数码 0x04 = R04 */
 	/* 先处理异常边界，避免LTD 传感器通信状态机带故障继续运行。 */
@@ -649,7 +649,7 @@ int DSM_V2_Read_LevelFrequency(uint32_t *freq_hz) {
 /* R16 液位频率（整型） */
 int DSM_V2_Read_DensityFrequency(float *freq_hz,float *freq_45,float *freq_225) {
 	if (!freq_hz || !freq_45 || !freq_225)
-		return PARAM_ADDRESS_OVERFLOW;
+		return SYSTEM_CALL_CONDITION_ERROR;
 	float v = 0;
 	int ret = DSM_V2_Read_FloatParam(0x11, &v);   /* 参数码 0x11 = 45度扫频平方均值 */
 	/* 先处理异常边界，避免LTD 传感器通信状态机带故障继续运行。 */
@@ -680,7 +680,7 @@ int DSM_V2_Read_DensityFrequency(float *freq_hz,float *freq_45,float *freq_225) 
  */
 int DSM_V2_Read_SensorID(uint32_t *sensor_id) {
 	if (!sensor_id)
-		return PARAM_ADDRESS_OVERFLOW;
+		return SYSTEM_CALL_CONDITION_ERROR;
 	int32_t v = 0;
 	int ret = DSM_V2_Read_IntParam(0x16, &v); /* 22 */
 	/* 先处理异常边界，避免LTD 传感器通信状态机带故障继续运行。 */
@@ -691,7 +691,7 @@ int DSM_V2_Read_SensorID(uint32_t *sensor_id) {
 
 int DSM_V2_Probe_SensorID(uint32_t *sensor_id) {
 	if (!sensor_id)
-		return PARAM_ADDRESS_OVERFLOW;
+		return SYSTEM_CALL_CONDITION_ERROR;
 	int32_t v = 0;
 	int ret = DSM_V2_Read_IntParamInternal(0x16, &v, 0U); /* 22 */
 	/* 识别阶段的协议探测失败属于候选未命中，不打印错误重试。 */

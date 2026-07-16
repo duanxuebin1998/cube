@@ -141,14 +141,14 @@ uint32_t MotorCtrl_TapeFitSolve(void)
     if (s_motor_tape_fit_count < 6U) {
         printf("TFIT求解失败: 至少需要6个采样点, 当前：%u\r\n",
                (unsigned)s_motor_tape_fit_count);
-        return PARAM_ERROR;
+        return ENCODER_CIRCUMFERENCE_CALIBRATION_ERROR;
     }
     MotorTapeFit_Range(&n_min, &n_max);
     if (fabs(n_max - n_min) < 1.0) {
         printf("TFIT求解失败: 电机步数跨度过小, 圈数范围=[%.3f, %.3f]\r\n",
                n_min,
                n_max);
-        return PARAM_ERROR;
+        return ENCODER_CIRCUMFERENCE_CALIBRATION_ERROR;
     }
     /* 拟合形式：
      *   y = a0 + a1*n + a2*n^2
@@ -175,7 +175,7 @@ uint32_t MotorCtrl_TapeFitSolve(void)
     }
     if (!MotorTapeFit_SolveLinear3x3(normal, coeff)) {
         printf("TFIT求解失败: 矩阵奇异\r\n");
-        return PARAM_ERROR;
+        return ENCODER_CIRCUMFERENCE_CALIBRATION_ERROR;
     }
     s_motor_tape_fit_result.offset_mm = coeff[0];
     s_motor_tape_fit_result.first_loop_circ_mm = coeff[1];
@@ -187,7 +187,7 @@ uint32_t MotorCtrl_TapeFitSolve(void)
                s_motor_tape_fit_result.first_loop_circ_mm,
                s_motor_tape_fit_result.tape_thickness_mm);
         s_motor_tape_fit_result.valid = false;
-        return PARAM_ERROR;
+        return ENCODER_CIRCUMFERENCE_CALIBRATION_ERROR;
     }
     for (i = 0; i < s_motor_tape_fit_count; i++) {
         const double n = (double)s_motor_tape_fit_samples[i].motor_step / (double)MotorPosition_TapeTicksPerRev();
@@ -237,14 +237,14 @@ uint32_t MotorCtrl_TapeFitSolveLocalOrigin(void)
 
     if (!s_motor_tape_fit_local_origin_valid) {
         printf("TFIT局部求解失败: 未设置局部原点\r\n");
-        return PARAM_ERROR;
+        return ENCODER_CIRCUMFERENCE_CALIBRATION_ERROR;
     }
 
     (void)MotorTapeFit_CaptureCurrentSample(true);
     if (s_motor_tape_fit_count < 6U) {
         printf("TFIT局部求解失败: 至少需要6个采样点, 当前：%u\r\n",
                (unsigned)s_motor_tape_fit_count);
-        return PARAM_ERROR;
+        return ENCODER_CIRCUMFERENCE_CALIBRATION_ERROR;
     }
 
     MotorTapeFit_LocalRange(&q_min, &q_max);
@@ -252,7 +252,7 @@ uint32_t MotorCtrl_TapeFitSolveLocalOrigin(void)
         printf("TFIT局部求解失败: 相对圈数跨度过小, q范围=[%.3f, %.3f]\r\n",
                q_min,
                q_max);
-        return PARAM_ERROR;
+        return ENCODER_CIRCUMFERENCE_CALIBRATION_ERROR;
     }
 
     for (i = 0; i < s_motor_tape_fit_count; i++) {
@@ -273,7 +273,7 @@ uint32_t MotorCtrl_TapeFitSolveLocalOrigin(void)
     det = (m00 * m11) - (m01 * m01);
     if (fabs(det) < 1e-12) {
         printf("TFIT局部求解失败: 矩阵奇异\r\n");
-        return PARAM_ERROR;
+        return ENCODER_CIRCUMFERENCE_CALIBRATION_ERROR;
     }
 
     a1 = ((b0 * m11) - (b1 * m01)) / det;
@@ -288,7 +288,7 @@ uint32_t MotorCtrl_TapeFitSolveLocalOrigin(void)
                s_motor_tape_fit_result.first_loop_circ_mm,
                s_motor_tape_fit_result.tape_thickness_mm);
         s_motor_tape_fit_result.valid = false;
-        return PARAM_ERROR;
+        return ENCODER_CIRCUMFERENCE_CALIBRATION_ERROR;
     }
 
     for (i = 0; i < s_motor_tape_fit_count; i++) {
@@ -337,7 +337,7 @@ uint32_t MotorCtrl_TapeFitApply(bool apply_c0, bool apply_t)
         if (s_motor_tape_fit_local_origin_valid) {
             if (apply_c0) {
                 printf("TFIT应用失败: 局部原点采样不能更新全局C0\r\n");
-                return PARAM_ERROR;
+                return ENCODER_CIRCUMFERENCE_CALIBRATION_ERROR;
             }
             ret = MotorCtrl_TapeFitSolveLocalOrigin();
         } else {
@@ -350,12 +350,12 @@ uint32_t MotorCtrl_TapeFitApply(bool apply_c0, bool apply_t)
     }
     if (apply_c0 && s_motor_tape_fit_result_is_local) {
         printf("TFIT应用失败: 局部结果不能更新全局C0\r\n");
-        return PARAM_ERROR;
+        return ENCODER_CIRCUMFERENCE_CALIBRATION_ERROR;
     }
     if (apply_c0) {
         const int32_t new_c0 = (int32_t)llround(s_motor_tape_fit_result.first_loop_circ_mm * 10.0);
         if (new_c0 <= 0) {
-            return PARAM_ERROR;
+            return ENCODER_CIRCUMFERENCE_CALIBRATION_ERROR;
         }
         g_deviceParams.first_loop_circumference_mm = (uint32_t)new_c0;
         changed = true;
@@ -363,13 +363,13 @@ uint32_t MotorCtrl_TapeFitApply(bool apply_c0, bool apply_t)
     if (apply_t) {
         const int32_t new_t = (int32_t)llround(s_motor_tape_fit_result.tape_thickness_mm * 1000.0);
         if (new_t <= 0) {
-            return PARAM_ERROR;
+            return ENCODER_CIRCUMFERENCE_CALIBRATION_ERROR;
         }
         g_deviceParams.tape_thickness_mm = (uint32_t)new_t;
         changed = true;
     }
     if (!changed) {
-        return PARAM_ERROR;
+        return ENCODER_CIRCUMFERENCE_CALIBRATION_ERROR;
     }
     save_device_params();
     printf("TFIT已应用: C0 %lu -> %lu (0.1mm), t %lu -> %lu (0.001mm)\r\n",

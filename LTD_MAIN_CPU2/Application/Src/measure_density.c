@@ -27,7 +27,7 @@
  *   - SinglePoint_ReadSensor(volatile DensityMeasurement *result)
  *   - g_measurement / g_deviceParams
  *   - DensityDistribution / DensityMeasurement
- *   - 错误码宏/定义：NO_ERROR、PARAM_RANGE_ERROR、PARAM_ADDRESS_OVERFLOW 等
+ *   - 错误码宏/定义：NO_ERROR、PARAM_RANGE_ERROR、SYSTEM_CALL_CONDITION_ERROR 等
  *   - 状态码/宏：SET_ERROR、CHECK_ERROR、CHECK_COMMAND_SWITCH、CMD_NONE 等
  *
  * 重要注意：
@@ -62,7 +62,8 @@
 /* ===================== 前置声明 ===================== */
 void Print_DensitySpreadResult(const DensityDistribution *dist);
 static uint32_t SinglePoint_ReadSensorWithStableWindow(volatile DensityMeasurement *result,
-                                                       uint32_t stable_win_ms);
+                                                       uint32_t stable_win_ms,
+                                                       uint8_t *stable_out);
 
 /* 国标过滤（按例程逻辑：Density20 差值阈值触发删点并搬移） */
 static void GB_FilterPoints_ByDensity20(DensityDistribution *dist,
@@ -107,11 +108,12 @@ static void SinglePoint_PrintTargetRangeError(const char *scene,
                                               const char *reason,
                                               uint32_t target_01mm,
                                               uint32_t top_limit_01mm,
-                                              uint32_t bottom_limit_01mm)
+                                              uint32_t bottom_limit_01mm,
+                                              uint32_t error_code)
 {
     const char *safe_scene = (scene != NULL) ? scene : "单点位置";
 
-    printf("%s\t目标位置参数超限\t原因:%s\t目标=%.1fmm\t零点=%.1fmm\t罐底盲区=%.1fmm\t当前位置=%.1fmm\t尺带=%.1fmm\t错误码=0x%08lX\r\n",
+    printf("%s\t目标位置检查失败\t原因:%s\t目标=%.1fmm\t零点=%.1fmm\t罐底盲区=%.1fmm\t当前位置=%.1fmm\t尺带=%.1fmm\t错误码=0x%08lX\r\n",
            safe_scene,
            (reason != NULL) ? reason : "未知",
            (double)target_01mm / 10.0,
@@ -119,7 +121,7 @@ static void SinglePoint_PrintTargetRangeError(const char *scene,
            (double)bottom_limit_01mm / 10.0,
            (double)g_measurement.debug_data.sensor_position / 10.0,
            (double)g_measurement.debug_data.cable_length / 10.0,
-           (unsigned long)PARAM_RANGE_ERROR);
+           (unsigned long)error_code);
 }
 
 /*
@@ -133,34 +135,103 @@ uint32_t SinglePoint_CheckTargetPosition(const char *scene, uint32_t target_01mm
     uint32_t bottom_limit_01mm = g_deviceParams.blindZone;
 
     if (top_limit_01mm == 0U) {
-        SinglePoint_PrintTargetRangeError(scene, "罐高为0", target_01mm, top_limit_01mm, bottom_limit_01mm);
-        return PARAM_RANGE_ERROR;
+        SinglePoint_PrintTargetRangeError(scene, "罐高未配置", target_01mm, top_limit_01mm, bottom_limit_01mm,
+                                              PARAM_CONFIG_MISSING);
+        return PARAM_CONFIG_MISSING;
     }
 
     if (bottom_limit_01mm > top_limit_01mm) {
-        SinglePoint_PrintTargetRangeError(scene, "罐底盲区大于零点", target_01mm, top_limit_01mm, bottom_limit_01mm);
-        return PARAM_RANGE_ERROR;
+        SinglePoint_PrintTargetRangeError(scene, "罐底盲区大于罐高", target_01mm, top_limit_01mm, bottom_limit_01mm,
+                                              PARAM_COMBINATION_CONFLICT);
+        return PARAM_COMBINATION_CONFLICT;
     }
 
     if (target_01mm > top_limit_01mm) {
-        SinglePoint_PrintTargetRangeError(scene, "目标超过零点", target_01mm, top_limit_01mm, bottom_limit_01mm);
+        SinglePoint_PrintTargetRangeError(scene, "目标超过罐高", target_01mm, top_limit_01mm, bottom_limit_01mm,
+                                              PARAM_RANGE_ERROR);
         return PARAM_RANGE_ERROR;
     }
 
     if (target_01mm < bottom_limit_01mm) {
-        SinglePoint_PrintTargetRangeError(scene, "目标进入罐底盲区", target_01mm, top_limit_01mm, bottom_limit_01mm);
+        SinglePoint_PrintTargetRangeError(scene, "目标进入罐底盲区", target_01mm, top_limit_01mm, bottom_limit_01mm,
+                                              PARAM_RANGE_ERROR);
         return PARAM_RANGE_ERROR;
     }
 
     return NO_ERROR;
 }
+
+/*
+ * 函数用途：把一个真实稳定的固定点候选结果按六字段同代发布。
+ * 调用场景：单点测量完成、固定点监测取得新样本或样机生成完整样本后。
+ * 关键约束：命令切换时拒绝发布；六字段全部写完并执行屏障后才递增对应代际。
+ */
+static uint8_t SinglePoint_PublishStableResult(volatile DensityMeasurement *published,
+                                               const DensityMeasurement *candidate,
+                                               volatile uint32_t *generation_counter)
+{
+    uint32_t primask;
+
+    if ((published == NULL) || (candidate == NULL) || (generation_counter == NULL)) {
+        return 0U;
+    }
+
+    primask = __get_PRIMASK();
+    __disable_irq();
+    if (HasEffectiveCommandSwitchRequest()) {
+        if (primask == 0U) {
+            __enable_irq();
+        }
+        return 0U;
+    }
+
+    published->temperature = candidate->temperature;
+    published->density = candidate->density;
+    published->temperature_position = candidate->temperature_position;
+    published->standard_density = candidate->standard_density;
+    published->vcf20 = candidate->vcf20;
+    published->weight_density = candidate->weight_density;
+    __DMB();
+    (*generation_counter)++;
+    __DMB();
+
+    if (primask == 0U) {
+        __enable_irq();
+    }
+    return 1U;
+}
+
+/*
+ * 函数用途：把完整的单点测量候选交给固定点原子发布器，并递增测量完成代际。
+ * 调用场景：真实稳定测量和显式串口虚拟展示取得完整六字段后。
+ * 关键约束：命令切换期间拒绝发布，调用方必须处理返回值。
+ */
+uint8_t SinglePoint_PublishMeasurementResult(const DensityMeasurement *candidate)
+{
+    return SinglePoint_PublishStableResult(&g_measurement.single_point_measurement,
+                                           candidate,
+                                           &g_measurement.measurement_complete_counter);
+}
+
+/*
+ * 函数用途：把完整的固定点监测候选交给固定点原子发布器，并递增监测样本代际。
+ * 调用场景：真实稳定监测和显式串口虚拟展示取得完整六字段后。
+ * 关键约束：命令切换期间拒绝发布，调用方必须处理返回值。
+ */
+uint8_t SinglePoint_PublishMonitoringResult(const DensityMeasurement *candidate)
+{
+    return SinglePoint_PublishStableResult(&g_measurement.single_point_monitoring,
+                                           candidate,
+                                           &g_measurement.monitoring_sample_counter);
+}
+
 #if ENABLE_SINGLE_POINT_MONITORING_PROTOTYPE
 /**
  * @brief 写入固定点监测样机虚拟数据。
  *
  * 只更新 CPU3/上位机读取的测量结果和调试字段，不访问传感器串口，适合无传感器样机演示。
  */
-static void SinglePointMonitoringPrototype_WriteSample(uint32_t sample_index)
+static uint8_t SinglePointMonitoringPrototype_WriteSample(uint32_t sample_index)
 {
     static const int16_t temp_wave_x100[] = { 0, 6, 12, 18, 24, 18, 12, 6, 0, -4, -8, -4 };
     static const int16_t pos_wave_01mm[]  = { 0, 1, 2, 3, 2, 1, 0, -1, -2, -1, 0, 1 };
@@ -171,17 +242,18 @@ static void SinglePointMonitoringPrototype_WriteSample(uint32_t sample_index)
     uint32_t position_raw = Density_ValueToU01mmClamped(current_pos_01mm, "固定点监测样机位置");
     uint32_t temperature_raw = (uint32_t)((int32_t)SINGLE_POINT_MONITORING_PROTO_BASE_TEMP_RAW + temp_wave_x100[idx]);
     uint32_t density_raw = SINGLE_POINT_MONITORING_PROTO_BASE_DENS_RAW;
+    DensityMeasurement candidate = {0};
     /* 样机要求固定展示水密度，三类密度保持一致，避免误读为真实油品修正值。 */
     uint32_t standard_density_raw = density_raw;
     uint32_t weight_density_raw = density_raw;
     uint32_t vcf20_raw = SINGLE_POINT_MONITORING_PROTO_BASE_VCF20 + (idx % 6U);
 
-    g_measurement.single_point_monitoring.temperature = temperature_raw;
-    g_measurement.single_point_monitoring.density = density_raw;
-    g_measurement.single_point_monitoring.temperature_position = position_raw;
-    g_measurement.single_point_monitoring.standard_density = standard_density_raw;
-    g_measurement.single_point_monitoring.vcf20 = vcf20_raw;
-    g_measurement.single_point_monitoring.weight_density = weight_density_raw;
+    candidate.temperature = temperature_raw;
+    candidate.density = density_raw;
+    candidate.temperature_position = position_raw;
+    candidate.standard_density = standard_density_raw;
+    candidate.vcf20 = vcf20_raw;
+    candidate.weight_density = weight_density_raw;
 
     g_measurement.debug_data.sensor_position = (int32_t)position_raw;
     g_measurement.debug_data.motor_distance = (int32_t)position_raw;
@@ -198,6 +270,10 @@ static void SinglePointMonitoringPrototype_WriteSample(uint32_t sample_index)
            RAW_TO_DENSITY(standard_density_raw),
            (unsigned long)vcf20_raw,
            RAW_TO_DENSITY(weight_density_raw));
+
+    return SinglePoint_PublishStableResult(&g_measurement.single_point_monitoring,
+                                           &candidate,
+                                           &g_measurement.monitoring_sample_counter);
 }
 
 /**
@@ -222,7 +298,9 @@ static uint32_t SinglePointMonitoringPrototype_Run(void)
 
         g_measurement.device_status.device_state = STATE_SPTESTING;
         g_measurement.device_status.error_code = NO_ERROR;
-        SinglePointMonitoringPrototype_WriteSample(sample_index);
+        if (SinglePointMonitoringPrototype_WriteSample(sample_index) == 0U) {
+            return STATE_SWITCH;
+        }
         sample_index++;
 
         ret = AbortableDelay_CommandSwitch(SINGLE_POINT_MONITORING_PROTO_PERIOD_MS, 50U);
@@ -280,9 +358,9 @@ static uint32_t Density_RunPoints01mmWithDwell(const int32_t *p01,
                                       DensityDistribution *dist,
                                       uint32_t dwell_time_s)
 {
-    if (!p01 || !dist) return PARAM_ADDRESS_OVERFLOW;
+    if (!p01 || !dist) return SYSTEM_CALL_CONDITION_ERROR;
     /* 先处理异常边界，避免密度测量状态机带故障继续运行。 */
-    if (n == 0 || n > MAX_MEASUREMENT_POINTS) return PARAM_RANGE_ERROR;
+    if (n == 0 || n > MAX_MEASUREMENT_POINTS) return MEASUREMENT_DENSITY_PLAN_INVALID;
 
     memset(dist, 0, sizeof(*dist));
 
@@ -318,7 +396,7 @@ static uint32_t Density_RunPoints01mmWithDwell(const int32_t *p01,
             }
         }
 
-        ret = SinglePoint_ReadSensorWithStableWindow(&dist->single_density_data[valid], hover_ms);
+        ret = SinglePoint_ReadSensorWithStableWindow(&dist->single_density_data[valid], hover_ms, NULL);
         if (ret == STATE_SWITCH) {
             /* 命令切换是正常打断，直接向上透传，不参与故障重试。 */
             return STATE_SWITCH;
@@ -385,7 +463,7 @@ static uint32_t BuildPoints_Spread_Exact(int32_t oil_level_01mm,
                                         int32_t *out_p01,
                                         uint32_t *out_n)
 {
-    if (!out_p01 || !out_n) return PARAM_ADDRESS_OVERFLOW;
+    if (!out_p01 || !out_n) return SYSTEM_CALL_CONDITION_ERROR;
 
     uint32_t NumOfPoints = 0;
 
@@ -403,9 +481,9 @@ static uint32_t BuildPoints_Spread_Exact(int32_t oil_level_01mm,
     if (distmin < 1000) distmin = 1000;
 
     /* 先处理异常边界，避免密度测量状态机带故障继续运行。 */
-    if (high <= 0) return PARAM_RANGE_ERROR;
+    if (high <= 0) return MEASUREMENT_DENSITY_PLAN_INVALID;
     /* 先处理异常边界，避免密度测量状态机带故障继续运行。 */
-    if (N_req == 0) return PARAM_RANGE_ERROR;
+    if (N_req == 0) return MEASUREMENT_DENSITY_PLAN_INVALID;
     if (N_req > MAX_MEASUREMENT_POINTS) N_req = MAX_MEASUREMENT_POINTS;
 
     int32_t high_min = high - top - floor;
@@ -609,7 +687,7 @@ static uint32_t BuildPoints_Meter_Exact(int32_t oil_level_01mm,
                                        int32_t *out_p01,
                                        uint32_t *out_n)
 {
-    if (!out_p01 || !out_n) return PARAM_ADDRESS_OVERFLOW;
+    if (!out_p01 || !out_n) return SYSTEM_CALL_CONDITION_ERROR;
 
     int32_t high  = oil_level_01mm;
     int32_t top   = (int32_t)g_deviceParams.spreadTopLimit;
@@ -621,7 +699,7 @@ static uint32_t BuildPoints_Meter_Exact(int32_t oil_level_01mm,
     int32_t meter = METER_STEP_01MM;
     int32_t dis01 = high - top - floor;
     if (dis01 < meter) {
-        return PARAM_RANGE_ERROR;
+        return MEASUREMENT_DENSITY_PLAN_INVALID;
     }
 
     uint32_t NumMeter = 0;
@@ -657,7 +735,7 @@ static uint32_t BuildPoints_Meter_Exact(int32_t oil_level_01mm,
     }
 
     /* 先处理异常边界，避免密度测量状态机带故障继续运行。 */
-    if (NumMeter == 0) return PARAM_RANGE_ERROR;
+    if (NumMeter == 0) return MEASUREMENT_DENSITY_PLAN_INVALID;
 
     *out_n = NumMeter;
     return NO_ERROR;
@@ -674,7 +752,7 @@ static uint32_t BuildPoints_Interval_Exact(int32_t oil_level_01mm,
                                            int32_t *out_p01,
                                            uint32_t *out_n)
 {
-    if (!out_p01 || !out_n) return PARAM_ADDRESS_OVERFLOW;
+    if (!out_p01 || !out_n) return SYSTEM_CALL_CONDITION_ERROR;
 
     uint32_t high_min;
     int32_t  high_a, high_b;
@@ -692,19 +770,19 @@ static uint32_t BuildPoints_Interval_Exact(int32_t oil_level_01mm,
     high_b = (int32_t)g_deviceParams.intervalMeasurementBottomLimit;
 
     /* 先处理异常边界，避免密度测量状态机带故障继续运行。 */
-    if (high_b >= high_a) return PARAM_RANGE_ERROR;
+    if (high_b >= high_a) return MEASUREMENT_DENSITY_PLAN_INVALID;
 
     c_num = (int)g_deviceParams.spreadMeasurementCount;
     /* 先处理异常边界，避免密度测量状态机带故障继续运行。 */
-    if (c_num <= 0) return PARAM_RANGE_ERROR;
+    if (c_num <= 0) return MEASUREMENT_DENSITY_PLAN_INVALID;
     if (c_num > (int)MAX_MEASUREMENT_POINTS) c_num = MAX_MEASUREMENT_POINTS;
 
     if (high_a >= (int32_t)g_deviceParams.tankHeight) {
-        return PARAM_RANGE_ERROR;
+        return MEASUREMENT_DENSITY_PLAN_INVALID;
     } else if (high_b < (int32_t)high_min) {
-        return PARAM_RANGE_ERROR;
+        return MEASUREMENT_DENSITY_PLAN_INVALID;
     } else if (high_a <= 0) {
-        return PARAM_RANGE_ERROR;
+        return MEASUREMENT_DENSITY_PLAN_INVALID;
     }
 
     if (c_num == 1) {
@@ -749,7 +827,7 @@ static uint32_t BuildPoints_Interval_Exact(int32_t oil_level_01mm,
 
 uint32_t Density_MeasureByMode_Exact(DensitySpreadModeId mode, DensityDistribution *out_dist)
 {
-    if (!out_dist) return PARAM_ADDRESS_OVERFLOW;
+    if (!out_dist) return SYSTEM_CALL_CONDITION_ERROR;
 
     uint32_t ret;
 
@@ -780,7 +858,7 @@ uint32_t Density_MeasureByMode_Exact(DensitySpreadModeId mode, DensityDistributi
     else if (mode == DENS_MODE_GB) {
         BuildPoints_GB4575_Exact((uint32_t)oil_level_01mm, points01, &n);
         /* 先处理异常边界，避免密度测量状态机带故障继续运行。 */
-        if (n == 0) return PARAM_RANGE_ERROR;
+        if (n == 0) return MEASUREMENT_DENSITY_PLAN_INVALID;
         PrintPoints01mm("国标测", points01, n);
     }
     else if (mode == DENS_MODE_METER) {
@@ -796,7 +874,7 @@ uint32_t Density_MeasureByMode_Exact(DensitySpreadModeId mode, DensityDistributi
         PrintPoints01mm("区间测", points01, n);
     }
     else {
-        return PARAM_RANGE_ERROR;
+        return MEASUREMENT_DENSITY_PLAN_INVALID;
     }
 
     /* 4) 统一执行测量 */
@@ -958,7 +1036,7 @@ uint32_t SiProfile_CompleteAfterReturnToLevel(void)
         return MEASUREMENT_OILLEVEL_NOTFOUND;
     }
     if (g_measurement.debug_data.motor_state != 0U) {
-        return MEASUREMENT_POSITION_ERROR;
+        return POSITION_MOTOR_NOT_STOPPED;
     }
 
     previous_complete_counter =
@@ -1137,10 +1215,10 @@ static uint32_t SiProfile_BuildPoints(int32_t bottom_position_01mm,
     int64_t bottom = (int64_t)bottom_position_01mm;
 
     if ((points01 == NULL) || (point_count == NULL)) {
-        return PARAM_ADDRESS_OVERFLOW;
+        return SYSTEM_CALL_CONDITION_ERROR;
     }
     if ((increment_01mm == 0U) || (first_point_01mm == 0U)) {
-        return PARAM_RANGE_ERROR;
+        return MEASUREMENT_DENSITY_PLAN_INVALID;
     }
     if (bottom < 0) {
         bottom = 0;
@@ -1159,7 +1237,7 @@ static uint32_t SiProfile_BuildPoints(int32_t bottom_position_01mm,
     }
 
     *point_count = n;
-    return (n > 0U) ? NO_ERROR : MEASUREMENT_DENSITY_NO_VALID_POINT;
+    return (n > 0U) ? NO_ERROR : MEASUREMENT_DENSITY_PLAN_INVALID;
 }
 
 static uint32_t SiProfile_ReportPosition01mm(uint32_t point_index, int32_t movement_position_01mm)
@@ -1262,7 +1340,7 @@ static uint32_t SiProfile_ReadPointAndClassify(SiProfilePointSample *sample,
     float last_liquid_temp = 0.0f;
 
     if (sample == NULL) {
-        return PARAM_ADDRESS_OVERFLOW;
+        return SYSTEM_CALL_CONDITION_ERROR;
     }
 
     ret = EnableDensityMode();
@@ -1397,10 +1475,10 @@ static uint32_t SiProfile_RunPoints01mmWithDwell(const int32_t *p01,
     uint8_t stopped_by_air = 0U;
 
     if ((p01 == NULL) || (dist == NULL)) {
-        return PARAM_ADDRESS_OVERFLOW;
+        return SYSTEM_CALL_CONDITION_ERROR;
     }
     if ((n == 0U) || (n > MAX_MEASUREMENT_POINTS)) {
-        return PARAM_RANGE_ERROR;
+        return MEASUREMENT_DENSITY_PLAN_INVALID;
     }
 
     memset(dist, 0, sizeof(*dist));
@@ -2062,10 +2140,17 @@ void Print_DensitySpreadResult(const DensityDistribution *dist)
  *         其他错误码        模式切换/通信等异常
  */
 static uint32_t SinglePoint_ReadSensorWithStableWindow(volatile DensityMeasurement *result,
-                                                       uint32_t stable_win_ms)
+                                                       uint32_t stable_win_ms,
+                                                       uint8_t *stable_out)
 {
     uint32_t ret = 0;
 
+    if (stable_out != NULL) {
+        *stable_out = 0U;
+    }
+    if (result == NULL) {
+        return SYSTEM_CALL_CONDITION_ERROR;
+    }
     if (HasEffectiveCommandSwitchRequest()) {
         return STATE_SWITCH;
     }
@@ -2286,6 +2371,9 @@ static uint32_t SinglePoint_ReadSensorWithStableWindow(volatile DensityMeasureme
             result->weight_density   = DENSITY_TO_RAW(ref_density);
             result->vcf20            = 1;
 
+            if (stable_out != NULL) {
+                *stable_out = 1U;
+            }
             return NO_ERROR;
         }
 
@@ -2301,7 +2389,20 @@ static uint32_t SinglePoint_ReadSensorWithStableWindow(volatile DensityMeasureme
 uint32_t SinglePoint_ReadSensor(volatile DensityMeasurement *result)
 {
     uint32_t stable_win_ms = g_deviceParams.spreadPointHoverTime * 1000U;
-    return SinglePoint_ReadSensorWithStableWindow(result, stable_win_ms);
+    uint32_t ret;
+    uint8_t stable = 0U;
+
+    do {
+        ret = SinglePoint_ReadSensorWithStableWindow(result, stable_win_ms, &stable);
+        if (ret != NO_ERROR) {
+            return ret;
+        }
+        if (stable == 0U) {
+            printf("固定点等待超过5分钟仍未稳定，本轮兜底不发布，重新开始稳定窗口\r\n");
+        }
+    } while (stable == 0U);
+
+    return NO_ERROR;
 }
 
 
@@ -2310,6 +2411,7 @@ uint32_t SinglePoint_ReadSensor(volatile DensityMeasurement *result)
 void CMD_SinglePointMeasurement(void)
 {
     uint32_t ret = 0;
+    DensityMeasurement candidate = {0};
     g_measurement.device_status.device_state = STATE_SINGLEPOINTING;
 
     MeasureStart();
@@ -2319,15 +2421,30 @@ void CMD_SinglePointMeasurement(void)
 
     ret = MotorCtrl_JogMoveToPosition((float)g_deviceParams.singlePointMeasurementPosition / 10.0f,
                                               MotorCtrl_GetDefaultSpeedX100());
+    if (ret == STATE_SWITCH) {
+        return;
+    }
     SET_ERROR(ret);
 
     g_measurement.device_status.device_state = STATE_SPTESTING;
 
-    EnableDensityMode();
-
-    ret = SinglePoint_ReadSensor(&g_measurement.single_point_measurement);
+    ret = EnableDensityMode();
+    if (ret == STATE_SWITCH) {
+        return;
+    }
     SET_ERROR(ret);
 
+    ret = SinglePoint_ReadSensor(&candidate);
+    if (ret == STATE_SWITCH) {
+        return;
+    }
+    SET_ERROR(ret);
+
+    if (SinglePoint_PublishStableResult(&g_measurement.single_point_measurement,
+                                        &candidate,
+                                        &g_measurement.measurement_complete_counter) == 0U) {
+        return;
+    }
     g_measurement.device_status.device_state = STATE_SINGLEPOINTOVER;
 }
 
@@ -2376,12 +2493,20 @@ void CMD_SinglePointMonitoring(void)
             return;
         }
 
-        ret = SinglePoint_ReadSensor(&g_measurement.single_point_monitoring);
+        DensityMeasurement candidate = {0};
+
+        ret = SinglePoint_ReadSensor(&candidate);
         if (ret == STATE_SWITCH) {
             printf("固定点监测读数阶段检测到命令切换请求，退出\r\n");
             return;
         }
         SET_ERROR(ret);
+
+        if (SinglePoint_PublishStableResult(&g_measurement.single_point_monitoring,
+                                            &candidate,
+                                            &g_measurement.monitoring_sample_counter) == 0U) {
+            return;
+        }
     }
 #endif
 }

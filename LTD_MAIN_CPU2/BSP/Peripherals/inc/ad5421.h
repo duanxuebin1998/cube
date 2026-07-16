@@ -76,6 +76,7 @@ typedef struct {
 
 
 uint32_t Ad5421Init(void);
+uint32_t AD5421_InitCurrentX100(uint32_t initial_mA_x100);
 uint32_t AD5421_SetCurrent(float mA);
 uint32_t AD5421_SetCurrentX100(uint32_t mA_x100);
 uint32_t AD5421_RecoverCurrentX100(uint32_t target_mA_x100);

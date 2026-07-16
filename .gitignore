@@ -51,6 +51,10 @@ __pycache__/
 node_modules/
 old/
 .worktrees/
+
+# Codex local temporary files.
+.codex_tmp/
+
 tmp/
 $out/
 _docx_render*/
@@ -65,9 +69,5 @@ site/
 docs/00_程序流程导航/
 tools/
 
-# Local audit, intermediate fault-code, and validation execution artifacts.
-outputs/????????-????-????-????-????????????/
-outputs/docs-site-audit-*/
-outputs/fault-code-optimization-*/
-outputs/fault-code-renumbering-*/
-outputs/validation-execution-kits/
+# Local generated outputs. Keep the entire directory on this machine only.
+outputs/

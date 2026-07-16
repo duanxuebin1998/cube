@@ -1,6 +1,6 @@
 ﻿# SI协议需求与实施总览
 
-日期：2026-07-14
+日期：2026-07-15
 
 本文是 SI 计划与需求目录的主维护文档，合并原“官方资料整理”“说明书需求确认”“下一步工作计划”“CPU2 建议新增项”“协议适配执行计划”和“进一步兼容需求与实施方案”的有效内容。旧拆分文档不再单独维护；待确认事项集中维护在 `SI协议待确认与后续清单.md`。
 
@@ -17,7 +17,7 @@
 - CPU2 不理解 SI 地址号、线圈、功能码、缩放和 Modbus 异常码。
 - `tools/check_si_modbus_frames.py` 和 `tools/check_si_protocol_contract.py` 已用于保护 SI协议地址表、参考帧和 CPU2/CPU3 共享字段契约。
 
-当前状态已经推进到“协议18 SI profile生命周期兼容提交版”。CPU2已升级为`V1.26.0.0`，CPU3已升级为`V1.24.0.0`；源码、协议契约、参考帧和双端clean-first构建已完成。真实RS485、V6实镜像迁移与写失败注入、掉电保存、CPU2/CPU3重启、PLC响应时延、完成边沿一致性、取消/失败/通信中断及1/30/200点边界仍需台架验证，提交前审查遗留见`SI协议待确认与后续清单.md`第7节。
+SI功能已经推进到协议18生命周期兼容正式基线，首个匹配固件为CPU2 `V1.26.0.0`、CPU3 `V1.24.0.0`；源码、协议契约、参考帧和双端clean-first构建已经完成。当前整机正式组合为协议21、CPU2 `V1.27.0.0`、CPU3 `V1.25.0.0`；协议19故障码、协议20 AO和协议21固定点代际均不改变SI地址、生命周期、参数和测试口径。真实RS485、V6实镜像迁移与写失败注入、掉电保存、CPU2/CPU3重启、PLC响应时延、完成边沿一致性、取消/失败/通信中断及1/30/200点边界仍需台架验证，协议18提交前审查遗留见 `SI协议待确认与后续清单.md` 第7节。
 
 ## 2. 官方资料要点
 
@@ -83,16 +83,16 @@
 
 ### 3.2 2026-07-01阶段实现结果
 
-> 本节是2026-07-01协议14/FRAM V6阶段的历史快照，其中“命令触发时锁存时间”和`0x0006`不是协议18当前口径。当前实现以3.4节及后续正文为准：Point0建立新周期时锁存时间，FRAM版本为V7/`0x0007`。
+> 本节是2026-07-01协议14/FRAM V6阶段的历史快照，其中“命令触发时锁存时间”和`0x0006`不是协议18建立并由协议19沿用的口径。当前实现以3.4节及后续正文为准：Point0建立新周期时锁存时间，FRAM版本为V7/`0x0007`。
 
 | 类别 | 已落地内容 | 关键文件 |
 | --- | --- | --- |
 | 共享协议 | `DEVICE_PROTOCOL_VERSION` 升至 `14`；新增 `CMD_SI_PROFILE = 20`，并增加 `profile_source` 隔离 SI profile 结果 | `LTD_MAIN_CPU2/Services/ParamStorage/system_parameter.h`、`LTD_DISPLAY_CPU3/Application/system_param/system_parameter.h` |
 | CPU2 profile 参数 | 复用原预留槽新增 `si_profile_first_point`、`si_profile_increment`、`si_profile_dwell_time`、`si_profile_bottom_detect_interval`；`DEVICE_PARAM_VERSION` 保持 `3`，通过协议版本迁移和运行期归一化补默认值 | `system_parameter.h/c`、`stateformodbus.h`、`dataanalysis_modbus.c` |
 | CPU2 profile 流程 | 新增 `CMD_SiProfile()`，支持探底频次、旧底部位置回退、Point0、最多 200 点、候选点运行中判定液面以上后停止、完成锁存和计数 | `LTD_MAIN_CPU2/Application/Src/measure_density.c`、`measure.c`、`fault_recovery.c` |
-| CPU3 本机参数 | 2026-07-01阶段新增 `40010~40023` 并把FRAM升至V6/`0x0006`；协议18当前已继续升至V7/`0x0007`并增加六个兼容槽 | `cpu3_comm_display_params.h/c` |
+| CPU3 本机参数 | 2026-07-01阶段新增 `40010~40023` 并把FRAM升至V6/`0x0006`；协议18已继续升至V7/`0x0007`并增加六个兼容槽，协议19沿用 | `cpu3_comm_display_params.h/c` |
 | CPU3 菜单 | `参数配置 -> 测量参数 -> SI参数` 下新增 `Profile参数`、`自动Profile`、`报警限值` 三个子页 | `display_tankopera.h/c`、`system_parameter.c` |
-| SI Modbus | 历史阶段由`00004 Profile`命令时锁存timestamp；协议18当前只下发`CMD_SI_PROFILE`，改为观察Point0新周期事件时锁存；`si_modbus_periodic_task()`负责自动调度 | `si_modbus_slave.c/h`、`app_main.c` |
+| SI Modbus | 历史阶段由`00004 Profile`命令时锁存timestamp；协议18起只下发`CMD_SI_PROFILE`，改为观察Point0新周期事件时锁存，协议19沿用；`si_modbus_periodic_task()`负责自动调度 | `si_modbus_slave.c/h`、`app_main.c` |
 | 状态和报警 | `10010=0` 固定可信；`10002/10003` 按液位跟随稳定状态合成；当前值报警、profile 上下限报警和相邻点偏差报警由 CPU3 合成 | `si_modbus_slave.c` |
 | 文档和脚本 | golden frame 更新为 CPU3 自动 profile 默认值；协议契约脚本覆盖协议版本、命令号、参数字段和状态口径 | `tools/check_si_modbus_frames.py`、`tools/check_si_protocol_contract.py` |
 
@@ -528,7 +528,7 @@ CPU3 菜单更新已作为 SI协议对外配置入口落地，不单独维护一
 | SI 温度无效值和报警阈值口径 | 否 | CPU3 参数 signedness | 温度无效值输出 `0xB1E0`，报警阈值 `0` 是有效值，`40016/40017` 允许负温度 |
 | SI Profile生命周期和最终发布 | 是 | 否 | 协议18追加阶段、周期和有效点进度；CPU3复核候选并同代发布Complete/N/点阵/Profile报警 |
 
-当前共享协议已经在源码中从17升至18；首个匹配固件组合为CPU2 `V1.26.0.0` / CPU3 `V1.24.0.0`。协议18属于跨CPU新功能，双端必须成对升级；CHANGELOG、协议变更记录和版本测试资料已经同步，真实硬件验收与提交前审查遗留见`SI协议待确认与后续清单.md`第6、7节。
+SI生命周期扩展已在协议18完成，首个正式匹配固件组合为CPU2 `V1.26.0.0` / CPU3 `V1.24.0.0`。协议18属于跨CPU新功能，双端必须成对升级；CHANGELOG、协议变更记录和版本测试资料已经同步。当前整机协议21同样严格配套，协议19故障码、协议20 AO和协议21固定点代际不改变本节SI实现。真实硬件验收与协议18提交前审查遗留见 `SI协议待确认与后续清单.md` 第6、7节。
 
 ## 16. 验证计划
 

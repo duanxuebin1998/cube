@@ -8,6 +8,7 @@
 #include "spi.h"
 #include "DSM_communication.h"
 #include "DSM_DataAnalysis_modbus2.h"
+#include "../external_read_freshness.h"
 #include <stdlib.h>
 #include <string.h>
 #include "stateformodbus.h"
@@ -34,6 +35,28 @@ static uint8_t s_dsm_self_check_placeholder_step = 0U; /* Modbus 协议模块级
 /* FC16 同步失败时恢复最后一次已确认的参数与 DSM 保持寄存器镜像。 */
 static DeviceParameters s_dsm_parameter_snapshot;
 static int s_dsm_holding_register_snapshot[DSM_MAX_WRITE_REGISTER_COUNT];
+
+/*
+ * 函数用途：刷新 DSM FC04 可离线读取的 CPU3 本地静态字段。
+ * 调用场景：FC04 完成整帧新鲜度分类后、读取输入寄存器影子前调用。
+ * 关键约束：本函数不得读取 g_measurement，也不得推进 0x0001 自检生命周期。
+ */
+static void DSM_RefreshLocalInputRegisters(void)
+{
+	WriteOneInputRegister(INPUTREGISTER_PATTERNOFWORK, 1U, 1);
+	WriteOneInputRegister(INPUTREGISTER_SP_TDSTATE, 1U, 0);
+	WriteOneInputRegister(INPUTREGISTER_SPT_TDSTATE, 1U, 0);
+	WriteOneInputRegister(INPUTREGISTER_SPREAD_AVERAGETDSTATE, 1U, 0);
+	WriteOneInputRegister(INPUTREGISTER_VALUE_P1, 2U, 0);
+	WriteOneInputRegister(INPUTREGISTER_VALUE_P3, 2U, 0);
+	WriteOneInputRegister(INPUTREGISTER_ZEROCIRCLE, 1U, 0);
+	WriteOneInputRegister(INPUTREGISTER_ZEROANGLE, 1U, 0);
+	WriteOneInputRegister(INPUTREGISTER_TANKHIGHT, 2U, 0);
+	WriteOneInputRegister(INPUTREGISTER_AMPLITUDE, 1U, 0);
+	WriteOneInputRegister(INPUTREGISTER_SENSORX_ANGLE, 1U, 0);
+	WriteOneInputRegister(INPUTREGISTER_SENSORY_ANGLE, 1U, 0);
+	WriteOneInputRegister(INPUTREGISTER_WARTER_VOLTAGE, 1U, 0);
+}
 
 /*
  * 函数功能：判断保持寄存器访问是否落在 DSM V1.228 第6段占位区。
@@ -728,19 +751,41 @@ int Response04(unsigned char *revframe, unsigned char *sendframe)
 	}
 	else
 	{
-		sendframe[0] = SlaveAddress;
-		sendframe[1] = functioncode;
-		sendframe[2] = registeramount * 2;
-		/* 读输入寄存器 */
-		ReadInputRegister(startaddress, registeramount, TempBuffer);
+		uint8_t needs_runtime = CPU3_ExternalDsmInputRangeNeedsRuntime(
+			(uint16_t)startaddress,
+			(uint16_t)registeramount);
 
-		for (i = 0, j = 0; i < registeramount; i++, j = j + 2)
+		if ((needs_runtime != 0U) && !CPU2_CommHasRuntimeSnapshot())
 		{
-			sendframe[j + 3] = (TempBuffer[i] >> 8) & 0xff;
-			sendframe[j + 4] = TempBuffer[i] & 0xff;
+			/* CPU2 派生字段和混合范围在首次失联后整帧返回设备忙。 */
+			sendframe[0] = SlaveAddress;
+			sendframe[1] = 0x80 + readinputregisterfuncode;
+			sendframe[2] = EXCEPTIONCODE_ERRORDEVIVEBUSY;
+			framelen = 3;
 		}
+		else
+		{
+			/* 先刷新静态白名单；只有运行态门禁通过后才允许消费 CPU2 与自检影子。 */
+			DSM_RefreshLocalInputRegisters();
+			if (needs_runtime != 0U)
+			{
+				Input_Write();
+			}
 
-		framelen = 3 + registeramount * 2;
+			sendframe[0] = SlaveAddress;
+			sendframe[1] = functioncode;
+			sendframe[2] = registeramount * 2;
+			/* 读输入寄存器 */
+			ReadInputRegister(startaddress, registeramount, TempBuffer);
+
+			for (i = 0, j = 0; i < registeramount; i++, j = j + 2)
+			{
+				sendframe[j + 3] = (TempBuffer[i] >> 8) & 0xff;
+				sendframe[j + 4] = TempBuffer[i] & 0xff;
+			}
+
+			framelen = 3 + registeramount * 2;
+		}
 	}
 
 	crc = CRC16_Calculate(sendframe, framelen);

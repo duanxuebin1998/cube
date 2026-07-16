@@ -204,6 +204,7 @@ static uint32_t OilLevel_StopBeforeReturn(uint32_t error_code, const char *reaso
     if (error_code == NO_ERROR) {
         return NO_ERROR;
     }
+    AoOutput_InvalidateProcessSample(AO_PROCESS_SOURCE_TANK_LEVEL);
     (void)MotorCtrl_SlowStop();
 
     return error_code;
@@ -214,7 +215,16 @@ static uint32_t OilLevel_StopBeforeReturn(uint32_t error_code, const char *reaso
 
 static void OilLevel_UpdateAoOutput(void)
 {
-    uint32_t ao_ret = AoOutput_Update();
+    uint32_t ao_ret;
+
+    if (g_measurement.oil_measurement.oil_level == UNVALID_LEVEL) {
+        AoOutput_InvalidateProcessSample(AO_PROCESS_SOURCE_TANK_LEVEL);
+    } else {
+        AoOutput_PublishProcessSample(AO_PROCESS_SOURCE_TANK_LEVEL,
+                                      (int32_t)g_measurement.oil_measurement.oil_level,
+                                      1U);
+    }
+    ao_ret = AoOutput_Update();
 
     if ((ao_ret != NO_ERROR) && (ao_ret != STATE_SWITCH) &&
         (g_measurement.device_status.error_code == NO_ERROR)) {
@@ -316,6 +326,7 @@ static uint32_t DensityLevel_StopAndReturn(uint32_t error_code, const char *reas
     if (error_code == NO_ERROR) {
         return NO_ERROR;
     }
+    AoOutput_InvalidateProcessSample(AO_PROCESS_SOURCE_TANK_LEVEL);
     if (error_code != STATE_SWITCH) {
         printf("密度找液位\t%s\t停止电机后返回\t错误码=0x%08lX\r\n",
                (reason != NULL) ? reason : "闭环退出",
@@ -343,7 +354,7 @@ static uint32_t DensityLevel_ReadCurrent(float *density, float *frequency, float
     uint32_t ret;
 
     if ((density == NULL) || (frequency == NULL) || (temperature == NULL)) {
-        return PARAM_ADDRESS_OVERFLOW;
+        return SYSTEM_CALL_CONDITION_ERROR;
     }
 
     ret = Read_Density(frequency, density, temperature);
@@ -404,7 +415,7 @@ static uint32_t LevelVelocity_StartOrUpdateMotion(int dir,
     uint32_t delta_speed;
 
     if ((active_dir == NULL) || (active_speed_x100 == NULL)) {
-        return PARAM_ADDRESS_OVERFLOW;
+        return SYSTEM_CALL_CONDITION_ERROR;
     }
 
     if (speed_x100 == 0U) {
@@ -471,7 +482,7 @@ static uint32_t DensityLevel_RunClosedLoop(uint32_t follow_mode)
 
     if (g_deviceParams.oilLevelDensity == 0U) {
         printf("密度找液位\t目标密度未配置\r\n");
-        return PARAM_ERROR;
+        return PARAM_CONFIG_MISSING;
     }
 
     target_density = RAW_TO_DENSITY(g_deviceParams.oilLevelDensity);
@@ -594,7 +605,7 @@ static uint32_t DensityLevel_RunClosedLoop(uint32_t follow_mode)
 
         if ((follow_mode == 0U) &&
             ((HAL_GetTick() - start_tick) > DENSITY_LEVEL_SEARCH_TIMEOUT_MS)) {
-            return DensityLevel_StopAndReturn(MEASUREMENT_TIMEOUT, "密度闭环超时");
+            return DensityLevel_StopAndReturn(MEASUREMENT_DENSITY_LEVEL_TIMEOUT, "密度闭环超时");
         }
 
         ret = AbortableDelay_CommandSwitch(DENSITY_LEVEL_SAMPLE_DELAY_MS, 50U);
@@ -620,6 +631,7 @@ static uint32_t FrequencyLevel_StopAndReturn(uint32_t error_code, const char *re
     if (error_code == NO_ERROR) {
         return NO_ERROR;
     }
+    AoOutput_InvalidateProcessSample(AO_PROCESS_SOURCE_TANK_LEVEL);
     if (error_code != STATE_SWITCH) {
         printf("频率找液位\t%s\t停止电机后返回\t错误码=0x%08lX\r\n",
                (reason != NULL) ? reason : "闭环退出",
@@ -633,12 +645,12 @@ static uint32_t FrequencyLevel_SetFixedTarget(void)
 {
     if (g_deviceParams.oilLevelFrequency == 0U) {
         printf("固定频率找液位\t目标频率为0\r\n");
-        return PARAM_ERROR;
+        return PARAM_CONFIG_MISSING;
     }
     if (g_deviceParams.oilLevelFrequency > FREQUENCY_LEVEL_VALID_MAX_HZ) {
         printf("固定频率找液位\t目标频率超出有效范围：%lu Hz\r\n",
                (unsigned long)g_deviceParams.oilLevelFrequency);
-        return PARAM_ERROR;
+        return PARAM_RANGE_ERROR;
     }
     g_measurement.oil_measurement.follow_frequency = g_deviceParams.oilLevelFrequency;
     return NO_ERROR;
@@ -661,10 +673,10 @@ static uint32_t OilLevel_ReadAverageFrequencyWithRetry(volatile uint32_t *freque
                                                        const char *stage_text)
 {
     uint32_t try_times;
-    uint32_t last_ret = PARAM_ADDRESS_OVERFLOW;
+    uint32_t last_ret = SYSTEM_CALL_CONDITION_ERROR;
 
     if (frequency_out == NULL) {
-        return PARAM_ADDRESS_OVERFLOW;
+        return SYSTEM_CALL_CONDITION_ERROR;
     }
 
     for (try_times = 1U; try_times <= 3U; try_times++) {
@@ -851,7 +863,7 @@ static uint32_t FrequencyLevel_RunClosedLoop(uint32_t follow_mode)
 
     if (g_measurement.oil_measurement.follow_frequency == 0U) {
         printf("频率找液位\t目标频率未配置\r\n");
-        return PARAM_ERROR;
+        return PARAM_CONFIG_MISSING;
     }
 
     if (method == OIL_LEVEL_METHOD_CONTINUOUS_RELATIVE_FREQ) {
@@ -976,7 +988,7 @@ static uint32_t FrequencyLevel_RunClosedLoop(uint32_t follow_mode)
 
         if ((follow_mode == 0U) &&
             ((HAL_GetTick() - start_tick) > FREQUENCY_LEVEL_SEARCH_TIMEOUT_MS)) {
-            return FrequencyLevel_StopAndReturn(MEASUREMENT_TIMEOUT, "频率闭环超时");
+            return FrequencyLevel_StopAndReturn(MEASUREMENT_FREQUENCY_LEVEL_TIMEOUT, "频率闭环超时");
         }
 
         ret = AbortableDelay_CommandSwitch(FREQUENCY_LEVEL_SAMPLE_DELAY_MS, 50U);
@@ -1122,7 +1134,7 @@ static void OilLevel_ResetSearchRuntimeState(void)
 static uint32_t OilLevel_TryRunDirectSearchMethod(uint8_t *handled)
 {
     if (handled == NULL) {
-        return PARAM_ADDRESS_OVERFLOW;
+        return SYSTEM_CALL_CONDITION_ERROR;
     }
 
     *handled = 1U;
@@ -1132,7 +1144,7 @@ static uint32_t OilLevel_TryRunDirectSearchMethod(uint8_t *handled)
         return DensityLevel_RunClosedLoop(DENSITY_LEVEL_RUN_SEARCH);
     case OIL_LEVEL_METHOD_ULTRASONIC_RESERVED:
         printf("液位测量\t方法3为超声波预留\r\n");
-        return PARAM_ERROR;
+        return PARAM_FEATURE_UNSUPPORTED;
     case OIL_LEVEL_METHOD_CONTINUOUS_FIXED_FREQ:
         /* 方法5固定频率速度法：不粗找空气/油面，校验后直接按 oilLevelFrequency 闭环。 */
         g_measurement.device_status.device_state = STATE_FINDOIL;
@@ -1298,7 +1310,7 @@ static uint32_t OilLevel_RunResolvedSearchMethod(uint8_t *result_recorded)
     uint32_t ret;
 
     if (result_recorded == NULL) {
-        RETURN_ERROR(PARAM_ADDRESS_OVERFLOW);
+        RETURN_ERROR(SYSTEM_CALL_CONDITION_ERROR);
     }
     *result_recorded = 0U;
 
@@ -1376,6 +1388,8 @@ uint32_t SearchOilLevel(void)
     uint8_t direct_handled = 0U;
     uint8_t result_recorded = 0U;
 
+    /* 新一轮搜索开始即失效旧液位，只有成功记录结果后才重新发布。 */
+    AoOutput_InvalidateProcessSample(AO_PROCESS_SOURCE_TANK_LEVEL);
     ret = OilLevel_TryRunDirectSearchMethod(&direct_handled);
     if ((ret != NO_ERROR) || (direct_handled != 0U)) {
         return ret;
@@ -1433,7 +1447,7 @@ uint32_t FollowOilLevel(void) {
 		return DensityLevel_RunClosedLoop(DENSITY_LEVEL_RUN_FOLLOW);
 	case OIL_LEVEL_METHOD_ULTRASONIC_RESERVED:
 		printf("液位测量\t方法3为超声波预留\r\n");
-		return PARAM_ERROR;
+		return PARAM_FEATURE_UNSUPPORTED;
 	default:
 		break;
 	}
@@ -1659,7 +1673,7 @@ static uint32_t determine_level_status_internal(Level_StateTypeDef *state_out, u
     const char *mode_text;
 
     if (state_out == NULL) {
-        return PARAM_ADDRESS_OVERFLOW;
+        return SYSTEM_CALL_CONDITION_ERROR;
     }
 
     mode_text = allow_mode_recovery ? "静态" : "运动";

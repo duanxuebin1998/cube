@@ -57,6 +57,12 @@ bool CPU2_CommShouldShowStartup(void);
  */
 bool CPU2_CommIsAvailable(void);
 /*
+ * 函数用途：使 CPU2 参数快照失效，并请求主循环重新读取全部保持寄存器参数。
+ * 调用场景：参数写入后的定向补读失败，CPU3 无法确认 CPU2 当前实际值时调用。
+ * 关键约束：刷新完成前参数读写门禁必须保持关闭，不能继续开放旧镜像。
+ */
+void CPU2_CommRequestParameterRefresh(void);
+/*
  * 函数用途：判断SI生命周期运行态是否来自连续、兼容的CPU2快照。
  * 调用场景：CPU3本地SI投影识别首次上线和通信重连。
  * 关键约束：参数补读期间不打断运行态连续性，通信故障和协议不匹配必须返回false。

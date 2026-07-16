@@ -39,6 +39,11 @@ bool DisplayTankOpera_IsMotorRunMonitorActive(void);
  */
 bool DisplayTankOpera_IsDebugWeightWaitActive(void);
 /**
+ * @brief 判断当前前景页是否为 AO 运行状态页。
+ * @return true 表示 AO 运行状态页需要跟随输入寄存器周期刷新。
+ */
+bool DisplayTankOpera_IsAoRuntimeActive(void);
+/**
  * @brief 判断当前前景菜单页是否允许空闲超时后自动退出。
  * @return true 表示允许自动退出到状态页，false 表示应继续保持当前业务等待页。
  */
@@ -86,7 +91,13 @@ typedef enum {
     KEYNUM_MENU_PARA_POLICY,             /* 策略/分布/区间参数 */
     KEYNUM_MENU_PARA_WARTSILA,           /* Wartsila 参数（如果你确实有此页） */
     KEYNUM_MENU_PARA_DO,                 /* 继电器报警输出参数入口 */
-    KEYNUM_MENU_PARA_AO,                 /* AO 参数（如果你确实有此页） */
+    KEYNUM_MENU_PARA_AO,                 /* AO 五分组入口 */
+    KEYNUM_MENU_AO_CHANNEL,              /* AO 通道设置 */
+    KEYNUM_MENU_AO_RANGE,                /* AO 量程设置 */
+    KEYNUM_MENU_AO_FAULT,                /* AO 故障设置 */
+    KEYNUM_MENU_AO_RUNTIME,              /* AO 运行状态 */
+    KEYNUM_MENU_AO_DIAGNOSTIC,           /* AO 诊断仿真 */
+    KEYNUM_AO_SIMULATION_SWITCH,         /* AO 非持久化仿真开关 */
     KEYNUM_MENU_PARA_CAL_SP,             /* 标定/单点参数 */
     KEYNUM_MENU_PARA_PARAM_CHECK,        /* 参数校验信息 */
     KEYNUM_MENU_OUTPUT_CONFIG,           /* 输出配置主菜单 */
@@ -154,7 +165,12 @@ typedef enum {
     MENU_GRP_CPU3_SI_AUTO,      /* SI 自动 Profile 调度 */
     MENU_GRP_CPU3_SI_ALARM,     /* SI 报警限值 */
     MENU_GRP_DO_ALARM,          /* 继电器报警输出 */
-    MENU_GRP_AO,                /* AO 输出/报警/故障电流/调试电流 */
+    MENU_GRP_AO_CHANNEL,        /* AO 工作模式/电流模式/输出源 */
+    MENU_GRP_AO_RANGE,          /* AO 固定电流/量程/阻尼 */
+    MENU_GRP_AO_FAULT,          /* AO 故障模式/故障电流/错误级别/上电电流 */
+    MENU_GRP_AO_RUNTIME,        /* AO 输入值/输入百分比，只读运行态 */
+    MENU_GRP_AO_DIAGNOSTIC,     /* AO 输出仿真/仿真电流 */
+    MENU_GRP_AO_RESERVED,       /* AO SIL/WHG 与 DAC 回读隐藏预留 */
     MENU_GRP_CAL_SP,            /* 标定液位(油/水)/单点位置/监测位置/分布液位/电机运行距离 */
     MENU_GRP_PARAM_CHECK,       /* ParamVer/StructSize/Magic/CRC */
     MENU_GRP_CPU3_BASE,         /* LedVer/语言 */
@@ -220,6 +236,9 @@ typedef enum
     COM_NUM_RESTOR_EFACTORYSETTING,  /* 恢复出厂设置 */
     COM_NUM_MAINTENANCE_MODE,        /* 维护模式 */
     COM_NUM_PAIR_NEAREST_WIRELESS_SLIPRING = 1000, /* 匹配最近无线滑环；显式编号，不改变既有连续操作码 */
+    COM_NUM_AO_SIMULATION_ENABLE = 1001,    /* AO 非持久化仿真开关，仅用于 CPU3 菜单 */
+    COM_NUM_AO_RUNTIME_PROCESS_VALUE = 1002,/* AO 输入值，只读运行态 */
+    COM_NUM_AO_RUNTIME_PERCENT = 1003,      /* AO 输入百分比，只读运行态 */
 
     COM_NUM_DEBUGCMD_STOP = COM_NUM_MAINTENANCE_MODE + 1, /* 调试模式无参指令 - 结束 */
 
@@ -377,23 +396,20 @@ typedef enum
     COM_NUM_DEVICEPARAM_WARTSILA_BOTTOM_DETECT_INTERVAL, /* 瓦锡兰测量后探底频率：0不探底，N表示每N次测量后探底一次，范围0~100 */
     COM_NUM_DEVICEPARAM_BOTTOM_ENCODER_CORRECTION_TANK_HEIGHT, /* 探底修正罐高 */
 
-    COM_NUM_DEVICEPARAM_AO_START_LEVEL,                     /* AO起点液位 */
-    COM_NUM_DEVICEPARAM_AO_END_LEVEL,                     /* AO终点液位 */
-
-    /* ---------------- 4-20mA / 报警 AO ---------------- */
-    COM_NUM_DEVICEPARAM_AO_NORMAL_CURRENT_START_mA,         /* 正常起点电流 */
-    COM_NUM_DEVICEPARAM_AO_NORMAL_CURRENT_END_mA,           /* 正常终点电流 */
-    COM_NUM_DEVICEPARAM_AO_HIGH_ALARM_LEVEL,                  /* AO 高报警液位 */
-    COM_NUM_DEVICEPARAM_AO_LOW_ALARM_LEVEL,                   /* AO 低报警液位 */
-    COM_NUM_DEVICEPARAM_INITIAL_CURRENT_mA,             /* 初始化电流 */
-    COM_NUM_DEVICEPARAM_AO_HIGH_CURRENT_mA,             /* AO 高报电流 */
-    COM_NUM_DEVICEPARAM_AO_LOW_CURRENT_mA,              /* AO 低报电流 */
-    COM_NUM_DEVICEPARAM_FAULT_CURRENT_mA,               /* 故障电流 */
-    COM_NUM_DEVICEPARAM_DEBUG_CURRENT_mA,               /* 调试电流 */
-
-    COM_NUM_DEVICEPARAM_AO_OUTPUT_ENABLE,               /* AO 输出使能 */
-    COM_NUM_DEVICEPARAM_RESERVED26 = COM_NUM_DEVICEPARAM_AO_OUTPUT_ENABLE, /* 兼容旧保留 26 */
-    COM_NUM_DEVICEPARAM_RESERVED27,                     /* 保留 27 */
+    /* ---------------- 协议20 AO配置，顺序对应连续13个共享槽位 ---------------- */
+    COM_NUM_DEVICEPARAM_AO_WORK_MODE,                   /* AO工作模式 */
+    COM_NUM_DEVICEPARAM_AO_CURRENT_MODE,                /* AO电流模式 */
+    COM_NUM_DEVICEPARAM_AO_OUTPUT_SOURCE,               /* AO输出源 */
+    COM_NUM_DEVICEPARAM_AO_SIL_WHG_RESERVED,            /* SIL/WHG隐藏预留 */
+    COM_NUM_DEVICEPARAM_AO_FIXED_CURRENT_MA_X100,       /* AO固定电流 */
+    COM_NUM_DEVICEPARAM_AO_RANGE_0_01MM,                /* AO 0%对应值 */
+    COM_NUM_DEVICEPARAM_AO_RANGE_100_01MM,              /* AO 100%对应值 */
+    COM_NUM_DEVICEPARAM_AO_DAMPING_X10_S,               /* AO阻尼 */
+    COM_NUM_DEVICEPARAM_AO_FAULT_MODE,                  /* AO故障模式 */
+    COM_NUM_DEVICEPARAM_AO_FAULT_CURRENT_MA_X100,       /* AO故障电流 */
+    COM_NUM_DEVICEPARAM_AO_ERROR_LEVEL,                 /* AO错误级别 */
+    COM_NUM_DEVICEPARAM_AO_POWER_ON_CURRENT_MA_X100,    /* AO上电电流 */
+    COM_NUM_DEVICEPARAM_AO_SIMULATION_CURRENT_MA_X100,  /* AO仿真电流 */
 
     /* ---------------- 指令参数（用于带参命令） ---------------- */
     COM_NUM_DEVICEPARAM_CALIBRATE_OIL_LEVEL,            /* 液位标定值 */

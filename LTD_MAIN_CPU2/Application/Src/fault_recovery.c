@@ -46,7 +46,10 @@ static uint8_t FaultRecovery_IsMotorDriverError(uint32_t error_code)
     case MOTOR_TMC_CONFIG_LOST:
     case MOTOR_CHARGE_PUMP_UNDER_VOLTAGE:
     case MOTOR_DISABLED:
+    case MOTOR_DRIVER_NOT_INITIALIZED:
     case MOTOR_RUN_TIMEOUT:
+    case MOTOR_STOP_WAIT_TIMEOUT:
+    case MOTOR_ARRIVAL_WAIT_TIMEOUT:
         return 1U;
     default:
         return 0U;
@@ -63,9 +66,36 @@ static uint8_t FaultRecovery_IsMotorDriverError(uint32_t error_code)
 static uint8_t FaultRecovery_IsNonRecoverableError(uint32_t error_code)
 {
     switch (error_code) {
+    /* 驱动保护、相线和堵转故障需要先排查硬件或机构，禁止自动重跑测量。 */
+    case MOTOR_UNKNOWN_FEEDBACK:
+    case MOTOR_OVERTEMPERATURE:
+    case MOTOR_STALL_ERROR:
+    case MOTOR_PHASE_SHORT_ERROR:
+    case MOTOR_PHASE_OPEN_ERROR:
+    case MOTOR_DRIVER_OVERTEMP_WARNING:
+    case ENCODER_CIRCUMFERENCE_CALIBRATION_ERROR:
+    case SENSOR_IDENTITY_MISMATCH:
+    case SENSOR_PROTOCOL_VERSION_INCOMPATIBLE:
+    case SENSOR_CAPABILITY_UNSUPPORTED:
+    case SENSOR_COMMAND_UNSUPPORTED:
+    case SENSOR_ARGUMENT_REJECTED:
+    case SENSOR_MODE_MISMATCH:
+    case SENSOR_MODE_NOT_ALLOWED:
     case PARAM_RANGE_ERROR:
-    case PARAM_ADDRESS_OVERFLOW:
-    case PARAM_ERROR:
+    case PARAM_CONFIG_MISSING:
+    case PARAM_COMBINATION_CONFLICT:
+    case PARAM_FEATURE_UNSUPPORTED:
+    case PARAM_STORAGE_SIZE_MISMATCH:
+    case PARAM_STORAGE_VERSION_MISMATCH:
+    case PARAM_STORAGE_WRITE_VERIFY_FAILED:
+    case MEASUREMENT_TANK_HEIGHT_NOT_CONFIGURED:
+    case MEASUREMENT_WATER_CALIBRATION_NOT_CONFIGURED:
+    case MEASUREMENT_TANK_HEIGHT_RESULT_INVALID:
+    case MEASUREMENT_WATER_CALC_OUT_OF_RANGE:
+    case MEASUREMENT_DENSITY_PLAN_INVALID:
+    case SYSTEM_BUFFER_CAPACITY_ERROR:
+    case SYSTEM_CALL_CONDITION_ERROR:
+    case SYSTEM_CALCULATION_ERROR:
         return 1U;
     default:
         return 0U;
@@ -308,8 +338,20 @@ void FaultRecovery_UpdateAfterCommand(CommandType command)
         (s_fault_recovery.command == command)) {
         s_fault_recovery.awaiting_retry_result = 0U;
 
-        /* 先处理异常边界，避免故障处理状态机带故障继续运行。 */
-        if ((error_code == NO_ERROR) || (error_code == STATE_SWITCH)) {
+        /* 只有业务命令重跑返回成功，才记录完整恢复成功。 */
+        if (error_code == NO_ERROR) {
+            /* 错误 阶段：重试成功 模块：系统 操作：自动恢复 原因：恢复成功 尝试：s_fault_recovery.command_retry_count/retry_limit */
+            ErrorLog_Recover(ERROR_LOG_MODULE_SYSTEM,
+                             ERROR_LOG_OP_AUTO_RECOVER,
+                             ERROR_LOG_REASON_RECOVER_OK,
+                             s_fault_recovery.command_retry_count,
+                             retry_limit);
+            FaultRecovery_ClearContext();
+            return;
+        }
+
+        /* 命令切换是非故障退出，只清理恢复上下文，不记录恢复成功。 */
+        if (error_code == STATE_SWITCH) {
             FaultRecovery_ClearContext();
             return;
         }
@@ -450,12 +492,6 @@ FaultRecoveryResult FaultRecovery_Poll(void)
     result.should_retry_command = 1U;          /* 恢复确认成功，通知主循环重跑原命令。 */
     result.retry_command = s_fault_recovery.command; /* 恢复模块不直接执行业务，只返回需要重跑的命令。 */
 
-    /* 错误 阶段：重试成功 模块：系统 操作：自动恢复 原因：恢复成功 尝试：s_fault_recovery.command_retry_count/retry_limit */
-    ErrorLog_Recover(ERROR_LOG_MODULE_SYSTEM,
-                     ERROR_LOG_OP_AUTO_RECOVER,
-                     ERROR_LOG_REASON_RECOVER_OK,
-                     s_fault_recovery.command_retry_count,
-                     retry_limit);
-    g_measurement.device_status.error_code = NO_ERROR; /* 恢复成功后清除全局错误码。 */
+    /* 部件检查只证明具备重跑条件；完整恢复要等业务命令真正成功。 */
     return result;
 }

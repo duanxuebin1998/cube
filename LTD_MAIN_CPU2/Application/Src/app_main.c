@@ -30,7 +30,7 @@
  * @brief ÅÐ¶Ï´íÎóÂëÊÇ·ñÊôÓÚ±àÂëÆ÷¹ÊÕÏ·¶Î§¡£
  */
 static uint8_t App_IsEncoderErrorCode(uint32_t error_code) {
-	return (error_code >= ENCODER_TIMEOUT) && (error_code <= ENCODER_OCF_INCOMPLETE);
+	return (error_code >= ENCODER_TIMEOUT) && (error_code <= ENCODER_FIRST_SAMPLE_TIMEOUT);
 }
 
 /**
@@ -141,7 +141,7 @@ void App_Init(void) {
 			       (unsigned long)startup_init_error);
 		} else if ((!MotorCtrl_IsPositionSourceMotor()) && (!Encoder_IsReady())) {
 			/* ±àÂëÂÖ¼Ç²½Ä£Ê½ÏÂ£¬ÉÏµçÄ¬ÈÏÃüÁî²»ÄÜÔçÓÚ±àÂëÆ÷Ê×Ö¡ÓÐÐ§Î»ÖÃ¡£ */
-			g_measurement.device_status.error_code = ENCODER_TIMEOUT;
+			g_measurement.device_status.error_code = ENCODER_FIRST_SAMPLE_TIMEOUT;
 			printf("ÉÏµçÄ¬ÈÏÃüÁî±»À¹½Ø£º±àÂëÆ÷Ê×Ö¡ÉÐÎ´¾ÍÐ÷\r\n");
 		} else {
 			g_deviceParams.command = DefaultCmd_To_MeasureCmd(g_deviceParams.powerOnDefaultCommand);

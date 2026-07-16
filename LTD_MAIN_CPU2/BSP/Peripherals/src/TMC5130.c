@@ -94,7 +94,7 @@ static uint32_t tmc5130_decodeDrvStatus(uint32_t drvstatus)
 
     if (drvstatus & TMC5130_DRVSTATUS_STALLGUARD) {
         printf("TMC5130 StallGuard 触发（DRV_STATUS[24]）\r\n");
-        ret = MOTOR_ALARM_TRIGGERED;
+        ret = MOTOR_STALL_ERROR;
     }
     if (drvstatus & TMC5130_DRVSTATUS_OT) {
         printf("TMC5130 过温关断（DRV_STATUS[25]=ot）\r\n");
@@ -104,36 +104,50 @@ static uint32_t tmc5130_decodeDrvStatus(uint32_t drvstatus)
         printf("TMC5130 过温预警（DRV_STATUS[26]=otpw）\r\n");
         /* 先处理异常边界，避免TMC5130 驱动状态机带故障继续运行。 */
         if (ret == NO_ERROR) {
-            ret = MOTOR_OVERTEMPERATURE;
+            ret = MOTOR_DRIVER_OVERTEMP_WARNING;
         }
     }
     if (drvstatus & TMC5130_DRVSTATUS_S2GA) {
         printf("TMC5130 A 相对地短路（DRV_STATUS[27]=s2ga）\r\n");
         /* 先处理异常边界，避免TMC5130 驱动状态机带故障继续运行。 */
         if (ret == NO_ERROR) {
-            ret = MOTOR_ALARM_TRIGGERED;
+            ret = MOTOR_PHASE_SHORT_ERROR;
         }
     }
     if (drvstatus & TMC5130_DRVSTATUS_S2GB) {
         printf("TMC5130 B 相对地短路（DRV_STATUS[28]=s2gb）\r\n");
         /* 先处理异常边界，避免TMC5130 驱动状态机带故障继续运行。 */
         if (ret == NO_ERROR) {
-            ret = MOTOR_ALARM_TRIGGERED;
+            ret = MOTOR_PHASE_SHORT_ERROR;
         }
     }
     if (drvstatus & TMC5130_DRVSTATUS_OLA) {
         printf("TMC5130 A 相开路/断线（DRV_STATUS[29]=ola）\r\n");
         /* 先处理异常边界，避免TMC5130 驱动状态机带故障继续运行。 */
         if (ret == NO_ERROR) {
-            ret = MOTOR_ALARM_TRIGGERED;
+            ret = MOTOR_PHASE_OPEN_ERROR;
         }
     }
     if (drvstatus & TMC5130_DRVSTATUS_OLB) {
         printf("TMC5130 B 相开路/断线（DRV_STATUS[30]=olb）\r\n");
         /* 先处理异常边界，避免TMC5130 驱动状态机带故障继续运行。 */
         if (ret == NO_ERROR) {
-            ret = MOTOR_ALARM_TRIGGERED;
+            ret = MOTOR_PHASE_OPEN_ERROR;
         }
+    }
+
+    /* 多个故障位同时出现时，优先返回会直接损坏驱动或电机的故障，
+     * 再返回断线、堵转和预警，避免低优先级状态覆盖真实保护原因。 */
+    if ((drvstatus & TMC5130_DRVSTATUS_OT) != 0U) {
+        ret = MOTOR_OVERTEMPERATURE;
+    } else if ((drvstatus & (TMC5130_DRVSTATUS_S2GA | TMC5130_DRVSTATUS_S2GB)) != 0U) {
+        ret = MOTOR_PHASE_SHORT_ERROR;
+    } else if ((drvstatus & (TMC5130_DRVSTATUS_OLA | TMC5130_DRVSTATUS_OLB)) != 0U) {
+        ret = MOTOR_PHASE_OPEN_ERROR;
+    } else if ((drvstatus & TMC5130_DRVSTATUS_STALLGUARD) != 0U) {
+        ret = MOTOR_STALL_ERROR;
+    } else if ((drvstatus & TMC5130_DRVSTATUS_OTPW) != 0U) {
+        ret = MOTOR_DRIVER_OVERTEMP_WARNING;
     }
 
     return ret;
@@ -312,7 +326,7 @@ static bool tmc5130_tryReadArray(TMC5130TypeDef *tmc5130,
                                address,
                                0U,
                                (uint32_t)HAL_ERROR,
-                               PARAM_ADDRESS_OVERFLOW,
+                               SYSTEM_CALL_CONDITION_ERROR,
                                0U,
                                0U,
                                0,
@@ -400,7 +414,7 @@ static bool tmc5130_writeArray(TMC5130TypeDef *tmc5130, uint8_t *data, size_t le
                                address,
                                0U,
                                (uint32_t)HAL_ERROR,
-                               PARAM_ADDRESS_OVERFLOW,
+                               SYSTEM_CALL_CONDITION_ERROR,
                                expected_value,
                                0U,
                                0,
@@ -671,7 +685,7 @@ bool stpr_tryReadInt(TMC5130TypeDef *tmc5130, uint8_t address, int32_t *value)
                                address,
                                0U,
                                (uint32_t)HAL_ERROR,
-                               PARAM_ADDRESS_OVERFLOW,
+                               SYSTEM_CALL_CONDITION_ERROR,
                                0U,
                                0U,
                                0,
@@ -757,7 +771,7 @@ uint32_t stpr_moveBy(TMC5130TypeDef *tmc5130, int32_t *ticks, uint32_t velocityM
     int64_t target;
 
     if ((tmc5130 == NULL) || (ticks == NULL)) {
-        return PARAM_ADDRESS_OVERFLOW;
+        return SYSTEM_CALL_CONDITION_ERROR;
     }
 
     /* 相对位移必须建立在可信的 XACTUAL 上；读失败时不能把当前位置当 0。 */
@@ -770,7 +784,7 @@ uint32_t stpr_moveBy(TMC5130TypeDef *tmc5130, int32_t *ticks, uint32_t velocityM
                (long)xactual,
                (long)(*ticks),
                (long long)target);
-        return PARAM_RANGE_ERROR;
+        return SYSTEM_CALCULATION_ERROR;
     }
 
     *ticks = (int32_t)target;
@@ -1004,14 +1018,14 @@ uint32_t stpr_checkDriverStatus(TMC5130TypeDef *tmc5130)
                                TMC5130_GSTAT,
                                0U,
                                (uint32_t)HAL_OK,
-                               MOTOR_TMC_COMM_ERROR,
+                               MOTOR_TMC_CONFIG_LOST,
                                0U,
                                gstat_raw,
                                0,
                                0,
                                0);
         MotorCtrl_InvalidateDriverInit();
-        return MOTOR_TMC_COMM_ERROR;
+        return MOTOR_TMC_CONFIG_LOST;
     }
 
     return NO_ERROR;
@@ -1218,7 +1232,7 @@ uint32_t stpr_initStepper(TMC5130TypeDef *tmc5130,
     tmc5130_initWrite((handle), (address), (value), &init_write_failed_count)
 
     if ((tmc5130 == NULL) || (spi == NULL) || (cs_port == NULL)) {
-        return PARAM_ADDRESS_OVERFLOW;
+        return SYSTEM_CALL_CONDITION_ERROR;
     }
 
     /* 更新句柄中的硬件资源 */

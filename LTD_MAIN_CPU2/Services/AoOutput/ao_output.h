@@ -2,17 +2,24 @@
 #define AO_OUTPUT_H_
 
 #include <stdint.h>
+#include "system_parameter.h"
 
 typedef enum {
-    AO_OUTPUT_SOURCE_INIT = 0U,
-    AO_OUTPUT_SOURCE_LEVEL,
-    AO_OUTPUT_SOURCE_ALARM_HIGH,
-    AO_OUTPUT_SOURCE_ALARM_LOW,
-    AO_OUTPUT_SOURCE_FAULT,
-    AO_OUTPUT_SOURCE_DEBUG,
-    AO_OUTPUT_SOURCE_DISABLED,
-    AO_OUTPUT_SOURCE_DRIVER_ERROR
+    AO_OUTPUT_SOURCE_POWER_ON = 0U,
+    AO_OUTPUT_SOURCE_PROCESS = 1U,
+    AO_OUTPUT_SOURCE_FAULT = 2U,
+    AO_OUTPUT_SOURCE_SIMULATION = 3U,
+    AO_OUTPUT_SOURCE_FIXED = 4U,
+    AO_OUTPUT_SOURCE_DISABLED = 5U,
+    AO_OUTPUT_SOURCE_DRIVER_ERROR = 6U
 } AoOutputSource;
+
+typedef struct {
+    int32_t value_01mm;
+    uint32_t update_tick;
+    uint32_t update_counter;
+    uint8_t valid;
+} AoProcessSample;
 
 typedef struct {
     uint32_t target_mA_x100;
@@ -24,66 +31,43 @@ typedef struct {
     uint32_t update_counter;
     uint32_t last_update_tick;
     uint32_t last_sent_tick;
+    int32_t process_value_01mm;
+    int32_t percent_x100;
+    uint32_t process_valid;
+    uint32_t simulation_enabled;
+    uint32_t dac_readback_mA_x100;
+    uint32_t dac_readback_valid;
 } AoOutputRuntime;
 
-/*
- * 函数用途：初始化 AO 输出服务并发布初始运行态。
- * 调用场景：系统参数加载后由主流程调用。
- * 关键约束：未使能时不访问 AD5421；使能时会访问 SPI 和诊断寄存器。
- */
+/* 初始化AO服务并写入禁用、固定或上电电流。 */
 uint32_t AoOutput_Init(void);
 
-/*
- * 函数用途：刷新 AO 目标电流、驱动诊断和输出写入。
- * 调用场景：主循环或测量流程周期调用。
- * 关键约束：会访问 SPI/GPIO，不应在中断中调用。
- */
+/* 在任务态刷新AO状态机和AD5421输出。 */
 uint32_t AoOutput_Update(void);
 
-/*
- * 函数用途：由 TIM4 中断请求一次 AO 延后刷新。
- * 调用场景：TIM4_IRQHandler 在继电器刷新后调用。
- * 关键约束：只置位请求并挂起 PendSV，不访问 AD5421、不打印、不阻塞。
- */
-void AoOutput_RequestTimerRefreshFromTim4Isr(void);
+/* 发布或失效指定过程量；函数只更新内存快照，不访问外设。 */
+void AoOutput_PublishProcessSample(AoProcessSource source, int32_t value_01mm, uint8_t valid);
+void AoOutput_InvalidateProcessSample(AoProcessSource source);
+uint32_t AoOutput_ReadProcessSample(AoProcessSource source, AoProcessSample *sample);
+uint32_t AoOutput_GetSelectedProcessSample(AoProcessSample *sample);
 
-/*
- * 函数用途：处理 TIM4 请求的 AO 延后刷新。
- * 调用场景：PendSV_Handler 最低优先级调用。
- * 关键约束：会访问 AD5421 SPI；驱动内部打印被抑制，错误延后由系统统一兜底。
- */
-uint32_t AoOutput_ProcessPendingTimerRefresh(void);
+/* 设置或读取AO仿真运行态；仿真开关不持久化。 */
+void AoOutput_SetSimulationEnabled(uint32_t enabled);
+uint32_t AoOutput_IsSimulationEnabled(void);
 
-/* 在主循环任务态输出由 PendSV 或前台刷新保存的 AD5421 诊断日志。 */
-void AoOutput_ProcessDeferredDiagnostics(void);
-
-/*
- * 函数用途：暂停或恢复定时触发的 AO 自动刷新。
- * 调用场景：串口 AO 测试直接访问 AD5421 期间使用。
- * 关键约束：只影响 TIM4 请求和 PendSV 延后刷新，不影响继电器和前台 AO 调用。
- */
-void AoOutput_SuspendTimerRefresh(void);
-void AoOutput_ResumeTimerRefresh(void);
-/*
- * 函数用途：返回 AO 运行态只读指针。
- * 调用场景：Modbus 输入寄存器打包和调试查看。
- * 关键约束：调用方不得修改返回的运行态数据。
- */
+/* 复制一致的AO运行态快照，供Modbus和HART跨上下文读取。 */
+void AoOutput_GetRuntimeSnapshot(AoOutputRuntime *runtime);
 const AoOutputRuntime *AoOutput_GetRuntime(void);
 
-/*
- * 函数用途：返回当前 AO 目标电流 mA 值。
- * 调用场景：HART 电流响应或调试查看。
- * 关键约束：只读运行态，不刷新硬件输出。
- */
+/* HART使用最后成功下发电流和真实过程百分数。 */
 float AoOutput_GetCurrent_mA(void);
-
-/*
- * 函数用途：返回当前 AO 目标电流在 4-20mA 量程内的比例。
- * 调用场景：HART Command 2/3 百分比响应。
- * 关键约束：只读运行态，返回值已钳位到 0..1。
- */
 float AoOutput_GetPercentOfRange(void);
 
+/* TIM4中断只请求刷新，PendSV执行实际SPI访问。 */
+void AoOutput_RequestTimerRefreshFromTim4Isr(void);
+uint32_t AoOutput_ProcessPendingTimerRefresh(void);
+void AoOutput_ProcessDeferredDiagnostics(void);
+void AoOutput_SuspendTimerRefresh(void);
+void AoOutput_ResumeTimerRefresh(void);
 
 #endif /* AO_OUTPUT_H_ */

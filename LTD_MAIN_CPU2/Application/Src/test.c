@@ -9,6 +9,7 @@
 #include "test.h"
 #include "serial_command_parser.h"
 #include "measure.h"
+#include "measure_density.h"
 #include "motor_ctrl.h"
 #include "motor_ctrl_internal.h"
 #include <stdio.h>
@@ -287,13 +288,13 @@ static uint32_t Test_MotorTextDistanceToTicksNoCheck(float move_mm, int dir, int
     bool use_local_circ;
 
     if (ticks_out == NULL) {
-        return PARAM_ADDRESS_OVERFLOW;
+        return SYSTEM_CALL_CONDITION_ERROR;
     }
     if (move_mm < 0.0f) {
-        return PARAM_ERROR;
+        return PARAM_RANGE_ERROR;
     }
     if (!MotorDriver_IsDirValid(dir)) {
-        return PARAM_ERROR;
+        return PARAM_RANGE_ERROR;
     }
     if (move_mm == 0.0f) {
         *ticks_out = 0;
@@ -322,7 +323,7 @@ static uint32_t Test_MotorTextDistanceToTicksNoCheck(float move_mm, int dir, int
         double ncur;
         double ntar;
         if (C0 <= 0.0) {
-            return PARAM_ERROR;
+            return PARAM_CONFIG_MISSING;
         }
         ncur = MotorPosition_TapeTurnsFromSignedLength(Lcur_mm, C0, t);
         ntar = MotorPosition_TapeTurnsFromSignedLength(Ltar_mm, C0, t);
@@ -962,7 +963,7 @@ static uint32_t Test_MoveUntilEncoderTarget(int32_t target_encoder,
         return STATE_SWITCH;
     }
     if (!MotorDriver_IsDirValid(dir)) {
-        return PARAM_ERROR;
+        return PARAM_RANGE_ERROR;
     }
 
     if (Test_EncoderTargetReached(Test_GetEncoderValue(), target_encoder, dir)) {
@@ -2828,13 +2829,11 @@ void DSM_V2_Test_AllParams(void) {
 
 	if (DSM_V2_Read_Temperature(&temp) == NO_ERROR) {
 		printf("温度值: %.3f ℃\r\n", temp);
-		g_measurement.single_point_monitoring.temperature = (int) (temp * 100) + 20000;
 	} else
 		printf("读取温度失败\r\n");
 
 	/* 先处理异常边界，避免本模块状态机带故障继续运行。 */
 	if (DSM_V2_Read_Density(&rho) == NO_ERROR) {
-		g_measurement.single_point_monitoring.density = (int)DENSITY_TO_RAW(rho);
 		printf("密度值: %.3f\r\n", rho);
 	} else
 		printf("读取密度失败\r\n");
@@ -2942,36 +2941,31 @@ static uint8_t Demo_SinglePointDisplay_ShouldAbort(void)
     return 1;
 }
 
-/**
- * @brief 更新本模块中的 Demo_SinglePointDisplay_UpdateResult 逻辑。
- *
- * @param result 业务参数。
- * @param temperature_raw 业务参数。
- * @param density_raw 业务参数。
- * @param pos_01mm 输入/输出指针。
- * @param standard_density_raw 业务参数。
- * @param vcf20_raw 业务参数。
- * @param weight_density_raw 业务参数。
- * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+/*
+ * 函数用途：构造完整虚拟六字段，并复用正式固定点发布器同步两块结果和对应代际。
+ * 调用场景：串口 X 展示在运行到点和稳定刷新阶段生成虚拟样本后。
+ * 关键约束：任一发布被命令切换拒绝时返回 0，调用方立即退出展示。
  */
-static void Demo_SinglePointDisplay_UpdateResult(volatile DensityMeasurement *result,
-                                                 uint32_t temperature_raw,
-                                                 uint32_t density_raw,
-                                                 uint32_t pos_01mm,
-                                                 uint32_t standard_density_raw,
-                                                 uint32_t vcf20_raw,
-                                                 uint32_t weight_density_raw)
+static uint8_t Demo_SinglePointDisplay_PublishResult(uint32_t temperature_raw,
+                                                     uint32_t density_raw,
+                                                     uint32_t pos_01mm,
+                                                     uint32_t standard_density_raw,
+                                                     uint32_t vcf20_raw,
+                                                     uint32_t weight_density_raw)
 {
-    if (result == NULL) {
-        return;
-    }
+    DensityMeasurement candidate = {0};
 
-    result->temperature = temperature_raw;
-    result->density = density_raw;
-    result->temperature_position = pos_01mm;
-    result->standard_density = standard_density_raw;
-    result->vcf20 = vcf20_raw;
-    result->weight_density = weight_density_raw;
+    candidate.temperature = temperature_raw;
+    candidate.density = density_raw;
+    candidate.temperature_position = pos_01mm;
+    candidate.standard_density = standard_density_raw;
+    candidate.vcf20 = vcf20_raw;
+    candidate.weight_density = weight_density_raw;
+
+    if (SinglePoint_PublishMeasurementResult(&candidate) == 0U) {
+        return 0U;
+    }
+    return SinglePoint_PublishMonitoringResult(&candidate);
 }
 
 /**
@@ -3039,20 +3033,16 @@ void Demo_SinglePointDisplayMock(void)
         g_measurement.debug_data.current_amplitude = 88U + i;
         g_measurement.debug_data.current_weight = 3200U + i * 10U;
 
-        Demo_SinglePointDisplay_UpdateResult(&g_measurement.single_point_measurement,
-                                             22580U,
-                                             DEMO_SINGLE_POINT_DISPLAY_APPROACH_DENS_RAW,
-                                             current_pos_01mm,
-                                             DEMO_SINGLE_POINT_DISPLAY_APPROACH_DENS_RAW - DEMO_SINGLE_POINT_DISPLAY_STD_OFFSET_RAW,
-                                             9997U,
-                                             DEMO_SINGLE_POINT_DISPLAY_APPROACH_DENS_RAW - DEMO_SINGLE_POINT_DISPLAY_WEIGHT_OFFSET_RAW);
-        Demo_SinglePointDisplay_UpdateResult(&g_measurement.single_point_monitoring,
-                                             22580U,
-                                             DEMO_SINGLE_POINT_DISPLAY_APPROACH_DENS_RAW,
-                                             current_pos_01mm,
-                                             DEMO_SINGLE_POINT_DISPLAY_APPROACH_DENS_RAW - DEMO_SINGLE_POINT_DISPLAY_STD_OFFSET_RAW,
-                                             9997U,
-                                             DEMO_SINGLE_POINT_DISPLAY_APPROACH_DENS_RAW - DEMO_SINGLE_POINT_DISPLAY_WEIGHT_OFFSET_RAW);
+        if (Demo_SinglePointDisplay_PublishResult(
+                22580U,
+                DEMO_SINGLE_POINT_DISPLAY_APPROACH_DENS_RAW,
+                current_pos_01mm,
+                DEMO_SINGLE_POINT_DISPLAY_APPROACH_DENS_RAW - DEMO_SINGLE_POINT_DISPLAY_STD_OFFSET_RAW,
+                9997U,
+                DEMO_SINGLE_POINT_DISPLAY_APPROACH_DENS_RAW - DEMO_SINGLE_POINT_DISPLAY_WEIGHT_OFFSET_RAW) == 0U) {
+            (void)Demo_SinglePointDisplay_ShouldAbort();
+            return;
+        }
 
         printf("单点展示\t运行到测量点 [%lu/6] 位置=%.1fmm\r\n",
                (unsigned long)(i + 1U),
@@ -3095,20 +3085,15 @@ void Demo_SinglePointDisplayMock(void)
         g_measurement.debug_data.current_amplitude = 96U + (idx % 5U);
         g_measurement.debug_data.current_weight = 3280U + (idx % 4U) * 8U;
 
-        Demo_SinglePointDisplay_UpdateResult(&g_measurement.single_point_measurement,
-                                             temperature_raw,
-                                             density_raw,
-                                             current_pos_01mm,
-                                             standard_density_raw,
-                                             vcf20_raw,
-                                             weight_density_raw);
-        Demo_SinglePointDisplay_UpdateResult(&g_measurement.single_point_monitoring,
-                                             temperature_raw,
-                                             density_raw,
-                                             current_pos_01mm,
-                                             standard_density_raw,
-                                             vcf20_raw,
-                                             weight_density_raw);
+        if (Demo_SinglePointDisplay_PublishResult(temperature_raw,
+                                                  density_raw,
+                                                  current_pos_01mm,
+                                                  standard_density_raw,
+                                                  vcf20_raw,
+                                                  weight_density_raw) == 0U) {
+            (void)Demo_SinglePointDisplay_ShouldAbort();
+            return;
+        }
 
         printf("单点展示\t状态=固定点测量中 位置=%.1fmm 温度=%.2fC 密度=%.2f 标密=%.2f VCF20=%lu 重量密度=%.2f\r\n",
                current_pos_01mm / 10.0f,

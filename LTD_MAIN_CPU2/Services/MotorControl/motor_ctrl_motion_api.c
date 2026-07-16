@@ -26,7 +26,7 @@
 #define MOTOR_JOG_STOP_TRIGGER_MM          0.45f /* 电机点动控制参数：停止 触发 MM。 */
 #endif
 #ifndef MOTOR_JOG_OVERSHOOT_LIMIT_MM
-#define MOTOR_JOG_OVERSHOOT_LIMIT_MM       0.1f /* 电机点动控制参数：越界 限值 MM。 */
+#define MOTOR_JOG_OVERSHOOT_LIMIT_MM       1.0f /* 电机点动控制参数：越界 限值 MM。 */
 #endif
 #ifndef MOTOR_JOG_POLL_MS
 #define MOTOR_JOG_POLL_MS                  20U /* 电机点动控制参数：轮询 毫秒。 */
@@ -302,11 +302,11 @@ uint32_t MotorCtrl_MoveByTicksAndWait(int32_t ticks, uint32_t speed_x100)
 uint32_t MotorCtrl_MoveNoWait(float move_mm, int dir, uint32_t speed_x100)
 {
     /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
-    if (move_mm < 0.0f) return PARAM_ERROR;
+    if (move_mm < 0.0f) return PARAM_RANGE_ERROR;
     /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
     if (move_mm == 0.0f) return NO_ERROR;
     /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
-    if (!MotorDriver_IsDirValid(dir)) return PARAM_ERROR;
+    if (!MotorDriver_IsDirValid(dir)) return PARAM_RANGE_ERROR;
 
     /* 非阻塞入口返回后电机会继续跑，因此必须在下发目标前完成就绪门控。 */
     uint32_t ret = MotorDriver_CheckMotionReady();
@@ -355,13 +355,13 @@ uint32_t MotorCtrl_CalibrateFirstLoopCircumferenceAtZero(void)
     const double t = MotorPosition_TapeThicknessMm();
     if (t <= 0.0) {
         printf("首圈周长标定失败 | 尺带厚度非法 尺带厚度=%.4fmm\r\n", t);
-        return PARAM_ERROR;
+        return ENCODER_CIRCUMFERENCE_CALIBRATION_ERROR;
     }
 
     const int32_t one_rev_ticks = MotorPosition_TapeTicksPerRev();
     if (one_rev_ticks <= 0) {
         printf("首圈周长标定失败 | 每圈步数非法 步数=%ld\r\n", (long)one_rev_ticks);
-        return PARAM_ERROR;
+        return ENCODER_CIRCUMFERENCE_CALIBRATION_ERROR;
     }
 
     CHECK_COMMAND_SWITCH_AND_STOP(COMMAND_SWITCH_ABORT);
@@ -388,7 +388,7 @@ uint32_t MotorCtrl_CalibrateFirstLoopCircumferenceAtZero(void)
            L0, L1, dL, (long)one_rev_ticks);
     if (dL <= 0.0) {
         printf("首圈周长标定失败 | 一圈后尺带长度未增加 长度差=%.1fmm\r\n", dL);
-        return PARAM_ERROR;
+        return ENCODER_CIRCUMFERENCE_CALIBRATION_ERROR;
     }
 
     /* 新模型：第一圈放出长度：dL = C0 - pi*t => C0 = dL + pi*t */
@@ -397,7 +397,7 @@ uint32_t MotorCtrl_CalibrateFirstLoopCircumferenceAtZero(void)
     if (!(C0 > C0_MIN_MM && C0 < C0_MAX_MM)) {
         printf("首圈周长标定失败 | C0越界 C0=%.3fmm | 范围=(%.1f, %.1f)\r\n",
                C0, C0_MIN_MM, C0_MAX_MM);
-        return PARAM_ERROR;
+        return ENCODER_CIRCUMFERENCE_CALIBRATION_ERROR;
     }
 
     printf("首圈周长标定计算 | 长度差=%.1fmm | 尺带厚度=%.4fmm | C0=%.3fmm | 旧值=%lu(0.1mm) | 新值=%ld(0.1mm)\r\n",
@@ -453,7 +453,7 @@ uint32_t MotorCtrl_MoveAndWait(float mm, int dir, uint32_t speed_x100)
         return NO_ERROR;
     }
     if (!MotorDriver_IsDirValid(dir)) {
-        return PARAM_ERROR;
+        return PARAM_RANGE_ERROR;
     }
 
     /* 阻塞运动虽然后续会轮询保护，但首帧位置不可用时不能先下发运动。 */
@@ -613,7 +613,7 @@ uint32_t MotorCtrl_StartVelocity(int dir, uint32_t speed_x100)
     CHECK_COMMAND_SWITCH_AND_STOP(COMMAND_SWITCH_ABORT);
 
     if (!MotorDriver_IsDirValid(dir)) {
-        return PARAM_ERROR;
+        return PARAM_RANGE_ERROR;
     }
 
     ret = MotorDriver_CheckMotionReady();
@@ -694,7 +694,7 @@ uint32_t MotorCtrl_MoveToPosition(float target_mm, uint32_t speed_x100)
         printf("运动到位置 | 当前：%.3fmm | 目标：%.3fmm\r\n", cur_mm, target_mm);
 
         ret = MotorMotion_BuildAbsoluteTargetPlan(cur_mm, target_mm, EPS_MM, &target_plan);
-        if (ret == MEASUREMENT_POSITION_ERROR) {
+        if (ret == POSITION_DATA_INVALID) {
             printf("运动到位置 | 当前快照异常：%.3fmm，取消移动\r\n", cur_mm);
         }
         /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
@@ -745,7 +745,7 @@ uint32_t MotorCtrl_JogMoveAndWait(float mm, int dir, uint32_t speed_x100)
         return NO_ERROR;
     }
     if (!MotorDriver_IsDirValid(dir)) {
-        return PARAM_ERROR;
+        return PARAM_RANGE_ERROR;
     }
 
     ret = MotorMotion_CheckReadyForProtectedMotion(false, true);
@@ -955,9 +955,9 @@ static uint32_t MotorMotion_MoveBlockingNoDetectInternal(float mm,
     uint32_t ret;
 
     /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
-    if (mm <= 0.0f) return PARAM_ERROR;
+    if (mm <= 0.0f) return PARAM_RANGE_ERROR;
     /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
-    if (!MotorDriver_IsDirValid(dir)) return PARAM_ERROR;
+    if (!MotorDriver_IsDirValid(dir)) return PARAM_RANGE_ERROR;
 
     /* 无检测只跳过撞底/丢步检测；强制调试入口才允许额外绕过编码器首帧。 */
     ret = MotorMotion_CheckReadyForProtectedMotion(ignore_encoder_ready, true);
@@ -1178,17 +1178,17 @@ static uint32_t MotorMotion_WaitTicksReachTarget(int32_t target_ticks,
                      (long)target_ticks,
                      (long)diff_ticks,
                      (unsigned long)MOTOR_STOP_WAIT_TIMEOUT_MS);
-            /* 错误 阶段：错误报警 模块：电机 操作：等待电机停止 原因：ErrorLog_GetReasonByCode(MOTOR_RUN_TIMEOUT) 处理：停止电机 详情：detail */
+            /* 错误 阶段：错误报警 模块：电机 操作：等待电机停止 原因：ErrorLog_GetReasonByCode(MOTOR_ARRIVAL_WAIT_TIMEOUT) 处理：停止电机 详情：detail */
             ErrorLog_WarnDetail(ERROR_LOG_MODULE_MOTOR,
                                 ERROR_LOG_OP_WAIT_STOP,
-                                ErrorLog_GetReasonByCode(MOTOR_RUN_TIMEOUT),
+                                ErrorLog_GetReasonByCode(MOTOR_ARRIVAL_WAIT_TIMEOUT),
                                 ERROR_LOG_ACTION_STOP_MOTOR,
                                 detail);
             printf("ticks运动等待到位超时 | 实际位置：%ld | 目标位置：%ld | 差值：%ld\r\n",
                    (long)xactual_now,
                    (long)target_ticks,
                    (long)diff_ticks);
-            return MOTOR_RUN_TIMEOUT;
+            return MOTOR_ARRIVAL_WAIT_TIMEOUT;
         }
         MotorDriver_RefreshVelocityDuringRun(&stepper, &last_vel_refresh_tick);
         ret = MotorDriver_SyncPositionOrCheckHealth(&stepper);
@@ -1216,18 +1216,18 @@ static uint32_t MotorMotion_DistanceToTicks(float move_mm,
     int64_t ticks64;
 
     if (ticks == NULL) {
-        return PARAM_ADDRESS_OVERFLOW;
+        return SYSTEM_CALL_CONDITION_ERROR;
     }
     *ticks = 0;
 
     if (move_mm < 0.0f) {
-        return PARAM_ERROR;
+        return PARAM_RANGE_ERROR;
     }
     if (move_mm == 0.0f) {
         return NO_ERROR;
     }
     if (!MotorDriver_IsDirValid(dir)) {
-        return PARAM_ERROR;
+        return PARAM_RANGE_ERROR;
     }
 
     delta_length_mm = (double)move_mm;
@@ -1249,7 +1249,7 @@ static uint32_t MotorMotion_DistanceToTicks(float move_mm,
         double dn;
 
         if (C0 <= 0.0) {
-            return PARAM_ERROR;
+            return PARAM_CONFIG_MISSING;
         }
         ncur = MotorPosition_TapeTurnsFromSignedLength(current_length_mm, C0, t);
         ntar = MotorPosition_TapeTurnsFromSignedLength(target_length_mm, C0, t);
@@ -1278,7 +1278,7 @@ static uint32_t MotorMotion_BeginSpeedScope(MotorMotionSpeedScope *scope,
                                             uint32_t speed_x100)
 {
     if (scope == NULL) {
-        return PARAM_ADDRESS_OVERFLOW;
+        return SYSTEM_CALL_CONDITION_ERROR;
     }
 
     return MotorDriver_BeginTemporarySpeed(speed_x100,
@@ -1292,7 +1292,7 @@ static uint32_t MotorMotion_BeginSpeedScope(MotorMotionSpeedScope *scope,
 static uint32_t MotorMotion_EndSpeedScope(const MotorMotionSpeedScope *scope)
 {
     if (scope == NULL) {
-        return PARAM_ADDRESS_OVERFLOW;
+        return SYSTEM_CALL_CONDITION_ERROR;
     }
 
     return MotorDriver_EndTemporarySpeed(scope->restore_needed,
@@ -1310,7 +1310,7 @@ static uint32_t MotorMotion_ReturnWithSpeedScope(uint32_t ret,
                                                  const MotorMotionSpeedScope *scope)
 {
     if (scope == NULL) {
-        return (ret != NO_ERROR) ? ret : PARAM_ADDRESS_OVERFLOW;
+        return (ret != NO_ERROR) ? ret : SYSTEM_CALL_CONDITION_ERROR;
     }
 
     return MotorDriver_ReturnAfterTemporarySpeed(ret,
@@ -1455,7 +1455,7 @@ static uint32_t MotorMotion_CheckAbortRefreshAndHealth(TMC5130TypeDef *tmc5130,
     uint32_t ret;
 
     if ((tmc5130 == NULL) || (last_vel_refresh_tick == NULL)) {
-        return PARAM_ADDRESS_OVERFLOW;
+        return SYSTEM_CALL_CONDITION_ERROR;
     }
 
     ret = MotorDriver_StopIfCommandSwitchRequested();
@@ -1482,7 +1482,7 @@ static uint32_t MotorMotion_CheckStoppedAndRefresh(TMC5130TypeDef *tmc5130)
     uint32_t ret;
 
     if (tmc5130 == NULL) {
-        return PARAM_ADDRESS_OVERFLOW;
+        return SYSTEM_CALL_CONDITION_ERROR;
     }
 
     ret = MotorDriver_SyncPositionOrCheckHealth(tmc5130);
@@ -1629,7 +1629,7 @@ static uint32_t MotorMotion_JogMoveToTargetInternal(float target_mm,
     uint32_t display_state;
 
     if (!MotorDriver_IsDirValid(dir)) {
-        return PARAM_ERROR;
+        return PARAM_RANGE_ERROR;
     }
 
     ret = MotorMotion_CheckReadyForProtectedMotion(false, true);
@@ -1774,7 +1774,7 @@ static uint32_t MotorMotion_JogMoveToTargetInternal(float target_mm,
 static uint32_t MotorMotion_RefreshActivePositionMm(float *pos_mm)
 {
     if (pos_mm == NULL) {
-        return PARAM_ADDRESS_OVERFLOW;
+        return SYSTEM_CALL_CONDITION_ERROR;
     }
 
     MotorCtrl_RefreshPositionFromActiveSource();
@@ -1813,7 +1813,7 @@ static uint32_t MotorMotion_BuildRelativeTargetPlan(float start_mm,
     uint32_t ret;
 
     if (plan == NULL) {
-        return PARAM_ADDRESS_OVERFLOW;
+        return SYSTEM_CALL_CONDITION_ERROR;
     }
 
     plan->start_mm = start_mm;
@@ -1827,10 +1827,10 @@ static uint32_t MotorMotion_BuildRelativeTargetPlan(float start_mm,
         return NO_ERROR;
     }
     if (!MotorDriver_IsDirValid(dir)) {
-        return PARAM_ERROR;
+        return PARAM_RANGE_ERROR;
     }
     if (!MotorMotion_IsPositionSnapshotValid(start_mm)) {
-        return MEASUREMENT_POSITION_ERROR;
+        return POSITION_DATA_INVALID;
     }
 
     plan->distance_mm = move_mm;
@@ -1858,7 +1858,7 @@ static uint32_t MotorMotion_BuildAbsoluteTargetPlan(float current_mm,
     uint32_t ret;
 
     if (plan == NULL) {
-        return PARAM_ADDRESS_OVERFLOW;
+        return SYSTEM_CALL_CONDITION_ERROR;
     }
 
     plan->start_mm = current_mm;
@@ -1872,7 +1872,7 @@ static uint32_t MotorMotion_BuildAbsoluteTargetPlan(float current_mm,
         return ret;
     }
     if (!MotorMotion_IsPositionSnapshotValid(current_mm)) {
-        return MEASUREMENT_POSITION_ERROR;
+        return POSITION_DATA_INVALID;
     }
 
     if (eps_mm < 0.0f) {
@@ -1975,13 +1975,13 @@ static uint32_t MotorMotion_RefreshJogPositionChecked(float *cur_mm,
         return ret;
     }
     if (!MotorMotion_IsPositionSnapshotValid(*cur_mm)) {
-        return MEASUREMENT_POSITION_ERROR;
+        return POSITION_DATA_INVALID;
     }
     if (MotorMotion_IsOvershotPastTarget(*cur_mm,
                                          target_mm,
                                          dir,
                                          MOTOR_JOG_OVERSHOOT_LIMIT_MM)) {
-        return MEASUREMENT_POSITION_ERROR;
+        return POSITION_TARGET_OVERRUN;
     }
 
     return NO_ERROR;
@@ -1998,7 +1998,7 @@ static uint32_t MotorMotion_CheckJogRuntimeGuards(uint32_t start_tick,
     uint32_t ret;
 
     if (is_moving == NULL) {
-        return PARAM_ADDRESS_OVERFLOW;
+        return SYSTEM_CALL_CONDITION_ERROR;
     }
 
     ret = MotorDriver_CheckHealth(MOTOR_DRIVER_HEALTH_RUNNING);
@@ -2055,7 +2055,7 @@ static uint32_t MotorMotion_CalcJogSlowdownDistanceMm(float current_mm,
     double tape_length_mm;
 
     if (slowdown_mm == NULL) {
-        return PARAM_ADDRESS_OVERFLOW;
+        return SYSTEM_CALL_CONDITION_ERROR;
     }
 
     *slowdown_mm = MOTOR_JOG_SLOWDOWN_DISTANCE_MM;
@@ -2190,13 +2190,13 @@ static uint32_t MotorMotion_StartJogVelocity(int dir)
     int32_t signed_velocity;
 
     if (!MotorDriver_IsDirValid(dir)) {
-        return PARAM_ERROR;
+        return PARAM_RANGE_ERROR;
     }
     if (velocity == 0U) {
         MotorDriver_UpdateVelocityFromParams();
     }
     if ((velocity == 0U) || (velocity > (uint32_t)INT32_MAX)) {
-        return PARAM_ERROR;
+        return PARAM_CONFIG_MISSING;
     }
 
     signed_velocity = (int32_t)velocity;
@@ -2234,7 +2234,7 @@ static uint32_t MotorMotion_StopJogAndRestore(uint32_t ret,
                    final_mm,
                    fabsf(final_mm - target_mm),
                    MOTOR_JOG_FINAL_ERROR_LIMIT_MM);
-            verify_ret = MEASUREMENT_POSITION_ERROR;
+            verify_ret = POSITION_ARRIVAL_DEVIATION;
         }
     }
 
@@ -2413,11 +2413,11 @@ static uint32_t MotorMotion_WaitStoppedAfterStopCommand(uint32_t timeout_ms)
                      (unsigned long)timeout_ms);
             ErrorLog_WarnDetail(ERROR_LOG_MODULE_MOTOR,
                                 ERROR_LOG_OP_WAIT_STOP,
-                                ErrorLog_GetReasonByCode(MOTOR_RUN_TIMEOUT),
+                                ErrorLog_GetReasonByCode(MOTOR_STOP_WAIT_TIMEOUT),
                                 ERROR_LOG_ACTION_STOP_MOTOR,
                                 detail);
             printf("motor stop wait timeout | timeout=%lums\r\n", (unsigned long)timeout_ms);
-            return MOTOR_RUN_TIMEOUT;
+            return MOTOR_STOP_WAIT_TIMEOUT;
         }
 
         HAL_Delay(10U);

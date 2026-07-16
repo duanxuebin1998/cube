@@ -436,7 +436,7 @@ uint32_t MotorCtrl_SwitchPositionSourceToMotor(void)
     uint32_t old_error_code;
 
     if (!s_motor_driver.initialized) {
-        return MOTOR_DISABLED;
+        return MOTOR_DRIVER_NOT_INITIALIZED;
     }
 
     old_mode = g_deviceParams.position_count_mode;
@@ -454,7 +454,7 @@ uint32_t MotorCtrl_SwitchPositionSourceToMotor(void)
 
     one_rev_ticks = MotorPosition_TapeTicksPerRev();
     if (one_rev_ticks <= 0) {
-        return PARAM_ERROR;
+        return ENCODER_CIRCUMFERENCE_CALIBRATION_ERROR;
     }
 
     /* 切换到电机记步时，基准尺带长度必须直接来自编码轮。
@@ -572,10 +572,10 @@ uint32_t MotorCtrl_CalibrateCurrentTapeCircumference(void)
     double local_circumference_mm;
 
     if (!s_motor_driver.initialized) {
-        return MOTOR_DISABLED;
+        return MOTOR_DRIVER_NOT_INITIALIZED;
     }
     if (g_deviceParams.position_count_mode != POSITION_COUNT_MODE_MOTOR) {
-        return PARAM_ERROR;
+        return ENCODER_CIRCUMFERENCE_CALIBRATION_ERROR;
     }
 
     /* 校准只需要编码轮长度作为参考，电机记步模式下不能覆盖业务 sensor_position。 */
@@ -587,7 +587,7 @@ uint32_t MotorCtrl_CalibrateCurrentTapeCircumference(void)
                  (int64_t)s_motor_position.count_base_step;
     if (llabs(delta_step) < ((int64_t)MotorPosition_TapeTicksPerRev() / 16)) {
         MotorPosition_UpdatePositionFromMotorSource(&drum);
-        return PARAM_ERROR;
+        return ENCODER_CIRCUMFERENCE_CALIBRATION_ERROR;
     }
 
     delta_turns = (double)delta_step / (double)MotorPosition_TapeTicksPerRev();
@@ -596,14 +596,14 @@ uint32_t MotorCtrl_CalibrateCurrentTapeCircumference(void)
     if (((delta_length_mm > 0.0) && (delta_turns < 0.0)) ||
         ((delta_length_mm < 0.0) && (delta_turns > 0.0))) {
         MotorPosition_UpdatePositionFromMotorSource(&drum);
-        return PARAM_ERROR;
+        return ENCODER_CIRCUMFERENCE_CALIBRATION_ERROR;
     }
 
     local_circumference_mm = delta_length_mm / delta_turns;
     if ((local_circumference_mm < C0_MIN_MM) ||
         (local_circumference_mm > C0_MAX_MM)) {
         MotorPosition_UpdatePositionFromMotorSource(&drum);
-        return PARAM_ERROR;
+        return ENCODER_CIRCUMFERENCE_CALIBRATION_ERROR;
     }
 
     (void)MotorPosition_SetLocalCircumferenceToParams(local_circumference_mm);
@@ -640,7 +640,7 @@ uint32_t MotorCtrl_ResetDrumReferenceForZeroCalibration(void)
     s_motor_position.count_base_length_01mm = 0;
     s_motor_position.count_base_turns = 0.0;
     if (!MotorPosition_SetLocalCircumferenceToParams(MotorPosition_TapeC0Mm())) {
-        return PARAM_ERROR;
+        return ENCODER_CIRCUMFERENCE_CALIBRATION_ERROR;
     }
 
     /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
@@ -873,8 +873,11 @@ uint32_t MotorPosition_RestorePersistedRegisters(TMC5130TypeDef *tmc5130)
     int32_t xactual = 0;
     int32_t base_length_01mm = 0;
     int32_t base_step = 0;
-    if ((tmc5130 == NULL) || (!s_motor_driver.initialized)) {
-        return PARAM_ADDRESS_OVERFLOW;
+    if (tmc5130 == NULL) {
+        return SYSTEM_CALL_CONDITION_ERROR;
+    }
+    if (!s_motor_driver.initialized) {
+        return MOTOR_DRIVER_NOT_INITIALIZED;
     }
     if (MotorPosition_ReadPersistAB(&xactual, &base_length_01mm, &base_step)) {
         if ((!stpr_writeInt(tmc5130, TMC5130_RAMPMODE, TMC5130_MODE_HOLD)) ||
@@ -1082,7 +1085,7 @@ static void MotorPosition_SavePositionSourceParams(bool force)
  */
 static bool MotorPosition_IsEncoderErrorCode(uint32_t error_code)
 {
-    return (error_code >= ENCODER_TIMEOUT) && (error_code <= ENCODER_OCF_INCOMPLETE);
+    return (error_code >= ENCODER_TIMEOUT) && (error_code <= ENCODER_FIRST_SAMPLE_TIMEOUT);
 }
 
 /**

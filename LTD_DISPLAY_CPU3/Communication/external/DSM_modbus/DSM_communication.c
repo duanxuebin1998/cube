@@ -125,7 +125,7 @@ int DSM_CommunicationProcess(unsigned char *rcvbuff, int rcvcount, uint8_t* tx, 
 		}
 
 		case FUNCTIONCODE_READ_INPUTREGISTER: {
-			Input_Write(); /* 更新数据,每一个输入寄存器的参数必须写入，否则读出来会不变； */
+			/* Response04 在地址分类和新鲜度门禁通过后再刷新目标影子。 */
 			*tx_len = Response04(rcvbuff, tx);
 			break;
 		}

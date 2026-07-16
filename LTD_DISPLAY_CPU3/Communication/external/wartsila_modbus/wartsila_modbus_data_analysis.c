@@ -6,6 +6,7 @@
  */
 #include "wartsila_modbus_data_analysis.h"
 #include "system_parameter.h"
+#include "../external_read_freshness.h"
 #include <stdint.h>
 #include <stddef.h>
 #include <string.h>
@@ -146,6 +147,9 @@ void DeviceParams_LoadFromRegisters(uint16_t *reg) {
  * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
  */
 static void DSMToWartsila(const volatile MeasurementResult *DSM, wartsila_DeviceParameters *WXL) {
+	uint16_t point_count;
+	uint16_t i;
+
 	if ((DSM == NULL) || (WXL == NULL)) {
 		return;
 	}
@@ -193,16 +197,55 @@ static void DSMToWartsila(const volatile MeasurementResult *DSM, wartsila_Device
 	WXL->spread_dist_to_surface_mm = g_deviceParams.wartsila_max_height_above_surface;
 	/* 分布测量 */
 /* printf("分布测量起始点：%d\r\n", DSM->density_distribution.measurement_points); */
-	WXL->spread_point_count = (uint16_t) DSM->density_distribution.measurement_points;
+	point_count = CPU3_ExternalWartsilaClampPointCount(
+		DSM->density_distribution.measurement_points);
+	WXL->spread_point_count = point_count;
 	WXL->spread_oillevel_mm = (uint16_t) (DSM->density_distribution.Density_oil_level/10);
 	WXL->spread_unknown = 0;
 
 	/* 密度点 100 组 */
-	for (int i = 0; i < 100; ++i) {
+	for (i = 0U; i < point_count; ++i) {
 		WXL->dens_points[i].pos_mm = (int16_t) (DSM->density_distribution.single_density_data[i].temperature_position/10);
 		WXL->dens_points[i].density_x10 = Wartsila_DensityRawToX10(DSM->density_distribution.single_density_data[i].density);
 		/* 温度同上，保持 ×100 的原始值 */
 		WXL->dens_points[i].temp_x100 = (int16_t) DSM->density_distribution.single_density_data[i].temperature;
+	}
+}
+
+/*
+ * 函数用途：刷新 Wärtsilä 可离线读取的 CPU3 本地静态字段。
+ * 调用场景：FC03 完成整帧新鲜度分类后、复制寄存器池之前调用。
+ * 关键约束：不读取 g_measurement 或 g_deviceParams，点表预留 lane 始终返回零。
+ */
+void Wartsila_StoreLocalStaticRegisters(uint16_t *reg)
+{
+	uint16_t i;
+
+	if (reg == NULL)
+	{
+		return;
+	}
+
+	reg[0x0001] = 0U;
+	reg[0x0003] = 0U;
+	reg[0x0005] = 0U;
+	reg[0x0006] = 0U;
+	reg[0x0008] = 0x4896U;
+	reg[0x000A] = 0U;
+	reg[0x000C] = 0U;
+	reg[0x000E] = 0U;
+	reg[0x000F] = 0U;
+	reg[0x0052] = 0U;
+	reg[0x0053] = 0U;
+
+	for (i = 0U; i < CPU3_EXTERNAL_WARTSILA_POINT_COUNT; ++i)
+	{
+		uint16_t base = (uint16_t)(CPU3_EXTERNAL_WARTSILA_POINT_BASE +
+			(i * CPU3_EXTERNAL_WARTSILA_POINT_STRIDE));
+
+		reg[base + 3U] = 0U;
+		reg[base + 4U] = 0U;
+		reg[base + 5U] = 0U;
 	}
 }
 
@@ -213,6 +256,7 @@ static void DSMToWartsila(const volatile MeasurementResult *DSM, wartsila_Device
 void DeviceParams_StoreToRegisters(uint16_t *reg) {
 	wartsila_DeviceParameters wxl;
 	DSMToWartsila(&g_measurement, &wxl);   /* 先把 DSM/g_measurement -> WXL */
+	Wartsila_StoreLocalStaticRegisters(reg);
 
 	/* ===== 0x0000 ~ 0x000F ===== */
 	reg[0x0000] = (uint16_t) wxl.float_pos_mm;
@@ -255,8 +299,9 @@ void DeviceParams_StoreToRegisters(uint16_t *reg) {
 	reg[0x005C] = wxl.spread_interval_mm;
 	reg[0x005D] = wxl.spread_dist_to_surface_mm;
 
-	/* ===== 密度点 100 组，每组 6 寄存器 ===== */
-	for (int i = 0; i < 100; ++i) {
+	/* 每轮先清空完整点表，再只发布本轮有效点，避免短轮次泄漏旧尾点。 */
+	CPU3_ExternalWartsilaClearPointRegisters(&reg[CPU3_EXTERNAL_WARTSILA_POINT_BASE]);
+	for (uint16_t i = 0U; i < wxl.spread_point_count; ++i) {
 		uint16_t base = 0x0064 + i * 6;
 
 		reg[base + 0] = (uint16_t) wxl.dens_points[i].pos_mm;
@@ -265,10 +310,6 @@ void DeviceParams_StoreToRegisters(uint16_t *reg) {
 		/* 温度保持同样的偏移方式： (×100 - 20000) */
 		reg[base + 2] = (uint16_t) (wxl.dens_points[i].temp_x100 - 20000);
 
-		/* base + 3、4、5 预留 => 清零（安全） */
-		reg[base + 3] = 0;
-		reg[base + 4] = 0;
-		reg[base + 5] = 0;
 	}
 }
 

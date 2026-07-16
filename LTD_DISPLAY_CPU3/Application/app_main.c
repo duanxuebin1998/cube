@@ -96,8 +96,8 @@ static ComProtocolType g_protocol_switch_target[3] = {
  * @note 函数执行以下操作：
  *       1. 停止当前UART DMA传输
  *       2. 调用set_recv_mode函数设置接收模式（如果提供）
- *       3. 清除UART空闲中断标志
- *       4. 清除可能的错误标志（ORE-溢出错误、FE-帧错误、NE-噪声错误）
+ *       3. 清除可能的错误标志（PE/ORE/FE/NE）
+ *       4. 清除UART空闲中断标志
  *       5. 使能UART空闲中断
  *       6. 重新启动UART DMA接收
  *
@@ -113,10 +113,11 @@ static void uart_restart_rx_dma(UART_HandleTypeDef *huart,
         set_recv_mode();
     }
 
-    __HAL_UART_CLEAR_IDLEFLAG(huart);
+    if (__HAL_UART_GET_FLAG(huart, UART_FLAG_PE)  != RESET) __HAL_UART_CLEAR_PEFLAG(huart);
     if (__HAL_UART_GET_FLAG(huart, UART_FLAG_ORE) != RESET) __HAL_UART_CLEAR_OREFLAG(huart);
     if (__HAL_UART_GET_FLAG(huart, UART_FLAG_FE)  != RESET) __HAL_UART_CLEAR_FEFLAG(huart);
     if (__HAL_UART_GET_FLAG(huart, UART_FLAG_NE)  != RESET) __HAL_UART_CLEAR_NEFLAG(huart);
+    __HAL_UART_CLEAR_IDLEFLAG(huart);
 
     __HAL_UART_ENABLE_IT(huart, UART_IT_IDLE);
     HAL_UART_Receive_DMA(huart, rx_buf, rx_buf_size);
@@ -130,6 +131,7 @@ static void uart_restart_rx_dma(UART_HandleTypeDef *huart,
  * @param huart 指向UART句柄的指针，用于指定要操作的UART外设
  *
  * @note 该函数会清除以下错误标志：
+ *       - PE (Parity Error): 奇偶校验错误标志
  *       - ORE (Overrun Error): 过载错误标志
  *       - FE (Framing Error): 帧错误标志
  *       - NE (Noise Error): 噪声错误标志
@@ -141,10 +143,11 @@ static void uart_prepare_tx_dma(UART_HandleTypeDef *huart)
     __HAL_UART_DISABLE_IT(huart, UART_IT_IDLE);
     HAL_UART_DMAStop(huart);
 
-    __HAL_UART_CLEAR_IDLEFLAG(huart);
+    if (__HAL_UART_GET_FLAG(huart, UART_FLAG_PE)  != RESET) __HAL_UART_CLEAR_PEFLAG(huart);
     if (__HAL_UART_GET_FLAG(huart, UART_FLAG_ORE) != RESET) __HAL_UART_CLEAR_OREFLAG(huart);
     if (__HAL_UART_GET_FLAG(huart, UART_FLAG_FE)  != RESET) __HAL_UART_CLEAR_FEFLAG(huart);
     if (__HAL_UART_GET_FLAG(huart, UART_FLAG_NE)  != RESET) __HAL_UART_CLEAR_NEFLAG(huart);
+    __HAL_UART_CLEAR_IDLEFLAG(huart);
 }
 
 /**

@@ -1,0 +1,260 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<opml version="2.0">
+  <head>
+    <title>NMS81 4-20 mA 输出配置菜单</title>
+  </head>
+  <body>
+    <outline text="NMS81 4-20 mA 输出配置菜单">
+      <outline text="设置">
+        <outline text="高级设置">
+          <outline text="输入/输出">
+            <outline text="Analog I/O X1-3（X 为实际插槽字母）">
+              <outline text="工作模式">
+                <outline text="含义：定义模拟量 I/O 模块的方向和信号类型" />
+                <outline text="可配置内容">
+                  <outline text="禁用（出厂默认）：关闭该模拟量 I/O 功能" />
+                  <outline text="4-20 mA 输入：作为模拟电流输入" />
+                  <outline text="HART 主站+4-20 mA 输入：作为 HART 主站并读取模拟电流" />
+                  <outline text="HART 主站：仅作为 HART 主站" />
+                  <outline text="4-20 mA 输出：作为普通模拟电流输出" />
+                  <outline text="HART 从站+4-20 mA 输出：同时输出模拟电流并作为 HART 从站" />
+                </outline>
+                <outline text="显示条件：始终显示；实际模块和插槽由订货号决定" />
+                <outline text="权限：操作员可读，维护可写" />
+                <outline text="手册页：218-219" />
+              </outline>
+              <outline text="电流模式">
+                <outline text="含义：选择正常过程电流范围、越限编码和硬件边界，或切换为固定电流" />
+                <outline text="可配置内容">
+                  <outline text="4...20 mA NE（出厂默认）：过程 3.8...20.5 mA；低故障 &lt;3.6 mA；高故障 &gt;21.95 mA；硬件 3.5...22.6 mA" />
+                  <outline text="4...20 mA US：过程 3.9...20.8 mA；低故障 &lt;3.6 mA；高故障 &gt;21.95 mA；硬件 3.5...22.0 mA" />
+                  <outline text="普通 4...20 mA：过程 4.0...20.5 mA；低故障 &lt;3.6 mA；高故障 &gt;21.95 mA；硬件 3.5...22.6 mA" />
+                  <outline text="固定电流：输出由“固定电流”参数直接决定" />
+                </outline>
+                <outline text="显示条件：工作模式不是“禁用”或“HART 主站”" />
+                <outline text="权限：操作员可读，维护可写" />
+                <outline text="手册页：219-220" />
+              </outline>
+              <outline text="固定电流">
+                <outline text="含义：在固定电流模式下直接指定正式输出电流；不等同于诊断仿真" />
+                <outline text="可配置内容：4.0...22.5 mA" />
+                <outline text="出厂设置：4 mA" />
+                <outline text="显示条件：电流模式=固定电流" />
+                <outline text="权限：操作员可读，维护可写" />
+                <outline text="手册页：220" />
+              </outline>
+              <outline text="模拟输入源">
+                <outline text="含义：选择由该路 4-20 mA 输出承载的过程变量" />
+                <outline text="可配置内容（38 项）">
+                  <outline text="通用">
+                    <outline text="无：不分配过程变量" />
+                  </outline>
+                  <outline text="液位与几何">
+                    <outline text="储罐液位（出厂默认）：罐内液位工程值" />
+                    <outline text="储罐液位%：储罐液位百分比" />
+                    <outline text="储罐空高：罐顶到液面的空高" />
+                    <outline text="储罐空高%：储罐空高百分比" />
+                    <outline text="液位测量值：原始或测量液位值" />
+                    <outline text="距离：测量距离" />
+                    <outline text="浮子位置：浮子或浮筒位置" />
+                    <outline text="水位：水界面液位" />
+                    <outline text="上界面液位：上层界面位置" />
+                    <outline text="下界面液位：下层界面位置" />
+                    <outline text="罐底位置：检测到的罐底位置" />
+                    <outline text="储罐参考高度：罐体参考高度" />
+                  </outline>
+                  <outline text="温度">
+                    <outline text="液相温度值：液体介质温度" />
+                    <outline text="气相温度值：气相空间温度" />
+                    <outline text="环境（空气）温度值：环境空气温度" />
+                    <outline text="测温点温度 1-24：指定测温点的温度" />
+                  </outline>
+                  <outline text="密度">
+                    <outline text="视密度：当前条件下的视密度" />
+                    <outline text="平均梯度密度：梯度测量的平均密度" />
+                    <outline text="上层介质密度：上层介质密度" />
+                    <outline text="中间介质密度：中间层介质密度" />
+                    <outline text="下层介质密度：下层介质密度" />
+                  </outline>
+                  <outline text="压力和通用量">
+                    <outline text="P1（底部）值：底部压力或通用量" />
+                    <outline text="P2（中部）值：中部压力或通用量" />
+                    <outline text="P3（顶部）值：顶部压力或通用量" />
+                    <outline text="GP 1-4 值：通用过程值" />
+                  </outline>
+                  <outline text="模拟量级联">
+                    <outline text="AIO B1-3 数值：B 插槽其它 AIO 的工程值" />
+                    <outline text="AIO B1-3 毫安值：B 插槽其它 AIO 的电流值" />
+                    <outline text="AIO C1-3 数值：C 插槽其它 AIO 的工程值" />
+                    <outline text="AIO C1-3 毫安值：C 插槽其它 AIO 的电流值" />
+                    <outline text="AIP B4-8 数值：B 插槽模拟量输入的工程值" />
+                    <outline text="AIP C4-8 数值：C 插槽模拟量输入的工程值" />
+                  </outline>
+                  <outline text="HART 级联">
+                    <outline text="HART 设备 1-15 PV：外接 HART 设备的主变量" />
+                    <outline text="HART 设备 1-15 PV mA：外接 HART 设备主变量的电流值" />
+                    <outline text="HART 设备 1-15 PV %：外接 HART 设备主变量的百分比" />
+                    <outline text="HART 设备 1-15 SV：外接 HART 设备的第二变量" />
+                    <outline text="HART 设备 1-15 TV：外接 HART 设备的第三变量" />
+                    <outline text="HART 设备 1-15 QV：外接 HART 设备的第四变量" />
+                  </outline>
+                </outline>
+                <outline text="显示条件：工作模式为输出模式，且电流模式不是固定电流；部分选项依赖已安装模块和已启用功能" />
+                <outline text="权限：操作员可读，维护可写" />
+                <outline text="手册页：220-221" />
+              </outline>
+              <outline text="故障模式">
+                <outline text="含义：设备故障报警时决定电流输出采用哪种策略" />
+                <outline text="可配置内容">
+                  <outline text="最小值：输出电流模式定义的低故障方向" />
+                  <outline text="最大值（出厂默认）：输出电流模式定义的高故障方向" />
+                  <outline text="最近有效值：保持故障前最后一次有效输出" />
+                  <outline text="实际值：故障期间继续输出当前过程值" />
+                  <outline text="设定值：按“故障值”参数输出" />
+                </outline>
+                <outline text="显示条件：工作模式为普通输出或 HART 从站+4-20 mA 输出" />
+                <outline text="权限：操作员可读，维护可写" />
+                <outline text="手册页：221" />
+              </outline>
+              <outline text="故障值">
+                <outline text="含义：故障模式选择“设定值”时使用的输出电流" />
+                <outline text="可配置内容：3.4...22.6 mA" />
+                <outline text="出厂设置：22 mA" />
+                <outline text="显示条件：故障模式=设定值" />
+                <outline text="权限：操作员可读，维护可写" />
+                <outline text="手册页：222" />
+              </outline>
+              <outline text="输入值 [只读]">
+                <outline text="含义：显示当前被映射到电流输出的过程变量值" />
+                <outline text="可配置内容：无，仅查看" />
+                <outline text="显示条件：输出模式且不是固定电流" />
+                <outline text="权限：操作员可读" />
+                <outline text="手册页：222" />
+              </outline>
+              <outline text="0% 值">
+                <outline text="含义：定义映射到 4 mA 标称点的过程值" />
+                <outline text="可配置内容：带符号浮点数，单位随所选输出源变化" />
+                <outline text="出厂设置：0 Unitless" />
+                <outline text="显示条件：输出模式且不是固定电流" />
+                <outline text="权限：操作员可读，维护可写" />
+                <outline text="手册页：222" />
+              </outline>
+              <outline text="100% 值">
+                <outline text="含义：定义映射到 20 mA 标称点的过程值" />
+                <outline text="可配置内容：带符号浮点数，单位随所选输出源变化" />
+                <outline text="出厂设置：0 Unitless" />
+                <outline text="显示条件：输出模式且不是固定电流" />
+                <outline text="权限：操作员可读，维护可写" />
+                <outline text="手册页：223" />
+              </outline>
+              <outline text="输入值 % [只读]">
+                <outline text="含义：显示当前过程值在 4-20 mA 映射量程中的百分比" />
+                <outline text="可配置内容：无，仅查看" />
+                <outline text="显示条件：输出模式且不是固定电流" />
+                <outline text="权限：操作员可读" />
+                <outline text="手册页：223" />
+              </outline>
+              <outline text="输出值 [只读]">
+                <outline text="含义：显示当前电流输出值" />
+                <outline text="可配置内容：无，仅查看；单位 mA" />
+                <outline text="显示条件：工作模式为输出模式" />
+                <outline text="权限：操作员可读" />
+                <outline text="手册页：223" />
+              </outline>
+              <outline text="错误事件类型">
+                <outline text="含义：定义模拟量 I/O 错误或输出超范围时产生的事件级别" />
+                <outline text="可配置内容">
+                  <outline text="无：不生成事件" />
+                  <outline text="警告（出厂默认）：生成警告事件" />
+                  <outline text="报警：生成报警事件" />
+                </outline>
+                <outline text="显示条件：工作模式不是“禁用”或“HART 主站”" />
+                <outline text="权限：操作员可读，维护可写" />
+                <outline text="手册页：225" />
+              </outline>
+              <outline text="阻尼因子">
+                <outline text="含义：定义模拟电流输出的时间阻尼常数" />
+                <outline text="可配置内容：0...999.9 s" />
+                <outline text="出厂设置：0 s" />
+                <outline text="显示条件：工作模式不是“禁用”或“HART 主站”" />
+                <outline text="权限：操作员可读，维护可写" />
+                <outline text="手册页：226" />
+              </outline>
+              <outline text="用于 SIL/WHG">
+                <outline text="含义：在具有相应认证的设备上，将该输出用于 SIL/WHG 功能" />
+                <outline text="可配置内容：开启、禁用" />
+                <outline text="出厂设置：禁用" />
+                <outline text="显示条件：输出模式且设备具有 SIL 认证" />
+                <outline text="权限：操作员可读，维护可写" />
+                <outline text="手册页：226-227" />
+              </outline>
+            </outline>
+          </outline>
+          <outline text="通信">
+            <outline text="HART 输出">
+              <outline text="设置">
+                <outline text="使用条件：工作模式=HART 从站+4-20 mA 输出" />
+                <outline text="系统轮询地址">
+                  <outline text="含义：设置该仪表作为 HART 从站时使用的轮询地址" />
+                  <outline text="可配置内容：HART 轮询地址；具体范围以设备菜单为准" />
+                </outline>
+                <outline text="分配 SV">
+                  <outline text="含义：选择 HART 第二变量" />
+                  <outline text="可配置内容：从可用罐体参数中选择" />
+                </outline>
+                <outline text="分配 TV">
+                  <outline text="含义：选择 HART 第三变量" />
+                  <outline text="可配置内容：从可用罐体参数中选择" />
+                </outline>
+                <outline text="分配 QV">
+                  <outline text="含义：选择 HART 第四变量" />
+                  <outline text="可配置内容：从可用罐体参数中选择" />
+                </outline>
+                <outline text="PV 数据源">
+                  <outline text="含义：决定 HART 主变量是否沿用模拟电流输出变量，或采用独立变量" />
+                  <outline text="可配置内容：默认沿用电流输出变量；需要独立配置时选择“自定义”" />
+                </outline>
+                <outline text="分配 PV">
+                  <outline text="含义：PV 数据源为自定义时，选择 HART 主变量" />
+                  <outline text="可配置内容：从可用罐体参数中选择" />
+                </outline>
+                <outline text="PV 0% 值">
+                  <outline text="含义：定义 HART 主变量的 0% 量程点" />
+                  <outline text="可配置内容：数值和单位随所选 PV 变化" />
+                </outline>
+                <outline text="PV 100% 值">
+                  <outline text="含义：定义 HART 主变量的 100% 量程点" />
+                  <outline text="可配置内容：数值和单位随所选 PV 变化" />
+                </outline>
+                <outline text="PV mA">
+                  <outline text="含义：决定 HART 循环输出中是否包含模拟端子的输出电流" />
+                  <outline text="可配置内容：包含或不包含；不改变接线端子的实际电流" />
+                </outline>
+                <outline text="手册页：123" />
+              </outline>
+            </outline>
+          </outline>
+        </outline>
+      </outline>
+      <outline text="诊断">
+        <outline text="仿真">
+          <outline text="电流输出 N 仿真">
+            <outline text="含义：独立打开或关闭第 N 路模拟电流输出仿真" />
+            <outline text="可配置内容：关、开" />
+            <outline text="出厂设置：关" />
+            <outline text="显示条件：存在模拟量 I/O 模块且工作模式为输出模式" />
+            <outline text="权限：操作员可读，维护可写" />
+            <outline text="手册页：328" />
+          </outline>
+          <outline text="电流仿真值">
+            <outline text="含义：仿真开启时指定该路输出的测试电流" />
+            <outline text="可配置内容：3.4...23 mA" />
+            <outline text="显示条件：电流输出 N 仿真=开" />
+            <outline text="权限：操作员可读，维护可写" />
+            <outline text="手册页：328-329" />
+          </outline>
+        </outline>
+      </outline>
+    </outline>
+  </body>
+</opml>

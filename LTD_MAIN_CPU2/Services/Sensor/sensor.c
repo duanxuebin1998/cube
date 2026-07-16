@@ -24,7 +24,6 @@
 #define READ_PART_PARAMS_REFRESH_INTERVAL_MS 1000U /* 部件参数读取刷新间隔，单位 ms。 */
 #define READ_PART_PARAMS_RSSI_REFRESH_INTERVAL_MS 5000U /* 部件参数 RSSI 刷新间隔，单位 ms。 */
 
-static uint32_t Sensor_PositionToU01mmClamped(void);
 static uint32_t Sensor_UpdateWirelessRssiForPartParams(uint8_t force_update);
 static void Sensor_PrintBluetoothLinkSnapshot(const WirelessConnectionStatus *status);
 
@@ -179,7 +178,7 @@ static uint32_t Sensor_ParseDsmTextId(const char *id_text, uint32_t *sensor_id_o
     uint8_t has_digit = 0U;
 
     if ((id_text == NULL) || (sensor_id_out == NULL)) {
-        return PARAM_ADDRESS_OVERFLOW;
+        return SYSTEM_CALL_CONDITION_ERROR;
     }
 
     while (*id_text != '\0') {
@@ -513,7 +512,7 @@ static uint32_t Sensor_RecoverLevelFrequencyWhenStopped(void)
  */
 uint32_t DSM_Get_LevelMode_Frequence(volatile uint32_t *frequency_out) {
 	if (frequency_out == NULL) {
-		return PARAM_ADDRESS_OVERFLOW;   /* 比设备通信错误更合理 */
+		return SYSTEM_CALL_CONDITION_ERROR;   /* 比设备通信错误更合理 */
 	}
 
 	uint32_t ret;
@@ -589,7 +588,7 @@ uint32_t DSM_Get_LevelMode_Frequence(volatile uint32_t *frequency_out) {
  */
 uint32_t DSM_Get_LevelMode_Frequence_Avg(volatile uint32_t *frequency_out) {
 	if (frequency_out == NULL) {
-		return PARAM_ADDRESS_OVERFLOW;
+		return SYSTEM_CALL_CONDITION_ERROR;
 	}
 
 	uint32_t values[10];
@@ -644,7 +643,7 @@ uint32_t DSM_Get_LevelMode_Frequence_Avg(volatile uint32_t *frequency_out) {
  */
 uint32_t Read_Density_text(float *frequency, float *density, float *temp) {
 	if (frequency == NULL || temp == NULL || density == NULL) {
-		return PARAM_ADDRESS_OVERFLOW;
+		return SYSTEM_CALL_CONDITION_ERROR;
 	}
 	*frequency = 5500.123f;
 	*density = 800.5f;
@@ -682,7 +681,7 @@ static void Apply_Fixed_DensityTemp_Correction(float *density, float *temp)
  */
 uint32_t Read_Density(float *frequency, float *density, float *temp) {
 	if (frequency == NULL || temp == NULL || density == NULL) {
-		return PARAM_ADDRESS_OVERFLOW;
+		return SYSTEM_CALL_CONDITION_ERROR;
 	}
 	float hz_45, hz_225;
 	uint32_t ret = NO_ERROR;
@@ -730,24 +729,9 @@ uint32_t Read_Density(float *frequency, float *density, float *temp) {
 	           temp_before, *temp);
 	    printf("频率: %.3f Hz\r\n", *frequency);
 
-	    uint32_t density_raw = DENSITY_TO_RAW(*density);
-	    uint32_t temp_raw    = TEMP_TO_RAW(*temp);
-		uint32_t pos = Sensor_PositionToU01mmClamped();
-		if(*density != 0)
-		{
-			g_measurement.single_point_monitoring.density = density_raw;
-		}
-		g_measurement.single_point_monitoring.temperature = temp_raw;
-		g_measurement.single_point_monitoring.temperature_position = pos;
+	    uint32_t temp_raw = TEMP_TO_RAW(*temp);
 
-		if(*density !=0)
-		{
-			g_measurement.single_point_measurement.density = density_raw;
-		}
-		g_measurement.single_point_measurement.temperature = temp_raw;
-		g_measurement.single_point_measurement.temperature_position = pos;
-
-		/* 调试信息赋值 */
+		/* Read_Density只发布调试字段；固定点六字段由稳定窗口完成后统一提交。 */
 	    g_measurement.debug_data.temperature = temp_raw;
 	    g_measurement.debug_data.frequency = *frequency;
 	}
@@ -755,19 +739,6 @@ uint32_t Read_Density(float *frequency, float *density, float *temp) {
 	return ret;
 }
 
-/**
- * @brief 将当前传感器位置写入无符号结果字段前钳位，避免负位置变成超大数。
- */
-static uint32_t Sensor_PositionToU01mmClamped(void)
-{
-    int32_t pos_s = g_measurement.debug_data.sensor_position;
-
-    if (pos_s <= 0) {
-        return 0U;
-    }
-
-    return (uint32_t)pos_s;
-}
 
 /**
  * @brief 读取传感器数据中的 Sensor_ReadWaterCapacitance 逻辑。
@@ -779,7 +750,7 @@ uint32_t Sensor_ReadWaterCapacitance(float *cap_out)
 {
     if (!Sensor_SupportsWaterCapChannel()) {
         printf("当前传感器类型不支持读取水位电容\r\n");
-        return PARAM_ERROR;
+        return PARAM_FEATURE_UNSUPPORTED;
     }
 
     uint32_t ret = (g_deviceParams.sensorType == SAFE_SENSOR)
@@ -799,7 +770,7 @@ uint32_t Sensor_ReadGyroAngle(float *angle_x_deg, float *angle_y_deg)
 {
     if (!Sensor_SupportsGyroChannel()) {
         printf("当前传感器类型不支持读取姿态角\r\n");
-        return PARAM_ERROR;
+        return PARAM_FEATURE_UNSUPPORTED;
     }
 
     uint32_t ret = (g_deviceParams.sensorType == SAFE_SENSOR)
@@ -819,17 +790,6 @@ uint32_t Sensor_Test1(void) {
 
 	printf("密度: %.2f  频率: %.3f  温度: %.3f ℃\r\n", density, frequency, temp);
 
-	uint32_t density_raw = DENSITY_TO_RAW(density);
-	uint32_t temp_raw = TEMP_TO_RAW(temp);
-	uint32_t pos = Sensor_PositionToU01mmClamped();
-
-	g_measurement.single_point_monitoring.density = density_raw;
-	g_measurement.single_point_monitoring.temperature = temp_raw;
-	g_measurement.single_point_monitoring.temperature_position = pos;
-
-	g_measurement.single_point_measurement.density = density_raw;
-	g_measurement.single_point_measurement.temperature = temp_raw;
-	g_measurement.single_point_measurement.temperature_position = pos;
 
 	return NO_ERROR;
 }

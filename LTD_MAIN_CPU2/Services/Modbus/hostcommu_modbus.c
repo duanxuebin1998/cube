@@ -7,6 +7,7 @@
 #include <string.h>
 #include <ctype.h>
 #include "system_parameter.h"
+#include "AoOutput/ao_output.h"
 
 /* 从机地址 */
 int SlaveAddress = 1; /* 主板通信地址配置，影响协议寻址或硬件访问。 */
@@ -17,12 +18,12 @@ static const int presetmultipleregisterfuncode = 0x10; /* 写多个寄存器功能码 */
 /* 异常码 */
 static const int illegalfunction = 0x01; /* 非法功能 */
 static const int illegaldataaddress = 0x02; /* 非法数据地址 */
-/* static const int illegaldatavalue = 0x03; / /非法数据值 */
+static const int illegaldatavalue = 0x03; /* 非法数据值 */
 /* static const int slavedevicefailure = 0x04; / /从设备故障 */
 /* static const int slavedevicebusy = 0x05; / /从设备忙 */
 /* 保持寄存器 */
 static const int HoldingregisterAddress = 0x00; /* 保持寄存器起始地址 */
-static const int HoldingregisterAmount = HOLEREGISTER_STOP + 1; /* 保持寄存器总数 */
+static const int HoldingregisterAmount = HOLEREGISTER_STOP; /* 保持寄存器总数 */
 /* static int HoldingRegisterArray[HOLEREGISTER_STOP] = { 0 }; / /保持寄存器数组 */
 static uint16_t HoldingRegisterArray[HOLEREGISTER_STOP] = { 0 }; /* 保持寄存器数组，1 个元素对应 1 个 16 位保持寄存器 */
 /* 输入寄存器 */
@@ -261,54 +262,97 @@ static int Compose04Package(uint8_t  *revframe, uint8_t  *sendframe) {
 /* 功能码 0x10：写多个保持寄存器处理 */
 int Response10Process(uint8_t const *revframe, uint8_t *sendframe)
 {
+    DeviceParameters previous_params;
+    DeviceParameters candidate_params;
     int length;
     uint16_t startAddr;
     uint16_t regCount;
+    uint32_t previous_tank_height;
+    uint32_t previous_simulation_enabled;
+    uint32_t candidate_simulation_enabled;
+    uint32_t candidate_simulation_raw;
+    int64_t sensor_position_01mm;
     int need_save = 0;
     int persist_write = 0;
 
-    /* 解析起始地址和寄存器数量 */
     startAddr = ((uint16_t)revframe[2] << 8) | revframe[3];
     regCount  = ((uint16_t)revframe[4] << 8) | revframe[5];
+    previous_params = g_deviceParams;
+    previous_tank_height = previous_params.tankHeight;
+    previous_simulation_enabled = AoOutput_IsSimulationEnabled();
 
-    /* 1. 先用当前设备参数填充保持寄存器数组，保证未被写到的寄存器保持最新值 */
+    /* 先发布当前镜像，再叠加主站本次写入。 */
+    WriteDeviceParamsToHoldingRegisters(HoldingRegisterArray);
+    length = Compose10Package(revframe, sendframe);
+    candidate_simulation_raw =
+            ((uint32_t)HoldingRegisterArray[HOLDREGISTER_AO_SIMULATION_ENABLE] << 16) |
+            (uint32_t)HoldingRegisterArray[HOLDREGISTER_AO_SIMULATION_ENABLE + 1U];
+    if (candidate_simulation_raw > 1U) {
+        /* 仿真开关仅接受0/1，解析运行态前拒绝非法值并恢复原寄存器镜像。 */
+        WriteDeviceParamsToHoldingRegisters(HoldingRegisterArray);
+        sendframe[0] = (uint8_t)SlaveAddress;
+        sendframe[1] = (uint8_t)(presetmultipleregisterfuncode | 0x80);
+        sendframe[2] = (uint8_t)illegaldatavalue;
+        return 3;
+    }
+    ReadDeviceParamsFromHoldingRegisters(HoldingRegisterArray);
+    candidate_params = g_deviceParams;
+    candidate_simulation_enabled = AoOutput_IsSimulationEnabled();
+
+    /* AO配置必须严格校验；源切换或当前源上限变化时成对加载默认量程。 */
+    if (prepare_ao_params_for_write(&previous_params, &candidate_params) != 0) {
+        g_deviceParams = previous_params;
+        AoOutput_SetSimulationEnabled(previous_simulation_enabled);
+        WriteDeviceParamsToHoldingRegisters(HoldingRegisterArray);
+        sendframe[0] = (uint8_t)SlaveAddress;
+        sendframe[1] = (uint8_t)(presetmultipleregisterfuncode | 0x80);
+        sendframe[2] = (uint8_t)illegaldatavalue;
+        return 3;
+    }
+
+    /* AO禁用时拒绝开启仿真；由输出模式切到禁用时清除潜伏的非持久化仿真状态。 */
+    if ((candidate_params.ao_output.work_mode == AO_WORK_MODE_DISABLED) &&
+        (candidate_simulation_enabled != 0U)) {
+        if (((uint32_t)startAddr < (HOLDREGISTER_AO_SIMULATION_ENABLE + 2U)) &&
+            (((uint32_t)startAddr + (uint32_t)regCount) > HOLDREGISTER_AO_SIMULATION_ENABLE)) {
+            g_deviceParams = previous_params;
+            AoOutput_SetSimulationEnabled(previous_simulation_enabled);
+            WriteDeviceParamsToHoldingRegisters(HoldingRegisterArray);
+            sendframe[0] = (uint8_t)SlaveAddress;
+            sendframe[1] = (uint8_t)(presetmultipleregisterfuncode | 0x80);
+            sendframe[2] = (uint8_t)illegaldatavalue;
+            return 3;
+        }
+        candidate_simulation_enabled = 0U;
+    }
+    persist_write = IsPersistentDeviceParamWrite(startAddr, regCount) ? 1 : 0;
+    if (persist_write != 0) {
+        DeviceParams_CaptureWriteSnapshot(&previous_params);
+    }
+    g_deviceParams = candidate_params;
+    AoOutput_SetSimulationEnabled(candidate_simulation_enabled);
     WriteDeviceParamsToHoldingRegisters(HoldingRegisterArray);
 
-    if (IsPersistentDeviceParamWrite(startAddr, regCount)) {
-        persist_write = 1;
-        DeviceParams_CaptureWriteSnapshot();
-    }
-    /* 2. 处理主站写入，Compose10Package 内部应修改 HoldingRegisterArray 并组应答帧 */
-    length = Compose10Package(revframe, sendframe);
-
-    /* 3. 将 HoldingRegisterArray 中的数据重新读回到 g_deviceParams 中 */
-    ReadDeviceParamsFromHoldingRegisters(HoldingRegisterArray);
-    if (normalize_ao_params_after_write() != 0) {
-        WriteDeviceParamsToHoldingRegisters(HoldingRegisterArray);
-        need_save = 1;
+    if (g_deviceParams.tankHeight != previous_tank_height) {
+        /* 当前函数位于 UART5 中断，只重算缓存位置，不访问编码器或电机外设。 */
+        sensor_position_01mm = (int64_t)g_deviceParams.tankHeight -
+                               (int64_t)g_measurement.debug_data.cable_length;
+        if (sensor_position_01mm > (int64_t)INT32_MAX) {
+            sensor_position_01mm = (int64_t)INT32_MAX;
+        } else if (sensor_position_01mm < (int64_t)INT32_MIN) {
+            sensor_position_01mm = (int64_t)INT32_MIN;
+        }
+        g_measurement.debug_data.sensor_position = (int32_t)sensor_position_01mm;
     }
 
-
-/* printf("0x10 write startAddr=%u regCount=%u, COMMAND=%u, TANKHEIGHT=%u, CRC=%u\r\n", */
-/* startAddr, regCount, */
-/* HOLDREGISTER_DEVICEPARAM_COMMAND, */
-/* HOLDREGISTER_DEVICEPARAM_TANKHEIGHT, */
-/* HOLDREGISTER_DEVICEPARAM_CRC); */
-    /* 4. 判断这次写操作是否需要存储到 FRAM
-     *    规则：只写 command（起始地址刚好是 COMMAND 且长度为 2 寄存器）不存储，
-     *          其它涉及参数区的写操作统一认为需要持久化。
-     */
     if (persist_write != 0) {
         need_save = 1;
     }
-    /* 5. 持久化参数到 FRAM（command 不参与 CRC） */
-    if (need_save) {
+    if (need_save != 0) {
         request_device_params_save();
     }
-
     return length;
 }
-
 
 /* 更新保持寄存器,组织10响应包 */
 static int Compose10Package(uint8_t  const *revframe, uint8_t  *sendframe) {

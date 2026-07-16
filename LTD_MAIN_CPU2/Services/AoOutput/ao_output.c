@@ -3,35 +3,36 @@
 #include "ad5421.h"
 #include "error_log.h"
 #include "main.h"
-#include "system_parameter.h"
 #include <stddef.h>
 #include <stdio.h>
+#include <string.h>
 
-#define AO_OUTPUT_MIN_MA_X100          320U /* 4-20mA 模拟量输出参数：最小值 MA 放大 100 倍。 */
-#define AO_OUTPUT_MAX_MA_X100          2400U /* 4-20mA 模拟量输出参数：最大值 MA 放大 100 倍。 */
-#define AO_OUTPUT_NORMAL_MIN_MA_X100   400U /* 4-20mA 模拟量输出参数：正常 最小值 MA 放大 100 倍。 */
-#define AO_OUTPUT_NORMAL_MAX_MA_X100   2000U /* 4-20mA 模拟量输出参数：正常 最大值 MA 放大 100 倍。 */
-#define AO_OUTPUT_REFRESH_INTERVAL_MS  1000U /* 4-20mA 模拟量输出参数：刷新 间隔 毫秒。 */
-#define AO_OUTPUT_DIAG_INTERVAL_MS     1000U /* 4-20mA 模拟量输出芯片诊断检查间隔，单位毫秒。 */
-#define AO_OUTPUT_RECOVER_INTERVAL_MS  1000U /* AD5421 诊断异常后的最小恢复重试间隔，单位毫秒。 */
+#define AO_OUTPUT_HARDWARE_MIN_MA_X100 320U
+#define AO_OUTPUT_HARDWARE_MAX_MA_X100 2400U
+#define AO_OUTPUT_REFRESH_INTERVAL_MS  1000U
+#define AO_OUTPUT_DIAG_INTERVAL_MS     1000U
+#define AO_OUTPUT_RECOVER_INTERVAL_MS  1000U
+#define AO_PROCESS_SOURCE_COUNT        3U
+
+typedef struct {
+    uint32_t process_min_mA_x100;
+    uint32_t process_max_mA_x100;
+    uint32_t fault_min_mA_x100;
+    uint32_t fault_max_mA_x100;
+} AoCurrentModeLimits;
 
 static AoOutputRuntime ao_output_runtime = {
-    AO_OUTPUT_NORMAL_MIN_MA_X100,
-    AO_OUTPUT_NORMAL_MIN_MA_X100,
-    AO_OUTPUT_SOURCE_INIT,
-    0U,
-    0U,
-    NO_ERROR,
-    0U,
-    0U,
-    0U
+    400U, 400U, AO_OUTPUT_SOURCE_POWER_ON, 0U, 0U, NO_ERROR,
+    0U, 0U, 0U, 0, 0, 0U, 0U, 0U, 0U
 };
-
+static AoProcessSample ao_process_samples[AO_PROCESS_SOURCE_COUNT] = {0};
 static uint8_t ao_output_initialized = 0U;
 static volatile uint8_t ao_output_update_busy = 0U;
 static volatile uint8_t ao_output_timer_refresh_pending = 0U;
 static volatile uint32_t ao_output_timer_suspend_count = 0U;
+static volatile uint32_t ao_simulation_enabled = 0U;
 static uint8_t ao_output_driver_ready = 0U;
+static uint8_t ao_output_power_on_pending = 0U;
 static uint8_t ao_output_driver_retry_valid = 0U;
 static uint8_t ao_output_diag_valid = 0U;
 static uint8_t ao_output_write_attempt_valid = 0U;
@@ -43,6 +44,12 @@ static uint32_t ao_output_last_recover_tick = 0U;
 static uint32_t ao_output_last_write_attempt_tick = 0U;
 static uint32_t ao_output_last_write_attempt_mA_x100 = 0U;
 static uint32_t ao_output_last_recover_target_mA_x100 = 0U;
+static uint8_t ao_last_normal_current_valid = 0U;
+static uint32_t ao_last_normal_current_mA_x100 = 0U;
+static uint8_t ao_filter_initialized = 0U;
+static uint32_t ao_filter_source = AO_PROCESS_SOURCE_TANK_LEVEL;
+static uint32_t ao_filter_tick = 0U;
+static int64_t ao_filter_value_x1000 = 0;
 static volatile uint8_t ao_output_diag_error_pending = 0U;
 static volatile uint8_t ao_output_diag_recover_pending = 0U;
 static volatile uint8_t ao_output_diag_fault_active = 0U;
@@ -52,8 +59,8 @@ static uint32_t ao_output_diag_pending_recover_code = NO_ERROR;
 static AD5421DiagnosticSnapshot ao_output_diag_active_snapshot = {0U};
 static AD5421DiagnosticSnapshot ao_output_diag_pending_error_snapshot = {0U};
 static AD5421DiagnosticSnapshot ao_output_diag_pending_recover_snapshot = {0U};
+
 static uint32_t AoOutput_UpdateInternal(uint8_t allow_driver_init);
-static uint32_t AoOutput_NormalizeHardwareCurrent(uint32_t current_mA_x100);
 
 /*
  * 函数用途：判断两次 AD5421 故障是否属于同一故障现场。
@@ -191,21 +198,359 @@ static void AoOutput_LeaveUpdate(void)
     ao_output_update_busy = 0U;
     __set_PRIMASK(primask);
 }
-/*
- * 函数用途：判断 AO 输出功能是否被参数使能。
- * 调用场景：AO 初始化和周期更新入口。
- * 关键约束：只读取参数，不访问 AD5421，未接电流环时可安全调用。
- */
-static uint8_t AoOutput_IsEnabled(void)
+/* 原子发布AO运行态，避免Modbus与HART读到跨轮次字段。 */
+static void AoOutput_CommitRuntime(const AoOutputRuntime *runtime)
 {
-    return (g_deviceParams.AoOutputEnable == 0U) ? 0U : 1U;
+    uint32_t primask;
+
+    if (runtime == NULL) {
+        return;
+    }
+    primask = __get_PRIMASK();
+    __disable_irq();
+    ao_output_runtime = *runtime;
+    __set_PRIMASK(primask);
 }
 
-/*
- * 函数用途：清除 AD5421 诊断恢复节流状态。
- * 调用场景：AO 初始化、禁用或驱动状态重建时调用。
- * 关键约束：只更新本模块恢复状态，不访问 AD5421。
- */
+/* 复制一致的AO运行态快照。 */
+void AoOutput_GetRuntimeSnapshot(AoOutputRuntime *runtime)
+{
+    uint32_t primask;
+
+    if (runtime == NULL) {
+        return;
+    }
+    primask = __get_PRIMASK();
+    __disable_irq();
+    *runtime = ao_output_runtime;
+    __set_PRIMASK(primask);
+}
+
+/* 在短临界区内更新过程量样本。 */
+static void AoOutput_WriteProcessSample(AoProcessSource source,
+                                        int32_t value_01mm,
+                                        uint8_t valid,
+                                        uint32_t now)
+{
+    AoProcessSample *sample;
+
+    if ((uint32_t)source >= AO_PROCESS_SOURCE_COUNT) {
+        return;
+    }
+    sample = &ao_process_samples[(uint32_t)source];
+    sample->value_01mm = value_01mm;
+    sample->valid = (valid == 0U) ? 0U : 1U;
+    sample->update_tick = now;
+    sample->update_counter++;
+}
+
+/* 发布过程量；储罐液位同时派生空高有效性。 */
+void AoOutput_PublishProcessSample(AoProcessSource source, int32_t value_01mm, uint8_t valid)
+{
+    uint32_t primask;
+    uint32_t now = HAL_GetTick();
+
+    primask = __get_PRIMASK();
+    __disable_irq();
+    AoOutput_WriteProcessSample(source, value_01mm, valid, now);
+    if (source == AO_PROCESS_SOURCE_TANK_LEVEL) {
+        if ((valid != 0U) &&
+            (value_01mm >= 0) &&
+            ((uint32_t)value_01mm <= g_deviceParams.tankHeight) &&
+            (g_deviceParams.tankHeight <= 0x7FFFFFFFUL)) {
+            AoOutput_WriteProcessSample(AO_PROCESS_SOURCE_ULLAGE,
+                                        (int32_t)g_deviceParams.tankHeight - value_01mm,
+                                        1U,
+                                        now);
+        } else {
+            AoOutput_WriteProcessSample(AO_PROCESS_SOURCE_ULLAGE, 0, 0U, now);
+        }
+    }
+    __set_PRIMASK(primask);
+}
+
+/* 显式失效一个过程量样本。 */
+void AoOutput_InvalidateProcessSample(AoProcessSource source)
+{
+    AoOutput_PublishProcessSample(source, 0, 0U);
+}
+
+/* 复制指定过程量快照。 */
+uint32_t AoOutput_ReadProcessSample(AoProcessSource source, AoProcessSample *sample)
+{
+    uint32_t primask;
+
+    if ((sample == NULL) || ((uint32_t)source >= AO_PROCESS_SOURCE_COUNT)) {
+        return SYSTEM_CALL_CONDITION_ERROR;
+    }
+    primask = __get_PRIMASK();
+    __disable_irq();
+    *sample = ao_process_samples[(uint32_t)source];
+    __set_PRIMASK(primask);
+    return NO_ERROR;
+}
+
+/* 在短临界区复制完整AO配置，避免FC10中断替换参数时单轮混用。 */
+static void AoOutput_GetConfigSnapshot(AoOutputConfig *config)
+{
+    uint32_t primask;
+
+    if (config == NULL) {
+        return;
+    }
+    primask = __get_PRIMASK();
+    __disable_irq();
+    *config = g_deviceParams.ao_output;
+    __set_PRIMASK(primask);
+}
+
+/* 复制当前配置选中的过程量快照。 */
+uint32_t AoOutput_GetSelectedProcessSample(AoProcessSample *sample)
+{
+    AoOutputConfig config;
+
+    AoOutput_GetConfigSnapshot(&config);
+    return AoOutput_ReadProcessSample((AoProcessSource)config.output_source, sample);
+}
+
+/* 设置仿真运行态；上电初始化会强制清零。 */
+void AoOutput_SetSimulationEnabled(uint32_t enabled)
+{
+    uint32_t primask = __get_PRIMASK();
+
+    __disable_irq();
+    ao_simulation_enabled = (enabled == 0U) ? 0U : 1U;
+    ao_output_runtime.simulation_enabled = ao_simulation_enabled;
+    ao_filter_initialized = 0U;
+    __set_PRIMASK(primask);
+}
+
+/* 返回仿真运行态开关。 */
+uint32_t AoOutput_IsSimulationEnabled(void)
+{
+    return ao_simulation_enabled;
+}
+
+/* 将电流限制在AD5421物理允许范围内。 */
+static uint32_t AoOutput_ClampHardwareCurrent(uint32_t current_mA_x100)
+{
+    if (current_mA_x100 < AO_OUTPUT_HARDWARE_MIN_MA_X100) {
+        return AO_OUTPUT_HARDWARE_MIN_MA_X100;
+    }
+    if (current_mA_x100 > AO_OUTPUT_HARDWARE_MAX_MA_X100) {
+        return AO_OUTPUT_HARDWARE_MAX_MA_X100;
+    }
+    return current_mA_x100;
+}
+
+/* 返回NMS81普通、NE、US及固定模式的过程与故障边界。 */
+static AoCurrentModeLimits AoOutput_GetModeLimits(uint32_t current_mode)
+{
+    AoCurrentModeLimits limits;
+
+    limits.process_min_mA_x100 = 380U;
+    limits.process_max_mA_x100 = 2050U;
+    limits.fault_min_mA_x100 = 350U;
+    limits.fault_max_mA_x100 = 2260U;
+    if (current_mode == AO_CURRENT_MODE_FIXED) {
+        limits.process_min_mA_x100 = 400U;
+        limits.process_max_mA_x100 = 2250U;
+        limits.fault_min_mA_x100 = 400U;
+        limits.fault_max_mA_x100 = 2250U;
+    } else if (current_mode == AO_CURRENT_MODE_US) {
+        limits.process_min_mA_x100 = 390U;
+        limits.process_max_mA_x100 = 2080U;
+        limits.fault_max_mA_x100 = 2200U;
+    } else if (current_mode == AO_CURRENT_MODE_NORMAL) {
+        limits.process_min_mA_x100 = 400U;
+        limits.process_max_mA_x100 = 2050U;
+    }
+    return limits;
+}
+
+/* 由过程值计算有符号百分比和模式限幅后的电流。 */
+static uint32_t AoOutput_MapProcessToCurrent(const AoOutputConfig *config,
+                                             int32_t value_01mm,
+                                             int32_t *percent_x100)
+{
+    int64_t range_0 = (int64_t)config->range_0_01mm;
+    int64_t range_100 = (int64_t)config->range_100_01mm;
+    int64_t range_span = range_100 - range_0;
+    int64_t percent;
+    int64_t current;
+    AoCurrentModeLimits limits = AoOutput_GetModeLimits(config->current_mode);
+
+    if (range_span == 0) {
+        percent = 0;
+    } else {
+        percent = (((int64_t)value_01mm - range_0) * 10000LL) / range_span;
+    }
+    if (percent > 0x7FFFFFFFLL) {
+        percent = 0x7FFFFFFFLL;
+    } else if (percent < -2147483648LL) {
+        percent = -2147483648LL;
+    }
+    if (percent_x100 != NULL) {
+        *percent_x100 = (int32_t)percent;
+    }
+
+    current = 400LL + ((percent * 1600LL) / 10000LL);
+    if (current < (int64_t)limits.process_min_mA_x100) {
+        current = limits.process_min_mA_x100;
+    } else if (current > (int64_t)limits.process_max_mA_x100) {
+        current = limits.process_max_mA_x100;
+    }
+    return (uint32_t)current;
+}
+
+/* 对正常过程输入应用一阶阻尼，特殊输出状态不调用本函数。 */
+static int32_t AoOutput_FilterProcess(const AoOutputConfig *config,
+                                      int32_t raw_01mm,
+                                      uint32_t now)
+{
+    uint32_t damping_x10_s = config->damping_x10_s;
+    uint32_t source = config->output_source;
+    uint32_t dt_ms;
+    uint64_t tau_ms;
+    int64_t delta;
+
+    if ((damping_x10_s == 0U) ||
+        (ao_filter_initialized == 0U) ||
+        (ao_filter_source != source) ||
+        (ao_output_runtime.source != AO_OUTPUT_SOURCE_PROCESS)) {
+        ao_filter_initialized = 1U;
+        ao_filter_source = source;
+        ao_filter_tick = now;
+        ao_filter_value_x1000 = (int64_t)raw_01mm * 1000LL;
+        return raw_01mm;
+    }
+
+    dt_ms = now - ao_filter_tick;
+    if (dt_ms == 0U) {
+        return (int32_t)(ao_filter_value_x1000 / 1000LL);
+    }
+    tau_ms = (uint64_t)damping_x10_s * 100ULL;
+    delta = ((int64_t)raw_01mm * 1000LL) - ao_filter_value_x1000;
+    ao_filter_value_x1000 += (delta * (int64_t)dt_ms) / (int64_t)(tau_ms + dt_ms);
+    ao_filter_tick = now;
+    if (ao_filter_value_x1000 >= 0) {
+        return (int32_t)((ao_filter_value_x1000 + 500LL) / 1000LL);
+    }
+    return (int32_t)((ao_filter_value_x1000 - 500LL) / 1000LL);
+}
+
+/* 判断整机报警级业务错误是否需要优先进入AO故障模式。 */
+static uint8_t AoOutput_ShouldUseBusinessFault(const AoOutputConfig *config)
+{
+    uint32_t error_code = g_measurement.device_status.error_code;
+
+    if ((error_code != NO_ERROR) &&
+        (error_code != STATE_SWITCH) &&
+        (config->error_level == AO_ERROR_LEVEL_ALARM)) {
+        return 1U;
+    }
+    return 0U;
+}
+
+/* 按故障模式选择旁路阻尼的电流值。 */
+static uint32_t AoOutput_SelectFaultCurrent(const AoOutputConfig *config,
+                                             const AoProcessSample *sample)
+{
+    AoCurrentModeLimits limits = AoOutput_GetModeLimits(config->current_mode);
+    uint32_t fault_mode = config->fault_mode;
+
+    if (fault_mode == AO_FAULT_MODE_MINIMUM) {
+        return limits.fault_min_mA_x100;
+    }
+    if (fault_mode == AO_FAULT_MODE_LAST_VALID) {
+        return (ao_last_normal_current_valid != 0U) ?
+               ao_last_normal_current_mA_x100 : limits.fault_max_mA_x100;
+    }
+    if (fault_mode == AO_FAULT_MODE_ACTUAL_VALUE) {
+        if ((sample != NULL) && (sample->valid != 0U)) {
+            return AoOutput_MapProcessToCurrent(config, sample->value_01mm, NULL);
+        }
+        return limits.fault_max_mA_x100;
+    }
+    if (fault_mode == AO_FAULT_MODE_SET_VALUE) {
+        return AoOutput_ClampHardwareCurrent(config->fault_current_mA_x100);
+    }
+    return limits.fault_max_mA_x100;
+}
+
+/* 按固定优先级选择本轮目标，只有正常过程输出进入阻尼。 */
+static uint32_t AoOutput_SelectTarget(const AoOutputConfig *config,
+                                      uint32_t now,
+                                      AoOutputSource *source,
+                                      uint32_t *target_mA_x100,
+                                      int32_t *process_value_01mm,
+                                      int32_t *percent_x100,
+                                      uint32_t *process_valid)
+{
+    AoProcessSample sample = {0};
+    int32_t filtered_01mm;
+
+    if ((config == NULL) || (source == NULL) || (target_mA_x100 == NULL) ||
+        (process_value_01mm == NULL) || (percent_x100 == NULL) ||
+        (process_valid == NULL)) {
+        return SYSTEM_CALL_CONDITION_ERROR;
+    }
+
+    (void)AoOutput_ReadProcessSample((AoProcessSource)config->output_source, &sample);
+    *process_value_01mm = sample.value_01mm;
+    *process_valid = (sample.valid == 0U) ? 0U : 1U;
+    *percent_x100 = 0;
+    if (sample.valid != 0U) {
+        (void)AoOutput_MapProcessToCurrent(config, sample.value_01mm, percent_x100);
+    } else {
+        ao_filter_initialized = 0U;
+    }
+
+    if (config->work_mode == AO_WORK_MODE_DISABLED) {
+        ao_output_power_on_pending = 0U;
+        *source = AO_OUTPUT_SOURCE_DISABLED;
+        *target_mA_x100 = AO_DISABLED_CURRENT_MA_X100;
+        return NO_ERROR;
+    }
+    if (ao_simulation_enabled != 0U) {
+        ao_output_power_on_pending = 0U;
+        *source = AO_OUTPUT_SOURCE_SIMULATION;
+        *target_mA_x100 = config->simulation_current_mA_x100;
+        return NO_ERROR;
+    }
+    if (AoOutput_ShouldUseBusinessFault(config) != 0U) {
+        ao_output_power_on_pending = 0U;
+        *source = AO_OUTPUT_SOURCE_FAULT;
+        *target_mA_x100 = AoOutput_SelectFaultCurrent(config, &sample);
+        return NO_ERROR;
+    }
+    if (config->current_mode == AO_CURRENT_MODE_FIXED) {
+        ao_output_power_on_pending = 0U;
+        *source = AO_OUTPUT_SOURCE_FIXED;
+        *target_mA_x100 = config->fixed_current_mA_x100;
+        return NO_ERROR;
+    }
+    if (ao_output_power_on_pending != 0U) {
+        if (sample.update_counter == 0U) {
+            *source = AO_OUTPUT_SOURCE_POWER_ON;
+            *target_mA_x100 = config->power_on_current_mA_x100;
+            return NO_ERROR;
+        }
+        ao_output_power_on_pending = 0U;
+    }
+    if (sample.valid == 0U) {
+        *source = AO_OUTPUT_SOURCE_FAULT;
+        *target_mA_x100 = AoOutput_SelectFaultCurrent(config, &sample);
+        return NO_ERROR;
+    }
+
+    filtered_01mm = AoOutput_FilterProcess(config, sample.value_01mm, now);
+    *source = AO_OUTPUT_SOURCE_PROCESS;
+    *target_mA_x100 = AoOutput_MapProcessToCurrent(config, filtered_01mm, percent_x100);
+    return NO_ERROR;
+}
+
+/* 清除AD5421诊断恢复节流状态。 */
 static void AoOutput_ResetRecoverState(void)
 {
     ao_output_recover_valid = 0U;
@@ -213,112 +558,107 @@ static void AoOutput_ResetRecoverState(void)
     ao_output_last_recover_target_mA_x100 = 0U;
 }
 
-/*
- * 函数用途：判断当前是否允许执行一次 AD5421 恢复序列。
- * 调用场景：诊断发现异常后，在写入故障电流前尝试恢复。
- * 关键约束：使用 HAL tick 差值判断节流窗口，允许计数回绕。
- */
+/* 判断当前是否允许执行一次AD5421恢复序列。 */
 static uint8_t AoOutput_ShouldRecover(uint32_t now)
 {
     if (ao_output_recover_valid == 0U) {
         return 1U;
     }
-
     return ((now - ao_output_last_recover_tick) >= AO_OUTPUT_RECOVER_INTERVAL_MS) ? 1U : 0U;
 }
-/*
- * 函数用途：判断 AO 运行期驱动错误是否只记录到 AO 运行态。
- * 调用场景：自动刷新或测量刷新遇到 AD5421 诊断、恢复、写入异常后调用。
- * 关键约束：启动初始化失败仍由 AoOutput_Init() 原样上报，运行期错误不拉起整机最终错误。
- */
+
+/* 判断诊断错误是否属于需要原地等待清除的过温状态。 */
+static uint8_t AoOutput_IsOvertemperatureError(uint32_t error_code)
+{
+    return ((error_code == AD5421_OVERTEMP_SHUTDOWN) ||
+            (error_code == AD5421_OVERTEMP_WARNING)) ? 1U : 0U;
+}
+
+/* 过温故障必须等待降温，不通过周期复位强行恢复。 */
+static uint8_t AoOutput_IsDiagnosticRecoveryAllowed(uint32_t error_code)
+{
+    return (AoOutput_IsOvertemperatureError(error_code) != 0U) ? 0U : 1U;
+}
+
+/* 判断错误是否属于AO运行期驱动故障。 */
 static uint8_t AoOutput_IsRuntimeDriverError(uint32_t error_code)
 {
     if ((error_code == AD5421_INIT_ERROR) ||
-        (error_code == AD5421_WRITE_CURRENT_ERROR) ||
-        (error_code == AD5421_READFAULT_ERROR) ||
-        (error_code == AD5421_FAULT_STATUS_ERROR) ||
-        (error_code == AD5421_READBACK_ERROR)) {
+        (error_code == AD5421_READBACK_ERROR) ||
+        (error_code == AD5421_INTERNAL_COMM_ERROR) ||
+        (error_code == AD5421_LOOP_CURRENT_HIGH) ||
+        (error_code == AD5421_LOOP_CURRENT_LOW) ||
+        (error_code == AD5421_LOOP_VOLTAGE_LOW) ||
+        (error_code == AD5421_SPI_TRANSFER_ERROR) ||
+        (error_code == AD5421_ACCESS_BUSY) ||
+        (error_code == AD5421_OVERTEMP_SHUTDOWN) ||
+        (error_code == AD5421_OVERTEMP_WARNING)) {
         return 1U;
     }
-
     return 0U;
 }
 
-/*
- * 函数用途：记录 AO 运行期 AD5421 驱动错误并保持服务返回成功。
- * 调用场景：AO 已初始化后，后台或测量刷新发现 AD5421 暂时不可用。
- * 关键约束：错误保存在 AO 运行态和驱动故障标志中，不写全局错误码。
- */
-static uint32_t AoOutput_RecordRuntimeDriverError(uint32_t now, uint32_t error_code)
+/* 记录AO运行期硬件故障，不把后台故障升级为整机最终错误。 */
+static uint32_t AoOutput_RecordRuntimeDriverError(const AoOutputConfig *config,
+                                                   uint32_t now,
+                                                   uint32_t error_code,
+                                                   uint8_t preserve_driver_ready)
 {
-    ao_output_driver_ready = 0U;
-    ao_output_runtime.target_mA_x100 = AoOutput_NormalizeHardwareCurrent(g_deviceParams.FaultCurrent_mA);
-    ao_output_runtime.source = AO_OUTPUT_SOURCE_DRIVER_ERROR;
-    ao_output_runtime.driver_fault_flags = AD5421_GetFaultFlags();
-    ao_output_runtime.driver_fault_register = AD5421_GetFaultRegister();
-    ao_output_runtime.last_update_tick = now;
-    ao_output_runtime.last_error_code = error_code;
-    ao_output_runtime.update_counter++;
-    AoOutput_QueueDriverError(error_code);
+    AoOutputRuntime next;
+    AoCurrentModeLimits limits = AoOutput_GetModeLimits(config->current_mode);
 
+    AoOutput_GetRuntimeSnapshot(&next);
+    if (preserve_driver_ready == 0U) {
+        ao_output_driver_ready = 0U;
+    }
+    next.target_mA_x100 = limits.fault_max_mA_x100;
+    next.source = AO_OUTPUT_SOURCE_DRIVER_ERROR;
+    next.driver_fault_flags = AD5421_GetFaultFlags();
+    next.driver_fault_register = AD5421_GetFaultRegister();
+    next.last_update_tick = now;
+    next.last_error_code = error_code;
+    next.simulation_enabled = ao_simulation_enabled;
+    next.dac_readback_mA_x100 = 0U;
+    next.dac_readback_valid = 0U;
+    next.update_counter++;
+    AoOutput_CommitRuntime(&next);
+    AoOutput_QueueDriverError(error_code);
     return NO_ERROR;
 }
 
-/*
- * 函数用途：把 AO 运行态更新为软件关闭状态。
- * 调用场景：AO 输出未使能或运行中被关闭时调用。
- * 关键约束：不访问 AD5421，不做阻塞操作，避免未接电流环触发诊断故障。
- */
-static void AoOutput_SetDisabledRuntime(uint32_t now)
+/* 按当前工作模式选择芯片初始化时应保持的电流。 */
+static uint32_t AoOutput_GetInitialCurrent(const AoOutputConfig *config)
 {
-    ao_output_runtime.target_mA_x100 = 0U;
-    ao_output_runtime.last_sent_mA_x100 = 0U;
-    ao_output_runtime.source = AO_OUTPUT_SOURCE_DISABLED;
-    ao_output_runtime.driver_fault_flags = 0U;
-    ao_output_runtime.driver_fault_register = 0U;
-    ao_output_runtime.last_error_code = NO_ERROR;
-    ao_output_runtime.last_update_tick = now;
-    ao_output_runtime.last_sent_tick = 0U;
-    ao_output_runtime.update_counter++;
+    if (config->work_mode == AO_WORK_MODE_DISABLED) {
+        return AO_DISABLED_CURRENT_MA_X100;
+    }
+    if (config->current_mode == AO_CURRENT_MODE_FIXED) {
+        return config->fixed_current_mA_x100;
+    }
+    return config->power_on_current_mA_x100;
 }
 
-/*
- * 函数用途：按需初始化 AD5421，并缓存驱动可用状态。
- * 调用场景：AO 输出已使能时，由初始化和周期更新路径调用。
- * 关键约束：会访问 SPI 和 AD5421 诊断寄存器，不应在中断中调用。
- */
-static uint32_t AoOutput_EnsureDriverReady(uint32_t now, uint8_t allow_init)
+/* 按需初始化AD5421并缓存驱动可用状态。 */
+static uint32_t AoOutput_EnsureDriverReady(uint32_t now,
+                                           uint8_t allow_init,
+                                           uint32_t initial_mA_x100)
 {
     uint32_t ret;
 
     if (ao_output_driver_ready != 0U) {
         return NO_ERROR;
     }
-
     if (allow_init == 0U) {
-        ret = ao_output_runtime.last_error_code;
-        if (ret == NO_ERROR) {
-            ret = AD5421_INIT_ERROR;
-        }
-        ao_output_runtime.driver_fault_flags = AD5421_GetFaultFlags();
-        ao_output_runtime.driver_fault_register = AD5421_GetFaultRegister();
-        ao_output_runtime.last_update_tick = now;
-        ao_output_runtime.last_error_code = ret;
-        return ret;
+        return AD5421_INIT_ERROR;
     }
-
     if ((ao_output_driver_retry_valid != 0U) &&
         ((now - ao_output_last_driver_retry_tick) < AO_OUTPUT_DIAG_INTERVAL_MS)) {
-        return ao_output_runtime.last_error_code;
+        return AD5421_INIT_ERROR;
     }
 
     ao_output_driver_retry_valid = 1U;
     ao_output_last_driver_retry_tick = now;
-    ret = Ad5421Init();
-    ao_output_runtime.driver_fault_flags = AD5421_GetFaultFlags();
-    ao_output_runtime.driver_fault_register = AD5421_GetFaultRegister();
-    ao_output_runtime.last_update_tick = now;
-    ao_output_runtime.last_error_code = ret;
+    ret = AD5421_InitCurrentX100(AoOutput_ClampHardwareCurrent(initial_mA_x100));
     if (ret == NO_ERROR) {
         ao_output_driver_ready = 1U;
         ao_output_driver_retry_valid = 0U;
@@ -326,36 +666,30 @@ static uint32_t AoOutput_EnsureDriverReady(uint32_t now, uint8_t allow_init)
         ao_output_last_diag_tick = 0U;
         ao_output_last_diag_error = NO_ERROR;
         AoOutput_ResetRecoverState();
-        ao_output_last_recover_target_mA_x100 = AoOutput_NormalizeHardwareCurrent(g_deviceParams.InitialCurrent_mA);
+        ao_output_last_recover_target_mA_x100 = initial_mA_x100;
         AoOutput_QueueDriverRecovery();
+    } else if (AoOutput_IsOvertemperatureError(ret) != 0U) {
+        /* 初始化已完成到末尾诊断，保留SPI诊断能力并等待温度故障清除。 */
+        ao_output_driver_ready = 1U;
+        ao_output_driver_retry_valid = 0U;
     }
-
     return ret;
 }
 
-/*
- * 函数用途：按节流周期轮询 AD5421 诊断。
- * 调用场景：AO 已使能且驱动已初始化后的周期刷新。
- * 关键约束：诊断访问 SPI，故障持续时不在每轮主循环阻塞访问硬件。
- */
+/* 按节流周期轮询AD5421诊断。 */
 static uint32_t AoOutput_PollDiagnosticsThrottled(uint32_t now)
 {
     if ((ao_output_diag_valid != 0U) &&
         ((now - ao_output_last_diag_tick) < AO_OUTPUT_DIAG_INTERVAL_MS)) {
         return ao_output_last_diag_error;
     }
-
     ao_output_diag_valid = 1U;
     ao_output_last_diag_tick = now;
     ao_output_last_diag_error = AD5421_PollDiagnostics();
     return ao_output_last_diag_error;
 }
 
-/*
- * 函数用途：判断本轮是否需要写入 AD5421 电流。
- * 调用场景：AO 目标电流计算完成后，进入硬件写入前调用。
- * 关键约束：目标变化立即写；目标不变且上次写失败时按周期重试，避免主循环持续阻塞。
- */
+/* 目标变化立即写，目标不变每秒刷新，失败目标按周期重试。 */
 static uint8_t AoOutput_ShouldWriteCurrent(uint32_t now, uint32_t target_mA_x100)
 {
     if (target_mA_x100 != ao_output_runtime.last_sent_mA_x100) {
@@ -365,483 +699,201 @@ static uint8_t AoOutput_ShouldWriteCurrent(uint32_t now, uint32_t target_mA_x100
         }
         return ((now - ao_output_last_write_attempt_tick) >= AO_OUTPUT_REFRESH_INTERVAL_MS) ? 1U : 0U;
     }
-
     return ((now - ao_output_runtime.last_sent_tick) >= AO_OUTPUT_REFRESH_INTERVAL_MS) ? 1U : 0U;
 }
 
-/*
- * 函数用途：将无符号数限制在指定上下限内。
- * 调用场景：AO 电流参数归一化和液位映射计算。
- * 关键约束：纯计算函数，不访问外设和全局运行态。
- */
-static uint32_t AoOutput_ClampU32(uint32_t value, uint32_t min, uint32_t max)
-{
-    if (value < min) {
-        return min;
-    }
-    if (value > max) {
-        return max;
-    }
-    return value;
-}
-
-/*
- * 函数用途：按 AD5421 硬件允许范围归一化电流。
- * 调用场景：写入 AD5421 前统一限制输出电流。
- * 关键约束：单位为 0.01mA，只做纯计算。
- */
-static uint32_t AoOutput_NormalizeHardwareCurrent(uint32_t current_mA_x100)
-{
-    return AoOutput_ClampU32(current_mA_x100, AO_OUTPUT_MIN_MA_X100, AO_OUTPUT_MAX_MA_X100);
-}
-
-/*
- * 函数用途：按正常 4-20mA 业务量程归一化电流参数。
- * 调用场景：液位线性映射使用起点/终点电流前。
- * 关键约束：单位为 0.01mA，只做纯计算。
- */
-static uint32_t AoOutput_NormalizeNormalCurrent(uint32_t current_mA_x100)
-{
-    return AoOutput_ClampU32(current_mA_x100,
-                             AO_OUTPUT_NORMAL_MIN_MA_X100,
-                             AO_OUTPUT_NORMAL_MAX_MA_X100);
-}
-
-/*
- * 函数用途：判断当前液位是否可用于 AO 线性输出。
- * 调用场景：选择 AO 输出来源时过滤无效液位。
- * 关键约束：只读取测量结果，不改变测量状态。
- */
-static uint8_t AoOutput_LevelIsValid(uint32_t level_01mm)
-{
-    if (level_01mm == UNVALID_LEVEL) {
-        return 0U;
-    }
-    if ((g_measurement.oil_measurement.probe_at_liquid_level == 0U) &&
-        (g_measurement.oil_measurement.liquid_stable == 0U)) {
-        return 0U;
-    }
-    return 1U;
-}
-
-/*
- * 函数用途：判断当前设备是否处于调试模式。
- * 调用场景：AO 输出来源选择，调试模式优先输出调试电流。
- * 关键约束：只读取设备状态，不切换状态机。
- */
-static uint8_t AoOutput_IsDebugState(void)
-{
-    return (g_measurement.device_status.device_state == STATE_DEBUG_MODE) ? 1U : 0U;
-}
-/*
- * 函数用途：选择 AO 正常液位电流换算使用的液位量程。
- * 调用场景：液位有效并准备计算 4-20mA 目标电流前调用。
- * 关键约束：AOStartLevel_01mm/AOEndLevel_01mm 复用为 起点/终点液位，不改变参数存储结构大小。
- */
-static uint32_t AoOutput_GetLevelRange(uint32_t *level_min_01mm, uint32_t *level_max_01mm)
-{
-    if ((level_min_01mm == NULL) || (level_max_01mm == NULL)) {
-        return PARAM_ADDRESS_OVERFLOW;
-    }
-
-    *level_min_01mm = g_deviceParams.AOStartLevel_01mm;
-    *level_max_01mm = g_deviceParams.AOEndLevel_01mm;
-    if (*level_max_01mm <= *level_min_01mm) {
-        *level_min_01mm = 0U;
-        *level_max_01mm = g_deviceParams.tankHeight;
-        if (*level_max_01mm == 0U) {
-            *level_max_01mm = 1U;
-        }
-    }
-
-    return NO_ERROR;
-}
-
-/*
- * 函数用途：根据液位和量程参数计算 AO 目标电流。
- * 调用场景：液位有效且无故障/调试优先级时调用。
- * 关键约束：只做线性换算，不写 AD5421；参数异常时返回错误供上层转故障电流。
- */
-static uint32_t AoOutput_CalculateLevelCurrent(uint32_t level_01mm, uint32_t *target_mA_x100)
-{
-    uint32_t start_mA_x100 = g_deviceParams.CurrentRangeStart_mA;
-    uint32_t end_mA_x100 = g_deviceParams.CurrentRangeEnd_mA;
-    uint32_t level_min_01mm;
-    uint32_t level_max_01mm;
-    uint32_t level_span_01mm;
-    int32_t current_delta_mA_x100;
-    uint64_t offset_01mm;
-    int64_t scaled;
-    int64_t result_mA_x100;
-    uint32_t ret;
-
-    if (target_mA_x100 == NULL) {
-        return PARAM_ADDRESS_OVERFLOW;
-    }
-
-    start_mA_x100 = AoOutput_NormalizeNormalCurrent(start_mA_x100);
-    end_mA_x100 = AoOutput_NormalizeNormalCurrent(end_mA_x100);
-    *target_mA_x100 = start_mA_x100;
-
-    ret = AoOutput_GetLevelRange(&level_min_01mm, &level_max_01mm);
-    if (ret != NO_ERROR) {
-        return ret;
-    }
-
-    if (end_mA_x100 == start_mA_x100) {
-        start_mA_x100 = AO_OUTPUT_NORMAL_MIN_MA_X100;
-        end_mA_x100 = AO_OUTPUT_NORMAL_MAX_MA_X100;
-        *target_mA_x100 = start_mA_x100;
-    }
-
-    if (level_01mm <= level_min_01mm) {
-        *target_mA_x100 = start_mA_x100;
-        return NO_ERROR;
-    }
-    if (level_01mm >= level_max_01mm) {
-        *target_mA_x100 = end_mA_x100;
-        return NO_ERROR;
-    }
-
-    level_span_01mm = level_max_01mm - level_min_01mm;
-    current_delta_mA_x100 = (int32_t)end_mA_x100 - (int32_t)start_mA_x100;
-    offset_01mm = (uint64_t)(level_01mm - level_min_01mm);
-    scaled = (int64_t)offset_01mm * (int64_t)current_delta_mA_x100;
-    if (scaled >= 0) {
-        scaled += (int64_t)(level_span_01mm / 2U);
-    } else {
-        scaled -= (int64_t)(level_span_01mm / 2U);
-    }
-    scaled /= (int64_t)level_span_01mm;
-    result_mA_x100 = (int64_t)start_mA_x100 + scaled;
-
-    if (result_mA_x100 < (int64_t)AO_OUTPUT_MIN_MA_X100) {
-        *target_mA_x100 = AO_OUTPUT_MIN_MA_X100;
-    } else if (result_mA_x100 > (int64_t)AO_OUTPUT_MAX_MA_X100) {
-        *target_mA_x100 = AO_OUTPUT_MAX_MA_X100;
-    } else {
-        *target_mA_x100 = (uint32_t)result_mA_x100;
-    }
-
-    return NO_ERROR;
-}
-
-/*
- * 函数用途：根据独立 AO 高低报警液位覆盖目标电流。
- * 调用场景：正常液位电流计算完成后，输出前处理 AO 报警优先级。
- * 关键约束：不读取继电器报警状态，AO 报警阈值与继电器阈值相互独立。
- */
-static void AoOutput_ApplyAlarm(uint32_t level_01mm, uint32_t *target_mA_x100, AoOutputSource *source)
-{
-    uint32_t high_alarm_01mm = g_deviceParams.AlarmHighAO;
-    uint32_t low_alarm_01mm = g_deviceParams.AlarmLowAO;
-    uint32_t tank_height_01mm = g_deviceParams.tankHeight;
-
-    if ((target_mA_x100 == NULL) || (source == NULL)) {
-        return;
-    }
-
-    if (tank_height_01mm != 0U) {
-        if (high_alarm_01mm > tank_height_01mm) {
-            high_alarm_01mm = 0U;
-        }
-        if (low_alarm_01mm > tank_height_01mm) {
-            low_alarm_01mm = 0U;
-        }
-    }
-
-    if ((high_alarm_01mm != 0U) &&
-        (low_alarm_01mm != 0U) &&
-        (low_alarm_01mm >= high_alarm_01mm)) {
-        return;
-    }
-
-    if ((low_alarm_01mm != 0U) && (level_01mm <= low_alarm_01mm)) {
-        *target_mA_x100 = AoOutput_NormalizeHardwareCurrent(g_deviceParams.AOLowCurrent_mA);
-        *source = AO_OUTPUT_SOURCE_ALARM_LOW;
-    } else if ((high_alarm_01mm != 0U) && (level_01mm >= high_alarm_01mm)) {
-        *target_mA_x100 = AoOutput_NormalizeHardwareCurrent(g_deviceParams.AOHighCurrent_mA);
-        *source = AO_OUTPUT_SOURCE_ALARM_HIGH;
-    }
-}
-
-/*
- * 函数用途：按故障、调试、液位和报警优先级选择 AO 目标电流。
- * 调用场景：AO 周期更新中，驱动诊断正常后调用。
- * 关键约束：只计算目标值和来源，不直接写 AD5421。
- */
-static uint32_t AoOutput_SelectTarget(AoOutputSource *source, uint32_t *target_mA_x100)
-{
-    uint32_t level_01mm;
-    uint32_t ret;
-
-    if ((source == NULL) || (target_mA_x100 == NULL)) {
-        return PARAM_ADDRESS_OVERFLOW;
-    }
-
-    *target_mA_x100 = AoOutput_NormalizeHardwareCurrent(g_deviceParams.InitialCurrent_mA);
-
-    if ((g_measurement.device_status.error_code != NO_ERROR) &&
-        (g_measurement.device_status.error_code != STATE_SWITCH)) {
-        *source = AO_OUTPUT_SOURCE_FAULT;
-        *target_mA_x100 = AoOutput_NormalizeHardwareCurrent(g_deviceParams.FaultCurrent_mA);
-        return NO_ERROR;
-    }
-
-    if (AoOutput_IsDebugState() != 0U) {
-        *source = AO_OUTPUT_SOURCE_DEBUG;
-        *target_mA_x100 = AoOutput_NormalizeHardwareCurrent(g_deviceParams.DebugCurrent_mA);
-        return NO_ERROR;
-    }
-
-    level_01mm = g_measurement.oil_measurement.oil_level;
-    if (AoOutput_LevelIsValid(level_01mm) != 0U) {
-        *source = AO_OUTPUT_SOURCE_LEVEL;
-        ret = AoOutput_CalculateLevelCurrent(level_01mm, target_mA_x100);
-        if (ret != NO_ERROR) {
-            *source = AO_OUTPUT_SOURCE_FAULT;
-            *target_mA_x100 = AoOutput_NormalizeHardwareCurrent(g_deviceParams.FaultCurrent_mA);
-            return ret;
-        }
-        AoOutput_ApplyAlarm(level_01mm, target_mA_x100, source);
-        *target_mA_x100 = AoOutput_NormalizeHardwareCurrent(*target_mA_x100);
-        return NO_ERROR;
-    }
-
-    *source = AO_OUTPUT_SOURCE_INIT;
-    *target_mA_x100 = AoOutput_NormalizeHardwareCurrent(g_deviceParams.InitialCurrent_mA);
-    return NO_ERROR;
-}
-
-/*
- * 函数用途：选择 AD5421 恢复后应写回的目标电流。
- * 调用场景：诊断异常触发恢复序列前调用。
- * 关键约束：优先使用当前有效目标，其次使用上次成功输出，最后回退到初始电流。
- */
-static void AoOutput_GetRecoverTarget(AoOutputSource *source, uint32_t *target_mA_x100)
-{
-    uint32_t select_ret;
-
-    if ((source == NULL) || (target_mA_x100 == NULL)) {
-        return;
-    }
-
-    select_ret = AoOutput_SelectTarget(source, target_mA_x100);
-    if (select_ret == NO_ERROR) {
-        *target_mA_x100 = AoOutput_NormalizeHardwareCurrent(*target_mA_x100);
-        return;
-    }
-
-    *source = (AoOutputSource)ao_output_runtime.source;
-    if ((*source == AO_OUTPUT_SOURCE_DISABLED) ||
-        (*source == AO_OUTPUT_SOURCE_DRIVER_ERROR)) {
-        *source = AO_OUTPUT_SOURCE_INIT;
-    }
-
-    if (ao_output_last_recover_target_mA_x100 != 0U) {
-        *target_mA_x100 = AoOutput_NormalizeHardwareCurrent(ao_output_last_recover_target_mA_x100);
-    } else if (ao_output_runtime.last_sent_mA_x100 != 0U) {
-        *target_mA_x100 = AoOutput_NormalizeHardwareCurrent(ao_output_runtime.last_sent_mA_x100);
-    } else {
-        *target_mA_x100 = AoOutput_NormalizeHardwareCurrent(g_deviceParams.InitialCurrent_mA);
-    }
-}
-/*
- * 函数用途：初始化 AO 输出服务并发布初始运行态。
- * 调用场景：系统参数加载后由主流程调用。
- * 关键约束：AO 未使能时不访问 AD5421；AO 使能时会走 SPI 初始化和诊断，不应在中断中调用。
- */
+/* 初始化AO并锁存一次上电等待状态，直到所选过程源首次明确发布。 */
 uint32_t AoOutput_Init(void)
 {
-    uint32_t ret;
+    AoOutputConfig config;
+    AoOutputRuntime next = {0};
     uint32_t now;
+    uint32_t initial_mA_x100;
+    uint32_t ret;
 
     if (AoOutput_TryEnterUpdate() == 0U) {
         return ao_output_runtime.last_error_code;
     }
-
+    now = HAL_GetTick();
     ao_output_initialized = 1U;
     ao_output_driver_ready = 0U;
-    now = HAL_GetTick();
-    if (AoOutput_IsEnabled() == 0U) {
-        AoOutput_SetDisabledRuntime(now);
+    ao_output_driver_retry_valid = 0U;
+    ao_output_diag_valid = 0U;
+    ao_output_write_attempt_valid = 0U;
+    ao_last_normal_current_valid = 0U;
+    ao_filter_initialized = 0U;
+    memset(ao_process_samples, 0, sizeof(ao_process_samples));
+    ao_simulation_enabled = 0U;
+
+    AoOutput_GetConfigSnapshot(&config);
+    ao_output_power_on_pending =
+            (((config.work_mode == AO_WORK_MODE_CURRENT_OUTPUT) ||
+              (config.work_mode == AO_WORK_MODE_HART_SLAVE_OUTPUT)) &&
+             (config.current_mode != AO_CURRENT_MODE_FIXED)) ? 1U : 0U;
+    initial_mA_x100 = AoOutput_GetInitialCurrent(&config);
+    next.target_mA_x100 = initial_mA_x100;
+    next.last_sent_mA_x100 = 0U;
+    next.source = (config.work_mode == AO_WORK_MODE_DISABLED) ?
+                  AO_OUTPUT_SOURCE_DISABLED :
+                  ((config.current_mode == AO_CURRENT_MODE_FIXED) ?
+                   AO_OUTPUT_SOURCE_FIXED : AO_OUTPUT_SOURCE_POWER_ON);
+    next.last_update_tick = now;
+    next.last_error_code = NO_ERROR;
+    next.simulation_enabled = 0U;
+    next.dac_readback_valid = 0U;
+
+    ret = AoOutput_EnsureDriverReady(now, 1U, initial_mA_x100);
+    next.driver_fault_flags = AD5421_GetFaultFlags();
+    next.driver_fault_register = AD5421_GetFaultRegister();
+    next.last_error_code = ret;
+    if (ret == NO_ERROR) {
+        next.last_sent_mA_x100 = initial_mA_x100;
+        next.last_sent_tick = now;
+        next.update_counter = 1U;
+        AoOutput_CommitRuntime(&next);
         AoOutput_LeaveUpdate();
         return NO_ERROR;
     }
 
-    ret = AoOutput_EnsureDriverReady(now, 1U);
-    ao_output_runtime.target_mA_x100 = AoOutput_NormalizeHardwareCurrent(g_deviceParams.InitialCurrent_mA);
-    ao_output_runtime.last_sent_mA_x100 = 0U;
-    ao_output_runtime.source = AO_OUTPUT_SOURCE_INIT;
-    ao_output_runtime.driver_fault_flags = AD5421_GetFaultFlags();
-    ao_output_runtime.driver_fault_register = AD5421_GetFaultRegister();
-    ao_output_runtime.last_error_code = ret;
-    ao_output_runtime.update_counter = 0U;
-    ao_output_runtime.last_update_tick = now;
-    ao_output_runtime.last_sent_tick = 0U;
-
-    if (ret != NO_ERROR) {
-        ao_output_runtime.source = AO_OUTPUT_SOURCE_DRIVER_ERROR;
-        ao_output_runtime.target_mA_x100 = AoOutput_NormalizeHardwareCurrent(g_deviceParams.FaultCurrent_mA);
-        AoOutput_QueueDriverError(ret);
-        AoOutput_LeaveUpdate();
-        return ret;
-    }
-
-    ret = AoOutput_UpdateInternal(1U);
+    next.source = AO_OUTPUT_SOURCE_DRIVER_ERROR;
+    next.update_counter = 1U;
+    AoOutput_CommitRuntime(&next);
+    AoOutput_QueueDriverError(ret);
     AoOutput_LeaveUpdate();
     return ret;
 }
 
-/*
- * 函数用途：刷新 AO 目标电流并写入 AD5421。
- * 调用场景：AO 初始化、前台刷新和 PendSV 延后刷新共用内部流程。
- * 关键约束：调用方必须先持有 AO 更新窗口；由 PendSV 调用时会抑制驱动内部打印。
- */
+/* 执行AO固定优先级状态机并刷新AD5421。 */
 static uint32_t AoOutput_UpdateInternal(uint8_t allow_driver_init)
 {
-    AoOutputSource source = AO_OUTPUT_SOURCE_INIT;
-    uint32_t target_mA_x100;
+    AoOutputConfig config;
+    AoOutputRuntime next;
+    AoOutputSource source = AO_OUTPUT_SOURCE_POWER_ON;
     uint32_t now;
-    uint32_t ret = NO_ERROR;
-    uint32_t select_ret = NO_ERROR;
+    uint32_t initial_mA_x100;
+    uint32_t target_mA_x100 = 400U;
+    uint32_t process_valid = 0U;
+    uint32_t ret;
     uint32_t diag_ret;
-    uint8_t should_send = 0U;
+    int32_t process_value_01mm = 0;
+    int32_t percent_x100 = 0;
+    uint8_t should_send;
 
     if (ao_output_initialized == 0U) {
         return NO_ERROR;
     }
-
+    AoOutput_GetConfigSnapshot(&config);
     now = HAL_GetTick();
-    if (AoOutput_IsEnabled() == 0U) {
-        ao_output_driver_ready = 0U;
-        ao_output_driver_retry_valid = 0U;
-        ao_output_diag_valid = 0U;
-        ao_output_write_attempt_valid = 0U;
-        ao_output_last_driver_retry_tick = 0U;
-        ao_output_last_diag_tick = 0U;
-        ao_output_last_diag_error = NO_ERROR;
-        ao_output_last_write_attempt_tick = 0U;
-        ao_output_last_write_attempt_mA_x100 = 0U;
-        AoOutput_ResetRecoverState();
-        AoOutput_SetDisabledRuntime(now);
-        return NO_ERROR;
-    }
-
-    ret = AoOutput_EnsureDriverReady(now, allow_driver_init);
+    initial_mA_x100 = AoOutput_GetInitialCurrent(&config);
+    ret = AoOutput_EnsureDriverReady(now, allow_driver_init, initial_mA_x100);
     if (ret != NO_ERROR) {
-        return AoOutput_RecordRuntimeDriverError(now, ret);
+        return AoOutput_RecordRuntimeDriverError(&config,
+                                                  now,
+                                                  ret,
+                                                  AoOutput_IsOvertemperatureError(ret));
     }
 
     diag_ret = AoOutput_PollDiagnosticsThrottled(now);
     if (diag_ret != NO_ERROR) {
+        uint32_t recover_target = ao_output_runtime.last_sent_mA_x100;
         uint32_t recover_ret = diag_ret;
 
-        if (AoOutput_ShouldRecover(now) != 0U) {
-            AoOutputSource recover_source = source;
-            uint32_t recover_target_mA_x100;
-
-            AoOutput_GetRecoverTarget(&recover_source, &recover_target_mA_x100);
+        if (recover_target == 0U) {
+            recover_target = initial_mA_x100;
+        }
+        if ((AoOutput_IsDiagnosticRecoveryAllowed(diag_ret) != 0U) &&
+            (AoOutput_ShouldRecover(now) != 0U)) {
             ao_output_recover_valid = 1U;
             ao_output_last_recover_tick = now;
-            recover_ret = AD5421_RecoverCurrentX100(recover_target_mA_x100);
-            ao_output_runtime.driver_fault_flags = AD5421_GetFaultFlags();
-            ao_output_runtime.driver_fault_register = AD5421_GetFaultRegister();
-
+            recover_ret = AD5421_RecoverCurrentX100(recover_target);
             if (recover_ret == NO_ERROR) {
+                ao_output_driver_ready = 1U;
                 ao_output_diag_valid = 0U;
                 ao_output_last_diag_error = NO_ERROR;
                 ao_output_write_attempt_valid = 0U;
-                ao_output_last_recover_target_mA_x100 = recover_target_mA_x100;
-                ao_output_runtime.target_mA_x100 = recover_target_mA_x100;
-                ao_output_runtime.last_sent_mA_x100 = recover_target_mA_x100;
-                ao_output_runtime.source = (uint32_t)recover_source;
-                ao_output_runtime.last_update_tick = now;
-                ao_output_runtime.last_sent_tick = now;
-                ao_output_runtime.last_error_code = NO_ERROR;
-                ao_output_runtime.update_counter++;
+                ao_output_last_recover_target_mA_x100 = recover_target;
                 AoOutput_QueueDriverRecovery();
-                return NO_ERROR;
-            }
-
-            ao_output_diag_valid = 1U;
-            ao_output_last_diag_tick = now;
-            ao_output_last_diag_error = recover_ret;
-            if (recover_ret != AD5421_FAULT_STATUS_ERROR) {
-                return AoOutput_RecordRuntimeDriverError(now, recover_ret);
             }
         }
+        if (recover_ret != NO_ERROR) {
+            uint8_t preserve_driver_ready =
+                    (AoOutput_IsOvertemperatureError(diag_ret) != 0U) ? 1U : 0U;
 
-        source = AO_OUTPUT_SOURCE_DRIVER_ERROR;
-        target_mA_x100 = AoOutput_NormalizeHardwareCurrent(g_deviceParams.FaultCurrent_mA);
-        ret = recover_ret;
-    } else {
-        select_ret = AoOutput_SelectTarget(&source, &target_mA_x100);
-        if (select_ret != NO_ERROR) {
-            ret = select_ret;
+            return AoOutput_RecordRuntimeDriverError(&config,
+                                                      now,
+                                                      recover_ret,
+                                                      preserve_driver_ready);
         }
     }
 
+    ret = AoOutput_SelectTarget(&config,
+                                now,
+                                &source,
+                                &target_mA_x100,
+                                &process_value_01mm,
+                                &percent_x100,
+                                &process_valid);
+    if (ret != NO_ERROR) {
+        return ret;
+    }
+    target_mA_x100 = AoOutput_ClampHardwareCurrent(target_mA_x100);
     should_send = AoOutput_ShouldWriteCurrent(now, target_mA_x100);
 
-    ao_output_runtime.target_mA_x100 = target_mA_x100;
-    ao_output_runtime.source = (uint32_t)source;
-    ao_output_runtime.driver_fault_flags = AD5421_GetFaultFlags();
-    ao_output_runtime.driver_fault_register = AD5421_GetFaultRegister();
-    ao_output_runtime.last_update_tick = now;
-    ao_output_runtime.update_counter++;
-    ao_output_runtime.last_error_code = ret;
+    AoOutput_GetRuntimeSnapshot(&next);
+    next.target_mA_x100 = target_mA_x100;
+    next.source = (uint32_t)source;
+    next.driver_fault_flags = AD5421_GetFaultFlags();
+    next.driver_fault_register = AD5421_GetFaultRegister();
+    next.last_error_code = NO_ERROR;
+    next.last_update_tick = now;
+    next.process_value_01mm = process_value_01mm;
+    next.percent_x100 = percent_x100;
+    next.process_valid = process_valid;
+    next.simulation_enabled = ao_simulation_enabled;
+    next.dac_readback_mA_x100 = 0U;
+    next.dac_readback_valid = 0U;
+    next.update_counter++;
 
     if (should_send != 0U) {
-        uint32_t write_ret = AD5421_SetCurrentX100(target_mA_x100);
+        ret = AD5421_SetCurrentX100(target_mA_x100);
         ao_output_write_attempt_valid = 1U;
         ao_output_last_write_attempt_tick = now;
         ao_output_last_write_attempt_mA_x100 = target_mA_x100;
-        ao_output_runtime.driver_fault_flags = AD5421_GetFaultFlags();
-        ao_output_runtime.driver_fault_register = AD5421_GetFaultRegister();
-        if (write_ret == NO_ERROR) {
-            ao_output_runtime.last_sent_mA_x100 = target_mA_x100;
-            ao_output_runtime.last_sent_tick = now;
-            if (source != AO_OUTPUT_SOURCE_DRIVER_ERROR) {
-                ao_output_last_recover_target_mA_x100 = target_mA_x100;
-                AoOutput_QueueDriverRecovery();
-            }
+        next.driver_fault_flags = AD5421_GetFaultFlags();
+        next.driver_fault_register = AD5421_GetFaultRegister();
+        if (ret == NO_ERROR) {
+            next.last_sent_mA_x100 = target_mA_x100;
+            next.last_sent_tick = now;
+            ao_output_last_recover_target_mA_x100 = target_mA_x100;
+            AoOutput_QueueDriverRecovery();
         } else {
-            ret = write_ret;
-            target_mA_x100 = AoOutput_NormalizeHardwareCurrent(g_deviceParams.FaultCurrent_mA);
-            ao_output_runtime.target_mA_x100 = target_mA_x100;
-            ao_output_runtime.source = AO_OUTPUT_SOURCE_DRIVER_ERROR;
+            return AoOutput_RecordRuntimeDriverError(&config,
+                                                      now,
+                                                      ret,
+                                                      AoOutput_IsOvertemperatureError(ret));
         }
-        ao_output_runtime.last_error_code = ret;
-    }
-    if (AoOutput_IsRuntimeDriverError(ret) != 0U) {
-        AoOutput_QueueDriverError(ret);
-        return NO_ERROR;
     }
 
-    return ret;
+    if ((source == AO_OUTPUT_SOURCE_PROCESS) &&
+        (next.last_sent_mA_x100 == target_mA_x100)) {
+        ao_last_normal_current_mA_x100 = target_mA_x100;
+        ao_last_normal_current_valid = 1U;
+    }
+    AoOutput_CommitRuntime(&next);
+    return NO_ERROR;
 }
 
-/*
- * 函数用途：刷新 AO 目标电流并写入 AD5421，带重入保护。
- * 调用场景：前台流程或测量流程需要主动刷新 AO 时调用。
- * 关键约束：内部会访问 SPI/GPIO；如果 PendSV 正在刷新，则返回上一次 AO 状态。
- */
+/* 带重入保护地执行一次任务态AO刷新。 */
 uint32_t AoOutput_Update(void)
 {
     uint32_t ret;
 
     if (AoOutput_TryEnterUpdate() == 0U) {
         ret = ao_output_runtime.last_error_code;
-        if (AoOutput_IsRuntimeDriverError(ret) != 0U) {
-            return NO_ERROR;
-        }
-        return ret;
+        return (AoOutput_IsRuntimeDriverError(ret) != 0U) ? NO_ERROR : ret;
     }
-
     ret = AoOutput_UpdateInternal(1U);
     AoOutput_LeaveUpdate();
-
     return ret;
 }
 
@@ -1041,6 +1093,7 @@ void AoOutput_ProcessDeferredDiagnostics(void)
                        (unsigned long)error_snapshot.fault_flags,
                        (unsigned long)error_snapshot.expected_value,
                        (unsigned long)error_snapshot.actual_value);
+        /* 错误 阶段：错误报警 模块：模拟量输出 操作：AD5421故障定位 原因：当前错误码映射 处理：保持主流程并后台恢复 */
         ErrorLog_WarnDetail("模拟量输出",
                             "AD5421故障定位",
                             ErrorLog_GetReasonByCode(error_code),
@@ -1056,6 +1109,7 @@ void AoOutput_ProcessDeferredDiagnostics(void)
                        AoOutput_GetDiagnosticStageText(recover_snapshot.stage),
                        (unsigned int)recover_snapshot.reg,
                        (unsigned long)recover_snapshot.fault_register);
+        /* 错误 阶段：重试成功 模块：模拟量输出 操作：AD5421自动恢复 原因：通信及芯片诊断恢复 尝试：1/1 */
         ErrorLog_RecoverDetail("模拟量输出",
                                "AD5421自动恢复",
                                "通信及芯片诊断恢复",
@@ -1064,44 +1118,26 @@ void AoOutput_ProcessDeferredDiagnostics(void)
                                detail);
     }
 }
-/*
- * 函数用途：返回 AO 运行态只读指针。
- * 调用场景：Modbus 输入寄存器、HART 和调试查看。
- * 关键约束：调用方不得通过返回指针修改运行态数据。
- */
+/* 返回兼容旧调用点的只读运行态指针。 */
 const AoOutputRuntime *AoOutput_GetRuntime(void)
 {
     return &ao_output_runtime;
 }
 
-/*
- * 函数用途：返回当前 AO 目标电流的人读 mA 值。
- * 调用场景：HART 电流响应或调试显示。
- * 关键约束：只读取运行态，不触发输出刷新。
- */
+/* HART读取最后一次成功下发的电流，而不是尚未写入的目标值。 */
 float AoOutput_GetCurrent_mA(void)
 {
-    return ((float)ao_output_runtime.target_mA_x100) / 100.0f;
+    AoOutputRuntime snapshot;
+
+    AoOutput_GetRuntimeSnapshot(&snapshot);
+    return ((float)snapshot.last_sent_mA_x100) / 100.0f;
 }
 
-/*
- * 函数用途：按 4-20mA 标准量程计算当前 AO 百分比。
- * 调用场景：HART Command 2/3 响应电流百分比。
- * 关键约束：结果钳位在 0..1，不访问 AD5421。
- */
+/* 返回真实百分数，例如50.00表示50%，不再返回0.5。 */
 float AoOutput_GetPercentOfRange(void)
 {
-    float percent;
-    float current_mA;
+    AoOutputRuntime snapshot;
 
-    current_mA = AoOutput_GetCurrent_mA();
-    percent = (current_mA - 4.0f) / 16.0f;
-    if (percent < 0.0f) {
-        percent = 0.0f;
-    }
-    if (percent > 1.0f) {
-        percent = 1.0f;
-    }
-
-    return percent;
+    AoOutput_GetRuntimeSnapshot(&snapshot);
+    return ((float)snapshot.percent_x100) / 100.0f;
 }

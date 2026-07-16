@@ -25,38 +25,133 @@ static uint32_t SensorSafeAdapter_NowMs(void)
     return HAL_GetTick();
 }
 
-/* 把新协议的分层错误映射到现有整机错误码，不在适配层直接置全局故障。 */
+/* 把本地协议校验结果映射为现场可区分的故障原因。 */
+static uint32_t SensorSafeAdapter_MapProtocolResult(SensorSafeResult result)
+{
+    switch (result) {
+    case SENSOR_SAFE_BAD_CRC:
+        return SENSOR_BCC_ERROR;
+    case SENSOR_SAFE_BAD_VERSION:
+        return SENSOR_PROTOCOL_VERSION_INCOMPATIBLE;
+    case SENSOR_SAFE_BAD_CAPABILITY:
+        return SENSOR_CAPABILITY_UNSUPPORTED;
+    case SENSOR_SAFE_BAD_ADDRESS:
+        return SENSOR_ADDRESS_MISMATCH;
+    case SENSOR_SAFE_BAD_SESSION:
+        return SENSOR_SESSION_INVALID;
+    case SENSOR_SAFE_BAD_SENSOR:
+        return SENSOR_IDENTITY_MISMATCH;
+    case SENSOR_SAFE_BAD_SEQUENCE:
+        return SENSOR_SEQUENCE_ERROR;
+    case SENSOR_SAFE_NEEDS_HELLO:
+        return SENSOR_HANDSHAKE_REQUIRED;
+    case SENSOR_SAFE_REPLAY_DETECTED:
+        return SENSOR_REPLAY_DETECTED;
+    case SENSOR_SAFE_BAD_PARAM_CRC:
+        return SENSOR_PARAM_CRC_ERROR;
+    case SENSOR_SAFE_BAD_CONFIG_EPOCH:
+        return SENSOR_CONFIG_EPOCH_MISMATCH;
+    case SENSOR_SAFE_BAD_SAMPLE_COUNTER:
+        return SENSOR_SAMPLE_COUNTER_ERROR;
+    case SENSOR_SAFE_BAD_STREAM_STATE:
+        return SENSOR_STREAM_STATE_ERROR;
+    case SENSOR_SAFE_STREAM_STOPPED:
+        return SENSOR_STREAM_STOPPED;
+    case SENSOR_SAFE_DATA_STALE:
+        return SENSOR_DATA_STALE;
+    case SENSOR_SAFE_MODE_MISMATCH:
+        return SENSOR_MODE_MISMATCH;
+    case SENSOR_SAFE_TRANSACTION_PENDING:
+        return SENSOR_TRANSACTION_PENDING;
+    default:
+        return SENSOR_RESP_FORMAT_ERROR;
+    }
+}
+
+/* 把传感器明确返回的在线结果码映射为对应硬件、状态或配置故障。 */
+static uint32_t SensorSafeAdapter_MapWireResult(uint16_t result, uint32_t invalid_data_error)
+{
+    switch ((SensorSafeWireResult)result) {
+    case SENSOR_SAFE_WIRE_UNSUPPORTED_VERSION:
+        return SENSOR_PROTOCOL_VERSION_INCOMPATIBLE;
+    case SENSOR_SAFE_WIRE_UNSUPPORTED_COMMAND:
+        return SENSOR_COMMAND_UNSUPPORTED;
+    case SENSOR_SAFE_WIRE_BAD_ARGUMENT:
+        return SENSOR_ARGUMENT_REJECTED;
+    case SENSOR_SAFE_WIRE_BAD_LENGTH:
+        return SENSOR_RESP_FORMAT_ERROR;
+    case SENSOR_SAFE_WIRE_BAD_CRC:
+        return SENSOR_BCC_ERROR;
+    case SENSOR_SAFE_WIRE_BAD_SEQUENCE:
+        return SENSOR_SEQUENCE_ERROR;
+    case SENSOR_SAFE_WIRE_BAD_SESSION:
+        return SENSOR_SESSION_INVALID;
+    case SENSOR_SAFE_WIRE_BAD_ADDRESS:
+        return SENSOR_ADDRESS_MISMATCH;
+    case SENSOR_SAFE_WIRE_MODE_NOT_READY:
+        return SENSOR_MODE_NOT_READY;
+    case SENSOR_SAFE_WIRE_MODE_NOT_ALLOWED:
+        return SENSOR_MODE_NOT_ALLOWED;
+    case SENSOR_SAFE_WIRE_DEVICE_BUSY:
+        return SENSOR_DEVICE_BUSY;
+    case SENSOR_SAFE_WIRE_DATA_INVALID:
+        return invalid_data_error;
+    case SENSOR_SAFE_WIRE_DATA_STALE:
+        return SENSOR_DATA_STALE;
+    case SENSOR_SAFE_WIRE_CONFIG_MISMATCH:
+        return SENSOR_CONFIG_EPOCH_MISMATCH;
+    case SENSOR_SAFE_WIRE_PARAM_CRC_ERROR:
+        return SENSOR_PARAM_CRC_ERROR;
+    case SENSOR_SAFE_WIRE_SELF_TEST_FAILED:
+        return SENSOR_SELF_TEST_FAILED;
+    case SENSOR_SAFE_WIRE_POWER_ERROR:
+        return SENSOR_POWER_SUPPLY_ERROR;
+    case SENSOR_SAFE_WIRE_TEMPERATURE_ERROR:
+        return SENSOR_TEMPERATURE_RANGE_ERROR;
+    case SENSOR_SAFE_WIRE_STREAM_NOT_ACTIVE:
+        return SENSOR_STREAM_NOT_ACTIVE;
+    case SENSOR_SAFE_WIRE_STREAM_ALREADY_ACTIVE:
+        return SENSOR_STREAM_ALREADY_ACTIVE;
+    case SENSOR_SAFE_WIRE_STREAM_EXIT_FAILED:
+        return SENSOR_STREAM_EXIT_FAILED;
+    default:
+        return SENSOR_REMOTE_INTERNAL_ERROR;
+    }
+}
+
+/* 把新协议的分层错误映射到整机错误码，不在适配层直接置全局故障。 */
 static uint32_t SensorSafeAdapter_MapResult(SensorSafeServiceResult result,
-                                            uint32_t invalid_data_error)
+                                             uint32_t invalid_data_error)
 {
     switch (result) {
     case SENSOR_SAFE_SERVICE_OK:
         return NO_ERROR;
     case SENSOR_SAFE_SERVICE_INVALID_ARGUMENT:
-        return PARAM_ADDRESS_OVERFLOW;
+        return SYSTEM_CALL_CONDITION_ERROR;
     case SENSOR_SAFE_SERVICE_TRANSPORT_ERROR:
         if (s_safe_service.client.last_transport_result == SENSOR_SAFE_TRANSPORT_TIMEOUT) {
             return SENSOR_DEVICE_COMM_TIMEOUT;
         }
         return COMM_UART_TRANSFER_ERROR;
     case SENSOR_SAFE_SERVICE_PROTOCOL_ERROR:
-        if (s_safe_service.client.last_protocol_result == SENSOR_SAFE_BAD_CRC) {
-            return SENSOR_BCC_ERROR;
-        }
-        return SENSOR_RESP_FORMAT_ERROR;
+        return SensorSafeAdapter_MapProtocolResult(s_safe_service.client.last_protocol_result);
     case SENSOR_SAFE_SERVICE_REMOTE_ERROR:
-        return SENSOR_DEVICE_REPORTED_ERROR;
+        return SensorSafeAdapter_MapWireResult(s_safe_service.client.last_wire_result,
+                                               invalid_data_error);
     case SENSOR_SAFE_SERVICE_DATA_INVALID:
-    case SENSOR_SAFE_SERVICE_DATA_STALE:
         return invalid_data_error;
+    case SENSOR_SAFE_SERVICE_DATA_STALE:
+        return SENSOR_DATA_STALE;
     case SENSOR_SAFE_SERVICE_UNSUPPORTED:
-        return PARAM_ERROR;
+        return SENSOR_CAPABILITY_UNSUPPORTED;
     case SENSOR_SAFE_SERVICE_BUFFER_TOO_SMALL:
-        return PARAM_ADDRESS_OVERFLOW;
+        return SYSTEM_BUFFER_CAPACITY_ERROR;
     case SENSOR_SAFE_SERVICE_IDENTITY_ERROR:
+        return SENSOR_IDENTITY_MISMATCH;
     case SENSOR_SAFE_SERVICE_SESSION_ERROR:
+        return SENSOR_SESSION_INVALID;
     default:
-        return SENSOR_RESP_FORMAT_ERROR;
+        return SENSOR_REMOTE_INTERNAL_ERROR;
     }
 }
 
@@ -68,11 +163,14 @@ static uint32_t SensorSafeAdapter_MapRecoveryError(void)
                    ? SENSOR_DEVICE_COMM_TIMEOUT
                    : COMM_UART_TRANSFER_ERROR;
     }
-    if ((s_safe_service.last_recovery_trigger == SENSOR_SAFE_CLIENT_PROTOCOL_ERROR) &&
-        (s_safe_service.last_recovery_protocol_result == SENSOR_SAFE_BAD_CRC)) {
-        return SENSOR_BCC_ERROR;
+    if (s_safe_service.last_recovery_trigger == SENSOR_SAFE_CLIENT_PROTOCOL_ERROR) {
+        return SensorSafeAdapter_MapProtocolResult(s_safe_service.last_recovery_protocol_result);
     }
-    return SENSOR_RESP_FORMAT_ERROR;
+    if (s_safe_service.last_recovery_trigger == SENSOR_SAFE_CLIENT_REMOTE_ERROR) {
+        return SensorSafeAdapter_MapWireResult(s_safe_service.last_recovery_wire_result,
+                                               SENSOR_REMOTE_INTERNAL_ERROR);
+    }
+    return SENSOR_SESSION_INVALID;
 }
 
 /* 适配层在业务调用返回后统一记录恢复尝试和最终成功，不重复承担最终故障出口。 */
@@ -135,19 +233,19 @@ uint32_t SensorSafeAdapter_Probe(uint32_t *sensor_id)
     SensorSafeServiceResult result;
 
     if (sensor_id == NULL) {
-        return PARAM_ADDRESS_OVERFLOW;
+        return SYSTEM_CALL_CONDITION_ERROR;
     }
     result = SensorSafeAdapter_EnsureInitialized();
     if (result != SENSOR_SAFE_SERVICE_OK) {
         SensorSafeAdapter_Deactivate();
-        return SensorSafeAdapter_MapResult(result, SENSOR_DEVICE_REPORTED_ERROR);
+        return SensorSafeAdapter_MapResult(result, SENSOR_REMOTE_INTERNAL_ERROR);
     }
     SensorSafeTransportUart6_Abort();
     result = SensorSafeService_Probe(&s_safe_service, sensor_id);
     if (result != SENSOR_SAFE_SERVICE_OK) {
         SensorSafeAdapter_Deactivate();
     }
-    return SensorSafeAdapter_MapResult(result, SENSOR_DEVICE_REPORTED_ERROR);
+    return SensorSafeAdapter_MapResult(result, SENSOR_REMOTE_INTERNAL_ERROR);
 }
 
 /* 撤销安全会话并释放 UART6 DMA；不清除身份模块持久化启动计数。 */
@@ -207,7 +305,7 @@ static uint32_t SensorSafeAdapter_SetMode(uint8_t mode)
 
     result = SensorSafeService_SetMeasureMode(&s_safe_service, mode, &settle_time_ms);
     SensorSafeAdapter_LogRecovery(attempts_before, recoveries_before);
-    mapped = SensorSafeAdapter_MapResult(result, SENSOR_DEVICE_REPORTED_ERROR);
+    mapped = SensorSafeAdapter_MapResult(result, SENSOR_MODE_NOT_READY);
     if ((mapped == NO_ERROR) && (settle_time_ms != 0U)) {
         mapped = AbortableDelay_CommandSwitch((uint32_t)settle_time_ms, 50U);
     }
@@ -268,7 +366,7 @@ uint32_t SensorSafeAdapter_ReadWaterCapacitance(float *capacitance_pf)
 
     result = SensorSafeService_ReadWaterCapacitance(&s_safe_service, capacitance_pf);
     SensorSafeAdapter_LogRecovery(attempts_before, recoveries_before);
-    return SensorSafeAdapter_MapResult(result, SENSOR_DEVICE_REPORTED_ERROR);
+    return SensorSafeAdapter_MapResult(result, SENSOR_REMOTE_INTERNAL_ERROR);
 }
 
 /* 读取双轴姿态角并把安全服务结果映射为现有整机错误码。 */
@@ -280,7 +378,7 @@ uint32_t SensorSafeAdapter_ReadGyroAngle(float *angle_x_deg, float *angle_y_deg)
 
     result = SensorSafeService_ReadGyroAngle(&s_safe_service, angle_x_deg, angle_y_deg);
     SensorSafeAdapter_LogRecovery(attempts_before, recoveries_before);
-    return SensorSafeAdapter_MapResult(result, SENSOR_DEVICE_REPORTED_ERROR);
+    return SensorSafeAdapter_MapResult(result, SENSOR_GYRO_ANGLE_ERROR);
 }
 
 /*
@@ -301,5 +399,5 @@ uint32_t SensorSafeAdapter_ReadAllParams(SensorSafeParameterValue *values,
                                              value_capacity,
                                              value_count_out);
     SensorSafeAdapter_LogRecovery(attempts_before, recoveries_before);
-    return SensorSafeAdapter_MapResult(result, SENSOR_DEVICE_REPORTED_ERROR);
+    return SensorSafeAdapter_MapResult(result, SENSOR_PARAM_CRC_ERROR);
 }

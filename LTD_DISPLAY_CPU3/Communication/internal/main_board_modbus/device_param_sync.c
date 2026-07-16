@@ -254,10 +254,6 @@ static volatile uint32_t* get_deviceparam_ptr_by_operanum(int operanum)
     case COM_NUM_DEVICEPARAM_BOTTOM_ENCODER_CORRECTION_TANK_HEIGHT:
         return &g_deviceParams.bottom_encoder_correction_tank_height;
 
-    /* ===== AO 输出配置 ===== */
-    case COM_NUM_DEVICEPARAM_AO_OUTPUT_ENABLE:
-        return &g_deviceParams.AoOutputEnable;
-
     /* ===== 继电器报警输出配置（四路） ===== */
     case COM_NUM_DEVICEPARAM_RELAY1_OPERATING_MODE:
         return &g_deviceParams.relayAlarm[0U].operating_mode;
@@ -364,29 +360,33 @@ static volatile uint32_t* get_deviceparam_ptr_by_operanum(int operanum)
     case COM_NUM_DEVICEPARAM_RELAY4_CLEAR_ALARM:
         return &g_deviceParams.relayAlarm[3U].clear_alarm;
 
-    /* ===== 4-20mA / 报警 AO ===== */
-    case COM_NUM_DEVICEPARAM_AO_START_LEVEL:
-        return &g_deviceParams.AOStartLevel_01mm;
-    case COM_NUM_DEVICEPARAM_AO_END_LEVEL:
-        return &g_deviceParams.AOEndLevel_01mm;
-    case COM_NUM_DEVICEPARAM_AO_NORMAL_CURRENT_START_mA:
-        return &g_deviceParams.CurrentRangeStart_mA;
-    case COM_NUM_DEVICEPARAM_AO_NORMAL_CURRENT_END_mA:
-        return &g_deviceParams.CurrentRangeEnd_mA;
-    case COM_NUM_DEVICEPARAM_AO_HIGH_ALARM_LEVEL:
-        return &g_deviceParams.AlarmHighAO;
-    case COM_NUM_DEVICEPARAM_AO_LOW_ALARM_LEVEL:
-        return &g_deviceParams.AlarmLowAO;
-    case COM_NUM_DEVICEPARAM_INITIAL_CURRENT_mA:
-        return &g_deviceParams.InitialCurrent_mA;
-    case COM_NUM_DEVICEPARAM_AO_HIGH_CURRENT_mA:
-        return &g_deviceParams.AOHighCurrent_mA;
-    case COM_NUM_DEVICEPARAM_AO_LOW_CURRENT_mA:
-        return &g_deviceParams.AOLowCurrent_mA;
-    case COM_NUM_DEVICEPARAM_FAULT_CURRENT_mA:
-        return &g_deviceParams.FaultCurrent_mA;
-    case COM_NUM_DEVICEPARAM_DEBUG_CURRENT_mA:
-        return &g_deviceParams.DebugCurrent_mA;
+    /* ===== 协议20 AO配置 ===== */
+    case COM_NUM_DEVICEPARAM_AO_WORK_MODE:
+        return &g_deviceParams.ao_output.work_mode;
+    case COM_NUM_DEVICEPARAM_AO_CURRENT_MODE:
+        return &g_deviceParams.ao_output.current_mode;
+    case COM_NUM_DEVICEPARAM_AO_OUTPUT_SOURCE:
+        return &g_deviceParams.ao_output.output_source;
+    case COM_NUM_DEVICEPARAM_AO_SIL_WHG_RESERVED:
+        return &g_deviceParams.ao_output.sil_whg_reserved;
+    case COM_NUM_DEVICEPARAM_AO_FIXED_CURRENT_MA_X100:
+        return &g_deviceParams.ao_output.fixed_current_mA_x100;
+    case COM_NUM_DEVICEPARAM_AO_RANGE_0_01MM:
+        return (volatile uint32_t *)&g_deviceParams.ao_output.range_0_01mm;
+    case COM_NUM_DEVICEPARAM_AO_RANGE_100_01MM:
+        return (volatile uint32_t *)&g_deviceParams.ao_output.range_100_01mm;
+    case COM_NUM_DEVICEPARAM_AO_DAMPING_X10_S:
+        return &g_deviceParams.ao_output.damping_x10_s;
+    case COM_NUM_DEVICEPARAM_AO_FAULT_MODE:
+        return &g_deviceParams.ao_output.fault_mode;
+    case COM_NUM_DEVICEPARAM_AO_FAULT_CURRENT_MA_X100:
+        return &g_deviceParams.ao_output.fault_current_mA_x100;
+    case COM_NUM_DEVICEPARAM_AO_ERROR_LEVEL:
+        return &g_deviceParams.ao_output.error_level;
+    case COM_NUM_DEVICEPARAM_AO_POWER_ON_CURRENT_MA_X100:
+        return &g_deviceParams.ao_output.power_on_current_mA_x100;
+    case COM_NUM_DEVICEPARAM_AO_SIMULATION_CURRENT_MA_X100:
+        return &g_deviceParams.ao_output.simulation_current_mA_x100;
 
     /* ===== 指令参数（新寄存器段：注意“操作码”与“参数项”分开） ===== */
     case COM_NUM_DEVICEPARAM_CALIBRATE_OIL_LEVEL:

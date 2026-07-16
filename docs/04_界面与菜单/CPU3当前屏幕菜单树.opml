@@ -279,18 +279,31 @@
             </outline>
           </outline>
           <outline text="AO输出">
-            <outline text="AO起点液位" />
-            <outline text="AO终点液位" />
-            <outline text="AO正常起点电流" />
-            <outline text="AO正常终点电流" />
-            <outline text="AO高报警液位" />
-            <outline text="AO低报警液位" />
-            <outline text="AO初始电流" />
-            <outline text="AO高位电流" />
-            <outline text="AO低位电流" />
-            <outline text="AO故障电流" />
-            <outline text="AO调试电流" />
-            <outline text="AO输出使能" />
+            <outline text="通道设置">
+              <outline text="工作模式" />
+              <outline text="电流模式" />
+              <outline text="输出源" />
+            </outline>
+            <outline text="量程设置">
+              <outline text="固定电流" />
+              <outline text="0%对应值" />
+              <outline text="100%对应值" />
+              <outline text="阻尼系数" />
+            </outline>
+            <outline text="故障设置">
+              <outline text="故障模式" />
+              <outline text="故障电流" />
+              <outline text="错误等级" />
+              <outline text="上电电流" />
+            </outline>
+            <outline text="运行状态">
+              <outline text="输入值 [只读]" />
+              <outline text="输入比例 [只读]" />
+            </outline>
+            <outline text="模拟设置">
+              <outline text="输出模拟" />
+              <outline text="模拟电流" />
+            </outline>
           </outline>
         </outline>
         <outline text="通信设置">

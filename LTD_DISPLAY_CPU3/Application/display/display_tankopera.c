@@ -33,6 +33,9 @@
 #define TAPE_THICKNESS_ETFE_001MM 1100
 #define TAPE_THICKNESS_CUSTOM_INDEX 3
 #define MOTOR_CURRENT_RMS_TABLE_OFFSET MOTOR_CURRENT_MIN
+#define AO_RANGE_PAIR_REGISTER_COUNT 4U
+#define AO_CONFIG_REGISTER_COUNT ((uint16_t)(HOLDREGISTER_DEVICEPARAM_AO_SIMULATION_CURRENT_MA_X100 - \
+                                             HOLDREGISTER_DEVICEPARAM_AO_WORK_MODE + REG_STRIDE))
 extern volatile uint8_t g_cpu3_uart_reinit_pending; /* CPU3 串口重初始化标志 */
 
 typedef void (*pFunc_void)(void);
@@ -60,6 +63,7 @@ static bool debug_weight_wait_started = false; /* 扭力等待页是否已进入
 static bool debug_weight_wait_ignore_initial_done = false; /* 扭力等待页是否忽略进入前残留完成态 */
 static Cpu3DateTime rtc_menu_dt = {0};
 static uint8_t rtc_menu_field = 0U;
+static uint32_t ao_simulation_selection = 0U;
 
 /* ==============================
  * 枚举/隐藏含义文字表
@@ -89,9 +93,47 @@ static uint8_t *arr_position_source_auto_switch[][2] = {
 	{ (uint8_t*)"非法配置", (uint8_t*)"Illegal CFG" },
 };
 
-static uint8_t *arr_ao_output_enable[][2] = {
-	{ (uint8_t*)"关闭", (uint8_t*)"Disabled" },
-	{ (uint8_t*)"启用", (uint8_t*)"Enabled" },
+static uint8_t *arr_ao_work_mode[][2] = {
+	{ (uint8_t*)"禁用", (uint8_t*)"Disabled" },
+	{ (uint8_t*)"4-20mA输出", (uint8_t*)"4-20mA Output" },
+	{ (uint8_t*)"HART从机+输出", (uint8_t*)"HART+Output" },
+	{ (uint8_t*)"非法配置", (uint8_t*)"Illegal CFG" },
+};
+
+static uint8_t *arr_ao_current_mode[][2] = {
+	{ (uint8_t*)"NE 4-20mA", (uint8_t*)"NE 4-20mA" },
+	{ (uint8_t*)"US 4-20mA", (uint8_t*)"US 4-20mA" },
+	{ (uint8_t*)"正常4-20mA", (uint8_t*)"Normal 4-20mA" },
+	{ (uint8_t*)"固定电流", (uint8_t*)"Fixed Current" },
+	{ (uint8_t*)"非法配置", (uint8_t*)"Illegal CFG" },
+};
+
+static uint8_t *arr_ao_output_source[][2] = {
+	{ (uint8_t*)"储罐液位", (uint8_t*)"Tank Level" },
+	{ (uint8_t*)"空高", (uint8_t*)"Ullage" },
+	{ (uint8_t*)"水位", (uint8_t*)"Water Level" },
+	{ (uint8_t*)"非法配置", (uint8_t*)"Illegal CFG" },
+};
+
+static uint8_t *arr_ao_fault_mode[][2] = {
+	{ (uint8_t*)"最小值", (uint8_t*)"Minimum" },
+	{ (uint8_t*)"最大值", (uint8_t*)"Maximum" },
+	{ (uint8_t*)"上次有效值", (uint8_t*)"Last Valid" },
+	{ (uint8_t*)"实时值", (uint8_t*)"Actual Value" },
+	{ (uint8_t*)"设定值", (uint8_t*)"Set Value" },
+	{ (uint8_t*)"非法配置", (uint8_t*)"Illegal CFG" },
+};
+
+static uint8_t *arr_ao_error_level[][2] = {
+	{ (uint8_t*)"无", (uint8_t*)"None" },
+	{ (uint8_t*)"提示", (uint8_t*)"Warning" },
+	{ (uint8_t*)"报警", (uint8_t*)"Alarm" },
+	{ (uint8_t*)"非法配置", (uint8_t*)"Illegal CFG" },
+};
+
+static uint8_t *arr_ao_simulation_enable[][2] = {
+	{ (uint8_t*)"关", (uint8_t*)"Off" },
+	{ (uint8_t*)"开", (uint8_t*)"On" },
 	{ (uint8_t*)"非法配置", (uint8_t*)"Illegal CFG" },
 };
 
@@ -376,7 +418,15 @@ static void menu_relay4_main(void);
 static void menu_relay4_channel(void);
 static void menu_relay4_alarm(void);
 static void menu_relay4_status(void);
-static void menu_ao(void)      ;
+static void menu_ao(void);
+static void menu_ao_channel(void);
+static void menu_ao_range(void);
+static void menu_ao_fault(void);
+static void menu_ao_runtime(void);
+static void menu_ao_diagnostic(void);
+static void ao_simulation_switch_enter(void);
+static void ao_simulation_switch_page(void);
+static void ao_simulation_switch_back(void);
 static void menu_cal_sp(void)     ;
 
 static void menu_param_check(void) ;
@@ -434,6 +484,12 @@ static void displaypara(void);			/* 显示参数值/含义 */
 static void parawritecheck(void);		/* 写权限检查：是否允许修改 */
 static void parascopecheck(void);		/* 范围检查：最小/最大等 */
 static void cmd_configpara_process(void); /* 组包写参数 -> 回读 -> 刷新显示 */
+static bool ao_param_is_config(int operaNum); /* AO持久化配置项判断 */
+static bool ao_param_is_editable(int operaNum); /* AO可见持久化参数写权限 */
+static int32_t ao_range_max_01mm(void); /* 当前输出源的量程输入上限 */
+static bool ao_write_range_pair(void); /* 0%与100%量程成对写入 */
+static bool ao_write_output_source(void); /* 输出源确认写入并补读完整AO配置 */
+static bool ao_write_simulation_enable(uint32_t enabled); /* 写非持久化仿真开关 */
 
 /* ---------- 5) 指令下发流程(无参/带参) ----------
  *	把“确定/返回”的动作映射到具体执行：下发指令或写参数
@@ -677,6 +733,30 @@ struct KeyMenu keymenu[KEYNUM_END] = {
     [KEYNUM_MENU_PARA_AO] =
         { menu_ao, menu_ao, menu_ao, menu_ao,
           USE_KEY_BACK | USE_KEY_UP | USE_KEY_DOWN | USE_KEY_SURE, menu_ao },
+
+    [KEYNUM_MENU_AO_CHANNEL] =
+        { menu_ao_channel, menu_ao_channel, menu_ao_channel, menu_ao_channel,
+          USE_KEY_BACK | USE_KEY_UP | USE_KEY_DOWN | USE_KEY_SURE, menu_ao_channel },
+
+    [KEYNUM_MENU_AO_RANGE] =
+        { menu_ao_range, menu_ao_range, menu_ao_range, menu_ao_range,
+          USE_KEY_BACK | USE_KEY_UP | USE_KEY_DOWN | USE_KEY_SURE, menu_ao_range },
+
+    [KEYNUM_MENU_AO_FAULT] =
+        { menu_ao_fault, menu_ao_fault, menu_ao_fault, menu_ao_fault,
+          USE_KEY_BACK | USE_KEY_UP | USE_KEY_DOWN | USE_KEY_SURE, menu_ao_fault },
+
+    [KEYNUM_MENU_AO_RUNTIME] =
+        { menu_ao_runtime, NULL, NULL, NULL,
+          USE_KEY_BACK, menu_ao_runtime },
+
+    [KEYNUM_MENU_AO_DIAGNOSTIC] =
+        { menu_ao_diagnostic, menu_ao_diagnostic, menu_ao_diagnostic, menu_ao_diagnostic,
+          USE_KEY_BACK | USE_KEY_UP | USE_KEY_DOWN | USE_KEY_SURE, menu_ao_diagnostic },
+
+    [KEYNUM_AO_SIMULATION_SWITCH] =
+        { ao_simulation_switch_back, ao_simulation_switch_page, ao_simulation_switch_page, ao_simulation_switch_page,
+          USE_KEY_BACK | USE_KEY_UP | USE_KEY_DOWN | USE_KEY_SURE, ao_simulation_switch_page },
 
     /* 23 - 标定/单点参数 */
     [KEYNUM_MENU_PARA_CAL_SP] =
@@ -963,6 +1043,15 @@ bool DisplayTankOpera_IsMotorRunMonitorActive(void)
 bool DisplayTankOpera_IsDebugWeightWaitActive(void)
 {
 	return (FlagofTankOpera == true) && (func_index == KEYNUM_DEBUG_WEIGHT_WAIT);
+}
+
+/**
+ * @brief 判断当前是否显示 AO 运行状态页。
+ * @return true 表示周期刷新应重绘 AO 输入值与输入百分比。
+ */
+bool DisplayTankOpera_IsAoRuntimeActive(void)
+{
+	return (FlagofTankOpera == true) && (func_index == KEYNUM_MENU_AO_RUNTIME);
 }
 
 /**
@@ -1333,6 +1422,17 @@ typedef struct {
  */
 static uint8_t *dtm_operaname(int num)
 {
+    switch (num) {
+    case COM_NUM_AO_SIMULATION_ENABLE:
+        return returnWordType((uint8_t*)"输出模拟", (uint8_t*)"Simulation");
+    case COM_NUM_AO_RUNTIME_PROCESS_VALUE:
+        return returnWordType((uint8_t*)"输入值", (uint8_t*)"Input Value");
+    case COM_NUM_AO_RUNTIME_PERCENT:
+        return returnWordType((uint8_t*)"输入比例", (uint8_t*)"Input Percent");
+    default:
+        break;
+    }
+
     /* 1) 普通无参测量指令（显式映射，避免依赖枚举连续性） */
     static const OperaNameMap_t normal_cmd_map[] = {
         { COM_NUM_BACK_ZERO,           (uint8_t*)"提零点",         (uint8_t*)"Return to Zero" },
@@ -1731,18 +1831,22 @@ static uint8_t *dtm_operaname_short(int num, uint8_t *fallback)
 		{ COM_NUM_DEVICEPARAM_RELAY4_ALARM_HYSTERESIS, (uint8_t*)"报警滞回", (uint8_t*)"K4Hys" },
 		{ COM_NUM_DEVICEPARAM_RELAY4_DAMPING_FACTOR, (uint8_t*)"阻尼系数", (uint8_t*)"K4Damp" },
 		{ COM_NUM_DEVICEPARAM_RELAY4_CLEAR_ALARM, (uint8_t*)"清除锁存", (uint8_t*)"K4Clear" },
-		{ COM_NUM_DEVICEPARAM_AO_START_LEVEL, (uint8_t*)"起点液位", (uint8_t*)"AOStartLvl" },
-		{ COM_NUM_DEVICEPARAM_AO_END_LEVEL, (uint8_t*)"终点液位", (uint8_t*)"AOEndLvl" },
-		{ COM_NUM_DEVICEPARAM_AO_NORMAL_CURRENT_START_mA, (uint8_t*)"起点电流", (uint8_t*)"AONormCurS" },
-		{ COM_NUM_DEVICEPARAM_AO_NORMAL_CURRENT_END_mA, (uint8_t*)"终点电流", (uint8_t*)"AONormCurE" },
-		{ COM_NUM_DEVICEPARAM_AO_HIGH_ALARM_LEVEL, (uint8_t*)"高报液位", (uint8_t*)"AOHighLvl" },
-		{ COM_NUM_DEVICEPARAM_AO_LOW_ALARM_LEVEL, (uint8_t*)"低报液位", (uint8_t*)"AOLowLvl" },
-		{ COM_NUM_DEVICEPARAM_INITIAL_CURRENT_mA, (uint8_t*)"初始电流", (uint8_t*)"AOInitCur" },
-		{ COM_NUM_DEVICEPARAM_AO_HIGH_CURRENT_mA, (uint8_t*)"高位电流", (uint8_t*)"AOHighCur" },
-		{ COM_NUM_DEVICEPARAM_AO_LOW_CURRENT_mA, (uint8_t*)"低位电流", (uint8_t*)"AOLowCur" },
-		{ COM_NUM_DEVICEPARAM_FAULT_CURRENT_mA, (uint8_t*)"故障电流", (uint8_t*)"AOFaultCur" },
-		{ COM_NUM_DEVICEPARAM_DEBUG_CURRENT_mA, (uint8_t*)"调试电流", (uint8_t*)"AODebugCur" },
-		{ COM_NUM_DEVICEPARAM_AO_OUTPUT_ENABLE, (uint8_t*)"AO使能", (uint8_t*)"AOEnable" },
+		{ COM_NUM_DEVICEPARAM_AO_WORK_MODE, (uint8_t*)"工作模式", (uint8_t*)"Work Mode" },
+		{ COM_NUM_DEVICEPARAM_AO_CURRENT_MODE, (uint8_t*)"电流模式", (uint8_t*)"Current Mode" },
+		{ COM_NUM_DEVICEPARAM_AO_OUTPUT_SOURCE, (uint8_t*)"输出源", (uint8_t*)"Source" },
+		{ COM_NUM_DEVICEPARAM_AO_SIL_WHG_RESERVED, (uint8_t*)"SIL/WHG", (uint8_t*)"SIL/WHG" },
+		{ COM_NUM_DEVICEPARAM_AO_FIXED_CURRENT_MA_X100, (uint8_t*)"固定电流", (uint8_t*)"Fixed Current" },
+		{ COM_NUM_DEVICEPARAM_AO_RANGE_0_01MM, (uint8_t*)"0%对应值", (uint8_t*)"0% Value" },
+		{ COM_NUM_DEVICEPARAM_AO_RANGE_100_01MM, (uint8_t*)"100%值", (uint8_t*)"100% Value" },
+		{ COM_NUM_DEVICEPARAM_AO_DAMPING_X10_S, (uint8_t*)"阻尼系数", (uint8_t*)"Damping" },
+		{ COM_NUM_DEVICEPARAM_AO_FAULT_MODE, (uint8_t*)"故障模式", (uint8_t*)"Fault Mode" },
+		{ COM_NUM_DEVICEPARAM_AO_FAULT_CURRENT_MA_X100, (uint8_t*)"故障电流", (uint8_t*)"Fault Current" },
+		{ COM_NUM_DEVICEPARAM_AO_ERROR_LEVEL, (uint8_t*)"错误等级", (uint8_t*)"Error Level" },
+		{ COM_NUM_DEVICEPARAM_AO_POWER_ON_CURRENT_MA_X100, (uint8_t*)"上电电流", (uint8_t*)"Power-on Cur" },
+		{ COM_NUM_DEVICEPARAM_AO_SIMULATION_CURRENT_MA_X100, (uint8_t*)"模拟电流", (uint8_t*)"Sim Current" },
+		{ COM_NUM_AO_SIMULATION_ENABLE, (uint8_t*)"输出模拟", (uint8_t*)"Simulation" },
+		{ COM_NUM_AO_RUNTIME_PROCESS_VALUE, (uint8_t*)"输入值", (uint8_t*)"Input Value" },
+		{ COM_NUM_AO_RUNTIME_PERCENT, (uint8_t*)"输入比例", (uint8_t*)"Input Percent" },
 		{ COM_NUM_DEVICEPARAM_OILLEVEL_HYSTERESIS_THRESHOLD, (uint8_t*)"滞后阈值", (uint8_t*)"HysTh" },
 		{ COM_NUM_DEVICEPARAM_SP_MEAS_POSITION, (uint8_t*)"测量位置", (uint8_t*)"SP_MeasPos" },
 		{ COM_NUM_DEVICEPARAM_SP_MONITOR_POSITION, (uint8_t*)"监测位置", (uint8_t*)"SP_MonPos" },
@@ -2036,6 +2140,11 @@ static void display_menu_item_with_value(const struct MenuData *item, uint8_t li
 
 	/* 带参指令只显示指令名，参数值在输入页处理，不在菜单项后追加。 */
 	if (!is_param_item) {
+		if (opera == COM_NUM_AO_SIMULATION_ENABLE) {
+			uint32_t enabled = (g_measurement.ao_output_runtime.simulation_enabled == 0U) ? 0U : 1U;
+			line = OledDisplayLineWords((uint8_t*)":", line, row, shift);
+			OledDisplayLineWords(arr_ao_simulation_enable[enabled][screen_parameter.language], line, row, shift);
+		}
 		return;
 	}
 
@@ -2190,7 +2299,12 @@ static void display_param_detail_range(const struct ParameterMetadata *meta, uin
 	if (meta->flag_checkvalue) {
 		line = OledValueDisplay(meta->valuemin, line, row, 0, meta->point, NULL);
 		line = OledDisplayOneNmb(11, row, line, 0);
-		OledValueDisplay(meta->valuemax, line, row, 0, meta->point, param_display_unit(meta->operanum, meta));
+		if ((meta->operanum == COM_NUM_DEVICEPARAM_AO_RANGE_0_01MM) ||
+		    (meta->operanum == COM_NUM_DEVICEPARAM_AO_RANGE_100_01MM)) {
+			OledValueDisplay(ao_range_max_01mm(), line, row, 0, meta->point, param_display_unit(meta->operanum, meta));
+		} else {
+			OledValueDisplay(meta->valuemax, line, row, 0, meta->point, param_display_unit(meta->operanum, meta));
+		}
 	} else {
 		DisplayLangaugeLineWords((uint8_t*)"--", line, row, 0, (uint8_t*)"--");
 	}
@@ -2510,6 +2624,7 @@ static bool operation_needs_protect_confirm(int operaNum)
 	case COM_NUM_DEVICEPARAM_MAX_TANKHEIGHT_DEVIATION:
 	case COM_NUM_DEVICEPARAM_BOTTOM_ENCODER_CORRECTION_ENABLE:
 	case COM_NUM_DEVICEPARAM_BOTTOM_ENCODER_CORRECTION_TANK_HEIGHT:
+	case COM_NUM_DEVICEPARAM_AO_OUTPUT_SOURCE:
 
 	/* 通信协议和串口物理参数 */
 	case COM_NUM_CPU3_COM1_BAUDRATE:
@@ -2544,6 +2659,11 @@ static void protected_operation_process(void)
 		return;
 	}
 
+	if (now_Opera_Num == COM_NUM_DEVICEPARAM_AO_OUTPUT_SOURCE) {
+		(void)ao_write_output_source();
+		return;
+	}
+
 	if (now_Opera_Num > COM_NUM_PARA_DEBUG_START && now_Opera_Num < COM_NUM_PARA_LOCAL_STOP) {
 		cmd_configpara_process();
 		return;
@@ -2560,10 +2680,18 @@ static void param_protect_confirm(void)
 	oled_clear();
 	func_index = KEYNUM_IF_PARAM_PROTECT_CONFIRM;
 
-	DisplayLangaugeLineWords((uint8_t*)"参数保护", OLED_LINE8_1, OLED_ROW4_1, 0, (uint8_t*)"Protected");
+	if (now_Opera_Num == COM_NUM_DEVICEPARAM_AO_OUTPUT_SOURCE) {
+		DisplayLangaugeLineWords((uint8_t*)"切换输出源", OLED_LINE8_1, OLED_ROW4_1, 0, (uint8_t*)"Change Source");
+	} else {
+		DisplayLangaugeLineWords((uint8_t*)"参数保护", OLED_LINE8_1, OLED_ROW4_1, 0, (uint8_t*)"Protected");
+	}
 	name = dtm_operaname_short(now_Opera_Num, dtm_operaname(now_Opera_Num));
 	OledDisplayLineWords(oled_fit_text(name, OLED_LINE8_END), OLED_LINE8_1, OLED_ROW4_2, 0);
-	DisplayLangaugeLineWords((uint8_t*)"请确认", OLED_LINE8_1, OLED_ROW4_3, 0, (uint8_t*)"Confirm");
+	if (now_Opera_Num == COM_NUM_DEVICEPARAM_AO_OUTPUT_SOURCE) {
+		DisplayLangaugeLineWords((uint8_t*)"量程重新加载", OLED_LINE8_1, OLED_ROW4_3, 0, (uint8_t*)"Reload Range");
+	} else {
+		DisplayLangaugeLineWords((uint8_t*)"请确认", OLED_LINE8_1, OLED_ROW4_3, 0, (uint8_t*)"Confirm");
+	}
 
 	if (NowKeyPress == USE_KEY_SURE) {
 		if (timesure > 1) {
@@ -2703,7 +2831,12 @@ static pFunc_void dtm_backtofunc(void)
             p = menu_si_config;
             break;
         case MENU_GRP_DO_ALARM:      p = RelayParam_BackToConfigMenu(now_Opera_Num); break;
-        case MENU_GRP_AO:            p = menu_ao;           break;
+        case MENU_GRP_AO_CHANNEL:    p = menu_ao_channel;    break;
+        case MENU_GRP_AO_RANGE:      p = menu_ao_range;      break;
+        case MENU_GRP_AO_FAULT:      p = menu_ao_fault;      break;
+        case MENU_GRP_AO_RUNTIME:    p = menu_ao_runtime;    break;
+        case MENU_GRP_AO_DIAGNOSTIC: p = menu_ao_diagnostic; break;
+        case MENU_GRP_AO_RESERVED:   p = menu_ao;            break;
         case MENU_GRP_CAL_SP:        p = menu_cal_sp;       break;
         case MENU_GRP_PARAM_CHECK:   p = menu_param_check;  break;
 
@@ -3325,7 +3458,9 @@ static void displaypara(void)
 		timesure--;
 	}
 
-	if (screen_parameter.language == LANGUAGE_CHINESE) {
+	if (ao_param_is_config(now_Opera_Num) && !ao_param_is_editable(now_Opera_Num)) {
+		DisplayLangaugeLineWords((uint8_t*)"返回  只读", OLED_LINE8_1, OLED_ROW4_4, 1, (uint8_t*)"Back  Readonly");
+	} else if (screen_parameter.language == LANGUAGE_CHINESE) {
 		OledDisplayLineWords((uint8_t*)"返回  修改        ", OLED_LINE8_1, OLED_ROW4_4, 1);
 	} else {
 		OledDisplayLineWords((uint8_t*)"Back Alter      ", OLED_LINE8_1, OLED_ROW4_4, 1);
@@ -3345,6 +3480,215 @@ static bool state_allows_param_write(DeviceState state)
 	return (state == STATE_STANDBY) || ((state & 0x8000U) != 0U);
 }
 
+/* AO仅在普通电流输出或HART从站加输出模式下具备输出能力。 */
+static bool ao_work_mode_is_output(void)
+{
+	return (g_deviceParams.ao_output.work_mode == AO_WORK_MODE_CURRENT_OUTPUT) ||
+	       (g_deviceParams.ao_output.work_mode == AO_WORK_MODE_HART_SLAVE_OUTPUT);
+}
+
+/* 判断操作码是否属于协议20的13项AO持久化配置。 */
+static bool ao_param_is_config(int operaNum)
+{
+	switch (operaNum) {
+	case COM_NUM_DEVICEPARAM_AO_WORK_MODE:
+	case COM_NUM_DEVICEPARAM_AO_CURRENT_MODE:
+	case COM_NUM_DEVICEPARAM_AO_OUTPUT_SOURCE:
+	case COM_NUM_DEVICEPARAM_AO_SIL_WHG_RESERVED:
+	case COM_NUM_DEVICEPARAM_AO_FIXED_CURRENT_MA_X100:
+	case COM_NUM_DEVICEPARAM_AO_RANGE_0_01MM:
+	case COM_NUM_DEVICEPARAM_AO_RANGE_100_01MM:
+	case COM_NUM_DEVICEPARAM_AO_DAMPING_X10_S:
+	case COM_NUM_DEVICEPARAM_AO_FAULT_MODE:
+	case COM_NUM_DEVICEPARAM_AO_FAULT_CURRENT_MA_X100:
+	case COM_NUM_DEVICEPARAM_AO_ERROR_LEVEL:
+	case COM_NUM_DEVICEPARAM_AO_POWER_ON_CURRENT_MA_X100:
+	case COM_NUM_DEVICEPARAM_AO_SIMULATION_CURRENT_MA_X100:
+		return true;
+	default:
+		return false;
+	}
+}
+
+/* 持久化AO参数允许预配置，当前模式不使用时仅暂不参与输出计算。 */
+static bool ao_param_is_editable(int operaNum)
+{
+	switch (operaNum) {
+	case COM_NUM_DEVICEPARAM_AO_WORK_MODE:
+	case COM_NUM_DEVICEPARAM_AO_CURRENT_MODE:
+	case COM_NUM_DEVICEPARAM_AO_OUTPUT_SOURCE:
+	case COM_NUM_DEVICEPARAM_AO_FIXED_CURRENT_MA_X100:
+	case COM_NUM_DEVICEPARAM_AO_RANGE_0_01MM:
+	case COM_NUM_DEVICEPARAM_AO_RANGE_100_01MM:
+	case COM_NUM_DEVICEPARAM_AO_DAMPING_X10_S:
+	case COM_NUM_DEVICEPARAM_AO_FAULT_MODE:
+	case COM_NUM_DEVICEPARAM_AO_FAULT_CURRENT_MA_X100:
+	case COM_NUM_DEVICEPARAM_AO_ERROR_LEVEL:
+	case COM_NUM_DEVICEPARAM_AO_POWER_ON_CURRENT_MA_X100:
+	case COM_NUM_DEVICEPARAM_AO_SIMULATION_CURRENT_MA_X100:
+		return true;
+	case COM_NUM_DEVICEPARAM_AO_SIL_WHG_RESERVED:
+	default:
+		return false;
+	}
+}
+
+/* 量程上限跟随真实输出源；水位罐高未配置时回退液位罐高。 */
+static int32_t ao_range_max_01mm(void)
+{
+	uint32_t maximum;
+
+	if (g_deviceParams.ao_output.output_source == AO_PROCESS_SOURCE_WATER_LEVEL) {
+		maximum = g_deviceParams.water_tank_height;
+		if (maximum == 0U) {
+			maximum = g_deviceParams.tankHeight;
+		}
+	} else {
+		maximum = g_deviceParams.tankHeight;
+	}
+
+	if (maximum == 0U) {
+		maximum = 1U;
+	}
+	if (maximum > 2147483647U) {
+		maximum = 2147483647U;
+	}
+	return (int32_t)maximum;
+}
+
+/* 0%和100%值必须在同一次FC10事务内写入，避免CPU2观察到半更新配置。 */
+static bool ao_write_range_pair(void)
+{
+	int index_0 = getHoldValueNum(COM_NUM_DEVICEPARAM_AO_RANGE_0_01MM);
+	int index_100 = getHoldValueNum(COM_NUM_DEVICEPARAM_AO_RANGE_100_01MM);
+	int32_t old_0;
+	int32_t old_100;
+	int32_t candidate_0;
+	int32_t candidate_100;
+	uint32_t pair[2];
+	bool success;
+
+	if ((index_0 < 0) || (index_100 < 0)) {
+		return false;
+	}
+
+	old_0 = (int32_t)param_meta[index_0].val;
+	old_100 = (int32_t)param_meta[index_100].val;
+	candidate_0 = old_0;
+	candidate_100 = old_100;
+	if (now_Opera_Num == COM_NUM_DEVICEPARAM_AO_RANGE_0_01MM) {
+		candidate_0 = (int32_t)now_Para_CT.val;
+	} else {
+		candidate_100 = (int32_t)now_Para_CT.val;
+	}
+
+	pair[0] = (uint32_t)candidate_0;
+	pair[1] = (uint32_t)candidate_100;
+	oled_clear();
+	DisplayLangaugeLineWords((uint8_t*)"正在修改量程", OLED_LINE8_2, OLED_ROW3_2, 0, (uint8_t*)"Modify Range");
+
+	success = CPU2_CommIsAvailable() &&
+	          CPU2_CombinatePackage_Send(FUNCTIONCODE_WRITE_MULREGISTER,
+	                                      HOLDREGISTER_DEVICEPARAM_AO_RANGE_0_01MM,
+	                                      AO_RANGE_PAIR_REGISTER_COUNT,
+	                                      pair) &&
+	          CPU2_CombinatePackage_Send(FUNCTIONCODE_READ_HOLDREGISTER,
+	                                      HOLDREGISTER_DEVICEPARAM_AO_RANGE_0_01MM,
+	                                      AO_RANGE_PAIR_REGISTER_COUNT,
+	                                      NULL) &&
+	          CPU2_CommIsAvailable();
+	if (!success) {
+		param_meta[index_0].val = old_0;
+		param_meta[index_100].val = old_100;
+		g_deviceParams.ao_output.range_0_01mm = old_0;
+		g_deviceParams.ao_output.range_100_01mm = old_100;
+		CPU2_CommRequestParameterRefresh();
+		display_cpu2_comm_failure();
+		mainmenu();
+		return false;
+	}
+
+	HAL_Delay(300);
+	displaypara();
+	return true;
+}
+
+/* 输出源写入后补读13项AO配置，接收CPU2按新源生成的默认量程。 */
+static bool ao_write_output_source(void)
+{
+	int index_source = getHoldValueNum(COM_NUM_DEVICEPARAM_AO_OUTPUT_SOURCE);
+	int index_0 = getHoldValueNum(COM_NUM_DEVICEPARAM_AO_RANGE_0_01MM);
+	int index_100 = getHoldValueNum(COM_NUM_DEVICEPARAM_AO_RANGE_100_01MM);
+	uint32_t old_source;
+	int32_t old_0;
+	int32_t old_100;
+	uint32_t source_value;
+	bool success;
+
+	if ((index_source < 0) || (index_0 < 0) || (index_100 < 0)) {
+		return false;
+	}
+
+	old_source = g_deviceParams.ao_output.output_source;
+	old_0 = g_deviceParams.ao_output.range_0_01mm;
+	old_100 = g_deviceParams.ao_output.range_100_01mm;
+	source_value = (uint32_t)now_Para_CT.val;
+	oled_clear();
+	DisplayLangaugeLineWords((uint8_t*)"正在切换输出源", OLED_LINE8_1, OLED_ROW3_2, 0, (uint8_t*)"Change Source");
+
+	success = CPU2_CommIsAvailable() &&
+	          CPU2_CombinatePackage_Send(FUNCTIONCODE_WRITE_MULREGISTER,
+	                                      HOLDREGISTER_DEVICEPARAM_AO_OUTPUT_SOURCE,
+	                                      REG_STRIDE,
+	                                      &source_value) &&
+	          CPU2_CombinatePackage_Send(FUNCTIONCODE_READ_HOLDREGISTER,
+	                                      HOLDREGISTER_DEVICEPARAM_AO_WORK_MODE,
+	                                      AO_CONFIG_REGISTER_COUNT,
+	                                      NULL) &&
+	          CPU2_CommIsAvailable();
+	if (!success) {
+		param_meta[index_source].val = (int)old_source;
+		param_meta[index_0].val = old_0;
+		param_meta[index_100].val = old_100;
+		g_deviceParams.ao_output.output_source = old_source;
+		g_deviceParams.ao_output.range_0_01mm = old_0;
+		g_deviceParams.ao_output.range_100_01mm = old_100;
+		CPU2_CommRequestParameterRefresh();
+		display_cpu2_comm_failure();
+		mainmenu();
+		return false;
+	}
+
+	HAL_Delay(300);
+	displaypara();
+	return true;
+}
+
+/* 仿真开关使用独立保持寄存器，不写入DeviceParameters或CPU3 FRAM。 */
+static bool ao_write_simulation_enable(uint32_t enabled)
+{
+	uint32_t old_enabled = (g_measurement.ao_output_runtime.simulation_enabled == 0U) ? 0U : 1U;
+	uint32_t normalized = (enabled == 0U) ? 0U : 1U;
+	bool success;
+
+	success = CPU2_CommIsAvailable() &&
+	          CPU2_CombinatePackage_Send(FUNCTIONCODE_WRITE_MULREGISTER,
+	                                      HOLDREGISTER_AO_SIMULATION_ENABLE,
+	                                      REG_STRIDE,
+	                                      &normalized) &&
+	          CPU2_CombinatePackage_Send(FUNCTIONCODE_READ_HOLDREGISTER,
+	                                      HOLDREGISTER_AO_SIMULATION_ENABLE,
+	                                      REG_STRIDE,
+	                                      NULL) &&
+	          CPU2_CommIsAvailable();
+	if (!success) {
+		g_measurement.ao_output_runtime.simulation_enabled = old_enabled;
+		CPU2_CommRequestParameterRefresh();
+		return false;
+	}
+	return true;
+}
+
 /* 写权限范围检查 */
 static void parawritecheck(void)
 {
@@ -3352,7 +3696,8 @@ static void parawritecheck(void)
 	bool allow_write = false;
 
 	index = getHoldValueNum(now_Opera_Num);
-	if (index != -1 && param_meta[index].authority_write) {
+	if (index != -1 && param_meta[index].authority_write &&
+	    (!ao_param_is_config(now_Opera_Num) || ao_param_is_editable(now_Opera_Num))) {
 		/* CPU3 本机参数只写本地 FRAM，不受 CPU2 测量状态限制。 */
 		if (Cpu3Local_IsParam((OperatingNumber)now_Opera_Num)) {
 			allow_write = true;
@@ -3494,6 +3839,8 @@ static void para_mainprocess(void)
 static void parascopecheck(void)
 {
 	int index;
+	int other_index;
+	int32_t maximum;
 
 	index = getHoldValueNum(now_Opera_Num);
 	if (index == -1) {
@@ -3501,6 +3848,25 @@ static void parascopecheck(void)
 		DisplayLangaugeLineWords((uint8_t*)"非法参数!", OLED_LINE8_2, OLED_ROW3_2, 0, (uint8_t*)"Invalid Para");
 		HAL_Delay(800);
 		displaypara();
+	} else if ((now_Opera_Num == COM_NUM_DEVICEPARAM_AO_RANGE_0_01MM) ||
+	           (now_Opera_Num == COM_NUM_DEVICEPARAM_AO_RANGE_100_01MM)) {
+		maximum = ao_range_max_01mm();
+		other_index = getHoldValueNum((now_Opera_Num == COM_NUM_DEVICEPARAM_AO_RANGE_0_01MM) ?
+		                              COM_NUM_DEVICEPARAM_AO_RANGE_100_01MM :
+		                              COM_NUM_DEVICEPARAM_AO_RANGE_0_01MM);
+		if ((now_Para_CT.val < 0) || (now_Para_CT.val > maximum)) {
+			oled_clear();
+			DisplayLangaugeLineWords((uint8_t*)"数值超范围!", OLED_LINE8_2, OLED_ROW3_2, 0, (uint8_t*)"Value out of Range");
+			HAL_Delay(800);
+			displaypara();
+		} else if ((other_index < 0) || (now_Para_CT.val == param_meta[other_index].val)) {
+			oled_clear();
+			DisplayLangaugeLineWords((uint8_t*)"起止值不能一样", OLED_LINE8_1, OLED_ROW3_2, 0, (uint8_t*)"Endpoints Differ");
+			HAL_Delay(800);
+			displaypara();
+		} else {
+			(void)ao_write_range_pair();
+		}
 	} else if (param_meta[index].flag_checkvalue) {
 		if (now_Para_CT.val < param_meta[index].valuemin || now_Para_CT.val > param_meta[index].valuemax) {
 			oled_clear();
@@ -3529,6 +3895,15 @@ static void cmd_configpara_process(void)
 	int index;
 
 	index = getHoldValueNum(now_Opera_Num);
+	if ((now_Opera_Num == COM_NUM_DEVICEPARAM_AO_RANGE_0_01MM) ||
+	    (now_Opera_Num == COM_NUM_DEVICEPARAM_AO_RANGE_100_01MM)) {
+		(void)ao_write_range_pair();
+		return;
+	}
+	if (now_Opera_Num == COM_NUM_DEVICEPARAM_AO_OUTPUT_SOURCE) {
+		(void)ao_write_output_source();
+		return;
+	}
 
 	oled_clear();
 	DisplayLangaugeLineWords((uint8_t*)"正在修改参数", OLED_LINE8_2, OLED_ROW3_2, 0, (uint8_t*)"Modify Para");
@@ -3589,6 +3964,7 @@ static void cmd_configpara_process(void)
 	                                    param_meta[index].rgstcnt,
 	                                    NULL) ||
 	        !CPU2_CommIsAvailable()) {
+	        CPU2_CommRequestParameterRefresh();
 	        display_cpu2_comm_failure();
 	        mainmenu();
 	        return;
@@ -3963,10 +4339,34 @@ uint8_t *(*dtm_disarr(int *pindex, int *plen))[2]
 		p = arr_position_source_auto_switch;
 		break;
 	}
-	case COM_NUM_DEVICEPARAM_AO_OUTPUT_ENABLE: {
+	case COM_NUM_DEVICEPARAM_AO_WORK_MODE: {
 		index = param_meta[index].val;
-		len = (int)(sizeof(arr_ao_output_enable) / sizeof(arr_ao_output_enable[0]));
-		p = arr_ao_output_enable;
+		len = (int)(sizeof(arr_ao_work_mode) / sizeof(arr_ao_work_mode[0]));
+		p = arr_ao_work_mode;
+		break;
+	}
+	case COM_NUM_DEVICEPARAM_AO_CURRENT_MODE: {
+		index = param_meta[index].val;
+		len = (int)(sizeof(arr_ao_current_mode) / sizeof(arr_ao_current_mode[0]));
+		p = arr_ao_current_mode;
+		break;
+	}
+	case COM_NUM_DEVICEPARAM_AO_OUTPUT_SOURCE: {
+		index = param_meta[index].val;
+		len = (int)(sizeof(arr_ao_output_source) / sizeof(arr_ao_output_source[0]));
+		p = arr_ao_output_source;
+		break;
+	}
+	case COM_NUM_DEVICEPARAM_AO_FAULT_MODE: {
+		index = param_meta[index].val;
+		len = (int)(sizeof(arr_ao_fault_mode) / sizeof(arr_ao_fault_mode[0]));
+		p = arr_ao_fault_mode;
+		break;
+	}
+	case COM_NUM_DEVICEPARAM_AO_ERROR_LEVEL: {
+		index = param_meta[index].val;
+		len = (int)(sizeof(arr_ao_error_level) / sizeof(arr_ao_error_level[0]));
+		p = arr_ao_error_level;
 		break;
 	}
 	case COM_NUM_DEVICEPARAM_POSITION_COUNT_MODE: {
@@ -4936,20 +5336,36 @@ static MenuGroup ParamGroupOf(int operaNum)
     case COM_NUM_DEVICEPARAM_SI_PROFILE_BOTTOM_DETECT_INTERVAL:
         return MENU_GRP_SI_PROFILE;
 
-    /* AO */
-    case COM_NUM_DEVICEPARAM_AO_START_LEVEL:
-    case COM_NUM_DEVICEPARAM_AO_END_LEVEL:
-    case COM_NUM_DEVICEPARAM_AO_NORMAL_CURRENT_START_mA:
-    case COM_NUM_DEVICEPARAM_AO_NORMAL_CURRENT_END_mA:
-    case COM_NUM_DEVICEPARAM_AO_HIGH_ALARM_LEVEL:
-    case COM_NUM_DEVICEPARAM_AO_LOW_ALARM_LEVEL:
-    case COM_NUM_DEVICEPARAM_INITIAL_CURRENT_mA:
-    case COM_NUM_DEVICEPARAM_AO_HIGH_CURRENT_mA:
-    case COM_NUM_DEVICEPARAM_AO_LOW_CURRENT_mA:
-    case COM_NUM_DEVICEPARAM_FAULT_CURRENT_mA:
-    case COM_NUM_DEVICEPARAM_DEBUG_CURRENT_mA:
-    case COM_NUM_DEVICEPARAM_AO_OUTPUT_ENABLE:
-        return MENU_GRP_AO;
+    /* AO通道设置 */
+    case COM_NUM_DEVICEPARAM_AO_WORK_MODE:
+    case COM_NUM_DEVICEPARAM_AO_CURRENT_MODE:
+    case COM_NUM_DEVICEPARAM_AO_OUTPUT_SOURCE:
+        return MENU_GRP_AO_CHANNEL;
+
+    /* AO量程设置 */
+    case COM_NUM_DEVICEPARAM_AO_FIXED_CURRENT_MA_X100:
+    case COM_NUM_DEVICEPARAM_AO_RANGE_0_01MM:
+    case COM_NUM_DEVICEPARAM_AO_RANGE_100_01MM:
+    case COM_NUM_DEVICEPARAM_AO_DAMPING_X10_S:
+        return MENU_GRP_AO_RANGE;
+
+    /* AO故障设置 */
+    case COM_NUM_DEVICEPARAM_AO_FAULT_MODE:
+    case COM_NUM_DEVICEPARAM_AO_FAULT_CURRENT_MA_X100:
+    case COM_NUM_DEVICEPARAM_AO_ERROR_LEVEL:
+    case COM_NUM_DEVICEPARAM_AO_POWER_ON_CURRENT_MA_X100:
+        return MENU_GRP_AO_FAULT;
+
+    case COM_NUM_DEVICEPARAM_AO_SIMULATION_CURRENT_MA_X100:
+    case COM_NUM_AO_SIMULATION_ENABLE:
+        return MENU_GRP_AO_DIAGNOSTIC;
+
+    case COM_NUM_AO_RUNTIME_PROCESS_VALUE:
+    case COM_NUM_AO_RUNTIME_PERCENT:
+        return MENU_GRP_AO_RUNTIME;
+
+    case COM_NUM_DEVICEPARAM_AO_SIL_WHG_RESERVED:
+        return MENU_GRP_AO_RESERVED;
 
     /* 标定/单点/位置 */
     case COM_NUM_DEVICEPARAM_CALIBRATE_OIL_LEVEL:
@@ -5101,7 +5517,9 @@ static void menu_build_by_group(MenuGroup grp, int key_index, void (*backFunc)(v
         menu[menulen].sureopera  = para_mainprocess;
 
         /* 关键：用你的 authority_write 来决定读/写 */
-        menu[menulen].rorw = (m->authority_write) ? COMMAND_WRITE : COMMAND_READ;
+        menu[menulen].rorw = (m->authority_write &&
+                              (!ao_param_is_config(m->operanum) || ao_param_is_editable(m->operanum))) ?
+                             COMMAND_WRITE : COMMAND_READ;
 
         /* 英文名称 */
         menu[menulen].operaName2 = m->name_English;
@@ -5901,11 +6319,163 @@ static void menu_relay4_status(void)
     menu_relay_status(3U, KEYNUM_MENU_RELAY4_STATUS, menu_relay4_main);
 }
 
-/**
- * @brief 执行屏幕菜单操作中的 menu_ao 逻辑。
- * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
- */
-static void menu_ao(void)           { menu_build_by_group(MENU_GRP_AO,           KEYNUM_MENU_PARA_AO,           menu_output_config); }
+/* AO根菜单固定为五组，SIL/WHG与DAC回读预留不进入当前菜单。 */
+static void menu_ao(void)
+{
+	static struct MenuData menu[] = {
+		{(uint8_t*)"通道设置", 0, menu_ao_channel,    COMMANE_NORW, (uint8_t*)"Channel"},
+		{(uint8_t*)"量程设置", 0, menu_ao_range,      COMMANE_NORW, (uint8_t*)"Range"},
+		{(uint8_t*)"故障设置", 0, menu_ao_fault,      COMMANE_NORW, (uint8_t*)"Fault"},
+		{(uint8_t*)"运行状态", 0, menu_ao_runtime,    COMMANE_NORW, (uint8_t*)"Runtime"},
+		{(uint8_t*)"模拟设置", 0, menu_ao_diagnostic, COMMANE_NORW, (uint8_t*)"Simulation"},
+		{(uint8_t*)"返回",     0, menu_output_config, COMMANE_NORW, (uint8_t*)"Back"},
+	};
+
+	oled_clear();
+	func_index = KEYNUM_MENU_PARA_AO;
+	menuselect(menu, (int)(sizeof(menu) / sizeof(menu[0])));
+}
+
+/* AO通道设置：工作模式、电流模式、输出源。 */
+static void menu_ao_channel(void)
+{
+	menu_build_by_group(MENU_GRP_AO_CHANNEL, KEYNUM_MENU_AO_CHANNEL, menu_ao);
+}
+
+/* AO量程设置：固定电流、0%、100%、阻尼。 */
+static void menu_ao_range(void)
+{
+	menu_build_by_group(MENU_GRP_AO_RANGE, KEYNUM_MENU_AO_RANGE, menu_ao);
+}
+
+/* AO故障设置：故障模式、故障电流、错误级别、上电电流。 */
+static void menu_ao_fault(void)
+{
+	menu_build_by_group(MENU_GRP_AO_FAULT, KEYNUM_MENU_AO_FAULT, menu_ao);
+}
+
+/* AO运行状态同时从同一份快照显示输入值和输入百分比。 */
+static void menu_ao_runtime(void)
+{
+	AoOutputRuntime snapshot;
+	bool value_valid;
+	uint8_t line;
+
+	if (NowKeyPress == USE_KEY_BACK) {
+		NowKeyPress = 0;
+		timeback = 0;
+		timesure = 1;
+		menu_ao();
+		return;
+	}
+
+	memcpy(&snapshot, (const void *)&g_measurement.ao_output_runtime, sizeof(snapshot));
+	value_valid = ao_work_mode_is_output() &&
+	              (g_deviceParams.ao_output.current_mode != AO_CURRENT_MODE_FIXED) &&
+	              (snapshot.process_valid != 0U);
+
+	oled_clear();
+	func_index = KEYNUM_MENU_AO_RUNTIME;
+	DisplayLangaugeLineWords((uint8_t*)"AO运行状态", OLED_LINE8_1, OLED_ROW4_1, 0, (uint8_t*)"AO Runtime");
+	line = DisplayLangaugeLineWords((uint8_t*)"输入值:", OLED_LINE8_1, OLED_ROW4_2, 0, (uint8_t*)"Input:");
+	if (value_valid) {
+		OledValueDisplay((int)snapshot.process_value_01mm, line, OLED_ROW4_2, 0, 1, (uint8_t*)"mm");
+	} else {
+		OledDisplayLineWords((uint8_t*)"N/A", line, OLED_ROW4_2, 0);
+	}
+
+	line = DisplayLangaugeLineWords((uint8_t*)"输入比例:", OLED_LINE8_1, OLED_ROW4_3, 0, (uint8_t*)"Percent:");
+	if (value_valid) {
+		OledValueDisplay((int)snapshot.percent_x100, line, OLED_ROW4_3, 0, 2, (uint8_t*)"%");
+	} else {
+		OledDisplayLineWords((uint8_t*)"N/A", line, OLED_ROW4_3, 0);
+	}
+	DisplayLangaugeLineWords((uint8_t*)"返回", OLED_LINE8_1, OLED_ROW4_4, 0, (uint8_t*)"Back");
+}
+
+/* AO诊断仿真仅显示非持久化仿真开关和已持久化的仿真电流。 */
+static void menu_ao_diagnostic(void)
+{
+	static struct MenuData menu[] = {
+		{(uint8_t*)"输出模拟", COM_NUM_AO_SIMULATION_ENABLE, ao_simulation_switch_enter, COMMANE_NORW, (uint8_t*)"Simulation"},
+		{(uint8_t*)"模拟电流", COM_NUM_DEVICEPARAM_AO_SIMULATION_CURRENT_MA_X100, para_mainprocess, COMMAND_WRITE, (uint8_t*)"Sim Current"},
+		{(uint8_t*)"返回", COM_NUM_NOOPERA, menu_ao, COMMANE_NORW, (uint8_t*)"Back"},
+	};
+
+	menu[0].rorw = ao_work_mode_is_output() ? COMMAND_WRITE : COMMAND_READ;
+	menu[1].rorw = ao_param_is_editable(COM_NUM_DEVICEPARAM_AO_SIMULATION_CURRENT_MA_X100) ?
+	               COMMAND_WRITE : COMMAND_READ;
+	oled_clear();
+	func_index = KEYNUM_MENU_AO_DIAGNOSTIC;
+	menuselect(menu, (int)(sizeof(menu) / sizeof(menu[0])));
+}
+
+/* 进入仿真开关页时以CPU2运行态为唯一当前值。 */
+static void ao_simulation_switch_enter(void)
+{
+	ao_simulation_selection = (g_measurement.ao_output_runtime.simulation_enabled == 0U) ? 0U : 1U;
+	timesure = 0;
+	timeback = 0;
+	NowKeyPress = 0;
+	ao_simulation_switch_page();
+}
+
+/* 仿真开关不写持久参数；确认后只写独立保持寄存器。 */
+static void ao_simulation_switch_page(void)
+{
+	bool editable = ao_work_mode_is_output();
+	uint32_t current = (g_measurement.ao_output_runtime.simulation_enabled == 0U) ? 0U : 1U;
+	uint8_t line;
+
+	oled_clear();
+	func_index = KEYNUM_AO_SIMULATION_SWITCH;
+	if (editable && ((NowKeyPress == USE_KEY_UP) || (NowKeyPress == USE_KEY_DOWN))) {
+		ao_simulation_selection = (ao_simulation_selection == 0U) ? 1U : 0U;
+		timesure = 0;
+	} else if (NowKeyPress == USE_KEY_SURE) {
+		if (!editable) {
+			DisplayLangaugeLineWords((uint8_t*)"当前模式只读", OLED_LINE8_1, OLED_ROW3_2, 0, (uint8_t*)"Readonly Mode");
+			HAL_Delay(800);
+			ao_simulation_selection = current;
+			NowKeyPress = 0;
+		} else if (timesure != 0) {
+			timesure = 0;
+			DisplayLangaugeLineWords((uint8_t*)"正在修改模拟", OLED_LINE8_1, OLED_ROW3_2, 0, (uint8_t*)"Modify Sim");
+			if (!ao_write_simulation_enable(ao_simulation_selection)) {
+				display_cpu2_comm_failure();
+				ao_simulation_selection = current;
+				NowKeyPress = 0;
+				mainmenu();
+				return;
+			}
+			NowKeyPress = 0;
+			menu_ao_diagnostic();
+			return;
+		} else {
+			timesure++;
+		}
+	}
+
+	DisplayLangaugeLineWords((uint8_t*)"输出模拟", OLED_LINE8_1, OLED_ROW4_1, 0, (uint8_t*)"Simulation");
+	line = DisplayLangaugeLineWords((uint8_t*)"当前值:", OLED_LINE8_1, OLED_ROW4_2, 0, (uint8_t*)"Value:");
+	OledDisplayLineWords(arr_ao_simulation_enable[current][screen_parameter.language], line, OLED_ROW4_2, 0);
+	line = DisplayLangaugeLineWords((uint8_t*)"设置:", OLED_LINE8_1, OLED_ROW4_3, 0, (uint8_t*)"Select:");
+	OledDisplayLineWords(arr_ao_simulation_enable[ao_simulation_selection][screen_parameter.language], line, OLED_ROW4_3, editable ? 1U : 0U);
+	if (editable) {
+		DisplayLangaugeLineWords((uint8_t*)"返回", OLED_LINE8_1, OLED_ROW4_4, 0, (uint8_t*)"Back");
+		DisplayLangaugeLineWords((uint8_t*)"确认", OLED_LINE8_8, OLED_ROW4_4, (timesure != 0), (uint8_t*)"Ok");
+	} else {
+		DisplayLangaugeLineWords((uint8_t*)"返回  只读", OLED_LINE8_1, OLED_ROW4_4, 0, (uint8_t*)"Back Readonly");
+	}
+}
+
+static void ao_simulation_switch_back(void)
+{
+	NowKeyPress = 0;
+	timesure = 0;
+	timeback = 0;
+	menu_ao_diagnostic();
+}
 /**
  * @brief 执行屏幕菜单操作中的 menu_cal_sp 逻辑。
  * @note 标定、单点和运动距离参数随测量/调试指令输入，不挂入参数配置主菜单；该页仅保留为旧返回映射兜底。

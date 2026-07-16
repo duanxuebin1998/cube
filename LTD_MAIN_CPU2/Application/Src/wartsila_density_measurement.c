@@ -134,7 +134,7 @@ static uint32_t Wartsila_MoveToDensityPoint(float target_mm,
     float cur_mm = 0.0f;
 
     if (actual_position_mm == NULL) {
-        return PARAM_ADDRESS_OVERFLOW;
+        return SYSTEM_CALL_CONDITION_ERROR;
     }
 
     for (uint32_t attempt = 0U; attempt <= WARTSILA_POINT_POSITION_RETRY_MAX; attempt++) {
@@ -171,7 +171,7 @@ static uint32_t Wartsila_MoveToDensityPoint(float target_mm,
            target_mm,
            cur_mm,
            WARTSILA_POINT_POSITION_TOLERANCE_MM);
-    return MEASUREMENT_POSITION_ERROR;
+    return POSITION_ARRIVAL_DEVIATION;
 }
 
 /**
@@ -199,7 +199,7 @@ static uint32_t Wartsila_ReadPointAndClassify(WartsilaPointSample *sample)
     float cur_mm = 0.0f;
 
     if (sample == NULL) {
-        return PARAM_ADDRESS_OVERFLOW;
+        return SYSTEM_CALL_CONDITION_ERROR;
     }
 
     ret = EnableDensityMode();
@@ -325,7 +325,7 @@ static uint32_t Wartsila_MoveDownToLiquidAfterAirPoint(float air_point_mm, float
     uint32_t start_tick = 0U;
 
     if (level_mm == NULL) {
-        return PARAM_ADDRESS_OVERFLOW;
+        return SYSTEM_CALL_CONDITION_ERROR;
     }
 
     ret = EnableLevelMode();
@@ -399,7 +399,7 @@ static uint32_t Wartsila_MoveDownToLiquidAfterAirPoint(float air_point_mm, float
         /* 先处理异常边界，避免测量流程状态机带故障继续运行。 */
         if ((HAL_GetTick() - start_tick) > WARTSILA_LEVEL_DOWN_TIMEOUT_MS) {
             (void)MotorCtrl_SlowStop();
-            return MOTOR_RUN_TIMEOUT;
+            return MEASUREMENT_OILLEVEL_LOW;
         }
 
         ret = AbortableDelay_CommandSwitch(WARTSILA_LEVEL_DOWN_POLL_MS, 20U);
@@ -430,7 +430,7 @@ static uint32_t Wartsila_TrimPointsByOilLevel(DensityDistribution *dist,
                                               uint32_t min_gap_surface)
 {
     if ((dist == NULL) || (valid_points == NULL) || (sum_temp == NULL) || (sum_density == NULL)) {
-        return PARAM_ADDRESS_OVERFLOW;
+        return SYSTEM_CALL_CONDITION_ERROR;
     }
 
     float valid_limit_mm = level_mm - (float)min_gap_surface;
@@ -472,7 +472,7 @@ static uint32_t Wartsila_TrimPointsByOilLevel(DensityDistribution *dist,
 uint32_t Wartsila_Density_SpreadMeasurement(DensityDistribution *dist)
 {
     if (dist == NULL) {
-        return PARAM_ADDRESS_OVERFLOW;
+        return SYSTEM_CALL_CONDITION_ERROR;
     }
 
     memset(dist, 0, sizeof(DensityDistribution));
@@ -483,20 +483,20 @@ uint32_t Wartsila_Density_SpreadMeasurement(DensityDistribution *dist)
     uint32_t min_gap_surface = g_deviceParams.wartsila_max_height_above_surface;
 
     if (step_mm == 0U) {
-        printf("瓦锡兰分布测量参数异常：步长=0\r\n");
-        return PARAM_RANGE_ERROR;
+        printf("瓦锡兰分布测量无法形成测点：测量间距为0\r\n");
+        return MEASUREMENT_DENSITY_PLAN_INVALID;
     }
     if (end_pos_mm <= start_pos_mm) {
         printf("瓦锡兰分布测量参数异常：结束位置<=起始位置 (%lu <= %lu)\r\n",
                (unsigned long)end_pos_mm,
                (unsigned long)start_pos_mm);
-        return PARAM_RANGE_ERROR;
+        return MEASUREMENT_DENSITY_PLAN_INVALID;
     }
 
     float range_mm = (float)(end_pos_mm - start_pos_mm);
     uint32_t max_points_by_range = (uint32_t)(range_mm / (float)step_mm) + 1U;
     if (max_points_by_range == 0U) {
-        return PARAM_RANGE_ERROR;
+        return MEASUREMENT_DENSITY_PLAN_INVALID;
     }
     if (max_points_by_range > MAX_MEASUREMENT_POINTS) {
         max_points_by_range = MAX_MEASUREMENT_POINTS;
@@ -582,8 +582,8 @@ uint32_t Wartsila_Density_SpreadMeasurement(DensityDistribution *dist)
     }
 
     if (valid_points == 0U) {
-        printf("瓦锡兰分布测量没有得到任何有效液体测点\r\n");
-        return MEASUREMENT_DENSITY_SURFACE_NOTFOUND;
+        printf("瓦锡兰分布测量已识别液面，但没有得到有效液体测点\r\n");
+        return MEASUREMENT_DENSITY_NO_VALID_POINT;
     }
 
     ret = Wartsila_TrimPointsByOilLevel(dist,

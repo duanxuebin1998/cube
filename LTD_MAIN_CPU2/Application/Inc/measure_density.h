@@ -66,6 +66,18 @@ void Print_DensitySpreadResult(const DensityDistribution *dist);
 /* 单点读数：内部完成稳定判定并写入 result */
 uint32_t SinglePoint_ReadSensor(volatile DensityMeasurement *result);
 
+/*
+ * 函数用途：发布完整单点测量六字段，并在同一临界区递增测量完成代际。
+ * 返回值：1 表示发布成功，0 表示参数无效或命令切换期间拒绝发布。
+ */
+uint8_t SinglePoint_PublishMeasurementResult(const DensityMeasurement *candidate);
+
+/*
+ * 函数用途：发布完整固定点监测六字段，并在同一临界区递增监测样本代际。
+ * 返回值：1 表示发布成功，0 表示参数无效或命令切换期间拒绝发布。
+ */
+uint8_t SinglePoint_PublishMonitoringResult(const DensityMeasurement *candidate);
+
 /**
  * @brief 按指定分布测量模式执行密度测量并输出完整点表。
  * @param mode 分布测量模式。

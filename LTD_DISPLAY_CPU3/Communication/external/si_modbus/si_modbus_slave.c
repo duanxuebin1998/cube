@@ -4,6 +4,7 @@
 
 #include "address.h"
 #include "cpu2_communicate.h"
+#include "../external_read_freshness.h"
 #include "cpu3_comm_display_params.h"
 #include "cpu3_clock.h"
 #include "main.h"
@@ -1670,6 +1671,11 @@ static uint8_t si_handle_read_bits(uint8_t func,
     if ((uint32_t)start + qty > bit_count) {
         return si_build_exception(func, SI_EX_ILLEGAL_ADDRESS, tx, tx_len);
     }
+    if ((CPU3_ExternalSiBitRangeNeedsRuntime(func, start, qty) != 0U) &&
+        !CPU2_CommHasRuntimeSnapshot()) {
+        /* CPU2 派生位与本地位混读时整帧返回忙，禁止旧状态影子穿透。 */
+        return si_build_exception(func, SI_EX_SLAVE_DEVICE_BUSY, tx, tx_len);
+    }
 
     byte_count = (uint16_t)((qty + 7U) / 8U);
     tx[0] = si_get_effective_slave_address();
@@ -1731,6 +1737,12 @@ static uint8_t si_handle_read_regs(uint8_t func,
          * 40001～40003来自CPU2参数快照。只要请求与该段相交，快照补读完成前
          * 就返回设备忙；40004～40023仍是CPU3本机参数，可在CPU2离线时读取。
          */
+        return si_build_exception(func, SI_EX_SLAVE_DEVICE_BUSY, tx, tx_len);
+    }
+    if ((func == SI_FUNC_READ_INPUT_REGS) &&
+        (CPU3_ExternalSiInputRangeNeedsRuntime(start, qty) != 0U) &&
+        !CPU2_CommHasRuntimeSnapshot()) {
+        /* Complete、时间、镜像和点阵都随 CPU2 运行态失效，不把旧发布快照当静态数据。 */
         return si_build_exception(func, SI_EX_SLAVE_DEVICE_BUSY, tx, tx_len);
     }
 

@@ -2,98 +2,119 @@
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>CUBE 故障代码分类治理现状与方案</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>故障代码分类治理现状与方案</title>
 <style>
-body{margin:0;background:#f4f6f8;color:#23364a;font:15px/1.7 "Microsoft YaHei",sans-serif}
-main{max-width:1180px;margin:0 auto;padding:32px 24px 56px}
-header,section{background:#fff;border:1px solid #dce3ea;margin-bottom:18px;padding:24px 28px}
-header{border-top:6px solid #1f4e78}
-h1{margin:0 0 8px;color:#1f4e78;font-size:28px}h2{margin:0 0 14px;color:#1f4e78;font-size:21px}
-p{margin:8px 0}.summary{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:18px}
-.summary div{background:#eef4f9;border-left:4px solid #5b9bd5;padding:12px}.summary strong{display:block;font-size:22px;color:#1f4e78}
-table{width:100%;border-collapse:collapse;margin:10px 0}th{background:#1f4e78;color:#fff;text-align:left}
-th,td{border:1px solid #d9e2f3;padding:9px 11px;vertical-align:top}tbody tr:nth-child(even){background:#f8fafc}
-code{font-family:Consolas,monospace;color:#1f4e78}.note{background:#fff7e6;border-left:4px solid #d6a138;padding:12px 14px}
-ul,ol{margin:8px 0;padding-left:24px}@media(max-width:800px){.summary{grid-template-columns:1fr 1fr}main{padding:16px 10px}header,section{padding:18px}}
+body{margin:0;background:#f3f5f7;color:#243746;font:15px/1.7 "Microsoft YaHei",sans-serif}
+main{max-width:1120px;margin:28px auto;padding:0 22px 48px}
+section{background:#fff;border:1px solid #d7e0e7;margin:16px 0;padding:22px 26px}
+h1{font-size:28px;margin:0 0 8px;color:#1f4f73}h2{font-size:20px;margin:0 0 14px;color:#245b85}h3{font-size:17px;margin:18px 0 8px}
+p{margin:8px 0}ul,ol{margin:8px 0 8px 24px;padding:0}
+.meta{color:#637789}.summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-top:18px}
+.summary div{border:1px solid #cad7e2;background:#f7fafc;padding:12px 14px}.summary span{display:block;color:#637789}.summary strong{font-size:24px;color:#1f4f73}
+table{width:100%;border-collapse:collapse;margin:10px 0}th,td{border:1px solid #cad7e2;padding:8px 10px;text-align:left;vertical-align:top}th{background:#e7eef4;color:#1f4f73}tbody tr:nth-child(even){background:#f8fafb}
+.note{border-left:4px solid #b8871b;background:#fff8e3;padding:10px 14px;margin:12px 0}.ok{border-left-color:#4c7a50;background:#edf7ed}
+code{font-family:Consolas,monospace;background:#eef2f5;padding:1px 4px}
+@media(max-width:760px){.summary{grid-template-columns:1fr 1fr}main{padding:0 10px}section{padding:18px 14px}}
 </style>
 </head>
 <body>
 <main>
-<header>
-<h1>CUBE 故障代码分类治理现状与方案</h1>
-<p>本文记录二代计量仪当前故障代码的分类规则、编号范围、保留与停用处理及协议兼容性。详细故障说明见正式工作簿，完整调用点和迁移关系见内部技术工作簿。</p>
+<section>
+<h1>故障代码分类治理现状与方案</h1>
+<p class="meta">更新日期：2026-07-15</p>
+<p>本文记录二代计量仪当前故障代码的分类、拆分、一代对照和历史兼容口径。具体故障说明、可能原因和处理方法见正式工作簿；完整调用点和编号迁移见内部技术工作簿。</p>
 <div class="summary">
-<div><span>CPU2共享故障</span><strong>63项</strong></div>
-<div><span>正式表</span><strong>64项</strong></div>
-<div><span>使用中 / 保留</span><strong>61 / 3</strong></div>
-<div><span>共享协议</span><strong>17</strong></div>
+<div><span>CPU2共享故障</span><strong>129项</strong></div>
+<div><span>正式故障项目</span><strong>130项</strong></div>
+<div><span>使用中</span><strong>127项</strong></div>
+<div><span>保留</span><strong>3项</strong></div>
 </div>
-</header>
+</section>
 
 <section>
-<h2>1. 当前基线</h2>
+<h2>1. 当前结论</h2>
 <ul>
-<li>CPU2枚举共65项，其中2项为非故障状态，63项为共享故障。</li>
-<li>CPU3同步65项定义，并额外定义本机故障 <code>20-7 / 0x00140007</code>。</li>
-<li>故障寄存器仍为32位，地址和宽度不变；参数存储结构和版本不变。</li>
-<li>屏幕显示十进制“类别代码-故障码”，正式资料不以十六进制作为现场主编号。</li>
+<li>CPU2共有131项定义，其中2项为非故障状态、129项为共享故障；CPU3同步这些定义，并另有1项本机故障 <code>20-7</code>。</li>
+<li>协议19完成的故障码拆分未单独发布，已经随协议21正式发布。</li>
+<li>协议21首个正式组合为CPU2 <code>V1.27.0.0</code>、CPU3 <code>V1.25.0.0</code>；CPU2 V1.26.0.0、CPU3 V1.24.0.0仍按协议18历史口径解释。</li>
+<li>故障寄存器仍为32位，高16位表示类别、低16位表示类别内编号；地址、宽度、命令和参数存储结构没有改变。</li>
+<li>正式表保留十进制“类别代码-故障码”作为现场查询入口；技术完整码和内部标识只放在内部资料。</li>
 </ul>
 </section>
 
 <section>
-<h2>2. 分类与编号</h2>
+<h2>2. 分类与数量</h2>
 <table>
-<thead><tr><th>类别</th><th>责任域</th><th>当前项数</th><th>编号原则</th></tr></thead>
+<thead><tr><th>类别</th><th>责任域</th><th>共享故障数</th><th>一代关系与说明</th></tr></thead>
 <tbody>
-<tr><td>10</td><td>上位机预留</td><td>0</td><td>对应一代0类，保留类别号。</td></tr>
-<tr><td>11</td><td>电机驱动</td><td>9</td><td>驱动通信、状态、运动和关键配置。</td></tr>
-<tr><td>12</td><td>编码器</td><td>10</td><td>通信、校验、初始化和位置质量。</td></tr>
-<tr><td>13</td><td>传感器与密度</td><td>6</td><td>13-3继承一代3-3“传感器无响应”语义。</td></tr>
-<tr><td>14</td><td>零点与位置检测</td><td>3</td><td>零点范围、位置反馈和重复性。</td></tr>
-<tr><td>15</td><td>测量过程</td><td>11</td><td>按液位、水位、寻重、密度分布和超时阶段区分。</td></tr>
-<tr><td>16</td><td>角度异常预留</td><td>0</td><td>对应一代6类，保留类别号。</td></tr>
-<tr><td>17</td><td>参数与存储</td><td>4</td><td>存储读写、初始化、范围和完整性。</td></tr>
-<tr><td>18</td><td>模拟输出与自检</td><td>5</td><td>对应一代8类，覆盖写入、初始化、诊断和回读。</td></tr>
-<tr><td>19</td><td>液位预留</td><td>0</td><td>对应一代9类；二代液位过程故障归15类。</td></tr>
-<tr><td>20</td><td>设备通信链路</td><td>6+1</td><td>串口、滑环、无线；另有CPU3本机20-7。</td></tr>
-<tr><td>21</td><td>扭力检测</td><td>6</td><td>范围、碰撞、漂移、饱和和通信。</td></tr>
-<tr><td>22</td><td>系统与软件</td><td>3</td><td>数据位置、调用条件和外设配置。</td></tr>
+<tr><td>11</td><td>电机驱动</td><td>15</td><td>优先对照一代1类；拆分堵转、相线短路、相线断路、过温预警、未初始化、整段运行超时、停止等待超时和到位等待超时。</td></tr>
+<tr><td>12</td><td>编码器</td><td>12</td><td>优先对照一代2类；新增首个位置等待超时和周长标定异常。</td></tr>
+<tr><td>13</td><td>传感器与密度</td><td>38</td><td>优先对照一代3类；<code>13-3</code>继续对应一代<code>3-3</code>传感器无响应，并细分内部通信、姿态、供电、自检、身份、地址、会话、协议、命令、模式、参数、采样和周期上报状态。</td></tr>
+<tr><td>14</td><td>零点与位置检测</td><td>6</td><td>对照一代4类和相关位置故障；拆分位置数据无效、越过目标、到位偏差和电机未停止。</td></tr>
+<tr><td>15</td><td>测量过程</td><td>18</td><td>对照一代5、6类；拆分两种找液位超时、探底前离底、标定值未设置、测量结果无效、计算结果越界和密度测点规划。</td></tr>
+<tr><td>17</td><td>参数与存储</td><td>10</td><td>对照一代7类；区分读写失败、未初始化、范围、完整性、缺项、组合冲突、功能不支持、结构大小、存储版本和写后校验。</td></tr>
+<tr><td>18</td><td>模拟输出与自检</td><td>10</td><td>对照一代8类；区分内部通信、环路电流高低、环路电压、传输、访问冲突和温度。</td></tr>
+<tr><td>20</td><td>设备通信链路</td><td>11</td><td>二代新增责任域；区分串口、滑环、无线主从、响应格式、扫描无设备、名称重复、名称无效、非主机模式和名称未找到。</td></tr>
+<tr><td>21</td><td>扭力检测</td><td>6</td><td>二代新增责任域；保留扭力范围、碰撞、漂移、饱和和通信。</td></tr>
+<tr><td>22</td><td>系统与软件</td><td>3</td><td>二代新增责任域；只保留内部容量、调用条件和计算结果三类同处理方式的系统故障。</td></tr>
+</tbody>
+</table>
+<p>10、16、19保留一代类别加10后的代际位置，当前不分配故障码。</p>
+</section>
+
+<section>
+<h2>3. 拆分规则</h2>
+<ol>
+<li>责任域不同，必须拆分。例如传感器内部故障不能继续与外部通信超时共用一个编号。</li>
+<li>现场检查方法不同，必须拆分。例如电机堵转、相线短路和相线断路分别对应机构、绝缘和连续性检查。</li>
+<li>同一操作的失败阶段不同，且能稳定判断时拆分。例如密度找液位超时与频率找液位超时分开。</li>
+<li>触发点虽然不同，但现场现象、责任域和处理方法完全一致时可以共用，例如内部调用前置条件异常统一归入 <code>22-5</code>。</li>
+<li>优先保持一代类别和子码对照；一代大类不足以定位时，在二代类别内新增子码，不强行复用旧含义。</li>
+<li>历史编号、保留编号和取消编号永久冻结，不分配给新的故障含义。</li>
+</ol>
+</section>
+
+<section>
+<h2>4. 协议18到19的主要拆分</h2>
+<table>
+<thead><tr><th>原通用方向</th><th>协议19处理</th><th>主要结果</th></tr></thead>
+<tbody>
+<tr><td>电机报警和运动超时</td><td>按驱动状态和等待阶段拆分</td><td>堵转、相线短路、相线断路、过温预警、整段运行超时、停止等待超时和到位等待超时独立报码。</td></tr>
+<tr><td>传感器安全通信结果</td><td>按身份、地址、会话、命令、模式和周期上报状态拆分</td><td><code>13-31</code>～<code>13-56</code>分别定位身份、版本、会话、序号、能力、命令、参数、模式、忙状态、参数校验、采样计数和周期上报状态。</td></tr>
+<tr><td>位置异常</td><td>按数据、目标、到位和停止状态拆分</td><td>位置数据无效、运动越过目标、到位偏差、电机未停止分开。</td></tr>
+<tr><td>测量超时</td><td>按找液方法拆分</td><td>密度找液位超时和频率找液位超时分开。</td></tr>
+<tr><td>模拟输出通用诊断</td><td>按环路和芯片状态拆分</td><td>电流高、电流低、环路电压低、传输、访问冲突和过温分别定位。</td></tr>
+<tr><td>罐高和水位标定</td><td>按前置值、测量结果和计算边界拆分</td><td>未设置罐高、未设置水位、罐高结果无效和水位标定计算越界分别报码。</td></tr>
+<tr><td>参数存储和系统通用错误</td><td>按读写、结构大小、版本、写后校验及系统容量、调用、计算拆分</td><td>存储介质故障、旧记录不兼容、写入结果不一致和内部执行问题分开。</td></tr>
+<tr><td>无线响应格式异常</td><td>保留真正的格式异常，扫描和名称结果另行报码</td><td><code>20-8</code>无设备、<code>20-9</code>名称重复、<code>20-10</code>名称无效、<code>20-11</code>非主机模式、<code>20-12</code>名称未找到。</td></tr>
 </tbody>
 </table>
 </section>
 
 <section>
-<h2>3. 保留与停用</h2>
-<p><strong>保留3项：</strong>12-6编码器上电变化、15-16实高偏差过大、21-5扭力传感器饱和。当前流程不主动产生，启用前必须补齐调用点和验证。</p>
-<p><strong>停用12项：</strong><code>MOTOR_FAIL_SETTING</code>、<code>MOTOR_RESET_FAIL</code>、<code>SLIPRING_BCC_ERROR</code>、<code>SLIPRING_PACKET_LOSS</code>、<code>SENSOR_TEMPERATURE_ERROR</code>、<code>SENSOR_VOLTAGE_ERROR</code>、<code>DENSITY_UNSTABLE</code>、<code>MEASUREMENT_DENSITY_RANGE_INVALID</code>、<code>AD5421_FAULT_PIN_ERROR</code>、<code>OTHER_UNKNOWN_ERROR</code>、<code>OTHER_ADDRESS_READ_ERROR</code>、<code>OTHER_POWER_FLUCTUATION</code>。</p>
-<div class="note">停用项只保留在CPU2 V1.24.0.0历史表；旧编号不得复用于新的故障含义。</div>
+<h2>5. 保留与历史冻结</h2>
+<p><strong>当前保留3项：</strong><code>12-6</code>编码器上电变化、<code>15-16</code>实高偏差过大、<code>21-5</code>扭力传感器饱和。当前程序不主动产生，启用前必须补齐调用点和验证。</p>
+<p><strong>CPU2 V1.25.0.0～V1.26.0.0历史页：</strong>保存64个历史故障项目和当前开发版拆分前的10个通用码。</p>
+<p><strong>CPU2 V1.24.0.0历史页：</strong>保存更早开发基线及12个早期停用码。</p>
+<p><strong>一代历史页：</strong>单独保存一代资料版本v1.0，不参与二代当前项目统计。</p>
+<div class="note">现场先确认设备代际，再按CPU2程序版本选表。共享协议版本只用于CPU2与CPU3配套判断；CPU3本机20-7另按CPU3程序版本确认。</div>
 </section>
 
 <section>
-<h2>4. 兼容性</h2>
-<ul>
-<li>协议17重新分类并调整故障子码，与协议16及更早版本的数值解释不兼容。</li>
-<li>CPU2和CPU3必须使用相同的 <code>DEVICE_PROTOCOL_VERSION</code>。</li>
-<li>现场选择共享故障码表以CPU2程序版本为准，不以CPU3版本或共享协议版本代替。</li>
-<li>CPU3本机20-7按CPU3程序版本确认。</li>
-<li>一代计量仪历史表和CPU2 V1.24.0.0历史表保持独立，不回写当前编号。</li>
-</ul>
-</section>
-
-<section>
-<h2>5. 实施状态与验证</h2>
+<h2>6. 完成情况与后续</h2>
 <table>
-<thead><tr><th>项目</th><th>状态</th><th>说明</th></tr></thead>
+<thead><tr><th>项目</th><th>状态</th><th>结论</th></tr></thead>
 <tbody>
-<tr><td>CPU2/CPU3枚举</td><td>已完成</td><td>双端同名同值，CPU3另含20-7。</td></tr>
-<tr><td>日志和显示</td><td>已完成</td><td>删除12项停用映射，保留当前63项具体原因。</td></tr>
-<tr><td>正式与内部工作簿</td><td>已完成</td><td>当前表64项；历史页保持不变；迁移表记录协议16到17。</td></tr>
-<tr><td>协议资料和检查脚本</td><td>已完成</td><td>共享协议版本调整为17。</td></tr>
-<tr><td>软件构建和静态检查</td><td>执行中</td><td>完成后以交接计划中的真实结果为准。</td></tr>
-<tr><td>台架故障注入</td><td>未执行</td><td>FI-01～FI-08及协议16/17交叉烧写需实机验证。</td></tr>
+<tr><td>CPU2/CPU3枚举与数值</td><td>已完成</td><td>129项共享故障一致；CPU3另有20-7本机故障。</td></tr>
+<tr><td>CPU2产生路径</td><td>已完成</td><td>原通用码已按可判断的具体原因替换，协议18的10个通用码不再被当前源码引用。</td></tr>
+<tr><td>日志和CPU3显示</td><td>已完成</td><td>129项共享故障和1项CPU3本机故障均有具体名称和原因。</td></tr>
+<tr><td>正式与内部工作簿</td><td>已完成</td><td>正式表130项和内部表已同步并复核，正式目录契约通过。CPU2历史页、CPU2 V1.24.0.0和一代历史页独立冻结。</td></tr>
+<tr><td>共享协议</td><td>已发布</td><td>协议19故障码拆分随协议21正式发布；首个组合为CPU2 V1.27.0.0 / CPU3 V1.25.0.0。</td></tr>
+<tr><td>实机故障注入</td><td>未执行</td><td>需要按类别验证产生、屏幕显示、日志、停机和恢复，不以静态检查代替。</td></tr>
 </tbody>
 </table>
+<div class="note ok">发布前必须同步CPU2/CPU3固件版本、协议变更记录、版本改动与测试方案和台架验证清单；参数存储版本保持3，本次不清参数。</div>
 </section>
 </main>
 </body>

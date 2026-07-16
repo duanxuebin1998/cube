@@ -1243,11 +1243,24 @@ static uint32_t WirelessPairing_EnterAtAndHostMode(void)
     printf("无线滑环匹配\t主机模式复位后重新进入AT\r\n");
     ret = CH9141_AT_EnterSoftwareMode(&response);
     WirelessPairing_PrintRet("无线滑环匹配\t重新进入AT", ret);
-    /* 先处理异常边界，避免无线滑环匹配状态机带故障继续运行。 */
     if (ret != NO_ERROR) {
         printf("无线滑环匹配\t重新进入AT响应=%s\r\n", response.text);
+        return ret;
     }
-    return ret;
+
+    ret = CH9141_AT_SendCommand("AT+BLEMODE?",
+                                CH9141_AT_WAIT_ACK,
+                                WIRELESS_PAIRING_ACK_TIMEOUT_MS,
+                                &response);
+    if (ret != NO_ERROR) {
+        return ret;
+    }
+    if ((WirelessPairing_ParseModeResponse(&response, &mode, NULL, 0U) == 0U) ||
+        (mode != WIRELESS_PAIRING_HOST_MODE)) {
+        printf("无线滑环匹配\t切换后仍不是主机模式\t响应=%s\r\n", response.text);
+        return WIRELESS_NOT_HOST_MODE;
+    }
+    return NO_ERROR;
 }
 
 /**
@@ -1260,7 +1273,7 @@ static uint32_t WirelessPairing_Scan(WirelessPairingScanResult *scan)
     uint32_t disconn_ret;
 
     if (scan == NULL) {
-        return PARAM_ADDRESS_OVERFLOW;
+        return SYSTEM_CALL_CONDITION_ERROR;
     }
 
     printf("无线滑环匹配\t阶段：扫描准备\t超时=%lu ms\r\n",
@@ -1299,7 +1312,7 @@ static uint32_t WirelessPairing_Scan(WirelessPairingScanResult *scan)
     WirelessPairing_PrintScan(scan);
     if (scan->count == 0U) {
         printf("无线滑环匹配\t扫描完成但没有解析到候选从机\r\n");
-        return WIRELESS_SLAVE_COMM_TIMEOUT;
+        return WIRELESS_SCAN_NO_DEVICE;
     }
     return NO_ERROR;
 }
@@ -1376,16 +1389,16 @@ static uint8_t WirelessPairing_SelectByRssi(const WirelessPairingScanResult *sca
 }
 
 /**
- * @brief 按显式名称字段选择唯一候选。
+ * @brief 按显式名称字段选择唯一候选，并区分未找到与名称重复。
  */
-static uint8_t WirelessPairing_SelectByName(const WirelessPairingScanResult *scan,
-                                            const char *target_name,
-                                            const WirelessPairingCandidate **selected)
+static uint32_t WirelessPairing_SelectByName(const WirelessPairingScanResult *scan,
+                                             const char *target_name,
+                                             const WirelessPairingCandidate **selected)
 {
     const WirelessPairingCandidate *match = NULL;
 
     if ((scan == NULL) || (target_name == NULL) || (selected == NULL) || (*target_name == '\0')) {
-        return 0U;
+        return SYSTEM_CALL_CONDITION_ERROR;
     }
 
     *selected = NULL;
@@ -1402,18 +1415,18 @@ static uint8_t WirelessPairing_SelectByName(const WirelessPairingScanResult *sca
                        target_name,
                        match->mac,
                        candidate->mac);
-                return 0U;
+                return WIRELESS_NAME_NOT_UNIQUE;
             }
             match = candidate;
         }
     }
 
     if (match == NULL) {
-        return 0U;
+        return WIRELESS_NAME_NOT_FOUND;
     }
 
     *selected = match;
-    return 1U;
+    return NO_ERROR;
 }
 
 /**
@@ -1426,7 +1439,7 @@ static uint32_t WirelessPairing_ConnectAndSave(const WirelessPairingCandidate *c
     char cmd[64];
 
     if (candidate == NULL) {
-        return PARAM_ADDRESS_OVERFLOW;
+        return SYSTEM_CALL_CONDITION_ERROR;
     }
 
     printf("无线滑环匹配\t选择目标\t序号=%u\tMAC=%s",
@@ -1554,7 +1567,7 @@ uint32_t WirelessPairing_ReadConnectionStatus(WirelessConnectionStatus *status)
     int16_t rssi = 0;
 
     if (status == NULL) {
-        return PARAM_ADDRESS_OVERFLOW;
+        return SYSTEM_CALL_CONDITION_ERROR;
     }
 
     WirelessPairing_ResetConnectionStatus(status);
@@ -1961,8 +1974,8 @@ uint32_t WirelessPairing_RunByName(const char *target_name)
     if ((target_name == NULL) || (*target_name == '\0') ||
         (strlen(target_name) >= WIRELESS_PAIRING_NAME_TEXT_SIZE)) {
         printf("无线滑环匹配\t名称参数无效，格式：SPN=<name>，长度小于18字节\r\n");
-        WirelessPairing_PublishStatus(WIRELESS_PAIRING_RESULT_FAILED, NULL, PARAM_RANGE_ERROR);
-        return PARAM_RANGE_ERROR;
+        WirelessPairing_PublishStatus(WIRELESS_PAIRING_RESULT_FAILED, NULL, WIRELESS_NAME_INVALID);
+        return WIRELESS_NAME_INVALID;
     }
 
     printf("\r\n===== 无线滑环名称匹配开始：%s =====\r\n", target_name);
@@ -1975,11 +1988,11 @@ uint32_t WirelessPairing_RunByName(const char *target_name)
         if (scan.scan_has_name_field == 0U) {
             printf("无线滑环匹配\t扫描结果未包含名称字段，不能按名称匹配\r\n");
             ret = WIRELESS_RESP_FORMAT_ERROR;
-        } else if (WirelessPairing_SelectByName(&scan, target_name, &selected) == 0U) {
-            printf("无线滑环匹配\t未找到唯一名称匹配项：%s\r\n", target_name);
-            ret = WIRELESS_SLAVE_COMM_TIMEOUT;
         } else {
-            ret = WirelessPairing_ConnectAndSave(selected);
+            ret = WirelessPairing_SelectByName(&scan, target_name, &selected);
+            if (ret == NO_ERROR) {
+                ret = WirelessPairing_ConnectAndSave(selected);
+            }
         }
     }
     WirelessPairing_Finish("无线滑环名称匹配", ret);

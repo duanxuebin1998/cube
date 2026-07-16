@@ -1,0 +1,437 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>CPU2 电机尺带 TFIT 拟合逻辑详解</title>
+  <style>
+    :root{
+      --nav:#10283c;--nav2:#173b55;--bg:#f3f6f9;--paper:#fff;--ink:#172430;--muted:#637383;
+      --line:#dce4ea;--motor:#136fa3;--encoder:#cf6a18;--c0:#16745b;--thick:#7556a8;--offset:#566574;
+      --blue-soft:#eaf4fa;--orange-soft:#fff2e5;--green-soft:#e9f6f1;--purple-soft:#f1edfa;
+      --danger:#b4382d;--danger-soft:#fff0ee;--warn:#9a6200;--warn-soft:#fff7df;--ok:#1e7354;
+    }
+    *{box-sizing:border-box} html{scroll-behavior:smooth;scroll-padding-top:20px}
+    body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.72 "Microsoft YaHei","PingFang SC",Arial,sans-serif}
+    .page{display:grid;grid-template-columns:274px minmax(0,1fr);max-width:1540px;margin:auto;min-height:100vh}
+    nav{position:sticky;top:0;height:100vh;overflow:auto;padding:25px 18px 30px;background:linear-gradient(180deg,var(--nav),#0c1e2d);color:#dbe7ee}
+    nav h1{font-size:20px;line-height:1.35;margin:0 0 5px;color:#fff}nav .version{font-size:12px;color:#96adbc;margin-bottom:21px}
+    nav .group{margin:16px 8px 5px;font-size:11px;letter-spacing:.12em;color:#66889e;text-transform:uppercase}
+    nav a{display:block;padding:7px 9px;margin:1px 0;border-radius:6px;color:#cbdbe5;text-decoration:none;font-size:13px;border-left:3px solid transparent}
+    nav a:hover,nav a.active{background:var(--nav2);border-left-color:#54b8c6;color:#fff}
+    main{min-width:0;padding:35px 42px 70px}.hero{position:relative;overflow:hidden;padding:38px 40px;border-radius:18px;color:#fff;background:linear-gradient(125deg,#164e72,#107b82);box-shadow:0 15px 35px #123a5220}
+    .hero:after{content:"";position:absolute;width:330px;height:330px;border:55px solid #ffffff0c;border-radius:50%;right:-100px;top:-150px}.hero .eyebrow{font-size:12px;letter-spacing:.12em;color:#bfe8ec}.hero h1{font-size:34px;line-height:1.3;margin:8px 0}.hero p{max-width:920px;margin:8px 0;color:#d8edf0}.tags{margin-top:15px}.tag{display:inline-block;padding:4px 10px;margin:4px 7px 0 0;border:1px solid #ffffff55;border-radius:99px;font-size:12px}
+    .section{margin:22px 0;padding:27px 30px;background:var(--paper);border:1px solid var(--line);border-radius:15px;box-shadow:0 5px 16px #1632470a}
+    .section>h2{margin:0 0 7px;color:#123f5e;font-size:25px;line-height:1.35}.section>h2 .num{display:inline-grid;place-items:center;width:34px;height:34px;margin-right:8px;border-radius:9px;background:#e4f0f6;color:#176386;font-size:17px}.section>.intro{margin:0 0 20px;color:var(--muted);font-size:15px}
+    h3{font-size:18px;margin:24px 0 10px;color:#20556f}h4{margin:13px 0 6px;font-size:15px}.lead{font-size:18px;line-height:1.8}.muted,.small{color:var(--muted)}.small{font-size:12px}.center{text-align:center}
+    .summary{display:grid;grid-template-columns:1.2fr 1fr 1fr;gap:13px}.summary-card{padding:17px;border-radius:11px;border:1px solid var(--line);background:#fbfcfd}.summary-card.primary{background:#eaf5f7;border-color:#b9dce1}.summary-card .kicker{font-size:11px;color:var(--muted);letter-spacing:.08em}.summary-card strong{display:block;margin:4px 0;color:#164c67;font-size:18px}.summary-card p{margin:4px 0}
+    .keyline{display:grid;grid-template-columns:repeat(5,1fr);gap:9px;align-items:stretch;margin:18px 0}.key-step{position:relative;padding:15px 12px;border:1px solid #cddce6;border-radius:10px;background:#f7fafc;text-align:center}.key-step:not(:last-child):after{content:"›";position:absolute;right:-10px;top:50%;transform:translateY(-52%);z-index:2;width:20px;height:20px;border-radius:50%;background:#fff;color:#18809b;font:bold 19px/18px Arial}.key-step b{display:block;color:#175a77;margin-bottom:3px}.key-step span{font-size:12px;color:var(--muted)}
+    .grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}.split{display:grid;grid-template-columns:1.08fr .92fr;gap:24px;align-items:start}
+    .callout{padding:14px 16px;margin:14px 0;border-radius:9px;border-left:4px solid var(--motor);background:var(--blue-soft)}.callout.warn{border-color:var(--warn);background:var(--warn-soft)}.callout.danger{border-color:var(--danger);background:var(--danger-soft)}.callout.ok{border-color:var(--ok);background:var(--green-soft)}
+    .token{display:inline-block;padding:1px 7px;border-radius:5px;font-weight:700}.tmotor{color:var(--motor);background:var(--blue-soft)}.tencoder{color:var(--encoder);background:var(--orange-soft)}.tc0{color:var(--c0);background:var(--green-soft)}.tt{color:var(--thick);background:var(--purple-soft)}.tb{color:var(--offset);background:#edf0f3}
+    .equation{margin:12px 0;padding:15px 18px;border:1px solid #cddae3;border-radius:10px;background:#f8fafb;text-align:center;font:20px/1.7 Cambria,"Times New Roman",serif;overflow:auto}.equation.big{padding:19px;font-size:24px;background:#f2f8fb;border-color:#b9d6e3}.equation .under{display:block;margin-top:2px;color:var(--muted);font:12px/1.4 "Microsoft YaHei",sans-serif}.eq-parts{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.eq-part{padding:13px;border-radius:9px;text-align:center;border:1px solid var(--line)}.eq-part b{display:block;font:19px Cambria,serif}.eq-part span{font-size:12px;color:var(--muted)}
+    .derivation{counter-reset:derive}.derive{position:relative;margin:13px 0;padding:15px 18px 15px 60px;border:1px solid var(--line);border-radius:11px;background:#fff}.derive:before{counter-increment:derive;content:counter(derive);position:absolute;left:17px;top:17px;display:grid;place-items:center;width:28px;height:28px;border-radius:50%;background:#1b708f;color:#fff;font-weight:700}.derive h4{margin:0 0 4px}.derive p{margin:4px 0}.derive .mini-eq{font:18px Cambria,serif;color:#143f58}
+    table{width:100%;border-collapse:collapse;margin:12px 0;font-size:13px}th,td{padding:10px 11px;border:1px solid var(--line);vertical-align:top}th{background:#eaf1f5;color:#174861;text-align:left}tr:nth-child(even) td{background:#fbfcfd}code{padding:2px 5px;border-radius:4px;background:#eef2f5;color:#8a2e48;font-family:Consolas,monospace;font-size:.92em;overflow-wrap:anywhere;word-break:break-word}pre{margin:12px 0;padding:15px 17px;border-radius:10px;background:#102436;color:#d9ebf6;overflow:auto;line-height:1.6;font-family:Consolas,monospace;font-size:13px}
+    .visual{padding:12px;border:1px solid var(--line);border-radius:12px;background:#f9fbfc}.visual svg{display:block;width:100%;height:auto}.caption{margin:8px 5px 0;color:var(--muted);font-size:12px;text-align:center}
+    .compare{display:grid;grid-template-columns:1fr 60px 1fr;gap:8px;align-items:stretch}.mode{padding:19px;border-radius:12px;border:2px solid}.mode.global{border-color:#77afd0;background:#eef7fb}.mode.local{border-color:#ad91d1;background:#f6f1fb}.mode h3{margin:0 0 8px}.vs{display:grid;place-items:center;font-weight:800;color:#70808d}
+    .state-row{display:flex;gap:9px;align-items:stretch;overflow:auto;padding:7px 1px}.state{min-width:138px;flex:1;padding:13px;border-radius:9px;background:#f3f8fb;border:1px solid #cadce7;text-align:center}.state b{display:block;color:#195b78}.state-arrow{align-self:center;color:#2a819c;font-size:22px}
+    .gate{display:grid;grid-template-columns:32px 1fr;gap:10px;margin:9px 0;padding:11px 13px;border:1px solid var(--line);border-radius:9px}.gate .icon{display:grid;place-items:center;width:27px;height:27px;border-radius:50%;background:#eaf5f0;color:var(--ok);font-weight:bold}.gate.no .icon{background:#fff0ee;color:var(--danger)}.gate b{display:block}.gate p{margin:2px 0;color:var(--muted);font-size:13px}
+    .calculator{padding:20px;border-radius:13px;background:linear-gradient(145deg,#102c43,#174b62);color:#ecf6fa}.calc-inputs{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.calc-inputs label{font-size:12px;color:#b9d2de}.calc-inputs input{display:block;width:100%;margin-top:5px;padding:9px 10px;border:1px solid #58788a;border-radius:7px;background:#fff;color:#14232d;font:15px Consolas,monospace}.calc-results{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:13px}.calc-result{padding:10px;border-radius:8px;background:#ffffff12;border:1px solid #ffffff1d}.calc-result span{display:block;font-size:11px;color:#a9c5d2}.calc-result b{font-size:16px;color:#fff}.calc-note{margin-top:10px;font-size:12px;color:#b9d2de}
+    .impact{display:grid;grid-template-columns:180px 1fr;gap:12px;margin:10px 0}.impact .param{padding:12px;border-radius:9px;text-align:center;font-weight:700}.impact .paths{padding:12px;border:1px solid var(--line);border-radius:9px;background:#fbfcfd}.impact .paths span{display:inline-block;margin:3px;padding:3px 8px;border-radius:99px;background:#eaf1f5;font-size:12px}
+    details{margin:10px 0;border:1px solid var(--line);border-radius:9px;background:#fbfcfd}summary{padding:12px 14px;cursor:pointer;font-weight:700;color:#24536e}details>div{padding:0 15px 15px}.source{word-break:break-all}.foot{margin-top:28px;text-align:center;color:var(--muted);font-size:12px}
+    @media(max-width:1050px){.page{grid-template-columns:230px minmax(0,1fr)}main{padding:25px}.summary,.grid3{grid-template-columns:1fr 1fr}.split{grid-template-columns:1fr}.keyline{grid-template-columns:1fr}.key-step:not(:last-child):after{content:"↓";right:50%;top:auto;bottom:-12px;transform:translateX(50%)}}
+    @media(max-width:760px){.page{display:block}nav{position:relative;height:auto}main{padding:16px}.hero{padding:27px 23px}.hero h1{font-size:27px}.section{padding:22px 18px}.summary,.grid2,.grid3,.eq-parts,.calc-inputs,.calc-results{grid-template-columns:1fr}.compare{grid-template-columns:1fr}.vs{height:34px}.impact{grid-template-columns:1fr}.state-row{flex-direction:column}.state-arrow{transform:rotate(90deg)}table{display:block;width:100%;max-width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch}}
+    @media print{nav{display:none}.page{display:block}.hero{background:#eef5f7;color:#172430;box-shadow:none}.hero p{color:#354b5a}main{padding:0}.section,.visual{box-shadow:none;break-inside:avoid}.calculator{background:#eef2f5;color:#172430}.calc-result b{color:#172430}}
+  </style>
+</head>
+<body>
+<div class="page">
+  <nav id="toc">
+    <h1>电机尺带 TFIT</h1>
+    <div class="version">CPU2 V1.27.0.0 · 当前工作区 · 2026-07-16</div>
+    <div class="group">先理解</div>
+    <a href="#overview">1　核心结论与全链路</a>
+    <a href="#data">2　输入数据与单位</a>
+    <div class="group">再看数学</div>
+    <a href="#physical">3　卷筒物理模型</a>
+    <a href="#derive">4　公式逐步推导</a>
+    <a href="#piecewise">5　分段与反算模型</a>
+    <a href="#fit">6　全局与局部拟合</a>
+    <div class="group">最后对代码</div>
+    <a href="#solve">7　求解器与质量指标</a>
+    <a href="#sample">8　采样和调试命令</a>
+    <a href="#apply">9　应用与参数消费</a>
+    <a href="#example">10　数值例子与计算器</a>
+    <a href="#limits">11　边界、风险与判读</a>
+    <a href="#sources">12　源码证据索引</a>
+  </nav>
+
+  <main>
+    <header class="hero">
+      <div class="eyebrow">LTD_MAIN_CPU2 · MOTOR / ENCODER CALIBRATION</div>
+      <h1>电机尺带 TFIT 拟合逻辑详解</h1>
+      <p>从卷筒半径变化出发，解释为什么尺带长度是圈数的二次函数；再把数学公式逐项映射到采样、最小二乘求解、参数写入和运行时消费代码。</p>
+      <div class="tags"><span class="tag">正式源：docs/</span><span class="tag">单文件 UTF-8 HTML</span><span class="tag">依据：当前工作区源码</span></div>
+    </header>
+
+    <section class="section" id="overview">
+      <h2><span class="num">1</span>核心结论与全链路</h2>
+      <p class="intro">如果只记住一件事：TFIT 拟合的是“电机转了多少圈”与“编码轮实际走了多长”之间的关系。</p>
+      <div class="callout ok lead"><strong>TFIT 的本质：</strong>用电机输出轴圈数 <span class="token tmotor">n</span> 作为自变量，用编码轮累计长度 <span class="token tencoder">y</span> 作为观测值，拟合二次曲线，从曲线的<strong>斜率</strong>得到首圈/局部周长，从曲线的<strong>弯曲程度</strong>得到尺带厚度。</div>
+      <div class="keyline">
+        <div class="key-step"><b>① 采电机</b><span>XACTUAL → 圈数 n</span></div>
+        <div class="key-step"><b>② 采编码轮</b><span>encoder count → 长度 y</span></div>
+        <div class="key-step"><b>③ 二次拟合</b><span>y = a0+a1n+a2n²</span></div>
+        <div class="key-step"><b>④ 参数映射</b><span>C0=a1，t=−a2/π</span></div>
+        <div class="key-step"><b>⑤ 人工应用</b><span>TP / TU → 参数保存</span></div>
+      </div>
+      <div class="summary">
+        <div class="summary-card primary"><div class="kicker">最终模型</div><strong>y = b + C0·n − πt·n²</strong><p>b 是零点差，C0 是 n=0 处周长，t 控制曲率。</p></div>
+        <div class="summary-card"><div class="kicker">全局 TFIT</div><strong>求 b、C0、t</strong><p>允许用 <code>TU</code> 同时写入 C0 与 t。</p></div>
+        <div class="summary-card"><div class="kicker">局部 TFIT</div><strong>求 Clocal、t</strong><p>局部周长不是全局 C0；设计用途主要是用 <code>TP</code> 更新 t。</p></div>
+      </div>
+      <div class="callout warn"><strong>“求解成功”不等于“标定合格”。</strong>当前代码只检查点数、圈数跨度、矩阵可解和参数为正；RMSE 与最大误差只打印，不参与放行。</div>
+    </section>
+
+    <section class="section" id="data">
+      <h2><span class="num">2</span>输入数据与单位换算</h2>
+      <p class="intro">先统一单位，后面的公式才不会混乱。拟合数组实际保存两个整数：电机 tick 与编码轮长度 0.1 mm。</p>
+      <div class="grid2">
+        <div class="summary-card">
+          <div class="kicker">电机侧 · 自变量</div><strong class="tmotor">XACTUAL → n</strong>
+          <div class="equation">n = motor_step / 1,536,000</div>
+          <p>每圈 tick 固定为 <code>30 × 1600 × 32</code>。n 是带符号圈数，代码中下行放带方向为正。</p>
+        </div>
+        <div class="summary-card">
+          <div class="kicker">编码轮侧 · 观测值</div><strong class="tencoder">g_encoder_count → y</strong>
+          <div class="equation">y<sub>0.1mm</sub> = (−count/4096) × encoderCirc<sub>0.001mm</sub> / 100</div>
+          <p>拟合时再乘 0.1 转成 mm。负号用于统一编码轮与电机模型的运动方向。</p>
+        </div>
+      </div>
+      <table>
+        <thead><tr><th>量</th><th>RAM/参数字段</th><th>存储单位</th><th>进入数学模型后的单位</th></tr></thead>
+        <tbody>
+          <tr><td>电机位置 s</td><td><code>motor_step</code> / XACTUAL</td><td>tick</td><td>n = s/1,536,000 rev</td></tr>
+          <tr><td>编码轮长度 y</td><td><code>encoder_length_01mm</code></td><td>0.1 mm</td><td>y×0.1 mm</td></tr>
+          <tr><td>首圈周长 C0</td><td><code>first_loop_circumference_mm</code></td><td>0.1 mm</td><td>参数×0.1 mm</td></tr>
+          <tr><td>尺带厚度 t</td><td><code>tape_thickness_mm</code></td><td>0.001 mm</td><td>参数×0.001 mm</td></tr>
+          <tr><td>电机局部周长</td><td><code>motor_count_first_loop_circumference_mm</code></td><td>0.001 mm</td><td>参数×0.001 mm</td></tr>
+        </tbody>
+      </table>
+      <div class="callout"><strong>两个“周长”不要混淆：</strong><code>first_loop_circumference_mm</code> 是全局卷筒模型 C0；<code>motor_count_first_loop_circumference_mm</code> 是电机记步模式使用的局部线性周长。当前 TFIT Apply 不会把局部拟合周长写入后者。</div>
+    </section>
+
+    <section class="section" id="physical">
+      <h2><span class="num">3</span>卷筒物理模型：为什么会出现二次曲线</h2>
+      <p class="intro">关键物理量不是“电机每圈永远走相同长度”，而是尺带放出后卷层逐渐变薄，下一圈的有效周长会变小。</p>
+      <div class="split">
+        <div class="visual">
+          <svg viewBox="0 0 760 330" role="img" aria-label="卷筒放带前后半径变化示意图">
+            <defs><marker id="arr" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6Z" fill="#176f91"/></marker><pattern id="layers" width="8" height="8" patternUnits="userSpaceOnUse"><path d="M0 8L8 0" stroke="#bd9fda" stroke-width="2" opacity=".5"/></pattern></defs>
+            <text x="175" y="28" text-anchor="middle" font-size="19" font-weight="700" fill="#174861">n = 0：卷层较厚</text>
+            <circle cx="175" cy="168" r="118" fill="url(#layers)" stroke="#7556a8" stroke-width="3"/><circle cx="175" cy="168" r="52" fill="#d9e2e8" stroke="#667b89" stroke-width="3"/><circle cx="175" cy="168" r="9" fill="#173f58"/>
+            <line x1="175" y1="168" x2="288" y2="168" stroke="#176f91" stroke-width="3" marker-end="url(#arr)"/><text x="230" y="157" text-anchor="middle" fill="#176f91" font-size="15">R0</text>
+            <line x1="293" y1="168" x2="293" y2="298" stroke="#cf6a18" stroke-width="7"/><text x="305" y="293" fill="#cf6a18" font-size="14">尺带放出方向</text>
+            <text x="570" y="28" text-anchor="middle" font-size="19" font-weight="700" fill="#174861">放出 n 圈后</text>
+            <circle cx="570" cy="168" r="84" fill="url(#layers)" stroke="#7556a8" stroke-width="3"/><circle cx="570" cy="168" r="52" fill="#d9e2e8" stroke="#667b89" stroke-width="3"/><circle cx="570" cy="168" r="9" fill="#173f58"/>
+            <circle cx="570" cy="168" r="118" fill="none" stroke="#9eacb6" stroke-width="2" stroke-dasharray="7 7"/>
+            <line x1="570" y1="168" x2="650" y2="168" stroke="#176f91" stroke-width="3" marker-end="url(#arr)"/><text x="612" y="157" text-anchor="middle" fill="#176f91" font-size="15">R(n)</text>
+            <line x1="654" y1="168" x2="654" y2="298" stroke="#cf6a18" stroke-width="7"/>
+            <line x1="570" y1="62" x2="570" y2="84" stroke="#7556a8" stroke-width="2" marker-end="url(#arr)"/><text x="585" y="74" fill="#7556a8" font-size="14">减少 t·n</text>
+            <text x="380" y="320" text-anchor="middle" fill="#637383" font-size="13">连续近似：每放出 1 圈，有效半径减少 1 个尺带厚度 t</text>
+          </svg>
+          <div class="caption">紫色区域代表卷绕尺带；虚线是初始外轮廓。</div>
+        </div>
+        <div>
+          <h3>模型的五个假设</h3>
+          <div class="gate"><div class="icon">1</div><div><b>厚度恒定</b><p>用单一 t 表示整段尺带的等效层厚。</p></div></div>
+          <div class="gate"><div class="icon">2</div><div><b>层间紧密贴合</b><p>无明显空隙、起皱或堆叠偏移。</p></div></div>
+          <div class="gate"><div class="icon">3</div><div><b>无滑移</b><p>电机圈数、卷筒转角和编码轮长度可一一对应。</p></div></div>
+          <div class="gate"><div class="icon">4</div><div><b>圆形等效卷层</b><p>偏心和椭圆度只进入残差，不单独建模。</p></div></div>
+          <div class="gate"><div class="icon">5</div><div><b>连续近似</b><p>把逐圈离散变化近似成可积分的连续半径。</p></div></div>
+        </div>
+      </div>
+      <div class="callout warn"><strong>t 是“拟合得到的等效层厚”，不一定等于卡尺测得的裸尺带材料厚度。</strong>张力、层间间隙和卷绕状态也可能被吸收到 t 中。</div>
+    </section>
+
+    <section class="section" id="derive">
+      <h2><span class="num">4</span>尺带公式逐步推导</h2>
+      <p class="intro">从半径开始，只需三步就能得到代码中的二次式。</p>
+      <div class="derivation">
+        <div class="derive"><h4>半径随圈数线性变化</h4><p>初始等效半径为 R0。下行放带 n 圈后，每圈减少厚度 t：</p><div class="mini-eq">R(n) = R0 − t·n</div></div>
+        <div class="derive"><h4>半径换成每圈的瞬时周长</h4><p>C0=2πR0，因此当前位置再转一圈能放出的长度为：</p><div class="mini-eq">C(n) = 2πR(n) = C0 − 2πt·n</div></div>
+        <div class="derive"><h4>瞬时周长沿圈数积分</h4><p>累计长度就是从 0 圈到 n 圈，每一小段周长的总和：</p><div class="mini-eq">L(n) = ∫₀ⁿ(C0−2πt·u)du = C0·n − πt·n²</div></div>
+      </div>
+      <div class="equation big"><span class="tc0">L(n) = C0·n</span> <span class="tt">− πt·n²</span><span class="under">线性长度　−　卷层变薄造成的二次修正</span></div>
+      <div class="eq-parts">
+        <div class="eq-part"><b class="tc0">C0·n</b><span>假设周长不变时的累计长度</span></div>
+        <div class="eq-part"><b class="tt">πt·n²</b><span>随着卷层变薄，需要扣除的长度</span></div>
+        <div class="eq-part"><b>dL/dn = C(n)</b><span>对累计长度求导，回到瞬时周长</span></div>
+      </div>
+      <h3>上行与下行为什么可以共用同一二次式</h3>
+      <div class="grid2">
+        <div class="summary-card"><strong>下行放带：n ≥ 0</strong><p>半径减小，L 为正；<code>L=C0n−πtn²</code>。</p></div>
+        <div class="summary-card"><strong>上行收带：n &lt; 0</strong><p>令 m=−n≥0，则 <code>L=−(C0m+πtm²)</code>；代回后仍是 <code>C0n−πtn²</code>。</p></div>
+      </div>
+      <h3>加入零点偏移，得到全局拟合模型</h3>
+      <p>电机 n=0 与编码轮 y=0 未必对应同一个物理位置，所以编码轮观测模型多一个常量 b：</p>
+      <div class="equation big"><span class="tencoder">y</span> = <span class="tb">b</span> + <span class="tc0">C0·n</span> <span class="tt">− πt·n²</span> + ε</div>
+      <p class="center muted">ε 表示编码量化、偏心、滑移、张力和未建模机械误差。</p>
+    </section>
+
+    <section class="section" id="piecewise">
+      <h2><span class="num">5</span>最小半径分段模型与长度反算</h2>
+      <p class="intro">二次式不能无限延伸，否则半径最终会变成负数。运行代码把下行最小半径限制为 40 mm。</p>
+      <div class="grid2">
+        <div>
+          <h3>进入最小半径前</h3>
+          <div class="equation">Rmin = 40 mm<br>Cmin = 2πRmin</div>
+          <div class="equation">n1 = (C0−Cmin)/(2πt)</div>
+          <div class="equation">L1 = C0·n1−πt·n1²</div>
+        </div>
+        <div>
+          <h3>CPU2 下行运行模型</h3>
+          <pre>L(n) = {
+  C0·n − πt·n²             0 ≤ n ≤ n1
+  L1 + (n−n1)·Cmin          n > n1
+}</pre>
+          <p>n&gt;n1 后继续放带，但固定按最小周长 Cmin 线性增长。上行 n&lt;0 不做该截断。</p>
+        </div>
+      </div>
+      <div class="callout danger"><strong>拟合与运行模型存在一个重要差别：</strong>TFIT 求解器始终拟合完整二次式，没有拟合分段线性项。用于 TFIT 的样本若跨过 n1，单一二次曲线就不再是正确模型。</div>
+      <h3>从长度反算圈数</h3>
+      <table><thead><tr><th>区域</th><th>反算公式</th><th>代码选择</th></tr></thead><tbody>
+        <tr><td>下行二次段</td><td><code>n=(C0−√(C0²−4πtL))/(2πt)</code></td><td>取与 n=0 连续的较小根</td></tr>
+        <tr><td>下行线性段</td><td><code>n=n1+(L−L1)/Cmin</code></td><td>L 超过 L1 后使用</td></tr>
+        <tr><td>上行</td><td><code>m=(−C0+√(C0²+4πt|L|))/(2πt)，n=−m</code></td><td>m 表示收带圈数</td></tr>
+        <tr><td>t≤0 退化</td><td><code>n=L/C0</code></td><td>按固定周长线性模型</td></tr>
+      </tbody></table>
+      <div class="callout"><strong>反算的用途：</strong>由当前长度得到 n，再算瞬时周长 <code>Cinst=dL/dn</code>；该周长继续用于线速度换算/补偿和位置持久化阈值。</div>
+    </section>
+
+    <section class="section" id="fit">
+      <h2><span class="num">6</span>全局拟合与局部拟合</h2>
+      <p class="intro">两种模式使用同一批类型的样本，但坐标原点和允许写回的参数不同。</p>
+      <div class="compare">
+        <div class="mode global">
+          <h3>全局 TFIT · T1 / TR</h3>
+          <div class="equation">y = a0 + a1·n + a2·n²</div>
+          <ul><li><span class="tb">b=a0</span>：编码轮长度零点偏移</li><li><span class="tc0">C0=a1</span>：全局 n=0 处周长</li><li><span class="tt">t=−a2/π</span>：等效层厚</li></ul>
+          <p><strong>3 个未知数，使用 3×3 正规方程。</strong></p>
+          <p>有效结果可由 <code>TU</code> 写 C0+t，或由 <code>TP</code> 只写 t。</p>
+        </div>
+        <div class="vs">VS</div>
+        <div class="mode local">
+          <h3>局部 TFIT · T2 / TV</h3>
+          <div class="equation">Δy = a1·q + a2·q²</div>
+          <ul><li><span class="tmotor">q=(step−step0)/Nrev</span></li><li><span class="tencoder">Δy=y−y0</span></li><li><span class="tc0">Clocal=a1</span>，<span class="tt">t=−a2/π</span></li></ul>
+          <p><strong>截距固定为 0，使用 2×2 正规方程。</strong></p>
+          <p>设计上只通过 <code>TP</code> 写 t；局部结果请求写全局 C0 会被拒绝。</p>
+        </div>
+      </div>
+      <h3>为什么局部一次项不是全局 C0</h3>
+      <p>假设局部启动点对应全局圈数 n0，令 n=n0+q。把全局长度在启动点前后相减：</p>
+      <div class="equation">L(n0+q)−L(n0) = <span class="tc0">(C0−2πt·n0)·q</span> <span class="tt">− πt·q²</span></div>
+      <p>括号内正是启动位置的瞬时周长 <code>Clocal=C0−2πtn0</code>。所以：</p>
+      <div class="callout ok"><strong>局部 a1 = Clocal，而不是 C0。</strong>局部坐标消除了固定零点偏移，适合从曲率估 t；但没有 n0 就不能仅凭 Clocal 还原全局 C0。</div>
+      <div class="callout warn"><strong>实现细节：</strong><code>T2 → TR</code> 仍会执行全局求解，因为 TR 直接调用全局接口；若随后全局结果有效，<code>TU</code> 在代码路径上可以写 C0+t。操作时应保持命令模式一致：T1 配 TR/TU，T2 配 TV/TP。</div>
+    </section>
+
+    <section class="section" id="solve">
+      <h2><span class="num">7</span>最小二乘求解器与质量指标</h2>
+      <p class="intro">参数虽然出现在二次曲线里，但对 a0、a1、a2 都是线性的，因此可用普通线性最小二乘。</p>
+      <h3>全局正规方程</h3>
+      <pre>[ Σ1   Σn   Σn² ] [a0]   [ Σy   ]
+[ Σn   Σn²  Σn³ ] [a1] = [ Σny  ]
+[ Σn²  Σn³  Σn⁴ ] [a2]   [ Σn²y ]</pre>
+      <div class="grid3">
+        <div class="summary-card"><strong>累加</strong><p>逐点累计 XᵀX 和 Xᵀy，不保留额外矩阵。</p></div>
+        <div class="summary-card"><strong>消元</strong><p>3×3 高斯消元；每列选择绝对值最大的主元候选行。</p></div>
+        <div class="summary-card"><strong>奇异判断</strong><p>主元或局部行列式绝对值小于 <code>1e−12</code> 即失败。</p></div>
+      </div>
+      <h3>结果质量怎么计算</h3>
+      <div class="equation">残差 eᵢ = ŷᵢ − yᵢ</div>
+      <div class="grid2"><div class="equation">RMSE = √(Σeᵢ²/N)<span class="under">描述典型误差大小</span></div><div class="equation">Emax = max|eᵢ|<span class="under">描述最坏单点误差</span></div></div>
+      <div class="callout danger"><strong>当前没有质量阈值：</strong>只要 C0&gt;0、t&gt;0，结果就会被标成 valid，即使 RMSE 或最大误差很大。也没有 R²、置信区间、参数上限、离群点剔除或重复点降权。</div>
+    </section>
+
+    <section class="section" id="sample">
+      <h2><span class="num">8</span>采样状态、触发点与调试命令</h2>
+      <p class="intro">样本只保存在 RAM 中，最多 256 点；启动、自动采样、手动采样和求解前采样的规则不同。</p>
+      <div class="state-row"><div class="state"><b>T1 / T2</b>清旧状态<br>立即强制采 1 点</div><div class="state-arrow">→</div><div class="state"><b>运动同步</b>调用 AutoSample</div><div class="state-arrow">→</div><div class="state"><b>间距门限</b>≥384,000 tick<br>约 1/4 圈</div><div class="state-arrow">→</div><div class="state"><b>保存样本</b>新点使旧结果失效</div><div class="state-arrow">→</div><div class="state"><b>满 256 点</b>自动停止</div></div>
+      <table><thead><tr><th>命令</th><th>动作</th><th>是否强制追加当前点</th><th>是否写参数</th></tr></thead><tbody>
+        <tr><td><code>T1</code></td><td>清空后开始全局自动采样</td><td>是</td><td>否</td></tr>
+        <tr><td><code>T2</code></td><td>记录 step0/y0，清空后开始局部采样</td><td>是</td><td>否</td></tr>
+        <tr><td><code>T0</code></td><td>停止自动采样，保留样本</td><td>否</td><td>否</td></tr>
+        <tr><td><code>TA</code></td><td>手动添加当前样本</td><td>是，不做间距过滤</td><td>否</td></tr>
+        <tr><td><code>TS</code></td><td>打印使能、点数、范围、当前参数与结果</td><td>否</td><td>否</td></tr>
+        <tr><td><code>TR</code></td><td>执行全局求解</td><td>是，求解前先加点</td><td>否</td></tr>
+        <tr><td><code>TV</code></td><td>执行局部求解</td><td>是，求解前先加点</td><td>否</td></tr>
+        <tr><td><code>TP</code></td><td>只应用厚度；无有效结果时先自动求解</td><td>可能，由自动求解追加</td><td>写 t</td></tr>
+        <tr><td><code>TU</code></td><td>应用全局首圈周长和厚度</td><td>可能，由自动求解追加</td><td>写 C0+t</td></tr>
+      </tbody></table>
+      <div class="grid2">
+        <div><h3>求解前硬门限</h3><div class="gate"><div class="icon">✓</div><div><b>样本数 ≥ 6</b><p>少于 6 点返回标定错误。</p></div></div><div class="gate"><div class="icon">✓</div><div><b>圈数跨度 ≥ 1</b><p>全局检查 nmax−nmin，局部检查 qmax−qmin。</p></div></div><div class="gate"><div class="icon">✓</div><div><b>矩阵可解</b><p>拒绝奇异或近奇异矩阵。</p></div></div></div>
+        <div><h3>当前没有的采样门禁</h3><div class="gate no"><div class="icon">×</div><div><b>没有编码轮有效标志</b><p>直接使用当前 g_encoder_count 换算值。</p></div></div><div class="gate no"><div class="icon">×</div><div><b>没有静止/稳定性判断</b><p>不检查速度、抖动或同步时差。</p></div></div><div class="gate no"><div class="icon">×</div><div><b>强制点可重复</b><p>相同步数可被 TA、TR、TV 多次加入并重复加权。</p></div></div></div>
+      </div>
+    </section>
+
+    <section class="section" id="apply">
+      <h2><span class="num">9</span>结果应用、持久化与运行时消费</h2>
+      <p class="intro">求解只更新 TFIT 的 RAM 结果；TP/TU 才把结果量化到设备参数并调用保存。</p>
+      <div class="keyline">
+        <div class="key-step"><b>结果 valid?</b><span>无效则先自动求解</span></div>
+        <div class="key-step"><b>模式检查</b><span>局部结果禁止写 C0</span></div>
+        <div class="key-step"><b>参数量化</b><span>C0×10；t×1000</span></div>
+        <div class="key-step"><b>更新 RAM</b><span>g_deviceParams</span></div>
+        <div class="key-step"><b>调用保存</b><span>save_device_params()</span></div>
+      </div>
+      <div class="grid2"><div class="equation"><span class="tc0">C0param = round(C0mm×10)</span><span class="under">存储分辨率 0.1 mm</span></div><div class="equation"><span class="tt">tparam = round(tmm×1000)</span><span class="under">存储分辨率 0.001 mm</span></div></div>
+      <h3>C0 与 t 写入后到底影响什么</h3>
+      <div class="impact"><div class="param tc0">全局 C0</div><div class="paths"><span>卷筒步数→模型长度</span><span>长度↔圈数反算</span><span>瞬时周长</span><span>线速度补偿</span><span>位置持久化阈值</span></div></div>
+      <div class="impact"><div class="param tt">尺带厚度 t</div><div class="paths"><span>二次曲率</span><span>最小半径阈值 n1/L1</span><span>瞬时周长变化</span><span>线速度补偿</span><span>全局模型位置</span></div></div>
+      <div class="callout warn"><strong>电机记步业务位置有优先级：</strong>当 <code>motor_count_first_loop_circumference_mm</code> 是合法值时，<code>MotorPosition_UpdatePositionFromMotorSource()</code> 使用“基准长度 + 圈数×局部周长”的线性模型，不使用全局 C0/t；只有局部周长无效时才回退到全局二次模型。因此应用 TFIT 厚度后，不一定会改变该线性位置路径的业务 <code>cable_length</code>。</div>
+      <div class="callout"><strong>保存边界：</strong>Apply 调用 <code>save_device_params()</code> 后打印“已应用”，但该接口没有在此处返回介质写入结果，也没有回读校验。CPU2 RAM 参数可立即被后续调用读取；CPU3 何时显示新值取决于参数同步链路，不能仅凭 Apply 代码断言同步瞬间完成。</div>
+    </section>
+
+    <section class="section" id="example">
+      <h2><span class="num">10</span>完整数值例子与交互计算器</h2>
+      <p class="intro">默认使用当前出厂参数口径 C0=600 mm、t=0.200 mm。先看 50 圈时每个量如何变化。</p>
+      <div class="grid2">
+        <div>
+          <h3>静态算例：n=50</h3>
+          <table><tbody>
+            <tr><th>初始半径</th><td>R0=600/(2π)=95.493 mm</td></tr>
+            <tr><th>50 圈后半径</th><td>R=95.493−0.2×50=85.493 mm</td></tr>
+            <tr><th>瞬时周长</th><td>C=600−2π×0.2×50=537.168 mm</td></tr>
+            <tr><th>固定周长估计</th><td>600×50=30,000 mm</td></tr>
+            <tr><th>厚度修正</th><td>π×0.2×50²=1,570.796 mm</td></tr>
+            <tr><th>实际模型长度</th><td>L=28,429.204 mm</td></tr>
+          </tbody></table>
+          <div class="callout ok"><strong>直觉：</strong>50 圈后，不能再用 600 mm/圈直接相乘；卷层已经变薄，累计长度要减去约 1.571 m。</div>
+        </div>
+        <div class="calculator">
+          <h3 style="color:#fff;margin-top:0">可调模型计算</h3>
+          <div class="calc-inputs">
+            <label>C0 首圈周长 (mm)<input id="c0Input" type="number" value="600" min="0" step="0.1"></label>
+            <label>t 等效厚度 (mm)<input id="tInput" type="number" value="0.2" min="0" step="0.001"></label>
+            <label>n 带符号圈数<input id="nInput" type="number" value="50" step="0.25"></label>
+          </div>
+          <div class="calc-results">
+            <div class="calc-result"><span>当前半径</span><b id="rOut">—</b></div>
+            <div class="calc-result"><span>瞬时周长</span><b id="cOut">—</b></div>
+            <div class="calc-result"><span>运行模型长度</span><b id="lOut">—</b></div>
+            <div class="calc-result"><span>所在分段</span><b id="regionOut">—</b></div>
+            <div class="calc-result"><span>最小周长 Cmin</span><b id="cminOut">—</b></div>
+            <div class="calc-result"><span>切换圈数 n1</span><b id="n1Out">—</b></div>
+            <div class="calc-result"><span>切换长度 L1</span><b id="l1Out">—</b></div>
+            <div class="calc-result"><span>未截断拟合式 Lfit</span><b id="lfitOut">—</b></div>
+          </div>
+          <div class="calc-note">运行模型在 R=40 mm 后进入线性段；Lfit 始终显示 TFIT 使用的完整二次式，便于比较两者差异。</div>
+        </div>
+      </div>
+      <div class="visual" style="margin-top:17px">
+        <svg id="modelChart" viewBox="0 0 900 310" role="img" aria-label="运行分段模型和TFIT二次模型对比曲线">
+          <rect x="0" y="0" width="900" height="310" fill="#f9fbfc"/><line x1="64" y1="260" x2="865" y2="260" stroke="#8496a3"/><line x1="64" y1="25" x2="64" y2="260" stroke="#8496a3"/>
+          <text x="870" y="279" text-anchor="end" fill="#637383" font-size="12">圈数 n</text><text x="27" y="35" fill="#637383" font-size="12">长度 L</text>
+          <path id="fitPath" fill="none" stroke="#7556a8" stroke-width="3" stroke-dasharray="8 5"/><path id="runPath" fill="none" stroke="#136fa3" stroke-width="4"/>
+          <line id="breakLine" x1="0" x2="0" y1="25" y2="260" stroke="#cf6a18" stroke-width="2" stroke-dasharray="4 4"/><circle id="pointMark" cx="0" cy="0" r="6" fill="#cf6a18" stroke="#fff" stroke-width="2"/>
+          <text x="665" y="36" fill="#136fa3" font-size="13">— CPU2 运行分段模型</text><text x="665" y="57" fill="#7556a8" font-size="13">┄ TFIT 完整二次式</text>
+          <text id="breakText" x="0" y="285" text-anchor="middle" fill="#cf6a18" font-size="11">n1</text>
+        </svg>
+        <div class="caption">改变计算器参数后，曲线同步更新。橙色竖线是最小半径切换点，橙点是当前 n。</div>
+      </div>
+    </section>
+
+    <section class="section" id="limits">
+      <h2><span class="num">11</span>适用边界、风险与结果判读</h2>
+      <p class="intro">下面区分“代码已经保护的边界”和“仍需人工/后续算法保护的边界”。</p>
+      <table><thead><tr><th>类别</th><th>当前行为</th><th>影响</th><th>判读建议</th></tr></thead><tbody>
+        <tr><td>样本跨度</td><td>只要求 ≥1 圈</td><td>刚超过 1 圈时二次曲率很弱，t 易被噪声主导</td><td>尽量扩大同一二次区段内的有效跨度</td></tr>
+        <tr><td>异常点</td><td>普通等权最小二乘，无剔除</td><td>单个尖峰即可拉偏 C0/t</td><td>检查原始日志、RMSE、最大误差和重复性</td></tr>
+        <tr><td>重复点</td><td>强制采样允许相同步数重复</td><td>等价于人为提高该位置权重</td><td>静止时不要反复 TA/TR/TV</td></tr>
+        <tr><td>运动方向</td><td>无方向一致性门禁</td><td>往返回差、松带和张力差会混入厚度</td><td>优先单方向、张力稳定采样</td></tr>
+        <tr><td>分段边界</td><td>TFIT 不识别 n1</td><td>跨线性段后模型结构错误</td><td>排除最小半径线性段样本</td></tr>
+        <tr><td>参数范围</td><td>仅检查 C0&gt;0、t&gt;0</td><td>物理上离谱的正值仍可能 valid</td><td>建立工程上下限后再应用</td></tr>
+        <tr><td>拟合质量</td><td>RMSE/Emax 只打印</td><td>误差很大仍可 TP/TU</td><td>现场必须设置人工验收阈值</td></tr>
+        <tr><td>数值条件</td><td>全局 n 未中心化/缩放</td><td>n 范围大或集中时正规方程条件变差</td><td>关注矩阵奇异和参数对重复采样的敏感度</td></tr>
+        <tr><td>持久化</td><td>保存后无回读确认</td><td>打印已应用不等于介质写入已验证</td><td>应用后重新读取并断电复核</td></tr>
+      </tbody></table>
+      <h3>一份结果至少要回答的 6 个问题</h3>
+      <div class="grid3">
+        <div class="gate"><div class="icon">1</div><div><b>模式对吗？</b><p>T1/TR 还是 T2/TV，是否混用。</p></div></div>
+        <div class="gate"><div class="icon">2</div><div><b>覆盖多大？</b><p>点数、n/q 最小值和最大值。</p></div></div>
+        <div class="gate"><div class="icon">3</div><div><b>方向稳定吗？</b><p>有无回差、停走、松带。</p></div></div>
+        <div class="gate"><div class="icon">4</div><div><b>参数合理吗？</b><p>C0、t 与机械测量量级是否一致。</p></div></div>
+        <div class="gate"><div class="icon">5</div><div><b>残差多大？</b><p>RMSE 与最大误差能否接受。</p></div></div>
+        <div class="gate"><div class="icon">6</div><div><b>独立复验了吗？</b><p>新参数是否改善独立尺长误差。</p></div></div>
+      </div>
+      <div class="callout ok"><strong>推荐命令配对：</strong>全局标定用 <code>T1 → 运动 → T0 → TS → TR → 人工检查 → TU</code>；局部厚度标定用 <code>T2 → 运动 → T0 → TS → TV → 人工检查 → TP</code>。</div>
+    </section>
+
+    <section class="section" id="sources">
+      <h2><span class="num">12</span>源码证据索引</h2>
+      <p class="intro">本文口径来自 2026-07-16 当前工作区源码。下面按结论主题列出直接证据。</p>
+      <table><thead><tr><th>主题</th><th>源码位置</th><th>关键内容</th></tr></thead><tbody>
+        <tr><td>TFIT 全部主流程</td><td class="source"><code>LTD_MAIN_CPU2/Services/MotorControl/motor_ctrl_tape_fit.c:42–620</code></td><td>启动、采样、全局/局部求解、误差、应用</td></tr>
+        <tr><td>圈数和参数单位</td><td class="source"><code>motor_ctrl_position_model.c:704–727</code></td><td>1,536,000 tick/rev；C0×0.1；t×0.001</td></tr>
+        <tr><td>编码轮拟合长度</td><td class="source"><code>motor_ctrl_position_model.c:850–862</code></td><td>g_encoder_count 与编码轮周长换算</td></tr>
+        <tr><td>自动采样挂点</td><td class="source"><code>motor_ctrl_position_model.c:916–933</code></td><td>同步 XACTUAL 后调用 MotorTapeFit_AutoSample</td></tr>
+        <tr><td>分段正算模型</td><td class="source"><code>motor_ctrl_position_model.c:1272–1340</code></td><td>Rmin、n1/L1、上下行长度</td></tr>
+        <tr><td>长度反算与瞬时周长</td><td class="source"><code>motor_ctrl_position_model.c:737–819</code></td><td>二次根、线性段、Cinst</td></tr>
+        <tr><td>电机记步业务位置</td><td class="source"><code>motor_ctrl_position_model.c:942–983</code></td><td>局部线性周长优先，全局模型回退</td></tr>
+        <tr><td>调试命令</td><td class="source"><code>LTD_MAIN_CPU2/Application/Src/test.c:1808–1881</code></td><td>T1/T2/T0/TA/TS/TR/TV/TP/TU</td></tr>
+        <tr><td>参数定义与默认值</td><td class="source"><code>Services/ParamStorage/system_parameter.h:732–737</code><br><code>system_parameter.c:1163–1170</code></td><td>单位、默认 C0=600 mm、t=0.200 mm</td></tr>
+      </tbody></table>
+      <details><summary>本文能证明什么、不能证明什么</summary><div><p><strong>能证明：</strong>当前工作区源码中的数学公式、数据来源、求解门限、命令调用关系、参数量化和 CPU2 内部消费路径。</p><p><strong>不能证明：</strong>某台设备的实际拟合质量、编码轮无滑移、机械假设成立、FRAM 写入已通过断电验证、CPU3 已在某个确定时刻完成同步。以上需要现场样本、日志或硬件测试。</p></div></details>
+      <details><summary>工作区边界</summary><div><p>生成本文时工作区已有大量其它暂存、未暂存和未跟踪改动。本文只修改这一份 HTML，不修改固件源码、不改变暂存区、不升版、不生成 PDF。</p></div></details>
+    </section>
+    <div class="foot">CPU2 电机尺带 TFIT 拟合逻辑详解 · UTF-8 · 当前工作区源码口径 · 2026-07-16</div>
+  </main>
+</div>
+
+<script>
+  (function(){
+    const $=id=>document.getElementById(id);
+    const inputs=[$('c0Input'),$('tInput'),$('nInput')];
+    const fmt=(v,d=3)=>Number.isFinite(v)?v.toLocaleString('zh-CN',{minimumFractionDigits:d,maximumFractionDigits:d}):'—';
+    function model(C0,t,n){
+      const pi=Math.PI,Cmin=2*pi*40;
+      if(!(C0>0)) return {bad:true};
+      if(!(t>0)) return {R:C0/(2*pi),C:C0,L:C0*n,Lfit:C0*n,Cmin,n1:0,L1:0,region:'线性退化'};
+      const n1=C0>Cmin?(C0-Cmin)/(2*pi*t):0;
+      const L1=C0*n1-pi*t*n1*n1;
+      const Lfit=C0*n-pi*t*n*n;
+      let L,C,R,region;
+      if(n<0){L=Lfit;C=C0+2*pi*t*(-n);R=C/(2*pi);region='上行收带';}
+      else if(n<=n1){L=Lfit;C=C0-2*pi*t*n;R=C/(2*pi);region='下行二次段';}
+      else{L=L1+(n-n1)*Cmin;C=Cmin;R=40;region='下行线性段';}
+      return {R,C,L,Lfit,Cmin,n1,L1,region};
+    }
+    function pathFor(fn,xmax,ymax){
+      let p='';
+      for(let i=0;i<=140;i++){
+        const n=xmax*i/140,y=fn(n),x=64+801*(n/xmax),py=260-225*Math.max(0,Math.min(1,y/ymax));
+        p+=(i?' L':'M')+x.toFixed(1)+' '+py.toFixed(1);
+      }
+      return p;
+    }
+    function update(){
+      const C0=Number($('c0Input').value),t=Number($('tInput').value),n=Number($('nInput').value),r=model(C0,t,n);
+      if(r.bad){['rOut','cOut','lOut','regionOut','cminOut','n1Out','l1Out','lfitOut'].forEach(id=>$(id).textContent='—');return;}
+      $('rOut').textContent=fmt(r.R)+' mm';$('cOut').textContent=fmt(r.C)+' mm';$('lOut').textContent=fmt(r.L)+' mm';$('regionOut').textContent=r.region;
+      $('cminOut').textContent=fmt(r.Cmin)+' mm';$('n1Out').textContent=fmt(r.n1)+' rev';$('l1Out').textContent=fmt(r.L1)+' mm';$('lfitOut').textContent=fmt(r.Lfit)+' mm';
+      const xmax=Math.max(20,Math.abs(n)*1.25,r.n1>0?r.n1*1.25:100),end=model(C0,t,xmax),ymax=Math.max(1,end.L,Math.max(0,end.Lfit));
+      $('fitPath').setAttribute('d',pathFor(x=>C0*x-Math.PI*Math.max(0,t)*x*x,xmax,ymax));
+      $('runPath').setAttribute('d',pathFor(x=>model(C0,t,x).L,xmax,ymax));
+      const bx=64+801*Math.min(1,r.n1/xmax);$('breakLine').setAttribute('x1',bx);$('breakLine').setAttribute('x2',bx);$('breakText').setAttribute('x',bx);
+      const pn=Math.max(0,Math.min(xmax,n)),pm=model(C0,t,pn),px=64+801*pn/xmax,py=260-225*Math.max(0,Math.min(1,pm.L/ymax));$('pointMark').setAttribute('cx',px);$('pointMark').setAttribute('cy',py);
+    }
+    inputs.forEach(x=>x.addEventListener('input',update));update();
+    const links=[...document.querySelectorAll('#toc a')],sections=links.map(a=>document.querySelector(a.getAttribute('href'))).filter(Boolean);
+    links.forEach(link=>link.addEventListener('click',()=>links.forEach(item=>item.classList.toggle('active',item===link))));
+    if('IntersectionObserver' in window){const obs=new IntersectionObserver(es=>{const v=es.filter(e=>e.isIntersecting).sort((a,b)=>a.boundingClientRect.top-b.boundingClientRect.top)[0];if(!v)return;links.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+v.target.id));},{rootMargin:'-10% 0px -75% 0px'});sections.forEach(s=>obs.observe(s));}
+  })();
+</script>
+</body>
+</html>

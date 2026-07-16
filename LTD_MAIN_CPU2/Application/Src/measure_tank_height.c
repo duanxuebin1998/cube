@@ -355,7 +355,7 @@ uint32_t SearchBottom(void)
     /* 先处理异常边界，避免罐高测量状态机带故障继续运行。 */
     if (ret != NO_ERROR)
     {
-        RETURN_ERROR(MEASUREMENT_WEIGHT_DOWN_FAIL);
+        RETURN_ERROR(ret);
     }
 
     printf("罐底测量\t粗找罐底完成：实高：%ld mm", bottom_value); MotorCtrl_PrintPositionRefs(); printf("\r\n");
@@ -588,7 +588,7 @@ static uint32_t EnsureBottomReleasedBeforeRoughSearch(void)
     }
 
     printf("罐底测量\t粗找前离底失败，累计上行%.1fmm后仍触底\r\n", (double)lifted_mm);
-    return MEASUREMENT_WEIGHT_DOWN_FAIL;
+    return MEASUREMENT_BOTTOM_RELEASE_FAIL;
 }
 /**
  * @brief 精确搜索罐底 - 使用变速策略精确定位罐底
@@ -802,7 +802,7 @@ uint32_t Bottom_SaveGyroZeroRef(void)
 uint32_t check_bottom_status(Weight_StateTypeDef *status)
 {
     if (status == NULL) {
-        return PARAM_ADDRESS_OVERFLOW;
+        return SYSTEM_CALL_CONDITION_ERROR;
     }
     *status = NORMAL;
 

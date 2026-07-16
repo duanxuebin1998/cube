@@ -479,7 +479,7 @@ static uint32_t CH9141_AT_CollectResponse(CH9141AtWaitMode wait_mode,
     uint32_t start_tick = HAL_GetTick();
 
     if (response == NULL) {
-        return PARAM_ADDRESS_OVERFLOW;
+        return SYSTEM_CALL_CONDITION_ERROR;
     }
 
     while ((HAL_GetTick() - start_tick) < timeout_ms) {
@@ -627,7 +627,7 @@ uint32_t CH9141_AT_WaitAsync(CH9141AtWaitMode wait_mode,
     uint32_t ret;
 
     if (response == NULL) {
-        return PARAM_ADDRESS_OVERFLOW;
+        return SYSTEM_CALL_CONDITION_ERROR;
     }
 
     CH9141_AT_ResetResponse(response);
@@ -664,7 +664,7 @@ uint32_t CH9141_AT_SendCommand(const char *cmd,
     uint32_t ret;
 
     if ((cmd == NULL) || (response == NULL)) {
-        return PARAM_ADDRESS_OVERFLOW;
+        return SYSTEM_CALL_CONDITION_ERROR;
     }
 
     CH9141_AT_ResetResponse(response);

@@ -1,0 +1,3529 @@
+<?xml version='1.0' encoding='utf-8'?>
+<opml version="2.0">
+  <head>
+    <title>NMS81 设备完整菜单</title>
+  </head>
+  <body>
+    <outline text="NMS81 设备完整菜单">
+      <outline text="操作">
+        <outline text="罐表命令">
+          <outline text="含义：罐表操作命令，用于选择仪表的测量模式。" />
+          <outline text="可配置内容">
+            <outline text="Stop（取决于仪表选型和设置）" />
+            <outline text="Level" />
+            <outline text="Up（取决于仪表选型和设置）" />
+            <outline text="Bottom level（取决于仪表选型和设置）" />
+            <outline text="Upper I/F level（取决于仪表选型和设置）" />
+            <outline text="Lower I/F level（取决于仪表选型和设置）" />
+            <outline text="Upper density（取决于仪表选型和设置）" />
+            <outline text="Middle density（取决于仪表选型和设置）" />
+            <outline text="Lower density（取决于仪表选型和设置）" />
+            <outline text="Repeatability（取决于仪表选型和设置）" />
+            <outline text="Water dip（取决于仪表选型和设置）" />
+            <outline text="Release overtension（取决于仪表选型和设置）" />
+            <outline text="Tank profile（取决于仪表选型和设置）" />
+            <outline text="Interface profile（取决于仪表选型和设置）" />
+            <outline text="Manual profile（取决于仪表选型和设置）" />
+            <outline text="Level standby（取决于仪表选型和设置）" />
+            <outline text="Offset standby（取决于仪表选型和设置）" />
+          </outline>
+          <outline text="出厂设置：Stop" />
+          <outline text="权限：读取：操作员；写入：维护" />
+          <outline text="手册页：170" />
+        </outline>
+        <outline text="距离">
+          <outline text="含义：显示与参考位置之间的测量距离。" />
+          <outline text="可配置内容：只读显示，不可配置" />
+          <outline text="权限：读取：操作员；写入：不可写" />
+          <outline text="手册页：171" />
+        </outline>
+        <outline text="净重">
+          <outline text="含义：显示测量人员根据重量表校正之后的重量数值，该重量数值用于测量。" />
+          <outline text="可配置内容：只读显示，不可配置" />
+          <outline text="权限：读取：操作员；写入：不可写" />
+          <outline text="手册页：171" />
+        </outline>
+        <outline text="罐表状态">
+          <outline text="含义：显示罐表命令的现在状态。" />
+          <outline text="可配置内容：只读显示，不可配置" />
+          <outline text="权限：读取：操作员；写入：不可写" />
+          <outline text="手册页：172" />
+        </outline>
+        <outline text="平衡标志">
+          <outline text="含义：显示测量结果是否有效。 如果显示“平衡”，说明对应的测量数值（液位、上界面、下界面、罐底）已经更新。" />
+          <outline text="可配置内容：只读显示，不可配置" />
+          <outline text="权限：读取：操作员；写入：不可写" />
+          <outline text="手册页：172" />
+        </outline>
+        <outline text="待机液位">
+          <outline text="含义：在执行“待机液位”指令时，浮子在储罐内等待液位上升的位置。" />
+          <outline text="可配置内容：–999 999.9 … 999 999.9 mm" />
+          <outline text="出厂设置：0 mm" />
+          <outline text="权限：读取：操作员；写入：维护" />
+          <outline text="手册页：172" />
+        </outline>
+        <outline text="偏置等待距离">
+          <outline text="含义：定义到当前位置的距离，此距离表示浮子在收到偏置等待罐表命令时，等待液位上升的距离。" />
+          <outline text="可配置内容：0 … 999 999.9 mm" />
+          <outline text="出厂设置：500 mm" />
+          <outline text="手册页：173" />
+        </outline>
+        <outline text="“一次性指令”状态">
+          <outline text="含义：显示执行的上一个”一次性指令“状态。" />
+          <outline text="可配置内容：只读显示，不可配置" />
+          <outline text="权限：读取：操作员；写入：不可写" />
+          <outline text="手册页：174" />
+        </outline>
+        <outline text="液位">
+          <outline text="Dip Freeze">
+            <outline text="含义：如果启用，液位值冻结且显示警告。" />
+            <outline text="可配置内容：只读显示，不可配置" />
+            <outline text="出厂设置：关" />
+            <outline text="手册页：174" />
+          </outline>
+          <outline text="储罐液位">
+            <outline text="含义：显示测量零点（罐底或基准板）与液面间的距离。" />
+            <outline text="可配置内容：只读显示，不可配置" />
+            <outline text="权限：读取：操作员；写入：不可写" />
+            <outline text="手册页：175" />
+          </outline>
+          <outline text="储罐液位%">
+            <outline text="含义：显示罐液位在全量程中所占百分比。" />
+            <outline text="可配置内容：只读显示，不可配置" />
+            <outline text="权限：读取：操作员；写入：不可写" />
+            <outline text="手册页：175" />
+          </outline>
+          <outline text="储罐空高">
+            <outline text="含义：显示储罐空高值。" />
+            <outline text="可配置内容：只读显示，不可配置" />
+            <outline text="权限：读取：操作员；写入：不可写" />
+            <outline text="手册页：175" />
+          </outline>
+          <outline text="储罐空高%">
+            <outline text="含义：显示储罐空高占全量程的百分比。" />
+            <outline text="可配置内容：只读显示，不可配置" />
+            <outline text="权限：读取：操作员；写入：不可写" />
+            <outline text="手册页：175" />
+          </outline>
+          <outline text="上界面液位">
+            <outline text="含义：显示从测量零点（罐底或基准板）到上界面的液位值。该数值在仪表执行一次有效的界面测量命令之后会自动更新。" />
+            <outline text="可配置内容：只读显示，不可配置" />
+            <outline text="权限：读取：维护；写入：不可写" />
+            <outline text="手册页：176" />
+          </outline>
+          <outline text="上界面时间戳">
+            <outline text="含义：显示上次进行上界面测量命令的时间戳。" />
+            <outline text="可配置内容：只读显示，不可配置" />
+            <outline text="权限：读取：操作员；写入：不可写" />
+            <outline text="手册页：176" />
+          </outline>
+          <outline text="下界面液位">
+            <outline text="含义：显示从测量零点（罐底或基准板）到下界面的液位值。该数值在仪表执行一次有效的界面测量命令之后会自动更新。" />
+            <outline text="可配置内容：只读显示，不可配置" />
+            <outline text="权限：读取：维护；写入：不可写" />
+            <outline text="手册页：176" />
+          </outline>
+          <outline text="下界面时间戳">
+            <outline text="含义：显示上次执行下界面测量命令的时间戳。" />
+            <outline text="可配置内容：只读显示，不可配置" />
+            <outline text="权限：读取：操作员；写入：不可写" />
+            <outline text="手册页：176" />
+          </outline>
+          <outline text="罐底位置">
+            <outline text="含义：显示罐底液位。" />
+            <outline text="可配置内容：只读显示，不可配置" />
+            <outline text="权限：读取：操作员；写入：不可写" />
+            <outline text="手册页：177" />
+          </outline>
+          <outline text="罐底位置时间戳">
+            <outline text="含义：显示上次执行罐底液位命令的时间戳。" />
+            <outline text="可配置内容：只读显示，不可配置" />
+            <outline text="权限：读取：操作员；写入：不可写" />
+            <outline text="手册页：177" />
+          </outline>
+          <outline text="水位">
+            <outline text="含义：显示罐底水位。" />
+            <outline text="可配置内容：只读显示，不可配置" />
+            <outline text="权限：读取：操作员；写入：不可写" />
+            <outline text="手册页：177" />
+          </outline>
+          <outline text="测量液位">
+            <outline text="含义：显示未经过任何校正的测量液位。" />
+            <outline text="可配置内容：只读显示，不可配置" />
+            <outline text="权限：读取：操作员；写入：不可写" />
+            <outline text="手册页：177" />
+          </outline>
+          <outline text="距离">
+            <outline text="含义：显示与参考位置之间的测量距离。" />
+            <outline text="可配置内容：只读显示，不可配置" />
+            <outline text="权限：读取：操作员；写入：不可写" />
+            <outline text="手册页：178" />
+          </outline>
+          <outline text="浮子位置">
+            <outline text="含义：显示浮子的位置。" />
+            <outline text="可配置内容：只读显示，不可配置" />
+            <outline text="权限：读取：操作员；写入：不可写" />
+            <outline text="手册页：178" />
+          </outline>
+        </outline>
+        <outline text="温度">
+          <outline text="环境(空气)温度值">
+            <outline text="含义：显示仪表周围的环境空气温度。" />
+            <outline text="可配置内容：只读显示，不可配置" />
+            <outline text="权限：读取：操作员；写入：不可写" />
+            <outline text="手册页：178" />
+          </outline>
+          <outline text="液相温度值">
+            <outline text="含义：显示测量介质的平均温度数值或单点温度数值。" />
+            <outline text="可配置内容：只读显示，不可配置" />
+            <outline text="权限：读取：操作员；写入：不可写" />
+            <outline text="手册页：178" />
+          </outline>
+          <outline text="气相温度值">
+            <outline text="含义：显示测量的气相温度数值。" />
+            <outline text="可配置内容：只读显示，不可配置" />
+            <outline text="权限：读取：操作员；写入：不可写" />
+            <outline text="手册页：179" />
+          </outline>
+          <outline text="NMT 测温点值">
+            <outline text="NMT 测温点温度">
+              <outline text="测温点温度 1 … 24">
+                <outline text="含义：显示 NMT 中的某一测温点的温度。" />
+                <outline text="可配置内容：只读显示，不可配置" />
+                <outline text="权限：读取：操作员；写入：不可写" />
+                <outline text="手册页：179" />
+              </outline>
+            </outline>
+            <outline text="NMT 测温点位置">
+              <outline text="测温点位置 1 … 24">
+                <outline text="含义：显示 NMT 中选择的测温点的位置。" />
+                <outline text="可配置内容：只读显示，不可配置" />
+                <outline text="权限：读取：操作员；写入：不可写" />
+                <outline text="手册页：179" />
+              </outline>
+            </outline>
+          </outline>
+        </outline>
+        <outline text="密度">
+          <outline text="视密度">
+            <outline text="含义：产品的视密度。" />
+            <outline text="可配置内容：只读显示，不可配置" />
+            <outline text="权限：读取：操作员；写入：不可写" />
+            <outline text="手册页：180" />
+          </outline>
+          <outline text="视密度温度">
+            <outline text="含义：测量密度的对应温度。用于参考密度计算。" />
+            <outline text="可配置内容：只读显示，不可配置；显示格式：带符号浮点数" />
+            <outline text="出厂设置：0 °C" />
+            <outline text="手册页：180" />
+          </outline>
+          <outline text="气相密度">
+            <outline text="含义：定义了储罐中气相空间的密度。" />
+            <outline text="可配置内容：0.0 … 500.0 kg/m³" />
+            <outline text="出厂设置：1.2 kg/m³" />
+            <outline text="权限：读取：操作员；写入：维护" />
+            <outline text="手册页：180" />
+          </outline>
+          <outline text="空气密度">
+            <outline text="含义：定义了储罐周围的空气密度。" />
+            <outline text="可配置内容：0.0 … 500.0 kg/m³" />
+            <outline text="出厂设置：1.2 kg/m³" />
+            <outline text="权限：读取：操作员；写入：维护" />
+            <outline text="手册页：181" />
+          </outline>
+          <outline text="上密度">
+            <outline text="含义：显示上层介质的密度。" />
+            <outline text="可配置内容：只读显示，不可配置" />
+            <outline text="权限：读取：操作员；写入：不可写" />
+            <outline text="手册页：181" />
+          </outline>
+          <outline text="上密度时间戳">
+            <outline text="含义：显示上次执行上密度测量命令的时间戳。" />
+            <outline text="可配置内容：只读显示，不可配置" />
+            <outline text="权限：读取：操作员；写入：不可写" />
+            <outline text="手册页：181" />
+          </outline>
+          <outline text="中密度">
+            <outline text="含义：中层介质的密度。" />
+            <outline text="可配置内容：只读显示，不可配置" />
+            <outline text="权限：读取：操作员；写入：不可写" />
+            <outline text="手册页：181" />
+          </outline>
+          <outline text="中密度时间戳">
+            <outline text="含义：显示上次执行中密度测量命令的时间戳。" />
+            <outline text="可配置内容：只读显示，不可配置" />
+            <outline text="权限：读取：操作员；写入：不可写" />
+            <outline text="手册页：182" />
+          </outline>
+          <outline text="下密度">
+            <outline text="含义：下层介质的密度。" />
+            <outline text="可配置内容：只读显示，不可配置" />
+            <outline text="权限：读取：维护；写入：不可写" />
+            <outline text="手册页：182" />
+          </outline>
+          <outline text="下密度时间戳">
+            <outline text="含义：显示上次执行下密度测量命令的时间戳。" />
+            <outline text="可配置内容：只读显示，不可配置" />
+            <outline text="权限：读取：操作员；写入：不可写" />
+            <outline text="手册页：182" />
+          </outline>
+          <outline text="梯度点">
+            <outline text="含义：显示在本次操作中实际执行过的密度梯度测量点数量，当密度梯度命令执行完毕时，该数值显示为密度梯度测量点的总数。" />
+            <outline text="可配置内容：只读显示，不可配置" />
+            <outline text="权限：读取：操作员；写入：不可写" />
+            <outline text="手册页：182" />
+          </outline>
+          <outline text="梯度平均密度">
+            <outline text="含义：显示执行完密度梯度测量命令之后计算得到的平均密度。" />
+            <outline text="可配置内容：只读显示，不可配置" />
+            <outline text="权限：读取：操作员；写入：不可写" />
+            <outline text="手册页：183" />
+          </outline>
+          <outline text="梯度密度时间戳">
+            <outline text="含义：显示上次密度梯度命令执行完成的时间戳。" />
+            <outline text="可配置内容：只读显示，不可配置" />
+            <outline text="权限：读取：操作员；写入：不可写" />
+            <outline text="手册页：183" />
+          </outline>
+          <outline text="梯度密度">
+            <outline text="密度梯度 0 … 49">
+              <outline text="含义：显示密度梯度对应位置的密度数值。" />
+              <outline text="可配置内容：只读显示，不可配置" />
+              <outline text="权限：读取：操作员；写入：不可写" />
+              <outline text="手册页：184" />
+            </outline>
+            <outline text="密度梯度位置 0 … 49">
+              <outline text="含义：显示密度梯度测量点的位置。" />
+              <outline text="可配置内容：只读显示，不可配置" />
+              <outline text="权限：读取：操作员；写入：不可写" />
+              <outline text="手册页：184" />
+            </outline>
+          </outline>
+        </outline>
+        <outline text="压力">
+          <outline text="P1(底部)值">
+            <outline text="含义：显示罐底压力数值。" />
+            <outline text="可配置内容：只读显示，不可配置" />
+            <outline text="权限：读取：操作员；写入：不可写" />
+            <outline text="手册页：184" />
+          </outline>
+          <outline text="P3(顶部)值">
+            <outline text="含义：显示储罐顶部压力表（P3）数值。" />
+            <outline text="可配置内容：只读显示，不可配置" />
+            <outline text="权限：读取：操作员；写入：不可写" />
+            <outline text="手册页：185" />
+          </outline>
+        </outline>
+        <outline text="通用参数值(GP)">
+          <outline text="通用参数 1 … 4 名称">
+            <outline text="含义：定义了对应通用参数数值的名称。" />
+            <outline text="可配置内容：由数字、字母和特殊字符组成的字符串 (15)" />
+            <outline text="出厂设置：GP Value 1" />
+            <outline text="权限：读取：操作员；写入：维护" />
+            <outline text="手册页：186" />
+          </outline>
+          <outline text="GP Value 1">
+            <outline text="含义：显示作为通用参数值使用的数值。" />
+            <outline text="可配置内容：只读显示，不可配置" />
+            <outline text="权限：读取：操作员；写入：不可写" />
+            <outline text="手册页：186" />
+          </outline>
+          <outline text="GP Value 2">
+            <outline text="含义：显示作为通用参数值使用的数值。" />
+            <outline text="可配置内容：只读显示，不可配置" />
+            <outline text="权限：读取：操作员；写入：不可写" />
+            <outline text="手册页：186" />
+          </outline>
+          <outline text="GP Value 3">
+            <outline text="含义：显示作为通用参数值使用的数值。" />
+            <outline text="可配置内容：只读显示，不可配置" />
+            <outline text="权限：读取：操作员；写入：不可写" />
+            <outline text="手册页：186" />
+          </outline>
+          <outline text="GP Value 4">
+            <outline text="含义：显示作为通用参数值使用的数值。" />
+            <outline text="可配置内容：只读显示，不可配置" />
+            <outline text="权限：读取：操作员；写入：不可写" />
+            <outline text="手册页：187" />
+          </outline>
+        </outline>
+      </outline>
+      <outline text="设置">
+        <outline text="设备位号">
+          <outline text="含义：输入测量点的唯一名称，能够在工厂中快速识别设备。" />
+          <outline text="可配置内容：由数字、字母和特殊字符组成的字符串 (32)" />
+          <outline text="出厂设置：NMS8x" />
+          <outline text="权限：读取：操作员；写入：维护" />
+          <outline text="手册页：188" />
+        </outline>
+        <outline text="预设置单位">
+          <outline text="含义：设置长度、压力和温度单位。" />
+          <outline text="可配置内容">
+            <outline text="mm, bar, °C" />
+            <outline text="m, bar, °C" />
+            <outline text="mm, PSI, °C" />
+            <outline text="ft, PSI, °F" />
+            <outline text="ft-in-16, PSI, °F" />
+            <outline text="ft-in-8, PSI, °F" />
+            <outline text="用户定义值" />
+          </outline>
+          <outline text="出厂设置：mm, bar, °C" />
+          <outline text="权限：读取：操作员；写入：维护" />
+          <outline text="手册页：188" />
+        </outline>
+        <outline text="上层介质密度">
+          <outline text="含义：设置上层介质密度。" />
+          <outline text="可配置内容：50 … 2 000 kg/m³" />
+          <outline text="出厂设置：800 kg/m³" />
+          <outline text="权限：读取：操作员；写入：维护" />
+          <outline text="手册页：189" />
+        </outline>
+        <outline text="中间介质密度">
+          <outline text="含义：如果罐体中存在三层介质，设置中间介质密度。如果仅存在两层介质，直接设置下层介质密度。" />
+          <outline text="可配置内容：50 … 2 000 kg/m³" />
+          <outline text="出厂设置：1 000 kg/m³" />
+          <outline text="权限：读取：操作员；写入：维护" />
+          <outline text="手册页：189" />
+        </outline>
+        <outline text="下层介质密度">
+          <outline text="含义：如果罐体中存在三层介质，设置下层介质密度。" />
+          <outline text="可配置内容：50 … 2 000 kg/m³" />
+          <outline text="出厂设置：1 200 kg/m³" />
+          <outline text="权限：读取：操作员；写入：维护" />
+          <outline text="手册页：189" />
+        </outline>
+        <outline text="罐表命令">
+          <outline text="含义：罐表操作命令，用于选择仪表的测量模式。" />
+          <outline text="可配置内容">
+            <outline text="Stop（取决于仪表选型和设置）" />
+            <outline text="Level" />
+            <outline text="Up（取决于仪表选型和设置）" />
+            <outline text="Bottom level（取决于仪表选型和设置）" />
+            <outline text="Upper I/F level（取决于仪表选型和设置）" />
+            <outline text="Lower I/F level（取决于仪表选型和设置）" />
+            <outline text="Upper density（取决于仪表选型和设置）" />
+            <outline text="Middle density（取决于仪表选型和设置）" />
+            <outline text="Lower density（取决于仪表选型和设置）" />
+            <outline text="Repeatability（取决于仪表选型和设置）" />
+            <outline text="Water dip（取决于仪表选型和设置）" />
+            <outline text="Release overtension（取决于仪表选型和设置）" />
+            <outline text="Tank profile（取决于仪表选型和设置）" />
+            <outline text="Interface profile（取决于仪表选型和设置）" />
+            <outline text="Manual profile（取决于仪表选型和设置）" />
+            <outline text="Level standby（取决于仪表选型和设置）" />
+            <outline text="Offset standby（取决于仪表选型和设置）" />
+          </outline>
+          <outline text="出厂设置：Stop" />
+          <outline text="权限：读取：操作员；写入：维护" />
+          <outline text="手册页：190" />
+        </outline>
+        <outline text="过程条件">
+          <outline text="含义：选择罐体内的液面状况。" />
+          <outline text="可配置内容">
+            <outline text="普通" />
+            <outline text="平静液面" />
+            <outline text="扰动液面" />
+          </outline>
+          <outline text="出厂设置：普通" />
+          <outline text="权限：读取：操作员；写入：维护" />
+          <outline text="手册页：190" />
+        </outline>
+        <outline text="空罐高度">
+          <outline text="含义：参考点至测量零点间（罐底或基准板）的距离。" />
+          <outline text="可配置内容：0 … 10 000 000 mm" />
+          <outline text="出厂设置：取决于设备型号" />
+          <outline text="权限：读取：操作员；写入：维护" />
+          <outline text="手册页：191" />
+        </outline>
+        <outline text="储罐参考高度">
+          <outline text="含义：定义了从投尺参考点至测量零点（罐底或基准板）间的距离。" />
+          <outline text="可配置内容：0 … 10 000 000 mm" />
+          <outline text="出厂设置：取决于设备型号" />
+          <outline text="权限：读取：操作员；写入：维护" />
+          <outline text="手册页：191" />
+        </outline>
+        <outline text="储罐液位">
+          <outline text="含义：显示测量零点（罐底或基准板）与液面间的距离。" />
+          <outline text="可配置内容：只读显示，不可配置" />
+          <outline text="权限：读取：操作员；写入：不可写" />
+          <outline text="手册页：191" />
+        </outline>
+        <outline text="设置液位">
+          <outline text="含义：当设备输出的液位测量值与人工投尺测定的实际液位高度不一致时，在此参数中输入液位校正值。" />
+          <outline text="可配置内容：0 … 10 000 000 mm" />
+          <outline text="出厂设置：0 mm" />
+          <outline text="权限：读取：操作员；写入：维护" />
+          <outline text="手册页：192" />
+        </outline>
+        <outline text="液位源">
+          <outline text="含义：定义了液位数值的输入源。" />
+          <outline text="可配置内容">
+            <outline text="无输入值" />
+            <outline text="HART 设备 1 ... 15 液位" />
+            <outline text="液位 SR（取决于仪表选型和设置）" />
+            <outline text="液位（取决于仪表选型和设置）" />
+            <outline text="浮子位置（取决于仪表选型和设置）" />
+            <outline text="AIO B1-3 数值（取决于仪表选型和设置）" />
+            <outline text="AIO C1-3 数值（取决于仪表选型和设置）" />
+            <outline text="AIP B4-8 数值（取决于仪表选型和设置）" />
+            <outline text="AIP C4-8 数值（取决于仪表选型和设置）" />
+          </outline>
+          <outline text="出厂设置：取决于仪表型号" />
+          <outline text="权限：读取：操作员；写入：维护" />
+          <outline text="手册页：192" />
+        </outline>
+        <outline text="上停止位">
+          <outline text="含义：从测量零点（罐底或基准板）到浮子上停止位的距离。" />
+          <outline text="可配置内容：–999 999.9 … 999 999.9 mm" />
+          <outline text="出厂设置：20 000 mm" />
+          <outline text="权限：读取：操作员；写入：维护" />
+          <outline text="手册页：192" />
+        </outline>
+        <outline text="下停止位">
+          <outline text="含义：从测量零点（罐底或基准板）到浮子下停止位的距离。" />
+          <outline text="可配置内容：–999 999.9 … 999 999.9 mm" />
+          <outline text="出厂设置：0 mm" />
+          <outline text="权限：读取：操作员；写入：维护" />
+          <outline text="手册页：193" />
+        </outline>
+        <outline text="距离">
+          <outline text="含义：显示与参考位置之间的测量距离。" />
+          <outline text="可配置内容：只读显示，不可配置" />
+          <outline text="权限：读取：操作员；写入：不可写" />
+          <outline text="手册页：193" />
+        </outline>
+        <outline text="液相温度源">
+          <outline text="含义：定义了液相温度的输入源。" />
+          <outline text="可配置内容">
+            <outline text="手动数值" />
+            <outline text="HART 设备 1 ... 15 温度" />
+            <outline text="AIO B1-3 数值" />
+            <outline text="AIO C1-3 数值" />
+            <outline text="AIP B4-8 数值" />
+            <outline text="AIP C4-8 数值" />
+          </outline>
+          <outline text="出厂设置：手动数值" />
+          <outline text="权限：读取：操作员；写入：维护" />
+          <outline text="手册页：193" />
+        </outline>
+        <outline text="校准">
+          <outline text="移动浮子">
+            <outline text="移动距离">
+              <outline text="含义：浮子的上下移动距离，单位：mm。" />
+              <outline text="可配置内容：0 … 999 999.9 mm" />
+              <outline text="出厂设置：0 mm" />
+              <outline text="权限：读取：操作员；写入：维护" />
+              <outline text="手册页：195" />
+            </outline>
+            <outline text="距离">
+              <outline text="含义：显示与参考位置之间的测量距离。" />
+              <outline text="可配置内容：只读显示，不可配置" />
+              <outline text="权限：读取：操作员；写入：不可写" />
+              <outline text="手册页：195" />
+            </outline>
+            <outline text="移动浮子（方向）">
+              <outline text="含义：选择浮子的移动方向或停止浮子。" />
+              <outline text="可配置内容">
+                <outline text="停止" />
+                <outline text="下降" />
+                <outline text="上升" />
+              </outline>
+              <outline text="出厂设置：停止" />
+              <outline text="权限：读取：操作员；写入：维护" />
+              <outline text="手册页：195" />
+            </outline>
+            <outline text="电机状态">
+              <outline text="含义：显示电机的当前移动方向。" />
+              <outline text="可配置内容：只读显示，不可配置" />
+              <outline text="权限：读取：操作员；写入：不可写" />
+              <outline text="手册页：196" />
+            </outline>
+            <outline text="移动浮子（确认）">
+              <outline text="含义：确认是否执行所选的浮子移动操作。" />
+              <outline text="可配置内容">
+                <outline text="否" />
+                <outline text="是" />
+              </outline>
+              <outline text="出厂设置：否" />
+              <outline text="权限：读取：操作员；写入：维护" />
+              <outline text="手册页：196" />
+            </outline>
+          </outline>
+          <outline text="传感器标定">
+            <outline text="传感器标定">
+              <outline text="含义：该序列对伺服液位计传感器进行标定。" />
+              <outline text="可配置内容：执行或确认该菜单功能；无独立数值范围" />
+              <outline text="权限：读取：操作员；写入：维护" />
+              <outline text="手册页：197" />
+            </outline>
+            <outline text="Offset weight">
+              <outline text="含义：设置用于下点传感器标定的重量。 更改值将删除标定数据。" />
+              <outline text="可配置内容：0 … 150 g" />
+              <outline text="出厂设置：取决于仪表型号" />
+              <outline text="权限：读取：操作员；写入：维护" />
+              <outline text="手册页：197" />
+            </outline>
+            <outline text="Span weight">
+              <outline text="含义：设置用于中点传感器标定的重量。 更改值将删除校准数据。" />
+              <outline text="可配置内容：10 … 999.9 g" />
+              <outline text="出厂设置：取决于仪表型号" />
+              <outline text="权限：读取：操作员；写入：维护" />
+              <outline text="手册页：197" />
+            </outline>
+            <outline text="零点标定">
+              <outline text="含义：在此步骤中将进行传感器零重量标定。" />
+              <outline text="可配置内容：执行或确认该菜单功能；无独立数值范围" />
+              <outline text="权限：读取：操作员；写入：维护" />
+              <outline text="手册页：198" />
+            </outline>
+            <outline text="标定状态">
+              <outline text="含义：提供标定过程的最新状态反馈。" />
+              <outline text="可配置内容：只读显示，不可配置" />
+              <outline text="权限：读取：操作员；写入：不可写" />
+              <outline text="手册页：198" />
+            </outline>
+            <outline text="偏移量标定">
+              <outline text="含义：在此步骤中将进行传感器偏置重量标定。" />
+              <outline text="可配置内容：执行或确认该菜单功能；无独立数值范围" />
+              <outline text="权限：读取：操作员；写入：维护" />
+              <outline text="手册页：198" />
+            </outline>
+            <outline text="满量程标定">
+              <outline text="含义：在此步骤中将进行传感器满重量标定。" />
+              <outline text="可配置内容：执行或确认该菜单功能；无独立数值范围" />
+              <outline text="权限：读取：操作员；写入：维护" />
+              <outline text="手册页：198" />
+            </outline>
+          </outline>
+          <outline text="参考位置标定">
+            <outline text="参考位置标定">
+              <outline text="含义：该操作将移动浮子至机械停止位，然后设置参考位置。" />
+              <outline text="可配置内容：执行或确认该菜单功能；无独立数值范围" />
+              <outline text="权限：读取：操作员；写入：维护" />
+              <outline text="手册页：199" />
+            </outline>
+            <outline text="参考位置">
+              <outline text="含义：单位：mm，该数值为轮毂中机械停止位和浮子线圈中心位置的距离。" />
+              <outline text="可配置内容：0 … 9 999.9 mm" />
+              <outline text="出厂设置：取决于仪表型号" />
+              <outline text="权限：读取：操作员；写入：维护" />
+              <outline text="手册页：199" />
+            </outline>
+            <outline text="进程">
+              <outline text="含义：反馈最新的参考位置标定过程状态。" />
+              <outline text="可配置内容：执行或确认该菜单功能；无独立数值范围" />
+              <outline text="权限：读取：操作员；写入：维护" />
+              <outline text="手册页：199" />
+            </outline>
+            <outline text="标定状态">
+              <outline text="含义：提供标定过程的最新状态反馈。" />
+              <outline text="可配置内容：只读显示，不可配置" />
+              <outline text="权限：读取：操作员；写入：不可写" />
+              <outline text="手册页：199" />
+            </outline>
+          </outline>
+          <outline text="轮毂标定">
+            <outline text="轮毂标定">
+              <outline text="含义：该序列将进行轮毂标定。" />
+              <outline text="可配置内容：执行或确认该菜单功能；无独立数值范围" />
+              <outline text="权限：读取：操作员；写入：维护" />
+              <outline text="手册页：201" />
+            </outline>
+            <outline text="设置高重量">
+              <outline text="含义：高重量是一个用于轮毂标定的参数（通常是浮子的重量）。" />
+              <outline text="可配置内容：10 … 999.9 g" />
+              <outline text="出厂设置：取决于仪表型号" />
+              <outline text="权限：读取：操作员；写入：维护" />
+              <outline text="手册页：201" />
+            </outline>
+            <outline text="制作重量表">
+              <outline text="含义：这是一个轮毂重量表的标定。" />
+              <outline text="可配置内容：执行或确认该菜单功能；无独立数值范围" />
+              <outline text="权限：读取：操作员；写入：维护" />
+              <outline text="手册页：201" />
+            </outline>
+            <outline text="重量表标定点">
+              <outline text="含义：显示当前重量表标定点值。总共 50 个标定点。" />
+              <outline text="可配置内容：只读显示，不可配置" />
+              <outline text="权限：读取：操作员；写入：不可写" />
+              <outline text="手册页：201" />
+            </outline>
+            <outline text="标定状态">
+              <outline text="含义：提供标定过程的最新状态反馈。" />
+              <outline text="可配置内容：只读显示，不可配置" />
+              <outline text="权限：读取：操作员；写入：不可写" />
+              <outline text="手册页：202" />
+            </outline>
+            <outline text="制作低重量表">
+              <outline text="含义：为了提高测量精度，可以制作低重量表。选择“是”或“否”开始/停止标定。" />
+              <outline text="可配置内容">
+                <outline text="否" />
+                <outline text="是" />
+              </outline>
+              <outline text="出厂设置：否" />
+              <outline text="权限：读取：操作员；写入：维护" />
+              <outline text="手册页：202" />
+            </outline>
+            <outline text="设置低重量">
+              <outline text="含义：为附加轮毂标定设置低重量。" />
+              <outline text="可配置内容：10 … 999.9 g" />
+              <outline text="出厂设置：取决于仪表型号" />
+              <outline text="权限：读取：操作员；写入：维护" />
+              <outline text="手册页：202" />
+            </outline>
+          </outline>
+        </outline>
+        <outline text="高级设置">
+          <outline text="锁定状态">
+            <outline text="含义：标识锁定类型。 “硬件锁定” (HW) 设备通过主要电子模块上的“WP”开关锁定。解锁时，将开关设置在关闭(OFF)位置上。 “WHG 锁定”(SW) 在“输入密码”处输入正确的密码用于解锁。 “SIL 锁定”（SW） 在“输入密码”处输入正确的密码用于解锁。 “临时锁定”（SW） 设备操作过程中仪表临时锁定（数据上存、下载、复位），操作完成后设备自动解锁。" />
+            <outline text="可配置内容：只读显示，不可配置" />
+            <outline text="权限：读取：操作员；写入：不可写" />
+            <outline text="手册页：203" />
+          </outline>
+          <outline text="用户角色">
+            <outline text="含义：显示调试软件的参数访问权限" />
+            <outline text="可配置内容：只读显示，不可配置" />
+            <outline text="权限：读取：操作员；写入：不可写" />
+            <outline text="手册页：203" />
+          </outline>
+          <outline text="输入访问密码">
+            <outline text="含义：输入密码，关闭写保护。" />
+            <outline text="可配置内容：执行或确认该菜单功能；无独立数值范围" />
+            <outline text="权限：读取：操作员；写入：操作员" />
+            <outline text="手册页：203" />
+          </outline>
+          <outline text="输入/输出">
+            <outline text="HART 设备">
+              <outline text="设备数量">
+                <outline text="含义：显示 HART 总线上的设备数量。" />
+                <outline text="可配置内容：只读显示，不可配置" />
+                <outline text="权限：读取：操作员；写入：不可写" />
+                <outline text="手册页：204" />
+              </outline>
+              <outline text="HART Device(s)（每台在线 HART 从设备）">
+                <outline text="设备名称">
+                  <outline text="含义：显示变送器名称。" />
+                  <outline text="可配置内容：只读显示，不可配置" />
+                  <outline text="权限：读取：操作员；写入：不可写" />
+                  <outline text="手册页：205" />
+                </outline>
+                <outline text="轮询地址">
+                  <outline text="含义：显示变送器的轮询地址。" />
+                  <outline text="可配置内容：只读显示，不可配置" />
+                  <outline text="权限：读取：操作员；写入：不可写" />
+                  <outline text="手册页：205" />
+                </outline>
+                <outline text="设备位号">
+                  <outline text="含义：显示变送器的设备位号。" />
+                  <outline text="可配置内容：只读显示，不可配置" />
+                  <outline text="权限：读取：操作员；写入：不可写" />
+                  <outline text="手册页：205" />
+                </outline>
+                <outline text="工作模式">
+                  <outline text="含义：选择运行模式仅 PV 或 PV,SV,TV,QV。 定义从连接的 HART 设备轮询的值。" />
+                  <outline text="可配置内容">
+                    <outline text="仅 PV" />
+                    <outline text="PV,SV,TV &amp; QV" />
+                    <outline text="液位（取决于仪表选型和设置）" />
+                    <outline text="液位测量值（取决于仪表选型和设置）" />
+                  </outline>
+                  <outline text="出厂设置：PV,SV,TV &amp; QV" />
+                  <outline text="显示/生效条件：如果 HART 设备是 Prothermo NMT，则不适用。" />
+                  <outline text="权限：读取：操作员；写入：维护" />
+                  <outline text="手册页：205" />
+                </outline>
+                <outline text="通信状态">
+                  <outline text="含义：显示变送器的运行状态。" />
+                  <outline text="可配置内容：只读显示，不可配置；显示格式：• 运行正常 • 设备离线" />
+                  <outline text="权限：读取：操作员；写入：不可写" />
+                  <outline text="手册页：206" />
+                </outline>
+                <outline text="状态信号">
+                  <outline text="含义：显示当前设备状态，符合 VDI/VDE 2650 和 NAMUR NE 107 标准。" />
+                  <outline text="可配置内容：只读显示，不可配置；显示格式：• OK • 故障(F) • 功能检查(C) • 超出规格(S) • 需要维护(M) • --- • 无影响(N) • ---" />
+                  <outline text="出厂设置：---" />
+                  <outline text="手册页：206" />
+                </outline>
+                <outline text="HART PV（实际名称取决于仪表）">
+                  <outline text="含义：显示第一个 HART 变量（PV）。" />
+                  <outline text="可配置内容：只读显示，不可配置" />
+                  <outline text="权限：读取：操作员；写入：不可写" />
+                  <outline text="手册页：207" />
+                </outline>
+                <outline text="HART SV（实际名称取决于仪表）">
+                  <outline text="含义：显示第二个 HART 变量（SV）。" />
+                  <outline text="可配置内容：只读显示，不可配置" />
+                  <outline text="显示/生效条件：HART 设备（而非 NMT）：工作模式 （参见手册页 205） = PV,SV,TV &amp; QV" />
+                  <outline text="权限：读取：操作员；写入：不可写" />
+                  <outline text="手册页：207" />
+                </outline>
+                <outline text="HART TV（实际名称取决于仪表）">
+                  <outline text="含义：显示第三个 HART 变量（TV）。" />
+                  <outline text="可配置内容：只读显示，不可配置" />
+                  <outline text="显示/生效条件：HART 设备（而非 NMT）：工作模式 （参见手册页 205） = PV,SV,TV &amp; QV" />
+                  <outline text="权限：读取：操作员；写入：不可写" />
+                  <outline text="手册页：207" />
+                </outline>
+                <outline text="HART QV（实际名称取决于仪表）">
+                  <outline text="含义：显示第四个 HART 变量（QV）。" />
+                  <outline text="可配置内容：只读显示，不可配置" />
+                  <outline text="显示/生效条件：HART 设备（而非 NMT）：工作模式 （参见手册页 205） = PV,SV,TV &amp; QV" />
+                  <outline text="权限：读取：操作员；写入：不可写" />
+                  <outline text="手册页：207" />
+                </outline>
+                <outline text="输出压力">
+                  <outline text="含义：定义哪个 HART 变量是压力。" />
+                  <outline text="可配置内容">
+                    <outline text="No value" />
+                    <outline text="PV 值" />
+                    <outline text="SV 值" />
+                    <outline text="TV 值" />
+                    <outline text="QV 值" />
+                  </outline>
+                  <outline text="出厂设置：No value" />
+                  <outline text="显示/生效条件：Micropilot S FMR5xx、Prothermo NMT53x 和 Prothermo NMT8x 不可用。在这些情况下，自动分配测量变量。" />
+                  <outline text="权限：读取：操作员；写入：维护" />
+                  <outline text="手册页：208" />
+                </outline>
+                <outline text="输出密度">
+                  <outline text="含义：定义哪个 HART 变量是密度。" />
+                  <outline text="可配置内容">
+                    <outline text="No value" />
+                    <outline text="PV 值" />
+                    <outline text="SV 值" />
+                    <outline text="TV 值" />
+                    <outline text="QV 值" />
+                  </outline>
+                  <outline text="出厂设置：No value" />
+                  <outline text="显示/生效条件：Micropilot S FMR5xx、Prothermo NMT53x 和 Prothermo NMT8x 不可用。在这些情况下，自动分配测量变量。" />
+                  <outline text="权限：读取：操作员；写入：维护" />
+                  <outline text="手册页：208" />
+                </outline>
+                <outline text="输出温度">
+                  <outline text="含义：定义哪个 HART 变量是温度。" />
+                  <outline text="可配置内容">
+                    <outline text="No value" />
+                    <outline text="PV 值" />
+                    <outline text="SV 值" />
+                    <outline text="TV 值" />
+                    <outline text="QV 值" />
+                  </outline>
+                  <outline text="出厂设置：No value" />
+                  <outline text="显示/生效条件：Micropilot S FMR5xx、Prothermo NMT53x 和 Prothermo NMT8x 不可用。在这些情况下，自动分配测量变量。" />
+                  <outline text="权限：读取：操作员；写入：维护" />
+                  <outline text="手册页：208" />
+                </outline>
+                <outline text="输出气相温度">
+                  <outline text="含义：定义哪个 HART 变量是气相温度。" />
+                  <outline text="可配置内容">
+                    <outline text="No value" />
+                    <outline text="PV 值" />
+                    <outline text="SV 值" />
+                    <outline text="TV 值" />
+                    <outline text="QV 值" />
+                  </outline>
+                  <outline text="出厂设置：No value" />
+                  <outline text="显示/生效条件：Micropilot S FMR5xx、Prothermo NMT53x 和 Prothermo NMT8x 不可用。在这些情况下，自动分配测量变量。" />
+                  <outline text="权限：读取：操作员；写入：维护" />
+                  <outline text="手册页：209" />
+                </outline>
+                <outline text="输出液位">
+                  <outline text="含义：定义哪个 HART 变量是液位。" />
+                  <outline text="可配置内容">
+                    <outline text="No value" />
+                    <outline text="PV 值" />
+                    <outline text="SV 值" />
+                    <outline text="TV 值" />
+                    <outline text="QV 值" />
+                  </outline>
+                  <outline text="出厂设置：No value" />
+                  <outline text="显示/生效条件：Micropilot S FMR5xx、Prothermo NMT53x 和 Prothermo NMT8x 不可用。在这些情况下，自动分配测量变量。" />
+                  <outline text="权限：读取：操作员；写入：维护" />
+                  <outline text="手册页：209" />
+                </outline>
+              </outline>
+              <outline text="删除设备">
+                <outline text="删除设备">
+                  <outline text="含义：使用此功能，可以从设备列表中删除离线设备。" />
+                  <outline text="可配置内容">
+                    <outline text="HART 设备 1（取决于仪表选型和设置）" />
+                    <outline text="HART 设备 2（取决于仪表选型和设置）" />
+                    <outline text="HART 设备 3（取决于仪表选型和设置）" />
+                    <outline text="HART 设备 4（取决于仪表选型和设置）" />
+                    <outline text="HART 设备 5（取决于仪表选型和设置）" />
+                    <outline text="HART 设备 6（取决于仪表选型和设置）" />
+                    <outline text="HART 设备 7（取决于仪表选型和设置）" />
+                    <outline text="HART 设备 8（取决于仪表选型和设置）" />
+                    <outline text="HART 设备 9（取决于仪表选型和设置）" />
+                    <outline text="HART 设备 10（取决于仪表选型和设置）" />
+                    <outline text="HART 设备 11（取决于仪表选型和设置）" />
+                    <outline text="HART 设备 12（取决于仪表选型和设置）" />
+                    <outline text="HART 设备 13（取决于仪表选型和设置）" />
+                    <outline text="HART 设备 14（取决于仪表选型和设置）" />
+                    <outline text="HART 设备 15（取决于仪表选型和设置）" />
+                    <outline text="无" />
+                  </outline>
+                  <outline text="出厂设置：无" />
+                  <outline text="权限：读取：操作员；写入：维护" />
+                  <outline text="手册页：211" />
+                </outline>
+              </outline>
+            </outline>
+            <outline text="Analog IP X4-8（X 为实际插槽）">
+              <outline text="工作模式">
+                <outline text="含义：定义模拟输入的操作模式。" />
+                <outline text="可配置内容">
+                  <outline text="禁用" />
+                  <outline text="RTD 温度输入" />
+                  <outline text="仪表供电" />
+                </outline>
+                <outline text="出厂设置：禁用" />
+                <outline text="权限：读取：操作员；写入：维护" />
+                <outline text="手册页：212" />
+              </outline>
+              <outline text="RTD 类型">
+                <outline text="含义：定义连接的 RTD 类型。" />
+                <outline text="可配置内容">
+                  <outline text="Cu50 (w=1.428, GOST)" />
+                  <outline text="Cu53 (w=1.426, GOST)" />
+                  <outline text="Cu90; 0°C (w=1.4274, GOST)" />
+                  <outline text="Cu100; 25°C (w=1.4274, GOST)" />
+                  <outline text="Cu100; 0°C(w=1.4274, GOST)" />
+                  <outline text="Pt46 (w=1.391, GOST)" />
+                  <outline text="Pt50 (w=1.391, GOST)" />
+                  <outline text="Pt100(385) (a=0.00385, IEC751)" />
+                  <outline text="Pt100(389) (a=0.00389, Canadian)" />
+                  <outline text="Pt100(391) (a=0.003916, JIS1604)" />
+                  <outline text="Pt100 (w=1.391, GOST)" />
+                  <outline text="Pt500(385) (a=0.00385, IEC751)" />
+                  <outline text="Pt1000(385) (a=0.00385, IEC751)" />
+                  <outline text="Ni100(617) (a=0.00617, DIN43760)" />
+                  <outline text="Ni120(672) (a=0.00672, DIN43760)" />
+                  <outline text="Ni1000(617) (a=0.00617, DIN43760)" />
+                </outline>
+                <outline text="出厂设置：Pt100(385) (a=0.00385, IEC751)" />
+                <outline text="显示/生效条件：工作模式 （参见手册页 212） = RTD 温度输入" />
+                <outline text="权限：读取：操作员；写入：维护" />
+                <outline text="手册页：212" />
+              </outline>
+              <outline text="热电偶类型">
+                <outline text="含义：定义连接的热电偶的类型。" />
+                <outline text="可配置内容">
+                  <outline text="N type" />
+                  <outline text="B type" />
+                  <outline text="C type" />
+                  <outline text="D type" />
+                  <outline text="J type" />
+                  <outline text="K type" />
+                  <outline text="L type" />
+                  <outline text="L GOST type" />
+                  <outline text="R type" />
+                  <outline text="S type" />
+                  <outline text="T type" />
+                  <outline text="U type" />
+                </outline>
+                <outline text="出厂设置：N type" />
+                <outline text="手册页：213" />
+              </outline>
+              <outline text="RTD 连接类型">
+                <outline text="含义：定义 RTD 的连接类型。" />
+                <outline text="可配置内容">
+                  <outline text="4 线 RTD 连接" />
+                  <outline text="2 线 RTD 连接" />
+                  <outline text="3 线 RTD 连接" />
+                </outline>
+                <outline text="出厂设置：4 线 RTD 连接" />
+                <outline text="显示/生效条件：工作模式 （参见手册页 212） = RTD 温度输入" />
+                <outline text="权限：读取：操作员；写入：维护" />
+                <outline text="手册页：213" />
+              </outline>
+              <outline text="过程值">
+                <outline text="含义：显示通过模拟输入接收到的测量值。" />
+                <outline text="可配置内容：只读显示，不可配置" />
+                <outline text="显示/生效条件：工作模式 （参见手册页 212） ≠ 禁用" />
+                <outline text="权限：读取：操作员；写入：不可写" />
+                <outline text="手册页：214" />
+              </outline>
+              <outline text="过程变量">
+                <outline text="含义：确定测量值的类型。" />
+                <outline text="可配置内容">
+                  <outline text="物位(或线性化值)" />
+                  <outline text="温度" />
+                  <outline text="压力" />
+                  <outline text="密度" />
+                </outline>
+                <outline text="出厂设置：物位(或线性化值)" />
+                <outline text="显示/生效条件：工作模式 （参见手册页 212） ≠ RTD 温度输入" />
+                <outline text="权限：读取：操作员；写入：维护" />
+                <outline text="手册页：214" />
+              </outline>
+              <outline text="0%值">
+                <outline text="含义：定义由 4mA 电流表示的值。" />
+                <outline text="可配置内容：带符号浮点数" />
+                <outline text="出厂设置：0 mm" />
+                <outline text="显示/生效条件：工作模式 （参见手册页 212） = 4..20mA 输入" />
+                <outline text="权限：读取：操作员；写入：维护" />
+                <outline text="手册页：214" />
+              </outline>
+              <outline text="100 % 值">
+                <outline text="含义：定义 20mA 电流所代表的值。" />
+                <outline text="可配置内容：带符号浮点数" />
+                <outline text="出厂设置：0 mm" />
+                <outline text="显示/生效条件：工作模式 （参见手册页 212） = 4..20mA 输入" />
+                <outline text="权限：读取：操作员；写入：维护" />
+                <outline text="手册页：215" />
+              </outline>
+              <outline text="输入值">
+                <outline text="含义：显示通过模拟输入接收的值。" />
+                <outline text="可配置内容：只读显示，不可配置" />
+                <outline text="显示/生效条件：工作模式 （参见手册页 212） ≠ 禁用" />
+                <outline text="权限：读取：操作员；写入：不可写" />
+                <outline text="手册页：215" />
+              </outline>
+              <outline text="最低探头温度">
+                <outline text="含义：已连接探头的最低认可温度。 如果温度低于此值，则 W&amp;M 状态将为“无效”。" />
+                <outline text="可配置内容：–213 … 927 °C" />
+                <outline text="出厂设置：–100 °C" />
+                <outline text="显示/生效条件：工作模式 （参见手册页 212） = RTD 温度输入" />
+                <outline text="权限：读取：操作员；写入：维护" />
+                <outline text="手册页：215" />
+              </outline>
+              <outline text="最高探头温度">
+                <outline text="含义：已连接探头的最高允许温度。 如果温度高于此值，则 W&amp;M 状态将为“无效”。" />
+                <outline text="可配置内容：–213 … 927 °C" />
+                <outline text="出厂设置：250 °C" />
+                <outline text="显示/生效条件：工作模式 （参见手册页 212） = RTD 温度输入" />
+                <outline text="权限：读取：操作员；写入：维护" />
+                <outline text="手册页：216" />
+              </outline>
+              <outline text="探头位置">
+                <outline text="含义：温度探头的位置，从零位（罐底或基准板）测量。 此参数与测得的液位一起确定温度探头是否仍被产品覆盖。 如果不再是这种情况，温度值的状态将是“无效”。" />
+                <outline text="可配置内容：–5 000 … 30 000 mm" />
+                <outline text="出厂设置：5 000 mm" />
+                <outline text="显示/生效条件：工作模式 （参见手册页 212） = RTD 温度输入" />
+                <outline text="权限：读取：操作员；写入：维护" />
+                <outline text="手册页：216" />
+              </outline>
+              <outline text="阻尼因子">
+                <outline text="含义：定义阻尼常数（以秒为单位）。" />
+                <outline text="可配置内容：0 … 999.9 s" />
+                <outline text="出厂设置：0s" />
+                <outline text="显示/生效条件：工作模式 （参见手册页 212） ≠ 禁用" />
+                <outline text="权限：读取：操作员；写入：维护" />
+                <outline text="手册页：216" />
+              </outline>
+              <outline text="仪表电流">
+                <outline text="含义：显示所连接设备的电源线上的电流。" />
+                <outline text="可配置内容：只读显示，不可配置" />
+                <outline text="显示/生效条件：工作模式 （参见手册页 212） = 仪表供电" />
+                <outline text="权限：读取：操作员；写入：不可写" />
+                <outline text="手册页：217" />
+              </outline>
+            </outline>
+            <outline text="Analog I/O X1-3（X 为实际插槽）">
+              <outline text="工作模式">
+                <outline text="含义：定义模拟量 I/O 模块的操作模式。" />
+                <outline text="可配置内容">
+                  <outline text="禁用" />
+                  <outline text="4..20mA 输入" />
+                  <outline text="HART 主站+4..20mA 输入" />
+                  <outline text="HART 主站" />
+                  <outline text="4..20mA 输出" />
+                  <outline text="HART 从站+4..20mA 输出" />
+                </outline>
+                <outline text="出厂设置：禁用" />
+                <outline text="权限：读取：操作员；写入：维护" />
+                <outline text="手册页：218" />
+              </outline>
+              <outline text="电流模式">
+                <outline text="含义：定义测量值传输的电流范围。" />
+                <outline text="可配置内容">
+                  <outline text="4...20 mA NE (3.8...20.5 mA)" />
+                  <outline text="4...20 mA US (3.9...20.8 mA)" />
+                  <outline text="4...20 mA (4...20.5 mA)" />
+                  <outline text="固定值（取决于仪表选型和设置）" />
+                </outline>
+                <outline text="出厂设置：4...20 mA NE (3.8...20.5 mA)" />
+                <outline text="显示/生效条件：工作模式参数 （参见手册页 218） ≠ 禁用选项 or HART 主站选项" />
+                <outline text="权限：读取：操作员；写入：维护" />
+                <outline text="手册页：219" />
+              </outline>
+              <outline text="固定电流">
+                <outline text="含义：设置固定输出电流。" />
+                <outline text="可配置内容：4 … 22.5 mA" />
+                <outline text="出厂设置：4 mA" />
+                <outline text="显示/生效条件：电流模式 （参见手册页 219） = 固定电流" />
+                <outline text="权限：读取：操作员；写入：维护" />
+                <outline text="手册页：220" />
+              </outline>
+              <outline text="模拟输入源">
+                <outline text="含义：定义通过 AIO 传输的过程变量。" />
+                <outline text="可配置内容">
+                  <outline text="无" />
+                  <outline text="储罐液位" />
+                  <outline text="储罐液位%" />
+                  <outline text="储罐空高" />
+                  <outline text="储罐空高%" />
+                  <outline text="液位测量值" />
+                  <outline text="距离" />
+                  <outline text="浮子位置" />
+                  <outline text="水位" />
+                  <outline text="上界面液位" />
+                  <outline text="下界面液位" />
+                  <outline text="罐底位置" />
+                  <outline text="储罐参考高度" />
+                  <outline text="液相温度值" />
+                  <outline text="气相温度值" />
+                  <outline text="环境(空气)温度值" />
+                  <outline text="视密度" />
+                  <outline text="平均梯度密度（取决于仪表选型和设置）" />
+                  <outline text="上层介质密度" />
+                  <outline text="中间介质密度" />
+                  <outline text="下层介质密度" />
+                  <outline text="P1(底部)值" />
+                  <outline text="P2(中部)值" />
+                  <outline text="P3(顶部)值" />
+                  <outline text="GP 1 ... 4 值" />
+                  <outline text="AIO B1-3 数值（取决于仪表选型和设置）" />
+                  <outline text="AIO B1-3 毫安值（取决于仪表选型和设置）" />
+                  <outline text="AIO C1-3 数值（取决于仪表选型和设置）" />
+                  <outline text="AIO C1-3 毫安值（取决于仪表选型和设置）" />
+                  <outline text="AIP B4-8 数值（取决于仪表选型和设置）" />
+                  <outline text="AIP C4-8 数值（取决于仪表选型和设置）" />
+                  <outline text="测温点温度 1 ... 24（取决于仪表选型和设置）" />
+                  <outline text="HART 设备 1...15 PV（取决于仪表选型和设置）" />
+                  <outline text="HART 设备 1 ... 15 PV mA（取决于仪表选型和设置）" />
+                  <outline text="HART 设备 1 ... 15 PV %（取决于仪表选型和设置）" />
+                  <outline text="HART 设备 1 ... 15 SV（取决于仪表选型和设置）" />
+                  <outline text="HART 设备 1 ... 15 TV（取决于仪表选型和设置）" />
+                  <outline text="HART 设备 1 ... 15 QV（取决于仪表选型和设置）" />
+                </outline>
+                <outline text="出厂设置：储罐液位" />
+                <outline text="显示/生效条件：• 工作模式 （参见手册页 218） = 4..20mA 输出或 HART 从站+4..20mA 输出 • 电流模式 （参见手册页 219） ≠ 固定电流" />
+                <outline text="权限：读取：操作员；写入：维护" />
+                <outline text="手册页：220" />
+              </outline>
+              <outline text="故障模式">
+                <outline text="含义：定义当设备出现故障报警时的输出。" />
+                <outline text="可配置内容">
+                  <outline text="最小值" />
+                  <outline text="最大值" />
+                  <outline text="最近有效值" />
+                  <outline text="实际值" />
+                  <outline text="设定值" />
+                </outline>
+                <outline text="出厂设置：最大值" />
+                <outline text="显示/生效条件：工作模式 （参见手册页 218） = 4..20mA 输出或 HART 从站+4..20mA 输出" />
+                <outline text="权限：读取：操作员；写入：维护" />
+                <outline text="手册页：221" />
+              </outline>
+              <outline text="故障值">
+                <outline text="含义：定义设备出现故障时的输出。" />
+                <outline text="可配置内容：3.4 … 22.6 mA" />
+                <outline text="出厂设置：22 mA" />
+                <outline text="显示/生效条件：故障模式 （参见手册页 221） = 设定值" />
+                <outline text="权限：读取：操作员；写入：维护" />
+                <outline text="手册页：222" />
+              </outline>
+              <outline text="输入值">
+                <outline text="含义：显示模拟量 I/O 模块的输入值。" />
+                <outline text="可配置内容：只读显示，不可配置" />
+                <outline text="显示/生效条件：• 工作模式 （参见手册页 218） = 4..20mA 输出或 HART 从站+4..20mA 输出 • 电流模式 （参见手册页 219） ≠ 固定电流" />
+                <outline text="权限：读取：操作员；写入：不可写" />
+                <outline text="手册页：222" />
+              </outline>
+              <outline text="0%值">
+                <outline text="含义：对应于 0% (4mA) 输出电流的值。" />
+                <outline text="可配置内容：带符号浮点数" />
+                <outline text="出厂设置：0 Unitless" />
+                <outline text="显示/生效条件：• 工作模式 （参见手册页 218） = 4..20mA 输出或 HART 从站+4..20mA 输出 • 电流模式 （参见手册页 219） ≠ 固定电流" />
+                <outline text="权限：读取：操作员；写入：维护" />
+                <outline text="手册页：222" />
+              </outline>
+              <outline text="100 % 值">
+                <outline text="含义：对应于 100% (20mA) 输出电流的值。" />
+                <outline text="可配置内容：带符号浮点数" />
+                <outline text="出厂设置：0 Unitless" />
+                <outline text="显示/生效条件：• 工作模式 （参见手册页 218） = 4..20mA 输出或 HART 从站+4..20mA 输出 • 电流模式 （参见手册页 219） ≠ 固定电流" />
+                <outline text="权限：读取：操作员；写入：维护" />
+                <outline text="手册页：223" />
+              </outline>
+              <outline text="输入值 %">
+                <outline text="含义：将输出值显示为整个 4...20mA 范围的百分比。" />
+                <outline text="可配置内容：只读显示，不可配置" />
+                <outline text="显示/生效条件：• 工作模式 （参见手册页 218） = 4..20mA 输出或 HART 从站+4..20mA 输出 • 电流模式 （参见手册页 219） ≠ 固定电流" />
+                <outline text="权限：读取：操作员；写入：不可写" />
+                <outline text="手册页：223" />
+              </outline>
+              <outline text="输出值">
+                <outline text="含义：以 mA 显示输出值。" />
+                <outline text="可配置内容：只读显示，不可配置" />
+                <outline text="显示/生效条件：工作模式 （参见手册页 218） = 4..20mA 输出或 HART 从站+4..20mA 输出" />
+                <outline text="权限：读取：操作员；写入：不可写" />
+                <outline text="手册页：223" />
+              </outline>
+              <outline text="过程变量">
+                <outline text="含义：定义测量变量的类型。" />
+                <outline text="可配置内容">
+                  <outline text="物位(或线性化值)" />
+                  <outline text="温度" />
+                  <outline text="压力" />
+                  <outline text="密度" />
+                </outline>
+                <outline text="出厂设置：物位(或线性化值)" />
+                <outline text="显示/生效条件：工作模式 （参见手册页 218） = 4..20mA 输入或 HART 主站+4..20mA 输入" />
+                <outline text="权限：读取：操作员；写入：维护" />
+                <outline text="手册页：224" />
+              </outline>
+              <outline text="模拟量输入 0% 值">
+                <outline text="含义：与输入电流 0%（4mA）相对应的值。" />
+                <outline text="可配置内容：带符号浮点数" />
+                <outline text="出厂设置：0 mm" />
+                <outline text="显示/生效条件：工作模式 （参见手册页 218） = 4..20mA 输入或 HART 主站+4..20mA 输入" />
+                <outline text="权限：读取：操作员；写入：维护" />
+                <outline text="手册页：224" />
+              </outline>
+              <outline text="模拟量输入 100% 值">
+                <outline text="含义：与输入电流 100%（20mA）相对应的值。" />
+                <outline text="可配置内容：带符号浮点数" />
+                <outline text="出厂设置：0 mm" />
+                <outline text="显示/生效条件：工作模式 （参见手册页 218） = 4..20mA 输入或 HART 主站+4..20mA 输入" />
+                <outline text="权限：读取：操作员；写入：维护" />
+                <outline text="手册页：224" />
+              </outline>
+              <outline text="错误事件类型">
+                <outline text="含义：定义模拟量 I/O 模块中出现错误或输出超出范围时的事件消息类型（报警/警告）。" />
+                <outline text="可配置内容">
+                  <outline text="无" />
+                  <outline text="警告" />
+                  <outline text="报警" />
+                </outline>
+                <outline text="出厂设置：警告" />
+                <outline text="显示/生效条件：工作模式 （参见手册页 218） ≠ 禁用或 HART 主站" />
+                <outline text="权限：读取：操作员；写入：维护" />
+                <outline text="手册页：225" />
+              </outline>
+              <outline text="过程值">
+                <outline text="含义：显示按客户单位缩放的输入值。" />
+                <outline text="可配置内容：只读显示，不可配置" />
+                <outline text="显示/生效条件：工作模式 （参见手册页 218） = 4..20mA 输入或 HART 主站+4..20mA 输入" />
+                <outline text="权限：读取：操作员；写入：不可写" />
+                <outline text="手册页：225" />
+              </outline>
+              <outline text="输入值 mA">
+                <outline text="含义：显示以 mA 为单位的输入值。" />
+                <outline text="可配置内容：只读显示，不可配置" />
+                <outline text="显示/生效条件：工作模式 （参见手册页 218） = 4..20mA 输入或 HART 主站+4..20mA 输入" />
+                <outline text="权限：读取：操作员；写入：不可写" />
+                <outline text="手册页：225" />
+              </outline>
+              <outline text="输入值百分比">
+                <outline text="含义：将输入值显示为整个 4...20mA 电流范围的百分比。" />
+                <outline text="可配置内容：只读显示，不可配置" />
+                <outline text="显示/生效条件：工作模式 （参见手册页 218） = 4..20mA 输入或 HART 主站+4..20mA 输入" />
+                <outline text="权限：读取：操作员；写入：不可写" />
+                <outline text="手册页：226" />
+              </outline>
+              <outline text="阻尼因子">
+                <outline text="含义：定义阻尼常数（以秒为单位）。" />
+                <outline text="可配置内容：0 … 999.9 s" />
+                <outline text="出厂设置：0s" />
+                <outline text="显示/生效条件：工作模式 （参见手册页 218） ≠ 禁用或 HART 主站" />
+                <outline text="权限：读取：操作员；写入：维护" />
+                <outline text="手册页：226" />
+              </outline>
+              <outline text="用于 SIL/WHG">
+                <outline text="含义：确定数字量 I/O 模块是否处于 SIL/WHG 模式。" />
+                <outline text="可配置内容">
+                  <outline text="开启" />
+                  <outline text="禁用" />
+                </outline>
+                <outline text="出厂设置：禁用" />
+                <outline text="显示/生效条件：• 工作模式 （参见手册页 218） = 4..20mA 输出或 HART 从站+4..20mA 输出 • 仪表具有 SIL 认证。" />
+                <outline text="权限：读取：操作员；写入：维护" />
+                <outline text="手册页：226" />
+              </outline>
+              <outline text="预期的 SIL/WHG 链">
+                <outline text="含义：显示预期的 SIL/WHG 安全链信息；手册未提供进一步说明。" />
+                <outline text="可配置内容：只读显示，不可配置" />
+                <outline text="显示/生效条件：• 工作模式 （参见手册页 218） = 4..20mA 输出或 HART 从站+4..20mA 输出 • 仪表具有 SIL 认证。" />
+                <outline text="权限：读取：操作员；写入：不可写" />
+                <outline text="手册页：227" />
+              </outline>
+            </outline>
+            <outline text="数字量 Xx-x">
+              <outline text="工作模式">
+                <outline text="含义：定义数字量 I/O 模块的操作模式。" />
+                <outline text="可配置内容">
+                  <outline text="禁用" />
+                  <outline text="无源输出" />
+                  <outline text="无源输入" />
+                  <outline text="有源输入" />
+                </outline>
+                <outline text="出厂设置：禁用" />
+                <outline text="手册页：228" />
+              </outline>
+              <outline text="数字量输入源">
+                <outline text="含义：定义用数字输出指示哪个设备状态。" />
+                <outline text="可配置内容：只读显示，不可配置" />
+                <outline text="出厂设置：无" />
+                <outline text="显示/生效条件：工作模式 （参见手册页 228） = 无源输出" />
+                <outline text="手册页：229" />
+              </outline>
+              <outline text="输入值">
+                <outline text="含义：显示数字输入值。" />
+                <outline text="可配置内容：只读显示，不可配置" />
+                <outline text="显示/生效条件：工作模式 （参见手册页 228） = “无源输入” 选项或“有源输入” 选项" />
+                <outline text="权限：读取：操作员；写入：不可写" />
+                <outline text="手册页：229" />
+              </outline>
+              <outline text="触点类型">
+                <outline text="含义：确定输入或输出的切换动作。" />
+                <outline text="可配置内容">
+                  <outline text="常开" />
+                  <outline text="常闭" />
+                </outline>
+                <outline text="出厂设置：常开" />
+                <outline text="显示/生效条件：工作模式 （参见手册页 228） ≠ 禁用" />
+                <outline text="手册页：230" />
+              </outline>
+              <outline text="输出模拟">
+                <outline text="含义：将输出设置为特定仿真值。" />
+                <outline text="可配置内容">
+                  <outline text="禁用" />
+                  <outline text="模拟激活" />
+                  <outline text="模拟未激活" />
+                  <outline text="故障 1" />
+                  <outline text="故障 2" />
+                </outline>
+                <outline text="出厂设置：禁用" />
+                <outline text="显示/生效条件：工作模式 （参见手册页 228） = 无源输出" />
+                <outline text="权限：读取：操作员；写入：维护" />
+                <outline text="手册页：230" />
+              </outline>
+              <outline text="输出值">
+                <outline text="含义：显示数字量输出值。" />
+                <outline text="可配置内容：只读显示，不可配置" />
+                <outline text="显示/生效条件：工作模式 （参见手册页 228） = 无源输出" />
+                <outline text="权限：读取：操作员；写入：不可写" />
+                <outline text="手册页：231" />
+              </outline>
+              <outline text="Readback value">
+                <outline text="含义：显示输出的反馈值。" />
+                <outline text="可配置内容：只读显示，不可配置" />
+                <outline text="显示/生效条件：工作模式 （参见手册页 228） = 无源输出" />
+                <outline text="权限：读取：操作员；写入：不可写" />
+                <outline text="手册页：231" />
+              </outline>
+              <outline text="用于 SIL/WHG">
+                <outline text="含义：确定数字量 I/O 模块是否处于 SIL/WHG 模式。" />
+                <outline text="可配置内容">
+                  <outline text="开启" />
+                  <outline text="禁用" />
+                </outline>
+                <outline text="出厂设置：禁用" />
+                <outline text="显示/生效条件：• 工作模式 （参见手册页 228） = 无源输出 • 仪表具有 SIL 认证。" />
+                <outline text="权限：读取：操作员；写入：维护" />
+                <outline text="手册页：231" />
+              </outline>
+              <outline text="预期的 SIL/WHG 链">
+                <outline text="含义：显示预期的 SIL/WHG 安全链信息；手册未提供进一步说明。" />
+                <outline text="可配置内容：只读显示，不可配置" />
+                <outline text="显示/生效条件：工作模式 （参见手册页 228） = 无源输出" />
+                <outline text="权限：读取：服务；写入：不可写" />
+                <outline text="手册页：232" />
+              </outline>
+            </outline>
+            <outline text="数字量输入映射">
+              <outline text="数字量输入源 1">
+                <outline text="含义：选择数字量输入源#1（罐表命令）。" />
+                <outline text="可配置内容">
+                  <outline text="无" />
+                  <outline text="数字量 A1-2（取决于仪表选型和设置）" />
+                  <outline text="数字量 A3-4（取决于仪表选型和设置）" />
+                  <outline text="数字量 B1-2（取决于仪表选型和设置）" />
+                  <outline text="数字量 B3-4（取决于仪表选型和设置）" />
+                  <outline text="数字量 C1-2（取决于仪表选型和设置）" />
+                  <outline text="数字量 C3-4（取决于仪表选型和设置）" />
+                  <outline text="数字量 D1-2（取决于仪表选型和设置）" />
+                  <outline text="数字量 D3-4（取决于仪表选型和设置）" />
+                </outline>
+                <outline text="出厂设置：无" />
+                <outline text="权限：读取：操作员；写入：维护" />
+                <outline text="手册页：233" />
+              </outline>
+              <outline text="数字量输入源 2">
+                <outline text="含义：选择数字量输入源#2（罐表命令）。" />
+                <outline text="可配置内容">
+                  <outline text="无" />
+                  <outline text="数字量 A1-2（取决于仪表选型和设置）" />
+                  <outline text="数字量 A3-4（取决于仪表选型和设置）" />
+                  <outline text="数字量 B1-2（取决于仪表选型和设置）" />
+                  <outline text="数字量 B3-4（取决于仪表选型和设置）" />
+                  <outline text="数字量 C1-2（取决于仪表选型和设置）" />
+                  <outline text="数字量 C3-4（取决于仪表选型和设置）" />
+                  <outline text="数字量 D1-2（取决于仪表选型和设置）" />
+                  <outline text="数字量 D3-4（取决于仪表选型和设置）" />
+                </outline>
+                <outline text="出厂设置：无" />
+                <outline text="权限：读取：操作员；写入：维护" />
+                <outline text="手册页：233" />
+              </outline>
+              <outline text="Gauge command 0">
+                <outline text="含义：数字量输入组合 0（DI2=0, DI1=0）关联的罐表命令。" />
+                <outline text="可配置内容">
+                  <outline text="Stop（取决于仪表选型和设置）" />
+                  <outline text="Level" />
+                  <outline text="Up（取决于仪表选型和设置）" />
+                  <outline text="Bottom level（取决于仪表选型和设置）" />
+                  <outline text="Upper I/F level（取决于仪表选型和设置）" />
+                  <outline text="Lower I/F level（取决于仪表选型和设置）" />
+                  <outline text="Upper density（取决于仪表选型和设置）" />
+                  <outline text="Middle density（取决于仪表选型和设置）" />
+                  <outline text="Lower density（取决于仪表选型和设置）" />
+                  <outline text="Repeatability（取决于仪表选型和设置）" />
+                  <outline text="Water dip（取决于仪表选型和设置）" />
+                  <outline text="Release overtension（取决于仪表选型和设置）" />
+                  <outline text="Tank profile（取决于仪表选型和设置）" />
+                  <outline text="Interface profile（取决于仪表选型和设置）" />
+                  <outline text="Manual profile（取决于仪表选型和设置）" />
+                  <outline text="Level standby（取决于仪表选型和设置）" />
+                  <outline text="Offset standby（取决于仪表选型和设置）" />
+                </outline>
+                <outline text="出厂设置：Level" />
+                <outline text="显示/生效条件：数字量输入源 1 （参见手册页 233） ≠ 无" />
+                <outline text="权限：读取：操作员；写入：维护" />
+                <outline text="手册页：234" />
+              </outline>
+              <outline text="Gauge command 1">
+                <outline text="含义：数字量输入组合 1（DI2=0, DI1=1）关联的罐表命令。" />
+                <outline text="可配置内容">
+                  <outline text="Stop（取决于仪表选型和设置）" />
+                  <outline text="Level" />
+                  <outline text="Up（取决于仪表选型和设置）" />
+                  <outline text="Bottom level（取决于仪表选型和设置）" />
+                  <outline text="Upper I/F level（取决于仪表选型和设置）" />
+                  <outline text="Lower I/F level（取决于仪表选型和设置）" />
+                  <outline text="Upper density（取决于仪表选型和设置）" />
+                  <outline text="Middle density（取决于仪表选型和设置）" />
+                  <outline text="Lower density（取决于仪表选型和设置）" />
+                  <outline text="Repeatability（取决于仪表选型和设置）" />
+                  <outline text="Water dip（取决于仪表选型和设置）" />
+                  <outline text="Release overtension（取决于仪表选型和设置）" />
+                  <outline text="Tank profile（取决于仪表选型和设置）" />
+                  <outline text="Interface profile（取决于仪表选型和设置）" />
+                  <outline text="Manual profile（取决于仪表选型和设置）" />
+                  <outline text="Level standby（取决于仪表选型和设置）" />
+                  <outline text="Offset standby（取决于仪表选型和设置）" />
+                </outline>
+                <outline text="出厂设置：Up" />
+                <outline text="显示/生效条件：数字量输入源 1 （参见手册页 233） ≠ 无" />
+                <outline text="权限：读取：操作员；写入：维护" />
+                <outline text="手册页：234" />
+              </outline>
+              <outline text="Gauge command 2">
+                <outline text="含义：数字量输入组合 2（DI2=1, DI1=0）关联的罐表命令。" />
+                <outline text="可配置内容">
+                  <outline text="Stop（取决于仪表选型和设置）" />
+                  <outline text="Level" />
+                  <outline text="Up（取决于仪表选型和设置）" />
+                  <outline text="Bottom level（取决于仪表选型和设置）" />
+                  <outline text="Upper I/F level（取决于仪表选型和设置）" />
+                  <outline text="Lower I/F level（取决于仪表选型和设置）" />
+                  <outline text="Upper density（取决于仪表选型和设置）" />
+                  <outline text="Middle density（取决于仪表选型和设置）" />
+                  <outline text="Lower density（取决于仪表选型和设置）" />
+                  <outline text="Repeatability（取决于仪表选型和设置）" />
+                  <outline text="Water dip（取决于仪表选型和设置）" />
+                  <outline text="Release overtension（取决于仪表选型和设置）" />
+                  <outline text="Tank profile（取决于仪表选型和设置）" />
+                  <outline text="Interface profile（取决于仪表选型和设置）" />
+                  <outline text="Manual profile（取决于仪表选型和设置）" />
+                  <outline text="Level standby（取决于仪表选型和设置）" />
+                  <outline text="Offset standby（取决于仪表选型和设置）" />
+                </outline>
+                <outline text="出厂设置：Stop" />
+                <outline text="显示/生效条件：• 数字量输入源 1 （参见手册页 233） ≠ 无 • 数字量输入源 2 （参见手册页 233） ≠ 无" />
+                <outline text="权限：读取：操作员；写入：维护" />
+                <outline text="手册页：235" />
+              </outline>
+              <outline text="Gauge command 3">
+                <outline text="含义：数字量输入组合 3（DI2=1, DI1=1）关联的罐表命令。" />
+                <outline text="可配置内容">
+                  <outline text="Stop（取决于仪表选型和设置）" />
+                  <outline text="Level" />
+                  <outline text="Up（取决于仪表选型和设置）" />
+                  <outline text="Bottom level（取决于仪表选型和设置）" />
+                  <outline text="Upper I/F level（取决于仪表选型和设置）" />
+                  <outline text="Lower I/F level（取决于仪表选型和设置）" />
+                  <outline text="Upper density（取决于仪表选型和设置）" />
+                  <outline text="Middle density（取决于仪表选型和设置）" />
+                  <outline text="Lower density（取决于仪表选型和设置）" />
+                  <outline text="Repeatability（取决于仪表选型和设置）" />
+                  <outline text="Water dip（取决于仪表选型和设置）" />
+                  <outline text="Release overtension（取决于仪表选型和设置）" />
+                  <outline text="Tank profile（取决于仪表选型和设置）" />
+                  <outline text="Interface profile（取决于仪表选型和设置）" />
+                  <outline text="Manual profile（取决于仪表选型和设置）" />
+                  <outline text="Level standby（取决于仪表选型和设置）" />
+                  <outline text="Offset standby（取决于仪表选型和设置）" />
+                </outline>
+                <outline text="出厂设置：Upper I/F level" />
+                <outline text="显示/生效条件：• 数字量输入源 1 （参见手册页 233） ≠ 无 • 数字量输入源 2 （参见手册页 233） ≠ 无" />
+                <outline text="权限：读取：操作员；写入：维护" />
+                <outline text="手册页：236" />
+              </outline>
+            </outline>
+          </outline>
+          <outline text="通信">
+            <outline text="Modbus X1-4（X 为实际插槽）">
+              <outline text="通信接口协议">
+                <outline text="含义：显示通信协议的类型。" />
+                <outline text="可配置内容：只读显示，不可配置" />
+                <outline text="权限：读取：操作员；写入：不可写" />
+                <outline text="手册页：237" />
+              </outline>
+              <outline text="设置">
+                <outline text="波特率">
+                  <outline text="含义：定义了通信的波特率。" />
+                  <outline text="可配置内容">
+                    <outline text="600 BAUD" />
+                    <outline text="1200 BAUD" />
+                    <outline text="2400 BAUD" />
+                    <outline text="4800 BAUD" />
+                    <outline text="9600 BAUD（取决于仪表选型和设置）" />
+                    <outline text="19200 BAUD（取决于仪表选型和设置）" />
+                  </outline>
+                  <outline text="出厂设置：9600 BAUD" />
+                  <outline text="显示/生效条件：通信接口协议 （参见手册页 237） = MODBUS" />
+                  <outline text="权限：读取：操作员；写入：维护" />
+                  <outline text="手册页：238" />
+                </outline>
+                <outline text="奇偶校验">
+                  <outline text="含义：定义 Modbus 通信的奇偶校验。" />
+                  <outline text="可配置内容">
+                    <outline text="奇校验" />
+                    <outline text="偶校验" />
+                    <outline text="无/1 位停止位" />
+                    <outline text="无/2 位停止位" />
+                  </outline>
+                  <outline text="出厂设置：无/1 位停止位" />
+                  <outline text="显示/生效条件：通信接口协议 （参见手册页 237） = MODBUS" />
+                  <outline text="权限：读取：操作员；写入：维护" />
+                  <outline text="手册页：238" />
+                </outline>
+                <outline text="Modbus 地址">
+                  <outline text="含义：定义设备的 Modbus 地址。" />
+                  <outline text="可配置内容：1 … 247" />
+                  <outline text="出厂设置：1" />
+                  <outline text="显示/生效条件：通信接口协议 （参见手册页 237） = MODBUS" />
+                  <outline text="权限：读取：操作员；写入：维护" />
+                  <outline text="手册页：239" />
+                </outline>
+                <outline text="浮点数字节顺序">
+                  <outline text="含义：设置浮点值在 Modbus 上的传输格式。" />
+                  <outline text="可配置内容">
+                    <outline text="标准 3-2-1-0" />
+                    <outline text="交换 0-1-2-3" />
+                    <outline text="WW 交换 1-0-3-2" />
+                    <outline text="WW 交换 2-3-0-1" />
+                  </outline>
+                  <outline text="出厂设置：交换 0-1-2-3" />
+                  <outline text="显示/生效条件：通信接口协议 （参见手册页 237） = MODBUS" />
+                  <outline text="权限：读取：操作员；写入：维护" />
+                  <outline text="手册页：239" />
+                </outline>
+                <outline text="总线终端电阻">
+                  <outline text="含义：激活或停用设备上的总线终端电阻。 只能在回路中的最后一个设备上激活。" />
+                  <outline text="可配置内容">
+                    <outline text="关" />
+                    <outline text="开" />
+                  </outline>
+                  <outline text="出厂设置：关" />
+                  <outline text="显示/生效条件：通信接口协议 （参见手册页 237） = MODBUS" />
+                  <outline text="权限：读取：操作员；写入：维护" />
+                  <outline text="手册页：239" />
+                </outline>
+                <outline text="兼容模式">
+                  <outline text="含义：定义兼容模式。" />
+                  <outline text="可配置内容">
+                    <outline text="Nxx5xx" />
+                    <outline text="Nxx8x" />
+                  </outline>
+                  <outline text="出厂设置：Nxx8x" />
+                  <outline text="权限：读取：操作员；写入：维护" />
+                  <outline text="手册页：243" />
+                </outline>
+              </outline>
+            </outline>
+            <outline text="V1 X1-4（X 为实际插槽）">
+              <outline text="通信接口协议">
+                <outline text="含义：显示通信协议的类型。" />
+                <outline text="可配置内容：只读显示，不可配置" />
+                <outline text="权限：读取：操作员；写入：不可写" />
+                <outline text="手册页：237" />
+              </outline>
+              <outline text="设置">
+                <outline text="通信协议版本">
+                  <outline text="含义：定义使用 V1 协议的哪种变体。" />
+                  <outline text="可配置内容：•无 • V1 *" />
+                  <outline text="出厂设置：无" />
+                  <outline text="权限：读取：操作员；写入：维护" />
+                  <outline text="手册页：241" />
+                </outline>
+                <outline text="V1 通信地址">
+                  <outline text="含义：V1 通信设备地址。" />
+                  <outline text="可配置内容：0 … 99" />
+                  <outline text="出厂设置：1" />
+                  <outline text="显示/生效条件：通信协议版本 （参见手册页 241） = V1" />
+                  <outline text="权限：读取：操作员；写入：维护" />
+                  <outline text="手册页：241" />
+                </outline>
+                <outline text="V1 通信旧设备地址">
+                  <outline text="含义：V1 通信老设备地址。" />
+                  <outline text="可配置内容：0 … 255" />
+                  <outline text="出厂设置：1" />
+                  <outline text="显示/生效条件：通信协议版本 （参见手册页 241）" />
+                  <outline text="权限：读取：操作员；写入：维护" />
+                  <outline text="手册页：241" />
+                </outline>
+                <outline text="液位传输范围">
+                  <outline text="含义：定义了液位的传输范围。" />
+                  <outline text="可配置内容">
+                    <outline text="+ve" />
+                    <outline text="+ve &amp; -ve" />
+                  </outline>
+                  <outline text="出厂设置：+ve" />
+                  <outline text="显示/生效条件：通信接口协议 （参见手册页 237） = V1" />
+                  <outline text="权限：读取：操作员；写入：维护" />
+                  <outline text="手册页：242" />
+                </outline>
+                <outline text="线路阻抗">
+                  <outline text="含义：调整通信线路阻抗。" />
+                  <outline text="可配置内容：0 … 15" />
+                  <outline text="出厂设置：15" />
+                  <outline text="显示/生效条件：通信接口协议 （参见手册页 237） = V1" />
+                  <outline text="权限：读取：操作员；写入：维护" />
+                  <outline text="手册页：242" />
+                </outline>
+                <outline text="兼容模式">
+                  <outline text="含义：定义兼容模式。" />
+                  <outline text="可配置内容">
+                    <outline text="Nxx5xx" />
+                    <outline text="Nxx8x" />
+                  </outline>
+                  <outline text="出厂设置：Nxx8x" />
+                  <outline text="权限：读取：操作员；写入：维护" />
+                  <outline text="手册页：243" />
+                </outline>
+              </outline>
+              <outline text="V1 输入选择器">
+                <outline text="报警 1 输入源">
+                  <outline text="含义：定义了 V1 协议报警 1 状态时输出的数值。" />
+                  <outline text="可配置内容">
+                    <outline text="无" />
+                    <outline text="报警 1-4 任意" />
+                    <outline text="报警 1-4 高高" />
+                    <outline text="报警 1-4 高或高高" />
+                    <outline text="报警 1-4 高" />
+                    <outline text="报警 1-4 低" />
+                    <outline text="报警 1-4 低或低低" />
+                    <outline text="报警 1-4 低低" />
+                  </outline>
+                  <outline text="出厂设置：无" />
+                  <outline text="权限：读取：操作员；写入：维护" />
+                  <outline text="手册页：244" />
+                </outline>
+                <outline text="报警 2 输入源">
+                  <outline text="含义：定义了 V1 协议报警 2 状态时输出的数值。" />
+                  <outline text="可配置内容">
+                    <outline text="无" />
+                    <outline text="报警 1-4 任意" />
+                    <outline text="报警 1-4 高高" />
+                    <outline text="报警 1-4 高或高高" />
+                    <outline text="报警 1-4 高" />
+                    <outline text="报警 1-4 低" />
+                    <outline text="报警 1-4 低或低低" />
+                    <outline text="报警 1-4 低低" />
+                  </outline>
+                  <outline text="出厂设置：无" />
+                  <outline text="权限：读取：操作员；写入：维护" />
+                  <outline text="手册页：244" />
+                </outline>
+                <outline text="百分比值选择器">
+                  <outline text="含义：选择在 V1 协议 Z0/Z1 信息中，0~100%传输对应的数值。" />
+                  <outline text="可配置内容">
+                    <outline text="无" />
+                    <outline text="储罐液位%" />
+                    <outline text="储罐空高%" />
+                    <outline text="AIO B1-3 值%（取决于仪表选型和设置）" />
+                    <outline text="AIO C1-3 值%（取决于仪表选型和设置）" />
+                  </outline>
+                  <outline text="出厂设置：无" />
+                  <outline text="权限：读取：操作员；写入：维护" />
+                  <outline text="手册页：245" />
+                </outline>
+              </outline>
+            </outline>
+            <outline text="WM550 X1-4（X 为实际插槽）">
+              <outline text="通信接口协议">
+                <outline text="含义：显示通信协议的类型。" />
+                <outline text="可配置内容：只读显示，不可配置" />
+                <outline text="权限：读取：操作员；写入：不可写" />
+                <outline text="手册页：237" />
+              </outline>
+              <outline text="设置">
+                <outline text="波特率">
+                  <outline text="含义：定义 WM550 通信的波特率。" />
+                  <outline text="可配置内容">
+                    <outline text="600 BAUD" />
+                    <outline text="1200 BAUD" />
+                    <outline text="2400 BAUD" />
+                    <outline text="4800 BAUD" />
+                  </outline>
+                  <outline text="出厂设置：2400 BAUD" />
+                  <outline text="显示/生效条件：通信接口协议 （参见手册页 237） = “WM550” 选项" />
+                  <outline text="权限：读取：操作员；写入：维护" />
+                  <outline text="手册页：245" />
+                </outline>
+                <outline text="WM550 address">
+                  <outline text="含义：说明仪表的 WM550 地址。" />
+                  <outline text="可配置内容：0 … 63" />
+                  <outline text="出厂设置：1" />
+                  <outline text="手册页：246" />
+                </outline>
+                <outline text="软件 ID">
+                  <outline text="含义：定义 WM550 任务 32 的内容。 WM550 任务 32 的详细信息参见《特殊文档》SD02567G。" />
+                  <outline text="可配置内容：0 … 9 999" />
+                  <outline text="出厂设置：2 000" />
+                  <outline text="显示/生效条件：通信接口协议 （参见手册页 237） = “WM550” 选项" />
+                  <outline text="手册页：246" />
+                </outline>
+              </outline>
+              <outline text="WM550 input selector">
+                <outline text="数字量 1 选择器">
+                  <outline text="含义：确定在相应的 WM550 任务中作为报警位[n]值传输的输入源。" />
+                  <outline text="可配置内容">
+                    <outline text="无" />
+                    <outline text="平衡标志选项显示与否取决于仪表选型和设置。" />
+                    <outline text="报警 1...4 任意" />
+                    <outline text="报警 1...4 高高" />
+                    <outline text="报警 1...4 高或高高" />
+                    <outline text="报警 1...4 高" />
+                    <outline text="报警 1...4 低" />
+                    <outline text="报警 1...4 低或低低" />
+                    <outline text="报警 1...4 低低" />
+                    <outline text="数字量 Xx-x" />
+                  </outline>
+                  <outline text="出厂设置：无" />
+                  <outline text="权限：读取：操作员；写入：维护" />
+                  <outline text="手册页：246" />
+                </outline>
+              </outline>
+            </outline>
+            <outline text="HART 输出">
+              <outline text="设置">
+                <outline text="系统轮询地址">
+                  <outline text="含义：Hart 通信地址。" />
+                  <outline text="可配置内容：0 … 63" />
+                  <outline text="出厂设置：15" />
+                  <outline text="权限：读取：操作员；写入：维护" />
+                  <outline text="手册页：248" />
+                </outline>
+                <outline text="前导码数">
+                  <outline text="含义：设置 HART 电报的前导序数。" />
+                  <outline text="可配置内容：5 … 20" />
+                  <outline text="出厂设置：5" />
+                  <outline text="权限：读取：操作员；写入：维护" />
+                  <outline text="手册页：248" />
+                </outline>
+                <outline text="PV 数据源">
+                  <outline text="含义：定义 PV 数值的配置是按照模拟量输出（Hart 从设备）还是客户自定义（在 Hart tunneling 模式下）。" />
+                  <outline text="可配置内容">
+                    <outline text="AIO B1-3（取决于仪表选型和设置）" />
+                    <outline text="AIO C1-3（取决于仪表选型和设置）" />
+                    <outline text="自定义" />
+                  </outline>
+                  <outline text="出厂设置：自定义" />
+                  <outline text="权限：读取：维护；写入：维护" />
+                  <outline text="手册页：248" />
+                </outline>
+                <outline text="分配 PV">
+                  <outline text="含义：将测量变量分配给主要动态参数（PV）。 附加信息： 电流输出输出分配的测量变量。" />
+                  <outline text="可配置内容">
+                    <outline text="无" />
+                    <outline text="储罐液位" />
+                    <outline text="储罐空高" />
+                    <outline text="液位测量值" />
+                    <outline text="距离" />
+                    <outline text="浮子位置" />
+                    <outline text="水位" />
+                    <outline text="上界面液位" />
+                    <outline text="下界面液位" />
+                    <outline text="罐底位置" />
+                    <outline text="储罐参考高度" />
+                    <outline text="液相温度值" />
+                    <outline text="气相温度值" />
+                    <outline text="环境(空气)温度值" />
+                    <outline text="视密度" />
+                    <outline text="平均梯度密度" />
+                    <outline text="上层介质密度" />
+                    <outline text="中间介质密度" />
+                    <outline text="下层介质密度" />
+                    <outline text="P1(底部)值" />
+                    <outline text="P2(中部)值" />
+                    <outline text="P3(顶部)值" />
+                    <outline text="GP 1 值" />
+                    <outline text="GP 2 值" />
+                    <outline text="GP 3 值" />
+                    <outline text="GP 4 值" />
+                  </outline>
+                  <outline text="出厂设置：储罐液位" />
+                  <outline text="显示/生效条件：PV 数据源 （参见手册页 248） = 自定义" />
+                  <outline text="权限：读取：操作员；写入：维护" />
+                  <outline text="手册页：249" />
+                </outline>
+                <outline text="0%值">
+                  <outline text="含义：PV 数值的 0%。" />
+                  <outline text="可配置内容：带符号浮点数" />
+                  <outline text="出厂设置：0 mm" />
+                  <outline text="显示/生效条件：PV 数据源 = 自定义" />
+                  <outline text="权限：读取：操作员；写入：维护" />
+                  <outline text="手册页：250" />
+                </outline>
+                <outline text="100 % 值">
+                  <outline text="含义：PV 数值的 100%数值。" />
+                  <outline text="可配置内容：带符号浮点数" />
+                  <outline text="出厂设置：0 mm" />
+                  <outline text="显示/生效条件：PV 数据源 = 自定义" />
+                  <outline text="权限：读取：操作员；写入：维护" />
+                  <outline text="手册页：250" />
+                </outline>
+                <outline text="PV mA 选择器">
+                  <outline text="含义：为 Hart 主参数 PV 分配电流值。" />
+                  <outline text="可配置内容">
+                    <outline text="无" />
+                    <outline text="AIO B1-3 毫安值（取决于仪表选型和设置）" />
+                    <outline text="AIO C1-3 毫安值（取决于仪表选型和设置）" />
+                  </outline>
+                  <outline text="出厂设置：无" />
+                  <outline text="显示/生效条件：PV 数据源 = 自定义" />
+                  <outline text="权限：读取：操作员；写入：维护" />
+                  <outline text="手册页：250" />
+                </outline>
+                <outline text="PV 值">
+                  <outline text="含义：显示主要动态变量（PV）的当前测量值" />
+                  <outline text="可配置内容：只读显示，不可配置" />
+                  <outline text="权限：读取：操作员；写入：不可写" />
+                  <outline text="手册页：251" />
+                </outline>
+                <outline text="量程百分比">
+                  <outline text="含义：显示主要变量(PV)的百分比值(0...100%)。" />
+                  <outline text="可配置内容：只读显示，不可配置" />
+                  <outline text="权限：读取：操作员；写入：不可写" />
+                  <outline text="手册页：251" />
+                </outline>
+                <outline text="分配 SV">
+                  <outline text="含义：将测量变量分配给第二动态参数（SV）" />
+                  <outline text="可配置内容">
+                    <outline text="无" />
+                    <outline text="储罐液位" />
+                    <outline text="储罐空高" />
+                    <outline text="液位测量值" />
+                    <outline text="距离" />
+                    <outline text="浮子位置" />
+                    <outline text="水位" />
+                    <outline text="上界面液位" />
+                    <outline text="下界面液位" />
+                    <outline text="罐底位置" />
+                    <outline text="储罐参考高度" />
+                    <outline text="液相温度值" />
+                    <outline text="气相温度值" />
+                    <outline text="环境(空气)温度值" />
+                    <outline text="视密度" />
+                    <outline text="平均梯度密度" />
+                    <outline text="上层介质密度" />
+                    <outline text="中间介质密度" />
+                    <outline text="下层介质密度" />
+                    <outline text="P1(底部)值" />
+                    <outline text="P2(中部)值" />
+                    <outline text="P3(顶部)值" />
+                    <outline text="GP 1 值" />
+                    <outline text="GP 2 值" />
+                    <outline text="GP 3 值" />
+                    <outline text="GP 4 值" />
+                  </outline>
+                  <outline text="出厂设置：液相温度值" />
+                  <outline text="权限：读取：操作员；写入：维护" />
+                  <outline text="手册页：251" />
+                </outline>
+                <outline text="SV 值">
+                  <outline text="含义：显示第二动态变量（SV）的当前测量值" />
+                  <outline text="可配置内容：只读显示，不可配置" />
+                  <outline text="显示/生效条件：分配 SV （参见手册页 251） ≠ 无" />
+                  <outline text="权限：读取：操作员；写入：不可写" />
+                  <outline text="手册页：252" />
+                </outline>
+                <outline text="分配 TV">
+                  <outline text="含义：将测量变量分配给第三动态参数（TV）" />
+                  <outline text="可配置内容">
+                    <outline text="无" />
+                    <outline text="储罐液位" />
+                    <outline text="储罐空高" />
+                    <outline text="液位测量值" />
+                    <outline text="距离" />
+                    <outline text="浮子位置" />
+                    <outline text="水位" />
+                    <outline text="上界面液位" />
+                    <outline text="下界面液位" />
+                    <outline text="罐底位置" />
+                    <outline text="储罐参考高度" />
+                    <outline text="液相温度值" />
+                    <outline text="气相温度值" />
+                    <outline text="环境(空气)温度值" />
+                    <outline text="视密度" />
+                    <outline text="平均梯度密度" />
+                    <outline text="上层介质密度" />
+                    <outline text="中间介质密度" />
+                    <outline text="下层介质密度" />
+                    <outline text="P1(底部)值" />
+                    <outline text="P2(中部)值" />
+                    <outline text="P3(顶部)值" />
+                    <outline text="GP 1 值" />
+                    <outline text="GP 2 值" />
+                    <outline text="GP 3 值" />
+                    <outline text="GP 4 值" />
+                  </outline>
+                  <outline text="出厂设置：水位" />
+                  <outline text="权限：读取：操作员；写入：维护" />
+                  <outline text="手册页：252" />
+                </outline>
+                <outline text="TV 值">
+                  <outline text="含义：显示第三动态变量（TV）对应的当前测量值" />
+                  <outline text="可配置内容：只读显示，不可配置" />
+                  <outline text="显示/生效条件：分配 TV （参见手册页 252） ≠ 无" />
+                  <outline text="权限：读取：操作员；写入：不可写" />
+                  <outline text="手册页：253" />
+                </outline>
+                <outline text="分配 QV">
+                  <outline text="含义：将测量变量分配给第四动态参数（QV）" />
+                  <outline text="可配置内容">
+                    <outline text="无" />
+                    <outline text="储罐液位" />
+                    <outline text="储罐空高" />
+                    <outline text="液位测量值" />
+                    <outline text="距离" />
+                    <outline text="浮子位置" />
+                    <outline text="水位" />
+                    <outline text="上界面液位" />
+                    <outline text="下界面液位" />
+                    <outline text="罐底位置" />
+                    <outline text="储罐参考高度" />
+                    <outline text="液相温度值" />
+                    <outline text="气相温度值" />
+                    <outline text="环境(空气)温度值" />
+                    <outline text="视密度" />
+                    <outline text="平均梯度密度" />
+                    <outline text="上层介质密度" />
+                    <outline text="中间介质密度" />
+                    <outline text="下层介质密度" />
+                    <outline text="P1(底部)值" />
+                    <outline text="P2(中部)值" />
+                    <outline text="P3(顶部)值" />
+                    <outline text="GP 1 值" />
+                    <outline text="GP 2 值" />
+                    <outline text="GP 3 值" />
+                    <outline text="GP 4 值" />
+                  </outline>
+                  <outline text="出厂设置：视密度" />
+                  <outline text="权限：读取：操作员；写入：维护" />
+                  <outline text="手册页：253" />
+                </outline>
+                <outline text="QV 值">
+                  <outline text="含义：显示第四动态变量（QV）对应的当前测量值" />
+                  <outline text="可配置内容：只读显示，不可配置" />
+                  <outline text="显示/生效条件：分配 QV （参见手册页 253） ≠ 无" />
+                  <outline text="权限：读取：操作员；写入：不可写" />
+                  <outline text="手册页：254" />
+                </outline>
+              </outline>
+              <outline text="信息">
+                <outline text="HART 短位号">
+                  <outline text="含义：输入测量点的短标识。 最大长度：8 个字符有效字符： A-Z、0-9、部分特殊字符" />
+                  <outline text="可配置内容：由数字、字母和特殊字符组成的字符串 (8)" />
+                  <outline text="出厂设置：NMS8x" />
+                  <outline text="权限：读取：操作员；写入：维护" />
+                  <outline text="手册页：255" />
+                </outline>
+                <outline text="设备位号">
+                  <outline text="含义：输入测量点的唯一名称，能够在工厂中快速识别设备。" />
+                  <outline text="可配置内容：由数字、字母和特殊字符组成的字符串 (32)" />
+                  <outline text="出厂设置：NMS8x" />
+                  <outline text="权限：读取：操作员；写入：维护" />
+                  <outline text="手册页：255" />
+                </outline>
+                <outline text="HART 描述符">
+                  <outline text="含义：输入测量点说明" />
+                  <outline text="可配置内容：由数字、字母和特殊字符组成的字符串 (16)" />
+                  <outline text="出厂设置：NMS8x" />
+                  <outline text="权限：读取：操作员；写入：维护" />
+                  <outline text="手册页：255" />
+                </outline>
+                <outline text="HART 消息">
+                  <outline text="含义：在此功能参数中输入 HART 通信模式下主站轮询时传输的 HART 信息。 最大长度：32 个字符支持字符：A-Z、0-9、部分特殊字符" />
+                  <outline text="可配置内容：由数字、字母和特殊字符组成的字符串 (32)" />
+                  <outline text="出厂设置：NMS8x" />
+                  <outline text="权限：读取：操作员；写入：维护" />
+                  <outline text="手册页：256" />
+                </outline>
+                <outline text="HART 日期编码">
+                  <outline text="含义：输入最近一次更改设置的日期。格式：年－月－日" />
+                  <outline text="可配置内容：由数字、字母和特殊字符组成的字符串 (10)" />
+                  <outline text="出厂设置：2009-07-20" />
+                  <outline text="权限：读取：操作员；写入：维护" />
+                  <outline text="手册页：256" />
+                </outline>
+              </outline>
+            </outline>
+          </outline>
+          <outline text="应用">
+            <outline text="储罐配置">
+              <outline text="液位">
+                <outline text="液位源">
+                  <outline text="含义：定义了液位数值的输入源。" />
+                  <outline text="可配置内容">
+                    <outline text="无输入值" />
+                    <outline text="HART 设备 1 ... 15 液位" />
+                    <outline text="液位 SR（取决于仪表选型和设置）" />
+                    <outline text="液位（取决于仪表选型和设置）" />
+                    <outline text="浮子位置（取决于仪表选型和设置）" />
+                    <outline text="AIO B1-3 数值（取决于仪表选型和设置）" />
+                    <outline text="AIO C1-3 数值（取决于仪表选型和设置）" />
+                    <outline text="AIP B4-8 数值（取决于仪表选型和设置）" />
+                    <outline text="AIP C4-8 数值（取决于仪表选型和设置）" />
+                  </outline>
+                  <outline text="出厂设置：取决于仪表型号" />
+                  <outline text="权限：读取：操作员；写入：维护" />
+                  <outline text="手册页：257" />
+                </outline>
+                <outline text="空罐高度">
+                  <outline text="含义：参考点至测量零点间（罐底或基准板）的距离。" />
+                  <outline text="可配置内容：0 … 10 000 000 mm" />
+                  <outline text="出厂设置：取决于设备型号" />
+                  <outline text="权限：读取：操作员；写入：维护" />
+                  <outline text="手册页：257" />
+                </outline>
+                <outline text="储罐参考高度">
+                  <outline text="含义：定义了从投尺参考点至测量零点（罐底或基准板）间的距离。" />
+                  <outline text="可配置内容：0 … 10 000 000 mm" />
+                  <outline text="出厂设置：取决于设备型号" />
+                  <outline text="权限：读取：操作员；写入：维护" />
+                  <outline text="手册页：258" />
+                </outline>
+                <outline text="储罐液位">
+                  <outline text="含义：显示测量零点（罐底或基准板）与液面间的距离。" />
+                  <outline text="可配置内容：只读显示，不可配置" />
+                  <outline text="权限：读取：操作员；写入：不可写" />
+                  <outline text="手册页：258" />
+                </outline>
+                <outline text="设置液位">
+                  <outline text="含义：当设备输出的液位测量值与人工投尺测定的实际液位高度不一致时，在此参数中输入液位校正值。" />
+                  <outline text="可配置内容：0 … 10 000 000 mm" />
+                  <outline text="出厂设置：0 mm" />
+                  <outline text="权限：读取：操作员；写入：维护" />
+                  <outline text="手册页：258" />
+                </outline>
+                <outline text="水位输入源">
+                  <outline text="含义：定义罐底水位的源。" />
+                  <outline text="可配置内容">
+                    <outline text="手动数值" />
+                    <outline text="罐底位置" />
+                    <outline text="HART 设备 1 ... 15 液位" />
+                    <outline text="AIO B1-3 数值" />
+                    <outline text="AIO C1-3 数值" />
+                    <outline text="AIP B4-8 数值" />
+                    <outline text="AIP C4-8 数值" />
+                  </outline>
+                  <outline text="出厂设置：手动数值" />
+                  <outline text="权限：读取：操作员；写入：维护" />
+                  <outline text="手册页：259" />
+                </outline>
+                <outline text="水位手动值">
+                  <outline text="含义：定义罐底水位的人工投尺数值。" />
+                  <outline text="可配置内容：–2 000 … 5 000 mm" />
+                  <outline text="出厂设置：0 mm" />
+                  <outline text="显示/生效条件：水位输入源 （参见手册页 259） = 手动数值" />
+                  <outline text="权限：读取：操作员；写入：维护" />
+                  <outline text="手册页：259" />
+                </outline>
+                <outline text="水位">
+                  <outline text="含义：显示罐底水位。" />
+                  <outline text="可配置内容：只读显示，不可配置" />
+                  <outline text="权限：读取：操作员；写入：不可写" />
+                  <outline text="手册页：259" />
+                </outline>
+              </outline>
+              <outline text="温度">
+                <outline text="液相温度源">
+                  <outline text="含义：定义了液相温度的输入源。" />
+                  <outline text="可配置内容">
+                    <outline text="手动数值" />
+                    <outline text="HART 设备 1 ... 15 温度" />
+                    <outline text="AIO B1-3 数值" />
+                    <outline text="AIO C1-3 数值" />
+                    <outline text="AIP B4-8 数值" />
+                    <outline text="AIP C4-8 数值" />
+                  </outline>
+                  <outline text="出厂设置：手动数值" />
+                  <outline text="权限：读取：操作员；写入：维护" />
+                  <outline text="手册页：260" />
+                </outline>
+                <outline text="液相温度手动值">
+                  <outline text="含义：定义液相温度的手动数值。" />
+                  <outline text="可配置内容：–50 … 300 °C" />
+                  <outline text="出厂设置：25 °C" />
+                  <outline text="显示/生效条件：液相温度源 （参见手册页 193） = 手动数值" />
+                  <outline text="权限：读取：操作员；写入：维护" />
+                  <outline text="手册页：260" />
+                </outline>
+                <outline text="液相温度值">
+                  <outline text="含义：显示测量介质的平均温度数值或单点温度数值。" />
+                  <outline text="可配置内容：只读显示，不可配置" />
+                  <outline text="权限：读取：操作员；写入：不可写" />
+                  <outline text="手册页：260" />
+                </outline>
+                <outline text="环境(空气)温度源">
+                  <outline text="含义：定义气相温度数值的源。" />
+                  <outline text="可配置内容">
+                    <outline text="手动数值" />
+                    <outline text="HART 设备 1 ... 15 温度" />
+                    <outline text="AIO B1-3 数值" />
+                    <outline text="AIO C1-3 数值" />
+                    <outline text="AIP B4-8 数值" />
+                    <outline text="AIP C4-8 数值" />
+                  </outline>
+                  <outline text="出厂设置：手动数值" />
+                  <outline text="权限：读取：操作员；写入：维护" />
+                  <outline text="手册页：261" />
+                </outline>
+                <outline text="环境(空气)温度手动值">
+                  <outline text="含义：定义气相温度的手动数值。" />
+                  <outline text="可配置内容：–50 … 300 °C" />
+                  <outline text="出厂设置：25 °C" />
+                  <outline text="显示/生效条件：环境(空气)温度源 （参见手册页 261） = 手动数值" />
+                  <outline text="权限：读取：操作员；写入：维护" />
+                  <outline text="手册页：261" />
+                </outline>
+                <outline text="环境(空气)温度值">
+                  <outline text="含义：显示仪表周围的环境空气温度。" />
+                  <outline text="可配置内容：只读显示，不可配置" />
+                  <outline text="权限：读取：操作员；写入：不可写" />
+                  <outline text="手册页：261" />
+                </outline>
+                <outline text="气相温度源">
+                  <outline text="含义：定义气相温度的源。" />
+                  <outline text="可配置内容">
+                    <outline text="手动数值" />
+                    <outline text="HART 设备 1 ... 15 气相温度" />
+                    <outline text="AIO B1-3 数值" />
+                    <outline text="AIO C1-3 数值" />
+                    <outline text="AIP B4-8 数值" />
+                    <outline text="AIP C4-8 数值" />
+                  </outline>
+                  <outline text="出厂设置：手动数值" />
+                  <outline text="权限：读取：操作员；写入：维护" />
+                  <outline text="手册页：262" />
+                </outline>
+                <outline text="气相温度手动值">
+                  <outline text="含义：定义了气相温度的手动数值。" />
+                  <outline text="可配置内容：–50 … 300 °C" />
+                  <outline text="出厂设置：25 °C" />
+                  <outline text="显示/生效条件：气相温度源 （参见手册页 262） = 手动数值" />
+                  <outline text="权限：读取：操作员；写入：维护" />
+                  <outline text="手册页：262" />
+                </outline>
+                <outline text="气相温度值">
+                  <outline text="含义：显示测量的气相温度数值。" />
+                  <outline text="可配置内容：只读显示，不可配置" />
+                  <outline text="权限：读取：操作员；写入：不可写" />
+                  <outline text="手册页：262" />
+                </outline>
+              </outline>
+              <outline text="密度">
+                <outline text="视密度源">
+                  <outline text="含义：定义如何获取密度值。" />
+                  <outline text="可配置内容">
+                    <outline text="HTG（取决于仪表选型和设置）" />
+                    <outline text="HTMS（取决于仪表选型和设置）" />
+                    <outline text="平均梯度密度（取决于仪表选型和设置）" />
+                    <outline text="上层介质密度" />
+                    <outline text="中间介质密度" />
+                    <outline text="下层介质密度" />
+                  </outline>
+                  <outline text="出厂设置：取决于仪表型号" />
+                  <outline text="权限：读取：操作员；写入：维护" />
+                  <outline text="手册页：263" />
+                </outline>
+                <outline text="视密度">
+                  <outline text="含义：显示测量或计算的密度值。" />
+                  <outline text="可配置内容：只读显示，不可配置" />
+                  <outline text="权限：读取：操作员；写入：不可写" />
+                  <outline text="手册页：263" />
+                </outline>
+                <outline text="空气密度">
+                  <outline text="含义：定义了储罐周围的空气密度。" />
+                  <outline text="可配置内容：0.0 … 500.0 kg/m³" />
+                  <outline text="出厂设置：1.2 kg/m³" />
+                  <outline text="权限：读取：操作员；写入：维护" />
+                  <outline text="手册页：263" />
+                </outline>
+                <outline text="气相密度">
+                  <outline text="含义：定义了储罐中气相空间的密度。" />
+                  <outline text="可配置内容：0.0 … 500.0 kg/m³" />
+                  <outline text="出厂设置：1.2 kg/m³" />
+                  <outline text="权限：读取：操作员；写入：维护" />
+                  <outline text="手册页：264" />
+                </outline>
+              </outline>
+              <outline text="压力">
+                <outline text="P1(底部)源">
+                  <outline text="含义：定义底部压力 P1 的源。" />
+                  <outline text="可配置内容">
+                    <outline text="手动数值" />
+                    <outline text="HART 设备 1 ... 15 压力" />
+                    <outline text="AIO B1-3 数值" />
+                    <outline text="AIO C1-3 数值" />
+                    <outline text="AIP B4-8 数值" />
+                    <outline text="AIP C4-8 数值" />
+                  </outline>
+                  <outline text="出厂设置：手动数值" />
+                  <outline text="权限：读取：操作员；写入：维护" />
+                  <outline text="手册页：265" />
+                </outline>
+                <outline text="P1(底部)值">
+                  <outline text="含义：显示罐底压力数值。" />
+                  <outline text="可配置内容：只读显示，不可配置" />
+                  <outline text="权限：读取：操作员；写入：不可写" />
+                  <outline text="手册页：265" />
+                </outline>
+                <outline text="P1(底部)手动值">
+                  <outline text="含义：定义底部压力 P1 的手动数值。" />
+                  <outline text="可配置内容：–1.01325 … 25 bar" />
+                  <outline text="出厂设置：0 bar" />
+                  <outline text="显示/生效条件：P1(底部)源 （参见手册页 265） = 手动数值" />
+                  <outline text="权限：读取：操作员；写入：维护" />
+                  <outline text="手册页：265" />
+                </outline>
+                <outline text="P1 位置">
+                  <outline text="含义：定义底部压力 P1 的位置，从储罐零点（罐底或投尺板）开始计算。" />
+                  <outline text="可配置内容：–10 000 … 100 000 mm" />
+                  <outline text="出厂设置：5 000 mm" />
+                  <outline text="权限：读取：操作员；写入：维护" />
+                  <outline text="手册页：266" />
+                </outline>
+                <outline text="P1 偏移量">
+                  <outline text="含义：底部压力 P1 的偏移量。 该偏移量会叠加在罐量计算时的压力测量值中。" />
+                  <outline text="可配置内容：–25 … 25 bar" />
+                  <outline text="出厂设置：0 bar" />
+                  <outline text="权限：读取：操作员；写入：维护" />
+                  <outline text="手册页：266" />
+                </outline>
+                <outline text="P1 绝压/表压">
+                  <outline text="含义：定义连接的压力变送器测量绝压还是表压。" />
+                  <outline text="可配置内容">
+                    <outline text="绝压" />
+                    <outline text="表压" />
+                  </outline>
+                  <outline text="出厂设置：表压" />
+                  <outline text="权限：读取：操作员；写入：维护" />
+                  <outline text="手册页：266" />
+                </outline>
+                <outline text="P3(顶部)源">
+                  <outline text="含义：设置顶部压力源(P3)。" />
+                  <outline text="可配置内容">
+                    <outline text="手动数值" />
+                    <outline text="HART 设备 1 ... 15 压力" />
+                    <outline text="AIO B1-3 数值" />
+                    <outline text="AIO C1-3 数值" />
+                    <outline text="AIP B4-8 数值" />
+                    <outline text="AIP C4-8 数值" />
+                  </outline>
+                  <outline text="出厂设置：手动数值" />
+                  <outline text="权限：读取：操作员；写入：维护" />
+                  <outline text="手册页：267" />
+                </outline>
+                <outline text="P3(顶部)值">
+                  <outline text="含义：显示储罐顶部压力表（P3）数值。" />
+                  <outline text="可配置内容：只读显示，不可配置" />
+                  <outline text="权限：读取：操作员；写入：不可写" />
+                  <outline text="手册页：267" />
+                </outline>
+                <outline text="P3(顶部)手动值">
+                  <outline text="含义：设置顶部压力手工值(P3)。" />
+                  <outline text="可配置内容：–1.01325 … 25 bar" />
+                  <outline text="出厂设置：0 bar" />
+                  <outline text="显示/生效条件：P3(顶部)源 （参见手册页 267） = 手动数值" />
+                  <outline text="权限：读取：操作员；写入：维护" />
+                  <outline text="手册页：267" />
+                </outline>
+                <outline text="P3 位置">
+                  <outline text="含义：设置从零点位置（罐底或基准板）到顶部压力变送器(P3)的位置。" />
+                  <outline text="可配置内容：0 … 100 000 mm" />
+                  <outline text="出厂设置：20 000 mm" />
+                  <outline text="权限：读取：操作员；写入：维护" />
+                  <outline text="手册页：268" />
+                </outline>
+                <outline text="P3 偏移量">
+                  <outline text="含义：顶部压力的偏移量(P3)。 在罐量计算前，系统把偏移量加入压力测量值。" />
+                  <outline text="可配置内容：–25 … 25 bar" />
+                  <outline text="出厂设置：0 bar" />
+                  <outline text="权限：读取：操作员；写入：维护" />
+                  <outline text="手册页：268" />
+                </outline>
+                <outline text="P3 绝压/表压">
+                  <outline text="含义：设置接入的压力变送器测量绝压或表压。" />
+                  <outline text="可配置内容">
+                    <outline text="绝压" />
+                    <outline text="表压" />
+                  </outline>
+                  <outline text="出厂设置：表压" />
+                  <outline text="权限：读取：操作员；写入：维护" />
+                  <outline text="手册页：268" />
+                </outline>
+                <outline text="环境大气压力">
+                  <outline text="含义：设置环境压力的手工值。" />
+                  <outline text="可配置内容：0 … 2.5 bar" />
+                  <outline text="出厂设置：1 bar" />
+                  <outline text="权限：读取：操作员；写入：维护" />
+                  <outline text="手册页：269" />
+                </outline>
+              </outline>
+            </outline>
+            <outline text="储罐计算">
+              <outline text="HyTD">
+                <outline text="HyTD 修正值">
+                  <outline text="含义：显示储罐静压力修正值。" />
+                  <outline text="可配置内容：只读显示，不可配置" />
+                  <outline text="权限：读取：操作员；写入：不可写" />
+                  <outline text="手册页：272" />
+                </outline>
+                <outline text="HyTD 模式">
+                  <outline text="含义：激活或停止储罐静压力修正计算。" />
+                  <outline text="可配置内容">
+                    <outline text="否" />
+                    <outline text="是" />
+                  </outline>
+                  <outline text="出厂设置：否" />
+                  <outline text="权限：读取：操作员；写入：维护" />
+                  <outline text="手册页：272" />
+                </outline>
+                <outline text="开始液位">
+                  <outline text="含义：定义储罐静压力修正的开始液位，液位低于此值不计算修正。" />
+                  <outline text="可配置内容：0 … 5 000 mm" />
+                  <outline text="出厂设置：500 mm" />
+                  <outline text="权限：读取：操作员；写入：维护" />
+                  <outline text="手册页：272" />
+                </outline>
+                <outline text="形变系数">
+                  <outline text="含义：定义 HyTD 的形变系数（每次液位变化对应的设备位置变化）。" />
+                  <outline text="可配置内容：–1.0 … 1.0 %" />
+                  <outline text="出厂设置：0.2 %" />
+                  <outline text="权限：读取：操作员；写入：维护" />
+                  <outline text="手册页：273" />
+                </outline>
+              </outline>
+              <outline text="CTSh">
+                <outline text="CTSh 修正值">
+                  <outline text="含义：显示 CTSh 校正值。" />
+                  <outline text="可配置内容：只读显示，不可配置" />
+                  <outline text="权限：读取：操作员；写入：不可写" />
+                  <outline text="手册页：277" />
+                </outline>
+                <outline text="CTSh 模式">
+                  <outline text="含义：激活或停止 CTSh。" />
+                  <outline text="可配置内容">
+                    <outline text="否" />
+                    <outline text="是" />
+                    <outline text="With wire（取决于仪表选型和设置）" />
+                    <outline text="Only wire（取决于仪表选型和设置）" />
+                  </outline>
+                  <outline text="出厂设置：否" />
+                  <outline text="权限：读取：操作员；写入：维护" />
+                  <outline text="手册页：277" />
+                </outline>
+                <outline text="有盖储罐">
+                  <outline text="含义：决定储罐是否有盖。" />
+                  <outline text="可配置内容">
+                    <outline text="敞开顶" />
+                    <outline text="顶部封闭" />
+                  </outline>
+                  <outline text="出厂设置：敞开顶" />
+                  <outline text="权限：读取：操作员；写入：维护" />
+                  <outline text="手册页：277" />
+                </outline>
+                <outline text="导波管">
+                  <outline text="含义：决定设备是否安装在稳液管上。" />
+                  <outline text="可配置内容">
+                    <outline text="否" />
+                    <outline text="是" />
+                  </outline>
+                  <outline text="出厂设置：否" />
+                  <outline text="权限：读取：操作员；写入：维护" />
+                  <outline text="手册页：278" />
+                </outline>
+                <outline text="标定温度">
+                  <outline text="含义：测量标定的特定温度。" />
+                  <outline text="可配置内容：–50 … 250 °C" />
+                  <outline text="出厂设置：25 °C" />
+                  <outline text="权限：读取：操作员；写入：维护" />
+                  <outline text="手册页：278" />
+                </outline>
+                <outline text="线性膨胀系数">
+                  <outline text="含义：设置储罐罐壁材料的线性膨胀系数。" />
+                  <outline text="可配置内容：0 … 100 ppm" />
+                  <outline text="出厂设置：15 ppm" />
+                  <outline text="权限：读取：操作员；写入：维护" />
+                  <outline text="手册页：278" />
+                </outline>
+                <outline text="测量钢丝热膨胀系数">
+                  <outline text="含义：设置测量钢丝的热膨胀系数。此数据在出厂前已预置。" />
+                  <outline text="可配置内容：0 … 100 ppm" />
+                  <outline text="出厂设置：15 ppm" />
+                  <outline text="手册页：279" />
+                </outline>
+              </outline>
+              <outline text="HTMS">
+                <outline text="HTMS 模式">
+                  <outline text="含义：定义 HTMS 模式。根据模式不同决定使用一个或两个压力变送器。" />
+                  <outline text="可配置内容">
+                    <outline text="HTMS P1" />
+                    <outline text="HTMS P1+P3" />
+                  </outline>
+                  <outline text="出厂设置：HTMS P1" />
+                  <outline text="权限：读取：操作员；写入：维护" />
+                  <outline text="手册页：282" />
+                </outline>
+                <outline text="密度手动值">
+                  <outline text="含义：定义手动密度。" />
+                  <outline text="可配置内容：0 … 3 000 kg/m³" />
+                  <outline text="出厂设置：800 kg/m³" />
+                  <outline text="权限：读取：维护；写入：维护" />
+                  <outline text="手册页：282" />
+                </outline>
+                <outline text="密度值">
+                  <outline text="含义：显示计算的产品密度。" />
+                  <outline text="可配置内容：只读显示，不可配置" />
+                  <outline text="权限：读取：操作员；写入：不可写" />
+                  <outline text="手册页：282" />
+                </outline>
+                <outline text="最小液位">
+                  <outline text="含义：定义 HTMS 计算的最低产品液位。 如果 Lp - V 低于此参数中定义的限制，密度将保留其最后一个值或使用手动值代替。" />
+                  <outline text="可配置内容：0 … 20 000 mm" />
+                  <outline text="出厂设置：7 000 mm" />
+                  <outline text="权限：读取：操作员；写入：维护" />
+                  <outline text="手册页：283" />
+                </outline>
+                <outline text="最小压力">
+                  <outline text="含义：定义 HTMS 计算的最小压力如果 P1（或 P1-P3 的差值）低于此参数中定义的限制，密度将保留其最后一个值或使用手动值代替。" />
+                  <outline text="可配置内容：0 … 100 bar" />
+                  <outline text="出厂设置：0.1 bar" />
+                  <outline text="权限：读取：操作员；写入：维护" />
+                  <outline text="手册页：283" />
+                </outline>
+                <outline text="安全距离">
+                  <outline text="含义：定义若信号用于计算，在底部压力传感器以上的最低液位。" />
+                  <outline text="可配置内容：0 … 10 000 mm" />
+                  <outline text="出厂设置：2 000 mm" />
+                  <outline text="权限：读取：操作员；写入：维护" />
+                  <outline text="手册页：283" />
+                </outline>
+                <outline text="回滞">
+                  <outline text="含义：定义 HTMS 计算的迟滞。 若液位接近切换点，则防止持续切换。" />
+                  <outline text="可配置内容：0 … 2 000 mm" />
+                  <outline text="出厂设置：50 mm" />
+                  <outline text="权限：读取：操作员；写入：维护" />
+                  <outline text="手册页：284" />
+                </outline>
+                <outline text="水密度">
+                  <outline text="含义：储罐中的水密度。" />
+                  <outline text="可配置内容：带符号浮点数" />
+                  <outline text="出厂设置：1 000 kg/m³" />
+                  <outline text="权限：读取：操作员；写入：维护" />
+                  <outline text="手册页：284" />
+                </outline>
+              </outline>
+            </outline>
+            <outline text="报警">
+              <outline text="报警 1 … 4">
+                <outline text="报警模式">
+                  <outline text="含义：定于选定报警的报警模式。" />
+                  <outline text="可配置内容">
+                    <outline text="关" />
+                    <outline text="开" />
+                    <outline text="闭锁" />
+                  </outline>
+                  <outline text="出厂设置：关" />
+                  <outline text="权限：读取：操作员；写入：维护" />
+                  <outline text="手册页：285" />
+                </outline>
+                <outline text="故障值">
+                  <outline text="含义：定义输入值无效时的报警。" />
+                  <outline text="可配置内容">
+                    <outline text="无报警" />
+                    <outline text="高高位+高位报警" />
+                    <outline text="高位报警" />
+                    <outline text="低位报警" />
+                    <outline text="低低位+低位报警" />
+                    <outline text="全部报警" />
+                  </outline>
+                  <outline text="出厂设置：全部报警" />
+                  <outline text="显示/生效条件：报警模式 （参见手册页 285） ≠ 关" />
+                  <outline text="权限：读取：操作员；写入：维护" />
+                  <outline text="手册页：286" />
+                </outline>
+                <outline text="报警值源">
+                  <outline text="含义：确定被监控的过程变量。" />
+                  <outline text="可配置内容">
+                    <outline text="储罐液位" />
+                    <outline text="液相温度值" />
+                    <outline text="气相温度值" />
+                    <outline text="水位" />
+                    <outline text="P1(底部)值" />
+                    <outline text="P2(中部)值" />
+                    <outline text="P3(顶部)值" />
+                    <outline text="视密度" />
+                    <outline text="体积" />
+                    <outline text="流速" />
+                    <outline text="体积流量" />
+                    <outline text="气相密度" />
+                    <outline text="中间介质密度" />
+                    <outline text="上层介质密度" />
+                    <outline text="Correction" />
+                    <outline text="储罐液位%" />
+                    <outline text="GP 1...4 值" />
+                    <outline text="液位测量值" />
+                    <outline text="P3 位置" />
+                    <outline text="储罐参考高度" />
+                    <outline text="本地重力" />
+                    <outline text="P1 位置" />
+                    <outline text="密度手动值" />
+                    <outline text="储罐空高" />
+                    <outline text="平均梯度密度" />
+                    <outline text="下层介质密度" />
+                    <outline text="上界面液位" />
+                    <outline text="下界面液位" />
+                    <outline text="罐底位置" />
+                    <outline text="浮子位置" />
+                    <outline text="HART 设备 1...15 PV" />
+                    <outline text="HART 设备 1...15 SV" />
+                    <outline text="HART 设备 1...15 TV" />
+                    <outline text="HART 设备 1...15 QV" />
+                    <outline text="HART 设备 1...15 PV mA" />
+                    <outline text="HART 设备 1...15 PV %" />
+                    <outline text="测温点温度 1...24" />
+                    <outline text="AIO B1-3 数值" />
+                    <outline text="AIO C1-3 数值" />
+                    <outline text="AIP B4-8 数值" />
+                    <outline text="AIP C4-8 数值" />
+                    <outline text="无" />
+                  </outline>
+                  <outline text="出厂设置：无" />
+                  <outline text="显示/生效条件：报警模式 （参见手册页 285） ≠ 关" />
+                  <outline text="权限：读取：操作员；写入：维护" />
+                  <outline text="手册页：287" />
+                </outline>
+                <outline text="报警值">
+                  <outline text="含义：显示被监控过程变量的当前值。" />
+                  <outline text="可配置内容：只读显示，不可配置；显示格式：带符号浮点数" />
+                  <outline text="出厂设置：0 None" />
+                  <outline text="显示/生效条件：报警模式 （参见手册页 285） ≠ 关" />
+                  <outline text="权限：读取：操作员；写入：不可写" />
+                  <outline text="手册页：288" />
+                </outline>
+                <outline text="高高位报警值">
+                  <outline text="含义：定义高高位报警限值。" />
+                  <outline text="可配置内容：带符号浮点数" />
+                  <outline text="出厂设置：0 None" />
+                  <outline text="显示/生效条件：报警模式 （参见手册页 285） ≠ 关" />
+                  <outline text="权限：读取：操作员；写入：维护" />
+                  <outline text="手册页：288" />
+                </outline>
+                <outline text="高位报警值">
+                  <outline text="含义：定义高位报警限值。" />
+                  <outline text="可配置内容：带符号浮点数" />
+                  <outline text="出厂设置：0 None" />
+                  <outline text="显示/生效条件：报警模式 （参见手册页 285） ≠ 关" />
+                  <outline text="权限：读取：操作员；写入：维护" />
+                  <outline text="手册页：289" />
+                </outline>
+                <outline text="低位报警值">
+                  <outline text="含义：定义低位报警值。" />
+                  <outline text="可配置内容：带符号浮点数" />
+                  <outline text="出厂设置：0 None" />
+                  <outline text="显示/生效条件：报警模式 （参见手册页 285） ≠ 关" />
+                  <outline text="权限：读取：操作员；写入：维护" />
+                  <outline text="手册页：289" />
+                </outline>
+                <outline text="低低位报警值">
+                  <outline text="含义：定义低低位报警值。" />
+                  <outline text="可配置内容：带符号浮点数" />
+                  <outline text="出厂设置：0 None" />
+                  <outline text="显示/生效条件：报警模式 （参见手册页 285） ≠ 关" />
+                  <outline text="权限：读取：操作员；写入：维护" />
+                  <outline text="手册页：289" />
+                </outline>
+                <outline text="高高位报警">
+                  <outline text="含义：显示高高位报警是否激活。" />
+                  <outline text="可配置内容：只读显示，不可配置" />
+                  <outline text="显示/生效条件：报警模式 （参见手册页 285） ≠ 关" />
+                  <outline text="权限：读取：操作员；写入：不可写" />
+                  <outline text="手册页：290" />
+                </outline>
+                <outline text="高位报警">
+                  <outline text="含义：显示高位报警是否被激活。" />
+                  <outline text="可配置内容：只读显示，不可配置" />
+                  <outline text="显示/生效条件：报警模式 （参见手册页 285） ≠ 关" />
+                  <outline text="权限：读取：操作员；写入：不可写" />
+                  <outline text="手册页：290" />
+                </outline>
+                <outline text="高高位+高位报警">
+                  <outline text="含义：显示高高位或高位报警是否被激活。" />
+                  <outline text="可配置内容：只读显示，不可配置" />
+                  <outline text="显示/生效条件：报警模式 （参见手册页 285） ≠ 关" />
+                  <outline text="权限：读取：操作员；写入：不可写" />
+                  <outline text="手册页：290" />
+                </outline>
+                <outline text="低位报警">
+                  <outline text="含义：显示低位报警是否被激活。" />
+                  <outline text="可配置内容：只读显示，不可配置" />
+                  <outline text="显示/生效条件：报警模式 （参见手册页 285） ≠ 关" />
+                  <outline text="权限：读取：操作员；写入：不可写" />
+                  <outline text="手册页：290" />
+                </outline>
+                <outline text="低低位报警">
+                  <outline text="含义：显示低低位报警是否被激活。" />
+                  <outline text="可配置内容：只读显示，不可配置" />
+                  <outline text="显示/生效条件：报警模式 （参见手册页 285） ≠ 关" />
+                  <outline text="权限：读取：操作员；写入：不可写" />
+                  <outline text="手册页：291" />
+                </outline>
+                <outline text="低低位+低位报警">
+                  <outline text="含义：显示低低位或低位报警是否被激活。" />
+                  <outline text="可配置内容：只读显示，不可配置" />
+                  <outline text="显示/生效条件：报警模式 （参见手册页 285） ≠ 关" />
+                  <outline text="权限：读取：操作员；写入：不可写" />
+                  <outline text="手册页：291" />
+                </outline>
+                <outline text="任何报警">
+                  <outline text="含义：显示是否有报警被激活。" />
+                  <outline text="可配置内容：只读显示，不可配置；显示格式：• 未知 • 未激活 • 激活 • 错误" />
+                  <outline text="出厂设置：未知" />
+                  <outline text="显示/生效条件：报警模式 （参见手册页 285） ≠ 关" />
+                  <outline text="权限：读取：操作员；写入：不可写" />
+                  <outline text="手册页：291" />
+                </outline>
+                <outline text="清除报警">
+                  <outline text="含义：清除报警状况消失但仍然存在的报警信号。" />
+                  <outline text="可配置内容">
+                    <outline text="否" />
+                    <outline text="是" />
+                  </outline>
+                  <outline text="出厂设置：否" />
+                  <outline text="显示/生效条件：报警模式 （参见手册页 285） = 闭锁" />
+                  <outline text="权限：读取：操作员；写入：维护" />
+                  <outline text="手册页：292" />
+                </outline>
+                <outline text="Alarm hysteresis">
+                  <outline text="含义：定义限值的滞后。如果液位接近某个限值，则滞后可防止报警状态的持续变化。" />
+                  <outline text="可配置内容：带符号浮点数" />
+                  <outline text="出厂设置：0.001" />
+                  <outline text="显示/生效条件：报警模式 （参见手册页 285） ≠ 关" />
+                  <outline text="权限：读取：维护；写入：维护" />
+                  <outline text="手册页：292" />
+                </outline>
+                <outline text="阻尼因子">
+                  <outline text="含义：定义阻尼常数（以秒为单位）。" />
+                  <outline text="可配置内容：0 … 999.9 s" />
+                  <outline text="出厂设置：0s" />
+                  <outline text="权限：读取：操作员；写入：维护" />
+                  <outline text="手册页：292" />
+                </outline>
+              </outline>
+            </outline>
+          </outline>
+          <outline text="安全设置">
+            <outline text="输出超出范围">
+              <outline text="含义：当浮子达到高停止位、低停止位或参考位置时，选择报警或上次有效值。" />
+              <outline text="可配置内容">
+                <outline text="最近有效值" />
+                <outline text="报警" />
+                <outline text="无" />
+              </outline>
+              <outline text="出厂设置：最近有效值" />
+              <outline text="权限：读取：操作员；写入：维护" />
+              <outline text="手册页：293" />
+            </outline>
+            <outline text="上停止位">
+              <outline text="含义：从测量零点（罐底或基准板）到浮子上停止位的距离。" />
+              <outline text="可配置内容：–999 999.9 … 999 999.9 mm" />
+              <outline text="出厂设置：取决于仪表型号" />
+              <outline text="权限：读取：操作员；写入：维护" />
+              <outline text="手册页：293" />
+            </outline>
+            <outline text="下停止位">
+              <outline text="含义：从测量零点（罐底或基准板）到浮子下停止位的距离。" />
+              <outline text="可配置内容：–999 999.9 … 999 999.9 mm" />
+              <outline text="出厂设置：0 mm" />
+              <outline text="权限：读取：操作员；写入：维护" />
+              <outline text="手册页：294" />
+            </outline>
+            <outline text="缓慢升起区">
+              <outline text="含义：以毫米为单位定义从参考位置开始向下测量的间隔，在该间隔中浮子降低移动速度。" />
+              <outline text="可配置内容：10 … 999 999.9 mm" />
+              <outline text="出厂设置：70 mm" />
+              <outline text="权限：读取：操作员；写入：维护" />
+              <outline text="手册页：294" />
+            </outline>
+            <outline text="过张力重量">
+              <outline text="含义：以克为单位设置过张力报警时的最小重量。" />
+              <outline text="可配置内容：100 … 999.9 g" />
+              <outline text="出厂设置：350 g" />
+              <outline text="权限：读取：操作员；写入：维护" />
+              <outline text="手册页：294" />
+            </outline>
+            <outline text="欠张力重量">
+              <outline text="含义：定义低张力报警值。 如果浮子重量低于此值超过 7 秒，将发出低张力报警。" />
+              <outline text="可配置内容：0 … 300 g" />
+              <outline text="出厂设置：10 g" />
+              <outline text="权限：读取：操作员；写入：维护" />
+              <outline text="手册页：295" />
+            </outline>
+          </outline>
+          <outline text="传感器组态">
+            <outline text="后续罐表命令">
+              <outline text="含义：设置执行“一次性”罐表命令之后的罐表命令。" />
+              <outline text="可配置内容">
+                <outline text="Stop" />
+                <outline text="Level" />
+                <outline text="Up" />
+                <outline text="Upper I/F level" />
+                <outline text="Lower I/F level" />
+                <outline text="无" />
+              </outline>
+              <outline text="出厂设置：Level" />
+              <outline text="权限：读取：操作员；写入：维护" />
+              <outline text="手册页：296" />
+            </outline>
+            <outline text="浮子">
+              <outline text="浮子类型">
+                <outline text="含义：选择使用的浮子类型。" />
+                <outline text="可配置内容">
+                  <outline text="自定义直径" />
+                  <outline text="Diameter 30 mm" />
+                  <outline text="Diameter 50 mm" />
+                  <outline text="Diameter 70 mm" />
+                  <outline text="Diameter 110 mm" />
+                </outline>
+                <outline text="出厂设置：取决于仪表型号" />
+                <outline text="权限：读取：操作员；写入：维护" />
+                <outline text="手册页：297" />
+              </outline>
+              <outline text="浮子直径">
+                <outline text="含义：设置浮子圆柱部分的直径。" />
+                <outline text="可配置内容：0 … 999.9 mm" />
+                <outline text="出厂设置：参见仪表铭牌。" />
+                <outline text="显示/生效条件：浮子类型 （参见手册页 297） = 自定义直径" />
+                <outline text="权限：读取：操作员；写入：维护" />
+                <outline text="手册页：297" />
+              </outline>
+              <outline text="浮子重量">
+                <outline text="含义：设置标注在浮子上的浮子重量(克)。" />
+                <outline text="可配置内容：10 … 999.9 g" />
+                <outline text="出厂设置：参见仪表铭牌。" />
+                <outline text="权限：读取：操作员；写入：维护" />
+                <outline text="手册页：297" />
+              </outline>
+              <outline text="浮子体积">
+                <outline text="含义：标注在浮子上的浮子体积(毫升)。" />
+                <outline text="可配置内容：10 … 999.9 ml" />
+                <outline text="出厂设置：参见仪表铭牌。" />
+                <outline text="权限：读取：操作员；写入：维护" />
+                <outline text="手册页：298" />
+              </outline>
+              <outline text="浮子平衡体积">
+                <outline text="含义：设置浮子在平衡时浸入液体部分的体积(毫升)，此数据标注在浮子上。" />
+                <outline text="可配置内容：10 … 999.9 ml" />
+                <outline text="出厂设置：参见仪表铭牌。" />
+                <outline text="权限：读取：操作员；写入：维护" />
+                <outline text="手册页：298" />
+              </outline>
+              <outline text="浮子高度">
+                <outline text="含义：设置浮子高度(毫米)。此数据用于密度测量时最终梯度密度点与液位之间的最小距离。" />
+                <outline text="可配置内容：10 … 300 mm" />
+                <outline text="出厂设置：取决于仪表型号" />
+                <outline text="权限：读取：操作员；写入：维护" />
+                <outline text="手册页：298" />
+              </outline>
+              <outline text="浸入深度">
+                <outline text="含义：设置浮子底部到平衡时平衡线的距离(毫米)。此数据用于校准罐底位置测量值。" />
+                <outline text="可配置内容：0 … 99.9 mm" />
+                <outline text="出厂设置：取决于仪表型号" />
+                <outline text="权限：读取：操作员；写入：维护" />
+                <outline text="手册页：299" />
+              </outline>
+            </outline>
+            <outline text="轮毂">
+              <outline text="轮毂周长">
+                <outline text="含义：设置标注在轮毂上的轮毂周长。" />
+                <outline text="可配置内容：100 … 999.9 mm" />
+                <outline text="出厂设置：参见仪表铭牌。" />
+                <outline text="权限：读取：操作员；写入：维护" />
+                <outline text="手册页：300" />
+              </outline>
+              <outline text="测量钢丝重量">
+                <outline text="含义：设置测量钢丝重量(克/10 米)，此数据标注于铭牌上。" />
+                <outline text="可配置内容：0 … 999.9 g" />
+                <outline text="出厂设置：参见仪表铭牌。" />
+                <outline text="权限：读取：操作员；写入：维护" />
+                <outline text="手册页：300" />
+              </outline>
+            </outline>
+            <outline text="单点密度">
+              <outline text="上密度偏移量">
+                <outline text="含义：设置测量上密度时的偏移量。" />
+                <outline text="可配置内容：–999.99 … 999.99 kg/m³" />
+                <outline text="出厂设置：0 kg/m³" />
+                <outline text="权限：读取：操作员；写入：维护" />
+                <outline text="手册页：301" />
+              </outline>
+              <outline text="中密度偏移量">
+                <outline text="含义：设置测量中密度时的偏移量。" />
+                <outline text="可配置内容：–999.99 … 999.99 kg/m³" />
+                <outline text="出厂设置：0 kg/m³" />
+                <outline text="权限：读取：操作员；写入：维护" />
+                <outline text="手册页：301" />
+              </outline>
+              <outline text="下密度偏移量">
+                <outline text="含义：设置测量下密度时的偏移量。" />
+                <outline text="可配置内容：–999.99 … 999.99 kg/m³" />
+                <outline text="出厂设置：0 kg/m³" />
+                <outline text="权限：读取：操作员；写入：维护" />
+                <outline text="手册页：301" />
+              </outline>
+              <outline text="浸没深度">
+                <outline text="含义：设置单点密度测量时浮子的浸没深度(毫米)。" />
+                <outline text="可配置内容：50 … 99 999.9 mm" />
+                <outline text="出厂设置：150 mm" />
+                <outline text="权限：读取：操作员；写入：维护" />
+                <outline text="手册页：302" />
+              </outline>
+            </outline>
+            <outline text="梯度密度">
+              <outline text="密度测量模式">
+                <outline text="含义：标准测量模式时，测量指定位置的密度值。补偿模式时，转动整数倍轮毂圈数进行测量以提高测量精度。" />
+                <outline text="可配置内容">
+                  <outline text="标准测量模式" />
+                  <outline text="补偿模式" />
+                </outline>
+                <outline text="出厂设置：标准测量模式" />
+                <outline text="权限：读取：操作员；写入：维护" />
+                <outline text="手册页：303" />
+              </outline>
+              <outline text="手动梯度液位">
+                <outline text="含义：设置手动梯度密度开始的液位位置。" />
+                <outline text="可配置内容：–999 999.9 … 999 999.9 mm" />
+                <outline text="出厂设置：1 000 mm" />
+                <outline text="权限：读取：操作员；写入：维护" />
+                <outline text="手册页：303" />
+              </outline>
+              <outline text="梯度密度偏移距离">
+                <outline text="含义：梯度密度偏移距离(毫米)是梯度密度起始点与第一测量点之间的距离。" />
+                <outline text="可配置内容：0 … 999 999.9 mm" />
+                <outline text="出厂设置：500 mm" />
+                <outline text="权限：读取：操作员；写入：维护" />
+                <outline text="手册页：303" />
+              </outline>
+              <outline text="梯度密度间隔">
+                <outline text="含义：设置梯度密度两个测量点之间的间隔距离。" />
+                <outline text="可配置内容：1 … 100 000 mm" />
+                <outline text="出厂设置：1 000 mm" />
+                <outline text="权限：读取：操作员；写入：维护" />
+                <outline text="手册页：304" />
+              </outline>
+              <outline text="梯度密度偏移量">
+                <outline text="含义：设置梯度密度测量时加入的偏移量。" />
+                <outline text="可配置内容：–999.99 … 999.99 kg/m³" />
+                <outline text="出厂设置：0 kg/m³" />
+                <outline text="权限：读取：操作员；写入：维护" />
+                <outline text="手册页：304" />
+              </outline>
+            </outline>
+          </outline>
+          <outline text="显示">
+            <outline text="Language">
+              <outline text="含义：设置显示语言。" />
+              <outline text="可配置内容">
+                <outline text="English" />
+                <outline text="Deutsch" />
+                <outline text="русский язык (Russian)" />
+                <outline text="日本語 (Japanese)" />
+                <outline text="Español" />
+                <outline text="中文 (Chinese)" />
+              </outline>
+              <outline text="出厂设置：English" />
+              <outline text="显示/生效条件：设备带现场显示单元。" />
+              <outline text="权限：读取：操作员；写入：操作员" />
+              <outline text="手册页：305" />
+            </outline>
+            <outline text="显示格式">
+              <outline text="含义：选择显示模块中测量值的显示方式。" />
+              <outline text="可配置内容">
+                <outline text="1 个数值(最大字体)" />
+                <outline text="1 个棒图+1 个数值" />
+                <outline text="2 个数值" />
+                <outline text="1 个数值(大)+2 个数值" />
+                <outline text="4 个数值" />
+              </outline>
+              <outline text="出厂设置：2 个数值" />
+              <outline text="显示/生效条件：仪表带现场显示单元。" />
+              <outline text="权限：读取：操作员；写入：操作员" />
+              <outline text="手册页：305" />
+            </outline>
+            <outline text="显示值 1 … 4">
+              <outline text="含义：选择本地显示的测量值。" />
+              <outline text="可配置内容">
+                <outline text="无（取决于仪表选型和设置）" />
+                <outline text="储罐液位" />
+                <outline text="液位测量值" />
+                <outline text="物位(或线性化值)" />
+                <outline text="储罐液位%" />
+                <outline text="水位（取决于仪表选型和设置）" />
+                <outline text="液相温度值（取决于仪表选型和设置）" />
+                <outline text="气相温度值（取决于仪表选型和设置）" />
+                <outline text="环境(空气)温度值（取决于仪表选型和设置）" />
+                <outline text="储罐空高" />
+                <outline text="储罐空高%" />
+                <outline text="视密度（取决于仪表选型和设置）" />
+                <outline text="P1(底部)值（取决于仪表选型和设置）" />
+                <outline text="P2(中部)值（取决于仪表选型和设置）" />
+                <outline text="P3(顶部)值（取决于仪表选型和设置）" />
+                <outline text="GP 1 值（取决于仪表选型和设置）" />
+                <outline text="GP 2 值（取决于仪表选型和设置）" />
+                <outline text="GP 3 值（取决于仪表选型和设置）" />
+                <outline text="GP 4 值（取决于仪表选型和设置）" />
+                <outline text="罐表命令（取决于仪表选型和设置）" />
+                <outline text="罐表状态（取决于仪表选型和设置）" />
+                <outline text="AIO B1-3 数值（取决于仪表选型和设置）" />
+                <outline text="AIO B1-3 毫安值（取决于仪表选型和设置）" />
+                <outline text="AIO B1-3 值%（取决于仪表选型和设置）" />
+                <outline text="AIO C1-3 数值（取决于仪表选型和设置）" />
+                <outline text="AIO C1-3 毫安值（取决于仪表选型和设置）" />
+                <outline text="AIO C1-3 值%（取决于仪表选型和设置）" />
+                <outline text="AIP B4-8 数值（取决于仪表选型和设置）" />
+                <outline text="AIP B4-8 value mA（取决于仪表选型和设置）" />
+                <outline text="AIP B4-8 value %（取决于仪表选型和设置）" />
+                <outline text="AIP C4-8 数值（取决于仪表选型和设置）" />
+                <outline text="AIP C4-8 value mA（取决于仪表选型和设置）" />
+                <outline text="AIP C4-8 value %（取决于仪表选型和设置）" />
+              </outline>
+              <outline text="出厂设置：取决于仪表型号" />
+              <outline text="显示/生效条件：设备带现场显示单元。" />
+              <outline text="权限：读取：操作员；写入：维护" />
+              <outline text="手册页：306" />
+            </outline>
+            <outline text="小数位数 1 … 4">
+              <outline text="含义：此项选择不会影响设备测量和计算的精度。" />
+              <outline text="可配置内容">
+                <outline text="x" />
+                <outline text="x.x" />
+                <outline text="x.xx" />
+                <outline text="x.xxx" />
+                <outline text="x.xxxx" />
+              </outline>
+              <outline text="出厂设置：x.x" />
+              <outline text="显示/生效条件：仪表带现场显示单元。" />
+              <outline text="权限：读取：操作员；写入：维护" />
+              <outline text="手册页：307" />
+            </outline>
+            <outline text="分隔符">
+              <outline text="含义：选择显示数值的小数分隔符。" />
+              <outline text="可配置内容">
+                <outline text="." />
+                <outline text="," />
+              </outline>
+              <outline text="出厂设置：." />
+              <outline text="显示/生效条件：仪表带现场显示单元。" />
+              <outline text="权限：读取：操作员；写入：维护" />
+              <outline text="手册页：308" />
+            </outline>
+            <outline text="数值格式">
+              <outline text="含义：选择显示的数字格式。" />
+              <outline text="可配置内容">
+                <outline text="十进制" />
+                <outline text="ft-in-1/16''" />
+              </outline>
+              <outline text="出厂设置：十进制" />
+              <outline text="显示/生效条件：仪表带现场显示单元。" />
+              <outline text="权限：读取：操作员；写入：维护" />
+              <outline text="手册页：308" />
+            </outline>
+            <outline text="标题栏">
+              <outline text="含义：选择现场显示的标题文本。" />
+              <outline text="可配置内容">
+                <outline text="设备位号" />
+                <outline text="自定义文本" />
+              </outline>
+              <outline text="出厂设置：设备位号" />
+              <outline text="显示/生效条件：仪表带现场显示单元。" />
+              <outline text="权限：读取：操作员；写入：维护" />
+              <outline text="手册页：309" />
+            </outline>
+            <outline text="标题名称">
+              <outline text="含义：输入显示标题名称。" />
+              <outline text="可配置内容：由数字、字母和特殊字符组成的字符串 (11)" />
+              <outline text="出厂设置：TG-Platform" />
+              <outline text="显示/生效条件：标题栏 （参见手册页 309） = 自定义文本" />
+              <outline text="权限：读取：操作员；写入：维护" />
+              <outline text="手册页：309" />
+            </outline>
+            <outline text="显示间隔时间">
+              <outline text="含义：设置测量值交替显示的间隔。" />
+              <outline text="可配置内容：1 … 10 s" />
+              <outline text="出厂设置：5s" />
+              <outline text="权限：读取：操作员；写入：操作员" />
+              <outline text="手册页：309" />
+            </outline>
+            <outline text="显示阻尼时间">
+              <outline text="含义：设置对测量值波动的显示响应时间。" />
+              <outline text="可配置内容：0.0 … 999.9 s" />
+              <outline text="出厂设置：0.0 s" />
+              <outline text="显示/生效条件：仪表带现场显示单元。" />
+              <outline text="权限：读取：操作员；写入：维护" />
+              <outline text="手册页：310" />
+            </outline>
+            <outline text="背光显示">
+              <outline text="含义：打开/关闭现场显示单元的背光显示。" />
+              <outline text="可配置内容">
+                <outline text="禁用" />
+                <outline text="开启" />
+              </outline>
+              <outline text="出厂设置：开启" />
+              <outline text="显示/生效条件：仪表带现场显示单元。" />
+              <outline text="权限：读取：操作员；写入：操作员" />
+              <outline text="手册页：310" />
+            </outline>
+            <outline text="显示对比度">
+              <outline text="含义：根据环境条件（比如光照强度或读数视角）调节显示单元的显示对比度。" />
+              <outline text="可配置内容：20 … 80 %" />
+              <outline text="出厂设置：30 %" />
+              <outline text="显示/生效条件：仪表带现场显示单元。" />
+              <outline text="权限：读取：操作员；写入：操作员" />
+              <outline text="手册页：310" />
+            </outline>
+          </outline>
+          <outline text="系统单位">
+            <outline text="预设置单位">
+              <outline text="含义：设置长度、压力和温度单位。" />
+              <outline text="可配置内容">
+                <outline text="mm, bar, °C" />
+                <outline text="m, bar, °C" />
+                <outline text="mm, PSI, °C" />
+                <outline text="ft, PSI, °F" />
+                <outline text="ft-in-16, PSI, °F" />
+                <outline text="ft-in-8, PSI, °F" />
+                <outline text="用户定义值" />
+              </outline>
+              <outline text="出厂设置：mm, bar, °C" />
+              <outline text="权限：读取：操作员；写入：维护" />
+              <outline text="手册页：312" />
+            </outline>
+            <outline text="长度单位">
+              <outline text="含义：选择长度单位。" />
+              <outline text="可配置内容">
+                <outline text="m" />
+                <outline text="mm" />
+                <outline text="cm" />
+                <outline text="ft" />
+                <outline text="in" />
+                <outline text="ft-in-16" />
+                <outline text="ft-in-8" />
+              </outline>
+              <outline text="出厂设置：mm" />
+              <outline text="权限：读取：操作员；写入：维护（如果预设置单位 （参见手册页 188）" />
+              <outline text="手册页：312" />
+            </outline>
+            <outline text="压力单位">
+              <outline text="含义：选择压力单位。" />
+              <outline text="可配置内容">
+                <outline text="bar" />
+                <outline text="Pa" />
+                <outline text="kPa" />
+                <outline text="MPa" />
+                <outline text="mbar a" />
+                <outline text="psi" />
+                <outline text="inH2O" />
+                <outline text="inH2O (68°F)" />
+                <outline text="ftH2O (68°F)" />
+                <outline text="mmH2O" />
+                <outline text="mmHg" />
+              </outline>
+              <outline text="出厂设置：bar" />
+              <outline text="权限：读取：操作员；写入：维护（如果预设置单位 （参见手册页 188）" />
+              <outline text="手册页：313" />
+            </outline>
+            <outline text="温度单位">
+              <outline text="含义：选择温度单位。" />
+              <outline text="可配置内容">
+                <outline text="°C" />
+                <outline text="K" />
+                <outline text="°F" />
+                <outline text="°R" />
+              </outline>
+              <outline text="出厂设置：°C" />
+              <outline text="权限：读取：操作员；写入：维护（如果预设置单位 （参见手册页 188）" />
+              <outline text="手册页：313" />
+            </outline>
+            <outline text="密度单位">
+              <outline text="含义：选择密度单位。" />
+              <outline text="可配置内容">
+                <outline text="g/cm³" />
+                <outline text="g/ml" />
+                <outline text="g/l" />
+                <outline text="kg/l" />
+                <outline text="kg/dm³" />
+                <outline text="kg/m³" />
+                <outline text="lb/ft³" />
+                <outline text="lb/gal (us)" />
+                <outline text="lb/in³" />
+                <outline text="STon/yd³" />
+                <outline text="°API" />
+                <outline text="SGU" />
+              </outline>
+              <outline text="出厂设置：kg/m³" />
+              <outline text="权限：读取：操作员；写入：维护（如果预设置单位 （参见手册页 188）" />
+              <outline text="手册页：313" />
+            </outline>
+          </outline>
+          <outline text="日期/时间">
+            <outline text="日期/时间">
+              <outline text="含义：显示设备内部时钟。" />
+              <outline text="可配置内容：只读显示，不可配置" />
+              <outline text="权限：读取：操作员；写入：不可写" />
+              <outline text="手册页：315" />
+            </outline>
+            <outline text="设置日期">
+              <outline text="含义：控制实时时钟的设置。" />
+              <outline text="可配置内容">
+                <outline text="请选择" />
+                <outline text="中断" />
+                <outline text="启动" />
+                <outline text="Confirm time" />
+              </outline>
+              <outline text="出厂设置：请选择" />
+              <outline text="权限：读取：操作员；写入：维护" />
+              <outline text="手册页：315" />
+            </outline>
+            <outline text="年">
+              <outline text="含义：输入当前年份。" />
+              <outline text="可配置内容：2 016 … 2 079" />
+              <outline text="出厂设置：2 016" />
+              <outline text="显示/生效条件：设置日期 （参见手册页 315） = 启动" />
+              <outline text="权限：读取：操作员；写入：维护" />
+              <outline text="手册页：315" />
+            </outline>
+            <outline text="月">
+              <outline text="含义：输入当前月份。" />
+              <outline text="可配置内容：1 … 12" />
+              <outline text="出厂设置：1" />
+              <outline text="显示/生效条件：设置日期 （参见手册页 315） = 启动" />
+              <outline text="权限：读取：操作员；写入：维护" />
+              <outline text="手册页：316" />
+            </outline>
+            <outline text="日">
+              <outline text="含义：输入当前日期。" />
+              <outline text="可配置内容：1 … 31" />
+              <outline text="出厂设置：1" />
+              <outline text="显示/生效条件：设置日期 （参见手册页 315） = 启动" />
+              <outline text="权限：读取：操作员；写入：维护" />
+              <outline text="手册页：316" />
+            </outline>
+            <outline text="小时">
+              <outline text="含义：输入当前小时。" />
+              <outline text="可配置内容：0 … 23" />
+              <outline text="出厂设置：0" />
+              <outline text="显示/生效条件：设置日期 （参见手册页 315） = 启动" />
+              <outline text="权限：读取：操作员；写入：维护" />
+              <outline text="手册页：316" />
+            </outline>
+            <outline text="分钟">
+              <outline text="含义：输入当前分钟。" />
+              <outline text="可配置内容：0 … 59" />
+              <outline text="出厂设置：0" />
+              <outline text="显示/生效条件：设置日期 （参见手册页 315） = 启动" />
+              <outline text="权限：读取：操作员；写入：维护" />
+              <outline text="手册页：317" />
+            </outline>
+          </outline>
+          <outline text="管理员">
+            <outline text="设置访问密码">
+              <outline text="含义：定义用于参数写访问的密码。" />
+              <outline text="可配置内容：0 … 9 999" />
+              <outline text="出厂设置：0" />
+              <outline text="权限：读取：操作员；写入：维护" />
+              <outline text="手册页：319" />
+            </outline>
+            <outline text="设备复位">
+              <outline text="含义：复位设备设置至设置状态-整体或部分" />
+              <outline text="可配置内容">
+                <outline text="取消" />
+                <outline text="复位至工厂缺省设置" />
+                <outline text="重启设备" />
+              </outline>
+              <outline text="出厂设置：取消" />
+              <outline text="权限：读取：操作员；写入：维护" />
+              <outline text="手册页：319" />
+            </outline>
+          </outline>
+          <outline text="SIL 序列确认">
+            <outline text="含义：按照 SIL 或 WHG 标准锁定设备的设置向导。" />
+            <outline text="可配置内容：按向导确认并锁定设备；具体功能参数见对应《功能安全手册》。" />
+            <outline text="显示条件：设备带 SIL/WHG 认证，且当前未处于 SIL/WHG 锁定状态。" />
+            <outline text="手册页：318" />
+          </outline>
+          <outline text="关闭 SIL/WHG">
+            <outline text="含义：按照 SIL 或 WHG 标准解除设备锁定的设置向导。" />
+            <outline text="可配置内容：按向导确认并解除锁定；具体功能参数见对应《功能安全手册》。" />
+            <outline text="显示条件：设备带 SIL/WHG 认证，且当前处于 SIL/WHG 锁定状态。" />
+            <outline text="手册页：318" />
+          </outline>
+        </outline>
+      </outline>
+      <outline text="诊断">
+        <outline text="实际诊断信息">
+          <outline text="含义：显示实际诊断信息。 存在多个诊断事件时，显示优先级最高的诊断信息。" />
+          <outline text="可配置内容：只读显示，不可配置" />
+          <outline text="权限：读取：操作员；写入：不可写" />
+          <outline text="手册页：320" />
+        </outline>
+        <outline text="时间戳（实际诊断信息）">
+          <outline text="含义：显示当前诊断信息的时间戳。" />
+          <outline text="可配置内容：只读显示，不可配置" />
+          <outline text="权限：读取：操作员；写入：不可写" />
+          <outline text="手册页：320" />
+          <outline text="时间戳（实际诊断信息）（配置变体 2）">
+            <outline text="含义：显示上一个诊断事件的诊断信息时间戳。" />
+            <outline text="可配置内容：只读显示，不可配置" />
+            <outline text="权限：读取：操作员；写入：不可写" />
+            <outline text="手册页：321" />
+          </outline>
+        </outline>
+        <outline text="上一条诊断信息">
+          <outline text="含义：显示上一条诊断事件的诊断信息。" />
+          <outline text="可配置内容：只读显示，不可配置" />
+          <outline text="权限：读取：操作员；写入：不可写" />
+          <outline text="手册页：320" />
+        </outline>
+        <outline text="重启后的运行时间">
+          <outline text="含义：显示设备重启后的总运行时间。" />
+          <outline text="可配置内容：只读显示，不可配置" />
+          <outline text="权限：读取：操作员；写入：不可写" />
+          <outline text="手册页：321" />
+        </outline>
+        <outline text="运行时间">
+          <outline text="含义：显示仪表的总运行时间。" />
+          <outline text="可配置内容：只读显示，不可配置" />
+          <outline text="权限：读取：操作员；写入：不可写" />
+          <outline text="手册页：321" />
+        </outline>
+        <outline text="日期/时间">
+          <outline text="含义：显示设备内部时钟。" />
+          <outline text="可配置内容：只读显示，不可配置" />
+          <outline text="权限：读取：操作员；写入：不可写" />
+          <outline text="手册页：321" />
+        </outline>
+        <outline text="诊断列表">
+          <outline text="诊断 1 … 5">
+            <outline text="含义：显示当前最高优先级的有效诊断信息。" />
+            <outline text="可配置内容：只读显示，不可配置" />
+            <outline text="手册页：323" />
+          </outline>
+          <outline text="时间戳 1 … 5">
+            <outline text="含义：诊断信息的时间戳。" />
+            <outline text="可配置内容：只读显示，不可配置" />
+            <outline text="手册页：323" />
+          </outline>
+        </outline>
+        <outline text="设备信息">
+          <outline text="设备位号">
+            <outline text="含义：显示仪表位号。" />
+            <outline text="可配置内容：只读显示，不可配置；显示格式：由数字、字母和特殊字符组成的字符串" />
+            <outline text="出厂设置：- none -" />
+            <outline text="权限：读取：操作员；写入：不可写" />
+            <outline text="手册页：324" />
+          </outline>
+          <outline text="序列号">
+            <outline text="含义：序列号是标识设备的唯一字符串。 打印在铭牌上。 通过 app 可以查看所有设备文档。" />
+            <outline text="可配置内容：只读显示，不可配置" />
+            <outline text="权限：读取：操作员；写入：不可写" />
+            <outline text="手册页：324" />
+          </outline>
+          <outline text="固件版本号">
+            <outline text="含义：显示设备当前固件版本号。" />
+            <outline text="可配置内容：只读显示，不可配置" />
+            <outline text="权限：读取：操作员；写入：不可写" />
+            <outline text="手册页：324" />
+          </outline>
+          <outline text="固件 CRC">
+            <outline text="含义：显示固件 CRC 校验结果。" />
+            <outline text="可配置内容：只读显示，不可配置" />
+            <outline text="权限：读取：操作员；写入：不可写" />
+            <outline text="手册页：325" />
+          </outline>
+          <outline text="计量认证设置 CRC">
+            <outline text="含义：计量认证相关参数 CRC 校验结果。" />
+            <outline text="可配置内容：只读显示，不可配置" />
+            <outline text="权限：读取：操作员；写入：不可写" />
+            <outline text="手册页：325" />
+          </outline>
+          <outline text="设备名称">
+            <outline text="含义：在此功能参数中显示设备名称。铭牌上也会显示设备名称。" />
+            <outline text="可配置内容：只读显示，不可配置" />
+            <outline text="权限：读取：操作员；写入：不可写" />
+            <outline text="手册页：325" />
+          </outline>
+          <outline text="订货号">
+            <outline text="含义：显示设备订货号。" />
+            <outline text="可配置内容：执行或确认该菜单功能；无独立数值范围" />
+            <outline text="权限：读取：操作员；写入：服务" />
+            <outline text="手册页：325" />
+          </outline>
+          <outline text="扩展订货号 1 … 3">
+            <outline text="含义：显示扩展订货号的三个部分。" />
+            <outline text="可配置内容：由数字、字母和特殊字符组成的字符串" />
+            <outline text="权限：读取：操作员；写入：服务" />
+            <outline text="手册页：326" />
+          </outline>
+        </outline>
+        <outline text="仿真">
+          <outline text="设备报警仿真">
+            <outline text="含义：设备报警开启和关闭切换。" />
+            <outline text="可配置内容">
+              <outline text="关" />
+              <outline text="开" />
+            </outline>
+            <outline text="出厂设置：关" />
+            <outline text="权限：读取：操作员；写入：维护" />
+            <outline text="手册页：327" />
+          </outline>
+          <outline text="自诊断事件仿真">
+            <outline text="含义：选择仿真诊断事件。" />
+            <outline text="可配置内容">
+              <outline text="仪表诊断事件" />
+            </outline>
+            <outline text="出厂设置：关" />
+            <outline text="权限：读取：操作员；写入：维护" />
+            <outline text="手册页：327" />
+          </outline>
+          <outline text="距离仿真开关">
+            <outline text="含义：打开或关闭距离仿真。" />
+            <outline text="可配置内容">
+              <outline text="关" />
+              <outline text="开" />
+            </outline>
+            <outline text="出厂设置：关" />
+            <outline text="权限：读取：操作员；写入：维护" />
+            <outline text="手册页：327" />
+          </outline>
+          <outline text="距离仿真值">
+            <outline text="含义：设置距离仿真值。" />
+            <outline text="可配置内容：带符号浮点数" />
+            <outline text="出厂设置：0 mm" />
+            <outline text="显示/生效条件：距离仿真开关 （参见手册页 327） = 开" />
+            <outline text="权限：读取：操作员；写入：维护" />
+            <outline text="手册页：328" />
+          </outline>
+          <outline text="电流输出 N 仿真">
+            <outline text="含义：打开或关闭电流模拟。" />
+            <outline text="可配置内容">
+              <outline text="关" />
+              <outline text="开" />
+            </outline>
+            <outline text="出厂设置：关" />
+            <outline text="显示/生效条件：• 仪表带模拟量输入/输出模块。 • 工作模式 （参见手册页 218） = 4..20mA 输出或 HART 从站+4..20mA 输出" />
+            <outline text="权限：读取：操作员；写入：维护" />
+            <outline text="手册页：328" />
+          </outline>
+          <outline text="电流仿真值">
+            <outline text="含义：定义需要模拟的电流。" />
+            <outline text="可配置内容：3.4 … 23 mA" />
+            <outline text="出厂设置：仿真开始时的电流。" />
+            <outline text="显示/生效条件：电流输出仿真 （参见手册页 328） = 开" />
+            <outline text="权限：读取：操作员；写入：维护" />
+            <outline text="手册页：328" />
+          </outline>
+        </outline>
+        <outline text="设备检查">
+          <outline text="轮毂检查结果">
+            <outline text="含义：显示最近调试检查反馈的结果。" />
+            <outline text="可配置内容：只读显示，不可配置" />
+            <outline text="权限：读取：操作员；写入：不可写" />
+            <outline text="手册页：330" />
+          </outline>
+          <outline text="调试检查">
+            <outline text="调试检查">
+              <outline text="含义：此检查测试传感器侧的硬件和安装的传感器。" />
+              <outline text="可配置内容：执行或确认该菜单功能；无独立数值范围" />
+              <outline text="权限：读取：操作员；写入：维护" />
+              <outline text="手册页：331" />
+            </outline>
+            <outline text="轮毂检查结果">
+              <outline text="含义：显示最近调试检查反馈的结果。" />
+              <outline text="可配置内容：只读显示，不可配置" />
+              <outline text="权限：读取：操作员；写入：不可写" />
+              <outline text="手册页：331" />
+            </outline>
+            <outline text="步骤 X / 11">
+              <outline text="含义：指示当前正在运行的调试检查步骤。" />
+              <outline text="可配置内容：只读显示，不可配置" />
+              <outline text="权限：读取：操作员；写入：不可写" />
+              <outline text="手册页：331" />
+            </outline>
+          </outline>
+        </outline>
+        <outline text="LRC">
+          <outline text="LRC 1 … 2">
+            <outline text="LRC 模式">
+              <outline text="含义：激活或停用液位参考模式（LRC）。" />
+              <outline text="可配置内容">
+                <outline text="关" />
+                <outline text="与液位计比较" />
+                <outline text="与液位开关比较" />
+                <outline text="测量参考点（取决于仪表选型和设置）" />
+              </outline>
+              <outline text="出厂设置：关" />
+              <outline text="权限：读取：操作员；写入：维护" />
+              <outline text="手册页：332" />
+            </outline>
+            <outline text="允许偏差">
+              <outline text="含义：定义储罐液位和参考之间允许的差值。" />
+              <outline text="可配置内容：1 … 1 000 mm" />
+              <outline text="出厂设置：10 mm" />
+              <outline text="权限：读取：操作员；写入：维护" />
+              <outline text="手册页：332" />
+            </outline>
+            <outline text="检查失败阈值">
+              <outline text="含义：定义检测失败的注意:仅适用于模式“与液位计比较”。" />
+              <outline text="可配置内容：1 … 60" />
+              <outline text="出厂设置：3" />
+              <outline text="权限：读取：操作员；写入：维护" />
+              <outline text="手册页：332" />
+            </outline>
+            <outline text="参考液位源">
+              <outline text="含义：定义参考液位来源。 注意:仅适用于模式“与液位计比较”。" />
+              <outline text="可配置内容">
+                <outline text="无输入值" />
+                <outline text="HART 设备 1 液位（取决于仪表选型和设置）" />
+                <outline text="HART 设备 2 液位（取决于仪表选型和设置）" />
+                <outline text="HART 设备 3 液位（取决于仪表选型和设置）" />
+                <outline text="HART 设备 4 液位（取决于仪表选型和设置）" />
+                <outline text="HART 设备 5 液位（取决于仪表选型和设置）" />
+                <outline text="HART 设备 6 液位（取决于仪表选型和设置）" />
+                <outline text="HART 设备 7 液位（取决于仪表选型和设置）" />
+                <outline text="HART 设备 8 液位（取决于仪表选型和设置）" />
+                <outline text="HART 设备 9 液位（取决于仪表选型和设置）" />
+                <outline text="HART 设备 10 液位（取决于仪表选型和设置）" />
+                <outline text="HART 设备 11 液位（取决于仪表选型和设置）" />
+                <outline text="HART 设备 12 液位（取决于仪表选型和设置）" />
+                <outline text="HART 设备 13 液位（取决于仪表选型和设置）" />
+                <outline text="HART 设备 14 液位（取决于仪表选型和设置）" />
+                <outline text="HART 设备 15 液位（取决于仪表选型和设置）" />
+              </outline>
+              <outline text="出厂设置：无输入值" />
+              <outline text="权限：读取：操作员；写入：维护" />
+              <outline text="手册页：333" />
+            </outline>
+            <outline text="参考开关源">
+              <outline text="含义：定义参考开关的源。 注意:仅适用于模式“与液位计比较”。" />
+              <outline text="可配置内容">
+                <outline text="无" />
+                <outline text="数字量 A1-2" />
+                <outline text="数字量 A3-4" />
+                <outline text="数字量 B1-2" />
+                <outline text="数字量 B3-4" />
+                <outline text="数字量 C1-2" />
+                <outline text="数字量 C3-4" />
+                <outline text="数字量 D1-2" />
+                <outline text="数字量 D3-4" />
+              </outline>
+              <outline text="出厂设置：无" />
+              <outline text="权限：读取：操作员；写入：维护" />
+              <outline text="手册页：333" />
+            </outline>
+            <outline text="参考开关模式">
+              <outline text="含义：定义执行检查的开关方向。 注意:仅适用于模式“与液位开关比较”。" />
+              <outline text="可配置内容">
+                <outline text="激活 -&gt; 非激活" />
+                <outline text="非激活-&gt;激活" />
+              </outline>
+              <outline text="出厂设置：激活 -&gt; 非激活" />
+              <outline text="权限：读取：操作员；写入：维护" />
+              <outline text="手册页：334" />
+            </outline>
+            <outline text="参考液位">
+              <outline text="含义：指示当前参考液位。" />
+              <outline text="可配置内容：只读显示，不可配置；显示格式：带符号浮点数" />
+              <outline text="出厂设置：0 mm" />
+              <outline text="权限：读取：操作员；写入：不可写" />
+              <outline text="手册页：334" />
+            </outline>
+            <outline text="参考开关液位">
+              <outline text="含义：定义参考液位开关位置注意：只用于“与液位开关比较”模式。" />
+              <outline text="可配置内容：0 … 10 000.00 mm" />
+              <outline text="出厂设置：0 mm" />
+              <outline text="权限：读取：操作员；写入：维护" />
+              <outline text="手册页：334" />
+            </outline>
+            <outline text="参考开关状态">
+              <outline text="含义：指示参考开关的当前状态（例如，“激活”） 注意：只用于“与液位开关比较”模式。" />
+              <outline text="可配置内容：只读显示，不可配置；显示格式：• 未知 • 未激活 • 激活 • 错误" />
+              <outline text="出厂设置：未知" />
+              <outline text="权限：读取：操作员；写入：不可写" />
+              <outline text="手册页：335" />
+            </outline>
+            <outline text="检查液位">
+              <outline text="含义：指示开始执行参考点检查的储罐液位。" />
+              <outline text="可配置内容：带符号浮点数" />
+              <outline text="出厂设置：0 mm" />
+              <outline text="权限：读取：操作员；写入：研发" />
+              <outline text="手册页：335" />
+            </outline>
+            <outline text="检查状态">
+              <outline text="含义：指示参考点检查执行状态（例如“通过”）。" />
+              <outline text="可配置内容：• 未执行 • 通过 • 失败 • 不可能" />
+              <outline text="出厂设置：未执行" />
+              <outline text="权限：读取：操作员；写入：研发" />
+              <outline text="手册页：335" />
+            </outline>
+            <outline text="检查时间戳">
+              <outline text="含义：指示参考点检查执行的时间戳。" />
+              <outline text="可配置内容：只读显示，不可配置；显示格式：由数字、字母和特殊字符组成的字符串" />
+              <outline text="权限：读取：操作员；写入：不可写" />
+              <outline text="手册页：336" />
+            </outline>
+          </outline>
+        </outline>
+      </outline>
+      <outline text="专家菜单（本手册未展开）">
+        <outline text="含义：访问设备的专家级全部参数。" />
+        <outline text="可配置内容：本《操作手册》未提供；需依据对应设备的《仪表功能描述》（GP）补充，当前未臆造。" />
+        <outline text="手册说明页：158" />
+      </outline>
+      <outline text="资料范围">
+        <outline text="设备：Endress+Hauser Proservo NMS81" />
+        <outline text="手册：BA01459G/28/ZH/07.23-00（2023-10-25）" />
+        <outline text="范围：操作、设置、诊断菜单；含条件显示和选型相关菜单" />
+        <outline text="说明：带 X、N 或范围编号的菜单会随插槽、通道、设备数量或选型重复出现" />
+      </outline>
+    </outline>
+  </body>
+</opml>

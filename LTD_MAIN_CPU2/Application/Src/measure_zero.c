@@ -68,7 +68,10 @@ static uint8_t Zero_IsMotorDriverRecoveryError(uint32_t error_code)
     case MOTOR_TMC_CONFIG_LOST:
     case MOTOR_CHARGE_PUMP_UNDER_VOLTAGE:
     case MOTOR_DISABLED:
+    case MOTOR_DRIVER_NOT_INITIALIZED:
     case MOTOR_RUN_TIMEOUT:
+    case MOTOR_STOP_WAIT_TIMEOUT:
+    case MOTOR_ARRIVAL_WAIT_TIMEOUT:
         return 1U;
     default:
         return 0U;

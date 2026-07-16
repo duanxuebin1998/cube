@@ -235,21 +235,20 @@ void WriteDeviceParamsToHoldingRegisters(uint16_t *HoldingRegisterArray)
     write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_BOTTOM_ENCODER_CORRECTION_TANK_HEIGHT, g_deviceParams.bottom_encoder_correction_tank_height);
 
 
-    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_AO_START_LEVEL, g_deviceParams.AOStartLevel_01mm);
-    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_AO_END_LEVEL, g_deviceParams.AOEndLevel_01mm);
-
     /* ===================== 4-20mA 输出 ===================== */
-    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_AO_NORMAL_CURRENT_START_mA, g_deviceParams.CurrentRangeStart_mA);
-    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_AO_NORMAL_CURRENT_END_mA,   g_deviceParams.CurrentRangeEnd_mA);
-    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_AO_HIGH_ALARM_LEVEL,          g_deviceParams.AlarmHighAO);
-    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_AO_LOW_ALARM_LEVEL,           g_deviceParams.AlarmLowAO);
-    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_INITIAL_CURRENT_mA,     g_deviceParams.InitialCurrent_mA);
-    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_AO_HIGH_CURRENT_mA,     g_deviceParams.AOHighCurrent_mA);
-    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_AO_LOW_CURRENT_mA,      g_deviceParams.AOLowCurrent_mA);
-    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_FAULT_CURRENT_mA,       g_deviceParams.FaultCurrent_mA);
-    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_DEBUG_CURRENT_mA,       g_deviceParams.DebugCurrent_mA);
-    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_AO_OUTPUT_ENABLE,       g_deviceParams.AoOutputEnable);
-    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_RESERVED27, g_deviceParams.reserved27);
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_AO_WORK_MODE, g_deviceParams.ao_output.work_mode);
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_AO_CURRENT_MODE, g_deviceParams.ao_output.current_mode);
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_AO_OUTPUT_SOURCE, g_deviceParams.ao_output.output_source);
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_AO_SIL_WHG_RESERVED, g_deviceParams.ao_output.sil_whg_reserved);
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_AO_FIXED_CURRENT_MA_X100, g_deviceParams.ao_output.fixed_current_mA_x100);
+    write_i32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_AO_RANGE_0_01MM, g_deviceParams.ao_output.range_0_01mm);
+    write_i32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_AO_RANGE_100_01MM, g_deviceParams.ao_output.range_100_01mm);
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_AO_DAMPING_X10_S, g_deviceParams.ao_output.damping_x10_s);
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_AO_FAULT_MODE, g_deviceParams.ao_output.fault_mode);
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_AO_FAULT_CURRENT_MA_X100, g_deviceParams.ao_output.fault_current_mA_x100);
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_AO_ERROR_LEVEL, g_deviceParams.ao_output.error_level);
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_AO_POWER_ON_CURRENT_MA_X100, g_deviceParams.ao_output.power_on_current_mA_x100);
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_AO_SIMULATION_CURRENT_MA_X100, g_deviceParams.ao_output.simulation_current_mA_x100);
 
     /* ===================== 指令参数 ===================== */
     write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_CALIBRATE_OIL_LEVEL,    g_deviceParams.calibrateOilLevel);
@@ -283,6 +282,8 @@ void WriteDeviceParamsToHoldingRegisters(uint16_t *HoldingRegisterArray)
     write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_STRUCT_SIZE,   g_deviceParams.struct_size);
     write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_MAGIC,         g_deviceParams.magic);
     write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_CRC,           g_deviceParams.crc);
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_AO_SIMULATION_ENABLE,
+                      AoOutput_IsSimulationEnabled());
 }
 
 /*----------------------------------------------------------------
@@ -425,21 +426,22 @@ void ReadDeviceParamsFromHoldingRegisters(uint16_t *HoldingRegisterArray)
     g_deviceParams.bottom_encoder_correction_tank_height = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_BOTTOM_ENCODER_CORRECTION_TANK_HEIGHT);
 
 
-    g_deviceParams.AOStartLevel_01mm = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_AO_START_LEVEL);
-    g_deviceParams.AOEndLevel_01mm = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_AO_END_LEVEL);
-
     /* ===================== 4-20mA 输出 ===================== */
-    g_deviceParams.CurrentRangeStart_mA = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_AO_NORMAL_CURRENT_START_mA);
-    g_deviceParams.CurrentRangeEnd_mA   = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_AO_NORMAL_CURRENT_END_mA);
-    g_deviceParams.AlarmHighAO          = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_AO_HIGH_ALARM_LEVEL);
-    g_deviceParams.AlarmLowAO           = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_AO_LOW_ALARM_LEVEL);
-    g_deviceParams.InitialCurrent_mA    = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_INITIAL_CURRENT_mA);
-    g_deviceParams.AOHighCurrent_mA     = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_AO_HIGH_CURRENT_mA);
-    g_deviceParams.AOLowCurrent_mA      = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_AO_LOW_CURRENT_mA);
-    g_deviceParams.FaultCurrent_mA      = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_FAULT_CURRENT_mA);
-    g_deviceParams.DebugCurrent_mA      = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_DEBUG_CURRENT_mA);
-    g_deviceParams.AoOutputEnable       = (read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_AO_OUTPUT_ENABLE) == 0U) ? 0U : 1U;
-    g_deviceParams.reserved27 = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_RESERVED27);
+    g_deviceParams.ao_output.work_mode = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_AO_WORK_MODE);
+    g_deviceParams.ao_output.current_mode = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_AO_CURRENT_MODE);
+    g_deviceParams.ao_output.output_source = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_AO_OUTPUT_SOURCE);
+    g_deviceParams.ao_output.sil_whg_reserved = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_AO_SIL_WHG_RESERVED);
+    g_deviceParams.ao_output.fixed_current_mA_x100 = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_AO_FIXED_CURRENT_MA_X100);
+    g_deviceParams.ao_output.range_0_01mm = read_i32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_AO_RANGE_0_01MM);
+    g_deviceParams.ao_output.range_100_01mm = read_i32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_AO_RANGE_100_01MM);
+    g_deviceParams.ao_output.damping_x10_s = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_AO_DAMPING_X10_S);
+    g_deviceParams.ao_output.fault_mode = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_AO_FAULT_MODE);
+    g_deviceParams.ao_output.fault_current_mA_x100 = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_AO_FAULT_CURRENT_MA_X100);
+    g_deviceParams.ao_output.error_level = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_AO_ERROR_LEVEL);
+    g_deviceParams.ao_output.power_on_current_mA_x100 = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_AO_POWER_ON_CURRENT_MA_X100);
+    g_deviceParams.ao_output.simulation_current_mA_x100 = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_AO_SIMULATION_CURRENT_MA_X100);
+    AoOutput_SetSimulationEnabled(
+        (read_u32_from_regs(regs, HOLDREGISTER_AO_SIMULATION_ENABLE) == 0U) ? 0U : 1U);
 
     /* ===================== 指令参数 ===================== */
     g_deviceParams.calibrateOilLevel            = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_CALIBRATE_OIL_LEVEL);
@@ -627,19 +629,32 @@ void write_measurement_result_to_InputRegisters(uint16_t *regs) {
 	write_u32_to_regs(regs, REG_WIRELESS_PAIRING_RSSI_UPDATE_COUNTER, g_measurement.wireless_pairing_status.rssi_update_counter);
 
 	/* ==== AO 输出运行态，追加在 RSSI 运行态之后 ==== */
-	const AoOutputRuntime *ao_runtime = AoOutput_GetRuntime();
-	write_u32_to_regs(regs, REG_AO_OUTPUT_RUNTIME_TARGET_MA_X100, ao_runtime->target_mA_x100);
-	write_u32_to_regs(regs, REG_AO_OUTPUT_RUNTIME_LAST_SENT_MA_X100, ao_runtime->last_sent_mA_x100);
-	write_u32_to_regs(regs, REG_AO_OUTPUT_RUNTIME_SOURCE, ao_runtime->source);
-	write_u32_to_regs(regs, REG_AO_OUTPUT_RUNTIME_DRIVER_FAULT_FLAGS, ao_runtime->driver_fault_flags);
-	write_u32_to_regs(regs, REG_AO_OUTPUT_RUNTIME_DRIVER_FAULT_REGISTER, ao_runtime->driver_fault_register);
-	write_u32_to_regs(regs, REG_AO_OUTPUT_RUNTIME_LAST_ERROR_CODE, ao_runtime->last_error_code);
-	write_u32_to_regs(regs, REG_AO_OUTPUT_RUNTIME_UPDATE_COUNTER, ao_runtime->update_counter);
-	write_u32_to_regs(regs, REG_AO_OUTPUT_RUNTIME_LAST_UPDATE_TICK, ao_runtime->last_update_tick);
-	write_u32_to_regs(regs, REG_AO_OUTPUT_RUNTIME_LAST_SENT_TICK, ao_runtime->last_sent_tick);
+	AoOutputRuntime ao_runtime;
+	AoOutput_GetRuntimeSnapshot(&ao_runtime);
+	write_u32_to_regs(regs, REG_AO_OUTPUT_RUNTIME_TARGET_MA_X100, ao_runtime.target_mA_x100);
+	write_u32_to_regs(regs, REG_AO_OUTPUT_RUNTIME_LAST_SENT_MA_X100, ao_runtime.last_sent_mA_x100);
+	write_u32_to_regs(regs, REG_AO_OUTPUT_RUNTIME_SOURCE, ao_runtime.source);
+	write_u32_to_regs(regs, REG_AO_OUTPUT_RUNTIME_DRIVER_FAULT_FLAGS, ao_runtime.driver_fault_flags);
+	write_u32_to_regs(regs, REG_AO_OUTPUT_RUNTIME_DRIVER_FAULT_REGISTER, ao_runtime.driver_fault_register);
+	write_u32_to_regs(regs, REG_AO_OUTPUT_RUNTIME_LAST_ERROR_CODE, ao_runtime.last_error_code);
+	write_u32_to_regs(regs, REG_AO_OUTPUT_RUNTIME_UPDATE_COUNTER, ao_runtime.update_counter);
+	write_u32_to_regs(regs, REG_AO_OUTPUT_RUNTIME_LAST_UPDATE_TICK, ao_runtime.last_update_tick);
+	write_u32_to_regs(regs, REG_AO_OUTPUT_RUNTIME_LAST_SENT_TICK, ao_runtime.last_sent_tick);
 
 	/* SI Profile生命周期字段最后打包，寄存器地址追加在AO运行态之后。 */
 	write_u32_to_regs(regs, REG_DENSITY_DIST_SI_PROFILE_PHASE, g_measurement.si_profile_runtime.phase);
 	write_u32_to_regs(regs, REG_DENSITY_DIST_SI_PROFILE_CYCLE_COUNTER, g_measurement.si_profile_runtime.cycle_counter);
 	write_u32_to_regs(regs, REG_DENSITY_DIST_SI_PROFILE_PROGRESS_POINTS, g_measurement.si_profile_runtime.progress_points);
+
+	/* 协议20 AO扩展运行态最后追加，既有AO和SI地址保持不变。 */
+	write_i32_to_regs(regs, REG_AO_OUTPUT_RUNTIME_PROCESS_VALUE_01MM, ao_runtime.process_value_01mm);
+	write_i32_to_regs(regs, REG_AO_OUTPUT_RUNTIME_PERCENT_X100, ao_runtime.percent_x100);
+	write_u32_to_regs(regs, REG_AO_OUTPUT_RUNTIME_PROCESS_VALID, ao_runtime.process_valid);
+	write_u32_to_regs(regs, REG_AO_OUTPUT_RUNTIME_SIMULATION_ENABLED, ao_runtime.simulation_enabled);
+	write_u32_to_regs(regs, REG_AO_OUTPUT_RUNTIME_DAC_READBACK_MA_X100, ao_runtime.dac_readback_mA_x100);
+	write_u32_to_regs(regs, REG_AO_OUTPUT_RUNTIME_DAC_READBACK_VALID, ao_runtime.dac_readback_valid);
+
+	/* 固定点六字段先发布，代际计数器最后映射，供CPU3执行前后双读一致性校验。 */
+	write_u32_to_regs(regs, REG_SINGLE_POINT_MEAS_COMPLETE_COUNTER, g_measurement.measurement_complete_counter);
+	write_u32_to_regs(regs, REG_SINGLE_POINT_MON_SAMPLE_COUNTER, g_measurement.monitoring_sample_counter);
 }

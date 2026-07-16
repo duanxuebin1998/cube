@@ -1,0 +1,652 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AO 电流输出配置实施与验证计划</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --text: #202124;
+      --muted: #5f6368;
+      --line: #b8bdc3;
+      --head: #eceff2;
+      --note: #f7f7f7;
+      --ok: #edf6ed;
+      --warn: #fff5d9;
+      --link: #174ea6;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      color: var(--text);
+      background: #fff;
+      font: 15px/1.65 "Microsoft YaHei", "Noto Sans CJK SC", Arial, sans-serif;
+    }
+    main {
+      width: min(1500px, calc(100% - 32px));
+      margin: 24px auto 56px;
+    }
+    h1, h2, h3 { line-height: 1.3; }
+    h1 { margin: 0 0 8px; font-size: 28px; }
+    h2 {
+      margin: 32px 0 12px;
+      padding-bottom: 6px;
+      border-bottom: 2px solid #444;
+      font-size: 21px;
+    }
+    h3 { margin: 22px 0 8px; font-size: 17px; }
+    p { margin: 8px 0; }
+    a { color: var(--link); }
+    code {
+      padding: 1px 4px;
+      background: #f1f3f4;
+      border-radius: 2px;
+      font-family: Consolas, "Cascadia Mono", monospace;
+    }
+    .meta, .conclusion, .notice {
+      margin: 12px 0;
+      padding: 12px 14px;
+      border: 1px solid var(--line);
+      background: var(--note);
+    }
+    .conclusion { background: var(--ok); }
+    .notice { background: var(--warn); }
+    .status {
+      display: inline-block;
+      margin-right: 8px;
+      padding: 1px 7px;
+      border: 1px solid #777;
+      font-size: 13px;
+      font-weight: 700;
+    }
+    .small { color: var(--muted); font-size: 13px; }
+    nav {
+      margin: 18px 0;
+      padding: 12px 18px;
+      border: 1px solid var(--line);
+      background: #fafafa;
+    }
+    nav ol { columns: 2; margin: 4px 0; padding-left: 22px; }
+    table {
+      width: 100%;
+      margin: 12px 0 20px;
+      border-collapse: collapse;
+    }
+    th, td {
+      padding: 7px 9px;
+      border: 1px solid var(--line);
+      text-align: left;
+      vertical-align: top;
+    }
+    th { background: var(--head); white-space: nowrap; }
+    .wide { overflow-x: auto; }
+    .wide table { min-width: 1400px; }
+    .group { font-weight: 700; background: #f5f6f7; white-space: nowrap; }
+    .readonly { background: #f8f8f8; }
+    ul, ol { margin: 7px 0; padding-left: 24px; }
+    pre {
+      margin: 10px 0 18px;
+      padding: 12px 14px;
+      overflow: auto;
+      border: 1px solid var(--line);
+      background: #fafafa;
+      font: 14px/1.55 Consolas, "Cascadia Mono", "Microsoft YaHei", monospace;
+      white-space: pre-wrap;
+    }
+    @media print {
+      main { width: 100%; margin: 0; }
+      nav { display: none; }
+      h2, h3, tr { break-after: avoid; }
+      table, pre, .meta, .conclusion, .notice { break-inside: avoid; }
+      a { color: inherit; text-decoration: none; }
+    }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>AO 电流输出配置实施与验证计划</h1>
+    <p>沿用 NMS81 五分组结构，形成适合本设备的 15 项实际菜单</p>
+    <div class="meta">
+      <p><span class="status">软件已实施，待台架验证</span><strong>首次整理：</strong>2026-07-15　<strong>本次更新：</strong>2026-07-16　<strong>目标：</strong>统一 CPU2、CPU3、共享协议、参数存储、OLED 菜单与 HART 的 AO 输出行为</p>
+      <p><strong>本轮边界：</strong>完成软件和正式文档，不升版、不暂存、不提交；硬件电流精度、断环恢复和 HART 叠加仍须台架验证。</p>
+    </div>
+  </header>
+
+  <section id="conclusion">
+    <h2>1. 结论</h2>
+    <div class="conclusion">
+      <p><strong>最终方案固定为：</strong>通道设置、量程设置、故障设置、运行状态、诊断仿真，共 5 个分组、15 个实际菜单项。其中 13 项可操作：12 项持久化配置、1 项非持久化仿真开关；另有 2 项只读运行状态。</p>
+      <p><strong>配置顺序：</strong>12 项持久化配置始终可预配置。可先保持 AO工作模式为“禁用”，完成电流模式、输出源、量程、阻尼、故障、上电和仿真电流设置并读回确认，最后再把 AO工作模式改为输出模式。进入禁用模式会清除非持久化仿真状态，重新启用时不会恢复旧仿真。当前模式不使用的配置只是不参与本轮输出，不会变成只读。</p>
+      <p><strong>本设备输出源固定为：</strong>储罐液位、空高、水位，单位均为 mm；默认选择储罐液位，不再动态扩展温度、密度、压力或内部测量量。</p>
+      <p><strong>隐藏预留：</strong>AO SIL/WHG 字段固定为 0；DAC回读字段保留但有效标志固定为 0。两者均不计入 15 项菜单，当前不显示、不启用。后续 DAC 回读表示 AD5421 设定码回读，不是物理环路电流。</p>
+      <p><strong>不再增加：</strong>独立 AO 使能、高低报警、未就绪策略、阻尼旁路、仿真超时、退出仿真、环路状态、AD5421故障寄存器、最近输出错误等用户菜单。</p>
+    </div>
+    <table>
+      <thead><tr><th>项目</th><th>最终决定</th><th>原因</th></tr></thead>
+      <tbody>
+        <tr><td>AO 使能</td><td>不单独设置</td><td>由“AO工作模式=禁用”统一承担</td></tr>
+        <tr><td>电流标准</td><td>使用“AO电流模式”</td><td>NE、US、普通 4-20 mA 和固定电流已经构成完整编码方式</td></tr>
+        <tr><td>异常处理</td><td>使用“AO故障模式+AO故障电流”</td><td>最小值、最大值、最近有效值、实际值和设定值已经覆盖常用策略</td></tr>
+        <tr><td>运行监视</td><td>当前显示输入值和输入百分比</td><td>DAC回读仅为隐藏接口预留，后续实现后另行评审是否显示</td></tr>
+        <tr><td>仿真</td><td>只保留仿真开关和仿真电流</td><td>测试结束显式关闭，不增加超时配置</td></tr>
+        <tr><td>安全与校验</td><td>写入行为规则和测试要求</td><td>安全规则不转换成新的用户配置项</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <nav aria-label="目录">
+    <strong>目录</strong>
+    <ol>
+      <li><a href="#conclusion">结论</a></li>
+      <li><a href="#scope">范围与数量</a></li>
+      <li><a href="#menu">目标菜单</a></li>
+      <li><a href="#matrix">15 项完整定义</a></li>
+      <li><a href="#relations">配置关系与行为规则</a></li>
+      <li><a href="#state">输出状态流程</a></li>
+      <li><a href="#ui">OLED 菜单组织</a></li>
+      <li><a href="#implementation">实施计划</a></li>
+      <li><a href="#tests">测试矩阵</a></li>
+      <li><a href="#decisions">已确认语义基线</a></li>
+      <li><a href="#acceptance">验收标准</a></li>
+      <li><a href="#evidence">依据与状态声明</a></li>
+    </ol>
+  </nav>
+
+  <section id="scope">
+    <h2>2. 范围与数量</h2>
+    <table>
+      <thead><tr><th>四级分组</th><th>菜单项数量</th><th>可写/只读</th><th>作用</th></tr></thead>
+      <tbody>
+        <tr><td>通道设置</td><td>3</td><td>3 项可写</td><td>决定通道工作模式、电流编码和输出源</td></tr>
+        <tr><td>量程设置</td><td>4</td><td>4 项可写</td><td>完成固定电流或 0%～100% 过程量映射，并配置阻尼</td></tr>
+        <tr><td>故障设置</td><td>4</td><td>4 项可写</td><td>决定设备异常时的输出策略、设定值、事件级别和上电电流</td></tr>
+        <tr><td>运行状态</td><td>2</td><td>2 项只读</td><td>查看当前过程输入和量程百分比</td></tr>
+        <tr><td>诊断仿真</td><td>2</td><td>1 项持久化可写，1 项条件可操作</td><td>仿真电流可随时预配置；非持久化仿真开关仅在输出已启用时可操作</td></tr>
+        <tr><td><strong>合计</strong></td><td><strong>15</strong></td><td><strong>13 项可操作，2 项只读</strong></td><td>另有 2 个隐藏预留设计节点，不计入菜单</td></tr>
+      </tbody>
+    </table>
+    <div class="notice">
+      <p><strong>范围控制：</strong>产品菜单以这 15 项为唯一清单。新的安全检查、权限校验、状态优先级或恢复规则只能作为内部行为，不得未经重新确认增加用户菜单。</p>
+    </div>
+  </section>
+
+  <section id="menu">
+    <h2>3. 目标菜单</h2>
+    <pre>AO输出
+├─ 通道设置
+│  ├─ AO工作模式
+│  ├─ AO电流模式
+│  └─ AO输出源
+├─ 量程设置
+│  ├─ AO固定电流
+│  ├─ AO 0%对应值
+│  ├─ AO 100%对应值
+│  └─ AO阻尼系数
+├─ 故障设置
+│  ├─ AO故障模式
+│  ├─ AO故障电流
+│  ├─ AO错误级别
+│  └─ AO上电电流
+├─ 运行状态
+│  ├─ AO输入值
+│  └─ AO输入百分比
+└─ 诊断仿真
+   ├─ AO输出仿真
+   └─ AO仿真电流</pre>
+    <p><strong>菜单口径：</strong>名称、层级和数量按上图冻结。15 项菜单不因工作模式或电流模式变化而隐藏。12 项持久化配置不受工作模式、电流模式、故障模式或仿真开关状态限制，均可预配置；模式条件只决定配置何时参与输出。AO输出仿真仅在输出已启用时可操作，2 项运行状态始终只读。</p>
+    <div class="notice">
+      <p><strong>不显示的设计节点：</strong>AO SIL/WHG 仅保留持久化字段且固定为 0；DAC回读仅保留运行态值和有效标志且当前固定无效。二者不属于当前菜单。</p>
+    </div>
+  </section>
+
+  <section id="matrix">
+    <h2>4. 15 项完整定义</h2>
+    <div class="wide">
+    <table>
+      <thead>
+        <tr>
+          <th>分组</th>
+          <th>菜单项</th>
+          <th>类型</th>
+          <th>配置内容</th>
+          <th>默认值</th>
+          <th>单位</th>
+          <th>运行时生效条件</th>
+          <th>访问属性</th>
+          <th>含义与约束</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="group" rowspan="3">通道设置</td>
+          <td><strong>AO工作模式</strong></td>
+          <td>枚举</td>
+          <td>禁用；4-20mA输出；HART从站+输出</td>
+          <td>禁用</td>
+          <td>无</td>
+          <td>始终参与通道模式选择</td>
+          <td>持久化配置；可随时预配置</td>
+          <td>统一承担启停和 HART 从站角色选择；本设备不提供输入或 HART 主站选项</td>
+        </tr>
+        <tr>
+          <td><strong>AO电流模式</strong></td>
+          <td>枚举</td>
+          <td>4...20 mA NE；4...20 mA US；普通 4...20 mA；固定电流</td>
+          <td>4...20 mA NE</td>
+          <td>无</td>
+          <td>AO工作模式为任一输出模式时参与输出编码</td>
+          <td>持久化配置；可随时预配置</td>
+          <td>成套规定正常范围、过程越限范围、故障判据和硬件输出边界</td>
+        </tr>
+        <tr>
+          <td><strong>AO输出源</strong></td>
+          <td>枚举</td>
+          <td>储罐液位；空高；水位</td>
+          <td>储罐液位</td>
+          <td>mm</td>
+          <td>工作模式为输出模式，且电流模式不是固定电流时参与过程输出</td>
+          <td>持久化配置；可随时预配置</td>
+          <td>固定为本设备确认的 3 个过程量；运行期失效按故障规则处理</td>
+        </tr>
+        <tr>
+          <td class="group" rowspan="4">量程设置</td>
+          <td><strong>AO固定电流</strong></td>
+          <td>数值</td>
+          <td>4.0～22.5 mA</td>
+          <td>4 mA</td>
+          <td>mA</td>
+          <td>工作模式为输出模式，且AO电流模式=固定电流时参与输出</td>
+          <td>持久化配置；可随时预配置</td>
+          <td>固定电流是正式工作模式，不等同于诊断仿真</td>
+        </tr>
+        <tr>
+          <td><strong>AO 0%对应值</strong></td>
+          <td>数值</td>
+          <td>0～所选过程源上限；内部 int32，倍率 0.1 mm</td>
+          <td>0 mm</td>
+          <td>mm</td>
+          <td>输出模式且电流模式不是固定电流时参与过程映射</td>
+          <td>持久化配置；可随时预配置</td>
+          <td>定义过程量程的 0% 点，不是配置 0%输出电流；与100%值禁止相等，允许反向量程</td>
+        </tr>
+        <tr>
+          <td><strong>AO 100%对应值</strong></td>
+          <td>数值</td>
+          <td>0～所选过程源上限；内部 int32，倍率 0.1 mm</td>
+          <td>储罐液位/空高取罐高；水位取水罐高度，未配置时回退罐高</td>
+          <td>mm</td>
+          <td>输出模式且电流模式不是固定电流时参与过程映射</td>
+          <td>持久化配置；可随时预配置</td>
+          <td>定义过程量程的 100% 点，不是配置 100%输出电流；源切换时与0%值成对更新</td>
+        </tr>
+        <tr>
+          <td><strong>AO阻尼系数</strong></td>
+          <td>数值</td>
+          <td>0～999.9 s</td>
+          <td>0 s</td>
+          <td>s</td>
+          <td>输出模式、非固定电流且正常过程路径激活时参与输出</td>
+          <td>持久化配置；可随时预配置</td>
+          <td>对有效过程输入执行一阶阻尼后再换算电流；0 表示关闭。故障、固定电流和仿真均旁路阻尼</td>
+        </tr>
+
+        <tr>
+          <td class="group" rowspan="4">故障设置</td>
+          <td><strong>AO故障模式</strong></td>
+          <td>枚举</td>
+          <td>最小值；最大值；最近有效值；实际值；设定值</td>
+          <td>最大值</td>
+          <td>无</td>
+          <td>输出模式且故障路径激活时参与输出选择</td>
+          <td>持久化配置；可随时预配置</td>
+          <td>分别代表低故障方向、高故障方向、保持、继续当前过程值或使用指定电流</td>
+        </tr>
+        <tr>
+          <td><strong>AO故障电流</strong></td>
+          <td>数值</td>
+          <td>3.4～22.6 mA</td>
+          <td>22 mA</td>
+          <td>mA</td>
+          <td>仅设定值故障路径激活时参与输出</td>
+          <td>持久化配置；可随时预配置</td>
+          <td>只在“设定值”故障模式下生效</td>
+        </tr>
+        <tr>
+          <td><strong>AO错误级别</strong></td>
+          <td>枚举</td>
+          <td>无；警告；报警</td>
+          <td>警告</td>
+          <td>无</td>
+          <td>输出模式下决定整机业务故障是否切入故障输出</td>
+          <td>持久化配置；可随时预配置</td>
+          <td>只决定整机业务故障是否强制 AO 切换故障输出：无/警告不强制，报警时执行 AO故障模式；不负责生成或抑制整机事件</td>
+        </tr>
+        <tr>
+          <td><strong>AO上电电流</strong></td>
+          <td>数值</td>
+          <td>3.40～22.60 mA，精度 0.01 mA</td>
+          <td>4.00 mA</td>
+          <td>mA</td>
+          <td>输出模式、非固定电流且首次过程源判定前参与输出</td>
+          <td>持久化配置；可随时预配置</td>
+          <td>驱动初始化成功后使用；首次过程源有效性判定完成即退出。源有效转正常输出，源无效转故障模式；硬件故障和已成立的正式故障优先</td>
+        </tr>
+
+        <tr class="readonly">
+          <td class="group" rowspan="2">运行状态</td>
+          <td><strong>AO输入值</strong></td>
+          <td>只读运行态</td>
+          <td>当前被映射的过程值</td>
+          <td>—</td>
+          <td>跟随输出源</td>
+          <td>输出模式且电流模式不是固定电流</td>
+          <td>只读</td>
+          <td>显示输出源的当前有效过程值；无效时显示明确的不可用状态</td>
+        </tr>
+        <tr class="readonly">
+          <td><strong>AO输入百分比</strong></td>
+          <td>只读运行态</td>
+          <td>过程值在 4-20 mA 量程中的百分比</td>
+          <td>—</td>
+          <td>%</td>
+          <td>输出模式且电流模式不是固定电流</td>
+          <td>只读</td>
+          <td>按 0%对应值和100%对应值计算，作为量程监视值</td>
+        </tr>
+        <tr>
+          <td class="group" rowspan="2">诊断仿真</td>
+          <td><strong>AO输出仿真</strong></td>
+          <td>枚举</td>
+          <td>关；开</td>
+          <td>关</td>
+          <td>无</td>
+          <td>具有模拟量 I/O 模块且工作模式为输出模式</td>
+          <td>非持久化运行期开关；仅输出已启用时可操作</td>
+          <td>独立诊断开关；测试结束后显式关闭；上电和切换到禁用模式均强制关闭，禁用状态写“开”返回非法数据值</td>
+        </tr>
+        <tr>
+          <td><strong>AO仿真电流</strong></td>
+          <td>数值</td>
+          <td>3.4～23 mA</td>
+          <td>12.00 mA</td>
+          <td>mA</td>
+          <td>输出已启用且AO输出仿真=开时参与输出</td>
+          <td>持久化配置；可随时预配置</td>
+          <td>仿真关闭时仍可预配置，开启后接管业务输出。该电流值持久化，仿真开关不持久化</td>
+        </tr>
+      </tbody>
+    </table>
+    </div>
+  </section>
+
+  <section id="relations">
+    <h2>5. 配置关系与行为规则</h2>
+    <h3>5.1 AO工作模式</h3>
+    <table>
+      <thead><tr><th>模式</th><th>通道方向</th><th>4-20 mA</th><th>HART 角色</th><th>后续菜单</th></tr></thead>
+      <tbody>
+        <tr><td>禁用</td><td>关闭业务输出并清除非持久化仿真状态</td><td>固定输出 3.40 mA 禁用指示电流</td><td>无</td><td>12项持久化配置均可预配置；仿真开关不可操作；运行状态只读</td></tr>
+        <tr><td>4-20mA 输出</td><td>输出</td><td>输出</td><td>无</td><td>12项持久化配置均可编辑；开放仿真开关；运行状态只读</td></tr>
+        <tr><td>HART从站+输出</td><td>输出</td><td>输出</td><td>从站</td><td>12项持久化配置均可编辑；开放仿真开关，并按 HART 从站要求提供变量</td></tr>
+      </tbody>
+    </table>
+
+    <h3>5.2 AO电流模式</h3>
+    <table>
+      <thead><tr><th>电流模式</th><th>正常/过程范围</th><th>最小值</th><th>低故障判据</th><th>高故障判据</th><th>最大值</th></tr></thead>
+      <tbody>
+        <tr><td>普通 4...20 mA</td><td>4.0～20.5 mA</td><td>3.5 mA</td><td>&lt;3.6 mA</td><td>&gt;21.95 mA</td><td>22.6 mA</td></tr>
+        <tr><td>4...20 mA NE</td><td>3.8～20.5 mA</td><td>3.5 mA</td><td>&lt;3.6 mA</td><td>&gt;21.95 mA</td><td>22.6 mA</td></tr>
+        <tr><td>4...20 mA US</td><td>3.9～20.8 mA</td><td>3.5 mA</td><td>&lt;3.6 mA</td><td>&gt;21.95 mA</td><td>22.0 mA</td></tr>
+        <tr><td>固定电流</td><td>4.0～22.5 mA，由 AO固定电流决定</td><td>4.0 mA</td><td>—</td><td>—</td><td>22.5 mA</td></tr>
+      </tbody>
+    </table>
+    <p class="small">以上边界直接采用 NMS81 手册口径。固定模式遇报警级业务故障时，最小值和最大值分别采用固定模式的 4.00 mA、22.50 mA 边界，不借用 NE 边界。实际输出精度仍须用电流表台架验证，DAC寄存器回读不能代替物理测量。</p>
+
+    <h3>5.3 映射关系</h3>
+    <pre>0%对应值  ────────────── 100%对应值
+    │                           │
+  标称4mA                     标称20mA</pre>
+    <ul>
+      <li>AO 0%对应值和 AO 100%对应值配置的是过程值，不是电流值。</li>
+      <li>电流越限编码由 AO电流模式决定，用户不再单独设置起点电流和终点电流。</li>
+      <li>固定电流模式下，不使用 AO输出源、0%对应值和100%对应值。</li>
+      <li>AO 0%对应值与 AO 100%对应值禁止相等；写入同值时拒绝保存并保留原有效配置。</li>
+      <li>允许反向量程，即 0%对应值可以大于 100%对应值；映射方向随两个端点自动反转。</li>
+      <li>过程值超出 0%～100%量程时继续按线性关系计算，最终电流按当前 NE、US 或普通模式的过程范围和边界处理。</li>
+      <li>设备只保存一组 0%对应值和100%对应值；切换输出源时提示用户，并加载新输出源默认量程，同时清除上一输出源的一阶阻尼状态。</li>
+      <li>罐高或水罐高度变化导致当前源量程越界时，0%/100%成对重载为该源默认量程，避免合法罐高写入被旧 AO 量程阻断。</li>
+    </ul>
+
+    <h3>5.4 输出源</h3>
+    <table>
+      <thead><tr><th>输出源</th><th>单位</th><th>有效性要求</th><th>默认选择</th></tr></thead>
+      <tbody>
+        <tr><td>储罐液位</td><td>mm</td><td>液位测量流程已发布有效值；搜索、停止或失败出口负责显式失效</td><td>是</td></tr>
+        <tr><td>空高</td><td>mm</td><td>有效罐高减去有效储罐液位；任一输入无效则空高无效</td><td>否</td></tr>
+        <tr><td>水位</td><td>mm</td><td>水位测量流程已发布有效值；0 mm 是有效真实零水位，搜索或跟随失败时显式失效</td><td>否</td></tr>
+      </tbody>
+    </table>
+    <p>输出源不再扩展温度、密度、压力、浮子位置、频率、电容、扭力、电机状态或外部 HART 变量。HART 从站 PV 默认跟随 AO输出源；SV/TV/QV 如后续需要配置，应放在独立 HART 设置中，不增加到本方案的 AO 菜单。</p>
+
+    <h3>5.5 阻尼</h3>
+    <ul>
+      <li>阻尼对象是经过有效性检查的过程输入，阻尼结果再参与 0%/100%量程换算。</li>
+      <li>采用一阶阻尼；时间常数为 AO阻尼系数，0 s 时直接使用当前过程输入。</li>
+      <li>建议离散实现使用 <code>y(k)=y(k-1)+dt/(τ+dt)×[x(k)-y(k-1)]</code>，并以实际采样周期计算 <code>dt</code>。</li>
+      <li>故障输出、固定电流和 AO输出仿真直接形成电流命令，不经过过程阻尼。</li>
+    </ul>
+
+    <h3>5.6 故障模式</h3>
+    <table>
+      <thead><tr><th>模式</th><th>输出行为</th><th>使用注意</th></tr></thead>
+      <tbody>
+        <tr><td>最小值</td><td>输出当前电流模式规定的最小故障方向</td><td>接收端必须按相同阈值识别</td></tr>
+        <tr><td>最大值</td><td>输出当前电流模式规定的最大故障方向</td><td>NMS81 默认模式</td></tr>
+        <tr><td>最近有效值</td><td>保持故障前最后有效输出</td><td>接收端可能把冻结值误认为仍在更新</td></tr>
+        <tr><td>实际值</td><td>过程源仍有效时继续按当前过程值输出</td><td>过程源无效时不使用无效值，自动回退为“最大值”故障输出</td></tr>
+        <tr><td>设定值</td><td>输出 AO故障电流</td><td>只在该模式下显示并使用 AO故障电流</td></tr>
+      </tbody>
+    </table>
+    <p>AO错误级别只决定整机业务故障是否强制 AO 切换故障电流：无和警告不强制切换，报警执行 AO故障模式。它不创建、隐藏或改变整机事件。非固定模式的过程源尚不可用或运行中失效时不得计算正常输出；“实际值”模式回退最大值，其它模式按各自故障行为执行。</p>
+
+    <h3>5.7 上电电流</h3>
+    <ul>
+      <li>AO上电电流范围为 3.40～22.60 mA，默认 4.00 mA，设置精度 0.01 mA。</li>
+      <li>只在输出模式、非固定电流模式下使用；固定电流模式上电后直接进入固定电流输出。</li>
+      <li>驱动初始化成功且没有更高优先级故障时输出上电电流；完成第一次过程源有效性判定后退出。</li>
+      <li>过程源有效时转入正常输出；过程源无效时转入 AO故障模式，不允许无限等待过程源首次有效。</li>
+      <li>上电电流不经过阻尼；输出硬件故障和已经成立的正式故障输出优先。</li>
+    </ul>
+
+    <h3>5.8 运行状态与仿真</h3>
+    <ul>
+      <li>AO输入值和 AO输入百分比当前构成基本运行监视；DAC回读电流为后续实现的只读预留项。</li>
+      <li>后续 DAC回读电流通过 AD5421 RDDAC 读取 DAC 数据寄存器并换算，表示设定码回读，不是物理环路电流；实际输出仍必须用电流表或独立采样硬件验证。</li>
+      <li>AO输出仿真是独立诊断状态；在输出模式已启用且输出硬件正常时，由 AO仿真电流覆盖正常输出、固定电流和业务故障输出。</li>
+      <li>仿真不得绕过 AO工作模式=禁用，也不得绕过芯片或输出驱动硬件故障。</li>
+      <li>仿真状态上电默认关闭，测试结束由维护人员显式关闭；这属于固定行为，不增加超时或退出菜单。</li>
+    </ul>
+  </section>
+
+  <section id="state">
+    <h2>6. 输出状态流程</h2>
+    <table>
+      <thead><tr><th>顺序</th><th>条件</th><th>处理</th><th>使用的菜单项</th></tr></thead>
+      <tbody>
+        <tr><td>1</td><td>AO工作模式=禁用</td><td>停止过程换算和 HART，输出 3.40 mA 禁用指示电流，不保持最后输出</td><td>AO工作模式</td></tr>
+        <tr><td>2</td><td>芯片或输出驱动硬件故障</td><td>禁止仿真和业务输出，执行硬件安全处理；DAC回读状态标记为不可用</td><td>内部硬件状态，不增加菜单</td></tr>
+        <tr><td>3</td><td>AO输出仿真=开</td><td>输出 AO仿真电流，覆盖正常输出、固定电流和业务故障输出</td><td>AO输出仿真、AO仿真电流</td></tr>
+        <tr><td>4</td><td>整机业务故障且 AO错误级别=报警</td><td>按 AO故障模式处理；“实际值”仅在源有效时继续，否则回退最大值；固定模式的最小/最大为 4.00/22.50 mA</td><td>AO故障模式、AO故障电流、AO错误级别</td></tr>
+        <tr><td>5</td><td>AO电流模式=固定电流</td><td>输出 AO固定电流；忽略过程源有效性，不经过上电电流和阻尼</td><td>AO电流模式、AO固定电流</td></tr>
+        <tr><td>6</td><td>非固定模式，上电后首次过程源有效性判定尚未完成</td><td>输出 AO上电电流，不经过阻尼；首次判定完成后立即退出</td><td>AO上电电流</td></tr>
+        <tr><td>7</td><td>非固定模式，输出源无效</td><td>按 AO故障模式处理；“实际值”自动回退最大值</td><td>AO输出源、AO故障模式、AO故障电流</td></tr>
+        <tr><td>8</td><td>正常过程输出</td><td>读取有效 AO输出源，先执行一阶阻尼，再按 0%/100%量程和电流模式换算</td><td>AO输出源、AO 0%对应值、AO 100%对应值、AO阻尼系数、AO电流模式</td></tr>
+        <tr><td>9</td><td>持续运行</td><td>更新过程输入和输入百分比；DAC回读值与有效标志保留但当前固定无效</td><td>AO输入值、AO输入百分比</td></tr>
+      </tbody>
+    </table>
+    <div class="notice">
+      <p><strong>已确认优先级：</strong>禁用 → 输出硬件故障 → 仿真 → 报警级业务故障 → 固定电流 → 上电电流 → 非固定模式源无效 → 正常过程。仿真上电默认关闭，切换到禁用模式时同步清除；禁用状态不得开启仿真。上述规则作为内部状态机实现，不新增菜单项。</p>
+    </div>
+  </section>
+
+  <section id="ui">
+    <h2>7. 128×64 OLED 菜单组织</h2>
+    <p>按 4 行 OLED 设计，一级页面通过分页容纳五个分组和返回项。</p>
+    <table>
+      <thead><tr><th>页面</th><th>第1行</th><th>第2行</th><th>第3行</th><th>第4行</th></tr></thead>
+      <tbody>
+        <tr><td>AO输出 1/2</td><td>AO输出</td><td>通道设置</td><td>量程设置</td><td>故障设置</td></tr>
+        <tr><td>AO输出 2/2</td><td>AO输出</td><td>运行状态</td><td>诊断仿真</td><td>返回</td></tr>
+        <tr><td>通道设置</td><td>AO工作模式</td><td>AO电流模式</td><td>AO输出源</td><td>返回</td></tr>
+        <tr><td>量程设置</td><td>AO固定电流</td><td>AO 0%对应值</td><td>AO 100%对应值</td><td>AO阻尼系数</td></tr>
+        <tr><td>故障设置 1/2</td><td>故障设置</td><td>AO故障模式</td><td>AO故障电流</td><td>AO错误级别</td></tr>
+        <tr><td>故障设置 2/2</td><td>故障设置</td><td>AO上电电流</td><td>返回</td><td>—</td></tr>
+        <tr><td>运行状态</td><td>AO输入值</td><td>AO输入百分比</td><td>—</td><td>返回</td></tr>
+        <tr><td>诊断仿真</td><td>AO输出仿真</td><td>AO仿真电流</td><td>—</td><td>返回</td></tr>
+      </tbody>
+    </table>
+    <h3>7.1 UI 规则</h3>
+    <ul>
+      <li>15 项实际菜单不因模式变化隐藏；12项持久化配置始终可预配置，不适用仅表示暂不参与当前输出。两个隐藏预留节点不进入页面。</li>
+      <li>运行状态始终只读；持久化配置沿用设备现有参数编辑与确认流程；非持久化仿真开关仅在输出已启用时可操作。</li>
+      <li>数值页同时显示当前值、允许范围和单位；单位随输出源变化。</li>
+      <li>仿真开启时应有持续、明显的状态提示，但提示不是新的菜单项。</li>
+      <li>所有子菜单返回到直接父级，不能跳回错误层级。</li>
+      <li>中英文名称需在 128×64、4 行显示条件下完成截断和字库检查。</li>
+      <li>本文件保留产品规范名；受现有点阵字库限制，OLED 使用等义短名：诊断仿真→模拟设置、AO输出仿真→输出模拟、AO仿真电流→模拟电流、AO输入百分比→输入比例、AO错误级别→错误等级，枚举中的从站/普通/最近有效值/实际值/警告分别显示为从机/正常/上次有效值/实时值/提示。短名不改变配置语义或协议枚举值。</li>
+    </ul>
+  </section>
+
+  <section id="implementation">
+    <h2>8. 实施结果与剩余计划</h2>
+    <table>
+      <thead><tr><th>工作包</th><th>已实施内容</th><th>状态</th><th>剩余动作</th></tr></thead>
+      <tbody>
+        <tr><td>参数与存储</td><td>13 个连续 32 位 AO 槽按新逻辑顺序原位复用；12 项配置持久化，仿真开关独立且不持久化；协议19及更早布局迁移到协议20，参数存储版本仍为3且结构总尺寸不变；罐高变化后仍合法的自定义量程保持不变，仅在当前量程失效时成对装载默认端点</td><td>软件已实施</td><td>执行旧 FRAM 样本迁移台架验证</td></tr>
+        <tr><td>CPU2 输出状态机</td><td>三过程源、一阶阻尼、四种电流模式、五种故障模式、上电电流、仿真、固定模式和最近有效值已接入；每次计算使用一致配置快照；非固定输出在选中源首次明确发布有效或无效前保持上电电流，后续模式或源切换不重新进入上电态；工作模式切到禁用时清除仿真运行态，禁用状态写仿真开启返回非法数据值</td><td>软件已实施</td><td>故障注入、上电时序、仿真禁用转场与物理电流台架验证</td></tr>
+        <tr><td>AD5421 与诊断</td><td>初始化可使用 0.01 mA 配置值；驱动故障参与优先级；DAC回读值和有效标志仅预留，当前固定无效</td><td>软件已实施</td><td>验证过温、断环/重接；RDDAC 后续单独实现</td></tr>
+        <tr><td>HART</td><td>仅 HART从站+输出模式响应；PV 跟随 AO输出源，电流取最后成功下发值，百分比按 50.00% 语义返回</td><td>软件已实施</td><td>HART 主站与 4-20 mA 叠加台架联调</td></tr>
+        <tr><td>共享协议</td><td>双端协议号更新为20；旧 AO 运行态地址不移动，AO 扩展运行态追加在 SI Profile 之后；非法 FC10 配置拒绝并回滚；非输出模式写仿真开启同样返回非法数据值；保持寄存器窗口严格结束于0x015A，0x015A起不可访问</td><td>软件已实施</td><td>验证19/20混搭拦截、仿真禁用门禁和0x0158/0x015A边界异常响应</td></tr>
+        <tr><td>CPU3 OLED</td><td>五组15项菜单、12项持久化配置全时预配置、仿真开关输出启用门禁、源切换确认与默认量程、0%/100%成对写和运行状态刷新已接入；写入ACK后若定向补读失败，立即关闭参数快照并排队全量补读，刷新完成前不开放旧镜像；仿真开启时状态页持续反显“模拟”，关闭后恢复电机图标；规范名与OLED短名映射已记录</td><td>软件已实施</td><td>实机逐页检查禁用状态预配置、按键、分页、单位、仿真提示、刷新和补读失败恢复</td></tr>
+        <tr><td>构建与静态检查</td><td>CPU2、CPU3 clean-first 构建通过；AO协议20契约、OLED字库、编码、地址、差异和暂存区检查通过</td><td>已通过</td><td>硬件台架项目仍按下方矩阵执行</td></tr>
+        <tr><td>硬件与发布</td><td>本轮不升版、不暂存、不提交、不发布</td><td>待后续授权</td><td>批准电流允许误差后完成台架矩阵，再决定升版和发布</td></tr>
+      </tbody>
+    </table>
+
+    <div class="notice">
+      <p><strong>调度残余风险：</strong>当前 AO 刷新属于 PendSV bottom-half 路径，AD5421 初始化/恢复内部仍含等待。软件构建通过不能证明实时性安全；台架必须观察初始化、过温恢复和断环重接期间的调度延迟。若影响其它实时任务，应把初始化/恢复迁移到可阻塞的任务上下文。</p>
+    </div>
+
+    <h3>8.1 协议20关键地址</h3>
+    <table>
+      <thead><tr><th>地址</th><th>内容</th><th>兼容规则</th></tr></thead>
+      <tbody>
+        <tr><td><code>0x00AC～0x00C5</code></td><td>13 个 AO 配置槽：工作模式、电流模式、输出源、SIL/WHG预留、固定电流、0%、100%、阻尼、故障模式、故障电流、错误级别、上电电流、仿真电流</td><td>原位复用，不移动其后参数</td></tr>
+        <tr><td><code>0x0156～0x0157</code></td><td>参数 CRC</td><td>地址不变</td></tr>
+        <tr><td><code>0x0158～0x0159</code></td><td>AO仿真开关，0/1，非持久化</td><td>重启固定恢复为0；<code>0x015A～0x01FF</code>不可访问</td></tr>
+        <tr><td><code>0x0A20～0x0A31</code></td><td>既有9项 AO 运行态</td><td>协议20不移动</td></tr>
+        <tr><td><code>0x0A32～0x0A37</code></td><td>SI Profile 三项运行态</td><td>继承协议18，不移动</td></tr>
+        <tr><td><code>0x0A38～0x0A43</code></td><td>过程值0.1 mm、百分比0.01%、过程有效、仿真开启、DAC回读预留值、DAC回读有效</td><td>6项 AO 扩展；DAC回读有效当前固定为0</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="tests">
+    <h2>9. 可执行测试矩阵</h2>
+    <div class="wide">
+    <table>
+      <thead><tr><th>ID</th><th>前置与输入</th><th>执行步骤</th><th>预期运行态/协议</th><th>预期输出或响应</th><th>证据</th><th>状态</th></tr></thead>
+      <tbody>
+        <tr><td>MENU-01</td><td>CPU3/CPU2均为协议20；设备处于允许写参数状态</td><td>遍历 AO输出五个分组、翻页和返回；在禁用、固定电流、非设定值故障模式和仿真关闭状态检查编辑入口</td><td>仅显示15项；SIL/WHG、DAC回读不可见；12项持久化配置始终可编辑；仿真开关在禁用时不可操作；2项运行状态只读</td><td>返回直接父级，无额外 AO使能、高低报警、环路状态等菜单</td><td>逐页照片/录像</td><td>待实机</td></tr>
+        <tr><td>MENU-02</td><td>输出源依次为0/1/2</td><td>确认和取消源切换；观察单位和量程</td><td>取消不写；确认后 CPU2 原子接受源切换并成对重载0%/100%，CPU3补读完整配置，阻尼状态重置</td><td>储罐液位/空高默认0～罐高；水位0～水罐高度，缺省回退罐高</td><td>串口帧+页面照片</td><td>待实机</td></tr>
+        <tr><td>MENU-03</td><td>AO工作模式=禁用；设备处于允许写参数状态；CPU2通信和参数快照有效</td><td>依次修改其余11项持久化配置并逐项读回，掉电重启后再次核对；最后把AO工作模式改为4-20mA输出</td><td>禁用期间全部配置写入、补读和持久化成功，但未被当前输出路径消费；最后启用时按已确认配置进入对应输出路径</td><td>启用前保持3.40mA禁用指示电流；启用后不要求重新配置即可按预设模式输出</td><td>菜单录像+UART5抓包+掉电读回+电流表</td><td>待实机/台架</td></tr>
+        <tr><td>CFG-01</td><td><code>0x00AC～0x00C5</code>逐字段取默认、边界、边界±1</td><td>使用 FC10 写32位值并读回</td><td>合法值生效；非法枚举、范围和非零SIL/WHG返回异常，原镜像不变</td><td>无错误瞬时电流；当前计算周期使用同一配置快照</td><td>请求/响应帧+运行态</td><td>软件静态完成，联调待测</td></tr>
+        <tr><td>SYNC-01</td><td>双端协议20；对量程、输出源、仿真和普通配置分别注入“FC10 ACK有效、紧随FC03超时或CRC错误”</td><td>从CPU3菜单写入并阻断定向补读，随后立即尝试再次读取和写入；恢复通信后等待全量保持区补读</td><td>失败分支立即使参数快照失效并请求全量补读；刷新完成前参数读写被拒绝，不把旧镜像或请求值显示为已确认值</td><td>补读完成后CPU3以CPU2实际值重建菜单和对外快照；仿真开关同样覆盖</td><td>UART5抓包+菜单录像+快照门禁记录</td><td>软件静态完成，故障注入待实机</td></tr>
+        <tr><td>RNG-01</td><td>正向0/100、反向100/0、相等50/50；内部倍率0.1 mm</td><td>用一条 FC10 成对写 <code>0x00B6～0x00B9</code></td><td>正向和反向均接受；相等值拒绝并完整回滚</td><td>0/50/100%线性映射；相等写入不改变原输出</td><td>帧记录+电流命令</td><td>待联调</td></tr>
+        <tr><td>MIG-01</td><td>准备协议19及更早的合法、部分非法旧AO FRAM镜像</td><td>启动协议20固件并读取全部参数</td><td>旧13槽迁移到新字段；合法值保留，非法AO值补默认；其它参数不清除；存储版本仍为3</td><td>启动先输出配置上电电流，仿真开关为0</td><td>迁移前后FRAM转储</td><td>待台架</td></tr>
+        <tr><td>SRC-01</td><td>分别发布储罐液位、空高、水位；水位含0 mm</td><td>选择对应源并让测量成功、搜索、停止和失败</td><td><code>0x0A38</code>过程值、<code>0x0A3C</code>有效标志随测量流程变化；0 mm水位有效</td><td>有效值正常映射；非固定模式无效时进入故障策略；固定模式不受影响</td><td>运行态快照+日志</td><td>待台架</td></tr>
+        <tr><td>CUR-01</td><td>NE=0、US=1、普通=2、固定=3</td><td>在量程0/50/100%及越限点切换四种模式</td><td>百分比按0.01%报告；目标/最后下发运行态一致</td><td>普通4.00～20.50；NE3.80～20.50；US3.90～20.80；固定4.00～22.50 mA</td><td>运行态+标准电流表</td><td>软件完成，物理待测</td></tr>
+        <tr><td>STATE-01</td><td>依次制造禁用、硬件故障、仿真、报警级业务故障、固定、上电、源无效、正常</td><td>逐层叠加并撤销条件</td><td>状态按既定优先级切换；DAC回读有效始终为0</td><td>低优先级不得覆盖高优先级命令</td><td>状态时间线+电流表</td><td>待台架</td></tr>
+        <tr><td>FLT-01</td><td>故障模式0～4；错误级别0/1/2；源有效/无效</td><td>在普通、NE、US、固定模式注入整机业务故障</td><td>无/警告不强制 AO；报警执行故障模式；不改变整机事件记录</td><td>最小/最大按模式边界；最近值取最后成功正常输出；实际值源无效回退最大；设定值取配置</td><td>故障注入记录+电流表</td><td>待台架</td></tr>
+        <tr><td>DAMP-01</td><td>阻尼0、1、10、999.9 s</td><td>过程量阶跃后切换故障、固定、仿真和上电场景</td><td>正常过程按实际tick一阶响应；其它路径无阻尼延迟</td><td>过程输出曲线符合 <code>dt/(τ+dt)</code>；旁路场景一步到目标</td><td>时间序列导出</td><td>待台架</td></tr>
+        <tr><td>PWR-01</td><td>上电电流3.40、4.00、22.60 mA；源有效/无效；固定和报警故障</td><td>每组配置重新上电</td><td>非固定模式首次源判定前为上电态；判定后退出且不重新进入</td><td>有效转正常，无效转故障，固定直接固定，报警级业务故障优先</td><td>上电波形+启动日志</td><td>待台架</td></tr>
+        <tr><td>SIM-01</td><td>仿真电流3.40、12.00、23.00；<code>0x0158</code>写0/1</td><td>在正常、业务故障、固定和硬件故障下开关仿真；执行“仿真开→工作模式禁用→重新启用”；在禁用状态直接写仿真开启；最后重启</td><td><code>0x0A3E</code>反映开关；切换禁用立即清零；禁用状态写1返回<code>0x03 Illegal Data Value</code>并保持关闭；重新启用不恢复旧仿真；重启后固定为0，仿真电流配置保留</td><td>仿真覆盖正常/业务故障/固定；不得覆盖禁用或硬件故障；重新启用按持久化业务配置输出</td><td>帧记录+运行态+电流表</td><td>待台架</td></tr>
+        <tr><td>RUN-01</td><td>过程量取无效、0%、50%、100%、越限</td><td>读取 OLED 与 <code>0x0A38～0x0A43</code></td><td>值0.1 mm、有符号百分比0.01%、有效标志和仿真状态一致；DAC值不显示且valid=0</td><td>运行状态不把陈旧值显示为当前有效值</td><td>寄存器转储+照片</td><td>待实机</td></tr>
+        <tr><td>PROT-01</td><td>20/20、19/20、20/19 三种双端组合</td><td>启动双端并轮询配置与运行态</td><td>20/20正常；混搭被协议门控拦截；旧AO和SI地址不移动；总输入寄存器2628</td><td>不得错位解析或伪成功</td><td>通信抓包+版本页</td><td>待双端联调</td></tr>
+        <tr><td>HART-01</td><td>工作模式分别0/1/2，过程值50%</td><td>主站读取PV、电流和百分比</td><td>仅模式2响应；PV跟随选中源，电流为最后成功下发值，百分比为50.00</td><td>HART变量和AO运行态一致</td><td>HART主站抓包</td><td>待台架</td></tr>
+        <tr><td>DRV-01</td><td>过温、断环、通信/寄存器故障</td><td>注入故障并清除；断开和重接环路</td><td>过温期间只轮询、不每秒反复初始化；清除后恢复；其它可恢复错误按策略重新初始化</td><td>故障期间不得输出伪正常值，恢复后按当前高优先级状态输出</td><td>SPI/故障日志+电流表</td><td>待台架</td></tr>
+        <tr><td>BUILD-01</td><td>当前工作区，不升版</td><td>双端 clean-first 构建、AO协议20契约、字库、<code>git diff --check</code>、编码/注释/地址/暂存区校验</td><td>CPU2与CPU3构建成功；无新增乱码和不合规注释；双端协议、地址和字段一致；暂存区由外部流程并发改变，未把指纹不变作为通过项</td><td>CPU2于2026-07-16重新clean-first构建，ELF：text 306452、data 2328、bss 33992；CPU3于2026-07-16重新clean-first构建，ELF：text 176832、data 37940、bss 60852；两端固定名和当前版本名HEX的SHA-256分别一致；本任务不执行提交或推送</td><td>构建输出、契约脚本、字库与Git检查记录</td><td>软件与静态检查通过；暂存边界待并发流程收敛</td></tr>
+        <tr><td>HW-01</td><td>3.40、3.50、3.60、3.80、3.90、4.00、20.00、20.50、20.80、21.95、22.00、22.50、22.60、23.00 mA</td><td>用校准合格的标准电流表逐点测量并验证接收端判定</td><td>运行态命令值与设定一致；DAC回读不得作为证据</td><td>物理电流满足批准容差；当前容差尚未批准，禁止判定通过</td><td>台架记录表+仪表编号</td><td>待批准容差后执行</td></tr>
+      </tbody>
+    </table>
+    </div>
+  </section>
+
+  <section id="decisions">
+    <h2>10. 已确认的产品语义基线</h2>
+    <p>以下结论已于 2026-07-15 确认并作为软件实现基线；当前菜单固定为15项，两个隐藏预留节点不计入菜单。</p>
+    <table>
+      <thead><tr><th>项目</th><th>已确认结论</th><th>实施边界</th></tr></thead>
+      <tbody>
+        <tr><td>工作模式</td><td>仅支持禁用、4-20mA输出、HART从站+输出</td><td>不显示输入和 HART 主站相关模式</td></tr>
+        <tr><td>输出源</td><td>固定为储罐液位、空高、水位，单位均为 mm；默认储罐液位</td><td>不显示温度、密度、压力和其它内部或外部变量</td></tr>
+        <tr><td>源切换量程</td><td>全设备只保存一组 0%/100%量程</td><td>切换源时提示、加载新源默认量程并重置阻尼，不保存分源历史量程</td></tr>
+        <tr><td>电流模式边界</td><td>直接采用 NMS81 的普通、NE、US和固定电流范围</td><td>数值以本文件 5.2 表格为唯一口径，并完成硬件验证</td></tr>
+        <tr><td>0%/100%规则</td><td>禁止两值相等；允许反向量程；过程越限按电流模式编码</td><td>同值写入必须拒绝且不能破坏原有效配置</td></tr>
+        <tr><td>阻尼</td><td>对有效过程输入做一阶阻尼，再换算电流</td><td>故障、固定电流和仿真均不经过阻尼</td></tr>
+        <tr><td>“实际值”故障模式</td><td>仅在输出源仍有效时继续输出；过程值无效时回退最大值故障模式</td><td>不得输出无效过程值</td></tr>
+        <tr><td>AO错误级别</td><td>无/警告不因整机业务故障强制 AO 切换；报警执行故障模式</td><td>只控制 AO 输出选择，不生成或抑制整机事件</td></tr>
+        <tr><td>DAC回读电流</td><td>字段和有效标志先预留，后续单独实现</td><td>当前有效标志固定为0且菜单不显示；后续读取的是 DAC 设定码，不是物理环路电流</td></tr>
+        <tr><td>AO上电电流</td><td>3.40～22.60 mA，默认4.00 mA，精度0.01 mA</td><td>首次源有效性判定后退出；源无效进入故障模式；固定电流、硬件故障和正式故障按已确认优先级处理</td></tr>
+        <tr><td>菜单显示</td><td>15项实际菜单不隐藏；12项持久化配置始终可预配置</td><td>模式条件只决定何时参与输出；仿真开关仅输出已启用时可操作；2项运行状态只读；SIL/WHG和DAC回读是隐藏设计节点</td></tr>
+        <tr><td>禁用行为</td><td>停止过程换算和 HART，不保持最后输出</td><td>固定输出3.40 mA禁用指示电流</td></tr>
+        <tr><td>固定模式</td><td>不依赖过程源有效性</td><td>报警级业务故障仍优先；最小/最大故障边界为4.00/22.50 mA</td></tr>
+        <tr><td>AO SIL/WHG</td><td>保留字段且固定为0</td><td>当前不显示、不启用；未经正式认证不得声明 SIL/WHG</td></tr>
+        <tr><td>仿真优先级</td><td>覆盖正常输出、固定电流和业务故障输出；上电关闭，切换禁用时清除</td><td>不能绕过 AO工作模式禁用或输出硬件故障；禁用状态写仿真开启返回非法数据值</td></tr>
+        <tr><td>HART 变量关系</td><td>HART 从站 PV 默认与 AO输出源一致</td><td>SV/TV/QV 留在独立 HART 设置，不增加到 AO 菜单</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="acceptance">
+    <h2>11. 验收标准</h2>
+    <ul>
+      <li>AO输出实际菜单为五组、15项，名称和层级与本文件一致。</li>
+      <li>不存在独立 AO使能、高低报警、未就绪策略、阻尼旁路、仿真超时或其它新增配置项。</li>
+      <li>13项可操作项全部落实：12项持久化配置和1项非持久化仿真开关。</li>
+      <li>在AO工作模式禁用时，其余11项持久化配置均能修改、写后读回并掉电保持；最后开启输出后直接按预配置生效。</li>
+      <li>固定电流、非设定值故障模式或仿真关闭等暂不使用状态不得把相关持久化配置变为只读；AO输出仿真在输出禁用时不可开启，切换到禁用时必须清除，重新启用不得恢复旧仿真。</li>
+      <li>2项只读运行状态定义完整；两个隐藏预留节点不出现在当前菜单。</li>
+      <li>AO工作模式只有 3 个选项，AO输出源只有储罐液位、空高、水位。</li>
+      <li>DAC回读电流当前只预留；后续实现时必须明确其为 DAC 设定码回读，不得混同物理环路电流。</li>
+      <li>AO上电电流、退出条件、禁用输出和单组量程切换规则均按本文件执行。</li>
+      <li>工作模式、电流模式、输出源、量程、阻尼、故障和仿真之间的依赖关系唯一、可测试。</li>
+      <li>128×64 OLED 的文案、4行分页、返回路径和数值输入通过构建与实机验证。</li>
+      <li>所有安全限制作为内部规则实现，没有擅自扩展菜单。</li>
+      <li>关键电流点、故障编码、HART、断环恢复和仿真通过硬件台架验证；物理电流容差须先批准。</li>
+    </ul>
+    <div class="notice">
+      <p><strong>当前状态：</strong>产品语义已冻结，CPU2、CPU3、共享协议20、参数迁移、OLED菜单和HART软件已实施，且已通过本轮构建/静态验证；尚未升版、发布或完成硬件电流和HART台架联调。</p>
+    </div>
+  </section>
+
+  <section id="evidence">
+    <h2>12. 依据与状态声明</h2>
+    <table>
+      <thead><tr><th>资料</th><th>用途</th><th>边界</th></tr></thead>
+      <tbody>
+        <tr><td><a href="../../01_协议与寄存器/AO电流输出/NMS81_4-20mA输出配置菜单.opml">NMS81 4-20 mA 输出配置菜单</a></td><td>核对菜单路径、选项、默认值、显示条件和权限</td><td>XMind/OPML 整理源</td></tr>
+        <tr><td><a href="../../01_协议与寄存器/AO电流输出/NMS81_4-20mA输出配置整理.md">NMS81 4-20 mA 输出配置整理</a></td><td>核对电流模式、输出源、故障、阻尼、状态和仿真语义</td><td>阅读辅助；原手册优先</td></tr>
+        <tr><td><a href="../../01_协议与寄存器/AO电流输出/00_原始资料/N81 - 操作手册.pdf">N81 - 操作手册.pdf</a></td><td>原厂配置和硬件条件依据</td><td>手册内容与整理冲突时以原文为准</td></tr>
+        <tr><td>用户确认的 AO 输出配置截图</td><td>冻结 NMS81 五组菜单骨架</td><td>本设备增加 AO上电电流，并对两个后续项仅作预留</td></tr>
+        <tr><td>2026-07-15 用户逐项确认的产品语义</td><td>冻结工作模式、三项输出源、电流边界、量程、阻尼、故障、上电电流、禁用、预留回读、SIL/WHG 和仿真规则</td><td>已作为本轮软件实现基线；不代表已经发布或通过台架</td></tr>
+      </tbody>
+    </table>
+    <p class="small">本文件记录当前工作区的软件实施结果与后续验证计划。未提交改动不等于已发布固件；当前正式发布组合仍以版本资料为准。</p>
+  </section>
+</main>
+</body>
+</html>

@@ -205,7 +205,7 @@ static uint32_t MotorDriver_CheckMotionReadyInternal(bool ignore_encoder_ready)
     if (MotorCtrl_IsPositionSourceMotor()) {
         /* 电机记步模式下，编码器只作为后台采集对象，旧编码器错误不阻断运动。 */
         if ((g_measurement.device_status.error_code >= ENCODER_TIMEOUT) &&
-            (g_measurement.device_status.error_code <= ENCODER_OCF_INCOMPLETE)) {
+            (g_measurement.device_status.error_code <= ENCODER_FIRST_SAMPLE_TIMEOUT)) {
             g_measurement.device_status.error_code = NO_ERROR;
         }
         return NO_ERROR;
@@ -217,9 +217,9 @@ static uint32_t MotorDriver_CheckMotionReadyInternal(bool ignore_encoder_ready)
             return NO_ERROR;
         }
         /* 编码轮记步模式下没有首帧可信位置，必须禁止下发运动命令。 */
-        g_measurement.device_status.error_code = ENCODER_TIMEOUT;
+        g_measurement.device_status.error_code = ENCODER_FIRST_SAMPLE_TIMEOUT;
         printf("电机运动被拦截：编码器首帧尚未就绪\r\n");
-        return ENCODER_TIMEOUT;
+        return ENCODER_FIRST_SAMPLE_TIMEOUT;
     }
 
     return NO_ERROR;
@@ -316,7 +316,7 @@ uint32_t MotorDriver_CheckHealth(MotorDriverHealthMode mode)
 
     /* 运行期/运动前发现驱动未初始化，直接按电机不可用处理，不继续读寄存器。 */
     if (!s_motor_driver.initialized && (mode != MOTOR_DRIVER_HEALTH_INIT_CHECK)) {
-        return MOTOR_DISABLED;
+        return MOTOR_DRIVER_NOT_INITIALIZED;
     }
 
     if (mode == MOTOR_DRIVER_HEALTH_INIT_CHECK) {
@@ -433,7 +433,7 @@ static uint32_t MotorDriver_ReadTargetPositionOpen(TMC5130TypeDef *tmc5130, bool
     int64_t diff;
 
     if ((tmc5130 == NULL) || (target_open == NULL)) {
-        return PARAM_ADDRESS_OVERFLOW;
+        return SYSTEM_CALL_CONDITION_ERROR;
     }
 
     if (!stpr_tryReadInt(tmc5130, TMC5130_XACTUAL, &xactual)) {
@@ -463,7 +463,7 @@ static uint32_t MotorDriver_AlignTargetToActual(TMC5130TypeDef *tmc5130)
     int32_t xactual = 0;
 
     if (tmc5130 == NULL) {
-        return PARAM_ADDRESS_OVERFLOW;
+        return SYSTEM_CALL_CONDITION_ERROR;
     }
 
     if (!stpr_tryReadInt(tmc5130, TMC5130_XACTUAL, &xactual)) {
@@ -630,7 +630,7 @@ uint32_t MotorCtrl_Init(void)
  *
  * @param tmc5130 TMC5130 device object.
  * @param is_moving Output moving state when return is NO_ERROR.
- * @return NO_ERROR, PARAM_ADDRESS_OVERFLOW or MOTOR_TMC_COMM_ERROR.
+ * @return NO_ERROR, SYSTEM_CALL_CONDITION_ERROR or MOTOR_TMC_COMM_ERROR.
  */
 uint32_t MotorCtrl_IsDriverMoving(TMC5130TypeDef *tmc5130, bool *is_moving)
 {
@@ -732,8 +732,8 @@ uint32_t MotorDriver_StopAndMarkStopped(void)
         }
         /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
         if ((HAL_GetTick() - start_tick) > MOTOR_STOP_WAIT_TIMEOUT_MS) {
-            printf("电机停止等待超时，错误码：0x%08lX\r\n", (unsigned long)MOTOR_RUN_TIMEOUT);
-            return MOTOR_RUN_TIMEOUT;
+            printf("电机停止等待超时，错误码：0x%08lX\r\n", (unsigned long)MOTOR_STOP_WAIT_TIMEOUT);
+            return MOTOR_STOP_WAIT_TIMEOUT;
         }
         HAL_Delay(10U);
     }
@@ -785,7 +785,7 @@ uint32_t MotorDriver_StopIfCommandSwitchRequested(void)
  *
  * @param tmc5130 TMC5130 device object.
  * @param is_moving Output moving state when return is NO_ERROR.
- * @return NO_ERROR, PARAM_ADDRESS_OVERFLOW or MOTOR_TMC_COMM_ERROR.
+ * @return NO_ERROR, SYSTEM_CALL_CONDITION_ERROR or MOTOR_TMC_COMM_ERROR.
  */
 uint32_t MotorDriver_ReadMovingState(TMC5130TypeDef *tmc5130, bool *is_moving)
 {
@@ -796,7 +796,7 @@ uint32_t MotorDriver_ReadMovingState(TMC5130TypeDef *tmc5130, bool *is_moving)
     uint32_t ret;
 
     if ((tmc5130 == NULL) || (is_moving == NULL)) {
-        return PARAM_ADDRESS_OVERFLOW;
+        return SYSTEM_CALL_CONDITION_ERROR;
     }
 
     *is_moving = true;
@@ -851,7 +851,7 @@ uint32_t MotorDriver_ReadStoppingState(TMC5130TypeDef *tmc5130, bool *is_moving)
     int32_t vactual = 0;
 
     if ((tmc5130 == NULL) || (is_moving == NULL)) {
-        return PARAM_ADDRESS_OVERFLOW;
+        return SYSTEM_CALL_CONDITION_ERROR;
     }
 
     *is_moving = true;

@@ -45,17 +45,22 @@ static void UART6_DrainRX_UntilIdle(uint32_t idle_ms)
     __HAL_UART_CLEAR_OREFLAG(&huart6);
 }
 
-/* 错误码关键字表 */
-const char *error_codes[] = {
-    "A+111.11B+111.11", /* 超声无谐振 */
-    "A+222.22B+222.22", /* 电源电压异常 */
-    "A+333.33B+333.33", /* 陀螺仪IIC通讯超时 */
-    "A+444.44B+444.44", /* 陀螺仪角度异常 */
-    "A+555.55B+555.55", /* CPU1自检错误 */
-    "A+888.88B+888.88", /* 与CPU0通讯超时 */
-    "A+999.99B+999.99"  /* 与CPU0通讯校验错误 */
+typedef struct {
+    const char *response_text;
+    uint32_t error_code;
+} DsmResponseErrorMap;
+
+/* DSM 特殊返回值沿用一代子码语义，二代只把类别 3 平移为 13。 */
+static const DsmResponseErrorMap s_dsm_response_errors[] = {
+    {"A+111.11B+111.11", SENSOR_NO_RESONANCE},
+    {"A+222.22B+222.22", SENSOR_POWER_SUPPLY_ERROR},
+    {"A+333.33B+333.33", SENSOR_GYRO_COMM_TIMEOUT},
+    {"A+444.44B+444.44", SENSOR_GYRO_ANGLE_ERROR},
+    {"A+555.55B+555.55", SENSOR_SELF_TEST_FAILED},
+    {"A+888.88B+888.88", SENSOR_INTERNAL_CPU_COMM_TIMEOUT},
+    {"A+999.99B+999.99", SENSOR_INTERNAL_COMM_CHECK_ERROR}
 };
-#define ERROR_CODES_COUNT (sizeof(error_codes)/sizeof(error_codes[0])) /* 传感器错误码映射表元素数量。 */
+#define DSM_RESPONSE_ERROR_COUNT (sizeof(s_dsm_response_errors) / sizeof(s_dsm_response_errors[0]))
 
 /**
  * @brief 执行DSM 传感器通信中的 DSM_LogLowVoltageFrame 逻辑。
@@ -70,21 +75,18 @@ static void DSM_LogLowVoltageFrame(const char *resp)
     }
 }
 
-/* 检查返回是否为错误码 */
-int IsErrorResponse(const char *resp) {
-    if (resp == NULL) {
-        return 0;
+/* 把 DSM 特殊响应转换为可直接上报的二代故障码。 */
+static uint32_t DSM_MapErrorResponse(const char *resp)
+{
+    if ((resp == NULL) || (resp[0] == 'E') || (resp[0] == 'e')) {
+        return NO_ERROR;
     }
-    if ((resp[0] == 'E') || (resp[0] == 'e')) {
-        return 0; /* DSM首字母E/e只表示传感器电压过低，不作为设备错误处理 */
-    }
-    for (int i = 0; i < ERROR_CODES_COUNT; i++) {
-        /* 先处理异常边界，避免DSM 传感器通信状态机带故障继续运行。 */
-        if (strstr(resp, error_codes[i]) != NULL) {
-            return 1; /* 是错误码 */
+    for (uint32_t i = 0U; i < DSM_RESPONSE_ERROR_COUNT; i++) {
+        if (strstr(resp, s_dsm_response_errors[i].response_text) != NULL) {
+            return s_dsm_response_errors[i].error_code;
         }
     }
-    return 0; /* 正常 */
+    return NO_ERROR;
 }
 
 #define DSM_UART_MAX_RETRY UART6_COMM_MAX_RETRY /* 传感器通信参数：传感器 UART 最大值 重试。 */
@@ -454,9 +456,11 @@ static int UART6_SendWithRetry(const char *cmd,
             return STATE_SWITCH;
         }
         if (ret == 0) {
+            uint32_t response_error;
+
             DSM_LogLowVoltageFrame(response);
-            /* 先处理异常边界，避免DSM 传感器通信状态机带故障继续运行。 */
-            if (!IsErrorResponse(response)) {
+            response_error = DSM_MapErrorResponse(response);
+            if (response_error == NO_ERROR) {
                 if (recv_len_out != NULL) {
                     *recv_len_out = recvLen;
                 }
@@ -468,17 +472,16 @@ static int UART6_SendWithRetry(const char *cmd,
                                      (uint32_t)(i + 1),
                                      DSM_UART_MAX_RETRY);
                 }
-                return NO_ERROR; /* 成功且不是错误码 */
-            } else {
-                /* 错误 阶段：错误重试 模块：传感器 操作：读取液位 原因：设备返回错误 尝试：(i + 1)/DSM_UART_MAX_RETRY 错误码：SENSOR_DEVICE_REPORTED_ERROR 错误名：ErrorLog_GetCodeName(SENSOR_DEVICE_REPORTED_ERROR) */
-                ErrorLog_Retry(ERROR_LOG_MODULE_SENSOR,
-                               ERROR_LOG_OP_READ_LEVEL,
-                               ERROR_LOG_REASON_DEVICE_ERROR,
-                               (uint32_t)(i + 1),
-                               DSM_UART_MAX_RETRY,
-                               SENSOR_DEVICE_REPORTED_ERROR);
-                ret = SENSOR_DEVICE_REPORTED_ERROR;
+                return NO_ERROR;
             }
+
+            ErrorLog_Retry(ERROR_LOG_MODULE_SENSOR,
+                           ERROR_LOG_OP_READ_LEVEL,
+                           ErrorLog_GetReasonByCode(response_error),
+                           (uint32_t)(i + 1),
+                           DSM_UART_MAX_RETRY,
+                           response_error);
+            ret = response_error;
         } else {
             /* 重试日志带上原始帧和 UART 错误标志，现场可直接判断失败类型。 */
             UART6_FormatHexDetail(ErrorLog_GetReasonByCode(ret),
@@ -507,7 +510,7 @@ uint32_t Read_Sensor_Voltage(float *voltage_out) {
     char resp[RX_BUF_LEN];
 
     if (voltage_out == NULL) {
-        return PARAM_ADDRESS_OVERFLOW;
+        return SYSTEM_CALL_CONDITION_ERROR;
     }
 
     ret = UART6_SendWithRetry("CK", resp, RX_BUF_LEN, NULL, 500);
@@ -601,7 +604,7 @@ int DSM_EnableDensityMode(void) {
 /* 工具函数: 解析 "E06.6379V\r\n" 这类响应为浮点数 */
 static int parse_freq_response(const char *resp, float *out_hz)
 {
-    if (!resp || !out_hz) return PARAM_ADDRESS_OVERFLOW;
+    if (!resp || !out_hz) return SYSTEM_CALL_CONDITION_ERROR;
 
     /* 1) 跳过起始标志（例如 'E'）和前导空白 */
     const char *p = resp;
@@ -623,7 +626,7 @@ static int parse_freq_response(const char *resp, float *out_hz)
 /* 读取液位跟随频率（单次） */
 uint32_t Read_Level_Frequency(uint32_t *frequency_out)
 {
-    if (!frequency_out) return PARAM_ADDRESS_OVERFLOW;
+    if (!frequency_out) return SYSTEM_CALL_CONDITION_ERROR;
 
     char resp[RX_BUF_LEN] = {0};
     uint32_t ret = UART6_SendWithRetry("Cb", resp, RX_BUF_LEN, NULL, 500);
@@ -647,7 +650,7 @@ uint32_t Read_Level_Frequency(uint32_t *frequency_out)
 /* 读取密度、温度 */
 int DSM_Read_Frequency_Density_Temp(float *frequency, float *density, float *temp) {
     if (!frequency || !density || !temp) {
-        return PARAM_ADDRESS_OVERFLOW;
+        return SYSTEM_CALL_CONDITION_ERROR;
     }
 
     int ret = NO_ERROR;
@@ -694,7 +697,7 @@ static char CalculationBCC_DSM(char command[], int count) {
 uint32_t Read_VibrationTube_ID(char *id_out, size_t id_out_size)
 {
     if ((id_out == NULL) || (id_out_size == 0)) {
-        return PARAM_ADDRESS_OVERFLOW;
+        return SYSTEM_CALL_CONDITION_ERROR;
     }
 
     char resp[RX_BUF_LEN] = {0};
@@ -758,7 +761,7 @@ uint32_t Read_VibrationTube_ID(char *id_out, size_t id_out_size)
 uint32_t Read_Water_Capacitance(float *cap_out)
 {
     if (cap_out == NULL) {
-        return PARAM_ADDRESS_OVERFLOW;   /* 你工程里若叫 PARAM_ADDRESS_OVERFLOW/PARAM_ERROR 请替换 */
+        return SYSTEM_CALL_CONDITION_ERROR;   /* 你工程里若叫 SYSTEM_CALL_CONDITION_ERROR/PARAM_RANGE_ERROR 请替换 */
     }
 
     char resp[RX_BUF_LEN] = {0};
@@ -835,7 +838,7 @@ static int dsm_parse_float_after_tag(const char *tag_pos, float *out_val)
 uint32_t Read_Gyro_Angle(float *angle_x_deg, float *angle_y_deg)
 {
     if (!angle_x_deg || !angle_y_deg) {
-        return PARAM_ADDRESS_OVERFLOW;
+        return SYSTEM_CALL_CONDITION_ERROR;
     }
 
     char resp[RX_BUF_LEN] = {0};

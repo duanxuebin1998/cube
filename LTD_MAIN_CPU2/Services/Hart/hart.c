@@ -79,11 +79,13 @@ void HartParameterInit(void) /* TEXT */
 
 static float Hart_GetPrimaryVariable(void)
 {
-    if (g_measurement.oil_measurement.oil_level == UNVALID_LEVEL) {
+    AoProcessSample sample;
+
+    if ((AoOutput_GetSelectedProcessSample(&sample) != NO_ERROR) ||
+        (sample.valid == 0U)) {
         return 0.0f;
     }
-
-    return ((float)g_measurement.oil_measurement.oil_level) / 10.0f;
+    return ((float)sample.value_01mm) / 10.0f;
 }
 
 static float Hart_GetSecondaryVariable(void)
@@ -113,11 +115,22 @@ Return: ret - 错误代码
 *************************************************/
 u8 HartCommunicationProcess(u8* RcvBuff,u8* SendBuff,volatile u8* Sendlen)
 {
-	int ret;							/* 故障代码返回 */
+	int ret;
 	u8 HartCommand;						/* HART指令代码 */
 	u8 FlagofLongFrame;					/* 接收包长短帧标志位 1：长帧 0：短帧 */
 	RCV_TYPE *RcvPackage;				/* 定义接收包共联体 */
 	SND_TYPE *SndPackage;				/* 定义发送包共联体 */
+
+	if (Sendlen == NULL) {
+		return 1U;
+	}
+	*Sendlen = 0U;
+	if ((RcvBuff == NULL) || (SendBuff == NULL)) {
+		return 1U;
+	}
+	if (g_deviceParams.ao_output.work_mode != AO_WORK_MODE_HART_SLAVE_OUTPUT) {
+		return 0U;
+	}
 	RcvPackage = (RCV_TYPE*)RcvBuff;	/* RevBuff强转接收包结构共联体 */
 	SndPackage = (SND_TYPE*)SendBuff;	/* SendBuff强转发送包结构共联体 */
 	ret = AnalyseRcvPackage(RcvPackage,&HartCommand,&FlagofLongFrame); /* hart接收解包、校验，读取指令代码 */
