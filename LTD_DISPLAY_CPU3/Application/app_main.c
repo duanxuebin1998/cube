@@ -946,7 +946,7 @@ void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)
     }
 
     if (huart->Instance == UART5) {
-        CPU2_CommNotifyUartErrorFromISR();
+        CPU2_CommNotifyUartErrorFromISR(huart->ErrorCode);
         UART5_RX_LEN = 0;
         uart_restart_rx_dma(&huart5, UART5_RX_BUF, UART5_RX_BUF_SIZE, RS485_RecvMode);
     }

@@ -15,6 +15,7 @@
 #define DEBUG_COMMUCPU2 0
 #define ADERSS 0X01
 #define CPU2_RESPONSE_TIMEOUT_MS 1000U /* CPU2 单次响应等待超时，单位 ms。 */
+#define CPU2_COMM_RESYNC_FAILURE_LIMIT 3U /* 连续失败达到三次后才废弃快照并完整重同步。 */
 #define CPU2_COMM_FAILURE_LIMIT 10U /* CPU2 连续请求未获得合法响应的置错阈值。 */
 #define CPU2_MAX_EXTERNAL_WRITE_REGISTERS 122U /* RTU 最大 123 个寄存器；共享字段按 32 位对齐后取最大偶数。 */
 #define CPU2_FIXED_POINT_RESULT_REGISTER_COUNT (REG_DENSITY_DIST_AVG_TEMP - REG_SINGLE_POINT_MEAS_TEMP)
@@ -40,7 +41,9 @@ static bool s_cpu2_comm_fault_active = false; /* CPU3 本机通信故障是否�
 static uint32_t s_cpu2_snapshot_generation = 0U; /* 每次CPU2公开快照失效时递增，供SI识别通信会话切换。 */
 static bool s_cpu2_parameter_refresh_requested = false; /* 外部参数写后是否要求重新确认 CPU2 参数。 */
 static bool s_cpu2_snapshot_resync_requested = false; /* 内部通信失败后是否要求完整重同步。 */
-static volatile bool s_cpu2_uart_error_pending = false; /* UART5 中断仅置位，主循环统一计入失败。 */
+static volatile uint32_t s_cpu2_uart_error_pending = HAL_UART_ERROR_NONE; /* UART5中断只锁存错误位，主循环统一分类计数。 */
+static Cpu2CommHealthSnapshot s_cpu2_comm_health = {0}; /* CPU3本机RAM通信健康计数，上电清零。 */
+static Cpu2CommFailureReason s_cpu2_response_failure_reason = CPU2_COMM_FAIL_NONE; /* 当前响应校验失败原因。 */
 
 /* 保持寄存器 */
 uint16_t HoldingRegisterArray[HOLEREGISTER_STOP] = { 0 }; /* 保持寄存器数组 */
@@ -120,12 +123,13 @@ static void CPU2_Response03Process(uint8_t const *revframe);
 static void CPU2_Response04Process(uint8_t const *revframe);
 static void CPU2_Response10Process(uint8_t *arr, uint16_t len);
 static void PresetRegister(bool registertype, int const *registervalue);
-static bool CPU2_ResponseFrameIsValid(uint8_t const *rcv, int len);
+static Cpu2CommFailureReason CPU2_ResponseFrameFailureReason(uint8_t const *rcv, int len);
 static bool CPU2_ResponseContainsDeviceStatus(void);
 static bool CPU2_ResponseContainsProtocolVersion(void);
 static void CPU2_CommMarkValidResponse(void);
 static void CPU2_InvalidatePublicSnapshotFreshness(void);
-static void CPU2_CommRecordFailure(void);
+static void CPU2_CommRecordFailure(Cpu2CommFailureReason reason);
+static void CPU2_CommRecordUartFlags(uint32_t uart_error_code);
 static void CPU2_ProfileInvalidatePublishedSnapshot(void);
 static void CPU2_ResetFixedPointSnapshotHandshake(bool invalidate_snapshot);
 static bool CPU2_ReadInputRegistersPrivate(uint16_t startadd, uint16_t registercnt, uint16_t *out_regs);
@@ -139,32 +143,38 @@ static void CPU2_ProfileApplyPublicStatusGate(void);
  * 调用场景：CRC 和从机地址校验通过后、清除连续请求失败计数前调用。
  * 关键约束：异常响应、错功能码和不完整数据帧均不得刷新通信有效状态。
  */
-static bool CPU2_ResponseFrameIsValid(uint8_t const *rcv, int len)
+static Cpu2CommFailureReason CPU2_ResponseFrameFailureReason(uint8_t const *rcv, int len)
 {
 	uint32_t expected_byte_count;
 
-	if ((rcv == NULL) || (len < 5) ||
-		(rcv[1] != (uint8_t)RCV_functioncode)) {
-		return false;
+	if ((rcv == NULL) || (len < 5)) {
+		return CPU2_COMM_FAIL_LENGTH;
+	}
+	if (rcv[1] != (uint8_t)RCV_functioncode) {
+		return CPU2_COMM_FAIL_FUNCTION;
 	}
 
 	switch (RCV_functioncode) {
 	case FUNCTIONCODE_READ_HOLDREGISTER:
 	case FUNCTIONCODE_READ_INPUTREGISTER:
 		expected_byte_count = (uint32_t)RCV_registercnt * 2U;
-		return (expected_byte_count <= UINT8_MAX) &&
-			   (rcv[2] == (uint8_t)expected_byte_count) &&
-			   (len == (int)(expected_byte_count + 5U));
+		return ((expected_byte_count <= UINT8_MAX) &&
+				(rcv[2] == (uint8_t)expected_byte_count) &&
+				(len == (int)(expected_byte_count + 5U))) ?
+			   CPU2_COMM_FAIL_NONE : CPU2_COMM_FAIL_LENGTH;
 
 	case FUNCTIONCODE_WRITE_MULREGISTER:
-		return (len == 8) &&
-			   (rcv[2] == (uint8_t)((uint16_t)RCV_startaddress >> 8)) &&
-			   (rcv[3] == (uint8_t)RCV_startaddress) &&
-			   (rcv[4] == (uint8_t)((uint16_t)RCV_registercnt >> 8)) &&
-			   (rcv[5] == (uint8_t)RCV_registercnt);
+		if (len != 8) {
+			return CPU2_COMM_FAIL_LENGTH;
+		}
+		return ((rcv[2] == (uint8_t)((uint16_t)RCV_startaddress >> 8)) &&
+				(rcv[3] == (uint8_t)RCV_startaddress) &&
+				(rcv[4] == (uint8_t)((uint16_t)RCV_registercnt >> 8)) &&
+				(rcv[5] == (uint8_t)RCV_registercnt)) ?
+			   CPU2_COMM_FAIL_NONE : CPU2_COMM_FAIL_FUNCTION;
 
 	default:
-		return false;
+		return CPU2_COMM_FAIL_FUNCTION;
 	}
 }
 
@@ -207,12 +217,14 @@ static bool CPU2_ResponseContainsProtocolVersion(void)
  */
 static void CPU2_CommMarkValidResponse(void)
 {
+	s_cpu2_comm_health.success_count++;
 	s_cpu2_consecutive_failure_count = 0U;
+	s_cpu2_comm_health.consecutive_failure_count = 0U;
 }
 
 /*
- * 函数用途：内部请求未获得合法响应时，立即关闭所有对外公开快照门禁。
- * 调用场景：响应超时、非法响应、UART错误或TX DMA启动失败。
+ * 函数用途：关闭所有对外公开快照门禁并请求完整重同步。
+ * 调用场景：CPU2连续请求失败达到三次重同步阈值时调用。
  * 关键约束：只处理数据新鲜度和完整重同步请求；连续十次报警计数由独立逻辑维护。
  */
 static void CPU2_InvalidatePublicSnapshotFreshness(void)
@@ -228,16 +240,51 @@ static void CPU2_InvalidatePublicSnapshotFreshness(void)
 }
 
 /*
- * 函数用途：先使公开快照失效，再记录一次未获得合法 CPU2 响应的请求。
+ * 函数用途：记录一次未获得合法CPU2响应的请求，并按连续失败阈值升级恢复动作。
  * 调用场景：主循环处理响应超时、非法响应、UART 错误或 TX DMA 启动失败时调用。
- * 关键约束：首次失败即关闭新鲜度门禁；计数仍饱和在十次报警阈值，ISR 只置待处理标志。
+ * 关键约束：前两次失败只计数并重试，第三次失败才废弃公开快照并完整重同步；
+ *           连续十次失败仍置CPU2通信超时故障，ISR只置待处理标志。
  */
-static void CPU2_CommRecordFailure(void)
+static void CPU2_CommRecordFailure(Cpu2CommFailureReason reason)
 {
-	CPU2_InvalidatePublicSnapshotFreshness();
+	switch (reason) {
+	case CPU2_COMM_FAIL_TIMEOUT:
+		s_cpu2_comm_health.timeout_count++;
+		break;
+	case CPU2_COMM_FAIL_CRC:
+		s_cpu2_comm_health.crc_count++;
+		break;
+	case CPU2_COMM_FAIL_ADDRESS:
+		s_cpu2_comm_health.address_count++;
+		break;
+	case CPU2_COMM_FAIL_FUNCTION:
+		s_cpu2_comm_health.function_count++;
+		break;
+	case CPU2_COMM_FAIL_LENGTH:
+		s_cpu2_comm_health.length_count++;
+		break;
+	case CPU2_COMM_FAIL_TX_DMA:
+		s_cpu2_comm_health.tx_dma_start_fail_count++;
+		break;
+	case CPU2_COMM_FAIL_UART:
+		s_cpu2_comm_health.uart_failure_count++;
+		break;
+	case CPU2_COMM_FAIL_NONE:
+	default:
+		break;
+	}
+	s_cpu2_comm_health.total_failure_count++;
+	s_cpu2_comm_health.last_failure_reason = reason;
+	s_cpu2_comm_health.consecutive_failure_count++;
+	if (s_cpu2_comm_health.consecutive_failure_count > s_cpu2_comm_health.max_consecutive_failure_count) {
+		s_cpu2_comm_health.max_consecutive_failure_count = s_cpu2_comm_health.consecutive_failure_count;
+	}
 
 	if (s_cpu2_consecutive_failure_count < CPU2_COMM_FAILURE_LIMIT) {
 		s_cpu2_consecutive_failure_count++;
+	}
+	if (s_cpu2_consecutive_failure_count == CPU2_COMM_RESYNC_FAILURE_LIMIT) {
+		CPU2_InvalidatePublicSnapshotFreshness();
 	}
 
 	if (s_cpu2_consecutive_failure_count >= CPU2_COMM_FAILURE_LIMIT) {
@@ -251,16 +298,46 @@ static void CPU2_CommRecordFailure(void)
 }
 
 /*
+ * 函数用途：把一次UART5事务中的硬件错误位分别累计到健康计数。
+ * 调用场景：主循环解除同步等待并取得ISR锁存的HAL错误码后调用。
+ * 关键约束：多个硬件错误位可分别累计，但整笔事务只增加一次总失败和连续失败。
+ */
+static void CPU2_CommRecordUartFlags(uint32_t uart_error_code)
+{
+	if ((uart_error_code & HAL_UART_ERROR_ORE) != 0U) {
+		s_cpu2_comm_health.uart_ore_count++;
+	}
+	if ((uart_error_code & HAL_UART_ERROR_FE) != 0U) {
+		s_cpu2_comm_health.uart_fe_count++;
+	}
+	if ((uart_error_code & HAL_UART_ERROR_NE) != 0U) {
+		s_cpu2_comm_health.uart_ne_count++;
+	}
+	if ((uart_error_code & HAL_UART_ERROR_PE) != 0U) {
+		s_cpu2_comm_health.uart_pe_count++;
+	}
+}
+
+/*
  * 函数用途：记录 UART5 错误并解除当前同步等待。
  * 调用场景：HAL UART 错误回调中调用。
  * 关键约束：本函数可能处于 ISR 上下文，只置标志，不打印、不计数、不改设备状态。
  */
-void CPU2_CommNotifyUartErrorFromISR(void)
+void CPU2_CommNotifyUartErrorFromISR(uint32_t uart_error_code)
 {
 	if (wait_response) {
-		s_cpu2_uart_error_pending = true;
+		s_cpu2_uart_error_pending |= uart_error_code;
 		wait_response = false;
 	}
+}
+
+void CPU2_CommGetHealthSnapshot(Cpu2CommHealthSnapshot *out_snapshot)
+{
+	if (out_snapshot == NULL) {
+		return;
+	}
+
+	*out_snapshot = s_cpu2_comm_health;
 }
 
 /*
@@ -464,7 +541,7 @@ bool CPU2_CommWriteHoldingRegisters(uint16_t startadd,
 /* 已发起的非命令写失败时，CPU2 是否实际应用无法由响应确定，必须重新确认参数。 */
 static bool CPU2_CommFinishFailedRequest(bool parameter_write_attempted)
 {
-	CPU2_CommRecordFailure();
+	CPU2_CommRecordFailure(s_cpu2_response_failure_reason);
 	if (parameter_write_attempted) {
 		CPU2_CommRequestParameterRefresh();
 	}
@@ -1199,18 +1276,24 @@ bool HostCommuProcess(uint8_t *rcv, int len) {
         printf("%02X ",rcv[i]);
     printf("\r\n");
 #endif
-	if (len <= 3)
+	s_cpu2_response_failure_reason = CPU2_COMM_FAIL_NONE;
+	if (len <= 3) {
+		s_cpu2_response_failure_reason = CPU2_COMM_FAIL_LENGTH;
 		return false;
+	}
 	if (!SlaveCheckCRC(rcv, len)) {
+		s_cpu2_response_failure_reason = CPU2_COMM_FAIL_CRC;
 		printf("CPU3 CRC校验错误");
 		return false;
 	}
 	/* 解析数据 */
 	if (rcv[0] != ADERSS) {
+		s_cpu2_response_failure_reason = CPU2_COMM_FAIL_ADDRESS;
 		printf("CPU3地址错误");
 		return false;
 	}
-	if (!CPU2_ResponseFrameIsValid(rcv, len)) {
+	s_cpu2_response_failure_reason = CPU2_ResponseFrameFailureReason(rcv, len);
+	if (s_cpu2_response_failure_reason != CPU2_COMM_FAIL_NONE) {
 		printf("CPU3响应格式错误");
 		return false;
 	}
@@ -1325,7 +1408,7 @@ void PollingInputData(void) {
 	static uint32_t last_param_update_flag = 0;
 	static uint32_t refresh_target_flag = 0;
 
-	/* 首次失败即废弃旧公开快照；下一轮从状态、参数和协议开始完整重同步。 */
+	/* 连续第三次失败才废弃旧公开快照；下一轮从状态、参数和协议开始完整重同步。 */
 	if (s_cpu2_snapshot_resync_requested) {
 		poweron_done = false;
 		poweron_index = 0;
@@ -1614,7 +1697,8 @@ bool CPU2_CombinatePackage_Send(uint8_t f_code, uint16_t startadd, uint16_t regi
 	RCV_startaddress = startadd;
 	RCV_registercnt = registercnt;
 	UART5_RX_LEN = 0U;
-	s_cpu2_uart_error_pending = false;
+	s_cpu2_uart_error_pending = HAL_UART_ERROR_NONE;
+	s_cpu2_response_failure_reason = CPU2_COMM_FAIL_TX_DMA;
 	if (!sendToCPU2(arr, len, false)) {
 		return CPU2_CommFinishFailedRequest(parameter_write_attempted);
 	}
@@ -1626,11 +1710,15 @@ bool CPU2_CombinatePackage_Send(uint8_t f_code, uint16_t startadd, uint16_t regi
 				{
 			printf("等待响应超时！\n");
 			wait_response = false;    /* 防止一直 True */
+			s_cpu2_response_failure_reason = CPU2_COMM_FAIL_TIMEOUT;
 			return CPU2_CommFinishFailedRequest(parameter_write_attempted);
 		}
 	}
-	if (s_cpu2_uart_error_pending) {
-		s_cpu2_uart_error_pending = false;
+	if (s_cpu2_uart_error_pending != HAL_UART_ERROR_NONE) {
+		uint32_t uart_error_code = s_cpu2_uart_error_pending;
+		s_cpu2_uart_error_pending = HAL_UART_ERROR_NONE;
+		CPU2_CommRecordUartFlags(uart_error_code);
+		s_cpu2_response_failure_reason = CPU2_COMM_FAIL_UART;
 		return CPU2_CommFinishFailedRequest(parameter_write_attempted);
 	}
 	if (!HostCommuProcess(UART5_RX_BUF, UART5_RX_LEN)) {

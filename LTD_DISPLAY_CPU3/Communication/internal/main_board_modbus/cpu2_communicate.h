@@ -15,6 +15,36 @@ typedef struct {
     uint32_t phase;
 } Cpu2SiProfileCandidateKey;
 
+typedef enum {
+    CPU2_COMM_FAIL_NONE = 0,
+    CPU2_COMM_FAIL_TIMEOUT,
+    CPU2_COMM_FAIL_CRC,
+    CPU2_COMM_FAIL_ADDRESS,
+    CPU2_COMM_FAIL_FUNCTION,
+    CPU2_COMM_FAIL_LENGTH,
+    CPU2_COMM_FAIL_UART,
+    CPU2_COMM_FAIL_TX_DMA
+} Cpu2CommFailureReason;
+
+typedef struct {
+    uint32_t success_count;
+    uint32_t timeout_count;
+    uint32_t crc_count;
+    uint32_t address_count;
+    uint32_t function_count;
+    uint32_t length_count;
+    uint32_t uart_ore_count;
+    uint32_t uart_fe_count;
+    uint32_t uart_ne_count;
+    uint32_t uart_pe_count;
+    uint32_t uart_failure_count;
+    uint32_t tx_dma_start_fail_count;
+    uint32_t total_failure_count;
+    uint32_t consecutive_failure_count;
+    uint32_t max_consecutive_failure_count;
+    Cpu2CommFailureReason last_failure_reason;
+} Cpu2CommHealthSnapshot;
+
 #define COM1_SET_RECV_MODE()  HAL_GPIO_WritePin(COM1_SEL_GPIO_Port, COM1_SEL_Pin, GPIO_PIN_SET)
 #define COM1_SET_SEND_MODE()  HAL_GPIO_WritePin(COM1_SEL_GPIO_Port, COM1_SEL_Pin, GPIO_PIN_RESET)
 #define COM2_SET_RECV_MODE()  HAL_GPIO_WritePin(COM2_SEL_GPIO_Port, COM2_SEL_Pin, GPIO_PIN_SET)
@@ -92,6 +122,12 @@ uint32_t CPU2_CommGetSnapshotGeneration(void);
  * @return true 表示当前通信状态允许下发该命令。
  */
 bool CPU2_CommCanSendCommand(CommandType cmd);
+/*
+ * 函数用途：读取CPU3本机累计的CPU2通信健康计数。
+ * 调用场景：CPU3维护菜单的CPU2通讯页面刷新时调用。
+ * 关键约束：计数仅存RAM、上电清零，不属于CPU2/CPU3共享协议。
+ */
+void CPU2_CommGetHealthSnapshot(Cpu2CommHealthSnapshot *out_snapshot);
 /**
  * @brief 从已确认的 CPU2 参数快照复制保持寄存器。
  * @param startadd 起始寄存器地址。
@@ -132,7 +168,7 @@ bool CPU2_CommWriteHoldingRegisters(uint16_t startadd, uint16_t registercnt, con
  * @brief 在 UART5 错误中断中记录待处理标志并解除当前等待。
  * @note 仅允许在 ISR 中置标志，不在中断内打印、计数或修改设备故障状态。
  */
-void CPU2_CommNotifyUartErrorFromISR(void);
+void CPU2_CommNotifyUartErrorFromISR(uint32_t uart_error_code);
 /**
  * @brief 发送Modbus 协议中的 CPU2_CombinatePackage_Send 逻辑。
  *

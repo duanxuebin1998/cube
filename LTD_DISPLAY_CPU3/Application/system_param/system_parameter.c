@@ -262,7 +262,7 @@ struct ParameterMetadata param_meta[] = {
 {(uint8_t*)"故障动作",	0,	COM_NUM_DEVICEPARAM_AO_FAULT_MODE,	HOLDREGISTER_DEVICEPARAM_AO_FAULT_MODE,	2,	true,	0,	1,	NULL,	0,	0,	true,	TYPE_INT,	1,	ret_arr_word,	(uint8_t*)"FaultAction"},
 {(uint8_t*)"故障电流",	0,	COM_NUM_DEVICEPARAM_AO_FAULT_CURRENT_MA_X100,	HOLDREGISTER_DEVICEPARAM_AO_FAULT_CURRENT_MA_X100,	2,	true,	AO_FAULT_CURRENT_MIN_MA_X100,	AO_FAULT_CURRENT_MAX_MA_X100,	(uint8_t*)"mA",	2,	0,	true,	TYPE_INT,	5,	NULL,	(uint8_t*)"FaultCur"},
 {(uint8_t*)"保留AO错误等级",	0,	COM_NUM_DEVICEPARAM_AO_ERROR_LEVEL,	HOLDREGISTER_DEVICEPARAM_AO_ERROR_LEVEL,	2,	true,	0,	0,	NULL,	0,	0,	false,	TYPE_INT,	1,	NULL,	(uint8_t*)"AOErrLvlRsv"},
-{(uint8_t*)"非跟随电流",	0,	COM_NUM_DEVICEPARAM_AO_POWER_ON_CURRENT_MA_X100,	HOLDREGISTER_DEVICEPARAM_AO_POWER_ON_CURRENT_MA_X100,	2,	true,	AO_NON_FOLLOW_CURRENT_MIN_MA_X100,	AO_NON_FOLLOW_CURRENT_MAX_MA_X100,	(uint8_t*)"mA",	2,	0,	true,	TYPE_INT,	5,	NULL,	(uint8_t*)"NonFollowCur"},
+{(uint8_t*)"初始电流",	0,	COM_NUM_DEVICEPARAM_AO_POWER_ON_CURRENT_MA_X100,	HOLDREGISTER_DEVICEPARAM_AO_POWER_ON_CURRENT_MA_X100,	2,	true,	AO_INITIAL_CURRENT_MIN_MA_X100,	AO_INITIAL_CURRENT_MAX_MA_X100,	(uint8_t*)"mA",	2,	0,	true,	TYPE_INT,	5,	NULL,	(uint8_t*)"InitialCur"},
 {(uint8_t*)"模拟电流",	0,	COM_NUM_DEVICEPARAM_AO_SIMULATION_CURRENT_MA_X100,	HOLDREGISTER_DEVICEPARAM_AO_SIMULATION_CURRENT_MA_X100,	2,	true,	AO_SIMULATION_CURRENT_MIN_MA_X100,	AO_SIMULATION_CURRENT_MAX_MA_X100,	(uint8_t*)"mA",	2,	0,	true,	TYPE_INT,	5,	NULL,	(uint8_t*)"SimCur"},
 
 {(uint8_t*)"标定液位值",	0,	COM_NUM_DEVICEPARAM_CALIBRATE_OIL_LEVEL,	HOLDREGISTER_DEVICEPARAM_CALIBRATE_OIL_LEVEL,	2,	false,	0,	0,	(uint8_t*)"mm",	1,	0,	true,	TYPE_INT,	6,	NULL,	(uint8_t*)"CalOilLvl"},
@@ -619,7 +619,7 @@ void print_device_params(void)
     printf("  %-32s : %lu\r\n", "AO故障动作", (unsigned long)params.ao_output.fault_mode);
     printf("  %-32s : %lu\r\n", "AO故障电流(x0.01mA)", (unsigned long)params.ao_output.fault_current_mA_x100);
     printf("  %-32s : %lu\r\n", "AO预留槽位", (unsigned long)params.ao_output.error_level);
-    printf("  %-32s : %lu\r\n", "AO非跟随电流(x0.01mA)", (unsigned long)params.ao_output.power_on_current_mA_x100);
+    printf("  %-32s : %lu\r\n", "AO初始电流(x0.01mA)", (unsigned long)params.ao_output.power_on_current_mA_x100);
     printf("  %-32s : %lu\r\n", "AO仿真电流(x0.01mA)", (unsigned long)params.ao_output.simulation_current_mA_x100);
 
     /* 指令参数 */

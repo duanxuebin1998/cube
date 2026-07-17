@@ -34,14 +34,15 @@
 #define TAPE_THICKNESS_CUSTOM_INDEX 3
 #define MOTOR_CURRENT_RMS_TABLE_OFFSET MOTOR_CURRENT_MIN
 #define AO_RANGE_PAIR_REGISTER_COUNT 4U
-#define AO_RUNTIME_SOURCE_NON_FOLLOW  0U
+#define AO_RUNTIME_SOURCE_INITIAL     0U
 #define AO_RUNTIME_SOURCE_PROCESS     1U
 #define AO_RUNTIME_SOURCE_FAULT       2U
 #define AO_RUNTIME_SOURCE_SIMULATION  3U
 #define AO_RUNTIME_SOURCE_FIXED       4U
 #define AO_RUNTIME_SOURCE_DISABLED    5U
 #define AO_RUNTIME_SOURCE_DRIVER_ERR  6U
-#define AO_RUNTIME_SOURCE_COUNT       7U
+#define AO_RUNTIME_SOURCE_HOLD_LAST   7U
+#define AO_RUNTIME_SOURCE_COUNT       8U
 #define AO_RUNTIME_SOURCE_UNAVAILABLE AO_RUNTIME_SOURCE_COUNT
 #define AO_CONFIG_REGISTER_COUNT ((uint16_t)(HOLDREGISTER_DEVICEPARAM_AO_SIMULATION_CURRENT_MA_X100 - \
                                              HOLDREGISTER_DEVICEPARAM_AO_WORK_MODE + REG_STRIDE))
@@ -73,6 +74,7 @@ static bool debug_weight_wait_ignore_initial_done = false; /* 扭力等待页是
 static Cpu3DateTime rtc_menu_dt = {0};
 static uint8_t rtc_menu_field = 0U;
 static uint32_t ao_simulation_selection = 0U;
+static uint8_t cpu2_comm_health_page = 0U;
 
 /* ==============================
  * 枚举/隐藏含义文字表
@@ -119,7 +121,7 @@ static uint8_t *arr_ao_current_mode[][2] = {
 
 static uint8_t *arr_ao_output_source[][2] = {
 	{ (uint8_t*)"储罐液位", (uint8_t*)"Tank Level" },
-	{ (uint8_t*)"空高", (uint8_t*)"Ullage" },
+	{ (uint8_t*)"传感器位置", (uint8_t*)"Sensor Pos" },
 	{ (uint8_t*)"水位", (uint8_t*)"Water Level" },
 	{ (uint8_t*)"非法配置", (uint8_t*)"Illegal CFG" },
 };
@@ -131,13 +133,14 @@ static uint8_t *arr_ao_fault_mode[][2] = {
 };
 
 static uint8_t *arr_ao_runtime_source[][2] = {
-	{ (uint8_t*)"AO:非跟随", (uint8_t*)"AO:Non-follow" },
+	{ (uint8_t*)"AO:初始", (uint8_t*)"AO:Initial" },
 	{ (uint8_t*)"AO:过程", (uint8_t*)"AO:Process" },
 	{ (uint8_t*)"AO:故障", (uint8_t*)"AO:Fault" },
 	{ (uint8_t*)"AO:模拟", (uint8_t*)"AO:Simulation" },
 	{ (uint8_t*)"AO:固定", (uint8_t*)"AO:Fixed" },
 	{ (uint8_t*)"AO:禁用", (uint8_t*)"AO:Disabled" },
 	{ (uint8_t*)"AO:驱动故障", (uint8_t*)"AO:Driver Err" },
+	{ (uint8_t*)"AO:保持", (uint8_t*)"AO:Hold Last" },
 	{ (uint8_t*)"AO:N/A", (uint8_t*)"AO:Unavailable" },
 };
 
@@ -452,6 +455,9 @@ static void menu_display_data_density(void);
 static void menu_display_data_temp(void);
 static void menu_maint_config(void);
 static void menu_rtc_datetime(void);
+static void menu_cpu2_comm_health(void);
+static const char *cpu2_comm_failure_reason_text(Cpu2CommFailureReason reason, bool chinese);
+static uint32_t cpu2_comm_display_count(uint64_t count);
 static void menu_cpu3_base(void)   ;
 static void menu_cpu3_source(void);
 static void menu_cpu3_input(void)  ;
@@ -886,6 +892,10 @@ struct KeyMenu keymenu[KEYNUM_END] = {
         { menu_rtc_datetime, menu_rtc_datetime, menu_rtc_datetime, menu_rtc_datetime,
           USE_KEY_BACK | USE_KEY_UP | USE_KEY_DOWN | USE_KEY_SURE, menu_rtc_datetime },
 
+    [KEYNUM_MENU_CPU2_COMM_HEALTH] =
+        { menu_maint_config, menu_cpu2_comm_health, menu_cpu2_comm_health, menu_cpu2_comm_health,
+          USE_KEY_BACK | USE_KEY_UP | USE_KEY_DOWN | USE_KEY_SURE, menu_cpu2_comm_health },
+
     /* ===== CPU3（拆分页面） ===== */
 
     [KEYNUM_MENU_CPU3_BASE] =
@@ -1062,6 +1072,11 @@ bool DisplayTankOpera_IsDebugWeightWaitActive(void)
 bool DisplayTankOpera_IsAoRuntimeActive(void)
 {
 	return (FlagofTankOpera == true) && (func_index == KEYNUM_MENU_AO_RUNTIME);
+}
+
+bool DisplayTankOpera_IsCpu2CommHealthActive(void)
+{
+	return (FlagofTankOpera == true) && (func_index == KEYNUM_MENU_CPU2_COMM_HEALTH);
 }
 
 /**
@@ -1854,7 +1869,7 @@ static uint8_t *dtm_operaname_short(int num, uint8_t *fallback)
 		{ COM_NUM_DEVICEPARAM_AO_FAULT_MODE, (uint8_t*)"故障动作", (uint8_t*)"Fault Action" },
 		{ COM_NUM_DEVICEPARAM_AO_FAULT_CURRENT_MA_X100, (uint8_t*)"故障电流", (uint8_t*)"Fault Current" },
 		{ COM_NUM_DEVICEPARAM_AO_ERROR_LEVEL, (uint8_t*)"隐藏预留", (uint8_t*)"Reserved" },
-		{ COM_NUM_DEVICEPARAM_AO_POWER_ON_CURRENT_MA_X100, (uint8_t*)"非跟随电流", (uint8_t*)"Non-follow Cur" },
+		{ COM_NUM_DEVICEPARAM_AO_POWER_ON_CURRENT_MA_X100, (uint8_t*)"初始电流", (uint8_t*)"Initial Current" },
 		{ COM_NUM_DEVICEPARAM_AO_SIMULATION_CURRENT_MA_X100, (uint8_t*)"模拟电流", (uint8_t*)"Sim Current" },
 		{ COM_NUM_AO_SIMULATION_ENABLE, (uint8_t*)"输出模拟", (uint8_t*)"Simulation" },
 		{ COM_NUM_AO_RUNTIME_PROCESS_VALUE, (uint8_t*)"输入值", (uint8_t*)"Input Value" },
@@ -3500,7 +3515,7 @@ static bool ao_work_mode_is_output(void)
 	       (g_deviceParams.ao_output.work_mode == AO_WORK_MODE_HART_SLAVE_OUTPUT);
 }
 
-/* 判断操作码是否属于协议23沿用的13项AO持久化配置。 */
+/* 判断操作码是否属于协议24沿用的13项AO持久化配置。 */
 static bool ao_param_is_config(int operaNum)
 {
 	switch (operaNum) {
@@ -5829,6 +5844,7 @@ static void menu_maint_config(void)
     static struct MenuData menu[] = {
         {(uint8_t*)"设备信息", 0, menu_dev_info,     COMMANE_NORW, (uint8_t*)"Info"},
         {(uint8_t*)"参数校验", 0, menu_param_check,  COMMANE_NORW, (uint8_t*)"Check"},
+        {(uint8_t*)"CPU2通讯", 0, menu_cpu2_comm_health, COMMANE_NORW, (uint8_t*)"CPU2 Comm"},
         {(uint8_t*)"RTC设置",  0, menu_rtc_datetime, COMMANE_NORW, (uint8_t*)"RTC Set"},
         {(uint8_t*)"返回",     0, menu_paracfg_main, COMMANE_NORW, (uint8_t*)"Back"},
     };
@@ -5836,6 +5852,121 @@ static void menu_maint_config(void)
     oled_clear();
     func_index = KEYNUM_MENU_MAINT_CONFIG;
     menuselect(menu, (int)(sizeof(menu) / sizeof(menu[0])));
+}
+
+/*
+ * 函数用途：返回通讯健康页使用的最近失败原因文字。
+ * 调用场景：中文或英文故障状态页刷新时调用。
+ * 关键约束：中文文字必须全部来自现有OLED字库，技术缩写保持ASCII。
+ */
+static const char *cpu2_comm_failure_reason_text(Cpu2CommFailureReason reason, bool chinese)
+{
+	switch (reason) {
+	case CPU2_COMM_FAIL_TIMEOUT:
+		return chinese ? "响应超时" : "TIMEOUT";
+	case CPU2_COMM_FAIL_CRC:
+		return chinese ? "CRC校验" : "CRC";
+	case CPU2_COMM_FAIL_ADDRESS:
+		return chinese ? "地址错误" : "ADDRESS";
+	case CPU2_COMM_FAIL_FUNCTION:
+		return chinese ? "功能码错误" : "FUNCTION";
+	case CPU2_COMM_FAIL_LENGTH:
+		return chinese ? "长度错误" : "LENGTH";
+	case CPU2_COMM_FAIL_UART:
+		return chinese ? "UART错误" : "UART";
+	case CPU2_COMM_FAIL_TX_DMA:
+		return chinese ? "发送失败" : "TXDMA";
+	case CPU2_COMM_FAIL_NONE:
+	default:
+		return chinese ? "无" : "NONE";
+	}
+}
+
+/*
+ * 函数用途：把健康计数限制到OLED四位显示范围。
+ * 调用场景：通讯健康页格式化累计计数前调用。
+ * 关键约束：只限制显示值，不修改RAM中的原始累计值。
+ */
+static uint32_t cpu2_comm_display_count(uint64_t count)
+{
+	return (count > 9999U) ? 9999U : (uint32_t)count;
+}
+
+/*
+ * 函数用途：显示CPU3本机累计的CPU2通讯健康计数。
+ * 调用场景：维护设置进入页面、上下翻页或前景页周期刷新。
+ * 关键约束：只读取RAM快照，不清零计数、不修改通信状态和共享协议。
+ */
+static void menu_cpu2_comm_health(void)
+{
+	Cpu2CommHealthSnapshot snapshot;
+	uint64_t total_count;
+	uint64_t response_failure_count;
+	uint32_t failure_rate_thousandths = 0U;
+	bool chinese = (screen_parameter.language == LANGUAGE_CHINESE);
+	char line1[32];
+	char line2[32];
+	char line3[32];
+	char line4[32];
+
+	if (func_index != KEYNUM_MENU_CPU2_COMM_HEALTH) {
+		cpu2_comm_health_page = 0U;
+	} else if (NowKeyPress == USE_KEY_UP) {
+		cpu2_comm_health_page = (cpu2_comm_health_page == 0U) ? 2U : (uint8_t)(cpu2_comm_health_page - 1U);
+	} else if ((NowKeyPress == USE_KEY_DOWN) || (NowKeyPress == USE_KEY_SURE)) {
+		cpu2_comm_health_page = (uint8_t)((cpu2_comm_health_page + 1U) % 3U);
+	}
+
+	CPU2_CommGetHealthSnapshot(&snapshot);
+	total_count = (uint64_t)snapshot.success_count + (uint64_t)snapshot.total_failure_count;
+	response_failure_count = (uint64_t)snapshot.timeout_count +
+	                         (uint64_t)snapshot.crc_count +
+	                         (uint64_t)snapshot.address_count +
+	                         (uint64_t)snapshot.function_count +
+	                         (uint64_t)snapshot.length_count;
+	if (total_count != 0U) {
+		/* 以0.001%为一单位四舍五入，100%对应100000，使用64位避免乘法溢出。 */
+		failure_rate_thousandths = (uint32_t)((((uint64_t)snapshot.total_failure_count * 100000U) +
+		                                          (total_count / 2U)) /
+		                                         total_count);
+	}
+	oled_clear();
+	func_index = KEYNUM_MENU_CPU2_COMM_HEALTH;
+	if (cpu2_comm_health_page == 0U) {
+		(void)snprintf(line1, sizeof(line1), chinese ? "CPU2通讯 1/3" : "CPU2 COMM 1/3");
+		(void)snprintf(line2, sizeof(line2), chinese ? "总次数:%lu" : "TOTAL:%lu",
+		               (unsigned long)cpu2_comm_display_count(total_count));
+		(void)snprintf(line3, sizeof(line3), chinese ? "失败次数:%lu" : "FAIL:%lu",
+		               (unsigned long)cpu2_comm_display_count(snapshot.total_failure_count));
+		if (total_count == 0U) {
+			(void)snprintf(line4, sizeof(line4), chinese ? "失败率:--.---%%" : "F-RATE:--.---%%");
+		} else {
+			(void)snprintf(line4, sizeof(line4), chinese ? "失败率:%lu.%03lu%%" : "F-RATE:%lu.%03lu%%",
+			               (unsigned long)(failure_rate_thousandths / 1000U),
+			               (unsigned long)(failure_rate_thousandths % 1000U));
+		}
+	} else if (cpu2_comm_health_page == 1U) {
+		(void)snprintf(line1, sizeof(line1), chinese ? "错误分类 2/3" : "ERROR TYPE 2/3");
+		(void)snprintf(line2, sizeof(line2), chinese ? "响应错误:%lu" : "RESP:%lu",
+		               (unsigned long)cpu2_comm_display_count(response_failure_count));
+		(void)snprintf(line3, sizeof(line3), chinese ? "UART错误:%lu" : "UART:%lu",
+		               (unsigned long)cpu2_comm_display_count(snapshot.uart_failure_count));
+		(void)snprintf(line4, sizeof(line4), chinese ? "发送失败:%lu" : "TX:%lu",
+		               (unsigned long)cpu2_comm_display_count(snapshot.tx_dma_start_fail_count));
+	} else {
+		(void)snprintf(line1, sizeof(line1), chinese ? "故障状态 3/3" : "FAIL STATE 3/3");
+		(void)snprintf(line2, sizeof(line2), chinese ? "上次:%s" : "LAST:%s",
+		               cpu2_comm_failure_reason_text(snapshot.last_failure_reason, chinese));
+		(void)snprintf(line3, sizeof(line3), chinese ? "当前连败:%lu" : "SEQ:%lu",
+		               (unsigned long)cpu2_comm_display_count(snapshot.consecutive_failure_count));
+		(void)snprintf(line4, sizeof(line4), chinese ? "最大连败:%lu" : "MAX:%lu",
+		               (unsigned long)cpu2_comm_display_count(snapshot.max_consecutive_failure_count));
+	}
+
+	OledDisplayLineWords((uint8_t *)line1, OLED_LINE8_1, OLED_ROW4_1, 0);
+	OledDisplayLineWords((uint8_t *)line2, OLED_LINE8_1, OLED_ROW4_2, 0);
+	OledDisplayLineWords((uint8_t *)line3, OLED_LINE8_1, OLED_ROW4_3, 0);
+	OledDisplayLineWords((uint8_t *)line4, OLED_LINE8_1, OLED_ROW4_4, 0);
 }
 
 static uint8_t rtc_menu_days_in_month(uint16_t year, uint8_t month)
@@ -6355,7 +6486,7 @@ static void menu_ao_range(void)
 	menu_build_by_group(MENU_GRP_AO_RANGE, KEYNUM_MENU_AO_RANGE, menu_ao);
 }
 
-/* AO故障设置：故障动作、故障电流、非跟随电流。 */
+/* AO故障设置：故障动作、故障电流、初始电流。 */
 static void menu_ao_fault(void)
 {
 	menu_build_by_group(MENU_GRP_AO_FAULT, KEYNUM_MENU_AO_FAULT, menu_ao);
@@ -6450,7 +6581,9 @@ static void menu_ao_runtime(void)
 	               snapshot.source : AO_RUNTIME_SOURCE_UNAVAILABLE;
 	process_valid = runtime_valid &&
 	                ao_work_mode_is_output() &&
-	                (snapshot.source == AO_RUNTIME_SOURCE_PROCESS) &&
+	                ((snapshot.source == AO_RUNTIME_SOURCE_PROCESS) ||
+	                 (snapshot.source == AO_RUNTIME_SOURCE_HOLD_LAST) ||
+	                 (snapshot.source == AO_RUNTIME_SOURCE_FAULT)) &&
 	                (snapshot.process_valid != 0U);
 	current_valid = runtime_valid &&
 	                ao_work_mode_is_output() &&

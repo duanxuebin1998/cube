@@ -3193,7 +3193,8 @@ void RefreshScreen(void)
     if (FlagofTankOpera == true) {
         if (DisplayTankOpera_IsMotorRunMonitorActive() ||
             DisplayTankOpera_IsDebugWeightWaitActive() ||
-            DisplayTankOpera_IsAoRuntimeActive()) {
+            DisplayTankOpera_IsAoRuntimeActive() ||
+            DisplayTankOpera_IsCpu2CommHealthActive()) {
             frame_spi_error_start = Display_PrepareForForegroundDraw();
             if (DisplayTankOpera_RedrawCurrentPage()) {
                 Display_FinishFrame(frame_spi_error_start);

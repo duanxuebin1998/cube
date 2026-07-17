@@ -8,7 +8,7 @@
 
 | 分类 | 资料 | 用途 |
 | --- | --- | --- |
-| CPU2/CPU3 共享协议 | `CPU2_CPU3协议变更记录.md` | 记录`DEVICE_PROTOCOL_VERSION`、共享寄存器、参数语义、兼容影响和验证结果；当前开发及最新发布协议为23，正式组合为CPU2 V1.28.0.0 / CPU3 V1.26.0.0 |
+| CPU2/CPU3 共享协议 | `CPU2_CPU3协议变更记录.md` | 记录`DEVICE_PROTOCOL_VERSION`、共享寄存器、参数语义、兼容影响和验证结果；当前开发及最新发布协议为24，正式组合为CPU2 V1.29.0.0 / CPU3 V1.27.0.0 |
 | LTD 共享 Modbus | `LTD共享Modbus协议/` | CPU2/CPU3 共用的当前寄存器、命令、帧格式、CPU3 快照响应/CPU2 ACK 写入和联调帧 |
 | 系统参数默认值 | `系统参数出厂默认值.md` | 整理 CPU2 恢复出厂写入的 `DeviceParameters` 默认值、单位和小数位；当前 CPU2 参数存储版本为 `3` |
 | AO 电流输出 | `AO电流输出/` | 归档NMS81等外部4-20mA/AO参考资料，并记录CUBE协议20已采纳的5组16项菜单、2个隐藏预留、HART、迁移和台架验证边界 |
@@ -23,13 +23,13 @@
 
 | 主题 | 当前结论 | 依据 |
 | --- | --- | --- |
-| 共享协议版本 | 当前开发及最新发布源码为`DEVICE_PROTOCOL_VERSION = 23`，正式组合为CPU2 V1.28.0.0 / CPU3 V1.26.0.0。CPU2/CPU3必须严格相等；协议23收敛AO语义并首次正式发布协议22重排后的共享故障编号 | `LTD_MAIN_CPU2/Services/ParamStorage/system_parameter.h`、`LTD_DISPLAY_CPU3/Application/system_param/system_parameter.h`、`CPU2_CPU3协议变更记录.md` |
-| LTD 对外协议 | CPU3菜单中的LTD与CPU2/CPU3板间协议按同一套协议管理；CPU3读已确认快照，FC10等待CPU2合法ACK后回成功；当前故障编号沿用协议22现行表，AO按协议23解释，固定点快照按协议21代际校验，历史记录按CPU2程序版本选故障表 | `LTD共享Modbus协议/LTD共享Modbus协议卷.md` |
-| CPU2 参数存储 | `DEVICE_PARAM_VERSION = 3`，CPU2 `V1.12.0.0`到当前版本头`V1.28.0.0`之间通常不清参数；协议13迁移密度倍率，协议14补齐SI Profile默认参数；协议20原位重构13个AO槽，协议23按旧值迁移故障动作和非跟随电流，结构总尺寸、元信息和CRC范围不变 | `LTD_MAIN_CPU2/Services/ParamStorage/system_parameter.c`、`../00_构建与版本/CPU2参数存储升级清单.md` |
+| 共享协议版本 | 当前开发及最新正式组合为`DEVICE_PROTOCOL_VERSION = 24`、CPU2 V1.29.0.0 / CPU3 V1.27.0.0。CPU2/CPU3必须严格相等；协议24定义AO初始/过程/保持状态和传感器位置源 | `LTD_MAIN_CPU2/Services/ParamStorage/system_parameter.h`、`LTD_DISPLAY_CPU3/Application/system_param/system_parameter.h`、`CPU2_CPU3协议变更记录.md` |
+| LTD 对外协议 | CPU3菜单中的LTD与CPU2/CPU3板间协议按同一套协议管理；CPU3读已确认快照，FC10等待CPU2合法ACK后回成功；当前故障编号沿用协议22现行表，AO按协议24解释，固定点快照按协议21代际校验，历史记录按CPU2程序版本选故障表 | `LTD共享Modbus协议/LTD共享Modbus协议卷.md` |
+| CPU2 参数存储 | `DEVICE_PARAM_VERSION = 3`，CPU2 `V1.12.0.0`到当前版本头`V1.29.0.0`之间通常不清参数；协议13迁移密度倍率，协议14补齐SI Profile默认参数；协议20原位重构13个AO槽，协议23按旧值迁移故障动作，协议24不改变结构、元信息和CRC范围，但旧输出源1升级后改按传感器位置解释 | `LTD_MAIN_CPU2/Services/ParamStorage/system_parameter.c`、`../00_构建与版本/CPU2参数存储升级清单.md` |
 | CPU3 本地显示/通信参数 | `CPU3_PARAM_VERSION = 0x0007`；V6到V7迁移保留SI自动调度、报警阈值和三路串口参数，并补充协议18兼容槽；协议20只改变CPU2/CPU3共享AO契约，不改变CPU3本机FRAM布局 | `LTD_DISPLAY_CPU3/Application/system_param/cpu3_comm_display_params.c`、`CPU2_CPU3协议变更记录.md` |
 | 读取部件参数与 DSM 调试区 | 共享协议为 9 起支持；`debug_data.water_capacitance_x10` 为水位电容快照，蓝牙 RSSI 通过 `WirelessPairingStatus` 尾部输入寄存器发布 | `../00_构建与版本/版本改动与测试/2026-06-13_CPU2_V1.15.0.0_CPU3_V1.14.0.0_读取部件参数蓝牙RSSI与CPU3菜单显示优化_改动与测试方案.md` |
 | AO历史基线 | 协议10追加9项AO运行态并建立旧输出使能；协议11明确旧AO液位量程与独立报警阈值。这些地址和历史语义只用于对应旧版本，不再代表协议20当前菜单 | `CPU2_CPU3协议变更记录.md`、`../00_构建与版本/版本改动与测试/2026-06-15_CPU2_V1.16.0.0_CPU3_V1.15.0.0_AO电流输出运行态与使能参数_改动与测试方案.md` |
-| AO协议23当前方案 | 沿用协议20原位建立的13个AO槽位、CRC后非持久化仿真开关和6项运行态；故障动作收敛为“故障电流/保持上次有效过程电流”，原上电电流解释为非跟随电流，错误等级隐藏预留。当前菜单5组16项：11项可见持久化配置、1项仿真开关和4项只读运行状态；SIL/WHG、错误等级和DAC回读只作隐藏预留 | `CPU2_CPU3协议变更记录.md`、`系统参数出厂默认值.md`、`AO电流输出/README.md`、`../04_界面与菜单/CPU3当前屏幕菜单树.md` |
+| AO协议24当前方案 | 沿用协议20原位建立的13个AO槽位、CRC后非持久化仿真开关和既有运行态窗口；输出源固定为储罐液位、传感器位置、水位，运行态区分初始、过程、保持、故障、仿真、固定、禁用和驱动错误。当前菜单5组16项：11项可见持久化配置、1项仿真开关和4项只读运行状态；SIL/WHG、错误等级和DAC回读只作隐藏预留 | `CPU2_CPU3协议变更记录.md`、`系统参数出厂默认值.md`、`AO电流输出/4-20mA电流输出逻辑.md`、`../04_界面与菜单/CPU3当前屏幕菜单树.md` |
 | 命令 115 保留 | 共享协议为 12 起支持；命令 115 和状态 `0x002F/0x802F` 均改为保留，不再执行或显示强制提零点 | `CPU2_CPU3协议变更记录.md`、`../00_构建与版本/版本改动与测试/2026-06-26_CPU2_V1.19.0.0_CPU3_V1.17.0.0_测量流程显示参数与协议语义汇总_改动与测试方案.md` |
 | 密度两位小数 | 共享协议为 13 起支持；CPU2/CPU3 内部密度 raw 统一为 `kg/m3 x100`，CPU3 密度参数和状态页显示两位小数，DSM/Wartsila/SI协议外部边界保持各自原有口径 | `CPU2_CPU3协议变更记录.md`、`系统参数出厂默认值.md`、`../00_构建与版本/版本改动与测试/2026-06-26_CPU2_V1.20.0.0_CPU3_V1.18.0.0_密度两位精度与菜单协议整理_改动与测试方案.md` |
 | SI Profile 独立兼容 | 共享协议14起支持独立SI Profile；协议18追加阶段、周期计数和有效点进度，并把CPU3本机参数版本升至`0x0007`；协议19故障码和协议20 AO扩展都不改变SI地址和生命周期 | `CPU2_CPU3协议变更记录.md`、`SI协议适配/02_协议映射/SI协议兼容映射表.md`、`../00_构建与版本/版本改动与测试/2026-07-15_CPU2_V1.26.0.0_CPU3_V1.24.0.0_SI协议18生命周期与现场兼容_改动与测试方案.md` |

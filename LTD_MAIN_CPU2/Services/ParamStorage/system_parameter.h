@@ -27,15 +27,15 @@
 #define UNVALID_GSW 0                      /* 质量无效值 */
 
 #define MAX_MEASUREMENT_POINTS 200 /* 密度分布测量最大点数。 */
-#define DEVICE_PROTOCOL_VERSION 23u /* CPU2/CPU3共享协议版本；协议23收敛AO故障动作与非跟随输出语义 */
+#define DEVICE_PROTOCOL_VERSION 24u /* CPU2/CPU3共享协议版本；协议24定义AO初始、过程和保持状态及传感器位置源。 */
 #define FAULT_AUTO_RECOVERY_RETRY_DEFAULT 3u /* 故障自动恢复默认重试次数。 */
 #define FAULT_AUTO_RECOVERY_RETRY_MAX 10u /* 故障自动恢复最大重试次数。 */
 
 #define AO_DISABLED_CURRENT_MA_X100        340U
-#define AO_NON_FOLLOW_CURRENT_MIN_MA_X100  340U
-#define AO_NON_FOLLOW_CURRENT_MAX_MA_X100  2260U
-#define AO_POWER_ON_CURRENT_MIN_MA_X100    AO_NON_FOLLOW_CURRENT_MIN_MA_X100
-#define AO_POWER_ON_CURRENT_MAX_MA_X100    AO_NON_FOLLOW_CURRENT_MAX_MA_X100
+#define AO_INITIAL_CURRENT_MIN_MA_X100     340U
+#define AO_INITIAL_CURRENT_MAX_MA_X100     2260U
+#define AO_POWER_ON_CURRENT_MIN_MA_X100    AO_INITIAL_CURRENT_MIN_MA_X100
+#define AO_POWER_ON_CURRENT_MAX_MA_X100    AO_INITIAL_CURRENT_MAX_MA_X100
 #define AO_FIXED_CURRENT_MIN_MA_X100       400U
 #define AO_FIXED_CURRENT_MAX_MA_X100       2250U
 #define AO_FAULT_CURRENT_MIN_MA_X100       340U
@@ -59,7 +59,7 @@ typedef enum {
 
 typedef enum {
     AO_PROCESS_SOURCE_TANK_LEVEL = 0U,
-    AO_PROCESS_SOURCE_ULLAGE = 1U,
+    AO_PROCESS_SOURCE_SENSOR_POSITION = 1U,
     AO_PROCESS_SOURCE_WATER_LEVEL = 2U
 } AoProcessSource;
 
@@ -84,7 +84,7 @@ typedef struct {
     uint32_t fault_mode;                    /* 故障动作：0输出故障电流，1保持上次有效过程电流 */
     uint32_t fault_current_mA_x100;
     uint32_t error_level;                   /* 隐藏预留槽位，固定为0 */
-    uint32_t power_on_current_mA_x100;      /* 非跟随电流，保留原字段名和槽位 */
+    uint32_t power_on_current_mA_x100;      /* 初始电流，保留原字段名和槽位 */
     uint32_t simulation_current_mA_x100;
 } AoOutputConfig;
 

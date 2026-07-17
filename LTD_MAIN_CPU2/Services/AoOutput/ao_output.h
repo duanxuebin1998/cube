@@ -5,13 +5,14 @@
 #include "system_parameter.h"
 
 typedef enum {
-    AO_OUTPUT_SOURCE_NON_FOLLOW = 0U,
+    AO_OUTPUT_SOURCE_INITIAL = 0U,
     AO_OUTPUT_SOURCE_PROCESS = 1U,
     AO_OUTPUT_SOURCE_FAULT = 2U,
     AO_OUTPUT_SOURCE_SIMULATION = 3U,
     AO_OUTPUT_SOURCE_FIXED = 4U,
     AO_OUTPUT_SOURCE_DISABLED = 5U,
-    AO_OUTPUT_SOURCE_DRIVER_ERROR = 6U
+    AO_OUTPUT_SOURCE_DRIVER_ERROR = 6U,
+    AO_OUTPUT_SOURCE_HOLD_LAST = 7U
 } AoOutputSource;
 
 typedef struct {
@@ -39,7 +40,7 @@ typedef struct {
     uint32_t dac_readback_valid;
 } AoOutputRuntime;
 
-/* 初始化AO服务并写入禁用、固定或非跟随电流。 */
+/* 初始化AO服务并写入禁用、固定或初始电流。 */
 uint32_t AoOutput_Init(void);
 
 /* 在任务态刷新AO状态机和AD5421输出。 */

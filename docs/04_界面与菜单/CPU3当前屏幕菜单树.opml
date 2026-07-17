@@ -293,7 +293,7 @@
             <outline text="故障设置">
               <outline text="故障动作" />
               <outline text="故障电流" />
-              <outline text="非跟随电流" />
+              <outline text="初始电流" />
             </outline>
             <outline text="运行状态">
               <outline text="输出状态 [只读]" />

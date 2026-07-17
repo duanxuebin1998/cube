@@ -44,6 +44,11 @@ bool DisplayTankOpera_IsDebugWeightWaitActive(void);
  */
 bool DisplayTankOpera_IsAoRuntimeActive(void);
 /**
+ * @brief 判断当前前景页是否为CPU2通讯计数页。
+ * @return true表示页面需要随屏幕刷新周期更新RAM计数。
+ */
+bool DisplayTankOpera_IsCpu2CommHealthActive(void);
+/**
  * @brief 判断当前前景菜单页是否允许空闲超时后自动退出。
  * @return true 表示允许自动退出到状态页，false 表示应继续保持当前业务等待页。
  */
@@ -127,6 +132,7 @@ typedef enum {
     KEYNUM_MENU_DISPLAY_DATA_TEMP,       /* 温度数据源与手输值 */
     KEYNUM_MENU_MAINT_CONFIG,            /* 维护设置主菜单 */
     KEYNUM_MENU_RTC_DATETIME,            /* RTC 日期时间设置 */
+    KEYNUM_MENU_CPU2_COMM_HEALTH,         /* CPU2 通讯健康计数 */
 
     /* ===== CPU3（拆分页面） ===== */
     KEYNUM_MENU_CPU3_BASE,               /* CPU3 - 基本参数 */
@@ -167,7 +173,7 @@ typedef enum {
     MENU_GRP_DO_ALARM,          /* 继电器报警输出 */
     MENU_GRP_AO_CHANNEL,        /* AO 基本设置：工作模式/电流模式/输出源 */
     MENU_GRP_AO_RANGE,          /* AO 固定电流/量程/阻尼 */
-    MENU_GRP_AO_FAULT,          /* AO 故障动作/故障电流/非跟随电流 */
+    MENU_GRP_AO_FAULT,          /* AO 故障动作/故障电流/初始电流 */
     MENU_GRP_AO_RUNTIME,        /* AO 输出状态/输入值/输入百分比/输出电流，只读运行态 */
     MENU_GRP_AO_DIAGNOSTIC,     /* AO 输出仿真/仿真电流 */
     MENU_GRP_AO_RESERVED,       /* AO SIL/WHG 与 DAC 回读隐藏预留 */
@@ -409,7 +415,7 @@ typedef enum
     COM_NUM_DEVICEPARAM_AO_FAULT_MODE,                  /* AO故障动作，保留原槽位 */
     COM_NUM_DEVICEPARAM_AO_FAULT_CURRENT_MA_X100,       /* AO故障电流 */
     COM_NUM_DEVICEPARAM_AO_ERROR_LEVEL,                 /* AO隐藏预留槽位，固定为0 */
-    COM_NUM_DEVICEPARAM_AO_POWER_ON_CURRENT_MA_X100,    /* AO非跟随电流，保留原槽位 */
+    COM_NUM_DEVICEPARAM_AO_POWER_ON_CURRENT_MA_X100,    /* AO初始电流，保留原槽位 */
     COM_NUM_DEVICEPARAM_AO_SIMULATION_CURRENT_MA_X100,  /* AO仿真电流 */
 
     /* ---------------- 指令参数（用于带参命令） ---------------- */

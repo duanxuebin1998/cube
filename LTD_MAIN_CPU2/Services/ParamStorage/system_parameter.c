@@ -375,7 +375,7 @@ static void ao_load_default_range(const DeviceParameters *params, AoOutputConfig
     config->range_100_01mm = ao_source_range_max_01mm(params, config->output_source);
 }
 
-/* 建立协议23 AO出厂配置，供恢复默认和旧协议迁移共用。 */
+/* 建立当前AO出厂配置，供恢复默认和旧协议迁移共用。 */
 static void ao_load_default_config(const DeviceParameters *params, AoOutputConfig *config)
 {
     if (config == NULL) {
@@ -397,7 +397,7 @@ static void ao_load_default_config(const DeviceParameters *params, AoOutputConfi
     config->simulation_current_mA_x100 = 1200U;
 }
 
-/* 检查协议23 AO配置是否满足全部枚举、范围和量程约束。 */
+/* 检查当前AO配置是否满足全部枚举、范围和量程约束。 */
 static int ao_config_is_valid(const DeviceParameters *params, const AoOutputConfig *config)
 {
     int32_t range_max_01mm;
@@ -417,8 +417,8 @@ static int ao_config_is_valid(const DeviceParameters *params, const AoOutputConf
         (config->fixed_current_mA_x100 > AO_FIXED_CURRENT_MAX_MA_X100) ||
         (config->fault_current_mA_x100 < AO_FAULT_CURRENT_MIN_MA_X100) ||
         (config->fault_current_mA_x100 > AO_FAULT_CURRENT_MAX_MA_X100) ||
-        (config->power_on_current_mA_x100 < AO_NON_FOLLOW_CURRENT_MIN_MA_X100) ||
-        (config->power_on_current_mA_x100 > AO_NON_FOLLOW_CURRENT_MAX_MA_X100) ||
+        (config->power_on_current_mA_x100 < AO_INITIAL_CURRENT_MIN_MA_X100) ||
+        (config->power_on_current_mA_x100 > AO_INITIAL_CURRENT_MAX_MA_X100) ||
         (config->simulation_current_mA_x100 < AO_SIMULATION_CURRENT_MIN_MA_X100) ||
         (config->simulation_current_mA_x100 > AO_SIMULATION_CURRENT_MAX_MA_X100) ||
         (config->damping_x10_s > AO_DAMPING_MAX_X10_S)) {
@@ -463,8 +463,8 @@ static int migrate_ao_params_runtime(void)
         migrated.range_0_01mm = (int32_t)legacy.range_start_01mm;
         migrated.range_100_01mm = (int32_t)legacy.range_end_01mm;
     }
-    if ((legacy.initial_current_mA_x100 >= AO_NON_FOLLOW_CURRENT_MIN_MA_X100) &&
-        (legacy.initial_current_mA_x100 <= AO_NON_FOLLOW_CURRENT_MAX_MA_X100)) {
+    if ((legacy.initial_current_mA_x100 >= AO_INITIAL_CURRENT_MIN_MA_X100) &&
+        (legacy.initial_current_mA_x100 <= AO_INITIAL_CURRENT_MAX_MA_X100)) {
         migrated.power_on_current_mA_x100 = legacy.initial_current_mA_x100;
     }
     if ((legacy.fault_current_mA_x100 >= AO_FAULT_CURRENT_MIN_MA_X100) &&
@@ -591,8 +591,8 @@ static int normalize_ao_params_runtime(void)
     if (normalized.error_level != 0U) {
         normalized.error_level = 0U;
     }
-    if ((normalized.power_on_current_mA_x100 < AO_NON_FOLLOW_CURRENT_MIN_MA_X100) ||
-        (normalized.power_on_current_mA_x100 > AO_NON_FOLLOW_CURRENT_MAX_MA_X100)) {
+    if ((normalized.power_on_current_mA_x100 < AO_INITIAL_CURRENT_MIN_MA_X100) ||
+        (normalized.power_on_current_mA_x100 > AO_INITIAL_CURRENT_MAX_MA_X100)) {
         normalized.power_on_current_mA_x100 = defaults.power_on_current_mA_x100;
     }
     if ((normalized.simulation_current_mA_x100 < AO_SIMULATION_CURRENT_MIN_MA_X100) ||
@@ -1521,7 +1521,7 @@ static const ParamPrintItem g_device_param_print_table[] = {
     DEVICE_PARAM_ITEM("4-20mA/AO参数", "故障动作", ao_output.fault_mode, PARAM_PRINT_TYPE_U32, NULL),
     DEVICE_PARAM_ITEM("4-20mA/AO参数", "故障电流", ao_output.fault_current_mA_x100, PARAM_PRINT_TYPE_U32_01MA, "0.01mA"),
     DEVICE_PARAM_ITEM("4-20mA/AO参数", "隐藏预留", ao_output.error_level, PARAM_PRINT_TYPE_U32, NULL),
-    DEVICE_PARAM_ITEM("4-20mA/AO参数", "非跟随电流", ao_output.power_on_current_mA_x100, PARAM_PRINT_TYPE_U32_01MA, "0.01mA"),
+    DEVICE_PARAM_ITEM("4-20mA/AO参数", "初始电流", ao_output.power_on_current_mA_x100, PARAM_PRINT_TYPE_U32_01MA, "0.01mA"),
     DEVICE_PARAM_ITEM("4-20mA/AO参数", "仿真电流", ao_output.simulation_current_mA_x100, PARAM_PRINT_TYPE_U32_01MA, "0.01mA"),
     DEVICE_PARAM_ITEM("指令参数", "标定液位值", calibrateOilLevel, PARAM_PRINT_TYPE_U32_01MM, "0.1mm"),
     DEVICE_PARAM_ITEM("指令参数", "标定水位值", calibrateWaterLevel, PARAM_PRINT_TYPE_U32_01MM, "0.1mm"),
