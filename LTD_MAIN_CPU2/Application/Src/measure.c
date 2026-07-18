@@ -78,6 +78,7 @@ static void CMD_MeasureBottom(void);
 static void CMD_MeasureAndFollowOilLevel(void);
 static uint32_t EnsureMotorPositionSourceBeforeFollow(const char *follow_name, uint8_t *switched_to_motor);
 static DensitySpreadModeId CMD_SyntheticDensityModeFromParam(void);
+static ProfileSource CMD_SyntheticProfileSourceFromMode(DensitySpreadModeId mode);
 static void CMD_CalibrateZeroPoint(void);
 static void CMD_CalibrateOilLevel(void);
 static void CMD_SyntheticMeasurement(void);
@@ -1053,6 +1054,9 @@ static void CMD_WartsilaDensitySpread(void) {
 	uint32_t ret = 0;
 	uint32_t bottom_detect_interval = g_deviceParams.wartsila_bottom_detect_interval; /* 本次瓦锡兰测量后的探底频率参数快照 */
 	DensityDistribution temp = {0};
+
+	/* 新一轮瓦锡兰测量先关闭旧完成锁存，CPU3仍保留已确认快照。 */
+	DensityProfile_Begin();
 	/* 设置设备状态：分布测量中 */
 	g_measurement.device_status.device_state = STATE_WARTSILA_DENSITY_MEASURING;
 
@@ -1067,11 +1071,8 @@ static void CMD_WartsilaDensitySpread(void) {
 		return;
 	}
 
-	uint32_t previous_profile_complete_counter = g_measurement.density_distribution.profile_complete_counter;
-	g_measurement.density_distribution = temp;
-	g_measurement.density_distribution.profile_complete_latched = 1U;
-	g_measurement.density_distribution.profile_complete_counter = previous_profile_complete_counter + 1U;
-	g_measurement.density_distribution.profile_source = PROFILE_SOURCE_WARTSILA;
+	/* 完整点阵写入后最后递增完成计数，CPU3只会同步完整新代际。 */
+	DensityProfile_PublishResult(&temp, PROFILE_SOURCE_WARTSILA);
 
 	if (AbortableDelay_CommandSwitch(1000U, 100U) == STATE_SWITCH) {
 		return;
@@ -1162,6 +1163,27 @@ static DensitySpreadModeId CMD_SyntheticDensityModeFromParam(void)
         return DENS_MODE_SPREAD;
     }
 }
+
+/*
+ * 函数用途：把综合测量选定的密度内核模式映射到现有点阵来源枚举。
+ * 调用场景：综合测量发布最终点阵前调用。
+ * 关键约束：只复用现有来源值，不新增共享协议枚举。
+ */
+static ProfileSource CMD_SyntheticProfileSourceFromMode(DensitySpreadModeId mode)
+{
+    switch (mode) {
+    case DENS_MODE_GB:
+        return PROFILE_SOURCE_GB;
+    case DENS_MODE_METER:
+        return PROFILE_SOURCE_METER;
+    case DENS_MODE_INTERVAL:
+        return PROFILE_SOURCE_INTERVAL;
+    case DENS_MODE_SPREAD:
+    default:
+        return PROFILE_SOURCE_STANDARD;
+    }
+}
+
 /**
  * @brief 执行测量流程中的 CMD_SyntheticMeasurement 逻辑。
  * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
@@ -1169,7 +1191,11 @@ static DensitySpreadModeId CMD_SyntheticDensityModeFromParam(void)
 static void CMD_SyntheticMeasurement(void) {
 	uint32_t ret = 0;
     DensitySpreadModeId density_mode = CMD_SyntheticDensityModeFromParam();
+    ProfileSource profile_source = CMD_SyntheticProfileSourceFromMode(density_mode);
 	DensityDistribution temp = {0};   /* 本次测量结果临时缓存 */
+
+    /* 新一轮综合测量先关闭旧完成锁存，CPU3仍保留已确认快照。 */
+    DensityProfile_Begin();
 	/* 设置设备状态：分布测量中 */
 	g_measurement.device_status.device_state = STATE_SYNTHETICING;
 
@@ -1201,8 +1227,8 @@ static void CMD_SyntheticMeasurement(void) {
     }
 
 
-    /* 4. 测量成功, 写回全局结果 */
-    g_measurement.density_distribution = temp;
+    /* 4. 测量成功，按实际内核模式统一发布点阵来源和完成代际。 */
+    DensityProfile_PublishResult(&temp, profile_source);
     Print_DensitySpreadResult(&temp);
 /* 测量结束，状态切换为分布测量完成 */
 	g_measurement.device_status.device_state = STATE_SYNTHETICING_OVER;

@@ -6,6 +6,7 @@
  */
 #include "wartsila_modbus_data_analysis.h"
 #include "system_parameter.h"
+#include "cpu3_debug_log.h"
 #include "../external_read_freshness.h"
 #include <stdint.h>
 #include <stddef.h>
@@ -190,7 +191,11 @@ static void DSMToWartsila(const volatile MeasurementResult *DSM, wartsila_Device
 
 	/* 位置标志 */
 	WXL->position_mm = 0;
-	printf("分布测量上限: %lu mm\r\n", g_deviceParams.wartsila_lower_density_limit);
+	CPU3_LOG_DEBUG("WARTSILA",
+				   "刷新分布参数 下限=%lu mm 上限=%lu mm 间隔=%lu mm",
+				   (unsigned long)g_deviceParams.wartsila_lower_density_limit,
+				   (unsigned long)g_deviceParams.wartsila_upper_density_limit,
+				   (unsigned long)g_deviceParams.wartsila_density_interval);
 	WXL->spread_lowest_mm = g_deviceParams.wartsila_lower_density_limit;
 	WXL->spread_highest_mm = g_deviceParams.wartsila_upper_density_limit;
 	WXL->spread_interval_mm = g_deviceParams.wartsila_density_interval;
@@ -289,7 +294,9 @@ void DeviceParams_StoreToRegisters(uint16_t *reg) {
 
 	/* ===== 分布测量 0x50 ~ 0x5D ===== */
 	reg[0x0050] = wxl.spread_point_count;
-	printf("分布测量点数：%d\r\n", wxl.spread_point_count);
+	CPU3_LOG_DEBUG("WARTSILA",
+				   "刷新分布寄存器 点数=%u",
+				   (unsigned int)wxl.spread_point_count);
 	reg[0x0051] = wxl.spread_oillevel_mm;
 	reg[0x0052] = 0;
 	reg[0x0053] = wxl.spread_unknown; /* 保留 */

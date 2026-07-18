@@ -12,6 +12,7 @@
 #include <string.h>
 #include "address.h"
 #include "cpu2_communicate.h"
+#include "cpu3_debug_log.h"
 #include "../external_read_freshness.h"
 
 static bool modbus_on_holding_written(uint16_t start, uint16_t qty);
@@ -286,7 +287,9 @@ static bool modbus_on_holding_written(uint16_t start, uint16_t qty)
 		if (g_deviceParams.command != CMD_NONE)
 		{
 			uint32_t cmd32 = (uint32_t)g_deviceParams.command;
-			printf("接收到下发指令：%d\r\n", g_deviceParams.command);
+			CPU3_LOG_INFO("WARTSILA",
+						  "收到外部命令并准备下发CPU2 命令=%u",
+						  (unsigned int)g_deviceParams.command);
 			/* 将 CMD_xxx 写入 HOLDREGISTER_DEVICEPARAM_COMMAND（2 个保持寄存器） */
 			command_sent = CPU2_CombinatePackage_Send(FUNCTIONCODE_WRITE_MULREGISTER,
 												 HOLDREGISTER_DEVICEPARAM_COMMAND,

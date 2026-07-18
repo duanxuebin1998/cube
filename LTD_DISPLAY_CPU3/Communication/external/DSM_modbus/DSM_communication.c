@@ -9,8 +9,6 @@
 #include "my_crc.h"
 #include "address.h"
 
-#define DEBUG_COMM 0
-
 /*
  * 函数用途：校验 DSM 请求帧的实际长度是否与功能码和 byteCount 一致。
  * 调用场景：地址和 CRC 通过后、分发到各 Response 函数前调用。
@@ -58,9 +56,6 @@ int DSM_CommunicationInit(void) {
 	MaxNum_HoldingRegister = ENDADDRESS6_HOLDREGISTER; /* 保持寄存器工作模式有效值 */
 	MaxNum_InputRegister = ENDADDRESS5_INPUTREGISTER;  /* 输入寄存器工作模式有效值 */
 	WriteOneInputRegister(INPUTREGISTER_SYSTEMSTATE, 1, STATE_INIT);
-#ifdef DEBUG_COMM
-	printf("Address = %d\r\n", LocalAddress);
-#endif
 	return 0;
 }
 /**********************************************************************************************
@@ -70,32 +65,17 @@ int DSM_CommunicationInit(void) {
  **返回值:		0
  **********************************************************************************************/
 int DSM_CommunicationProcess(unsigned char *rcvbuff, int rcvcount, uint8_t* tx, uint16_t* tx_len) {
-#ifdef DEBUG_COMM
-	int i;
-#endif
 	int functioncode;
 	unsigned short crc;
-#if DEBUG_COMM
-	printf("CPU3_RCV %d : ", rcvcount);
-	for (i = 0; i < rcvcount; i++)
-		printf("%02X ", rcvbuff[i]);
-	printf("\r\n");
-#endif
 	if (rcvcount <= 3) {
-		printf("COMM:<=3\t");
-
-		for (i = 0; i < rcvcount; i++) {
-			printf("0x%02X\t", rcvbuff[i]);
-		}
-		printf("\r\n");
-		return -1;
+		return DSM_COMM_ERR_BAD_LENGTH;
 	}
 	/* 校验地址 */
 	if (rcvbuff[0] != SlaveAddress && rcvbuff[0] != 0) {
-		return -1;
+		return DSM_COMM_ERR_ADDRESS_MISMATCH;
 	}
 	if (SlaveCheckCRC(rcvbuff, rcvcount) == false) {
-		return -1;
+		return DSM_COMM_ERR_CRC;
 	}
 	if (!DSM_IsRequestLengthValid(rcvbuff, rcvcount)) {
 		*tx_len = (uint16_t)ResponseException(rcvbuff[1], EXCEPTIONCODE_ERRORDATA, tx);
@@ -145,5 +125,5 @@ int DSM_CommunicationProcess(unsigned char *rcvbuff, int rcvcount, uint8_t* tx, 
 		}
 		}
 	}
-	return 0;
+	return DSM_COMM_OK;
 }

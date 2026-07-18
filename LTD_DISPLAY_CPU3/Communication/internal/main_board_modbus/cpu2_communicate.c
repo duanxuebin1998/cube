@@ -11,10 +11,11 @@
 #include "dataanalysis_modbus.h"
 #include "wartsila_modbus_communication.h"
 #include "wartsila_modbus_data_analysis.h"
+#include "cpu3_debug_log.h"
 
-#define DEBUG_COMMUCPU2 0
 #define ADERSS 0X01
 #define CPU2_RESPONSE_TIMEOUT_MS 1000U /* CPU2 单次响应等待超时，单位 ms。 */
+#define CPU2_COMM_STATUS_LOG_INTERVAL_MS 5000U /* CPU2通信健康摘要周期，避免阻塞调试串口影响轮询。 */
 #define CPU2_COMM_RESYNC_FAILURE_LIMIT 3U /* 连续失败达到三次后才废弃快照并完整重同步。 */
 #define CPU2_COMM_FAILURE_LIMIT 10U /* CPU2 连续请求未获得合法响应的置错阈值。 */
 #define CPU2_MAX_EXTERNAL_WRITE_REGISTERS 122U /* RTU 最大 123 个寄存器；共享字段按 32 位对齐后取最大偶数。 */
@@ -26,7 +27,8 @@
 #define CPU2_PROFILE_REGISTERS_PER_FRAME (CPU2_PROFILE_POINTS_PER_FRAME * REG_DENSITY_DIST_POINT_SIZE)
 #define CPU2_PROFILE_FRAME_INTERVAL_MS 50U
 #define CPU2_PROFILE_ROUND_RETRY_DELAY_MS 500U
-#define CPU2_PROFILE_TOTAL_TIMEOUT_MS 15000U
+#define CPU2_PROFILE_NO_PROGRESS_TIMEOUT_MS 20000U
+#define CPU2_PROFILE_FAILED_RETRY_DELAY_MS 2000U
 #define CPU2_PROFILE_BLOCK_RETRY_MAX 3U
 #define CPU2_PROFILE_ROUND_MAX 3U
 
@@ -42,6 +44,7 @@ static uint32_t s_cpu2_snapshot_generation = 0U; /* 每次CPU2公开快照失效
 static bool s_cpu2_parameter_refresh_requested = false; /* 外部参数写后是否要求重新确认 CPU2 参数。 */
 static bool s_cpu2_snapshot_resync_requested = false; /* 内部通信失败后是否要求完整重同步。 */
 static volatile uint32_t s_cpu2_uart_error_pending = HAL_UART_ERROR_NONE; /* UART5中断只锁存错误位，主循环统一分类计数。 */
+static uint32_t s_cpu2_request_uart_error_code = HAL_UART_ERROR_NONE; /* 当前失败请求对应的UART5硬件错误位。 */
 static Cpu2CommHealthSnapshot s_cpu2_comm_health = {0}; /* CPU3本机RAM通信健康计数，上电清零。 */
 static Cpu2CommFailureReason s_cpu2_response_failure_reason = CPU2_COMM_FAIL_NONE; /* 当前响应校验失败原因。 */
 
@@ -77,6 +80,7 @@ typedef struct {
 	Cpu2ProfileSnapshotKey target_key;
 	uint32_t snapshot_generation;
 	uint32_t started_tick;
+	uint32_t last_progress_tick;
 	uint32_t last_frame_tick;
 	uint32_t retry_due_tick;
 	uint32_t point_register_offset;
@@ -102,8 +106,10 @@ static DensityDistribution s_cpu2_profile_published_distribution;
 static Cpu2ProfileSnapshotKey s_cpu2_profile_published_key = {0};
 static uint32_t s_cpu2_profile_published_cycle = 0U;
 static bool s_cpu2_profile_published_valid = false;
-static bool s_cpu2_profile_failed_counter_valid = false;
-static uint32_t s_cpu2_profile_failed_counter = 0U;
+static bool s_cpu2_profile_failed_key_valid = false;
+static Cpu2ProfileSnapshotKey s_cpu2_profile_failed_key = {0};
+static uint32_t s_cpu2_profile_failed_snapshot_generation = 0U;
+static uint32_t s_cpu2_profile_failed_retry_due_tick = 0U;
 static bool s_cpu2_profile_sync_fault_active = false;
 static DeviceState s_cpu2_raw_device_state = STATE_INIT;
 static uint32_t s_cpu2_raw_error_code = NO_ERROR;
@@ -137,6 +143,48 @@ static bool CPU2_PollFixedPointSnapshotHandshake(void);
 static bool CPU2_ProfileSyncPoll(void);
 static void CPU2_ProfileObservePublicHeader(void);
 static void CPU2_ProfileApplyPublicStatusGate(void);
+static const char *CPU2_CommFailureReasonText(Cpu2CommFailureReason reason);
+static const char *CPU2_CommLinkStateText(void);
+static void CPU2_CommLogRequestFailure(void);
+
+/* 返回CPU2请求失败原因的现场可读名称。 */
+static const char *CPU2_CommFailureReasonText(Cpu2CommFailureReason reason)
+{
+	switch (reason) {
+	case CPU2_COMM_FAIL_TIMEOUT:
+		return "响应超时";
+	case CPU2_COMM_FAIL_CRC:
+		return "CRC校验失败";
+	case CPU2_COMM_FAIL_ADDRESS:
+		return "从机地址不匹配";
+	case CPU2_COMM_FAIL_FUNCTION:
+		return "功能码或写回显不匹配";
+	case CPU2_COMM_FAIL_LENGTH:
+		return "帧长度不匹配";
+	case CPU2_COMM_FAIL_UART:
+		return "UART硬件异常";
+	case CPU2_COMM_FAIL_TX_DMA:
+		return "发送DMA启动失败";
+	case CPU2_COMM_FAIL_NONE:
+	default:
+		return "无";
+	}
+}
+
+/* 返回CPU2链路当前对外门禁状态。 */
+static const char *CPU2_CommLinkStateText(void)
+{
+	if (s_cpu2_comm_fault_active) {
+		return "通信故障";
+	}
+	if (CPU2_CommIsProtocolMismatch()) {
+		return "协议不匹配";
+	}
+	if (CPU2_CommIsAvailable()) {
+		return "可用";
+	}
+	return "同步中";
+}
 
 /*
  * 函数用途：校验 CPU2 响应是否与当前请求的功能码、长度和回显字段一致。
@@ -217,9 +265,18 @@ static bool CPU2_ResponseContainsProtocolVersion(void)
  */
 static void CPU2_CommMarkValidResponse(void)
 {
+	uint32_t previous_consecutive_count = s_cpu2_comm_health.consecutive_failure_count;
+	Cpu2CommFailureReason previous_reason = s_cpu2_comm_health.last_failure_reason;
+
 	s_cpu2_comm_health.success_count++;
 	s_cpu2_consecutive_failure_count = 0U;
 	s_cpu2_comm_health.consecutive_failure_count = 0U;
+	if (previous_consecutive_count > 0U) {
+		CPU3_LOG_INFO("CPU2",
+					  "收到合法响应，连续失败计数清零 原因=%s 之前连续失败=%lu",
+					  CPU2_CommFailureReasonText(previous_reason),
+					  (unsigned long)previous_consecutive_count);
+	}
 }
 
 /*
@@ -237,6 +294,9 @@ static void CPU2_InvalidatePublicSnapshotFreshness(void)
 	CPU2_ProfileInvalidatePublishedSnapshot();
 	CPU2_ResetFixedPointSnapshotHandshake(true);
 	s_cpu2_snapshot_resync_requested = true;
+	CPU3_LOG_WARNING("CPU2",
+					 "连续失败达到%u次，公开快照已失效并请求完整重同步",
+					 (unsigned int)CPU2_COMM_RESYNC_FAILURE_LIMIT);
 }
 
 /*
@@ -247,6 +307,8 @@ static void CPU2_InvalidatePublicSnapshotFreshness(void)
  */
 static void CPU2_CommRecordFailure(Cpu2CommFailureReason reason)
 {
+	bool fault_was_active = s_cpu2_comm_fault_active;
+
 	switch (reason) {
 	case CPU2_COMM_FAIL_TIMEOUT:
 		s_cpu2_comm_health.timeout_count++;
@@ -289,6 +351,11 @@ static void CPU2_CommRecordFailure(Cpu2CommFailureReason reason)
 
 	if (s_cpu2_consecutive_failure_count >= CPU2_COMM_FAILURE_LIMIT) {
 		s_cpu2_comm_fault_active = true;
+	}
+	if ((!fault_was_active) && s_cpu2_comm_fault_active) {
+		CPU3_LOG_CRITICAL("CPU2",
+						  "连续失败达到%u次，CPU2通信故障已锁存",
+						  (unsigned int)CPU2_COMM_FAILURE_LIMIT);
 	}
 
 	if (s_cpu2_comm_fault_active) {
@@ -338,6 +405,77 @@ void CPU2_CommGetHealthSnapshot(Cpu2CommHealthSnapshot *out_snapshot)
 	}
 
 	*out_snapshot = s_cpu2_comm_health;
+}
+
+/*
+ * 函数用途：输出当前失败请求的地址、功能码、计数和原始帧证据。
+ * 调用场景：主循环完成失败分类和健康计数后调用。
+ * 关键约束：同一笔失败只在统一出口打印一次，避免CRC等解析分支重复刷屏。
+ */
+static void CPU2_CommLogRequestFailure(void)
+{
+	CPU3_LOG_WARNING("CPU2",
+					 "请求失败 原因=%s 功能码=0x%02X 起始地址=0x%04X 寄存器数=%u 接收长度=%u UART标志=0x%08lX 连续=%lu/%u 总失败=%lu",
+					 CPU2_CommFailureReasonText(s_cpu2_response_failure_reason),
+					 (unsigned int)(uint8_t)RCV_functioncode,
+					 (unsigned int)(uint16_t)RCV_startaddress,
+					 (unsigned int)(uint16_t)RCV_registercnt,
+					 (unsigned int)UART5_RX_LEN,
+					 (unsigned long)s_cpu2_request_uart_error_code,
+					 (unsigned long)s_cpu2_comm_health.consecutive_failure_count,
+					 (unsigned int)CPU2_COMM_FAILURE_LIMIT,
+					 (unsigned long)s_cpu2_comm_health.total_failure_count);
+
+	if ((UART5_RX_LEN > 0U) &&
+		(s_cpu2_response_failure_reason != CPU2_COMM_FAIL_TIMEOUT) &&
+		(s_cpu2_response_failure_reason != CPU2_COMM_FAIL_UART) &&
+		(s_cpu2_response_failure_reason != CPU2_COMM_FAIL_TX_DMA)) {
+		Cpu3Log_Frame(CPU3_LOG_LEVEL_WARNING,
+					  "CPU2",
+					  "接收失败帧",
+					  UART5_RX_BUF,
+					  UART5_RX_LEN);
+	}
+}
+
+void CPU2_CommDebugTask(void)
+{
+	static uint32_t last_log_tick = 0U;
+	uint32_t now = HAL_GetTick();
+
+	if ((now - last_log_tick) < CPU2_COMM_STATUS_LOG_INTERVAL_MS) {
+		return;
+	}
+	last_log_tick = now;
+
+	CPU3_LOG_INFO("CPU2",
+				  "链路=%s CPU2协议=%lu CPU3协议=%u 快照=状态%u/参数%u/固定点%u 成功=%lu 失败=%lu 连续=%lu 最大连续=%lu 最近=%s",
+				  CPU2_CommLinkStateText(),
+				  (unsigned long)s_cpu2_protocol_version,
+				  (unsigned int)DEVICE_PROTOCOL_VERSION,
+				  s_cpu2_has_status_snapshot ? 1U : 0U,
+				  s_cpu2_has_parameter_snapshot ? 1U : 0U,
+				  s_cpu2_has_fixed_point_snapshot ? 1U : 0U,
+				  (unsigned long)s_cpu2_comm_health.success_count,
+				  (unsigned long)s_cpu2_comm_health.total_failure_count,
+				  (unsigned long)s_cpu2_comm_health.consecutive_failure_count,
+				  (unsigned long)s_cpu2_comm_health.max_consecutive_failure_count,
+				  CPU2_CommFailureReasonText(s_cpu2_comm_health.last_failure_reason));
+	if (s_cpu2_comm_health.total_failure_count > 0U) {
+		CPU3_LOG_INFO("CPU2",
+					  "失败分类 超时=%lu CRC=%lu 地址=%lu 功能=%lu 长度=%lu UART=%lu(ORE=%lu/FE=%lu/NE=%lu/PE=%lu) TXDMA=%lu",
+					  (unsigned long)s_cpu2_comm_health.timeout_count,
+					  (unsigned long)s_cpu2_comm_health.crc_count,
+					  (unsigned long)s_cpu2_comm_health.address_count,
+					  (unsigned long)s_cpu2_comm_health.function_count,
+					  (unsigned long)s_cpu2_comm_health.length_count,
+					  (unsigned long)s_cpu2_comm_health.uart_failure_count,
+					  (unsigned long)s_cpu2_comm_health.uart_ore_count,
+					  (unsigned long)s_cpu2_comm_health.uart_fe_count,
+					  (unsigned long)s_cpu2_comm_health.uart_ne_count,
+					  (unsigned long)s_cpu2_comm_health.uart_pe_count,
+					  (unsigned long)s_cpu2_comm_health.tx_dma_start_fail_count);
+	}
 }
 
 /*
@@ -542,6 +680,7 @@ bool CPU2_CommWriteHoldingRegisters(uint16_t startadd,
 static bool CPU2_CommFinishFailedRequest(bool parameter_write_attempted)
 {
 	CPU2_CommRecordFailure(s_cpu2_response_failure_reason);
+	CPU2_CommLogRequestFailure();
 	if (parameter_write_attempted) {
 		CPU2_CommRequestParameterRefresh();
 	}
@@ -649,7 +788,8 @@ static void CPU2_CommitFixedPointSnapshot(void)
 /*
  * 函数用途：每次调用推进固定点快照握手的一个Modbus请求。
  * 调用场景：上电全量同步尾部，以及每轮普通运行轮询之后。
- * 关键约束：顺序固定为计数前读、私有结果读、计数后读；失败或变化从第一阶段重来。
+ * 关键约束：顺序固定为计数前读、私有结果读、计数后读；失败或变化仅丢弃本轮候选，
+ *           已发布快照继续有效，连续三次通信失败由全局恢复策略统一失效。
  */
 static bool CPU2_PollFixedPointSnapshotHandshake(void)
 {
@@ -658,7 +798,7 @@ static bool CPU2_PollFixedPointSnapshotHandshake(void)
 		if (!CPU2_ReadInputRegistersPrivate(REG_SINGLE_POINT_MEAS_COMPLETE_COUNTER,
 											 CPU2_FIXED_POINT_COUNTER_REGISTER_COUNT,
 											 s_cpu2_fixed_point_counter_before)) {
-			CPU2_ResetFixedPointSnapshotHandshake(true);
+			CPU2_ResetFixedPointSnapshotHandshake(false);
 			return false;
 		}
 		s_cpu2_fixed_point_stage = CPU2_FIXED_POINT_READ_RESULTS;
@@ -668,7 +808,7 @@ static bool CPU2_PollFixedPointSnapshotHandshake(void)
 		if (!CPU2_ReadInputRegistersPrivate(REG_SINGLE_POINT_MEAS_TEMP,
 											 CPU2_FIXED_POINT_RESULT_REGISTER_COUNT,
 											 s_cpu2_fixed_point_results)) {
-			CPU2_ResetFixedPointSnapshotHandshake(true);
+			CPU2_ResetFixedPointSnapshotHandshake(false);
 			return false;
 		}
 		s_cpu2_fixed_point_stage = CPU2_FIXED_POINT_READ_COUNTER_AFTER;
@@ -678,13 +818,13 @@ static bool CPU2_PollFixedPointSnapshotHandshake(void)
 		if (!CPU2_ReadInputRegistersPrivate(REG_SINGLE_POINT_MEAS_COMPLETE_COUNTER,
 											 CPU2_FIXED_POINT_COUNTER_REGISTER_COUNT,
 											 s_cpu2_fixed_point_counter_after)) {
-			CPU2_ResetFixedPointSnapshotHandshake(true);
+			CPU2_ResetFixedPointSnapshotHandshake(false);
 			return false;
 		}
 		if (memcmp(s_cpu2_fixed_point_counter_before,
 				   s_cpu2_fixed_point_counter_after,
 				   sizeof(s_cpu2_fixed_point_counter_before)) != 0) {
-			CPU2_ResetFixedPointSnapshotHandshake(true);
+			CPU2_ResetFixedPointSnapshotHandshake(false);
 			return false;
 		}
 		CPU2_CommitFixedPointSnapshot();
@@ -780,6 +920,34 @@ static bool CPU2_ProfileKeyEqual(const Cpu2ProfileSnapshotKey *left,
 }
 
 /*
+ * 函数用途：清除一次点阵最终失败留下的完整代际和自动重试计时。
+ * 调用场景：通信会话失效、新代际出现或候选最终同步成功后。
+ * 关键约束：只清CPU3本机失败记录，不修改CPU2原始状态和已发布点阵。
+ */
+static void CPU2_ProfileClearFailedKey(void)
+{
+	memset(&s_cpu2_profile_failed_key, 0, sizeof(s_cpu2_profile_failed_key));
+	s_cpu2_profile_failed_key_valid = false;
+	s_cpu2_profile_failed_snapshot_generation = 0U;
+	s_cpu2_profile_failed_retry_due_tick = 0U;
+}
+
+/*
+ * 函数用途：把CPU2最近一次原始状态恢复到CPU3公开状态区。
+ * 调用场景：本机20-13撤销、点阵重试恢复或CPU2真实故障需要优先显示时。
+ * 关键约束：不得用CPU3本机点阵故障继续遮盖CPU2发布的真实错误码。
+ */
+static void CPU2_ProfileRestoreRawStatus(void)
+{
+	g_measurement.device_status.device_state = s_cpu2_raw_device_state;
+	g_measurement.device_status.error_code = s_cpu2_raw_error_code;
+	CPU2_ProfileWriteU32ToInput(REG_DEVICE_STATUS_DEVICE_STATE,
+							(uint32_t)s_cpu2_raw_device_state);
+	CPU2_ProfileWriteU32ToInput(REG_DEVICE_STATUS_ERROR_CODE,
+							s_cpu2_raw_error_code);
+}
+
+/*
  * 函数用途：同步期间恢复上一次已确认点阵，保持旧代际标识不变。
  * 调用场景：普通轮询先读到新完成头、候选点阵尚未通过前后复核时。
  * 关键约束：无历史快照时公开区清零；完成状态由独立门禁保持为忙。
@@ -820,7 +988,7 @@ static void CPU2_ProfileInvalidatePublishedSnapshot(void)
 	memset(s_cpu2_profile_published_points, 0, sizeof(s_cpu2_profile_published_points));
 	s_cpu2_profile_published_cycle = 0U;
 	s_cpu2_profile_published_valid = false;
-	s_cpu2_profile_failed_counter_valid = false;
+	CPU2_ProfileClearFailedKey();
 	s_cpu2_profile_sync_fault_active = false;
 	s_cpu2_profile_completion_state_pending = false;
 	s_cpu2_profile_commit_waiting_for_complete_state = false;
@@ -848,9 +1016,10 @@ static void CPU2_ProfileCancelPendingSync(const char *reason)
 	memset(s_cpu2_profile_candidate_points, 0, sizeof(s_cpu2_profile_candidate_points));
 	s_cpu2_profile_completion_state_pending = false;
 	s_cpu2_profile_commit_waiting_for_complete_state = false;
-	printf("分布结果同步取消：完成计数=%lu，原因=%s\r\n",
-		   (unsigned long)complete_counter,
-		   reason);
+	CPU3_LOG_INFO("CPU2分布",
+				  "同步取消 完成计数=%lu 原因=%s",
+				  (unsigned long)complete_counter,
+				  reason);
 }
 
 static void CPU2_ProfileStart(const Cpu2ProfileSnapshotKey *observed)
@@ -862,6 +1031,7 @@ static void CPU2_ProfileStart(const Cpu2ProfileSnapshotKey *observed)
 	s_cpu2_profile_sync.target_key = *observed;
 	s_cpu2_profile_sync.snapshot_generation = s_cpu2_snapshot_generation;
 	s_cpu2_profile_sync.started_tick = now;
+	s_cpu2_profile_sync.last_progress_tick = now;
 	s_cpu2_profile_sync.last_frame_tick = now - CPU2_PROFILE_FRAME_INTERVAL_MS;
 	s_cpu2_profile_sync.round = 1U;
 	memset(s_cpu2_profile_header_before, 0, sizeof(s_cpu2_profile_header_before));
@@ -871,25 +1041,38 @@ static void CPU2_ProfileStart(const Cpu2ProfileSnapshotKey *observed)
 
 static void CPU2_ProfilePublishError(void)
 {
-	s_cpu2_profile_failed_counter = s_cpu2_profile_sync.target_key.complete_counter;
-	s_cpu2_profile_failed_counter_valid = true;
+	uint32_t now = HAL_GetTick();
+
+	s_cpu2_profile_failed_key = s_cpu2_profile_sync.target_key;
+	s_cpu2_profile_failed_key_valid = true;
+	s_cpu2_profile_failed_snapshot_generation = s_cpu2_profile_sync.snapshot_generation;
+	s_cpu2_profile_failed_retry_due_tick = now + CPU2_PROFILE_FAILED_RETRY_DELAY_MS;
 	s_cpu2_profile_sync_fault_active = true;
 	s_cpu2_profile_sync.stage = CPU2_PROFILE_SYNC_IDLE;
-	g_measurement.device_status.device_state = STATE_ERROR;
-	g_measurement.device_status.error_code = CPU2_PROFILE_SYNC_FAILED;
-	CPU2_ProfileWriteU32ToInput(REG_DEVICE_STATUS_DEVICE_STATE, (uint32_t)STATE_ERROR);
-	CPU2_ProfileWriteU32ToInput(REG_DEVICE_STATUS_ERROR_CODE, (uint32_t)CPU2_PROFILE_SYNC_FAILED);
-	printf("分布结果同步失败：完成计数=%lu，已尝试%u轮\r\n",
-		   (unsigned long)s_cpu2_profile_failed_counter,
-		   (unsigned)s_cpu2_profile_sync.round);
+	if (s_cpu2_raw_device_state == STATE_ERROR) {
+		/* CPU2真实故障优先，20-13只保留为CPU3本机同步状态。 */
+		CPU2_ProfileRestoreRawStatus();
+	} else {
+		g_measurement.device_status.device_state = STATE_ERROR;
+		g_measurement.device_status.error_code = CPU2_PROFILE_SYNC_FAILED;
+		CPU2_ProfileWriteU32ToInput(REG_DEVICE_STATUS_DEVICE_STATE, (uint32_t)STATE_ERROR);
+		CPU2_ProfileWriteU32ToInput(REG_DEVICE_STATUS_ERROR_CODE, (uint32_t)CPU2_PROFILE_SYNC_FAILED);
+	}
+	CPU3_LOG_CRITICAL("CPU2分布",
+					  "同步最终失败 完成计数=%lu 点数=%lu 来源=%lu 会话=%lu 已尝试=%u轮 耗时=%lums",
+					  (unsigned long)s_cpu2_profile_failed_key.complete_counter,
+					  (unsigned long)s_cpu2_profile_failed_key.measurement_points,
+					  (unsigned long)s_cpu2_profile_failed_key.profile_source,
+					  (unsigned long)s_cpu2_profile_failed_snapshot_generation,
+					  (unsigned)s_cpu2_profile_sync.round,
+					  (unsigned long)(now - s_cpu2_profile_sync.started_tick));
 }
 
 static void CPU2_ProfileScheduleRoundRetry(const char *reason)
 {
 	uint32_t now = HAL_GetTick();
 
-	if (((now - s_cpu2_profile_sync.started_tick) >= CPU2_PROFILE_TOTAL_TIMEOUT_MS) ||
-		(s_cpu2_profile_sync.round >= CPU2_PROFILE_ROUND_MAX)) {
+	if (s_cpu2_profile_sync.round >= CPU2_PROFILE_ROUND_MAX) {
 		CPU2_ProfilePublishError();
 		return;
 	}
@@ -903,10 +1086,11 @@ static void CPU2_ProfileScheduleRoundRetry(const char *reason)
 	memset(s_cpu2_profile_header_before, 0, sizeof(s_cpu2_profile_header_before));
 	memset(s_cpu2_profile_header_after, 0, sizeof(s_cpu2_profile_header_after));
 	memset(s_cpu2_profile_candidate_points, 0, sizeof(s_cpu2_profile_candidate_points));
-	printf("分布结果同步整轮重试：原因=%s，下一轮=%u/%u\r\n",
-		   reason,
-		   (unsigned)s_cpu2_profile_sync.round,
-		   (unsigned)CPU2_PROFILE_ROUND_MAX);
+	CPU3_LOG_WARNING("CPU2分布",
+					 "同步整轮重试 原因=%s 下一轮=%u/%u",
+					 reason,
+					 (unsigned)s_cpu2_profile_sync.round,
+					 (unsigned)CPU2_PROFILE_ROUND_MAX);
 }
 
 static void CPU2_ProfileHandleBlockFailure(Cpu2ProfileSyncStage failed_stage)
@@ -914,7 +1098,8 @@ static void CPU2_ProfileHandleBlockFailure(Cpu2ProfileSyncStage failed_stage)
 	static const uint32_t retry_delays_ms[CPU2_PROFILE_BLOCK_RETRY_MAX] = {100U, 300U, 1000U};
 	uint32_t now = HAL_GetTick();
 
-	if ((now - s_cpu2_profile_sync.started_tick) >= CPU2_PROFILE_TOTAL_TIMEOUT_MS) {
+	if ((now - s_cpu2_profile_sync.last_progress_tick) >=
+		CPU2_PROFILE_NO_PROGRESS_TIMEOUT_MS) {
 		CPU2_ProfilePublishError();
 		return;
 	}
@@ -926,11 +1111,12 @@ static void CPU2_ProfileHandleBlockFailure(Cpu2ProfileSyncStage failed_stage)
 		s_cpu2_profile_sync.retry_stage = failed_stage;
 		s_cpu2_profile_sync.retry_due_tick = now + retry_delays_ms[retry_index];
 		s_cpu2_profile_sync.stage = CPU2_PROFILE_SYNC_RETRY_WAIT;
-		printf("分布结果同步块重试：阶段=%u，尝试=%u/%u，等待=%lums\r\n",
-			   (unsigned)failed_stage,
-			   (unsigned)s_cpu2_profile_sync.block_retry_count,
-			   (unsigned)CPU2_PROFILE_BLOCK_RETRY_MAX,
-			   (unsigned long)retry_delays_ms[retry_index]);
+		CPU3_LOG_WARNING("CPU2分布",
+						 "同步块重试 阶段=%u 尝试=%u/%u 等待=%lums",
+						 (unsigned)failed_stage,
+						 (unsigned)s_cpu2_profile_sync.block_retry_count,
+						 (unsigned)CPU2_PROFILE_BLOCK_RETRY_MAX,
+						 (unsigned long)retry_delays_ms[retry_index]);
 		return;
 	}
 
@@ -939,10 +1125,12 @@ static void CPU2_ProfileHandleBlockFailure(Cpu2ProfileSyncStage failed_stage)
 
 static void CPU2_ProfileMarkBlockSuccess(void)
 {
+	s_cpu2_profile_sync.last_progress_tick = HAL_GetTick();
 	if (s_cpu2_profile_sync.block_retry_count != 0U) {
-		printf("分布结果同步块重试成功：尝试=%u/%u\r\n",
-			   (unsigned)s_cpu2_profile_sync.block_retry_count,
-			   (unsigned)CPU2_PROFILE_BLOCK_RETRY_MAX);
+		CPU3_LOG_INFO("CPU2分布",
+					  "同步块重试成功 尝试=%u/%u",
+					  (unsigned)s_cpu2_profile_sync.block_retry_count,
+					  (unsigned)CPU2_PROFILE_BLOCK_RETRY_MAX);
 	}
 	s_cpu2_profile_sync.block_retry_count = 0U;
 }
@@ -1008,6 +1196,7 @@ static void CPU2_ProfileCommitCandidate(void)
 	DensityDistribution *candidate = &s_cpu2_profile_candidate_distribution;
 	uint32_t point_register_count;
 	uint32_t primask;
+	bool recovered_from_sync_fault = s_cpu2_profile_sync_fault_active;
 
 	CPU2_ProfileBuildCandidate();
 	point_register_count = candidate->measurement_points * (uint32_t)REG_DENSITY_DIST_POINT_SIZE;
@@ -1034,40 +1223,43 @@ static void CPU2_ProfileCommitCandidate(void)
 	memcpy(&InputRegisterArray[REG_DENSITY_DIST_POINT_BASE],
 		   s_cpu2_profile_published_points,
 		   (size_t)point_register_count * sizeof(uint16_t));
-	if (s_cpu2_profile_completion_state_pending &&
-		CPU2_ProfileIsCompleteState(s_cpu2_raw_device_state)) {
-		g_measurement.device_status.device_state = s_cpu2_raw_device_state;
-		g_measurement.device_status.error_code = s_cpu2_raw_error_code;
-		CPU2_ProfileWriteU32ToInput(REG_DEVICE_STATUS_DEVICE_STATE, (uint32_t)s_cpu2_raw_device_state);
-		CPU2_ProfileWriteU32ToInput(REG_DEVICE_STATUS_ERROR_CODE, s_cpu2_raw_error_code);
+	if (recovered_from_sync_fault ||
+		(s_cpu2_profile_completion_state_pending &&
+		 CPU2_ProfileIsCompleteState(s_cpu2_raw_device_state))) {
+		CPU2_ProfileRestoreRawStatus();
 	}
 	s_cpu2_profile_completion_state_pending = false;
 	s_cpu2_profile_commit_waiting_for_complete_state =
 		!CPU2_ProfileIsCompleteState(s_cpu2_raw_device_state);
 	s_cpu2_profile_published_valid = true;
 	s_cpu2_profile_sync_fault_active = false;
-	s_cpu2_profile_failed_counter_valid = false;
+	CPU2_ProfileClearFailedKey();
 	s_cpu2_profile_sync.stage = CPU2_PROFILE_SYNC_IDLE;
 	__DMB();
 	if (primask == 0U) {
 		__enable_irq();
 	}
 
-	printf("分布结果同步完成：完成计数=%lu，点数=%lu，轮次=%u\r\n",
-		   (unsigned long)candidate->profile_complete_counter,
-		   (unsigned long)candidate->measurement_points,
-		   (unsigned)s_cpu2_profile_sync.round);
+	CPU3_LOG_INFO("CPU2分布",
+				  "同步完成 完成计数=%lu 点数=%lu 轮次=%u",
+				  (unsigned long)candidate->profile_complete_counter,
+				  (unsigned long)candidate->measurement_points,
+				  (unsigned)s_cpu2_profile_sync.round);
+	if (recovered_from_sync_fault) {
+		CPU3_LOG_INFO("CPU2分布", "同代自动重试成功，20-13已清除");
+	}
 }
 
 /*
  * 函数用途：每次主循环调用最多推进一个分布点阵Modbus请求。
  * 调用场景：普通轮询前优先调度，覆盖普通、国标、每米、区间、瓦锡兰、综合和SI结果。
- * 关键约束：每帧固定最多8点，失败按100/300/1000ms重试，三轮或15秒后统一报错。
+ * 关键约束：每帧固定最多8点，失败按100/300/1000ms重试；三轮耗尽或20秒无进展才报错。
  */
 static bool CPU2_ProfileSyncPoll(void)
 {
 	Cpu2ProfileSnapshotKey before;
 	Cpu2ProfileSnapshotKey after;
+	Cpu2ProfileSnapshotKey restart_key;
 	uint32_t now = HAL_GetTick();
 	uint32_t total_registers;
 	uint32_t remaining;
@@ -1077,27 +1269,26 @@ static bool CPU2_ProfileSyncPoll(void)
 	if (s_cpu2_profile_sync.stage == CPU2_PROFILE_SYNC_IDLE) {
 		return false;
 	}
-	if ((now - s_cpu2_profile_sync.started_tick) >= CPU2_PROFILE_TOTAL_TIMEOUT_MS) {
+	if (s_cpu2_profile_sync.snapshot_generation != s_cpu2_snapshot_generation) {
+		/* 通信会话变化后轮次、退避、偏移和计时全部归零，禁止沿用旧任务预算。 */
+		restart_key = s_cpu2_profile_sync.target_key;
+		CPU2_ProfileStart(&restart_key);
+		now = HAL_GetTick();
+	}
+	if ((now - s_cpu2_profile_sync.last_progress_tick) >=
+		CPU2_PROFILE_NO_PROGRESS_TIMEOUT_MS) {
 		CPU2_ProfilePublishError();
 		return true;
 	}
 	if (s_cpu2_profile_sync.stage == CPU2_PROFILE_SYNC_RETRY_WAIT) {
 		if (!CPU2_ProfileTickReached(now, s_cpu2_profile_sync.retry_due_tick)) {
-			return false;
+			/* 点阵退避期间不插入普通小帧，避免成功小帧打断本次连续失败判定。 */
+			return true;
 		}
 		s_cpu2_profile_sync.stage = s_cpu2_profile_sync.retry_stage;
 	}
-	if (s_cpu2_profile_sync.snapshot_generation != s_cpu2_snapshot_generation) {
-		/* 通信会话变化后必须从头重读，禁止把失效前后的点块拼成同一候选。 */
-		s_cpu2_profile_sync.snapshot_generation = s_cpu2_snapshot_generation;
-		s_cpu2_profile_sync.stage = CPU2_PROFILE_SYNC_HEADER_BEFORE;
-		s_cpu2_profile_sync.point_register_offset = 0U;
-		memset(s_cpu2_profile_header_before, 0, sizeof(s_cpu2_profile_header_before));
-		memset(s_cpu2_profile_header_after, 0, sizeof(s_cpu2_profile_header_after));
-		memset(s_cpu2_profile_candidate_points, 0, sizeof(s_cpu2_profile_candidate_points));
-	}
 	if ((now - s_cpu2_profile_sync.last_frame_tick) < CPU2_PROFILE_FRAME_INTERVAL_MS) {
-		return false;
+		return true;
 	}
 	s_cpu2_profile_sync.last_frame_tick = now;
 
@@ -1188,11 +1379,15 @@ static void CPU2_ProfileObservePublicHeader(void)
 {
 	Cpu2ProfileSnapshotKey observed = CPU2_ProfileKeyFromHeader(
 		&InputRegisterArray[REG_DENSITY_DIST_AVG_TEMP]);
+	uint32_t now = HAL_GetTick();
 	bool observed_valid = CPU2_ProfileKeyIsValid(&observed);
 	bool already_published = s_cpu2_profile_published_valid &&
 		CPU2_ProfileKeyEqual(&observed, &s_cpu2_profile_published_key);
-	bool terminal_failed = s_cpu2_profile_failed_counter_valid &&
-		(observed.complete_counter == s_cpu2_profile_failed_counter);
+	bool terminal_failed = s_cpu2_profile_failed_key_valid &&
+		(s_cpu2_profile_failed_snapshot_generation == s_cpu2_snapshot_generation) &&
+		CPU2_ProfileKeyEqual(&observed, &s_cpu2_profile_failed_key);
+	bool failed_retry_due = terminal_failed &&
+		CPU2_ProfileTickReached(now, s_cpu2_profile_failed_retry_due_tick);
 	bool sync_canceled = false;
 
 	if (observed.complete_latched == 0U) {
@@ -1206,17 +1401,23 @@ static void CPU2_ProfileObservePublicHeader(void)
 	if (s_cpu2_profile_sync_fault_active &&
 		((observed.complete_latched == 0U) || !terminal_failed)) {
 		s_cpu2_profile_sync_fault_active = false;
-		s_cpu2_profile_failed_counter_valid = false;
-		g_measurement.device_status.device_state = s_cpu2_raw_device_state;
-		g_measurement.device_status.error_code = s_cpu2_raw_error_code;
-		CPU2_ProfileWriteU32ToInput(REG_DEVICE_STATUS_DEVICE_STATE, (uint32_t)s_cpu2_raw_device_state);
-		CPU2_ProfileWriteU32ToInput(REG_DEVICE_STATUS_ERROR_CODE, s_cpu2_raw_error_code);
+		CPU2_ProfileClearFailedKey();
+		CPU2_ProfileRestoreRawStatus();
 		terminal_failed = false;
+		failed_retry_due = false;
 	}
 
-	if (observed_valid && !already_published && !terminal_failed) {
+	if (observed_valid && !already_published &&
+		(!terminal_failed || failed_retry_due)) {
 		if ((s_cpu2_profile_sync.stage == CPU2_PROFILE_SYNC_IDLE) ||
-			(observed.complete_counter != s_cpu2_profile_sync.target_key.complete_counter)) {
+			(s_cpu2_profile_sync.snapshot_generation != s_cpu2_snapshot_generation) ||
+			!CPU2_ProfileKeyEqual(&observed, &s_cpu2_profile_sync.target_key)) {
+			if (failed_retry_due) {
+				CPU3_LOG_INFO("CPU2分布",
+							  "同代自动重试 完成计数=%lu 会话=%lu",
+							  (unsigned long)observed.complete_counter,
+							  (unsigned long)s_cpu2_snapshot_generation);
+			}
 			s_cpu2_profile_commit_waiting_for_complete_state = false;
 			CPU2_ProfileStart(&observed);
 		}
@@ -1230,7 +1431,7 @@ static void CPU2_ProfileObservePublicHeader(void)
 /*
  * 函数用途：在点阵提交前把CPU2原始分布完成态转换为对应测量中状态。
  * 调用场景：每次完整状态分组解析后。
- * 关键约束：本地同步故障优先显示错误；成功提交后才恢复CPU2原始完成态。
+ * 关键约束：CPU2真实故障优先于本机20-13；成功提交后才恢复CPU2原始完成态。
  */
 static void CPU2_ProfileApplyPublicStatusGate(void)
 {
@@ -1251,7 +1452,7 @@ static void CPU2_ProfileApplyPublicStatusGate(void)
 	s_cpu2_last_raw_device_state = parsed_state;
 	s_cpu2_last_raw_device_state_valid = true;
 
-	if (s_cpu2_profile_sync_fault_active) {
+	if (s_cpu2_profile_sync_fault_active && (parsed_state != STATE_ERROR)) {
 		g_measurement.device_status.device_state = STATE_ERROR;
 		g_measurement.device_status.error_code = CPU2_PROFILE_SYNC_FAILED;
 		CPU2_ProfileWriteU32ToInput(REG_DEVICE_STATUS_DEVICE_STATE, (uint32_t)STATE_ERROR);
@@ -1269,13 +1470,11 @@ static void CPU2_ProfileApplyPublicStatusGate(void)
 
 /* 与CPU2通讯接收包主处理过程 */
 bool HostCommuProcess(uint8_t *rcv, int len) {
-#if DEBUG_COMMUCPU2
-    int i;
-    printf("收到CPU2数据 %d 字节: ",len);
-    for(i = 0;i < len;i++)
-        printf("%02X ",rcv[i]);
-    printf("\r\n");
-#endif
+	Cpu3Log_Frame(CPU3_LOG_LEVEL_DEBUG,
+				  "CPU2",
+				  "接收",
+				  rcv,
+				  (len > 0) ? (uint16_t)len : 0U);
 	s_cpu2_response_failure_reason = CPU2_COMM_FAIL_NONE;
 	if (len <= 3) {
 		s_cpu2_response_failure_reason = CPU2_COMM_FAIL_LENGTH;
@@ -1283,43 +1482,29 @@ bool HostCommuProcess(uint8_t *rcv, int len) {
 	}
 	if (!SlaveCheckCRC(rcv, len)) {
 		s_cpu2_response_failure_reason = CPU2_COMM_FAIL_CRC;
-		printf("CPU3 CRC校验错误");
 		return false;
 	}
 	/* 解析数据 */
 	if (rcv[0] != ADERSS) {
 		s_cpu2_response_failure_reason = CPU2_COMM_FAIL_ADDRESS;
-		printf("CPU3地址错误");
 		return false;
 	}
 	s_cpu2_response_failure_reason = CPU2_ResponseFrameFailureReason(rcv, len);
 	if (s_cpu2_response_failure_reason != CPU2_COMM_FAIL_NONE) {
-		printf("CPU3响应格式错误");
 		return false;
 	}
 	CPU2_CommMarkValidResponse();
 	switch (RCV_functioncode) {
 	case FUNCTIONCODE_READ_HOLDREGISTER: {
 		CPU2_Response03Process(rcv);
-#if DEBUG_COMMUCPU2
-            printf("CPU3处理03响应\r\n");
-/* print_device_params(); */
-#endif
 		break;
 	}
 	case FUNCTIONCODE_READ_INPUTREGISTER: {
-#if DEBUG_COMMUCPU2
-            printf("CPU3处理04响应\r\n");
-/* print_device_params(); */
-#endif
 		CPU2_Response04Process(rcv);
 		break;
 	}
 	case FUNCTIONCODE_WRITE_MULREGISTER: {
 		CPU2_Response10Process(rcv, len);
-#if DEBUG_COMMUCPU2
-/* print_device_params(); */
-#endif
 		break;
 	}
 	}
@@ -1487,11 +1672,19 @@ void PollingInputData(void) {
 		s_cpu2_has_parameter_snapshot = true;
 		s_cpu2_parameter_refresh_requested = false;
 		runtime_fixed_snapshot_pending = false;
+		if (s_cpu2_profile_sync.stage != CPU2_PROFILE_SYNC_IDLE) {
+			Cpu2ProfileSnapshotKey restart_key = s_cpu2_profile_sync.target_key;
+
+			/* 全量重同步完成后重新计算点阵轮次和超时，旧会话耗时不得带入新任务。 */
+			CPU2_ProfileStart(&restart_key);
+		}
 		DeviceParams_StoreToRegisters(g_holding_regs);
 		last_param_update_flag = g_measurement.device_status.parameter_update_flag;
 		refresh_target_flag = last_param_update_flag;
 		param_flag_valid = true;
-/* print_device_params(); */
+		CPU3_LOG_INFO("CPU2",
+					  "完整同步完成 协议=%lu 状态快照=1 参数快照=1 固定点快照=1",
+					  (unsigned long)s_cpu2_protocol_version);
 		return;
 	}
 
@@ -1689,15 +1882,18 @@ bool CPU2_CombinatePackage_Send(uint8_t f_code, uint16_t startadd, uint16_t regi
 	crc = CRC16_Calculate((u8*) arr, len);
 	arr[len++] = crc & 0xff;
 	arr[len++] = crc >> 8;
-#if DEBUG_COMMUCPU2
-	printf("发送到CPU2 %d 字节:", len);
-#endif
+	Cpu3Log_Frame(CPU3_LOG_LEVEL_DEBUG,
+				  "CPU2",
+				  "发送",
+				  arr,
+				  (uint16_t)len);
 	/* 先发布本次期望字段，避免极快响应到达时仍沿用上一请求。 */
 	RCV_functioncode = f_code;
 	RCV_startaddress = startadd;
 	RCV_registercnt = registercnt;
 	UART5_RX_LEN = 0U;
 	s_cpu2_uart_error_pending = HAL_UART_ERROR_NONE;
+	s_cpu2_request_uart_error_code = HAL_UART_ERROR_NONE;
 	s_cpu2_response_failure_reason = CPU2_COMM_FAIL_TX_DMA;
 	if (!sendToCPU2(arr, len, false)) {
 		return CPU2_CommFinishFailedRequest(parameter_write_attempted);
@@ -1708,7 +1904,6 @@ bool CPU2_CombinatePackage_Send(uint8_t f_code, uint16_t startadd, uint16_t regi
 		/* 先处理异常边界，避免Modbus 协议状态机带故障继续运行。 */
 		if ((HAL_GetTick() - timeout) > CPU2_RESPONSE_TIMEOUT_MS)
 				{
-			printf("等待响应超时！\n");
 			wait_response = false;    /* 防止一直 True */
 			s_cpu2_response_failure_reason = CPU2_COMM_FAIL_TIMEOUT;
 			return CPU2_CommFinishFailedRequest(parameter_write_attempted);
@@ -1717,6 +1912,7 @@ bool CPU2_CombinatePackage_Send(uint8_t f_code, uint16_t startadd, uint16_t regi
 	if (s_cpu2_uart_error_pending != HAL_UART_ERROR_NONE) {
 		uint32_t uart_error_code = s_cpu2_uart_error_pending;
 		s_cpu2_uart_error_pending = HAL_UART_ERROR_NONE;
+		s_cpu2_request_uart_error_code = uart_error_code;
 		CPU2_CommRecordUartFlags(uart_error_code);
 		s_cpu2_response_failure_reason = CPU2_COMM_FAIL_UART;
 		return CPU2_CommFinishFailedRequest(parameter_write_attempted);
@@ -1743,14 +1939,6 @@ bool sendToCPU2(uint8_t *arr, uint16_t len, bool flag_fromhost) {
 		wait_response = false;
 		return false;
 	}
-#if DEBUG_COMMUCPU2
-    {
-        int i;
-        for(i = 0;i < len;i++)
-            printf("%02X ",arr[i]);
-        printf("\n");
-    }
-    #endif
 	return true;
 }
 /* 解析CPU2的响应包 0x03 功能码 */
@@ -1758,6 +1946,8 @@ static void CPU2_Response03Process(uint8_t const *revframe) {
 	int i;
 	int byteamount;
 	bool response_contains_protocol = CPU2_ResponseContainsProtocolVersion();
+	bool previous_protocol_valid = s_cpu2_has_protocol_snapshot;
+	uint32_t previous_protocol_version = s_cpu2_protocol_version;
 	uint16_t protocol_offset = 0U;
 
 	/* Modbus RTU: revframe[0]=地址, revframe[1]=功能码(0x03), revframe[2]=字节数 */
@@ -1780,6 +1970,20 @@ static void CPU2_Response03Process(uint8_t const *revframe) {
 		s_cpu2_protocol_version = ((uint32_t)(uint16_t)SlaveTempBuffer[protocol_offset] << 16) |
 							  (uint32_t)(uint16_t)SlaveTempBuffer[protocol_offset + 1U];
 		s_cpu2_has_protocol_snapshot = true;
+		if ((!previous_protocol_valid) ||
+			(previous_protocol_version != s_cpu2_protocol_version)) {
+			if (s_cpu2_protocol_version == DEVICE_PROTOCOL_VERSION) {
+				CPU3_LOG_INFO("CPU2",
+							  "协议版本确认匹配 CPU2=%lu CPU3=%u",
+							  (unsigned long)s_cpu2_protocol_version,
+							  (unsigned int)DEVICE_PROTOCOL_VERSION);
+			} else {
+				CPU3_LOG_WARNING("CPU2",
+								 "协议版本不匹配 CPU2=%lu CPU3=%u，普通命令与快照访问保持关闭",
+								 (unsigned long)s_cpu2_protocol_version,
+								 (unsigned int)DEVICE_PROTOCOL_VERSION);
+			}
+		}
 	}
 
 	/* 独立协议探测只更新私有兼容状态，不能把其余未读取参数覆盖为旧值或零值。 */
@@ -1806,6 +2010,7 @@ static void CPU2_Response03Process(uint8_t const *revframe) {
 static void CPU2_Response04Process(uint8_t const *revframe) {
 	int i, j;
 	bool response_contains_status = CPU2_ResponseContainsDeviceStatus();
+	bool comm_fault_was_active = s_cpu2_comm_fault_active;
 	uint32_t response_start = (uint32_t)RCV_startaddress;
 	uint32_t response_end = response_start + (uint32_t)RCV_registercnt;
 	bool response_contains_profile_header =
@@ -1846,6 +2051,9 @@ static void CPU2_Response04Process(uint8_t const *revframe) {
 			g_measurement.device_status.device_state = STATE_ERROR;
 			g_measurement.device_status.error_code = CPU2_COMM_TIMEOUT;
 		}
+	}
+	if (comm_fault_was_active && (!s_cpu2_comm_fault_active)) {
+		CPU3_LOG_INFO("CPU2", "状态快照已恢复，CPU2通信故障锁存已清除");
 	}
 }
 

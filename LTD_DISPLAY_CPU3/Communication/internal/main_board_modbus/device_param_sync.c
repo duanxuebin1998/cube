@@ -7,7 +7,7 @@
 
 
 #include "device_param_sync.h"
-#include <stdio.h>
+#include "cpu3_debug_log.h"
 #include <string.h>
 
 extern const int param_metaAmount;
@@ -465,8 +465,10 @@ static bool DeviceParams_SendHoldValueToCPU2(volatile struct ParameterMetadata *
     /* 每个参数占两个寄存器，因此这里只支持 rgstcnt == 2 的情况。 */
     if (h->rgstcnt != 2) {
         /* 如果以后有 1 寄存器参数，再单独处理 */
-        printf("设备参数警告: %s 寄存器数=%u 暂不支持同步\n",
-               h->name ? (char*)h->name : "noname", h->rgstcnt);
+        CPU3_LOG_WARNING("CPU2参数",
+                         "参数暂不支持同步 名称=%s 寄存器数=%u",
+                         h->name ? (char*)h->name : "noname",
+                         h->rgstcnt);
         return false;
     }
 
@@ -508,9 +510,11 @@ static bool DeviceParams_SyncOneHold(volatile struct ParameterMetadata *h)
         return true;
     }
 
-    printf("设备参数差异: %s, CPU2=%d, 本地=%ld -> 准备发送\r\n",
-           h->name ? (char*)h->name : "noname",
-           h->val, dev_val);
+    CPU3_LOG_INFO("CPU2参数",
+                  "发现参数差异并准备下发 名称=%s CPU2=%d 本地=%ld",
+                  h->name ? (char*)h->name : "noname",
+                  h->val,
+                  (long)dev_val);
 
     /* 先确认 CPU2 已接受新值，避免失败后本地缓存伪装成同步成功。 */
     if (!DeviceParams_SendHoldValueToCPU2(h, dev_val)) {

@@ -78,6 +78,18 @@ uint8_t SinglePoint_PublishMeasurementResult(const DensityMeasurement *candidate
  */
 uint8_t SinglePoint_PublishMonitoringResult(const DensityMeasurement *candidate);
 
+/*
+ * 函数用途：开始一轮分布点阵测量，关闭上一轮完成锁存但保留完成计数。
+ * 关键约束：CPU3继续保留上一份已确认快照，新结果完整发布后才开放新代际。
+ */
+void DensityProfile_Begin(void);
+
+/*
+ * 函数用途：统一发布普通、国标、每米、区间、瓦锡兰和综合测量点阵。
+ * 关键约束：完整点阵、来源和完成锁存先写入，完成计数在内存屏障后最后递增。
+ */
+void DensityProfile_PublishResult(DensityDistribution *candidate, ProfileSource source);
+
 /**
  * @brief 按指定分布测量模式执行密度测量并输出完整点表。
  * @param mode 分布测量模式。

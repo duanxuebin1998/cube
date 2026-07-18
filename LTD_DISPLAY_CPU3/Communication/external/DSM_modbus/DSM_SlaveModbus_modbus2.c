@@ -1,5 +1,6 @@
 #include "DSM_SlaveModbus_modbus2.h"
 #include "cpu2_communicate.h"
+#include "cpu3_debug_log.h"
 #include <stdlib.h>
 #include <string.h>
 #include "crc.h"
@@ -942,12 +943,17 @@ int Response05(unsigned char *revframe, unsigned char *sendframe)
 		}
 	}
 
-	printf("startaddress=%04X,coilvalue=%04X\r\n", startaddress, coilvalue);
+	CPU3_LOG_DEBUG("DSM",
+				   "写线圈 起始地址=0x%04X 值=0x%04X",
+				   startaddress,
+				   coilvalue);
 
 	if (should_send_cmd)
 	{
 		/* 只有合法动作线圈写入 0xFF00 时才下发 CPU2，避免异常帧或 0x0000 误动作。 */
-		printf("cmd=%lu\r\n", cmd);
+		CPU3_LOG_INFO("DSM",
+				  "收到动作线圈并准备下发CPU2 命令=%lu",
+				  (unsigned long)cmd);
 		if (!CPU2_CommCanSendCommand((CommandType)cmd) ||
 			!CPU2_CombinatePackage_Send(FUNCTIONCODE_WRITE_MULREGISTER,
 									  HOLDREGISTER_DEVICEPARAM_COMMAND,

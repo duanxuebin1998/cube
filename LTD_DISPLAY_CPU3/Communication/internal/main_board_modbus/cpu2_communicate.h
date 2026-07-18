@@ -128,6 +128,12 @@ bool CPU2_CommCanSendCommand(CommandType cmd);
  * 关键约束：计数仅存RAM、上电清零，不属于CPU2/CPU3共享协议。
  */
 void CPU2_CommGetHealthSnapshot(Cpu2CommHealthSnapshot *out_snapshot);
+/*
+ * 函数用途：周期输出CPU2链路、协议、快照和健康计数摘要。
+ * 调用场景：CPU3主循环每轮调用，函数内部按固定周期限流。
+ * 关键约束：只能在主循环调用，禁止在UART5中断上下文中打印。
+ */
+void CPU2_CommDebugTask(void);
 /**
  * @brief 从已确认的 CPU2 参数快照复制保持寄存器。
  * @param startadd 起始寄存器地址。

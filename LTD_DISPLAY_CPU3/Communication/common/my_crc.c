@@ -68,10 +68,7 @@ bool SlaveCheckCRC(uint8_t const *revframe, int framelen) {
     Hi = crc >> 8;
 
     if ((Hi != revframe[framelen - 1]) || (Lo != revframe[framelen - 2])) {
-        printf("CRC Error: Calc Hi=%02x, Lo=%02x | Frame Hi=%02x, Lo=%02x\r\n",
-              Hi, Lo,
-              revframe[framelen - 1],
-              revframe[framelen - 2]);
+        /* 只返回校验结果，由持有端口和请求上下文的上层统一打印。 */
         return false;
     }
     return true;
