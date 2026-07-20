@@ -165,7 +165,7 @@ struct ParameterMetadata param_meta[] = {
 {(uint8_t*)"故障停止测量",	0,	COM_NUM_DEVICEPARAM_ERROR_STOP_MEASUREMENT,	HOLDREGISTER_DEVICEPARAM_ERROR_STOP_MEASUREMENT,	2,	true,	0,	1,	NULL,	0,	0,	true,	TYPE_INT,	1,	ret_arr_word,	(uint8_t*)"ErrStopMeas"},
 
 {(uint8_t*)"故障自动恢复重跑次数",	0,	COM_NUM_DEVICEPARAM_RESERVED2,	HOLDREGISTER_DEVICEPARAM_FAULT_AUTO_RECOVERY_RETRY_LIMIT,	2,	true,	0,	10,	(uint8_t*)"次",	0,	0,	true,	TYPE_INT,	2,	NULL,	(uint8_t*)"AutoRecover"},
-{(uint8_t*)"保留3",	0,	COM_NUM_DEVICEPARAM_RESERVED3,	HOLDREGISTER_DEVICEPARAM_RESERVED3,	2,	false,	0,	0,	NULL,	0,	0,	false,	TYPE_INT,	8,	NULL,	(uint8_t*)"Rsv3"},
+{(uint8_t*)"水位滞后时间",	0,	COM_NUM_DEVICEPARAM_WATER_LEVEL_HYSTERESIS_TIME,	HOLDREGISTER_DEVICEPARAM_WATER_LEVEL_HYSTERESIS_TIME,	2,	true,	0,	3600,	(uint8_t*)"s",	0,	0,	true,	TYPE_INT,	6,	NULL,	(uint8_t*)"WaterHysTime"},
 
 {(uint8_t*)"电机运行电流", 0, COM_NUM_DEVICEPARAM_MOTOR_CURRENT, HOLDREGISTER_DEVICEPARAM_MOTOR_CURRENT, 2, true, 1, 31, NULL, 0, 0, true, TYPE_INT, 2, NULL, (uint8_t*)"MotorCur"},
 {(uint8_t*)"编码轮周长",	0,	COM_NUM_DEVICEPARAM_ENCODER_WHEEL_CIRCUMFERENCE_MM,	HOLDREGISTER_DEVICEPARAM_ENCODER_WHEEL_CIRCUMFERENCE_MM,	2,	false,	0,	0,	(uint8_t*)"mm",	3,	0,	true,	TYPE_INT,	7,	NULL,	(uint8_t*)"EncWheelCirc"},
@@ -282,7 +282,7 @@ struct ParameterMetadata param_meta[] = {
 {(uint8_t*)"SI首点",	0,	COM_NUM_DEVICEPARAM_SI_PROFILE_FIRST_POINT,	HOLDREGISTER_DEVICEPARAM_SI_PROFILE_FIRST_POINT,	2,	true,	10,	655350,	(uint8_t*)"mm",	1,	0,	true,	TYPE_INT,	7,	NULL,	(uint8_t*)"SI1stPt"},
 {(uint8_t*)"SI步距",	0,	COM_NUM_DEVICEPARAM_SI_PROFILE_INCREMENT,	HOLDREGISTER_DEVICEPARAM_SI_PROFILE_INCREMENT,	2,	true,	10,	655350,	(uint8_t*)"mm",	1,	0,	true,	TYPE_INT,	7,	NULL,	(uint8_t*)"SIInc"},
 {(uint8_t*)"SI停留",	0,	COM_NUM_DEVICEPARAM_SI_PROFILE_DWELL_TIME,	HOLDREGISTER_DEVICEPARAM_SI_PROFILE_DWELL_TIME,	2,	true,	1,	3600,	(uint8_t*)"s",	0,	0,	true,	TYPE_INT,	4,	NULL,	(uint8_t*)"SIDwell"},
-{(uint8_t*)"SI探底",	0,	COM_NUM_DEVICEPARAM_SI_PROFILE_BOTTOM_DETECT_INTERVAL,	HOLDREGISTER_DEVICEPARAM_SI_PROFILE_BOTTOM_DETECT_INTERVAL,	2,	true,	1,	1000,	(uint8_t*)"次",	0,	0,	true,	TYPE_INT,	4,	NULL,	(uint8_t*)"SIBtmInt"},
+{(uint8_t*)"SI探底频次",	0,	COM_NUM_DEVICEPARAM_SI_PROFILE_BOTTOM_DETECT_INTERVAL,	HOLDREGISTER_DEVICEPARAM_SI_PROFILE_BOTTOM_DETECT_INTERVAL,	2,	true,	1,	1000,	(uint8_t*)"次",	0,	0,	true,	TYPE_INT,	4,	NULL,	(uint8_t*)"SIBtmInt"},
 
 /* ==================== 继电器报警输出配置（四路） ==================== */
 {(uint8_t*)"K1工作模式",	0,	COM_NUM_DEVICEPARAM_RELAY1_OPERATING_MODE,	HOLDREGISTER_DEVICEPARAM_RELAY_OPERATING_MODE(0U),	2,	true,	0,	1,	NULL,	0,	0,	true,	TYPE_INT,	1,	ret_arr_word,	(uint8_t*)"K1WorkMode"},
@@ -539,6 +539,7 @@ void print_device_params(void)
     printf("  %-32s : %lu\r\n", "水位零点电容", (unsigned long)params.zero_cap);
     printf("  %-32s : %lu\r\n", "水位稳定距离", (unsigned long)params.water_stable_threshold);
     printf("  %-32s : %lu\r\n", "水位滞后电容阈值", (unsigned long)params.water_lag_cap_threshold);
+    printf("  %-32s : %lu\r\n", "水位滞后时间(s)", (unsigned long)params.water_level_hysteresis_time_s);
     printf("  %-32s : %lu\r\n", "水位修正值", (unsigned long)params.waterLevelCorrection);
 
     /* 罐底/罐高 */

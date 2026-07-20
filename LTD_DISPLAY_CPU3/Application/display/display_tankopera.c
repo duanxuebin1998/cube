@@ -1775,6 +1775,7 @@ static uint8_t *dtm_operaname_short(int num, uint8_t *fallback)
 		{ COM_NUM_DEVICEPARAM_OILLEVEL_FREQUENCY, (uint8_t*)"跟随频率", (uint8_t*)"FollowHz" },
 		{ COM_NUM_DEVICEPARAM_OILLEVEL_DENSITY, (uint8_t*)"跟随密度", (uint8_t*)"FollowD" },
 		{ COM_NUM_DEVICEPARAM_OILLEVEL_HYSTERESIS_TIME, (uint8_t*)"滞后时间", (uint8_t*)"HysTime" },
+		{ COM_NUM_DEVICEPARAM_WATER_LEVEL_HYSTERESIS_TIME, (uint8_t*)"滞后时间", (uint8_t*)"WaterHys" },
 		{ COM_NUM_DEVICEPARAM_WATER_LEVEL_MODE, (uint8_t*)"水位方式", (uint8_t*)"WaterMode" },
 		{ COM_NUM_DEVICEPARAM_WATER_CAP_THRESHOLD, (uint8_t*)"跟随阈值", (uint8_t*)"CapTh" },
 		{ COM_NUM_DEVICEPARAM_WATER_FIND_CAP_THRESHOLD, (uint8_t*)"寻找阈值", (uint8_t*)"FindCap" },
@@ -1802,6 +1803,7 @@ static uint8_t *dtm_operaname_short(int num, uint8_t *fallback)
 		{ COM_NUM_DEVICEPARAM_WARTSILA_MAX_HEIGHT_ABOVE_SURFACE, (uint8_t*)"最高距液面", (uint8_t*)"MaxHeight" },
 		{ COM_NUM_DEVICEPARAM_WARTSILA_BOTTOM_DETECT_INTERVAL, (uint8_t*)"探底间隔", (uint8_t*)"BotInterval" },
 		{ COM_NUM_DEVICEPARAM_BOTTOM_ENCODER_CORRECTION_TANK_HEIGHT, (uint8_t*)"修正罐高", (uint8_t*)"FixTankH" },
+		{ COM_NUM_DEVICEPARAM_SI_PROFILE_BOTTOM_DETECT_INTERVAL, (uint8_t*)"SI探底", (uint8_t*)"SIBtmInt" },
 		{ COM_NUM_DEVICEPARAM_LAST_OIL_CORRECTION_LEVEL, (uint8_t*)"修正液位", (uint8_t*)"LastOil" },
 		{ COM_NUM_DEVICEPARAM_TANK_GAS_PHASE_TEMPERATURE, (uint8_t*)"气相温度", (uint8_t*)"GasTemp" },
 		{ COM_NUM_DEVICEPARAM_TAPE_EXPANSION_COEFFICIENT, (uint8_t*)"尺带伸缩率", (uint8_t*)"TapeExp" },
@@ -2644,6 +2646,7 @@ static bool operation_needs_protect_confirm(int operaNum)
 	case COM_NUM_DEVICEPARAM_ZERO_CAP:
 	case COM_NUM_DEVICEPARAM_WATER_STABLE_THRESHOLD:
 	case COM_NUM_DEVICEPARAM_WATER_LAG_CAP_THRESHOLD:
+	case COM_NUM_DEVICEPARAM_WATER_LEVEL_HYSTERESIS_TIME:
 	case COM_NUM_DEVICEPARAM_WATER_LEVEL_CORRECTION:
 	case COM_NUM_DEVICEPARAM_BOTTOM_DETECT_MODE:
 	case COM_NUM_DEVICEPARAM_BOTTOM_ANGLE_THRESHOLD:
@@ -5304,6 +5307,7 @@ static MenuGroup ParamGroupOf(int operaNum)
     case COM_NUM_DEVICEPARAM_ZERO_CAP:
     case COM_NUM_DEVICEPARAM_WATER_STABLE_THRESHOLD:
     case COM_NUM_DEVICEPARAM_WATER_LAG_CAP_THRESHOLD:
+    case COM_NUM_DEVICEPARAM_WATER_LEVEL_HYSTERESIS_TIME:
     case COM_NUM_DEVICEPARAM_WATER_LEVEL_CORRECTION:
         return MENU_GRP_WATER;
 
@@ -5502,6 +5506,12 @@ static bool ParamVisibleInGroup(int operaNum, MenuGroup grp)
                (grp == MENU_GRP_SI_PROFILE);
     }
 
+    if (operaNum == COM_NUM_DEVICEPARAM_BOTTOM_ENCODER_CORRECTION_ENABLE) {
+        return (grp == MENU_GRP_BOTTOM_TANKH) ||
+               (grp == MENU_GRP_WARTSILA) ||
+               (grp == MENU_GRP_SI_PROFILE);
+    }
+
     return false;
 }
 
@@ -5553,6 +5563,47 @@ static void menu_build_by_group(MenuGroup grp, int key_index, void (*backFunc)(v
     menu[menulen].operaNum   = COM_NUM_NOOPERA;
     menu[menulen].sureopera  = backFunc;
     menu[menulen].rorw       = COMMANE_NORW;
+    menu[menulen].operaName2 = (uint8_t*)"Back";
+    menulen++;
+
+    oled_clear();
+    func_index = key_index;
+    menuselect(menu, menulen);
+}
+
+/**
+ * @brief 按显式参数顺序构造包含共享快捷入口的菜单。
+ * @param operas 参数操作号列表。
+ * @param count 参数数量。
+ * @param key_index 当前菜单页索引。
+ * @param backFunc 返回上一级菜单的回调函数。
+ * @note 同一参数可出现在多个菜单中，但仍共用唯一元数据、寄存器和写回路径。
+ */
+static void menu_build_by_operas(const int *operas, int count, int key_index, void (*backFunc)(void))
+{
+    static struct MenuData menu[AUTO_MENU_MAX_ITEMS + 1];
+    int menulen = 0;
+
+    for (int i = 0; (i < count) && (menulen < AUTO_MENU_MAX_ITEMS); i++) {
+        int index = getHoldValueNum(operas[i]);
+        const struct ParameterMetadata *m;
+
+        if (index < 0) {
+            continue;
+        }
+        m = &param_meta[index];
+        menu[menulen].operaName = m->name;
+        menu[menulen].operaNum = m->operanum;
+        menu[menulen].sureopera = para_mainprocess;
+        menu[menulen].rorw = m->authority_write ? COMMAND_WRITE : COMMAND_READ;
+        menu[menulen].operaName2 = m->name_English;
+        menulen++;
+    }
+
+    menu[menulen].operaName = (uint8_t*)"返回";
+    menu[menulen].operaNum = COM_NUM_NOOPERA;
+    menu[menulen].sureopera = backFunc;
+    menu[menulen].rorw = COMMANE_NORW;
     menu[menulen].operaName2 = (uint8_t*)"Back";
     menulen++;
 
@@ -6189,12 +6240,50 @@ static void menu_liquid(void)       { menu_build_by_group(MENU_GRP_LIQUID,      
  * @brief 执行屏幕菜单操作中的 menu_water 逻辑。
  * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
  */
-static void menu_water(void)        { menu_build_by_group(MENU_GRP_WATER,        KEYNUM_MENU_PARA_WATER,        menu_measure_config); }
+static void menu_water(void)
+{
+    static const int operas[] = {
+        COM_NUM_DEVICEPARAM_WATER_LEVEL_MODE,
+        COM_NUM_DEVICEPARAM_WATER_TANK_HEIGHT,
+        COM_NUM_DEVICEPARAM_WATER_BLINDZONE,
+        COM_NUM_DEVICEPARAM_WATER_CAP_THRESHOLD,
+        COM_NUM_DEVICEPARAM_WATER_FIND_CAP_THRESHOLD,
+        COM_NUM_DEVICEPARAM_WATER_LAG_CAP_THRESHOLD,
+        COM_NUM_DEVICEPARAM_WATER_STABLE_THRESHOLD,
+        COM_NUM_DEVICEPARAM_WATER_LEVEL_CORRECTION,
+        COM_NUM_DEVICEPARAM_MAXDOWNDISTANCE,
+        COM_NUM_DEVICEPARAM_ZERO_CAP,
+        COM_NUM_DEVICEPARAM_WATER_LEVEL_HYSTERESIS_TIME,
+    };
+
+    menu_build_by_operas(operas,
+                         (int)(sizeof(operas) / sizeof(operas[0])),
+                         KEYNUM_MENU_PARA_WATER,
+                         menu_measure_config);
+}
 /**
  * @brief 执行屏幕菜单操作中的 menu_bottom_tankh 逻辑。
  * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
  */
-static void menu_bottom_tankh(void) { menu_build_by_group(MENU_GRP_BOTTOM_TANKH, KEYNUM_MENU_PARA_BOTTOM_TANKH, menu_measure_config); }
+static void menu_bottom_tankh(void)
+{
+    static const int operas[] = {
+        COM_NUM_DEVICEPARAM_BOTTOM_DETECT_MODE,
+        COM_NUM_DEVICEPARAM_BOTTOM_ANGLE_THRESHOLD,
+        COM_NUM_DEVICEPARAM_BOTTOM_WEIGHT_THRESHOLD,
+        COM_NUM_DEVICEPARAM_REFRESH_TANKHEIGHT_FLAG,
+        COM_NUM_DEVICEPARAM_MAX_TANKHEIGHT_DEVIATION,
+        COM_NUM_DEVICEPARAM_INITIAL_TANKHEIGHT,
+        COM_NUM_DEVICEPARAM_CURRENT_TANKHEIGHT,
+        COM_NUM_DEVICEPARAM_BOTTOM_ENCODER_CORRECTION_ENABLE,
+        COM_NUM_DEVICEPARAM_BOTTOM_ENCODER_CORRECTION_TANK_HEIGHT,
+    };
+
+    menu_build_by_operas(operas,
+                         (int)(sizeof(operas) / sizeof(operas[0])),
+                         KEYNUM_MENU_PARA_BOTTOM_TANKH,
+                         menu_measure_config);
+}
 
 /**
  * @brief 执行屏幕菜单操作中的 menu_correct 逻辑。
@@ -6210,7 +6299,23 @@ static void menu_policy(void)       { menu_build_by_group(MENU_GRP_POLICY,      
  * @brief 执行屏幕菜单操作中的 menu_wartsila 逻辑。
  * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
  */
-static void menu_wartsila(void)     { menu_build_by_group(MENU_GRP_WARTSILA,     KEYNUM_MENU_PARA_WARTSILA,     menu_measure_config); }
+static void menu_wartsila(void)
+{
+    static const int operas[] = {
+        COM_NUM_DEVICEPARAM_WARTSILA_UPPER_DENSITY_LIMIT,
+        COM_NUM_DEVICEPARAM_WARTSILA_LOWER_DENSITY_LIMIT,
+        COM_NUM_DEVICEPARAM_WARTSILA_DENSITY_INTERVAL,
+        COM_NUM_DEVICEPARAM_WARTSILA_MAX_HEIGHT_ABOVE_SURFACE,
+        COM_NUM_DEVICEPARAM_WARTSILA_BOTTOM_DETECT_INTERVAL,
+        COM_NUM_DEVICEPARAM_BOTTOM_ENCODER_CORRECTION_TANK_HEIGHT,
+        COM_NUM_DEVICEPARAM_BOTTOM_ENCODER_CORRECTION_ENABLE,
+    };
+
+    menu_build_by_operas(operas,
+                         (int)(sizeof(operas) / sizeof(operas[0])),
+                         KEYNUM_MENU_PARA_WARTSILA,
+                         menu_measure_config);
+}
 
 static void menu_si_config(void)
 {
@@ -6228,7 +6333,19 @@ static void menu_si_config(void)
 
 static void menu_si_profile(void)
 {
-    menu_build_by_group(MENU_GRP_SI_PROFILE, KEYNUM_MENU_SI_PROFILE, menu_si_config);
+    static const int operas[] = {
+        COM_NUM_DEVICEPARAM_SI_PROFILE_FIRST_POINT,
+        COM_NUM_DEVICEPARAM_SI_PROFILE_INCREMENT,
+        COM_NUM_DEVICEPARAM_SI_PROFILE_DWELL_TIME,
+        COM_NUM_DEVICEPARAM_SI_PROFILE_BOTTOM_DETECT_INTERVAL,
+        COM_NUM_DEVICEPARAM_BOTTOM_ENCODER_CORRECTION_TANK_HEIGHT,
+        COM_NUM_DEVICEPARAM_BOTTOM_ENCODER_CORRECTION_ENABLE,
+    };
+
+    menu_build_by_operas(operas,
+                         (int)(sizeof(operas) / sizeof(operas[0])),
+                         KEYNUM_MENU_SI_PROFILE,
+                         menu_si_config);
 }
 
 static void menu_si_auto_profile(void)

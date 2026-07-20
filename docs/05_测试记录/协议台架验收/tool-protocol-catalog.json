@@ -69,7 +69,7 @@
     {
       "id": "wartsila",
       "displayName": "Wärtsilä专有RTU",
-      "description": "CPU3 对外的 Wärtsilä 厂商专有 RTU 兼容协议；默认 2400 8E1，现场 V6 配置可保留 4800 8N1/8N2；0x10 写请求按标准 Modbus 使用 byteCount=2×quantity，RTU 帧长=9+byteCount，PDU 长度=6+byteCount。",
+      "description": "CPU3 对外的 Wärtsilä 厂商专有 RTU 兼容协议；默认 2400 8E1，现场 V6 配置可保留 4800 8N1/8N2；0x03 响应按标准使用 byteCount=2×quantity；0x10 仅接受莆田现场 byteCount=quantity，数据区仍为 2×quantity，RTU 帧长=9+2×quantity、PDU 长度=6+2×quantity，标准 byteCount=2×quantity 返回 0x03 且不得写寄存器或下发 CPU2。",
       "defaultLine": {
         "baudRate": 2400,
         "dataBits": 8,

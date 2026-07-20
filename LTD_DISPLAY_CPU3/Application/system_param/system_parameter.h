@@ -26,7 +26,7 @@
 #define UNVALID_POSITION 0
 #define UNVALID_TEMPERATURE 0
 #define MAX_MEASUREMENT_POINTS 200 /* 密度分布测量最大点数 */
-#define DEVICE_PROTOCOL_VERSION 24u /* CPU2/CPU3共享协议版本；协议24定义AO初始、过程和保持状态及传感器位置源。 */
+#define DEVICE_PROTOCOL_VERSION 25u /* CPU2/CPU3共享协议版本；协议25复用reserved3为水位滞后时间预留参数。 */
 #define FAULT_AUTO_RECOVERY_RETRY_DEFAULT 3u
 #define FAULT_AUTO_RECOVERY_RETRY_MAX 10u
 
@@ -742,7 +742,7 @@ typedef struct {
 
     uint32_t protocolVersion;             /* CPU2/CPU3共享协议版本，旧程序该字段默认为0 */
     uint32_t fault_auto_recovery_retry_limit; /* 故障自动恢复重跑上限：0关闭，1~10为最多重跑次数 */
-    uint32_t reserved3;                   /* 预留 */
+    uint32_t water_level_hysteresis_time_s; /* 水位滞后时间预留参数，单位s，当前不参与运行逻辑 */
 
     /* ===================== 电机与编码器参数 ===================== */
     uint32_t position_source_auto_switch; /* 位置源自动切换(0=不切换,1=自动切换) */

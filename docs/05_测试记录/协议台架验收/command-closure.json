@@ -3,12 +3,12 @@
     "catalogDiff": {
       "schema": "cube.protocol-catalog-comparison",
       "schemaVersion": 1,
-      "sha256": "8c0442b3680ae4faf4602d3e25bf588d99fd85aa1ce8c8eecae5cf9960f185dd"
+      "sha256": "5041f0088b84f2314272201c8f4eefd18600743c27040de1e815975c9537b891"
     },
     "comparisonPolicy": {
       "schema": "cube.protocol-catalog-comparison-policy",
       "schemaVersion": 1,
-      "sha256": "e9703a74ace7c3c175c60fa04fdee23df184b291c4984cf84ed894b1960b3dee"
+      "sha256": "46e06af6f00ec1f1e5c1cc10a401c4e94bde4f838dfe5b3d662a0560de20f136"
     },
     "firmwareFacts": {
       "schema": "cube.ltd-firmware.protocol-fact-inventory",
@@ -18,7 +18,7 @@
     "toolCatalog": {
       "schema": "cube.ltd-device-debug-tool.protocol-catalog",
       "schemaVersion": 2,
-      "sha256": "5cd177bea6cad87c0678bd173f77b91b78412b508e32c1a9a10b48bd8fe4ffbe"
+      "sha256": "757f47db2a732816456494d0692fbaf0f31ac323f7b9e6de40372da448d90137"
     }
   },
   "classificationCounts": {
@@ -13901,7 +13901,7 @@
     "differences": 0,
     "exitCode": 3,
     "status": "Unverifiable",
-    "unverifiable": 4421,
+    "unverifiable": 4403,
     "validationErrors": 0
   },
   "counts": {

@@ -1,0 +1,567 @@
+{
+  "schema_version": 1,
+  "protocol_id": "dsm_cpu1_usart3_text",
+  "protocol_name": "DSM CPU1 SIL 对外 USART3 文本协议",
+  "current_normative_version": "V5.4",
+  "narrative_document": "docs/01_协议与接口/DSM_CPU1对外通信协议.md",
+  "evidence_scope": "历史版本命令能力来自归档提交或标签源码静态提取；V5.4 来自当前工作区源码。完整字段布局以 V5.4 为当前规范，历史布局未确认项明确标记为不完整。",
+  "physical_layer": {
+    "uart": "USART3",
+    "baud_rate": 9600,
+    "data_bits": 8,
+    "parity": "none",
+    "stop_bits": 1,
+    "flow_control": "none_in_firmware"
+  },
+  "request": {
+    "length": 2,
+    "prefix_ascii": "C",
+    "prefix_hex": "43",
+    "terminator": "none",
+    "checksum": "none",
+    "case_sensitive": true
+  },
+  "bcc": {
+    "algorithm": "xor",
+    "payload_index_origin": 0,
+    "skipped_payload_offsets": [
+      1
+    ],
+    "description": "对有效载荷逐字节 XOR，但跳过 payload[1]。"
+  },
+  "command_universe": [
+    "F",
+    "P",
+    "A",
+    "H",
+    "Z",
+    "L",
+    "D",
+    "B",
+    "f",
+    "d",
+    "h",
+    "l",
+    "p",
+    "z",
+    "V",
+    "v",
+    "S",
+    "M",
+    "N",
+    "K",
+    "a",
+    "b",
+    "R",
+    "X"
+  ],
+  "commands": {
+    "F": {
+      "request_ascii": "CF",
+      "request_hex": "43 46",
+      "default_response_profile": "compatibility_ack_3",
+      "current_v5_3_behavior": "兼容 ACK，不启动采集"
+    },
+    "P": {
+      "request_ascii": "CP",
+      "request_hex": "43 50",
+      "default_response_profile": "compatibility_ack_3",
+      "current_v5_3_behavior": "兼容 ACK，不启动采集"
+    },
+    "A": {
+      "request_ascii": "CA",
+      "request_hex": "43 41",
+      "default_response_profile": "compatibility_ack_3",
+      "current_v5_3_behavior": "兼容 ACK；历史过渡版本用于空气频率采集"
+    },
+    "H": {
+      "request_ascii": "CH",
+      "request_hex": "43 48",
+      "default_response_profile": "gyro_prepare_ack_3",
+      "current_v5_3_behavior": "陀螺仪准备并 ACK"
+    },
+    "Z": {
+      "request_ascii": "CZ",
+      "request_hex": "43 5A",
+      "default_response_profile": "gyro_prepare_ack_3",
+      "current_v5_3_behavior": "陀螺仪准备并 ACK"
+    },
+    "L": {
+      "request_ascii": "CL",
+      "request_hex": "43 4C",
+      "default_response_profile": "water_prepare_ack_3",
+      "current_v5_3_behavior": "历史水测量准备动作并 ACK"
+    },
+    "D": {
+      "request_ascii": "CD",
+      "request_hex": "43 44",
+      "default_response_profile": "density_mode_ack_3",
+      "current_v5_3_behavior": "请求 CPU0 密度模式并 ACK"
+    },
+    "B": {
+      "request_ascii": "CB",
+      "request_hex": "43 42",
+      "default_response_profile": "level_mode_ack_3",
+      "current_v5_3_behavior": "请求 CPU0 液位模式并 ACK"
+    },
+    "f": {
+      "request_ascii": "Cf",
+      "request_hex": "43 66",
+      "default_response_profile": "density_data_27",
+      "current_v5_3_behavior": "读取频率、密度、温度"
+    },
+    "d": {
+      "request_ascii": "Cd",
+      "request_hex": "43 64",
+      "default_response_profile": "density_data_27",
+      "current_v5_3_behavior": "读取频率、密度、温度"
+    },
+    "h": {
+      "request_ascii": "Ch",
+      "request_hex": "43 68",
+      "default_response_profile": "gyroscope_angle_19",
+      "current_v5_3_behavior": "读取陀螺仪 X/Y 角度"
+    },
+    "l": {
+      "request_ascii": "Cl",
+      "request_hex": "43 6C",
+      "default_response_profile": "water_capacitance_11",
+      "current_v5_3_behavior": "读取 FDC2214 水测量电容"
+    },
+    "p": {
+      "request_ascii": "Cp",
+      "request_hex": "43 70",
+      "default_response_profile": "oil_ad_27",
+      "current_v5_3_behavior": "读取扫频缓存中的液位 AD"
+    },
+    "z": {
+      "request_ascii": "Cz",
+      "request_hex": "43 7A",
+      "default_response_profile": "zero_voltage_11",
+      "current_v5_3_behavior": "读取零点 ADC 电压"
+    },
+    "V": {
+      "request_ascii": "CV",
+      "request_hex": "43 56",
+      "default_response_profile": "combined_version_6",
+      "current_v5_3_behavior": "读取 CPU1 组合前缀和 CPU0 软件版本"
+    },
+    "v": {
+      "request_ascii": "Cv",
+      "request_hex": "43 76",
+      "default_response_profile": "cpu1_version_6",
+      "current_v5_3_behavior": "读取 CPU1 本机版本"
+    },
+    "S": {
+      "request_ascii": "CS",
+      "request_hex": "43 53",
+      "default_response_profile": "sweep_result_19",
+      "current_v5_3_behavior": "入口停用，无响应"
+    },
+    "M": {
+      "request_ascii": "CM",
+      "request_hex": "43 4D",
+      "default_response_profile": "density_parameters_27",
+      "current_v5_3_behavior": "读取密度分析参数"
+    },
+    "N": {
+      "request_ascii": "CN",
+      "request_hex": "43 4E",
+      "default_response_profile": "sensor_number_11",
+      "current_v5_3_behavior": "读取传感器编号"
+    },
+    "K": {
+      "request_ascii": "CK",
+      "request_hex": "43 4B",
+      "default_response_profile": "supply_voltage_11",
+      "current_v5_3_behavior": "读取 CPU1 供电电压"
+    },
+    "a": {
+      "request_ascii": "Ca",
+      "request_hex": "43 61",
+      "default_response_profile": "level_frequency_11",
+      "current_v5_3_behavior": "读取液位频率；历史过渡版本用于读取空气频率缓存"
+    },
+    "b": {
+      "request_ascii": "Cb",
+      "request_hex": "43 62",
+      "default_response_profile": "level_frequency_11",
+      "current_v5_3_behavior": "读取液位频率"
+    },
+    "R": {
+      "request_ascii": "CR",
+      "request_hex": "43 52",
+      "default_response_profile": "software_reset_no_response",
+      "current_v5_3_behavior": "立即软件复位，不返回普通响应"
+    },
+    "X": {
+      "request_ascii": "CX",
+      "request_hex": "43 58",
+      "default_response_profile": "power_shutdown_ack_3",
+      "current_v5_4_behavior": "使PB4控制的陀螺仪和零点电源域掉电，完成后ACK；重复执行保持幂等"
+    }
+  },
+  "response_profiles": {
+    "compatibility_ack_3": {
+      "normal_length": 3,
+      "frame_kind": "literal",
+      "literal_hex": "25 0D 0A",
+      "bcc": false,
+      "terminator_hex": "0D 0A"
+    },
+    "air_acquire_ack_3": {
+      "normal_length": 3,
+      "frame_kind": "literal",
+      "literal_hex": "25 0D 0A",
+      "bcc": false,
+      "terminator_hex": "0D 0A"
+    },
+    "gyro_prepare_ack_3": {
+      "normal_length": 3,
+      "frame_kind": "literal",
+      "literal_hex": "25 0D 0A",
+      "bcc": false,
+      "terminator_hex": "0D 0A"
+    },
+    "water_prepare_ack_3": {
+      "normal_length": 3,
+      "frame_kind": "literal",
+      "literal_hex": "25 0D 0A",
+      "bcc": false,
+      "terminator_hex": "0D 0A"
+    },
+    "density_mode_ack_3": {
+      "normal_length": 3,
+      "frame_kind": "literal",
+      "literal_hex": "25 0D 0A",
+      "bcc": false,
+      "terminator_hex": "0D 0A"
+    },
+    "level_mode_ack_3": {
+      "normal_length": 3,
+      "frame_kind": "literal",
+      "literal_hex": "25 0D 0A",
+      "bcc": false,
+      "terminator_hex": "0D 0A"
+    },
+    "density_v1_27_legacy": {
+      "normal_length": 27,
+      "payload_length": 24,
+      "frame_kind": "bcc_payload",
+      "bcc": true,
+      "terminator_hex": "0D 0A",
+      "layout_complete": false,
+      "historical_semantics": "密度、黏度、温度；需以 V1.0 源码或抓包补齐完整字段布局"
+    },
+    "density_v2_27_legacy": {
+      "normal_length": 27,
+      "payload_length": 24,
+      "frame_kind": "bcc_payload",
+      "bcc": true,
+      "terminator_hex": "0D 0A",
+      "layout_complete": false,
+      "historical_semantics": "频率、密度、温度；V2.0 精度与后续过渡快照不同"
+    },
+    "density_data_27": {
+      "normal_length": 27,
+      "payload_length": 24,
+      "frame_kind": "bcc_payload",
+      "bcc": true,
+      "terminator_hex": "0D 0A",
+      "error_alternative_profile": "error_19",
+      "layout_complete": true,
+      "layout": [
+        {"offset": 0, "length": 1, "name": "status", "format": "F_or_E"},
+        {"offset": 1, "length": 1, "name": "frequency_sign", "format": "+"},
+        {"offset": 2, "length": 6, "name": "frequency", "format": "%06.0f", "unit": "Hz"},
+        {"offset": 8, "length": 1, "name": "density_marker", "format": "D"},
+        {"offset": 9, "length": 1, "name": "density_sign", "format": "+"},
+        {"offset": 10, "length": 6, "name": "density", "format": "%06.1f"},
+        {"offset": 16, "length": 1, "name": "temperature_marker", "format": "T"},
+        {"offset": 17, "length": 7, "name": "temperature", "format": "fixed_7_bytes"}
+      ]
+    },
+    "density_parameters_27": {
+      "normal_length": 27,
+      "payload_length": 24,
+      "frame_kind": "bcc_payload",
+      "bcc": true,
+      "terminator_hex": "0D 0A",
+      "error_alternative_profile": "error_19",
+      "layout_complete": true
+    },
+    "oil_ad_27": {
+      "normal_length": 27,
+      "payload_length": 24,
+      "frame_kind": "bcc_payload",
+      "bcc": true,
+      "terminator_hex": "0D 0A",
+      "error_alternative_profile": "error_19",
+      "layout_complete": true
+    },
+    "gyroscope_angle_19": {
+      "normal_length": 19,
+      "payload_length": 16,
+      "frame_kind": "bcc_payload",
+      "bcc": true,
+      "terminator_hex": "0D 0A",
+      "error_alternative_profile": "error_19",
+      "layout_complete": true
+    },
+    "sweep_result_19": {
+      "normal_length": 19,
+      "payload_length": 16,
+      "frame_kind": "bcc_payload",
+      "bcc": true,
+      "terminator_hex": "0D 0A",
+      "error_alternative_profile": "error_19",
+      "layout_complete": true
+    },
+    "error_19": {
+      "normal_length": 19,
+      "payload_length": 16,
+      "frame_kind": "bcc_payload",
+      "bcc": true,
+      "terminator_hex": "0D 0A",
+      "layout_complete": true
+    },
+    "water_adc_11": {
+      "normal_length": 11,
+      "payload_length": 8,
+      "frame_kind": "bcc_payload",
+      "bcc": true,
+      "terminator_hex": "0D 0A",
+      "error_alternative_profile": "error_19",
+      "layout_complete": true,
+      "field_semantics": "D + %07.4f，ADC 电压"
+    },
+    "water_capacitance_11": {
+      "normal_length": 11,
+      "payload_length": 8,
+      "frame_kind": "bcc_payload",
+      "bcc": true,
+      "terminator_hex": "0D 0A",
+      "error_alternative_profile": "error_19",
+      "layout_complete": true,
+      "field_semantics": "D + %07.1f，FDC2214 电容"
+    },
+    "zero_voltage_11": {
+      "normal_length": 11,
+      "payload_length": 8,
+      "frame_kind": "bcc_payload",
+      "bcc": true,
+      "terminator_hex": "0D 0A",
+      "error_alternative_profile": "error_19",
+      "layout_complete": true
+    },
+    "supply_voltage_11": {
+      "normal_length": 11,
+      "payload_length": 8,
+      "frame_kind": "bcc_payload",
+      "bcc": true,
+      "terminator_hex": "0D 0A",
+      "layout_complete": true
+    },
+    "sensor_number_11": {
+      "normal_length": 11,
+      "payload_length": 8,
+      "frame_kind": "bcc_payload",
+      "bcc": true,
+      "terminator_hex": "0D 0A",
+      "error_alternative_profile": "error_19",
+      "layout_complete": true
+    },
+    "air_frequency_11": {
+      "normal_length": 11,
+      "payload_length": 8,
+      "frame_kind": "bcc_payload",
+      "bcc": true,
+      "terminator_hex": "0D 0A",
+      "layout_complete": true,
+      "field_semantics": "F + 7 位空气频率缓存"
+    },
+    "level_frequency_11": {
+      "normal_length": 11,
+      "payload_length": 8,
+      "frame_kind": "bcc_payload",
+      "bcc": true,
+      "terminator_hex": "0D 0A",
+      "error_alternative_profile": "error_19",
+      "layout_complete": true,
+      "field_semantics": "F + 7 位液位频率"
+    },
+    "combined_version_6": {
+      "normal_length": 6,
+      "payload_length": 5,
+      "frame_kind": "bcc_payload",
+      "bcc": true,
+      "terminator_hex": "",
+      "layout_complete": true
+    },
+    "cpu1_version_6": {
+      "normal_length": 6,
+      "payload_length": 5,
+      "frame_kind": "bcc_payload",
+      "bcc": true,
+      "terminator_hex": "",
+      "layout_complete": true
+    },
+    "software_reset_no_response": {
+      "normal_length": 0,
+      "frame_kind": "none",
+      "bcc": false,
+      "terminator_hex": ""
+    },
+    "power_shutdown_ack_3": {
+      "normal_length": 3,
+      "frame_kind": "literal",
+      "literal_hex": "25 0D 0A",
+      "bcc": false,
+      "terminator_hex": "0D 0A"
+    }
+  },
+  "host_profiles": {
+    "cube_v2_traditional_dsm": {
+      "request_ascii": "Ch",
+      "prepare_command_required": false,
+      "single_attempt_timeout_ms": 500,
+      "maximum_attempts": 3,
+      "retry_delay_ms": 300,
+      "drain_rx_before_attempt": true,
+      "cold_start_acceptance": "first_attempt_may_timeout_second_attempt_must_succeed"
+    }
+  },
+  "power_management": {
+    "control_gpio": "PB4",
+    "controlled_consumers": ["MPU6050", "zero_point"],
+    "systick_period_ms": 2,
+    "idle_shutdown_ms": 30000,
+    "startup_max_attempts": 2,
+    "pre_sample_count": 3,
+    "shutdown_command": "X",
+    "shutdown_response_profile": "power_shutdown_ack_3"
+  },
+  "versions": [
+    {
+      "id": "V1.0",
+      "revision": "c54c685",
+      "cpu1_version": null,
+      "combined_version_prefix": "07",
+      "supported_commands": ["D", "F", "H", "Z", "P", "L", "f", "d", "h", "l", "p", "z", "V", "S", "M", "N", "K", "R"],
+      "response_profile_overrides": {"D": "compatibility_ack_3", "f": "density_v1_27_legacy", "d": "density_v1_27_legacy", "l": "water_adc_11"}
+    },
+    {
+      "id": "V2.0",
+      "revision": "e04af2b",
+      "cpu1_version": null,
+      "combined_version_prefix": "07",
+      "supported_commands": ["D", "F", "H", "Z", "P", "L", "f", "d", "h", "l", "p", "z", "V", "S", "M", "N", "K", "R"],
+      "response_profile_overrides": {"D": "compatibility_ack_3", "f": "density_v2_27_legacy", "d": "density_v2_27_legacy", "l": "water_adc_11"}
+    },
+    {
+      "id": "方案2/液位模式",
+      "revision": "60150e4",
+      "cpu1_version": null,
+      "combined_version_prefix": "07",
+      "supported_commands": ["D", "F", "H", "Z", "P", "L", "f", "d", "h", "l", "p", "z", "V", "S", "M", "N", "K", "A", "a", "R"],
+      "response_profile_overrides": {"D": "compatibility_ack_3", "A": "air_acquire_ack_3", "a": "air_frequency_11", "l": "water_adc_11"}
+    },
+    {
+      "id": "CPU0频率轮询修正",
+      "revision": "84a86c3",
+      "cpu1_version": null,
+      "combined_version_prefix": "07",
+      "supported_commands": ["D", "F", "H", "Z", "P", "L", "f", "d", "h", "l", "p", "z", "V", "S", "M", "N", "K", "A", "a", "R"],
+      "response_profile_overrides": {"D": "compatibility_ack_3", "A": "air_acquire_ack_3", "a": "air_frequency_11", "l": "water_adc_11"}
+    },
+    {
+      "id": "V3.02",
+      "revision": "v3.02",
+      "cpu1_version": "03.03",
+      "combined_version_prefix": "07",
+      "supported_commands": ["D", "F", "H", "Z", "P", "L", "f", "d", "h", "l", "p", "z", "V", "v", "S", "M", "N", "K", "A", "a", "R"],
+      "response_profile_overrides": {"D": "compatibility_ack_3", "A": "air_acquire_ack_3", "a": "air_frequency_11", "l": "water_adc_11"}
+    },
+    {
+      "id": "V4.0",
+      "revision": "v4.0",
+      "cpu1_version": "04.00",
+      "combined_version_prefix": "07",
+      "supported_commands": ["F", "H", "Z", "P", "A", "L", "D", "f", "d", "h", "l", "p", "z", "V", "v", "S", "M", "N", "K", "B", "b", "a", "R"],
+      "response_profile_overrides": {"l": "water_adc_11"}
+    },
+    {
+      "id": "V4.10",
+      "revision": "v4.10",
+      "cpu1_version": "04.10",
+      "combined_version_prefix": "07",
+      "supported_commands": ["F", "H", "Z", "P", "A", "L", "D", "f", "d", "h", "l", "p", "z", "V", "v", "S", "M", "N", "K", "B", "b", "a", "R"],
+      "response_profile_overrides": {"l": "water_adc_11"}
+    },
+    {
+      "id": "V5.0",
+      "revision": "v5.0",
+      "cpu1_version": "05.00",
+      "combined_version_prefix": "08",
+      "supported_commands": ["F", "H", "Z", "P", "A", "L", "D", "f", "d", "h", "l", "p", "z", "V", "v", "S", "M", "N", "K", "B", "b", "a", "R"],
+      "response_profile_overrides": {}
+    },
+    {
+      "id": "V5.1",
+      "revision": "v5.1",
+      "cpu1_version": "05.10",
+      "combined_version_prefix": "08",
+      "supported_commands": ["F", "H", "Z", "P", "A", "L", "D", "f", "d", "h", "l", "p", "z", "V", "v", "S", "M", "N", "K", "B", "b", "a", "R"],
+      "response_profile_overrides": {}
+    },
+    {
+      "id": "V5.2",
+      "revision": "v5.2",
+      "cpu1_version": "05.20",
+      "combined_version_prefix": "09",
+      "supported_commands": ["F", "P", "A", "H", "Z", "L", "D", "f", "d", "h", "l", "p", "z", "V", "v", "M", "N", "K", "B", "b", "a", "R"],
+      "response_profile_overrides": {}
+    },
+    {
+      "id": "V5.3",
+      "revision": "v5.3",
+      "cpu1_version": "05.30",
+      "combined_version_prefix": "0A",
+      "supported_commands": ["F", "P", "A", "H", "Z", "L", "D", "f", "d", "h", "l", "p", "z", "V", "v", "M", "N", "K", "B", "b", "a", "R"],
+      "response_profile_overrides": {}
+    },
+    {
+      "id": "V5.4",
+      "revision": "WORKTREE",
+      "cpu1_version": "05.40",
+      "combined_version_prefix": "0A",
+      "supported_commands": ["F", "P", "A", "H", "Z", "L", "D", "f", "d", "h", "l", "p", "z", "V", "v", "M", "N", "K", "B", "b", "a", "R", "X"],
+      "response_profile_overrides": {}
+    },
+    {
+      "id": "V6.0",
+      "revision": "v6.0",
+      "cpu1_version": "06.00",
+      "combined_version_prefix": "08",
+      "supported_commands": ["F", "H", "Z", "P", "A", "L", "D", "f", "d", "h", "l", "p", "z", "V", "v", "S", "M", "N", "K", "B", "b", "a", "R"],
+      "response_profile_overrides": {}
+    },
+    {
+      "id": "V6.1",
+      "revision": "v6.1",
+      "cpu1_version": "06.10",
+      "combined_version_prefix": "08",
+      "supported_commands": ["F", "H", "Z", "P", "A", "L", "D", "f", "d", "h", "l", "p", "z", "V", "v", "S", "M", "N", "K", "B", "b", "a", "R"],
+      "response_profile_overrides": {}
+    },
+    {
+      "id": "V5.0-Lemis",
+      "revision": "v5.0-lemis",
+      "cpu1_version": "05.00",
+      "combined_version_prefix": "08",
+      "supported_commands": ["F", "H", "Z", "P", "A", "L", "D", "f", "d", "h", "l", "p", "z", "V", "v", "S", "M", "N", "K", "B", "b", "a", "R"],
+      "response_profile_overrides": {},
+      "compatibility_warning": "CPU0 请求统一为 0x20 且参数重新映射；仅凭 Cv=05.00 无法与标准 V5.0 区分。"
+    }
+  ]
+}

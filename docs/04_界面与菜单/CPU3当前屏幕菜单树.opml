@@ -85,6 +85,7 @@
             <outline text="水位修正值" />
             <outline text="水位最大下行距离" />
             <outline text="零点电容" />
+            <outline text="水位滞后时间" />
           </outline>
           <outline text="罐底与罐高">
             <outline text="罐底检测模式" />
@@ -92,9 +93,9 @@
             <outline text="探底扭力阈值" />
             <outline text="更新罐高标志" />
             <outline text="实测罐高最大偏差" />
-            <outline text="罐底后编码器修正" />
             <outline text="初始罐高 [只读]" />
             <outline text="当前罐高 [只读]" />
+            <outline text="罐底后编码器修正" />
             <outline text="探底修正罐高" />
           </outline>
           <outline text="密度测量参数">
@@ -118,6 +119,7 @@
             <outline text="最高点液面距" />
             <outline text="瓦锡兰探底间隔" />
             <outline text="探底修正罐高" />
+            <outline text="罐底后编码器修正" />
           </outline>
           <outline text="SI参数">
             <outline text="Profile参数">
@@ -126,6 +128,7 @@
               <outline text="SI停留" />
               <outline text="SI探底" />
               <outline text="探底修正罐高" />
+              <outline text="罐底后编码器修正" />
             </outline>
             <outline text="自动Profile">
               <outline text="SI周期" />

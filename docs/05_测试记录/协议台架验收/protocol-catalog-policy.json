@@ -8,7 +8,7 @@
     "toolCatalog": {
       "schema": "cube.ltd-device-debug-tool.protocol-catalog",
       "schemaVersion": 2,
-      "sha256": "5cd177bea6cad87c0678bd173f77b91b78412b508e32c1a9a10b48bd8fe4ffbe"
+      "sha256": "757f47db2a732816456494d0692fbaf0f31ac323f7b9e6de40372da448d90137"
     }
   },
   "closures": [

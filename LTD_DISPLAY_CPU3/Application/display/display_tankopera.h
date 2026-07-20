@@ -157,12 +157,12 @@ typedef enum {
 
 typedef enum {
     MENU_GRP_DEV_INFO = 0,      /* 传感器类型/编号/版本/软件版本/协议版本 */
-    MENU_GRP_RUN_POLICY,        /* 上电默认/故障策略/自动恢复/位置源切换 */
+    MENU_GRP_RUN_POLICY,        /* 上电默认/故障策略/自动恢复 */
     MENU_GRP_MECH,              /* 编码轮周长/首圈周长/尺带厚度/电机速度等 */
     MENU_GRP_WEIGHT,            /* 空载/满载/上下限/比例 */
     MENU_GRP_ZERO,              /* 零点阈值/忽略区/最大偏差/找零下行距离 */
     MENU_GRP_LIQUID,            /* 罐高/液位距差/盲区/阈值/滞后/测量方式 */
-    MENU_GRP_WATER,             /* 水罐高/水位距差/盲区/电容阈值/滞回/水位最大下行距离 */
+    MENU_GRP_WATER,             /* 水罐高/盲区/电容阈值/滞回/滞后时间/水位最大下行距离 */
     MENU_GRP_BOTTOM_TANKH,      /* 罐底模式/角度阈值/扭力阈值/更新罐高标志/实高偏差/初始/当前 */
     MENU_GRP_CORR,              /* 密度修正/温度修正 */
     MENU_GRP_POLICY,            /* 是否测罐底/是否测水/是否测单点/顺序/模式/点数/间距/悬停/上下限 */
@@ -300,7 +300,7 @@ typedef enum
 
     COM_NUM_DEVICEPARAM_PROTOCOL_VERSION,               /* CPU2/CPU3协议版本，旧程序该位置默认为0 */
     COM_NUM_DEVICEPARAM_RESERVED2,                      /* 故障自动恢复重跑上限 */
-    COM_NUM_DEVICEPARAM_RESERVED3,                      /* 保留 3 */
+    COM_NUM_DEVICEPARAM_WATER_LEVEL_HYSTERESIS_TIME,    /* 水位滞后时间预留参数 */
     COM_NUM_DEVICEPARAM_POSITION_SOURCE_AUTO_SWITCH,    /* 位置源自动切换 */
 
     /* ---------------- 电机与编码器参数 ---------------- */
@@ -587,6 +587,8 @@ typedef enum
      * ======================================================================= */
     COM_NUM_END                        /* 操作码结束标志 */
 } OperatingNumber;
+
+#define COM_NUM_DEVICEPARAM_RESERVED3 COM_NUM_DEVICEPARAM_WATER_LEVEL_HYSTERESIS_TIME
 
 struct ParaContent {
 	int val;

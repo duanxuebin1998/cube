@@ -3504,6 +3504,26 @@
         "reason": ""
       },
       "dimension": "ParameterSemanticClassification",
+      "identity": "dsm:dsm.holding.calibrationtankhigh",
+      "message": "semanticClassification 及 reason 一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "classification": "Closed",
+        "reason": ""
+      },
+      "dimension": "ParameterSemanticClassification",
+      "identity": "dsm:dsm.holding.calibrationwaterlevel",
+      "message": "semanticClassification 及 reason 一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "classification": "Closed",
+        "reason": ""
+      },
+      "dimension": "ParameterSemanticClassification",
       "identity": "dsm:dsm.holding.correctionOil",
       "message": "semanticClassification 及 reason 一致"
     },
@@ -3514,7 +3534,367 @@
         "reason": ""
       },
       "dimension": "ParameterSemanticClassification",
+      "identity": "dsm:dsm.holding.densityCorrectionValue",
+      "message": "semanticClassification 及 reason 一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "classification": "Closed",
+        "reason": ""
+      },
+      "dimension": "ParameterSemanticClassification",
+      "identity": "dsm:dsm.holding.fadezero",
+      "message": "semanticClassification 及 reason 一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "classification": "Closed",
+        "reason": ""
+      },
+      "dimension": "ParameterSemanticClassification",
+      "identity": "dsm:dsm.holding.girthYiti",
+      "message": "semanticClassification 及 reason 一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "classification": "Closed",
+        "reason": ""
+      },
+      "dimension": "ParameterSemanticClassification",
+      "identity": "dsm:dsm.holding.intervalDirection",
+      "message": "semanticClassification 及 reason 一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "classification": "Closed",
+        "reason": ""
+      },
+      "dimension": "ParameterSemanticClassification",
+      "identity": "dsm:dsm.holding.intervalOilA",
+      "message": "semanticClassification 及 reason 一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "classification": "Closed",
+        "reason": ""
+      },
+      "dimension": "ParameterSemanticClassification",
+      "identity": "dsm:dsm.holding.intervalOilB",
+      "message": "semanticClassification 及 reason 一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "classification": "Closed",
+        "reason": ""
+      },
+      "dimension": "ParameterSemanticClassification",
+      "identity": "dsm:dsm.holding.intervalPoint",
+      "message": "semanticClassification 及 reason 一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "classification": "Closed",
+        "reason": ""
+      },
+      "dimension": "ParameterSemanticClassification",
+      "identity": "dsm:dsm.holding.maxdownDis",
+      "message": "semanticClassification 及 reason 一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "classification": "Closed",
+        "reason": ""
+      },
+      "dimension": "ParameterSemanticClassification",
+      "identity": "dsm:dsm.holding.measurementMeter",
+      "message": "semanticClassification 及 reason 一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "classification": "Closed",
+        "reason": ""
+      },
+      "dimension": "ParameterSemanticClassification",
       "identity": "dsm:dsm.holding.realWaterLevelCorrect",
+      "message": "semanticClassification 及 reason 一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "classification": "Closed",
+        "reason": ""
+      },
+      "dimension": "ParameterSemanticClassification",
+      "identity": "dsm:dsm.holding.runtodistance",
+      "message": "semanticClassification 及 reason 一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "classification": "Closed",
+        "reason": ""
+      },
+      "dimension": "ParameterSemanticClassification",
+      "identity": "dsm:dsm.holding.spreadDistance",
+      "message": "semanticClassification 及 reason 一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "classification": "Closed",
+        "reason": ""
+      },
+      "dimension": "ParameterSemanticClassification",
+      "identity": "dsm:dsm.holding.spreadFixedbase",
+      "message": "semanticClassification 及 reason 一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "classification": "Closed",
+        "reason": ""
+      },
+      "dimension": "ParameterSemanticClassification",
+      "identity": "dsm:dsm.holding.spreadFixeddistance",
+      "message": "semanticClassification 及 reason 一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "classification": "Closed",
+        "reason": ""
+      },
+      "dimension": "ParameterSemanticClassification",
+      "identity": "dsm:dsm.holding.spreadFixedtop",
+      "message": "semanticClassification 及 reason 一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "classification": "Closed",
+        "reason": ""
+      },
+      "dimension": "ParameterSemanticClassification",
+      "identity": "dsm:dsm.holding.spreadFloorlimit",
+      "message": "semanticClassification 及 reason 一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "classification": "Closed",
+        "reason": ""
+      },
+      "dimension": "ParameterSemanticClassification",
+      "identity": "dsm:dsm.holding.spreadMeasureTurn",
+      "message": "semanticClassification 及 reason 一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "classification": "Closed",
+        "reason": ""
+      },
+      "dimension": "ParameterSemanticClassification",
+      "identity": "dsm:dsm.holding.spreadNum",
+      "message": "semanticClassification 及 reason 一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "classification": "Closed",
+        "reason": ""
+      },
+      "dimension": "ParameterSemanticClassification",
+      "identity": "dsm:dsm.holding.spreadState",
+      "message": "semanticClassification 及 reason 一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "classification": "Closed",
+        "reason": ""
+      },
+      "dimension": "ParameterSemanticClassification",
+      "identity": "dsm:dsm.holding.spreadToplimit",
+      "message": "semanticClassification 及 reason 一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "classification": "Closed",
+        "reason": ""
+      },
+      "dimension": "ParameterSemanticClassification",
+      "identity": "dsm:dsm.holding.syntheticBottom",
+      "message": "semanticClassification 及 reason 一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "classification": "Closed",
+        "reason": ""
+      },
+      "dimension": "ParameterSemanticClassification",
+      "identity": "dsm:dsm.holding.syntheticBottomFree",
+      "message": "semanticClassification 及 reason 一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "classification": "Closed",
+        "reason": ""
+      },
+      "dimension": "ParameterSemanticClassification",
+      "identity": "dsm:dsm.holding.syntheticSinglepoint",
+      "message": "semanticClassification 及 reason 一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "classification": "Closed",
+        "reason": ""
+      },
+      "dimension": "ParameterSemanticClassification",
+      "identity": "dsm:dsm.holding.syntheticSinglepointFree",
+      "message": "semanticClassification 及 reason 一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "classification": "Closed",
+        "reason": ""
+      },
+      "dimension": "ParameterSemanticClassification",
+      "identity": "dsm:dsm.holding.syntheticWater",
+      "message": "semanticClassification 及 reason 一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "classification": "Closed",
+        "reason": ""
+      },
+      "dimension": "ParameterSemanticClassification",
+      "identity": "dsm:dsm.holding.syntheticWaterFree",
+      "message": "semanticClassification 及 reason 一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "classification": "Closed",
+        "reason": ""
+      },
+      "dimension": "ParameterSemanticClassification",
+      "identity": "dsm:dsm.holding.temperatureCorrectionValue",
+      "message": "semanticClassification 及 reason 一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "classification": "Closed",
+        "reason": ""
+      },
+      "dimension": "ParameterSemanticClassification",
+      "identity": "dsm:dsm.levelMeasureMethod",
+      "message": "semanticClassification 及 reason 一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "classification": "Closed",
+        "reason": ""
+      },
+      "dimension": "ParameterSemanticClassification",
+      "identity": "dsm:dsm.singlePointMonitorPosition",
+      "message": "semanticClassification 及 reason 一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "classification": "Closed",
+        "reason": ""
+      },
+      "dimension": "ParameterSemanticClassification",
+      "identity": "dsm:dsm.singlePointPosition",
+      "message": "semanticClassification 及 reason 一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "classification": "Closed",
+        "reason": ""
+      },
+      "dimension": "ParameterSemanticClassification",
+      "identity": "dsm:dsm.spreadDistance",
+      "message": "semanticClassification 及 reason 一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "classification": "Closed",
+        "reason": ""
+      },
+      "dimension": "ParameterSemanticClassification",
+      "identity": "dsm:dsm.spreadFloorLimit",
+      "message": "semanticClassification 及 reason 一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "classification": "Closed",
+        "reason": ""
+      },
+      "dimension": "ParameterSemanticClassification",
+      "identity": "dsm:dsm.spreadModeFree",
+      "message": "semanticClassification 及 reason 一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "classification": "Closed",
+        "reason": ""
+      },
+      "dimension": "ParameterSemanticClassification",
+      "identity": "dsm:dsm.spreadOilLevel",
+      "message": "semanticClassification 及 reason 一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "classification": "Closed",
+        "reason": ""
+      },
+      "dimension": "ParameterSemanticClassification",
+      "identity": "dsm:dsm.spreadPointCount",
+      "message": "semanticClassification 及 reason 一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "classification": "Closed",
+        "reason": ""
+      },
+      "dimension": "ParameterSemanticClassification",
+      "identity": "dsm:dsm.spreadTopLimit",
+      "message": "semanticClassification 及 reason 一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "classification": "Closed",
+        "reason": ""
+      },
+      "dimension": "ParameterSemanticClassification",
+      "identity": "dsm:dsm.tankHeight",
       "message": "semanticClassification 及 reason 一致"
     },
     {
@@ -7883,6 +8263,23 @@
       "details": {
         "evidence": [
           {
+            "line": 228,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_DataAnalysis_modbus2.c"
+          }
+        ],
+        "reason": "UpdateDeviceParamsFromLegacyRegs 将该寄存器映射到 DeviceParameters 并同步 CPU2",
+        "status": "Resolved",
+        "value": true
+      },
+      "dimension": "ParameterStructuredWritePermission",
+      "identity": "dsm:dsm.singlePointPosition",
+      "message": "工具 IsWritable 与固件结构化业务写权限一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "evidence": [
+          {
             "line": 232,
             "path": "LTD_DISPLAY_CPU3/Application/system_param/system_parameter.c"
           }
@@ -7927,6 +8324,23 @@
       },
       "dimension": "ParameterStructuredWritePermission",
       "identity": "ltd-modbus:density.requireSinglePoint",
+      "message": "工具 IsWritable 与固件结构化业务写权限一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "evidence": [
+          {
+            "line": 234,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_DataAnalysis_modbus2.c"
+          }
+        ],
+        "reason": "UpdateDeviceParamsFromLegacyRegs 将该寄存器映射到 DeviceParameters 并同步 CPU2",
+        "status": "Resolved",
+        "value": true
+      },
+      "dimension": "ParameterStructuredWritePermission",
+      "identity": "dsm:dsm.singlePointMonitorPosition",
       "message": "工具 IsWritable 与固件结构化业务写权限一致"
     },
     {
@@ -8053,6 +8467,23 @@
       "details": {
         "evidence": [
           {
+            "line": 241,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_DataAnalysis_modbus2.c"
+          }
+        ],
+        "reason": "UpdateDeviceParamsFromLegacyRegs 将该寄存器映射到 DeviceParameters 并同步 CPU2",
+        "status": "Resolved",
+        "value": true
+      },
+      "dimension": "ParameterStructuredWritePermission",
+      "identity": "dsm:dsm.spreadOilLevel",
+      "message": "工具 IsWritable 与固件结构化业务写权限一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "evidence": [
+          {
             "line": 242,
             "path": "LTD_DISPLAY_CPU3/Application/system_param/system_parameter.c"
           }
@@ -8122,6 +8553,238 @@
         "evidence": [
           {
             "line": 248,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_DataAnalysis_modbus2.c"
+          }
+        ],
+        "reason": "UpdateDeviceParamsFromLegacyRegs 将该寄存器映射到 DeviceParameters 并同步 CPU2",
+        "status": "Resolved",
+        "value": true
+      },
+      "dimension": "ParameterStructuredWritePermission",
+      "identity": "dsm:dsm.tankHeight",
+      "message": "工具 IsWritable 与固件结构化业务写权限一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "evidence": [
+          {
+            "line": 248,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 999,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1002,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1011,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1094,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1101,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1641,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_stateformodbus2.h"
+          },
+          {
+            "line": 1684,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_stateformodbus2.h"
+          }
+        ],
+        "value": "Writable"
+      },
+      "dimension": "ParameterWireAccess",
+      "identity": "dsm:dsm.holding.intervalDirection",
+      "message": "工具 Access 与固件 wireAccess 一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "evidence": [
+          {
+            "line": 248,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 999,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1002,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1011,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1094,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1101,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1641,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_stateformodbus2.h"
+          },
+          {
+            "line": 1684,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_stateformodbus2.h"
+          }
+        ],
+        "value": "Writable"
+      },
+      "dimension": "ParameterWireAccess",
+      "identity": "dsm:dsm.holding.intervalOilA",
+      "message": "工具 Access 与固件 wireAccess 一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "evidence": [
+          {
+            "line": 248,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 999,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1002,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1011,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1094,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1101,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1641,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_stateformodbus2.h"
+          },
+          {
+            "line": 1684,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_stateformodbus2.h"
+          }
+        ],
+        "value": "Writable"
+      },
+      "dimension": "ParameterWireAccess",
+      "identity": "dsm:dsm.holding.intervalOilB",
+      "message": "工具 Access 与固件 wireAccess 一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "evidence": [
+          {
+            "line": 248,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 999,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1002,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1011,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1094,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1101,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1641,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_stateformodbus2.h"
+          },
+          {
+            "line": 1684,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_stateformodbus2.h"
+          }
+        ],
+        "value": "Writable"
+      },
+      "dimension": "ParameterWireAccess",
+      "identity": "dsm:dsm.holding.intervalPoint",
+      "message": "工具 Access 与固件 wireAccess 一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "evidence": [
+          {
+            "line": 248,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 999,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1002,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1011,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1094,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1101,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1641,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_stateformodbus2.h"
+          },
+          {
+            "line": 1684,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_stateformodbus2.h"
+          }
+        ],
+        "value": "Writable"
+      },
+      "dimension": "ParameterWireAccess",
+      "identity": "dsm:dsm.holding.measurementMeter",
+      "message": "工具 Access 与固件 wireAccess 一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "evidence": [
+          {
+            "line": 248,
             "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
           },
           {
@@ -8176,6 +8839,479 @@
             "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
           },
           {
+            "line": 1011,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1094,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1101,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1641,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_stateformodbus2.h"
+          },
+          {
+            "line": 1684,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_stateformodbus2.h"
+          }
+        ],
+        "value": "Writable"
+      },
+      "dimension": "ParameterWireAccess",
+      "identity": "dsm:dsm.holding.syntheticBottomFree",
+      "message": "工具 Access 与固件 wireAccess 一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "evidence": [
+          {
+            "line": 248,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 999,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1002,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1011,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1094,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1101,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1641,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_stateformodbus2.h"
+          },
+          {
+            "line": 1684,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_stateformodbus2.h"
+          }
+        ],
+        "value": "Writable"
+      },
+      "dimension": "ParameterWireAccess",
+      "identity": "dsm:dsm.holding.syntheticSinglepointFree",
+      "message": "工具 Access 与固件 wireAccess 一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "evidence": [
+          {
+            "line": 248,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 999,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1002,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1011,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1094,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1101,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1641,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_stateformodbus2.h"
+          },
+          {
+            "line": 1684,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_stateformodbus2.h"
+          }
+        ],
+        "value": "Writable"
+      },
+      "dimension": "ParameterWireAccess",
+      "identity": "dsm:dsm.holding.syntheticWaterFree",
+      "message": "工具 Access 与固件 wireAccess 一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "evidence": [
+          {
+            "line": 248,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 999,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1002,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1011,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1094,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1101,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1641,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_stateformodbus2.h"
+          },
+          {
+            "line": 1684,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_stateformodbus2.h"
+          }
+        ],
+        "value": "Writable"
+      },
+      "dimension": "ParameterWireAccess",
+      "identity": "dsm:dsm.singlePointMonitorPosition",
+      "message": "工具 Access 与固件 wireAccess 一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "evidence": [
+          {
+            "line": 248,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 999,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1002,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1011,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1094,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1101,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1641,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_stateformodbus2.h"
+          },
+          {
+            "line": 1684,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_stateformodbus2.h"
+          }
+        ],
+        "value": "Writable"
+      },
+      "dimension": "ParameterWireAccess",
+      "identity": "dsm:dsm.singlePointPosition",
+      "message": "工具 Access 与固件 wireAccess 一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "evidence": [
+          {
+            "line": 248,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 999,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1002,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1011,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1094,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1101,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1641,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_stateformodbus2.h"
+          },
+          {
+            "line": 1684,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_stateformodbus2.h"
+          }
+        ],
+        "value": "Writable"
+      },
+      "dimension": "ParameterWireAccess",
+      "identity": "dsm:dsm.spreadDistance",
+      "message": "工具 Access 与固件 wireAccess 一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "evidence": [
+          {
+            "line": 248,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 999,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1002,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1011,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1094,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1101,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1641,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_stateformodbus2.h"
+          },
+          {
+            "line": 1684,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_stateformodbus2.h"
+          }
+        ],
+        "value": "Writable"
+      },
+      "dimension": "ParameterWireAccess",
+      "identity": "dsm:dsm.spreadFloorLimit",
+      "message": "工具 Access 与固件 wireAccess 一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "evidence": [
+          {
+            "line": 248,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 999,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1002,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1011,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1094,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1101,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1641,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_stateformodbus2.h"
+          },
+          {
+            "line": 1684,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_stateformodbus2.h"
+          }
+        ],
+        "value": "Writable"
+      },
+      "dimension": "ParameterWireAccess",
+      "identity": "dsm:dsm.spreadModeFree",
+      "message": "工具 Access 与固件 wireAccess 一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "evidence": [
+          {
+            "line": 248,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 999,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1002,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1011,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1094,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1101,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1641,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_stateformodbus2.h"
+          },
+          {
+            "line": 1684,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_stateformodbus2.h"
+          }
+        ],
+        "value": "Writable"
+      },
+      "dimension": "ParameterWireAccess",
+      "identity": "dsm:dsm.spreadOilLevel",
+      "message": "工具 Access 与固件 wireAccess 一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "evidence": [
+          {
+            "line": 248,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 999,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1002,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1011,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1094,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1101,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1641,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_stateformodbus2.h"
+          },
+          {
+            "line": 1684,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_stateformodbus2.h"
+          }
+        ],
+        "value": "Writable"
+      },
+      "dimension": "ParameterWireAccess",
+      "identity": "dsm:dsm.spreadPointCount",
+      "message": "工具 Access 与固件 wireAccess 一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "evidence": [
+          {
+            "line": 248,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 999,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1002,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1011,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1094,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1101,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1641,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_stateformodbus2.h"
+          },
+          {
+            "line": 1684,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_stateformodbus2.h"
+          }
+        ],
+        "value": "Writable"
+      },
+      "dimension": "ParameterWireAccess",
+      "identity": "dsm:dsm.spreadTopLimit",
+      "message": "工具 Access 与固件 wireAccess 一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "evidence": [
+          {
+            "line": 248,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 999,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1002,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
             "line": 1017,
             "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
           },
@@ -8204,6 +9340,100 @@
       },
       "dimension": "ParameterWireAccess",
       "identity": "dsm:dsm.holding.calibrationliquidlevel",
+      "message": "工具 Access 与固件 wireAccess 一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "evidence": [
+          {
+            "line": 248,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 999,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1002,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1017,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1094,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1101,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 58,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_communication.c"
+          },
+          {
+            "line": 1686,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_stateformodbus2.h"
+          },
+          {
+            "line": 1819,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_stateformodbus2.h"
+          }
+        ],
+        "value": "Writable"
+      },
+      "dimension": "ParameterWireAccess",
+      "identity": "dsm:dsm.holding.calibrationtankhigh",
+      "message": "工具 Access 与固件 wireAccess 一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "evidence": [
+          {
+            "line": 248,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 999,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1002,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1017,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1094,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1101,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 58,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_communication.c"
+          },
+          {
+            "line": 1686,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_stateformodbus2.h"
+          },
+          {
+            "line": 1819,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_stateformodbus2.h"
+          }
+        ],
+        "value": "Writable"
+      },
+      "dimension": "ParameterWireAccess",
+      "identity": "dsm:dsm.holding.calibrationwaterlevel",
       "message": "工具 Access 与固件 wireAccess 一致"
     },
     {
@@ -8579,7 +9809,430 @@
         "value": "Writable"
       },
       "dimension": "ParameterWireAccess",
+      "identity": "dsm:dsm.holding.spreadDistance",
+      "message": "工具 Access 与固件 wireAccess 一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "evidence": [
+          {
+            "line": 248,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 999,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1002,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1017,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1094,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1101,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 58,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_communication.c"
+          },
+          {
+            "line": 1686,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_stateformodbus2.h"
+          },
+          {
+            "line": 1819,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_stateformodbus2.h"
+          }
+        ],
+        "value": "Writable"
+      },
+      "dimension": "ParameterWireAccess",
+      "identity": "dsm:dsm.holding.spreadFixedbase",
+      "message": "工具 Access 与固件 wireAccess 一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "evidence": [
+          {
+            "line": 248,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 999,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1002,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1017,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1094,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1101,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 58,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_communication.c"
+          },
+          {
+            "line": 1686,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_stateformodbus2.h"
+          },
+          {
+            "line": 1819,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_stateformodbus2.h"
+          }
+        ],
+        "value": "Writable"
+      },
+      "dimension": "ParameterWireAccess",
+      "identity": "dsm:dsm.holding.spreadFixeddistance",
+      "message": "工具 Access 与固件 wireAccess 一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "evidence": [
+          {
+            "line": 248,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 999,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1002,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1017,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1094,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1101,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 58,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_communication.c"
+          },
+          {
+            "line": 1686,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_stateformodbus2.h"
+          },
+          {
+            "line": 1819,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_stateformodbus2.h"
+          }
+        ],
+        "value": "Writable"
+      },
+      "dimension": "ParameterWireAccess",
+      "identity": "dsm:dsm.holding.spreadFixedtop",
+      "message": "工具 Access 与固件 wireAccess 一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "evidence": [
+          {
+            "line": 248,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 999,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1002,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1017,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1094,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1101,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 58,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_communication.c"
+          },
+          {
+            "line": 1686,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_stateformodbus2.h"
+          },
+          {
+            "line": 1819,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_stateformodbus2.h"
+          }
+        ],
+        "value": "Writable"
+      },
+      "dimension": "ParameterWireAccess",
+      "identity": "dsm:dsm.holding.spreadFloorlimit",
+      "message": "工具 Access 与固件 wireAccess 一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "evidence": [
+          {
+            "line": 248,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 999,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1002,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1017,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1094,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1101,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 58,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_communication.c"
+          },
+          {
+            "line": 1686,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_stateformodbus2.h"
+          },
+          {
+            "line": 1819,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_stateformodbus2.h"
+          }
+        ],
+        "value": "Writable"
+      },
+      "dimension": "ParameterWireAccess",
+      "identity": "dsm:dsm.holding.spreadMeasureTurn",
+      "message": "工具 Access 与固件 wireAccess 一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "evidence": [
+          {
+            "line": 248,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 999,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1002,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1017,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1094,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1101,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 58,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_communication.c"
+          },
+          {
+            "line": 1686,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_stateformodbus2.h"
+          },
+          {
+            "line": 1819,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_stateformodbus2.h"
+          }
+        ],
+        "value": "Writable"
+      },
+      "dimension": "ParameterWireAccess",
+      "identity": "dsm:dsm.holding.spreadNum",
+      "message": "工具 Access 与固件 wireAccess 一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "evidence": [
+          {
+            "line": 248,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 999,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1002,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1017,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1094,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1101,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 58,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_communication.c"
+          },
+          {
+            "line": 1686,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_stateformodbus2.h"
+          },
+          {
+            "line": 1819,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_stateformodbus2.h"
+          }
+        ],
+        "value": "Writable"
+      },
+      "dimension": "ParameterWireAccess",
       "identity": "dsm:dsm.holding.spreadOthernum",
+      "message": "工具 Access 与固件 wireAccess 一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "evidence": [
+          {
+            "line": 248,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 999,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1002,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1017,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1094,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1101,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 58,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_communication.c"
+          },
+          {
+            "line": 1686,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_stateformodbus2.h"
+          },
+          {
+            "line": 1819,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_stateformodbus2.h"
+          }
+        ],
+        "value": "Writable"
+      },
+      "dimension": "ParameterWireAccess",
+      "identity": "dsm:dsm.holding.spreadState",
+      "message": "工具 Access 与固件 wireAccess 一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "evidence": [
+          {
+            "line": 248,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 999,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1002,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1017,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1094,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1101,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 58,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_communication.c"
+          },
+          {
+            "line": 1686,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_stateformodbus2.h"
+          },
+          {
+            "line": 1819,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_stateformodbus2.h"
+          }
+        ],
+        "value": "Writable"
+      },
+      "dimension": "ParameterWireAccess",
+      "identity": "dsm:dsm.holding.spreadToplimit",
       "message": "工具 Access 与固件 wireAccess 一致"
     },
     {
@@ -8928,6 +10581,100 @@
             "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
           },
           {
+            "line": 1017,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1094,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1101,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 58,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_communication.c"
+          },
+          {
+            "line": 1686,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_stateformodbus2.h"
+          },
+          {
+            "line": 1819,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_stateformodbus2.h"
+          }
+        ],
+        "value": "Writable"
+      },
+      "dimension": "ParameterWireAccess",
+      "identity": "dsm:dsm.levelMeasureMethod",
+      "message": "工具 Access 与固件 wireAccess 一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "evidence": [
+          {
+            "line": 248,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 999,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1002,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1017,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1094,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1101,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 58,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_communication.c"
+          },
+          {
+            "line": 1686,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_stateformodbus2.h"
+          },
+          {
+            "line": 1819,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_stateformodbus2.h"
+          }
+        ],
+        "value": "Writable"
+      },
+      "dimension": "ParameterWireAccess",
+      "identity": "dsm:dsm.tankHeight",
+      "message": "工具 Access 与固件 wireAccess 一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "evidence": [
+          {
+            "line": 248,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 999,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1002,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
             "line": 1023,
             "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
           },
@@ -9002,7 +10749,148 @@
         "value": "Writable"
       },
       "dimension": "ParameterWireAccess",
+      "identity": "dsm:dsm.holding.densityCorrectionValue",
+      "message": "工具 Access 与固件 wireAccess 一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "evidence": [
+          {
+            "line": 248,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 999,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1002,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1023,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1094,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1101,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 58,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_communication.c"
+          },
+          {
+            "line": 1718,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_stateformodbus2.h"
+          },
+          {
+            "line": 1743,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_stateformodbus2.h"
+          }
+        ],
+        "value": "Writable"
+      },
+      "dimension": "ParameterWireAccess",
       "identity": "dsm:dsm.holding.devicenum",
+      "message": "工具 Access 与固件 wireAccess 一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "evidence": [
+          {
+            "line": 248,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 999,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1002,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1023,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1094,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1101,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 58,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_communication.c"
+          },
+          {
+            "line": 1718,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_stateformodbus2.h"
+          },
+          {
+            "line": 1743,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_stateformodbus2.h"
+          }
+        ],
+        "value": "Writable"
+      },
+      "dimension": "ParameterWireAccess",
+      "identity": "dsm:dsm.holding.fadezero",
+      "message": "工具 Access 与固件 wireAccess 一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "evidence": [
+          {
+            "line": 248,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 999,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1002,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1023,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1094,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1101,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 58,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_communication.c"
+          },
+          {
+            "line": 1718,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_stateformodbus2.h"
+          },
+          {
+            "line": 1743,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_stateformodbus2.h"
+          }
+        ],
+        "value": "Writable"
+      },
+      "dimension": "ParameterWireAccess",
+      "identity": "dsm:dsm.holding.girthYiti",
       "message": "工具 Access 与固件 wireAccess 一致"
     },
     {
@@ -9097,6 +10985,53 @@
       },
       "dimension": "ParameterWireAccess",
       "identity": "dsm:dsm.holding.leveltowaterHigh",
+      "message": "工具 Access 与固件 wireAccess 一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "evidence": [
+          {
+            "line": 248,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 999,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1002,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1023,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1094,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1101,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 58,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_communication.c"
+          },
+          {
+            "line": 1718,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_stateformodbus2.h"
+          },
+          {
+            "line": 1743,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_stateformodbus2.h"
+          }
+        ],
+        "value": "Writable"
+      },
+      "dimension": "ParameterWireAccess",
+      "identity": "dsm:dsm.holding.maxdownDis",
       "message": "工具 Access 与固件 wireAccess 一致"
     },
     {
@@ -9284,7 +11219,242 @@
         "value": "Writable"
       },
       "dimension": "ParameterWireAccess",
+      "identity": "dsm:dsm.holding.runtodistance",
+      "message": "工具 Access 与固件 wireAccess 一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "evidence": [
+          {
+            "line": 248,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 999,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1002,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1023,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1094,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1101,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 58,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_communication.c"
+          },
+          {
+            "line": 1718,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_stateformodbus2.h"
+          },
+          {
+            "line": 1743,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_stateformodbus2.h"
+          }
+        ],
+        "value": "Writable"
+      },
+      "dimension": "ParameterWireAccess",
       "identity": "dsm:dsm.holding.softofversion",
+      "message": "工具 Access 与固件 wireAccess 一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "evidence": [
+          {
+            "line": 248,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 999,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1002,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1023,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1094,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1101,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 58,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_communication.c"
+          },
+          {
+            "line": 1718,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_stateformodbus2.h"
+          },
+          {
+            "line": 1743,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_stateformodbus2.h"
+          }
+        ],
+        "value": "Writable"
+      },
+      "dimension": "ParameterWireAccess",
+      "identity": "dsm:dsm.holding.syntheticBottom",
+      "message": "工具 Access 与固件 wireAccess 一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "evidence": [
+          {
+            "line": 248,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 999,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1002,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1023,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1094,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1101,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 58,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_communication.c"
+          },
+          {
+            "line": 1718,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_stateformodbus2.h"
+          },
+          {
+            "line": 1743,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_stateformodbus2.h"
+          }
+        ],
+        "value": "Writable"
+      },
+      "dimension": "ParameterWireAccess",
+      "identity": "dsm:dsm.holding.syntheticSinglepoint",
+      "message": "工具 Access 与固件 wireAccess 一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "evidence": [
+          {
+            "line": 248,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 999,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1002,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1023,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1094,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1101,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 58,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_communication.c"
+          },
+          {
+            "line": 1718,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_stateformodbus2.h"
+          },
+          {
+            "line": 1743,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_stateformodbus2.h"
+          }
+        ],
+        "value": "Writable"
+      },
+      "dimension": "ParameterWireAccess",
+      "identity": "dsm:dsm.holding.syntheticWater",
+      "message": "工具 Access 与固件 wireAccess 一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "evidence": [
+          {
+            "line": 248,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 999,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1002,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1023,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1094,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 1101,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_SlaveModbus_modbus2.c"
+          },
+          {
+            "line": 58,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_communication.c"
+          },
+          {
+            "line": 1718,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_stateformodbus2.h"
+          },
+          {
+            "line": 1743,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_stateformodbus2.h"
+          }
+        ],
+        "value": "Writable"
+      },
+      "dimension": "ParameterWireAccess",
+      "identity": "dsm:dsm.holding.temperatureCorrectionValue",
       "message": "工具 Access 与固件 wireAccess 一致"
     },
     {
@@ -10602,6 +12772,23 @@
       "details": {
         "evidence": [
           {
+            "line": 267,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_DataAnalysis_modbus2.c"
+          }
+        ],
+        "reason": "UpdateDeviceParamsFromLegacyRegs 将该寄存器映射到 DeviceParameters 并同步 CPU2",
+        "status": "Resolved",
+        "value": true
+      },
+      "dimension": "ParameterStructuredWritePermission",
+      "identity": "dsm:dsm.holding.calibrationwaterlevel",
+      "message": "工具 IsWritable 与固件结构化业务写权限一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "evidence": [
+          {
             "line": 268,
             "path": "LTD_DISPLAY_CPU3/Application/system_param/system_parameter.c"
           },
@@ -10732,6 +12919,23 @@
       "details": {
         "evidence": [
           {
+            "line": 273,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_DataAnalysis_modbus2.c"
+          }
+        ],
+        "reason": "UpdateDeviceParamsFromLegacyRegs 将该寄存器映射到 DeviceParameters 并同步 CPU2",
+        "status": "Resolved",
+        "value": true
+      },
+      "dimension": "ParameterStructuredWritePermission",
+      "identity": "dsm:dsm.holding.calibrationtankhigh",
+      "message": "工具 IsWritable 与固件结构化业务写权限一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "evidence": [
+          {
             "line": 274,
             "path": "LTD_DISPLAY_CPU3/Application/system_param/system_parameter.c"
           },
@@ -10809,6 +13013,23 @@
       },
       "dimension": "ParameterStructuredWritePermission",
       "identity": "ltd-modbus:tape.expansionCoefficient",
+      "message": "工具 IsWritable 与固件结构化业务写权限一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "evidence": [
+          {
+            "line": 280,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_DataAnalysis_modbus2.c"
+          }
+        ],
+        "reason": "UpdateDeviceParamsFromLegacyRegs 将该寄存器映射到 DeviceParameters 并同步 CPU2",
+        "status": "Resolved",
+        "value": true
+      },
+      "dimension": "ParameterStructuredWritePermission",
+      "identity": "dsm:dsm.holding.spreadMeasureTurn",
       "message": "工具 IsWritable 与固件结构化业务写权限一致"
     },
     {
@@ -10911,6 +13132,23 @@
       },
       "dimension": "ParameterStructuredWritePermission",
       "identity": "ltd-modbus:relay.config.channel1.operatingMode",
+      "message": "工具 IsWritable 与固件结构化业务写权限一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "evidence": [
+          {
+            "line": 288,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_DataAnalysis_modbus2.c"
+          }
+        ],
+        "reason": "UpdateDeviceParamsFromLegacyRegs 将该寄存器映射到 DeviceParameters 并同步 CPU2",
+        "status": "Resolved",
+        "value": true
+      },
+      "dimension": "ParameterStructuredWritePermission",
+      "identity": "dsm:dsm.holding.measurementMeter",
       "message": "工具 IsWritable 与固件结构化业务写权限一致"
     },
     {
@@ -11047,6 +13285,23 @@
       },
       "dimension": "ParameterStructuredWritePermission",
       "identity": "ltd-modbus:relay.config.channel1.lowValue",
+      "message": "工具 IsWritable 与固件结构化业务写权限一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "evidence": [
+          {
+            "line": 296,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_DataAnalysis_modbus2.c"
+          }
+        ],
+        "reason": "UpdateDeviceParamsFromLegacyRegs 将该寄存器映射到 DeviceParameters 并同步 CPU2",
+        "status": "Resolved",
+        "value": true
+      },
+      "dimension": "ParameterStructuredWritePermission",
+      "identity": "dsm:dsm.holding.intervalDirection",
       "message": "工具 IsWritable 与固件结构化业务写权限一致"
     },
     {
@@ -13571,6 +15826,23 @@
       "details": {
         "evidence": [
           {
+            "line": 303,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_DataAnalysis_modbus2.c"
+          }
+        ],
+        "reason": "UpdateDeviceParamsFromLegacyRegs 将该寄存器映射到 DeviceParameters 并同步 CPU2",
+        "status": "Resolved",
+        "value": true
+      },
+      "dimension": "ParameterStructuredWritePermission",
+      "identity": "dsm:dsm.holding.intervalOilA",
+      "message": "工具 IsWritable 与固件结构化业务写权限一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "evidence": [
+          {
             "line": 304,
             "path": "LTD_DISPLAY_CPU3/Application/system_param/system_parameter.c"
           }
@@ -13690,6 +15962,23 @@
       "details": {
         "evidence": [
           {
+            "line": 310,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_DataAnalysis_modbus2.c"
+          }
+        ],
+        "reason": "UpdateDeviceParamsFromLegacyRegs 将该寄存器映射到 DeviceParameters 并同步 CPU2",
+        "status": "Resolved",
+        "value": true
+      },
+      "dimension": "ParameterStructuredWritePermission",
+      "identity": "dsm:dsm.holding.intervalOilB",
+      "message": "工具 IsWritable 与固件结构化业务写权限一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "evidence": [
+          {
             "line": 311,
             "path": "LTD_DISPLAY_CPU3/Application/system_param/system_parameter.c"
           }
@@ -13802,6 +16091,23 @@
       },
       "dimension": "ParameterStructuredWritePermission",
       "identity": "ltd-modbus:relay.config.channel3.contactType",
+      "message": "工具 IsWritable 与固件结构化业务写权限一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "evidence": [
+          {
+            "line": 318,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_DataAnalysis_modbus2.c"
+          }
+        ],
+        "reason": "UpdateDeviceParamsFromLegacyRegs 将该寄存器映射到 DeviceParameters 并同步 CPU2",
+        "status": "Resolved",
+        "value": true
+      },
+      "dimension": "ParameterStructuredWritePermission",
+      "identity": "dsm:dsm.holding.spreadState",
       "message": "工具 IsWritable 与固件结构化业务写权限一致"
     },
     {
@@ -13970,6 +16276,23 @@
       },
       "dimension": "ParameterStructuredWritePermission",
       "identity": "ltd-modbus:relay.config.channel3.hysteresis",
+      "message": "工具 IsWritable 与固件结构化业务写权限一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "evidence": [
+          {
+            "line": 326,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_DataAnalysis_modbus2.c"
+          }
+        ],
+        "reason": "UpdateDeviceParamsFromLegacyRegs 将该寄存器映射到 DeviceParameters 并同步 CPU2",
+        "status": "Resolved",
+        "value": true
+      },
+      "dimension": "ParameterStructuredWritePermission",
+      "identity": "dsm:dsm.spreadModeFree",
       "message": "工具 IsWritable 与固件结构化业务写权限一致"
     },
     {
@@ -14160,6 +16483,23 @@
       "details": {
         "evidence": [
           {
+            "line": 334,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_DataAnalysis_modbus2.c"
+          }
+        ],
+        "reason": "UpdateDeviceParamsFromLegacyRegs 将该寄存器映射到 DeviceParameters 并同步 CPU2",
+        "status": "Resolved",
+        "value": true
+      },
+      "dimension": "ParameterStructuredWritePermission",
+      "identity": "dsm:dsm.holding.spreadNum",
+      "message": "工具 IsWritable 与固件结构化业务写权限一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "evidence": [
+          {
             "line": 335,
             "path": "LTD_DISPLAY_CPU3/Application/system_param/system_parameter.c"
           }
@@ -14328,6 +16668,23 @@
       "details": {
         "evidence": [
           {
+            "line": 342,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_DataAnalysis_modbus2.c"
+          }
+        ],
+        "reason": "UpdateDeviceParamsFromLegacyRegs 将该寄存器映射到 DeviceParameters 并同步 CPU2",
+        "status": "Resolved",
+        "value": true
+      },
+      "dimension": "ParameterStructuredWritePermission",
+      "identity": "dsm:dsm.spreadPointCount",
+      "message": "工具 IsWritable 与固件结构化业务写权限一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "evidence": [
+          {
             "line": 345,
             "path": "LTD_DISPLAY_CPU3/Application/system_param/system_parameter.c"
           }
@@ -14396,6 +16753,176 @@
       "details": {
         "evidence": [
           {
+            "line": 350,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_DataAnalysis_modbus2.c"
+          }
+        ],
+        "reason": "UpdateDeviceParamsFromLegacyRegs 将该寄存器映射到 DeviceParameters 并同步 CPU2",
+        "status": "Resolved",
+        "value": true
+      },
+      "dimension": "ParameterStructuredWritePermission",
+      "identity": "dsm:dsm.holding.intervalPoint",
+      "message": "工具 IsWritable 与固件结构化业务写权限一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "evidence": [
+          {
+            "line": 358,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_DataAnalysis_modbus2.c"
+          }
+        ],
+        "reason": "UpdateDeviceParamsFromLegacyRegs 将该寄存器映射到 DeviceParameters 并同步 CPU2",
+        "status": "Resolved",
+        "value": true
+      },
+      "dimension": "ParameterStructuredWritePermission",
+      "identity": "dsm:dsm.holding.spreadDistance",
+      "message": "工具 IsWritable 与固件结构化业务写权限一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "evidence": [
+          {
+            "line": 366,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_DataAnalysis_modbus2.c"
+          }
+        ],
+        "reason": "UpdateDeviceParamsFromLegacyRegs 将该寄存器映射到 DeviceParameters 并同步 CPU2",
+        "status": "Resolved",
+        "value": true
+      },
+      "dimension": "ParameterStructuredWritePermission",
+      "identity": "dsm:dsm.spreadDistance",
+      "message": "工具 IsWritable 与固件结构化业务写权限一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "evidence": [
+          {
+            "line": 374,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_DataAnalysis_modbus2.c"
+          }
+        ],
+        "reason": "UpdateDeviceParamsFromLegacyRegs 将该寄存器映射到 DeviceParameters 并同步 CPU2",
+        "status": "Resolved",
+        "value": true
+      },
+      "dimension": "ParameterStructuredWritePermission",
+      "identity": "dsm:dsm.holding.spreadFixeddistance",
+      "message": "工具 IsWritable 与固件结构化业务写权限一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "evidence": [
+          {
+            "line": 382,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_DataAnalysis_modbus2.c"
+          }
+        ],
+        "reason": "UpdateDeviceParamsFromLegacyRegs 将该寄存器映射到 DeviceParameters 并同步 CPU2",
+        "status": "Resolved",
+        "value": true
+      },
+      "dimension": "ParameterStructuredWritePermission",
+      "identity": "dsm:dsm.holding.spreadToplimit",
+      "message": "工具 IsWritable 与固件结构化业务写权限一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "evidence": [
+          {
+            "line": 389,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_DataAnalysis_modbus2.c"
+          }
+        ],
+        "reason": "UpdateDeviceParamsFromLegacyRegs 将该寄存器映射到 DeviceParameters 并同步 CPU2",
+        "status": "Resolved",
+        "value": true
+      },
+      "dimension": "ParameterStructuredWritePermission",
+      "identity": "dsm:dsm.spreadTopLimit",
+      "message": "工具 IsWritable 与固件结构化业务写权限一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "evidence": [
+          {
+            "line": 396,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_DataAnalysis_modbus2.c"
+          }
+        ],
+        "reason": "UpdateDeviceParamsFromLegacyRegs 将该寄存器映射到 DeviceParameters 并同步 CPU2",
+        "status": "Resolved",
+        "value": true
+      },
+      "dimension": "ParameterStructuredWritePermission",
+      "identity": "dsm:dsm.holding.spreadFixedtop",
+      "message": "工具 IsWritable 与固件结构化业务写权限一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "evidence": [
+          {
+            "line": 404,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_DataAnalysis_modbus2.c"
+          }
+        ],
+        "reason": "UpdateDeviceParamsFromLegacyRegs 将该寄存器映射到 DeviceParameters 并同步 CPU2",
+        "status": "Resolved",
+        "value": true
+      },
+      "dimension": "ParameterStructuredWritePermission",
+      "identity": "dsm:dsm.holding.spreadFloorlimit",
+      "message": "工具 IsWritable 与固件结构化业务写权限一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "evidence": [
+          {
+            "line": 411,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_DataAnalysis_modbus2.c"
+          }
+        ],
+        "reason": "UpdateDeviceParamsFromLegacyRegs 将该寄存器映射到 DeviceParameters 并同步 CPU2",
+        "status": "Resolved",
+        "value": true
+      },
+      "dimension": "ParameterStructuredWritePermission",
+      "identity": "dsm:dsm.spreadFloorLimit",
+      "message": "工具 IsWritable 与固件结构化业务写权限一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "evidence": [
+          {
+            "line": 418,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_DataAnalysis_modbus2.c"
+          }
+        ],
+        "reason": "UpdateDeviceParamsFromLegacyRegs 将该寄存器映射到 DeviceParameters 并同步 CPU2",
+        "status": "Resolved",
+        "value": true
+      },
+      "dimension": "ParameterStructuredWritePermission",
+      "identity": "dsm:dsm.holding.spreadFixedbase",
+      "message": "工具 IsWritable 与固件结构化业务写权限一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "evidence": [
+          {
             "line": 426,
             "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_DataAnalysis_modbus2.c"
           }
@@ -14406,6 +16933,227 @@
       },
       "dimension": "ParameterStructuredWritePermission",
       "identity": "dsm:dsm.holding.realWaterLevelCorrect",
+      "message": "工具 IsWritable 与固件结构化业务写权限一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "evidence": [
+          {
+            "line": 434,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_DataAnalysis_modbus2.c"
+          }
+        ],
+        "reason": "UpdateDeviceParamsFromLegacyRegs 将该寄存器映射到 DeviceParameters 并同步 CPU2",
+        "status": "Resolved",
+        "value": true
+      },
+      "dimension": "ParameterStructuredWritePermission",
+      "identity": "dsm:dsm.levelMeasureMethod",
+      "message": "工具 IsWritable 与固件结构化业务写权限一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "evidence": [
+          {
+            "line": 442,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_DataAnalysis_modbus2.c"
+          }
+        ],
+        "reason": "UpdateDeviceParamsFromLegacyRegs 将该寄存器映射到 DeviceParameters 并同步 CPU2",
+        "status": "Resolved",
+        "value": true
+      },
+      "dimension": "ParameterStructuredWritePermission",
+      "identity": "dsm:dsm.holding.fadezero",
+      "message": "工具 IsWritable 与固件结构化业务写权限一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "evidence": [
+          {
+            "line": 450,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_DataAnalysis_modbus2.c"
+          }
+        ],
+        "reason": "UpdateDeviceParamsFromLegacyRegs 将该寄存器映射到 DeviceParameters 并同步 CPU2",
+        "status": "Resolved",
+        "value": true
+      },
+      "dimension": "ParameterStructuredWritePermission",
+      "identity": "dsm:dsm.holding.girthYiti",
+      "message": "工具 IsWritable 与固件结构化业务写权限一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "evidence": [
+          {
+            "line": 458,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_DataAnalysis_modbus2.c"
+          }
+        ],
+        "reason": "UpdateDeviceParamsFromLegacyRegs 将该寄存器映射到 DeviceParameters 并同步 CPU2",
+        "status": "Resolved",
+        "value": true
+      },
+      "dimension": "ParameterStructuredWritePermission",
+      "identity": "dsm:dsm.holding.runtodistance",
+      "message": "工具 IsWritable 与固件结构化业务写权限一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "evidence": [
+          {
+            "line": 466,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_DataAnalysis_modbus2.c"
+          }
+        ],
+        "reason": "UpdateDeviceParamsFromLegacyRegs 将该寄存器映射到 DeviceParameters 并同步 CPU2",
+        "status": "Resolved",
+        "value": true
+      },
+      "dimension": "ParameterStructuredWritePermission",
+      "identity": "dsm:dsm.holding.maxdownDis",
+      "message": "工具 IsWritable 与固件结构化业务写权限一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "evidence": [
+          {
+            "line": 474,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_DataAnalysis_modbus2.c"
+          }
+        ],
+        "reason": "UpdateDeviceParamsFromLegacyRegs 将该寄存器映射到 DeviceParameters 并同步 CPU2",
+        "status": "Resolved",
+        "value": true
+      },
+      "dimension": "ParameterStructuredWritePermission",
+      "identity": "dsm:dsm.holding.syntheticBottom",
+      "message": "工具 IsWritable 与固件结构化业务写权限一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "evidence": [
+          {
+            "line": 481,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_DataAnalysis_modbus2.c"
+          }
+        ],
+        "reason": "UpdateDeviceParamsFromLegacyRegs 将该寄存器映射到 DeviceParameters 并同步 CPU2",
+        "status": "Resolved",
+        "value": true
+      },
+      "dimension": "ParameterStructuredWritePermission",
+      "identity": "dsm:dsm.holding.syntheticWater",
+      "message": "工具 IsWritable 与固件结构化业务写权限一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "evidence": [
+          {
+            "line": 488,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_DataAnalysis_modbus2.c"
+          }
+        ],
+        "reason": "UpdateDeviceParamsFromLegacyRegs 将该寄存器映射到 DeviceParameters 并同步 CPU2",
+        "status": "Resolved",
+        "value": true
+      },
+      "dimension": "ParameterStructuredWritePermission",
+      "identity": "dsm:dsm.holding.syntheticSinglepoint",
+      "message": "工具 IsWritable 与固件结构化业务写权限一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "evidence": [
+          {
+            "line": 496,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_DataAnalysis_modbus2.c"
+          }
+        ],
+        "reason": "UpdateDeviceParamsFromLegacyRegs 将该寄存器映射到 DeviceParameters 并同步 CPU2",
+        "status": "Resolved",
+        "value": true
+      },
+      "dimension": "ParameterStructuredWritePermission",
+      "identity": "dsm:dsm.holding.syntheticBottomFree",
+      "message": "工具 IsWritable 与固件结构化业务写权限一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "evidence": [
+          {
+            "line": 503,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_DataAnalysis_modbus2.c"
+          }
+        ],
+        "reason": "UpdateDeviceParamsFromLegacyRegs 将该寄存器映射到 DeviceParameters 并同步 CPU2",
+        "status": "Resolved",
+        "value": true
+      },
+      "dimension": "ParameterStructuredWritePermission",
+      "identity": "dsm:dsm.holding.syntheticWaterFree",
+      "message": "工具 IsWritable 与固件结构化业务写权限一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "evidence": [
+          {
+            "line": 510,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_DataAnalysis_modbus2.c"
+          }
+        ],
+        "reason": "UpdateDeviceParamsFromLegacyRegs 将该寄存器映射到 DeviceParameters 并同步 CPU2",
+        "status": "Resolved",
+        "value": true
+      },
+      "dimension": "ParameterStructuredWritePermission",
+      "identity": "dsm:dsm.holding.syntheticSinglepointFree",
+      "message": "工具 IsWritable 与固件结构化业务写权限一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "evidence": [
+          {
+            "line": 518,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_DataAnalysis_modbus2.c"
+          }
+        ],
+        "reason": "UpdateDeviceParamsFromLegacyRegs 将该寄存器映射到 DeviceParameters 并同步 CPU2",
+        "status": "Resolved",
+        "value": true
+      },
+      "dimension": "ParameterStructuredWritePermission",
+      "identity": "dsm:dsm.holding.temperatureCorrectionValue",
+      "message": "工具 IsWritable 与固件结构化业务写权限一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "evidence": [
+          {
+            "line": 525,
+            "path": "LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_DataAnalysis_modbus2.c"
+          }
+        ],
+        "reason": "UpdateDeviceParamsFromLegacyRegs 将该寄存器映射到 DeviceParameters 并同步 CPU2",
+        "status": "Resolved",
+        "value": true
+      },
+      "dimension": "ParameterStructuredWritePermission",
+      "identity": "dsm:dsm.holding.densityCorrectionValue",
       "message": "工具 IsWritable 与固件结构化业务写权限一致"
     },
     {
@@ -21240,6 +23988,28 @@
     {
       "category": "Compared",
       "details": {
+        "externalSymbol": "HOLDREGISTER_CALIBRATE_TANK_HEIGHT",
+        "firmwareParameterName": "calibrateTankHeight",
+        "proof": "UniqueExactWireTuple"
+      },
+      "dimension": "ParameterBinding",
+      "identity": "dsm:dsm.holding.calibrationtankhigh",
+      "message": "工具参数通过唯一精确 wire 元组闭环到固件参数"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "externalSymbol": "HOLDREGISTER_CALIBRATE_WATER_LEVEL",
+        "firmwareParameterName": "calibrateWaterLevel",
+        "proof": "UniqueExactWireTuple"
+      },
+      "dimension": "ParameterBinding",
+      "identity": "dsm:dsm.holding.calibrationwaterlevel",
+      "message": "工具参数通过唯一精确 wire 元组闭环到固件参数"
+    },
+    {
+      "category": "Compared",
+      "details": {
         "externalSymbol": "HOLDREGISTER_CALIBRATIONLIQUIDLEVEL",
         "firmwareParameterName": "calibrateOilLevel",
         "proof": "UniqueExactWireTuple"
@@ -21257,6 +24027,17 @@
       },
       "dimension": "ParameterBinding",
       "identity": "dsm:dsm.holding.correctionOil",
+      "message": "工具参数通过唯一精确 wire 元组闭环到固件参数"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "externalSymbol": "HOLDREGISTER_DENSITYCORRECTCALUE",
+        "firmwareParameterName": "densityCorrection",
+        "proof": "UniqueExactWireTuple"
+      },
+      "dimension": "ParameterBinding",
+      "identity": "dsm:dsm.holding.densityCorrectionValue",
       "message": "工具参数通过唯一精确 wire 元组闭环到固件参数"
     },
     {
@@ -23033,12 +25814,397 @@
     {
       "category": "Compared",
       "details": {
+        "externalSymbol": "HOLDREGISTER_FADEZERO",
+        "firmwareParameterName": "blindZone",
+        "proof": "UniqueExactWireTuple"
+      },
+      "dimension": "ParameterBinding",
+      "identity": "dsm:dsm.holding.fadezero",
+      "message": "工具参数通过唯一精确 wire 元组闭环到固件参数"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "externalSymbol": "HOLDREGISTER_GIRTH_YITI",
+        "firmwareParameterName": "encoder_wheel_circumference_mm",
+        "proof": "UniqueExactWireTuple"
+      },
+      "dimension": "ParameterBinding",
+      "identity": "dsm:dsm.holding.girthYiti",
+      "message": "工具参数通过唯一精确 wire 元组闭环到固件参数"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "externalSymbol": "HOLDREGISTER_INTERVAL_DIREDION",
+        "firmwareParameterName": "spreadMeasurementOrder",
+        "proof": "UniqueExactWireTuple"
+      },
+      "dimension": "ParameterBinding",
+      "identity": "dsm:dsm.holding.intervalDirection",
+      "message": "工具参数通过唯一精确 wire 元组闭环到固件参数"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "externalSymbol": "HOLDREGISTER_INTERVAL_OIL_A",
+        "firmwareParameterName": "intervalMeasurementTopLimit",
+        "proof": "UniqueExactWireTuple"
+      },
+      "dimension": "ParameterBinding",
+      "identity": "dsm:dsm.holding.intervalOilA",
+      "message": "工具参数通过唯一精确 wire 元组闭环到固件参数"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "externalSymbol": "HOLDREGISTER_INTERVAL_OIL_B",
+        "firmwareParameterName": "intervalMeasurementBottomLimit",
+        "proof": "UniqueExactWireTuple"
+      },
+      "dimension": "ParameterBinding",
+      "identity": "dsm:dsm.holding.intervalOilB",
+      "message": "工具参数通过唯一精确 wire 元组闭环到固件参数"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "externalSymbol": "HOLDREGISTER_INTERVAL_POINT",
+        "firmwareParameterName": "spreadMeasurementCount",
+        "proof": "UniqueExactWireTuple"
+      },
+      "dimension": "ParameterBinding",
+      "identity": "dsm:dsm.holding.intervalPoint",
+      "message": "工具参数通过唯一精确 wire 元组闭环到固件参数"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "externalSymbol": "HOLDREGISTER_LEVEL_MEASURE_METHOD",
+        "firmwareParameterName": "liquidLevelMeasurementMethod",
+        "proof": "UniqueExactWireTuple"
+      },
+      "dimension": "ParameterBinding",
+      "identity": "dsm:dsm.levelMeasureMethod",
+      "message": "工具参数通过唯一精确 wire 元组闭环到固件参数"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "externalSymbol": "HOLDREGISTER_MAXDOWN_DIS",
+        "firmwareParameterName": "maxDownDistance",
+        "proof": "UniqueExactWireTuple"
+      },
+      "dimension": "ParameterBinding",
+      "identity": "dsm:dsm.holding.maxdownDis",
+      "message": "工具参数通过唯一精确 wire 元组闭环到固件参数"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "externalSymbol": "HOLDREGISTER_MEASREMENT_METER",
+        "firmwareParameterName": "spreadMeasurementOrder",
+        "proof": "UniqueExactWireTuple"
+      },
+      "dimension": "ParameterBinding",
+      "identity": "dsm:dsm.holding.measurementMeter",
+      "message": "工具参数通过唯一精确 wire 元组闭环到固件参数"
+    },
+    {
+      "category": "Compared",
+      "details": {
         "externalSymbol": "HOLDREGISTER_REAL_WATER_LEVEL_CORRECT",
         "firmwareParameterName": "calibrateWaterLevel",
         "proof": "UniqueExactWireTuple"
       },
       "dimension": "ParameterBinding",
       "identity": "dsm:dsm.holding.realWaterLevelCorrect",
+      "message": "工具参数通过唯一精确 wire 元组闭环到固件参数"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "externalSymbol": "HOLDREGISTER_RUNTODISTANCE",
+        "firmwareParameterName": "motorCommandDistance",
+        "proof": "UniqueExactWireTuple"
+      },
+      "dimension": "ParameterBinding",
+      "identity": "dsm:dsm.holding.runtodistance",
+      "message": "工具参数通过唯一精确 wire 元组闭环到固件参数"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "externalSymbol": "HOLDREGISTER_SPREAD_DISTANCE",
+        "firmwareParameterName": "spreadMeasurementDistance",
+        "proof": "UniqueExactWireTuple"
+      },
+      "dimension": "ParameterBinding",
+      "identity": "dsm:dsm.holding.spreadDistance",
+      "message": "工具参数通过唯一精确 wire 元组闭环到固件参数"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "externalSymbol": "HOLDREGISTER_SPREAD_DISTANCE_FREE",
+        "firmwareParameterName": "spreadMeasurementDistance",
+        "proof": "UniqueExactWireTuple"
+      },
+      "dimension": "ParameterBinding",
+      "identity": "dsm:dsm.spreadDistance",
+      "message": "工具参数通过唯一精确 wire 元组闭环到固件参数"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "externalSymbol": "HOLDREGISTER_SPREAD_DSM_STATE_FREE",
+        "firmwareParameterName": "spreadMeasurementMode",
+        "proof": "UniqueExactWireTuple"
+      },
+      "dimension": "ParameterBinding",
+      "identity": "dsm:dsm.spreadModeFree",
+      "message": "工具参数通过唯一精确 wire 元组闭环到固件参数"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "externalSymbol": "HOLDREGISTER_SPREAD_FIXEDBASE",
+        "firmwareParameterName": "spreadBottomLimit",
+        "proof": "UniqueExactWireTuple"
+      },
+      "dimension": "ParameterBinding",
+      "identity": "dsm:dsm.holding.spreadFixedbase",
+      "message": "工具参数通过唯一精确 wire 元组闭环到固件参数"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "externalSymbol": "HOLDREGISTER_SPREAD_FIXEDDISTANCE",
+        "firmwareParameterName": "spreadMeasurementDistance",
+        "proof": "UniqueExactWireTuple"
+      },
+      "dimension": "ParameterBinding",
+      "identity": "dsm:dsm.holding.spreadFixeddistance",
+      "message": "工具参数通过唯一精确 wire 元组闭环到固件参数"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "externalSymbol": "HOLDREGISTER_SPREAD_FIXEDTOP",
+        "firmwareParameterName": "spreadTopLimit",
+        "proof": "UniqueExactWireTuple"
+      },
+      "dimension": "ParameterBinding",
+      "identity": "dsm:dsm.holding.spreadFixedtop",
+      "message": "工具参数通过唯一精确 wire 元组闭环到固件参数"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "externalSymbol": "HOLDREGISTER_SPREAD_FLOORLIMIT",
+        "firmwareParameterName": "spreadBottomLimit",
+        "proof": "UniqueExactWireTuple"
+      },
+      "dimension": "ParameterBinding",
+      "identity": "dsm:dsm.holding.spreadFloorlimit",
+      "message": "工具参数通过唯一精确 wire 元组闭环到固件参数"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "externalSymbol": "HOLDREGISTER_SPREAD_FLOORLIMIT_FREE",
+        "firmwareParameterName": "spreadBottomLimit",
+        "proof": "UniqueExactWireTuple"
+      },
+      "dimension": "ParameterBinding",
+      "identity": "dsm:dsm.spreadFloorLimit",
+      "message": "工具参数通过唯一精确 wire 元组闭环到固件参数"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "externalSymbol": "HOLDREGISTER_SPREAD_NUM",
+        "firmwareParameterName": "spreadMeasurementCount",
+        "proof": "UniqueExactWireTuple"
+      },
+      "dimension": "ParameterBinding",
+      "identity": "dsm:dsm.holding.spreadNum",
+      "message": "工具参数通过唯一精确 wire 元组闭环到固件参数"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "externalSymbol": "HOLDREGISTER_SPREAD_NUM_FREE",
+        "firmwareParameterName": "spreadMeasurementCount",
+        "proof": "UniqueExactWireTuple"
+      },
+      "dimension": "ParameterBinding",
+      "identity": "dsm:dsm.spreadPointCount",
+      "message": "工具参数通过唯一精确 wire 元组闭环到固件参数"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "externalSymbol": "HOLDREGISTER_SPREAD_STATE",
+        "firmwareParameterName": "spreadMeasurementMode",
+        "proof": "UniqueExactWireTuple"
+      },
+      "dimension": "ParameterBinding",
+      "identity": "dsm:dsm.holding.spreadState",
+      "message": "工具参数通过唯一精确 wire 元组闭环到固件参数"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "externalSymbol": "HOLDREGISTER_SPREAD_TOPLIMIT",
+        "firmwareParameterName": "spreadTopLimit",
+        "proof": "UniqueExactWireTuple"
+      },
+      "dimension": "ParameterBinding",
+      "identity": "dsm:dsm.holding.spreadToplimit",
+      "message": "工具参数通过唯一精确 wire 元组闭环到固件参数"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "externalSymbol": "HOLDREGISTER_SPREAD_TOPLIMIT_FREE",
+        "firmwareParameterName": "spreadTopLimit",
+        "proof": "UniqueExactWireTuple"
+      },
+      "dimension": "ParameterBinding",
+      "identity": "dsm:dsm.spreadTopLimit",
+      "message": "工具参数通过唯一精确 wire 元组闭环到固件参数"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "externalSymbol": "HOLDREGISTER_SPT_POSITION",
+        "firmwareParameterName": "singlePointMonitoringPosition",
+        "proof": "UniqueExactWireTuple"
+      },
+      "dimension": "ParameterBinding",
+      "identity": "dsm:dsm.singlePointMonitorPosition",
+      "message": "工具参数通过唯一精确 wire 元组闭环到固件参数"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "externalSymbol": "HOLDREGISTER_SP_POSITION",
+        "firmwareParameterName": "singlePointMeasurementPosition",
+        "proof": "UniqueExactWireTuple"
+      },
+      "dimension": "ParameterBinding",
+      "identity": "dsm:dsm.singlePointPosition",
+      "message": "工具参数通过唯一精确 wire 元组闭环到固件参数"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "externalSymbol": "HOLDREGISTER_SRREAD_MEASURETURN",
+        "firmwareParameterName": "spreadMeasurementOrder",
+        "proof": "UniqueExactWireTuple"
+      },
+      "dimension": "ParameterBinding",
+      "identity": "dsm:dsm.holding.spreadMeasureTurn",
+      "message": "工具参数通过唯一精确 wire 元组闭环到固件参数"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "externalSymbol": "HOLDREGISTER_SRREAD_POSITION",
+        "firmwareParameterName": "densityDistributionOilLevel",
+        "proof": "UniqueExactWireTuple"
+      },
+      "dimension": "ParameterBinding",
+      "identity": "dsm:dsm.spreadOilLevel",
+      "message": "工具参数通过唯一精确 wire 元组闭环到固件参数"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "externalSymbol": "HOLDREGISTER_SYNTHETIC_BOTTOM",
+        "firmwareParameterName": "requireBottomMeasurement",
+        "proof": "UniqueExactWireTuple"
+      },
+      "dimension": "ParameterBinding",
+      "identity": "dsm:dsm.holding.syntheticBottom",
+      "message": "工具参数通过唯一精确 wire 元组闭环到固件参数"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "externalSymbol": "HOLDREGISTER_SYNTHETIC_BOTTOM_FREE",
+        "firmwareParameterName": "requireBottomMeasurement",
+        "proof": "UniqueExactWireTuple"
+      },
+      "dimension": "ParameterBinding",
+      "identity": "dsm:dsm.holding.syntheticBottomFree",
+      "message": "工具参数通过唯一精确 wire 元组闭环到固件参数"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "externalSymbol": "HOLDREGISTER_SYNTHETIC_SINGLEPOINT",
+        "firmwareParameterName": "requireSinglePointDensity",
+        "proof": "UniqueExactWireTuple"
+      },
+      "dimension": "ParameterBinding",
+      "identity": "dsm:dsm.holding.syntheticSinglepoint",
+      "message": "工具参数通过唯一精确 wire 元组闭环到固件参数"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "externalSymbol": "HOLDREGISTER_SYNTHETIC_SINGLEPOINT_FREE",
+        "firmwareParameterName": "requireSinglePointDensity",
+        "proof": "UniqueExactWireTuple"
+      },
+      "dimension": "ParameterBinding",
+      "identity": "dsm:dsm.holding.syntheticSinglepointFree",
+      "message": "工具参数通过唯一精确 wire 元组闭环到固件参数"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "externalSymbol": "HOLDREGISTER_SYNTHETIC_WATER",
+        "firmwareParameterName": "requireWaterMeasurement",
+        "proof": "UniqueExactWireTuple"
+      },
+      "dimension": "ParameterBinding",
+      "identity": "dsm:dsm.holding.syntheticWater",
+      "message": "工具参数通过唯一精确 wire 元组闭环到固件参数"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "externalSymbol": "HOLDREGISTER_SYNTHETIC_WATER_FREE",
+        "firmwareParameterName": "requireWaterMeasurement",
+        "proof": "UniqueExactWireTuple"
+      },
+      "dimension": "ParameterBinding",
+      "identity": "dsm:dsm.holding.syntheticWaterFree",
+      "message": "工具参数通过唯一精确 wire 元组闭环到固件参数"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "externalSymbol": "HOLDREGISTER_TANKHIGHT",
+        "firmwareParameterName": "tankHeight",
+        "proof": "UniqueExactWireTuple"
+      },
+      "dimension": "ParameterBinding",
+      "identity": "dsm:dsm.tankHeight",
+      "message": "工具参数通过唯一精确 wire 元组闭环到固件参数"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "externalSymbol": "HOLDREGISTER_TEMCORRECTCALUE",
+        "firmwareParameterName": "temperatureCorrection",
+        "proof": "UniqueExactWireTuple"
+      },
+      "dimension": "ParameterBinding",
+      "identity": "dsm:dsm.holding.temperatureCorrectionValue",
       "message": "工具参数通过唯一精确 wire 元组闭环到固件参数"
     },
     {
@@ -23993,6 +27159,24 @@
         "value": "0"
       },
       "dimension": "ParameterRawOffset",
+      "identity": "dsm:dsm.holding.calibrationtankhigh",
+      "message": "rawOffset 与固件 rawOffset 数值一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "value": "0"
+      },
+      "dimension": "ParameterRawOffset",
+      "identity": "dsm:dsm.holding.calibrationwaterlevel",
+      "message": "rawOffset 与固件 rawOffset 数值一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "value": "0"
+      },
+      "dimension": "ParameterRawOffset",
       "identity": "dsm:dsm.holding.correctionOil",
       "message": "rawOffset 与固件 rawOffset 数值一致"
     },
@@ -24416,6 +27600,60 @@
         "value": "0"
       },
       "dimension": "ParameterRawOffset",
+      "identity": "dsm:dsm.holding.fadezero",
+      "message": "rawOffset 与固件 rawOffset 数值一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "value": "0"
+      },
+      "dimension": "ParameterRawOffset",
+      "identity": "dsm:dsm.holding.girthYiti",
+      "message": "rawOffset 与固件 rawOffset 数值一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "value": "0"
+      },
+      "dimension": "ParameterRawOffset",
+      "identity": "dsm:dsm.holding.intervalDirection",
+      "message": "rawOffset 与固件 rawOffset 数值一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "value": "0"
+      },
+      "dimension": "ParameterRawOffset",
+      "identity": "dsm:dsm.holding.intervalOilA",
+      "message": "rawOffset 与固件 rawOffset 数值一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "value": "0"
+      },
+      "dimension": "ParameterRawOffset",
+      "identity": "dsm:dsm.holding.intervalOilB",
+      "message": "rawOffset 与固件 rawOffset 数值一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "value": "0"
+      },
+      "dimension": "ParameterRawOffset",
+      "identity": "dsm:dsm.holding.intervalPoint",
+      "message": "rawOffset 与固件 rawOffset 数值一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "value": "0"
+      },
+      "dimension": "ParameterRawOffset",
       "identity": "dsm:dsm.holding.k0",
       "message": "rawOffset 与固件 rawOffset 数值一致"
     },
@@ -24650,6 +27888,24 @@
         "value": "0"
       },
       "dimension": "ParameterRawOffset",
+      "identity": "dsm:dsm.holding.maxdownDis",
+      "message": "rawOffset 与固件 rawOffset 数值一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "value": "0"
+      },
+      "dimension": "ParameterRawOffset",
+      "identity": "dsm:dsm.holding.measurementMeter",
+      "message": "rawOffset 与固件 rawOffset 数值一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "value": "0"
+      },
+      "dimension": "ParameterRawOffset",
       "identity": "dsm:dsm.holding.realWaterLevelCorrect",
       "message": "rawOffset 与固件 rawOffset 数值一致"
     },
@@ -24659,7 +27915,151 @@
         "value": "0"
       },
       "dimension": "ParameterRawOffset",
+      "identity": "dsm:dsm.holding.runtodistance",
+      "message": "rawOffset 与固件 rawOffset 数值一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "value": "0"
+      },
+      "dimension": "ParameterRawOffset",
       "identity": "dsm:dsm.holding.softofversion",
+      "message": "rawOffset 与固件 rawOffset 数值一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "value": "0"
+      },
+      "dimension": "ParameterRawOffset",
+      "identity": "dsm:dsm.holding.spreadDistance",
+      "message": "rawOffset 与固件 rawOffset 数值一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "value": "0"
+      },
+      "dimension": "ParameterRawOffset",
+      "identity": "dsm:dsm.holding.spreadFixedbase",
+      "message": "rawOffset 与固件 rawOffset 数值一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "value": "0"
+      },
+      "dimension": "ParameterRawOffset",
+      "identity": "dsm:dsm.holding.spreadFixeddistance",
+      "message": "rawOffset 与固件 rawOffset 数值一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "value": "0"
+      },
+      "dimension": "ParameterRawOffset",
+      "identity": "dsm:dsm.holding.spreadFixedtop",
+      "message": "rawOffset 与固件 rawOffset 数值一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "value": "0"
+      },
+      "dimension": "ParameterRawOffset",
+      "identity": "dsm:dsm.holding.spreadFloorlimit",
+      "message": "rawOffset 与固件 rawOffset 数值一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "value": "0"
+      },
+      "dimension": "ParameterRawOffset",
+      "identity": "dsm:dsm.holding.spreadMeasureTurn",
+      "message": "rawOffset 与固件 rawOffset 数值一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "value": "0"
+      },
+      "dimension": "ParameterRawOffset",
+      "identity": "dsm:dsm.holding.spreadNum",
+      "message": "rawOffset 与固件 rawOffset 数值一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "value": "0"
+      },
+      "dimension": "ParameterRawOffset",
+      "identity": "dsm:dsm.holding.spreadState",
+      "message": "rawOffset 与固件 rawOffset 数值一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "value": "0"
+      },
+      "dimension": "ParameterRawOffset",
+      "identity": "dsm:dsm.holding.spreadToplimit",
+      "message": "rawOffset 与固件 rawOffset 数值一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "value": "0"
+      },
+      "dimension": "ParameterRawOffset",
+      "identity": "dsm:dsm.holding.syntheticBottom",
+      "message": "rawOffset 与固件 rawOffset 数值一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "value": "0"
+      },
+      "dimension": "ParameterRawOffset",
+      "identity": "dsm:dsm.holding.syntheticBottomFree",
+      "message": "rawOffset 与固件 rawOffset 数值一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "value": "0"
+      },
+      "dimension": "ParameterRawOffset",
+      "identity": "dsm:dsm.holding.syntheticSinglepoint",
+      "message": "rawOffset 与固件 rawOffset 数值一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "value": "0"
+      },
+      "dimension": "ParameterRawOffset",
+      "identity": "dsm:dsm.holding.syntheticSinglepointFree",
+      "message": "rawOffset 与固件 rawOffset 数值一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "value": "0"
+      },
+      "dimension": "ParameterRawOffset",
+      "identity": "dsm:dsm.holding.syntheticWater",
+      "message": "rawOffset 与固件 rawOffset 数值一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "value": "0"
+      },
+      "dimension": "ParameterRawOffset",
+      "identity": "dsm:dsm.holding.syntheticWaterFree",
       "message": "rawOffset 与固件 rawOffset 数值一致"
     },
     {
@@ -24867,6 +28267,96 @@
       },
       "dimension": "ParameterRawOffset",
       "identity": "dsm:dsm.holding.tSegCorrectionTem9",
+      "message": "rawOffset 与固件 rawOffset 数值一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "value": "0"
+      },
+      "dimension": "ParameterRawOffset",
+      "identity": "dsm:dsm.levelMeasureMethod",
+      "message": "rawOffset 与固件 rawOffset 数值一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "value": "0"
+      },
+      "dimension": "ParameterRawOffset",
+      "identity": "dsm:dsm.singlePointMonitorPosition",
+      "message": "rawOffset 与固件 rawOffset 数值一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "value": "0"
+      },
+      "dimension": "ParameterRawOffset",
+      "identity": "dsm:dsm.singlePointPosition",
+      "message": "rawOffset 与固件 rawOffset 数值一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "value": "0"
+      },
+      "dimension": "ParameterRawOffset",
+      "identity": "dsm:dsm.spreadDistance",
+      "message": "rawOffset 与固件 rawOffset 数值一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "value": "0"
+      },
+      "dimension": "ParameterRawOffset",
+      "identity": "dsm:dsm.spreadFloorLimit",
+      "message": "rawOffset 与固件 rawOffset 数值一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "value": "0"
+      },
+      "dimension": "ParameterRawOffset",
+      "identity": "dsm:dsm.spreadModeFree",
+      "message": "rawOffset 与固件 rawOffset 数值一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "value": "0"
+      },
+      "dimension": "ParameterRawOffset",
+      "identity": "dsm:dsm.spreadOilLevel",
+      "message": "rawOffset 与固件 rawOffset 数值一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "value": "0"
+      },
+      "dimension": "ParameterRawOffset",
+      "identity": "dsm:dsm.spreadPointCount",
+      "message": "rawOffset 与固件 rawOffset 数值一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "value": "0"
+      },
+      "dimension": "ParameterRawOffset",
+      "identity": "dsm:dsm.spreadTopLimit",
+      "message": "rawOffset 与固件 rawOffset 数值一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "value": "0"
+      },
+      "dimension": "ParameterRawOffset",
+      "identity": "dsm:dsm.tankHeight",
       "message": "rawOffset 与固件 rawOffset 数值一致"
     },
     {
@@ -26909,6 +30399,24 @@
         "value": "1"
       },
       "dimension": "ParameterScale",
+      "identity": "dsm:dsm.holding.intervalDirection",
+      "message": "scale 与固件 wireScale 数值一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "value": "1"
+      },
+      "dimension": "ParameterScale",
+      "identity": "dsm:dsm.holding.intervalPoint",
+      "message": "scale 与固件 wireScale 数值一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "value": "1"
+      },
+      "dimension": "ParameterScale",
       "identity": "dsm:dsm.holding.k0",
       "message": "scale 与固件 wireScale 数值一致"
     },
@@ -27143,7 +30651,97 @@
         "value": "1"
       },
       "dimension": "ParameterScale",
+      "identity": "dsm:dsm.holding.measurementMeter",
+      "message": "scale 与固件 wireScale 数值一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "value": "1"
+      },
+      "dimension": "ParameterScale",
       "identity": "dsm:dsm.holding.softofversion",
+      "message": "scale 与固件 wireScale 数值一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "value": "1"
+      },
+      "dimension": "ParameterScale",
+      "identity": "dsm:dsm.holding.spreadMeasureTurn",
+      "message": "scale 与固件 wireScale 数值一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "value": "1"
+      },
+      "dimension": "ParameterScale",
+      "identity": "dsm:dsm.holding.spreadNum",
+      "message": "scale 与固件 wireScale 数值一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "value": "1"
+      },
+      "dimension": "ParameterScale",
+      "identity": "dsm:dsm.holding.spreadState",
+      "message": "scale 与固件 wireScale 数值一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "value": "1"
+      },
+      "dimension": "ParameterScale",
+      "identity": "dsm:dsm.holding.syntheticBottom",
+      "message": "scale 与固件 wireScale 数值一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "value": "1"
+      },
+      "dimension": "ParameterScale",
+      "identity": "dsm:dsm.holding.syntheticBottomFree",
+      "message": "scale 与固件 wireScale 数值一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "value": "1"
+      },
+      "dimension": "ParameterScale",
+      "identity": "dsm:dsm.holding.syntheticSinglepoint",
+      "message": "scale 与固件 wireScale 数值一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "value": "1"
+      },
+      "dimension": "ParameterScale",
+      "identity": "dsm:dsm.holding.syntheticSinglepointFree",
+      "message": "scale 与固件 wireScale 数值一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "value": "1"
+      },
+      "dimension": "ParameterScale",
+      "identity": "dsm:dsm.holding.syntheticWater",
+      "message": "scale 与固件 wireScale 数值一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "value": "1"
+      },
+      "dimension": "ParameterScale",
+      "identity": "dsm:dsm.holding.syntheticWaterFree",
       "message": "scale 与固件 wireScale 数值一致"
     },
     {
@@ -27351,6 +30949,33 @@
       },
       "dimension": "ParameterScale",
       "identity": "dsm:dsm.holding.tSegCorrectionTem9",
+      "message": "scale 与固件 wireScale 数值一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "value": "1"
+      },
+      "dimension": "ParameterScale",
+      "identity": "dsm:dsm.levelMeasureMethod",
+      "message": "scale 与固件 wireScale 数值一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "value": "1"
+      },
+      "dimension": "ParameterScale",
+      "identity": "dsm:dsm.spreadModeFree",
+      "message": "scale 与固件 wireScale 数值一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "value": "1"
+      },
+      "dimension": "ParameterScale",
+      "identity": "dsm:dsm.spreadPointCount",
       "message": "scale 与固件 wireScale 数值一致"
     },
     {
@@ -28448,6 +32073,24 @@
         "value": "10"
       },
       "dimension": "ParameterScale",
+      "identity": "dsm:dsm.holding.calibrationtankhigh",
+      "message": "scale 与固件 wireScale 数值一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "value": "10"
+      },
+      "dimension": "ParameterScale",
+      "identity": "dsm:dsm.holding.calibrationwaterlevel",
+      "message": "scale 与固件 wireScale 数值一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "value": "10"
+      },
+      "dimension": "ParameterScale",
       "identity": "dsm:dsm.holding.correctionOil",
       "message": "scale 与固件 wireScale 数值一致"
     },
@@ -28457,7 +32100,187 @@
         "value": "10"
       },
       "dimension": "ParameterScale",
+      "identity": "dsm:dsm.holding.densityCorrectionValue",
+      "message": "scale 与固件 wireScale 数值一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "value": "10"
+      },
+      "dimension": "ParameterScale",
+      "identity": "dsm:dsm.holding.fadezero",
+      "message": "scale 与固件 wireScale 数值一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "value": "10"
+      },
+      "dimension": "ParameterScale",
+      "identity": "dsm:dsm.holding.intervalOilA",
+      "message": "scale 与固件 wireScale 数值一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "value": "10"
+      },
+      "dimension": "ParameterScale",
+      "identity": "dsm:dsm.holding.intervalOilB",
+      "message": "scale 与固件 wireScale 数值一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "value": "10"
+      },
+      "dimension": "ParameterScale",
+      "identity": "dsm:dsm.holding.maxdownDis",
+      "message": "scale 与固件 wireScale 数值一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "value": "10"
+      },
+      "dimension": "ParameterScale",
       "identity": "dsm:dsm.holding.realWaterLevelCorrect",
+      "message": "scale 与固件 wireScale 数值一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "value": "10"
+      },
+      "dimension": "ParameterScale",
+      "identity": "dsm:dsm.holding.runtodistance",
+      "message": "scale 与固件 wireScale 数值一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "value": "10"
+      },
+      "dimension": "ParameterScale",
+      "identity": "dsm:dsm.holding.spreadDistance",
+      "message": "scale 与固件 wireScale 数值一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "value": "10"
+      },
+      "dimension": "ParameterScale",
+      "identity": "dsm:dsm.holding.spreadFixedbase",
+      "message": "scale 与固件 wireScale 数值一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "value": "10"
+      },
+      "dimension": "ParameterScale",
+      "identity": "dsm:dsm.holding.spreadFixeddistance",
+      "message": "scale 与固件 wireScale 数值一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "value": "10"
+      },
+      "dimension": "ParameterScale",
+      "identity": "dsm:dsm.holding.spreadFixedtop",
+      "message": "scale 与固件 wireScale 数值一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "value": "10"
+      },
+      "dimension": "ParameterScale",
+      "identity": "dsm:dsm.holding.spreadFloorlimit",
+      "message": "scale 与固件 wireScale 数值一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "value": "10"
+      },
+      "dimension": "ParameterScale",
+      "identity": "dsm:dsm.holding.spreadToplimit",
+      "message": "scale 与固件 wireScale 数值一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "value": "10"
+      },
+      "dimension": "ParameterScale",
+      "identity": "dsm:dsm.holding.temperatureCorrectionValue",
+      "message": "scale 与固件 wireScale 数值一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "value": "10"
+      },
+      "dimension": "ParameterScale",
+      "identity": "dsm:dsm.singlePointMonitorPosition",
+      "message": "scale 与固件 wireScale 数值一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "value": "10"
+      },
+      "dimension": "ParameterScale",
+      "identity": "dsm:dsm.singlePointPosition",
+      "message": "scale 与固件 wireScale 数值一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "value": "10"
+      },
+      "dimension": "ParameterScale",
+      "identity": "dsm:dsm.spreadDistance",
+      "message": "scale 与固件 wireScale 数值一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "value": "10"
+      },
+      "dimension": "ParameterScale",
+      "identity": "dsm:dsm.spreadFloorLimit",
+      "message": "scale 与固件 wireScale 数值一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "value": "10"
+      },
+      "dimension": "ParameterScale",
+      "identity": "dsm:dsm.spreadOilLevel",
+      "message": "scale 与固件 wireScale 数值一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "value": "10"
+      },
+      "dimension": "ParameterScale",
+      "identity": "dsm:dsm.spreadTopLimit",
+      "message": "scale 与固件 wireScale 数值一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "value": "10"
+      },
+      "dimension": "ParameterScale",
+      "identity": "dsm:dsm.tankHeight",
       "message": "scale 与固件 wireScale 数值一致"
     },
     {
@@ -28943,8 +32766,26 @@
         "value": "1000"
       },
       "dimension": "ParameterRawOffset",
+      "identity": "dsm:dsm.holding.temperatureCorrectionValue",
+      "message": "rawOffset 与固件 rawOffset 数值一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "value": "1000"
+      },
+      "dimension": "ParameterRawOffset",
       "identity": "ltd-modbus:temperature.correction",
       "message": "rawOffset 与固件 rawOffset 数值一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "value": "1000"
+      },
+      "dimension": "ParameterScale",
+      "identity": "dsm:dsm.holding.girthYiti",
+      "message": "scale 与固件 wireScale 数值一致"
     },
     {
       "category": "Compared",
@@ -29017,6 +32858,15 @@
       "dimension": "ParameterScale",
       "identity": "ltd-modbus:water.lagCapThreshold",
       "message": "scale 与固件 wireScale 数值一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "value": "10000"
+      },
+      "dimension": "ParameterRawOffset",
+      "identity": "dsm:dsm.holding.densityCorrectionValue",
+      "message": "rawOffset 与固件 rawOffset 数值一致"
     },
     {
       "category": "Compared",
@@ -30329,6 +34179,15 @@
         "value": "NotApplicable"
       },
       "dimension": "ParameterWordOrder",
+      "identity": "dsm:dsm.holding.densityCorrectionValue",
+      "message": "单寄存器参数不涉及 wordOrder"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "value": "NotApplicable"
+      },
+      "dimension": "ParameterWordOrder",
       "identity": "dsm:dsm.holding.densityTime",
       "message": "单寄存器参数不涉及 wordOrder"
     },
@@ -30357,6 +34216,24 @@
       },
       "dimension": "ParameterWordOrder",
       "identity": "dsm:dsm.holding.ifRefreshTankhigh",
+      "message": "单寄存器参数不涉及 wordOrder"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "value": "NotApplicable"
+      },
+      "dimension": "ParameterWordOrder",
+      "identity": "dsm:dsm.holding.intervalDirection",
+      "message": "单寄存器参数不涉及 wordOrder"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "value": "NotApplicable"
+      },
+      "dimension": "ParameterWordOrder",
+      "identity": "dsm:dsm.holding.intervalPoint",
       "message": "单寄存器参数不涉及 wordOrder"
     },
     {
@@ -30617,6 +34494,24 @@
         "value": "NotApplicable"
       },
       "dimension": "ParameterWordOrder",
+      "identity": "dsm:dsm.holding.maxdownDis",
+      "message": "单寄存器参数不涉及 wordOrder"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "value": "NotApplicable"
+      },
+      "dimension": "ParameterWordOrder",
+      "identity": "dsm:dsm.holding.measurementMeter",
+      "message": "单寄存器参数不涉及 wordOrder"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "value": "NotApplicable"
+      },
+      "dimension": "ParameterWordOrder",
       "identity": "dsm:dsm.holding.numofdecimals",
       "message": "单寄存器参数不涉及 wordOrder"
     },
@@ -30725,7 +34620,88 @@
         "value": "NotApplicable"
       },
       "dimension": "ParameterWordOrder",
+      "identity": "dsm:dsm.holding.spreadMeasureTurn",
+      "message": "单寄存器参数不涉及 wordOrder"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "value": "NotApplicable"
+      },
+      "dimension": "ParameterWordOrder",
+      "identity": "dsm:dsm.holding.spreadNum",
+      "message": "单寄存器参数不涉及 wordOrder"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "value": "NotApplicable"
+      },
+      "dimension": "ParameterWordOrder",
       "identity": "dsm:dsm.holding.spreadOthernum",
+      "message": "单寄存器参数不涉及 wordOrder"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "value": "NotApplicable"
+      },
+      "dimension": "ParameterWordOrder",
+      "identity": "dsm:dsm.holding.spreadState",
+      "message": "单寄存器参数不涉及 wordOrder"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "value": "NotApplicable"
+      },
+      "dimension": "ParameterWordOrder",
+      "identity": "dsm:dsm.holding.syntheticBottom",
+      "message": "单寄存器参数不涉及 wordOrder"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "value": "NotApplicable"
+      },
+      "dimension": "ParameterWordOrder",
+      "identity": "dsm:dsm.holding.syntheticBottomFree",
+      "message": "单寄存器参数不涉及 wordOrder"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "value": "NotApplicable"
+      },
+      "dimension": "ParameterWordOrder",
+      "identity": "dsm:dsm.holding.syntheticSinglepoint",
+      "message": "单寄存器参数不涉及 wordOrder"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "value": "NotApplicable"
+      },
+      "dimension": "ParameterWordOrder",
+      "identity": "dsm:dsm.holding.syntheticSinglepointFree",
+      "message": "单寄存器参数不涉及 wordOrder"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "value": "NotApplicable"
+      },
+      "dimension": "ParameterWordOrder",
+      "identity": "dsm:dsm.holding.syntheticWater",
+      "message": "单寄存器参数不涉及 wordOrder"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "value": "NotApplicable"
+      },
+      "dimension": "ParameterWordOrder",
+      "identity": "dsm:dsm.holding.syntheticWaterFree",
       "message": "单寄存器参数不涉及 wordOrder"
     },
     {
@@ -30941,6 +34917,15 @@
         "value": "NotApplicable"
       },
       "dimension": "ParameterWordOrder",
+      "identity": "dsm:dsm.holding.temperatureCorrectionValue",
+      "message": "单寄存器参数不涉及 wordOrder"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "value": "NotApplicable"
+      },
+      "dimension": "ParameterWordOrder",
       "identity": "dsm:dsm.holding.temperatureMode",
       "message": "单寄存器参数不涉及 wordOrder"
     },
@@ -31041,6 +35026,33 @@
       },
       "dimension": "ParameterWordOrder",
       "identity": "dsm:dsm.holding.zerocircle",
+      "message": "单寄存器参数不涉及 wordOrder"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "value": "NotApplicable"
+      },
+      "dimension": "ParameterWordOrder",
+      "identity": "dsm:dsm.levelMeasureMethod",
+      "message": "单寄存器参数不涉及 wordOrder"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "value": "NotApplicable"
+      },
+      "dimension": "ParameterWordOrder",
+      "identity": "dsm:dsm.spreadModeFree",
+      "message": "单寄存器参数不涉及 wordOrder"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "value": "NotApplicable"
+      },
+      "dimension": "ParameterWordOrder",
+      "identity": "dsm:dsm.spreadPointCount",
       "message": "单寄存器参数不涉及 wordOrder"
     },
     {
@@ -31535,6 +35547,24 @@
         "value": "unsigned"
       },
       "dimension": "ParameterSignedness",
+      "identity": "dsm:dsm.holding.calibrationtankhigh",
+      "message": "signedness 一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "value": "unsigned"
+      },
+      "dimension": "ParameterSignedness",
+      "identity": "dsm:dsm.holding.calibrationwaterlevel",
+      "message": "signedness 一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "value": "unsigned"
+      },
+      "dimension": "ParameterSignedness",
       "identity": "dsm:dsm.holding.correctionOil",
       "message": "signedness 一致"
     },
@@ -31545,6 +35575,15 @@
       },
       "dimension": "ParameterSignedness",
       "identity": "dsm:dsm.holding.correctionfactor",
+      "message": "signedness 一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "value": "unsigned"
+      },
+      "dimension": "ParameterSignedness",
+      "identity": "dsm:dsm.holding.densityCorrectionValue",
       "message": "signedness 一致"
     },
     {
@@ -31580,6 +35619,24 @@
         "value": "unsigned"
       },
       "dimension": "ParameterSignedness",
+      "identity": "dsm:dsm.holding.fadezero",
+      "message": "signedness 一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "value": "unsigned"
+      },
+      "dimension": "ParameterSignedness",
+      "identity": "dsm:dsm.holding.girthYiti",
+      "message": "signedness 一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "value": "unsigned"
+      },
+      "dimension": "ParameterSignedness",
       "identity": "dsm:dsm.holding.ifFindoilPoweron",
       "message": "signedness 一致"
     },
@@ -31598,6 +35655,42 @@
         "value": "unsigned"
       },
       "dimension": "ParameterSignedness",
+      "identity": "dsm:dsm.holding.intervalDirection",
+      "message": "signedness 一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "value": "unsigned"
+      },
+      "dimension": "ParameterSignedness",
+      "identity": "dsm:dsm.holding.intervalOilA",
+      "message": "signedness 一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "value": "unsigned"
+      },
+      "dimension": "ParameterSignedness",
+      "identity": "dsm:dsm.holding.intervalOilB",
+      "message": "signedness 一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "value": "unsigned"
+      },
+      "dimension": "ParameterSignedness",
+      "identity": "dsm:dsm.holding.intervalPoint",
+      "message": "signedness 一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "value": "unsigned"
+      },
+      "dimension": "ParameterSignedness",
       "identity": "dsm:dsm.holding.lengthofsensor",
       "message": "signedness 一致"
     },
@@ -31608,6 +35701,24 @@
       },
       "dimension": "ParameterSignedness",
       "identity": "dsm:dsm.holding.leveltowaterHigh",
+      "message": "signedness 一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "value": "unsigned"
+      },
+      "dimension": "ParameterSignedness",
+      "identity": "dsm:dsm.holding.maxdownDis",
+      "message": "signedness 一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "value": "unsigned"
+      },
+      "dimension": "ParameterSignedness",
+      "identity": "dsm:dsm.holding.measurementMeter",
       "message": "signedness 一致"
     },
     {
@@ -31724,6 +35835,15 @@
         "value": "unsigned"
       },
       "dimension": "ParameterSignedness",
+      "identity": "dsm:dsm.holding.runtodistance",
+      "message": "signedness 一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "value": "unsigned"
+      },
+      "dimension": "ParameterSignedness",
       "identity": "dsm:dsm.holding.spread1pointthreshold",
       "message": "signedness 一致"
     },
@@ -31742,6 +35862,69 @@
         "value": "unsigned"
       },
       "dimension": "ParameterSignedness",
+      "identity": "dsm:dsm.holding.spreadDistance",
+      "message": "signedness 一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "value": "unsigned"
+      },
+      "dimension": "ParameterSignedness",
+      "identity": "dsm:dsm.holding.spreadFixedbase",
+      "message": "signedness 一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "value": "unsigned"
+      },
+      "dimension": "ParameterSignedness",
+      "identity": "dsm:dsm.holding.spreadFixeddistance",
+      "message": "signedness 一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "value": "unsigned"
+      },
+      "dimension": "ParameterSignedness",
+      "identity": "dsm:dsm.holding.spreadFixedtop",
+      "message": "signedness 一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "value": "unsigned"
+      },
+      "dimension": "ParameterSignedness",
+      "identity": "dsm:dsm.holding.spreadFloorlimit",
+      "message": "signedness 一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "value": "unsigned"
+      },
+      "dimension": "ParameterSignedness",
+      "identity": "dsm:dsm.holding.spreadMeasureTurn",
+      "message": "signedness 一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "value": "unsigned"
+      },
+      "dimension": "ParameterSignedness",
+      "identity": "dsm:dsm.holding.spreadNum",
+      "message": "signedness 一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "value": "unsigned"
+      },
+      "dimension": "ParameterSignedness",
       "identity": "dsm:dsm.holding.spreadOthernum",
       "message": "signedness 一致"
     },
@@ -31751,7 +35934,88 @@
         "value": "unsigned"
       },
       "dimension": "ParameterSignedness",
+      "identity": "dsm:dsm.holding.spreadState",
+      "message": "signedness 一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "value": "unsigned"
+      },
+      "dimension": "ParameterSignedness",
+      "identity": "dsm:dsm.holding.spreadToplimit",
+      "message": "signedness 一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "value": "unsigned"
+      },
+      "dimension": "ParameterSignedness",
       "identity": "dsm:dsm.holding.spsyntheticPosition",
+      "message": "signedness 一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "value": "unsigned"
+      },
+      "dimension": "ParameterSignedness",
+      "identity": "dsm:dsm.holding.syntheticBottom",
+      "message": "signedness 一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "value": "unsigned"
+      },
+      "dimension": "ParameterSignedness",
+      "identity": "dsm:dsm.holding.syntheticBottomFree",
+      "message": "signedness 一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "value": "unsigned"
+      },
+      "dimension": "ParameterSignedness",
+      "identity": "dsm:dsm.holding.syntheticSinglepoint",
+      "message": "signedness 一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "value": "unsigned"
+      },
+      "dimension": "ParameterSignedness",
+      "identity": "dsm:dsm.holding.syntheticSinglepointFree",
+      "message": "signedness 一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "value": "unsigned"
+      },
+      "dimension": "ParameterSignedness",
+      "identity": "dsm:dsm.holding.syntheticWater",
+      "message": "signedness 一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "value": "unsigned"
+      },
+      "dimension": "ParameterSignedness",
+      "identity": "dsm:dsm.holding.syntheticWaterFree",
+      "message": "signedness 一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "value": "unsigned"
+      },
+      "dimension": "ParameterSignedness",
+      "identity": "dsm:dsm.holding.temperatureCorrectionValue",
       "message": "signedness 一致"
     },
     {
@@ -31869,6 +36133,96 @@
       },
       "dimension": "ParameterSignedness",
       "identity": "dsm:dsm.holding.zerocircle",
+      "message": "signedness 一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "value": "unsigned"
+      },
+      "dimension": "ParameterSignedness",
+      "identity": "dsm:dsm.levelMeasureMethod",
+      "message": "signedness 一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "value": "unsigned"
+      },
+      "dimension": "ParameterSignedness",
+      "identity": "dsm:dsm.singlePointMonitorPosition",
+      "message": "signedness 一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "value": "unsigned"
+      },
+      "dimension": "ParameterSignedness",
+      "identity": "dsm:dsm.singlePointPosition",
+      "message": "signedness 一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "value": "unsigned"
+      },
+      "dimension": "ParameterSignedness",
+      "identity": "dsm:dsm.spreadDistance",
+      "message": "signedness 一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "value": "unsigned"
+      },
+      "dimension": "ParameterSignedness",
+      "identity": "dsm:dsm.spreadFloorLimit",
+      "message": "signedness 一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "value": "unsigned"
+      },
+      "dimension": "ParameterSignedness",
+      "identity": "dsm:dsm.spreadModeFree",
+      "message": "signedness 一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "value": "unsigned"
+      },
+      "dimension": "ParameterSignedness",
+      "identity": "dsm:dsm.spreadOilLevel",
+      "message": "signedness 一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "value": "unsigned"
+      },
+      "dimension": "ParameterSignedness",
+      "identity": "dsm:dsm.spreadPointCount",
+      "message": "signedness 一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "value": "unsigned"
+      },
+      "dimension": "ParameterSignedness",
+      "identity": "dsm:dsm.spreadTopLimit",
+      "message": "signedness 一致"
+    },
+    {
+      "category": "Compared",
+      "details": {
+        "value": "unsigned"
+      },
+      "dimension": "ParameterSignedness",
+      "identity": "dsm:dsm.tankHeight",
       "message": "signedness 一致"
     },
     {
@@ -149486,766 +153840,6 @@
       "message": "固件桥接没有结构化 wireScale"
     },
     {
-      "category": "ParameterBindingAmbiguous",
-      "details": [
-        {
-          "direction": "cpu2ShadowToExternal",
-          "externalSymbol": "HOLDREGISTER_CALIBRATE_TANK_HEIGHT",
-          "firmwareParameterName": "calibrateTankHeight",
-          "wireAccess": "Writable"
-        },
-        {
-          "direction": "externalToCpu2Shadow",
-          "externalSymbol": "HOLDREGISTER_CALIBRATE_TANK_HEIGHT",
-          "firmwareParameterName": "calibrateTankHeight",
-          "wireAccess": "Writable"
-        }
-      ],
-      "dimension": "ParameterBinding",
-      "identity": "dsm:dsm.holding.calibrationtankhigh",
-      "message": "精确 wire 元组对应多个不同固件参数语义；禁止按名称模糊选择"
-    },
-    {
-      "category": "ParameterBindingAmbiguous",
-      "details": [
-        {
-          "direction": "cpu2ShadowToExternal",
-          "externalSymbol": "HOLDREGISTER_CALIBRATE_WATER_LEVEL",
-          "firmwareParameterName": "calibrateWaterLevel",
-          "wireAccess": "Writable"
-        },
-        {
-          "direction": "externalToCpu2Shadow",
-          "externalSymbol": "HOLDREGISTER_CALIBRATE_WATER_LEVEL",
-          "firmwareParameterName": "calibrateWaterLevel",
-          "wireAccess": "Writable"
-        }
-      ],
-      "dimension": "ParameterBinding",
-      "identity": "dsm:dsm.holding.calibrationwaterlevel",
-      "message": "精确 wire 元组对应多个不同固件参数语义；禁止按名称模糊选择"
-    },
-    {
-      "category": "ParameterBindingAmbiguous",
-      "details": [
-        {
-          "direction": "cpu2ShadowToExternal",
-          "externalSymbol": "HOLDREGISTER_DENSITYCORRECTCALUE",
-          "firmwareParameterName": "densityCorrection",
-          "wireAccess": "Writable"
-        },
-        {
-          "direction": "externalToCpu2Shadow",
-          "externalSymbol": "HOLDREGISTER_DENSITYCORRECTCALUE",
-          "firmwareParameterName": "densityCorrection",
-          "wireAccess": "Writable"
-        }
-      ],
-      "dimension": "ParameterBinding",
-      "identity": "dsm:dsm.holding.densityCorrectionValue",
-      "message": "精确 wire 元组对应多个不同固件参数语义；禁止按名称模糊选择"
-    },
-    {
-      "category": "ParameterBindingAmbiguous",
-      "details": [
-        {
-          "direction": "cpu2ShadowToExternal",
-          "externalSymbol": "HOLDREGISTER_FADEZERO",
-          "firmwareParameterName": "blindZone",
-          "wireAccess": "Writable"
-        },
-        {
-          "direction": "externalToCpu2Shadow",
-          "externalSymbol": "HOLDREGISTER_FADEZERO",
-          "firmwareParameterName": "blindZone",
-          "wireAccess": "Writable"
-        }
-      ],
-      "dimension": "ParameterBinding",
-      "identity": "dsm:dsm.holding.fadezero",
-      "message": "精确 wire 元组对应多个不同固件参数语义；禁止按名称模糊选择"
-    },
-    {
-      "category": "ParameterBindingAmbiguous",
-      "details": [
-        {
-          "direction": "cpu2ShadowToExternal",
-          "externalSymbol": "HOLDREGISTER_GIRTH_YITI",
-          "firmwareParameterName": "encoder_wheel_circumference_mm",
-          "wireAccess": "Writable"
-        },
-        {
-          "direction": "externalToCpu2Shadow",
-          "externalSymbol": "HOLDREGISTER_GIRTH_YITI",
-          "firmwareParameterName": "encoder_wheel_circumference_mm",
-          "wireAccess": "Writable"
-        }
-      ],
-      "dimension": "ParameterBinding",
-      "identity": "dsm:dsm.holding.girthYiti",
-      "message": "精确 wire 元组对应多个不同固件参数语义；禁止按名称模糊选择"
-    },
-    {
-      "category": "ParameterBindingAmbiguous",
-      "details": [
-        {
-          "direction": "cpu2ShadowToExternal",
-          "externalSymbol": "HOLDREGISTER_INTERVAL_DIREDION",
-          "firmwareParameterName": "spreadMeasurementOrder",
-          "wireAccess": "Writable"
-        },
-        {
-          "direction": "externalToCpu2Shadow",
-          "externalSymbol": "HOLDREGISTER_INTERVAL_DIREDION",
-          "firmwareParameterName": "spreadMeasurementOrder",
-          "wireAccess": "Writable"
-        }
-      ],
-      "dimension": "ParameterBinding",
-      "identity": "dsm:dsm.holding.intervalDirection",
-      "message": "精确 wire 元组对应多个不同固件参数语义；禁止按名称模糊选择"
-    },
-    {
-      "category": "ParameterBindingAmbiguous",
-      "details": [
-        {
-          "direction": "cpu2ShadowToExternal",
-          "externalSymbol": "HOLDREGISTER_INTERVAL_OIL_A",
-          "firmwareParameterName": "intervalMeasurementTopLimit",
-          "wireAccess": "Writable"
-        },
-        {
-          "direction": "externalToCpu2Shadow",
-          "externalSymbol": "HOLDREGISTER_INTERVAL_OIL_A",
-          "firmwareParameterName": "intervalMeasurementTopLimit",
-          "wireAccess": "Writable"
-        }
-      ],
-      "dimension": "ParameterBinding",
-      "identity": "dsm:dsm.holding.intervalOilA",
-      "message": "精确 wire 元组对应多个不同固件参数语义；禁止按名称模糊选择"
-    },
-    {
-      "category": "ParameterBindingAmbiguous",
-      "details": [
-        {
-          "direction": "cpu2ShadowToExternal",
-          "externalSymbol": "HOLDREGISTER_INTERVAL_OIL_B",
-          "firmwareParameterName": "intervalMeasurementBottomLimit",
-          "wireAccess": "Writable"
-        },
-        {
-          "direction": "externalToCpu2Shadow",
-          "externalSymbol": "HOLDREGISTER_INTERVAL_OIL_B",
-          "firmwareParameterName": "intervalMeasurementBottomLimit",
-          "wireAccess": "Writable"
-        }
-      ],
-      "dimension": "ParameterBinding",
-      "identity": "dsm:dsm.holding.intervalOilB",
-      "message": "精确 wire 元组对应多个不同固件参数语义；禁止按名称模糊选择"
-    },
-    {
-      "category": "ParameterBindingAmbiguous",
-      "details": [
-        {
-          "direction": "cpu2ShadowToExternal",
-          "externalSymbol": "HOLDREGISTER_INTERVAL_POINT",
-          "firmwareParameterName": "spreadMeasurementCount",
-          "wireAccess": "Writable"
-        },
-        {
-          "direction": "externalToCpu2Shadow",
-          "externalSymbol": "HOLDREGISTER_INTERVAL_POINT",
-          "firmwareParameterName": "spreadMeasurementCount",
-          "wireAccess": "Writable"
-        }
-      ],
-      "dimension": "ParameterBinding",
-      "identity": "dsm:dsm.holding.intervalPoint",
-      "message": "精确 wire 元组对应多个不同固件参数语义；禁止按名称模糊选择"
-    },
-    {
-      "category": "ParameterBindingAmbiguous",
-      "details": [
-        {
-          "direction": "cpu2ShadowToExternal",
-          "externalSymbol": "HOLDREGISTER_LEVEL_MEASURE_METHOD",
-          "firmwareParameterName": "liquidLevelMeasurementMethod",
-          "wireAccess": "Writable"
-        },
-        {
-          "direction": "externalToCpu2Shadow",
-          "externalSymbol": "HOLDREGISTER_LEVEL_MEASURE_METHOD",
-          "firmwareParameterName": "liquidLevelMeasurementMethod",
-          "wireAccess": "Writable"
-        }
-      ],
-      "dimension": "ParameterBinding",
-      "identity": "dsm:dsm.levelMeasureMethod",
-      "message": "精确 wire 元组对应多个不同固件参数语义；禁止按名称模糊选择"
-    },
-    {
-      "category": "ParameterBindingAmbiguous",
-      "details": [
-        {
-          "direction": "cpu2ShadowToExternal",
-          "externalSymbol": "HOLDREGISTER_MAXDOWN_DIS",
-          "firmwareParameterName": "maxDownDistance",
-          "wireAccess": "Writable"
-        },
-        {
-          "direction": "externalToCpu2Shadow",
-          "externalSymbol": "HOLDREGISTER_MAXDOWN_DIS",
-          "firmwareParameterName": "maxDownDistance",
-          "wireAccess": "Writable"
-        }
-      ],
-      "dimension": "ParameterBinding",
-      "identity": "dsm:dsm.holding.maxdownDis",
-      "message": "精确 wire 元组对应多个不同固件参数语义；禁止按名称模糊选择"
-    },
-    {
-      "category": "ParameterBindingAmbiguous",
-      "details": [
-        {
-          "direction": "cpu2ShadowToExternal",
-          "externalSymbol": "HOLDREGISTER_MEASREMENT_METER",
-          "firmwareParameterName": "spreadMeasurementOrder",
-          "wireAccess": "Writable"
-        },
-        {
-          "direction": "externalToCpu2Shadow",
-          "externalSymbol": "HOLDREGISTER_MEASREMENT_METER",
-          "firmwareParameterName": "spreadMeasurementOrder",
-          "wireAccess": "Writable"
-        }
-      ],
-      "dimension": "ParameterBinding",
-      "identity": "dsm:dsm.holding.measurementMeter",
-      "message": "精确 wire 元组对应多个不同固件参数语义；禁止按名称模糊选择"
-    },
-    {
-      "category": "ParameterBindingAmbiguous",
-      "details": [
-        {
-          "direction": "cpu2ShadowToExternal",
-          "externalSymbol": "HOLDREGISTER_RUNTODISTANCE",
-          "firmwareParameterName": "motorCommandDistance",
-          "wireAccess": "Writable"
-        },
-        {
-          "direction": "externalToCpu2Shadow",
-          "externalSymbol": "HOLDREGISTER_RUNTODISTANCE",
-          "firmwareParameterName": "motorCommandDistance",
-          "wireAccess": "Writable"
-        }
-      ],
-      "dimension": "ParameterBinding",
-      "identity": "dsm:dsm.holding.runtodistance",
-      "message": "精确 wire 元组对应多个不同固件参数语义；禁止按名称模糊选择"
-    },
-    {
-      "category": "ParameterBindingAmbiguous",
-      "details": [
-        {
-          "direction": "cpu2ShadowToExternal",
-          "externalSymbol": "HOLDREGISTER_SPREAD_DISTANCE",
-          "firmwareParameterName": "spreadMeasurementDistance",
-          "wireAccess": "Writable"
-        },
-        {
-          "direction": "externalToCpu2Shadow",
-          "externalSymbol": "HOLDREGISTER_SPREAD_DISTANCE",
-          "firmwareParameterName": "spreadMeasurementDistance",
-          "wireAccess": "Writable"
-        }
-      ],
-      "dimension": "ParameterBinding",
-      "identity": "dsm:dsm.holding.spreadDistance",
-      "message": "精确 wire 元组对应多个不同固件参数语义；禁止按名称模糊选择"
-    },
-    {
-      "category": "ParameterBindingAmbiguous",
-      "details": [
-        {
-          "direction": "cpu2ShadowToExternal",
-          "externalSymbol": "HOLDREGISTER_SPREAD_DISTANCE_FREE",
-          "firmwareParameterName": "spreadMeasurementDistance",
-          "wireAccess": "Writable"
-        },
-        {
-          "direction": "externalToCpu2Shadow",
-          "externalSymbol": "HOLDREGISTER_SPREAD_DISTANCE_FREE",
-          "firmwareParameterName": "spreadMeasurementDistance",
-          "wireAccess": "Writable"
-        }
-      ],
-      "dimension": "ParameterBinding",
-      "identity": "dsm:dsm.spreadDistance",
-      "message": "精确 wire 元组对应多个不同固件参数语义；禁止按名称模糊选择"
-    },
-    {
-      "category": "ParameterBindingAmbiguous",
-      "details": [
-        {
-          "direction": "cpu2ShadowToExternal",
-          "externalSymbol": "HOLDREGISTER_SPREAD_DSM_STATE_FREE",
-          "firmwareParameterName": "spreadMeasurementMode",
-          "wireAccess": "Writable"
-        },
-        {
-          "direction": "externalToCpu2Shadow",
-          "externalSymbol": "HOLDREGISTER_SPREAD_DSM_STATE_FREE",
-          "firmwareParameterName": "spreadMeasurementMode",
-          "wireAccess": "Writable"
-        }
-      ],
-      "dimension": "ParameterBinding",
-      "identity": "dsm:dsm.spreadModeFree",
-      "message": "精确 wire 元组对应多个不同固件参数语义；禁止按名称模糊选择"
-    },
-    {
-      "category": "ParameterBindingAmbiguous",
-      "details": [
-        {
-          "direction": "cpu2ShadowToExternal",
-          "externalSymbol": "HOLDREGISTER_SPREAD_FIXEDBASE",
-          "firmwareParameterName": "spreadBottomLimit",
-          "wireAccess": "Writable"
-        },
-        {
-          "direction": "externalToCpu2Shadow",
-          "externalSymbol": "HOLDREGISTER_SPREAD_FIXEDBASE",
-          "firmwareParameterName": "spreadBottomLimit",
-          "wireAccess": "Writable"
-        }
-      ],
-      "dimension": "ParameterBinding",
-      "identity": "dsm:dsm.holding.spreadFixedbase",
-      "message": "精确 wire 元组对应多个不同固件参数语义；禁止按名称模糊选择"
-    },
-    {
-      "category": "ParameterBindingAmbiguous",
-      "details": [
-        {
-          "direction": "cpu2ShadowToExternal",
-          "externalSymbol": "HOLDREGISTER_SPREAD_FIXEDDISTANCE",
-          "firmwareParameterName": "spreadMeasurementDistance",
-          "wireAccess": "Writable"
-        },
-        {
-          "direction": "externalToCpu2Shadow",
-          "externalSymbol": "HOLDREGISTER_SPREAD_FIXEDDISTANCE",
-          "firmwareParameterName": "spreadMeasurementDistance",
-          "wireAccess": "Writable"
-        }
-      ],
-      "dimension": "ParameterBinding",
-      "identity": "dsm:dsm.holding.spreadFixeddistance",
-      "message": "精确 wire 元组对应多个不同固件参数语义；禁止按名称模糊选择"
-    },
-    {
-      "category": "ParameterBindingAmbiguous",
-      "details": [
-        {
-          "direction": "cpu2ShadowToExternal",
-          "externalSymbol": "HOLDREGISTER_SPREAD_FIXEDTOP",
-          "firmwareParameterName": "spreadTopLimit",
-          "wireAccess": "Writable"
-        },
-        {
-          "direction": "externalToCpu2Shadow",
-          "externalSymbol": "HOLDREGISTER_SPREAD_FIXEDTOP",
-          "firmwareParameterName": "spreadTopLimit",
-          "wireAccess": "Writable"
-        }
-      ],
-      "dimension": "ParameterBinding",
-      "identity": "dsm:dsm.holding.spreadFixedtop",
-      "message": "精确 wire 元组对应多个不同固件参数语义；禁止按名称模糊选择"
-    },
-    {
-      "category": "ParameterBindingAmbiguous",
-      "details": [
-        {
-          "direction": "cpu2ShadowToExternal",
-          "externalSymbol": "HOLDREGISTER_SPREAD_FLOORLIMIT",
-          "firmwareParameterName": "spreadBottomLimit",
-          "wireAccess": "Writable"
-        },
-        {
-          "direction": "externalToCpu2Shadow",
-          "externalSymbol": "HOLDREGISTER_SPREAD_FLOORLIMIT",
-          "firmwareParameterName": "spreadBottomLimit",
-          "wireAccess": "Writable"
-        }
-      ],
-      "dimension": "ParameterBinding",
-      "identity": "dsm:dsm.holding.spreadFloorlimit",
-      "message": "精确 wire 元组对应多个不同固件参数语义；禁止按名称模糊选择"
-    },
-    {
-      "category": "ParameterBindingAmbiguous",
-      "details": [
-        {
-          "direction": "cpu2ShadowToExternal",
-          "externalSymbol": "HOLDREGISTER_SPREAD_FLOORLIMIT_FREE",
-          "firmwareParameterName": "spreadBottomLimit",
-          "wireAccess": "Writable"
-        },
-        {
-          "direction": "externalToCpu2Shadow",
-          "externalSymbol": "HOLDREGISTER_SPREAD_FLOORLIMIT_FREE",
-          "firmwareParameterName": "spreadBottomLimit",
-          "wireAccess": "Writable"
-        }
-      ],
-      "dimension": "ParameterBinding",
-      "identity": "dsm:dsm.spreadFloorLimit",
-      "message": "精确 wire 元组对应多个不同固件参数语义；禁止按名称模糊选择"
-    },
-    {
-      "category": "ParameterBindingAmbiguous",
-      "details": [
-        {
-          "direction": "cpu2ShadowToExternal",
-          "externalSymbol": "HOLDREGISTER_SPREAD_NUM",
-          "firmwareParameterName": "spreadMeasurementCount",
-          "wireAccess": "Writable"
-        },
-        {
-          "direction": "externalToCpu2Shadow",
-          "externalSymbol": "HOLDREGISTER_SPREAD_NUM",
-          "firmwareParameterName": "spreadMeasurementCount",
-          "wireAccess": "Writable"
-        }
-      ],
-      "dimension": "ParameterBinding",
-      "identity": "dsm:dsm.holding.spreadNum",
-      "message": "精确 wire 元组对应多个不同固件参数语义；禁止按名称模糊选择"
-    },
-    {
-      "category": "ParameterBindingAmbiguous",
-      "details": [
-        {
-          "direction": "cpu2ShadowToExternal",
-          "externalSymbol": "HOLDREGISTER_SPREAD_NUM_FREE",
-          "firmwareParameterName": "spreadMeasurementCount",
-          "wireAccess": "Writable"
-        },
-        {
-          "direction": "externalToCpu2Shadow",
-          "externalSymbol": "HOLDREGISTER_SPREAD_NUM_FREE",
-          "firmwareParameterName": "spreadMeasurementCount",
-          "wireAccess": "Writable"
-        }
-      ],
-      "dimension": "ParameterBinding",
-      "identity": "dsm:dsm.spreadPointCount",
-      "message": "精确 wire 元组对应多个不同固件参数语义；禁止按名称模糊选择"
-    },
-    {
-      "category": "ParameterBindingAmbiguous",
-      "details": [
-        {
-          "direction": "cpu2ShadowToExternal",
-          "externalSymbol": "HOLDREGISTER_SPREAD_STATE",
-          "firmwareParameterName": "spreadMeasurementMode",
-          "wireAccess": "Writable"
-        },
-        {
-          "direction": "externalToCpu2Shadow",
-          "externalSymbol": "HOLDREGISTER_SPREAD_STATE",
-          "firmwareParameterName": "spreadMeasurementMode",
-          "wireAccess": "Writable"
-        }
-      ],
-      "dimension": "ParameterBinding",
-      "identity": "dsm:dsm.holding.spreadState",
-      "message": "精确 wire 元组对应多个不同固件参数语义；禁止按名称模糊选择"
-    },
-    {
-      "category": "ParameterBindingAmbiguous",
-      "details": [
-        {
-          "direction": "cpu2ShadowToExternal",
-          "externalSymbol": "HOLDREGISTER_SPREAD_TOPLIMIT",
-          "firmwareParameterName": "spreadTopLimit",
-          "wireAccess": "Writable"
-        },
-        {
-          "direction": "externalToCpu2Shadow",
-          "externalSymbol": "HOLDREGISTER_SPREAD_TOPLIMIT",
-          "firmwareParameterName": "spreadTopLimit",
-          "wireAccess": "Writable"
-        }
-      ],
-      "dimension": "ParameterBinding",
-      "identity": "dsm:dsm.holding.spreadToplimit",
-      "message": "精确 wire 元组对应多个不同固件参数语义；禁止按名称模糊选择"
-    },
-    {
-      "category": "ParameterBindingAmbiguous",
-      "details": [
-        {
-          "direction": "cpu2ShadowToExternal",
-          "externalSymbol": "HOLDREGISTER_SPREAD_TOPLIMIT_FREE",
-          "firmwareParameterName": "spreadTopLimit",
-          "wireAccess": "Writable"
-        },
-        {
-          "direction": "externalToCpu2Shadow",
-          "externalSymbol": "HOLDREGISTER_SPREAD_TOPLIMIT_FREE",
-          "firmwareParameterName": "spreadTopLimit",
-          "wireAccess": "Writable"
-        }
-      ],
-      "dimension": "ParameterBinding",
-      "identity": "dsm:dsm.spreadTopLimit",
-      "message": "精确 wire 元组对应多个不同固件参数语义；禁止按名称模糊选择"
-    },
-    {
-      "category": "ParameterBindingAmbiguous",
-      "details": [
-        {
-          "direction": "cpu2ShadowToExternal",
-          "externalSymbol": "HOLDREGISTER_SPT_POSITION",
-          "firmwareParameterName": "singlePointMonitoringPosition",
-          "wireAccess": "Writable"
-        },
-        {
-          "direction": "externalToCpu2Shadow",
-          "externalSymbol": "HOLDREGISTER_SPT_POSITION",
-          "firmwareParameterName": "singlePointMonitoringPosition",
-          "wireAccess": "Writable"
-        }
-      ],
-      "dimension": "ParameterBinding",
-      "identity": "dsm:dsm.singlePointMonitorPosition",
-      "message": "精确 wire 元组对应多个不同固件参数语义；禁止按名称模糊选择"
-    },
-    {
-      "category": "ParameterBindingAmbiguous",
-      "details": [
-        {
-          "direction": "cpu2ShadowToExternal",
-          "externalSymbol": "HOLDREGISTER_SP_POSITION",
-          "firmwareParameterName": "singlePointMeasurementPosition",
-          "wireAccess": "Writable"
-        },
-        {
-          "direction": "externalToCpu2Shadow",
-          "externalSymbol": "HOLDREGISTER_SP_POSITION",
-          "firmwareParameterName": "singlePointMeasurementPosition",
-          "wireAccess": "Writable"
-        }
-      ],
-      "dimension": "ParameterBinding",
-      "identity": "dsm:dsm.singlePointPosition",
-      "message": "精确 wire 元组对应多个不同固件参数语义；禁止按名称模糊选择"
-    },
-    {
-      "category": "ParameterBindingAmbiguous",
-      "details": [
-        {
-          "direction": "cpu2ShadowToExternal",
-          "externalSymbol": "HOLDREGISTER_SRREAD_MEASURETURN",
-          "firmwareParameterName": "spreadMeasurementOrder",
-          "wireAccess": "Writable"
-        },
-        {
-          "direction": "externalToCpu2Shadow",
-          "externalSymbol": "HOLDREGISTER_SRREAD_MEASURETURN",
-          "firmwareParameterName": "spreadMeasurementOrder",
-          "wireAccess": "Writable"
-        }
-      ],
-      "dimension": "ParameterBinding",
-      "identity": "dsm:dsm.holding.spreadMeasureTurn",
-      "message": "精确 wire 元组对应多个不同固件参数语义；禁止按名称模糊选择"
-    },
-    {
-      "category": "ParameterBindingAmbiguous",
-      "details": [
-        {
-          "direction": "cpu2ShadowToExternal",
-          "externalSymbol": "HOLDREGISTER_SRREAD_POSITION",
-          "firmwareParameterName": "densityDistributionOilLevel",
-          "wireAccess": "Writable"
-        },
-        {
-          "direction": "externalToCpu2Shadow",
-          "externalSymbol": "HOLDREGISTER_SRREAD_POSITION",
-          "firmwareParameterName": "densityDistributionOilLevel",
-          "wireAccess": "Writable"
-        }
-      ],
-      "dimension": "ParameterBinding",
-      "identity": "dsm:dsm.spreadOilLevel",
-      "message": "精确 wire 元组对应多个不同固件参数语义；禁止按名称模糊选择"
-    },
-    {
-      "category": "ParameterBindingAmbiguous",
-      "details": [
-        {
-          "direction": "cpu2ShadowToExternal",
-          "externalSymbol": "HOLDREGISTER_SYNTHETIC_BOTTOM",
-          "firmwareParameterName": "requireBottomMeasurement",
-          "wireAccess": "Writable"
-        },
-        {
-          "direction": "externalToCpu2Shadow",
-          "externalSymbol": "HOLDREGISTER_SYNTHETIC_BOTTOM",
-          "firmwareParameterName": "requireBottomMeasurement",
-          "wireAccess": "Writable"
-        }
-      ],
-      "dimension": "ParameterBinding",
-      "identity": "dsm:dsm.holding.syntheticBottom",
-      "message": "精确 wire 元组对应多个不同固件参数语义；禁止按名称模糊选择"
-    },
-    {
-      "category": "ParameterBindingAmbiguous",
-      "details": [
-        {
-          "direction": "cpu2ShadowToExternal",
-          "externalSymbol": "HOLDREGISTER_SYNTHETIC_BOTTOM_FREE",
-          "firmwareParameterName": "requireBottomMeasurement",
-          "wireAccess": "Writable"
-        },
-        {
-          "direction": "externalToCpu2Shadow",
-          "externalSymbol": "HOLDREGISTER_SYNTHETIC_BOTTOM_FREE",
-          "firmwareParameterName": "requireBottomMeasurement",
-          "wireAccess": "Writable"
-        }
-      ],
-      "dimension": "ParameterBinding",
-      "identity": "dsm:dsm.holding.syntheticBottomFree",
-      "message": "精确 wire 元组对应多个不同固件参数语义；禁止按名称模糊选择"
-    },
-    {
-      "category": "ParameterBindingAmbiguous",
-      "details": [
-        {
-          "direction": "cpu2ShadowToExternal",
-          "externalSymbol": "HOLDREGISTER_SYNTHETIC_SINGLEPOINT",
-          "firmwareParameterName": "requireSinglePointDensity",
-          "wireAccess": "Writable"
-        },
-        {
-          "direction": "externalToCpu2Shadow",
-          "externalSymbol": "HOLDREGISTER_SYNTHETIC_SINGLEPOINT",
-          "firmwareParameterName": "requireSinglePointDensity",
-          "wireAccess": "Writable"
-        }
-      ],
-      "dimension": "ParameterBinding",
-      "identity": "dsm:dsm.holding.syntheticSinglepoint",
-      "message": "精确 wire 元组对应多个不同固件参数语义；禁止按名称模糊选择"
-    },
-    {
-      "category": "ParameterBindingAmbiguous",
-      "details": [
-        {
-          "direction": "cpu2ShadowToExternal",
-          "externalSymbol": "HOLDREGISTER_SYNTHETIC_SINGLEPOINT_FREE",
-          "firmwareParameterName": "requireSinglePointDensity",
-          "wireAccess": "Writable"
-        },
-        {
-          "direction": "externalToCpu2Shadow",
-          "externalSymbol": "HOLDREGISTER_SYNTHETIC_SINGLEPOINT_FREE",
-          "firmwareParameterName": "requireSinglePointDensity",
-          "wireAccess": "Writable"
-        }
-      ],
-      "dimension": "ParameterBinding",
-      "identity": "dsm:dsm.holding.syntheticSinglepointFree",
-      "message": "精确 wire 元组对应多个不同固件参数语义；禁止按名称模糊选择"
-    },
-    {
-      "category": "ParameterBindingAmbiguous",
-      "details": [
-        {
-          "direction": "cpu2ShadowToExternal",
-          "externalSymbol": "HOLDREGISTER_SYNTHETIC_WATER",
-          "firmwareParameterName": "requireWaterMeasurement",
-          "wireAccess": "Writable"
-        },
-        {
-          "direction": "externalToCpu2Shadow",
-          "externalSymbol": "HOLDREGISTER_SYNTHETIC_WATER",
-          "firmwareParameterName": "requireWaterMeasurement",
-          "wireAccess": "Writable"
-        }
-      ],
-      "dimension": "ParameterBinding",
-      "identity": "dsm:dsm.holding.syntheticWater",
-      "message": "精确 wire 元组对应多个不同固件参数语义；禁止按名称模糊选择"
-    },
-    {
-      "category": "ParameterBindingAmbiguous",
-      "details": [
-        {
-          "direction": "cpu2ShadowToExternal",
-          "externalSymbol": "HOLDREGISTER_SYNTHETIC_WATER_FREE",
-          "firmwareParameterName": "requireWaterMeasurement",
-          "wireAccess": "Writable"
-        },
-        {
-          "direction": "externalToCpu2Shadow",
-          "externalSymbol": "HOLDREGISTER_SYNTHETIC_WATER_FREE",
-          "firmwareParameterName": "requireWaterMeasurement",
-          "wireAccess": "Writable"
-        }
-      ],
-      "dimension": "ParameterBinding",
-      "identity": "dsm:dsm.holding.syntheticWaterFree",
-      "message": "精确 wire 元组对应多个不同固件参数语义；禁止按名称模糊选择"
-    },
-    {
-      "category": "ParameterBindingAmbiguous",
-      "details": [
-        {
-          "direction": "cpu2ShadowToExternal",
-          "externalSymbol": "HOLDREGISTER_TANKHIGHT",
-          "firmwareParameterName": "tankHeight",
-          "wireAccess": "Writable"
-        },
-        {
-          "direction": "externalToCpu2Shadow",
-          "externalSymbol": "HOLDREGISTER_TANKHIGHT",
-          "firmwareParameterName": "tankHeight",
-          "wireAccess": "Writable"
-        }
-      ],
-      "dimension": "ParameterBinding",
-      "identity": "dsm:dsm.tankHeight",
-      "message": "精确 wire 元组对应多个不同固件参数语义；禁止按名称模糊选择"
-    },
-    {
-      "category": "ParameterBindingAmbiguous",
-      "details": [
-        {
-          "direction": "cpu2ShadowToExternal",
-          "externalSymbol": "HOLDREGISTER_TEMCORRECTCALUE",
-          "firmwareParameterName": "temperatureCorrection",
-          "wireAccess": "Writable"
-        },
-        {
-          "direction": "externalToCpu2Shadow",
-          "externalSymbol": "HOLDREGISTER_TEMCORRECTCALUE",
-          "firmwareParameterName": "temperatureCorrection",
-          "wireAccess": "Writable"
-        }
-      ],
-      "dimension": "ParameterBinding",
-      "identity": "dsm:dsm.holding.temperatureCorrectionValue",
-      "message": "精确 wire 元组对应多个不同固件参数语义；禁止按名称模糊选择"
-    },
-    {
       "category": "ParameterBindingMissing",
       "details": {
         "wire": "dsm|fc=3|address=0|registerCount=6"
@@ -185488,6 +189082,26 @@
         "tool": null
       },
       "dimension": "ParameterWordOrder",
+      "identity": "dsm:dsm.holding.calibrationtankhigh",
+      "message": "多寄存器参数两端没有同时发布结构化 wordOrder"
+    },
+    {
+      "category": "ParameterWordOrderUnproven",
+      "details": {
+        "firmware": null,
+        "tool": null
+      },
+      "dimension": "ParameterWordOrder",
+      "identity": "dsm:dsm.holding.calibrationwaterlevel",
+      "message": "多寄存器参数两端没有同时发布结构化 wordOrder"
+    },
+    {
+      "category": "ParameterWordOrderUnproven",
+      "details": {
+        "firmware": null,
+        "tool": null
+      },
+      "dimension": "ParameterWordOrder",
       "identity": "dsm:dsm.holding.correctionOil",
       "message": "多寄存器参数两端没有同时发布结构化 wordOrder"
     },
@@ -185508,7 +189122,57 @@
         "tool": null
       },
       "dimension": "ParameterWordOrder",
+      "identity": "dsm:dsm.holding.fadezero",
+      "message": "多寄存器参数两端没有同时发布结构化 wordOrder"
+    },
+    {
+      "category": "ParameterWordOrderUnproven",
+      "details": {
+        "firmware": null,
+        "tool": null
+      },
+      "dimension": "ParameterWordOrder",
+      "identity": "dsm:dsm.holding.girthYiti",
+      "message": "多寄存器参数两端没有同时发布结构化 wordOrder"
+    },
+    {
+      "category": "ParameterWordOrderUnproven",
+      "details": {
+        "firmware": null,
+        "tool": null
+      },
+      "dimension": "ParameterWordOrder",
+      "identity": "dsm:dsm.holding.intervalOilA",
+      "message": "多寄存器参数两端没有同时发布结构化 wordOrder"
+    },
+    {
+      "category": "ParameterWordOrderUnproven",
+      "details": {
+        "firmware": null,
+        "tool": null
+      },
+      "dimension": "ParameterWordOrder",
+      "identity": "dsm:dsm.holding.intervalOilB",
+      "message": "多寄存器参数两端没有同时发布结构化 wordOrder"
+    },
+    {
+      "category": "ParameterWordOrderUnproven",
+      "details": {
+        "firmware": null,
+        "tool": null
+      },
+      "dimension": "ParameterWordOrder",
       "identity": "dsm:dsm.holding.oilMeasurPosition",
+      "message": "多寄存器参数两端没有同时发布结构化 wordOrder"
+    },
+    {
+      "category": "ParameterWordOrderUnproven",
+      "details": {
+        "firmware": null,
+        "tool": null
+      },
+      "dimension": "ParameterWordOrder",
+      "identity": "dsm:dsm.holding.runtodistance",
       "message": "多寄存器参数两端没有同时发布结构化 wordOrder"
     },
     {
@@ -185538,6 +189202,66 @@
         "tool": null
       },
       "dimension": "ParameterWordOrder",
+      "identity": "dsm:dsm.holding.spreadDistance",
+      "message": "多寄存器参数两端没有同时发布结构化 wordOrder"
+    },
+    {
+      "category": "ParameterWordOrderUnproven",
+      "details": {
+        "firmware": null,
+        "tool": null
+      },
+      "dimension": "ParameterWordOrder",
+      "identity": "dsm:dsm.holding.spreadFixedbase",
+      "message": "多寄存器参数两端没有同时发布结构化 wordOrder"
+    },
+    {
+      "category": "ParameterWordOrderUnproven",
+      "details": {
+        "firmware": null,
+        "tool": null
+      },
+      "dimension": "ParameterWordOrder",
+      "identity": "dsm:dsm.holding.spreadFixeddistance",
+      "message": "多寄存器参数两端没有同时发布结构化 wordOrder"
+    },
+    {
+      "category": "ParameterWordOrderUnproven",
+      "details": {
+        "firmware": null,
+        "tool": null
+      },
+      "dimension": "ParameterWordOrder",
+      "identity": "dsm:dsm.holding.spreadFixedtop",
+      "message": "多寄存器参数两端没有同时发布结构化 wordOrder"
+    },
+    {
+      "category": "ParameterWordOrderUnproven",
+      "details": {
+        "firmware": null,
+        "tool": null
+      },
+      "dimension": "ParameterWordOrder",
+      "identity": "dsm:dsm.holding.spreadFloorlimit",
+      "message": "多寄存器参数两端没有同时发布结构化 wordOrder"
+    },
+    {
+      "category": "ParameterWordOrderUnproven",
+      "details": {
+        "firmware": null,
+        "tool": null
+      },
+      "dimension": "ParameterWordOrder",
+      "identity": "dsm:dsm.holding.spreadToplimit",
+      "message": "多寄存器参数两端没有同时发布结构化 wordOrder"
+    },
+    {
+      "category": "ParameterWordOrderUnproven",
+      "details": {
+        "firmware": null,
+        "tool": null
+      },
+      "dimension": "ParameterWordOrder",
       "identity": "dsm:dsm.holding.spsyntheticPosition",
       "message": "多寄存器参数两端没有同时发布结构化 wordOrder"
     },
@@ -185549,6 +189273,76 @@
       },
       "dimension": "ParameterWordOrder",
       "identity": "dsm:dsm.holding.thresholdoffrequence",
+      "message": "多寄存器参数两端没有同时发布结构化 wordOrder"
+    },
+    {
+      "category": "ParameterWordOrderUnproven",
+      "details": {
+        "firmware": null,
+        "tool": null
+      },
+      "dimension": "ParameterWordOrder",
+      "identity": "dsm:dsm.singlePointMonitorPosition",
+      "message": "多寄存器参数两端没有同时发布结构化 wordOrder"
+    },
+    {
+      "category": "ParameterWordOrderUnproven",
+      "details": {
+        "firmware": null,
+        "tool": null
+      },
+      "dimension": "ParameterWordOrder",
+      "identity": "dsm:dsm.singlePointPosition",
+      "message": "多寄存器参数两端没有同时发布结构化 wordOrder"
+    },
+    {
+      "category": "ParameterWordOrderUnproven",
+      "details": {
+        "firmware": null,
+        "tool": null
+      },
+      "dimension": "ParameterWordOrder",
+      "identity": "dsm:dsm.spreadDistance",
+      "message": "多寄存器参数两端没有同时发布结构化 wordOrder"
+    },
+    {
+      "category": "ParameterWordOrderUnproven",
+      "details": {
+        "firmware": null,
+        "tool": null
+      },
+      "dimension": "ParameterWordOrder",
+      "identity": "dsm:dsm.spreadFloorLimit",
+      "message": "多寄存器参数两端没有同时发布结构化 wordOrder"
+    },
+    {
+      "category": "ParameterWordOrderUnproven",
+      "details": {
+        "firmware": null,
+        "tool": null
+      },
+      "dimension": "ParameterWordOrder",
+      "identity": "dsm:dsm.spreadOilLevel",
+      "message": "多寄存器参数两端没有同时发布结构化 wordOrder"
+    },
+    {
+      "category": "ParameterWordOrderUnproven",
+      "details": {
+        "firmware": null,
+        "tool": null
+      },
+      "dimension": "ParameterWordOrder",
+      "identity": "dsm:dsm.spreadTopLimit",
+      "message": "多寄存器参数两端没有同时发布结构化 wordOrder"
+    },
+    {
+      "category": "ParameterWordOrderUnproven",
+      "details": {
+        "firmware": null,
+        "tool": null
+      },
+      "dimension": "ParameterWordOrder",
+      "identity": "dsm:dsm.tankHeight",
       "message": "多寄存器参数两端没有同时发布结构化 wordOrder"
     },
     {
@@ -187319,7 +191113,7 @@
   "ValidationErrors": [],
   "categoryCounts": {
     "Compared": {
-      "Compared": 7776
+      "Compared": 8060
     },
     "Differences": {},
     "Unverifiable": {
@@ -187327,15 +191121,14 @@
       "FirmwareRawOffsetUnproven": 42,
       "FirmwareRequiredParametersUnresolved": 67,
       "FirmwareWireScaleUnproven": 42,
-      "ParameterBindingAmbiguous": 38,
       "ParameterBindingMissing": 3914,
-      "ParameterWordOrderUnproven": 169,
+      "ParameterWordOrderUnproven": 189,
       "ToolParameterCoverageUnproven": 11
     },
     "ValidationErrors": {}
   },
   "counts": {
-    "compared": 7776,
+    "compared": 8060,
     "differences": 0,
     "firmwareCommandConsumers": 39,
     "firmwareCommands": 39,
@@ -187345,7 +191138,7 @@
     "toolCommands": 75,
     "toolParameters": 4275,
     "toolProfiles": 5,
-    "unverifiable": 4421,
+    "unverifiable": 4403,
     "validationErrors": 0
   },
   "dimensionCounts": {
@@ -187374,52 +191167,52 @@
       "unverifiableCount": 0
     },
     "ParameterBinding": {
-      "comparedCount": 185,
+      "comparedCount": 223,
       "differenceCount": 0,
       "required": true,
-      "unverifiableCount": 4101
+      "unverifiableCount": 4063
     },
     "ParameterRawOffset": {
-      "comparedCount": 281,
+      "comparedCount": 319,
       "differenceCount": 0,
       "required": true,
       "unverifiableCount": 42
     },
     "ParameterScale": {
-      "comparedCount": 281,
+      "comparedCount": 319,
       "differenceCount": 0,
       "required": true,
       "unverifiableCount": 42
     },
     "ParameterSemanticClassification": {
-      "comparedCount": 459,
+      "comparedCount": 497,
       "differenceCount": 0,
       "required": true,
       "unverifiableCount": 0
     },
     "ParameterSignedness": {
-      "comparedCount": 323,
+      "comparedCount": 361,
       "differenceCount": 0,
       "required": true,
       "unverifiableCount": 0
     },
     "ParameterStructuredWritePermission": {
-      "comparedCount": 323,
+      "comparedCount": 361,
       "differenceCount": 0,
       "required": true,
       "unverifiableCount": 0
     },
     "ParameterWireAccess": {
-      "comparedCount": 323,
+      "comparedCount": 361,
       "differenceCount": 0,
       "required": true,
       "unverifiableCount": 0
     },
     "ParameterWordOrder": {
-      "comparedCount": 154,
+      "comparedCount": 172,
       "differenceCount": 0,
       "required": true,
-      "unverifiableCount": 169
+      "unverifiableCount": 189
     },
     "ProfileCoverage": {
       "comparedCount": 4,
@@ -187445,7 +191238,7 @@
     "comparisonPolicy": {
       "schema": "cube.protocol-catalog-comparison-policy",
       "schemaVersion": 1,
-      "sha256": "e9703a74ace7c3c175c60fa04fdee23df184b291c4984cf84ed894b1960b3dee"
+      "sha256": "46e06af6f00ec1f1e5c1cc10a401c4e94bde4f838dfe5b3d662a0560de20f136"
     },
     "firmwareFacts": {
       "schema": "cube.ltd-firmware.protocol-fact-inventory",
@@ -187455,7 +191248,7 @@
     "toolCatalog": {
       "schema": "cube.ltd-device-debug-tool.protocol-catalog",
       "schemaVersion": 2,
-      "sha256": "5cd177bea6cad87c0678bd173f77b91b78412b508e32c1a9a10b48bd8fe4ffbe"
+      "sha256": "757f47db2a732816456494d0692fbaf0f31ac323f7b9e6de40372da448d90137"
     }
   },
   "policy": {
@@ -187533,19 +191326,18 @@
     {
       "categories": [
         "FirmwareParameterIdentityMissing",
-        "ParameterBindingAmbiguous",
         "ParameterBindingMissing",
         "ToolParameterCoverageUnproven"
       ],
       "dimension": "ParameterBinding",
-      "unverifiableCount": 4101
+      "unverifiableCount": 4063
     },
     {
       "categories": [
         "ParameterWordOrderUnproven"
       ],
       "dimension": "ParameterWordOrder",
-      "unverifiableCount": 169
+      "unverifiableCount": 189
     },
     {
       "categories": [

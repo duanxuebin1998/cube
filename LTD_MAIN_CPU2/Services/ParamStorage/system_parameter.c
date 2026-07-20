@@ -312,10 +312,15 @@ static int apply_protocol_version_runtime(void)
     }
 
     if ((old_protocol < 14U) || (old_protocol > DEVICE_PROTOCOL_VERSION)) {
-        g_deviceParams.si_profile_first_point = 1000U;
+        g_deviceParams.si_profile_first_point = 5000U;
         g_deviceParams.si_profile_increment = 10000U;
         g_deviceParams.si_profile_dwell_time = 10U;
         g_deviceParams.si_profile_bottom_detect_interval = 1U;
+    }
+
+    if ((old_protocol < 25U) || (old_protocol > DEVICE_PROTOCOL_VERSION)) {
+        /* 协议25首次赋予reserved3水位滞后时间语义，旧槽位不得直接作为有效秒数。 */
+        g_deviceParams.water_level_hysteresis_time_s = 0U;
     }
     g_deviceParams.protocolVersion = DEVICE_PROTOCOL_VERSION;
     return 1;
@@ -696,7 +701,7 @@ static int normalize_device_params_runtime(void)
 
     /* 旧版本该位置为 reserved17，可能读到 0；这里补默认值，避免监测阈值过小。 */
     if (g_deviceParams.water_lag_cap_threshold == 0U) {
-        g_deviceParams.water_lag_cap_threshold = 30000U;
+        g_deviceParams.water_lag_cap_threshold = 15000U;
         changed = 1;
     }
 
@@ -708,9 +713,14 @@ static int normalize_device_params_runtime(void)
 
 
     if (g_deviceParams.si_profile_first_point == 0U) {
-        g_deviceParams.si_profile_first_point = 1000U;
+        g_deviceParams.si_profile_first_point = 5000U;
         changed = 1;
     }
+    if (g_deviceParams.water_level_hysteresis_time_s > 3600U) {
+        g_deviceParams.water_level_hysteresis_time_s = 0U;
+        changed = 1;
+    }
+
     if (g_deviceParams.si_profile_increment == 0U) {
         g_deviceParams.si_profile_increment = 10000U;
         changed = 1;
@@ -1234,6 +1244,7 @@ void RestoreFactoryParamsConfig(void)
     g_deviceParams.error_auto_back_zero  = 0;   /* 默认关闭 */
     g_deviceParams.error_stop_measurement= 1;   /* 默认: 报错停止测量 */
     g_deviceParams.fault_auto_recovery_retry_limit = FAULT_AUTO_RECOVERY_RETRY_DEFAULT; /* 默认: 故障自动恢复最多重跑3次 */
+    g_deviceParams.water_level_hysteresis_time_s = 0U; /* 预留参数默认0s，当前不参与水位流程 */
     g_deviceParams.position_source_auto_switch = POSITION_SOURCE_AUTO_SWITCH_DISABLE; /* 默认关闭 */
 
     /* ---------------- 电机与编码器参数 ---------------- */
@@ -1272,7 +1283,7 @@ void RestoreFactoryParamsConfig(void)
     g_deviceParams.oilLevelThreshold                     = 150;     /* 项目自定义倍率/单位 */
     g_deviceParams.oilLevelHysteresisThreshold = 200;     /* 项目自定义倍率/单位 */
     g_deviceParams.liquidLevelMeasurementMethod= 0;		/* 0 空气+液体频率/2 1：按设置频率步进跟随 2 密度连续跟随 3.根据振动管跟随 4 连续相对频率 5 连续定频 */
-    g_deviceParams.oilLevelFrequency                = 5500;      /* oilLevelFrequency */
+    g_deviceParams.oilLevelFrequency                = 5200;      /* oilLevelFrequency */
     g_deviceParams.oilLevelDensity                = 0;      /* oilLevelDensity */
 
     /* ---------------- 水位测量参数 ---------------- */
@@ -1284,7 +1295,7 @@ void RestoreFactoryParamsConfig(void)
     g_deviceParams.maxDownDistance                  = 3000;   /* 0.1mm => 300mm */
     g_deviceParams.zero_cap                         = 0;      /* 0.1pf */
     g_deviceParams.water_stable_threshold                      = 500;      /* 0.1mm */
-    g_deviceParams.water_lag_cap_threshold  = 30000;  /* x1000 => 30.000pF */
+    g_deviceParams.water_lag_cap_threshold  = 15000;  /* x1000 => 15.000pF */
 
     /* ---------------- 罐高/罐底测量 ---------------- */
     g_deviceParams.bottom_detect_mode      = 0;    /* 0=按项目定义 */
@@ -1327,7 +1338,7 @@ void RestoreFactoryParamsConfig(void)
 
 
     /* ---------------- SI Profile参数 ---------------- */
-    g_deviceParams.si_profile_first_point = 1000U;
+    g_deviceParams.si_profile_first_point = 5000U;
     g_deviceParams.si_profile_increment = 10000U;
     g_deviceParams.si_profile_dwell_time = 10U;
     g_deviceParams.si_profile_bottom_detect_interval = 1U;
@@ -1480,6 +1491,7 @@ static const ParamPrintItem g_device_param_print_table[] = {
     DEVICE_PARAM_ITEM("水位参数", "水位零点电容", zero_cap, PARAM_PRINT_TYPE_U32_01PF, "0.1pF"),
     DEVICE_PARAM_ITEM("水位参数", "水位稳定阈值", water_stable_threshold, PARAM_PRINT_TYPE_U32_01MM, "0.1mm"),
     DEVICE_PARAM_ITEM("水位参数", "水位滞后电容阈值", water_lag_cap_threshold, PARAM_PRINT_TYPE_U32_001PF, "0.001pF"),
+    DEVICE_PARAM_ITEM("水位参数", "水位滞后时间", water_level_hysteresis_time_s, PARAM_PRINT_TYPE_U32_UNIT, "s"),
     DEVICE_PARAM_ITEM("水位参数", "水位修正值", waterLevelCorrection, PARAM_PRINT_TYPE_U32_01MM, "0.1mm"),
     DEVICE_PARAM_ITEM("罐底/罐高参数", "罐底检测模式", bottom_detect_mode, PARAM_PRINT_TYPE_U32, NULL),
     DEVICE_PARAM_ITEM("罐底/罐高参数", "探底角度阈值", bottom_angle_threshold, PARAM_PRINT_TYPE_U32_UNIT, "deg"),

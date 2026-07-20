@@ -1,0 +1,222 @@
+{
+  "schema_version": 1,
+  "protocol_id": "dsm_cpu1_usart3_text",
+  "matrix_file": "../dsm_protocol_matrix.json",
+  "description": "确定性协议样例。documented 表示协议正文已有样例，synthetic 表示按字段格式和历史 BCC 算法构造的契约向量，不代表目标板抓包。",
+  "cases": [
+    {
+      "id": "v5_3_ack_cf",
+      "version": "V5.3",
+      "command": "F",
+      "response_profile": "compatibility_ack_3",
+      "kind": "literal",
+      "expected_frame_hex": "25 0D 0A",
+      "evidence": "documented"
+    },
+    {
+      "id": "v5_3_density_cd",
+      "version": "V5.3",
+      "command": "d",
+      "response_profile": "density_data_27",
+      "kind": "bcc_payload",
+      "payload_ascii": "F+016920D+0000.0T+19.570",
+      "expected_bcc_hex": "50",
+      "expected_frame_hex": "46 2B 30 31 36 39 32 30 44 2B 30 30 30 30 2E 30 54 2B 31 39 2E 35 37 30 50 0D 0A",
+      "evidence": "documented"
+    },
+    {
+      "id": "v5_3_density_parameters_cm",
+      "version": "V5.3",
+      "command": "M",
+      "response_profile": "density_parameters_27",
+      "kind": "bcc_payload",
+      "payload_ascii": "A+123456B+234567C+0012.3",
+      "expected_bcc_hex": "58",
+      "expected_frame_hex": "41 2B 31 32 33 34 35 36 42 2B 32 33 34 35 36 37 43 2B 30 30 31 32 2E 33 58 0D 0A",
+      "evidence": "synthetic"
+    },
+    {
+      "id": "v5_3_gyroscope_ch",
+      "version": "V5.3",
+      "command": "h",
+      "response_profile": "gyroscope_angle_19",
+      "kind": "bcc_payload",
+      "payload_ascii": "A+0001.2B-0003.4",
+      "expected_bcc_hex": "2A",
+      "expected_frame_hex": "41 2B 30 30 30 31 2E 32 42 2D 30 30 30 33 2E 34 2A 0D 0A",
+      "evidence": "synthetic"
+    },
+    {
+      "id": "v5_3_water_cl",
+      "version": "V5.3",
+      "command": "l",
+      "response_profile": "water_capacitance_11",
+      "kind": "bcc_payload",
+      "payload_ascii": "D00003.3",
+      "expected_bcc_hex": "5A",
+      "expected_frame_hex": "44 30 30 30 30 33 2E 33 5A 0D 0A",
+      "evidence": "documented_payload_synthetic_bcc"
+    },
+    {
+      "id": "v5_3_oil_ad_cp",
+      "version": "V5.3",
+      "command": "p",
+      "response_profile": "oil_ad_27",
+      "kind": "bcc_payload",
+      "payload_ascii": "A+001.23B+004.56C+000.00",
+      "expected_bcc_hex": "59",
+      "expected_frame_hex": "41 2B 30 30 31 2E 32 33 42 2B 30 30 34 2E 35 36 43 2B 30 30 30 2E 30 30 59 0D 0A",
+      "evidence": "synthetic"
+    },
+    {
+      "id": "v5_3_zero_voltage_cz",
+      "version": "V5.3",
+      "command": "z",
+      "response_profile": "zero_voltage_11",
+      "kind": "bcc_payload",
+      "payload_ascii": "D01.6573",
+      "expected_bcc_hex": "5C",
+      "expected_frame_hex": "44 30 31 2E 36 35 37 33 5C 0D 0A",
+      "evidence": "documented"
+    },
+    {
+      "id": "v5_3_supply_voltage_ck",
+      "version": "V5.3",
+      "command": "K",
+      "response_profile": "supply_voltage_11",
+      "kind": "bcc_payload",
+      "payload_ascii": "e06.6379",
+      "expected_bcc_hex": "76",
+      "expected_frame_hex": "65 30 36 2E 36 33 37 39 76 0D 0A",
+      "evidence": "documented"
+    },
+    {
+      "id": "v5_3_sensor_number_cn",
+      "version": "V5.3",
+      "command": "N",
+      "response_profile": "sensor_number_11",
+      "kind": "bcc_payload",
+      "payload_ascii": "N2009924",
+      "expected_bcc_hex": "48",
+      "expected_frame_hex": "4E 32 30 30 39 39 32 34 48 0D 0A",
+      "evidence": "documented"
+    },
+    {
+      "id": "v5_3_level_frequency_cb",
+      "version": "V5.3",
+      "command": "b",
+      "response_profile": "level_frequency_11",
+      "kind": "bcc_payload",
+      "payload_ascii": "F0001234",
+      "expected_bcc_hex": "42",
+      "expected_frame_hex": "46 30 30 30 31 32 33 34 42 0D 0A",
+      "evidence": "documented"
+    },
+    {
+      "id": "v5_3_combined_version_cv",
+      "version": "V5.3",
+      "command": "V",
+      "response_profile": "combined_version_6",
+      "kind": "bcc_payload",
+      "payload_ascii": "0A442",
+      "expected_bcc_hex": "02",
+      "expected_frame_hex": "30 41 34 34 32 02",
+      "evidence": "documented"
+    },
+    {
+      "id": "v5_3_cpu1_version_cv_lower",
+      "version": "V5.3",
+      "command": "v",
+      "response_profile": "cpu1_version_6",
+      "kind": "bcc_payload",
+      "payload_ascii": "05.30",
+      "expected_bcc_hex": "1D",
+      "expected_frame_hex": "30 35 2E 33 30 1D",
+      "evidence": "documented"
+    },
+    {
+      "id": "v5_4_cpu1_version_cv_lower",
+      "version": "V5.4",
+      "command": "v",
+      "response_profile": "cpu1_version_6",
+      "kind": "bcc_payload",
+      "payload_ascii": "05.40",
+      "expected_bcc_hex": "1A",
+      "expected_frame_hex": "30 35 2E 34 30 1A",
+      "evidence": "source_derived"
+    },
+    {
+      "id": "v5_4_power_shutdown_cx",
+      "version": "V5.4",
+      "command": "X",
+      "response_profile": "power_shutdown_ack_3",
+      "kind": "literal",
+      "expected_frame_hex": "25 0D 0A",
+      "evidence": "source_derived"
+    },
+    {
+      "id": "v6_1_sweep_cs",
+      "version": "V6.1",
+      "command": "S",
+      "response_profile": "sweep_result_19",
+      "kind": "bcc_payload",
+      "payload_ascii": "A+012345B+067890",
+      "expected_bcc_hex": "29",
+      "expected_frame_hex": "41 2B 30 31 32 33 34 35 42 2B 30 36 37 38 39 30 29 0D 0A",
+      "evidence": "synthetic"
+    },
+    {
+      "id": "v5_3_error_1",
+      "version": "V5.3",
+      "command": "h",
+      "response_profile": "error_19",
+      "kind": "bcc_payload",
+      "payload_ascii": "A+111.11B+111.11",
+      "expected_bcc_hex": "28",
+      "expected_frame_hex": "41 2B 31 31 31 2E 31 31 42 2B 31 31 31 2E 31 31 28 0D 0A",
+      "evidence": "documented_payload_synthetic_bcc"
+    },
+    {
+      "id": "bcc_boundary_nul",
+      "version": "V5.3",
+      "command": "b",
+      "response_profile": "level_frequency_11",
+      "kind": "bcc_payload",
+      "payload_ascii": "F000000v",
+      "expected_bcc_hex": "00",
+      "expected_frame_hex": "46 30 30 30 30 30 30 76 00 0D 0A",
+      "evidence": "synthetic_checksum_boundary_nonsemantic_payload"
+    },
+    {
+      "id": "bcc_boundary_lf",
+      "version": "V5.3",
+      "command": "b",
+      "response_profile": "level_frequency_11",
+      "kind": "bcc_payload",
+      "payload_ascii": "F000000|",
+      "expected_bcc_hex": "0A",
+      "expected_frame_hex": "46 30 30 30 30 30 30 7C 0A 0D 0A",
+      "evidence": "synthetic_checksum_boundary_nonsemantic_payload"
+    },
+    {
+      "id": "bcc_boundary_cr",
+      "version": "V5.3",
+      "command": "b",
+      "response_profile": "level_frequency_11",
+      "kind": "bcc_payload",
+      "payload_ascii": "F000000{",
+      "expected_bcc_hex": "0D",
+      "expected_frame_hex": "46 30 30 30 30 30 30 7B 0D 0D 0A",
+      "evidence": "synthetic_checksum_boundary_nonsemantic_payload"
+    },
+    {
+      "id": "v5_3_reset_cr",
+      "version": "V5.3",
+      "command": "R",
+      "response_profile": "software_reset_no_response",
+      "kind": "none",
+      "expected_frame_hex": "",
+      "evidence": "documented"
+    }
+  ]
+}

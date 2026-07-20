@@ -873,16 +873,16 @@
           </p>
           <h4>影响</h4>
           <p>
-            只保留现场格式会拒绝标准调试工具；只保留标准格式则会拒绝真实 Wartsila 主机，并返回 FC16 异常码 <code>0x03</code>。两种单边实现都会造成参数或命令无法写入。
+            当前产品决定以莆田现场真实主机为唯一 Wartsila FC16 口径。标准调试工具若发送 <code>byteCount == qty * 2</code> 将收到异常码 <code>0x03</code>，这是受控拒绝；调试和联调必须复放现场格式。FC03 读响应不使用该特例，仍按 <code>byteCount == qty * 2</code> 返回实际数据字节数。
           </p>
           <h4>整改方案</h4>
           <ul>
-            <li><strong>现场兼容特例：</strong>同时接受 <code>byteCount == qty</code> 和 <code>byteCount == qty * 2U</code>，禁止后续通用 Modbus 整改删除前一分支。</li>
-            <li>两种格式的数据区都必须严格为 <code>2 * qty</code> 字节，因此 PDU 长度统一检查 <code>6U + 2U * qty</code>，不得按现场 <code>byteCount</code> 直接推导长度。</li>
+            <li><strong>莆田现场唯一口径：</strong>所有 Wartsila FC16 命令和参数写入仅接受 <code>byteCount == qty</code>；标准 <code>byteCount == qty * 2U</code> 必须返回 <code>0x03</code>，且不得写寄存器池或下发 CPU2。</li>
+            <li>实际数据区必须严格为 <code>2 * qty</code> 字节，因此 PDU 长度统一检查 <code>6U + 2U * qty</code>，不得按现场 <code>byteCount</code> 直接推导长度。</li>
             <li>保持 <code>1 &lt;= qty &lt;= 123</code>，避免请求超出 RTU 单帧合理上限。</li>
           </ul>
           <h4>验证建议</h4>
-          <p>已补生产共享契约测试，覆盖现场格式、标准格式、单寄存器、四寄存器、最大数量、截短、超长和其它 byte count；现场命令帧 <code>01 10 00 06 00 01 01 00 05 96 35</code> 必须保持成功。</p>
+          <p>已补生产共享契约测试，覆盖现场格式成功，标准格式拒绝，以及单寄存器、四寄存器、最大数量、截短、超长和其它 byte count；现场命令帧 <code>01 10 00 06 00 01 01 00 05 96 35</code> 必须保持成功。FC03 需另行保持 <code>byteCount == qty * 2</code>。</p>
         </article>
 
         <article class="issue p1" id="issue-p1-12">
@@ -1418,7 +1418,7 @@
         <h2>建议整改顺序</h2>
         <ol>
           <li>第一批：修复 P0 三项。重点是 CPU2 FC04/FC10 帧边界和电机失步错误传播，这三项影响内存安全和运动安全。</li>
-          <li>第二批：修复 P1 中的协议边界问题，包括保持寄存器 off-by-one、FC03 数量限制和 CPU3 内部 FC04 短帧校验；Wartsila FC16 已依据现场抓包改为现场/标准双格式兼容并闭环。</li>
+          <li>第二批：修复 P1 中的协议边界问题，包括保持寄存器 off-by-one、FC03 数量限制和 CPU3 内部 FC04 短帧校验；Wartsila FC16 已依据现场抓包收口为 <code>byteCount == qty</code> 唯一口径并闭环，FC03 响应继续使用 <code>byteCount == qty * 2</code>。</li>
           <li>第三批：修复测量状态一致性，包括 <code>MeasureStart()</code> 重复调用、取消停机失败、<code>STATE_SWITCH</code> 完成态、密度部分结果完整性。</li>
           <li>第四批：修复故障和恢复可靠性，包括扭力通信超时、编码器错误异步清除、罐底 fallback、自动恢复严格健康检查。</li>
           <li>第五批：修复 CPU3 显示参数实际生效、FRAM 参数合法化、长标题布局和 Wartsila/DSM 协议一致性。</li>

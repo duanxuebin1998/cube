@@ -18,7 +18,7 @@ extern volatile uint8_t button_long_press_key;
 #define LONG_PRESS_KEY_NONE 0u
 #define LONG_PRESS_KEY_SURE 1u
 #define LONG_PRESS_KEY_BACK 2u
-#define REQUIRED_PRESS_COUNT 15  /* TIM1 约 100ms 一次，15 次约 1.5s */
+#define REQUIRED_PRESS_COUNT 30  /* TIM1 约 100ms 一次，30 次约 3s */
 #define DISPLAY_KEY_DEBOUNCE_MS 50U
 #define DISPLAY_LONG_PRESS_RELEASE_GUARD_MS 50U
 
