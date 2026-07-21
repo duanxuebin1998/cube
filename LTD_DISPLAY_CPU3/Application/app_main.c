@@ -21,6 +21,9 @@
 
 #define CPU2_POLL_PERIOD_MS 100u /* CPU2 轮询调度门限；主循环阻塞时实际请求间隔可大于 100 ms。 */
 #define CPU3_COMM_STATUS_LOG_INTERVAL_MS 5000U /* 外部COM口通信摘要周期。 */
+#define CPU3_COMM_EVENT_LOG_INTERVAL_MS 1000U /* 同一端口异常事件的最短打印间隔。 */
+#define CPU3_UART_RECOVERY_RETRY_MS 100U /* UART异常或收满后由主循环执行单次恢复的退避时间。 */
+#define CPU3_UART_COUNT 4U /* 三路外部COM口加CPU2板间UART5。 */
 
 #define CPU3_PORT_RESULT_INVALID_CONFIG 0xFFFFFFFEUL
 #define CPU3_PORT_RESULT_INVALID_HANDLER 0xFFFFFFFDUL
@@ -83,6 +86,9 @@ typedef struct {
     volatile uint32_t uart_fe_count;
     volatile uint32_t uart_ne_count;
     volatile uint32_t uart_pe_count;
+    volatile uint32_t rx_overflow_count;
+    uint32_t rx_recovery_count;
+    uint32_t rx_recovery_fail_count;
     uint32_t tx_dma_start_fail_count;
     volatile uint32_t tx_dma_continue_fail_count;
     uint32_t last_process_result;
@@ -92,10 +98,20 @@ static Cpu3PortCommStats s_port_comm_stats[3] = {0};
 static volatile uint32_t s_port_uart_error_pending[3] = {0U, 0U, 0U};
 static volatile uint8_t s_port_uart_error_during_tx[3] = {0U, 0U, 0U};
 static volatile uint32_t s_port_tx_continue_fail_pending[3] = {0U, 0U, 0U};
+static volatile uint8_t s_uart_rx_recovery_pending[CPU3_UART_COUNT] = {0U, 0U, 0U, 0U};
+static volatile uint8_t s_uart_full_reinit_pending[CPU3_UART_COUNT] = {0U, 0U, 0U, 0U};
+static volatile uint32_t s_uart_rx_recovery_due_tick[CPU3_UART_COUNT] = {0U, 0U, 0U, 0U};
+static volatile uint32_t s_uart5_rx_overflow_count = 0U;
+static volatile uint32_t s_uart5_rx_recovery_count = 0U;
+static volatile uint32_t s_uart5_rx_recovery_fail_count = 0U;
+static volatile uint32_t s_foreground_health_generation = 0U;
 
 static const ComPortConfig* cpu3_get_port_cfg(uint8_t port_idx);
 static void cpu3_log_all_port_configs(const char *reason);
 static void cpu3_comm_debug_task(void);
+static void cpu3_cancel_protocol_switch(uint8_t port_idx);
+static bool cpu3_reinit_external_port(uint8_t port_idx);
+static bool cpu3_reinit_all_external_ports(void);
 
 /* 返回外部端口的统一日志模块名。 */
 static const char *cpu3_port_module_text(uint8_t port_idx)
@@ -186,45 +202,79 @@ static bool cpu3_port_result_needs_warning(uint32_t result)
     return true;
 }
 
-/**
- * @brief 重启UART接收DMA
- *
- * 该函数用于重启UART的DMA接收模式，包括停止当前DMA传输、清除各种错误标志、
- * 重新设置接收模式并启动DMA接收。适用于需要重新初始化UART接收的场景。
- *
- * @param huart UART句柄指针，指定要操作的UART外设
- * @param rx_buf 接收缓冲区指针，用于存储DMA接收到的数据
- * @param rx_buf_size 接收缓冲区大小，指定DMA接收的数据长度
- * @param set_recv_mode 接收模式设置函数指针，可为NULL。如果不为NULL，则在重启前调用该函数设置接收模式
- *
- * @note 函数执行以下操作：
- *       1. 停止当前UART DMA传输
- *       2. 调用set_recv_mode函数设置接收模式（如果提供）
- *       3. 清除可能的错误标志（PE/ORE/FE/NE）
- *       4. 清除UART空闲中断标志
- *       5. 使能UART空闲中断
- *       6. 重新启动UART DMA接收
- *
- * @note 该函数为静态函数，仅在当前文件内部可见
+/* 把UART句柄映射为恢复状态下标：COM1/2/3为0/1/2，板间UART5为3。 */
+static int8_t cpu3_uart_recovery_index(UART_HandleTypeDef *huart)
+{
+    if (huart == NULL) {
+        return -1;
+    }
+    if (huart->Instance == USART6) {
+        return 0;
+    }
+    if (huart->Instance == USART2) {
+        return 1;
+    }
+    if (huart->Instance == USART3) {
+        return 2;
+    }
+    if (huart->Instance == UART5) {
+        return 3;
+    }
+    return -1;
+}
+
+/* 锁存一次DMA恢复请求；中断和主循环均可调用，本函数不打印、不循环重试。 */
+void CPU3_UartScheduleRxRecovery(UART_HandleTypeDef *huart)
+{
+    int8_t index = cpu3_uart_recovery_index(huart);
+
+    if (index < 0) {
+        return;
+    }
+    s_uart_rx_recovery_due_tick[(uint8_t)index] = HAL_GetTick() + CPU3_UART_RECOVERY_RETRY_MS;
+    s_uart_rx_recovery_pending[(uint8_t)index] = 1U;
+}
+
+/* 完整重初始化只用于三个外部COM口；普通DMA恢复不得降级已经锁存的完整请求。 */
+static void cpu3_schedule_uart_full_reinit(UART_HandleTypeDef *huart)
+{
+    int8_t index = cpu3_uart_recovery_index(huart);
+
+    if ((index < 0) || (index >= 3)) {
+        CPU3_UartScheduleRxRecovery(huart);
+        return;
+    }
+
+    s_uart_full_reinit_pending[(uint8_t)index] = 1U;
+    CPU3_UartScheduleRxRecovery(huart);
+}
+
+/*
+ * 重新启动接收时先关闭IDLEIE，只有DMA真正启动成功后才重新开启。
+ * 启动失败时保持端口隔离并投递主循环退避恢复，禁止留下空DMA的IDLE中断。
  */
-static void uart_restart_rx_dma(UART_HandleTypeDef *huart,
+static bool uart_restart_rx_dma(UART_HandleTypeDef *huart,
                                 uint8_t *rx_buf, uint16_t rx_buf_size,
                                 void (*set_recv_mode)(void))
 {
-    HAL_UART_DMAStop(huart);
+    HAL_StatusTypeDef status;
+
+    __HAL_UART_DISABLE_IT(huart, UART_IT_IDLE);
+    (void)HAL_UART_DMAStop(huart);
 
     if (set_recv_mode != NULL) {
         set_recv_mode();
     }
 
-    if (__HAL_UART_GET_FLAG(huart, UART_FLAG_PE)  != RESET) __HAL_UART_CLEAR_PEFLAG(huart);
-    if (__HAL_UART_GET_FLAG(huart, UART_FLAG_ORE) != RESET) __HAL_UART_CLEAR_OREFLAG(huart);
-    if (__HAL_UART_GET_FLAG(huart, UART_FLAG_FE)  != RESET) __HAL_UART_CLEAR_FEFLAG(huart);
-    if (__HAL_UART_GET_FLAG(huart, UART_FLAG_NE)  != RESET) __HAL_UART_CLEAR_NEFLAG(huart);
     __HAL_UART_CLEAR_IDLEFLAG(huart);
+    status = HAL_UART_Receive_DMA(huart, rx_buf, rx_buf_size);
+    if (status != HAL_OK) {
+        CPU3_UartScheduleRxRecovery(huart);
+        return false;
+    }
 
     __HAL_UART_ENABLE_IT(huart, UART_IT_IDLE);
-    HAL_UART_Receive_DMA(huart, rx_buf, rx_buf_size);
+    return true;
 }
 
 /**
@@ -294,8 +344,8 @@ static void cpu3_uart_recover_tx(UART_HandleTypeDef *huart,
  *
  * @note 重配置过程包括：
  *       - 停止所有 UART 的 DMA 接收
- *       - 调用 Cpu3_ReinitAllUarts() 重新初始化所有 UART
- *       - 恢复所有 UART 的 DMA 接收
+ *       - 调用 cpu3_reinit_all_external_ports() 逐端口重新初始化 UART
+ *       - 成功端口恢复 DMA 接收，失败端口进入完整重初始化队列
  *
  * @note 函数在以下情况下会直接返回，不执行重配置：
  *       - 无挂起的重配置请求
@@ -314,17 +364,8 @@ static void cpu3_apply_uart_reinit_if_pending(void)
 
     g_cpu3_uart_reinit_pending = 0;
 
-    /* 重配前：建议停止 DMA 接收，避免 HAL 状态混乱（根据你现有接收实现调整） */
-    HAL_UART_DMAStop(&huart6);
-    HAL_UART_DMAStop(&huart2);
-    HAL_UART_DMAStop(&huart3);
-
-    Cpu3_ReinitAllUarts();
-
-    /* 重配后：恢复接收 */
-    COM1_RecvMode(); HAL_UART_Receive_DMA(&huart6, UART6_RX_BUF, UART6_RX_BUF_SIZE);
-    COM2_RecvMode(); HAL_UART_Receive_DMA(&huart2, UART2_RX_BUF, UART2_RX_BUF_SIZE);
-    COM3_RecvMode(); HAL_UART_Receive_DMA(&huart3, UART3_RX_BUF, UART3_RX_BUF_SIZE);
+    /* 逐端口入口会先关闭IDLEIE再停止DMA，禁止在此留下悬空中断窗口。 */
+    (void)cpu3_reinit_all_external_ports();
     cpu3_log_all_port_configs("参数重配置完成");
 }
 
@@ -541,6 +582,143 @@ static void cpu3_record_uart_error_from_isr(uint8_t port_idx,
     }
 }
 
+/*
+ * UART错误或DMA收满后的统一中断出口。
+ * 中断只隔离端口、丢弃候选帧并投递恢复事件，DMA重启由主循环执行。
+ */
+void CPU3_UartRxFaultFromISR(UART_HandleTypeDef *huart,
+                            uint32_t error_code,
+                            uint8_t overflow)
+{
+    int8_t recovery_index = cpu3_uart_recovery_index(huart);
+
+    if (recovery_index < 0) {
+        return;
+    }
+
+    if (huart->Instance == USART6) {
+        if (error_code != HAL_UART_ERROR_NONE) {
+            cpu3_record_uart_error_from_isr(1U, error_code, g_tx_busy_com1);
+        }
+        if (overflow != 0U) {
+            s_port_comm_stats[0].rx_overflow_count++;
+        }
+        cpu3_cancel_protocol_switch(1U);
+        g_tx_busy_com1 = 0U;
+        g_tx_pending_len_com1 = 0U;
+        com1_rx_ready = 0U;
+        UART6_RX_LEN = 0U;
+        COM1_RecvMode();
+    } else if (huart->Instance == USART2) {
+        if (error_code != HAL_UART_ERROR_NONE) {
+            cpu3_record_uart_error_from_isr(2U, error_code, g_tx_busy_com2);
+        }
+        if (overflow != 0U) {
+            s_port_comm_stats[1].rx_overflow_count++;
+        }
+        cpu3_cancel_protocol_switch(2U);
+        g_tx_busy_com2 = 0U;
+        g_tx_pending_len_com2 = 0U;
+        com2_rx_ready = 0U;
+        UART2_RX_LEN = 0U;
+        COM2_RecvMode();
+    } else if (huart->Instance == USART3) {
+        if (error_code != HAL_UART_ERROR_NONE) {
+            cpu3_record_uart_error_from_isr(3U, error_code, g_tx_busy_com3);
+        }
+        if (overflow != 0U) {
+            s_port_comm_stats[2].rx_overflow_count++;
+        }
+        cpu3_cancel_protocol_switch(3U);
+        g_tx_busy_com3 = 0U;
+        g_tx_pending_len_com3 = 0U;
+        com3_rx_ready = 0U;
+        UART3_RX_LEN = 0U;
+        COM3_RecvMode();
+    } else {
+        uint32_t notify_error = error_code;
+
+        if (overflow != 0U) {
+            s_uart5_rx_overflow_count++;
+            notify_error |= HAL_UART_ERROR_DMA;
+        }
+        CPU2_CommNotifyUartErrorFromISR(notify_error);
+        UART5_RX_LEN = 0U;
+        RS485_RecvMode();
+    }
+
+    CPU3_UartScheduleRxRecovery(huart);
+}
+
+/* 主循环按端口和固定退避执行DMA恢复或完整UART重初始化。 */
+static void cpu3_uart_rx_recovery_task(void)
+{
+    uint32_t now = HAL_GetTick();
+    uint8_t index;
+
+    for (index = 0U; index < CPU3_UART_COUNT; index++) {
+        bool recovered;
+        uint8_t full_reinit;
+
+        if ((s_uart_rx_recovery_pending[index] == 0U) ||
+            ((int32_t)(now - s_uart_rx_recovery_due_tick[index]) < 0)) {
+            continue;
+        }
+
+        s_uart_rx_recovery_pending[index] = 0U;
+        full_reinit = s_uart_full_reinit_pending[index];
+        if ((full_reinit != 0U) && (index < 3U)) {
+            recovered = cpu3_reinit_external_port((uint8_t)(index + 1U));
+        } else if (index == 0U) {
+            recovered = uart_restart_rx_dma(&huart6, UART6_RX_BUF, UART6_RX_BUF_SIZE, COM1_RecvMode);
+        } else if (index == 1U) {
+            recovered = uart_restart_rx_dma(&huart2, UART2_RX_BUF, UART2_RX_BUF_SIZE, COM2_RecvMode);
+        } else if (index == 2U) {
+            recovered = uart_restart_rx_dma(&huart3, UART3_RX_BUF, UART3_RX_BUF_SIZE, COM3_RecvMode);
+        } else {
+            recovered = uart_restart_rx_dma(&huart5, UART5_RX_BUF, UART5_RX_BUF_SIZE, RS485_RecvMode);
+        }
+
+        if (recovered) {
+            s_uart_full_reinit_pending[index] = 0U;
+            if (index < 3U) {
+                s_port_comm_stats[index].rx_recovery_count++;
+            } else {
+                s_uart5_rx_recovery_count++;
+            }
+        } else {
+            if ((full_reinit != 0U) && (index < 3U)) {
+                cpu3_schedule_uart_full_reinit((index == 0U) ? &huart6 :
+                                                ((index == 1U) ? &huart2 : &huart3));
+            }
+            if (index < 3U) {
+                s_port_comm_stats[index].rx_recovery_fail_count++;
+            } else {
+                s_uart5_rx_recovery_fail_count++;
+            }
+        }
+    }
+}
+
+/* 前台完成一个有界阶段后推进健康代际；等待循环内部不得调用。 */
+void CPU3_WatchdogReportProgress(void)
+{
+    s_foreground_health_generation++;
+}
+
+/* 看门狗只消费已经完成的前台健康进度，不再由定时器无条件续命。 */
+bool CPU3_WatchdogHealthAdvancedFromISR(void)
+{
+    static uint32_t last_generation = 0U;
+    uint32_t current_generation = s_foreground_health_generation;
+
+    if (current_generation == last_generation) {
+        return false;
+    }
+    last_generation = current_generation;
+    return true;
+}
+
 /* ISR中记录续发DMA失败，主循环统一输出。 */
 static void cpu3_record_tx_continue_fail_from_isr(uint8_t port_idx)
 {
@@ -562,6 +740,7 @@ static void cpu3_record_tx_continue_fail_from_isr(uint8_t port_idx)
 static void cpu3_comm_debug_task(void)
 {
     static uint32_t last_status_tick = 0U;
+    static uint32_t last_event_log_tick[3] = {0U, 0U, 0U};
     uint32_t now = HAL_GetTick();
     uint8_t port_idx;
 
@@ -571,6 +750,11 @@ static void cpu3_comm_debug_task(void)
         uint32_t tx_continue_fail_count;
         uint32_t interrupt_mask;
         uint8_t during_tx;
+
+        if ((now - last_event_log_tick[index]) < CPU3_COMM_EVENT_LOG_INTERVAL_MS) {
+            continue;
+        }
+        last_event_log_tick[index] = now;
 
         interrupt_mask = __get_PRIMASK();
         __disable_irq();
@@ -586,7 +770,7 @@ static void cpu3_comm_debug_task(void)
 
         if (uart_error_flags != HAL_UART_ERROR_NONE) {
             CPU3_LOG_WARNING(cpu3_port_module_text(port_idx),
-                             "UART异常已恢复 阶段=%s 标志=0x%08lX ORE=%lu FE=%lu NE=%lu PE=%lu 累计=%lu",
+                             "UART异常已隔离并投递恢复 阶段=%s 标志=0x%08lX ORE=%lu FE=%lu NE=%lu PE=%lu 累计=%lu",
                              (during_tx != 0U) ? "发送" : "接收",
                              (unsigned long)uart_error_flags,
                              (unsigned long)s_port_comm_stats[index].uart_ore_count,
@@ -631,7 +815,7 @@ static void cpu3_comm_debug_task(void)
         }
 
         CPU3_LOG_INFO(cpu3_port_module_text(port_idx),
-                      "协议=%s 接收=%lu 发送=完成%lu/受理%lu/排队%lu 忽略=%lu 处理失败=%lu UART异常=%lu DMA失败=启动%lu/续发%lu 队列覆盖=%lu TX忙=%u 待发=%u 最近=%s",
+                      "协议=%s 接收=%lu 发送=完成%lu/受理%lu/排队%lu 忽略=%lu 处理失败=%lu UART异常=%lu 收满=%lu 恢复=%lu/失败%lu DMA失败=启动%lu/续发%lu 队列覆盖=%lu TX忙=%u 待发=%u 最近=%s",
                       cpu3_protocol_text(protocol),
                       (unsigned long)s_port_comm_stats[index].rx_frame_count,
                       (unsigned long)s_port_comm_stats[index].tx_complete_count,
@@ -640,6 +824,9 @@ static void cpu3_comm_debug_task(void)
                       (unsigned long)s_port_comm_stats[index].ignored_frame_count,
                       (unsigned long)s_port_comm_stats[index].process_failure_count,
                       (unsigned long)s_port_comm_stats[index].uart_error_count,
+                      (unsigned long)s_port_comm_stats[index].rx_overflow_count,
+                      (unsigned long)s_port_comm_stats[index].rx_recovery_count,
+                      (unsigned long)s_port_comm_stats[index].rx_recovery_fail_count,
                       (unsigned long)s_port_comm_stats[index].tx_dma_start_fail_count,
                       (unsigned long)s_port_comm_stats[index].tx_dma_continue_fail_count,
                       (unsigned long)pending_overwrite,
@@ -648,6 +835,12 @@ static void cpu3_comm_debug_task(void)
                       (s_port_comm_stats[index].process_failure_count > 0U) ?
                           cpu3_port_result_text(protocol, s_port_comm_stats[index].last_process_result) : "无");
     }
+
+    CPU3_LOG_INFO("CPU2链路",
+                  "UART5收满=%lu 恢复=%lu/失败%lu",
+                  (unsigned long)s_uart5_rx_overflow_count,
+                  (unsigned long)s_uart5_rx_recovery_count,
+                  (unsigned long)s_uart5_rx_recovery_fail_count);
 }
 
 /*
@@ -705,11 +898,11 @@ static bool cpu3_mark_protocol_switch_tx_complete(uint8_t port_idx)
 }
 
 /*
- * 函数用途：把一个端口切回 RS485 接收方向，并按保存后的参数只重初始化该端口。
- * 调用场景：协议切换应答发送完成且新协议已经写入 CPU3 本机参数后调用。
+ * 函数用途：把一个端口切回 RS485 接收方向，并按当前参数只重初始化该端口。
+ * 调用场景：启动、参数重配置、协议切换和完整恢复队列。
  * 关键约束：不得重配其它端口，避免中断无关的外部通信。
  */
-static bool cpu3_reinit_protocol_switch_port(uint8_t port_idx)
+static bool cpu3_reinit_external_port(uint8_t port_idx)
 {
     switch (port_idx)
     {
@@ -736,6 +929,24 @@ static bool cpu3_reinit_protocol_switch_port(uint8_t port_idx)
     }
 
     return Cpu3_ReinitPortUart(port_idx);
+}
+
+/* 逐端口应用当前配置，仅把失败端口投递完整重初始化，避免干扰其它COM口。 */
+static bool cpu3_reinit_all_external_ports(void)
+{
+    bool all_ok = true;
+    uint8_t port_idx;
+
+    for (port_idx = 1U; port_idx <= 3U; port_idx++) {
+        if (!cpu3_reinit_external_port(port_idx)) {
+            UART_HandleTypeDef *huart = (port_idx == 1U) ? &huart6 :
+                                        ((port_idx == 2U) ? &huart2 : &huart3);
+            cpu3_schedule_uart_full_reinit(huart);
+            all_ok = false;
+        }
+    }
+
+    return all_ok;
 }
 
 /*
@@ -821,7 +1032,13 @@ static void cpu3_apply_ready_protocol_switches(void)
                 CPU3_LOG_CRITICAL(cpu3_port_module_text(port_idx),
                                   "协议切换失败后旧配置回写FRAM失败");
             }
-            (void)cpu3_reinit_protocol_switch_port(port_idx);
+            if (!cpu3_reinit_external_port(port_idx)) {
+                UART_HandleTypeDef *huart = (port_idx == 1U) ? &huart6 :
+                                            ((port_idx == 2U) ? &huart2 : &huart3);
+                cpu3_schedule_uart_full_reinit(huart);
+                CPU3_LOG_CRITICAL(cpu3_port_module_text(port_idx),
+                                  "协议切换回滚后串口重初始化失败，已进入恢复队列");
+            }
             CPU3_LOG_WARNING(cpu3_port_module_text(port_idx),
                              "协议切换持久化失败，已保持原协议=%s(%u)",
                              cpu3_protocol_text(previous_config.protocol),
@@ -829,15 +1046,18 @@ static void cpu3_apply_ready_protocol_switches(void)
             continue;
         }
 
-        if (cpu3_reinit_protocol_switch_port(port_idx)) {
+        if (cpu3_reinit_external_port(port_idx)) {
             CPU3_LOG_INFO(cpu3_port_module_text(port_idx),
                           "协议切换完成 新协议=%s(%u)",
                           cpu3_protocol_text(target_protocol),
                           (unsigned int)target_protocol);
             cpu3_log_port_config(port_idx, "切换后配置");
         } else {
+            UART_HandleTypeDef *huart = (port_idx == 1U) ? &huart6 :
+                                        ((port_idx == 2U) ? &huart2 : &huart3);
+            cpu3_schedule_uart_full_reinit(huart);
             CPU3_LOG_CRITICAL(cpu3_port_module_text(port_idx),
-                              "协议切换后串口重初始化失败 目标协议=%s(%u)",
+                              "协议切换后串口重初始化失败，已进入恢复队列 目标协议=%s(%u)",
                               cpu3_protocol_text(target_protocol),
                               (unsigned int)target_protocol);
         }
@@ -899,7 +1119,9 @@ static uint32_t cpu3_port_process(uint8_t port_idx,
  * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
  */
 void App_Init(void) {
+	CPU3_WatchdogReportProgress();
 	Cpu3Log_Init();
+	CPU3_WatchdogReportProgress();
 	CPU3_LOG_INFO("系统",
 	              "CPU3启动 固件=%s 共享协议=%u 日志级别=%s 调试串口=USART1/115200/8N1",
 	              CPU3_APP_VERSION_STRING,
@@ -909,15 +1131,21 @@ void App_Init(void) {
 	RS485_SET_RECV_MODE();
 	__HAL_UART_CLEAR_IDLEFLAG(&huart5);
 	DisplayInit(); /* Initialize the OLED display */
+	CPU3_WatchdogReportProgress();
 	DisplayAubonLogo(); /* 刚上电显示AUBON LOGO */
+	CPU3_WatchdogReportProgress();
     /* RTC 先初始化，保证后续 SI 读当前时间或 profile 时间戳时有合法兜底值。 */
     Cpu3Clock_Init();
     Cpu3_Params_LoadFromFRAM(); /* 从 FRAM 载入 Cpu3 通讯+显示参数（里面会自动回退默认并保存） */
-    Cpu3_ReinitAllUarts(); /* 根据参数重配 3 个串口 */
+	CPU3_WatchdogReportProgress();
+    (void)cpu3_reinit_all_external_ports();
+	CPU3_WatchdogReportProgress();
 	DSM_CommunicationInit(); /* 初始化通信模块 */
 	cpu3_log_all_port_configs("启动配置");
+	CPU3_WatchdogReportProgress();
 	/* 屏幕显示与外设通信之间保留等待时间，避免硬件或对端协议尚未准备好。 */
 	HAL_Delay(1000); /* */
+	CPU3_WatchdogReportProgress();
 }
 
 /**
@@ -938,10 +1166,13 @@ void App_MainLoop(void)
 
     uint8_t did_work = 0;
 
+	CPU3_WatchdogReportProgress();
+    cpu3_uart_rx_recovery_task();
     cpu3_apply_ready_protocol_switches();
     cpu3_apply_uart_reinit_if_pending(); /* 如果有待重配的串口，先重配 */
     si_modbus_periodic_task();
     Display_Task();
+	CPU3_WatchdogReportProgress();
     /* ========= COM1 ========= */
     if (com1_rx_ready == 1) {
         com1_rx_ready = 0;
@@ -972,8 +1203,7 @@ void App_MainLoop(void)
                                cpu3_port_result_text(active_protocol, ret));
             }
 
-            COM1_RecvMode();
-            HAL_UART_Receive_DMA(&huart6, UART6_RX_BUF, UART6_RX_BUF_SIZE);
+            (void)uart_restart_rx_dma(&huart6, UART6_RX_BUF, UART6_RX_BUF_SIZE, COM1_RecvMode);
         } else {
             if (send_len > 0) {
                 Cpu3Log_Frame(CPU3_LOG_LEVEL_DEBUG, "COM1", "准备发送", sendbuff1, send_len);
@@ -993,11 +1223,11 @@ void App_MainLoop(void)
                 /* 注意：接收 DMA 的重启交给 TxCplt（最后一帧发完才切回接收） */
             } else {
                 /* 没有回复也必须恢复接收，否则会“收一帧就停” */
-                COM1_RecvMode();
-                HAL_UART_Receive_DMA(&huart6, UART6_RX_BUF, UART6_RX_BUF_SIZE);
+                (void)uart_restart_rx_dma(&huart6, UART6_RX_BUF, UART6_RX_BUF_SIZE, COM1_RecvMode);
             }
         }
     }
+	CPU3_WatchdogReportProgress();
 
     /* ========= COM2 ========= */
     if (com2_rx_ready == 1) {
@@ -1029,8 +1259,7 @@ void App_MainLoop(void)
                                cpu3_port_result_text(active_protocol, ret));
             }
 
-            COM2_RecvMode();
-            HAL_UART_Receive_DMA(&huart2, UART2_RX_BUF, UART2_RX_BUF_SIZE);
+            (void)uart_restart_rx_dma(&huart2, UART2_RX_BUF, UART2_RX_BUF_SIZE, COM2_RecvMode);
         } else {
             if (send_len > 0) {
                 Cpu3Log_Frame(CPU3_LOG_LEVEL_DEBUG, "COM2", "准备发送", sendbuff2, send_len);
@@ -1047,11 +1276,11 @@ void App_MainLoop(void)
                     s_port_comm_stats[1].tx_accept_count++;
                 }
             } else {
-                COM2_RecvMode();
-                HAL_UART_Receive_DMA(&huart2, UART2_RX_BUF, UART2_RX_BUF_SIZE);
+                (void)uart_restart_rx_dma(&huart2, UART2_RX_BUF, UART2_RX_BUF_SIZE, COM2_RecvMode);
             }
         }
     }
+	CPU3_WatchdogReportProgress();
 
     /* ========= COM3 ========= */
     if (com3_rx_ready == 1) {
@@ -1083,8 +1312,7 @@ void App_MainLoop(void)
                                cpu3_port_result_text(active_protocol, ret));
             }
 
-            COM3_RecvMode();
-            HAL_UART_Receive_DMA(&huart3, UART3_RX_BUF, UART3_RX_BUF_SIZE);
+            (void)uart_restart_rx_dma(&huart3, UART3_RX_BUF, UART3_RX_BUF_SIZE, COM3_RecvMode);
         } else {
             if (send_len > 0) {
                 Cpu3Log_Frame(CPU3_LOG_LEVEL_DEBUG, "COM3", "准备发送", sendbuff3, send_len);
@@ -1101,14 +1329,15 @@ void App_MainLoop(void)
                     s_port_comm_stats[2].tx_accept_count++;
                 }
             } else {
-                COM3_RecvMode();
-                HAL_UART_Receive_DMA(&huart3, UART3_RX_BUF, UART3_RX_BUF_SIZE);
+                (void)uart_restart_rx_dma(&huart3, UART3_RX_BUF, UART3_RX_BUF_SIZE, COM3_RecvMode);
             }
         }
     }
+	CPU3_WatchdogReportProgress();
 
     cpu3_comm_debug_task();
     CPU2_CommDebugTask();
+	CPU3_WatchdogReportProgress();
 
     /* 主循环可调度时按 100 ms 门限轮询，避免外部流量永久饿死 CPU2；同步请求阻塞期间不保证实际间隔。 */
     if ((HAL_GetTick() - last_cpu2_poll_tick) >= CPU2_POLL_PERIOD_MS) {
@@ -1116,6 +1345,7 @@ void App_MainLoop(void)
         last_cpu2_poll_tick = HAL_GetTick();
         did_work = 1U;
     }
+	CPU3_WatchdogReportProgress();
 
     /* 业务通信调度完成后再推进调试日志，日志队列忙时立即返回。 */
     Cpu3Log_Service();
@@ -1123,6 +1353,7 @@ void App_MainLoop(void)
     if (!did_work) {
         HAL_Delay(1U);
     }
+	CPU3_WatchdogReportProgress();
 }
 /**
  * @brief UART 发送完成回调函数
@@ -1266,24 +1497,20 @@ void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
     }
 }
 
-/**
- * @brief UART 错误回调函数
- *
- * 该函数在 UART 发生错误时被 HAL 库调用，用于处理不同 UART 接口的错误恢复。
- * 根据触发错误的 UART 实例，执行相应的错误恢复操作，包括发送恢复和接收重启。
- *
- * @param huart 指向发生错误的 UART 句柄的指针
- *
- * @note 支持的 UART 接口：
- *       - USART6: 调用 cpu3_uart_recover_tx 进行发送恢复
- *       - USART2: 调用 cpu3_uart_recover_tx 进行发送恢复
- *       - USART3: 调用 cpu3_uart_recover_tx 进行发送恢复
- *       - UART5: 仅记录待处理错误并解除等待，由主循环统一累计通信失败
- *
- * @note 函数内部会调用以下函数：
- *       - cpu3_uart_recover_tx(): UART 发送恢复
- *       - uart_restart_rx_dma(): 重启 UART DMA 接收
- */
+/* DMA普通模式收满后关闭IDLEIE并丢弃整块数据，等待主循环退避恢复。 */
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
+{
+    if ((huart->Instance == USART6) ||
+        (huart->Instance == USART2) ||
+        (huart->Instance == USART3) ||
+        (huart->Instance == UART5)) {
+        __HAL_UART_DISABLE_IT(huart, UART_IT_IDLE);
+        __HAL_UART_CLEAR_IDLEFLAG(huart);
+        CPU3_UartRxFaultFromISR(huart, HAL_UART_ERROR_NONE, 1U);
+    }
+}
+
+/* UART硬件错误只隔离并投递恢复，禁止在错误回调中立即重启DMA。 */
 void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)
 {
     if (huart->Instance == USART1) {
@@ -1291,42 +1518,12 @@ void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)
         return;
     }
 
-    if (huart->Instance == USART6) {
-        cpu3_record_uart_error_from_isr(1U, huart->ErrorCode, g_tx_busy_com1);
-        cpu3_cancel_protocol_switch(1U);
-        cpu3_uart_recover_tx(&huart6,
-                             &g_tx_busy_com1, &g_tx_pending_len_com1,
-                             &com1_rx_ready, &UART6_RX_LEN,
-                             UART6_RX_BUF, UART6_RX_BUF_SIZE,
-                             COM1_RecvMode);
-        return;
-    }
-
-    if (huart->Instance == USART2) {
-        cpu3_record_uart_error_from_isr(2U, huart->ErrorCode, g_tx_busy_com2);
-        cpu3_cancel_protocol_switch(2U);
-        cpu3_uart_recover_tx(&huart2,
-                             &g_tx_busy_com2, &g_tx_pending_len_com2,
-                             &com2_rx_ready, &UART2_RX_LEN,
-                             UART2_RX_BUF, UART2_RX_BUF_SIZE,
-                             COM2_RecvMode);
-        return;
-    }
-
-    if (huart->Instance == USART3) {
-        cpu3_record_uart_error_from_isr(3U, huart->ErrorCode, g_tx_busy_com3);
-        cpu3_cancel_protocol_switch(3U);
-        cpu3_uart_recover_tx(&huart3,
-                             &g_tx_busy_com3, &g_tx_pending_len_com3,
-                             &com3_rx_ready, &UART3_RX_LEN,
-                             UART3_RX_BUF, UART3_RX_BUF_SIZE,
-                             COM3_RecvMode);
-        return;
-    }
-
-    if (huart->Instance == UART5) {
-        CPU2_CommNotifyUartErrorFromISR(huart->ErrorCode);
-        UART5_RX_LEN = 0;
-        uart_restart_rx_dma(&huart5, UART5_RX_BUF, UART5_RX_BUF_SIZE, RS485_RecvMode);
+    if ((huart->Instance == USART6) ||
+        (huart->Instance == USART2) ||
+        (huart->Instance == USART3) ||
+        (huart->Instance == UART5)) {
+        __HAL_UART_DISABLE_IT(huart, UART_IT_IDLE);
+        __HAL_UART_CLEAR_IDLEFLAG(huart);
+        CPU3_UartRxFaultFromISR(huart, huart->ErrorCode, 0U);
     }
 }

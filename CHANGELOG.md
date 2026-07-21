@@ -2487,3 +2487,29 @@ CPU3通信和界面：
 - 菜单顺序调整后的CPU3 clean-first构建通过，生成`LTD_DISPLAY_CPU3_V1.29.0.0.hex`，ELF为`text=190144`、`data=37932`、`bss=86780`。
 - 《LNG计量仪屏幕菜单》Word已检查全部28页；DSM适配复查PDF与Markdown同步并检查全部11页，未见明显截断、重叠或乱码。
 - 真实CPU2/CPU3交叉烧写、旧FRAM升级、Wärtsilä现场主机、DSM传感器、菜单按键、Word/PDF人工审阅、继电器硬件和完整故障注入仍需台架或人工验证。
+
+## 2026-07-21 - UART连续流量中断活锁与双端通信恢复整改
+
+版本：
+- CPU2：`V1.30.0.0 -> V1.30.1.0`（PATCH）。
+- CPU3：`V1.29.0.0 -> V1.29.1.0`（PATCH）。
+
+协议版本与兼容性：
+- CPU2/CPU3 `DEVICE_PROTOCOL_VERSION`保持25；共享寄存器、功能码、命令、参数含义、合法帧响应内容和外部DSM/Wärtsilä/SI/LTD协议格式均不变，两端仍按协议25配套运行。
+- CPU2 `DEVICE_PARAM_VERSION`保持3，`DeviceParameters`、`struct_size`、FRAM A/B地址、magic、元信息和CRC范围不变；升级不恢复出厂、不清除现场参数。
+- CPU3本机参数版本保持V7 / `0x0007`，三路COM配置和FRAM布局不变；新增恢复状态、计数和看门狗健康代际只驻留RAM。
+
+本次修改：
+- CPU3 COM1/COM2/COM3及板间UART5补齐DMA收满和UART错误接管：中断先关闭IDLEIE、清除错误触发并丢弃不完整候选帧，只投递恢复事件；RX DMA启动成功后才重新开启IDLEIE，避免`DMA已停+IDLE/ORE未清`导致UART IRQ无限重入。
+- CPU3按端口执行100 ms退避恢复，并把启动参数重载、运行期重配置和协议切换中的UART重初始化失败纳入失败端口独立的完整重初始化队列；COM摘要增加收满、恢复和失败计数，异常事件按端口限频输出。
+- CPU3 TIM4改为仅在启动、主循环关键阶段或CPU2事务边界的前台健康代际推进后刷新IWDG，响应等待循环内部不重复续票，使持续UART中断活锁不再被无条件喂狗永久掩盖。
+- CPU2 USART1/USART2/UART4的512字节接收长度由8位改为16位；四路普通DMA+IDLE接收统一处理DMA收满、UART错误和启动失败，TIM4只检查状态并触发最低优先级PendSV恢复，不依赖不可更改的阻塞式主循环。
+- CPU2 HART和板间UART5 Modbus从硬件UART IRQ移到PendSV解析；进入原业务解析前增加HART声明长度及Modbus FC03/04、FC10帧形校验，合法帧的分发、寄存器访问和响应内容保持不变，畸形或超长帧直接丢弃并恢复接收。
+- CPU2中断上下文不再执行阻塞式`printf`，线程态调试串口单字符发送等待上限改为10 ms；TIM4仅在没有其它活动ISR时刷新IWDG，降低中断活锁被看门狗掩盖的风险。
+
+验证：
+- `py -X utf8 tools\check_cpu3_external_freshness_contract.py`：通过，`66877 checks`。
+- `py -X utf8 tools\check_cpu2_uart_resilience_contract.py`：通过，`42 checks`。
+- `cmake --build build\LTD_DISPLAY_CPU3 --clean-first`：61步通过，生成`LTD_DISPLAY_CPU3_V1.29.1.0.hex`；ELF为`text=191408`、`data=37932`、`bss=86876`。
+- `cmake --build build\LTD_MAIN_CPU2 --clean-first`：92步通过，生成`LTD_MAIN_CPU2_V1.30.1.0.hex`；ELF为`text=308492`、`data=2328`、`bss=34088`。
+- 整改前COM3连续流量已实机复现并由ST-Link确认USART3中断活锁；较早P0修复固件完成约150秒COM3短回归。新版本完整闭环代码仍需执行COM1/2/3单路与并发压力、A-B短接、UART错误/HAL失败注入、CPU3看门狗冻结和CPU2阻塞业务并发台架验证。

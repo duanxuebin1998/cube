@@ -12,6 +12,7 @@
 #include "wartsila_modbus_communication.h"
 #include "wartsila_modbus_data_analysis.h"
 #include "cpu3_debug_log.h"
+#include "app_main.h"
 
 #define ADERSS 0X01
 #define CPU2_RESPONSE_TIMEOUT_MS 1000U /* CPU2 单次响应等待超时，单位 ms。 */
@@ -1836,6 +1837,9 @@ bool CPU2_CombinatePackage_Send(uint8_t f_code, uint16_t startadd, uint16_t regi
 	bool cancel_command_allowed = false;
 	bool parameter_write_attempted = false;
 
+	/* 每个板间事务只在边界报告进度，等待响应循环内部不得给看门狗续命。 */
+	CPU3_WatchdogReportProgress();
+
 	/* 普通写必须通过完整快照门禁；参数刷新期间只放行协议兼容的取消命令。 */
 	if ((f_code == FUNCTIONCODE_WRITE_MULREGISTER) &&
 		(startadd == HOLDREGISTER_DEVICEPARAM_COMMAND) &&
@@ -1849,6 +1853,7 @@ bool CPU2_CombinatePackage_Send(uint8_t f_code, uint16_t startadd, uint16_t regi
 	}
 	if ((f_code == FUNCTIONCODE_WRITE_MULREGISTER) && !CPU2_CommIsAvailable()) {
 		if (!cancel_command_allowed) {
+			CPU3_WatchdogReportProgress();
 			return false;
 		}
 	}
@@ -1896,6 +1901,7 @@ bool CPU2_CombinatePackage_Send(uint8_t f_code, uint16_t startadd, uint16_t regi
 	s_cpu2_request_uart_error_code = HAL_UART_ERROR_NONE;
 	s_cpu2_response_failure_reason = CPU2_COMM_FAIL_TX_DMA;
 	if (!sendToCPU2(arr, len, false)) {
+		CPU3_WatchdogReportProgress();
 		return CPU2_CommFinishFailedRequest(parameter_write_attempted);
 	}
 	/* 等待接收完成 */
@@ -1906,6 +1912,7 @@ bool CPU2_CombinatePackage_Send(uint8_t f_code, uint16_t startadd, uint16_t regi
 				{
 			wait_response = false;    /* 防止一直 True */
 			s_cpu2_response_failure_reason = CPU2_COMM_FAIL_TIMEOUT;
+			CPU3_WatchdogReportProgress();
 			return CPU2_CommFinishFailedRequest(parameter_write_attempted);
 		}
 	}
@@ -1915,11 +1922,14 @@ bool CPU2_CombinatePackage_Send(uint8_t f_code, uint16_t startadd, uint16_t regi
 		s_cpu2_request_uart_error_code = uart_error_code;
 		CPU2_CommRecordUartFlags(uart_error_code);
 		s_cpu2_response_failure_reason = CPU2_COMM_FAIL_UART;
+		CPU3_WatchdogReportProgress();
 		return CPU2_CommFinishFailedRequest(parameter_write_attempted);
 	}
 	if (!HostCommuProcess(UART5_RX_BUF, UART5_RX_LEN)) {
+		CPU3_WatchdogReportProgress();
 		return CPU2_CommFinishFailedRequest(parameter_write_attempted);
 	}
+	CPU3_WatchdogReportProgress();
 	return true;
 }
 /* 向CPU2发送数据包 */
@@ -1929,13 +1939,18 @@ bool sendToCPU2(uint8_t *arr, uint16_t len, bool flag_fromhost) {
 	if (HAL_UART_Transmit_DMA(&huart5, arr, len) != HAL_OK) {
 		/* Fall back to RX immediately if TX DMA cannot start. */
 		RS485_SET_RECV_MODE();
+		__HAL_UART_DISABLE_IT(&huart5, UART_IT_IDLE);
 		if (__HAL_UART_GET_FLAG(&huart5, UART_FLAG_PE) != RESET) __HAL_UART_CLEAR_PEFLAG(&huart5);
 		if (__HAL_UART_GET_FLAG(&huart5, UART_FLAG_ORE) != RESET) __HAL_UART_CLEAR_OREFLAG(&huart5);
 		if (__HAL_UART_GET_FLAG(&huart5, UART_FLAG_FE) != RESET) __HAL_UART_CLEAR_FEFLAG(&huart5);
 		if (__HAL_UART_GET_FLAG(&huart5, UART_FLAG_NE) != RESET) __HAL_UART_CLEAR_NEFLAG(&huart5);
 		__HAL_UART_CLEAR_IDLEFLAG(&huart5);
 		HAL_UART_DMAStop(&huart5);
-		HAL_UART_Receive_DMA(&huart5, UART5_RX_BUF, UART5_RX_BUF_SIZE);
+		if (HAL_UART_Receive_DMA(&huart5, UART5_RX_BUF, UART5_RX_BUF_SIZE) == HAL_OK) {
+			__HAL_UART_ENABLE_IT(&huart5, UART_IT_IDLE);
+		} else {
+			CPU3_UartScheduleRxRecovery(&huart5);
+		}
 		wait_response = false;
 		return false;
 	}

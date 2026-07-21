@@ -118,8 +118,8 @@ bool Cpu3Local_IsUartParam(OperatingNumber opera);
 /* 初始化默认值（上电调用一次，或 FRAM 无效时用） */
 void Cpu3_Params_InitDefaults(void);
 
-/* 根据 g_cpu3_comm_display_params.com1/com2/com3 重配置 3 个串口 */
-void Cpu3_ReinitAllUarts(void);
+/* 根据 g_cpu3_comm_display_params.com1/com2/com3 重配置3个串口并启动接收。 */
+bool Cpu3_ReinitAllUarts(void);
 
 /*
  * @brief 根据已保存的端口配置只重初始化一个外部 COM 口并恢复 DMA 接收。

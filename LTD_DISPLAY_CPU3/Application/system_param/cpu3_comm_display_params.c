@@ -764,11 +764,15 @@ void Cpu3Local_ApplyDisplayRuntimeParams(void)
 }
 
 /* ================ 内部小工具：用一个 ComPortConfig 初始化一个 UART ================ */
-static void Cpu3_ReinitOneUart(UART_HandleTypeDef *huart, const ComPortConfig *cfg)
+static bool Cpu3_ReinitOneUart(UART_HandleTypeDef *huart, const ComPortConfig *cfg)
 {
-    if (!huart || !cfg) return;
+    if ((huart == NULL) || (cfg == NULL)) {
+        return false;
+    }
 
-    HAL_UART_DeInit(huart);
+    if (HAL_UART_DeInit(huart) != HAL_OK) {
+        return false;
+    }
 
     huart->Init.BaudRate = cfg->baudrate;
     /*
@@ -798,8 +802,9 @@ static void Cpu3_ReinitOneUart(UART_HandleTypeDef *huart, const ComPortConfig *c
     huart->Init.OverSampling = UART_OVERSAMPLING_16;
 
     if (HAL_UART_Init(huart) != HAL_OK) {
-        Error_Handler();
+        return false;
     }
+    return true;
 }
 
 /* ========================== 初始化默认值 ========================== */
@@ -847,22 +852,13 @@ void Cpu3_Params_InitDefaults(void)
 }
 
 /* ========================== 重配全部串口 ========================== */
-void Cpu3_ReinitAllUarts(void)
+bool Cpu3_ReinitAllUarts(void)
 {
-    /* COM1 = USART6 */
-    Cpu3_ReinitOneUart(&huart6, &g_cpu3_comm_display_params.com1);
-    __HAL_UART_ENABLE_IT(&huart6, UART_IT_IDLE);
-    HAL_UART_Receive_DMA(&huart6, UART6_RX_BUF, UART6_RX_BUF_SIZE);
+    bool com1_ok = Cpu3_ReinitPortUart(1U);
+    bool com2_ok = Cpu3_ReinitPortUart(2U);
+    bool com3_ok = Cpu3_ReinitPortUart(3U);
 
-    /* COM2 = USART2 */
-    Cpu3_ReinitOneUart(&huart2, &g_cpu3_comm_display_params.com2);
-    __HAL_UART_ENABLE_IT(&huart2, UART_IT_IDLE);
-    HAL_UART_Receive_DMA(&huart2, UART2_RX_BUF, UART2_RX_BUF_SIZE);
-
-    /* COM3 = USART3 */
-    Cpu3_ReinitOneUart(&huart3, &g_cpu3_comm_display_params.com3);
-    __HAL_UART_ENABLE_IT(&huart3, UART_IT_IDLE);
-    HAL_UART_Receive_DMA(&huart3, UART3_RX_BUF, UART3_RX_BUF_SIZE);
+    return com1_ok && com2_ok && com3_ok;
 }
 
 /*
@@ -904,10 +900,17 @@ bool Cpu3_ReinitPortUart(uint8_t port_idx)
         return false;
     }
 
+    __HAL_UART_DISABLE_IT(huart, UART_IT_IDLE);
     (void)HAL_UART_DMAStop(huart);
-    Cpu3_ReinitOneUart(huart, cfg);
+    if (!Cpu3_ReinitOneUart(huart, cfg)) {
+        return false;
+    }
+    __HAL_UART_CLEAR_IDLEFLAG(huart);
+    if (HAL_UART_Receive_DMA(huart, rx_buf, rx_buf_size) != HAL_OK) {
+        return false;
+    }
     __HAL_UART_ENABLE_IT(huart, UART_IT_IDLE);
-    return HAL_UART_Receive_DMA(huart, rx_buf, rx_buf_size) == HAL_OK;
+    return true;
 }
 
 /* ==================== FRAM 存储结构定义 ==================== */

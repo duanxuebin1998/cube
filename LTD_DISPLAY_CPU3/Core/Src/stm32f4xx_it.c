@@ -29,6 +29,7 @@
 #include "iwdg.h"
 #include "display.h"
 #include "uart_idle_frame_gate.h"
+#include "app_main.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -187,6 +188,67 @@ static inline Cpu3UartRxIrqAction uart_classify_rx_irq(UART_HandleTypeDef *huart
                                   USART_SR_NE | USART_SR_ORE);
 }
 
+/* 把SR错误位转换为HAL错误码，供主循环诊断和恢复使用。 */
+static inline uint32_t uart_error_code_from_status(uint32_t status)
+{
+    uint32_t error_code = HAL_UART_ERROR_NONE;
+
+    if ((status & USART_SR_PE) != 0U) {
+        error_code |= HAL_UART_ERROR_PE;
+    }
+    if ((status & USART_SR_NE) != 0U) {
+        error_code |= HAL_UART_ERROR_NE;
+    }
+    if ((status & USART_SR_FE) != 0U) {
+        error_code |= HAL_UART_ERROR_FE;
+    }
+    if ((status & USART_SR_ORE) != 0U) {
+        error_code |= HAL_UART_ERROR_ORE;
+    }
+    return error_code;
+}
+
+/*
+ * 错误IRQ必须在返回前关闭IDLEIE并执行SR到DR清除序列。
+ * 本次候选帧整体丢弃，恢复事件交给主循环，HAL不再重复消费同一错误。
+ */
+static inline bool uart_consume_rx_error_irq(UART_HandleTypeDef *huart)
+{
+    uint32_t status = READ_REG(huart->Instance->SR);
+    uint32_t error_code = uart_error_code_from_status(status);
+
+    if (error_code == HAL_UART_ERROR_NONE) {
+        return false;
+    }
+
+    __HAL_UART_DISABLE_IT(huart, UART_IT_IDLE);
+    (void)READ_REG(huart->Instance->SR);
+    (void)READ_REG(huart->Instance->DR);
+    (void)HAL_UART_DMAStop(huart);
+    huart->ErrorCode |= error_code;
+    CPU3_UartRxFaultFromISR(huart, error_code, 0U);
+    return true;
+}
+
+/* IDLE空帧或过短板间帧只允许尝试一次DMA重启，成功后才重新开启IDLEIE。 */
+static inline bool uart_restart_rx_dma_from_isr(UART_HandleTypeDef *huart,
+                                                uint8_t *rx_buf,
+                                                uint16_t rx_buf_size,
+                                                void (*set_recv_mode)(void))
+{
+    __HAL_UART_DISABLE_IT(huart, UART_IT_IDLE);
+    if (set_recv_mode != NULL) {
+        set_recv_mode();
+    }
+    __HAL_UART_CLEAR_IDLEFLAG(huart);
+    if (HAL_UART_Receive_DMA(huart, rx_buf, rx_buf_size) != HAL_OK) {
+        CPU3_UartRxFaultFromISR(huart, HAL_UART_ERROR_DMA, 0U);
+        return false;
+    }
+    __HAL_UART_ENABLE_IT(huart, UART_IT_IDLE);
+    return true;
+}
+
 /* ready 模式：len>0 置位 ready；len==0 重启 DMA */
 static inline void uart_idle_rx_dma_ready(UART_HandleTypeDef *huart,
                                          DMA_HandleTypeDef  *hdma_rx,
@@ -201,8 +263,9 @@ static inline void uart_idle_rx_dma_ready(UART_HandleTypeDef *huart,
         return;
     }
 
-    /* 清 IDLE */
+    /* 清除本次IDLE并先关闭中断，DMA恢复成功前禁止重新开启。 */
     __HAL_UART_CLEAR_IDLEFLAG(huart);
+    __HAL_UART_DISABLE_IT(huart, UART_IT_IDLE);
 
     /* Stop DMA, compute length */
     HAL_UART_DMAStop(huart);
@@ -214,8 +277,7 @@ static inline void uart_idle_rx_dma_ready(UART_HandleTypeDef *huart,
         *rx_ready = 1;    /* 主循环处理后再重启 DMA（你当前架构） */
     } else {
         *rx_len = 0;
-        if (set_recv_mode) set_recv_mode();
-        HAL_UART_Receive_DMA(huart, rx_buf, rx_buf_size);
+        (void)uart_restart_rx_dma_from_isr(huart, rx_buf, rx_buf_size, set_recv_mode);
     }
 }
 
@@ -235,6 +297,7 @@ static inline void uart_idle_rx_dma_wait(UART_HandleTypeDef *huart,
     }
 
     __HAL_UART_CLEAR_IDLEFLAG(huart);
+    __HAL_UART_DISABLE_IT(huart, UART_IT_IDLE);
 
     HAL_UART_DMAStop(huart);
     uint32_t left = __HAL_DMA_GET_COUNTER(hdma_rx);
@@ -246,8 +309,7 @@ static inline void uart_idle_rx_dma_wait(UART_HandleTypeDef *huart,
         *wait_response = false; /* 接收完成，解除等待 */
         /* 此时由你的上层逻辑决定何时重启 DMA */
     } else {
-        if (set_recv_mode) set_recv_mode();
-        HAL_UART_Receive_DMA(huart, rx_buf, rx_buf_size);
+        (void)uart_restart_rx_dma_from_isr(huart, rx_buf, rx_buf_size, set_recv_mode);
     }
 }
 
@@ -624,7 +686,9 @@ void TIM4_IRQHandler(void)
   /* USER CODE END TIM4_IRQn 0 */
   HAL_TIM_IRQHandler(&htim4);
   /* USER CODE BEGIN TIM4_IRQn 1 */
-	HAL_IWDG_Refresh(&hiwdg);
+	if (CPU3_WatchdogHealthAdvancedFromISR()) {
+		HAL_IWDG_Refresh(&hiwdg);
+	}
   /* USER CODE END TIM4_IRQn 1 */
 }
 
@@ -648,6 +712,9 @@ void USART1_IRQHandler(void)
 void USART2_IRQHandler(void)
 {
   /* USER CODE BEGIN USART2_IRQn 0 */
+    if (uart_consume_rx_error_irq(&huart2)) {
+        return;
+    }
     uart_idle_rx_dma_ready(&huart2, &hdma_usart2_rx,
                            UART2_RX_BUF, UART2_RX_BUF_SIZE,
                            &UART2_RX_LEN, &com2_rx_ready,
@@ -665,6 +732,9 @@ void USART2_IRQHandler(void)
 void USART3_IRQHandler(void)
 {
   /* USER CODE BEGIN USART3_IRQn 0 */
+    if (uart_consume_rx_error_irq(&huart3)) {
+        return;
+    }
     uart_idle_rx_dma_ready(&huart3, &hdma_usart3_rx,
                            UART3_RX_BUF, UART3_RX_BUF_SIZE,
                            &UART3_RX_LEN, &com3_rx_ready,
@@ -696,14 +766,7 @@ void DMA1_Stream7_IRQHandler(void)
 void UART5_IRQHandler(void)
 {
   /* USER CODE BEGIN UART5_IRQn 0 */
-    if (uart_classify_rx_irq(&huart5) == CPU3_UART_RX_IRQ_ERROR)
-    {
-        /* 8N1 下 PEIE 可能关闭，先锁存 PE 再交 HAL 统一中止 DMA 和执行错误回调。 */
-        if ((READ_REG(huart5.Instance->SR) & USART_SR_PE) != 0U)
-        {
-            huart5.ErrorCode |= HAL_UART_ERROR_PE;
-        }
-        HAL_UART_IRQHandler(&huart5);
+    if (uart_consume_rx_error_irq(&huart5)) {
         return;
     }
 
@@ -782,6 +845,9 @@ void DMA2_Stream7_IRQHandler(void)
 void USART6_IRQHandler(void)
 {
   /* USER CODE BEGIN USART6_IRQn 0 */
+    if (uart_consume_rx_error_irq(&huart6)) {
+        return;
+    }
     uart_idle_rx_dma_ready(&huart6, &hdma_usart6_rx,
                            UART6_RX_BUF, UART6_RX_BUF_SIZE,
                            &UART6_RX_LEN, &com1_rx_ready,

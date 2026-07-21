@@ -48,17 +48,17 @@ extern UART_HandleTypeDef huart6;
 
 /* USER CODE BEGIN Private defines */
 #define USART1_RX_BUF_SIZE 512
-extern volatile uint8_t USART1_RX_LEN;              // 接收一帧数据的长度
+extern volatile uint16_t USART1_RX_LEN;             /* 接收一帧数据的长度。 */
 extern uint8_t USART1_RX_BUF[USART1_RX_BUF_SIZE];   // 接收数据缓冲区
 
 #define USART2_RX_BUF_SIZE 512
-extern volatile uint8_t USART2_RX_LEN;              // 接收一帧数据的长度
+extern volatile uint16_t USART2_RX_LEN;             /* 接收一帧数据的长度。 */
 extern volatile uint8_t USART2_TX_LEN;              // 发送一帧数据的长度
 extern uint8_t USART2_RX_BUF[USART2_RX_BUF_SIZE];   // 接收数据缓冲区
 extern uint8_t USART2_TX_BUF[USART2_RX_BUF_SIZE];   // 发送数据缓冲区
 
 #define USART4_RX_BUF_SIZE 512
-extern volatile uint8_t USART4_RX_LEN;              // 接收一帧数据的长度
+extern volatile uint16_t USART4_RX_LEN;             /* 接收一帧数据的长度。 */
 extern uint8_t USART4_RX_BUF[USART4_RX_BUF_SIZE];   // 接收数据缓冲区
 
 #define UART5_RX_BUF_SIZE 512
@@ -75,6 +75,15 @@ void MX_USART3_UART_Init(void);
 void MX_USART6_UART_Init(void);
 
 /* USER CODE BEGIN Prototypes */
+
+/* 统一按“DMA启动成功后再开启IDLEIE”的顺序恢复指定接收端口。 */
+bool CPU2_UartRestartRxDMA(UART_HandleTypeDef *huart);
+
+/* TIM4只检查恢复条件并触发PendSV，不在高优先级定时中断内调用HAL重启。 */
+void CPU2_UartRecoveryPollFromTim4Isr(void);
+
+/* PendSV在不依赖CPU2主循环的前提下执行到期的UART接收恢复。 */
+void CPU2_UartServicePendingRecovery(void);
 
 /* USER CODE END Prototypes */
 

@@ -26,24 +26,203 @@
 #ifdef __GNUC__
 #define PUTCHAR_PROTOTYPE int __io_putchar(int ch)
 PUTCHAR_PROTOTYPE {
-	HAL_UART_Transmit(&huart1, (uint8_t*) &ch, 1, HAL_MAX_DELAY);
+	/* 中断上下文禁止阻塞打印，异常细节应由主循环延后输出。 */
+	if (__get_IPSR() != 0U) {
+		return ch;
+	}
+	/* 调试口异常时最多等待10 ms，避免线程态打印永久阻塞业务主循环。 */
+	(void)HAL_UART_Transmit(&huart1, (uint8_t*) &ch, 1, 10U);
 	return ch;
 }
 #endif
 
-volatile uint8_t USART1_RX_LEN = 0;              // 接收一帧数据的长度
+volatile uint16_t USART1_RX_LEN = 0;             /* 接收一帧数据的长度。 */
 uint8_t USART1_RX_BUF[USART1_RX_BUF_SIZE] = { 0 };   // 接收数据缓冲区
 
-volatile uint8_t USART2_RX_LEN = 0;              // 接收一帧数据的长度
+volatile uint16_t USART2_RX_LEN = 0;             /* 接收一帧数据的长度。 */
 volatile uint8_t USART2_TX_LEN = 0;              // 接收一帧数据的长度
 uint8_t USART2_RX_BUF[USART2_RX_BUF_SIZE] = { 0 };   // 接收数据缓冲区
 uint8_t USART2_TX_BUF[USART2_RX_BUF_SIZE] = { 0 };   // 发送数据缓冲区
 
-volatile uint8_t USART4_RX_LEN = 0;              // 接收一帧数据的长度
+volatile uint16_t USART4_RX_LEN = 0;             /* 接收一帧数据的长度。 */
 uint8_t USART4_RX_BUF[USART4_RX_BUF_SIZE] = { 0 };   // 接收数据缓冲区
 
 volatile uint16_t UART5_RX_LEN = 0;              // 接收一帧数据的长度
 uint8_t UART5_RX_BUF[UART5_RX_BUF_SIZE] = { 0 };   // 接收数据缓冲区
+
+#define CPU2_UART_RX_PORT_COUNT 4U
+#define CPU2_UART_RX_RECOVERY_RETRY_MS 100U
+
+static volatile uint8_t s_uart_rx_recovery_pending[CPU2_UART_RX_PORT_COUNT] = {0U};
+static volatile uint32_t s_uart_rx_recovery_due_tick[CPU2_UART_RX_PORT_COUNT] = {0U};
+
+/*
+ * 函数用途：把受控UART句柄映射为恢复队列下标。
+ * 调用场景：接收启动失败、DMA收满、硬件错误和TIM4健康检查。
+ * 关键约束：只管理USART1、USART2、UART4和UART5，不接管其它业务串口。
+ */
+static int8_t CPU2_UartRecoveryIndex(UART_HandleTypeDef *huart)
+{
+	if (huart == NULL) {
+		return -1;
+	}
+	if (huart->Instance == USART1) {
+		return 0;
+	}
+	if (huart->Instance == USART2) {
+		return 1;
+	}
+	if (huart->Instance == UART4) {
+		return 2;
+	}
+	if (huart->Instance == UART5) {
+		return 3;
+	}
+	return -1;
+}
+
+/* 返回恢复队列下标对应的UART句柄。 */
+static UART_HandleTypeDef *CPU2_UartHandleFromRecoveryIndex(uint8_t index)
+{
+	switch (index) {
+	case 0U:
+		return &huart1;
+	case 1U:
+		return &huart2;
+	case 2U:
+		return &huart4;
+	case 3U:
+		return &huart5;
+	default:
+		return NULL;
+	}
+}
+
+/* 锁存一次有退避的恢复请求；本函数不打印、不阻塞、不直接调用HAL重启。 */
+static void CPU2_UartScheduleRxRecovery(UART_HandleTypeDef *huart, uint32_t delay_ms)
+{
+	int8_t index = CPU2_UartRecoveryIndex(huart);
+
+	if (index < 0) {
+		return;
+	}
+	s_uart_rx_recovery_due_tick[(uint8_t)index] = HAL_GetTick() + delay_ms;
+	s_uart_rx_recovery_pending[(uint8_t)index] = 1U;
+}
+
+/*
+ * 统一恢复普通DMA加IDLE接收。
+ * DMA启动失败时保持IDLEIE关闭，避免形成无DMA接管的中断状态。
+ */
+bool CPU2_UartRestartRxDMA(UART_HandleTypeDef *huart)
+{
+	uint8_t *rx_buf;
+	uint16_t rx_buf_size;
+	int8_t recovery_index;
+
+	recovery_index = CPU2_UartRecoveryIndex(huart);
+	if (recovery_index < 0) {
+		return false;
+	}
+	if (huart->Instance == USART1) {
+		rx_buf = USART1_RX_BUF;
+		rx_buf_size = USART1_RX_BUF_SIZE;
+	} else if (huart->Instance == USART2) {
+		rx_buf = USART2_RX_BUF;
+		rx_buf_size = USART2_RX_BUF_SIZE;
+		HAL_GPIO_WritePin(HART_RTS_GPIO_Port, HART_RTS_Pin, GPIO_PIN_SET);
+	} else if (huart->Instance == UART4) {
+		rx_buf = USART4_RX_BUF;
+		rx_buf_size = USART4_RX_BUF_SIZE;
+	} else if (huart->Instance == UART5) {
+		rx_buf = UART5_RX_BUF;
+		rx_buf_size = UART5_RX_BUF_SIZE;
+		RS485_SET_RECV_MODE();
+	} else {
+		return false;
+	}
+
+	__HAL_UART_DISABLE_IT(huart, UART_IT_IDLE);
+	(void)HAL_UART_DMAStop(huart);
+	__HAL_UART_CLEAR_IDLEFLAG(huart);
+	if (HAL_UART_Receive_DMA(huart, rx_buf, rx_buf_size) != HAL_OK) {
+		CPU2_UartScheduleRxRecovery(huart, CPU2_UART_RX_RECOVERY_RETRY_MS);
+		return false;
+	}
+	__HAL_UART_ENABLE_IT(huart, UART_IT_IDLE);
+	s_uart_rx_recovery_pending[(uint8_t)recovery_index] = 0U;
+	return true;
+}
+
+/*
+ * 函数用途：由TIM4检查四路受控UART是否失去DMA接收，并在到期时触发PendSV。
+ * 调用场景：CPU2主循环可能长期阻塞，因此恢复调度不能依赖主循环。
+ * 关键约束：TIM4中只读状态、锁存事件和置PendSV，不执行HAL_UART_DMAStop。
+ */
+void CPU2_UartRecoveryPollFromTim4Isr(void)
+{
+	uint32_t now = HAL_GetTick();
+	uint8_t index;
+	uint8_t service_due = 0U;
+
+	for (index = 0U; index < CPU2_UART_RX_PORT_COUNT; index++) {
+		UART_HandleTypeDef *huart = CPU2_UartHandleFromRecoveryIndex(index);
+
+		if (huart == NULL) {
+			continue;
+		}
+
+		/* 发送期间DMA接收按现有半双工流程暂停，不得被健康检查提前切回接收。 */
+		if (huart->gState == HAL_UART_STATE_BUSY_TX) {
+			continue;
+		}
+
+		if (((huart->Instance->CR3 & USART_CR3_DMAR) == 0U) ||
+			(huart->RxState != HAL_UART_STATE_BUSY_RX)) {
+			if (s_uart_rx_recovery_pending[index] == 0U) {
+				s_uart_rx_recovery_due_tick[index] = now;
+				s_uart_rx_recovery_pending[index] = 1U;
+			}
+		}
+
+		if ((s_uart_rx_recovery_pending[index] != 0U) &&
+			((int32_t)(now - s_uart_rx_recovery_due_tick[index]) >= 0)) {
+			service_due = 1U;
+		}
+	}
+
+	if (service_due != 0U) {
+		SCB->ICSR = SCB_ICSR_PENDSVSET_Msk;
+	}
+}
+
+/*
+ * 函数用途：在最低优先级PendSV中重试到期的UART接收恢复。
+ * 调用场景：由TIM4或已有通信延后工作触发，不依赖CPU2阻塞式主循环。
+ * 关键约束：发送中的半双工端口保持待恢复，避免改变现有收发方向时序。
+ */
+void CPU2_UartServicePendingRecovery(void)
+{
+	uint32_t now = HAL_GetTick();
+	uint8_t index;
+
+	for (index = 0U; index < CPU2_UART_RX_PORT_COUNT; index++) {
+		UART_HandleTypeDef *huart;
+
+		if ((s_uart_rx_recovery_pending[index] == 0U) ||
+			((int32_t)(now - s_uart_rx_recovery_due_tick[index]) < 0)) {
+			continue;
+		}
+
+		huart = CPU2_UartHandleFromRecoveryIndex(index);
+		if ((huart == NULL) || (huart->gState == HAL_UART_STATE_BUSY_TX)) {
+			continue;
+		}
+
+		/* 启动失败会由统一入口重新锁存下一次退避时间。 */
+		(void)CPU2_UartRestartRxDMA(huart);
+	}
+}
 
 /**
  * @brief UART发送完成回调函数
@@ -76,8 +255,7 @@ void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart) {
 		for (volatile uint32_t i = 0; i < 180000; i++) {
 			__NOP();
 		}
-		HAL_GPIO_WritePin(HART_RTS_GPIO_Port, HART_RTS_Pin, GPIO_PIN_SET);   //切换接收模式
-		HAL_UART_Receive_DMA(&huart2, USART2_RX_BUF, USART2_RX_BUF_SIZE);
+		(void)CPU2_UartRestartRxDMA(&huart2);
 	}
 	if (huart->Instance == UART5) {
 		//等待DMA完全发送完成
@@ -87,8 +265,29 @@ void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart) {
 //		for (volatile uint32_t i = 0; i < 180000; i++) {
 //			__NOP();
 //		}
-		RS485_SET_RECV_MODE();//切换接收模式
-		HAL_UART_Receive_DMA(&huart5, UART5_RX_BUF, UART5_RX_BUF_SIZE);
+		(void)CPU2_UartRestartRxDMA(&huart5);
+	}
+}
+
+/* DMA收满的数据视为溢出垃圾，立即关闭悬空状态并重新开始接收。 */
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
+{
+	if ((huart->Instance == USART1) ||
+		(huart->Instance == USART2) ||
+		(huart->Instance == UART4) ||
+		(huart->Instance == UART5)) {
+		(void)CPU2_UartRestartRxDMA(huart);
+	}
+}
+
+/* UART硬件错误执行一次有界恢复，失败时保持IDLEIE关闭。 */
+void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)
+{
+	if ((huart->Instance == USART1) ||
+		(huart->Instance == USART2) ||
+		(huart->Instance == UART4) ||
+		(huart->Instance == UART5)) {
+		(void)CPU2_UartRestartRxDMA(huart);
 	}
 }
 
@@ -134,8 +333,7 @@ void MX_UART4_Init(void)
     Error_Handler();
   }
   /* USER CODE BEGIN UART4_Init 2 */
-	__HAL_UART_ENABLE_IT(&huart4, UART_IT_IDLE);
-	HAL_UART_Receive_DMA(&huart4, USART4_RX_BUF, USART4_RX_BUF_SIZE);
+	(void)CPU2_UartRestartRxDMA(&huart4);
   /* USER CODE END UART4_Init 2 */
 
 }
@@ -163,8 +361,7 @@ void MX_UART5_Init(void)
     Error_Handler();
   }
   /* USER CODE BEGIN UART5_Init 2 */
-	__HAL_UART_ENABLE_IT(&huart5, UART_IT_IDLE);
-	HAL_UART_Receive_DMA(&huart5, UART5_RX_BUF, UART5_RX_BUF_SIZE);
+	(void)CPU2_UartRestartRxDMA(&huart5);
   /* USER CODE END UART5_Init 2 */
 
 }
@@ -221,8 +418,7 @@ void MX_USART1_UART_Init(void)
     Error_Handler();
   }
   /* USER CODE BEGIN USART1_Init 2 */
-	__HAL_UART_ENABLE_IT(&huart1, UART_IT_IDLE);
-	HAL_UART_Receive_DMA(&huart1, USART1_RX_BUF, USART1_RX_BUF_SIZE);
+	(void)CPU2_UartRestartRxDMA(&huart1);
   /* USER CODE END USART1_Init 2 */
 
 }
@@ -251,8 +447,7 @@ void MX_USART2_UART_Init(void)
     Error_Handler();
   }
   /* USER CODE BEGIN USART2_Init 2 */
-	__HAL_UART_ENABLE_IT(&huart2, UART_IT_IDLE);
-	HAL_UART_Receive_DMA(&huart2, USART2_RX_BUF, USART2_RX_BUF_SIZE);
+	(void)CPU2_UartRestartRxDMA(&huart2);
   /* USER CODE END USART2_Init 2 */
 
 }

@@ -163,9 +163,7 @@ void HostCommu_ProcessDeferredLogs(void)
  */
 static void HostCommuResumeRxDMA(void) {
 	/* UART5 IDLE IRQ stops RX DMA first; restore RX here for bad frames or TX start failures. */
-	RS485_SET_RECV_MODE();
-	__HAL_UART_CLEAR_IDLEFLAG(&huart5);
-	HAL_UART_Receive_DMA(&huart5, UART5_RX_BUF, UART5_RX_BUF_SIZE);
+	(void)CPU2_UartRestartRxDMA(&huart5);
 }
 
 /**

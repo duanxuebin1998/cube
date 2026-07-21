@@ -140,7 +140,7 @@ void MX_UART5_Init(void)
     Error_Handler();
   }
   /* USER CODE BEGIN UART5_Init 2 */
-	__HAL_UART_ENABLE_IT(&huart5, UART_IT_IDLE);
+  __HAL_UART_DISABLE_IT(&huart5, UART_IT_IDLE);
 //	HAL_UART_Receive_DMA(&huart5, UART5_RX_BUF, UART5_RX_BUF_SIZE);
   /* USER CODE END UART5_Init 2 */
 
@@ -199,8 +199,11 @@ void MX_USART2_UART_Init(void)
     Error_Handler();
   }
   /* USER CODE BEGIN USART2_Init 2 */
-	__HAL_UART_ENABLE_IT(&huart2, UART_IT_IDLE);
-	HAL_UART_Receive_DMA(&huart2, UART2_RX_BUF, UART2_RX_BUF_SIZE);
+	__HAL_UART_DISABLE_IT(&huart2, UART_IT_IDLE);
+	__HAL_UART_CLEAR_IDLEFLAG(&huart2);
+	if (HAL_UART_Receive_DMA(&huart2, UART2_RX_BUF, UART2_RX_BUF_SIZE) == HAL_OK) {
+		__HAL_UART_ENABLE_IT(&huart2, UART_IT_IDLE);
+	}
   /* USER CODE END USART2_Init 2 */
 
 }
@@ -229,8 +232,11 @@ void MX_USART3_UART_Init(void)
     Error_Handler();
   }
   /* USER CODE BEGIN USART3_Init 2 */
-	__HAL_UART_ENABLE_IT(&huart3, UART_IT_IDLE);
-	HAL_UART_Receive_DMA(&huart3, UART3_RX_BUF, UART3_RX_BUF_SIZE);
+	__HAL_UART_DISABLE_IT(&huart3, UART_IT_IDLE);
+	__HAL_UART_CLEAR_IDLEFLAG(&huart3);
+	if (HAL_UART_Receive_DMA(&huart3, UART3_RX_BUF, UART3_RX_BUF_SIZE) == HAL_OK) {
+		__HAL_UART_ENABLE_IT(&huart3, UART_IT_IDLE);
+	}
   /* USER CODE END USART3_Init 2 */
 
 }
@@ -259,8 +265,11 @@ void MX_USART6_UART_Init(void)
     Error_Handler();
   }
   /* USER CODE BEGIN USART6_Init 2 */
-	__HAL_UART_ENABLE_IT(&huart6, UART_IT_IDLE);
-	HAL_UART_Receive_DMA(&huart6, UART6_RX_BUF, UART6_RX_BUF_SIZE);
+	__HAL_UART_DISABLE_IT(&huart6, UART_IT_IDLE);
+	__HAL_UART_CLEAR_IDLEFLAG(&huart6);
+	if (HAL_UART_Receive_DMA(&huart6, UART6_RX_BUF, UART6_RX_BUF_SIZE) == HAL_OK) {
+		__HAL_UART_ENABLE_IT(&huart6, UART_IT_IDLE);
+	}
   /* USER CODE END USART6_Init 2 */
 
 }
