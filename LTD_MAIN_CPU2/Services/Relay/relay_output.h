@@ -17,6 +17,12 @@ typedef enum {
  */
 void RelayOutput_Init(void);
 
+/**
+ * @brief 请求清除四路继电器锁存报警。
+ * @note 请求由继电器更新周期消费，不写入参数存储。
+ */
+void RelayOutput_RequestClearAllLatchedAlarms(void);
+
 /* 完整计算继电器输出状态；当前由 TIM4 中断直接调用。 */
 void RelayOutput_Update(void);
 

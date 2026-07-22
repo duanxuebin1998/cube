@@ -133,6 +133,8 @@ void WriteDeviceParamsToHoldingRegisters(uint16_t *HoldingRegisterArray)
 
     /* 指令 */
     write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_COMMAND, (uint32_t)g_deviceParams.command);
+    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_PROTOCOL_CAPABILITIES,
+                      LTD_CAPABILITY_SUPPORTED_MASK);
 
     /* ===================== 基础参数 ===================== */
     write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_SENSORTYPE,            g_deviceParams.sensorType);
@@ -252,7 +254,7 @@ void WriteDeviceParamsToHoldingRegisters(uint16_t *HoldingRegisterArray)
     write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_AO_WORK_MODE, g_deviceParams.ao_output.work_mode);
     write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_AO_CURRENT_MODE, g_deviceParams.ao_output.current_mode);
     write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_AO_OUTPUT_SOURCE, g_deviceParams.ao_output.output_source);
-    write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_AO_SIL_WHG_RESERVED, g_deviceParams.ao_output.sil_whg_reserved);
+    write_i32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_AO_CURRENT_CORRECTION_MA_X100, g_deviceParams.ao_output.current_correction_mA_x100);
     write_u32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_AO_FIXED_CURRENT_MA_X100, g_deviceParams.ao_output.fixed_current_mA_x100);
     write_i32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_AO_RANGE_0_01MM, g_deviceParams.ao_output.range_0_01mm);
     write_i32_to_regs(HoldingRegisterArray, HOLDREGISTER_DEVICEPARAM_AO_RANGE_100_01MM, g_deviceParams.ao_output.range_100_01mm);
@@ -439,7 +441,7 @@ void ReadDeviceParamsFromHoldingRegisters(uint16_t *HoldingRegisterArray)
     g_deviceParams.ao_output.work_mode = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_AO_WORK_MODE);
     g_deviceParams.ao_output.current_mode = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_AO_CURRENT_MODE);
     g_deviceParams.ao_output.output_source = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_AO_OUTPUT_SOURCE);
-    g_deviceParams.ao_output.sil_whg_reserved = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_AO_SIL_WHG_RESERVED);
+    g_deviceParams.ao_output.current_correction_mA_x100 = read_i32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_AO_CURRENT_CORRECTION_MA_X100);
     g_deviceParams.ao_output.fixed_current_mA_x100 = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_AO_FIXED_CURRENT_MA_X100);
     g_deviceParams.ao_output.range_0_01mm = read_i32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_AO_RANGE_0_01MM);
     g_deviceParams.ao_output.range_100_01mm = read_i32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_AO_RANGE_100_01MM);
@@ -619,17 +621,17 @@ void read_measurement_result_from_InputRegisters(uint16_t *regs) {
 		read_relay_alarm_runtime_from_regs(cregs, channel, &g_measurement.relay_alarm_runtime[channel]);
 	}
 
-	/* ==== 蓝牙连接 RSSI 运行态，追加在继电器运行态之后，避免移动既有地址 ==== */
+	/* ==== 无线运行状态固定块：0x1600 ==== */
 	g_measurement.wireless_pairing_status.connection_valid = read_u32_from_regs(cregs, REG_WIRELESS_PAIRING_CONNECTION_VALID);
 	g_measurement.wireless_pairing_status.rssi_valid = read_u32_from_regs(cregs, REG_WIRELESS_PAIRING_RSSI_VALID);
 	g_measurement.wireless_pairing_status.rssi = read_i32_from_regs(cregs, REG_WIRELESS_PAIRING_RSSI);
 	g_measurement.wireless_pairing_status.connection_error_code = read_u32_from_regs(cregs, REG_WIRELESS_PAIRING_CONNECTION_ERROR_CODE);
 	g_measurement.wireless_pairing_status.rssi_update_counter = read_u32_from_regs(cregs, REG_WIRELESS_PAIRING_RSSI_UPDATE_COUNTER);
 
-	/* ==== AO模拟电流输出运行态，追加在 RSSI 运行态之后 ==== */
+	/* ==== AO运行状态固定块：0x1400 ==== */
 	read_ao_output_runtime_from_regs(cregs, &g_measurement.ao_output_runtime);
 
-	/* ==== SI Profile生命周期运行态，追加在全部既有输入寄存器之后 ==== */
+	/* ==== 固定结果块中的SI Profile生命周期：0x115A~0x115F ==== */
 	g_measurement.si_profile_runtime.phase = read_u32_from_regs(cregs, REG_DENSITY_DIST_SI_PROFILE_PHASE);
 	g_measurement.si_profile_runtime.cycle_counter = read_u32_from_regs(cregs, REG_DENSITY_DIST_SI_PROFILE_CYCLE_COUNTER);
 	g_measurement.si_profile_runtime.progress_points = read_u32_from_regs(cregs, REG_DENSITY_DIST_SI_PROFILE_PROGRESS_POINTS);
@@ -637,6 +639,17 @@ void read_measurement_result_from_InputRegisters(uint16_t *regs) {
 	/* 协议21固定点代际只从已通过前后双读校验的公开缓存恢复。 */
 	g_measurement.measurement_complete_counter = read_u32_from_regs(cregs, REG_SINGLE_POINT_MEAS_COMPLETE_COUNTER);
 	g_measurement.monitoring_sample_counter = read_u32_from_regs(cregs, REG_SINGLE_POINT_MON_SAMPLE_COUNTER);
+
+	/* 维护与继电器状态槽均来自同一CPU2权威输入快照。 */
+	g_measurement.device_status.maintenance_mode_active =
+		read_u32_from_regs(cregs, REG_MAINTENANCE_MODE_ACTIVE);
+	g_measurement.device_status.relay_alarm_inhibit_effective =
+		read_u32_from_regs(cregs, REG_RELAY_ALARM_INHIBIT_EFFECTIVE);
+	g_measurement.device_status.relay_alarm_action_mask =
+		((read_u32_from_regs(cregs, REG_RELAY_ALARM_ACTION_CHANNEL1) & 1U) << 0U) |
+		((read_u32_from_regs(cregs, REG_RELAY_ALARM_ACTION_CHANNEL2) & 1U) << 1U) |
+		((read_u32_from_regs(cregs, REG_RELAY_ALARM_ACTION_CHANNEL3) & 1U) << 2U) |
+		((read_u32_from_regs(cregs, REG_RELAY_ALARM_ACTION_CHANNEL4) & 1U) << 3U);
 }
 
 /* 解析03功能码保持寄存器数据 */

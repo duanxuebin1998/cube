@@ -103,6 +103,10 @@ void App_Init(void) {
     uint32_t startup_init_error = NO_ERROR;
 	printf("LTD重启！\n");
 	init_device_params(); /* 初始化设备参数 */
+	/* 维护模式属于易失运行态；每次上电都必须关闭并清空对外发布状态。 */
+	g_measurement.device_status.maintenance_mode_active = 0U;
+	g_measurement.device_status.relay_alarm_inhibit_effective = 0U;
+	g_measurement.device_status.relay_alarm_action_mask = 0U;
 	Initialize_Encoder(); /* 初始化编码器 */
 	/* 这 1 秒延时保留给外设稳定，但必须放在编码器启动之后，让编码器先采集首帧。 */
 	HAL_Delay(1000);

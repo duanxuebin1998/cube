@@ -2513,3 +2513,46 @@ CPU3通信和界面：
 - `cmake --build build\LTD_DISPLAY_CPU3 --clean-first`：61步通过，生成`LTD_DISPLAY_CPU3_V1.29.1.0.hex`；ELF为`text=191408`、`data=37932`、`bss=86876`。
 - `cmake --build build\LTD_MAIN_CPU2 --clean-first`：92步通过，生成`LTD_MAIN_CPU2_V1.30.1.0.hex`；ELF为`text=308492`、`data=2328`、`bss=34088`。
 - 整改前COM3连续流量已实机复现并由ST-Link确认USART3中断活锁；较早P0修复固件完成约150秒COM3短回归。新版本完整闭环代码仍需执行COM1/2/3单路与并发压力、A-B短接、UART错误/HAL失败注入、CPU3看门狗冻结和CPU2阻塞业务并发台架验证。
+
+## 2026-07-22 - 发布协议27固定地址、LH适配与AO继电器维护闭环
+
+版本：
+- CPU2：`V1.30.1.0 -> V1.31.0.0`（MINOR）。
+- CPU3：`V1.29.1.0 -> V1.30.0.0`（MINOR）。
+
+协议版本与兼容性：
+- CPU2/CPU3 `DEVICE_PROTOCOL_VERSION`由25提升到27；协议26的AO电流修正能力未单独形成固件组合，随协议27首个正式组合交付。协议27改为固定功能块地址直接索引，与旧紧凑地址程序不兼容，双端必须严格使用CPU2 V1.31.0.0 / CPU3 V1.30.0.0配套运行。
+- CPU2共享Holding范围固定为`0x0000～0x0FFF`，共享Input范围固定为`0x0000～0x29FF`，CPU3本机Holding范围固定为`0x7000～0x706B`；继续只使用标准Modbus FC03、FC04和FC10。
+- CPU2 `DEVICE_PARAM_VERSION`保持3，`DeviceParameters`大小、字段偏移、`struct_size`、FRAM A/B地址、magic、元信息和CRC范围均不变；AO修正复用原预留槽，旧协议存储升级时归零，不恢复出厂、不清除其它现场参数。
+- CPU3本机参数存储版本保持V7 / `0x0007`；新增LH协议模板和运行态只复用现有配置结构及RAM上下文，不改变CPU3本机FRAM布局。
+
+本次修改：
+- CPU2/CPU3共享寄存器改为固定PDU地址直接索引，CPU3按公共、参数、运行态和分布数据分组轮询并保持原子快照；新增协议能力掩码、非阻塞维护、继电器最终逻辑动作/实际屏蔽状态、AO设备故障电流屏蔽及命令118/119。
+- AO第4个32位预留槽正式定义为有符号电流修正值，单位0.01mA、范围-1.00～+1.00mA、默认0；启用态在最终输出阶段对基础目标只修正一次，保持路径不累计，禁用输出仍固定3.40mA。
+- 维护模式由阻塞等待改为主循环状态驱动；继电器按报警、正反逻辑、延时、锁存和维护屏蔽计算最终逻辑动作。当前输入寄存器发布逻辑动作而非NO/NC物理触点反馈，清锁存命令按一次性请求消费。
+- CPU3新增LH Modbus RTU从站，默认9600 8N1，支持FC03、FC04、FC05和FC10；命令等待CPU2合法ACK，参数写在ACK后继续等待FRAM完成代次并回读目标字段一致，异常按标准Modbus响应。
+- LTD外部FC10继续以CPU2合法ACK作为成功条件，随后异步失效并补读参数快照，不误用LH的FRAM强确认语义；LTD外部默认串口统一为4800 8N1。屏幕协议字段和远程 `0x46` 都先在旧串口参数下完成ACK，再应用并保存目标协议整组默认模板；同协议切换也重新套用模板，不保留旧协议下的自定义串口值。
+- SI Stop改为发送取消测量命令，不再隐式进入维护模式；同步DSM、LH、LTD、SI、AO、系统参数、CPU3菜单/状态页和版本索引资料。
+- DSM二代Modbus手册停止位修正为1；新增LH协议手册和索引；《LNG计量仪屏幕菜单》同步CPU2 V1.31.0.0、CPU3 V1.30.0.0及协议27并消除重复空白页。
+
+关键源码与边界：
+- 固定地址链路位于双端 `stateformodbus.h`、CPU2 `hostcommu_modbus.c` 和CPU3 `cpu2_communicate.c`；CPU3通过 `poweron_groups`、`runtime_groups`、`refresh_hold_groups`分块读取，并只在完整候选满足代际条件后提交公开快照。必须覆盖功能块首末地址、空洞、32位对齐、125寄存器上限及协议25/27混搭。
+- AO修正统一由CPU2 `AoOutput_ApplyCurrentCorrection()`在最终输出阶段执行；保持缓存只保存基础目标，禁用3.40mA不修正。必须覆盖 `-1.00/0/+1.00mA`、各输出模式、上下限幅、重复保持和AD5421写失败。
+- 维护与继电器闭环由 `ProcessMeasureCmd()`、`CMD_EnterMaintenanceMode()`、`CMD_ExitMaintenanceMode()`、`CMD_ClearAllRelayLatchedAlarms()`和 `RelayOutput_BuildStateMask()`组成；寄存器发布的是屏蔽后的逻辑动作，不是NO/NC物理触点反馈。
+- LH入口为 `lh_modbus_process()`；命令写以CPU2合法ACK为完成条件，持久参数还要经过 `lh_wait_parameter_persisted()`确认保存代次变化和目标字段回读一致。FRAM失败、超时、回读不一致和CPU2忙均不得返回成功。
+- 协议切换由 `ProtocolSwitchFrame_Process()`识别、`cpu3_apply_ready_protocol_switches()`延后应用；ACK使用旧串口配置，随后 `Cpu3Local_WriteValueChecked()`应用目标默认模板。CRC错误静默、非法目标返回异常、FRAM或重初始化失败必须回滚或进入UART恢复队列。
+
+验证：
+- `cmake --build build\LTD_MAIN_CPU2 --clean-first`：92步通过，生成V1.31.0.0产物；ELF为`text=309452`、`data=2328`、`bss=57832`。
+- `cmake --build build\LTD_DISPLAY_CPU3 --clean-first`：62步通过，生成V1.30.0.0产物；ELF为`text=195832`、`data=37940`、`bss=100716`。
+- `py -X utf8 tools\check_ao_output_enable_contract.py`、`check_ad5421_diagnostic_contract.py`和`check_fixed_point_generation_contract.py`通过，覆盖AO基础/修正分层、AD5421诊断及固定地址快照。
+- `py -X utf8 tools\check_cpu2_uart_resilience_contract.py`通过42项；`py -X utf8 tools\check_cpu3_external_freshness_contract.py`通过66877项；CPU2通信故障、DSM、SI、Wärtsilä、参数/故障和协议切换专项检查通过。
+- `py -m unittest tools.test_cpu3_protocol_switch`通过6项，覆盖LH 9600 8N1、同协议重套模板和非法目标；菜单短名与字库检查覆盖1075个显示字符串且缺字为0。
+- 文档结构、Markdown链接、流程影响/流程资料和 `git diff --check` 通过；这些均为静态或构建证据，不替代本节未验证台架。
+- DSM、LH和LNG三份Word分别完成17页、16页和29页渲染检查，未见明显乱码、重叠、截断或空白页。
+
+未验证风险：
+- 尚未完成协议27交叉烧写、真实RS485错波特率/校验、A-B短接、三路并发压力、FRAM A/B失败及掉电恢复、AO真实4～20mA电流环、继电器物理触点、维护/清锁存时序、LH现场主机和SI Stop实机回归。
+- 固定地址数组使双端BSS明显增加，链接通过不能替代启动、栈余量和长稳验证；LH参数强确认最长同步等待约1.5秒，其对其它COM、OLED和看门狗的影响仍需并发台架记录。
+- FRAM持久化失败时CPU2已更新的RAM参数不会回滚；LH会对外返回失败，但同次上电期间RAM读回可能仍是新值。
+- 本机旧协议事实提取工具仍固化协议25紧凑地址和旧命令集合，当前失败不列为本版通过项，需后续单独升级工具基线。

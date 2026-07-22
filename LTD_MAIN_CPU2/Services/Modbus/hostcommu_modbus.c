@@ -21,15 +21,9 @@ static const int illegaldataaddress = 0x02; /* 非法数据地址 */
 static const int illegaldatavalue = 0x03; /* 非法数据值 */
 /* static const int slavedevicefailure = 0x04; / /从设备故障 */
 /* static const int slavedevicebusy = 0x05; / /从设备忙 */
-/* 保持寄存器 */
-static const int HoldingregisterAddress = 0x00; /* 保持寄存器起始地址 */
-static const int HoldingregisterAmount = HOLEREGISTER_STOP; /* 保持寄存器总数 */
-/* static int HoldingRegisterArray[HOLEREGISTER_STOP] = { 0 }; / /保持寄存器数组 */
-static uint16_t HoldingRegisterArray[HOLEREGISTER_STOP] = { 0 }; /* 保持寄存器数组，1 个元素对应 1 个 16 位保持寄存器 */
-/* 输入寄存器 */
-static const int InputregisterAddress = 0x00; /* 输入寄存器起始地址 */
-static const int InputRegisterAmount = INPUTREGISTER_AMOUNT; /* 输入寄存器总数 */
-static uint16_t InputRegisterArray[INPUTREGISTER_AMOUNT] = { 0 };    /* 输入寄存器数组 */
+/* 现行Modbus地址直接作为数组索引，不再经过内部紧凑地址转换。 */
+static uint16_t HoldingRegisterArray[HOLDREGISTER_AMOUNT] = { 0 };
+static uint16_t InputRegisterArray[INPUTREGISTER_AMOUNT] = { 0 };
 /* 发送区暂存数组 */
 static int SlaveTempBuffer[HOSTCOMMU_SENDLENGTH]; /* 主板通信数据缓冲区，注意与中断或 DMA 访问边界保持一致。 */
 /* 接收到的命令包数据暂存变量 */
@@ -44,7 +38,6 @@ static void PresetRegister(bool registertype, int const *registervalue); /* 写寄
 static int Compose03Package(uint8_t  *revframe, uint8_t  *sendframe);
 static int Compose04Package(uint8_t  *revframe, uint8_t  *sendframe);
 static int Compose10Package(uint8_t  const *revframe, uint8_t  *sendframe);
-static bool IsOnlyRelayClearAlarmWrite(uint16_t startAddr, uint16_t regCount);
 static bool IsPersistentDeviceParamWrite(uint16_t startAddr, uint16_t regCount);
 /* 接收到的数据包进行地址检查 */
 bool SlaveCheckAddress(uint8_t  const *revframe, int framelen) {
@@ -64,53 +57,10 @@ void SetSlaveaddress(int address) {
 }
 
 
-/* 判断 0x10 写入是否落在需要持久化的设备参数区。
- * 命令和继电器清锁存属于运行态写入，不触发 FRAM 保存和差异打印。 */
+/* 只有当前可写参数块触发FRAM保存；命令和AO仿真开关保持非持久化。 */
 static bool IsPersistentDeviceParamWrite(uint16_t startAddr, uint16_t regCount)
 {
-    uint32_t persist_start;
-    uint32_t persist_end;
-    uint32_t write_start;
-    uint32_t write_end;
-
-    if (((startAddr == HOLDREGISTER_DEVICEPARAM_COMMAND) && (regCount == 2U)) ||
-        IsOnlyRelayClearAlarmWrite(startAddr, regCount)) {
-        return false;
-    }
-
-    persist_start = (uint32_t)HOLDREGISTER_DEVICEPARAM_SENSORTYPE;
-    persist_end = (uint32_t)HOLDREGISTER_DEVICEPARAM_CRC + 1UL;
-    write_start = (uint32_t)startAddr;
-    write_end = (uint32_t)startAddr + (uint32_t)regCount;
-
-    return (write_end > persist_start) && (write_start < persist_end);
-}
-
-/* 清除锁存报警是运行期命令，单独写这些寄存器时不触发 FRAM 保存。 */
-static bool IsOnlyRelayClearAlarmWrite(uint16_t startAddr, uint16_t regCount)
-{
-    if (regCount == 0U) {
-        return false;
-    }
-
-    for (uint16_t offset = 0U; offset < regCount; offset++) {
-        uint16_t addr = (uint16_t)(startAddr + offset);
-        bool matched = false;
-
-        for (uint16_t channel = 0U; channel < HOLDREGISTER_RELAY_ALARM_CHANNEL_COUNT; channel++) {
-            uint16_t clearAddr = (uint16_t)HOLDREGISTER_DEVICEPARAM_RELAY_CLEAR_ALARM(channel);
-            if ((addr == clearAddr) || (addr == (uint16_t)(clearAddr + 1U))) {
-                matched = true;
-                break;
-            }
-        }
-
-        if (!matched) {
-            return false;
-        }
-    }
-
-    return true;
+    return LtdModbus_HoldingWriteTouchesPersistent(startAddr, regCount);
 }
 
 /* 判断功能码是否正确 */
@@ -122,28 +72,29 @@ static bool JudgeFunctioncode(void) {
 		return true;
 	}
 }
-/* 根据不同功能码判断相应的地址是否正确 */
+/* 按标准Modbus数量限制和当前直接地址数组边界验证请求。 */
 static bool JudgeStartAddress(void) {
-	bool ret = true;
-	switch (RCV_functioncode) {
-	case FUNCTIONCODE_READ_HOLDREGISTER:
-	case FUNCTIONCODE_WRITE_MULREGISTER: {
-		if ((RCV_startaddress < HoldingregisterAddress) || (RCV_registercnt > HoldingregisterAmount)
-				|| ((RCV_startaddress + RCV_registercnt - 1) >= HoldingregisterAmount + HoldingregisterAddress)) {
-			ret = false;
-		}
-		break;
-	}
-	case FUNCTIONCODE_READ_INPUTREGISTER: {
-		if ((RCV_startaddress < InputregisterAddress) || (RCV_registercnt > InputRegisterAmount)
-				|| ((RCV_startaddress + RCV_registercnt - 1) >= (InputRegisterAmount + InputregisterAddress))) {
-			ret = false;
-		}
-		break;
-	}
+    uint16_t start;
+    uint16_t count;
 
-	}
-	return ret;
+    if ((RCV_startaddress < 0) || (RCV_registercnt <= 0)) {
+        return false;
+    }
+    start = (uint16_t)RCV_startaddress;
+    count = (uint16_t)RCV_registercnt;
+    if (RCV_functioncode == FUNCTIONCODE_READ_INPUTREGISTER) {
+        return (count <= LTD_MODBUS_MAX_READ_REGISTERS) &&
+               LtdModbus_RangeWithin(start, count, INPUTREGISTER_AMOUNT);
+    }
+    if (RCV_functioncode == FUNCTIONCODE_READ_HOLDREGISTER) {
+        return (count <= LTD_MODBUS_MAX_READ_REGISTERS) &&
+               LtdModbus_RangeWithin(start, count, HOLDREGISTER_AMOUNT);
+    }
+    if (RCV_functioncode == FUNCTIONCODE_WRITE_MULREGISTER) {
+        return (count <= LTD_MODBUS_MAX_WRITE_REGISTERS) &&
+               LtdModbus_HoldingWriteRangeIsValid(start, count);
+    }
+    return false;
 }
 /*
  读寄存器
@@ -151,20 +102,12 @@ static bool JudgeStartAddress(void) {
  --> false - 保持寄存器
  */
 static void ReadRegister(bool registertype, int *registervalue) {
-	int range;
-	int i;
-	int j;
+    const uint16_t *registers = registertype ? InputRegisterArray : HoldingRegisterArray;
+    int index;
 
-	range = RCV_startaddress + RCV_registercnt;
-	if (registertype) {
-		for (i = RCV_startaddress, j = 0; i < range; i++, j++) {
-			registervalue[j] = InputRegisterArray[i];
-		}
-	} else {
-		for (i = RCV_startaddress, j = 0; i < range; i++, j++) {
-			registervalue[j] = HoldingRegisterArray[i];
-		}
-	}
+    for (index = 0; index < RCV_registercnt; index++) {
+        registervalue[index] = (int)registers[RCV_startaddress + index];
+    }
 }
 
 /* 检查功能码，若错误则组织违法功能码响应包 */
@@ -267,6 +210,7 @@ int Response10Process(uint8_t const *revframe, uint8_t *sendframe)
     int length;
     uint16_t startAddr;
     uint16_t regCount;
+    uint32_t command_value;
     uint32_t previous_tank_height;
     uint32_t previous_simulation_enabled;
     uint32_t candidate_simulation_enabled;
@@ -277,6 +221,21 @@ int Response10Process(uint8_t const *revframe, uint8_t *sendframe)
 
     startAddr = ((uint16_t)revframe[2] << 8) | revframe[3];
     regCount  = ((uint16_t)revframe[4] << 8) | revframe[5];
+    if (LtdModbus_RangeContains(startAddr, regCount,
+                                HOLDREGISTER_DEVICEPARAM_COMMAND, REG_STRIDE)) {
+        command_value = ((uint32_t)revframe[7] << 24) |
+                        ((uint32_t)revframe[8] << 16) |
+                        ((uint32_t)revframe[9] << 8) |
+                        (uint32_t)revframe[10];
+        if ((startAddr != HOLDREGISTER_DEVICEPARAM_COMMAND) ||
+            (regCount != REG_STRIDE) ||
+            !LtdModbus_CommandIsImplemented(command_value)) {
+            sendframe[0] = (uint8_t)SlaveAddress;
+            sendframe[1] = (uint8_t)(presetmultipleregisterfuncode | 0x80);
+            sendframe[2] = (uint8_t)illegaldatavalue;
+            return 3;
+        }
+    }
     previous_params = g_deviceParams;
     previous_tank_height = previous_params.tankHeight;
     previous_simulation_enabled = AoOutput_IsSimulationEnabled();
@@ -313,8 +272,8 @@ int Response10Process(uint8_t const *revframe, uint8_t *sendframe)
     /* AO禁用时拒绝开启仿真；由输出模式切到禁用时清除潜伏的非持久化仿真状态。 */
     if ((candidate_params.ao_output.work_mode == AO_WORK_MODE_DISABLED) &&
         (candidate_simulation_enabled != 0U)) {
-        if (((uint32_t)startAddr < (HOLDREGISTER_AO_SIMULATION_ENABLE + 2U)) &&
-            (((uint32_t)startAddr + (uint32_t)regCount) > HOLDREGISTER_AO_SIMULATION_ENABLE)) {
+        if (LtdModbus_RangeContains(startAddr, regCount,
+                                    HOLDREGISTER_AO_SIMULATION_ENABLE, REG_STRIDE)) {
             g_deviceParams = previous_params;
             AoOutput_SetSimulationEnabled(previous_simulation_enabled);
             WriteDeviceParamsToHoldingRegisters(HoldingRegisterArray);
@@ -380,23 +339,13 @@ static int Compose10Package(uint8_t  const *revframe, uint8_t  *sendframe) {
  --> true - 输入寄存器
  */
 static void PresetRegister(bool registertype, int const *registervalue) {
-	int range;
-	int i;
-	int j;
+    int index;
 
-	range = RCV_startaddress + RCV_registercnt;
-	if (registertype) {
-		for (i = RCV_startaddress, j = 0; i < range; i++, j++) {
-			InputRegisterArray[i] = registervalue[j];
-		}
-	} else {
-		for (i = RCV_startaddress, j = 0; i < range; i++, j++) {
-			HoldingRegisterArray[i] = registervalue[j];
-            /* 该函数可能在 UART5 中断路径执行，逐寄存器打印只能在调试宏下开启。 */
-#if DEBUG_HOSTCOMMU_MODBUS
-			printf("HoldingRegisterArray[%d] = %d\n", i, HoldingRegisterArray[i]);
-#endif
-		}
-	}
+    if (registertype) {
+        return;
+    }
+    for (index = 0; index < RCV_registercnt; index++) {
+        HoldingRegisterArray[RCV_startaddress + index] = (uint16_t)registervalue[index];
+    }
 }
 

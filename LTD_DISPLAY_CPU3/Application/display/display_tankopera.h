@@ -172,11 +172,11 @@ typedef enum {
     MENU_GRP_CPU3_SI_ALARM,     /* SI 报警限值 */
     MENU_GRP_DO_ALARM,          /* 继电器报警输出 */
     MENU_GRP_AO_CHANNEL,        /* AO 基本设置：工作模式/电流模式/输出源 */
-    MENU_GRP_AO_RANGE,          /* AO 固定电流/量程/阻尼 */
+    MENU_GRP_AO_RANGE,          /* AO 电流修正/固定电流/量程/阻尼 */
     MENU_GRP_AO_FAULT,          /* AO 故障动作/故障电流/初始电流 */
     MENU_GRP_AO_RUNTIME,        /* AO 输出状态/输入值/输入百分比/输出电流，只读运行态 */
     MENU_GRP_AO_DIAGNOSTIC,     /* AO 输出仿真/仿真电流 */
-    MENU_GRP_AO_RESERVED,       /* AO SIL/WHG 与 DAC 回读隐藏预留 */
+    MENU_GRP_AO_RESERVED,       /* AO 错误等级与 DAC 回读隐藏预留 */
     MENU_GRP_CAL_SP,            /* 标定液位(油/水)/单点位置/监测位置/分布液位/电机运行距离 */
     MENU_GRP_PARAM_CHECK,       /* ParamVer/StructSize/Magic/CRC */
     MENU_GRP_CPU3_BASE,         /* LedVer/语言 */
@@ -407,7 +407,7 @@ typedef enum
     COM_NUM_DEVICEPARAM_AO_WORK_MODE,                   /* AO工作模式 */
     COM_NUM_DEVICEPARAM_AO_CURRENT_MODE,                /* AO电流模式 */
     COM_NUM_DEVICEPARAM_AO_OUTPUT_SOURCE,               /* AO输出源 */
-    COM_NUM_DEVICEPARAM_AO_SIL_WHG_RESERVED,            /* SIL/WHG隐藏预留 */
+    COM_NUM_DEVICEPARAM_AO_CURRENT_CORRECTION_MA_X100,  /* AO电流修正，单位0.01mA */
     COM_NUM_DEVICEPARAM_AO_FIXED_CURRENT_MA_X100,       /* AO固定电流 */
     COM_NUM_DEVICEPARAM_AO_RANGE_0_01MM,                /* AO 0%对应值 */
     COM_NUM_DEVICEPARAM_AO_RANGE_100_01MM,              /* AO 100%对应值 */

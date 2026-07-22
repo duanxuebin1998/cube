@@ -1,8 +1,8 @@
 # CPU3状态页不同状态显示信息确认表
 
-日期：2026-07-16
+日期：2026-07-22
 
-适用版本：当前开发及最新正式固件组合为共享协议 `25`、CPU2 `V1.30.0.0` / CPU3 `V1.29.0.0`。读取部件参数页RSSI显示从协议9起支持，密度两位小数显示从协议13起支持，SI Profile来源隔离和点阵输入寄存器从协议14起支持，SI生命周期字段从协议18起支持。协议19拆分多义故障，协议20新增AO配置和运行态，协议21增加固定点结果代际和已确认快照，协议22只重排32项共享故障编号，协议23收敛AO故障动作，协议24定义传感器位置源以及初始/过程/保持输出语义，协议25增加水位滞后时间预留参数且不改变状态页。协议21及更早固件必须按对应CPU2历史页解释故障编号；协议23及更早版本不能按协议24解释AO输出源1、初始电流和保持状态，协议20及更早版本缺少协议21固定点快照契约。
+适用版本：本次正式固件组合为共享协议 `27`、CPU2 `V1.31.0.0` / CPU3 `V1.30.0.0`。读取部件参数页RSSI显示从协议9起支持，密度两位小数显示从协议13起支持，SI Profile来源隔离和点阵输入寄存器从协议14起支持，SI生命周期字段从协议18起支持。协议19拆分多义故障，协议20新增AO配置和运行态，协议21增加固定点结果代际和已确认快照，协议22只重排32项共享故障编号，协议23收敛AO故障动作，协议24定义传感器位置源以及初始/过程/保持输出语义，协议25增加水位滞后时间预留参数，协议26定义单一AO电流修正，协议27发布固定功能块地址、非阻塞维护叠加态、继电器屏蔽后逻辑动作/锁存状态和参数完成代次。协议21及更早固件必须按对应CPU2历史页解释故障编号；协议23及更早版本不能按协议24解释AO输出源1、初始电流和保持状态，协议20及更早版本缺少协议21固定点快照契约。
 
 源码依据：`LTD_DISPLAY_CPU3/Application/display/display.c`、`LTD_DISPLAY_CPU3/Communication/internal/main_board_modbus/cpu2_communicate.c`、`LTD_DISPLAY_CPU3/Application/system_param/system_parameter.h`、`LTD_MAIN_CPU2/Services/Sensor/sensor.c`
 
@@ -10,7 +10,7 @@
 
 ## 1. 显示规则总览
 
-CPU3 状态页第一行固定显示设备状态文字。通常在右侧显示电机运行图标；CPU2/CPU3协议兼容且AO输出仿真开启时，右侧改为反显“模拟”/`SIM`，关闭仿真后清除提示并恢复电机图标。除无线滑环匹配特殊页外，后续结果行由 `DisplayResultContext` 决定：
+CPU3 状态页第一行固定显示设备主状态文字。协议27的维护模式是易失、非阻塞叠加态，不覆盖设备主状态，因此进入/退出维护模式不会把状态页主状态改成`STATE_MAINTENANCEMODE`；该枚举仅保留给遗留状态显示分支。通常在右侧显示电机运行图标；CPU2/CPU3协议兼容且AO输出仿真开启时，右侧改为反显“模拟”/`SIM`，关闭仿真后清除提示并恢复电机图标。除无线滑环匹配特殊页外，后续结果行由 `DisplayResultContext` 决定：
 
 | 显示项 | 显示条件 | 数据源 | 显示口径 |
 | --- | --- | --- | --- |
@@ -28,7 +28,7 @@ CPU3 状态页第一行固定显示设备状态文字。通常在右侧显示电
 | 错误码 | `STATE_ERROR` | `device_status.error_code` | 状态行追加错误类型和位置，格式为 `type-pos` |
 | 故障详情 | `STATE_ERROR` 且 `error_code != NO_ERROR` | `Display_GetErrorReasonByCode(error_code)` | 结果区显示 `故障:` 原因，过长时拆成两行 |
 | AO仿真提示 | CPU2/CPU3协议兼容且 `ao_output_runtime.simulation_enabled != 0` | `g_measurement.ao_output_runtime.simulation_enabled` | 状态行右上角反显“模拟”/`SIM`并临时替代电机图标；关闭仿真、协议不兼容或提示行切换时先清除旧区域，再恢复电机图标，避免残留维护态提示 |
-| CPU2通信超时 | `STATE_ERROR` 且 `error_code == CPU2_COMM_TIMEOUT` | `CPU2_CommRecordFailure()`、`CPU2_CommShouldShowStartup()`、`CPU2_CommIsAvailable()`、`CPU2_CommCanSendCommand()` | 连续请求失败计数从0开始；1000 ms超时、非法响应、UART错误和TX DMA启动失败均按1次累计。已建立快照后，第1～2次失败只计数并重试，不清快照、不退回“通讯尝试中...”；连续第3次失败才清空公开快照并完整重同步；第10次置 `STATE_ERROR` 和 `0x00140007`，屏幕显示 `20-7`。冷启动因尚无快照，在重试期间仍显示“通讯尝试中...”。只有完整包含设备状态和错误码的0x04响应才能解除故障锁存。任何已发起的非命令参数写失败仍立即关闭参数快照并强制补读，覆盖CPU2已写入但ACK丢失场景。参数刷新期间普通写关闭，但状态/协议快照有效、协议匹配且无故障时，屏幕 `CMD_CANCEL_MEASUREMENT` 仍可达；SI `00009 Stop`不使用该绕过 |
+| CPU2通信超时 | `STATE_ERROR` 且 `error_code == CPU2_COMM_TIMEOUT` | `CPU2_CommRecordFailure()`、`CPU2_CommShouldShowStartup()`、`CPU2_CommIsAvailable()`、`CPU2_CommCanSendCommand()` | 连续请求失败计数从0开始；1000 ms超时、非法响应、UART错误和TX DMA启动失败均按1次累计。已建立快照后，第1～2次失败只计数并重试，不清快照、不退回“通讯尝试中...”；连续第3次失败才清空公开快照并完整重同步；第10次置 `STATE_ERROR` 和 `0x00140007`，屏幕显示 `20-7`。冷启动因尚无快照，在重试期间仍显示“通讯尝试中...”。只有完整包含设备状态和错误码的0x04响应才能解除故障锁存。任何已发起的非命令参数写失败仍立即关闭参数快照并强制补读，覆盖CPU2已写入但ACK丢失场景。参数刷新期间普通写关闭，但状态/协议快照有效、协议匹配且无故障时，屏幕 `CMD_CANCEL_MEASUREMENT` 仍可达；SI `00009 Stop`现在也发送`CMD_CANCEL_MEASUREMENT`，不再进入维护模式，但仍按外部协议普通命令门禁处理，不使用屏幕专用绕过 |
 | CPU2/CPU3协议不匹配 | 当前连接协议快照有效且CPU2协议不等于CPU3协议 | `CPU2_CommIsProtocolCompatible()`、`CPU2_CommIsProtocolMismatch()` | 上电或恢复先读取`0x0010~0x0011`协议版本；确认不匹配后退出通讯尝试页并显示“协议版本不匹配”，不显示伪`20-7`，不读取新协议扩展区，不开放普通写或CPU2派生字段。协议心跳后续连续10次无合法响应时才转入`20-7`通信超时故障 |
 
 ## 2. 状态显示确认表
@@ -81,7 +81,7 @@ CPU3 状态页第一行固定显示设备状态文字。通常在右侧显示电
 | `STATE_FORCE_RUNDOWN_OVER` | 运动调试 | 状态、位置、扭力 | `debug_data.sensor_position`、`debug_data.current_weight` | 强制下行完成 |
 | `STATE_FORCEZERO` | 运动调试 | 状态、位置、扭力 | `debug_data.sensor_position`、`debug_data.current_weight` | 设置电机零点中 |
 | `STATE_FORCEZERO_OVER` | 运动调试 | 状态、位置、扭力 | `debug_data.sensor_position`、`debug_data.current_weight` | 设置电机零点完成 |
-| `STATE_MAINTENANCEMODE` | 运动调试 | 状态、位置、扭力 | `debug_data.sensor_position`、`debug_data.current_weight` | 维护模式不显示旧业务结果 |
+| `STATE_MAINTENANCEMODE` | 遗留显示分支 | 状态、位置、扭力 | `debug_data.sensor_position`、`debug_data.current_weight` | 协议27命令109/118使用独立`maintenance_mode_active`叠加态，不再把主设备状态切到该枚举；仅在旧路径显式发布该状态时沿用本行显示规则 |
 | `STATE_DEBUG_MODE` | 运动调试 | 状态、位置、扭力 | `debug_data.sensor_position`、`debug_data.current_weight` | 调试模式不显示旧业务结果 |
 | `STATE_GET_FULLWEIGHT` | 扭力 | 状态、位置、扭力 | `debug_data.sensor_position`、`debug_data.current_weight` | 满载扭力中 |
 | `STATE_GET_EMPTYWEIGHT` | 扭力 | 状态、位置、扭力 | `debug_data.sensor_position`、`debug_data.current_weight` | 空载扭力中 |

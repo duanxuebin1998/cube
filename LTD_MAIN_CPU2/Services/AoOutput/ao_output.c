@@ -46,7 +46,7 @@ static uint32_t ao_output_last_write_attempt_tick = 0U;
 static uint32_t ao_output_last_write_attempt_mA_x100 = 0U;
 static uint32_t ao_output_last_recover_target_mA_x100 = 0U;
 static uint8_t ao_last_process_valid = 0U;
-static uint32_t ao_last_process_current_mA_x100 = 0U;
+static uint32_t ao_last_process_base_current_mA_x100 = 0U;
 static int32_t ao_last_process_value_01mm = 0;
 static int32_t ao_last_process_percent_x100 = 0;
 static uint8_t ao_config_snapshot_valid = 0U;
@@ -360,6 +360,28 @@ static uint32_t AoOutput_ClampHardwareCurrent(uint32_t current_mA_x100)
     return current_mA_x100;
 }
 
+/* AO启用时在基础目标上统一叠加一次修正；禁用态3.40mA保持原值。 */
+static uint32_t AoOutput_ApplyCurrentCorrection(const AoOutputConfig *config,
+                                                AoOutputSource source,
+                                                uint32_t base_target_mA_x100)
+{
+    int64_t corrected_target;
+
+    if ((config == NULL) || (source == AO_OUTPUT_SOURCE_DISABLED)) {
+        return base_target_mA_x100;
+    }
+
+    corrected_target = (int64_t)base_target_mA_x100 +
+                       (int64_t)config->current_correction_mA_x100;
+    if (corrected_target < (int64_t)AO_OUTPUT_HARDWARE_MIN_MA_X100) {
+        return AO_OUTPUT_HARDWARE_MIN_MA_X100;
+    }
+    if (corrected_target > (int64_t)AO_OUTPUT_HARDWARE_MAX_MA_X100) {
+        return AO_OUTPUT_HARDWARE_MAX_MA_X100;
+    }
+    return (uint32_t)corrected_target;
+}
+
 /* 返回NMS81普通、NE、US及固定模式的过程与故障边界。 */
 static AoCurrentModeLimits AoOutput_GetModeLimits(uint32_t current_mode)
 {
@@ -557,7 +579,7 @@ static void AoOutput_HandleConfigTransition(const AoOutputConfig *config)
 
     if (clear_last_valid != 0U) {
         ao_last_process_valid = 0U;
-        ao_last_process_current_mA_x100 = 0U;
+        ao_last_process_base_current_mA_x100 = 0U;
         ao_last_process_value_01mm = 0;
         ao_last_process_percent_x100 = 0;
     }
@@ -570,20 +592,24 @@ static void AoOutput_HandleConfigTransition(const AoOutputConfig *config)
     ao_config_snapshot_valid = 1U;
 }
 
-/* 仅整机明确进入错误态且带真实错误码时执行AO故障动作。 */
-static uint8_t AoOutput_IsDeviceFault(void)
+/* 仅非维护状态下整机明确进入错误态且带真实错误码时执行AO故障电流。 */
+static uint8_t AoOutput_ShouldUseFaultCurrent(void)
 {
     DeviceState state;
     uint32_t error_code;
+    uint32_t maintenance_mode_active;
     uint32_t primask;
 
     primask = __get_PRIMASK();
     __disable_irq();
     state = g_measurement.device_status.device_state;
     error_code = g_measurement.device_status.error_code;
+    maintenance_mode_active = g_measurement.device_status.maintenance_mode_active;
     __set_PRIMASK(primask);
 
-    return ((state == STATE_ERROR) &&
+    /* 维护模式只旁路设备故障电流，后续固定、仿真和过程输出选择保持不变。 */
+    return ((maintenance_mode_active == 0U) &&
+            (state == STATE_ERROR) &&
             (error_code != NO_ERROR) &&
             (error_code != STATE_SWITCH)) ? 1U : 0U;
 }
@@ -615,7 +641,7 @@ static uint32_t AoOutput_SelectFaultCurrent(const AoOutputConfig *config,
     if ((config->fault_mode == AO_FAULT_ACTION_HOLD_LAST_VALID) &&
         (ao_last_process_valid != 0U)) {
         AoOutput_UseLastProcess(process_value_01mm, percent_x100, process_valid);
-        return ao_last_process_current_mA_x100;
+        return ao_last_process_base_current_mA_x100;
     }
     if (config->fault_mode == AO_FAULT_ACTION_HOLD_LAST_VALID) {
         return config->power_on_current_mA_x100;
@@ -627,7 +653,7 @@ static uint32_t AoOutput_SelectFaultCurrent(const AoOutputConfig *config,
 static uint32_t AoOutput_SelectTarget(const AoOutputConfig *config,
                                       uint32_t now,
                                       AoOutputSource *source,
-                                      uint32_t *target_mA_x100,
+                                      uint32_t *base_target_mA_x100,
                                       int32_t *process_value_01mm,
                                       int32_t *percent_x100,
                                       uint32_t *process_valid)
@@ -635,7 +661,7 @@ static uint32_t AoOutput_SelectTarget(const AoOutputConfig *config,
     AoProcessSample sample = {0};
     int32_t filtered_01mm;
 
-    if ((config == NULL) || (source == NULL) || (target_mA_x100 == NULL) ||
+    if ((config == NULL) || (source == NULL) || (base_target_mA_x100 == NULL) ||
         (process_value_01mm == NULL) || (percent_x100 == NULL) ||
         (process_valid == NULL)) {
         return SYSTEM_CALL_CONDITION_ERROR;
@@ -648,12 +674,12 @@ static uint32_t AoOutput_SelectTarget(const AoOutputConfig *config,
     if (config->work_mode == AO_WORK_MODE_DISABLED) {
         ao_filter_initialized = 0U;
         *source = AO_OUTPUT_SOURCE_DISABLED;
-        *target_mA_x100 = AO_DISABLED_CURRENT_MA_X100;
+        *base_target_mA_x100 = AO_DISABLED_CURRENT_MA_X100;
         return NO_ERROR;
     }
-    if (AoOutput_IsDeviceFault() != 0U) {
+    if (AoOutput_ShouldUseFaultCurrent() != 0U) {
         *source = AO_OUTPUT_SOURCE_FAULT;
-        *target_mA_x100 = AoOutput_SelectFaultCurrent(config,
+        *base_target_mA_x100 = AoOutput_SelectFaultCurrent(config,
                                                        process_value_01mm,
                                                        percent_x100,
                                                        process_valid);
@@ -667,13 +693,13 @@ static uint32_t AoOutput_SelectTarget(const AoOutputConfig *config,
     if (ao_simulation_enabled != 0U) {
         ao_filter_initialized = 0U;
         *source = AO_OUTPUT_SOURCE_SIMULATION;
-        *target_mA_x100 = config->simulation_current_mA_x100;
+        *base_target_mA_x100 = config->simulation_current_mA_x100;
         return NO_ERROR;
     }
     if (config->current_mode == AO_CURRENT_MODE_FIXED) {
         ao_filter_initialized = 0U;
         *source = AO_OUTPUT_SOURCE_FIXED;
-        *target_mA_x100 = config->fixed_current_mA_x100;
+        *base_target_mA_x100 = config->fixed_current_mA_x100;
         return NO_ERROR;
     }
 
@@ -684,11 +710,11 @@ static uint32_t AoOutput_SelectTarget(const AoOutputConfig *config,
             AoOutput_FreezeFilter(now);
             AoOutput_UseLastProcess(process_value_01mm, percent_x100, process_valid);
             *source = AO_OUTPUT_SOURCE_HOLD_LAST;
-            *target_mA_x100 = ao_last_process_current_mA_x100;
+            *base_target_mA_x100 = ao_last_process_base_current_mA_x100;
         } else {
             ao_filter_initialized = 0U;
             *source = AO_OUTPUT_SOURCE_INITIAL;
-            *target_mA_x100 = config->power_on_current_mA_x100;
+            *base_target_mA_x100 = config->power_on_current_mA_x100;
         }
         return NO_ERROR;
     }
@@ -698,7 +724,7 @@ static uint32_t AoOutput_SelectTarget(const AoOutputConfig *config,
     *process_value_01mm = filtered_01mm;
     *process_valid = 1U;
     *source = AO_OUTPUT_SOURCE_PROCESS;
-    *target_mA_x100 = AoOutput_MapProcessToCurrent(config, filtered_01mm, percent_x100);
+    *base_target_mA_x100 = AoOutput_MapProcessToCurrent(config, filtered_01mm, percent_x100);
     return NO_ERROR;
 }
 
@@ -787,8 +813,8 @@ static uint32_t AoOutput_RecordRuntimeDriverError(const AoOutputConfig *config,
     return NO_ERROR;
 }
 
-/* 按当前工作模式选择芯片初始化时应保持的禁用、固定或初始电流。 */
-static uint32_t AoOutput_GetInitialCurrent(const AoOutputConfig *config)
+/* 按当前工作模式选择芯片初始化时应保持的禁用、固定或初始基础电流。 */
+static uint32_t AoOutput_GetInitialBaseCurrent(const AoOutputConfig *config)
 {
     if (config->work_mode == AO_WORK_MODE_DISABLED) {
         return AO_DISABLED_CURRENT_MA_X100;
@@ -869,8 +895,10 @@ uint32_t AoOutput_Init(void)
     AoOutputConfig config;
     AoOutputRuntime next = {0};
     uint32_t now;
-    uint32_t initial_mA_x100;
+    uint32_t initial_base_mA_x100;
+    uint32_t initial_target_mA_x100;
     uint32_t ret;
+    AoOutputSource initial_source;
 
     if (AoOutput_TryEnterUpdate() == 0U) {
         return ao_output_runtime.last_error_code;
@@ -882,7 +910,7 @@ uint32_t AoOutput_Init(void)
     ao_output_diag_valid = 0U;
     ao_output_write_attempt_valid = 0U;
     ao_last_process_valid = 0U;
-    ao_last_process_current_mA_x100 = 0U;
+    ao_last_process_base_current_mA_x100 = 0U;
     ao_last_process_value_01mm = 0;
     ao_last_process_percent_x100 = 0;
     ao_config_snapshot_valid = 0U;
@@ -892,24 +920,28 @@ uint32_t AoOutput_Init(void)
 
     AoOutput_GetConfigSnapshot(&config);
     AoOutput_HandleConfigTransition(&config);
-    initial_mA_x100 = AoOutput_GetInitialCurrent(&config);
-    next.target_mA_x100 = initial_mA_x100;
+    initial_base_mA_x100 = AoOutput_GetInitialBaseCurrent(&config);
+    initial_source = (config.work_mode == AO_WORK_MODE_DISABLED) ?
+                     AO_OUTPUT_SOURCE_DISABLED :
+                     ((config.current_mode == AO_CURRENT_MODE_FIXED) ?
+                      AO_OUTPUT_SOURCE_FIXED : AO_OUTPUT_SOURCE_INITIAL);
+    initial_target_mA_x100 = AoOutput_ApplyCurrentCorrection(&config,
+                                                             initial_source,
+                                                             initial_base_mA_x100);
+    next.target_mA_x100 = initial_target_mA_x100;
     next.last_sent_mA_x100 = 0U;
-    next.source = (config.work_mode == AO_WORK_MODE_DISABLED) ?
-                  AO_OUTPUT_SOURCE_DISABLED :
-                  ((config.current_mode == AO_CURRENT_MODE_FIXED) ?
-                   AO_OUTPUT_SOURCE_FIXED : AO_OUTPUT_SOURCE_INITIAL);
+    next.source = (uint32_t)initial_source;
     next.last_update_tick = now;
     next.last_error_code = NO_ERROR;
     next.simulation_enabled = 0U;
     next.dac_readback_valid = 0U;
 
-    ret = AoOutput_EnsureDriverReady(now, 1U, initial_mA_x100);
+    ret = AoOutput_EnsureDriverReady(now, 1U, initial_target_mA_x100);
     next.driver_fault_flags = AD5421_GetFaultFlags();
     next.driver_fault_register = AD5421_GetFaultRegister();
     next.last_error_code = ret;
     if (ret == NO_ERROR) {
-        next.last_sent_mA_x100 = initial_mA_x100;
+        next.last_sent_mA_x100 = initial_target_mA_x100;
         next.last_sent_tick = now;
         next.update_counter = 1U;
         AoOutput_CommitRuntime(&next);
@@ -932,7 +964,9 @@ static uint32_t AoOutput_UpdateInternal(uint8_t allow_driver_init)
     AoOutputRuntime next;
     AoOutputSource source = AO_OUTPUT_SOURCE_INITIAL;
     uint32_t now;
-    uint32_t initial_mA_x100;
+    uint32_t initial_base_mA_x100;
+    uint32_t initial_target_mA_x100;
+    uint32_t base_target_mA_x100 = 400U;
     uint32_t target_mA_x100 = 400U;
     uint32_t process_valid = 0U;
     uint32_t ret;
@@ -948,8 +982,15 @@ static uint32_t AoOutput_UpdateInternal(uint8_t allow_driver_init)
     AoOutput_GetConfigSnapshot(&config);
     AoOutput_HandleConfigTransition(&config);
     now = HAL_GetTick();
-    initial_mA_x100 = AoOutput_GetInitialCurrent(&config);
-    ret = AoOutput_EnsureDriverReady(now, allow_driver_init, initial_mA_x100);
+    initial_base_mA_x100 = AoOutput_GetInitialBaseCurrent(&config);
+    initial_target_mA_x100 = AoOutput_ApplyCurrentCorrection(
+            &config,
+            (config.work_mode == AO_WORK_MODE_DISABLED) ?
+            AO_OUTPUT_SOURCE_DISABLED :
+            ((config.current_mode == AO_CURRENT_MODE_FIXED) ?
+             AO_OUTPUT_SOURCE_FIXED : AO_OUTPUT_SOURCE_INITIAL),
+            initial_base_mA_x100);
+    ret = AoOutput_EnsureDriverReady(now, allow_driver_init, initial_target_mA_x100);
     if (ret != NO_ERROR) {
         return AoOutput_RecordRuntimeDriverError(&config,
                                                   NULL,
@@ -964,7 +1005,7 @@ static uint32_t AoOutput_UpdateInternal(uint8_t allow_driver_init)
         uint32_t recover_ret = diag_ret;
 
         if (recover_target == 0U) {
-            recover_target = initial_mA_x100;
+            recover_target = initial_target_mA_x100;
         }
         if ((AoOutput_IsDiagnosticRecoveryAllowed(diag_ret) != 0U) &&
             (AoOutput_ShouldRecover(now) != 0U)) {
@@ -995,13 +1036,17 @@ static uint32_t AoOutput_UpdateInternal(uint8_t allow_driver_init)
     ret = AoOutput_SelectTarget(&config,
                                 now,
                                 &source,
-                                &target_mA_x100,
+                                &base_target_mA_x100,
                                 &process_value_01mm,
                                 &percent_x100,
                                 &process_valid);
     if (ret != NO_ERROR) {
         return ret;
     }
+    /* 选择阶段只产生基础目标；修正阶段统一执行一次，保持缓存也只保存基础值。 */
+    target_mA_x100 = AoOutput_ApplyCurrentCorrection(&config,
+                                                      source,
+                                                      base_target_mA_x100);
     target_mA_x100 = AoOutput_ClampHardwareCurrent(target_mA_x100);
     should_send = AoOutput_ShouldWriteCurrent(now, target_mA_x100);
     if ((source == AO_OUTPUT_SOURCE_PROCESS) &&
@@ -1050,7 +1095,7 @@ static uint32_t AoOutput_UpdateInternal(uint8_t allow_driver_init)
 
     if (process_write_succeeded != 0U) {
         /* 只缓存AD5421已确认成功接受的过程目标及其同轮输入快照。 */
-        ao_last_process_current_mA_x100 = target_mA_x100;
+        ao_last_process_base_current_mA_x100 = base_target_mA_x100;
         ao_last_process_value_01mm = process_value_01mm;
         ao_last_process_percent_x100 = percent_x100;
         ao_last_process_valid = 1U;

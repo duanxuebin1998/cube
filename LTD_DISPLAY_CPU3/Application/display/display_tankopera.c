@@ -264,6 +264,7 @@ static uint8_t *arr_protocol[][2] = {
 	{ (uint8_t*)"计量仪协议", (uint8_t*)"DSM" },
 	{ (uint8_t*)"瓦锡兰协议", (uint8_t*)"Wartsila LTD" },
 	{ (uint8_t*)"LTD协议", (uint8_t*)"LTD" },
+	{ (uint8_t*)"LH协议", (uint8_t*)"LH" },
 	{ (uint8_t*)"SI协议", (uint8_t*)"SI" }, /* 显示侧只暴露协议选择，具体串口参数由配置归一化自动处理。 */
 	{ (uint8_t*)"非法配置", (uint8_t*)"Illegal CFG" },
 };
@@ -1863,7 +1864,7 @@ static uint8_t *dtm_operaname_short(int num, uint8_t *fallback)
 		{ COM_NUM_DEVICEPARAM_AO_WORK_MODE, (uint8_t*)"工作模式", (uint8_t*)"Work Mode" },
 		{ COM_NUM_DEVICEPARAM_AO_CURRENT_MODE, (uint8_t*)"电流模式", (uint8_t*)"Current Mode" },
 		{ COM_NUM_DEVICEPARAM_AO_OUTPUT_SOURCE, (uint8_t*)"输出源", (uint8_t*)"Source" },
-		{ COM_NUM_DEVICEPARAM_AO_SIL_WHG_RESERVED, (uint8_t*)"SIL/WHG", (uint8_t*)"SIL/WHG" },
+		{ COM_NUM_DEVICEPARAM_AO_CURRENT_CORRECTION_MA_X100, (uint8_t*)"电流修正", (uint8_t*)"AO Trim" },
 		{ COM_NUM_DEVICEPARAM_AO_FIXED_CURRENT_MA_X100, (uint8_t*)"固定电流", (uint8_t*)"Fixed Current" },
 		{ COM_NUM_DEVICEPARAM_AO_RANGE_0_01MM, (uint8_t*)"0%对应值", (uint8_t*)"0% Value" },
 		{ COM_NUM_DEVICEPARAM_AO_RANGE_100_01MM, (uint8_t*)"100%值", (uint8_t*)"100% Value" },
@@ -3518,14 +3519,14 @@ static bool ao_work_mode_is_output(void)
 	       (g_deviceParams.ao_output.work_mode == AO_WORK_MODE_HART_SLAVE_OUTPUT);
 }
 
-/* 判断操作码是否属于协议24沿用的13项AO持久化配置。 */
+/* 判断操作码是否属于协议26沿用原地址的13项AO持久化配置。 */
 static bool ao_param_is_config(int operaNum)
 {
 	switch (operaNum) {
 	case COM_NUM_DEVICEPARAM_AO_WORK_MODE:
 	case COM_NUM_DEVICEPARAM_AO_CURRENT_MODE:
 	case COM_NUM_DEVICEPARAM_AO_OUTPUT_SOURCE:
-	case COM_NUM_DEVICEPARAM_AO_SIL_WHG_RESERVED:
+	case COM_NUM_DEVICEPARAM_AO_CURRENT_CORRECTION_MA_X100:
 	case COM_NUM_DEVICEPARAM_AO_FIXED_CURRENT_MA_X100:
 	case COM_NUM_DEVICEPARAM_AO_RANGE_0_01MM:
 	case COM_NUM_DEVICEPARAM_AO_RANGE_100_01MM:
@@ -3548,6 +3549,7 @@ static bool ao_param_is_editable(int operaNum)
 	case COM_NUM_DEVICEPARAM_AO_WORK_MODE:
 	case COM_NUM_DEVICEPARAM_AO_CURRENT_MODE:
 	case COM_NUM_DEVICEPARAM_AO_OUTPUT_SOURCE:
+	case COM_NUM_DEVICEPARAM_AO_CURRENT_CORRECTION_MA_X100:
 	case COM_NUM_DEVICEPARAM_AO_FIXED_CURRENT_MA_X100:
 	case COM_NUM_DEVICEPARAM_AO_RANGE_0_01MM:
 	case COM_NUM_DEVICEPARAM_AO_RANGE_100_01MM:
@@ -3557,7 +3559,6 @@ static bool ao_param_is_editable(int operaNum)
 	case COM_NUM_DEVICEPARAM_AO_POWER_ON_CURRENT_MA_X100:
 	case COM_NUM_DEVICEPARAM_AO_SIMULATION_CURRENT_MA_X100:
 		return true;
-	case COM_NUM_DEVICEPARAM_AO_SIL_WHG_RESERVED:
 	default:
 		return false;
 	}
@@ -4124,8 +4125,10 @@ static int protocol_value_to_selection_index(int value)
 		return 1;
 	case COM_PROTO_LTD:
 		return 2;
-	case COM_PROTO_SI:
+	case COM_PROTO_LH:
 		return 3;
+	case COM_PROTO_SI:
+		return 4;
 	default:
 		return 0;
 	}
@@ -4144,6 +4147,7 @@ static int selection_index_to_value(int operaNum, int selectedIndex)
 		COM_PROTO_DSM,
 		COM_PROTO_WARTSILA,
 		COM_PROTO_LTD,
+		COM_PROTO_LH,
 		COM_PROTO_SI,
 	};
 
@@ -5368,6 +5372,7 @@ static MenuGroup ParamGroupOf(int operaNum)
         return MENU_GRP_AO_CHANNEL;
 
     /* AO量程设置 */
+    case COM_NUM_DEVICEPARAM_AO_CURRENT_CORRECTION_MA_X100:
     case COM_NUM_DEVICEPARAM_AO_FIXED_CURRENT_MA_X100:
     case COM_NUM_DEVICEPARAM_AO_RANGE_0_01MM:
     case COM_NUM_DEVICEPARAM_AO_RANGE_100_01MM:
@@ -5389,7 +5394,6 @@ static MenuGroup ParamGroupOf(int operaNum)
     case COM_NUM_AO_RUNTIME_OUTPUT_CURRENT:
         return MENU_GRP_AO_RUNTIME;
 
-    case COM_NUM_DEVICEPARAM_AO_SIL_WHG_RESERVED:
     case COM_NUM_DEVICEPARAM_AO_ERROR_LEVEL:
         return MENU_GRP_AO_RESERVED;
 
@@ -6574,7 +6578,7 @@ static void menu_relay4_status(void)
     menu_relay_status(3U, KEYNUM_MENU_RELAY4_STATUS, menu_relay4_main);
 }
 
-/* AO根菜单固定为五组，SIL/WHG与DAC回读预留不进入当前菜单。 */
+/* AO根菜单固定为五组，电流修正归入量程设置，错误等级与DAC回读保持隐藏。 */
 static void menu_ao(void)
 {
 	static struct MenuData menu[] = {
@@ -6597,7 +6601,7 @@ static void menu_ao_channel(void)
 	menu_build_by_group(MENU_GRP_AO_CHANNEL, KEYNUM_MENU_AO_CHANNEL, menu_ao);
 }
 
-/* AO量程设置：固定电流、0%、100%、阻尼。 */
+/* AO量程设置：电流修正、固定电流、0%、100%、阻尼。 */
 static void menu_ao_range(void)
 {
 	menu_build_by_group(MENU_GRP_AO_RANGE, KEYNUM_MENU_AO_RANGE, menu_ao);

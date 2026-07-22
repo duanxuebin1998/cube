@@ -2,6 +2,7 @@
 #include "main.h"
 #include "spi.h"
 #include "usart.h"
+#include <stdbool.h>
 #include <string.h>
 #include <ctype.h>
 #include <math.h>
@@ -21,8 +22,8 @@
 #define CPU2_COMM_FAILURE_LIMIT 10U /* CPU2 连续请求未获得合法响应的置错阈值。 */
 #define CPU2_MAX_EXTERNAL_WRITE_REGISTERS 122U /* RTU 最大 123 个寄存器；共享字段按 32 位对齐后取最大偶数。 */
 #define CPU2_FIXED_POINT_RESULT_REGISTER_COUNT (REG_DENSITY_DIST_AVG_TEMP - REG_SINGLE_POINT_MEAS_TEMP)
-#define CPU2_FIXED_POINT_COUNTER_REGISTER_COUNT (REG_ENG - REG_SINGLE_POINT_MEAS_COMPLETE_COUNTER)
-#define CPU2_PROFILE_HEADER_REGISTER_COUNT (REG_DENSITY_DIST_POINT_BASE - REG_DENSITY_DIST_AVG_TEMP)
+#define CPU2_FIXED_POINT_COUNTER_REGISTER_COUNT (2U * REG_SIZE_U32)
+#define CPU2_PROFILE_HEADER_REGISTER_COUNT REG_DENSITY_DIST_SUMMARY_REG_COUNT
 #define CPU2_PROFILE_POINT_REGISTER_CAPACITY (MAX_MEASUREMENT_POINTS * REG_DENSITY_DIST_POINT_SIZE)
 #define CPU2_PROFILE_POINTS_PER_FRAME 8U
 #define CPU2_PROFILE_REGISTERS_PER_FRAME (CPU2_PROFILE_POINTS_PER_FRAME * REG_DENSITY_DIST_POINT_SIZE)
@@ -50,7 +51,7 @@ static Cpu2CommHealthSnapshot s_cpu2_comm_health = {0}; /* CPU3本机RAM通信�
 static Cpu2CommFailureReason s_cpu2_response_failure_reason = CPU2_COMM_FAIL_NONE; /* 当前响应校验失败原因。 */
 
 /* 保持寄存器 */
-uint16_t HoldingRegisterArray[HOLEREGISTER_STOP] = { 0 }; /* 保持寄存器数组 */
+uint16_t HoldingRegisterArray[HOLDREGISTER_AMOUNT] = { 0 }; /* 保持寄存器数组 */
 /* 输入寄存器 */
 static uint16_t InputRegisterArray[INPUTREGISTER_AMOUNT] = { 0 };    /* 输入寄存器数组 */
 
@@ -95,6 +96,7 @@ static uint16_t s_cpu2_fixed_point_counter_before[CPU2_FIXED_POINT_COUNTER_REGIS
 static uint16_t s_cpu2_fixed_point_counter_after[CPU2_FIXED_POINT_COUNTER_REGISTER_COUNT];
 static uint16_t *s_cpu2_private_input_destination = NULL;
 static uint16_t s_cpu2_private_input_capacity = 0U;
+static uint16_t s_cpu2_private_input_start = 0U;
 static bool s_cpu2_private_input_captured = false;
 static Cpu2ProfileSyncContext s_cpu2_profile_sync = {0};
 static uint16_t s_cpu2_profile_header_before[CPU2_PROFILE_HEADER_REGISTER_COUNT];
@@ -123,7 +125,7 @@ static bool s_cpu2_profile_commit_waiting_for_complete_state = false;
 static int RCV_functioncode = 0; /* Modbus 协议模块级变量，保存跨函数共享的业务状态。 */
 static int RCV_startaddress = 0; /* Modbus 协议地址配置，影响协议寻址或硬件访问。 */
 static int RCV_registercnt = 0; /* Modbus 协议模块级变量，保存跨函数共享的业务状态。 */
-static int SlaveTempBuffer[INPUTREGISTER_AMOUNT]; /* Modbus 协议数据缓冲区，注意与中断或 DMA 访问边界保持一致。 */
+static int SlaveTempBuffer[LTD_MODBUS_MAX_READ_REGISTERS]; /* 单帧寄存器数据缓冲区。 */
 
 /* static void CPU2_Response03Process(char const *revframe); */
 static void CPU2_Response03Process(uint8_t const *revframe);
@@ -147,6 +149,10 @@ static void CPU2_ProfileApplyPublicStatusGate(void);
 static const char *CPU2_CommFailureReasonText(Cpu2CommFailureReason reason);
 static const char *CPU2_CommLinkStateText(void);
 static void CPU2_CommLogRequestFailure(void);
+static bool CPU2_CombinatePackage_SendWire(uint8_t f_code,
+                                           uint16_t startadd,
+                                           uint16_t registercnt,
+                                           uint32_t *holddata);
 
 /* 返回CPU2请求失败原因的现场可读名称。 */
 static const char *CPU2_CommFailureReasonText(Cpu2CommFailureReason reason)
@@ -234,13 +240,15 @@ static Cpu2CommFailureReason CPU2_ResponseFrameFailureReason(uint8_t const *rcv,
  */
 static bool CPU2_ResponseContainsDeviceStatus(void)
 {
-	uint32_t response_start = (uint32_t)RCV_startaddress;
-	uint32_t response_end = response_start + (uint32_t)RCV_registercnt;
-	uint32_t required_end = (uint32_t)REG_DEVICE_STATUS_ERROR_CODE + REG_SIZE_U32;
-
 	return (RCV_functioncode == FUNCTIONCODE_READ_INPUTREGISTER) &&
-		   (response_start <= (uint32_t)REG_DEVICE_STATUS_DEVICE_STATE) &&
-		   (response_end >= required_end);
+		   LtdModbus_RangeContains((uint16_t)RCV_startaddress,
+							   (uint16_t)RCV_registercnt,
+							   REG_DEVICE_STATUS_DEVICE_STATE,
+							   REG_SIZE_U32) &&
+		   LtdModbus_RangeContains((uint16_t)RCV_startaddress,
+							   (uint16_t)RCV_registercnt,
+							   REG_DEVICE_STATUS_ERROR_CODE,
+							   REG_SIZE_U32);
 }
 
 /*
@@ -250,13 +258,11 @@ static bool CPU2_ResponseContainsDeviceStatus(void)
  */
 static bool CPU2_ResponseContainsProtocolVersion(void)
 {
-	uint32_t response_start = (uint32_t)RCV_startaddress;
-	uint32_t response_end = response_start + (uint32_t)RCV_registercnt;
-	uint32_t required_end = (uint32_t)HOLDREGISTER_DEVICEPARAM_PROTOCOL_VERSION + REG_SIZE_U32;
-
 	return (RCV_functioncode == FUNCTIONCODE_READ_HOLDREGISTER) &&
-		   (response_start <= (uint32_t)HOLDREGISTER_DEVICEPARAM_PROTOCOL_VERSION) &&
-		   (response_end >= required_end);
+		   LtdModbus_RangeContains((uint16_t)RCV_startaddress,
+							   (uint16_t)RCV_registercnt,
+							   HOLDREGISTER_DEVICEPARAM_PROTOCOL_VERSION,
+							   REG_SIZE_U32);
 }
 
 /*
@@ -583,18 +589,16 @@ bool CPU2_CommCanSendCommand(CommandType cmd)
  */
 bool CPU2_CommReadHoldingSnapshot(uint16_t startadd, uint16_t registercnt, uint16_t *out_regs)
 {
-	if ((out_regs == NULL) || (registercnt == 0U) ||
-		(startadd >= HOLEREGISTER_STOP) ||
-		(registercnt > (uint16_t)(HOLEREGISTER_STOP - startadd)) ||
+	if ((out_regs == NULL) ||
+		!LtdModbus_RangeWithin(startadd, registercnt, HOLDREGISTER_AMOUNT) ||
 		(!CPU2_CommIsAvailable())) {
 		return false;
 	}
 
 	/* g_deviceParams 只在 CPU2 快照或成功写入后更新，组表后再复制可覆盖菜单成功写入的新值。 */
 	WriteDeviceParamsToHoldingRegisters(HoldingRegisterArray);
-	memcpy(out_regs,
-	       &HoldingRegisterArray[startadd],
-	       (size_t)registercnt * sizeof(out_regs[0]));
+	memcpy(out_regs, &HoldingRegisterArray[startadd],
+		   (size_t)registercnt * sizeof(uint16_t));
 	return true;
 }
 
@@ -605,16 +609,14 @@ bool CPU2_CommReadHoldingSnapshot(uint16_t startadd, uint16_t registercnt, uint1
  */
 bool CPU2_CommReadInputSnapshot(uint16_t startadd, uint16_t registercnt, uint16_t *out_regs)
 {
-	if ((out_regs == NULL) || (registercnt == 0U) ||
-		(startadd >= INPUTREGISTER_AMOUNT) ||
-		(registercnt > (uint16_t)(INPUTREGISTER_AMOUNT - startadd)) ||
+	if ((out_regs == NULL) ||
+		!LtdModbus_RangeWithin(startadd, registercnt, INPUTREGISTER_AMOUNT) ||
 		(!CPU2_CommIsAvailable())) {
 		return false;
 	}
 
-	memcpy(out_regs,
-	       &InputRegisterArray[startadd],
-	       (size_t)registercnt * sizeof(out_regs[0]));
+	memcpy(out_regs, &InputRegisterArray[startadd],
+		   (size_t)registercnt * sizeof(uint16_t));
 	return true;
 }
 
@@ -644,11 +646,10 @@ bool CPU2_CommWriteHoldingRegisters(uint16_t startadd,
 	bool command_only;
 	bool ret;
 
-	if ((wire_regs == NULL) || (registercnt == 0U) ||
+	if ((wire_regs == NULL) ||
+		(registercnt == 0U) ||
 		(registercnt > CPU2_MAX_EXTERNAL_WRITE_REGISTERS) ||
-		((startadd & 1U) != 0U) || ((registercnt & 1U) != 0U) ||
-		(startadd >= HOLEREGISTER_STOP) ||
-		(registercnt > (uint16_t)(HOLEREGISTER_STOP - startadd))) {
+		!LtdModbus_HoldingWriteRangeIsValid(startadd, registercnt)) {
 		return false;
 	}
 
@@ -658,9 +659,13 @@ bool CPU2_CommWriteHoldingRegisters(uint16_t startadd,
 									 (uint32_t)wire_regs[i + 1U];
 	}
 
-	command_only = (startadd == HOLDREGISTER_DEVICEPARAM_COMMAND) && (registercnt == 2U);
+	command_only = (startadd == HOLDREGISTER_DEVICEPARAM_COMMAND) &&
+				   (registercnt == REG_STRIDE);
 	command_value = ((uint32_t)wire_regs[0] << 16) | (uint32_t)wire_regs[1];
-	ret = CPU2_CombinatePackage_Send(FUNCTIONCODE_WRITE_MULREGISTER,
+	if (command_only && !LtdModbus_CommandIsImplemented(command_value)) {
+		return false;
+	}
+	ret = CPU2_CombinatePackage_SendWire(FUNCTIONCODE_WRITE_MULREGISTER,
 										startadd,
 										registercnt,
 										host_values);
@@ -698,6 +703,7 @@ static void CPU2_ResetFixedPointSnapshotHandshake(bool invalidate_snapshot)
 	s_cpu2_fixed_point_stage = CPU2_FIXED_POINT_READ_COUNTER_BEFORE;
 	s_cpu2_private_input_destination = NULL;
 	s_cpu2_private_input_capacity = 0U;
+	s_cpu2_private_input_start = 0U;
 	s_cpu2_private_input_captured = false;
 	memset(s_cpu2_fixed_point_results, 0, sizeof(s_cpu2_fixed_point_results));
 	memset(s_cpu2_fixed_point_counter_before, 0, sizeof(s_cpu2_fixed_point_counter_before));
@@ -728,6 +734,7 @@ static bool CPU2_ReadInputRegistersPrivate(uint16_t startadd,
 
 	s_cpu2_private_input_destination = out_regs;
 	s_cpu2_private_input_capacity = registercnt;
+	s_cpu2_private_input_start = startadd;
 	s_cpu2_private_input_captured = false;
 	request_ok = CPU2_CombinatePackage_Send(FUNCTIONCODE_READ_INPUTREGISTER,
 												 startadd,
@@ -736,6 +743,7 @@ static bool CPU2_ReadInputRegistersPrivate(uint16_t startadd,
 	captured = s_cpu2_private_input_captured;
 	s_cpu2_private_input_destination = NULL;
 	s_cpu2_private_input_capacity = 0U;
+	s_cpu2_private_input_start = 0U;
 	s_cpu2_private_input_captured = false;
 	return request_ok && captured;
 }
@@ -746,7 +754,7 @@ static uint32_t CPU2_ReadU32FromPrivateRegs(const uint16_t *regs, uint16_t offse
 }
 
 /*
- * 函数用途：把已验证同代的24个固定点结果寄存器与两个代际一次提交到公开缓存。
+ * 函数用途：把已验证同代的固定点结果块与两个代际一次提交到公开缓存。
  * 调用场景：计数后读与计数前读完全一致后。
  * 关键约束：公开寄存器和g_measurement在同一短临界区更新，外部读者不会看到六字段混代。
  */
@@ -771,12 +779,18 @@ static void CPU2_CommitFixedPointSnapshot(void)
 	g_measurement.single_point_measurement.standard_density = CPU2_ReadU32FromPrivateRegs(s_cpu2_fixed_point_results, 6U);
 	g_measurement.single_point_measurement.vcf20 = CPU2_ReadU32FromPrivateRegs(s_cpu2_fixed_point_results, 8U);
 	g_measurement.single_point_measurement.weight_density = CPU2_ReadU32FromPrivateRegs(s_cpu2_fixed_point_results, 10U);
-	g_measurement.single_point_monitoring.temperature = CPU2_ReadU32FromPrivateRegs(s_cpu2_fixed_point_results, 12U);
-	g_measurement.single_point_monitoring.density = CPU2_ReadU32FromPrivateRegs(s_cpu2_fixed_point_results, 14U);
-	g_measurement.single_point_monitoring.temperature_position = CPU2_ReadU32FromPrivateRegs(s_cpu2_fixed_point_results, 16U);
-	g_measurement.single_point_monitoring.standard_density = CPU2_ReadU32FromPrivateRegs(s_cpu2_fixed_point_results, 18U);
-	g_measurement.single_point_monitoring.vcf20 = CPU2_ReadU32FromPrivateRegs(s_cpu2_fixed_point_results, 20U);
-	g_measurement.single_point_monitoring.weight_density = CPU2_ReadU32FromPrivateRegs(s_cpu2_fixed_point_results, 22U);
+	g_measurement.single_point_monitoring.temperature = CPU2_ReadU32FromPrivateRegs(
+		s_cpu2_fixed_point_results, REG_SINGLE_POINT_MON_TEMP - REG_SINGLE_POINT_MEAS_TEMP);
+	g_measurement.single_point_monitoring.density = CPU2_ReadU32FromPrivateRegs(
+		s_cpu2_fixed_point_results, REG_SINGLE_POINT_MON_DENSITY - REG_SINGLE_POINT_MEAS_TEMP);
+	g_measurement.single_point_monitoring.temperature_position = CPU2_ReadU32FromPrivateRegs(
+		s_cpu2_fixed_point_results, REG_SINGLE_POINT_MON_TEMP_POS - REG_SINGLE_POINT_MEAS_TEMP);
+	g_measurement.single_point_monitoring.standard_density = CPU2_ReadU32FromPrivateRegs(
+		s_cpu2_fixed_point_results, REG_SINGLE_POINT_MON_STD_DENSITY - REG_SINGLE_POINT_MEAS_TEMP);
+	g_measurement.single_point_monitoring.vcf20 = CPU2_ReadU32FromPrivateRegs(
+		s_cpu2_fixed_point_results, REG_SINGLE_POINT_MON_VCF20 - REG_SINGLE_POINT_MEAS_TEMP);
+	g_measurement.single_point_monitoring.weight_density = CPU2_ReadU32FromPrivateRegs(
+		s_cpu2_fixed_point_results, REG_SINGLE_POINT_MON_WEIGHT_DENSITY - REG_SINGLE_POINT_MEAS_TEMP);
 	g_measurement.measurement_complete_counter = measurement_counter;
 	g_measurement.monitoring_sample_counter = monitoring_counter;
 	s_cpu2_has_fixed_point_snapshot = true;
@@ -1517,35 +1531,47 @@ typedef struct {
 	uint16_t start;   /* 起始寄存器 */
 	uint16_t len;     /* 寄存器个数 */
 } PollGroup;
-#include <stdbool.h>
 
-#define INPUT_TAIL_REGISTER_COUNT ((uint16_t)(REG_SINGLE_POINT_MEAS_COMPLETE_COUNTER - REG_WIRELESS_PAIRING_RESULT))
-
-/* 上电阶段要读取的组：
- * - 包含设备参数（保持寄存器）
- * - 也可以顺便把输入寄存器读一遍
- */
+/* 轮询表直接使用stateformodbus.h中的现行Modbus地址。 */
 static const PollGroup poweron_groups[] = {
-/* 输入寄存器组 1：设备状态 */
-{FUNCTIONCODE_READ_INPUTREGISTER, REG_DEVICE_STATUS_WORK_MODE, (uint16_t) (REG_SINGLE_POINT_MEAS_TEMP - REG_DEVICE_STATUS_WORK_MODE) },
-
-/* 输入寄存器组 2：单点 / 分布测量结果 */
-{FUNCTIONCODE_READ_INPUTREGISTER, REG_DENSITY_DIST_AVG_TEMP, (uint16_t) (REG_DENSITY_DIST_POINT_BASE - REG_DENSITY_DIST_AVG_TEMP) },
-
-/* 输入寄存器组 3：无线滑环匹配状态与继电器报警输出运行态 */
-{FUNCTIONCODE_READ_INPUTREGISTER, REG_WIRELESS_PAIRING_RESULT, INPUT_TAIL_REGISTER_COUNT },
-
-/* 保持寄存器组 4：设备参数前半段 */
-{FUNCTIONCODE_READ_HOLDREGISTER, HOLDREGISTER_DEVICEPARAM_COMMAND, (uint16_t) (HOLDREGISTER_DEVICEPARAM_RESERVED11 - HOLDREGISTER_DEVICEPARAM_COMMAND) },
-
-/* 保持寄存器组 5：设备参数中段 */
-{FUNCTIONCODE_READ_HOLDREGISTER, HOLDREGISTER_DEVICEPARAM_RESERVED11, (uint16_t) (HOLDREGISTER_DEVICEPARAM_AO_WORK_MODE - HOLDREGISTER_DEVICEPARAM_RESERVED11) },
-
-/* 保持寄存器组 6：AO/指令参数/尺带补偿 */
-{FUNCTIONCODE_READ_HOLDREGISTER, HOLDREGISTER_DEVICEPARAM_AO_WORK_MODE, (uint16_t) (HOLDREGISTER_DEVICEPARAM_RELAY_ALARM_BASE - HOLDREGISTER_DEVICEPARAM_AO_WORK_MODE) },
-
-/* 保持寄存器组 7：继电器报警输出配置与元信息 */
-{FUNCTIONCODE_READ_HOLDREGISTER, HOLDREGISTER_DEVICEPARAM_RELAY_ALARM_BASE, (uint16_t) (HOLEREGISTER_STOP - HOLDREGISTER_DEVICEPARAM_RELAY_ALARM_BASE) }
+	{FUNCTIONCODE_READ_INPUTREGISTER, REG_DEVICE_STATUS_WORK_MODE,
+	 REG_DEVICE_STATUS_BLOCK_END - REG_DEVICE_STATUS_WORK_MODE},
+	{FUNCTIONCODE_READ_INPUTREGISTER, REG_DEBUG_BASE,
+	 REG_DEBUG_BLOCK_END - REG_DEBUG_BASE},
+	{FUNCTIONCODE_READ_INPUTREGISTER, REG_OIL_MEASUREMENT_OIL_LEVEL,
+	 REG_PROCESS_BLOCK_END - REG_OIL_MEASUREMENT_OIL_LEVEL},
+	{FUNCTIONCODE_READ_INPUTREGISTER, REG_SINGLE_POINT_MEAS_TEMP,
+	 REG_FIXED_RESULT_BLOCK_END - REG_SINGLE_POINT_MEAS_TEMP},
+	{FUNCTIONCODE_READ_INPUTREGISTER, REG_AO_OUTPUT_RUNTIME_BASE,
+	 REG_AO_OUTPUT_RUNTIME_BLOCK_END - REG_AO_OUTPUT_RUNTIME_BASE},
+	{FUNCTIONCODE_READ_INPUTREGISTER, REG_RELAY_ALARM_RUNTIME_BASE,
+	 REG_RELAY_ALARM_RUNTIME_BLOCK_END - REG_RELAY_ALARM_RUNTIME_BASE},
+	{FUNCTIONCODE_READ_INPUTREGISTER, REG_WIRELESS_PAIRING_RESULT,
+	 REG_WIRELESS_PAIRING_BLOCK_END - REG_WIRELESS_PAIRING_RESULT},
+	{FUNCTIONCODE_READ_HOLDREGISTER, HOLDREG_BASE_GENERAL,
+	 HOLDREGISTER_DEVICEPARAM_FAULT_AUTO_RECOVERY_RETRY_LIMIT + REG_STRIDE - HOLDREG_BASE_GENERAL},
+	{FUNCTIONCODE_READ_HOLDREGISTER, HOLDREG_BASE_MOTOR,
+	 HOLDREGISTER_DEVICEPARAM_FINDZERO_DOWN_DISTANCE + REG_STRIDE - HOLDREG_BASE_MOTOR},
+	{FUNCTIONCODE_READ_HOLDREGISTER, HOLDREG_BASE_OIL_HEIGHT,
+	 HOLDREGISTER_DEVICEPARAM_BOTTOM_ENCODER_CORRECTION_ENABLE + REG_STRIDE - HOLDREG_BASE_OIL_HEIGHT},
+	{FUNCTIONCODE_READ_HOLDREGISTER, HOLDREG_BASE_WATER,
+	 HOLDREGISTER_DEVICEPARAM_WATER_LAG_CAP_THRESHOLD + REG_STRIDE - HOLDREG_BASE_WATER},
+	{FUNCTIONCODE_READ_HOLDREGISTER, HOLDREG_BASE_CORRECTION,
+	 HOLDREGISTER_DEVICEPARAM_TAPE_CALIBRATION_TEMPERATURE + REG_STRIDE - HOLDREG_BASE_CORRECTION},
+	{FUNCTIONCODE_READ_HOLDREGISTER, HOLDREG_BASE_MEAS_CONFIG,
+	 HOLDREGISTER_DEVICEPARAM_MOTOR_COMMAND_DISTANCE + REG_STRIDE - HOLDREG_BASE_MEAS_CONFIG},
+	{FUNCTIONCODE_READ_HOLDREGISTER, HOLDREG_BASE_AO,
+	 HOLDREGISTER_AO_SIMULATION_ENABLE + REG_STRIDE - HOLDREG_BASE_AO},
+	{FUNCTIONCODE_READ_HOLDREGISTER, HOLDREGISTER_DEVICEPARAM_RELAY_ALARM_BASE,
+	 HOLDREGISTER_DEVICEPARAM_RELAY_ALARM_END - HOLDREGISTER_DEVICEPARAM_RELAY_ALARM_BASE},
+	{FUNCTIONCODE_READ_HOLDREGISTER, HOLDREG_BASE_SI_WARTSILA,
+	 HOLDREGISTER_DEVICEPARAM_SI_PROFILE_BOTTOM_DETECT_INTERVAL + REG_STRIDE - HOLDREG_BASE_SI_WARTSILA},
+	{FUNCTIONCODE_READ_HOLDREGISTER, HOLDREG_BASE_RESERVED,
+	 HOLDREGISTER_DEVICEPARAM_RESERVED29 + REG_STRIDE - HOLDREG_BASE_RESERVED},
+	{FUNCTIONCODE_READ_HOLDREGISTER, HOLDREG_BASE_METADATA,
+	 HOLDREGISTER_DEVICEPARAM_CRC + REG_STRIDE - HOLDREG_BASE_METADATA},
+	{FUNCTIONCODE_READ_HOLDREGISTER, HOLDREGISTER_DEVICEPARAM_COMMAND,
+	 HOLDREGISTER_PROTOCOL_CAPABILITIES + REG_STRIDE - HOLDREGISTER_DEVICEPARAM_COMMAND}
 };
 
 #define POWERON_GROUP_COUNT  (sizeof(poweron_groups) / sizeof(poweron_groups[0]))
@@ -1554,27 +1580,50 @@ static const PollGroup poweron_groups[] = {
  * 只保留输入寄存器，不再读保持寄存器
  */
 static const PollGroup runtime_groups[] = {
-/* 输入寄存器组 1：设备状态 */
-{
-FUNCTIONCODE_READ_INPUTREGISTER, REG_DEVICE_STATUS_WORK_MODE, (uint16_t) (REG_SINGLE_POINT_MEAS_TEMP - REG_DEVICE_STATUS_WORK_MODE) },
-
-/* 输入寄存器组 2：单点 / 密度测量结果 */
-{
-FUNCTIONCODE_READ_INPUTREGISTER, REG_DENSITY_DIST_AVG_TEMP, (uint16_t) (REG_DENSITY_DIST_POINT_BASE - REG_DENSITY_DIST_AVG_TEMP) },
-
-/* 输入寄存器组 3：无线滑环匹配状态与继电器报警输出运行态 */
-{
-FUNCTIONCODE_READ_INPUTREGISTER, REG_WIRELESS_PAIRING_RESULT, INPUT_TAIL_REGISTER_COUNT }
+	{FUNCTIONCODE_READ_INPUTREGISTER, REG_DEVICE_STATUS_WORK_MODE,
+	 REG_DEVICE_STATUS_BLOCK_END - REG_DEVICE_STATUS_WORK_MODE},
+	{FUNCTIONCODE_READ_INPUTREGISTER, REG_DEBUG_BASE,
+	 REG_DEBUG_BLOCK_END - REG_DEBUG_BASE},
+	{FUNCTIONCODE_READ_INPUTREGISTER, REG_OIL_MEASUREMENT_OIL_LEVEL,
+	 REG_PROCESS_BLOCK_END - REG_OIL_MEASUREMENT_OIL_LEVEL},
+	{FUNCTIONCODE_READ_INPUTREGISTER, REG_SINGLE_POINT_MEAS_TEMP,
+	 REG_FIXED_RESULT_BLOCK_END - REG_SINGLE_POINT_MEAS_TEMP},
+	{FUNCTIONCODE_READ_INPUTREGISTER, REG_AO_OUTPUT_RUNTIME_BASE,
+	 REG_AO_OUTPUT_RUNTIME_BLOCK_END - REG_AO_OUTPUT_RUNTIME_BASE},
+	{FUNCTIONCODE_READ_INPUTREGISTER, REG_RELAY_ALARM_RUNTIME_BASE,
+	 REG_RELAY_ALARM_RUNTIME_BLOCK_END - REG_RELAY_ALARM_RUNTIME_BASE},
+	{FUNCTIONCODE_READ_INPUTREGISTER, REG_WIRELESS_PAIRING_RESULT,
+	 REG_WIRELESS_PAIRING_BLOCK_END - REG_WIRELESS_PAIRING_RESULT}
 };
 
 #define RUNTIME_GROUP_COUNT  (sizeof(runtime_groups) / sizeof(runtime_groups[0]))
 
 /* 参数更新时，一次性补读系统参数。 */
 static const PollGroup refresh_hold_groups[] = {
-{FUNCTIONCODE_READ_HOLDREGISTER, HOLDREGISTER_DEVICEPARAM_COMMAND, (uint16_t) (HOLDREGISTER_DEVICEPARAM_RESERVED11 - HOLDREGISTER_DEVICEPARAM_COMMAND) },
-{FUNCTIONCODE_READ_HOLDREGISTER, HOLDREGISTER_DEVICEPARAM_RESERVED11, (uint16_t) (HOLDREGISTER_DEVICEPARAM_AO_WORK_MODE - HOLDREGISTER_DEVICEPARAM_RESERVED11) },
-{FUNCTIONCODE_READ_HOLDREGISTER, HOLDREGISTER_DEVICEPARAM_AO_WORK_MODE, (uint16_t) (HOLDREGISTER_DEVICEPARAM_RELAY_ALARM_BASE - HOLDREGISTER_DEVICEPARAM_AO_WORK_MODE) },
-{FUNCTIONCODE_READ_HOLDREGISTER, HOLDREGISTER_DEVICEPARAM_RELAY_ALARM_BASE, (uint16_t) (HOLEREGISTER_STOP - HOLDREGISTER_DEVICEPARAM_RELAY_ALARM_BASE) }
+	{FUNCTIONCODE_READ_HOLDREGISTER, HOLDREG_BASE_GENERAL,
+	 HOLDREGISTER_DEVICEPARAM_FAULT_AUTO_RECOVERY_RETRY_LIMIT + REG_STRIDE - HOLDREG_BASE_GENERAL},
+	{FUNCTIONCODE_READ_HOLDREGISTER, HOLDREG_BASE_MOTOR,
+	 HOLDREGISTER_DEVICEPARAM_FINDZERO_DOWN_DISTANCE + REG_STRIDE - HOLDREG_BASE_MOTOR},
+	{FUNCTIONCODE_READ_HOLDREGISTER, HOLDREG_BASE_OIL_HEIGHT,
+	 HOLDREGISTER_DEVICEPARAM_BOTTOM_ENCODER_CORRECTION_ENABLE + REG_STRIDE - HOLDREG_BASE_OIL_HEIGHT},
+	{FUNCTIONCODE_READ_HOLDREGISTER, HOLDREG_BASE_WATER,
+	 HOLDREGISTER_DEVICEPARAM_WATER_LAG_CAP_THRESHOLD + REG_STRIDE - HOLDREG_BASE_WATER},
+	{FUNCTIONCODE_READ_HOLDREGISTER, HOLDREG_BASE_CORRECTION,
+	 HOLDREGISTER_DEVICEPARAM_TAPE_CALIBRATION_TEMPERATURE + REG_STRIDE - HOLDREG_BASE_CORRECTION},
+	{FUNCTIONCODE_READ_HOLDREGISTER, HOLDREG_BASE_MEAS_CONFIG,
+	 HOLDREGISTER_DEVICEPARAM_MOTOR_COMMAND_DISTANCE + REG_STRIDE - HOLDREG_BASE_MEAS_CONFIG},
+	{FUNCTIONCODE_READ_HOLDREGISTER, HOLDREG_BASE_AO,
+	 HOLDREGISTER_AO_SIMULATION_ENABLE + REG_STRIDE - HOLDREG_BASE_AO},
+	{FUNCTIONCODE_READ_HOLDREGISTER, HOLDREGISTER_DEVICEPARAM_RELAY_ALARM_BASE,
+	 HOLDREGISTER_DEVICEPARAM_RELAY_ALARM_END - HOLDREGISTER_DEVICEPARAM_RELAY_ALARM_BASE},
+	{FUNCTIONCODE_READ_HOLDREGISTER, HOLDREG_BASE_SI_WARTSILA,
+	 HOLDREGISTER_DEVICEPARAM_SI_PROFILE_BOTTOM_DETECT_INTERVAL + REG_STRIDE - HOLDREG_BASE_SI_WARTSILA},
+	{FUNCTIONCODE_READ_HOLDREGISTER, HOLDREG_BASE_RESERVED,
+	 HOLDREGISTER_DEVICEPARAM_RESERVED29 + REG_STRIDE - HOLDREG_BASE_RESERVED},
+	{FUNCTIONCODE_READ_HOLDREGISTER, HOLDREG_BASE_METADATA,
+	 HOLDREGISTER_DEVICEPARAM_CRC + REG_STRIDE - HOLDREG_BASE_METADATA},
+	{FUNCTIONCODE_READ_HOLDREGISTER, HOLDREGISTER_DEVICEPARAM_COMMAND,
+	 HOLDREGISTER_PROTOCOL_CAPABILITIES + REG_STRIDE - HOLDREGISTER_DEVICEPARAM_COMMAND}
 };
 
 #define REFRESH_HOLD_GROUP_COUNT (sizeof(refresh_hold_groups) / sizeof(refresh_hold_groups[0]))
@@ -1618,7 +1667,7 @@ void PollingInputData(void) {
 		hold_refresh_pending = false;
 		hold_refresh_index = 0;
 		param_flag_valid = false;
-		(void)CPU2_CombinatePackage_Send(status_group->func,
+		(void)CPU2_CombinatePackage_SendWire(status_group->func,
 									   status_group->start,
 									   status_group->len,
 									   NULL);
@@ -1658,7 +1707,7 @@ void PollingInputData(void) {
 		if (poweron_index < POWERON_GROUP_COUNT) {
 			const PollGroup *g = &poweron_groups[poweron_index];
 
-			if (!CPU2_CombinatePackage_Send(g->func, g->start, g->len, NULL)) {
+			if (!CPU2_CombinatePackage_SendWire(g->func, g->start, g->len, NULL)) {
 				return;
 			}
 			poweron_index++;
@@ -1705,7 +1754,7 @@ void PollingInputData(void) {
 	if (hold_refresh_pending) {
 		if (hold_refresh_index < REFRESH_HOLD_GROUP_COUNT) {
 			const PollGroup *g = &refresh_hold_groups[hold_refresh_index];
-			if (!CPU2_CombinatePackage_Send(g->func, g->start, g->len, NULL)) {
+			if (!CPU2_CombinatePackage_SendWire(g->func, g->start, g->len, NULL)) {
 				return;
 			}
 			hold_refresh_index++;
@@ -1738,7 +1787,7 @@ void PollingInputData(void) {
 	{
 		const PollGroup *g = &runtime_groups[runtime_index];
 
-		if (!CPU2_CombinatePackage_Send(g->func, g->start, g->len, NULL)) {
+		if (!CPU2_CombinatePackage_SendWire(g->func, g->start, g->len, NULL)) {
 			return;
 		}
 
@@ -1832,23 +1881,77 @@ bool CPU2_CommFetchSiPreviousSnapshot(Cpu2SiProfileCandidateKey *out_key)
 	return CPU2_CommGetPublishedSiProfile(out_key, true);
 }
 
-/* 由屏幕向CPU2发送指令包 */
-bool CPU2_CombinatePackage_Send(uint8_t f_code, uint16_t startadd, uint16_t registercnt, uint32_t *holddata) {
+/*
+ * 函数用途：使用stateformodbus.h中的现行地址发起CPU2标准Modbus事务。
+ * 调用场景：菜单、周期轮询、快照握手和外部LTD网关共用。
+ * 关键约束：读取按标准125寄存器上限拆帧；写入必须等待CPU2合法ACK。
+ */
+bool CPU2_CombinatePackage_Send(uint8_t f_code,
+								uint16_t startadd,
+								uint16_t registercnt,
+								uint32_t *holddata)
+{
+	uint16_t processed = 0U;
+
+	if ((registercnt == 0U) ||
+		((f_code != FUNCTIONCODE_READ_HOLDREGISTER) &&
+		 (f_code != FUNCTIONCODE_READ_INPUTREGISTER) &&
+		 (f_code != FUNCTIONCODE_WRITE_MULREGISTER))) {
+		return false;
+	}
+	if (f_code == FUNCTIONCODE_WRITE_MULREGISTER) {
+		if ((registercnt > LTD_MODBUS_MAX_WRITE_REGISTERS) ||
+			!LtdModbus_HoldingWriteRangeIsValid(startadd, registercnt)) {
+			return false;
+		}
+		return CPU2_CombinatePackage_SendWire(f_code, startadd, registercnt, holddata);
+	}
+	if ((f_code == FUNCTIONCODE_READ_HOLDREGISTER) &&
+		!LtdModbus_RangeWithin(startadd, registercnt, HOLDREGISTER_AMOUNT)) {
+		return false;
+	}
+	if ((f_code == FUNCTIONCODE_READ_INPUTREGISTER) &&
+		!LtdModbus_RangeWithin(startadd, registercnt, INPUTREGISTER_AMOUNT)) {
+		return false;
+	}
+
+	while (processed < registercnt) {
+		uint16_t remaining = (uint16_t)(registercnt - processed);
+		uint16_t chunk = (remaining > LTD_MODBUS_MAX_READ_REGISTERS) ?
+			LTD_MODBUS_MAX_READ_REGISTERS : remaining;
+
+		if (!CPU2_CombinatePackage_SendWire(f_code,
+										(uint16_t)(startadd + processed),
+										chunk,
+										NULL)) {
+			return false;
+		}
+		processed = (uint16_t)(processed + chunk);
+	}
+	return true;
+}
+
+/* 使用现行Modbus地址执行一次CPU2事务。 */
+static bool CPU2_CombinatePackage_SendWire(uint8_t f_code,
+										   uint16_t startadd,
+										   uint16_t registercnt,
+										   uint32_t *holddata) {
 	bool cancel_command_allowed = false;
 	bool parameter_write_attempted = false;
+	bool command_write = (f_code == FUNCTIONCODE_WRITE_MULREGISTER) &&
+		(startadd == HOLDREGISTER_DEVICEPARAM_COMMAND) &&
+		(registercnt == REG_STRIDE);
 
 	/* 每个板间事务只在边界报告进度，等待响应循环内部不得给看门狗续命。 */
 	CPU3_WatchdogReportProgress();
 
 	/* 普通写必须通过完整快照门禁；参数刷新期间只放行协议兼容的取消命令。 */
 	if ((f_code == FUNCTIONCODE_WRITE_MULREGISTER) &&
-		(startadd == HOLDREGISTER_DEVICEPARAM_COMMAND) &&
-		(registercnt == 2U) &&
+		command_write && (registercnt == 2U) &&
 		(holddata != NULL)) {
 		cancel_command_allowed = CPU2_CommCanSendCommand((CommandType)(*holddata));
 	}
-	if ((f_code == FUNCTIONCODE_WRITE_MULREGISTER) &&
-		!((startadd == HOLDREGISTER_DEVICEPARAM_COMMAND) && (registercnt == 2U))) {
+	if ((f_code == FUNCTIONCODE_WRITE_MULREGISTER) && !command_write) {
 		parameter_write_attempted = true;
 	}
 	if ((f_code == FUNCTIONCODE_WRITE_MULREGISTER) && !CPU2_CommIsAvailable()) {
@@ -1981,7 +2084,8 @@ static void CPU2_Response03Process(uint8_t const *revframe) {
 		SlaveTempBuffer[i] = reg;
 	}
 	if (response_contains_protocol) {
-		protocol_offset = (uint16_t)(HOLDREGISTER_DEVICEPARAM_PROTOCOL_VERSION - RCV_startaddress);
+		protocol_offset = (uint16_t)(HOLDREGISTER_DEVICEPARAM_PROTOCOL_VERSION -
+									 (uint16_t)RCV_startaddress);
 		s_cpu2_protocol_version = ((uint32_t)(uint16_t)SlaveTempBuffer[protocol_offset] << 16) |
 							  (uint32_t)(uint16_t)SlaveTempBuffer[protocol_offset + 1U];
 		s_cpu2_has_protocol_snapshot = true;
@@ -2002,7 +2106,8 @@ static void CPU2_Response03Process(uint8_t const *revframe) {
 	}
 
 	/* 独立协议探测只更新私有兼容状态，不能把其余未读取参数覆盖为旧值或零值。 */
-	if ((RCV_startaddress == HOLDREGISTER_DEVICEPARAM_PROTOCOL_VERSION) &&
+	if (response_contains_protocol &&
+		(RCV_startaddress == HOLDREGISTER_DEVICEPARAM_PROTOCOL_VERSION) &&
 		(RCV_registercnt == REG_SIZE_U32)) {
 		return;
 	}
@@ -2011,12 +2116,7 @@ static void CPU2_Response03Process(uint8_t const *revframe) {
 	WriteDeviceParamsToHoldingRegisters(HoldingRegisterArray);
 	PresetRegister(false, SlaveTempBuffer);
 
-	/* 3. 更新 HoldingRegisterArray 里对应的寄存器（注意，这里是按“寄存器”写） */
-	for (i = 0; i < RCV_registercnt; i++) {
-		HoldingRegisterArray[RCV_startaddress + i] = SlaveTempBuffer[i];
-	}
-
-	/* 4. 解析保持寄存器并刷新 g_deviceParams */
+	/* 3. 按现行直接地址解析保持寄存器并刷新g_deviceParams。 */
 	AnalysisHoldRegister();
 	ReadDeviceParamsFromHoldingRegisters(HoldingRegisterArray);
 }
@@ -2026,11 +2126,11 @@ static void CPU2_Response04Process(uint8_t const *revframe) {
 	int i, j;
 	bool response_contains_status = CPU2_ResponseContainsDeviceStatus();
 	bool comm_fault_was_active = s_cpu2_comm_fault_active;
-	uint32_t response_start = (uint32_t)RCV_startaddress;
-	uint32_t response_end = response_start + (uint32_t)RCV_registercnt;
 	bool response_contains_profile_header =
-		(response_start <= (uint32_t)REG_DENSITY_DIST_AVG_TEMP) &&
-		(response_end >= (uint32_t)REG_DENSITY_DIST_POINT_BASE);
+		LtdModbus_RangeContains((uint16_t)RCV_startaddress,
+							   (uint16_t)RCV_registercnt,
+							   REG_DENSITY_DIST_AVG_TEMP,
+							   CPU2_PROFILE_HEADER_REGISTER_COUNT);
 	memset(SlaveTempBuffer, 0, sizeof(SlaveTempBuffer));
 	for (i = 0, j = 0; i < RCV_registercnt; i++, j = j + 2) {
 		SlaveTempBuffer[i] = (revframe[j + 3] << 8) + revframe[j + 4];
@@ -2038,7 +2138,8 @@ static void CPU2_Response04Process(uint8_t const *revframe) {
 
 	/* 固定点三阶段读取只写私有候选，任何中间响应都不得触碰公开输入缓存。 */
 	if (s_cpu2_private_input_destination != NULL) {
-		if ((uint16_t)RCV_registercnt > s_cpu2_private_input_capacity) {
+		if (((uint16_t)RCV_startaddress != s_cpu2_private_input_start) ||
+			((uint16_t)RCV_registercnt > s_cpu2_private_input_capacity)) {
 			return;
 		}
 		for (i = 0; i < RCV_registercnt; i++) {
@@ -2088,20 +2189,10 @@ static void CPU2_Response10Process(uint8_t *arr, uint16_t len) {
  --> true - 输入寄存器
  */
 static void PresetRegister(bool registertype, int const *registervalue) {
-	int range;
 	int i;
-	int j;
+	uint16_t *registers = registertype ? InputRegisterArray : HoldingRegisterArray;
 
-	range = RCV_startaddress + RCV_registercnt;
-	if (registertype) {
-		for (i = RCV_startaddress, j = 0; i < range; i++, j++) {
-			InputRegisterArray[i] = registervalue[j];
-/* printf("InputRegisterArray[%d] = %d\r\n", i, InputRegisterArray[i]); */
-		}
-	} else {
-		for (i = RCV_startaddress, j = 0; i < range; i++, j++) {
-			HoldingRegisterArray[i] = registervalue[j];
-/* printf("HoldingRegisterArray[%d] = %d\r\n", i, HoldingRegisterArray[i]); */
-		}
+	for (i = 0; i < RCV_registercnt; i++) {
+		registers[RCV_startaddress + i] = (uint16_t)registervalue[i];
 	}
 }

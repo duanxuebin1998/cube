@@ -12,6 +12,7 @@
 #include "cpu3_comm_display_params.h"
 #include "cpu3_clock.h"
 #include "ltd_modbus_slave.h"
+#include "lh_modbus_slave.h"
 #include "si_modbus_slave.h"
 #include "protocol_switch_frame.h"
 #include "address.h"
@@ -138,10 +139,10 @@ static const char *cpu3_protocol_text(ComProtocolType protocol)
         return "WARTSILA";
     case COM_PROTO_LTD:
         return "LTD";
+    case COM_PROTO_LH:
+        return "LH";
     case COM_PROTO_SI:
         return "SI";
-    case COM_PROTO_1:
-        return "预留1";
     case COM_PROTO_2:
         return "预留2";
     default:
@@ -495,12 +496,23 @@ static uint32_t proto_ltd_process(const uint8_t* rx, uint16_t rx_len,
     return ltd_modbus_process_for_dispatch(rx, rx_len, tx, tx_len);
 }
 
+/*
+ * 处理 LH 现场 Modbus 协议帧。
+ * LH 地址重排和参数写入约束全部封装在独立模块，主分发层只负责转交完整 RTU 帧。
+ */
+static uint32_t proto_lh_process(const uint8_t* rx, uint16_t rx_len,
+                                 uint8_t* tx, uint16_t* tx_len)
+{
+    return lh_modbus_process_for_dispatch(rx, rx_len, tx, tx_len);
+}
+
 /* 关键：用你现有枚举做索引。若枚举不是从 0 连续增长，别用这种表，改 switch（见下） */
 static const ComProtocolHandler g_handlers[] = {
     [COM_PROTO_DSM]      = { proto_dsm_process,      NULL },
     [COM_PROTO_WARTSILA] = { proto_wartsila_process, NULL },
     [COM_PROTO_SI]   = { proto_si_process,   NULL },
     [COM_PROTO_LTD]      = { proto_ltd_process,      NULL },
+    [COM_PROTO_LH]       = { proto_lh_process,       NULL },
 };
 
 /* 按端口号取配置：你这里的 com1/com2/com3 结构来自 cpu3_comm_display_params.h */
@@ -845,8 +857,8 @@ static void cpu3_comm_debug_task(void)
 
 /*
  * 函数用途：记录某个外部 COM 口已经接受的协议切换目标。
- * 调用场景：统一切换帧校验成功且目标协议不同于当前协议时调用。
- * 关键约束：只暂存 RAM 状态，必须等旧串口参数下的应答发送完成后才能保存和重配。
+ * 调用场景：统一切换帧校验成功时调用，包括目标协议与当前协议相同的请求。
+ * 关键约束：只暂存 RAM 状态，必须等旧串口参数下的 ACK 发送完成后，才能应用目标协议默认模板并恢复接收。
  */
 static void cpu3_stage_protocol_switch(uint8_t port_idx, ComProtocolType target_protocol)
 {
@@ -1048,7 +1060,7 @@ static void cpu3_apply_ready_protocol_switches(void)
 
         if (cpu3_reinit_external_port(port_idx)) {
             CPU3_LOG_INFO(cpu3_port_module_text(port_idx),
-                          "协议切换完成 新协议=%s(%u)",
+                          "协议切换完成，已应用目标协议默认串口参数 新协议=%s(%u)",
                           cpu3_protocol_text(target_protocol),
                           (unsigned int)target_protocol);
             cpu3_log_port_config(port_idx, "切换后配置");
@@ -1095,9 +1107,8 @@ static uint32_t cpu3_port_process(uint8_t port_idx,
                                                 tx_len,
                                                 &target_protocol);
     if (switch_result != PROTOCOL_SWITCH_FRAME_NOT_MATCHED) {
-        if ((switch_result == PROTOCOL_SWITCH_FRAME_ACCEPTED) &&
-            (target_protocol != cfg->protocol))
-        {
+        if (switch_result == PROTOCOL_SWITCH_FRAME_ACCEPTED) {
+            /* 同协议请求也重新应用该协议默认串口整组参数。 */
             cpu3_stage_protocol_switch(port_idx, target_protocol);
         }
         return 0U;
@@ -1373,7 +1384,7 @@ void App_MainLoop(void)
  *       1. 检查是否有待发送帧（g_tx_pending_len_comX > 0）
  *       2. 如果有待发送帧，直接启动 DMA 发送，不切换到接收模式
  *       3. 普通响应最后一帧完成后恢复 DMA 接收
- *       4. 协议切换 ACK 完成后只标记 APPLY 并保持 RX 停止，由主循环按新参数恢复
+ *       4. 协议切换 ACK 完成后只标记 APPLY 并保持 RX 停止，由主循环按目标协议默认参数恢复
  *
  * @note 错误处理：
  *       - 如果续发失败，调用 cpu3_uart_recover_tx() 恢复接收模式并释放资源

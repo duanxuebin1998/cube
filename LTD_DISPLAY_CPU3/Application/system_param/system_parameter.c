@@ -254,7 +254,7 @@ struct ParameterMetadata param_meta[] = {
 {(uint8_t*)"工作模式",	0,	COM_NUM_DEVICEPARAM_AO_WORK_MODE,	HOLDREGISTER_DEVICEPARAM_AO_WORK_MODE,	2,	true,	0,	2,	NULL,	0,	0,	true,	TYPE_INT,	1,	ret_arr_word,	(uint8_t*)"WorkMode"},
 {(uint8_t*)"电流模式",	0,	COM_NUM_DEVICEPARAM_AO_CURRENT_MODE,	HOLDREGISTER_DEVICEPARAM_AO_CURRENT_MODE,	2,	true,	0,	3,	NULL,	0,	0,	true,	TYPE_INT,	1,	ret_arr_word,	(uint8_t*)"CurrentMode"},
 {(uint8_t*)"输出源",	0,	COM_NUM_DEVICEPARAM_AO_OUTPUT_SOURCE,	HOLDREGISTER_DEVICEPARAM_AO_OUTPUT_SOURCE,	2,	true,	0,	2,	NULL,	0,	0,	true,	TYPE_INT,	1,	ret_arr_word,	(uint8_t*)"Source"},
-{(uint8_t*)"保留AO SIL/WHG",	0,	COM_NUM_DEVICEPARAM_AO_SIL_WHG_RESERVED,	HOLDREGISTER_DEVICEPARAM_AO_SIL_WHG_RESERVED,	2,	true,	0,	0,	NULL,	0,	0,	false,	TYPE_INT,	1,	NULL,	(uint8_t*)"AOSilWhgRsv"},
+{(uint8_t*)"电流修正",	0,	COM_NUM_DEVICEPARAM_AO_CURRENT_CORRECTION_MA_X100,	HOLDREGISTER_DEVICEPARAM_AO_CURRENT_CORRECTION_MA_X100,	2,	true,	AO_CURRENT_CORRECTION_MIN_MA_X100,	AO_CURRENT_CORRECTION_MAX_MA_X100,	(uint8_t*)"mA",	2,	0,	true,	TYPE_INT,	5,	NULL,	(uint8_t*)"AOTrim"},
 {(uint8_t*)"固定电流",	0,	COM_NUM_DEVICEPARAM_AO_FIXED_CURRENT_MA_X100,	HOLDREGISTER_DEVICEPARAM_AO_FIXED_CURRENT_MA_X100,	2,	true,	AO_FIXED_CURRENT_MIN_MA_X100,	AO_FIXED_CURRENT_MAX_MA_X100,	(uint8_t*)"mA",	2,	0,	true,	TYPE_INT,	5,	NULL,	(uint8_t*)"FixedCur"},
 {(uint8_t*)"0%对应值",	0,	COM_NUM_DEVICEPARAM_AO_RANGE_0_01MM,	HOLDREGISTER_DEVICEPARAM_AO_RANGE_0_01MM,	2,	true,	0,	2147483647,	(uint8_t*)"mm",	1,	0,	true,	TYPE_INT,	7,	NULL,	(uint8_t*)"Range0"},
 {(uint8_t*)"100%对应值",	0,	COM_NUM_DEVICEPARAM_AO_RANGE_100_01MM,	HOLDREGISTER_DEVICEPARAM_AO_RANGE_100_01MM,	2,	true,	0,	2147483647,	(uint8_t*)"mm",	1,	0,	true,	TYPE_INT,	7,	NULL,	(uint8_t*)"Range100"},
@@ -613,6 +613,7 @@ void print_device_params(void)
     printf("  %-32s : %lu\r\n", "AO工作模式", (unsigned long)params.ao_output.work_mode);
     printf("  %-32s : %lu\r\n", "AO电流模式", (unsigned long)params.ao_output.current_mode);
     printf("  %-32s : %lu\r\n", "AO输出源", (unsigned long)params.ao_output.output_source);
+    printf("  %-32s : %ld\r\n", "AO电流修正(x0.01mA)", (long)params.ao_output.current_correction_mA_x100);
     printf("  %-32s : %lu\r\n", "AO固定电流(x0.01mA)", (unsigned long)params.ao_output.fixed_current_mA_x100);
     printf("  %-32s : %ld\r\n", "AO 0%对应值(x0.1mm)", (long)params.ao_output.range_0_01mm);
     printf("  %-32s : %ld\r\n", "AO 100%对应值(x0.1mm)", (long)params.ao_output.range_100_01mm);

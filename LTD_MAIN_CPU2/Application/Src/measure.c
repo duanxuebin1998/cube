@@ -25,6 +25,7 @@
 #include "abortable_delay.h"
 #include "fault_recovery.h"
 #include "serial_command.h"
+#include "../../Services/Relay/relay_output.h"
 
 static void CMD_CorrectOilLevel(void);
 static void CMD_CancelMeasurement(void);
@@ -64,6 +65,8 @@ static void CMD_CalibrateTankHeight(void)
 
 
 static void CMD_EnterMaintenanceMode(void);
+static void CMD_ExitMaintenanceMode(void);
+static void CMD_ClearAllRelayLatchedAlarms(void);
 static void CMD_WartsilaDensitySpread(void);
 static void CMD_SetFullWeight(void);
 static void CMD_SetEmptyWeight(void);
@@ -95,6 +98,19 @@ void ProcessMeasureCmd(CommandType command)
 {
     if (command == CMD_CANCEL_MEASUREMENT) {
         CMD_CancelMeasurement();
+        return;
+    }
+    /* 维护控制和清锁存是即时控制命令，不得触发测量初始化或改写当前运行状态。 */
+    if (command == CMD_MAINTENANCE_MODE) {
+        CMD_EnterMaintenanceMode();
+        return;
+    }
+    if (command == CMD_MAINTENANCE_EXIT) {
+        CMD_ExitMaintenanceMode();
+        return;
+    }
+    if (command == CMD_CLEAR_ALL_RELAY_LATCHED_ALARMS) {
+        CMD_ClearAllRelayLatchedAlarms();
         return;
     }
     /*
@@ -278,11 +294,6 @@ void ProcessMeasureCmd(CommandType command)
     case CMD_RESTORE_FACTORY:
         printf("执行恢复出厂设置指令\r\n");
         RestoreFactoryParamsConfig();
-        break;
-
-    case CMD_MAINTENANCE_MODE:
-        printf("执行维护模式指令\r\n");
-        CMD_EnterMaintenanceMode();
         break;
 
     case CMD_DEBUG_MODE:
@@ -825,20 +836,29 @@ static void CMD_CorrectOilLevel(void) {
  */
 static void CMD_EnterMaintenanceMode(void)
 {
-    printf("进入维护模式\n");
-    /* 维护模式是 SI Manual/Stop 的保守映射，手动期间抑制自动报警和液位自动更新。 */
-    g_measurement.device_status.manual_alarm_inhibit = 1U;
-    g_measurement.oil_measurement.manual_level_update_inhibit = 1U;
-    g_measurement.device_status.device_state = STATE_MAINTENANCEMODE;
-    while (1) {
-        if (HasEffectiveCommandSwitchRequest()) {
-            printf("检测到命令切换请求，停止当前操作\r\n");
-            /* 命令切换退出时必须清除抑制位，避免 CPU3 长时间保持 SI 手动抑制状态。 */
-            g_measurement.device_status.manual_alarm_inhibit = 0U;
-            g_measurement.oil_measurement.manual_level_update_inhibit = 0U;
-            return;
-        }
-    }
+    /* 维护模式只叠加报警输出屏蔽，不占用设备状态，也不阻塞后续指令和测量。 */
+    g_measurement.device_status.maintenance_mode_active = 1U;
+    printf("维护模式已开启\r\n");
+}
+
+/**
+ * @brief 退出非阻塞维护模式。
+ * @note 只撤销维护屏蔽，不改写当前设备状态、故障码或正在执行的测量。
+ */
+static void CMD_ExitMaintenanceMode(void)
+{
+    g_measurement.device_status.maintenance_mode_active = 0U;
+    printf("维护模式已退出\r\n");
+}
+
+/**
+ * @brief 请求清除四路继电器锁存报警。
+ * @note 请求只作用于运行态，由继电器更新周期消费，不触发参数持久化。
+ */
+static void CMD_ClearAllRelayLatchedAlarms(void)
+{
+    RelayOutput_RequestClearAllLatchedAlarms();
+    printf("已请求清除全部继电器锁存报警\r\n");
 }
 /* 电机上行指令 */
 static void CMD_MoveUp(void)

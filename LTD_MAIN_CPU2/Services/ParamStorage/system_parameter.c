@@ -391,7 +391,7 @@ static void ao_load_default_config(const DeviceParameters *params, AoOutputConfi
     config->work_mode = AO_WORK_MODE_DISABLED;
     config->current_mode = AO_CURRENT_MODE_NE;
     config->output_source = AO_PROCESS_SOURCE_TANK_LEVEL;
-    config->sil_whg_reserved = 0U;
+    config->current_correction_mA_x100 = 0;
     config->fixed_current_mA_x100 = 400U;
     ao_load_default_range(params, config);
     config->damping_x10_s = 0U;
@@ -413,7 +413,8 @@ static int ao_config_is_valid(const DeviceParameters *params, const AoOutputConf
     if ((config->work_mode > AO_WORK_MODE_HART_SLAVE_OUTPUT) ||
         (config->current_mode > AO_CURRENT_MODE_FIXED) ||
         (config->output_source > AO_PROCESS_SOURCE_WATER_LEVEL) ||
-        (config->sil_whg_reserved != 0U) ||
+        (config->current_correction_mA_x100 < AO_CURRENT_CORRECTION_MIN_MA_X100) ||
+        (config->current_correction_mA_x100 > AO_CURRENT_CORRECTION_MAX_MA_X100) ||
         (config->fault_mode > AO_FAULT_ACTION_HOLD_LAST_VALID) ||
         (config->error_level != 0U)) {
         return 0;
@@ -550,6 +551,9 @@ static int migrate_ao_fault_action_runtime(void)
             break;
         }
         config->error_level = 0U;
+    } else if (old_protocol <= DEVICE_PROTOCOL_VERSION) {
+        /* 协议23及以后已使用当前两种故障动作，升级时只清理旧预留槽。 */
+        config->error_level = 0U;
     } else {
         /* 新于当前固件的未知语义按安全默认动作收敛，剩余范围交给归一化处理。 */
         config->fault_mode = AO_FAULT_ACTION_OUTPUT_CURRENT;
@@ -578,7 +582,13 @@ static int normalize_ao_params_runtime(void)
     if (normalized.output_source > AO_PROCESS_SOURCE_WATER_LEVEL) {
         normalized.output_source = defaults.output_source;
     }
-    normalized.sil_whg_reserved = 0U;
+    if ((g_deviceParams.protocolVersion < 26U) ||
+        (g_deviceParams.protocolVersion > DEVICE_PROTOCOL_VERSION) ||
+        (normalized.current_correction_mA_x100 < AO_CURRENT_CORRECTION_MIN_MA_X100) ||
+        (normalized.current_correction_mA_x100 > AO_CURRENT_CORRECTION_MAX_MA_X100)) {
+        /* 协议25及更早版本中该槽位为隐藏预留，升级时必须从零修正开始。 */
+        normalized.current_correction_mA_x100 = defaults.current_correction_mA_x100;
+    }
     if ((normalized.fixed_current_mA_x100 < AO_FIXED_CURRENT_MIN_MA_X100) ||
         (normalized.fixed_current_mA_x100 > AO_FIXED_CURRENT_MAX_MA_X100)) {
         normalized.fixed_current_mA_x100 = defaults.fixed_current_mA_x100;
@@ -969,8 +979,8 @@ static void print_device_params_save_diff(const DeviceParameters *new_params,
 }
 
 /* 统一的参数保存入口：
- * mark_updated=1：说明这是一次“真正的参数变更”，需要递增 parameter_update_flag，
- *                 让 CPU3 在后续轮询中检测到并补读保持寄存器。
+ * mark_updated=1：说明这是一次“真正的参数变更”，写入并回读校验成功后递增
+ *                 parameter_update_flag，让 CPU3 检测到持久化完成并补读保持寄存器。
  * force_write=1：忽略判重，强制回写 FRAM，主要用于 A/B 分区自修复这种场景。 */
 static void save_device_params_internal(int mark_updated, int force_write)
 {
@@ -1018,15 +1028,13 @@ static void save_device_params_internal(int mark_updated, int force_write)
         && device_param_persist_equal(&slot_a, &params)
         && device_param_persist_equal(&slot_b, &params))
     {
+        /* A/B已与请求值一致也属于持久化确认完成，保证同值写入仍有可等待的完成标志。 */
+        if (mark_updated) {
+            g_measurement.device_status.parameter_update_flag++;
+        }
         clear_device_params_write_snapshot();
         print_device_params_event(PARAM_PRINT_SAVE_SKIP, &params, NULL, NULL);
         return;
-    }
-
-    /* 只有“参数真的发生改变”时才递增更新标志。
-     * 如果因为判重被跳过或仅仅是分区自修复，都不应该触发 CPU3 再次补读。 */
-    if (mark_updated) {
-        g_measurement.device_status.parameter_update_flag++;
     }
 
     WriteMultiData((uint8_t *)&params, (int)FRAM_PARAM_A_ADDRESS, sizeof(DeviceParameters));
@@ -1059,6 +1067,11 @@ static void save_device_params_internal(int mark_updated, int force_write)
     /* 仅清除上一轮写后校验故障，不覆盖测量、电机或传感器等其它故障。 */
     if (g_measurement.device_status.error_code == PARAM_STORAGE_WRITE_VERIFY_FAILED) {
         g_measurement.device_status.error_code = NO_ERROR;
+    }
+
+    /* 只有A/B双分区写后回读一致，才发布参数更新完成；失败时CPU3不能向外应答成功。 */
+    if (mark_updated) {
+        g_measurement.device_status.parameter_update_flag++;
     }
 
     print_device_params_save_diff(&params, &slot_a, slot_a_valid, &slot_b, slot_b_valid, mark_updated);
@@ -1525,7 +1538,7 @@ static const ParamPrintItem g_device_param_print_table[] = {
     DEVICE_PARAM_ITEM("4-20mA/AO参数", "工作模式", ao_output.work_mode, PARAM_PRINT_TYPE_U32, NULL),
     DEVICE_PARAM_ITEM("4-20mA/AO参数", "电流模式", ao_output.current_mode, PARAM_PRINT_TYPE_U32, NULL),
     DEVICE_PARAM_ITEM("4-20mA/AO参数", "输出源", ao_output.output_source, PARAM_PRINT_TYPE_U32, NULL),
-    DEVICE_PARAM_ITEM("4-20mA/AO参数", "SIL/WHG预留", ao_output.sil_whg_reserved, PARAM_PRINT_TYPE_U32, NULL),
+    DEVICE_PARAM_ITEM("4-20mA/AO参数", "电流修正", ao_output.current_correction_mA_x100, PARAM_PRINT_TYPE_I32_UNIT, "0.01mA"),
     DEVICE_PARAM_ITEM("4-20mA/AO参数", "固定电流", ao_output.fixed_current_mA_x100, PARAM_PRINT_TYPE_U32_01MA, "0.01mA"),
     DEVICE_PARAM_ITEM("4-20mA/AO参数", "0%量程", ao_output.range_0_01mm, PARAM_PRINT_TYPE_U32_01MM, "0.1mm"),
     DEVICE_PARAM_ITEM("4-20mA/AO参数", "100%量程", ao_output.range_100_01mm, PARAM_PRINT_TYPE_U32_01MM, "0.1mm"),
@@ -1781,7 +1794,7 @@ static const char *device_param_value_desc(const ParamPrintItem *item, uint32_t 
         case CMD_RESTORE_FACTORY:
             return "恢复出厂设置";
         case CMD_MAINTENANCE_MODE:
-            return "维护模式";
+            return "开启维护模式";
         case CMD_CALIBRATE_TANKHEIGHT:
             return "标定罐高";
         case CMD_FORCE_MOVE_UP:
@@ -1792,6 +1805,10 @@ static const char *device_param_value_desc(const ParamPrintItem *item, uint32_t 
             return "标定水位";
         case CMD_PAIR_NEAREST_WIRELESS_SLIPRING:
             return "匹配最近无线滑环";
+        case CMD_MAINTENANCE_EXIT:
+            return "退出维护模式";
+        case CMD_CLEAR_ALL_RELAY_LATCHED_ALARMS:
+            return "清除全部继电器锁存报警";
         case CMD_UNKNOWN:
             return "未知命令";
         default:

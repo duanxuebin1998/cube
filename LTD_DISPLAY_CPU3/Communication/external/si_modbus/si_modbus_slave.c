@@ -1540,8 +1540,8 @@ static bool si_apply_coil_write(uint16_t offset, uint8_t is_on)
         request_ok = si_profile_request_start();
         break;
     case SI_COIL_STOP:
-        /* 现阶段用维护模式承担“停当前动作并进入手动态”的作用。 */
-        request_ok = si_send_cpu2_command(CMD_MAINTENANCE_MODE);
+        /* Stop只取消当前测量/运动，不再隐式进入维护模式。 */
+        request_ok = si_send_cpu2_command(CMD_CANCEL_MEASUREMENT);
         break;
     case SI_COIL_UP_SLOW:
     case SI_COIL_UP_MEDIUM:

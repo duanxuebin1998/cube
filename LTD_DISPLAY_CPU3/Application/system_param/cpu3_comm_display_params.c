@@ -104,12 +104,13 @@ static ComProtocolType Cpu3_NormalizeProtocol(int32_t protocol)
 {
     /*
      * 只允许现场菜单确认过的协议值。
-     * 预留协议值 3/4 也收敛回 DSM，避免选择后保留不明确的串口组合。
+     * 预留协议值 4 收敛回 DSM，避免选择后保留不明确的串口组合。
      */
     switch (protocol) {
     case COM_PROTO_DSM:
     case COM_PROTO_WARTSILA:
     case COM_PROTO_LTD:
+    case COM_PROTO_LH:
     case COM_PROTO_SI:
         return (ComProtocolType)protocol;
     default:
@@ -119,7 +120,7 @@ static ComProtocolType Cpu3_NormalizeProtocol(int32_t protocol)
 
 /*
  * 根据协议生成默认串口模板。
- * 只有协议字段发生变化时才应用该模板，普通串口字段允许现场单独覆盖。
+ * 只有写入协议字段时才应用该模板，普通串口字段允许现场单独覆盖。
  */
 static void Cpu3_FillProtocolSerialProfile(ComProtocolType protocol, ComPortConfig *profile)
 {
@@ -151,8 +152,16 @@ static void Cpu3_FillProtocolSerialProfile(ComProtocolType protocol, ComPortConf
         break;
 
     case COM_PROTO_LTD:
-        /* LTD 按 CPU2 串口5（UART5）口径：115200 8N1。 */
-        profile->baudrate = 115200U;
+        /* LTD 对外串口默认值与计量仪/DSM 保持一致，不影响板间 UART5。 */
+        profile->baudrate = 4800U;
+        profile->databits = 8U;
+        profile->parity = COM_PARITY_NONE;
+        profile->stopbits = COM_STOPBITS_1;
+        break;
+
+    case COM_PROTO_LH:
+        /* LH 现场协议固定带出 9600 8N1，协议切换不影响其它外部端口。 */
+        profile->baudrate = 9600U;
         profile->databits = 8U;
         profile->parity = COM_PARITY_NONE;
         profile->stopbits = COM_STOPBITS_1;
@@ -540,10 +549,12 @@ bool Cpu3Local_WriteSiCompatHoldingChecked(uint8_t index, uint16_t value)
 
 /*
  * 函数用途：事务式写入 CPU3 本机参数并返回 FRAM 持久化校验结果。
- * 调用场景：协议切换和 SI FC06 写入需要根据返回值决定是否应答成功。
+ * 调用场景：屏幕菜单、本机参数写入、远程协议切换和 SI FC06 共用本事务内核。
  * 关键约束：FRAM 写后读回失败时恢复整份旧运行态，不允许伪成功或保留未持久化的新值。
  */
-bool Cpu3Local_WriteValueChecked(OperatingNumber opera, int32_t v)
+static bool Cpu3Local_WriteValueCheckedInternal(OperatingNumber opera,
+                                                int32_t v,
+                                                bool apply_protocol_serial_profile)
 {
     Cpu3CommAndDisplayParams old_params = g_cpu3_comm_display_params;
     bool display_runtime_changed = false;
@@ -620,7 +631,9 @@ bool Cpu3Local_WriteValueChecked(OperatingNumber opera, int32_t v)
         break;
     case COM_NUM_CPU3_COM1_PROTOCOL:
         g_cpu3_comm_display_params.com1.protocol = Cpu3_NormalizeProtocol(v);
-        (void)Cpu3_ApplyProtocolSerialProfile(&g_cpu3_comm_display_params.com1);
+        if (apply_protocol_serial_profile) {
+            (void)Cpu3_ApplyProtocolSerialProfile(&g_cpu3_comm_display_params.com1);
+        }
         break;
 
     /* COM2 */
@@ -638,7 +651,9 @@ bool Cpu3Local_WriteValueChecked(OperatingNumber opera, int32_t v)
         break;
     case COM_NUM_CPU3_COM2_PROTOCOL:
         g_cpu3_comm_display_params.com2.protocol = Cpu3_NormalizeProtocol(v);
-        (void)Cpu3_ApplyProtocolSerialProfile(&g_cpu3_comm_display_params.com2);
+        if (apply_protocol_serial_profile) {
+            (void)Cpu3_ApplyProtocolSerialProfile(&g_cpu3_comm_display_params.com2);
+        }
         break;
 
     /* COM3 */
@@ -656,7 +671,9 @@ bool Cpu3Local_WriteValueChecked(OperatingNumber opera, int32_t v)
         break;
     case COM_NUM_CPU3_COM3_PROTOCOL:
         g_cpu3_comm_display_params.com3.protocol = Cpu3_NormalizeProtocol(v);
-        (void)Cpu3_ApplyProtocolSerialProfile(&g_cpu3_comm_display_params.com3);
+        if (apply_protocol_serial_profile) {
+            (void)Cpu3_ApplyProtocolSerialProfile(&g_cpu3_comm_display_params.com3);
+        }
         break;
 
     /* SI */
@@ -707,7 +724,7 @@ bool Cpu3Local_WriteValueChecked(OperatingNumber opera, int32_t v)
         break;
     }
 
-    if (Cpu3Local_IsUartParam(opera)) {
+    if (apply_protocol_serial_profile && Cpu3Local_IsUartParam(opera)) {
         /* 非协议字段允许现场覆盖；这里只兜底修正越界值，避免 UART 初始化异常。 */
         (void)Cpu3_SanitizeAllPortConfigs();
     }
@@ -727,6 +744,16 @@ bool Cpu3Local_WriteValueChecked(OperatingNumber opera, int32_t v)
     }
 
     return true;
+}
+
+/*
+ * 函数用途：按屏幕配置语义事务式写入本机参数。
+ * 调用场景：屏幕菜单修改协议时同步套用目标协议默认串口参数，其它参数沿用原写入行为。
+ * 关键约束：屏幕与远程协议切换均在旧参数应答完成后调用；修改协议时同步应用默认串口参数。
+ */
+bool Cpu3Local_WriteValueChecked(OperatingNumber opera, int32_t v)
+{
+    return Cpu3Local_WriteValueCheckedInternal(opera, v, true);
 }
 
 /*

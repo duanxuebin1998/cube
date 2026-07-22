@@ -19,6 +19,7 @@ typedef struct {
 
 typedef struct {
     uint32_t manual_alarm_inhibit;
+    uint32_t maintenance_mode_active;
     uint32_t oil_level;
     uint32_t probe_at_liquid_level;
     uint32_t liquid_stable;
@@ -154,6 +155,7 @@ static void RelayOutput_CopyMeasurementSnapshot(RelayOutputMeasurementSnapshot *
 
     primask = RelayOutput_EnterCritical();
     snapshot->manual_alarm_inhibit = g_measurement.device_status.manual_alarm_inhibit;
+    snapshot->maintenance_mode_active = g_measurement.device_status.maintenance_mode_active;
     snapshot->oil_level = g_measurement.oil_measurement.oil_level;
     snapshot->probe_at_liquid_level = g_measurement.oil_measurement.probe_at_liquid_level;
     snapshot->liquid_stable = g_measurement.oil_measurement.liquid_stable;
@@ -220,6 +222,23 @@ static void RelayOutput_CommitRuntimeState(uint32_t channel, const RelayAlarmRun
     dst->LL_L_alarm = state->LL_L_alarm;
     dst->any_error = state->any_error;
     dst->clear_alarm = state->clear_alarm;
+    RelayOutput_ExitCritical(primask);
+}
+
+/**
+ * @brief 发布继电器报警屏蔽状态和四路最终逻辑动作位图。
+ * @param alarm_inhibited 非0表示当前报警动作被手动操作或维护模式屏蔽。
+ * @param logical_action_mask bit0~bit3分别表示K1~K4最终逻辑报警动作。
+ */
+static void RelayOutput_CommitPublishedStatus(uint8_t alarm_inhibited,
+                                              uint8_t logical_action_mask)
+{
+    uint32_t primask = RelayOutput_EnterCritical();
+
+    g_measurement.device_status.relay_alarm_inhibit_effective =
+            (alarm_inhibited != 0U) ? 1U : 0U;
+    g_measurement.device_status.relay_alarm_action_mask =
+            (uint32_t)(logical_action_mask & 0x0FU);
     RelayOutput_ExitCritical(primask);
 }
 
@@ -563,7 +582,9 @@ static void RelayOutput_ConsumeClearCommand(uint32_t channel,
  * @return 状态码、计数值或协议数值，具体含义由调用点约定。
  */
 static uint8_t RelayOutput_UpdateChannel(uint32_t channel,
-                                         const RelayOutputMeasurementSnapshot *measurement)
+                                         const RelayOutputMeasurementSnapshot *measurement,
+                                         uint8_t alarm_inhibited,
+                                         uint8_t *logical_action_active)
 {
     RelayAlarmConfig cfg;
     RelayAlarmRuntimeState state;
@@ -575,9 +596,8 @@ static uint8_t RelayOutput_UpdateChannel(uint32_t channel,
     RelayOutput_CopyRuntimeSnapshot(channel, &state);
     RelayOutput_ConsumeClearCommand(channel, &cfg, &state);
 
-    if ((measurement != NULL) && (measurement->manual_alarm_inhibit != 0U)) {
-        RelayOutput_CommitRuntimeState(channel, &state);
-        return 0U;
+    if (logical_action_active != NULL) {
+        *logical_action_active = 0U;
     }
 
     if ((cfg.operating_mode != RELAY_ALARM_OPERATING_OUTPUT_PASSIVE) ||
@@ -604,7 +624,12 @@ static uint8_t RelayOutput_UpdateChannel(uint32_t channel,
                       RELAY_ALARM_STATE_ACTIVE : RELAY_ALARM_STATE_INACTIVE;
 
     digital_state = RelayOutput_SelectDigitalState(&cfg, &state);
-    coil_active = (digital_state == RELAY_ALARM_STATE_ACTIVE) ? 1U : 0U;
+    /* 屏蔽期间继续计算阈值和锁存，只把最终逻辑动作压为0。 */
+    coil_active = ((digital_state == RELAY_ALARM_STATE_ACTIVE) &&
+                   (alarm_inhibited == 0U)) ? 1U : 0U;
+    if (logical_action_active != NULL) {
+        *logical_action_active = coil_active;
+    }
 
     if (cfg.contact_type == RELAY_ALARM_CONTACT_NORMALLY_CLOSED) {
         coil_active = (coil_active == 0U) ? 1U : 0U;
@@ -621,17 +646,30 @@ static uint8_t RelayOutput_UpdateChannel(uint32_t channel,
 static uint8_t RelayOutput_BuildStateMask(void)
 {
     RelayOutputMeasurementSnapshot measurement;
-    uint8_t mask = 0U;
+    uint8_t physical_mask = 0U;
+    uint8_t logical_action_mask = 0U;
+    uint8_t logical_action_active;
+    uint8_t alarm_inhibited;
 
     RelayOutput_CopyMeasurementSnapshot(&measurement);
+    alarm_inhibited = ((measurement.manual_alarm_inhibit != 0U) ||
+                       (measurement.maintenance_mode_active != 0U)) ? 1U : 0U;
 
     for (uint32_t channel = 0U; channel < RELAY_ALARM_CHANNEL_COUNT; channel++) {
-        if (RelayOutput_UpdateChannel(channel, &measurement) != 0U) {
-            mask |= (uint8_t)(1U << channel);
+        logical_action_active = 0U;
+        if (RelayOutput_UpdateChannel(channel,
+                                      &measurement,
+                                      alarm_inhibited,
+                                      &logical_action_active) != 0U) {
+            physical_mask |= (uint8_t)(1U << channel);
+        }
+        if (logical_action_active != 0U) {
+            logical_action_mask |= (uint8_t)(1U << channel);
         }
     }
 
-    return mask;
+    RelayOutput_CommitPublishedStatus(alarm_inhibited, logical_action_mask);
+    return physical_mask;
 }
 
 /**
@@ -648,8 +686,23 @@ void RelayOutput_Init(void)
         RelayOutput_ResetRuntimeState(&state, &cfg);
         RelayOutput_CommitRuntimeState(channel, &state);
     }
+    RelayOutput_CommitPublishedStatus(0U, 0U);
     RelayOutput_WriteMask(0U);
     relay_output_initialized = 1U;
+}
+
+/**
+ * @brief 请求清除四路继电器锁存报警。
+ * @note 可由主循环调用；只写一次性运行请求，不保存到FRAM。
+ */
+void RelayOutput_RequestClearAllLatchedAlarms(void)
+{
+    uint32_t primask = RelayOutput_EnterCritical();
+
+    for (uint32_t channel = 0U; channel < RELAY_ALARM_CHANNEL_COUNT; channel++) {
+        g_deviceParams.relayAlarm[channel].clear_alarm = RELAY_ALARM_CLEAR_YES;
+    }
+    RelayOutput_ExitCritical(primask);
 }
 
 

@@ -27,7 +27,7 @@
 #define UNVALID_GSW 0                      /* 质量无效值 */
 
 #define MAX_MEASUREMENT_POINTS 200 /* 密度分布测量最大点数。 */
-#define DEVICE_PROTOCOL_VERSION 25u /* CPU2/CPU3共享协议版本；协议25复用reserved3为水位滞后时间预留参数。 */
+#define DEVICE_PROTOCOL_VERSION 27u /* CPU2/CPU3共享协议版本；协议27使用固定分块的直接Modbus地址。 */
 #define FAULT_AUTO_RECOVERY_RETRY_DEFAULT 3u /* 故障自动恢复默认重试次数。 */
 #define FAULT_AUTO_RECOVERY_RETRY_MAX 10u /* 故障自动恢复最大重试次数。 */
 
@@ -42,6 +42,8 @@
 #define AO_FAULT_CURRENT_MAX_MA_X100       2260U
 #define AO_SIMULATION_CURRENT_MIN_MA_X100  340U
 #define AO_SIMULATION_CURRENT_MAX_MA_X100  2300U
+#define AO_CURRENT_CORRECTION_MIN_MA_X100  (-100)
+#define AO_CURRENT_CORRECTION_MAX_MA_X100  100
 #define AO_DAMPING_MAX_X10_S               9999U
 
 typedef enum {
@@ -76,7 +78,7 @@ typedef struct {
     uint32_t work_mode;
     uint32_t current_mode;
     uint32_t output_source;
-    uint32_t sil_whg_reserved;
+    int32_t current_correction_mA_x100;     /* 电流修正值，单位0.01mA，复用原SIL/WHG预留槽 */
     uint32_t fixed_current_mA_x100;
     int32_t range_0_01mm;
     int32_t range_100_01mm;
@@ -434,6 +436,8 @@ typedef enum {
     CMD_RESERVED_CMD5              = 111,
     CMD_RESERVED_CMD6              = 112,
     CMD_PAIR_NEAREST_WIRELESS_SLIPRING = 117, /* 匹配最近无线滑环 */
+    CMD_MAINTENANCE_EXIT           = 118,  /* 退出维护模式 */
+    CMD_CLEAR_ALL_RELAY_LATCHED_ALARMS = 119,  /* 清除全部继电器锁存报警 */
 
     /* ======================= 其他 ======================= */
     CMD_UNKNOWN                    = 255   /* 未知命令 */
@@ -542,9 +546,12 @@ typedef struct {
 
 	/* ---- 标志位 ---- */
 	uint32_t zero_point_status; /* 零点状态（0-正常 1-需要回零） */
-	uint32_t parameter_update_flag; /* parameter update flag */
+	uint32_t parameter_update_flag; /* 参数持久化完成代次；FRAM A/B确认一致后递增 */
     uint32_t loading_unloading_active;        /* /< 装卸液过程标志，供 CPU3/SI 判断工况 */
     uint32_t manual_alarm_inhibit;            /* /< 手动/强制动作期间报警抑制，避免误判为自动测量报警 */
+    uint32_t maintenance_mode_active;         /* /< 非阻塞维护模式，非持久化且不覆盖主运行状态 */
+    uint32_t relay_alarm_inhibit_effective;   /* /< 维护或人工动作造成的继电器最终屏蔽状态 */
+    uint32_t relay_alarm_action_mask;         /* /< bit0~bit3为K1~K4最终逻辑报警动作 */
 } DeviceStatus;
 /* 单点密度数据 */
 typedef struct {

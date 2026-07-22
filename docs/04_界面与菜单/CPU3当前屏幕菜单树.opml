@@ -288,6 +288,7 @@
               <outline text="输出源" />
             </outline>
             <outline text="量程设置">
+              <outline text="电流修正" />
               <outline text="固定电流" />
               <outline text="0%对应值" />
               <outline text="100%对应值" />

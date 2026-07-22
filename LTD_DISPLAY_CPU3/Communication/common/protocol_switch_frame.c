@@ -9,7 +9,7 @@
 /*
  * 函数用途：判断切换帧中的目标协议是否属于当前固件已实现的外部协议。
  * 调用场景：统一切换帧通过地址、功能码和魔术字识别后调用。
- * 关键约束：预留协议值 3、4 不得通过远程切换入口写入 FRAM。
+ * 关键约束：预留协议值 4 不得通过远程切换入口写入 FRAM。
  */
 static uint8_t ProtocolSwitchFrame_IsTargetSupported(uint8_t target)
 {
@@ -18,6 +18,7 @@ static uint8_t ProtocolSwitchFrame_IsTargetSupported(uint8_t target)
     case COM_PROTO_DSM:
     case COM_PROTO_WARTSILA:
     case COM_PROTO_LTD:
+    case COM_PROTO_LH:
     case COM_PROTO_SI:
         return 1U;
 
