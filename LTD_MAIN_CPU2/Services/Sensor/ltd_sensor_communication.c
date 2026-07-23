@@ -311,9 +311,9 @@ static int DSM_V2_CheckReply(const uint8_t tx[8], const uint8_t rx[8]) {
 		return SENSOR_RESP_FORMAT_ERROR;
 	}
 	if (rx[6] == 0xFFU) {
-		printf("V2应答参数为0xFF，仅记录原始帧，不置错误：%02X %02X %02X %02X %02X %02X %02X %02X\r\n",
-		       rx[0], rx[1], rx[2], rx[3], rx[4], rx[5], rx[6], rx[7]);
-		return NO_ERROR;
+		/* 远端仅给出粗粒度失败，不解析数据或猜测更具体原因。 */
+		DSM_V2_RecordDiagnostic("应答远端粗粒度失败", 8U);
+		return SENSOR_REMOTE_INTERNAL_ERROR;
 	}
 	if (rx[6] != expect_param) {
 #ifdef DEBUG_DSM
@@ -377,10 +377,10 @@ int DSM_V2_SwitchMode(dsm_v2_mode_t mode) {
 		/* 先处理异常边界，避免LTD 传感器通信状态机带故障继续运行。 */
 		if (ret == NO_ERROR) {
 			if (attempt > 0) {
-				/* 错误 阶段：重试成功 模块：传感器 操作：切换模式 原因：通信失败 尝试：(attempt + 1)/DSM_V2_MAX_RETRY */
+				/* 错误 阶段：重试成功 模块：传感器 操作：切换模式 原因：最后一次错误码对应原因 尝试：(attempt + 1)/DSM_V2_MAX_RETRY */
 				ErrorLog_Recover(ERROR_LOG_MODULE_SENSOR,
 				                 ERROR_LOG_OP_SWITCH_MODE,
-				                 ERROR_LOG_REASON_COMM_FAIL,
+				                 ErrorLog_GetReasonByCode((uint32_t)last_err),
 				                 (uint32_t)(attempt + 1),
 				                 DSM_V2_MAX_RETRY);
 			}
@@ -461,10 +461,10 @@ int DSM_V2_Read_FloatParam(uint8_t param, float *out_value) {
 			float v = DSM_V2_ParseFloat_LE(rx + 2);
 			*out_value = v;
             if (attempt > 0) {
-                /* 错误 阶段：重试成功 模块：传感器 操作：读取浮点参数 原因：通信失败 尝试：(attempt + 1)/DSM_V2_MAX_RETRY */
+                /* 错误 阶段：重试成功 模块：传感器 操作：读取浮点参数 原因：最后一次错误码对应原因 尝试：(attempt + 1)/DSM_V2_MAX_RETRY */
                 ErrorLog_Recover(ERROR_LOG_MODULE_SENSOR,
                                  ERROR_LOG_OP_READ_FLOAT_PARAM,
-                                 ERROR_LOG_REASON_COMM_FAIL,
+                                 ErrorLog_GetReasonByCode((uint32_t)last_err),
                                  (uint32_t)(attempt + 1),
                                  DSM_V2_MAX_RETRY);
             }
@@ -541,10 +541,10 @@ static int DSM_V2_Read_IntParamInternal(uint8_t param, int32_t *out_value, uint8
 			int32_t v = DSM_V2_ParseInt32_LE(rx + 2);
 			*out_value = v;
 			if ((attempt > 0) && (log_retry != 0U)) {
-				/* 错误 阶段：重试成功 模块：传感器 操作：读取整数参数 原因：通信失败 尝试：(attempt + 1)/DSM_V2_MAX_RETRY */
+				/* 错误 阶段：重试成功 模块：传感器 操作：读取整数参数 原因：最后一次错误码对应原因 尝试：(attempt + 1)/DSM_V2_MAX_RETRY */
 				ErrorLog_Recover(ERROR_LOG_MODULE_SENSOR,
 				                 ERROR_LOG_OP_READ_INT_PARAM,
-				                 ERROR_LOG_REASON_COMM_FAIL,
+				                 ErrorLog_GetReasonByCode((uint32_t)last_err),
 				                 (uint32_t)(attempt + 1),
 				                 DSM_V2_MAX_RETRY);
 			}

@@ -1,6 +1,6 @@
 # CPU2 串口调试命令协议卷
 
-更新日期：2026-07-20
+更新日期：2026-07-23
 
 本文定义 CPU2 本地调试串口的接入参数、文本帧格式、应答口径、命令语法和安全边界。它面向现场调试人员、串口工具配置维护者和固件开发人员；详细过程打印另见 `CPU2串口调试指令与打印信息梳理.md`。
 
@@ -124,6 +124,21 @@ ACK cmd=<原命令>
 
 兼容性说明：单独的 `,1` 保留旧语义“启用传感器通信”；如需明确设置 `1.00 m/min`，应同时给出倍率，例如 `BE200,1.0,1`。
 
+### 7.4 LF 固定频率找液位
+
+`LF` 命令执行一次独立的固定频率找液位调试闭环，不进入持续跟随。频率只决定方向和速度，位置、扭力、通信、丢步和超时只作为停机保护。命令覆盖值仅对本次运行生效，不修改 `DeviceParameters`，不写 FRAM。
+
+| 格式 | 用途 | 约束 |
+| --- | --- | --- |
+| `LF` | 使用当前 `oilLevelFrequency` 和 `oilLevelThreshold` 执行一次找液位 | 目标频率必须为 `1～6500 Hz` |
+| `LF=<frequency>` | 临时覆盖本次目标频率 | `<frequency>` 为 `1～6500 Hz` 整数 |
+| `LF=<frequency>,<deadband>` | 同时临时覆盖目标频率和死区 | 两项均为 `1～6500 Hz` 整数 |
+| `LF?` | 只读打印解析后的频率、位置、扭力和速度限制 | 不调用 `MeasureStart()`，不启动电机 |
+
+闭环方向固定为：`当前频率 > 目标频率 + 死区` 时下行，`当前频率 < 目标频率 - 死区` 时上行；连续三次进入死区后停机并记录当前位置。位置上限沿用 `tankHeight - 100.0 mm`，位置下限使用 `blindZone`；最大扭力由 `full_weight × (100 + zero_weight_threshold_ratio) / 100` 得到，最小扭力使用 `bottom_weight_threshold`。任一限位、通信失败、丢步、搜索超时或新命令都会慢停退出。
+
+运行中发送 `STOP` 可打断闭环。`ACK cmd=LF...` 只表示命令语法已接受；最终结果以 `LF RESULT status=FOUND/ERROR/ABORT ...` 为准。本命令自 CPU2 V1.32.0.0 起提供；CPU2 V1.31.1.0 及更早版本不支持该命令。
+
 ## 8. 重复性、耐久与基础测试
 
 下列命令均必须完整匹配，不接受任何尾随字符：
@@ -190,6 +205,10 @@ ACK cmd=<原命令>
 | 固定调试命令尾随垃圾 | `T1abc`、`YMabc`、`Cabc` | `INVALID_FORMAT`，不调用 `MeasureStart()` |
 | 数值尾随垃圾 | `A+10abc`、`BE200,2,5,X` | `INVALID_FORMAT` |
 | 参数越界 | `BE200,6.1`、`BE200,2,21` | `INVALID_FORMAT` |
+| LF 默认参数查询 | `LF?` | 返回 `LF CONFIG ...`，不调用 `MeasureStart()`、不启动电机 |
+| LF 临时参数 | `LF=5200,15` | `ACK` 后执行一次闭环，覆盖值不写 FRAM |
+| LF 参数越界 | `LF=0`、`LF=6501`、`LF=5200,0` | `INVALID_FORMAT`，不启动电机 |
+| LF 命令切换 | `LF` 运行中发送 `STOP` | 当前闭环慢停并打印 `status=ABORT`，随后主循环执行停止命令 |
 | 通用停止 | `STOP` | 先 `ACK`，再经主循环执行 `CMD_CANCEL_MEASUREMENT` |
 | 查询只读 | `VER?`、`STAT?`、`ERR?` | 返回查询数据，不启动电机和测量 |
 | 超长输入 | 64 字节正文后发送 `LF` | 整行丢弃，主循环返回 `CMD_TOO_LONG` |
@@ -199,6 +218,7 @@ ACK cmd=<原命令>
 
 - `LTD_MAIN_CPU2/Application/Src/serial_command_parser.c`
 - `LTD_MAIN_CPU2/Application/Src/serial_command.c`
+- `LTD_MAIN_CPU2/Application/Src/fixed_frequency_level_search.c`
 - `LTD_MAIN_CPU2/Application/Src/measure.c`
 - `LTD_MAIN_CPU2/Application/Src/test.c`
 - `LTD_MAIN_CPU2/Application/Src/app_main.c`

@@ -792,15 +792,18 @@ static uint32_t BuildPoints_Meter_Exact(int32_t oil_level_01mm,
  */
 static uint32_t BuildPoints_Interval_Exact(int32_t oil_level_01mm,
                                            int32_t *out_p01,
+                                           uint32_t out_capacity,
                                            uint32_t *out_n)
 {
-    if (!out_p01 || !out_n) return SYSTEM_CALL_CONDITION_ERROR;
+    if (!out_n) return SYSTEM_CALL_CONDITION_ERROR;
+    *out_n = 0U;
+    if (!out_p01) return SYSTEM_CALL_CONDITION_ERROR;
 
     uint32_t high_min;
     int32_t  high_a, high_b;
     uint32_t dis;
-    int c_num;
-    int8_t i;
+    uint32_t c_num;
+    uint32_t i;
 
     high_min = (uint32_t)g_deviceParams.blindZone;
 
@@ -814,10 +817,13 @@ static uint32_t BuildPoints_Interval_Exact(int32_t oil_level_01mm,
     /* 先处理异常边界，避免密度测量状态机带故障继续运行。 */
     if (high_b >= high_a) return MEASUREMENT_DENSITY_PLAN_INVALID;
 
-    c_num = (int)g_deviceParams.spreadMeasurementCount;
-    /* 先处理异常边界，避免密度测量状态机带故障继续运行。 */
-    if (c_num <= 0) return MEASUREMENT_DENSITY_PLAN_INVALID;
-    if (c_num > (int)MAX_MEASUREMENT_POINTS) c_num = MAX_MEASUREMENT_POINTS;
+    c_num = g_deviceParams.spreadMeasurementCount;
+    /* 点数必须在调用方容量内，非法配置不得静默钳位或部分写入。 */
+    if ((c_num == 0U) ||
+        (c_num > MAX_MEASUREMENT_POINTS) ||
+        (c_num > out_capacity)) {
+        return MEASUREMENT_DENSITY_PLAN_INVALID;
+    }
 
     if (high_a >= (int32_t)g_deviceParams.tankHeight) {
         return MEASUREMENT_DENSITY_PLAN_INVALID;
@@ -827,13 +833,13 @@ static uint32_t BuildPoints_Interval_Exact(int32_t oil_level_01mm,
         return MEASUREMENT_DENSITY_PLAN_INVALID;
     }
 
-    if (c_num == 1) {
+    if (c_num == 1U) {
         out_p01[0] = (g_deviceParams.spreadMeasurementOrder == 0) ? high_a : high_b;
-        *out_n = 1;
+        *out_n = 1U;
         return NO_ERROR;
     }
 
-    if (c_num == 2) {
+    if (c_num == 2U) {
         if (g_deviceParams.spreadMeasurementOrder == 0) {
             out_p01[0] = high_a;
             out_p01[1] = high_b;
@@ -841,25 +847,25 @@ static uint32_t BuildPoints_Interval_Exact(int32_t oil_level_01mm,
             out_p01[0] = high_b;
             out_p01[1] = high_a;
         }
-        *out_n = 2;
+        *out_n = 2U;
         return NO_ERROR;
     }
 
-    dis = (uint32_t)(i32_abs(high_a - high_b) / (uint32_t)(c_num - 1));
+    dis = (uint32_t)i32_abs(high_a - high_b) / (c_num - 1U);
 
     if (g_deviceParams.spreadMeasurementOrder == 0) {
         for (i = 0; i < c_num; i++) {
-            out_p01[i] = high_a - (int32_t)(dis * (uint32_t)i);
+            out_p01[i] = high_a - (int32_t)(dis * i);
         }
         out_p01[c_num - 1] = high_b;
     } else {
         for (i = 0; i < c_num; i++) {
-            out_p01[i] = high_b + (int32_t)(dis * (uint32_t)i);
+            out_p01[i] = high_b + (int32_t)(dis * i);
         }
         out_p01[c_num - 1] = high_a;
     }
 
-    *out_n = (uint32_t)c_num;
+    *out_n = c_num;
     return NO_ERROR;
 }
 
@@ -910,7 +916,11 @@ uint32_t Density_MeasureByMode_Exact(DensitySpreadModeId mode, DensityDistributi
         PrintPoints01mm("每米测", points01, n);
     }
     else if (mode == DENS_MODE_INTERVAL) {
-        ret = BuildPoints_Interval_Exact(oil_level_01mm, points01, &n);
+        ret = BuildPoints_Interval_Exact(
+            oil_level_01mm,
+            points01,
+            (uint32_t)(sizeof(points01) / sizeof(points01[0])),
+            &n);
         /* 先处理异常边界，避免密度测量状态机带故障继续运行。 */
         if (ret != NO_ERROR) return ret;
         PrintPoints01mm("区间测", points01, n);
@@ -1861,10 +1871,11 @@ void CMD_MeasureDensitySpread_Interval(void)
     if (ret == STATE_SWITCH) {
         return;
     }
-    /* 先处理异常边界，避免密度测量状态机带故障继续运行。 */
+    /* 区间测失败时禁止发布空结果或部分结果，也不得进入完成态。 */
     if (ret != NO_ERROR) {
         printf("区间测\t失败，错误码=0x%08lX\r\n", (unsigned long)ret);
         SET_ERROR(ret);
+        return;
     }
 
     Print_DensitySpreadResult(&temp);

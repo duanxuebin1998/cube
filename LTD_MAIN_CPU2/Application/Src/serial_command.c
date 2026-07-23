@@ -37,6 +37,7 @@ static void SerialCommand_PrintHelp(void)
     printf("HELP 运动：A0/A+mm/A-mm/B/BE/BJ/BJP\r\n");
     printf("HELP 通信与诊断：SC/SPC/SPS/SPR/SPN=<name>/YS/YC/YT\r\n");
     printf("HELP 测试：C/D/E/F/H/J/L/M/N/T0-TU/AO/X\r\n");
+    printf("HELP 找液位：LF/LF=<频率Hz>[,<死区Hz>]/LF?，STOP=停止\r\n");
     printf("HELP 详细参数见《CPU2串口调试命令协议卷》\r\n");
 }
 

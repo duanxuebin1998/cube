@@ -166,6 +166,38 @@ static void lh_build_exception(uint8_t address,
 }
 
 /*
+ * 函数用途：兼容 LH 主机的 FC01 读线圈请求。
+ * 调用场景：主机读取 LH 连续命令线圈区时调用。
+ * 关键约束：线圈仅作为命令写入口，合法读请求统一返回 0，不回显历史命令或运行状态。
+ */
+static void lh_handle_read_coils(uint8_t address,
+                                 uint16_t start,
+                                 uint16_t count,
+                                 uint8_t *tx,
+                                 uint16_t *tx_len)
+{
+    uint16_t byte_count;
+
+    if ((count == 0U) || (count > LH_MODBUS_MAX_READ_COILS)) {
+        lh_build_exception(address, LH_MODBUS_FUNC_READ_COILS,
+                           LH_MODBUS_EX_ILLEGAL_VALUE, tx, tx_len);
+        return;
+    }
+    if (((uint32_t)start + (uint32_t)count) > LH_COIL_COUNT) {
+        lh_build_exception(address, LH_MODBUS_FUNC_READ_COILS,
+                           LH_MODBUS_EX_ILLEGAL_ADDRESS, tx, tx_len);
+        return;
+    }
+
+    byte_count = (uint16_t)((count + 7U) / 8U);
+    tx[0] = address;
+    tx[1] = LH_MODBUS_FUNC_READ_COILS;
+    tx[2] = (uint8_t)byte_count;
+    memset(&tx[3], 0, byte_count);
+    lh_append_crc(tx, (uint16_t)(3U + byte_count), tx_len);
+}
+
+/*
  * 函数用途：把 CPU2 内部设备状态投影为 LH 手册定义的现场状态码。
  * 调用场景：生成 LH 输入寄存器中的设备状态。
  * 关键约束：只发布 LH 手册明确支持的状态；其它协议或屏幕触发的内部状态
@@ -795,6 +827,14 @@ LhModbusResult lh_modbus_process(const uint8_t *rx,
 
     function = rx[1];
     switch (function) {
+    case LH_MODBUS_FUNC_READ_COILS:
+        if (rx_len != 8U) {
+            lh_build_exception(address, function, LH_MODBUS_EX_ILLEGAL_VALUE, tx, tx_len);
+            return LH_MODBUS_OK;
+        }
+        lh_handle_read_coils(address, lh_be16(&rx[2]), lh_be16(&rx[4]), tx, tx_len);
+        return LH_MODBUS_OK;
+
     case LH_MODBUS_FUNC_READ_HOLDING_REGS:
     case LH_MODBUS_FUNC_READ_INPUT_REGS:
         if (rx_len != 8U) {

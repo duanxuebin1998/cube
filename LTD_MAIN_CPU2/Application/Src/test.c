@@ -8,6 +8,7 @@
 #include <ltd_sensor_communication.h>
 #include "test.h"
 #include "serial_command_parser.h"
+#include "fixed_frequency_level_search.h"
 #include "measure.h"
 #include "measure_density.h"
 #include "motor_ctrl.h"
@@ -1535,6 +1536,7 @@ uint8_t Test_ProcessSerialCommand(uint8_t *command)
     uint32_t ret = NO_ERROR;
     TestCommandDebugDisplaySnapshot debug_display = { STATE_STANDBY, 0U };
 
+
     if ((command == NULL) || (command[0] == '\0')) {
         return 0U;
     }
@@ -1542,6 +1544,12 @@ uint8_t Test_ProcessSerialCommand(uint8_t *command)
     /* 只有通过严格校验的测试命令才能进入旧动作分发器，避免前缀误执行。 */
     if (SerialCommandParser_Parse(command).kind != SERIAL_COMMAND_KIND_TEST) {
         return 0U;
+    }
+
+    if ((command[0] == 'L') && (command[1] == 'F') &&
+        (command[2] == '?')) {
+        FixedFrequencyLevelSearch_PrintCurrentConfig();
+        return 1U;
     }
 
     if (TestCommand_HandleAoOutputTest(command) != 0U) {
@@ -1642,6 +1650,14 @@ uint8_t Test_ProcessSerialCommand(uint8_t *command)
             printf("串口命令\t启动失败\t电机初始化错误码=0x%08lX\\r\\n", (unsigned long)ret);
             return 1U;
         }
+    }
+    if ((command[0] == 'L') && (command[1] == 'F')) {
+        Test_EnterDebugDisplayState(&debug_display);
+        ret = FixedFrequencyLevelSearch_Run(command);
+        Test_RestoreDebugDisplayState(&debug_display);
+        Test_ProcessCommandWarnFailure("固定频率找液位", ret);
+        printf("LF COMMAND done code=0x%08lX\r\n", (unsigned long)ret);
+        return 1U;
     }
     if (command[0] == 'A') {
         Test_EnterDebugDisplayState(&debug_display);

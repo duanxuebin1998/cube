@@ -2633,3 +2633,40 @@ CPU3通信和界面：
 - 尚未在目标板测量TIM4实际250毫秒节拍、IWDG的LSI偏差、瞬时/持续ISR占用下的复位时间，以及继电器、AO和UART恢复仍保持约2秒周期。
 - 尚未用CPU2/CPU3实机逐项验证待机、完成态、持续态、活动命令、待执行命令、自动故障恢复和错误态的屏幕/LH/DSM/Wärtsilä/SI/LTD持久参数写入矩阵。
 - 静态契约和clean-first构建不能替代FRAM写失败/掉电、RS485并发、真实LH主机和现场参数修正流程验证。
+
+## 2026-07-23 - 新增固定频率找液位、LH FC01并修复区间测量与传感器失败传播
+
+版本：
+- CPU2：`V1.31.1.0 -> V1.32.0.0`（MINOR）。
+- CPU3：`V1.31.1.0 -> V1.32.0.0`（MINOR）。
+
+协议版本与兼容性：
+- CPU2/CPU3 `DEVICE_PROTOCOL_VERSION`保持27；本次不改变板间共享寄存器地址、字段布局、命令值或参数语义。
+- CPU2 `DEVICE_PARAM_VERSION`保持3，`DeviceParameters`大小、字段偏移、`struct_size`、CRC范围和FRAM A/B地址不变；升级不恢复出厂、不清除现场参数。
+- CPU3本机参数版本保持V7 / `0x0007`；LH新增FC01属于CPU3外部协议能力，不改变CPU3本机FRAM布局。
+
+本次修改：
+- CPU2新增`LF`、`LF=<频率>[,<死区>]`和`LF?`串口调试命令：执行一次固定频率找液位闭环，按频差决定方向和速度，并以位置、扭力、传感器通信、丢步、命令切换和10分钟超时作为停机保护；临时覆盖值不写参数或FRAM。
+- CPU2区间密度点规划把点数和索引统一为32位无符号类型，显式传入输出容量；0点、超过200点或超过容量时直接失败并保持输出点数为0，不再静默钳位。区间测量失败后不再发布空/部分点阵，也不进入完成态。
+- LTD/V2响应第7字节为`0xFF`时映射到现有`SENSOR_REMOTE_INTERNAL_ERROR`并进入有限重试，失败帧不再被当作成功解析；重试恢复日志记录最后一次具体错误原因。
+- CPU3 LH从站新增FC01读线圈兼容：合法`0x0000～0x0010`范围统一返回全0位图，不回显历史命令或运行状态；数量0、超过2000或越界分别返回标准Modbus异常。
+- 同步CPU2串口调试协议卷、LH协议索引和16页LH Word手册；更新高价值问题分批方案、需求索引和故障码复核口径。
+
+关键源码与边界：
+- LF链路为 `SerialCommandParser_Parse()` → `Test_ProcessSerialCommand()` → `FixedFrequencyLevelSearch_Run()`；默认目标/死区来自现有参数但本次覆盖仅驻留单次运行。必须覆盖语法、0/6500边界、方向切换、连续3次稳定、STOP/新命令、位置/扭力/通信/丢步和10分钟超时，所有退出都要先安全停机。
+- `BuildPoints_Interval_Exact()`把点数、索引和容量统一为32位无符号，入口先清 `out_n`；必须覆盖0、127、128、129、199、200、201和canary。`CMD_MeasureDensitySpread_Interval()`失败后立即返回，不发布空/部分点阵或完成态。
+- `DSM_V2_CheckReply()`在功能码校验后把应答第7字节 `0xFF`映射为 `SENSOR_REMOTE_INTERNAL_ERROR`；模式、浮点和整数读取只提交完整成功帧，有限重试耗尽后保留最后一次具体失败原因。
+- LH `lh_handle_read_coils()`只接受1～2000且不越过17线圈范围的8字节FC01请求，合法响应按位打包全0；该全0口径只用于兼容探测，不是命令历史或状态回读。
+- 本提交精确包含22个Git文件：10个CPU2/CPU3业务源码与工程文件、2个版本头、`CHANGELOG.md`、1份版本方案及8项正式协议/需求/问题资料；3个未跟踪PDF及本机工具、流程、构建产物均排除。
+
+验证：
+- `cmake --build build\LTD_MAIN_CPU2 --clean-first`：通过；最终V1.32.0.0产物为`text=312420`、`data=2328`、`bss=57832`。
+- `cmake --build build\LTD_DISPLAY_CPU3 --clean-first`：62步通过；最终V1.32.0.0产物为`text=198112`、`data=37964`、`bss=100716`。
+- 主机编译并运行 `tools/test_serial_command_parser.c`，LF合法/非法/边界及CRLF/LF用例通过。
+- `py -X utf8 tools/check_sensor_fault_contract.py`、`check_density_profile_publish_contract.py`和`check_parameter_measurement_fault_contract.py`通过；C/C++新增/修改行未新增`//`注释。
+- LH Word手册完成16页逐页渲染检查，未见裁切、重叠或乱码。
+
+未验证风险：
+- 尚未用真实电机、传感器和扭力输入验证LF闭环方向、速度、稳定确认、机械边界、STOP打断、丢步和10分钟超时。
+- 尚未完成128～200点区间测量canary/目标板回归、LTD/V2 `0xFF`真实或golden frame注入、LH FC01现场主机和RS485异常帧测试。
+- clean-first构建和静态契约不能替代CPU2/CPU3交叉烧写、真实机械运动、传感器故障注入及长时间并发测试。

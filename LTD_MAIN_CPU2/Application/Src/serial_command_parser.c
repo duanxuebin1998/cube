@@ -1,4 +1,5 @@
 #include "serial_command_parser.h"
+#include "fixed_frequency_level_search.h"
 
 #include <math.h>
 #include <string.h>
@@ -60,6 +61,37 @@ static uint8_t SerialCommandParser_ParseUnsigned(const char **cursor,
     return 1U;
 }
 
+/* 校验 LF、LF? 和 LF=<目标频率>[,<死区>] 固定频率找液位调试命令。 */
+static uint8_t SerialCommandParser_ParseLf(const uint8_t *command)
+{
+    const char *cursor;
+
+    if ((SerialCommandParser_IsExact(command, "LF") != 0U) ||
+        (SerialCommandParser_IsExact(command, "LF?") != 0U)) {
+        return 1U;
+    }
+    if (command[2] != '=') {
+        return 0U;
+    }
+
+    cursor = (const char *)&command[3];
+    if (SerialCommandParser_ParseUnsigned(
+            &cursor, 1UL, FIXED_FREQUENCY_LEVEL_MAX_HZ, NULL) == 0U) {
+        return 0U;
+    }
+    if (*cursor == '\0') {
+        return 1U;
+    }
+    if (*cursor++ != ',') {
+        return 0U;
+    }
+    return (uint8_t)((SerialCommandParser_ParseUnsigned(
+                              &cursor,
+                              1UL,
+                              FIXED_FREQUENCY_LEVEL_MAX_HZ,
+                              NULL) != 0U) &&
+                     (*cursor == '\0'));
+}
 /* 解析不带符号和指数的十进制数，并执行有限值和范围检查。 */
 static uint8_t SerialCommandParser_ParseDecimal(const char **cursor,
                                                 double minimum,
@@ -325,6 +357,11 @@ SerialCommandParseResult SerialCommandParser_Parse(const uint8_t *command)
         return result;
     }
 
+    if ((command[0] == 'L') && (command[1] == 'F')) {
+        result.kind = (SerialCommandParser_ParseLf(command) != 0U) ?
+                      SERIAL_COMMAND_KIND_TEST : SERIAL_COMMAND_KIND_INVALID;
+        return result;
+    }
     if ((command[0] == 'A') && (command[1] == 'O')) {
         result.kind = (SerialCommandParser_ParseAo(command) != 0U) ?
                       SERIAL_COMMAND_KIND_TEST : SERIAL_COMMAND_KIND_INVALID;
