@@ -139,11 +139,15 @@ py tools\generate_cpu2_serial_command_panel.py --check
 ### 6.2 编译解析器测试
 
 ```powershell
+$taskId = "cpu2-serial-panel-$(Get-Date -Format 'yyyyMMdd-HHmmss')"
+$testBuildDir = [IO.Path]::GetFullPath((Join-Path (Get-Location) "tmp\$taskId\build"))
+[void][IO.Directory]::CreateDirectory($testBuildDir)
+
 gcc -std=c11 -Wall -Wextra -Werror `
   -I LTD_MAIN_CPU2/Application/Inc `
   LTD_MAIN_CPU2/Application/Src/serial_command_parser.c `
   tools/test_serial_command_parser.c -lm `
-  -o build/serial_command_parser_tests.exe
+  -o "$testBuildDir\serial_command_parser_tests.exe"
 ```
 
 ### 6.3 用实际解析器校验全部面板 payload
@@ -153,7 +157,7 @@ $panel = Get-Content -Raw -Encoding UTF8 `
   "docs\01_协议与寄存器\CPU2通信与解耦\串口助手命令面板\CPU2串口助手命令面板配置.json" `
   | ConvertFrom-Json
 $payloads = @($panel.items.commands.payload)
-& .\build\serial_command_parser_tests.exe $payloads
+& "$testBuildDir\serial_command_parser_tests.exe" $payloads
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 ```
 

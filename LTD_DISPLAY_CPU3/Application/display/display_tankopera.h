@@ -246,6 +246,8 @@ typedef enum
     COM_NUM_AO_RUNTIME_PROCESS_VALUE = 1002,/* AO 输入值，只读运行态 */
     COM_NUM_AO_RUNTIME_PERCENT = 1003,      /* AO 输入百分比，只读运行态 */
     COM_NUM_AO_RUNTIME_OUTPUT_CURRENT = 1004, /* AO 最近成功下发电流，只读运行态 */
+    COM_NUM_MAINTENANCE_EXIT = 1005,        /* 退出维护模式；CPU3 屏幕操作码，不等同于 CPU2 命令号 */
+    COM_NUM_CLEAR_ALL_RELAY_LATCHED_ALARMS = 1006, /* 清全部继电器锁存；CPU3 屏幕操作码 */
 
     COM_NUM_DEBUGCMD_STOP = COM_NUM_MAINTENANCE_MODE + 1, /* 调试模式无参指令 - 结束 */
 

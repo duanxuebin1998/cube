@@ -1160,7 +1160,7 @@ static uint8_t StockMap[] = "通讯尝试中液位跟随密度温℃版本水测
                             "大英更传层滞域使磨结束针总阻六级内息命感顺有阈值角导本整瓦锡兰厚首波特率验位奇偶预留默强差"
 							"义已碰撞寄存次菜忽略志构魔术望全过收为裁剪准除以跳飞频声稳记局切匹"
 							"馈被荷泵欠驱丢溢性弱响应格快越漂移饱和系统因尼组跑锁隔策亮控扭"
-                            "持身代会话需要握拒绝允许尚忙采样果名站普";
+                            "持身代会话需要握拒绝允许尚忙采样果名站普求";
 static const int wordbyte      = 3; /* UTF-8 下汉字 3 字节 */
 static const int StockmapLength = (sizeof(StockMap) - 1) / wordbyte;
 static uint8_t WordStock[255 * 28] =
@@ -1650,6 +1650,7 @@ static uint8_t WordStock2[255 * 28] =
     0x04,0x00,0x04,0x00,0x0F,0xF0,0x10,0x20,0x68,0x40,0x04,0x80,0x03,0x00,0x0C,0x00,0x3F,0xF0,0xD0,0x10,0x10,0x10,0x10,0x10,0x1F,0xF0,0x10,0x10, /* "名",48 */
     0x20,0x80,0x10,0x80,0x10,0x80,0xF8,0xF8,0x00,0x80,0x08,0x80,0x88,0x80,0x4B,0xF0,0x52,0x10,0x52,0x10,0x02,0x10,0x1A,0x10,0xE3,0xF0,0x02,0x10, /* "站",49 */
     0x10,0x40,0x08,0x80,0x7F,0xF0,0x08,0x80,0x48,0x90,0x28,0xA0,0xFF,0xF8,0x00,0x00,0x3F,0xE0,0x20,0x20,0x3F,0xE0,0x20,0x20,0x3F,0xE0,0x20,0x20, /* "普",50 */
+    0x02,0x00,0x02,0x40,0x02,0x20,0xFF,0xF8,0x02,0x00,0x42,0x10,0x22,0x20,0x27,0x40,0x0A,0x80,0x12,0x40,0x22,0x20,0xC2,0x18,0x02,0x00,0x0E,0x00, /* "求",51 */
 };
 static uint8_t NumberStock[] = {
 
@@ -3919,29 +3920,58 @@ static void DIS_Equipment(void)
     uint8_t lang = screen_parameter.language;
     bool protocol_compatible = IsCpu2ProtocolCompatible();
     bool protocol_mismatch = IsCpu2ProtocolMismatch();
-    bool ao_simulation_active = protocol_compatible &&
-                                (g_measurement.ao_output_runtime.simulation_enabled != 0U);
-    static bool ao_simulation_badge_visible = false;
-    static uint8_t ao_simulation_badge_row = OLED_ROW4_1;
+    bool runtime_snapshot_valid = CPU2_CommHasRuntimeSnapshot();
+    bool maintenance_active;
+    bool maintenance_unknown;
+    bool ao_simulation_active;
+    const char *badge_text = NULL;
+    uint8_t badge_line = OLED_LINE8_8;
+    static bool maintenance_last_confirmed_active = false;
+    static bool status_badge_visible = false;
+    static uint8_t status_badge_row = OLED_ROW4_1;
 
     if (lang > 1) lang = 1;
     row = FlagofTotalTwoRow ? OLED_ROW4_2 : OLED_ROW4_1;
 
     /*
-     * 仿真开启期间在状态栏持续反显“模拟”，占用原电机图标区域。
-     * 切换行或关闭仿真时先清除旧徽标，避免增量刷新残留维护态提示。
+     * 维护态只信任当前完整运行快照。曾确认维护开启后若快照失效，保留维护未知提示，
+     * 直到新快照明确确认关闭，避免通信抖动把仍可能有效的维护态显示成普通运行。
      */
-    if (ao_simulation_badge_visible && (ao_simulation_badge_row != (uint8_t)row)) {
-        OLED_ClearArea(OLED_LINE8_8,
-                       ao_simulation_badge_row,
-                       (uint8_t)(OLED_LINE8_END - OLED_LINE8_8 + 1U),
+    if (runtime_snapshot_valid) {
+        maintenance_active = (g_measurement.device_status.maintenance_mode_active != 0U);
+        maintenance_last_confirmed_active = maintenance_active;
+        maintenance_unknown = false;
+    } else {
+        maintenance_active = false;
+        maintenance_unknown = maintenance_last_confirmed_active;
+    }
+    ao_simulation_active = runtime_snapshot_valid && protocol_compatible &&
+                           (g_measurement.ao_output_runtime.simulation_enabled != 0U);
+
+    if (maintenance_unknown) {
+        badge_text = (lang == LANGUAGE_CHINESE) ? "维护?" : "MNT?";
+        badge_line = (lang == LANGUAGE_CHINESE) ? OLED_LINE8_7 : OLED_LINE8_6;
+    } else if (maintenance_active && ao_simulation_active) {
+        badge_text = (lang == LANGUAGE_CHINESE) ? "维模" : "M/S";
+        badge_line = (lang == LANGUAGE_CHINESE) ? OLED_LINE8_8 : OLED_LINE8_7;
+    } else if (maintenance_active) {
+        badge_text = (lang == LANGUAGE_CHINESE) ? "维护" : "MNT";
+        badge_line = (lang == LANGUAGE_CHINESE) ? OLED_LINE8_8 : OLED_LINE8_7;
+    } else if (ao_simulation_active) {
+        badge_text = (lang == LANGUAGE_CHINESE) ? "模拟" : "SIM";
+        badge_line = (lang == LANGUAGE_CHINESE) ? OLED_LINE8_8 : OLED_LINE8_7;
+    }
+
+    /* 徽标最长四字符，统一清除右侧四列；换行时同时清除旧行，防止增量刷新残留。 */
+    if (status_badge_visible && (status_badge_row != (uint8_t)row)) {
+        OLED_ClearArea(OLED_LINE8_6,
+                       status_badge_row,
+                       (uint8_t)(OLED_LINE8_END - OLED_LINE8_6 + 1U),
                        OLED_ROW4_2);
     }
-    OLED_ClearArea((ao_simulation_active || ao_simulation_badge_visible) ? OLED_LINE8_8 : OLED_LINE8_9,
+    OLED_ClearArea(OLED_LINE8_6,
                    (uint8_t)row,
-                   (uint8_t)(OLED_LINE8_END -
-                             ((ao_simulation_active || ao_simulation_badge_visible) ? OLED_LINE8_8 : OLED_LINE8_9) +
-                             1U),
+                   (uint8_t)(OLED_LINE8_END - OLED_LINE8_6 + 1U),
                    OLED_ROW4_2);
 
     /* 协议不匹配是整机状态问题，优先覆盖普通运行状态，避免用户只在参数页才看到。 */
@@ -3959,9 +3989,9 @@ static void DIS_Equipment(void)
 		line = OledDisplayLineWords((uint8_t*)err_text, line, row, 0);
     }
 
-    if (ao_simulation_active) {
-        OledDisplayLineWords((uint8_t*)((lang == LANGUAGE_CHINESE) ? "模拟" : "SIM"),
-                             OLED_LINE8_8,
+    if (badge_text != NULL) {
+        OledDisplayLineWords((uint8_t*)badge_text,
+                             badge_line,
                              (uint8_t)row,
                              1U);
     } else {
@@ -3969,8 +3999,8 @@ static void DIS_Equipment(void)
         write_hanzi16(OLED_LINE8_9, row, (uint8_t*)MotorRunIcon16Stock,
                       motor_icon_index, motor_icon_index + 1U, 0);
     }
-    ao_simulation_badge_visible = ao_simulation_active;
-    ao_simulation_badge_row = (uint8_t)row;
+    status_badge_visible = (badge_text != NULL);
+    status_badge_row = (uint8_t)row;
 }
 
 

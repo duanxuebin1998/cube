@@ -2556,3 +2556,43 @@ CPU3通信和界面：
 - 固定地址数组使双端BSS明显增加，链接通过不能替代启动、栈余量和长稳验证；LH参数强确认最长同步等待约1.5秒，其对其它COM、OLED和看门狗的影响仍需并发台架记录。
 - FRAM持久化失败时CPU2已更新的RAM参数不会回滚；LH会对外返回失败，但同次上电期间RAM读回可能仍是新值。
 - 本机旧协议事实提取工具仍固化协议25紧凑地址和旧命令集合，当前失败不列为本版通过项，需后续单独升级工具基线。
+
+## 2026-07-23 - CPU3维护显示闭环、LH状态投影与文档治理
+
+版本：
+- CPU2：保持 `V1.31.0.0`。
+- CPU3：`V1.30.0.0 -> V1.31.0.0`（MINOR）。
+
+协议版本与兼容性：
+- CPU2/CPU3 `DEVICE_PROTOCOL_VERSION`保持27；固定功能块地址、命令118/119、AO修正、维护及继电器运行态的共享字段布局不变，双端仍必须使用协议27配套运行。
+- CPU2 `DEVICE_PARAM_VERSION`保持3，`DeviceParameters`结构、字段偏移、CRC范围和FRAM A/B地址不变；本次不改CPU2固件产物，不触发清参。
+- CPU3本机参数版本保持V7 / `0x0007`；新增屏幕操作码、徽标状态和LH投影均不进入CPU3本机FRAM布局。
+
+本次修改：
+- CPU3系统维护菜单根据完整CPU2运行快照切换“进入维护模式”/“退出维护模式”；快照无效时显示维护状态未知且禁止下发，避免把未知误判为可进入状态。
+- 补齐退出维护和清除全部继电器锁存报警的菜单名称、二次确认、命令映射、发送回执及返回路径；“指令已发送”与CPU2最终执行结果明确分层。
+- 状态栏统一显示维护、AO仿真及叠加徽标；已确认维护开启后遇快照失效显示“维护?”，直到新快照明确关闭，并清理切行和长度变化时的残留区域。
+- K1～K4继电器运行态页增加“动作禁用”和“最终动作”；快照无效时字段统一显示 `N/A`。最终动作仍是维护/人工禁用处理后的逻辑动作，不是NO/NC反相后的物理触点反馈。
+- CPU3字库按用户提供的14×14点阵补入“求”字，同步 `StockMap` 和 `WordStock2`索引。
+- LH设备状态只发布LH手册明确支持的内部状态及水位/罐高标定映射；其它协议或屏幕专用内部状态统一投影为待机，避免对LH主机暴露未定义码值。
+- 整理CPU2串口助手说明、电机方案/台架资料和2026-07-23全量问题双格式总账；迁移重复资料到 `docs/02_需求与计划/` 与 `docs/05_测试记录/`，删除旧位置重复副本，并更新正式索引。
+- 增加仓库根目录、固件构建目录与临时产物门禁；`tools/`、`docs/00_程序流程导航/`、`docs-site/`和临时/构建产物仍仅本机维护，不纳入本次提交。
+
+关键源码与边界：
+- 维护菜单闭环位于 `display_tankopera.c` 的 `menu_debug_system()`、`screen_operation_is_no_para_command()`、`ifsendcmd()`和`cmd_nopara_process()`；必须覆盖普通/维护/快照无效、确认/取消、发送失败和状态刷新竞态，CPU3“已发送”不能替代CPU2最终执行结果。
+- 状态栏由 `display.c` 的 `DIS_Equipment()`统一维护徽标及清屏范围；继电器页由 `relay_status_state_of()`和`display_relay_status_row()`读取Block/Action。必须覆盖维护+仿真、维护后断链、字符串长短切换、K1～K4及快照失效 `N/A`。
+- “求”字同时追加到 `StockMap` 与 `WordStock2`同一索引；静态字库检查只能证明索引和缺字，不证明OLED位序、偏移、笔画和残影。
+- LH状态由 `lh_translate_device_state()`显式白名单投影；水位/罐高标定保留专用映射，其它协议、屏幕、保留和未知内部态统一为待机，不改变CPU2原始状态或其它协议。
+- 本提交精确包含61个Git文件：4个CPU3业务源码、1个CPU3版本头、`AGENTS.md`、`CHANGELOG.md`及54项正式资料变更/迁移/删除；新PDF、`tools/`、流程导航、`docs-site/`和临时构建产物均排除。
+
+验证：
+- `py -X utf8 LTD_DISPLAY_CPU3/font_check.py`通过，475个字索引一致、1100个OLED字符串缺字为0；`check_cpu3_menu_name_width.py`、`check_cpu3_display_command_contract.py`和`check_cpu3_display_isr_boundaries.py`通过。
+- `check_ao_output_enable_contract.py`、`check_wireless_rssi_contract.py`、`check_fixed_point_generation_contract.py`和`check_cpu3_cpu2_comm_timeout_fault_contract.py`通过；LH状态白名单完成针对性源码/主机契约检查。
+- 文档结构、305份Markdown链接、XMind/OPML结构和Git差异门禁通过；静态结果不替代按键、OLED残影、RS485和继电器实测。
+- `cmake --build build\LTD_MAIN_CPU2 --clean-first`：92步通过，生成`LTD_MAIN_CPU2_V1.31.0.0.hex`；ELF为`text=309452`、`data=2328`、`bss=57832`。
+- `cmake --build build\LTD_DISPLAY_CPU3 --clean-first`：62步通过，生成`LTD_DISPLAY_CPU3_V1.31.0.0.hex`；ELF为`text=197280`、`data=37964`、`bss=100716`。
+- 《LNG计量仪屏幕菜单》Word已同步CPU3 V1.31.0.0并重新渲染检查；不为本次提交新增PDF。
+
+未验证风险：
+- 尚未完成OLED真机显示、按键确认/返回、维护快照失效、进入/退出/清锁存时序、继电器物理触点和LH现场主机状态码回归。
+- 静态契约、Word渲染和构建成功不能替代真实CPU2/CPU3交叉烧写、RS485并发/故障注入、FRAM掉电、AO电流环或继电器台架验收。

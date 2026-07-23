@@ -166,13 +166,37 @@ static void lh_build_exception(uint8_t address,
 }
 
 /*
- * 函数用途：把水位和罐高标定状态翻译到 LH 手册沿用的现场状态码。
+ * 函数用途：把 CPU2 内部设备状态投影为 LH 手册定义的现场状态码。
  * 调用场景：生成 LH 输入寄存器中的设备状态。
- * 关键约束：未列入 LH 的其它内部状态保持原值，不伪装成 LH 已定义状态。
+ * 关键约束：只发布 LH 手册明确支持的状态；其它协议或屏幕触发的内部状态
+ *           统一投影为待机，避免在 LH 侧与既有状态码产生歧义。
  */
 static uint16_t lh_translate_device_state(DeviceState state)
 {
     switch (state) {
+    case STATE_STANDBY:
+    case STATE_INIT:
+    case STATE_BACKZEROING:
+    case STATE_FINDZEROING:
+    case STATE_CALIBRATIONOILING:
+    case STATE_READPARAMETERING:
+    case STATE_RUNUPING:
+    case STATE_RUNDOWNING:
+    case STATE_FINDOIL:
+    case STATE_FINDWATER:
+    case STATE_FINDBOTTOM:
+    case STATE_FOLLOW_WATER_POINT_SEARCHING:
+    case STATE_FINDZEROOVER:
+    case STATE_FINDOILOVER:
+    case STATE_READPARAMETEROVER:
+    case STATE_RUNUPOVER:
+    case STATE_RUNDOWNOVER:
+    case STATE_FLOWOIL:
+    case STATE_FINDWATER_OVER:
+    case STATE_FINDBOTTOM_OVER:
+    case STATE_FOLLOW_WATERING:
+    case STATE_ERROR:
+        return (uint16_t)state;
     case STATE_CALIBRATE_WATERING:
         return 0x0026U;
     case STATE_CALIBRATE_WATER_OVER:
@@ -182,7 +206,7 @@ static uint16_t lh_translate_device_state(DeviceState state)
     case STATE_CALIBRATE_TANKHEIGHT_OVER:
         return 0x8028U;
     default:
-        return (uint16_t)state;
+        return (uint16_t)STATE_STANDBY;
     }
 }
 

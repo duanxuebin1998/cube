@@ -24,7 +24,7 @@
 
 | 主题 | 当前结论 | 依据 |
 | --- | --- | --- |
-| 共享协议版本 | 当前开发源码与最新正式组合均为`DEVICE_PROTOCOL_VERSION = 27`、CPU2 V1.31.0.0 / CPU3 V1.30.0.0。CPU2/CPU3必须严格相等，协议27不能与旧地址固件混用 | `LTD_MAIN_CPU2/Services/ParamStorage/system_parameter.h`、`LTD_DISPLAY_CPU3/Application/system_param/system_parameter.h`、`CPU2_CPU3协议变更记录.md` |
+| 共享协议版本 | 当前开发源码与最新正式组合均为`DEVICE_PROTOCOL_VERSION = 27`、CPU2 V1.31.0.0 / CPU3 V1.31.0.0。CPU2/CPU3必须严格相等，协议27不能与旧地址固件混用 | `LTD_MAIN_CPU2/Services/ParamStorage/system_parameter.h`、`LTD_DISPLAY_CPU3/Application/system_param/system_parameter.h`、`CPU2_CPU3协议变更记录.md` |
 | LTD 对外协议 | 只维护一套标准Modbus协议，沿用地址宏/枚举和`HoldingRegisterArray[]`、`InputRegisterArray[]`直映射格式；CPU3读已确认快照，FC10等待CPU2合法ACK后回成功；当前故障编号沿用协议22现行表，历史记录按CPU2程序版本选故障表 | `LTD共享Modbus协议/LTD共享Modbus协议卷.md` |
 | CPU2 参数存储 | `DEVICE_PARAM_VERSION = 3`，当前版本头为`V1.31.0.0`；协议27不改变`DeviceParameters`结构、CRC范围或FRAM A/B槽，地址重排本身不清参数。既有协议13、14、20、23～26迁移规则继续生效 | `LTD_MAIN_CPU2/Services/ParamStorage/system_parameter.c`、`../00_构建与版本/CPU2参数存储升级清单.md` |
 | CPU3 本地显示/通信参数 | `CPU3_PARAM_VERSION = 0x0007`；V6到V7迁移保留SI自动调度、报警阈值和三路串口参数，并补充协议18兼容槽；协议20只改变CPU2/CPU3共享AO契约，不改变CPU3本机FRAM布局 | `LTD_DISPLAY_CPU3/Application/system_param/cpu3_comm_display_params.c`、`CPU2_CPU3协议变更记录.md` |

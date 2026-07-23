@@ -883,7 +883,7 @@
       <p>电机程序的核心分层比较清晰：业务命令和测量流程调用 <code>MotorCtrl_*</code> 上层接口；<code>MotorControl</code> 内部再分为运动 API、驱动参数/健康检查、位置模型、丢步检测和尺带拟合；最底层由 <code>TMC5130.c</code> 负责 SPI 寄存器访问和步进驱动器控制，<code>AS5145.c</code> 与 <code>encoder.c</code> 负责外部编码轮采集与位置换算。</p>
     </div>
     <div class="note">
-      <p>2026-06-13 当前 <code>MAIN</code> 工作区在第一轮结构优化基础上继续收敛点动和位置模式：<code>MotorMotionTargetPlan</code> 统一相对/绝对目标规划，<code>MotorMotion_CheckReadyForProtectedMotion()</code>、<code>MotorMotion_CheckCommandAbortWithSpeedScope()</code>、<code>MotorMotion_WaitMoveStartObservation()</code>、<code>MotorMotion_CheckJogRuntimeGuards()</code>、<code>MotorMotion_CheckAbortRefreshAndHealth()</code> 和 <code>MotorMotion_CheckStoppedAndRefresh()</code> 收敛入口门控、命令切换、正式运动启动观察、Jog 单轮运行保护、等待循环公共运行检查和停稳后刷新收尾；第三轮策略评估结论是继续保留正式位置模式和 Jog 点动速度模式各自执行策略，不用 Jog 默认替换 <code>MotorCtrl_MoveToPosition()</code>。台架验证仍以《电机运动函数台架验证记录.md》为准，本文不宣称本轮实物验证已经完成。</p>
+      <p>2026-06-13 当前 <code>MAIN</code> 工作区在第一轮结构优化基础上继续收敛点动和位置模式：<code>MotorMotionTargetPlan</code> 统一相对/绝对目标规划，<code>MotorMotion_CheckReadyForProtectedMotion()</code>、<code>MotorMotion_CheckCommandAbortWithSpeedScope()</code>、<code>MotorMotion_WaitMoveStartObservation()</code>、<code>MotorMotion_CheckJogRuntimeGuards()</code>、<code>MotorMotion_CheckAbortRefreshAndHealth()</code> 和 <code>MotorMotion_CheckStoppedAndRefresh()</code> 收敛入口门控、命令切换、正式运动启动观察、Jog 单轮运行保护、等待循环公共运行检查和停稳后刷新收尾；第三轮策略评估结论是继续保留正式位置模式和 Jog 点动速度模式各自执行策略，不用 Jog 默认替换 <code>MotorCtrl_MoveToPosition()</code>。台架验证现归档为 <code>docs/05_测试记录/版本验证/2026-06-11_CPU2_V1.13.0.1_电机运动函数台架验证记录.md</code>，本文不宣称本轮实物验证已经完成。</p>
     </div>
     <div class="grid">
       <div class="panel">
@@ -1598,7 +1598,7 @@
       </tbody>
     </table>
     <div class="note">
-      <p>当前 worktree 已完成第一轮结构收敛、第二轮等待循环窄 helper 收敛和第三轮策略评估记录：默认 <code>MotorCtrl_MoveToPosition()</code> 策略暂不替换，后续实验条件见《电机运动第三轮策略评估记录.md》。完整路线见《电机运动函数简化优化计划.md》；实物回归矩阵见《电机运动函数台架验证记录.md》，其中已细化 T01 到 T16 的入口、步骤、通过条件和记录模板。</p>
+      <p>当前 worktree 已完成第一轮结构收敛、第二轮等待循环窄 helper 收敛和第三轮策略评估记录：默认 <code>MotorCtrl_MoveToPosition()</code> 策略暂不替换，后续实验条件见《电机运动第三轮策略评估记录.md》。完整路线现归档为 <code>docs/02_需求与计划/已实现/2026-06-12_电机运动函数简化优化计划.md</code>；实物回归矩阵现归档为 <code>docs/05_测试记录/版本验证/2026-06-11_CPU2_V1.13.0.1_电机运动函数台架验证记录.md</code>，其中已细化 T01 到 T16 的入口、步骤、通过条件和记录模板。</p>
     </div>
   </section>
 

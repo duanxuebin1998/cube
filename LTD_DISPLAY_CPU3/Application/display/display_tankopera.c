@@ -507,6 +507,7 @@ static int32_t ao_range_max_01mm(void); /* 当前输出源的量程输入上限 
 static bool ao_write_range_pair(void); /* 0%与100%量程成对写入 */
 static bool ao_write_output_source(void); /* 输出源确认写入并补读完整AO配置 */
 static bool ao_write_simulation_enable(uint32_t enabled); /* 写非持久化仿真开关 */
+static bool screen_operation_is_no_para_command(int operaNum); /* 屏幕无参指令分类，含显式扩展操作码 */
 
 /* ---------- 5) 指令下发流程(无参/带参) ----------
  *	把“确定/返回”的动作映射到具体执行：下发指令或写参数
@@ -1489,6 +1490,8 @@ static uint8_t *dtm_operaname(int num)
         { COM_NUM_SET_FULL_WEIGHT,     (uint8_t*)"获取满载扭力",   (uint8_t*)"Set Full Torque" },
         { COM_NUM_RESTOR_EFACTORYSETTING,(uint8_t*)"恢复出厂设置", (uint8_t*)"Factory Reset" },
         { COM_NUM_MAINTENANCE_MODE,    (uint8_t*)"进入维护模式",   (uint8_t*)"Maintenance Mode" },
+        { COM_NUM_MAINTENANCE_EXIT,    (uint8_t*)"退出维护模式",   (uint8_t*)"Exit Maintenance" },
+        { COM_NUM_CLEAR_ALL_RELAY_LATCHED_ALARMS, (uint8_t*)"清全部锁存", (uint8_t*)"Clear All Latched" },
         { COM_NUM_PAIR_NEAREST_WIRELESS_SLIPRING, (uint8_t*)"匹配无线滑环", (uint8_t*)"Pair Wireless" },
     };
 
@@ -1532,8 +1535,7 @@ static uint8_t *dtm_operaname(int num)
     }
 
     /* ---------- B) 无参调试指令 ---------- */
-    if ((num > COM_NUM_DEBUGCMD_START && num < COM_NUM_DEBUGCMD_STOP) ||
-        (num == COM_NUM_PAIR_NEAREST_WIRELESS_SLIPRING)) {
+    if (screen_operation_is_no_para_command(num)) {
         for (int i = 0; i < (int)(sizeof(debug_cmd_map)/sizeof(debug_cmd_map[0])); i++) {
             if (num == debug_cmd_map[i].opera) {
                 return (screen_parameter.language == LANGUAGE_CHINESE)
@@ -1878,6 +1880,8 @@ static uint8_t *dtm_operaname_short(int num, uint8_t *fallback)
 		{ COM_NUM_AO_RUNTIME_PROCESS_VALUE, (uint8_t*)"输入值", (uint8_t*)"Input Value" },
 		{ COM_NUM_AO_RUNTIME_PERCENT, (uint8_t*)"输入比例", (uint8_t*)"Input Percent" },
 		{ COM_NUM_AO_RUNTIME_OUTPUT_CURRENT, (uint8_t*)"输出电流", (uint8_t*)"Output Current" },
+		{ COM_NUM_MAINTENANCE_EXIT, (uint8_t*)"退出维护模式", (uint8_t*)"Exit MNT" },
+		{ COM_NUM_CLEAR_ALL_RELAY_LATCHED_ALARMS, (uint8_t*)"清全部锁存", (uint8_t*)"Clear All" },
 		{ COM_NUM_DEVICEPARAM_OILLEVEL_HYSTERESIS_THRESHOLD, (uint8_t*)"滞后阈值", (uint8_t*)"HysTh" },
 		{ COM_NUM_DEVICEPARAM_SP_MEAS_POSITION, (uint8_t*)"测量位置", (uint8_t*)"SP_MeasPos" },
 		{ COM_NUM_DEVICEPARAM_SP_MONITOR_POSITION, (uint8_t*)"监测位置", (uint8_t*)"SP_MonPos" },
@@ -1896,8 +1900,7 @@ static uint8_t *dtm_operaname_short(int num, uint8_t *fallback)
 		{ COM_NUM_CPU3_COM3_STOPBITS, (uint8_t*)"C3停止位", (uint8_t*)"C3Stop" },
 	};
 
-	if (((num > COM_NUM_NOPARACMD_START) && (num < COM_NUM_NOPARACMD_END)) ||
-	    (num == COM_NUM_PAIR_NEAREST_WIRELESS_SLIPRING) ||
+	if (screen_operation_is_no_para_command(num) ||
 	    ((num > COM_NUM_ONEPARACMD_START) && (num < COM_NUM_ONEPARACMD_END)) ||
 	    ((num > COM_NUM_ONEPARA_DEBUGCMD_START) && (num < COM_NUM_NOPARA_DEBUGCMD_END))) {
 		return fallback;
@@ -2543,10 +2546,20 @@ static void ifsendcmd(void)
 	oled_clear();
 	func_index = KEYNUM_IFSENDCMD;
 
-	if ((now_Opera_Num > COM_NUM_NOPARACMD_START && now_Opera_Num < COM_NUM_NOPARACMD_END) ||
-        (now_Opera_Num == COM_NUM_PAIR_NEAREST_WIRELESS_SLIPRING)) {
-		DisplayLangaugeLineWords((uint8_t*)"是否下发指令:", OLED_LINE8_1, OLED_ROW4_1, 0, (uint8_t*)"Issue instruct:");
-		display_split_title(dtm_operaname_short(now_Opera_Num, dtm_operaname(now_Opera_Num)), OLED_ROW4_2, OLED_ROW4_3);
+	if (screen_operation_is_no_para_command(now_Opera_Num)) {
+		if (now_Opera_Num == COM_NUM_CLEAR_ALL_RELAY_LATCHED_ALARMS) {
+			DisplayLangaugeLineWords((uint8_t*)"清除全部继电器", OLED_LINE8_1, OLED_ROW4_1, 0, (uint8_t*)"Clear All Relay");
+			DisplayLangaugeLineWords((uint8_t*)"锁存报警?", OLED_LINE8_1, OLED_ROW4_2, 0, (uint8_t*)"Latched Alarms?");
+		} else if (now_Opera_Num == COM_NUM_MAINTENANCE_MODE) {
+			DisplayLangaugeLineWords((uint8_t*)"是否进入", OLED_LINE8_1, OLED_ROW4_1, 0, (uint8_t*)"Enter");
+			DisplayLangaugeLineWords((uint8_t*)"维护模式?", OLED_LINE8_1, OLED_ROW4_2, 0, (uint8_t*)"Maintenance?");
+		} else if (now_Opera_Num == COM_NUM_MAINTENANCE_EXIT) {
+			DisplayLangaugeLineWords((uint8_t*)"是否退出", OLED_LINE8_1, OLED_ROW4_1, 0, (uint8_t*)"Exit");
+			DisplayLangaugeLineWords((uint8_t*)"维护模式?", OLED_LINE8_1, OLED_ROW4_2, 0, (uint8_t*)"Maintenance?");
+		} else {
+			DisplayLangaugeLineWords((uint8_t*)"是否下发指令:", OLED_LINE8_1, OLED_ROW4_1, 0, (uint8_t*)"Issue instruct:");
+			display_split_title(dtm_operaname_short(now_Opera_Num, dtm_operaname(now_Opera_Num)), OLED_ROW4_2, OLED_ROW4_3);
+		}
 	} else if (now_Opera_Num > COM_NUM_ONEPARACMD_START && now_Opera_Num < COM_NUM_NOPARA_DEBUGCMD_END) {
 		DisplayLangaugeLineWords((uint8_t*)"是否下发带参指令:", OLED_LINE8_1, OLED_ROW4_1, 0, (uint8_t*)"Issue IWP:");
 		display_split_title(dtm_operaname_short(now_Opera_Num, dtm_operaname(now_Opera_Num)), OLED_ROW4_2, OLED_ROW4_3);
@@ -2828,6 +2841,8 @@ static pFunc_void dtm_backtofunc(void)
     /* 系统维护子菜单 */
     case COM_NUM_RESTOR_EFACTORYSETTING:
     case COM_NUM_MAINTENANCE_MODE:
+    case COM_NUM_MAINTENANCE_EXIT:
+    case COM_NUM_CLEAR_ALL_RELAY_LATCHED_ALARMS:
         return menu_debug_system;
 
     /* 密码入口：回主菜单 */
@@ -2938,8 +2953,7 @@ static pFunc_void dtm_backtofunc(void)
 /* 返回按确认键后要跳转的函数指针 */
 static pFunc_void dtm_suretofunc(void)
 {
-	if ((now_Opera_Num > COM_NUM_NOPARACMD_START && now_Opera_Num < COM_NUM_NOPARACMD_END) ||
-        (now_Opera_Num == COM_NUM_PAIR_NEAREST_WIRELESS_SLIPRING)) {
+	if (screen_operation_is_no_para_command(now_Opera_Num)) {
 		if (operation_needs_protect_confirm(now_Opera_Num)) {
 			return param_protect_confirm;
 		}
@@ -2957,6 +2971,27 @@ typedef struct {
     uint32_t opera;
     uint32_t cmd;
 } NoParaCmdMap_t;
+
+/*
+ * 函数用途：统一判断屏幕操作码是否属于无参 CPU2 命令。
+ * 调用场景：名称分类、确认页、确认键分发共用，避免显式操作码在多个区间判断中漏配。
+ * 关键约束：1000~1006 中只有列出的命令操作码可进入下发流程，AO 只读/仿真操作不得误分类。
+ */
+static bool screen_operation_is_no_para_command(int operaNum)
+{
+	if ((operaNum > COM_NUM_NOPARACMD_START) && (operaNum < COM_NUM_NOPARACMD_END)) {
+		return true;
+	}
+
+	switch (operaNum) {
+	case COM_NUM_PAIR_NEAREST_WIRELESS_SLIPRING:
+	case COM_NUM_MAINTENANCE_EXIT:
+	case COM_NUM_CLEAR_ALL_RELAY_LATCHED_ALARMS:
+		return true;
+	default:
+		return false;
+	}
+}
 
 /**
  * @brief 发送屏幕菜单操作中的 send_cpu2_command 逻辑。
@@ -3169,6 +3204,8 @@ static void cmd_nopara_process(void)
         { COM_NUM_SET_FULL_WEIGHT,    CMD_SET_FULL_WEIGHT },
         { COM_NUM_RESTOR_EFACTORYSETTING, CMD_RESTORE_FACTORY },
         { COM_NUM_MAINTENANCE_MODE,   CMD_MAINTENANCE_MODE },
+        { COM_NUM_MAINTENANCE_EXIT,   CMD_MAINTENANCE_EXIT },
+        { COM_NUM_CLEAR_ALL_RELAY_LATCHED_ALARMS, CMD_CLEAR_ALL_RELAY_LATCHED_ALARMS },
         { COM_NUM_PAIR_NEAREST_WIRELESS_SLIPRING, CMD_PAIR_NEAREST_WIRELESS_SLIPRING },
     };
 
@@ -3216,7 +3253,19 @@ static void cmd_nopara_process(void)
         exitTankOpera();
     } else if (now_Opera_Num == COM_NUM_MAINTENANCE_MODE) {
         oled_clear();
-        DisplayLangaugeLineWords((uint8_t*)"已进入维护模式", OLED_LINE8_1, OLED_ROW4_2, 0, (uint8_t*)"Maintenance Mode");
+        DisplayLangaugeLineWords((uint8_t*)"进入指令已发送", OLED_LINE8_1, OLED_ROW4_2, 0, (uint8_t*)"Enter MNT Sent");
+        HAL_Delay(800);
+        exitTankOpera();
+    } else if (now_Opera_Num == COM_NUM_MAINTENANCE_EXIT) {
+        oled_clear();
+        DisplayLangaugeLineWords((uint8_t*)"退出指令已发送", OLED_LINE8_1, OLED_ROW4_2, 0, (uint8_t*)"Exit MNT Sent");
+        HAL_Delay(800);
+        exitTankOpera();
+    } else if (now_Opera_Num == COM_NUM_CLEAR_ALL_RELAY_LATCHED_ALARMS) {
+        oled_clear();
+        DisplayLangaugeLineWords((uint8_t*)"清锁存请求已发送", OLED_LINE8_1, OLED_ROW4_2, 0, (uint8_t*)"Clear Request Sent");
+        HAL_Delay(800);
+        exitTankOpera();
     } else if (now_Opera_Num == COM_NUM_PAIR_NEAREST_WIRELESS_SLIPRING) {
         FlagofTankOpera = false;
         HAL_TIM_Base_Stop_IT(&htim1);
@@ -4814,9 +4863,29 @@ static void menu_debug_system(void)
 {
     static struct MenuData menu[] = {
         { (uint8_t*)"进入维护模式", COM_NUM_MAINTENANCE_MODE, ifsendcmd, COMMANE_NORW, (uint8_t*)"Maintenance" },
+        { (uint8_t*)"清全部锁存", COM_NUM_CLEAR_ALL_RELAY_LATCHED_ALARMS, ifsendcmd, COMMANE_NORW, (uint8_t*)"ClearAllLatched" },
         { (uint8_t*)"恢复出厂设置", COM_NUM_RESTOR_EFACTORYSETTING, ifsendcmd, COMMANE_NORW, (uint8_t*)"RestoreFactory" },
         { (uint8_t*)"返回", COM_NUM_NOOPERA, menu_cmdconfig_main, COMMANE_NORW, (uint8_t*)"Back" },
     };
+	bool snapshot_valid = CPU2_CommHasRuntimeSnapshot();
+
+	/* 快照无效时第一项只显示未知状态，不允许把未知误判为可进入维护。 */
+	if (!snapshot_valid) {
+		menu[0].operaName = (uint8_t*)"维护状态未知";
+		menu[0].operaName2 = (uint8_t*)"MNT Unavailable";
+		menu[0].operaNum = COM_NUM_NOOPERA;
+		menu[0].sureopera = menu_debug_system;
+	} else if (g_measurement.device_status.maintenance_mode_active != 0U) {
+		menu[0].operaName = (uint8_t*)"退出维护模式";
+		menu[0].operaName2 = (uint8_t*)"Exit Maintenance";
+		menu[0].operaNum = COM_NUM_MAINTENANCE_EXIT;
+		menu[0].sureopera = ifsendcmd;
+	} else {
+		menu[0].operaName = (uint8_t*)"进入维护模式";
+		menu[0].operaName2 = (uint8_t*)"Enter Maintenance";
+		menu[0].operaNum = COM_NUM_MAINTENANCE_MODE;
+		menu[0].sureopera = ifsendcmd;
+	}
 
     oled_clear();
     func_index = KEYNUM_DEBUG_SYSTEM;
@@ -5042,6 +5111,21 @@ static pFunc_void RelayParam_BackToConfigMenu(int operaNum)
     return menu_do_alarm;
 }
 
+typedef enum {
+    RELAY_STATUS_FIELD_ALARM_VALUE = 0,
+    RELAY_STATUS_FIELD_HH,
+    RELAY_STATUS_FIELD_H,
+    RELAY_STATUS_FIELD_HH_H,
+    RELAY_STATUS_FIELD_L,
+    RELAY_STATUS_FIELD_LL,
+    RELAY_STATUS_FIELD_LL_L,
+    RELAY_STATUS_FIELD_ANY,
+    RELAY_STATUS_FIELD_CLEAR_LATCHED,
+    RELAY_STATUS_FIELD_ACTION_INHIBITED,
+    RELAY_STATUS_FIELD_FINAL_ACTION,
+    RELAY_STATUS_FIELD_COUNT
+} RelayStatusField;
+
 typedef struct {
     uint8_t *name_cn;
     uint8_t *name_en;
@@ -5057,6 +5141,8 @@ static const RelayStatusFieldName relay_status_field_name[] = {
     { (uint8_t*)"LL/L",   (uint8_t*)"LL/L" },
     { (uint8_t*)"Any",    (uint8_t*)"Any" },
     { (uint8_t*)"清锁存", (uint8_t*)"Clear" },
+    { (uint8_t*)"动作禁用", (uint8_t*)"Block" },
+    { (uint8_t*)"最终动作", (uint8_t*)"Action" },
 };
 
 /**
@@ -5104,30 +5190,40 @@ static uint8_t *relay_clear_state_word(uint32_t state)
  * @param field 业务参数。
  * @return 状态码、计数值或协议数值，具体含义由调用点约定。
  */
-static uint32_t relay_status_state_of(const volatile RelayAlarmRuntimeState *state, int field)
+static uint32_t relay_status_state_of(const volatile RelayAlarmRuntimeState *state, RelayStatusField field)
 {
     if (state == NULL) {
         return RELAY_ALARM_STATE_INACTIVE;
     }
 
     switch (field) {
-    case 1:
+    case RELAY_STATUS_FIELD_HH:
         return state->HH_alarm;
-    case 2:
+    case RELAY_STATUS_FIELD_H:
         return state->H_alarm;
-    case 3:
+    case RELAY_STATUS_FIELD_HH_H:
         return state->HH_H_alarm;
-    case 4:
+    case RELAY_STATUS_FIELD_L:
         return state->L_alarm;
-    case 5:
+    case RELAY_STATUS_FIELD_LL:
         return state->LL_alarm;
-    case 6:
+    case RELAY_STATUS_FIELD_LL_L:
         return state->LL_L_alarm;
-    case 7:
+    case RELAY_STATUS_FIELD_ANY:
         return state->any_error;
     default:
         return RELAY_ALARM_STATE_INACTIVE;
     }
+}
+
+/* 最终动作表示维护/人工禁用处理后的逻辑动作，不代表 NO/NC 反相后的物理触点反馈。 */
+static uint8_t *relay_final_action_word(bool active)
+{
+    if (active) {
+        return (screen_parameter.language == LANGUAGE_CHINESE) ? (uint8_t*)"动作" : (uint8_t*)"ON";
+    }
+
+    return (screen_parameter.language == LANGUAGE_CHINESE) ? (uint8_t*)"不动作" : (uint8_t*)"OFF";
 }
 
 /**
@@ -5152,7 +5248,12 @@ static int relay_status_alarm_value_x10(float value)
  * @param shift 业务参数。
  * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
  */
-static void display_relay_status_row(const volatile RelayAlarmRuntimeState *state, int field, uint8_t row, uint8_t shift)
+static void display_relay_status_row(const volatile RelayAlarmRuntimeState *state,
+                                     uint32_t channel,
+                                     RelayStatusField field,
+                                     bool snapshot_valid,
+                                     uint8_t row,
+                                     uint8_t shift)
 {
     uint8_t line;
     uint8_t *name;
@@ -5166,15 +5267,30 @@ static void display_relay_status_row(const volatile RelayAlarmRuntimeState *stat
     line = OledDisplayLineWords(name, OLED_LINE8_1, row, shift);
     line = OledDisplayLineWords((uint8_t*)":", line, row, shift);
 
-    if (field == 0) {
-        OledValueDisplay(relay_status_alarm_value_x10((state != NULL) ? state->alarm_value : 0.0f),
+    if (!snapshot_valid || (state == NULL)) {
+        OledDisplayLineWords((uint8_t*)"N/A", line, row, shift);
+    } else if (field == RELAY_STATUS_FIELD_ALARM_VALUE) {
+        OledValueDisplay(relay_status_alarm_value_x10(state->alarm_value),
                          line,
                          row,
                          shift,
                          1,
                          NULL);
-    } else if (field == 8) {
-        OledDisplayLineWords(relay_clear_state_word((state != NULL) ? state->clear_alarm : RELAY_ALARM_CLEAR_NO),
+    } else if (field == RELAY_STATUS_FIELD_CLEAR_LATCHED) {
+        OledDisplayLineWords(relay_clear_state_word(state->clear_alarm),
+                             line,
+                             row,
+                             shift);
+    } else if (field == RELAY_STATUS_FIELD_ACTION_INHIBITED) {
+        OledDisplayLineWords((g_measurement.device_status.relay_alarm_inhibit_effective != 0U) ?
+                             returnWordType((uint8_t*)"是", (uint8_t*)"YES") :
+                             returnWordType((uint8_t*)"否", (uint8_t*)"NO"),
+                             line,
+                             row,
+                             shift);
+    } else if (field == RELAY_STATUS_FIELD_FINAL_ACTION) {
+        OledDisplayLineWords(relay_final_action_word((g_measurement.device_status.relay_alarm_action_mask &
+                                                      (1UL << channel)) != 0U),
                              line,
                              row,
                              shift);
@@ -5186,8 +5302,9 @@ static void display_relay_status_row(const volatile RelayAlarmRuntimeState *stat
 /* 显示单路继电器报警运行态，只读消费 CPU2 输入寄存器快照，不触发参数下发。 */
 static void menu_relay_status(uint32_t channel, keymenuNumber keynum, pFunc_void backfunc)
 {
-    enum { RELAY_STATUS_FIELD_COUNT = 9, RELAY_STATUS_ROWS = 2 };
+    enum { RELAY_STATUS_ROWS = 2 };
     volatile RelayAlarmRuntimeState *state;
+    bool snapshot_valid;
     int selected;
     int first;
     int i;
@@ -5224,11 +5341,15 @@ static void menu_relay_status(uint32_t channel, keymenuNumber keynum, pFunc_void
              (screen_parameter.language == LANGUAGE_CHINESE) ? "报警状态" : " Alarm");
     OledDisplayLineWords((uint8_t*)title, OLED_LINE8_1, OLED_ROW4_1, 0);
 
-    state = (channel < RELAY_ALARM_CHANNEL_COUNT) ? &g_measurement.relay_alarm_runtime[channel] : NULL;
+    snapshot_valid = CPU2_CommHasRuntimeSnapshot();
+    state = (snapshot_valid && (channel < RELAY_ALARM_CHANNEL_COUNT)) ?
+            &g_measurement.relay_alarm_runtime[channel] : NULL;
     for (i = 0; (i < RELAY_STATUS_ROWS) && ((first + i) < RELAY_STATUS_FIELD_COUNT); i++) {
         selected = first + i;
         display_relay_status_row(state,
-                                 selected,
+                                 channel,
+                                 (RelayStatusField)selected,
+                                 snapshot_valid,
                                  (uint8_t)(OLED_ROW4_2 + (i * OLED_ROW4_2)),
                                  (selected == PageNum[keynum].menu_num) ? 1U : 0U);
     }

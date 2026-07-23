@@ -1122,7 +1122,7 @@
 </section>
 <section id="p2-09-wärtsilä-测后回位探底失败没有对外闭环" class="level3">
 <h3>P2-09 Wärtsilä 测后回位／探底失败没有对外闭环</h3>
-<p>回固定点失败和 <code>SearchBottom()</code> 失败的部分路径只打印并切回 <code>CMD_MONITOR_SINGLE</code>，没有设置可关联的活动错误：<code>LTD_MAIN_CPU2/Application/Src/measure.c:1111-1135</code>。外部主机可能看到设备已回单点监测，却不知道测后维护动作失败。应在 Wärtsilä 状态／结果中保留失败原因和完成代际，并与 <a href="瓦锡兰分布测量详细流程梳理.html">现有流程梳理</a> 的剩余风险合并验证。</p>
+<p>回固定点失败和 <code>SearchBottom()</code> 失败的部分路径只打印并切回 <code>CMD_MONITOR_SINGLE</code>，没有设置可关联的活动错误：<code>LTD_MAIN_CPU2/Application/Src/measure.c:1111-1135</code>。外部主机可能看到设备已回单点监测，却不知道测后维护动作失败。应在 Wärtsilä 状态／结果中保留失败原因和完成代际，并与 <a href="../../00_程序流程导航/2026-06-11_Wartsila分布测量专题流程.html">Wartsila 分布测量专题流程</a> 的剩余风险合并验证。</p>
 </section>
 <section id="p2-10-国标密度后处理阈值硬编码为-100" class="level3">
 <h3>P2-10 国标密度后处理阈值硬编码为 100</h3>
@@ -1215,7 +1215,7 @@
 <tr>
 <td>电机运动</td>
 <td>实现已合入，验证未完</td>
-<td>T15 编码器首帧缺失、T16 TMC／24V 故障注入、200 mm 边界决策、正式位置模式与 Jog A/B；见 <a href="电机运动剩余台架验证执行规程.md">剩余台架规程</a></td>
+<td>T15 编码器首帧缺失、T16 TMC／24V 故障注入、200 mm 边界决策、正式位置模式与 Jog A/B；见 <a href="../../02_需求与计划/未实现/2026-06-12_电机运动剩余台架验证执行规程.md">剩余台架规程</a></td>
 </tr>
 <tr>
 <td>AD5421 断环恢复</td>
