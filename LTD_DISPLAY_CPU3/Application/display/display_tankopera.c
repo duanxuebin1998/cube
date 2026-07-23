@@ -3548,17 +3548,10 @@ static void displaypara(void)
 	}
 }
 
-/* 判断当前设备状态是否允许修改参数 */
+/* 判断当前设备状态是否允许修改CPU2持久参数。 */
 static bool state_allows_param_write(DeviceState state)
 {
-	/* 这些状态虽然使用 0x80xx 编码，但属于长期运行态，不应按“完成态”放行修改参数。 */
-	if (state == STATE_FLOWOIL
-		|| state == STATE_FOLLOW_WATERING
-		|| state == STATE_SPTESTING) {
-		return false;
-	}
-
-	return (state == STATE_STANDBY) || ((state & 0x8000U) != 0U);
+	return DeviceState_AllowsPersistentParamWrite(state);
 }
 
 /* AO仅在普通电流输出或HART从站加输出模式下具备输出能力。 */

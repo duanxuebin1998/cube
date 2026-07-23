@@ -535,6 +535,65 @@ typedef enum {
     STATE_ERROR = 0xFFFF                        /* 故障 */
 } DeviceState;
 
+/*
+ * 函数用途：判断当前设备状态是否允许尝试写入CPU2持久参数。
+ * 调用场景：CPU2最终写门禁和CPU3菜单、外部协议预检查。
+ * 关键约束：只列出已确认空闲的完成态；持续态、预留态和未来新增状态默认拒绝。
+ */
+static inline bool DeviceState_AllowsPersistentParamWrite(DeviceState state)
+{
+    switch (state) {
+    case STATE_STANDBY:
+    case STATE_FINDZEROOVER:
+    case STATE_SINGLEPOINTOVER:
+    case STATE_GB_SPREADPOINTOVER:
+    case STATE_SPREADPOINTOVER:
+    case STATE_RUNUPOVER:
+    case STATE_RUNDOWNOVER:
+    case STATE_FINDWATER_OVER:
+    case STATE_FINDBOTTOM_OVER:
+    case STATE_SYNTHETICING_OVER:
+    case STATE_COM_METER_DENSITY_OVER:
+    case STATE_INTERVAL_DENSITY_OVER:
+    case STATE_GET_FULLWEIGHT_OVER:
+    case STATE_GET_EMPTYWEIGHT_OVER:
+    case STATE_RUN_TO_POSITION_OVER:
+    case STATE_FORCE_RUNUP_OVER:
+    case STATE_FORCE_RUNDOWN_OVER:
+    case STATE_CALIBRATE_WATER_OVER:
+    case STATE_CALIBRATE_TANKHEIGHT_OVER:
+    case STATE_WIRELESS_PAIRING_OVER:
+    case STATE_ERROR:
+        return true;
+    default:
+        return false;
+    }
+}
+
+/*
+ * 函数用途：根据CPU2完整运行上下文判断持久参数写入权限。
+ * 调用场景：FC10最终门禁和主机策略矩阵测试。
+ * 关键约束：错误态忽略错误码但必须停止自动恢复；普通完成态必须无错误。
+ */
+static inline bool DeviceContext_AllowsPersistentParamWrite(
+    DeviceState state,
+    CommandType current_command,
+    CommandType pending_command,
+    uint32_t error_code,
+    bool fault_recovery_active)
+{
+    if (!DeviceState_AllowsPersistentParamWrite(state)) {
+        return false;
+    }
+    if ((current_command != CMD_NONE) || (pending_command != CMD_NONE)) {
+        return false;
+    }
+    if (state == STATE_ERROR) {
+        return !fault_recovery_active;
+    }
+    return error_code == NO_ERROR;
+}
+
 
 /* 设备状态结构体 */
 typedef struct {

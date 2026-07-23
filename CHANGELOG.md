@@ -2596,3 +2596,40 @@ CPU3通信和界面：
 未验证风险：
 - 尚未完成OLED真机显示、按键确认/返回、维护快照失效、进入/退出/清锁存时序、继电器物理触点和LH现场主机状态码回归。
 - 静态契约、Word渲染和构建成功不能替代真实CPU2/CPU3交叉烧写、RS485并发/故障注入、FRAM掉电、AO电流环或继电器台架验收。
+
+## 2026-07-23 - 缩短CPU2看门狗监督节拍并收紧双端持久参数写门禁
+
+版本：
+- CPU2：`V1.31.0.0 -> V1.31.1.0`（PATCH）。
+- CPU3：`V1.31.0.0 -> V1.31.1.0`（PATCH）。
+
+协议版本与兼容性：
+- CPU2/CPU3 `DEVICE_PROTOCOL_VERSION`保持27；共享寄存器地址、字段布局、命令值和外部合法帧格式均不变，两端仍按协议27配套运行。
+- CPU2 `DEVICE_PARAM_VERSION`保持3；`DeviceParameters`大小、字段偏移、`struct_size`、FRAM A/B地址、magic、元信息和CRC范围不变，升级不恢复出厂、不清除现场参数。
+- CPU3本机参数版本保持V7 / `0x0007`；本次只增加运行态写权限预检查，不改变CPU3本机FRAM布局。
+
+本次修改：
+- CPU2 TIM4从约2秒监督一次调整为250毫秒监督一次；继电器更新、AO刷新请求和UART恢复检查通过8分频继续保持约2秒周期，避免改变原业务时序，同时缩短瞬时ISR重叠后补喂IWDG的等待窗口。
+- CPU2在板间FC10持久参数入口增加最终运行上下文门禁：只允许待机和明确白名单完成态；活动命令、待执行命令、持续态、预留态、带错误码的普通完成态以及自动故障恢复期间均返回标准Modbus设备忙`0x06`。错误态只有在命令队列和自动恢复均空闲时才允许修正持久参数。
+- CPU3把相同状态白名单用于屏幕参数修改、通用CPU2持久参数桥接和LH FC10预检查；底层发送统一经过公共门禁，持续态、未知态和未来新增状态默认拒绝。CPU2仍保留最终裁决，避免CPU3快照滞后形成越权写窗口。
+- LH参数写等待不再因单纯处于错误态提前失败；只要CPU2最终接受写入，LH继续等待持久化完成代次和目标字段回读一致。超时、通信失败、最终回读不一致仍返回失败。
+- 同步全量问题核对清单、专项问题报告和问题索引，统一C-01～C-45、R-01～R-05、B-01～B-10、F-01～F-21的当前状态、证据边界和历史映射；这些文档更新不把静态核查冒充台架闭环。
+
+关键源码与边界：
+- TIM4由 `MX_TIM4_Init()`把Period改为1249，`TIM4_IRQHandler()`以 `CPU2_TIM4_BUSINESS_DIVIDER=8`分离250毫秒监督节拍和约2秒继电器/AO/UART业务节拍；必须覆盖计数边界、LSI偏差、瞬时/持续ISR占用及三类业务周期不漂移。
+- CPU2 `DeviceState_AllowsPersistentParamWrite()`和`DeviceContext_AllowsPersistentParamWrite()`组合状态、当前命令、待执行命令、错误码及 `FaultRecovery_IsActive()`；`Response10Process()`拒绝时返回 `0x90/0x06`且不得应用候选或请求保存。
+- CPU3屏幕 `state_allows_param_write()`、通用 `CPU2_CombinatePackage_Send()`和LH入口复用显式白名单，只做保守预检查；CPU3快照可能滞后，因此所有放行仍必须经过CPU2最终裁决，未知/未来状态默认拒绝。
+- LH `lh_write_holding_field()`只在CPU2 ACK后进入 `lh_wait_parameter_persisted()`；错误态本身不再提前判失败，但恢复活动、完成代次超时、通信失败或字段回读不一致仍不得成功。
+- 本提交精确包含32个Git文件：11个双端业务源码/工程文件、2个版本头、`CHANGELOG.md`、1份版本方案及17份问题资料/索引；未跟踪PDF和本机流程/工具产物不纳入。
+
+验证：
+- `cmake --build build\LTD_MAIN_CPU2 --clean-first`：92步通过，生成`LTD_MAIN_CPU2_V1.31.1.0.hex`；ELF为`text=309836`、`data=2328`、`bss=57832`。
+- `cmake --build build\LTD_DISPLAY_CPU3 --clean-first`：62步通过，生成`LTD_DISPLAY_CPU3_V1.31.1.0.hex`；ELF为`text=197944`、`data=37964`、`bss=100716`。
+- `py -X utf8 tools/check_cpu2_uart_resilience_contract.py`通过，覆盖250毫秒节拍、8分频和UART恢复预算；`check_cpu3_cpu2_comm_timeout_fault_contract.py`通过板间通信超时契约。
+- `check_dsm_compat_contract.py`、`check_wartsila_distribution_logic.py`、`check_si_protocol_contract.py`、`check_cpu3_display_command_contract.py`和`check_parameter_measurement_fault_contract.py`通过。
+- `py -X utf8 tools/check_docs_structure.py`通过，统计600个正式文档；`check_markdown_links.py`检查305个Markdown，缺失链接为0；`git diff --check`通过。
+
+未验证风险：
+- 尚未在目标板测量TIM4实际250毫秒节拍、IWDG的LSI偏差、瞬时/持续ISR占用下的复位时间，以及继电器、AO和UART恢复仍保持约2秒周期。
+- 尚未用CPU2/CPU3实机逐项验证待机、完成态、持续态、活动命令、待执行命令、自动故障恢复和错误态的屏幕/LH/DSM/Wärtsilä/SI/LTD持久参数写入矩阵。
+- 静态契约和clean-first构建不能替代FRAM写失败/掉电、RS485并发、真实LH主机和现场参数修正流程验证。

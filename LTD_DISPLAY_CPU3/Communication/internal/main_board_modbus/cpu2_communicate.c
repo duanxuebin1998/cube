@@ -665,10 +665,10 @@ bool CPU2_CommWriteHoldingRegisters(uint16_t startadd,
 	if (command_only && !LtdModbus_CommandIsImplemented(command_value)) {
 		return false;
 	}
-	ret = CPU2_CombinatePackage_SendWire(FUNCTIONCODE_WRITE_MULREGISTER,
-										startadd,
-										registercnt,
-										host_values);
+	ret = CPU2_CombinatePackage_Send(FUNCTIONCODE_WRITE_MULREGISTER,
+									startadd,
+									registercnt,
+									host_values);
 	if (!ret) {
 		return false;
 	}
@@ -1902,6 +1902,15 @@ bool CPU2_CombinatePackage_Send(uint8_t f_code,
 	if (f_code == FUNCTIONCODE_WRITE_MULREGISTER) {
 		if ((registercnt > LTD_MODBUS_MAX_WRITE_REGISTERS) ||
 			!LtdModbus_HoldingWriteRangeIsValid(startadd, registercnt)) {
+			return false;
+		}
+		/*
+		 * CPU3只用状态白名单提前抑制明显不安全的持久参数写；
+		 * 当前命令、待执行命令和故障恢复活动仍由CPU2在FC10入口最终裁决。
+		 */
+		if (LtdModbus_HoldingWriteTouchesPersistent(startadd, registercnt) &&
+			!DeviceState_AllowsPersistentParamWrite(
+				g_measurement.device_status.device_state)) {
 			return false;
 		}
 		return CPU2_CombinatePackage_SendWire(f_code, startadd, registercnt, holddata);

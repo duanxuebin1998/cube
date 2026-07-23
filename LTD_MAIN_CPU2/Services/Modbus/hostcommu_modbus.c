@@ -8,6 +8,7 @@
 #include <ctype.h>
 #include "system_parameter.h"
 #include "AoOutput/ao_output.h"
+#include "fault_recovery.h"
 
 /* 从机地址 */
 int SlaveAddress = 1; /* 主板通信地址配置，影响协议寻址或硬件访问。 */
@@ -20,7 +21,7 @@ static const int illegalfunction = 0x01; /* 非法功能 */
 static const int illegaldataaddress = 0x02; /* 非法数据地址 */
 static const int illegaldatavalue = 0x03; /* 非法数据值 */
 /* static const int slavedevicefailure = 0x04; / /从设备故障 */
-/* static const int slavedevicebusy = 0x05; / /从设备忙 */
+static const int slavedevicebusy = 0x06; /* 从设备忙 */
 /* 现行Modbus地址直接作为数组索引，不再经过内部紧凑地址转换。 */
 static uint16_t HoldingRegisterArray[HOLDREGISTER_AMOUNT] = { 0 };
 static uint16_t InputRegisterArray[INPUTREGISTER_AMOUNT] = { 0 };
@@ -39,6 +40,7 @@ static int Compose03Package(uint8_t  *revframe, uint8_t  *sendframe);
 static int Compose04Package(uint8_t  *revframe, uint8_t  *sendframe);
 static int Compose10Package(uint8_t  const *revframe, uint8_t  *sendframe);
 static bool IsPersistentDeviceParamWrite(uint16_t startAddr, uint16_t regCount);
+static bool PersistentParamWriteRuntimeAllowed(void);
 /* 接收到的数据包进行地址检查 */
 bool SlaveCheckAddress(uint8_t  const *revframe, int framelen) {
     if (revframe[0] != SlaveAddress && revframe[0] != 0) {
@@ -61,6 +63,21 @@ void SetSlaveaddress(int address) {
 static bool IsPersistentDeviceParamWrite(uint16_t startAddr, uint16_t regCount)
 {
     return LtdModbus_HoldingWriteTouchesPersistent(startAddr, regCount);
+}
+
+/*
+ * 函数用途：判断CPU2当前运行上下文是否允许写入持久参数。
+ * 调用场景：FC10地址和值解析完成前的最终权限门禁。
+ * 关键约束：普通完成态必须无错误；错误态只在自动恢复和命令队列均空闲时放行。
+ */
+static bool PersistentParamWriteRuntimeAllowed(void)
+{
+    return DeviceContext_AllowsPersistentParamWrite(
+        g_measurement.device_status.device_state,
+        g_measurement.device_status.current_command,
+        g_deviceParams.command,
+        g_measurement.device_status.error_code,
+        FaultRecovery_IsActive());
 }
 
 /* 判断功能码是否正确 */
@@ -236,6 +253,13 @@ int Response10Process(uint8_t const *revframe, uint8_t *sendframe)
             return 3;
         }
     }
+    persist_write = IsPersistentDeviceParamWrite(startAddr, regCount) ? 1 : 0;
+    if ((persist_write != 0) && !PersistentParamWriteRuntimeAllowed()) {
+        sendframe[0] = (uint8_t)SlaveAddress;
+        sendframe[1] = (uint8_t)(presetmultipleregisterfuncode | 0x80);
+        sendframe[2] = (uint8_t)slavedevicebusy;
+        return 3;
+    }
     previous_params = g_deviceParams;
     previous_tank_height = previous_params.tankHeight;
     previous_simulation_enabled = AoOutput_IsSimulationEnabled();
@@ -284,7 +308,6 @@ int Response10Process(uint8_t const *revframe, uint8_t *sendframe)
         }
         candidate_simulation_enabled = 0U;
     }
-    persist_write = IsPersistentDeviceParamWrite(startAddr, regCount) ? 1 : 0;
     if (persist_write != 0) {
         DeviceParams_CaptureWriteSnapshot(&previous_params);
     }

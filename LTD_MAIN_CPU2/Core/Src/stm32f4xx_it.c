@@ -42,6 +42,7 @@
 
 #define UART4_WEIGHT_HIGH_IDX  19u
 #define UART4_WEIGHT_LOW_IDX   20u
+#define CPU2_TIM4_BUSINESS_DIVIDER  8U
 
 /* USER CODE END PD */
 
@@ -55,6 +56,7 @@
 
 static volatile uint8_t s_hart_frame_pending = 0U;
 static volatile uint8_t s_hostcommu_frame_pending = 0U;
+static uint8_t s_tim4_business_tick_count = 0U;
 
 /* USER CODE END PV */
 
@@ -436,12 +438,18 @@ void TIM4_IRQHandler(void)
   /* USER CODE END TIM4_IRQn 0 */
   HAL_TIM_IRQHandler(&htim4);
   /* USER CODE BEGIN TIM4_IRQn 1 */
-	RelayOutput_Update();
-	AoOutput_RequestTimerRefreshFromTim4Isr();
-	CPU2_UartRecoveryPollFromTim4Isr();
-	/* TIM4抢占其它ISR时不得喂狗，避免持续串口中断掩盖前台失去调度。 */
+	/* 250 ms监督节拍只在没有被抢占ISR时喂狗，瞬时重叠可在下一节拍补喂。 */
 	if ((SCB->ICSR & SCB_ICSR_RETTOBASE_Msk) != 0U) {
 		HAL_IWDG_Refresh(&hiwdg);
+	}
+
+	/* 原继电器、AO和UART恢复任务保持2 s周期，避免改变既有业务时序。 */
+	s_tim4_business_tick_count++;
+	if (s_tim4_business_tick_count >= CPU2_TIM4_BUSINESS_DIVIDER) {
+		s_tim4_business_tick_count = 0U;
+		RelayOutput_Update();
+		AoOutput_RequestTimerRefreshFromTim4Isr();
+		CPU2_UartRecoveryPollFromTim4Isr();
 	}
   /* USER CODE END TIM4_IRQn 1 */
 }

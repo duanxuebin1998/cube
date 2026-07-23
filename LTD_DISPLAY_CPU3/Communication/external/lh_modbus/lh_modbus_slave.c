@@ -624,7 +624,7 @@ static bool lh_read_shared_holding_field(const LhWritableField *field,
     return true;
 }
 
-/* 同步刷新 CPU2 状态块，供待机门禁、保存完成计数和故障状态共同确认。 */
+/* 同步刷新 CPU2 状态块，供状态白名单和保存完成计数共同确认。 */
 static bool lh_refresh_cpu2_status(void)
 {
     return CPU2_CombinatePackage_Send(
@@ -642,7 +642,7 @@ static bool lh_shared_regs_equal(const uint16_t *left, const uint16_t *right)
 /*
  * 函数用途：等待 CPU2 参数完成持久化并回读确认目标字段。
  * 调用场景：LH FC10 写入任一持久参数并收到 CPU2 即时 ACK 后调用。
- * 关键约束：不使用 HAL_Delay；每轮依靠一次同步状态事务推进，超时、CPU2故障或回读不一致均失败。
+ * 关键约束：不使用 HAL_Delay；每轮依靠一次同步状态事务推进，超时或回读不一致即失败。
  */
 static bool lh_wait_parameter_persisted(const LhWritableField *field,
                                         uint32_t previous_update_flag,
@@ -659,10 +659,6 @@ static bool lh_wait_parameter_persisted(const LhWritableField *field,
         poll_count++;
 
         if (!lh_refresh_cpu2_status()) {
-            return false;
-        }
-        if ((g_measurement.device_status.device_state == STATE_ERROR) &&
-            (g_measurement.device_status.error_code != NO_ERROR)) {
             return false;
         }
         if (g_measurement.device_status.parameter_update_flag != previous_update_flag) {
@@ -688,7 +684,8 @@ static LhParameterWriteResult lh_write_holding_field(const LhWritableField *fiel
     if (!lh_refresh_cpu2_status()) {
         return LH_PARAMETER_WRITE_BUSY;
     }
-    if (g_measurement.device_status.device_state != STATE_STANDBY) {
+    if (!DeviceState_AllowsPersistentParamWrite(
+            g_measurement.device_status.device_state)) {
         return LH_PARAMETER_WRITE_BUSY;
     }
     previous_update_flag = g_measurement.device_status.parameter_update_flag;
@@ -703,7 +700,7 @@ static LhParameterWriteResult lh_write_holding_field(const LhWritableField *fiel
            LH_PARAMETER_WRITE_OK : LH_PARAMETER_WRITE_FAILURE;
 }
 
-/* 处理 FC10；只允许待机时一次写一个完整的 LH 字段。 */
+/* 处理 FC10；只允许白名单空闲态一次写一个完整的 LH 字段。 */
 static void lh_handle_write_holding(uint8_t address,
                                     const uint8_t *rx,
                                     uint16_t rx_len,
@@ -739,7 +736,8 @@ static void lh_handle_write_holding(uint8_t address,
         return;
     }
     if (!CPU2_CommIsAvailable() ||
-        (g_measurement.device_status.device_state != STATE_STANDBY)) {
+        !DeviceState_AllowsPersistentParamWrite(
+            g_measurement.device_status.device_state)) {
         lh_build_exception(address, LH_MODBUS_FUNC_WRITE_MULTI_REGS,
                            LH_MODBUS_EX_SLAVE_DEVICE_BUSY, tx, tx_len);
         return;

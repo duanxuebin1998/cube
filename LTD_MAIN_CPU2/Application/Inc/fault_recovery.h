@@ -35,4 +35,11 @@ void FaultRecovery_Cancel(const char *reason);
  */
 FaultRecoveryResult FaultRecovery_Poll(void);
 
+/*
+ * 函数用途：查询自动故障恢复是否正在占用设备恢复流程。
+ * 调用场景：CPU2持久参数最终写门禁判断错误态是否真正空闲。
+ * 关键约束：只读返回恢复上下文，不清故障、不取消恢复、不触发重试。
+ */
+bool FaultRecovery_IsActive(void);
+
 #endif /* INC_FAULT_RECOVERY_H_ */

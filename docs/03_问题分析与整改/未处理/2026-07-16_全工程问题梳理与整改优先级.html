@@ -4,7 +4,9 @@
   <meta charset="utf-8" />
   <meta name="generator" content="pandoc" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
-  <title>2026-07-16 全工程问题梳理与整改优先级</title>
+  <meta name="artifact-source" content="2026-07-16_全工程问题梳理与整改优先级.md" />
+  <meta name="artifact-source-sha256" content="7E315EF44BBFBAD72A57B7B542817A1F764DDFA1CE281A3A57D6D9872BE8942A" />
+  <title>2026-07-16 全工程问题梳理与整改优先级（历史审查快照）</title>
   <style>
     /* Default styles provided by pandoc.
     ** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
@@ -170,570 +172,633 @@
     }
     .display.math{display: block; text-align: center; margin: 0.5rem auto;}
   </style>
-  <meta name="artifact-generator" content="Pandoc 3.9.0.2">
-  <meta name="artifact-source" content="2026-07-16_全工程问题梳理与整改优先级.md">
-  <meta name="artifact-source-sha256" content="0B0339957BD7169AD3BFCA6EF657A20F12AC2AF8B2C0FE29B6AA27492819B48B">
-  <meta name="artifact-generated-date" content="2026-07-17">
-  <meta name="description" content="CUBE 全工程问题梳理、证据链、整改优先级和验证闭环总账">
   <style>
-    :root {
-      color-scheme: light;
-      --bg: #eef3f7;
-      --paper: #ffffff;
-      --panel: #f7fafc;
-      --text: #1d2939;
-      --muted: #667085;
-      --line: #d8e0e8;
-      --line-soft: #e7edf3;
-      --navy: #12304a;
-      --accent: #0f766e;
-      --accent-dark: #0b5f59;
-      --p1: #b42318;
-      --p1-bg: #fff3f1;
-      --p2: #b45309;
-      --p2-bg: #fff8eb;
-      --p3: #1d4ed8;
-      --p3-bg: #eff6ff;
-      --ok: #027a48;
-      --ok-bg: #ecfdf3;
-      --shadow: 0 16px 44px rgba(26, 45, 67, 0.10);
-    }
-
+    :root { color-scheme: light; --bg:#eef3f7; --paper:#fff; --text:#1d2733; --muted:#667085; --line:#d9e0e8; --accent:#0f766e; --code:#eef2f6; }
     * { box-sizing: border-box; }
-
-    html {
-      scroll-behavior: smooth;
-      scroll-padding-top: 24px;
-      background: var(--bg);
-    }
-
-    body {
-      display: grid;
-      grid-template-columns: minmax(260px, 310px) minmax(0, 1120px);
-      grid-template-rows: auto auto auto;
-      gap: 24px 28px;
-      justify-content: center;
-      max-width: none;
-      min-height: 100vh;
-      margin: 0;
-      padding: 28px;
-      overflow-x: hidden;
-      color: var(--text);
-      background:
-        radial-gradient(circle at 82% 0%, rgba(15, 118, 110, 0.13), transparent 34rem),
-        linear-gradient(180deg, #e9f1f5 0, var(--bg) 24rem);
-      font-family: "Microsoft YaHei", "PingFang SC", "Segoe UI", Arial, sans-serif;
-      font-size: 15px;
-      line-height: 1.75;
-    }
-
-    a {
-      color: var(--accent-dark);
-      text-decoration-thickness: 1px;
-      text-underline-offset: 3px;
-    }
-
-    a:hover { color: var(--accent); }
-
-    .reader-note {
-      grid-column: 2;
-      grid-row: 1;
-      padding: 20px 22px;
-      background: rgba(255, 255, 255, 0.94);
-      border: 1px solid var(--line);
-      border-radius: 10px;
-      box-shadow: 0 10px 28px rgba(26, 45, 67, 0.08);
-    }
-
-    .reader-note__top {
-      display: flex;
-      gap: 18px;
-      align-items: center;
-      justify-content: space-between;
-    }
-
-    .reader-note__title {
-      display: block;
-      color: var(--navy);
-      font-size: 18px;
-    }
-
-    .reader-note__subtitle {
-      display: block;
-      margin-top: 3px;
-      color: var(--muted);
-      font-size: 13px;
-    }
-
-    .source-link {
-      flex: 0 0 auto;
-      padding: 8px 13px;
-      color: #fff;
-      background: var(--accent);
-      border-radius: 7px;
-      font-size: 13px;
-      font-weight: 700;
-      text-decoration: none;
-    }
-
-    .source-link:hover {
-      color: #fff;
-      background: var(--accent-dark);
-      text-decoration: none;
-    }
-
-    .summary-grid {
-      display: grid;
-      grid-template-columns: repeat(4, minmax(0, 1fr));
-      gap: 10px;
-      margin-top: 16px;
-    }
-
-    .summary-item {
-      min-width: 0;
-      padding: 12px 13px;
-      background: var(--panel);
-      border: 1px solid var(--line-soft);
-      border-radius: 8px;
-    }
-
-    .summary-item span {
-      display: block;
-      color: var(--muted);
-      font-size: 12px;
-      font-weight: 700;
-      letter-spacing: 0.04em;
-    }
-
-    .summary-item strong {
-      display: block;
-      margin: 2px 0;
-      color: var(--navy);
-      font-size: 24px;
-      line-height: 1.2;
-    }
-
-    .summary-item small {
-      display: block;
-      color: var(--muted);
-      line-height: 1.45;
-    }
-
-    .summary-item.p1 { border-top: 3px solid var(--p1); }
-    .summary-item.p2 { border-top: 3px solid var(--p2); }
-    .summary-item.p3 { border-top: 3px solid var(--p3); }
-    .summary-item.evidence { border-top: 3px solid var(--ok); }
-
-    .snapshot-note {
-      margin: 13px 0 0;
-      color: var(--muted);
-      font-size: 12px;
-    }
-
-    nav#TOC {
-      grid-column: 1;
-      grid-row: 1 / span 3;
-      position: sticky;
-      top: 22px;
-      align-self: start;
-      max-height: calc(100vh - 44px);
-      overflow: auto;
-      padding: 18px;
-      background: rgba(255, 255, 255, 0.96);
-      border: 1px solid var(--line);
-      border-radius: 10px;
-      box-shadow: 0 12px 34px rgba(26, 45, 67, 0.09);
-    }
-
-    nav#TOC > h2 {
-      margin: 0 0 12px;
-      padding-bottom: 10px;
-      color: var(--navy);
-      border-bottom: 1px solid var(--line-soft);
-      font-size: 17px;
-    }
-
-    nav#TOC ul {
-      margin: 0;
-      padding: 0;
-      list-style: none;
-    }
-
-    nav#TOC ul ul {
-      margin: 5px 0 8px 8px;
-      padding-left: 11px;
-      border-left: 1px solid var(--line);
-    }
-
-    nav#TOC li { margin: 4px 0; }
-
-    nav#TOC a {
-      display: block;
-      padding: 5px 7px;
-      color: #344054;
-      border-radius: 6px;
-      font-size: 13px;
-      line-height: 1.45;
-      text-decoration: none;
-    }
-
-    nav#TOC a:hover {
-      color: var(--accent-dark);
-      background: #eef8f7;
-    }
-
-    nav#TOC a.active {
-      color: #fff;
-      background: var(--accent);
-      font-weight: 700;
-    }
-
-    nav#TOC > ul > li > a { display: none; }
-
-    nav#TOC > ul > li > ul {
-      margin: 0;
-      padding-left: 0;
-      border-left: 0;
-    }
-
-    section.level1 {
-      grid-column: 2;
-      grid-row: 2;
-      min-width: 0;
-    }
-
-    section.level1 > h1 {
-      margin: 0;
-      padding: 34px 38px 18px;
-      color: #fff;
-      background: linear-gradient(135deg, #12304a, #0f766e);
-      border-radius: 11px 11px 0 0;
-      box-shadow: var(--shadow);
-      font-size: clamp(28px, 4vw, 44px);
-      line-height: 1.2;
-      letter-spacing: -0.02em;
-    }
-
-    section.level1 > h1 + p {
-      margin: 0 0 24px;
-      padding: 0 38px 28px;
-      color: #e8f4f3;
-      background: linear-gradient(135deg, #12304a, #0f766e);
-      border-radius: 0 0 11px 11px;
-      box-shadow: var(--shadow);
-      font-size: 14px;
-    }
-
-    section.level2 {
-      margin: 0 0 24px;
-      padding: 28px 30px;
-      background: var(--paper);
-      border: 1px solid var(--line);
-      border-radius: 10px;
-      box-shadow: 0 9px 26px rgba(26, 45, 67, 0.07);
-    }
-
-    h2 {
-      margin: 0 0 16px;
-      color: var(--navy);
-      font-size: 25px;
-      line-height: 1.35;
-    }
-
-    h3 {
-      margin: 22px 0 11px;
-      color: #20364b;
-      font-size: 19px;
-      line-height: 1.45;
-    }
-
-    h4 {
-      margin: 18px 0 8px;
-      color: var(--accent-dark);
-      font-size: 15px;
-    }
-
-    section.level3[id^="p1-"] {
-      margin: 18px 0;
-      padding: 15px 17px 17px;
-      background: var(--p1-bg);
-      border: 1px solid #f5c9c4;
-      border-left: 5px solid var(--p1);
-      border-radius: 8px;
-    }
-
-    section.level3[id^="p2-"] {
-      margin: 18px 0;
-      padding: 15px 17px 17px;
-      background: var(--p2-bg);
-      border: 1px solid #f1d7ae;
-      border-left: 5px solid var(--p2);
-      border-radius: 8px;
-    }
-
-    section.level3[id^="p3-"] {
-      margin: 18px 0;
-      padding: 15px 17px 17px;
-      background: var(--p3-bg);
-      border: 1px solid #c8dafb;
-      border-left: 5px solid var(--p3);
-      border-radius: 8px;
-    }
-
-    section.level3[id^="p1-"] > h3,
-    section.level3[id^="p2-"] > h3,
-    section.level3[id^="p3-"] > h3 {
-      margin-top: 0;
-    }
-
-    p { margin: 8px 0; }
-
-    ul, ol {
-      margin: 9px 0 0 22px;
-      padding: 0;
-    }
-
-    li { margin: 6px 0; }
-
-    strong { color: #172f45; }
-
-    code {
-      padding: 0.12rem 0.34rem;
-      color: #0f172a;
-      background: #eef2f6;
-      border: 1px solid #dde5ed;
-      border-radius: 5px;
-      font-family: Consolas, "Cascadia Mono", "Courier New", monospace;
-      font-size: 0.91em;
-      overflow-wrap: anywhere;
-    }
-
-    pre {
-      max-width: 100%;
-      overflow: auto;
-      padding: 15px 17px;
-      color: #e6edf3;
-      background: #172332;
-      border-radius: 8px;
-      line-height: 1.55;
-    }
-
-    pre code {
-      padding: 0;
-      color: inherit;
-      background: transparent;
-      border: 0;
-      overflow-wrap: normal;
-    }
-
-    table {
-      display: block;
-      width: 100%;
-      max-width: 100%;
-      margin: 15px 0 4px;
-      overflow-x: auto;
-      border-collapse: collapse;
-      background: var(--paper);
-      font-size: 13px;
-    }
-
-    thead { background: #edf4f7; }
-
-    th, td {
-      min-width: 120px;
-      padding: 9px 11px;
-      border: 1px solid var(--line);
-      text-align: left;
-      vertical-align: top;
-    }
-
-    tbody tr:nth-child(even) { background: #fafcfd; }
-
-    blockquote {
-      margin: 16px 0;
-      padding: 12px 16px;
-      color: #425466;
-      background: #f5faf9;
-      border-left: 4px solid var(--accent);
-    }
-
-    hr {
-      margin: 28px 0;
-      border: 0;
-      border-top: 1px solid var(--line);
-    }
-
-    .footer-note {
-      grid-column: 2;
-      grid-row: 3;
-      padding: 15px 18px;
-      color: var(--muted);
-      background: rgba(255, 255, 255, 0.84);
-      border: 1px solid var(--line);
-      border-radius: 9px;
-      font-size: 12px;
-      text-align: center;
-    }
-
-    #back-to-top {
-      position: fixed;
-      right: 24px;
-      bottom: 24px;
-      width: 42px;
-      height: 42px;
-      color: #fff;
-      background: var(--accent);
-      border: 0;
-      border-radius: 50%;
-      box-shadow: 0 8px 22px rgba(15, 118, 110, 0.32);
-      cursor: pointer;
-      font-size: 20px;
-      opacity: 0;
-      pointer-events: none;
-      transition: opacity 0.2s ease, transform 0.2s ease;
-    }
-
-    #back-to-top.visible {
-      opacity: 1;
-      pointer-events: auto;
-    }
-
-    #back-to-top:hover { transform: translateY(-2px); }
-
-    @media (max-width: 980px) {
-      body {
-        display: block;
-        padding: 16px;
-      }
-
-      .reader-note,
-      nav#TOC,
-      section.level1,
-      .footer-note {
-        margin-bottom: 18px;
-      }
-
-      nav#TOC {
-        position: static;
-        max-height: none;
-      }
-
-      .summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-      section.level2 { padding: 22px 20px; }
-      section.level1 > h1 { padding: 28px 24px 16px; }
-      section.level1 > h1 + p { padding: 0 24px 23px; }
-    }
-
-    @media (max-width: 620px) {
-      body { padding: 10px; }
-      .reader-note__top { display: block; }
-      .source-link { display: inline-block; margin-top: 12px; }
-      .summary-grid { grid-template-columns: 1fr; }
-      section.level2 { padding: 18px 15px; }
-      section.level1 > h1 { padding: 24px 18px 14px; font-size: 28px; }
-      section.level1 > h1 + p { padding: 0 18px 20px; }
-      #back-to-top { right: 14px; bottom: 14px; }
-    }
-
-    @page { size: A4; margin: 14mm; }
-
-    @media print {
-      html, body { background: #fff; }
-
-      body {
-        display: block;
-        padding: 0;
-        color: #000;
-        font-size: 10.5pt;
-      }
-
-      nav#TOC,
-      #back-to-top { display: none !important; }
-
-      .reader-note,
-      section.level1 > h1,
-      section.level1 > h1 + p,
-      section.level2,
-      .footer-note {
-        box-shadow: none;
-      }
-
-      .reader-note { margin-bottom: 8mm; }
-
-      section.level1 > h1 {
-        color: #000;
-        background: #fff;
-        border: 1px solid #777;
-        border-bottom: 0;
-      }
-
-      section.level1 > h1 + p {
-        color: #222;
-        background: #fff;
-        border: 1px solid #777;
-        border-top: 0;
-      }
-
-      section.level2 {
-        margin-bottom: 8mm;
-        border-color: #aaa;
-        break-inside: auto;
-      }
-
-      section.level3 { break-inside: avoid-page; }
-      h2, h3, h4 { break-after: avoid-page; }
-      table { display: table; overflow: visible; font-size: 8.5pt; }
-      thead { display: table-header-group; }
-      tr, img, pre { break-inside: avoid; }
-      a { color: #000; text-decoration: none; }
-    }
+    html { scroll-behavior: smooth; }
+    body { max-width: 1500px; margin: 0 auto; padding: 28px 34px 64px; color: var(--text); background: var(--bg); font-family:"Microsoft YaHei","Segoe UI",Arial,sans-serif; line-height:1.68; }
+    body > header, body > nav, body > main, body > .hero, body > .section, body > .historical-banner { background:var(--paper); border:1px solid var(--line); border-radius:10px; box-shadow:0 10px 30px rgba(28,43,64,.08); }
+    body > header { padding:22px 28px; margin-bottom:20px; }
+    #TOC { padding:20px 30px; margin:0 0 22px; columns:2; }
+    #TOC ul { margin:.25rem 0; }
+    .hero, .section, .historical-banner { padding:28px 32px; margin:0 0 22px; }
+    .hero h1 { margin-top:0; color:#102a43; font-size:clamp(28px,4vw,44px); }
+    h1,h2,h3,h4 { color:#17324d; line-height:1.3; scroll-margin-top:18px; }
+    h2 { margin-top:0; padding-bottom:.4rem; border-bottom:2px solid #dcebe9; }
+    h3 { margin-top:1.9rem; }
+    a { color:#0b5f59; }
+    code { padding:.1rem .3rem; border:1px solid #e1e7ee; border-radius:4px; background:var(--code); color:#0f172a; }
+    table { display:block; width:100%; overflow-x:auto; border-collapse:collapse; margin:1rem 0 1.5rem; background:#fff; }
+    th,td { min-width:95px; padding:9px 11px; border:1px solid var(--line); text-align:left; vertical-align:top; }
+    th { position:sticky; top:0; z-index:1; background:#eaf4f2; color:#174a46; }
+    tr:nth-child(even) td { background:#fafcfd; }
+    .meta-grid, .ledger-grid, .focus-grid, .analysis-grid, .split { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
+    .meta-item, .ledger-stat, .focus-card, .analysis-panel, .note { padding:13px 15px; border:1px solid #e3e9ef; border-radius:8px; background:#f7fafc; }
+    .meta-item strong, .ledger-stat strong, .focus-card strong { display:block; color:var(--accent); }
+    .historical-banner { border-left:6px solid #b45309; background:#fff7ed; }
+    .issue { padding:22px 0; border-top:1px solid #e5eaf0; }
+    .badge { display:inline-block; padding:.15rem .55rem; border-radius:999px; background:#eef2f6; font-weight:700; }
+    .p0 .badge, .badge.p0 { background:#fff0ee; color:#b42318; }
+    .p1 .badge, .badge.p1 { background:#fff7ed; color:#b45309; }
+    .p2 .badge, .badge.p2 { background:#eff6ff; color:#1d4ed8; }
+    .p3 .badge, .badge.p3 { background:#f4f3ff; color:#6941c6; }
+    blockquote { margin:1rem 0; padding:.5rem 1rem; border-left:4px solid var(--accent); background:#f1f8f7; }
+    @media (max-width:800px) { body{padding:14px} #TOC{columns:1} .meta-grid,.ledger-grid,.focus-grid,.analysis-grid,.split{grid-template-columns:1fr} .hero,.section,.historical-banner{padding:20px} }
   </style>
 </head>
 <body>
-<div class="reader-note" role="note" aria-label="HTML 阅读版说明">
-  <div class="reader-note__top">
-    <div>
-      <strong class="reader-note__title">全工程问题总账 · HTML 阅读版</strong>
-      <span class="reader-note__subtitle">结论优先、目录可跳转、适配移动端与 A4 打印；Markdown 仍是事实维护源。</span>
-    </div>
-    <a class="source-link" href="2026-07-16_全工程问题梳理与整改优先级.md">查看 Markdown 源</a>
-  </div>
-  <div class="summary-grid" aria-label="问题优先级摘要">
-    <div class="summary-item p1"><span>P1</span><strong>16</strong><small>发布前修复或形成正式接受证据</small></div>
-    <div class="summary-item p2"><span>P2</span><strong>12</strong><small>近期版本整改并补专项测试</small></div>
-    <div class="summary-item p3"><span>P3</span><strong>11</strong><small>工程、工具和文档治理项</small></div>
-    <div class="summary-item evidence"><span>关闭条件</span><strong>6</strong><small>实现、自动化、台架、资料、构建与证据分层</small></div>
-  </div>
-  <p class="snapshot-note">HTML 生成日期：2026-07-17。正文事实仍以报告注明的 2026-07-16 审查快照为准；当前源码发生变化后应重新复核，不能只沿用本阅读版。</p>
-</div>
+<header id="title-block-header">
+<h1 class="title">2026-07-16
+全工程问题梳理与整改优先级（历史审查快照）</h1>
+</header>
 <nav id="TOC" role="doc-toc">
-<h2 id="toc-title">内容导航</h2>
 <ul>
-<li><a href="#2026-07-16-全工程问题梳理与整改优先级" id="toc-2026-07-16-全工程问题梳理与整改优先级">2026-07-16 全工程问题梳理与整改优先级</a>
+<li><a href="#全工程问题梳理与整改优先级"
+id="toc-全工程问题梳理与整改优先级">2026-07-16
+全工程问题梳理与整改优先级</a>
 <ul>
-<li><a href="#1-文档目的与结论口径" id="toc-1-文档目的与结论口径">1. 文档目的与结论口径</a></li>
-<li><a href="#2-审查范围与多轮方法" id="toc-2-审查范围与多轮方法">2. 审查范围与多轮方法</a></li>
-<li><a href="#3-优先级定义" id="toc-3-优先级定义">3. 优先级定义</a></li>
-<li><a href="#4-p1优先整改的问题" id="toc-4-p1优先整改的问题">4. P1：优先整改的问题</a></li>
-<li><a href="#5-p2近期整改和一致性问题" id="toc-5-p2近期整改和一致性问题">5. P2：近期整改和一致性问题</a></li>
-<li><a href="#6-p3工程工具和文档治理问题" id="toc-6-p3工程工具和文档治理问题">6. P3：工程、工具和文档治理问题</a></li>
-<li><a href="#7-既有未闭环台架与产品决策" id="toc-7-既有未闭环台架与产品决策">7. 既有未闭环台架与产品决策</a></li>
-<li><a href="#8-已排除的误报和已经通过的检查" id="toc-8-已排除的误报和已经通过的检查">8. 已排除的误报和已经通过的检查</a></li>
-<li><a href="#9-整改顺序建议" id="toc-9-整改顺序建议">9. 整改顺序建议</a></li>
-<li><a href="#10-关闭条件" id="toc-10-关闭条件">10. 关闭条件</a></li>
+<li><a href="#现行稳定编号映射"
+id="toc-现行稳定编号映射">现行稳定编号映射</a></li>
+<li><a href="#审查基线后增量状态" id="toc-审查基线后增量状态">0.
+审查基线后增量状态</a>
+<ul>
+<li><a href="#dsm-增量" id="toc-dsm-增量">0.1 2026-07-18 DSM
+增量</a></li>
+<li><a href="#协议27与-lh-增量" id="toc-协议27与-lh-增量">0.2 2026-07-23
+协议27与 LH 增量</a></li>
+</ul></li>
+<li><a href="#文档目的与结论口径" id="toc-文档目的与结论口径">1.
+文档目的与结论口径</a>
+<ul>
+<li><a href="#总体判断" id="toc-总体判断">1.1 总体判断</a></li>
+</ul></li>
+<li><a href="#审查范围与多轮方法" id="toc-审查范围与多轮方法">2.
+审查范围与多轮方法</a>
+<ul>
+<li><a href="#范围" id="toc-范围">2.1 范围</a></li>
+<li><a href="#审查轮次" id="toc-审查轮次">2.2 审查轮次</a></li>
+</ul></li>
+<li><a href="#优先级定义" id="toc-优先级定义">3. 优先级定义</a></li>
+<li><a href="#p1优先整改的问题" id="toc-p1优先整改的问题">4.
+P1：优先整改的问题</a>
+<ul>
+<li><a
+href="#p1-01-cpu2-modbus-请求边界不完整可造成发送缓冲越界和截断帧污染"
+id="toc-p1-01-cpu2-modbus-请求边界不完整可造成发送缓冲越界和截断帧污染">P1-01
+CPU2 Modbus 请求边界不完整，可造成发送缓冲越界和截断帧污染</a></li>
+<li><a href="#p1-02-cpu2-uart5-中断直接执行完整-modbusspi-和阻塞日志"
+id="toc-p1-02-cpu2-uart5-中断直接执行完整-modbusspi-和阻塞日志">P1-02
+CPU2 UART5 中断直接执行完整 Modbus、SPI 和阻塞日志</a></li>
+<li><a href="#p1-03-cpu2-电机电流硬件下发失败仍会-ack-并申请持久化"
+id="toc-p1-03-cpu2-电机电流硬件下发失败仍会-ack-并申请持久化">P1-03 CPU2
+电机电流硬件下发失败仍会 ACK 并申请持久化</a></li>
+<li><a href="#p1-04-cpu2-取消停机失败后仍清错并发布待机"
+id="toc-p1-04-cpu2-取消停机失败后仍清错并发布待机">P1-04 CPU2
+取消停机失败后仍清错并发布待机</a></li>
+<li><a href="#p1-05-cpu2-命令合法性启动失败和清错边界不安全"
+id="toc-p1-05-cpu2-命令合法性启动失败和清错边界不安全">P1-05 CPU2
+命令合法性、启动失败和清错边界不安全</a></li>
+<li><a href="#p1-06-双-cpu-看门狗都由独立定时-isr-无条件喂狗"
+id="toc-p1-06-双-cpu-看门狗都由独立定时-isr-无条件喂狗">P1-06 双 CPU
+看门狗都由独立定时 ISR 无条件喂狗</a></li>
+<li><a
+href="#p1-07-cpu3-fram-本机参数只有单槽覆盖写掉电可破坏最后有效镜像"
+id="toc-p1-07-cpu3-fram-本机参数只有单槽覆盖写掉电可破坏最后有效镜像">P1-07
+CPU3 FRAM 本机参数只有单槽覆盖写，掉电可破坏最后有效镜像</a></li>
+<li><a href="#p1-08-cpu3-在-cpu2-断链时约-91-时间同步忙等"
+id="toc-p1-08-cpu3-在-cpu2-断链时约-91-时间同步忙等">P1-08 CPU3 在 CPU2
+断链时约 91% 时间同步忙等</a></li>
+<li><a href="#p1-09-dsm-接受地址-0-并生成响应"
+id="toc-p1-09-dsm-接受地址-0-并生成响应">P1-09 DSM 接受地址 0
+并生成响应</a></li>
+<li><a href="#p1-10-si-自动-profile-在-manual维护状态仍会启动"
+id="toc-p1-10-si-自动-profile-在-manual维护状态仍会启动">P1-10 SI 自动
+Profile 在 Manual／维护状态仍会启动</a></li>
+<li><a href="#p1-11-si-manual-时-cpu3-对外报警仍按阈值合成"
+id="toc-p1-11-si-manual-时-cpu3-对外报警仍按阈值合成">P1-11 SI Manual 时
+CPU3 对外报警仍按阈值合成</a></li>
+<li><a
+href="#p1-12-外部命令只有寄存器写成功回显没有可关联本次请求的业务接受完成-ack"
+id="toc-p1-12-外部命令只有寄存器写成功回显没有可关联本次请求的业务接受完成-ack">P1-12
+外部命令只有寄存器写成功回显，没有可关联本次请求的业务接受／完成
+ACK</a></li>
+<li><a href="#p1-13-cpu2-传感器运动硬限位没有覆盖连续强制路径"
+id="toc-p1-13-cpu2-传感器运动硬限位没有覆盖连续强制路径">P1-13 CPU2
+传感器运动硬限位没有覆盖连续／强制路径</a></li>
+<li><a href="#p1-14-as5145-dma-完成回调内同步打印并立即重启-dma"
+id="toc-p1-14-as5145-dma-完成回调内同步打印并立即重启-dma">P1-14 AS5145
+DMA 完成回调内同步打印并立即重启 DMA</a></li>
+<li><a href="#p1-15-wärtsilä-完成态与测量中对外返回同一个状态字"
+id="toc-p1-15-wärtsilä-完成态与测量中对外返回同一个状态字">P1-15
+Wärtsilä 完成态与测量中对外返回同一个状态字</a></li>
+<li><a href="#p1-16-生产固件常开高风险-usart1-调试入口条件风险"
+id="toc-p1-16-生产固件常开高风险-usart1-调试入口条件风险">P1-16
+生产固件常开高风险 USART1 调试入口（条件风险）</a></li>
+</ul></li>
+<li><a href="#p2近期整改和一致性问题" id="toc-p2近期整改和一致性问题">5.
+P2：近期整改和一致性问题</a>
+<ul>
+<li><a href="#p2-01-dsmwärtsilä-多参数写不是-cpu2-原子事务"
+id="toc-p2-01-dsmwärtsilä-多参数写不是-cpu2-原子事务">P2-01
+DSM／Wärtsilä 多参数写不是 CPU2 原子事务</a></li>
+<li><a href="#p2-02-si-非整日周期在-cpu3-重启后相位漂移"
+id="toc-p2-02-si-非整日周期在-cpu3-重启后相位漂移">P2-02 SI 非整日周期在
+CPU3 重启后相位漂移</a></li>
+<li><a href="#p2-03-si-探底频次存在-off-by-one"
+id="toc-p2-03-si-探底频次存在-off-by-one">P2-03 SI 探底频次存在
+off-by-one</a></li>
+<li><a href="#p2-04-cpu2-fc10-ack-早于-fram-写后验证"
+id="toc-p2-04-cpu2-fc10-ack-早于-fram-写后验证">P2-04 CPU2 FC10 ACK 早于
+FRAM 写后验证</a></li>
+<li><a href="#p2-05-cpu2-ab-参数槽缺少单槽自愈"
+id="toc-p2-05-cpu2-ab-参数槽缺少单槽自愈">P2-05 CPU2 A/B
+参数槽缺少单槽自愈</a></li>
+<li><a href="#p2-06-cpu3-参数保存失败反馈和迁移日志不完整"
+id="toc-p2-06-cpu3-参数保存失败反馈和迁移日志不完整">P2-06 CPU3
+参数保存失败反馈和迁移日志不完整</a></li>
+<li><a href="#p2-07-modbus-rtu-仍以约-1t-的-uart-idle-直接判帧"
+id="toc-p2-07-modbus-rtu-仍以约-1t-的-uart-idle-直接判帧">P2-07 Modbus
+RTU 仍以约 1T 的 UART IDLE 直接判帧</a></li>
+<li><a href="#p2-08-uart6ch9141-缺少统一链路所有权"
+id="toc-p2-08-uart6ch9141-缺少统一链路所有权">P2-08 UART6／CH9141
+缺少统一链路所有权</a></li>
+<li><a href="#p2-09-wärtsilä-测后回位探底失败没有对外闭环"
+id="toc-p2-09-wärtsilä-测后回位探底失败没有对外闭环">P2-09 Wärtsilä
+测后回位／探底失败没有对外闭环</a></li>
+<li><a href="#p2-10-国标密度后处理阈值硬编码为-100"
+id="toc-p2-10-国标密度后处理阈值硬编码为-100">P2-10
+国标密度后处理阈值硬编码为 100</a></li>
+<li><a href="#p2-11-cpu3-协议切换-ack-是-accepted不是-completed"
+id="toc-p2-11-cpu3-协议切换-ack-是-accepted不是-completed">P2-11 CPU3
+协议切换 ACK 是 Accepted，不是 Completed</a></li>
+<li><a href="#p2-12-未来参数版本迁移边界不足"
+id="toc-p2-12-未来参数版本迁移边界不足">P2-12
+未来参数版本迁移边界不足</a></li>
+</ul></li>
+<li><a href="#p3工程工具和文档治理问题"
+id="toc-p3工程工具和文档治理问题">6. P3：工程、工具和文档治理问题</a>
+<ul>
+<li><a href="#p3-01-根-readme-和-si-正式入口版本基线过期"
+id="toc-p3-01-根-readme-和-si-正式入口版本基线过期">P3-01 根 README 和
+SI 正式入口版本基线过期</a></li>
+<li><a href="#p3-02-文档结构检查已闭环2026-07-18"
+id="toc-p3-02-文档结构检查已闭环2026-07-18">P3-02
+文档结构检查已闭环（2026-07-18）</a></li>
+<li><a href="#p3-03-本机检查脚本基线过期"
+id="toc-p3-03-本机检查脚本基线过期">P3-03 本机检查脚本基线过期</a></li>
+<li><a href="#p3-04-tools-和完整测试不在-gitci"
+id="toc-p3-04-tools-和完整测试不在-gitci">P3-04 <code>tools/</code>
+和完整测试不在 Git／CI</a></li>
+<li><a href="#p3-05-outputs-已忽略但仍有-4-个跟踪文件"
+id="toc-p3-05-outputs-已忽略但仍有-4-个跟踪文件">P3-05
+<code>outputs/</code> 已忽略但仍有 4 个跟踪文件</a></li>
+<li><a
+href="#p3-06-当前暂存区与发布资料边界冲突且生成流程会改写暂存导出件"
+id="toc-p3-06-当前暂存区与发布资料边界冲突且生成流程会改写暂存导出件">P3-06
+当前暂存区与发布资料边界冲突，且生成流程会改写暂存导出件</a></li>
+<li><a href="#p3-07-协议验收产物缺少完整生成元数据"
+id="toc-p3-07-协议验收产物缺少完整生成元数据">P3-07
+协议验收产物缺少完整生成元数据</a></li>
+<li><a href="#p3-08-正式发布没有明确-release-构建基线"
+id="toc-p3-08-正式发布没有明确-release-构建基线">P3-08 正式发布没有明确
+Release 构建基线</a></li>
+<li><a href="#p3-09-编译告警门禁只有--wall"
+id="toc-p3-09-编译告警门禁只有--wall">P3-09 编译告警门禁只有
+<code>-Wall</code></a></li>
+<li><a href="#p3-10-wirelesshost_v4.1_init-不具备独立可复现构建入口"
+id="toc-p3-10-wirelesshost_v4.1_init-不具备独立可复现构建入口">P3-10
+<code>WirelessHost_V4.1_init</code> 不具备独立可复现构建入口</a></li>
+<li><a href="#p3-11-历史问题正文与统一索引的状态口径仍需持续对账"
+id="toc-p3-11-历史问题正文与统一索引的状态口径仍需持续对账">P3-11
+历史问题正文与统一索引的状态口径仍需持续对账</a></li>
+</ul></li>
+<li><a href="#既有未闭环台架与产品决策"
+id="toc-既有未闭环台架与产品决策">7. 既有未闭环台架与产品决策</a></li>
+<li><a href="#已排除的误报和已经通过的检查"
+id="toc-已排除的误报和已经通过的检查">8.
+已排除的误报和已经通过的检查</a>
+<ul>
+<li><a href="#已排除降级" id="toc-已排除降级">8.1 已排除／降级</a></li>
+<li><a href="#已通过" id="toc-已通过">8.2 已通过</a></li>
+</ul></li>
+<li><a href="#整改顺序建议" id="toc-整改顺序建议">9. 整改顺序建议</a>
+<ul>
+<li><a href="#天先关闭内存运动状态和维护安全边界"
+id="toc-天先关闭内存运动状态和维护安全边界">9.1 0～15
+天：先关闭内存、运动状态和维护安全边界</a></li>
+<li><a href="#天处理活性存储和事务一致性"
+id="toc-天处理活性存储和事务一致性">9.2 15～45
+天：处理活性、存储和事务一致性</a></li>
+<li><a href="#天补齐台架与可复现治理"
+id="toc-天补齐台架与可复现治理">9.3 45～90
+天：补齐台架与可复现治理</a></li>
+</ul></li>
+<li><a href="#关闭条件" id="toc-关闭条件">10. 关闭条件</a></li>
 </ul></li>
 </ul>
 </nav>
-<section id="2026-07-16-全工程问题梳理与整改优先级" class="level1">
-<h1>2026-07-16 全工程问题梳理与整改优先级</h1>
-<p>状态：未处理／全工程静态审查总账<br />
+<h1 id="全工程问题梳理与整改优先级">2026-07-16
+全工程问题梳理与整改优先级</h1>
+<blockquote>
+<p><strong>文档身份：2026-07-16
+历史全工程审查快照。</strong>本页保留形成时的证据、构建数字、测试数量和
+P1／P2／P3 编号，不再作为现行问题状态入口。</p>
+<p><strong>现行入口：</strong><a
+href="2026-07-23_CUBE全量问题核对清单与整改跟踪.md">2026-07-23 CUBE
+全量问题核对清单与整改跟踪</a>，基线
+<code>MAIN@db0b1322</code>，CPU2／CPU3 <code>V1.31.0.0</code>，共享协议
+<code>27</code>。</p>
+</blockquote>
+<p>状态：历史审查快照／详细证据保留
 审查基线：<code>MAIN</code>，<code>24250b529cf9</code><br />
-固件基线：CPU2 <code>V1.28.0.0</code>，CPU3 <code>V1.26.0.0</code>，共享协议 <code>23</code><br />
-参数存储基线：CPU2 <code>DEVICE_PARAM_VERSION=3</code>，CPU3 本机参数 <code>V7</code><br />
+固件基线：CPU2 <code>V1.28.0.0</code>，CPU3
+<code>V1.26.0.0</code>，共享协议 <code>23</code><br />
+参数存储基线：CPU2 <code>DEVICE_PARAM_VERSION=3</code>，CPU3 本机参数
+<code>V7</code><br />
 审查日期：2026-07-16</p>
-<section id="1-文档目的与结论口径" class="level2">
-<h2>1. 文档目的与结论口径</h2>
-<p>本文对当前 CUBE 工程做多轮、跨 CPU、跨协议、跨文档和构建工具的系统梳理，目标不是重复历史问题清单，而是回答以下问题：</p>
+<h2 id="现行稳定编号映射">现行稳定编号映射</h2>
+<table>
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
+<thead>
+<tr>
+<th>历史范围</th>
+<th>现行归并</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>P1-01</td>
+<td>C-01、C-02</td>
+</tr>
+<tr>
+<td>P1-02／P1-14</td>
+<td>C-14</td>
+</tr>
+<tr>
+<td>P1-03、P2-01、P2-04</td>
+<td>C-03</td>
+</tr>
+<tr>
+<td>P1-04～P1-06</td>
+<td>C-05、C-06、C-08；其中“启动失败仍继续分派”已转 F-01</td>
+</tr>
+<tr>
+<td>P1-07／P2-06、P1-08</td>
+<td>C-16／C-36、C-15</td>
+</tr>
+<tr>
+<td>P1-09～P1-12</td>
+<td>C-24、C-18、C-19</td>
+</tr>
+<tr>
+<td>P1-13</td>
+<td>C-42A～C-42H、B-05</td>
+</tr>
+<tr>
+<td>P1-15／P2-09</td>
+<td>C-20</td>
+</tr>
+<tr>
+<td>P1-16</td>
+<td>R-03</td>
+</tr>
+<tr>
+<td>P2-02／P2-03／P2-05</td>
+<td>F-04／F-05／F-11，已关闭</td>
+</tr>
+<tr>
+<td>P2-07／P2-08／P2-10</td>
+<td>R-01、C-23、C-28</td>
+</tr>
+<tr>
+<td>协议 27／LH 增量</td>
+<td>C-03、C-12、C-15、C-25、C-39、C-40、B-10</td>
+</tr>
+<tr>
+<td>DSM 增量</td>
+<td>C-22、C-23、C-25、F-18；CPU3 对外 DSM 地址 0 另见 C-24</td>
+</tr>
+<tr>
+<td>历史 P3 文档／证据项</td>
+<td>分别归入 C-27、R-04、F-09／F-10 或 B-09，不再按原 P3
+数量作为当前统计</td>
+</tr>
+</tbody>
+</table>
+<p>本页 SI 专题内部使用的 <code>R-01／R-02</code>
+是当时的局部编号，不能与现行总账 R-01／R-02 混用；其
+Manual／维护门禁残余统一归 C-18。</p>
+<h2 id="审查基线后增量状态">0. 审查基线后增量状态</h2>
+<h3 id="dsm-增量">0.1 2026-07-18 DSM 增量</h3>
+<p>本节只追加审查基线之后的新证据，不改写 2026-07-16
+主体中的历史版本、构建尺寸和测试数量。当前 <code>MAIN</code> HEAD 为
+<code>37627ec3</code>，正式版本为 CPU2 <code>V1.29.1.0</code>、CPU3
+<code>V1.28.0.0</code>、共享协议 <code>24</code>；当前实现以 <a
+href="../../00_构建与版本/版本改动与测试/2026-07-18_CPU2_V1.29.1.0_CPU3_V1.28.0.0_CPU3通信诊断与点阵同步恢复_改动与测试方案.md">V1.29.1.0/V1.28.0.0
+改动与测试方案</a> 为准。</p>
+<p>DSM CPU1 V5.3 正文、15 个版本/快照矩阵和 20 组 golden frames
+已作为当前暂存/工作树分层的同步制品进入静态复查基准；最终口径由当前工作树制品和
+<code>.sync.json</code> 哈希绑定。它们没有对应 CPU2/DSM CPU1
+固件整改，也不是已发布行为。完整证据、整改顺序和关闭条件见 <a
+href="2026-07-18_DSM传感器协议适配复查.md">2026-07-18 DSM
+传感器协议适配复查</a>。</p>
+<table>
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr>
+<th>增量问题</th>
+<th>优先级</th>
+<th>当前状态与主要风险</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>DSM-CUBE-01</code> 低电容被改写为 <code>99999.9 pF</code></td>
+<td>受控产品行为</td>
+<td>已确认 <code>&lt;30.0 pF → 99999.9 pF</code>
+为有意特殊处理，不作为缺陷修改，也不清理
+<code>zero_cap</code>；现行编号见全量总账 F-18</td>
+</tr>
+<tr>
+<td><code>DSM-CUBE-02</code> 模式 ACK 伪成功且 DSM CPU1 可能空指针
+HardFault</td>
+<td>P1</td>
+<td>CPU2/DSM CPU1 均未整改，未做真实 CPU0 故障注入</td>
+</tr>
+<tr>
+<td><code>DSM-CUBE-03</code> 未识别维护线</td>
+<td>多版本现场 P1，单一受控 V5.3 为 P2</td>
+<td><code>Cv/CV</code> 未实现，不能可靠应用 14 版本矩阵</td>
+</tr>
+<tr>
+<td><code>DSM-CUBE-04～07</code> 定长接收、解析重试、<code>Cb</code>
+内部失败和 drain 活性</td>
+<td>P2</td>
+<td>未整改；BCC 为控制字符、错配帧、CPU0 失败和持续噪声均待台架</td>
+</tr>
+<tr>
+<td><code>DSM-CUBE-08</code> <code>CK</code>/供电日志与消费语义</td>
+<td>P3</td>
+<td>正常小写 <code>e</code>
+也会被误报为低压，供电异常方向和数据质量未收口</td>
+</tr>
+</tbody>
+</table>
+<h3 id="协议27与-lh-增量">0.2 2026-07-23 协议27与 LH 增量</h3>
+<p>本节基于当前 <code>MAIN</code> HEAD <code>46f5d634</code>，固件为
+CPU2 <code>V1.31.0.0</code>、CPU3 <code>V1.30.0.0</code>、共享协议
+<code>27</code>；版本范围和已有静态／构建证据见 <a
+href="../../00_构建与版本/版本改动与测试/2026-07-22_CPU2_V1.31.0.0_CPU3_V1.30.0.0_协议27与LH适配_改动与测试方案.md">CPU2
+V1.31.0.0 / CPU3 V1.30.0.0
+协议27与LH适配改动与测试方案</a>。以下项均是待整改／待决策项，不表示已修复或已完成实机复现。</p>
+<table>
+<colgroup>
+<col style="width: 25%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
+</colgroup>
+<thead>
+<tr>
+<th>编号</th>
+<th>问题</th>
+<th>优先级</th>
+<th>当前状态与关联</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>CUBE-20260723-01</code></td>
+<td>维护进入／退出／清锁存会中断正在执行的测量</td>
+<td>P1／待产品语义确认</td>
+<td>未整改；关联既有 <code>P1-05</code>
+命令边界，但本项聚焦有效控制命令的抢占语义</td>
+</tr>
+<tr>
+<td><code>CUBE-20260723-02</code></td>
+<td>FRAM 写后校验失败时运行态不回滚</td>
+<td>P1</td>
+<td>未整改；补充并强化既有 <code>P2-04</code> 的
+ACK／持久化语义问题</td>
+</tr>
+<tr>
+<td><code>CUBE-20260723-03</code></td>
+<td>K1～K3 阻尼系数可配置但不参与继电器判断</td>
+<td>P2</td>
+<td>未整改；字段仍定义为后续滤波预留</td>
+</tr>
+<tr>
+<td><code>CUBE-20260723-04</code></td>
+<td>LH 幅值寄存器没有正常硬件数据源</td>
+<td>P2</td>
+<td>未整改；实机可能返回初始值或旧值</td>
+</tr>
+<tr>
+<td><code>CUBE-20260723-05</code></td>
+<td>LH 参数与 CPU2 权威写入校验未闭环</td>
+<td>P1</td>
+<td>未整改；继电器顺序、范围和阻尼值仍可非法组合</td>
+</tr>
+<tr>
+<td><code>CUBE-20260723-06</code></td>
+<td>LH FC10 同步等待占用 CPU3 主循环</td>
+<td>P1</td>
+<td>未整改；关联既有 <code>P1-08</code> 的 CPU2 同步忙等架构</td>
+</tr>
+<tr>
+<td><code>CUBE-20260723-07</code></td>
+<td>继电器 NC／NO 物理反馈未闭环</td>
+<td>P2／待硬件验证</td>
+<td>既有能力缺口，不是本次新回归；新增对外状态仍只表示逻辑动作</td>
+</tr>
+</tbody>
+</table>
+<h4
+id="cube-20260723-01-维护进入退出清锁存会中断正在执行的测量">CUBE-20260723-01
+维护进入／退出／清锁存会中断正在执行的测量</h4>
+<p><strong>当前行为与证据</strong></p>
+<ul>
+<li>三个命令都使用 <code>g_deviceParams.command</code>
+这一正式命令槽下发，主循环取走后再调用
+<code>ProcessMeasureCmd()</code>：<code>LTD_MAIN_CPU2/Application/Src/app_main.c:199-207</code>。</li>
+<li><code>ProcessMeasureCmd()</code>
+对维护进入、维护退出和清除全部继电器锁存报警做了快速分派，但这不改变它们被传递前已经占用正式命令槽的事实：<code>LTD_MAIN_CPU2/Application/Src/measure.c:97-115</code>。</li>
+<li><code>HasEffectiveCommandSwitchRequest()</code> 对任何非
+<code>CMD_NONE</code> 的不同待执行命令返回
+<code>true</code>：<code>LTD_MAIN_CPU2/Services/ParamStorage/system_parameter.h:913-932</code>。测量循环、运动宏和传感器等待均把它视为切换请求：<code>measure_density.c:337-339</code>、<code>motor_ctrl_internal.h:102-126</code>、<code>sensor.c:894-936</code>。</li>
+</ul>
+<p><strong>影响</strong></p>
+<p>命令最终会被执行，但当前测量／运动／传感器等待会先按“命令切换”退出，因而“非阻塞维护控制”与“抢占当前测量”两种语义实际混在同一通道。如果产品预期是在不取消测量的前提下切换维护状态或清锁存，当前实现不满足。</p>
+<p><strong>建议关闭条件</strong></p>
+<ol type="1">
+<li>由产品明确三个命令对测量的语义：不抢占、显式取消后执行，或忙时拒绝；不得依赖当前隐式退出行为。</li>
+<li>如定义为不抢占，将瞬时控制事件与测量命令槽分离，或在切换判断中对它们建立明确白名单，同时保证事件恰好消费一次。</li>
+<li>实机覆盖单点、分布、SI
+Profile、运动中和传感器等待中逐项下发三个命令，同时核对原测量生命周期、电机状态、命令单次执行和对外结果。</li>
+</ol>
+<h4
+id="cube-20260723-02-fram-写后校验失败时运行态不回滚">CUBE-20260723-02
+FRAM 写后校验失败时运行态不回滚</h4>
+<p><strong>当前行为与证据</strong></p>
+<ul>
+<li>CPU2 FC10 路径先保留写前快照，随后把候选参数赋给
+<code>g_deviceParams</code>、刷新寄存器镜像并请求延后保存：<code>LTD_MAIN_CPU2/Services/Modbus/hostcommu_modbus.c:239-245,287-313</code>。</li>
+<li>该快照的现有用途是延后打印写参差异，不是回滚：<code>LTD_MAIN_CPU2/Services/ParamStorage/system_parameter.c:941-976,2501-2511</code>。</li>
+<li>A／B 槽写后回读校验失败时，代码只记录
+<code>PARAM_STORAGE_WRITE_VERIFY_FAILED</code>并返回，没有恢复
+<code>g_deviceParams</code>或寄存器镜像：<code>system_parameter.c:1040-1064</code>。</li>
+</ul>
+<p><strong>影响</strong></p>
+<p>可出现“LH 主机收到写入失败，但当次运行的 RAM
+参数已改变；重启后又从有效旧槽恢复旧值”的分裂语义。如候选参数已影响
+AO、电机或继电器运行态，仅回滚结构体也不足以恢复实际外设状态。本项与
+<code>P2-04</code> 的“通用 FC10 ACK
+早于持久化”有关，但是一个独立的失败原子性问题。</p>
+<p><strong>建议关闭条件</strong></p>
+<ol type="1">
+<li>明确以“持久化成功后才提交运行态”或“先临时应用，失败时完整回滚”为唯一事务模型。</li>
+<li>失败路径必须一致处理 <code>g_deviceParams</code>、Holding Register
+镜像、CPU3 重读快照和已经下发的硬件副作用；不能只改错误码。</li>
+<li>对 A 槽写失败、B
+槽写失败、单槽回读不一致和双槽回读不一致做故障注入，核对主机响应、RAM、FRAM、实际外设和重启后值必须属于同一次已提交事务。</li>
+</ol>
+<h4
+id="cube-20260723-03-k1k3-阻尼系数可配置但不参与继电器判断">CUBE-20260723-03
+K1～K3 阻尼系数可配置但不参与继电器判断</h4>
+<p><strong>当前行为与证据</strong></p>
+<ul>
+<li><code>RelayAlarmConfig.damping_factor</code>
+明确标注为“预留给后续滤波”：<code>LTD_MAIN_CPU2/Services/ParamStorage/system_parameter.h:172-185</code>。</li>
+<li>该字段已纳入保持寄存器读写、参数镜像和 FRAM
+保存：<code>LTD_MAIN_CPU2/Services/Modbus/dataanalysis_modbus.c:60-87</code>。</li>
+<li>继电器运行时会把它复制到快照，但实际判断只使用 HH／H／L／LL
+阈值和滞回：<code>LTD_MAIN_CPU2/Services/Relay/relay_output.c:115-139,479-511</code>，没有阻尼／时间滤波消费点。</li>
+</ul>
+<p><strong>影响</strong></p>
+<p>主机和屏幕可以写入、读回并持久化一个看似生效的阻尼值，但继电器的实际吸合／释放行为不受它影响，易形成配置伪成功和验收误判。</p>
+<p><strong>建议关闭条件</strong></p>
+<ol type="1">
+<li>产品二选一定版：实现可验证的阻尼算法，或将字段正式定义为预留并禁止主机修改。</li>
+<li>如实现滤波，必须定义单位、范围、采样周期、上电初值、锁存和滞回的先后顺序，并覆盖阈值附近噪声台架测试。</li>
+<li>如继续预留，LH
+和共享协议应明确标注为保留值，写入返回非法值或只读，不得回显为已生效配置。</li>
+</ol>
+<h4
+id="cube-20260723-04-lh-幅值寄存器没有正常硬件数据源">CUBE-20260723-04
+LH 幅值寄存器没有正常硬件数据源</h4>
+<p><strong>当前行为与证据</strong></p>
+<ul>
+<li>LH 输入寄存器 <code>0x0014</code> 直接读取
+<code>g_measurement.debug_data.current_amplitude</code>：<code>LTD_DISPLAY_CPU3/Communication/external/lh_modbus/lh_register_map.h:41</code>、<code>lh_modbus_slave.c:239-243</code>。</li>
+<li>CPU2
+正常硬件测量路径未找到该字段的赋值。现有赋值只出现在测试代码和固定点样机虚拟数据路径：<code>LTD_MAIN_CPU2/Application/Src/test.c:3033,3085</code>、<code>measure_density.c:270-304</code>。</li>
+<li>固定点样机宏默认为关闭：<code>measure_density.c:51-54</code>。</li>
+</ul>
+<p><strong>影响</strong></p>
+<p>正常实机运行时，LH
+主机可能把初始零值或未被刷新的旧值解释为有效幅值；当前也没有新鲜度、无效值和单位语义可以让主机识别数据不可用。</p>
+<p><strong>建议关闭条件</strong></p>
+<ol type="1">
+<li>确认传感器真实幅值的来源、量纲、缩放、刷新时点和有效范围，在 CPU2
+正常测量路径中发布。</li>
+<li>为未采样、超时和传感器故障定义不会与正常幅值冲突的无效语义，并在 LH
+文档中同步。</li>
+<li>若当前硬件根本不提供幅值，应把寄存器定义为不支持，不得继续把默认数值当作正常测量量输出。</li>
+</ol>
+<h4
+id="cube-20260723-05-lh-参数与-cpu2-权威写入校验未闭环">CUBE-20260723-05
+LH 参数与 CPU2 权威写入校验未闭环</h4>
+<p><strong>当前行为与证据</strong></p>
+<ul>
+<li>LH
+预校验对标定油位、标定水位和标定罐高直接返回成功：<code>LTD_DISPLAY_CPU3/Communication/external/lh_modbus/lh_modbus_slave.c:555-561</code>。</li>
+<li>继电器 HH／H／L／LL 只检查 Float32
+为有限值，滞回只检查非负，阻尼字段接受任意 32
+位值：<code>lh_modbus_slave.c:500-534</code>。当前没有 HH、H、L、LL
+顺序关系或按报警源限定的物理范围。</li>
+<li>CPU2 权威写入入口把三路继电器字段直接从寄存器复制到
+<code>g_deviceParams</code>：<code>LTD_MAIN_CPU2/Services/Modbus/dataanalysis_modbus.c:72-87,470-473</code>；现有运行归一化只清除
+<code>clear_alarm</code>
+命令：<code>LTD_MAIN_CPU2/Services/ParamStorage/system_parameter.c:748-753</code>。</li>
+</ul>
+<p><strong>影响</strong></p>
+<p>非法阈值组合、过大但有限的浮点值或任意阻尼值可以进入 CPU2
+运行态并持久化。LH 是当前某个外部入口，但安全边界应位于 CPU2
+权威提交点；否则其它主机或未来入口仍可绕过 CPU3 预校验。</p>
+<p><strong>建议关闭条件</strong></p>
+<ol type="1">
+<li>在 CPU2 建立完整候选参数校验，CPU3 LH
+预校验只做同规则的提前拒绝，不能代替权威校验。</li>
+<li>至少定义标定目标物理范围、按报警源的阈值范围、<code>HH ≥ H ≥ L ≥ LL</code>
+是否允许等值、滞回上限和阻尼单位／上限。</li>
+<li>非法值必须整个事务拒绝，不改
+RAM、FRAM、继电器运行态或完成代次；表驱动覆盖
+NaN／Inf、最大有限值、阈值乱序、边界等值和每个报警源。</li>
+</ol>
+<h4
+id="cube-20260723-06-lh-fc10-同步等待占用-cpu3-主循环">CUBE-20260723-06
+LH FC10 同步等待占用 CPU3 主循环</h4>
+<p><strong>当前行为与证据</strong></p>
+<ul>
+<li>LH 持久化确认循环定义了 <code>1500 ms</code> 名义超时和 128
+次轮询上限：<code>LTD_DISPLAY_CPU3/Communication/external/lh_modbus/lh_modbus_slave.c:14-15,647-675</code>。</li>
+<li>FC10 在同一调用链中先刷新 CPU2
+状态、同步写参、再反复刷新状态并回读目标字段：<code>lh_modbus_slave.c:683-703,707-753</code>。</li>
+<li>底层每个 CPU2 UART5 同步事务自身可忙等约
+<code>1000 ms</code>：<code>LTD_DISPLAY_CPU3/Communication/internal/main_board_modbus/cpu2_communicate.c:19,1998-2021</code>。外层只在每轮事务开始前检查
+1.5 s 截止时间，因此正在执行的内层事务可将整体耗时推过名义上限。</li>
+</ul>
+<p><strong>影响</strong></p>
+<p>慢响应、丢帧或 CPU2 异常时，一条 LH FC10 可长时间占用 CPU3
+主循环；期间 OLED、其它外部 COM、正常 CPU2 轮询和后台任务均会延后。名义
+1.5 s 也不是包括内层阻塞在内的硬上限。</p>
+<p><strong>建议关闭条件</strong></p>
+<ol type="1">
+<li>将 LH
+写参、持久化代次确认和目标回读改为可逐主循环推进的非阻塞事务状态机，不在外部
+Modbus 处理调用栈中连续忙等。</li>
+<li>统一一个包含所有内部事务的绝对 deadline；超时后必须及时释放外部 COM
+和 CPU2 通信状态，不得因单次 UART 等待越过总截止时间。</li>
+<li>在 CPU2 正常、慢响应、断链和 FRAM 校验失败四类场景下，并发压测
+LH、其它外部 COM、OLED 刷新和 CPU2
+重连，记录最大响应延迟和主循环最大停顿。</li>
+</ol>
+<h4 id="cube-20260723-07-继电器-ncno-物理反馈未闭环">CUBE-20260723-07
+继电器 NC／NO 物理反馈未闭环</h4>
+<p><strong>当前行为与证据</strong></p>
+<ul>
+<li>CPU2 已将 K1～K4 的 NC／NO
+管脚配置为输入：<code>LTD_MAIN_CPU2/Core/Src/gpio.c:128-144</code>。</li>
+<li>继电器业务模块只向驱动 GPIO
+写电平，并用写入命令更新软件状态掩码：<code>LTD_MAIN_CPU2/Services/Relay/relay_output.c:299-318</code>；对外发布的是逻辑报警动作掩码：<code>relay_output.c:228-242,645-672</code>。</li>
+<li>LH 明确把 K1～K3
+状态映射为“维护屏蔽后的逻辑动作位”，不是物理触点反馈：<code>LTD_DISPLAY_CPU3/Communication/external/lh_modbus/lh_modbus_slave.c:213-233</code>。</li>
+</ul>
+<p><strong>影响</strong></p>
+<p>外部主机看到的“继电器动作”只能证明软件希望动作，不能证明线圈、触点和现场接线已实际到位。触点粘连、拒动、NC／NO
+矛盾或反馈断线都不会形成不一致故障。这是既有闭环缺口，不是协议27／LH
+新增逻辑造成的回归，但新增对外状态不应被解读为真实触点证据。</p>
+<p><strong>建议关闭条件</strong></p>
+<ol type="1">
+<li>先根据原理图和实物确认 NC／NO 输入的有效电平、断线表现、消抖时间和
+K1～K4 是否都装配反馈。</li>
+<li>分离“期望逻辑动作”“驱动电平”和“物理触点状态”，对拒动、粘连、NC／NO
+矛盾和超时建立独立故障及恢复语义。</li>
+<li>使用拔线、触点强制和线圈失效做真实硬件故障注入；LH／共享协议在实现前必须保持“逻辑动作，非物理反馈”的明确口径。</li>
+</ol>
+<p>本报告的 Markdown 与 HTML
+阅读版均作为历史详细证据保留；当前状态、数量和关闭条件只以 2026-07-23
+全量总账为准。</p>
+<h2 id="文档目的与结论口径">1. 文档目的与结论口径</h2>
+<p>本文对当前 CUBE 工程做多轮、跨
+CPU、跨协议、跨文档和构建工具的系统梳理，目标不是重复历史问题清单，而是回答以下问题：</p>
 <ol type="1">
 <li>当前源码中还有哪些可以由代码直接证明的问题；</li>
 <li>哪些问题已经有实现，但仍缺真实硬件、PLC 或故障注入证据；</li>
@@ -742,22 +807,30 @@
 <li>下一轮整改应按什么顺序推进，避免只处理表面告警。</li>
 </ol>
 <p>本报告中的“确认”表示当前源码和正式资料已经形成可达证据链，不等于已经在真实硬件上复现；“条件风险”表示影响等级依赖物理可达性、主机契约或产品决策；“待台架”表示不能仅凭静态检查宣称闭环。</p>
-<section id="11-总体判断" class="level3">
-<h3>1.1 总体判断</h3>
+<h3 id="总体判断">1.1 总体判断</h3>
 <ul>
-<li>当前双固件可以 clean-first 构建，CPU2／CPU3 共享协议、结构体、枚举和寄存器公式未发现漂移。</li>
-<li>仍有一组需要优先处理的运行态问题，集中在：CPU2 Modbus 输入边界、命令与停机错误语义、双 CPU 看门狗活性监督、CPU3 参数掉电原子性、CPU3 断链阻塞、SI Manual 安全语义和外部命令闭环。</li>
-<li>现有测试和文档数量很多，但真实掉电、SPI/UART 故障、长线、PLC、4～20 mA、Wärtsilä 主机、电机限位和长时间跨日调度证据仍不足。构建通过不能替代这些验证。</li>
-<li>当前协议台架闭环产物明确给出 <code>Unverifiable</code>：75 个命令中 70 个启用，67 个不可证明闭环，68 个只有寄存器写回显，业务接受／完成 ACK 为 0。这个结果不能因为 catalog 差异为 0 就解释成协议验收通过。</li>
-<li>本机 <code>tools/</code> 已形成较强的专项检查能力，但它不纳入 Git 和 CI，且已有 3 个契约脚本和 2 个单元测试与当前版本基线漂移。当前“本机检查很多”仍不等于“新克隆和服务器可以复现”。</li>
+<li>当前双固件可以 clean-first 构建，CPU2／CPU3
+共享协议、结构体、枚举和寄存器公式未发现漂移。</li>
+<li>仍有一组需要优先处理的运行态问题，集中在：CPU2 Modbus
+输入边界、命令与停机错误语义、双 CPU 看门狗活性监督、CPU3
+参数掉电原子性、CPU3 断链阻塞、SI Manual 安全语义和外部命令闭环。</li>
+<li>现有测试和文档数量很多，但真实掉电、SPI/UART 故障、长线、PLC、4～20
+mA、Wärtsilä
+主机、电机限位和长时间跨日调度证据仍不足。构建通过不能替代这些验证。</li>
+<li>当前协议台架闭环产物明确给出 <code>Unverifiable</code>：75 个命令中
+70 个启用，67 个不可证明闭环，68 个只有寄存器写回显，业务接受／完成 ACK
+为 0。这个结果不能因为 catalog 差异为 0 就解释成协议验收通过。</li>
+<li>本机 <code>tools/</code> 已形成较强的专项检查能力，但它不纳入 Git 和
+CI，且已有 3 个契约脚本和 2
+个单元测试与当前版本基线漂移。当前“本机检查很多”仍不等于“新克隆和服务器可以复现”。</li>
 </ul>
-</section>
-</section>
-<section id="2-审查范围与多轮方法" class="level2">
-<h2>2. 审查范围与多轮方法</h2>
-<section id="21-范围" class="level3">
-<h3>2.1 范围</h3>
+<h2 id="审查范围与多轮方法">2. 审查范围与多轮方法</h2>
+<h3 id="范围">2.1 范围</h3>
 <table>
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
 <thead>
 <tr>
 <th>范围</th>
@@ -771,7 +844,8 @@
 </tr>
 <tr>
 <td>CPU3 显示／网关固件</td>
-<td><code>LTD_DISPLAY_CPU3/</code>，CPU2 内部通信、三路外部协议、OLED、RTC、FRAM、本机参数和协议切换</td>
+<td><code>LTD_DISPLAY_CPU3/</code>，CPU2
+内部通信、三路外部协议、OLED、RTC、FRAM、本机参数和协议切换</td>
 </tr>
 <tr>
 <td>跨 CPU 契约</td>
@@ -783,31 +857,38 @@
 </tr>
 <tr>
 <td>工程与治理</td>
-<td>CMake、GitHub Actions、本机工具、文档结构、正式索引、生成产物和暂存区边界</td>
+<td>CMake、GitHub
+Actions、本机工具、文档结构、正式索引、生成产物和暂存区边界</td>
 </tr>
 <tr>
 <td>历史独立工程</td>
-<td><code>WirelessHost_V4.1_init/</code> 仅按资产和可复现性审查，不等同当前主产品固件</td>
+<td><code>WirelessHost_V4.1_init/</code>
+仅按资产和可复现性审查，不等同当前主产品固件</td>
 </tr>
 </tbody>
 </table>
-<p>PDF 只作为既有阅读件和当前暂存状态观察对象，本轮没有修改 PDF，也没有把 PDF 当作唯一可维护正文。</p>
-</section>
-<section id="22-审查轮次" class="level3">
-<h3>2.2 审查轮次</h3>
+<p>PDF 只作为既有阅读件和当前暂存状态观察对象，本轮没有修改
+PDF，也没有把 PDF 当作唯一可维护正文。</p>
+<h3 id="审查轮次">2.2 审查轮次</h3>
 <ol type="1">
-<li>工程基线轮：确认分支、HEAD、版本、协议、目录边界、Git 状态和正式文档入口。</li>
-<li>广度扫描轮：搜索 TODO、同步等待、ISR 业务、错误恢复、参数存储、命令 ACK、协议入口和测试缺口。</li>
-<li>并行深挖轮：分别审查 CPU2、CPU3、跨 CPU／协议和既有未处理问题总账。</li>
-<li>构建与契约轮：双固件 clean-first 构建、专项契约、Markdown 链接、文档结构和 Python 工具测试。</li>
-<li>对抗复核轮：对 P1/P2 候选逐项尝试找上层门禁、下层回滚、正式契约或产品决策反证。</li>
+<li>工程基线轮：确认分支、HEAD、版本、协议、目录边界、Git
+状态和正式文档入口。</li>
+<li>广度扫描轮：搜索 TODO、同步等待、ISR 业务、错误恢复、参数存储、命令
+ACK、协议入口和测试缺口。</li>
+<li>并行深挖轮：分别审查 CPU2、CPU3、跨
+CPU／协议和既有未处理问题总账。</li>
+<li>构建与契约轮：双固件 clean-first 构建、专项契约、Markdown
+链接、文档结构和 Python 工具测试。</li>
+<li>对抗复核轮：对 P1/P2
+候选逐项尝试找上层门禁、下层回滚、正式契约或产品决策反证。</li>
 <li>工作区副作用轮：重复核对暂存区和协议台架导出件，区分用户已有暂存、工具生成漂移和本轮文档改动。</li>
 </ol>
-</section>
-</section>
-<section id="3-优先级定义" class="level2">
-<h2>3. 优先级定义</h2>
+<h2 id="优先级定义">3. 优先级定义</h2>
 <table>
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
 <thead>
 <tr>
 <th>等级</th>
@@ -833,139 +914,161 @@
 </tr>
 </tbody>
 </table>
-</section>
-<section id="4-p1优先整改的问题" class="level2">
-<h2>4. P1：优先整改的问题</h2>
-<section id="p1-01-cpu2-modbus-请求边界不完整可造成发送缓冲越界和截断帧污染" class="level3">
-<h3>P1-01 CPU2 Modbus 请求边界不完整，可造成发送缓冲越界和截断帧污染</h3>
-<section id="现状与证据" class="level4">
-<h4>现状与证据</h4>
+<h2 id="p1优先整改的问题">4. P1：优先整改的问题</h2>
+<h3
+id="p1-01-cpu2-modbus-请求边界不完整可造成发送缓冲越界和截断帧污染">P1-01
+CPU2 Modbus 请求边界不完整，可造成发送缓冲越界和截断帧污染</h3>
+<h4 id="现状与证据">现状与证据</h4>
 <ul>
-<li>CPU2 发送缓冲区只有 1000 字节：<code>LTD_MAIN_CPU2/Services/Modbus/hostcommu.h:8</code>、<code>hostcommu.c:40-42</code>。</li>
-<li>输入寄存器表总量为 <code>0x0A48</code>，即 2632 个寄存器：<code>stateformodbus.h:390-395</code>。</li>
-<li>FC03／FC04 只按整个寄存器表范围检查，没有执行标准最大 125 个寄存器和响应缓冲容量检查：<code>hostcommu_modbus.c:126-146</code>。</li>
-<li>FC04 组帧长度为 <code>3 + 2 * count</code>，随后再追加 2 字节 CRC：<code>hostcommu_modbus.c:244-258</code>、<code>hostcommu.c:313-317</code>。</li>
-<li>现有通用入口只拒绝长度 <code>&lt;=3</code> 或 <code>&gt;=256</code>，随后无条件读取请求的 <code>[4]</code>、<code>[5]</code>：<code>hostcommu.c:208-259</code>。</li>
-<li>FC10 不接收实际帧长，不检查 byte-count，直接按声明数量读取 <code>revframe[7 + 2*i]</code>：<code>hostcommu_modbus.c:263-286,358-374</code>。</li>
+<li>CPU2 发送缓冲区只有 1000
+字节：<code>LTD_MAIN_CPU2/Services/Modbus/hostcommu.h:8</code>、<code>hostcommu.c:40-42</code>。</li>
+<li>输入寄存器表总量为 <code>0x0A48</code>，即 2632
+个寄存器：<code>stateformodbus.h:390-395</code>。</li>
+<li>FC03／FC04 只按整个寄存器表范围检查，没有执行标准最大 125
+个寄存器和响应缓冲容量检查：<code>hostcommu_modbus.c:126-146</code>。</li>
+<li>FC04 组帧长度为 <code>3 + 2 * count</code>，随后再追加 2 字节
+CRC：<code>hostcommu_modbus.c:244-258</code>、<code>hostcommu.c:313-317</code>。</li>
+<li>现有通用入口只拒绝长度 <code>&lt;=3</code> 或
+<code>&gt;=256</code>，随后无条件读取请求的
+<code>[4]</code>、<code>[5]</code>：<code>hostcommu.c:208-259</code>。</li>
+<li>FC10 不接收实际帧长，不检查 byte-count，直接按声明数量读取
+<code>revframe[7 + 2*i]</code>：<code>hostcommu_modbus.c:263-286,358-374</code>。</li>
 </ul>
-</section>
-<section id="最小触发" class="level4">
-<h4>最小触发</h4>
+<h4 id="最小触发">最小触发</h4>
 <ul>
-<li>FC04 请求 498 个寄存器时，数据最后写到索引 998，CRC 低字节写索引 999，CRC 高字节写索引 1000，首次越过 <code>HCOM_SendBuff[1000]</code>。</li>
-<li>先发送完整 FC10 帧在 DMA 缓冲尾部留下旧数据，再发送 CRC 自洽但数据区截断、byte-count 不匹配的 FC10；CRC 只覆盖本次长度，但解析会继续读取 CRC 字节和旧缓冲内容。</li>
+<li>FC04 请求 498 个寄存器时，数据最后写到索引 998，CRC 低字节写索引
+999，CRC 高字节写索引 1000，首次越过
+<code>HCOM_SendBuff[1000]</code>。</li>
+<li>先发送完整 FC10 帧在 DMA 缓冲尾部留下旧数据，再发送 CRC
+自洽但数据区截断、byte-count 不匹配的 FC10；CRC
+只覆盖本次长度，但解析会继续读取 CRC 字节和旧缓冲内容。</li>
 </ul>
-</section>
-<section id="影响" class="level4">
-<h4>影响</h4>
+<h4 id="影响">影响</h4>
 <p>可能破坏相邻静态状态、返回畸形响应、错误改变命令／电机／参数并触发保存，严重时导致异常复位或不可预测行为。</p>
-</section>
-<section id="建议与验证" class="level4">
-<h4>建议与验证</h4>
+<h4 id="建议与验证">建议与验证</h4>
 <ol type="1">
 <li>FC03／FC04 必须精确 8 字节，数量限制为 <code>1..125</code>。</li>
-<li>FC10 必须满足 <code>1&lt;=count&lt;=123</code>、<code>byte_count==2*count</code>、<code>rcvcount==9+2*count</code>。</li>
-<li>所有组帧统一校验 <code>response_len &lt;= sizeof(send_buffer)</code>，区间计算使用无溢出的减法口径。</li>
-<li>用主机桩／ASan 或边界哨兵覆盖数量 0、1、125、126、497、498、123、124，以及每一个截断字节位置和前帧残留污染。</li>
+<li>FC10 必须满足
+<code>1&lt;=count&lt;=123</code>、<code>byte_count==2*count</code>、<code>rcvcount==9+2*count</code>。</li>
+<li>所有组帧统一校验
+<code>response_len &lt;= sizeof(send_buffer)</code>，区间计算使用无溢出的减法口径。</li>
+<li>用主机桩／ASan 或边界哨兵覆盖数量
+0、1、125、126、497、498、123、124，以及每一个截断字节位置和前帧残留污染。</li>
 </ol>
-</section>
-</section>
-<section id="p1-02-cpu2-uart5-中断直接执行完整-modbusspi-和阻塞日志" class="level3">
-<h3>P1-02 CPU2 UART5 中断直接执行完整 Modbus、SPI 和阻塞日志</h3>
-<section id="证据链" class="level4">
-<h4>证据链</h4>
+<h3 id="p1-02-cpu2-uart5-中断直接执行完整-modbusspi-和阻塞日志">P1-02
+CPU2 UART5 中断直接执行完整 Modbus、SPI 和阻塞日志</h3>
+<h4 id="证据链">证据链</h4>
 <ul>
-<li><code>UART5_IRQHandler()</code> 在 IDLE 中断内直接调用 <code>HostCommuProcess()</code>：<code>LTD_MAIN_CPU2/Core/Src/stm32f4xx_it.c:451-469</code>。</li>
-<li>FC10 写参数可进入 <code>MotorCtrl_SetCurrent()</code> 和位置源应用：<code>dataanalysis_modbus.c:479-483</code>。</li>
-<li>TMC5130 SPI 路径使用 <code>HAL_MAX_DELAY</code>，电流应用路径还会打印：<code>motor_ctrl_driver_param.c:485-506</code>、<code>TMC5130.c:358,443</code>。</li>
-<li>CPU2 <code>printf</code> 逐字符调用 USART1 阻塞发送并使用 <code>HAL_MAX_DELAY</code>：<code>Core/Src/usart.c:27-30</code>。</li>
+<li><code>UART5_IRQHandler()</code> 在 IDLE 中断内直接调用
+<code>HostCommuProcess()</code>：<code>LTD_MAIN_CPU2/Core/Src/stm32f4xx_it.c:451-469</code>。</li>
+<li>FC10 写参数可进入 <code>MotorCtrl_SetCurrent()</code>
+和位置源应用：<code>dataanalysis_modbus.c:479-483</code>。</li>
+<li>TMC5130 SPI 路径使用
+<code>HAL_MAX_DELAY</code>，电流应用路径还会打印：<code>motor_ctrl_driver_param.c:485-506</code>、<code>TMC5130.c:358,443</code>。</li>
+<li>CPU2 <code>printf</code> 逐字符调用 USART1 阻塞发送并使用
+<code>HAL_MAX_DELAY</code>：<code>Core/Src/usart.c:27-30</code>。</li>
 </ul>
-</section>
-<section id="影响-1" class="level4">
-<h4>影响</h4>
-<p>合法或恶意 UART5 帧都可能放大 ISR 执行时间；电机 SPI 故障时可能长期停在高优先级中断，延迟重量采样、传感器通信、定时任务和同级／低级中断。</p>
-</section>
-<section id="建议" class="level4">
-<h4>建议</h4>
-<p>ISR 只负责清标志、冻结长度、重启或移交 DMA 并投递事件；CRC、地址校验、参数写、SPI、FRAM 请求和日志全部移到主循环任务态。压测时同时测 UART4、UART6、TIM4 的最大中断延迟和丢帧率。</p>
-</section>
-</section>
-<section id="p1-03-cpu2-电机电流硬件下发失败仍会-ack-并申请持久化" class="level3">
-<h3>P1-03 CPU2 电机电流硬件下发失败仍会 ACK 并申请持久化</h3>
-<section id="证据链-1" class="level4">
-<h4>证据链</h4>
+<h4 id="影响-1">影响</h4>
+<p>合法或恶意 UART5 帧都可能放大 ISR 执行时间；电机 SPI
+故障时可能长期停在高优先级中断，延迟重量采样、传感器通信、定时任务和同级／低级中断。</p>
+<h4 id="建议">建议</h4>
+<p>ISR 只负责清标志、冻结长度、重启或移交 DMA
+并投递事件；CRC、地址校验、参数写、SPI、FRAM
+请求和日志全部移到主循环任务态。压测时同时测 UART4、UART6、TIM4
+的最大中断延迟和丢帧率。</p>
+<h3 id="p1-03-cpu2-电机电流硬件下发失败仍会-ack-并申请持久化">P1-03 CPU2
+电机电流硬件下发失败仍会 ACK 并申请持久化</h3>
+<h4 id="证据链-1">证据链</h4>
 <ul>
-<li><code>ReadDeviceParamsFromHoldingRegisters()</code> 检测电流变化后调用 <code>MotorCtrl_SetCurrent()</code>，但显式丢弃返回值：<code>dataanalysis_modbus.c:479-480</code>。</li>
-<li><code>MotorCtrl_SetCurrent()</code> 先修改 <code>g_deviceParams.motor_current</code>，再写 TMC；SPI 失败只返回错误，不回滚 RAM 参数：<code>motor_ctrl_driver_param.c:485-508</code>。</li>
-<li>FC10 随后把候选参数重新提交、请求保存并返回正常回显：<code>hostcommu_modbus.c:278-354</code>。</li>
+<li><code>ReadDeviceParamsFromHoldingRegisters()</code>
+检测电流变化后调用
+<code>MotorCtrl_SetCurrent()</code>，但显式丢弃返回值：<code>dataanalysis_modbus.c:479-480</code>。</li>
+<li><code>MotorCtrl_SetCurrent()</code> 先修改
+<code>g_deviceParams.motor_current</code>，再写 TMC；SPI
+失败只返回错误，不回滚 RAM
+参数：<code>motor_ctrl_driver_param.c:485-508</code>。</li>
+<li>FC10
+随后把候选参数重新提交、请求保存并返回正常回显：<code>hostcommu_modbus.c:278-354</code>。</li>
 </ul>
-</section>
-<section id="影响-2" class="level4">
-<h4>影响</h4>
-<p>运行态和 FRAM 可显示新电流，而 TMC 实际仍保持旧电流；设备重启后新值又可能突然生效，形成“显示／持久化值”和“当前执行值”分裂。</p>
-</section>
-<section id="建议与验证-1" class="level4">
-<h4>建议与验证</h4>
-<p>硬件应用成功后才能提交候选参数；失败时恢复旧值、返回 Modbus 异常并禁止保存。对 <code>stpr_setCurrent()</code> 注入失败，核对 ACK、FRAM、RAM 和 IHOLD_IRUN 都保持旧值。</p>
-</section>
-</section>
-<section id="p1-04-cpu2-取消停机失败后仍清错并发布待机" class="level3">
-<h3>P1-04 CPU2 取消停机失败后仍清错并发布待机</h3>
+<h4 id="影响-2">影响</h4>
+<p>运行态和 FRAM 可显示新电流，而 TMC
+实际仍保持旧电流；设备重启后新值又可能突然生效，形成“显示／持久化值”和“当前执行值”分裂。</p>
+<h4 id="建议与验证-1">建议与验证</h4>
+<p>硬件应用成功后才能提交候选参数；失败时恢复旧值、返回 Modbus
+异常并禁止保存。对 <code>stpr_setCurrent()</code> 注入失败，核对
+ACK、FRAM、RAM 和 IHOLD_IRUN 都保持旧值。</p>
+<h3 id="p1-04-cpu2-取消停机失败后仍清错并发布待机">P1-04 CPU2
+取消停机失败后仍清错并发布待机</h3>
 <ul>
-<li>取消路径先清命令和错误码，再调用慢停；慢停返回任何错误都只打印，最后仍无条件设置 <code>STATE_STANDBY</code>：<code>LTD_MAIN_CPU2/Application/Src/measure.c:311-331</code>。</li>
+<li>取消路径先清命令和错误码，再调用慢停；慢停返回任何错误都只打印，最后仍无条件设置
+<code>STATE_STANDBY</code>：<code>LTD_MAIN_CPU2/Application/Src/measure.c:311-331</code>。</li>
 <li>底层返回项既包含停止写失败、状态读取失败、健康检查失败和停机超时，也包含停稳后的同步、目标对齐、二次确认或速度恢复失败：<code>motor_ctrl_driver_param.c:703-750</code>、<code>motor_ctrl_motion_api.c:840-858</code>。</li>
 </ul>
-<p>在停止下发、运动状态读取或超时阶段失败时，电机可能仍在运动或至少没有确认停稳；在停稳后的同步／恢复阶段失败时，电机可能已停稳，但具体硬件错误仍被掩盖。两类失败都会使 CPU3／外部主机看到“待机、无错误”。只有确认停稳且取消收尾成功后才能清错并进入待机；前半段失败应进入“停机未确认／错误”状态并执行硬件级安全动作，后半段失败也必须保留具体错误。</p>
-</section>
-<section id="p1-05-cpu2-命令合法性启动失败和清错边界不安全" class="level3">
-<h3>P1-05 CPU2 命令合法性、启动失败和清错边界不安全</h3>
-<section id="已确认的三条路径" class="level4">
-<h4>已确认的三条路径</h4>
+<p>在停止下发、运动状态读取或超时阶段失败时，电机可能仍在运动或至少没有确认停稳；在停稳后的同步／恢复阶段失败时，电机可能已停稳，但具体硬件错误仍被掩盖。两类失败都会使
+CPU3／外部主机看到“待机、无错误”。只有确认停稳且取消收尾成功后才能清错并进入待机；前半段失败应进入“停机未确认／错误”状态并执行硬件级安全动作，后半段失败也必须保留具体错误。</p>
+<h3 id="p1-05-cpu2-命令合法性启动失败和清错边界不安全">P1-05 CPU2
+命令合法性、启动失败和清错边界不安全</h3>
+<h4 id="已确认的三条路径">已确认的三条路径</h4>
 <ol type="1">
-<li>除取消和无线配对外，<code>ProcessMeasureCmd()</code> 在判断具体命令前统一调用 <code>MeasureStart()</code>：<code>measure.c:93-125</code>。</li>
-<li><code>MeasureStart()</code> 先执行 <code>fault_info_init()</code>，成功后再次清 <code>error_code</code>：<code>measure.c:407-416</code>；未知／预留命令最终只打印“不支持”：<code>measure.c:291-301</code>。因此非法命令也会触发测量前置初始化；初始化成功时，已有故障会先被清除，随后却没有对应的有效业务动作。</li>
-<li><code>MeasureStart()</code> 返回错误后，调用方只 <code>SET_ERROR(start_ret)</code>，没有 <code>return</code>，仍继续进入命令 <code>switch</code>：<code>measure.c:113-125</code>。这会把“初始化失败后是否安全退出”分散给所有下游命令，不能形成统一保证。</li>
+<li>除取消和无线配对外，<code>ProcessMeasureCmd()</code>
+在判断具体命令前统一调用
+<code>MeasureStart()</code>：<code>measure.c:93-125</code>。</li>
+<li><code>MeasureStart()</code> 先执行
+<code>fault_info_init()</code>，成功后再次清
+<code>error_code</code>：<code>measure.c:407-416</code>；未知／预留命令最终只打印“不支持”：<code>measure.c:291-301</code>。因此非法命令也会触发测量前置初始化；初始化成功时，已有故障会先被清除，随后却没有对应的有效业务动作。</li>
+<li><code>MeasureStart()</code> 返回错误后，调用方只
+<code>SET_ERROR(start_ret)</code>，没有
+<code>return</code>，仍继续进入命令
+<code>switch</code>：<code>measure.c:113-125</code>。这会把“初始化失败后是否安全退出”分散给所有下游命令，不能形成统一保证。</li>
 </ol>
-<p>共享命令从寄存器直接强转，未见枚举白名单：<code>dataanalysis_modbus.c:304-315</code>。可达序列为“已有真实故障／电机初始化失败 → 写入未知或普通命令 → 入口清错或记录错误 → 仍进入业务分派”。</p>
-<p>建议在 Modbus 接收层和命令调度层都建立显式白名单；非法值返回异常且不得触发 <code>MeasureStart()</code>；<code>MeasureStart()</code> 失败必须统一终止本次命令；故障只能由明确恢复／确认流程清除。该问题与既有 <a href="2026-06-29_CPU2全局错误报警响应滞后问题分析.md">CPU2 全局错误报警响应滞后问题</a> 属于同一系统边界，应合并整改而不是只补一个 <code>default</code>。</p>
-</section>
-</section>
-<section id="p1-06-双-cpu-看门狗都由独立定时-isr-无条件喂狗" class="level3">
-<h3>P1-06 双 CPU 看门狗都由独立定时 ISR 无条件喂狗</h3>
-<section id="cpu2" class="level4">
-<h4>CPU2</h4>
+<p>共享命令从寄存器直接强转，未见枚举白名单：<code>dataanalysis_modbus.c:304-315</code>。可达序列为“已有真实故障／电机初始化失败
+→ 写入未知或普通命令 → 入口清错或记录错误 → 仍进入业务分派”。</p>
+<p>建议在 Modbus
+接收层和命令调度层都建立显式白名单；非法值返回异常且不得触发
+<code>MeasureStart()</code>；<code>MeasureStart()</code>
+失败必须统一终止本次命令；故障只能由明确恢复／确认流程清除。该问题与既有
+<a href="2026-06-29_CPU2全局错误报警响应滞后问题分析.md">CPU2
+全局错误报警响应滞后问题</a> 属于同一系统边界，应合并整改而不是只补一个
+<code>default</code>。</p>
+<h3 id="p1-06-双-cpu-看门狗都由独立定时-isr-无条件喂狗">P1-06 双 CPU
+看门狗都由独立定时 ISR 无条件喂狗</h3>
+<h4 id="cpu2">CPU2</h4>
 <ul>
-<li><code>TIM4_IRQHandler()</code> 无条件刷新 IWDG：<code>LTD_MAIN_CPU2/Core/Src/stm32f4xx_it.c:315-325</code>。</li>
-<li>IWDG 配置：<code>Core/Src/iwdg.c:40-42</code>；TIM4 约 2 s：<code>Core/Src/tim.c:85-88</code>。</li>
+<li><code>TIM4_IRQHandler()</code> 无条件刷新
+IWDG：<code>LTD_MAIN_CPU2/Core/Src/stm32f4xx_it.c:315-325</code>。</li>
+<li>IWDG 配置：<code>Core/Src/iwdg.c:40-42</code>；TIM4 约 2
+s：<code>Core/Src/tim.c:85-88</code>。</li>
 </ul>
-</section>
-<section id="cpu3" class="level4">
-<h4>CPU3</h4>
+<h4 id="cpu3">CPU3</h4>
 <ul>
-<li>TIM4 约 2 s，IWDG 典型约 4 s：<code>LTD_DISPLAY_CPU3/Core/Src/tim.c:169-191</code>、<code>Core/Src/iwdg.c:40-43</code>。</li>
-<li><code>TIM4_IRQHandler()</code> 无条件执行 <code>HAL_IWDG_Refresh()</code>：<code>Core/Src/stm32f4xx_it.c:619-627</code>。</li>
+<li>TIM4 约 2 s，IWDG 典型约 4
+s：<code>LTD_DISPLAY_CPU3/Core/Src/tim.c:169-191</code>、<code>Core/Src/iwdg.c:40-43</code>。</li>
+<li><code>TIM4_IRQHandler()</code> 无条件执行
+<code>HAL_IWDG_Refresh()</code>：<code>Core/Src/stm32f4xx_it.c:619-627</code>。</li>
 </ul>
-</section>
-<section id="影响边界" class="level4">
-<h4>影响边界</h4>
-<p>主循环永久死锁但中断仍运行时，两颗 MCU 都不会被 IWDG 复位。看门狗并非对所有故障完全失效：全局关中断、TIM4 停止等仍可能触发复位；确定的问题是它无法监督前台主循环和关键任务是否推进。</p>
-<p>建议由主循环维护健康代际／票据，定时 ISR 只有观察到代际推进且关键任务健康时才喂狗，或在关键调度完成后由主循环直接喂狗。必须注入“主循环死锁、中断正常”验证复位。</p>
-</section>
-</section>
-<section id="p1-07-cpu3-fram-本机参数只有单槽覆盖写掉电可破坏最后有效镜像" class="level3">
-<h3>P1-07 CPU3 FRAM 本机参数只有单槽覆盖写，掉电可破坏最后有效镜像</h3>
-<section id="证据链-2" class="level4">
-<h4>证据链</h4>
+<h4 id="影响边界">影响边界</h4>
+<p>主循环永久死锁但中断仍运行时，两颗 MCU 都不会被 IWDG
+复位。看门狗并非对所有故障完全失效：全局关中断、TIM4
+停止等仍可能触发复位；确定的问题是它无法监督前台主循环和关键任务是否推进。</p>
+<p>建议由主循环维护健康代际／票据，定时 ISR
+只有观察到代际推进且关键任务健康时才喂狗，或在关键调度完成后由主循环直接喂狗。必须注入“主循环死锁、中断正常”验证复位。</p>
+<h3
+id="p1-07-cpu3-fram-本机参数只有单槽覆盖写掉电可破坏最后有效镜像">P1-07
+CPU3 FRAM 本机参数只有单槽覆盖写，掉电可破坏最后有效镜像</h3>
+<h4 id="证据链-2">证据链</h4>
 <ul>
-<li>唯一参数槽地址为 <code>0x1000</code>：<code>LTD_DISPLAY_CPU3/Application/system_param/cpu3_comm_display_params.h:12</code>。</li>
-<li>镜像只有 magic、version、params 和 CRC，没有第二槽、generation 或 commit 标记：<code>cpu3_comm_display_params.c:913-927,1081-1088</code>。</li>
+<li>唯一参数槽地址为
+<code>0x1000</code>：<code>LTD_DISPLAY_CPU3/Application/system_param/cpu3_comm_display_params.h:12</code>。</li>
+<li>镜像只有 magic、version、params 和 CRC，没有第二槽、generation 或
+commit
+标记：<code>cpu3_comm_display_params.c:913-927,1081-1088</code>。</li>
 <li>保存直接覆盖同一地址，完成后才读回验证：<code>cpu3_comm_display_params.c:1258-1292</code>。</li>
-<li>FRAM 驱动的命令、地址、payload 传输均忽略 HAL 返回值并使用 <code>HAL_MAX_DELAY</code>：<code>LTD_DISPLAY_CPU3/Application/system_param/mb85rs2m.c:112-162</code>。</li>
-<li>下次启动 CRC 失败会初始化默认值并再次写回：<code>cpu3_comm_display_params.c:1383-1399</code>。</li>
+<li>FRAM 驱动的命令、地址、payload 传输均忽略 HAL 返回值并使用
+<code>HAL_MAX_DELAY</code>：<code>LTD_DISPLAY_CPU3/Application/system_param/mb85rs2m.c:112-162</code>。</li>
+<li>下次启动 CRC
+失败会初始化默认值并再次写回：<code>cpu3_comm_display_params.c:1383-1399</code>。</li>
 </ul>
-</section>
-<section id="精确故障序列" class="level4">
-<h4>精确故障序列</h4>
+<h4 id="精确故障序列">精确故障序列</h4>
 <ol type="1">
 <li>FRAM 中有一份 CRC 正确、明显非默认的 V7 配置；</li>
 <li>修改任一字段触发同槽覆盖；</li>
@@ -973,237 +1076,385 @@
 <li>重启后 magic／version 可能仍合法，但 CRC 失败；</li>
 <li>加载路径恢复整份默认值，原配置已经没有副本可回退。</li>
 </ol>
-<p>V6→V7 迁移也覆盖同一槽；保存失败时当前 RAM 仍可继续运行，但旧 V6 镜像可能已被破坏。V3／V4／V5 迁移甚至丢弃保存结果后打印升级成功：<code>cpu3_comm_display_params.c:1309-1348</code>。</p>
-</section>
-<section id="影响与建议" class="level4">
-<h4>影响与建议</h4>
-<p>COM1～3 协议／波特率、显示参数、SI 自动 Profile 和报警限值可能整份恢复默认；串口恢复默认后还可能导致现场主站失联。应改为 A/B 双槽：写非活动槽、读回完整校验、最后提交有效标志，启动选择 generation 最大的有效槽；迁移成功前保留 legacy 槽；FRAM 驱动返回真实 HAL 状态。对每个字节边界做 brownout／复位矩阵，结果必须只能是完整旧值或完整新值。</p>
-</section>
-</section>
-<section id="p1-08-cpu3-在-cpu2-断链时约-91-时间同步忙等" class="level3">
-<h3>P1-08 CPU3 在 CPU2 断链时约 91% 时间同步忙等</h3>
+<p>V6→V7 迁移也覆盖同一槽；保存失败时当前 RAM 仍可继续运行，但旧 V6
+镜像可能已被破坏。V3／V4／V5
+迁移甚至丢弃保存结果后打印升级成功：<code>cpu3_comm_display_params.c:1309-1348</code>。</p>
+<h4 id="影响与建议">影响与建议</h4>
+<p>COM1～3 协议／波特率、显示参数、SI 自动 Profile
+和报警限值可能整份恢复默认；串口恢复默认后还可能导致现场主站失联。应改为
+A/B 双槽：写非活动槽、读回完整校验、最后提交有效标志，启动选择
+generation 最大的有效槽；迁移成功前保留 legacy 槽；FRAM 驱动返回真实 HAL
+状态。对每个字节边界做
+brownout／复位矩阵，结果必须只能是完整旧值或完整新值。</p>
+<h3 id="p1-08-cpu3-在-cpu2-断链时约-91-时间同步忙等">P1-08 CPU3 在 CPU2
+断链时约 91% 时间同步忙等</h3>
 <ul>
-<li>CPU2 轮询门限为 100 ms：<code>LTD_DISPLAY_CPU3/Application/app_main.c:22,762-767</code>。</li>
-<li>单次 CPU2 响应超时为 1000 ms，主循环在 <code>while(wait_response)</code> 中忙等：<code>cpu2_communicate.c:17,1622-1630</code>。</li>
-<li>返回后才更新时间戳，因此断链稳态大致是“忙等约 1000 ms + 运行约 100 ms”，阻塞占比约 <code>1000/(1000+100)=91%</code>。</li>
+<li>CPU2 轮询门限为 100
+ms：<code>LTD_DISPLAY_CPU3/Application/app_main.c:22,762-767</code>。</li>
+<li>单次 CPU2 响应超时为 1000 ms，主循环在
+<code>while(wait_response)</code>
+中忙等：<code>cpu2_communicate.c:17,1622-1630</code>。</li>
+<li>返回后才更新时间戳，因此断链稳态大致是“忙等约 1000 ms + 运行约 100
+ms”，阻塞占比约 <code>1000/(1000+100)=91%</code>。</li>
 </ul>
-<p>UART／TIM 中断仍可运行，但 SI 周期任务、OLED、外部协议前台处理和重连逻辑会产生秒级停顿。十次置故障后也没有切换到低频／异步模式。建议改为非阻塞事务状态机；至少在断链后降频并让外部协议快速返回 Busy。拔掉 CPU2 后同时向三路 COM 发送 10 Hz 请求，量化最大响应延迟、OLED 刷新和重连时间。</p>
-</section>
-<section id="p1-09-dsm-接受地址-0-并生成响应" class="level3">
-<h3>P1-09 DSM 接受地址 0 并生成响应</h3>
+<p>UART／TIM 中断仍可运行，但 SI
+周期任务、OLED、外部协议前台处理和重连逻辑会产生秒级停顿。十次置故障后也没有切换到低频／异步模式。建议改为非阻塞事务状态机；至少在断链后降频并让外部协议快速返回
+Busy。拔掉 CPU2 后同时向三路 COM 发送 10 Hz 请求，量化最大响应延迟、OLED
+刷新和重连时间。</p>
+<h3 id="p1-09-dsm-接受地址-0-并生成响应">P1-09 DSM 接受地址 0
+并生成响应</h3>
 <ul>
-<li>地址检查同时接受配置站号和 0：<code>LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_communication.c:93-96</code>。</li>
-<li>地址 0 继续进入 FC01／03／04／05／16 和异常响应路径：<code>DSM_communication.c:100-146</code>。</li>
-<li>响应用配置站号构造并追加 CRC：<code>DSM_SlaveModbus_modbus2.c:643-676</code>。</li>
+<li>地址检查同时接受配置站号和
+0：<code>LTD_DISPLAY_CPU3/Communication/external/DSM_modbus/DSM_communication.c:93-96</code>。</li>
+<li>地址 0 继续进入 FC01／03／04／05／16
+和异常响应路径：<code>DSM_communication.c:100-146</code>。</li>
+<li>响应用配置站号构造并追加
+CRC：<code>DSM_SlaveModbus_modbus2.c:643-676</code>。</li>
 </ul>
-<p>多台从站收到地址 0 的读写帧时会同时回包，造成 RS485 冲突；广播读本身也不应执行。除非 DSM 正式协议明确把地址 0 定义成非标准单播，否则应按 Modbus 语义处理：广播读静默丢弃，允许的广播写可执行但绝不应答。</p>
-</section>
-<section id="p1-10-si-自动-profile-在-manual维护状态仍会启动" class="level3">
-<h3>P1-10 SI 自动 Profile 在 Manual／维护状态仍会启动</h3>
+<p>多台从站收到地址 0 的读写帧时会同时回包，造成 RS485
+冲突；广播读本身也不应执行。除非 DSM 正式协议明确把地址 0
+定义成非标准单播，否则应按 Modbus
+语义处理：广播读静默丢弃，允许的广播写可执行但绝不应答。</p>
+<h3 id="p1-10-si-自动-profile-在-manual维护状态仍会启动">P1-10 SI 自动
+Profile 在 Manual／维护状态仍会启动</h3>
 <ul>
-<li>官方资料明确 Manual 下不能执行自动功能，自动 Profile 到点时若处于 Manual 不应开始：<code>docs/01_协议与寄存器/SI协议适配/05_官方资料中文整理/05_操作手册_中文整理.md:345,438</code>。</li>
-<li>当前调度只检查使能、周期、RTC、去重、重试和重启首轮 SI 阶段，没有 Manual／维护门禁：<code>si_modbus_slave.c:1352-1442</code>。</li>
-<li>下层 <code>CPU2_CommCanSendCommand()</code> 只判断通信和快照可用：<code>cpu2_communicate.c:351-355</code>。</li>
-<li>CPU2 维护态收到新命令后会清除手动抑制并退出，随后执行新命令：<code>LTD_MAIN_CPU2/Application/Src/measure.c:825-840</code>、<code>app_main.c:197-204</code>。</li>
+<li>官方资料明确 Manual 下不能执行自动功能，自动 Profile 到点时若处于
+Manual
+不应开始：<code>docs/01_协议与寄存器/SI协议适配/05_官方资料中文整理/05_操作手册_中文整理.md:345,438</code>。</li>
+<li>当前调度只检查使能、周期、RTC、去重、重试和重启首轮 SI 阶段，没有
+Manual／维护门禁：<code>si_modbus_slave.c:1352-1442</code>。</li>
+<li>下层 <code>CPU2_CommCanSendCommand()</code>
+只判断通信和快照可用：<code>cpu2_communicate.c:351-355</code>。</li>
+<li>CPU2
+维护态收到新命令后会清除手动抑制并退出，随后执行新命令：<code>LTD_MAIN_CPU2/Application/Src/measure.c:825-840</code>、<code>app_main.c:197-204</code>。</li>
 </ul>
-<p>最小序列为“进入 Manual → 自动计划分钟到达 → CPU3 下发 <code>CMD_SI_PROFILE</code> → CPU2 退出维护态并执行 Profile”。这会打断维护或强制操作，不只是显示偏差。正式 SI 待确认清单已把它列为 R-02／P0；整机总账至少按 P1 处理。应使用 CPU2 权威 Manual 状态阻止自动触发，并记录跳过原因和计数。</p>
-</section>
-<section id="p1-11-si-manual-时-cpu3-对外报警仍按阈值合成" class="level3">
-<h3>P1-11 SI Manual 时 CPU3 对外报警仍按阈值合成</h3>
+<p>最小序列为“进入 Manual → 自动计划分钟到达 → CPU3 下发
+<code>CMD_SI_PROFILE</code> → CPU2 退出维护态并执行
+Profile”。这会打断维护或强制操作，不只是显示偏差。正式 SI
+待确认清单已把它列为 R-02／P0；整机总账至少按 P1 处理。应使用 CPU2 权威
+Manual 状态阻止自动触发，并记录跳过原因和计数。</p>
+<h3 id="p1-11-si-manual-时-cpu3-对外报警仍按阈值合成">P1-11 SI Manual 时
+CPU3 对外报警仍按阈值合成</h3>
 <ul>
-<li>CPU2 维护／强制动作会发布 <code>manual_alarm_inhibit=1</code>，CPU3 也已读取该共享字段：<code>LTD_MAIN_CPU2/Application/Src/measure.c:825-840</code>、<code>LTD_DISPLAY_CPU3/Communication/internal/main_board_modbus/dataanalysis_modbus.c:564-571</code>。</li>
-<li>CPU3 SI 离散输入仍直接按当前值、阈值和 Profile 快照合成设备、密度、温度、液位和 Profile 报警，没有消费 <code>manual_alarm_inhibit</code>：<code>si_modbus_slave.c:1135-1206</code>。</li>
+<li>CPU2 维护／强制动作会发布 <code>manual_alarm_inhibit=1</code>，CPU3
+也已读取该共享字段：<code>LTD_MAIN_CPU2/Application/Src/measure.c:825-840</code>、<code>LTD_DISPLAY_CPU3/Communication/internal/main_board_modbus/dataanalysis_modbus.c:564-571</code>。</li>
+<li>CPU3 SI 离散输入仍直接按当前值、阈值和 Profile
+快照合成设备、密度、温度、液位和 Profile 报警，没有消费
+<code>manual_alarm_inhibit</code>：<code>si_modbus_slave.c:1135-1206</code>。</li>
 </ul>
-<p>因此进入 Manual 后，PLC 仍可能读到 <code>10017~10026/10029~10032</code> 报警。该偏差已经在正式 SI 清单 R-01 中登记，但尚未实现。整改时只抑制 SI 对外报警投影，不应掩盖 CPU2 本机安全故障和继电器保护。</p>
-</section>
-<section id="p1-12-外部命令只有寄存器写成功回显没有可关联本次请求的业务接受完成-ack" class="level3">
-<h3>P1-12 外部命令只有寄存器写成功回显，没有可关联本次请求的业务接受／完成 ACK</h3>
-<section id="证据链-3" class="level4">
-<h4>证据链</h4>
+<p>因此进入 Manual 后，PLC 仍可能读到
+<code>10017~10026/10029~10032</code> 报警。该偏差已经在正式 SI 清单 R-01
+中登记，但尚未实现。整改时只抑制 SI 对外报警投影，不应掩盖 CPU2
+本机安全故障和继电器保护。</p>
+<h3
+id="p1-12-外部命令只有寄存器写成功回显没有可关联本次请求的业务接受完成-ack">P1-12
+外部命令只有寄存器写成功回显，没有可关联本次请求的业务接受／完成
+ACK</h3>
+<h4 id="证据链-3">证据链</h4>
 <ul>
-<li>SI FC05 在线圈映射成功后立即构造功能码回显：<code>si_modbus_slave.c:1519-1564,1769-1816</code>。</li>
-<li>CPU3→CPU2 FC10 返回只校验功能码、起始地址和数量回显：<code>cpu2_communicate.c:142-164,1559-1639</code>。</li>
-<li>CPU2 <code>Response10Process()</code> 把寄存器写入候选并立即回显地址／数量：<code>hostcommu_modbus.c:278-374</code>。</li>
-<li>真正业务消费发生在后续 CPU2 主循环：<code>LTD_MAIN_CPU2/Application/Src/app_main.c:197-204</code>。</li>
-<li>可轮询的 <code>device_state/error_code/current_command</code> 没有 request id、accepted id、completed id 或事务代际，无法严格关联本次命令。</li>
+<li>SI FC05
+在线圈映射成功后立即构造功能码回显：<code>si_modbus_slave.c:1519-1564,1769-1816</code>。</li>
+<li>CPU3→CPU2 FC10
+返回只校验功能码、起始地址和数量回显：<code>cpu2_communicate.c:142-164,1559-1639</code>。</li>
+<li>CPU2 <code>Response10Process()</code>
+把寄存器写入候选并立即回显地址／数量：<code>hostcommu_modbus.c:278-374</code>。</li>
+<li>真正业务消费发生在后续 CPU2
+主循环：<code>LTD_MAIN_CPU2/Application/Src/app_main.c:197-204</code>。</li>
+<li>可轮询的 <code>device_state/error_code/current_command</code> 没有
+request id、accepted id、completed id
+或事务代际，无法严格关联本次命令。</li>
 </ul>
-<p>当前暂存的 <code>command-closure</code> 报告给出：75 个命令、70 个启用、67 个不可证明、68 个 <code>RegisterWriteAckOnly</code>、67 个必需参数集合未解析、0 个业务接受／完成 ACK、15 个 <code>BenchPending</code>。</p>
-<p>建议共享最小事务状态：<code>command_request_id</code>、<code>accepted_id</code>、<code>completed_id</code>、<code>result/error</code>；外部协议明确区分“寄存器已接收”“业务已接受”“业务已完成”。台架覆盖忙、非法前置条件、重复／并发、运行中失败和 CPU2 重启。</p>
-</section>
-</section>
-<section id="p1-13-cpu2-传感器运动硬限位没有覆盖连续强制路径" class="level3">
-<h3>P1-13 CPU2 传感器运动硬限位没有覆盖连续／强制路径</h3>
-<p>绝对目标检查主要覆盖位置目标运动：<code>motor_ctrl_motion_api.c:1898-1919</code>。<code>MoveNoWait()</code> 只检查距离、方向和 ready／health，不计算绝对目标：<code>motor_ctrl_motion_api.c:302-344</code>；<code>StartVelocity()</code> 没有位置边界：<code>:609-635</code>；强制入口仍走绕过编码器门禁的路径：<code>:934-960</code>。只有 Jog 循环具备较完整的健康、碰撞、丢步和超时 guard：<code>:1995-2031</code>。</p>
-<p>这意味着水位、找空气、找零和强制速度运动不能由统一规划层证明不会越过机械边界。现有 <a href="2026-07-02_CPU2传感器运动上下限位风险逐项分析.md">CPU2 传感器运动上下限位风险分析</a> 已记录该缺口。建议统一所有运动入口的绝对位置预算、硬限位、碰撞和停止确认，并把 T15／T16 故障注入作为发布门禁。</p>
-</section>
-<section id="p1-14-as5145-dma-完成回调内同步打印并立即重启-dma" class="level3">
-<h3>P1-14 AS5145 DMA 完成回调内同步打印并立即重启 DMA</h3>
+<p>当前暂存的 <code>command-closure</code> 报告给出：75 个命令、70
+个启用、67 个不可证明、68 个 <code>RegisterWriteAckOnly</code>、67
+个必需参数集合未解析、0 个业务接受／完成 ACK、15 个
+<code>BenchPending</code>。</p>
+<p>建议共享最小事务状态：<code>command_request_id</code>、<code>accepted_id</code>、<code>completed_id</code>、<code>result/error</code>；外部协议明确区分“寄存器已接收”“业务已接受”“业务已完成”。台架覆盖忙、非法前置条件、重复／并发、运行中失败和
+CPU2 重启。</p>
+<h3 id="p1-13-cpu2-传感器运动硬限位没有覆盖连续强制路径">P1-13 CPU2
+传感器运动硬限位没有覆盖连续／强制路径</h3>
+<p>绝对目标检查主要覆盖位置目标运动：<code>motor_ctrl_motion_api.c:1898-1919</code>。<code>MoveNoWait()</code>
+只检查距离、方向和
+ready／health，不计算绝对目标：<code>motor_ctrl_motion_api.c:302-344</code>；<code>StartVelocity()</code>
+没有位置边界：<code>:609-635</code>；强制入口仍走绕过编码器门禁的路径：<code>:934-960</code>。只有
+Jog 循环具备较完整的健康、碰撞、丢步和超时
+guard：<code>:1995-2031</code>。</p>
+<p>这意味着水位、找空气、找零和强制速度运动不能由统一规划层证明不会越过机械边界。现有
+<a href="2026-07-02_CPU2传感器运动上下限位风险逐项分析.md">CPU2
+传感器运动上下限位风险分析</a>
+已记录该缺口。建议统一所有运动入口的绝对位置预算、硬限位、碰撞和停止确认，并把
+T15／T16 故障注入作为发布门禁。</p>
+<h3 id="p1-14-as5145-dma-完成回调内同步打印并立即重启-dma">P1-14 AS5145
+DMA 完成回调内同步打印并立即重启 DMA</h3>
 <ul>
-<li><code>HAL_SPI_RxCpltCallback()</code> 直接进入帧解析：<code>LTD_MAIN_CPU2/BSP/Peripherals/src/AS5145.c:232-235</code>。</li>
-<li>失败前 3 次在 <code>Handle_SSI_Error()</code> 内直接调用 <code>ErrorLog_Retry()</code> 并立即 <code>Start_Read_SSI_Data()</code>：<code>AS5145.c:197-214</code>。</li>
-<li><code>ErrorLog_Retry()</code> 最终同步 <code>printf</code>：<code>Services/Utilities/error_log.c:720-771</code>；CPU2 <code>printf</code> 是逐字符阻塞 UART。</li>
+<li><code>HAL_SPI_RxCpltCallback()</code>
+直接进入帧解析：<code>LTD_MAIN_CPU2/BSP/Peripherals/src/AS5145.c:232-235</code>。</li>
+<li>失败前 3 次在 <code>Handle_SSI_Error()</code> 内直接调用
+<code>ErrorLog_Retry()</code> 并立即
+<code>Start_Read_SSI_Data()</code>：<code>AS5145.c:197-214</code>。</li>
+<li><code>ErrorLog_Retry()</code> 最终同步
+<code>printf</code>：<code>Services/Utilities/error_log.c:720-771</code>；CPU2
+<code>printf</code> 是逐字符阻塞 UART。</li>
 </ul>
-<p>这与“ISR 只记录、任务态打印／重试”的边界冲突，可能放大 UART6 和其它 DMA 的时序抖动。V1.20.3 恢复三次立即重试后，断线、OCF、COF 和偶发校验错误仍缺实机覆盖。建议回调只发布错误事件和重试请求，由任务态执行日志与下一次 DMA。</p>
-</section>
-<section id="p1-15-wärtsilä-完成态与测量中对外返回同一个状态字" class="level3">
-<h3>P1-15 Wärtsilä 完成态与测量中对外返回同一个状态字</h3>
+<p>这与“ISR 只记录、任务态打印／重试”的边界冲突，可能放大 UART6 和其它
+DMA 的时序抖动。V1.20.3 恢复三次立即重试后，断线、OCF、COF
+和偶发校验错误仍缺实机覆盖。建议回调只发布错误事件和重试请求，由任务态执行日志与下一次
+DMA。</p>
+<h3 id="p1-15-wärtsilä-完成态与测量中对外返回同一个状态字">P1-15
+Wärtsilä 完成态与测量中对外返回同一个状态字</h3>
 <ul>
-<li>源码注释表定义测量中为 <code>0x0C60</code>、完成为 <code>0x2840</code>：<code>wartsila_modbus_data_analysis.c:45-50</code>。</li>
-<li>实际 <code>STATE_WARTSILA_DENSITY_MEASURING</code> 和 <code>STATE_WARTSILA_DENSITY_OVER</code> 都返回 <code>0x0C60</code>：<code>:67-73</code>。</li>
+<li>源码注释表定义测量中为 <code>0x0C60</code>、完成为
+<code>0x2840</code>：<code>wartsila_modbus_data_analysis.c:45-50</code>。</li>
+<li>实际 <code>STATE_WARTSILA_DENSITY_MEASURING</code> 和
+<code>STATE_WARTSILA_DENSITY_OVER</code> 都返回
+<code>0x0C60</code>：<code>:67-73</code>。</li>
 <li>正式兼容文档也明确记录该差异和主机待确认项：<code>docs/01_协议与寄存器/Wartsila协议适配/当前兼容情况与协议栈.md:191-217,305-322</code>。</li>
 </ul>
-<p>确认的问题是主机无法仅靠当前状态字区分“测量中”和“完成”；具体是否直接改成 <code>0x2840</code> 仍需真实 PLC／golden frame 定版，因为现场抓包中该值还可能对应空气中下行阶段。完成码未定版前，不得把当前兼容文档写成已闭环。</p>
-</section>
-<section id="p1-16-生产固件常开高风险-usart1-调试入口条件风险" class="level3">
-<h3>P1-16 生产固件常开高风险 USART1 调试入口（条件风险）</h3>
+<p>确认的问题是主机无法仅靠当前状态字区分“测量中”和“完成”；具体是否直接改成
+<code>0x2840</code> 仍需真实 PLC／golden frame
+定版，因为现场抓包中该值还可能对应空气中下行阶段。完成码未定版前，不得把当前兼容文档写成已闭环。</p>
+<h3 id="p1-16-生产固件常开高风险-usart1-调试入口条件风险">P1-16
+生产固件常开高风险 USART1 调试入口（条件风险）</h3>
 <ul>
-<li>CPU2 CMake 全量收录 <code>Application/Src/*.c</code>，<code>test.c</code> 进入正式 ELF。</li>
-<li>USART1 在正式启动流程中初始化并启用 DMA／中断：<code>Core/Src/main.c:101-105</code>、<code>Core/Src/usart.c:201-225,503-505</code>。</li>
-<li>串口解析接受大量测试命令，语法合法后先 ACK，再分发正式／测试命令：<code>serial_command.c:129-143</code>、<code>serial_command_parser.c:284-354</code>。</li>
-<li><code>test.c</code> 可执行 AO、直接运动、循环运动、编码器清零、参数拟合等操作：<code>test.c:1547-1800</code>。</li>
+<li>CPU2 CMake 全量收录
+<code>Application/Src/*.c</code>，<code>test.c</code> 进入正式
+ELF。</li>
+<li>USART1 在正式启动流程中初始化并启用
+DMA／中断：<code>Core/Src/main.c:101-105</code>、<code>Core/Src/usart.c:201-225,503-505</code>。</li>
+<li>串口解析接受大量测试命令，语法合法后先
+ACK，再分发正式／测试命令：<code>serial_command.c:129-143</code>、<code>serial_command_parser.c:284-354</code>。</li>
+<li><code>test.c</code> 可执行
+AO、直接运动、循环运动、编码器清零、参数拟合等操作：<code>test.c:1547-1800</code>。</li>
 <li>未见认证、维护模式、物理跳线或 Release 编译隔离。</li>
 </ul>
-<p>若 PA9／PA10 在成品上外部可接触，应按 P1 发布阻断处理；若必须拆机且有封签、跳线和受控维护流程，可降低等级，但仍应形成书面边界。建议生产构建默认移除测试分发，只在物理维护门禁和限时解锁后开放危险命令，并用 ELF 符号／字符串检查证明生产镜像不含入口。</p>
-</section>
-</section>
-<section id="5-p2近期整改和一致性问题" class="level2">
-<h2>5. P2：近期整改和一致性问题</h2>
-<section id="p2-01-dsmwärtsilä-多参数写不是-cpu2-原子事务" class="level3">
-<h3>P2-01 DSM／Wärtsilä 多参数写不是 CPU2 原子事务</h3>
-<p>DSM FC16 和 Wärtsilä 四参数写都会按参数逐项向 CPU2 发送。第 N 项失败时，CPU3 能恢复本地镜像并向外返回 <code>0x06</code>，但 CPU2 已经 ACK 的前 N-1 项不会自动回滚：</p>
+<p>若 PA9／PA10 在成品上外部可接触，应按 P1
+发布阻断处理；若必须拆机且有封签、跳线和受控维护流程，可降低等级，但仍应形成书面边界。建议生产构建默认移除测试分发，只在物理维护门禁和限时解锁后开放危险命令，并用
+ELF 符号／字符串检查证明生产镜像不含入口。</p>
+<h2 id="p2近期整改和一致性问题">5. P2：近期整改和一致性问题</h2>
+<h3 id="p2-01-dsmwärtsilä-多参数写不是-cpu2-原子事务">P2-01
+DSM／Wärtsilä 多参数写不是 CPU2 原子事务</h3>
+<p>DSM FC16 和 Wärtsilä 四参数写都会按参数逐项向 CPU2 发送。第 N
+项失败时，CPU3 能恢复本地镜像并向外返回 <code>0x06</code>，但 CPU2 已经
+ACK 的前 N-1 项不会自动回滚：</p>
 <ul>
 <li>DSM：<code>DSM_SlaveModbus_modbus2.c:1088-1115</code>、<code>DSM_DataAnalysis_modbus2.c:531-535</code>、<code>device_param_sync.c:515-550</code>；</li>
 <li>Wärtsilä：<code>wartsila_modbus_communication.c:226-230,251-339</code>。</li>
 </ul>
-<p>这不是“对外伪成功”，因为外部会收到失败；它是“失败不等于全部未生效”的残余一致性风险。若参数组合要求原子一致，应提供 CPU2 批量事务／影子提交；否则协议必须强制主站在失败后补读、重试并核对最终值。</p>
-</section>
-<section id="p2-02-si-非整日周期在-cpu3-重启后相位漂移" class="level3">
-<h3>P2-02 SI 非整日周期在 CPU3 重启后相位漂移</h3>
-<p>调度锚点仅保存在静态 RAM：<code>si_modbus_slave.c:170-179</code>。重启后按“当日 00:00 + 配置时分”重建：<code>si_modbus_slave.c:1314-1344,1394-1407</code>。</p>
-<p>示例：起始 D0 08:00，周期 1000 min，连续计划应为 D0 08:00 → D1 00:40 → D1 17:20 → D2 10:00。若 D1 09:00 重启，锚点重建为 D1 08:00，后续变为 D2 00:40，原 D1 17:20 被跳过。61 min 等不能整除 1440 的周期同样会漂移。</p>
-<p>建议持久化绝对 next-trigger／epoch，或从固定全局 epoch 推导；验证跨午夜、计划点前后重启和 RTC 回拨。该问题已在 SI 待确认清单 R18-03 登记，不能继续只靠注释说明“锚点建立后可跨日”。</p>
-</section>
-<section id="p2-03-si-探底频次存在-off-by-one" class="level3">
-<h3>P2-03 SI 探底频次存在 off-by-one</h3>
+<p>这不是“对外伪成功”，因为外部会收到失败；它是“失败不等于全部未生效”的残余一致性风险。若参数组合要求原子一致，应提供
+CPU2
+批量事务／影子提交；否则协议必须强制主站在失败后补读、重试并核对最终值。</p>
+<h3 id="p2-02-si-非整日周期在-cpu3-重启后相位漂移">P2-02 SI 非整日周期在
+CPU3 重启后相位漂移</h3>
+<p>调度锚点仅保存在静态
+RAM：<code>si_modbus_slave.c:170-179</code>。重启后按“当日 00:00 +
+配置时分”重建：<code>si_modbus_slave.c:1314-1344,1394-1407</code>。</p>
+<p>示例：起始 D0 08:00，周期 1000 min，连续计划应为 D0 08:00 → D1 00:40
+→ D1 17:20 → D2 10:00。若 D1 09:00 重启，锚点重建为 D1 08:00，后续变为
+D2 00:40，原 D1 17:20 被跳过。61 min 等不能整除 1440
+的周期同样会漂移。</p>
+<p>建议持久化绝对 next-trigger／epoch，或从固定全局 epoch
+推导；验证跨午夜、计划点前后重启和 RTC 回拨。该问题已在 SI 待确认清单
+R18-03 登记，不能继续只靠注释说明“锚点建立后可跨日”。</p>
+<h3 id="p2-03-si-探底频次存在-off-by-one">P2-03 SI 探底频次存在
+off-by-one</h3>
 <ul>
-<li><code>SiProfile_ShouldDetectBottom()</code> 使用 <code>count + 1 &gt;= N</code> 判断：<code>LTD_MAIN_CPU2/Application/Src/measure_density.c:1110-1118</code>。</li>
-<li>探底后 <code>SiProfile_AdvanceBottomDetectTriggerCount()</code> 把计数置 1，而不是 0：<code>:1121-1127</code>。</li>
+<li><code>SiProfile_ShouldDetectBottom()</code> 使用
+<code>count + 1 &gt;= N</code>
+判断：<code>LTD_MAIN_CPU2/Application/Src/measure_density.c:1110-1118</code>。</li>
+<li>探底后 <code>SiProfile_AdvanceBottomDetectTriggerCount()</code>
+把计数置 1，而不是 0：<code>:1121-1127</code>。</li>
 <li>调用顺序是先判断、再推进、再探底：<code>:1620-1625</code>。</li>
 </ul>
-<p>序列结果：首次 Profile 探底后 count=1；N=2 时后续每轮都满足 <code>1+1&gt;=2</code>，实际每轮探底；N=5 时探底轮为 1、5、9……，间隔为 4。应明确计数语义为“已完成的非探底轮数”，探底后置 0，并对 N=1／2／5／1000 跑至少 <code>2N+2</code> 轮表驱动测试。</p>
-</section>
-<section id="p2-04-cpu2-fc10-ack-早于-fram-写后验证" class="level3">
-<h3>P2-04 CPU2 FC10 ACK 早于 FRAM 写后验证</h3>
-<p>FC10 只调用 <code>request_device_params_save()</code> 就返回 ACK：<code>hostcommu_modbus.c:348-354</code>；真实保存至少延后约 100 ms，写后校验失败只能稍后置全局错误：<code>system_parameter.c:1025-1046,1074-1102</code>。</p>
-<p>如果 ACK 只定义为“运行态参数已接收”，必须增加可查询的 pending／result 事务状态；如果协议把 ACK 定义为“持久化成功”，当前行为不满足定义，应在任务态完成保存后再 ACK。测试要覆盖写失败、读回不一致和 ACK 后掉电。</p>
-</section>
-<section id="p2-05-cpu2-ab-参数槽缺少单槽自愈" class="level3">
-<h3>P2-05 CPU2 A/B 参数槽缺少单槽自愈</h3>
-<p>CPU2 A 有效时不会读取和修复 B：<code>system_parameter.c:1123-1143</code>；只有从 B 回退或参数归一化时才主动回写：<code>:1145-1162</code>。因此 B 先损坏不会被发现，之后 A 再损坏会直接双槽失效并恢复默认。启动时应同时验证 A/B，只有一个有效时用有效副本修复另一槽并读回校验。</p>
-</section>
-<section id="p2-06-cpu3-参数保存失败反馈和迁移日志不完整" class="level3">
-<h3>P2-06 CPU3 参数保存失败反馈和迁移日志不完整</h3>
+<p>序列结果：首次 Profile 探底后 count=1；N=2 时后续每轮都满足
+<code>1+1&gt;=2</code>，实际每轮探底；N=5 时探底轮为 1、5、9……，间隔为
+4。应明确计数语义为“已完成的非探底轮数”，探底后置 0，并对
+N=1／2／5／1000 跑至少 <code>2N+2</code> 轮表驱动测试。</p>
+<h3 id="p2-04-cpu2-fc10-ack-早于-fram-写后验证">P2-04 CPU2 FC10 ACK 早于
+FRAM 写后验证</h3>
+<p>FC10 只调用 <code>request_device_params_save()</code> 就返回
+ACK：<code>hostcommu_modbus.c:348-354</code>；真实保存至少延后约 100
+ms，写后校验失败只能稍后置全局错误：<code>system_parameter.c:1025-1046,1074-1102</code>。</p>
+<p>如果 ACK 只定义为“运行态参数已接收”，必须增加可查询的 pending／result
+事务状态；如果协议把 ACK
+定义为“持久化成功”，当前行为不满足定义，应在任务态完成保存后再
+ACK。测试要覆盖写失败、读回不一致和 ACK 后掉电。</p>
+<h3 id="p2-05-cpu2-ab-参数槽缺少单槽自愈">P2-05 CPU2 A/B
+参数槽缺少单槽自愈</h3>
+<p>CPU2 A 有效时不会读取和修复
+B：<code>system_parameter.c:1123-1143</code>；只有从 B
+回退或参数归一化时才主动回写：<code>:1145-1162</code>。因此 B
+先损坏不会被发现，之后 A
+再损坏会直接双槽失效并恢复默认。启动时应同时验证
+A/B，只有一个有效时用有效副本修复另一槽并读回校验。</p>
+<h3 id="p2-06-cpu3-参数保存失败反馈和迁移日志不完整">P2-06 CPU3
+参数保存失败反馈和迁移日志不完整</h3>
 <ul>
-<li>OLED 参数保存使用 void 包装器丢弃失败结果，菜单仍按正常流程返回，并可能置串口重配标志：<code>cpu3_comm_display_params.c:732-740</code>、<code>display_tankopera.c:3920-3939,3985-3986</code>。</li>
-<li>V3／V4／V5 迁移保存失败仍打印“已升级”；V7 修正和恢复默认路径也丢弃保存返回值：<code>cpu3_comm_display_params.c:1309-1348,1395-1417</code>。</li>
-<li>V6 路径已经有正确的失败分支：<code>:1367-1370</code>，可作为统一范式。</li>
+<li>OLED 参数保存使用 void
+包装器丢弃失败结果，菜单仍按正常流程返回，并可能置串口重配标志：<code>cpu3_comm_display_params.c:732-740</code>、<code>display_tankopera.c:3920-3939,3985-3986</code>。</li>
+<li>V3／V4／V5 迁移保存失败仍打印“已升级”；V7
+修正和恢复默认路径也丢弃保存返回值：<code>cpu3_comm_display_params.c:1309-1348,1395-1417</code>。</li>
+<li>V6
+路径已经有正确的失败分支：<code>:1367-1370</code>，可作为统一范式。</li>
 </ul>
-<p>菜单应显示“保存失败”，不得置重配成功语义；所有迁移日志必须区分“仅 RAM 生效”和“持久化成功”。根因仍应由 P1-07 的 A/B 原子存储解决。</p>
-</section>
-<section id="p2-07-modbus-rtu-仍以约-1t-的-uart-idle-直接判帧" class="level3">
-<h3>P2-07 Modbus RTU 仍以约 1T 的 UART IDLE 直接判帧</h3>
-<p>CPU2 UART5 和 CPU3 多路外部协议都在 UART IDLE 后立即停 DMA，没有独立 t1.5／t3.5 定时器：<code>LTD_MAIN_CPU2/Core/Src/stm32f4xx_it.c:460-468</code>、<code>LTD_DISPLAY_CPU3/Core/Src/stm32f4xx_it.c:199-250</code>。</p>
-<p>这会带来帧内停顿拆帧和过早响应风险，但当前没有现场失败波形，项目已经决定暂缓实施。应继续按 <a href="2026-07-10_Modbus_RTU帧间隔与字节间超时问题分析及整改方案.md">Modbus RTU 帧间隔问题分析</a> 记录为受控偏差，不能对外宣称严格满足 RTU t1.5／t3.5。</p>
-</section>
-<section id="p2-08-uart6ch9141-缺少统一链路所有权" class="level3">
-<h3>P2-08 UART6／CH9141 缺少统一链路所有权</h3>
-<p>CH9141 AT 已有固定总时限，但仍逐字节阻塞接收：<code>ch9141_at.c:151-175,475-511</code>。CH9141、DSM、LTD 和安全协议模块分别执行 DMAStop／Abort／Receive_DMA，未见统一 UART6 owner：<code>ch9141_at.c:523-556,704</code>、<code>dsm_sensor_communication.c:103,179,369</code>、<code>ltd_sensor_communication.c:113,187,265</code>、<code>sensor_safe_transport_uart6.c:83,139,381</code>。</p>
-<p>建议建立统一模式切换和恢复状态机；在不同上报周期、传感器重启、AT 超时和持续透传下做并发台架。</p>
-</section>
-<section id="p2-09-wärtsilä-测后回位探底失败没有对外闭环" class="level3">
-<h3>P2-09 Wärtsilä 测后回位／探底失败没有对外闭环</h3>
-<p>回固定点失败和 <code>SearchBottom()</code> 失败的部分路径只打印并切回 <code>CMD_MONITOR_SINGLE</code>，没有设置可关联的活动错误：<code>LTD_MAIN_CPU2/Application/Src/measure.c:1111-1135</code>。外部主机可能看到设备已回单点监测，却不知道测后维护动作失败。应在 Wärtsilä 状态／结果中保留失败原因和完成代际，并与 <a href="../../00_程序流程导航/2026-06-11_Wartsila分布测量专题流程.html">Wartsila 分布测量专题流程</a> 的剩余风险合并验证。</p>
-</section>
-<section id="p2-10-国标密度后处理阈值硬编码为-100" class="level3">
-<h3>P2-10 国标密度后处理阈值硬编码为 100</h3>
-<p><code>LTD_MAIN_CPU2/Application/Src/measure_density.c:885-896</code> 使用固定值 100 参与 <code>GB_FilterPoints_ByDensity20()</code> 点位过滤，并保留 TODO；未找到对应参数定义、单位来源和可追溯依据。建议明确单位和标准条款，再决定固化常量还是纳入参数／协议；用边界点和历史样本回放证明口径不漂移。</p>
-</section>
-<section id="p2-11-cpu3-协议切换-ack-是-accepted不是-completed" class="level3">
-<h3>P2-11 CPU3 协议切换 ACK 是 Accepted，不是 Completed</h3>
-<p>协议切换帧先返回 OK，真正 FRAM 保存和 UART 重配在后续主循环执行：<code>protocol_switch_frame.c:91-97</code>、<code>app_main.c:362-405,481-541</code>。正式文档已经明确 ACK 只表示“识别并接受”，工具会等待并二次验证，因此当前不是无条件代码缺陷。残余风险是所有主站都必须遵循二次验证；应在协议字段或文档中持续使用 <code>Accepted</code> 语义，覆盖保存失败、DMA 启动失败和 ACK 后掉电。</p>
-</section>
-<section id="p2-12-未来参数版本迁移边界不足" class="level3">
-<h3>P2-12 未来参数版本迁移边界不足</h3>
-<p>CPU2 当前 A/B 存储能处理现有 V3 原位复用，但 <code>struct_size</code> 或 <code>param_version</code> 不一致会直接拒绝并最终恢复默认：<code>system_parameter.c:791-836,1172-1211</code>。当前没有证据表明 V3 升级会清参；风险在下一次真实结构变化。提升 <code>DEVICE_PARAM_VERSION</code> 前必须先建立逐版本迁移表、旧镜像样例和掉电回滚测试。</p>
-</section>
-</section>
-<section id="6-p3工程工具和文档治理问题" class="level2">
-<h2>6. P3：工程、工具和文档治理问题</h2>
-<section id="p3-01-根-readme-和-si-正式入口版本基线过期" class="level3">
-<h3>P3-01 根 README 和 SI 正式入口版本基线过期</h3>
+<p>菜单应显示“保存失败”，不得置重配成功语义；所有迁移日志必须区分“仅 RAM
+生效”和“持久化成功”。根因仍应由 P1-07 的 A/B 原子存储解决。</p>
+<h3 id="p2-07-modbus-rtu-仍以约-1t-的-uart-idle-直接判帧">P2-07 Modbus
+RTU 仍以约 1T 的 UART IDLE 直接判帧</h3>
+<p>CPU2 UART5 和 CPU3 多路外部协议都在 UART IDLE 后立即停 DMA，没有独立
+t1.5／t3.5
+定时器：<code>LTD_MAIN_CPU2/Core/Src/stm32f4xx_it.c:460-468</code>、<code>LTD_DISPLAY_CPU3/Core/Src/stm32f4xx_it.c:199-250</code>。</p>
+<p>这会带来帧内停顿拆帧和过早响应风险，但当前没有现场失败波形，项目已经决定暂缓实施。应继续按
+<a
+href="2026-07-10_Modbus_RTU帧间隔与字节间超时问题分析及整改方案.md">Modbus
+RTU 帧间隔问题分析</a> 记录为受控偏差，不能对外宣称严格满足 RTU
+t1.5／t3.5。</p>
+<h3 id="p2-08-uart6ch9141-缺少统一链路所有权">P2-08 UART6／CH9141
+缺少统一链路所有权</h3>
+<p>CH9141 AT
+已有固定总时限，但仍逐字节阻塞接收：<code>ch9141_at.c:151-175,475-511</code>。CH9141、DSM、LTD
+和安全协议模块分别执行 DMAStop／Abort／Receive_DMA，未见统一 UART6
+owner：<code>ch9141_at.c:523-556,704</code>、<code>dsm_sensor_communication.c:103,179,369</code>、<code>ltd_sensor_communication.c:113,187,265</code>、<code>sensor_safe_transport_uart6.c:83,139,381</code>。</p>
+<p>建议建立统一模式切换和恢复状态机；在不同上报周期、传感器重启、AT
+超时和持续透传下做并发台架。</p>
+<h3 id="p2-09-wärtsilä-测后回位探底失败没有对外闭环">P2-09 Wärtsilä
+测后回位／探底失败没有对外闭环</h3>
+<p>回固定点失败和 <code>SearchBottom()</code> 失败的部分路径只打印并切回
+<code>CMD_MONITOR_SINGLE</code>，没有设置可关联的活动错误：<code>LTD_MAIN_CPU2/Application/Src/measure.c:1111-1135</code>。外部主机可能看到设备已回单点监测，却不知道测后维护动作失败。应在
+Wärtsilä 状态／结果中保留失败原因和完成代际，并与 <a
+href="../../00_程序流程导航/2026-06-11_Wartsila分布测量专题流程.html">Wartsila
+分布测量专题流程</a> 的剩余风险合并验证。</p>
+<h3 id="p2-10-国标密度后处理阈值硬编码为-100">P2-10
+国标密度后处理阈值硬编码为 100</h3>
+<p><code>LTD_MAIN_CPU2/Application/Src/measure_density.c:885-896</code>
+使用固定值 100 参与 <code>GB_FilterPoints_ByDensity20()</code>
+点位过滤，并保留
+TODO；未找到对应参数定义、单位来源和可追溯依据。建议明确单位和标准条款，再决定固化常量还是纳入参数／协议；用边界点和历史样本回放证明口径不漂移。</p>
+<h3 id="p2-11-cpu3-协议切换-ack-是-accepted不是-completed">P2-11 CPU3
+协议切换 ACK 是 Accepted，不是 Completed</h3>
+<p>协议切换帧先返回 OK，真正 FRAM 保存和 UART
+重配在后续主循环执行：<code>protocol_switch_frame.c:91-97</code>、<code>app_main.c:362-405,481-541</code>。正式文档已经明确
+ACK
+只表示“识别并接受”，工具会等待并二次验证，因此当前不是无条件代码缺陷。残余风险是所有主站都必须遵循二次验证；应在协议字段或文档中持续使用
+<code>Accepted</code> 语义，覆盖保存失败、DMA 启动失败和 ACK
+后掉电。</p>
+<h3 id="p2-12-未来参数版本迁移边界不足">P2-12
+未来参数版本迁移边界不足</h3>
+<p>CPU2 当前 A/B 存储能处理现有 V3 原位复用，但 <code>struct_size</code>
+或 <code>param_version</code>
+不一致会直接拒绝并最终恢复默认：<code>system_parameter.c:791-836,1172-1211</code>。当前没有证据表明
+V3 升级会清参；风险在下一次真实结构变化。提升
+<code>DEVICE_PARAM_VERSION</code>
+前必须先建立逐版本迁移表、旧镜像样例和掉电回滚测试。</p>
+<h2 id="p3工程工具和文档治理问题">6. P3：工程、工具和文档治理问题</h2>
+<h3 id="p3-01-根-readme-和-si-正式入口版本基线过期">P3-01 根 README 和
+SI 正式入口版本基线过期</h3>
 <ul>
-<li>根 <code>README.md:22-24</code> 仍写 CPU2 V1.27、CPU3 V1.25、协议 21，但当前源码是 V1.28／V1.26／协议 23；README 同时标注最后核对日期 2026-07-16，容易造成误导。</li>
-<li>SI 入口、需求总览和目录 README 仍有“正式组合协议 21”的表述，而映射表和源码已经是协议 23。</li>
-<li>SI 待确认清单中的部分 R18 条目仍按旧实现标未修，但当前首败关闭快照、分块同代提交和会话代际已经落地；应关闭旧项，只保留仍真实存在的相位漂移、Manual 门禁和台架风险。</li>
+<li>报告形成时根 <code>README.md:22-24</code> 仍写 CPU2 V1.27、CPU3
+V1.25、协议 21；2026-07-18 已按当前正式组合修正为 CPU2 V1.29.1、CPU3
+V1.28、协议 24。该子项已闭环。</li>
+<li>SI 入口、需求总览和目录 README 仍有“正式组合协议
+21”的表述，而映射表和源码已经是协议 23。</li>
+<li>SI 待确认清单中的部分 R18
+条目仍按旧实现标未修，但当前首败关闭快照、分块同代提交和会话代际已经落地；应关闭旧项，只保留仍真实存在的相位漂移、Manual
+门禁和台架风险。</li>
 </ul>
-</section>
-<section id="p3-02-文档结构检查当前失败" class="level3">
-<h3>P3-02 文档结构检查当前失败</h3>
-<p><code>py tools/check_docs.py</code> 和 <code>py tools/check_docs_structure.py</code> 当前因 <code>docs/05_测试记录/协议台架验收/</code> 缺少 <code>README.md</code> 失败。Markdown 链接、流程 HTML、SVG 和流程反向索引本轮通过。应为协议台架目录补正式说明，明确哪些文件是权威输入、生成输出、验收结论和重跑命令。</p>
-</section>
-<section id="p3-03-本机检查脚本基线过期" class="level3">
-<h3>P3-03 本机检查脚本基线过期</h3>
+<h3 id="p3-02-文档结构检查已闭环2026-07-18">P3-02
+文档结构检查已闭环（2026-07-18）</h3>
+<p>报告形成时 <code>py tools/check_docs.py</code> 和
+<code>py tools/check_docs_structure.py</code> 因
+<code>docs/05_测试记录/协议台架验收/</code> 缺少 <code>README.md</code>
+失败。2026-07-18
+当前工作树已补正式说明，明确输入、派生输出、验收边界和重跑命令；随后重新执行
+<code>check_docs_structure.py</code> 和 <code>check_docs.py</code>
+均通过，当前统计为 586 个文件、75 个目录、294 份 Markdown、71 份
+HTML，Markdown 链接检查为 294 份、缺失
+0。该结果只关闭文档结构和链接门禁，不代表协议
+<code>Unverifiable</code>、业务 ACK 或真实台架项已经闭环。</p>
+<h3 id="p3-03-本机检查脚本基线过期">P3-03 本机检查脚本基线过期</h3>
 <p>32 项专项检查中 29 项通过，3 项失败经源码反证均为工具误报：</p>
 <ol type="1">
-<li><code>check_cpu3_oled_brightness_config.py</code> 把历史枚举顺序写死，未适配 SI 项追加；</li>
-<li><code>check_cpu3_ret_arr_word_contract.py</code> 漏掉 AO 四项和 SI 自动开关五个映射；</li>
-<li><code>check_density_level_control_contract.py</code> 仍要求方法 4／5 是相邻 <code>case</code>，未适配方法 5 的独立固定频率闭环入口。</li>
+<li><code>check_cpu3_oled_brightness_config.py</code>
+把历史枚举顺序写死，未适配 SI 项追加；</li>
+<li><code>check_cpu3_ret_arr_word_contract.py</code> 漏掉 AO 四项和 SI
+自动开关五个映射；</li>
+<li><code>check_density_level_control_contract.py</code> 仍要求方法 4／5
+是相邻 <code>case</code>，未适配方法 5 的独立固定频率闭环入口。</li>
 </ol>
-<p>429 项 Python 单元测试有 2 项失败，原因是 <code>test_update_flow_navigation.py</code> 仍硬编码 CPU2 V1.24／CPU3 V1.22，而当前清单为 V1.28／V1.26。工具红灯长期存在会降低门禁可信度，应先修工具再恢复“全部专项门禁通过”的发布表述。</p>
-</section>
-<section id="p3-04-tools-和完整测试不在-gitci" class="level3">
-<h3>P3-04 <code>tools/</code> 和完整测试不在 Git／CI</h3>
-<p><code>.gitignore:70</code> 忽略整个 <code>tools/</code>，<code>git ls-files -- tools</code> 为空；GitHub Actions 只执行 CPU2／CPU3 Debug 构建。文档、协议、版本、契约和 429 项 Python 测试都依赖当前机器，服务器和新克隆无法复现。</p>
-<p>这是既定治理选择，但残余风险必须被显式接受。至少应发布带 hash／版本的本机工具包，记录运行命令和结果；关键只读门禁应逐步进入可复现 CI。</p>
-</section>
-<section id="p3-05-outputs-已忽略但仍有-4-个跟踪文件" class="level3">
-<h3>P3-05 <code>outputs/</code> 已忽略但仍有 4 个跟踪文件</h3>
-<p><code>.gitignore:72-73</code> 明确忽略 <code>outputs/</code>，但 Git 仍跟踪 3 个 XLSX 和 1 个 <code>.inspect.ndjson</code>。应先确认权威资料落位，再执行仅取消跟踪的治理操作，并增加“被 ignore 的文件仍被 tracked”检查。本报告不执行删除或取消跟踪。</p>
-</section>
-<section id="p3-06-当前暂存区与发布资料边界冲突且生成流程会改写暂存导出件" class="level3">
-<h3>P3-06 当前暂存区与发布资料边界冲突，且生成流程会改写暂存导出件</h3>
-<p>审查起点有 9 个既有暂存条目：2 个 PDF，以及 <code>command-closure</code> 三件套和 4 个 catalog／facts JSON。当前版本方案明确 PDF 不进入 Git／最终暂存应排除 PDF，因此提交前需要单独确认。</p>
-<p>审查期间运行本机检查后，协议台架目录两次出现相同漂移：英文 CSV／MD 在工作树被删除，4 个 JSON 被重写，并生成两份中文名“多协议命令闭环矩阵”文件。这表明至少有一条本机工具／测试链会对正式暂存材料产生副作用，且失败或并发时没有可靠恢复。应定位写入者、统一输出目录、使用临时目录和原子替换，并在测试结束后验证 <code>git status</code> 不变。</p>
-</section>
-<section id="p3-07-协议验收产物缺少完整生成元数据" class="level3">
-<h3>P3-07 协议验收产物缺少完整生成元数据</h3>
-<p>当前 JSON 绑定了输入 hash，这是优点；但没有统一记录 source Git commit、generator 版本／hash、生成命令和生成时间。由于工具本身不在 Git，新克隆无法仅凭仓库重跑。建议每个产物顶层写入上述四项，并在协议台架 README 固化命令。</p>
-</section>
-<section id="p3-08-正式发布没有明确-release-构建基线" class="level3">
-<h3>P3-08 正式发布没有明确 Release 构建基线</h3>
-<p>两份构建说明和 GitHub Actions 都配置 <code>CMAKE_BUILD_TYPE=Debug</code>，发布前只要求 Debug clean-first。CMake 虽存在 Release 配置能力，但未进入 CI 和正式交付说明。应明确交付二进制的优化等级、断言／日志开关、时序差异和实际验证配置，并至少建立一条 Release clean-first 门禁。</p>
-</section>
-<section id="p3-09-编译告警门禁只有--wall" class="level3">
-<h3>P3-09 编译告警门禁只有 <code>-Wall</code></h3>
-<p>CPU2／CPU3 CMake 当前只启用 <code>-Wall</code>，没有 <code>-Wextra</code>、<code>-Wconversion</code>、<code>-Wshadow</code> 或分阶段 <code>-Werror</code>。不建议一次性全开并阻塞维护；应先建立告警基线和白名单，再逐类收紧，优先覆盖协议长度、符号／无符号转换和枚举转换。</p>
-</section>
-<section id="p3-10-wirelesshost_v41_init-不具备独立可复现构建入口" class="level3">
-<h3>P3-10 <code>WirelessHost_V4.1_init</code> 不具备独立可复现构建入口</h3>
-<p>该目录在主 README 中定位为历史／独立验证工程；当前只有 CubeIDE 工程和本地生成的 Debug makefile，makefile 含 <code>D:\CUBE\...</code> 绝对路径，当前环境也没有统一命令行构建说明。它不是当前主产品发布阻断项，但应补独立 README、工具链版本和可复现命令，或明确冻结为只读历史资产。</p>
-</section>
-<section id="p3-11-历史问题正文与统一索引的状态口径仍需持续对账" class="level3">
-<h3>P3-11 历史问题正文与统一索引的状态口径仍需持续对账</h3>
+<p>429 项 Python 单元测试有 2 项失败，原因是
+<code>test_update_flow_navigation.py</code> 仍硬编码 CPU2 V1.24／CPU3
+V1.22，而当前清单为
+V1.28／V1.26。工具红灯长期存在会降低门禁可信度，应先修工具再恢复“全部专项门禁通过”的发布表述。</p>
+<h3 id="p3-04-tools-和完整测试不在-gitci">P3-04 <code>tools/</code>
+和完整测试不在 Git／CI</h3>
+<p><code>.gitignore:70</code> 忽略整个
+<code>tools/</code>，<code>git ls-files -- tools</code> 为空；GitHub
+Actions 只执行 CPU2／CPU3 Debug 构建。文档、协议、版本、契约和 429 项
+Python 测试都依赖当前机器，服务器和新克隆无法复现。</p>
+<p>这是既定治理选择，但残余风险必须被显式接受。至少应发布带
+hash／版本的本机工具包，记录运行命令和结果；关键只读门禁应逐步进入可复现
+CI。</p>
+<h3 id="p3-05-outputs-已忽略但仍有-4-个跟踪文件">P3-05
+<code>outputs/</code> 已忽略但仍有 4 个跟踪文件</h3>
+<p><code>.gitignore:72-73</code> 明确忽略 <code>outputs/</code>，但 Git
+仍跟踪 3 个 XLSX 和 1 个
+<code>.inspect.ndjson</code>。应先确认权威资料落位，再执行仅取消跟踪的治理操作，并增加“被
+ignore 的文件仍被 tracked”检查。本报告不执行删除或取消跟踪。</p>
+<h3
+id="p3-06-当前暂存区与发布资料边界冲突且生成流程会改写暂存导出件">P3-06
+当前暂存区与发布资料边界冲突，且生成流程会改写暂存导出件</h3>
+<p>审查起点有 9 个既有暂存条目：2 个 PDF，以及
+<code>command-closure</code> 三件套和 4 个 catalog／facts
+JSON。当前版本方案明确 PDF 不进入 Git／最终暂存应排除
+PDF，因此提交前需要单独确认。</p>
+<p>审查期间运行本机检查后，协议台架目录两次出现相同漂移：英文 CSV／MD
+在工作树被删除，4 个 JSON
+被重写，并生成两份中文名“多协议命令闭环矩阵”文件。这表明至少有一条本机工具／测试链会对正式暂存材料产生副作用，且失败或并发时没有可靠恢复。应定位写入者、统一输出目录、使用临时目录和原子替换，并在测试结束后验证
+<code>git status</code> 不变。</p>
+<h3 id="p3-07-协议验收产物缺少完整生成元数据">P3-07
+协议验收产物缺少完整生成元数据</h3>
+<p>当前 JSON 绑定了输入 hash，这是优点；但没有统一记录 source Git
+commit、generator 版本／hash、生成命令和生成时间。由于工具本身不在
+Git，新克隆无法仅凭仓库重跑。建议每个产物顶层写入上述四项，并在协议台架
+README 固化命令。</p>
+<h3 id="p3-08-正式发布没有明确-release-构建基线">P3-08 正式发布没有明确
+Release 构建基线</h3>
+<p>两份构建说明和 GitHub Actions 都配置
+<code>CMAKE_BUILD_TYPE=Debug</code>，发布前只要求 Debug
+clean-first。CMake 虽存在 Release 配置能力，但未进入 CI
+和正式交付说明。应明确交付二进制的优化等级、断言／日志开关、时序差异和实际验证配置，并至少建立一条
+Release clean-first 门禁。</p>
+<h3 id="p3-09-编译告警门禁只有--wall">P3-09 编译告警门禁只有
+<code>-Wall</code></h3>
+<p>CPU2／CPU3 CMake 当前只启用 <code>-Wall</code>，没有
+<code>-Wextra</code>、<code>-Wconversion</code>、<code>-Wshadow</code>
+或分阶段
+<code>-Werror</code>。不建议一次性全开并阻塞维护；应先建立告警基线和白名单，再逐类收紧，优先覆盖协议长度、符号／无符号转换和枚举转换。</p>
+<h3 id="p3-10-wirelesshost_v4.1_init-不具备独立可复现构建入口">P3-10
+<code>WirelessHost_V4.1_init</code> 不具备独立可复现构建入口</h3>
+<p>该目录在主 README 中定位为历史／独立验证工程；当前只有 CubeIDE
+工程和本地生成的 Debug makefile，makefile 含 <code>D:\CUBE\...</code>
+绝对路径，当前环境也没有统一命令行构建说明。它不是当前主产品发布阻断项，但应补独立
+README、工具链版本和可复现命令，或明确冻结为只读历史资产。</p>
+<h3 id="p3-11-历史问题正文与统一索引的状态口径仍需持续对账">P3-11
+历史问题正文与统一索引的状态口径仍需持续对账</h3>
 <ul>
-<li>本轮已把 AD5421 断环恢复统一为“代码已落地、待真实断环循环验证”；</li>
-<li>本轮已把 AD5421 <code>0xFFFF</code> 统一为“<code>MAIN</code> 已完成 PB6 修正和部分验证、专项 write-only 分支未合入、仍待硬件验证”；</li>
-<li>系统通信历史页仍写 AS5145 已从回调去打印／去立即重试，而当前 V1.20.3 源码已经恢复三次立即重试。</li>
+<li>本轮已把 AD5421
+断环恢复统一为“代码已落地、待真实断环循环验证”；</li>
+<li>2026-07-23 已把 AD5421 <code>0xFFFF</code> 统一为 B-03
+硬件读回证据缺口，PB4／PB5 标签修正归 F-08 关闭；专项 write-only
+分支不再作为现行正式口径；</li>
+<li>系统通信历史页已补 C-07／C-14／C-23 现行映射，并明确 AS5145
+回调减重和连续稳定窗口尚未落地。</li>
 </ul>
-<p>统一索引已按当前源码修正，但旧问题正文仍保留形成时的阶段性判断。后续关闭问题时，应同时给旧正文增加“当前状态更新”，并以当前源码、版本方案和统一索引为准，避免把历史 HTML 中已经关闭或已经回退的条目再次算作新问题。</p>
-</section>
-</section>
-<section id="7-既有未闭环台架与产品决策" class="level2">
-<h2>7. 既有未闭环台架与产品决策</h2>
+<p>统一索引和本目录专题已补 2026-07-23
+状态映射，但旧正文仍保留形成时的阶段性证据。后续关闭问题时，应继续同步现行总账、专题状态区和索引，避免把历史
+HTML 中已经关闭或已经回退的条目再次算作新问题。</p>
+<h2 id="既有未闭环台架与产品决策">7. 既有未闭环台架与产品决策</h2>
 <table>
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
 <thead>
 <tr>
 <th>专题</th>
@@ -1215,12 +1466,16 @@
 <tr>
 <td>电机运动</td>
 <td>实现已合入，验证未完</td>
-<td>T15 编码器首帧缺失、T16 TMC／24V 故障注入、200 mm 边界决策、正式位置模式与 Jog A/B；见 <a href="../../02_需求与计划/未实现/2026-06-12_电机运动剩余台架验证执行规程.md">剩余台架规程</a></td>
+<td>T15 编码器首帧缺失、T16 TMC／24V 故障注入、200 mm
+边界决策、正式位置模式与 Jog A/B；见 <a
+href="../../02_需求与计划/未实现/2026-06-12_电机运动剩余台架验证执行规程.md">剩余台架规程</a></td>
 </tr>
 <tr>
 <td>AD5421 断环恢复</td>
 <td>代码已实现，待台架</td>
-<td>真实断环／重接至少 10 轮、HART 共存、逻辑分析仪帧、长期自动跟随；见 <a href="2026-07-08_AD5421环路断开重接后电流乱跳问题分析.md">断环恢复问题分析</a></td>
+<td>真实断环／重接至少 10 轮、HART 共存、逻辑分析仪帧、长期自动跟随；见
+<a
+href="2026-07-08_AD5421环路断开重接后电流乱跳问题分析.md">断环恢复问题分析</a></td>
 </tr>
 <tr>
 <td>AD5421 回读</td>
@@ -1230,12 +1485,14 @@
 <tr>
 <td>SI</td>
 <td>静态契约较完整，实机不足</td>
-<td>Manual 报警／自动 Profile、非整日周期重启、RTC 回拨、1／30／200 点、取消／失败、PLC 高频轮询、FRAM 掉电</td>
+<td>Manual 报警／自动 Profile、非整日周期重启、RTC 回拨、1／30／200
+点、取消／失败、PLC 高频轮询、FRAM 掉电</td>
 </tr>
 <tr>
 <td>Wärtsilä</td>
 <td>主地址 1 已实现，兼容缺口保留</td>
-<td>完成状态序列、地址 2／3／4、100／200 点契约、参数部分提交、测后探底失败和真实主机 golden frame</td>
+<td>完成状态序列、地址 2／3／4、100／200
+点契约、参数部分提交、测后探底失败和真实主机 golden frame</td>
 </tr>
 <tr>
 <td>CPU3 断链</td>
@@ -1245,12 +1502,14 @@
 <tr>
 <td>CPU2／CPU3 FRAM</td>
 <td>软件校验存在，掉电原子性不足</td>
-<td>每字节边界断电、SPI HAL_ERROR／TIMEOUT、迁移版本矩阵和 ACK 后掉电</td>
+<td>每字节边界断电、SPI HAL_ERROR／TIMEOUT、迁移版本矩阵和 ACK
+后掉电</td>
 </tr>
 <tr>
 <td>安全传感器</td>
 <td>主机桩和静态检查通过</td>
-<td>真实传感器端参数表、9600 bps／200 m、噪声、重启、控制窗口、SRS／FTTI 和独立认证证据；不得据当前结果宣称满足 SIL</td>
+<td>真实传感器端参数表、9600 bps／200 m、噪声、重启、控制窗口、SRS／FTTI
+和独立认证证据；不得据当前结果宣称满足 SIL</td>
 </tr>
 <tr>
 <td>Modbus RTU</td>
@@ -1259,111 +1518,97 @@
 </tr>
 </tbody>
 </table>
-</section>
-<section id="8-已排除的误报和已经通过的检查" class="level2">
-<h2>8. 已排除的误报和已经通过的检查</h2>
-<section id="81-已排除降级" class="level3">
-<h3>8.1 已排除／降级</h3>
+<h2 id="已排除的误报和已经通过的检查">8.
+已排除的误报和已经通过的检查</h2>
+<h3 id="已排除降级">8.1 已排除／降级</h3>
 <ul>
-<li>双端 <code>DEVICE_PROTOCOL_VERSION=23</code> 一致；共享 <code>CommandType</code>、<code>DefaultCommandType</code>、<code>DeviceState</code>、共享故障码、<code>DeviceParameters</code>、状态／测量结构和寄存器公式未发现漂移。</li>
-<li>CPU3 OLED 亮度契约失败是脚本写死枚举相邻关系，不应移动源码枚举。</li>
-<li>CPU3 <code>ret_arr</code> 契约失败是脚本漏映射，AO 和 SI 实际显示链存在。</li>
-<li>密度液位连续闭环契约失败是脚本未适配方法 5 重构；方法 4／5 当前都能进入对应连续闭环。</li>
-<li><code>FRAM_ANGLE_ADDRESS=0x1000</code> 是未使用遗留宏，当前没有运行时调用，不构成已发生覆盖冲突；仍建议删除或纳入地址分配表。</li>
-<li>Wärtsilä 整个本地保持寄存器池可写并 ACK 是当前正式契约；没有供应商只读权限矩阵前，不列代码缺陷。</li>
-<li>DSM／Wärtsilä 多参数失败会返回 <code>0x06</code>，因此不能写成外部伪成功；保留的风险是 CPU2 已成功字段不会原子回滚。</li>
-<li>CPU2 自动恢复确认阶段持续轮询符合当前正式需求，不能仅因循环长就判定为违约。</li>
+<li>双端 <code>DEVICE_PROTOCOL_VERSION=23</code> 一致；共享
+<code>CommandType</code>、<code>DefaultCommandType</code>、<code>DeviceState</code>、共享故障码、<code>DeviceParameters</code>、状态／测量结构和寄存器公式未发现漂移。</li>
+<li>CPU3 OLED
+亮度契约失败是脚本写死枚举相邻关系，不应移动源码枚举。</li>
+<li>CPU3 <code>ret_arr</code> 契约失败是脚本漏映射，AO 和 SI
+实际显示链存在。</li>
+<li>密度液位连续闭环契约失败是脚本未适配方法 5 重构；方法 4／5
+当前都能进入对应连续闭环。</li>
+<li><code>FRAM_ANGLE_ADDRESS=0x1000</code>
+是未使用遗留宏，当前没有运行时调用，不构成已发生覆盖冲突；仍建议删除或纳入地址分配表。</li>
+<li>Wärtsilä 整个本地保持寄存器池可写并 ACK
+是当前正式契约；没有供应商只读权限矩阵前，不列代码缺陷。</li>
+<li>DSM／Wärtsilä 多参数失败会返回
+<code>0x06</code>，因此不能写成外部伪成功；保留的风险是 CPU2
+已成功字段不会原子回滚。</li>
+<li>CPU2
+自动恢复确认阶段持续轮询符合当前正式需求，不能仅因循环长就判定为违约。</li>
 </ul>
-</section>
-<section id="82-已通过" class="level3">
-<h3>8.2 已通过</h3>
+<h3 id="已通过">8.2 已通过</h3>
 <ul>
-<li>CPU2 clean-first：<code>text=307268</code>、<code>data=2328</code>、<code>bss=34048</code>，无 <code>-Wall</code> 告警。</li>
-<li>CPU3 clean-first：<code>text=180392</code>、<code>data=37892</code>、<code>bss=80420</code>，无 <code>-Wall</code> 告警。</li>
+<li>CPU2
+clean-first：<code>text=307268</code>、<code>data=2328</code>、<code>bss=34048</code>，无
+<code>-Wall</code> 告警。</li>
+<li>CPU3
+clean-first：<code>text=180392</code>、<code>data=37892</code>、<code>bss=80420</code>，无
+<code>-Wall</code> 告警。</li>
 <li>284 个 Markdown 文件链接检查通过，missing=0。</li>
-<li>CPU3 字库、Profile 快照、菜单宽度、长按、故障可见性、外部数据新鲜度、显示 ISR 边界、CPU2 超时故障、LTD、DSM、Wärtsilä 分布、SI golden frame、密度精度和故障码目录等检查通过。</li>
-<li>当前共享协议 catalog 比较无差异、无 validation error；但 <code>Unverifiable</code> 和业务 ACK=0 仍然有效，不能把“无差异”写成闭环通过。</li>
+<li>CPU3 字库、Profile
+快照、菜单宽度、长按、故障可见性、外部数据新鲜度、显示 ISR 边界、CPU2
+超时故障、LTD、CPU3 对外 DSM V1.228、Wärtsilä 分布、SI golden
+frame、密度精度和故障码目录等检查通过；这里的 DSM 检查不覆盖 CPU2 与 DSM
+CPU1 之间的传统 UART 文本协议、维护线识别或真实传感器台架。</li>
+<li>当前共享协议 catalog 比较无差异、无 validation error；但
+<code>Unverifiable</code> 和业务 ACK=0
+仍然有效，不能把“无差异”写成闭环通过。</li>
 </ul>
-</section>
-</section>
-<section id="9-整改顺序建议" class="level2">
-<h2>9. 整改顺序建议</h2>
-<section id="91-015-天先关闭内存运动状态和维护安全边界" class="level3">
-<h3>9.1 0～15 天：先关闭内存、运动状态和维护安全边界</h3>
+<h2 id="整改顺序建议">9. 整改顺序建议</h2>
+<h3 id="天先关闭内存运动状态和维护安全边界">9.1 0～15
+天：先关闭内存、运动状态和维护安全边界</h3>
 <ol type="1">
-<li>修复 CPU2 FC03／FC04／FC10 精确长度、数量和缓冲容量检查，建立主机 ASan／边界测试。</li>
-<li>修复取消停机失败仍待机、非法命令清故障、<code>MeasureStart()</code> 失败仍继续分派。</li>
+<li>修复 CPU2 FC03／FC04／FC10 精确长度、数量和缓冲容量检查，建立主机
+ASan／边界测试。</li>
+<li>修复取消停机失败仍待机、非法命令清故障、<code>MeasureStart()</code>
+失败仍继续分派。</li>
 <li>给 SI 自动调度和报警投影接入 CPU2 权威 Manual 抑制状态。</li>
-<li>修复 DSM 地址 0 回包；用真实 PLC 确认 Wärtsilä 完成状态后冻结 golden frame。</li>
+<li>修复 DSM 地址 0 回包；用真实 PLC 确认 Wärtsilä 完成状态后冻结 golden
+frame。</li>
 <li>把 CPU2 UART5 业务和 AS5145 错误日志／重试移出 ISR。</li>
-<li>结合整机硬件确认 USART1 物理可达性；在结论出来前，生产构建默认关闭危险测试分发。</li>
+<li>结合整机硬件确认 USART1
+物理可达性；在结论出来前，生产构建默认关闭危险测试分发。</li>
 </ol>
-</section>
-<section id="92-1545-天处理活性存储和事务一致性" class="level3">
-<h3>9.2 15～45 天：处理活性、存储和事务一致性</h3>
+<h3 id="天处理活性存储和事务一致性">9.2 15～45
+天：处理活性、存储和事务一致性</h3>
 <ol type="1">
 <li>双 CPU 看门狗改为主循环健康票据，并完成死锁注入。</li>
 <li>CPU3→CPU2 通信改为异步事务；断链降频并完成三路 COM 压测。</li>
 <li>CPU3 本机参数改 A/B 原子槽，CPU2 A/B 增加单槽自愈。</li>
-<li>明确 CPU2 参数 ACK 的持久化语义；设计 command request／accepted／completed 代际。</li>
+<li>明确 CPU2 参数 ACK 的持久化语义；设计 command
+request／accepted／completed 代际。</li>
 <li>修复 SI 非整日周期锚点和探底频次 off-by-one。</li>
-<li>对 DSM／Wärtsilä 参数组合决定“批量原子事务”还是“失败后补读重试”的正式契约。</li>
+<li>对 DSM／Wärtsilä
+参数组合决定“批量原子事务”还是“失败后补读重试”的正式契约。</li>
 </ol>
-</section>
-<section id="93-4590-天补齐台架与可复现治理" class="level3">
-<h3>9.3 45～90 天：补齐台架与可复现治理</h3>
+<h3 id="天补齐台架与可复现治理">9.3 45～90 天：补齐台架与可复现治理</h3>
 <ol type="1">
-<li>完成电机 T15／T16、硬限位、CPU2／CPU3 FRAM 掉电、SI PLC、Wärtsilä 主机、AD5421、长线传感器和 RTU 时序矩阵。</li>
+<li>完成电机 T15／T16、硬限位、CPU2／CPU3 FRAM 掉电、SI PLC、Wärtsilä
+主机、AD5421、长线传感器和 RTU 时序矩阵。</li>
 <li>修复 3 个过期契约脚本和 2 个版本硬编码测试，恢复全绿基线。</li>
-<li>为协议台架验收目录增加 README、生成器 hash／commit／命令和无副作用检查。</li>
-<li>增加 Release clean-first 和分阶段告警门禁；决定哪些本机工具进入可复现 CI。</li>
-<li>清理版本、索引、tracked outputs 和历史工程构建说明，但不得用文档状态更新替代真实验证。</li>
+<li>协议台架验收目录 README 已于 2026-07-18 补齐；后续继续保持生成器
+hash／commit／命令和无副作用检查。</li>
+<li>增加 Release clean-first
+和分阶段告警门禁；决定哪些本机工具进入可复现 CI。</li>
+<li>清理版本、索引、tracked outputs
+和历史工程构建说明，但不得用文档状态更新替代真实验证。</li>
 </ol>
-</section>
-</section>
-<section id="10-关闭条件" class="level2">
-<h2>10. 关闭条件</h2>
+<h2 id="关闭条件">10. 关闭条件</h2>
 <p>每个问题只有同时满足以下条件才可从本总账移入“已闭环”：</p>
 <ol type="1">
 <li>源码或产品决策已经落地，并有对应版本号；</li>
 <li>关键失败出口有自动化或主机桩测试；</li>
-<li>涉及电机、掉电、外部协议、AO 或真实传感器的问题完成对应硬件／PLC 验证；</li>
+<li>涉及电机、掉电、外部协议、AO 或真实传感器的问题完成对应硬件／PLC
+验证；</li>
 <li>正式协议、版本方案、问题索引和测试记录同步更新；</li>
 <li>双端 clean-first、关键契约、文档链接和最终 Git 状态检查通过；</li>
 <li>证据明确区分“静态通过”“主机桩通过”“硬件通过”和“产品接受偏差”。</li>
 </ol>
-<p>在上述条件完成前，本报告保持在 <code>未处理/</code>，作为后续版本审查和整改排序的统一入口。</p>
-</section>
-</section>
-<footer class="footer-note">
-  本页由同目录 Markdown 总账生成，不加载外部字体、脚本或网络资源。问题状态更新时，请先维护 Markdown，再重新生成 HTML 阅读版。
-</footer>
-<button id="back-to-top" type="button" aria-label="返回页面顶部" title="返回顶部">↑</button>
-<script>
-  (() => {
-    const button = document.getElementById('back-to-top');
-    const update = () => button.classList.toggle('visible', window.scrollY > 640);
-    window.addEventListener('scroll', update, { passive: true });
-    button.addEventListener('click', () => window.scrollTo({ top: 0, behavior: 'smooth' }));
-    update();
-
-    const links = new Map(
-      [...document.querySelectorAll('nav#TOC a[href^="#"]')]
-        .map((link) => [decodeURIComponent(link.hash.slice(1)), link])
-    );
-    const sections = [...document.querySelectorAll('section.level2[id]')];
-    if ('IntersectionObserver' in window && sections.length) {
-      const observer = new IntersectionObserver((entries) => {
-        const visible = entries
-          .filter((entry) => entry.isIntersecting)
-          .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)[0];
-        if (!visible) return;
-        links.forEach((link) => link.classList.remove('active'));
-        links.get(visible.target.id)?.classList.add('active');
-      }, { rootMargin: '-12% 0px -76% 0px', threshold: 0 });
-      sections.forEach((section) => observer.observe(section));
-    }
-  })();
-</script>
+<p>在上述条件完成前，本报告保持在
+<code>未处理/</code>，作为后续版本审查和整改排序的统一入口。</p>
 </body>
 </html>

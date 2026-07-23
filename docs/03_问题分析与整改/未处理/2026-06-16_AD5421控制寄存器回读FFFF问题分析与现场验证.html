@@ -1,535 +1,344 @@
 <!DOCTYPE html>
-<html xmlns="http://www.w3.org/1999/xhtml">
+<html xmlns="http://www.w3.org/1999/xhtml" lang="zh-CN" xml:lang="zh-CN">
 <head>
   <meta charset="utf-8" />
   <meta name="generator" content="pandoc" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+  <meta name="artifact-source" content="2026-06-16_AD5421控制寄存器回读FFFF问题分析与现场验证.md" />
+  <meta name="artifact-source-sha256" content="A172301CF5F6A3DB853D57CBFFD0FD904BE76F3727473EA4F9AEFDE8E00A3689" />
   <title>AD5421 控制寄存器回读 0xFFFF 问题分析与现场验证</title>
   <style>
-
-span.smallcaps{font-variant: small-caps;}
-div.columns{display: flex; gap: min(4vw, 1.5em);}
-div.column{flex: auto; overflow-x: auto;}
-div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
-
-ul.task-list[class]{list-style: none;}
-ul.task-list li input[type="checkbox"] {
-font-size: inherit;
-width: 0.8em;
-margin: 0 0.8em 0.2em -1.6em;
-vertical-align: middle;
-}
-.display.math{display: block; text-align: center; margin: 0.5rem auto;}
-</style>
-  <style type="text/css">:root {
-color-scheme: light;
---page-bg: #edf1f5;
---paper: #ffffff;
---ink: #182230;
---muted: #617081;
---line: #d9e0e8;
---line-soft: #e8edf3;
---nav-bg: #f8fafc;
---nav-active: #e6f5f2;
---accent: #0f766e;
---accent-strong: #0b5f59;
---accent-soft: #e8f6f3;
---warn: #b45309;
---warn-soft: #fff4df;
---code: #15436b;
---code-bg: #f3f7fb;
---shadow: 0 18px 48px rgba(28, 43, 64, 0.12);
-}
-@page {
-size: A4;
-margin: 12mm;
-}
-html {
-background: var(--page-bg);
-scroll-behavior: smooth;
-}
-body {
-box-sizing: border-box;
-min-height: 100vh;
-margin: 0;
-color: var(--ink);
-background:
-linear-gradient(180deg, rgba(15, 118, 110, 0.08), rgba(15, 118, 110, 0) 260px),
-var(--page-bg);
-font-family: "Microsoft YaHei", "Segoe UI", Arial, sans-serif;
-font-size: 15px;
-line-height: 1.72;
-letter-spacing: 0;
--webkit-font-smoothing: antialiased;
--webkit-print-color-adjust: exact;
-print-color-adjust: exact;
-}
-* {
-box-sizing: border-box;
-}
-a {
-color: var(--accent-strong);
-text-decoration: none;
-}
-a:hover {
-text-decoration: underline;
-}
-body > .level1 {
-max-width: 1180px;
-margin: 28px auto 56px;
-padding: 44px 56px 52px;
-background: var(--paper);
-border: 1px solid var(--line-soft);
-border-radius: 8px;
-box-shadow: var(--shadow);
-}
-body > .level1 > p:first-of-type {
-display: inline-flex;
-align-items: center;
-gap: 8px;
-margin: 0 0 20px;
-padding: 5px 10px;
-color: var(--accent-strong);
-font-size: 13px;
-font-weight: 700;
-background: var(--accent-soft);
-border: 1px solid #cbe7e2;
-border-radius: 999px;
-}
-h1,
-h2,
-h3,
-h4 {
-color: #101828;
-font-weight: 750;
-line-height: 1.24;
-letter-spacing: 0;
-scroll-margin-top: 24px;
-break-after: avoid;
-}
-h1 {
-max-width: 920px;
-margin: 0 0 14px;
-padding: 0;
-color: #0f172a;
-font-size: 36px;
-border: 0;
-}
-h2 {
-margin: 38px 0 16px;
-padding: 0 0 10px;
-font-size: 24px;
-border: 0;
-border-bottom: 1px solid var(--line-soft);
-}
-h2::before {
-content: "";
-display: inline-block;
-width: 7px;
-height: 22px;
-margin-right: 10px;
-vertical-align: -4px;
-background: var(--accent);
-border-radius: 4px;
-}
-h3 {
-margin: 28px 0 12px;
-color: #1d2939;
-font-size: 18px;
-}
-h4 {
-margin: 22px 0 10px;
-color: #344054;
-font-size: 15px;
-}
-p {
-margin: 0 0 14px;
-}
-ul,
-ol {
-margin: 10px 0 18px 22px;
-padding-left: 18px;
-}
-li {
-margin: 7px 0;
-}
-li::marker {
-color: var(--accent);
-font-weight: 700;
-}
-blockquote {
-margin: 18px 0;
-padding: 14px 18px;
-color: #344054;
-background: var(--warn-soft);
-border: 1px solid #f4d7a1;
-border-left: 5px solid var(--warn);
-border-radius: 8px;
-}
-hr {
-height: 1px;
-margin: 28px 0;
-background: var(--line-soft);
-border: 0;
-}
-#TOC {
-max-width: 1180px;
-margin: 22px auto 0;
-padding: 16px 18px;
-color: #344054;
-background: rgba(255, 255, 255, 0.92);
-border: 1px solid var(--line-soft);
-border-radius: 8px;
-box-shadow: 0 8px 24px rgba(28, 43, 64, 0.08);
-}
-#TOC::before {
-content: "目录";
-display: block;
-margin: 0 0 8px;
-color: #101828;
-font-size: 15px;
-font-weight: 800;
-}
-#TOC ul {
-margin: 0;
-padding: 0;
-list-style: none;
-}
-#TOC li {
-margin: 0;
-}
-#TOC a {
-display: block;
-padding: 6px 8px;
-color: #475467;
-font-size: 13px;
-line-height: 1.35;
-border-radius: 6px;
-}
-#TOC a:hover {
-color: var(--accent-strong);
-background: var(--nav-active);
-text-decoration: none;
-}
-#TOC > ul > li > a {
-color: #101828;
-font-weight: 800;
-}
-#TOC ul ul {
-margin-top: 3px;
-padding-left: 10px;
-border-left: 2px solid var(--line-soft);
-}
-#TOC ul ul ul a {
-color: #667085;
-font-size: 12px;
-}
-table {
-display: block;
-width: 100%;
-margin: 18px 0 26px;
-overflow-x: auto;
-border-collapse: separate;
-border-spacing: 0;
-font-size: 13px;
-line-height: 1.55;
-}
-thead,
-tbody,
-tr {
-width: 100%;
-}
-th,
-td {
-min-width: 130px;
-padding: 11px 13px;
-vertical-align: top;
-border: 0;
-border-right: 1px solid var(--line);
-border-bottom: 1px solid var(--line);
-word-break: break-word;
-}
-th:first-child,
-td:first-child {
-border-left: 1px solid var(--line);
-}
-thead th {
-position: sticky;
-top: 0;
-z-index: 1;
-color: #102a43;
-font-weight: 800;
-background: #dff0ed;
-border-top: 1px solid var(--line);
-}
-thead th:first-child {
-border-top-left-radius: 8px;
-}
-thead th:last-child {
-border-top-right-radius: 8px;
-}
-tbody tr:nth-child(even) td {
-background: #fafcff;
-}
-tbody tr:hover td {
-background: #f3faf8;
-}
-code {
-padding: 2px 6px;
-color: var(--code);
-font-family: Consolas, "Cascadia Mono", "Courier New", monospace;
-font-size: 0.92em;
-background: var(--code-bg);
-border: 1px solid #dce7f2;
-border-radius: 5px;
-}
-pre {
-margin: 18px 0 24px;
-padding: 16px 18px;
-overflow-x: auto;
-color: #172033;
-white-space: pre;
-background: #f7fafc;
-border: 1px solid var(--line);
-border-left: 5px solid var(--accent);
-border-radius: 8px;
-}
-pre code {
-padding: 0;
-color: inherit;
-background: transparent;
-border: 0;
-}
-img {
-max-width: 100%;
-height: auto;
-}
-.report-summary {
-display: grid;
-grid-template-columns: repeat(4, minmax(0, 1fr));
-gap: 10px;
-margin: 20px 0 28px;
-padding: 14px;
-background: #f8fafc;
-border: 1px solid var(--line-soft);
-border-radius: 8px;
-}
-.report-summary div {
-min-width: 0;
-padding: 10px 12px;
-background: #ffffff;
-border: 1px solid var(--line-soft);
-border-radius: 8px;
-}
-.report-summary span {
-display: block;
-margin-bottom: 3px;
-color: var(--muted);
-font-size: 12px;
-}
-.report-summary strong {
-display: block;
-color: #101828;
-font-size: 14px;
-line-height: 1.35;
-}
-.signal-flow {
-display: grid;
-grid-template-columns: repeat(5, minmax(145px, 1fr));
-gap: 10px;
-margin: 18px 0 24px;
-}
-.flow-node {
-min-height: 118px;
-padding: 13px 13px 12px;
-background: #ffffff;
-border: 1px solid #cfdce8;
-border-top: 4px solid var(--accent);
-border-radius: 8px;
-}
-.flow-step {
-display: inline-flex;
-align-items: center;
-justify-content: center;
-width: 28px;
-height: 24px;
-margin-bottom: 8px;
-color: #ffffff;
-font-size: 12px;
-font-weight: 800;
-background: var(--accent);
-border-radius: 999px;
-}
-.flow-node strong {
-display: block;
-margin-bottom: 5px;
-color: #101828;
-font-size: 14px;
-line-height: 1.35;
-}
-.flow-node span:last-child {
-display: block;
-color: #667085;
-font-size: 12px;
-line-height: 1.45;
-}
-@media (min-width: 1180px) {
-body {
-display: grid;
-grid-template-columns: 286px minmax(0, 1180px);
-gap: 24px;
-align-items: start;
-padding: 28px 32px 56px;
-}
-#TOC {
-position: sticky;
-top: 24px;
-max-height: calc(100vh - 48px);
-margin: 0;
-overflow: auto;
-}
-body > .level1 {
-width: 100%;
-margin: 0;
-}
-}
-@media (max-width: 900px) {
-body > .level1 {
-margin: 14px 10px 28px;
-padding: 26px 18px 34px;
-}
-h1 {
-font-size: 28px;
-}
-h2 {
-font-size: 21px;
-}
-#TOC {
-margin: 12px 10px 0;
-}
-.report-summary {
-grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-.signal-flow {
-grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-}
-@media (max-width: 560px) {
-.report-summary,
-.signal-flow {
-grid-template-columns: 1fr;
-}
-th,
-td {
-min-width: 180px;
-}
-}
-@media print {
-html,
-body {
-background: #ffffff;
-}
-body {
-display: block;
-padding: 0;
-font-size: 10.5pt;
-}
-#TOC,
-body > .level1 {
-max-width: none;
-margin: 0 0 8mm;
-padding: 0;
-border: 0;
-border-radius: 0;
-box-shadow: none;
-}
-table {
-display: table;
-font-size: 8.6pt;
-}
-pre,
-table,
-.report-summary,
-.signal-flow,
-.flow-node {
-break-inside: avoid;
-}
-}
-</style>
+    /* Default styles provided by pandoc.
+    ** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
+    */
+    html {
+      color: #1a1a1a;
+      background-color: #fdfdfd;
+    }
+    body {
+      margin: 0 auto;
+      max-width: 36em;
+      padding-left: 50px;
+      padding-right: 50px;
+      padding-top: 50px;
+      padding-bottom: 50px;
+      hyphens: auto;
+      overflow-wrap: break-word;
+      text-rendering: optimizeLegibility;
+      font-kerning: normal;
+    }
+    @media (max-width: 600px) {
+      body {
+        font-size: 0.9em;
+        padding: 12px;
+      }
+      h1 {
+        font-size: 1.8em;
+      }
+    }
+    @media print {
+      html {
+        background-color: white;
+      }
+      body {
+        background-color: transparent;
+        color: black;
+        font-size: 12pt;
+      }
+      p, h2, h3 {
+        orphans: 3;
+        widows: 3;
+      }
+      h2, h3, h4 {
+        page-break-after: avoid;
+      }
+    }
+    p {
+      margin: 1em 0;
+    }
+    a {
+      color: #1a1a1a;
+    }
+    a:visited {
+      color: #1a1a1a;
+    }
+    img {
+      max-width: 100%;
+    }
+    svg {
+      height: auto;
+      max-width: 100%;
+    }
+    h1, h2, h3, h4, h5, h6 {
+      margin-top: 1.4em;
+    }
+    h5, h6 {
+      font-size: 1em;
+      font-style: italic;
+    }
+    h6 {
+      font-weight: normal;
+    }
+    ol, ul {
+      padding-left: 1.7em;
+      margin-top: 1em;
+    }
+    li > ol, li > ul {
+      margin-top: 0;
+    }
+    blockquote {
+      margin: 1em 0 1em 1.7em;
+      padding-left: 1em;
+      border-left: 2px solid #e6e6e6;
+      color: #606060;
+    }
+    code {
+      white-space: pre-wrap;
+      font-family: Menlo, Monaco, Consolas, 'Lucida Console', monospace;
+      font-size: 85%;
+      margin: 0;
+      hyphens: manual;
+    }
+    pre {
+      margin: 1em 0;
+      overflow: auto;
+    }
+    pre code {
+      padding: 0;
+      overflow: visible;
+      overflow-wrap: normal;
+    }
+    .sourceCode {
+     background-color: transparent;
+     overflow: visible;
+    }
+    hr {
+      border: none;
+      border-top: 1px solid #1a1a1a;
+      height: 1px;
+      margin: 1em 0;
+    }
+    table {
+      margin: 1em 0;
+      border-collapse: collapse;
+      width: 100%;
+      overflow-x: auto;
+      display: block;
+      font-variant-numeric: lining-nums tabular-nums;
+    }
+    table caption {
+      margin-bottom: 0.75em;
+    }
+    tbody {
+      margin-top: 0.5em;
+      border-top: 1px solid #1a1a1a;
+      border-bottom: 1px solid #1a1a1a;
+    }
+    th {
+      border-top: 1px solid #1a1a1a;
+      padding: 0.25em 0.5em 0.25em 0.5em;
+    }
+    td {
+      padding: 0.125em 0.5em 0.25em 0.5em;
+    }
+    header {
+      margin-bottom: 4em;
+      text-align: center;
+    }
+    #TOC li {
+      list-style: none;
+    }
+    #TOC ul {
+      padding-left: 1.3em;
+    }
+    #TOC > ul {
+      padding-left: 0;
+    }
+    #TOC a:not(:hover) {
+      text-decoration: none;
+    }
+    span.smallcaps{font-variant: small-caps;}
+    div.columns{display: flex; gap: min(4vw, 1.5em);}
+    div.column{flex: auto; overflow-x: auto;}
+    div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+    /* The extra [class] is a hack that increases specificity enough to
+       override a similar rule in reveal.js */
+    ul.task-list[class]{list-style: none;}
+    ul.task-list li input[type="checkbox"] {
+      font-size: inherit;
+      width: 0.8em;
+      margin: 0 0.8em 0.2em -1.6em;
+      vertical-align: middle;
+    }
+    .display.math{display: block; text-align: center; margin: 0.5rem auto;}
+  </style>
+  <style>
+    :root { color-scheme: light; --bg:#eef3f7; --paper:#fff; --text:#1d2733; --muted:#667085; --line:#d9e0e8; --accent:#0f766e; --code:#eef2f6; }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body { max-width: 1500px; margin: 0 auto; padding: 28px 34px 64px; color: var(--text); background: var(--bg); font-family:"Microsoft YaHei","Segoe UI",Arial,sans-serif; line-height:1.68; }
+    body > header, body > nav, body > main, body > .hero, body > .section, body > .historical-banner { background:var(--paper); border:1px solid var(--line); border-radius:10px; box-shadow:0 10px 30px rgba(28,43,64,.08); }
+    body > header { padding:22px 28px; margin-bottom:20px; }
+    #TOC { padding:20px 30px; margin:0 0 22px; columns:2; }
+    #TOC ul { margin:.25rem 0; }
+    .hero, .section, .historical-banner { padding:28px 32px; margin:0 0 22px; }
+    .hero h1 { margin-top:0; color:#102a43; font-size:clamp(28px,4vw,44px); }
+    h1,h2,h3,h4 { color:#17324d; line-height:1.3; scroll-margin-top:18px; }
+    h2 { margin-top:0; padding-bottom:.4rem; border-bottom:2px solid #dcebe9; }
+    h3 { margin-top:1.9rem; }
+    a { color:#0b5f59; }
+    code { padding:.1rem .3rem; border:1px solid #e1e7ee; border-radius:4px; background:var(--code); color:#0f172a; }
+    table { display:block; width:100%; overflow-x:auto; border-collapse:collapse; margin:1rem 0 1.5rem; background:#fff; }
+    th,td { min-width:95px; padding:9px 11px; border:1px solid var(--line); text-align:left; vertical-align:top; }
+    th { position:sticky; top:0; z-index:1; background:#eaf4f2; color:#174a46; }
+    tr:nth-child(even) td { background:#fafcfd; }
+    .meta-grid, .ledger-grid, .focus-grid, .analysis-grid, .split { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
+    .meta-item, .ledger-stat, .focus-card, .analysis-panel, .note { padding:13px 15px; border:1px solid #e3e9ef; border-radius:8px; background:#f7fafc; }
+    .meta-item strong, .ledger-stat strong, .focus-card strong { display:block; color:var(--accent); }
+    .historical-banner { border-left:6px solid #b45309; background:#fff7ed; }
+    .issue { padding:22px 0; border-top:1px solid #e5eaf0; }
+    .badge { display:inline-block; padding:.15rem .55rem; border-radius:999px; background:#eef2f6; font-weight:700; }
+    .p0 .badge, .badge.p0 { background:#fff0ee; color:#b42318; }
+    .p1 .badge, .badge.p1 { background:#fff7ed; color:#b45309; }
+    .p2 .badge, .badge.p2 { background:#eff6ff; color:#1d4ed8; }
+    .p3 .badge, .badge.p3 { background:#f4f3ff; color:#6941c6; }
+    blockquote { margin:1rem 0; padding:.5rem 1rem; border-left:4px solid var(--accent); background:#f1f8f7; }
+    @media (max-width:800px) { body{padding:14px} #TOC{columns:1} .meta-grid,.ledger-grid,.focus-grid,.analysis-grid,.split{grid-template-columns:1fr} .hero,.section,.historical-banner{padding:20px} }
+  </style>
 </head>
 <body>
+<header id="title-block-header">
+<h1 class="title">AD5421 控制寄存器回读 0xFFFF 问题分析与现场验证</h1>
+</header>
 <!-- FLOW-LEGACY-NOTICE-START -->
 <section class="flow-legacy-notice" style="margin:16px auto;padding:14px 16px;border:1px solid #bad8fb;border-radius:10px;background:#eef7ff;color:#17233a;font-size:14px;line-height:1.65;font-family:'Microsoft YaHei','Segoe UI',Arial,sans-serif;max-width:min(1180px,calc(100% - 32px));box-sizing:border-box"><b style="display:block;margin-bottom:4px">历史/专题流程提示</b><p style="margin:0 0 8px">AD5421 控制寄存器回读 FFFF 的历史现场验证；当前 AO/AD5421 输出流程以 CPU2 扭力与继电器输出页为准。</p><div style="display:flex;flex-wrap:wrap;gap:8px"><a style="color:#1f65aa;font-weight:700;text-decoration:none" href="../../00_程序流程导航/CPU2/13_扭力与继电器输出.html">当前权威流程：扭力与继电器输出</a><a style="color:#1f65aa;font-weight:700;text-decoration:none" href="../../00_程序流程导航/index.html">程序流程统一入口</a><a style="color:#1f65aa;font-weight:700;text-decoration:none" href="../../00_程序流程导航/跨CPU业务链路.html#ao">跨 CPU 业务链路</a></div></section>
 <!-- FLOW-LEGACY-NOTICE-END -->
 
 <nav id="TOC" role="doc-toc">
 <ul>
-<li><a href="#ad5421-控制寄存器回读-0xffff-问题分析与现场验证" id="toc-ad5421-控制寄存器回读-0xffff-问题分析与现场验证">AD5421
+<li><a href="#ad5421-控制寄存器回读-0xffff-问题分析与现场验证"
+id="toc-ad5421-控制寄存器回读-0xffff-问题分析与现场验证">AD5421
 控制寄存器回读 0xFFFF 问题分析与现场验证</a>
 <ul>
-<li><a href="#1-问题摘要" id="toc-1-问题摘要">1. 问题摘要</a></li>
-<li><a href="#2-触发路径" id="toc-2-触发路径">2. 触发路径</a></li>
-<li><a href="#3-已做的软件侧验证" id="toc-3-已做的软件侧验证">3.
+<li><a href="#现行状态与总账映射" id="toc-现行状态与总账映射">0.
+2026-07-23 现行状态与总账映射</a></li>
+<li><a href="#问题摘要" id="toc-问题摘要">1. 问题摘要</a></li>
+<li><a href="#触发路径" id="toc-触发路径">2. 触发路径</a></li>
+<li><a href="#已做的软件侧验证" id="toc-已做的软件侧验证">3.
 已做的软件侧验证</a>
 <ul>
-<li><a href="#31-spi-原始接收字节" id="toc-31-spi-原始接收字节">3.1 SPI
+<li><a href="#spi-原始接收字节" id="toc-spi-原始接收字节">3.1 SPI
 原始接收字节</a></li>
-<li><a href="#32-pb4miso-普通-gpio-探测" id="toc-32-pb4miso-普通-gpio-探测">3.2 PB4/MISO 普通 GPIO 探测</a></li>
-<li><a href="#33-spi-模式矩阵" id="toc-33-spi-模式矩阵">3.3 SPI
+<li><a href="#pb4miso-普通-gpio-探测"
+id="toc-pb4miso-普通-gpio-探测">3.2 PB4/MISO 普通 GPIO 探测</a></li>
+<li><a href="#spi-模式矩阵" id="toc-spi-模式矩阵">3.3 SPI
 模式矩阵</a></li>
-<li><a href="#34-读帧格式对比" id="toc-34-读帧格式对比">3.4
+<li><a href="#读帧格式对比" id="toc-读帧格式对比">3.4
 读帧格式对比</a></li>
-<li><a href="#35-cs-默认电平" id="toc-35-cs-默认电平">3.5 CS
-默认电平</a></li>
-<li><a href="#36-历史正常输出信息" id="toc-36-历史正常输出信息">3.6
+<li><a href="#cs-默认电平" id="toc-cs-默认电平">3.5 CS 默认电平</a></li>
+<li><a href="#历史正常输出信息" id="toc-历史正常输出信息">3.6
 历史正常输出信息</a></li>
 </ul></li>
-<li><a href="#4-原理图对照" id="toc-4-原理图对照">4. 原理图对照</a>
+<li><a href="#原理图对照" id="toc-原理图对照">4. 原理图对照</a>
 <ul>
-<li><a href="#41-mcu-到-ad5421-的-spi-链路" id="toc-41-mcu-到-ad5421-的-spi-链路">4.1 MCU 到 AD5421 的 SPI
+<li><a href="#mcu-到-ad5421-的-spi-链路"
+id="toc-mcu-到-ad5421-的-spi-链路">4.1 MCU 到 AD5421 的 SPI
 链路</a></li>
-<li><a href="#42-容易误导的命名问题" id="toc-42-容易误导的命名问题">4.2
-容易误导的命名问题</a></li>
-<li><a href="#43-fault-引脚疑点" id="toc-43-fault-引脚疑点">4.3 FAULT
-引脚疑点</a></li>
-<li><a href="#44-ldac-引脚疑点" id="toc-44-ldac-引脚疑点">4.4 LDAC
+<li><a href="#历史命名问题f-08-已关闭"
+id="toc-历史命名问题f-08-已关闭">4.2 历史命名问题（F-08
+已关闭）</a></li>
+<li><a href="#fault-引脚现行边界" id="toc-fault-引脚现行边界">4.3 FAULT
+引脚现行边界</a></li>
+<li><a href="#ldac-引脚疑点" id="toc-ldac-引脚疑点">4.4 LDAC
 引脚疑点</a></li>
 </ul></li>
-<li><a href="#5-关键判断" id="toc-5-关键判断">5. 关键判断</a></li>
-<li><a href="#6-现场验证步骤" id="toc-6-现场验证步骤">6.
-现场验证步骤</a>
+<li><a href="#关键判断" id="toc-关键判断">5. 关键判断</a></li>
+<li><a href="#现场验证步骤" id="toc-现场验证步骤">6. 现场验证步骤</a>
 <ul>
-<li><a href="#61-优先使用逻辑分析仪或示波器" id="toc-61-优先使用逻辑分析仪或示波器">6.1
+<li><a href="#优先使用逻辑分析仪或示波器"
+id="toc-优先使用逻辑分析仪或示波器">6.1
 优先使用逻辑分析仪或示波器</a></li>
-<li><a href="#62-电源和参考点测量" id="toc-62-电源和参考点测量">6.2
+<li><a href="#电源和参考点测量" id="toc-电源和参考点测量">6.2
 电源和参考点测量</a></li>
-<li><a href="#63-断电电阻连通性检查" id="toc-63-断电电阻连通性检查">6.3
+<li><a href="#断电电阻连通性检查" id="toc-断电电阻连通性检查">6.3
 断电电阻/连通性检查</a></li>
-<li><a href="#64-fault-和-ldac-补充确认" id="toc-64-fault-和-ldac-补充确认">6.4 FAULT 和 LDAC 补充确认</a></li>
+<li><a href="#fault-和-ldac-补充确认"
+id="toc-fault-和-ldac-补充确认">6.4 FAULT 和 LDAC 补充确认</a></li>
 </ul></li>
-<li><a href="#7-建议的排查顺序" id="toc-7-建议的排查顺序">7.
+<li><a href="#建议的排查顺序" id="toc-建议的排查顺序">7.
 建议的排查顺序</a></li>
-<li><a href="#8-当前临时软件改动说明" id="toc-8-当前临时软件改动说明">8.
-当前临时软件改动说明</a></li>
-<li><a href="#9-整改建议" id="toc-9-整改建议">9. 整改建议</a>
+<li><a href="#历史临时软件诊断说明" id="toc-历史临时软件诊断说明">8.
+历史临时软件诊断说明</a></li>
+<li><a href="#整改建议" id="toc-整改建议">9. 整改建议</a>
 <ul>
-<li><a href="#91-硬件和原理图" id="toc-91-硬件和原理图">9.1
+<li><a href="#硬件和原理图" id="toc-硬件和原理图">9.1
 硬件和原理图</a></li>
-<li><a href="#92-固件" id="toc-92-固件">9.2 固件</a></li>
+<li><a href="#固件状态" id="toc-固件状态">9.2 固件状态</a></li>
 </ul></li>
-<li><a href="#10-当前结论" id="toc-10-当前结论">10. 当前结论</a></li>
+<li><a href="#当前结论" id="toc-当前结论">10. 当前结论</a></li>
 </ul></li>
 </ul>
 </nav>
-<section id="ad5421-控制寄存器回读-0xffff-问题分析与现场验证" class="level1">
-<h1>AD5421 控制寄存器回读 0xFFFF 问题分析与现场验证</h1>
+<h1 id="ad5421-控制寄存器回读-0xffff-问题分析与现场验证">AD5421
+控制寄存器回读 0xFFFF 问题分析与现场验证</h1>
 <p>更新日期：2026-06-16</p>
-<section id="1-问题摘要" class="level2">
-<h2>1. 问题摘要</h2>
+<blockquote>
+<p>编号迁移：本文保留现场原始故障码 <code>0x00130009</code> 和屏幕编号
+<code>19-9</code>；协议15中同一故障曾为
+<code>0x00100006 / 16-6</code>。协议19将
+<code>AD5421_READBACK_ERROR</code> 调整为 <code>0x00120006</code>、屏幕
+<code>18-6</code>，当前协议27继续沿用该编号；其它AD5421诊断编号以统一故障码表为准。现场复测时按CPU2程序版本选择故障码表，原始波形、回读值和排查步骤仍然有效。</p>
+</blockquote>
+<blockquote>
+<p>历史复核（2026-07-08）：曾对专项 write-only
+分支与主线进行对比。该分支不是当前正式口径；以下现场波形、原始回读和排查步骤继续作为历史证据。</p>
+</blockquote>
+<h2 id="现行状态与总账映射">0. 2026-07-23 现行状态与总账映射</h2>
+<p>现行基线为 <code>MAIN@db0b1322</code>，CPU2／CPU3 均为
+<code>V1.31.0.0</code>，共享协议为 <code>27</code>。当前
+<code>MAIN</code> 保留 <code>WriteControlRegister()</code> 的
+<code>READCONTROL</code> 回读校验和运行期 <code>READFAULT</code>
+诊断；AO 初始化失败只记录 AO 运行态，不再阻断整机测量。</p>
+<table>
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr>
+<th>稳定编号</th>
+<th>当前状态</th>
+<th>关闭条件</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>B-03</td>
+<td>未关闭</td>
+<td>核实不同硬件批次的 <code>SDO → U9 → PB4</code> 连通性、电平、SPI
+波形和 <code>READCONTROL</code>／<code>READFAULT</code>
+返回；静态源码不能替代现场读回证据。</td>
+</tr>
+<tr>
+<td>F-08</td>
+<td>已关闭</td>
+<td>PB4／PB5 的 MISO／MOSI 标签和宏名已经修正，不再作为当前问题。</td>
+</tr>
+</tbody>
+</table>
+<p>现行状态统一以<a
+href="2026-07-23_CUBE全量问题核对清单与整改跟踪.md">全量问题总账</a>为准；本文其余“当前”表述均指形成时的历史现场或诊断版本。</p>
+<h2 id="问题摘要">1. 问题摘要</h2>
 <p>CPU2 开启 AO 输出后，AD5421 初始化失败，最终错误码为
 <code>0x00130009</code>，CPU3 侧显示为报警 <code>19-9</code>。</p>
 <p>错误含义：</p>
 <table>
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
 <thead>
 <tr>
 <th>字段</th>
@@ -560,8 +369,8 @@ break-inside: avoid;
 </tr>
 <tr>
 <td>当前处理</td>
-<td>停止测量/置错误状态</td>
-<td>防止 AO 初始化异常后继续默认测量</td>
+<td>记录 AO 初始化／回读故障并保持 AO 运行态不可用</td>
+<td>当前主线不因 AO 初始化失败阻断整机测量</td>
 </tr>
 </tbody>
 </table>
@@ -583,9 +392,7 @@ AD5421 SDO 到 CPU2 PB4
 的回读链路一直处于高电平，或当前初始化/回读校验时序和历史写电流路径存在差异。排查重点应从“整条
 AD5421 通信链路不通”收敛到“读回方向、读回时序、U9 回读通道、当前上电/AO
 使能状态差异”。</p>
-</section>
-<section id="2-触发路径" class="level2">
-<h2>2. 触发路径</h2>
+<h2 id="触发路径">2. 触发路径</h2>
 <p>AO 使能打开后，CPU2 会进入 AD5421 初始化流程：</p>
 <ol type="1">
 <li><code>AoOutput_EnsureInitialized()</code> 或 AO 输出刷新路径触发
@@ -602,6 +409,10 @@ AD5421 通信链路不通”收敛到“读回方向、读回时序、U9 回读�
 </ol>
 <p>相关源码位置：</p>
 <table>
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
 <thead>
 <tr>
 <th>文件</th>
@@ -627,18 +438,13 @@ AD5421 通信链路不通”收敛到“读回方向、读回时序、U9 回读�
 </tr>
 </tbody>
 </table>
-</section>
-<section id="3-已做的软件侧验证" class="level2">
-<h2>3. 已做的软件侧验证</h2>
-<section id="31-spi-原始接收字节" class="level3">
-<h3>3.1 SPI 原始接收字节</h3>
+<h2 id="已做的软件侧验证">3. 已做的软件侧验证</h2>
+<h3 id="spi-原始接收字节">3.1 SPI 原始接收字节</h3>
 <p>最初只打印 <code>read=0xFFFF</code>，后续增加原始 SPI 接收字节：</p>
 <pre class="text"><code>AD5421 control readback mismatch: write=0x1000 read=0xFFFF rx=FF FF FF</code></pre>
 <p>说明不是解析高低字节顺序导致的误判，而是整个 SPI 接收帧三个字节全为
 <code>0xFF</code>。</p>
-</section>
-<section id="32-pb4miso-普通-gpio-探测" class="level3">
-<h3>3.2 PB4/MISO 普通 GPIO 探测</h3>
+<h3 id="pb4miso-普通-gpio-探测">3.2 PB4/MISO 普通 GPIO 探测</h3>
 <p>临时诊断把 PB4 先从 SPI3_MISO
 切为普通输入，分别配置无上下拉、内部下拉、内部上拉：</p>
 <pre class="text"><code>AD5421 PB4/MISO probe: nopull=1 pulldown=1 pullup=1</code></pre>
@@ -646,9 +452,7 @@ AD5421 通信链路不通”收敛到“读回方向、读回时序、U9 回读�
 前级接了数字隔离器 U9，这个结果不能直接等价于 PB4 对 3.3V
 短路，更准确的解释是：U9 的 MCU 侧输出正在把 PB4 驱动为高，或 PB4
 线上存在比 MCU 内部下拉更强的外部高电平驱动。</p>
-</section>
-<section id="33-spi-模式矩阵" class="level3">
-<h3>3.3 SPI 模式矩阵</h3>
+<h3 id="spi-模式矩阵">3.3 SPI 模式矩阵</h3>
 <p>临时诊断遍历 4 种 CPOL/CPHA，并把 SPI3 降速到
 <code>SPI_BAUDRATEPRESCALER_256</code>。四种组合全部读回
 <code>0xFFFF</code>：</p>
@@ -699,9 +503,7 @@ AD5421 通信链路不通”收敛到“读回方向、读回时序、U9 回读�
 </tbody>
 </table>
 <p>这基本排除 SPI 极性、相位和速度造成的读取失败。</p>
-</section>
-<section id="34-读帧格式对比" class="level3">
-<h3>3.4 读帧格式对比</h3>
+<h3 id="读帧格式对比">3.4 读帧格式对比</h3>
 <p>已测试三种读法：</p>
 <table>
 <thead>
@@ -730,18 +532,18 @@ AD5421 通信链路不通”收敛到“读回方向、读回时序、U9 回读�
 </tbody>
 </table>
 <p>三种读法都为全 <code>FF</code>，所以问题不集中在软件读帧格式。</p>
-</section>
-<section id="35-cs-默认电平" class="level3">
-<h3>3.5 CS 默认电平</h3>
+<h3 id="cs-默认电平">3.5 CS 默认电平</h3>
 <p>GPIO 初始化已临时调整为 AD5421 CS 默认高电平，避免上电后 CS
 长时间低电平：</p>
 <pre class="text"><code>AD5421 diag pins: cs=1 miso=1 fault=1</code></pre>
 <p>CS 空闲状态符合低有效片选器件的一般要求，但回读仍然失败。</p>
-</section>
-<section id="36-历史正常输出信息" class="level3">
-<h3>3.6 历史正常输出信息</h3>
+<h3 id="历史正常输出信息">3.6 历史正常输出信息</h3>
 <p>现场补充信息显示：之前电流值能够正常下发并设置。该信息对判断有明显约束：</p>
 <table>
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
 <thead>
 <tr>
 <th>约束点</th>
@@ -771,12 +573,13 @@ AD5421 通信链路不通”收敛到“读回方向、读回时序、U9 回读�
 </tbody>
 </table>
 <p>因此，后续验证应优先区分“写能生效但读不回来”和“当前写也已经不生效”这两种情况。</p>
-</section>
-</section>
-<section id="4-原理图对照" class="level2">
-<h2>4. 原理图对照</h2>
+<h2 id="原理图对照">4. 原理图对照</h2>
 <p>原理图依据：</p>
 <table>
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
 <thead>
 <tr>
 <th>资料</th>
@@ -799,10 +602,16 @@ AD5421 通信链路不通”收敛到“读回方向、读回时序、U9 回读�
 </tr>
 </tbody>
 </table>
-<section id="41-mcu-到-ad5421-的-spi-链路" class="level3">
-<h3>4.1 MCU 到 AD5421 的 SPI 链路</h3>
+<h3 id="mcu-到-ad5421-的-spi-链路">4.1 MCU 到 AD5421 的 SPI 链路</h3>
 <p>原理图第 4 页显示 CPU2 SPI3 先经过 U9 数字隔离器，再到 AD5421：</p>
 <table>
+<colgroup>
+<col style="width: 20%" />
+<col style="width: 20%" />
+<col style="width: 20%" />
+<col style="width: 20%" />
+<col style="width: 20%" />
+</colgroup>
 <thead>
 <tr>
 <th>CPU2 MCU 侧</th>
@@ -845,16 +654,20 @@ AD5421 通信链路不通”收敛到“读回方向、读回时序、U9 回读�
 </table>
 <p>结论：从原理图看，PB4/PB5 物理方向没有接反。PB4 是 MISO，PB5 是
 MOSI。</p>
-</section>
-<section id="42-容易误导的命名问题" class="level3">
-<h3>4.2 容易误导的命名问题</h3>
-<p>固件工程存在标签和宏名错误：</p>
+<h3 id="历史命名问题f-08-已关闭">4.2 历史命名问题（F-08 已关闭）</h3>
+<p>历史固件工程曾存在标签和宏名错误，现行 <code>.ioc</code>
+和生成宏已经修正：</p>
 <table>
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
 <thead>
 <tr>
 <th>实际引脚</th>
 <th>实际功能</th>
-<th>当前标签/宏名问题</th>
+<th>历史标签/宏名问题</th>
 </tr>
 </thead>
 <tbody>
@@ -872,26 +685,22 @@ MOSI。</p>
 </tr>
 </tbody>
 </table>
-<p>这个问题不一定影响 HAL SPI 复用，因为 <code>.ioc</code> 的 Signal
-仍然是
-PB4=<code>SPI3_MISO</code>、PB5=<code>SPI3_MOSI</code>；但会严重影响现场核线、临时
-GPIO 探测和后续维护。</p>
-</section>
-<section id="43-fault-引脚疑点" class="level3">
-<h3>4.3 FAULT 引脚疑点</h3>
-<p>固件中 PB8 配置为 <code>AD5421_FAULT</code> 输入。原理图 MCU 页能看到
-<code>FAULT</code> 网络在 PB8 附近，但 AD5421 页上 AD5421
-<code>FAULT</code> 脚附近没有清晰看到它通过 U9 或跨页网络回到 PB8。</p>
+<p>该问题当时不一定影响 HAL SPI 复用，因为 Signal 仍为
+PB4=<code>SPI3_MISO</code>、PB5=<code>SPI3_MOSI</code>；但会误导现场核线和临时
+GPIO 探测。现已归入 F-08 关闭，不能再作为 B-03 的当前根因。</p>
+<h3 id="fault-引脚现行边界">4.3 FAULT 引脚现行边界</h3>
+<p>现行 PCB 没有把 AD5421 <code>FAULT</code> 引脚接入
+MCU，当前诊断只能依赖 SPI <code>READFAULT</code>；PB8 不能作为 AD5421
+物理故障反馈。</p>
 <p>当前判断：</p>
 <ul>
 <li>这不是导致 SPI 回读全 <code>FF</code> 的直接原因。</li>
-<li>但它说明 AD5421 硬件故障诊断闭环可能和固件假设不一致。</li>
-<li>现场应确认 AD5421 <code>FAULT</code> 脚是否实际接到 PB8，还是 PB8 的
-<code>FAULT</code> 来自别的网络或未装配链路。</li>
+<li>它说明当前硬件没有独立 GPIO 故障反馈，SPI
+读回链的可靠性直接决定诊断能力。</li>
+<li>后续硬件版本若接入
+<code>FAULT</code>，必须重新核对原理图、BOM、有效电平和固件门禁，不能沿用当前板卡假设。</li>
 </ul>
-</section>
-<section id="44-ldac-引脚疑点" class="level3">
-<h3>4.4 LDAC 引脚疑点</h3>
+<h3 id="ldac-引脚疑点">4.4 LDAC 引脚疑点</h3>
 <p>原理图中 AD5421 <code>LDAC</code> 脚看起来没有明显连接。若 LDAC
 确实悬空，可能影响 DAC 输出更新行为。该点不太像导致 SPI SDO 全
 <code>FF</code> 的主因，但会影响后续“写入是否能产生电流输出”的验证。</p>
@@ -900,10 +709,7 @@ GPIO 探测和后续维护。</p>
 <li>LDAC 是否在 PCB 上有隐藏网络、默认焊接或器件内部处理。</li>
 <li>若无连接，是否需要固定到明确电平。</li>
 </ul>
-</section>
-</section>
-<section id="5-关键判断" class="level2">
-<h2>5. 关键判断</h2>
+<h2 id="关键判断">5. 关键判断</h2>
 <p>当前最关键的证据是：</p>
 <pre class="text"><code>PB4/MISO probe: nopull=1 pulldown=1 pullup=1
 rx=FF FF FF
@@ -961,13 +767,16 @@ DAC 而没有强制读回确认。</li>
 </tr>
 </tbody>
 </table>
-</section>
-<section id="6-现场验证步骤" class="level2">
-<h2>6. 现场验证步骤</h2>
-<section id="61-优先使用逻辑分析仪或示波器" class="level3">
-<h3>6.1 优先使用逻辑分析仪或示波器</h3>
+<h2 id="现场验证步骤">6. 现场验证步骤</h2>
+<h3 id="优先使用逻辑分析仪或示波器">6.1 优先使用逻辑分析仪或示波器</h3>
 <p>建议同时抓 4 根 SPI 线，并尽量在 U9 两侧都测：</p>
 <table>
+<colgroup>
+<col style="width: 25%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
+</colgroup>
 <thead>
 <tr>
 <th>信号</th>
@@ -1005,6 +814,10 @@ DAC 而没有强制读回确认。</li>
 </table>
 <p>判断分支：</p>
 <table>
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
 <thead>
 <tr>
 <th>观测结果</th>
@@ -1034,9 +847,7 @@ DAC 而没有强制读回确认。</li>
 </tr>
 </tbody>
 </table>
-</section>
-<section id="62-电源和参考点测量" class="level3">
-<h3>6.2 电源和参考点测量</h3>
+<h3 id="电源和参考点测量">6.2 电源和参考点测量</h3>
 <p>在 AO 使能、AD5421 初始化期间测：</p>
 <table>
 <thead>
@@ -1072,9 +883,7 @@ DAC 而没有强制读回确认。</li>
 </tr>
 </tbody>
 </table>
-</section>
-<section id="63-断电电阻连通性检查" class="level3">
-<h3>6.3 断电电阻/连通性检查</h3>
+<h3 id="断电电阻连通性检查">6.3 断电电阻/连通性检查</h3>
 <p>断电后检查：</p>
 <table>
 <thead>
@@ -1114,10 +923,12 @@ DAC 而没有强制读回确认。</li>
 </tr>
 </tbody>
 </table>
-</section>
-<section id="64-fault-和-ldac-补充确认" class="level3">
-<h3>6.4 FAULT 和 LDAC 补充确认</h3>
+<h3 id="fault-和-ldac-补充确认">6.4 FAULT 和 LDAC 补充确认</h3>
 <table>
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
 <thead>
 <tr>
 <th>项目</th>
@@ -1143,10 +954,7 @@ DAC 而没有强制读回确认。</li>
 </tr>
 </tbody>
 </table>
-</section>
-</section>
-<section id="7-建议的排查顺序" class="level2">
-<h2>7. 建议的排查顺序</h2>
+<h2 id="建议的排查顺序">7. 建议的排查顺序</h2>
 <ol type="1">
 <li>先确认“之前电流值能够正常下发并设置”是实测电流输出变化，还是仅上位机/CPU2
 接受了设定值。</li>
@@ -1166,11 +974,13 @@ AD5421 <code>SDO -&gt; U9 -&gt; PB4</code> 回读链路。</li>
 <li>若硬件波形恢复正常，再移除临时诊断代码，保留必要的错误打印和 CS
 默认高修正。</li>
 </ol>
-</section>
-<section id="8-当前临时软件改动说明" class="level2">
-<h2>8. 当前临时软件改动说明</h2>
-<p>当前用于诊断的临时改动包括：</p>
+<h2 id="历史临时软件诊断说明">8. 历史临时软件诊断说明</h2>
+<p>形成本文时用于诊断的临时改动包括：</p>
 <table>
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
 <thead>
 <tr>
 <th>文件</th>
@@ -1196,7 +1006,8 @@ AD5421 <code>SDO -&gt; U9 -&gt; PB4</code> 回读链路。</li>
 </tr>
 </tbody>
 </table>
-<p>这些改动用于现场定位，不建议作为最终长期版本全部保留。建议最终保留：</p>
+<p>这些手段用于历史现场定位；PB4 上下拉探测和 SPI
+模式矩阵在现行主线中已不存在。长期版本保留的是正常初始化、回读诊断和有界错误记录。</p>
 <ul>
 <li>CS 默认高电平。</li>
 <li>AD5421 初始化失败时打印 <code>write/read/rx</code> 原始字节。</li>
@@ -1208,11 +1019,8 @@ AD5421 <code>SDO -&gt; U9 -&gt; PB4</code> 回读链路。</li>
 <li>PB4 临时 GPIO 上下拉探测。</li>
 <li>影响启动时间或改变 SPI 配置的临时诊断函数。</li>
 </ul>
-</section>
-<section id="9-整改建议" class="level2">
-<h2>9. 整改建议</h2>
-<section id="91-硬件和原理图" class="level3">
-<h3>9.1 硬件和原理图</h3>
+<h2 id="整改建议">9. 整改建议</h2>
+<h3 id="硬件和原理图">9.1 硬件和原理图</h3>
 <ol type="1">
 <li>确认 U9 型号、方向、供电和默认输出状态。</li>
 <li>确认 AD5421 SDO 到 U9 pin11、U9 pin6 到 PB4 的实际 PCB 网络。</li>
@@ -1220,25 +1028,19 @@ AD5421 <code>SDO -&gt; U9 -&gt; PB4</code> 回读链路。</li>
 <li>确认 LDAC 是否固定到有效电平，避免悬空。</li>
 <li>确认 AD5421 回路供电条件和外部 4-20mA 负载要求。</li>
 </ol>
-</section>
-<section id="92-固件" class="level3">
-<h3>9.2 固件</h3>
+<h3 id="固件状态">9.2 固件状态</h3>
 <ol type="1">
-<li>修正 CubeMX 标签：PB4 使用 <code>AD5421_SPI3_MISO</code>，PB5 使用
-<code>AD5421_SPI3_MOSI</code>。</li>
-<li>更新生成后的宏名引用，避免 <code>AD5421_SPI3_MOSI_Pin</code>
-实际指向 PB4。</li>
+<li>CubeMX 标签和生成宏已经修正，归入 F-08 关闭。</li>
+<li>当前主线继续保留
+<code>READCONTROL</code>／<code>READFAULT</code>，不采用专项 write-only
+分支作为正式口径。</li>
 <li>保留 AD5421 回读失败时的原始字节打印，便于现场区分全
 <code>FF</code>、全 <code>00</code> 和随机数据。</li>
-<li>若 FAULT 线确认有效，将 PB8 和 <code>READFAULT</code> 合并为 AO
-诊断状态。</li>
-<li>若 FAULT 线确认无效，应从固件和文档中明确标注 PB8
-诊断不可用，避免误报。</li>
+<li>当前板卡 <code>FAULT</code> 未接 MCU，文档和诊断必须明确只依赖
+SPI；未来硬件若接入，再建立 GPIO 与 <code>READFAULT</code>
+的一致性门禁。</li>
 </ol>
-</section>
-</section>
-<section id="10-当前结论" class="level2">
-<h2>10. 当前结论</h2>
+<h2 id="当前结论">10. 当前结论</h2>
 <p>本次问题不是典型的软件 SPI
 配置错误，也不应在已有“历史上电流值能够正常下发并设置”的前提下直接判断为完整
 AD5421 写入链路断开。已验证的现象说明 CPU2 从 AD5421
@@ -1254,7 +1056,5 @@ AD5421 写入链路断开。已验证的现象说明 CPU2 从 AD5421
 </ul>
 <p>在 U9 两侧波形和“写能否生效”没有确认前，不建议继续反复调整 SPI
 模式或读帧格式，也不建议把读回校验直接长期屏蔽。</p>
-</section>
-</section>
 </body>
 </html>
