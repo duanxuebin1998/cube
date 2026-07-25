@@ -714,8 +714,6 @@ static const char *Display_GetErrorReasonByCode(uint32_t code)
         return "编码器上电值变化";
     case ENCODER_DIFF_EXCESS:
         return "编码器相邻差值过大";
-    case ENCODER_INVALID_DATA:
-        return "编码器多次无效数据";
     case ENCODER_CORDIC_OVERFLOW:
         return "编码器角度运算溢出";
     case ENCODER_LINEARITY_WARNING:
@@ -729,7 +727,7 @@ static const char *Display_GetErrorReasonByCode(uint32_t code)
     case SENSOR_BCC_ERROR:
         return "传感器校验错误";
     case SONIC_FREQ_ABNORMAL:
-        return "测量管频率异常";
+        return "震动管频率异常";
     case SENSOR_DEVICE_COMM_TIMEOUT:
         return "传感器通信超时";
     case SENSOR_INTERNAL_CPU_COMM_TIMEOUT:
@@ -952,11 +950,11 @@ static const char *Display_GetErrorReasonByCode(uint32_t code)
     case 0x00110000UL:
         return "参数故障";
     case 0x00120000UL:
-        return "模拟输出故障";
+        return "扭力故障";
     case 0x00140000UL:
         return "通信故障";
     case 0x00150000UL:
-        return "扭力故障";
+        return "模拟输出故障";
     case 0x00160000UL:
         return "系统软件故障";
     default:
@@ -1160,7 +1158,7 @@ static uint8_t StockMap[] = "通讯尝试中液位跟随密度温℃版本水测
                             "大英更传层滞域使磨结束针总阻六级内息命感顺有阈值角导本整瓦锡兰厚首波特率验位奇偶预留默强差"
 							"义已碰撞寄存次菜忽略志构魔术望全过收为裁剪准除以跳飞频声稳记局切匹"
 							"馈被荷泵欠驱丢溢性弱响应格快越漂移饱和系统因尼组跑锁隔策亮控扭"
-                            "持身代会话需要握拒绝允许尚忙采样果名站普求";
+                            "持身代会话需要握拒绝允许尚忙采样果名站普求震";
 static const int wordbyte      = 3; /* UTF-8 下汉字 3 字节 */
 static const int StockmapLength = (sizeof(StockMap) - 1) / wordbyte;
 static uint8_t WordStock[255 * 28] =
@@ -1651,6 +1649,7 @@ static uint8_t WordStock2[255 * 28] =
     0x20,0x80,0x10,0x80,0x10,0x80,0xF8,0xF8,0x00,0x80,0x08,0x80,0x88,0x80,0x4B,0xF0,0x52,0x10,0x52,0x10,0x02,0x10,0x1A,0x10,0xE3,0xF0,0x02,0x10, /* "站",49 */
     0x10,0x40,0x08,0x80,0x7F,0xF0,0x08,0x80,0x48,0x90,0x28,0xA0,0xFF,0xF8,0x00,0x00,0x3F,0xE0,0x20,0x20,0x3F,0xE0,0x20,0x20,0x3F,0xE0,0x20,0x20, /* "普",50 */
     0x02,0x00,0x02,0x40,0x02,0x20,0xFF,0xF8,0x02,0x00,0x42,0x10,0x22,0x20,0x27,0x40,0x0A,0x80,0x12,0x40,0x22,0x20,0xC2,0x18,0x02,0x00,0x0E,0x00, /* "求",51 */
+    0x3F,0xF8,0x01,0x00,0x7F,0xFC,0x49,0x24,0x01,0x00,0x1D,0x70,0x00,0x00,0x3F,0xF8,0x20,0x00,0x2F,0xF0,0x20,0x00,0x3F,0xF8,0x24,0x90,0x46,0x7C, /* "震",52 */
 };
 static uint8_t NumberStock[] = {
 
@@ -1868,16 +1867,14 @@ void EquipFirstPower(void)
     line = DisplayLangaugeLineWords((uint8_t*)"版本:",0,OLED_ROW4_2,0,(u8*)"Version:");
     OledDisplayLineWords((uint8_t*)CPU3_APP_VERSION_STRING,line,OLED_ROW4_2,0);
 }
-/* 刚上电时显示logo */
+/*
+ * 函数用途：OLED 初始化完成后立即绘制启动页。
+ * 调用场景：CPU3 上电初始化显示模块后调用。
+ * 关键约束：不得在首帧前阻塞等待，CPU2 快照未完成时由现有启动页门禁显示通讯提示。
+ */
 void DisplayAubonLogo(void)
 {
-    HAL_Delay(1000);
-    HAL_Delay(1000);
-/* HAL_Delay(1000); */
-/* HAL_Delay(1000); */
-/* HAL_Delay(1000); */
-/* HAL_Delay(1000); */
-    RefreshScreen(); /* 显示完logo后立刻刷新一下屏幕 */
+    RefreshScreen();
 }
 /* 显示设备数据 */
 static void oled_workingdata(void)

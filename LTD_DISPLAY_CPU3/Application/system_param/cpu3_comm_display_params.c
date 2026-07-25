@@ -749,11 +749,28 @@ static bool Cpu3Local_WriteValueCheckedInternal(OperatingNumber opera,
 /*
  * 函数用途：按屏幕配置语义事务式写入本机参数。
  * 调用场景：屏幕菜单修改协议时同步套用目标协议默认串口参数，其它参数沿用原写入行为。
- * 关键约束：屏幕与远程协议切换均在旧参数应答完成后调用；修改协议时同步应用默认串口参数。
+ * 关键约束：修改协议时同步应用默认串口参数；远程管理帧不得调用本入口。
  */
 bool Cpu3Local_WriteValueChecked(OperatingNumber opera, int32_t v)
 {
     return Cpu3Local_WriteValueCheckedInternal(opera, v, true);
+}
+
+/*
+ * 函数用途：按远程管理帧语义事务式写入外部 COM 协议。
+ * 调用场景：0x46 协议切换 ACK 使用当前串口参数发送完成后，由主循环调用。
+ * 关键约束：只修改并持久化协议字段，波特率、数据位、校验位和停止位必须原样保持。
+ */
+bool Cpu3Local_WriteProtocolPreserveSerialChecked(OperatingNumber opera, int32_t v)
+{
+    if ((opera != COM_NUM_CPU3_COM1_PROTOCOL) &&
+        (opera != COM_NUM_CPU3_COM2_PROTOCOL) &&
+        (opera != COM_NUM_CPU3_COM3_PROTOCOL))
+    {
+        return false;
+    }
+
+    return Cpu3Local_WriteValueCheckedInternal(opera, v, false);
 }
 
 /*

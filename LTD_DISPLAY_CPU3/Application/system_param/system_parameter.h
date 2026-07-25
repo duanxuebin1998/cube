@@ -26,7 +26,7 @@
 #define UNVALID_POSITION 0
 #define UNVALID_TEMPERATURE 0
 #define MAX_MEASUREMENT_POINTS 200 /* 密度分布测量最大点数 */
-#define DEVICE_PROTOCOL_VERSION 28u /* CPU2/CPU3共享协议版本；协议28固定命令参数快照并允许运行态前置参数写入。 */
+#define DEVICE_PROTOCOL_VERSION 29u /* CPU2/CPU3共享协议版本；协议29取消12-11并交换18/21故障类别，不兼容旧故障码。 */
 #define FAULT_AUTO_RECOVERY_RETRY_DEFAULT 3u
 #define FAULT_AUTO_RECOVERY_RETRY_MAX 10u
 
@@ -251,7 +251,6 @@ typedef enum {
     ENCODER_POWERON_FAIL = 0x000C0005,            /* 编码器上电初始化失败 */
     ENCODER_POWERON_CHANGE = 0x000C0006,          /* 编码器上电值变化，保留 */
     ENCODER_DIFF_EXCESS = 0x000C000A,             /* 编码器相邻差值过大 */
-    ENCODER_INVALID_DATA = 0x000C000B,            /* 编码器连续返回无效数据 */
     ENCODER_CORDIC_OVERFLOW = 0x000C000C,         /* 编码器内部运算溢出 */
     ENCODER_LINEARITY_WARNING = 0x000C000D,       /* 编码器线性度报警 */
     ENCODER_OCF_INCOMPLETE = 0x000C000E,          /* 编码器角度计算未完成 */
@@ -338,17 +337,13 @@ typedef enum {
     PARAM_STORAGE_VERSION_MISMATCH = 0x0011000B,  /* 参数存储版本不匹配 */
     PARAM_STORAGE_WRITE_VERIFY_FAILED = 0x0011000C, /* 参数写入后校验失败 */
 
-    /* ==================== 18 模拟输出与自检故障 (0x00120000 - 0x0012FFFF) ==================== */
-    AD5421_INIT_ERROR = 0x00120002,               /* 模拟输出芯片初始化兜底失败 */
-    AD5421_READBACK_ERROR = 0x00120006,           /* 模拟输出控制寄存器回读不一致 */
-    AD5421_INTERNAL_COMM_ERROR = 0x00120009,      /* 模拟输出芯片内部通信异常 */
-    AD5421_LOOP_CURRENT_HIGH = 0x0012000A,        /* 模拟输出环路电流过高 */
-    AD5421_LOOP_CURRENT_LOW = 0x0012000B,         /* 模拟输出环路电流过低或断环 */
-    AD5421_LOOP_VOLTAGE_LOW = 0x0012000C,         /* 模拟输出环路供电电压不足 */
-    AD5421_SPI_TRANSFER_ERROR = 0x0012000D,       /* 模拟输出SPI传输失败 */
-    AD5421_ACCESS_BUSY = 0x0012000E,              /* 模拟输出访问冲突 */
-    AD5421_OVERTEMP_SHUTDOWN = 0x0012000F,        /* 模拟输出芯片过温关断 */
-    AD5421_OVERTEMP_WARNING = 0x00120010,         /* 模拟输出芯片过温预警 */
+    /* ==================== 18 扭力检测故障 (0x00120000 - 0x0012FFFF) ==================== */
+    WEIGHT_OUT_OF_RANGE = 0x00120001,             /* 扭力超过上限 */
+    WEIGHT_UNDER_RANGE = 0x00120002,              /* 扭力低于下限 */
+    WEIGHT_COLLISION_DETECTED = 0x00120003,       /* 检测到碰撞 */
+    WEIGHT_DRIFT_ERROR = 0x00120004,              /* 扭力漂移异常 */
+    WEIGHT_SENSOR_SATURATION = 0x00120005,        /* 扭力传感器饱和，保留 */
+    WEIGHT_COMM_TIMEOUT = 0x00120006,             /* 扭力通信超时 */
 
     /* ==================== 20 设备通信链路故障 (0x00140000 - 0x0014FFFF) ==================== */
     COMM_UART_TRANSFER_ERROR = 0x00140001,        /* 串口或DMA传输异常 */
@@ -365,13 +360,17 @@ typedef enum {
     WIRELESS_NAME_NOT_FOUND = 0x0014000C,         /* 无线名称未找到 */
     CPU2_PROFILE_SYNC_FAILED = 0x0014000D,         /* CPU3本机分布结果同步三轮仍不一致 */
 
-    /* ==================== 21 扭力检测故障 (0x00150000 - 0x0015FFFF) ==================== */
-    WEIGHT_OUT_OF_RANGE = 0x00150001,             /* 扭力超过上限 */
-    WEIGHT_UNDER_RANGE = 0x00150002,              /* 扭力低于下限 */
-    WEIGHT_COLLISION_DETECTED = 0x00150003,       /* 检测到碰撞 */
-    WEIGHT_DRIFT_ERROR = 0x00150004,              /* 扭力漂移异常 */
-    WEIGHT_SENSOR_SATURATION = 0x00150005,        /* 扭力传感器饱和，保留 */
-    WEIGHT_COMM_TIMEOUT = 0x00150006,             /* 扭力通信超时 */
+    /* ==================== 21 模拟输出与自检故障 (0x00150000 - 0x0015FFFF) ==================== */
+    AD5421_INIT_ERROR = 0x00150002,               /* 模拟输出芯片初始化兜底失败 */
+    AD5421_READBACK_ERROR = 0x00150006,           /* 模拟输出控制寄存器回读不一致 */
+    AD5421_INTERNAL_COMM_ERROR = 0x00150009,      /* 模拟输出芯片内部通信异常 */
+    AD5421_LOOP_CURRENT_HIGH = 0x0015000A,        /* 模拟输出环路电流过高 */
+    AD5421_LOOP_CURRENT_LOW = 0x0015000B,         /* 模拟输出环路电流过低或断环 */
+    AD5421_LOOP_VOLTAGE_LOW = 0x0015000C,         /* 模拟输出环路供电电压不足 */
+    AD5421_SPI_TRANSFER_ERROR = 0x0015000D,       /* 模拟输出SPI传输失败 */
+    AD5421_ACCESS_BUSY = 0x0015000E,              /* 模拟输出访问冲突 */
+    AD5421_OVERTEMP_SHUTDOWN = 0x0015000F,        /* 模拟输出芯片过温关断 */
+    AD5421_OVERTEMP_WARNING = 0x00150010,         /* 模拟输出芯片过温预警 */
 
     /* ==================== 22 系统与软件故障 (0x00160000 - 0x0016FFFF) ==================== */
     SYSTEM_BUFFER_CAPACITY_ERROR = 0x00160001,    /* 内部缓冲区或存储分区容量不足 */

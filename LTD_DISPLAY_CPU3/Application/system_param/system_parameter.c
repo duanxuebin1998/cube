@@ -389,7 +389,7 @@ struct ParameterMetadata param_meta[] = {
 
 {(uint8_t*)"液位手输值",	0,	COM_NUM_SCREEN_INPUT_OIL,	HOLDREGISTER_CPU3_IN_OIL,	2,	true,	0,	999999,	(uint8_t*)"mm",	1,	0,	true,	TYPE_INT,	7,	NULL,	(uint8_t*)"InOil"},
 {(uint8_t*)"水位手输值",	0,	COM_NUM_SCREEN_INPUT_WATER,	HOLDREGISTER_CPU3_IN_WATER,	2,	true,	0,	999999,	(uint8_t*)"mm",	1,	0,	true,	TYPE_INT,	7,	NULL,	(uint8_t*)"InWater"},
-{(uint8_t*)"密度手输值",	0,	COM_NUM_SCREEN_INPUT_D,	HOLDREGISTER_CPU3_IN_D,	2,	true,	0,	200000,	(uint8_t*)"kg/m3",	2,	0,	true,	TYPE_INT,	6,	NULL,	(uint8_t*)"InD"},
+{(uint8_t*)"密度手输值",	0,	COM_NUM_SCREEN_INPUT_D,	HOLDREGISTER_CPU3_IN_D,	2,	true,	0,	300000,	(uint8_t*)"kg/m3",	2,	0,	true,	TYPE_INT,	6,	NULL,	(uint8_t*)"InD"},
 {(uint8_t*)"上传手输密度",	0,	COM_NUM_SCREEN_INPUT_D_SWITCH,	HOLDREGISTER_CPU3_IN_D_SW,	2,	true,	0,	1,	NULL,	0,	0,	true,	TYPE_INT,	1,	ret_arr_word,	(uint8_t*)"InDSw"},
 {(uint8_t*)"温度手输值",	0,	COM_NUM_SCREEN_INPUT_T,	HOLDREGISTER_CPU3_IN_T,	2,	true,	-500,	2000,	(uint8_t*)"℃",	1,	0,	true,	TYPE_INT,	7,	NULL,	(uint8_t*)"InT"},
 

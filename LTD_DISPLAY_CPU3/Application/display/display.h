@@ -141,7 +141,7 @@ uint8_t OledDisplayOneNmb(int c,uint8_t row,uint8_t line,uint8_t shift);
  */
 uint8_t OledValueDisplay(int value,uint8_t line,uint8_t row,uint8_t shift,uint8_t points,uint8_t* unit);
 /**
- * @brief 显示或打印屏幕显示中的 DisplayAubonLogo 逻辑。
+ * @brief OLED 初始化完成后立即显示启动页。
  */
 void DisplayAubonLogo(void);
 /**

@@ -96,6 +96,12 @@ void    Cpu3Local_WriteValue(OperatingNumber opera, int32_t v);
  */
 bool    Cpu3Local_WriteValueChecked(OperatingNumber opera, int32_t v);
 /*
+ * 函数用途：事务式写入远程切换目标协议并保持当前串口物理参数。
+ * 调用场景：0x46 管理帧 ACK 发送完成后的主循环安全点。
+ * 关键约束：调用方只能传入 COM1、COM2 或 COM3 的协议操作号。
+ */
+bool    Cpu3Local_WriteProtocolPreserveSerialChecked(OperatingNumber opera, int32_t v);
+/*
  * 函数用途：读取SI 40004～40009原始兼容槽。
  * 调用场景：SI Modbus FC03刷新保持寄存器快照。
  * 关键约束：字段只做原值保存，不参与测量、报警或控制。

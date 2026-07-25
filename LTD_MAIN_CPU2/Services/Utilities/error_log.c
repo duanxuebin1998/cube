@@ -140,11 +140,11 @@ const char *ErrorLog_GetModuleByCode(uint32_t code)
     case 0x00110000UL:
         return ERROR_LOG_MODULE_PARAM;
     case 0x00120000UL:
-        return ERROR_LOG_MODULE_AO_OUTPUT;
+        return ERROR_LOG_MODULE_WEIGHT;
     case 0x00140000UL:
         return ERROR_LOG_MODULE_COMM;
     case 0x00150000UL:
-        return ERROR_LOG_MODULE_WEIGHT;
+        return ERROR_LOG_MODULE_AO_OUTPUT;
     case 0x00160000UL:
         return ERROR_LOG_MODULE_SYSTEM;
     default:
@@ -200,8 +200,6 @@ const char *ErrorLog_GetReasonByCode(uint32_t code)
         return ERROR_LOG_REASON_INIT_FAIL;
     case ENCODER_POWERON_CHANGE:
         return "编码器上电状态变化";
-    case ENCODER_INVALID_DATA:
-        return "编码器连续返回无效位置";
     case ENCODER_CORDIC_OVERFLOW:
         return "编码器内部角度运算溢出";
     case ENCODER_LINEARITY_WARNING:
@@ -493,8 +491,6 @@ const char *ErrorLog_GetCodeName(uint32_t code)
         return "编码器上电值变化";
     case ENCODER_DIFF_EXCESS:
         return "编码器相邻差值过大";
-    case ENCODER_INVALID_DATA:
-        return "编码器连续无效数据";
     case ENCODER_CORDIC_OVERFLOW:
         return "编码器角度运算溢出";
     case ENCODER_LINEARITY_WARNING:

@@ -362,7 +362,7 @@ static uint32_t DensityLevel_ReadCurrent(float *density, float *frequency, float
         return ret;
     }
 
-    if ((*density <= 0.0f) || (*density > 2000.0f)) {
+    if ((*density <= 0.0f) || (*density > 3000.0f)) {
         printf("密度找液位\t密度值无效\t密度=%.3f\r\n", (double)*density);
         return DENSITY_INVALID;
     }

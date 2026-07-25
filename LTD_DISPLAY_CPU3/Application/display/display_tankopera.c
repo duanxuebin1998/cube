@@ -540,6 +540,7 @@ static bool ParamAllowsSignedInput(int operaNum); /* 参数是否允许选择正
  */
 static uint8_t *dtm_operaname(int num);	/* 根据操作号返回名称(中/英) */
 static uint8_t oled_text_width(const uint8_t *name); /* 按 OLED 绘制列宽估算显示长度 */
+static void display_right_aligned_action(uint8_t *chinese, uint8_t *english, uint8_t row, uint8_t shift); /* 底栏右侧操作按实际字宽右对齐 */
 static uint8_t *dtm_operaname_short(int num, uint8_t *fallback); /* 菜单列表短名 */
 static uint8_t *menu_display_name(const struct MenuData *item); /* 当前语言下的菜单列表显示名 */
 static uint8_t *oled_fit_text(uint8_t *name, uint8_t max_width); /* 裁剪到 OLED 单行宽度 */
@@ -1207,7 +1208,7 @@ static void motor_run_monitor_page(void)
 	motor_run_monitor_draw_values();
 
 	DisplayLangaugeLineWords((uint8_t*)"返回", OLED_LINE8_1, OLED_ROW4_4, 0, (uint8_t*)"Back");
-	DisplayLangaugeLineWords((uint8_t*)"停止运动", OLED_LINE8_5, OLED_ROW4_4, 0, (uint8_t*)"Stop");
+	display_right_aligned_action((uint8_t*)"停止运动", (uint8_t*)"Stop", OLED_ROW4_4, 0);
 }
 
 /**
@@ -1790,6 +1791,27 @@ static uint8_t oled_text_width(const uint8_t *name)
 	}
 
 	return width;
+}
+
+/*
+ * 函数用途：按当前语言和实际字符宽度把底栏右侧操作贴齐屏幕右边界。
+ * 调用场景：确认、保存、修改、只读和停止运动等底栏右侧文字绘制。
+ * 关键约束：文字超过单行宽度时从左边界绘制，并沿用底层现有裁剪行为。
+ */
+static void display_right_aligned_action(uint8_t *chinese, uint8_t *english, uint8_t row, uint8_t shift)
+{
+	uint8_t *text;
+	uint8_t width;
+	uint8_t line;
+
+	text = (screen_parameter.language == LANGUAGE_ENGLISH && english != NULL) ? english : chinese;
+	if (text == NULL) {
+		return;
+	}
+
+	width = oled_text_width(text);
+	line = (width < OLED_LINE8_END) ? (uint8_t)(OLED_LINE8_END - width) : OLED_LINE8_1;
+	OledDisplayLineWords(text, line, row, shift);
 }
 
 typedef struct {
@@ -2591,7 +2613,7 @@ static bool inputvalue(uint8_t deci, uint8_t row, uint8_t line, uint8_t points, 
 		OledDisplayLineWords(unit, line, row, 0);
 	}
 
-	DisplayLangaugeLineWords((uint8_t*)"确认", OLED_LINE8_8, OLED_ROW4_4, !(nowbit & 7), (uint8_t*)"Ok");
+	display_right_aligned_action((uint8_t*)"确认", (uint8_t*)"Ok", OLED_ROW4_4, !(nowbit & 7));
 
 	if ((nowbit == (deci - 1)) && (sgl_val == 0)) {
 		DisplayLangaugeLineWords((uint8_t*)"返回", OLED_LINE8_1, OLED_ROW4_4, 0, (uint8_t*)"Back");
@@ -2676,7 +2698,7 @@ static void ifsendcmd(void)
 	}
 
 	DisplayLangaugeLineWords((uint8_t*)"返回", OLED_LINE8_1, OLED_ROW4_4, timeback, (uint8_t*)"Back");
-	DisplayLangaugeLineWords((uint8_t*)"确认", OLED_LINE8_8, OLED_ROW4_4, timesure, (uint8_t*)"Ok");
+	display_right_aligned_action((uint8_t*)"确认", (uint8_t*)"Ok", OLED_ROW4_4, timesure);
 }
 
 /**
@@ -2829,7 +2851,7 @@ static void param_protect_confirm(void)
 	}
 
 	DisplayLangaugeLineWords((uint8_t*)"返回", OLED_LINE8_1, OLED_ROW4_4, timeback, (uint8_t*)"Back");
-	DisplayLangaugeLineWords((uint8_t*)"确认保存", OLED_LINE8_6, OLED_ROW4_4, timesure, (uint8_t*)"Save");
+	display_right_aligned_action((uint8_t*)"确认保存", (uint8_t*)"Save", OLED_ROW4_4, timesure);
 }
 
 /* 返回按返回键后要跳转的函数指针 */
@@ -3635,11 +3657,11 @@ static void displaypara(void)
 	}
 
 	if (ao_param_is_config(now_Opera_Num) && !ao_param_is_editable(now_Opera_Num)) {
-		DisplayLangaugeLineWords((uint8_t*)"返回  只读", OLED_LINE8_1, OLED_ROW4_4, 1, (uint8_t*)"Back  Readonly");
-	} else if (screen_parameter.language == LANGUAGE_CHINESE) {
-		OledDisplayLineWords((uint8_t*)"返回  修改        ", OLED_LINE8_1, OLED_ROW4_4, 1);
+		DisplayLangaugeLineWords((uint8_t*)"返回", OLED_LINE8_1, OLED_ROW4_4, 1, (uint8_t*)"Back");
+		display_right_aligned_action((uint8_t*)"只读", (uint8_t*)"Readonly", OLED_ROW4_4, 1);
 	} else {
-		OledDisplayLineWords((uint8_t*)"Back Alter      ", OLED_LINE8_1, OLED_ROW4_4, 1);
+		DisplayLangaugeLineWords((uint8_t*)"返回", OLED_LINE8_1, OLED_ROW4_4, 1, (uint8_t*)"Back");
+		display_right_aligned_action((uint8_t*)"修改", (uint8_t*)"Alter", OLED_ROW4_4, 1);
 	}
 }
 
@@ -3931,7 +3953,7 @@ static void ifentermainmenu(void)
 	func_index = KEYNUM_IF_ENTER_MAINMENU;
 	DisplayLangaugeLineWords((uint8_t*)"是否进入罐上操作?", OLED_LINE8_1, OLED_ROW4_1, 0, (uint8_t*)"Enter operation?");
 	DisplayLangaugeLineWords((uint8_t*)"返回", OLED_LINE8_1, OLED_ROW4_4, 0, (uint8_t*)"Back");
-	DisplayLangaugeLineWords((uint8_t*)"确认", OLED_LINE8_8, OLED_ROW4_4, 0, (uint8_t*)"Ok");
+	display_right_aligned_action((uint8_t*)"确认", (uint8_t*)"Ok", OLED_ROW4_4, 0);
 }
 
 /* 是否退出罐上操作 */
@@ -3941,7 +3963,7 @@ static void ifexittankopera(void)
 	func_index = KEYNUM_IF_EXIT_MAINMENU;
 	DisplayLangaugeLineWords((uint8_t*)"是否退出罐上操作?", OLED_LINE8_1, OLED_ROW4_1, 0, (uint8_t*)"Exit operation?");
 	DisplayLangaugeLineWords((uint8_t*)"返回", OLED_LINE8_1, OLED_ROW4_4, 0, (uint8_t*)"Back");
-	DisplayLangaugeLineWords((uint8_t*)"确认", OLED_LINE8_8, OLED_ROW4_4, 0, (uint8_t*)"Ok");
+	display_right_aligned_action((uint8_t*)"确认", (uint8_t*)"Ok", OLED_ROW4_4, 0);
 }
 
 /* 是否取消当前测量 */
@@ -3951,7 +3973,7 @@ static void ifcancelmeasurement(void)
 	func_index = KEYNUM_IF_CANCEL_MEASUREMENT;
 	DisplayLangaugeLineWords((uint8_t*)"是否停止测量?", OLED_LINE8_1, OLED_ROW4_1, 0, (uint8_t*)"Cancel measure?");
 	DisplayLangaugeLineWords((uint8_t*)"返回", OLED_LINE8_1, OLED_ROW4_4, 0, (uint8_t*)"Back");
-	DisplayLangaugeLineWords((uint8_t*)"确认", OLED_LINE8_8, OLED_ROW4_4, 0, (uint8_t*)"Ok");
+	display_right_aligned_action((uint8_t*)"确认", (uint8_t*)"Ok", OLED_ROW4_4, 0);
 }
 
 /* 取消测量确认页返回处理。 */
@@ -4287,7 +4309,7 @@ static int SignInput(uint8_t row, uint8_t line, uint8_t shift)
 	}
 
 	DisplayLangaugeLineWords((uint8_t*)"返回", OLED_LINE8_1, OLED_ROW4_4, 0, (uint8_t*)"Back");
-	DisplayLangaugeLineWords((uint8_t*)"确认", OLED_LINE8_8, OLED_ROW4_4, s_param_sign_confirm_count > 0, (uint8_t*)"Ok");
+	display_right_aligned_action((uint8_t*)"确认", (uint8_t*)"Ok", OLED_ROW4_4, s_param_sign_confirm_count > 0);
 
 	return ret;
 }
@@ -6439,9 +6461,9 @@ static void rtc_menu_draw(void)
 
     DisplayLangaugeLineWords((uint8_t *)"返回", OLED_LINE8_1, OLED_ROW4_4, 0, (uint8_t *)"Back");
     if (rtc_menu_field >= 5U) {
-        DisplayLangaugeLineWords((uint8_t *)"确认保存", OLED_LINE8_6, OLED_ROW4_4, 1, (uint8_t *)"Save");
+        display_right_aligned_action((uint8_t *)"确认保存", (uint8_t *)"Save", OLED_ROW4_4, 1);
     } else {
-        DisplayLangaugeLineWords((uint8_t *)"确认", OLED_LINE8_8, OLED_ROW4_4, 0, (uint8_t *)"Ok");
+        display_right_aligned_action((uint8_t *)"确认", (uint8_t *)"Ok", OLED_ROW4_4, 0);
     }
 }
 
@@ -7086,9 +7108,10 @@ static void ao_simulation_switch_page(void)
 	OledDisplayLineWords(arr_ao_simulation_enable[ao_simulation_selection][screen_parameter.language], line, OLED_ROW4_3, editable ? 1U : 0U);
 	if (editable) {
 		DisplayLangaugeLineWords((uint8_t*)"返回", OLED_LINE8_1, OLED_ROW4_4, 0, (uint8_t*)"Back");
-		DisplayLangaugeLineWords((uint8_t*)"确认", OLED_LINE8_8, OLED_ROW4_4, (timesure != 0), (uint8_t*)"Ok");
+		display_right_aligned_action((uint8_t*)"确认", (uint8_t*)"Ok", OLED_ROW4_4, (timesure != 0));
 	} else {
-		DisplayLangaugeLineWords((uint8_t*)"返回  只读", OLED_LINE8_1, OLED_ROW4_4, 0, (uint8_t*)"Back Readonly");
+		DisplayLangaugeLineWords((uint8_t*)"返回", OLED_LINE8_1, OLED_ROW4_4, 0, (uint8_t*)"Back");
+		display_right_aligned_action((uint8_t*)"只读", (uint8_t*)"Readonly", OLED_ROW4_4, 0);
 	}
 }
 

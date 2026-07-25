@@ -168,7 +168,8 @@ static uint32_t Get_SSI_Error_Code(const SSI_Data_t *data) {
     if (data->LIN) {
         return ENCODER_LINEARITY_WARNING;
     }
-    return ENCODER_INVALID_DATA;
+    /* 所有硬件状态位均正常时不生成故障码。 */
+    return NO_ERROR;
 }
 
 /**

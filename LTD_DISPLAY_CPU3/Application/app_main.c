@@ -25,6 +25,7 @@
 #define CPU3_COMM_EVENT_LOG_INTERVAL_MS 1000U /* 同一端口异常事件的最短打印间隔。 */
 #define CPU3_UART_RECOVERY_RETRY_MS 100U /* UART异常或收满后由主循环执行单次恢复的退避时间。 */
 #define CPU3_UART_COUNT 4U /* 三路外部COM口加CPU2板间UART5。 */
+#define CPU3_EXTERNAL_PORT_STARTUP_GUARD_MS 1000U /* 外部COM初始化后的非阻塞硬件稳定保护时间。 */
 
 #define CPU3_PORT_RESULT_INVALID_CONFIG 0xFFFFFFFEUL
 #define CPU3_PORT_RESULT_INVALID_HANDLER 0xFFFFFFFDUL
@@ -74,6 +75,10 @@ static ComProtocolType g_protocol_switch_target[3] = {
     COM_PROTO_DSM,
     COM_PROTO_DSM
 };
+static uint32_t s_cpu3_boot_start_tick = 0U; /* CPU3进入应用初始化的时刻，用于启动阶段耗时日志。 */
+static uint32_t s_external_ports_ready_tick = 0U; /* 外部COM允许处理协议帧的启动保护截止时刻。 */
+static bool s_external_ports_ready_logged = false; /* 外部COM启动保护结束日志是否已输出。 */
+static bool s_cpu2_startup_ready_logged = false; /* CPU2首次完整启动快照日志是否已输出。 */
 
 typedef struct {
     uint32_t rx_frame_count;
@@ -662,8 +667,11 @@ void CPU3_UartRxFaultFromISR(UART_HandleTypeDef *huart,
     CPU3_UartScheduleRxRecovery(huart);
 }
 
-/* 主循环按端口和固定退避执行DMA恢复或完整UART重初始化。 */
-static void cpu3_uart_rx_recovery_task(void)
+/*
+ * 主循环按端口和固定退避执行DMA恢复或完整UART重初始化。
+ * 外部COM保护期只跳过COM1/2/3，板间UART5恢复始终允许执行。
+ */
+static void cpu3_uart_rx_recovery_task(bool external_ports_ready)
 {
     uint32_t now = HAL_GetTick();
     uint8_t index;
@@ -671,6 +679,10 @@ static void cpu3_uart_rx_recovery_task(void)
     for (index = 0U; index < CPU3_UART_COUNT; index++) {
         bool recovered;
         uint8_t full_reinit;
+
+        if (!external_ports_ready && (index < 3U)) {
+            continue;
+        }
 
         if ((s_uart_rx_recovery_pending[index] == 0U) ||
             ((int32_t)(now - s_uart_rx_recovery_due_tick[index]) < 0)) {
@@ -858,7 +870,7 @@ static void cpu3_comm_debug_task(void)
 /*
  * 函数用途：记录某个外部 COM 口已经接受的协议切换目标。
  * 调用场景：统一切换帧校验成功时调用，包括目标协议与当前协议相同的请求。
- * 关键约束：只暂存 RAM 状态，必须等旧串口参数下的 ACK 发送完成后，才能应用目标协议默认模板并恢复接收。
+ * 关键约束：只暂存 RAM 状态，必须等当前串口参数下的 ACK 发送完成后，才能保存目标协议并恢复接收。
  */
 static void cpu3_stage_protocol_switch(uint8_t port_idx, ComProtocolType target_protocol)
 {
@@ -993,7 +1005,7 @@ static bool cpu3_restore_protocol_switch_port_config(uint8_t port_idx,
 }
 
 /*
- * 函数用途：在主循环中保存已确认发送完成的协议切换，并应用目标协议默认串口参数。
+ * 函数用途：在主循环中保存已确认发送完成的远程协议切换，并保持当前串口物理参数。
  * 调用场景：每轮主循环处理普通通信前调用。
  * 关键约束：保存和 HAL 重初始化均在主循环执行，禁止放入 UART 中断。
  */
@@ -1038,7 +1050,7 @@ static void cpu3_apply_ready_protocol_switches(void)
             continue;
         }
 
-        if (!Cpu3Local_WriteValueChecked(opera, (int32_t)target_protocol)) {
+        if (!Cpu3Local_WriteProtocolPreserveSerialChecked(opera, (int32_t)target_protocol)) {
             (void)cpu3_restore_protocol_switch_port_config(port_idx, &previous_config);
             if (!Cpu3_Params_SaveToFRAM()) {
                 CPU3_LOG_CRITICAL(cpu3_port_module_text(port_idx),
@@ -1060,7 +1072,7 @@ static void cpu3_apply_ready_protocol_switches(void)
 
         if (cpu3_reinit_external_port(port_idx)) {
             CPU3_LOG_INFO(cpu3_port_module_text(port_idx),
-                          "协议切换完成，已应用目标协议默认串口参数 新协议=%s(%u)",
+                          "协议切换完成，串口参数保持不变 新协议=%s(%u)",
                           cpu3_protocol_text(target_protocol),
                           (unsigned int)target_protocol);
             cpu3_log_port_config(port_idx, "切换后配置");
@@ -1108,7 +1120,7 @@ static uint32_t cpu3_port_process(uint8_t port_idx,
                                                 &target_protocol);
     if (switch_result != PROTOCOL_SWITCH_FRAME_NOT_MATCHED) {
         if (switch_result == PROTOCOL_SWITCH_FRAME_ACCEPTED) {
-            /* 同协议请求也重新应用该协议默认串口整组参数。 */
+            /* 同协议请求保持幂等，只重新保存协议值，不改当前串口物理参数。 */
             cpu3_stage_protocol_switch(port_idx, target_protocol);
         }
         return 0U;
@@ -1124,12 +1136,26 @@ static uint32_t cpu3_port_process(uint8_t port_idx,
     return g_handlers[p].process(rx, rx_len, tx, tx_len);
 }
 
+/*
+ * 函数用途：判断外部 COM 启动保护时间是否结束。
+ * 调用场景：主循环处理 COM1、COM2、COM3 接收帧前调用。
+ * 关键约束：仅限制外部协议帧处理，不阻塞屏幕任务、CPU2 板间轮询和调试日志服务。
+ */
+static bool cpu3_external_ports_startup_ready(void)
+{
+    return ((int32_t)(HAL_GetTick() - s_external_ports_ready_tick) >= 0);
+}
 
 /**
  * @brief 初始化屏幕显示中的 App_Init 逻辑。
  * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
  */
 void App_Init(void) {
+    uint32_t phase_start_tick;
+
+    s_cpu3_boot_start_tick = HAL_GetTick();
+    s_external_ports_ready_logged = false;
+    s_cpu2_startup_ready_logged = false;
 	CPU3_WatchdogReportProgress();
 	Cpu3Log_Init();
 	CPU3_WatchdogReportProgress();
@@ -1141,12 +1167,24 @@ void App_Init(void) {
 	/* Force UART5 RS485 direction back to RX after CubeMX init. */
 	RS485_SET_RECV_MODE();
 	__HAL_UART_CLEAR_IDLEFLAG(&huart5);
+    phase_start_tick = HAL_GetTick();
 	DisplayInit(); /* Initialize the OLED display */
 	CPU3_WatchdogReportProgress();
-	DisplayAubonLogo(); /* 刚上电显示AUBON LOGO */
+	DisplayAubonLogo(); /* OLED 初始化完成后立即显示启动页。 */
+    CPU3_LOG_INFO("启动",
+                  "OLED首屏完成 阶段耗时=%lums 总耗时=%lums",
+                  (unsigned long)(HAL_GetTick() - phase_start_tick),
+                  (unsigned long)(HAL_GetTick() - s_cpu3_boot_start_tick));
 	CPU3_WatchdogReportProgress();
     /* RTC 先初始化，保证后续 SI 读当前时间或 profile 时间戳时有合法兜底值。 */
+    phase_start_tick = HAL_GetTick();
     Cpu3Clock_Init();
+    CPU3_LOG_INFO("启动",
+                  "RTC初始化完成 阶段耗时=%lums 时钟源=%u 状态=%u",
+                  (unsigned long)(HAL_GetTick() - phase_start_tick),
+                  (unsigned int)Cpu3Clock_GetSource(),
+                  (unsigned int)Cpu3Clock_GetState());
+    phase_start_tick = HAL_GetTick();
     Cpu3_Params_LoadFromFRAM(); /* 从 FRAM 载入 Cpu3 通讯+显示参数（里面会自动回退默认并保存） */
 	CPU3_WatchdogReportProgress();
     (void)cpu3_reinit_all_external_ports();
@@ -1154,8 +1192,16 @@ void App_Init(void) {
 	DSM_CommunicationInit(); /* 初始化通信模块 */
 	cpu3_log_all_port_configs("启动配置");
 	CPU3_WatchdogReportProgress();
-	/* 屏幕显示与外设通信之间保留等待时间，避免硬件或对端协议尚未准备好。 */
-	HAL_Delay(1000); /* */
+    /*
+     * 外部 COM 保留原有 1 秒硬件稳定窗口，但主循环立即运行屏幕和 CPU2 轮询，
+     * 避免整机启动被固定延时阻塞。
+     */
+    s_external_ports_ready_tick = HAL_GetTick() + CPU3_EXTERNAL_PORT_STARTUP_GUARD_MS;
+    CPU3_LOG_INFO("启动",
+                  "本机参数和外部COM初始化完成 阶段耗时=%lums 外部COM保护=%ums 总耗时=%lums",
+                  (unsigned long)(HAL_GetTick() - phase_start_tick),
+                  (unsigned int)CPU3_EXTERNAL_PORT_STARTUP_GUARD_MS,
+                  (unsigned long)(HAL_GetTick() - s_cpu3_boot_start_tick));
 	CPU3_WatchdogReportProgress();
 }
 
@@ -1169,6 +1215,7 @@ void App_MainLoop(void)
     uint16_t send_len;
     const ComPortConfig *port_cfg;
     ComProtocolType active_protocol;
+    bool external_ports_ready;
 
     static uint8_t sendbuff1[256] = {0};
     static uint8_t sendbuff2[256] = {0};
@@ -1177,15 +1224,26 @@ void App_MainLoop(void)
 
     uint8_t did_work = 0;
 
-	CPU3_WatchdogReportProgress();
-    cpu3_uart_rx_recovery_task();
-    cpu3_apply_ready_protocol_switches();
-    cpu3_apply_uart_reinit_if_pending(); /* 如果有待重配的串口，先重配 */
-    si_modbus_periodic_task();
+    CPU3_WatchdogReportProgress();
+    external_ports_ready = cpu3_external_ports_startup_ready();
+    cpu3_uart_rx_recovery_task(external_ports_ready);
+    if (external_ports_ready) {
+        cpu3_apply_ready_protocol_switches();
+        cpu3_apply_uart_reinit_if_pending(); /* 如果有待重配的串口，先重配 */
+        si_modbus_periodic_task();
+    }
     Display_Task();
 	CPU3_WatchdogReportProgress();
+
+    if (external_ports_ready && !s_external_ports_ready_logged) {
+        s_external_ports_ready_logged = true;
+        CPU3_LOG_INFO("启动",
+                      "外部COM启动保护结束 总耗时=%lums",
+                      (unsigned long)(HAL_GetTick() - s_cpu3_boot_start_tick));
+    }
+
     /* ========= COM1 ========= */
-    if (com1_rx_ready == 1) {
+    if (external_ports_ready && (com1_rx_ready == 1)) {
         com1_rx_ready = 0;
         did_work = 1;
         s_port_comm_stats[0].rx_frame_count++;
@@ -1241,7 +1299,7 @@ void App_MainLoop(void)
 	CPU3_WatchdogReportProgress();
 
     /* ========= COM2 ========= */
-    if (com2_rx_ready == 1) {
+    if (external_ports_ready && (com2_rx_ready == 1)) {
         com2_rx_ready = 0;
         did_work = 1;
         s_port_comm_stats[1].rx_frame_count++;
@@ -1294,7 +1352,7 @@ void App_MainLoop(void)
 	CPU3_WatchdogReportProgress();
 
     /* ========= COM3 ========= */
-    if (com3_rx_ready == 1) {
+    if (external_ports_ready && (com3_rx_ready == 1)) {
         com3_rx_ready = 0;
         did_work = 1;
         s_port_comm_stats[2].rx_frame_count++;
@@ -1355,6 +1413,12 @@ void App_MainLoop(void)
         PollingInputData();
         last_cpu2_poll_tick = HAL_GetTick();
         did_work = 1U;
+    }
+    if (!s_cpu2_startup_ready_logged && CPU2_CommHasFixedPointSnapshot()) {
+        s_cpu2_startup_ready_logged = true;
+        CPU3_LOG_INFO("启动",
+                      "CPU2启动快照完成 总耗时=%lums",
+                      (unsigned long)(HAL_GetTick() - s_cpu3_boot_start_tick));
     }
 	CPU3_WatchdogReportProgress();
 
