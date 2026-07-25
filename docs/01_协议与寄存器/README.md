@@ -14,6 +14,7 @@
 | AO 电流输出 | `AO电流输出/` | 归档NMS81等外部4-20mA/AO参考资料，并记录CUBE当前5组17项菜单、2个隐藏预留、HART、迁移和台架验证边界 |
 | CPU2 通信与解耦 | `CPU2通信与解耦/` | CPU2 串口调试指令、通信异常影响、HART 旧栈适配、传感器无线链路和无线滑环匹配整理 |
 | CPU3 外部 COM 协议切换 | `CPU3外部COM协议切换帧.md` | 提供自动工具、手工发帧、独立 ACK、防本地回显误判、异常恢复和单端口切换时序说明 |
+| CPU3 外部 COM 设备发现 | `CPU3外部COM安全快速设备发现协议设计.md` | 设计 `0xF8/0x47` 只读安全快速发现、UID 逻辑单播、确定性时隙和三路串口并发边界；当前仅为待实现方案 |
 | 传感器通信协议 | `传感器通信协议/` | CPU2 与传感器之间的通信协议，包含 DSM CPU1 传统 UART 文本协议同步副本、新一代安全通信协议卷、设计理由、标准映射和验证矩阵 |
 | DSM 外部协议 | `DSM协议适配/`、`DSM寄存器说明V1.225.xlsx` | DSM V1.228 一代协议源表、二代兼容边界、历史寄存器表和现场联调参考 |
 | LH 外部协议 | `LH协议适配/` | LH Modbus RTU的线圈、输入/保持寄存器、9600 8N1默认串口、命令行为和联调边界 |
@@ -25,6 +26,7 @@
 | 主题 | 当前结论 | 依据 |
 | --- | --- | --- |
 | 共享协议版本 | 最新正式协议为28；首个正式组合为CPU2 V1.33.0.0 / CPU3 V1.33.0.0，CPU2/CPU3必须严格相等 | `LTD_MAIN_CPU2/Services/ParamStorage/system_parameter.h`、`LTD_DISPLAY_CPU3/Application/system_param/system_parameter.h`、`CPU2_CPU3协议变更记录.md` |
+| CPU3 外部 COM 快速发现 | 已完成 `0xF8/0x47` V3 简化方案设计，限定为三路外部 COM 只读发现；CPU3 固件、上位机和真实 RS485 台架均尚未实施，不改变当前版本及共享协议 | `CPU3外部COM安全快速设备发现协议设计.md` |
 | LTD 对外协议 | 只维护一套标准Modbus协议，沿用地址宏/枚举和`HoldingRegisterArray[]`、`InputRegisterArray[]`直映射格式；CPU3读已确认快照，FC10等待CPU2合法ACK，七个命令前置参数以ACK确认本次值并后台刷新完整快照；当前故障编号沿用协议22现行表，历史记录按CPU2程序版本选故障表 | `LTD共享Modbus协议/LTD共享Modbus协议卷.md` |
 | CPU2 参数存储 | `DEVICE_PARAM_VERSION = 3`，当前版本头为`V1.33.0.0`；协议28只改变命令参数RAM快照和跨CPU写确认，不改变`DeviceParameters`结构、CRC范围或FRAM A/B槽，也不清现场参数。既有协议13、14、20、23～26迁移规则继续生效 | `LTD_MAIN_CPU2/Services/ParamStorage/system_parameter.c`、`../00_构建与版本/CPU2参数存储升级清单.md` |
 | CPU3 本地显示/通信参数 | `CPU3_PARAM_VERSION = 0x0007`；V6到V7迁移保留SI自动调度、报警阈值和三路串口参数，并补充协议18兼容槽；协议20只改变CPU2/CPU3共享AO契约，不改变CPU3本机FRAM布局 | `LTD_DISPLAY_CPU3/Application/system_param/cpu3_comm_display_params.c`、`CPU2_CPU3协议变更记录.md` |
