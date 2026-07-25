@@ -111,6 +111,9 @@ static uint8_t handle_0x03(uint8_t addr, const uint8_t* pdu, uint16_t pdu_len,
     if (((requirements & (uint8_t)CPU3_EXTERNAL_READ_PARAMETERS) != 0U) &&
         !CPU2_CommIsAvailable())
         return build_exception(addr, 0x03, 0x06, tx, tx_len);
+    if (((requirements & (uint8_t)CPU3_EXTERNAL_READ_FIXED_POINT) != 0U) &&
+        !CPU2_CommHasFixedPointSnapshot())
+        return build_exception(addr, 0x03, 0x06, tx, tx_len);
 
     /* 静态白名单始终本地重建；其余字段只在对应快照门禁通过后投影。 */
     Wartsila_StoreLocalStaticRegisters(g_holding_regs);

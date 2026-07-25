@@ -37,7 +37,7 @@ static void CMD_CalibrateTankHeight(void)
 
     MeasureStart();
 
-    if (g_deviceParams.calibrateTankHeight == 0) {
+    if (DeviceCommandArguments_Get(DEVICE_COMMAND_ARG_CALIBRATE_TANK_HEIGHT) == 0) {
         printf("标定罐高值为0，无法执行罐高标定\r\n");
         SET_ERROR(MEASUREMENT_TANK_HEIGHT_NOT_CONFIGURED);
     }
@@ -55,7 +55,7 @@ static void CMD_CalibrateTankHeight(void)
     }
 
     g_deviceParams.initialTankHeight = raw_real_height;
-    g_deviceParams.currentTankHeight = g_deviceParams.calibrateTankHeight;
+    g_deviceParams.currentTankHeight = DeviceCommandArguments_Get(DEVICE_COMMAND_ARG_CALIBRATE_TANK_HEIGHT);
     g_measurement.height_measurement.current_real_height =
             g_deviceParams.currentTankHeight;
     save_device_params();
@@ -328,8 +328,10 @@ static void CMD_CancelMeasurement(void)
     FaultRecovery_Cancel("cancel measurement");
     SiProfile_HandleCancel();
 
-    /* 用户主动取消不是故障：清掉当前命令和错误码，再把状态切到待机。 */
-    g_deviceParams.command = CMD_NONE;
+    /*
+     * 用户主动取消不是故障。待执行取消命令已由主循环原子取走；
+     * 此处只清当前执行态，不能覆盖取消期间并发到达的下一条命令。
+     */
     g_measurement.device_status.current_command = CMD_NONE;
     g_measurement.device_status.error_code = NO_ERROR;
 
@@ -593,8 +595,8 @@ static void CMD_MeasureBottom(void) {
         (ret != STATE_SWITCH))
     {
         uint32_t reference_real_height =
-                (g_deviceParams.calibrateTankHeight != 0U)
-                ? g_deviceParams.calibrateTankHeight
+                (DeviceCommandArguments_Get(DEVICE_COMMAND_ARG_CALIBRATE_TANK_HEIGHT) != 0U)
+                ? DeviceCommandArguments_Get(DEVICE_COMMAND_ARG_CALIBRATE_TANK_HEIGHT)
                 : g_deviceParams.currentTankHeight;
         uint32_t fallback_real_height = 0U;
         uint32_t measured_real_height =
@@ -602,17 +604,17 @@ static void CMD_MeasureBottom(void) {
         int32_t diff_real_height = 0;
         int32_t randomized_real_height = 0;
 
-        if (g_deviceParams.calibrateTankHeight != 0U)
+        if (DeviceCommandArguments_Get(DEVICE_COMMAND_ARG_CALIBRATE_TANK_HEIGHT) != 0U)
         {
             srand((unsigned int)(HAL_GetTick() ^
                   (uint32_t)g_measurement.debug_data.cable_length));
             randomized_real_height =
-                    (int32_t)g_deviceParams.calibrateTankHeight +
+                    (int32_t)DeviceCommandArguments_Get(DEVICE_COMMAND_ARG_CALIBRATE_TANK_HEIGHT) +
                     ((rand() % 61) - 30); /* +/-3.0mm, unit: 0.1mm */
             if (randomized_real_height <= 0)
             {
                 randomized_real_height =
-                        (int32_t)g_deviceParams.calibrateTankHeight;
+                        (int32_t)DeviceCommandArguments_Get(DEVICE_COMMAND_ARG_CALIBRATE_TANK_HEIGHT);
             }
             fallback_real_height = (uint32_t)randomized_real_height;
         }
@@ -793,7 +795,7 @@ static void CMD_CalibrateOilLevel(void) {
     {
         g_measurement.device_status.device_state = STATE_CALIBRATIONOILING;
         /* 标定液位为0为实高标定液位 */
-        if(g_deviceParams.calibrateOilLevel == 0)
+        if(DeviceCommandArguments_Get(DEVICE_COMMAND_ARG_CALIBRATE_OIL_LEVEL) == 0)
         {
             ret = SearchBottom();
             SET_ERROR(ret);
@@ -872,7 +874,7 @@ static void CMD_MoveUp(void)
     g_measurement.device_status.device_state = STATE_RUNUPING;
 
     ret = MotorCtrl_MoveAndWait(
-            (float)g_deviceParams.motorCommandDistance / 10.0f,
+            (float)DeviceCommandArguments_Get(DEVICE_COMMAND_ARG_MOTOR_COMMAND_DISTANCE) / 10.0f,
             MOTOR_DIRECTION_UP,
             MotorCtrl_GetDefaultSpeedX100());
 
@@ -905,7 +907,7 @@ static void CMD_MoveDown(void)
     g_measurement.device_status.device_state = STATE_RUNDOWNING;
 
     ret = MotorCtrl_MoveAndWait(
-            (float)g_deviceParams.motorCommandDistance / 10.0f,
+            (float)DeviceCommandArguments_Get(DEVICE_COMMAND_ARG_MOTOR_COMMAND_DISTANCE) / 10.0f,
             MOTOR_DIRECTION_DOWN,
             MotorCtrl_GetDefaultSpeedX100());
 
@@ -936,10 +938,10 @@ static void CMD_ForceMoveUp(void)
     g_measurement.device_status.manual_alarm_inhibit = 1U;
     g_measurement.oil_measurement.manual_level_update_inhibit = 1U;
     g_measurement.device_status.device_state = STATE_FORCE_RUNUPING;
-    printf("强制上行距离: %.1f mm\r\n", (float) g_deviceParams.motorCommandDistance / 10.0f);
+    printf("强制上行距离: %.1f mm\r\n", (float) DeviceCommandArguments_Get(DEVICE_COMMAND_ARG_MOTOR_COMMAND_DISTANCE) / 10.0f);
     /* 强制调试运动允许忽略编码器首帧未就绪，但不绕过驱动安全检查。 */
     ret = MotorCtrl_MoveBlockingNoDetectForceDebug(
-        (float)g_deviceParams.motorCommandDistance / 10.0f,
+        (float)DeviceCommandArguments_Get(DEVICE_COMMAND_ARG_MOTOR_COMMAND_DISTANCE) / 10.0f,
         MOTOR_DIRECTION_UP,
         MotorCtrl_GetDefaultSpeedX100());
     if (ret == STATE_SWITCH) {
@@ -957,7 +959,7 @@ static void CMD_ForceMoveUp(void)
     g_measurement.device_status.manual_alarm_inhibit = 0U;
     g_measurement.oil_measurement.manual_level_update_inhibit = 0U;
 /* MotorCtrl_MoveAndWait( */
-/* (float)g_deviceParams.motorCommandDistance / 10.0f, */
+/* (float)DeviceCommandArguments_Get(DEVICE_COMMAND_ARG_MOTOR_COMMAND_DISTANCE) / 10.0f, */
 /* MOTOR_DIRECTION_UP); */
     g_measurement.device_status.device_state = STATE_FORCE_RUNUP_OVER;
     return;
@@ -976,7 +978,7 @@ static void CMD_ForceMoveDown(void)
 
     /* 强制调试运动允许忽略编码器首帧未就绪，但不绕过驱动安全检查。 */
     ret = MotorCtrl_MoveBlockingNoDetectForceDebug(
-        (float)g_deviceParams.motorCommandDistance / 10.0f,
+        (float)DeviceCommandArguments_Get(DEVICE_COMMAND_ARG_MOTOR_COMMAND_DISTANCE) / 10.0f,
         MOTOR_DIRECTION_DOWN,
         MotorCtrl_GetDefaultSpeedX100());
     if (ret == STATE_SWITCH) {
@@ -1036,12 +1038,12 @@ static uint32_t Wartsila_MoveToMonitorPositionOnly(void)
 {
     uint32_t ret = NO_ERROR;
     const uint32_t max_attempts = 3U;
-    float target_mm = (float)g_deviceParams.singlePointMonitoringPosition / 10.0f;
+    float target_mm = (float)DeviceCommandArguments_Get(DEVICE_COMMAND_ARG_SINGLE_POINT_MONITORING_POSITION) / 10.0f;
 
     g_measurement.device_status.device_state = STATE_RUNTOPOINTING;
     printf("瓦锡兰测后探底\t先回固定点监测位置：%.1fmm，仅移动不读密度\r\n", (double)target_mm);
 
-    ret = SinglePoint_CheckTargetPosition("瓦锡兰测后回固定点", g_deviceParams.singlePointMonitoringPosition);
+    ret = SinglePoint_CheckTargetPosition("瓦锡兰测后回固定点", DeviceCommandArguments_Get(DEVICE_COMMAND_ARG_SINGLE_POINT_MONITORING_POSITION));
     /* 先处理异常边界，避免测量流程状态机带故障继续运行。 */
     if (ret != NO_ERROR) {
         return ret;
@@ -1141,7 +1143,7 @@ static void CMD_WartsilaDensitySpread(void) {
             }
             /* 先处理异常边界，避免测量流程状态机带故障继续运行。 */
             if (ret != NO_ERROR) {
-                g_deviceParams.command = CMD_MONITOR_SINGLE;
+                DeviceCommand_Queue(CMD_MONITOR_SINGLE);
                 return;
             }
 
@@ -1152,7 +1154,7 @@ static void CMD_WartsilaDensitySpread(void) {
             /* 先处理异常边界，避免测量流程状态机带故障继续运行。 */
             if (ret != NO_ERROR) {
                 printf("瓦锡兰测后探底\t罐底测量失败：0x%08lX，退出且不置错误状态\r\n", (unsigned long)ret);
-                g_deviceParams.command = CMD_MONITOR_SINGLE;
+                DeviceCommand_Queue(CMD_MONITOR_SINGLE);
                 return;
             }
         }
@@ -1161,7 +1163,7 @@ static void CMD_WartsilaDensitySpread(void) {
         printf("瓦锡兰测后探底\t测量总次数=%lu | 探底频次=0，不探底\r\n",
                (unsigned long)wartsila_measure_total_count);
     }
-    g_deviceParams.command = CMD_MONITOR_SINGLE; /* 切回单点监测状态，继续监测当前液位/密度 */
+    DeviceCommand_Queue(CMD_MONITOR_SINGLE); /* 切回单点监测状态，继续监测当前液位/密度 */
 	return;
 }
 /*
@@ -1273,7 +1275,7 @@ static void CMD_RunToPosition(void)
     g_measurement.device_status.device_state = STATE_RUN_TO_POSITIONING;
 
 
-    target_mm = (float)g_deviceParams.densityDistributionOilLevel/10.0;
+    target_mm = (float)DeviceCommandArguments_Get(DEVICE_COMMAND_ARG_DENSITY_DISTRIBUTION_OIL_LEVEL)/10.0;
     ret = MotorCtrl_JogMoveToPosition(target_mm, MotorCtrl_GetDefaultSpeedX100());
 
     /* MotorCtrl_JogMoveToPosition 里如果你也加了 CHECK_COMMAND_SWITCH，就能更快退出；

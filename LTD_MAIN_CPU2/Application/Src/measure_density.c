@@ -279,7 +279,7 @@ static uint8_t SinglePointMonitoringPrototype_WriteSample(uint32_t sample_index)
     static const int16_t pos_wave_01mm[]  = { 0, 1, 2, 3, 2, 1, 0, -1, -2, -1, 0, 1 };
     const uint32_t wave_count = (uint32_t)(sizeof(temp_wave_x100) / sizeof(temp_wave_x100[0]));
     uint32_t idx = sample_index % wave_count;
-    uint32_t base_pos_01mm = g_deviceParams.singlePointMonitoringPosition;
+    uint32_t base_pos_01mm = DeviceCommandArguments_Get(DEVICE_COMMAND_ARG_SINGLE_POINT_MONITORING_POSITION);
     int32_t current_pos_01mm = (int32_t)base_pos_01mm + (int32_t)pos_wave_01mm[idx];
     uint32_t position_raw = Density_ValueToU01mmClamped(current_pos_01mm, "固定点监测样机位置");
     uint32_t temperature_raw = (uint32_t)((int32_t)SINGLE_POINT_MONITORING_PROTO_BASE_TEMP_RAW + temp_wave_x100[idx]);
@@ -1729,7 +1729,7 @@ void CMD_SiProfile(void)
         g_measurement.si_profile_runtime.phase = SI_PROFILE_PHASE_RETURNING_LEVEL;
         __DMB();
         if (g_deviceParams.command == CMD_NONE) {
-            g_deviceParams.command = CMD_FIND_OIL;
+            DeviceCommand_Queue(CMD_FIND_OIL);
             queued_find_oil = 1U;
         }
     }
@@ -2437,10 +2437,10 @@ void CMD_SinglePointMeasurement(void)
 
     MeasureStart();
 
-    ret = SinglePoint_CheckTargetPosition("单点测量", g_deviceParams.singlePointMeasurementPosition);
+    ret = SinglePoint_CheckTargetPosition("单点测量", DeviceCommandArguments_Get(DEVICE_COMMAND_ARG_SINGLE_POINT_MEASUREMENT_POSITION));
     SET_ERROR(ret);
 
-    ret = MotorCtrl_JogMoveToPosition((float)g_deviceParams.singlePointMeasurementPosition / 10.0f,
+    ret = MotorCtrl_JogMoveToPosition((float)DeviceCommandArguments_Get(DEVICE_COMMAND_ARG_SINGLE_POINT_MEASUREMENT_POSITION) / 10.0f,
                                               MotorCtrl_GetDefaultSpeedX100());
     if (ret == STATE_SWITCH) {
         return;
@@ -2480,10 +2480,10 @@ void CMD_SinglePointMonitoring(void)
         return;
     }
 
-    ret = SinglePoint_CheckTargetPosition("固定点监测", g_deviceParams.singlePointMonitoringPosition);
+    ret = SinglePoint_CheckTargetPosition("固定点监测", DeviceCommandArguments_Get(DEVICE_COMMAND_ARG_SINGLE_POINT_MONITORING_POSITION));
     SET_ERROR(ret);
 
-    ret = MotorCtrl_JogMoveToPosition((float)g_deviceParams.singlePointMonitoringPosition / 10.0f,
+    ret = MotorCtrl_JogMoveToPosition((float)DeviceCommandArguments_Get(DEVICE_COMMAND_ARG_SINGLE_POINT_MONITORING_POSITION) / 10.0f,
                                               MotorCtrl_GetDefaultSpeedX100());
     if (ret == STATE_SWITCH) {
         printf("固定点监测移动阶段检测到命令切换请求，退出\r\n");

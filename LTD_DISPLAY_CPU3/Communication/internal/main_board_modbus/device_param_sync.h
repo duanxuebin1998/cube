@@ -20,11 +20,12 @@ extern "C" {
 
 /* 同步所有允许批量同步的 DeviceParameters → CPU2
  * 步骤：
- *  1) 遍历 param_meta[]
+ *  1) 预检完整差异集；普通持久参数不允许在运行态开始部分同步
  *  2) 跳过一次性命令和由 CPU2 运行期维护的参数
  *  3) 使用 operanum 在 g_deviceParams 中找到对应字段
  *  4) 如果 h->val 与 g_deviceParams 不同：
- *       - 调用 10 功能码下发到 CPU2
+ *       - 七个命令前置参数由合法 FC10 ACK 确认，并更新局部镜像、请求后台完整刷新
+ *       - 普通参数保留批量 ACK 路径
  *       - 仅在 CPU2 成功响应后更新 h->val
  * 返回：全部差异参数同步成功或无需同步时为 true，否则为 false。
  */

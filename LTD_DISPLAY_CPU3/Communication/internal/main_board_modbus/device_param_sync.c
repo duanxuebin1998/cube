@@ -8,6 +8,7 @@
 
 #include "device_param_sync.h"
 #include "cpu3_debug_log.h"
+#include "param_float32.h"
 #include <string.h>
 
 extern const int param_metaAmount;
@@ -58,20 +59,19 @@ static uint32_t DeviceParams_MetaValueToRaw(volatile struct ParameterMetadata *h
  * @param raw 业务参数。
  * @return 状态码、计数值或协议数值，具体含义由调用点约定。
  */
-static int32_t DeviceParams_RawToMetaValue(volatile struct ParameterMetadata *h, uint32_t raw)
+static bool DeviceParams_RawToMetaValue(volatile struct ParameterMetadata *h,
+                                        uint32_t raw,
+                                        int32_t *meta_value)
 {
-    if ((h != NULL) && (h->data_type == TYPE_FLOAT)) {
-        float value;
-        /* 按结构或原始字节复制，保持参数存储协议/存储布局不被字段解释改变。 */
-        memcpy(&value, &raw, sizeof(value));
-        value *= DeviceParams_DecimalScale(h->point);
-        return (int32_t)value;
+    if ((h == NULL) || (meta_value == NULL)) {
+        return false;
     }
-    if (h == NULL) {
-        return 0;
+    if (h->data_type == TYPE_FLOAT) {
+        return ParamFloat32_TryRawToScaledInt(raw, h->point, meta_value);
     }
     /* CPU2 下发的是协议原始值，缓存到菜单元数据时补回显示偏移。 */
-    return (int32_t)raw + (int32_t)h->offset;
+    *meta_value = (int32_t)raw + (int32_t)h->offset;
+    return true;
 }
 
 /* ==================== 内部：operanum → g_deviceParams 字段映射 ==================== */
@@ -455,17 +455,57 @@ static volatile uint32_t* get_deviceparam_ptr_by_operanum(int operanum)
     }
 }
 
+/*
+ * 函数用途：取得一个元数据项准备同步到 CPU2 的协议原始值。
+ * 调用场景：DSM 批量同步预检和实际逐项同步共用。
+ * 关键约束：只读项和不属于 DeviceParameters 的项返回“无需参与”，转换失败不得开始批量写入。
+ */
+static bool DeviceParams_TryGetSyncValue(volatile struct ParameterMetadata *h,
+                                         int32_t *target_value,
+                                         bool *participates)
+{
+    volatile uint32_t *p_dev;
+
+    if ((h == NULL) || (target_value == NULL) || (participates == NULL)) {
+        return false;
+    }
+    *participates = false;
+    if (!h->authority_write) {
+        return true;
+    }
+
+    if (h->operanum == COM_NUM_DEVICEPARAM_EMPTY_WEIGHT) {
+        *target_value = g_deviceParams.empty_weight;
+    } else {
+        p_dev = get_deviceparam_ptr_by_operanum(h->operanum);
+        if (p_dev == NULL) {
+            return true;
+        }
+        if (!DeviceParams_RawToMetaValue(h, *p_dev, target_value)) {
+            CPU3_LOG_WARNING("CPU2参数",
+                             "参数值无法安全转换 名称=%s 原始值=0x%08lX",
+                             h->name ? (char*)h->name : "noname",
+                             (unsigned long)*p_dev);
+            return false;
+        }
+    }
+    *participates = true;
+    return true;
+}
+
 
 /* ==================== 内部：把 param_meta[i].val 下发到 CPU2（10 功能码） ==================== */
 
 static bool DeviceParams_SendHoldValueToCPU2(volatile struct ParameterMetadata *h,
                                              int32_t target_value)
 {
+    uint16_t wire_regs[REG_STRIDE];
+    uint32_t u32_temp;
+
     if (h == NULL) return false;
 
-    /* CPU2_CombinatePackage_Send 是按 32bit + word swap 来发的， */
-    /* 每个参数占两个寄存器，因此这里只支持 rgstcnt == 2 的情况。 */
-    if (h->rgstcnt != 2) {
+    /* 每个共享参数占两个寄存器，单寄存器字段不在本同步入口处理。 */
+    if (h->rgstcnt != REG_STRIDE) {
         /* 如果以后有 1 寄存器参数，再单独处理 */
         CPU3_LOG_WARNING("CPU2参数",
                          "参数暂不支持同步 名称=%s 寄存器数=%u",
@@ -475,8 +515,17 @@ static bool DeviceParams_SendHoldValueToCPU2(volatile struct ParameterMetadata *
     }
 
     /* TYPE_FLOAT 菜单值是显示缩放后的整数，下发前恢复为 IEEE754 原始位。 */
-    uint32_t u32_temp = DeviceParams_MetaValueToRaw(h, target_value);
+    u32_temp = DeviceParams_MetaValueToRaw(h, target_value);
+    if (LtdModbus_HoldingWriteIsCommandArgumentOnly(h->startadd, h->rgstcnt)) {
+        wire_regs[0] = (uint16_t)(u32_temp >> 16);
+        wire_regs[1] = (uint16_t)(u32_temp & 0xFFFFU);
+        return CPU2_CommWriteHoldingRegistersEx(h->startadd,
+                                               h->rgstcnt,
+                                               wire_regs) ==
+               CPU2_MODBUS_RESULT_OK;
+    }
 
+    /* 普通字段保留原批量 ACK 路径，避免首项成功后使后续合法字段被本地快照门禁截断。 */
     return CPU2_CombinatePackage_Send(FUNCTIONCODE_WRITE_MULREGISTER,
                                       h->startadd,
                                       h->rgstcnt,
@@ -487,24 +536,14 @@ static bool DeviceParams_SendHoldValueToCPU2(volatile struct ParameterMetadata *
 
 static bool DeviceParams_SyncOneHold(volatile struct ParameterMetadata *h)
 {
-    if (h == NULL) return false;
-
-    if (!h->authority_write) {
-        /* 屏幕不可写的参数不参与向 CPU2 的反向同步。 */
-        return true;
-    }
-
-    /* g_deviceParams 中的源值 */
     int32_t dev_val;
-    if (h->operanum == COM_NUM_DEVICEPARAM_EMPTY_WEIGHT) {
-        dev_val = g_deviceParams.empty_weight;
-    } else {
-        volatile uint32_t *p_dev = get_deviceparam_ptr_by_operanum(h->operanum);
-        if (p_dev == NULL) {
-            /* 不属于 DeviceParameters 的项（例如测量结果），跳过 */
-            return true;
-        }
-        dev_val = DeviceParams_RawToMetaValue(h, *p_dev);
+    bool participates;
+
+    if (!DeviceParams_TryGetSyncValue(h, &dev_val, &participates)) {
+        return false;
+    }
+    if (!participates) {
+        return true;
     }
 
     if (h->val == dev_val) {
@@ -539,12 +578,60 @@ static bool DeviceParams_ShouldSkipBulkSync(int operanum)
            (operanum == COM_NUM_DEVICEPARAM_MOTOR_COUNT_FIRST_LOOP_CIRC);
 }
 
+/*
+ * 函数用途：在 DSM 批量同步发送首帧前检查完整差异集和状态门禁。
+ * 调用场景：DeviceParams_SyncAllToCPU2 每次批量同步开始时。
+ * 关键约束：存在普通持久参数差异时按原状态白名单整体拒绝；只有命令前置参数差异时允许运行态写入。
+ */
+static bool DeviceParams_BulkSyncPreflight(void)
+{
+    bool has_difference = false;
+    bool has_ordinary_difference = false;
+
+    for (uint32_t i = 0U; i < (uint32_t)param_metaAmount; ++i) {
+        volatile struct ParameterMetadata *h = &param_meta[i];
+        int32_t target_value;
+        bool participates;
+
+        if (DeviceParams_ShouldSkipBulkSync(h->operanum)) {
+            continue;
+        }
+        if (!DeviceParams_TryGetSyncValue(h, &target_value, &participates)) {
+            return false;
+        }
+        if (!participates || (h->val == target_value)) {
+            continue;
+        }
+        has_difference = true;
+        if (!LtdModbus_HoldingWriteIsCommandArgumentOnly(h->startadd, h->rgstcnt)) {
+            has_ordinary_difference = true;
+        }
+    }
+
+    if (!has_difference) {
+        return true;
+    }
+    if (!CPU2_CommIsAvailable()) {
+        return false;
+    }
+    if (has_ordinary_difference &&
+        !DeviceState_AllowsPersistentParamWrite(
+            g_measurement.device_status.device_state)) {
+        return false;
+    }
+    return true;
+}
+
 /* ==================== 对外接口 ==================== */
 
 /* 同步所有 DeviceParameters → CPU2 */
 bool DeviceParams_SyncAllToCPU2(void)
 {
-    for (uint32_t i = 0; i < param_metaAmount; ++i) {
+    if (!DeviceParams_BulkSyncPreflight()) {
+        return false;
+    }
+
+    for (uint32_t i = 0U; i < (uint32_t)param_metaAmount; ++i) {
         if (DeviceParams_ShouldSkipBulkSync(param_meta[i].operanum)) {
             continue;
         }

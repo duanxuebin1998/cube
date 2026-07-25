@@ -9,6 +9,7 @@
 #include "system_parameter.h"
 #include "cpu2_communicate.h"
 #include "cpu3_comm_display_params.h"
+#include "param_float32.h"
 #include <math.h>     /* for pow() */
 
 int32_t ywj_hold_analysis_data(int startadd,int rgscnt);
@@ -671,10 +672,16 @@ void AnalysisHoldRegister(void)
         }
         else if(param_meta[index].data_type == TYPE_FLOAT)
         {
-            union utof tmp_f;
-            tmp_f.u = ywj_hold_analysis_data(param_meta[index].startadd,param_meta[index].rgstcnt);
-            tmp_f.f *= pow(10,param_meta[index].point);
-            param_meta[index].val = tmp_f.f;
+            int32_t scaled_value;
+            uint32_t raw_value = (uint32_t)ywj_hold_analysis_data(
+                param_meta[index].startadd,
+                param_meta[index].rgstcnt);
+
+            if (ParamFloat32_TryRawToScaledInt(raw_value,
+                                               param_meta[index].point,
+                                               &scaled_value)) {
+                param_meta[index].val = scaled_value;
+            }
         }
         else if(param_meta[index].data_type == TYPE_DOUBLE)
         {

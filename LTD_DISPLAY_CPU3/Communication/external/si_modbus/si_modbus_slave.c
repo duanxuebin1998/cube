@@ -1678,6 +1678,11 @@ static uint8_t si_handle_read_bits(uint8_t func,
         /* CPU2 派生位与本地位混读时整帧返回忙，禁止旧状态影子穿透。 */
         return si_build_exception(func, SI_EX_SLAVE_DEVICE_BUSY, tx, tx_len);
     }
+    if ((CPU3_ExternalSiBitRangeNeedsFixedPoint(func, start, qty) != 0U) &&
+        !CPU2_CommHasFixedPointSnapshot()) {
+        /* 固定点密度报警和混合范围等待固定点一致性握手。 */
+        return si_build_exception(func, SI_EX_SLAVE_DEVICE_BUSY, tx, tx_len);
+    }
 
     byte_count = (uint16_t)((qty + 7U) / 8U);
     tx[0] = si_get_effective_slave_address();
@@ -1745,6 +1750,12 @@ static uint8_t si_handle_read_regs(uint8_t func,
         (CPU3_ExternalSiInputRangeNeedsRuntime(start, qty) != 0U) &&
         !CPU2_CommHasRuntimeSnapshot()) {
         /* Complete、时间、镜像和点阵都随 CPU2 运行态失效，不把旧发布快照当静态数据。 */
+        return si_build_exception(func, SI_EX_SLAVE_DEVICE_BUSY, tx, tx_len);
+    }
+    if ((func == SI_FUNC_READ_INPUT_REGS) &&
+        (CPU3_ExternalSiInputRangeNeedsFixedPoint(start, qty) != 0U) &&
+        !CPU2_CommHasFixedPointSnapshot()) {
+        /* 当前密度及其报警镜像必须等待固定点一致性握手。 */
         return si_build_exception(func, SI_EX_SLAVE_DEVICE_BUSY, tx, tx_len);
     }
 

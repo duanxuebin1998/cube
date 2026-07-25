@@ -474,6 +474,7 @@ static void enter_motor_run_monitor_page_waiting_stop(void); /* 停止后回到�
 static void motor_run_monitor_back_to_status(void); /* 监控页返回状态页 */
 static void motor_run_monitor_request_stop(void); /* 监控页确认键直接停止运动 */
 static void display_cpu2_comm_failure(void); /* CPU2 请求失败统一提示 */
+static void display_cpu2_modbus_exception(uint8_t exception_code); /* CPU2标准异常提示 */
 static void motor_run_monitor_draw_values(void); /* 绘制监控页位置和扭力 */
 static bool command_is_motor_monitor_command(uint32_t cmd); /* 纯电机指令范围判断 */
 static bool motor_run_monitor_state_is_active(DeviceState state); /* 电机监控运行态判断 */
@@ -530,6 +531,9 @@ static void inputcmdpara(void);			/* 输入参数页面(数值/符号) */
 static bool inputvalue(uint8_t deci, uint8_t row, uint8_t line,
 		uint8_t points, uint8_t *unit, int *value);				/* 多位数字输入状态机 */
 static int SignInput(uint8_t row, uint8_t line, uint8_t shift); /* 正负号输入 */
+static void ResetSignInputState(void); /* 清除符号页跨次编辑状态 */
+static void inputcmdpara_back(void); /* 输入页返回，符号阶段只取消本次编辑 */
+static bool ParamAllowsSignedInput(int operaNum); /* 参数是否允许选择正负号 */
 
 /* ---------- 7) 名称/单位/枚举含义工具函数 ----------
  *	根据 operaNum 或 param_meta 表，返回名字、单位、小数点位数、显示位数等
@@ -660,7 +664,7 @@ struct KeyMenu keymenu[KEYNUM_END] = {
 
     /* 7 - 输入参数值(带参指令中的) */
     [KEYNUM_INPUTCMDPARA] =
-        { inputcmdpara, inputcmdpara, inputcmdpara, inputcmdpara,
+        { inputcmdpara_back, inputcmdpara, inputcmdpara, inputcmdpara,
           USE_KEY_BACK | USE_KEY_UP | USE_KEY_DOWN | USE_KEY_SURE, inputcmdpara },
 
     /* 8 - 参数显示(读写类参数中的) */
@@ -1362,13 +1366,72 @@ void useKey(void)
 /* ==============================
  * 输入参数页面
  * ============================== */
+/*
+ * 函数用途：判断当前参数输入是否允许选择正负号。
+ * 调用场景：数字输入完成后决定是否进入符号选择页。
+ * 关键约束：继电器仅 HH、H、L、LL 阈值允许负号，报警滞回保持非负。
+ */
+static bool ParamAllowsSignedInput(int operaNum)
+{
+	int relay_field = RelayParam_FieldOf(operaNum);
+
+	if ((relay_field >= 6) && (relay_field <= 9)) {
+		return true;
+	}
+
+	switch (operaNum) {
+	case COM_NUM_DEVICEPARAM_EMPTY_WEIGHT:
+	case COM_NUM_DEVICEPARAM_LIQUID_SENSOR_DISTANCE_DIFF:
+	case COM_NUM_DEVICEPARAM_DENSITYCORRECTION:
+	case COM_NUM_DEVICEPARAM_TEMPERATURECORRECTION:
+	case COM_NUM_DEVICEPARAM_AO_CURRENT_CORRECTION_MA_X100:
+	case COM_NUM_CPU3_SI_LOW_TEMPERATURE_SETPOINT:
+	case COM_NUM_CPU3_SI_HIGH_TEMPERATURE_SETPOINT:
+	case COM_NUM_SCREEN_INPUT_T:
+		return true;
+	default:
+		return false;
+	}
+}
+
+static bool s_param_sign_input_active = false;
+static int s_param_sign_value = 1;
+static int s_param_sign_confirm_count = -1;
+
+static void ResetSignInputState(void)
+{
+	s_param_sign_input_active = false;
+	s_param_sign_value = 1;
+	s_param_sign_confirm_count = -1;
+}
+
+/*
+ * 符号选择阶段按返回只取消本次编辑，恢复参数详情页且不下发。
+ * 数字输入阶段仍沿用原 inputvalue() 的逐位返回行为。
+ */
+static void inputcmdpara_back(void)
+{
+	if (s_param_sign_input_active) {
+		ResetSignInputState();
+		NowKeyPress = 0;
+		timeback = 0;
+		timesure = 1;
+		displaypara();
+		return;
+	}
+	inputcmdpara();
+}
+
 static void inputcmdpara(void)
 {
 	uint8_t line, row = OLED_ROW4_1;
 	int value;
 	uint8_t *name = NULL;
-	static bool flag_inputsign = false;
 
+	if (func_index != KEYNUM_INPUTCMDPARA) {
+		/* 从其它页面重新进入输入流程时，不继承上一次未完成的符号选择。 */
+		ResetSignInputState();
+	}
 	oled_clear();
 	func_index = KEYNUM_INPUTCMDPARA;
 
@@ -1388,13 +1451,13 @@ static void inputcmdpara(void)
 	}
 
 	/* 先输入数值, 特定参数再输入符号 */
-	if (flag_inputsign == false) {
+	if (s_param_sign_input_active == false) {
 		if (inputvalue(now_Para_CT.bits, row, line, now_Para_CT.points, now_Para_CT.unit, &value)) {
 			now_Para_CT.val = value;
 
-			if (now_Opera_Num == COM_NUM_DEVICEPARAM_DENSITYCORRECTION
-				|| now_Opera_Num == COM_NUM_DEVICEPARAM_TEMPERATURECORRECTION) {
-				flag_inputsign = true;
+			if (ParamAllowsSignedInput(now_Opera_Num)) {
+				ResetSignInputState();
+				s_param_sign_input_active = true;
 				SignInput(row, line - 4, 1);
 				return;
 			}
@@ -1403,13 +1466,12 @@ static void inputcmdpara(void)
 			return;
 		}
 	} else {
-		static int sgn = 0;
+		int sgn;
 
 		sgn = SignInput(row, line - 4, 1);
 		if (sgn != 0) {
 			now_Para_CT.val *= sgn;
-			sgn = 0;
-			flag_inputsign = false;
+			ResetSignInputState();
 			ifsendcmd();
 			return;
 		}
@@ -3001,14 +3063,17 @@ static bool screen_operation_is_no_para_command(int operaNum)
  */
 static bool send_cpu2_command(uint32_t cmd)
 {
+    uint16_t command_regs[REG_STRIDE];
+
     if (!CPU2_CommCanSendCommand((CommandType)cmd)) {
         return false;
     }
-    /* 写 2 个寄存器：如果协议定义为 command 占 32bit，这里保持 2 不动。 */
-    return CPU2_CombinatePackage_Send(FUNCTIONCODE_WRITE_MULREGISTER,
-                                     HOLDREGISTER_DEVICEPARAM_COMMAND,
-                                     2,
-                                     &cmd);
+    command_regs[0] = (uint16_t)(cmd >> 16);
+    command_regs[1] = (uint16_t)(cmd & 0xFFFFU);
+    return CPU2_CommWriteHoldingRegistersEx(
+               HOLDREGISTER_DEVICEPARAM_COMMAND,
+               REG_STRIDE,
+               command_regs) == CPU2_MODBUS_RESULT_OK;
 }
 
 /*
@@ -3018,8 +3083,51 @@ static bool send_cpu2_command(uint32_t cmd)
  */
 static void display_cpu2_comm_failure(void)
 {
+    uint8_t exception_code = CPU2_CommGetLastModbusException();
+
+    if ((exception_code != CPU2_MODBUS_RESULT_OK) && CPU2_CommIsAvailable()) {
+        display_cpu2_modbus_exception(exception_code);
+        return;
+    }
+    if (CPU2_CommIsProtocolMismatch()) {
+        oled_clear();
+        DisplayLangaugeLineWords((uint8_t*)"协议版本不匹配", OLED_LINE8_1, OLED_ROW3_2, 0, (uint8_t*)"Proto Mismatch");
+        HAL_Delay(800);
+        return;
+    }
+    if (CPU2_CommHasRuntimeSnapshot() && !CPU2_CommIsAvailable()) {
+        oled_clear();
+        DisplayLangaugeLineWords((uint8_t*)"正在读取参数", OLED_LINE8_1, OLED_ROW3_2, 0, (uint8_t*)"Syncing Para");
+        HAL_Delay(800);
+        return;
+    }
     oled_clear();
     DisplayLangaugeLineWords((uint8_t*)"与CPU2通讯故障!", OLED_LINE8_1, OLED_ROW3_2, 0, (uint8_t*)"Cpu2 CF!");
+    HAL_Delay(800);
+}
+
+/* 标准Modbus异常属于CPU2业务拒绝，不计作板间物理通信故障。 */
+static void display_cpu2_modbus_exception(uint8_t exception_code)
+{
+    oled_clear();
+    switch (exception_code) {
+    case CPU2_MODBUS_EX_ILLEGAL_FUNCTION:
+        DisplayLangaugeLineWords((uint8_t*)"操作不支持!", OLED_LINE8_2, OLED_ROW3_2, 0, (uint8_t*)"Unsupported");
+        break;
+    case CPU2_MODBUS_EX_ILLEGAL_ADDRESS:
+        DisplayLangaugeLineWords((uint8_t*)"非法参数!", OLED_LINE8_2, OLED_ROW3_2, 0, (uint8_t*)"Invalid Para");
+        break;
+    case CPU2_MODBUS_EX_ILLEGAL_VALUE:
+        DisplayLangaugeLineWords((uint8_t*)"数值超范围!", OLED_LINE8_2, OLED_ROW3_2, 0, (uint8_t*)"Value out of Range");
+        break;
+    case CPU2_MODBUS_EX_SLAVE_DEVICE_BUSY:
+        DisplayLangaugeLineWords((uint8_t*)"CPU2设备忙!", OLED_LINE8_2, OLED_ROW3_2, 0, (uint8_t*)"CPU2 Busy");
+        break;
+    case CPU2_MODBUS_EX_SLAVE_DEVICE_FAILURE:
+    default:
+        DisplayLangaugeLineWords((uint8_t*)"CPU2操作失败!", OLED_LINE8_2, OLED_ROW3_2, 0, (uint8_t*)"CPU2 Failed");
+        break;
+    }
     HAL_Delay(800);
 }
 
@@ -3322,10 +3430,13 @@ static void cmd_onepara_process(void)
         return;
     }
 
-    /* 2) 动态组织要下发的参数字节：rgstcnt 个寄存器 = rgstcnt*2 字节 */
+    /* 2) 七个带参命令字段都是一个 32 位值，按共享 Modbus 高字在前组织。 */
     {
-        int bytes = (int)param_meta[index].rgstcnt * 2;
-        if (bytes <= 0 || bytes > 64) {
+        uint32_t raw_value;
+        uint16_t parameter_regs[REG_STRIDE];
+        uint8_t write_result;
+
+        if (param_meta[index].rgstcnt != REG_STRIDE) {
             oled_clear();
             DisplayLangaugeLineWords((uint8_t*)"参数长度异常!", OLED_LINE8_2, OLED_ROW3_2, 0, (uint8_t*)"Bad Para Len");
             HAL_Delay(800);
@@ -3333,29 +3444,17 @@ static void cmd_onepara_process(void)
             return;
         }
 
-        uint8_t paraarr[64];
-        memset(paraarr, 0, sizeof(paraarr));
-
         oled_clear();
         DisplayLangaugeLineWords((uint8_t*)"正在下发参数", OLED_LINE8_2, OLED_ROW3_2, 0, (uint8_t*)"Send Para");
 
-        for (i = 0; i < bytes; i++) {
-            paraarr[i] = (uint8_t)((now_Para_CT.val >> (8 * i)) & 0xFF);  /* 你原先的小端拆字节 */
-        }
-
-        /* 把 byte 流打包成 uint32_t 数组：每 4 字节一个 uint32_t（小端） */
-        uint32_t hold32[16];                 /* 64B => 16 个 uint32_t */
-        memset(hold32, 0, sizeof(hold32));
-
-        for (i = 0; i < bytes; i++) {
-            hold32[i >> 2] |= ((uint32_t)paraarr[i]) << (8u * (uint32_t)(i & 3));
-        }
-
-        if (!CPU2_CommIsAvailable() ||
-            !CPU2_CombinatePackage_Send(FUNCTIONCODE_WRITE_MULREGISTER,
-                                       param_meta[index].startadd,
-                                       param_meta[index].rgstcnt,
-                                       hold32)) {
+        raw_value = (uint32_t)((int32_t)now_Para_CT.val);
+        parameter_regs[0] = (uint16_t)(raw_value >> 16);
+        parameter_regs[1] = (uint16_t)(raw_value & 0xFFFFU);
+        write_result = CPU2_CommWriteHoldingRegistersEx(
+            param_meta[index].startadd,
+            param_meta[index].rgstcnt,
+            parameter_regs);
+        if (write_result != CPU2_MODBUS_RESULT_OK) {
             display_cpu2_comm_failure();
             exitTankOpera();
             return;
@@ -3387,11 +3486,7 @@ static void cmd_onepara_process(void)
             return;
         }
 
-        /* 2 个寄存器写入：把 cmd 作为 32bit 写入 command 寄存器 */
-        if (!CPU2_CombinatePackage_Send(FUNCTIONCODE_WRITE_MULREGISTER,
-                                       HOLDREGISTER_DEVICEPARAM_COMMAND,
-                                       2,
-                                       (uint32_t *)&cmd)) {
+        if (!send_cpu2_command(cmd)) {
             display_cpu2_comm_failure();
             exitTankOpera();
             return;
@@ -3639,6 +3734,7 @@ static bool ao_write_range_pair(void)
 	int32_t candidate_0;
 	int32_t candidate_100;
 	uint32_t pair[2];
+	bool write_ok;
 	bool success;
 
 	if ((index_0 < 0) || (index_100 < 0)) {
@@ -3660,11 +3756,12 @@ static bool ao_write_range_pair(void)
 	oled_clear();
 	DisplayLangaugeLineWords((uint8_t*)"正在修改量程", OLED_LINE8_2, OLED_ROW3_2, 0, (uint8_t*)"Modify Range");
 
-	success = CPU2_CommIsAvailable() &&
-	          CPU2_CombinatePackage_Send(FUNCTIONCODE_WRITE_MULREGISTER,
-	                                      HOLDREGISTER_DEVICEPARAM_AO_RANGE_0_01MM,
-	                                      AO_RANGE_PAIR_REGISTER_COUNT,
-	                                      pair) &&
+	write_ok = CPU2_CommIsAvailable() &&
+	           CPU2_CombinatePackage_Send(FUNCTIONCODE_WRITE_MULREGISTER,
+	                                       HOLDREGISTER_DEVICEPARAM_AO_RANGE_0_01MM,
+	                                       AO_RANGE_PAIR_REGISTER_COUNT,
+	                                       pair);
+	success = write_ok &&
 	          CPU2_CombinatePackage_Send(FUNCTIONCODE_READ_HOLDREGISTER,
 	                                      HOLDREGISTER_DEVICEPARAM_AO_RANGE_0_01MM,
 	                                      AO_RANGE_PAIR_REGISTER_COUNT,
@@ -3675,7 +3772,9 @@ static bool ao_write_range_pair(void)
 		param_meta[index_100].val = old_100;
 		g_deviceParams.ao_output.range_0_01mm = old_0;
 		g_deviceParams.ao_output.range_100_01mm = old_100;
-		CPU2_CommRequestParameterRefresh();
+		if (write_ok || (CPU2_CommGetLastModbusException() == CPU2_MODBUS_RESULT_OK)) {
+			CPU2_CommRequestParameterRefresh();
+		}
 		display_cpu2_comm_failure();
 		mainmenu();
 		return false;
@@ -3696,6 +3795,7 @@ static bool ao_write_output_source(void)
 	int32_t old_0;
 	int32_t old_100;
 	uint32_t source_value;
+	bool write_ok;
 	bool success;
 
 	if ((index_source < 0) || (index_0 < 0) || (index_100 < 0)) {
@@ -3709,11 +3809,12 @@ static bool ao_write_output_source(void)
 	oled_clear();
 	DisplayLangaugeLineWords((uint8_t*)"正在切换输出源", OLED_LINE8_1, OLED_ROW3_2, 0, (uint8_t*)"Change Source");
 
-	success = CPU2_CommIsAvailable() &&
-	          CPU2_CombinatePackage_Send(FUNCTIONCODE_WRITE_MULREGISTER,
-	                                      HOLDREGISTER_DEVICEPARAM_AO_OUTPUT_SOURCE,
-	                                      REG_STRIDE,
-	                                      &source_value) &&
+	write_ok = CPU2_CommIsAvailable() &&
+	           CPU2_CombinatePackage_Send(FUNCTIONCODE_WRITE_MULREGISTER,
+	                                       HOLDREGISTER_DEVICEPARAM_AO_OUTPUT_SOURCE,
+	                                       REG_STRIDE,
+	                                       &source_value);
+	success = write_ok &&
 	          CPU2_CombinatePackage_Send(FUNCTIONCODE_READ_HOLDREGISTER,
 	                                      HOLDREGISTER_DEVICEPARAM_AO_WORK_MODE,
 	                                      AO_CONFIG_REGISTER_COUNT,
@@ -3726,7 +3827,9 @@ static bool ao_write_output_source(void)
 		g_deviceParams.ao_output.output_source = old_source;
 		g_deviceParams.ao_output.range_0_01mm = old_0;
 		g_deviceParams.ao_output.range_100_01mm = old_100;
-		CPU2_CommRequestParameterRefresh();
+		if (write_ok || (CPU2_CommGetLastModbusException() == CPU2_MODBUS_RESULT_OK)) {
+			CPU2_CommRequestParameterRefresh();
+		}
 		display_cpu2_comm_failure();
 		mainmenu();
 		return false;
@@ -3742,13 +3845,15 @@ static bool ao_write_simulation_enable(uint32_t enabled)
 {
 	uint32_t old_enabled = (g_measurement.ao_output_runtime.simulation_enabled == 0U) ? 0U : 1U;
 	uint32_t normalized = (enabled == 0U) ? 0U : 1U;
+	bool write_ok;
 	bool success;
 
-	success = CPU2_CommIsAvailable() &&
-	          CPU2_CombinatePackage_Send(FUNCTIONCODE_WRITE_MULREGISTER,
-	                                      HOLDREGISTER_AO_SIMULATION_ENABLE,
-	                                      REG_STRIDE,
-	                                      &normalized) &&
+	write_ok = CPU2_CommIsAvailable() &&
+	           CPU2_CombinatePackage_Send(FUNCTIONCODE_WRITE_MULREGISTER,
+	                                       HOLDREGISTER_AO_SIMULATION_ENABLE,
+	                                       REG_STRIDE,
+	                                       &normalized);
+	success = write_ok &&
 	          CPU2_CombinatePackage_Send(FUNCTIONCODE_READ_HOLDREGISTER,
 	                                      HOLDREGISTER_AO_SIMULATION_ENABLE,
 	                                      REG_STRIDE,
@@ -3756,10 +3861,23 @@ static bool ao_write_simulation_enable(uint32_t enabled)
 	          CPU2_CommIsAvailable();
 	if (!success) {
 		g_measurement.ao_output_runtime.simulation_enabled = old_enabled;
-		CPU2_CommRequestParameterRefresh();
+		if (write_ok || (CPU2_CommGetLastModbusException() == CPU2_MODBUS_RESULT_OK)) {
+			CPU2_CommRequestParameterRefresh();
+		}
 		return false;
 	}
 	return true;
+}
+
+/* 判断当前屏幕参数项是否属于七个命令前置参数。 */
+static bool screen_param_is_command_argument(int index)
+{
+	if (index < 0) {
+		return false;
+	}
+	return LtdModbus_HoldingWriteIsCommandArgumentOnly(
+		param_meta[index].startadd,
+		param_meta[index].rgstcnt);
 }
 
 /* 写权限范围检查 */
@@ -3773,6 +3891,8 @@ static void parawritecheck(void)
 	    (!ao_param_is_config(now_Opera_Num) || ao_param_is_editable(now_Opera_Num))) {
 		/* CPU3 本机参数只写本地 FRAM，不受 CPU2 测量状态限制。 */
 		if (Cpu3Local_IsParam((OperatingNumber)now_Opera_Num)) {
+			allow_write = true;
+		} else if (screen_param_is_command_argument(index)) {
 			allow_write = true;
 		} else {
 			allow_write = state_allows_param_write(g_measurement.device_status.device_state);
@@ -4003,6 +4123,7 @@ static void cmd_configpara_process(void)
 	{
 	    uint32_t hold32[16]; /* rgstcnt 最大一般不会很大；16 个 u32 = 64 字节 */
 	    int raw_value;
+	    bool command_argument_only;
 
 
 	    if (!CPU2_CommIsAvailable()) {
@@ -4028,19 +4149,53 @@ static void cmd_configpara_process(void)
 	        hold32[0] = (uint32_t)((int32_t)raw_value);
 	    }
 
-	    if (!CPU2_CombinatePackage_Send(FUNCTIONCODE_WRITE_MULREGISTER,
-	                                    param_meta[index].startadd,
-	                                    param_meta[index].rgstcnt,
-	                                    hold32) ||
-	        !CPU2_CombinatePackage_Send(FUNCTIONCODE_READ_HOLDREGISTER,
-	                                    param_meta[index].startadd,
-	                                    param_meta[index].rgstcnt,
-	                                    NULL) ||
-	        !CPU2_CommIsAvailable()) {
-	        CPU2_CommRequestParameterRefresh();
-	        display_cpu2_comm_failure();
-	        mainmenu();
-	        return;
+	    command_argument_only = screen_param_is_command_argument(index);
+	    if (command_argument_only) {
+	        uint16_t parameter_regs[REG_STRIDE];
+	        uint8_t write_result;
+
+	        if (param_meta[index].rgstcnt != REG_STRIDE) {
+	            display_cpu2_modbus_exception(CPU2_MODBUS_EX_ILLEGAL_VALUE);
+	            mainmenu();
+	            return;
+	        }
+	        parameter_regs[0] = (uint16_t)(hold32[0] >> 16);
+	        parameter_regs[1] = (uint16_t)(hold32[0] & 0xFFFFU);
+	        write_result = CPU2_CommWriteHoldingRegistersEx(
+	            param_meta[index].startadd,
+	            param_meta[index].rgstcnt,
+	            parameter_regs);
+	        if (write_result != CPU2_MODBUS_RESULT_OK) {
+	            display_cpu2_comm_failure();
+	            mainmenu();
+	            return;
+	        }
+	    } else {
+	        if (!CPU2_CombinatePackage_Send(FUNCTIONCODE_WRITE_MULREGISTER,
+	                                        param_meta[index].startadd,
+	                                        param_meta[index].rgstcnt,
+	                                        hold32)) {
+	            if (CPU2_CommGetLastModbusException() != CPU2_MODBUS_RESULT_OK) {
+	                display_cpu2_modbus_exception(CPU2_CommGetLastModbusException());
+	                NowKeyPress = 0;
+	                displaypara();
+	                return;
+	            }
+	            CPU2_CommRequestParameterRefresh();
+	            display_cpu2_comm_failure();
+	            mainmenu();
+	            return;
+	        }
+	        if (!CPU2_CombinatePackage_Send(FUNCTIONCODE_READ_HOLDREGISTER,
+	                                        param_meta[index].startadd,
+	                                        param_meta[index].rgstcnt,
+	                                        NULL) ||
+	            !CPU2_CommIsAvailable()) {
+	            CPU2_CommRequestParameterRefresh();
+	            display_cpu2_comm_failure();
+	            mainmenu();
+	            return;
+	        }
 	    }
 	}
 	HAL_Delay(800);
@@ -4104,24 +4259,22 @@ static void menuselect(struct MenuData *menu, int menulen)
 /* 正负号输入 */
 static int SignInput(uint8_t row, uint8_t line, uint8_t shift)
 {
-	static int sgn = 1;
-	static int tosure = -1;
 	int ret = 0;
 
 	if (NowKeyPress == USE_KEY_SURE) {
-		tosure++;
+		s_param_sign_confirm_count++;
 	} else if (NowKeyPress == USE_KEY_UP) {
-		sgn *= -1;
-		tosure = 0;
+		s_param_sign_value *= -1;
+		s_param_sign_confirm_count = 0;
 	} else if (NowKeyPress == USE_KEY_DOWN) {
-		sgn *= -1;
-		tosure = 0;
+		s_param_sign_value *= -1;
+		s_param_sign_confirm_count = 0;
 	} else {
-		sgn = 1;
-		tosure = 0;
+		s_param_sign_value = 1;
+		s_param_sign_confirm_count = 0;
 	}
 
-	if (sgn == -1) {
+	if (s_param_sign_value == -1) {
 		line = OledDisplayLineWords((u8*)"-", line, row, shift);
 	} else {
 		line = OledDisplayLineWords((u8*)"+", line, row, shift);
@@ -4129,12 +4282,12 @@ static int SignInput(uint8_t row, uint8_t line, uint8_t shift)
 
 	OledValueDisplay(now_Para_CT.val, line, row, 0, now_Para_CT.points, now_Para_CT.unit);
 
-	if (tosure > 1) {
-		ret = sgn;
+	if (s_param_sign_confirm_count > 1) {
+		ret = s_param_sign_value;
 	}
 
 	DisplayLangaugeLineWords((uint8_t*)"返回", OLED_LINE8_1, OLED_ROW4_4, 0, (uint8_t*)"Back");
-	DisplayLangaugeLineWords((uint8_t*)"确认", OLED_LINE8_8, OLED_ROW4_4, tosure > 0, (uint8_t*)"Ok");
+	DisplayLangaugeLineWords((uint8_t*)"确认", OLED_LINE8_8, OLED_ROW4_4, s_param_sign_confirm_count > 0, (uint8_t*)"Ok");
 
 	return ret;
 }

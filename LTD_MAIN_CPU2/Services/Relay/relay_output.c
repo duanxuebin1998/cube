@@ -1,6 +1,7 @@
 #include "relay_output.h"
 
 #include "main.h"
+#include <math.h>
 #include <stddef.h>
 #include <string.h>
 
@@ -53,6 +54,28 @@ static float RelayOutput_RawToFloat(uint32_t raw)
     return value;
 }
 
+/*
+ * 函数用途：把继电器比较值按 0.1 单位进行符号对称的四舍五入。
+ * 调用场景：RelayOutput_Compare 比较当前值、阈值和滞回前统一量化。
+ * 关键约束：负数使用减 0.5 后截断，避免统一加 0.5 导致负值向零偏移。
+ */
+static int32_t RelayOutput_ToTenths(float value)
+{
+    double scaled;
+
+    if (!isfinite(value)) {
+        return 0;
+    }
+    scaled = ((double)value) * 10.0;
+    if (scaled >= (double)INT32_MAX) {
+        return INT32_MAX;
+    }
+    if (scaled <= (double)INT32_MIN) {
+        return INT32_MIN;
+    }
+    return (int32_t)(scaled + ((scaled >= 0.0) ? 0.5 : -0.5));
+}
+
 /**
  * @brief 执行继电器输出中的 RelayOutput_Compare 逻辑。
  *
@@ -71,15 +94,21 @@ static uint8_t RelayOutput_Compare(float current,
     int32_t target_tenths;
     int32_t hysteresis_tenths;
 
-    current_tenths = (int32_t)((current * 10.0f) + 0.5f);
-    target_tenths = (int32_t)((target * 10.0f) + 0.5f);
-    hysteresis_tenths = (int32_t)((hysteresis * 10.0f) + 0.5f);
+    current_tenths = RelayOutput_ToTenths(current);
+    target_tenths = RelayOutput_ToTenths(target);
+    hysteresis_tenths = RelayOutput_ToTenths(hysteresis);
 
     if (type == RELAY_COMPARE_GREATER) {
-        return (current_tenths >= (target_tenths - hysteresis_tenths)) ? 1U : 0U;
+        const int64_t release_threshold =
+            (int64_t)target_tenths - (int64_t)hysteresis_tenths;
+        return ((int64_t)current_tenths >= release_threshold) ? 1U : 0U;
     }
 
-    return (current_tenths <= (target_tenths + hysteresis_tenths)) ? 1U : 0U;
+    {
+        const int64_t release_threshold =
+            (int64_t)target_tenths + (int64_t)hysteresis_tenths;
+        return ((int64_t)current_tenths <= release_threshold) ? 1U : 0U;
+    }
 }
 
 /**

@@ -755,10 +755,21 @@ int Response04(unsigned char *revframe, unsigned char *sendframe)
 		uint8_t needs_runtime = CPU3_ExternalDsmInputRangeNeedsRuntime(
 			(uint16_t)startaddress,
 			(uint16_t)registeramount);
+		uint8_t needs_fixed_point = CPU3_ExternalDsmInputRangeNeedsFixedPoint(
+			(uint16_t)startaddress,
+			(uint16_t)registeramount);
 
 		if ((needs_runtime != 0U) && !CPU2_CommHasRuntimeSnapshot())
 		{
 			/* CPU2 派生字段和混合范围在首次失联后整帧返回设备忙。 */
+			sendframe[0] = SlaveAddress;
+			sendframe[1] = 0x80 + readinputregisterfuncode;
+			sendframe[2] = EXCEPTIONCODE_ERRORDEVIVEBUSY;
+			framelen = 3;
+		}
+		else if ((needs_fixed_point != 0U) && !CPU2_CommHasFixedPointSnapshot())
+		{
+			/* 固定点握手未完成时只阻塞单点结果及其混合读取。 */
 			sendframe[0] = SlaveAddress;
 			sendframe[1] = 0x80 + readinputregisterfuncode;
 			sendframe[2] = EXCEPTIONCODE_ERRORDEVIVEBUSY;

@@ -54,6 +54,20 @@ static void ltd_build_exception(uint8_t address,
 }
 
 /*
+ * 函数用途：把CPU2共享写失败转换成LTD对外异常语义。
+ * 调用场景：LTD FC10转发到CPU2后未取得成功结果。
+ * 关键约束：CPU2明确返回的标准异常保持原值；无标准异常的板间失败统一返回0x06。
+ */
+static uint8_t ltd_map_cpu2_write_exception(uint8_t result)
+{
+    if ((result == CPU2_MODBUS_EX_SLAVE_DEVICE_FAILURE) &&
+        (CPU2_CommGetLastModbusException() == CPU2_MODBUS_RESULT_OK)) {
+        return LTD_MODBUS_EX_SLAVE_DEVICE_BUSY;
+    }
+    return result;
+}
+
+/*
  * 函数用途：按现行Modbus地址查找CPU3本机参数元数据。
  * 调用场景：LTD FC03/FC10访问0x7000本机参数块。
  * 关键约束：仅返回 CPU3 本机参数；每个字段继续按两个 16 位寄存器对外发布。
@@ -275,13 +289,17 @@ static void ltd_handle_write(uint8_t address,
                                 tx_len);
             return;
         }
-    } else if (!CPU2_CommWriteHoldingRegisters(start, count, registers)) {
-        ltd_build_exception(address,
-                            LTD_MODBUS_FUNC_WRITE_MULTI_REGS,
-                            LTD_MODBUS_EX_SLAVE_DEVICE_BUSY,
-                            tx,
-                            tx_len);
-        return;
+    } else {
+        local_exception = CPU2_CommWriteHoldingRegistersEx(start, count, registers);
+        if (local_exception != CPU2_MODBUS_RESULT_OK) {
+            local_exception = ltd_map_cpu2_write_exception(local_exception);
+            ltd_build_exception(address,
+                                LTD_MODBUS_FUNC_WRITE_MULTI_REGS,
+                                local_exception,
+                                tx,
+                                tx_len);
+            return;
+        }
     }
 
     tx[0] = address;

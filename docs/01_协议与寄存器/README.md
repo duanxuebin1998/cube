@@ -1,6 +1,6 @@
 # 协议与寄存器文档索引
 
-更新日期：2026-07-22
+更新日期：2026-07-25
 
 本目录用于保存 CPU2/CPU3 共享协议、外部 Modbus/DSM/SI协议适配、寄存器表、协议版本和兼容性记录。凡是会影响通信地址、字段语义、命令、状态、缩放、补码解释或协议兼容性的资料，优先归入本目录。
 
@@ -8,7 +8,7 @@
 
 | 分类 | 资料 | 用途 |
 | --- | --- | --- |
-| CPU2/CPU3 共享协议 | `CPU2_CPU3协议变更记录.md` | 记录`DEVICE_PROTOCOL_VERSION`、共享寄存器、参数语义、兼容影响和验证结果；当前开发协议与最新正式协议均为27 |
+| CPU2/CPU3 共享协议 | `CPU2_CPU3协议变更记录.md` | 记录`DEVICE_PROTOCOL_VERSION`、共享寄存器、参数语义、兼容影响和验证结果；最新正式协议与当前开发协议均为28 |
 | LTD 共享 Modbus | `LTD共享Modbus协议/` | CPU2/CPU3 共用的当前寄存器、命令、帧格式、CPU3 快照响应/CPU2 ACK 写入和联调帧 |
 | 系统参数默认值 | `系统参数出厂默认值.md` | 整理 CPU2 恢复出厂写入的 `DeviceParameters` 默认值、单位和小数位；当前 CPU2 参数存储版本为 `3` |
 | AO 电流输出 | `AO电流输出/` | 归档NMS81等外部4-20mA/AO参考资料，并记录CUBE当前5组17项菜单、2个隐藏预留、HART、迁移和台架验证边界 |
@@ -24,9 +24,9 @@
 
 | 主题 | 当前结论 | 依据 |
 | --- | --- | --- |
-| 共享协议版本 | 当前开发源码与最新正式组合均为`DEVICE_PROTOCOL_VERSION = 27`、CPU2 V1.31.0.0 / CPU3 V1.31.0.0。CPU2/CPU3必须严格相等，协议27不能与旧地址固件混用 | `LTD_MAIN_CPU2/Services/ParamStorage/system_parameter.h`、`LTD_DISPLAY_CPU3/Application/system_param/system_parameter.h`、`CPU2_CPU3协议变更记录.md` |
-| LTD 对外协议 | 只维护一套标准Modbus协议，沿用地址宏/枚举和`HoldingRegisterArray[]`、`InputRegisterArray[]`直映射格式；CPU3读已确认快照，FC10等待CPU2合法ACK后回成功；当前故障编号沿用协议22现行表，历史记录按CPU2程序版本选故障表 | `LTD共享Modbus协议/LTD共享Modbus协议卷.md` |
-| CPU2 参数存储 | `DEVICE_PARAM_VERSION = 3`，当前版本头为`V1.31.0.0`；协议27不改变`DeviceParameters`结构、CRC范围或FRAM A/B槽，地址重排本身不清参数。既有协议13、14、20、23～26迁移规则继续生效 | `LTD_MAIN_CPU2/Services/ParamStorage/system_parameter.c`、`../00_构建与版本/CPU2参数存储升级清单.md` |
+| 共享协议版本 | 最新正式协议为28；首个正式组合为CPU2 V1.33.0.0 / CPU3 V1.33.0.0，CPU2/CPU3必须严格相等 | `LTD_MAIN_CPU2/Services/ParamStorage/system_parameter.h`、`LTD_DISPLAY_CPU3/Application/system_param/system_parameter.h`、`CPU2_CPU3协议变更记录.md` |
+| LTD 对外协议 | 只维护一套标准Modbus协议，沿用地址宏/枚举和`HoldingRegisterArray[]`、`InputRegisterArray[]`直映射格式；CPU3读已确认快照，FC10等待CPU2合法ACK，七个命令前置参数以ACK确认本次值并后台刷新完整快照；当前故障编号沿用协议22现行表，历史记录按CPU2程序版本选故障表 | `LTD共享Modbus协议/LTD共享Modbus协议卷.md` |
+| CPU2 参数存储 | `DEVICE_PARAM_VERSION = 3`，当前版本头为`V1.33.0.0`；协议28只改变命令参数RAM快照和跨CPU写确认，不改变`DeviceParameters`结构、CRC范围或FRAM A/B槽，也不清现场参数。既有协议13、14、20、23～26迁移规则继续生效 | `LTD_MAIN_CPU2/Services/ParamStorage/system_parameter.c`、`../00_构建与版本/CPU2参数存储升级清单.md` |
 | CPU3 本地显示/通信参数 | `CPU3_PARAM_VERSION = 0x0007`；V6到V7迁移保留SI自动调度、报警阈值和三路串口参数，并补充协议18兼容槽；协议20只改变CPU2/CPU3共享AO契约，不改变CPU3本机FRAM布局 | `LTD_DISPLAY_CPU3/Application/system_param/cpu3_comm_display_params.c`、`CPU2_CPU3协议变更记录.md` |
 | 读取部件参数与 DSM 调试区 | 共享协议为 9 起支持；`debug_data.water_capacitance_x10` 为水位电容快照，蓝牙 RSSI 通过 `WirelessPairingStatus` 尾部输入寄存器发布 | `../00_构建与版本/版本改动与测试/2026-06-13_CPU2_V1.15.0.0_CPU3_V1.14.0.0_读取部件参数蓝牙RSSI与CPU3菜单显示优化_改动与测试方案.md` |
 | DSM CPU1 传统传感器协议 | V5.3 正文、15 个版本/快照矩阵和 20 组 golden frames 已同步为静态复查基准；当前 CPU2 未识别或绑定维护线，且低电容哨兵化、模式 ACK、定长接收等 `DSM-CUBE-01～08` 尚未整改或完成真实台架验证 | `传感器通信协议/DSM传感器协议/README.md`、`../03_问题分析与整改/未处理/2026-07-18_DSM传感器协议适配复查.md` |
@@ -36,8 +36,8 @@
 | 密度两位小数 | 共享协议为 13 起支持；CPU2/CPU3 内部密度 raw 统一为 `kg/m3 x100`，CPU3 密度参数和状态页显示两位小数，DSM/Wartsila/SI协议外部边界保持各自原有口径 | `CPU2_CPU3协议变更记录.md`、`系统参数出厂默认值.md`、`../00_构建与版本/版本改动与测试/2026-06-26_CPU2_V1.20.0.0_CPU3_V1.18.0.0_密度两位精度与菜单协议整理_改动与测试方案.md` |
 | SI Profile 独立兼容 | 共享协议14起支持独立SI Profile；协议18追加阶段、周期计数和有效点进度，并把CPU3本机参数版本升至`0x0007`；协议27重排CPU2/CPU3共享地址，但不改变SI对外地址、生命周期或CPU3本机FRAM布局 | `CPU2_CPU3协议变更记录.md`、`SI协议适配/02_协议映射/SI协议兼容映射表.md`、`../00_构建与版本/版本改动与测试/2026-07-15_CPU2_V1.26.0.0_CPU3_V1.24.0.0_SI协议18生命周期与现场兼容_改动与测试方案.md` |
 | 故障码责任域和编号 | 共享协议19在协议17分类基础上拆分多义故障；协议22按一代同义子码优先和最低可用子码重排32项编号。当前仍为129项CPU2共享故障、2项CPU3本机故障；历史表按CPU2程序版本查询 | `CPU2_CPU3协议变更记录.md`、`../00_构建与版本/故障码/README.md`、`../00_构建与版本/故障码/LTD故障代码统一表.xlsx` |
-| CPU2 通信快照与外部写反馈 | CPU3 `V1.20.0.0`起分离状态、完整参数和当前连接协议快照；V1.25.0.0加入固定点快照和首次通信失败即失效；V1.26.0.0进一步加入协议优先探测、分布结果分块同代同步和会话代际作废。普通写需快照完整、协议匹配且无通信故障；DSM/SI/Wartsila的CPU2派生读取或写失败返回设备忙`0x06` | `CPU2通信与解耦/README.md`、`DSM协议适配/02_协议映射/DSM_V1.228一代协议卷整理.md`、`SI协议适配/03_改动记录/SI协议适配改动整理.md`、`Wartsila协议适配/当前兼容情况与协议栈.md`、`../00_构建与版本/版本改动与测试/2026-07-16_CPU2_V1.28.0.0_CPU3_V1.26.0.0_协议23故障码AO分布同步与现场兼容_改动与测试方案.md` |
-| DSM V1.228 一代协议兼容 | `在线一体机对外Modbus协议V1.228.xlsx` 已归档为一代协议源表；二代通过 CPU3 外部 DSM 层兼容，`0x0110` 标定罐高等一代不支持项作为二代扩展单独说明；CPU2 写失败返回设备忙 `0x06`，多字段同步不保证原子回滚 | `DSM协议适配/02_协议映射/DSM_V1.228一代协议卷整理.md`、`../02_需求与计划/已实现/二代计量仪同步支持DSM_V1.228协议需求方案.md`、`../00_构建与版本/版本改动与测试/2026-06-02_CPU3_V1.8.0.0_DSM_V1.228外部协议兼容_改动与测试方案.md` |
+| CPU2 通信快照与外部写反馈 | CPU3继续分离状态、完整参数、固定点和当前连接协议快照；普通运行态不再等待参数或固定点，FC03与固定点派生字段分别使用专用门禁。协议28中七个命令前置参数以合法FC10 ACK确认本次写值、更新局部镜像并设置字段位图，只放行实际消费这些字段的命令；参数写结果不确定才强制全量刷新，普通命令只消费对应确认位，恢复出厂保持全量刷新特例；取消命令保持原特例 | `CPU2通信与解耦/README.md`、`CPU2_CPU3协议变更记录.md`、`LTD共享Modbus协议/LTD共享Modbus协议卷.md` |
+| DSM V1.228 一代协议兼容 | `在线一体机对外Modbus协议V1.228.xlsx` 已归档为一代协议源表；二代通过CPU3外部DSM层兼容。协议28批量同步先预检完整差异集，运行态存在普通参数差异时在首帧前拒绝；仅命令前置参数有差异时走FC10 ACK确认。跨字段失败仍不提供事务回滚 | `DSM协议适配/02_协议映射/DSM_V1.228一代协议卷整理.md`、`CPU2_CPU3协议变更记录.md`、`../02_需求与计划/已实现/二代计量仪同步支持DSM_V1.228协议需求方案.md` |
 | Wartsila 现场抓包协议 | 2026-01-27 莆田抓包确认 Wartsila 使用 Modbus RTU；CPU3 V1.29.0.0起FC10仅接受`byteCount=qty`且实际数据区为`2*qty`，标准`byteCount=2*qty`返回`0x03`，FC03响应仍使用`2*qty` | `Wartsila协议适配/2026-01-27_莆田现场Wartsila抓包协议整理.md`、`Wartsila协议适配/当前兼容情况与协议栈.md` |
 
 ## 维护规则

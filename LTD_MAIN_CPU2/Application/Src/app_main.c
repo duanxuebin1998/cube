@@ -38,7 +38,6 @@ static uint8_t App_IsEncoderErrorCode(uint32_t error_code) {
  */
 static void App_ExecuteMeasureCommand(CommandType command) {
     printf("当前命令：%d\r\n", command);
-    g_measurement.device_status.current_command = command;
 
     /* 统一命令分发入口：后续会进入 measure.c，根据命令类型执行具体业务流程。 */
     ProcessMeasureCmd(command);
@@ -81,7 +80,7 @@ static uint8_t App_HandleIdleGlobalError(void) {
 			g_measurement.device_status.device_state = STATE_ERROR;
 			g_measurement.device_status.zero_point_status = 1;
 		}
-		g_deviceParams.command = CMD_NONE;
+		/* 条件判断后可能并发收到新命令，不再清除待执行命令。 */
 		g_measurement.device_status.current_command = CMD_NONE;
 		return 1;
 	}
@@ -148,7 +147,7 @@ void App_Init(void) {
 			g_measurement.device_status.error_code = ENCODER_FIRST_SAMPLE_TIMEOUT;
 			printf("上电默认命令被拦截：编码器首帧尚未就绪\r\n");
 		} else {
-			g_deviceParams.command = DefaultCmd_To_MeasureCmd(g_deviceParams.powerOnDefaultCommand);
+			DeviceCommand_Queue(DefaultCmd_To_MeasureCmd(g_deviceParams.powerOnDefaultCommand));
 			printf("上电默认命令：%d\r\n", g_deviceParams.command);
 		}
 	}
@@ -171,6 +170,7 @@ void App_Init(void) {
  * 从而把恢复动作、重试动作、强制运动动作卡死。
  */
 void App_MainLoop(void) {
+    CommandType pending_command = CMD_NONE;
 
 	/* 测试指令 */
 	/* DSM_V2_Test_AllParams(); / / 二代传感器测试函数 */
@@ -198,13 +198,10 @@ void App_MainLoop(void) {
 	}
 	/* 第二优先级：执行已经挂起的正式命令。
 	 * 这类命令通常来自上位机、参数区或其他控制入口，是系统真正的业务入口。 */
-    else if (g_deviceParams.command != CMD_NONE) {
-        CommandType command = g_deviceParams.command;
-
+    else if (DeviceCommand_TakePending(&pending_command)) {
         /* 参数命令同样打断自动恢复，主循环本轮只执行最新命令。 */
         FaultRecovery_Cancel("formal command");
-        g_deviceParams.command = CMD_NONE; /* 取走后立即清空，避免下轮重复执行 */
-        App_ExecuteMeasureCommand(command);
+        App_ExecuteMeasureCommand(pending_command);
     }
     /* 第三优先级：自动恢复期间保持原错误状态，每 1 秒检查一次部件参数。
      * 恢复模块只返回是否需要重跑命令，真正执行仍留在主循环。 */
@@ -213,7 +210,15 @@ void App_MainLoop(void) {
         if (recovery.handled) {
             /* 恢复模块只返回是否需要重跑命令，真正命令分发仍由主循环统一执行。 */
             if (recovery.should_retry_command) {
-                App_ExecuteMeasureCommand(recovery.retry_command);
+                CommandType selected_command = CMD_NONE;
+                bool pending_selected =
+                    DeviceCommand_PrepareRecoveryExecution(
+                        recovery.retry_command, &selected_command);
+
+                if (pending_selected) {
+                    FaultRecovery_Cancel("formal command");
+                }
+                App_ExecuteMeasureCommand(selected_command);
             }
             process_device_params_deferred_tasks();
             /* 应用主循环与外设通信之间保留等待时间，避免硬件或对端协议尚未准备好。 */

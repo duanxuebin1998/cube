@@ -44,11 +44,14 @@ static uint32_t s_cpu2_consecutive_failure_count = 0U; /* CPU2 连续请求失�
 static bool s_cpu2_comm_fault_active = false; /* CPU3 本机通信故障是否等待状态帧恢复。 */
 static uint32_t s_cpu2_snapshot_generation = 0U; /* 每次CPU2公开快照失效时递增，供SI识别通信会话切换。 */
 static bool s_cpu2_parameter_refresh_requested = false; /* 外部参数写后是否要求重新确认 CPU2 参数。 */
+static bool s_cpu2_factory_restore_refresh_pending = false; /* 恢复出厂ACK后等待CPU2发布持久化完成代次。 */
+static uint32_t s_cpu2_confirmed_command_argument_mask = 0U; /* 本连接内逐字段ACK确认、尚未被对应命令消费的命令参数位图。 */
 static bool s_cpu2_snapshot_resync_requested = false; /* 内部通信失败后是否要求完整重同步。 */
 static volatile uint32_t s_cpu2_uart_error_pending = HAL_UART_ERROR_NONE; /* UART5中断只锁存错误位，主循环统一分类计数。 */
 static uint32_t s_cpu2_request_uart_error_code = HAL_UART_ERROR_NONE; /* 当前失败请求对应的UART5硬件错误位。 */
 static Cpu2CommHealthSnapshot s_cpu2_comm_health = {0}; /* CPU3本机RAM通信健康计数，上电清零。 */
 static Cpu2CommFailureReason s_cpu2_response_failure_reason = CPU2_COMM_FAIL_NONE; /* 当前响应校验失败原因。 */
+static uint8_t s_cpu2_last_modbus_exception = CPU2_MODBUS_RESULT_OK; /* 最近一次合法标准异常帧的异常码。 */
 
 /* 保持寄存器 */
 uint16_t HoldingRegisterArray[HOLDREGISTER_AMOUNT] = { 0 }; /* 保持寄存器数组 */
@@ -121,6 +124,12 @@ static bool s_cpu2_last_raw_device_state_valid = false;
 static bool s_cpu2_profile_completion_state_pending = false;
 static bool s_cpu2_profile_commit_waiting_for_complete_state = false;
 
+typedef enum {
+	CPU2_COMM_REQUEST_READ = 0,
+	CPU2_COMM_REQUEST_PARAMETER_WRITE,
+	CPU2_COMM_REQUEST_COMMAND_WRITE
+} Cpu2CommRequestKind;
+
 /* 接收到的命令包数据暂存变量 */
 static int RCV_functioncode = 0; /* Modbus 协议模块级变量，保存跨函数共享的业务状态。 */
 static int RCV_startaddress = 0; /* Modbus 协议地址配置，影响协议寻址或硬件访问。 */
@@ -153,6 +162,21 @@ static bool CPU2_CombinatePackage_SendWire(uint8_t f_code,
                                            uint16_t startadd,
                                            uint16_t registercnt,
                                            uint32_t *holddata);
+
+/* 只接受当前 CPU2 共享契约实际可能返回的标准异常码。 */
+static bool CPU2_ModbusExceptionIsSupported(uint8_t exception_code)
+{
+	switch (exception_code) {
+	case CPU2_MODBUS_EX_ILLEGAL_FUNCTION:
+	case CPU2_MODBUS_EX_ILLEGAL_ADDRESS:
+	case CPU2_MODBUS_EX_ILLEGAL_VALUE:
+	case CPU2_MODBUS_EX_SLAVE_DEVICE_FAILURE:
+	case CPU2_MODBUS_EX_SLAVE_DEVICE_BUSY:
+		return true;
+	default:
+		return false;
+	}
+}
 
 /* 返回CPU2请求失败原因的现场可读名称。 */
 static const char *CPU2_CommFailureReasonText(Cpu2CommFailureReason reason)
@@ -196,7 +220,7 @@ static const char *CPU2_CommLinkStateText(void)
 /*
  * 函数用途：校验 CPU2 响应是否与当前请求的功能码、长度和回显字段一致。
  * 调用场景：CRC 和从机地址校验通过后、清除连续请求失败计数前调用。
- * 关键约束：异常响应、错功能码和不完整数据帧均不得刷新通信有效状态。
+ * 关键约束：标准异常帧由 HostCommuProcess 单独识别；错功能码和不完整数据帧不得刷新通信有效状态。
  */
 static Cpu2CommFailureReason CPU2_ResponseFrameFailureReason(uint8_t const *rcv, int len)
 {
@@ -296,6 +320,8 @@ static void CPU2_InvalidatePublicSnapshotFreshness(void)
 	s_cpu2_has_status_snapshot = false;
 	s_cpu2_has_parameter_snapshot = false;
 	s_cpu2_has_protocol_snapshot = false;
+	s_cpu2_confirmed_command_argument_mask = 0U;
+	s_cpu2_factory_restore_refresh_pending = false;
 	s_cpu2_protocol_version = 0U;
 	s_cpu2_snapshot_generation++;
 	CPU2_ProfileInvalidatePublishedSnapshot();
@@ -533,25 +559,39 @@ bool CPU2_CommShouldShowStartup(void)
 /*
  * 函数用途：判断 CPU2 状态和参数快照是否完整、协议是否兼容且通信故障未锁存。
  * 调用场景：CPU3 菜单或外部协议访问 CPU2 参数和命令前调用。
- * 关键约束：冷启动补读、参数刷新、协议不匹配和通信故障期间均禁止写入。
+ * 关键约束：固定点结果使用独立门禁，不得阻塞无关参数访问。
  */
 bool CPU2_CommIsAvailable(void)
 {
 	return s_cpu2_has_status_snapshot &&
 		   s_cpu2_has_parameter_snapshot &&
 		   s_cpu2_has_protocol_snapshot &&
-		   s_cpu2_has_fixed_point_snapshot &&
 		   (!s_cpu2_comm_fault_active) &&
 		   CPU2_CommIsProtocolCompatible();
 }
 
+/*
+ * 函数用途：判断普通 CPU2 运行态快照和当前通信会话是否可用。
+ * 调用场景：外部协议读取设备状态、错误码、液位等非参数运行数据前调用。
+ * 关键约束：固定点结果和参数快照分别使用独立门禁，不能扩大成全部运行数据失效。
+ */
 bool CPU2_CommHasRuntimeSnapshot(void)
 {
 	return s_cpu2_has_status_snapshot &&
 		   s_cpu2_has_protocol_snapshot &&
-		   s_cpu2_has_fixed_point_snapshot &&
 		   (!s_cpu2_comm_fault_active) &&
 		   CPU2_CommIsProtocolCompatible();
+}
+
+/*
+ * 函数用途：判断固定点测量和监测结果是否已在当前 CPU2 会话内完成一致性握手。
+ * 调用场景：LTD、DSM、SI 和 Wärtsilä 读取固定点派生字段前调用。
+ * 关键约束：固定点快照必须建立在有效运行态会话上，掉线前结果不得继续发布。
+ */
+bool CPU2_CommHasFixedPointSnapshot(void)
+{
+	return CPU2_CommHasRuntimeSnapshot() &&
+		   s_cpu2_has_fixed_point_snapshot;
 }
 
 /*
@@ -565,15 +605,105 @@ uint32_t CPU2_CommGetSnapshotGeneration(void)
 }
 
 /*
+ * 函数用途：把命令参数保持寄存器范围转换成逐字段确认位图。
+ * 调用场景：七个命令参数完成FC10写入并取得合法ACK后调用。
+ * 关键约束：调用范围必须完整位于七个连续32位字段内，位序与寄存器顺序一致。
+ */
+static uint32_t CPU2_CommCommandArgumentMaskForRange(uint16_t startadd,
+												 uint16_t registercnt)
+{
+	uint32_t end;
+	uint32_t address;
+	uint32_t mask = 0U;
+
+	if (!LtdModbus_HoldingWriteIsCommandArgumentOnly(startadd, registercnt)) {
+		return 0U;
+	}
+	end = (uint32_t)startadd + (uint32_t)registercnt;
+	for (address = (uint32_t)startadd; address < end; address += REG_STRIDE) {
+		uint32_t field =
+			(address - (uint32_t)HOLDREGISTER_DEVICEPARAM_CALIBRATE_OIL_LEVEL) /
+			REG_STRIDE;
+		mask |= (uint32_t)1U << field;
+	}
+	return mask;
+}
+
+/*
+ * 函数用途：返回CPU2业务实际消费的命令前置参数位图。
+ * 调用场景：完整参数快照刷新期间判断某条命令能否依靠定向确认值下发，并在ACK后消费对应资格。
+ * 关键约束：只映射当前CPU2消费点；无参数命令返回0，不能凭其它字段的确认资格越过完整快照门禁。
+ */
+static uint32_t CPU2_CommRequiredCommandArgumentMask(CommandType cmd)
+{
+	switch (cmd) {
+	case CMD_CALIBRATE_OIL:
+	case CMD_CORRECT_OIL:
+		return CPU2_CommCommandArgumentMaskForRange(
+			HOLDREGISTER_DEVICEPARAM_CALIBRATE_OIL_LEVEL, REG_STRIDE);
+	case CMD_CALIBRATE_WATER:
+		return CPU2_CommCommandArgumentMaskForRange(
+			HOLDREGISTER_DEVICEPARAM_CALIBRATE_WATER_LEVEL, REG_STRIDE);
+	case CMD_FIND_BOTTOM:
+	case CMD_CALIBRATE_TANKHEIGHT:
+		return CPU2_CommCommandArgumentMaskForRange(
+			HOLDREGISTER_DEVICEPARAM_CALIBRATE_TANK_HEIGHT, REG_STRIDE);
+	case CMD_MEASURE_SINGLE:
+		return CPU2_CommCommandArgumentMaskForRange(
+			HOLDREGISTER_DEVICEPARAM_SP_MEAS_POSITION, REG_STRIDE);
+	case CMD_MONITOR_SINGLE:
+	case CMD_WARTSILA_DENSITY_RANGE:
+		return CPU2_CommCommandArgumentMaskForRange(
+			HOLDREGISTER_DEVICEPARAM_SP_MONITOR_POSITION, REG_STRIDE);
+	case CMD_RUN_TO_POSITION:
+		return CPU2_CommCommandArgumentMaskForRange(
+			HOLDREGISTER_DEVICEPARAM_DENSITY_DISTRIBUTION_OIL_LEVEL,
+			REG_STRIDE);
+	case CMD_MOVE_UP:
+	case CMD_MOVE_DOWN:
+	case CMD_FORCE_MOVE_UP:
+	case CMD_FORCE_MOVE_DOWN:
+		return CPU2_CommCommandArgumentMaskForRange(
+			HOLDREGISTER_DEVICEPARAM_MOTOR_COMMAND_DISTANCE, REG_STRIDE);
+	default:
+		return 0U;
+	}
+}
+
+/*
+ * 函数用途：在CPU2确认接收命令后消费该命令对应的参数确认资格。
+ * 调用场景：所有屏幕和外部协议共用的UART5命令成功出口。
+ * 关键约束：只消费业务实际使用的字段；恢复出厂会覆盖整套参数，因此清除全部资格。
+ */
+static void CPU2_CommConsumeCommandArgumentConfirmation(CommandType cmd)
+{
+	if (cmd == CMD_RESTORE_FACTORY) {
+		s_cpu2_confirmed_command_argument_mask = 0U;
+		return;
+	}
+
+	s_cpu2_confirmed_command_argument_mask &=
+		~CPU2_CommRequiredCommandArgumentMask(cmd);
+}
+
+/*
  * 函数用途：判断指定 CPU2 命令在当前通信状态下是否允许下发。
  * 调用场景：菜单或外部协议准备写命令寄存器前调用。
- * 关键约束：普通命令继续依赖完整参数快照；取消命令在参数刷新期间保持可达，
- *           但仍要求状态快照、协议兼容且通信故障未锁存。
+ * 关键约束：普通命令依赖完整参数快照；刷新期间只有所需字段均已由ACK确认的带参命令可下发；
+ *           取消命令保持原特例，但仍要求状态快照、协议兼容且通信故障未锁存。
  */
 bool CPU2_CommCanSendCommand(CommandType cmd)
 {
 	if (cmd != CMD_CANCEL_MEASUREMENT) {
-		return CPU2_CommIsAvailable();
+		uint32_t required_mask = CPU2_CommRequiredCommandArgumentMask(cmd);
+
+		if (CPU2_CommIsAvailable()) {
+			return true;
+		}
+		return (required_mask != 0U) &&
+			   CPU2_CommHasRuntimeSnapshot() &&
+			   ((s_cpu2_confirmed_command_argument_mask & required_mask) ==
+				required_mask);
 	}
 
 	return s_cpu2_has_status_snapshot &&
@@ -603,15 +733,37 @@ bool CPU2_CommReadHoldingSnapshot(uint16_t startadd, uint16_t registercnt, uint1
 }
 
 /*
+ * 函数用途：判断 LTD 输入寄存器范围是否触及固定点结果或其代次字段。
+ * 调用场景：LTD FC04 复制输入寄存器快照前调用。
+ * 关键约束：范围相交即整帧使用固定点门禁，不能拼接新运行态和旧固定点结果。
+ */
+static bool CPU2_CommInputRangeTouchesFixedPoint(uint16_t startadd,
+												 uint16_t registercnt)
+{
+	uint32_t range_start = (uint32_t)startadd;
+	uint32_t range_end = range_start + (uint32_t)registercnt;
+	uint32_t counter_start = (uint32_t)REG_SINGLE_POINT_MEAS_COMPLETE_COUNTER;
+	uint32_t counter_end =
+		(uint32_t)REG_SINGLE_POINT_MON_SAMPLE_COUNTER + (uint32_t)REG_SIZE_U32;
+	uint32_t result_start = (uint32_t)REG_SINGLE_POINT_MEAS_TEMP;
+	uint32_t result_end = (uint32_t)REG_DENSITY_DIST_AVG_TEMP;
+
+	return ((range_start < counter_end) && (range_end > counter_start)) ||
+		   ((range_start < result_end) && (range_end > result_start));
+}
+
+/*
  * 函数用途：从 CPU3 已确认的状态快照复制 LTD 输入寄存器。
  * 调用场景：CPU3 对外以 LTD 协议独立响应 FC04 读请求时调用。
- * 关键约束：只复制 CPU2 最近一次合法响应形成的数组，不用默认结构生成伪状态。
+ * 关键约束：普通输入只依赖运行态；固定点范围还必须完成固定点一致性握手。
  */
 bool CPU2_CommReadInputSnapshot(uint16_t startadd, uint16_t registercnt, uint16_t *out_regs)
 {
 	if ((out_regs == NULL) ||
 		!LtdModbus_RangeWithin(startadd, registercnt, INPUTREGISTER_AMOUNT) ||
-		(!CPU2_CommIsAvailable())) {
+		(!CPU2_CommHasRuntimeSnapshot()) ||
+		(CPU2_CommInputRangeTouchesFixedPoint(startadd, registercnt) &&
+		 !CPU2_CommHasFixedPointSnapshot())) {
 		return false;
 	}
 
@@ -621,9 +773,9 @@ bool CPU2_CommReadInputSnapshot(uint16_t startadd, uint16_t registercnt, uint16_
 }
 
 /*
- * 函数用途：使当前参数快照失效并请求重新读取 CPU2 全部保持寄存器参数。
- * 调用场景：外部协议写参数成功或失败后，重新确认 CPU2 的实际生效值。
- * 关键约束：刷新完成前普通写和依赖 CPU2 参数的外部读均不得返回成功。
+ * 函数用途：使当前完整参数快照失效并请求重新读取 CPU2 全部保持寄存器参数。
+ * 调用场景：参数写入已确认、写结果不确定或恢复出厂命令确认后调用。
+ * 关键约束：刷新请求本身不得清除逐字段确认资格；结果不确定和会话失效由调用点显式清除。
  */
 void CPU2_CommRequestParameterRefresh(void)
 {
@@ -632,25 +784,49 @@ void CPU2_CommRequestParameterRefresh(void)
 }
 
 /*
+ * 函数用途：在 CPU2 合法 FC10 ACK 后把本次确认值提交到 CPU3 参数镜像。
+ * 调用场景：外部协议或屏幕通过统一写入口成功写入非命令保持寄存器后调用。
+ * 关键约束：必须先从当前 g_deviceParams 生成完整寄存器镜像，再覆盖本次范围并复用现有解析入口；
+ *           未收到合法 ACK、标准异常或坏响应路径不得调用。
+ */
+static void CPU2_CommApplyConfirmedHoldingWrite(uint16_t startadd,
+											 uint16_t registercnt,
+											 const uint16_t *wire_regs)
+{
+	WriteDeviceParamsToHoldingRegisters(HoldingRegisterArray);
+	memcpy(&HoldingRegisterArray[startadd],
+		   wire_regs,
+		   (size_t)registercnt * sizeof(uint16_t));
+	AnalysisHoldRegister();
+	ReadDeviceParamsFromHoldingRegisters(HoldingRegisterArray);
+}
+
+/*
  * 函数用途：把 LTD 外部 FC10 的寄存器序列写穿到 CPU2，并以 CPU2 ACK 作为成功依据。
  * 调用场景：CPU3 外部 LTD Modbus 从站处理写多个保持寄存器请求时调用。
- * 关键约束：共享参数均为 32 位字段，只接受偶数地址和偶数数量；参数写成功后也使快照失效，
- *           下一次对外读取必须等待 CPU2 全量补读确认，不能把请求影子当作 CPU2 实际值。
+ * 关键约束：共享参数均为 32 位字段，只接受偶数地址和偶数数量；合法 FC10 ACK 直接确认
+ *           本次写值并更新局部镜像，完整参数快照统一在后台补读完成后恢复。
  */
-bool CPU2_CommWriteHoldingRegisters(uint16_t startadd,
-										uint16_t registercnt,
-										const uint16_t *wire_regs)
+uint8_t CPU2_CommWriteHoldingRegistersEx(uint16_t startadd,
+                                         uint16_t registercnt,
+                                         const uint16_t *wire_regs)
 {
 	uint32_t host_values[CPU2_MAX_EXTERNAL_WRITE_REGISTERS / 2U];
 	uint32_t command_value;
 	bool command_only;
+	bool command_arguments_only;
 	bool ret;
 
+	s_cpu2_last_modbus_exception = CPU2_MODBUS_RESULT_OK;
 	if ((wire_regs == NULL) ||
 		(registercnt == 0U) ||
 		(registercnt > CPU2_MAX_EXTERNAL_WRITE_REGISTERS) ||
-		!LtdModbus_HoldingWriteRangeIsValid(startadd, registercnt)) {
-		return false;
+		((startadd & 1U) != 0U) ||
+		((registercnt & 1U) != 0U)) {
+		return CPU2_MODBUS_EX_ILLEGAL_VALUE;
+	}
+	if (!LtdModbus_HoldingWriteRangeIsValid(startadd, registercnt)) {
+		return CPU2_MODBUS_EX_ILLEGAL_ADDRESS;
 	}
 
 	/* 现有发送入口接收本机 uint32_t 值，并负责转换为共享协议的高字在前线序。 */
@@ -661,34 +837,83 @@ bool CPU2_CommWriteHoldingRegisters(uint16_t startadd,
 
 	command_only = (startadd == HOLDREGISTER_DEVICEPARAM_COMMAND) &&
 				   (registercnt == REG_STRIDE);
+	command_arguments_only =
+		LtdModbus_HoldingWriteIsCommandArgumentOnly(startadd, registercnt);
 	command_value = ((uint32_t)wire_regs[0] << 16) | (uint32_t)wire_regs[1];
 	if (command_only && !LtdModbus_CommandIsImplemented(command_value)) {
-		return false;
+		return CPU2_MODBUS_EX_ILLEGAL_VALUE;
+	}
+	if (!CPU2_CommIsAvailable() &&
+		!(command_only && CPU2_CommCanSendCommand((CommandType)command_value))) {
+		return CPU2_MODBUS_EX_SLAVE_DEVICE_BUSY;
+	}
+	if (LtdModbus_HoldingWriteTouchesPersistent(startadd, registercnt) &&
+		!LtdModbus_HoldingWriteIsCommandArgumentOnly(startadd, registercnt) &&
+		!DeviceState_AllowsPersistentParamWrite(
+			g_measurement.device_status.device_state)) {
+		return CPU2_MODBUS_EX_SLAVE_DEVICE_BUSY;
 	}
 	ret = CPU2_CombinatePackage_Send(FUNCTIONCODE_WRITE_MULREGISTER,
 									startadd,
 									registercnt,
 									host_values);
 	if (!ret) {
-		return false;
+		if (s_cpu2_last_modbus_exception != CPU2_MODBUS_RESULT_OK) {
+			return s_cpu2_last_modbus_exception;
+		}
+		return CPU2_MODBUS_EX_SLAVE_DEVICE_FAILURE;
 	}
 
 	if (command_only) {
-		g_deviceParams.command = (CommandType)command_value;
+		/* 命令是一次性写槽，CPU2确认接收后CPU3不得长期保留旧命令影子。 */
+		g_deviceParams.command = CMD_NONE;
 		WriteDeviceParamsToHoldingRegisters(HoldingRegisterArray);
 	} else {
+		CPU2_CommApplyConfirmedHoldingWrite(startadd, registercnt, wire_regs);
+		if (command_arguments_only) {
+			s_cpu2_confirmed_command_argument_mask |=
+				CPU2_CommCommandArgumentMaskForRange(startadd, registercnt);
+		}
 		CPU2_CommRequestParameterRefresh();
 	}
-	return true;
+	return CPU2_MODBUS_RESULT_OK;
 }
 
-/* 已发起的非命令写失败时，CPU2 是否实际应用无法由响应确定，必须重新确认参数。 */
-static bool CPU2_CommFinishFailedRequest(bool parameter_write_attempted)
+bool CPU2_CommWriteHoldingRegisters(uint16_t startadd,
+									uint16_t registercnt,
+									const uint16_t *wire_regs)
+{
+	return CPU2_CommWriteHoldingRegistersEx(startadd, registercnt, wire_regs) ==
+		   CPU2_MODBUS_RESULT_OK;
+}
+
+uint8_t CPU2_CommGetLastModbusException(void)
+{
+	return s_cpu2_last_modbus_exception;
+}
+
+/*
+ * 函数用途：完成一次未取得合法响应的 CPU2 请求，并按事务确定性处理参数确认资格。
+ * 调用场景：发送后超时、UART错误、CRC/地址/功能码/长度错误或TX DMA启动失败。
+ * 关键约束：普通读单次失败不清确认位；TX DMA未启动属于确定未发送；参数写结果不确定时
+ *           清除全部确认位并补读，普通命令只消费对应确认位，恢复出厂仍强制全量补读。
+ */
+static bool CPU2_CommFinishFailedRequest(Cpu2CommRequestKind request_kind,
+										 CommandType request_command)
 {
 	CPU2_CommRecordFailure(s_cpu2_response_failure_reason);
 	CPU2_CommLogRequestFailure();
-	if (parameter_write_attempted) {
+	if (s_cpu2_response_failure_reason == CPU2_COMM_FAIL_TX_DMA) {
+		return false;
+	}
+	if (request_kind == CPU2_COMM_REQUEST_PARAMETER_WRITE) {
+		s_cpu2_confirmed_command_argument_mask = 0U;
 		CPU2_CommRequestParameterRefresh();
+	} else if (request_kind == CPU2_COMM_REQUEST_COMMAND_WRITE) {
+		CPU2_CommConsumeCommandArgumentConfirmation(request_command);
+		if (request_command == CMD_RESTORE_FACTORY) {
+			CPU2_CommRequestParameterRefresh();
+		}
 	}
 	return false;
 }
@@ -1491,6 +1716,7 @@ bool HostCommuProcess(uint8_t *rcv, int len) {
 				  rcv,
 				  (len > 0) ? (uint16_t)len : 0U);
 	s_cpu2_response_failure_reason = CPU2_COMM_FAIL_NONE;
+	s_cpu2_last_modbus_exception = CPU2_MODBUS_RESULT_OK;
 	if (len <= 3) {
 		s_cpu2_response_failure_reason = CPU2_COMM_FAIL_LENGTH;
 		return false;
@@ -1503,6 +1729,25 @@ bool HostCommuProcess(uint8_t *rcv, int len) {
 	if (rcv[0] != ADERSS) {
 		s_cpu2_response_failure_reason = CPU2_COMM_FAIL_ADDRESS;
 		return false;
+	}
+	if (rcv[1] == ((uint8_t)RCV_functioncode | 0x80U)) {
+		if (len != 5) {
+			s_cpu2_response_failure_reason = CPU2_COMM_FAIL_LENGTH;
+			return false;
+		}
+		if (!CPU2_ModbusExceptionIsSupported(rcv[2])) {
+			s_cpu2_response_failure_reason = CPU2_COMM_FAIL_FUNCTION;
+			return false;
+		}
+		s_cpu2_last_modbus_exception = rcv[2];
+		s_cpu2_comm_health.last_modbus_exception_code =
+			s_cpu2_last_modbus_exception;
+		CPU2_CommMarkValidResponse();
+		CPU3_LOG_WARNING("CPU2",
+						 "收到标准Modbus异常 功能码=0x%02X 异常码=0x%02X",
+						 (unsigned int)RCV_functioncode,
+						 (unsigned int)s_cpu2_last_modbus_exception);
+		return true;
 	}
 	s_cpu2_response_failure_reason = CPU2_ResponseFrameFailureReason(rcv, len);
 	if (s_cpu2_response_failure_reason != CPU2_COMM_FAIL_NONE) {
@@ -1653,6 +1898,8 @@ void PollingInputData(void) {
 		hold_refresh_index = 0;
 		param_flag_valid = false;
 		s_cpu2_parameter_refresh_requested = false;
+		s_cpu2_factory_restore_refresh_pending = false;
+		s_cpu2_confirmed_command_argument_mask = 0U;
 		CPU2_ResetFixedPointSnapshotHandshake(true);
 		s_cpu2_snapshot_resync_requested = false;
 	}
@@ -1667,6 +1914,8 @@ void PollingInputData(void) {
 		hold_refresh_pending = false;
 		hold_refresh_index = 0;
 		param_flag_valid = false;
+		s_cpu2_factory_restore_refresh_pending = false;
+		s_cpu2_confirmed_command_argument_mask = 0U;
 		(void)CPU2_CombinatePackage_SendWire(status_group->func,
 									   status_group->start,
 									   status_group->len,
@@ -1694,6 +1943,8 @@ void PollingInputData(void) {
 		param_flag_valid = false;
 		s_cpu2_has_parameter_snapshot = false;
 		s_cpu2_parameter_refresh_requested = false;
+		s_cpu2_factory_restore_refresh_pending = false;
+		s_cpu2_confirmed_command_argument_mask = 0U;
 		CPU2_ResetFixedPointSnapshotHandshake(true);
 		(void)CPU2_CombinatePackage_Send(FUNCTIONCODE_READ_HOLDREGISTER,
 										   HOLDREGISTER_DEVICEPARAM_PROTOCOL_VERSION,
@@ -1720,6 +1971,8 @@ void PollingInputData(void) {
 
 		poweron_done = true;
 		s_cpu2_has_parameter_snapshot = true;
+		s_cpu2_factory_restore_refresh_pending = false;
+		s_cpu2_confirmed_command_argument_mask = 0U;
 		s_cpu2_parameter_refresh_requested = false;
 		runtime_fixed_snapshot_pending = false;
 		if (s_cpu2_profile_sync.stage != CPU2_PROFILE_SYNC_IDLE) {
@@ -1741,6 +1994,14 @@ void PollingInputData(void) {
 	/* 上电尾部已取得SI生命周期后再推进分布候选；本次调用最多发送一个相关请求。 */
 	if (CPU2_ProfileSyncPoll()) {
 		return;
+	}
+
+	/*
+	 * 恢复出厂ACK不能立即补读，否则CPU2主循环尚未完成默认值保存时可能重新发布旧参数。
+	 * 必须继续轮询状态，等待parameter_update_flag变化后再进入下方完整保持寄存器刷新。
+	 */
+	if (s_cpu2_factory_restore_refresh_pending) {
+		s_cpu2_parameter_refresh_requested = false;
 	}
 
 	/* 外部参数写后不能依赖本地影子，必须主动重读确认 CPU2 实际值。 */
@@ -1767,6 +2028,7 @@ void PollingInputData(void) {
 			param_flag_valid = true;
 			DeviceParams_StoreToRegisters(g_holding_regs);
 			s_cpu2_has_parameter_snapshot = true;
+			s_cpu2_confirmed_command_argument_mask = 0U;
 		}
 		return;
 	}
@@ -1806,6 +2068,7 @@ void PollingInputData(void) {
 		refresh_target_flag = g_measurement.device_status.parameter_update_flag;
 		hold_refresh_pending = true;
 		hold_refresh_index = 0;
+		s_cpu2_factory_restore_refresh_pending = false;
 		s_cpu2_has_parameter_snapshot = false;
 		return;
 	}
@@ -1893,6 +2156,7 @@ bool CPU2_CombinatePackage_Send(uint8_t f_code,
 {
 	uint16_t processed = 0U;
 
+	s_cpu2_last_modbus_exception = CPU2_MODBUS_RESULT_OK;
 	if ((registercnt == 0U) ||
 		((f_code != FUNCTIONCODE_READ_HOLDREGISTER) &&
 		 (f_code != FUNCTIONCODE_READ_INPUTREGISTER) &&
@@ -1905,10 +2169,11 @@ bool CPU2_CombinatePackage_Send(uint8_t f_code,
 			return false;
 		}
 		/*
-		 * CPU3只用状态白名单提前抑制明显不安全的持久参数写；
-		 * 当前命令、待执行命令和故障恢复活动仍由CPU2在FC10入口最终裁决。
+		 * CPU3只用状态白名单提前抑制普通持久参数写；
+		 * 命令前置参数需要先写后发命令，具体命令是否切换仍由CPU2原有命令入口裁决。
 		 */
 		if (LtdModbus_HoldingWriteTouchesPersistent(startadd, registercnt) &&
+			!LtdModbus_HoldingWriteIsCommandArgumentOnly(startadd, registercnt) &&
 			!DeviceState_AllowsPersistentParamWrite(
 				g_measurement.device_status.device_state)) {
 			return false;
@@ -1945,26 +2210,32 @@ static bool CPU2_CombinatePackage_SendWire(uint8_t f_code,
 										   uint16_t startadd,
 										   uint16_t registercnt,
 										   uint32_t *holddata) {
-	bool cancel_command_allowed = false;
-	bool parameter_write_attempted = false;
+	bool command_write_allowed = false;
 	bool command_write = (f_code == FUNCTIONCODE_WRITE_MULREGISTER) &&
 		(startadd == HOLDREGISTER_DEVICEPARAM_COMMAND) &&
 		(registercnt == REG_STRIDE);
+	Cpu2CommRequestKind request_kind = CPU2_COMM_REQUEST_READ;
+	CommandType request_command = CMD_NONE;
 
 	/* 每个板间事务只在边界报告进度，等待响应循环内部不得给看门狗续命。 */
 	CPU3_WatchdogReportProgress();
 
-	/* 普通写必须通过完整快照门禁；参数刷新期间只放行协议兼容的取消命令。 */
+	/* 普通写必须通过完整快照门禁；命令写统一复用取消特例或逐字段ACK确认门禁。 */
 	if ((f_code == FUNCTIONCODE_WRITE_MULREGISTER) &&
 		command_write && (registercnt == 2U) &&
 		(holddata != NULL)) {
-		cancel_command_allowed = CPU2_CommCanSendCommand((CommandType)(*holddata));
+		command_write_allowed = CPU2_CommCanSendCommand((CommandType)(*holddata));
 	}
-	if ((f_code == FUNCTIONCODE_WRITE_MULREGISTER) && !command_write) {
-		parameter_write_attempted = true;
+	if (f_code == FUNCTIONCODE_WRITE_MULREGISTER) {
+		request_kind = command_write ?
+			CPU2_COMM_REQUEST_COMMAND_WRITE :
+			CPU2_COMM_REQUEST_PARAMETER_WRITE;
+		if (command_write && (holddata != NULL)) {
+			request_command = (CommandType)(*holddata);
+		}
 	}
 	if ((f_code == FUNCTIONCODE_WRITE_MULREGISTER) && !CPU2_CommIsAvailable()) {
-		if (!cancel_command_allowed) {
+		if (!command_write_allowed) {
 			CPU3_WatchdogReportProgress();
 			return false;
 		}
@@ -2011,10 +2282,11 @@ static bool CPU2_CombinatePackage_SendWire(uint8_t f_code,
 	UART5_RX_LEN = 0U;
 	s_cpu2_uart_error_pending = HAL_UART_ERROR_NONE;
 	s_cpu2_request_uart_error_code = HAL_UART_ERROR_NONE;
+	s_cpu2_last_modbus_exception = CPU2_MODBUS_RESULT_OK;
 	s_cpu2_response_failure_reason = CPU2_COMM_FAIL_TX_DMA;
 	if (!sendToCPU2(arr, len, false)) {
 		CPU3_WatchdogReportProgress();
-		return CPU2_CommFinishFailedRequest(parameter_write_attempted);
+		return CPU2_CommFinishFailedRequest(request_kind, request_command);
 	}
 	/* 等待接收完成 */
 	uint32_t timeout = HAL_GetTick();
@@ -2025,7 +2297,7 @@ static bool CPU2_CombinatePackage_SendWire(uint8_t f_code,
 			wait_response = false;    /* 防止一直 True */
 			s_cpu2_response_failure_reason = CPU2_COMM_FAIL_TIMEOUT;
 			CPU3_WatchdogReportProgress();
-			return CPU2_CommFinishFailedRequest(parameter_write_attempted);
+			return CPU2_CommFinishFailedRequest(request_kind, request_command);
 		}
 	}
 	if (s_cpu2_uart_error_pending != HAL_UART_ERROR_NONE) {
@@ -2035,11 +2307,29 @@ static bool CPU2_CombinatePackage_SendWire(uint8_t f_code,
 		CPU2_CommRecordUartFlags(uart_error_code);
 		s_cpu2_response_failure_reason = CPU2_COMM_FAIL_UART;
 		CPU3_WatchdogReportProgress();
-		return CPU2_CommFinishFailedRequest(parameter_write_attempted);
+		return CPU2_CommFinishFailedRequest(request_kind, request_command);
 	}
 	if (!HostCommuProcess(UART5_RX_BUF, UART5_RX_LEN)) {
 		CPU3_WatchdogReportProgress();
-		return CPU2_CommFinishFailedRequest(parameter_write_attempted);
+		return CPU2_CommFinishFailedRequest(request_kind, request_command);
+	}
+	if (s_cpu2_last_modbus_exception != CPU2_MODBUS_RESULT_OK) {
+		CPU3_WatchdogReportProgress();
+		return false;
+	}
+	if (command_write && (holddata != NULL)) {
+		CommandType confirmed_command = (CommandType)(*holddata);
+
+		CPU2_CommConsumeCommandArgumentConfirmation(confirmed_command);
+		if (confirmed_command == CMD_RESTORE_FACTORY) {
+			/*
+			 * ACK只表示CPU2已接收命令，默认参数尚未必保存完成。
+			 * 先关闭读取门禁，等待parameter_update_flag变化后再执行完整补读。
+			 */
+			s_cpu2_has_parameter_snapshot = false;
+			s_cpu2_parameter_refresh_requested = false;
+			s_cpu2_factory_restore_refresh_pending = true;
+		}
 	}
 	CPU3_WatchdogReportProgress();
 	return true;
@@ -2124,6 +2414,17 @@ static void CPU2_Response03Process(uint8_t const *revframe) {
 	/* 2. 写保持寄存器（根据项目逻辑，这里我不动你的调用顺序） */
 	WriteDeviceParamsToHoldingRegisters(HoldingRegisterArray);
 	PresetRegister(false, SlaveTempBuffer);
+	/*
+	 * 命令寄存器是一次性写槽。即使CPU2在主循环取命令前仍回读pending值，
+	 * CPU3也不得把它重新发布成长期保持参数。
+	 */
+	if (LtdModbus_RangeContains((uint16_t)RCV_startaddress,
+								(uint16_t)RCV_registercnt,
+								HOLDREGISTER_DEVICEPARAM_COMMAND,
+								REG_STRIDE)) {
+		HoldingRegisterArray[HOLDREGISTER_DEVICEPARAM_COMMAND] = 0U;
+		HoldingRegisterArray[HOLDREGISTER_DEVICEPARAM_COMMAND + 1U] = 0U;
+	}
 
 	/* 3. 按现行直接地址解析保持寄存器并刷新g_deviceParams。 */
 	AnalysisHoldRegister();

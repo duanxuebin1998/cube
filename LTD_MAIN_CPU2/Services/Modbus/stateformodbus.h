@@ -496,6 +496,17 @@ static inline bool LtdModbus_HoldingRegisterIsRelayClearAlarm(uint16_t address)
     return false;
 }
 
+/* 仅当整个FC10区间完全位于7个带参命令前置参数字段内时放行运行态写入。 */
+static inline bool LtdModbus_HoldingWriteIsCommandArgumentOnly(uint16_t start,
+                                                               uint16_t count)
+{
+    return (count != 0U) &&
+           ((uint32_t)start >=
+            (uint32_t)HOLDREGISTER_DEVICEPARAM_CALIBRATE_OIL_LEVEL) &&
+           ((uint32_t)start + (uint32_t)count <=
+            (uint32_t)HOLDREGISTER_DEVICEPARAM_MOTOR_COMMAND_DISTANCE + REG_STRIDE);
+}
+
 /* 持久化写入排除命令、AO模拟开关和4路清除锁存报警瞬时写槽 */
 static inline bool LtdModbus_HoldingWriteTouchesPersistent(uint16_t start, uint16_t count)
 {

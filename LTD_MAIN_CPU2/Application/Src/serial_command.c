@@ -135,13 +135,13 @@ void SerialCommand_Process(const uint8_t *command)
             printf("ERR cmd=%s reason=UNSUPPORTED\r\n", (const char *)command);
             return;
         }
-        g_deviceParams.command = formal_command;
+        DeviceCommand_Queue(formal_command);
         return;
     case SERIAL_COMMAND_KIND_TEST:
         (void)Test_ProcessSerialCommand((uint8_t *)command);
         return;
     case SERIAL_COMMAND_KIND_STOP:
-        g_deviceParams.command = CMD_CANCEL_MEASUREMENT;
+        DeviceCommand_Queue(CMD_CANCEL_MEASUREMENT);
         return;
     case SERIAL_COMMAND_KIND_HELP:
         SerialCommand_PrintHelp();

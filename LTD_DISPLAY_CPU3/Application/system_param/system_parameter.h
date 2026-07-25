@@ -26,7 +26,7 @@
 #define UNVALID_POSITION 0
 #define UNVALID_TEMPERATURE 0
 #define MAX_MEASUREMENT_POINTS 200 /* 密度分布测量最大点数 */
-#define DEVICE_PROTOCOL_VERSION 27u /* CPU2/CPU3共享协议版本；协议27使用固定分块的直接Modbus地址。 */
+#define DEVICE_PROTOCOL_VERSION 28u /* CPU2/CPU3共享协议版本；协议28固定命令参数快照并允许运行态前置参数写入。 */
 #define FAULT_AUTO_RECOVERY_RETRY_DEFAULT 3u
 #define FAULT_AUTO_RECOVERY_RETRY_MAX 10u
 

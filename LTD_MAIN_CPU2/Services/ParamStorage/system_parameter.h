@@ -27,7 +27,7 @@
 #define UNVALID_GSW 0                      /* 质量无效值 */
 
 #define MAX_MEASUREMENT_POINTS 200 /* 密度分布测量最大点数。 */
-#define DEVICE_PROTOCOL_VERSION 27u /* CPU2/CPU3共享协议版本；协议27使用固定分块的直接Modbus地址。 */
+#define DEVICE_PROTOCOL_VERSION 28u /* CPU2/CPU3共享协议版本；协议28固定命令参数快照并允许运行态前置参数写入。 */
 #define FAULT_AUTO_RECOVERY_RETRY_DEFAULT 3u /* 故障自动恢复默认重试次数。 */
 #define FAULT_AUTO_RECOVERY_RETRY_MAX 10u /* 故障自动恢复最大重试次数。 */
 
@@ -955,6 +955,32 @@ typedef enum {
 extern volatile MeasurementResult g_measurement; /* 测量结果 */
 extern volatile DeviceParameters g_deviceParams; /* 设备参数 */
 extern volatile uint8_t new_command_ready;       /* 串口原始命令就绪标志 */
+
+/* 命令前置参数字段；顺序同时用于运行快照和逐字段写入代次。 */
+typedef enum {
+    DEVICE_COMMAND_ARG_CALIBRATE_OIL_LEVEL = 0,
+    DEVICE_COMMAND_ARG_CALIBRATE_WATER_LEVEL,
+    DEVICE_COMMAND_ARG_CALIBRATE_TANK_HEIGHT,
+    DEVICE_COMMAND_ARG_SINGLE_POINT_MEASUREMENT_POSITION,
+    DEVICE_COMMAND_ARG_SINGLE_POINT_MONITORING_POSITION,
+    DEVICE_COMMAND_ARG_DENSITY_DISTRIBUTION_OIL_LEVEL,
+    DEVICE_COMMAND_ARG_MOTOR_COMMAND_DISTANCE,
+    DEVICE_COMMAND_ARG_COUNT
+} DeviceCommandArgumentField;
+
+/*
+ * 函数用途：记录命令前置参数写入、绑定待执行命令，并为当前执行或自动重试选择稳定参数快照。
+ * 调用场景：CPU2 FC10 成功提交、内部命令入队以及主循环真正执行命令前。
+ * 关键约束：只固定参数生命周期，不改变任何命令的打断、重复执行或状态切换规则。
+ */
+void DeviceCommandArguments_RecordWrite(uint16_t start, uint16_t count);
+void DeviceCommandArguments_CapturePending(CommandType command);
+void DeviceCommand_Queue(CommandType command);
+bool DeviceCommand_TakePending(CommandType *command);
+bool DeviceCommand_PrepareRecoveryExecution(CommandType retry_command,
+                                            CommandType *selected_command);
+uint32_t DeviceCommandArguments_Get(DeviceCommandArgumentField field);
+void DeviceCommandArguments_ClearIfUnchanged(DeviceCommandArgumentField field);
 /* 仅对白名单命令开放“自身打断自身”，其他命令仍保持重复下发无效。 */
 static inline bool IsSelfInterruptibleCommand(CommandType cmd)
 {
@@ -969,30 +995,12 @@ static inline bool IsSelfInterruptibleCommand(CommandType cmd)
         return false;
     }
 }
-static inline bool HasEffectiveCommandSwitchRequest(void)
-{
-    CommandType pending_command = g_deviceParams.command;
-    CommandType current_command = g_measurement.device_status.current_command;
-
-    if (pending_command != CMD_NONE) {
-        if ((current_command != CMD_NONE) && (pending_command == current_command)) {
-            if (!IsSelfInterruptibleCommand(current_command)) {
-                g_deviceParams.command = CMD_NONE;
-                return false;
-            }
-        }
-
-        return true;
-    }
-
-    /* 原始串口命令同样视为有效切换请求。
-     * 这样长时间运行的调试命令也能被新的串口/正式指令打断。 */
-    if (new_command_ready != 0U) {
-        return true;
-    }
-
-    return false;
-}
+/*
+ * 函数用途：原子判断是否存在能够切换当前流程的新命令。
+ * 调用场景：阻塞测量、传感器通信和电机等待循环的既有退出检查。
+ * 关键约束：保持原自中断白名单和重复命令规则，只防止条件清零覆盖并发到达的新命令。
+ */
+bool HasEffectiveCommandSwitchRequest(void);
 /**
  * @brief 保存系统参数中的 save_device_params 逻辑。
  */
@@ -1029,6 +1037,12 @@ void init_device_params(void); /* 初始化设备参数 */
  * @brief 保存系统参数中的 RestoreFactoryParamsConfig 逻辑。
  */
 void RestoreFactoryParamsConfig(void); /* 恢复出厂默认参数配置 */
+/*
+ * 函数用途：查询恢复出厂是否正在整体覆盖运行参数。
+ * 调用场景：CPU2 Modbus写入口保护命令前置参数不被恢复过程覆盖。
+ * 关键约束：只读易失运行标志，不改变恢复出厂或命令业务逻辑。
+ */
+bool DeviceParams_IsFactoryRestoreInProgress(void);
 /**
  * @brief 显示或打印系统参数中的 print_device_params 逻辑。
  */

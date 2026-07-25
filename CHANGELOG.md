@@ -2670,3 +2670,35 @@ CPU3通信和界面：
 - 尚未用真实电机、传感器和扭力输入验证LF闭环方向、速度、稳定确认、机械边界、STOP打断、丢步和10分钟超时。
 - 尚未完成128～200点区间测量canary/目标板回归、LTD/V2 `0xFF`真实或golden frame注入、LH FC01现场主机和RS485异常帧测试。
 - clean-first构建和静态契约不能替代CPU2/CPU3交叉烧写、真实机械运动、传感器故障注入及长时间并发测试。
+
+## 2026-07-25 - 发布协议28命令参数事务、继电器配置校验与CPU3快照门禁解耦
+
+版本：
+- CPU2：`V1.32.0.0 -> V1.33.0.0`（MINOR）。
+- CPU3：`V1.32.0.0 -> V1.33.0.0`（MINOR）。
+
+协议版本与兼容性：
+- CPU2/CPU3 `DEVICE_PROTOCOL_VERSION`由27提升到28。协议28改变七个命令前置参数的运行态生命周期和跨CPU确认语义，CPU2/CPU3必须使用V1.33.0.0配套运行；协议27及更早组合由严格相等门禁拦截。
+- 不新增、删除或移动共享寄存器，不改变字段宽度、字序、缩放、命令值、设备状态和故障码。
+- CPU2 `DEVICE_PARAM_VERSION`保持3；`DeviceParameters`大小、字段偏移、`struct_size`、magic、CRC范围、FRAM A/B地址和单槽容量不变，升级不恢复出厂、不清除现场参数。
+- CPU3本机参数版本保持V7 / `0x0007`；CPU2的pending/active快照、字段代次和CPU3逐字段ACK确认位图均只存在RAM，不改变本机FRAM布局。
+
+本次修改：
+- CPU2为七个命令前置参数建立pending/active快照和逐字段代次。参数写成功后更新pending，命令被主循环接受时原子绑定active；命令执行和自动恢复使用已绑定值，后续参数写只供下一条命令使用。
+- 活动态只放开这七个命令相关参数，普通持久配置仍沿用既有状态门禁。协议28不增加端口所有权、来源ID或事务租约；屏幕与上位机交错写同一字段时，以命令到达前最后一次CPU2 ACK成功值生效。
+- CPU3在七字段FC10合法ACK后立即提交局部镜像并记录逐字段确认资格，随后后台补读完整参数；参数刷新期间仅允许实际所需字段均已确认的带参命令凭运行态下发。命令ACK后只消费该命令对应资格，不改变原有命令打断、自中断白名单、重复命令和单命令槽规则。
+- 拆分CPU3快照门禁：普通运行态只依赖状态、当前连接协议、通信会话和严格协议匹配；完整参数、固定点结果和Profile分别使用各自门禁。LTD FC04普通字段不再等待完整参数或固定点，`0x0030～0x0033`及`0x1100～0x113F`固定点字段单独检查固定点快照，`0x1140`起分布汇总继续按运行态处理；DSM、SI、Wärtsilä固定点派生字段同步使用专用门禁。
+- 区分失败类型：参数写结果不确定仍关闭完整参数快照并立即请求全量刷新；普通命令超时、坏帧或UART失败只消费对应命令参数确认资格；恢复出厂继续保留立即关闭参数读取并等待参数代次后全量刷新。TX DMA未启动不消费确认资格，CPU2标准Modbus异常按确定失败处理且不累计物理通信失败。
+- 继电器报警配置改为禁用通道可逐字段配置、启用时完整校验；已启用通道不允许写入破坏阈值顺序或物理范围的单字段，非法历史浮点逐字段归零，纯顺序冲突保值但禁用通道。四路阻尼预留字段继续固定为0。
+- 参数打印和浮点寄存器转换复用统一辅助函数；CPU3屏幕、LH、LTD、DSM、SI和Wärtsilä继续以CPU2合法ACK作为成功依据，不增加自动重发。
+
+验证：
+- `cmake --build build\LTD_MAIN_CPU2 --clean-first`通过，生成`LTD_MAIN_CPU2_V1.33.0.0.hex`；ELF为`text=314116`、`data=2328`、`bss=57992`。
+- `cmake --build build\LTD_DISPLAY_CPU3 --clean-first`通过，生成`LTD_DISPLAY_CPU3_V1.33.0.0.hex`；ELF为`text=201896`、`data=37964`、`bss=100716`。
+- `check_command_argument_transaction_contract.py`通过，确认协议28、七字段和“最后一次CPU2 ACK成功值”语义；`check_cpu3_external_freshness_contract.py`通过66892项。
+- `check_cpu3_cpu2_comm_timeout_fault_contract.py`、`check_cpu3_display_command_contract.py`、`check_dsm_compat_contract.py`、`check_relay_alarm_config_contract.py`、`check_si_protocol_contract.py`和`check_wartsila_distribution_logic.py`通过。
+
+未验证风险：
+- 尚未执行真实CPU2/CPU3交叉烧写、屏幕与上位机并发写同字段、ACK丢失/坏帧/超时、FRAM掉电和恢复出厂时序测试。
+- 尚未用真实RS485主站逐项验证DSM、SI、Wärtsilä、LTD和LH的读写Busy边界，也未用电机和传感器验证带参命令的实际动作值。
+- 静态契约和clean-first构建证明源码契约与可编译性，不替代台架通信压力、物理继电器输出和真实运动验收。

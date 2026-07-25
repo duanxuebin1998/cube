@@ -8,6 +8,7 @@
 #include <ctype.h>
 #include "system_parameter.h"
 #include "AoOutput/ao_output.h"
+#include "Relay/relay_alarm_config.h"
 #include "fault_recovery.h"
 
 /* 从机地址 */
@@ -227,7 +228,7 @@ int Response10Process(uint8_t const *revframe, uint8_t *sendframe)
     int length;
     uint16_t startAddr;
     uint16_t regCount;
-    uint32_t command_value;
+    uint32_t command_value = 0U;
     uint32_t previous_tank_height;
     uint32_t previous_simulation_enabled;
     uint32_t candidate_simulation_enabled;
@@ -235,6 +236,7 @@ int Response10Process(uint8_t const *revframe, uint8_t *sendframe)
     int64_t sensor_position_01mm;
     int need_save = 0;
     int persist_write = 0;
+    int command_arguments_only = 0;
 
     startAddr = ((uint16_t)revframe[2] << 8) | revframe[3];
     regCount  = ((uint16_t)revframe[4] << 8) | revframe[5];
@@ -253,8 +255,38 @@ int Response10Process(uint8_t const *revframe, uint8_t *sendframe)
             return 3;
         }
     }
+    /* 重复不可自中断命令只返回ACK，不得覆盖此前已确认的其他待执行命令。 */
+    if ((startAddr == HOLDREGISTER_DEVICEPARAM_COMMAND) &&
+        (regCount == REG_STRIDE) &&
+        (g_measurement.device_status.current_command != CMD_NONE) &&
+        ((CommandType)command_value ==
+         g_measurement.device_status.current_command) &&
+        !IsSelfInterruptibleCommand(
+            g_measurement.device_status.current_command)) {
+        sendframe[0] = (uint8_t)SlaveAddress;
+        sendframe[1] = (uint8_t)presetmultipleregisterfuncode;
+        sendframe[2] = revframe[2];
+        sendframe[3] = revframe[3];
+        sendframe[4] = revframe[4];
+        sendframe[5] = revframe[5];
+        return 6;
+    }
     persist_write = IsPersistentDeviceParamWrite(startAddr, regCount) ? 1 : 0;
-    if ((persist_write != 0) && !PersistentParamWriteRuntimeAllowed()) {
+    command_arguments_only =
+        LtdModbus_HoldingWriteIsCommandArgumentOnly(startAddr, regCount) ? 1 : 0;
+    /* 恢复出厂从命令ACK到整套默认值保存完成期间，七字段写入必须明确返回忙。 */
+    if ((command_arguments_only != 0) &&
+        ((g_deviceParams.command == CMD_RESTORE_FACTORY) ||
+         (g_measurement.device_status.current_command == CMD_RESTORE_FACTORY) ||
+         DeviceParams_IsFactoryRestoreInProgress())) {
+        sendframe[0] = (uint8_t)SlaveAddress;
+        sendframe[1] = (uint8_t)(presetmultipleregisterfuncode | 0x80);
+        sendframe[2] = (uint8_t)slavedevicebusy;
+        return 3;
+    }
+    if ((persist_write != 0) &&
+        (command_arguments_only == 0) &&
+        !PersistentParamWriteRuntimeAllowed()) {
         sendframe[0] = (uint8_t)SlaveAddress;
         sendframe[1] = (uint8_t)(presetmultipleregisterfuncode | 0x80);
         sendframe[2] = (uint8_t)slavedevicebusy;
@@ -293,6 +325,18 @@ int Response10Process(uint8_t const *revframe, uint8_t *sendframe)
         return 3;
     }
 
+    /* 继电器候选按实际写字段校验；禁用通道可逐项配置，启用后仍保持完整约束。 */
+    if (!RelayAlarmConfig_WriteCandidateIsValid(
+            &candidate_params, startAddr, regCount)) {
+        g_deviceParams = previous_params;
+        AoOutput_SetSimulationEnabled(previous_simulation_enabled);
+        WriteDeviceParamsToHoldingRegisters(HoldingRegisterArray);
+        sendframe[0] = (uint8_t)SlaveAddress;
+        sendframe[1] = (uint8_t)(presetmultipleregisterfuncode | 0x80);
+        sendframe[2] = (uint8_t)illegaldatavalue;
+        return 3;
+    }
+
     /* AO禁用时拒绝开启仿真；由输出模式切到禁用时清除潜伏的非持久化仿真状态。 */
     if ((candidate_params.ao_output.work_mode == AO_WORK_MODE_DISABLED) &&
         (candidate_simulation_enabled != 0U)) {
@@ -312,6 +356,11 @@ int Response10Process(uint8_t const *revframe, uint8_t *sendframe)
         DeviceParams_CaptureWriteSnapshot(&previous_params);
     }
     g_deviceParams = candidate_params;
+    DeviceCommandArguments_RecordWrite(startAddr, regCount);
+    if (LtdModbus_RangeContains(startAddr, regCount,
+                                HOLDREGISTER_DEVICEPARAM_COMMAND, REG_STRIDE)) {
+        DeviceCommandArguments_CapturePending(g_deviceParams.command);
+    }
     AoOutput_SetSimulationEnabled(candidate_simulation_enabled);
     WriteDeviceParamsToHoldingRegisters(HoldingRegisterArray);
 
@@ -371,4 +420,3 @@ static void PresetRegister(bool registertype, int const *registervalue) {
         HoldingRegisterArray[RCV_startaddress + index] = (uint16_t)registervalue[index];
     }
 }
-

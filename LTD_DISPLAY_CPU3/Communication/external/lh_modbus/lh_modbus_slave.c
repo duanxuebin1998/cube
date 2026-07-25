@@ -22,12 +22,6 @@ typedef struct {
     uint16_t shared_start;
 } LhWritableField;
 
-typedef enum {
-    LH_PARAMETER_WRITE_OK = 0,
-    LH_PARAMETER_WRITE_BUSY,
-    LH_PARAMETER_WRITE_FAILURE
-} LhParameterWriteResult;
-
 /* LH 只开放现场文档中的可写字段；只读兼容字段不进入此表。 */
 static const LhWritableField s_lh_writable_fields[] = {
     {LH_HR_TANK_HEIGHT,                    2U, HOLDREGISTER_DEVICEPARAM_TANKHEIGHT},
@@ -377,21 +371,21 @@ static const LhWritableField *lh_find_writable_field(uint16_t start, uint16_t co
 /*
  * 函数用途：下发一个 LH 线圈对应的 CPU2 命令并等待 ACK。
  * 调用场景：FC05 收到标准 ON 值后调用。
- * 关键约束：不得先更新本地命令影子；CPU2 忙、断链或拒绝时向外返回设备忙。
+ * 关键约束：不得先更新本地命令影子；CPU2 标准异常原样返回，断链按设备故障返回。
  */
-static bool lh_send_command(CommandType command)
+static uint8_t lh_send_command(CommandType command)
 {
     uint32_t command_value = (uint32_t)command;
     uint16_t command_regs[REG_STRIDE];
 
     if (!CPU2_CommCanSendCommand(command)) {
-        return false;
+        return LH_MODBUS_EX_SLAVE_DEVICE_BUSY;
     }
     command_regs[0] = (uint16_t)(command_value >> 16);
     command_regs[1] = (uint16_t)(command_value & 0xFFFFU);
-    return CPU2_CommWriteHoldingRegisters(HOLDREGISTER_DEVICEPARAM_COMMAND,
-                                          REG_STRIDE,
-                                          command_regs);
+    return CPU2_CommWriteHoldingRegistersEx(HOLDREGISTER_DEVICEPARAM_COMMAND,
+                                            REG_STRIDE,
+                                            command_regs);
 }
 
 /* 处理 FC03/FC04 读取，快照无效时整帧返回设备忙。 */
@@ -405,6 +399,7 @@ static void lh_handle_read(uint8_t address,
     uint16_t registers[LH_HOLDING_REGISTER_COUNT];
     uint16_t register_count;
     uint16_t i;
+    uint32_t read_end;
 
     if ((count == 0U) || (count > LH_MODBUS_MAX_READ_REGISTERS)) {
         lh_build_exception(address, function, LH_MODBUS_EX_ILLEGAL_VALUE, tx, tx_len);
@@ -419,6 +414,14 @@ static void lh_handle_read(uint8_t address,
         }
         if (!CPU2_CommIsAvailable()) {
             lh_build_exception(address, function, LH_MODBUS_EX_SLAVE_DEVICE_BUSY, tx, tx_len);
+            return;
+        }
+        read_end = (uint32_t)start + (uint32_t)count;
+        if (((uint32_t)start <= (uint32_t)LH_HR_LIQUID_TO_WATER_PROBE_DISTANCE) &&
+            (read_end > (uint32_t)LH_HR_LIQUID_TO_WATER_PROBE_DISTANCE) &&
+            (g_deviceParams.liquid_sensor_distance_diff > (uint32_t)UINT16_MAX)) {
+            /* LH 将该字段定义为 UInt16，内部负值或超范围值不得截断后发布。 */
+            lh_build_exception(address, function, LH_MODBUS_EX_SLAVE_DEVICE_FAILURE, tx, tx_len);
             return;
         }
         lh_build_holding_registers(registers);
@@ -452,6 +455,7 @@ static void lh_handle_write_single_coil(uint8_t address,
 {
     uint16_t offset = lh_be16(&rx[2]);
     uint16_t value = lh_be16(&rx[4]);
+    uint8_t command_exception;
 
     if (offset >= LH_COIL_COUNT) {
         lh_build_exception(address, LH_MODBUS_FUNC_WRITE_SINGLE_COIL,
@@ -463,10 +467,13 @@ static void lh_handle_write_single_coil(uint8_t address,
                            LH_MODBUS_EX_ILLEGAL_VALUE, tx, tx_len);
         return;
     }
-    if ((value == 0xFF00U) && !lh_send_command(s_lh_coil_commands[offset])) {
-        lh_build_exception(address, LH_MODBUS_FUNC_WRITE_SINGLE_COIL,
-                           LH_MODBUS_EX_SLAVE_DEVICE_BUSY, tx, tx_len);
-        return;
+    if (value == 0xFF00U) {
+        command_exception = lh_send_command(s_lh_coil_commands[offset]);
+        if (command_exception != CPU2_MODBUS_RESULT_OK) {
+            lh_build_exception(address, LH_MODBUS_FUNC_WRITE_SINGLE_COIL,
+                               command_exception, tx, tx_len);
+            return;
+        }
     }
 
     memcpy(tx, rx, 6U);
@@ -475,7 +482,7 @@ static void lh_handle_write_single_coil(uint8_t address,
 
 /*
  * 函数用途：把一个完整 LH 参数字段转换为共享 32 位寄存器值。
- * 调用场景：FC10 已通过帧长度、字段边界和待机状态校验后调用。
+ * 调用场景：FC10 已通过帧长度、字段边界和运行状态预检查后调用。
  * 关键约束：LH 单寄存器字段只写共享字段低 16 位，高 16 位固定为 0。
  */
 static void lh_decode_holding_field(const LhWritableField *field,
@@ -560,7 +567,7 @@ static bool lh_relay_field_value_is_valid(uint16_t start, uint32_t raw)
     case 0x000EU:
         return lh_float_raw_is_nonnegative(raw);
     case 0x0010U:
-        return true;
+        return raw == 0U;
     default:
         return false;
     }
@@ -568,7 +575,7 @@ static bool lh_relay_field_value_is_valid(uint16_t start, uint32_t raw)
 
 /*
  * 函数用途：按 LH 手册校验一个完整字段的类型和值域。
- * 调用场景：FC10 已确认字段边界、CPU2可用且设备待机后调用。
+ * 调用场景：FC10 已确认字段边界、CPU2可用且通过运行状态预检查后调用。
  * 关键约束：只做 LH 对外预校验，CPU2 仍负责最终业务校验、运行态提交和持久化。
  */
 static bool lh_holding_field_value_is_valid(const LhWritableField *field,
@@ -704,35 +711,48 @@ static bool lh_wait_parameter_persisted(const LhWritableField *field,
 }
 
 /*
- * 函数用途：写入一个完整 LH 参数，并把 CPU2 持久化与目标回读作为最终成功条件。
+ * 函数用途：写入一个完整 LH 参数，并按字段类型选择最终成功条件。
  * 调用场景：FC10 字段和帧格式校验通过后调用。
- * 关键约束：同值写入也必须等待保存完成计数变化，再补读确认目标字段。
+ * 关键约束：命令前置参数由公共写入口完成 ACK 加定向回读，不等待阻塞业务期间无法推进的
+ *           FRAM 完成代次；普通参数仍等待保存完成计数变化后补读确认。
  */
-static LhParameterWriteResult lh_write_holding_field(const LhWritableField *field,
-                                                     const uint16_t *expected_regs)
+static uint8_t lh_write_holding_field(const LhWritableField *field,
+                                      const uint16_t *expected_regs)
 {
-    uint32_t previous_update_flag;
+    uint32_t previous_update_flag = 0U;
+    uint8_t write_exception;
+    bool command_argument_only;
 
     if (!lh_refresh_cpu2_status()) {
-        return LH_PARAMETER_WRITE_BUSY;
+        return LH_MODBUS_EX_SLAVE_DEVICE_BUSY;
     }
-    if (!DeviceState_AllowsPersistentParamWrite(
+    command_argument_only = LtdModbus_HoldingWriteIsCommandArgumentOnly(
+        field->shared_start, REG_STRIDE);
+    if (!command_argument_only &&
+        !DeviceState_AllowsPersistentParamWrite(
             g_measurement.device_status.device_state)) {
-        return LH_PARAMETER_WRITE_BUSY;
+        return LH_MODBUS_EX_SLAVE_DEVICE_BUSY;
     }
-    previous_update_flag = g_measurement.device_status.parameter_update_flag;
+    if (!command_argument_only) {
+        previous_update_flag =
+            g_measurement.device_status.parameter_update_flag;
+    }
 
-    if (!CPU2_CommWriteHoldingRegisters(field->shared_start,
-                                        REG_STRIDE,
-                                        expected_regs)) {
-        return LH_PARAMETER_WRITE_BUSY;
+    write_exception = CPU2_CommWriteHoldingRegistersEx(field->shared_start,
+                                                       REG_STRIDE,
+                                                       expected_regs);
+    if (write_exception != CPU2_MODBUS_RESULT_OK) {
+        return write_exception;
+    }
+    if (command_argument_only) {
+        return CPU2_MODBUS_RESULT_OK;
     }
 
     return lh_wait_parameter_persisted(field, previous_update_flag, expected_regs) ?
-           LH_PARAMETER_WRITE_OK : LH_PARAMETER_WRITE_FAILURE;
+           CPU2_MODBUS_RESULT_OK : LH_MODBUS_EX_SLAVE_DEVICE_FAILURE;
 }
 
-/* 处理 FC10；只允许白名单空闲态一次写一个完整的 LH 字段。 */
+/* 处理 FC10；一次写一个完整LH字段，普通持久参数仍遵循状态白名单。 */
 static void lh_handle_write_holding(uint8_t address,
                                     const uint8_t *rx,
                                     uint16_t rx_len,
@@ -743,7 +763,7 @@ static void lh_handle_write_holding(uint8_t address,
     uint16_t count = lh_be16(&rx[4]);
     uint8_t byte_count = rx[6];
     const LhWritableField *field;
-    LhParameterWriteResult write_result;
+    uint8_t write_exception;
     uint16_t expected_regs[REG_STRIDE];
 
     if ((count == 0U) || (count > LH_MODBUS_MAX_WRITE_REGISTERS) ||
@@ -768,8 +788,10 @@ static void lh_handle_write_holding(uint8_t address,
         return;
     }
     if (!CPU2_CommIsAvailable() ||
-        !DeviceState_AllowsPersistentParamWrite(
-            g_measurement.device_status.device_state)) {
+        (!LtdModbus_HoldingWriteIsCommandArgumentOnly(
+             field->shared_start, REG_STRIDE) &&
+         !DeviceState_AllowsPersistentParamWrite(
+             g_measurement.device_status.device_state))) {
         lh_build_exception(address, LH_MODBUS_FUNC_WRITE_MULTI_REGS,
                            LH_MODBUS_EX_SLAVE_DEVICE_BUSY, tx, tx_len);
         return;
@@ -780,15 +802,10 @@ static void lh_handle_write_holding(uint8_t address,
                            LH_MODBUS_EX_ILLEGAL_VALUE, tx, tx_len);
         return;
     }
-    write_result = lh_write_holding_field(field, expected_regs);
-    if (write_result == LH_PARAMETER_WRITE_BUSY) {
+    write_exception = lh_write_holding_field(field, expected_regs);
+    if (write_exception != CPU2_MODBUS_RESULT_OK) {
         lh_build_exception(address, LH_MODBUS_FUNC_WRITE_MULTI_REGS,
-                           LH_MODBUS_EX_SLAVE_DEVICE_BUSY, tx, tx_len);
-        return;
-    }
-    if (write_result == LH_PARAMETER_WRITE_FAILURE) {
-        lh_build_exception(address, LH_MODBUS_FUNC_WRITE_MULTI_REGS,
-                           LH_MODBUS_EX_SLAVE_DEVICE_FAILURE, tx, tx_len);
+                           write_exception, tx, tx_len);
         return;
     }
 

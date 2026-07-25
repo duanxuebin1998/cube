@@ -296,7 +296,7 @@ struct ParameterMetadata param_meta[] = {
 {(uint8_t*)"K1低报警阈值",	0,	COM_NUM_DEVICEPARAM_RELAY1_L_ALARM_VALUE,	HOLDREGISTER_DEVICEPARAM_RELAY_L_ALARM_VALUE(0U),	2,	false,	0,	0,	NULL,	1,	0,	true,	TYPE_FLOAT,	7,	NULL,	(uint8_t*)"K1LValue"},
 {(uint8_t*)"K1低低报警阈值",	0,	COM_NUM_DEVICEPARAM_RELAY1_LL_ALARM_VALUE,	HOLDREGISTER_DEVICEPARAM_RELAY_LL_ALARM_VALUE(0U),	2,	false,	0,	0,	NULL,	1,	0,	true,	TYPE_FLOAT,	7,	NULL,	(uint8_t*)"K1LLValue"},
 {(uint8_t*)"K1报警滞回",	0,	COM_NUM_DEVICEPARAM_RELAY1_ALARM_HYSTERESIS,	HOLDREGISTER_DEVICEPARAM_RELAY_ALARM_HYSTERESIS(0U),	2,	false,	0,	0,	NULL,	1,	0,	true,	TYPE_FLOAT,	7,	NULL,	(uint8_t*)"K1Hysteresis"},
-{(uint8_t*)"K1阻尼系数",	0,	COM_NUM_DEVICEPARAM_RELAY1_DAMPING_FACTOR,	HOLDREGISTER_DEVICEPARAM_RELAY_DAMPING_FACTOR(0U),	2,	false,	0,	0,	NULL,	0,	0,	true,	TYPE_INT,	4,	NULL,	(uint8_t*)"K1Damping"},
+{(uint8_t*)"K1阻尼系数",	0,	COM_NUM_DEVICEPARAM_RELAY1_DAMPING_FACTOR,	HOLDREGISTER_DEVICEPARAM_RELAY_DAMPING_FACTOR(0U),	2,	true,	0,	0,	NULL,	0,	0,	true,	TYPE_INT,	4,	NULL,	(uint8_t*)"K1Damping"},
 {(uint8_t*)"K1清除锁存报警",	0,	COM_NUM_DEVICEPARAM_RELAY1_CLEAR_ALARM,	HOLDREGISTER_DEVICEPARAM_RELAY_CLEAR_ALARM(0U),	2,	true,	0,	1,	NULL,	0,	0,	true,	TYPE_INT,	1,	ret_arr_word,	(uint8_t*)"K1Clear"},
 
 {(uint8_t*)"K2工作模式",	0,	COM_NUM_DEVICEPARAM_RELAY2_OPERATING_MODE,	HOLDREGISTER_DEVICEPARAM_RELAY_OPERATING_MODE(1U),	2,	true,	0,	1,	NULL,	0,	0,	true,	TYPE_INT,	1,	ret_arr_word,	(uint8_t*)"K2WorkMode"},
@@ -310,7 +310,7 @@ struct ParameterMetadata param_meta[] = {
 {(uint8_t*)"K2低报警阈值",	0,	COM_NUM_DEVICEPARAM_RELAY2_L_ALARM_VALUE,	HOLDREGISTER_DEVICEPARAM_RELAY_L_ALARM_VALUE(1U),	2,	false,	0,	0,	NULL,	1,	0,	true,	TYPE_FLOAT,	7,	NULL,	(uint8_t*)"K2LValue"},
 {(uint8_t*)"K2低低报警阈值",	0,	COM_NUM_DEVICEPARAM_RELAY2_LL_ALARM_VALUE,	HOLDREGISTER_DEVICEPARAM_RELAY_LL_ALARM_VALUE(1U),	2,	false,	0,	0,	NULL,	1,	0,	true,	TYPE_FLOAT,	7,	NULL,	(uint8_t*)"K2LLValue"},
 {(uint8_t*)"K2报警滞回",	0,	COM_NUM_DEVICEPARAM_RELAY2_ALARM_HYSTERESIS,	HOLDREGISTER_DEVICEPARAM_RELAY_ALARM_HYSTERESIS(1U),	2,	false,	0,	0,	NULL,	1,	0,	true,	TYPE_FLOAT,	7,	NULL,	(uint8_t*)"K2Hysteresis"},
-{(uint8_t*)"K2阻尼系数",	0,	COM_NUM_DEVICEPARAM_RELAY2_DAMPING_FACTOR,	HOLDREGISTER_DEVICEPARAM_RELAY_DAMPING_FACTOR(1U),	2,	false,	0,	0,	NULL,	0,	0,	true,	TYPE_INT,	4,	NULL,	(uint8_t*)"K2Damping"},
+{(uint8_t*)"K2阻尼系数",	0,	COM_NUM_DEVICEPARAM_RELAY2_DAMPING_FACTOR,	HOLDREGISTER_DEVICEPARAM_RELAY_DAMPING_FACTOR(1U),	2,	true,	0,	0,	NULL,	0,	0,	true,	TYPE_INT,	4,	NULL,	(uint8_t*)"K2Damping"},
 {(uint8_t*)"K2清除锁存报警",	0,	COM_NUM_DEVICEPARAM_RELAY2_CLEAR_ALARM,	HOLDREGISTER_DEVICEPARAM_RELAY_CLEAR_ALARM(1U),	2,	true,	0,	1,	NULL,	0,	0,	true,	TYPE_INT,	1,	ret_arr_word,	(uint8_t*)"K2Clear"},
 
 {(uint8_t*)"K3工作模式",	0,	COM_NUM_DEVICEPARAM_RELAY3_OPERATING_MODE,	HOLDREGISTER_DEVICEPARAM_RELAY_OPERATING_MODE(2U),	2,	true,	0,	1,	NULL,	0,	0,	true,	TYPE_INT,	1,	ret_arr_word,	(uint8_t*)"K3WorkMode"},
@@ -324,7 +324,7 @@ struct ParameterMetadata param_meta[] = {
 {(uint8_t*)"K3低报警阈值",	0,	COM_NUM_DEVICEPARAM_RELAY3_L_ALARM_VALUE,	HOLDREGISTER_DEVICEPARAM_RELAY_L_ALARM_VALUE(2U),	2,	false,	0,	0,	NULL,	1,	0,	true,	TYPE_FLOAT,	7,	NULL,	(uint8_t*)"K3LValue"},
 {(uint8_t*)"K3低低报警阈值",	0,	COM_NUM_DEVICEPARAM_RELAY3_LL_ALARM_VALUE,	HOLDREGISTER_DEVICEPARAM_RELAY_LL_ALARM_VALUE(2U),	2,	false,	0,	0,	NULL,	1,	0,	true,	TYPE_FLOAT,	7,	NULL,	(uint8_t*)"K3LLValue"},
 {(uint8_t*)"K3报警滞回",	0,	COM_NUM_DEVICEPARAM_RELAY3_ALARM_HYSTERESIS,	HOLDREGISTER_DEVICEPARAM_RELAY_ALARM_HYSTERESIS(2U),	2,	false,	0,	0,	NULL,	1,	0,	true,	TYPE_FLOAT,	7,	NULL,	(uint8_t*)"K3Hysteresis"},
-{(uint8_t*)"K3阻尼系数",	0,	COM_NUM_DEVICEPARAM_RELAY3_DAMPING_FACTOR,	HOLDREGISTER_DEVICEPARAM_RELAY_DAMPING_FACTOR(2U),	2,	false,	0,	0,	NULL,	0,	0,	true,	TYPE_INT,	4,	NULL,	(uint8_t*)"K3Damping"},
+{(uint8_t*)"K3阻尼系数",	0,	COM_NUM_DEVICEPARAM_RELAY3_DAMPING_FACTOR,	HOLDREGISTER_DEVICEPARAM_RELAY_DAMPING_FACTOR(2U),	2,	true,	0,	0,	NULL,	0,	0,	true,	TYPE_INT,	4,	NULL,	(uint8_t*)"K3Damping"},
 {(uint8_t*)"K3清除锁存报警",	0,	COM_NUM_DEVICEPARAM_RELAY3_CLEAR_ALARM,	HOLDREGISTER_DEVICEPARAM_RELAY_CLEAR_ALARM(2U),	2,	true,	0,	1,	NULL,	0,	0,	true,	TYPE_INT,	1,	ret_arr_word,	(uint8_t*)"K3Clear"},
 
 {(uint8_t*)"K4工作模式",	0,	COM_NUM_DEVICEPARAM_RELAY4_OPERATING_MODE,	HOLDREGISTER_DEVICEPARAM_RELAY_OPERATING_MODE(3U),	2,	true,	0,	1,	NULL,	0,	0,	true,	TYPE_INT,	1,	ret_arr_word,	(uint8_t*)"K4WorkMode"},
@@ -338,7 +338,7 @@ struct ParameterMetadata param_meta[] = {
 {(uint8_t*)"K4低报警阈值",	0,	COM_NUM_DEVICEPARAM_RELAY4_L_ALARM_VALUE,	HOLDREGISTER_DEVICEPARAM_RELAY_L_ALARM_VALUE(3U),	2,	false,	0,	0,	NULL,	1,	0,	true,	TYPE_FLOAT,	7,	NULL,	(uint8_t*)"K4LValue"},
 {(uint8_t*)"K4低低报警阈值",	0,	COM_NUM_DEVICEPARAM_RELAY4_LL_ALARM_VALUE,	HOLDREGISTER_DEVICEPARAM_RELAY_LL_ALARM_VALUE(3U),	2,	false,	0,	0,	NULL,	1,	0,	true,	TYPE_FLOAT,	7,	NULL,	(uint8_t*)"K4LLValue"},
 {(uint8_t*)"K4报警滞回",	0,	COM_NUM_DEVICEPARAM_RELAY4_ALARM_HYSTERESIS,	HOLDREGISTER_DEVICEPARAM_RELAY_ALARM_HYSTERESIS(3U),	2,	false,	0,	0,	NULL,	1,	0,	true,	TYPE_FLOAT,	7,	NULL,	(uint8_t*)"K4Hysteresis"},
-{(uint8_t*)"K4阻尼系数",	0,	COM_NUM_DEVICEPARAM_RELAY4_DAMPING_FACTOR,	HOLDREGISTER_DEVICEPARAM_RELAY_DAMPING_FACTOR(3U),	2,	false,	0,	0,	NULL,	0,	0,	true,	TYPE_INT,	4,	NULL,	(uint8_t*)"K4Damping"},
+{(uint8_t*)"K4阻尼系数",	0,	COM_NUM_DEVICEPARAM_RELAY4_DAMPING_FACTOR,	HOLDREGISTER_DEVICEPARAM_RELAY_DAMPING_FACTOR(3U),	2,	true,	0,	0,	NULL,	0,	0,	true,	TYPE_INT,	4,	NULL,	(uint8_t*)"K4Damping"},
 {(uint8_t*)"K4清除锁存报警",	0,	COM_NUM_DEVICEPARAM_RELAY4_CLEAR_ALARM,	HOLDREGISTER_DEVICEPARAM_RELAY_CLEAR_ALARM(3U),	2,	true,	0,	1,	NULL,	0,	0,	true,	TYPE_INT,	1,	ret_arr_word,	(uint8_t*)"K4Clear"},
 
 
@@ -519,7 +519,7 @@ void print_device_params(void)
     /* 液位 */
     printf("\r\n-- 液位参数 --\r\n");
     printf("  %-32s : %lu\r\n", "液位罐高(0.1mm)", (unsigned long)params.tankHeight);
-    printf("  %-32s : %lu\r\n", "液位探头距差(0.1mm)", (unsigned long)params.liquid_sensor_distance_diff);
+    printf("  %-32s : %ld\r\n", "液位探头距差(0.1mm)", (long)(int32_t)params.liquid_sensor_distance_diff);
     printf("  %-32s : %lu\r\n", "液位盲区(0.1mm)", (unsigned long)params.blindZone);
     printf("  %-32s : %lu\r\n", "液位找液阈值", (unsigned long)params.oilLevelThreshold);
     printf("  %-32s : %lu\r\n", "液位滞后阈值", (unsigned long)params.oilLevelHysteresisThreshold);

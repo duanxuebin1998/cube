@@ -14,6 +14,9 @@
 #include "app_version.h"
 #include "mb85rs2m.h"
 #include "my_crc.h"
+#include "Relay/relay_alarm_config.h"
+#include "main.h"
+#include "stateformodbus.h"
 #include <stdint.h>
 #include <string.h>
 #include <stdio.h>
@@ -24,6 +27,7 @@ volatile DeviceParameters  g_deviceParams = {0};  /* 设备参数 */
 static volatile uint8_t g_device_params_save_pending = 0; /* Deferred save request flag */
 static volatile uint32_t g_device_params_save_request_tick = 0; /* Last deferred save request tick */
 static volatile uint8_t g_device_params_write_snapshot_valid = 0U; /* 写参前快照是否有效。 */
+static volatile uint8_t g_device_params_factory_restore_in_progress = 0U; /* 恢复出厂覆盖整套参数期间关闭并发写入口。 */
 static DeviceParameters g_device_params_write_snapshot; /* 写参前快照，供主循环延后打印差异。 */
 static const char *g_device_params_last_load_source = "UNKNOWN";
 #ifndef DEVICE_PARAMS_BOOT_FULL_PRINT_ENABLE
@@ -34,6 +38,362 @@ static void print_device_params_event(DeviceParamPrintEvent event, const DeviceP
 #define AO_NORMAL_CURRENT_MAX_MA_X100 2000U /* AO正常输出电流最大值，单位0.01mA。 */
 #define AO_OUTPUT_CURRENT_MIN_MA_X100 320U /* AO特殊电流最小值，单位0.01mA。 */
 #define AO_OUTPUT_CURRENT_MAX_MA_X100 2400U /* AO特殊电流最大值，单位0.01mA。 */
+
+typedef struct {
+    CommandType command;
+    uint32_t values[DEVICE_COMMAND_ARG_COUNT];
+    uint32_t generations[DEVICE_COMMAND_ARG_COUNT];
+    uint8_t valid;
+} DeviceCommandArgumentSnapshot;
+
+static volatile DeviceCommandArgumentSnapshot g_pending_command_arguments;
+static DeviceCommandArgumentSnapshot g_active_command_arguments;
+static volatile uint32_t g_command_argument_generations[DEVICE_COMMAND_ARG_COUNT];
+
+/*
+ * 函数用途：报告CPU2是否正在用出厂值整体覆盖运行参数。
+ * 调用场景：UART5 FC10在解析候选参数前判断七个命令参数能否写入。
+ * 关键约束：只读取易失标志，不阻塞、不打印，可在UART5中断上下文调用。
+ */
+bool DeviceParams_IsFactoryRestoreInProgress(void)
+{
+    return g_device_params_factory_restore_in_progress != 0U;
+}
+
+/* 返回指定命令前置参数对应的共享保持寄存器起始地址。 */
+static uint16_t DeviceCommandArguments_RegisterAddress(DeviceCommandArgumentField field)
+{
+    static const uint16_t addresses[DEVICE_COMMAND_ARG_COUNT] = {
+        HOLDREGISTER_DEVICEPARAM_CALIBRATE_OIL_LEVEL,
+        HOLDREGISTER_DEVICEPARAM_CALIBRATE_WATER_LEVEL,
+        HOLDREGISTER_DEVICEPARAM_CALIBRATE_TANK_HEIGHT,
+        HOLDREGISTER_DEVICEPARAM_SP_MEAS_POSITION,
+        HOLDREGISTER_DEVICEPARAM_SP_MONITOR_POSITION,
+        HOLDREGISTER_DEVICEPARAM_DENSITY_DISTRIBUTION_OIL_LEVEL,
+        HOLDREGISTER_DEVICEPARAM_MOTOR_COMMAND_DISTANCE
+    };
+
+    return (field < DEVICE_COMMAND_ARG_COUNT) ? addresses[field] : HOLDREGISTER_AMOUNT;
+}
+
+/* 从运行参数读取指定命令前置参数。 */
+static uint32_t DeviceCommandArguments_ReadGlobal(DeviceCommandArgumentField field)
+{
+    switch (field) {
+    case DEVICE_COMMAND_ARG_CALIBRATE_OIL_LEVEL:
+        return g_deviceParams.calibrateOilLevel;
+    case DEVICE_COMMAND_ARG_CALIBRATE_WATER_LEVEL:
+        return g_deviceParams.calibrateWaterLevel;
+    case DEVICE_COMMAND_ARG_CALIBRATE_TANK_HEIGHT:
+        return g_deviceParams.calibrateTankHeight;
+    case DEVICE_COMMAND_ARG_SINGLE_POINT_MEASUREMENT_POSITION:
+        return g_deviceParams.singlePointMeasurementPosition;
+    case DEVICE_COMMAND_ARG_SINGLE_POINT_MONITORING_POSITION:
+        return g_deviceParams.singlePointMonitoringPosition;
+    case DEVICE_COMMAND_ARG_DENSITY_DISTRIBUTION_OIL_LEVEL:
+        return g_deviceParams.densityDistributionOilLevel;
+    case DEVICE_COMMAND_ARG_MOTOR_COMMAND_DISTANCE:
+        return g_deviceParams.motorCommandDistance;
+    default:
+        return 0U;
+    }
+}
+
+/* 把指定值写回运行参数；调用方必须持有短临界区。 */
+static void DeviceCommandArguments_WriteGlobal(DeviceCommandArgumentField field, uint32_t value)
+{
+    switch (field) {
+    case DEVICE_COMMAND_ARG_CALIBRATE_OIL_LEVEL:
+        g_deviceParams.calibrateOilLevel = value;
+        break;
+    case DEVICE_COMMAND_ARG_CALIBRATE_WATER_LEVEL:
+        g_deviceParams.calibrateWaterLevel = value;
+        break;
+    case DEVICE_COMMAND_ARG_CALIBRATE_TANK_HEIGHT:
+        g_deviceParams.calibrateTankHeight = value;
+        break;
+    case DEVICE_COMMAND_ARG_SINGLE_POINT_MEASUREMENT_POSITION:
+        g_deviceParams.singlePointMeasurementPosition = value;
+        break;
+    case DEVICE_COMMAND_ARG_SINGLE_POINT_MONITORING_POSITION:
+        g_deviceParams.singlePointMonitoringPosition = value;
+        break;
+    case DEVICE_COMMAND_ARG_DENSITY_DISTRIBUTION_OIL_LEVEL:
+        g_deviceParams.densityDistributionOilLevel = value;
+        break;
+    case DEVICE_COMMAND_ARG_MOTOR_COMMAND_DISTANCE:
+        g_deviceParams.motorCommandDistance = value;
+        break;
+    default:
+        break;
+    }
+}
+
+/* 在已关闭中断的短临界区内，把当前七字段绑定到待执行命令。 */
+static void DeviceCommandArguments_CapturePendingLocked(CommandType command)
+{
+    uint32_t index;
+
+    g_pending_command_arguments.command = command;
+    g_pending_command_arguments.valid = (command != CMD_NONE) ? 1U : 0U;
+    for (index = 0U; index < DEVICE_COMMAND_ARG_COUNT; index++) {
+        g_pending_command_arguments.values[index] =
+            DeviceCommandArguments_ReadGlobal((DeviceCommandArgumentField)index);
+        g_pending_command_arguments.generations[index] =
+            g_command_argument_generations[index];
+    }
+}
+
+/*
+ * 函数用途：恢复出厂完成后重新发布期间已经ACK的最新待执行命令。
+ * 调用场景：整套默认参数保存完成、重新开放七字段写入口之前。
+ * 关键约束：按最终出厂值重新绑定参数；重复恢复命令仍按不可自中断规则丢弃。
+ */
+static void DeviceCommandArguments_RebindAfterFactoryRestore(void)
+{
+    CommandType pending_command;
+    uint32_t primask = __get_PRIMASK();
+
+    __disable_irq();
+    if (g_pending_command_arguments.valid != 0U) {
+        pending_command = g_pending_command_arguments.command;
+        if (pending_command == CMD_RESTORE_FACTORY) {
+            g_pending_command_arguments.valid = 0U;
+            if (g_deviceParams.command == CMD_RESTORE_FACTORY) {
+                g_deviceParams.command = CMD_NONE;
+            }
+        } else {
+            g_deviceParams.command = pending_command;
+            DeviceCommandArguments_CapturePendingLocked(pending_command);
+        }
+    }
+    __set_PRIMASK(primask);
+}
+
+/*
+ * 函数用途：为本次成功写入涉及的命令前置参数递增逐字段代次。
+ * 调用场景：CPU2 FC10 候选参数全部校验通过并提交到 g_deviceParams 后。
+ * 关键约束：同值写入也必须递增，防止当前命令收尾清零覆盖下一次同值请求。
+ */
+void DeviceCommandArguments_RecordWrite(uint16_t start, uint16_t count)
+{
+    uint32_t index;
+    uint32_t primask = __get_PRIMASK();
+
+    __disable_irq();
+    for (index = 0U; index < DEVICE_COMMAND_ARG_COUNT; index++) {
+        uint16_t address =
+            DeviceCommandArguments_RegisterAddress((DeviceCommandArgumentField)index);
+        if (LtdModbus_RangeContains(start, count, address, REG_STRIDE)) {
+            g_command_argument_generations[index]++;
+        }
+    }
+    __set_PRIMASK(primask);
+}
+
+/*
+ * 函数用途：把当前七字段与已经接受的待执行命令原子绑定。
+ * 调用场景：Modbus 命令寄存器写入成功后。
+ * 关键约束：只更新 pending 快照，不得覆盖正在执行命令的 active 快照。
+ */
+void DeviceCommandArguments_CapturePending(CommandType command)
+{
+    uint32_t primask = __get_PRIMASK();
+
+    __disable_irq();
+    DeviceCommandArguments_CapturePendingLocked(command);
+    __set_PRIMASK(primask);
+}
+
+/*
+ * 函数用途：由 CPU2 内部路径入队正式命令并同步绑定当前七字段。
+ * 调用场景：上电默认命令、串口命令和业务内部续接命令。
+ * 关键约束：命令值和参数快照在同一短临界区发布。
+ */
+void DeviceCommand_Queue(CommandType command)
+{
+    uint32_t primask = __get_PRIMASK();
+
+    __disable_irq();
+    g_deviceParams.command = command;
+    DeviceCommandArguments_CapturePendingLocked(command);
+    __set_PRIMASK(primask);
+}
+
+/*
+ * 函数用途：原子判断是否存在能够切换当前流程的新命令。
+ * 调用场景：阻塞测量、传感器通信和电机等待循环的既有退出检查。
+ * 关键约束：保持原自中断白名单和重复命令规则，只防止条件清零覆盖并发到达的新命令。
+ */
+bool HasEffectiveCommandSwitchRequest(void)
+{
+    CommandType pending_command;
+    CommandType current_command;
+    uint32_t primask = __get_PRIMASK();
+    bool switch_requested = false;
+
+    __disable_irq();
+    pending_command = g_deviceParams.command;
+    current_command = g_measurement.device_status.current_command;
+    if (pending_command != CMD_NONE) {
+        if ((current_command != CMD_NONE) &&
+            (pending_command == current_command) &&
+            !IsSelfInterruptibleCommand(current_command)) {
+            g_deviceParams.command = CMD_NONE;
+            if ((g_pending_command_arguments.valid != 0U) &&
+                (g_pending_command_arguments.command == pending_command)) {
+                g_pending_command_arguments.valid = 0U;
+            }
+        } else {
+            switch_requested = true;
+        }
+    } else if (new_command_ready != 0U) {
+        switch_requested = true;
+    }
+    __set_PRIMASK(primask);
+    return switch_requested;
+}
+
+/* 在已关闭中断的短临界区内，把匹配的 pending 参数提升为 active 参数。 */
+static void DeviceCommandArguments_ActivatePendingLocked(CommandType command)
+{
+    uint32_t index;
+    uint8_t pending_matches =
+        ((g_pending_command_arguments.valid != 0U) &&
+         (g_pending_command_arguments.command == command)) ? 1U : 0U;
+
+    g_active_command_arguments.command = command;
+    g_active_command_arguments.valid = 1U;
+    for (index = 0U; index < DEVICE_COMMAND_ARG_COUNT; index++) {
+        if (pending_matches != 0U) {
+            g_active_command_arguments.values[index] =
+                g_pending_command_arguments.values[index];
+            g_active_command_arguments.generations[index] =
+                g_pending_command_arguments.generations[index];
+        } else {
+            g_active_command_arguments.values[index] =
+                DeviceCommandArguments_ReadGlobal((DeviceCommandArgumentField)index);
+            g_active_command_arguments.generations[index] =
+                g_command_argument_generations[index];
+        }
+    }
+    if (pending_matches != 0U) {
+        g_pending_command_arguments.valid = 0U;
+    }
+}
+
+/*
+ * 函数用途：原子取走一个待执行正式命令，并同步把其 pending 参数提升为 active 参数。
+ * 调用场景：主循环在原始串口命令分支之后、自动恢复分支之前调用。
+ * 关键约束：命令读取、条件清零和参数提升位于同一短临界区；不消费其它命令的 pending 快照。
+ */
+bool DeviceCommand_TakePending(CommandType *command)
+{
+    CommandType captured_command;
+    uint32_t primask;
+
+    if (command == NULL) {
+        return false;
+    }
+    primask = __get_PRIMASK();
+    __disable_irq();
+    captured_command = g_deviceParams.command;
+    if (captured_command == CMD_NONE) {
+        __set_PRIMASK(primask);
+        return false;
+    }
+
+    g_deviceParams.command = CMD_NONE;
+    DeviceCommandArguments_ActivatePendingLocked(captured_command);
+    g_measurement.device_status.current_command = captured_command;
+    *command = captured_command;
+    __set_PRIMASK(primask);
+    return true;
+}
+
+/*
+ * 函数用途：在自动恢复重试与最后时刻到达的正式命令之间做一次原子仲裁。
+ * 调用场景：FaultRecovery_Poll 决定重试后、主循环真正执行命令前。
+ * 关键约束：有 pending 时保持正式命令优先；否则复用原 active 参数，并在同一临界区发布 current_command。
+ * 返回值：true 表示选中了新的 pending 命令，false 表示继续自动重试。
+ */
+bool DeviceCommand_PrepareRecoveryExecution(CommandType retry_command,
+                                            CommandType *selected_command)
+{
+    CommandType pending_command;
+    uint32_t primask;
+    bool pending_selected = false;
+
+    if (selected_command == NULL) {
+        return false;
+    }
+    primask = __get_PRIMASK();
+    __disable_irq();
+    pending_command = g_deviceParams.command;
+    if (pending_command != CMD_NONE) {
+        g_deviceParams.command = CMD_NONE;
+        DeviceCommandArguments_ActivatePendingLocked(pending_command);
+        *selected_command = pending_command;
+        pending_selected = true;
+    } else {
+        if ((g_active_command_arguments.valid == 0U) ||
+            (g_active_command_arguments.command != retry_command)) {
+            DeviceCommandArguments_ActivatePendingLocked(retry_command);
+        }
+        *selected_command = retry_command;
+    }
+    g_measurement.device_status.current_command = *selected_command;
+    __set_PRIMASK(primask);
+    return pending_selected;
+}
+
+/*
+ * 函数用途：返回当前命令绑定的参数值；非命令上下文返回最新全局值。
+ * 调用场景：测量、标定和电机业务消费七个前置参数时。
+ * 关键约束：只有 active 命令与 current_command 一致时才读取快照。
+ */
+uint32_t DeviceCommandArguments_Get(DeviceCommandArgumentField field)
+{
+    if (field >= DEVICE_COMMAND_ARG_COUNT) {
+        return 0U;
+    }
+    if ((g_active_command_arguments.valid != 0U) &&
+        (g_active_command_arguments.command ==
+         g_measurement.device_status.current_command)) {
+        return g_active_command_arguments.values[field];
+    }
+    return DeviceCommandArguments_ReadGlobal(field);
+}
+
+/*
+ * 函数用途：消费一次性参数后仅在该字段未被后续写入时清零全局值。
+ * 调用场景：油位或水位标定完成后的原有清零位置。
+ * 关键约束：后续同值写入也由逐字段代次识别，不能被当前命令收尾误清。
+ */
+void DeviceCommandArguments_ClearIfUnchanged(DeviceCommandArgumentField field)
+{
+    uint32_t primask;
+    uint8_t active_matches;
+
+    if (field >= DEVICE_COMMAND_ARG_COUNT) {
+        return;
+    }
+    primask = __get_PRIMASK();
+    __disable_irq();
+    active_matches =
+        ((g_active_command_arguments.valid != 0U) &&
+         (g_active_command_arguments.command ==
+          g_measurement.device_status.current_command)) ? 1U : 0U;
+    if ((active_matches == 0U) ||
+        ((g_command_argument_generations[field] ==
+          g_active_command_arguments.generations[field]) &&
+         (DeviceCommandArguments_ReadGlobal(field) ==
+          g_active_command_arguments.values[field]))) {
+        DeviceCommandArguments_WriteGlobal(field, 0U);
+        g_command_argument_generations[field]++;
+    }
+    __set_PRIMASK(primask);
+}
 /* 将继电器报警输出枚举值转换成中文打印文本，便于现场调试查看。 */
 static const char * relay_operating_mode_str(uint32_t value)
 {
@@ -662,6 +1022,8 @@ int prepare_ao_params_for_write(const DeviceParameters *current, DeviceParameter
 static int normalize_device_params_runtime(void)
 {
     int changed = 0;
+    uint32_t relay_changed_mask;
+    uint32_t relay_invalid_mask;
 
     if ((g_deviceParams.position_count_mode != POSITION_COUNT_MODE_ENCODER) &&
         (g_deviceParams.position_count_mode != POSITION_COUNT_MODE_MOTOR)) {
@@ -745,11 +1107,15 @@ static int normalize_device_params_runtime(void)
         g_deviceParams.si_profile_bottom_detect_interval = 1U;
         changed = 1;
     }
-    for (uint32_t channel = 0U; channel < RELAY_ALARM_CHANNEL_COUNT; channel++) {
-        if (g_deviceParams.relayAlarm[channel].clear_alarm != RELAY_ALARM_CLEAR_NO) {
-            g_deviceParams.relayAlarm[channel].clear_alarm = RELAY_ALARM_CLEAR_NO;
-            changed = 1;
-        }
+    relay_changed_mask = RelayAlarmConfig_Normalize(
+        (DeviceParameters *)&g_deviceParams,
+        &relay_invalid_mask);
+    if (relay_changed_mask != 0U) {
+        changed = 1;
+    }
+    if (relay_invalid_mask != 0U) {
+        printf("[参数][上电][修复] 继电器非法配置已归一化并禁用通道 | 通道掩码=0x%02lX\r\n",
+               (unsigned long)relay_invalid_mask);
     }
 
     return changed;
@@ -1222,7 +1588,6 @@ void init_device_params(void)
     if (!ok)
     {
         /* 连续失败 3 次 -> 恢复出厂参数并保存 */
-        memset((void * volatile)&g_deviceParams, 0, sizeof(DeviceParameters));
         RestoreFactoryParamsConfig(); /* 内部会调用 save_device_params() */
 
         g_measurement.device_status.error_code = load_error_code;
@@ -1241,6 +1606,8 @@ void init_device_params(void)
  */
 void RestoreFactoryParamsConfig(void)
 {
+    /* 先关闭七个命令参数写入口，避免已ACK的新值随后被整体默认值覆盖。 */
+    g_device_params_factory_restore_in_progress = 1U;
     /* 整体清零, 保证保留字段等为 0 */
     memset((void * volatile)&g_deviceParams, 0, sizeof(DeviceParameters));
 
@@ -1401,6 +1768,9 @@ void RestoreFactoryParamsConfig(void)
     g_deviceParams.crc           = 0; /* save_device_params 内更新 */
 
     save_device_params();
+    DeviceCommandArguments_RebindAfterFactoryRestore();
+    /* 默认参数及FRAM保存均已完成，重新开放七个命令参数写入口。 */
+    g_device_params_factory_restore_in_progress = 0U;
     print_device_params_event(PARAM_PRINT_FACTORY_RESET_FULL, NULL, "恢复出厂默认参数", NULL);
 }
 
@@ -1414,6 +1784,7 @@ typedef enum {
     PARAM_PRINT_TYPE_HEX32,
     PARAM_PRINT_TYPE_VERSION_TEXT,
     PARAM_PRINT_TYPE_U32_01MM,
+    PARAM_PRINT_TYPE_I32_01MM,
     PARAM_PRINT_TYPE_U32_001MM,
     PARAM_PRINT_TYPE_U32_01M_PER_MIN,
     PARAM_PRINT_TYPE_U32_01MA,
@@ -1487,7 +1858,7 @@ static const ParamPrintItem g_device_param_print_table[] = {
     DEVICE_PARAM_ITEM("零点参数", "零点最大偏差", max_zero_deviation_distance, PARAM_PRINT_TYPE_U32_01MM, "0.1mm"),
     DEVICE_PARAM_ITEM("零点参数", "找零下行距离", findZeroDownDistance, PARAM_PRINT_TYPE_U32_01MM, "0.1mm"),
     DEVICE_PARAM_ITEM("液位参数", "液位罐高", tankHeight, PARAM_PRINT_TYPE_U32_01MM, "0.1mm"),
-    DEVICE_PARAM_ITEM("液位参数", "液位探头距差", liquid_sensor_distance_diff, PARAM_PRINT_TYPE_U32_01MM, "0.1mm"),
+    DEVICE_PARAM_ITEM("液位参数", "液位探头距差", liquid_sensor_distance_diff, PARAM_PRINT_TYPE_I32_01MM, "0.1mm"),
     DEVICE_PARAM_ITEM("液位参数", "液位盲区", blindZone, PARAM_PRINT_TYPE_U32_01MM, "0.1mm"),
     DEVICE_PARAM_ITEM("液位参数", "液位找液阈值", oilLevelThreshold, PARAM_PRINT_TYPE_U32_OIL_LEVEL_THRESHOLD, NULL),
     DEVICE_PARAM_ITEM("液位参数", "液位滞后阈值", oilLevelHysteresisThreshold, PARAM_PRINT_TYPE_U32_OIL_LEVEL_THRESHOLD, NULL),
@@ -2062,6 +2433,10 @@ static void print_device_param_item(const DeviceParameters *params, const ParamP
         raw = device_param_item_read_u32(params, item);
         printf("  %-32s : %.1f mm\r\n", label, ((double)raw) / 10.0);
         break;
+    case PARAM_PRINT_TYPE_I32_01MM:
+        signed_raw = device_param_item_read_i32(params, item);
+        printf("  %-32s : %.1f mm\r\n", label, ((double)signed_raw) / 10.0);
+        break;
     case PARAM_PRINT_TYPE_U32_001MM:
         raw = device_param_item_read_u32(params, item);
         printf("  %-32s : %.3f mm\r\n", label, ((double)raw) / 1000.0);
@@ -2172,7 +2547,8 @@ static uint32_t count_device_params_diff(const DeviceParameters *old_params, con
             count += count_relay_alarm_diff(old_params, new_params);
         } else if (device_param_item_can_diff(item) != 0) {
             if ((item->type == PARAM_PRINT_TYPE_I32) ||
-                (item->type == PARAM_PRINT_TYPE_I32_UNIT)) {
+                (item->type == PARAM_PRINT_TYPE_I32_UNIT) ||
+                (item->type == PARAM_PRINT_TYPE_I32_01MM)) {
                 if (device_param_item_read_i32(old_params, item) != device_param_item_read_i32(new_params, item)) {
                     count++;
                 }
@@ -2197,10 +2573,16 @@ static void print_device_param_diff_item(const DeviceParameters *old_params, con
     build_device_param_print_label(item, NULL, label, sizeof(label));
 
     if ((item->type == PARAM_PRINT_TYPE_I32) ||
-        (item->type == PARAM_PRINT_TYPE_I32_UNIT)) {
+        (item->type == PARAM_PRINT_TYPE_I32_UNIT) ||
+        (item->type == PARAM_PRINT_TYPE_I32_01MM)) {
         old_signed = device_param_item_read_i32(old_params, item);
         new_signed = device_param_item_read_i32(new_params, item);
-        if (item->type == PARAM_PRINT_TYPE_I32_UNIT) {
+        if (item->type == PARAM_PRINT_TYPE_I32_01MM) {
+            printf("  %-32s : %.1f mm -> %.1f mm\r\n",
+                   label,
+                   ((double)old_signed) / 10.0,
+                   ((double)new_signed) / 10.0);
+        } else if (item->type == PARAM_PRINT_TYPE_I32_UNIT) {
             printf("  %-32s : %ld %s -> %ld %s\r\n",
                    label,
                    (long)old_signed,

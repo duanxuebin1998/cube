@@ -1336,11 +1336,11 @@ static uint32_t CorrectWaterTankHeightProcess(void)
     printf("水位标定\t开始\r\n");
     printf("水位标定\t当前缆长=%.1fmm  标定真值=%.1fmm\r\n",
            g_measurement.debug_data.cable_length / 10.0f,
-           g_deviceParams.calibrateWaterLevel / 10.0f);
+           DeviceCommandArguments_Get(DEVICE_COMMAND_ARG_CALIBRATE_WATER_LEVEL) / 10.0f);
 
     /* 核心公式：water_tank_height = cable_length_at_water + calibrateWaterLevel */
     new_height = (int32_t)g_measurement.debug_data.cable_length
-              + (int32_t)g_deviceParams.calibrateWaterLevel;
+              + (int32_t)DeviceCommandArguments_Get(DEVICE_COMMAND_ARG_CALIBRATE_WATER_LEVEL);
 
     /* 合理性保护 */
     if (new_height <= 0 || new_height > 5000000) { /* 例：500m -> 5,000,000(0.1mm) */
@@ -1351,7 +1351,7 @@ static uint32_t CorrectWaterTankHeightProcess(void)
     g_deviceParams.water_tank_height = new_height;
 	WaterLevelSyncFromCable();
     /* 标定完成后清零，防止重复触发 */
-    g_deviceParams.calibrateWaterLevel = 0;
+    DeviceCommandArguments_ClearIfUnchanged(DEVICE_COMMAND_ARG_CALIBRATE_WATER_LEVEL);
 
     save_device_params();
 
@@ -1374,7 +1374,7 @@ static uint32_t CorrectWaterTankHeightProcess(void)
      * 无论当前是否处于跟随态，水位标定都依赖用户给出的真值。
      * 若真值为 0，则无法反推 water_tank_height。
      */
-    if (g_deviceParams.calibrateWaterLevel == 0) {
+    if (DeviceCommandArguments_Get(DEVICE_COMMAND_ARG_CALIBRATE_WATER_LEVEL) == 0) {
         printf("水位标定\t未设置标定水位真值(标定水位=0)，无法标定\r\n");
         SET_ERROR(MEASUREMENT_WATER_CALIBRATION_NOT_CONFIGURED);
     }

@@ -2026,7 +2026,7 @@ static int waitForTheLiquidLevelToExceedTheBlindZone(void) {
 void CorrectOilLevelProcess(void) {
     printf("液位流程\t开始标定液位\r\n");
     int64_t tank_height = (int64_t)g_measurement.debug_data.cable_length +
-                          (int64_t)g_deviceParams.calibrateOilLevel;
+                          (int64_t)DeviceCommandArguments_Get(DEVICE_COMMAND_ARG_CALIBRATE_OIL_LEVEL);
 
     if ((tank_height < 0) || (tank_height > (int64_t)UINT32_MAX)) {
         printf("液位流程\t修正后罐高非法：%ld(0.1mm)，取消修正，保留原罐高和修正参数\r\n",
@@ -2034,7 +2034,7 @@ void CorrectOilLevelProcess(void) {
         return;
     }
     g_deviceParams.tankHeight = (uint32_t)tank_height;
-    g_deviceParams.calibrateOilLevel = 0; /* 标定完成后清零 */
+    DeviceCommandArguments_ClearIfUnchanged(DEVICE_COMMAND_ARG_CALIBRATE_OIL_LEVEL); /* 未被后续写入时清零 */
     printf("液位流程\t标定完成，罐高设置为：%lu(0.1mm)\r\n", (unsigned long)g_deviceParams.tankHeight);
     MotorCtrl_RefreshPositionFromActiveSource();  /* 修正罐高后按当前记步源刷新当前位置 */
     OilLevel_SyncCurrentPositionToResult("液位修正");

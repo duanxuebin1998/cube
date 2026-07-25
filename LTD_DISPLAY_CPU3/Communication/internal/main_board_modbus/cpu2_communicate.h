@@ -43,7 +43,15 @@ typedef struct {
     uint32_t consecutive_failure_count;
     uint32_t max_consecutive_failure_count;
     Cpu2CommFailureReason last_failure_reason;
+    uint8_t last_modbus_exception_code;
 } Cpu2CommHealthSnapshot;
+
+#define CPU2_MODBUS_RESULT_OK                 0x00U
+#define CPU2_MODBUS_EX_ILLEGAL_FUNCTION       0x01U
+#define CPU2_MODBUS_EX_ILLEGAL_ADDRESS        0x02U
+#define CPU2_MODBUS_EX_ILLEGAL_VALUE          0x03U
+#define CPU2_MODBUS_EX_SLAVE_DEVICE_FAILURE   0x04U
+#define CPU2_MODBUS_EX_SLAVE_DEVICE_BUSY      0x06U
 
 #define COM1_SET_RECV_MODE()  HAL_GPIO_WritePin(COM1_SEL_GPIO_Port, COM1_SEL_Pin, GPIO_PIN_SET)
 #define COM1_SET_SEND_MODE()  HAL_GPIO_WritePin(COM1_SEL_GPIO_Port, COM1_SEL_Pin, GPIO_PIN_RESET)
@@ -99,9 +107,9 @@ bool CPU2_CommIsProtocolMismatch(void);
  */
 bool CPU2_CommIsAvailable(void);
 /*
- * 函数用途：使 CPU2 参数快照失效，并请求主循环重新读取全部保持寄存器参数。
- * 调用场景：参数写入后的定向补读失败，CPU3 无法确认 CPU2 当前实际值时调用。
- * 关键约束：刷新完成前参数读写门禁必须保持关闭，不能继续开放旧镜像。
+ * 函数用途：使 CPU2 完整参数快照失效，并请求主循环重新读取全部保持寄存器参数。
+ * 调用场景：参数写入确认、写结果不确定或恢复出厂命令确认后调用。
+ * 关键约束：刷新请求不清逐字段确认资格；刷新完成前参数读取和普通写入门禁保持关闭。
  */
 void CPU2_CommRequestParameterRefresh(void);
 /*
@@ -110,6 +118,12 @@ void CPU2_CommRequestParameterRefresh(void);
  * 关键约束：参数补读期间不打断运行态连续性，通信故障和协议不匹配必须返回false。
  */
 bool CPU2_CommHasRuntimeSnapshot(void);
+/*
+ * 函数用途：判断当前 CPU2 会话内固定点结果是否完成一致性握手。
+ * 调用场景：外部协议准备读取单点测量或监测派生字段前调用。
+ * 关键约束：运行态会话无效时必须同时返回 false，不能发布掉线前固定点结果。
+ */
+bool CPU2_CommHasFixedPointSnapshot(void);
 /*
  * 函数用途：读取CPU3本机维护的CPU2公开快照会话代际。
  * 调用场景：外部协议本地投影判断通信恢复后是否需要丢弃旧缓存。
@@ -167,9 +181,23 @@ bool CPU2_CommFetchSiPreviousSnapshot(Cpu2SiProfileCandidateKey *out_key);
  * @param startadd 起始保持寄存器地址，必须按 2 个寄存器对齐。
  * @param registercnt 寄存器数量，必须为非零偶数。
  * @param wire_regs 按 Modbus 高字在前、低字在后的寄存器数据。
- * @return true 表示 CPU2 已返回合法 ACK，false 表示门禁、范围或通信失败。
+ * @return true 表示 CPU2 已返回合法 ACK，false 表示门禁、范围、标准异常或通信失败。
  */
 bool CPU2_CommWriteHoldingRegisters(uint16_t startadd, uint16_t registercnt, const uint16_t *wire_regs);
+/**
+ * @brief 按 LTD 共享 Modbus 线序写入并返回标准 Modbus 结果。
+ * @note 非命令参数以合法 FC10 ACK 确认本次值并更新局部镜像，随后触发后台全量刷新。
+ * @return 0 表示成功；CPU2 标准异常码原样返回；本地忙返回 0x06；
+ *         UART、超时、CRC 等传输失败返回 0x04。
+ */
+uint8_t CPU2_CommWriteHoldingRegistersEx(uint16_t startadd,
+                                         uint16_t registercnt,
+                                         const uint16_t *wire_regs);
+/**
+ * @brief 读取最近一次同步事务收到的标准 Modbus 异常码。
+ * @return 0 表示最近事务没有标准异常帧。
+ */
+uint8_t CPU2_CommGetLastModbusException(void);
 /**
  * @brief 在 UART5 错误中断中记录待处理标志并解除当前等待。
  * @note 仅允许在 ISR 中置标志，不在中断内打印、计数或修改设备故障状态。
@@ -202,4 +230,3 @@ bool sendToCPU2(uint8_t*arr,uint16_t len,bool flag_fromhost);
 
 
 #endif
-

@@ -15,7 +15,8 @@ typedef enum
 {
     CPU3_EXTERNAL_READ_LOCAL = 0U,
     CPU3_EXTERNAL_READ_RUNTIME = 1U,
-    CPU3_EXTERNAL_READ_PARAMETERS = 2U
+    CPU3_EXTERNAL_READ_PARAMETERS = 2U,
+    CPU3_EXTERNAL_READ_FIXED_POINT = 4U
 } Cpu3ExternalReadRequirement;
 
 /*
@@ -54,6 +55,46 @@ static inline uint8_t CPU3_ExternalDsmInputRangeNeedsRuntime(uint16_t start,
         uint16_t address = (uint16_t)((uint32_t)start + index);
 
         if (CPU3_ExternalDsmInputIsLocal(address) == 0U)
+        {
+            return 1U;
+        }
+    }
+
+    return 0U;
+}
+
+/*
+ * 函数用途：判断 DSM 输入寄存器是否来自 CPU2 固定点测量或监测结果。
+ * 调用场景：DSM FC04 在基础运行态门禁后逐寄存器分类。
+ * 关键约束：0x0006 和 0x000F 是 CPU3 本地状态常量，不得扩大固定点门禁范围。
+ */
+static inline uint8_t CPU3_ExternalDsmInputNeedsFixedPoint(uint16_t address)
+{
+    if (((address >= 0x0004U) && (address <= 0x0005U)) ||
+        ((address >= 0x0007U) && (address <= 0x000EU)) ||
+        ((address >= 0x0010U) && (address <= 0x0015U)))
+    {
+        return 1U;
+    }
+
+    return 0U;
+}
+
+/*
+ * 函数用途：判断 DSM FC04 整帧是否包含固定点派生字段。
+ * 调用场景：读取输入寄存器影子前执行独立固定点门禁。
+ * 关键约束：混合普通运行态和固定点字段时整帧返回 Busy。
+ */
+static inline uint8_t CPU3_ExternalDsmInputRangeNeedsFixedPoint(uint16_t start,
+                                                                uint16_t quantity)
+{
+    uint32_t index;
+
+    for (index = 0U; index < (uint32_t)quantity; ++index)
+    {
+        uint16_t address = (uint16_t)((uint32_t)start + index);
+
+        if (CPU3_ExternalDsmInputNeedsFixedPoint(address) != 0U)
         {
             return 1U;
         }
@@ -114,6 +155,25 @@ static inline uint8_t CPU3_ExternalSiBitRangeNeedsRuntime(uint8_t function,
 }
 
 /*
+ * 函数用途：判断 SI FC02 整帧是否读取固定点密度派生报警。
+ * 调用场景：离散输入位池打包前执行独立固定点门禁。
+ * 关键约束：只有 16、17 位来自固定点密度；FC01 线圈不受该门禁影响。
+ */
+static inline uint8_t CPU3_ExternalSiBitRangeNeedsFixedPoint(uint8_t function,
+                                                             uint16_t start,
+                                                             uint16_t quantity)
+{
+    uint32_t range_end = (uint32_t)start + (uint32_t)quantity;
+
+    if (function != 0x02U)
+    {
+        return 0U;
+    }
+
+    return (((uint32_t)start < 18U) && (range_end > 16U)) ? 1U : 0U;
+}
+
+/*
  * 函数用途：判断 SI FC04 输入寄存器是否依赖 CPU2 运行态快照。
  * 调用场景：SI 输入寄存器响应复制前逐 offset 分类。
  * 关键约束：Profile 时间、镜像和点阵均随 CPU2 生命周期失效。
@@ -155,6 +215,21 @@ static inline uint8_t CPU3_ExternalSiInputRangeNeedsRuntime(uint16_t start,
 }
 
 /*
+ * 函数用途：判断 SI FC04 整帧是否读取固定点密度或其离散输入镜像。
+ * 调用场景：输入寄存器池序列化前执行独立固定点门禁。
+ * 关键约束：offset 2 是当前密度，offset 15 含低高密度报警镜像。
+ */
+static inline uint8_t CPU3_ExternalSiInputRangeNeedsFixedPoint(uint16_t start,
+                                                               uint16_t quantity)
+{
+    uint32_t range_end = (uint32_t)start + (uint32_t)quantity;
+    uint8_t contains_density = ((uint32_t)start < 3U) && (range_end > 2U);
+    uint8_t contains_alarm_mirror = ((uint32_t)start < 16U) && (range_end > 15U);
+
+    return ((contains_density != 0U) || (contains_alarm_mirror != 0U)) ? 1U : 0U;
+}
+
+/*
  * 函数用途：分类一个 Wärtsilä FC03 保持寄存器的新鲜度要求。
  * 调用场景：合法读取范围在复制寄存器影子前逐项分类。
  * 关键约束：未列入静态白名单的兼容空洞保守地要求运行态快照。
@@ -170,12 +245,16 @@ CPU3_ExternalWartsilaRegisterRequirement(uint16_t address)
         return CPU3_EXTERNAL_READ_PARAMETERS;
     }
 
-    if ((address == 0x0000U) ||
-        (address == 0x0002U) ||
+    if ((address == 0x0002U) ||
         (address == 0x0004U) ||
+        (address == 0x000BU))
+    {
+        return CPU3_EXTERNAL_READ_FIXED_POINT;
+    }
+
+    if ((address == 0x0000U) ||
         (address == 0x0007U) ||
         (address == 0x0009U) ||
-        (address == 0x000BU) ||
         (address == 0x000DU) ||
         (address == 0x0050U) ||
         (address == 0x0051U))
