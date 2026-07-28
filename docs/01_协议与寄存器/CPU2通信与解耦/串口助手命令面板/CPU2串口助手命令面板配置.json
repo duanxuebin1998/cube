@@ -31,6 +31,24 @@
           "delayMs": 100
         },
         {
+          "comment": "读取 24V 电压与掉电触发状态",
+          "payload": "PWR?",
+          "sendMode": "text",
+          "delayMs": 100
+        },
+        {
+          "comment": "读取编码器与 FRAM 保存状态",
+          "payload": "ENC?",
+          "sendMode": "text",
+          "delayMs": 100
+        },
+        {
+          "comment": "[测试] 模拟一次紧急保存，不改变 ADC 状态",
+          "payload": "PWRTEST",
+          "sendMode": "text",
+          "delayMs": 100
+        },
+        {
           "comment": "[安全] 通用停止并取消当前测量/调试",
           "payload": "STOP",
           "sendMode": "text",

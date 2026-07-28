@@ -27,7 +27,7 @@
 #define UNVALID_GSW 0                      /* 质量无效值 */
 
 #define MAX_MEASUREMENT_POINTS 200 /* 密度分布测量最大点数。 */
-#define DEVICE_PROTOCOL_VERSION 29u /* CPU2/CPU3共享协议版本；协议29取消12-11并交换18/21故障类别，不兼容旧故障码。 */
+#define DEVICE_PROTOCOL_VERSION 30u /* CPU2/CPU3共享协议版本；协议30新增23类整机供电与电源监控故障码。 */
 #define FAULT_AUTO_RECOVERY_RETRY_DEFAULT 3u /* 故障自动恢复默认重试次数。 */
 #define FAULT_AUTO_RECOVERY_RETRY_MAX 10u /* 故障自动恢复最大重试次数。 */
 
@@ -362,7 +362,15 @@ typedef enum {
     /* ==================== 22 系统与软件故障 (0x00160000 - 0x0016FFFF) ==================== */
     SYSTEM_BUFFER_CAPACITY_ERROR = 0x00160001,    /* 内部缓冲区或存储分区容量不足 */
     SYSTEM_CALL_CONDITION_ERROR = 0x00160002,     /* 内部调用参数或前置条件异常 */
-    SYSTEM_CALCULATION_ERROR = 0x00160003         /* 内部计算无法得到有效结果 */
+    SYSTEM_CALCULATION_ERROR = 0x00160003,        /* 内部计算无法得到有效结果 */
+
+    /* ==================== 23 整机供电与电源监控故障 (0x00170000 - 0x0017FFFF) ==================== */
+    POWER_SUPPLY_24V_UNDERVOLTAGE = 0x00170001,   /* 整机24V供电低于安全阈值 */
+    POWER_MONITOR_ADC_OVERRUN = 0x00170002,       /* 24V监控ADC发生数据溢出 */
+    POWER_MONITOR_DMA_STOPPED = 0x00170003,       /* 24V监控DMA意外停止 */
+    POWER_MONITOR_INIT_FAILED = 0x00170004,       /* 24V电源监控启动失败 */
+    POWER_MONITOR_RECOVERY_FAILED = 0x00170005,   /* 24V电源监控连续三次恢复失败 */
+    POWER_LOSS_POSITION_SAVE_FAILED = 0x00170006  /* 低压紧急位置保存未完成 */
 
 } ErrorCode;
 

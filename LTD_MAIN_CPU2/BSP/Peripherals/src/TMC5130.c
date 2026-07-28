@@ -7,6 +7,8 @@
 #include "spi.h"
 #include "fault_manager.h"
 #include "error_log.h"
+#include "encoder.h"
+#include "power_monitor.h"
 
 #include "sensor.h"    /* 传感器相关接口（如扭力、防撞检测等） */
 #include "motor_ctrl.h" /* 电机控制上层接口 */
@@ -806,6 +808,14 @@ void stpr_disableDriver(TMC5130TypeDef *tmc5130)
  */
 void stpr_enableDriver(TMC5130TypeDef *tmc5130)
 {
+    /*
+     * 这是最底层最终门禁：即使上层遗漏状态检查，电源监控或编码器锁存期间也只允许
+     * 把ENN保持为高电平关闭状态，不能通过任何运动路径重新使能驱动。
+     */
+    if (PowerMonitor_IsMotorInhibited() || Encoder_HasLatchedFault()) {
+        HAL_GPIO_WritePin(tmc5130->en_port, tmc5130->en_pin, GPIO_PIN_SET);
+        return;
+    }
     HAL_GPIO_WritePin(tmc5130->en_port, tmc5130->en_pin, GPIO_PIN_RESET);
 }
 
@@ -1304,4 +1314,3 @@ uint32_t stpr_initStepper(TMC5130TypeDef *tmc5130,
 #undef TMC5130_INIT_WRITE
     return NO_ERROR;
 }
-

@@ -32,7 +32,8 @@ extern "C" {
 
 /* USER CODE END Includes */
 
-extern ADC_HandleTypeDef hadc1;
+extern ADC_HandleTypeDef hadc1;       /* ADC1连续采集PC2上的24V分压。 */
+extern DMA_HandleTypeDef hdma_adc1;   /* DMA2 Stream0循环覆盖单个32bit采样值。 */
 
 /* USER CODE BEGIN Private defines */
 

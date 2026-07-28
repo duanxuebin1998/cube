@@ -25,6 +25,13 @@ void SerialCommand_ProcessReady(void);
 void SerialCommand_Process(const uint8_t *command);
 
 /*
+ * 函数用途：在线程态输出中断或PendSV延后提交的调试快照。
+ * 调用场景：App_MainLoop每轮后台服务入口。
+ * 关键约束：只消费已完成快照；不得从ISR或PendSV调用。
+ */
+void SerialCommand_ProcessDeferredReports(void);
+
+/*
  * 函数用途：在主循环报告一条超长串口命令。
  * 调用场景：SerialCommand_ProcessReady 检测到超长帧后在主循环调用。
  * 关键约束：不得在 USART1 中断内调用。

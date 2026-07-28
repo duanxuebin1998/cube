@@ -28,6 +28,10 @@
 #include "stateformodbus.h"
 #include "iwdg.h"
 #include "serial_command.h"
+#include "AS5145.h"
+#include "encoder.h"
+#include "adc.h"
+#include "power_monitor.h"
 #include "../../Services/Relay/relay_output.h"
 #include "../../Services/AoOutput/ao_output.h"
 /* USER CODE END Includes */
@@ -331,6 +335,12 @@ void PendSV_Handler(void)
 
   /* USER CODE END PendSV_IRQn 0 */
   /* USER CODE BEGIN PendSV_IRQn 1 */
+  /*
+   * 先消费SSI事件更新RAM累计位置，再提交对应编码器快照；
+   * AO和CPU2通信延后服务随后执行，所有处理都必须保持有界。
+   */
+  AS5145_ProcessDeferred();
+  Encoder_ProcessDeferredPersistence();
   (void)AoOutput_ProcessPendingTimerRefresh();
   CPU2_ProcessDeferredUartFrames();
   CPU2_UartServicePendingRecovery();
@@ -347,8 +357,23 @@ void SysTick_Handler(void)
   /* USER CODE END SysTick_IRQn 0 */
   HAL_IncTick();
   /* USER CODE BEGIN SysTick_IRQn 1 */
-
+  /* 1ms周期只检查寄存器和RAM状态、执行硬门禁及挂起延后任务。 */
+  PowerMonitor_TickFromISR();
   /* USER CODE END SysTick_IRQn 1 */
+}
+
+/**
+  * @brief This function handles ADC global interrupt.
+  */
+void ADC_IRQHandler(void)
+{
+  /* USER CODE BEGIN ADC_IRQn 0 */
+
+  /* USER CODE END ADC_IRQn 0 */
+  HAL_ADC_IRQHandler(&hadc1);
+  /* USER CODE BEGIN ADC_IRQn 1 */
+
+  /* USER CODE END ADC_IRQn 1 */
 }
 
 /******************************************************************************/

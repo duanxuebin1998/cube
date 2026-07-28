@@ -23,6 +23,7 @@
 #include "sensor.h"
 #include "ch9141_at.h"
 #include "fault_recovery.h"
+#include "power_monitor.h"
 #include "serial_command.h"
 #include "../../Services/Relay/relay_output.h"
 
@@ -97,16 +98,45 @@ static uint8_t App_HandleIdleGlobalError(void) {
 }
 /* 初始化函数 */
 void App_Init(void) {
+    /*
+     * 各子系统返回值保留到其初始化边界；startup_init_error汇总需要在
+     * fault_info_init之后重新发布的启动故障，避免初始化函数清掉诊断证据。
+     */
     uint32_t motor_init_ret;
+    uint32_t encoder_init_ret;
     uint32_t ao_init_ret;
     uint32_t startup_init_error = NO_ERROR;
+    uint32_t power_monitor_start_ret;
 	printf("LTD重启！\n");
+    /*
+     * 电源监控必须先于参数、编码器和电机初始化进入默认安全状态，
+     * 防止启动期在24V采样尚不可信时使能驱动或发起普通FRAM写入。
+     */
+    power_monitor_start_ret = PowerMonitor_Start();
+    if (power_monitor_start_ret != NO_ERROR) {
+        startup_init_error = power_monitor_start_ret;
+    }
 	init_device_params(); /* 初始化设备参数 */
 	/* 维护模式属于易失运行态；每次上电都必须关闭并清空对外发布状态。 */
 	g_measurement.device_status.maintenance_mode_active = 0U;
 	g_measurement.device_status.relay_alarm_inhibit_effective = 0U;
 	g_measurement.device_status.relay_alarm_action_mask = 0U;
-	Initialize_Encoder(); /* 初始化编码器 */
+	encoder_init_ret = Initialize_Encoder(); /* 初始化编码器 */
+	if (encoder_init_ret != NO_ERROR) {
+		startup_init_error = encoder_init_ret;
+	}
+    /*
+     * 编码器已在恢复A/B后消费上次掉电回执；确认失败时升级为23-6，
+     * 其优先级高于普通监控启动故障，并保持运动禁止。
+     */
+    if (Encoder_DidBootDetectPowerLossSaveFailure()) {
+        PowerMonitor_ReportEmergencyPersistenceFailure();
+        startup_init_error = POWER_LOSS_POSITION_SAVE_FAILED;
+    }
+    /* 只有已恢复可信位置时才开放掉电保存，避免无效位置使 PendSV 持续重投。 */
+    if (Encoder_HasTrustedPosition()) {
+        PowerMonitor_ArmEmergencyPersistence();
+    }
 	/* 这 1 秒延时保留给外设稳定，但必须放在编码器启动之后，让编码器先采集首帧。 */
 	HAL_Delay(1000);
 	HartInit();
@@ -118,11 +148,24 @@ void App_Init(void) {
         /* AO 输出是辅助输出服务，启动期 AD5421 暂时不可读只记录运行态，不阻塞整机测量。 */
         printf("AO初始化失败，仅记录AO运行态：0x%08lX\r\n", (unsigned long)ao_init_ret);
     }
-	motor_init_ret = MotorCtrl_Init();
+    /*
+     * 电源门禁已锁存时不触碰电机驱动初始化；仍返回明确故障码，
+     * 使上层进入统一故障状态而不是把“未初始化电机”误当成成功。
+     */
+    if (PowerMonitor_IsMotorInhibited()) {
+        motor_init_ret = PowerMonitor_GetLatchedFaultCode();
+        if (motor_init_ret == NO_ERROR) {
+            motor_init_ret = POWER_MONITOR_INIT_FAILED;
+        }
+    } else {
+        motor_init_ret = MotorCtrl_Init();
+    }
 	/* 先处理异常边界，避免应用主循环状态机带故障继续运行。 */
 	if (motor_init_ret != NO_ERROR) {
 		g_measurement.device_status.error_code = motor_init_ret;
-		startup_init_error = motor_init_ret;
+		if (startup_init_error == NO_ERROR) {
+			startup_init_error = motor_init_ret;
+		}
 		printf("电机初始化失败：0x%08lX\r\n", (unsigned long)motor_init_ret);
 	}
 	fault_info_init(); /* 初始化故障信息 */
@@ -131,7 +174,7 @@ void App_Init(void) {
 	 * 避免只出现一次的硬件诊断丢失。
 	 */
 	if (startup_init_error != NO_ERROR) {
-		g_measurement.device_status.error_code = startup_init_error;
+		FaultManager_LatchAsyncError(startup_init_error);
 	}
 	CH9141_AT_NotifySensorPowerOn();
 	DetectSensorType(); /* 检测传感器类型 */
@@ -171,6 +214,7 @@ void App_Init(void) {
  */
 void App_MainLoop(void) {
     CommandType pending_command = CMD_NONE;
+    uint32_t power_fault_code;
 
 	/* 测试指令 */
 	/* DSM_V2_Test_AllParams(); / / 二代传感器测试函数 */
@@ -182,7 +226,14 @@ void App_MainLoop(void) {
 	/* HAL_UART_Transmit_DMA(&huart2, "123456", 6); / / 通过UART发送响应 */
 
 
+	/* 电源监控故障先在线程态发布；恢复服务每轮最多执行一次局部ADC/DMA重启。 */
+    power_fault_code = PowerMonitor_ProcessDeferred();
+    if (power_fault_code != NO_ERROR) {
+        FaultManager_LatchAsyncError(power_fault_code);
+    }
 	/* 后台轻量检查：这里只做一次快速轮询，不在主循环里展开复杂处理。 */
+	/* 先输出PendSV已完成的紧急保存快照，确保所有printf仍在线程态。 */
+	SerialCommand_ProcessDeferredReports();
 	(void)MotorCtrl_PollRuntimePosition();
 	(void)Weight_CheckCommunicationTimeout();
 	HostCommu_ProcessDeferredLogs();

@@ -118,6 +118,13 @@ void FaultManager_SetGlobalErrorState(uint32_t error_code,
                                       uint32_t line,
                                       const char *func);
 
+/*
+ * 函数用途：由异步采集链路锁存并发布稳定故障快照。
+ * 调用场景：PendSV 确认编码器连续第 3 帧异常。
+ * 关键约束：先发布再硬禁止驱动；不打印、不调用 ErrorLog、不执行阻塞慢停。
+ */
+void FaultManager_LatchAsyncError(uint32_t error_code);
+
 /* 统一错误检查宏，发现错误后进入故障处理出口。 */
 #define CHECK_ERROR(errorcode)                                                   \
     do {                                                                         \

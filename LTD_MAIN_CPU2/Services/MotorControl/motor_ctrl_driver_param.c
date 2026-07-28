@@ -212,9 +212,24 @@ static uint32_t MotorDriver_CheckMotionReadyInternal(bool ignore_encoder_ready)
     }
 
     if (!Encoder_IsReady()) {
+        /*
+         * A/B 编码器记录都损坏时，只有明确的回零或零点标定命令可以在 AS5145
+         * 已有有效单圈角度后运动，回零完成后由 set_encoder_zero 建立新可信记录。
+         */
+        if (((g_measurement.device_status.current_command == CMD_BACK_ZERO) ||
+             (g_measurement.device_status.current_command == CMD_CALIBRATE_ZERO)) &&
+            Encoder_CanStartHoming()) {
+            printf("编码器累计位置无效，允许回零或标定零点命令重新建立位置基准\r\n");
+            return NO_ERROR;
+        }
         if (ignore_encoder_ready) {
             printf("强制调试运动：忽略编码器首帧未就绪，仅保留驱动安全检查\r\n");
             return NO_ERROR;
+        }
+        if (!Encoder_HasTrustedPosition()) {
+            g_measurement.device_status.error_code = ENCODER_POWERON_FAIL;
+            printf("电机运动被拦截：编码器累计位置无有效持久化记录，必须先回零\r\n");
+            return ENCODER_POWERON_FAIL;
         }
         /* 编码轮记步模式下没有首帧可信位置，必须禁止下发运动命令。 */
         g_measurement.device_status.error_code = ENCODER_FIRST_SAMPLE_TIMEOUT;

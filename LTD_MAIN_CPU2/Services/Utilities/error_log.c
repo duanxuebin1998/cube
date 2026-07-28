@@ -146,6 +146,7 @@ const char *ErrorLog_GetModuleByCode(uint32_t code)
     case 0x00150000UL:
         return ERROR_LOG_MODULE_AO_OUTPUT;
     case 0x00160000UL:
+    case 0x00170000UL:
         return ERROR_LOG_MODULE_SYSTEM;
     default:
         return ERROR_LOG_MODULE_UNKNOWN;
@@ -412,6 +413,18 @@ const char *ErrorLog_GetReasonByCode(uint32_t code)
         return "内部调用参数或前置条件异常";
     case SYSTEM_CALCULATION_ERROR:
         return "内部计算无法得到有效结果";
+    case POWER_SUPPLY_24V_UNDERVOLTAGE:
+        return "整机24V供电低于20V安全阈值";
+    case POWER_MONITOR_ADC_OVERRUN:
+        return "24V监控ADC数据溢出，采样时效无法确认";
+    case POWER_MONITOR_DMA_STOPPED:
+        return "24V监控DMA停止，采样值可能已经陈旧";
+    case POWER_MONITOR_INIT_FAILED:
+        return "24V电源监控启动或首次采样失败";
+    case POWER_MONITOR_RECOVERY_FAILED:
+        return "24V电源监控连续三次局部恢复失败";
+    case POWER_LOSS_POSITION_SAVE_FAILED:
+        return "低压期间编码器位置和回执未完成可靠提交";
     default:
         break;
     }
@@ -433,6 +446,8 @@ const char *ErrorLog_GetReasonByCode(uint32_t code)
         return ERROR_LOG_REASON_COMM_FAIL;
     case 0x00160000UL:
         return ERROR_LOG_REASON_UNKNOWN_FAULT;
+    case 0x00170000UL:
+        return "整机供电或电源监控异常";
     default:
         return ERROR_LOG_REASON_UNKNOWN;
     }
@@ -705,6 +720,18 @@ const char *ErrorLog_GetCodeName(uint32_t code)
         return "系统调用条件异常";
     case SYSTEM_CALCULATION_ERROR:
         return "系统计算异常";
+    case POWER_SUPPLY_24V_UNDERVOLTAGE:
+        return "整机24V欠压";
+    case POWER_MONITOR_ADC_OVERRUN:
+        return "电源监控ADC溢出";
+    case POWER_MONITOR_DMA_STOPPED:
+        return "电源监控DMA停止";
+    case POWER_MONITOR_INIT_FAILED:
+        return "电源监控启动失败";
+    case POWER_MONITOR_RECOVERY_FAILED:
+        return "电源监控恢复失败";
+    case POWER_LOSS_POSITION_SAVE_FAILED:
+        return "掉电位置保存失败";
     default:
         return ERROR_LOG_TEXT_UNKNOWN;
     }

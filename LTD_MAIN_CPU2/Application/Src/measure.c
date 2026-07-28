@@ -24,6 +24,7 @@
 #include "error_log.h"
 #include "abortable_delay.h"
 #include "fault_recovery.h"
+#include "power_monitor.h"
 #include "serial_command.h"
 #include "../../Services/Relay/relay_output.h"
 
@@ -127,6 +128,23 @@ void ProcessMeasureCmd(CommandType command)
         return;
     }
 
+    /*
+     * 只有新的顶层正式命令拥有解除编码器故障锁存的权限。
+     * 后续粗找、精找和回零内部重试再次调用 MeasureStart 时不会经过这里。
+     */
+    /*
+     * 产品边界规定“收到新的正式命令”即允许清编码器锁存，因此先清编码器，
+     * 再现场复核电源门禁；即使电源拒绝启动，也不恢复上一流程的编码器锁存。
+     */
+    Encoder_BeginNewProcess();
+    uint32_t power_start_ret = PowerMonitor_BeginNewProcess();
+    if (power_start_ret != NO_ERROR) {
+        printf("新流程被拒绝：电源监控故障码=0x%08lX\r\n",
+               (unsigned long)power_start_ret);
+        SiProfile_HandleFailure();
+        SET_ERROR(power_start_ret);
+        return;
+    }
     uint32_t start_ret = (uint32_t)MeasureStart(); /* 测量初始化 */
     /* SI Profile 回液位期间的启动失败必须关闭候选态，避免阶段永久停在 RETURNING_LEVEL。 */
     if (start_ret == STATE_SWITCH) {
@@ -333,7 +351,10 @@ static void CMD_CancelMeasurement(void)
      * 此处只清当前执行态，不能覆盖取消期间并发到达的下一条命令。
      */
     g_measurement.device_status.current_command = CMD_NONE;
-    g_measurement.device_status.error_code = NO_ERROR;
+    if ((!Encoder_HasLatchedFault()) &&
+        (g_measurement.device_status.error_code == STATE_SWITCH)) {
+        g_measurement.device_status.error_code = NO_ERROR;
+    }
 
     stop_ret = MotorCtrl_SlowStop();
     /* 先处理异常边界，避免测量流程状态机带故障继续运行。 */
@@ -427,7 +448,7 @@ int MeasureStart(void) {
         return (int)ret;
     }
 	weight_init();
-	g_measurement.device_status.error_code = NO_ERROR; /* 故障代码清零 */
+
     /*
      * 外部协议适配辅助状态随新测量命令重新计算，避免上一次流程残留。
      * 这些状态只给 CPU3/SI 做协议转换，不参与原测量流程控制。
@@ -560,7 +581,10 @@ static void CMD_CalibrateZeroPoint(void) {
 
     /* 开始回零点 */
     ret = SearchZero();
-    SET_ERROR(ret);
+    if (ret != NO_ERROR) {
+        SET_ERROR(ret);
+        return;
+    }
     ret = MotorCtrl_CalibrateFirstLoopCircumferenceAtZero();
     /* 先处理异常边界，避免测量流程状态机带故障继续运行。 */
     if (ret != NO_ERROR) {

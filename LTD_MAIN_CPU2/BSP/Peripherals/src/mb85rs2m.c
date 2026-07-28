@@ -2,237 +2,365 @@
 #include <stdio.h>
 #include "usart.h"
 
-static void WriteEnableLatch(void);
+/* 单个SPI命令、地址或数据阶段的最大阻塞时间，单位ms，禁止使用HAL_MAX_DELAY。 */
+#define FRAM_SPI_TIMEOUT_MS 5U
+
+/* 仲裁状态会被ADC/SysTick、PendSV和主循环共同访问，复合变更使用短临界区。 */
+static volatile uint8_t s_fram_transaction_active = 0U; /* 1表示已有读写事务持有SPI4。 */
+static volatile uint8_t s_fram_emergency_reserved = 0U; /* 1表示掉电保存已预约后续事务。 */
+static volatile uint8_t s_fram_emergency_owner = 0U; /* 1表示当前调用属于编码器紧急保存。 */
+static volatile uint8_t s_fram_normal_write_inhibited = 0U; /* 1表示电源不可信，拒绝普通写。 */
+
 /*
- **Function: write enable
- **Parameter: None
- **Return value: None
+ * 函数用途：把 HAL SPI 状态转换为 FRAM 统一状态。
+ * 调用场景：FRAM 事务的每一个命令、地址和数据阶段。
+ * 关键约束：不打印、不递归访问 FRAM。
  */
-static void WriteEnableLatch(void)
+static FRAM_Status FRAM_MapHalStatus(HAL_StatusTypeDef status)
 {
-	/* 选择 FRAM（拉低 CS 引脚） */
-	HAL_GPIO_WritePin(FRAM_CS_GPIO_Port, FRAM_CS_Pin, GPIO_PIN_RESET);
-
-	/* 发送写使能命令 */
-	uint8_t cmd = MB_WRITEENABLE;
-	HAL_SPI_Transmit(&FRAM_SPI, &cmd, 1, HAL_MAX_DELAY);
-
-	/* 取消选择 FRAM（拉高 CS 引脚） */
-	HAL_GPIO_WritePin(FRAM_CS_GPIO_Port, FRAM_CS_Pin, GPIO_PIN_SET);
+    if (status == HAL_OK) {
+        return FRAM_STATUS_OK;
+    }
+    if (status == HAL_BUSY) {
+        return FRAM_STATUS_BUSY;
+    }
+    if (status == HAL_TIMEOUT) {
+        return FRAM_STATUS_TIMEOUT;
+    }
+    return FRAM_STATUS_HAL_ERROR;
 }
 
-/* 写数据到 FRAM */
-void WriteSingleData(uint32_t data, uint32_t address)
+/*
+ * 函数用途：在短临界区内取得唯一 FRAM 事务所有权。
+ * 调用场景：FRAM_Read 和 FRAM_Write 进入硬件事务之前。
+ * 关键约束：不等待；已有事务时立即返回 BUSY，避免中断上下文死锁。
+ */
+static FRAM_Status FRAM_TryLock(void)
 {
-	WriteEnableLatch();  /* 使能写操作 */
+    uint32_t primask = __get_PRIMASK();
+    FRAM_Status result = FRAM_STATUS_BUSY;
 
-	/* 发送写命令 */
-	HAL_GPIO_WritePin(FRAM_CS_GPIO_Port, FRAM_CS_Pin, GPIO_PIN_RESET);
-	uint8_t write_cmd = MB_WRITEDATA;
-	HAL_SPI_Transmit(&FRAM_SPI, &write_cmd, 1, HAL_MAX_DELAY);
-
-	/* 发送地址（3个字节） */
-	uint8_t address_bytes[3] =
-	{ (address >> 16) & 0xFF, (address >> 8) & 0xFF, address & 0xFF };
-	HAL_SPI_Transmit(&FRAM_SPI, address_bytes, 3, HAL_MAX_DELAY);
-
-	/* 发送数据（4字节） */
-	uint8_t data_bytes[4] =
-			{ (data >> 24) & 0xFF, (data >> 16) & 0xFF, (data >> 8) & 0xFF, data
-					& 0xFF };
-	HAL_SPI_Transmit(&FRAM_SPI, data_bytes, 4, HAL_MAX_DELAY);
-
-	/* 取消选择 FRAM */
-	HAL_GPIO_WritePin(FRAM_CS_GPIO_Port, FRAM_CS_Pin, GPIO_PIN_SET);
+    __disable_irq();
+    if (((s_fram_emergency_reserved == 0U) ||
+         (s_fram_emergency_owner != 0U)) &&
+        (s_fram_transaction_active == 0U)) {
+        s_fram_transaction_active = 1U;
+        __DMB();
+        result = FRAM_STATUS_OK;
+    }
+    if (primask == 0U) {
+        __enable_irq();
+    }
+    return result;
 }
 
-/* 从 FRAM 读取数据 */
-uint32_t ReadSingleData(uint32_t address)
+/*
+ * 函数用途：释放 FRAM 事务所有权。
+ * 调用场景：FRAM 事务统一清理出口。
+ * 关键约束：先恢复片选为高，再允许其它调用者进入。
+ */
+static void FRAM_Unlock(void)
 {
-	uint32_t data = 0;
+    uint32_t primask = __get_PRIMASK();
 
-	/* 选择 FRAM */
-	HAL_GPIO_WritePin(FRAM_CS_GPIO_Port, FRAM_CS_Pin, GPIO_PIN_RESET);
-
-	/* 发送读取命令 */
-	uint8_t read_cmd = MB_READDATA;
-	HAL_SPI_Transmit(&FRAM_SPI, &read_cmd, 1, HAL_MAX_DELAY);
-
-	/* 发送地址（3个字节） */
-	uint8_t address_bytes[3] =
-	{ (address >> 16) & 0xFF, (address >> 8) & 0xFF, address & 0xFF };
-	HAL_SPI_Transmit(&FRAM_SPI, address_bytes, 3, HAL_MAX_DELAY);
-
-	/* 读取数据（4字节） */
-	uint8_t received_data[4];
-	HAL_SPI_Receive(&FRAM_SPI, received_data, 4, HAL_MAX_DELAY);  /* 仅接收数据 */
-
-	/* 组合数据 */
-	data = (received_data[0] << 24) | (received_data[1] << 16)
-			| (received_data[2] << 8) | received_data[3];
-
-	/* 取消选择 FRAM */
-	HAL_GPIO_WritePin(FRAM_CS_GPIO_Port, FRAM_CS_Pin, GPIO_PIN_SET);
-
-	return data;
+    __disable_irq();
+    __DMB();
+    s_fram_transaction_active = 0U;
+    if (primask == 0U) {
+        __enable_irq();
+    }
 }
 
-/* 写入两个数据 */
-void WriteTwoData(int steps, int circle, int address)
+/*
+ * 函数用途：为掉电编码器提交预留后续FRAM事务。
+ * 调用场景：24V模拟看门狗中断。
+ * 关键约束：不打断已经开始的事务；预留后普通新事务立即返回BUSY。
+ */
+void FRAM_RequestEmergencyReservationFromISR(void)
 {
-	WriteEnableLatch();
-
-	address *= 4;  /* 调整地址 */
-	HAL_GPIO_WritePin(FRAM_CS_GPIO_Port, FRAM_CS_Pin, GPIO_PIN_RESET);
-
-	/* 发送写命令 */
-	uint8_t cmd = MB_WRITEDATA;
-	HAL_SPI_Transmit(&FRAM_SPI, &cmd, 1, HAL_MAX_DELAY);  /* 假设 FRAM_SPI 是你的 SPI1 句柄 */
-
-	/* 发送地址 */
-	uint8_t addr[3] =
-	{ (address >> 16) & 0xff, (address >> 8) & 0xff, address & 0xff };
-	HAL_SPI_Transmit(&FRAM_SPI, addr, 3, HAL_MAX_DELAY);
-
-	/* 发送第一个数据（steps） */
-	uint8_t steps_bytes[4] =
-	{ (steps >> 24) & 0xff, (steps >> 16) & 0xff, (steps >> 8) & 0xff, steps
-			& 0xff };
-	HAL_SPI_Transmit(&FRAM_SPI, steps_bytes, 4, HAL_MAX_DELAY);
-
-	/* 发送第二个数据（circle） */
-	uint8_t circle_bytes[4] =
-	{ (circle >> 24) & 0xff, (circle >> 16) & 0xff, (circle >> 8) & 0xff, circle
-			& 0xff };
-	HAL_SPI_Transmit(&FRAM_SPI, circle_bytes, 4, HAL_MAX_DELAY);
-
-	HAL_GPIO_WritePin(FRAM_CS_GPIO_Port, FRAM_CS_Pin, GPIO_PIN_SET);
+    s_fram_emergency_reserved = 1U;
+    __DMB();
 }
-/* Write data to FRAM */
+
+/* PendSV在执行紧急A/B与回执事务前声明所有者，使其可越过普通写门禁。 */
+void FRAM_EnterEmergencyOwner(void)
+{
+    s_fram_emergency_owner = 1U;
+    __DMB();
+}
+
+/* 结束紧急所有者身份；预约仍保留到电压稳定且紧急请求完全结束。 */
+void FRAM_ExitEmergencyOwner(void)
+{
+    __DMB();
+    s_fram_emergency_owner = 0U;
+}
+
+/* 释放掉电预约，允许普通读写重新参与无等待仲裁。 */
+void FRAM_ReleaseEmergencyReservation(void)
+{
+    __DMB();
+    s_fram_emergency_reserved = 0U;
+}
+
+/*
+ * 函数用途：查询紧急掉电流程是否已经预约 FRAM。
+ * 调用场景：主循环参数延后保存决定是否继续等待。
+ * 关键约束：只读取单字节状态，不等待、不打印。
+ */
+bool FRAM_IsEmergencyReserved(void)
+{
+    return s_fram_emergency_reserved != 0U;
+}
+
+/*
+ * 函数用途：在电源不可靠时禁止普通 FRAM 写入。
+ * 调用场景：24V 监控启动、低压、DMA 故障和恢复边界。
+ * 关键约束：紧急所有者仍可写入掉电记录；FRAM 读取不受影响。
+ */
+void FRAM_SetNormalWriteInhibitedFromISR(bool inhibited)
+{
+    s_fram_normal_write_inhibited = inhibited ? 1U : 0U;
+    __DMB();
+}
+
+/* 在触碰片选前校验指针、HAL 16bit长度限制及256KiB地址边界。 */
+static FRAM_Status FRAM_ValidateRange(const void *data, uint32_t address, uint32_t length)
+{
+    if ((data == NULL) || (length == 0U) || (length > UINT16_MAX)) {
+        return FRAM_STATUS_INVALID_ARGUMENT;
+    }
+    if ((address >= FRAM_CAPACITY_BYTES) || (length > (FRAM_CAPACITY_BYTES - address))) {
+        return FRAM_STATUS_OUT_OF_RANGE;
+    }
+    return FRAM_STATUS_OK;
+}
+
+/* 已持有事务锁时发送WREN；无论HAL结果如何都在返回前释放片选。 */
+static FRAM_Status FRAM_WriteEnableLocked(void)
+{
+    uint8_t command = MB_WRITEENABLE;
+    FRAM_Status result;
+
+    HAL_GPIO_WritePin(FRAM_CS_GPIO_Port, FRAM_CS_Pin, GPIO_PIN_RESET);
+    result = FRAM_MapHalStatus(HAL_SPI_Transmit(&FRAM_SPI,
+                                               &command,
+                                               1U,
+                                               FRAM_SPI_TIMEOUT_MS));
+    HAL_GPIO_WritePin(FRAM_CS_GPIO_Port, FRAM_CS_Pin, GPIO_PIN_SET);
+    return result;
+}
+
+/*
+ * 统一写事务：参数校验、双重普通写门禁、无等待加锁、WREN、24bit地址和数据发送。
+ * 所有硬件阶段共用cleanup出口恢复片选并释放事务锁。
+ */
+FRAM_Status FRAM_Write(const uint8_t *data, uint32_t address, uint32_t length)
+{
+    uint8_t command = MB_WRITEDATA;
+    uint8_t address_bytes[3];
+    FRAM_Status result;
+
+    result = FRAM_ValidateRange(data, address, length);
+    if (result != FRAM_STATUS_OK) {
+        return result;
+    }
+    if ((s_fram_normal_write_inhibited != 0U) &&
+        (s_fram_emergency_owner == 0U)) {
+        return FRAM_STATUS_BUSY;
+    }
+
+    result = FRAM_TryLock();
+    if (result != FRAM_STATUS_OK) {
+        return result;
+    }
+    /*
+     * 取得事务所有权后再次检查，关闭 ADC/DMA 故障在首次检查与加锁之间到达的竞态。
+     */
+    if ((s_fram_normal_write_inhibited != 0U) &&
+        (s_fram_emergency_owner == 0U)) {
+        FRAM_Unlock();
+        return FRAM_STATUS_BUSY;
+    }
+
+    HAL_GPIO_WritePin(FRAM_CS_GPIO_Port, FRAM_CS_Pin, GPIO_PIN_SET);
+    result = FRAM_WriteEnableLocked();
+    if (result != FRAM_STATUS_OK) {
+        goto cleanup;
+    }
+
+    address_bytes[0] = (uint8_t)((address >> 16) & 0xFFU);
+    address_bytes[1] = (uint8_t)((address >> 8) & 0xFFU);
+    address_bytes[2] = (uint8_t)(address & 0xFFU);
+
+    HAL_GPIO_WritePin(FRAM_CS_GPIO_Port, FRAM_CS_Pin, GPIO_PIN_RESET);
+    result = FRAM_MapHalStatus(HAL_SPI_Transmit(&FRAM_SPI,
+                                               &command,
+                                               1U,
+                                               FRAM_SPI_TIMEOUT_MS));
+    if (result != FRAM_STATUS_OK) {
+        goto cleanup;
+    }
+    result = FRAM_MapHalStatus(HAL_SPI_Transmit(&FRAM_SPI,
+                                               address_bytes,
+                                               3U,
+                                               FRAM_SPI_TIMEOUT_MS));
+    if (result != FRAM_STATUS_OK) {
+        goto cleanup;
+    }
+    result = FRAM_MapHalStatus(HAL_SPI_Transmit(&FRAM_SPI,
+                                               (uint8_t *)data,
+                                               (uint16_t)length,
+                                               FRAM_SPI_TIMEOUT_MS));
+
+cleanup:
+    HAL_GPIO_WritePin(FRAM_CS_GPIO_Port, FRAM_CS_Pin, GPIO_PIN_SET);
+    FRAM_Unlock();
+    return result;
+}
+
+/*
+ * 统一读事务：读取不受普通写禁止影响，但仍必须遵守紧急预约和唯一事务锁。
+ * 任一SPI阶段失败均从cleanup恢复片选并释放所有权。
+ */
+FRAM_Status FRAM_Read(uint8_t *data, uint32_t address, uint32_t length)
+{
+    uint8_t command = MB_READDATA;
+    uint8_t address_bytes[3];
+    FRAM_Status result;
+
+    result = FRAM_ValidateRange(data, address, length);
+    if (result != FRAM_STATUS_OK) {
+        return result;
+    }
+
+    result = FRAM_TryLock();
+    if (result != FRAM_STATUS_OK) {
+        return result;
+    }
+
+    address_bytes[0] = (uint8_t)((address >> 16) & 0xFFU);
+    address_bytes[1] = (uint8_t)((address >> 8) & 0xFFU);
+    address_bytes[2] = (uint8_t)(address & 0xFFU);
+
+    HAL_GPIO_WritePin(FRAM_CS_GPIO_Port, FRAM_CS_Pin, GPIO_PIN_RESET);
+    result = FRAM_MapHalStatus(HAL_SPI_Transmit(&FRAM_SPI,
+                                               &command,
+                                               1U,
+                                               FRAM_SPI_TIMEOUT_MS));
+    if (result != FRAM_STATUS_OK) {
+        goto cleanup;
+    }
+    result = FRAM_MapHalStatus(HAL_SPI_Transmit(&FRAM_SPI,
+                                               address_bytes,
+                                               3U,
+                                               FRAM_SPI_TIMEOUT_MS));
+    if (result != FRAM_STATUS_OK) {
+        goto cleanup;
+    }
+    result = FRAM_MapHalStatus(HAL_SPI_Receive(&FRAM_SPI,
+                                              data,
+                                              (uint16_t)length,
+                                              FRAM_SPI_TIMEOUT_MS));
+
+cleanup:
+    HAL_GPIO_WritePin(FRAM_CS_GPIO_Port, FRAM_CS_Pin, GPIO_PIN_SET);
+    FRAM_Unlock();
+    return result;
+}
+
 void WriteMultiData(uint8_t const *p_array, int startcnt, uint32_t length)
 {
-	uint8_t data[4];  /* 用来存储地址和命令数据 */
-
-	/* 使能写操作 */
-	WriteEnableLatch();
-
-	/* 选择芯片 */
-	HAL_GPIO_WritePin(FRAM_CS_GPIO_Port, FRAM_CS_Pin, GPIO_PIN_RESET);
-
-	/* 发送写命令 */
-	data[0] = MB_WRITEDATA;
-	HAL_SPI_Transmit(&FRAM_SPI, data, 1, HAL_MAX_DELAY);  /* 发送命令 */
-
-	/* 发送地址 */
-	data[0] = (startcnt >> 16) & 0xff;
-	data[1] = (startcnt >> 8) & 0xff;
-	data[2] = startcnt & 0xff;
-	HAL_SPI_Transmit(&FRAM_SPI, data, 3, HAL_MAX_DELAY);  /* 发送地址 */
-
-	/* 发送数据 */
-	HAL_SPI_Transmit(&FRAM_SPI, p_array, length, HAL_MAX_DELAY);  /* 发送数据 */
-
-	/* 取消芯片选择 */
-	HAL_GPIO_WritePin(FRAM_CS_GPIO_Port, FRAM_CS_Pin, GPIO_PIN_SET);
+    if (startcnt < 0) {
+        return;
+    }
+    (void)FRAM_Write(p_array, (uint32_t)startcnt, length);
 }
 
-/* Read data from FRAM */
 void ReadMultiData(uint8_t *p_array, int startcnt, uint32_t length)
 {
-	uint8_t address[3];  /* 存储地址的字节 */
-
-	/* 选择 FRAM（拉低 CS 引脚） */
-	HAL_GPIO_WritePin(FRAM_CS_GPIO_Port, FRAM_CS_Pin, GPIO_PIN_RESET);
-
-	/* 发送读取命令 */
-	uint8_t cmd = MB_READDATA;
-	HAL_SPI_Transmit(&FRAM_SPI, &cmd, 1, HAL_MAX_DELAY);
-
-	/* 发送地址，地址分为 3 个字节（16 位地址） */
-	address[0] = (startcnt >> 16) & 0xFF;
-	address[1] = (startcnt >> 8) & 0xFF;
-	address[2] = startcnt & 0xFF;
-
-	HAL_SPI_Transmit(&FRAM_SPI, address, 3, HAL_MAX_DELAY);  /* 发送地址 */
-
-	/* 读取数据 */
-	HAL_SPI_Receive(&FRAM_SPI, p_array, length, HAL_MAX_DELAY); /* 直接接收数据，无需同时发送虚拟字节 */
-
-	/* 取消选择 FRAM（拉高 CS 引脚） */
-	HAL_GPIO_WritePin(FRAM_CS_GPIO_Port, FRAM_CS_Pin, GPIO_PIN_SET);
+    if (startcnt < 0) {
+        return;
+    }
+    (void)FRAM_Read(p_array, (uint32_t)startcnt, length);
 }
 
-/* 测试 FRAM 数据读写功能，包括单字节和多字节的读写 */
+void WriteSingleData(uint32_t data, uint32_t address)
+{
+    uint8_t bytes[4];
+
+    bytes[0] = (uint8_t)((data >> 24) & 0xFFU);
+    bytes[1] = (uint8_t)((data >> 16) & 0xFFU);
+    bytes[2] = (uint8_t)((data >> 8) & 0xFFU);
+    bytes[3] = (uint8_t)(data & 0xFFU);
+    (void)FRAM_Write(bytes, address, sizeof(bytes));
+}
+
+uint32_t ReadSingleData(uint32_t address)
+{
+    uint8_t bytes[4] = {0U};
+
+    if (FRAM_Read(bytes, address, sizeof(bytes)) != FRAM_STATUS_OK) {
+        return 0U;
+    }
+    return ((uint32_t)bytes[0] << 24) |
+           ((uint32_t)bytes[1] << 16) |
+           ((uint32_t)bytes[2] << 8) |
+           (uint32_t)bytes[3];
+}
+
+void WriteTwoData(int steps, int circle, int address)
+{
+    uint8_t bytes[8];
+    uint32_t steps_value = (uint32_t)steps;
+    uint32_t circle_value = (uint32_t)circle;
+
+    if (address < 0) {
+        return;
+    }
+    bytes[0] = (uint8_t)((steps_value >> 24) & 0xFFU);
+    bytes[1] = (uint8_t)((steps_value >> 16) & 0xFFU);
+    bytes[2] = (uint8_t)((steps_value >> 8) & 0xFFU);
+    bytes[3] = (uint8_t)(steps_value & 0xFFU);
+    bytes[4] = (uint8_t)((circle_value >> 24) & 0xFFU);
+    bytes[5] = (uint8_t)((circle_value >> 16) & 0xFFU);
+    bytes[6] = (uint8_t)((circle_value >> 8) & 0xFFU);
+    bytes[7] = (uint8_t)(circle_value & 0xFFU);
+    (void)FRAM_Write(bytes, (uint32_t)address * 4U, sizeof(bytes));
+}
+
 void Test_FRAM_ReadWrite(void)
 {
-	uint32_t test_cases[][2] =
-	{
-	{ 50, 0x12345678 },          /* 起始地址 */
-			{ 511, 0xA5A5A5A5 },        /* 最大逻辑地址（511 *4 = 2044，在2KB范围内） */
-			{ 100, 0x00000000 },        /* 全零测试 */
-			{ 200, 0xFFFFFFFF }         /* 全一测试 */
-	};
+    uint32_t test_cases[][2] = {
+        {50U, 0x12345678U},
+        {511U, 0xA5A5A5A5U},
+        {100U, 0x00000000U},
+        {200U, 0xFFFFFFFFU}
+    };
+    uint8_t write_data[8] = {0x11U, 0x22U, 0x33U, 0x44U, 0x55U, 0x66U, 0x77U, 0x88U};
+    uint8_t read_data[8] = {0U};
+    uint32_t start_address = 0x0100U;
+    uint32_t index;
 
-	/* 测试单字节数据读写 */
-	for (int i = 0; i < sizeof(test_cases) / sizeof(test_cases[0]); i++)
-	{
-		uint32_t logic_addr = test_cases[i][0];
-		uint32_t write_data = test_cases[i][1];
-		uint32_t read_data;
+    for (index = 0U; index < (uint32_t)(sizeof(test_cases) / sizeof(test_cases[0])); index++) {
+        uint32_t read_value;
 
-		/* 写入数据到 FRAM */
-		WriteSingleData(write_data, logic_addr);
-		/* FRAM 存储与外设通信之间保留等待时间，避免硬件或对端协议尚未准备好。 */
-		HAL_Delay(10);  /* 等待10ms，确保写入完成 */
+        WriteSingleData(test_cases[index][1], test_cases[index][0]);
+        read_value = ReadSingleData(test_cases[index][0]);
+        printf("FRAM single test %lu | address=0x%04lX | write=0x%08lX | read=0x%08lX\r\n",
+               (unsigned long)index,
+               (unsigned long)test_cases[index][0],
+               (unsigned long)test_cases[index][1],
+               (unsigned long)read_value);
+    }
 
-		/* 从 FRAM 读取数据 */
-		read_data = ReadSingleData(logic_addr);
-
-		/* 检查读写数据是否一致 */
-		if (read_data == write_data)
-		{
-			printf("Test %d (Single Byte) passed: Addr=0x%04lX, Data=0x%08lX\n",
-					i, logic_addr, read_data);
-		}
-		else
-		{
-			printf(
-					"Test %d (Single Byte) FAILED: Addr=0x%04lX, Write=0x%08lX, Read=0x%08lX\n",
-					i, logic_addr, write_data, read_data);
-		}
-		/* FRAM 存储与外设通信之间保留等待时间，避免硬件或对端协议尚未准备好。 */
-		HAL_Delay(100);  /* 适当延时 */
-	}
-
-	/* 测试多字节数据读写 */
-	uint32_t start_address = 0x0100;  /* 写入起始地址 */
-	uint8_t write_data[8] =
-	{ 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88 };  /* 要写入的数据 */
-	uint8_t read_data[8];  /* 用于存储读取的数据 */
-
-	/* 写数据到 FRAM */
-	WriteMultiData(write_data, start_address, sizeof(write_data));
-	/* FRAM 存储与外设通信之间保留等待时间，避免硬件或对端协议尚未准备好。 */
-	HAL_Delay(10);  /* 等待写入操作完成 */
-
-	/* 从 FRAM 读取数据 */
-	ReadMultiData(read_data, start_address, sizeof(read_data));
-	/* FRAM 存储与外设通信之间保留等待时间，避免硬件或对端协议尚未准备好。 */
-	HAL_Delay(10);  /* 等待读取操作完成 */
-
-	/* 检查读写数据是否一致 */
-	for (int i = 0; i < sizeof(write_data); i++)
-	{
-		if (read_data[i] != write_data[i])
-		{
-			printf(
-					"Test (Multi Byte) FAILED: Addr=0x%04lX, Write=0x%02X, Read=0x%02X\n",
-					start_address + i, write_data[i], read_data[i]);
-		}
-		else
-		{
-			printf("Test (Multi Byte) passed: Addr=0x%04lX, Data=0x%02X\n",
-					start_address + i, read_data[i]);
-		}
-	}
+    if ((FRAM_Write(write_data, start_address, sizeof(write_data)) == FRAM_STATUS_OK) &&
+        (FRAM_Read(read_data, start_address, sizeof(read_data)) == FRAM_STATUS_OK)) {
+        for (index = 0U; index < (uint32_t)sizeof(write_data); index++) {
+            printf("FRAM multi test | address=0x%04lX | write=0x%02X | read=0x%02X\r\n",
+                   (unsigned long)(start_address + index),
+                   write_data[index],
+                   read_data[index]);
+        }
+    }
 }

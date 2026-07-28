@@ -33,7 +33,7 @@
 
 | 项目 | 当前结论 |
 | --- | --- |
-| 协议契约 | 最新正式组合为 `DEVICE_PROTOCOL_VERSION = 29`、CPU2 V1.34.0.0 / CPU3 V1.34.0.0。SI对外地址和生命周期仍沿用协议18；协议29不改变SI外部地址或字段语义，双端仍须严格配套 |
+| 协议契约 | 最新正式组合为 `DEVICE_PROTOCOL_VERSION = 30`、CPU2 V1.35.0.0 / CPU3 V1.35.0.0。SI对外地址和生命周期仍沿用协议18；协议30不改变SI外部地址或字段语义，双端仍须严格配套 |
 | 外部协议入口 | CPU3 对外模拟 SI Modbus RTU 从站，CPU2 不承载 SI 地址、功能码或异常码 |
 | Profile 命令 | `00004 Profile` 写 ON 后下发 `CMD_SI_PROFILE`；命令成功只进入PREPARING，Point0有效样本才建立新周期并锁存时间 |
 | 屏幕 Profile 入口 | CPU3 屏幕“密度分布测量 -> SI Profile”确认后走同一启动入口；时间同样以Point0周期事件为准 |

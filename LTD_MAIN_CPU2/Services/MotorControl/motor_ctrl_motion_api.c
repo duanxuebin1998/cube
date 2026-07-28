@@ -829,6 +829,15 @@ uint32_t MotorCtrl_QuickStop(void)
 
     MotorPosition_SyncDebugDrumState(&stepper);
     MotorMotion_ClearActiveState();
+    /*
+     * 快停确认停稳后也强制保存编码器基线；只在编码器作为位置源且位置/首帧均可信时执行。
+     */
+    if ((!MotorCtrl_IsPositionSourceMotor()) && Encoder_IsReady()) {
+        ret = Encoder_SaveCurrentPosition();
+        if (ret != NO_ERROR) {
+            return ret;
+        }
+    }
     return MotorDriver_SetSpeedQuiet(g_deviceParams.max_motor_speed);
 }
 /**
@@ -855,6 +864,16 @@ uint32_t MotorCtrl_SlowStop(void)
         return ret;
     }
 
+    /*
+     * 电机确认停稳后强制提交当前编码器快照。
+     * 受控断电流程必须在该接口成功返回后才允许切断电源。
+     */
+    if ((!MotorCtrl_IsPositionSourceMotor()) && Encoder_IsReady()) {
+        ret = Encoder_SaveCurrentPosition();
+        if (ret != NO_ERROR) {
+            return ret;
+        }
+    }
     return MotorDriver_SetSpeedQuiet(g_deviceParams.max_motor_speed);
 }
 

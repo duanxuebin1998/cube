@@ -932,6 +932,18 @@ static const char *Display_GetErrorReasonByCode(uint32_t code)
         return "系统输入异常";
     case SYSTEM_CALCULATION_ERROR:
         return "系统计算异常";
+    case POWER_SUPPLY_24V_UNDERVOLTAGE:
+        return "整机24V欠压";
+    case POWER_MONITOR_ADC_OVERRUN:
+        return "电源ADC溢出";
+    case POWER_MONITOR_DMA_STOPPED:
+        return "电源DMA停止";
+    case POWER_MONITOR_INIT_FAILED:
+        return "电源监控启动失败";
+    case POWER_MONITOR_RECOVERY_FAILED:
+        return "电源监控恢复失败";
+    case POWER_LOSS_POSITION_SAVE_FAILED:
+        return "位置保存失败";
     default:
         break;
     }
@@ -957,6 +969,8 @@ static const char *Display_GetErrorReasonByCode(uint32_t code)
         return "模拟输出故障";
     case 0x00160000UL:
         return "系统软件故障";
+    case 0x00170000UL:
+        return "电源监控故障";
     default:
         return "未知原因";
     }

@@ -25,6 +25,7 @@
 volatile MeasurementResult g_measurement = {0};   /* 测量结果 */
 volatile DeviceParameters  g_deviceParams = {0};  /* 设备参数 */
 static volatile uint8_t g_device_params_save_pending = 0; /* Deferred save request flag */
+static volatile uint8_t g_device_params_save_retry_count = 0U; /* Deferred save retry count */
 static volatile uint32_t g_device_params_save_request_tick = 0; /* Last deferred save request tick */
 static volatile uint8_t g_device_params_write_snapshot_valid = 0U; /* 写参前快照是否有效。 */
 static volatile uint8_t g_device_params_factory_restore_in_progress = 0U; /* 恢复出厂覆盖整套参数期间关闭并发写入口。 */
@@ -542,6 +543,8 @@ static float relay_alarm_raw_to_float(uint32_t raw)
 #ifndef DEVICE_PARAMS_SAVE_DEBOUNCE_MS
 #define DEVICE_PARAMS_SAVE_DEBOUNCE_MS 100u /* 参数存储配置：设备 PARAMS 保存 DEBOUNCE 毫秒。 */
 #endif
+/* 主循环延后保存连续失败上限；到达3次后清待处理标志并保留存储故障码。 */
+#define DEVICE_PARAMS_SAVE_DEFERRED_RETRY_LIMIT 3U
 
 /* param_version和 magic 常量 */
 #define DEVICE_PARAM_VERSION   (3u) /* 参数存储配置：设备 参数 版本。 */
@@ -1136,7 +1139,8 @@ typedef enum {
     DEVICE_PARAM_SLOT_UNINITIALIZED,
     DEVICE_PARAM_SLOT_SIZE_MISMATCH,
     DEVICE_PARAM_SLOT_VERSION_MISMATCH,
-    DEVICE_PARAM_SLOT_CRC_ERROR
+    DEVICE_PARAM_SLOT_CRC_ERROR,
+    DEVICE_PARAM_SLOT_IO_ERROR
 } DeviceParamSlotLoadResult;
 
 /* 内部通用读取接口：
@@ -1151,7 +1155,14 @@ static DeviceParamSlotLoadResult load_device_params_from_slot_impl(uint32_t base
     DeviceParameters temp;
     char detail[128];
 
-    ReadMultiData((uint8_t *)&temp, (int)base_addr, sizeof(DeviceParameters));
+    if (FRAM_Read((uint8_t *)&temp,
+                  base_addr,
+                  sizeof(DeviceParameters)) != FRAM_STATUS_OK) {
+        if (verbose) {
+            printf("参数[%s]FRAM读取失败\r\n", slot_name);
+        }
+        return DEVICE_PARAM_SLOT_IO_ERROR;
+    }
 
     if (temp.magic != DEVICE_PARAM_MAGIC)
     {
@@ -1344,11 +1355,42 @@ static void print_device_params_save_diff(const DeviceParameters *new_params,
     clear_device_params_write_snapshot();
 }
 
+/* 每个A/B参数槽在一次保存轮次内允许的“写入+完整读回”尝试次数。 */
+#define DEVICE_PARAM_SAVE_RETRY_LIMIT 3U
+
+/*
+ * 函数用途：对单个参数槽执行写入、读回和内容校验。
+ * 调用场景：参数保存和单槽冗余修复。
+ * 关键约束：每次最多尝试 3 次，只有完整镜像一致才返回成功。
+ */
+static int write_and_verify_device_param_slot(uint32_t address,
+                                              const DeviceParameters *params,
+                                              DeviceParameters *verify,
+                                              DeviceParamSlotLoadResult *verify_result)
+{
+    uint32_t attempt;
+
+    *verify_result = DEVICE_PARAM_SLOT_IO_ERROR;
+    for (attempt = 0U; attempt < DEVICE_PARAM_SAVE_RETRY_LIMIT; attempt++) {
+        if (FRAM_Write((const uint8_t *)params,
+                       address,
+                       sizeof(DeviceParameters)) != FRAM_STATUS_OK) {
+            continue;
+        }
+        *verify_result = load_device_params_from_slot_impl(address, verify, "", 0);
+        if ((*verify_result == DEVICE_PARAM_SLOT_VALID) &&
+            (memcmp(verify, params, sizeof(DeviceParameters)) == 0)) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
 /* 统一的参数保存入口：
  * mark_updated=1：说明这是一次“真正的参数变更”，写入并回读校验成功后递增
  *                 parameter_update_flag，让 CPU3 检测到持久化完成并补读保持寄存器。
  * force_write=1：忽略判重，强制回写 FRAM，主要用于 A/B 分区自修复这种场景。 */
-static void save_device_params_internal(int mark_updated, int force_write)
+static bool save_device_params_internal(int mark_updated, int force_write)
 {
     DeviceParameters params;
     DeviceParameters slot_a;
@@ -1361,6 +1403,8 @@ static void save_device_params_internal(int mark_updated, int force_write)
     DeviceParamSlotLoadResult verify_b_result;
     int slot_a_valid;
     int slot_b_valid;
+    int verify_a_valid;
+    int verify_b_valid;
     char detail[128];
 
     if (sizeof(DeviceParameters) > FRAM_PARAM_SLOT_SIZE)
@@ -1370,7 +1414,7 @@ static void save_device_params_internal(int mark_updated, int force_write)
                (unsigned long)FRAM_PARAM_SLOT_SIZE);
         g_measurement.device_status.error_code = SYSTEM_BUFFER_CAPACITY_ERROR;
         clear_device_params_write_snapshot();
-        return;
+        return false;
     }
 
     build_saved_device_params(&params);
@@ -1400,34 +1444,53 @@ static void save_device_params_internal(int mark_updated, int force_write)
         }
         clear_device_params_write_snapshot();
         print_device_params_event(PARAM_PRINT_SAVE_SKIP, &params, NULL, NULL);
-        return;
+        return true;
     }
 
-    WriteMultiData((uint8_t *)&params, (int)FRAM_PARAM_A_ADDRESS, sizeof(DeviceParameters));
-    WriteMultiData((uint8_t *)&params, (int)FRAM_PARAM_B_ADDRESS, sizeof(DeviceParameters));
+    verify_a_valid = write_and_verify_device_param_slot(FRAM_PARAM_A_ADDRESS,
+                                                        &params,
+                                                        &verify_a,
+                                                        &verify_a_result);
+    verify_b_valid = write_and_verify_device_param_slot(FRAM_PARAM_B_ADDRESS,
+                                                        &params,
+                                                        &verify_b,
+                                                        &verify_b_result);
 
-    /* A/B 两个分区均需重新读回并与本次写入镜像一致，防止写操作静默失败。 */
-    verify_a_result = load_device_params_from_slot_impl(FRAM_PARAM_A_ADDRESS, &verify_a, "A", 0);
-    verify_b_result = load_device_params_from_slot_impl(FRAM_PARAM_B_ADDRESS, &verify_b, "B", 0);
-    if ((verify_a_result != DEVICE_PARAM_SLOT_VALID) ||
-        (verify_b_result != DEVICE_PARAM_SLOT_VALID) ||
-        (memcmp(&verify_a, &params, sizeof(DeviceParameters)) != 0) ||
-        (memcmp(&verify_b, &params, sizeof(DeviceParameters)) != 0)) {
+    /*
+     * 一份新镜像已验证有效时允许降级继续，同一保存轮次已对另一槽完成有限修复尝试。
+     * 只有两槽经过写入、读回和修复尝试后仍全部失败，才锁存 0x0011000C。
+     */
+
+    if ((!verify_a_valid) && (!verify_b_valid)) {
         snprintf(detail, sizeof(detail),
-                 "A读取结果：%u,B读取结果：%u",
+                 "A读取结果：%u,B读取结果：%u,每槽尝试：%u次",
                  (unsigned int)verify_a_result,
-                 (unsigned int)verify_b_result);
-        /* 错误 阶段：错误报警 模块：参数 操作：参数校验 原因：ErrorLog_GetReasonByCode(PARAM_STORAGE_WRITE_VERIFY_FAILED) 处理：继续尝试 详情：detail */
+                 (unsigned int)verify_b_result,
+                 (unsigned int)DEVICE_PARAM_SAVE_RETRY_LIMIT);
+        /* 错误 阶段：错误报警 模块：参数 操作：参数校验 原因：ErrorLog_GetReasonByCode(PARAM_STORAGE_WRITE_VERIFY_FAILED) 处理：停止测量 详情：detail */
         ErrorLog_WarnDetail(ERROR_LOG_MODULE_PARAM,
                             ERROR_LOG_OP_PARAM_VALIDATE,
                             ErrorLog_GetReasonByCode(PARAM_STORAGE_WRITE_VERIFY_FAILED),
-                            ERROR_LOG_ACTION_CONTINUE,
+                            ERROR_LOG_ACTION_STOP_MEASURE,
                             detail);
         if (g_measurement.device_status.error_code == NO_ERROR) {
             g_measurement.device_status.error_code = PARAM_STORAGE_WRITE_VERIFY_FAILED;
         }
-        print_device_params_save_diff(&params, &slot_a, slot_a_valid, &slot_b, slot_b_valid, mark_updated);
-        return;
+        clear_device_params_write_snapshot();
+        return false;
+    }
+
+    if ((!verify_a_valid) || (!verify_b_valid)) {
+        snprintf(detail, sizeof(detail),
+                 "A有效：%u,B有效：%u,已保留单槽新镜像并完成修复尝试",
+                 (unsigned int)verify_a_valid,
+                 (unsigned int)verify_b_valid);
+        /* 错误 阶段：错误报警 模块：参数 操作：参数校验 原因：参数冗余槽降级 处理：继续运行 详情：detail */
+        ErrorLog_WarnDetail(ERROR_LOG_MODULE_PARAM,
+                            ERROR_LOG_OP_PARAM_VALIDATE,
+                            "参数冗余槽降级",
+                            ERROR_LOG_ACTION_CONTINUE,
+                            detail);
     }
 
     /* 仅清除上一轮写后校验故障，不覆盖测量、电机或传感器等其它故障。 */
@@ -1435,13 +1498,17 @@ static void save_device_params_internal(int mark_updated, int force_write)
         g_measurement.device_status.error_code = NO_ERROR;
     }
 
-    /* 只有A/B双分区写后回读一致，才发布参数更新完成；失败时CPU3不能向外应答成功。 */
+    /* 至少一份本次新镜像写后回读一致才发布完成；A/B 都失败时 CPU3 不能向外应答成功。 */
     if (mark_updated) {
         g_measurement.device_status.parameter_update_flag++;
     }
 
     print_device_params_save_diff(&params, &slot_a, slot_a_valid, &slot_b, slot_b_valid, mark_updated);
-    print_device_params_event(PARAM_PRINT_SAVE_META, &params, NULL, "FRAM A/B");
+    print_device_params_event(PARAM_PRINT_SAVE_META,
+                              &params,
+                              NULL,
+                              (verify_a_valid && verify_b_valid) ? "FRAM A/B" : "FRAM 单槽降级");
+    return true;
 }
 
 /* 从指定分区读取并校验设备参数：返回1成功，0失败 */
@@ -1457,7 +1524,7 @@ static DeviceParamSlotLoadResult load_device_params_from_slot(uint32_t base_addr
  * 因此需要同时进行判重 + 必要时写 FRAM + 递增参数更新标志。 */
 void save_device_params(void)
 {
-    save_device_params_internal(1, 0);
+    (void)save_device_params_internal(1, 0);
 }
 
 /* Called from the Modbus write path after a 0x10 parameter update.
@@ -1466,6 +1533,7 @@ void save_device_params(void)
 void request_device_params_save(void)
 {
     g_device_params_save_pending = 1;
+    g_device_params_save_retry_count = 0U;
     g_device_params_save_request_tick = HAL_GetTick();
 }
 
@@ -1487,8 +1555,26 @@ void process_device_params_deferred_tasks(void)
         return;
     }
 
-    g_device_params_save_pending = 0;
-    save_device_params_internal(1, 0);
+    if (FRAM_IsEmergencyReserved()) {
+        /* 掉电紧急保存优先；等待期间不累计参数保存失败次数。 */
+        return;
+    }
+
+    if (save_device_params_internal(1, 0)) {
+        g_device_params_save_pending = 0U;
+        g_device_params_save_retry_count = 0U;
+        return;
+    }
+
+    if (g_device_params_save_retry_count < UINT8_MAX) {
+        g_device_params_save_retry_count++;
+    }
+    if (g_device_params_save_retry_count >=
+        DEVICE_PARAMS_SAVE_DEFERRED_RETRY_LIMIT) {
+        g_device_params_save_pending = 0U;
+    } else {
+        g_device_params_save_request_tick = now;
+    }
 }
 /**
  * @brief 加载或恢复系统参数中的 load_device_params 逻辑。
@@ -1547,7 +1633,7 @@ int load_device_params(void)
      * 所以不递增 parameter_update_flag，避免 CPU3 在上电后被平白触发一次“参数变更”。 */
     /* repair A from B without bumping update flag */
     if ((!loaded_from_a) || params_normalized) {
-        save_device_params_internal(0, 1);
+        (void)save_device_params_internal(0, 1);
     }
 
     g_device_params_last_load_source = loaded_from_a ? "FRAM A" : "FRAM B";

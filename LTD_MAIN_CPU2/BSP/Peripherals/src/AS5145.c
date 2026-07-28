@@ -1,190 +1,340 @@
 /*
  * AS5145.c
  *
- * 实现方案说明：
- * 1. 本文件使用 TIM1 周期触发 + SPI5 DMA 接收 的方式读取 AS5145 的 SSI 数据。
- *    每次定时器到期后，都会由 Start_Read_SSI_Data() 发起一次 4 字节 DMA 读取。
- * 2. DMA 接收完成后，在 HAL_SPI_RxCpltCallback() 中关闭片选并解析帧数据。
- *    解析内容包括角度值 angle、OCF、COF、LIN 以及 parity 校验位。
- * 3. 为了提高“编码器未插/数据线悬空”时的可检测性，程序会先判断是否收到全 0 或全 1 的空总线模式。
- *    若检测到该模式，则直接按无响应处理，不进入正常角度累计流程。
- * 4. 正常帧到达后，会清零重试计数和错误上报锁存，并清除编码器类错误码；
- *    随后调用 Update_Encoder_Count() 完成跨零点修正、累计计数和位置换算。
- * 5. 当帧校验失败、OCF 未完成、COF 溢出或 SPI/DMA 本身异常时，会进入统一错误处理：
- *    - 前 3 次错误立即重试；
- *    - 超过 3 次只打印一次错误信息，但不会停止 TIM1，也不会停止后续通信；
- *    - 后续定时器仍持续拉起通信，直到再次收到有效帧后自动恢复。
- * 6. 该实现的目标是：既能在编码器异常时给出全局错误，又不会因为一次持续异常把通信链路彻底锁死。
+ * SPI5 和 DMA 中断只保存原始事件；帧解析、连续异常确认和 RAM 更新由 PendSV 有界处理。
  */
 
-#include <mb85rs2m.h>
 #include "AS5145.h"
-#include "main.h"
-#include "stdio.h"
 #include "encoder.h"
-#include "system_parameter.h"
-#include "error_log.h"
+#include "fault_manager.h"
 #include "motor_ctrl.h"
+#include "system_parameter.h"
+#include <string.h>
+#include <stdio.h>
 
-#define SSI_FRAME_LENGTH     4u /* AS5145 SSI 单帧读取字节数。 */
-#define SSI_RETRY_LIMIT      3u /* AS5145 SSI 通信参数：SSI 重试 限值。 */
+/* SPI5 DMA每次固定接收4字节，包含18bit有效SSI载荷及尾部无效位。 */
+#define SSI_FRAME_LENGTH            4U
+/* ISR到PendSV的环形事件队列容量；满队列也会转化为异常证据。 */
+#define SSI_EVENT_QUEUE_CAPACITY    8U
+/* 单次PendSV最多消费4项，限制低优先级异常处理对其它延后服务的占用。 */
+#define SSI_DEFERRED_EVENT_BUDGET   4U
+/* 任意类型连续3个异常事件才锁存，正常帧会打断未锁存的连续计数。 */
+#define SSI_FAULT_CONFIRM_FRAMES    3U
 
-/* SSI 通信状态：
- * retry_count   记录当前连续失败次数；
- * error_reported 用于限制持续故障期间只打印一次错误日志。
- */
+/* ISR投递的证据类型；PendSV统一把传输异常映射为编码器超时故障。 */
+typedef enum {
+    SSI_EVENT_FRAME = 0,   /* DMA收到一份完整原始帧。 */
+    SSI_EVENT_SPI_ERROR,   /* HAL SPI错误回调携带的错误证据。 */
+    SSI_EVENT_START_ERROR  /* 定时触发时SPI/DMA无法开始新接收。 */
+} SSI_EventType;
+
+/* 固定长度事件邮箱项；ISR只填充，不解析业务字段。 */
 typedef struct {
-    uint8_t retry_count;
-    bool error_reported;
-} SSI_State;
+    uint8_t raw[SSI_FRAME_LENGTH]; /* 完整原始4字节，错误事件允许为全0。 */
+    uint8_t type;                  /* SSI_EventType的紧凑存储值。 */
+    uint8_t hal_status;            /* HAL_OK/BUSY/ERROR的现场状态。 */
+    uint16_t reserved;             /* 固定清零，为结构对齐和后续扩展预留。 */
+    uint32_t hal_error;            /* SPI句柄ErrorCode快照。 */
+    uint32_t sample_tick;          /* ISR投递时HAL毫秒时基。 */
+    uint32_t sequence;             /* 单调事件序号，用于新流程丢弃旧队列证据。 */
+} SSI_Event;
 
-static SSI_State ssi_state = { .retry_count = 0, .error_reported = false };
-static volatile uint32_t ssi_last_error_code = NO_ERROR; /* AS5145 编码器故障记录，供恢复、显示或日志链路使用。 */
-/* 首帧有效数据锁存：定时器启动不等于位置可信，运动门控必须等到这里置位。 */
-static volatile bool ssi_first_valid_sample = false; /* AS5145 编码器模块级变量，保存跨函数共享的业务状态。 */
-static volatile uint32_t ssi_last_ok_tick = 0U; /* AS5145 编码器模块级变量，保存跨函数共享的业务状态。 */
-static uint8_t rxData[10] = { 0 };
+/*
+ * 队列由SPI/TIM中断生产、PendSV消费；头尾和计数的复合更新均在短临界区完成。
+ */
+static volatile uint8_t ssi_queue_head = 0U; /* 下一项写入索引。 */
+static volatile uint8_t ssi_queue_tail = 0U; /* 下一项读取索引。 */
+static volatile uint8_t ssi_queue_count = 0U; /* 当前已发布且未消费的事件数。 */
+static SSI_Event ssi_event_queue[SSI_EVENT_QUEUE_CAPACITY]; /* 固定环形事件存储。 */
+static volatile uint32_t ssi_event_sequence = 0U; /* 每次成功入队递增的事件序号。 */
+static volatile uint32_t ssi_process_start_sequence = 0U; /* 新正式流程允许处理的序号边界。 */
+static volatile uint32_t ssi_frame_count = 0U; /* 本次采集收到的完整帧总数。 */
+static volatile uint32_t ssi_error_count = 0U; /* 传输错误和队列溢出证据总数。 */
+static volatile uint32_t ssi_queue_overrun_count = 0U; /* 因队列满而丢失的事件数。 */
+static uint32_t ssi_processed_overrun_count = 0U; /* 已转换为故障证据的溢出数。 */
+
+/* 连续异常、锁存和首帧状态只在PendSV更新，查询及清锁存路径可能在线程态读取。 */
+static volatile uint8_t ssi_consecutive_bad_count = 0U; /* 尚未锁存时的连续异常数。 */
+static volatile uint8_t ssi_recovery_good_count = 0U; /* 锁存后观察到的正常帧数，仅供诊断。 */
+static volatile bool ssi_fault_latched = false; /* 锁存后正常帧不自动清除。 */
+static volatile uint32_t ssi_latched_error_code = NO_ERROR; /* 第3个连续异常对应的锁存码。 */
+static volatile uint32_t ssi_last_error_code = NO_ERROR; /* 最近一次未锁存异常或锁存码。 */
+static volatile bool ssi_first_valid_sample = false; /* 本次采集是否至少收到一帧有效数据。 */
+static volatile uint32_t ssi_last_ok_tick = 0U; /* 最近有效帧处理时刻，单位ms。 */
+static uint8_t rxData[SSI_FRAME_LENGTH] = {0U}; /* SPI5 DMA当前接收缓冲区。 */
 
 static uint8_t Calculate_Even_Parity(uint32_t data);
-static SSI_Data_t Parse_SSI_Data(const uint8_t *rxData);
-static SSI_Data_t Process_SSI_Frame(uint8_t *rx_data, GPIO_TypeDef *cs_port, uint16_t cs_pin);
+static SSI_Data_t Parse_SSI_Data(const uint8_t *raw);
 static bool Check_SSI_Error_Condition(const SSI_Data_t *data);
-static bool Is_SSI_DisconnectedPattern(const uint8_t *rxData);
+static bool Is_SSI_DisconnectedPattern(const uint8_t *raw);
 static uint32_t Get_SSI_Error_Code(const SSI_Data_t *data);
-static bool Is_Encoder_Error_Code(uint32_t error_code);
 static void Recover_SSI_Bus(void);
 static HAL_StatusTypeDef Start_Read_SSI_Data(void);
-static void Handle_SSI_Error(const SSI_Data_t *data);
-static void Report_SSI_PersistentError(const SSI_Data_t *data);
-static void Print_SSI_Error(const SSI_Data_t *data);
+static void SSI_ProcessError(uint32_t error_code);
+static void SSI_ProcessFrame(const uint8_t *raw);
 
-/**
- * @brief  计算 17 位有效数据的偶校验位
+/* 挂起最低优先级PendSV，并用屏障保证事件内容先于挂起请求对处理器可见。 */
+static void SSI_PendDeferred(void)
+{
+    SCB->ICSR = SCB_ICSR_PENDSVSET_Msk;
+    __DSB();
+    __ISB();
+}
+
+/*
+ * 函数用途：从硬件中断向编码器事件邮箱投递一项原始证据。
+ * 调用场景：SPI5 DMA 完成、SPI5 错误和 TIM1 启动失败路径。
+ * 关键约束：只复制固定长度数据和计数，不打印、不解析、不访问 FRAM。
  */
-static uint8_t Calculate_Even_Parity(uint32_t data) {
-    uint8_t count = 0;
+static void SSI_EnqueueEvent(SSI_EventType type,
+                             const uint8_t *raw,
+                             HAL_StatusTypeDef hal_status,
+                             uint32_t hal_error)
+{
+    uint32_t primask = __get_PRIMASK();
+    uint8_t head;
+    uint8_t next;
+    SSI_Event *event;
 
-    for (uint8_t i = 0; i < 17; i++) {
-        if (data & (1u << i)) {
+    __disable_irq();
+    head = ssi_queue_head;
+    next = (uint8_t)((head + 1U) % SSI_EVENT_QUEUE_CAPACITY);
+    if (ssi_queue_count >= SSI_EVENT_QUEUE_CAPACITY) {
+        ssi_queue_overrun_count++;
+        ssi_error_count++;
+        if (primask == 0U) {
+            __enable_irq();
+        }
+        SSI_PendDeferred();
+        return;
+    }
+
+    event = &ssi_event_queue[head];
+    if (raw != NULL) {
+        memcpy(event->raw, raw, SSI_FRAME_LENGTH);
+    } else {
+        memset(event->raw, 0, SSI_FRAME_LENGTH);
+    }
+    event->type = (uint8_t)type;
+    event->hal_status = (uint8_t)hal_status;
+    event->reserved = 0U;
+    event->hal_error = hal_error;
+    event->sample_tick = HAL_GetTick();
+    event->sequence = ++ssi_event_sequence;
+    if (type == SSI_EVENT_FRAME) {
+        ssi_frame_count++;
+    } else {
+        ssi_error_count++;
+    }
+    __DMB();
+    ssi_queue_head = next;
+    ssi_queue_count++;
+    if (primask == 0U) {
+        __enable_irq();
+    }
+    SSI_PendDeferred();
+}
+
+/*
+ * 在短临界区取出一项已发布事件；复制完成后才推进尾指针，避免ISR覆盖未复制内容。
+ */
+static bool SSI_DequeueEvent(SSI_Event *event)
+{
+    uint32_t primask = __get_PRIMASK();
+    uint8_t tail;
+
+    __disable_irq();
+    tail = ssi_queue_tail;
+    if (ssi_queue_count == 0U) {
+        if (primask == 0U) {
+            __enable_irq();
+        }
+        return false;
+    }
+
+    *event = ssi_event_queue[tail];
+    __DMB();
+    ssi_queue_tail = (uint8_t)((tail + 1U) % SSI_EVENT_QUEUE_CAPACITY);
+    ssi_queue_count--;
+    if (primask == 0U) {
+        __enable_irq();
+    }
+    return true;
+}
+
+/* 统计17个数据/状态位中的置位数，返回AS5145帧要求的偶校验位。 */
+static uint8_t Calculate_Even_Parity(uint32_t data)
+{
+    uint8_t count = 0U;
+    uint8_t index;
+
+    for (index = 0U; index < 17U; index++) {
+        if ((data & (1UL << index)) != 0U) {
             count++;
         }
     }
-
-    return ((count % 2u) == 0u) ? 0u : 1u;
+    return ((count % 2U) == 0U) ? 0U : 1U;
 }
 
-/**
- * @brief  解析 SSI 传感器返回的数据帧
- */
-static SSI_Data_t Parse_SSI_Data(const uint8_t *rxData) {
+/* 按AS5145 SSI位序从4字节缓冲拼出18bit载荷并解析角度、状态和校验结果。 */
+static SSI_Data_t Parse_SSI_Data(const uint8_t *raw)
+{
     SSI_Data_t result;
-    uint32_t raw_data = (((rxData[0] & 0x7Fu) << 11) | (rxData[1] << 3) | (rxData[2] >> 5));
-    uint8_t calculated_parity;
+    uint32_t raw_data =
+        (((uint32_t)(raw[0] & 0x7FU) << 11) |
+         ((uint32_t)raw[1] << 3) |
+         ((uint32_t)raw[2] >> 5));
 
-    result.angle = (raw_data >> 6) & 0x0FFFu;
-    result.OCF = (raw_data >> 5) & 0x01u;
-    result.COF = (raw_data >> 4) & 0x01u;
-    result.LIN = (raw_data >> 3) & 0x01u;
-    result.MagINCn = (raw_data >> 2) & 0x01u;
-    result.MagDECn = (raw_data >> 1) & 0x01u;
-    result.parity = raw_data & 0x01u;
-
-    calculated_parity = Calculate_Even_Parity(raw_data >> 1);
-    result.parity_ok = (calculated_parity == result.parity);
-
+    result.angle = (uint16_t)((raw_data >> 6) & 0x0FFFU);
+    result.OCF = (uint8_t)((raw_data >> 5) & 0x01U);
+    result.COF = (uint8_t)((raw_data >> 4) & 0x01U);
+    result.LIN = (uint8_t)((raw_data >> 3) & 0x01U);
+    result.MagINCn = (uint8_t)((raw_data >> 2) & 0x01U);
+    result.MagDECn = (uint8_t)((raw_data >> 1) & 0x01U);
+    result.parity = (uint8_t)(raw_data & 0x01U);
+    result.parity_ok = (Calculate_Even_Parity(raw_data >> 1) == result.parity) ? 1U : 0U;
     return result;
 }
 
-/**
- * @brief  处理一次完整 SSI 帧
- */
-static SSI_Data_t Process_SSI_Frame(uint8_t *rx_data, GPIO_TypeDef *cs_port, uint16_t cs_pin) {
-    SSI_Data_t parsed_data = { 0 };
-
-    HAL_GPIO_WritePin(cs_port, cs_pin, GPIO_PIN_SET);
-
-    if (Is_SSI_DisconnectedPattern(rx_data)) {
-        Handle_SSI_Error(NULL);
-        return parsed_data;
-    }
-
-    parsed_data = Parse_SSI_Data(rx_data);
-
-    /* 先处理异常边界，避免AS5145 编码器状态机带故障继续运行。 */
-    if (Check_SSI_Error_Condition(&parsed_data)) {
-        Handle_SSI_Error(&parsed_data);
-    } else {
-        ssi_state.retry_count = 0;
-        ssi_state.error_reported = false;
-        ssi_last_error_code = NO_ERROR;
-        /* 只有完整解析且无协议错误的帧，才能作为启动后的首个可信位置。 */
-        ssi_first_valid_sample = true;
-        ssi_last_ok_tick = HAL_GetTick();
-
-        /* 先处理异常边界，避免AS5145 编码器状态机带故障继续运行。 */
-        if (Is_Encoder_Error_Code(g_measurement.device_status.error_code)) {
-            g_measurement.device_status.error_code = NO_ERROR;
-        }
-
-        Update_Encoder_Count(parsed_data.angle);
-    }
-
-    return parsed_data;
+/* 校验、OCF和COF属于阻止位置更新的硬异常；LIN只作为独立诊断码保留。 */
+static bool Check_SSI_Error_Condition(const SSI_Data_t *data)
+{
+    return (data->parity_ok == 0U) || (data->OCF == 0U) || (data->COF != 0U);
 }
 
-/**
- * @brief  判断当前 SSI 帧是否存在协议级错误
- */
-static bool Check_SSI_Error_Condition(const SSI_Data_t *data) {
-    return (!data->parity_ok || !data->OCF || data->COF);
+/* 全0或全FF通常表示总线悬空/短接，优先映射为超时而不是解析为有效角度。 */
+static bool Is_SSI_DisconnectedPattern(const uint8_t *raw)
+{
+    return ((raw[0] == 0x00U) && (raw[1] == 0x00U) &&
+            (raw[2] == 0x00U) && (raw[3] == 0x00U)) ||
+           ((raw[0] == 0xFFU) && (raw[1] == 0xFFU) &&
+            (raw[2] == 0xFFU) && (raw[3] == 0xFFU));
 }
 
-/**
- * @brief  判断是否为编码器断开或数据线悬空时常见的空总线模式
- */
-static bool Is_SSI_DisconnectedPattern(const uint8_t *rxData) {
-    return ((rxData[0] == 0x00u) && (rxData[1] == 0x00u) &&
-            (rxData[2] == 0x00u) && (rxData[3] == 0x00u)) ||
-           ((rxData[0] == 0xFFu) && (rxData[1] == 0xFFu) &&
-            (rxData[2] == 0xFFu) && (rxData[3] == 0xFFu));
-}
-
-/**
- * @brief  将当前 SSI 异常映射成全局错误码
- */
-static uint32_t Get_SSI_Error_Code(const SSI_Data_t *data) {
+static uint32_t Get_SSI_Error_Code(const SSI_Data_t *data)
+{
     if (data == NULL) {
         return ENCODER_TIMEOUT;
     }
-    if (!data->parity_ok) {
+    if (data->parity_ok == 0U) {
         return ENCODER_PARITY_ERROR;
     }
-    if (!data->OCF) {
+    if (data->OCF == 0U) {
         return ENCODER_OCF_INCOMPLETE;
     }
-    if (data->COF) {
+    if (data->COF != 0U) {
         return ENCODER_CORDIC_OVERFLOW;
     }
-    if (data->LIN) {
+    if (data->LIN != 0U) {
         return ENCODER_LINEARITY_WARNING;
     }
-    /* 所有硬件状态位均正常时不生成故障码。 */
     return NO_ERROR;
 }
 
-/**
- * @brief  判断错误码是否属于编码器通信错误范围
+/*
+ * 函数用途：处理一项延后的编码器异常。
+ * 调用场景：PendSV 消费原始帧或 SPI/DMA 错误事件。
+ * 关键约束：第 3 个连续异常才锁存；只发布故障快照，不打印和不执行阻塞停机。
  */
-static bool Is_Encoder_Error_Code(uint32_t error_code) {
-    return (error_code >= ENCODER_TIMEOUT) && (error_code <= ENCODER_FIRST_SAMPLE_TIMEOUT);
+static void SSI_ProcessError(uint32_t error_code)
+{
+    ssi_last_error_code = error_code;
+    ssi_recovery_good_count = 0U;
+
+    if (MotorCtrl_IsPositionSourceMotor()) {
+        ssi_consecutive_bad_count = 0U;
+        return;
+    }
+
+    if (ssi_fault_latched) {
+        FaultManager_LatchAsyncError(ssi_latched_error_code);
+        return;
+    }
+
+    if (ssi_consecutive_bad_count < UINT8_MAX) {
+        ssi_consecutive_bad_count++;
+    }
+    if (ssi_consecutive_bad_count >= SSI_FAULT_CONFIRM_FRAMES) {
+        ssi_fault_latched = true;
+        ssi_latched_error_code = error_code;
+        FaultManager_LatchAsyncError(error_code);
+    }
 }
 
-/**
- * @brief  SPI5 异常时恢复片选和 DMA 状态，避免总线卡死
+/*
+ * 处理一帧原始证据：异常帧不更新累计位置；正常帧清未锁存连续计数，
+ * 但已经锁存的故障只重复发布，必须由下一条顶层正式命令清除。
  */
-static void Recover_SSI_Bus(void) {
-    HAL_GPIO_WritePin(SSI_CSN_PORT, SSI_CSN_PIN, GPIO_PIN_SET);
+static void SSI_ProcessFrame(const uint8_t *raw)
+{
+    SSI_Data_t parsed;
 
+    if (Is_SSI_DisconnectedPattern(raw)) {
+        SSI_ProcessError(ENCODER_TIMEOUT);
+        return;
+    }
+
+    parsed = Parse_SSI_Data(raw);
+    if (Check_SSI_Error_Condition(&parsed)) {
+        SSI_ProcessError(Get_SSI_Error_Code(&parsed));
+        return;
+    }
+
+    ssi_consecutive_bad_count = 0U;
+    ssi_first_valid_sample = true;
+    ssi_last_ok_tick = HAL_GetTick();
+    if (ssi_fault_latched && (!MotorCtrl_IsPositionSourceMotor())) {
+        if (ssi_recovery_good_count < UINT8_MAX) {
+            ssi_recovery_good_count++;
+        }
+        FaultManager_LatchAsyncError(ssi_latched_error_code);
+    } else {
+        ssi_recovery_good_count = 0U;
+        ssi_last_error_code = NO_ERROR;
+    }
+    Update_Encoder_Count(parsed.angle);
+}
+
+/*
+ * 函数用途：按固定预算先补记队列溢出，再顺序处理原始事件。
+ * 调用场景：PendSV_Handler。
+ * 关键约束：超过本轮预算时重新挂起PendSV，不在单次低优先级中断无限排空。
+ */
+void AS5145_ProcessDeferred(void)
+{
+    SSI_Event event;
+    uint32_t processed = 0U;
+
+    while ((processed < SSI_DEFERRED_EVENT_BUDGET) &&
+           (ssi_processed_overrun_count != ssi_queue_overrun_count)) {
+        ssi_processed_overrun_count++;
+        SSI_ProcessError(ENCODER_TIMEOUT);
+        processed++;
+    }
+
+    while ((processed < SSI_DEFERRED_EVENT_BUDGET) && SSI_DequeueEvent(&event)) {
+        if ((int32_t)(event.sequence - ssi_process_start_sequence) <= 0) {
+            processed++;
+            continue;
+        }
+        if (event.type == (uint8_t)SSI_EVENT_FRAME) {
+            SSI_ProcessFrame(event.raw);
+        } else {
+            SSI_ProcessError(ENCODER_TIMEOUT);
+        }
+        processed++;
+    }
+
+    if ((ssi_queue_count != 0U) ||
+        (ssi_processed_overrun_count != ssi_queue_overrun_count)) {
+        SSI_PendDeferred();
+    }
+}
+
+/* 仅恢复SPI5接收硬件到可重启状态；不清业务故障锁存，也不伪造正常帧。 */
+static void Recover_SSI_Bus(void)
+{
+    HAL_GPIO_WritePin(SSI_CSN_PORT, SSI_CSN_PIN, GPIO_PIN_SET);
     if (SSI.hdmarx != NULL) {
         (void)HAL_SPI_DMAStop(&SSI);
         __HAL_DMA_DISABLE(SSI.hdmarx);
@@ -192,76 +342,21 @@ static void Recover_SSI_Bus(void) {
     }
 }
 
-/**
- * @brief  统一 SSI 错误处理：有限重试，超限后只上报一次，但持续保持通信
+/*
+ * 发起一次4字节SPI5 DMA接收；总线忙时先作有限硬件复位，仍不可用则投递启动异常。
+ * 函数可能由TIM1 ISR调用，因此不等待、不打印、不解析。
  */
-static void Handle_SSI_Error(const SSI_Data_t *data) {
-    uint32_t err = Get_SSI_Error_Code(data);
-
-    ssi_last_error_code = err;
-    if (!MotorCtrl_IsPositionSourceMotor()) {
-        g_measurement.device_status.error_code = err;
-    }
-
-    if (++ssi_state.retry_count <= SSI_RETRY_LIMIT) {
-        /* 错误 阶段：错误重试 模块：编码器 操作：通信诊断 原因：ErrorLog_GetReasonByCode(err) 尝试：ssi_state.retry_count/SSI_RETRY_LIMIT 错误码：err 错误名：ErrorLog_GetCodeName(err) */
-        ErrorLog_Retry(ERROR_LOG_MODULE_ENCODER,
-                       ERROR_LOG_OP_COMM_DIAG,
-                       ErrorLog_GetReasonByCode(err),
-                       (uint32_t)ssi_state.retry_count,
-                       SSI_RETRY_LIMIT,
-                       err);
-        (void)Start_Read_SSI_Data();
-        return;
-    }
-
-    /* 先处理异常边界，避免AS5145 编码器状态机带故障继续运行。 */
-    if (!ssi_state.error_reported) {
-        ssi_state.error_reported = true;
-        if (!MotorCtrl_IsPositionSourceMotor()) {
-            Report_SSI_PersistentError(data);
-        }
-    }
-}
-
-/**
- * @brief 接收AS5145 编码器中的 HAL_SPI_RxCpltCallback 逻辑。
- *
- * @param hspi 业务参数。
- * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
- */
-void HAL_SPI_RxCpltCallback(SPI_HandleTypeDef *hspi) {
-    if (hspi == &SSI) {
-        Process_SSI_Frame(rxData, SSI_CSN_PORT, SSI_CSN_PIN);
-    }
-}
-
-/**
- * @brief 执行AS5145 编码器中的 HAL_SPI_ErrorCallback 逻辑。
- *
- * @param hspi 业务参数。
- * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
- */
-void HAL_SPI_ErrorCallback(SPI_HandleTypeDef *hspi) {
-    if (hspi == &SSI) {
-        Handle_SSI_Error(NULL);
-    }
-}
-
-/**
- * @brief  启动一次 SSI DMA 读取
- */
-static HAL_StatusTypeDef Start_Read_SSI_Data(void) {
+static HAL_StatusTypeDef Start_Read_SSI_Data(void)
+{
     HAL_StatusTypeDef status;
 
     if (HAL_SPI_GetState(&SSI) != HAL_SPI_STATE_READY) {
         Recover_SSI_Bus();
         if (HAL_SPI_GetState(&SSI) != HAL_SPI_STATE_READY) {
-            if (!MotorCtrl_IsPositionSourceMotor()) {
-                ssi_last_error_code = ENCODER_TIMEOUT;
-                g_measurement.device_status.error_code = ENCODER_TIMEOUT;
-                printf("SPI未就绪，当前状态: %d\n", HAL_SPI_GetState(&SSI));
-            }
+            SSI_EnqueueEvent(SSI_EVENT_START_ERROR,
+                             NULL,
+                             HAL_BUSY,
+                             SSI.ErrorCode);
             return HAL_BUSY;
         }
     } else if (SSI.hdmarx != NULL) {
@@ -272,120 +367,128 @@ static HAL_StatusTypeDef Start_Read_SSI_Data(void) {
     HAL_GPIO_WritePin(SSI_CSN_PORT, SSI_CSN_PIN, GPIO_PIN_RESET);
     status = HAL_SPI_Receive_DMA(&SSI, rxData, SSI_FRAME_LENGTH);
     if (status != HAL_OK) {
-        Recover_SSI_Bus();
-        if (!MotorCtrl_IsPositionSourceMotor()) {
-            ssi_last_error_code = ENCODER_TIMEOUT;
-            g_measurement.device_status.error_code = ENCODER_TIMEOUT;
-            printf("SPI错误码: 0x%08lX\n", SSI.ErrorCode);
-            printf("SPI DMA 启动失败, 错误码: %d\n", status);
-        }
+        HAL_GPIO_WritePin(SSI_CSN_PORT, SSI_CSN_PIN, GPIO_PIN_SET);
+        SSI_EnqueueEvent(SSI_EVENT_START_ERROR,
+                         NULL,
+                         status,
+                         SSI.ErrorCode);
     }
-
     return status;
 }
 
-/**
- * @brief 执行AS5145 编码器中的 AS5145_GetLastError 逻辑。
- * @return 状态码、计数值或协议数值，具体含义由调用点约定。
- */
-uint32_t AS5145_GetLastError(void) {
-    return ssi_last_error_code;
+/* SPI5 DMA完成回调：先释放片选，再把完整原始帧复制到事件队列。 */
+void HAL_SPI_RxCpltCallback(SPI_HandleTypeDef *hspi)
+{
+    if (hspi == &SSI) {
+        HAL_GPIO_WritePin(SSI_CSN_PORT, SSI_CSN_PIN, GPIO_PIN_SET);
+        SSI_EnqueueEvent(SSI_EVENT_FRAME, rxData, HAL_OK, SSI.ErrorCode);
+    }
 }
 
-/**
- * @brief 查询 AS5145 是否已经收到过首帧有效 SSI 数据。
- *
- * 该函数只读锁存状态，不阻塞，可在普通任务流程中频繁调用。
- */
-bool AS5145_HasValidSample(void) {
+/* SPI5错误回调：释放片选并保存HAL状态，故障确认留给PendSV。 */
+void HAL_SPI_ErrorCallback(SPI_HandleTypeDef *hspi)
+{
+    if (hspi == &SSI) {
+        HAL_GPIO_WritePin(SSI_CSN_PORT, SSI_CSN_PIN, GPIO_PIN_SET);
+        SSI_EnqueueEvent(SSI_EVENT_SPI_ERROR,
+                         rxData,
+                         HAL_ERROR,
+                         SSI.ErrorCode);
+    }
+}
+
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
+{
+    if (htim->Instance == TIM1) {
+        (void)Start_Read_SSI_Data();
+    }
+}
+
+uint32_t AS5145_GetLastError(void)
+{
+    return ssi_fault_latched ? ssi_latched_error_code : ssi_last_error_code;
+}
+
+bool AS5145_HasValidSample(void)
+{
     return ssi_first_valid_sample;
 }
 
+bool AS5145_IsFaultLatched(void)
+{
+    return ssi_fault_latched;
+}
 
-/**
- * @brief 等待启动后的首帧有效 SSI 数据。
- *
- * 该函数会用 HAL_Delay() 短周期轮询，只能在任务上下文调用；
- * 不能在中断回调内调用，避免阻塞 SPI/DMA 和系统调度。
+/*
+ * 清除锁存时记录当前事件/溢出序号边界，避免新正式流程重新消费清锁存前的旧证据。
  */
-uint32_t AS5145_WaitFirstValidSample(uint32_t timeout_ms) {
+void AS5145_ClearLatchedFaultForNewProcess(void)
+{
+    uint32_t primask = __get_PRIMASK();
+
+    __disable_irq();
+    ssi_fault_latched = false;
+    ssi_latched_error_code = NO_ERROR;
+    ssi_last_error_code = NO_ERROR;
+    ssi_consecutive_bad_count = 0U;
+    ssi_recovery_good_count = 0U;
+    ssi_process_start_sequence = ssi_event_sequence;
+    ssi_processed_overrun_count = ssi_queue_overrun_count;
+    if (primask == 0U) {
+        __enable_irq();
+    }
+}
+
+/* 启动线程有限等待首帧；超时后优先返回已识别的编码器错误，否则返回首帧超时。 */
+uint32_t AS5145_WaitFirstValidSample(uint32_t timeout_ms)
+{
     uint32_t start_tick = HAL_GetTick();
 
     while ((HAL_GetTick() - start_tick) < timeout_ms) {
         if (ssi_first_valid_sample) {
             return NO_ERROR;
         }
-        /* AS5145 编码器与外设通信之间保留等待时间，避免硬件或对端协议尚未准备好。 */
         HAL_Delay(5U);
     }
-
     if (ssi_first_valid_sample) {
         return NO_ERROR;
     }
-    /* 先处理异常边界，避免AS5145 编码器状态机带故障继续运行。 */
-    if (ssi_last_error_code != NO_ERROR) {
-        return ssi_last_error_code;
+    if (AS5145_GetLastError() != NO_ERROR) {
+        return AS5145_GetLastError();
     }
     return ENCODER_FIRST_SAMPLE_TIMEOUT;
 }
 
-/**
- * @brief 执行AS5145 编码器中的 HAL_TIM_PeriodElapsedCallback 逻辑。
- *
- * @param htim 业务参数。
- * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+/*
+ * 启动新一轮采集前原子清空队列、统计和故障锁存，然后启动TIM1并立即触发首帧。
+ * 定时器启动失败直接返回HAL状态，交由编码器初始化决定是否阻止测量。
  */
-void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
-    if (htim->Instance == TIM1) {
-        (void)Start_Read_SSI_Data();
-    }
-}
-
-/**
- * @brief  持续错误首次超限时记录一次日志
- */
-static void Report_SSI_PersistentError(const SSI_Data_t *data) {
-    g_measurement.device_status.error_code = Get_SSI_Error_Code(data);
-    Print_SSI_Error(data);
-}
-
-/**
- * @brief  打印 SSI 错误详情
- */
-static void Print_SSI_Error(const SSI_Data_t *data) {
-    if (data == NULL) {
-        printf("编码器 SSI 无响应或数据线悬空，错误码: 0x%08lX\r\n", (unsigned long)SSI.ErrorCode);
-        return;
-    }
-
-    if (!data->parity_ok) {
-        printf("编码器 SSI 偶校验失败\r\n");
-    }
-    if (!data->OCF) {
-        printf("编码器 SSI OCF 未完成\r\n");
-    }
-    if (data->COF) {
-        printf("编码器 SSI CORDIC 溢出\r\n");
-    }
-    if (data->LIN) {
-        printf("编码器 SSI 线性度报警\r\n");
-    }
-}
-
-/**
- * @brief 执行AS5145 编码器中的 Start_Encoder_Collection_TIM 逻辑。
- * @return HAL 状态码，用于判断底层外设访问是否成功。
- */
-HAL_StatusTypeDef Start_Encoder_Collection_TIM(void) {
+HAL_StatusTypeDef Start_Encoder_Collection_TIM(void)
+{
     HAL_StatusTypeDef status;
+    uint32_t primask = __get_PRIMASK();
 
-    ssi_state.retry_count = 0;
-    ssi_state.error_reported = false;
+    __disable_irq();
+    ssi_queue_head = 0U;
+    ssi_queue_tail = 0U;
+    ssi_queue_count = 0U;
+    ssi_event_sequence = 0U;
+    ssi_frame_count = 0U;
+    ssi_error_count = 0U;
+    ssi_queue_overrun_count = 0U;
+    ssi_processed_overrun_count = 0U;
+    ssi_consecutive_bad_count = 0U;
+    ssi_recovery_good_count = 0U;
+    ssi_fault_latched = false;
+    ssi_latched_error_code = NO_ERROR;
     ssi_last_error_code = NO_ERROR;
     ssi_first_valid_sample = false;
     ssi_last_ok_tick = 0U;
-    HAL_GPIO_WritePin(SSI_CSN_PORT, SSI_CSN_PIN, GPIO_PIN_SET);
+    if (primask == 0U) {
+        __enable_irq();
+    }
 
+    HAL_GPIO_WritePin(SSI_CSN_PORT, SSI_CSN_PIN, GPIO_PIN_SET);
     status = HAL_TIM_Base_Start_IT(&ENCODER_TIM_HANDLE);
     if (status != HAL_OK) {
         printf("[编码器][初始化][失败] 定时器启动失败：%d\r\n", status);
@@ -393,7 +496,6 @@ HAL_StatusTypeDef Start_Encoder_Collection_TIM(void) {
     }
 
     printf("[编码器][初始化][成功] 定时器已启动，已触发首帧读取\r\n");
-    /* 定时周期到来前先主动读一次，缩短上电后编码器不可用窗口。 */
     (void)Start_Read_SSI_Data();
     return status;
 }

@@ -6,129 +6,36 @@
 #include "stm32f4xx_hal.h"
 
 #define SENSOR_SAFE_RNG_WAIT_LOOPS  100000UL
-#define SENSOR_SAFE_FRAM_CAPACITY_BYTES  0x40000UL
-#define SENSOR_SAFE_FRAM_SPI_TIMEOUT_MS  100U
-
-/* 校验 FRAM 地址加长度不越界，并限制为 HAL SPI 可表达的 16 位传输长度。 */
-static uint8_t SensorSafeIdentityPlatform_IsRangeValid(uint32_t address,
-                                                       size_t length)
-{
-    if ((length == 0U) || (length > UINT16_MAX) ||
-        (address >= SENSOR_SAFE_FRAM_CAPACITY_BYTES)) {
-        return 0U;
-    }
-    return (uint8_t)((length <=
-                      (size_t)(SENSOR_SAFE_FRAM_CAPACITY_BYTES - address))
-                         ? 1U
-                         : 0U);
-}
-
-/* 无论 SPI 成功或失败都释放 FRAM 片选，避免阻塞同总线后续设备。 */
-static void SensorSafeIdentityPlatform_Deselect(void)
-{
-    HAL_GPIO_WritePin(FRAM_CS_GPIO_Port, FRAM_CS_Pin, GPIO_PIN_SET);
-}
-
-/* 发送 FRAM 写使能命令；调用结束前必定恢复片选为非选中。 */
-static uint8_t SensorSafeIdentityPlatform_WriteEnable(void)
-{
-    uint8_t command = MB_WRITEENABLE;
-    HAL_StatusTypeDef status;
-
-    HAL_GPIO_WritePin(FRAM_CS_GPIO_Port, FRAM_CS_Pin, GPIO_PIN_RESET);
-    status = HAL_SPI_Transmit(&FRAM_SPI,
-                              &command,
-                              1U,
-                              SENSOR_SAFE_FRAM_SPI_TIMEOUT_MS);
-    SensorSafeIdentityPlatform_Deselect();
-    return (uint8_t)((status == HAL_OK) ? 1U : 0U);
-}
-
 /*
- * 函数用途：通过 SPI 从指定 FRAM 地址读取身份记录字节。
+ * 函数用途：通过统一FRAM事务入口读取身份记录字节。
  * 调用场景：身份双副本初始化和写后回读校验使用。
- * 关键约束：本函数为任务上下文阻塞调用，不得在中断中执行；所有出口释放片选。
+ * 关键约束：本函数为任务上下文调用，不得绕过FRAM仲裁直接控制SPI4和片选。
  */
 static uint8_t SensorSafeIdentityPlatform_Read(uint32_t address,
                                                uint8_t *data,
                                                size_t length)
 {
-    uint8_t command = MB_READDATA;
-    uint8_t address_bytes[3];
-    HAL_StatusTypeDef status;
-
-    if ((data == NULL) ||
-        (SensorSafeIdentityPlatform_IsRangeValid(address, length) == 0U)) {
+    if ((data == NULL) || (length == 0U) || (length > UINT16_MAX)) {
         return 0U;
     }
-    address_bytes[0] = (uint8_t)((address >> 16U) & 0xFFU);
-    address_bytes[1] = (uint8_t)((address >> 8U) & 0xFFU);
-    address_bytes[2] = (uint8_t)(address & 0xFFU);
-
-    HAL_GPIO_WritePin(FRAM_CS_GPIO_Port, FRAM_CS_Pin, GPIO_PIN_RESET);
-    status = HAL_SPI_Transmit(&FRAM_SPI,
-                              &command,
-                              1U,
-                              SENSOR_SAFE_FRAM_SPI_TIMEOUT_MS);
-    if (status == HAL_OK) {
-        status = HAL_SPI_Transmit(&FRAM_SPI,
-                                  address_bytes,
-                                  (uint16_t)sizeof(address_bytes),
-                                  SENSOR_SAFE_FRAM_SPI_TIMEOUT_MS);
-    }
-    if (status == HAL_OK) {
-        status = HAL_SPI_Receive(&FRAM_SPI,
-                                 data,
-                                 (uint16_t)length,
-                                 SENSOR_SAFE_FRAM_SPI_TIMEOUT_MS);
-    }
-    SensorSafeIdentityPlatform_Deselect();
-    return (uint8_t)((status == HAL_OK) ? 1U : 0U);
+    return (uint8_t)((FRAM_Read(data, address, (uint32_t)length) ==
+                      FRAM_STATUS_OK) ? 1U : 0U);
 }
 
 /*
- * 函数用途：写使能后通过 SPI 向指定 FRAM 地址写入身份记录字节。
+ * 函数用途：通过统一FRAM事务入口写入身份记录字节。
  * 调用场景：身份模块推进 A/B 双副本时调用。
- * 关键约束：本函数为任务上下文阻塞调用，不得在中断中执行；范围非法时不触碰硬件。
+ * 关键约束：本函数为任务上下文调用，不得绕过FRAM仲裁直接控制SPI4和片选。
  */
 static uint8_t SensorSafeIdentityPlatform_Write(uint32_t address,
                                                 const uint8_t *data,
                                                 size_t length)
 {
-    uint8_t command = MB_WRITEDATA;
-    uint8_t address_bytes[3];
-    HAL_StatusTypeDef status;
-
-    if ((data == NULL) ||
-        (SensorSafeIdentityPlatform_IsRangeValid(address, length) == 0U)) {
+    if ((data == NULL) || (length == 0U) || (length > UINT16_MAX)) {
         return 0U;
     }
-    if (SensorSafeIdentityPlatform_WriteEnable() == 0U) {
-        return 0U;
-    }
-    address_bytes[0] = (uint8_t)((address >> 16U) & 0xFFU);
-    address_bytes[1] = (uint8_t)((address >> 8U) & 0xFFU);
-    address_bytes[2] = (uint8_t)(address & 0xFFU);
-
-    HAL_GPIO_WritePin(FRAM_CS_GPIO_Port, FRAM_CS_Pin, GPIO_PIN_RESET);
-    status = HAL_SPI_Transmit(&FRAM_SPI,
-                              &command,
-                              1U,
-                              SENSOR_SAFE_FRAM_SPI_TIMEOUT_MS);
-    if (status == HAL_OK) {
-        status = HAL_SPI_Transmit(&FRAM_SPI,
-                                  address_bytes,
-                                  (uint16_t)sizeof(address_bytes),
-                                  SENSOR_SAFE_FRAM_SPI_TIMEOUT_MS);
-    }
-    if (status == HAL_OK) {
-        status = HAL_SPI_Transmit(&FRAM_SPI,
-                                  (uint8_t *)data,
-                                  (uint16_t)length,
-                                  SENSOR_SAFE_FRAM_SPI_TIMEOUT_MS);
-    }
-    SensorSafeIdentityPlatform_Deselect();
-    return (uint8_t)((status == HAL_OK) ? 1U : 0U);
+    return (uint8_t)((FRAM_Write(data, address, (uint32_t)length) ==
+                      FRAM_STATUS_OK) ? 1U : 0U);
 }
 
 /* 直接使用 F429 RNG 寄存器，避免启用当前工程未配置的 HAL RNG 模块。 */

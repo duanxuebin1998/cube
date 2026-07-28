@@ -2,7 +2,7 @@
 
 日期：2026-07-23
 
-适用版本：最新正式固件组合为共享协议 `29`、CPU2 `V1.34.0.0` / CPU3 `V1.34.0.0`。协议29取消12-11，将18类改为扭力检测、21类改为模拟输出与自检，并统一13-2显示名称；协议21及更早固件必须按对应CPU2历史页解释故障编号，协议29也不提供旧故障码别名或翻译。
+适用版本：最新正式固件组合为共享协议 `30`、CPU2 `V1.35.0.0` / CPU3 `V1.35.0.0`。协议30在协议29故障码治理口径上新增23类整机供电与电源监控故障；协议21及更早固件必须按对应CPU2历史页解释故障编号，协议22～29也应按各自CPU2版本选择历史故障表，协议30不提供旧故障码别名或翻译。
 
 源码依据：`LTD_DISPLAY_CPU3/Application/display/display.c`、`LTD_DISPLAY_CPU3/Communication/internal/main_board_modbus/cpu2_communicate.c`、`LTD_DISPLAY_CPU3/Application/system_param/system_parameter.h`、`LTD_MAIN_CPU2/Services/Sensor/sensor.c`
 

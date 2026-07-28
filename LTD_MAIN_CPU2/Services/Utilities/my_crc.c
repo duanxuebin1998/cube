@@ -79,6 +79,13 @@ bool SlaveCheckCRC(uint8_t const *revframe, int framelen) {
 uint32_t CRC32_HAL(const uint8_t *buf, uint32_t lenBytes) {
 	uint32_t word, crc;
 	uint32_t words = lenBytes >> 2;                /* HAL 接口的长度单位是“32-bit word” :contentReference[oaicite:3]{index=3} */
+	uint32_t primask = __get_PRIMASK();
+
+	/*
+	 * 硬件 CRC 只有一套累加寄存器。参数保存可能在线程态运行，而编码器紧急保存
+	 * 位于 PendSV；整个计算期间关闭抢占，避免另一条路径复位外设并污染结果。
+	 */
+	__disable_irq();
 	crc = HAL_CRC_Calculate(&hcrc, (uint32_t*) buf, words);
 
 	/* 处理尾部 1‒3 个字节 */
@@ -87,6 +94,9 @@ uint32_t CRC32_HAL(const uint8_t *buf, uint32_t lenBytes) {
 		word = 0;
 		memcpy(&word, buf + (words << 2), remain);
 		crc = HAL_CRC_Accumulate(&hcrc, &word, 1);
+	}
+	if (primask == 0U) {
+		__enable_irq();
 	}
 
 	return crc;   /* HAL 已做反射，这里做最后一步取反 */

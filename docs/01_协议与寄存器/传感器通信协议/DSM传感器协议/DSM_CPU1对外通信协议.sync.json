@@ -1,21 +1,21 @@
 {
     "schema_version":  2,
     "source_repository":  "DSM_CPU1_SIL",
-    "source_git_head":  "36ee2fad51a373ce1c7ee0a09f5e5fab487dbf32",
+    "source_git_head":  "c0decca953970197aa6c5feb2697c851f211c94e",
     "artifacts":  [
                       {
                           "kind":  "protocol_document",
                           "source_file":  "docs/01_协议与接口/DSM_CPU1对外通信协议.md",
-                          "source_git_blob":  "9bee2b6c2667309462d04ab438378313a77fbf8e",
-                          "source_file_state":  "AM",
-                          "source_sha256":  "00224614AB2DF45E5E2C1620C1FD206B2EE347EDE1CC893BFC2248A26E3DE086",
+                          "source_git_blob":  "2383c9534d2078c89d556e8f5bde2a3093146dea",
+                          "source_file_state":  "clean",
+                          "source_sha256":  "F0D8A238C2412F3D5BBCEF9E70C2A0EDAB773507702B0BCA4F9FE088F862F06F",
                           "target_file":  "docs/01_协议与寄存器/传感器通信协议/DSM传感器协议/DSM_CPU1对外通信协议.md"
                       },
                       {
                           "kind":  "protocol_data_index",
                           "source_file":  "protocol/README.md",
                           "source_git_blob":  "bc7861e4779eccd4c877a6587598b6b49703a4c0",
-                          "source_file_state":  "AM",
+                          "source_file_state":  "clean",
                           "source_sha256":  "C279F05B85DB2C0920726F370310C9B9C3112D983279D2AEE5934445904C615C",
                           "target_file":  "docs/01_协议与寄存器/传感器通信协议/DSM传感器协议/protocol/README.md"
                       },
@@ -23,7 +23,7 @@
                           "kind":  "machine_matrix",
                           "source_file":  "protocol/dsm_protocol_matrix.json",
                           "source_git_blob":  "924c5941eef572f96ba8b65edd9b4e7d99f8f4d2",
-                          "source_file_state":  "AM",
+                          "source_file_state":  "clean",
                           "source_sha256":  "2CAB9EDB1DA6B696A5FAD8B1F35F3E1012171FD05E97B74A7D33E51DB0A68C8A",
                           "target_file":  "docs/01_协议与寄存器/传感器通信协议/DSM传感器协议/protocol/dsm_protocol_matrix.json"
                       },
@@ -31,7 +31,7 @@
                           "kind":  "golden_frames_index",
                           "source_file":  "protocol/golden_frames/README.md",
                           "source_git_blob":  "04aa0b869d4471a6f18486989534407091157e6c",
-                          "source_file_state":  "A ",
+                          "source_file_state":  "clean",
                           "source_sha256":  "164DD534B20677D229EB876C00045B4B7D21187EFE519A875A1962813650E70F",
                           "target_file":  "docs/01_协议与寄存器/传感器通信协议/DSM传感器协议/protocol/golden_frames/README.md"
                       },
@@ -39,7 +39,7 @@
                           "kind":  "golden_frames",
                           "source_file":  "protocol/golden_frames/dsm_protocol_golden_frames.json",
                           "source_git_blob":  "305c7b4500a2e3c7853d48c54edf86ed0fad40a2",
-                          "source_file_state":  "AM",
+                          "source_file_state":  "clean",
                           "source_sha256":  "1C2CC546A607C4DA8CF3C20E3FD0E7F18D73E67A0E17D9D9FB3F118C3565D84D",
                           "target_file":  "docs/01_协议与寄存器/传感器通信协议/DSM传感器协议/protocol/golden_frames/dsm_protocol_golden_frames.json"
                       }

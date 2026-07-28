@@ -220,7 +220,8 @@ int SearchZero(void) {
 	if ((abs(g_measurement.debug_data.cable_length) > g_deviceParams.max_zero_deviation_distance) && Zero_ShouldCheckDeviation()) {
 		RETURN_ERROR(MEASUREMENT_ZERO_OUT_OF_RANGE);
 	} else {
-		set_encoder_zero();
+		ret = set_encoder_zero();
+		CHECK_ERROR(ret);
 		ret = MotorCtrl_ResetDrumReferenceForZeroCalibration();
 		CHECK_ERROR(ret);
 		if (g_deviceParams.position_source_auto_switch == POSITION_SOURCE_AUTO_SWITCH_ENABLE) {

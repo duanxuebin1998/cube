@@ -346,6 +346,19 @@ SerialCommandParseResult SerialCommandParser_Parse(const uint8_t *command)
         result.kind = SERIAL_COMMAND_KIND_ERROR;
         return result;
     }
+    /* 电源/编码器查询与PWRTEST必须全字匹配，禁止被正式命令前缀规则误接收。 */
+    if (SerialCommandParser_IsExact(command, "PWR?") != 0U) {
+        result.kind = SERIAL_COMMAND_KIND_POWER_STATUS;
+        return result;
+    }
+    if (SerialCommandParser_IsExact(command, "ENC?") != 0U) {
+        result.kind = SERIAL_COMMAND_KIND_ENCODER_STATUS;
+        return result;
+    }
+    if (SerialCommandParser_IsExact(command, "PWRTEST") != 0U) {
+        result.kind = SERIAL_COMMAND_KIND_POWER_TEST;
+        return result;
+    }
 
     if (SerialCommandParser_IsFormalPrefix(command[0]) != 0U) {
         if (command[1] == '\0') {

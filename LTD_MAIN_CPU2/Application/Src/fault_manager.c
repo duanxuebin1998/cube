@@ -11,9 +11,43 @@
 #include "motor_ctrl.h"
 #include "TMC5130.h"
 #include "error_log.h"
+#include "encoder.h"
+#include "power_monitor.h"
 
 ErrorInfo err; /* 全局错误信息变量 */
 static uint8_t s_handle_error_skip_logged = 0U; /* 故障处理故障记录，供恢复、显示或日志链路使用。 */
+
+/*
+ * 函数用途：在短临界区发布一致的故障快照。
+ * 调用场景：同步 SET_ERROR、空闲兜底和编码器异步故障锁存。
+ * 关键约束：先发布状态、实际错误码和回零标志，退出临界区后才允许停机或打印。
+ */
+static void FaultManager_PublishErrorSnapshot(uint32_t error_code)
+{
+    uint32_t primask = __get_PRIMASK();
+
+    __disable_irq();
+    g_measurement.device_status.device_state = STATE_ERROR;
+    g_measurement.device_status.error_code = error_code;
+    g_measurement.device_status.zero_point_status = 1U;
+    __DMB();
+    if (primask == 0U) {
+        __enable_irq();
+    }
+}
+
+void FaultManager_LatchAsyncError(uint32_t error_code)
+{
+    if ((error_code == NO_ERROR) || (error_code == STATE_SWITCH)) {
+        return;
+    }
+    FaultManager_PublishErrorSnapshot(error_code);
+    /*
+     * 异步入口不能执行慢停，但必须在快照发布后立即拉高ENN，
+     * 避免测量流程下一次CHECK_ERROR之前电机继续运动。
+     */
+    stpr_disableDriver(&stepper);
+}
 
 /* 返回 TMC5130 故障快照中的阶段中文名称。 */
 static const char *FaultManager_GetTmcStageText(uint8_t stage)
@@ -237,11 +271,9 @@ void FaultManager_SetErrorState(uint32_t error_code,
     err.func = func;
     err.error_code = error_code;
 
+    FaultManager_PublishErrorSnapshot(error_code);
     FaultManager_ReportErrorExit(err.error_code);
     HandleError();
-    g_measurement.device_status.device_state = STATE_ERROR;
-    g_measurement.device_status.error_code = error_code;
-    g_measurement.device_status.zero_point_status = 1;
 }
 
 /*
@@ -259,11 +291,9 @@ void FaultManager_SetGlobalErrorState(uint32_t error_code,
     err.func = func;
     err.error_code = error_code;
 
+    FaultManager_PublishErrorSnapshot(error_code);
     FaultManager_ReportGlobalErrorExit(err.error_code, file, line, func);
     HandleError();
-    g_measurement.device_status.device_state = STATE_ERROR;
-    g_measurement.device_status.error_code = error_code;
-    g_measurement.device_status.zero_point_status = 1;
 }
 /**
  * @brief 错误处理函数
@@ -329,7 +359,15 @@ const char* GetShortFilename(const char* fullpath) {
 /**
  * @brief 故障信息初始化函数（系统启动时调用）
  */
-void fault_info_init(void) {
+void fault_info_init(void)
+{
     MotorCtrl_SlowStop(); /* 初始化时确保电机停止 */
-    g_measurement.device_status.error_code = NO_ERROR; /* 清除设备状态错误码 */
+    /*
+     * 编码器异步故障只能由新的顶层正式过程先解除锁存。
+     * 粗找、精找和回零内部重试即使调用本函数，也不能越权清除。
+     */
+    if ((!Encoder_HasLatchedFault()) &&
+        (!PowerMonitor_HasLatchedFault())) {
+        g_measurement.device_status.error_code = NO_ERROR;
+    }
 }

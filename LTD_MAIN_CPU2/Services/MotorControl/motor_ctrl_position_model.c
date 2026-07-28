@@ -45,7 +45,8 @@ static int MotorPosition_ReadPersistFromSlot(uint32_t base_addr,
                                      int32_t *base_length_01mm,
                                      int32_t *base_step,
                                      const char *slot_name);
-static void MotorPosition_WritePersistAB(int32_t xactual,
+static bool MotorPosition_VerifyPersistSlot(uint32_t base_addr,
+                                            const MotorPersistRecord *expected);static bool MotorPosition_WritePersistAB(int32_t xactual,
                                   int32_t base_length_01mm,
                                   int32_t base_step);
 static int MotorPosition_ReadPersistAB(int32_t *xactual,
@@ -321,7 +322,9 @@ uint32_t MotorCtrl_PollRuntimePosition(void)
     bool is_moving = false;
     uint32_t ret;
 
-    if (!s_motor_driver.initialized) {
+    /* 首次通信故障会使安全停机有效性失效，后台轮询随即停止，避免每50ms重复访问和刷屏。
+     * 正式运动或测量重试仍由运动入口重新初始化驱动。 */
+    if (!MotorCtrl_IsDriverInitValid()) {
         return NO_ERROR;
     }
     if ((now - s_last_runtime_poll_tick) < 50U) {
@@ -1442,8 +1445,12 @@ static int MotorPosition_ReadPersistFromSlot(uint32_t base_addr,
                                      int32_t *base_step,
                                      const char *slot_name)
 {
-    MotorPersistRecord rec;
-    ReadMultiData((uint8_t *)&rec, (int)base_addr, sizeof(rec));
+    MotorPersistRecord rec = {0};
+
+    if (FRAM_Read((uint8_t *)&rec, base_addr, sizeof(rec)) != FRAM_STATUS_OK) {
+        printf("电机持久化[%s]FRAM读取失败\r\n", slot_name);
+        return 0;
+    }
     if (rec.magic != MOTOR_STORE_MAGIC) {
         printf("电机持久化[%s]魔术字异常: 0x%08lX\r\n", slot_name, (unsigned long)rec.magic);
         return 0;
@@ -1464,6 +1471,35 @@ static int MotorPosition_ReadPersistFromSlot(uint32_t base_addr,
 }
 
 /**
+ * @brief 读回并完整校验一个电机位置持久化槽位。
+ *
+ * @param base_addr FRAM槽位起始地址。
+ * @param expected 本次期望写入的完整记录。
+ * @return 魔术字、版本、CRC和全部业务字段一致时返回true。
+ */
+static bool MotorPosition_VerifyPersistSlot(
+    uint32_t base_addr,
+    const MotorPersistRecord *expected)
+{
+    MotorPersistRecord verify = {0};
+
+    if ((expected == NULL) ||
+        (FRAM_Read((uint8_t *)&verify,
+                   base_addr,
+                   sizeof(verify)) != FRAM_STATUS_OK)) {
+        return false;
+    }
+    return (verify.magic == MOTOR_STORE_MAGIC) &&
+           (verify.version == MOTOR_STORE_VERSION) &&
+           (MotorPosition_PersistRecordCrc(&verify) == verify.crc) &&
+           (verify.magic == expected->magic) &&
+           (verify.version == expected->version) &&
+           (verify.xactual == expected->xactual) &&
+           (verify.base_length_01mm == expected->base_length_01mm) &&
+           (verify.base_step == expected->base_step) &&
+           (verify.crc == expected->crc);
+}
+/**
  * @brief 将电机位置记录同时写入 A/B 两个 FRAM 槽位。
  *
  * 双槽写入用于断电或写入中断后的冗余恢复。
@@ -1471,19 +1507,42 @@ static int MotorPosition_ReadPersistFromSlot(uint32_t base_addr,
  * @param base_length_01mm 电机记步基准长度。
  * @param base_step 电机记步基准步数。
  */
-static void MotorPosition_WritePersistAB(int32_t xactual,
+static bool MotorPosition_WritePersistAB(int32_t xactual,
                                   int32_t base_length_01mm,
                                   int32_t base_step)
 {
     MotorPersistRecord rec;
+    FRAM_Status status_a;
+    FRAM_Status status_b;
+    bool verified_a = false;
+    bool verified_b = false;
+
     rec.magic = MOTOR_STORE_MAGIC;
     rec.version = MOTOR_STORE_VERSION;
     rec.xactual = xactual;
     rec.base_length_01mm = base_length_01mm;
     rec.base_step = base_step;
     rec.crc = MotorPosition_PersistRecordCrc(&rec);
-    WriteMultiData((const uint8_t *)&rec, (int)FRAM_MOTOR_A_ADDRESS, sizeof(rec));
-    WriteMultiData((const uint8_t *)&rec, (int)FRAM_MOTOR_B_ADDRESS, sizeof(rec));
+    status_a = FRAM_Write((const uint8_t *)&rec,
+                          FRAM_MOTOR_A_ADDRESS,
+                          sizeof(rec));
+    if (status_a == FRAM_STATUS_OK) {
+        /* FRAM_Write成功只表示SPI事务完成，必须完整读回后才接受A槽。 */
+        verified_a = MotorPosition_VerifyPersistSlot(
+            FRAM_MOTOR_A_ADDRESS, &rec);
+    }
+    status_b = FRAM_Write((const uint8_t *)&rec,
+                          FRAM_MOTOR_B_ADDRESS,
+                          sizeof(rec));
+    if (status_b == FRAM_STATUS_OK) {
+        /* B槽独立写入和校验，A槽失败不会阻止保留一份新的有效记录。 */
+        verified_b = MotorPosition_VerifyPersistSlot(
+            FRAM_MOTOR_B_ADDRESS, &rec);
+    }
+    /*
+     * 最小可用边界为至少一槽写后回读一致；双槽都失败时调用方不得推进已保存基线。
+     */
+    return verified_a || verified_b;
 }
 
 /**
@@ -1525,10 +1584,12 @@ static int MotorPosition_ReadPersistAB(int32_t *xactual,
  */
 static void MotorPosition_StorePersistSnapshot(int32_t xactual)
 {
-    MotorPosition_WritePersistAB(xactual,
-                         s_motor_position.count_base_length_01mm,
-                         s_motor_position.count_base_step);
-    s_motor_saved_xactual = xactual;
+    if (MotorPosition_WritePersistAB(
+            xactual,
+            s_motor_position.count_base_length_01mm,
+            s_motor_position.count_base_step)) {
+        s_motor_saved_xactual = xactual;
+    }
 }
 
 /**
