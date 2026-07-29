@@ -59,6 +59,7 @@ enum { /* 用于记录每个参数显示在第几页第几行 */
     Para_alarm,
     Para_current,
     Para_weight,
+    Para_torque_temperature,
     Para_sensor_value, /* sensor value */
     Para_capacitance,
     Para_angle_x,   /* 新增：陀螺仪 X 角度 */
@@ -102,6 +103,7 @@ typedef enum {
     DISPLAY_STATUS_SLOT_TEMPERATURE,
     DISPLAY_STATUS_SLOT_POSITION,
     DISPLAY_STATUS_SLOT_WEIGHT,
+    DISPLAY_STATUS_SLOT_TORQUE_TEMPERATURE,
     DISPLAY_STATUS_SLOT_FREQUENCY,
     DISPLAY_STATUS_SLOT_CAPACITANCE,
     DISPLAY_STATUS_SLOT_ANGLE_X,
@@ -258,6 +260,38 @@ static DisplayResultContext Display_GetResultContext(DeviceState state)
 static bool Display_IsTemperatureValid(uint32_t temperature)
 {
     return (temperature > 0U) && (temperature < 40000U);
+}
+
+/*
+ * 函数用途：把协议31中的扭力模块温度IEEE754原始位转换为0.01摄氏度整数。
+ * 调用场景：读取部件参数完成后的状态分页构建与刷新。
+ * 关键约束：只在读取部件参数结果上下文使用，并拒绝NaN、无穷和超出显示范围的数据。
+ */
+static bool Display_GetTorqueTemperatureX100(DisplayResultContext ctx,
+                                             int32_t *temperature_x100)
+{
+    uint32_t temperature_bits;
+    float temperature;
+    float scaled;
+
+    if ((ctx != DISPLAY_RESULT_CONTEXT_READ_PARAMETER) ||
+        (temperature_x100 == NULL)) {
+        return false;
+    }
+
+    temperature_bits = g_measurement.debug_data.torque_temperature_bits;
+    if ((temperature_bits & 0x7F800000UL) == 0x7F800000UL) {
+        return false;
+    }
+
+    memcpy(&temperature, &temperature_bits, sizeof(temperature));
+    if ((temperature < -999.99f) || (temperature > 999.99f)) {
+        return false;
+    }
+
+    scaled = temperature * 100.0f;
+    *temperature_x100 = (int32_t)(scaled + ((scaled >= 0.0f) ? 0.5f : -0.5f));
+    return true;
 }
 
 /**
@@ -2497,6 +2531,7 @@ static void Display_AddCurrentPageValueStatusSlots(DisplayStatusSnapshot *snapsh
     int display_position = 0;
     int display_frequency;
     int display_capacitance;
+    int32_t torque_temperature_x100;
 
     Display_AddErrorReasonStatusSlots(snapshot, now_page);
 
@@ -2579,6 +2614,27 @@ static void Display_AddCurrentPageValueStatusSlots(DisplayStatusSnapshot *snapsh
                                    (int32_t)g_measurement.debug_data.current_weight,
                                    0U,
                                    (uint8_t*)" ");
+    }
+
+    if ((ValidParaDisArr[Para_torque_temperature][PARA_VALID] == true) &&
+        (now_page == ValidParaDisArr[Para_torque_temperature][PARA_PAGE])) {
+        row = (uint8_t)ValidParaDisArr[Para_torque_temperature][PARA_X];
+        line = Display_GetLabelEndLine((uint8_t*)"扭温:", (uint8_t*)"T.Temp:");
+        if (Display_GetTorqueTemperatureX100(snapshot->ctx, &torque_temperature_x100)) {
+            Display_AddValueStatusSlot(snapshot,
+                                       DISPLAY_STATUS_SLOT_TORQUE_TEMPERATURE,
+                                       row,
+                                       line,
+                                       torque_temperature_x100,
+                                       2U,
+                                       (uint8_t*)"℃");
+        } else {
+            Display_AddTextStatusSlot(snapshot,
+                                      DISPLAY_STATUS_SLOT_TORQUE_TEMPERATURE,
+                                      row,
+                                      line,
+                                      "--.--");
+        }
     }
 
     if ((ValidParaDisArr[Para_sensor_value][PARA_VALID] == true) &&
@@ -3260,6 +3316,7 @@ static void oled_equipment(void)
     int display_position = 0;
     int display_frequency = 0;
     int display_capacitance = 0;
+    int32_t torque_temperature_x100;
     
     /* 显示当前设备状态 */
     DIS_Equipment();
@@ -3451,6 +3508,37 @@ static void oled_equipment(void)
                          0,
                          (u8*) " ");
 	}
+    /* 扭力模块温度 */
+    if (ValidParaDisArr[Para_torque_temperature][PARA_VALID] == true &&
+        now_page == ValidParaDisArr[Para_torque_temperature][PARA_PAGE])
+    {
+        row = ValidParaDisArr[Para_torque_temperature][PARA_X];
+        line = DisplayLangaugeLineWords((u8*)"扭温:", OLED_LINE8_1, row, 0, (u8*)"T.Temp:");
+        if (Display_GetTorqueTemperatureX100(ctx, &torque_temperature_x100))
+        {
+            OledValueDisplay((int)torque_temperature_x100,
+                             line,
+                             row,
+                             Display_GetStatusSlotShift(DISPLAY_STATUS_SLOT_TORQUE_TEMPERATURE,
+                                                        row,
+                                                        torque_temperature_x100,
+                                                        false,
+                                                        NULL),
+                             2,
+                             (u8*)"℃");
+        }
+        else
+        {
+            OledDisplayLineWords((u8*)"--.--",
+                                 line,
+                                 row,
+                                 Display_GetStatusSlotShift(DISPLAY_STATUS_SLOT_TORQUE_TEMPERATURE,
+                                                            row,
+                                                            0,
+                                                            true,
+                                                            "--.--"));
+        }
+    }
     /* 频率 */
     if (ValidParaDisArr[Para_sensor_value][PARA_VALID] == true &&
         now_page == ValidParaDisArr[Para_sensor_value][PARA_PAGE])
@@ -3704,6 +3792,15 @@ static void CalculateValidPara(void)
     }
     else
         ValidParaDisArr[Para_weight][PARA_VALID] = false;
+    /* 扭力模块温度在读取部件参数结果页固定占一项，无效时显示占位。 */
+    if (ctx == DISPLAY_RESULT_CONTEXT_READ_PARAMETER)
+    {
+        ValidParaCnt++;
+        ValidParaDisArr[Para_torque_temperature][PARA_NUM] = ValidParaCnt;
+        ValidParaDisArr[Para_torque_temperature][PARA_VALID] = true;
+    }
+    else
+        ValidParaDisArr[Para_torque_temperature][PARA_VALID] = false;
     /* 频率 */
     if (Display_ShouldShowOilFrequencyValue(ctx))
     {

@@ -1349,6 +1349,8 @@ static uint32_t CorrectWaterTankHeightProcess(void)
     }
 
     g_deviceParams.water_tank_height = new_height;
+    /* 水位罐高变化后立即归一化 AO 量程，避免旧量程阻塞后续命令。 */
+    (void)normalize_ao_params_after_write();
 	WaterLevelSyncFromCable();
     /* 标定完成后清零，防止重复触发 */
     DeviceCommandArguments_ClearIfUnchanged(DEVICE_COMMAND_ARG_CALIBRATE_WATER_LEVEL);
@@ -1391,6 +1393,11 @@ static uint32_t CorrectWaterTankHeightProcess(void)
 
 		/* 先找并精确定位水位界面 */
 		ret = SearchWaterLevel();
+        if (ret == STATE_SWITCH)
+        {
+            /* 新命令属于正常切换，立即退出标定，禁止继续修正和保存旧标定结果。 */
+            return;
+        }
 		SET_ERROR(ret);
 	}
     /*

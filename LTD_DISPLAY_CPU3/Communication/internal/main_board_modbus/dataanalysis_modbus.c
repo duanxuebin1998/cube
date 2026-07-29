@@ -530,7 +530,8 @@ void read_measurement_result_from_InputRegisters(uint16_t *regs) {
 
 	/* 扭力相关 */
 	g_measurement.debug_data.current_weight = read_u32_from_regs(cregs, REG_DEBUG_CURRENT_WEIGHT);
-	g_measurement.debug_data.weight_param = read_u32_from_regs(cregs, REG_DEBUG_WEIGHT_PARAM);
+	g_measurement.debug_data.torque_temperature_bits =
+	    read_u32_from_regs(cregs, REG_DEBUG_TORQUE_TEMPERATURE_BITS);
 
 	/* 姿态角 */
 	g_measurement.debug_data.angle_x = read_i32_from_regs(cregs, REG_DEBUG_ANGLE_X);

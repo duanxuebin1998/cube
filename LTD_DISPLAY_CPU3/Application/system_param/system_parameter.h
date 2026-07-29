@@ -26,7 +26,7 @@
 #define UNVALID_POSITION 0
 #define UNVALID_TEMPERATURE 0
 #define MAX_MEASUREMENT_POINTS 200 /* 密度分布测量最大点数 */
-#define DEVICE_PROTOCOL_VERSION 30u /* CPU2/CPU3共享协议版本；协议30新增23类整机供电与电源监控故障码。 */
+#define DEVICE_PROTOCOL_VERSION 31u /* CPU2/CPU3共享协议版本；协议31复用未使用的扭力参数槽传递扭力模块温度。 */
 #define FAULT_AUTO_RECOVERY_RETRY_DEFAULT 3u
 #define FAULT_AUTO_RECOVERY_RETRY_MAX 10u
 
@@ -658,7 +658,7 @@ typedef struct {
 
     /* 扭力相关 */
     uint32_t current_weight;       /* /< 当前扭力值 */
-    uint32_t weight_param;         /* /< 扭力参数 */
+    uint32_t torque_temperature_bits; /* /< 扭力模块温度IEEE754原始位 */
 
     /* 姿态角 */
     int32_t  angle_x;              /* /< X 轴角度 */

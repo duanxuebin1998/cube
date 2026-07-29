@@ -866,16 +866,6 @@ static uint32_t Read_CurrentWeight_Adapter(void)
     return (uint32_t)weight_parament.current_weight;
 }
 
-/**
- * @brief 读取传感器数据中的 Read_WeightParam_Adapter 逻辑。
- * @return 状态码、计数值或协议数值，具体含义由调用点约定。
- */
-static uint32_t Read_WeightParam_Adapter(void)
-{
-    /* TODO: 若你有扭力系数/滤波参数等，可填这里；没有就保持原值 */
-    return g_measurement.debug_data.weight_param;
-}
-
 /*
  * 函数用途：按周期刷新蓝牙 RSSI 快照。
  * 调用场景：读取部件参数循环末尾调用，用于刷新显示缓存。
@@ -964,7 +954,6 @@ static uint32_t Sensor_ReadPartParamsInternal(uint8_t update_command_state)
     }
 
     g_measurement.debug_data.current_weight = Read_CurrentWeight_Adapter();
-    g_measurement.debug_data.weight_param   = Read_WeightParam_Adapter();
 
     /* ---------- 4) 姿态角（陀螺仪） ---------- */
     if ((!update_command_state) && HasEffectiveCommandSwitchRequest()) {

@@ -30,6 +30,7 @@
 #define WEIGHT_FILTER_NEW_FACTOR 2 /* 扭力一阶滤波新值权重。 */
 #define WEIGHT_FILTER_DIVISOR    (WEIGHT_FILTER_OLD_FACTOR + WEIGHT_FILTER_NEW_FACTOR) /* 扭力一阶滤波权重除数。 */
 #define WEIGHT_COMM_TIMEOUT_MS 1000U /* 扭力处理参数：扭力 通信 超时 毫秒。 */
+#define TORQUE_TEMPERATURE_INVALID_BITS 0x7FC00000UL /* 尚未收到有效温度时发布安静NaN位模式。 */
 
 /* 全局变量，存储当前扭力传感器的原始扭力值 */
 int16_t g_weight; /* 扭力数据模块级变量，保存跨函数共享的业务状态。 */
@@ -78,6 +79,7 @@ static void Weight_PrintCableRefs(float cable_mm)
 uint32_t weight_init() {
 	weight_parament.empty_weight = g_deviceParams.empty_weight;           /* 从设备参数中获取空载扭力 */
 	weight_parament.full_weight = g_deviceParams.full_weight;           /* 从设备参数中获取满载扭力 */
+	g_measurement.debug_data.torque_temperature_bits = TORQUE_TEMPERATURE_INVALID_BITS;
 	s_weight_last_rx_tick = HAL_GetTick();
 	s_weight_timeout_reported = 0U;
 	return NO_ERROR;

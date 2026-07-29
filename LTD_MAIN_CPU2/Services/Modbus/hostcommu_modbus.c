@@ -315,7 +315,10 @@ int Response10Process(uint8_t const *revframe, uint8_t *sendframe)
     candidate_simulation_enabled = AoOutput_IsSimulationEnabled();
 
     /* AO配置必须严格校验；源切换或当前源上限变化时成对加载默认量程。 */
-    if (prepare_ao_params_for_write(&previous_params, &candidate_params) != 0) {
+    if (prepare_ao_params_for_write(&previous_params,
+                                    &candidate_params,
+                                    startAddr,
+                                    regCount) != 0) {
         g_deviceParams = previous_params;
         AoOutput_SetSimulationEnabled(previous_simulation_enabled);
         WriteDeviceParamsToHoldingRegisters(HoldingRegisterArray);

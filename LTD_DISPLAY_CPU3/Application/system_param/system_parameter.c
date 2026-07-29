@@ -700,7 +700,8 @@ void PrintMeasurementResult(const MeasurementResult *m)
     printf("  水位电容快照(0.1pF): %lu\r\n",(unsigned long)m->debug_data.water_capacitance_x10);
 
     printf("  当前扭力值: %lu\r\n",    (unsigned long)m->debug_data.current_weight);
-    printf("  扭力参数: %lu\r\n",      (unsigned long)m->debug_data.weight_param);
+    printf("  扭力模块温度位模式: 0x%08lX\r\n",
+           (unsigned long)m->debug_data.torque_temperature_bits);
 
     printf("  X角度: %ld\r\n", (long)m->debug_data.angle_x);
     printf("  Y角度: %ld\r\n", (long)m->debug_data.angle_y);

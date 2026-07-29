@@ -46,6 +46,15 @@
 
 #define UART4_WEIGHT_HIGH_IDX  19u
 #define UART4_WEIGHT_LOW_IDX   20u
+#define UART4_NEWHALL_FRAME_LEN 22u
+#define UART4_NEWHALL_HEADER_0  0xCCu
+#define UART4_NEWHALL_HEADER_1  0x03u
+#define UART4_NEWHALL_HEADER_2  0x83u
+#define UART4_TEMPERATURE_B3_IDX 15u
+#define UART4_TEMPERATURE_B2_IDX 16u
+#define UART4_TEMPERATURE_B1_IDX 17u
+#define UART4_TEMPERATURE_B0_IDX 18u
+#define UART4_BCC_IDX             21u
 #define CPU2_TIM4_BUSINESS_DIVIDER  8U
 
 /* USER CODE END PD */
@@ -74,12 +83,56 @@ static void CPU2_ProcessDeferredUartFrames(void);
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 
+/*
+ * 函数用途：统一校验Newhall称重响应候选帧的固定长度、帧头和BCC。
+ * 调用场景：UART4空闲中断取得DMA候选帧后、更新重量和通信存活状态前调用。
+ * 关键约束：坏帧不得更新重量、温度、接收时间或清除通信超时。
+ */
+static bool UART4_NewhallFrameIsValid(uint16_t rx_len)
+{
+	uint8_t bcc = 0U;
+	uint16_t index;
+
+	if ((rx_len != UART4_NEWHALL_FRAME_LEN) ||
+	    (USART4_RX_BUF[0] != UART4_NEWHALL_HEADER_0) ||
+	    (USART4_RX_BUF[1] != UART4_NEWHALL_HEADER_1) ||
+	    (USART4_RX_BUF[2] != UART4_NEWHALL_HEADER_2)) {
+		return false;
+	}
+
+	for (index = 0U; index < UART4_BCC_IDX; index++) {
+		bcc ^= USART4_RX_BUF[index];
+	}
+
+	return bcc == USART4_RX_BUF[UART4_BCC_IDX];
+}
+
+/*
+ * 函数用途：从合法Newhall称重响应帧提取扭力模块温度原始位。
+ * 调用场景：UART4候选帧通过统一长度、帧头和BCC校验后调用。
+ * 关键约束：仅组合字节并写入32位快照，不在中断中执行浮点运算、打印或阻塞。
+ */
+static void UART4_UpdateTorqueTemperatureFromFrame(void)
+{
+	uint32_t temperature_bits;
+
+	temperature_bits = ((uint32_t)USART4_RX_BUF[UART4_TEMPERATURE_B3_IDX] << 24) |
+	                   ((uint32_t)USART4_RX_BUF[UART4_TEMPERATURE_B2_IDX] << 16) |
+	                   ((uint32_t)USART4_RX_BUF[UART4_TEMPERATURE_B1_IDX] << 8) |
+	                   (uint32_t)USART4_RX_BUF[UART4_TEMPERATURE_B0_IDX];
+	if ((temperature_bits & 0x7F800000UL) == 0x7F800000UL) {
+		return;
+	}
+
+	g_measurement.debug_data.torque_temperature_bits = temperature_bits;
+}
+
 static void UART4_UpdateWeightFromFrame(uint16_t rx_len)
 {
 	uint8_t high_byte;
 	uint8_t low_byte;
 
-	if (rx_len <= UART4_WEIGHT_LOW_IDX) {
+	if (!UART4_NewhallFrameIsValid(rx_len)) {
 		return;
 	}
 
@@ -89,6 +142,7 @@ static void UART4_UpdateWeightFromFrame(uint16_t rx_len)
 	weight_parament.current_weight = weight_parament.empty_weight - g_weight;
 	Weight_Update(weight_parament.current_weight);
 	Weight_MarkFrameReceived();
+	UART4_UpdateTorqueTemperatureFromFrame();
 }
 
 /*

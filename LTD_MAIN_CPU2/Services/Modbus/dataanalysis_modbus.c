@@ -526,7 +526,9 @@ void write_measurement_result_to_InputRegisters(uint16_t *regs) {
 
 	/* Å¤Á¦Ïà¹Ø */
 	write_u32_to_regs(regs, REG_DEBUG_CURRENT_WEIGHT, g_measurement.debug_data.current_weight);
-	write_u32_to_regs(regs, REG_DEBUG_WEIGHT_PARAM, g_measurement.debug_data.weight_param);
+	write_u32_to_regs(regs,
+	                  REG_DEBUG_TORQUE_TEMPERATURE_BITS,
+	                  g_measurement.debug_data.torque_temperature_bits);
 
 	/* ×ËÌ¬½Ç */
 	write_i32_to_regs(regs, REG_DEBUG_ANGLE_X, g_measurement.debug_data.angle_x);

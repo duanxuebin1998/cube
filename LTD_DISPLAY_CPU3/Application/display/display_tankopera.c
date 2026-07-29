@@ -485,6 +485,8 @@ static void enter_debug_weight_wait_page(int operaNum); /* 进入扭力获取等
 static void debug_weight_wait_back_to_menu(void); /* 扭力等待页返回扭力标定菜单 */
 static bool debug_weight_wait_state_is_active(int operaNum, DeviceState state); /* 扭力获取中状态判断 */
 static bool debug_weight_wait_state_is_done(int operaNum, DeviceState state); /* 扭力获取完成状态判断 */
+static bool debug_weight_temperature_x100(int32_t *temperature_x100); /* 解码扭力模块温度原始位 */
+static void debug_weight_draw_temperature(void); /* 绘制扭力模块温度或无效占位 */
 
 /* ---------- 3) 通用菜单渲染/选择器 ----------
  *	分页、上下移动、确认/返回等统一菜单交互
@@ -1292,6 +1294,54 @@ static bool debug_weight_wait_state_is_done(int operaNum, DeviceState state)
 	return false;
 }
 
+/*
+ * 函数用途：把协议31复用槽中的IEEE754扭力模块温度转换为0.01摄氏度整数。
+ * 调用场景：扭力标定等待页刷新实时温度时调用。
+ * 关键约束：拒绝NaN、无穷和超出屏幕表达范围的数据，避免显示无效或溢出值。
+ */
+static bool debug_weight_temperature_x100(int32_t *temperature_x100)
+{
+	uint32_t temperature_bits = g_measurement.debug_data.torque_temperature_bits;
+	float temperature;
+	float scaled;
+
+	if ((temperature_x100 == NULL) ||
+	    ((temperature_bits & 0x7F800000UL) == 0x7F800000UL)) {
+		return false;
+	}
+
+	memcpy(&temperature, &temperature_bits, sizeof(temperature));
+	if ((temperature < -999.99f) || (temperature > 999.99f)) {
+		return false;
+	}
+
+	scaled = temperature * 100.0f;
+	*temperature_x100 = (int32_t)(scaled + ((scaled >= 0.0f) ? 0.5f : -0.5f));
+	return true;
+}
+
+/*
+ * 函数用途：在扭力标定等待页第二行显示扭力模块温度。
+ * 调用场景：等待空载或满载扭力获取期间随页面周期刷新。
+ * 关键约束：温度无效时显示占位，不把旧占位槽的零值解释为有效温度。
+ */
+static void debug_weight_draw_temperature(void)
+{
+	int32_t temperature_x100;
+
+	DisplayLangaugeLineWords((uint8_t*)"温度", OLED_LINE8_1, OLED_ROW4_2, 0, (uint8_t*)"Temp");
+	if (debug_weight_temperature_x100(&temperature_x100)) {
+		OledValueDisplay((int)temperature_x100,
+		                 OLED_LINE8_5,
+		                 OLED_ROW4_2,
+		                 0,
+		                 2,
+		                 (uint8_t*)"C");
+	} else {
+		OledDisplayLineWords((uint8_t*)"--.--", OLED_LINE8_5, OLED_ROW4_2, 0);
+	}
+}
+
 /**
  * @brief 显示扭力获取等待页，完成后直接回到调试指令的扭力标定菜单。
  */
@@ -1346,6 +1396,7 @@ static void debug_weight_wait_page(void)
 	}
 
 	DisplayLangaugeLineWords(title_cn, OLED_LINE8_1, OLED_ROW4_1, 0, title_en);
+	debug_weight_draw_temperature();
 	DisplayLangaugeLineWords((uint8_t*)"扭力", OLED_LINE8_1, OLED_ROW4_3, 0, (uint8_t*)"Torque");
 	OledValueDisplay((int)g_measurement.debug_data.current_weight,
 	                 OLED_LINE8_5,

@@ -988,15 +988,35 @@ static int normalize_ao_params_runtime(void)
     return changed;
 }
 
+/*
+ * 函数用途：判断本次 FC10 写区间是否触及 AO 配置或仿真开关。
+ * 调用场景：候选 AO 参数校验前区分无关写入和 AO 字段写入。
+ * 关键约束：任一 AO 寄存器被触及时都必须执行严格配置校验。
+ */
+static int ao_write_range_touches_config(uint16_t start_addr, uint16_t reg_count)
+{
+    uint32_t write_end = (uint32_t)start_addr + (uint32_t)reg_count;
+    uint32_t ao_end = (uint32_t)HOLDREGISTER_AO_SIMULATION_ENABLE + REG_STRIDE;
+
+    return (reg_count != 0U) &&
+           ((uint32_t)start_addr < ao_end) &&
+           (write_end > (uint32_t)HOLDREGISTER_DEVICEPARAM_AO_WORK_MODE);
+}
+
 /* 对FC10候选配置执行源切换、非法旧量程回退和严格校验。 */
-int prepare_ao_params_for_write(const DeviceParameters *current, DeviceParameters *candidate)
+int prepare_ao_params_for_write(const DeviceParameters *current,
+                                DeviceParameters *candidate,
+                                uint16_t start_addr,
+                                uint16_t reg_count)
 {
     int32_t current_range_max_01mm;
     int32_t candidate_range_max_01mm;
+    int ao_write_touched;
 
-    if ((current == NULL) || (candidate == NULL)) {
+    if ((current == NULL) || (candidate == NULL) || (reg_count == 0U)) {
         return -1;
     }
+    ao_write_touched = ao_write_range_touches_config(start_addr, reg_count);
     if (candidate->ao_output.output_source != current->ao_output.output_source) {
         ao_load_default_range(candidate, &candidate->ao_output);
     } else {
@@ -1014,6 +1034,17 @@ int prepare_ao_params_for_write(const DeviceParameters *current, DeviceParameter
              (candidate->ao_output.range_0_01mm == candidate->ao_output.range_100_01mm))) {
             /* 单独改罐高且旧量程已非法时才成对回默认，保留仍有效的自定义量程。 */
             ao_load_default_range(candidate, &candidate->ao_output);
+        }
+        if ((ao_write_touched == 0) &&
+            (candidate_range_max_01mm == current_range_max_01mm) &&
+            (memcmp(&candidate->ao_output,
+                    &current->ao_output,
+                    sizeof(candidate->ao_output)) == 0)) {
+            /*
+             * 仅未触及 AO 且动态上限未变化时放行无关写入；
+             * AO 同值写入仍执行严格校验，不能掩盖历史非法配置。
+             */
+            return 0;
         }
     }
     return (ao_config_is_valid(candidate, &candidate->ao_output) != 0) ? 0 : -1;
@@ -3039,7 +3070,8 @@ void PrintMeasurementResult(const MeasurementResult *m)
     printf("  水位电容快照(0.1pF): %lu\r\n",(unsigned long)m->debug_data.water_capacitance_x10);
 
     printf("  当前扭力值: %lu\r\n",    (unsigned long)m->debug_data.current_weight);
-    printf("  扭力参数: %lu\r\n",      (unsigned long)m->debug_data.weight_param);
+    printf("  扭力模块温度位模式: 0x%08lX\r\n",
+           (unsigned long)m->debug_data.torque_temperature_bits);
 
     printf("  X角度: %ld\r\n", (long)m->debug_data.angle_x);
     printf("  Y角度: %ld\r\n", (long)m->debug_data.angle_y);

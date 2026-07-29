@@ -153,18 +153,18 @@ static uint32_t BuildBottomCableLengthFromTankHeight(uint32_t tank_height_01mm)
 
     return (uint32_t)cable_length_01mm;
 }
-static void ApplyBottomEncoderCorrection(void);
+static void ApplyBottomEncoderCorrection(uint32_t fallback_tank_height);
 /**
  * @brief 读取罐高测量中的 GetBottomEncoderCorrectionTankHeight 逻辑。
  * @return 状态码、计数值或协议数值，具体含义由调用点约定。
  */
-static uint32_t GetBottomEncoderCorrectionTankHeight(void)
+static uint32_t GetBottomEncoderCorrectionTankHeight(uint32_t fallback_tank_height)
 {
     if (g_deviceParams.bottom_encoder_correction_tank_height != 0U) {
         return g_deviceParams.bottom_encoder_correction_tank_height;
     }
 
-    return g_deviceParams.tankHeight;
+    return fallback_tank_height;
 }
 
 /**
@@ -217,7 +217,7 @@ static uint32_t ApplyRealHeightCalibration(uint32_t raw_real_height)
  * @brief 执行罐高测量中的 ApplyBottomEncoderCorrection 逻辑。
  * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
  */
-static void ApplyBottomEncoderCorrection(void)
+static void ApplyBottomEncoderCorrection(uint32_t fallback_tank_height)
 {
     int32_t old_encoder_count;
     int32_t old_cable_length;
@@ -232,7 +232,7 @@ static void ApplyBottomEncoderCorrection(void)
         return;
     }
 
-    correction_tank_height = GetBottomEncoderCorrectionTankHeight();
+    correction_tank_height = GetBottomEncoderCorrectionTankHeight(fallback_tank_height);
     if (correction_tank_height == 0U) {
         printf("罐底编码器修正跳过：目标罐高为0，不修改编码值\r\n");
         return;
@@ -277,6 +277,8 @@ static void ApplyBottomEncoderCorrection(void)
 uint32_t SearchBottom(void)
 {
     uint32_t ret;
+    uint32_t pending_calibration_tank_height = 0U;
+    uint8_t pending_calibration_tank_height_valid = 0U;
     uint8_t try_times = 0;
 
     fault_info_init();  /* 清除故障信息 */
@@ -477,17 +479,34 @@ uint32_t SearchBottom(void)
                (unsigned long)corrected_real_height); MotorCtrl_PrintPositionRefs(); printf("\r\n");
         if(g_measurement.device_status.device_state == STATE_CALIBRATIONOILING)
         {
-            g_measurement.height_measurement.calibrated_liquid_level = raw_real_height;
-            g_deviceParams.tankHeight = raw_real_height;
-            printf("罐底测量\t罐高标定完成，罐高=%ld(0.1mm)\r\n", g_deviceParams.tankHeight);
-            MotorCtrl_RefreshPositionFromActiveSource();    /* 罐高变化后按当前记步源刷新当前位置 */
+            /*
+             * 先保留候选罐高；安全抬升失败时不得让标定结果在 RAM 中半生效。
+             */
+            pending_calibration_tank_height = raw_real_height;
+            pending_calibration_tank_height_valid = 1U;
         }
     }
     /* 电机上行，完成流程 */
-    ApplyBottomEncoderCorrection();
+    /* 标定候选罐高尚未提交，显式传递以保持编码器修正的原有目标语义。 */
+    ApplyBottomEncoderCorrection(
+            (pending_calibration_tank_height_valid != 0U) ?
+            pending_calibration_tank_height : g_deviceParams.tankHeight);
 
     ret = MotorCtrl_MoveBlockingNoDetect(100.0, MOTOR_DIRECTION_UP, MotorCtrl_GetDefaultSpeedX100());
     CHECK_ERROR(ret);
+
+    if (pending_calibration_tank_height_valid != 0U)
+    {
+        g_measurement.height_measurement.calibrated_liquid_level =
+                pending_calibration_tank_height;
+        g_deviceParams.tankHeight = pending_calibration_tank_height;
+        /* 安全抬升成功后再提交罐高并同步归一化 AO 量程。 */
+        (void)normalize_ao_params_after_write();
+        printf("罐底测量\t罐高标定完成，罐高=%ld(0.1mm)\r\n",
+               g_deviceParams.tankHeight);
+        MotorCtrl_RefreshPositionFromActiveSource();    /* 罐高变化后按当前记步源刷新当前位置 */
+    }
+
     printf("罐底测量\t电机上行完成，流程结束\r\n");
 
     return NO_ERROR;

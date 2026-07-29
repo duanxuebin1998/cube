@@ -27,7 +27,7 @@
 #define UNVALID_GSW 0                      /* 质量无效值 */
 
 #define MAX_MEASUREMENT_POINTS 200 /* 密度分布测量最大点数。 */
-#define DEVICE_PROTOCOL_VERSION 30u /* CPU2/CPU3共享协议版本；协议30新增23类整机供电与电源监控故障码。 */
+#define DEVICE_PROTOCOL_VERSION 31u /* CPU2/CPU3共享协议版本；协议31复用未使用的扭力参数槽传递扭力模块温度。 */
 #define FAULT_AUTO_RECOVERY_RETRY_DEFAULT 3u /* 故障自动恢复默认重试次数。 */
 #define FAULT_AUTO_RECOVERY_RETRY_MAX 10u /* 故障自动恢复最大重试次数。 */
 
@@ -676,7 +676,7 @@ typedef struct {
 
     /* 扭力相关 */
     uint32_t current_weight;       /* /< 当前扭力值 */
-    uint32_t weight_param;         /* /< 扭力参数 */
+    uint32_t torque_temperature_bits; /* /< 扭力模块温度IEEE754原始位 */
 
     /* 姿态角 */
     int32_t  angle_x;              /* /< X 轴角度 */
@@ -1024,9 +1024,12 @@ int normalize_ao_params_after_write(void); /* 启动兼容路径归一化 AO 参数 */
 /*
  * 函数用途：对候选 AO 配置执行源切换、非法旧量程回退和严格范围校验。
  * 调用场景：CPU2 接收 FC10 写参后、提交全局参数前调用。
- * 关键约束：当前源上限变化且旧量程因此非法时才成对回默认；有效自定义量程保持不变。
+ * 关键约束：AO 字段写入始终严格校验；未触及 AO 且动态上限未变化时允许无关写入。
  */
-int prepare_ao_params_for_write(const DeviceParameters *current, DeviceParameters *candidate);
+int prepare_ao_params_for_write(const DeviceParameters *current,
+                                DeviceParameters *candidate,
+                                uint16_t start_addr,
+                                uint16_t reg_count);
 /**
  * @brief 处理系统参数中的 process_device_params_deferred_tasks 逻辑。
  */
