@@ -1560,7 +1560,7 @@ uint32_t WirelessPairing_ReadConnectionStatus(WirelessConnectionStatus *status)
     uint8_t at_entered = 0U;
     uint8_t mode = 0xFFU;
     uint8_t ble_status = 0xFFU;
-    uint8_t rssi_started = 0U;
+    uint8_t rssi_enable_attempted = 0U;
     char data_line[WIRELESS_PAIRING_LINE_TEXT_SIZE];
     char mac[WIRELESS_PAIRING_MAC_TEXT_SIZE] = {0};
     char rssi_cmd[32];
@@ -1638,12 +1638,13 @@ uint32_t WirelessPairing_ReadConnectionStatus(WirelessConnectionStatus *status)
 
     snprintf(rssi_cmd, sizeof(rssi_cmd), "AT+RSSI=ON,%lu",
              (unsigned long)WIRELESS_PAIRING_RSSI_REPORT_PERIOD_MS);
+    /* 命令可能已被模块执行但 ACK 未收完整，发送前即标记为必须清理。 */
+    rssi_enable_attempted = 1U;
     rssi_ret = CH9141_AT_SendCommand(rssi_cmd,
                                       CH9141_AT_WAIT_ACK,
                                       WIRELESS_PAIRING_ACK_TIMEOUT_MS,
                                       &response);
     if (rssi_ret == NO_ERROR) {
-        rssi_started = 1U;
         rssi_ret = CH9141_AT_WaitAsync(CH9141_AT_WAIT_RSSI,
                                        WIRELESS_PAIRING_RSSI_ASYNC_TIMEOUT_MS,
                                        &response);
@@ -1658,16 +1659,24 @@ uint32_t WirelessPairing_ReadConnectionStatus(WirelessConnectionStatus *status)
     if (rssi_ret != NO_ERROR) {
         status->error_code = rssi_ret;
     }
-    ret = NO_ERROR;
+    ret = (rssi_ret == STATE_SWITCH) ? STATE_SWITCH : NO_ERROR;
 
 finish:
-    if (rssi_started != 0U) {
+    if (rssi_enable_attempted != 0U) {
         rssi_stop_ret = CH9141_AT_SendCommand("AT+RSSI=OFF",
                                               CH9141_AT_WAIT_ACK,
                                               WIRELESS_PAIRING_ACK_TIMEOUT_MS,
                                               &response);
         if ((status->error_code == NO_ERROR) && (rssi_stop_ret != NO_ERROR)) {
             status->error_code = rssi_stop_ret;
+        }
+        if (rssi_stop_ret == STATE_SWITCH) {
+            ret = STATE_SWITCH;
+        }
+        if (rssi_stop_ret != NO_ERROR) {
+            /* 普通清理被半 ACK、UART 故障或命令切换打断时，强制关闭 RSSI 并退出 AT。 */
+            CH9141_AT_RecoverRssiQuery();
+            at_entered = 0U;
         }
     }
 
@@ -1676,6 +1685,10 @@ finish:
                                          CH9141_AT_WAIT_ACK,
                                          WIRELESS_PAIRING_ACK_TIMEOUT_MS,
                                          &response);
+        if (exit_ret != NO_ERROR) {
+            /* AT EXIT 可能已执行但 ACK 丢失，也可能仍停留在 AT 模式，统一执行有界强制清理。 */
+            CH9141_AT_RecoverRssiQuery();
+        }
         (void)CH9141_AT_PrepareUart6(WIRELESS_PAIRING_POST_RESET_IDLE_MS);
         if ((ret == NO_ERROR) && (exit_ret != NO_ERROR)) {
             ret = exit_ret;
@@ -1720,7 +1733,7 @@ uint32_t WirelessPairing_PrintConnectionStatus(void)
     char rssi_cmd[32];
     int16_t rssi = 0;
     uint8_t has_rssi = 0U;
-    uint8_t rssi_started = 0U;
+    uint8_t rssi_enable_attempted = 0U;
     const char *cached_name;
     DeviceState previous_state = g_measurement.device_status.device_state;
 
@@ -1810,13 +1823,14 @@ uint32_t WirelessPairing_PrintConnectionStatus(void)
     printf("无线滑环连接状态\tRSSI读取\t协议=先ACK后异步上报\t上报周期=%lu ms\t异步等待=%lu ms\r\n",
            (unsigned long)WIRELESS_PAIRING_RSSI_REPORT_PERIOD_MS,
            (unsigned long)WIRELESS_PAIRING_RSSI_ASYNC_TIMEOUT_MS);
+    /* 命令可能已被模块执行但 ACK 未收完整，发送前即标记为必须清理。 */
+    rssi_enable_attempted = 1U;
     rssi_ret = CH9141_AT_SendCommand(rssi_cmd,
                                       CH9141_AT_WAIT_ACK,
                                       WIRELESS_PAIRING_ACK_TIMEOUT_MS,
                                       &response);
     /* 先处理异常边界，避免无线滑环匹配状态机带故障继续运行。 */
     if (rssi_ret == NO_ERROR) {
-        rssi_started = 1U;
         WirelessPairing_PrintRet("无线滑环连接状态\t打开RSSI上报", rssi_ret);
 
         /* AT+RSSI=ON,<周期> 只直接返回 OK；RSSI 值随后异步上报，需要单独等待。 */
@@ -1843,18 +1857,23 @@ uint32_t WirelessPairing_PrintConnectionStatus(void)
         printf("无线滑环连接状态\tRSSI打开响应=%s\r\n", response.text);
     }
 
-    if (rssi_started != 0U) {
+    if (rssi_enable_attempted != 0U) {
         rssi_stop_ret = CH9141_AT_SendCommand("AT+RSSI=OFF",
                                               CH9141_AT_WAIT_ACK,
                                               WIRELESS_PAIRING_ACK_TIMEOUT_MS,
                                               &response);
         WirelessPairing_PrintRet("无线滑环连接状态\t关闭RSSI读取", rssi_stop_ret);
+        if (rssi_stop_ret != NO_ERROR) {
+            /* 普通清理失败时立即强制关闭 RSSI 并退出 AT，避免污染后续 DSM 透传响应。 */
+            CH9141_AT_RecoverRssiQuery();
+            at_entered = 0U;
+        }
         /* 先处理异常边界，避免无线滑环匹配状态机带故障继续运行。 */
         if ((ret == NO_ERROR) && (rssi_stop_ret != NO_ERROR)) {
             ret = rssi_stop_ret;
         }
     } else {
-        printf("无线滑环连接状态\t关闭RSSI读取\t跳过=RSSI上报未成功开启\r\n");
+        printf("无线滑环连接状态\t关闭RSSI读取\t跳过=未尝试开启RSSI上报\r\n");
     }
 
     cached_name = WirelessPairing_GetCachedName(mac);
@@ -1877,6 +1896,10 @@ finish:
                                          WIRELESS_PAIRING_ACK_TIMEOUT_MS,
                                          &response);
         WirelessPairing_PrintRet("无线滑环连接状态\t退出AT", exit_ret);
+        if (exit_ret != NO_ERROR) {
+            /* 退出 AT 未确认时执行有界强制清理，保证下一条传感器命令回到透传链路。 */
+            CH9141_AT_RecoverRssiQuery();
+        }
         (void)CH9141_AT_PrepareUart6(WIRELESS_PAIRING_POST_RESET_IDLE_MS);
         /* 先处理异常边界，避免无线滑环匹配状态机带故障继续运行。 */
         if ((ret == NO_ERROR) && (exit_ret != NO_ERROR)) {

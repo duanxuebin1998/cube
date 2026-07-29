@@ -542,6 +542,42 @@ static void CH9141_AT_RecoverTransparentMode(uint8_t send_exit)
  * @param idle_ms 业务参数。
  * @return 状态码、计数值或协议数值，具体含义由调用点约定。
  */
+/*
+ * 函数用途：在 RSSI 查询正常清理失败后，强制关闭异步上报并退出 AT 模式。
+ * 调用场景：无线连接状态查询已进入 AT 模式，但 RSSI OFF 或 AT EXIT 未得到完整应答。
+ * 关键约束：忽略命令切换以完成 UART6 清场；只允许在主循环任务上下文调用。
+ */
+void CH9141_AT_RecoverRssiQuery(void)
+{
+    static const uint8_t rssi_off_cmd[] = "AT+RSSI=OFF\r\n";
+    static const uint8_t exit_cmd[] = "AT+EXIT\r\n";
+
+    (void)HAL_UART_DMAStop(&huart6);
+    CH9141_AT_ClearUartError();
+    printf("CH9141K AT\tRSSI查询清理\t动作=强制关闭RSSI并退出AT\r\n");
+
+    (void)HAL_UART_Transmit(&huart6,
+                            (uint8_t *)rssi_off_cmd,
+                            (uint16_t)(sizeof(rssi_off_cmd) - 1U),
+                            CH9141_AT_COMMAND_TX_TIMEOUT_MS);
+    (void)CH9141_AT_DrainRxUntilIdle(CH9141_AT_PRE_COMMAND_IDLE_MS,
+                                     CH9141_AT_PRE_COMMAND_DRAIN_TIMEOUT_MS);
+    CH9141_AT_ClearUartError();
+
+    (void)HAL_UART_Transmit(&huart6,
+                            (uint8_t *)exit_cmd,
+                            (uint16_t)(sizeof(exit_cmd) - 1U),
+                            CH9141_AT_COMMAND_TX_TIMEOUT_MS);
+    (void)CH9141_AT_DrainRxUntilIdle(CH9141_AT_PRE_COMMAND_IDLE_MS,
+                                     CH9141_AT_PRE_COMMAND_DRAIN_TIMEOUT_MS);
+
+    (void)HAL_UART_Abort(&huart6);
+    CH9141_AT_ClearUartError();
+    (void)CH9141_AT_DrainRxUntilIdle(CH9141_AT_PRE_COMMAND_IDLE_MS,
+                                     CH9141_AT_PRE_COMMAND_DRAIN_TIMEOUT_MS);
+    CH9141_AT_ClearUartError();
+}
+
 uint32_t CH9141_AT_PrepareUart6(uint32_t idle_ms)
 {
     /* 切换到 CH9141 AT 前先清除安全协议同步传输状态，避免共享 UART6 保留忙标志。 */

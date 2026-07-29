@@ -50,6 +50,13 @@ void CH9141_AT_NotifySensorPowerOn(void);
 uint32_t CH9141_AT_PrepareUart6(uint32_t idle_ms);
 
 /**
+ * @brief 在 RSSI 查询清理不确定时，强制关闭异步上报并退出 AT 模式。
+ *
+ * 该函数绕过命令切换检查发送清理命令，只能在已进入 AT 模式的主循环任务上下文调用。
+ */
+void CH9141_AT_RecoverRssiQuery(void);
+
+/**
  * @brief 通过 UART6 软件方式进入 CH9141K AT 配置。
  *
  * 硬件 AT 引脚未确认接入 CPU2 时，先保证 UART6 空闲，再发送 AT... 进入软件 AT 配置。

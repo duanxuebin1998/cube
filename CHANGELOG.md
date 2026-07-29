@@ -2796,3 +2796,26 @@ CPU3通信和界面：
 - 尚未用真实UART4抓包确认Newhall温度float32字节序、首帧0 ℃和温度落后一轮行为；未执行坏帧、粘连、断线恢复及OLED负温/无效占位实机验证。
 - 扭力温度通信超时后仍会保留最后有效值；读取部件参数也不保证取得命令开始后的新温度帧，这两项已记录并按用户决定暂缓。
 - 尚未执行真实`STATE_SWITCH`命令切换、电机安全抬升失败注入、FRAM写失败、AO物理电流和水位/罐高标定台架回归；静态检查和构建不能替代硬件证据。
+
+## 2026-07-29 - 修复CH9141K RSSI半ACK清理与透传恢复
+
+版本：
+- CPU2：`V1.36.0.0 -> V1.36.1.0`（PATCH）。
+- CPU3：保持`V1.36.0.0`。
+
+协议版本与兼容性：
+- CPU2/CPU3 `DEVICE_PROTOCOL_VERSION`保持31，不新增或改变共享寄存器、命令、状态及字段语义。
+- CPU2 `DEVICE_PARAM_VERSION`保持3，参数结构、FRAM布局和升级清参行为均不变。
+
+本次修改：
+- RSSI查询在发送`AT+RSSI=ON`前即记录“已尝试开启”，即使模块执行命令后只返回半个ACK，收尾阶段仍发送`AT+RSSI=OFF`。
+- 普通`AT+RSSI=OFF`或`AT+EXIT`遇到短ACK、UART/DMA异常或命令切换时，使用有界强制清理依次发送`AT+RSSI=OFF\r\n`和`AT+EXIT\r\n`，随后终止DMA、清除UART错误并排空残留数据，避免异步`RSSI:-xxdB`污染DSM透传响应。
+- 连接状态读取显式透传RSSI阶段的`STATE_SWITCH`，维护连接状态命令同步使用相同清理边界。
+
+验证：
+- 无线RSSI契约、传感器故障契约、GBK/936与CRLF、无新增`//`注释及`git diff --check`通过。
+- CPU2按隔离提交源码执行clean-first构建，固定名与`V1.36.1.0`版本名HEX哈希一致。
+
+未验证风险：
+- 尚未在真实CH9141K上注入`AT+RSSI=ON`半ACK、`AT+RSSI=OFF`/`AT+EXIT`丢ACK、UART FE及DMA异常。
+- 尚未在真实DSM透传链路验证恢复后首条`Cl`响应；静态契约和构建不能替代台架故障注入。
