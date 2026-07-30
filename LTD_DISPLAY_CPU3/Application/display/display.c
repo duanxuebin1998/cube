@@ -10,29 +10,39 @@
 #include <stdio.h>
 #include <string.h>
 
+/* 显示模块调试输出编译开关；0 关闭额外调试路径，量产构建保持关闭以避免串口与刷新时序受日志影响。 */
 #define DEBUG_DISPLAY 0
+/* OLED 异常后的周期恢复尝试间隔 60000 ms；限制重复初始化频率，避免故障时持续占用总线。 */
 #define DISPLAY_RECOVER_INTERVAL_MS 60000U
+/* 一次显示刷新等待完成的超时 500 ms；超过后进入显示故障与恢复处理。 */
 #define DISPLAY_REFRESH_TIMEOUT_MS 500U
+/* 菜单数值修改后高亮显示的保持时间 500 ms。 */
 #define DISPLAY_VALUE_HIGHLIGHT_MS 500U
+/* 状态页业务数据重建周期 2000 ms；页面扫描可更快，但过程量文本只按该节拍更新。 */
 #define DISPLAY_STATUS_DATA_REFRESH_MS 2000U
+/* 状态页最多容纳的可配置显示项数量 6；超过时必须分页或裁剪。 */
 #define DISPLAY_STATUS_MAX_SLOTS 6U
+/* 状态页单个数值区域高度 16 像素；用于局部清屏和重绘边界。 */
 #define DISPLAY_VALUE_AREA_HEIGHT 16U
+/* 主界面无按键 30000 ms 后允许进入熄屏状态。 */
 #define DISPLAY_SCREEN_OFF_IDLE_MS 30000U
+/* 菜单无操作 120000 ms 后自动退出，避免长期停留在参数编辑上下文。 */
 #define DISPLAY_MENU_IDLE_EXIT_MS 120000U
+/* 状态页切换后保持当前页的刷新周期数 3；用于抑制数据项变化造成的过快自动翻页。 */
 #define DISPLAY_STATUS_PAGE_HOLD_REFRESHES 3U
 
 /* struct ScreenDisplay SDisPosi; */
 struct ScreenPARA screen_parameter = {0}; /* 屏幕存储参数 */
 static volatile bool flag_bright = false;            /* 亮屏标志位 */
-static volatile bool display_refresh_pending = false; /* 屏幕显示状态标志，通常由主循环或中断回调共同检查。 */
-static bool display_recover_before_draw = false; /* 屏幕显示模块级变量，保存跨函数共享的业务状态。 */
-static volatile bool display_screen_off_active = false; /* 屏幕显示模块级变量，保存跨函数共享的业务状态。 */
-static bool display_recover_requested = false; /* 屏幕显示模块级变量，保存跨函数共享的业务状态。 */
-static uint32_t display_last_recover_tick = 0U; /* 屏幕显示模块级变量，保存跨函数共享的业务状态。 */
-static uint32_t display_last_spi_error_count = 0U; /* 屏幕显示计数值，用于节拍、统计或协议数量控制。 */
-static uint32_t display_last_refresh_ms = 0U; /* 屏幕显示模块级变量，保存跨函数共享的业务状态。 */
-static uint32_t display_refresh_timeout_count = 0U; /* 屏幕显示计数值，用于节拍、统计或协议数量控制。 */
-static volatile uint32_t display_last_key_tick = 0U; /* 屏幕显示模块级变量，保存跨函数共享的业务状态。 */
+static volatile bool display_refresh_pending = false; /* 等待 Display_Task 消费的一次 OLED 刷新请求；定时器、按键和页面流程只置位，前台取走后在非中断上下文执行绘制。 */
+static bool display_recover_before_draw = false; /* 下一帧绘制前必须先恢复 OLED 控制器和清屏的标志；由主动恢复、SPI 错误变化或周期恢复判定设置，帧结束后清除。 */
+static volatile bool display_screen_off_active = false; /* OLED 已执行关显示命令的运行态标志；按键中断和前台绘制流程均会读取，因此使用 volatile 保证每次访问均取得最新状态。 */
+static bool display_recover_requested = false; /* OLED 从息屏状态唤醒后挂起的一次主动恢复请求；下一次恢复判定消费并清除，确保重新开屏后重建控制器和显存状态。 */
+static uint32_t display_last_recover_tick = 0U; /* 最近一次确认或发起 OLED 恢复的 HAL 毫秒节拍；用于限制周期恢复间隔，按无符号差值兼容系统节拍回绕。 */
+static uint32_t display_last_spi_error_count = 0U; /* 显示恢复判定最近一次确认过的 OLED SPI 累计错误数；计数发生变化时要求下一帧重建控制器和显存状态。 */
+static uint32_t display_last_refresh_ms = 0U; /* 最近一次 RefreshScreen 完整执行耗时，单位 ms；与 DISPLAY_REFRESH_TIMEOUT_MS 比较后累计刷新超时诊断。 */
+static uint32_t display_refresh_timeout_count = 0U; /* RefreshScreen 单次耗时超过 DISPLAY_REFRESH_TIMEOUT_MS 的累计次数；仅作显示任务时序诊断，不参与刷新完成判定。 */
+static volatile uint32_t display_last_key_tick = 0U; /* 最近一次按键唤醒或显示初始化时的 HAL 毫秒节拍；息屏判定按该值计算主界面连续无操作时长。 */
 static uint32_t display_menu_last_activity_tick = 0U; /* 菜单最近一次有效操作时间，用于空闲自动退出。 */
 
 
@@ -40,9 +50,13 @@ static int PageAmount = 0;                  /* 总共显示几页 */
 static bool flagofoillevelvalid = false;    /* 是否显示液位 */
 static bool FlagofTotalTwoRow = false;      /* 标志位 - 总共要显示的内容只有两行 */
 static void DIS_Equipment(void);
+/* ValidParaDisArr 每项的行坐标字段索引 0；值为 OLED Y 像素坐标。 */
 #define PARA_X 0
+/* ValidParaDisArr 每项的页号字段索引 1；用于筛选当前页显示项。 */
 #define PARA_PAGE 1
+/* ValidParaDisArr 每项的有效显示顺序字段索引 2；从 1 开始参与分页布局。 */
 #define PARA_NUM 2
+/* ValidParaDisArr 每项的有效标志字段索引 3；为假时不得构建或绘制该项。 */
 #define PARA_VALID 3
 enum { /* 用于记录每个参数显示在第几页第几行 */
     Para_ErrorReason = 0,
@@ -75,86 +89,98 @@ enum { /* 用于记录每个参数显示在第几页第几行 */
     
     Para_Amount,
 };
+/* 各参数菜单项的显示有效性、页号和布局属性缓存。 */
 static int ValidParaDisArr[Para_Amount][4] = {0};
 
+/**
+ * @brief 读取并换算状态页使用的油位传感器频率。
+ * @return 优先返回 oil_measurement.current_frequency；该值为 0 时回退到 debug_data.frequency，单位 Hz，最终转换为 int。
+ */
 static int GetOilSensorFrequencyForDisplay(void);
 
+/* 结果页业务上下文；决定状态快照应组织油位、水位、密度分布、称重或故障等哪一类字段，避免仅凭设备主状态猜测页面内容。 */
 typedef enum {
-    DISPLAY_RESULT_CONTEXT_NONE = 0,
-    DISPLAY_RESULT_CONTEXT_OIL_LEVEL,
-    DISPLAY_RESULT_CONTEXT_WATER_LEVEL,
-    DISPLAY_RESULT_CONTEXT_SINGLE_POINT,
-    DISPLAY_RESULT_CONTEXT_SINGLE_MONITOR,
-    DISPLAY_RESULT_CONTEXT_DENSITY_DISTRIBUTION,
-    DISPLAY_RESULT_CONTEXT_BOTTOM_HEIGHT,
-    DISPLAY_RESULT_CONTEXT_MOTION_DEBUG,
-    DISPLAY_RESULT_CONTEXT_WEIGHT,
-    DISPLAY_RESULT_CONTEXT_READ_PARAMETER,
-    DISPLAY_RESULT_CONTEXT_ERROR
+    /* 状态页结果上下文；用于选择当前业务结果应生成的字段集合。 */
+    DISPLAY_RESULT_CONTEXT_NONE = 0, /* 当前页面解释为没有结果页上下文。 */
+    DISPLAY_RESULT_CONTEXT_OIL_LEVEL, /* 当前页面解释为油位测量结果。 */
+    DISPLAY_RESULT_CONTEXT_WATER_LEVEL, /* 当前页面解释为水位测量结果。 */
+    DISPLAY_RESULT_CONTEXT_SINGLE_POINT, /* 当前页面解释为单点密度测量结果。 */
+    DISPLAY_RESULT_CONTEXT_SINGLE_MONITOR, /* 当前页面解释为单点连续监测结果。 */
+    DISPLAY_RESULT_CONTEXT_DENSITY_DISTRIBUTION, /* 当前页面解释为密度分布测量结果。 */
+    DISPLAY_RESULT_CONTEXT_BOTTOM_HEIGHT, /* 当前页面解释为罐底和罐高测量结果。 */
+    DISPLAY_RESULT_CONTEXT_MOTION_DEBUG, /* 当前页面解释为电机运动调试结果。 */
+    DISPLAY_RESULT_CONTEXT_WEIGHT, /* 当前页面解释为扭力/重量结果。 */
+    DISPLAY_RESULT_CONTEXT_READ_PARAMETER, /* 当前页面解释为参数读取结果。 */
+    DISPLAY_RESULT_CONTEXT_ERROR /* 当前页面解释为故障详情结果。 */
 } DisplayResultContext;
 
 typedef enum {
-    DISPLAY_STATUS_SLOT_NONE = 0,
-    DISPLAY_STATUS_SLOT_ERROR_REASON,
-    DISPLAY_STATUS_SLOT_ERROR_REASON_MORE,
-    DISPLAY_STATUS_SLOT_OIL_LEVEL,
-    DISPLAY_STATUS_SLOT_WATER_LEVEL,
-    DISPLAY_STATUS_SLOT_DENSITY,
-    DISPLAY_STATUS_SLOT_TEMPERATURE,
-    DISPLAY_STATUS_SLOT_POSITION,
-    DISPLAY_STATUS_SLOT_WEIGHT,
-    DISPLAY_STATUS_SLOT_TORQUE_TEMPERATURE,
-    DISPLAY_STATUS_SLOT_FREQUENCY,
-    DISPLAY_STATUS_SLOT_CAPACITANCE,
-    DISPLAY_STATUS_SLOT_ANGLE_X,
-    DISPLAY_STATUS_SLOT_ANGLE_Y,
-    DISPLAY_STATUS_SLOT_TANK_HEIGHT,
-    DISPLAY_STATUS_SLOT_WIRELESS_RSSI,
-    DISPLAY_STATUS_SLOT_WIRELESS_RSSI_NA,
-    DISPLAY_STATUS_SLOT_WIRELESS_MAC_COMPACT,
-    DISPLAY_STATUS_SLOT_WIRELESS_MAC_1,
-    DISPLAY_STATUS_SLOT_WIRELESS_MAC_2,
-    DISPLAY_STATUS_SLOT_WIRELESS_MAC_NA
+    /* 状态页字段槽标识；每个标识对应固定的格式、单位或文本渲染规则。 */
+    DISPLAY_STATUS_SLOT_NONE = 0, /* 本槽显示空槽。 */
+    DISPLAY_STATUS_SLOT_ERROR_REASON, /* 本槽显示首条故障原因。 */
+    DISPLAY_STATUS_SLOT_ERROR_REASON_MORE, /* 本槽显示其余故障原因提示。 */
+    DISPLAY_STATUS_SLOT_OIL_LEVEL, /* 本槽显示油位。 */
+    DISPLAY_STATUS_SLOT_WATER_LEVEL, /* 本槽显示水位。 */
+    DISPLAY_STATUS_SLOT_DENSITY, /* 本槽显示密度。 */
+    DISPLAY_STATUS_SLOT_TEMPERATURE, /* 本槽显示温度。 */
+    DISPLAY_STATUS_SLOT_POSITION, /* 本槽显示传感器位置。 */
+    DISPLAY_STATUS_SLOT_WEIGHT, /* 本槽显示扭力/重量。 */
+    DISPLAY_STATUS_SLOT_TORQUE_TEMPERATURE, /* 本槽显示扭力传感器温度。 */
+    DISPLAY_STATUS_SLOT_FREQUENCY, /* 本槽显示传感器频率。 */
+    DISPLAY_STATUS_SLOT_CAPACITANCE, /* 本槽显示水位电容。 */
+    DISPLAY_STATUS_SLOT_ANGLE_X, /* 本槽显示陀螺仪 X 轴角度。 */
+    DISPLAY_STATUS_SLOT_ANGLE_Y, /* 本槽显示陀螺仪 Y 轴角度。 */
+    DISPLAY_STATUS_SLOT_TANK_HEIGHT, /* 本槽显示罐高。 */
+    DISPLAY_STATUS_SLOT_WIRELESS_RSSI, /* 本槽显示无线 RSSI。 */
+    DISPLAY_STATUS_SLOT_WIRELESS_RSSI_NA, /* 本槽显示无线 RSSI 不可用提示。 */
+    DISPLAY_STATUS_SLOT_WIRELESS_MAC_COMPACT, /* 本槽显示紧凑格式无线 MAC。 */
+    DISPLAY_STATUS_SLOT_WIRELESS_MAC_1, /* 本槽显示无线 MAC 上半行。 */
+    DISPLAY_STATUS_SLOT_WIRELESS_MAC_2, /* 本槽显示无线 MAC 下半行。 */
+    DISPLAY_STATUS_SLOT_WIRELESS_MAC_NA /* 本槽显示无线 MAC 不可用提示。 */
 } DisplayStatusSlotId;
 
 typedef struct {
-    DisplayStatusSlotId id;
-    bool is_text;
-    int32_t value;
-    uint8_t points;
-    uint8_t row;
-    uint8_t value_line;
-    const uint8_t *unit;
-    char text[32];
-    bool highlight_visible;
-    uint32_t highlight_until_tick;
+    /* 状态页的单个可渲染字段；数值字段和文本字段互斥，并携带行位置、单位及临时高亮期限。 */
+    DisplayStatusSlotId id; /* 字段类型标识，决定本槽采用的标签、单位和格式化规则。 */
+    bool is_text; /* 字段载荷类型标志；为真时读取 text，否则按 value 和 points 格式化。 */
+    int32_t value; /* 数值字段的有符号原始值，按 points 指定的小数位显示。 */
+    uint8_t points; /* 数值字段显示的小数位数。 */
+    uint8_t row; /* 字段标签所在 OLED 行号。 */
+    uint8_t value_line; /* 字段数值或文本所在 OLED 行号。 */
+    const uint8_t *unit; /* 数值字段的只读单位字符串；无单位时为 NULL。 */
+    char text[32]; /* 文本字段的本地副本，固定长度并保证以 NUL 结束。 */
+    bool highlight_visible; /* 临时高亮当前是否可见；用于通信异常等短时提示。 */
+    uint32_t highlight_until_tick; /* 临时高亮结束的 HAL 毫秒节拍。 */
 } DisplayStatusSlot;
 
 typedef struct {
-    bool valid;
-    uint16_t state;
-    uint32_t error_code;
-    DisplayResultContext ctx;
-    bool protocol_compatible;
-    bool protocol_mismatch;
-    uint8_t language;
-    bool total_two_row;
-    int page;
-    int page_amount;
-    uint8_t slot_count;
-    DisplayStatusSlot slots[DISPLAY_STATUS_MAX_SLOTS];
+    /* 一次完整状态页快照；先在非活动缓冲区生成全部字段，再整体切换为活动快照，避免刷新过程中混用不同轮询周期的数据。 */
+    bool valid; /* 整份快照是否完整生成；为真后活动缓冲区才可交给绘制函数。 */
+    uint16_t state; /* 生成快照时读取到的 CPU2 设备主状态。 */
+    uint32_t error_code; /* 生成快照时读取到的 CPU2 汇总故障码。 */
+    DisplayResultContext ctx; /* 本快照的结果页业务上下文。 */
+    bool protocol_compatible; /* CPU2/CPU3 协议版本已确认兼容的标志。 */
+    bool protocol_mismatch; /* 检测到 CPU2/CPU3 协议版本不一致的标志。 */
+    uint8_t language; /* 生成文本时使用的界面语言快照。 */
+    bool total_two_row; /* 总计区域是否占两行的布局标志。 */
+    int page; /* 生成快照时的当前页索引。 */
+    int page_amount; /* 当前结果上下文可显示的总页数。 */
+    uint8_t slot_count; /* slots 中实际填充的字段数量，不得超过 DISPLAY_STATUS_MAX_SLOTS。 */
+    DisplayStatusSlot slots[DISPLAY_STATUS_MAX_SLOTS]; /* 按显示顺序排列的字段槽数组。 */
 } DisplayStatusSnapshot;
 
+/* 上一份已经完整绘制的状态页快照，用于差异刷新。 */
 static DisplayStatusSnapshot display_status_last_snapshot = {0};
+/* 当前允许绘制函数读取的完整状态页快照。 */
 static DisplayStatusSnapshot display_status_active_snapshot = {0};
-static int display_status_page_index = 0; /* 屏幕显示运行状态缓存，供状态机或协议上报使用。 */
-static uint8_t display_status_page_hold_count = 0U; /* 屏幕显示计数值，用于节拍、统计或协议数量控制。 */
-static bool display_status_full_redraw_required = true; /* 屏幕显示运行状态缓存，供状态机或协议上报使用。 */
+static int display_status_page_index = 0; /* 状态页当前页索引；上下翻页时在可用页数内循环。 */
+static uint8_t display_status_page_hold_count = 0U; /* 当前状态页已保持的业务数据刷新次数；达到 DISPLAY_STATUS_PAGE_HOLD_REFRESHES 后清零并切换到下一页。 */
+static bool display_status_full_redraw_required = true; /* 状态页局部刷新缓存已经失效、下一帧必须全屏重绘的标志；前景页覆盖屏幕后置位，完整状态页绘制时清除。 */
 static uint32_t display_status_last_data_refresh_tick = 0U; /* 状态页显示值最近一次采样时间。 */
 
 /**
- * @brief 检查屏幕显示中的 IsBottomAngleDisplayEnabled 逻辑。
- * @return true 表示条件满足或处理成功，false 表示条件不满足或处理失败。
+ * @brief 判断探底角度是否已配置为状态页显示项。
+ * @return true 表示探底角度已配置为状态页显示项；false 表示探底角度尚未配置为状态页显示项。
  */
 static bool IsBottomAngleDisplayEnabled(void)
 {
@@ -162,10 +188,11 @@ static bool IsBottomAngleDisplayEnabled(void)
 }
 
 /**
- * @brief 显示或打印屏幕显示中的 Display_GetResultContext 逻辑。
+ * @brief 根据测量状态选择当前结果页的数据上下文。
  *
- * @param state 状态值。
- * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ * @param state CPU2 共享测量快照中的设备状态，用于选择单点、监测、分布、油位、水位或参数读取结果上下文。
+ *
+ * @return 返回与当前测量状态对应的结果页上下文；无匹配状态时返回 DISPLAY_RESULT_CONTEXT_NONE。
  */
 static DisplayResultContext Display_GetResultContext(DeviceState state)
 {
@@ -252,20 +279,25 @@ static DisplayResultContext Display_GetResultContext(DeviceState state)
 }
 
 /**
- * @brief 显示或打印屏幕显示中的 Display_IsTemperatureValid 逻辑。
+ * @brief 判断温度值是否位于屏幕允许显示的有效范围内。
  *
- * @param temperature 业务参数。
- * @return true 表示条件满足或处理成功，false 表示条件不满足或处理失败。
+ * @param temperature CPU2 温度原始值，单位 0.01 ℃ 且包含 +20000 偏移；显示层只接受 1 至 39999。
+ * @return true 表示 temperature 严格大于 0 且小于 40000，属于屏幕允许显示的原始温度范围；false 表示值为 0 或不小于 40000，应按无效温度处理。
  */
 static bool Display_IsTemperatureValid(uint32_t temperature)
 {
     return (temperature > 0U) && (temperature < 40000U);
 }
 
-/*
- * 函数用途：把协议31中的扭力模块温度IEEE754原始位转换为0.01摄氏度整数。
- * 调用场景：读取部件参数完成后的状态分页构建与刷新。
- * 关键约束：只在读取部件参数结果上下文使用，并拒绝NaN、无穷和超出显示范围的数据。
+/**
+ * @brief 把协议31中的扭力模块温度IEEE754原始位转换为0.01摄氏度整数。
+ *
+ * @details 调用场景：读取部件参数完成后的状态分页构建与刷新。
+ * @note 关键约束：只在读取部件参数结果上下文使用，并拒绝NaN、无穷和超出显示范围的数据。
+ *
+ * @param ctx 本次处理使用的上下文或状态快照。该 DisplayResultContext 已由 CPU2 设备状态映射得到，用于选择单点、监测、分布、油位、水位或参数读取结果字段。
+ * @param temperature_x100 温度定点值，单位 0.01 ℃。
+ * @return true 表示扭力温度原始位为有限且可显示的 IEEE754 数值，并已换算为 0.01 ℃ 写入输出；false 表示输出指针为空、原始值为 NaN/无穷或超出允许温度范围。
  */
 static bool Display_GetTorqueTemperatureX100(DisplayResultContext ctx,
                                              int32_t *temperature_x100)
@@ -295,10 +327,10 @@ static bool Display_GetTorqueTemperatureX100(DisplayResultContext ctx,
 }
 
 /**
- * @brief 显示或打印屏幕显示中的 Display_IsDensityDistributionCompleteState 逻辑。
+ * @brief 判断设备状态是否属于可展示分布测量最终结果的完成态。
  *
- * @param state 状态值。
- * @return true 表示条件满足或处理成功，false 表示条件不满足或处理失败。
+ * @param state 待检查的 CPU2 设备状态；函数只接受各分布模式和综合测量的完成态。
+ * @return true 表示设备状态属于可展示分布测量最终结果的完成态；false 表示设备状态不属于可展示分布测量最终结果的完成态。
  */
 static bool Display_IsDensityDistributionCompleteState(DeviceState state)
 {
@@ -317,10 +349,10 @@ static bool Display_IsDensityDistributionCompleteState(DeviceState state)
 }
 
 /**
- * @brief 显示或打印屏幕显示中的 Display_IsDensityDistributionValueState 逻辑。
+ * @brief 判断当前设备状态是否包含可显示的密度分布测量值。
  *
- * @param state 状态值。
- * @return true 表示条件满足或处理成功，false 表示条件不满足或处理失败。
+ * @param state 待检查的 CPU2 设备状态；完成态、瓦锡兰测量中和参数读取完成态允许读取密度分布值。
+ * @return true 表示 state 为任一分布或综合测量完成态、Wärtsilä 密度测量中，或参数读取完成态，可读取分布测量值；false 表示其它状态，当前没有可显示的分布值。
  */
 static bool Display_IsDensityDistributionValueState(DeviceState state)
 {
@@ -330,10 +362,10 @@ static bool Display_IsDensityDistributionValueState(DeviceState state)
 }
 
 /**
- * @brief 显示或打印屏幕显示中的 Display_IsDensityDistributionOilLevelState 逻辑。
+ * @brief 判断当前设备状态是否包含密度分布测量使用的有效油位。
  *
- * @param state 状态值。
- * @return true 表示条件满足或处理成功，false 表示条件不满足或处理失败。
+ * @param state 待检查的 CPU2 设备状态；只有分布或综合测量完成态允许使用配套油位。
+ * @return true 表示 state 为国标、普通、每米、区间或 Wärtsilä 分布测量完成态，或综合测量完成态，可使用配套油位；false 表示其它状态，尚不能把分布测量油位作为有效结果。
  */
 static bool Display_IsDensityDistributionOilLevelState(DeviceState state)
 {
@@ -341,10 +373,10 @@ static bool Display_IsDensityDistributionOilLevelState(DeviceState state)
 }
 
 /**
- * @brief 显示或打印屏幕显示中的 Display_IsOilLevelResultState 逻辑。
+ * @brief 判断当前设备状态是否已经产生可显示的油位结果。
  *
- * @param state 状态值。
- * @return true 表示条件满足或处理成功，false 表示条件不满足或处理失败。
+ * @param state 待检查的 CPU2 设备状态；找油完成、油位跟随和综合测量完成态视为已有油位结果。
+ * @return true 表示当前设备状态已经产生可显示的油位结果；false 表示当前设备状态尚未产生可显示的油位结果。
  */
 static bool Display_IsOilLevelResultState(DeviceState state)
 {
@@ -354,10 +386,10 @@ static bool Display_IsOilLevelResultState(DeviceState state)
 }
 
 /**
- * @brief 显示或打印屏幕显示中的 Display_IsWaterLevelResultState 逻辑。
+ * @brief 判断当前设备状态是否已经产生可显示的水位结果。
  *
- * @param state 状态值。
- * @return true 表示条件满足或处理成功，false 表示条件不满足或处理失败。
+ * @param state 待检查的 CPU2 设备状态；找水、跟随、标定或综合测量完成态视为已有水位结果。
+ * @return true 表示当前设备状态已经产生可显示的水位结果；false 表示当前设备状态尚未产生可显示的水位结果。
  */
 static bool Display_IsWaterLevelResultState(DeviceState state)
 {
@@ -368,11 +400,11 @@ static bool Display_IsWaterLevelResultState(DeviceState state)
 }
 
 /**
- * @brief 显示或打印屏幕显示中的 Display_GetDensityValue 逻辑。
+ * @brief 读取当前结果页可显示的密度值。
  *
- * @param ctx 业务参数。
- * @param density 业务参数。
- * @return true 表示条件满足或处理成功，false 表示条件不满足或处理失败。
+ * @param ctx 本次处理使用的上下文或状态快照。该 DisplayResultContext 已由 CPU2 设备状态映射得到，用于选择单点、监测、分布、油位、水位或参数读取结果字段。
+ * @param density 密度原始值输出指针；上下文存在有效结果时写入 0.01 kg/m3 定点值。
+ * @return true 表示指定结果上下文存在有效密度，并已写入 density；false 表示输出指针为空、上下文不提供密度、分布状态尚未形成结果，或值仍为 UNVALID_DENSITY。
  */
 static bool Display_GetDensityValue(DisplayResultContext ctx, uint32_t *density)
 {
@@ -409,11 +441,11 @@ static bool Display_GetDensityValue(DisplayResultContext ctx, uint32_t *density)
 }
 
 /**
- * @brief 显示或打印屏幕显示中的 Display_GetTemperatureValue 逻辑。
+ * @brief 读取当前结果页可显示的温度值。
  *
- * @param ctx 业务参数。
- * @param temperature 业务参数。
- * @return true 表示条件满足或处理成功，false 表示条件不满足或处理失败。
+ * @param ctx 本次处理使用的上下文或状态快照。该 DisplayResultContext 已由 CPU2 设备状态映射得到，用于选择单点、监测、分布、油位、水位或参数读取结果字段。
+ * @param temperature 温度原始值输出指针；上下文存在有效结果时写入带 +20000 偏移的 0.01 ℃ 定点值。
+ * @return true 表示指定结果上下文存在有效温度，并已写入 temperature；false 表示输出指针为空、上下文不提供温度、分布状态尚未形成结果，或温度仍为无效占位值。
  */
 static bool Display_GetTemperatureValue(DisplayResultContext ctx, uint32_t *temperature)
 {
@@ -454,11 +486,11 @@ static bool Display_GetTemperatureValue(DisplayResultContext ctx, uint32_t *temp
 }
 
 /**
- * @brief 显示或打印屏幕显示中的 Display_GetOilLevelValue 逻辑。
+ * @brief 读取当前结果页可显示的油位值。
  *
- * @param ctx 业务参数。
- * @param oil_level 业务参数。
- * @return true 表示条件满足或处理成功，false 表示条件不满足或处理失败。
+ * @param ctx 本次处理使用的上下文或状态快照。该 DisplayResultContext 已由 CPU2 设备状态映射得到，用于选择单点、监测、分布、油位、水位或参数读取结果字段。
+ * @param oil_level 油位输出指针；上下文和设备状态有效时写入无符号 0.1 mm 结果。
+ * @return true 表示当前油位或分布结果状态有效，且非哨兵油位已写入输出；false 表示输出指针为空、上下文/状态不允许展示油位，或结果仍为 UNVALID_LEVEL。
  */
 static bool Display_GetOilLevelValue(DisplayResultContext ctx, uint32_t *oil_level)
 {
@@ -497,11 +529,11 @@ static bool Display_GetOilLevelValue(DisplayResultContext ctx, uint32_t *oil_lev
 }
 
 /**
- * @brief 显示或打印屏幕显示中的 Display_GetWaterLevelValue 逻辑。
+ * @brief 读取当前结果页可显示的水位值。
  *
- * @param ctx 业务参数。
- * @param water_level 业务参数。
- * @return true 表示条件满足或处理成功，false 表示条件不满足或处理失败。
+ * @param ctx 本次处理使用的上下文或状态快照。该 DisplayResultContext 已由 CPU2 设备状态映射得到，用于选择单点、监测、分布、油位、水位或参数读取结果字段。
+ * @param water_level 水位输出指针；设备状态有效且结果不是下限哨兵时写入无符号 0.1 mm 结果。
+ * @return true 表示当前状态允许展示水位，且非下限哨兵值已写入输出；false 表示输出指针为空、状态不是水位结果态、上下文不匹配，或结果等于 LEVEL_DOWNLIMITWATER。
  */
 static bool Display_GetWaterLevelValue(DisplayResultContext ctx, uint32_t *water_level)
 {
@@ -529,10 +561,10 @@ static bool Display_GetWaterLevelValue(DisplayResultContext ctx, uint32_t *water
 }
 
 /**
- * @brief 显示或打印屏幕显示中的 Display_ShouldShowOilLevel 逻辑。
+ * @brief 综合设备状态和油位有效标志判断是否显示油位。
  *
- * @param ctx 业务参数。
- * @return true 表示条件满足或处理成功，false 表示条件不满足或处理失败。
+ * @param ctx 本次处理使用的上下文或状态快照。该 DisplayResultContext 已由 CPU2 设备状态映射得到，用于选择单点、监测、分布、油位、水位或参数读取结果字段。
+ * @return true 表示当前上下文和设备状态能够取得有效油位；false 表示Display_GetOilLevelValue 未取得可显示结果。
  */
 static bool Display_ShouldShowOilLevel(DisplayResultContext ctx)
 {
@@ -542,10 +574,10 @@ static bool Display_ShouldShowOilLevel(DisplayResultContext ctx)
 }
 
 /**
- * @brief 显示或打印屏幕显示中的 Display_ShouldShowWaterLevel 逻辑。
+ * @brief 综合设备状态和水位有效标志判断是否显示水位。
  *
- * @param ctx 业务参数。
- * @return true 表示条件满足或处理成功，false 表示条件不满足或处理失败。
+ * @param ctx 本次处理使用的上下文或状态快照。该 DisplayResultContext 已由 CPU2 设备状态映射得到，用于选择单点、监测、分布、油位、水位或参数读取结果字段。
+ * @return true 表示当前上下文和设备状态能够取得有效水位；false 表示Display_GetWaterLevelValue 未取得可显示结果。
  */
 static bool Display_ShouldShowWaterLevel(DisplayResultContext ctx)
 {
@@ -555,10 +587,10 @@ static bool Display_ShouldShowWaterLevel(DisplayResultContext ctx)
 }
 
 /**
- * @brief 显示或打印屏幕显示中的 Display_ShouldShowOilFrequency 逻辑。
+ * @brief 判断当前状态页是否应显示油位传感器频率。
  *
- * @param state 状态值。
- * @return true 表示条件满足或处理成功，false 表示条件不满足或处理失败。
+ * @param state 当前 CPU2 设备状态，用于判断油位频率是否属于本页有效诊断项。
+ * @return true 表示设备状态为找油、油位标定或油位跟随，状态页应显示油位传感器频率；false 表示其它设备状态。
  */
 static bool Display_ShouldShowOilFrequency(DeviceState state)
 {
@@ -574,10 +606,10 @@ static bool Display_ShouldShowOilFrequency(DeviceState state)
 }
 
 /**
- * @brief 显示或打印屏幕显示中的 Display_ShouldShowWaterCapacitance 逻辑。
+ * @brief 判断当前状态页是否应显示水位电容值。
  *
- * @param state 状态值。
- * @return true 表示条件满足或处理成功，false 表示条件不满足或处理失败。
+ * @param state 当前 CPU2 设备状态，用于判断水位电容是否属于本页有效诊断项。
+ * @return true 表示设备状态为找水、跟随水位搜索、水位跟随或水位标定，状态页应显示水位电容；false 表示其它设备状态。
  */
 static bool Display_ShouldShowWaterCapacitance(DeviceState state)
 {
@@ -594,10 +626,10 @@ static bool Display_ShouldShowWaterCapacitance(DeviceState state)
 }
 
 /**
- * @brief 显示或打印屏幕显示中的 Display_ShouldShowOilFrequencyValue 逻辑。
+ * @brief 按结果页上下文、业务状态和频率有效性决定是否显示液位传感器频率。
  *
- * @param ctx 业务参数。
- * @return true 表示条件满足或处理成功，false 表示条件不满足或处理失败。
+ * @param ctx 本次处理使用的上下文或状态快照。该 DisplayResultContext 已由 CPU2 设备状态映射得到，用于选择单点、监测、分布、油位、水位或参数读取结果字段。
+ * @return true 表示调试频率已经非零，或当前为油位结果页且设备状态允许展示油频；false 表示频率仍无有效值，并且上下文或状态不满足油频显示条件。
  */
 static bool Display_ShouldShowOilFrequencyValue(DisplayResultContext ctx)
 {
@@ -617,10 +649,10 @@ static bool Display_ShouldShowOilFrequencyValue(DisplayResultContext ctx)
 }
 
 /**
- * @brief 显示或打印屏幕显示中的 Display_ShouldShowWaterCapacitanceValue 逻辑。
+ * @brief 按结果页上下文、业务状态和电容有效性决定是否显示水位电容。
  *
- * @param ctx 业务参数。
- * @return true 表示条件满足或处理成功，false 表示条件不满足或处理失败。
+ * @param ctx 本次处理使用的上下文或状态快照。该 DisplayResultContext 已由 CPU2 设备状态映射得到，用于选择单点、监测、分布、油位、水位或参数读取结果字段。
+ * @return true 表示水位电容快照已经非零，或当前为水位结果页且设备状态允许展示电容；false 表示电容仍无有效值，并且上下文或状态不满足显示条件。
  */
 static bool Display_ShouldShowWaterCapacitanceValue(DisplayResultContext ctx)
 {
@@ -640,11 +672,11 @@ static bool Display_ShouldShowWaterCapacitanceValue(DisplayResultContext ctx)
 }
 
 /**
- * @brief 显示或打印屏幕显示中的 Display_GetPositionValue 逻辑。
+ * @brief 读取当前结果页可显示的传感器位置。
  *
- * @param ctx 业务参数。
- * @param position 输入/输出指针。
- * @return true 表示条件满足或处理成功，false 表示条件不满足或处理失败。
+ * @param ctx 本次处理使用的上下文或状态快照。该 DisplayResultContext 已由 CPU2 设备状态映射得到，用于选择单点、监测、分布、油位、水位或参数读取结果字段。
+ * @param position 传感器位置输出指针；参数非 NULL 时写入当前 debug_data.sensor_position 快照。
+ * @return true 表示 position 非空，当前传感器位置快照已写入输出；false 仅表示输出指针为空，函数未写入位置。
  */
 static bool Display_GetPositionValue(DisplayResultContext ctx, int *position)
 {
@@ -659,10 +691,10 @@ static bool Display_GetPositionValue(DisplayResultContext ctx, int *position)
 }
 
 /**
- * @brief 显示或打印屏幕显示中的 Display_ShouldShowWeight 逻辑。
+ * @brief 判断当前状态页是否应显示实时扭力值。
  *
- * @param ctx 业务参数。
- * @return true 表示条件满足或处理成功，false 表示条件不满足或处理失败。
+ * @param ctx 本次处理使用的上下文或状态快照。该 DisplayResultContext 已由 CPU2 设备状态映射得到，用于选择单点、监测、分布、油位、水位或参数读取结果字段。
+ * @return 当前实现固定返回 true，所有 DisplayResultContext 均显示实时扭力值；该函数不存在 false 返回分支。
  */
 static bool Display_ShouldShowWeight(DisplayResultContext ctx)
 {
@@ -672,10 +704,10 @@ static bool Display_ShouldShowWeight(DisplayResultContext ctx)
 }
 
 /**
- * @brief 显示或打印屏幕显示中的 Display_ShouldShowErrorReason 逻辑。
+ * @brief 判断当前故障是否具有可供状态页显示的详细原因。
  *
- * @param ctx 业务参数。
- * @return true 表示条件满足或处理成功，false 表示条件不满足或处理失败。
+ * @param ctx 本次处理使用的上下文或状态快照。该 DisplayResultContext 已由 CPU2 设备状态映射得到，用于选择单点、监测、分布、油位、水位或参数读取结果字段。
+ * @return true 表示当前页面上下文为故障结果页，且全局错误码不是 NO_ERROR，可以显示详细原因；false 表示不在故障结果页，或当前没有有效故障码。
  */
 static bool Display_ShouldShowErrorReason(DisplayResultContext ctx)
 {
@@ -683,24 +715,33 @@ static bool Display_ShouldShowErrorReason(DisplayResultContext ctx)
            (g_measurement.device_status.error_code != NO_ERROR);
 }
 
-/* 判断CPU2/CPU3共享协议是否一致。
- * 必须使用通信模块确认的当前连接快照，不能直接比较默认值或掉线前参数缓存。 */
+/**
+ * @brief 判断CPU2/CPU3共享协议是否一致。
+ *
+ * 必须使用通信模块确认的当前连接快照，不能直接比较默认值或掉线前参数缓存。
+ *
+ * @return true 表示 CPU2 已上报的共享协议版本与 CPU3 当前协议兼容；false 表示协议快照尚不可用或版本不兼容，状态页应按协议不一致处理。
+ */
 static bool IsCpu2ProtocolCompatible(void)
 {
     return CPU2_CommIsProtocolCompatible();
 }
 
-/* 仅在当前连接协议快照有效且版本不一致时报告不匹配。 */
+/**
+ * @brief 仅在当前连接协议快照有效且版本不一致时报告不匹配。
+ *
+ * @return true 表示 CPU2 通信层已有有效协议版本快照且版本与 CPU3 不一致；false 表示快照尚未确认、通信不可用，或两端协议版本一致。
+ */
 static bool IsCpu2ProtocolMismatch(void)
 {
     return CPU2_CommIsProtocolMismatch();
 }
 
 /**
- * @brief 显示或打印屏幕显示中的 Display_GetErrorReasonByCode 逻辑。
+ * @brief 返回故障码对应的中文原因文本。
  *
- * @param code 业务参数。
- * @return 返回业务对象或缓冲区指针，NULL 表示无有效对象。
+ * @param code 待判断、转换或上报的状态码。该整机错误码用于从 CPU3 故障文本表查找适合当前语言的现场原因。
+ * @return 返回故障码对应的中文原因文本对应的只读文本首地址；内容由当前输入或语言配置选择，调用方不得修改或释放。
  */
 static const char *Display_GetErrorReasonByCode(uint32_t code)
 {
@@ -1011,11 +1052,11 @@ static const char *Display_GetErrorReasonByCode(uint32_t code)
 }
 
 /**
- * @brief 显示或打印屏幕显示中的 Display_GetTextWidth 逻辑。
+ * @brief 计算指定字节范围内文本的 OLED 像素宽度。
  *
- * @param text 业务参数。
- * @param byte_limit 业务参数。
- * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ * @param text 待测量、排版或写入状态槽的 NUL 结尾显示文字；宽度计算同时处理 ASCII 与中文字节。
+ * @param byte_limit 字节上限。
+ * @return 返回文字占用的 OLED 像素宽度。
  */
 static uint8_t Display_GetTextWidth(const char *text, uint8_t byte_limit)
 {
@@ -1040,11 +1081,11 @@ static uint8_t Display_GetTextWidth(const char *text, uint8_t byte_limit)
 }
 
 /**
- * @brief 显示或打印屏幕显示中的 Display_GetFitTextBytes 逻辑。
+ * @brief 计算从指定横坐标起可在一行内显示的文本字节数。
  *
- * @param text 业务参数。
- * @param start_x 业务参数。
- * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ * @param text 待测量、排版或写入状态槽的 NUL 结尾显示文字；宽度计算同时处理 ASCII 与中文字节。
+ * @param start_x 起始位置。
+ * @return 返回从指定横坐标起可在一行内显示的文本字节数的有效长度，单位字节；0 表示没有可供消费的数据。
  */
 static uint8_t Display_GetFitTextBytes(const char *text, uint8_t start_x)
 {
@@ -1079,8 +1120,8 @@ static uint8_t Display_GetFitTextBytes(const char *text, uint8_t start_x)
 }
 
 /**
- * @brief 显示或打印屏幕显示中的 Display_IsErrorReasonNeedTwoRows 逻辑。
- * @return true 表示条件满足或处理成功，false 表示条件不满足或处理失败。
+ * @brief 判断故障原因文字是否需要占用状态页两行。
+ * @return true 表示故障原因文字需要占用状态页两行；false 表示故障原因文字不需要占用状态页两行。
  */
 static bool Display_IsErrorReasonNeedTwoRows(void)
 {
@@ -1092,10 +1133,9 @@ static bool Display_IsErrorReasonNeedTwoRows(void)
 }
 
 /**
- * @brief 显示或打印屏幕显示中的 Display_ErrorReasonLine 逻辑。
+ * @brief 返回故障原因在状态页中的第一行文字。
  *
- * @param row 业务参数。
- * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ * @param row OLED 绘制使用的行号。取值使用 OLED_ROW4_x 等页面行坐标常量，决定文字或数字写入的纵向基线。
  */
 static void Display_ErrorReasonLine(uint8_t row)
 {
@@ -1114,10 +1154,9 @@ static void Display_ErrorReasonLine(uint8_t row)
 }
 
 /**
- * @brief 显示或打印屏幕显示中的 Display_ErrorReasonMoreLine 逻辑。
+ * @brief 返回故障原因在状态页中的补充行文字。
  *
- * @param row 业务参数。
- * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ * @param row OLED 绘制使用的行号。取值使用 OLED_ROW4_x 等页面行坐标常量，决定文字或数字写入的纵向基线。
  */
 static void Display_ErrorReasonMoreLine(uint8_t row)
 {
@@ -1131,8 +1170,7 @@ static void Display_ErrorReasonMoreLine(uint8_t row)
 }
 
 /**
- * @brief 显示或打印屏幕显示中的 Display_ShowErrorReasonPage 逻辑。
- * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ * @brief 绘制当前故障的详细原因查看页。
  */
 void Display_ShowErrorReasonPage(void)
 {
@@ -1140,10 +1178,10 @@ void Display_ShowErrorReasonPage(void)
     FlagofTotalTwoRow = false;
     DIS_Equipment();
 
-    /* 先处理异常边界，避免屏幕显示状态机带故障继续运行。 */
+    /* 只有存在有效故障码时才绘制故障原因，正常状态不占用原因行。 */
     if (g_measurement.device_status.error_code != NO_ERROR) {
         Display_ErrorReasonLine(OLED_ROW4_2);
-        /* 先处理异常边界，避免屏幕显示状态机带故障继续运行。 */
+        /* 故障原因超过单行显示宽度时再使用第三行，短原因继续保留单行布局。 */
         if (Display_IsErrorReasonNeedTwoRows()) {
             Display_ErrorReasonMoreLine(OLED_ROW4_3);
         }
@@ -1153,8 +1191,8 @@ void Display_ShowErrorReasonPage(void)
 }
 
 /**
- * @brief 读取屏幕显示中的 GetOilSensorFrequencyForDisplay 逻辑。
- * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ * @brief 读取并换算状态页使用的油位传感器频率。
+ * @return 优先返回 oil_measurement.current_frequency；该值为 0 时回退到 debug_data.frequency，单位 Hz，最终转换为 int。
  */
 static int GetOilSensorFrequencyForDisplay(void)
 {
@@ -1166,6 +1204,7 @@ static int GetOilSensorFrequencyForDisplay(void)
     return (int)g_measurement.debug_data.frequency;
 }
 
+/* 电机上行、下行和停止三种 16×16 单色图标点阵。 */
 static const uint8_t MotorRunIcon16Stock[] = {
     0x02,0x00,0x07,0x00,0x0F,0x80,0x1A,0xC0,0x02,0x00,0x02,0x00,0x02,0x00,
     0x02,0x00,0x02,0x00,0x02,0x00,0x02,0x00,0x00,0x00,0x00,0x00,0x00,0x00, /* up */
@@ -1176,8 +1215,8 @@ static const uint8_t MotorRunIcon16Stock[] = {
 };
 
 /**
- * @brief 读取屏幕显示中的 GetMotorRunIconIndex 逻辑。
- * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ * @brief 根据电机运动方向和动画节拍选择运行图标索引。
+ * @return 返回当前方向和动画节拍对应的电机运行图标索引。
  */
 static uint8_t GetMotorRunIconIndex(void)
 {
@@ -1795,49 +1834,216 @@ static uint8_t CharStock[] = {
 0x00,0x00,0x00,0x30,0x18,0x18,0x0C,0x0C,0x0C,0x0C,0x0C,0x18,0x18,0x30, /* ")",72 */
 };
 
+/**
+ * @brief 按当前字节编码在 OLED 上绘制 ASCII 字符或中文字模，并计算下一横向绘制坐标。
+ *
+ * 函数读取 display 指向的字节序列：ASCII 字节在 CharStockMap 中匹配并按 4 列推进，中文字节组在 StockMap、WordStock 和 WordStock2 中匹配并按
+ * 7 列推进。
+ * 达到 cnt 指定的编码字节数或横坐标到达 OLED_LINE8_END 后停止；字库缺字时仍保留对应中文字符的横向空位。
+ *
+ * @param display 指向待绘制字节序列首地址的二级指针；函数读取 *display，但不会把局部推进后的地址回写给调用方。
+ * @param cnt 本次最多消费的编码字节数；ASCII 字符计 1 字节，中文字符按 wordbyte 个字节累计。
+ * @param x 首个字符的 OLED 横向列坐标；函数在此基础上累加字符宽度并返回下一可用坐标。
+ * @param y 字符或中文字模的 OLED 纵向绘制坐标。
+ * @param shift 传给字模绘制函数的阴码、阳码选择值。
+ * @return 返回本轮绘制结束后的下一 OLED 横向列坐标；ASCII 每个推进 4 列，中文字符每个推进 7 列，达到 OLED_LINE8_END 时提前停止。
+ * @note 函数只在局部变量中推进字符串读取指针，不会回写调用方的 *display；返回值用于调用方继续安排同一行后续绘制位置。
+ */
 static uint8_t matchingwordstock(uint8_t **display,int cnt,int x,int y,int shift);
+/**
+ * @brief 统计有符号整数绝对值的十进制数字个数。
+ *
+ * @param value 待统计位数的有符号整数；负号不计入位数，函数按绝对值统计。
+ * @return 返回 value 绝对值的十进制数字个数；0 返回 1，负号不计入位数。
+ */
 static uint8_t judgedecimals(int value);
+/**
+ * @brief 按符号、整数位数和小数位数在 OLED 指定位置逐位绘制数值。
+ *
+ * @param sgn 数值符号，1 表示正数，-1 表示负数。
+ * @param value 待格式化并绘制到 OLED 的数值。
+ * @param points value 需要显示的小数位数；决定小数点位置和小数部分循环次数。
+ * @param line OLED 绘制使用的横向列位置。
+ * @param row OLED 绘制使用的行号。取值使用 OLED_ROW4_x 等页面行坐标常量，决定文字或数字写入的纵向基线。
+ * @param shift OLED 字模阴码/阳码或显示偏移选项。
+ * @param deci 当前数值整数部分的十进制位数。
+ * @return 返回符号、整数、小数点和小数位全部绘制完成后的下一 OLED 横坐标。
+ */
 static uint8_t dis_number(int sgn,int value,int points,uint8_t line,uint8_t row,uint8_t shift,uint8_t deci);
+/**
+ * @brief 裁剪小数尾随0: 16.000->16, 16.100->16.1, 16.120->16.12。
+ *
+ * @param value 以定点整数保存的显示数值；函数会原地除去与尾随零对应的十进制位。
+ * @param points 当前定点数值保留的小数位数，也是允许裁剪的最大位数。
+ * @return 返回裁剪后的有效小数位数；value 为 NULL 时保持传入的 points 不变。
+ */
 static uint8_t trim_display_points(int *value, uint8_t points);
+/**
+ * @brief 根据刷新周期和状态页布局变化，选择高亮恢复、全量重绘或差量更新当前设备数据。
+ *
+ * 未到采样周期且布局稳定时只恢复按键高亮；需要刷新时先构建设备状态快照，再依据恢复请求和布局变化决定全量或差量绘制。
+ * 绘制完成后保存本轮快照并重置状态数据刷新时刻，供下一帧判断变化范围。
+ */
 static void oled_workingdata(void);
+/**
+ * @brief 根据设备状态、结果上下文和当前分页，绘制状态标题、故障详情及有效测量与调试数据。
+ *
+ * 先绘制当前设备状态；无线配对进行中不追加测量数据，配对结束时单独显示成功取得的 MAC 或不可用提示。
+ * 普通状态页按 ValidParaDisArr 的有效标志和页码，选择显示故障原因、液位、水位、密度、温度、位置、扭力、扭力模块温度、频率、电容、姿态角、罐高、无线 RSSI 和从机 MAC。
+ * 各数据项使用当前测量结果上下文选择来源，并通过状态槽位计算差量绘制偏移和工程单位。
+ */
 static void oled_equipment(void);
+/**
+ * @brief 根据当前测量结果上下文生成 OLED 结果页的有效参数布局。
+ *
+ * 函数先根据设备状态取得结果页上下文，再逐项判定故障详情、液位、密度、温度、水位、位置、扭力、部件参数、传感器原始量、姿态角、罐高和无线信息是否需要显示。
+ * 每个有效项目按显示顺序写入 ValidParaDisArr 的 PARA_NUM 和 PARA_VALID；需要两行的故障原因会占用两个连续项目，读取部件参数时为扭力模块温度、RSSI 和 MAC
+ * 保留固定项目。
+ * 液位有效时结果区每页排两行并从 OLED_ROW4_3 开始，否则每页排三行并从 OLED_ROW4_2 开始；随后计算 PageAmount 以及每个有效项目的页号和行坐标。
+ *
+ * @note 函数直接更新 ValidParaDisArr、PageAmount、FlagofTotalTwoRow 和液位有效标志，调用方应在测量快照更新后再生成页面布局。
+ */
 static void CalculateValidPara(void);
+/**
+ * @brief 绘制状态页顶部设备状态及维护/模拟徽标；协议不匹配优先覆盖普通运行态，快照失效时保留曾确认的维护提示。
+ *
+ * 函数根据当前结果页是否仅有两行选择标题行，并把非法语言索引收敛为英文；设备状态文字通常从状态表取得，CPU2 协议不匹配时则强制显示协议错误。
+ * 维护模式只信任完整运行态快照；曾确认维护开启后若快照暂时失效，继续显示维护状态未知，直到新快照明确确认维护已经关闭。
+ * 维护模式与 AO 模拟状态组合为右侧徽标；没有徽标时显示电机运行图标。增量刷新前统一清理当前徽标区域，行位置变化时同时清除旧行，避免 OLED 残影。
+ * 设备处于错误状态时，在状态文字之后追加由错误类型和错误位置组成的十进制故障码。
+ */
 static void DIS_Equipment(void);
+/**
+ * @brief 判断是否需要息屏。
+ *
+ * @return true 表示需要息屏；false 表示不需要息屏。
+ */
 static bool ScreenOff( void );
+/**
+ * @brief 清除本轮按键唤醒标志，不直接发送 OLED 关显示命令。
+ */
 static void SetScreenOffState( void );
+/**
+ * @brief 采集设备状态、语言和当前页槽位，构建本次状态页渲染快照。
+ *
+ * @param snapshot 可写 CPU3 状态页快照；函数追加或读取固定槽位中的文字、数值、位置、反显和数据新鲜度，最终用于全量或差量绘制。
+ */
 static void Display_BuildStatusSnapshot(DisplayStatusSnapshot *snapshot);
+/**
+ * @brief 比较两次快照的页面和槽位布局，判断是否需要全量重绘。
+ *
+ * @param current 本次准备显示的当前状态页快照。
+ * @param last 上一次保存的值、状态或快照。
+ * @return true 表示页面类型、槽位数量、槽位标识、行位置或文字或数值布局中至少一项发生变化；false 表示两份状态页快照的布局完全一致。
+ */
 static bool Display_StatusLayoutChanged(const DisplayStatusSnapshot *current,
                                         const DisplayStatusSnapshot *last);
+/**
+ * @brief 判断状态页是否需要重新采样运行数据。
+ *
+ * @param now 本次判断使用的当前系统节拍，单位 ms；调用方在同一轮处理内复用该快照，避免多次取时造成边界漂移。
+ * @return true 表示需要按当前 g_measurement 生成新快照，false 表示仅允许恢复反白显示。
+ */
 static bool Display_ShouldSampleStatusData(uint32_t now);
+/**
+ * @brief 记录状态页最近一次按运行数据采样的节拍。
+ *
+ * @param now 本次判断使用的当前系统节拍，单位 ms；调用方在同一轮处理内复用该快照，避免多次取时造成边界漂移。
+ */
 static void Display_ResetStatusDataRefreshTick(uint32_t now);
+/**
+ * @brief 按状态页快照重画单个数值或文本区域。
+ *
+ * @param slot 状态页显示项快照。
+ * @param shift 非 0 时按反显方式绘制。
+ */
 static void Display_DrawStatusSlotValue(const DisplayStatusSlot *slot, uint8_t shift);
+/**
+ * @brief 非采样刷新时重画状态行并恢复反白区域，不重新采样状态页数值。
+ */
 static void Display_DrawStatusHighlightRestore(void);
+/**
+ * @brief 全量绘制状态快照并保存为当前活动快照。
+ *
+ * @param snapshot 可写 CPU3 状态页快照；函数追加或读取固定槽位中的文字、数值、位置、反显和数据新鲜度，最终用于全量或差量绘制。
+ */
 static void Display_DrawStatusFull(DisplayStatusSnapshot *snapshot);
+/**
+ * @brief 比较前后快照，只重绘发生变化的状态槽。
+ *
+ * @param current 本次准备显示的当前状态页快照。
+ * @param last 上一次保存的值、状态或快照。
+ */
 static void Display_DrawStatusDelta(DisplayStatusSnapshot *current,
                                     const DisplayStatusSnapshot *last);
+/**
+ * @brief 存在到期反白且状态页可见时请求一次非采样刷新。
+ * @return true 表示状态页有效且可见，并存在保持期刚到期的反白槽位；false 表示状态页无效、罐上操作或息屏正在占用界面，或所有反白仍在保持期内或已经清除。
+ */
 static bool Display_ShouldRequestStatusHighlightRefresh(void);
+/**
+ * @brief 仅在匹配槽位仍处于反白期且内容一致时返回反色标志。
+ *
+ * @param id 编号。该值是 CPU3 状态页固定槽位标识，用于在快照中定位同一业务字段并执行全量或差量重绘。
+ * @param row OLED 绘制使用的行号。取值使用 OLED_ROW4_x 等页面行坐标常量，决定文字或数字写入的纵向基线。
+ * @param value 待格式化并绘制到 OLED 的数值。
+ * @param is_text true 表示按文字宽度计算布局，false 表示按数值格式计算。
+ * @param text 待测量、排版或写入状态槽的 NUL 结尾显示文字；宽度计算同时处理 ASCII 与中文字节。
+ * @return 1 表示目标状态槽仍处于内容一致的反白保持期；槽位无效、内容变化或保持期结束时返回 0。
+ */
 static uint8_t Display_GetStatusSlotShift(DisplayStatusSlotId id,
                                           uint8_t row,
                                           int32_t value,
                                           bool is_text,
                                           const char *text);
+/**
+ * @brief 按页面清屏策略清除下一次绘制涉及的 OLED 区域。
+ */
 static void Display_ClearBeforeDraw(void);
+/**
+ * @brief 主动恢复、SPI 错误计数变化或周期到期时，要求下一帧恢复 OLED 状态。
+ * @return true 表示收到主动恢复请求、OLED SPI 累计错误数发生变化，或周期恢复时限已到；false 表示本帧无需重新初始化 OLED 绘制状态。
+ */
 static bool Display_ShouldRecoverBeforeDraw(void);
+/**
+ * @brief 执行确认键或返回键长按动作，并提交对应前景绘制帧。
+ *
+ * @param long_press_key 长按按键。
+ */
 static void Display_ProcessLongPressAction(uint8_t long_press_key);
+/**
+ * @brief 主循环中优先处理长按动作，再依次消费普通按键事件。
+ */
 static void Display_ProcessPendingInput(void);
+/**
+ * @brief 记录菜单最近一次有效交互时间。
+ *
+ * @param now 当前 HAL tick。该值单位为 ms，用于记录最近菜单操作时间并计算状态页自动恢复等待时间。
+ * @note 仅在主循环处理菜单进入或有效按键后调用，不在中断中修改页面状态。
+ */
 static void Display_RecordMenuActivity(uint32_t now);
+/**
+ * @brief 菜单长时间无操作时自动退回状态页。
+ * @note 电机运行监控、扭力等待等业务等待页不参与普通菜单空闲退出。
+ */
 static void Display_ProcessMenuIdleExit(void);
 
 
-/*
-**功能：显示汉字和字符
-**参数：display - 指向要显示的字符串的指针的指针
-        cnt - 显示汉字的个数
-        x - 屏幕横坐标
-        y - 屏幕纵坐标
-        shift - 阴码阳码选项
-**返回值：无
-*/
+/**
+ * @brief 按当前字节编码在 OLED 上绘制 ASCII 字符或中文字模，并计算下一横向绘制坐标。
+ *
+ * 函数读取 display 指向的字节序列：ASCII 字节在 CharStockMap 中匹配并按 4 列推进，中文字节组在 StockMap、WordStock 和 WordStock2 中匹配并按
+ * 7 列推进。
+ * 达到 cnt 指定的编码字节数或横坐标到达 OLED_LINE8_END 后停止；字库缺字时仍保留对应中文字符的横向空位。
+ *
+ * @param display 指向待绘制字节序列首地址的二级指针；函数读取 *display，但不会把局部推进后的地址回写给调用方。
+ * @param cnt 本次最多消费的编码字节数；ASCII 字符计 1 字节，中文字符按 wordbyte 个字节累计。
+ * @param x 首个字符的 OLED 横向列坐标；函数在此基础上累加字符宽度并返回下一可用坐标。
+ * @param y 字符或中文字模的 OLED 纵向绘制坐标。
+ * @param shift 传给字模绘制函数的阴码、阳码选择值。
+ * @return 返回本轮绘制结束后的下一 OLED 横向列坐标；ASCII 每个推进 4 列，中文字符每个推进 7 列，达到 OLED_LINE8_END 时提前停止。
+ * @note 函数只在局部变量中推进字符串读取指针，不会回写调用方的 *display；返回值用于调用方继续安排同一行后续绘制位置。
+ */
 static uint8_t matchingwordstock(uint8_t **display,int cnt,int x,int y,int shift)
 {
     int i,j;
@@ -1893,7 +2099,15 @@ static uint8_t matchingwordstock(uint8_t **display,int cnt,int x,int y,int shift
     }
     return x;
 }
-/* 显示多个汉字或字符 */
+/**
+ * @brief 显示多个汉字或字符。
+ *
+ * @param data 待绘制的 NUL 结尾 OLED 文字字节串；ASCII 和中文字节按当前字库规则依次推进横向列坐标。
+ * @param x 算法、坐标或比较使用的 X 值。
+ * @param y 算法、坐标或比较使用的 Y 值。
+ * @param shift OLED 字模阴码/阳码或显示偏移选项。
+ * @return 返回字符串绘制完成后的下一 OLED 横坐标；data 为空时保持传入横坐标 y。
+ */
 uint8_t OledDisplayLineWords(uint8_t* data,uint8_t x,uint8_t y,uint8_t shift)
 {
     int len = 0;
@@ -1906,7 +2120,9 @@ uint8_t OledDisplayLineWords(uint8_t* data,uint8_t x,uint8_t y,uint8_t shift)
     y = matchingwordstock(&data,len,x,y,shift);
     return y;
 }
-/* 设备刚上电还未与CPU2通讯时显示初始化中 */
+/**
+ * @brief 设备刚上电还未与CPU2通讯时显示初始化中。
+ */
 void EquipFirstPower(void)
 {
     int line;
@@ -1915,16 +2131,22 @@ void EquipFirstPower(void)
     line = DisplayLangaugeLineWords((uint8_t*)"版本:",0,OLED_ROW4_2,0,(u8*)"Version:");
     OledDisplayLineWords((uint8_t*)CPU3_APP_VERSION_STRING,line,OLED_ROW4_2,0);
 }
-/*
- * 函数用途：OLED 初始化完成后立即绘制启动页。
- * 调用场景：CPU3 上电初始化显示模块后调用。
- * 关键约束：不得在首帧前阻塞等待，CPU2 快照未完成时由现有启动页门禁显示通讯提示。
+/**
+ * @brief OLED 初始化完成后立即绘制启动页。
+ *
+ * @details 调用场景：CPU3 上电初始化显示模块后调用。
+ * @note 关键约束：不得在首帧前阻塞等待，CPU2 快照未完成时由现有启动页门禁显示通讯提示。
  */
 void DisplayAubonLogo(void)
 {
     RefreshScreen();
 }
-/* 显示设备数据 */
+/**
+ * @brief 根据刷新周期和状态页布局变化，选择高亮恢复、全量重绘或差量更新当前设备数据。
+ *
+ * 未到采样周期且布局稳定时只恢复按键高亮；需要刷新时先构建设备状态快照，再依据恢复请求和布局变化决定全量或差量绘制。
+ * 绘制完成后保存本轮快照并重置状态数据刷新时刻，供下一帧判断变化范围。
+ */
 static void oled_workingdata(void)
 {
     DisplayStatusSnapshot current_snapshot;
@@ -1949,13 +2171,31 @@ static void oled_workingdata(void)
     display_status_last_snapshot = current_snapshot;
     Display_ResetStatusDataRefreshTick(now);
 }
-/* 显示一个数字 */
+/**
+ * @brief 显示一个数字。
+ *
+ * @param c 待绘制的十进制数字，合法范围为 0 至 9。
+ * @param row OLED 绘制使用的行号。取值使用 OLED_ROW4_x 等页面行坐标常量，决定文字或数字写入的纵向基线。
+ * @param line OLED 绘制使用的横向列位置。
+ * @param shift OLED 字模阴码/阳码或显示偏移选项。
+ * @return 返回单个数字字模绘制完成后的下一 OLED 横坐标，即传入 line 加 4。
+ */
 uint8_t OledDisplayOneNmb(int c,uint8_t row,uint8_t line,uint8_t shift)
 {
     write_816(line,row,NumberStock,c,shift);
     return (line + 4);
 }
-/* 显示数据 */
+/**
+ * @brief 裁剪定点数尾随零后，在 OLED 指定位置绘制带符号数值及可选工程单位。
+ *
+ * @param value 待格式化并绘制到 OLED 的数值。
+ * @param line OLED 绘制使用的横向列位置。
+ * @param row OLED 绘制使用的行号。取值使用 OLED_ROW4_x 等页面行坐标常量，决定文字或数字写入的纵向基线。
+ * @param shift OLED 字模阴码/阳码或显示偏移选项。
+ * @param points value 当前采用的小数位数；函数先裁掉尾随零，再按剩余位数插入小数点。
+ * @param unit 数值对应的工程单位文字。
+ * @return 返回数值及可选单位绘制完成后的下一 OLED 横坐标。
+ */
 uint8_t OledValueDisplay(int value,uint8_t line,uint8_t row,uint8_t shift,uint8_t points,uint8_t* unit)
 {
     uint8_t deci;
@@ -1975,7 +2215,13 @@ uint8_t OledValueDisplay(int value,uint8_t line,uint8_t row,uint8_t shift,uint8_
         line = OledDisplayLineWords(unit,line,row,shift);
     return line;
 }
-/* 裁剪小数尾随0: 16.000->16, 16.100->16.1, 16.120->16.12 */
+/**
+ * @brief 裁剪小数尾随0: 16.000->16, 16.100->16.1, 16.120->16.12。
+ *
+ * @param value 以定点整数保存的显示数值；函数会原地除去与尾随零对应的十进制位。
+ * @param points 当前定点数值保留的小数位数，也是允许裁剪的最大位数。
+ * @return 返回裁剪后的有效小数位数；value 为 NULL 时保持传入的 points 不变。
+ */
 static uint8_t trim_display_points(int *value, uint8_t points)
 {
     if(value == NULL)
@@ -1989,7 +2235,12 @@ static uint8_t trim_display_points(int *value, uint8_t points)
 
     return points;
 }
-/* 计算数值位数 */
+/**
+ * @brief 统计有符号整数绝对值的十进制数字个数。
+ *
+ * @param value 待统计位数的有符号整数；负号不计入位数，函数按绝对值统计。
+ * @return 返回 value 绝对值的十进制数字个数；0 返回 1，负号不计入位数。
+ */
 static uint8_t judgedecimals(int value)
 {
     uint8_t cnt = 1;
@@ -2003,7 +2254,18 @@ static uint8_t judgedecimals(int value)
     }
     return cnt;
 }
-/* 显示数字 */
+/**
+ * @brief 按符号、整数位数和小数位数在 OLED 指定位置逐位绘制数值。
+ *
+ * @param sgn 数值符号，1 表示正数，-1 表示负数。
+ * @param value 待格式化并绘制到 OLED 的数值。
+ * @param points value 需要显示的小数位数；决定小数点位置和小数部分循环次数。
+ * @param line OLED 绘制使用的横向列位置。
+ * @param row OLED 绘制使用的行号。取值使用 OLED_ROW4_x 等页面行坐标常量，决定文字或数字写入的纵向基线。
+ * @param shift OLED 字模阴码/阳码或显示偏移选项。
+ * @param deci 当前数值整数部分的十进制位数。
+ * @return 返回符号、整数、小数点和小数位全部绘制完成后的下一 OLED 横坐标。
+ */
 static uint8_t dis_number(int sgn,int value,int points,uint8_t line,uint8_t row,uint8_t shift,uint8_t deci)
 {
     int i;
@@ -2035,7 +2297,9 @@ static uint8_t dis_number(int sgn,int value,int points,uint8_t line,uint8_t row,
     }
     return line;
 }
-/* 显示模块初始化 */
+/**
+ * @brief 初始化 OLED、显示恢复节拍、按键计时、刷新定时器以及菜单输入状态。
+ */
 void DisplayInit(void)
 {
     OLED_Init();    /* 屏幕初始化 */
@@ -2061,8 +2325,7 @@ void Display_RequestRefresh(void)
 }
 
 /**
- * @brief 清除或复位屏幕显示中的 Display_ClearBeforeDraw 逻辑。
- * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ * @brief 按页面清屏策略清除下一次绘制涉及的 OLED 区域。
  */
 static void Display_ClearBeforeDraw(void)
 {
@@ -2074,8 +2337,8 @@ static void Display_ClearBeforeDraw(void)
 }
 
 /**
- * @brief 显示或打印屏幕显示中的 Display_ShouldRecoverBeforeDraw 逻辑。
- * @return true 表示条件满足或处理成功，false 表示条件不满足或处理失败。
+ * @brief 主动恢复、SPI 错误计数变化或周期到期时，要求下一帧恢复 OLED 状态。
+ * @return true 表示收到主动恢复请求、OLED SPI 累计错误数发生变化，或周期恢复时限已到；false 表示本帧无需重新初始化 OLED 绘制状态。
  */
 static bool Display_ShouldRecoverBeforeDraw(void)
 {
@@ -2088,7 +2351,7 @@ static bool Display_ShouldRecoverBeforeDraw(void)
         return true;
     }
 
-    /* 先处理异常边界，避免屏幕显示状态机带故障继续运行。 */
+    /* OLED SPI 累计错误数一旦增加，下一帧立即执行恢复；不能继续等待周期性恢复窗口。 */
     if (spi_error_count != display_last_spi_error_count) {
         display_last_spi_error_count = spi_error_count;
         display_last_recover_tick = now;
@@ -2104,8 +2367,8 @@ static bool Display_ShouldRecoverBeforeDraw(void)
 }
 
 /**
- * @brief 显示或打印屏幕显示中的 Display_BeginFrame 逻辑。
- * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ * @brief 记录显示帧开始时的 SPI 错误计数，供帧结束时判断本次绘制是否无新增错误。
+ * @return 返回进入本次显示帧时的 OLED SPI 累计错误计数快照；帧结束时与新计数比较。
  */
 static uint32_t Display_BeginFrame(void)
 {
@@ -2113,23 +2376,22 @@ static uint32_t Display_BeginFrame(void)
 }
 
 /**
- * @brief 显示或打印屏幕显示中的 Display_FinishFrame 逻辑。
+ * @brief 清除本次恢复标记；若绘制期间无新增 SPI 错误，则记录逻辑显示帧完成。
  *
- * @param frame_spi_error_start 故障或错误码。
- * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ * @param frame_spi_error_start 本帧开始绘制前读取的 OLED SPI 累计错误计数快照；结束时与当前计数比较，用于判断绘制期间是否新增传输错误。
  */
 static void Display_FinishFrame(uint32_t frame_spi_error_start)
 {
     display_recover_before_draw = false;
-    /* 先处理异常边界，避免屏幕显示状态机带故障继续运行。 */
+    /* 只有本帧绘制期间没有新增 SPI 错误，才更新影子显存 CRC 并推进完整刷新序号。 */
     if (OLED_GetSpiErrorCount() == frame_spi_error_start) {
         OLED_MarkFrameComplete();
     }
 }
 
 /**
- * @brief 显示或打印屏幕显示中的 Display_PrepareForForegroundDraw 逻辑。
- * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ * @brief 前景页绘制前重置状态页局部刷新缓存，并按需恢复 OLED。
+ * @return 返回前景绘制开始时的 OLED SPI 累计错误计数，供绘制结束时判断本帧是否新增传输错误。
  */
 static uint32_t Display_PrepareForForegroundDraw(void)
 {
@@ -2155,10 +2417,9 @@ static uint32_t Display_PrepareForForegroundDraw(void)
 }
 
 /**
- * @brief 处理屏幕显示中的 Display_ProcessLongPressAction 逻辑。
+ * @brief 执行确认键或返回键长按动作，并提交对应前景绘制帧。
  *
- * @param long_press_key 业务参数。
- * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ * @param long_press_key 长按按键。
  */
 static void Display_ProcessLongPressAction(uint8_t long_press_key)
 {
@@ -2188,8 +2449,7 @@ static void Display_ProcessLongPressAction(uint8_t long_press_key)
 }
 
 /**
- * @brief 处理屏幕显示中的 Display_ProcessPendingInput 逻辑。
- * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ * @brief 主循环中优先处理长按动作，再依次消费普通按键事件。
  */
 static void Display_ProcessPendingInput(void)
 {
@@ -2224,7 +2484,7 @@ static void Display_ProcessPendingInput(void)
 /**
  * @brief 记录菜单最近一次有效交互时间。
  *
- * @param now 当前 HAL tick。
+ * @param now 当前 HAL tick。该值单位为 ms，用于记录最近菜单操作时间并计算状态页自动恢复等待时间。
  * @note 仅在主循环处理菜单进入或有效按键后调用，不在中断中修改页面状态。
  */
 static void Display_RecordMenuActivity(uint32_t now)
@@ -2257,8 +2517,7 @@ static void Display_ProcessMenuIdleExit(void)
 }
 
 /**
- * @brief 显示或打印屏幕显示中的 Display_Task 逻辑。
- * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ * @brief 处理显示刷新、按键事件和状态页增量更新。
  */
 void Display_Task(void)
 {
@@ -2275,7 +2534,7 @@ void Display_Task(void)
         display_refresh_pending = false;
         RefreshScreen();
         display_last_refresh_ms = HAL_GetTick() - start_tick;
-        /* 先处理异常边界，避免屏幕显示状态机带故障继续运行。 */
+        /* 完整刷新耗时超过门限时累计超时次数，供显示性能诊断；该统计不在此处中断当前页面流程。 */
         if (display_last_refresh_ms > DISPLAY_REFRESH_TIMEOUT_MS) {
             display_refresh_timeout_count++;
         }
@@ -2283,12 +2542,11 @@ void Display_Task(void)
 }
 
 /**
- * @brief 显示或打印屏幕显示中的 Display_FormatWirelessPairingMac 逻辑。
+ * @brief 将三段 MAC 快照格式化为两行十六进制文本。
  *
- * @param status 状态值。
- * @param line1 业务参数。
- * @param line2 业务参数。
- * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ * @param status 已经完成配对结果和 MAC 有效性校验的无线状态快照。
+ * @param line1 用于返回无线 MAC 地址前半段显示文字的定长缓存。
+ * @param line2 用于返回无线 MAC 地址后半段显示文字的定长缓存。
  */
 static void Display_FormatWirelessPairingMac(const volatile WirelessPairingStatus *status,
                                              char line1[9],
@@ -2342,11 +2600,11 @@ static void Display_FormatWirelessConnectionMacCompact(const volatile WirelessPa
 }
 
 /**
- * @brief 显示或打印屏幕显示中的 Display_SelectLanguageText 逻辑。
+ * @brief 按当前语言设置返回中文或英文显示文字。
  *
- * @param name_cn 业务参数。
- * @param name_en 业务参数。
- * @return 返回业务对象或缓冲区指针，NULL 表示无有效对象。
+ * @param name_cn 当前语言为中文时返回的只读文字；允许为 NULL。
+ * @param name_en 当前语言为英文时返回的只读文字；为空时回退到中文文字。
+ * @return 返回按当前语言设置返回中文或英文显示文字对应的只读文本首地址；内容由当前输入或语言配置选择，调用方不得修改或释放。
  */
 static const char *Display_SelectLanguageText(const uint8_t *name_cn, const uint8_t *name_en)
 {
@@ -2358,11 +2616,11 @@ static const char *Display_SelectLanguageText(const uint8_t *name_cn, const uint
 }
 
 /**
- * @brief 显示或打印屏幕显示中的 Display_GetLabelEndLine 逻辑。
+ * @brief 计算中英文标签绘制后占用的最后一行。
  *
- * @param name_cn 业务参数。
- * @param name_en 业务参数。
- * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ * @param name_cn 用于计算中文标签宽度的只读文字。
+ * @param name_en 用于计算英文标签宽度的只读文字；为空时使用中文标签。
+ * @return 返回中英文标签绘制后占用的最后一行的有效长度，单位字节；0 表示没有可供消费的数据。
  */
 static uint8_t Display_GetLabelEndLine(const uint8_t *name_cn, const uint8_t *name_en)
 {
@@ -2370,11 +2628,10 @@ static uint8_t Display_GetLabelEndLine(const uint8_t *name_cn, const uint8_t *na
 }
 
 /**
- * @brief 显示或打印屏幕显示中的 Display_CopyStatusText 逻辑。
+ * @brief 把状态文字安全复制到固定长度的状态槽缓存。
  *
- * @param dest 业务参数。
- * @param src 业务参数。
- * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ * @param dest 状态文字的目标定长缓存。
+ * @param src 待复制到状态槽的只读文字；NULL 按空字符串处理。
  */
 static void Display_CopyStatusText(char dest[32], const char *src)
 {
@@ -2392,13 +2649,13 @@ static void Display_CopyStatusText(char dest[32], const char *src)
 }
 
 /**
- * @brief 显示或打印屏幕显示中的 Display_AddStatusSlot 逻辑。
+ * @brief 向状态页快照追加一个有序显示槽；参数无效或容量已满时返回 NULL，成功后由调用方填入数值或文本。
  *
- * @param snapshot 业务参数。
- * @param id 业务参数。
- * @param row 业务参数。
- * @param value_line 待处理数值。
- * @return 返回业务对象或缓冲区指针，NULL 表示无有效对象。
+ * @param snapshot 可写 CPU3 状态页快照；函数追加或读取固定槽位中的文字、数值、位置、反显和数据新鲜度，最终用于全量或差量绘制。
+ * @param id 编号。该值是 CPU3 状态页固定槽位标识，用于在快照中定位同一业务字段并执行全量或差量重绘。
+ * @param row OLED 绘制使用的行号。取值使用 OLED_ROW4_x 等页面行坐标常量，决定文字或数字写入的纵向基线。
+ * @param value_line 状态槽数值或文字在 OLED 上开始绘制的横向像素位置。
+ * @return 成功时返回指向向状态页快照追加一个有序显示槽；参数无效或容量已满时返回 NULL，成功后由调用方填入数值或文本的指针；输入非法或未找到匹配项时返回 NULL。
  */
 static DisplayStatusSlot *Display_AddStatusSlot(DisplayStatusSnapshot *snapshot,
                                                 DisplayStatusSlotId id,
@@ -2421,16 +2678,15 @@ static DisplayStatusSlot *Display_AddStatusSlot(DisplayStatusSnapshot *snapshot,
 }
 
 /**
- * @brief 显示或打印屏幕显示中的 Display_AddValueStatusSlot 逻辑。
+ * @brief 向状态页快照追加数值槽，并记录显示值、小数位和单位。
  *
- * @param snapshot 业务参数。
- * @param id 业务参数。
- * @param row 业务参数。
- * @param value_line 待处理数值。
- * @param value 待处理数值。
- * @param points 输入/输出指针。
- * @param unit 业务参数。
- * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ * @param snapshot 可写 CPU3 状态页快照；函数追加或读取固定槽位中的文字、数值、位置、反显和数据新鲜度，最终用于全量或差量绘制。
+ * @param id 编号。该值是 CPU3 状态页固定槽位标识，用于在快照中定位同一业务字段并执行全量或差量重绘。
+ * @param row OLED 绘制使用的行号。取值使用 OLED_ROW4_x 等页面行坐标常量，决定文字或数字写入的纵向基线。
+ * @param value_line 状态槽数值或文字在 OLED 上开始绘制的横向像素位置。
+ * @param value 待格式化并绘制到 OLED 的数值。
+ * @param points 状态页数值槽的小数位数；后续绘制按该位数缩放和格式化 value。
+ * @param unit 数值对应的工程单位文字。
  */
 static void Display_AddValueStatusSlot(DisplayStatusSnapshot *snapshot,
                                        DisplayStatusSlotId id,
@@ -2451,14 +2707,13 @@ static void Display_AddValueStatusSlot(DisplayStatusSnapshot *snapshot,
 }
 
 /**
- * @brief 显示或打印屏幕显示中的 Display_AddTextStatusSlot 逻辑。
+ * @brief 向状态页快照追加文本槽，并复制受长度限制的显示文本。
  *
- * @param snapshot 业务参数。
- * @param id 业务参数。
- * @param row 业务参数。
- * @param value_line 待处理数值。
- * @param text 业务参数。
- * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ * @param snapshot 可写 CPU3 状态页快照；函数追加或读取固定槽位中的文字、数值、位置、反显和数据新鲜度，最终用于全量或差量绘制。
+ * @param id 编号。该值是 CPU3 状态页固定槽位标识，用于在快照中定位同一业务字段并执行全量或差量重绘。
+ * @param row OLED 绘制使用的行号。取值使用 OLED_ROW4_x 等页面行坐标常量，决定文字或数字写入的纵向基线。
+ * @param value_line 状态槽数值或文字在 OLED 上开始绘制的横向像素位置。
+ * @param text 待测量、排版或写入状态槽的 NUL 结尾显示文字；宽度计算同时处理 ASCII 与中文字节。
  */
 static void Display_AddTextStatusSlot(DisplayStatusSnapshot *snapshot,
                                       DisplayStatusSlotId id,
@@ -2475,11 +2730,10 @@ static void Display_AddTextStatusSlot(DisplayStatusSnapshot *snapshot,
 }
 
 /**
- * @brief 显示或打印屏幕显示中的 Display_AddErrorReasonStatusSlots 逻辑。
+ * @brief 按 OLED 可用宽度拆分当前故障原因，并加入状态页文本槽。
  *
- * @param snapshot 业务参数。
- * @param now_page 业务参数。
- * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ * @param snapshot 可写 CPU3 状态页快照；函数追加或读取固定槽位中的文字、数值、位置、反显和数据新鲜度，最终用于全量或差量绘制。
+ * @param now_page 页面。
  */
 static void Display_AddErrorReasonStatusSlots(DisplayStatusSnapshot *snapshot, int now_page)
 {
@@ -2488,7 +2742,7 @@ static void Display_AddErrorReasonStatusSlots(DisplayStatusSnapshot *snapshot, i
     uint8_t prefix_width = Display_GetTextWidth("故障:", 7U);
     uint8_t first_bytes = Display_GetFitTextBytes(reason, prefix_width);
 
-    /* 先处理异常边界，避免屏幕显示状态机带故障继续运行。 */
+    /* 当前页包含故障原因首行槽位时，只复制本行能够容纳的完整字节。 */
     if ((ValidParaDisArr[Para_ErrorReason][PARA_VALID] == true) &&
         (now_page == ValidParaDisArr[Para_ErrorReason][PARA_PAGE])) {
         uint8_t i;
@@ -2504,7 +2758,7 @@ static void Display_AddErrorReasonStatusSlots(DisplayStatusSnapshot *snapshot, i
                                   first_line);
     }
 
-    /* 先处理异常边界，避免屏幕显示状态机带故障继续运行。 */
+    /* 仅当原因仍有剩余文本且当前页分配了续行槽位时，才发布第二行故障原因。 */
     if ((ValidParaDisArr[Para_ErrorReasonMore][PARA_VALID] == true) &&
         (now_page == ValidParaDisArr[Para_ErrorReasonMore][PARA_PAGE]) &&
         (reason[first_bytes] != '\0')) {
@@ -2517,11 +2771,18 @@ static void Display_AddErrorReasonStatusSlots(DisplayStatusSnapshot *snapshot, i
 }
 
 /**
- * @brief 显示或打印屏幕显示中的 Display_AddCurrentPageValueStatusSlots 逻辑。
+ * @brief 根据当前状态页及数据有效性构建本页数值和文本槽。
  *
- * @param snapshot 业务参数。
- * @param now_page 业务参数。
- * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ * 函数先追加当前错误原因槽，再依据 ValidParaDisArr
+ * 中每个项目的有效标志、所属页号和行坐标，为当前页选择性追加液位、水位、密度、温度、位置、扭力、扭力模块温度、传感器频率、电容、姿态角、罐高、无线 RSSI 和对端 MAC。
+ * 数值来源随 snapshot->ctx 切换：结果页优先读取已经发布的测量结果，部件读取页使用调试快照；温度按内部偏移恢复为 0.01 ℃，长度保留 0.1 mm，密度保留两位小数，频率使用
+ * Hz，RSSI 使用 dB。
+ * 液位处于下盲区时显示“低于盲区”而不是伪造数值；扭力模块温度无效时显示“--.--”，RSSI 或 MAC 尚未确认时分别追加 N/A 文本槽。
+ * 本函数只向 DisplayStatusSnapshot 追加用于后续全量或差量绘制的槽，不直接刷新 OLED；同一槽位编号用于让绘制层识别内容变化并清除旧区域。
+ *
+ * @param snapshot 当前结果页的可写状态快照；函数向其中追加带固定槽位编号的文字或数值项，供后续全量或差量 OLED 绘制。
+ * @param now_page 当前待构建的结果页页号；仅追加 ValidParaDisArr 中 PARA_PAGE 与该值相等的项目。
+ * @note 调用方必须传入已初始化且可继续追加槽位的 snapshot，并先完成 CalculateValidPara 页面布局；本函数不检查 snapshot 空指针。
  */
 static void Display_AddCurrentPageValueStatusSlots(DisplayStatusSnapshot *snapshot, int now_page)
 {
@@ -2741,10 +3002,9 @@ static void Display_AddCurrentPageValueStatusSlots(DisplayStatusSnapshot *snapsh
 }
 
 /**
- * @brief 显示或打印屏幕显示中的 Display_AddWirelessPairingSlots 逻辑。
+ * @brief 按配对结果和 MAC 有效性追加无线状态槽。
  *
- * @param snapshot 业务参数。
- * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ * @param snapshot 可写 CPU3 状态页快照；函数追加或读取固定槽位中的文字、数值、位置、反显和数据新鲜度，最终用于全量或差量绘制。
  */
 static void Display_AddWirelessPairingSlots(DisplayStatusSnapshot *snapshot)
 {
@@ -2782,10 +3042,9 @@ static void Display_AddWirelessPairingSlots(DisplayStatusSnapshot *snapshot)
 }
 
 /**
- * @brief 显示或打印屏幕显示中的 Display_AdvanceStatusPage 逻辑。
+ * @brief 达到页面保持次数后推进多页状态索引。
  *
- * @param page_amount 输入/输出指针。
- * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ * @param page_amount 当前状态页实际可轮换的页面总数；小于等于 1 时固定显示第 0 页，否则按保持刷新次数循环推进。
  */
 static void Display_AdvanceStatusPage(int page_amount)
 {
@@ -2808,10 +3067,9 @@ static void Display_AdvanceStatusPage(int page_amount)
 }
 
 /**
- * @brief 显示或打印屏幕显示中的 Display_BuildStatusSnapshot 逻辑。
+ * @brief 采集设备状态、语言和当前页槽位，构建本次状态页渲染快照。
  *
- * @param snapshot 业务参数。
- * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ * @param snapshot 可写 CPU3 状态页快照；函数追加或读取固定槽位中的文字、数值、位置、反显和数据新鲜度，最终用于全量或差量绘制。
  */
 static void Display_BuildStatusSnapshot(DisplayStatusSnapshot *snapshot)
 {
@@ -2855,11 +3113,11 @@ static void Display_BuildStatusSnapshot(DisplayStatusSnapshot *snapshot)
 }
 
 /**
- * @brief 显示或打印屏幕显示中的 Display_StatusSlotLayoutChanged 逻辑。
+ * @brief 判断状态槽的标签、行号或布局参数是否发生变化。
  *
- * @param current 业务参数。
- * @param last 业务参数。
- * @return true 表示条件满足或处理成功，false 表示条件不满足或处理失败。
+ * @param current 本次准备显示的当前状态页快照。
+ * @param last 上一次保存的值、状态或快照。
+ * @return true 表示两个槽位的 id、文本或数值类型、行号、数值列、小数位或单位中至少一项不同；false 表示上述全部布局字段完全一致。
  */
 static bool Display_StatusSlotLayoutChanged(const DisplayStatusSlot *current,
                                             const DisplayStatusSlot *last)
@@ -2873,11 +3131,11 @@ static bool Display_StatusSlotLayoutChanged(const DisplayStatusSlot *current,
 }
 
 /**
- * @brief 显示或打印屏幕显示中的 Display_StatusLayoutChanged 逻辑。
+ * @brief 比较两次快照的页面和槽位布局，判断是否需要全量重绘。
  *
- * @param current 业务参数。
- * @param last 业务参数。
- * @return true 表示条件满足或处理成功，false 表示条件不满足或处理失败。
+ * @param current 本次准备显示的当前状态页快照。
+ * @param last 上一次保存的值、状态或快照。
+ * @return true 表示页面类型、槽位数量、槽位标识、行位置或文字/数值布局中至少一项发生变化；false 表示两份状态页快照的布局完全一致。
  */
 static bool Display_StatusLayoutChanged(const DisplayStatusSnapshot *current,
                                         const DisplayStatusSnapshot *last)
@@ -2913,7 +3171,7 @@ static bool Display_StatusLayoutChanged(const DisplayStatusSnapshot *current,
 /**
  * @brief 判断状态页是否需要重新采样运行数据。
  *
- * @param now 当前系统节拍。
+ * @param now 本次判断使用的当前系统节拍，单位 ms；调用方在同一轮处理内复用该快照，避免多次取时造成边界漂移。
  * @return true 表示需要按当前 g_measurement 生成新快照，false 表示仅允许恢复反白显示。
  */
 static bool Display_ShouldSampleStatusData(uint32_t now)
@@ -2942,7 +3200,7 @@ static bool Display_ShouldSampleStatusData(uint32_t now)
 /**
  * @brief 记录状态页最近一次按运行数据采样的节拍。
  *
- * @param now 当前系统节拍。
+ * @param now 本次判断使用的当前系统节拍，单位 ms；调用方在同一轮处理内复用该快照，避免多次取时造成边界漂移。
  */
 static void Display_ResetStatusDataRefreshTick(uint32_t now)
 {
@@ -2974,11 +3232,11 @@ static void Display_DrawStatusSlotValue(const DisplayStatusSlot *slot, uint8_t s
 }
 
 /**
- * @brief 显示或打印屏幕显示中的 Display_StatusSlotValueChanged 逻辑。
+ * @brief 判断状态槽的显示值或有效性是否发生变化。
  *
- * @param current 业务参数。
- * @param last 业务参数。
- * @return true 表示条件满足或处理成功，false 表示条件不满足或处理失败。
+ * @param current 本次准备显示的当前状态页快照。
+ * @param last 上一次保存的值、状态或快照。
+ * @return true 表示任一槽位指针为空、文本或数值类型不同、文本内容不同，或数值不同；false 表示两个有效槽位类型一致且对应文本或数值内容相同。
  */
 static bool Display_StatusSlotValueChanged(const DisplayStatusSlot *current,
                                            const DisplayStatusSlot *last)
@@ -2995,11 +3253,11 @@ static bool Display_StatusSlotValueChanged(const DisplayStatusSlot *current,
 }
 
 /**
- * @brief 显示或打印屏幕显示中的 Display_StatusTickBefore 逻辑。
+ * @brief 按无符号节拍回绕规则判断一个时刻是否早于另一个时刻。
  *
- * @param left 业务参数。
- * @param right 业务参数。
- * @return true 表示条件满足或处理成功，false 表示条件不满足或处理失败。
+ * @param left 区间左端值或左侧比较对象。
+ * @param right 区间右端值或右侧比较对象。
+ * @return true 表示 left 按 32 位节拍回绕规则早于 right；false 表示 left 已经到达或晚于 right。
  */
 static bool Display_StatusTickBefore(uint32_t left, uint32_t right)
 {
@@ -3007,11 +3265,11 @@ static bool Display_StatusTickBefore(uint32_t left, uint32_t right)
 }
 
 /**
- * @brief 显示或打印屏幕显示中的 Display_IsStatusHighlightActive 逻辑。
+ * @brief 判断指定状态槽当前是否处于高亮保持期。
  *
- * @param slot 业务参数。
- * @param now 业务参数。
- * @return true 表示条件满足或处理成功，false 表示条件不满足或处理失败。
+ * @param slot 待检查的状态槽快照，提供高亮可见标志和高亮截止节拍。
+ * @param now 本次判断使用的当前系统节拍，单位 ms；调用方在同一轮处理内复用该快照，避免多次取时造成边界漂移。
+ * @return true 表示槽位指针有效、反白可见标志已置位，且当前时刻仍早于反白截止时刻；false 表示槽位为空、反白未启用，或保持时间已经到期。
  */
 static bool Display_IsStatusHighlightActive(const DisplayStatusSlot *slot, uint32_t now)
 {
@@ -3021,10 +3279,9 @@ static bool Display_IsStatusHighlightActive(const DisplayStatusSlot *slot, uint3
 }
 
 /**
- * @brief 清除或复位屏幕显示中的 Display_ClearStatusSlotValueArea 逻辑。
+ * @brief 清除指定状态槽上一次数值占用的 OLED 区域。
  *
- * @param slot 业务参数。
- * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ * @param slot 待清除的状态槽布局，提供数值起始列和所在 OLED 行。
  */
 static void Display_ClearStatusSlotValueArea(const DisplayStatusSlot *slot)
 {
@@ -3039,11 +3296,10 @@ static void Display_ClearStatusSlotValueArea(const DisplayStatusSlot *slot)
 }
 
 /**
- * @brief 更新屏幕显示中的 Display_UpdateStatusHighlights 逻辑。
+ * @brief 检测槽位值变化并更新短时反白截止时间。
  *
- * @param current 业务参数。
- * @param last 业务参数。
- * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ * @param current 本次准备显示的当前状态页快照。
+ * @param last 上一次保存的值、状态或快照。
  */
 static void Display_UpdateStatusHighlights(DisplayStatusSnapshot *current,
                                            const DisplayStatusSnapshot *last)
@@ -3080,10 +3336,9 @@ static void Display_UpdateStatusHighlights(DisplayStatusSnapshot *current,
 }
 
 /**
- * @brief 显示或打印屏幕显示中的 Display_DrawStatusFull 逻辑。
+ * @brief 全量绘制状态快照并保存为当前活动快照。
  *
- * @param snapshot 业务参数。
- * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ * @param snapshot 可写 CPU3 状态页快照；函数追加或读取固定槽位中的文字、数值、位置、反显和数据新鲜度，最终用于全量或差量绘制。
  */
 static void Display_DrawStatusFull(DisplayStatusSnapshot *snapshot)
 {
@@ -3105,11 +3360,10 @@ static void Display_DrawStatusFull(DisplayStatusSnapshot *snapshot)
 }
 
 /**
- * @brief 显示或打印屏幕显示中的 Display_DrawStatusDelta 逻辑。
+ * @brief 比较前后快照，只重绘发生变化的状态槽。
  *
- * @param current 业务参数。
- * @param last 业务参数。
- * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ * @param current 本次准备显示的当前状态页快照。
+ * @param last 上一次保存的值、状态或快照。
  */
 static void Display_DrawStatusDelta(DisplayStatusSnapshot *current,
                                     const DisplayStatusSnapshot *last)
@@ -3167,8 +3421,8 @@ static void Display_DrawStatusHighlightRestore(void)
 }
 
 /**
- * @brief 更新屏幕显示中的 Display_ShouldRequestStatusHighlightRefresh 逻辑。
- * @return true 表示条件满足或处理成功，false 表示条件不满足或处理失败。
+ * @brief 存在到期反白且状态页可见时请求一次非采样刷新。
+ * @return true 表示状态页有效且可见，并存在保持期刚到期的反白槽位；false 表示状态页无效、罐上操作或息屏正在占用界面，或所有反白仍在保持期内/已经清除。
  */
 static bool Display_ShouldRequestStatusHighlightRefresh(void)
 {
@@ -3195,12 +3449,12 @@ static bool Display_ShouldRequestStatusHighlightRefresh(void)
 }
 
 /**
- * @brief 显示或打印屏幕显示中的 Display_FindActiveStatusSlot 逻辑。
+ * @brief 按优先级查找当前应显示的活动状态槽。
  *
- * @param id 业务参数。
- * @param row 业务参数。
- * @param is_text 业务参数。
- * @return 返回业务对象或缓冲区指针，NULL 表示无有效对象。
+ * @param id 编号。该值是 CPU3 状态页固定槽位标识，用于在快照中定位同一业务字段并执行全量或差量重绘。
+ * @param row OLED 绘制使用的行号。取值使用 OLED_ROW4_x 等页面行坐标常量，决定文字或数字写入的纵向基线。
+ * @param is_text true 表示按文字宽度计算布局，false 表示按数值格式计算。
+ * @return 成功时返回指向按优先级查找当前应显示的活动状态槽的指针；输入非法或未找到匹配项时返回 NULL。
  */
 static const DisplayStatusSlot *Display_FindActiveStatusSlot(DisplayStatusSlotId id,
                                                             uint8_t row,
@@ -3220,14 +3474,14 @@ static const DisplayStatusSlot *Display_FindActiveStatusSlot(DisplayStatusSlotId
 }
 
 /**
- * @brief 显示或打印屏幕显示中的 Display_GetStatusSlotShift 逻辑。
+ * @brief 仅在匹配槽位仍处于反白期且内容一致时返回反色标志。
  *
- * @param id 业务参数。
- * @param row 业务参数。
- * @param value 待处理数值。
- * @param is_text 业务参数。
- * @param text 业务参数。
- * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ * @param id 编号。该值是 CPU3 状态页固定槽位标识，用于在快照中定位同一业务字段并执行全量或差量重绘。
+ * @param row OLED 绘制使用的行号。取值使用 OLED_ROW4_x 等页面行坐标常量，决定文字或数字写入的纵向基线。
+ * @param value 待格式化并绘制到 OLED 的数值。
+ * @param is_text true 表示按文字宽度计算布局，false 表示按数值格式计算。
+ * @param text 待测量、排版或写入状态槽的 NUL 结尾显示文字；宽度计算同时处理 ASCII 与中文字节。
+ * @return 1 表示目标状态槽仍处于内容一致的反白保持期；槽位无效、内容变化或保持期结束时返回 0。
  */
 static uint8_t Display_GetStatusSlotShift(DisplayStatusSlotId id,
                                           uint8_t row,
@@ -3251,7 +3505,11 @@ static uint8_t Display_GetStatusSlotShift(DisplayStatusSlotId id,
     return (slot->value == value) ? 1U : 0U;
 }
 
-/* 刷新屏幕 */
+/**
+ * @brief 根据当前前景页、恢复标志和状态快照选择局部或全量方式刷新 OLED。
+ *
+ * @note 罐上操作页只在监控页、恢复请求或显式重绘时刷新；状态页按布局变化选择全量绘制或差量绘制，并在每帧结束时核对 OLED SPI 错误计数。
+ */
 void RefreshScreen(void)
 {
     uint32_t frame_spi_error_start;
@@ -3306,7 +3564,13 @@ void RefreshScreen(void)
         Display_FinishFrame(frame_spi_error_start);
     }
 }
-/* 显示设备状态 */
+/**
+ * @brief 根据设备状态、结果上下文和当前分页，绘制状态标题、故障详情及有效测量与调试数据。
+ *
+ * 先绘制当前设备状态；无线配对进行中不追加测量数据，配对结束时单独显示成功取得的 MAC 或不可用提示。
+ * 普通状态页按 ValidParaDisArr 的有效标志和页码，选择显示故障原因、液位、水位、密度、温度、位置、扭力、扭力模块温度、频率、电容、姿态角、罐高、无线 RSSI 和从机 MAC。
+ * 各数据项使用当前测量结果上下文选择来源，并通过状态槽位计算差量绘制偏移和工程单位。
+ */
 static void oled_equipment(void)
 {
     u8 row = OLED_ROW4_2,line = 0;
@@ -3371,7 +3635,7 @@ static void oled_equipment(void)
         Display_ErrorReasonLine(row);
     }
 
-    /* 先处理异常边界，避免屏幕显示状态机带故障继续运行。 */
+    /* 故障原因确实占用第二行且该槽位位于当前页时，再绘制续行，避免覆盖后续状态字段。 */
     if (ValidParaDisArr[Para_ErrorReasonMore][PARA_VALID] == true &&
         now_page == ValidParaDisArr[Para_ErrorReasonMore][PARA_PAGE])
     {
@@ -3697,7 +3961,16 @@ static void oled_equipment(void)
         }
     }
 }
-/* 显示多个汉字或字符 - 带中英文选择 */
+/**
+ * @brief 显示多个汉字或字符 - 带中英文选择。
+ *
+ * @param name1 中文模式使用的显示文字。
+ * @param line OLED 绘制使用的横向列位置。
+ * @param row OLED 绘制使用的行号。取值使用 OLED_ROW4_x 等页面行坐标常量，决定文字或数字写入的纵向基线。
+ * @param shift OLED 字模阴码/阳码或显示偏移选项。
+ * @param name2 英文模式使用的显示文字；为 NULL 时沿用中文文字。
+ * @return 返回当前语言文本绘制完成后的下一 OLED 横坐标；英文文本为空时使用中文文本。
+ */
 uint8_t DisplayLangaugeLineWords(uint8_t* name1,uint8_t line,uint8_t row,uint8_t shift,uint8_t* name2)
 {
     if(screen_parameter.language == LANGUAGE_CHINESE || name2 == NULL)
@@ -3707,7 +3980,16 @@ uint8_t DisplayLangaugeLineWords(uint8_t* name1,uint8_t line,uint8_t row,uint8_t
     return line;
 }
 
-/* 计算要显示的参数个数 */
+/**
+ * @brief 根据当前测量结果上下文生成 OLED 结果页的有效参数布局。
+ *
+ * 函数先根据设备状态取得结果页上下文，再逐项判定故障详情、液位、密度、温度、水位、位置、扭力、部件参数、传感器原始量、姿态角、罐高和无线信息是否需要显示。
+ * 每个有效项目按显示顺序写入 ValidParaDisArr 的 PARA_NUM 和 PARA_VALID；需要两行的故障原因会占用两个连续项目，读取部件参数时为扭力模块温度、RSSI 和 MAC
+ * 保留固定项目。
+ * 液位有效时结果区每页排两行并从 OLED_ROW4_3 开始，否则每页排三行并从 OLED_ROW4_2 开始；随后计算 PageAmount 以及每个有效项目的页号和行坐标。
+ *
+ * @note 函数直接更新 ValidParaDisArr、PageAmount、FlagofTotalTwoRow 和液位有效标志，调用方应在测量快照更新后再生成页面布局。
+ */
 static void CalculateValidPara(void)
 {
     static int ValidParaCnt = 0; /* 需要显示的有效参数 */
@@ -3726,7 +4008,7 @@ static void CalculateValidPara(void)
         ValidParaCnt++;
         ValidParaDisArr[Para_ErrorReason][PARA_NUM] = ValidParaCnt;
         ValidParaDisArr[Para_ErrorReason][PARA_VALID] = true;
-        /* 先处理异常边界，避免屏幕显示状态机带故障继续运行。 */
+        /* 长故障原因需要两个状态槽位；短原因只登记首行，并显式关闭旧页面残留的续行槽位。 */
         if (Display_IsErrorReasonNeedTwoRows())
         {
             ValidParaCnt++;
@@ -3938,20 +4220,20 @@ static const EquipStateDisplay state_display_table[] = {
     { STATE_ONTANKOPRATIONING,       "罐上仪表操作中",           "On-Tank Operation" },
     { STATE_SYNTHETICING,            "综合指令中",               "Synthetics Running" },
 
-    /* ===== LTD 新增运行中 ===== */
-    { STATE_FOLLOW_WATER_POINT_SEARCHING, "寻找水位跟随点",             "Searching Water Follow Point" }, /* NEW */
+    /* ===== 水位跟随与扩展测量运行态 ===== */
+    { STATE_FOLLOW_WATER_POINT_SEARCHING, "寻找水位跟随点",             "Searching Water Follow Point" },
     { STATE_METER_DENSITY,           "密度每米测量中",           "Meter Density Measuring" },
     { STATE_INTERVAL_DENSITY,        "液位区间测量中",           "Interval Density Measuring" },
     { STATE_GET_FULLWEIGHT,          "获取满载扭力中",           "Getting Full Torque" },
     { STATE_GET_EMPTYWEIGHT,         "获取空载扭力中",           "Getting Empty Torque" },
     { STATE_MAINTENANCEMODE,         "维护模式中",               "Maintenance Mode" },
 
-    /* ===== 运行控制类（NEW） ===== */
-    { STATE_RUN_TO_POSITIONING,      "运行到指定位置中",         "Run to Position" },            /* NEW */
-    { STATE_FORCE_RUNUPING,          "电机强制上行中",           "Force Running Up" },            /* NEW */
-    { STATE_FORCE_RUNDOWNING,        "电机强制下行中",           "Force Running Down" },          /* NEW */
-    { STATE_CALIBRATE_WATERING,      "水位标定中",               "Calibrating Water Level" },     /* NEW */
-    { STATE_CALIBRATE_TANKHEIGHTING, "罐高标定中",               "Calibrating Tank Height" },     /* NEW */
+    /* ===== 手动运动、标定与维护运行态 ===== */
+    { STATE_RUN_TO_POSITIONING,      "运行到指定位置中",         "Run to Position" },
+    { STATE_FORCE_RUNUPING,          "电机强制上行中",           "Force Running Up" },
+    { STATE_FORCE_RUNDOWNING,        "电机强制下行中",           "Force Running Down" },
+    { STATE_CALIBRATE_WATERING,      "水位标定中",               "Calibrating Water Level" },
+    { STATE_CALIBRATE_TANKHEIGHTING, "罐高标定中",               "Calibrating Tank Height" },
     { STATE_WIRELESS_PAIRING,        "无线滑环匹配中",           "Wireless Pairing" },
     { STATE_DEBUG_MODE,              "调试模式中",               "Debug Mode" },
 
@@ -3976,8 +4258,8 @@ static const EquipStateDisplay state_display_table[] = {
     { STATE_RESTORYOVER,             "恢复配置文件完成",         "Restore Done" },
     { STATE_FLOWOIL,                 "液位跟随中",               "Level Following" },
 
-    /* ===== LTD 新完成态 ===== */
-    { STATE_FOLLOW_WATERING,         "水位跟随中",                 "Water Level Following" },      /* NEW */
+    /* ===== 水位跟随、测量与手动控制完成态 ===== */
+    { STATE_FOLLOW_WATERING,         "水位跟随中",                 "Water Level Following" },
     { STATE_FINDWATER_OVER,          "寻找水位完成",             "Water Level Done" },
     { STATE_FINDBOTTOM_OVER,         "寻找罐底完成",             "Tank Bottom Done" },
     { STATE_FORCEZERO_OVER,          "设置电机零点完成",         "Motor Zero Done" },
@@ -3986,11 +4268,11 @@ static const EquipStateDisplay state_display_table[] = {
     { STATE_COM_METER_DENSITY_OVER,  "密度每米测量完成",         "Meter Density Done" },
     { STATE_INTERVAL_DENSITY_OVER,   "液位区间测量完成",         "Interval Density Done" },
 
-    { STATE_RUN_TO_POSITION_OVER,    "运行到指定位置完成",       "Run to Position Done" },        /* NEW */
-    { STATE_FORCE_RUNUP_OVER,        "强制上行完成",             "Force Run Up Done" },            /* NEW */
-    { STATE_FORCE_RUNDOWN_OVER,      "强制下行完成",             "Force Run Down Done" },          /* NEW */
-    { STATE_CALIBRATE_WATER_OVER,    "水位标定完成",             "Water Calibration Done" },       /* NEW */
-    { STATE_CALIBRATE_TANKHEIGHT_OVER,"罐高标定完成",             "Tank Height Calibration Done" }, /* NEW */
+    { STATE_RUN_TO_POSITION_OVER,    "运行到指定位置完成",       "Run to Position Done" },
+    { STATE_FORCE_RUNUP_OVER,        "强制上行完成",             "Force Run Up Done" },
+    { STATE_FORCE_RUNDOWN_OVER,      "强制下行完成",             "Force Run Down Done" },
+    { STATE_CALIBRATE_WATER_OVER,    "水位标定完成",             "Water Calibration Done" },
+    { STATE_CALIBRATE_TANKHEIGHT_OVER,"罐高标定完成",             "Tank Height Calibration Done" },
     { STATE_WIRELESS_PAIRING_OVER,   "无线滑环匹配完成",         "Wireless Pair Done" },
 
     { STATE_WARTSILA_DENSITY_OVER,   "LTD密度分布完成",          "Wartsila Density Done" },
@@ -4003,11 +4285,11 @@ static const EquipStateDisplay state_display_table[] = {
 
 
 /**
- * @brief 读取屏幕显示中的 GetStateString 逻辑。
+ * @brief 把设备运行状态转换为当前语言的状态文字。
  *
- * @param state 状态值。
- * @param lang 业务参数。
- * @return 返回业务对象或缓冲区指针，NULL 表示无有效对象。
+ * @param state CPU2 共享的 16 位设备状态码；函数按当前语言查找对应状态文字。
+ * @param lang 状态文字使用的语言枚举值。
+ * @return 返回当前语言的状态文字对应的只读文本首地址；内容由当前输入或语言配置选择，调用方不得修改或释放。
  */
 const char* GetStateString(uint16_t state, uint8_t lang)
 {
@@ -4018,8 +4300,12 @@ const char* GetStateString(uint16_t state, uint8_t lang)
     return (lang == 0) ? "未知" : "Unknown";
 }
 /**
- * @brief 执行屏幕显示中的 DIS_Equipment 逻辑。
- * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ * @brief 绘制状态页顶部设备状态及维护/模拟徽标；协议不匹配优先覆盖普通运行态，快照失效时保留曾确认的维护提示。
+ *
+ * 函数根据当前结果页是否仅有两行选择标题行，并把非法语言索引收敛为英文；设备状态文字通常从状态表取得，CPU2 协议不匹配时则强制显示协议错误。
+ * 维护模式只信任完整运行态快照；曾确认维护开启后若快照暂时失效，继续显示维护状态未知，直到新快照明确确认维护已经关闭。
+ * 维护模式与 AO 模拟状态组合为右侧徽标；没有徽标时显示电机运行图标。增量刷新前统一清理当前徽标区域，行位置变化时同时清除旧行，避免 OLED 残影。
+ * 设备处于错误状态时，在状态文字之后追加由错误类型和错误位置组成的十进制故障码。
  */
 static void DIS_Equipment(void)
 {
@@ -4112,7 +4398,11 @@ static void DIS_Equipment(void)
 }
 
 
-/* 判断是否需要息屏 */
+/**
+ * @brief 判断是否需要息屏。
+ *
+ * @return true 表示需要息屏；false 表示不需要息屏。
+ */
 static bool ScreenOff( void )
 {
     uint32_t now = HAL_GetTick();
@@ -4129,7 +4419,9 @@ static bool ScreenOff( void )
     return true;
 }
 
-/* 设置亮屏 */
+/**
+ * @brief 记录按键唤醒时刻，并在屏幕已经关闭时请求 OLED 刷新。
+ */
 void SetScreenBright( void )
 {
     flag_bright = true;
@@ -4139,7 +4431,9 @@ void SetScreenBright( void )
     }
 }
 
-/* 清除本轮按键唤醒标志，不直接发送 OLED 关显示命令。 */
+/**
+ * @brief 清除本轮按键唤醒标志，不直接发送 OLED 关显示命令。
+ */
 static void SetScreenOffState( void )
 {
     flag_bright = false;

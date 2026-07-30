@@ -25,13 +25,20 @@
 #define ZERO_PRECISE_SLOW_DISTANCE_01MM   1000  /* 精找零点提前 100mm 降到低速 */
 
 /* 全局变量，记录零点的编码器数值 */
-int32_t zero_position; /* 回零测量模块级变量，保存跨函数共享的业务状态。 */
+int32_t zero_position; /* 最近一次找零确认的电机零点位置计数，供后续位置换算使用。 */
 
 /* 内部函数声明：粗略和精确寻找零点 */
 static int SearchZeroRough();
 static int SearchZeroPrecise();
 static uint32_t Zero_MoveDownWithoutWeightGuard(const char *phase_name, float distance_mm);
 
+/**
+ * @brief 在明确跳过扭力保护的场景下向下移动传感器。
+ *
+ * @param phase_name 用于日志标识当前阶段的只读文字。
+ * @param distance_mm 距离。
+ * @return 返回 MotorCtrl_MoveAndWait 的实际结果；NO_ERROR 表示无扭力保护下行完成，其他值为命令切换、参数、驱动、位置或到位错误。
+ */
 static uint32_t Zero_MoveDownWithoutWeightGuard(const char *phase_name, float distance_mm)
 {
     uint32_t ret;
@@ -52,15 +59,25 @@ static uint32_t Zero_MoveDownWithoutWeightGuard(const char *phase_name, float di
 }
 
 
-/* 电机记步时，零点位置由 XACTUAL/电机基准维护，不再用编码轮零点偏差报警。
- * 标定零点流程本身也跳过该检查，避免标定过程被旧零点拦截。 */
+/**
+ * @brief 电机记步时，零点位置由 XACTUAL/电机基准维护，不再用编码轮零点偏差报警。
+ *
+ * 标定零点流程本身也跳过该检查，避免标定过程被旧零点拦截。
+ *
+ * @return 1 表示当前使用编码轮位置源且不在找零状态，需要执行零点偏差检查；否则返回 0。
+ */
 static uint8_t Zero_ShouldCheckDeviation(void)
 {
 	return (!MotorCtrl_IsPositionSourceMotor()) &&
 	       (g_measurement.device_status.device_state != STATE_FINDZEROING);
 }
 
-/* 回零内部重试只处理搜索类失败；电机驱动掉电/复位交给外层自动恢复重新初始化。 */
+/**
+ * @brief 回零内部重试只处理搜索类失败；电机驱动掉电/复位交给外层自动恢复重新初始化。
+ *
+ * @param error_code 待记录、转换或判断的错误码。该值用于判断零点流程失败是否属于允许执行电机驱动恢复的错误集合。
+ * @return 1 表示错误码属于 TMC 通信、配置丢失、欠压、禁用、未初始化，或运行、停止、到位等待超时，应交给外层电机驱动恢复；0 表示不属于该恢复集合，仍由回零内部或其它上层逻辑处理。
+ */
 static uint8_t Zero_IsMotorDriverRecoveryError(uint32_t error_code)
 {
     switch (error_code) {
@@ -78,20 +95,20 @@ static uint8_t Zero_IsMotorDriverRecoveryError(uint32_t error_code)
     }
 }
 
-/**
- * @brief 主零点搜索流程
- *        先进行多次粗略找零点，成功后再进行两次精确找零点（均带可配置重试机制）
- *        最终记录零点编码器值
- * @return 0表示成功，1表示三次粗找零点失败
- */
+
 
 #ifndef ZERO_SEARCH_RETRY_MAX
 #define ZERO_SEARCH_RETRY_MAX  3  /* 可通过宏配置最大重试次数 */
 #endif
 
 /**
- * @brief 执行回零测量中的 SearchZero 逻辑。
- * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ * @brief 在有限重试次数内依次执行零点粗找和精找，成功后重建编码器及卷筒位置基准。
+ *
+ * 初始扭力过大时先下行脱离零点；粗找和精找分别最多尝试 ZERO_SEARCH_RETRY_MAX 次，并记录失败重试、恢复成功及驱动恢复错误。
+ * 最终校验零点偏差后，保存编码器零点、重置电机卷筒参考，按配置切回编码轮位置源，再下行脱离并在传感器支持时保存水位零电容和陀螺仪零基准。
+ *
+ * @return NO_ERROR 表示粗找、精找、零点保存及后续脱离动作全部完成；STATE_SWITCH
+ *         表示被新命令正常打断；其他值为运动、驱动、丢步、零点范围、位置保存或可选传感器基准读取错误码。
  */
 int SearchZero(void) {
 	uint32_t ret;
@@ -118,7 +135,6 @@ int SearchZero(void) {
         ret = SearchZeroRough();
         CHECK_COMMAND_SWITCH(ret);
 
-        /* 先处理异常边界，避免回零测量状态机带故障继续运行。 */
         if (ret == NO_ERROR) {
             if ((abs(g_measurement.debug_data.cable_length) > g_deviceParams.max_zero_deviation_distance) && Zero_ShouldCheckDeviation()) {
                 printf("零点测量    粗找后零点偏差超过阈值 | cable=%ld | limit=%lu\r\n",
@@ -134,7 +150,6 @@ int SearchZero(void) {
         }
 
         /* 保持原有粗找重试语义：粗找失败或偏差超限都先记录重试，再执行一次退让动作。 */
-        /* 错误 阶段：错误重试 模块：测量 操作：粗找零点 原因：搜索失败 尝试：try_times/ZERO_SEARCH_RETRY_MAX 错误码：ret 错误名：ErrorLog_GetCodeName(ret) */
         ErrorLog_Retry(ERROR_LOG_MODULE_MEASURE,
                        ERROR_LOG_OP_SEARCH_ZERO_ROUGH,
                        ERROR_LOG_REASON_SEARCH_FAIL,
@@ -142,7 +157,7 @@ int SearchZero(void) {
                        (uint32_t)ZERO_SEARCH_RETRY_MAX,
                        ret);
 
-        /* 先处理异常边界，避免回零测量状态机带故障继续运行。 */
+        /* 粗找遇到电机驱动类故障时不继续位置退让和测量重试，立即退出本轮命令，交由自动恢复重新初始化驱动。 */
         if (Zero_IsMotorDriverRecoveryError(ret)) {
             printf("零点测量    粗找检测到电机驱动故障，退出本轮命令等待自动恢复 | 错误码=0x%08lX\r\n",
                    (unsigned long)ret);
@@ -160,7 +175,6 @@ int SearchZero(void) {
         RETURN_ERROR(ret);
     }
 	if (try_times > 1U) {
-		/* 错误 阶段：重试成功 模块：测量 操作：粗找零点 原因：恢复成功 尝试：try_times/ZERO_SEARCH_RETRY_MAX */
 		ErrorLog_Recover(ERROR_LOG_MODULE_MEASURE,
 		                 ERROR_LOG_OP_SEARCH_ZERO_ROUGH,
 		                 ERROR_LOG_REASON_RECOVER_OK,
@@ -177,10 +191,8 @@ int SearchZero(void) {
 		try_times++;
 		ret = SearchZeroPrecise();
 
-		/* 先处理异常边界，避免回零测量状态机带故障继续运行。 */
 		if (ret == NO_ERROR) {
 			if (try_times > 1U) {
-				/* 错误 阶段：重试成功 模块：测量 操作：精找零点 原因：恢复成功 尝试：try_times/ZERO_SEARCH_RETRY_MAX */
 				ErrorLog_Recover(ERROR_LOG_MODULE_MEASURE,
 				                 ERROR_LOG_OP_SEARCH_ZERO_PRECISE,
 				                 ERROR_LOG_REASON_RECOVER_OK,
@@ -191,14 +203,13 @@ int SearchZero(void) {
 		} else if (ret == STATE_SWITCH) {
 			break;
 		} else {
-			/* 错误 阶段：错误重试 模块：测量 操作：精找零点 原因：搜索失败 尝试：try_times/ZERO_SEARCH_RETRY_MAX 错误码：ret 错误名：ErrorLog_GetCodeName(ret) */
 			ErrorLog_Retry(ERROR_LOG_MODULE_MEASURE,
 			               ERROR_LOG_OP_SEARCH_ZERO_PRECISE,
 			               ERROR_LOG_REASON_SEARCH_FAIL,
 			               (uint32_t)try_times,
 			               (uint32_t)ZERO_SEARCH_RETRY_MAX,
 			               ret);
-			/* 先处理异常边界，避免回零测量状态机带故障继续运行。 */
+			/* 精找遇到电机驱动类故障同样立即退出；只有普通测量失败才允许执行退让后再次尝试。 */
 			if (Zero_IsMotorDriverRecoveryError(ret)) {
 				printf("零点测量    精找检测到电机驱动故障，退出本轮命令等待自动恢复 | 错误码=0x%08lX\r\n",
 				       (unsigned long)ret);

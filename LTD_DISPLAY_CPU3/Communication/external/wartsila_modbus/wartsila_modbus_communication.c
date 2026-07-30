@@ -15,6 +15,13 @@
 #include "cpu3_debug_log.h"
 #include "../external_read_freshness.h"
 
+/**
+ * @brief 把写入的寄存器转成设备参数并“往下发”。
+ *
+ * @param start 本次连续处理范围的起始索引。该值是瓦锡兰连续保持寄存器写入的起始地址，用于识别需转发 CPU2 的目标字段。
+ * @param qty 本次 Modbus 连续访问的寄存器数量。
+ * @return true 表示写区间无需转发，或命令或参数已经成功桥接 CPU2 并保留确认值；false 表示命令下发或四个分布参数同步失败，函数已恢复对外缓存中的最后确认值。
+ */
 static bool modbus_on_holding_written(uint16_t start, uint16_t qty);
 /**
  * @brief 将瓦锡兰保持寄存器中的参数整理后下发到 CPU2。
@@ -24,23 +31,46 @@ static bool ForwardParamsToLowerDevice(void);
 /* ================= 寄存器池 ================= */
 uint16_t g_holding_regs[HOLDREG_COUNT] = {0};   /* 应用层可定期把你的参数写进/读出这个数组 */
 
-/* ================ 内部工具 ================ */
+/**
+ * @brief 从 Modbus PDU 按高字节在前的线格式读取 16 位无符号值。
+ *
+ * @param p 指向至少 2 字节 Modbus PDU 数据的只读指针。
+ * @return 返回从连续 2 字节 Modbus 大端数据还原的 16 位无符号值。
+ */
 static inline uint16_t be16(const uint8_t* p) {
     return (uint16_t)((p[0] << 8) | p[1]);
 }
-/* 按 Modbus 大端字节序写入 16 位寄存器值。 */
+/**
+ * @brief 按 Modbus 大端字节序写入 16 位寄存器值。
+ *
+ * @param p 指向至少 2 字节可写响应区的指针，用于写入大端 16 位值。
+ * @param v 待按高字节在前写入 Modbus 缓冲区的 16 位值。
+ */
 static inline void wr_be16(uint8_t* p, uint16_t v) {
     p[0] = (uint8_t)(v >> 8);
     p[1] = (uint8_t)(v & 0xFF);
 }
 
-/* 判断 [start, start+qty-1] 是否覆盖了某个地址。 */
+/**
+ * @brief 判断 [start, start+qty-1] 是否覆盖了某个地址。
+ *
+ * @param start 本次连续处理范围的起始索引。该值是瓦锡兰连续保持寄存器写入的起始地址，用于识别需转发 CPU2 的目标字段。
+ * @param qty 本次 Modbus 连续访问的寄存器数量。
+ * @param addr 准备检查是否落在连续区间内的目标 Modbus 寄存器地址。
+ * @return 1 表示调用方给出的 qty 非 0，且 addr 位于包含式区间 [start, start + qty - 1] 内；0 表示 addr 在该区间之外。
+ */
 static inline int range_contains(uint16_t start, uint16_t qty, uint16_t addr)
 {
     return (addr >= start) && (addr <= (uint16_t)(start + qty - 1U));
 }
 
-/* 只有命令和四个分布参数地址需要桥接到 CPU2。 */
+/**
+ * @brief 只有命令和四个分布参数地址需要桥接到 CPU2。
+ *
+ * @param start 本次连续处理范围的起始索引。该值是瓦锡兰连续保持寄存器写入的起始地址，用于识别需转发 CPU2 的目标字段。
+ * @param qty 本次 Modbus 连续访问的寄存器数量。
+ * @return true 表示写区间覆盖命令寄存器或四个需要转发 CPU2 的分布参数之一；false 表示本次写入只涉及 CPU3 本地瓦锡兰映射字段。
+ */
 static bool wartsila_write_targets_cpu2(uint16_t start, uint16_t qty)
 {
     return (range_contains(start, qty, 0x0006U) != 0) ||
@@ -50,7 +80,16 @@ static bool wartsila_write_targets_cpu2(uint16_t start, uint16_t qty)
            (range_contains(start, qty, REG_SPREAD_DIST_TO_SURFACE) != 0);
 }
 
-/* ============== 异常应答（功能码|0x80, 异常码）============== */
+/**
+ * @brief 构造瓦锡兰 Modbus 异常响应并追加 CRC16。
+ *
+ * @param addr 写入异常响应第 1 字节的瓦锡兰 Modbus 从站地址。
+ * @param func 原请求功能码；函数置位最高位后写入异常响应第 2 字节。
+ * @param ex_code 写入异常响应第 3 字节的标准 Modbus 异常码。
+ * @param tx 异常响应输出缓冲区，调用方必须提供至少 5 个可写字节。
+ * @param tx_len 异常响应长度输出指针；成功组帧后写入固定长度 5 字节。
+ * @return 固定返回 1，表示 5 字节瓦锡兰 Modbus 异常响应已写入 tx 且 *tx_len 已更新；该返回值不是帧长或异常码。
+ */
 static uint8_t build_exception(uint8_t addr, uint8_t func, uint8_t ex_code,
                                uint8_t* tx, uint16_t* tx_len)
 {
@@ -64,7 +103,16 @@ static uint8_t build_exception(uint8_t addr, uint8_t func, uint8_t ex_code,
     return 1;
 }
 
-/* ============== 处理 0x03 读取保持寄存器 =============== */
+/**
+ * @brief 校验并处理瓦锡兰 Modbus 0x03 读保持寄存器请求。
+ *
+ * @param addr 从合法请求中取得的瓦锡兰 Modbus 从站地址，正常和异常响应均原样回显。
+ * @param pdu 待解析或构造的 Modbus PDU 缓冲区。
+ * @param pdu_len Modbus PDU 有效长度，单位字节。
+ * @param tx 瓦锡兰 FC03 正常寄存器数据或标准异常响应的输出缓冲区。
+ * @param tx_len 待发送数据的有效长度，单位字节。该指针用于返回已经构造完成的响应帧总长度，长度包含当前协议要求的帧头、数据区及 CRC 等尾部字段。
+ * @return 返回 1，表示已构造瓦锡兰 FC03 正常或异常响应。
+ */
 static uint8_t handle_0x03(uint8_t addr, const uint8_t* pdu, uint16_t pdu_len,
                            uint8_t* tx, uint16_t* tx_len)
 {
@@ -137,7 +185,17 @@ static uint8_t handle_0x03(uint8_t addr, const uint8_t* pdu, uint16_t pdu_len,
     return 1;
 }
 
-/* ============== 处理 0x10 写多个保持寄存器 =============== */
+/**
+ * @brief 校验并处理瓦锡兰 Modbus 0x10 写多个保持寄存器请求。
+ *
+ * @param addr 从合法请求中取得的瓦锡兰 Modbus 从站地址，写入确认和异常响应均原样回显。
+ * @param pdu 待解析或构造的 Modbus PDU 缓冲区。
+ * @param pdu_len Modbus PDU 有效长度，单位字节。
+ * @param tx 瓦锡兰 FC10 写入确认或标准异常响应的输出缓冲区。
+ * @param tx_len 待发送数据的有效长度，单位字节。该指针用于返回已经构造完成的响应帧总长度，长度包含当前协议要求的帧头、数据区及 CRC 等尾部字段。
+ * @param write_applied 用于返回 0x10 请求是否已经实际修改保持寄存器。
+ * @return 返回 1 表示已构造瓦锡兰 FC10 正常或异常响应；write_applied 为空时返回 0 且不处理请求。
+ */
 static uint8_t handle_0x10(uint8_t addr, const uint8_t* pdu, uint16_t pdu_len,
                            uint8_t* tx, uint16_t* tx_len, bool *write_applied)
 {
@@ -190,7 +248,15 @@ static uint8_t handle_0x10(uint8_t addr, const uint8_t* pdu, uint16_t pdu_len,
     return 1;
 }
 
-/* ============== 顶层处理 ============== */
+/**
+ * @brief 校验瓦锡兰 Modbus RTU 请求并分发 0x03、0x10 功能码。
+ *
+ * @param rx 接收到的数据缓冲区。有效字节范围由 rx_len 或调用点固定帧长限定，函数不会修改原始请求帧。
+ * @param rx_len 接收数据的有效长度，单位字节。函数只读取 rx[0..rx_len-1]，并在访问固定字段前检查协议要求的最小长度。
+ * @param tx 完整瓦锡兰 Modbus RTU 正常或异常响应的输出缓冲区；函数通过 tx_len 返回有效长度。
+ * @param tx_len 待发送数据的有效长度，单位字节。该指针用于返回已经构造完成的响应帧总长度，长度包含当前协议要求的帧头、数据区及 CRC 等尾部字段。
+ * @return 返回瓦锡兰 Modbus 分发结果；MODBUS_OK 表示已完成处理，其他值区分帧长、CRC、从机地址和功能码错误；tx_len 非零时包含可发送的正常或异常响应。
+ */
 ModbusResult modbus_rtu_process(const uint8_t* rx, uint16_t rx_len,
                                 uint8_t* tx, uint16_t* tx_len)
 {
@@ -244,14 +310,22 @@ ModbusResult modbus_rtu_process(const uint8_t* rx, uint16_t rx_len,
 
     return MODBUS_OK;
 }
-/* 命令影子只允许消费一次；清零后同步刷新 Wartsila 寄存器池。 */
+/**
+ * @brief 命令影子只允许消费一次；清零后同步刷新 Wartsila 寄存器池。
+ */
 static void Wartsila_ClearCommandShadow(void)
 {
 	g_deviceParams.command = CMD_NONE;
 	DeviceParams_StoreToRegisters(g_holding_regs);
 }
 
-/* 把写入的寄存器转成设备参数并“往下发” */
+/**
+ * @brief 把写入的寄存器转成设备参数并“往下发”。
+ *
+ * @param start 本次连续处理范围的起始索引。该值是瓦锡兰连续保持寄存器写入的起始地址，用于识别需转发 CPU2 的目标字段。
+ * @param qty 本次 Modbus 连续访问的寄存器数量。
+ * @return true 表示写区间无需转发，或命令/参数已经成功桥接 CPU2 并保留确认值；false 表示命令下发或四个分布参数同步失败，函数已恢复对外缓存中的最后确认值。
+ */
 static bool modbus_on_holding_written(uint16_t start, uint16_t qty)
 {
     uint32_t confirmed_upper_density_limit = g_deviceParams.wartsila_upper_density_limit;
@@ -311,6 +385,8 @@ static bool modbus_on_holding_written(uint16_t start, uint16_t qty)
 /**
  * @brief 将瓦锡兰外部协议参数同步下发到 CPU2 参数区。
  * @note 由外部 Modbus 写保持寄存器后触发，避免 CPU3 缓存和 CPU2 参数脱节。
+ *
+ * @return true 表示上限、下限、间隔和液面上最大高度四个参数均已连续写入 CPU2；false 表示其中任一板间 Modbus 写事务失败，后续参数不再视为已同步。
  */
 static bool ForwardParamsToLowerDevice(void)
 {

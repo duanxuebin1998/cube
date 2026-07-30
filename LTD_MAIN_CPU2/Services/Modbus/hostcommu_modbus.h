@@ -1,4 +1,5 @@
 #ifndef __HOSTCOMMU_MODBUS_H
+/* __HOSTCOMMU_MODBUS_H 是本头文件的包含保护标记；首次展开后置位，防止重复包含造成类型或接口重复定义。 */
 #define __HOSTCOMMU_MODBUS_H
 
 #include <stdbool.h>  /* 提供布尔类型支持 */
@@ -46,11 +47,12 @@ int Response03Process(uint8_t  *revframe, uint8_t  *sendframe);
 int Response04Process(uint8_t  *revframe, uint8_t  *sendframe);
 
 /**
- * @brief 处理Modbus功能码05（写单个线圈）请求
+ * @brief 声明 Modbus 功能码 0x05 单线圈写请求的响应处理入口。
  *
- * @param revframe 接收到的Modbus帧数据
- * @param sendframe 待发送的响应帧缓冲区
- * @return int 响应帧长度
+ * @param revframe 已经接收完成的 Modbus RTU 请求帧缓冲区。
+ * @param sendframe 用于输出正常或异常响应帧的缓冲区。
+ * @return 返回待发送响应帧的有效长度，单位字节。
+ * @note 当前工程未找到该接口的实现和调用点；该声明仅保留兼容性，新增调用前必须先补齐实现并验证异常响应语义。
  */
 int Response05Process(uint8_t  const *revframe, uint8_t  *sendframe);
 

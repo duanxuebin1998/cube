@@ -8,6 +8,7 @@
  */
 
 #ifndef MOTOR_CTRL_INTERNAL_H_
+/* MOTOR_CTRL_INTERNAL_H_ 是本头文件的包含保护标记；首次展开后置位，防止重复包含造成类型或接口重复定义。 */
 #define MOTOR_CTRL_INTERNAL_H_
 
 #include "motor_ctrl.h"
@@ -127,28 +128,31 @@ extern "C" {
 
 /* 电机位置持久化记录。 */
 typedef struct {
-    uint32_t magic;
-    uint32_t version;
-    int32_t xactual;
-    int32_t base_length_01mm;
-    int32_t base_step;
-    uint32_t crc;
+    /* 电机位置掉电记录；以魔术字、版本和 CRC 保护位置及尺带基准。 */
+    uint32_t magic; /* 持久化记录魔术字；装载时首先用于排除空白或错误类型的数据。 */
+    uint32_t version; /* 持久化结构版本；决定后续负载按哪一版固定布局解释。 */
+    int32_t xactual; /* 掉电时保存的 TMC5130 XACTUAL 电机位置计数。 */
+    int32_t base_length_01mm; /* 基准长度 0.1 mm 定点值，单位为 0.1 mm；该字段保存已经缩放的整数定点值，换算物理量时只能应用一次缩放。 */
+    int32_t base_step; /* 尺带位置模型基准点对应的电机步数。 */
+    uint32_t crc; /* 覆盖记录约定范围的 CRC 校验值；装载失败时不得使用对应负载。 */
 } MotorPersistRecord;
 
 /* TFIT 采样点。 */
 typedef struct {
-    int32_t motor_step;
-    int32_t encoder_length_01mm;
+    /* 尺带模型拟合使用的电机步数与编码器长度配对样本。 */
+    int32_t motor_step; /* 拟合样本记录的电机累计步数。 */
+    int32_t encoder_length_01mm; /* 编码器长度 0.1 mm 定点值，单位为 0.1 mm；该字段保存已经缩放的整数定点值，换算物理量时只能应用一次缩放。 */
 } MotorTapeFitSample;
 
 /* TFIT 拟合结果。 */
 typedef struct {
-    bool valid;
-    double offset_mm;
-    double first_loop_circ_mm;
-    double tape_thickness_mm;
-    double rmse_mm;
-    double max_abs_err_mm;
+    /* 尺带模型拟合结果及误差指标；valid 为真后其余几何参数才可使用。 */
+    bool valid; /* 拟合样本数量和误差均满足接受条件的标志；为假时不得应用几何参数。 */
+    double offset_mm; /* 拟合得到的尺带长度零点偏移，单位为 mm；该字段直接保存浮点物理值，不使用 0.1 mm 整数缩放。 */
+    double first_loop_circ_mm; /* 拟合得到的卷筒首圈有效周长，单位为 mm。 */
+    double tape_thickness_mm; /* 拟合得到的尺带等效厚度，单位为 mm。 */
+    double rmse_mm; /* 拟合残差均方根，单位为 mm，用于判断整体拟合质量。 */
+    double max_abs_err_mm; /* 拟合样本最大绝对残差，单位为 mm，用于拒绝局部异常拟合。 */
 } MotorTapeFitResult;
 
 /* ===================== 内部共享状态 ===================== */
@@ -201,10 +205,29 @@ void MotorDriver_UpdateVelocityFromParams(void);
  */
 uint32_t MotorDriver_CheckHealth(MotorDriverHealthMode mode);
 
-/* * 写运动寄存器前统一检查驱动初始化状态和位置源首帧就绪状态。 */
+/**
+ * @brief 写运动寄存器前检查电机和位置源是否允许运动。
+ *
+ * 所有上层运动入口在写 VMAX/XTARGET/RAMPMODE 前调用这里。
+ * 编码轮记步模式必须等编码器首帧有效；电机记步模式允许编码器后台异常，
+ * 避免因为编码器悬空阻断电机记步模式下的受控运动。
+ *
+ * 写运动寄存器前统一检查驱动初始化状态和位置源首帧就绪状态。
+ *
+ * @return NO_ERROR 表示驱动和当前位置源均允许普通运动；其他值定位驱动未就绪、位置无效或读取失败。
+ */
 uint32_t MotorDriver_CheckMotionReady(void);
 
-/* * 强制调试运动专用：只绕过编码器首帧门控，不绕过驱动初始化和上电安全停机。 */
+/**
+ * @brief 强制调试运动专用就绪检查。
+ *
+ * 只绕过编码器首帧就绪，仍要求上电安全停机和 TMC5130 完整初始化成功。
+ * 该入口只给人工强制运动使用，正常测量和普通运动不能调用。
+ *
+ * 强制调试运动专用：只绕过编码器首帧门控，不绕过驱动初始化和上电安全停机。
+ *
+ * @return NO_ERROR 表示已满足强制调试运动的放宽就绪条件；其他值仍表示不可绕过的驱动或位置源故障。
+ */
 uint32_t MotorDriver_CheckMotionReadyForceDebug(void);
 
 /**
@@ -241,11 +264,11 @@ uint32_t MotorDriver_StopIfCommandSwitchRequested(void);
 uint32_t MotorDriver_ReadMovingState(TMC5130TypeDef *tmc5130, bool *is_moving);
 
 /**
- * @brief 读取电机控制中的 MotorDriver_ReadStoppingState 逻辑。
+ * @brief 连续读取两次 VZERO 和 VACTUAL，判断驱动器是否仍处于减速停止过程。
  *
- * @param tmc5130 业务参数。
- * @param is_moving 业务参数。
- * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ * @param tmc5130 目标 TMC5130 驱动实例。对象保存 SPI 句柄、片选 GPIO 和使能 GPIO，底层寄存器访问与驱动使能操作均通过该实例定位硬件。
+ * @param is_moving 用于返回 TMC5130 当前是否仍在运动。
+ * @return SYSTEM_CALL_CONDITION_ERROR 表示当前系统状态不允许执行；NO_ERROR 表示操作成功。
  */
 uint32_t MotorDriver_ReadStoppingState(TMC5130TypeDef *tmc5130, bool *is_moving);
 

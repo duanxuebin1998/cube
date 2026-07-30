@@ -11,11 +11,19 @@
 #include <stdio.h>
 #include <string.h>
 
+/* 调试串口逐字节命令接收状态。 */
 static SerialCommandRxState s_serial_command_rx;
+/* 超长命令事件已经就绪、等待前台输出错误提示的标志。 */
 static volatile uint8_t s_serial_command_too_long_ready = 0U;
+/* 完整调试命令已经组帧、等待前台解析执行的标志。 */
 volatile uint8_t new_command_ready = 0U;
 
-/* 将已严格校验的正式单字母命令映射为统一业务命令枚举。 */
+/**
+ * @brief 将已严格校验的正式单字母命令映射为统一业务命令枚举。
+ *
+ * @param command 已经通过正式命令语法校验的单字节 ASCII 命令字母。
+ * @return I、G、K、R、W、O、P、Q 分别映射回零、探底、找油、分布测量、找水、空载标定、满载标定和恢复出厂命令；其他字符返回 CMD_UNKNOWN。
+ */
 static CommandType SerialCommand_MapFormalCommand(uint8_t command)
 {
     switch (command) {
@@ -31,7 +39,9 @@ static CommandType SerialCommand_MapFormalCommand(uint8_t command)
     }
 }
 
-/* 打印现场可用命令族摘要，详细参数由协议卷维护。 */
+/**
+ * @brief 打印现场可用命令族摘要，详细参数由协议卷维护。
+ */
 static void SerialCommand_PrintHelp(void)
 {
     printf("HELP 正式命令：I/G/K/R/W/O/P/Q，Q=恢复出厂参数\r\n");
@@ -44,7 +54,9 @@ static void SerialCommand_PrintHelp(void)
     printf("HELP 详细参数见《CPU2串口调试命令协议卷》\r\n");
 }
 
-/* 打印 CPU2 固件、共享协议和当前参数存储版本。 */
+/**
+ * @brief 打印 CPU2 固件、共享协议和当前参数存储版本。
+ */
 static void SerialCommand_PrintVersion(void)
 {
     printf("VERSION cpu2=%s protocol=%lu param=%lu\r\n",
@@ -53,7 +65,9 @@ static void SerialCommand_PrintVersion(void)
            (unsigned long)g_deviceParams.param_version);
 }
 
-/* 打印设备状态、当前命令和待执行命令的只读快照。 */
+/**
+ * @brief 打印设备状态、当前命令和待执行命令的只读快照。
+ */
 static void SerialCommand_PrintStatus(void)
 {
     printf("STATUS state=0x%04lX current=%lu pending=%lu zero=%lu work=%lu\r\n",
@@ -64,7 +78,9 @@ static void SerialCommand_PrintStatus(void)
            (unsigned long)g_measurement.device_status.work_mode);
 }
 
-/* 打印当前错误码及统一错误名称、模块和原因。 */
+/**
+ * @brief 打印当前错误码及统一错误名称、模块和原因。
+ */
 static void SerialCommand_PrintError(void)
 {
     uint32_t error_code = g_measurement.device_status.error_code;
@@ -76,10 +92,14 @@ static void SerialCommand_PrintError(void)
            ErrorLog_GetReasonByCode(error_code));
 }
 
-/*
- * 函数用途：把编码器最近持久化结果转换为稳定的串口文本。
- * 调用场景：ENC?状态输出。
- * 关键约束：只返回静态字符串，不访问硬件、不修改状态。
+/**
+ * @brief 把编码器最近持久化结果转换为稳定的串口文本。
+ *
+ * @details 调用场景：ENC?状态输出。
+ * @note 关键约束：只返回静态字符串，不访问硬件、不修改状态。
+ *
+ * @param result 编码器最近一次持久化结果枚举，用于映射为稳定串口文字。
+ * @return 返回稳定的串口文本对应的只读文本首地址；内容由当前输入或语言配置选择，调用方不得修改或释放。
  */
 static const char *SerialCommand_GetPersistResultName(EncoderPersistResult result)
 {
@@ -94,10 +114,14 @@ static const char *SerialCommand_GetPersistResultName(EncoderPersistResult resul
     }
 }
 
-/*
- * 函数用途：把本次上电判定的上一次掉电存储结果转换为稳定串口文本。
- * 调用场景：ENC?状态输出。
- * 关键约束：结果在初始化时固定，不被本次启动后的普通保存覆盖。
+/**
+ * @brief 把本次上电判定的上一次掉电存储结果转换为稳定串口文本。
+ *
+ * @details 调用场景：ENC?状态输出。
+ * @note 关键约束：结果在初始化时固定，不被本次启动后的普通保存覆盖。
+ *
+ * @param result 本次启动对上次掉电保存的判定结果枚举，用于映射为稳定串口文字。
+ * @return 返回稳定串口文本对应的只读文本首地址；内容由当前输入或语言配置选择，调用方不得修改或释放。
  */
 static const char *SerialCommand_GetPowerLossResultName(EncoderPowerLossPersistResult result)
 {
@@ -112,10 +136,11 @@ static const char *SerialCommand_GetPowerLossResultName(EncoderPowerLossPersistR
     }
 }
 
-/*
- * 函数用途：输出24V监测和紧急保存请求状态。
- * 调用场景：线程态处理PWR?命令。
- * 关键约束：只读取一致RAM快照，不直接操作ADC看门狗或FRAM。
+/**
+ * @brief 输出24V监测和紧急保存请求状态。
+ *
+ * @details 调用场景：线程态处理PWR?命令。
+ * @note 关键约束：只读取一致RAM快照，不直接操作ADC看门狗或FRAM。
  */
 static void SerialCommand_PrintPowerStatus(void)
 {
@@ -145,10 +170,11 @@ static void SerialCommand_PrintPowerStatus(void)
            (unsigned int)snapshot.adc_overrun);
 }
 
-/*
- * 函数用途：输出编码器当前值、已保存值和FRAM提交状态。
- * 调用场景：线程态处理ENC?命令。
- * 关键约束：只读取一致RAM快照，不在查询路径访问FRAM。
+/**
+ * @brief 输出编码器当前值、已保存值和FRAM提交状态。
+ *
+ * @details 调用场景：线程态处理ENC?命令。
+ * @note 关键约束：只读取一致RAM快照，不在查询路径访问FRAM。
  */
 static void SerialCommand_PrintEncoderStatus(void)
 {
@@ -175,10 +201,11 @@ static void SerialCommand_PrintEncoderStatus(void)
            (unsigned int)snapshot.fault_latched);
 }
 
-/*
- * 函数用途：请求一次不改变ADC状态的软件紧急保存测试。
- * 调用场景：线程态处理PWRTEST命令。
- * 关键约束：命令只投递请求，最终提交结果由POWER_TEST_SAVE和ENC?确认。
+/**
+ * @brief 请求一次不改变ADC状态的软件紧急保存测试。
+ *
+ * @details 调用场景：线程态处理PWRTEST命令。
+ * @note 关键约束：命令只投递请求，最终提交结果由POWER_TEST_SAVE和ENC?确认。
  */
 static void SerialCommand_RunPowerTest(void)
 {
@@ -194,7 +221,12 @@ static void SerialCommand_RunPowerTest(void)
     }
 }
 
-/* USART1 中断入口只记录字节和事件，不在中断内打印或执行命令。 */
+/**
+ * @brief 在 UART 接收中断中把单字节写入串口命令环形缓冲区。
+ *
+ * @param byte UART 接收中断取得的单个原始字节，随后交给定长收帧状态机处理。
+ * @note USART1 中断入口只记录字节和收帧事件，不在中断内打印或执行命令。
+ */
 void SerialCommand_RxByteFromIsr(uint8_t byte)
 {
     SerialCommandRxEvent event;
@@ -214,7 +246,9 @@ void SerialCommand_RxByteFromIsr(uint8_t byte)
     }
 }
 
-/* 主循环先复制完整帧再清就绪标志，避免下一帧覆盖正在处理的文本。 */
+/**
+ * @brief 主循环先复制完整帧再清就绪标志，避免下一帧覆盖正在处理的文本。
+ */
 void SerialCommand_ProcessReady(void)
 {
     uint8_t command[SERIAL_COMMAND_RX_CAPACITY];
@@ -232,7 +266,11 @@ void SerialCommand_ProcessReady(void)
     SerialCommand_Process(command);
 }
 
-/* 严格解析完整命令，并按查询、正式业务、测试和停止四类分发。 */
+/**
+ * @brief 严格解析完整命令，并按查询、正式业务、测试和停止四类分发。
+ *
+ * @param command 以 NUL 结尾的完整串口命令字节串；函数先严格分类，再分发查询、正式业务、测试或停止命令。
+ */
 void SerialCommand_Process(const uint8_t *command)
 {
     SerialCommandParseResult parsed = SerialCommandParser_Parse(command);
@@ -291,10 +329,11 @@ void SerialCommand_Process(const uint8_t *command)
     }
 }
 
-/*
- * 函数用途：输出PendSV已完成的紧急持久化成功快照。
- * 调用场景：App_MainLoop每轮后台服务入口。
- * 关键约束：仅线程态打印；完全掉电时字符可能来不及发送。
+/**
+ * @brief 输出PendSV已完成的紧急持久化成功快照。
+ *
+ * @details 调用场景：App_MainLoop每轮后台服务入口。
+ * @note 关键约束：仅线程态打印；完全掉电时字符可能来不及发送。
  */
 void SerialCommand_ProcessDeferredReports(void)
 {
@@ -323,7 +362,9 @@ void SerialCommand_ProcessDeferredReports(void)
     }
 }
 
-/* 在主循环统一报告超长帧，保持 USART1 中断无打印。 */
+/**
+ * @brief 在主循环统一报告超长帧，保持 USART1 中断无打印。
+ */
 void SerialCommand_ReportTooLong(void)
 {
     printf("ERR reason=CMD_TOO_LONG max=%u\r\n", (unsigned int)(SERIAL_COMMAND_RX_CAPACITY - 1U));

@@ -33,12 +33,12 @@
 #define TORQUE_TEMPERATURE_INVALID_BITS 0x7FC00000UL /* 尚未收到有效温度时发布安静NaN位模式。 */
 
 /* 全局变量，存储当前扭力传感器的原始扭力值 */
-int16_t g_weight; /* 扭力数据模块级变量，保存跨函数共享的业务状态。 */
+int16_t g_weight; /* 最近一次通过称重通信校验的原始扭力/重量计数。 */
 
 /* 全局结构体，存储扭力相关参数（空载、稳定、当前扭力等） */
 Weight_ParamentTypeDef weight_parament = { 0 };
-static uint32_t s_weight_last_rx_tick = 0U; /* 扭力数据模块级变量，保存跨函数共享的业务状态。 */
-static uint8_t s_weight_timeout_reported = 0U; /* 扭力数据模块级变量，保存跨函数共享的业务状态。 */
+static uint32_t s_weight_last_rx_tick = 0U; /* 最近一次收到有效称重数据的 HAL 毫秒节拍。 */
+static uint8_t s_weight_timeout_reported = 0U; /* 当前称重通信超时已经上报、等待有效数据恢复的标志。 */
 
 /**
  * @brief 判断当前是否处于允许零点搜索的设备状态。
@@ -53,20 +53,19 @@ static uint8_t Weight_IsZeroSearchState(void)
 }
 
 /**
- * @brief 执行扭力数据中的 Weight_IsCommErrorCode 逻辑。
+ * @brief 判断错误码是否属于扭力模块通信故障。
  *
- * @param error_code 故障或错误码。
- * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ * @param error_code 待分类的整机错误码；函数只识别扭力通信超时、扭力帧校验失败和扭力数据无效三类代码。
+ * @return true 表示错误码属于扭力模块通信超时、帧校验或数据失效故障；否则返回 false。
  */
 static uint8_t Weight_IsCommErrorCode(uint32_t error_code) {
 	return (error_code == WEIGHT_COMM_TIMEOUT);
 }
 
 /**
- * @brief 显示或打印扭力数据中的 Weight_PrintCableRefs 逻辑。
+ * @brief 打印当前尺带扭力参考值和标定状态。
  *
- * @param cable_mm 业务参数。
- * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ * @param cable_mm 当前尺带长度，单位 mm，用于换算并打印扭力参考值。
  */
 static void Weight_PrintCableRefs(float cable_mm)
 {
@@ -75,7 +74,11 @@ static void Weight_PrintCableRefs(float cable_mm)
 	printf("\r\n");
 }
 
-/* 初始化扭力 */
+/**
+ * @brief 从设备参数加载空载和满载扭力，并初始化扭力通信有效性状态。
+ *
+ * @return 固定返回 NO_ERROR；当前初始化过程只复制参数并复位运行态，不包含可失败的硬件访问。
+ */
 uint32_t weight_init() {
 	weight_parament.empty_weight = g_deviceParams.empty_weight;           /* 从设备参数中获取空载扭力 */
 	weight_parament.full_weight = g_deviceParams.full_weight;           /* 从设备参数中获取满载扭力 */
@@ -85,22 +88,23 @@ uint32_t weight_init() {
 	return NO_ERROR;
 }
 
+/**
+ * @brief 回零退让成功后，把当前扭力设为新的稳定基线。
+ */
 void Weight_RebaseStableWeight(void)
 {
 	weight_parament.stable_weight = weight_parament.current_weight;
 }
 
 /**
- * @brief 接收扭力数据中的 Weight_MarkFrameReceived 逻辑。
- * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ * @brief 记录扭力模块已收到一帧有效数据并刷新通信时间戳。
  */
 void Weight_MarkFrameReceived(void) {
 	uint32_t now = HAL_GetTick();
 	s_weight_last_rx_tick = now;
 	s_weight_timeout_reported = 0U;
-	/* 先处理异常边界，避免扭力数据状态机带故障继续运行。 */
+	/* 收到新扭力帧后只清除扭力通信类故障并记录恢复，其他模块已经锁存的错误不得被覆盖。 */
 	if (Weight_IsCommErrorCode(g_measurement.device_status.error_code)) {
-		/* 错误 阶段：重试成功 模块：扭力 操作：读取整数参数 原因：扭力通信恢复 尝试：1U/1U */
 		ErrorLog_Recover(ERROR_LOG_MODULE_WEIGHT,
 		                 ERROR_LOG_OP_READ_INT_PARAM,
 		                 ERROR_LOG_REASON_WEIGHT_RECOVER,
@@ -111,17 +115,17 @@ void Weight_MarkFrameReceived(void) {
 }
 
 /**
- * @brief 检查扭力数据中的 Weight_CheckCommunicationTimeoutInternal 逻辑。
+ * @brief 根据最近有效重量帧时间更新通信超时状态。
  *
- * @param keep_global_error 故障或错误码。
- * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ * @param keep_global_error 非零时保留当前已经锁存的非扭力通信故障，不允许本次超时检查用 WEIGHT_COMM_TIMEOUT 覆盖其他模块根因。
+ * @return NO_ERROR 表示最近有效重量帧仍在超时窗口内；超时且允许更新时返回 WEIGHT_COMM_TIMEOUT，keep_global_error 要求保留其他根因时返回当前已锁存错误码。
  */
 static uint32_t Weight_CheckCommunicationTimeoutInternal(uint8_t keep_global_error)
 {
 	uint32_t now = HAL_GetTick();
 	uint32_t error_code = g_measurement.device_status.error_code;
 
-	/* 先处理异常边界，避免扭力数据状态机带故障继续运行。 */
+	/* 调用方要求保留全局错误时，非扭力通信故障具有更高优先级，超时检查不得把它替换为扭力超时。 */
 	if (keep_global_error &&
 		(error_code != NO_ERROR) &&
 		(error_code != STATE_SWITCH) &&
@@ -129,15 +133,14 @@ static uint32_t Weight_CheckCommunicationTimeoutInternal(uint8_t keep_global_err
 		return error_code;
 	}
 
-	/* 先处理异常边界，避免扭力数据状态机带故障继续运行。 */
+	/* 距离最近一帧尚未达到通信超时门限时返回正常，避免低帧率链路被提前判故障。 */
 	if ((now - s_weight_last_rx_tick) < WEIGHT_COMM_TIMEOUT_MS) {
 		return NO_ERROR;
 	}
 
-	/* 先处理异常边界，避免扭力数据状态机带故障继续运行。 */
+	/* 同一次连续失联只在首次越过门限时输出告警；收到下一帧后 s_weight_timeout_reported 才会复位。 */
 	if (!s_weight_timeout_reported) {
 		s_weight_timeout_reported = 1U;
-		/* 错误 阶段：错误报警 模块：扭力 操作：读取整数参数 原因：扭力通信超时 处理：继续尝试 */
 		ErrorLog_Warn(ERROR_LOG_MODULE_WEIGHT,
 		              ERROR_LOG_OP_READ_INT_PARAM,
 		              ERROR_LOG_REASON_WEIGHT_TIMEOUT,
@@ -152,8 +155,8 @@ static uint32_t Weight_CheckCommunicationTimeoutInternal(uint8_t keep_global_err
 }
 
 /**
- * @brief 检查扭力数据中的 Weight_CheckCommunicationTimeout 逻辑。
- * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ * @brief 检查共享扭力通信是否超过允许静默时间。
+ * @return 返回共享扭力通信超时检查结果；NO_ERROR 表示链路未超时，其他值为对应通信故障码。
  */
 uint32_t Weight_CheckCommunicationTimeout(void)
 {
@@ -161,8 +164,8 @@ uint32_t Weight_CheckCommunicationTimeout(void)
 }
 
 /**
- * @brief 检查扭力数据中的 Weight_CheckOwnCommunicationTimeout 逻辑。
- * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ * @brief 检查本机扭力通信链路是否超过允许静默时间。
+ * @return 返回本机扭力通信链路超时检查结果；NO_ERROR 表示链路未超时，其他值为对应通信故障码。
  */
 uint32_t Weight_CheckOwnCommunicationTimeout(void)
 {
@@ -174,11 +177,12 @@ uint32_t Weight_CheckOwnCommunicationTimeout(void)
  * @brief 获取空载扭力
  *        延时5秒后，将当前扭力值记录为空载扭力
  *        并通过串口打印空载扭力
+ *
+ * @return NO_ERROR 表示空载等待完成并记录空载扭力；等待被命令切换、通信故障或超时终止时返回相应 wait_ret。
  */
 uint32_t get_empty_weight(void) {
 	printf("正在获取空载扭力值...\r\n"); /* 打印获取空载扭力信息 */
 	uint32_t wait_ret = AbortableDelay_CommandSwitch(5000U, 100U); /* 等待5秒，确保扭力稳定 */
-	/* 先处理异常边界，避免扭力数据状态机带故障继续运行。 */
 	if (wait_ret != NO_ERROR) {
 		return wait_ret;
 	}
@@ -198,11 +202,12 @@ uint32_t get_empty_weight(void) {
  * @brief 获取满载扭力
  *        延时5秒后，计算当前扭力与空载扭力的差值，作为满载扭力
  *        并通过串口打印满载扭力
+ *
+ * @return NO_ERROR 表示满载等待完成并记录满载扭力；等待被命令切换、通信故障或超时终止时返回相应 wait_ret。
  */
 uint32_t get_full_weight(void) {
 	printf("正在等待扭力值稳定...\r\n"); /* 打印等待信息 */
 	uint32_t wait_ret = AbortableDelay_CommandSwitch(5000U, 100U); /* 等待5秒，确保扭力稳定 */
-	/* 先处理异常边界，避免扭力数据状态机带故障继续运行。 */
 	if (wait_ret != NO_ERROR) {
 		return wait_ret;
 	}
@@ -289,7 +294,6 @@ Weight_StateTypeDef check_zero_point_status(void)
 uint32_t CheckWeightCollision(void)
 {
 	uint32_t comm_ret = Weight_CheckCommunicationTimeout();
-	/* 先处理异常边界，避免扭力数据状态机带故障继续运行。 */
 	if (comm_ret != NO_ERROR) {
 		return comm_ret;
 	}
@@ -400,7 +404,6 @@ uint32_t CheckWeightCollision(void)
                      (long)lower_threshold,
                      (double)cable_mm,
                      (double)sensor_mm);
-            /* 错误 阶段：错误报警 模块：扭力 操作：扭力碰撞检查 原因：碰撞检测 处理：停止电机 详情：detail */
             ErrorLog_WarnDetail(ERROR_LOG_MODULE_WEIGHT,
                                 ERROR_LOG_OP_WEIGHT_COLLISION,
                                 ERROR_LOG_REASON_COLLISION,
@@ -437,7 +440,6 @@ uint32_t CheckWeightCollision(void)
                      (long)lower_threshold,
                      (double)cable_mm,
                      (double)sensor_mm);
-            /* 错误 阶段：错误报警 模块：扭力 操作：扭力碰撞检查 原因：碰撞检测 处理：停止电机 详情：detail */
             ErrorLog_WarnDetail(ERROR_LOG_MODULE_WEIGHT,
                                 ERROR_LOG_OP_WEIGHT_COLLISION,
                                 ERROR_LOG_REASON_COLLISION,
@@ -493,7 +495,6 @@ uint32_t CheckWeightCollision(void)
                      (long)lower_threshold,
                      (double)cable_mm,
                      (double)sensor_mm);
-            /* 错误 阶段：错误报警 模块：扭力 操作：扭力碰撞检查 原因：碰撞检测 处理：停止电机 详情：detail */
             ErrorLog_WarnDetail(ERROR_LOG_MODULE_WEIGHT,
                                 ERROR_LOG_OP_WEIGHT_COLLISION,
                                 ERROR_LOG_REASON_COLLISION,
@@ -528,7 +529,6 @@ uint32_t CheckWeightCollision(void)
                      (long)lower_threshold,
                      (double)cable_mm,
                      (double)sensor_mm);
-            /* 错误 阶段：错误报警 模块：扭力 操作：扭力碰撞检查 原因：碰撞检测 处理：停止电机 详情：detail */
             ErrorLog_WarnDetail(ERROR_LOG_MODULE_WEIGHT,
                                 ERROR_LOG_OP_WEIGHT_COLLISION,
                                 ERROR_LOG_REASON_COLLISION,

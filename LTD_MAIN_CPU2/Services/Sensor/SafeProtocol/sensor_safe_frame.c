@@ -4,13 +4,23 @@
 
 #include "sensor_safe_crc32c.h"
 
-/* 从冻结的小端线格式读取 16 位字段，避免依赖 CPU 对齐和主机字节序。 */
+/**
+ * @brief 从冻结的小端线格式读取 16 位字段，避免依赖 CPU 对齐和主机字节序。
+ *
+ * @param data 安全协议帧中的连续小端字段首地址；具体读写宽度由当前 U16 或 U32 辅助函数固定。
+ * @return 返回从冻结的小端线格式读取 16 位字段，避免依赖 CPU 对齐和主机字节序得到的主机整数值；函数只处理既定字节序或编码，不执行范围校验。
+ */
 static uint16_t SensorSafe_ReadU16(const uint8_t *data)
 {
     return (uint16_t)((uint16_t)data[0] | ((uint16_t)data[1] << 8U));
 }
 
-/* 从冻结的小端线格式读取 32 位字段，调用方必须先完成边界检查。 */
+/**
+ * @brief 从冻结的小端线格式读取 32 位字段，调用方必须先完成边界检查。
+ *
+ * @param data 安全协议帧中的连续小端字段首地址；具体读写宽度由当前 U16 或 U32 辅助函数固定。
+ * @return 返回从冻结的小端线格式读取 32 位字段，调用方必须先完成边界检查得到的主机整数值；函数只处理既定字节序或编码，不执行范围校验。
+ */
 static uint32_t SensorSafe_ReadU32(const uint8_t *data)
 {
     return (uint32_t)data[0] |
@@ -19,14 +29,24 @@ static uint32_t SensorSafe_ReadU32(const uint8_t *data)
            ((uint32_t)data[3] << 24U);
 }
 
-/* 把 16 位字段逐字节写入线格式，禁止直接强制转换未对齐指针。 */
+/**
+ * @brief 把 16 位字段逐字节写入线格式，禁止直接强制转换未对齐指针。
+ *
+ * @param data 安全协议帧中的连续小端字段首地址；具体读写宽度由当前 U16 或 U32 辅助函数固定。
+ * @param value 待编码写入线格式的 16 位数值。
+ */
 static void SensorSafe_WriteU16(uint8_t *data, uint16_t value)
 {
     data[0] = (uint8_t)(value & 0xFFU);
     data[1] = (uint8_t)((value >> 8U) & 0xFFU);
 }
 
-/* 把 32 位字段逐字节写入线格式，保证不同编译器生成相同帧。 */
+/**
+ * @brief 把 32 位字段逐字节写入线格式，保证不同编译器生成相同帧。
+ *
+ * @param data 安全协议帧中的连续小端字段首地址；具体读写宽度由当前 U16 或 U32 辅助函数固定。
+ * @param value 待编码写入线格式的 32 位数值。
+ */
 static void SensorSafe_WriteU32(uint8_t *data, uint32_t value)
 {
     data[0] = (uint8_t)(value & 0xFFU);
@@ -35,7 +55,12 @@ static void SensorSafe_WriteU32(uint8_t *data, uint32_t value)
     data[3] = (uint8_t)((value >> 24U) & 0xFFU);
 }
 
-/* 只接受协议卷冻结的请求、响应和错误三类控制消息。 */
+/**
+ * @brief 只接受协议卷冻结的请求、响应和错误三类控制消息。
+ *
+ * @param msg_type 类型。
+ * @return 1 表示消息类型是冻结的请求、响应或错误控制帧；其他保留类型返回 0。
+ */
 static uint8_t SensorSafe_IsControlMessageType(uint8_t msg_type)
 {
     return (uint8_t)(((msg_type == (uint8_t)SENSOR_SAFE_MSG_REQ) ||
@@ -43,10 +68,17 @@ static uint8_t SensorSafe_IsControlMessageType(uint8_t msg_type)
                       (msg_type == (uint8_t)SENSOR_SAFE_MSG_ERR)) ? 1U : 0U);
 }
 
-/*
- * 函数用途：仅凭已接收前缀判定候选帧类型和完整帧长度。
- * 调用场景：UART6 流式收包在等待完整帧前调用，不解析业务字段。
- * 关键约束：先检查 SOF 和最小前缀；异常长度不得驱动后续缓冲区访问。
+/**
+ * @brief 仅凭已接收前缀判定候选帧类型和完整帧长度。
+ *
+ * @details 调用场景：UART6 流式收包在等待完整帧前调用，不解析业务字段。
+ * @note 关键约束：先检查 SOF 和最小前缀；异常长度不得驱动后续缓冲区访问。
+ *
+ * @param data 安全协议帧中的连续小端字段首地址；具体读写宽度由当前 U16 或 U32 辅助函数固定。
+ * @param available 当前接收缓冲区中已经可供判帧的字节数。
+ * @param frame_len_out 用于返回根据当前帧前缀判定的完整候选帧长度，单位字节。
+ * @param is_fast_frame_out 用于返回候选帧是否为周期快速上报帧。
+ * @return 返回安全协议校验结果；SENSOR_SAFE_OK 表示帧校验或状态转换成功，其他值保留参数、长度、帧头、CRC、会话、序号、能力及数据有效性等具体失败原因。
  */
 SensorSafeResult SensorSafeFrame_PeekLength(const uint8_t *data,
                                             size_t available,
@@ -89,10 +121,17 @@ SensorSafeResult SensorSafeFrame_PeekLength(const uint8_t *data,
     return SENSOR_SAFE_OK;
 }
 
-/*
- * 函数用途：把控制字段编码为冻结的小端线格式并追加 CRC32C。
- * 调用场景：client 发起 HELLO、测量、配置和诊断控制事务时调用。
- * 关键约束：保留标志、消息类型和载荷上限必须在写缓冲区前完成校验。
+/**
+ * @brief 把控制字段编码为冻结的小端线格式并追加 CRC32C。
+ *
+ * @details 调用场景：client 发起 HELLO、测量、配置和诊断控制事务时调用。
+ * @note 关键约束：保留标志、消息类型和载荷上限必须在写缓冲区前完成校验。
+ *
+ * @param fields 待编码为安全协议控制帧的字段集合。
+ * @param output 用于接收控制帧头、载荷和 CRC32C 的目标字节缓冲区。
+ * @param output_capacity 输出容量。
+ * @param output_len 用于返回实际编码后的完整控制帧长度，单位字节。
+ * @return 返回安全协议校验结果；SENSOR_SAFE_OK 表示帧校验或状态转换成功，其他值保留参数、长度、帧头、CRC、会话、序号、能力及数据有效性等具体失败原因。
  */
 SensorSafeResult SensorSafeFrame_EncodeControl(const SensorSafeControlFields *fields,
                                                uint8_t *output,
@@ -151,10 +190,16 @@ SensorSafeResult SensorSafeFrame_EncodeControl(const SensorSafeControlFields *fi
     return SENSOR_SAFE_OK;
 }
 
-/*
- * 函数用途：校验并解码控制帧，输出只引用调用方持有的原始载荷区。
- * 调用场景：client 在会话语义校验之前执行线格式验收。
- * 关键约束：先校验长度和 CRC，再解释版本、标志及业务字段，失败时不得信任载荷。
+/**
+ * @brief 校验并解码控制帧，输出只引用调用方持有的原始载荷区。
+ *
+ * @details 调用场景：client 在会话语义校验之前执行线格式验收。
+ * @note 关键约束：先校验长度和 CRC，再解释版本、标志及业务字段，失败时不得信任载荷。
+ *
+ * @param frame 待解析、校验或发送的协议帧缓冲区。该只读线端帧有效范围由 frame_len 指定，函数在解码业务字段前完成长度、帧头和 CRC32C 校验。
+ * @param frame_len 协议帧有效长度，单位字节。
+ * @param decoded 用于接收通过完整性校验后的解码帧或响应字段。
+ * @return 返回安全协议校验结果；SENSOR_SAFE_OK 表示帧校验或状态转换成功，其他值保留参数、长度、帧头、CRC、会话、序号、能力及数据有效性等具体失败原因。
  */
 SensorSafeResult SensorSafeFrame_DecodeControl(const uint8_t *frame,
                                                size_t frame_len,
@@ -216,10 +261,16 @@ SensorSafeResult SensorSafeFrame_DecodeControl(const uint8_t *frame,
     return SENSOR_SAFE_OK;
 }
 
-/*
- * 函数用途：校验固定长度周期快报并解码测量值、状态和诊断位。
- * 调用场景：周期上报接收链路在会话防重放检查之前调用。
- * 关键约束：CRC、通信模式、测量模式、保留位和质量范围任一异常均拒绝整帧。
+/**
+ * @brief 校验固定长度周期快报并解码测量值、状态和诊断位。
+ *
+ * @details 调用场景：周期上报接收链路在会话防重放检查之前调用。
+ * @note 关键约束：CRC、通信模式、测量模式、保留位和质量范围任一异常均拒绝整帧。
+ *
+ * @param frame 待解析、校验或发送的协议帧缓冲区。该只读线端帧有效范围由 frame_len 指定，函数在解码业务字段前完成长度、帧头和 CRC32C 校验。
+ * @param frame_len 协议帧有效长度，单位字节。
+ * @param decoded 用于接收通过完整性校验后的解码帧或响应字段。
+ * @return 返回安全协议校验结果；SENSOR_SAFE_OK 表示帧校验或状态转换成功，其他值保留参数、长度、帧头、CRC、会话、序号、能力及数据有效性等具体失败原因。
  */
 SensorSafeResult SensorSafeFrame_DecodeFastReport(const uint8_t *frame,
                                                   size_t frame_len,
@@ -293,10 +344,16 @@ SensorSafeResult SensorSafeFrame_DecodeFastReport(const uint8_t *frame,
     return SENSOR_SAFE_OK;
 }
 
-/*
- * 函数用途：解码控制响应载荷共有的结果、模式、状态和数据新鲜度字段。
- * 调用场景：各业务命令在控制帧和会话校验通过后复用此入口。
- * 关键约束：只接受完整公共前缀；命令专属尾部仍由对应 client 接口检查。
+/**
+ * @brief 解码控制响应载荷共有的结果、模式、状态和数据新鲜度字段。
+ *
+ * @details 调用场景：各业务命令在控制帧和会话校验通过后复用此入口。
+ * @note 关键约束：只接受完整公共前缀；命令专属尾部仍由对应 client 接口检查。
+ *
+ * @param payload 已经通过帧头、长度和 CRC32C 校验的响应载荷起始地址。
+ * @param payload_len 协议载荷有效长度，单位字节。
+ * @param decoded 用于接收通过完整性校验后的解码帧或响应字段。
+ * @return 返回安全协议校验结果；SENSOR_SAFE_OK 表示帧校验或状态转换成功，其他值保留参数、长度、帧头、CRC、会话、序号、能力及数据有效性等具体失败原因。
  */
 SensorSafeResult SensorSafeFrame_DecodeCommonResponse(const uint8_t *payload,
                                                       size_t payload_len,

@@ -5,19 +5,22 @@
  */
 
 #ifndef SENSOR_WIRELESS_PAIRING_H_
+/* SENSOR_WIRELESS_PAIRING_H_ 是本头文件的包含保护标记；首次展开后置位，防止重复包含造成类型或接口重复定义。 */
 #define SENSOR_WIRELESS_PAIRING_H_
 
 #include <stdint.h>
 
+/* 无线模块连接状态快照；将连接有效性、对端 MAC、RSSI 及最近错误作为同一份可发布数据保存。 */
 typedef struct {
-    uint32_t connection_valid;
-    uint32_t mac_valid;
-    uint32_t mac_high;
-    uint32_t mac_mid;
-    uint32_t mac_low;
-    uint32_t rssi_valid;
-    int32_t rssi;
-    uint32_t error_code;
+    /* 无线连接、MAC、RSSI 和错误码的一致性状态快照。 */
+    uint32_t connection_valid; /* 连接查询已得到可信结果的标志；与是否已连接的业务值分开。 */
+    uint32_t mac_valid; /* mac_high、mac_mid 和 mac_low 已组成完整对端 MAC 的标志。 */
+    uint32_t mac_high; /* 对端 MAC 地址高 16 位/字段，按既定寄存器布局发布。 */
+    uint32_t mac_mid; /* 对端 MAC 地址中间字段，按既定寄存器布局发布。 */
+    uint32_t mac_low; /* 对端 MAC 地址低 16 位/字段，按既定寄存器布局发布。 */
+    uint32_t rssi_valid; /* rssi 已由本次有效查询取得的标志；为假时不得显示旧值。 */
+    int32_t rssi; /* 最近一次有效的无线 RSSI，单位为 dBm。 */
+    uint32_t error_code; /* 最近一次无线查询、配对或连接流程的完整统一故障码。 */
 } WirelessConnectionStatus;
 
 /**
@@ -52,7 +55,12 @@ uint32_t WirelessPairing_ReadConnectionStatus(WirelessConnectionStatus *status);
 uint32_t WirelessPairing_UpdateConnectionStatusSnapshot(void);
 
 /**
- * @brief 查询当前 CH9141K 连接状态、发布共享快照，并按蓝牙主从机连接条件返回链路结果。
+ * @brief 查询 CH9141K 蓝牙主机状态，发布共享快照并判断从机链路是否有效。
+ *
+ * 该接口用于上电识别、传感器通信超时归因、配对收尾和串口维护测试；只允许在任务上下文调用，不执行扫描、断开或默认连接保存。
+ *
+ * @param status 用于返回本次 AT 查询得到的临时连接状态；可读取 MAC、RSSI、有效标志和业务错误码。
+ * @return NO_ERROR 表示蓝牙主机可查询且从机连接有效；其他值区分 AT 查询失败、主机未连接从机和命令切换。
  */
 uint32_t WirelessPairing_CheckBluetoothLinkDetailed(WirelessConnectionStatus *status);
 

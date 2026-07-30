@@ -25,15 +25,26 @@
 volatile MeasurementResult g_measurement = {0};   /* 测量结果 */
 volatile DeviceParameters  g_deviceParams = {0};  /* 设备参数 */
 static volatile uint8_t g_device_params_save_pending = 0; /* Deferred save request flag */
+/* 参数保存失败后的剩余自动重试次数，由前台有界递减。 */
 static volatile uint8_t g_device_params_save_retry_count = 0U; /* Deferred save retry count */
 static volatile uint32_t g_device_params_save_request_tick = 0; /* Last deferred save request tick */
 static volatile uint8_t g_device_params_write_snapshot_valid = 0U; /* 写参前快照是否有效。 */
 static volatile uint8_t g_device_params_factory_restore_in_progress = 0U; /* 恢复出厂覆盖整套参数期间关闭并发写入口。 */
 static DeviceParameters g_device_params_write_snapshot; /* 写参前快照，供主循环延后打印差异。 */
+/* 最近一次成功装载参数的来源标签，用于启动和迁移诊断日志。 */
 static const char *g_device_params_last_load_source = "UNKNOWN";
 #ifndef DEVICE_PARAMS_BOOT_FULL_PRINT_ENABLE
+/* 上电后打印完整设备参数清单的编译开关；1 启用，仅用于启动诊断，打印不得位于中断上下文。 */
 #define DEVICE_PARAMS_BOOT_FULL_PRINT_ENABLE 1U
 #endif
+/**
+ * @brief 按事件选择完整参数、保存元数据或跳过保存摘要的输出方式。
+ *
+ * @param event 设备参数打印事件类型，决定日志标题和附加字段。
+ * @param params 完整设备参数只读快照；包含版本、结构长度、测量与协议配置、AO、继电器以及 CRC 等持久字段，函数不会修改该快照。
+ * @param reason 用于诊断输出的 NUL 结尾只读原因文字；该文字补充错误发生背景，不代替函数另行记录或返回的数值错误码。
+ * @param source 用于参数保存诊断的 NUL 结尾来源标签；区分启动加载、命令保存、迁移或其它调用路径。
+ */
 static void print_device_params_event(DeviceParamPrintEvent event, const DeviceParameters *params, const char *reason, const char *source);
 #define AO_NORMAL_CURRENT_MIN_MA_X100 400U /* AO正常输出电流最小值，单位0.01mA。 */
 #define AO_NORMAL_CURRENT_MAX_MA_X100 2000U /* AO正常输出电流最大值，单位0.01mA。 */
@@ -41,27 +52,39 @@ static void print_device_params_event(DeviceParamPrintEvent event, const DeviceP
 #define AO_OUTPUT_CURRENT_MAX_MA_X100 2400U /* AO特殊电流最大值，单位0.01mA。 */
 
 typedef struct {
-    CommandType command;
-    uint32_t values[DEVICE_COMMAND_ARG_COUNT];
-    uint32_t generations[DEVICE_COMMAND_ARG_COUNT];
-    uint8_t valid;
+    /* 命令参数原子快照；命令码、各参数值和独立代际一起复制，防止跨命令读取到混合数据。 */
+    CommandType command; /* 本快照绑定的设备命令码。 */
+    uint32_t values[DEVICE_COMMAND_ARG_COUNT]; /* 按 DeviceCommandArgumentField 索引保存的命令参数值数组。 */
+    uint32_t generations[DEVICE_COMMAND_ARG_COUNT]; /* 各命令参数槽独立的更新代际副本；与参数值一起验证快照未被并发写入撕裂。 */
+    uint8_t valid; /* 命令码、参数值和各代际前后一致、快照可以执行的标志。 */
 } DeviceCommandArgumentSnapshot;
 
+/* 串口或 Modbus 写入侧正在组装的命令参数快照。 */
 static volatile DeviceCommandArgumentSnapshot g_pending_command_arguments;
+/* 命令开始执行时锁存的参数快照，执行期间保持不变。 */
 static DeviceCommandArgumentSnapshot g_active_command_arguments;
+/* 各命令参数槽的更新代际，用于判定快照复制前后是否一致。 */
 static volatile uint32_t g_command_argument_generations[DEVICE_COMMAND_ARG_COUNT];
 
-/*
- * 函数用途：报告CPU2是否正在用出厂值整体覆盖运行参数。
- * 调用场景：UART5 FC10在解析候选参数前判断七个命令参数能否写入。
- * 关键约束：只读取易失标志，不阻塞、不打印，可在UART5中断上下文调用。
+/**
+ * @brief 报告CPU2是否正在用出厂值整体覆盖运行参数。
+ *
+ * @details 调用场景：UART5 FC10在解析候选参数前判断七个命令参数能否写入。
+ * @note 关键约束：只读取易失标志，不阻塞、不打印，可在UART5中断上下文调用。
+ *
+ * @return true 表示 CPU2 正在执行整份出厂参数覆盖，其他持久化写入应避让；false 表示当前没有恢复出厂事务。
  */
 bool DeviceParams_IsFactoryRestoreInProgress(void)
 {
     return g_device_params_factory_restore_in_progress != 0U;
 }
 
-/* 返回指定命令前置参数对应的共享保持寄存器起始地址。 */
+/**
+ * @brief 返回指定命令前置参数对应的共享保持寄存器起始地址。
+ *
+ * @param field 待查询或显示的字段枚举值。该枚举指定七个 CPU2 命令前置参数之一，用于计算位掩码并消费对应确认状态。
+ * @return 返回按当前映射得到的指定命令前置参数对应的共享保持寄存器起始地址；非法输入使用 @brief 说明的兜底地址或无效值。
+ */
 static uint16_t DeviceCommandArguments_RegisterAddress(DeviceCommandArgumentField field)
 {
     static const uint16_t addresses[DEVICE_COMMAND_ARG_COUNT] = {
@@ -77,7 +100,12 @@ static uint16_t DeviceCommandArguments_RegisterAddress(DeviceCommandArgumentFiel
     return (field < DEVICE_COMMAND_ARG_COUNT) ? addresses[field] : HOLDREGISTER_AMOUNT;
 }
 
-/* 从运行参数读取指定命令前置参数。 */
+/**
+ * @brief 从运行参数读取指定命令前置参数。
+ *
+ * @param field 待查询或显示的字段枚举值。该枚举指定七个 CPU2 命令前置参数之一，用于计算位掩码并消费对应确认状态。
+ * @return 返回指定命令当前保存的前置参数原始值；命令不需要或无法映射前置参数时返回 0。
+ */
 static uint32_t DeviceCommandArguments_ReadGlobal(DeviceCommandArgumentField field)
 {
     switch (field) {
@@ -100,7 +128,12 @@ static uint32_t DeviceCommandArguments_ReadGlobal(DeviceCommandArgumentField fie
     }
 }
 
-/* 把指定值写回运行参数；调用方必须持有短临界区。 */
+/**
+ * @brief 把指定值写回运行参数；调用方必须持有短临界区。
+ *
+ * @param field 待查询或显示的字段枚举值。该枚举指定七个 CPU2 命令前置参数之一，用于计算位掩码并消费对应确认状态。
+ * @param value 命令写入使用的输入数值。
+ */
 static void DeviceCommandArguments_WriteGlobal(DeviceCommandArgumentField field, uint32_t value)
 {
     switch (field) {
@@ -130,7 +163,11 @@ static void DeviceCommandArguments_WriteGlobal(DeviceCommandArgumentField field,
     }
 }
 
-/* 在已关闭中断的短临界区内，把当前七字段绑定到待执行命令。 */
+/**
+ * @brief 在已关闭中断的短临界区内，把当前七字段绑定到待执行命令。
+ *
+ * @param command 已被接受、准备执行的 CommandType 命令；七个前置参数将在同一临界区内与其绑定。
+ */
 static void DeviceCommandArguments_CapturePendingLocked(CommandType command)
 {
     uint32_t index;
@@ -145,10 +182,11 @@ static void DeviceCommandArguments_CapturePendingLocked(CommandType command)
     }
 }
 
-/*
- * 函数用途：恢复出厂完成后重新发布期间已经ACK的最新待执行命令。
- * 调用场景：整套默认参数保存完成、重新开放七字段写入口之前。
- * 关键约束：按最终出厂值重新绑定参数；重复恢复命令仍按不可自中断规则丢弃。
+/**
+ * @brief 恢复出厂完成后重新发布期间已经ACK的最新待执行命令。
+ *
+ * @details 调用场景：整套默认参数保存完成、重新开放七字段写入口之前。
+ * @note 关键约束：按最终出厂值重新绑定参数；重复恢复命令仍按不可自中断规则丢弃。
  */
 static void DeviceCommandArguments_RebindAfterFactoryRestore(void)
 {
@@ -171,10 +209,14 @@ static void DeviceCommandArguments_RebindAfterFactoryRestore(void)
     __set_PRIMASK(primask);
 }
 
-/*
- * 函数用途：为本次成功写入涉及的命令前置参数递增逐字段代次。
- * 调用场景：CPU2 FC10 候选参数全部校验通过并提交到 g_deviceParams 后。
- * 关键约束：同值写入也必须递增，防止当前命令收尾清零覆盖下一次同值请求。
+/**
+ * @brief 为本次成功写入涉及的命令前置参数递增逐字段代次。
+ *
+ * @details 调用场景：CPU2 FC10 候选参数全部校验通过并提交到 g_deviceParams 后。
+ * @note 关键约束：同值写入也必须递增，防止当前命令收尾清零覆盖下一次同值请求。
+ *
+ * @param start 本次连续处理范围的起始索引。该值是 CPU2 共享保持寄存器写区间的起始地址，用于记录七个命令前置参数的覆盖掩码。
+ * @param count 参与本次处理的数据项数量。
  */
 void DeviceCommandArguments_RecordWrite(uint16_t start, uint16_t count)
 {
@@ -192,10 +234,13 @@ void DeviceCommandArguments_RecordWrite(uint16_t start, uint16_t count)
     __set_PRIMASK(primask);
 }
 
-/*
- * 函数用途：把当前七字段与已经接受的待执行命令原子绑定。
- * 调用场景：Modbus 命令寄存器写入成功后。
- * 关键约束：只更新 pending 快照，不得覆盖正在执行命令的 active 快照。
+/**
+ * @brief 把当前七字段与已经接受的待执行命令原子绑定。
+ *
+ * @details 调用场景：Modbus 命令寄存器写入成功后。
+ * @note 关键约束：只更新 pending 快照，不得覆盖正在执行命令的 active 快照。
+ *
+ * @param command 已被接受、准备执行的 CommandType 命令；函数原子捕获并绑定当前七个前置参数。
  */
 void DeviceCommandArguments_CapturePending(CommandType command)
 {
@@ -206,10 +251,13 @@ void DeviceCommandArguments_CapturePending(CommandType command)
     __set_PRIMASK(primask);
 }
 
-/*
- * 函数用途：由 CPU2 内部路径入队正式命令并同步绑定当前七字段。
- * 调用场景：上电默认命令、串口命令和业务内部续接命令。
- * 关键约束：命令值和参数快照在同一短临界区发布。
+/**
+ * @brief 由 CPU2 内部路径入队正式命令并同步绑定当前七字段。
+ *
+ * @details 调用场景：上电默认命令、串口命令和业务内部续接命令。
+ * @note 关键约束：命令值和参数快照在同一短临界区发布。
+ *
+ * @param command 准备写入内部待执行槽的正式 CommandType 命令。
  */
 void DeviceCommand_Queue(CommandType command)
 {
@@ -221,10 +269,13 @@ void DeviceCommand_Queue(CommandType command)
     __set_PRIMASK(primask);
 }
 
-/*
- * 函数用途：原子判断是否存在能够切换当前流程的新命令。
- * 调用场景：阻塞测量、传感器通信和电机等待循环的既有退出检查。
- * 关键约束：保持原自中断白名单和重复命令规则，只防止条件清零覆盖并发到达的新命令。
+/**
+ * @brief 原子判断是否存在能够切换当前流程的新命令。
+ *
+ * @details 调用场景：阻塞测量、传感器通信和电机等待循环的既有退出检查。
+ * @note 关键约束：保持原自中断白名单和重复命令规则，只防止条件清零覆盖并发到达的新命令。
+ *
+ * @return true 表示当前 pending 命令满足切换条件，正在运行的可打断流程应退出；false 表示没有待执行命令，或待命令与当前命令重复且不在自打断白名单。
  */
 bool HasEffectiveCommandSwitchRequest(void)
 {
@@ -255,7 +306,11 @@ bool HasEffectiveCommandSwitchRequest(void)
     return switch_requested;
 }
 
-/* 在已关闭中断的短临界区内，把匹配的 pending 参数提升为 active 参数。 */
+/**
+ * @brief 在已关闭中断的短临界区内，把匹配的 pending 参数提升为 active 参数。
+ *
+ * @param command 主循环即将执行的 CommandType 命令；只有与 pending 绑定命令一致时才提升参数快照。
+ */
 static void DeviceCommandArguments_ActivatePendingLocked(CommandType command)
 {
     uint32_t index;
@@ -283,10 +338,14 @@ static void DeviceCommandArguments_ActivatePendingLocked(CommandType command)
     }
 }
 
-/*
- * 函数用途：原子取走一个待执行正式命令，并同步把其 pending 参数提升为 active 参数。
- * 调用场景：主循环在原始串口命令分支之后、自动恢复分支之前调用。
- * 关键约束：命令读取、条件清零和参数提升位于同一短临界区；不消费其它命令的 pending 快照。
+/**
+ * @brief 原子取走一个待执行正式命令，并同步把其 pending 参数提升为 active 参数。
+ *
+ * @details 调用场景：主循环在原始串口命令分支之后、自动恢复分支之前调用。
+ * @note 关键约束：命令读取、条件清零和参数提升位于同一短临界区；不消费其它命令的 pending 快照。
+ *
+ * @param command 命令输出指针；成功取队列时写入待执行 CommandType，队列为空时保持调用方原值。
+ * @return true 表示已原子取走一项 pending 正式命令，并把对应 pending 参数提升为 active 参数；false 表示输出指针为空或当前没有待执行命令。
  */
 bool DeviceCommand_TakePending(CommandType *command)
 {
@@ -312,11 +371,15 @@ bool DeviceCommand_TakePending(CommandType *command)
     return true;
 }
 
-/*
- * 函数用途：在自动恢复重试与最后时刻到达的正式命令之间做一次原子仲裁。
+/**
+ * @brief 在自动恢复重试与最后时刻到达的正式命令之间做一次原子仲裁。
+ *
  * 调用场景：FaultRecovery_Poll 决定重试后、主循环真正执行命令前。
- * 关键约束：有 pending 时保持正式命令优先；否则复用原 active 参数，并在同一临界区发布 current_command。
- * 返回值：true 表示选中了新的 pending 命令，false 表示继续自动重试。
+ *
+ * @param retry_command 命令。
+ * @param selected_command 用于返回恢复流程最终选择执行的设备命令。
+ * @return true 表示选中了新的 pending 命令，false 表示继续自动重试。
+ * @note 关键约束：有 pending 时保持正式命令优先；否则复用原 active 参数，并在同一临界区发布 current_command。
  */
 bool DeviceCommand_PrepareRecoveryExecution(CommandType retry_command,
                                             CommandType *selected_command)
@@ -348,10 +411,14 @@ bool DeviceCommand_PrepareRecoveryExecution(CommandType retry_command,
     return pending_selected;
 }
 
-/*
- * 函数用途：返回当前命令绑定的参数值；非命令上下文返回最新全局值。
- * 调用场景：测量、标定和电机业务消费七个前置参数时。
- * 关键约束：只有 active 命令与 current_command 一致时才读取快照。
+/**
+ * @brief 返回当前命令绑定的参数值；非命令上下文返回最新全局值。
+ *
+ * @details 调用场景：测量、标定和电机业务消费七个前置参数时。
+ * @note 关键约束：只有 active 命令与 current_command 一致时才读取快照。
+ *
+ * @param field 待读取的命令参数字段枚举；必须小于 DEVICE_COMMAND_ARG_COUNT。
+ * @return field 越界时返回 0；活动命令快照与 current_command 一致时返回冻结参数值，否则返回对应字段的最新全局参数值。
  */
 uint32_t DeviceCommandArguments_Get(DeviceCommandArgumentField field)
 {
@@ -366,10 +433,13 @@ uint32_t DeviceCommandArguments_Get(DeviceCommandArgumentField field)
     return DeviceCommandArguments_ReadGlobal(field);
 }
 
-/*
- * 函数用途：消费一次性参数后仅在该字段未被后续写入时清零全局值。
- * 调用场景：油位或水位标定完成后的原有清零位置。
- * 关键约束：后续同值写入也由逐字段代次识别，不能被当前命令收尾误清。
+/**
+ * @brief 消费一次性参数后仅在该字段未被后续写入时清零全局值。
+ *
+ * @details 调用场景：油位或水位标定完成后的原有清零位置。
+ * @note 关键约束：后续同值写入也由逐字段代次识别，不能被当前命令收尾误清。
+ *
+ * @param field 待查询或显示的字段枚举值。该枚举指定七个 CPU2 命令前置参数之一，用于计算位掩码并消费对应确认状态。
  */
 void DeviceCommandArguments_ClearIfUnchanged(DeviceCommandArgumentField field)
 {
@@ -395,7 +465,12 @@ void DeviceCommandArguments_ClearIfUnchanged(DeviceCommandArgumentField field)
     }
     __set_PRIMASK(primask);
 }
-/* 将继电器报警输出枚举值转换成中文打印文本，便于现场调试查看。 */
+/**
+ * @brief 将继电器报警输出枚举值转换成中文打印文本，便于现场调试查看。
+ *
+ * @param value 待转换为现场可读文字的枚举值。
+ * @return 返回继电器报警输出枚举值转换成中文打印文本，便于现场调试查看对应的只读文本首地址；内容由当前输入或语言配置选择，调用方不得修改或释放。
+ */
 static const char * relay_operating_mode_str(uint32_t value)
 {
     switch ((RelayAlarmOperatingMode)value) {
@@ -409,10 +484,10 @@ static const char * relay_operating_mode_str(uint32_t value)
 }
 
 /**
- * @brief 执行系统参数中的 relay_digital_source_str 逻辑。
+ * @brief 返回继电器数字源枚举对应的中文名称。
  *
- * @param value 待处理数值。
- * @return 返回业务对象或缓冲区指针，NULL 表示无有效对象。
+ * @param value 待转换为现场可读文字的枚举值。
+ * @return 返回继电器数字源枚举对应的中文名称对应的只读文本首地址；内容由当前输入或语言配置选择，调用方不得修改或释放。
  */
 static const char * relay_digital_source_str(uint32_t value)
 {
@@ -439,10 +514,10 @@ static const char * relay_digital_source_str(uint32_t value)
 }
 
 /**
- * @brief 执行系统参数中的 relay_contact_type_str 逻辑。
+ * @brief 把继电器触点类型转换为调试打印文字。
  *
- * @param value 待处理数值。
- * @return 返回业务对象或缓冲区指针，NULL 表示无有效对象。
+ * @param value 待转换为现场可读文字的枚举值。
+ * @return 返回调试打印文字对应的只读文本首地址；内容由当前输入或语言配置选择，调用方不得修改或释放。
  */
 static const char * relay_contact_type_str(uint32_t value)
 {
@@ -457,10 +532,10 @@ static const char * relay_contact_type_str(uint32_t value)
 }
 
 /**
- * @brief 执行系统参数中的 relay_alarm_mode_str 逻辑。
+ * @brief 把继电器报警模式转换为调试打印文字。
  *
- * @param value 待处理数值。
- * @return 返回业务对象或缓冲区指针，NULL 表示无有效对象。
+ * @param value 本次报警门限判断使用的实时输入值。
+ * @return 返回调试打印文字对应的只读文本首地址；内容由当前输入或语言配置选择，调用方不得修改或释放。
  */
 static const char * relay_alarm_mode_str(uint32_t value)
 {
@@ -477,10 +552,10 @@ static const char * relay_alarm_mode_str(uint32_t value)
 }
 
 /**
- * @brief 执行系统参数中的 relay_alarm_source_str 逻辑。
+ * @brief 返回继电器报警源枚举对应的中文名称。
  *
- * @param value 待处理数值。
- * @return 返回业务对象或缓冲区指针，NULL 表示无有效对象。
+ * @param value 本次报警门限判断使用的实时输入值。
+ * @return 返回继电器报警源枚举对应的中文名称对应的只读文本首地址；内容由当前输入或语言配置选择，调用方不得修改或释放。
  */
 static const char * relay_alarm_source_str(uint32_t value)
 {
@@ -500,6 +575,12 @@ static const char * relay_alarm_source_str(uint32_t value)
     }
 }
 
+/**
+ * @brief 返回继电器错误动作枚举对应的中文名称。
+ *
+ * @param value 待转换为现场可读文字的枚举值。
+ * @return 返回继电器错误动作枚举对应的中文名称对应的只读文本首地址；内容由当前输入或语言配置选择，调用方不得修改或释放。
+ */
 static const char * relay_error_value_str(uint32_t value)
 {
     switch ((RelayAlarmErrorValue)value) {
@@ -520,7 +601,12 @@ static const char * relay_error_value_str(uint32_t value)
     }
 }
 
-/* 将继电器清锁存命令转换成中文打印文本。 */
+/**
+ * @brief 将继电器清锁存命令转换成中文打印文本。
+ *
+ * @param value 本次报警门限判断使用的实时输入值。
+ * @return 返回继电器清锁存命令转换成中文打印文本对应的只读文本首地址；内容由当前输入或语言配置选择，调用方不得修改或释放。
+ */
 static const char * relay_clear_alarm_str(uint32_t value)
 {
     switch (value) {
@@ -532,6 +618,12 @@ static const char * relay_clear_alarm_str(uint32_t value)
         return "未定义";
     }
 }
+/**
+ * @brief 将继电器报警阈值的 32 位原始位模式还原为单精度浮点数。
+ *
+ * @param raw 旧设备参数中继电器报警值的 IEEE 754 Float32 原始 32 位位模式。
+ * @return 返回与 raw 的 32 位 IEEE 754 位模式完全一致的 float 数值；不执行缩放或范围修正。
+ */
 static float relay_alarm_raw_to_float(uint32_t raw)
 {
     float value;
@@ -561,22 +653,27 @@ static float relay_alarm_raw_to_float(uint32_t raw)
 #define DEVICE_PARAM_PERSIST_START(p) ((uint8_t *)(p) + DEVICE_PARAM_PERSIST_OFFSET) /* 参数存储配置：设备 参数 持久化 启动。 */
 
 /**
- * @brief 执行系统参数中的 relay_alarm_float_to_raw 逻辑。
+ * @brief 把继电器浮点报警阈值转换为 32 位原始位模式。
  *
- * @param value 待处理数值。
- * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ * @param value 本次报警门限判断使用的实时输入值。
+ * @return 返回转换后的 IEEE 754 单精度位模式或浮点值；转换保持原始 32 位，不进行数值缩放。
  */
 static uint32_t relay_alarm_float_to_raw(float value)
 {
     uint32_t raw;
-    /* 按结构或原始字节复制，保持系统参数协议/存储布局不被字段解释改变。 */
+    /* 将继电器报警浮点阈值按 IEEE-754 Float32 原始位模式保存为 uint32_t，避免数值强转改变小数含义。 */
     memcpy(&raw, &value, sizeof(raw));
     return raw;
 }
 
 /* ========================= 参数存储逻辑 ========================= */
 
-/* 根据持久化区计算crc（不含command和crc字段） */
+/**
+ * @brief 根据持久化区计算crc（不含command和crc字段）。
+ *
+ * @param params 完整设备参数只读快照；包含版本、结构长度、测量与协议配置、AO、继电器以及 CRC 等持久字段，函数不会修改该快照。
+ * @return 返回设备参数持久化区域按冻结范围计算的 CRC32，不包含运行命令和 crc 字段本身。
+ */
 static uint32_t device_param_crc(const DeviceParameters *params)
 {
     const uint8_t *crc_base = DEVICE_PARAM_PERSIST_START(params);
@@ -585,10 +682,9 @@ static uint32_t device_param_crc(const DeviceParameters *params)
 }
 
 /**
- * @brief 清除或复位系统参数中的 clear_relay_alarm_runtime_commands 逻辑。
+ * @brief 清除四路继电器的瞬时锁存清除命令。
  *
- * @param params 输入/输出指针。
- * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ * @param params 待清除运行态瞬时命令的 DeviceParameters 可写对象；函数只把四路继电器 clear_alarm 字段复位，不修改其它持久配置。
  */
 static void clear_relay_alarm_runtime_commands(DeviceParameters *params)
 {
@@ -600,6 +696,11 @@ static void clear_relay_alarm_runtime_commands(DeviceParameters *params)
 #define MOTOR_LOCAL_CIRC_MAX_001MM  (5000000u)  /* 5000.000mm，防止旧 reserved 脏值被当成有效周长 */
 #define MOTOR_LOCAL_CIRC_FALLBACK_001MM (600000u) /* 默认 600.000mm，用于first_loop_circumference_mm本身也异常时兜底 */
 
+/**
+ * @brief 根据首圈周长生成电机本地周长默认值，并对旧参数脏值执行范围兜底。
+ *
+ * @return 返回由首圈周长换算并限制后的电机本地周长默认值，单位 0.001 mm。
+ */
 static uint32_t device_params_default_motor_local_circ_001mm(void)
 {
     uint32_t value = g_deviceParams.first_loop_circumference_mm * 100U;
@@ -611,7 +712,15 @@ static uint32_t device_params_default_motor_local_circ_001mm(void)
     return value;
 }
 
-/* 软件版本跟随当前固件，避免被 FRAM 里的旧参数覆盖。 */
+/**
+ * @brief 把旧参数存储中的无符号密度 x10 定点值迁移为当前 x100 定点值。
+ *
+ * 输入 0 保持为 0；其他值乘以 DENSITY_PARAM_MIGRATE_FACTOR，乘法超出 uint32_t 范围时饱和为 UINT32_MAX。
+ *
+ * @param raw 旧参数存储中的无符号密度 x10 定点值。
+ * @return raw 为 0 时返回 0；可表示时返回 raw 乘以 10 的 x100 定点值，乘法溢出时返回 UINT32_MAX。
+ * @note 该函数只执行倍率迁移，不解释具体密度字段的业务上下限。
+ */
 static uint32_t density_param_scale_x10_to_x100(uint32_t raw)
 {
     if (raw == 0U) {
@@ -623,6 +732,12 @@ static uint32_t density_param_scale_x10_to_x100(uint32_t raw)
     return raw * DENSITY_PARAM_MIGRATE_FACTOR;
 }
 
+/**
+ * @brief 以旧基准值为中心将密度修正量从 x10 换算为 x100。
+ *
+ * @param raw 旧参数存储中的密度修正 x10 编码，以 DENSITY_CORRECTION_OLD_BASE_RAW 为零点。
+ * @return 返回以当前修正零点为基准的 x100 编码；由旧 x10 编码换算后小于 0 时返回 0，超过 uint32_t 范围时返回 UINT32_MAX。
+ */
 static uint32_t density_correction_scale_x10_to_x100(uint32_t raw)
 {
     int64_t delta = (int64_t)raw - (int64_t)DENSITY_CORRECTION_OLD_BASE_RAW;
@@ -638,6 +753,11 @@ static uint32_t density_correction_scale_x10_to_x100(uint32_t raw)
     return (uint32_t)value;
 }
 
+/**
+ * @brief 当 protocolVersion 小于 13 时，将密度目标、阈值、滞回量和修正量从 x10 迁移为 x100。
+ *
+ * @return 1 表示旧协议密度参数已从 x10 迁移为 x100；无需迁移时返回 0。
+ */
 static int migrate_density_params_runtime(void)
 {
     if (g_deviceParams.protocolVersion >= DENSITY_X100_PROTOCOL_VERSION) {
@@ -650,6 +770,11 @@ static int migrate_density_params_runtime(void)
     g_deviceParams.densityCorrection = density_correction_scale_x10_to_x100(g_deviceParams.densityCorrection);
     return 1;
 }
+/**
+ * @brief 用当前 CPU2 固件版本覆盖 FRAM 中的历史软件版本。
+ *
+ * @return 1 表示 FRAM 中的软件版本已更新为当前 CPU2 固件版本；原值一致时返回 0。
+ */
 static int apply_firmware_version_runtime(void)
 {
     if (g_deviceParams.softwareVersion == CPU2_APP_VERSION_U32) {
@@ -659,8 +784,13 @@ static int apply_firmware_version_runtime(void)
     g_deviceParams.softwareVersion = CPU2_APP_VERSION_U32;
     return 1;
 }
-/* 协议版本固定由当前固件维护。
- * 旧程序没有该语义，原reserved1位置默认为0；新程序统一写入当前协议，供CPU3判断共享数据能力。 */
+/**
+ * @brief 协议版本固定由当前固件维护。
+ *
+ * 旧程序没有该语义，原reserved1位置默认为0；新程序统一写入当前协议，供CPU3判断共享数据能力。
+ *
+ * @return 1 表示 FRAM 中的协议版本已更新为当前固件版本；原值一致时返回 0。
+ */
 static int apply_protocol_version_runtime(void)
 {
     uint32_t old_protocol = g_deviceParams.protocolVersion;
@@ -691,22 +821,29 @@ static int apply_protocol_version_runtime(void)
 
 /* 协议19及更早版本的AO原始布局，仅用于一次性FRAM迁移。 */
 typedef struct {
-    uint32_t range_start_01mm;
-    uint32_t range_end_01mm;
-    uint32_t normal_current_start_mA_x100;
-    uint32_t normal_current_end_mA_x100;
-    uint32_t alarm_high_01mm;
-    uint32_t alarm_low_01mm;
-    uint32_t initial_current_mA_x100;
-    uint32_t high_current_mA_x100;
-    uint32_t low_current_mA_x100;
-    uint32_t fault_current_mA_x100;
-    uint32_t debug_current_mA_x100;
-    uint32_t output_enable;
-    uint32_t reserved27;
+    /* 第 19 版 AO 历史参数布局，仅用于升级迁移，字段偏移不得改变。 */
+    uint32_t range_start_01mm; /* 历史量程起点 0.1 mm 定点值，单位为 0.1 mm；该字段保存已经缩放的整数定点值，换算物理量时只能应用一次缩放。 */
+    uint32_t range_end_01mm; /* 历史量程终点 0.1 mm 定点值，单位为 0.1 mm；该字段保存已经缩放的整数定点值，换算物理量时只能应用一次缩放。 */
+    uint32_t normal_current_start_mA_x100; /* 历史正常量程起点电流，单位为 0.01 mA；该字段保存已经缩放的整数定点值，换算物理量时只能应用一次缩放。 */
+    uint32_t normal_current_end_mA_x100; /* 历史正常量程终点电流，单位为 0.01 mA；该字段保存已经缩放的整数定点值，换算物理量时只能应用一次缩放。 */
+    uint32_t alarm_high_01mm; /* 历史高报警阈值 0.1 mm 定点值，单位为 0.1 mm；该字段保存已经缩放的整数定点值，换算物理量时只能应用一次缩放。 */
+    uint32_t alarm_low_01mm; /* 历史低报警阈值 0.1 mm 定点值，单位为 0.1 mm；该字段保存已经缩放的整数定点值，换算物理量时只能应用一次缩放。 */
+    uint32_t initial_current_mA_x100; /* 历史上电初始电流，单位为 0.01 mA；该字段保存已经缩放的整数定点值，换算物理量时只能应用一次缩放。 */
+    uint32_t high_current_mA_x100; /* 历史高端电流，单位为 0.01 mA；该字段保存已经缩放的整数定点值，换算物理量时只能应用一次缩放。 */
+    uint32_t low_current_mA_x100; /* 历史低端电流，单位为 0.01 mA；该字段保存已经缩放的整数定点值，换算物理量时只能应用一次缩放。 */
+    uint32_t fault_current_mA_x100; /* 故障电流，单位为 0.01 mA；该字段保存已经缩放的整数定点值，换算物理量时只能应用一次缩放。 */
+    uint32_t debug_current_mA_x100; /* 调试电流，单位为 0.01 mA；该字段保存已经缩放的整数定点值，换算物理量时只能应用一次缩放。 */
+    uint32_t output_enable; /* 第 19 版参数中的 AO 输出使能值，仅用于迁移到当前工作模式。 */
+    uint32_t reserved27; /* 第 19 版布局中的保留字，迁移时不得解释为当前参数。 */
 } AoOutputLegacyV19;
 
-/* 返回输出源允许的默认量程上限，单位0.1mm。 */
+/**
+ * @brief 返回输出源允许的默认量程上限，单位0.1mm。
+ *
+ * @param params 用于取得主罐高和水罐高的设备参数快照；传入 NULL 时返回最小安全上限 1。
+ * @param source AO 过程量来源；水位来源优先使用水罐高，其他来源使用主罐高。
+ * @return 返回 AO 来源对应的正向量程上限，单位 0.1 mm；水位优先使用水罐高并回退主罐高，空指针或零高度返回 1，过大值饱和为 INT32_MAX。
+ */
 static int32_t ao_source_range_max_01mm(const DeviceParameters *params, uint32_t source)
 {
     uint32_t max_01mm;
@@ -733,7 +870,12 @@ static int32_t ao_source_range_max_01mm(const DeviceParameters *params, uint32_t
     return (int32_t)max_01mm;
 }
 
-/* 为指定输出源装载0%和100%的默认量程。 */
+/**
+ * @brief 为指定输出源装载0%和100%的默认量程。
+ *
+ * @param params 完整设备参数只读快照；包含版本、结构长度、测量与协议配置、AO、继电器以及 CRC 等持久字段，函数不会修改该快照。
+ * @param config 可写 AO 输出配置对象；函数按职责填充默认值或当前快照，字段覆盖模式、来源、量程、电流修正、阻尼、故障动作、上电电流和仿真电流。
+ */
 static void ao_load_default_range(const DeviceParameters *params, AoOutputConfig *config)
 {
     if (config == NULL) {
@@ -743,7 +885,12 @@ static void ao_load_default_range(const DeviceParameters *params, AoOutputConfig
     config->range_100_01mm = ao_source_range_max_01mm(params, config->output_source);
 }
 
-/* 建立当前AO出厂配置，供恢复默认和旧协议迁移共用。 */
+/**
+ * @brief 建立当前AO出厂配置，供恢复默认和旧协议迁移共用。
+ *
+ * @param params 完整设备参数只读快照；包含版本、结构长度、测量与协议配置、AO、继电器以及 CRC 等持久字段，函数不会修改该快照。
+ * @param config 可写 AO 输出配置对象；函数按职责填充默认值或当前快照，字段覆盖模式、来源、量程、电流修正、阻尼、故障动作、上电电流和仿真电流。
+ */
 static void ao_load_default_config(const DeviceParameters *params, AoOutputConfig *config)
 {
     if (config == NULL) {
@@ -765,7 +912,13 @@ static void ao_load_default_config(const DeviceParameters *params, AoOutputConfi
     config->simulation_current_mA_x100 = 1200U;
 }
 
-/* 检查当前AO配置是否满足全部枚举、范围和量程约束。 */
+/**
+ * @brief 检查当前AO配置是否满足全部枚举、范围和量程约束。
+ *
+ * @param params 完整设备参数只读快照；包含版本、结构长度、测量与协议配置、AO、继电器以及 CRC 等持久字段，函数不会修改该快照。
+ * @param config 只读 AO 输出配置；包含工作与电流模式、过程量来源、量程、修正、阻尼、故障动作、上电电流、定点输出和仿真电流等持久参数。
+ * @return 1 表示参数指针有效，工作模式、电流模式、输出源、故障模式、各电流和阻尼范围，以及 0% 或 100% 量程边界和非等值约束全部通过；0 表示指针为空，或任一枚举、数值范围、量程上限或交叉约束无效。
+ */
 static int ao_config_is_valid(const DeviceParameters *params, const AoOutputConfig *config)
 {
     int32_t range_max_01mm;
@@ -805,7 +958,11 @@ static int ao_config_is_valid(const DeviceParameters *params, const AoOutputConf
     return 1;
 }
 
-/* 将协议19及更早版本的AO字段迁移为当前配置，不清除其它现场参数。 */
+/**
+ * @brief 将协议19及更早版本的AO字段迁移为当前配置，不清除其它现场参数。
+ *
+ * @return 1 表示检测到协议版本早于 20，旧 AO 字段已迁移为当前配置；0 表示协议版本已是 20 或更高，无需迁移，并不表示执行失败。
+ */
 static int migrate_ao_params_runtime(void)
 {
     AoOutputLegacyV19 legacy;
@@ -849,15 +1006,24 @@ static int migrate_ao_params_runtime(void)
     return 1;
 }
 
+/* 旧版 AO 故障模式枚举，仅用于迁移历史参数到当前故障动作和故障电流配置。 */
 typedef enum {
-    AO_LEGACY_FAULT_MINIMUM = 0U,
-    AO_LEGACY_FAULT_MAXIMUM = 1U,
-    AO_LEGACY_FAULT_LAST_VALID = 2U,
-    AO_LEGACY_FAULT_ACTUAL_VALUE = 3U,
-    AO_LEGACY_FAULT_SET_VALUE = 4U
+    /* 旧参数版本中的 AO 故障输出模式，仅供迁移。 */
+    AO_LEGACY_FAULT_MINIMUM = 0U, /* 旧版故障模式：输出该电流制式的最小故障电流。 */
+    AO_LEGACY_FAULT_MAXIMUM = 1U, /* 旧版故障模式：输出该电流制式的最大故障电流。 */
+    AO_LEGACY_FAULT_LAST_VALID = 2U, /* 旧版故障模式：保持最近一次有效电流。 */
+    AO_LEGACY_FAULT_ACTUAL_VALUE = 3U, /* 旧版故障模式：继续输出按实际过程量换算的电流。 */
+    AO_LEGACY_FAULT_SET_VALUE = 4U /* 旧版故障模式：输出单独配置的故障设定电流。 */
 } AoLegacyFaultMode;
 
-/* 返回协议22及更早故障最小值/最大值对应的实际电流。 */
+/**
+ * @brief 返回协议22及更早故障最小值/最大值对应的实际电流。
+ *
+ * @param current_mode 协议 22 及更早版本保存的 AO 电流模式，决定兼容故障上下边界。
+ * @param maximum 边界选择标志；非 0 选择最大故障电流，0 选择最小故障电流。
+ * @return 按 current_mode 和 maximum 返回旧协议故障边界，单位 0.01 mA：固定模式为 4.00/22.50 mA，美标模式为 3.50/22.00 mA，其他模式为
+ *         3.50/22.60 mA。
+ */
 static uint32_t ao_legacy_fault_boundary_mA_x100(uint32_t current_mode, uint8_t maximum)
 {
     uint32_t minimum = 350U;
@@ -872,10 +1038,13 @@ static uint32_t ao_legacy_fault_boundary_mA_x100(uint32_t current_mode, uint8_t 
     return (maximum != 0U) ? maximum_value : minimum;
 }
 
-/*
- * 函数用途：把协议20至22的五种故障模式迁移成协议23的两种故障动作。
- * 调用场景：FRAM旧布局迁移完成后、AO严格归一化之前调用。
- * 关键约束：不改变13槽位结构；旧最小/最大值固化到故障电流，旧最近有效值迁移为保持动作。
+/**
+ * @brief 把协议20至22的五种故障模式迁移成协议23的两种故障动作。
+ *
+ * @details 调用场景：FRAM旧布局迁移完成后、AO严格归一化之前调用。
+ * @note 关键约束：不改变13槽位结构；旧最小/最大值固化到故障电流，旧最近有效值迁移为保持动作。
+ *
+ * @return 1 表示旧故障模式、电流或保留字段已迁移为协议 23 运行态；无需修改时返回 0。
  */
 static int migrate_ao_fault_action_runtime(void)
 {
@@ -928,7 +1097,11 @@ static int migrate_ao_fault_action_runtime(void)
             (config->error_level != old_reserved)) ? 1 : 0;
 }
 
-/* 启动加载时归一化AO配置；用户写参走严格拒绝路径，不调用本函数兜底。 */
+/**
+ * @brief 启动加载时归一化AO配置；用户写参走严格拒绝路径，不调用本函数兜底。
+ *
+ * @return 1 表示启动加载时至少一个 AO 非法旧值已归一化；配置原本合法时返回 0。
+ */
 static int normalize_ao_params_runtime(void)
 {
     AoOutputConfig normalized = g_deviceParams.ao_output;
@@ -988,10 +1161,15 @@ static int normalize_ao_params_runtime(void)
     return changed;
 }
 
-/*
- * 函数用途：判断本次 FC10 写区间是否触及 AO 配置或仿真开关。
- * 调用场景：候选 AO 参数校验前区分无关写入和 AO 字段写入。
- * 关键约束：任一 AO 寄存器被触及时都必须执行严格配置校验。
+/**
+ * @brief 判断本次 FC10 写区间是否触及 AO 配置或仿真开关。
+ *
+ * @details 调用场景：候选 AO 参数校验前区分无关写入和 AO 字段写入。
+ * @note 关键约束：任一 AO 寄存器被触及时都必须执行严格配置校验。
+ *
+ * @param start_addr 起始位置地址。
+ * @param reg_count 本次 Modbus 写请求连续覆盖的保持寄存器数量。
+ * @return 1 表示 reg_count 非 0，且 FC10 半开写区间与 AO 工作模式至仿真使能的配置块相交；0 表示写入数量为 0，或写区间完全位于 AO 配置块之外。
  */
 static int ao_write_range_touches_config(uint16_t start_addr, uint16_t reg_count)
 {
@@ -1003,7 +1181,15 @@ static int ao_write_range_touches_config(uint16_t start_addr, uint16_t reg_count
            (write_end > (uint32_t)HOLDREGISTER_DEVICEPARAM_AO_WORK_MODE);
 }
 
-/* 对FC10候选配置执行源切换、非法旧量程回退和严格校验。 */
+/**
+ * @brief 对FC10候选配置执行源切换、非法旧量程回退和严格校验。
+ *
+ * @param current 本次 Modbus 写入前的设备参数快照，用于识别 AO 字段变化和保持未覆盖字段。
+ * @param candidate 待校验或比较的候选值。该可写设备参数副本用于合并 AO 写入字段并保持未覆盖字段，确认后再提交。
+ * @param start_addr 起始位置地址。
+ * @param reg_count 本次待提交 AO 参数写请求覆盖的保持寄存器数量。
+ * @return 0 表示 FC10 候选 AO 配置已完成源切换处理并通过严格校验；地址、范围或配置非法时返回 -1。
+ */
 int prepare_ao_params_for_write(const DeviceParameters *current,
                                 DeviceParameters *candidate,
                                 uint16_t start_addr,
@@ -1050,9 +1236,15 @@ int prepare_ao_params_for_write(const DeviceParameters *current,
     return (ao_config_is_valid(candidate, &candidate->ao_output) != 0) ? 0 : -1;
 }
 
-/* 修正新增参数的非法值。
- * reserved6/reserved7 复用为position_count_mode和motor_count_first_loop_circumference_mm后，旧 FRAM 里可能残留任意非 0 值。
- * 这里既修正 RAM，又把是否修正返回给 load_device_params()，由加载流程决定是否写回 FRAM。 */
+/**
+ * @brief 修正新增参数的非法值。
+ *
+ * reserved6/reserved7 复用为position_count_mode和motor_count_first_loop_circumference_mm后，旧 FRAM 里可能残留任意非
+ * 0 值。
+ * 这里既修正 RAM，又把是否修正返回给 load_device_params()，由加载流程决定是否写回 FRAM。
+ *
+ * @return 1 表示至少一个新增设备参数非法值已修正；全部合法时返回 0。
+ */
 static int normalize_device_params_runtime(void)
 {
     int changed = 0;
@@ -1092,7 +1284,7 @@ static int normalize_device_params_runtime(void)
         changed = 1;
     }
 
-    /* 先处理异常边界，避免系统参数状态机带故障继续运行。 */
+    /* 自动恢复次数超过固件允许上限时恢复默认值并标记参数已归一化，后续由保存流程修复持久化记录。 */
     if (g_deviceParams.fault_auto_recovery_retry_limit > FAULT_AUTO_RECOVERY_RETRY_MAX) {
         g_deviceParams.fault_auto_recovery_retry_limit = FAULT_AUTO_RECOVERY_RETRY_DEFAULT;
         changed = 1;
@@ -1155,29 +1347,43 @@ static int normalize_device_params_runtime(void)
     return changed;
 }
 
-/*
- * 函数用途：Modbus 写参后归一化 AO 相关运行参数。
- * 调用场景：0x10 写保持寄存器后，保存 FRAM 前调用。
- * 关键约束：不处理继电器清报警等一次性命令；调用方负责同步保持寄存器和触发延后保存。
+/**
+ * @brief Modbus 写参后归一化 AO 相关运行参数。
+ *
+ * @details 调用场景：0x10 写保持寄存器后，保存 FRAM 前调用。
+ * @note 关键约束：不处理继电器清报警等一次性命令；调用方负责同步保持寄存器和触发延后保存。
+ *
+ * @return 1 表示 Modbus 写入后至少一个 AO 参数被归一化；无需修正时返回 0。
  */
 int normalize_ao_params_after_write(void)
 {
     return normalize_ao_params_runtime();
 }
 
+/* 单个参数存储槽的装载判定；区分有效记录、未初始化、结构/版本不兼容、CRC 错误和底层读写错误。 */
 typedef enum {
-    DEVICE_PARAM_SLOT_VALID = 0,
-    DEVICE_PARAM_SLOT_UNINITIALIZED,
-    DEVICE_PARAM_SLOT_SIZE_MISMATCH,
-    DEVICE_PARAM_SLOT_VERSION_MISMATCH,
-    DEVICE_PARAM_SLOT_CRC_ERROR,
-    DEVICE_PARAM_SLOT_IO_ERROR
+    /* 参数双槽中单个槽位的装载校验结果。 */
+    DEVICE_PARAM_SLOT_VALID = 0, /* 槽位记录的魔术字、版本、长度和 CRC 均有效。 */
+    DEVICE_PARAM_SLOT_UNINITIALIZED, /* 槽位为空白或尚未写入有效魔术字。 */
+    DEVICE_PARAM_SLOT_SIZE_MISMATCH, /* 槽位记录的结构长度与当前固件不一致。 */
+    DEVICE_PARAM_SLOT_VERSION_MISMATCH, /* 槽位记录版本不受当前迁移逻辑支持。 */
+    DEVICE_PARAM_SLOT_CRC_ERROR, /* 槽位记录 CRC 校验失败。 */
+    DEVICE_PARAM_SLOT_IO_ERROR /* 读取槽位时底层 FRAM 操作失败。 */
 } DeviceParamSlotLoadResult;
 
-/* 内部通用读取接口：
- * 1. 统一对 FRAM 槽位做 magic/version/CRC 校验；
- * 2. verbose=0 时用于静默判重，避免因为每次保存前判重而打大量日志；
- * 3. verbose=1 时用于正常加载诊断，保留详细失败原因。 */
+/**
+ * @brief 读取并校验一个 FRAM 参数槽的魔术字、结构大小、版本和 CRC。
+ *
+ * 1. 统一对 FRAM 槽位做 magic/version/CRC 校验；同时额外核对结构大小，只有全部通过时才把槽位镜像视为有效参数。
+ * 2. verbose=0 时用于静默判重，避免因为每次保存前判重而打大量日志。
+ * 3. verbose=1 时用于正常加载诊断，保留详细失败原因。详细原因覆盖 FRAM 读取、结构字段和 CRC 各个校验阶段。
+ *
+ * @param base_addr 基址地址。
+ * @param out 参数槽镜像输出对象；仅当 FRAM 读取和魔术字、大小、版本、CRC 校验全部通过时可作为有效参数使用。
+ * @param slot_name 用于诊断日志的 FRAM 参数槽名称，例如 A 槽或 B 槽。
+ * @param verbose true 表示输出调试过程日志，false 表示静默执行。
+ * @return 返回参数槽校验结果；DEVICE_PARAM_SLOT_VALID 表示镜像可用，其他值分别表示未初始化、结构大小不匹配、版本不匹配、CRC 错误或 FRAM 读取失败。
+ */
 static DeviceParamSlotLoadResult load_device_params_from_slot_impl(uint32_t base_addr,
                                                                    DeviceParameters *out,
                                                                    const char *slot_name,
@@ -1206,7 +1412,6 @@ static DeviceParamSlotLoadResult load_device_params_from_slot_impl(uint32_t base
                      slot_name,
                      (unsigned long)temp.magic,
                      (unsigned long)DEVICE_PARAM_MAGIC);
-            /* 错误 阶段：错误报警 模块：参数 操作：参数校验 原因：魔术字不匹配 处理：继续尝试 详情：detail */
             ErrorLog_WarnDetail(ERROR_LOG_MODULE_PARAM,
                                 ERROR_LOG_OP_PARAM_VALIDATE,
                                 ERROR_LOG_REASON_PARAM_MAGIC,
@@ -1230,7 +1435,6 @@ static DeviceParamSlotLoadResult load_device_params_from_slot_impl(uint32_t base
                      slot_name,
                      (unsigned long)temp.struct_size,
                      (unsigned long)sizeof(DeviceParameters));
-            /* 错误 阶段：错误报警 模块：参数 操作：参数校验 原因：结构体大小不匹配 处理：继续尝试 详情：detail */
             ErrorLog_WarnDetail(ERROR_LOG_MODULE_PARAM,
                                 ERROR_LOG_OP_PARAM_VALIDATE,
                                 ERROR_LOG_REASON_PARAM_SIZE,
@@ -1254,7 +1458,6 @@ static DeviceParamSlotLoadResult load_device_params_from_slot_impl(uint32_t base
                      slot_name,
                      (unsigned long)temp.param_version,
                      (unsigned long)DEVICE_PARAM_VERSION);
-            /* 错误 阶段：错误报警 模块：参数 操作：参数校验 原因：版本不匹配 处理：继续尝试 详情：detail */
             ErrorLog_WarnDetail(ERROR_LOG_MODULE_PARAM,
                                 ERROR_LOG_OP_PARAM_VALIDATE,
                                 ERROR_LOG_REASON_PARAM_VERSION,
@@ -1280,7 +1483,6 @@ static DeviceParamSlotLoadResult load_device_params_from_slot_impl(uint32_t base
                          slot_name,
                          (unsigned long)calc_crc,
                          (unsigned long)temp.crc);
-                /* 错误 阶段：错误报警 模块：参数 操作：参数校验 原因：CRC不匹配 处理：继续尝试 详情：detail */
                 ErrorLog_WarnDetail(ERROR_LOG_MODULE_PARAM,
                                     ERROR_LOG_OP_PARAM_VALIDATE,
                                     ERROR_LOG_REASON_PARAM_CRC,
@@ -1295,7 +1497,13 @@ static DeviceParamSlotLoadResult load_device_params_from_slot_impl(uint32_t base
     return DEVICE_PARAM_SLOT_VALID;
 }
 
-/* 两个参数分区均不可用时，优先返回能够直接定位的校验原因。 */
+/**
+ * @brief 两个参数分区均不可用时，优先返回能够直接定位的校验原因。
+ *
+ * @param slot_a_result 槽位结果。
+ * @param slot_b_result 槽位结果。
+ * @return 返回两个 FRAM 参数槽共同失败时最具定位价值的整机错误码，优先区分 CRC、结构大小、版本、未初始化和介质访问失败。
+ */
 static uint32_t device_param_error_from_slot_results(DeviceParamSlotLoadResult slot_a_result,
                                                      DeviceParamSlotLoadResult slot_b_result)
 {
@@ -1322,9 +1530,13 @@ static uint32_t device_param_error_from_slot_results(DeviceParamSlotLoadResult s
     return PARAM_EEPROM_FAIL;
 }
 
-/* 把当前内存里的 g_deviceParams 整理成“准备写入 FRAM 的完整镜像”。
- * 这一步会顺手补齐 version/size/magic/crc，
- * 保证后面的“判断是否需要保存”与“真正写入的内容”完全一致。 */
+/**
+ * @brief 把当前内存里的 g_deviceParams 整理成“准备写入 FRAM 的完整镜像”。
+ *
+ * 这一步会顺手补齐 version/size/magic/crc，保证后面的“判断是否需要保存”与“真正写入的内容”完全一致。
+ *
+ * @param out 准备写入 FRAM 的完整 DeviceParameters 输出镜像；函数从当前运行参数复制并补齐版本、长度和 CRC 字段。
+ */
 static void build_saved_device_params(DeviceParameters *out)
 {
     apply_firmware_version_runtime();
@@ -1337,8 +1549,14 @@ static void build_saved_device_params(DeviceParameters *out)
     out->crc           = device_param_crc(out);
 }
 
-/* 只比较持久化参数区（sensorType ~ crc 之前）。
- * command 属于运行态指令，不应该因为它的变化就触发整个参数区重写。 */
+/**
+ * @brief 只比较持久化参数区（sensorType ~ crc 之前）。
+ *
+ * @param lhs 持久化参数比较左侧的设备参数快照。
+ * @param rhs 持久化参数比较右侧的设备参数快照。
+ * @return 1 表示两份设备参数在 sensorType 至 crc 前的持久化区域逐字节一致；存在差异时返回 0。
+ * @note command 属于运行态指令，不在持久化比较范围内，命令变化不得触发整个参数区重写。
+ */
 static int device_param_persist_equal(const DeviceParameters *lhs, const DeviceParameters *rhs)
 {
     return memcmp(DEVICE_PARAM_PERSIST_START(lhs),
@@ -1346,15 +1564,27 @@ static int device_param_persist_equal(const DeviceParameters *lhs, const DeviceP
                   DEVICE_PARAM_PERSIST_LEN) == 0;
 }
 
-/* 清除写参前快照，避免一次写参的快照串到后续保存场景。 */
+/**
+ * @brief 清除写参前快照，避免一次写参的快照串到后续保存场景。
+ */
 static void clear_device_params_write_snapshot(void)
 {
     g_device_params_write_snapshot_valid = 0U;
 }
 
-/* 打印本次保存的参数差异：
- * Modbus 批量写参优先使用写入前快照，其它业务保存使用 FRAM 有效槽作为旧值。
- * 该函数只在真正准备写 FRAM 前调用，保存跳过或自修复场景不会输出误导性差异。 */
+/**
+ * @brief 打印本次保存的参数差异：Modbus 批量写参优先使用写入前快照，其它业务保存使用 FRAM 有效槽作为旧值。
+ *
+ * 该函数只在真正准备写 FRAM 前调用，保存跳过或自修复场景不会输出误导性差异。
+ *
+ * @param new_params 待提交的新设备参数快照。
+ * @param slot_a A 槽中最近一次有效的设备参数快照；无有效快照时传入 NULL。
+ * @param slot_a_valid 槽位有效。
+ * @param slot_b B 槽中最近一次有效的设备参数快照；无有效快照时传入 NULL。
+ * @param slot_b_valid 槽位有效。
+ * @param mark_updated 标记更新。
+ * @note Modbus 批量写参优先使用写入前快照；其他保存路径使用 FRAM 有效槽作为旧值基线。
+ */
 static void print_device_params_save_diff(const DeviceParameters *new_params,
                                           const DeviceParameters *slot_a,
                                           int slot_a_valid,
@@ -1389,10 +1619,17 @@ static void print_device_params_save_diff(const DeviceParameters *new_params,
 /* 每个A/B参数槽在一次保存轮次内允许的“写入+完整读回”尝试次数。 */
 #define DEVICE_PARAM_SAVE_RETRY_LIMIT 3U
 
-/*
- * 函数用途：对单个参数槽执行写入、读回和内容校验。
- * 调用场景：参数保存和单槽冗余修复。
- * 关键约束：每次最多尝试 3 次，只有完整镜像一致才返回成功。
+/**
+ * @brief 对单个参数槽执行写入、读回和内容校验。
+ *
+ * @details 调用场景：参数保存和单槽冗余修复。
+ * @note 关键约束：每次最多尝试 3 次，只有完整镜像一致才返回成功。
+ *
+ * @param address 设备参数 FRAM 槽的绝对字节地址；写入后从同一地址回读完整结构并逐字节核对。
+ * @param params 完整设备参数只读快照；包含版本、结构长度、测量与协议配置、AO、继电器以及 CRC 等持久字段，函数不会修改该快照。
+ * @param verify 用于接收参数槽写后完整读回镜像的输出对象。
+ * @param verify_result 用于返回 FRAM 写后回读得到的完整参数槽校验结果。
+ * @return 1 表示参数槽写入、回读和完整内容比较全部通过；任一步失败时返回 0。
  */
 static int write_and_verify_device_param_slot(uint32_t address,
                                               const DeviceParameters *params,
@@ -1417,10 +1654,16 @@ static int write_and_verify_device_param_slot(uint32_t address,
     return 0;
 }
 
-/* 统一的参数保存入口：
- * mark_updated=1：说明这是一次“真正的参数变更”，写入并回读校验成功后递增
- *                 parameter_update_flag，让 CPU3 检测到持久化完成并补读保持寄存器。
- * force_write=1：忽略判重，强制回写 FRAM，主要用于 A/B 分区自修复这种场景。 */
+/**
+ * @brief 统一的参数保存入口：mark_updated=1：说明这是一次“真正的参数变更”，写入并回读校验成功后递增。
+ *
+ * parameter_update_flag，让 CPU3 检测到持久化完成并补读保持寄存器。
+ * force_write=1：忽略判重，强制回写 FRAM，主要用于 A/B 分区自修复这种场景。
+ *
+ * @param mark_updated =1：说明这是一次“真正的参数变更”，写入并回读校验成功后递增。
+ * @param force_write =1：忽略判重，强制回写 FRAM，主要用于 A/B 分区自修复这种场景。
+ * @return true 表示 A/B 原已与目标一致而完成同值确认，或新参数已写入并通过双槽读回校验；false 表示结构超过槽容量、FRAM 写入/读回失败、两个槽均无有效目标镜像，或最终内容校验不一致。
+ */
 static bool save_device_params_internal(int mark_updated, int force_write)
 {
     DeviceParameters params;
@@ -1498,7 +1741,6 @@ static bool save_device_params_internal(int mark_updated, int force_write)
                  (unsigned int)verify_a_result,
                  (unsigned int)verify_b_result,
                  (unsigned int)DEVICE_PARAM_SAVE_RETRY_LIMIT);
-        /* 错误 阶段：错误报警 模块：参数 操作：参数校验 原因：ErrorLog_GetReasonByCode(PARAM_STORAGE_WRITE_VERIFY_FAILED) 处理：停止测量 详情：detail */
         ErrorLog_WarnDetail(ERROR_LOG_MODULE_PARAM,
                             ERROR_LOG_OP_PARAM_VALIDATE,
                             ErrorLog_GetReasonByCode(PARAM_STORAGE_WRITE_VERIFY_FAILED),
@@ -1516,7 +1758,6 @@ static bool save_device_params_internal(int mark_updated, int force_write)
                  "A有效：%u,B有效：%u,已保留单槽新镜像并完成修复尝试",
                  (unsigned int)verify_a_valid,
                  (unsigned int)verify_b_valid);
-        /* 错误 阶段：错误报警 模块：参数 操作：参数校验 原因：参数冗余槽降级 处理：继续运行 详情：detail */
         ErrorLog_WarnDetail(ERROR_LOG_MODULE_PARAM,
                             ERROR_LOG_OP_PARAM_VALIDATE,
                             "参数冗余槽降级",
@@ -1542,7 +1783,14 @@ static bool save_device_params_internal(int mark_updated, int force_write)
     return true;
 }
 
-/* 从指定分区读取并校验设备参数：返回1成功，0失败 */
+/**
+ * @brief 读取指定 FRAM 参数槽并输出可直接定位失败阶段的校验结果。
+ *
+ * @param base_addr 基址地址。
+ * @param out 指定 FRAM 参数槽的 DeviceParameters 输出对象；返回 VALID 时内容已经通过全部结构和 CRC 校验。
+ * @param slot_name 用于校验失败日志的 FRAM 参数槽名称，例如 A 槽或 B 槽。
+ * @return 返回参数槽校验结果；DEVICE_PARAM_SLOT_VALID 表示镜像可用，其他值分别表示未初始化、结构大小不匹配、版本不匹配、CRC 错误或 FRAM 读取失败。
+ */
 static DeviceParamSlotLoadResult load_device_params_from_slot(uint32_t base_addr,
                                                               DeviceParameters *out,
                                                               const char *slot_name)
@@ -1550,17 +1798,18 @@ static DeviceParamSlotLoadResult load_device_params_from_slot(uint32_t base_addr
     return load_device_params_from_slot_impl(base_addr, out, slot_name, 1);
 }
 
-/* 对外的默认保存入口：
- * 表示“用户或业务逻辑确实修改了系统参数”，
- * 因此需要同时进行判重 + 必要时写 FRAM + 递增参数更新标志。 */
+/**
+ * @brief 对外的默认保存入口：表示“用户或业务逻辑确实修改了系统参数”，因此需要同时进行判重 + 必要时写 FRAM + 递增参数更新标志。
+ */
 void save_device_params(void)
 {
     (void)save_device_params_internal(1, 0);
 }
 
-/* Called from the Modbus write path after a 0x10 parameter update.
- * This function only sets a pending flag. The actual FRAM write is moved
- * to the main loop so the UART interrupt path stays short. */
+
+/**
+ * @brief 登记一次延迟参数保存请求，不在通信中断路径写 FRAM。
+ */
 void request_device_params_save(void)
 {
     g_device_params_save_pending = 1;
@@ -1568,9 +1817,10 @@ void request_device_params_save(void)
     g_device_params_save_request_tick = HAL_GetTick();
 }
 
-/* Handle deferred tasks in the main loop.
- * For now this only flushes pending parameter saves, but more deferred
- * work can be merged here later if needed. */
+
+/**
+ * @brief 在主循环中执行待处理的参数保存并按策略重试。
+ */
 void process_device_params_deferred_tasks(void)
 {
     uint32_t now;
@@ -1608,8 +1858,8 @@ void process_device_params_deferred_tasks(void)
     }
 }
 /**
- * @brief 加载或恢复系统参数中的 load_device_params 逻辑。
- * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ * @brief 校验 FRAM A/B 参数槽，选择最新有效副本并修复冗余槽。
+ * @return 1 表示已从 FRAM A 或 B 槽加载、归一化并按需修复冗余副本；容量超限或两个槽均无效时返回 0。
  */
 int load_device_params(void)
 {
@@ -1635,7 +1885,6 @@ int load_device_params(void)
     {
         slot_b_result = load_device_params_from_slot(FRAM_PARAM_B_ADDRESS, &temp, "B");
         if (slot_b_result == DEVICE_PARAM_SLOT_VALID) {
-            /* 错误 阶段：重试成功 模块：参数 操作：FRAM参数分区回退 原因：A分区异常，使用B分区 尝试：1U/1U */
             ErrorLog_Recover(ERROR_LOG_MODULE_PARAM,
                              ERROR_LOG_OP_FRAM_FALLBACK,
                              ERROR_LOG_REASON_FRAM_FALLBACK,
@@ -1648,7 +1897,7 @@ int load_device_params(void)
         }
     }
 
-    /* 按结构或原始字节复制，保持系统参数协议/存储布局不被字段解释改变。 */
+    /* 参数槽校验和版本迁移完成后，把临时结构整体复制到运行态参数；随后再覆盖启动命令并执行固件相关归一化。 */
     memcpy((void * volatile)&g_deviceParams, &temp, sizeof(DeviceParameters));
 
     g_deviceParams.command = g_deviceParams.powerOnDefaultCommand;
@@ -1674,7 +1923,9 @@ int load_device_params(void)
 
 /* ========================= 参数初始化 ========================= */
 
-/* 初始化设备参数模块：连续 3 次读取失败才恢复出厂 */
+/**
+ * @brief 初始化设备参数模块：连续 3 次读取失败才恢复出厂。
+ */
 void init_device_params(void)
 {
     const int MAX_RETRY = 3;
@@ -1692,7 +1943,6 @@ void init_device_params(void)
             break;
         }
         load_error_code = g_measurement.device_status.error_code;
-        /* 错误 阶段：错误重试 模块：参数 操作：FRAM参数分区回退 原因：ErrorLog_GetReasonByCode(load_error_code) 尝试：attempt/MAX_RETRY 错误码：load_error_code 错误名：ErrorLog_GetCodeName(load_error_code) */
         ErrorLog_Retry(ERROR_LOG_MODULE_PARAM,
                        ERROR_LOG_OP_FRAM_FALLBACK,
                        ErrorLog_GetReasonByCode(load_error_code),
@@ -1708,7 +1958,6 @@ void init_device_params(void)
         RestoreFactoryParamsConfig(); /* 内部会调用 save_device_params() */
 
         g_measurement.device_status.error_code = load_error_code;
-        /* 错误 阶段：错误报警 模块：参数 操作：FRAM参数分区回退 原因：ErrorLog_GetReasonByCode(load_error_code) 处理：使用默认参数 */
         ErrorLog_Warn(ERROR_LOG_MODULE_PARAM,
                       ERROR_LOG_OP_FRAM_FALLBACK,
                       ErrorLog_GetReasonByCode(load_error_code),
@@ -1717,9 +1966,17 @@ void init_device_params(void)
 }
 /* ========================= 恢复出厂参数 ========================= */
 
-/*
- * 恢复出厂参数配置
- * 注意: 这里设置的是默认值, 可根据实际项目需要调整
+/**
+ * @brief 恢复出厂参数配置。
+ *
+ * 函数先置位恢复进行标志，关闭七个命令参数写入口，再整体清零 DeviceParameters，防止历史保留字段或并发已应答的新参数混入默认镜像。
+ * 随后逐项重建设备命令、传感器身份与版本、故障策略、电机和编码器、扭力、零点、油位、水位、罐高、密度修正、分布测量、瓦锡兰、SI Profile、三路继电器、4~20 mA 及命令参数默认值。
+ * 继电器通道使用同一套禁用和零阈值配置初始化；AO 配置通过 ao_load_default_config 按当前 DeviceParameters 结构生成，避免手工字段与 AO 模块默认规则分叉。
+ * 全部业务字段完成后写入参数版本、结构长度和 magic，清零待计算 CRC，并调用 save_device_params 把默认镜像持久化到 FRAM。
+ * 保存调用返回后重新绑定命令参数快照，开放写入口并打印完整恢复事件；该函数会同时覆盖 RAM 运行参数和 FRAM 参数镜像，不是只恢复某一参数组。
+ *
+ * @note 这里设置的是默认值, 可根据实际项目需要调整。
+ * @note 恢复期间发生复位或 FRAM 保存失败可能留下默认值写入未完成的镜像；调用场景必须允许后续启动校验和双槽回退处理。
  */
 void RestoreFactoryParamsConfig(void)
 {
@@ -1894,54 +2151,62 @@ void RestoreFactoryParamsConfig(void)
 /* ========================= 参数打印 ========================= */
 
 typedef enum {
-    PARAM_PRINT_TYPE_U32 = 0,
-    PARAM_PRINT_TYPE_I32,
-    PARAM_PRINT_TYPE_U32_UNIT,
-    PARAM_PRINT_TYPE_I32_UNIT,
-    PARAM_PRINT_TYPE_HEX32,
-    PARAM_PRINT_TYPE_VERSION_TEXT,
-    PARAM_PRINT_TYPE_U32_01MM,
-    PARAM_PRINT_TYPE_I32_01MM,
-    PARAM_PRINT_TYPE_U32_001MM,
-    PARAM_PRINT_TYPE_U32_01M_PER_MIN,
-    PARAM_PRINT_TYPE_U32_01MA,
-    PARAM_PRINT_TYPE_U32_001PF,
-    PARAM_PRINT_TYPE_U32_01PF,
-    PARAM_PRINT_TYPE_U32_DENSITY,
-    PARAM_PRINT_TYPE_U32_OIL_LEVEL_THRESHOLD,
-    PARAM_PRINT_TYPE_U32_DENSITY_OFFSET,
-    PARAM_PRINT_TYPE_U32_TEMP_OFFSET,
-    PARAM_PRINT_TYPE_U32_01C,
-    PARAM_PRINT_TYPE_U32_000001_RATIO,
-    PARAM_PRINT_TYPE_RELAY_BLOCK
+    /* 参数诊断打印项的格式和缩放规则。 */
+    PARAM_PRINT_TYPE_U32 = 0, /* 按无符号 32 位整数打印。 */
+    PARAM_PRINT_TYPE_I32, /* 按有符号 32 位整数打印。 */
+    PARAM_PRINT_TYPE_U32_UNIT, /* 按无符号 32 位整数并追加单位打印。 */
+    PARAM_PRINT_TYPE_I32_UNIT, /* 按有符号 32 位整数并追加单位打印。 */
+    PARAM_PRINT_TYPE_HEX32, /* 按 8 位十六进制数打印。 */
+    PARAM_PRINT_TYPE_VERSION_TEXT, /* 把 32 位版本编码拆分为点分版本文本。 */
+    PARAM_PRINT_TYPE_U32_01MM, /* 按 0.1 mm 缩放打印无符号值。 */
+    PARAM_PRINT_TYPE_I32_01MM, /* 按 0.1 mm 缩放打印有符号值。 */
+    PARAM_PRINT_TYPE_U32_001MM, /* 按 0.001 mm 缩放打印无符号值。 */
+    PARAM_PRINT_TYPE_U32_01M_PER_MIN, /* 按 0.01 m/min 缩放打印速度。 */
+    PARAM_PRINT_TYPE_U32_01MA, /* 按 0.01 mA 缩放打印电流。 */
+    PARAM_PRINT_TYPE_U32_001PF, /* 按 0.001 pF 缩放打印电容。 */
+    PARAM_PRINT_TYPE_U32_01PF, /* 按 0.1 pF 缩放打印电容。 */
+    PARAM_PRINT_TYPE_U32_DENSITY, /* 按 0.01 kg/m3 缩放打印密度。 */
+    PARAM_PRINT_TYPE_U32_OIL_LEVEL_THRESHOLD, /* 按液位频率阈值的既定缩放打印。 */
+    PARAM_PRINT_TYPE_U32_DENSITY_OFFSET, /* 按有符号密度修正值的既定编码打印。 */
+    PARAM_PRINT_TYPE_U32_TEMP_OFFSET, /* 按有符号 0.1 ℃ 温度修正值打印。 */
+    PARAM_PRINT_TYPE_U32_01C, /* 按 0.1 ℃ 或 0.1 s 的字段约定打印。 */
+    PARAM_PRINT_TYPE_U32_000001_RATIO, /* 按 0.000001 比率缩放打印尺带伸缩系数。 */
+    PARAM_PRINT_TYPE_RELAY_BLOCK /* 展开并打印四路继电器参数块。 */
 } ParamPrintType;
 
 typedef struct {
-    const char *group;
-    const char *name;
-    uint16_t offset;
-    ParamPrintType type;
+    /* 设备参数诊断打印表项；给出分组、名称、结构偏移、格式和单位。 */
+    const char *group; /* 参数诊断输出的中文分组名称。 */
+    const char *name; /* 设备参数的中文诊断名称。 */
+    uint16_t offset; /* 结构字段或协议映射使用的字节/寄存器偏移，具体单位由所属类型规定。 */
+    ParamPrintType type; /* 表项格式类型，决定读取目标字段后采用的解释和打印方式。 */
     const char *unit; /* 直接工程单位或原始存储倍率，仅用于统一打印格式。 */
 } ParamPrintItem;
 
 typedef enum {
-    RELAY_PARAM_PRINT_U32 = 0,
-    RELAY_PARAM_PRINT_FLOAT_RAW
+    /* 继电器参数诊断打印项的底层解释方式。 */
+    RELAY_PARAM_PRINT_U32 = 0, /* 按无符号 32 位整数解释继电器参数。 */
+    RELAY_PARAM_PRINT_FLOAT_RAW /* 把 32 位原始位模式解释为单精度浮点数。 */
 } RelayParamPrintType;
 
 typedef struct {
-    const char *name;
-    uint16_t offset;
-    RelayParamPrintType type;
+    /* 单路继电器参数诊断打印表项；给出名称、结构偏移和底层解释方式。 */
+    const char *name; /* 继电器参数的中文诊断名称。 */
+    uint16_t offset; /* 结构字段或协议映射使用的字节/寄存器偏移，具体单位由所属类型规定。 */
+    RelayParamPrintType type; /* 表项格式类型，决定读取目标字段后采用的解释和打印方式。 */
 } RelayParamPrintItem;
 
+/* 构造普通 DeviceParameters 字段的打印描述项；自动记录组名、项目名、结构体偏移、显示类型和单位，字段名参数只求偏移不取值。 */
 #define DEVICE_PARAM_ITEM(group_name, item_name, field_name, item_type, item_unit) \
     { (group_name), (item_name), (uint16_t)offsetof(DeviceParameters, field_name), (item_type), (item_unit) }
+/* 构造一个继电器报警配置块的顶层打印描述项；块内字段由专用继电器表展开，顶层偏移固定为 0。 */
 #define DEVICE_PARAM_RELAY_ITEM(group_name) \
     { (group_name), "继电器报警", 0U, PARAM_PRINT_TYPE_RELAY_BLOCK, NULL }
+/* 构造 RelayAlarmConfig 单个字段的打印描述项；使用 offsetof 记录字段偏移，避免结构布局变化后手工地址失配。 */
 #define RELAY_PARAM_ITEM(item_name, field_name, item_type) \
     { (item_name), (uint16_t)offsetof(RelayAlarmConfig, field_name), (item_type) }
 
+/* 设备参数诊断打印表，按结构偏移和格式遍历输出当前配置。 */
 static const ParamPrintItem g_device_param_print_table[] = {
     DEVICE_PARAM_ITEM("指令", "当前指令", command, PARAM_PRINT_TYPE_U32, NULL),
     DEVICE_PARAM_ITEM("指令", "上电默认指令", powerOnDefaultCommand, PARAM_PRINT_TYPE_U32, NULL),
@@ -2057,6 +2322,7 @@ static const ParamPrintItem g_device_param_print_table[] = {
     DEVICE_PARAM_ITEM("元信息/CRC", "参数CRC32", crc, PARAM_PRINT_TYPE_HEX32, NULL)
 };
 
+/* 单路继电器参数诊断打印表，复用于四个通道。 */
 static const RelayParamPrintItem g_relay_param_print_table[] = {
     RELAY_PARAM_ITEM("模式", operating_mode, RELAY_PARAM_PRINT_U32),
     RELAY_PARAM_ITEM("报警位", digital_source, RELAY_PARAM_PRINT_U32),
@@ -2073,6 +2339,13 @@ static const RelayParamPrintItem g_relay_param_print_table[] = {
     RELAY_PARAM_ITEM("清锁存", clear_alarm, RELAY_PARAM_PRINT_U32)
 };
 
+/**
+ * @brief 按打印表偏移读取 32 位无符号字段，并单独处理实际类型不同的命令字段。
+ *
+ * @param params 完整设备参数只读快照；包含版本、结构长度、测量与协议配置、AO、继电器以及 CRC 等持久字段，函数不会修改该快照。
+ * @param item 待显示或判断的菜单项元数据。该参数指向设备参数打印表项，包含字段偏移、名称、数值类型、枚举描述和输出策略。
+ * @return 返回参数打印表目标字段的 32 位无符号原始值；命令类字段按其实际存储类型转换。
+ */
 static uint32_t device_param_item_read_u32(const DeviceParameters *params, const ParamPrintItem *item)
 {
     uint32_t value;
@@ -2094,6 +2367,13 @@ static uint32_t device_param_item_read_u32(const DeviceParameters *params, const
     return value;
 }
 
+/**
+ * @brief 按打印表偏移读取一个 32 位有符号参数字段。
+ *
+ * @param params 完整设备参数只读快照；包含版本、结构长度、测量与协议配置、AO、继电器以及 CRC 等持久字段，函数不会修改该快照。
+ * @param item 待显示或判断的菜单项元数据。该参数指向设备参数打印表项，包含字段偏移、名称、数值类型、枚举描述和输出策略。
+ * @return 返回参数打印表目标字段的 32 位有符号原始值。
+ */
 static int32_t device_param_item_read_i32(const DeviceParameters *params, const ParamPrintItem *item)
 {
     int32_t value;
@@ -2102,6 +2382,13 @@ static int32_t device_param_item_read_i32(const DeviceParameters *params, const 
     return value;
 }
 
+/**
+ * @brief 按继电器打印表偏移读取一个 32 位原始字段。
+ *
+ * @param cfg 只读单路继电器报警配置；包含工作模式、数字源、触点与报警模式、无效值策略、报警源、四级阈值、滞回、阻尼和清除锁存命令。
+ * @param item 待显示或判断的菜单项元数据。该参数指向继电器参数打印表项，包含通道内字段偏移、名称、位模式解释和枚举描述。
+ * @return 返回指定继电器通道配置字段的 32 位原始值。
+ */
 static uint32_t relay_param_item_read_u32(const RelayAlarmConfig *cfg, const RelayParamPrintItem *item)
 {
     uint32_t value;
@@ -2110,10 +2397,15 @@ static uint32_t relay_param_item_read_u32(const RelayAlarmConfig *cfg, const Rel
     return value;
 }
 
-/*
- * 函数用途：返回继电器配置字段的枚举含义。
- * 调用场景：继电器参数 diff 打印，和全量打印保持同一套中文解释。
- * 关键约束：只解释枚举字段，阈值和阻尼等数值字段返回 NULL。
+/**
+ * @brief 返回继电器配置字段的枚举含义。
+ *
+ * @details 调用场景：继电器参数 diff 打印，和全量打印保持同一套中文解释。
+ * @note 关键约束：只解释枚举字段，阈值和阻尼等数值字段返回 NULL。
+ *
+ * @param item 待显示或判断的菜单项元数据。该参数指向继电器参数打印表项，包含通道内字段偏移、名称、位模式解释和枚举描述。
+ * @param value 待转换为现场可读文字的枚举值。
+ * @return 成功时返回指向继电器配置字段的枚举含义的指针；输入非法或未找到匹配项时返回 NULL。
  */
 static const char *relay_param_value_desc(const RelayParamPrintItem *item, uint32_t value)
 {
@@ -2140,6 +2432,12 @@ static const char *relay_param_value_desc(const RelayParamPrintItem *item, uint3
         return NULL;
     }
 }
+/**
+ * @brief 排除命令和持久化元数据，只允许业务字段参与参数差异统计。
+ *
+ * @param item 待显示或判断的菜单项元数据。该参数指向设备参数打印表项，包含字段偏移、名称、数值类型、枚举描述和输出策略。
+ * @return 1 表示目标字段属于可参与参数差异统计的业务持久化字段；命令或存储元数据字段返回 0。
+ */
 static int device_param_item_can_diff(const ParamPrintItem *item)
 {
     if (item == NULL) {
@@ -2159,6 +2457,11 @@ static int device_param_item_can_diff(const ParamPrintItem *item)
     return 1;
 }
 
+/**
+ * @brief 逐通道打印继电器报警配置及枚举含义。
+ *
+ * @param params 完整设备参数只读快照；包含版本、结构长度、测量与协议配置、AO、继电器以及 CRC 等持久字段，函数不会修改该快照。
+ */
 static void print_relay_alarm_params(const DeviceParameters *params)
 {
     for (uint32_t channel = 0U; channel < RELAY_ALARM_CHANNEL_COUNT; channel++) {
@@ -2191,6 +2494,12 @@ static void print_relay_alarm_params(const DeviceParameters *params)
     }
 }
 
+/**
+ * @brief 返回设备参数兼容迁移使用的频率阈值。
+ *
+ * @param raw_threshold 设备参数中的兼容频率阈值 x10 定点值，单位 0.1 Hz；0 表示未配置。
+ * @return raw_threshold 为 0 时返回 0；否则把 0.1 Hz 定点兼容值四舍五入换算为整数 Hz。
+ */
 static uint32_t device_param_frequency_compat_threshold_hz(uint32_t raw_threshold)
 {
     if (raw_threshold == 0U) {
@@ -2199,15 +2508,26 @@ static uint32_t device_param_frequency_compat_threshold_hz(uint32_t raw_threshol
     return (raw_threshold + (DENSITY_PARAM_MIGRATE_FACTOR / 2U)) / DENSITY_PARAM_MIGRATE_FACTOR;
 }
 
+/**
+ * @brief 判断设备参数是否选择密度液位测量方式。
+ *
+ * @param params 待检查的设备参数对象；传入 NULL 时判定为未选择密度液位方式。
+ * @return params 非空且 liquidLevelMeasurementMethod 等于 2 时返回 1；空指针或其他测量方式返回 0。
+ */
 static int device_param_is_density_level_method(const DeviceParameters *params)
 {
     return ((params != NULL) && (params->liquidLevelMeasurementMethod == 2U)) ? 1 : 0;
 }
 
-/*
- * 函数用途：返回和 CPU3 参数菜单一致的枚举含义。
- * 调用场景：设备参数全量打印和写参差异打印。
- * 关键约束：只解释数值，不修改参数，不参与参数范围归一化。
+/**
+ * @brief 返回和 CPU3 参数菜单一致的枚举含义。
+ *
+ * @details 调用场景：设备参数全量打印和写参差异打印。
+ * @note 关键约束：只解释数值，不修改参数，不参与参数范围归一化。
+ *
+ * @param item 待显示或判断的菜单项元数据。该参数指向设备参数打印表项，包含字段偏移、名称、数值类型、枚举描述和输出策略。
+ * @param value 待转换为现场可读文字的枚举值。
+ * @return 成功时返回指向和 CPU3 参数菜单一致的枚举含义的指针；输入非法或未找到匹配项时返回 NULL。
  */
 static const char *device_param_value_desc(const ParamPrintItem *item, uint32_t value)
 {
@@ -2411,10 +2731,16 @@ static const char *device_param_value_desc(const ParamPrintItem *item, uint32_t 
     }
 }
 
-/*
- * 函数用途：把带枚举含义的参数格式化为“值(含义)”。
- * 调用场景：复用在全量打印和 diff 打印中，保证同一字段显示一致。
- * 关键约束：缓冲区不足时由 snprintf 截断，不影响主流程执行。
+/**
+ * @brief 把带枚举含义的参数格式化为“值(含义)”。
+ *
+ * @details 调用场景：复用在全量打印和 diff 打印中，保证同一字段显示一致。
+ * @note 关键约束：缓冲区不足时由 snprintf 截断，不影响主流程执行。
+ *
+ * @param item 待显示或判断的菜单项元数据。该参数指向设备参数打印表项，包含字段偏移、名称、数值类型、枚举描述和输出策略。
+ * @param value 待处理的带枚举含义的参数。
+ * @param buffer 接收无符号参数格式化文本的可写字符缓冲区。
+ * @param buffer_size buffer 的总容量，单位字节，包含字符串结尾的空字符空间。
  */
 static void format_device_param_u32_value(const ParamPrintItem *item, uint32_t value, char *buffer, size_t buffer_size)
 {
@@ -2432,10 +2758,16 @@ static void format_device_param_u32_value(const ParamPrintItem *item, uint32_t v
     }
 }
 
-/*
- * 函数用途：把带单位的参数格式化为工程值。
- * 调用场景：普通 U32_UNIT 参数打印，补充电机电流和重跑次数的现场含义。
- * 关键约束：只做显示换算，不改变实际 IRUN 档位或重跑次数。
+/**
+ * @brief 把带单位的参数格式化为工程值。
+ *
+ * @details 调用场景：普通 U32_UNIT 参数打印，补充电机电流和重跑次数的现场含义。
+ * @note 关键约束：只做显示换算，不改变实际 IRUN 档位或重跑次数。
+ *
+ * @param item 待显示或判断的菜单项元数据。该参数指向设备参数打印表项，包含字段偏移、名称、数值类型、枚举描述和输出策略。
+ * @param value 待处理的带单位的参数。
+ * @param buffer 接收带工程单位参数文本的可写字符缓冲区。
+ * @param buffer_size buffer 的总容量，单位字节，包含字符串结尾的空字符空间。
  */
 static void format_device_param_u32_unit_value(const ParamPrintItem *item, uint32_t value, char *buffer, size_t buffer_size)
 {
@@ -2485,6 +2817,14 @@ static void format_device_param_u32_unit_value(const ParamPrintItem *item, uint3
     }
 }
 
+/**
+ * @brief 组合设备参数调试打印使用的分组与字段标签。
+ *
+ * @param item 待显示或判断的菜单项元数据。该参数指向设备参数打印表项，包含字段偏移、名称、数值类型、枚举描述和输出策略。
+ * @param fallback_unit 参数元数据未提供单位时使用的只读兜底单位文本；允许为空字符串。
+ * @param label 用于接收“参数分组.字段名”调试标签的目标字符缓冲区。
+ * @param label_size 参数打印标签目标缓存的容量，单位字节。
+ */
 static void build_device_param_print_label(const ParamPrintItem *item, const char *fallback_unit, char *label, size_t label_size)
 {
     (void)fallback_unit;
@@ -2496,6 +2836,12 @@ static void build_device_param_print_label(const ParamPrintItem *item, const cha
     (void)snprintf(label, label_size, "%s", item->name);
 }
 
+/**
+ * @brief 按字段类型和工程单位打印一个设备参数项。
+ *
+ * @param params 完整设备参数只读快照；包含版本、结构长度、测量与协议配置、AO、继电器以及 CRC 等持久字段，函数不会修改该快照。
+ * @param item 待显示或判断的菜单项元数据。该参数指向设备参数打印表项，包含字段偏移、名称、数值类型、枚举描述和输出策略。
+ */
 static void print_device_param_item(const DeviceParameters *params, const ParamPrintItem *item)
 {
     uint32_t raw;
@@ -2608,15 +2954,24 @@ static void print_device_param_item(const DeviceParameters *params, const ParamP
         break;
     }
 }
-/*
- * 函数用途：判断全量参数表是否打印该字段。
- * 调用场景：上电、恢复出厂和人工全量打印。
- * 关键约束：全量打印不再屏蔽运行态命令，继电器等特殊块也必须保留。
+/**
+ * @brief 判断全量参数表是否打印该字段。
+ *
+ * @details 调用场景：上电、恢复出厂和人工全量打印。
+ * @note 关键约束：全量打印不再屏蔽运行态命令，继电器等特殊块也必须保留。
+ *
+ * @param item 待显示或判断的菜单项元数据。该参数指向设备参数打印表项，包含字段偏移、名称、数值类型、枚举描述和输出策略。
+ * @return 1 表示 item 指针非空，可由全量参数表打印流程读取该条目；0 表示 item 为空，不得解引用或打印。
  */
 static int device_param_item_can_full_print(const ParamPrintItem *item)
 {
     return (item != NULL) ? 1 : 0;
 }
+/**
+ * @brief 按打印表顺序分组输出允许完整展示的设备参数。
+ *
+ * @param params 完整设备参数只读快照；包含版本、结构长度、测量与协议配置、AO、继电器以及 CRC 等持久字段，函数不会修改该快照。
+ */
 static void print_device_params_items(const DeviceParameters *params)
 {
     const char *current_group = NULL;
@@ -2635,6 +2990,13 @@ static void print_device_params_items(const DeviceParameters *params)
     }
 }
 
+/**
+ * @brief 逐通道逐字段统计两份继电器报警配置的原始值差异。
+ *
+ * @param old_params 更新前的设备参数快照。
+ * @param new_params 待提交的新设备参数快照。
+ * @return 返回两份四路继电器报警配置中原始值不同的字段总数。
+ */
 static uint32_t count_relay_alarm_diff(const DeviceParameters *old_params, const DeviceParameters *new_params)
 {
     uint32_t count = 0U;
@@ -2653,6 +3015,13 @@ static uint32_t count_relay_alarm_diff(const DeviceParameters *old_params, const
     return count;
 }
 
+/**
+ * @brief 统计两份参数快照中可比较业务字段和继电器配置的差异。
+ *
+ * @param old_params 更新前的设备参数快照。
+ * @param new_params 待提交的新设备参数快照。
+ * @return 返回两份设备参数快照中业务字段及继电器配置的差异总数。
+ */
 static uint32_t count_device_params_diff(const DeviceParameters *old_params, const DeviceParameters *new_params)
 {
     uint32_t count = 0U;
@@ -2677,6 +3046,13 @@ static uint32_t count_device_params_diff(const DeviceParameters *old_params, con
     return count;
 }
 
+/**
+ * @brief 按字段类型和工程单位打印单个参数的旧值与新值。
+ *
+ * @param old_params 更新前的设备参数快照。
+ * @param new_params 待提交的新设备参数快照。
+ * @param item 待显示或判断的菜单项元数据。该参数指向设备参数打印表项，包含字段偏移、名称、数值类型、枚举描述和输出策略。
+ */
 static void print_device_param_diff_item(const DeviceParameters *old_params, const DeviceParameters *new_params, const ParamPrintItem *item)
 {
     uint32_t old_raw;
@@ -2815,6 +3191,12 @@ static void print_device_param_diff_item(const DeviceParameters *old_params, con
         break;
     }
 }
+/**
+ * @brief 逐通道打印发生变化的继电器字段及枚举含义。
+ *
+ * @param old_params 更新前的设备参数快照。
+ * @param new_params 待提交的新设备参数快照。
+ */
 static void print_relay_alarm_diff(const DeviceParameters *old_params, const DeviceParameters *new_params)
 {
     uint32_t item_count = (uint32_t)(sizeof(g_relay_param_print_table) / sizeof(g_relay_param_print_table[0]));
@@ -2858,10 +3240,14 @@ static void print_relay_alarm_diff(const DeviceParameters *old_params, const Dev
     }
 }
 
-/*
- * 函数用途：把参数打印场景转换成中文标签。
- * 调用场景：上电、恢复出厂和人工全量打印的标题/结束行。
- * 关键约束：只影响串口打印文本，不改变参数内容和保存流程。
+/**
+ * @brief 把参数打印场景转换成中文标签。
+ *
+ * @details 调用场景：上电、恢复出厂和人工全量打印的标题/结束行。
+ * @note 关键约束：只影响串口打印文本，不改变参数内容和保存流程。
+ *
+ * @param stage 用于诊断日志或参数保存记录的 NUL 结尾阶段名称；标识本次输出对应的加载、比较、写入、回读或协议处理阶段。
+ * @return 返回选中的参数打印场景转换成中文标签首地址；结果可能直接别名引用调用方输入，调用方继续持有其存储并负责保证生命周期。
  */
 static const char *device_param_print_stage_name(const char *stage)
 {
@@ -2879,6 +3265,14 @@ static const char *device_param_print_stage_name(const char *stage)
     }
     return stage;
 }
+/**
+ * @brief 打印指定参数快照的上下文、完整字段表和结束标记。
+ *
+ * @param snapshot 已经通过校验的完整设备参数只读快照；用于按保存阶段打印关键字段和元数据，不会修改持久参数。
+ * @param stage 用于诊断日志或参数保存记录的 NUL 结尾阶段名称；标识本次输出对应的加载、比较、写入、回读或协议处理阶段。
+ * @param reason 用于诊断输出的 NUL 结尾只读原因文字；该文字补充错误发生背景，不代替函数另行记录或返回的数值错误码。
+ * @param source 用于参数保存诊断的 NUL 结尾来源标签；区分启动加载、命令保存、迁移或其它调用路径。
+ */
 static void print_device_params_full(const DeviceParameters *snapshot,
                                      const char *stage,
                                      const char *reason,
@@ -2907,6 +3301,12 @@ static void print_device_params_full(const DeviceParameters *snapshot,
     printf("========================================\r\n");
 }
 
+/**
+ * @brief 打印保存来源以及参数版本、结构长度和 CRC。
+ *
+ * @param params 完整设备参数只读快照；包含版本、结构长度、测量与协议配置、AO、继电器以及 CRC 等持久字段，函数不会修改该快照。
+ * @param source 用于参数保存诊断的 NUL 结尾来源标签；区分启动加载、命令保存、迁移或其它调用路径。
+ */
 static void print_device_params_save_meta(const DeviceParameters *params, const char *source)
 {
     DeviceParameters snapshot;
@@ -2924,6 +3324,14 @@ static void print_device_params_save_meta(const DeviceParameters *params, const 
            (unsigned long)print_params->crc);
 }
 
+/**
+ * @brief 按事件选择完整参数、保存元数据或跳过保存摘要的输出方式。
+ *
+ * @param event 设备参数打印事件类型，决定日志标题和附加字段。
+ * @param params 完整设备参数只读快照；包含版本、结构长度、测量与协议配置、AO、继电器以及 CRC 等持久字段，函数不会修改该快照。
+ * @param reason 用于诊断输出的 NUL 结尾只读原因文字；该文字补充错误发生背景，不代替函数另行记录或返回的数值错误码。
+ * @param source 用于参数保存诊断的 NUL 结尾来源标签；区分启动加载、命令保存、迁移或其它调用路径。
+ */
 static void print_device_params_event(DeviceParamPrintEvent event, const DeviceParameters *params, const char *reason, const char *source)
 {
     switch (event) {
@@ -2949,20 +3357,27 @@ static void print_device_params_event(DeviceParamPrintEvent event, const DeviceP
     }
 }
 
-/*
- * 函数用途：按统一场景入口打印设备参数。
- * 调用场景：上电、恢复出厂、保存摘要和人工调试入口。
- * 关键约束：该函数会直接 printf，不应在中断上下文调用。
+/**
+ * @brief 按统一场景入口打印设备参数。
+ *
+ * @details 调用场景：上电、恢复出厂、保存摘要和人工调试入口。
+ * @note 关键约束：该函数会直接 printf，不应在中断上下文调用。
+ *
+ * @param event 设备参数打印事件类型，决定日志标题和附加字段。
  */
 void DeviceParams_PrintEvent(DeviceParamPrintEvent event)
 {
     print_device_params_event(event, NULL, NULL, NULL);
 }
 
-/*
- * 函数用途：打印两份设备参数之间的差异。
- * 调用场景：保存入口拿到旧参数快照和新参数镜像后统一输出。
- * 关键约束：该函数只打印、不修改参数、不写 FRAM。
+/**
+ * @brief 打印两份设备参数之间的差异。
+ *
+ * @details 调用场景：保存入口拿到旧参数快照和新参数镜像后统一输出。
+ * @note 关键约束：该函数只打印、不修改参数、不写 FRAM。
+ *
+ * @param old_params 更新前的设备参数快照。
+ * @param new_params 待提交的新设备参数快照。
  */
 void DeviceParams_PrintDiff(const DeviceParameters *old_params, const DeviceParameters *new_params)
 {
@@ -2997,10 +3412,13 @@ void DeviceParams_PrintDiff(const DeviceParameters *old_params, const DevicePara
     }
 }
 
-/*
- * 函数用途：记录 Modbus 写参前的设备参数快照。
- * 调用场景：0x10 写入持久化参数区之前调用，供主循环延后保存时打印差异。
- * 关键约束：该函数只复制内存，不打印、不写 FRAM。
+/**
+ * @brief 记录 Modbus 写参前的设备参数快照。
+ *
+ * @details 调用场景：0x10 写入持久化参数区之前调用，供主循环延后保存时打印差异。
+ * @note 关键约束：该函数只复制内存，不打印、不写 FRAM。
+ *
+ * @param params 完整设备参数只读快照；包含版本、结构长度、测量与协议配置、AO、继电器以及 CRC 等持久字段，函数不会修改该快照。
  */
 void DeviceParams_CaptureWriteSnapshot(const DeviceParameters *params)
 {
@@ -3010,6 +3428,9 @@ void DeviceParams_CaptureWriteSnapshot(const DeviceParameters *params)
     }
 }
 
+/**
+ * @brief 按业务分组完整打印当前设备参数快照。
+ */
 void print_device_params(void)
 {
     DeviceParams_PrintEvent(PARAM_PRINT_MANUAL_FULL);
@@ -3036,8 +3457,13 @@ void PrintDensity(const char *title, const DensityMeasurement *d)
 }
 
 /**
- * @brief 打印完整测量结果
- * @param m 测量结果指针
+ * @brief 打印完整测量结果。
+ *
+ * 空指针直接返回；有效快照按设备状态、调试数据、液位、水位、实高、单点测量、单点监测、密度分布和继电器报警运行态分区输出。
+ * 密度分布同时打印平均值、点数和测量时液位；单点明细最多输出前十项，避免完整 200 点结果长时间占用调试串口。
+ * 继电器部分逐通道打印报警输入值、HH、H、HH_H、L、LL、LL_L、综合故障和清除状态，便于将配置判断与实际输出链路对照。
+ *
+ * @param m 测量结果指针；指向待打印的完整快照，传入 NULL 时函数直接返回且不输出。
  */
 void PrintMeasurementResult(const MeasurementResult *m)
 {
@@ -3165,9 +3591,9 @@ void PrintMeasurementResult(const MeasurementResult *m)
     printf("========================【打印结束】========================\r\n");
 }
 /**
- * @brief 默认指令 -> 测量命令 映射
- * @param def_cmd  DefaultCommandType
- * @return         CommandType（测量命令）；无匹配返回 CMD_UNKNOWN
+ * @brief 将上电默认指令枚举映射为实际测量命令枚举。
+ * @param def_cmd 待映射的上电默认指令枚举值。
+ * @return 返回对应的 CommandType 测量命令；默认指令未定义或未建立映射时返回 CMD_UNKNOWN。
  */
 CommandType DefaultCmd_To_MeasureCmd(DefaultCommandType def_cmd)
 {

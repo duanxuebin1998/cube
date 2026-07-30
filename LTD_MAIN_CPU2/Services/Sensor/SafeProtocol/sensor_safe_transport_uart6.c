@@ -5,16 +5,27 @@
 #include "sensor_safe_frame.h"
 #include "usart.h"
 
+/* 安全协议 UART6 默认发送完成超时 200 ms；超时后进入恢复，不能继续复用未确认空闲的发送状态。 */
 #define SENSOR_SAFE_UART6_DEFAULT_TX_TIMEOUT_MS  200U
+/* UART6 恢复排空期间判定线路空闲所需的连续静默时间 5 ms。 */
 #define SENSOR_SAFE_UART6_DEFAULT_DRAIN_IDLE_MS  5U
+/* UART6 恢复排空允许的总时间 30 ms；在窗口内持续丢弃迟到字节，超时后结束本轮清理。 */
 #define SENSOR_SAFE_UART6_DEFAULT_DRAIN_TOTAL_MS 30U
 
+/* UART6 安全协议传输层当前配置。 */
 static SensorSafeTransportUart6Config s_config;
+/* UART6 安全协议传输累计诊断。 */
 static SensorSafeTransportDiagnostics s_diagnostics;
+/* UART6 安全协议收帧和重同步共用缓冲区。 */
 static uint8_t s_rx_buffer[SENSOR_SAFE_UART6_RX_BUFFER_SIZE];
+/* UART6 安全协议传输正在占用外设的互斥标志。 */
 static uint8_t s_busy;
 
-/* 传输诊断计数饱和保持，避免长稳运行后回绕造成故障次数倒退。 */
+/**
+ * @brief 传输诊断计数饱和保持，避免长稳运行后回绕造成故障次数倒退。
+ *
+ * @param counter 本次节拍、重试或统计使用的计数值。指针非 NULL 且当前值未达到 UINT32_MAX 时原地加一，达到上限后饱和保持。
+ */
 static void SensorSafeTransport_IncrementCounter(uint32_t *counter)
 {
     if ((counter != NULL) && (*counter != UINT32_MAX)) {
@@ -22,7 +33,9 @@ static void SensorSafeTransport_IncrementCounter(uint32_t *counter)
     }
 }
 
-/* 把 HAL 位图拆成独立计数，长稳记录可保留各硬件错误分子。 */
+/**
+ * @brief 把 HAL 位图拆成独立计数，长稳记录可保留各硬件错误分子。
+ */
 static void SensorSafeTransport_RecordHalError(void)
 {
     uint32_t error = huart6.ErrorCode;
@@ -55,7 +68,11 @@ static void SensorSafeTransport_RecordHalError(void)
     }
 }
 
-/* 查询上层命令切换请求；未配置回调时保持当前传输继续执行。 */
+/**
+ * @brief 查询上层命令切换请求；未配置回调时保持当前传输继续执行。
+ *
+ * @return 1 表示已配置 should_abort 回调，且回调请求中止当前 UART 等待；0 表示未配置回调，或回调允许继续传输。
+ */
 static uint8_t SensorSafeTransport_ShouldAbort(void)
 {
     if (s_config.should_abort == NULL) {
@@ -64,7 +81,9 @@ static uint8_t SensorSafeTransport_ShouldAbort(void)
     return s_config.should_abort();
 }
 
-/* 恢复外部收发器为接收方向；具体 GPIO 控制由可选平台回调承担。 */
+/**
+ * @brief 恢复外部收发器为接收方向；具体 GPIO 控制由可选平台回调承担。
+ */
 static void SensorSafeTransport_SetReceiveMode(void)
 {
     if (s_config.set_receive_mode != NULL) {
@@ -72,10 +91,11 @@ static void SensorSafeTransport_SetReceiveMode(void)
     }
 }
 
-/*
- * 函数用途：停止 UART6 DMA、记录硬件错误并恢复可再次接收的外设状态。
- * 调用场景：正常收帧结束以及超时、溢出、硬件错误、主动中止的统一出口。
- * 关键约束：必须清除 ORE 和 HAL 错误锁存，避免错误污染下一协议探测。
+/**
+ * @brief 停止 UART6 DMA、记录硬件错误并恢复可再次接收的外设状态。
+ *
+ * @details 调用场景：正常收帧结束以及超时、溢出、硬件错误、主动中止的统一出口。
+ * @note 关键约束：必须清除 ORE 和 HAL 错误锁存，避免错误污染下一协议探测。
  */
 static void SensorSafeTransport_StopDma(void)
 {
@@ -86,7 +106,11 @@ static void SensorSafeTransport_StopDma(void)
     SensorSafeTransport_SetReceiveMode();
 }
 
-/* 根据 DMA 剩余计数计算已接收字节数，异常计数固定返回 0。 */
+/**
+ * @brief 根据 DMA 剩余计数计算已接收字节数，异常计数固定返回 0。
+ *
+ * @return 返回根据 DMA 剩余计数计算已接收字节数，异常计数固定返回 0的有效长度，单位字节；0 表示没有可供消费的数据。
+ */
 static uint16_t SensorSafeTransport_GetReceivedLength(void)
 {
     uint16_t remaining;
@@ -101,10 +125,15 @@ static uint16_t SensorSafeTransport_GetReceivedLength(void)
     return (uint16_t)(SENSOR_SAFE_UART6_RX_BUFFER_SIZE - remaining);
 }
 
-/*
- * 函数用途：清理旧协议、AT 模式或上一次失败事务遗留的 UART6 字节。
- * 调用场景：请求响应事务启动前；周期接收入口不调用，避免丢弃合法快报。
- * 关键约束：连续空闲达到 idle_ms 即结束，并受 total_ms 总上限约束。
+/**
+ * @brief 清理旧协议、AT 模式或上一次失败事务遗留的 UART6 字节。
+ *
+ * @details 调用场景：请求响应事务启动前；周期接收入口不调用，避免丢弃合法快报。
+ * @note 关键约束：连续空闲达到 idle_ms 即结束，并受 total_ms 总上限约束。
+ *
+ * @param idle_ms 进入 AT 操作前要求 UART6 连续无数据的空闲时间，单位 ms。
+ * @param total_ms 本次分片延时或串口接收排空允许占用的总时长，单位 ms。
+ * @return 返回 UART6 传输结果；SENSOR_SAFE_TRANSPORT_OK 表示本次收发阶段完成，其他值区分参数非法、忙、超时、中止、溢出、收发启动失败和硬件错误。
  */
 static SensorSafeTransportResult SensorSafeTransport_Drain(uint32_t idle_ms, uint32_t total_ms)
 {
@@ -131,7 +160,11 @@ static SensorSafeTransportResult SensorSafeTransport_Drain(uint32_t idle_ms, uin
     return SENSOR_SAFE_TRANSPORT_OK;
 }
 
-/* 启动覆盖整个本地缓冲区的 UART6 DMA 接收，失败时统一清理 DMA 状态。 */
+/**
+ * @brief 启动覆盖整个本地缓冲区的 UART6 DMA 接收，失败时统一清理 DMA 状态。
+ *
+ * @return 返回 UART6 传输结果；SENSOR_SAFE_TRANSPORT_OK 表示本次收发阶段完成，其他值区分参数非法、忙、超时、中止、溢出、收发启动失败和硬件错误。
+ */
 static SensorSafeTransportResult SensorSafeTransport_StartReceive(void)
 {
     (void)memset(s_rx_buffer, 0, sizeof(s_rx_buffer));
@@ -145,10 +178,14 @@ static SensorSafeTransportResult SensorSafeTransport_StartReceive(void)
     return SENSOR_SAFE_TRANSPORT_OK;
 }
 
-/*
- * 函数用途：等待 DMA 发送完成并在可打断、超时和硬件错误之间分类返回。
- * 调用场景：请求响应事务发送控制帧后调用。
- * 关键约束：任务上下文按 1 ms 轮询，完成后立即切回接收方向，不可在 ISR 调用。
+/**
+ * @brief 等待 DMA 发送完成并在可打断、超时和硬件错误之间分类返回。
+ *
+ * @details 调用场景：请求响应事务发送控制帧后调用。
+ * @note 关键约束：任务上下文按 1 ms 轮询，完成后立即切回接收方向，不可在 ISR 调用。
+ *
+ * @param timeout_ms 允许等待的最长时间，单位 ms。
+ * @return 返回 UART6 传输结果；SENSOR_SAFE_TRANSPORT_OK 表示本次收发阶段完成，其他值区分参数非法、忙、超时、中止、溢出、收发启动失败和硬件错误。
  */
 static SensorSafeTransportResult SensorSafeTransport_WaitTransmit(uint32_t timeout_ms)
 {
@@ -171,10 +208,16 @@ static SensorSafeTransportResult SensorSafeTransport_WaitTransmit(uint32_t timeo
 }
 
 /* 只用 CRC 完整的后续候选打破伪长度前缀阻塞，语义仍由上层会话校验。 */
-/*
- * 函数用途：在当前 DMA 数据中查找 CRC 已通过的后续完整帧候选。
- * 调用场景：前导 SOF 声明的伪长度阻塞当前扫描时用于重新同步。
- * 关键约束：候选必须完成 frame 层 CRC 校验，不能仅凭 SOF 和长度抢占当前帧。
+/**
+ * @brief 在当前 DMA 数据中查找 CRC 已通过的后续完整帧候选。
+ *
+ * @details 调用场景：前导 SOF 声明的伪长度阻塞当前扫描时用于重新同步。
+ * @note 关键约束：候选必须完成 frame 层 CRC 校验，不能仅凭 SOF 和长度抢占当前帧。
+ *
+ * @param received 当前候选帧已经接收的字节数。
+ * @param start_offset 起始位置。
+ * @param candidate_offset 用于返回 CRC 已通过候选帧相对 DMA 缓冲区起点的字节偏移。
+ * @return 1 表示从 start_offset 起找到完整 SOF 候选，长度检查及快速帧或控制帧解码（含 CRC）均通过，并已写回 candidate_offset；0 表示输出指针为空，或剩余 DMA 数据中没有完整且校验通过的候选帧。
  */
 static uint8_t SensorSafeTransport_FindCompleteCandidate(uint16_t received,
                                                          uint16_t start_offset,
@@ -223,10 +266,18 @@ static uint8_t SensorSafeTransport_FindCompleteCandidate(uint16_t received,
     return 0U;
 }
 
-/*
- * 函数用途：在 DMA 已接收字节中同步 SOF 并提取一帧。
- * 调用场景：请求响应和周期上报共用等待路径。
- * 关键约束：长度字段只决定候选帧边界，CRC 和语义由 frame/session 层继续校验。
+/**
+ * @brief 在 DMA 已接收字节中同步 SOF 并提取一帧。
+ *
+ * @details 调用场景：请求响应和周期上报共用等待路径。
+ * @note 关键约束：长度字段只决定候选帧边界，CRC 和语义由 frame/session 层继续校验。
+ *
+ * @param frame 待解析、校验或发送的协议帧缓冲区。该参数是 UART6 接收帧输出区，容量由 frame_capacity 指定，成功时通过 frame_len 返回完整帧长。
+ * @param frame_capacity 帧容量。
+ * @param frame_len 协议帧有效长度，单位字节。
+ * @param rx_timestamp_ms 完整接收本帧时记录的本机 HAL 毫秒节拍；作为指针传入时由函数写回。
+ * @param timeout_ms 允许等待的最长时间，单位 ms。
+ * @return 返回 UART6 传输结果；SENSOR_SAFE_TRANSPORT_OK 表示本次收发阶段完成，其他值区分参数非法、忙、超时、中止、溢出、收发启动失败和硬件错误。
  */
 static SensorSafeTransportResult SensorSafeTransport_WaitFrame(uint8_t *frame,
                                                                size_t frame_capacity,
@@ -317,10 +368,13 @@ static SensorSafeTransportResult SensorSafeTransport_WaitFrame(uint8_t *frame,
     return SENSOR_SAFE_TRANSPORT_TIMEOUT;
 }
 
-/*
- * 函数用途：初始化 UART6 安全传输配置、诊断计数和方向状态。
- * 调用场景：设备适配层首次初始化安全服务时调用。
- * 关键约束：零超时配置替换为受控默认值；本函数不启动 DMA 或发送数据。
+/**
+ * @brief 初始化 UART6 安全传输配置、诊断计数和方向状态。
+ *
+ * @details 调用场景：设备适配层首次初始化安全服务时调用。
+ * @note 关键约束：零超时配置替换为受控默认值；本函数不启动 DMA 或发送数据。
+ *
+ * @param config UART6 安全协议传输配置；包含收发方向切换回调、中止回调、发送超时、排空空闲门限和排空总超时。
  */
 void SensorSafeTransportUart6_Init(const SensorSafeTransportUart6Config *config)
 {
@@ -342,10 +396,20 @@ void SensorSafeTransportUart6_Init(const SensorSafeTransportUart6Config *config)
     SensorSafeTransport_SetReceiveMode();
 }
 
-/*
- * 函数用途：串行完成清残留、先开接收、DMA 发送和等待单帧响应。
- * 调用场景：client 的全部控制请求响应事务使用。
- * 关键约束：s_busy 保证不可重入；所有失败出口停止 DMA 并释放占用标志。
+/**
+ * @brief 串行完成清残留、先开接收、DMA 发送和等待单帧响应。
+ *
+ * @details 调用场景：client 的全部控制请求响应事务使用。
+ * @note 关键约束：s_busy 保证不可重入；所有失败出口停止 DMA 并释放占用标志。
+ *
+ * @param request 待通过 UART6 发送的安全协议完整请求帧。
+ * @param request_len 待发送安全协议请求帧的有效长度，单位字节。
+ * @param response 用于保存或解析响应数据的缓冲区。该输出区最大容量由 response_capacity 指定，成功时写入完整安全协议响应并通过 response_len 返回长度。
+ * @param response_capacity 容量。
+ * @param response_len 用于返回实际接收的安全协议响应帧长度，单位字节。
+ * @param rx_timestamp_ms 完整接收本帧时记录的本机 HAL 毫秒节拍；作为指针传入时由函数写回。
+ * @param response_timeout_ms 等待传感器完整响应帧的最长时间，单位 ms。
+ * @return 返回 UART6 传输结果；SENSOR_SAFE_TRANSPORT_OK 表示本次收发阶段完成，其他值区分参数非法、忙、超时、中止、溢出、收发启动失败和硬件错误。
  */
 SensorSafeTransportResult SensorSafeTransportUart6_Exchange(const uint8_t *request,
                                                             uint16_t request_len,
@@ -398,10 +462,18 @@ SensorSafeTransportResult SensorSafeTransportUart6_Exchange(const uint8_t *reque
     return result;
 }
 
-/*
- * 函数用途：在周期模式下只启动接收并等待一帧，不发送控制请求。
- * 调用场景：client 轮询传感器主动上报的固定长度快报。
- * 关键约束：不执行 drain，避免把已到达的合法快报当作残留字节丢弃。
+/**
+ * @brief 在周期模式下只启动接收并等待一帧，不发送控制请求。
+ *
+ * @details 调用场景：client 轮询传感器主动上报的固定长度快报。
+ * @note 关键约束：不执行 drain，避免把已到达的合法快报当作残留字节丢弃。
+ *
+ * @param frame 待解析、校验或发送的协议帧缓冲区。该参数是 UART6 接收帧输出区，容量由 frame_capacity 指定，成功时通过 frame_len 返回完整帧长。
+ * @param frame_capacity 帧容量。
+ * @param frame_len 协议帧有效长度，单位字节。
+ * @param rx_timestamp_ms 完整接收本帧时记录的本机 HAL 毫秒节拍；作为指针传入时由函数写回。
+ * @param timeout_ms 允许等待的最长时间，单位 ms。
+ * @return 返回 UART6 传输结果；SENSOR_SAFE_TRANSPORT_OK 表示本次收发阶段完成，其他值区分参数非法、忙、超时、中止、溢出、收发启动失败和硬件错误。
  */
 SensorSafeTransportResult SensorSafeTransportUart6_ReceiveFrame(uint8_t *frame,
                                                                 size_t frame_capacity,
@@ -435,20 +507,30 @@ SensorSafeTransportResult SensorSafeTransportUart6_ReceiveFrame(uint8_t *frame,
     return result;
 }
 
-/* 主动停止当前 UART6 DMA 并释放不可重入标志，供命令切换和协议回退调用。 */
+/**
+ * @brief 主动停止当前 UART6 DMA 并释放不可重入标志，供命令切换和协议回退调用。
+ */
 void SensorSafeTransportUart6_Abort(void)
 {
     SensorSafeTransport_StopDma();
     s_busy = 0U;
 }
 
-/* 返回安全传输是否正在占用 UART6；只用于状态观察，不替代互斥保护。 */
+/**
+ * @brief 返回安全传输是否正在占用 UART6；只用于状态观察，不替代互斥保护。
+ *
+ * @return 1 表示安全传输当前持有 UART6；0 表示空闲。该值仅供观察，不替代互斥。
+ */
 uint8_t SensorSafeTransportUart6_IsBusy(void)
 {
     return s_busy;
 }
 
-/* 复制累计传输诊断快照；空指针时不写输出。 */
+/**
+ * @brief 复制累计传输诊断快照；空指针时不写输出。
+ *
+ * @param diagnostics 用于接收 UART6 超时、中止、溢出和硬件错误累计值的诊断快照。
+ */
 void SensorSafeTransportUart6_GetDiagnostics(SensorSafeTransportDiagnostics *diagnostics)
 {
     if (diagnostics != NULL) {

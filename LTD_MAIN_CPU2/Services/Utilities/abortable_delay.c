@@ -9,6 +9,10 @@
  * 每个分片只调用一次 HAL_Delay，分片结束后检查有效命令切换请求；
  * 返回 STATE_SWITCH 时调用方应按正常切换退出，不进入错误日志。
  * 该函数会阻塞当前任务，不允许在中断上下文调用。
+ *
+ * @param total_ms 本次分片延时或串口接收排空允许占用的总时长，单位 ms。
+ * @param step_ms 可打断延时每次检查命令切换的分片时长，单位 ms。
+ * @return NO_ERROR 表示 total_ms 已按 step_ms 分片等待完成；任一分片检测到有效新命令时立即返回 STATE_SWITCH。
  */
 uint32_t AbortableDelay_CommandSwitch(uint32_t total_ms, uint32_t step_ms)
 {

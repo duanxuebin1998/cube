@@ -6,6 +6,7 @@
  */
 
 #ifndef WARTSILA_MODBUS_WARTSILA_REGISTER_MAP_H_
+/* WARTSILA_MODBUS_WARTSILA_REGISTER_MAP_H_ 是本头文件的包含保护标记；首次展开后置位，防止重复包含造成类型或接口重复定义。 */
 #define WARTSILA_MODBUS_WARTSILA_REGISTER_MAP_H_
 #pragma once
 #include <stdint.h>
@@ -61,6 +62,7 @@
 #define REG_SPREAD_POINT_COUNT         0x0050   /* 分布测量点数, scale = 1 */
 #define REG_SPREAD_OILLEVEL            0x0051   /* 分布测量液位值 (mm), scale = 1 */
 #define REG_SPREAD_UNKNOWN             0x0052   /* 未知，随液位变化 */
+/* Wartsila 分布测量摘要区地址 0x0053 的协议保留字段；当前不承载业务语义，发送端保持兼容占位。 */
 #define REG_SPREAD_RESERVED0           0x0053
 
 #define REG_SPREAD_LOWEST_POINT        0x005A   /* 分布测量最低点 (mm) */
@@ -82,22 +84,28 @@
 #define REG_DENS_PT_POS(i)   (uint16_t)(REG_DENSITY_POINT_BASE + (i) * REG_DENSITY_POINT_STRIDE + 0)
 /* 位置 (mm), scale = 1 */
 
+/* 返回第 i 个密度点的密度字段地址；单位为 kg/m3，协议缩放系数为 10。 */
 #define REG_DENS_PT_VALUE(i) (uint16_t)(REG_DENSITY_POINT_BASE + (i) * REG_DENSITY_POINT_STRIDE + 1)
-/* 密度 (kg/m3), scale = 10 */
 
+/* 返回第 i 个密度点的温度字段地址；单位为摄氏度，协议缩放系数为 100。 */
 #define REG_DENS_PT_TEMP(i)  (uint16_t)(REG_DENSITY_POINT_BASE + (i) * REG_DENSITY_POINT_STRIDE + 2)
-/* 温度 (°C), scale = 100 */
 
+/* 返回第 i 个密度点的第 1 个保留寄存器地址；当前无业务语义，但仍计入固定步长。 */
 #define REG_DENS_PT_RSVD1(i) (uint16_t)(REG_DENSITY_POINT_BASE + (i) * REG_DENSITY_POINT_STRIDE + 3)
+/* 返回第 i 个密度点的第 2 个保留寄存器地址；当前无业务语义，但仍计入固定步长。 */
 #define REG_DENS_PT_RSVD2(i) (uint16_t)(REG_DENSITY_POINT_BASE + (i) * REG_DENSITY_POINT_STRIDE + 4)
+/* 返回第 i 个密度点的第 3 个保留寄存器地址；该字段也是本点布局的最后一个地址。 */
 #define REG_DENS_PT_RSVD3(i) (uint16_t)(REG_DENSITY_POINT_BASE + (i) * REG_DENSITY_POINT_STRIDE + 5)
 
 
 /****************************************************
  * 全寄存器范围（供 0x03/0x10 边界检查）
  ****************************************************/
+/* Wartsila 保持寄存器表的包含式起始地址 0x0000；与结束地址共同用于单地址和连续区间边界校验。 */
 #define HOLDREG_START_ADDR   0x0000
+/* Wartsila 保持寄存器表的包含式结束地址；由最后一个密度点的第三个保留字段计算，点数变化时自动同步。 */
 #define HOLDREG_END_ADDR     ( REG_DENS_PT_RSVD3(REG_DENSITY_POINT_COUNT - 1) )
+/* Wartsila 保持寄存器镜像元素数量；按包含式首末地址计算，必须用于声明 g_holding_regs 的长度。 */
 #define HOLDREG_COUNT        (HOLDREG_END_ADDR - HOLDREG_START_ADDR + 1)
 
 
@@ -106,12 +114,16 @@
  ****************************************************/
 extern uint16_t g_holding_regs[HOLDREG_COUNT];
 
+/* 判断地址 addr 是否落在 Wartsila 保持寄存器闭区间内；该宏只校验单地址，不校验多寄存器字段是否完整。 */
 #define HOLDREG_VALID(addr)  ((addr) >= HOLDREG_START_ADDR && (addr) <= HOLDREG_END_ADDR)
+/* 把合法 Wartsila 协议地址 addr 换算为 g_holding_regs 的零基数组下标；调用前必须先通过 HOLDREG_VALID。 */
 #define HOLDREG_OFFSET(addr) ((addr) - HOLDREG_START_ADDR)
 
+/* 在地址有效时向 Wartsila 保持寄存器镜像写入一个 16 位值；无效地址静默忽略，宏参数不得带有依赖单次求值的副作用。 */
 #define HR_SET(addr, val) \
     do{ if(HOLDREG_VALID(addr)) g_holding_regs[HOLDREG_OFFSET(addr)] = (uint16_t)(val); }while(0)
 
+/* 从 Wartsila 保持寄存器镜像读取一个 16 位值；地址越界时返回 0，因此调用方不能仅凭返回 0 区分合法零值与非法地址。 */
 #define HR_GET(addr) \
     ( HOLDREG_VALID(addr) ? g_holding_regs[HOLDREG_OFFSET(addr)] : 0 )
 

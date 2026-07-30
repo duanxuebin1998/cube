@@ -5,6 +5,7 @@
  */
 
 #ifndef SENSOR_CH9141_AT_H_
+/* SENSOR_CH9141_AT_H_ 是本头文件的包含保护标记；首次展开后置位，防止重复包含造成类型或接口重复定义。 */
 #define SENSOR_CH9141_AT_H_
 
 #include <stdint.h>
@@ -12,21 +13,23 @@
 #define CH9141_AT_RESPONSE_TEXT_SIZE 768U /* CH9141K AT 指令参数：响应 文本 大小。 */
 
 typedef enum {
-    CH9141_AT_WAIT_ACK = 0,
-    CH9141_AT_WAIT_SCAN_END,
-    CH9141_AT_WAIT_LINK,
-    CH9141_AT_WAIT_RSSI,
+    /* CH9141K AT 命令等待结束的判定模式。 */
+    CH9141_AT_WAIT_ACK = 0, /* 等待普通 AT 命令的 OK 或 ERR 结束标志。 */
+    CH9141_AT_WAIT_SCAN_END, /* 等待无线扫描结束标志，并持续收集候选行。 */
+    CH9141_AT_WAIT_LINK, /* 等待连接成功或配对失败标志。 */
+    CH9141_AT_WAIT_RSSI, /* 等待完整 RSSI 文本字段；半 ACK 时仍由恢复流程继续清理。 */
 } CH9141AtWaitMode;
 
 typedef struct {
-    char text[CH9141_AT_RESPONSE_TEXT_SIZE];
-    uint16_t len;
-    uint8_t has_ok;
-    uint8_t has_err;
-    uint8_t has_link_ok;
-    uint8_t has_pair_err;
-    uint8_t has_scan_end;
-    uint8_t has_rssi;
+    /* CH9141K AT 响应解析结果；保留原始文本长度及 OK、ERR、连接、扫描和 RSSI 关键标志。 */
+    char text[CH9141_AT_RESPONSE_TEXT_SIZE]; /* 本次 AT 响应的原始文本副本，固定容量并保证以 NUL 结束。 */
+    uint16_t len; /* text 中不含终止符的有效字节数。 */
+    uint8_t has_ok; /* 响应文本中已经识别到独立 OK 结束标志。 */
+    uint8_t has_err; /* 响应文本中已经识别到通用 ERR 标志。 */
+    uint8_t has_link_ok; /* 响应文本中已经识别到连接成功标志。 */
+    uint8_t has_pair_err; /* 响应文本中已经识别到配对失败标志。 */
+    uint8_t has_scan_end; /* 响应文本中已经识别到扫描结束标志。 */
+    uint8_t has_rssi; /* 响应文本中已经解析出完整 RSSI 字段的标志。 */
 } CH9141AtResponse;
 
 /**
@@ -36,8 +39,14 @@ typedef struct {
  */
 void CH9141_AT_ResetResponse(CH9141AtResponse *response);
 
-/*
+/**
+ * @brief 标记传感器重新上电后的首次百分号透传过滤机会。
+ *
+ * 设备启动或明确重新给传感器供电后，由主循环任务调用。
+ *
  * 标记传感器重新上电，下一次进入 AT 失败且只收到百分号时允许重试一次。
+ *
+ * @note 只允许首次进入 AT 失败且响应仅为百分号时重试一次。
  */
 void CH9141_AT_NotifySensorPowerOn(void);
 

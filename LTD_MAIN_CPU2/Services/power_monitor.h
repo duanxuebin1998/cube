@@ -1,4 +1,5 @@
 #ifndef SERVICES_POWER_MONITOR_H_
+/* SERVICES_POWER_MONITOR_H_ 是本头文件的包含保护标记；首次展开后置位，防止重复包含造成类型或接口重复定义。 */
 #define SERVICES_POWER_MONITOR_H_
 
 #include <stdbool.h>
@@ -10,6 +11,7 @@
  */
 /* 24V 下降到约 20V 时触发安全停机；允许由编译参数覆盖以适配台架校准值。 */
 #ifndef POWER_MONITOR_24V_FAIL_ADC_COUNTS
+/* 24 V 输入下降到约 20 V 时触发安全停机的 ADC 原始计数阈值 2256；允许由编译参数覆盖以适配实际分压和台架校准。 */
 #define POWER_MONITOR_24V_FAIL_ADC_COUNTS       2256U
 #endif
 
@@ -18,6 +20,7 @@
  * 与触发阈值之间保留约 2V 回差，避免电压在边界抖动时反复进出低压状态。
  */
 #ifndef POWER_MONITOR_24V_RECOVER_ADC_COUNTS
+/* 24 V 输入回升到约 22 V 后进入恢复计时的 ADC 原始计数阈值 2482；与停机阈值形成约 2 V 回差，避免边界抖动。 */
 #define POWER_MONITOR_24V_RECOVER_ADC_COUNTS    2482U
 #endif
 
@@ -61,76 +64,109 @@ typedef struct {
     PowerMonitorState monitor_state;      /* ADC/DMA 监控链路当前状态。 */
 } PowerMonitorDebugSnapshot;
 
-/*
- * 函数用途：启动 ADC1 通道12连续采样和24V低压模拟看门狗。
- * 调用场景：CPU2业务初始化开始阶段调用一次。
- * 关键约束：返回准确故障码；失败后由主循环延后服务最多尝试三次局部恢复。
+/**
+ * @brief 启动 ADC1 通道12连续采样和24V低压模拟看门狗。
+ *
+ * @details 调用场景：CPU2业务初始化开始阶段调用一次。
+ * @note 关键约束：返回准确故障码；失败后由主循环延后服务最多尝试三次局部恢复。
  */
 uint32_t PowerMonitor_Start(void);
 
-/*
- * 函数用途：锁存24V低压事件并请求编码器紧急保存。
- * 调用场景：ADC模拟看门狗中断回调。
- * 关键约束：只置标志和投递PendSV，不访问FRAM、不打印、不阻塞。
+/**
+ * @brief 锁存24V低压事件并请求编码器紧急保存。
+ *
+ * @details 调用场景：ADC模拟看门狗中断回调。
+ * @note 关键约束：只置标志和投递PendSV，不访问FRAM、不打印、不阻塞。
  */
 void PowerMonitor_Handle24VWatchdogFromISR(uint32_t adc_sample);
 
-/*
- * 函数用途：检测监控链路、维持紧急保存投递并统计24V稳定恢复时间。
- * 调用场景：SysTick中断每1ms调用。
- * 关键约束：只记录故障和执行硬禁止，不重启ADC/DMA、不访问FRAM、不打印。
+/**
+ * @brief 检测监控链路、维持紧急保存投递并统计24V稳定恢复时间。
+ *
+ * @details 调用场景：SysTick中断每1ms调用。
+ * @note 关键约束：只记录故障和执行硬禁止，不重启ADC/DMA、不访问FRAM、不打印。
  */
 void PowerMonitor_TickFromISR(void);
 
-/*
- * 函数用途：在线程态发布故障并局部恢复ADC/DMA监控链路。
- * 调用场景：App_MainLoop每轮最先调用。
- * 关键约束：每轮最多尝试一次，累计三次失败后保持禁止并返回恢复失败码。
+/**
+ * @brief 在线程态发布故障并局部恢复ADC/DMA监控链路。
+ *
+ * @details 调用场景：App_MainLoop每轮最先调用。
+ * @note 关键约束：每轮最多尝试一次，累计三次失败后保持禁止并返回恢复失败码。
  */
 uint32_t PowerMonitor_ProcessDeferred(void);
 
-/*
- * 函数用途：在编码器可信位置建立后开放紧急位置持久化。
- * 调用场景：启动恢复、回零或人工位置修正后，也可由SysTick自动补布防。
- * 关键约束：函数自身复核可信位置，不能把无效位置布防为可保存状态。
+/**
+ * @brief 在编码器可信位置建立后开放紧急位置持久化。
+ *
+ * @details 调用场景：启动恢复、回零或人工位置修正后，也可由SysTick自动补布防。
+ * @note 关键约束：函数自身复核可信位置，不能把无效位置布防为可保存状态。
  */
 void PowerMonitor_ArmEmergencyPersistence(void);
 
-/*
+/**
+ * @brief 判断 24 V 低压掉电状态当前是否仍然有效。
+ *
  * 以下查询接口均为无阻塞 RAM/寄存器读取，可用于线程态和短中断路径。
  * IsPowerFailActive 表示电压恢复过程；IsMotorInhibited 还包含监控链路故障锁存。
+ *
+ * @return true 表示 24 V 低压掉电状态当前仍然有效；false 表示 24 V 低压掉电状态当前已不再有效。
  */
 bool PowerMonitor_IsPowerFailActive(void);
+/**
+ * @brief 判断电源监控是否仍禁止电机驱动动作。
+ *
+ * @return true 表示电源监控仍禁止电机驱动动作；false 表示电源监控已不再禁止电机驱动动作。
+ */
 bool PowerMonitor_IsMotorInhibited(void);
+/**
+ * @brief 判断电源监控是否已经锁存整机故障码。
+ *
+ * @return true 表示电源监控已经锁存整机故障码；false 表示电源监控尚未锁存整机故障码。
+ */
 bool PowerMonitor_HasLatchedFault(void);
+/**
+ * @brief 返回电源监控当前锁存的整机故障码。
+ *
+ * @return 返回当前锁存的电源监控整机错误码；没有锁存故障时返回 NO_ERROR。
+ */
 uint32_t PowerMonitor_GetLatchedFaultCode(void);
+/**
+ * @brief 读取并返回 24 V 监控 ADC 循环 DMA 的最新原始采样值。
+ *
+ * @return 返回最近一次 24 V ADC 原始采样计数；调用时会先从循环 DMA 读取最新值。
+ */
 uint32_t PowerMonitor_GetLast24VAdcSample(void);
 
-/*
- * 函数用途：在新的顶层正式过程开始时检查电源并解除可恢复锁存。
- * 调用场景：测量命令通过即时控制命令过滤后。
- * 关键约束：只在监控健康、电压稳定且无恢复任务时返回NO_ERROR。
+/**
+ * @brief 在新的顶层正式过程开始时检查电源并解除可恢复锁存。
+ *
+ * @details 调用场景：测量命令通过即时控制命令过滤后。
+ * @note 关键约束：只在监控健康、电压稳定且无恢复任务时返回NO_ERROR。
  */
 uint32_t PowerMonitor_BeginNewProcess(void);
 
-/*
- * 函数用途：记录真实低压紧急位置保存最终失败。
- * 调用场景：主循环消费编码器紧急保存报告时。
- * 关键约束：软件测试保存失败不调用本接口，避免把测试结果伪装成现场故障。
+/**
+ * @brief 记录真实低压紧急位置保存最终失败。
+ *
+ * @details 调用场景：主循环消费编码器紧急保存报告时。
+ * @note 关键约束：软件测试保存失败不调用本接口，避免把测试结果伪装成现场故障。
  */
 void PowerMonitor_ReportEmergencyPersistenceFailure(void);
 
-/*
- * 函数用途：取得24V监测、恢复和紧急保存状态的一致调试快照。
- * 调用场景：线程态处理PWR?查询。
- * 关键约束：只短暂关中断复制RAM状态，不读取FRAM、不打印。
+/**
+ * @brief 取得24V监测、恢复和紧急保存状态的一致调试快照。
+ *
+ * @details 调用场景：线程态处理PWR?查询。
+ * @note 关键约束：只短暂关中断复制RAM状态，不读取FRAM、不打印。
  */
 bool PowerMonitor_GetDebugSnapshot(PowerMonitorDebugSnapshot *snapshot);
 
-/*
- * 函数用途：在线程态模拟一次掉电紧急保存请求。
- * 调用场景：处理PWRTEST串口命令。
- * 关键约束：不伪造ADC低压、不改变恢复状态，只验证FRAM预留与紧急提交链。
+/**
+ * @brief 在线程态模拟一次掉电紧急保存请求。
+ *
+ * @details 调用场景：处理PWRTEST串口命令。
+ * @note 关键约束：不伪造ADC低压、不改变恢复状态，只验证FRAM预留与紧急提交链。
  */
 PowerMonitorTestRequestResult PowerMonitor_RequestEmergencyPersistenceForTest(void);
 

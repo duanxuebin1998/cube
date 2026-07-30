@@ -6,6 +6,7 @@
  */
 
 #ifndef TMC5130_REGISTER_H
+/* TMC5130_REGISTER_H 是本头文件的包含保护标记；首次展开后置位，防止重复包含造成类型或接口重复定义。 */
 #define TMC5130_REGISTER_H
 
 /* ===== TMC5130 register set ===== */

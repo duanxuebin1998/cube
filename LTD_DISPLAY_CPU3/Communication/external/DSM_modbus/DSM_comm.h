@@ -1,4 +1,5 @@
 #ifndef _DSM_COMM_H__
+/* _DSM_COMM_H__ 是本头文件的包含保护标记；首次展开后置位，防止重复包含造成类型或接口重复定义。 */
 #define _DSM_COMM_H__
 
 #include "DSM_stateformodbus2.h"

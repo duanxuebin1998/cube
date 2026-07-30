@@ -73,7 +73,9 @@ static HAL_StatusTypeDef Start_Read_SSI_Data(void);
 static void SSI_ProcessError(uint32_t error_code);
 static void SSI_ProcessFrame(const uint8_t *raw);
 
-/* 挂起最低优先级PendSV，并用屏障保证事件内容先于挂起请求对处理器可见。 */
+/**
+ * @brief 挂起最低优先级PendSV，并用屏障保证事件内容先于挂起请求对处理器可见。
+ */
 static void SSI_PendDeferred(void)
 {
     SCB->ICSR = SCB_ICSR_PENDSVSET_Msk;
@@ -81,10 +83,16 @@ static void SSI_PendDeferred(void)
     __ISB();
 }
 
-/*
- * 函数用途：从硬件中断向编码器事件邮箱投递一项原始证据。
- * 调用场景：SPI5 DMA 完成、SPI5 错误和 TIM1 启动失败路径。
- * 关键约束：只复制固定长度数据和计数，不打印、不解析、不访问 FRAM。
+/**
+ * @brief 从硬件中断向编码器事件邮箱投递一项原始证据。
+ *
+ * @details 调用场景：SPI5 DMA 完成、SPI5 错误和 TIM1 启动失败路径。
+ * @note 关键约束：只复制固定长度数据和计数，不打印、不解析、不访问 FRAM。
+ *
+ * @param type 类型。
+ * @param raw 可选的 AS5145 SSI_FRAME_LENGTH 字节原始帧；传入 NULL 时事件中填入全 0 证据。
+ * @param hal_status 状态。
+ * @param hal_error 故障。
  */
 static void SSI_EnqueueEvent(SSI_EventType type,
                              const uint8_t *raw,
@@ -135,8 +143,11 @@ static void SSI_EnqueueEvent(SSI_EventType type,
     SSI_PendDeferred();
 }
 
-/*
- * 在短临界区取出一项已发布事件；复制完成后才推进尾指针，避免ISR覆盖未复制内容。
+/**
+ * @brief 在短临界区取出一项已发布事件；复制完成后才推进尾指针，避免ISR覆盖未复制内容。
+ *
+ * @param event 设备参数打印事件类型，决定日志标题和附加字段。
+ * @return true 表示队列中存在已发布事件，事件已完整复制且尾指针已推进；false 表示输出指针为空或队列当前为空。
  */
 static bool SSI_DequeueEvent(SSI_Event *event)
 {
@@ -162,7 +173,12 @@ static bool SSI_DequeueEvent(SSI_Event *event)
     return true;
 }
 
-/* 统计17个数据/状态位中的置位数，返回AS5145帧要求的偶校验位。 */
+/**
+ * @brief 统计17个数据/状态位中的置位数，返回AS5145帧要求的偶校验位。
+ *
+ * @param data 待计算偶校验的 AS5145 SSI 有效载荷位；函数统计其中置位位数并返回协议要求的偶校验位。
+ * @return 返回 AS5145 帧的偶校验位；17 个数据和状态位中置位数为偶数时返回 0，奇数时返回 1。
+ */
 static uint8_t Calculate_Even_Parity(uint32_t data)
 {
     uint8_t count = 0U;
@@ -176,7 +192,12 @@ static uint8_t Calculate_Even_Parity(uint32_t data)
     return ((count % 2U) == 0U) ? 0U : 1U;
 }
 
-/* 按AS5145 SSI位序从4字节缓冲拼出18bit载荷并解析角度、状态和校验结果。 */
+/**
+ * @brief 按AS5145 SSI位序从4字节缓冲拼出18bit载荷并解析角度、状态和校验结果。
+ *
+ * @param raw 连续 SSI_FRAME_LENGTH 字节 AS5145 原始 SSI 帧，按协议位序解析 18 位载荷。
+ * @return 返回解析后的 SSI_Data_t；其中包含 18 位载荷、角度、状态位及奇偶校验结果。
+ */
 static SSI_Data_t Parse_SSI_Data(const uint8_t *raw)
 {
     SSI_Data_t result;
@@ -196,13 +217,23 @@ static SSI_Data_t Parse_SSI_Data(const uint8_t *raw)
     return result;
 }
 
-/* 校验、OCF和COF属于阻止位置更新的硬异常；LIN只作为独立诊断码保留。 */
+/**
+ * @brief 校验、OCF和COF属于阻止位置更新的硬异常；LIN只作为独立诊断码保留。
+ *
+ * @param data 已经从 AS5145 SSI 原始帧解码出的只读数据对象；包含角度、奇偶校验位和系统、磁场、线性、坐标溢出等诊断标志。
+ * @return true 表示上述校验全部通过；false 表示至少一项校验未通过。
+ */
 static bool Check_SSI_Error_Condition(const SSI_Data_t *data)
 {
     return (data->parity_ok == 0U) || (data->OCF == 0U) || (data->COF != 0U);
 }
 
-/* 全0或全FF通常表示总线悬空/短接，优先映射为超时而不是解析为有效角度。 */
+/**
+ * @brief 全0或全FF通常表示总线悬空/短接，优先映射为超时而不是解析为有效角度。
+ *
+ * @param raw 连续 SSI_FRAME_LENGTH 字节 AS5145 原始帧；函数检查是否全 0 或全 0xFF。
+ * @return true 表示 4 字节原始帧全部为 0x00 或全部为 0xFF，符合总线悬空/短接特征；false 表示帧中存在其他组合，需继续按正常 SSI 帧解析。
+ */
 static bool Is_SSI_DisconnectedPattern(const uint8_t *raw)
 {
     return ((raw[0] == 0x00U) && (raw[1] == 0x00U) &&
@@ -211,6 +242,12 @@ static bool Is_SSI_DisconnectedPattern(const uint8_t *raw)
             (raw[2] == 0xFFU) && (raw[3] == 0xFFU));
 }
 
+/**
+ * @brief 按空指针、奇偶校验、OCF、COF 和 LIN 的优先级映射 AS5145 错误码。
+ *
+ * @param data 已经从 AS5145 SSI 原始帧解码出的只读数据对象；包含角度、奇偶校验位和系统、磁场、线性、坐标溢出等诊断标志。
+ * @return 按优先级返回 ENCODER_TIMEOUT、ENCODER_PARITY_ERROR、ENCODER_OCF_INCOMPLETE、ENCODER_CORDIC_OVERFLOW 或 ENCODER_LINEARITY_WARNING；所有状态位有效时返回 NO_ERROR。
+ */
 static uint32_t Get_SSI_Error_Code(const SSI_Data_t *data)
 {
     if (data == NULL) {
@@ -231,10 +268,13 @@ static uint32_t Get_SSI_Error_Code(const SSI_Data_t *data)
     return NO_ERROR;
 }
 
-/*
- * 函数用途：处理一项延后的编码器异常。
- * 调用场景：PendSV 消费原始帧或 SPI/DMA 错误事件。
- * 关键约束：第 3 个连续异常才锁存；只发布故障快照，不打印和不执行阻塞停机。
+/**
+ * @brief 处理一项延后的编码器异常。
+ *
+ * @details 调用场景：PendSV 消费原始帧或 SPI/DMA 错误事件。
+ * @note 关键约束：第 3 个连续异常才锁存；只发布故障快照，不打印和不执行阻塞停机。
+ *
+ * @param error_code 待记录、转换或判断的错误码。该值是 AS5145 SSI 帧校验或磁场状态对应的整机错误码，用于统一错误处理。
  */
 static void SSI_ProcessError(uint32_t error_code)
 {
@@ -261,9 +301,10 @@ static void SSI_ProcessError(uint32_t error_code)
     }
 }
 
-/*
- * 处理一帧原始证据：异常帧不更新累计位置；正常帧清未锁存连续计数，
- * 但已经锁存的故障只重复发布，必须由下一条顶层正式命令清除。
+/**
+ * @brief 处理一帧原始证据：异常帧不更新累计位置；正常帧清未锁存连续计数，但已经锁存的故障只重复发布，必须由下一条顶层正式命令清除。
+ *
+ * @param raw 从中断事件邮箱取出的连续 SSI_FRAME_LENGTH 字节 AS5145 原始帧。
  */
 static void SSI_ProcessFrame(const uint8_t *raw)
 {
@@ -295,10 +336,11 @@ static void SSI_ProcessFrame(const uint8_t *raw)
     Update_Encoder_Count(parsed.angle);
 }
 
-/*
- * 函数用途：按固定预算先补记队列溢出，再顺序处理原始事件。
- * 调用场景：PendSV_Handler。
- * 关键约束：超过本轮预算时重新挂起PendSV，不在单次低优先级中断无限排空。
+/**
+ * @brief 按固定预算先补记队列溢出，再顺序处理原始事件。
+ *
+ * @details 调用场景：PendSV_Handler。
+ * @note 关键约束：超过本轮预算时重新挂起PendSV，不在单次低优先级中断无限排空。
  */
 void AS5145_ProcessDeferred(void)
 {
@@ -331,7 +373,9 @@ void AS5145_ProcessDeferred(void)
     }
 }
 
-/* 仅恢复SPI5接收硬件到可重启状态；不清业务故障锁存，也不伪造正常帧。 */
+/**
+ * @brief 仅恢复SPI5接收硬件到可重启状态；不清业务故障锁存，也不伪造正常帧。
+ */
 static void Recover_SSI_Bus(void)
 {
     HAL_GPIO_WritePin(SSI_CSN_PORT, SSI_CSN_PIN, GPIO_PIN_SET);
@@ -342,9 +386,12 @@ static void Recover_SSI_Bus(void)
     }
 }
 
-/*
- * 发起一次4字节SPI5 DMA接收；总线忙时先作有限硬件复位，仍不可用则投递启动异常。
+/**
+ * @brief 发起一次4字节SPI5 DMA接收；总线忙时先作有限硬件复位，仍不可用则投递启动异常。
+ *
  * 函数可能由TIM1 ISR调用，因此不等待、不打印、不解析。
+ *
+ * @return 返回 HAL 外设操作状态；HAL_OK 表示启动成功，HAL_BUSY 表示外设仍被占用，HAL_TIMEOUT 或 HAL_ERROR 表示超时或硬件操作失败。
  */
 static HAL_StatusTypeDef Start_Read_SSI_Data(void)
 {
@@ -376,7 +423,11 @@ static HAL_StatusTypeDef Start_Read_SSI_Data(void)
     return status;
 }
 
-/* SPI5 DMA完成回调：先释放片选，再把完整原始帧复制到事件队列。 */
+/**
+ * @brief SPI5 DMA完成回调：先释放片选，再把完整原始帧复制到事件队列。
+ *
+ * @param hspi 触发完成或错误回调的 SPI HAL 句柄。
+ */
 void HAL_SPI_RxCpltCallback(SPI_HandleTypeDef *hspi)
 {
     if (hspi == &SSI) {
@@ -385,7 +436,11 @@ void HAL_SPI_RxCpltCallback(SPI_HandleTypeDef *hspi)
     }
 }
 
-/* SPI5错误回调：释放片选并保存HAL状态，故障确认留给PendSV。 */
+/**
+ * @brief SPI5错误回调：释放片选并保存HAL状态，故障确认留给PendSV。
+ *
+ * @param hspi 触发完成或错误回调的 SPI HAL 句柄。
+ */
 void HAL_SPI_ErrorCallback(SPI_HandleTypeDef *hspi)
 {
     if (hspi == &SSI) {
@@ -397,6 +452,13 @@ void HAL_SPI_ErrorCallback(SPI_HandleTypeDef *hspi)
     }
 }
 
+/**
+ * @brief 仅在 TIM1 周期中断中启动一次 AS5145 DMA 采样，不在 ISR 内等待、打印或解析。
+ *
+ * @note 关键约束：在中断或回调上下文中只更新必要状态，避免阻塞和高耗时操作。
+ *
+ * @param htim 触发周期完成回调的定时器 HAL 句柄。
+ */
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 {
     if (htim->Instance == TIM1) {
@@ -404,23 +466,38 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
     }
 }
 
+/**
+ * @brief 返回 AS5145 当前锁存故障或最近一次访问错误码。
+ *
+ * @return 存在锁存故障时返回锁存错误码，否则返回最近一次 AS5145 访问错误码；无错误时为 NO_ERROR。
+ */
 uint32_t AS5145_GetLastError(void)
 {
     return ssi_fault_latched ? ssi_latched_error_code : ssi_last_error_code;
 }
 
+/**
+ * @brief 判断 AS5145 是否已经取得至少一个有效角度样本。
+ *
+ * @return true 表示 AS5145 已经取得至少一个有效角度样本；false 表示 AS5145 尚未取得至少一个有效角度样本。
+ */
 bool AS5145_HasValidSample(void)
 {
     return ssi_first_valid_sample;
 }
 
+/**
+ * @brief 判断 AS5145 采样链路是否仍锁存故障。
+ *
+ * @return true 表示 AS5145 采样链路仍锁存故障；false 表示 AS5145 采样链路已不再锁存故障。
+ */
 bool AS5145_IsFaultLatched(void)
 {
     return ssi_fault_latched;
 }
 
-/*
- * 清除锁存时记录当前事件/溢出序号边界，避免新正式流程重新消费清锁存前的旧证据。
+/**
+ * @brief 清除锁存时记录当前事件/溢出序号边界，避免新正式流程重新消费清锁存前的旧证据。
  */
 void AS5145_ClearLatchedFaultForNewProcess(void)
 {
@@ -439,7 +516,12 @@ void AS5145_ClearLatchedFaultForNewProcess(void)
     }
 }
 
-/* 启动线程有限等待首帧；超时后优先返回已识别的编码器错误，否则返回首帧超时。 */
+/**
+ * @brief 启动线程有限等待首帧；超时后优先返回已识别的编码器错误，否则返回首帧超时。
+ *
+ * @param timeout_ms 允许等待的最长时间，单位 ms。
+ * @return NO_ERROR 表示等待窗口内取得首个有效编码器样本；若期间已识别具体编码器故障则返回该故障，否则超时返回 ENCODER_FIRST_SAMPLE_TIMEOUT。
+ */
 uint32_t AS5145_WaitFirstValidSample(uint32_t timeout_ms)
 {
     uint32_t start_tick = HAL_GetTick();
@@ -459,9 +541,12 @@ uint32_t AS5145_WaitFirstValidSample(uint32_t timeout_ms)
     return ENCODER_FIRST_SAMPLE_TIMEOUT;
 }
 
-/*
- * 启动新一轮采集前原子清空队列、统计和故障锁存，然后启动TIM1并立即触发首帧。
+/**
+ * @brief 启动新一轮采集前原子清空队列、统计和故障锁存，然后启动TIM1并立即触发首帧。
+ *
  * 定时器启动失败直接返回HAL状态，交由编码器初始化决定是否阻止测量。
+ *
+ * @return 返回 HAL 外设操作状态；HAL_OK 表示启动成功，HAL_BUSY 表示外设仍被占用，HAL_TIMEOUT 或 HAL_ERROR 表示超时或硬件操作失败。
  */
 HAL_StatusTypeDef Start_Encoder_Collection_TIM(void)
 {

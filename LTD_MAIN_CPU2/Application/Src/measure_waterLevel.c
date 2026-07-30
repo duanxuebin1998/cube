@@ -69,12 +69,13 @@ int32_t water_value = -100000000; /* 初始值设为无效 */
 
 /* -------------------- 函数原型 -------------------- */
 typedef struct {
-    int32_t position_01mm;
-    float capacitance;
+    /* 水位传感器测试轨迹中的位置与电容配对样本。 */
+    int32_t position_01mm; /* 位置 0.1 mm 定点值，单位为 0.1 mm；该字段保存已经缩放的整数定点值，换算物理量时只能应用一次缩放。 */
+    float capacitance; /* 该测试位置采集到的水位探头电容值。 */
 } WaterSensorTestPoint;
 
-static WaterSensorTestPoint g_water_sensor_test_up_points[WATER_SENSOR_TEST_POINT_COUNT]; /* 水位测量模块级变量，保存跨函数共享的业务状态。 */
-static WaterSensorTestPoint g_water_sensor_test_down_points[WATER_SENSOR_TEST_POINT_COUNT]; /* 水位测量模块级变量，保存跨函数共享的业务状态。 */
+static WaterSensorTestPoint g_water_sensor_test_up_points[WATER_SENSOR_TEST_POINT_COUNT]; /* 水位传感器上行测试采集的位置/电容点阵。 */
+static WaterSensorTestPoint g_water_sensor_test_down_points[WATER_SENSOR_TEST_POINT_COUNT]; /* 水位传感器下行测试采集的位置/电容点阵。 */
 
 static int SearchWaterRough(void);
 static int SearchWaterPrecise(void);
@@ -88,9 +89,9 @@ static void WaterSensorTestPrintResults(const char *phase_name,
                                         int32_t water_pos_01mm);
 
 /**
- * @brief 执行水位测量中的 WaterCapRawToFloat 逻辑。
+ * @brief 把水位电容原始位模式还原为单精度浮点值。
  *
- * @param raw 业务参数。
+ * @param raw 传感器水位电容的 IEEE 754 Float32 原始 32 位位模式。
  * @return 计算后的业务数值。
  */
 static inline float WaterCapRawToFloat(uint32_t raw)
@@ -100,6 +101,8 @@ static inline float WaterCapRawToFloat(uint32_t raw)
 
 /**
  * @brief 用有符号计算当前水位，避免 water_tank_height 与负尺带长度混算成无符号大数。
+ *
+ * @return 返回由水位罐高和当前尺带长度计算的有符号水位，单位 0.1 mm；溢出时饱和到 INT32_MIN 或 INT32_MAX。
  */
 static inline int32_t WaterLevelCalcFromCable(void)
 {
@@ -118,6 +121,9 @@ static inline int32_t WaterLevelCalcFromCable(void)
 
 /**
  * @brief 用有符号计算目标水位对应的尺带长度，供水位跟随移动距离使用。
+ *
+ * @param lvl_target_01mm 目标水位对应的位置，单位 0.1 mm。
+ * @return 返回目标水位对应的有符号尺带长度，单位 0.1 mm；溢出时饱和到 INT32_MIN 或 INT32_MAX。
  */
 static inline int32_t WaterCableTargetFromLevel(int32_t lvl_target_01mm)
 {
@@ -134,10 +140,10 @@ static inline int32_t WaterCableTargetFromLevel(int32_t lvl_target_01mm)
     return (int32_t)cable_target;
 }
 /**
- * @brief 执行水位测量中的 WaterLevelClampForReport 逻辑。
+ * @brief 把水位结果限制到协议允许上报的有效区间。
  *
- * @param lvl 业务参数。
- * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ * @param lvl 待限制、保存或打印的水位值，单位 0.1 mm。
+ * @return 返回完成边界钳位后的数值；输入低于下限时返回下限，高于上限时返回上限，区间内保持原值。
  */
 static inline uint32_t WaterLevelClampForReport(int32_t lvl)
 {
@@ -145,10 +151,9 @@ static inline uint32_t WaterLevelClampForReport(int32_t lvl)
 }
 
 /**
- * @brief 执行水位测量中的 WaterLevelSetAndLog 逻辑。
+ * @brief 用当前尺带位置更新水位结果并打印定位信息。
  *
- * @param lvl 业务参数。
- * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ * @param lvl 待限制、保存或打印的水位值，单位 0.1 mm。
  */
 static inline void WaterLevelSetAndLog(int32_t lvl)
 {
@@ -173,8 +178,7 @@ static inline void WaterLevelSetAndLog(int32_t lvl)
 }
 
 /**
- * @brief 执行水位测量中的 WaterLevelSyncFromCable 逻辑。
- * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ * @brief 根据当前尺带长度同步水位结果和传感器位置。
  */
 static inline void WaterLevelSyncFromCable(void)
 {
@@ -183,13 +187,13 @@ static inline void WaterLevelSyncFromCable(void)
 }
 
 /**
- * @brief 执行水位测量中的 WaterSensorTestScanDirection 逻辑。
+ * @brief 按指定方向逐点移动并记录位置、电容和水区判定。
  *
- * @param phase_name 输入/输出指针。
- * @param dir 业务参数。
- * @param points 输入/输出指针。
- * @param point_count 输入/输出指针。
- * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ * @param phase_name 标识本轮向上或向下扫描阶段的 NUL 结尾只读名称，用于逐点和结束诊断日志。
+ * @param dir 电机或扫描方向编码；使用 MOTOR_DIRECTION_UP 或 MOTOR_DIRECTION_DOWN，决定本轮步进移动的正负方向。
+ * @param points 本轮水传感器扫描测点输出数组；函数按移动顺序追加位置、电容和有效性结果。
+ * @param point_count points 输出数组可容纳的最大测点数；扫描达到该数量后停止追加，防止越界。
+ * @return NO_ERROR 表示指定方向的全部测试点已移动、驻留和记录；命令切换、位置越界、电容读取或电机运动失败时返回对应错误码。
  */
 static uint32_t WaterSensorTestScanDirection(const char *phase_name,
                                              uint32_t dir,
@@ -226,13 +230,12 @@ static uint32_t WaterSensorTestScanDirection(const char *phase_name,
 }
 
 /**
- * @brief 显示或打印水位测量中的 WaterSensorTestPrintResults 逻辑。
+ * @brief 按扫描方向打印水位传感器剖面测试结果。
  *
- * @param phase_name 输入/输出指针。
- * @param points 输入/输出指针。
- * @param point_count 输入/输出指针。
- * @param water_pos_01mm 业务参数。
- * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ * @param phase_name 标识当前结果属于向上或向下扫描阶段的 NUL 结尾只读名称，用于汇总日志。
+ * @param points 已经采集完成的水传感器扫描测点只读数组；函数按 count 逐点打印位置、电容和判定结果。
+ * @param point_count points 数组中已经采集完成并允许打印的实际测点数量。
+ * @param water_pos_01mm 水位传感器当前所在位置，单位 0.1 mm。
  */
 static void WaterSensorTestPrintResults(const char *phase_name,
                                         const WaterSensorTestPoint *points,
@@ -373,10 +376,8 @@ uint32_t SearchWaterLevel(void)
 
         CHECK_COMMAND_SWITCH(ret);
 
-        /* 先处理异常边界，避免水位测量状态机带故障继续运行。 */
         if (ret != NO_ERROR)
         {
-            /* 错误 阶段：错误重试 模块：测量 操作：粗找水位 原因：搜索失败 尝试：try_times/WATER_ROUGH_RETRY_MAX 错误码：ret 错误名：ErrorLog_GetCodeName(ret) */
             ErrorLog_Retry(ERROR_LOG_MODULE_MEASURE,
                            ERROR_LOG_OP_SEARCH_WATER_ROUGH,
                            ERROR_LOG_REASON_SEARCH_FAIL,
@@ -391,7 +392,6 @@ uint32_t SearchWaterLevel(void)
         {
             if (try_times > 1U)
             {
-                /* 错误 阶段：重试成功 模块：测量 操作：粗找水位 原因：恢复成功 尝试：try_times/WATER_ROUGH_RETRY_MAX */
                 ErrorLog_Recover(ERROR_LOG_MODULE_MEASURE,
                                  ERROR_LOG_OP_SEARCH_WATER_ROUGH,
                                  ERROR_LOG_REASON_RECOVER_OK,
@@ -402,7 +402,6 @@ uint32_t SearchWaterLevel(void)
         }
     }
 
-    /* 先处理异常边界，避免水位测量状态机带故障继续运行。 */
     if (ret != NO_ERROR)
     {
         RETURN_ERROR(last_rough_ret);
@@ -424,12 +423,10 @@ uint32_t SearchWaterLevel(void)
             return STATE_SWITCH;
         }
 
-        /* 先处理异常边界，避免水位测量状态机带故障继续运行。 */
         if (ret == NO_ERROR)
         {
             if (try_times > 1U)
             {
-                /* 错误 阶段：重试成功 模块：测量 操作：精找水位 原因：恢复成功 尝试：try_times/WATER_PRECISE_RETRY_MAX */
                 ErrorLog_Recover(ERROR_LOG_MODULE_MEASURE,
                                  ERROR_LOG_OP_SEARCH_WATER_PRECISE,
                                  ERROR_LOG_REASON_RECOVER_OK,
@@ -440,7 +437,6 @@ uint32_t SearchWaterLevel(void)
         }
         else
         {
-            /* 错误 阶段：错误重试 模块：测量 操作：精找水位 原因：搜索失败 尝试：try_times/WATER_PRECISE_RETRY_MAX 错误码：ret 错误名：ErrorLog_GetCodeName(ret) */
             ErrorLog_Retry(ERROR_LOG_MODULE_MEASURE,
                            ERROR_LOG_OP_SEARCH_WATER_PRECISE,
                            ERROR_LOG_REASON_SEARCH_FAIL,
@@ -451,7 +447,6 @@ uint32_t SearchWaterLevel(void)
         }
     }
 
-    /* 先处理异常边界，避免水位测量状态机带故障继续运行。 */
     if (ret != NO_ERROR)
     {
         CHECK_ERROR(ret);
@@ -466,8 +461,8 @@ uint32_t SearchWaterLevel(void)
 }
 
 /**
- * @brief 执行水位测量中的 WaterSensorCapacitanceProfileTest 逻辑。
- * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ * @brief 先定位水位，再分别执行下行和上行电容剖面扫描并输出结果。
+ * @return NO_ERROR 表示水位定位以及下行、上行两段电容扫描均完成；命令切换、传感器读取或电机运动失败时返回具体错误码。
  */
 uint32_t WaterSensorCapacitanceProfileTest(void)
 {
@@ -525,8 +520,8 @@ uint32_t WaterSensorCapacitanceProfileTest(void)
 }
 
 /**
- * @brief 执行水位测量中的 SearchWaterRough 逻辑。
- * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ * @brief 持续下行直至传感器进入水区；停稳复核成功后记录水位，否则上提 100 mm 并返回低水位错误。
+ * @return NO_ERROR 表示下行进入水区且停稳复核通过；未能稳定确认水区时上提 100 mm 并返回 MEASUREMENT_WATERLEVEL_LOW，命令切换、传感器或电机错误由检查入口原样返回。
  */
 static int SearchWaterRough(void)
 {
@@ -584,6 +579,8 @@ static int SearchWaterRough(void)
 
 /**
  * @brief 精确搜索水位 - 使用变速策略精确定位
+ *
+ * @return NO_ERROR 表示变速精找已收敛并记录水位；命令切换、传感器数据无效、位置边界或电机运动错误由检查宏返回。
  */
 static int SearchWaterPrecise(void)
 {
@@ -677,8 +674,8 @@ static int SearchWaterPrecise(void)
 }
 
 /**
- * @brief 读取水位测量中的 read_zero_capacitance 逻辑。
- * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ * @brief 读取水位传感器零点电容并校验结果。
+ * @return NO_ERROR 表示零点电容读取成功且数值有效；其他值为水位传感器通信、数据格式或零点电容有效性错误。
  */
 uint32_t read_zero_capacitance(void)
 {
@@ -686,7 +683,6 @@ uint32_t read_zero_capacitance(void)
     float    cap = 0.0f;
 
     ret = Sensor_ReadWaterCapacitance(&cap);
-    /* 先处理异常边界，避免水位测量状态机带故障继续运行。 */
     if (ret != NO_ERROR) {
         return ret;
     }
@@ -717,7 +713,6 @@ uint32_t check_water_status(uint8_t *water_state)
     }
 
     ret = Sensor_ReadWaterCapacitance(&cap);
-    /* 先处理异常边界，避免水位测量状态机带故障继续运行。 */
     if (ret != NO_ERROR) {
         return ret;
     }
@@ -774,7 +769,6 @@ static uint32_t AlignToWaterLevel_01mm(int32_t lvl_target_01mm)
            move_mm);
 
     ret = MotorCtrl_MoveAndWait(move_mm, dir, MotorCtrl_GetDefaultSpeedX100());
-    /* 先处理异常边界，避免水位测量状态机带故障继续运行。 */
     if (ret != NO_ERROR) return ret;
 
     return NO_ERROR;
@@ -803,6 +797,8 @@ static uint32_t AlignToWaterLevel_01mm(int32_t lvl_target_01mm)
  * @param stable_win_ms 稳定判定窗口时长（ms）
  * 退出条件：
  *   连续 stable_win_ms 内 water_level 波动（max-min）不超过阈值 -> 认为稳定找到水位，退出
+ *
+ * @return NO_ERROR 表示检测到水区状态翻转并通过稳定窗口确认；命令切换、超时、传感器通信或电机错误由过程检查返回。
  */
 uint32_t FindWaterLevel_FastByStateFlip_StableExit(uint32_t stable_win_ms)
 {
@@ -1009,15 +1005,16 @@ uint32_t FindWaterLevel_FastByStateFlip_StableExit(uint32_t stable_win_ms)
  * - 带自恢复机制，避免长期卡死在错误区域
  */
 typedef enum {
-    WATER_RECOVER_BY_SEARCH = 0,
-    WATER_RECOVER_BY_STATE_FLIP = 1,
+    /* 水位搜索失步后的恢复策略选择。 */
+    WATER_RECOVER_BY_SEARCH = 0, /* 失步后重新执行水位搜索以恢复介质边界。 */
+    WATER_RECOVER_BY_STATE_FLIP = 1, /* 失步后翻转介质状态并沿相反方向继续确认。 */
 } WaterRecoverStrategy;
 
 /**
- * @brief 执行水位测量中的 WaterRecoverAfterLost 逻辑。
+ * @brief 水位信号丢失后按配置策略重新搜索或翻转搜索方向。
  *
- * @param strategy 业务参数。
- * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ * @param strategy 水位丢失后的恢复动作选择。
+ * @return 返回重新搜索或翻转方向搜索的原始结果码；NO_ERROR 表示恢复成功，其他值保留命令切换、传感器或运动错误。
  */
 static uint32_t WaterRecoverAfterLost(WaterRecoverStrategy strategy)
 {
@@ -1034,6 +1031,9 @@ static uint32_t WaterRecoverAfterLost(WaterRecoverStrategy strategy)
  * 连续多次处于稳定区后进入本函数，不主动调整电机，只周期性读取水位电容。
  * 当电容偏离跟随目标值超过 water_lag_cap_threshold 时，认为水位发生变化，
  * 退出本循环并返回原闭环跟随流程，由原逻辑重新判断偏水/偏空气并调整。
+ *
+ * @param target_cap 目标。
+ * @return NO_ERROR 表示变化监测按当前结束条件正常退出；STATE_SWITCH、传感器超时、数据失效或水位丢失恢复失败由内部检查返回。
  */
 static uint32_t MonitorWaterFollowChange(float target_cap)
 {
@@ -1076,10 +1076,19 @@ static uint32_t MonitorWaterFollowChange(float target_cap)
 }
 
 /**
- * @brief 执行水位测量中的 FollowWaterLevelCore 逻辑。
+ * @brief 以空气电容和配置阈值建立跟随区间，按偏差分级步进；稳定后进入监测，信号丢失时按策略重新搜索。
  *
- * @param recover_strategy 业务参数。
- * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ * 函数以空气零点电容加 water_cap_threshold 得到目标电容，再用 water_find_cap_threshold 建立上下滞回边界；三个参数均转换为统一浮点电容单位后参与计算。
+ * 当前电容高于上边界时上行、低于下边界时下行，偏差越大使用的步进距离越大；每次动作均通过 MotorCtrl_MoveAndWait 阻塞等待完成，然后重新采样形成闭环。
+ * 连续位于稳定区达到 WATER_FOLLOW_STABLE_MONITOR_COUNT 后进入不驱动电机的稳定监测；连续调节超过 WATER_FOLLOW_ENTER_TIMEOUT_MS
+ * 仍未稳定时也进入监测，避免长期机械往返。
+ * 监测到电容偏离目标后返回闭环调节；连续大偏差达到五次则按 recover_strategy 重新搜索水位，成功后清零丢失计数并继续跟随。
+ * 测量、运动、重新搜索或命令切换错误原样返回；正常跟随没有主动成功结束点，会持续运行直到收到新命令或出现错误。
+ *
+ * @param recover_strategy 连续大偏差判定水位丢失后的恢复策略；WATER_RECOVER_BY_SEARCH
+ *                         重新执行完整找水，WATER_RECOVER_BY_STATE_FLIP 使用快速状态翻转搜索。
+ * @return STATE_SWITCH 表示水位跟随被新命令正常打断；其他非零值为电容读取、电机运动、稳定监测或丢失恢复流程原样传播的错误码；正常跟随持续运行，不以 NO_ERROR 主动结束。
+ * @note 本函数包含阻塞式电机等待和 HAL_Delay，只能在测量任务流程调用，不得在中断上下文执行。
  */
 static uint32_t FollowWaterLevelCore(WaterRecoverStrategy recover_strategy)
 {
@@ -1137,7 +1146,6 @@ static uint32_t FollowWaterLevelCore(WaterRecoverStrategy recover_strategy)
     {
         /* ---------- 1. 读取当前水位电容 ---------- */
         ret = Sensor_ReadWaterCapacitance(&cap);
-        /* 先处理异常边界，避免水位测量状态机带故障继续运行。 */
         if (ret != NO_ERROR)
         {
             printf("水位跟随\t读取电容失败 错误码=0x%lX\r\n", ret);
@@ -1301,8 +1309,8 @@ static uint32_t FollowWaterLevelCore(WaterRecoverStrategy recover_strategy)
 }
 
 /**
- * @brief 执行水位测量中的 FollowWaterLevel_fast 逻辑。
- * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ * @brief 以快速步进策略跟随水位并收敛到电容目标区间。
+ * @return 返回快速水位跟随循环的最终状态；STATE_SWITCH 表示新命令打断，其他非零值为电容读取、目标区间收敛或电机运动错误。
  */
 uint32_t FollowWaterLevel_fast(void)
 {
@@ -1315,8 +1323,8 @@ uint32_t FollowWaterLevel_fast(void)
 }
 
 /**
- * @brief 执行水位测量中的 FollowWaterLevel 逻辑。
- * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ * @brief 执行水位跟随主流程并发布最终测量状态。
+ * @return 返回所选水位跟随实现的结果；STATE_SWITCH 表示正常命令打断，其他非零值为水位定位、电容读取、运动、稳定性或丢失恢复错误。
  */
 uint32_t FollowWaterLevel(void)
 {
@@ -1329,6 +1337,11 @@ uint32_t FollowWaterLevel(void)
 }
 
 
+/**
+ * @brief 用当前尺带长度和命令修正量计算水罐高度，校验后同步水位并持久化。
+ *
+ * @return NO_ERROR 表示修正后的水罐高度、同步水位和持久化参数均完成；输入范围、当前位置、参数写回或保存失败时由检查宏返回对应错误码。
+ */
 static uint32_t CorrectWaterTankHeightProcess(void)
 {
     int32_t new_height;
@@ -1362,7 +1375,12 @@ static uint32_t CorrectWaterTankHeightProcess(void)
 
     return NO_ERROR;
 }
-/* 标定水位：修正 water_tank_height */
+ /**
+  * @brief 按用户给出的水位真值修正水罐高度；非跟随态先重找水位，跟随态修正后恢复原跟随模式。
+  *
+  * 标定真值为 0 时立即报告未配置错误；非跟随态调用 SearchWaterLevel 精确定位水面，命令切换时禁止继续使用旧位置修正参数。
+  * 定位或沿用跟随位置后调用 CorrectWaterTankHeightProcess 计算并保存水罐高度；原先处于跟随态时按 water_level_mode 恢复普通或快速跟随。
+  */
  void CMD_CalibrateWaterLevel(void)
 {
     uint32_t ret = NO_ERROR;

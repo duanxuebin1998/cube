@@ -6,6 +6,7 @@
  */
 
 #ifndef INC_FAULT_MANAGER_H_
+/* INC_FAULT_MANAGER_H_ 是本头文件的包含保护标记；首次展开后置位，防止重复包含造成类型或接口重复定义。 */
 #define INC_FAULT_MANAGER_H_
 
 #include <stdint.h>   /* 处理 uint8_t, uint32_t 等类型 */
@@ -54,27 +55,29 @@ typedef struct {
 } FaultRecoveryPolicy;
 /* 错误信息结构体 */
 typedef struct {
-	const char *file;
-	uint32_t line;
-	const char *func;
+	/* 故障发生位置和故障码快照，用于延迟记录文件、行号及函数来源。 */
+	const char *file; /* 产生故障的源码文件名指针，指向静态字符串。 */
+	uint32_t line; /* 产生故障的源码行号。 */
+	const char *func; /* 产生故障的函数名指针，指向静态字符串。 */
 	uint32_t error_code; /* 错误码; */
 } ErrorInfo;
 extern ErrorInfo err; /* 全局错误信息变量 */
 
 /**
- * @brief 执行故障处理中的 FaultManager_ReportErrorExit 逻辑。
+  * @brief 记录故障现场并进入统一错误退出路径。
  *
  * @param error_code 故障或错误码。
  */
 void FaultManager_ReportErrorExit(uint32_t error_code);
 /**
- * @brief 处理故障处理中的 FaultManager_HandleCheckError 逻辑。
+ * @brief CHECK_ERROR 宏的统一处理入口。
+ * @note 记录文件、行号和函数名后输出最终报错，并执行停机处理。
  *
- * @param error_code 故障或错误码。
- * @param file 业务参数。
- * @param line 业务参数。
- * @param func 业务参数。
- * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ * @param error_code CHECK_ERROR 捕获的原始整机错误码；函数原样记录、上报并返回。
+ * @param file 触发 CHECK_ERROR 的源文件名字符串，保存到全局故障上下文供诊断输出使用。
+ * @param line 触发 CHECK_ERROR 的源代码行号。
+ * @param func 触发 CHECK_ERROR 的函数名字符串，保存到全局故障上下文供诊断输出使用。
+ * @return 返回传入并已写入全局故障上下文的原始 error_code；函数不改写错误码，但会先完成最终上报和停机处理。
  */
 uint32_t FaultManager_HandleCheckError(uint32_t error_code,
                                        const char *file,
@@ -94,12 +97,13 @@ uint32_t FaultManager_HandleGlobalError(uint32_t error_code,
                                         uint32_t line,
                                         const char *func);
 /**
- * @brief 执行故障处理中的 FaultManager_SetErrorState 逻辑。
+ * @brief SET_ERROR 宏的统一处理入口。
+ * @note 输出最终报错后把设备状态切换为错误态，并标记后续需要回零。
  *
- * @param error_code 故障或错误码。
- * @param file 业务参数。
- * @param line 业务参数。
- * @param func 业务参数。
+ * @param error_code 待记录、转换或判断的错误码。该值使用整机分模块错误码编码，并由故障出口发布、锁存或附加 TMC5130 现场。
+ * @param file 诊断输出关联的源文件名称。
+ * @param line 触发当前错误出口或运动保护检查的源代码行号；与 file 和 func 一起保存，用于最终故障日志定位。
+ * @param func 触发 SET_ERROR 的源函数名字符串，保存到全局故障上下文并用于日志定位。
  */
 void FaultManager_SetErrorState(uint32_t error_code,
                                 const char *file,
@@ -118,10 +122,11 @@ void FaultManager_SetGlobalErrorState(uint32_t error_code,
                                       uint32_t line,
                                       const char *func);
 
-/*
- * 函数用途：由异步采集链路锁存并发布稳定故障快照。
- * 调用场景：PendSV 确认编码器连续第 3 帧异常。
- * 关键约束：先发布再硬禁止驱动；不打印、不调用 ErrorLog、不执行阻塞慢停。
+/**
+ * @brief 由异步采集链路锁存并发布稳定故障快照。
+ *
+ * @details 调用场景：PendSV 确认编码器连续第 3 帧异常。
+ * @note 关键约束：先发布再硬禁止驱动；不打印、不调用 ErrorLog、不执行阻塞慢停。
  */
 void FaultManager_LatchAsyncError(uint32_t error_code);
 
@@ -218,16 +223,16 @@ void fault_info_init(void);
  */
 void HandleError(void);
 /**
- * @brief 显示或打印故障处理中的 printError 逻辑。
+ * @brief 从错误信息对象取得错误码并转交统一最终报错出口。
  *
- * @param err 业务参数。
+ * @param err 待上报错误信息对象；函数读取其中的错误码，传入 NULL 时直接返回。
+ * @note 传入 NULL 时直接返回；统一报错出口会过滤 NO_ERROR 和 STATE_SWITCH，并对短时间内的重复错误码去重，本函数自身不执行停机。
  */
 void printError(const ErrorInfo* err);
 /**
- * @brief 读取故障处理中的 GetShortFilename 逻辑。
- *
- * @param fullpath 业务参数。
- * @return 返回业务对象或缓冲区指针，NULL 表示无有效对象。
+ * @brief 提取短文件名 (从路径中提取)
+ * @param fullpath 完整路径
+ * @return 指向短文件名的指针
  */
 const char* GetShortFilename(const char *fullpath);
 #endif /* INC_FAULT_MANAGER_H_ */

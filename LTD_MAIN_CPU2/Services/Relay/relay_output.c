@@ -9,26 +9,30 @@
 #define RELAY_OUTPUT_INACTIVE_LEVEL GPIO_PIN_RESET /* 继电器输出参数：继电器 输出 无效 液位。 */
 
 typedef enum {
-    RELAY_COMPARE_GREATER = 0U,
-    RELAY_COMPARE_LESS = 1U
+    /* 继电器报警阈值的比较方向。 */
+    RELAY_COMPARE_GREATER = 0U, /* 过程量大于阈值时满足报警比较条件。 */
+    RELAY_COMPARE_LESS = 1U /* 过程量小于阈值时满足报警比较条件。 */
 } RelayCompareType;
 
 typedef struct {
-    GPIO_TypeDef *port;
-    uint16_t pin;
+    /* 继电器逻辑通道到 GPIO 端口和引脚的只读映射。 */
+    GPIO_TypeDef *port; /* 继电器通道对应的 GPIO 端口。 */
+    uint16_t pin; /* 继电器通道对应的 GPIO 引脚位掩码。 */
 } RelayOutputIo;
 
 typedef struct {
-    uint32_t manual_alarm_inhibit;
-    uint32_t maintenance_mode_active;
-    uint32_t oil_level;
-    uint32_t probe_at_liquid_level;
-    uint32_t liquid_stable;
-    int32_t temperature;
-    uint32_t water_level;
-    int32_t sensor_position;
+    /* 一次继电器判定使用的测量与抑制快照；整轮四通道计算必须复用同一份输入。 */
+    uint32_t manual_alarm_inhibit; /* 人工报警抑制在本轮继电器判定中的快照值。 */
+    uint32_t maintenance_mode_active; /* 维护模式在本轮继电器判定中的快照值。 */
+    uint32_t oil_level; /* 本轮继电器判定使用的油位过程量。 */
+    uint32_t probe_at_liquid_level; /* 本轮继电器判定使用的探头已到液面标志。 */
+    uint32_t liquid_stable; /* 本轮继电器判定使用的液面稳定标志。 */
+    int32_t temperature; /* 本轮继电器判定使用的有符号温度过程量。 */
+    uint32_t water_level; /* 本轮继电器判定使用的水位过程量。 */
+    int32_t sensor_position; /* 本轮继电器判定使用的有符号传感器位置。 */
 } RelayOutputMeasurementSnapshot;
 
+/* 四路继电器逻辑通道到 GPIO 端口和引脚的只读映射表。 */
 static const RelayOutputIo relay_output_ios[RELAY_OUTPUT_COUNT] = {
     { RELAY1_GPIO_Port, RELAY1_Pin },
     { RELAY2_GPIO_Port, RELAY2_Pin },
@@ -36,28 +40,32 @@ static const RelayOutputIo relay_output_ios[RELAY_OUTPUT_COUNT] = {
     { RELAY4_GPIO_Port, RELAY4_Pin },
 };
 
-static volatile uint8_t relay_output_initialized = 0U; /* 继电器输出模块级变量，保存跨函数共享的业务状态。 */
-static volatile uint8_t relay_output_updating = 0U; /* 继电器输出模块级变量，保存跨函数共享的业务状态。 */
-static volatile uint8_t relay_output_state_mask = 0U; /* 继电器输出运行状态缓存，供状态机或协议上报使用。 */
+static volatile uint8_t relay_output_initialized = 0U; /* 继电器输出 GPIO 已完成安全初始态设置的标志。 */
+static volatile uint8_t relay_output_updating = 0U; /* 四路继电器输出正在整批更新的互斥标志。 */
+static volatile uint8_t relay_output_state_mask = 0U; /* 四路继电器当前逻辑动作状态位掩码；低四位分别对应通道 1～4，批量更新和单路设置后均按有效通道掩码保存。 */
 
 /**
- * @brief 执行继电器输出中的 RelayOutput_RawToFloat 逻辑。
+ * @brief 把继电器报警阈值原始位模式还原为单精度浮点值。
  *
- * @param raw 业务参数。
+ * @param raw 继电器报警阈值快照中的 IEEE 754 Float32 原始 32 位位模式。
  * @return 计算后的业务数值。
  */
 static float RelayOutput_RawToFloat(uint32_t raw)
 {
     float value;
-    /* 按结构或原始字节复制，保持继电器输出协议/存储布局不被字段解释改变。 */
+    /* 把持久化的 uint32_t 原始位模式解释为 IEEE-754 Float32 阈值；memcpy 用于位级转换，不能改成数值强制转换。 */
     memcpy(&value, &raw, sizeof(value));
     return value;
 }
 
-/*
- * 函数用途：把继电器比较值按 0.1 单位进行符号对称的四舍五入。
- * 调用场景：RelayOutput_Compare 比较当前值、阈值和滞回前统一量化。
- * 关键约束：负数使用减 0.5 后截断，避免统一加 0.5 导致负值向零偏移。
+/**
+ * @brief 把继电器比较值按 0.1 单位进行符号对称的四舍五入。
+ *
+ * @details 调用场景：RelayOutput_Compare 比较当前值、阈值和滞回前统一量化。
+ * @note 关键约束：负数使用减 0.5 后截断，避免统一加 0.5 导致负值向零偏移。
+ *
+ * @param value 继电器输出使用的输入数值。
+ * @return 返回工程值按 0.1 单位正负对称四舍五入后的有符号整数；溢出时饱和到 INT32 边界。
  */
 static int32_t RelayOutput_ToTenths(float value)
 {
@@ -77,13 +85,13 @@ static int32_t RelayOutput_ToTenths(float value)
 }
 
 /**
- * @brief 执行继电器输出中的 RelayOutput_Compare 逻辑。
+ * @brief 将工程浮点值饱和并四舍五入为 0.1 单位，再按比较方向和滞回量判断阈值是否成立。
  *
- * @param current 业务参数。
- * @param target 业务参数。
- * @param hysteresis 业务参数。
- * @param type 业务参数。
- * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ * @param current 当前继电器报警输入值。
+ * @param target 本次比较、运动或写入的目标值。该浮点数是继电器报警阈值，函数按高限或低限方向与 current 比较。
+ * @param hysteresis 滞回。
+ * @param type 类型。
+ * @return 1 表示当前 0.1 单位值按比较方向和滞回门限满足动作或释放条件；否则返回 0。
  */
 static uint8_t RelayOutput_Compare(float current,
                                    float target,
@@ -112,8 +120,8 @@ static uint8_t RelayOutput_Compare(float current,
 }
 
 /**
- * @brief 执行继电器输出中的 RelayOutput_EnterCritical 逻辑。
- * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ * @brief 进入继电器输出临界区并保存中断状态。
+ * @return 返回进入继电器临界区前的 PRIMASK 中断屏蔽状态，供退出临界区时原样恢复。
  */
 static uint32_t RelayOutput_EnterCritical(void)
 {
@@ -124,10 +132,9 @@ static uint32_t RelayOutput_EnterCritical(void)
 }
 
 /**
- * @brief 执行继电器输出中的 RelayOutput_ExitCritical 逻辑。
+ * @brief 恢复进入继电器输出临界区前的中断状态。
  *
  * @param primask 进入临界区前保存的中断屏蔽状态。
- * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
  */
 static void RelayOutput_ExitCritical(uint32_t primask)
 {
@@ -135,11 +142,10 @@ static void RelayOutput_ExitCritical(uint32_t primask)
 }
 
 /**
- * @brief 执行继电器输出中的 RelayOutput_CopyConfigSnapshot 逻辑。
+ * @brief 在短临界区内复制指定通道的完整继电器配置快照；参数无效时不输出。
  *
- * @param channel 业务参数。
- * @param cfg 业务参数。
- * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ * @param channel 零基通道号。合法范围为 0～3，用于选择四路继电器配置、运行态、锁存命令和物理输出。
+ * @param cfg 可写单路继电器报警配置对象；函数按职责从寄存器还原或更新模式、报警源、四级阈值、滞回、阻尼及锁存清除字段。
  */
 static void RelayOutput_CopyConfigSnapshot(uint32_t channel, RelayAlarmConfig *cfg)
 {
@@ -169,10 +175,9 @@ static void RelayOutput_CopyConfigSnapshot(uint32_t channel, RelayAlarmConfig *c
 }
 
 /**
- * @brief 执行继电器输出中的 RelayOutput_CopyMeasurementSnapshot 逻辑。
+ * @brief 在短临界区内复制报警抑制状态及油位、温度、水位和浮子位置测量快照。
  *
- * @param snapshot 业务参数。
- * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ * @param snapshot 继电器报警计算使用的测量快照输出对象；在临界区内复制液位、温度、水位、浮子位置及各字段有效性，避免一次判定读取到跨周期数据。
  */
 static void RelayOutput_CopyMeasurementSnapshot(RelayOutputMeasurementSnapshot *snapshot)
 {
@@ -195,11 +200,10 @@ static void RelayOutput_CopyMeasurementSnapshot(RelayOutputMeasurementSnapshot *
 }
 
 /**
- * @brief 执行继电器输出中的 RelayOutput_CopyRuntimeSnapshot 逻辑。
+ * @brief 在短临界区内复制指定通道的报警运行态快照；参数无效时不输出。
  *
- * @param channel 业务参数。
- * @param state 状态值。
- * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ * @param channel 零基通道号。合法范围为 0～3，用于选择四路继电器配置、运行态、锁存命令和物理输出。
+ * @param state 用于接收继电器报警运行态一致快照的输出对象。
  */
 static void RelayOutput_CopyRuntimeSnapshot(uint32_t channel, RelayAlarmRuntimeState *state)
 {
@@ -225,11 +229,10 @@ static void RelayOutput_CopyRuntimeSnapshot(uint32_t channel, RelayAlarmRuntimeS
 }
 
 /**
- * @brief 执行继电器输出中的 RelayOutput_CommitRuntimeState 逻辑。
+ * @brief 在短临界区内把指定通道的本轮报警运行态原子发布到共享测量结构。
  *
- * @param channel 业务参数。
- * @param state 状态值。
- * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ * @param channel 零基通道号。合法范围为 0～3，用于选择四路继电器配置、运行态、锁存命令和物理输出。
+ * @param state 已经完成本轮判定、准备提交到共享运行态的继电器状态。
  */
 static void RelayOutput_CommitRuntimeState(uint32_t channel, const RelayAlarmRuntimeState *state)
 {
@@ -272,9 +275,9 @@ static void RelayOutput_CommitPublishedStatus(uint8_t alarm_inhibited,
 }
 
 /**
- * @brief 执行继电器输出中的 RelayOutput_GetInvalidAlarmValue 逻辑。
+ * @brief 按报警源返回对应的无效工程值哨兵；未知来源返回 0。
  *
- * @param source 业务参数。
+ * @param source 待判断或转换的数据来源枚举值。该 RelayAlarmSource 指定液位、温度、水位或浮子位置，用于选择测量无效时的报警策略。
  * @return 计算后的业务数值。
  */
 static float RelayOutput_GetInvalidAlarmValue(uint32_t source)
@@ -295,11 +298,10 @@ static float RelayOutput_GetInvalidAlarmValue(uint32_t source)
 }
 
 /**
- * @brief 清除或复位继电器输出中的 RelayOutput_ResetRuntimeState 逻辑。
+ * @brief 按报警源写入无效值，并把四级报警、组合报警、故障和清除请求复位为非活动态。
  *
- * @param state 状态值。
- * @param cfg 业务参数。
- * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ * @param state 待恢复为初始未激活状态的继电器运行态对象。
+ * @param cfg 只读单路继电器报警配置；包含工作模式、数字源、触点与报警模式、无效值策略、报警源、四级阈值、滞回、阻尼和清除锁存命令。
  */
 static void RelayOutput_ResetRuntimeState(RelayAlarmRuntimeState *state, const RelayAlarmConfig *cfg)
 {
@@ -325,10 +327,9 @@ static void RelayOutput_ResetRuntimeState(RelayAlarmRuntimeState *state, const R
 }
 
 /**
- * @brief 写入或设置继电器输出中的 RelayOutput_WriteMask 逻辑。
+ * @brief 把四路继电器逻辑动作位掩码写入 GPIO 输出。
  *
- * @param mask 业务参数。
- * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ * @param mask 四路继电器逻辑动作位掩码，低 4 位分别对应通道 1 至 4。
  */
 static void RelayOutput_WriteMask(uint8_t mask)
 {
@@ -347,12 +348,12 @@ static void RelayOutput_WriteMask(uint8_t mask)
 }
 
 /**
- * @brief 执行继电器输出中的 RelayOutput_GetAlarmSourceValue 逻辑。
+ * @brief 从一致测量快照取得配置所选报警源的工程值；样本无效或液位未稳定时保留哨兵并返回失败。
  *
- * @param cfg 业务参数。
- * @param snapshot 业务参数。
- * @param value 待处理数值。
- * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ * @param cfg 只读单路继电器报警配置；包含工作模式、数字源、触点与报警模式、无效值策略、报警源、四级阈值、滞回、阻尼和清除锁存命令。
+ * @param snapshot 只读继电器测量一致性快照；包含液位、温度、水位和浮子位置及有效标志，用于按当前报警源取得同一周期输入值。
+ * @param value 用于返回配置所选报警源的工程值。
+ * @return 1 表示已取得有效报警源工程值并写入输出参数；0 表示配置、测量样本或液位稳定性不满足要求。
  */
 static uint8_t RelayOutput_GetAlarmSourceValue(const RelayAlarmConfig *cfg,
                                                const RelayOutputMeasurementSnapshot *snapshot,
@@ -407,11 +408,10 @@ static uint8_t RelayOutput_GetAlarmSourceValue(const RelayAlarmConfig *cfg,
 }
 
 /**
- * @brief 执行继电器输出中的 RelayOutput_ApplyInvalidState 逻辑。
+ * @brief 测量源无效时清除四级模拟报警，再按 error_value 配置置位对应的故障替代状态。
  *
- * @param cfg 业务参数。
- * @param state 状态值。
- * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ * @param cfg 只读单路继电器报警配置；包含工作模式、数字源、触点与报警模式、无效值策略、报警源、四级阈值、滞回、阻尼和清除锁存命令。
+ * @param state 样本无效时待更新阻尼和失效状态的继电器运行态对象。
  */
 static void RelayOutput_ApplyInvalidState(const RelayAlarmConfig *cfg,
                                           RelayAlarmRuntimeState *state)
@@ -451,16 +451,16 @@ static void RelayOutput_ApplyInvalidState(const RelayAlarmConfig *cfg,
 }
 
 /**
- * @brief 执行继电器输出中的 RelayOutput_JudgeAlarm 逻辑。
+ * @brief 按报警模式处理阈值、滞回和锁存清除请求，返回本级报警的新状态。
  *
- * @param current 业务参数。
- * @param target 业务参数。
- * @param hysteresis 业务参数。
- * @param compare_type 业务参数。
- * @param current_state 状态值。
+ * @param current 当前继电器报警输入值。
+ * @param target 本次比较、运动或写入的目标值。该浮点数是当前报警级别阈值，函数结合 hysteresis 和上次状态执行回差判定。
+ * @param hysteresis 滞回。
+ * @param compare_type 类型。
+ * @param current_state 本轮判断前的继电器报警运行态。
  * @param mode 工作模式。
- * @param state 状态值。
- * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ * @param state 用于保存本轮报警、阻尼和锁存结果的继电器运行态。
+ * @return 返回本轮阈值、滞回和锁存处理后的 RELAY_ALARM_STATE_ACTIVE 或 RELAY_ALARM_STATE_INACTIVE。
  */
 static uint32_t RelayOutput_JudgeAlarm(float current,
                                        float target,
@@ -498,12 +498,11 @@ static uint32_t RelayOutput_JudgeAlarm(float current,
 }
 
 /**
- * @brief 执行继电器输出中的 RelayOutput_ApplyValidState 逻辑。
+ * @brief 对有效模拟量分别计算 HH、H、L、LL 四级报警，并更新本轮报警值和各级状态。
  *
- * @param cfg 业务参数。
- * @param state 状态值。
- * @param value 待处理数值。
- * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ * @param cfg 只读单路继电器报警配置；包含工作模式、数字源、触点与报警模式、无效值策略、报警源、四级阈值、滞回、阻尼和清除锁存命令。
+ * @param state 样本有效时待更新报警和阻尼结果的继电器运行态对象。
+ * @param value 继电器输出应用有效状态使用的输入数值。
  */
 static void RelayOutput_ApplyValidState(const RelayAlarmConfig *cfg,
                                         RelayAlarmRuntimeState *state,
@@ -544,11 +543,11 @@ static void RelayOutput_ApplyValidState(const RelayAlarmConfig *cfg,
 }
 
 /**
- * @brief 执行继电器输出中的 RelayOutput_SelectDigitalState 逻辑。
+ * @brief 按 digital_source 选择单级、组合或任意故障状态；非法选择返回非活动态。
  *
- * @param cfg 业务参数。
- * @param state 状态值。
- * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ * @param cfg 只读单路继电器报警配置；包含工作模式、数字源、触点与报警模式、无效值策略、报警源、四级阈值、滞回、阻尼和清除锁存命令。
+ * @param state 用于保存数字量报警源判定结果的继电器运行态。
+ * @return 返回所选数字报警源的活动状态；来源非法时返回 RELAY_ALARM_STATE_INACTIVE。
  */
 static uint32_t RelayOutput_SelectDigitalState(const RelayAlarmConfig *cfg,
                                                const RelayAlarmRuntimeState *state)
@@ -578,12 +577,11 @@ static uint32_t RelayOutput_SelectDigitalState(const RelayAlarmConfig *cfg,
 }
 
 /**
- * @brief 清除或复位继电器输出中的 RelayOutput_ConsumeClearCommand 逻辑。
+ * @brief 消费指定通道的锁存报警清除命令。
  *
- * @param channel 业务参数。
- * @param cfg 业务参数。
- * @param state 状态值。
- * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ * @param channel 零基通道号。合法范围为 0～3，用于选择四路继电器配置、运行态、锁存命令和物理输出。
+ * @param cfg 只读单路继电器报警配置；包含工作模式、数字源、触点与报警模式、无效值策略、报警源、四级阈值、滞回、阻尼和清除锁存命令。
+ * @param state 待清除锁存报警并记录消费结果的继电器运行态对象。
  */
 static void RelayOutput_ConsumeClearCommand(uint32_t channel,
                                             const RelayAlarmConfig *cfg,
@@ -604,11 +602,13 @@ static void RelayOutput_ConsumeClearCommand(uint32_t channel,
 }
 
 /**
- * @brief 更新继电器输出中的 RelayOutput_UpdateChannel 逻辑。
+ * @brief 按单通道配置、数据有效性、锁存和滞回规则计算并提交继电器输出。
  *
- * @param channel 业务参数。
- * @param measurement 业务参数。
- * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ * @param channel 零基通道号。合法范围为 0～3，用于选择四路继电器配置、运行态、锁存命令和物理输出。
+ * @param measurement 本次处理使用的测量结果对象。该只读一致性快照包含液位、温度、水位、浮子位置及各字段有效性，用于单路继电器报警计算。
+ * @param alarm_inhibited 报警。
+ * @param logical_action_active 用于返回本轮逻辑报警动作是否处于有效状态。
+ * @return 1 表示本轮通道计算完成且输出状态有效；配置或采样无效时按安全状态处理并返回 0。
  */
 static uint8_t RelayOutput_UpdateChannel(uint32_t channel,
                                          const RelayOutputMeasurementSnapshot *measurement,
@@ -669,8 +669,8 @@ static uint8_t RelayOutput_UpdateChannel(uint32_t channel,
 }
 
 /**
- * @brief 执行继电器输出中的 RelayOutput_BuildStateMask 逻辑。
- * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ * @brief 汇总四路输出、报警、锁存和无效状态位掩码。
+ * @return 返回汇总四路输出、报警、锁存和无效状态位掩码对应的位掩码；各位含义由相邻枚举或宏定义。
  */
 static uint8_t RelayOutput_BuildStateMask(void)
 {
@@ -702,8 +702,7 @@ static uint8_t RelayOutput_BuildStateMask(void)
 }
 
 /**
- * @brief 初始化继电器输出中的 RelayOutput_Init 逻辑。
- * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ * @brief 初始化继电器输出运行态并按安全默认值驱动四路 GPIO。
  */
 void RelayOutput_Init(void)
 {
@@ -736,8 +735,7 @@ void RelayOutput_RequestClearAllLatchedAlarms(void)
 
 
 /**
- * @brief 更新继电器输出中的 RelayOutput_Update 逻辑。
- * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ * @brief 根据最新测量值、故障和报警配置刷新四路继电器输出。
  */
 void RelayOutput_Update(void)
 {
@@ -754,11 +752,10 @@ void RelayOutput_Update(void)
 }
 
 /**
- * @brief 执行继电器输出中的 RelayOutput_SetChannel 逻辑。
+ * @brief 按逻辑动作和触点类型设置指定继电器通道。
  *
- * @param channel 业务参数。
- * @param active 业务参数。
- * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ * @param channel 零基通道号。合法范围为 0～3，用于选择四路继电器配置、运行态、锁存命令和物理输出。
+ * @param active 目标活动状态，true 表示活动。
  */
 void RelayOutput_SetChannel(RelayOutputChannel channel, uint8_t active)
 {
@@ -779,8 +776,8 @@ void RelayOutput_SetChannel(RelayOutputChannel channel, uint8_t active)
 }
 
 /**
- * @brief 执行继电器输出中的 RelayOutput_GetStateMask 逻辑。
- * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ * @brief 返回四路继电器当前逻辑动作的位掩码。
+ * @return 返回四路继电器当前逻辑动作的位掩码对应的位掩码；各位含义由相邻枚举或宏定义。
  */
 uint8_t RelayOutput_GetStateMask(void)
 {
@@ -788,10 +785,10 @@ uint8_t RelayOutput_GetStateMask(void)
 }
 
 /**
- * @brief 执行继电器输出中的 RelayOutput_GetRuntimeState 逻辑。
+ * @brief 复制指定通道的继电器报警运行态快照。
  *
- * @param channel 业务参数。
- * @return 返回业务对象或缓冲区指针，NULL 表示无有效对象。
+ * @param channel 零基通道号。合法范围为 0～3，用于选择四路继电器配置、运行态、锁存命令和物理输出。
+ * @return 成功时返回指向复制指定通道的继电器报警运行态快照的指针；输入非法或未找到匹配项时返回 NULL。
  */
 const volatile RelayAlarmRuntimeState *RelayOutput_GetRuntimeState(uint32_t channel)
 {

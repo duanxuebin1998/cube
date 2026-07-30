@@ -66,6 +66,9 @@
  * @brief 从 DRV_STATUS 中提取实际电流档 CS_ACTUAL。
  *
  * 该值用于判断驱动功率级是否真正建立电流；只做位解析，不访问硬件、不打印日志。
+ *
+ * @param drvstatus TMC5130 DRV_STATUS 寄存器原始值。
+ * @return 返回 DRV_STATUS[20:16] 的 CS_ACTUAL 实际电流档位值。
  */
 static uint32_t tmc5130_drvStatusCurrent(uint32_t drvstatus)
 {
@@ -73,10 +76,10 @@ static uint32_t tmc5130_drvStatusCurrent(uint32_t drvstatus)
 }
 
 /**
- * @brief 执行TMC5130 驱动中的 tmc5130_decodeDrvStatus 逻辑。
+ * @brief 解析 DRV_STATUS 的短路、过温、开路和失步位，并映射为整机驱动错误码。
  *
- * @param drvstatus 状态值。
- * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ * @param drvstatus TMC5130 DRV_STATUS 寄存器原始值。
+ * @return 返回 DRV_STATUS 映射后的具体整机错误码；无短路、过温、开路、StallGuard 或失步故障时返回 NO_ERROR。
  */
 static uint32_t tmc5130_decodeDrvStatus(uint32_t drvstatus)
 {
@@ -104,35 +107,30 @@ static uint32_t tmc5130_decodeDrvStatus(uint32_t drvstatus)
     }
     if (drvstatus & TMC5130_DRVSTATUS_OTPW) {
         printf("TMC5130 过温预警（DRV_STATUS[26]=otpw）\r\n");
-        /* 先处理异常边界，避免TMC5130 驱动状态机带故障继续运行。 */
         if (ret == NO_ERROR) {
             ret = MOTOR_DRIVER_OVERTEMP_WARNING;
         }
     }
     if (drvstatus & TMC5130_DRVSTATUS_S2GA) {
         printf("TMC5130 A 相对地短路（DRV_STATUS[27]=s2ga）\r\n");
-        /* 先处理异常边界，避免TMC5130 驱动状态机带故障继续运行。 */
         if (ret == NO_ERROR) {
             ret = MOTOR_PHASE_SHORT_ERROR;
         }
     }
     if (drvstatus & TMC5130_DRVSTATUS_S2GB) {
         printf("TMC5130 B 相对地短路（DRV_STATUS[28]=s2gb）\r\n");
-        /* 先处理异常边界，避免TMC5130 驱动状态机带故障继续运行。 */
         if (ret == NO_ERROR) {
             ret = MOTOR_PHASE_SHORT_ERROR;
         }
     }
     if (drvstatus & TMC5130_DRVSTATUS_OLA) {
         printf("TMC5130 A 相开路/断线（DRV_STATUS[29]=ola）\r\n");
-        /* 先处理异常边界，避免TMC5130 驱动状态机带故障继续运行。 */
         if (ret == NO_ERROR) {
             ret = MOTOR_PHASE_OPEN_ERROR;
         }
     }
     if (drvstatus & TMC5130_DRVSTATUS_OLB) {
         printf("TMC5130 B 相开路/断线（DRV_STATUS[30]=olb）\r\n");
-        /* 先处理异常边界，避免TMC5130 驱动状态机带故障继续运行。 */
         if (ret == NO_ERROR) {
             ret = MOTOR_PHASE_OPEN_ERROR;
         }
@@ -185,13 +183,26 @@ static void tmc5130_initWrite(TMC5130TypeDef *tmc5130,
                               uint32_t *failed_count);
 /* < = SPI 底层封装 */
 
-static volatile uint8_t s_tmc5130_spi_busy = 0U; /* TMC5130 驱动模块级变量，保存跨函数共享的业务状态。 */
+static volatile uint8_t s_tmc5130_spi_busy = 0U; /* TMC5130 SPI 事务正在执行的互斥标志，防止中断与前台重入。 */
 static TMC5130DiagnosticSnapshot s_tmc5130_diagnostic = {0U};
 
-/*
- * 函数用途：保存最后一次有效 TMC5130 故障现场。
- * 调用场景：SPI 访问失败、XACTUAL 连续读数不稳定或配置丢失时调用。
- * 关键约束：只保存数值，不打印日志，不改变原有错误码和停机行为。
+/**
+ * @brief 保存最后一次有效 TMC5130 故障现场。
+ *
+ * @details 调用场景：SPI 访问失败、XACTUAL 连续读数不稳定或配置丢失时调用。
+ * @note 关键约束：只保存数值，不打印日志，不改变原有错误码和停机行为。
+ *
+ * @param stage 外设故障现场的诊断阶段编号；用于区分参数检查、总线访问、寄存器读写、回读核对和设备状态检查等失败位置。
+ * @param direction 外设故障现场中的访问方向枚举；写方向、读方向和未指定方向分别使用对应模块的诊断常量编码。
+ * @param address 寄存器地址（不带写标志位）。诊断和底层收发均保存该 TMC5130 原始寄存器地址。
+ * @param response_status 状态。
+ * @param hal_status 状态。
+ * @param error_code 待记录、转换或判断的错误码。该值是本次 TMC5130 访问或配置检查的整机错误码，并写入最近诊断快照。
+ * @param expected_value 期望数值。
+ * @param actual_value 实际数值。
+ * @param sample_first 第一次读取的 TMC5130 诊断寄存器样本。
+ * @param sample_second 第二次读取的 TMC5130 诊断寄存器样本。
+ * @param sample_third 第三次读取的 TMC5130 诊断寄存器样本。
  */
 static void tmc5130_saveDiagnostic(uint8_t stage,
                                    uint8_t direction,
@@ -229,10 +240,13 @@ static void tmc5130_saveDiagnostic(uint8_t stage,
     __set_PRIMASK(primask);
 }
 
-/*
- * 函数用途：复制最后一次有效 TMC5130 故障现场。
- * 调用场景：故障管理最终出口和故障注入测试读取。
- * 关键约束：使用短临界区保证所有字段来自同一次故障，不访问 SPI。
+/**
+ * @brief 复制最后一次有效 TMC5130 故障现场。
+ *
+ * @details 调用场景：故障管理最终出口和故障注入测试读取。
+ * @note 关键约束：使用短临界区保证所有字段来自同一次故障，不访问 SPI。
+ *
+ * @param snapshot TMC5130 最近一次有效故障现场输出对象；写入序号、错误码、阶段、方向、寄存器地址、状态字和连续采样值。
  */
 void TMC5130_GetDiagnosticSnapshot(TMC5130DiagnosticSnapshot *snapshot)
 {
@@ -248,8 +262,10 @@ void TMC5130_GetDiagnosticSnapshot(TMC5130DiagnosticSnapshot *snapshot)
     __set_PRIMASK(primask);
 }
 
+/**
+ * @brief 用短 NOP 延时满足 TMC5130 片选前后保持时间，避免引入毫秒级阻塞。
+ */
 static void tmc5130_delayCsGuard(void)
-/* TMC5130 驱动与外设通信之间保留等待时间，避免硬件或对端协议尚未准备好。 */
 /* 这里使用 NOP 而不是 HAL_Delay，避免把每次 5 字节 SPI 访问扩大到 ms 级。
  * 延时会同时用于 CS 拉低前、拉低后和拉高后，确保每帧边界留出恢复时间。 */
 {
@@ -259,8 +275,8 @@ static void tmc5130_delayCsGuard(void)
 }
 
 /**
- * @brief 执行TMC5130 驱动中的 tmc5130_enterSpiAccess 逻辑。
- * @return true 表示条件满足或处理成功，false 表示条件不满足或处理失败。
+ * @brief 取得 TMC5130 SPI 总线访问权并满足片选保护时序。
+ * @return true 表示临界区内发现 SPI 访问标志空闲，并已将其置为占用；false 表示已有 TMC5130 访问正在进行，本次调用未取得总线所有权。
  */
 static bool tmc5130_enterSpiAccess(void)
 {
@@ -279,8 +295,7 @@ static bool tmc5130_enterSpiAccess(void)
 }
 
 /**
- * @brief 执行TMC5130 驱动中的 tmc5130_leaveSpiAccess 逻辑。
- * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ * @brief 释放 TMC5130 SPI 总线访问权并恢复片选状态。
  */
 static void tmc5130_leaveSpiAccess(void)
 {
@@ -295,16 +310,17 @@ static void tmc5130_leaveSpiAccess(void)
 /* *********************** SPI 读写封装 *********************** */
 
 /**
- * @brief  通过 SPI 读一个寄存器（发送 length 字节，接收 5 字节）
- *         TMC5130 的寄存器读取机制：
- *         - 第一次发送地址，只是“触发”内部准备数据，不使用返回值
- *         - 第二次再发送同一地址，才能读到上一帧准备好的 32bit 数据
- *         此函数只负责发一帧并返回 RX 数据解析出来的 32bit 整数
+ * @brief 通过 SPI 读一个寄存器（发送 length 字节，接收 5 字节）。
  *
- * @param  tmc5130  驱动句柄
- * @param  data     TX 缓冲区指针（data[0] 一般为寄存器地址）
- * @param  length   发送/接收长度，一般为 5
- * @retval 组合后的 32bit 数据（rxBuff[1..4]）
+ * 第二次再发送同一地址，才能读到上一帧准备好的 32bit 数据。
+ * 此函数只负责发一帧并返回 RX 数据解析出来的 32bit 整数。
+ *
+ * @param tmc5130 驱动句柄。该 TMC5130TypeDef 实例提供 SPI、片选和使能 GPIO，用于执行一次五字节寄存器读取事务。
+ * @param data TX 缓冲区指针（data[0] 一般为寄存器地址）。
+ * @param length 发送/接收长度，一般为 5。
+ * @param value 用于返回 TMC5130 数组读取事务还原出的 32 位寄存器值。
+ * @param stage 外设故障现场的诊断阶段编号；用于区分参数检查、总线访问、寄存器读写、回读核对和设备状态检查等失败位置。
+ * @return 组合后的 32bit 数据（rxBuff[1..4]）。
  */
 static bool tmc5130_tryReadArray(TMC5130TypeDef *tmc5130,
                                  uint8_t *data,
@@ -388,9 +404,11 @@ static bool tmc5130_tryReadArray(TMC5130TypeDef *tmc5130,
 /**
  * @brief  通过 SPI 写一帧数据，并返回 HAL 发送是否成功
  *
- * @param  tmc5130 驱动句柄
+ * @param tmc5130 驱动句柄。该 TMC5130TypeDef 实例提供 SPI、片选和使能 GPIO，用于执行一次五字节寄存器写入事务。
  * @param  data    待发送数据（data[0] 为寄存器地址 | 写标志位）
  * @param  length  数据长度，一般为 5
+ *
+ * @return true 表示待发数据和设备对象有效，SPI 总线访问成功且 HAL_SPI_Transmit 完成；false 表示参数/长度无效、无法取得 SPI 访问权或 HAL 发送失败。
  */
 static bool tmc5130_writeArray(TMC5130TypeDef *tmc5130, uint8_t *data, size_t length)
 {
@@ -468,10 +486,15 @@ static bool tmc5130_writeArray(TMC5130TypeDef *tmc5130, uint8_t *data, size_t le
 /* *********************** 寄存器级读写 *********************** */
 
 /**
- * @brief  写 4 字节（x1~x4）到指定寄存器地址
+ * @brief 写 4 字节（x1~x4）到指定寄存器地址。
  *
- * @param  address 寄存器地址（不带写标志位）
- * @param  x1~x4   四个字节，高字节在前
+ * @param tmc5130 目标 TMC5130 驱动实例。对象保存 SPI 句柄、片选 GPIO 和使能 GPIO，底层寄存器访问与驱动使能操作均通过该实例定位硬件。
+ * @param address 寄存器地址（不带写标志位）。诊断和底层收发均保存该 TMC5130 原始寄存器地址。
+ * @param x1 TMC5130 32 位数据的最高字节。
+ * @param x2 TMC5130 32 位数据的次高字节。
+ * @param x3 TMC5130 32 位数据的次低字节。
+ * @param x4 TMC5130 32 位数据的最低字节。
+ * @return true 表示地址及 4 个数据字节组成的 5 字节报文已成功发送；false 表示底层 SPI 访问或发送失败。
  */
 static bool tmc5130_writeDatagram(TMC5130TypeDef *tmc5130,
                                   uint8_t address,
@@ -482,10 +505,12 @@ static bool tmc5130_writeDatagram(TMC5130TypeDef *tmc5130,
 }
 
 /**
- * @brief  向 TMC5130 指定寄存器写入 32 位整数
+ * @brief 向 TMC5130 指定寄存器写入 32 位整数。
  *
- * @param  address 寄存器地址
- * @param  value   要写入的 32 位数
+ * @param tmc5130 目标 TMC5130 驱动实例。对象保存 SPI 句柄、片选 GPIO 和使能 GPIO，底层寄存器访问与驱动使能操作均通过该实例定位硬件。
+ * @param address 寄存器地址（不带写标志位）。诊断和底层收发均保存该 TMC5130 原始寄存器地址。
+ * @param value 要写入的 32 位数。
+ * @return true 表示 32 位 value 已按高字节在前拆分并写入指定 TMC5130 寄存器；false 表示底层 5 字节寄存器写报文发送失败。
  */
 bool stpr_writeInt(TMC5130TypeDef *tmc5130, uint8_t address, int32_t value)
 {
@@ -500,13 +525,12 @@ bool stpr_writeInt(TMC5130TypeDef *tmc5130, uint8_t address, int32_t value)
 }
 
 /**
- * @brief 初始化TMC5130 驱动中的 tmc5130_initWrite 逻辑。
+ * @brief 初始化阶段写寄存器并记录首次失败，后续统一返回初始化结果。
  *
- * @param tmc5130 业务参数。
- * @param address 地址参数。
- * @param value 待处理数值。
- * @param failed_count 业务参数。
- * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ * @param tmc5130 目标 TMC5130 驱动实例。对象保存 SPI 句柄、片选 GPIO 和使能 GPIO，底层寄存器访问与驱动使能操作均通过该实例定位硬件。
+ * @param address 寄存器地址（不带写标志位）。诊断和底层收发均保存该 TMC5130 原始寄存器地址。
+ * @param value 初始化写入使用的输入数值。
+ * @param failed_count 用于累计 TMC5130 初始化寄存器写入或回读失败次数。
  */
 static void tmc5130_initWrite(TMC5130TypeDef *tmc5130,
                               uint8_t address,
@@ -516,7 +540,6 @@ static void tmc5130_initWrite(TMC5130TypeDef *tmc5130,
     for (uint32_t attempt = 1U; attempt <= TMC5130_INIT_WRITE_RETRY_MAX; ++attempt) {
         if (stpr_writeInt(tmc5130, address, value)) {
             if (attempt > 1U) {
-                /* 错误 阶段：重试成功 模块：电机 操作：驱动初始化 原因：恢复成功 尝试：attempt/TMC5130_INIT_WRITE_RETRY_MAX */
                 ErrorLog_Recover(ERROR_LOG_MODULE_MOTOR,
                                  ERROR_LOG_OP_DRIVER_INIT,
                                  ERROR_LOG_REASON_RECOVER_OK,
@@ -531,7 +554,6 @@ static void tmc5130_initWrite(TMC5130TypeDef *tmc5130,
             return;
         }
 
-        /* 错误 阶段：错误重试 模块：电机 操作：驱动初始化 原因：通信失败 尝试：attempt/TMC5130_INIT_WRITE_RETRY_MAX 错误码：MOTOR_TMC_COMM_ERROR 错误名：ErrorLog_GetCodeName(MOTOR_TMC_COMM_ERROR) */
         ErrorLog_Retry(ERROR_LOG_MODULE_MOTOR,
                        ERROR_LOG_OP_DRIVER_INIT,
                        ERROR_LOG_REASON_COMM_FAIL,
@@ -555,6 +577,11 @@ static void tmc5130_initWrite(TMC5130TypeDef *tmc5130,
 /**
  * @brief  执行一次完整的 TMC5130 寄存器读取流程。
  *         TMC5130 的读操作带流水线：第一帧只提交地址，第二帧才返回上一帧准备好的数据。
+ *
+ * @param tmc5130 目标 TMC5130 驱动实例。对象保存 SPI 句柄、片选 GPIO 和使能 GPIO，底层寄存器访问与驱动使能操作均通过该实例定位硬件。
+ * @param address 寄存器地址（不带写标志位）。诊断和底层收发均保存该 TMC5130 原始寄存器地址。
+ * @param value 用于返回单次 TMC5130 SPI 事务读取的 32 位寄存器值。
+ * @return true 表示已完成 TMC5130 流水线读的请求帧和取数帧，返回值已写入输出；false 表示输出指针为空，或请求帧/取数帧任一底层 SPI 事务失败。
  */
 static bool tmc5130_readRegisterOnce(TMC5130TypeDef *tmc5130, uint8_t address, int32_t *value)
 {
@@ -588,12 +615,12 @@ static bool tmc5130_readRegisterOnce(TMC5130TypeDef *tmc5130, uint8_t address, i
 }
 
 /**
- * @brief 执行TMC5130 驱动中的 tmc5130_isCloseInt32 逻辑。
+ * @brief 判断两个有符号 32 位值的差是否位于给定容差内。
  *
- * @param a 业务参数。
- * @param b 业务参数。
- * @param tolerance 业务参数。
- * @return true 表示条件满足或处理成功，false 表示条件不满足或处理失败。
+ * @param a 算法或比较使用的第一个输入值。
+ * @param b 算法或比较使用的第二个输入值。
+ * @param tolerance 两个 32 位数判定接近时允许的最大绝对差。
+ * @return true 表示 a 与 b 的 64 位绝对差不大于 tolerance；false 表示两值差超过给定容差。
  */
 static bool tmc5130_isCloseInt32(int32_t a, int32_t b, int32_t tolerance)
 {
@@ -611,6 +638,10 @@ static bool tmc5130_isCloseInt32(int32_t a, int32_t b, int32_t tolerance)
  * 现场日志中出现 0x21 状态字混入数据区的错位值，例如 0x4DF12100、0xF1210000。
  * 这类值会让上层看到瞬时位置跳变。XACTUAL 是位置核心基准，因此这里要求连续
  * 两次完整读取足够接近；若第一组不稳定，再补读第三组，用后两组稳定值作为结果。
+ *
+ * @param tmc5130 目标 TMC5130 驱动实例。对象保存 SPI 句柄、片选 GPIO 和使能 GPIO，底层寄存器访问与驱动使能操作均通过该实例定位硬件。
+ * @param value 用于返回连续样本一致的 TMC5130 XACTUAL 位置值。
+ * @return true 表示在限定重试内取得两次可接受且一致的 XACTUAL，并已写入输出；false 表示前三次中的必要寄存器读取失败，或三份读数任意两份都未落入允许容差。
  */
 static bool tmc5130_readXactualStable(TMC5130TypeDef *tmc5130, int32_t *value)
 {
@@ -653,7 +684,6 @@ static bool tmc5130_readXactualStable(TMC5130TypeDef *tmc5130, int32_t *value)
              (long)first,
              (long)second,
              (long)third);
-    /* 错误 阶段：错误报警 模块：电机 操作：驱动状态检查 原因：通信失败 处理：停止电机 详情：detail */
     ErrorLog_WarnDetail(ERROR_LOG_MODULE_MOTOR,
                         ERROR_LOG_OP_DRIVER_CHECK,
                         ERROR_LOG_REASON_COMM_FAIL,
@@ -678,6 +708,11 @@ static bool tmc5130_readXactualStable(TMC5130TypeDef *tmc5130, int32_t *value)
  *
  * XACTUAL 直接影响电机尺带长度和运动判断，单次错位值风险最高，因此使用稳定读取；
  * 其它寄存器保持原来的两帧流水线读取流程，避免改变状态类寄存器的实时语义。
+ *
+ * @param tmc5130 目标 TMC5130 驱动实例。对象保存 SPI 句柄、片选 GPIO 和使能 GPIO，底层寄存器访问与驱动使能操作均通过该实例定位硬件。
+ * @param address 寄存器地址（不带写标志位）。诊断和底层收发均保存该 TMC5130 原始寄存器地址。
+ * @param value 待原地读取或更新的数值对象。该输出指针在 TMC5130 寄存器读取成功时写入按补码解释的 32 位值，失败时保持调用方原值。
+ * @return true 表示指定寄存器已成功读取；XACTUAL 还通过了稳定读策略；false 表示设备/输出参数无效，或相应稳定读/单次读事务失败。
  */
 bool stpr_tryReadInt(TMC5130TypeDef *tmc5130, uint8_t address, int32_t *value)
 {
@@ -707,9 +742,11 @@ bool stpr_tryReadInt(TMC5130TypeDef *tmc5130, uint8_t address, int32_t *value)
 /* *********************** 内部速度模式工具 / 位置控制接口 *********************** */
 
 /**
- * @brief  以给定速度持续旋转（速度模式）
+ * @brief 以给定速度持续旋转（速度模式）。
  *
- * @param  velocity 目标速度（正：正向，负：反向）
+ * @param tmc5130 目标 TMC5130 驱动实例。对象保存 SPI 句柄、片选 GPIO 和使能 GPIO，底层寄存器访问与驱动使能操作均通过该实例定位硬件。
+ * @param velocity 目标速度（正：正向，负：反向）。
+ * @return 当前接口在写入速度模式和目标速度后返回 NO_ERROR；调用方需通过后续驱动健康检查确认 SPI 写入及功率级状态。
  */
 uint32_t stpr_rotate(TMC5130TypeDef *tmc5130, int32_t velocity)
 {
@@ -726,6 +763,9 @@ uint32_t stpr_rotate(TMC5130TypeDef *tmc5130, int32_t velocity)
  * 速度模式下只把 VMAX 写成 0 虽然能停住当前动作，但 RAMPMODE 会停留在速度模式。
  * 后续如果只是恢复速度参数并写 VMAX，驱动可能在没有新位置命令的情况下重新运动。
  * 因此停止时把当前位置同步为目标位置，再切回位置模式，保证空闲态写 VMAX 不会启动电机。
+ *
+ * @param tmc5130 目标 TMC5130 驱动实例。对象保存 SPI 句柄、片选 GPIO 和使能 GPIO，底层寄存器访问与驱动使能操作均通过该实例定位硬件。
+ * @return NO_ERROR 表示 VMAX 已清零且驱动回到安全位置模式；寄存器写入失败返回对应访问错误，模式恢复回读失败返回 MOTOR_TMC_COMM_ERROR。
  */
 uint32_t stpr_stop(TMC5130TypeDef *tmc5130)
 {
@@ -733,7 +773,6 @@ uint32_t stpr_stop(TMC5130TypeDef *tmc5130)
     int32_t xactual = 0;
 
     ret = stpr_rotate(tmc5130, 0);
-    /* 先处理异常边界，避免TMC5130 驱动状态机带故障继续运行。 */
     if (ret != NO_ERROR) {
         return ret;
     }
@@ -746,10 +785,12 @@ uint32_t stpr_stop(TMC5130TypeDef *tmc5130)
 }
 
 /**
- * @brief  以给定最大速度，运行到指定位置（位置模式）
+ * @brief 以给定最大速度，运行到指定位置（位置模式）。
  *
- * @param  position   目标位置（步数）
- * @param  velocityMax 最大速度（VMAX）
+ * @param tmc5130 目标 TMC5130 驱动实例。对象保存 SPI 句柄、片选 GPIO 和使能 GPIO，底层寄存器访问与驱动使能操作均通过该实例定位硬件。
+ * @param position 目标位置（步数）。
+ * @param velocityMax 最大速度（VMAX）。
+ * @return 当前接口在目标位置和最大速度寄存器写入后返回 NO_ERROR；底层写入失败通过 TMC5130 诊断快照和全局通信状态记录，本函数不返回单独的写失败码。
  */
 uint32_t stpr_moveTo(TMC5130TypeDef *tmc5130, int32_t position, uint32_t velocityMax)
 {
@@ -761,11 +802,12 @@ uint32_t stpr_moveTo(TMC5130TypeDef *tmc5130, int32_t position, uint32_t velocit
 }
 
 /**
- * @brief  在当前位置基础上“相对移动”一定步数
- *         ticks 传入的是相对位移，函数内部会转换成绝对位置并回写到 *ticks
+ * @brief 在当前位置基础上“相对移动”一定步数。
  *
- * @param  ticks       [入/出] 相对位移 / 计算后的绝对目标位置
- * @param  velocityMax 最大速度
+ * @param tmc5130 目标 TMC5130 驱动实例。对象保存 SPI 句柄、片选 GPIO 和使能 GPIO，底层寄存器访问与驱动使能操作均通过该实例定位硬件。
+ * @param ticks [入/出] 相对位移 / 计算后的绝对目标位置。
+ * @param velocityMax 最大速度。
+ * @return NO_ERROR 表示相对步数已换算为绝对目标并下发；空 ticks 指针返回 SYSTEM_CALL_CONDITION_ERROR，XACTUAL 读取失败返回 MOTOR_TMC_COMM_ERROR，加法溢出返回 SYSTEM_CALCULATION_ERROR，其他值为 stpr_moveTo 结果。
  */
 uint32_t stpr_moveBy(TMC5130TypeDef *tmc5130, int32_t *ticks, uint32_t velocityMax)
 {
@@ -797,6 +839,8 @@ uint32_t stpr_moveBy(TMC5130TypeDef *tmc5130, int32_t *ticks, uint32_t velocityM
 
 /**
  * @brief  禁止驱动（EN 引脚拉高或拉低视硬件设计，一般为高电平关闭）
+ *
+ * @param tmc5130 目标 TMC5130 驱动实例。对象保存 SPI 句柄、片选 GPIO 和使能 GPIO，底层寄存器访问与驱动使能操作均通过该实例定位硬件。
  */
 void stpr_disableDriver(TMC5130TypeDef *tmc5130)
 {
@@ -805,6 +849,8 @@ void stpr_disableDriver(TMC5130TypeDef *tmc5130)
 
 /**
  * @brief  使能驱动（EN 引脚）
+ *
+ * @param tmc5130 目标 TMC5130 驱动实例。对象保存 SPI 句柄、片选 GPIO 和使能 GPIO，底层寄存器访问与驱动使能操作均通过该实例定位硬件。
  */
 void stpr_enableDriver(TMC5130TypeDef *tmc5130)
 {
@@ -821,6 +867,10 @@ void stpr_enableDriver(TMC5130TypeDef *tmc5130)
 
 /**
  * @brief  同时设置“实际位置”和“目标位置”，相当于软件重置坐标
+ *
+ * @param tmc5130 目标 TMC5130 驱动实例。对象保存 SPI 句柄、片选 GPIO 和使能 GPIO，底层寄存器访问与驱动使能操作均通过该实例定位硬件。
+ * @param position 位置。
+ * @return 当前接口在同步写入 XACTUAL 和 XTARGET 后返回 NO_ERROR；底层寄存器写异常通过 TMC5130 访问诊断另行记录。
  */
 uint32_t stpr_setPos(TMC5130TypeDef *tmc5130, int32_t position)
 {
@@ -840,7 +890,7 @@ uint32_t stpr_setPos(TMC5130TypeDef *tmc5130, int32_t position)
  * - uv_cp 和 reset 会清除 GSTAT 后返回对应错误。
  * 功率级是否建立统一由 stpr_checkDriverPowerReady() 或 MotorDriver_CheckHealth() 追加检查。
  *
- * @param tmc5130 TMC5130 设备对象。
+ * @param tmc5130 TMC5130 设备对象。该实例提供 SPI、片选和使能 GPIO，用于读取驱动状态寄存器并判断故障。
  * @return NO_ERROR 或对应电机故障错误码。
  */
 uint32_t stpr_checkDriverStatus(TMC5130TypeDef *tmc5130)
@@ -864,7 +914,6 @@ uint32_t stpr_checkDriverStatus(TMC5130TypeDef *tmc5130)
         /* GSTAT/RAMPSTAT 可能读成 0；再读 CHOPCONF 用于识别“读得通但配置全丢”的掉电场景。 */
         if (!stpr_tryReadInt(tmc5130, TMC5130_CHOPCONF, &chopconf)) {
             snprintf(detail, sizeof(detail), "全局状态：0x00000000,斩波配置：读取失败");
-            /* 错误 阶段：错误报警 模块：电机 操作：驱动状态检查 原因：通信失败 处理：停止电机 详情：detail */
             ErrorLog_WarnDetail(ERROR_LOG_MODULE_MOTOR,
                                 ERROR_LOG_OP_DRIVER_CHECK,
                                 ERROR_LOG_REASON_COMM_FAIL,
@@ -877,7 +926,6 @@ uint32_t stpr_checkDriverStatus(TMC5130TypeDef *tmc5130)
             /* CHOPCONF 正常配置不应为 0；为 0 时不能再把 GSTAT=0 当作健康状态。 */
             printf("TMC5130配置丢失或驱动掉电 | GSTAT=0x00000000 | CHOPCONF=0x00000000\r\n");
             snprintf(detail, sizeof(detail), "全局状态：0x00000000,斩波配置：0x00000000");
-            /* 错误 阶段：错误报警 模块：电机 操作：驱动状态检查 原因：通信失败 处理：停止电机 详情：detail */
             ErrorLog_WarnDetail(ERROR_LOG_MODULE_MOTOR,
                                 ERROR_LOG_OP_DRIVER_CHECK,
                                 ERROR_LOG_REASON_COMM_FAIL,
@@ -912,7 +960,6 @@ uint32_t stpr_checkDriverStatus(TMC5130TypeDef *tmc5130)
                  "全局状态：0x%08lX,非法位：0x%08lX",
                  (unsigned long)gstat_raw,
                  (unsigned long)(gstat_raw & ~TMC5130_GSTAT_VALID_MASK));
-        /* 错误 阶段：错误报警 模块：电机 操作：驱动状态检查 原因：校验失败 处理：继续尝试 详情：detail */
         ErrorLog_WarnDetail(ERROR_LOG_MODULE_MOTOR,
                             ERROR_LOG_OP_DRIVER_CHECK,
                             ERROR_LOG_REASON_VALIDATE_FAIL,
@@ -943,7 +990,7 @@ uint32_t stpr_checkDriverStatus(TMC5130TypeDef *tmc5130)
         printf("TMC5130 芯片复位标志（GSTAT[0]），运动过程中复位按通信/供电异常处理\r\n");
     }
 
-    /* 先处理异常边界，避免TMC5130 驱动状态机带故障继续运行。 */
+    /* 只有 GSTAT 或 DRV_STATUS 已确认存在驱动异常时才进入故障归因；具体根因由后续寄存器位和读取状态决定。 */
     if (driver_error) {
         uint32_t driver_ret;
 
@@ -953,7 +1000,6 @@ uint32_t stpr_checkDriverStatus(TMC5130TypeDef *tmc5130)
             snprintf(detail, sizeof(detail),
                      "全局状态：0x%08lX,驱动状态：读取失败",
                      (unsigned long)gstat_raw);
-            /* 错误 阶段：错误报警 模块：电机 操作：驱动状态检查 原因：通信失败 处理：停止电机 详情：detail */
             ErrorLog_WarnDetail(ERROR_LOG_MODULE_MOTOR,
                                 ERROR_LOG_OP_DRIVER_CHECK,
                                 ERROR_LOG_REASON_COMM_FAIL,
@@ -969,7 +1015,6 @@ uint32_t stpr_checkDriverStatus(TMC5130TypeDef *tmc5130)
             MotorCtrl_InvalidateDriverInit();
             return MOTOR_TMC_COMM_ERROR;
         }
-        /* 先处理异常边界，避免TMC5130 驱动状态机带故障继续运行。 */
         if (driver_ret == NO_ERROR) {
             driver_ret = MOTOR_UNKNOWN_FEEDBACK;
         }
@@ -977,7 +1022,6 @@ uint32_t stpr_checkDriverStatus(TMC5130TypeDef *tmc5130)
                  "全局状态：0x%08lX,驱动状态：0x%08lX",
                  (unsigned long)gstat_raw,
                  (unsigned long)((uint32_t)drvstatus));
-        /* 错误 阶段：错误报警 模块：电机 操作：驱动状态检查 原因：ErrorLog_GetReasonByCode(driver_ret) 处理：停止电机 详情：detail */
         ErrorLog_WarnDetail(ERROR_LOG_MODULE_MOTOR,
                             ERROR_LOG_OP_DRIVER_CHECK,
                             ErrorLog_GetReasonByCode(driver_ret),
@@ -998,7 +1042,6 @@ uint32_t stpr_checkDriverStatus(TMC5130TypeDef *tmc5130)
                  "全局状态：0x%08lX,驱动状态：%s",
                  (unsigned long)gstat_raw,
                  drvstatus_ok ? "读取成功" : "读取失败");
-        /* 错误 阶段：错误报警 模块：电机 操作：驱动状态检查 原因：电荷泵欠压 处理：停止电机 详情：detail */
         ErrorLog_WarnDetail(ERROR_LOG_MODULE_MOTOR,
                             ERROR_LOG_OP_DRIVER_CHECK,
                             ERROR_LOG_REASON_DRIVER_UV,
@@ -1017,7 +1060,6 @@ uint32_t stpr_checkDriverStatus(TMC5130TypeDef *tmc5130)
                  "全局状态：0x%08lX,驱动状态：%s",
                  (unsigned long)gstat_raw,
                  drvstatus_ok ? "读取成功" : "读取失败");
-        /* 错误 阶段：错误报警 模块：电机 操作：驱动状态检查 原因：通信失败 处理：停止电机 详情：detail */
         ErrorLog_WarnDetail(ERROR_LOG_MODULE_MOTOR,
                             ERROR_LOG_OP_DRIVER_CHECK,
                             ERROR_LOG_REASON_COMM_FAIL,
@@ -1044,9 +1086,9 @@ uint32_t stpr_checkDriverStatus(TMC5130TypeDef *tmc5130)
 /**
  * @brief 检查 TMC5130 驱动功率级是否已经建立实际电流。
  *
- * SPI 和配置寄存器正常不代表电机 24V 已经上电。使能后 CS_ACTUAL 仍为 0 时，
- * 说明实际电流没有建立，按电机被禁止/功率级不可用处理。
  * 该函数会读取寄存器并打印错误报警，只能在任务上下文调用，不能放入中断链路。
+ *
+ * @param tmc5130 目标 TMC5130 驱动实例。对象保存 SPI 句柄、片选 GPIO 和使能 GPIO，底层寄存器访问与驱动使能操作均通过该实例定位硬件。
  * @return NO_ERROR 表示功率级已建立，否则返回具体电机错误码。
  */
 uint32_t stpr_checkDriverPowerReady(TMC5130TypeDef *tmc5130)
@@ -1058,7 +1100,6 @@ uint32_t stpr_checkDriverPowerReady(TMC5130TypeDef *tmc5130)
     /* 读取 DRV_STATUS 是功率级判断的依据，失败时按通信异常处理并失效初始化标记。 */
     if (!stpr_tryReadInt(tmc5130, TMC5130_DRVSTATUS, &drvstatus)) {
         snprintf(detail, sizeof(detail), "驱动状态：读取失败");
-        /* 错误 阶段：错误报警 模块：电机 操作：驱动状态检查 原因：通信失败 处理：停止电机 详情：detail */
         ErrorLog_WarnDetail(ERROR_LOG_MODULE_MOTOR,
                             ERROR_LOG_OP_DRIVER_CHECK,
                             ERROR_LOG_REASON_COMM_FAIL,
@@ -1075,7 +1116,6 @@ uint32_t stpr_checkDriverPowerReady(TMC5130TypeDef *tmc5130)
                (unsigned long)((uint32_t)drvstatus));
         snprintf(detail, sizeof(detail), "驱动状态：0x%08lX,实际电流档：0",
                  (unsigned long)((uint32_t)drvstatus));
-        /* 错误 阶段：错误报警 模块：电机 操作：驱动状态检查 原因：电机被禁止 处理：停止电机 详情：detail */
         ErrorLog_WarnDetail(ERROR_LOG_MODULE_MOTOR,
                             ERROR_LOG_OP_DRIVER_CHECK,
                             ErrorLog_GetReasonByCode(MOTOR_DISABLED),
@@ -1089,10 +1129,10 @@ uint32_t stpr_checkDriverPowerReady(TMC5130TypeDef *tmc5130)
 }
 
 /**
- * @brief 执行TMC5130 驱动中的 stpr_waitMove 逻辑。
+ * @brief 等待目标运动结束，循环处理命令切换、扭力碰撞、驱动和功率状态及运行位置刷新。
  *
- * @param tmc5130 业务参数。
- * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ * @param tmc5130 目标 TMC5130 驱动实例。对象保存 SPI 句柄、片选 GPIO 和使能 GPIO，底层寄存器访问与驱动使能操作均通过该实例定位硬件。
+ * @return NO_ERROR 表示运动结束且最终位置状态已刷新；STATE_SWITCH 表示新命令打断，读取驱动状态失败返回 MOTOR_TMC_COMM_ERROR，其他碰撞、功率、扭力、丢步或运行超时错误由循环检查返回。
  */
 uint32_t stpr_waitMove(TMC5130TypeDef *tmc5130)
 {
@@ -1137,7 +1177,6 @@ uint32_t stpr_waitMove(TMC5130TypeDef *tmc5130)
 
         /* 在运动过程中周期性检查防撞（比如扭力超限等） */
         ret = CheckWeightCollision();
-        /* 先处理异常边界，避免TMC5130 驱动状态机带故障继续运行。 */
         if (ret != NO_ERROR) {
             MotorCtrl_SlowStop();
             RETURN_ERROR(ret);
@@ -1145,7 +1184,6 @@ uint32_t stpr_waitMove(TMC5130TypeDef *tmc5130)
 
         /* 检查 TMC5130 全局状态；读取失败或检测到真实故障时停止运动并把错误交给上层处理 */
         ret = stpr_checkDriverStatus(tmc5130);
-        /* 先处理异常边界，避免TMC5130 驱动状态机带故障继续运行。 */
         if (ret != NO_ERROR) {
             MotorCtrl_SlowStop();
             RETURN_ERROR(ret);
@@ -1154,19 +1192,17 @@ uint32_t stpr_waitMove(TMC5130TypeDef *tmc5130)
         /* stpr_waitMove() 是底层直接调用点，不能依赖 MotorDriver_CheckHealth() 追加功率级检查；
          * 这里单独确认 CS_ACTUAL，避免 24V 未上电时仍按普通等待继续运行。 */
         ret = stpr_checkDriverPowerReady(tmc5130);
-        /* 先处理异常边界，避免TMC5130 驱动状态机带故障继续运行。 */
         if (ret != NO_ERROR) {
             MotorCtrl_SlowStop();
             RETURN_ERROR(ret);
         }
 
         ret = MotorCtrl_PollRuntimePosition();
-        /* 先处理异常边界，避免TMC5130 驱动状态机带故障继续运行。 */
         if (ret != NO_ERROR) {
             MotorCtrl_SlowStop();
             RETURN_ERROR(ret);
         }
-        /* TMC5130 驱动与外设通信之间保留等待时间，避免硬件或对端协议尚未准备好。 */
+        /* 以 50 ms 周期轮询电机停稳状态，在限制 SPI 读取频率的同时保留驱动错误和超时检查机会。 */
         HAL_Delay(50);
     }
     MotorCtrl_RefreshDebugDrumState();
@@ -1178,6 +1214,9 @@ uint32_t stpr_waitMove(TMC5130TypeDef *tmc5130)
  * @brief  生成 IHOLD_IRUN 寄存器值。
  *
  * 运行时只改变 IRUN；IHOLD 和 IHOLDDELAY 保持统一口径，避免不同入口写出不同电流配置。
+ *
+ * @param current 准备写入 TMC5130 IHOLD_IRUN 的运行电流档位值，函数会限制到驱动允许范围。
+ * @return 返回由固定 IHOLD、输入 IRUN 和固定 IHOLDDELAY 组合得到的 32 位 IHOLD_IRUN 寄存器值。
  */
 static uint32_t tmc5130_buildCurrentSetting(uint8_t current)
 {
@@ -1188,6 +1227,8 @@ static uint32_t tmc5130_buildCurrentSetting(uint8_t current)
 
 /**
  * @brief  记录本次下发的 IHOLD_IRUN 电流字段。
+ *
+ * @param setting TMC5130 电流设置的寄存器原始值。
  */
 static void tmc5130_logCurrentSetting(uint32_t setting)
 {
@@ -1196,9 +1237,11 @@ static void tmc5130_logCurrentSetting(uint32_t setting)
     (void)setting;
 }
 /**
- * @brief  设置驱动电流（IHOLD_IRUN 寄存器）
+ * @brief 设置驱动电流（IHOLD_IRUN 寄存器）。
  *
- * @param  current  运行电流 IRUN 的编码值（0~31）
+ * @param tmc5130 目标 TMC5130 驱动实例。对象保存 SPI 句柄、片选 GPIO 和使能 GPIO，底层寄存器访问与驱动使能操作均通过该实例定位硬件。
+ * @param current 运行电流 IRUN 的编码值（0~31）。
+ * @return 当前接口在写入 IHOLD_IRUN 后返回 NO_ERROR；电流范围应由上层门禁保证，底层 SPI 异常写入 TMC5130 诊断快照。
  */
 uint32_t stpr_setCurrent(TMC5130TypeDef *tmc5130, uint8_t current)
 {
@@ -1211,6 +1254,10 @@ uint32_t stpr_setCurrent(TMC5130TypeDef *tmc5130, uint8_t current)
 
 /**
  * @brief  设置最大速度（VMAX）
+ *
+ * @param tmc5130 目标 TMC5130 驱动实例。对象保存 SPI 句柄、片选 GPIO 和使能 GPIO，底层寄存器访问与驱动使能操作均通过该实例定位硬件。
+ * @param velocity 待写入 TMC5130 的速度寄存器值。
+ * @return 当前接口在更新 VMAX 后返回 NO_ERROR；速度范围由上层校验，底层 SPI 失败由驱动诊断链路记录。
  */
 uint32_t stpr_setVelocity(TMC5130TypeDef *tmc5130, uint32_t velocity)
 {
@@ -1219,14 +1266,17 @@ uint32_t stpr_setVelocity(TMC5130TypeDef *tmc5130, uint32_t velocity)
 }
 
 /**
- * @brief  初始化 TMC5130 步进电机驱动器的寄存器参数
- *         包括斩波配置、加减速、速度、stealthChop、StallGuard 等
+ * @brief 初始化 TMC5130 步进电机驱动器的寄存器参数。
  *
- * @param  spi      SPI 句柄
- * @param  cs_port  片选 GPIO 端口
- * @param  cs_pin   片选 GPIO 引脚
- * @param  dir      方向配置（如需从 GCONF 中配置方向，可使用）
- * @param  current  电流设置（IRUN）
+ * 包括斩波配置、加减速、速度、stealthChop、StallGuard 等。
+ *
+ * @param tmc5130 目标 TMC5130 驱动实例。对象保存 SPI 句柄、片选 GPIO 和使能 GPIO，底层寄存器访问与驱动使能操作均通过该实例定位硬件。
+ * @param spi SPI 句柄。
+ * @param cs_port 片选 GPIO 端口。
+ * @param cs_pin 片选 GPIO 引脚。
+ * @param dir 方向配置（如需从 GCONF 中配置方向，可使用）。
+ * @param current 电流设置（IRUN）。
+ * @return SYSTEM_CALL_CONDITION_ERROR 表示当前系统状态不允许执行；NO_ERROR 表示操作成功。
  */
 uint32_t stpr_initStepper(TMC5130TypeDef *tmc5130,
                           SPI_HandleTypeDef *spi,

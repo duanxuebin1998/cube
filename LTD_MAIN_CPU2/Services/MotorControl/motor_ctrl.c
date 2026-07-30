@@ -12,7 +12,7 @@
 /* ===================== 私有类型/状态 ===================== */
 
 /* 全局速度：由 MotorDriver_UpdateVelocityFromParams() 根据参数动态更新。 */
-uint32_t velocity = MOTOR_VELOCITY_BASE; /* 电机控制模块级变量，保存跨函数共享的业务状态。 */
+uint32_t velocity = MOTOR_VELOCITY_BASE;
 
 /* 驱动运行态：集中保存驱动侧跨文件共享状态。 */
 MotorDriverRuntime s_motor_driver = {

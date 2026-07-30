@@ -16,6 +16,7 @@
  */
 
 #ifndef INC_MEASURE_WATER_LEVEL_H_
+/* INC_MEASURE_WATER_LEVEL_H_ 是本头文件的包含保护标记；首次展开后置位，防止重复包含造成类型或接口重复定义。 */
 #define INC_MEASURE_WATER_LEVEL_H_
 
 #ifdef __cplusplus

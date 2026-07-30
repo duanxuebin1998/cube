@@ -1,11 +1,17 @@
 #ifndef _DSM_STATEFORMODBUS2_H
+/* _DSM_STATEFORMODBUS2_H 是本头文件的包含保护标记；首次展开后置位，防止重复包含造成类型或接口重复定义。 */
 #define _DSM_STATEFORMODBUS2_H
 /* 所有寄存器的地址 */
 /* #include "sys.h" */
+/* DSM 外部 Modbus 功能码 0x01，读取线圈状态；解析器必须同时校验地址范围、数据长度和异常响应规则。 */
 #define FUNCTIONCODE_READ_COIL 0x01
+/* DSM 外部 Modbus 功能码 0x03，读取保持寄存器；解析器必须同时校验地址范围、数据长度和异常响应规则。 */
 #define FUNCTIONCODE_READ_HOLDREGISTER 0x03
+/* DSM 外部 Modbus 功能码 0x04，读取输入寄存器；解析器必须同时校验地址范围、数据长度和异常响应规则。 */
 #define FUNCTIONCODE_READ_INPUTREGISTER 0x04
+/* DSM 外部 Modbus 功能码 0x05，写单个线圈；解析器必须同时校验地址范围、数据长度和异常响应规则。 */
 #define FUNCTIONCODE_WRITE_COIL 0x05
+/* DSM 外部 Modbus 功能码 0x10，写多个保持寄存器；解析器必须同时校验地址范围、数据长度和异常响应规则。 */
 #define FUNCTIONCODE_WRITE_MULREGISTER 0x10
 
 #define EXCEPTIONCODE_ERRORFUNCTION 0X01   /* 功能码错误 */
@@ -16,18 +22,37 @@
 
 /* *************************液位计输入寄存器地址****************meng */
 
+/* DSM 第一段输入寄存器的起始地址 0x0000；该段发布液位、温度、密度、水位及其状态字段。 */
 #define STARTADDRESS_INPUTREGISTER 0x00
+/* DSM 第一段输入寄存器“液位测量值”的起始地址；该字段占 2 个 16 位寄存器，读取时不得截断字段。 */
 #define INPUTREGISTER_VALUE_LEVEL 0x00
+/* DSM 第一段输入寄存器“液位测量状态”的起始地址；该字段占 1 个 16 位寄存器，读取时不得截断字段。 */
 #define INPUTREGISTER_DSM_STATE_LEVEL 0x02
+/* DSM 第一段输入寄存器“DSM 当前错误码”的起始地址；该字段占 1 个 16 位寄存器，读取时不得截断字段。 */
 #define INPUTREGISTER_ERRORCODE 0x03
+/* DSM 第一段输入寄存器“DSM 报警状态”的起始地址；该字段占 1 个 16 位寄存器，读取时不得截断字段。 */
 #define INPUTREGISTER_DSM_STATE_ALARM 0x04
+/* DSM 第一段输入寄存器“温度计类型”的起始地址；该字段占 1 个 16 位寄存器，读取时不得截断字段。 */
 #define INPUTREGISTER_TYPEOFTHERMOMETER 0x05
+/* DSM 第一段输入寄存器“平均温度”的起始地址；该字段占 1 个 16 位寄存器，读取时不得截断字段。 */
 #define INPUTREGISTER_VALUE_AVERAGETEMPERATURE 0x06
+/* DSM 第一段输入寄存器“平均温度有效状态”的起始地址；该字段占 1 个 16 位寄存器，读取时不得截断字段。 */
 #define INPUTREGISTER_DSM_STATE_AVERAGETEMPERATURE 0x07
+/* DSM 第一段输入寄存器“平均密度”的起始地址；该字段占 1 个 16 位寄存器，读取时不得截断字段。 */
 #define INPUTREGISTER_VALUE_AVERAGEDENSITY 0x08
+/* DSM 第一段输入寄存器“平均密度有效状态”的起始地址；该字段占 1 个 16 位寄存器，读取时不得截断字段。 */
 #define INPUTREGISTER_DSM_STATE_AVERAGEDENSITY 0x09
+/* DSM 第一段输入寄存器“水位测量值”的起始地址；该字段占 2 个 16 位寄存器，读取时不得截断字段。 */
 #define INPUTREGISTER_VALUE_WATER 0x0A
+/* DSM 第一段输入寄存器“水位测量状态”的起始地址；该字段占 1 个 16 位寄存器，读取时不得截断字段。 */
 #define INPUTREGISTER_DSM_STATE_WATER 0x0C
+/*
+ * DSM 实时密度点阵统一布局：共 16 个同构测点，点号按 1～16 编号。
+ * 每点分别定义密度值地址和紧随其后的点位地址，相邻两点的密度值地址固定相差 3；
+ * 每组第 3 个地址未定义独立业务宏，作为协议地址间隔保留。
+ * 第 n 点密度起始地址为 0x000D + 3 × (n - 1)，位置地址紧随其后，
+ * 因此这一重复点阵只在此统一说明，后续 32 个地址宏不再逐条重复相同注释。
+ */
 #define INPUTREGISTER_VALUE_DENSITY1 0x0D
 #define INPUTREGISTER_POSITION_DENSITY1 0x0E
 #define INPUTREGISTER_VALUE_DENSITY2 0x10
@@ -92,8 +117,11 @@
 #define INPUTREGISTER_POSITION_TEMPERATURE15 0x68 /* 实时温度15的位置 */
 #define INPUTREGISTER_VALUE_TEMPERATURE16 0x6A    /* 实时温度16 */
 #define INPUTREGISTER_POSITION_TEMPERATURE16 0x6B /* 实时温度16的位置 */
+/* DSM 第一段输入寄存器中的当前称重值地址 0x006D；该字段用于调试和状态显示，数值单位沿用 DSM 既有协议定义。 */
 #define INPUTREGISTER_VALUE_GETWEIGHT 0x6D
+/* DSM 第一段输入寄存器“电机累计步数”的起始地址；该字段占 2 个 16 位寄存器，读取时不得截断字段。 */
 #define INPUTREGISTER_VALUE_MOTORSTEPS 0x6E
+/* DSM 第一段输入寄存器“当前温度”的起始地址；该字段占 1 个 16 位寄存器，读取时不得截断字段。 */
 #define INPUTREGISTER_VALUE_TEMPERATURE 0x70
 #define INPUTREGISTER_VALUE_WIRELESSTEMPERATURE1 0x71    /* 温度计温度值1(无线) */
 #define INPUTREGISTER_POSITION_WIRELESSTEMPERATURE1 0x72 /* 温度计温度值1的位置 */
@@ -1635,6 +1663,7 @@
 #define INPUTREGISTER_SPREAD_VCF_M100 0x15C7             /* 分布测量VCF100 */
 #define INPUTREGISTER_SPREAD_WEIGHTDENSITY_M100 0x15C9   /* 分布测量计重密度密度100 */
 
+/* DSM 第五段输入寄存器的包含式结束地址 0x15C9；该地址对应第 100 个分布测点的最后字段，区间长度计算必须加 1。 */
 #define ENDADDRESS5_INPUTREGISTER 0x15C9
 
 /* ********************************保持寄存器*************************************** */
@@ -1681,6 +1710,7 @@
 #define HOLDREGISTER_D_CORRECTION_10 0x0034            /* 密度修正值10 */
 #define HOLDREGISTER_D_CORRECTION_11 0x0035            /* 密度修正值11 */
 #define HOLDREGISTER_D_CORRECTION_12 0x0036            /* 密度修正值12 */
+/* DSM 第一段保持寄存器的包含式结束地址 0x001F；分段数组下标换算按 END - START + 1 计算。 */
 #define ENDADDRESS1_HOLDREGISTER 0x001F
 /* 第一段：25 41 55 */
 #define STARTADDRESS2_HOLDREGISTER 0x0100
@@ -1712,9 +1742,11 @@
 #define HOLDREGISTER_WATER_ZERO_MIN_DISTANCE 0x0122  /* 水位与零点最小距离 */
 #define HOLDREGISTER_IF_FINDOIL_POWERON 0x0123       /* 上电是否自动找液位 */
 #define HOLDREGISTER_DENSITY_TIME 0x0124             /* 密度测量提出油面时间 */
+/* DSM 第二段保持寄存器的包含式结束地址，扩展后为 0x0128；覆盖新增水位和罐高标定值的全部寄存器。 */
 #define ENDADDRESS2_HOLDREGISTER 0x0124
 /* 第二段：37 */
 
+/* DSM 第三段保持寄存器的包含式起始地址 0x0180；该段保存运动、传感器和修正参数。 */
 #define STARTADDRESS3_HOLDREGISTER 0x0180
 #define HOLDREGISTER_RUNTODISTANCE 0x0180     /* 运行距离 */
 #define HOLDREGISTER_ZEROCIRCLE 0x0182        /* 零点圈数 */
@@ -1743,6 +1775,7 @@
 #define ENDADDRESS3_WRITE_HOLDREGISTER 0x019D /* 写地址保护，防止程序版本被修改 V1.116 dq2020.4.2 */
 /* 第三段： 30 */
 
+/* DSM 第四段保持寄存器的包含式起始地址 0x0200；该段保存霍尔、频率阈值和稳定判定参数。 */
 #define STARTADDRESS4_HOLDREGISTER 0x0200
 
 #define HOLDREGISTER_TYPEOFEINDUCTION 0x0200        /* 霍尔器件类型 */
@@ -1758,6 +1791,7 @@
 #define HOLDREGISTER_NUMOFSTABLEHITS 0x020B         /* 密度测量温度平衡所需要的点数 V1.116 dq2020.4.2 */
 #define HOLDREGISTER_NUMOFHITS 0x020C               /* 密度测量第一点温度平衡时间 V1.116 dq2020.4.2 */
 
+/* DSM 第四段保持寄存器的包含式结束地址 0x020C；连续访问长度按 END - START + 1 计算。 */
 #define ENDADDRESS4_HOLDREGISTER 0x020C
 /* 第四段：13 */
 #define STARTADDRESS5_HOLDREGISTER 0x0280
@@ -1777,6 +1811,7 @@
 
 /* 第6段 */
 #define STARTADDRESS6_HOLDREGISTER 0x0300
+/* DSM 第六段保持寄存器的包含式结束地址 0x0362；同时作为 DSM 保持寄存器模式的最大有效地址。 */
 #define ENDADDRESS6_HOLDREGISTER 0x0362
 
 #undef INPUTREGISTER_CIRCLE
@@ -1790,32 +1825,66 @@
 
 /* V1.225 调试输入寄存器修正：0x0104/0x0105 为 X/Y 角度，0x010B 为幅值，0x010C/0x010D 为水位电压。 */
 #define INPUTREGISTER_CURRENT_X_ANGLE 0x0104
+/* DSM 调试输入寄存器“当前 Y 轴倾角”地址；该地址来自 V1.225 调试寄存器修正，旧别名在下方单独映射。 */
 #define INPUTREGISTER_CURRENT_Y_ANGLE 0x0105
+/* DSM 调试输入寄存器“传感器当前幅值”地址；该地址来自 V1.225 调试寄存器修正，旧别名在下方单独映射。 */
 #define INPUTREGISTER_SENSOR_AMPLITUDE 0x010B
+/* DSM 调试输入寄存器“水位传感器电压”地址；该地址来自 V1.225 调试寄存器修正，旧别名在下方单独映射。 */
 #define INPUTREGISTER_WATER_SENSOR_VOLTAGE 0x010C
+/* DSM 调试输入寄存器“调试输入寄存器 0x010E 保留槽”地址；该槽当前只为旧协议地址兼容保留，写入或读取结果不得解释为有效新字段。 */
 #define INPUTREGISTER_RESERVED_010E 0x010E
+/* DSM 调试输入寄存器“调试输入寄存器 0x010F 保留槽”地址；该槽当前只为旧协议地址兼容保留，写入或读取结果不得解释为有效新字段。 */
 #define INPUTREGISTER_RESERVED_010F 0x010F
+/* DSM 调试输入寄存器“调试输入寄存器 0x0110 保留槽”地址；该槽当前只为旧协议地址兼容保留，写入或读取结果不得解释为有效新字段。 */
 #define INPUTREGISTER_RESERVED_0110 0x0110
+/* DSM 调试输入寄存器“调试输入寄存器 0x0111 保留槽”地址；该槽当前只为旧协议地址兼容保留，写入或读取结果不得解释为有效新字段。 */
 #define INPUTREGISTER_RESERVED_0111 0x0111
 
+/* 历史 CIRCLE 符号的兼容别名，当前固定映射到 INPUTREGISTER_CURRENT_X_ANGLE（当前 X 轴倾角）；符号名已不能代表真实语义，新代码应使用修正后的目标符号。 */
 #define INPUTREGISTER_CIRCLE INPUTREGISTER_CURRENT_X_ANGLE
+/* 历史 ANGLE 符号的兼容别名，当前固定映射到 INPUTREGISTER_CURRENT_Y_ANGLE（当前 Y 轴倾角）；符号名已不能代表真实语义，新代码应使用修正后的目标符号。 */
 #define INPUTREGISTER_ANGLE INPUTREGISTER_CURRENT_Y_ANGLE
+/*
+ * 历史 STATEOFEINDUCTION 符号的兼容别名，当前固定映射到 INPUTREGISTER_SENSOR_AMPLITUDE（传感器幅值）；符号名已不能代表真实语义，新代码应使用修正后的目标符号。
+ */
 #define INPUTREGISTER_STATEOFEINDUCTION INPUTREGISTER_SENSOR_AMPLITUDE
+/*
+ * 历史 FREQUENCEINAIR 符号的兼容别名，当前固定映射到 INPUTREGISTER_WATER_SENSOR_VOLTAGE（水位传感器电压）；符号名已不能代表真实语义，新代码应使用修正后的目标符号。
+ */
 #define INPUTREGISTER_FREQUENCEINAIR INPUTREGISTER_WATER_SENSOR_VOLTAGE
+/*
+ * 历史 AMPLITUDE 符号的兼容别名，当前固定映射到 INPUTREGISTER_RESERVED_010E（0x010E 保留槽）；符号名已不能代表真实语义，新代码应使用修正后的目标符号。
+ */
 #define INPUTREGISTER_AMPLITUDE INPUTREGISTER_RESERVED_010E
+/*
+ * 历史 SENSORX_ANGLE 符号的兼容别名，当前固定映射到 INPUTREGISTER_RESERVED_010F（0x010F 保留槽）；符号名已不能代表真实语义，新代码应使用修正后的目标符号。
+ */
 #define INPUTREGISTER_SENSORX_ANGLE INPUTREGISTER_RESERVED_010F
+/*
+ * 历史 SENSORY_ANGLE 符号的兼容别名，当前固定映射到 INPUTREGISTER_RESERVED_0110（0x0110 保留槽）；符号名已不能代表真实语义，新代码应使用修正后的目标符号。
+ */
 #define INPUTREGISTER_SENSORY_ANGLE INPUTREGISTER_RESERVED_0110
+/*
+ * 历史拼写 WARTER_VOLTAGE 符号的兼容别名，当前固定映射到 INPUTREGISTER_RESERVED_0111（0x0111 保留槽）；符号名已不能代表真实语义，新代码应使用修正后的目标符号。
+ */
 #define INPUTREGISTER_WARTER_VOLTAGE INPUTREGISTER_RESERVED_0111
 
+/* DSM 水位标定命令线圈地址 0x0108；写入有效触发值后进入水位标定流程。 */
 #define COM_CAL_WATER 0x0108
+/* DSM 自检命令线圈地址 0x0109；用于请求设备执行一次自检。 */
 #define COM_SELF_CHECK 0x0109
+/* DSM 罐高标定命令线圈地址 0x0110；写入后进入罐高标定流程。 */
 #define COM_CALIBRATE_TANKHEIGHT 0x0110
 #undef ENDADDRESS2_COM
+/* DSM 第二段命令线圈的包含式结束地址，扩展后为 0x0110；范围判断必须包含新增的水位、自检和罐高标定命令。 */
 #define ENDADDRESS2_COM 0x0110
 
+/* DSM 水位标定值保持寄存器起始地址 0x0125；位于第二参数段扩展区，按完整字段读写。 */
 #define HOLDREGISTER_CALIBRATE_WATER_LEVEL 0x0125
+/* DSM 罐高标定值保持寄存器起始地址 0x0127；位于第二参数段扩展区，按完整字段读写。 */
 #define HOLDREGISTER_CALIBRATE_TANK_HEIGHT 0x0127
 #undef ENDADDRESS2_HOLDREGISTER
+/* DSM 第二段保持寄存器的包含式结束地址，扩展后为 0x0128；覆盖新增水位和罐高标定值的全部寄存器。 */
 #define ENDADDRESS2_HOLDREGISTER 0x0128
 
 #endif

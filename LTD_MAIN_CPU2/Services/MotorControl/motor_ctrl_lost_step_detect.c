@@ -11,14 +11,14 @@
 /* ===================== 私有类型/状态 ===================== */
 
 /* 丢步检测环形缓冲区：记录最近位置采样，单位 0.1mm。 */
-static int32_t pos_buf[LOST_STEP_WINDOW]; /* 电机控制数据缓冲区，注意与中断或 DMA 访问边界保持一致。 */
-static int32_t motor_pos_buf[LOST_STEP_WINDOW]; /* 电机控制数据缓冲区，注意与中断或 DMA 访问边界保持一致。 */
-static int32_t encoder_pos_buf[LOST_STEP_WINDOW]; /* 电机控制数据缓冲区，注意与中断或 DMA 访问边界保持一致。 */
-static uint32_t tick_buf[LOST_STEP_WINDOW]; /* 电机控制数据缓冲区，注意与中断或 DMA 访问边界保持一致。 */
-static int write_idx = 0; /* 电机控制模块级变量，保存跨函数共享的业务状态。 */
-static int samples = 0; /* 电机控制模块级变量，保存跨函数共享的业务状态。 */
-static uint32_t last_check_tick = 0; /* 电机控制模块级变量，保存跨函数共享的业务状态。 */
-static uint32_t last_alarm_tick = 0; /* 电机控制模块级变量，保存跨函数共享的业务状态。 */
+static int32_t pos_buf[LOST_STEP_WINDOW]; /* 丢步检测窗口内各采样时刻的业务位置，单位为 0.1 mm；索引与另外三组环形缓冲严格对齐。 */
+static int32_t motor_pos_buf[LOST_STEP_WINDOW]; /* 丢步检测窗口内由电机步数模型换算的移动距离，单位为 0.1 mm；用于与编码轮实际位移比较跟随比例。 */
+static int32_t encoder_pos_buf[LOST_STEP_WINDOW]; /* 丢步检测窗口内编码轮换算的尺带长度，单位为 0.1 mm；与 motor_pos_buf 的同索引样本配对判断未跟随。 */
+static uint32_t tick_buf[LOST_STEP_WINDOW]; /* 丢步检测窗口内每个位置样本对应的 HAL 毫秒节拍；与三组位置缓冲同索引，用于计算窗口时间跨度和速度。 */
+static int write_idx = 0; /* 失步检测采样环形缓冲区的下一写入索引。 */
+static int samples = 0; /* 失步检测缓冲区当前已有的有效样本数。 */
+static uint32_t last_check_tick = 0; /* 失步检测最近一次执行窗口统计的 HAL 毫秒节拍。 */
+static uint32_t last_alarm_tick = 0; /* 失步告警最近一次上报的 HAL 毫秒节拍，用于限制重复告警频率。 */
 #ifndef NODETECT_LOG_PERIOD_MS
 #define NODETECT_LOG_PERIOD_MS        100u   /* 打印周期：100ms */
 #endif
@@ -239,7 +239,6 @@ void MotorLostStep_NoDetectRuntimeLogUpdate(void)
         float f = 0.0f, d = 0.0f, t = 0.0f;
         uint32_t ret = Read_Density(&f, &d, &t);
         (void)f; (void)d; (void)t;
-        /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
         if (ret == NO_ERROR) {
             /* Read_Density 内部写 debug_data.temperature/frequency 等 */
         }

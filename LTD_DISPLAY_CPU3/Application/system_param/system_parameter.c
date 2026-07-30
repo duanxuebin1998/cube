@@ -12,10 +12,18 @@
 #include <string.h>
 #include <stdio.h>
 #include <math.h>
-volatile MeasurementResult g_measurement = { 0 }; /* 测量结果 */
-volatile DeviceParameters g_deviceParams = { 0 }; /* 设备参数 */
+/** CPU3 当前测量结果快照，由 CPU2 通信解析流程更新，显示与外部协议只读使用。 */
+volatile MeasurementResult g_measurement = { 0 };
 
-/* 将继电器报警输出枚举值转换成中文打印文本，便于现场调试查看。 */
+/** CPU2 下发并经 CPU3 同步确认的设备参数快照，供菜单、显示和协议映射共同使用。 */
+volatile DeviceParameters g_deviceParams = { 0 };
+
+/**
+ * @brief 将继电器报警输出工作模式转换为中文名称。
+ *
+ * @param value `RelayAlarmOperatingMode` 枚举值。
+ * @return 对应的中文名称；枚举值不在当前协议定义范围内时返回“未定义”。
+ */
 static const char * relay_operating_mode_str(uint32_t value)
 {
     switch ((RelayAlarmOperatingMode)value) {
@@ -29,13 +37,14 @@ static const char * relay_operating_mode_str(uint32_t value)
 }
 
 /**
- * @brief 执行系统参数中的 relay_digital_source_str 逻辑。
+ * @brief 将继电器数字报警源组合转换为中文名称。
  *
- * @param value 待处理数值。
- * @return 返回业务对象或缓冲区指针，NULL 表示无有效对象。
+ * @param value `RelayAlarmDigitalSource` 枚举值，可表示单个报警位或组合报警位。
+ * @return 对应的中文名称；枚举值不在当前协议定义范围内时返回“未定义”。
  */
 static const char * relay_digital_source_str(uint32_t value)
 {
+    /* 按协议枚举逐项映射，组合报警位必须保持与 CPU2 输出语义一致。 */
     switch ((RelayAlarmDigitalSource)value) {
     case RELAY_ALARM_DIGITAL_NONE:
         return "无";
@@ -59,10 +68,10 @@ static const char * relay_digital_source_str(uint32_t value)
 }
 
 /**
- * @brief 执行系统参数中的 relay_contact_type_str 逻辑。
+ * @brief 将继电器接点类型转换为中文名称。
  *
- * @param value 待处理数值。
- * @return 返回业务对象或缓冲区指针，NULL 表示无有效对象。
+ * @param value `RelayAlarmContactType` 枚举值。
+ * @return “常开”或“常闭”；枚举值无效时返回“未定义”。
  */
 static const char * relay_contact_type_str(uint32_t value)
 {
@@ -77,10 +86,10 @@ static const char * relay_contact_type_str(uint32_t value)
 }
 
 /**
- * @brief 执行系统参数中的 relay_alarm_mode_str 逻辑。
+ * @brief 将继电器报警动作模式转换为中文名称。
  *
- * @param value 待处理数值。
- * @return 返回业务对象或缓冲区指针，NULL 表示无有效对象。
+ * @param value `RelayAlarmMode` 枚举值。
+ * @return “关”“开”或“锁存”；枚举值无效时返回“未定义”。
  */
 static const char * relay_alarm_mode_str(uint32_t value)
 {
@@ -97,13 +106,14 @@ static const char * relay_alarm_mode_str(uint32_t value)
 }
 
 /**
- * @brief 执行系统参数中的 relay_alarm_source_str 逻辑。
+ * @brief 将继电器报警测量源转换为中文名称。
  *
- * @param value 待处理数值。
- * @return 返回业务对象或缓冲区指针，NULL 表示无有效对象。
+ * @param value `RelayAlarmSource` 枚举值，表示液位、温度、水位、浮子位置或无测量源。
+ * @return 对应的中文名称；枚举值不在当前协议定义范围内时返回“未定义”。
  */
 static const char * relay_alarm_source_str(uint32_t value)
 {
+    /* 这里的名称直接用于设备参数打印，必须与 CPU2 报警源定义保持一致。 */
     switch ((RelayAlarmSource)value) {
     case RELAY_ALARM_SOURCE_TANK_LEVEL:
         return "储罐液位";
@@ -120,8 +130,16 @@ static const char * relay_alarm_source_str(uint32_t value)
     }
 }
 
+/**
+ * @brief 将继电器报警无效值策略转换为中文名称。
+ *
+ * @param value `RelayAlarmErrorValue` 枚举值，表示测量值无效时需要置位的报警组合。
+ * @return 对应的中文名称；枚举值不在当前协议定义范围内时返回“未定义”。
+ * @note 该文本仅用于参数打印，不改变继电器报警状态或锁存状态。
+ */
 static const char * relay_error_value_str(uint32_t value)
 {
+    /* 按协议定义返回无效测量值对应的报警组合名称。 */
     switch ((RelayAlarmErrorValue)value) {
     case RELAY_ALARM_ERROR_NO_ALARM:
         return "无报警";
@@ -140,8 +158,16 @@ static const char * relay_error_value_str(uint32_t value)
     }
 }
 
+/**
+ * @brief 将继电器报警阈值的 32 位原始位模式还原为单精度浮点数。
+ *
+ * @param raw CPU2 参数结构中保存的继电器报警阈值 IEEE 754 Float32 原始 32 位位模式。
+ * @return 返回与 raw 的 32 位 IEEE 754 位模式完全一致的 float 数值；不执行缩放或范围修正。
+ * @note 使用 `memcpy` 避免类型双关和严格别名问题，不执行数值缩放或范围修正。
+ */
 static float relay_alarm_raw_to_float(uint32_t raw)
 {
+    /* value 保存从 raw 原样复制得到的 IEEE 754 单精度数值。 */
     float value;
     /* 按原始位转换 IEEE754 float，避免字段打印改变协议解释口径。 */
     memcpy(&value, &raw, sizeof(value));
@@ -149,7 +175,14 @@ static float relay_alarm_raw_to_float(uint32_t raw)
 }
 
 /* 名称 数值 数据号 起始地址 寄存器数 是否检范围 最小 最大 单位 小数 偏移 写权 类型 显示 隐藏 英文 */
-/* 参数元数据 */
+/**
+ * @brief CPU3 参数菜单和保持寄存器共用的参数元数据表。
+ *
+ * 每个表项依次描述中文名称、数据号、寄存器起始地址与数量、范围检查、
+ * 最小值、最大值、单位、小数位、显示偏移、写权限、数据类型、显示宽度、
+ * 可选值文本和英文短名称。大量同构表项统一由本说明描述，各表项自身的
+ * 中文名称、寄存器宏和范围字段用于区分具体参数语义。
+ */
 struct ParameterMetadata param_meta[] = {
 
 {(uint8_t*)"设备指令",	0,	COM_NUM_DEVICEPARAM_COMMAND,	HOLDREGISTER_DEVICEPARAM_COMMAND,	2,	false,	0,	0,	NULL,	0,	0,	true,	TYPE_INT,	7,	NULL,	(uint8_t*)"Cmd"},
@@ -416,11 +449,18 @@ struct ParameterMetadata param_meta[] = {
 
 
 
+/** `param_meta` 元数据表的有效表项数量，供索引查找和菜单遍历统一使用。 */
 const int param_metaAmount = sizeof(param_meta) / sizeof(param_meta[0]);
 
-/* 根据操作获取当前保持寄存器具体信息的索引 */
+/**
+ * @brief 根据操作号查找对应的参数元数据索引。
+ *
+ * @param operanum 菜单或参数操作号，对应 `ParameterMetadata.operanum`。
+ * @return 找到时返回 `param_meta` 的零基索引；未找到时返回 -1。
+ */
 int getHoldValueNum(int operanum)
 {
+    /* i 为元数据表的当前扫描索引，循环结束后同时用于判断是否命中。 */
     int i;
     for(i = 0;i < param_metaAmount;i++)
     {
@@ -434,8 +474,10 @@ int getHoldValueNum(int operanum)
 }
 
 /**
- * @brief 执行系统参数中的 InputValueInit 逻辑。
- * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ * @brief 初始化 CPU3 本地显示参数和首包同步前的测量运行态。
+ *
+ * @note 本函数在 CPU3 启动初始化阶段调用。它先应用本地显示参数，再将尚未从
+ * CPU2 收到的数据设置为明确的无效值或未激活态，避免界面把零初始化误当成实测结果。
  */
 void InputValueInit(void)
 {
@@ -447,7 +489,7 @@ void InputValueInit(void)
 	g_measurement.single_point_monitoring.density = UNVALID_DENSITY;
 	g_measurement.single_point_monitoring.temperature = UNVALID_TEMPERATURE_WIRELESS;
 
-	/* CPU2 首包数据到达前，按参考程序只读状态默认值初始化为未激活。 */
+	/* channel 为零基继电器通道索引；CPU2 首包到达前逐通道初始化只读运行态。 */
 	for (uint32_t channel = 0U; channel < RELAY_ALARM_CHANNEL_COUNT; channel++) {
 		g_measurement.relay_alarm_runtime[channel].alarm_value = ((float)UNVALID_LEVEL) / 10.0f;
 		g_measurement.relay_alarm_runtime[channel].HH_alarm = RELAY_ALARM_STATE_INACTIVE;
@@ -460,11 +502,17 @@ void InputValueInit(void)
 		g_measurement.relay_alarm_runtime[channel].clear_alarm = RELAY_ALARM_CLEAR_NO;
 	}
 }
-/* 新增函数：打印所有设备参数 */
+/**
+ * @brief 将当前 CPU2 设备参数快照按业务分组完整打印到调试串口。
+ *
+ * @note 打印使用局部快照，避免输出过程中 CPU2 同步更新全局参数造成同一次
+ * 打印前后字段不一致；本函数只读取参数，不修改运行态或持久化内容。
+ */
 void print_device_params(void)
 {
+    /* params 为本次打印使用的一致性快照，后续所有字段均从该副本读取。 */
     DeviceParameters params;
-    /* 按结构或原始字节复制，保持系统参数协议/存储布局不被字段解释改变。 */
+    /* 将全局设备参数复制到局部快照，本次整页打印后续只读取该副本，避免打印过程中反复访问全局结构。 */
     memcpy(&params, (void *)&g_deviceParams, sizeof(DeviceParameters));
 
     printf("\r\n========================================\r\n");
@@ -582,7 +630,9 @@ void print_device_params(void)
     printf("  %-32s : %lu\r\n", "瓦锡兰探底间隔", (unsigned long)params.wartsila_bottom_detect_interval);
     printf("  %-32s : %lu\r\n", "探底修正罐高", (unsigned long)params.bottom_encoder_correction_tank_height);
 
+    /* channel 为零基通道索引，逐项打印各继电器的配置和浮点阈值。 */
     for (uint32_t channel = 0U; channel < RELAY_ALARM_CHANNEL_COUNT; channel++) {
+        /* cfg 指向当前通道在局部参数快照中的报警配置。 */
         const RelayAlarmConfig *cfg = &params.relayAlarm[channel];
         printf("  继电器%lu报警: 模式=%s(%lu) 报警源=%s(%lu) 报警位=%s(%lu) 接点=%s(%lu) 报警模式=%s(%lu) 无效值=%s(%lu)\r\n",
                (unsigned long)(channel + 1U),
@@ -651,6 +701,13 @@ void print_device_params(void)
 /* ========================= 测量结果打印（可选） ========================= */
 /* 注: 该部分与参数结构无强耦合，仅保留你现有打印习惯；如果不需要可移除 */
 
+/**
+ * @brief 打印一组密度测量结果的温度、密度及位置字段。
+ *
+ * @param title 本组数据的显示标题，用于区分单点测量和单点监测。
+ * @param d 待打印的密度测量结构；传入 NULL 时直接返回且不输出。
+ * @note 本函数按结构体保存的原始整数值打印，不在此处执行单位换算或有效性修正。
+ */
 void PrintDensity(const char *title, const DensityMeasurement *d)
 {
     if (!d) return;
@@ -664,10 +721,11 @@ void PrintDensity(const char *title, const DensityMeasurement *d)
     printf("    温度位置: %lu\r\n", (unsigned long)d->temperature_position);
 }
 /**
- * @brief 显示或打印系统参数中的 PrintMeasurementResult 逻辑。
+ * @brief 按业务分区完整打印当前设备测量结果快照。
  *
- * @param m 业务参数。
- * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ * @param m 待打印的测量结果结构；传入 NULL 时直接返回且不输出。
+ * @note 输出包括设备状态、调试数据、液位、水位、罐高、密度分布和继电器运行态。
+ * 密度分布单点数据最多打印前 10 项，避免调试串口被 200 点完整数据长时间占用。
  */
 void PrintMeasurementResult(const MeasurementResult *m)
 {
@@ -760,8 +818,10 @@ void PrintMeasurementResult(const MeasurementResult *m)
     printf("  测量时液位: %lu mm\r\n",(unsigned long)m->density_distribution.Density_oil_level);
 
     printf("  --- 单点数据（仅打印前10个）---\r\n");
+    /* i 为密度分布点索引；最多输出前 10 点且不超过本次有效测量点数。 */
     for (uint32_t i = 0; i < 10 && i < m->density_distribution.measurement_points; i++)
     {
+        /* d 指向当前分布测量点，字段按结构体中的原始整数格式打印。 */
         const DensityMeasurement *d = &m->density_distribution.single_density_data[i];
         printf("    [%02lu] T=%lu ρ=%lu ρ15=%lu VCF=%lu WD=%lu Pos=%lu\r\n",
                (unsigned long)i,
@@ -776,7 +836,9 @@ void PrintMeasurementResult(const MeasurementResult *m)
 
     printf("--------------------------------------------------------------\r\n");
     printf("【继电器报警输出运行态】\r\n");
+    /* channel 为零基继电器通道索引，逐通道输出 CPU2 同步的只读报警运行态。 */
     for (uint32_t channel = 0U; channel < RELAY_ALARM_CHANNEL_COUNT; channel++) {
+        /* state 指向当前通道的报警判定、组合状态和清锁存状态。 */
         const RelayAlarmRuntimeState *state = &m->relay_alarm_runtime[channel];
         printf("  继电器%lu: value=%.1f HH=%lu H=%lu HH_H=%lu L=%lu LL=%lu LL_L=%lu any=%lu clear=%lu\r\n",
                (unsigned long)(channel + 1U),

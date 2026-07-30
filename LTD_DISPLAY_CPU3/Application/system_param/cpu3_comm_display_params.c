@@ -42,9 +42,14 @@ static const uint16_t s_cpu3_si_compat_holding_defaults[CPU3_SI_COMPAT_HOLDING_C
 
 
 
+/* CPU3 本地参数描述表条目数；由 cpu3_local_param_table 数组长度自动推导。 */
 #define CPU3_LOCAL_PARAM_COUNT (sizeof(cpu3_local_param_table) / sizeof(cpu3_local_param_table[0]))
 
-/* CPU3版本跟随当前显示板固件，避免被FRAM旧参数覆盖。 */
+/**
+ * @brief CPU3版本跟随当前显示板固件，避免被FRAM旧参数覆盖。
+ *
+ * @return true 表示运行参数中的 CPU3 版本原先不是当前固件版本，本次已纠正；false 表示版本字段已经等于 CPU3_APP_VERSION_U32，无需改写。
+ */
 static bool Cpu3_ApplyFirmwareVersionRuntime(void)
 {
     if (g_cpu3_comm_display_params.local_led_version == CPU3_APP_VERSION_U32) {
@@ -56,7 +61,12 @@ static bool Cpu3_ApplyFirmwareVersionRuntime(void)
 }
 
 
-/* 判断当前操作是否 CPU3 本机参数 */
+/**
+ * @brief 判断当前操作是否 CPU3 本机参数。
+ *
+ * @param opera 菜单操作号或当前操作索引。
+ * @return true 表示操作号大于或等于 COM_NUM_PARA_LOCAL_START，属于 CPU3 本机参数范围；false 表示操作号位于该边界之前，不按 CPU3 本机参数处理。
+ */
 bool Cpu3Local_IsParam(OperatingNumber opera)
 {
     return (opera >= COM_NUM_PARA_LOCAL_START);
@@ -64,7 +74,12 @@ bool Cpu3Local_IsParam(OperatingNumber opera)
 
 /* ========== CPU3 通信/显示参数 <-> 菜单值 的转换 ========== */
 
-/* 波特率索引 -> 实际波特率 */
+/**
+ * @brief 波特率索引 -> 实际波特率。
+ *
+ * @param idx 波特率选项的零基菜单索引。
+ * @return 返回菜单索引 0 至 7 对应的实际波特率 1200 至 115200；越界索引回退到函数默认值。
+ */
 static uint32_t Cpu3_BaudIndexToValue(int idx)
 {
 	switch (idx) {
@@ -80,7 +95,12 @@ static uint32_t Cpu3_BaudIndexToValue(int idx)
 	}
 }
 
-/* 实际波特率 -> 索引 */
+/**
+ * @brief 实际波特率 -> 索引。
+ *
+ * @param baud 波特率。
+ * @return 返回波特率在菜单表中的下标 0 至 7；不支持的波特率回退到默认下标 0。
+ */
 static int Cpu3_BaudValueToIndex(uint32_t baud)
 {
 	switch (baud) {
@@ -96,9 +116,12 @@ static int Cpu3_BaudValueToIndex(uint32_t baud)
 	}
 }
 
-/*
- * 归一化协议枚举值。
- * FRAM 旧值或菜单异常值可能落入未定义范围，必须先收敛再作为协议分发表索引。
+/**
+ * @brief 归一化协议枚举值。
+ *
+ * @param protocol 待判断、显示或写入的协议枚举值。
+ * @return 返回合法的外部协议枚举；输入超出已支持协议范围时回退 COM_PROTO_DSM。
+ * @note FRAM 旧值或菜单异常值可能落入未定义范围，必须先收敛后才能作为协议分发表索引。
  */
 static ComProtocolType Cpu3_NormalizeProtocol(int32_t protocol)
 {
@@ -118,9 +141,13 @@ static ComProtocolType Cpu3_NormalizeProtocol(int32_t protocol)
     }
 }
 
-/*
- * 根据协议生成默认串口模板。
+/**
+ * @brief 根据协议生成默认串口模板。
+ *
  * 只有写入协议字段时才应用该模板，普通串口字段允许现场单独覆盖。
+ *
+ * @param protocol 待判断、显示或写入的协议枚举值。
+ * @param profile 用于接收协议默认波特率、数据位、校验位和停止位的串口配置对象。
  */
 static void Cpu3_FillProtocolSerialProfile(ComProtocolType protocol, ComPortConfig *profile)
 {
@@ -180,9 +207,13 @@ static void Cpu3_FillProtocolSerialProfile(ComProtocolType protocol, ComPortConf
     }
 }
 
-/*
- * 将单个串口配置切换到当前协议的默认参数。
+/**
+ * @brief 将单个串口配置切换到当前协议的默认参数。
+ *
  * 返回值表示配置是否被修正，调用方据此决定是否回写 FRAM。
+ *
+ * @param cfg 可写外部串口配置；包含波特率、数据位、校验位、停止位和协议类型，函数按职责应用协议 profile、迁移旧默认值或修正非法组合。
+ * @return 1 表示串口至少一个字段已改为目标协议默认值；配置为空或无需修改时返回 0。
  */
 static uint8_t Cpu3_ApplyProtocolSerialProfile(ComPortConfig *cfg)
 {
@@ -219,9 +250,13 @@ static uint8_t Cpu3_ApplyProtocolSerialProfile(ComPortConfig *cfg)
     return changed;
 }
 
-/*
- * 旧版本把瓦锡兰默认值写成 4800 无校验；加载 FRAM 时只迁移这一类旧默认值。
+/**
+ * @brief 旧版本把瓦锡兰默认值写成 4800 无校验；加载 FRAM 时只迁移这一类旧默认值。
+ *
  * 其它合法人工配置仍保留，避免升级后覆盖现场已确认的串口参数。
+ *
+ * @param cfg 可写外部串口配置；包含波特率、数据位、校验位、停止位和协议类型，函数按职责应用协议 profile、迁移旧默认值或修正非法组合。
+ * @return 1 表示检测到瓦锡兰旧默认串口格式并已迁移；配置无需迁移或参数为空时返回 0。
  */
 static uint8_t Cpu3_MigrateLegacyWartsilaDefault(ComPortConfig *cfg)
 {
@@ -241,8 +276,10 @@ static uint8_t Cpu3_MigrateLegacyWartsilaDefault(ComPortConfig *cfg)
     return 0U;
 }
 
-/*
- * 对三路外部串口执行瓦锡兰旧默认值迁移。
+/**
+ * @brief 对三路外部串口执行瓦锡兰旧默认值迁移。
+ *
+ * @return 1 表示三个外部端口中至少一个瓦锡兰旧默认配置已迁移；全部无需迁移时返回 0。
  */
 static uint8_t Cpu3_MigrateLegacyWartsilaDefaults(void)
 {
@@ -255,8 +292,11 @@ static uint8_t Cpu3_MigrateLegacyWartsilaDefaults(void)
     return changed;
 }
 
-/*
- * 判断 FRAM 或外部写入的波特率是否在菜单支持范围内。
+/**
+ * @brief 判断 FRAM 或外部写入的波特率是否在菜单支持范围内。
+ *
+ * @param baudrate 波特率。
+ * @return 1 表示波特率为 1200、2400、4800、9600、19200、38400、57600 或 115200，属于菜单和串口配置白名单；0 表示其它波特率。
  */
 static uint8_t Cpu3_IsSupportedBaudrate(uint32_t baudrate)
 {
@@ -275,9 +315,13 @@ static uint8_t Cpu3_IsSupportedBaudrate(uint32_t baudrate)
     }
 }
 
-/*
- * 只修正非法串口字段，不按协议覆盖用户已经保存的合法物理参数。
+/**
+ * @brief 只修正非法串口字段，不按协议覆盖用户已经保存的合法物理参数。
+ *
  * 该函数用于 FRAM 加载或写入兜底，避免旧值越界导致 UART 初始化异常。
+ *
+ * @param cfg 可写外部串口配置；包含波特率、数据位、校验位、停止位和协议类型，函数按职责应用协议 profile、迁移旧默认值或修正非法组合。
+ * @return 1 表示至少一个非法串口字段已修正；配置原本合法或参数为空时返回 0。
  */
 static uint8_t Cpu3_SanitizePortConfig(ComPortConfig *cfg)
 {
@@ -317,9 +361,12 @@ static uint8_t Cpu3_SanitizePortConfig(ComPortConfig *cfg)
     return changed;
 }
 
-/*
- * 对三个外部串口统一执行非法值修正。
+/**
+ * @brief 对三个外部串口统一执行非法值修正。
+ *
  * 该函数不直接重启 UART，只修正参数结构，避免和通信收发并发。
+ *
+ * @return 1 表示三个外部端口中至少一个非法字段已修正；全部合法时返回 0。
  */
 static uint8_t Cpu3_SanitizeAllPortConfigs(void)
 {
@@ -333,10 +380,11 @@ static uint8_t Cpu3_SanitizeAllPortConfigs(void)
     return changed;
 }
 
-/*
- * 函数用途：恢复SI 40004～40009原始兼容槽的现场默认值。
- * 调用场景：恢复出厂、旧FRAM迁移和V6到V7升级。
- * 关键约束：这些值没有业务含义，只允许原样读写和持久化。
+/**
+ * @brief 恢复SI 40004～40009原始兼容槽的现场默认值。
+ *
+ * @details 调用场景：恢复出厂、旧FRAM迁移和V6到V7升级。
+ * @note 关键约束：这些值没有业务含义，只允许原样读写和持久化。
  */
 static void Cpu3_InitSiCompatHolding(void)
 {
@@ -345,9 +393,10 @@ static void Cpu3_InitSiCompatHolding(void)
            sizeof(g_cpu3_comm_display_params.si_compat_holding));
 }
 
-/*
- * SI 自动 profile 和报警限值是 CPU3 本机协议参数。
- * 这里统一补默认值，供恢复出厂和旧 FRAM 迁移复用。
+/**
+ * @brief 这里统一补默认值，供恢复出厂和旧 FRAM 迁移复用。
+ *
+ * @note SI 自动 profile 和报警限值属于 CPU3 本机协议参数；恢复默认或迁移时不得由 CPU2 参数覆盖。
  */
 static void Cpu3_InitSiParams(void)
 {
@@ -368,6 +417,12 @@ static void Cpu3_InitSiParams(void)
     Cpu3_InitSiCompatHolding();
 }
 
+/**
+ * @brief 把无符号 16 位参数限制到给定上下限。
+ *
+ * @param value 待限制到合法范围的原始输入值。
+ * @return 返回完成边界钳位后的数值；输入低于下限时返回下限，高于上限时返回上限，区间内保持原值。
+ */
 static uint16_t Cpu3_ClampU16Param(int32_t value)
 {
     if (value <= 0) {
@@ -379,6 +434,12 @@ static uint16_t Cpu3_ClampU16Param(int32_t value)
     return (uint16_t)value;
 }
 
+/**
+ * @brief 把有符号 16 位参数限制到给定上下限。
+ *
+ * @param value 待限制到合法范围的原始输入值。
+ * @return 返回完成边界钳位后的数值；输入低于下限时返回下限，高于上限时返回上限，区间内保持原值。
+ */
 static int16_t Cpu3_ClampS16Param(int32_t value)
 {
     if (value < -32768) {
@@ -390,7 +451,12 @@ static int16_t Cpu3_ClampS16Param(int32_t value)
     return (int16_t)value;
 }
 
-/* 读取 CPU3 本机参数当前值（统一入口） */
+/**
+ * @brief 读取 CPU3 本机参数当前值（统一入口）。
+ *
+ * @param opera 菜单操作号或当前操作索引。
+ * @return 返回操作号对应的 CPU3 本机参数值；未知操作号返回 0，波特率字段返回菜单索引。
+ */
 int32_t Cpu3Local_ReadValue(OperatingNumber opera)
 {
     switch (opera)
@@ -514,6 +580,12 @@ int32_t Cpu3Local_ReadValue(OperatingNumber opera)
     }
 }
 
+/**
+ * @brief 按索引读取六个 SI 原始兼容槽，越界返回 0。
+ *
+ * @param index 零基数组或菜单索引。
+ * @return 返回指定 SI 兼容保持寄存器槽的 16 位原始值；索引越界时返回 0。
+ */
 uint16_t Cpu3Local_ReadSiCompatHolding(uint8_t index)
 {
     if (index >= CPU3_SI_COMPAT_HOLDING_COUNT) {
@@ -523,10 +595,15 @@ uint16_t Cpu3Local_ReadSiCompatHolding(uint8_t index)
     return g_cpu3_comm_display_params.si_compat_holding[index];
 }
 
-/*
- * 函数用途：事务式写入 SI 兼容保持寄存器并校验 FRAM 持久化结果。
- * 调用场景：SI FC06 写入 40004～40009 时同步更新运行态和掉电参数。
- * 关键约束：即使写入值未变化也执行持久化；失败时恢复整份旧镜像并尽力修复 FRAM。
+/**
+ * @brief 事务式写入 SI 兼容保持寄存器并校验 FRAM 持久化结果。
+ *
+ * @details 调用场景：SI FC06 写入 40004～40009 时同步更新运行态和掉电参数。
+ * @note 关键约束：即使写入值未变化也执行持久化；失败时恢复整份旧镜像并尽力修复 FRAM。
+ *
+ * @param index 零基数组或菜单索引。
+ * @param value 写入保持寄存器使用的输入数值。
+ * @return true 表示 SI 兼容寄存器索引有效，运行镜像已更新且 FRAM 写后校验成功；false 表示索引越界或持久化失败，失败时已恢复旧运行镜像并尽力回写旧值。
  */
 bool Cpu3Local_WriteSiCompatHoldingChecked(uint8_t index, uint16_t value)
 {
@@ -547,10 +624,16 @@ bool Cpu3Local_WriteSiCompatHoldingChecked(uint8_t index, uint16_t value)
     return true;
 }
 
-/*
- * 函数用途：事务式写入 CPU3 本机参数并返回 FRAM 持久化校验结果。
- * 调用场景：屏幕菜单、本机参数写入、远程协议切换和 SI FC06 共用本事务内核。
- * 关键约束：FRAM 写后读回失败时恢复整份旧运行态，不允许伪成功或保留未持久化的新值。
+/**
+ * @brief 事务式写入 CPU3 本机参数并返回 FRAM 持久化校验结果。
+ *
+ * @details 调用场景：屏幕菜单、本机参数写入、远程协议切换和 SI FC06 共用本事务内核。
+ * @note 关键约束：FRAM 写后读回失败时恢复整份旧运行态，不允许伪成功或保留未持久化的新值。
+ *
+ * @param opera 菜单操作号或当前操作索引。
+ * @param v 待写入 CPU3 本机参数的 32 位原始值。
+ * @param apply_protocol_serial_profile true 表示协议切换时同时应用该协议推荐串口参数，false 表示保留现有串口格式。
+ * @return true 表示操作号已识别，新值已应用并通过 FRAM 持久化校验，所需显示或串口运行态也已同步；false 表示操作号不受支持，参数值无法应用，或 FRAM 写后校验失败并已恢复旧镜像。
  */
 static bool Cpu3Local_WriteValueCheckedInternal(OperatingNumber opera,
                                                 int32_t v,
@@ -746,20 +829,30 @@ static bool Cpu3Local_WriteValueCheckedInternal(OperatingNumber opera,
     return true;
 }
 
-/*
- * 函数用途：按屏幕配置语义事务式写入本机参数。
- * 调用场景：屏幕菜单修改协议时同步套用目标协议默认串口参数，其它参数沿用原写入行为。
- * 关键约束：修改协议时同步应用默认串口参数；远程管理帧不得调用本入口。
+/**
+ * @brief 按屏幕配置语义事务式写入本机参数。
+ *
+ * @details 调用场景：屏幕菜单修改协议时同步套用目标协议默认串口参数，其它参数沿用原写入行为。
+ * @note 关键约束：修改协议时同步应用默认串口参数；远程管理帧不得调用本入口。
+ *
+ * @param opera 菜单操作号或当前操作索引。
+ * @param v 待校验并写入 CPU3 本机参数的 32 位原始值。
+ * @return true 表示本机参数已按菜单语义写入、持久化并应用运行态；false 表示操作号或值无效，或内部事务的 FRAM 校验/运行态应用失败。
  */
 bool Cpu3Local_WriteValueChecked(OperatingNumber opera, int32_t v)
 {
     return Cpu3Local_WriteValueCheckedInternal(opera, v, true);
 }
 
-/*
- * 函数用途：按远程管理帧语义事务式写入外部 COM 协议。
- * 调用场景：0x46 协议切换 ACK 使用当前串口参数发送完成后，由主循环调用。
- * 关键约束：只修改并持久化协议字段，波特率、数据位、校验位和停止位必须原样保持。
+/**
+ * @brief 按远程管理帧语义事务式写入外部 COM 协议。
+ *
+ * @details 调用场景：0x46 协议切换 ACK 使用当前串口参数发送完成后，由主循环调用。
+ * @note 关键约束：只修改并持久化协议字段，波特率、数据位、校验位和停止位必须原样保持。
+ *
+ * @param opera 菜单操作号或当前操作索引。
+ * @param v 待写入的协议枚举值；写入时保留当前串口电气格式。
+ * @return true 表示 COM1、COM2 或 COM3 的协议字段已持久化，原波特率、数据位、校验位和停止位保持不变；false 表示操作号不是三路协议字段，或内部持久化事务失败。
  */
 bool Cpu3Local_WriteProtocolPreserveSerialChecked(OperatingNumber opera, int32_t v)
 {
@@ -773,10 +866,14 @@ bool Cpu3Local_WriteProtocolPreserveSerialChecked(OperatingNumber opera, int32_t
     return Cpu3Local_WriteValueCheckedInternal(opera, v, false);
 }
 
-/*
- * 函数用途：保持现有菜单和参数写入口的无返回值接口。
- * 调用场景：不需要同步处理 FRAM 写入结果的既有调用方。
- * 关键约束：需要确认持久化结果时必须调用 Cpu3Local_WriteValueChecked。
+/**
+ * @brief 保持现有菜单和参数写入口的无返回值接口。
+ *
+ * @details 调用场景：不需要同步处理 FRAM 写入结果的既有调用方。
+ * @note 关键约束：需要确认持久化结果时必须调用 Cpu3Local_WriteValueChecked。
+ *
+ * @param opera 菜单操作号或当前操作索引。
+ * @param v 待写入 CPU3 本机参数的 32 位原始值。
  */
 void Cpu3Local_WriteValue(OperatingNumber opera, int32_t v)
 {
@@ -793,8 +890,9 @@ bool Cpu3Local_IsUartParam(OperatingNumber opera)
     return (opera >= COM_NUM_CPU3_COM1_BAUDRATE && opera <= COM_NUM_CPU3_COM3_PROTOCOL);
 }
 
-/*
- * 将 CPU3 本地显示参数同步到运行期全局变量，并立即应用 OLED 亮度。
+/**
+ * @brief 将 CPU3 本地显示参数同步到运行期全局变量，并立即应用 OLED 亮度。
+ *
  * 上电时 FRAM 加载发生在 OLED 默认初始化之后，所以这里必须再应用一次保存的挡位。
  */
 void Cpu3Local_ApplyDisplayRuntimeParams(void)
@@ -807,7 +905,13 @@ void Cpu3Local_ApplyDisplayRuntimeParams(void)
     OLED_SetBrightnessLevel(g_cpu3_comm_display_params.screen_brightness);
 }
 
-/* ================ 内部小工具：用一个 ComPortConfig 初始化一个 UART ================ */
+/**
+ * @brief 按照指定端口配置重建 UART 数据位、停止位、校验位和波特率。
+ *
+ * @param huart 目标 UART 外设句柄。
+ * @param cfg 只读外部串口配置；包含波特率、数据位、校验位、停止位和协议类型，用于按当前字段重新初始化对应 UART。
+ * @return true 表示目标 UART 配置已被 HAL 接受；配置非法或 HAL 初始化失败时返回 false。
+ */
 static bool Cpu3_ReinitOneUart(UART_HandleTypeDef *huart, const ComPortConfig *cfg)
 {
     if ((huart == NULL) || (cfg == NULL)) {
@@ -851,7 +955,9 @@ static bool Cpu3_ReinitOneUart(UART_HandleTypeDef *huart, const ComPortConfig *c
     return true;
 }
 
-/* ========================== 初始化默认值 ========================== */
+/**
+ * @brief 恢复 CPU3 显示参数以及三路外部 COM 口的编译期默认配置。
+ */
 void Cpu3_Params_InitDefaults(void)
 {
     memset(&g_cpu3_comm_display_params, 0, sizeof(g_cpu3_comm_display_params));
@@ -895,7 +1001,11 @@ void Cpu3_Params_InitDefaults(void)
     g_cpu3_comm_display_params.com3.protocol = COM_PROTO_WARTSILA;
 }
 
-/* ========================== 重配全部串口 ========================== */
+/**
+ * @brief 依次按当前 COM1、COM2、COM3 配置重新初始化三路外部 UART。
+ *
+ * @return true 表示 COM1、COM2、COM3 均按当前配置重初始化成功；任一端口失败时返回 false。
+ */
 bool Cpu3_ReinitAllUarts(void)
 {
     bool com1_ok = Cpu3_ReinitPortUart(1U);
@@ -905,10 +1015,14 @@ bool Cpu3_ReinitAllUarts(void)
     return com1_ok && com2_ok && com3_ok;
 }
 
-/*
- * 函数用途：按当前 CPU3 本机参数只重初始化指定的外部 COM 口。
- * 调用场景：协议切换应答发送完成后，由主循环保存新协议并调用。
- * 关键约束：不影响其它外部 COM 口；调用前应确保目标端口发送已经完成。
+/**
+ * @brief 按当前 CPU3 本机参数只重初始化指定的外部 COM 口。
+ *
+ * @details 调用场景：协议切换应答发送完成后，由主循环保存新协议并调用。
+ * @note 关键约束：不影响其它外部 COM 口；调用前应确保目标端口发送已经完成。
+ *
+ * @param port_idx 零基外部串口索引。
+ * @return true 表示端口 1～3 对应 UART 已停止旧 DMA、按当前配置重新初始化并恢复空闲接收；false 表示端口编号无效，或 HAL 初始化/接收启动失败。
  */
 bool Cpu3_ReinitPortUart(uint8_t port_idx)
 {
@@ -967,71 +1081,81 @@ bool Cpu3_ReinitPortUart(uint8_t port_idx)
  */
 
 #define CPU3_PARAM_MAGIC   0x43505533UL   /* 'CPU3' */
+/* CPU3 参数存储格式历史版本 3，用于识别最早的兼容结构并迁移。 */
 #define CPU3_PARAM_VERSION_V3 0x0003U
+/* CPU3 参数存储格式历史版本 4，用于识别并迁移对应旧结构。 */
 #define CPU3_PARAM_VERSION_V4 0x0004U
+/* CPU3 参数存储格式历史版本 5，用于识别并迁移对应旧结构。 */
 #define CPU3_PARAM_VERSION_V5 0x0005U
+/* CPU3 参数存储格式历史版本 6，用于识别并迁移对应旧结构。 */
 #define CPU3_PARAM_VERSION_V6 0x0006U
+/* CPU3 当前参数存储格式版本 7；持久化结构或兼容语义变化时必须递增并提供迁移处理。 */
 #define CPU3_PARAM_VERSION 0x0007U
 
+/* CPU3 第 3 版通信与显示参数历史布局；仅用于识别并迁移旧 FRAM 数据，字段顺序和宽度不得按当前结构随意调整。 */
 typedef struct
 {
-    uint32_t local_led_version;
-    uint8_t  language;
-    uint8_t  screen_source_oil;
-    uint8_t  screen_source_water;
-    uint8_t  screen_source_d;
-    uint8_t  screen_source_t;
-    int32_t  screen_input_oil;
-    int32_t  screen_input_water;
-    int32_t  screen_input_d;
-    uint8_t  screen_input_d_switch;
-    int32_t  screen_input_t;
-    uint8_t  screen_decimal;
-    uint16_t screen_password;
-    uint8_t  screen_off_time;
-    ComPortConfig com1;
-    ComPortConfig com2;
-    ComPortConfig com3;
+    /* 第 3 版 CPU3 参数负载的固定字段布局。 */
+    uint32_t local_led_version; /* CPU3 显示板软件版本编码，用于菜单显示和参数兼容诊断。 */
+    uint8_t  language; /* OLED 界面语言编号；只影响文本选择，不改变业务数值。 */
+    uint8_t  screen_source_oil; /* 油位显示数据源选择。 */
+    uint8_t  screen_source_water; /* 水位显示数据源选择。 */
+    uint8_t  screen_source_d; /* 密度显示数据源选择。 */
+    uint8_t  screen_source_t; /* 温度显示数据源选择。 */
+    int32_t  screen_input_oil; /* 油位字段显示使能值。 */
+    int32_t  screen_input_water; /* 水位字段显示使能值。 */
+    int32_t  screen_input_d; /* 密度字段显示使能值。 */
+    uint8_t  screen_input_d_switch; /* 密度字段自动/手动切换方式。 */
+    int32_t  screen_input_t; /* 温度字段显示使能值。 */
+    uint8_t  screen_decimal; /* 过程量显示的小数位配置。 */
+    uint16_t screen_password; /* CPU3 参数菜单密码数值。 */
+    uint8_t  screen_off_time; /* OLED 息屏功能开关，0 表示禁用、1 表示启用；空闲门限由 DISPLAY_SCREEN_OFF_IDLE_MS 固定定义，本字段不是可配置时长。 */
+    ComPortConfig com1; /* COM1 的波特率、数据位、校验、停止位和协议配置。 */
+    ComPortConfig com2; /* COM2 的波特率、数据位、校验、停止位和协议配置。 */
+    ComPortConfig com3; /* COM3 的波特率、数据位、校验、停止位和协议配置。 */
 } Cpu3CommAndDisplayParamsV3;
 
 typedef struct
 {
-    uint32_t                    magic;
-    uint16_t                    version;
-    uint16_t                    reserved;
-    Cpu3CommAndDisplayParamsV3  params;
-    uint32_t                    crc;
+    /* 第 3 版 CPU3 FRAM 记录头、参数负载和 CRC 布局。 */
+    uint32_t                    magic; /* 持久化记录魔术字；装载时首先用于排除空白或错误类型的数据。 */
+    uint16_t                    version; /* 持久化结构版本；决定后续负载按哪一版固定布局解释。 */
+    uint16_t                    reserved; /* 为保持历史二进制布局预留的字段；写入时保持约定值，禁止复用。 */
+    Cpu3CommAndDisplayParamsV3  params; /* 持久化的实际参数负载；其结构布局必须与记录头中的版本号一致。 */
+    uint32_t                    crc; /* 覆盖记录约定范围的 CRC 校验值；装载失败时不得使用对应负载。 */
 } Cpu3ParamStorageV3;
 
 typedef struct
 {
-    uint32_t local_led_version;
-    uint8_t  language;
-    uint8_t screen_source_oil;
-    uint8_t screen_source_water;
-    uint8_t screen_source_d;
-    uint8_t screen_source_t;
-    int32_t screen_input_oil;
-    int32_t screen_input_water;
-    int32_t screen_input_d;
-    uint8_t screen_input_d_switch;
-    int32_t screen_input_t;
-    uint8_t  screen_decimal;
-    uint16_t screen_password;
-    uint8_t  screen_off_time;
-    uint8_t  screen_brightness;
-    ComPortConfig com1;
-    ComPortConfig com2;
-    ComPortConfig com3;
+    /* 第 5 版 CPU3 参数负载的固定字段布局。 */
+    uint32_t local_led_version; /* CPU3 显示板软件版本编码，用于菜单显示和参数兼容诊断。 */
+    uint8_t  language; /* OLED 界面语言编号；只影响文本选择，不改变业务数值。 */
+    uint8_t screen_source_oil; /* 油位显示数据源选择。 */
+    uint8_t screen_source_water; /* 水位显示数据源选择。 */
+    uint8_t screen_source_d; /* 密度显示数据源选择。 */
+    uint8_t screen_source_t; /* 温度显示数据源选择。 */
+    int32_t screen_input_oil; /* 油位字段显示使能值。 */
+    int32_t screen_input_water; /* 水位字段显示使能值。 */
+    int32_t screen_input_d; /* 密度字段显示使能值。 */
+    uint8_t screen_input_d_switch; /* 密度字段自动/手动切换方式。 */
+    int32_t screen_input_t; /* 温度字段显示使能值。 */
+    uint8_t  screen_decimal; /* 过程量显示的小数位配置。 */
+    uint16_t screen_password; /* CPU3 参数菜单密码数值。 */
+    uint8_t  screen_off_time; /* OLED 息屏功能开关，0 表示禁用、1 表示启用；空闲门限由 DISPLAY_SCREEN_OFF_IDLE_MS 固定定义，本字段不是可配置时长。 */
+    uint8_t  screen_brightness; /* OLED 亮度档位，写入硬件前由参数校验限制范围。 */
+    ComPortConfig com1; /* COM1 的波特率、数据位、校验、停止位和协议配置。 */
+    ComPortConfig com2; /* COM2 的波特率、数据位、校验、停止位和协议配置。 */
+    ComPortConfig com3; /* COM3 的波特率、数据位、校验、停止位和协议配置。 */
 } Cpu3CommAndDisplayParamsV5;
 
 typedef struct
 {
-    uint32_t                    magic;
-    uint16_t                    version;
-    uint16_t                    reserved;
-    Cpu3CommAndDisplayParamsV5  params;
-    uint32_t                    crc;
+    /* 第 5 版 CPU3 FRAM 记录头、参数负载和 CRC 布局。 */
+    uint32_t                    magic; /* 持久化记录魔术字；装载时首先用于排除空白或错误类型的数据。 */
+    uint16_t                    version; /* 持久化结构版本；决定后续负载按哪一版固定布局解释。 */
+    uint16_t                    reserved; /* 为保持历史二进制布局预留的字段；写入时保持约定值，禁止复用。 */
+    Cpu3CommAndDisplayParamsV5  params; /* 持久化的实际参数负载；其结构布局必须与记录头中的版本号一致。 */
+    uint32_t                    crc; /* 覆盖记录约定范围的 CRC 校验值；装载失败时不得使用对应负载。 */
 } Cpu3ParamStorageV5;
 
 /*
@@ -1040,38 +1164,39 @@ typedef struct
  */
 typedef struct
 {
-    uint32_t local_led_version;
-    uint8_t  language;
-    uint8_t  screen_source_oil;
-    uint8_t  screen_source_water;
-    uint8_t  screen_source_d;
-    uint8_t  screen_source_t;
-    int32_t  screen_input_oil;
-    int32_t  screen_input_water;
-    int32_t  screen_input_d;
-    uint8_t  screen_input_d_switch;
-    int32_t  screen_input_t;
-    uint8_t  screen_decimal;
-    uint16_t screen_password;
-    uint8_t  screen_off_time;
-    uint8_t  screen_brightness;
-    uint16_t si_auto_profile_interval;
-    uint8_t  si_auto_profile_enable;
-    uint8_t  si_auto_profile_hour;
-    uint8_t  si_auto_profile_minute;
-    uint16_t si_low_density_setpoint;
-    uint16_t si_high_density_setpoint;
-    int16_t  si_low_temperature_setpoint;
-    int16_t  si_high_temperature_setpoint;
-    uint16_t si_ll_level_setpoint;
-    uint16_t si_hh_level_setpoint;
-    uint16_t si_low_level_setpoint;
-    uint16_t si_high_level_setpoint;
-    uint16_t si_temp_deviation_setpoint;
-    uint16_t si_density_deviation_setpoint;
-    ComPortConfig com1;
-    ComPortConfig com2;
-    ComPortConfig com3;
+    /* 第 6 版 CPU3 参数负载；除显示和三路串口配置外，还保存 SI 自动测量与报警设定值。 */
+    uint32_t local_led_version; /* CPU3 显示板软件版本编码，用于菜单显示和参数兼容诊断。 */
+    uint8_t  language; /* OLED 界面语言编号；只影响文本选择，不改变业务数值。 */
+    uint8_t  screen_source_oil; /* 油位显示数据源选择。 */
+    uint8_t  screen_source_water; /* 水位显示数据源选择。 */
+    uint8_t  screen_source_d; /* 密度显示数据源选择。 */
+    uint8_t  screen_source_t; /* 温度显示数据源选择。 */
+    int32_t  screen_input_oil; /* 油位字段显示使能值。 */
+    int32_t  screen_input_water; /* 水位字段显示使能值。 */
+    int32_t  screen_input_d; /* 密度字段显示使能值。 */
+    uint8_t  screen_input_d_switch; /* 密度字段自动/手动切换方式。 */
+    int32_t  screen_input_t; /* 温度字段显示使能值。 */
+    uint8_t  screen_decimal; /* 过程量显示的小数位配置。 */
+    uint16_t screen_password; /* CPU3 参数菜单密码数值。 */
+    uint8_t  screen_off_time; /* OLED 息屏功能开关，0 表示禁用、1 表示启用；空闲门限由 DISPLAY_SCREEN_OFF_IDLE_MS 固定定义，本字段不是可配置时长。 */
+    uint8_t  screen_brightness; /* OLED 亮度档位，写入硬件前由参数校验限制范围。 */
+    uint16_t si_auto_profile_interval; /* SI 自动剖面重复间隔，按 SI 调度逻辑以分钟解释，零值会被校正。 */
+    uint8_t  si_auto_profile_enable; /* SI 自动剖面调度使能值；非零时才计算计划启动时间。 */
+    uint8_t  si_auto_profile_hour; /* SI 自动剖面首次计划启动的小时，使用 24 小时制。 */
+    uint8_t  si_auto_profile_minute; /* SI 自动剖面首次计划启动的分钟。 */
+    uint16_t si_low_density_setpoint; /* SI 低密度报警设定值，保持 SI 寄存器规定的原始单位和缩放。 */
+    uint16_t si_high_density_setpoint; /* SI 高密度报警设定值，保持 SI 寄存器规定的原始单位和缩放。 */
+    int16_t  si_low_temperature_setpoint; /* SI 低温报警设定值，保持 SI 寄存器规定的有符号原始单位。 */
+    int16_t  si_high_temperature_setpoint; /* SI 高温报警设定值，保持 SI 寄存器规定的有符号原始单位。 */
+    uint16_t si_ll_level_setpoint; /* SI 低低液位报警设定值，保持 SI 寄存器原始单位。 */
+    uint16_t si_hh_level_setpoint; /* SI 高高液位报警设定值，保持 SI 寄存器原始单位。 */
+    uint16_t si_low_level_setpoint; /* SI 低液位报警设定值，保持 SI 寄存器原始单位。 */
+    uint16_t si_high_level_setpoint; /* SI 高液位报警设定值，保持 SI 寄存器原始单位。 */
+    uint16_t si_temp_deviation_setpoint; /* SI 剖面温度偏差报警阈值，保持 SI 寄存器原始单位。 */
+    uint16_t si_density_deviation_setpoint; /* SI 剖面密度偏差报警阈值，保持 SI 寄存器原始单位。 */
+    ComPortConfig com1; /* COM1 的波特率、数据位、校验、停止位和协议配置。 */
+    ComPortConfig com2; /* COM2 的波特率、数据位、校验、停止位和协议配置。 */
+    ComPortConfig com3; /* COM3 的波特率、数据位、校验、停止位和协议配置。 */
 } Cpu3CommAndDisplayParamsV6;
 
 /* 编译期逐字段确认V6布局就是V7兼容槽之前的完整前缀。 */
@@ -1116,27 +1241,34 @@ _Static_assert(sizeof(Cpu3CommAndDisplayParamsV6) ==
                offsetof(Cpu3CommAndDisplayParams, si_compat_holding),
                "CPU3 V6参数前缀长度不兼容");
 
+/* CPU3 第 6 版 FRAM 参数记录；以魔术字、版本、结构体负载和 CRC 共同完成持久化完整性校验。 */
 typedef struct
 {
-    uint32_t                    magic;
-    uint16_t                    version;
-    uint16_t                    reserved;
-    Cpu3CommAndDisplayParamsV6  params;
-    uint32_t                    crc;
+    /* 第 6 版 CPU3 FRAM 记录头、参数负载和 CRC 布局。 */
+    uint32_t                    magic; /* 持久化记录魔术字；装载时首先用于排除空白或错误类型的数据。 */
+    uint16_t                    version; /* 持久化结构版本；决定后续负载按哪一版固定布局解释。 */
+    uint16_t                    reserved; /* 为保持历史二进制布局预留的字段；写入时保持约定值，禁止复用。 */
+    Cpu3CommAndDisplayParamsV6  params; /* 持久化的实际参数负载；其结构布局必须与记录头中的版本号一致。 */
+    uint32_t                    crc; /* 覆盖记录约定范围的 CRC 校验值；装载失败时不得使用对应负载。 */
 } Cpu3ParamStorageV6;
 
 typedef struct
 {
-    uint32_t                 magic;
-    uint16_t                 version;
+    /* 当前 CPU3 FRAM 参数记录头；后续负载字段由版本对应的结构布局解释。 */
+    uint32_t                 magic; /* 持久化记录魔术字；装载时首先用于排除空白或错误类型的数据。 */
+    uint16_t                 version; /* 持久化结构版本；决定后续负载按哪一版固定布局解释。 */
     uint16_t                 reserved;  /* 对齐/预留 */
-    Cpu3CommAndDisplayParams params;
-    uint32_t                 crc;
+    Cpu3CommAndDisplayParams params; /* 持久化的实际参数负载；其结构布局必须与记录头中的版本号一致。 */
+    uint32_t                 crc; /* 覆盖记录约定范围的 CRC 校验值；装载失败时不得使用对应负载。 */
 } Cpu3ParamStorage;
 
-/* 把当前 CPU3 本机参数组织成可直接落 FRAM 的镜像结构。
- * 这样保存前后的比较、CRC 计算、真正写入，三者都使用同一份数据组织方式，
- * 避免“比较的是一套数据、写入的是另一套数据”导致的误判。 */
+/**
+ * @brief 把当前 CPU3 本机参数组织成可直接落 FRAM 的镜像结构。
+ *
+ * 这样保存前后的比较、CRC 计算、真正写入，三者都使用同一份数据组织方式，避免“比较的是一套数据、写入的是另一套数据”导致的误判。
+ *
+ * @param stor 用于接收 CPU3 参数持久化镜像的输出对象。
+ */
 static void Cpu3_Params_BuildStorage(Cpu3ParamStorage *stor)
 {
     stor->magic    = CPU3_PARAM_MAGIC;
@@ -1152,9 +1284,14 @@ static void Cpu3_Params_BuildStorage(Cpu3ParamStorage *stor)
     }
 }
 
-/* 判断 FRAM 里现有的 CPU3 参数镜像是否有效。
- * 只有 magic/version/CRC 同时成立，才允许把它当成“可信旧值”参与判重；
- * 否则宁可重写一次，也不能基于脏数据跳过保存。 */
+/**
+ * @brief 判断 FRAM 里现有的 CPU3 参数镜像是否有效。
+ *
+ * 只有 magic/version/CRC 同时成立，才允许把它当成“可信旧值”参与判重；否则宁可重写一次，也不能基于脏数据跳过保存。
+ *
+ * @param stor 用于接收 CPU3 参数持久化镜像的输出对象。
+ * @return true 表示 FRAM 镜像的 magic 和 version 均匹配当前格式，且重新计算的 CRC 等于存储值；false 表示魔术字或版本不匹配，或内容 CRC 校验失败。
+ */
 static bool Cpu3_Params_StorageValid(const Cpu3ParamStorage *stor)
 {
     uint32_t crc_len;
@@ -1170,10 +1307,10 @@ static bool Cpu3_Params_StorageValid(const Cpu3ParamStorage *stor)
 }
 
 /**
- * @brief 执行参数存储中的 Cpu3_Params_StorageV3Valid 逻辑。
+ * @brief 校验 V3 参数镜像的魔术字、版本、长度和 CRC。
  *
- * @param stor 业务参数。
- * @return true 表示条件满足或处理成功，false 表示条件不满足或处理失败。
+ * @param stor 用于接收 CPU3 参数持久化镜像的输出对象。
+ * @return true 表示上述校验全部通过；false 表示至少一项校验未通过。
  */
 static bool Cpu3_Params_StorageV3Valid(const Cpu3ParamStorageV3 *stor)
 {
@@ -1189,6 +1326,12 @@ static bool Cpu3_Params_StorageV3Valid(const Cpu3ParamStorageV3 *stor)
     return crc_calc == stor->crc;
 }
 
+/**
+ * @brief 校验参数镜像的魔术字、V4/V5 版本、结构长度和尾部 CRC。
+ *
+ * @param stor 用于接收 CPU3 参数持久化镜像的输出对象。
+ * @return true 表示上述校验全部通过；false 表示至少一项校验未通过。
+ */
 static bool Cpu3_Params_StorageV5Valid(const Cpu3ParamStorageV5 *stor)
 {
     uint32_t crc_len;
@@ -1205,6 +1348,12 @@ static bool Cpu3_Params_StorageV5Valid(const Cpu3ParamStorageV5 *stor)
     return crc_calc == stor->crc;
 }
 
+/**
+ * @brief 校验参数镜像的魔术字、V6 版本、结构长度和尾部 CRC。
+ *
+ * @param stor 用于接收 CPU3 参数持久化镜像的输出对象。
+ * @return true 表示上述校验全部通过；false 表示至少一项校验未通过。
+ */
 static bool Cpu3_Params_StorageV6Valid(const Cpu3ParamStorageV6 *stor)
 {
     uint32_t crc_len;
@@ -1220,10 +1369,9 @@ static bool Cpu3_Params_StorageV6Valid(const Cpu3ParamStorageV6 *stor)
 }
 
 /**
- * @brief 执行参数存储中的 Cpu3_Params_MigrateFromV3 逻辑。
+ * @brief 把 V3 参数镜像迁移到当前结构并补齐新增默认值。
  *
- * @param stor 业务参数。
- * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ * @param stor 用于接收 CPU3 参数持久化镜像的输出对象。
  */
 static void Cpu3_Params_MigrateFromV3(const Cpu3ParamStorageV3 *stor)
 {
@@ -1250,6 +1398,11 @@ static void Cpu3_Params_MigrateFromV3(const Cpu3ParamStorageV3 *stor)
     Cpu3_InitSiParams();
 }
 
+/**
+ * @brief 把 V4/V5 显示和三路串口字段迁移到当前镜像，并补齐 SI 默认值。
+ *
+ * @param stor 用于接收 CPU3 参数持久化镜像的输出对象。
+ */
 static void Cpu3_Params_MigrateFromV5(const Cpu3ParamStorageV5 *stor)
 {
     memset(&g_cpu3_comm_display_params, 0, sizeof(g_cpu3_comm_display_params));
@@ -1275,10 +1428,13 @@ static void Cpu3_Params_MigrateFromV5(const Cpu3ParamStorageV5 *stor)
     Cpu3_InitSiParams();
 }
 
-/*
- * 函数用途：把完整V6参数前缀迁移到V7并补入六个SI原始兼容槽。
- * 调用场景：上电发现FRAM版本为V6且CRC有效。
- * 关键约束：V6已有SI参数和三路合法串口配置保持不变；非法串口字段仍按既有加载规则归一化。
+/**
+ * @brief 把完整V6参数前缀迁移到V7并补入六个SI原始兼容槽。
+ *
+ * @details 调用场景：上电发现FRAM版本为V6且CRC有效。
+ * @note 关键约束：V6已有SI参数和三路合法串口配置保持不变；非法串口字段仍按既有加载规则归一化。
+ *
+ * @param stor 用于接收 CPU3 参数持久化镜像的输出对象。
  */
 static void Cpu3_Params_MigrateFromV6(const Cpu3ParamStorageV6 *stor)
 {
@@ -1287,6 +1443,12 @@ static void Cpu3_Params_MigrateFromV6(const Cpu3ParamStorageV6 *stor)
     Cpu3_InitSiCompatHolding();
 }
 
+/**
+ * @brief 将旧版密度输入倍率从 x10 饱和换算为 x100。
+ *
+ * @param raw 旧参数存储中的有符号密度 x10 定点值，允许为负并按十倍倍率迁移。
+ * @return 返回 raw 乘以 DENSITY_PARAM_MIGRATE_FACTOR 后的 x100 有符号定点值；正向或负向溢出时分别饱和为 INT32_MAX 或 INT32_MIN。
+ */
 static int32_t Cpu3_MigrateDensityInputX10ToX100(int32_t raw)
 {
     if (raw > (INT32_MAX / (int32_t)DENSITY_PARAM_MIGRATE_FACTOR)) {
@@ -1340,8 +1502,13 @@ bool Cpu3_Params_SaveToFRAM(void)
 }
 
 /**
- * @brief 加载或恢复参数存储中的 Cpu3_Params_LoadFromFRAM 逻辑。
- * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ * @brief 从 FRAM 加载 CPU3 通信与显示参数；迁移 V3～V6 旧布局，校验失败时恢复默认值并回写当前 V7 布局。
+ *
+ * 函数先读取当前 V7 存储头；识别到 V3、V4、V5 或 V6 旧布局时，使用对应结构重新读取并校验 CRC，通过后迁移到当前运行结构、应用显示参数并保存为 V7。
+ * V3 和 V4 的密度显示输入从旧 x10 口径迁移到 x100；V3 至 V5 补入后来新增的 SI 和兼容字段默认值。V6 已是现场发布基线，迁移时保留合法 SI
+ * 与串口配置，不再猜测并改写瓦锡兰物理参数。
+ * 当前布局的 magic、版本或 CRC 无效时初始化全部默认参数并立即回写；合法 V7 参数只修正固件运行版本和非法串口字段，合法人工配置保持原值。
+ * 所有成功加载或迁移路径都会把显示亮度、息屏和相关 CPU3 本机参数应用到运行态；需要修正的当前布局在保存并读回校验后才作为新的 FRAM 镜像使用。
  */
 void Cpu3_Params_LoadFromFRAM(void)
 {
@@ -1438,7 +1605,7 @@ void Cpu3_Params_LoadFromFRAM(void)
         }
     }
 
-    /* 先处理异常边界，避免参数存储状态机带故障继续运行。 */
+    /* 两个 FRAM 参数副本都不可用时恢复默认值，并立即应用到显示运行态后回写，避免后续再次把损坏记录当作有效参数。 */
     if (use_default) {
         /* 使用默认值并立刻写回 FRAM */
         Cpu3_Params_InitDefaults();

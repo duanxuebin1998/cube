@@ -6,6 +6,7 @@
  */
 
 #ifndef TMC_IC_TMC5130_TMC5130_CONSTANTS_H_
+/* TMC_IC_TMC5130_TMC5130_CONSTANTS_H_ 是本头文件的包含保护标记；首次展开后置位，防止重复包含造成类型或接口重复定义。 */
 #define TMC_IC_TMC5130_TMC5130_CONSTANTS_H_
 
 #define TMC5130_REGISTER_COUNT   128 /* TMC5130 寄存器地址表容量。 */

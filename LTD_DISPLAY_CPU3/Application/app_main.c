@@ -27,13 +27,14 @@
 #define CPU3_UART_COUNT 4U /* 三路外部COM口加CPU2板间UART5。 */
 #define CPU3_EXTERNAL_PORT_STARTUP_GUARD_MS 1000U /* 外部COM初始化后的非阻塞硬件稳定保护时间。 */
 
+/* CPU3 外部端口配置无效时返回的保留结果码 0xFFFFFFFE；用于区分未配置协议与协议处理器自身返回的 Modbus 错误。 */
 #define CPU3_PORT_RESULT_INVALID_CONFIG 0xFFFFFFFEUL
+/* CPU3 外部端口找不到对应协议处理器时返回的保留结果码 0xFFFFFFFD；该值不得与正常协议结果码复用。 */
 #define CPU3_PORT_RESULT_INVALID_HANDLER 0xFFFFFFFDUL
 
 
 /**
- * @brief 接收屏幕显示中的 RS485_RecvMode 逻辑。
- * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ * @brief 将 UART5 板间 RS485 收发器切回接收方向。
  */
 static inline void RS485_RecvMode(void)
 {
@@ -41,35 +42,38 @@ static inline void RS485_RecvMode(void)
 }
 
 /* ====== 每口 TX busy + 单帧 pending 队列（忙时缓存 1 帧）====== */
-volatile uint8_t  g_tx_busy_com1 = 0; /* 屏幕显示模块级变量，保存跨函数共享的业务状态。 */
-volatile uint8_t  g_tx_busy_com2 = 0; /* 屏幕显示模块级变量，保存跨函数共享的业务状态。 */
-volatile uint8_t  g_tx_busy_com3 = 0; /* 屏幕显示模块级变量，保存跨函数共享的业务状态。 */
+volatile uint8_t  g_tx_busy_com1 = 0; /* COM1（UART6）发送 DMA 占用标志；主循环启动发送时置位，最后一帧发送完成或 UART 恢复路径释放。 */
+volatile uint8_t  g_tx_busy_com2 = 0; /* COM2（UART2）发送 DMA 占用标志；主循环启动发送时置位，最后一帧发送完成或 UART 恢复路径释放。 */
+volatile uint8_t  g_tx_busy_com3 = 0; /* COM3（UART3）发送 DMA 占用标志；主循环启动发送时置位，最后一帧发送完成或 UART 恢复路径释放。 */
 
-static uint16_t g_tx_pending_len_com1 = 0; /* 屏幕显示状态标志，通常由主循环或中断回调共同检查。 */
-static uint16_t g_tx_pending_len_com2 = 0; /* 屏幕显示状态标志，通常由主循环或中断回调共同检查。 */
-static uint16_t g_tx_pending_len_com3 = 0; /* 屏幕显示状态标志，通常由主循环或中断回调共同检查。 */
+static uint16_t g_tx_pending_len_com1 = 0; /* COM1 当前单帧待发缓存的有效字节数；0 表示没有排队帧，发送完成中断取走后立即清零。 */
+static uint16_t g_tx_pending_len_com2 = 0; /* COM2 当前单帧待发缓存的有效字节数；0 表示没有排队帧，发送完成中断取走后立即清零。 */
+static uint16_t g_tx_pending_len_com3 = 0; /* COM3 当前单帧待发缓存的有效字节数；0 表示没有排队帧，发送完成中断取走后立即清零。 */
 
-static uint8_t  g_tx_pending_buf_com1[256]; /* 屏幕显示数据缓冲区，注意与中断或 DMA 访问边界保持一致。 */
-static uint8_t  g_tx_pending_buf_com2[256]; /* 屏幕显示数据缓冲区，注意与中断或 DMA 访问边界保持一致。 */
-static uint8_t  g_tx_pending_buf_com3[256]; /* 屏幕显示数据缓冲区，注意与中断或 DMA 访问边界保持一致。 */
+static uint8_t  g_tx_pending_buf_com1[256]; /* COM1 忙碌时保存下一帧响应的 256 字节单帧缓存；仅前 g_tx_pending_len_com1 字节有效，当前 DMA 完成后续发。 */
+static uint8_t  g_tx_pending_buf_com2[256]; /* COM2 忙碌时保存下一帧响应的 256 字节单帧缓存；仅前 g_tx_pending_len_com2 字节有效，当前 DMA 完成后续发。 */
+static uint8_t  g_tx_pending_buf_com3[256]; /* COM3 忙碌时保存下一帧响应的 256 字节单帧缓存；仅前 g_tx_pending_len_com3 字节有效，当前 DMA 完成后续发。 */
 
 /* 统计：如果 pending 已有帧又来新帧，会覆盖旧帧（可观察是否需要更大队列） */
-static uint32_t g_tx_pending_overwrite_com1 = 0; /* 屏幕显示状态标志，通常由主循环或中断回调共同检查。 */
-static uint32_t g_tx_pending_overwrite_com2 = 0; /* 屏幕显示状态标志，通常由主循环或中断回调共同检查。 */
-static uint32_t g_tx_pending_overwrite_com3 = 0; /* 屏幕显示状态标志，通常由主循环或中断回调共同检查。 */
+static uint32_t g_tx_pending_overwrite_com1 = 0; /* COM1 单帧待发缓存尚未发送时又被新响应覆盖的累计次数。 */
+static uint32_t g_tx_pending_overwrite_com2 = 0; /* COM2 单帧待发缓存尚未发送时又被新响应覆盖的累计次数。 */
+static uint32_t g_tx_pending_overwrite_com3 = 0; /* COM3 单帧待发缓存尚未发送时又被新响应覆盖的累计次数。 */
 
 
 /* UI/参数修改后置位，主循环应用 */
-volatile uint8_t g_cpu3_uart_reinit_pending = 0; /* 屏幕显示状态标志，通常由主循环或中断回调共同检查。 */
+volatile uint8_t g_cpu3_uart_reinit_pending = 0;
 
 typedef enum
 {
-    PROTOCOL_SWITCH_PENDING_NONE = 0,
-    PROTOCOL_SWITCH_PENDING_TX,
-    PROTOCOL_SWITCH_PENDING_APPLY
+    /* 每个外部串口的协议切换发送状态；先等待切换响应发送完成，再在前台安全应用新的串口配置。 */
+    PROTOCOL_SWITCH_PENDING_NONE = 0, /* 当前串口没有待完成的协议切换。 */
+    PROTOCOL_SWITCH_PENDING_TX, /* 切换响应帧正在发送，尚不能重配串口。 */
+    PROTOCOL_SWITCH_PENDING_APPLY /* 响应已发送完成，等待前台应用目标协议和串口参数。 */
 } ProtocolSwitchPendingState;
 
+/* 三路外部 COM 口各自的协议切换发送状态；UART 发送完成回调推进状态，前台主循环消费并清零。 */
 static volatile uint8_t g_protocol_switch_pending_state[3] = {0U, 0U, 0U};
+/* 三路外部 COM 口待应用的目标协议；只有对应切换响应发送完成后才写入持久化配置。 */
 static ComProtocolType g_protocol_switch_target[3] = {
     COM_PROTO_DSM,
     COM_PROTO_DSM,
@@ -81,45 +85,108 @@ static bool s_external_ports_ready_logged = false; /* 外部COM启动保护结�
 static bool s_cpu2_startup_ready_logged = false; /* CPU2首次完整启动快照日志是否已输出。 */
 
 typedef struct {
-    uint32_t rx_frame_count;
-    uint32_t tx_accept_count;
-    uint32_t tx_queued_count;
-    volatile uint32_t tx_complete_count;
-    uint32_t process_failure_count;
-    uint32_t ignored_frame_count;
-    volatile uint32_t uart_error_count;
-    volatile uint32_t uart_ore_count;
-    volatile uint32_t uart_fe_count;
-    volatile uint32_t uart_ne_count;
-    volatile uint32_t uart_pe_count;
-    volatile uint32_t rx_overflow_count;
-    uint32_t rx_recovery_count;
-    uint32_t rx_recovery_fail_count;
-    uint32_t tx_dma_start_fail_count;
-    volatile uint32_t tx_dma_continue_fail_count;
-    uint32_t last_process_result;
+    /* 单个外部串口的累计通信健康快照；前台与中断回调共享的计数使用 volatile，统计值只用于诊断，不作为协议状态机控制条件。 */
+    uint32_t rx_frame_count; /* 接收到完整协议帧的累计次数；自对应上下文初始化后按事件递增，仅用于诊断统计，达到无符号上限后允许自然回绕。 */
+    uint32_t tx_accept_count; /* 接受发送请求的累计次数；自对应上下文初始化后按事件递增，仅用于诊断统计，达到无符号上限后允许自然回绕。 */
+    uint32_t tx_queued_count; /* 因发送忙而进入单帧等待队列的累计次数；自对应上下文初始化后按事件递增，仅用于诊断统计，达到无符号上限后允许自然回绕。 */
+    volatile uint32_t tx_complete_count; /* DMA 发送完成的累计次数；自对应上下文初始化后按事件递增，仅用于诊断统计，达到无符号上限后允许自然回绕。 */
+    uint32_t process_failure_count; /* 协议处理失败的累计次数；自对应上下文初始化后按事件递增，仅用于诊断统计，达到无符号上限后允许自然回绕。 */
+    uint32_t ignored_frame_count; /* 协议判定为无需响应帧的累计次数；自对应上下文初始化后按事件递增，仅用于诊断统计，达到无符号上限后允许自然回绕。 */
+    volatile uint32_t uart_error_count; /* UART 错误事件累计次数；自对应上下文初始化后按事件递增，仅用于诊断统计，达到无符号上限后允许自然回绕。 */
+    volatile uint32_t uart_ore_count; /* UART 接收溢出错误累计次数；自对应上下文初始化后按事件递增，仅用于诊断统计，达到无符号上限后允许自然回绕。 */
+    volatile uint32_t uart_fe_count; /* UART 帧格式错误累计次数；自对应上下文初始化后按事件递增，仅用于诊断统计，达到无符号上限后允许自然回绕。 */
+    volatile uint32_t uart_ne_count; /* UART 噪声错误累计次数；自对应上下文初始化后按事件递增，仅用于诊断统计，达到无符号上限后允许自然回绕。 */
+    volatile uint32_t uart_pe_count; /* UART 奇偶校验错误累计次数；自对应上下文初始化后按事件递增，仅用于诊断统计，达到无符号上限后允许自然回绕。 */
+    volatile uint32_t rx_overflow_count; /* 接收缓冲区溢出累计次数；自对应上下文初始化后按事件递增，仅用于诊断统计，达到无符号上限后允许自然回绕。 */
+    uint32_t rx_recovery_count; /* 接收路径成功恢复累计次数；自对应上下文初始化后按事件递增，仅用于诊断统计，达到无符号上限后允许自然回绕。 */
+    uint32_t rx_recovery_fail_count; /* 接收路径恢复失败累计次数；自对应上下文初始化后按事件递增，仅用于诊断统计，达到无符号上限后允许自然回绕。 */
+    uint32_t tx_dma_start_fail_count; /* 发送 DMA 启动失败累计次数；自对应上下文初始化后按事件递增，仅用于诊断统计，达到无符号上限后允许自然回绕。 */
+    volatile uint32_t tx_dma_continue_fail_count; /* 等待队列 DMA 续发失败累计次数；自对应上下文初始化后按事件递增，仅用于诊断统计，达到无符号上限后允许自然回绕。 */
+    uint32_t last_process_result; /* 最近一次协议帧处理返回码，供串口健康诊断保留具体失败上下文。 */
 } Cpu3PortCommStats;
 
+/* 三路外部 COM 口的通信健康累计统计，供诊断查询读取。 */
 static Cpu3PortCommStats s_port_comm_stats[3] = {0};
+/* 三路外部 COM 口由中断挂起、等待前台归因和记录的 UART 错误位。 */
 static volatile uint32_t s_port_uart_error_pending[3] = {0U, 0U, 0U};
+/* 三路外部 COM 口错误是否发生在发送阶段的标志，用于区分收发恢复路径。 */
 static volatile uint8_t s_port_uart_error_during_tx[3] = {0U, 0U, 0U};
+/* 三路外部 COM 口 DMA 续发失败的挂起计数，由前台并入通信健康统计。 */
 static volatile uint32_t s_port_tx_continue_fail_pending[3] = {0U, 0U, 0U};
+/* 各 UART 接收异常等待前台执行轻量恢复的标志数组。 */
 static volatile uint8_t s_uart_rx_recovery_pending[CPU3_UART_COUNT] = {0U, 0U, 0U, 0U};
+/* 各 UART 轻量恢复失败后等待前台完整重初始化的标志数组。 */
 static volatile uint8_t s_uart_full_reinit_pending[CPU3_UART_COUNT] = {0U, 0U, 0U, 0U};
+/* 各 UART 允许再次执行接收恢复的最早 HAL 毫秒节拍。 */
 static volatile uint32_t s_uart_rx_recovery_due_tick[CPU3_UART_COUNT] = {0U, 0U, 0U, 0U};
+/* UART5 接收环形缓冲区溢出的累计次数。 */
 static volatile uint32_t s_uart5_rx_overflow_count = 0U;
+/* UART5 接收路径成功恢复的累计次数。 */
 static volatile uint32_t s_uart5_rx_recovery_count = 0U;
+/* UART5 接收路径恢复失败的累计次数。 */
 static volatile uint32_t s_uart5_rx_recovery_fail_count = 0U;
+/* 前台通信健康处理代际；每完成一轮挂起错误和恢复事件消费后递增，供快照一致性检查。 */
 static volatile uint32_t s_foreground_health_generation = 0U;
 
+/**
+ * @brief 按零基端口索引返回 COM1、COM2 或 COM3 的当前配置。
+ *
+ * @param port_idx 零基外部串口索引。
+ * @return 成功时返回指向按零基端口索引返回 COM1、COM2 或 COM3 的当前配置的指针；输入非法或未找到匹配项时返回 NULL。
+ */
 static const ComPortConfig* cpu3_get_port_cfg(uint8_t port_idx);
+/**
+ * @brief 输出三个外部COM口当前生效配置。
+ *
+ * @param reason 用于诊断输出的 NUL 结尾只读原因文字；该文字补充错误发生背景，不代替函数另行记录或返回的数值错误码。
+ */
 static void cpu3_log_all_port_configs(const char *reason);
+/**
+ * @brief 在主循环延后输出UART异常，并周期汇总三个外部COM口通信健康状态。
+ *
+ * 调用场景：App_MainLoop每轮调用，内部按5秒周期限流摘要。
+ * 函数由 App_MainLoop 每轮调用，但每个外部 COM 口的异常事件分别按 CPU3_COMM_EVENT_LOG_INTERVAL_MS 限流，避免持续 UART 故障占满调试串口。
+ * 读取 ISR 写入的 UART 错误标志、错误发生阶段和续发 DMA 失败计数时，先保存 PRIMASK 并关闭中断，再一次性取走并清零待处理值；临界区结束后只在进入前允许中断时重新使能中断。
+ * 线程态根据锁存值输出端口、发送或接收阶段、ORE、FE、NE、PE 以及 DMA 续发失败统计，ISR 本身只累计标志和计数，不执行格式化打印。
+ * 达到 CPU3_COMM_STATUS_LOG_INTERVAL_MS 后，逐端口汇总协议、收发、忽略帧、处理失败、UART 异常、接收恢复、DMA 启动或续发失败及待发队列状态，并另行汇总 CPU2
+ * UART5 的收满和恢复情况。
+ *
+ * @note 关键约束：ISR只写pending标志，所有阻塞打印均在本函数执行。
+ * @note 静态节拍使用无符号减法，允许 HAL_GetTick 自然回绕；不得把本函数的格式化日志移回 UART 中断上下文。
+ */
 static void cpu3_comm_debug_task(void);
+/**
+ * @brief 取消尚未完成应答的协议切换请求。
+ *
+ * @details 调用场景：DMA 发送启动失败或 UART 错误恢复时调用。
+ * @note 关键约束：只清除对应 COM 口，不影响其它端口已经排队的切换请求。
+ *
+ * @param port_idx 零基外部串口索引。
+ */
 static void cpu3_cancel_protocol_switch(uint8_t port_idx);
+/**
+ * @brief 把一个端口切回 RS485 接收方向，并按当前参数只重初始化该端口。
+ *
+ * @details 调用场景：启动、参数重配置、协议切换和完整恢复队列。
+ * @note 关键约束：不得重配其它端口，避免中断无关的外部通信。
+ *
+ * @param port_idx 零基外部串口索引。
+ * @return true 表示端口编号有效，收发方向已切回接收，且对应 UART 已按当前参数重新初始化；false 表示端口编号不在 1～3，或 Cpu3_ReinitPortUart 未能完成该端口重初始化。
+ */
 static bool cpu3_reinit_external_port(uint8_t port_idx);
+/**
+ * @brief 逐端口应用当前配置，仅把失败端口投递完整重初始化，避免干扰其它COM口。
+ *
+ * @return true 表示三路外部 COM 口均按当前配置恢复成功；任一端口失败并进入后续恢复队列时返回 false。
+ */
 static bool cpu3_reinit_all_external_ports(void);
 
-/* 返回外部端口的统一日志模块名。 */
+/**
+ * @brief 返回外部端口的统一日志模块名。
+ *
+ * @param port_idx 零基外部串口索引。
+ * @return 返回外部端口的统一日志模块名对应的只读文本首地址；内容由当前输入或语言配置选择，调用方不得修改或释放。
+ */
 static const char *cpu3_port_module_text(uint8_t port_idx)
 {
     switch (port_idx) {
@@ -134,7 +201,12 @@ static const char *cpu3_port_module_text(uint8_t port_idx)
     }
 }
 
-/* 返回外部协议的现场可读名称。 */
+/**
+ * @brief 返回外部协议的现场可读名称。
+ *
+ * @param protocol 待判断、显示或写入的协议枚举值。
+ * @return 返回外部协议的现场可读名称对应的只读文本首地址；内容由当前输入或语言配置选择，调用方不得修改或释放。
+ */
 static const char *cpu3_protocol_text(ComProtocolType protocol)
 {
     switch (protocol) {
@@ -155,7 +227,12 @@ static const char *cpu3_protocol_text(ComProtocolType protocol)
     }
 }
 
-/* 返回校验位配置名称。 */
+/**
+ * @brief 返回校验位配置名称。
+ *
+ * @param parity 串口校验位枚举值。
+ * @return 返回校验位配置名称对应的只读文本首地址；内容由当前输入或语言配置选择，调用方不得修改或释放。
+ */
 static const char *cpu3_parity_text(ComParityType parity)
 {
     switch (parity) {
@@ -169,7 +246,13 @@ static const char *cpu3_parity_text(ComParityType parity)
     }
 }
 
-/* 返回协议分发结果的统一说明。 */
+/**
+ * @brief 返回协议分发结果的统一说明。
+ *
+ * @param protocol 待判断、显示或写入的协议枚举值。
+ * @param result 当前协议处理器返回的 CPU3_PORT_RESULT 或协议结果码，用于选择统一诊断文字。
+ * @return 返回协议分发结果的统一说明对应的只读文本首地址；内容由当前输入或语言配置选择，调用方不得修改或释放。
+ */
 static const char *cpu3_port_result_text(ComProtocolType protocol, uint32_t result)
 {
     if (result == CPU3_PORT_RESULT_INVALID_CONFIG) {
@@ -195,7 +278,12 @@ static const char *cpu3_port_result_text(ComProtocolType protocol, uint32_t resu
     }
 }
 
-/* 地址不匹配属于多机总线常见流量，其余失败默认提升为警告。 */
+/**
+ * @brief 地址不匹配属于多机总线常见流量，其余失败默认提升为警告。
+ *
+ * @param result 当前端口分发结果码；成功和地址不匹配不告警，其余失败提升为警告。
+ * @return true 表示该分发结果需要提升为警告；地址不匹配等正常总线旁路流量返回 false。
+ */
 static bool cpu3_port_result_needs_warning(uint32_t result)
 {
     if ((result == CPU3_PORT_RESULT_INVALID_CONFIG) ||
@@ -208,7 +296,12 @@ static bool cpu3_port_result_needs_warning(uint32_t result)
     return true;
 }
 
-/* 把UART句柄映射为恢复状态下标：COM1/2/3为0/1/2，板间UART5为3。 */
+/**
+ * @brief 把UART句柄映射为恢复状态下标：COM1/2/3为0/1/2，板间UART5为3。
+ *
+ * @param huart 目标 UART 外设句柄。
+ * @return 返回恢复状态数组下标：COM1、COM2、COM3、UART5 分别为 0、1、2、3；未知句柄返回 -1。
+ */
 static int8_t cpu3_uart_recovery_index(UART_HandleTypeDef *huart)
 {
     if (huart == NULL) {
@@ -229,7 +322,11 @@ static int8_t cpu3_uart_recovery_index(UART_HandleTypeDef *huart)
     return -1;
 }
 
-/* 锁存一次DMA恢复请求；中断和主循环均可调用，本函数不打印、不循环重试。 */
+/**
+ * @brief 锁存一次DMA恢复请求；中断和主循环均可调用，本函数不打印、不循环重试。
+ *
+ * @param huart 目标 UART 外设句柄。
+ */
 void CPU3_UartScheduleRxRecovery(UART_HandleTypeDef *huart)
 {
     int8_t index = cpu3_uart_recovery_index(huart);
@@ -241,7 +338,11 @@ void CPU3_UartScheduleRxRecovery(UART_HandleTypeDef *huart)
     s_uart_rx_recovery_pending[(uint8_t)index] = 1U;
 }
 
-/* 完整重初始化只用于三个外部COM口；普通DMA恢复不得降级已经锁存的完整请求。 */
+/**
+ * @brief 完整重初始化只用于三个外部COM口；普通DMA恢复不得降级已经锁存的完整请求。
+ *
+ * @param huart 目标 UART 外设句柄。
+ */
 static void cpu3_schedule_uart_full_reinit(UART_HandleTypeDef *huart)
 {
     int8_t index = cpu3_uart_recovery_index(huart);
@@ -255,9 +356,16 @@ static void cpu3_schedule_uart_full_reinit(UART_HandleTypeDef *huart)
     CPU3_UartScheduleRxRecovery(huart);
 }
 
-/*
- * 重新启动接收时先关闭IDLEIE，只有DMA真正启动成功后才重新开启。
+/**
+ * @brief 重新启动接收时先关闭IDLEIE，只有DMA真正启动成功后才重新开启。
+ *
  * 启动失败时保持端口隔离并投递主循环退避恢复，禁止留下空DMA的IDLE中断。
+ *
+ * @param huart 目标 UART 外设句柄。
+ * @param rx_buf 重新挂载 UART 接收 DMA 的目标缓冲区首地址；可写容量由 rx_buf_size 指定。
+ * @param rx_buf_size 目标 UART DMA 接收缓冲区容量，单位字节。
+ * @param set_recv_mode DMA 接收启动前用于将对应 RS485 收发器切到接收方向的回调函数。
+ * @return true 表示 DMA 接收已启动且 IDLE 中断已重新使能；HAL 启动失败并已投递恢复时返回 false。
  */
 static bool uart_restart_rx_dma(UART_HandleTypeDef *huart,
                                 uint8_t *rx_buf, uint16_t rx_buf_size,
@@ -377,24 +485,23 @@ static void cpu3_apply_uart_reinit_if_pending(void)
 
 /* ====== 统一“尝试发送”：忙则塞进 pending（单帧）====== */
 /**
- * @brief 尝试发送 UART 数据或将其加入待发送队列
+ * @brief 尝试发送 UART 数据或将其加入待发送队列。
  *
- * 该函数用于管理 UART 数据的发送，当发送通道空闲时直接启动 DMA 发送，
- * 当发送通道忙碌时将数据缓存到待发送队列（单帧缓冲，新数据覆盖旧数据）。
+ * 该函数用于管理 UART 数据的发送，当发送通道空闲时直接启动 DMA 发送，当发送通道忙碌时将数据缓存到待发送队列（单帧缓冲，新数据覆盖旧数据）。
  *
- * @param huart UART 句柄指针
- * @param tx_busy 指向发送忙标志的指针，0 表示空闲，非 0 表示忙碌
- * @param txbuf 待发送数据缓冲区指针
- * @param txlen 待发送数据长度
- * @param pending_len 指向待发送队列数据长度的指针
- * @param pending_buf 待发送队列缓冲区指针
- * @param pending_overwrite_cnt 指向待发送数据被覆盖次数计数器的指针
- * @param set_send_mode 设置发送模式的函数指针
- * @param set_recv_mode 设置接收模式的函数指针
- *
- * @note 当发送通道忙碌时，新数据会覆盖待发送队列中的旧数据，且最大缓存长度为 256 字节
- * @note 发送失败时会立即回退到接收模式，但不负责重启接收 DMA
+ * @param port_idx 零基外部串口索引。
+ * @param huart UART 句柄指针。
+ * @param tx_busy 指向发送忙标志的指针，0 表示空闲，非 0 表示忙碌。
+ * @param txbuf 待发送帧的首地址；空闲时该缓冲区直接交给 UART DMA，必须保持有效直至发送完成，忙碌时最多复制 256 字节到 pending_buf。
+ * @param txlen 待发送数据长度。
+ * @param pending_len 指向待发送队列数据长度的指针。
+ * @param pending_buf 待发送队列缓冲区指针。
+ * @param pending_overwrite_cnt 指向待发送数据被覆盖次数计数器的指针。
+ * @param set_send_mode 设置发送模式的函数指针。
+ * @param set_recv_mode 设置接收模式的函数指针。
  * @return true 表示已启动或排队发送，false 表示参数为空或启动发送失败。
+ * @note 当发送通道忙碌时，新数据会覆盖待发送队列中的旧数据，且最大缓存长度为 256 字节。
+ * @note 发送失败时会立即回退到接收模式，但不负责重启接收 DMA。
  */
 static bool uart_try_send_or_queue(uint8_t port_idx,
                                   UART_HandleTypeDef *huart,
@@ -454,11 +561,22 @@ typedef uint32_t (*ProtoProcessFn)(const uint8_t* rx, uint16_t rx_len,
 typedef void (*ProtoResetFn)(void);
 
 typedef struct {
-    ProtoProcessFn process;
+    /* 外部协议分发表项；process 处理一帧完整接收数据，reset 在协议切换或串口恢复时清理协议私有状态。 */
+    ProtoProcessFn process; /* 完整帧处理回调；返回协议处理结果，上层据此累计成功、忽略或失败统计。 */
     ProtoResetFn   reset;   /* 可为 NULL */
 } ComProtocolHandler;
 
-/* 封装： */
+/**
+ * @brief 处理一帧 DSM Modbus 请求并生成响应。
+ *
+ * 该函数是 CPU3 外部端口分发表的 DSM 适配入口，直接调用 DSM_CommunicationProcess 并透传处理结果。
+ *
+ * @param rx 接收到的数据缓冲区。有效字节范围由 rx_len 或调用点固定帧长限定，函数不会修改原始请求帧。
+ * @param rx_len 接收数据的有效长度，单位字节。函数只读取 rx[0..rx_len-1]，并在访问固定字段前检查协议要求的最小长度。
+ * @param tx DSM Modbus 正常或异常响应的输出缓冲区；实际响应长度通过 tx_len 返回。
+ * @param tx_len 待发送数据的有效长度，单位字节。该指针用于返回已经构造完成的响应帧总长度，长度包含当前协议要求的帧头、数据区及 CRC 等尾部字段。
+ * @return 返回 DSM 请求处理结果；DSM_COMM_OK 表示已生成响应，其他值区分帧长、CRC 和从机地址错误。
+ */
 static uint32_t proto_dsm_process(const uint8_t* rx, uint16_t rx_len,
                                  uint8_t* tx, uint16_t* tx_len)
 {
@@ -466,13 +584,13 @@ static uint32_t proto_dsm_process(const uint8_t* rx, uint16_t rx_len,
 }
 
 /**
- * @brief 处理屏幕显示中的 proto_wartsila_process 逻辑。
+ * @brief 处理一帧瓦锡兰 Modbus 请求并生成响应。
  *
- * @param rx 业务参数。
- * @param rx_len 数据长度。
- * @param tx 业务参数。
- * @param tx_len 数据长度。
- * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ * @param rx 接收到的数据缓冲区。有效字节范围由 rx_len 或调用点固定帧长限定，函数不会修改原始请求帧。
+ * @param rx_len 数据长度。该值是当前瓦锡兰 Modbus RTU 请求帧的有效字节数，函数只解析 rx[0..rx_len-1]。
+ * @param tx 瓦锡兰 Modbus 正常或异常响应的输出缓冲区；实际响应长度通过 tx_len 返回。
+ * @param tx_len 数据长度。该输出指针用于返回瓦锡兰 Modbus RTU 响应帧的实际字节数。
+ * @return 返回瓦锡兰 Modbus 分发结果码；0 表示已生成正常或异常响应，其他值表示帧长、CRC、地址或功能码错误。
  */
 static uint32_t proto_wartsila_process(const uint8_t* rx, uint16_t rx_len,
                                       uint8_t* tx, uint16_t* tx_len)
@@ -480,9 +598,16 @@ static uint32_t proto_wartsila_process(const uint8_t* rx, uint16_t rx_len,
     return modbus_rtu_process(rx, rx_len, tx, tx_len);
 }
 
-/*
- * 处理 SI协议帧。
+/**
+ * @brief 处理 SI协议帧。
+ *
  * 主循环只转交完整 RTU 帧，地址表、状态翻译和 CRC 回包都由 SI 模块负责。
+ *
+ * @param rx 接收到的数据缓冲区。有效字节范围由 rx_len 或调用点固定帧长限定，函数不会修改原始请求帧。
+ * @param rx_len 接收数据的有效长度，单位字节。函数只读取 rx[0..rx_len-1]，并在访问固定字段前检查协议要求的最小长度。
+ * @param tx SI Modbus 正常或异常响应的输出缓冲区；实际响应长度通过 tx_len 返回。
+ * @param tx_len 待发送数据的有效长度，单位字节。该指针用于返回已经构造完成的响应帧总长度，长度包含当前协议要求的帧头、数据区及 CRC 等尾部字段。
+ * @return 返回 SI Modbus 分发结果码；0 表示已生成正常或异常响应，其他值表示帧长、CRC、地址或功能码错误。
  */
 static uint32_t proto_si_process(const uint8_t* rx, uint16_t rx_len,
                                      uint8_t* tx, uint16_t* tx_len)
@@ -491,9 +616,16 @@ static uint32_t proto_si_process(const uint8_t* rx, uint16_t rx_len,
     return si_modbus_process_for_dispatch(rx, rx_len, tx, tx_len);
 }
 
-/*
- * 处理 LTD 共享 Modbus 协议帧。
+/**
+ * @brief 处理 LTD 共享 Modbus 协议帧。
+ *
  * 读取由 CPU3 已确认快照响应，写入由 LTD 模块等待 CPU2 ACK 后再决定外部响应。
+ *
+ * @param rx 接收到的数据缓冲区。有效字节范围由 rx_len 或调用点固定帧长限定，函数不会修改原始请求帧。
+ * @param rx_len 接收数据的有效长度，单位字节。函数只读取 rx[0..rx_len-1]，并在访问固定字段前检查协议要求的最小长度。
+ * @param tx LTD 共享 Modbus 正常或异常响应的输出缓冲区；实际响应长度通过 tx_len 返回。
+ * @param tx_len 待发送数据的有效长度，单位字节。该指针用于返回已经构造完成的响应帧总长度，长度包含当前协议要求的帧头、数据区及 CRC 等尾部字段。
+ * @return 返回 LTD Modbus 分发结果码；0 表示已生成正常或异常响应，其他值表示帧长、CRC、地址或功能码错误。
  */
 static uint32_t proto_ltd_process(const uint8_t* rx, uint16_t rx_len,
                                   uint8_t* tx, uint16_t* tx_len)
@@ -501,9 +633,15 @@ static uint32_t proto_ltd_process(const uint8_t* rx, uint16_t rx_len,
     return ltd_modbus_process_for_dispatch(rx, rx_len, tx, tx_len);
 }
 
-/*
- * 处理 LH 现场 Modbus 协议帧。
- * LH 地址重排和参数写入约束全部封装在独立模块，主分发层只负责转交完整 RTU 帧。
+/**
+ * @brief 处理 LH 现场 Modbus 协议帧。
+ *
+ * @param rx 接收到的数据缓冲区。有效字节范围由 rx_len 或调用点固定帧长限定，函数不会修改原始请求帧。
+ * @param rx_len 接收数据的有效长度，单位字节。函数只读取 rx[0..rx_len-1]，并在访问固定字段前检查协议要求的最小长度。
+ * @param tx LH Modbus 正常或异常响应的输出缓冲区；实际响应长度通过 tx_len 返回。
+ * @param tx_len 待发送数据的有效长度，单位字节。该指针用于返回已经构造完成的响应帧总长度，长度包含当前协议要求的帧头、数据区及 CRC 等尾部字段。
+ * @return 返回 LH Modbus 分发结果码；0 表示已生成正常或异常响应，其他值表示帧长、CRC、地址或功能码错误。
+ * @note LH 地址重排和参数写入约束全部封装在独立模块；主分发层只转交完整 RTU 帧。
  */
 static uint32_t proto_lh_process(const uint8_t* rx, uint16_t rx_len,
                                  uint8_t* tx, uint16_t* tx_len)
@@ -520,7 +658,12 @@ static const ComProtocolHandler g_handlers[] = {
     [COM_PROTO_LH]       = { proto_lh_process,       NULL },
 };
 
-/* 按端口号取配置：你这里的 com1/com2/com3 结构来自 cpu3_comm_display_params.h */
+/**
+ * @brief 按零基端口索引返回 COM1、COM2 或 COM3 的当前配置。
+ *
+ * @param port_idx 零基外部串口索引。
+ * @return 成功时返回指向按零基端口索引返回 COM1、COM2 或 COM3 的当前配置的指针；输入非法或未找到匹配项时返回 NULL。
+ */
 static const ComPortConfig* cpu3_get_port_cfg(uint8_t port_idx)
 {
     switch (port_idx) {
@@ -531,7 +674,12 @@ static const ComPortConfig* cpu3_get_port_cfg(uint8_t port_idx)
     }
 }
 
-/* 输出一个外部COM口当前生效的协议与串口参数。 */
+/**
+ * @brief 输出一个外部COM口当前生效的协议与串口参数。
+ *
+ * @param port_idx 零基外部串口索引。
+ * @param reason 用于诊断输出的 NUL 结尾只读原因文字；该文字补充错误发生背景，不代替函数另行记录或返回的数值错误码。
+ */
 static void cpu3_log_port_config(uint8_t port_idx, const char *reason)
 {
     const ComPortConfig *cfg = cpu3_get_port_cfg(port_idx);
@@ -552,7 +700,11 @@ static void cpu3_log_port_config(uint8_t port_idx, const char *reason)
                   (unsigned int)SlaveAddress);
 }
 
-/* 输出三个外部COM口当前生效配置。 */
+/**
+ * @brief 输出三个外部COM口当前生效配置。
+ *
+ * @param reason 用于诊断输出的 NUL 结尾只读原因文字；该文字补充错误发生背景，不代替函数另行记录或返回的数值错误码。
+ */
 static void cpu3_log_all_port_configs(const char *reason)
 {
     uint8_t port_idx;
@@ -562,10 +714,15 @@ static void cpu3_log_all_port_configs(const char *reason)
     }
 }
 
-/*
- * 函数用途：在外部COM口UART中断中累计硬件异常并交给主循环打印。
- * 调用场景：HAL_UART_ErrorCallback处理COM1、COM2、COM3时调用。
- * 关键约束：中断中只记录计数和标志，禁止直接printf或调用统一日志函数。
+/**
+ * @brief 在外部COM口UART中断中累计硬件异常并交给主循环打印。
+ *
+ * @details 调用场景：HAL_UART_ErrorCallback处理COM1、COM2、COM3时调用。
+ * @note 关键约束：中断中只记录计数和标志，禁止直接printf或调用统一日志函数。
+ *
+ * @param port_idx 零基外部串口索引。
+ * @param error_code 待记录、转换或判断的错误码。该值是 HAL UART 错误位掩码，ISR 仅入队，主循环再按端口归并和打印。
+ * @param during_tx true 表示错误发生在发送阶段，false 表示发生在接收或空闲阶段。
  */
 static void cpu3_record_uart_error_from_isr(uint8_t port_idx,
                                             uint32_t error_code,
@@ -599,9 +756,14 @@ static void cpu3_record_uart_error_from_isr(uint8_t port_idx,
     }
 }
 
-/*
- * UART错误或DMA收满后的统一中断出口。
+/**
+ * @brief UART错误或DMA收满后的统一中断出口。
+ *
  * 中断只隔离端口、丢弃候选帧并投递恢复事件，DMA重启由主循环执行。
+ *
+ * @param huart 目标 UART 外设句柄。
+ * @param error_code 待记录、转换或判断的错误码。该值是 HAL UART 错误位掩码，ISR 仅入队，主循环再按端口归并和打印。
+ * @param overflow true 表示接收长度超过 DMA 缓冲容量，false 表示长度仍在范围内。
  */
 void CPU3_UartRxFaultFromISR(UART_HandleTypeDef *huart,
                             uint32_t error_code,
@@ -667,9 +829,12 @@ void CPU3_UartRxFaultFromISR(UART_HandleTypeDef *huart,
     CPU3_UartScheduleRxRecovery(huart);
 }
 
-/*
- * 主循环按端口和固定退避执行DMA恢复或完整UART重初始化。
+/**
+ * @brief 主循环按端口和固定退避执行DMA恢复或完整UART重初始化。
+ *
  * 外部COM保护期只跳过COM1/2/3，板间UART5恢复始终允许执行。
+ *
+ * @param external_ports_ready true 表示三路外部 COM 口已经完成初始化，可执行恢复；false 表示仍处于启动阶段。
  */
 static void cpu3_uart_rx_recovery_task(bool external_ports_ready)
 {
@@ -724,13 +889,19 @@ static void cpu3_uart_rx_recovery_task(bool external_ports_ready)
     }
 }
 
-/* 前台完成一个有界阶段后推进健康代际；等待循环内部不得调用。 */
+/**
+ * @brief 前台完成一个有界阶段后推进健康代际；等待循环内部不得调用。
+ */
 void CPU3_WatchdogReportProgress(void)
 {
     s_foreground_health_generation++;
 }
 
-/* 看门狗只消费已经完成的前台健康进度，不再由定时器无条件续命。 */
+/**
+ * @brief 看门狗只消费已经完成的前台健康进度，不再由定时器无条件续命。
+ *
+ * @return true 表示前台健康代次自上次检查后已推进；没有新进度时返回 false。
+ */
 bool CPU3_WatchdogHealthAdvancedFromISR(void)
 {
     static uint32_t last_generation = 0U;
@@ -743,7 +914,11 @@ bool CPU3_WatchdogHealthAdvancedFromISR(void)
     return true;
 }
 
-/* ISR中记录续发DMA失败，主循环统一输出。 */
+/**
+ * @brief ISR中记录续发DMA失败，主循环统一输出。
+ *
+ * @param port_idx 零基外部串口索引。
+ */
 static void cpu3_record_tx_continue_fail_from_isr(uint8_t port_idx)
 {
     uint8_t index;
@@ -756,10 +931,18 @@ static void cpu3_record_tx_continue_fail_from_isr(uint8_t port_idx)
     s_port_tx_continue_fail_pending[index]++;
 }
 
-/*
- * 函数用途：在主循环延后输出UART异常，并周期汇总三个外部COM口通信健康状态。
+/**
+ * @brief 在主循环延后输出UART异常，并周期汇总三个外部COM口通信健康状态。
+ *
  * 调用场景：App_MainLoop每轮调用，内部按5秒周期限流摘要。
- * 关键约束：ISR只写pending标志，所有阻塞打印均在本函数执行。
+ * 函数由 App_MainLoop 每轮调用，但每个外部 COM 口的异常事件分别按 CPU3_COMM_EVENT_LOG_INTERVAL_MS 限流，避免持续 UART 故障占满调试串口。
+ * 读取 ISR 写入的 UART 错误标志、错误发生阶段和续发 DMA 失败计数时，先保存 PRIMASK 并关闭中断，再一次性取走并清零待处理值；临界区结束后只在进入前允许中断时重新使能中断。
+ * 线程态根据锁存值输出端口、发送或接收阶段、ORE、FE、NE、PE 以及 DMA 续发失败统计，ISR 本身只累计标志和计数，不执行格式化打印。
+ * 达到 CPU3_COMM_STATUS_LOG_INTERVAL_MS 后，逐端口汇总协议、收发、忽略帧、处理失败、UART 异常、接收恢复、DMA 启动或续发失败及待发队列状态，并另行汇总 CPU2
+ * UART5 的收满和恢复情况。
+ *
+ * @note 关键约束：ISR只写pending标志，所有阻塞打印均在本函数执行。
+ * @note 静态节拍使用无符号减法，允许 HAL_GetTick 自然回绕；不得把本函数的格式化日志移回 UART 中断上下文。
  */
 static void cpu3_comm_debug_task(void)
 {
@@ -867,10 +1050,14 @@ static void cpu3_comm_debug_task(void)
                   (unsigned long)s_uart5_rx_recovery_fail_count);
 }
 
-/*
- * 函数用途：记录某个外部 COM 口已经接受的协议切换目标。
- * 调用场景：统一切换帧校验成功时调用，包括目标协议与当前协议相同的请求。
- * 关键约束：只暂存 RAM 状态，必须等当前串口参数下的 ACK 发送完成后，才能保存目标协议并恢复接收。
+/**
+ * @brief 记录某个外部 COM 口已经接受的协议切换目标。
+ *
+ * @details 调用场景：统一切换帧校验成功时调用，包括目标协议与当前协议相同的请求。
+ * @note 关键约束：只暂存 RAM 状态，必须等当前串口参数下的 ACK 发送完成后，才能保存目标协议并恢复接收。
+ *
+ * @param port_idx 零基外部串口索引。
+ * @param target_protocol 目标协议。
  */
 static void cpu3_stage_protocol_switch(uint8_t port_idx, ComProtocolType target_protocol)
 {
@@ -885,10 +1072,13 @@ static void cpu3_stage_protocol_switch(uint8_t port_idx, ComProtocolType target_
     g_protocol_switch_pending_state[index] = PROTOCOL_SWITCH_PENDING_TX;
 }
 
-/*
- * 函数用途：取消尚未完成应答的协议切换请求。
- * 调用场景：DMA 发送启动失败或 UART 错误恢复时调用。
- * 关键约束：只清除对应 COM 口，不影响其它端口已经排队的切换请求。
+/**
+ * @brief 取消尚未完成应答的协议切换请求。
+ *
+ * @details 调用场景：DMA 发送启动失败或 UART 错误恢复时调用。
+ * @note 关键约束：只清除对应 COM 口，不影响其它端口已经排队的切换请求。
+ *
+ * @param port_idx 零基外部串口索引。
  */
 static void cpu3_cancel_protocol_switch(uint8_t port_idx)
 {
@@ -899,10 +1089,14 @@ static void cpu3_cancel_protocol_switch(uint8_t port_idx)
     }
 }
 
-/*
- * 函数用途：在发送完成中断中标记切换应答已经使用旧串口参数完整发出。
- * 调用场景：COM1、COM2 或 COM3 最后一帧 DMA 发送完成后调用。
- * 关键约束：中断内只改状态，不保存 FRAM、不重初始化 UART。
+/**
+ * @brief 在发送完成中断中标记切换应答已经使用旧串口参数完整发出。
+ *
+ * @details 调用场景：COM1、COM2 或 COM3 最后一帧 DMA 发送完成后调用。
+ * @note 关键约束：中断内只改状态，不保存 FRAM、不重初始化 UART。
+ *
+ * @param port_idx 零基外部串口索引。
+ * @return true 表示本次发送属于协议切换应答且已锁存发送完成；普通响应或无待决切换时返回 false。
  */
 static bool cpu3_mark_protocol_switch_tx_complete(uint8_t port_idx)
 {
@@ -921,10 +1115,14 @@ static bool cpu3_mark_protocol_switch_tx_complete(uint8_t port_idx)
     return false;
 }
 
-/*
- * 函数用途：把一个端口切回 RS485 接收方向，并按当前参数只重初始化该端口。
- * 调用场景：启动、参数重配置、协议切换和完整恢复队列。
- * 关键约束：不得重配其它端口，避免中断无关的外部通信。
+/**
+ * @brief 把一个端口切回 RS485 接收方向，并按当前参数只重初始化该端口。
+ *
+ * @details 调用场景：启动、参数重配置、协议切换和完整恢复队列。
+ * @note 关键约束：不得重配其它端口，避免中断无关的外部通信。
+ *
+ * @param port_idx 零基外部串口索引。
+ * @return true 表示端口编号有效，收发方向已切回接收且对应 UART 已按当前参数重新初始化；false 表示端口编号不在 1～3，或 Cpu3_ReinitPortUart 未能完成该端口重初始化。
  */
 static bool cpu3_reinit_external_port(uint8_t port_idx)
 {
@@ -955,7 +1153,11 @@ static bool cpu3_reinit_external_port(uint8_t port_idx)
     return Cpu3_ReinitPortUart(port_idx);
 }
 
-/* 逐端口应用当前配置，仅把失败端口投递完整重初始化，避免干扰其它COM口。 */
+/**
+ * @brief 逐端口应用当前配置，仅把失败端口投递完整重初始化，避免干扰其它COM口。
+ *
+ * @return true 表示三路外部 COM 口均按当前配置恢复成功；任一端口失败并进入后续恢复队列时返回 false。
+ */
 static bool cpu3_reinit_all_external_ports(void)
 {
     bool all_ok = true;
@@ -973,10 +1175,15 @@ static bool cpu3_reinit_all_external_ports(void)
     return all_ok;
 }
 
-/*
- * 函数用途：协议切换持久化失败时恢复指定端口的旧配置镜像。
- * 调用场景：新协议写入 FRAM 后读回校验失败时调用。
- * 关键约束：只恢复目标端口，不修改其它外部 COM 口。
+/**
+ * @brief 协议切换持久化失败时恢复指定端口的旧配置镜像。
+ *
+ * @details 调用场景：新协议写入 FRAM 后读回校验失败时调用。
+ * @note 关键约束：只恢复目标端口，不修改其它外部 COM 口。
+ *
+ * @param port_idx 零基外部串口索引。
+ * @param config 只读外部串口配置；包含波特率、数据位、校验位、停止位和当前协议类型，用于恢复协议切换前的端口设置。
+ * @return true 表示指定端口的协议和串口配置已恢复为切换前镜像并重新生效；false 表示端口编号无效，旧镜像无法持久化，或恢复后的 UART 重初始化失败。
  */
 static bool cpu3_restore_protocol_switch_port_config(uint8_t port_idx,
                                                      const ComPortConfig *config)
@@ -1004,10 +1211,11 @@ static bool cpu3_restore_protocol_switch_port_config(uint8_t port_idx,
     }
 }
 
-/*
- * 函数用途：在主循环中保存已确认发送完成的远程协议切换，并保持当前串口物理参数。
- * 调用场景：每轮主循环处理普通通信前调用。
- * 关键约束：保存和 HAL 重初始化均在主循环执行，禁止放入 UART 中断。
+/**
+ * @brief 在主循环中保存已确认发送完成的远程协议切换，并保持当前串口物理参数。
+ *
+ * @details 调用场景：每轮主循环处理普通通信前调用。
+ * @note 关键约束：保存和 HAL 重初始化均在主循环执行，禁止放入 UART 中断。
  */
 static void cpu3_apply_ready_protocol_switches(void)
 {
@@ -1089,14 +1297,14 @@ static void cpu3_apply_ready_protocol_switches(void)
 }
 
 /**
- * @brief 处理屏幕显示中的 cpu3_port_process 逻辑。
+ * @brief 按端口配置分派外部协议帧；通过 tx_len 输出响应长度，并返回 CPU3_PORT_RESULT 处理状态。
  *
- * @param port_idx 输入/输出指针。
- * @param rx 业务参数。
- * @param rx_len 数据长度。
- * @param tx 业务参数。
- * @param tx_len 数据长度。
- * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ * @param port_idx 待处理的零基外部串口索引；用于选择该端口的接收快照、协议分发器、配置和诊断计数。
+ * @param rx 接收到的数据缓冲区。有效字节范围由 rx_len 或调用点固定帧长限定，函数不会修改原始请求帧。
+ * @param rx_len 数据长度。该值是当前外部串口接收快照的有效字节数，协议分发器只读取 rx[0..rx_len-1]。
+ * @param tx 当前外部端口协议处理器使用的响应帧输出缓冲区；仅在 tx_len 非 0 时由上层启动发送。
+ * @param tx_len 数据长度。该输出指针用于返回当前端口协议处理器生成的响应帧实际字节数。
+ * @return 返回 CPU3_PORT_RESULT 分发状态；0 表示处理成功，其他值区分端口配置、处理器、帧长、CRC、地址和功能码错误。
  */
 static uint32_t cpu3_port_process(uint8_t port_idx,
                                  const uint8_t* rx, uint16_t rx_len,
@@ -1136,10 +1344,13 @@ static uint32_t cpu3_port_process(uint8_t port_idx,
     return g_handlers[p].process(rx, rx_len, tx, tx_len);
 }
 
-/*
- * 函数用途：判断外部 COM 启动保护时间是否结束。
- * 调用场景：主循环处理 COM1、COM2、COM3 接收帧前调用。
- * 关键约束：仅限制外部协议帧处理，不阻塞屏幕任务、CPU2 板间轮询和调试日志服务。
+/**
+ * @brief 判断外部 COM 启动保护时间是否结束。
+ *
+ * @details 调用场景：主循环处理 COM1、COM2、COM3 接收帧前调用。
+ * @note 关键约束：仅限制外部协议帧处理，不阻塞屏幕任务、CPU2 板间轮询和调试日志服务。
+ *
+ * @return true 表示当前 HAL tick 已达到 s_external_ports_ready_tick，外部 COM 启动保护期结束；false 表示仍处于保护期，暂不初始化外部端口。
  */
 static bool cpu3_external_ports_startup_ready(void)
 {
@@ -1147,8 +1358,11 @@ static bool cpu3_external_ports_startup_ready(void)
 }
 
 /**
- * @brief 初始化屏幕显示中的 App_Init 逻辑。
- * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ * @brief 初始化 CPU3 参数、显示、板间通信和三路外部串口调度。
+ *
+ * 先初始化异步日志并把 UART5 板间 RS485 收发器切回接收方向，然后初始化 OLED、立即绘制启动页并建立 RTC 时钟。
+ * 随后从 FRAM 加载 CPU3 通信与显示参数，按当前配置重建三路外部串口并初始化 DSM 通信模块。
+ * 外部串口保留一秒硬件稳定窗口，但只记录非阻塞就绪时刻，使屏幕任务和 CPU2 板间轮询可以立即进入主循环；各阶段持续上报看门狗健康进度。
  */
 void App_Init(void) {
     uint32_t phase_start_tick;
@@ -1206,8 +1420,14 @@ void App_Init(void) {
 }
 
 /**
- * @brief 执行屏幕显示中的 App_MainLoop 逻辑。
- * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ * @brief 调度显示、参数保存、日志、CPU2 板间通信及三路外部协议任务。
+ *
+ * 每轮先上报看门狗进度，推进外部串口启动保护、接收异常恢复、协议切换和待执行串口重配置，再运行 SI 周期调度与 OLED 显示任务。
+ * COM1、COM2、COM3 各自最多消费一帧已完成接收的数据；函数按端口当前协议分发请求，区分需要告警的处理失败和可忽略帧，并累计对应通信统计。
+ * 处理成功且存在响应时启动或排队 UART DMA 发送；处理失败、发送启动失败或无需响应时立即恢复该端口 DMA 接收，避免外部串口停收。
+ * 三路外部通信之后推进调试任务，并按 100 ms 门限轮询 CPU2，使持续外部流量不能永久饿死板间通信；最后服务异步日志，仅在本轮没有接收或轮询工作时延时 1 ms。
+ *
+ * @note UART DMA 响应的最后一帧发送完成后，由 HAL_UART_TxCpltCallback 负责切回接收；主循环不得提前重启同一端口接收 DMA。
  */
 void App_MainLoop(void)
 {
@@ -1431,12 +1651,12 @@ void App_MainLoop(void)
 	CPU3_WatchdogReportProgress();
 }
 /**
- * @brief UART 发送完成回调函数
+ * @brief 在 UART DMA 发送完成中断中续发排队帧、恢复 RS485 接收或推进协议切换。
  *
  * 该函数在 UART DMA 发送完成时被 HAL 库调用，用于处理多路串口（COM1/COM2/COM3/UART5）的发送完成逻辑。
  * 支持多帧连续发送机制：当有待发送帧时自动续发，最后一帧发送完成后切换回接收模式。
  *
- * @param huart 指向 UART 句柄的指针，用于标识触发的 UART 外设
+ * @param huart 指向 UART 句柄的指针，用于标识触发的 UART 外设；函数据其实例区分调试串口、三路外部 COM 和 UART5 板间口。
  *
  * @note 支持的串口及其对应实例：
  *       - COM1: USART6
@@ -1572,7 +1792,11 @@ void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
     }
 }
 
-/* DMA普通模式收满后关闭IDLEIE并丢弃整块数据，等待主循环退避恢复。 */
+/**
+ * @brief DMA普通模式收满后关闭IDLEIE并丢弃整块数据，等待主循环退避恢复。
+ *
+ * @param huart 目标 UART 外设句柄。
+ */
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 {
     if ((huart->Instance == USART6) ||
@@ -1585,7 +1809,11 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
     }
 }
 
-/* UART硬件错误只隔离并投递恢复，禁止在错误回调中立即重启DMA。 */
+/**
+ * @brief UART硬件错误只隔离并投递恢复，禁止在错误回调中立即重启DMA。
+ *
+ * @param huart 目标 UART 外设句柄。
+ */
 void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)
 {
     if (huart->Instance == USART1) {

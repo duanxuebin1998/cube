@@ -9,6 +9,7 @@
  * 2025-07-15 11:01:57
  */
 #ifndef _SYSTEM_PARAMETER_H
+/* _SYSTEM_PARAMETER_H 是本头文件的包含保护标记；首次展开后置位，防止重复包含造成类型或接口重复定义。 */
 #define _SYSTEM_PARAMETER_H
 
 #include <stdint.h>
@@ -31,43 +32,62 @@
 #define FAULT_AUTO_RECOVERY_RETRY_DEFAULT 3u /* 故障自动恢复默认重试次数。 */
 #define FAULT_AUTO_RECOVERY_RETRY_MAX 10u /* 故障自动恢复最大重试次数。 */
 
+/* AO 关闭状态使用的硬件目标电流 3.40 mA，线值单位为 0.01 mA；该值低于正常 4 mA 量程起点，用于表达禁用而非有效过程量。 */
 #define AO_DISABLED_CURRENT_MA_X100        340U
+/* AO 上电初始电流允许下限 3.40 mA，线值单位为 0.01 mA；参数校验和旧结构迁移必须使用同一边界。 */
 #define AO_INITIAL_CURRENT_MIN_MA_X100     340U
+/* AO 上电初始电流允许上限 22.60 mA，线值单位为 0.01 mA；超过该值的持久化参数必须判无效或归一化。 */
 #define AO_INITIAL_CURRENT_MAX_MA_X100     2260U
+/* AO 上电电流下限的语义别名；与初始电流下限保持一致，避免 CPU2/CPU3 参数校验使用不同范围。 */
 #define AO_POWER_ON_CURRENT_MIN_MA_X100    AO_INITIAL_CURRENT_MIN_MA_X100
+/* AO 上电电流上限的语义别名；与初始电流上限保持一致，修改基础边界时该别名自动同步。 */
 #define AO_POWER_ON_CURRENT_MAX_MA_X100    AO_INITIAL_CURRENT_MAX_MA_X100
+/* AO 固定输出模式允许的最小电流 4.00 mA，线值单位为 0.01 mA。 */
 #define AO_FIXED_CURRENT_MIN_MA_X100       400U
+/* AO 固定输出模式允许的最大电流 22.50 mA，线值单位为 0.01 mA。 */
 #define AO_FIXED_CURRENT_MAX_MA_X100       2250U
+/* AO 故障电流模式允许的最小电流 3.40 mA，线值单位为 0.01 mA。 */
 #define AO_FAULT_CURRENT_MIN_MA_X100       340U
+/* AO 故障电流模式允许的最大电流 22.60 mA，线值单位为 0.01 mA。 */
 #define AO_FAULT_CURRENT_MAX_MA_X100       2260U
+/* AO 调试模拟输出允许的最小电流 3.40 mA，线值单位为 0.01 mA。 */
 #define AO_SIMULATION_CURRENT_MIN_MA_X100  340U
+/* AO 调试模拟输出允许的最大电流 23.00 mA，线值单位为 0.01 mA；模拟模式仍不能越过硬件保护范围。 */
 #define AO_SIMULATION_CURRENT_MAX_MA_X100  2300U
+/* AO 电流校正量允许下限 -1.00 mA，线值单位为 0.01 mA；该值是有符号修正量，不是绝对输出电流。 */
 #define AO_CURRENT_CORRECTION_MIN_MA_X100  (-100)
+/* AO 电流校正量允许上限 +1.00 mA，线值单位为 0.01 mA；校正后结果仍需经过硬件电流限幅。 */
 #define AO_CURRENT_CORRECTION_MAX_MA_X100  100
+/* AO 阻尼时间允许上限 999.9 s，线值单位为 0.1 s；用于限制持久化参数和菜单输入，防止时间换算溢出。 */
 #define AO_DAMPING_MAX_X10_S               9999U
 
+/* 模拟量输出工作模式；区分关闭、4～20 mA 电流输出和 HART 从站输出，CPU2 与 CPU3 的枚举数值必须保持一致。 */
 typedef enum {
-    AO_WORK_MODE_DISABLED = 0U,
-    AO_WORK_MODE_CURRENT_OUTPUT = 1U,
-    AO_WORK_MODE_HART_SLAVE_OUTPUT = 2U
+    /* AO 工作模式，CPU2 与 CPU3 的数值约定必须一致。 */
+    AO_WORK_MODE_DISABLED = 0U, /* 关闭 AO 输出服务并进入安全关闭路径。 */
+    AO_WORK_MODE_CURRENT_OUTPUT = 1U, /* 启用 4～20 mA 电流输出路径。 */
+    AO_WORK_MODE_HART_SLAVE_OUTPUT = 2U /* 启用 HART 从站输出路径。 */
 } AoWorkMode;
 
 typedef enum {
-    AO_CURRENT_MODE_NE = 0U,
-    AO_CURRENT_MODE_US = 1U,
-    AO_CURRENT_MODE_NORMAL = 2U,
-    AO_CURRENT_MODE_FIXED = 3U
+    /* AO 电流制式及固定输出模式选择。 */
+    AO_CURRENT_MODE_NE = 0U, /* 采用 NAMUR NE43 电流制式边界。 */
+    AO_CURRENT_MODE_US = 1U, /* 采用美国习惯电流制式边界。 */
+    AO_CURRENT_MODE_NORMAL = 2U, /* 采用普通 4～20 mA 电流制式。 */
+    AO_CURRENT_MODE_FIXED = 3U /* 忽略过程量并输出配置的固定电流。 */
 } AoCurrentMode;
 
 typedef enum {
-    AO_PROCESS_SOURCE_TANK_LEVEL = 0U,
-    AO_PROCESS_SOURCE_SENSOR_POSITION = 1U,
-    AO_PROCESS_SOURCE_WATER_LEVEL = 2U
+    /* AO 过程量来源选择，决定 0%～100% 量程换算使用的输入值。 */
+    AO_PROCESS_SOURCE_TANK_LEVEL = 0U, /* 以储罐油位作为 AO 过程量。 */
+    AO_PROCESS_SOURCE_SENSOR_POSITION = 1U, /* 以传感器位置作为 AO 过程量。 */
+    AO_PROCESS_SOURCE_WATER_LEVEL = 2U /* 以水位作为 AO 过程量。 */
 } AoProcessSource;
 
 typedef enum {
-    AO_FAULT_ACTION_OUTPUT_CURRENT = 0U,
-    AO_FAULT_ACTION_HOLD_LAST_VALID = 1U
+    /* AO 进入故障状态后的输出动作。 */
+    AO_FAULT_ACTION_OUTPUT_CURRENT = 0U, /* 故障时输出配置的故障电流。 */
+    AO_FAULT_ACTION_HOLD_LAST_VALID = 1U /* 故障时保持最近一次已经确认有效的电流。 */
 } AoFaultAction;
 
 /*
@@ -75,41 +95,45 @@ typedef enum {
  * 旧协议布局由启动迁移函数按原始字节解释，结构总尺寸保持不变。
  */
 typedef struct {
-    uint32_t work_mode;
-    uint32_t current_mode;
-    uint32_t output_source;
+    /* AO 核心工作配置；CPU2 消费该结构决定工作模式、电流制式、过程量来源及电流零点修正。 */
+    uint32_t work_mode; /* AO 工作模式，取值遵循 AoWorkMode。 */
+    uint32_t current_mode; /* AO 电流制式或固定输出模式，取值遵循 AoCurrentMode。 */
+    uint32_t output_source; /* AO 过程量来源，决定量程换算使用油位、位置或水位。 */
     int32_t current_correction_mA_x100;     /* 电流修正值，单位0.01mA，复用原SIL/WHG预留槽 */
-    uint32_t fixed_current_mA_x100;
-    int32_t range_0_01mm;
-    int32_t range_100_01mm;
-    uint32_t damping_x10_s;
+    uint32_t fixed_current_mA_x100; /* AO 固定电流模式的目标值，单位为 0.01 mA。 */
+    int32_t range_0_01mm; /* AO 过程量量程的 0% 端点，单位为 0.1 mm。 */
+    int32_t range_100_01mm; /* AO 过程量量程的 100% 端点，单位为 0.1 mm。 */
+    uint32_t damping_x10_s; /* AO 阻尼时间的十倍定点值，单位为 0.1 s。 */
     uint32_t fault_mode;                    /* 故障动作：0输出故障电流，1保持上次有效过程电流 */
-    uint32_t fault_current_mA_x100;
+    uint32_t fault_current_mA_x100; /* 故障电流，单位为 0.01 mA；该字段保存已经缩放的整数定点值，换算物理量时只能应用一次缩放。 */
     uint32_t error_level;                   /* 隐藏预留槽位，固定为0 */
     uint32_t power_on_current_mA_x100;      /* 初始电流，保留原字段名和槽位 */
-    uint32_t simulation_current_mA_x100;
+    uint32_t simulation_current_mA_x100; /* AO 仿真模式目标电流，单位为 0.01 mA。 */
 } AoOutputConfig;
 
 
+/* 密度剖面结果来源；用于标记标准分布、国标、仪表、区间、Wartsila 或 SI 流程，CPU2 与 CPU3 必须使用相同数值。 */
 typedef enum {
-    PROFILE_SOURCE_NONE = 0u,
-    PROFILE_SOURCE_STANDARD = 1u,
-    PROFILE_SOURCE_GB = 2u,
-    PROFILE_SOURCE_METER = 3u,
-    PROFILE_SOURCE_INTERVAL = 4u,
-    PROFILE_SOURCE_WARTSILA = 5u,
-    PROFILE_SOURCE_SI = 6u
+    /* 剖面测量结果来源；用于跨 CPU 判断点阵布局、完成条件和对外协议投影。 */
+    PROFILE_SOURCE_NONE = 0u, /* 结果来源为没有有效剖面来源。 */
+    PROFILE_SOURCE_STANDARD = 1u, /* 结果来源为标准密度分布流程。 */
+    PROFILE_SOURCE_GB = 2u, /* 结果来源为国标密度分布流程。 */
+    PROFILE_SOURCE_METER = 3u, /* 结果来源为仪表直接提供的剖面。 */
+    PROFILE_SOURCE_INTERVAL = 4u, /* 结果来源为区间密度测量流程。 */
+    PROFILE_SOURCE_WARTSILA = 5u, /* 结果来源为Wartsila 剖面流程。 */
+    PROFILE_SOURCE_SI = 6u /* 结果来源为SI Profile 流程。 */
 } ProfileSource;
 
 /* SI Profile生命周期阶段，CPU2和CPU3协议18保持相同枚举值。 */
 typedef enum {
-    SI_PROFILE_PHASE_IDLE = 0u,
-    SI_PROFILE_PHASE_PREPARING = 1u,
-    SI_PROFILE_PHASE_MEASURING = 2u,
-    SI_PROFILE_PHASE_RETURNING_LEVEL = 3u,
-    SI_PROFILE_PHASE_COMPLETE = 4u,
-    SI_PROFILE_PHASE_ABORTED = 5u,
-    SI_PROFILE_PHASE_FAILED = 6u
+    /* SI 剖面测量阶段；CPU3 以该阶段配合周期和完成计数判定快照是否可发布。 */
+    SI_PROFILE_PHASE_IDLE = 0u, /* 空闲，当前没有 SI 剖面任务。 */
+    SI_PROFILE_PHASE_PREPARING = 1u, /* 准备阶段，尚未产生有效点阵。 */
+    SI_PROFILE_PHASE_MEASURING = 2u, /* 逐点测量阶段。 */
+    SI_PROFILE_PHASE_RETURNING_LEVEL = 3u, /* 测量结束后返回液面阶段。 */
+    SI_PROFILE_PHASE_COMPLETE = 4u, /* 完整剖面已经提交。 */
+    SI_PROFILE_PHASE_ABORTED = 5u, /* 流程被上层主动中止。 */
+    SI_PROFILE_PHASE_FAILED = 6u /* 流程因故障终止。 */
 } SiProfilePhase;
 
 #define RELAY_ALARM_CHANNEL_COUNT 4u /* 当前项目只使用 RELAY1~RELAY4 */
@@ -164,9 +188,11 @@ typedef enum {
     RELAY_ALARM_STATE_INACTIVE = 1u    /* 未激活 */
 } RelayAlarmState;
 
+/* 继电器锁存报警清除命令值；该字段按瞬时命令处理，CPU2 消费后不得长期保持为“清除”。 */
 typedef enum {
-    RELAY_ALARM_CLEAR_NO = 0u,
-    RELAY_ALARM_CLEAR_YES = 1u
+    /* 继电器锁存报警清除请求；YES 为一次性动作，消费后应恢复为 NO。 */
+    RELAY_ALARM_CLEAR_NO = 0u, /* 不请求清除继电器锁存报警。 */
+    RELAY_ALARM_CLEAR_YES = 1u /* 请求一次清除继电器锁存报警；CPU2 消费后复位。 */
 } RelayAlarmClearCommand;
 
 typedef struct {
@@ -542,10 +568,14 @@ typedef enum {
     STATE_ERROR = 0xFFFF                        /* 故障 */
 } DeviceState;
 
-/*
- * 函数用途：判断当前设备状态是否允许尝试写入CPU2持久参数。
- * 调用场景：CPU2最终写门禁和CPU3菜单、外部协议预检查。
- * 关键约束：只列出已确认空闲的完成态；持续态、预留态和未来新增状态默认拒绝。
+/**
+ * @brief 判断当前设备状态是否允许尝试写入CPU2持久参数。
+ *
+ * @details 调用场景：CPU2最终写门禁和CPU3菜单、外部协议预检查。
+ * @note 关键约束：只列出已确认空闲的完成态；持续态、预留态和未来新增状态默认拒绝。
+ *
+ * @param state 待检查的 CPU2 设备状态；函数按共享持久参数写白名单决定是否允许写入。
+ * @return true 表示当前设备状态允许尝试写入CPU2持久参数；false 表示当前设备状态不允许尝试写入CPU2持久参数。
  */
 static inline bool DeviceState_AllowsPersistentParamWrite(DeviceState state)
 {
@@ -577,10 +607,18 @@ static inline bool DeviceState_AllowsPersistentParamWrite(DeviceState state)
     }
 }
 
-/*
- * 函数用途：根据CPU2完整运行上下文判断持久参数写入权限。
- * 调用场景：FC10最终门禁和主机策略矩阵测试。
- * 关键约束：错误态忽略错误码但必须停止自动恢复；普通完成态必须无错误。
+/**
+ * @brief 根据CPU2完整运行上下文判断持久参数写入权限。
+ *
+ * @details 调用场景：FC10最终门禁和主机策略矩阵测试。
+ * @note 关键约束：错误态忽略错误码但必须停止自动恢复；普通完成态必须无错误。
+ *
+ * @param state CPU2 当前设备状态；函数还会结合当前命令、待执行命令、故障码和恢复活动态共同判权。
+ * @param current_command 当前值命令。
+ * @param pending_command 命令。
+ * @param error_code 待记录、转换或判断的错误码。该值是当前整机故障状态，参数写门禁结合设备状态和恢复活动态决定是否放行。
+ * @param fault_recovery_active true 表示当前处于故障恢复流程，false 表示普通运行流程。
+ * @return true 表示设备处于允许写参数的稳定上下文；自动恢复未占用，且当前/待命令和错误状态满足白名单；false 表示恢复正在运行、业务命令占用，设备状态不允许写入，或存在未清故障。
  */
 static inline bool DeviceContext_AllowsPersistentParamWrite(
     DeviceState state,
@@ -651,9 +689,10 @@ typedef struct {
 
 /* SI Profile独立运行态，避免普通分布结果整结构赋值破坏生命周期代次。 */
 typedef struct {
-    uint32_t phase;
-    uint32_t cycle_counter;
-    uint32_t progress_points;
+    /* SI 剖面流程对外发布的最小运行态；阶段、周期计数和已完成点数必须来自同一次快照。 */
+    uint32_t phase; /* 当前剖面或状态机阶段；消费者必须按对应枚举解释。 */
+    uint32_t cycle_counter; /* 剖面测量周期计数；每开始一个新周期递增，用于区分不同点阵。 */
+    uint32_t progress_points; /* 当前周期已经完成并可报告的剖面测点数。 */
 } SiProfileRuntime;
 
 /**
@@ -717,8 +756,9 @@ typedef struct {
 typedef struct {
 	uint32_t water_level;                        /* /< 测量水位的值 */
 	float zero_capacitance;
-	float oil_capacitance;
-	float current_capacitance;
+	/* 水位测量过程中用于比较油相基准和当前位置的电容结果。 */
+	float oil_capacitance; /* 进入水位判定前锁存的油相基准电容。 */
+	float current_capacitance; /* 当前位置最新测得的水位探头电容。 */
 } WaterMeasurement;
 
 typedef enum {
@@ -744,6 +784,7 @@ typedef struct {
     uint32_t result;                         /* 无线滑环匹配结果 */
     uint32_t mac_valid;                      /* MAC 是否有效 */
     uint32_t mac_high;                       /* AA:BB */
+    /* CPU2/CPU3 共享的无线配对状态字段。 */
     uint32_t mac_mid;                        /* CC:DD */
     uint32_t mac_low;                        /* EE:FF */
     uint32_t error_code;                     /* 失败时的 CPU2 错误码 */
@@ -909,6 +950,7 @@ typedef struct {
     /* ===================== Tape compensation ===================== */
     uint32_t lastOilCorrectionLevel;     /* 上次液位修正液位 */
     uint32_t tankGasPhaseTemperature;    /* tank gas phase temperature */
+    /* 设备参数结构末尾的尺带温度补偿字段。 */
     uint32_t tapeExpansionCoefficient;   /* tape expansion coefficient */
     uint32_t tapeCalibrationTemperature; /* tape calibration temperature */
 
@@ -930,11 +972,12 @@ typedef struct {
 
 /* 设备参数打印场景。 */
 typedef enum {
-    PARAM_PRINT_BOOT_FULL = 0,
-    PARAM_PRINT_FACTORY_RESET_FULL,
-    PARAM_PRINT_SAVE_META,
-    PARAM_PRINT_MANUAL_FULL,
-    PARAM_PRINT_SAVE_SKIP
+    /* 触发参数诊断输出的业务事件。 */
+    PARAM_PRINT_BOOT_FULL = 0, /* 上电装载完成后打印完整参数清单。 */
+    PARAM_PRINT_FACTORY_RESET_FULL, /* 恢复出厂参数后打印完整参数清单。 */
+    PARAM_PRINT_SAVE_META, /* 参数保存时仅打印版本、长度、魔术字和 CRC 摘要。 */
+    PARAM_PRINT_MANUAL_FULL, /* 收到人工诊断命令后打印完整参数清单。 */
+    PARAM_PRINT_SAVE_SKIP /* 高频保存路径跳过详细参数打印。 */
 } DeviceParamPrintEvent;
 
 #define FRAM_PARAM_A_ADDRESS 0x0000u /* 参数存储 A 分区 FRAM 起始地址。 */
@@ -965,30 +1008,89 @@ extern volatile uint8_t new_command_ready;       /* 串口原始命令就绪标志 */
 
 /* 命令前置参数字段；顺序同时用于运行快照和逐字段写入代次。 */
 typedef enum {
-    DEVICE_COMMAND_ARG_CALIBRATE_OIL_LEVEL = 0,
-    DEVICE_COMMAND_ARG_CALIBRATE_WATER_LEVEL,
-    DEVICE_COMMAND_ARG_CALIBRATE_TANK_HEIGHT,
-    DEVICE_COMMAND_ARG_SINGLE_POINT_MEASUREMENT_POSITION,
-    DEVICE_COMMAND_ARG_SINGLE_POINT_MONITORING_POSITION,
-    DEVICE_COMMAND_ARG_DENSITY_DISTRIBUTION_OIL_LEVEL,
-    DEVICE_COMMAND_ARG_MOTOR_COMMAND_DISTANCE,
-    DEVICE_COMMAND_ARG_COUNT
+    /* 命令参数快照数组的字段索引；每一项拥有独立代际，防止命令与参数错配。 */
+    DEVICE_COMMAND_ARG_CALIBRATE_OIL_LEVEL = 0, /* 标定油位命令使用的目标油位参数槽。 */
+    DEVICE_COMMAND_ARG_CALIBRATE_WATER_LEVEL, /* 标定水位命令使用的目标水位参数槽。 */
+    DEVICE_COMMAND_ARG_CALIBRATE_TANK_HEIGHT, /* 标定罐高命令使用的目标罐高参数槽。 */
+    DEVICE_COMMAND_ARG_SINGLE_POINT_MEASUREMENT_POSITION, /* 单点密度测量命令使用的位置参数槽。 */
+    DEVICE_COMMAND_ARG_SINGLE_POINT_MONITORING_POSITION, /* 单点监测命令使用的位置参数槽。 */
+    DEVICE_COMMAND_ARG_DENSITY_DISTRIBUTION_OIL_LEVEL, /* 密度分布命令使用的液位参数槽。 */
+    DEVICE_COMMAND_ARG_MOTOR_COMMAND_DISTANCE, /* 电机运动命令使用的距离参数槽。 */
+    DEVICE_COMMAND_ARG_COUNT /* 命令参数槽总数，仅用于数组容量和边界检查。 */
 } DeviceCommandArgumentField;
 
-/*
- * 函数用途：记录命令前置参数写入、绑定待执行命令，并为当前执行或自动重试选择稳定参数快照。
- * 调用场景：CPU2 FC10 成功提交、内部命令入队以及主循环真正执行命令前。
- * 关键约束：只固定参数生命周期，不改变任何命令的打断、重复执行或状态切换规则。
+/**
+ * @brief 记录命令前置参数写入、绑定待执行命令，并为当前执行或自动重试选择稳定参数快照。
+ *
+ * @details 调用场景：CPU2 FC10 成功提交、内部命令入队以及主循环真正执行命令前。
+ * @note 关键约束：只固定参数生命周期，不改变任何命令的打断、重复执行或状态切换规则。
  */
 void DeviceCommandArguments_RecordWrite(uint16_t start, uint16_t count);
+/**
+ * @brief 把当前七字段与已经接受的待执行命令原子绑定。
+ *
+ * @details 调用场景：Modbus 命令寄存器写入成功后。
+ * @note 关键约束：只更新 pending 快照，不得覆盖正在执行命令的 active 快照。
+ *
+ * @param command 已被接受、准备执行的 CommandType 命令；函数原子捕获并绑定当前七个前置参数。
+ */
 void DeviceCommandArguments_CapturePending(CommandType command);
+/**
+ * @brief 由 CPU2 内部路径入队正式命令并同步绑定当前七字段。
+ *
+ * @details 调用场景：上电默认命令、串口命令和业务内部续接命令。
+ * @note 关键约束：命令值和参数快照在同一短临界区发布。
+ *
+ * @param command 准备写入内部待执行槽的正式 CommandType 命令。
+ */
 void DeviceCommand_Queue(CommandType command);
+/**
+ * @brief 原子取走一个待执行正式命令，并同步把其 pending 参数提升为 active 参数。
+ *
+ * @details 调用场景：主循环在原始串口命令分支之后、自动恢复分支之前调用。
+ * @note 关键约束：命令读取、条件清零和参数提升位于同一短临界区；不消费其它命令的 pending 快照。
+ *
+ * @param command 命令输出指针；成功取队列时写入待执行 CommandType，队列为空时保持调用方原值。
+ * @return true 表示已原子取走一项 pending 正式命令，并把对应 pending 参数提升为 active 参数；false 表示输出指针为空或当前没有待执行命令。
+ */
 bool DeviceCommand_TakePending(CommandType *command);
+/**
+ * @brief 在自动恢复重试与最后时刻到达的正式命令之间做一次原子仲裁。
+ *
+ * 调用场景：FaultRecovery_Poll 决定重试后、主循环真正执行命令前。
+ *
+ * @param retry_command 命令。
+ * @param selected_command 用于返回恢复流程最终选择执行的设备命令。
+ * @return true 表示选中了新的 pending 命令，false 表示继续自动重试。
+ * @note 关键约束：有 pending 时保持正式命令优先；否则复用原 active 参数，并在同一临界区发布 current_command。
+ */
 bool DeviceCommand_PrepareRecoveryExecution(CommandType retry_command,
                                             CommandType *selected_command);
+/**
+ * @brief 返回当前命令绑定的参数值；非命令上下文返回最新全局值。
+ *
+ * @details 调用场景：测量、标定和电机业务消费七个前置参数时。
+ * @note 关键约束：只有 active 命令与 current_command 一致时才读取快照。
+ *
+ * @param field 待读取的命令参数字段枚举；必须小于 DEVICE_COMMAND_ARG_COUNT。
+ * @return field 越界时返回 0；活动命令快照与 current_command 一致时返回冻结参数值，否则返回对应字段的最新全局参数值。
+ */
 uint32_t DeviceCommandArguments_Get(DeviceCommandArgumentField field);
+/**
+ * @brief 消费一次性参数后仅在该字段未被后续写入时清零全局值。
+ *
+ * @details 调用场景：油位或水位标定完成后的原有清零位置。
+ * @note 关键约束：后续同值写入也由逐字段代次识别，不能被当前命令收尾误清。
+ *
+ * @param field 待查询或显示的字段枚举值。该枚举指定七个 CPU2 命令前置参数之一，用于计算位掩码并消费对应确认状态。
+ */
 void DeviceCommandArguments_ClearIfUnchanged(DeviceCommandArgumentField field);
-/* 仅对白名单命令开放“自身打断自身”，其他命令仍保持重复下发无效。 */
+/**
+ * @brief 仅对白名单命令开放“自身打断自身”，其他命令仍保持重复下发无效。
+ *
+ * @param cmd 命令值。该值是 CPU2 业务命令枚举；函数按该命令判断必需前置参数、发送条件、自中断能力或板间确认关系。
+ * @return true 表示命令位于允许重复下发后重新启动自身流程的白名单；false 表示同命令重复请求应被忽略，不能打断当前实例。
+ */
 static inline bool IsSelfInterruptibleCommand(CommandType cmd)
 {
     switch (cmd) {
@@ -1002,10 +1104,11 @@ static inline bool IsSelfInterruptibleCommand(CommandType cmd)
         return false;
     }
 }
-/*
- * 函数用途：原子判断是否存在能够切换当前流程的新命令。
- * 调用场景：阻塞测量、传感器通信和电机等待循环的既有退出检查。
- * 关键约束：保持原自中断白名单和重复命令规则，只防止条件清零覆盖并发到达的新命令。
+/**
+ * @brief 原子判断是否存在能够切换当前流程的新命令。
+ *
+ * @details 调用场景：阻塞测量、传感器通信和电机等待循环的既有退出检查。
+ * @note 关键约束：保持原自中断白名单和重复命令规则，只防止条件清零覆盖并发到达的新命令。
  */
 bool HasEffectiveCommandSwitchRequest(void);
 /**
@@ -1021,10 +1124,11 @@ void request_device_params_save(void); /* Queue one deferred save request */
  * @return 1表示参数被修正，0表示未变化。
  */
 int normalize_ao_params_after_write(void); /* 启动兼容路径归一化 AO 参数 */
-/*
- * 函数用途：对候选 AO 配置执行源切换、非法旧量程回退和严格范围校验。
- * 调用场景：CPU2 接收 FC10 写参后、提交全局参数前调用。
- * 关键约束：AO 字段写入始终严格校验；未触及 AO 且动态上限未变化时允许无关写入。
+/**
+ * @brief 对候选 AO 配置执行源切换、非法旧量程回退和严格范围校验。
+ *
+ * @details 调用场景：CPU2 接收 FC10 写参后、提交全局参数前调用。
+ * @note 关键约束：AO 字段写入始终严格校验；未触及 AO 且动态上限未变化时允许无关写入。
  */
 int prepare_ao_params_for_write(const DeviceParameters *current,
                                 DeviceParameters *candidate,
@@ -1035,8 +1139,8 @@ int prepare_ao_params_for_write(const DeviceParameters *current,
  */
 void process_device_params_deferred_tasks(void); /* Run deferred save tasks in the main loop */
 /**
- * @brief 加载或恢复系统参数中的 load_device_params 逻辑。
- * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ * @brief 校验 FRAM A/B 参数槽，选择最新有效副本并修复冗余槽。
+ * @return 1 表示已从 FRAM A 或 B 槽加载、归一化并按需修复冗余副本；容量超限或两个槽均无效时返回 0。
  */
 int load_device_params(void); /* 加载设备参数 */
 /**
@@ -1047,14 +1151,15 @@ void init_device_params(void); /* 初始化设备参数 */
  * @brief 保存系统参数中的 RestoreFactoryParamsConfig 逻辑。
  */
 void RestoreFactoryParamsConfig(void); /* 恢复出厂默认参数配置 */
-/*
- * 函数用途：查询恢复出厂是否正在整体覆盖运行参数。
- * 调用场景：CPU2 Modbus写入口保护命令前置参数不被恢复过程覆盖。
- * 关键约束：只读易失运行标志，不改变恢复出厂或命令业务逻辑。
+/**
+ * @brief 查询恢复出厂是否正在整体覆盖运行参数。
+ *
+ * @details 调用场景：CPU2 Modbus写入口保护命令前置参数不被恢复过程覆盖。
+ * @note 关键约束：只读易失运行标志，不改变恢复出厂或命令业务逻辑。
  */
 bool DeviceParams_IsFactoryRestoreInProgress(void);
 /**
- * @brief 显示或打印系统参数中的 print_device_params 逻辑。
+ * @brief 按业务分组完整打印当前设备参数快照。
  */
 void print_device_params(void); /* 打印设备参数 */
 /**
@@ -1073,13 +1178,19 @@ void DeviceParams_PrintDiff(const DeviceParameters *old_params, const DevicePara
  */
 void DeviceParams_CaptureWriteSnapshot(const DeviceParameters *params);
 /**
- * @brief 执行系统参数中的 DefaultCmd_To_MeasureCmd 逻辑。
- *
- * @param def_cmd 命令值。
- * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ * @brief 将上电默认指令枚举映射为实际测量命令枚举。
+ * @param def_cmd 待映射的上电默认指令枚举值。
+ * @return 返回对应的 CommandType 测量命令；默认指令未定义或未建立映射时返回 CMD_UNKNOWN。
  */
 CommandType DefaultCmd_To_MeasureCmd(DefaultCommandType def_cmd);
-/* 调试打印接口 */
+/**
+ * @brief 打印单个密度测点信息
+ *
+ * 调试打印接口。
+ *
+ * @param title 输出标题
+ * @param d     密度测点数据指针
+ */
 void PrintDensity(const char *title, const DensityMeasurement *d); /* 打印单个密度测点 */
 /**
  * @brief 打印完整测量结果，供串口调试和现场排查使用。

@@ -7,16 +7,20 @@
 #define ERROR_LOG_RECENT_REPORT_WINDOW_MS 200U /* 错误日志重复上报抑制窗口，单位 ms。 */
 #define ERROR_LOG_RETRY_VERBOSE_LIMIT 3U /* 重试日志详细打印次数上限。 */
 
-static uint8_t s_error_log_recent_report_valid = 0U; /* 错误日志故障记录，供恢复、显示或日志链路使用。 */
-static uint32_t s_error_log_recent_report_code = 0U; /* 错误日志故障记录，供恢复、显示或日志链路使用。 */
-static uint32_t s_error_log_recent_report_tick = 0U; /* 错误日志故障记录，供恢复、显示或日志链路使用。 */
+static uint8_t s_error_log_recent_report_valid = 0U; /* 最近一次最终报错抑制记录是否有效；仅在已登记真实故障码和时间戳后置位。 */
+static uint32_t s_error_log_recent_report_code = 0U; /* 最近一次已经输出最终报错的错误码，用于在短窗口内识别上下层重复上报。 */
+static uint32_t s_error_log_recent_report_tick = 0U; /* 最近一次最终报错的 HAL 毫秒时刻，与错误码共同判断 ERROR_LOG_RECENT_REPORT_WINDOW_MS 抑制窗口。 */
 /**
  * @brief 判断当前重试次数是否需要打印。
  * @note 短重试保留每次打印，长重试只打印首次和末次，避免现场日志刷屏。
+ *
+ * @param attempt 当前重试序号。
+ * @param max 本次操作计划的最大尝试次数，用于判断首轮、末轮和限频日志是否应输出。
+ * @return 1 表示当前重试次数需要打印；0 表示当前重试次数不需要打印。
  */
 static uint8_t ErrorLog_ShouldPrintRetry(uint32_t attempt, uint32_t max)
 {
-    /* 先处理异常边界，避免错误日志状态机带故障继续运行。 */
+    /* 短重试打印每一次；长重试只保留首轮和末轮，在保留恢复时间线的同时限制串口日志量。 */
     if ((max <= ERROR_LOG_RETRY_VERBOSE_LIMIT) || (attempt <= 1U) || (attempt >= max)) {
         return 1U;
     }
@@ -27,10 +31,12 @@ static uint8_t ErrorLog_ShouldPrintRetry(uint32_t attempt, uint32_t max)
 /**
  * @brief 标记刚刚已经输出过的最终报错。
  * @note 用于短时间内抑制同一个错误码的重复最终报错日志。
+ *
+ * @param code 待判断、转换或上报的状态码。该值使用整机模块-原因编码，函数按职责映射模块、原因、名称或记录最近一次报告。
  */
 static void ErrorLog_MarkRecentReport(uint32_t code)
 {
-    /* 先处理异常边界，避免错误日志状态机带故障继续运行。 */
+    /* 正常结果和命令切换会清空最近报错标记，不能进入真实故障的重复抑制窗口。 */
     if ((code == NO_ERROR) || (code == STATE_SWITCH)) {
         s_error_log_recent_report_valid = 0U;
         return;
@@ -43,16 +49,18 @@ static void ErrorLog_MarkRecentReport(uint32_t code)
 
 /**
  * @brief 判断最近一次最终报错标记。
+ *
+ * @param code 待判断、转换或上报的状态码。该值使用整机模块-原因编码，函数按职责映射模块、原因、名称或记录最近一次报告。
  * @return 1 表示指定错误码刚刚已经打印过；0 表示需要继续打印。
  */
 uint8_t ErrorLog_TakeRecentReport(uint32_t code)
 {
-    /* 先处理异常边界，避免错误日志状态机带故障继续运行。 */
+    /* 尚未登记最近报错时直接判定为未重复，避免读取无效的错误码和时间戳。 */
     if (s_error_log_recent_report_valid == 0U) {
         return 0U;
     }
 
-    /* 先处理异常边界，避免错误日志状态机带故障继续运行。 */
+    /* 仅同一错误码且仍在 200 ms 抑制窗口内才视为重复；超时或换码后清除标记，允许新的最终报错输出。 */
     if ((s_error_log_recent_report_code == code) &&
         ((HAL_GetTick() - s_error_log_recent_report_tick) <= ERROR_LOG_RECENT_REPORT_WINDOW_MS)) {
         return 1U;
@@ -64,6 +72,9 @@ uint8_t ErrorLog_TakeRecentReport(uint32_t code)
 
 /**
  * @brief 保护普通文本字段，避免传入空指针导致 printf 异常。
+ *
+ * @param text 待规范化的 NUL 结尾诊断文字；空指针或空字符串按当前字段的默认占位文字处理。
+ * @return 返回保护普通文本字段，避免传入空指针导致 printf 异常对应的只读文本首地址；内容由当前输入或语言配置选择，调用方不得修改或释放。
  */
 static const char *ErrorLog_NonNull(const char *text)
 {
@@ -72,6 +83,9 @@ static const char *ErrorLog_NonNull(const char *text)
 
 /**
  * @brief 保护模块名字段，空指针时输出“未知”模块。
+ *
+ * @param text 待规范化的 NUL 结尾诊断文字；空指针或空字符串按当前字段的默认占位文字处理。
+ * @return 返回保护模块名字段，空指针时输出“未知”模块对应的只读文本首地址；内容由当前输入或语言配置选择，调用方不得修改或释放。
  */
 static const char *ErrorLog_ModuleText(const char *text)
 {
@@ -80,6 +94,9 @@ static const char *ErrorLog_ModuleText(const char *text)
 
 /**
  * @brief 保护原因字段，空指针时输出“未知原因”。
+ *
+ * @param text 待规范化的 NUL 结尾诊断文字；空指针或空字符串按当前字段的默认占位文字处理。
+ * @return 返回保护原因字段，空指针时输出“未知原因”对应的只读文本首地址；内容由当前输入或语言配置选择，调用方不得修改或释放。
  */
 static const char *ErrorLog_ReasonText(const char *text)
 {
@@ -88,21 +105,27 @@ static const char *ErrorLog_ReasonText(const char *text)
 
 /**
  * @brief 保护处理动作字段，空指针时输出“未知处理”。
+ *
+ * @param text 待规范化的 NUL 结尾诊断文字；空指针或空字符串按当前字段的默认占位文字处理。
+ * @return 返回保护处理动作字段，空指针时输出“未知处理”对应的只读文本首地址；内容由当前输入或语言配置选择，调用方不得修改或释放。
  */
 static const char *ErrorLog_ActionText(const char *text)
 {
     return (text != NULL) ? text : ERROR_LOG_ACTION_UNKNOWN;
 }
 
+/* 特定故障码到日志模块名称的覆盖映射；用于替代仅按故障码高字节推导出的默认模块名。 */
 typedef struct {
-    uint32_t code;
-    const char *module;
+    /* 故障码到日志模块名称的覆盖表项。 */
+    uint32_t code; /* 需要覆盖默认模块归属的完整故障码。 */
+    const char *module; /* 该故障码应显示和记录的中文模块名称。 */
 } ErrorLogModuleOverride;
 
-/*
- * 函数用途：登记不能仅按编号高位判断的主责任模块。
- * 调用场景：最终报错需要区分无线通信、软件内部和模拟量输出时使用。
- * 关键约束：无线专用码仍显示滑环通信模块，其余故障按新版编号责任域归类。
+/**
+ * @brief 登记不能仅按编号高位判断的主责任模块。
+ *
+ * @details 调用场景：最终报错需要区分无线通信、软件内部和模拟量输出时使用。
+ * @note 关键约束：无线专用码仍显示滑环通信模块，其余故障按新版编号责任域归类。
  */
 static const ErrorLogModuleOverride s_error_log_module_overrides[] = {
     {SLIPRING_COMM_FAIL, ERROR_LOG_MODULE_SLIPRING_COMM},
@@ -114,6 +137,9 @@ static const ErrorLogModuleOverride s_error_log_module_overrides[] = {
 
 /**
  * @brief 根据逐码责任域和编号高位返回中文模块名。
+ *
+ * @param code 待判断、转换或上报的状态码。该值使用整机模块-原因编码，函数按职责映射模块、原因、名称或记录最近一次报告。
+ * @return 返回根据逐码责任域和编号高位返回中文模块名对应的只读文本首地址；内容由当前输入或语言配置选择，调用方不得修改或释放。
  */
 const char *ErrorLog_GetModuleByCode(uint32_t code)
 {
@@ -156,6 +182,9 @@ const char *ErrorLog_GetModuleByCode(uint32_t code)
 /**
  * @brief 根据具体错误码返回中文故障原因。
  * @note 优先匹配具体错误码，未覆盖时再按错误大类兜底。
+ *
+ * @param code 待判断、转换或上报的状态码。该值使用整机模块-原因编码，函数按职责映射模块、原因、名称或记录最近一次报告。
+ * @return 返回根据具体错误码返回中文故障原因对应的只读文本首地址；内容由当前输入或语言配置选择，调用方不得修改或释放。
  */
 const char *ErrorLog_GetReasonByCode(uint32_t code)
 {
@@ -455,6 +484,9 @@ const char *ErrorLog_GetReasonByCode(uint32_t code)
 
 /**
  * @brief 根据错误码返回中文错误名称。
+ *
+ * @param code 待判断、转换或上报的状态码。该值使用整机模块-原因编码，函数按职责映射模块、原因、名称或记录最近一次报告。
+ * @return 返回根据错误码返回中文错误名称对应的只读文本首地址；内容由当前输入或语言配置选择，调用方不得修改或释放。
  */
 const char *ErrorLog_GetCodeName(uint32_t code)
 {
@@ -739,6 +771,13 @@ const char *ErrorLog_GetCodeName(uint32_t code)
 
 /**
  * @brief 打印“错误重试”阶段错误日志。
+ *
+ * @param module 用于日志分类的只读模块名称。该 NUL 结尾标签标识传感器、电机、电源或存储等来源，写入结构化日志前缀。
+ * @param op 用于标识当前失败、重试或恢复操作的只读文字。
+ * @param reason 用于诊断输出的 NUL 结尾只读原因文字；该文字补充错误发生背景，不代替函数另行记录或返回的数值错误码。
+ * @param attempt 当前重试序号。
+ * @param max 本次操作允许的总尝试次数，用于格式化“当前次数/总次数”的重试日志。
+ * @param code 待判断、转换或上报的状态码。该值使用整机模块-原因编码，函数按职责映射模块、原因、名称或记录最近一次报告。
  */
 void ErrorLog_Retry(const char *module,
                     const char *op,
@@ -752,6 +791,14 @@ void ErrorLog_Retry(const char *module,
 
 /**
  * @brief 打印带详情的“错误重试”阶段错误日志。
+ *
+ * @param module 用于日志分类的只读模块名称。该 NUL 结尾标签标识传感器、电机、电源或存储等来源，写入结构化日志前缀。
+ * @param op 用于标识当前失败、重试或恢复操作的只读文字。
+ * @param reason 用于诊断输出的 NUL 结尾只读原因文字；该文字补充错误发生背景，不代替函数另行记录或返回的数值错误码。
+ * @param attempt 当前重试序号。
+ * @param max 本次操作允许的总尝试次数，用于带详情重试日志的次数显示。
+ * @param code 待判断、转换或上报的状态码。该值使用整机模块-原因编码，函数按职责映射模块、原因、名称或记录最近一次报告。
+ * @param detail 错误或诊断记录使用的详细信息。
  */
 void ErrorLog_RetryDetail(const char *module,
                           const char *op,
@@ -766,7 +813,7 @@ void ErrorLog_RetryDetail(const char *module,
         return;
     }
 
-    /* 先处理异常边界，避免错误日志状态机带故障继续运行。 */
+    /* 当前尝试不在日志保留点时直接返回，重试动作本身仍由调用方继续执行。 */
     if (ErrorLog_ShouldPrintRetry(attempt, max) == 0U) {
         return;
     }
@@ -796,6 +843,12 @@ void ErrorLog_RetryDetail(const char *module,
 
 /**
  * @brief 打印“重试成功”阶段错误日志。
+ *
+ * @param module 用于日志分类的只读模块名称。该 NUL 结尾标签标识传感器、电机、电源或存储等来源，写入结构化日志前缀。
+ * @param op 用于标识当前失败、重试或恢复操作的只读文字。
+ * @param reason 用于诊断输出的 NUL 结尾只读原因文字；该文字补充错误发生背景，不代替函数另行记录或返回的数值错误码。
+ * @param attempt 当前重试序号。
+ * @param max 本次操作允许的总尝试次数，用于恢复成功日志的次数显示。
  */
 void ErrorLog_Recover(const char *module,
                       const char *op,
@@ -808,6 +861,13 @@ void ErrorLog_Recover(const char *module,
 
 /**
  * @brief 打印带详情的“重试成功”阶段错误日志。
+ *
+ * @param module 用于日志分类的只读模块名称。该 NUL 结尾标签标识传感器、电机、电源或存储等来源，写入结构化日志前缀。
+ * @param op 用于标识当前失败、重试或恢复操作的只读文字。
+ * @param reason 用于诊断输出的 NUL 结尾只读原因文字；该文字补充错误发生背景，不代替函数另行记录或返回的数值错误码。
+ * @param attempt 当前重试序号。
+ * @param max 本次操作允许的总尝试次数，用于带详情恢复日志的次数显示。
+ * @param detail 错误或诊断记录使用的详细信息。
  */
 void ErrorLog_RecoverDetail(const char *module,
                             const char *op,
@@ -838,6 +898,13 @@ void ErrorLog_RecoverDetail(const char *module,
 
 /**
  * @brief 打印最终报错日志，带额外详情字段。
+ *
+ * @param module 用于日志分类的只读模块名称。该 NUL 结尾标签标识传感器、电机、电源或存储等来源，写入结构化日志前缀。
+ * @param op 用于标识当前失败、重试或恢复操作的只读文字。
+ * @param reason 用于诊断输出的 NUL 结尾只读原因文字；该文字补充错误发生背景，不代替函数另行记录或返回的数值错误码。
+ * @param code 待判断、转换或上报的状态码。该值使用整机模块-原因编码，函数按职责映射模块、原因、名称或记录最近一次报告。
+ * @param action 故障日志中记录的后续处置或恢复动作文字。
+ * @param detail 错误或诊断记录使用的详细信息。
  */
 void ErrorLog_ReportDetail(const char *module,
                            const char *op,
@@ -876,6 +943,11 @@ void ErrorLog_ReportDetail(const char *module,
 
 /**
  * @brief 打印“错误报警”阶段错误日志，不带额外详情。
+ *
+ * @param module 用于日志分类的只读模块名称。该 NUL 结尾标签标识传感器、电机、电源或存储等来源，写入结构化日志前缀。
+ * @param op 用于标识当前失败、重试或恢复操作的只读文字。
+ * @param reason 用于诊断输出的 NUL 结尾只读原因文字；该文字补充错误发生背景，不代替函数另行记录或返回的数值错误码。
+ * @param action 故障日志中记录的后续处置或恢复动作文字。
  */
 void ErrorLog_Warn(const char *module,
                    const char *op,
@@ -887,6 +959,12 @@ void ErrorLog_Warn(const char *module,
 
 /**
  * @brief 打印“错误报警”阶段错误日志，带额外详情字段。
+ *
+ * @param module 用于日志分类的只读模块名称。该 NUL 结尾标签标识传感器、电机、电源或存储等来源，写入结构化日志前缀。
+ * @param op 用于标识当前失败、重试或恢复操作的只读文字。
+ * @param reason 用于诊断输出的 NUL 结尾只读原因文字；该文字补充错误发生背景，不代替函数另行记录或返回的数值错误码。
+ * @param action 故障日志中记录的后续处置或恢复动作文字。
+ * @param detail 错误或诊断记录使用的详细信息。
  */
 void ErrorLog_WarnDetail(const char *module,
                          const char *op,

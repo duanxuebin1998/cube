@@ -6,12 +6,13 @@
  */
 
 #ifndef INC_MEASURE_H_
+/* INC_MEASURE_H_ 是本头文件的包含保护标记；首次展开后置位，防止重复包含造成类型或接口重复定义。 */
 #define INC_MEASURE_H_
 
 #include "app_main.h"
 /**
- * @brief 执行测量流程中的 MeasureStart 逻辑。
- * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ * @brief 初始化故障、驱动和扭力模块，并清除新测量流程的协议辅助运行态。
+ * @return NO_ERROR 表示初始化故障、驱动和扭力模块，并清除新测量流程的协议辅助运行态已完成；其他值为调用链原样传播的参数、状态、通信、传感器或电机错误码。
  */
 int MeasureStart(void);
 

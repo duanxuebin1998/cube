@@ -9,6 +9,7 @@
 #define MOTOR_DRIVER_RAMPSTAT_VZERO_MASK          0x400U /* RAMPSTAT 中速度为零状态位掩码。 */
 #define MOTOR_DRIVER_POSITION_TOLERANCE_TICKS     1024L /* 电机驱动位置校验允许误差，单位 tick。 */
 #ifndef MOTOR_INIT_POSITION_DETAIL_PRINT_ENABLE
+/* 电机初始化位置详情打印编译开关；0 关闭逐项调试输出，避免启动阶段日志影响电机和 SPI 时序。 */
 #define MOTOR_INIT_POSITION_DETAIL_PRINT_ENABLE      0U
 #endif
 
@@ -57,8 +58,7 @@ uint32_t MotorCtrl_GetDefaultSpeedX100(void)
 }
 
 /**
- * @brief 检查电机控制中的 MotorCtrl_InvalidateDriverInit 逻辑。
- * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ * @brief 使 TMC5130 初始化状态失效，强制下次运动前重新校验。
  */
 void MotorCtrl_InvalidateDriverInit(void)
 {
@@ -71,8 +71,8 @@ void MotorCtrl_InvalidateDriverInit(void)
 }
 
 /**
- * @brief 执行电机控制中的 MotorCtrl_IsDriverInitValid 逻辑。
- * @return true 表示条件满足或处理成功，false 表示条件不满足或处理失败。
+ * @brief 判断当前 TMC5130 初始化状态是否仍可信。
+ * @return true 表示当前 TMC5130 初始化状态仍可信；false 表示当前 TMC5130 初始化状态已不再可信。
  */
 bool MotorCtrl_IsDriverInitValid(void)
 {
@@ -86,6 +86,8 @@ bool MotorCtrl_IsDriverInitValid(void)
  * 再把 VMAX 清零、XTARGET 对齐当前 XACTUAL，并切回位置模式。
  * 这样即使设备在运动中复位，TMC5130 也不会沿用旧速度或旧目标继续跑。
  * 本函数会访问 SPI 和 GPIO，只能在任务上下文调用，不能在中断中调用。
+ *
+ * @return NO_ERROR 表示上电残留运动状态已清除并完成停稳确认；其他值为停止命令、驱动通信、停稳超时或位置同步错误。
  */
 uint32_t MotorCtrl_BootSafeStop(void)
 {
@@ -122,7 +124,6 @@ uint32_t MotorCtrl_BootSafeStop(void)
     stpr_disableDriver(&stepper);
     s_motor_driver.boot_safe_stop_done = (ret == NO_ERROR);
 
-    /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
     if (ret != NO_ERROR) {
         printf("电机上电安全停机失败：0x%08lX\r\n", (unsigned long)ret);
     } else {
@@ -138,6 +139,8 @@ uint32_t MotorCtrl_BootSafeStop(void)
  * 所有上层运动入口在写 VMAX/XTARGET/RAMPMODE 前调用这里。
  * 编码轮记步模式必须等编码器首帧有效；电机记步模式允许编码器后台异常，
  * 避免因为编码器悬空阻断电机记步模式下的受控运动。
+ *
+ * @return NO_ERROR 表示驱动和当前位置源均允许普通运动；其他值定位驱动未就绪、位置无效或读取失败。
  */
 uint32_t MotorDriver_CheckMotionReady(void)
 {
@@ -149,6 +152,8 @@ uint32_t MotorDriver_CheckMotionReady(void)
  *
  * 只绕过编码器首帧就绪，仍要求上电安全停机和 TMC5130 完整初始化成功。
  * 该入口只给人工强制运动使用，正常测量和普通运动不能调用。
+ *
+ * @return NO_ERROR 表示已满足强制调试运动的放宽就绪条件；其他值仍表示不可绕过的驱动或位置源故障。
  */
 uint32_t MotorDriver_CheckMotionReadyForceDebug(void)
 {
@@ -160,6 +165,8 @@ uint32_t MotorDriver_CheckMotionReadyForceDebug(void)
  *
  * 运行中 24V 断电或 TMC5130 复位会让底层调用 MotorCtrl_InvalidateDriverInit()；
  * 下一次业务重试不能直接返回 MOTOR_DISABLED，而应先重新下发 TMC5130 配置。
+ *
+ * @return NO_ERROR 表示驱动原本可运动或重新初始化成功；重建 TMC5130 配置、功率级或位置状态失败时返回具体错误码。
  */
 static uint32_t MotorDriver_ReinitIfMotionNotReady(void)
 {
@@ -175,7 +182,6 @@ static uint32_t MotorDriver_ReinitIfMotionNotReady(void)
     g_measurement.debug_data.motor_state = 0U;
 
     ret = MotorCtrl_Init();
-    /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
     if (ret != NO_ERROR) {
         printf("电机运动准备 | 自动重新初始化失败 | 返回=0x%08lX\r\n",
                (unsigned long)ret);
@@ -187,17 +193,17 @@ static uint32_t MotorDriver_ReinitIfMotionNotReady(void)
 }
 
 /**
- * @brief 检查电机控制中的 MotorDriver_CheckMotionReadyInternal 逻辑。
+ * @brief 校验驱动器、电源和位置源是否允许开始运动。
  *
- * @param ignore_encoder_ready 业务参数。
- * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ * @param ignore_encoder_ready true 表示本次受控调试动作允许跳过编码器就绪门禁，false 表示执行完整门禁。
+ * @return NO_ERROR 表示驱动重初始化通过且当前位置源满足运动条件，或当前受控场景允许回零、强制调试旁路；否则返回驱动错误、ENCODER_POWERON_FAIL 或
+ *         ENCODER_FIRST_SAMPLE_TIMEOUT。
  */
 static uint32_t MotorDriver_CheckMotionReadyInternal(bool ignore_encoder_ready)
 {
     uint32_t ret;
 
     ret = MotorDriver_ReinitIfMotionNotReady();
-    /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
     if (ret != NO_ERROR) {
         return ret;
     }
@@ -279,6 +285,8 @@ static uint32_t MotorDriver_ClearInitResetFlag(void)
  *
  * 电机 24V 刚恢复时，寄存器可能已经可写、GSTAT reset 也能清除，但 DRV_STATUS.CS_ACTUAL
  * 仍短时间为 0。初始化期允许等待几秒；超时后再按电机被禁止返回，交给自动恢复继续等待。
+ *
+ * @return NO_ERROR 表示初始化窗口内确认 TMC5130 功率级和实际电流就绪；超时或读取异常时返回 stpr_checkDriverPowerReady 映射的禁止、欠压或通信错误。
  */
 static uint32_t MotorDriver_CheckInitPowerReadyWithRetry(void)
 {
@@ -302,7 +310,7 @@ static uint32_t MotorDriver_CheckInitPowerReadyWithRetry(void)
             }
         }
 
-        /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
+        /* TMC5130 上电后在规定时间内仍未建立驱动电流，按功率级未就绪返回，不能无限等待后继续初始化。 */
         if ((uint32_t)(now - start_tick) >= MOTOR_DRIVER_INIT_POWER_READY_TIMEOUT_MS) {
             printf("TMC5130初始化等待电流建立超时，按电机被禁止处理\r\n");
             return stpr_checkDriverPowerReady(&stepper);
@@ -324,6 +332,9 @@ static uint32_t MotorDriver_CheckInitPowerReadyWithRetry(void)
  * 不同模式只影响未初始化时的返回语义；GSTAT/DRV_STATUS 故障位先由
  * stpr_checkDriverStatus() 解析，随后统一追加 stpr_checkDriverPowerReady()，
  * 避免业务路径重复读取功率级状态。
+ *
+ * @param mode 驱动健康检查阶段：初始化、运动前或运动中；不同阶段采用不同的初始化和故障处置约束。
+ * @return NO_ERROR 表示初始化、SPI 通信、配置回读、DRV_STATUS 和功率级均正常；未初始化返回 MOTOR_DRIVER_NOT_INITIALIZED，其他值保留具体通信、配置、欠压、过温、短路或失步错误。
  */
 uint32_t MotorDriver_CheckHealth(MotorDriverHealthMode mode)
 {
@@ -337,7 +348,6 @@ uint32_t MotorDriver_CheckHealth(MotorDriverHealthMode mode)
     if (mode == MOTOR_DRIVER_HEALTH_INIT_CHECK) {
         /* 初始化阶段允许清除纯 reset 标志；欠压和驱动错误仍由后续状态检查处理。 */
         ret = MotorDriver_ClearInitResetFlag();
-        /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
         if (ret != NO_ERROR) {
             return ret;
         }
@@ -345,7 +355,6 @@ uint32_t MotorDriver_CheckHealth(MotorDriverHealthMode mode)
 
     /* 先解析 GSTAT/DRV_STATUS 的真实故障位，再追加功率级电流建立检查。 */
     ret = stpr_checkDriverStatus(&stepper);
-    /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
     if (ret != NO_ERROR) {
         return ret;
     }
@@ -355,7 +364,6 @@ uint32_t MotorDriver_CheckHealth(MotorDriverHealthMode mode)
     } else {
         ret = stpr_checkDriverPowerReady(&stepper);
     }
-    /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
     if (ret != NO_ERROR) {
         return ret;
     }
@@ -368,6 +376,10 @@ uint32_t MotorDriver_CheckHealth(MotorDriverHealthMode mode)
  * @brief 应用电机速度参数，可选择是否打印用户操作结果。
  *
  * 公开接口保留简洁日志；内部临时速度、停机恢复等路径保持安静，避免正常运动流程刷屏。
+ *
+ * @param speed_x100 本次调试运动速度，单位 0.01 m/min；0 表示使用当前默认速度。
+ * @param print_result true 表示速度设置后打印结果，false 表示保持静默。
+ * @return NO_ERROR 表示速度参数及驱动寄存器均已更新；范围校验、驱动未初始化或 TMC5130 写入失败时返回对应错误码。
  */
 static uint32_t MotorDriver_SetSpeedInternal(uint32_t speed_x100, bool print_result)
 {
@@ -383,7 +395,6 @@ static uint32_t MotorDriver_SetSpeedInternal(uint32_t speed_x100, bool print_res
 
     if (s_motor_driver.initialized) {
         ret = MotorCtrl_IsDriverMoving(&stepper, &is_running);
-        /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
         if (ret != NO_ERROR) {
             return ret;
         }
@@ -400,7 +411,6 @@ static uint32_t MotorDriver_SetSpeedInternal(uint32_t speed_x100, bool print_res
     if (is_running) {
         /* 运行中改速：立即写入驱动，让本次运动立刻生效。 */
         ret = stpr_setVelocity(&stepper, velocity);
-        /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
         if (ret != NO_ERROR) {
             return ret;
         }
@@ -435,11 +445,11 @@ static uint32_t MotorDriver_SetSpeedInternal(uint32_t speed_x100, bool print_res
 }
 
 /**
- * @brief 读取电机控制中的 MotorDriver_ReadTargetPositionOpen 逻辑。
+ * @brief 读取 XACTUAL 与 XTARGET，并判断位置差是否超过 1024 tick 容差。
  *
- * @param tmc5130 业务参数。
- * @param target_open 业务参数。
- * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ * @param tmc5130 目标 TMC5130 驱动实例。对象保存 SPI 句柄、片选 GPIO 和使能 GPIO，底层寄存器访问与驱动使能操作均通过该实例定位硬件。
+ * @param target_open 用于返回 TMC5130 目标位置是否仍未到达。
+ * @return SYSTEM_CALL_CONDITION_ERROR 表示当前系统状态不允许执行；NO_ERROR 表示操作成功。
  */
 static uint32_t MotorDriver_ReadTargetPositionOpen(TMC5130TypeDef *tmc5130, bool *target_open)
 {
@@ -468,10 +478,10 @@ static uint32_t MotorDriver_ReadTargetPositionOpen(TMC5130TypeDef *tmc5130, bool
 }
 
 /**
- * @brief 执行电机控制中的 MotorDriver_AlignTargetToActual 逻辑。
+ * @brief 把目标位置对齐到当前位置，避免恢复后产生意外运动。
  *
- * @param tmc5130 业务参数。
- * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ * @param tmc5130 目标 TMC5130 驱动实例。对象保存 SPI 句柄、片选 GPIO 和使能 GPIO，底层寄存器访问与驱动使能操作均通过该实例定位硬件。
+ * @return SYSTEM_CALL_CONDITION_ERROR 表示当前系统状态不允许执行；NO_ERROR 表示操作成功。
  */
 static uint32_t MotorDriver_AlignTargetToActual(TMC5130TypeDef *tmc5130)
 {
@@ -508,7 +518,6 @@ uint32_t MotorCtrl_SetCurrent(uint32_t current)
         uint32_t ret;
         /* 电流参数写入后立即更新 TMC5130，避免必须重启才生效。 */
         ret = stpr_setCurrent(&stepper, (uint8_t)clamped_current);
-        /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
         if (ret != NO_ERROR) {
             return ret;
         }
@@ -557,7 +566,6 @@ uint32_t MotorCtrl_Init(void)
      * 不能通过 CHECK_ERROR() 再读取历史全局错误码。 */
     if (!s_motor_driver.initialized) {
         uint32_t ret = stpr_initStepper(&stepper, &hspi2, GPIOB, GPIO_PIN_12, 1, (uint8_t)motor_current);
-        /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
         if (ret != NO_ERROR) {
             return ret;
         }
@@ -566,13 +574,11 @@ uint32_t MotorCtrl_Init(void)
         s_motor_driver.initialized = true;
         /* 使能后立即确认 24V 功率级和配置寄存器，避免未上电时仍显示初始化成功。 */
         ret = MotorDriver_CheckHealth(MOTOR_DRIVER_HEALTH_INIT_CHECK);
-        /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
         if (ret != NO_ERROR) {
             s_motor_driver.initialized = false;
             return ret;
         }
         ret = MotorPosition_RestorePersistedRegisters(&stepper);
-        /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
         if (ret != NO_ERROR) {
             s_motor_driver.initialized = false;
             return ret;
@@ -582,7 +588,6 @@ uint32_t MotorCtrl_Init(void)
         /* stpr_initStepper() 只写基础斜坡参数，不写当前业务速度对应的 VMAX。
          * 初始化完成后必须把本次计算出的 velocity 下发到 TMC5130，否则驱动会沿用旧 VMAX。 */
         ret = stpr_setVelocity(&stepper, velocity);
-        /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
         if (ret != NO_ERROR) {
             s_motor_driver.initialized = false;
             stpr_disableDriver(&stepper);
@@ -602,7 +607,6 @@ uint32_t MotorCtrl_Init(void)
          * 配置可能沿用调试残留；非首次不恢复 FRAM 位置，也不恢复位置源。 */
         stpr_disableDriver(&stepper);
         ret = stpr_initStepper(&stepper, &hspi2, GPIOB, GPIO_PIN_12, 1, (uint8_t)motor_current);
-        /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
         if (ret != NO_ERROR) {
             s_motor_driver.initialized = false;
             return ret;
@@ -611,7 +615,6 @@ uint32_t MotorCtrl_Init(void)
         stpr_enableDriver(&stepper);
         s_motor_driver.initialized = true;
         ret = MotorDriver_CheckHealth(MOTOR_DRIVER_HEALTH_INIT_CHECK);
-        /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
         if (ret != NO_ERROR) {
             s_motor_driver.initialized = false;
             return ret;
@@ -619,7 +622,6 @@ uint32_t MotorCtrl_Init(void)
 
         /* stpr_initStepper() 会写默认速度寄存器；重写寄存器后再写当前业务速度。 */
         ret = stpr_setVelocity(&stepper, velocity);
-        /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
         if (ret != NO_ERROR) {
             s_motor_driver.initialized = false;
             stpr_disableDriver(&stepper);
@@ -641,12 +643,13 @@ uint32_t MotorCtrl_Init(void)
 }
 
 /**
- * @brief Read whether the TMC5130 driver is still moving.
+ * @brief 读取 TMC5130 实时运动状态并通过输出参数返回。
  *
- * @param tmc5130 TMC5130 device object.
- * @param is_moving Output moving state when return is NO_ERROR.
- * @return NO_ERROR, SYSTEM_CALL_CONDITION_ERROR or MOTOR_TMC_COMM_ERROR.
+ * @param tmc5130 目标 TMC5130 驱动实例。对象保存 SPI 句柄、片选 GPIO 和使能 GPIO，底层寄存器访问与驱动使能操作均通过该实例定位硬件。
+ * @param is_moving 运动状态输出指针；函数返回 NO_ERROR 时，true 表示仍在运动，false 表示已经确认停止。
+ * @return 返回 TMC5130 运动状态读取结果码；NO_ERROR 时通过 is_moving 返回当前是否运动。
  */
+
 uint32_t MotorCtrl_IsDriverMoving(TMC5130TypeDef *tmc5130, bool *is_moving)
 {
     return MotorDriver_ReadMovingState(tmc5130, is_moving);
@@ -669,6 +672,9 @@ uint32_t MotorCtrl_CheckDriverGstat(void)
  * @brief 静默设置电机速度参数。
  *
  * 给停机恢复和内部临时速度使用，不打印用户操作日志。
+ *
+ * @param speed_x100 本次调试运动速度，单位 0.01 m/min；0 表示使用当前默认速度。
+ * @return 返回静默速度设置结果码；NO_ERROR 表示速度寄存器已更新，其他值为参数或 TMC5130 访问错误。
  */
 uint32_t MotorDriver_SetSpeedQuiet(uint32_t speed_x100)
 {
@@ -701,7 +707,7 @@ void MotorDriver_UpdateVelocityFromParams(void)
 /**
  * @brief 判断业务方向参数是否合法。
  *
- * @param dir 业务方向，必须是 MOTOR_DIRECTION_UP 或 MOTOR_DIRECTION_DOWN。
+ * @param dir 业务方向，必须是 MOTOR_DIRECTION_UP 或 MOTOR_DIRECTION_DOWN。函数只执行枚举合法性判断，不启动电机。
  * @return 方向合法返回 1，否则返回 0。
  */
 int MotorDriver_IsDirValid(int dir)
@@ -714,6 +720,8 @@ int MotorDriver_IsDirValid(int dir)
  *
  * 该函数用于命令切换、异常保护和主动停止场景。停止命令只表示开始减速，
  * 最终显示状态仍会结合驱动 vzero / rampstat 判断。
+ *
+ * @return NO_ERROR 表示停止命令、停稳轮询和位置同步全部完成；驱动访问失败返回原错误，超过停稳门限返回 MOTOR_STOP_WAIT_TIMEOUT。
  */
 uint32_t MotorDriver_StopAndMarkStopped(void)
 {
@@ -722,7 +730,6 @@ uint32_t MotorDriver_StopAndMarkStopped(void)
     uint32_t start_tick;
 
     ret = stpr_stop(&stepper);
-    /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
     if (ret != NO_ERROR) {
         printf("电机停止命令写入失败，错误码：0x%08lX\r\n", (unsigned long)ret);
         return ret;
@@ -732,7 +739,6 @@ uint32_t MotorDriver_StopAndMarkStopped(void)
     start_tick = HAL_GetTick();
     while (1) {
         ret = MotorDriver_ReadStoppingState(&stepper, &is_moving);
-        /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
         if (ret != NO_ERROR) {
             printf("电机停止状态读取失败，错误码：0x%08lX\r\n", (unsigned long)ret);
             return ret;
@@ -741,11 +747,10 @@ uint32_t MotorDriver_StopAndMarkStopped(void)
             break;
         }
         ret = MotorDriver_SyncPositionOrCheckHealth(&stepper);
-        /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
         if (ret != NO_ERROR) {
             return ret;
         }
-        /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
+        /* 停止命令发出后超过门限仍未观察到停稳状态，立即返回停止超时，禁止继续同步位置并标记已停止。 */
         if ((HAL_GetTick() - start_tick) > MOTOR_STOP_WAIT_TIMEOUT_MS) {
             printf("电机停止等待超时，错误码：0x%08lX\r\n", (unsigned long)MOTOR_STOP_WAIT_TIMEOUT);
             return MOTOR_STOP_WAIT_TIMEOUT;
@@ -754,13 +759,11 @@ uint32_t MotorDriver_StopAndMarkStopped(void)
     }
 
     ret = MotorDriver_SyncPositionOrCheckHealth(&stepper);
-    /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
     if (ret != NO_ERROR) {
         return ret;
     }
 
     ret = MotorDriver_AlignTargetToActual(&stepper);
-    /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
     if (ret != NO_ERROR) {
         return ret;
     }
@@ -786,7 +789,6 @@ uint32_t MotorDriver_StopIfCommandSwitchRequested(void)
     if (HasEffectiveCommandSwitchRequest()) {
         printf("检测到命令切换请求，停止当前操作\r\n");
         ret = MotorDriver_StopAndMarkStopped();
-        /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
         if (ret != NO_ERROR) {
             return ret;
         }
@@ -796,12 +798,14 @@ uint32_t MotorDriver_StopIfCommandSwitchRequested(void)
 }
 
 /**
- * @brief Read current TMC5130 moving state.
+ * @brief 读取并交叉确认 TMC5130 的 RAMP_STAT 与 VACTUAL 运动状态。
  *
- * @param tmc5130 TMC5130 device object.
- * @param is_moving Output moving state when return is NO_ERROR.
- * @return NO_ERROR, SYSTEM_CALL_CONDITION_ERROR or MOTOR_TMC_COMM_ERROR.
+ * @param tmc5130 目标 TMC5130 驱动实例。对象保存 SPI 句柄、片选 GPIO 和使能 GPIO，底层寄存器访问与驱动使能操作均通过该实例定位硬件。
+ * @param is_moving 运动状态输出指针；函数返回 NO_ERROR 时，true 表示仍在运动，false 表示已经通过寄存器复核确认停止。
+ * @return NO_ERROR 表示已通过 is_moving 返回运动状态；SYSTEM_CALL_CONDITION_ERROR 表示实例或输出指针为空；MOTOR_TMC_COMM_ERROR
+ *         表示寄存器读取失败。
  */
+
 uint32_t MotorDriver_ReadMovingState(TMC5130TypeDef *tmc5130, bool *is_moving)
 {
     int32_t rampstat = 0;
@@ -843,7 +847,6 @@ uint32_t MotorDriver_ReadMovingState(TMC5130TypeDef *tmc5130, bool *is_moving)
     }
 
     ret = MotorDriver_ReadTargetPositionOpen(tmc5130, &target_open);
-    /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
     if (ret != NO_ERROR) {
         return ret;
     }
@@ -853,11 +856,11 @@ uint32_t MotorDriver_ReadMovingState(TMC5130TypeDef *tmc5130, bool *is_moving)
 }
 
 /**
- * @brief 读取电机控制中的 MotorDriver_ReadStoppingState 逻辑。
+ * @brief 连续读取两次 VZERO 和 VACTUAL，判断驱动器是否仍处于减速停止过程。
  *
- * @param tmc5130 业务参数。
- * @param is_moving 业务参数。
- * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ * @param tmc5130 目标 TMC5130 驱动实例。对象保存 SPI 句柄、片选 GPIO 和使能 GPIO，底层寄存器访问与驱动使能操作均通过该实例定位硬件。
+ * @param is_moving 用于返回 TMC5130 当前是否仍在运动。
+ * @return SYSTEM_CALL_CONDITION_ERROR 表示当前系统状态不允许执行；NO_ERROR 表示操作成功。
  */
 uint32_t MotorDriver_ReadStoppingState(TMC5130TypeDef *tmc5130, bool *is_moving)
 {
@@ -898,7 +901,7 @@ uint32_t MotorDriver_ReadStoppingState(TMC5130TypeDef *tmc5130, bool *is_moving)
  * @brief 根据驱动状态推断上层显示用运动状态。
  *
  * 显示状态只区分停止、上行、下行，读取失败时会尽量使用最近缓存状态兜底。
- * @param tmc5130 TMC5130 设备对象。
+ * @param tmc5130 TMC5130 设备对象。该实例用于读取实际速度和斜坡状态，推导 CPU3 应显示的电机运行状态。
  * @return 0 表示停止，1 表示上行，2 表示下行。
  */
 uint32_t MotorDriver_InferDisplayStateFromDriver(TMC5130TypeDef *tmc5130)
@@ -967,7 +970,7 @@ uint32_t MotorDriver_ComputeUniformVelocityFromLength(double L_mm)
  * @brief 运动过程中按卷径变化刷新 TMC5130 VMAX。
  *
  * 函数内部带刷新周期和变化阈值，避免高频重复写寄存器。
- * @param tmc5130 TMC5130 设备对象。
+ * @param tmc5130 TMC5130 设备对象。该实例用于在速度模式运行中更新 VMAX，并通过同一 SPI 设备保持方向与速度一致。
  * @param last_refresh_tick 上次刷新 tick，函数会在成功检查后更新。
  */
 void MotorDriver_RefreshVelocityDuringRun(TMC5130TypeDef *tmc5130,
@@ -1001,7 +1004,6 @@ void MotorDriver_RefreshVelocityDuringRun(TMC5130TypeDef *tmc5130,
 
     if (delta >= threshold) {
         uint32_t ret = stpr_setVelocity(tmc5130, new_v);
-        /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
         if (ret != NO_ERROR) {
             printf("速度刷新失败 | 错误码：0x%08lX | 目标VMAX=%lu\r\n",
                    (unsigned long)ret,
@@ -1113,6 +1115,11 @@ uint32_t MotorDriver_EndTemporarySpeed(bool restore_needed,
  * 阻塞型运动退出前调用该函数，先尽量把软件速度恢复到进入运动前的值。
  * 若原运动已经返回故障或 STATE_SWITCH，则原始返回值更能代表退出原因，不能被恢复速度失败覆盖；
  * 只有原运动成功时，恢复速度失败才作为最终错误返回。
+ *
+ * @param ret 上一层调用返回的结果码。函数先恢复临时驱动速度参数，再原样返回该结果。
+ * @param restore_needed true 表示返回前必须恢复临时速度配置，false 表示无需恢复。
+ * @param restore_speed_x100 临时调速流程退出时需要恢复的电机速度，单位 0.01 m/min。
+ * @return 原运动 ret 非零时优先返回该根因；原运动成功但恢复速度失败时返回 restore_ret；两者都成功时返回 NO_ERROR。
  */
 uint32_t MotorDriver_ReturnAfterTemporarySpeed(uint32_t ret,
                                                        bool restore_needed,
@@ -1137,6 +1144,9 @@ uint32_t MotorDriver_ReturnAfterTemporarySpeed(uint32_t ret,
  *
  * 该函数用于运行期轮询和停机收尾；同步失败不立即按普通读数丢弃处理，
  * 而是继续检查 TMC5130 配置、GSTAT 和功率级，便于识别 24V 断电或复位。
+ *
+ * @param tmc5130 目标 TMC5130 驱动实例。对象保存 SPI 句柄、片选 GPIO 和使能 GPIO，底层寄存器访问与驱动使能操作均通过该实例定位硬件。
+ * @return NO_ERROR 表示 XACTUAL 已同步到调试位置；位置读取失败时返回 MotorDriver_CheckHealth 的具体归因结果。
  */
 uint32_t MotorDriver_SyncPositionOrCheckHealth(TMC5130TypeDef *tmc5130)
 {
@@ -1204,9 +1214,9 @@ static double MotorDriver_VmaxToUstepsPerSec(uint32_t vmax)
 }
 
 /**
- * @brief 执行电机控制中的 MotorDriver_VmaxToOutputRevPerSec 逻辑。
+ * @brief 将 TMC5130 VMAX 换算为输出轴每秒转数。
  *
- * @param vmax 业务参数。
+ * @param vmax TMC5130 VMAX 寄存器值或待限制的速度原始值。
  * @return 计算后的业务数值。
  */
 static double MotorDriver_VmaxToOutputRevPerSec(uint32_t vmax)
@@ -1219,9 +1229,9 @@ static double MotorDriver_VmaxToOutputRevPerSec(uint32_t vmax)
 }
 
 /**
- * @brief 执行电机控制中的 MotorDriver_VmaxToMotorRevPerSec 逻辑。
+ * @brief 将 TMC5130 VMAX 换算为电机轴每秒转数。
  *
- * @param vmax 业务参数。
+ * @param vmax TMC5130 VMAX 寄存器值或待限制的速度原始值。
  * @return 计算后的业务数值。
  */
 static double MotorDriver_VmaxToMotorRevPerSec(uint32_t vmax)
@@ -1290,6 +1300,11 @@ static uint32_t MotorDriver_ComputeBaseVelocityFromParams(void)
  *
  * 编码轮记步时，电机 XACTUAL 只能反映本段运动的局部卷筒长度，不能作为实际尺带
  * 长度参与 VMAX 计算；因此先按当前记步源刷新业务位置，再统一使用 cable_length。
+ *
+ * @param tmc5130 目标 TMC5130 驱动实例。对象保存 SPI 句柄、片选 GPIO 和使能 GPIO，底层寄存器访问与驱动使能操作均通过该实例定位硬件。
+ * @param business_length_mm 用于返回业务位置模型计算的当前尺带长度，单位 mm。
+ * @param motor_length_mm 用于返回由 TMC5130 XACTUAL 换算的局部卷筒长度，单位 mm。
+ * @return 返回刷新位置源后的业务尺带长度，单位 mm；同一值同时写入非空 business_length_mm，motor_length_mm 则接收 XACTUAL 对应的局部卷筒长度。
  */
 static double MotorDriver_GetVelocityReferenceLengthMm(TMC5130TypeDef *tmc5130,
                                                        double *business_length_mm,

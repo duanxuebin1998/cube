@@ -3,7 +3,11 @@
 #include <limits.h>
 #include <string.h>
 
-/* 清除当前会话和周期流运行态，但保留跨会话的传感器防重放历史。 */
+/**
+ * @brief 清除当前会话和周期流运行态，但保留跨会话的传感器防重放历史。
+ *
+ * @param context 安全协议会话状态机上下文；保存本机与传感器节点号、会话和能力协商结果、待确认命令与序号、防重放计数、周期流标识和最近有效接收时间。
+ */
 static void SensorSafeSession_ClearRuntime(SensorSafeSessionContext *context)
 {
     context->session_id = 0U;
@@ -24,7 +28,12 @@ static void SensorSafeSession_ClearRuntime(SensorSafeSessionContext *context)
     context->last_valid_rx_ms = 0U;
 }
 
-/* 根据当前测量模式选择必须判无效的通道诊断位。 */
+/**
+ * @brief 根据当前测量模式选择必须判无效的通道诊断位。
+ *
+ * @param measure_mode 测量模式。
+ * @return 返回根据当前测量模式选择必须判无效的通道诊断位对应的位掩码；各位含义由相邻枚举或宏定义。
+ */
 static uint16_t SensorSafeSession_ChannelDiagnosticMask(uint8_t measure_mode)
 {
     switch (measure_mode) {
@@ -41,10 +50,16 @@ static uint16_t SensorSafeSession_ChannelDiagnosticMask(uint8_t measure_mode)
     }
 }
 
-/*
- * 函数用途：为新事务分配单调序号并锁存待应答命令。
- * 调用场景：HELLO 和全部控制请求在编码前调用。
- * 关键约束：同一时刻只允许一个待决事务；序号临近回绕时强制重新 HELLO。
+/**
+ * @brief 为新事务分配单调序号并锁存待应答命令。
+ *
+ * @details 调用场景：HELLO 和全部控制请求在编码前调用。
+ * @note 关键约束：同一时刻只允许一个待决事务；序号临近回绕时强制重新 HELLO。
+ *
+ * @param context 安全协议会话状态机上下文；保存本机与传感器节点号、会话和能力协商结果、待确认命令与序号、防重放计数、周期流标识和最近有效接收时间。
+ * @param cmd 安全协议控制命令字节；写入请求帧并与待确认会话状态绑定，响应必须回显同一命令才可接受。
+ * @param seq_out 用于返回本次新分配或重试沿用的协议事务序号。
+ * @return 返回安全协议校验结果；SENSOR_SAFE_OK 表示帧校验或状态转换成功，其他值保留参数、长度、帧头、CRC、会话、序号、能力及数据有效性等具体失败原因。
  */
 static SensorSafeResult SensorSafeSession_AllocateSequence(SensorSafeSessionContext *context,
                                                            uint8_t cmd,
@@ -69,10 +84,15 @@ static SensorSafeResult SensorSafeSession_AllocateSequence(SensorSafeSessionCont
     return SENSOR_SAFE_OK;
 }
 
-/*
- * 函数用途：初始化会话状态机和本地、远端节点地址。
- * 调用场景：client 初始化时调用，不建立实际安全会话。
- * 关键约束：初态为 OFFLINE，首个合法业务必须先完成 HELLO。
+/**
+ * @brief 初始化会话状态机和本地、远端节点地址。
+ *
+ * @details 调用场景：client 初始化时调用，不建立实际安全会话。
+ * @note 关键约束：初态为 OFFLINE，首个合法业务必须先完成 HELLO。
+ *
+ * @param context 安全协议会话状态机上下文；保存本机与传感器节点号、会话和能力协商结果、待确认命令与序号、防重放计数、周期流标识和最近有效接收时间。
+ * @param local_node_id 编号。该值是 CPU2 在安全协议中的本机节点号，初始化会话后写入每个控制请求的源节点字段。
+ * @param remote_node_id 编号。该值是目标安全传感器节点号，响应源节点必须与该值一致才可通过会话校验。
  */
 void SensorSafeSession_Init(SensorSafeSessionContext *context,
                             uint8_t local_node_id,
@@ -88,10 +108,13 @@ void SensorSafeSession_Init(SensorSafeSessionContext *context,
     context->next_seq = 1U;
 }
 
-/*
- * 函数用途：撤销当前会话、待决事务和周期流运行态。
- * 调用场景：协议探测失败、旧协议回退或显式下线时调用。
- * 关键约束：保留传感器启动/会话计数历史，防止下次 HELLO 接受重放。
+/**
+ * @brief 撤销当前会话、待决事务和周期流运行态。
+ *
+ * @details 调用场景：协议探测失败、旧协议回退或显式下线时调用。
+ * @note 关键约束：保留传感器启动/会话计数历史，防止下次 HELLO 接受重放。
+ *
+ * @param context 安全协议会话状态机上下文；保存本机与传感器节点号、会话和能力协商结果、待确认命令与序号、防重放计数、周期流标识和最近有效接收时间。
  */
 void SensorSafeSession_Deactivate(SensorSafeSessionContext *context)
 {
@@ -103,10 +126,17 @@ void SensorSafeSession_Deactivate(SensorSafeSessionContext *context)
     context->next_seq = 1U;
 }
 
-/*
- * 函数用途：开始 HELLO 事务并锁存 CPU 启动计数与挑战随机数。
- * 调用场景：首次探测或故障恢复需要重建安全会话时调用。
- * 关键约束：禁止复用当前或已有防重放历史中的 nonce；开始时清除旧运行态。
+/**
+ * @brief 开始 HELLO 事务并锁存 CPU 启动计数与挑战随机数。
+ *
+ * @details 调用场景：首次探测或故障恢复需要重建安全会话时调用。
+ * @note 关键约束：禁止复用当前或已有防重放历史中的 nonce；开始时清除旧运行态。
+ *
+ * @param context 安全协议会话状态机上下文；保存本机与传感器节点号、会话和能力协商结果、待确认命令与序号、防重放计数、周期流标识和最近有效接收时间。
+ * @param cpu_boot_counter CPU2 本次启动计数；写入 HELLO 会话上下文，用于和传感器共同建立防重放基线。
+ * @param cpu_nonce CPU2 为本次 HELLO 生成的 32 位挑战随机数；不得复用当前会话或历史防重放记录中的值。
+ * @param seq_out 用于返回本次新分配或重试沿用的协议事务序号。
+ * @return 返回安全协议校验结果；SENSOR_SAFE_OK 表示帧校验或状态转换成功，其他值保留参数、长度、帧头、CRC、会话、序号、能力及数据有效性等具体失败原因。
  */
 SensorSafeResult SensorSafeSession_BeginHello(SensorSafeSessionContext *context,
                                               uint32_t cpu_boot_counter,
@@ -136,10 +166,16 @@ SensorSafeResult SensorSafeSession_BeginHello(SensorSafeSessionContext *context,
     return result;
 }
 
-/*
- * 函数用途：依据会话状态和周期流命令白名单开始普通控制事务。
- * 调用场景：client 发送测量、配置、诊断及通信模式命令前调用。
- * 关键约束：周期流活动或恢复态仅允许停流、PING、RESET_SESSION 类控制命令。
+/**
+ * @brief 依据会话状态和周期流命令白名单开始普通控制事务。
+ *
+ * @details 调用场景：client 发送测量、配置、诊断及通信模式命令前调用。
+ * @note 关键约束：周期流活动或恢复态仅允许停流、PING、RESET_SESSION 类控制命令。
+ *
+ * @param context 安全协议会话状态机上下文；保存本机与传感器节点号、会话和能力协商结果、待确认命令与序号、防重放计数、周期流标识和最近有效接收时间。
+ * @param cmd 安全协议控制命令字节；写入请求帧并与待确认会话状态绑定，响应必须回显同一命令才可接受。
+ * @param seq_out 用于返回本次新分配或重试沿用的协议事务序号。
+ * @return 返回安全协议校验结果；SENSOR_SAFE_OK 表示帧校验或状态转换成功，其他值保留参数、长度、帧头、CRC、会话、序号、能力及数据有效性等具体失败原因。
  */
 SensorSafeResult SensorSafeSession_BeginRequest(SensorSafeSessionContext *context,
                                                 uint8_t cmd,
@@ -168,7 +204,14 @@ SensorSafeResult SensorSafeSession_BeginRequest(SensorSafeSessionContext *contex
     return SensorSafeSession_AllocateSequence(context, cmd, seq_out);
 }
 
-/* 读取待决命令和原序号，确保超时重发不分配新序号而破坏幂等识别。 */
+/**
+ * @brief 读取待决命令和原序号，确保超时重发不分配新序号而破坏幂等识别。
+ *
+ * @param context 安全协议会话只读上下文；用于核对会话标识、待确认命令和序号、防重放计数及周期流边界，不修改状态机。
+ * @param cmd_out 用于返回当前待重试的协议命令码。
+ * @param seq_out 用于返回本次新分配或重试沿用的协议事务序号。
+ * @return 返回安全协议校验结果；SENSOR_SAFE_OK 表示帧校验或状态转换成功，其他值保留参数、长度、帧头、CRC、会话、序号、能力及数据有效性等具体失败原因。
+ */
 SensorSafeResult SensorSafeSession_RetryPending(const SensorSafeSessionContext *context,
                                                 uint8_t *cmd_out,
                                                 uint32_t *seq_out)
@@ -184,10 +227,15 @@ SensorSafeResult SensorSafeSession_RetryPending(const SensorSafeSessionContext *
     return SENSOR_SAFE_OK;
 }
 
-/*
- * 函数用途：核对控制响应的类型、地址、命令、序号及会话身份字段。
- * 调用场景：控制帧 CRC 和线格式通过后、解释业务载荷之前调用。
- * 关键约束：HELLO 与普通事务采用不同身份规则；ERR 也必须绑定当前待决事务。
+/**
+ * @brief 核对控制响应的类型、地址、命令、序号及会话身份字段。
+ *
+ * @details 调用场景：控制帧 CRC 和线格式通过后、解释业务载荷之前调用。
+ * @note 关键约束：HELLO 与普通事务采用不同身份规则；ERR 也必须绑定当前待决事务。
+ *
+ * @param context 安全协议会话只读上下文；用于核对会话标识、待确认命令和序号、防重放计数及周期流边界，不修改状态机。
+ * @param frame 待解析、校验或发送的协议帧缓冲区。该参数实际是已经完成帧级解码的只读安全协议控制帧，用于会话、命令和序号核对。
+ * @return 返回安全协议校验结果；SENSOR_SAFE_OK 表示帧校验或状态转换成功，其他值保留参数、长度、帧头、CRC、会话、序号、能力及数据有效性等具体失败原因。
  */
 SensorSafeResult SensorSafeSession_CheckControlResponse(const SensorSafeSessionContext *context,
                                                         const SensorSafeControlFrame *frame)
@@ -233,10 +281,16 @@ SensorSafeResult SensorSafeSession_CheckControlResponse(const SensorSafeSessionC
     return SENSOR_SAFE_OK;
 }
 
-/*
- * 函数用途：验收 HELLO 回显、传感器身份、能力位和单调计数并激活会话。
- * 调用场景：client 完成 HELLO 响应载荷解析后调用。
- * 关键约束：启动计数不得倒退，同一启动周期的会话计数必须严格递增。
+/**
+ * @brief 验收 HELLO 回显、传感器身份、能力位和单调计数并激活会话。
+ *
+ * @details 调用场景：client 完成 HELLO 响应载荷解析后调用。
+ * @note 关键约束：启动计数不得倒退，同一启动周期的会话计数必须严格递增。
+ *
+ * @param context 安全协议会话状态机上下文；保存本机与传感器节点号、会话和能力协商结果、待确认命令与序号、防重放计数、周期流标识和最近有效接收时间。
+ * @param frame 待解析、校验或发送的协议帧缓冲区。该参数实际是已经完成帧级解码的只读安全协议控制帧，用于会话、命令和序号核对。
+ * @param hello 已经解码并等待会话层验收的 HELLO 响应载荷。
+ * @return 返回安全协议校验结果；SENSOR_SAFE_OK 表示帧校验或状态转换成功，其他值保留参数、长度、帧头、CRC、会话、序号、能力及数据有效性等具体失败原因。
  */
 SensorSafeResult SensorSafeSession_AcceptHello(SensorSafeSessionContext *context,
                                                const SensorSafeControlFrame *frame,
@@ -308,7 +362,12 @@ SensorSafeResult SensorSafeSession_AcceptHello(SensorSafeSessionContext *context
     return SENSOR_SAFE_OK;
 }
 
-/* 成功完成当前控制事务并释放待决锁；无待决事务时拒绝误清状态。 */
+/**
+ * @brief 成功完成当前控制事务并释放待决锁；无待决事务时拒绝误清状态。
+ *
+ * @param context 安全协议会话状态机上下文；保存本机与传感器节点号、会话和能力协商结果、待确认命令与序号、防重放计数、周期流标识和最近有效接收时间。
+ * @return 返回安全协议校验结果；SENSOR_SAFE_OK 表示帧校验或状态转换成功，其他值保留参数、长度、帧头、CRC、会话、序号、能力及数据有效性等具体失败原因。
+ */
 SensorSafeResult SensorSafeSession_CompleteRequest(SensorSafeSessionContext *context)
 {
     if (context == NULL) {
@@ -323,7 +382,13 @@ SensorSafeResult SensorSafeSession_CompleteRequest(SensorSafeSessionContext *con
     return SENSOR_SAFE_OK;
 }
 
-/* 把已确认的测量模式锁存为请求响应和后续周期流的预期模式。 */
+/**
+ * @brief 把已确认的测量模式锁存为请求响应和后续周期流的预期模式。
+ *
+ * @param context 安全协议会话状态机上下文；保存本机与传感器节点号、会话和能力协商结果、待确认命令与序号、防重放计数、周期流标识和最近有效接收时间。
+ * @param measure_mode 测量模式。
+ * @return 返回安全协议校验结果；SENSOR_SAFE_OK 表示帧校验或状态转换成功，其他值保留参数、长度、帧头、CRC、会话、序号、能力及数据有效性等具体失败原因。
+ */
 SensorSafeResult SensorSafeSession_SetMeasureReady(SensorSafeSessionContext *context,
                                                    uint8_t measure_mode)
 {
@@ -342,10 +407,17 @@ SensorSafeResult SensorSafeSession_SetMeasureReady(SensorSafeSessionContext *con
     return SENSOR_SAFE_OK;
 }
 
-/*
- * 函数用途：以已协商的 stream_id、配置代次和测量模式进入周期接收态。
- * 调用场景：SET_COMM_MODE 启动响应验收成功后调用。
- * 关键约束：标识和配置代次不得为 0，模式必须与此前 SET_MEASURE_MODE 一致。
+/**
+ * @brief 以已协商的 stream_id、配置代次和测量模式进入周期接收态。
+ *
+ * @details 调用场景：SET_COMM_MODE 启动响应验收成功后调用。
+ * @note 关键约束：标识和配置代次不得为 0，模式必须与此前 SET_MEASURE_MODE 一致。
+ *
+ * @param context 安全协议会话状态机上下文；保存本机与传感器节点号、会话和能力协商结果、待确认命令与序号、防重放计数、周期流标识和最近有效接收时间。
+ * @param stream_id 数据流编号。
+ * @param config_epoch 配置。
+ * @param measure_mode 测量模式。
+ * @return 返回安全协议校验结果；SENSOR_SAFE_OK 表示帧校验或状态转换成功，其他值保留参数、长度、帧头、CRC、会话、序号、能力及数据有效性等具体失败原因。
  */
 SensorSafeResult SensorSafeSession_StartStream(SensorSafeSessionContext *context,
                                                uint16_t stream_id,
@@ -376,7 +448,12 @@ SensorSafeResult SensorSafeSession_StartStream(SensorSafeSessionContext *context
     return SENSOR_SAFE_OK;
 }
 
-/* 正常结束周期流并回到测量就绪态，同时清除全部流连续性基准。 */
+/**
+ * @brief 正常结束周期流并回到测量就绪态，同时清除全部流连续性基准。
+ *
+ * @param context 安全协议会话状态机上下文；保存本机与传感器节点号、会话和能力协商结果、待确认命令与序号、防重放计数、周期流标识和最近有效接收时间。
+ * @return 返回安全协议校验结果；SENSOR_SAFE_OK 表示帧校验或状态转换成功，其他值保留参数、长度、帧头、CRC、会话、序号、能力及数据有效性等具体失败原因。
+ */
 SensorSafeResult SensorSafeSession_StopStream(SensorSafeSessionContext *context)
 {
     if (context == NULL) {
@@ -396,7 +473,11 @@ SensorSafeResult SensorSafeSession_StopStream(SensorSafeSessionContext *context)
     return SENSOR_SAFE_OK;
 }
 
-/* 周期帧异常时立即撤销流有效性并转入恢复态，禁止继续发布快照。 */
+/**
+ * @brief 周期帧异常时立即撤销流有效性并转入恢复态，禁止继续发布快照。
+ *
+ * @param context 安全协议会话状态机上下文；保存本机与传感器节点号、会话和能力协商结果、待确认命令与序号、防重放计数、周期流标识和最近有效接收时间。
+ */
 void SensorSafeSession_InvalidateStream(SensorSafeSessionContext *context)
 {
     if (context == NULL) {
@@ -406,10 +487,17 @@ void SensorSafeSession_InvalidateStream(SensorSafeSessionContext *context)
     context->state = SENSOR_SAFE_SESSION_RECOVERING;
 }
 
-/*
- * 函数用途：验收周期快报的地址、会话、流序号、样本计数、模式和数据状态。
- * 调用场景：快报线格式及 CRC 通过后、发布监控快照之前调用。
- * 关键约束：身份或连续性异常立即使流失效；质量无效只拒绝数据但推进已验证序号。
+/**
+ * @brief 验收周期快报的地址、会话、流序号、样本计数、模式和数据状态。
+ *
+ * @details 调用场景：快报线格式及 CRC 通过后、发布监控快照之前调用。
+ * @note 关键约束：身份或连续性异常立即使流失效；质量无效只拒绝数据但推进已验证序号。
+ *
+ * @param context 安全协议会话状态机上下文；保存本机与传感器节点号、会话和能力协商结果、待确认命令与序号、防重放计数、周期流标识和最近有效接收时间。
+ * @param report 用于接收本次诊断或测量结果的报告对象。
+ * @param rx_timestamp_ms 完整接收本帧时记录的本机 HAL 毫秒节拍；作为指针传入时由函数写回。
+ * @param max_data_age_ms 允许样本保持有效的最大数据年龄，单位 ms。
+ * @return 返回安全协议校验结果；SENSOR_SAFE_OK 表示帧校验或状态转换成功，其他值保留参数、长度、帧头、CRC、会话、序号、能力及数据有效性等具体失败原因。
  */
 SensorSafeResult SensorSafeSession_AcceptFastReport(SensorSafeSessionContext *context,
                                                     const SensorSafeFastReport *report,
@@ -493,10 +581,16 @@ SensorSafeResult SensorSafeSession_AcceptFastReport(SensorSafeSessionContext *co
     return SENSOR_SAFE_OK;
 }
 
-/*
- * 函数用途：把传感器声明的数据年龄与本地接收后经过时间相加。
- * 调用场景：周期帧首次验收和业务读取快照时调用。
- * 关键约束：加法溢出时饱和为 UINT32_MAX，确保数据必然被判过期而非变新。
+/**
+ * @brief 把传感器声明的数据年龄与本地接收后经过时间相加。
+ *
+ * @details 调用场景：周期帧首次验收和业务读取快照时调用。
+ * @note 关键约束：加法溢出时饱和为 UINT32_MAX，确保数据必然被判过期而非变新。
+ *
+ * @param data_age_ms 传感器在快速上报帧中给出的样本年龄，单位 ms。
+ * @param rx_timestamp_ms 完整接收本帧时记录的本机 HAL 毫秒节拍；作为指针传入时由函数写回。
+ * @param now_ms 当前系统节拍，单位 ms。
+ * @return 返回远端声明数据年龄与本地接收后经过时间之和，单位 ms；加法溢出时饱和到 UINT32_MAX。
  */
 uint32_t SensorSafeSession_EffectiveAgeMs(uint16_t data_age_ms,
                                           uint32_t rx_timestamp_ms,

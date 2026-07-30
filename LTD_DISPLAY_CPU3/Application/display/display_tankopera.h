@@ -1,40 +1,43 @@
 #ifndef __DISPLAY_TANKOPERA_H
+/* __DISPLAY_TANKOPERA_H 是本头文件的包含保护标记；首次展开后置位，防止重复包含造成类型或接口重复定义。 */
 #define __DISPLAY_TANKOPERA_H 
 #include "main.h"
 
+/* CPU3 参数菜单固定密码 1009；与显示模块入口校验保持一致，仅用于防误操作，不属于安全认证。 */
 #define FIXPASSWORD         1009
 
 struct KeyMenu {
-	void (*back_opera)();
-	void (*up_opera)();
-	void (*down_opera)();
-	void (*sure_opera)();
+	/* 单个菜单页的四键回调和按键权限配置。 */
+	void (*back_opera)(); /* 返回键回调；用于退出当前菜单或返回上一级页面。 */
+	void (*up_opera)(); /* 上键回调；用于移动选项或增加当前编辑值。 */
+	void (*down_opera)(); /* 下键回调；用于移动选项或减小当前编辑值。 */
+	void (*sure_opera)(); /* 确认键回调；用于进入子页、提交参数或触发命令。 */
 	int keyauthority;           /* 按键权限 */
 	void (*execute_opera)();    /* 执行本次操作 */
 };
 extern struct KeyMenu keymenu[];
 /**
- * @brief 显示或打印屏幕菜单操作中的 Display_RequestCancelMeasurement 逻辑。
+  * @brief 向 CPU2 提交取消当前测量的命令。
  * @return true 表示无需取消或取消命令获得合法响应，false 表示通信失败。
  */
 bool Display_RequestCancelMeasurement(void);
 /**
- * @brief 显示或打印屏幕菜单操作中的 Display_CanEnterCancelMeasurementConfirm 逻辑。
- * @return true 表示可进入取消确认或故障详情页，false 表示当前状态无需入口。
+ * @brief 判断当前页面和设备状态是否允许进入取消测量确认页。
+ * @return true 表示当前页面和设备状态允许进入取消测量确认页；false 表示当前页面和设备状态不允许进入取消测量确认页。
  */
 bool Display_CanEnterCancelMeasurementConfirm(void);
 /**
- * @brief 显示或打印屏幕菜单操作中的 Display_EnterCancelMeasurementConfirm 逻辑。
+  * @brief 进入取消测量确认页并保存返回位置。
  * @return true 表示条件满足或处理成功，false 表示条件不满足或处理失败。
  */
 bool Display_EnterCancelMeasurementConfirm(void);
 /**
- * @brief 显示或打印屏幕菜单操作中的 DisplayTankOpera_IsMotorRunMonitorActive 逻辑。
+ * @brief 判断当前前景页是否为纯电机指令运行监控页。
  * @return true 表示当前前景页是电机运行监控页。
  */
 bool DisplayTankOpera_IsMotorRunMonitorActive(void);
 /**
- * @brief 显示或打印屏幕菜单操作中的 DisplayTankOpera_IsDebugWeightWaitActive 逻辑。
+ * @brief 判断当前前景页是否为扭力获取等待页。
  * @return true 表示当前前景页是扭力获取等待页。
  */
 bool DisplayTankOpera_IsDebugWeightWaitActive(void);
@@ -181,11 +184,12 @@ typedef enum {
     MENU_GRP_PARAM_CHECK,       /* ParamVer/StructSize/Magic/CRC */
     MENU_GRP_CPU3_BASE,         /* LedVer/语言 */
     MENU_GRP_CPU3_SOURCE,       /* SrcOil/SrcWater/SrcD/SrcT */
+    /* CPU3 本机显示、输入和串口设置菜单组；枚举顺序参与菜单元数据索引。 */
     MENU_GRP_CPU3_INPUT,        /* InOil/InWater/InD/InDSw/InT */
     MENU_GRP_CPU3_SCREEN,       /* Decimal/密码/息屏 */
-    MENU_GRP_CPU3_COM1,
-    MENU_GRP_CPU3_COM2,
-    MENU_GRP_CPU3_COM3,
+    MENU_GRP_CPU3_COM1, /* CPU3 COM1 串口通信参数菜单组。 */
+    MENU_GRP_CPU3_COM2, /* CPU3 COM2 串口通信参数菜单组。 */
+    MENU_GRP_CPU3_COM3, /* CPU3 COM3 串口通信参数菜单组。 */
 } MenuGroup;
 
 /**
@@ -590,62 +594,67 @@ typedef enum
     COM_NUM_END                        /* 操作码结束标志 */
 } OperatingNumber;
 
+/* 历史参数操作号 RESERVED3 的兼容别名；当前明确映射到水位回差时间，旧调用继续使用同一操作号。 */
 #define COM_NUM_DEVICEPARAM_RESERVED3 COM_NUM_DEVICEPARAM_WATER_LEVEL_HYSTERESIS_TIME
 
 struct ParaContent {
-	int val;
-	int points;
-	uint8_t *unit;
-	uint8_t bits;
+	/* 当前参数编辑值的显示精度、单位和存储位宽描述。 */
+	int val; /* 当前参数的协议原始值；显示时再按小数位和单位元数据进行格式化。 */
+	int points; /* 参数显示小数位数，不改变底层协议原始值。 */
+	uint8_t *unit; /* 只读单位字符串；无单位时为 NULL。 */
+	uint8_t bits; /* 参数有效位宽，用于数值掩码、符号扩展和编辑范围限制。 */
 };
 struct MenuData {
-	uint8_t *operaName;
-	int operaNum;
-	void (*sureopera)();
-	int rorw;
-	uint8_t *operaName2;
+	/* 菜单项名称、操作码、确认回调和读写属性。 */
+	uint8_t *operaName; /* 菜单项主显示名称。 */
+	int operaNum; /* 菜单项操作码，用于定位参数元数据或命令处理入口。 */
+	void (*sureopera)(); /* 确认键处理回调；无确认动作时可以为空。 */
+	int rorw; /* 菜单项读写属性，取值遵循 CommandOpera。 */
+	uint8_t *operaName2; /* 菜单项第二行或补充显示名称。 */
 };
 /* 指令中读写操作 */
 typedef enum {
-	COMMANE_NORW = 0, COMMAND_READ = 1, COMMAND_WRITE = 2,
+	/* 菜单项的读写属性；区分只展示、读取参数和写入参数三种操作。 */
+	COMMANE_NORW = 0, /* 该菜单项只显示或执行本地动作，不读写 CPU2 参数。 */ COMMAND_READ = 1, /* 从 CPU2 读取参数并刷新当前菜单值。 */ COMMAND_WRITE = 2, /* 将当前菜单值写入 CPU2 参数。 */
 } CommandOpera;
 
 extern struct ParaContent now_Para_CT;
 
 /**
- * @brief 处理屏幕菜单操作中的 KeyProcess 逻辑。
+ * @brief 按键操作处理。
  *
- * @param keypress 业务参数。
- * @return true 表示条件满足或处理成功，false 表示条件不满足或处理失败。
+ * @param keypress 本次待分发的按键位掩码。
+ * @return true 表示按键已分发给当前页面回调；无权限、无回调或菜单索引非法时返回 false。
  */
 bool KeyProcess(uint8_t keypress);
 /**
- * @brief 处理屏幕菜单操作中的 DisplayTankOpera_CanProcessKey 逻辑。
+ * @brief 判断菜单当前状态是否允许处理新的按键事件。
  *
- * @param keypress 业务参数。
- * @return true 表示条件满足或处理成功，false 表示条件不满足或处理失败。
+ * @param keypress 本次待分发的按键位掩码。
+ * @return true 表示菜单索引有效、按键已获授权且存在对应回调；否则返回 false。
  */
 bool DisplayTankOpera_CanProcessKey(uint8_t keypress);
 /**
- * @brief 显示或打印屏幕菜单操作中的 DisplayTankOpera_RedrawCurrentPage 逻辑。
+  * @brief 按当前菜单层级和选中项重绘页面。
  * @return true 表示条件满足或处理成功，false 表示条件不满足或处理失败。
  */
 bool DisplayTankOpera_RedrawCurrentPage(void);
 /**
- * @brief 执行屏幕菜单操作中的 useKey 逻辑。
+ * @brief 记录一次有效按键活动并重启菜单空闲计时器。
  */
 void useKey(void);
 /**
- * @brief 执行屏幕菜单操作中的 exitTankOpera 逻辑。
+ * @brief 停止罐上操作定时器并清理显示分页状态，显示退出提示后交还普通状态页。
  */
 void exitTankOpera(void);
 /**
- * @brief 执行屏幕菜单操作中的 ret_arr_word 逻辑。
- * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ * @brief 返回通讯方式文字信息。
+ *
+ * @return 返回通讯方式文字信息对应的只读文本首地址；内容由当前输入或语言配置选择，调用方不得修改或释放。
  */
 uint8_t* ret_arr_word(void);
 /**
- * @brief 清除或复位屏幕菜单操作中的 ClearPageNum 逻辑。
+ * @brief 清零菜单分页、光标和选项缓存，准备构建新页面。
  */
 void ClearPageNum(void);
 

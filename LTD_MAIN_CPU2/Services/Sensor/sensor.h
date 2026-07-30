@@ -6,6 +6,7 @@
  */
 
 #ifndef SENSOR_SENSOR_H_
+/* SENSOR_SENSOR_H_ 是本头文件的包含保护标记；首次展开后置位，防止重复包含造成类型或接口重复定义。 */
 #define SENSOR_SENSOR_H_
 
 #include <stdint.h>
@@ -33,61 +34,64 @@
 #define RX_BUF_LEN 128 /* 传感器串口接收缓冲区长度。 */
 
 /**
- * @brief 执行传感器数据中的 DetectSensorType 逻辑。
- * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ * @brief 自动识别传感器类型（DSM 一代 / DSM_V2 / SIL）
+ *
+ * @return uint32_t 错误码或 NO_ERROR
  */
 uint32_t DetectSensorType(void);
 /**
- * @brief 执行传感器数据中的 EnableDensityMode 逻辑。
- * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ * @brief 切换传感器到密度测量模式并等待模式生效。
+ * @return 返回整机错误码；NO_ERROR 表示传感器已进入密度模式并完成稳定等待，其他值由模式切换或链路诊断返回。
  */
 uint32_t EnableDensityMode(void);
 /**
- * @brief 执行传感器数据中的 EnableLevelMode 逻辑。
- * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ * @brief 按当前传感器类型切换液位模式，并执行对应的稳定等待。
+ * @return 返回整机错误码；NO_ERROR 表示当前传感器已进入液位模式并完成稳定等待，其他值透传模式切换失败。
  */
 uint32_t EnableLevelMode(void);
 /**
- * @brief 执行传感器数据中的 DSM_Get_LevelMode_Frequence 逻辑。
+ * @brief 按协议层重试策略读取整数 Hz 液位频率；连续三次为 0 或超过 6500 Hz 时执行受电机状态约束的模式恢复，多轮恢复仍无效则返回 SONIC_FREQ_ABNORMAL。
  *
- * @param frequency_out 业务参数。
- * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ * @param frequency_out 用于返回读取或平均后的液位通道频率。
+ * @return SYSTEM_CALL_CONDITION_ERROR 表示当前系统状态不允许执行；NO_ERROR 表示操作成功。
  */
 uint32_t DSM_Get_LevelMode_Frequence(volatile uint32_t *frequency_out);
 /**
- * @brief 执行传感器数据中的 DSM_Get_LevelMode_Frequence_Avg 逻辑。
+ * @brief 获取液位跟随频率的平均值
+ *        （10 次采样，2s 间隔，去 2 大 2 小，取中间 6 次均值）
  *
- * @param frequency_out 业务参数。
- * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ * @param frequency_out 用于返回读取或平均后的液位通道频率。
+ * @return SYSTEM_CALL_CONDITION_ERROR 表示当前系统状态不允许执行；NO_ERROR 表示操作成功。
  */
 uint32_t DSM_Get_LevelMode_Frequence_Avg(volatile uint32_t *frequency_out);
 /**
- * @brief 读取传感器数据中的 Read_Density 逻辑。
+ * @brief 按传感器类型读取频率、密度和温度，应用固定修正并更新调试快照。
  *
- * @param frequency 业务参数。
- * @param density 业务参数。
- * @param temp 业务参数。
- * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ * @param frequency 实时传感器频率输出指针，成功时写入 Hz 浮点值。
+ * @param density 实时传感器密度输出指针，成功时写入经过固定修正的 kg/m3 浮点值。
+ * @param temp 用于返回传感器温度的输出参数，单位 ℃。
+ * @return SYSTEM_CALL_CONDITION_ERROR 表示当前系统状态不允许执行。
  */
 uint32_t Read_Density(float *frequency, float *density, float *temp);
 /**
- * @brief 读取传感器数据中的 Sensor_ReadWaterCapacitance 逻辑。
+ * @brief 读取水位传感器电容值。
  *
- * @param cap_out 业务参数。
- * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ * @param cap_out 用于返回水位通道电容值，单位 pF。
+ * @return 返回整机错误码；NO_ERROR 表示电容值有效，PARAM_FEATURE_UNSUPPORTED 表示当前传感器不支持该通道，其他值表示通信或响应异常。
  */
 uint32_t Sensor_ReadWaterCapacitance(float *cap_out);
 /**
- * @brief 读取传感器数据中的 Sensor_ReadGyroAngle 逻辑。
+ * @brief 读取传感器陀螺仪姿态角。
  *
- * @param angle_x_deg 业务参数。
- * @param angle_y_deg 业务参数。
- * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ * @param angle_x_deg 用于返回陀螺仪 X 轴角度的输出参数，单位度。
+ * @param angle_y_deg 用于返回陀螺仪 Y 轴角度的输出参数，单位度。
+ * @return 当前传感器不支持姿态通道时返回 PARAM_FEATURE_UNSUPPORTED；否则 NO_ERROR 表示双轴角度有效，通信超时会经蓝牙链路诊断映射，其他底层错误或
+ *         STATE_SWITCH 原样返回。
  */
 uint32_t Sensor_ReadGyroAngle(float *angle_x_deg, float *angle_y_deg);
 /**
- * @brief 检查传感器数据中的 Sensor_CheckAllPartParams 逻辑。
- * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ * @brief 逐项读取并核对传感器部件参数完整性。
+ * @return 返回整机错误码；NO_ERROR 表示全部传感器部件参数均已读取并通过核对，其他值定位首个失败项。
  */
 uint32_t Sensor_CheckAllPartParams(void);
 

@@ -25,25 +25,45 @@
 #include "system_parameter.h"
 #include <string.h>    /* for memset, memcpy, strcmp, strlen... */
 
+/* 进入主参数菜单所需的固定密码 1009；该宏只定义本机菜单校验值，不构成安全认证机制。 */
 #define PASSWORD_ENTERMAIN		1009
+/* 电机启动后 5000 ms 的监测宽限时间；宽限期内避免把电流尚未稳定误判为运行异常。 */
 #define MOTOR_RUN_MONITOR_START_GRACE_MS 5000U
+/* 电机运行监测页数值区域使用的 OLED 纵向坐标；当前取八行布局的第 4 行。 */
 #define MOTOR_RUN_MONITOR_VALUE_LINE OLED_LINE8_4
+/* PET 钢带厚度预设值 0.300 mm，存储单位为 0.001 mm。 */
 #define TAPE_THICKNESS_PET_001MM 300
+/* PEEK 钢带厚度预设值 0.500 mm，存储单位为 0.001 mm。 */
 #define TAPE_THICKNESS_PEEK_001MM 500
+/* ETFE 钢带厚度预设值 1.100 mm，存储单位为 0.001 mm。 */
 #define TAPE_THICKNESS_ETFE_001MM 1100
+/* 钢带厚度菜单中的自定义项索引 3；选中后使用用户参数而不是前三个材料预设值。 */
 #define TAPE_THICKNESS_CUSTOM_INDEX 3
+/* 电机 IRUN 值到 RMS 电流查表索引的偏移量；最小合法 IRUN 映射为表索引 0。 */
 #define MOTOR_CURRENT_RMS_TABLE_OFFSET MOTOR_CURRENT_MIN
+/* AO 量程 0% 和 100% 两个 UInt32 值合计占用的 16 位寄存器数量 4；用于成对读取和写入，禁止只更新半个 32 位值。 */
 #define AO_RANGE_PAIR_REGISTER_COUNT 4U
+/* AO 运行来源编码 0：尚未形成有效业务输出的初始状态。 */
 #define AO_RUNTIME_SOURCE_INITIAL     0U
+/* AO 运行来源编码 1：由有效过程量按量程换算得到。 */
 #define AO_RUNTIME_SOURCE_PROCESS     1U
+/* AO 运行来源编码 2：由故障输出策略选择。 */
 #define AO_RUNTIME_SOURCE_FAULT       2U
+/* AO 运行来源编码 3：使用调试模拟电流。 */
 #define AO_RUNTIME_SOURCE_SIMULATION  3U
+/* AO 运行来源编码 4：使用固定电流配置。 */
 #define AO_RUNTIME_SOURCE_FIXED       4U
+/* AO 运行来源编码 5：通道禁用并输出禁用电流。 */
 #define AO_RUNTIME_SOURCE_DISABLED    5U
+/* AO 运行来源编码 6：驱动故障导致当前输出不可用。 */
 #define AO_RUNTIME_SOURCE_DRIVER_ERR  6U
+/* AO 运行来源编码 7：故障策略保持最近一次有效输出。 */
 #define AO_RUNTIME_SOURCE_HOLD_LAST   7U
+/* AO 运行来源有效编码数量 8；合法值为 0～7，用于菜单文本表和边界校验。 */
 #define AO_RUNTIME_SOURCE_COUNT       8U
+/* CPU3 无法识别 AO 运行来源时使用的哨兵值；取有效编码数量 8，明确落在 0～7 合法范围之外。 */
 #define AO_RUNTIME_SOURCE_UNAVAILABLE AO_RUNTIME_SOURCE_COUNT
+/* 完整 AO 配置块占用的 16 位寄存器数量；由首末保持寄存器地址和统一步长计算，避免字段新增后手工计数失配。 */
 #define AO_CONFIG_REGISTER_COUNT ((uint16_t)(HOLDREGISTER_DEVICEPARAM_AO_SIMULATION_CURRENT_MA_X100 - \
                                              HOLDREGISTER_DEVICEPARAM_AO_WORK_MODE + REG_STRIDE))
 extern volatile uint8_t g_cpu3_uart_reinit_pending; /* CPU3 串口重初始化标志 */
@@ -57,7 +77,7 @@ typedef struct
 	int menu_page;			/* 当前显示的页数(页起始项) */
 } PAGENUM_T;
 
- PAGENUM_T PageNum[KEYNUM_END]; /* 屏幕菜单操作计数值，用于节拍、统计或协议数量控制。 */
+ PAGENUM_T PageNum[KEYNUM_END]; /* 各菜单层级的光标与分页运行态数组；每项分别保存当前选中序号、上下键循环计数和本页首项索引，ClearPageNum 统一复位。 */
  struct ParaContent now_Para_CT;		/* 当前设置的参数内容 */
 
 static int func_index = 0;					/* 菜单索引 */
@@ -72,8 +92,11 @@ static int debug_weight_wait_opera = COM_NUM_NOOPERA; /* 扭力等待页对应�
 static bool debug_weight_wait_started = false; /* 扭力等待页是否已进入本次等待周期 */
 static bool debug_weight_wait_ignore_initial_done = false; /* 扭力等待页是否忽略进入前残留完成态 */
 static Cpu3DateTime rtc_menu_dt = {0};
+/* RTC 设置页面当前选中的年、月、日、时、分或秒字段索引。 */
 static uint8_t rtc_menu_field = 0U;
+/* AO 仿真页面当前选择的启停操作项。 */
 static uint32_t ao_simulation_selection = 0U;
+/* CPU2 通信健康详情当前显示的分页索引。 */
 static uint8_t cpu2_comm_health_page = 0U;
 
 /* ==============================
@@ -300,12 +323,14 @@ static uint8_t *water_level_mode[][2] = {
 };
 
 
+/* 继电器工作模式数值到中英文菜单文本的映射表。 */
 static uint8_t *arr_relay_operating[][2] = {
     { (uint8_t*)"禁用", (uint8_t*)"Disabled" },
     { (uint8_t*)"无源输出", (uint8_t*)"Passive Out" },
     { (uint8_t*)"非法配置", (uint8_t*)"Illegal CFG" },
 };
 
+/* 继电器数字报警组合数值到中英文菜单文本的映射表。 */
 static uint8_t *arr_relay_digital[][2] = {
     { (uint8_t*)"无", (uint8_t*)"None" },
     { (uint8_t*)"高报", (uint8_t*)"H" },
@@ -318,12 +343,14 @@ static uint8_t *arr_relay_digital[][2] = {
     { (uint8_t*)"非法配置", (uint8_t*)"Illegal CFG" },
 };
 
+/* 继电器常开/常闭接点类型到中英文菜单文本的映射表。 */
 static uint8_t *arr_relay_contact[][2] = {
     { (uint8_t*)"常开", (uint8_t*)"NO" },
     { (uint8_t*)"常闭", (uint8_t*)"NC" },
     { (uint8_t*)"非法配置", (uint8_t*)"Illegal CFG" },
 };
 
+/* 继电器报警关闭、开启和锁存模式到中英文菜单文本的映射表。 */
 static uint8_t *arr_relay_alarm_mode[][2] = {
     { (uint8_t*)"关闭", (uint8_t*)"Off" },
     { (uint8_t*)"开启", (uint8_t*)"On" },
@@ -331,6 +358,7 @@ static uint8_t *arr_relay_alarm_mode[][2] = {
     { (uint8_t*)"非法配置", (uint8_t*)"Illegal CFG" },
 };
 
+/* 继电器无效值策略到中英文菜单文本的映射表。 */
 static uint8_t *arr_relay_error[][2] = {
     { (uint8_t*)"无报警", (uint8_t*)"No Alarm" },
     { (uint8_t*)"高高/高", (uint8_t*)"HH/H" },
@@ -341,6 +369,7 @@ static uint8_t *arr_relay_error[][2] = {
     { (uint8_t*)"非法配置", (uint8_t*)"Illegal CFG" },
 };
 
+/* 继电器报警过程量来源到中英文菜单文本的映射表。 */
 static uint8_t *arr_relay_source[][2] = {
     { (uint8_t*)"储罐液位", (uint8_t*)"Tank Level" },
     { (uint8_t*)"液相温度", (uint8_t*)"Liquid Temp" },
@@ -974,10 +1003,10 @@ struct KeyMenu keymenu[KEYNUM_END] = {
 
 
 /**
- * @brief 处理屏幕菜单操作中的 DisplayTankOpera_CanProcessKey 逻辑。
+ * @brief 判断菜单当前状态是否允许处理新的按键事件。
  *
- * @param keypress 业务参数。
- * @return true 表示条件满足或处理成功，false 表示条件不满足或处理失败。
+ * @param keypress 本次待分发的按键位掩码。
+ * @return true 表示菜单索引有效、按键已获授权且存在对应回调；否则返回 false。
  */
 bool DisplayTankOpera_CanProcessKey(uint8_t keypress)
 {
@@ -1005,9 +1034,12 @@ bool DisplayTankOpera_CanProcessKey(uint8_t keypress)
 	return false;
 }
 
-/* ==============================
- * 按键操作处理
- * ============================== */
+/**
+ * @brief 按键操作处理。
+ *
+ * @param keypress 本次待分发的按键位掩码。
+ * @return true 表示按键已分发给当前页面回调；无权限、无回调或菜单索引非法时返回 false。
+ */
 bool KeyProcess(uint8_t keypress)
 {
 	if ((func_index < 0) || (func_index >= KEYNUM_END)) {
@@ -1038,8 +1070,8 @@ bool KeyProcess(uint8_t keypress)
 }
 
 /**
- * @brief 显示或打印屏幕菜单操作中的 DisplayTankOpera_RedrawCurrentPage 逻辑。
- * @return true 表示条件满足或处理成功，false 表示条件不满足或处理失败。
+ * @brief 按当前菜单层级和选中项重绘页面。
+ * @return true 表示当前罐上操作页面已由对应层级的绘制入口重绘；false 表示当前菜单层级、选中项或执行入口无效，无法确定可安全重绘的页面。
  */
 bool DisplayTankOpera_RedrawCurrentPage(void)
 {
@@ -1057,7 +1089,7 @@ bool DisplayTankOpera_RedrawCurrentPage(void)
 }
 
 /**
- * @brief 显示或打印屏幕菜单操作中的 DisplayTankOpera_IsMotorRunMonitorActive 逻辑。
+ * @brief 判断当前前景页是否为纯电机指令运行监控页。
  * @return true 表示当前前景页是电机运行监控页。
  */
 bool DisplayTankOpera_IsMotorRunMonitorActive(void)
@@ -1066,7 +1098,7 @@ bool DisplayTankOpera_IsMotorRunMonitorActive(void)
 }
 
 /**
- * @brief 显示或打印屏幕菜单操作中的 DisplayTankOpera_IsDebugWeightWaitActive 逻辑。
+ * @brief 判断当前前景页是否为扭力获取等待页。
  * @return true 表示当前前景页是扭力获取等待页。
  */
 bool DisplayTankOpera_IsDebugWeightWaitActive(void)
@@ -1083,6 +1115,11 @@ bool DisplayTankOpera_IsAoRuntimeActive(void)
 	return (FlagofTankOpera == true) && (func_index == KEYNUM_MENU_AO_RUNTIME);
 }
 
+/**
+ * @brief 判断 CPU2 板间通信健康页是否仍处于罐上操作前景。
+ *
+ * @return true 表示 CPU2 板间通信健康页仍处于罐上操作前景；false 表示 CPU2 板间通信健康页已不再处于罐上操作前景。
+ */
 bool DisplayTankOpera_IsCpu2CommHealthActive(void)
 {
 	return (FlagofTankOpera == true) && (func_index == KEYNUM_MENU_CPU2_COMM_HEALTH);
@@ -1232,6 +1269,8 @@ static void motor_run_monitor_request_stop(void)
 
 /**
  * @brief 进入扭力获取等待页。
+ *
+ * @param operaNum 菜单操作号，对应参数元数据或命令操作码。
  */
 static void enter_debug_weight_wait_page(int operaNum)
 {
@@ -1264,6 +1303,10 @@ static void debug_weight_wait_back_to_menu(void)
 
 /**
  * @brief 判断 CPU2 当前状态是否属于空载/满载扭力获取中。
+ *
+ * @param operaNum 菜单操作号，对应参数元数据或命令操作码。
+ * @param state CPU2 当前设备状态；结合 operaNum 区分空载或满载扭力获取是否仍在执行。
+ * @return true 表示 CPU2 当前状态属于空载/满载扭力获取中；false 表示 CPU2 当前状态不属于空载/满载扭力获取中。
  */
 static bool debug_weight_wait_state_is_active(int operaNum, DeviceState state)
 {
@@ -1280,6 +1323,10 @@ static bool debug_weight_wait_state_is_active(int operaNum, DeviceState state)
 
 /**
  * @brief 判断 CPU2 当前状态是否属于空载/满载扭力获取完成。
+ *
+ * @param operaNum 菜单操作号，对应参数元数据或命令操作码。
+ * @param state CPU2 当前设备状态；结合 operaNum 区分空载或满载扭力获取是否已经完成。
+ * @return true 表示 CPU2 当前状态属于空载/满载扭力获取完成；false 表示 CPU2 当前状态不属于空载/满载扭力获取完成。
  */
 static bool debug_weight_wait_state_is_done(int operaNum, DeviceState state)
 {
@@ -1294,10 +1341,14 @@ static bool debug_weight_wait_state_is_done(int operaNum, DeviceState state)
 	return false;
 }
 
-/*
- * 函数用途：把协议31复用槽中的IEEE754扭力模块温度转换为0.01摄氏度整数。
- * 调用场景：扭力标定等待页刷新实时温度时调用。
- * 关键约束：拒绝NaN、无穷和超出屏幕表达范围的数据，避免显示无效或溢出值。
+/**
+ * @brief 把协议31复用槽中的IEEE754扭力模块温度转换为0.01摄氏度整数。
+ *
+ * @details 调用场景：扭力标定等待页刷新实时温度时调用。
+ * @note 关键约束：拒绝NaN、无穷和超出屏幕表达范围的数据，避免显示无效或溢出值。
+ *
+ * @param temperature_x100 温度定点值，单位 0.01 ℃。
+ * @return true 表示原始 IEEE754 温度为有限值且位于 -999.99～999.99 ℃，并已四舍五入写入 temperature_x100；false 表示输出指针为空、原始位为 NaN/无穷，或温度超出屏幕表达范围。
  */
 static bool debug_weight_temperature_x100(int32_t *temperature_x100)
 {
@@ -1320,10 +1371,11 @@ static bool debug_weight_temperature_x100(int32_t *temperature_x100)
 	return true;
 }
 
-/*
- * 函数用途：在扭力标定等待页第二行显示扭力模块温度。
- * 调用场景：等待空载或满载扭力获取期间随页面周期刷新。
- * 关键约束：温度无效时显示占位，不把旧占位槽的零值解释为有效温度。
+/**
+ * @brief 在扭力标定等待页第二行显示扭力模块温度。
+ *
+ * @details 调用场景：等待空载或满载扭力获取期间随页面周期刷新。
+ * @note 关键约束：温度无效时显示占位，不把旧占位槽的零值解释为有效温度。
  */
 static void debug_weight_draw_temperature(void)
 {
@@ -1407,7 +1459,9 @@ static void debug_weight_wait_page(void)
 	DisplayLangaugeLineWords((uint8_t*)"返回", OLED_LINE8_1, OLED_ROW4_4, 0, (uint8_t*)"Back");
 }
 
-/* 使用了按键 - 更新按键检测定时器(你原来有 Timer1Start, 保留结构) */
+/**
+ * @brief 记录一次有效按键活动并重启菜单空闲计时器。
+ */
 void useKey(void)
 {
 	static int keytimeout = 300;		/* 按键超时时间 */
@@ -1418,10 +1472,14 @@ void useKey(void)
 /* ==============================
  * 输入参数页面
  * ============================== */
-/*
- * 函数用途：判断当前参数输入是否允许选择正负号。
- * 调用场景：数字输入完成后决定是否进入符号选择页。
- * 关键约束：继电器仅 HH、H、L、LL 阈值允许负号，报警滞回保持非负。
+/**
+ * @brief 判断当前参数输入是否允许选择正负号。
+ *
+ * @details 调用场景：数字输入完成后决定是否进入符号选择页。
+ * @note 关键约束：继电器仅 HH、H、L、LL 阈值允许负号，报警滞回保持非负。
+ *
+ * @param operaNum 菜单操作号，对应参数元数据或命令操作码。
+ * @return true 表示当前参数输入允许选择正负号；false 表示当前参数输入不允许选择正负号。
  */
 static bool ParamAllowsSignedInput(int operaNum)
 {
@@ -1446,10 +1504,16 @@ static bool ParamAllowsSignedInput(int operaNum)
 	}
 }
 
+/* 有符号参数编辑是否正在等待符号确认的状态。 */
 static bool s_param_sign_input_active = false;
+/* 当前有符号参数编辑采用的符号，取 1 或 -1。 */
 static int s_param_sign_value = 1;
+/* 符号确认页面的选择索引；-1 表示尚未选择。 */
 static int s_param_sign_confirm_count = -1;
 
+/**
+ * @brief 清除带符号数值输入的编辑状态。
+ */
 static void ResetSignInputState(void)
 {
 	s_param_sign_input_active = false;
@@ -1457,8 +1521,9 @@ static void ResetSignInputState(void)
 	s_param_sign_confirm_count = -1;
 }
 
-/*
- * 符号选择阶段按返回只取消本次编辑，恢复参数详情页且不下发。
+/**
+ * @brief 符号选择阶段按返回只取消本次编辑，恢复参数详情页且不下发。
+ *
  * 数字输入阶段仍沿用原 inputvalue() 的逐位返回行为。
  */
 static void inputcmdpara_back(void)
@@ -1474,6 +1539,9 @@ static void inputcmdpara_back(void)
 	inputcmdpara();
 }
 
+/**
+ * @brief 显示当前参数输入页；数字输入完成后，对允许负值的参数追加符号选择，再统一下发。
+ */
 static void inputcmdpara(void)
 {
 	uint8_t line, row = OLED_ROW4_1;
@@ -1531,7 +1599,11 @@ static void inputcmdpara(void)
 	}
 }
 
-/* 确定小数点位数 */
+/**
+ * @brief 确定小数点位数。
+ *
+ * @return 返回当前参数输入和显示使用的小数位数。
+ */
 static uint8_t dtm_points(void)
 {
 	uint8_t p = 0;
@@ -1549,17 +1621,19 @@ static uint8_t dtm_points(void)
 
 	return p;
 }
+/* 菜单操作码与中英文完整名称的只读映射项；用于参数页标题和操作名称查表。 */
 typedef struct {
-    int opera;
-    uint8_t *name_cn;
-    uint8_t *name_en;
+    /* 菜单操作码与中英文完整名称的一一映射。 */
+    int opera; /* 菜单操作码，用于把当前表项与菜单元数据及命令映射关联。 */
+    uint8_t *name_cn; /* 该表项对应的中文显示名称。 */
+    uint8_t *name_en; /* 该表项对应的英文显示名称。 */
 } OperaNameMap_t;
 
 /**
- * @brief 执行屏幕菜单操作中的 dtm_operaname 逻辑。
+ * @brief 返回当前操作编号对应的中英文菜单名称。
  *
- * @param num 业务参数。
- * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ * @param num 待查询的菜单操作号或序号。
+ * @return 返回当前操作编号对应的中英文菜单名称对应的只读文本首地址；内容由当前输入或语言配置选择，调用方不得修改或释放。
  */
 static uint8_t *dtm_operaname(int num)
 {
@@ -1806,6 +1880,13 @@ static uint8_t *dtm_operaname(int num)
 /* return returnWordType((uint8_t*)"非法操作", (uint8_t*)"Invalid Operation"); */
 /* } */
 
+/**
+ * @brief 按当前语言返回参数输入类型文本；非法语言值会递归调用本函数，调用方必须保证语言枚举有效。
+ *
+ * @param chinese 中文显示文字指针。
+ * @param english 英文显示文字指针。
+ * @return 返回选中的按当前语言返回参数输入类型文本；非法语言值会递归调用本函数，调用方必须保证语言枚举有效首地址；结果可能直接别名引用调用方输入，调用方继续持有其存储并负责保证生命周期。
+ */
 static uint8_t *returnWordType(uint8_t *chinese, uint8_t *english)
 {
 	if (screen_parameter.language == LANGUAGE_CHINESE) {
@@ -1818,10 +1899,10 @@ static uint8_t *returnWordType(uint8_t *chinese, uint8_t *english)
 }
 
 /**
- * @brief 执行屏幕菜单操作中的 oled_text_width 逻辑。
+ * @brief 计算中英文混排文本的 OLED 像素宽度。
  *
- * @param name 业务参数。
- * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ * @param name 待测量、裁剪、分行或匹配的 OLED 菜单文字字节串；中文按双字节字库字符处理，ASCII 按单字节处理。
+ * @return 返回文字占用的 OLED 像素宽度。
  */
 static uint8_t oled_text_width(const uint8_t *name)
 {
@@ -1844,10 +1925,16 @@ static uint8_t oled_text_width(const uint8_t *name)
 	return width;
 }
 
-/*
- * 函数用途：按当前语言和实际字符宽度把底栏右侧操作贴齐屏幕右边界。
- * 调用场景：确认、保存、修改、只读和停止运动等底栏右侧文字绘制。
- * 关键约束：文字超过单行宽度时从左边界绘制，并沿用底层现有裁剪行为。
+/**
+ * @brief 按当前语言和实际字符宽度把底栏右侧操作贴齐屏幕右边界。
+ *
+ * @details 调用场景：确认、保存、修改、只读和停止运动等底栏右侧文字绘制。
+ * @note 关键约束：文字超过单行宽度时从左边界绘制，并沿用底层现有裁剪行为。
+ *
+ * @param chinese 中文显示文字指针。
+ * @param english 英文显示文字指针。
+ * @param row OLED 绘制使用的行号。取值使用 OLED_ROW4_x 等页面行坐标常量，决定文字或数字写入的纵向基线。
+ * @param shift OLED 字模阴码/阳码或显示偏移选项。
  */
 static void display_right_aligned_action(uint8_t *chinese, uint8_t *english, uint8_t row, uint8_t shift)
 {
@@ -1865,18 +1952,20 @@ static void display_right_aligned_action(uint8_t *chinese, uint8_t *english, uin
 	OledDisplayLineWords(text, line, row, shift);
 }
 
+/* 菜单操作码与中英文短名称的只读映射项；用于显示宽度受限的状态栏或紧凑页面。 */
 typedef struct {
-	int opera;
-	uint8_t *name_cn;
-	uint8_t *name_en;
+	/* 菜单操作码与中英文短名称的一一映射。 */
+	int opera; /* 菜单操作码，用于把当前表项与菜单元数据及命令映射关联。 */
+	uint8_t *name_cn; /* 该表项对应的中文显示名称。 */
+	uint8_t *name_en; /* 该表项对应的英文显示名称。 */
 } OperaShortNameMap_t;
 
 /**
- * @brief 执行屏幕菜单操作中的 dtm_operaname_short 逻辑。
+ * @brief 返回参数或命令的短标签；未命中显式映射时使用传入回退名称。
  *
- * @param num 业务参数。
- * @param fallback 业务参数。
- * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ * @param num 待查询的菜单操作号或序号。
+ * @param fallback 未找到短名称映射时返回的兜底显示文字。
+ * @return 返回选中的参数或命令的短标签；未命中显式映射时使用传入回退名称首地址；结果可能直接别名引用调用方输入，调用方继续持有其存储并负责保证生命周期。
  */
 static uint8_t *dtm_operaname_short(int num, uint8_t *fallback)
 {
@@ -2052,10 +2141,10 @@ static uint8_t *dtm_operaname_short(int num, uint8_t *fallback)
 }
 
 /**
- * @brief 显示或打印屏幕菜单操作中的 menu_display_name 逻辑。
+ * @brief 返回菜单项在当前语言下使用的显示名称。
  *
- * @param item 业务参数。
- * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ * @param item 待显示或判断的菜单项元数据。该参数包含菜单操作号、中英文名称、回调及显示属性，用于选择文字和当前参数值。
+ * @return 返回菜单项在当前语言下使用的显示名称对应的只读文本首地址；内容由当前输入或语言配置选择，调用方不得修改或释放。
  */
 static uint8_t *menu_display_name(const struct MenuData *item)
 {
@@ -2071,7 +2160,13 @@ static uint8_t *menu_display_name(const struct MenuData *item)
 	return dtm_operaname_short(item->operaNum, name);
 }
 
-/* 按 OLED 实际列宽裁剪字符串，避免长英文或长中文名称越过单行右边界。 */
+/**
+ * @brief 按 OLED 实际列宽裁剪字符串，避免长英文或长中文名称越过单行右边界。
+ *
+ * @param name 待测量、裁剪、分行或匹配的 OLED 菜单文字字节串；中文按双字节字库字符处理，ASCII 按单字节处理。
+ * @param max_width 允许文字或百分比占用的最大 OLED 像素宽度。
+ * @return 返回存放按 OLED 实际列宽裁剪字符串，避免长英文或长中文名称越过单行右边界的模块静态缓冲区首地址；后续调用可能覆盖其内容，调用方不得释放。
+ */
 static uint8_t *oled_fit_text(uint8_t *name, uint8_t max_width)
 {
 	static uint8_t fit[64];
@@ -2103,10 +2198,10 @@ static uint8_t *oled_fit_text(uint8_t *name, uint8_t max_width)
 }
 
 /**
- * @brief 检查屏幕菜单操作中的 is_version_value_opera 逻辑。
+ * @brief 判断参数操作号是否对应软件或协议版本字段。
  *
- * @param operaNum 业务参数。
- * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ * @param operaNum 菜单操作号，对应参数元数据或命令操作码。
+ * @return 1 表示操作号对应 CPU2/CPU3 软件版本或协议版本字段，0 表示不是版本字段。
  */
 static int is_version_value_opera(int operaNum)
 {
@@ -2121,10 +2216,10 @@ static int is_version_value_opera(int operaNum)
 }
 
 /**
- * @brief 检查屏幕菜单操作中的 is_hex_u32_value_opera 逻辑。
+ * @brief 判断参数操作号是否对应应以十六进制显示的 32 位字段。
  *
- * @param operaNum 业务参数。
- * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ * @param operaNum 菜单操作号，对应参数元数据或命令操作码。
+ * @return 1 表示操作号对应需要按 8 位十六进制显示的 32 位字段，0 表示使用普通数值格式。
  */
 static int is_hex_u32_value_opera(int operaNum)
 {
@@ -2137,7 +2232,16 @@ static int is_hex_u32_value_opera(int operaNum)
 	}
 }
 
-/* 显示 32 位只读值：版本号按 Vx.x.x.x，魔术字/CRC 按 0xXXXXXXXX。 */
+/**
+ * @brief 显示 32 位只读值：版本号按 Vx.x.x.x，魔术字/CRC 按 0xXXXXXXXX。
+ *
+ * @param operaNum 菜单操作号，对应参数元数据或命令操作码。
+ * @param value 待格式化并绘制到 OLED 的数值。
+ * @param line OLED 绘制使用的横向列位置。
+ * @param row OLED 绘制使用的行号。取值使用 OLED_ROW4_x 等页面行坐标常量，决定文字或数字写入的纵向基线。
+ * @param shift OLED 字模阴码/阳码或显示偏移选项。
+ * @return 1 表示 operaNum 属于版本号或 32 位十六进制只读项，数值已按对应格式绘制；0 表示该操作号不属于这两类，调用方应继续使用普通数值格式。
+ */
 static int display_formatted_readonly_value(int operaNum, int32_t value, uint8_t line, uint8_t row, uint8_t shift)
 {
 	char text[24];
@@ -2159,10 +2263,10 @@ static int display_formatted_readonly_value(int operaNum, int32_t value, uint8_t
 }
 
 /**
- * @brief 执行屏幕菜单操作中的 relay_alarm_source_unit 逻辑。
+ * @brief 返回继电器报警源对应的工程单位文字。
  *
- * @param source 业务参数。
- * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ * @param source 待判断或转换的数据来源枚举值。该 RelayAlarmSource 编码决定详情页显示 mm、℃ 或无单位，非法来源返回空单位。
+ * @return 成功时返回指向继电器报警源对应的工程单位文字的指针；输入非法或未找到匹配项时返回 NULL。
  */
 static uint8_t *relay_alarm_source_unit(uint32_t source)
 {
@@ -2179,11 +2283,11 @@ static uint8_t *relay_alarm_source_unit(uint32_t source)
 }
 
 /**
- * @brief 显示或打印屏幕菜单操作中的 param_display_unit 逻辑。
+ * @brief 根据参数操作号和元数据返回详情页使用的工程单位。
  *
- * @param operaNum 业务参数。
- * @param meta 业务参数。
- * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ * @param operaNum 菜单操作号，对应参数元数据或命令操作码。
+ * @param meta 目标参数的元数据描述。
+ * @return 成功时返回指向根据参数操作号和元数据返回详情页使用的工程单位的指针；输入非法或未找到匹配项时返回 NULL。
  */
 static uint8_t *param_display_unit(int operaNum, const struct ParameterMetadata *meta)
 {
@@ -2206,10 +2310,14 @@ static uint8_t *param_display_unit(int operaNum, const struct ParameterMetadata 
 	return relay_alarm_source_unit(g_deviceParams.relayAlarm[channel].alarm_source);
 }
 
-/*
- * 函数用途：把电机电流参数归一到 TMC5130 IRUN 的合法档位。
- * 调用场景：电机电流详情页、菜单列表和选择列表显示前调用。
- * 关键约束：只修正显示侧口径，实际写入范围仍由参数范围检查和 CPU2 保护。
+/**
+ * @brief 把电机电流参数归一到 TMC5130 IRUN 的合法档位。
+ *
+ * @details 调用场景：电机电流详情页、菜单列表和选择列表显示前调用。
+ * @note 关键约束：只修正显示侧口径，实际写入范围仍由参数范围检查和 CPU2 保护。
+ *
+ * @param irun TMC5130 运行电流档位 IRUN。
+ * @return 返回完成边界钳位后的数值；输入低于下限时返回下限，高于上限时返回上限，区间内保持原值。
  */
 static uint32_t motor_current_clamp_irun(uint32_t irun)
 {
@@ -2220,10 +2328,14 @@ static uint32_t motor_current_clamp_irun(uint32_t irun)
 	return irun;
 }
 
-/*
- * 函数用途：按当前硬件 RSENSE=0.15Ω 和 TMC5130 vsense=0 的口径换算 RMS 电流。
- * 调用场景：屏幕显示电机电流档位对应的相电流参考值。
- * 关键约束：返回值只用于显示，不改变 motor_current 保存和通信语义。
+/**
+ * @brief 按当前硬件 RSENSE=0.15Ω 和 TMC5130 vsense=0 的口径换算 RMS 电流。
+ *
+ * @details 调用场景：屏幕显示电机电流档位对应的相电流参考值。
+ * @note 关键约束：返回值只用于显示，不改变 motor_current 保存和通信语义。
+ *
+ * @param irun TMC5130 运行电流档位 IRUN。
+ * @return 返回 IRUN 档位按当前采样电阻和 vsense 配置换算的 RMS 电流，单位 mA。
  */
 static uint16_t motor_current_rms_ma(uint32_t irun)
 {
@@ -2237,10 +2349,15 @@ static uint16_t motor_current_rms_ma(uint32_t irun)
 	return motor_current_rms_ma_table[index];
 }
 
-/*
- * 函数用途：生成“IRUN档位 + RMS电流”的短显示文本。
- * 调用场景：机械参数列表、参数详情页和选择确认后的显示刷新。
- * 关键约束：电流值按 0.01A 四舍五入，保持与选择列表一致。
+/**
+ * @brief 生成“IRUN档位 + RMS电流”的短显示文本。
+ *
+ * @details 调用场景：机械参数列表、参数详情页和选择确认后的显示刷新。
+ * @note 关键约束：电流值按 0.01A 四舍五入，保持与选择列表一致。
+ *
+ * @param irun TMC5130 运行电流档位 IRUN。
+ * @param buf 用于接收 IRUN 档位和 RMS 电流格式化文字的目标缓冲区。
+ * @param buf_size 缓冲区容量，单位字节。
  */
 static void format_motor_current_label(uint32_t irun, char *buf, size_t buf_size)
 {
@@ -2260,10 +2377,14 @@ static void format_motor_current_label(uint32_t irun, char *buf, size_t buf_size
 	         (unsigned long)(rms_centiamps % 100U));
 }
 
-/*
- * 函数用途：在参数详情页显示电机电流档位和对应 RMS 电流。
- * 调用场景：查看“电机运行电流”参数时调用。
- * 关键约束：第三行显示的是 IRUN 档位范围，不改变 Modbus 参数范围。
+/**
+ * @brief 在参数详情页显示电机电流档位和对应 RMS 电流。
+ *
+ * @details 调用场景：查看“电机运行电流”参数时调用。
+ * @note 关键约束：第三行显示的是 IRUN 档位范围，不改变 Modbus 参数范围。
+ *
+ * @param irun TMC5130 运行电流档位 IRUN。
+ * @param row OLED 绘制使用的行号。取值使用 OLED_ROW4_x 等页面行坐标常量，决定文字或数字写入的纵向基线。
  */
 static void display_motor_current_detail(uint32_t irun, uint8_t row)
 {
@@ -2278,13 +2399,12 @@ static void display_motor_current_detail(uint32_t irun, uint8_t row)
 }
 
 /**
- * @brief 显示或打印屏幕菜单操作中的 display_menu_item_with_value 逻辑。
+ * @brief 显示菜单项名称；参数项同时读取并显示当前值或枚举文本。
  *
- * @param item 业务参数。
- * @param line 业务参数。
- * @param row 业务参数。
- * @param shift 业务参数。
- * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ * @param item 待显示或判断的菜单项元数据。该参数包含菜单操作号、中英文名称、回调及显示属性，用于选择文字和当前参数值。
+ * @param line OLED 绘制使用的横向列位置。
+ * @param row OLED 绘制使用的行号。取值使用 OLED_ROW4_x 等页面行坐标常量，决定文字或数字写入的纵向基线。
+ * @param shift OLED 字模阴码/阳码或显示偏移选项。
  */
 static void display_menu_item_with_value(const struct MenuData *item, uint8_t line, uint8_t row, uint8_t shift)
 {
@@ -2360,12 +2480,12 @@ static void display_menu_item_with_value(const struct MenuData *item, uint8_t li
 }
 
 /**
- * @brief 显示或打印屏幕菜单操作中的 display_split_title 逻辑。
+ * @brief 按 OLED 宽度把标题拆成最多两行，并返回下一可用行。
  *
- * @param name 业务参数。
- * @param row1 业务参数。
- * @param row2 业务参数。
- * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ * @param name 待测量、裁剪、分行或匹配的 OLED 菜单文字字节串；中文按双字节字库字符处理，ASCII 按单字节处理。
+ * @param row1 用于返回标题第一显示行文字的定长缓存。
+ * @param row2 用于返回标题第二显示行文字的定长缓存。
+ * @return 返回标题绘制完成后的下一可用 OLED 行坐标；单行和双行标题分别按实际占用行数推进。
  */
 static uint8_t display_split_title(uint8_t *name, uint8_t row1, uint8_t row2)
 {
@@ -2425,11 +2545,10 @@ static uint8_t display_split_title(uint8_t *name, uint8_t row1, uint8_t row2)
 }
 
 /**
- * @brief 显示或打印屏幕菜单操作中的 display_param_detail_value 逻辑。
+ * @brief 显示当前参数值及单位，并返回下一可用行。
  *
- * @param meta 业务参数。
- * @param row 业务参数。
- * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ * @param meta 目标参数的元数据描述。
+ * @param row OLED 绘制使用的行号。取值使用 OLED_ROW4_x 等页面行坐标常量，决定文字或数字写入的纵向基线。
  */
 static void display_param_detail_value(const struct ParameterMetadata *meta, uint8_t row)
 {
@@ -2449,11 +2568,10 @@ static void display_param_detail_value(const struct ParameterMetadata *meta, uin
 }
 
 /**
- * @brief 显示或打印屏幕菜单操作中的 display_param_detail_range 逻辑。
+ * @brief 按参数类型显示可写范围或枚举范围。
  *
- * @param meta 业务参数。
- * @param row 业务参数。
- * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ * @param meta 目标参数的元数据描述。
+ * @param row OLED 绘制使用的行号。取值使用 OLED_ROW4_x 等页面行坐标常量，决定文字或数字写入的纵向基线。
  */
 static void display_param_detail_range(const struct ParameterMetadata *meta, uint8_t row)
 {
@@ -2479,7 +2597,11 @@ static void display_param_detail_range(const struct ParameterMetadata *meta, uin
 	}
 }
 
-/* 确定单位 */
+/**
+ * @brief 按当前参数操作号返回数值输入页和详情页使用的工程单位文字。
+ *
+ * @return 当前操作号具有参数元数据时返回对应工程单位文字首地址；无单位或非参数操作时返回 NULL。
+ */
 static uint8_t *dtm_unit(void)
 {
 	uint8_t *u = NULL;
@@ -2498,7 +2620,11 @@ static uint8_t *dtm_unit(void)
 	return u;
 }
 
-/* 确定显示位数 */
+/**
+ * @brief 确定显示位数。
+ *
+ * @return 返回当前参数输入框允许显示的十进制总位数。
+ */
 static uint8_t dtm_bits(void)
 {
 	uint8_t b = 6;
@@ -2521,7 +2647,17 @@ static uint8_t dtm_bits(void)
 	return b;
 }
 
-/* 输入数据(数值输入状态机) */
+/**
+ * @brief 输入数据(数值输入状态机)。
+ *
+ * @param deci 当前数值整数部分的十进制位数。
+ * @param row OLED 绘制使用的行号。取值使用 OLED_ROW4_x 等页面行坐标常量，决定文字或数字写入的纵向基线。
+ * @param line OLED 绘制使用的横向列位置。
+ * @param points 当前参数允许输入的小数位数；用于限定小数点位置和逐位编辑范围。
+ * @param unit 当前参数的工程单位文字，用于输入页提示。
+ * @param value 数值输入缓存；函数按键逐位修改并在确认时输出最终整数。
+ * @return 1 表示数值输入已确认并写回，0 表示仍在编辑、取消或输入尚未完成。
+ */
 static bool inputvalue(uint8_t deci, uint8_t row, uint8_t line, uint8_t points, uint8_t *unit, int *value)
 {
 	static int nowbit = 8;
@@ -2675,7 +2811,13 @@ static bool inputvalue(uint8_t deci, uint8_t row, uint8_t line, uint8_t points, 
 	return false;
 }
 
-/* 是否下发指令或参数判断页 */
+/**
+ * @brief 绘制当前命令或参数的确认页，并按确认或返回按键跳转到对应处理流程。
+ *
+ * 函数依据 now_Opera_Num 区分无参命令、带参命令、普通参数和密码入口，分别绘制中英文确认标题、操作短名称以及待写参数值。
+ * 密码入口在本页直接校验屏幕密码或固定维护密码，成功后进入参数或命令菜单，失败时提示并返回主菜单，不再进入通用确认分支。
+ * 确认和返回状态由 timesure、timeback 维护；达到确认条件后调用 dtm_suretofunc 取得执行入口，返回条件成立时调用 dtm_backtofunc 恢复上一页。
+ */
 static void ifsendcmd(void)
 {
 	oled_clear();
@@ -2753,10 +2895,10 @@ static void ifsendcmd(void)
 }
 
 /**
- * @brief 执行屏幕菜单操作中的 operation_needs_protect_confirm 逻辑。
+ * @brief 判断当前操作是否需要二次保护确认。
  *
- * @param operaNum 业务参数。
- * @return true 表示条件满足或处理成功，false 表示条件不满足或处理失败。
+ * @param operaNum 菜单操作号，对应参数元数据或命令操作码。
+ * @return true 表示当前操作需要二次保护确认；false 表示当前操作不需要二次保护确认。
  */
 static bool operation_needs_protect_confirm(int operaNum)
 {
@@ -2829,8 +2971,7 @@ static bool operation_needs_protect_confirm(int operaNum)
 }
 
 /**
- * @brief 处理屏幕菜单操作中的 protected_operation_process 逻辑。
- * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ * @brief 执行受保护操作的确认、取消和命令下发流程。
  */
 static void protected_operation_process(void)
 {
@@ -2852,7 +2993,9 @@ static void protected_operation_process(void)
 	errorprocess();
 }
 
-/* 保护参数不增加维护权限，只在真正写入前追加确认，降低误保存风险。 */
+/**
+ * @brief 保护参数不增加维护权限，只在真正写入前追加确认，降低误保存风险。
+ */
 static void param_protect_confirm(void)
 {
 	uint8_t *name;
@@ -2905,9 +3048,13 @@ static void param_protect_confirm(void)
 	display_right_aligned_action((uint8_t*)"确认保存", (uint8_t*)"Save", OLED_ROW4_4, timesure);
 }
 
-/* 返回按返回键后要跳转的函数指针 */
-/* 返回按返回键后要跳转的函数指针 */
-/* 返回按返回键后要跳转的函数指针 */
+
+
+/**
+ * @brief 返回按返回键后要跳转的函数指针。
+ *
+ * @return 返回当前操作按返回键时应调用的页面函数；未命中特殊映射时返回参数元数据配置的返回函数。
+ */
 static pFunc_void dtm_backtofunc(void)
 {
     pFunc_void p = errorprocess;
@@ -3085,7 +3232,11 @@ static pFunc_void dtm_backtofunc(void)
 }
 
 
-/* 返回按确认键后要跳转的函数指针 */
+/**
+ * @brief 返回按确认键后要跳转的函数指针。
+ *
+ * @return 返回当前操作按确认键时应调用的处理函数；受保护参数、无参数命令和单参数命令分别映射到对应入口。
+ */
 static pFunc_void dtm_suretofunc(void)
 {
 	if (screen_operation_is_no_para_command(now_Opera_Num)) {
@@ -3102,15 +3253,21 @@ static pFunc_void dtm_suretofunc(void)
 		return errorprocess;
 	}
 }
+/* 无附加参数的菜单操作码到 CPU2 命令码映射项；用于只需下发命令本身的菜单动作。 */
 typedef struct {
-    uint32_t opera;
-    uint32_t cmd;
+    /* 无参数菜单动作到 CPU2 命令码的一一映射。 */
+    uint32_t opera; /* 菜单操作码，用于把当前表项与菜单元数据及命令映射关联。 */
+    uint32_t cmd; /* 向 CPU2 下发的设备命令码。 */
 } NoParaCmdMap_t;
 
-/*
- * 函数用途：统一判断屏幕操作码是否属于无参 CPU2 命令。
- * 调用场景：名称分类、确认页、确认键分发共用，避免显式操作码在多个区间判断中漏配。
- * 关键约束：1000~1006 中只有列出的命令操作码可进入下发流程，AO 只读/仿真操作不得误分类。
+/**
+ * @brief 统一判断屏幕操作码是否属于无参 CPU2 命令。
+ *
+ * @details 调用场景：名称分类、确认页、确认键分发共用，避免显式操作码在多个区间判断中漏配。
+ * @note 关键约束：1000~1006 中只有列出的命令操作码可进入下发流程，AO 只读/仿真操作不得误分类。
+ *
+ * @param operaNum 菜单操作号，对应参数元数据或命令操作码。
+ * @return true 表示操作号属于无需先写参数即可直接下发的 CPU2 命令白名单；false 表示它是参数项、带参命令、仅本机操作或未知操作号。
  */
 static bool screen_operation_is_no_para_command(int operaNum)
 {
@@ -3129,9 +3286,9 @@ static bool screen_operation_is_no_para_command(int operaNum)
 }
 
 /**
- * @brief 发送屏幕菜单操作中的 send_cpu2_command 逻辑。
+ * @brief 向 CPU2 下发当前菜单命令，并统一处理确认、异常响应和通信失败。
  *
- * @param cmd 命令值。
+ * @param cmd 命令值。该 32 位 CommandType 编码将写入 CPU2 共享命令寄存器，并等待板间参数同步结果确认。
  * @return true 表示 CPU2 返回合法写响应，false 表示本次请求失败。
  */
 static bool send_cpu2_command(uint32_t cmd)
@@ -3149,10 +3306,11 @@ static bool send_cpu2_command(uint32_t cmd)
                command_regs) == CPU2_MODBUS_RESULT_OK;
 }
 
-/*
- * 函数用途：统一显示 CPU2 请求未获得合法响应的菜单提示。
- * 调用场景：CPU2 参数读取、写入或命令下发失败后调用。
- * 关键约束：不得继续进入成功页、运动监控页或参数确认页。
+/**
+ * @brief 统一显示 CPU2 请求未获得合法响应的菜单提示。
+ *
+ * @details 调用场景：CPU2 参数读取、写入或命令下发失败后调用。
+ * @note 关键约束：不得继续进入成功页、运动监控页或参数确认页。
  */
 static void display_cpu2_comm_failure(void)
 {
@@ -3179,7 +3337,11 @@ static void display_cpu2_comm_failure(void)
     HAL_Delay(800);
 }
 
-/* 标准Modbus异常属于CPU2业务拒绝，不计作板间物理通信故障。 */
+/**
+ * @brief 标准Modbus异常属于CPU2业务拒绝，不计作板间物理通信故障。
+ *
+ * @param exception_code 异常码。
+ */
 static void display_cpu2_modbus_exception(uint8_t exception_code)
 {
     oled_clear();
@@ -3208,6 +3370,9 @@ static void display_cpu2_modbus_exception(uint8_t exception_code)
  * @brief 判断命令是否属于本需求定义的纯电机运行监控范围。
  *
  * 只有用户直接下发的纯电机指令进入监控页，普通测量流程即使内部驱动电机也不进入。
+ *
+ * @param cmd 待分类的 32 位 CommandType 编码；函数只判断该命令是否需要进入电机运行监控页。
+ * @return true 表示命令属于本需求定义的纯电机运行监控范围；false 表示命令不属于本需求定义的纯电机运行监控范围。
  */
 static bool command_is_motor_monitor_command(uint32_t cmd)
 {
@@ -3225,6 +3390,9 @@ static bool command_is_motor_monitor_command(uint32_t cmd)
 
 /**
  * @brief 判断 CPU2 当前状态是否仍属于电机监控运行态。
+ *
+ * @param state CPU2 当前设备状态；纯电机命令对应的上行、下行或停止过渡态均视为监控仍活动。
+ * @return true 表示 CPU2 当前状态仍属于电机监控运行态；false 表示 CPU2 当前状态已不再属于电机监控运行态。
  */
 static bool motor_run_monitor_state_is_active(DeviceState state)
 {
@@ -3242,6 +3410,9 @@ static bool motor_run_monitor_state_is_active(DeviceState state)
 
 /**
  * @brief 判断 CPU2 当前状态是否已从纯电机指令收敛到完成态。
+ *
+ * @param state CPU2 当前设备状态；用于判断纯电机命令是否已收敛到可退出监控页的完成态。
+ * @return true 表示 CPU2 当前状态已从纯电机指令收敛到完成态；false 表示 CPU2 当前状态尚未从纯电机指令收敛到完成态。
  */
 static bool motor_run_monitor_state_is_done(DeviceState state)
 {
@@ -3260,6 +3431,8 @@ static bool motor_run_monitor_state_is_done(DeviceState state)
 
 /**
  * @brief 纯电机指令下发后进入运行监控页，其它业务命令保持原有退出策略。
+ *
+ * @param cmd 刚刚获得 CPU2 发送确认的 32 位 CommandType 编码；用于决定监控页的目标命令和初始状态。
  */
 static void motor_run_monitor_handle_sent_command(uint32_t cmd)
 {
@@ -3271,10 +3444,10 @@ static void motor_run_monitor_handle_sent_command(uint32_t cmd)
 }
 
 /**
- * @brief 显示或打印屏幕菜单操作中的 display_state_can_cancel_measurement 逻辑。
+ * @brief 判断指定设备状态是否属于允许用户取消的测量过程。
  *
- * @param state 状态值。
- * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ * @param state 准备由用户取消的 CPU2 测量状态；仅正在执行且具备安全取消出口的状态被放行。
+ * @return 1 表示指定设备状态属于允许用户取消的测量过程；0 表示指定设备状态不属于允许用户取消的测量过程。
  */
 static uint8_t display_state_can_cancel_measurement(DeviceState state)
 {
@@ -3295,14 +3468,14 @@ static uint8_t display_state_can_cancel_measurement(DeviceState state)
 }
 
 /**
- * @brief 显示或打印屏幕菜单操作中的 Display_CanEnterCancelMeasurementConfirm 逻辑。
- * @return true 表示条件满足或处理成功，false 表示条件不满足或处理失败。
+ * @brief 判断当前页面和设备状态是否允许进入取消测量确认页。
+ * @return true 表示当前页面和设备状态允许进入取消测量确认页；false 表示当前页面和设备状态不允许进入取消测量确认页。
  */
 bool Display_CanEnterCancelMeasurementConfirm(void)
 {
     DeviceState state = g_measurement.device_status.device_state;
 
-    /* 先处理异常边界，避免屏幕菜单操作状态机带故障继续运行。 */
+    /* 正式错误态即使已经没有可取消的测量流程，也允许进入确认入口，以便用户查看故障原因。 */
     if ((state == STATE_ERROR) && (g_measurement.device_status.error_code != NO_ERROR)) {
         return true;
     }
@@ -3311,7 +3484,7 @@ bool Display_CanEnterCancelMeasurementConfirm(void)
 }
 
 /**
- * @brief 显示或打印屏幕菜单操作中的 Display_RequestCancelMeasurement 逻辑。
+ * @brief 向 CPU2 提交取消当前测量的命令。
  * @return true 表示无需取消或取消命令获得合法响应，false 表示通信失败。
  */
 bool Display_RequestCancelMeasurement(void)
@@ -3330,14 +3503,14 @@ bool Display_RequestCancelMeasurement(void)
 }
 
 /**
- * @brief 显示或打印屏幕菜单操作中的 Display_EnterCancelMeasurementConfirm 逻辑。
- * @return true 表示条件满足或处理成功，false 表示条件不满足或处理失败。
+ * @brief 进入取消测量确认页并保存返回位置。
+ * @return true 表示已进入取消测量确认页，或当前故障已转入故障原因页；false 表示当前设备状态不属于可取消的测量流程，页面未进入确认态。
  */
 bool Display_EnterCancelMeasurementConfirm(void)
 {
     DeviceState state = g_measurement.device_status.device_state;
 
-    /* 先处理异常边界，避免屏幕菜单操作状态机带故障继续运行。 */
+    /* 错误态下取消入口改为直接打开故障原因页，不再向 CPU2 重复发送取消测量命令。 */
     if ((state == STATE_ERROR) && (g_measurement.device_status.error_code != NO_ERROR)) {
         FlagofTankOpera = true;
         useKey();
@@ -3356,7 +3529,15 @@ bool Display_EnterCancelMeasurementConfirm(void)
     return true;
 }
 
-/* 不带参线圈指令处理过程 */
+/**
+ * @brief 将当前无参菜单操作映射为 CPU2 命令，校验通信状态后下发并更新界面。
+ *
+ * 静态映射表统一覆盖普通测量、密度 Profile、部件读取、标定、扭力采集、恢复出厂、维护、清锁存和无线配对等不携带独立参数的操作号。
+ * 未找到操作号映射，或 CPU2 当前协议、通信状态不允许发送该命令时，函数提示失败并退出罐上操作，禁止下发 CMD_UNKNOWN。
+ * SI Profile 通过 si_profile_request_start 建立专用生命周期，其他命令通过统一 CPU2
+ * 命令接口发送；请求成功后按命令类型进入运行监视、调试扭力等待页或专用完成提示。
+ * 无线配对命令发送后退出普通罐上操作并停止页面定时器，使后续状态页能够展示配对过程。
+ */
 static void cmd_nopara_process(void)
 {
     static const NoParaCmdMap_t map[] = {
@@ -3367,16 +3548,16 @@ static void cmd_nopara_process(void)
         { COM_NUM_FIND_BOTTOM,        CMD_FIND_BOTTOM },
         { COM_NUM_SYNTHETIC,          CMD_SYNTHETIC },
 
-        { COM_NUM_FOLLOW_WATER,       CMD_FOLLOW_WATER },              /* 新增 */
+        { COM_NUM_FOLLOW_WATER,       CMD_FOLLOW_WATER },
         { COM_NUM_SPREADPOINTS,       CMD_MEASURE_DISTRIBUTED },
-        { COM_NUM_SPREADPOINTS_GB,    CMD_GB_MEASURE_DISTRIBUTED },     /* 新增 */
+        { COM_NUM_SPREADPOINTS_GB,    CMD_GB_MEASURE_DISTRIBUTED },
 
         { COM_NUM_METER_DENSITY,      CMD_MEASURE_DENSITY_METER },
         { COM_NUM_INTERVAL_DENSITY,   CMD_MEASURE_DENSITY_RANGE },
         { COM_NUM_WARTSILA_DENSITY,   CMD_WARTSILA_DENSITY_RANGE },
         { COM_NUM_SI_PROFILE,         CMD_SI_PROFILE },
 
-        { COM_NUM_READ_PART_PARAMS,   CMD_READ_PART_PARAMS },          /* 新增 */
+        { COM_NUM_READ_PART_PARAMS,   CMD_READ_PART_PARAMS },
 
         /* -------- 调试模式：无参指令 -------- */
         { COM_NUM_FIND_ZERO,          CMD_CALIBRATE_ZERO },
@@ -3459,15 +3640,24 @@ static void cmd_nopara_process(void)
     }
 }
 
-/* 带一参线圈指令处理过程（适配新指令） */
+/**
+ * @brief 先写入当前带参命令的 32 位参数，再映射并下发对应 CPU2 命令。
+ *
+ * 静态映射表覆盖单点测量、单点监测、运行到位置、液位或水位或罐高标定、手动运动和强制运动等携带一个 32 位参数的操作。
+ * 函数先用当前操作号定位参数元数据，要求对应字段恰好占两个保持寄存器，再把 now_Para_CT.val 的有符号 32 位原始值按高字在前拆分并写入 CPU2。
+ * 参数写入成功后才查找并下发对应 CommandType；任一步发生元数据、寄存器长度、板间写入、命令映射或命令发送错误时，都显示明确提示并退出当前操作。
+ * 命令发送成功后进入统一电机运行监视；当前实现先写参数再确认命令映射，因此新增带参命令时必须同步维护参数元数据和 onepara_cmd_map。
+ */
 static void cmd_onepara_process(void)
 {
     int index;
     int i;
 
+    /* 带一个数值参数的菜单操作码到 CPU2 命令码映射项；发送前还需由调用方写入对应命令参数槽。 */
     typedef struct {
-        int opera;
-        uint32_t cmd;
+        /* 单参数菜单动作到 CPU2 命令码的一一映射。 */
+        int opera; /* 菜单操作码，用于把当前表项与菜单元数据及命令映射关联。 */
+        uint32_t cmd; /* 向 CPU2 下发的设备命令码。 */
     } OneParaCmdMap_t;
 
     /* 新版：带参指令映射 */
@@ -3622,7 +3812,9 @@ static void cmd_onepara_process(void)
 /* } */
 /* } */
 
-/* 非法操作处理 */
+/**
+ * @brief 显示非法操作提示，保持 1 秒后退出罐上屏幕操作。
+ */
 static void errorprocess(void)
 {
 	oled_clear();
@@ -3632,7 +3824,13 @@ static void errorprocess(void)
 	exitTankOpera();
 }
 
-/* 将0xMMmmppbb版本编码显示为V主.次.修订.构建。 */
+/**
+ * @brief 将0xMMmmppbb版本编码显示为V主.次.修订.构建。
+ *
+ * @param version 版本。
+ * @param buf 用于接收 V主.次.修订.构建 格式版本文字的目标缓冲区。
+ * @param buf_size 缓冲区容量，单位字节。
+ */
 static void format_version_u32(uint32_t version, char *buf, size_t buf_size)
 {
 	snprintf(buf, buf_size, "V%lu.%lu.%lu.%lu",
@@ -3642,7 +3840,12 @@ static void format_version_u32(uint32_t version, char *buf, size_t buf_size)
 			(unsigned long)(version & 0xFFU));
 }
 
-/* 显示参数内容 */
+/**
+ * @brief 绘制当前操作参数的名称、现值、允许范围和修改入口，并处理确认或返回按键。
+ *
+ * CPU3 本机版本、版本号和十六进制参数采用只读格式；电机电流和普通数值分别使用专用详情或元数据范围显示。
+ * 确认键连续触发后进入写权限检查，返回键按当前菜单回退函数恢复上一页；模拟量输出只读项只提供返回入口。
+ */
 static void displaypara(void)
 {
 	int index;
@@ -3716,20 +3919,34 @@ static void displaypara(void)
 	}
 }
 
-/* 判断当前设备状态是否允许修改CPU2持久参数。 */
+/**
+ * @brief 判断当前设备状态是否允许修改CPU2持久参数。
+ *
+ * @param state CPU2 当前设备状态；只有共享持久参数写白名单内的稳定状态允许继续编辑并下发。
+ * @return true 表示当前设备状态允许修改CPU2持久参数；false 表示当前设备状态不允许修改CPU2持久参数。
+ */
 static bool state_allows_param_write(DeviceState state)
 {
 	return DeviceState_AllowsPersistentParamWrite(state);
 }
 
-/* AO仅在普通电流输出或HART从站加输出模式下具备输出能力。 */
+/**
+ * @brief AO仅在普通电流输出或HART从站加输出模式下具备输出能力。
+ *
+ * @return true 表示 AO 工作模式为普通电流输出或 HART 从站加电流输出；false 表示当前模式不驱动过程量电流输出。
+ */
 static bool ao_work_mode_is_output(void)
 {
 	return (g_deviceParams.ao_output.work_mode == AO_WORK_MODE_CURRENT_OUTPUT) ||
 	       (g_deviceParams.ao_output.work_mode == AO_WORK_MODE_HART_SLAVE_OUTPUT);
 }
 
-/* 判断操作码是否属于协议26沿用原地址的13项AO持久化配置。 */
+/**
+ * @brief 判断操作码是否属于协议26沿用原地址的13项AO持久化配置。
+ *
+ * @param operaNum 菜单操作号，对应参数元数据或命令操作码。
+ * @return true 表示操作码属于协议26沿用原地址的13项AO持久化配置；false 表示操作码不属于协议26沿用原地址的13项AO持久化配置。
+ */
 static bool ao_param_is_config(int operaNum)
 {
 	switch (operaNum) {
@@ -3752,7 +3969,12 @@ static bool ao_param_is_config(int operaNum)
 	}
 }
 
-/* 持久化AO参数允许预配置，当前模式不使用时仅暂不参与输出计算。 */
+/**
+ * @brief 持久化AO参数允许预配置，当前模式不使用时仅暂不参与输出计算。
+ *
+ * @param operaNum 菜单操作号，对应参数元数据或命令操作码。
+ * @return true 表示操作号是 12 个允许预配置的 AO 持久化参数之一；false 表示该操作号不是 AO 配置项，不能走 AO 参数编辑入口。
+ */
 static bool ao_param_is_editable(int operaNum)
 {
 	switch (operaNum) {
@@ -3774,7 +3996,11 @@ static bool ao_param_is_editable(int operaNum)
 	}
 }
 
-/* 量程上限跟随真实输出源；水位罐高未配置时回退液位罐高。 */
+/**
+ * @brief 量程上限跟随真实输出源；水位罐高未配置时回退液位罐高。
+ *
+ * @return 返回 AO 当前过程量来源对应的量程上限，单位 0.1 mm；水位罐高未配置时回退液位罐高。
+ */
 static int32_t ao_range_max_01mm(void)
 {
 	uint32_t maximum;
@@ -3797,7 +4023,11 @@ static int32_t ao_range_max_01mm(void)
 	return (int32_t)maximum;
 }
 
-/* 0%和100%值必须在同一次FC10事务内写入，避免CPU2观察到半更新配置。 */
+/**
+ * @brief 0%和100%值必须在同一次FC10事务内写入，避免CPU2观察到半更新配置。
+ *
+ * @return true 表示 0%/100% 量程已成对写入 CPU2、补读确认且通信仍可用；false 表示参数元数据缺失、CPU2 不可用、FC10 写入或补读失败，函数已恢复本地旧量程并请求后续刷新。
+ */
 static bool ao_write_range_pair(void)
 {
 	int index_0 = getHoldValueNum(COM_NUM_DEVICEPARAM_AO_RANGE_0_01MM);
@@ -3858,7 +4088,11 @@ static bool ao_write_range_pair(void)
 	return true;
 }
 
-/* 输出源写入后补读13项AO配置，接收CPU2按新源生成的默认量程。 */
+/**
+ * @brief 输出源写入后补读13项AO配置，接收CPU2按新源生成的默认量程。
+ *
+ * @return true 表示输出源已写入，并已补读完整 AO 配置以接收 CPU2 生成的新默认量程；false 表示元数据缺失、CPU2 不可用、写入或补读失败，函数已恢复旧输出源和旧量程。
+ */
 static bool ao_write_output_source(void)
 {
 	int index_source = getHoldValueNum(COM_NUM_DEVICEPARAM_AO_OUTPUT_SOURCE);
@@ -3913,7 +4147,12 @@ static bool ao_write_output_source(void)
 	return true;
 }
 
-/* 仿真开关使用独立保持寄存器，不写入DeviceParameters或CPU3 FRAM。 */
+/**
+ * @brief 仿真开关使用独立保持寄存器，不写入DeviceParameters或CPU3 FRAM。
+ *
+ * @param enabled 目标使能状态，非零表示启用，零表示禁用。
+ * @return true 表示归一化后的仿真开关已写入并从 CPU2 补读确认；false 表示CPU2 不可用、写入失败或补读失败，函数已恢复旧运行态并按需请求刷新。
+ */
 static bool ao_write_simulation_enable(uint32_t enabled)
 {
 	uint32_t old_enabled = (g_measurement.ao_output_runtime.simulation_enabled == 0U) ? 0U : 1U;
@@ -3942,7 +4181,12 @@ static bool ao_write_simulation_enable(uint32_t enabled)
 	return true;
 }
 
-/* 判断当前屏幕参数项是否属于七个命令前置参数。 */
+/**
+ * @brief 判断当前屏幕参数项是否属于七个命令前置参数。
+ *
+ * @param index 零基数组或菜单索引。
+ * @return true 表示当前屏幕参数项属于七个命令前置参数；false 表示当前屏幕参数项不属于七个命令前置参数。
+ */
 static bool screen_param_is_command_argument(int index)
 {
 	if (index < 0) {
@@ -3953,7 +4197,11 @@ static bool screen_param_is_command_argument(int index)
 		param_meta[index].rgstcnt);
 }
 
-/* 写权限范围检查 */
+/**
+ * @brief 校验当前参数的写权限与设备状态，并进入数值输入、枚举选择或专用设置页。
+ *
+ * @note CPU3 本机参数和仅供命令使用的参数不受 CPU2 运行状态限制；普通 CPU2 持久参数只有在当前设备状态允许时才能修改。
+ */
 static void parawritecheck(void)
 {
 	int index;
@@ -3997,7 +4245,9 @@ static void parawritecheck(void)
 	}
 }
 
-/* 是否进入罐上操作 */
+/**
+ * @brief 绘制进入罐上操作的中英文确认页，并登记对应按键处理状态。
+ */
 static void ifentermainmenu(void)
 {
 	oled_clear();
@@ -4007,7 +4257,9 @@ static void ifentermainmenu(void)
 	display_right_aligned_action((uint8_t*)"确认", (uint8_t*)"Ok", OLED_ROW4_4, 0);
 }
 
-/* 是否退出罐上操作 */
+/**
+ * @brief 绘制退出罐上操作的中英文确认页，并登记对应按键处理状态。
+ */
 static void ifexittankopera(void)
 {
 	oled_clear();
@@ -4017,7 +4269,9 @@ static void ifexittankopera(void)
 	display_right_aligned_action((uint8_t*)"确认", (uint8_t*)"Ok", OLED_ROW4_4, 0);
 }
 
-/* 是否取消当前测量 */
+/**
+ * @brief 绘制停止当前测量的中英文确认页，并登记对应按键处理状态。
+ */
 static void ifcancelmeasurement(void)
 {
 	oled_clear();
@@ -4027,13 +4281,17 @@ static void ifcancelmeasurement(void)
 	display_right_aligned_action((uint8_t*)"确认", (uint8_t*)"Ok", OLED_ROW4_4, 0);
 }
 
-/* 取消测量确认页返回处理。 */
+/**
+ * @brief 取消测量确认页返回处理。
+ */
 static void cancel_confirm_back(void)
 {
 	exitTankOpera();
 }
 
-/* 确认取消测量：确认键触发后直接下发CPU2取消测量命令。 */
+/**
+ * @brief 确认取消测量：确认键触发后直接下发CPU2取消测量命令。
+ */
 static void confirm_cancel_measurement(void)
 {
 	if (!Display_RequestCancelMeasurement()) {
@@ -4044,21 +4302,29 @@ static void confirm_cancel_measurement(void)
 	exitTankOpera();
 }
 
-/* 进入参数配置前的密码输入操作页 */
+/**
+ * @brief 进入参数配置前的密码输入操作页。
+ */
 static void password_enter_para(void)
 {
 	now_Opera_Num = COM_NUM_PASSWORD_ENTER_PARA;
 	inputcmdpara();
 }
 
-/* 进入调试指令前的密码输入操作页 */
+/**
+ * @brief 进入调试指令前的密码输入操作页。
+ */
 static void password_enter_cmd(void)
 {
 	now_Opera_Num = COM_NUM_PASSWORD_ENTER_CMD;
 	inputcmdpara();
 }
 
-/* 发送指令获取对应参数的数据 */
+/**
+ * @brief 发送指令获取对应参数的数据。
+ *
+ * @return 0 表示参数读取命令已成功下发并取得有效数据；-1 表示通信、响应或参数映射失败。
+ */
 static int get_para_data(void)
 {
 	int index;
@@ -4091,7 +4357,9 @@ static int get_para_data(void)
 	}
 }
 
-/* 参数类处理入口 */
+/**
+ * @brief 读取当前操作号对应的参数元数据；有效时进入参数详情页，无效时返回主菜单。
+ */
 static void para_mainprocess(void)
 {
 	if (get_para_data() == 0) {
@@ -4101,7 +4369,12 @@ static void para_mainprocess(void)
 	}
 }
 
-/* 参数范围检查 */
+/**
+ * @brief 校验待写参数的通用范围和模拟量输出双端点约束，再转入保护确认或实际写入流程。
+ *
+ * 模拟量输出起止点必须处于当前量程上限内且彼此不同；普通参数在启用范围检查时必须位于元数据最小值和最大值之间。
+ * 校验通过后，受保护参数先进入二次确认页，其余参数直接进入配置写入流程；失败时显示原因并返回参数详情页。
+ */
 static void parascopecheck(void)
 {
 	int index;
@@ -4155,7 +4428,14 @@ static void parascopecheck(void)
 	}
 }
 
-/* 配置参数过程 */
+/**
+ * @brief 按参数归属将待写值保存到 CPU3 本地 FRAM，或通过板间 Modbus 写入 CPU2 并回读确认。
+ *
+ * 模拟量输出量程和输出源使用各自的成对写入流程；CPU3 本机参数按数据类型去除显示偏移后写入本地参数区。
+ * CPU2 参数按整数、float 或 double 的原始位模式组织 32 位字；命令参数直接写保持寄存器，持久参数通过统一组包接口写入并立即回读。
+ *
+ * @note 外部串口参数写入后只设置重配置挂起标志，由主循环安全点执行实际重配置；板间写入或回读失败时请求参数刷新并返回菜单，避免继续显示未经确认的值。
+ */
 static void cmd_configpara_process(void)
 {
 	int index;
@@ -4275,7 +4555,12 @@ static void cmd_configpara_process(void)
 	displaypara();
 }
 
-/* 菜单选项栏(分页显示) */
+/**
+ * @brief 菜单选项栏(分页显示)。
+ *
+ * @param menu 当前页面使用的菜单项数组。
+ * @param menulen 当前菜单文字数组的有效条目数量。
+ */
 static void menuselect(struct MenuData *menu, int menulen)
 {
 	const static int RowsPerPage = 4;
@@ -4329,7 +4614,14 @@ static void menuselect(struct MenuData *menu, int menulen)
 	}
 }
 
-/* 正负号输入 */
+/**
+ * @brief 正负号输入。
+ *
+ * @param row OLED 绘制使用的行号。取值使用 OLED_ROW4_x 等页面行坐标常量，决定文字或数字写入的纵向基线。
+ * @param line OLED 绘制使用的横向列位置。
+ * @param shift OLED 字模阴码/阳码或显示偏移选项。
+ * @return 返回正负号输入流程结果；确认完成时返回 1，取消或尚未完成时返回 0。
+ */
 static int SignInput(uint8_t row, uint8_t line, uint8_t shift)
 {
 	int ret = 0;
@@ -4366,10 +4658,10 @@ static int SignInput(uint8_t row, uint8_t line, uint8_t shift)
 }
 
 /**
- * @brief 执行屏幕菜单操作中的 opera_is_com_protocol 逻辑。
+ * @brief 判断参数操作号是否对应外部 COM 口的协议选择项。
  *
- * @param operaNum 业务参数。
- * @return true 表示条件满足或处理成功，false 表示条件不满足或处理失败。
+ * @param operaNum 菜单操作号，对应参数元数据或命令操作码。
+ * @return true 表示 operaNum 为 CPU3 COM1、COM2 或 COM3 的协议选择操作号；false 表示其它参数或命令操作号。
  */
 static bool opera_is_com_protocol(int operaNum)
 {
@@ -4379,10 +4671,10 @@ static bool opera_is_com_protocol(int operaNum)
 }
 
 /**
- * @brief 执行屏幕菜单操作中的 protocol_value_to_selection_index 逻辑。
+ * @brief 把串口协议枚举值转换为菜单选择下标。
  *
- * @param value 待处理数值。
- * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ * @param value 当前串口协议枚举值。
+ * @return 返回 DSM、瓦锡兰、LTD、LH、SI 对应的菜单下标 0 至 4；未知协议回退到 DSM 下标 0。
  */
 static int protocol_value_to_selection_index(int value)
 {
@@ -4403,11 +4695,11 @@ static int protocol_value_to_selection_index(int value)
 }
 
 /**
- * @brief 执行屏幕菜单操作中的 selection_index_to_value 逻辑。
+ * @brief 将菜单下标转换为实际参数编码；串口协议和电机电流使用非零起点/稀疏枚举，越界时回退默认值。
  *
- * @param operaNum 业务参数。
+ * @param operaNum 菜单操作号，对应参数元数据或命令操作码。
  * @param selectedIndex 索引值。
- * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ * @return 返回菜单下标对应的实际协议、电流或普通参数编码；下标越界时返回该参数类型的默认值。
  */
 static int selection_index_to_value(int operaNum, int selectedIndex)
 {
@@ -4439,6 +4731,12 @@ static int selection_index_to_value(int operaNum, int selectedIndex)
 	return selectedIndex;
 }
 
+/**
+ * @brief 将尺带厚度参数值映射为材料型号选择索引。
+ *
+ * @param value 当前尺带厚度参数值。
+ * @return 返回 0.15、0.20、0.25 mm 对应的下标 0、1、2；其他厚度返回自定义厚度下标。
+ */
 static int tape_thickness_to_selection_index(int value)
 {
 	switch (value) {
@@ -4453,10 +4751,11 @@ static int tape_thickness_to_selection_index(int value)
 	}
 }
 
-/*
- * 函数用途：为尺带厚度提供材料型号快速选择。
- * 调用场景：参数详情页选择修改“尺带厚度”时调用。
- * 关键约束：前三项仍写入现有厚度参数，手输保留原数字输入入口。
+/**
+ * @brief 为尺带厚度提供材料型号快速选择。
+ *
+ * @details 调用场景：参数详情页选择修改“尺带厚度”时调用。
+ * @note 关键约束：前三项仍写入现有厚度参数，手输保留原数字输入入口。
  */
 static void tape_thickness_select(void)
 {
@@ -4543,10 +4842,15 @@ static void tape_thickness_select(void)
 	}
 }
 
-/* 返回通讯方式文字信息 */
+/**
+ * @brief 返回通讯方式文字信息。
+ *
+ * @return 返回通讯方式文字信息对应的只读文本首地址；内容由当前输入或语言配置选择，调用方不得修改或释放。
+ */
 uint8_t *ret_arr_word(void)
 {
 	int index, len;
+	/* 当前参数对应的中英文枚举文字表指针；由 dtm_disarr 返回静态二维数组，同时通过输出参数给出当前索引和条目数。 */
 	uint8_t *(*p)[2];
 
 	p = dtm_disarr(&index, &len);
@@ -4557,10 +4861,22 @@ uint8_t *ret_arr_word(void)
 	}
 }
 
-/* 决定显示哪个数组里的文字 */
+/**
+ * @brief 根据当前操作参数选择对应的中英文枚举文字表。
+ *
+ * 函数以 now_Opera_Num 和参数元数据现值为输入，返回枚举选择页应使用的静态双语文字表，同时通过输出参数给出当前选中索引和表项数量。
+ * 继电器配置先按每路字段号选择工作模式、数字量、触点、报警模式、故障源、测量源或启用开关表；普通参数再按操作号选择密度方向、开关、模拟量输出、显示、串口和测量模式等文字表。
+ * 电机电流越界时回退到默认电流对应索引，串口协议通过协议值映射为菜单索引，水位模式把 CPU2 的所有非零值归一为快速模式；不支持的操作号或空表返回 NULL。
+ *
+ * @param pindex 用于返回当前菜单文字数组的默认选中项，索引从 0 开始。
+ * @param plen 用于返回当前菜单文字数组的条目数量。
+ * @return 返回当前操作对应的中英文文字二维数组；无法映射时返回 NULL。
+ * @note pindex 和 plen 必须指向可写整数；返回值指向静态文字表，调用方不得修改或释放。
+ */
 uint8_t *(*dtm_disarr(int *pindex, int *plen))[2]
 {
 	int index = 0, len = -1;
+	/* 当前参数对应的中英文枚举文字表指针；由 dtm_disarr 返回静态二维数组，同时通过输出参数给出当前索引和条目数。 */
 	uint8_t *(*p)[2] = NULL;
 
 	index = getHoldValueNum(now_Opera_Num);
@@ -4785,9 +5101,12 @@ uint8_t *(*dtm_disarr(int *pindex, int *plen))[2]
 }
 
 
-/* 显示要选择的信息 */
+/**
+ * @brief 按当前参数元数据取得枚举选项并定位现值，随后进入分页选择页。
+ */
 static void selectparaword(void)
 {
+	/* 当前参数选择页使用的中英文枚举文字表指针；指向 dtm_disarr 返回的静态数组，只读使用且不得释放。 */
 	uint8_t *(*parr)[2];
 	int len, index;
 	int selected_index;
@@ -4812,7 +5131,13 @@ static void selectparaword(void)
 	operationselect(parr, len - 1, selected_index);
 }
 
-/* 隐藏信息含义选择栏 */
+/**
+ * @brief 隐藏信息含义选择栏。
+ *
+ * @param menu 当前页面使用的菜单项数组。
+ * @param menulen 当前菜单文字数组的有效条目数量。
+ * @param selected_index 已选索引。
+ */
 static void operationselect(uint8_t *(*menu)[2], int menulen, int selected_index)
 {
 	const static int RowsPerPage = 4;
@@ -4899,8 +5224,7 @@ static void operationselect(uint8_t *(*menu)[2], int menulen, int selected_index
 }
 
 /**
- * @brief 清除或复位屏幕菜单操作中的 ClearPageNum 逻辑。
- * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ * @brief 清零菜单分页、光标和选项缓存，准备构建新页面。
  */
 void ClearPageNum(void)
 {
@@ -4914,7 +5238,9 @@ void ClearPageNum(void)
 	timeback = 0;
 }
 
-/* 主菜单 */
+/**
+ * @brief 构建并显示罐上操作主菜单，提供测量、参数、调试、语言和退出入口。
+ */
 static void mainmenu(void)
 {
 	static struct MenuData menu[] = {
@@ -4931,7 +5257,9 @@ static void mainmenu(void)
 	func_index = KEYNUM_MAINMENU;
 	menuselect(menu, menulen);
 }
-/* 普通测量指令菜单 */
+/**
+ * @brief 构建罐上操作测量菜单，分派零点、液位、水位、罐高、综合、部件参数和密度测量入口。
+ */
 static void measuremenu(void)
 {
     static struct MenuData menu[] = {
@@ -4954,6 +5282,9 @@ static void measuremenu(void)
     menuselect(menu, menulen);
 }
 
+/**
+ * @brief 构建水位测量子菜单并进入选择界面。
+ */
 static void menu_measure_water(void)
 {
     static struct MenuData menu[] = {
@@ -4967,6 +5298,9 @@ static void menu_measure_water(void)
     menuselect(menu, (int)(sizeof(menu) / sizeof(menu[0])));
 }
 
+/**
+ * @brief 构建单点密度测量与监测子菜单并进入选择界面。
+ */
 static void menu_measure_density_single(void)
 {
     static struct MenuData menu[] = {
@@ -4980,6 +5314,9 @@ static void menu_measure_density_single(void)
     menuselect(menu, (int)(sizeof(menu) / sizeof(menu[0])));
 }
 
+/**
+ * @brief 构建分布类密度测量子菜单并进入选择界面。
+ */
 static void menu_measure_density_distribution(void)
 {
     static struct MenuData menu[] = {
@@ -4998,7 +5335,9 @@ static void menu_measure_density_distribution(void)
 }
 
 
-/* 菜单 - 调试指令 */
+/**
+ * @brief 菜单 - 调试指令。
+ */
 static void menu_cmdconfig_main(void)
 {
     static struct MenuData menu[] = {
@@ -5018,6 +5357,9 @@ static void menu_cmdconfig_main(void)
     menuselect(menu, menulen);
 }
 
+/**
+ * @brief 构建浮子运动控制子菜单并进入选择界面。
+ */
 static void menu_debug_float_motion(void)
 {
     static struct MenuData menu[] = {
@@ -5034,6 +5376,9 @@ static void menu_debug_float_motion(void)
     menuselect(menu, (int)(sizeof(menu) / sizeof(menu[0])));
 }
 
+/**
+ * @brief 构建标定修正子菜单并进入选择界面。
+ */
 static void menu_debug_calibration(void)
 {
     static struct MenuData menu[] = {
@@ -5051,6 +5396,9 @@ static void menu_debug_calibration(void)
     menuselect(menu, (int)(sizeof(menu) / sizeof(menu[0])));
 }
 
+/**
+ * @brief 构建扭力标定子菜单并进入选择界面。
+ */
 static void menu_debug_weight(void)
 {
     static struct MenuData menu[] = {
@@ -5065,6 +5413,9 @@ static void menu_debug_weight(void)
     menuselect(menu, (int)(sizeof(menu) / sizeof(menu[0])));
 }
 
+/**
+ * @brief 构建无线维护子菜单并进入选择界面。
+ */
 static void menu_debug_wireless(void)
 {
     static struct MenuData menu[] = {
@@ -5078,6 +5429,9 @@ static void menu_debug_wireless(void)
     menuselect(menu, (int)(sizeof(menu) / sizeof(menu[0])));
 }
 
+/**
+ * @brief 构建系统维护子菜单并进入选择界面。
+ */
 static void menu_debug_system(void)
 {
     static struct MenuData menu[] = {
@@ -5113,7 +5467,9 @@ static void menu_debug_system(void)
 }
 
 
-/* 设置语言 */
+/**
+ * @brief 构建并显示中文、英文及退出三项语言选择菜单。
+ */
 static void setlanguage(void)
 {
 	static struct MenuData menu[] = {
@@ -5130,8 +5486,7 @@ static void setlanguage(void)
 }
 
 /**
- * @brief 写入或设置屏幕菜单操作中的 setchinese 逻辑。
- * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ * @brief 把 CPU3 菜单语言切换为中文并刷新当前页面。
  */
 static void setchinese(void)
 {
@@ -5140,8 +5495,7 @@ static void setchinese(void)
 }
 
 /**
- * @brief 写入或设置屏幕菜单操作中的 setenglish 逻辑。
- * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ * @brief 把 CPU3 菜单语言切换为英文并刷新当前页面。
  */
 static void setenglish(void)
 {
@@ -5151,7 +5505,9 @@ static void setenglish(void)
 
 
 
-/* 退出罐上操作 */
+/**
+ * @brief 停止罐上操作定时器并清理显示分页状态，显示退出提示后交还普通状态页。
+ */
 void exitTankOpera(void)
 {
 	FlagofTankOpera = false;
@@ -5167,8 +5523,13 @@ void exitTankOpera(void)
 
 
 
-/* -------------------- 可选：过滤“保留项” --------------------
- * 当前源码按 UTF-8 维护，比较完整“保留”前缀，避免只比对半个汉字。
+/**
+ * @brief 判断菜单名称是否以中文“保留”前缀开头。
+ *
+ * @param name 待测量、裁剪、分行或匹配的 OLED 菜单文字字节串；中文按双字节字库字符处理，ASCII 按单字节处理。
+ * @return 1 表示名称以中文“保留”前缀开头；空指针或普通名称返回 0。
+ * @note 仅用于隐藏自动菜单中的保留项，不改变参数元数据或寄存器映射。
+ * @note 当前源码按 UTF-8 维护，必须比较完整“保留”前缀，不能只比较半个汉字的字节。
  */
 static int is_reserved_cn(const uint8_t *name)
 {
@@ -5181,8 +5542,15 @@ static int is_reserved_cn(const uint8_t *name)
     return (strncmp((const char*)name, reserved_prefix, sizeof(reserved_prefix) - 1U) == 0);
 }
 
-/* 每路继电器报警输出参数固定为 13 个字段。
- * 这里集中识别通道和字段，避免菜单和枚举文字显示各自写裸范围判断。 */
+/**
+ * @brief 把继电器参数操作号转换为零基通道号。
+ *
+ * 这里集中识别通道和字段，避免菜单和枚举文字显示各自写裸范围判断。
+ *
+ * @param operaNum 菜单操作号，对应参数元数据或命令操作码。
+ * @return 返回零基继电器通道号 0 至 3；操作号不属于四路继电器字段时返回 -1。
+ * @note 每路继电器报警输出固定占用 13 个参数字段；通道和字段识别集中在本函数维护。
+ */
 static int RelayParam_ChannelOf(int operaNum)
 {
     if ((operaNum >= COM_NUM_DEVICEPARAM_RELAY1_OPERATING_MODE) &&
@@ -5209,10 +5577,10 @@ static int RelayParam_ChannelOf(int operaNum)
 }
 
 /**
- * @brief 执行屏幕菜单操作中的 RelayParam_FieldOf 逻辑。
+ * @brief 把继电器参数操作号转换为通道内字段序号。
  *
- * @param operaNum 业务参数。
- * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ * @param operaNum 菜单操作号，对应参数元数据或命令操作码。
+ * @return 返回通道内字段序号 0 至 12；操作号不属于四路继电器字段时返回 -1。
  */
 static int RelayParam_FieldOf(int operaNum)
 {
@@ -5231,10 +5599,10 @@ static int RelayParam_FieldOf(int operaNum)
 }
 
 /**
- * @brief 执行屏幕菜单操作中的 RelayParam_IsConfig 逻辑。
+ * @brief 判断操作号是否属于四路继电器的持久化配置字段。
  *
- * @param operaNum 业务参数。
- * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ * @param operaNum 菜单操作号，对应参数元数据或命令操作码。
+ * @return 1 表示操作号属于目标字段集合，0 表示不属于。
  */
 static int RelayParam_IsConfig(int operaNum)
 {
@@ -5244,10 +5612,10 @@ static int RelayParam_IsConfig(int operaNum)
 }
 
 /**
- * @brief 执行屏幕菜单操作中的 RelayParam_IsChannelSetting 逻辑。
+ * @brief 判断继电器参数是否属于通道类型、触点类型或报警模式设置。
  *
- * @param operaNum 业务参数。
- * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ * @param operaNum 菜单操作号，对应参数元数据或命令操作码。
+ * @return 1 表示继电器参数属于通道类型、触点类型或报警模式设置；0 表示继电器参数不属于通道类型、触点类型或报警模式设置。
  */
 static int RelayParam_IsChannelSetting(int operaNum)
 {
@@ -5263,10 +5631,10 @@ static int RelayParam_IsChannelSetting(int operaNum)
 }
 
 /**
- * @brief 执行屏幕菜单操作中的 RelayParam_IsAlarmCondition 逻辑。
+ * @brief 判断继电器参数是否属于报警阈值或滞回条件。
  *
- * @param operaNum 业务参数。
- * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ * @param operaNum 菜单操作号，对应参数元数据或命令操作码。
+ * @return 1 表示操作号属于目标字段集合，0 表示不属于。
  */
 static int RelayParam_IsAlarmCondition(int operaNum)
 {
@@ -5276,10 +5644,10 @@ static int RelayParam_IsAlarmCondition(int operaNum)
 }
 
 /**
- * @brief 执行屏幕菜单操作中的 RelayParam_IsAlarmValueField 逻辑。
+ * @brief 判断继电器字段是否为可带符号的报警阈值。
  *
- * @param operaNum 业务参数。
- * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ * @param operaNum 菜单操作号，对应参数元数据或命令操作码。
+ * @return 1 表示操作号属于目标字段集合，0 表示不属于。
  */
 static int RelayParam_IsAlarmValueField(int operaNum)
 {
@@ -5288,10 +5656,14 @@ static int RelayParam_IsAlarmValueField(int operaNum)
     return (field >= 6) && (field <= 10);
 }
 
-/*
- * 函数用途：返回继电器参数详情页的上一级配置菜单。
- * 调用场景：参数详情页按返回键时，由 dtm_backtofunc() 根据当前参数调用。
- * 关键约束：通道设置和报警配置是四级菜单，不能统一返回继电器总列表。
+/**
+ * @brief 返回继电器参数详情页的上一级配置菜单。
+ *
+ * @details 调用场景：参数详情页按返回键时，由 dtm_backtofunc() 根据当前参数调用。
+ * @note 关键约束：通道设置和报警配置是四级菜单，不能统一返回继电器总列表。
+ *
+ * @param operaNum 菜单操作号，对应参数元数据或命令操作码。
+ * @return 返回当前继电器详情字段对应的上一级菜单回调函数指针。
  */
 static pFunc_void RelayParam_BackToConfigMenu(int operaNum)
 {
@@ -5330,26 +5702,30 @@ static pFunc_void RelayParam_BackToConfigMenu(int operaNum)
     return menu_do_alarm;
 }
 
+/* 继电器运行状态页的字段标识；枚举顺序同时作为双语字段名表的索引，新增或调整时必须同步 relay_status_field_name。 */
 typedef enum {
-    RELAY_STATUS_FIELD_ALARM_VALUE = 0,
-    RELAY_STATUS_FIELD_HH,
-    RELAY_STATUS_FIELD_H,
-    RELAY_STATUS_FIELD_HH_H,
-    RELAY_STATUS_FIELD_L,
-    RELAY_STATUS_FIELD_LL,
-    RELAY_STATUS_FIELD_LL_L,
-    RELAY_STATUS_FIELD_ANY,
-    RELAY_STATUS_FIELD_CLEAR_LATCHED,
-    RELAY_STATUS_FIELD_ACTION_INHIBITED,
-    RELAY_STATUS_FIELD_FINAL_ACTION,
-    RELAY_STATUS_FIELD_COUNT
+    /* 继电器状态页字段顺序；该顺序与双语字段名数组及页面选择索引一一对应。 */
+    RELAY_STATUS_FIELD_ALARM_VALUE = 0, /* 显示当前报警源过程量或比较值。 */
+    RELAY_STATUS_FIELD_HH, /* 显示高高报警判定状态。 */
+    RELAY_STATUS_FIELD_H, /* 显示高报警判定状态。 */
+    RELAY_STATUS_FIELD_HH_H, /* 显示高高或高报警的合并状态。 */
+    RELAY_STATUS_FIELD_L, /* 显示低报警判定状态。 */
+    RELAY_STATUS_FIELD_LL, /* 显示低低报警判定状态。 */
+    RELAY_STATUS_FIELD_LL_L, /* 显示低低或低报警的合并状态。 */
+    RELAY_STATUS_FIELD_ANY, /* 显示任一配置报警条件是否成立。 */
+    RELAY_STATUS_FIELD_CLEAR_LATCHED, /* 显示或执行清除锁存报警字段。 */
+    RELAY_STATUS_FIELD_ACTION_INHIBITED, /* 显示当前继电器逻辑动作是否被抑制。 */
+    RELAY_STATUS_FIELD_FINAL_ACTION, /* 显示抑制和锁存处理后的最终逻辑动作。 */
+    RELAY_STATUS_FIELD_COUNT /* 继电器状态字段总数，仅用于数组容量和边界检查。 */
 } RelayStatusField;
 
 typedef struct {
-    uint8_t *name_cn;
-    uint8_t *name_en;
+    /* 继电器运行状态字段的中英文显示名称。 */
+    uint8_t *name_cn; /* 该表项对应的中文显示名称。 */
+    uint8_t *name_en; /* 该表项对应的英文显示名称。 */
 } RelayStatusFieldName;
 
+/* 继电器运行状态字段的中英文名称表，索引必须与 RelayStatusField 枚举一致。 */
 static const RelayStatusFieldName relay_status_field_name[] = {
     { (uint8_t*)"报警值", (uint8_t*)"Value" },
     { (uint8_t*)"HH",     (uint8_t*)"HH" },
@@ -5365,10 +5741,10 @@ static const RelayStatusFieldName relay_status_field_name[] = {
 };
 
 /**
- * @brief 执行屏幕菜单操作中的 relay_alarm_state_word 逻辑。
+ * @brief 把继电器报警激活状态转换为当前语言的显示文字。
  *
- * @param state 状态值。
- * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ * @param state 继电器报警运行状态，期望为 RELAY_ALARM_STATE_ACTIVE 或 RELAY_ALARM_STATE_INACTIVE；其他值显示为非法。
+ * @return 返回当前语言的显示文字对应的只读文本首地址；内容由当前输入或语言配置选择，调用方不得修改或释放。
  */
 static uint8_t *relay_alarm_state_word(uint32_t state)
 {
@@ -5384,10 +5760,10 @@ static uint8_t *relay_alarm_state_word(uint32_t state)
 }
 
 /**
- * @brief 清除或复位屏幕菜单操作中的 relay_clear_state_word 逻辑。
+ * @brief 把继电器锁存清除状态转换为当前语言的显示文字。
  *
- * @param state 状态值。
- * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ * @param state 继电器锁存清除状态，期望为 RELAY_ALARM_CLEAR_YES 或 RELAY_ALARM_CLEAR_NO；其他值显示为非法。
+ * @return 返回当前语言的显示文字对应的只读文本首地址；内容由当前输入或语言配置选择，调用方不得修改或释放。
  */
 static uint8_t *relay_clear_state_word(uint32_t state)
 {
@@ -5403,11 +5779,11 @@ static uint8_t *relay_clear_state_word(uint32_t state)
 }
 
 /**
- * @brief 执行屏幕菜单操作中的 relay_status_state_of 逻辑。
+ * @brief 按 HH、H、组合高限、L、LL、组合低限或任一报警字段读取继电器运行快照；未知字段按未激活处理。
  *
- * @param state 状态值。
- * @param field 业务参数。
- * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ * @param state 待读取的单路继电器运行快照；传入 NULL 时按未激活返回。
+ * @param field 待查询或显示的字段枚举值。该枚举指定继电器运行快照中的报警值、分级状态、锁存清除或最终动作字段。
+ * @return 返回指定报警字段的 RELAY_ALARM_STATE_ACTIVE 或 RELAY_ALARM_STATE_INACTIVE；字段非法时返回非活动态。
  */
 static uint32_t relay_status_state_of(const volatile RelayAlarmRuntimeState *state, RelayStatusField field)
 {
@@ -5435,7 +5811,12 @@ static uint32_t relay_status_state_of(const volatile RelayAlarmRuntimeState *sta
     }
 }
 
-/* 最终动作表示维护/人工禁用处理后的逻辑动作，不代表 NO/NC 反相后的物理触点反馈。 */
+/**
+ * @brief 最终动作表示维护/人工禁用处理后的逻辑动作，不代表 NO/NC 反相后的物理触点反馈。
+ *
+ * @param active 目标活动状态，true 表示活动。
+ * @return 返回最终动作表示维护/人工禁用处理后的逻辑动作，不代表 NO/NC 反相后的物理触点反馈对应的只读文本首地址；内容由当前输入或语言配置选择，调用方不得修改或释放。
+ */
 static uint8_t *relay_final_action_word(bool active)
 {
     if (active) {
@@ -5446,10 +5827,10 @@ static uint8_t *relay_final_action_word(bool active)
 }
 
 /**
- * @brief 执行屏幕菜单操作中的 relay_status_alarm_value_x10 逻辑。
+ * @brief 把继电器实时报警值换算为一位小数显示使用的整数。
  *
- * @param value 待处理数值。
- * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ * @param value CPU2 运行态快照中的继电器报警工程值。
+ * @return 返回按一位小数放大并进行正负对称四舍五入后的显示整数。
  */
 static int relay_status_alarm_value_x10(float value)
 {
@@ -5459,13 +5840,14 @@ static int relay_status_alarm_value_x10(float value)
 }
 
 /**
- * @brief 显示或打印屏幕菜单操作中的 display_relay_status_row 逻辑。
+ * @brief 绘制继电器报警值、各级报警状态、锁存清除、动作禁用或最终动作；快照无效时显示 N/A，且不触发参数写入。
  *
- * @param state 状态值。
- * @param field 业务参数。
- * @param row 业务参数。
- * @param shift 业务参数。
- * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ * @param state 当前通道的只读继电器运行快照，包含报警值、分级报警、锁存清除和最终动作状态。
+ * @param channel 零基通道号。合法范围为 0～3，用于把继电器菜单字段映射到第 1～4 路显示和配置项。
+ * @param field 待查询或显示的字段枚举值。该枚举指定继电器运行快照中的报警值、分级状态、锁存清除或最终动作字段。
+ * @param snapshot_valid true 表示继电器运行快照有效，false 表示必须显示不可用状态。
+ * @param row OLED 绘制使用的行号。取值使用 OLED_ROW4_x 等页面行坐标常量，决定文字或数字写入的纵向基线。
+ * @param shift OLED 字模阴码/阳码或显示偏移选项。
  */
 static void display_relay_status_row(const volatile RelayAlarmRuntimeState *state,
                                      uint32_t channel,
@@ -5518,10 +5900,17 @@ static void display_relay_status_row(const volatile RelayAlarmRuntimeState *stat
     }
 }
 
-/* 显示单路继电器报警运行态，只读消费 CPU2 输入寄存器快照，不触发参数下发。 */
+/**
+ * @brief 显示单路继电器报警运行态，只读消费 CPU2 输入寄存器快照，不触发参数下发。
+ *
+ * @param channel 零基通道号。合法范围为 0～3，用于把继电器菜单字段映射到第 1～4 路显示和配置项。
+ * @param keynum 当前页面收到的按键编码。
+ * @param backfunc 退出当前继电器状态页时调用的返回页回调函数。
+ */
 static void menu_relay_status(uint32_t channel, keymenuNumber keynum, pFunc_void backfunc)
 {
-    enum { RELAY_STATUS_ROWS = 2 };
+    /* 继电器运行状态页的局部布局常量。 */
+    enum { RELAY_STATUS_ROWS = 2 /* 继电器运行状态页固定显示的字段行数。 */ };
     volatile RelayAlarmRuntimeState *state;
     bool snapshot_valid;
     int selected;
@@ -5576,7 +5965,13 @@ static void menu_relay_status(uint32_t channel, keymenuNumber keynum, pFunc_void
     DisplayLangaugeLineWords((uint8_t*)"返回", OLED_LINE8_1, OLED_ROW4_4, 0, (uint8_t*)"Back");
 }
 
-/* -------------------- 分组映射（只维护这个即可） -------------------- */
+/**
+ * @brief 将参数操作号映射到自动菜单分组。
+ *
+ * @param operaNum 菜单操作号，对应参数元数据或命令操作码。
+ * @return 返回参数操作号所属的 MenuGroup 枚举，用于自动构造对应菜单分组。
+ * @note 返回分组只决定 CPU3 菜单入口，不改变参数读写、同步或持久化路径。
+ */
 static MenuGroup ParamGroupOf(int operaNum)
 {
     if (RelayParam_IsConfig(operaNum)) {
@@ -5833,10 +6228,15 @@ static MenuGroup ParamGroupOf(int operaNum)
     }
 }
 
-/*
- * 函数用途：判断参数是否应显示在指定菜单分组。
- * 调用场景：自动构造参数菜单时使用；允许少数跨业务参数在多个入口出现。
- * 关键约束：只影响屏幕菜单入口，不复制参数元数据，也不改变寄存器和写回路径。
+/**
+ * @brief 判断参数是否应显示在指定菜单分组。
+ *
+ * @details 调用场景：自动构造参数菜单时使用；允许少数跨业务参数在多个入口出现。
+ * @note 关键约束：只影响屏幕菜单入口，不复制参数元数据，也不改变寄存器和写回路径。
+ *
+ * @param operaNum 菜单操作号，对应参数元数据或命令操作码。
+ * @param grp 菜单参数分组标识，用于筛选当前分组可见项。
+ * @return true 表示参数原生分组等于 grp，或参数为底部编码器修正罐高或使能项，且 grp 为底部罐高、Wärtsilä 或 SI Profile 分组；false 表示既不属于目标原生分组，也不满足这两个跨分组参数的例外规则。
  */
 static bool ParamVisibleInGroup(int operaNum, MenuGroup grp)
 {
@@ -5957,12 +6357,11 @@ static void menu_build_by_operas(const int *operas, int count, int key_index, vo
 }
 
 /**
- * @brief 执行屏幕菜单操作中的 menu_build_by_filter 逻辑。
+ * @brief 按过滤条件从 param_meta 收集可见项，追加返回项并构建参数菜单。
  *
- * @param filter 业务参数。
+ * @param filter 参数菜单项过滤回调；返回非零时保留该项。
  * @param key_index 索引值。
- * @param backFunc 业务参数。
- * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ * @param backFunc 按返回键时调用的页面回调函数。
  */
 static void menu_build_by_filter(int (*filter)(int), int key_index, void (*backFunc)(void))
 {
@@ -5997,10 +6396,10 @@ static void menu_build_by_filter(int (*filter)(int), int key_index, void (*backF
 }
 
 /**
- * @brief 执行屏幕菜单操作中的 menu_filter_relay1_channel 逻辑。
+ * @brief 判断参数操作号是否属于继电器 1 的通道配置字段。
  *
- * @param operaNum 业务参数。
- * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ * @param operaNum 菜单操作号，对应参数元数据或命令操作码。
+ * @return 1 表示操作号属于目标字段集合，0 表示不属于。
  */
 static int menu_filter_relay1_channel(int operaNum)
 {
@@ -6008,10 +6407,10 @@ static int menu_filter_relay1_channel(int operaNum)
 }
 
 /**
- * @brief 执行屏幕菜单操作中的 menu_filter_relay1_alarm 逻辑。
+ * @brief 判断参数操作号是否属于继电器 1 的报警条件字段。
  *
- * @param operaNum 业务参数。
- * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ * @param operaNum 菜单操作号，对应参数元数据或命令操作码。
+ * @return 1 表示操作号属于目标字段集合，0 表示不属于。
  */
 static int menu_filter_relay1_alarm(int operaNum)
 {
@@ -6019,10 +6418,10 @@ static int menu_filter_relay1_alarm(int operaNum)
 }
 
 /**
- * @brief 执行屏幕菜单操作中的 menu_filter_relay2_channel 逻辑。
+ * @brief 判断参数操作号是否属于继电器 2 的通道配置字段。
  *
- * @param operaNum 业务参数。
- * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ * @param operaNum 菜单操作号，对应参数元数据或命令操作码。
+ * @return 1 表示操作号属于目标字段集合，0 表示不属于。
  */
 static int menu_filter_relay2_channel(int operaNum)
 {
@@ -6030,10 +6429,10 @@ static int menu_filter_relay2_channel(int operaNum)
 }
 
 /**
- * @brief 执行屏幕菜单操作中的 menu_filter_relay2_alarm 逻辑。
+ * @brief 判断参数操作号是否属于继电器 2 的报警条件字段。
  *
- * @param operaNum 业务参数。
- * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ * @param operaNum 菜单操作号，对应参数元数据或命令操作码。
+ * @return 1 表示操作号属于目标字段集合，0 表示不属于。
  */
 static int menu_filter_relay2_alarm(int operaNum)
 {
@@ -6041,10 +6440,10 @@ static int menu_filter_relay2_alarm(int operaNum)
 }
 
 /**
- * @brief 执行屏幕菜单操作中的 menu_filter_relay3_channel 逻辑。
+ * @brief 判断参数操作号是否属于继电器 3 的通道配置字段。
  *
- * @param operaNum 业务参数。
- * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ * @param operaNum 菜单操作号，对应参数元数据或命令操作码。
+ * @return 1 表示操作号属于目标字段集合，0 表示不属于。
  */
 static int menu_filter_relay3_channel(int operaNum)
 {
@@ -6052,10 +6451,10 @@ static int menu_filter_relay3_channel(int operaNum)
 }
 
 /**
- * @brief 执行屏幕菜单操作中的 menu_filter_relay3_alarm 逻辑。
+ * @brief 判断参数操作号是否属于继电器 3 的报警条件字段。
  *
- * @param operaNum 业务参数。
- * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ * @param operaNum 菜单操作号，对应参数元数据或命令操作码。
+ * @return 1 表示操作号属于目标字段集合，0 表示不属于。
  */
 static int menu_filter_relay3_alarm(int operaNum)
 {
@@ -6063,10 +6462,10 @@ static int menu_filter_relay3_alarm(int operaNum)
 }
 
 /**
- * @brief 执行屏幕菜单操作中的 menu_filter_relay4_channel 逻辑。
+ * @brief 判断参数操作号是否属于继电器 4 的通道配置字段。
  *
- * @param operaNum 业务参数。
- * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ * @param operaNum 菜单操作号，对应参数元数据或命令操作码。
+ * @return 1 表示操作号属于目标字段集合，0 表示不属于。
  */
 static int menu_filter_relay4_channel(int operaNum)
 {
@@ -6074,10 +6473,10 @@ static int menu_filter_relay4_channel(int operaNum)
 }
 
 /**
- * @brief 执行屏幕菜单操作中的 menu_filter_relay4_alarm 逻辑。
+ * @brief 判断参数操作号是否属于继电器 4 的报警条件字段。
  *
- * @param operaNum 业务参数。
- * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ * @param operaNum 菜单操作号，对应参数元数据或命令操作码。
+ * @return 1 表示操作号属于目标字段集合，0 表示不属于。
  */
 static int menu_filter_relay4_alarm(int operaNum)
 {
@@ -6085,10 +6484,10 @@ static int menu_filter_relay4_alarm(int operaNum)
 }
 
 /**
- * @brief 显示或打印屏幕菜单操作中的 menu_filter_display_base 逻辑。
+ * @brief 判断参数操作号是否属于CPU3 基础显示参数。
  *
- * @param operaNum 业务参数。
- * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ * @param operaNum 菜单操作号，对应参数元数据或命令操作码。
+ * @return 1 表示参数操作号属于CPU3 基础显示参数；0 表示参数操作号不属于CPU3 基础显示参数。
  */
 static int menu_filter_display_base(int operaNum)
 {
@@ -6103,10 +6502,10 @@ static int menu_filter_display_base(int operaNum)
 }
 
 /**
- * @brief 显示或打印屏幕菜单操作中的 menu_filter_display_data_oil 逻辑。
+ * @brief 判断参数操作号是否属于油位状态页数据项。
  *
- * @param operaNum 业务参数。
- * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ * @param operaNum 菜单操作号，对应参数元数据或命令操作码。
+ * @return 1 表示操作号属于目标字段集合，0 表示不属于。
  */
 static int menu_filter_display_data_oil(int operaNum)
 {
@@ -6114,10 +6513,10 @@ static int menu_filter_display_data_oil(int operaNum)
 }
 
 /**
- * @brief 显示或打印屏幕菜单操作中的 menu_filter_display_data_water 逻辑。
+ * @brief 判断参数操作号是否属于水位状态页数据项。
  *
- * @param operaNum 业务参数。
- * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ * @param operaNum 菜单操作号，对应参数元数据或命令操作码。
+ * @return 1 表示操作号属于目标字段集合，0 表示不属于。
  */
 static int menu_filter_display_data_water(int operaNum)
 {
@@ -6125,10 +6524,10 @@ static int menu_filter_display_data_water(int operaNum)
 }
 
 /**
- * @brief 显示或打印屏幕菜单操作中的 menu_filter_display_data_density 逻辑。
+ * @brief 判断参数操作号是否属于密度状态页数据项。
  *
- * @param operaNum 业务参数。
- * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ * @param operaNum 菜单操作号，对应参数元数据或命令操作码。
+ * @return 1 表示操作号属于目标字段集合，0 表示不属于。
  */
 static int menu_filter_display_data_density(int operaNum)
 {
@@ -6138,10 +6537,10 @@ static int menu_filter_display_data_density(int operaNum)
 }
 
 /**
- * @brief 显示或打印屏幕菜单操作中的 menu_filter_display_data_temp 逻辑。
+ * @brief 判断参数操作号是否属于温度状态页数据项。
  *
- * @param operaNum 业务参数。
- * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ * @param operaNum 菜单操作号，对应参数元数据或命令操作码。
+ * @return 1 表示操作号属于目标字段集合，0 表示不属于。
  */
 static int menu_filter_display_data_temp(int operaNum)
 {
@@ -6149,8 +6548,7 @@ static int menu_filter_display_data_temp(int operaNum)
 }
 
 /**
- * @brief 执行屏幕菜单操作中的 menu_measure_config 逻辑。
- * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ * @brief 构建测量参数配置菜单并进入参数选择页。
  */
 static void menu_measure_config(void)
 {
@@ -6175,8 +6573,7 @@ static void menu_measure_config(void)
 }
 
 /**
- * @brief 执行屏幕菜单操作中的 menu_comm_config 逻辑。
- * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ * @brief 构建外部通信参数配置菜单并进入端口选择页。
  */
 static void menu_comm_config(void)
 {
@@ -6193,8 +6590,7 @@ static void menu_comm_config(void)
 }
 
 /**
- * @brief 显示或打印屏幕菜单操作中的 menu_display_config 逻辑。
- * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ * @brief 构建 CPU3 显示设置菜单并进入参数选择页。
  */
 static void menu_display_config(void)
 {
@@ -6212,8 +6608,7 @@ static void menu_display_config(void)
 }
 
 /**
- * @brief 显示或打印屏幕菜单操作中的 menu_display_data 逻辑。
- * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ * @brief 构建状态页数据项配置菜单并进入分类选择页。
  */
 static void menu_display_data(void)
 {
@@ -6231,8 +6626,7 @@ static void menu_display_data(void)
 }
 
 /**
- * @brief 执行屏幕菜单操作中的 menu_maint_config 逻辑。
- * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ * @brief 构建维护参数配置菜单并进入参数选择页。
  */
 static void menu_maint_config(void)
 {
@@ -6249,10 +6643,15 @@ static void menu_maint_config(void)
     menuselect(menu, (int)(sizeof(menu) / sizeof(menu[0])));
 }
 
-/*
- * 函数用途：返回通讯健康页使用的最近失败原因文字。
- * 调用场景：中文或英文故障状态页刷新时调用。
- * 关键约束：中文文字必须全部来自现有OLED字库，技术缩写保持ASCII。
+/**
+ * @brief 返回通讯健康页使用的最近失败原因文字。
+ *
+ * @details 调用场景：中文或英文故障状态页刷新时调用。
+ * @note 关键约束：中文文字必须全部来自现有OLED字库，技术缩写保持ASCII。
+ *
+ * @param reason CPU2 板间通信失败原因枚举；用于区分启动失败、响应超时、帧错误、Modbus 异常和重试耗尽等失败阶段。
+ * @param chinese 中文显示文字指针。
+ * @return 返回通讯健康页使用的最近失败原因文字对应的只读文本首地址；内容由当前输入或语言配置选择，调用方不得修改或释放。
  */
 static const char *cpu2_comm_failure_reason_text(Cpu2CommFailureReason reason, bool chinese)
 {
@@ -6277,20 +6676,25 @@ static const char *cpu2_comm_failure_reason_text(Cpu2CommFailureReason reason, b
 	}
 }
 
-/*
- * 函数用途：把健康计数限制到OLED四位显示范围。
- * 调用场景：通讯健康页格式化累计计数前调用。
- * 关键约束：只限制显示值，不修改RAM中的原始累计值。
+/**
+ * @brief 把健康计数限制到OLED四位显示范围。
+ *
+ * @details 调用场景：通讯健康页格式化累计计数前调用。
+ * @note 关键约束：只限制显示值，不修改RAM中的原始累计值。
+ *
+ * @param count 参与本次处理的数据项数量。
+ * @return 返回可供 OLED 四位数显示的计数值；原始计数超过 9999 时钳位为 9999。
  */
 static uint32_t cpu2_comm_display_count(uint64_t count)
 {
 	return (count > 9999U) ? 9999U : (uint32_t)count;
 }
 
-/*
- * 函数用途：显示CPU3本机累计的CPU2通讯健康计数。
- * 调用场景：维护设置进入页面、上下翻页或前景页周期刷新。
- * 关键约束：只读取RAM快照，不清零计数、不修改通信状态和共享协议。
+/**
+ * @brief 显示CPU3本机累计的CPU2通讯健康计数。
+ *
+ * @details 调用场景：维护设置进入页面、上下翻页或前景页周期刷新。
+ * @note 关键约束：只读取RAM快照，不清零计数、不修改通信状态和共享协议。
  */
 static void menu_cpu2_comm_health(void)
 {
@@ -6364,6 +6768,13 @@ static void menu_cpu2_comm_health(void)
 	OledDisplayLineWords((uint8_t *)line4, OLED_LINE8_1, OLED_ROW4_4, 0);
 }
 
+/**
+ * @brief 返回指定年月的实际天数。
+ *
+ * @param year 完整年份数值。
+ * @param month 月份，合法范围为 1～12。
+ * @return 返回指定月份的天数；月份非法时返回 0。
+ */
 static uint8_t rtc_menu_days_in_month(uint16_t year, uint8_t month)
 {
     static const uint8_t days[] = {
@@ -6382,6 +6793,9 @@ static uint8_t rtc_menu_days_in_month(uint16_t year, uint8_t month)
     return days[month - 1U];
 }
 
+/**
+ * @brief 在年月变化后将日期限制到当月有效范围。
+ */
 static void rtc_menu_normalize_day(void)
 {
     uint8_t max_day = rtc_menu_days_in_month(rtc_menu_dt.year, rtc_menu_dt.month);
@@ -6391,6 +6805,9 @@ static void rtc_menu_normalize_day(void)
     }
 }
 
+/**
+ * @brief 从 RTC 读取当前时间并初始化菜单编辑缓存。
+ */
 static void rtc_menu_load_current_time(void)
 {
     if (Cpu3Clock_GetDateTime(&rtc_menu_dt) == 0U) {
@@ -6406,6 +6823,11 @@ static void rtc_menu_load_current_time(void)
     rtc_menu_normalize_day();
 }
 
+/**
+ * @brief 按键调整 RTC 菜单当前选中的日期或时间字段。
+ *
+ * @param delta 增量。
+ */
 static void rtc_menu_change_field(int delta)
 {
     uint8_t max_day;
@@ -6459,6 +6881,11 @@ static void rtc_menu_change_field(int delta)
     }
 }
 
+/**
+ * @brief 返回 RTC 设置页当前时钟状态和时钟源对应的显示文字。
+ *
+ * @return 返回模块静态缓冲区首地址，内容为 RTC ERR、RTC LSI、RTC LSE、RTC NONE 或 RTC UNSET；后续调用会覆盖该缓冲区。
+ */
 static uint8_t *rtc_menu_status_text(void)
 {
     static uint8_t text[16];
@@ -6482,6 +6909,9 @@ static uint8_t *rtc_menu_status_text(void)
     return text;
 }
 
+/**
+ * @brief 绘制 RTC 日期时间设置页。
+ */
 static void rtc_menu_draw(void)
 {
     static const uint8_t *field_name[] = {
@@ -6518,6 +6948,9 @@ static void rtc_menu_draw(void)
     }
 }
 
+/**
+ * @brief 显示 RTC 日期时间编辑页并处理字段切换、保存和返回。
+ */
 static void menu_rtc_datetime(void)
 {
     uint8_t save_ok;
@@ -6561,28 +6994,33 @@ static void menu_rtc_datetime(void)
     rtc_menu_draw();
 }
 
-/* CPU2：分组页 = 参数列表页（取消 DEBUG 容器页） */
+/**
+ * @brief CPU2：分组页 = 参数列表页（取消 DEBUG 容器页）。
+ */
 static void menu_run_policy(void)   { menu_build_by_group(MENU_GRP_RUN_POLICY,   KEYNUM_MENU_PARA_RUN_POLICY,   menu_measure_config); }
-/* * @brief 进入设备信息参数分组菜单。 */
+/**
+ * @brief 进入设备信息参数分组菜单。
+ */
 static void menu_dev_info(void)     { menu_build_by_group(MENU_GRP_DEV_INFO,     KEYNUM_MENU_PARA_DEV_INFO,     menu_maint_config); }
-/* * @brief 进入机械参数分组菜单。 */
+/**
+ * @brief 进入机械参数分组菜单。
+ */
 static void menu_mech(void)         { menu_build_by_group(MENU_GRP_MECH,         KEYNUM_MENU_PARA_MECH,         menu_measure_config); }
-/* * @brief 进入扭力参数分组菜单。 */
+/**
+ * @brief 进入扭力参数分组菜单。
+ */
 static void menu_weight(void)       { menu_build_by_group(MENU_GRP_WEIGHT,       KEYNUM_MENU_PARA_WEIGHT,       menu_measure_config); }
 /**
- * @brief 执行屏幕菜单操作中的 menu_zero 逻辑。
- * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ * @brief 构建零点相关参数菜单。
  */
 static void menu_zero(void)         { menu_build_by_group(MENU_GRP_ZERO,         KEYNUM_MENU_PARA_ZERO,         menu_measure_config); }
 
 /**
- * @brief 执行屏幕菜单操作中的 menu_liquid 逻辑。
- * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ * @brief 构建油位测量相关参数菜单。
  */
 static void menu_liquid(void)       { menu_build_by_group(MENU_GRP_LIQUID,       KEYNUM_MENU_PARA_LIQUID,       menu_measure_config); }
 /**
- * @brief 执行屏幕菜单操作中的 menu_water 逻辑。
- * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ * @brief 构建水位测量相关参数菜单。
  */
 static void menu_water(void)
 {
@@ -6606,8 +7044,7 @@ static void menu_water(void)
                          menu_measure_config);
 }
 /**
- * @brief 执行屏幕菜单操作中的 menu_bottom_tankh 逻辑。
- * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ * @brief 构建探底和罐高标定参数菜单。
  */
 static void menu_bottom_tankh(void)
 {
@@ -6630,18 +7067,15 @@ static void menu_bottom_tankh(void)
 }
 
 /**
- * @brief 执行屏幕菜单操作中的 menu_correct 逻辑。
- * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ * @brief 构建测量修正参数菜单。
  */
 static void menu_correct(void)      { menu_build_by_group(MENU_GRP_CORR,         KEYNUM_MENU_PARA_CORR,         menu_measure_config); }
 /**
- * @brief 执行屏幕菜单操作中的 menu_policy 逻辑。
- * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ * @brief 构建故障处理与运行策略参数菜单。
  */
 static void menu_policy(void)       { menu_build_by_group(MENU_GRP_POLICY,       KEYNUM_MENU_PARA_POLICY,       menu_measure_config); }
 /**
- * @brief 执行屏幕菜单操作中的 menu_wartsila 逻辑。
- * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ * @brief 构建瓦锡兰密度分布参数菜单。
  */
 static void menu_wartsila(void)
 {
@@ -6661,6 +7095,9 @@ static void menu_wartsila(void)
                          menu_measure_config);
 }
 
+/**
+ * @brief 构建 SI 配置入口菜单。
+ */
 static void menu_si_config(void)
 {
     static struct MenuData menu[] = {
@@ -6675,6 +7112,9 @@ static void menu_si_config(void)
     menuselect(menu, (int)(sizeof(menu) / sizeof(menu[0])));
 }
 
+/**
+ * @brief 构建 SI Profile 参数菜单。
+ */
 static void menu_si_profile(void)
 {
     static const int operas[] = {
@@ -6692,19 +7132,24 @@ static void menu_si_profile(void)
                          menu_si_config);
 }
 
+/**
+ * @brief 构建 SI 自动剖面参数配置页。
+ */
 static void menu_si_auto_profile(void)
 {
     menu_build_by_group(MENU_GRP_CPU3_SI_AUTO, KEYNUM_MENU_SI_AUTO_PROFILE, menu_si_config);
 }
 
+/**
+ * @brief 构建 SI 报警限值菜单。
+ */
 static void menu_si_alarm(void)
 {
     menu_build_by_group(MENU_GRP_CPU3_SI_ALARM, KEYNUM_MENU_SI_ALARM, menu_si_config);
 }
 
 /**
- * @brief 执行屏幕菜单操作中的 menu_output_config 逻辑。
- * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ * @brief 构建模拟量和继电器输出配置菜单。
  */
 static void menu_output_config(void)
 {
@@ -6720,8 +7165,7 @@ static void menu_output_config(void)
 }
 
 /**
- * @brief 执行屏幕菜单操作中的 menu_do_alarm 逻辑。
- * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ * @brief 构建四路继电器报警输出入口菜单。
  */
 static void menu_do_alarm(void)
 {
@@ -6739,8 +7183,7 @@ static void menu_do_alarm(void)
 }
 
 /**
- * @brief 执行屏幕菜单操作中的 menu_relay1_main 逻辑。
- * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ * @brief 构建继电器 1 的主菜单。
  */
 static void menu_relay1_main(void)
 {
@@ -6757,8 +7200,7 @@ static void menu_relay1_main(void)
 }
 
 /**
- * @brief 执行屏幕菜单操作中的 menu_relay1_channel 逻辑。
- * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ * @brief 构建继电器 1 的通道配置菜单。
  */
 static void menu_relay1_channel(void)
 {
@@ -6766,8 +7208,7 @@ static void menu_relay1_channel(void)
 }
 
 /**
- * @brief 执行屏幕菜单操作中的 menu_relay1_alarm 逻辑。
- * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ * @brief 构建继电器 1 的报警条件菜单。
  */
 static void menu_relay1_alarm(void)
 {
@@ -6775,8 +7216,7 @@ static void menu_relay1_alarm(void)
 }
 
 /**
- * @brief 执行屏幕菜单操作中的 menu_relay1_status 逻辑。
- * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ * @brief 显示继电器 1 的实时报警状态页。
  */
 static void menu_relay1_status(void)
 {
@@ -6784,8 +7224,7 @@ static void menu_relay1_status(void)
 }
 
 /**
- * @brief 执行屏幕菜单操作中的 menu_relay2_main 逻辑。
- * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ * @brief 构建继电器 2 的主菜单。
  */
 static void menu_relay2_main(void)
 {
@@ -6802,8 +7241,7 @@ static void menu_relay2_main(void)
 }
 
 /**
- * @brief 执行屏幕菜单操作中的 menu_relay2_channel 逻辑。
- * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ * @brief 构建继电器 2 的通道配置菜单。
  */
 static void menu_relay2_channel(void)
 {
@@ -6811,8 +7249,7 @@ static void menu_relay2_channel(void)
 }
 
 /**
- * @brief 执行屏幕菜单操作中的 menu_relay2_alarm 逻辑。
- * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ * @brief 构建继电器 2 的报警条件菜单。
  */
 static void menu_relay2_alarm(void)
 {
@@ -6820,8 +7257,7 @@ static void menu_relay2_alarm(void)
 }
 
 /**
- * @brief 执行屏幕菜单操作中的 menu_relay2_status 逻辑。
- * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ * @brief 显示继电器 2 的实时报警状态页。
  */
 static void menu_relay2_status(void)
 {
@@ -6829,8 +7265,7 @@ static void menu_relay2_status(void)
 }
 
 /**
- * @brief 执行屏幕菜单操作中的 menu_relay3_main 逻辑。
- * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ * @brief 构建继电器 3 的主菜单。
  */
 static void menu_relay3_main(void)
 {
@@ -6847,8 +7282,7 @@ static void menu_relay3_main(void)
 }
 
 /**
- * @brief 执行屏幕菜单操作中的 menu_relay3_channel 逻辑。
- * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ * @brief 构建继电器 3 的通道配置菜单。
  */
 static void menu_relay3_channel(void)
 {
@@ -6856,8 +7290,7 @@ static void menu_relay3_channel(void)
 }
 
 /**
- * @brief 执行屏幕菜单操作中的 menu_relay3_alarm 逻辑。
- * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ * @brief 构建继电器 3 的报警条件菜单。
  */
 static void menu_relay3_alarm(void)
 {
@@ -6865,8 +7298,7 @@ static void menu_relay3_alarm(void)
 }
 
 /**
- * @brief 执行屏幕菜单操作中的 menu_relay3_status 逻辑。
- * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ * @brief 显示继电器 3 的实时报警状态页。
  */
 static void menu_relay3_status(void)
 {
@@ -6874,8 +7306,7 @@ static void menu_relay3_status(void)
 }
 
 /**
- * @brief 执行屏幕菜单操作中的 menu_relay4_main 逻辑。
- * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ * @brief 构建继电器 4 的主菜单。
  */
 static void menu_relay4_main(void)
 {
@@ -6892,8 +7323,7 @@ static void menu_relay4_main(void)
 }
 
 /**
- * @brief 执行屏幕菜单操作中的 menu_relay4_channel 逻辑。
- * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ * @brief 构建继电器 4 的通道配置菜单。
  */
 static void menu_relay4_channel(void)
 {
@@ -6901,8 +7331,7 @@ static void menu_relay4_channel(void)
 }
 
 /**
- * @brief 执行屏幕菜单操作中的 menu_relay4_alarm 逻辑。
- * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ * @brief 构建继电器 4 的报警条件菜单。
  */
 static void menu_relay4_alarm(void)
 {
@@ -6910,15 +7339,16 @@ static void menu_relay4_alarm(void)
 }
 
 /**
- * @brief 执行屏幕菜单操作中的 menu_relay4_status 逻辑。
- * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ * @brief 显示继电器 4 的实时报警状态页。
  */
 static void menu_relay4_status(void)
 {
     menu_relay_status(3U, KEYNUM_MENU_RELAY4_STATUS, menu_relay4_main);
 }
 
-/* AO根菜单固定为五组，电流修正归入量程设置，错误等级与DAC回读保持隐藏。 */
+/**
+ * @brief AO根菜单固定为五组，电流修正归入量程设置，错误等级与DAC回读保持隐藏。
+ */
 static void menu_ao(void)
 {
 	static struct MenuData menu[] = {
@@ -6935,28 +7365,40 @@ static void menu_ao(void)
 	menuselect(menu, (int)(sizeof(menu) / sizeof(menu[0])));
 }
 
-/* AO基本设置：工作模式、电流模式、输出源。 */
+/**
+ * @brief AO基本设置：工作模式、电流模式、输出源。
+ */
 static void menu_ao_channel(void)
 {
 	menu_build_by_group(MENU_GRP_AO_CHANNEL, KEYNUM_MENU_AO_CHANNEL, menu_ao);
 }
 
-/* AO量程设置：电流修正、固定电流、0%、100%、阻尼。 */
+/**
+ * @brief AO量程设置：电流修正、固定电流、0%、100%、阻尼。
+ */
 static void menu_ao_range(void)
 {
 	menu_build_by_group(MENU_GRP_AO_RANGE, KEYNUM_MENU_AO_RANGE, menu_ao);
 }
 
-/* AO故障设置：故障动作、故障电流、初始电流。 */
+/**
+ * @brief AO故障设置：故障动作、故障电流、初始电流。
+ */
 static void menu_ao_fault(void)
 {
 	menu_build_by_group(MENU_GRP_AO_FAULT, KEYNUM_MENU_AO_FAULT, menu_ao);
 }
 
-/*
- * 函数用途：安全格式化AO有符号百分比，避免对INT32_MIN直接取绝对值。
- * 调用场景：AO运行状态页显示CPU2快照中的0.01%定点数。
- * 关键约束：优先保留有效小数，空间不足时逐级降精度，仍放不下则显示OVER。
+/**
+ * @brief 安全格式化AO有符号百分比，避免对INT32_MIN直接取绝对值。
+ *
+ * @details 调用场景：AO运行状态页显示CPU2快照中的0.01%定点数。
+ * @note 关键约束：优先保留有效小数，空间不足时逐级降精度，仍放不下则显示OVER。
+ *
+ * @param percent_x100 百分比定点值，单位 0.01%。
+ * @param max_width 允许文字或百分比占用的最大 OLED 像素宽度。
+ * @param text 输入文字或格式化结果缓冲区。该可写输出区容量为 text_size，函数把 0.01% 定点值格式化为 NUL 结尾百分比文字。
+ * @param text_size 文字。
  */
 static void ao_format_percent_x100(int32_t percent_x100,
 								   uint8_t max_width,
@@ -7016,7 +7458,13 @@ static void ao_format_percent_x100(int32_t percent_x100,
 	(void)snprintf(text, text_size, "OVER");
 }
 
-/* AO运行状态从同一份CPU2快照显示过程输入、输入比例和最近成功下发电流。 */
+/**
+ * @brief AO运行状态从同一份CPU2快照显示过程输入、输入比例和最近成功下发电流。
+ *
+ * 返回键直接回到 AO 菜单；普通刷新时一次性复制 CPU2 AO 运行态快照，避免同一页面的输出源、过程值、比例和电流来自不同通信时刻。
+ * 只有 CPU2 通信可用、AO 处于输出工作模式、来源属于过程量或保持或故障输出且过程值有效时，才显示输入值和比例；否则显示 N/A。
+ * 最近成功下发电流只有在输出模式启用、来源不是禁用且缓存值非零时显示，并按 0.01 mA 格式化；输出来源索引非法时统一显示不可用项。
+ */
 static void menu_ao_runtime(void)
 {
 	AoOutputRuntime snapshot;
@@ -7089,7 +7537,9 @@ static void menu_ao_runtime(void)
 	}
 }
 
-/* AO诊断仿真仅显示非持久化仿真开关和已持久化的仿真电流。 */
+/**
+ * @brief AO诊断仿真仅显示非持久化仿真开关和已持久化的仿真电流。
+ */
 static void menu_ao_diagnostic(void)
 {
 	static struct MenuData menu[] = {
@@ -7106,7 +7556,9 @@ static void menu_ao_diagnostic(void)
 	menuselect(menu, (int)(sizeof(menu) / sizeof(menu[0])));
 }
 
-/* 进入仿真开关页时以CPU2运行态为唯一当前值。 */
+/**
+ * @brief 进入仿真开关页时以CPU2运行态为唯一当前值。
+ */
 static void ao_simulation_switch_enter(void)
 {
 	ao_simulation_selection = (g_measurement.ao_output_runtime.simulation_enabled == 0U) ? 0U : 1U;
@@ -7116,7 +7568,9 @@ static void ao_simulation_switch_enter(void)
 	ao_simulation_switch_page();
 }
 
-/* 仿真开关不写持久参数；确认后只写独立保持寄存器。 */
+/**
+ * @brief 仿真开关不写持久参数；确认后只写独立保持寄存器。
+ */
 static void ao_simulation_switch_page(void)
 {
 	bool editable = ao_work_mode_is_output();
@@ -7166,6 +7620,9 @@ static void ao_simulation_switch_page(void)
 	}
 }
 
+/**
+ * @brief 取消 AO 仿真开关编辑并返回 AO 诊断页。
+ */
 static void ao_simulation_switch_back(void)
 {
 	NowKeyPress = 0;
@@ -7174,69 +7631,69 @@ static void ao_simulation_switch_back(void)
 	menu_ao_diagnostic();
 }
 /**
- * @brief 执行屏幕菜单操作中的 menu_cal_sp 逻辑。
+ * @brief 进入标定、单点测量和运动距离参数的兼容菜单。
  * @note 标定、单点和运动距离参数随测量/调试指令输入，不挂入参数配置主菜单；该页仅保留为旧返回映射兜底。
  */
 static void menu_cal_sp(void)       { menu_build_by_group(MENU_GRP_CAL_SP,       KEYNUM_MENU_PARA_CAL_SP,       menu_paracfg_main); }
 
 /**
- * @brief 检查屏幕菜单操作中的 menu_param_check 逻辑。
- * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ * @brief 构建参数版本、结构长度、魔术字和 CRC 检查菜单。
  */
 static void menu_param_check(void)  { menu_build_by_group(MENU_GRP_PARAM_CHECK, KEYNUM_MENU_PARA_PARAM_CHECK,  menu_maint_config); }
 
-/* CPU3 旧分组页仅作兼容兜底；现场入口使用显示设置/通信设置的静态菜单和过滤页。 */
+/**
+ * @brief 构建 CPU3 本机参数兼容分组页，供旧返回路径兜底。
+ *
+ * @note 该旧分组页仅用于兼容历史返回路径；现场入口使用显示设置、通信设置的静态菜单和过滤页。
+ */
 static void menu_cpu3_base(void)    { menu_build_by_group(MENU_GRP_CPU3_BASE,   KEYNUM_MENU_CPU3_BASE,   menu_paracfg_main); }
-/* * @brief 进入 CPU3 来源配置菜单。 */
+/**
+ * @brief 进入 CPU3 来源配置菜单。
+ */
 static void menu_cpu3_source(void)  { menu_build_by_group(MENU_GRP_CPU3_SOURCE, KEYNUM_MENU_CPU3_SOURCE, menu_paracfg_main); }
-/* * @brief 进入 CPU3 手输值配置菜单。 */
+/**
+ * @brief 进入 CPU3 手输值配置菜单。
+ */
 static void menu_cpu3_input(void)   { menu_build_by_group(MENU_GRP_CPU3_INPUT,  KEYNUM_MENU_CPU3_INPUT,  menu_paracfg_main); }
-/* * @brief 进入 CPU3 屏幕配置菜单。 */
+/**
+ * @brief 进入 CPU3 屏幕配置菜单。
+ */
 static void menu_cpu3_screen(void)  { menu_build_by_group(MENU_GRP_CPU3_SCREEN, KEYNUM_MENU_CPU3_SCREEN, menu_paracfg_main); }
 /**
- * @brief 显示或打印屏幕菜单操作中的 menu_display_base 逻辑。
- * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ * @brief 构建 CPU3 基础显示参数菜单。
  */
 static void menu_display_base(void) { menu_build_by_filter(menu_filter_display_base, KEYNUM_MENU_DISPLAY_BASE, menu_display_config); }
 /**
- * @brief 显示或打印屏幕菜单操作中的 menu_display_data_oil 逻辑。
- * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ * @brief 构建油位状态页数据项配置菜单。
  */
 static void menu_display_data_oil(void)     { menu_build_by_filter(menu_filter_display_data_oil,     KEYNUM_MENU_DISPLAY_DATA_OIL,     menu_display_data); }
 /**
- * @brief 显示或打印屏幕菜单操作中的 menu_display_data_water 逻辑。
- * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ * @brief 构建水位状态页数据项配置菜单。
  */
 static void menu_display_data_water(void)   { menu_build_by_filter(menu_filter_display_data_water,   KEYNUM_MENU_DISPLAY_DATA_WATER,   menu_display_data); }
 /**
- * @brief 显示或打印屏幕菜单操作中的 menu_display_data_density 逻辑。
- * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ * @brief 构建密度状态页数据项配置菜单。
  */
 static void menu_display_data_density(void) { menu_build_by_filter(menu_filter_display_data_density, KEYNUM_MENU_DISPLAY_DATA_DENSITY, menu_display_data); }
 /**
- * @brief 显示或打印屏幕菜单操作中的 menu_display_data_temp 逻辑。
- * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ * @brief 构建温度状态页数据项配置菜单。
  */
 static void menu_display_data_temp(void)    { menu_build_by_filter(menu_filter_display_data_temp,    KEYNUM_MENU_DISPLAY_DATA_TEMP,    menu_display_data); }
 /**
- * @brief 执行屏幕菜单操作中的 menu_cpu3_comm1 逻辑。
- * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ * @brief 构建 CPU3 COM1 协议和串口参数菜单。
  */
 static void menu_cpu3_comm1(void)   { menu_build_by_group(MENU_GRP_CPU3_COM1,   KEYNUM_MENU_CPU3_COM1,   menu_comm_config); }
 /**
- * @brief 执行屏幕菜单操作中的 menu_cpu3_comm2 逻辑。
- * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ * @brief 构建 CPU3 COM2 协议和串口参数菜单。
  */
 static void menu_cpu3_comm2(void)   { menu_build_by_group(MENU_GRP_CPU3_COM2,   KEYNUM_MENU_CPU3_COM2,   menu_comm_config); }
 /**
- * @brief 执行屏幕菜单操作中的 menu_cpu3_comm3 逻辑。
- * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ * @brief 构建 CPU3 COM3 协议和串口参数菜单。
  */
 static void menu_cpu3_comm3(void)   { menu_build_by_group(MENU_GRP_CPU3_COM3,   KEYNUM_MENU_CPU3_COM3,   menu_comm_config); }
 
 /**
- * @brief 执行屏幕菜单操作中的 menu_paracfg_main 逻辑。
- * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ * @brief 构建参数配置主菜单并进入分类选择页。
  */
 static void menu_paracfg_main(void)
 {

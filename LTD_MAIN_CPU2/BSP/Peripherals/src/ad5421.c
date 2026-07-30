@@ -4,14 +4,16 @@
 #include "main.h"
 #include "system_parameter.h"
 /* static int32_t SetCurrent(double current); */
+/**
+ * @brief 拉低 AD5421 片选信号，开始 SPI 事务。
+ */
 static inline void AD5421_CS_LOW(void)
 {
     HAL_GPIO_WritePin(AD5421_CS_GPIO_PORT, AD5421_CS_PIN, GPIO_PIN_RESET);
 }
 
 /**
- * @brief 执行AD5421 模拟输出中的 AD5421_CS_HIGH 逻辑。
- * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ * @brief 拉高 AD5421 片选信号，结束 SPI 事务。
  */
 static inline void AD5421_CS_HIGH(void)
 {
@@ -28,10 +30,20 @@ static volatile uint8_t ad5421_sequence_busy = 0U;
 static uint8_t ad5421_last_rx_data[3] = {0x00u, 0x00u, 0x00u};
 static AD5421DiagnosticSnapshot ad5421_diagnostic = {0U};
 
-/*
- * 函数用途：保存最后一次有效 AD5421 故障现场。
- * 调用场景：SPI 访问、控制回读或故障寄存器检查失败时调用。
- * 关键约束：只保存数值，不打印日志，不改变原有返回码和控制行为。
+/**
+ * @brief 保存最后一次有效 AD5421 故障现场。
+ *
+ * @details 调用场景：SPI 访问、控制回读或故障寄存器检查失败时调用。
+ * @note 关键约束：只保存数值，不打印日志，不改变原有返回码和控制行为。
+ *
+ * @param stage 外设故障现场的诊断阶段编号；用于区分参数检查、总线访问、寄存器读写、回读核对和设备状态检查等失败位置。
+ * @param direction 外设故障现场中的访问方向枚举；写方向、读方向和未指定方向分别使用对应模块的诊断常量编码。
+ * @param reg 目标寄存器地址或寄存器值。该 uint8_t 参数是 AD5421 原始寄存器地址，用于 SPI 命令和最近故障现场。
+ * @param hal_status 状态。
+ * @param error_code 待记录、转换或判断的错误码。该值是本次 AD5421 访问对外返回的整机错误码，并写入最近诊断快照。
+ * @param root_error_code 根因故障。
+ * @param expected_value 期望数值。
+ * @param actual_value 实际数值。
  */
 static void AD5421_SaveDiagnostic(uint8_t stage,
                                   uint8_t direction,
@@ -66,10 +78,14 @@ static void AD5421_SaveDiagnostic(uint8_t stage,
     __set_PRIMASK(primask);
 }
 
-/*
- * 函数用途：在上层把底层访问错误映射为现有 AD5421 故障码时更新快照。
- * 调用场景：写电流失败和故障寄存器读取失败的兼容返回路径。
- * 关键约束：保留访问阶段、寄存器和 HAL 状态，只更新对外错误码及根因码。
+/**
+ * @brief 在上层把底层访问错误映射为现有 AD5421 故障码时更新快照。
+ *
+ * @details 调用场景：写电流失败和故障寄存器读取失败的兼容返回路径。
+ * @note 关键约束：保留访问阶段、寄存器和 HAL 状态，只更新对外错误码及根因码。
+ *
+ * @param error_code 待记录、转换或判断的错误码。该值是本次 AD5421 访问对外返回的整机错误码，并写入最近诊断快照。
+ * @param root_error_code 根因故障。
  */
 static void AD5421_PromoteDiagnostic(uint32_t error_code, uint32_t root_error_code)
 {
@@ -86,10 +102,13 @@ static void AD5421_PromoteDiagnostic(uint32_t error_code, uint32_t root_error_co
     __set_PRIMASK(primask);
 }
 
-/*
- * 函数用途：尝试占用 AD5421 SPI 访问窗口。
- * 调用场景：所有 AD5421 公开访问入口和控制寄存器回读序列。
- * 关键约束：只用短临界区保护标志位，不在临界区内访问 SPI。
+/**
+ * @brief 尝试占用 AD5421 SPI 访问窗口。
+ *
+ * @details 调用场景：所有 AD5421 公开访问入口和控制寄存器回读序列。
+ * @note 关键约束：只用短临界区保护标志位，不在临界区内访问 SPI。
+ *
+ * @return 1 表示已独占 AD5421 SPI 单帧访问窗口；已有访问或初始化序列占用时返回 0。
  */
 static uint8_t AD5421_TryBeginAccess(void)
 {
@@ -107,10 +126,11 @@ static uint8_t AD5421_TryBeginAccess(void)
     return entered;
 }
 
-/*
- * 函数用途：释放 AD5421 SPI 访问窗口。
- * 调用场景：AD5421 访问入口结束后统一调用。
- * 关键约束：只清本模块访问保护标志，不操作硬件片选。
+/**
+ * @brief 释放 AD5421 SPI 访问窗口。
+ *
+ * @details 调用场景：AD5421 访问入口结束后统一调用。
+ * @note 关键约束：只清本模块访问保护标志，不操作硬件片选。
  */
 static void AD5421_EndAccess(void)
 {
@@ -122,10 +142,13 @@ static void AD5421_EndAccess(void)
     __set_PRIMASK(primask);
 }
 
-/*
- * 函数用途：尝试占用 AD5421 多帧初始化序列。
- * 调用场景：Ad5421Init() 开始复位、控制回读、初始电流写入前调用。
- * 关键约束：只阻止 TIM4 中断插入 AO 刷新，单帧 SPI 访问仍由 access_busy 保护。
+/**
+ * @brief 尝试占用 AD5421 多帧初始化序列。
+ *
+ * @details 调用场景：Ad5421Init() 开始复位、控制回读、初始电流写入前调用。
+ * @note 关键约束：只阻止 TIM4 中断插入 AO 刷新，单帧 SPI 访问仍由 access_busy 保护。
+ *
+ * @return 1 表示已独占 AD5421 多帧初始化序列；SPI 正忙或已有序列执行时返回 0。
  */
 static uint8_t AD5421_TryBeginSequence(void)
 {
@@ -143,10 +166,11 @@ static uint8_t AD5421_TryBeginSequence(void)
     return entered;
 }
 
-/*
- * 函数用途：释放 AD5421 多帧初始化序列。
- * 调用场景：Ad5421Init() 所有出口统一调用。
- * 关键约束：只清序列保护标志，不操作 SPI 和片选。
+/**
+ * @brief 释放 AD5421 多帧初始化序列。
+ *
+ * @details 调用场景：Ad5421Init() 所有出口统一调用。
+ * @note 关键约束：只清序列保护标志，不操作 SPI 和片选。
  */
 static void AD5421_EndSequence(void)
 {
@@ -158,10 +182,14 @@ static void AD5421_EndSequence(void)
     __set_PRIMASK(primask);
 }
 
-/*
- * 函数用途：切换 AD5421 调试打印抑制状态并返回旧状态。
- * 调用场景：TIM4 中断刷新 AO 前抑制 printf，退出中断前恢复。
- * 关键约束：只影响本驱动内部诊断打印，不改变错误码和故障标志。
+/**
+ * @brief 切换 AD5421 调试打印抑制状态并返回旧状态。
+ *
+ * @details 调用场景：TIM4 中断刷新 AO 前抑制 printf，退出中断前恢复。
+ * @note 关键约束：只影响本驱动内部诊断打印，不改变错误码和故障标志。
+ *
+ * @param suppress true 表示暂时抑制 AD5421 逐次跟踪日志，false 表示恢复打印。
+ * @return 返回切换前的调试打印抑制状态，供调用方退出临时静默区时恢复。
  */
 uint8_t AD5421_SetTraceSuppressed(uint8_t suppress)
 {
@@ -170,10 +198,13 @@ uint8_t AD5421_SetTraceSuppressed(uint8_t suppress)
     return previous;
 }
 
-/*
- * 函数用途：返回 AD5421 当前是否正在访问 SPI。
- * 调用场景：TIM4 AO 刷新前判断是否需要跳过本次中断刷新。
- * 关键约束：只返回软件访问保护状态，不读取 SPI 外设寄存器。
+/**
+ * @brief 返回 AD5421 当前是否正在访问 SPI。
+ *
+ * @details 调用场景：TIM4 AO 刷新前判断是否需要跳过本次中断刷新。
+ * @note 关键约束：只返回软件访问保护状态，不读取 SPI 外设寄存器。
+ *
+ * @return 1 表示寄存器访问或分阶段输出序列正在占用 AD5421 SPI；0 表示两类访问均处于空闲状态。
  */
 uint8_t AD5421_IsAccessBusy(void)
 {
@@ -183,17 +214,25 @@ uint8_t AD5421_IsAccessBusy(void)
     return 0U;
 }
 
-/*
- * 函数用途：判断 AD5421 诊断打印当前是否允许输出。
- * 调用场景：本驱动内部错误诊断打印前调用。
- * 关键约束：中断刷新 AO 时应返回 0，避免 ISR 直接 printf。
+/**
+ * @brief 判断 AD5421 诊断打印当前是否允许输出。
+ *
+ * @details 调用场景：本驱动内部错误诊断打印前调用。
+ * @note 关键约束：中断刷新 AO 时应返回 0，避免 ISR 直接 printf。
+ *
+ * @return 1 表示 AD5421 诊断打印当前允许输出；0 表示 AD5421 诊断打印当前不允许输出。
  */
 static uint8_t AD5421_CanPrint(void)
 {
     return (ad5421_trace_suppressed == 0U) ? 1U : 0U;
 }
 
-/* 按 AD5421 READFAULT 高字节位定义返回唯一故障原因。 */
+/**
+ * @brief 按 AD5421 READFAULT 高字节位定义返回唯一故障原因。
+ *
+ * @param fault_reg 故障。
+ * @return 返回 READFAULT 首个命中位对应的整机故障码；寄存器无故障位时返回 NO_ERROR。
+ */
 static uint32_t AD5421_MapFaultRegister(uint16_t fault_reg)
 {
     /* 多位同时置位时，先返回内部通信和过温关断，再返回环路硬故障，
@@ -219,10 +258,15 @@ static uint32_t AD5421_MapFaultRegister(uint16_t fault_reg)
     return NO_ERROR;
 }
 
-/*
- * 函数用途：向 AD5421 写入 24 位寄存器数据。
- * 调用场景：AD5421 初始化、复位和 DAC 电流更新。
- * 关键约束：通过 SPI3 阻塞发送，带有限超时，不应在中断中调用。
+/**
+ * @brief 向 AD5421 写入 24 位寄存器数据。
+ *
+ * @details 调用场景：AD5421 初始化、复位和 DAC 电流更新。
+ * @note 关键约束：通过 SPI3 阻塞发送，带有限超时，不应在中断中调用。
+ *
+ * @param reg 目标寄存器地址或寄存器值。该 uint8_t 参数是 AD5421 原始寄存器地址，用于 SPI 命令和最近故障现场。
+ * @param value 写入原始使用的输入数值。
+ * @return NO_ERROR 表示 24 位寄存器帧已完整发送；SPI 访问失败返回 AD5421_SPI_TRANSFER_ERROR，并在诊断快照中保留寄存器、阶段和 HAL 状态。
  */
 static uint32_t AD5421_WriteRegRaw(uint8_t reg, uint16_t value)
 {
@@ -253,10 +297,15 @@ static uint32_t AD5421_WriteRegRaw(uint8_t reg, uint16_t value)
     return NO_ERROR;
 }
 
-/*
- * 函数用途：按 AD5421 两帧读时序读取寄存器原始值。
- * 调用场景：控制寄存器回读和故障寄存器诊断的底层实现。
- * 关键约束：调用方必须已经持有 access 窗口；本函数只负责 SPI 帧时序和错误标志。
+/**
+ * @brief 按 AD5421 两帧读时序读取寄存器原始值。
+ *
+ * @details 调用场景：控制寄存器回读和故障寄存器诊断的底层实现。
+ * @note 关键约束：调用方必须已经持有 access 窗口；本函数只负责 SPI 帧时序和错误标志。
+ *
+ * @param reg 目标寄存器地址或寄存器值。该 uint8_t 参数是 AD5421 原始寄存器地址，用于 SPI 命令和最近故障现场。
+ * @param value 用于返回完成通信校验后的 AD5421 寄存器原始值。
+ * @return SYSTEM_CALL_CONDITION_ERROR 表示当前系统状态不允许执行；NO_ERROR 表示操作成功。
  */
 static uint32_t AD5421_ReadRegCheckedRaw(uint8_t reg, uint16_t *value)
 {
@@ -321,10 +370,15 @@ static uint32_t AD5421_ReadRegCheckedRaw(uint8_t reg, uint16_t *value)
     *value = ((uint16_t)rxData[1] << 8) | rxData[2];
     return NO_ERROR;
 }
-/*
- * 函数用途：带 access 保护地写入 AD5421 单个寄存器。
- * 调用场景：旧接口、复位接口和 DAC 原始写入路径。
- * 关键约束：会占用 SPI 访问窗口，不应在中断中调用。
+/**
+ * @brief 带 access 保护地写入 AD5421 单个寄存器。
+ *
+ * @details 调用场景：旧接口、复位接口和 DAC 原始写入路径。
+ * @note 关键约束：会占用 SPI 访问窗口，不应在中断中调用。
+ *
+ * @param reg 目标寄存器地址或寄存器值。该 uint8_t 参数是 AD5421 原始寄存器地址，用于 SPI 命令和最近故障现场。
+ * @param value 写入使用的输入数值。
+ * @return 返回整机错误码；NO_ERROR 表示寄存器写入成功，AD5421_ACCESS_BUSY 表示访问窗口被占用，其他值透传 SPI 或回读校验失败。
  */
 uint32_t AD5421_WriteReg(uint8_t reg, uint16_t value)
 {
@@ -348,10 +402,15 @@ uint32_t AD5421_WriteReg(uint8_t reg, uint16_t value)
     return ret;
 }
 
-/*
- * 函数用途：从 AD5421 读取寄存器并返回通信状态。
- * 调用场景：控制寄存器回读校验和故障寄存器诊断。
- * 关键约束：通过 SPI3 阻塞收发，带有限超时，不应在中断中调用。
+/**
+ * @brief 从 AD5421 读取寄存器并返回通信状态。
+ *
+ * @details 调用场景：控制寄存器回读校验和故障寄存器诊断。
+ * @note 关键约束：通过 SPI3 阻塞收发，带有限超时，不应在中断中调用。
+ *
+ * @param reg 目标寄存器地址或寄存器值。该 uint8_t 参数是 AD5421 原始寄存器地址，用于 SPI 命令和最近故障现场。
+ * @param value 用于返回完成通信及状态校验后的 AD5421 寄存器值。
+ * @return NO_ERROR 表示寄存器读取和故障状态检查均通过；空输出指针返回 SYSTEM_CALL_CONDITION_ERROR，SPI 仲裁被占用返回 AD5421_ACCESS_BUSY，其他值为读命令、读数据或器件状态错误。
  */
 static uint32_t AD5421_ReadRegChecked(uint8_t reg, uint16_t *value)
 {
@@ -387,10 +446,14 @@ static uint32_t AD5421_ReadRegChecked(uint8_t reg, uint16_t *value)
     return ret;
 }
 
-/*
- * 函数用途：兼容旧接口读取 AD5421 寄存器值。
- * 调用场景：保留给历史状态读取路径。
- * 关键约束：通信失败时返回 0，详细故障通过驱动故障标志查询。
+/**
+ * @brief 兼容旧接口读取 AD5421 寄存器值。
+ *
+ * @details 调用场景：保留给历史状态读取路径。
+ * @note 关键约束：通信失败时返回 0，详细故障通过驱动故障标志查询。
+ *
+ * @param reg 目标寄存器地址或寄存器值。该 uint8_t 参数是 AD5421 原始寄存器地址，用于 SPI 命令和最近故障现场。
+ * @return 返回 AD5421 目标寄存器的 16 位值；兼容接口无法向调用方传播读取失败，失败详情保留在诊断状态中。
  */
 uint16_t AD5421_ReadReg(uint8_t reg)
 {
@@ -399,20 +462,28 @@ uint16_t AD5421_ReadReg(uint8_t reg)
     return value;
 }
 
-/*
- * 函数用途：直接写入 AD5421 DAC 原始值。
- * 调用场景：电流换算完成后由电流设置接口调用。
- * 关键约束：不做电流范围换算，调用方必须先完成范围约束。
+/**
+ * @brief 直接写入 AD5421 DAC 原始值。
+ *
+ * @details 调用场景：电流换算完成后由电流设置接口调用。
+ * @note 关键约束：不做电流范围换算，调用方必须先完成范围约束。
+ *
+ * @param value 设置原始使用的输入数值。
+ * @return 返回整机错误码；NO_ERROR 表示 DAC 原始值已写入，其他值透传 AD5421 访问或通信失败。
  */
 uint32_t AD5421_SetDacRaw(uint16_t value)
 {
     return AD5421_WriteReg(WRITEDAC, value);
 }
 
-/*
- * 函数用途：按 mA 值换算并写入 AD5421 输出电流。
- * 调用场景：AO 服务需要刷新模拟电流输出时调用。
- * 关键约束：会把输入限制在 AD5421 允许的 3.2-24.0mA 范围内。
+/**
+ * @brief 按 mA 值换算并写入 AD5421 输出电流。
+ *
+ * @details 调用场景：AO 服务需要刷新模拟电流输出时调用。
+ * @note 关键约束：会把输入限制在 AD5421 允许的 3.2-24.0mA 范围内。
+ *
+ * @param mA 目标模拟输出电流，单位 mA。
+ * @return 返回整机错误码；NO_ERROR 表示目标 mA 已换算并写入 DAC，其他值表示范围或 AD5421 通信失败。
  */
 uint32_t AD5421_SetCurrent(float mA)
 {
@@ -432,40 +503,53 @@ uint32_t AD5421_SetCurrent(float mA)
     return AD5421_SetDacRaw(dacValue);
 }
 
-/*
- * 函数用途：按 0.01mA 单位设置 AD5421 输出电流。
- * 调用场景：AO 服务使用参数原始单位写入电流。
- * 关键约束：内部转为 mA 后复用 AD5421_SetCurrent()。
+/**
+ * @brief 按 0.01mA 单位设置 AD5421 输出电流。
+ *
+ * @details 调用场景：AO 服务使用参数原始单位写入电流。
+ * @note 关键约束：内部转为 mA 后复用 AD5421_SetCurrent()。
+ *
+ * @param mA_x100 准备写入 AD5421 的目标电流，单位 0.01 mA。
+ * @return 返回整机错误码；NO_ERROR 表示 0.01 mA 定点目标已成功写入，其他值透传范围或驱动错误。
  */
 uint32_t AD5421_SetCurrentX100(uint32_t mA_x100)
 {
     return AD5421_SetCurrent(((float)mA_x100) / 100.0f);
 }
 
-/*
- * 函数用途：读取 AD5421 驱动累计故障标志。
- * 调用场景：AO 运行态打包和故障分析。
- * 关键约束：只读内存状态，不访问外设。
+/**
+ * @brief 读取 AD5421 驱动累计故障标志。
+ *
+ * @details 调用场景：AO 运行态打包和故障分析。
+ * @note 关键约束：只读内存状态，不访问外设。
+ *
+ * @return 返回 AD5421 驱动累计故障标志对应的位掩码；各位含义由相邻枚举或宏定义。
  */
 uint32_t AD5421_GetFaultFlags(void)
 {
     return ad5421_fault_flags;
 }
 
-/*
- * 函数用途：读取最近一次 AD5421 READFAULT 原始值。
- * 调用场景：AO 运行态打包和故障分析。
- * 关键约束：只读缓存值，不主动刷新 AD5421。
+/**
+ * @brief 读取最近一次 AD5421 READFAULT 原始值。
+ *
+ * @details 调用场景：AO 运行态打包和故障分析。
+ * @note 关键约束：只读缓存值，不主动刷新 AD5421。
+ *
+ * @return 返回最近一次成功读取并缓存的 AD5421 READFAULT 原始寄存器位图。
  */
 uint32_t AD5421_GetFaultRegister(void)
 {
     return ad5421_fault_register;
 }
 
-/*
- * 函数用途：复制最后一次有效 AD5421 故障现场。
- * 调用场景：AO 主循环延后日志和故障注入测试读取。
- * 关键约束：使用短临界区保证快照字段来自同一次故障，不访问 SPI。
+/**
+ * @brief 复制最后一次有效 AD5421 故障现场。
+ *
+ * @details 调用场景：AO 主循环延后日志和故障注入测试读取。
+ * @note 关键约束：使用短临界区保证快照字段来自同一次故障，不访问 SPI。
+ *
+ * @param snapshot AD5421 最近一次有效故障现场输出对象；写入序号、错误码、故障寄存器、HAL 状态、阶段、方向以及期望值和实测值。
  */
 void AD5421_GetDiagnosticSnapshot(AD5421DiagnosticSnapshot *snapshot)
 {
@@ -481,10 +565,13 @@ void AD5421_GetDiagnosticSnapshot(AD5421DiagnosticSnapshot *snapshot)
     __set_PRIMASK(primask);
 }
 
-/*
- * 函数用途：轮询 AD5421 故障寄存器。
- * 调用场景：AO 初始化和周期刷新时确认电流环/芯片状态。
- * 关键约束：会访问 SPI，不应在中断中调用；当前 PCB 未接 AD5421 FAULT 引脚。
+/**
+ * @brief 轮询 AD5421 故障寄存器。
+ *
+ * @details 调用场景：AO 初始化和周期刷新时确认电流环/芯片状态。
+ * @note 关键约束：会访问 SPI，不应在中断中调用；当前 PCB 未接 AD5421 FAULT 引脚。
+ *
+ * @return NO_ERROR 表示故障寄存器可读且未报告有效故障；SPI 读取失败返回访问错误，寄存器置位时返回映射后的 AD5421 供电、电流环、温度或通信故障码。
  */
 uint32_t AD5421_PollDiagnostics(void)
 {
@@ -525,6 +612,9 @@ uint32_t AD5421_PollDiagnostics(void)
 /* ============================== */
 /* 初始化函数 */
 /* ============================== */
+/**
+ * @brief 兼容保留的空初始化入口，当前不执行 AD5421 硬件操作。
+ */
 void AD5421_Init(void)
 {
 
@@ -533,16 +623,24 @@ void AD5421_Init(void)
 /* ============================== */
 /* 软件复位 */
 /* ============================== */
+/**
+ * @brief 写 AD5421 复位寄存器并等待 10 ms 稳定。
+ */
 void AD5421_Reset(void)
 {
 	(void)AD5421_WriteReg(RESETAD5421REG, 0x0000);
-    /* AD5421 模拟输出与外设通信之间保留等待时间，避免硬件或对端协议尚未准备好。 */
+    /* 复位寄存器写入后等待 10 ms，让 AD5421 完成内部复位，再允许后续寄存器访问。 */
     HAL_Delay(10);
 }
 
 /* ============================== */
 /* 读取状态寄存器 */
 /* ============================== */
+/**
+ * @brief 轮询 AD5421 故障寄存器后返回缓存状态；当前接口不传播轮询失败码。
+ *
+ * @return 返回最近一次轮询后缓存的 AD5421 READFAULT 低 16 位；轮询失败不通过本返回值传播。
+ */
 uint16_t AD5421_GetStatus(void)
 {
     (void)AD5421_PollDiagnostics();
@@ -552,6 +650,11 @@ uint16_t AD5421_GetStatus(void)
 /* ============================== */
 /* 读取实际输出电流 (诊断值, 单位 mA) */
 /* ============================== */
+/**
+ * @brief 兼容诊断接口：当前只刷新 AD5421 故障状态并固定返回 0.0 mA。
+ *
+ * @return 固定返回 0.0 mA；调用前仅刷新 AD5421 诊断故障状态，当前接口不会读取或估算真实环路电流。
+ */
 float AD5421_ReadCurrent(void)
 {
     (void)AD5421_PollDiagnostics();
@@ -559,8 +662,7 @@ float AD5421_ReadCurrent(void)
 }
 
 /**
- * @brief 清除或复位AD5421 模拟输出中的 ResetAD5421 逻辑。
- * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ * @brief 旧兼容复位接口：写复位寄存器后等待 1 ms，且不传播写入返回码。
  */
 void ResetAD5421(void)
 {
@@ -568,10 +670,14 @@ void ResetAD5421(void)
     HAL_Delay(1);
 }
 
-/*
- * 函数用途：写入 AD5421 控制寄存器并回读校验。
- * 调用场景：AD5421 初始化时配置 SPI 看门狗模式。
- * 关键约束：会访问 SPI；回读不一致时返回专用读回错误。
+/**
+ * @brief 写入 AD5421 控制寄存器并回读校验。
+ *
+ * @details 调用场景：AD5421 初始化时配置 SPI 看门狗模式。
+ * @note 关键约束：会访问 SPI；回读不一致时返回专用读回错误。
+ *
+ * @param controldata 待写入 AD5421 控制寄存器的位字段原始值。
+ * @return NO_ERROR 表示控制寄存器写入及回读完全一致；写入失败返回 AD5421_INIT_ERROR，回读值不匹配返回 AD5421_READBACK_ERROR。
  */
 static uint32_t WriteControlRegister(uint16_t controldata)
 {
@@ -635,10 +741,14 @@ static uint32_t WriteControlRegister(uint16_t controldata)
     return NO_ERROR;
 }
 
-/*
- * 函数用途：执行 AD5421 复位、控制寄存器回读、目标电流写入和故障诊断公共序列。
- * 调用场景：Ad5421Init() 和 AD5421_RecoverCurrentX100() 共用。
- * 关键约束：会占用 sequence 并访问 SPI/GPIO，不应在中断中调用。
+/**
+ * @brief 执行 AD5421 复位、控制寄存器回读、目标电流写入和故障诊断公共序列。
+ *
+ * @details 调用场景：Ad5421Init() 和 AD5421_RecoverCurrentX100() 共用。
+ * @note 关键约束：会占用 sequence 并访问 SPI/GPIO，不应在中断中调用。
+ *
+ * @param target_mA_x100 目标电流定点值，单位 0.01 mA。
+ * @return NO_ERROR 表示复位、控制寄存器回读、目标电流写入和最终诊断均通过；复位或参数阶段失败返回 AD5421_INIT_ERROR，其他值保留具体 SPI、回读或器件故障码。
  */
 static uint32_t AD5421_RunCurrentStartupSequence(uint32_t target_mA_x100)
 {
@@ -680,30 +790,41 @@ static uint32_t AD5421_RunCurrentStartupSequence(uint32_t target_mA_x100)
     return ret;
 }
 
-/*
- * 函数用途：按0.01mA目标复位并初始化AD5421。
- * 调用场景：AO服务根据禁用、固定或上电电流选择初始输出时调用。
- * 关键约束：会访问SPI并等待芯片稳定，不应在中断中调用。
+/**
+ * @brief 按0.01mA目标复位并初始化AD5421。
+ *
+ * @details 调用场景：AO服务根据禁用、固定或上电电流选择初始输出时调用。
+ * @note 关键约束：会访问SPI并等待芯片稳定，不应在中断中调用。
+ *
+ * @param initial_mA_x100 AD5421 初始化完成后准备输出的起始电流，单位 0.01 mA。
+ * @return 返回整机错误码；NO_ERROR 表示 AD5421 已复位、初始化并输出目标电流，其他值标识失败阶段。
  */
 uint32_t AD5421_InitCurrentX100(uint32_t initial_mA_x100)
 {
     return AD5421_RunCurrentStartupSequence(initial_mA_x100);
 }
 
-/*
- * 函数用途：保留历史无参数初始化接口，供旧测试和调用点兼容使用。
- * 调用场景：尚未迁移到AO服务显式初始电流接口的旧调用点。
- * 关键约束：默认采用当前AO上电电流参数，不改变旧接口返回语义。
+/**
+ * @brief 保留历史无参数初始化接口，供旧测试和调用点兼容使用。
+ *
+ * @details 调用场景：尚未迁移到AO服务显式初始电流接口的旧调用点。
+ * @note 关键约束：默认采用当前AO上电电流参数，不改变旧接口返回语义。
+ *
+ * @return 返回整机错误码；NO_ERROR 表示已按上电默认电流完成 AD5421 初始化，其他值标识初始化失败阶段。
  */
 uint32_t Ad5421Init(void)
 {
     return AD5421_InitCurrentX100(g_deviceParams.ao_output.power_on_current_mA_x100);
 }
 
-/*
- * 函数用途：按指定目标电流恢复 AD5421 输出。
- * 调用场景：AO 运行期 READFAULT 异常后的自动恢复。
- * 关键约束：复位芯片后直接写回目标电流，保留控制回读和故障回读诊断。
+/**
+ * @brief 按指定目标电流恢复 AD5421 输出。
+ *
+ * @details 调用场景：AO 运行期 READFAULT 异常后的自动恢复。
+ * @note 关键约束：复位芯片后直接写回目标电流，保留控制回读和故障回读诊断。
+ *
+ * @param target_mA_x100 目标电流定点值，单位 0.01 mA。
+ * @return 返回整机错误码；NO_ERROR 表示 AD5421 已恢复目标电流，其他值标识复位、初始化或写入失败。
  */
 uint32_t AD5421_RecoverCurrentX100(uint32_t target_mA_x100)
 {

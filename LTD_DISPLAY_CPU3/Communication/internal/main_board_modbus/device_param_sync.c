@@ -11,12 +11,13 @@
 #include "param_float32.h"
 #include <string.h>
 
+/* CPU3 参数元数据表项总数，由参数模块定义并供同步范围检查使用。 */
 extern const int param_metaAmount;
 
 /**
- * @brief 执行参数存储中的 DeviceParams_DecimalScale 逻辑。
+ * @brief 返回设备参数小数位对应的十进制缩放因子。
  *
- * @param point 输入/输出指针。
+ * @param point 参数元数据声明的小数位数；函数返回 10 的 point 次幂作为菜单值与协议值之间的缩放因子。
  * @return 计算后的业务数值。
  */
 static float DeviceParams_DecimalScale(uint8_t point)
@@ -29,11 +30,11 @@ static float DeviceParams_DecimalScale(uint8_t point)
 }
 
 /**
- * @brief 执行参数存储中的 DeviceParams_MetaValueToRaw 逻辑。
+ * @brief 把菜单元数据值还原为 CPU2 协议原始值；浮点参数按位复制 IEEE-754 表示。
  *
  * @param h 参数元数据。
  * @param meta_value 待转换的菜单显示值。
- * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ * @return 返回菜单元数据值对应的 CPU2 32 位原始值；浮点字段保留 IEEE 754 位模式，整数移除显示偏移。
  */
 static uint32_t DeviceParams_MetaValueToRaw(volatile struct ParameterMetadata *h,
                                             int32_t meta_value)
@@ -41,7 +42,7 @@ static uint32_t DeviceParams_MetaValueToRaw(volatile struct ParameterMetadata *h
     if ((h != NULL) && (h->data_type == TYPE_FLOAT)) {
         float value = ((float)meta_value) / DeviceParams_DecimalScale(h->point);
         uint32_t raw;
-        /* 按结构或原始字节复制，保持参数存储协议/存储布局不被字段解释改变。 */
+        /* 把缩放后的 float 按 IEEE-754 Float32 位模式复制到协议原始值；memcpy 用于位级转换，避免违反严格别名规则。 */
         memcpy(&raw, &value, sizeof(raw));
         return raw;
     }
@@ -53,11 +54,12 @@ static uint32_t DeviceParams_MetaValueToRaw(volatile struct ParameterMetadata *h
 }
 
 /**
- * @brief 执行参数存储中的 DeviceParams_RawToMetaValue 逻辑。
+ * @brief 将 CPU2 参数原始值转换为菜单显示值；浮点字段按 point 安全缩放，整数按照元数据 offset 补回显示偏移，参数无效或浮点转换失败时返回 false。
  *
- * @param h 业务参数。
- * @param raw 业务参数。
- * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ * @param h 目标参数的 ParameterMetadata 元数据项。
+ * @param raw CPU2 参数快照中的 32 位原始值；浮点字段按 IEEE 754 解释，整数按元数据 offset 和小数位还原。
+ * @param meta_value 用于接收按参数元数据类型解释后的 32 位值。
+ * @return true 表示原始值已按元数据类型转换并写入 meta_value；h 或 meta_value 为空，或 Float32 字段无法按 point 安全缩放时返回 false。
  */
 static bool DeviceParams_RawToMetaValue(volatile struct ParameterMetadata *h,
                                         uint32_t raw,
@@ -75,7 +77,12 @@ static bool DeviceParams_RawToMetaValue(volatile struct ParameterMetadata *h,
 }
 
 /* ==================== 内部：operanum → g_deviceParams 字段映射 ==================== */
-/* 根据 operanum(COM_NUM_xxx) 找到 DeviceParameters 中对应字段的指针（适配新寄存器/新操作码） */
+/**
+ * @brief 根据 operanum(COM_NUM_xxx) 找到 DeviceParameters 中对应字段的指针（适配新寄存器/新操作码）。
+ *
+ * @param operanum 参数操作号，用于定位 ParameterMetadata 项或同步策略。
+ * @return 成功时返回 DeviceParameters 中与操作号对应字段的可写指针；操作号没有字段映射时返回 NULL。
+ */
 static volatile uint32_t* get_deviceparam_ptr_by_operanum(int operanum)
 {
     switch (operanum) {
@@ -455,10 +462,16 @@ static volatile uint32_t* get_deviceparam_ptr_by_operanum(int operanum)
     }
 }
 
-/*
- * 函数用途：取得一个元数据项准备同步到 CPU2 的协议原始值。
- * 调用场景：DSM 批量同步预检和实际逐项同步共用。
- * 关键约束：只读项和不属于 DeviceParameters 的项返回“无需参与”，转换失败不得开始批量写入。
+/**
+ * @brief 取得一个元数据项准备同步到 CPU2 的协议原始值。
+ *
+ * @details 调用场景：DSM 批量同步预检和实际逐项同步共用。
+ * @note 关键约束：只读项和不属于 DeviceParameters 的项返回“无需参与”，转换失败不得开始批量写入。
+ *
+ * @param h 目标参数的 ParameterMetadata 元数据项。
+ * @param target_value 准备同步到 CPU2 的参数协议原始值。
+ * @param participates 用于返回该参数是否参加本轮 CPU2 批量同步。
+ * @return true 表示元数据项可同步，且当前 DeviceParameters 值已按协议原始格式写入输出；false 表示元数据/输出指针无效、字段不支持批量同步，或值无法按声明类型编码。
  */
 static bool DeviceParams_TryGetSyncValue(volatile struct ParameterMetadata *h,
                                          int32_t *target_value,
@@ -494,7 +507,13 @@ static bool DeviceParams_TryGetSyncValue(volatile struct ParameterMetadata *h,
 }
 
 
-/* ==================== 内部：把 param_meta[i].val 下发到 CPU2（10 功能码） ==================== */
+/**
+ * @brief 将一个双寄存器参数按其线格式下发 CPU2，并以合法应答判定成功。
+ *
+ * @param h 目标参数的 ParameterMetadata 元数据项。
+ * @param target_value 准备同步到 CPU2 的参数协议原始值。
+ * @return true 表示参数已获得 CPU2 合法写应答；元数据为空、寄存器宽度不支持或通信失败时返回 false。
+ */
 
 static bool DeviceParams_SendHoldValueToCPU2(volatile struct ParameterMetadata *h,
                                              int32_t target_value)
@@ -532,7 +551,12 @@ static bool DeviceParams_SendHoldValueToCPU2(volatile struct ParameterMetadata *
                                       &u32_temp);
 }
 
-/* ==================== 内部：同步一个 ParameterMetadata 项 ==================== */
+/**
+ * @brief 比较一个参数的 CPU2 快照值与 CPU3 目标值，并在有差异时完成下发确认。
+ *
+ * @param h 目标参数的 ParameterMetadata 元数据项。
+ * @return true 表示参数无需同步或新值已由 CPU2 确认；元数据解析或下发失败时返回 false。
+ */
 
 static bool DeviceParams_SyncOneHold(volatile struct ParameterMetadata *h)
 {
@@ -566,11 +590,16 @@ static bool DeviceParams_SyncOneHold(volatile struct ParameterMetadata *h)
     return true;
 }
 
-/* 批量同步通常由外部协议写入旧寄存器后触发。
+/**
+ * @brief 批量同步通常由外部协议写入旧寄存器后触发。
+ *
  * 命令只允许走一次性命令入口，禁止随参数批量同步重放。
- * 位置源模式和电机局部周长可能由 CPU2 在 YM 切换/标定流程中自动更新，
- * 如果 CPU3 本地缓存尚未补读完成，批量同步会把旧值覆盖回 CPU2。
- * 因此这些字段不参与批量同步；菜单单项读写仍然直接走对应保持寄存器。 */
+ * 位置源模式和电机局部周长可能由 CPU2 在 YM 切换/标定流程中自动更新，如果 CPU3 本地缓存尚未补读完成，批量同步会把旧值覆盖回 CPU2。
+ * 因此这些字段不参与批量同步；菜单单项读写仍然直接走对应保持寄存器。
+ *
+ * @param operanum 参数操作号，用于定位 ParameterMetadata 项或同步策略。
+ * @return true 表示操作号是命令、位置计数模式或电机首圈计数，必须跳过通用批量同步；false 表示该字段可继续按元数据差异集判断是否同步。
+ */
 static bool DeviceParams_ShouldSkipBulkSync(int operanum)
 {
     return (operanum == COM_NUM_DEVICEPARAM_COMMAND) ||
@@ -578,10 +607,13 @@ static bool DeviceParams_ShouldSkipBulkSync(int operanum)
            (operanum == COM_NUM_DEVICEPARAM_MOTOR_COUNT_FIRST_LOOP_CIRC);
 }
 
-/*
- * 函数用途：在 DSM 批量同步发送首帧前检查完整差异集和状态门禁。
- * 调用场景：DeviceParams_SyncAllToCPU2 每次批量同步开始时。
- * 关键约束：存在普通持久参数差异时按原状态白名单整体拒绝；只有命令前置参数差异时允许运行态写入。
+/**
+ * @brief 在 DSM 批量同步发送首帧前检查完整差异集和状态门禁。
+ *
+ * @details 调用场景：DeviceParams_SyncAllToCPU2 每次批量同步开始时。
+ * @note 关键约束：存在普通持久参数差异时按原状态白名单整体拒绝；只有命令前置参数差异时允许运行态写入。
+ *
+ * @return true 表示没有参数差异，或差异集均可编码、CPU2 通信可用，且普通持久参数差异满足当前设备状态写入门禁；false 表示任一元数据值无法编码、CPU2 不可用，或普通持久参数在当前运行状态禁止写入。
  */
 static bool DeviceParams_BulkSyncPreflight(void)
 {
@@ -624,7 +656,11 @@ static bool DeviceParams_BulkSyncPreflight(void)
 
 /* ==================== 对外接口 ==================== */
 
-/* 同步所有 DeviceParameters → CPU2 */
+/**
+ * @brief 同步所有 DeviceParameters → CPU2。
+ *
+ * @return true 表示无需同步或全部差异参数已逐项写入 CPU2 并通过事务确认；false 表示预检失败，或任一参数的板间 Modbus 写入失败。
+ */
 bool DeviceParams_SyncAllToCPU2(void)
 {
     if (!DeviceParams_BulkSyncPreflight()) {

@@ -2,7 +2,11 @@
 
 #include <string.h>
 
-/* 诊断计数饱和保持，避免长稳运行后回绕造成错误次数倒退。 */
+/**
+ * @brief 诊断计数饱和保持，避免长稳运行后回绕造成错误次数倒退。
+ *
+ * @param counter 本次节拍、重试或统计使用的计数值。指针非 NULL 且当前值未达到 UINT32_MAX 时原地加一，达到上限后饱和保持。
+ */
 static void SensorSafeMonitor_IncrementCounter(uint32_t *counter)
 {
     if ((counter != NULL) && (*counter != UINT32_MAX)) {
@@ -10,7 +14,12 @@ static void SensorSafeMonitor_IncrementCounter(uint32_t *counter)
     }
 }
 
-/* 安全快照再次核对协议内在状态，避免绕过会话层直接发布无效快报。 */
+/**
+ * @brief 安全快照再次核对协议内在状态，避免绕过会话层直接发布无效快报。
+ *
+ * @param report 用于接收本次诊断或测量结果的报告对象。
+ * @return 1 表示测量模式、周期上报模式、信号质量、状态位和诊断位均合法，且数据有效、新鲜、模式匹配、数据流活动并且对应通道无故障；0 表示任一字段越界或含保留位、数据无效或陈旧、配置或模式不匹配，或存在快速帧或通道诊断故障。
+ */
 static uint8_t SensorSafeMonitor_IsReportDataValid(const SensorSafeFastReport *report)
 {
     uint16_t channel_diag_mask = 0U;
@@ -53,10 +62,13 @@ static uint8_t SensorSafeMonitor_IsReportDataValid(const SensorSafeFastReport *r
     return 1U;
 }
 
-/*
- * 函数用途：初始化周期快照双缓冲及其失效原因。
- * 调用场景：client 初始化和每次新周期流建立前调用。
- * 关键约束：初始化后快照默认无效，必须接收并验收首帧后才能读取。
+/**
+ * @brief 初始化周期快照双缓冲及其失效原因。
+ *
+ * @details 调用场景：client 初始化和每次新周期流建立前调用。
+ * @note 关键约束：初始化后快照默认无效，必须接收并验收首帧后才能读取。
+ *
+ * @param context 周期快照监测上下文；保存双缓冲快照、接收时间、线端数据年龄、失效原因、发布与失效计数以及当前有效槽，更新时由临界区保护切换有效槽。
  */
 void SensorSafeMonitor_Init(SensorSafeMonitorContext *context)
 {
@@ -67,10 +79,18 @@ void SensorSafeMonitor_Init(SensorSafeMonitorContext *context)
     context->invalid_reason = SENSOR_SAFE_NEEDS_HELLO;
 }
 
-/*
- * 函数用途：复核快报数据、新鲜度并原子式发布到非活动快照槽。
- * 调用场景：周期帧通过线格式和会话校验后调用。
- * 关键约束：任何状态、诊断或年龄异常都撤销旧快照，禁止沿用上一有效值。
+/**
+ * @brief 复核快报数据、新鲜度并原子式发布到非活动快照槽。
+ *
+ * @details 调用场景：周期帧通过线格式和会话校验后调用。
+ * @note 关键约束：任何状态、诊断或年龄异常都撤销旧快照，禁止沿用上一有效值。
+ *
+ * @param context 周期快照监测上下文；保存双缓冲快照、接收时间、线端数据年龄、失效原因、发布与失效计数以及当前有效槽，更新时由临界区保护切换有效槽。
+ * @param report 用于接收本次诊断或测量结果的报告对象。
+ * @param rx_timestamp_ms 完整接收本帧时记录的本机 HAL 毫秒节拍；作为指针传入时由函数写回。
+ * @param now_ms 当前系统节拍，单位 ms。
+ * @param max_data_age_ms 允许样本保持有效的最大数据年龄，单位 ms。
+ * @return 返回安全协议校验结果；SENSOR_SAFE_OK 表示帧校验或状态转换成功，其他值保留参数、长度、帧头、CRC、会话、序号、能力及数据有效性等具体失败原因。
  */
 SensorSafeResult SensorSafeMonitor_Publish(SensorSafeMonitorContext *context,
                                            const SensorSafeFastReport *report,
@@ -117,10 +137,17 @@ SensorSafeResult SensorSafeMonitor_Publish(SensorSafeMonitorContext *context,
     return SENSOR_SAFE_OK;
 }
 
-/*
- * 函数用途：读取一致的周期快照，并按当前时刻重新计算有效数据年龄。
- * 调用场景：业务层获取最新周期测量值时调用。
- * 关键约束：检测到并发翻转两次或数据过期时清零输出并使快照失效。
+/**
+ * @brief 读取一致的周期快照，并按当前时刻重新计算有效数据年龄。
+ *
+ * @details 调用场景：业务层获取最新周期测量值时调用。
+ * @note 关键约束：检测到并发翻转两次或数据过期时清零输出并使快照失效。
+ *
+ * @param context 周期快照监测上下文；保存双缓冲快照、接收时间、线端数据年龄、失效原因、发布与失效计数以及当前有效槽，更新时由临界区保护切换有效槽。
+ * @param now_ms 当前系统节拍，单位 ms。
+ * @param max_data_age_ms 允许样本保持有效的最大数据年龄，单位 ms。
+ * @param snapshot 安全协议周期数据快照输出对象；成功时写入流标识、样本序号、测量数据、传感器数据年龄和信号质量。
+ * @return 返回安全协议校验结果；SENSOR_SAFE_OK 表示帧校验或状态转换成功，其他值保留参数、长度、帧头、CRC、会话、序号、能力及数据有效性等具体失败原因。
  */
 SensorSafeResult SensorSafeMonitor_Read(SensorSafeMonitorContext *context,
                                         uint32_t now_ms,
@@ -163,10 +190,14 @@ SensorSafeResult SensorSafeMonitor_Read(SensorSafeMonitorContext *context,
     return SENSOR_SAFE_OK;
 }
 
-/*
- * 函数用途：撤销当前周期快照并保存首个可追溯失效原因。
- * 调用场景：退出周期流、帧校验失败、数据过期或并发一致性失败时调用。
- * 关键约束：成功码不得成为失效原因；本函数不打印、不阻塞，可由接收链路调用。
+/**
+ * @brief 撤销当前周期快照并保存首个可追溯失效原因。
+ *
+ * @details 调用场景：退出周期流、帧校验失败、数据过期或并发一致性失败时调用。
+ * @note 关键约束：成功码不得成为失效原因；本函数不打印、不阻塞，可由接收链路调用。
+ *
+ * @param context 周期快照监测上下文；保存双缓冲快照、接收时间、线端数据年龄、失效原因、发布与失效计数以及当前有效槽，更新时由临界区保护切换有效槽。
+ * @param reason 导致周期快照失效的安全协议结果码；保留 CRC、会话、序号、能力和数据有效性等具体协议原因。
  */
 void SensorSafeMonitor_Invalidate(SensorSafeMonitorContext *context,
                                   SensorSafeResult reason)

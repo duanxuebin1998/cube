@@ -6,98 +6,137 @@
  */
 
 #ifndef INC_TEST_H_
+/* INC_TEST_H_ 是本头文件的包含保护标记；首次展开后置位，防止重复包含造成类型或接口重复定义。 */
 #define INC_TEST_H_
 
 #include <stdint.h>
 
 
 /**
- * @brief 执行本模块中的 motor_step_up_text 逻辑。
+ * @brief 以 4×32 微步为单次增量执行长时间上行测试，并周期打印位置参考与扭力采样。
+ *
+ * 启用步进驱动后，每轮向上移动 -4×32 微步，等待两秒，再依次打印循环序号、传感器位置、电机位置参考和三次扭力读数。
+ *
+ * @note 该维护测试最多循环 24000 次并真实驱动电机；命令切换会立即返回，当前提前返回路径不会执行末尾的驱动关闭。
  */
 void motor_step_up_text(void); /* 电机小步进上行测试 */
 /**
- * @brief 执行本模块中的 motor_step_down_text 逻辑。
+ * @brief 以 4×32 微步为单次增量执行长时间下行测试，并周期打印位置参考与扭力采样。
+ *
+ * 启用步进驱动后，每轮向下移动 4×32 微步，等待两秒，再依次打印循环序号、传感器位置、电机位置参考和三次扭力读数。
+ *
+ * @note 该维护测试最多循环 24000 次并真实驱动电机；命令切换会立即返回，当前提前返回路径不会执行末尾的驱动关闭。
  */
 void motor_step_down_text(void); /* 电机小步进下行测试 */
 /**
- * @brief 执行本模块中的 motor_step_text 逻辑。
+ * @brief 依次按 4、8 和 40 个整步的细分脉冲执行往返耐久测试，并持续打印编码器与扭力数据。
+ *
+ * 每种步长先按正脉冲方向运行固定总行程，再按负脉冲方向返回；步长增大时相应减少循环次数，使三个阶段的累计脉冲量一致。
+ * 每次动作前后检查命令切换，动作后等待两秒并分三次输出循环序号、编码器计数和当前扭力，全部阶段完成后关闭步进驱动。
+ *
+ * @note 该维护测试会真实、长时间驱动电机；每次移动后等待并连续采集编码器与扭力。收到命令切换时会立即返回，当前提前返回路径不会执行函数末尾的驱动关闭。
  */
 void motor_step_text(void); /* 电机步进测试 */
 /**
- * @brief 执行本模块中的 Test_Params_Storage 逻辑。
+ * @brief 写入测试罐高并回读校验设备参数存储，最后恢复原始参数。
+ *
+ * @note 该维护测试会真实写入 FRAM 参数区两次；仅允许在受控测试环境执行，中途掉电可能使测试值保留到下次启动。
  */
 void Test_Params_Storage(void); /* 测试参数存储 */
 /**
- * @brief 执行本模块中的 Test_ParamEncoder_AB_Backup 逻辑。
+ * @brief 验证参数区和编码器位置区的 FRAM A/B 双备份回退与全损坏报错逻辑。
+ *
+ * 测试开始时完整备份参数 A/B 分区、编码器 A/B 测试分区以及当前 g_deviceParams，随后通过破坏 magic 字段模拟单分区和双分区损坏。
+ * 参数区分别验证 A 损坏时能回退到 B，以及 A/B 均损坏时必须返回 PARAM_UNINITIALIZED；编码器区分别验证 A 损坏时能从 B 恢复，以及 A/B 均损坏时必须发布
+ * ENCODER_POWERON_FAIL。
+ * 参数测试后恢复两个原始分区并重新保存当前参数，编码器测试后恢复两个原始分区并重新初始化编码器；每个用例只通过打印报告结果，不返回汇总状态。
+ *
+ * @note 该测试会真实改写 FRAM；若测试在恢复步骤前掉电或被复位，参数区或编码器位置区可能保持故意制造的损坏状态，只能在可恢复的维护环境执行。
  */
 void Test_ParamEncoder_AB_Backup(void); /* A/B双备份回退测试（参数+编码值） */
 /**
- * @brief 执行本模块中的 DSM_V2_Test_AllParams 逻辑。
+ * @brief  测试V2协议通讯与关键参数读取
+ * @note   可在初始化完成后调用，例如 main() 或 sensor init 后
  */
 void DSM_V2_Test_AllParams(void) ; /* DSM V2 演示函数 */
 /**
- * @brief 执行本模块中的 SensorWireless_CommTest 逻辑。
+ * @brief  传感器与蓝牙链路综合通信测试
+ * @note   手动调试入口，建议在系统初始化完成后临时调用；函数会执行传感器识别，
+ *         并刷新 g_deviceParams.sensorType/sensorID，正式流程中不要周期性调用。
  */
 void SensorWireless_CommTest(void); /* 传感器与无线通信综合测试 */
 /**
- * @brief 执行本模块中的 Test_main 逻辑。
+ * @brief 依次执行 FRAM 读写、设备参数存储和硬件 CRC32 调试测试。
  */
 void Test_main(void) ; /* 测试主函数 */
 /**
- * @brief 执行本模块中的 motor_text_manual_stop 逻辑。
+ * @brief A指令测试专用：只下发停止寄存器，不判断扭力、编码器或驱动错误。
+ * @note  只在任务上下文调用；用于串口低检测调试，退出时恢复进入前错误状态。
  */
 void motor_text_manual_stop(void); /* A指令低检测停止 */
 /**
- * @brief 执行本模块中的 motor_text_manual_once 逻辑。
+ * @brief A指令测试专用：按指定方向执行一段低检测运动。
+ * @note  运动期间只响应命令切换；不读取扭力、编码器错误或全局错误退出。
  *
- * @param run_distance_mm 业务参数。
- * @param dir 业务参数。
+ * @param run_distance_mm 单个下行行程的目标距离，单位 mm。
+ * @param dir 运动方向。必须使用 MOTOR_DIRECTION_UP 或 MOTOR_DIRECTION_DOWN；函数据此换算符号、目标位置、速度模式或到位条件。
  */
 void motor_text_manual_once(float run_distance_mm, int dir); /* A指令低检测单段运动 */
 /**
- * @brief 执行本模块中的 motor_jog_text 逻辑。
+ * @brief BJ 指令测试专用：初始化电机后直接调用点动相对运动正式接口。
+ * @note  该函数不绕过 MotorCtrl_JogMoveAndWait 内部检测，用于现场验证新长距离点动控制方案。
  *
- * @param run_distance_mm 业务参数。
- * @param dir 业务参数。
- * @param speed_x100 业务参数。
+ * @param run_distance_mm 单个下行行程的目标距离，单位 mm。
+ * @param dir 运动方向。必须使用 MOTOR_DIRECTION_UP 或 MOTOR_DIRECTION_DOWN；函数据此换算符号、目标位置、速度模式或到位条件。
+ * @param speed_x100 本次调试运动速度，单位 0.01 m/min；0 表示使用当前默认速度。
  */
 void motor_jog_text(float run_distance_mm, int dir, uint32_t speed_x100); /* BJ指令点动相对运动测试 */
 /**
- * @brief 执行本模块中的 motor_jog_to_position_text 逻辑。
+ * @brief BJP 指令测试专用：初始化电机后直接调用点动绝对位置正式接口。
+ * @note  用于验证目标位置、提前降速、越界保护和命令切换等正式 API 行为。
  *
- * @param target_mm 业务参数。
- * @param speed_x100 业务参数。
+ * @param target_mm 目标位置，单位 mm。
+ * @param speed_x100 本次调试运动速度，单位 0.01 m/min；0 表示使用当前默认速度。
  */
 void motor_jog_to_position_text(float target_mm, uint32_t speed_x100); /* BJP指令点动绝对位置测试 */
 /**
- * @brief 执行本模块中的 motor_text 逻辑。
+ * @brief 按指定距离连续执行下行与回零往返电机测试，并可在每个行程后检查传感器通信。
  *
- * @param run_distance_mm 业务参数。
- * @param enable_sensor_comm 业务参数。
+ * @param run_distance_mm 单个下行行程的目标距离，单位 mm。
+ * @param enable_sensor_comm 非零表示每个运动行程后附加一次传感器通信检查，0 表示只测试电机。
  */
 void motor_text(float run_distance_mm, uint8_t enable_sensor_comm); /* 电机测试 */
 /**
- * @brief 执行本模块中的 motor_text_encoder 逻辑。
+ * @brief 以固定编码器原点和下行目标连续往返测试，支持运动中传感器通信、超时或提前停稳重启及命令切换恢复。
  *
- * @param run_distance_mm 业务参数。
- * @param enable_sensor_comm 业务参数。
- * @param speed_x100 业务参数。
- * @param accel_multiplier 业务参数。
+ * @param run_distance_mm 单个下行行程的目标距离，单位 mm。
+ * @param enable_sensor_comm 非零表示每个运动行程后附加一次传感器通信检查，0 表示只测试电机。
+ * @param speed_x100 本次调试运动速度，单位 0.01 m/min；0 表示使用当前默认速度。
+ * @param accel_multiplier BE 调试使用的加速度倍率，非法值会限制到允许档位。
  */
 void motor_text_encoder(float run_distance_mm, uint8_t enable_sensor_comm, uint32_t speed_x100, uint32_t accel_multiplier); /* encoder-based mm motor test */
 /**
- * @brief 执行本模块中的 Test_TMC5130_SPI_Static 逻辑。
+ * @brief TMC5130 静态 SPI 通信测试。
+ *
+ * 不启动电机，只重复读取 GSTAT/DRV_STATUS/IOIN/IFCNT，用于判断静止状态下
+ * SPI 是否仍有 0xFFFFFFFF、0x00FFFFFF、0x00000100 等非法读数。
  */
 void Test_TMC5130_SPI_Static(void); /* TMC5130静态SPI通信测试 */
 /**
- * @brief 显示或打印本模块中的 Demo_SinglePointDisplayMock 逻辑。
+  * @brief 不驱动电机也不读取传感器；先模拟接近测量点，再持续发布带小幅波动的单点显示数据，直至新命令打断。
  */
 void Demo_SinglePointDisplayMock(void); /* 单点测量展示（虚拟数据） */
 /**
- * @brief 处理本模块中的 Test_ProcessSerialCommand 逻辑。
+ * @brief 校验并分派 CPU2 串口维护测试命令。
  *
- * @param command 命令值。
- * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ * 空缓冲区或未被 SerialCommandParser 严格识别为测试类的命令立即返回，避免仅凭首字符前缀误启动电机或维护动作。
+ * 传感器与无线通信、蓝牙配对、模拟量输出、B/BE 电机往返等无需通用测量初始化的命令优先处理；除 A 手动运动和 X 展示模拟外，其余后续测试在分派前调用 MeasureStart。
+ * 支持固定频率找液位、电机步进与重复性试验、卷筒参数拟合、位置源切换和静态 SPI 等维护入口；需要 OLED 调试状态的分支会保存并恢复原显示状态。
+ * 长时间循环测试会反复检查新命令切换请求，并在需要时慢停电机后退出；这些命令会真实操作传感器、电机、模拟量输出或参数，不得在中断上下文调用。
+ *
+ * @param command 已完成基础收帧的可修改串口测试命令缓冲区，以 NUL 结尾。
+ * @return 已识别并处理返回 1，非测试命令返回 0；空命令或没有匹配到具体测试分支时也返回 0，由上层继续处理。
+ * @note 返回 1 只表示测试命令已被本函数消费，不等同于对应硬件测试成功；实际结果由打印、错误码和设备状态判断。
  */
 uint8_t Test_ProcessSerialCommand(uint8_t *command);
 #endif /* INC_TEST_H_ */

@@ -4,11 +4,16 @@
 
 /* 区分可安全重发的只读事务和结果不确定时禁止重发的副作用事务。 */
 typedef enum {
-    SENSOR_SAFE_RECOVERY_READ_ONLY = 0,
-    SENSOR_SAFE_RECOVERY_SIDE_EFFECT
+    /* 安全服务恢复动作是否允许产生远端副作用。 */
+    SENSOR_SAFE_RECOVERY_READ_ONLY = 0, /* 恢复过程只允许只读握手和状态确认，不执行远端副作用命令。 */
+    SENSOR_SAFE_RECOVERY_SIDE_EFFECT /* 恢复过程允许执行重置会话等会改变远端状态的命令。 */
 } SensorSafeRecoveryPolicy;
 
-/* 服务级诊断计数饱和保持，避免长稳运行后回绕成较小值。 */
+/**
+ * @brief 服务级诊断计数饱和保持，避免长稳运行后回绕成较小值。
+ *
+ * @param counter 本次节拍、重试或统计使用的计数值。指针非 NULL 且当前值未达到 UINT32_MAX 时原地加一，达到上限后饱和保持。
+ */
 static void SensorSafeService_IncrementCounter(uint32_t *counter)
 {
     if ((counter != NULL) && (*counter != UINT32_MAX)) {
@@ -16,7 +21,12 @@ static void SensorSafeService_IncrementCounter(uint32_t *counter)
     }
 }
 
-/* 把 client 分层结果收敛为设备适配层使用的稳定服务结果。 */
+/**
+ * @brief 把 client 分层结果收敛为设备适配层使用的稳定服务结果。
+ *
+ * @param result 客户端层 SensorSafeClientResult；函数收敛为适配层使用的服务结果类别。
+ * @return 返回服务层结果码；SENSOR_SAFE_SERVICE_OK 表示服务操作完成，其他值区分参数、身份、会话、传输、远端、协议、容量、能力和数据有效性故障。
+ */
 static SensorSafeServiceResult SensorSafeService_MapClientResult(SensorSafeClientResult result)
 {
     switch (result) {
@@ -45,10 +55,14 @@ static SensorSafeServiceResult SensorSafeService_MapClientResult(SensorSafeClien
     }
 }
 
-/*
- * 函数用途：按旧 LTD 参数码判断冻结映射中的整数参数类型。
- * 调用场景：完整参数表读取成功后，服务层逐项核对传感器返回的解释元数据。
- * 关键约束：未列出的参数均来自旧协议单浮点，统一转换为六位小数定点数。
+/**
+ * @brief 按旧 LTD 参数码判断冻结映射中的整数参数类型。
+ *
+ * @details 调用场景：完整参数表读取成功后，服务层逐项核对传感器返回的解释元数据。
+ * @note 关键约束：未列出的参数均来自旧协议单浮点，统一转换为六位小数定点数。
+ *
+ * @param legacy_param_code CPU2 旧参数编号，用于映射安全协议参数类型。
+ * @return 返回旧 LTD 参数码对应的安全协议参数类型编码；未映射参数返回函数定义的未知类型值。
  */
 static uint8_t SensorSafeService_LtdParamType(uint16_t legacy_param_code)
 {
@@ -70,10 +84,15 @@ static uint8_t SensorSafeService_LtdParamType(uint16_t legacy_param_code)
     return param_type;
 }
 
-/*
- * 函数用途：核对完整 LTD 参数表的项数、连续地址和冻结解释元数据。
- * 调用场景：client 完成所有分页事务后、服务层向业务调用方发布结果之前。
- * 关键约束：任一项不符都使整表无效，防止自洽 CRC 掩盖参数缺失或解释漂移。
+/**
+ * @brief 核对完整 LTD 参数表的项数、连续地址和冻结解释元数据。
+ *
+ * @details 调用场景：client 完成所有分页事务后、服务层向业务调用方发布结果之前。
+ * @note 关键约束：任一项不符都使整表无效，防止自洽 CRC 掩盖参数缺失或解释漂移。
+ *
+ * @param values 用于保存连续参数值或测量值的数组。
+ * @param value_count 已经拉取的 LTD 参数值个数，必须覆盖冻结映射表。
+ * @return 1 表示 values 非空、项数正确，且全部参数 ID 连续、索引为 0，类型、读写权限、缩放和单位均符合冻结的 LTD 参数表；0 表示指针或项数无效，或任一参数元数据不匹配。
  */
 static uint8_t SensorSafeService_IsLtdParamTableValid(const SensorSafeParameterValue *values,
                                                       uint16_t value_count)
@@ -105,10 +124,14 @@ static uint8_t SensorSafeService_IsLtdParamTableValid(const SensorSafeParameterV
     return 1U;
 }
 
-/*
- * 函数用途：领取新挑战、建立会话、核对必需能力并读取配置摘要。
- * 调用场景：首次探测以及允许恢复的控制事务失败后调用。
- * 关键约束：每次新 HELLO 领取新挑战，同一事务内重试由 client 复用原挑战。
+/**
+ * @brief 领取新挑战、建立会话、核对必需能力并读取配置摘要。
+ *
+ * @details 调用场景：首次探测以及允许恢复的控制事务失败后调用。
+ * @note 关键约束：每次新 HELLO 领取新挑战，同一事务内重试由 client 复用原挑战。
+ *
+ * @param context 服务握手上下文；函数组合启动身份、nonce 来源和内嵌 client 建立远端身份、配置摘要及 active 状态，并累计 HELLO 次数。
+ * @return 返回服务层结果码；SENSOR_SAFE_SERVICE_OK 表示服务操作完成，其他值区分参数、身份、会话、传输、远端、协议、容量、能力和数据有效性故障。
  */
 static SensorSafeServiceResult SensorSafeService_Hello(SensorSafeServiceContext *context)
 {
@@ -154,10 +177,14 @@ static SensorSafeServiceResult SensorSafeService_Hello(SensorSafeServiceContext 
     return SENSOR_SAFE_SERVICE_OK;
 }
 
-/*
- * 函数用途：确认服务已初始化、处于活动态且会话允许普通业务。
- * 调用场景：所有请求响应测量和模式切换接口的共同前置检查。
- * 关键约束：周期流活动时禁止隐式切回控制业务；离线或恢复态只能通过新 HELLO 恢复。
+/**
+ * @brief 确认服务已初始化、处于活动态且会话允许普通业务。
+ *
+ * @details 调用场景：所有请求响应测量和模式切换接口的共同前置检查。
+ * @note 关键约束：周期流活动时禁止隐式切回控制业务；离线或恢复态只能通过新 HELLO 恢复。
+ *
+ * @param context 待检查的服务上下文；函数核对 initialized、active 和客户端会话，必要时触发受限恢复，不直接读取业务测量值。
+ * @return 返回服务层结果码；SENSOR_SAFE_SERVICE_OK 表示服务操作完成，其他值区分参数、身份、会话、传输、远端、协议、容量、能力和数据有效性故障。
  */
 static SensorSafeServiceResult SensorSafeService_EnsureReady(SensorSafeServiceContext *context)
 {
@@ -174,10 +201,16 @@ static SensorSafeServiceResult SensorSafeService_EnsureReady(SensorSafeServiceCo
     return SensorSafeService_Hello(context);
 }
 
-/*
- * 函数用途：按事务副作用策略决定是否允许一次重新 HELLO。
- * 调用场景：业务控制命令首次失败后、决定是否进行第二次尝试时调用。
- * 关键约束：结果不确定的副作用命令禁止重发；可信 ERR 明确拒绝时允许恢复后重试。
+/**
+ * @brief 按事务副作用策略决定是否允许一次重新 HELLO。
+ *
+ * @details 调用场景：业务控制命令首次失败后、决定是否进行第二次尝试时调用。
+ * @note 关键约束：结果不确定的副作用命令禁止重发；可信 ERR 明确拒绝时允许恢复后重试。
+ *
+ * @param context 恢复状态上下文；函数累计尝试或阻断次数，并保存触发原因以及最近传输、线格式和协议失败现场。
+ * @param result 首次业务请求的客户端结果；只有会话类可恢复失败且策略允许时才尝试一次重新 HELLO。
+ * @param policy 安全协议恢复策略，限定允许的重试和重新握手动作。
+ * @return 1 表示当前失败允许且已执行一次重新 HELLO；禁止恢复、恢复失败或已达上限时返回 0。
  */
 static uint8_t SensorSafeService_TryRecover(SensorSafeServiceContext *context,
                                            SensorSafeClientResult result,
@@ -212,7 +245,13 @@ static uint8_t SensorSafeService_TryRecover(SensorSafeServiceContext *context,
     return 1U;
 }
 
-/* 只有重新 HELLO 后的业务重试也成功，才把本次恢复计为成功。 */
+/**
+ * @brief 只有重新 HELLO 后的业务重试也成功，才把本次恢复计为成功。
+ *
+ * @param context 恢复诊断上下文；函数累计恢复次数，并按本轮结果更新最近恢复触发原因及成功、失败统计。
+ * @param attempt 当前重试序号。
+ * @param result 重新 HELLO 后业务重试的最终客户端结果；只有 OK 才增加恢复成功计数。
+ */
 static void SensorSafeService_RecordRecoveryResult(SensorSafeServiceContext *context,
                                                    uint8_t attempt,
                                                    SensorSafeClientResult result)
@@ -222,7 +261,13 @@ static void SensorSafeService_RecordRecoveryResult(SensorSafeServiceContext *con
     }
 }
 
-/* 周期快报失败原因与本次 client 结果绑定，禁止沿用上一帧的协议错误。 */
+/**
+ * @brief 周期快报失败原因与本次 client 结果绑定，禁止沿用上一帧的协议错误。
+ *
+ * @param context 安全传感器服务只读上下文；用于读取服务激活状态、客户端最近错误、周期流状态和恢复诊断信息，不修改服务运行态。
+ * @param result 本次周期接收的客户端结果；函数据此选择当前协议失败原因，禁止沿用历史错误。
+ * @return 返回安全协议校验结果；SENSOR_SAFE_OK 表示帧校验或状态转换成功，其他值保留参数、长度、帧头、CRC、会话、序号、能力及数据有效性等具体失败原因。
+ */
 static SensorSafeResult SensorSafeService_PeriodicFailureReason(const SensorSafeServiceContext *context,
                                                                 SensorSafeClientResult result)
 {
@@ -243,10 +288,16 @@ static SensorSafeResult SensorSafeService_PeriodicFailureReason(const SensorSafe
     return SENSOR_SAFE_DATA_INVALID;
 }
 
-/*
- * 函数用途：初始化持久化身份、client、会话和周期快照监控器。
- * 调用场景：设备适配层首次尝试安全协议探测前调用。
- * 关键约束：同一上电周期重复调用不再推进 FRAM 启动计数；本函数不发送 HELLO。
+/**
+ * @brief 初始化持久化身份、client、会话和周期快照监控器。
+ *
+ * @details 调用场景：设备适配层首次尝试安全协议探测前调用。
+ * @note 关键约束：同一上电周期重复调用不再推进 FRAM 启动计数；本函数不发送 HELLO。
+ *
+ * @param context 待初始化的服务对象；函数建立启动身份、客户端和周期监测器，清零诊断并在全部步骤成功后置 initialized。
+ * @param identity_ops 安全身份模块访问 FRAM、随机数、UID 和时钟的平台接口表。
+ * @param transport_ops 安全协议服务使用的请求响应传输接口表。
+ * @return 返回服务层结果码；SENSOR_SAFE_SERVICE_OK 表示服务操作完成，其他值区分参数、身份、会话、传输、远端、协议、容量、能力和数据有效性故障。
  */
 SensorSafeServiceResult SensorSafeService_Init(SensorSafeServiceContext *context,
                                                const SensorSafeIdentityOps *identity_ops,
@@ -288,10 +339,15 @@ SensorSafeServiceResult SensorSafeService_Init(SensorSafeServiceContext *context
     return SENSOR_SAFE_SERVICE_OK;
 }
 
-/*
- * 函数用途：执行完整 HELLO 与配置摘要验收并返回安全传感器 ID。
- * 调用场景：传感器自动识别的安全协议探测阶段。
- * 关键约束：必需能力缺失或摘要读取失败时 active 保持为 0，允许外层回退旧协议。
+/**
+ * @brief 执行完整 HELLO 与配置摘要验收并返回安全传感器 ID。
+ *
+ * @details 调用场景：传感器自动识别的安全协议探测阶段。
+ * @note 关键约束：必需能力缺失或摘要读取失败时 active 保持为 0，允许外层回退旧协议。
+ *
+ * @param context 已初始化但可尚未激活的服务上下文；函数执行 HELLO 探测，成功后从 identity 发布设备编号并置 active。
+ * @param sensor_id 用于返回探测到的传感器编号。
+ * @return 返回服务层结果码；SENSOR_SAFE_SERVICE_OK 表示服务操作完成，其他值区分参数、身份、会话、传输、远端、协议、容量、能力和数据有效性故障。
  */
 SensorSafeServiceResult SensorSafeService_Probe(SensorSafeServiceContext *context,
                                                 uint32_t *sensor_id)
@@ -314,7 +370,11 @@ SensorSafeServiceResult SensorSafeService_Probe(SensorSafeServiceContext *contex
     return SENSOR_SAFE_SERVICE_OK;
 }
 
-/* 撤销服务活动态、client 会话及周期快照，不重复初始化持久化身份。 */
+/**
+ * @brief 撤销服务活动态、client 会话及周期快照，不重复初始化持久化身份。
+ *
+ * @param context 待停用的服务上下文；函数停用内嵌 client、复位周期 monitor，并清除 active 状态。
+ */
 void SensorSafeService_Deactivate(SensorSafeServiceContext *context)
 {
     if (context == NULL) {
@@ -325,16 +385,27 @@ void SensorSafeService_Deactivate(SensorSafeServiceContext *context)
     SensorSafeMonitor_Invalidate(&context->monitor, SENSOR_SAFE_STREAM_STOPPED);
 }
 
-/* 查询服务是否已通过探测并保持活动态。 */
+/**
+ * @brief 查询服务是否已通过探测并保持活动态。
+ *
+ * @param context 安全传感器服务只读上下文；用于读取服务激活状态、客户端最近错误、周期流状态和恢复诊断信息，不修改服务运行态。
+ * @return 1 表示 context 非空且 active 标志已置位；0 表示上下文为空或服务尚未激活。
+ */
 uint8_t SensorSafeService_IsActive(const SensorSafeServiceContext *context)
 {
     return (uint8_t)(((context != NULL) && (context->active != 0U)) ? 1U : 0U);
 }
 
-/*
- * 函数用途：切换测量模式并返回传感器声明的稳定等待时间。
- * 调用场景：旧测量流程进入密度或液位阶段时由适配层调用。
- * 关键约束：模式切换属于副作用事务，响应不确定时禁止自动重发。
+/**
+ * @brief 切换测量模式并返回传感器声明的稳定等待时间。
+ *
+ * @details 调用场景：旧测量流程进入密度或液位阶段时由适配层调用。
+ * @note 关键约束：模式切换属于副作用事务，响应不确定时禁止自动重发。
+ *
+ * @param context 活动服务上下文；函数通过内嵌 client 执行模式切换，并保存 last_client_result 供恢复和错误映射。
+ * @param mode 准备下发给安全传感器的测量模式码，必须在已协商能力范围内。
+ * @param settle_time_ms 传感器切换测量模式后要求的稳定等待时间，单位 ms。
+ * @return 返回服务层结果码；SENSOR_SAFE_SERVICE_OK 表示服务操作完成，其他值区分参数、身份、会话、传输、远端、协议、容量、能力和数据有效性故障。
  */
 SensorSafeServiceResult SensorSafeService_SetMeasureMode(SensorSafeServiceContext *context,
                                                          uint8_t mode,
@@ -366,10 +437,17 @@ SensorSafeServiceResult SensorSafeService_SetMeasureMode(SensorSafeServiceContex
     return SensorSafeService_MapClientResult(client_result);
 }
 
-/*
- * 函数用途：读取密度组合原始定点数并转换为旧业务层浮点单位。
- * 调用场景：密度测量流程读取频率、密度和温度时调用。
- * 关键约束：只读事务最多允许一次重新 HELLO；失败时不修改三个输出值。
+/**
+ * @brief 读取密度组合原始定点数并转换为旧业务层浮点单位。
+ *
+ * @details 调用场景：密度测量流程读取频率、密度和温度时调用。
+ * @note 关键约束：只读事务最多允许一次重新 HELLO；失败时不修改三个输出值。
+ *
+ * @param context 活动服务上下文；函数通过 client 读取组合定点值，全部转换成功后才更新频率、密度和温度三个输出。
+ * @param frequency_hz 传感器频率，单位 Hz。
+ * @param density_kg_m3 用于返回实时密度的输出参数，单位 kg/m3。
+ * @param temperature_c 温度值，单位 ℃。
+ * @return 返回服务层结果码；SENSOR_SAFE_SERVICE_OK 表示服务操作完成，其他值区分参数、身份、会话、传输、远端、协议、容量、能力和数据有效性故障。
  */
 SensorSafeServiceResult SensorSafeService_ReadDensity(SensorSafeServiceContext *context,
                                                       float *frequency_hz,
@@ -410,10 +488,15 @@ SensorSafeServiceResult SensorSafeService_ReadDensity(SensorSafeServiceContext *
     return SENSOR_SAFE_SERVICE_OK;
 }
 
-/*
- * 函数用途：读取液位频率并按四舍五入转换为整数 Hz。
- * 调用场景：液位测量流程读取探头频率时调用。
- * 关键约束：加 500 前检查 UINT32 上界，避免溢出后产生虚假低频值。
+/**
+ * @brief 读取液位频率并按四舍五入转换为整数 Hz。
+ *
+ * @details 调用场景：液位测量流程读取探头频率时调用。
+ * @note 关键约束：加 500 前检查 UINT32 上界，避免溢出后产生虚假低频值。
+ *
+ * @param context 活动服务上下文；函数通过 client 读取液位频率并更新最近客户端结果，失败时不覆盖调用方输出。
+ * @param frequency_hz 传感器频率，单位 Hz。
+ * @return 返回服务层结果码；SENSOR_SAFE_SERVICE_OK 表示服务操作完成，其他值区分参数、身份、会话、传输、远端、协议、容量、能力和数据有效性故障。
  */
 SensorSafeServiceResult SensorSafeService_ReadLevelFrequency(SensorSafeServiceContext *context,
                                                              uint32_t *frequency_hz)
@@ -452,7 +535,13 @@ SensorSafeServiceResult SensorSafeService_ReadLevelFrequency(SensorSafeServiceCo
     return SENSOR_SAFE_SERVICE_OK;
 }
 
-/* 读取水位电容定点数并转换为 pF；能力缺失由 client 明确返回不支持。 */
+/**
+ * @brief 读取水位电容定点数并转换为 pF；能力缺失由 client 明确返回不支持。
+ *
+ * @param context 活动服务上下文；函数通过 client 读取水位电容定点值，并保存最近客户端结果供能力缺失和通信错误映射。
+ * @param capacitance_pf 用于返回水位通道电容值的输出参数，单位 pF。
+ * @return 返回服务层结果码；SENSOR_SAFE_SERVICE_OK 表示服务操作完成，其他值区分参数、身份、会话、传输、远端、协议、容量、能力和数据有效性故障。
+ */
 SensorSafeServiceResult SensorSafeService_ReadWaterCapacitance(SensorSafeServiceContext *context,
                                                                float *capacitance_pf)
 {
@@ -487,7 +576,14 @@ SensorSafeServiceResult SensorSafeService_ReadWaterCapacitance(SensorSafeService
     return SENSOR_SAFE_SERVICE_OK;
 }
 
-/* 读取双轴姿态定点数并转换为度；失败时不覆盖调用方输出。 */
+/**
+ * @brief 读取双轴姿态定点数并转换为度；失败时不覆盖调用方输出。
+ *
+ * @param context 活动服务上下文；函数通过 client 读取双轴角度定点值，转换成功后才写浮点输出并保存最近客户端结果。
+ * @param angle_x_deg 用于返回陀螺仪 X 轴角度的输出参数，单位度。
+ * @param angle_y_deg 用于返回陀螺仪 Y 轴角度的输出参数，单位度。
+ * @return 返回服务层结果码；SENSOR_SAFE_SERVICE_OK 表示服务操作完成，其他值区分参数、身份、会话、传输、远端、协议、容量、能力和数据有效性故障。
+ */
 SensorSafeServiceResult SensorSafeService_ReadGyroAngle(SensorSafeServiceContext *context,
                                                         float *angle_x_deg,
                                                         float *angle_y_deg)
@@ -524,10 +620,17 @@ SensorSafeServiceResult SensorSafeService_ReadGyroAngle(SensorSafeServiceContext
     return SENSOR_SAFE_SERVICE_OK;
 }
 
-/*
- * 函数用途：在服务层以一次调用读取完整 LTD 参数表并隐藏底层分页事务。
- * 调用场景：参数同步、维护导出和诊断快照需要取得完整参数集合时调用。
- * 关键约束：固定校验 115 项映射；属于只读事务，允许会话失效后恢复一次。
+/**
+ * @brief 在服务层以一次调用读取完整 LTD 参数表并隐藏底层分页事务。
+ *
+ * @details 调用场景：参数同步、维护导出和诊断快照需要取得完整参数集合时调用。
+ * @note 关键约束：固定校验 115 项映射；属于只读事务，允许会话失效后恢复一次。
+ *
+ * @param context 活动服务上下文；函数使用 client 和已确认远端身份读取完整参数表，并保存最后客户端结果供上层诊断。
+ * @param values 用于保存连续参数值或测量值的数组。
+ * @param value_capacity 调用方结果数组可容纳的元素数量。
+ * @param value_count_out 用于返回实际写入结果数组的元素数量。
+ * @return 返回服务层结果码；SENSOR_SAFE_SERVICE_OK 表示服务操作完成，其他值区分参数、身份、会话、传输、远端、协议、容量、能力和数据有效性故障。
  */
 SensorSafeServiceResult SensorSafeService_ReadAllParams(SensorSafeServiceContext *context,
                                                         SensorSafeParameterValue *values,
@@ -586,10 +689,20 @@ SensorSafeServiceResult SensorSafeService_ReadAllParams(SensorSafeServiceContext
     return SENSOR_SAFE_SERVICE_OK;
 }
 
-/*
- * 函数用途：协商周期、静默预算、流标识和控制保护窗并启动主动上报。
- * 调用场景：显式启用安全协议周期模式时调用，默认测量流程不会自动进入。
- * 关键约束：启动属于副作用事务；成功后清空旧快照，必须等待本流首帧重新发布。
+/**
+ * @brief 协商周期、静默预算、流标识和控制保护窗并启动主动上报。
+ *
+ * @details 调用场景：显式启用安全协议周期模式时调用，默认测量流程不会自动进入。
+ * @note 关键约束：启动属于副作用事务；成功后清空旧快照，必须等待本流首帧重新发布。
+ *
+ * @param context 活动服务上下文；函数通过 client 协商周期流参数，成功后用接受值初始化 monitor 的时序和数据年龄门限。
+ * @param period_ms 传感器周期主动上报的目标周期，单位 ms。
+ * @param max_silent_ms 周期主动上报允许连续未收到有效快报的最长静默时间，单位 ms。
+ * @param stream_id 数据流编号。
+ * @param control_guard_ms 周期主动上报期间预留给控制请求的保护窗口，单位 ms。
+ * @param measure_mode 测量模式。
+ * @param start_after_ms 传感器接受周期主动上报请求后延迟开始快报的时间，单位 ms。
+ * @return 返回服务层结果码；SENSOR_SAFE_SERVICE_OK 表示服务操作完成，其他值区分参数、身份、会话、传输、远端、协议、容量、能力和数据有效性故障。
  */
 SensorSafeServiceResult SensorSafeService_StartPeriodic(SensorSafeServiceContext *context,
                                                         uint16_t period_ms,
@@ -635,10 +748,15 @@ SensorSafeServiceResult SensorSafeService_StartPeriodic(SensorSafeServiceContext
     return SENSOR_SAFE_SERVICE_OK;
 }
 
-/*
- * 函数用途：接收并验收一帧周期快报，再发布为一致性监控快照。
- * 调用场景：周期模式任务轮询入口。
- * 关键约束：任一 client 或 monitor 错误立即撤销旧快照，禁止陈旧值继续被读取。
+/**
+ * @brief 接收并验收一帧周期快报，再发布为一致性监控快照。
+ *
+ * @details 调用场景：周期模式任务轮询入口。
+ * @note 关键约束：任一 client 或 monitor 错误立即撤销旧快照，禁止陈旧值继续被读取。
+ *
+ * @param context 周期轮询服务上下文；函数驱动 client 接收快报，再把通过协议校验的样本交给 monitor 双缓冲发布。
+ * @param timeout_ms 允许等待的最长时间，单位 ms。
+ * @return 返回服务层结果码；SENSOR_SAFE_SERVICE_OK 表示服务操作完成，其他值区分参数、身份、会话、传输、远端、协议、容量、能力和数据有效性故障。
  */
 SensorSafeServiceResult SensorSafeService_PollPeriodic(SensorSafeServiceContext *context,
                                                        uint32_t timeout_ms)
@@ -672,10 +790,15 @@ SensorSafeServiceResult SensorSafeService_PollPeriodic(SensorSafeServiceContext 
     return SENSOR_SAFE_SERVICE_OK;
 }
 
-/*
- * 函数用途：按当前时刻读取仍在新鲜度预算内的周期快照。
- * 调用场景：业务层消费最近一次已验收快报时调用。
- * 关键约束：读取失败时由 monitor 清零输出，服务层只映射失效类别。
+/**
+ * @brief 按当前时刻读取仍在新鲜度预算内的周期快照。
+ *
+ * @details 调用场景：业务层消费最近一次已验收快报时调用。
+ * @note 关键约束：读取失败时由 monitor 清零输出，服务层只映射失效类别。
+ *
+ * @param context 周期快报服务上下文；函数从 client 和 monitor 取得已经通过序号、年龄和一致性检查的双缓冲发布快照。
+ * @param snapshot 安全协议周期数据快照输出对象；成功时写入流标识、样本序号、测量数据、传感器数据年龄和信号质量。
+ * @return 返回服务层结果码；SENSOR_SAFE_SERVICE_OK 表示服务操作完成，其他值区分参数、身份、会话、传输、远端、协议、容量、能力和数据有效性故障。
  */
 SensorSafeServiceResult SensorSafeService_ReadPeriodicSnapshot(SensorSafeServiceContext *context,
                                                                SensorSafePeriodicSnapshot *snapshot)
@@ -700,10 +823,14 @@ SensorSafeServiceResult SensorSafeService_ReadPeriodicSnapshot(SensorSafeService
     return SENSOR_SAFE_SERVICE_DATA_INVALID;
 }
 
-/*
- * 函数用途：请求退出周期模式，并无条件撤销当前快照。
- * 调用场景：回到请求响应模式、命令切换或业务结束时调用。
- * 关键约束：即使停流响应失败也不得继续使用旧周期数据。
+/**
+ * @brief 请求退出周期模式，并无条件撤销当前快照。
+ *
+ * @details 调用场景：回到请求响应模式、命令切换或业务结束时调用。
+ * @note 关键约束：即使停流响应失败也不得继续使用旧周期数据。
+ *
+ * @param context 正在运行周期流的服务上下文；函数通过 client 停止远端快报，保存结果并复位本地 monitor。
+ * @return 返回服务层结果码；SENSOR_SAFE_SERVICE_OK 表示服务操作完成，其他值区分参数、身份、会话、传输、远端、协议、容量、能力和数据有效性故障。
  */
 SensorSafeServiceResult SensorSafeService_StopPeriodic(SensorSafeServiceContext *context)
 {

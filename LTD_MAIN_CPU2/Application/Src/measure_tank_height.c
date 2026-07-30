@@ -52,8 +52,8 @@ static uint32_t Bottom_CheckMaxCableLength(void);
 static uint32_t Bottom_ApplyNearSensorSpeedLimit(uint32_t speed_x100);
 static uint32_t BuildTankHeightFromCableLength(int32_t cable_length_01mm);
 /**
- * @brief 执行罐高测量中的 Bottom_GetMaxCableLength01mm 逻辑。
- * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ * @brief 计算探底流程允许使用的最大尺带长度，单位 0.1 mm。
+ * @return 返回探底流程允许使用的最大尺带长度，单位 0.1 mm的有效长度，单位字节；0 表示没有可供消费的数据。
  */
 static uint32_t Bottom_GetMaxCableLength01mm(void)
 {
@@ -68,8 +68,8 @@ static uint32_t Bottom_GetMaxCableLength01mm(void)
 }
 
 /**
- * @brief 检查罐高测量中的 Bottom_CheckMaxCableLength 逻辑。
- * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ * @brief 检查当前尺带长度是否超过罐高约束的最大放带范围。
+ * @return NO_ERROR 表示当前尺带长度未超过罐高约束；超出最大放带范围时返回 MEASUREMENT_WEIGHT_DOWN_FAIL。
  */
 static uint32_t Bottom_CheckMaxCableLength(void)
 {
@@ -89,10 +89,10 @@ static uint32_t Bottom_CheckMaxCableLength(void)
 }
 
 /**
- * @brief 执行罐高测量中的 Bottom_ApplyNearSensorSpeedLimit 逻辑。
+ * @brief 接近传感器量程端点时限制探底运动速度。
  *
- * @param speed_x100 业务参数。
- * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ * @param speed_x100 本次调试运动速度，单位 0.01 m/min；0 表示使用当前默认速度。
+ * @return 返回探底实际采用速度，单位 0.01 m/min；接近传感器量程端点时不超过 BOTTOM_NEAR_SPEED_X100。
  */
 static uint32_t Bottom_ApplyNearSensorSpeedLimit(uint32_t speed_x100)
 {
@@ -108,10 +108,10 @@ static uint32_t Bottom_ApplyNearSensorSpeedLimit(uint32_t speed_x100)
 }
 
 /**
- * @brief 执行罐高测量中的 BuildTankHeightFromCableLength 逻辑。
+ * @brief 根据触底尺带长度和标定偏移计算罐高。
  *
- * @param cable_length_01mm 数据长度。
- * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ * @param cable_length_01mm 尺带长度定点值，单位 0.1 mm；函数结合浮子和安装偏移换算储罐高度并执行范围检查。
+ * @return 返回根据触底尺带长度和标定偏移计算罐高的有效长度，单位字节；0 表示没有可供消费的数据。
  */
 static uint32_t BuildTankHeightFromCableLength(int32_t cable_length_01mm)
 {
@@ -133,10 +133,10 @@ static uint32_t BuildTankHeightFromCableLength(int32_t cable_length_01mm)
     return (uint32_t)tank_height_01mm;
 }
 /**
- * @brief 执行罐高测量中的 BuildBottomCableLengthFromTankHeight 逻辑。
+ * @brief 根据罐高和标定偏移反算触底尺带长度。
  *
- * @param tank_height_01mm 业务参数。
- * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ * @param tank_height_01mm 参与换算的罐体高度，单位 0.1 mm。
+ * @return 返回根据罐高和标定偏移反算触底尺带长度的有效长度，单位字节；0 表示没有可供消费的数据。
  */
 static uint32_t BuildBottomCableLengthFromTankHeight(uint32_t tank_height_01mm)
 {
@@ -153,10 +153,17 @@ static uint32_t BuildBottomCableLengthFromTankHeight(uint32_t tank_height_01mm)
 
     return (uint32_t)cable_length_01mm;
 }
+/**
+ * @brief 在触底结果中应用编码器罐高修正值。
+ *
+ * @param fallback_tank_height 兜底值高度。
+ */
 static void ApplyBottomEncoderCorrection(uint32_t fallback_tank_height);
 /**
- * @brief 读取罐高测量中的 GetBottomEncoderCorrectionTankHeight 逻辑。
- * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ * @brief 读取应用编码器修正后的探底罐高。
+ *
+ * @param fallback_tank_height 兜底值高度。
+ * @return 返回可用的编码器修正罐高，单位 0.1 mm；修正值无效时返回调用方提供的 fallback_tank_height。
  */
 static uint32_t GetBottomEncoderCorrectionTankHeight(uint32_t fallback_tank_height)
 {
@@ -168,19 +175,19 @@ static uint32_t GetBottomEncoderCorrectionTankHeight(uint32_t fallback_tank_heig
 }
 
 /**
- * @brief 计算罐高测量中的 CalcAbsU32Diff 逻辑。
+ * @brief 计算两个无符号 32 位位置值的绝对差。
  *
- * @param a 业务参数。
- * @param b 业务参数。
- * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ * @param a 算法或比较使用的第一个输入值。
+ * @param b 算法或比较使用的第二个输入值。
+ * @return 返回两个无符号 32 位位置值的绝对差；有符号边界按函数内饱和规则处理。
  */
 static uint32_t CalcAbsU32Diff(uint32_t a, uint32_t b)
 {
     return (a >= b) ? (a - b) : (b - a);
 }
 /**
- * @brief 读取罐高测量中的 GetRealHeightCalibrationOffset 逻辑。
- * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ * @brief 计算真实罐高标定相对探底罐高的偏移量。
+ * @return 返回当前真实罐高与初始罐高之差，单位 0.1 mm；标定条件不成立时返回 0。
  */
 static int32_t GetRealHeightCalibrationOffset(void)
 {
@@ -195,10 +202,10 @@ static int32_t GetRealHeightCalibrationOffset(void)
 }
 
 /**
- * @brief 执行罐高测量中的 ApplyRealHeightCalibration 逻辑。
+ * @brief 把真实罐高标定偏移应用到测量位置。
  *
- * @param raw_real_height 业务参数。
- * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ * @param raw_real_height 原始高度。
+ * @return 返回叠加真实罐高标定偏移后的测量位置，单位 0.1 mm；负值和溢出分别钳位到 0 与 UINT32_MAX。
  */
 static uint32_t ApplyRealHeightCalibration(uint32_t raw_real_height)
 {
@@ -214,8 +221,9 @@ static uint32_t ApplyRealHeightCalibration(uint32_t raw_real_height)
 }
 
 /**
- * @brief 执行罐高测量中的 ApplyBottomEncoderCorrection 逻辑。
- * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ * @brief 在触底结果中应用编码器罐高修正值。
+ *
+ * @param fallback_tank_height 兜底值高度。
  */
 static void ApplyBottomEncoderCorrection(uint32_t fallback_tank_height)
 {
@@ -326,10 +334,8 @@ uint32_t SearchBottom(void)
 
         CHECK_COMMAND_SWITCH(ret);
 
-        /* 先处理异常边界，避免罐高测量状态机带故障继续运行。 */
         if (ret != NO_ERROR)
         {
-            /* 错误 阶段：错误重试 模块：测量 操作：粗找罐底 原因：搜索失败 尝试：try_times/3U 错误码：ret 错误名：ErrorLog_GetCodeName(ret) */
             ErrorLog_Retry(ERROR_LOG_MODULE_MEASURE,
                            ERROR_LOG_OP_SEARCH_BOTTOM_ROUGH,
                            ERROR_LOG_REASON_SEARCH_FAIL,
@@ -343,7 +349,6 @@ uint32_t SearchBottom(void)
         {
             if (try_times > 1U)
             {
-                /* 错误 阶段：重试成功 模块：测量 操作：粗找罐底 原因：恢复成功 尝试：try_times/3U */
                 ErrorLog_Recover(ERROR_LOG_MODULE_MEASURE,
                                  ERROR_LOG_OP_SEARCH_BOTTOM_ROUGH,
                                  ERROR_LOG_REASON_RECOVER_OK,
@@ -354,7 +359,6 @@ uint32_t SearchBottom(void)
         }
     }
 
-    /* 先处理异常边界，避免罐高测量状态机带故障继续运行。 */
     if (ret != NO_ERROR)
     {
         RETURN_ERROR(ret);
@@ -376,12 +380,10 @@ uint32_t SearchBottom(void)
             return STATE_SWITCH;
         }
 
-        /* 先处理异常边界，避免罐高测量状态机带故障继续运行。 */
         if (ret == NO_ERROR)
         {
             if (try_times > 1U)
             {
-                /* 错误 阶段：重试成功 模块：测量 操作：精找罐底 原因：恢复成功 尝试：try_times/3U */
                 ErrorLog_Recover(ERROR_LOG_MODULE_MEASURE,
                                  ERROR_LOG_OP_SEARCH_BOTTOM_PRECISE,
                                  ERROR_LOG_REASON_RECOVER_OK,
@@ -392,7 +394,6 @@ uint32_t SearchBottom(void)
         }
         else
         {
-            /* 错误 阶段：错误重试 模块：测量 操作：精找罐底 原因：搜索失败 尝试：try_times/3U 错误码：ret 错误名：ErrorLog_GetCodeName(ret) */
             ErrorLog_Retry(ERROR_LOG_MODULE_MEASURE,
                            ERROR_LOG_OP_SEARCH_BOTTOM_PRECISE,
                            ERROR_LOG_REASON_SEARCH_FAIL,
@@ -403,7 +404,6 @@ uint32_t SearchBottom(void)
         }
     }
 
-    /* 先处理异常边界，避免罐高测量状态机带故障继续运行。 */
     if (ret != NO_ERROR)
     {
         CHECK_ERROR(ret);
@@ -423,12 +423,10 @@ uint32_t SearchBottom(void)
             return STATE_SWITCH;
         }
 
-        /* 先处理异常边界，避免罐高测量状态机带故障继续运行。 */
         if (ret == NO_ERROR)
         {
             if (try_times > 1U)
             {
-                /* 错误 阶段：重试成功 模块：测量 操作：精找罐底 原因：恢复成功 尝试：try_times/3U */
                 ErrorLog_Recover(ERROR_LOG_MODULE_MEASURE,
                                  ERROR_LOG_OP_SEARCH_BOTTOM_PRECISE,
                                  ERROR_LOG_REASON_RECOVER_OK,
@@ -439,7 +437,6 @@ uint32_t SearchBottom(void)
         }
         else
         {
-            /* 错误 阶段：错误重试 模块：测量 操作：精找罐底 原因：搜索失败 尝试：try_times/3U 错误码：ret 错误名：ErrorLog_GetCodeName(ret) */
             ErrorLog_Retry(ERROR_LOG_MODULE_MEASURE,
                            ERROR_LOG_OP_SEARCH_BOTTOM_PRECISE,
                            ERROR_LOG_REASON_SEARCH_FAIL,
@@ -450,7 +447,6 @@ uint32_t SearchBottom(void)
         }
     }
 
-    /* 先处理异常边界，避免罐高测量状态机带故障继续运行。 */
     if (ret != NO_ERROR)
     {
         CHECK_ERROR(ret);
@@ -529,7 +525,6 @@ static int SearchBottomRough() {
         }
 
         ret = Bottom_CheckMaxCableLength();
-        /* 先处理异常边界，避免罐高测量状态机带故障继续运行。 */
         if (ret != NO_ERROR) {
             (void)MotorCtrl_QuickStop();
             RETURN_ERROR(ret);
@@ -569,6 +564,8 @@ static int SearchBottomRough() {
  *
  * 如果进入找底流程时已经触底，先分段上行并复查触底状态，确保粗找从 NORMAL 状态开始。
  * 上行动作只用于离底，不做扭力碰撞检测；超过最大离底距离仍触底则返回找底失败。
+ *
+ * @return NO_ERROR 表示探头已确认离开罐底；退让运动或扭力读取失败时返回对应错误，允许次数内仍无法释放时返回 MEASUREMENT_BOTTOM_RELEASE_FAIL。
  */
 static uint32_t EnsureBottomReleasedBeforeRoughSearch(void)
 {
@@ -578,7 +575,6 @@ static uint32_t EnsureBottomReleasedBeforeRoughSearch(void)
 
     while (lifted_mm <= BOTTOM_RELEASE_BEFORE_ROUGH_MAX_MM) {
         ret = check_bottom_status(&bottom_status);
-        /* 先处理异常边界，避免罐高测量状态机带故障继续运行。 */
         if (ret != NO_ERROR) {
             return ret;
         }
@@ -598,7 +594,6 @@ static uint32_t EnsureBottomReleasedBeforeRoughSearch(void)
         ret = MotorCtrl_MoveBlockingNoDetect(BOTTOM_RELEASE_BEFORE_ROUGH_STEP_MM,
                                              MOTOR_DIRECTION_UP,
                                              MotorCtrl_GetDefaultSpeedX100());
-        /* 先处理异常边界，避免罐高测量状态机带故障继续运行。 */
         if (ret != NO_ERROR) {
             return ret;
         }
@@ -635,7 +630,6 @@ static int SearchBottomPrecise() {
         }
 
         ret = Bottom_CheckMaxCableLength();
-        /* 先处理异常边界，避免罐高测量状态机带故障继续运行。 */
         if (ret != NO_ERROR) {
             (void)MotorCtrl_QuickStop();
             RETURN_ERROR(ret);
@@ -688,7 +682,6 @@ static uint32_t CaptureGyroZeroRefAverage(const char *tag, uint8_t allow_first_s
 
     for (uint32_t i = 0; i < BOTTOM_GYRO_REF_SAMPLE_COUNT; i++) {
         ret = Sensor_ReadGyroAngle(&ax, &ay);
-        /* 先处理异常边界，避免罐高测量状态机带故障继续运行。 */
         if (ret != NO_ERROR) {
             g_gyro_zero_ref.valid = 0;
             return ret;
@@ -757,8 +750,8 @@ static uint32_t CaptureGyroZeroRefAverage(const char *tag, uint8_t allow_first_s
 }
 
 /**
- * @brief 执行罐高测量中的 EnsureGyroZeroRefForBottomMeasurement 逻辑。
- * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ * @brief 探底前确保姿态零基准有效；必要时在允许位置重新采集并保存基准。
+ * @return NO_ERROR 表示已有合法姿态零基准，或已重新采集并保存；其他值为位置不允许、陀螺仪读取、角度有效性或参数持久化错误。
  */
 static uint32_t EnsureGyroZeroRefForBottomMeasurement(void)
 {
@@ -774,14 +767,12 @@ static uint32_t EnsureGyroZeroRefForBottomMeasurement(void)
 
     printf("罐底测量\t角度找底基准无效，尝试在当前位置建立基准\r\n");
     ret = MotorCtrl_SlowStop();
-    /* 先处理异常边界，避免罐高测量状态机带故障继续运行。 */
     if (ret != NO_ERROR) {
         return ret;
     }
 
     if (g_measurement.debug_data.cable_length > 1000) {
         ret = MotorCtrl_MoveBlockingNoDetect(BOTTOM_GYRO_REF_SAFE_LIFT_MM, MOTOR_DIRECTION_UP, MotorCtrl_GetDefaultSpeedX100());
-        /* 先处理异常边界，避免罐高测量状态机带故障继续运行。 */
         if (ret != NO_ERROR) {
             return ret;
         }
@@ -790,7 +781,6 @@ static uint32_t EnsureGyroZeroRefForBottomMeasurement(void)
 
     HAL_Delay(1000);
     ret = CaptureGyroZeroRefAverage("非回零", 1U);
-    /* 先处理异常边界，避免罐高测量状态机带故障继续运行。 */
     if (ret != NO_ERROR) {
         printf("罐底测量\t非回零建立角度基准失败:0x%lX\r\n", (unsigned long)ret);
     }
@@ -798,8 +788,8 @@ static uint32_t EnsureGyroZeroRefForBottomMeasurement(void)
 }
 
 /**
- * @brief 保存罐高测量中的 Bottom_SaveGyroZeroRef 逻辑。
- * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ * @brief 保存探底流程使用的陀螺仪零位参考角。
+ * @return NO_ERROR 表示多次陀螺仪采样稳定且平均零位已保存；采样离散度超限返回 MEASUREMENT_ZERO_REPEAT_FAIL，传感器读取失败时原样返回其错误码。
  */
 uint32_t Bottom_SaveGyroZeroRef(void)
 {
@@ -882,7 +872,6 @@ uint32_t check_bottom_status(Weight_StateTypeDef *status)
 
     float ax = 0.0f, ay = 0.0f;
     uint32_t ret = Sensor_ReadGyroAngle(&ax, &ay);
-    /* 先处理异常边界，避免罐高测量状态机带故障继续运行。 */
     if (ret != NO_ERROR) {
         printf("罐底检测(陀螺仪) | 读取失败 错误码：%lu\r\n", (unsigned long)ret);
         return ret;

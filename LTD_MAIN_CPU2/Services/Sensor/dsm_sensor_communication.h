@@ -6,6 +6,7 @@
  */
 
 #ifndef SENSOR_DSM_SENSOR_COMMUNICATION_H_
+/* SENSOR_DSM_SENSOR_COMMUNICATION_H_ 是本头文件的包含保护标记；首次展开后置位，防止重复包含造成类型或接口重复定义。 */
 #define SENSOR_DSM_SENSOR_COMMUNICATION_H_
 
 #include <stddef.h>
@@ -44,6 +45,11 @@ typedef struct
 extern DSMSENSOR_DATA dsmsensor_data;
 /* int DSMSendcommand3times(uint8_t *pCommand, uint16_t commandLen); */
 
+/**
+ * @brief 开启液位模式。
+ *
+ * @return NO_ERROR 表示开启液位模式已完成；其他值为调用链原样传播的参数、状态、通信、传感器或电机错误码。
+ */
 int DSM_EnableLevelMode(void);
 /**
  * @brief 将 DSM 传感器切换到密度测量模式。
@@ -57,47 +63,58 @@ int DSM_EnableDensityMode(void);
  */
 uint32_t Read_Sensor_Voltage(float *voltage_out);
 /**
- * @brief 读取DSM 传感器通信中的 Read_Level_Frequency 逻辑。
+ * @brief 读取液位跟随频率（单次）。
  *
- * @param frequency_out 业务参数。
- * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ * @param frequency_out 用于返回读取或平均后的液位通道频率。
+ * @return SYSTEM_CALL_CONDITION_ERROR 表示当前系统状态不允许执行；NO_ERROR 表示操作成功。
  */
 uint32_t Read_Level_Frequency(uint32_t *frequency_out);
 /**
- * @brief 执行DSM 传感器通信中的 Probe_EnableWaterSensor 逻辑。
- * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ * @brief 开启测水探针 (CL 命令)。
+ *
+ * @return NO_ERROR 表示开启测水探针 (CL 命令)已完成；其他值为调用链原样传播的参数、状态、通信、传感器或电机错误码。
  */
 int Probe_EnableWaterSensor(void);
 /**
- * @brief 读取DSM 传感器通信中的 DSM_Read_Frequency_Density_Temp 逻辑。
+ * @brief 发送 DSM Cd 命令并解析同一应答中的频率、密度和温度。
  *
- * @param frequency 业务参数。
- * @param density 业务参数。
- * @param temp 业务参数。
- * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ * @param frequency DSM 传感器振动频率输出指针，成功时写入协议定义的 Hz 浮点值。
+ * @param density DSM 传感器密度输出指针，成功时写入 kg/m3 浮点值。
+ * @param temp 用于返回传感器温度的输出参数，单位 ℃。
+ * @return NO_ERROR 表示三项数据均已解析；SYSTEM_CALL_CONDITION_ERROR 表示输出指针无效；SENSOR_RESP_FORMAT_ERROR
+ *         表示应答字段不完整；其他值为 UART6 发送或接收错误码。
  */
 int DSM_Read_Frequency_Density_Temp(float *frequency,float *density, float *temp);
 /**
- * @brief 读取DSM 传感器通信中的 Read_VibrationTube_ID 逻辑。
+ * @brief 读取振动管编号（CN 指令）。
  *
- * @param id_out 业务参数。
- * @param id_out_size 数据长度。
- * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ * @param id_out 用于返回 CN 应答中的振动管编号。
+ * @param id_out_size 编号。该值实际表示振动管 ID 输出缓冲区容量，单位字节；写入时为末尾 NUL 预留一个字节。
+ * @return SYSTEM_CALL_CONDITION_ERROR 表示当前系统状态不允许执行；NO_ERROR 表示操作成功。
  */
 uint32_t Read_VibrationTube_ID(char *id_out, size_t id_out_size);
 /**
- * @brief 读取DSM 传感器通信中的 Read_Water_Capacitance 逻辑。
+ * @brief 读取电容值（Cl 指令）
+ * @param[out] cap_out  输出电容值（单位与 WaterSendPack 一致，通常是 pF 或等效单位）
+ * @return uint32_t 错误码（NO_ERROR 成功）
  *
- * @param cap_out 业务参数。
- * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ * 期望响应帧(11字节):
+ *   [0]  'D' 或 'E'
+ *   [1..7] 7位数字/小数点格式（sprintf: "%07.1f" 生成，实际包含小数点）
+ *   [8]  BCC（对 [0..7] 计算）
+ *   [9]  '\r'
+ *   [10] '\n'
  */
 uint32_t Read_Water_Capacitance(float *cap_out);
 /**
- * @brief 读取DSM 传感器通信中的 Read_Gyro_Angle 逻辑。
+ * @brief 读取陀螺仪角度（Ch 指令）
+ * @param[out] angle_x_deg  X轴角度（A）
+ * @param[out] angle_y_deg  Y轴角度（B）
+ * @return uint32_t 错误码（NO_ERROR 成功）
  *
- * @param angle_x_deg 业务参数。
- * @param angle_y_deg 业务参数。
- * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ * 期望响应示例：
+ *   A+0040.1B+0097.8+
+ * （实际帧尾通常还带 BCC + \r\n，你的 UART6_SendWithRetry 已做 BCC 校验）
  */
 uint32_t Read_Gyro_Angle(float *angle_x_deg, float *angle_y_deg);
 #endif /* SENSOR_DSM_SENSOR_COMMUNICATION_H_ */

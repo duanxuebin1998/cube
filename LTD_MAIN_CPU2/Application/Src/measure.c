@@ -28,9 +28,17 @@
 #include "serial_command.h"
 #include "../../Services/Relay/relay_output.h"
 
+/**
+ * @brief 液位跟随中直接应用液位修正并恢复跟随；非跟随态转入液位标定流程。
+ */
 static void CMD_CorrectOilLevel(void);
+/**
+ * @brief 取消当前测量，停止电机并恢复可接收命令状态。
+ */
 static void CMD_CancelMeasurement(void);
-/* 标定罐高：先测出原始实高，再用标定罐高值修正“当前实高”显示链路。 */
+/**
+ * @brief 标定罐高：先测出原始实高，再用标定罐高值修正“当前实高”显示链路。
+ */
 static void CMD_CalibrateTankHeight(void)
 {
     uint32_t ret = 0;
@@ -65,35 +73,172 @@ static void CMD_CalibrateTankHeight(void)
 }
 
 
+/**
+ * @brief 进入维护模式并停止当前自动测量动作。
+ */
 static void CMD_EnterMaintenanceMode(void);
+/**
+ * @brief 退出非阻塞维护模式。
+ * @note 只撤销维护屏蔽，不改写当前设备状态、故障码或正在执行的测量。
+ */
 static void CMD_ExitMaintenanceMode(void);
+/**
+ * @brief 请求清除四路继电器锁存报警。
+ * @note 请求只作用于运行态，由继电器更新周期消费，不触发参数持久化。
+ */
 static void CMD_ClearAllRelayLatchedAlarms(void);
+/**
+ * @brief 执行并发布瓦锡兰点阵，保留结果供 CPU3 读取，并按配置周期探底后恢复固定点监测。
+ *
+ * 开始新一轮测量时先关闭旧完成锁存并发布瓦锡兰测量中状态；点阵先写入局部临时结构，只有 Wartsila_Density_SpreadMeasurement 完整成功后才作为新的瓦锡兰代际整体发布。
+ * 发布后先保留一秒再打印结果，切换到测量完成状态，并以可被新命令打断的方式继续保留八秒，给 CPU3 足够时间读取完整快照。
+ * 每轮完整测量后更新运行期总次数和探底周期计数；探底频次 0 表示禁用，1 至 100 表示每 N 次执行一次，超过 100 的异常配置按每次探底处理并输出诊断。
+ * 到达探底周期时先仅移动到固定点监测位置，再执行罐底搜索；参数配置错误进入统一故障状态，普通移动或探底失败则跳过本次探底并排队恢复单点监测，不覆盖已经发布的密度结果。
+ *
+ * @note 任一可中断等待、移动或测量返回 STATE_SWITCH 时立即退出，把最新命令交还主循环处理。
+ */
 static void CMD_WartsilaDensitySpread(void);
+/**
+ * @brief 切换至满载扭力采集状态，完成稳定等待、范围校验和参数保存后发布完成状态。
+ *
+ * 底层采集等待五秒使扭力稳定，将当前扭力作为满载值，并在最小值和最大值范围内写入设备参数和 FRAM。
+ * 采集、命令切换或范围校验结果通过 SET_ERROR 进入统一错误处理。
+ */
 static void CMD_SetFullWeight(void);
+/**
+ * @brief 切换至空载扭力采集状态，完成稳定等待、范围校验和参数保存后发布完成状态。
+ *
+ * 底层采集等待五秒使扭力稳定，将当前原始扭力作为空载值，并在绝对值不超过允许上限时写入设备参数和 FRAM。
+ * 采集、命令切换或范围校验结果通过 SET_ERROR 进入统一错误处理。
+ */
 static void CMD_SetEmptyWeight(void);
+/**
+ * @brief 按命令参数指定的距离和默认速度执行手动下行，并在动作期间抑制自动报警与液位更新。
+ *
+ * @note 无论动作正常完成、发生命令切换还是返回错误，退出前都要清除手动报警和液位更新抑制标志。
+ */
 static void CMD_MoveDown(void);
+/**
+ * @brief 按命令参数指定的距离和默认速度执行手动上行，并在动作期间抑制自动报警与液位更新。
+ *
+ * @note 无论动作正常完成、发生命令切换还是返回错误，退出前都要清除手动报警和液位更新抑制标志。
+ */
 static void CMD_MoveUp(void);
+/**
+ * @brief 电机强制上行指令（无检测）。
+ */
 static void CMD_ForceMoveUp(void);
+/**
+ * @brief 电机强制下行指令（无检测）。
+ */
 static void CMD_ForceMoveDown(void);
+/**
+ * @brief 执行单次水位搜索命令：初始化测量并发布寻找状态，运行 SearchWaterLevel 后统一写入错误码和完成态。
+ */
 static void CMD_MeasurWater(void);
+/**
+ * @brief 水位跟随主函数（命令入口）。
+ */
 static void CMD_FollowWaterLevel(void);
+/**
+ * @brief 执行零点测量命令并统一发布完成或故障状态。
+ */
 static void CMD_MeasureZero(void);
+/**
+ * @brief 启动罐底搜索流程，并按搜索结果发布完成、命令切换或故障状态。
+ *
+ * 该函数用于启动测量罐底高度的过程，包括以下步骤：
+ * 1. 设置设备状态为 STATE_FINDBOTTOM。
+ * 2. 调用 MeasureStart() 开始测量。
+ * 3. 调用 SearchBottom() 搜索罐底高度。
+ * 4. 根据返回结果更新设备状态。
+ *
+ * @note 如果测量过程中发生错误（非 NO_ERROR 或 STATE_SWITCH），设备状态将被设置为 STATE_ERROR。
+ */
 static void CMD_MeasureBottom(void);
+/**
+ * @brief 按需回零并搜索液位；切换到电机记步后重新定位，完成 SI Profile 回液位发布，再进入持续液位跟随。
+ *
+ * 函数先调用 MeasureStart 建立测量上下文；若设备标记需要回零且启用了错误自动回零，则在找液位前执行 SearchZero。
+ * 随后按当前记步来源搜索一次液位；若仍使用编码轮记步，则调用 EnsureMotorPositionSourceBeforeFollow
+ * 切换到电机记步，并在实际发生切换后重新搜索液位，使后续闭环使用新的位置基准。
+ * SI Profile 回液位阶段只有在稳定回到液位且电机停止后，才通过 SiProfile_CompleteAfterReturnToLevel 发布最终完成组合；之后设备状态切换为液位跟随并进入
+ * FollowOilLevel。
+ * 任一阶段收到 STATE_SWITCH 都取消 SI 候选并立即返回；其他错误标记 SI Profile 失败并送入统一错误处理，禁止把不完整候选发布为完成结果。
+ */
 static void CMD_MeasureAndFollowOilLevel(void);
+/**
+ * @brief 跟随类命令进入闭环前，如果参数允许且当前位置源为编码器，则切到电机记步。
+ *
+ * 发生切换后不直接沿用旧的液位/水位点，而是重新定位后再跟随。
+ *
+ * @param follow_name 写入现场日志的跟随流程名称，用于区分油位、水位等位置源切换场景。
+ * @param switched_to_motor 用于返回本次是否已从编码轮位置源切换到电机位置源。
+ * @return NO_ERROR 表示跟随类命令进入闭环前，如果参数允许且当前位置源为编码器，则切到电机记步已完成；其他值为调用链原样传播的参数、状态、通信、传感器或电机错误码。
+ */
 static uint32_t EnsureMotorPositionSourceBeforeFollow(const char *follow_name, uint8_t *switched_to_motor);
+/**
+ * @brief 将综合测量使用的分布测量模式参数转换为密度内核枚举。
+ *
+ * @details 调用场景：CMD_SYNTHETIC 执行分布密度子流程前调用。
+ * @note 关键约束：CPU3 菜单保存 0~3 索引，0 兼容默认普通分布测。
+ *
+ * @return 参数值 1、2、3 分别返回 DENS_MODE_GB、DENS_MODE_METER、DENS_MODE_INTERVAL；0 或未知值返回兼容默认
+ *         DENS_MODE_SPREAD。
+ */
 static DensitySpreadModeId CMD_SyntheticDensityModeFromParam(void);
+/**
+ * @brief 把综合测量选定的密度内核模式映射到现有点阵来源枚举。
+ *
+ * @details 调用场景：综合测量发布最终点阵前调用。
+ * @note 关键约束：只复用现有来源值，不新增共享协议枚举。
+ *
+ * @param mode 综合测量实际采用的密度分布内核模式枚举。
+ * @return GB、密度计和区间模式分别返回 PROFILE_SOURCE_GB、PROFILE_SOURCE_METER、PROFILE_SOURCE_INTERVAL；普通或未知模式返回
+ *         PROFILE_SOURCE_STANDARD。
+ */
 static ProfileSource CMD_SyntheticProfileSourceFromMode(DensitySpreadModeId mode);
+/**
+ * @brief 启动测量并搜索机械零点，成功后在零点标定电机首圈尺带周长。
+ *
+ * 调用 MeasureStart 清理并建立本次测量上下文，将状态切换为正在找零点，再执行 SearchZero。
+ * 搜索成功后调用 MotorCtrl_CalibrateFirstLoopCircumferenceAtZero；任一步失败都送入统一错误处理，全部完成后发布找零点结束状态。
+ */
 static void CMD_CalibrateZeroPoint(void);
+/**
+ * @brief 启动液位标定；跟随态直接修正后继续跟随，其他状态先探底再重新搜索液位。
+ *
+ * @note 所有测量、探底、液位搜索和跟随错误均通过 SET_ERROR 进入统一停机与错误状态；命令参数为 0 时先用探底结果修正并保存罐高。
+ */
 static void CMD_CalibrateOilLevel(void);
+/**
+ * @brief 搜索液位并切换密度模式，按配置执行分布测量，随后发布与实际内核一致的点阵来源。
+ */
 static void CMD_SyntheticMeasurement(void);
+/**
+ * @brief 运行到指定绝对位置（mm）
+ * 依赖：
+ *  - MeasureStart()
+ *  - MotorCtrl_JogMoveToPosition(float target_mm, uint32_t speed_x100)
+ *  - CHECK_COMMAND_SWITCH(x) / SET_ERROR(x)
+ *  - g_measurement.device_status.device_state
+ *  - 目标位置参数来源（见下方 get_target_mm()）
+ */
 static void CMD_RunToPosition(void);
+/**
+ * @brief 执行部件参数读取命令并更新测量快照。
+ */
 void CMD_ReadPartParams(void);
 
 /**
- * @brief 处理测量流程中的 ProcessMeasureCmd 逻辑。
+ * @brief 按命令类别执行即时控制，或完成测量启动门禁后分派业务测量流程。
  *
- * @param command 命令值。
- * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ * 取消测量、维护模式进入或退出、清除继电器锁存以及无线滑环配对属于即时控制命令，直接执行并返回，不触发新的测量初始化。
+ * 新的普通业务命令会先取消不应继续保留的 SI 回液位候选，解除上一流程的编码器故障锁存，再通过电源监控门禁和 MeasureStart 建立本轮测量上下文。
+ * 电源门禁失败时发布电源错误并停止分派；MeasureStart 返回 STATE_SWITCH 时取消 SI 候选并退出，其他启动错误通过统一错误入口发布后由具体命令流程继续按现有状态约束处理。
+ * 通过启动阶段后，函数按 CommandType 分派回零、液位、水位、罐底、单点、综合、四类密度分布、瓦锡兰、部件读取、标定、手动或强制运动、扭力采集以及恢复出厂流程。
+ *
+ * @param command 命令值。该 CommandType 是已经通过队列和参数绑定检查的测量命令，函数按类型分发到具体业务流程。
  */
 void ProcessMeasureCmd(CommandType command)
 {
@@ -335,8 +480,7 @@ void ProcessMeasureCmd(CommandType command)
 
 
 /**
- * @brief 执行测量流程中的 CMD_CancelMeasurement 逻辑。
- * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ * @brief 取消当前测量，停止电机并恢复可接收命令状态。
  */
 static void CMD_CancelMeasurement(void)
 {
@@ -357,7 +501,7 @@ static void CMD_CancelMeasurement(void)
     }
 
     stop_ret = MotorCtrl_SlowStop();
-    /* 先处理异常边界，避免测量流程状态机带故障继续运行。 */
+    /* 取消测量时慢停失败只记录诊断；除命令切换外，取消流程仍清理命令并进入待机，避免界面长期卡在运行态。 */
     if ((stop_ret != NO_ERROR) && (stop_ret != STATE_SWITCH)) {
         printf("取消测量\t停止电机返回：0x%08lX\r\n", (unsigned long)stop_ret);
     }
@@ -370,7 +514,7 @@ static void CMD_CancelMeasurement(void)
  *
  * 该函数根据传入的命令字符数组执行不同的电机控制操作，包括刹车、上下移动、编码器清零、测试模式等。
  *
- * @param command 指向命令字符数组的指针，命令格式为单个字符后跟可选参数。
+ * @param command 指向完整调试命令字节串的指针；command[0] 为主命令，后续字符按命令类型承载子命令、距离、速度或测试选项。
  * @note 串口调试命令协议：
  *       通用格式：ASCII 字符串，command[0] 为主命令，部分命令使用 command[1] 作为子命令。
  *       距离参数默认按 mm 解析，例如 A+100 表示上行 100mm。
@@ -379,8 +523,8 @@ static void CMD_CancelMeasurement(void)
  *       - A0：快速停止电机
  *       - A+<mm>：电机上行指定距离
  *       - A-<mm>：电机下行指定距离
- *       - B<mm>: motor-model round-trip test
- *       - BE<mm>[,<速度m/min>,<加速度倍率>][S|,1]: encoder-based continuous round-trip test
+ *       - B<mm>：电机位置模型往返测试
+ *       - BE<mm>[,<速度m/min>,<加速度倍率>][S|,1]：基于编码器的连续往返测试
  *       - BJ+<mm>[,<速度m/min>]：点动模式上行相对运动测试
  *       - BJ-<mm>[,<速度m/min>]：点动模式下行相对运动测试
  *       - BJP<target_mm>[,<速度m/min>]：点动模式绝对位置测试
@@ -425,24 +569,18 @@ static void CMD_CancelMeasurement(void)
  *       - YS：打印记步模式、局部周长、XACTUAL、基准、电机计算位置、编码轮位置和差值
  *       - YC：电机记步诊断，额外打印 XTARGET/VACTUAL/RAMPSTAT/GSTAT 和显示状态校验
  */
-/**
- * @brief 处理测量流程中的 process_command 逻辑。
- *
- * @param command 命令值。
- * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
- */
+
 void process_command(uint8_t *command)
 {
     SerialCommand_Process(command);
 }
 /**
- * @brief 执行测量流程中的 MeasureStart 逻辑。
- * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ * @brief 初始化故障、驱动和扭力模块，并清除新测量流程的协议辅助运行态。
+ * @return NO_ERROR 表示故障现场、驱动、扭力模块和本轮协议辅助状态均已初始化；其他值为电机驱动初始化或测量前置检查返回的真实错误码。
  */
 int MeasureStart(void) {
 	fault_info_init(); /* 故障初始化清零 */
     uint32_t ret = MotorCtrl_Init(); /* 电机初始化 */
-    /* 先处理异常边界，避免测量流程状态机带故障继续运行。 */
     if (ret != NO_ERROR) {
         printf("电机初始化失败，错误码：0x%08lX\r\n", (unsigned long)ret);
         return (int)ret;
@@ -464,8 +602,15 @@ int MeasureStart(void) {
 }
 
 /* 测量水位主函数 */
-/* 跟随类命令进入闭环前，如果参数允许且当前位置源为编码器，则切到电机记步。
- * 发生切换后不直接沿用旧的液位/水位点，而是重新定位后再跟随。 */
+/**
+ * @brief 跟随类命令进入闭环前，如果参数允许且当前位置源为编码器，则切到电机记步。
+ *
+ * 发生切换后不直接沿用旧的液位/水位点，而是重新定位后再跟随。
+ *
+ * @param follow_name 写入现场日志的跟随流程名称，用于区分油位、水位等位置源切换场景。
+ * @param switched_to_motor 用于返回本次是否已从编码轮位置源切换到电机位置源。
+ * @return NO_ERROR 表示无需切换或已经成功改用电机记步；切换、周长标定、位置同步或持久化失败时返回对应错误码。
+ */
 static uint32_t EnsureMotorPositionSourceBeforeFollow(const char *follow_name, uint8_t *switched_to_motor)
 {
     uint32_t ret;
@@ -485,7 +630,6 @@ static uint32_t EnsureMotorPositionSourceBeforeFollow(const char *follow_name, u
 
     printf("%s\t当前位置源为编码器，切换到电机记步后重新搜索\r\n", follow_name);
     ret = MotorCtrl_SwitchPositionSourceToMotor();
-    /* 先处理异常边界，避免测量流程状态机带故障继续运行。 */
     if (ret != NO_ERROR) {
         printf("%s\t切换电机记步失败，错误码:0x%08lX\r\n", follow_name, (unsigned long)ret);
         return ret;
@@ -499,8 +643,7 @@ static uint32_t EnsureMotorPositionSourceBeforeFollow(const char *follow_name, u
 }
 
 /**
- * @brief 执行测量流程中的 CMD_MeasurWater 逻辑。
- * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ * @brief 执行单次水位搜索命令：初始化测量并发布寻找状态，运行 SearchWaterLevel 后统一写入错误码和完成态。
  */
 static void CMD_MeasurWater(void) {
 	uint32_t ret = 0;
@@ -513,7 +656,9 @@ static void CMD_MeasurWater(void) {
 	g_measurement.device_status.device_state = STATE_FINDWATER_OVER;
 	return;
 }
-/* 水位跟随主函数（命令入口） */
+/**
+ * @brief 水位跟随主函数（命令入口）。
+ */
 static void CMD_FollowWaterLevel(void)
 {
     uint32_t ret = NO_ERROR;
@@ -559,8 +704,7 @@ static void CMD_FollowWaterLevel(void)
 }
 
 /**
- * @brief 执行测量流程中的 CMD_MeasureZero 逻辑。
- * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ * @brief 执行零点测量命令并统一发布完成或故障状态。
  */
 static void CMD_MeasureZero(void) {
 	uint32_t ret = 0;
@@ -573,7 +717,12 @@ static void CMD_MeasureZero(void) {
 	g_measurement.device_status.device_state = STATE_STANDBY;
 	return;
 }
-/* 罐底零点主函数 */
+/**
+ * @brief 启动测量并搜索机械零点，成功后在零点标定电机首圈尺带周长。
+ *
+ * 调用 MeasureStart 清理并建立本次测量上下文，将状态切换为正在找零点，再执行 SearchZero。
+ * 搜索成功后调用 MotorCtrl_CalibrateFirstLoopCircumferenceAtZero；任一步失败都送入统一错误处理，全部完成后发布找零点结束状态。
+ */
 static void CMD_CalibrateZeroPoint(void) {
     uint32_t ret = 0;
     MeasureStart();
@@ -586,7 +735,6 @@ static void CMD_CalibrateZeroPoint(void) {
         return;
     }
     ret = MotorCtrl_CalibrateFirstLoopCircumferenceAtZero();
-    /* 先处理异常边界，避免测量流程状态机带故障继续运行。 */
     if (ret != NO_ERROR) {
         printf("标定零点\t首圈周长标定失败 错误码：0x%08lX\r\n", (unsigned long)ret);
         SET_ERROR(ret);
@@ -595,7 +743,7 @@ static void CMD_CalibrateZeroPoint(void) {
     return;
 }
 /**
- * @brief 测量罐底高度的函数。
+ * @brief 启动罐底搜索流程，并按搜索结果发布完成、命令切换或故障状态。
  *
  * 该函数用于启动测量罐底高度的过程，包括以下步骤：
  * 1. 设置设备状态为 STATE_FINDBOTTOM。
@@ -604,8 +752,6 @@ static void CMD_CalibrateZeroPoint(void) {
  * 4. 根据返回结果更新设备状态。
  *
  * @note 如果测量过程中发生错误（非 NO_ERROR 或 STATE_SWITCH），设备状态将被设置为 STATE_ERROR。
- *
- * @return 无返回值。
  */
 static void CMD_MeasureBottom(void) {
 	uint32_t ret = 0;
@@ -614,7 +760,7 @@ static void CMD_MeasureBottom(void) {
 	/* 开始测量罐高 */
 	ret = SearchBottom();
 
-    /* 先处理异常边界，避免测量流程状态机带故障继续运行。 */
+    /* 该兼容分支仅在参数值为 1 且未收到命令切换时检查探底结果；存在有效参考值时，可用标定罐高或当前罐高替代失败或偏差过大的结果。 */
     if ((g_deviceParams.error_stop_measurement == 1U) &&
         (ret != STATE_SWITCH))
     {
@@ -664,10 +810,9 @@ static void CMD_MeasureBottom(void) {
                     fallback_real_height;
             g_measurement.device_status.error_code = NO_ERROR;
 
-            /* 先处理异常边界，避免测量流程状态机带故障继续运行。 */
+            /* 回退原因需区分“搜索返回错误”和“搜索成功但与参考值偏差超过 10.0 mm”，便于现场判断是流程故障还是位置可信度不足。 */
             if (ret != NO_ERROR)
             {
-                /* 错误 阶段：错误报警 模块：测量 操作：精找罐底 原因：ErrorLog_GetReasonByCode(ret) 处理：使用回退值 */
                 ErrorLog_Warn(ERROR_LOG_MODULE_MEASURE,
                               ERROR_LOG_OP_SEARCH_BOTTOM_PRECISE,
                               ErrorLog_GetReasonByCode(ret),
@@ -678,7 +823,6 @@ static void CMD_MeasureBottom(void) {
             }
             else
             {
-                /* 错误 阶段：错误报警 模块：测量 操作：精找罐底 原因：位置异常 处理：使用回退值 */
                 ErrorLog_Warn(ERROR_LOG_MODULE_MEASURE,
                               ERROR_LOG_OP_SEARCH_BOTTOM_PRECISE,
                               ERROR_LOG_REASON_POSITION_ERROR,
@@ -697,7 +841,6 @@ static void CMD_MeasureBottom(void) {
         }
     }
 	SET_ERROR(ret);
-    /* 先处理异常边界，避免测量流程状态机带故障继续运行。 */
     if (ret == NO_ERROR) {
         /* 普通探底路径成功时同样刷新协议辅助状态，保持与快速返回路径一致。 */
         g_measurement.height_measurement.bottom_reference_valid = 1U;
@@ -707,8 +850,14 @@ static void CMD_MeasureBottom(void) {
 	return;
 }
 /**
- * @brief 执行测量流程中的 CMD_MeasureAndFollowOilLevel 逻辑。
- * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ * @brief 按需回零并搜索液位；切换到电机记步后重新定位，完成 SI Profile 回液位发布，再进入持续液位跟随。
+ *
+ * 函数先调用 MeasureStart 建立测量上下文；若设备标记需要回零且启用了错误自动回零，则在找液位前执行 SearchZero。
+ * 随后按当前记步来源搜索一次液位；若仍使用编码轮记步，则调用 EnsureMotorPositionSourceBeforeFollow
+ * 切换到电机记步，并在实际发生切换后重新搜索液位，使后续闭环使用新的位置基准。
+ * SI Profile 回液位阶段只有在稳定回到液位且电机停止后，才通过 SiProfile_CompleteAfterReturnToLevel 发布最终完成组合；之后设备状态切换为液位跟随并进入
+ * FollowOilLevel。
+ * 任一阶段收到 STATE_SWITCH 都取消 SI 候选并立即返回；其他错误标记 SI Profile 失败并送入统一错误处理，禁止把不完整候选发布为完成结果。
  */
 static void CMD_MeasureAndFollowOilLevel(void) {
     uint32_t ret = 0U;
@@ -801,7 +950,11 @@ static void CMD_MeasureAndFollowOilLevel(void) {
     return;
 }
 
-/* 标定液位 */
+/**
+ * @brief 启动液位标定；跟随态直接修正后继续跟随，其他状态先探底再重新搜索液位。
+ *
+ * @note 所有测量、探底、液位搜索和跟随错误均通过 SET_ERROR 进入统一停机与错误状态；命令参数为 0 时先用探底结果修正并保存罐高。
+ */
 static void CMD_CalibrateOilLevel(void) {
 	uint32_t ret = 0;
 	ret = (uint32_t)MeasureStart();
@@ -832,8 +985,7 @@ static void CMD_CalibrateOilLevel(void) {
     }
 }
 /**
- * @brief 执行测量流程中的 CMD_CorrectOilLevel 逻辑。
- * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ * @brief 液位跟随中直接应用液位修正并恢复跟随；非跟随态转入液位标定流程。
  */
 static void CMD_CorrectOilLevel(void) {
 	uint32_t ret = 0;
@@ -857,8 +1009,7 @@ static void CMD_CorrectOilLevel(void) {
 	}
 }
 /**
- * @brief 执行测量流程中的 CMD_EnterMaintenanceMode 逻辑。
- * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ * @brief 进入维护模式并停止当前自动测量动作。
  */
 static void CMD_EnterMaintenanceMode(void)
 {
@@ -886,7 +1037,11 @@ static void CMD_ClearAllRelayLatchedAlarms(void)
     RelayOutput_RequestClearAllLatchedAlarms();
     printf("已请求清除全部继电器锁存报警\r\n");
 }
-/* 电机上行指令 */
+/**
+ * @brief 按命令参数指定的距离和默认速度执行手动上行，并在动作期间抑制自动报警与液位更新。
+ *
+ * @note 无论动作正常完成、发生命令切换还是返回错误，退出前都要清除手动报警和液位更新抑制标志。
+ */
 static void CMD_MoveUp(void)
 {
     uint32_t ret = 0;
@@ -907,7 +1062,6 @@ static void CMD_MoveUp(void)
         g_measurement.oil_measurement.manual_level_update_inhibit = 0U;
         return;
     }
-    /* 先处理异常边界，避免测量流程状态机带故障继续运行。 */
     if (ret != NO_ERROR) {
         g_measurement.device_status.manual_alarm_inhibit = 0U;
         g_measurement.oil_measurement.manual_level_update_inhibit = 0U;
@@ -919,7 +1073,11 @@ static void CMD_MoveUp(void)
     g_measurement.device_status.device_state = STATE_RUNUPOVER;
     return;
 }
-/* 电机下行指令 */
+/**
+ * @brief 按命令参数指定的距离和默认速度执行手动下行，并在动作期间抑制自动报警与液位更新。
+ *
+ * @note 无论动作正常完成、发生命令切换还是返回错误，退出前都要清除手动报警和液位更新抑制标志。
+ */
 static void CMD_MoveDown(void)
 {
     uint32_t ret = 0;
@@ -940,7 +1098,6 @@ static void CMD_MoveDown(void)
         g_measurement.oil_measurement.manual_level_update_inhibit = 0U;
         return;
     }
-    /* 先处理异常边界，避免测量流程状态机带故障继续运行。 */
     if (ret != NO_ERROR) {
         g_measurement.device_status.manual_alarm_inhibit = 0U;
         g_measurement.oil_measurement.manual_level_update_inhibit = 0U;
@@ -952,7 +1109,9 @@ static void CMD_MoveDown(void)
     g_measurement.device_status.device_state = STATE_RUNDOWNOVER;
     return;
 }
-/* 电机强制上行指令（无检测） */
+/**
+ * @brief 电机强制上行指令（无检测）。
+ */
 static void CMD_ForceMoveUp(void)
 {
     uint32_t ret;
@@ -973,7 +1132,6 @@ static void CMD_ForceMoveUp(void)
         g_measurement.oil_measurement.manual_level_update_inhibit = 0U;
         return;
     }
-    /* 先处理异常边界，避免测量流程状态机带故障继续运行。 */
     if (ret != NO_ERROR) {
         g_measurement.device_status.manual_alarm_inhibit = 0U;
         g_measurement.oil_measurement.manual_level_update_inhibit = 0U;
@@ -989,7 +1147,9 @@ static void CMD_ForceMoveUp(void)
     return;
 }
 
-/* 电机强制下行指令（无检测） */
+/**
+ * @brief 电机强制下行指令（无检测）。
+ */
 static void CMD_ForceMoveDown(void)
 {
     uint32_t ret;
@@ -1010,7 +1170,6 @@ static void CMD_ForceMoveDown(void)
         g_measurement.oil_measurement.manual_level_update_inhibit = 0U;
         return;
     }
-    /* 先处理异常边界，避免测量流程状态机带故障继续运行。 */
     if (ret != NO_ERROR) {
         g_measurement.device_status.manual_alarm_inhibit = 0U;
         g_measurement.oil_measurement.manual_level_update_inhibit = 0U;
@@ -1024,7 +1183,12 @@ static void CMD_ForceMoveDown(void)
 }
 
 
-/* 设置空载扭力指令 */
+/**
+ * @brief 切换至空载扭力采集状态，完成稳定等待、范围校验和参数保存后发布完成状态。
+ *
+ * 底层采集等待五秒使扭力稳定，将当前原始扭力作为空载值，并在绝对值不超过允许上限时写入设备参数和 FRAM。
+ * 采集、命令切换或范围校验结果通过 SET_ERROR 进入统一错误处理。
+ */
 static void CMD_SetEmptyWeight(void)
 {
     uint32_t ret = 0;
@@ -1039,7 +1203,12 @@ static void CMD_SetEmptyWeight(void)
     g_measurement.device_status.device_state = STATE_GET_EMPTYWEIGHT_OVER;
     return;
 }
-/* 设置满载扭力指令 */
+/**
+ * @brief 切换至满载扭力采集状态，完成稳定等待、范围校验和参数保存后发布完成状态。
+ *
+ * 底层采集等待五秒使扭力稳定，将当前扭力作为满载值，并在最小值和最大值范围内写入设备参数和 FRAM。
+ * 采集、命令切换或范围校验结果通过 SET_ERROR 进入统一错误处理。
+ */
 static void CMD_SetFullWeight(void)
 {
     uint32_t ret = 0;
@@ -1055,8 +1224,8 @@ static void CMD_SetFullWeight(void)
     return;
 }
 /**
- * @brief 执行测量流程中的 Wartsila_MoveToMonitorPositionOnly 逻辑。
- * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ * @brief 校验并移动到固定点监测位置，最多重试三次，不读取密度。
+ * @return 返回整机错误码；NO_ERROR 表示已到达固定监测位置，其他值表示位置校验、运动或停止确认失败。
  */
 static uint32_t Wartsila_MoveToMonitorPositionOnly(void)
 {
@@ -1068,14 +1237,13 @@ static uint32_t Wartsila_MoveToMonitorPositionOnly(void)
     printf("瓦锡兰测后探底\t先回固定点监测位置：%.1fmm，仅移动不读密度\r\n", (double)target_mm);
 
     ret = SinglePoint_CheckTargetPosition("瓦锡兰测后回固定点", DeviceCommandArguments_Get(DEVICE_COMMAND_ARG_SINGLE_POINT_MONITORING_POSITION));
-    /* 先处理异常边界，避免测量流程状态机带故障继续运行。 */
     if (ret != NO_ERROR) {
         return ret;
     }
 
     for (uint32_t attempt = 1U; attempt <= max_attempts; attempt++) {
         ret = MotorCtrl_JogMoveToPosition(target_mm, MotorCtrl_GetDefaultSpeedX100());
-        /* 先处理异常边界，避免测量流程状态机带故障继续运行。 */
+        /* 回固定监测位置成功或收到命令切换时立即结束；只有真实运动失败才继续消耗剩余尝试次数。 */
         if ((ret == NO_ERROR) || (ret == STATE_SWITCH)) {
             return ret;
         }
@@ -1091,8 +1259,14 @@ static uint32_t Wartsila_MoveToMonitorPositionOnly(void)
 }
 
 /**
- * @brief 执行测量流程中的 CMD_WartsilaDensitySpread 逻辑。
- * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ * @brief 执行并发布瓦锡兰点阵，保留结果供 CPU3 读取，并按配置周期探底后恢复固定点监测。
+ *
+ * 开始新一轮测量时先关闭旧完成锁存并发布瓦锡兰测量中状态；点阵先写入局部临时结构，只有 Wartsila_Density_SpreadMeasurement 完整成功后才作为新的瓦锡兰代际整体发布。
+ * 发布后先保留一秒再打印结果，切换到测量完成状态，并以可被新命令打断的方式继续保留八秒，给 CPU3 足够时间读取完整快照。
+ * 每轮完整测量后更新运行期总次数和探底周期计数；探底频次 0 表示禁用，1 至 100 表示每 N 次执行一次，超过 100 的异常配置按每次探底处理并输出诊断。
+ * 到达探底周期时先仅移动到固定点监测位置，再执行罐底搜索；参数配置错误进入统一故障状态，普通移动或探底失败则跳过本次探底并排队恢复单点监测，不覆盖已经发布的密度结果。
+ *
+ * @note 任一可中断等待、移动或测量返回 STATE_SWITCH 时立即退出，把最新命令交还主循环处理。
  */
 static void CMD_WartsilaDensitySpread(void) {
 	static uint32_t bottom_detect_count = 0; /* 瓦锡兰测量后探底计数，仅运行期累计 */
@@ -1110,7 +1284,6 @@ static void CMD_WartsilaDensitySpread(void) {
 	if (ret == STATE_SWITCH) {
 		return;
 	}
-	/* 先处理异常边界，避免测量流程状态机带故障继续运行。 */
 	if (ret != NO_ERROR) {
 		printf("瓦锡兰分布测量失败，错误码：0x%08lX，不更新新的有效结果\r\n", (unsigned long)ret);
 		SET_ERROR(ret);
@@ -1159,13 +1332,13 @@ static void CMD_WartsilaDensitySpread(void) {
             if (ret == STATE_SWITCH) {
                 return;
             }
-            /* 先处理异常边界，避免测量流程状态机带故障继续运行。 */
+            /* 缺失、冲突或越界的瓦锡兰配置属于确定性参数错误，先发布故障码，不能把它当作普通测量抖动静默重试。 */
             if ((ret == PARAM_CONFIG_MISSING) ||
                 (ret == PARAM_COMBINATION_CONFLICT) ||
                 (ret == PARAM_RANGE_ERROR)) {
                 SET_ERROR(ret);
             }
-            /* 先处理异常边界，避免测量流程状态机带故障继续运行。 */
+            /* 瓦锡兰测量未成功时排队恢复固定点监测；参数错误已在上一步发布，其他错误保留原返回语义。 */
             if (ret != NO_ERROR) {
                 DeviceCommand_Queue(CMD_MONITOR_SINGLE);
                 return;
@@ -1175,7 +1348,6 @@ static void CMD_WartsilaDensitySpread(void) {
             if (ret == STATE_SWITCH) {
                 return;
             }
-            /* 先处理异常边界，避免测量流程状态机带故障继续运行。 */
             if (ret != NO_ERROR) {
                 printf("瓦锡兰测后探底\t罐底测量失败：0x%08lX，退出且不置错误状态\r\n", (unsigned long)ret);
                 DeviceCommand_Queue(CMD_MONITOR_SINGLE);
@@ -1190,10 +1362,14 @@ static void CMD_WartsilaDensitySpread(void) {
     DeviceCommand_Queue(CMD_MONITOR_SINGLE); /* 切回单点监测状态，继续监测当前液位/密度 */
 	return;
 }
-/*
- * 函数用途：将综合测量使用的分布测量模式参数转换为密度内核枚举。
- * 调用场景：CMD_SYNTHETIC 执行分布密度子流程前调用。
- * 关键约束：CPU3 菜单保存 0~3 索引，0 兼容默认普通分布测。
+/**
+ * @brief 将综合测量使用的分布测量模式参数转换为密度内核枚举。
+ *
+ * @details 调用场景：CMD_SYNTHETIC 执行分布密度子流程前调用。
+ * @note 关键约束：CPU3 菜单保存 0~3 索引，0 兼容默认普通分布测。
+ *
+ * @return 参数值 1、2、3 分别返回 DENS_MODE_GB、DENS_MODE_METER、DENS_MODE_INTERVAL；0 或未知值返回兼容默认
+ *         DENS_MODE_SPREAD。
  */
 static DensitySpreadModeId CMD_SyntheticDensityModeFromParam(void)
 {
@@ -1210,10 +1386,15 @@ static DensitySpreadModeId CMD_SyntheticDensityModeFromParam(void)
     }
 }
 
-/*
- * 函数用途：把综合测量选定的密度内核模式映射到现有点阵来源枚举。
- * 调用场景：综合测量发布最终点阵前调用。
- * 关键约束：只复用现有来源值，不新增共享协议枚举。
+/**
+ * @brief 把综合测量选定的密度内核模式映射到现有点阵来源枚举。
+ *
+ * @details 调用场景：综合测量发布最终点阵前调用。
+ * @note 关键约束：只复用现有来源值，不新增共享协议枚举。
+ *
+ * @param mode 综合测量实际采用的密度分布内核模式枚举。
+ * @return GB、密度计和区间模式分别返回 PROFILE_SOURCE_GB、PROFILE_SOURCE_METER、PROFILE_SOURCE_INTERVAL；普通或未知模式返回
+ *         PROFILE_SOURCE_STANDARD。
  */
 static ProfileSource CMD_SyntheticProfileSourceFromMode(DensitySpreadModeId mode)
 {
@@ -1231,8 +1412,7 @@ static ProfileSource CMD_SyntheticProfileSourceFromMode(DensitySpreadModeId mode
 }
 
 /**
- * @brief 执行测量流程中的 CMD_SyntheticMeasurement 逻辑。
- * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ * @brief 搜索液位并切换密度模式，按配置执行分布测量，随后发布与实际内核一致的点阵来源。
  */
 static void CMD_SyntheticMeasurement(void) {
 	uint32_t ret = 0;
@@ -1247,7 +1427,6 @@ static void CMD_SyntheticMeasurement(void) {
 
     /* 1. 先搜索液位 */
     ret = SearchOilLevel();
-    /* 先处理异常边界，避免测量流程状态机带故障继续运行。 */
     if (ret != NO_ERROR) {
         printf("密度分布\t液位搜索失败, 错误码: 0x%08lX\r\n", ret);
         SET_ERROR(ret);
@@ -1265,7 +1444,6 @@ static void CMD_SyntheticMeasurement(void) {
     if (ret == STATE_SWITCH) {
         return;
     }
-    /* 先处理异常边界，避免测量流程状态机带故障继续运行。 */
     if (ret != NO_ERROR) {
         printf("综合测量\t分布密度测量失败，错误码：0x%08lX\r\n", (unsigned long)ret);
         SET_ERROR(ret);
@@ -1312,7 +1490,6 @@ static void CMD_RunToPosition(void)
         return;
     }
 
-    /* 先处理异常边界，避免测量流程状态机带故障继续运行。 */
     if (ret != NO_ERROR) {
         printf("运行到指定位置\t失败 错误码：0x%lX\r\n", ret);
         SET_ERROR(ret);

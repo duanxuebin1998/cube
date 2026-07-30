@@ -1,4 +1,5 @@
 #ifndef HART_H
+/* HART_H 是本头文件的包含保护标记；首次展开后置位，防止重复包含造成类型或接口重复定义。 */
 #define HART_H
 #include "main.h"
 /* #include "usart3.h" */
@@ -19,6 +20,7 @@
 
 /* HART 工程单位代码 */
 #define MILLIMETERS		49		/* mm */
+/* HART 工程单位代码 32：摄氏度；写入设备变量单位字段时使用，不是温度数值缩放系数。 */
 #define DEGREES_CELSIUS 32		/* ℃ */
 #define KG_CUM			92		/* KG/M3 */
 #define MEGAPASCALS		237		/* Mpa */
@@ -150,10 +152,21 @@ typedef union
 
 
 /**
- * @brief 执行本模块中的 HartInit 逻辑。
+ * @brief 将 HART 收发方向置为发送空闲态，并初始化 HART 过程变量。
  */
 void HartInit(void);																			/* Hart初始化 */
+/**
+ * @brief 用当前 AO 电流及实时过程变量初始化 HART 参数缓存。
+ */
 void HartParameterInit(void);																	/* Hart参数初始化 */
+/**
+ * @brief 解析一帧 HART 主机请求，执行对应命令并生成响应帧。
+ *
+ * @param rcvbuff 已经接收完成的 HART 请求帧缓冲区。
+ * @param SendBuff 用于输出 HART 响应帧的缓冲区。
+ * @param Sendlen 用于返回 HART 响应帧有效长度的输出指针，单位字节。
+ * @return 返回 HART 请求解析或命令响应结果码；响应内容和长度分别通过 SendBuff、Sendlen 输出。
+ */
 u8 HartCommunicationProcess(u8* rcvbuff,u8* SendBuff,volatile u8* Sendlen);														/* HART通信上位机指令包处理函数,处理不同指令并发送响应包。 */
 
 #endif

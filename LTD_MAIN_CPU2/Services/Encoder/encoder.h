@@ -6,6 +6,7 @@
  */
 
 #ifndef ENCODER_ENCODER_H_
+/* ENCODER_ENCODER_H_ 是本头文件的包含保护标记；首次展开后置位，防止重复包含造成类型或接口重复定义。 */
 #define ENCODER_ENCODER_H_
 
 #include <stdbool.h>
@@ -66,101 +67,159 @@ typedef struct {
     EncoderEmergencyPersistSource source; /* 真实ADC低压或软件测试来源。 */
 } EncoderEmergencyPersistenceReport;
 
-/*
- * 函数用途：恢复编码器持久化记录并启动 AS5145 采集。
- * 调用场景：CPU2 上电初始化。
- * 关键约束：A/B 都无效时返回 ENCODER_POWERON_FAIL，不把 0 写成可信位置。
+/**
+ * @brief 恢复编码器持久化记录并启动 AS5145 采集。
+ *
+ * @details 调用场景：CPU2 上电初始化。
+ * @note 关键约束：A/B 都无效时返回 ENCODER_POWERON_FAIL，不把 0 写成可信位置。
  */
 uint32_t Initialize_Encoder(void);
 
-/*
+/**
+ * @brief 仅在位置恢复有效且 AS5145 已取得有效样本时报告编码器就绪。
+ *
  * IsReady同时要求累计位置可信和AS5145已有有效帧；WaitReady用于启动期有限等待首帧。
  * 二者都不会把A/B无效时的零值自动提升为可信位置。
+ *
+ * @note 关键约束：在中断或回调上下文中只更新必要状态，避免阻塞和高耗时操作。
+ *
+ * @return true 表示编码器位置恢复有效且 AS5145 已取得至少一帧有效样本；false 表示持久位置尚未建立，或角度传感器仍无有效样本。
  */
 bool Encoder_IsReady(void);
+/**
+ * @brief 位置恢复有效时等待 AS5145 首个有效样本；位置无效立即返回 ENCODER_POWERON_FAIL。
+ *
+ * @param timeout_ms 允许等待的最长时间，单位 ms。
+ * @return NO_ERROR 表示已取得首个有效 AS5145 样本；位置恢复无效返回 ENCODER_POWERON_FAIL，等待失败透传 AS5145 错误。
+ */
 uint32_t Encoder_WaitReady(uint32_t timeout_ms);
 
-/*
- * 函数用途：判断编码器传感器是否可用于重新回零。
- * 调用场景：A/B 持久化记录都损坏后的 CMD_BACK_ZERO 运动门控。
- * 关键约束：只代表 AS5145 已有有效帧，不代表累计位置已经可信。
+/**
+ * @brief 判断编码器传感器是否可用于重新回零。
+ *
+ * @details 调用场景：A/B 持久化记录都损坏后的 CMD_BACK_ZERO 运动门控。
+ * @note 关键约束：只代表 AS5145 已有有效帧，不代表累计位置已经可信。
  */
 bool Encoder_CanStartHoming(void);
+/**
+ * @brief 判断当前累计位置是否来自有效的持久化恢复。
+ *
+ * @return true 表示编码器累计位置有效标志已置位，当前位置来自可信的持久化恢复；false 表示尚未恢复出可信累计位置，调用方不得把当前位置作为已建立基准。
+ */
 bool Encoder_HasTrustedPosition(void);
 
-/*
- * 函数用途：查询本次上电是否确认上一次真实掉电位置保存失败。
- * 调用场景：App_Init在编码器恢复和回执消费完成后调用。
- * 关键约束：仅BOR/POR复位下的真实低压回执不一致或不完整回执置位。
+/**
+ * @brief 查询本次上电是否确认上一次真实掉电位置保存失败。
+ *
+ * @details 调用场景：App_Init在编码器恢复和回执消费完成后调用。
+ * @note 关键约束：仅BOR/POR复位下的真实低压回执不一致或不完整回执置位。
  */
 bool Encoder_DidBootDetectPowerLossSaveFailure(void);
 
-/*
- * 函数用途：根据 AS5145 当前角度更新 RAM 累计值。
- * 调用场景：PendSV 延后处理有效编码器帧。
- * 关键约束：不访问 FRAM、不打印、不阻塞。
+/**
+ * @brief 根据 AS5145 当前角度更新 RAM 累计值。
+ *
+ * @details 调用场景：PendSV 延后处理有效编码器帧。
+ * @note 关键约束：不访问 FRAM、不打印、不阻塞。
  */
 void Update_Encoder_Count(uint16_t current_angle);
 
-/*
- * 函数用途：尝试提交一份待保存编码器快照。
- * 调用场景：PendSV 每轮编码器事件处理结束。
- * 关键约束：每次最多提交一份快照，失败后保留脏标志等待下次采样重试。
+/**
+ * @brief 尝试提交一份待保存编码器快照。
+ *
+ * @details 调用场景：PendSV 每轮编码器事件处理结束。
+ * @note 关键约束：每次最多提交一份快照，失败后保留脏标志等待下次采样重试。
  */
 void Encoder_ProcessDeferredPersistence(void);
 
-/*
- * 函数用途：请求掉电紧急保存并查询请求是否仍待提交。
- * 调用场景：ADC看门狗和SysTick中断。
- * 关键约束：接口只访问RAM标志，不访问FRAM、不打印、不阻塞。
+/**
+ * @brief 请求掉电紧急保存并查询请求是否仍待提交。
+ *
+ * @details 调用场景：ADC看门狗和SysTick中断。
+ * @note 关键约束：接口只访问RAM标志，不访问FRAM、不打印、不阻塞。
  */
 void Encoder_RequestEmergencyPersistenceFromISR(EncoderEmergencyPersistSource source);
+/**
+ * @brief 判断是否仍有待处理的编码器紧急保存请求。
+ *
+ * @return true 表示仍有待处理的编码器紧急保存请求；false 表示已不再有待处理的编码器紧急保存请求。
+ */
 bool Encoder_HasEmergencyPersistencePending(void);
 
-/*
- * 函数用途：取得编码器运行态、已保存值和FRAM槽位的一致调试快照。
- * 调用场景：线程态处理ENC?查询。
- * 关键约束：只短暂关中断复制RAM状态，不访问FRAM、不打印。
+/**
+ * @brief 取得编码器运行态、已保存值和FRAM槽位的一致调试快照。
+ *
+ * @details 调用场景：线程态处理ENC?查询。
+ * @note 关键约束：只短暂关中断复制RAM状态，不访问FRAM、不打印。
  */
 bool Encoder_GetDebugSnapshot(EncoderDebugSnapshot *snapshot);
 
-/*
- * 函数用途：消费一次紧急持久化成功快照。
- * 调用场景：主循环延后打印POWER_SAVE结果。
- * 关键约束：PendSV只置快照；打印方消费后清除就绪标志。
+/**
+ * @brief 消费一次紧急持久化成功快照。
+ *
+ * @details 调用场景：主循环延后打印POWER_SAVE结果。
+ * @note 关键约束：PendSV只置快照；打印方消费后清除就绪标志。
  */
 bool Encoder_TakeEmergencyPersistenceReport(EncoderEmergencyPersistenceReport *report);
 
-/*
- * 函数用途：同步保存当前编码器快照。
- * 调用场景：电机停稳、回零、人工修正和受控断电前。
- * 关键约束：只在线程态调用，成功后才推进已保存计数。
+/**
+ * @brief 同步保存当前编码器快照。
+ *
+ * @details 调用场景：电机停稳、回零、人工修正和受控断电前。
+ * @note 关键约束：只在线程态调用，成功后才推进已保存计数。
  */
 uint32_t Encoder_SaveCurrentPosition(void);
 
-/*
- * 函数用途：开始新的顶层正式业务过程。
- * 调用场景：ProcessMeasureCmd 通过即时控制命令过滤后调用。
- * 关键约束：只解除编码器故障锁存；业务内部粗找、精找重试不得调用。
+/**
+ * @brief 开始新的顶层正式业务过程。
+ *
+ * @details 调用场景：ProcessMeasureCmd 通过即时控制命令过滤后调用。
+ * @note 关键约束：只解除编码器故障锁存；业务内部粗找、精找重试不得调用。
  */
 void Encoder_BeginNewProcess(void);
 
-/*
+/**
+ * @brief 判断 AS5145 是否仍有锁存故障。
+ *
  * 函数用途：查询编码器异步故障是否仍处于锁存状态。
  * 调用场景：故障初始化和错误清除权限判断。
+ *
+ * @return true 表示 AS5145 仍有锁存故障；false 表示 AS5145 已不再有锁存故障。
  */
 bool Encoder_HasLatchedFault(void);
 
+/**
+ * @brief 位置源为编码器时，按累计计数刷新尺带长度和传感器高度。
+ */
 void update_sensor_height_from_encoder(void);
+/**
+ * @brief 忽略当前位置源选择，强制按编码器累计计数刷新尺带长度和传感器高度。
+ */
 void update_sensor_height_from_encoder_force(void);
-/*
- * 函数用途：把当前编码器位置置零并同步提交可信位置记录。
- * 调用场景：正式回零、零点标定和人工调试置零。
- * 关键约束：只有FRAM写入和回读验证成功才返回NO_ERROR。
+/**
+ * @brief 把当前编码器位置置零并同步提交可信位置记录。
+ *
+ * @details 调用场景：正式回零、零点标定和人工调试置零。
+ * @note 关键约束：只有FRAM写入和回读验证成功才返回NO_ERROR。
  */
 uint32_t set_encoder_zero(void);
+/**
+ * @brief 根据目标尺带长度反算编码器计数并持久化，单位 0.1 mm。
+ *
+ * @param cable_length_01mm 待写入编码器位置模型的尺带长度，单位 0.1 mm。
+ */
 void encoder_set_cable_length_01mm(int32_t cable_length_01mm);
+/**
+ * @brief 将编码器累计计数换算为尺带长度，单位 0.1 mm。
+ *
+ * @return 返回尺带长度，单位 0.1 mm的有效长度，单位字节；0 表示没有可供消费的数据。
+ */
 int32_t encoder_get_cable_length_01mm(void);
+/**
+ * @brief 根据罐高和尺带长度计算传感器位置，单位 0.1 mm。
+ *
+ * @return 返回 tankHeight 减去当前尺带长度得到的有符号传感器位置，单位 0.1 mm；函数不对负值或罐高上限执行钳位。
+ */
 int32_t encoder_get_sensor_position_01mm(void);
 
 #endif

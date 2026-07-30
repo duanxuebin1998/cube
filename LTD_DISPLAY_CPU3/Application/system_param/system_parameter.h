@@ -9,6 +9,7 @@
  * 2025-07-15 11:01:57
  */
 #ifndef _SYSTEM_PARAMETER_H
+/* _SYSTEM_PARAMETER_H 是本头文件的包含保护标记；首次展开后置位，防止重复包含造成类型或接口重复定义。 */
 #define _SYSTEM_PARAMETER_H
 
 #include "main.h"
@@ -16,6 +17,7 @@
 #include <stdbool.h>
 /* 无效值 */
 #define UNVALID_LEVEL 999999u /* 液位无效值 */
+/* 无效电流哨兵值 3.5 mA；低于正常 4 mA 起点，用于表示当前没有可信电流过程量。 */
 #define UNVALID_CURRENT 3.5
 #define LEVEL_DOWNLIMIT 100u               /* 盲区液位值 */
 #define UNVALID_DENSITY 0                  /* 密度无效值 */
@@ -23,26 +25,44 @@
 #define UNVALID_VCF 1                      /* VCF无效值 */
 #define UNVALID_TOV 0                      /* 体积无效值 */
 #define UNVALID_GSW 0                      /* 质量无效值 */
+/* 无效位置哨兵值 0；使用该值前必须结合有效标志，避免把合法零基准与无效状态混淆。 */
 #define UNVALID_POSITION 0
+/* 历史有线温度无效哨兵值 0；保留用于旧接口兼容，不能与无线温度无效值 UNVALID_TEMPERATURE_WIRELESS 混用。 */
 #define UNVALID_TEMPERATURE 0
 #define MAX_MEASUREMENT_POINTS 200 /* 密度分布测量最大点数 */
 #define DEVICE_PROTOCOL_VERSION 31u /* CPU2/CPU3共享协议版本；协议31复用未使用的扭力参数槽传递扭力模块温度。 */
+/* 故障自动恢复的默认重试次数 3；仅在参数缺省、越界或旧版本迁移时作为归一化值。 */
 #define FAULT_AUTO_RECOVERY_RETRY_DEFAULT 3u
+/* 故障自动恢复重试次数的配置硬上限 10；CPU3 菜单和参数校验不得允许写入超过该值的重试次数。 */
 #define FAULT_AUTO_RECOVERY_RETRY_MAX 10u
 
+/* AO 关闭状态使用的硬件目标电流 3.40 mA，线值单位为 0.01 mA；该值低于正常 4 mA 量程起点，用于表达禁用而非有效过程量。 */
 #define AO_DISABLED_CURRENT_MA_X100        340U
+/* AO 上电初始电流允许下限 3.40 mA，线值单位为 0.01 mA；参数校验和旧结构迁移必须使用同一边界。 */
 #define AO_INITIAL_CURRENT_MIN_MA_X100     340U
+/* AO 上电初始电流允许上限 22.60 mA，线值单位为 0.01 mA；超过该值的持久化参数必须判无效或归一化。 */
 #define AO_INITIAL_CURRENT_MAX_MA_X100     2260U
+/* AO 上电电流下限的语义别名；与初始电流下限保持一致，避免 CPU2/CPU3 参数校验使用不同范围。 */
 #define AO_POWER_ON_CURRENT_MIN_MA_X100    AO_INITIAL_CURRENT_MIN_MA_X100
+/* AO 上电电流上限的语义别名；与初始电流上限保持一致，修改基础边界时该别名自动同步。 */
 #define AO_POWER_ON_CURRENT_MAX_MA_X100    AO_INITIAL_CURRENT_MAX_MA_X100
+/* AO 固定输出模式允许的最小电流 4.00 mA，线值单位为 0.01 mA。 */
 #define AO_FIXED_CURRENT_MIN_MA_X100       400U
+/* AO 固定输出模式允许的最大电流 22.50 mA，线值单位为 0.01 mA。 */
 #define AO_FIXED_CURRENT_MAX_MA_X100       2250U
+/* AO 故障电流模式允许的最小电流 3.40 mA，线值单位为 0.01 mA。 */
 #define AO_FAULT_CURRENT_MIN_MA_X100       340U
+/* AO 故障电流模式允许的最大电流 22.60 mA，线值单位为 0.01 mA。 */
 #define AO_FAULT_CURRENT_MAX_MA_X100       2260U
+/* AO 调试模拟输出允许的最小电流 3.40 mA，线值单位为 0.01 mA。 */
 #define AO_SIMULATION_CURRENT_MIN_MA_X100  340U
+/* AO 调试模拟输出允许的最大电流 23.00 mA，线值单位为 0.01 mA；模拟模式仍不能越过硬件保护范围。 */
 #define AO_SIMULATION_CURRENT_MAX_MA_X100  2300U
+/* AO 电流校正量允许下限 -1.00 mA，线值单位为 0.01 mA；该值是有符号修正量，不是绝对输出电流。 */
 #define AO_CURRENT_CORRECTION_MIN_MA_X100  (-100)
+/* AO 电流校正量允许上限 +1.00 mA，线值单位为 0.01 mA；校正后结果仍需经过硬件电流限幅。 */
 #define AO_CURRENT_CORRECTION_MAX_MA_X100  100
+/* AO 阻尼时间允许上限 999.9 s，线值单位为 0.1 s；用于限制持久化参数和菜单输入，防止时间换算溢出。 */
 #define AO_DAMPING_MAX_X10_S               9999U
 
 #define DENSITY_RAW_SCALE 100U /* 密度内部原始值倍率，单位 0.01kg/m3。 */
@@ -52,29 +72,32 @@
 #define DENSITY_CORRECTION_BASE_RAW 100000U /* 密度修正零点，单位 0.01kg/m3。 */
 
 typedef enum {
-    PROFILE_SOURCE_NONE = 0u,
-    PROFILE_SOURCE_STANDARD = 1u,
-    PROFILE_SOURCE_GB = 2u,
-    PROFILE_SOURCE_METER = 3u,
-    PROFILE_SOURCE_INTERVAL = 4u,
-    PROFILE_SOURCE_WARTSILA = 5u,
-    PROFILE_SOURCE_SI = 6u
+    /* 剖面测量结果来源；用于跨 CPU 判断点阵布局、完成条件和对外协议投影。 */
+    PROFILE_SOURCE_NONE = 0u, /* 结果来源为没有有效剖面来源。 */
+    PROFILE_SOURCE_STANDARD = 1u, /* 结果来源为标准密度分布流程。 */
+    PROFILE_SOURCE_GB = 2u, /* 结果来源为国标密度分布流程。 */
+    PROFILE_SOURCE_METER = 3u, /* 结果来源为仪表直接提供的剖面。 */
+    PROFILE_SOURCE_INTERVAL = 4u, /* 结果来源为区间密度测量流程。 */
+    PROFILE_SOURCE_WARTSILA = 5u, /* 结果来源为Wartsila 剖面流程。 */
+    PROFILE_SOURCE_SI = 6u /* 结果来源为SI Profile 流程。 */
 } ProfileSource;
 
 typedef enum {
-    SI_PROFILE_PHASE_IDLE = 0u,
-    SI_PROFILE_PHASE_PREPARING = 1u,
-    SI_PROFILE_PHASE_MEASURING = 2u,
-    SI_PROFILE_PHASE_RETURNING_LEVEL = 3u,
-    SI_PROFILE_PHASE_COMPLETE = 4u,
-    SI_PROFILE_PHASE_ABORTED = 5u,
-    SI_PROFILE_PHASE_FAILED = 6u
+    /* SI 剖面测量阶段；CPU3 以该阶段配合周期和完成计数判定快照是否可发布。 */
+    SI_PROFILE_PHASE_IDLE = 0u, /* 空闲，当前没有 SI 剖面任务。 */
+    SI_PROFILE_PHASE_PREPARING = 1u, /* 准备阶段，尚未产生有效点阵。 */
+    SI_PROFILE_PHASE_MEASURING = 2u, /* 逐点测量阶段。 */
+    SI_PROFILE_PHASE_RETURNING_LEVEL = 3u, /* 测量结束后返回液面阶段。 */
+    SI_PROFILE_PHASE_COMPLETE = 4u, /* 完整剖面已经提交。 */
+    SI_PROFILE_PHASE_ABORTED = 5u, /* 流程被上层主动中止。 */
+    SI_PROFILE_PHASE_FAILED = 6u /* 流程因故障终止。 */
 } SiProfilePhase;
 
 typedef struct {
-    uint32_t phase;
-    uint32_t cycle_counter;
-    uint32_t progress_points;
+    /* SI 剖面流程对外发布的最小运行态；阶段、周期计数和已完成点数必须来自同一次快照。 */
+    uint32_t phase; /* 当前剖面或状态机阶段；消费者必须按对应枚举解释。 */
+    uint32_t cycle_counter; /* 剖面测量周期计数；每开始一个新周期递增，用于区分不同点阵。 */
+    uint32_t progress_points; /* 当前周期已经完成并可报告的剖面测点数。 */
 } SiProfileRuntime;
 
 
@@ -131,9 +154,11 @@ typedef enum {
     RELAY_ALARM_STATE_INACTIVE = 1u    /* 未激活 */
 } RelayAlarmState;
 
+/* 继电器锁存报警清除命令值；该字段按瞬时命令处理，CPU2 消费后不得长期保持为“清除”。 */
 typedef enum {
-    RELAY_ALARM_CLEAR_NO = 0u,
-    RELAY_ALARM_CLEAR_YES = 1u
+    /* 继电器锁存报警清除请求；YES 为一次性动作，消费后应恢复为 NO。 */
+    RELAY_ALARM_CLEAR_NO = 0u, /* 不请求清除继电器锁存报警。 */
+    RELAY_ALARM_CLEAR_YES = 1u /* 请求一次清除继电器锁存报警；CPU2 消费后复位。 */
 } RelayAlarmClearCommand;
 
 typedef struct {
@@ -152,44 +177,51 @@ typedef struct {
     uint32_t clear_alarm;        /* 清除锁存报警命令，CPU2 消费后清零 */
 } RelayAlarmConfig;
 
+/* 模拟量输出工作模式；区分关闭、4～20 mA 电流输出和 HART 从站输出，CPU2 与 CPU3 的枚举数值必须保持一致。 */
 typedef enum {
-    AO_WORK_MODE_DISABLED = 0u,
-    AO_WORK_MODE_CURRENT_OUTPUT = 1u,
-    AO_WORK_MODE_HART_SLAVE_OUTPUT = 2u
+    /* AO 工作模式，CPU2 与 CPU3 的数值约定必须一致。 */
+    AO_WORK_MODE_DISABLED = 0u, /* 关闭 AO 输出服务并进入安全关闭路径。 */
+    AO_WORK_MODE_CURRENT_OUTPUT = 1u, /* 启用 4～20 mA 电流输出路径。 */
+    AO_WORK_MODE_HART_SLAVE_OUTPUT = 2u /* 启用 HART 从站输出路径。 */
 } AoWorkMode;
 
 typedef enum {
-    AO_CURRENT_MODE_NE = 0u,
-    AO_CURRENT_MODE_US = 1u,
-    AO_CURRENT_MODE_NORMAL = 2u,
-    AO_CURRENT_MODE_FIXED = 3u
+    /* AO 电流制式及固定输出模式选择。 */
+    AO_CURRENT_MODE_NE = 0u, /* 采用 NAMUR NE43 电流制式边界。 */
+    AO_CURRENT_MODE_US = 1u, /* 采用美国习惯电流制式边界。 */
+    AO_CURRENT_MODE_NORMAL = 2u, /* 采用普通 4～20 mA 电流制式。 */
+    AO_CURRENT_MODE_FIXED = 3u /* 忽略过程量并输出配置的固定电流。 */
 } AoCurrentMode;
 
 typedef enum {
-    AO_PROCESS_SOURCE_TANK_LEVEL = 0u,
-    AO_PROCESS_SOURCE_SENSOR_POSITION = 1u,
-    AO_PROCESS_SOURCE_WATER_LEVEL = 2u
+    /* AO 过程量来源选择，决定 0%～100% 量程换算使用的输入值。 */
+    AO_PROCESS_SOURCE_TANK_LEVEL = 0u, /* 以储罐油位作为 AO 过程量。 */
+    AO_PROCESS_SOURCE_SENSOR_POSITION = 1u, /* 以传感器位置作为 AO 过程量。 */
+    AO_PROCESS_SOURCE_WATER_LEVEL = 2u /* 以水位作为 AO 过程量。 */
 } AoProcessSource;
 
+/* AO 故障处理动作；决定故障期间输出配置的故障电流，或保持最近一次已经确认有效的输出。 */
 typedef enum {
-    AO_FAULT_ACTION_OUTPUT_CURRENT = 0u,
-    AO_FAULT_ACTION_HOLD_LAST_VALID = 1u
+    /* AO 进入故障状态后的输出动作。 */
+    AO_FAULT_ACTION_OUTPUT_CURRENT = 0u, /* 故障时输出配置的故障电流。 */
+    AO_FAULT_ACTION_HOLD_LAST_VALID = 1u /* 故障时保持最近一次已经确认有效的电流。 */
 } AoFaultAction;
 
 typedef struct {
-    uint32_t work_mode;
-    uint32_t current_mode;
-    uint32_t output_source;
+    /* AO 核心工作配置；CPU2 消费该结构决定工作模式、电流制式、过程量来源及电流零点修正。 */
+    uint32_t work_mode; /* AO 工作模式，取值遵循 AoWorkMode。 */
+    uint32_t current_mode; /* AO 电流制式或固定输出模式，取值遵循 AoCurrentMode。 */
+    uint32_t output_source; /* AO 过程量来源，决定量程换算使用油位、位置或水位。 */
     int32_t current_correction_mA_x100;     /* 电流修正值，单位0.01mA，复用原SIL/WHG预留槽 */
-    uint32_t fixed_current_mA_x100;
-    int32_t range_0_01mm;
-    int32_t range_100_01mm;
-    uint32_t damping_x10_s;
+    uint32_t fixed_current_mA_x100; /* AO 固定电流模式的目标值，单位为 0.01 mA。 */
+    int32_t range_0_01mm; /* AO 过程量量程的 0% 端点，单位为 0.1 mm。 */
+    int32_t range_100_01mm; /* AO 过程量量程的 100% 端点，单位为 0.1 mm。 */
+    uint32_t damping_x10_s; /* AO 阻尼时间的十倍定点值，单位为 0.1 s。 */
     uint32_t fault_mode;                    /* 故障动作：0输出故障电流，1保持上次有效过程电流 */
-    uint32_t fault_current_mA_x100;
+    uint32_t fault_current_mA_x100; /* 故障电流，单位为 0.01 mA；该字段保存已经缩放的整数定点值，换算物理量时只能应用一次缩放。 */
     uint32_t error_level;                   /* 隐藏预留槽位，固定为0 */
     uint32_t power_on_current_mA_x100;      /* 初始电流，保留原字段名和槽位 */
-    uint32_t simulation_current_mA_x100;
+    uint32_t simulation_current_mA_x100; /* AO 仿真模式目标电流，单位为 0.01 mA。 */
 } AoOutputConfig;
 
 #define REPEATMAX 3 /* 重复性测试次数 */
@@ -208,7 +240,9 @@ typedef struct {
 
 /* 报警状态 */
 #define ALARMSTATE_NONE 0
+/* 报警方向编码 1：表示低限或低低限侧报警。 */
 #define ALARMSTATE_LOW 1
+/* 报警方向编码 2：表示高限或高高限侧报警。 */
 #define ALARMSTATE_HIGH 2
 
 
@@ -554,10 +588,14 @@ typedef enum {
     STATE_ERROR = 0xFFFF                        /* 故障 */
 } DeviceState;
 
-/*
- * 函数用途：判断当前设备状态是否允许尝试写入CPU2持久参数。
- * 调用场景：CPU2最终写门禁和CPU3菜单、外部协议预检查。
- * 关键约束：只列出已确认空闲的完成态；持续态、预留态和未来新增状态默认拒绝。
+/**
+ * @brief 判断当前设备状态是否允许尝试写入CPU2持久参数。
+ *
+ * @details 调用场景：CPU2最终写门禁和CPU3菜单、外部协议预检查。
+ * @note 关键约束：只列出已确认空闲的完成态；持续态、预留态和未来新增状态默认拒绝。
+ *
+ * @param state 待检查的 CPU2 设备状态；函数按共享持久参数写白名单决定是否允许写入。
+ * @return true 表示当前设备状态允许尝试写入CPU2持久参数；false 表示当前设备状态不允许尝试写入CPU2持久参数。
  */
 static inline bool DeviceState_AllowsPersistentParamWrite(DeviceState state)
 {
@@ -699,8 +737,9 @@ typedef struct {
 typedef struct {
 	uint32_t water_level;                        /* /< 测量水位的值 */
 	float zero_capacitance;
-	float oil_capacitance;
-	float current_capacitance;
+	/* 水位测量过程中用于比较油相基准和当前位置的电容结果。 */
+	float oil_capacitance; /* 进入水位判定前锁存的油相基准电容。 */
+	float current_capacitance; /* 当前位置最新测得的水位探头电容。 */
 } WaterMeasurement;
 
 typedef enum {
@@ -726,6 +765,7 @@ typedef struct {
     uint32_t result;                         /* 无线滑环匹配结果 */
     uint32_t mac_valid;                      /* MAC 是否有效 */
     uint32_t mac_high;                       /* AA:BB */
+    /* CPU2/CPU3 共享的无线配对状态字段。 */
     uint32_t mac_mid;                        /* CC:DD */
     uint32_t mac_low;                        /* EE:FF */
     uint32_t error_code;                     /* 失败时的 CPU2 错误码 */
@@ -936,44 +976,50 @@ typedef struct {
 
 /* 保持寄存器数据结构 */
 struct ParameterMetadata {
-    uint8_t* name;
-    int val;
-    const int operanum;
-    const uint16_t startadd;
-    const uint8_t rgstcnt;
-    const bool flag_checkvalue;
-    const int valuemin;
-    const int valuemax;
-    uint8_t* unit;
-    const uint8_t point;
-    const int offset;
-    const bool authority_write;
-    int data_type;
-    int bits;
-    uint8_t *(*pword)();
-    uint8_t* name_English;
+    /* CPU3 参数菜单元数据；定义显示名、寄存器地址、范围、精度、权限、数据类型及密码文本入口。 */
+    uint8_t* name; /* 参数在中文界面中的显示名称。 */
+    int val; /* 当前参数的协议原始值；显示时再按小数位和单位元数据进行格式化。 */
+    const int operanum; /* 参数对应的菜单操作码，用于查找和回写。 */
+    const uint16_t startadd; /* 参数在 CPU2 共享保持寄存器中的起始地址。 */
+    const uint8_t rgstcnt; /* 该参数连续占用的 16 位寄存器数量。 */
+    const bool flag_checkvalue; /* 写入前是否执行最小值和最大值范围校验。 */
+    const int valuemin; /* 启用范围校验时允许写入的最小值。 */
+    const int valuemax; /* 启用范围校验时允许写入的最大值。 */
+    uint8_t* unit; /* 只读单位字符串；无单位时为 NULL。 */
+    const uint8_t point; /* 显示和编辑时使用的小数位数。 */
+    const int offset; /* 显示值与协议原始值之间使用的固定偏移。 */
+    const bool authority_write; /* 当前菜单权限下是否允许写入该参数。 */
+    int data_type; /* 参数底层标量类型，决定读写时的位宽和浮点解释方式。 */
+    int bits; /* 参数有效位宽，用于掩码和符号扩展。 */
+    uint8_t *(*pword)(); /* 密码文本回调；受保护参数写入时动态取得当前密码字符串。 */
+    uint8_t* name_English; /* 参数在英文界面中的显示名称。 */
 };
 extern struct ParameterMetadata param_meta[];
 
 union utof
 {
-    float f;
-    u32 u;
+    /* 32 位无符号整数与单精度浮点数共享位模式的转换联合体。 */
+    float f; /* 按 IEEE 754 单精度浮点数解释的位模式视图。 */
+    u32 u; /* 按无符号整数字项解释的同一位模式视图。 */
 };
 
 union utod
 {
-    double d;
-    u32 u[2];
+    /* 两个 32 位字与双精度浮点数共享位模式的转换联合体。 */
+    double d; /* 按 IEEE 754 双精度浮点数解释的位模式视图。 */
+    u32 u[2]; /* 按无符号整数字项解释的同一位模式视图。 */
 };
+/* CPU3 参数元数据使用的标量表示类型；决定菜单读写时按整数、单精度或双精度解释目标地址。 */
 typedef enum{
-    TYPE_INT,
-    TYPE_FLOAT,
-    TYPE_DOUBLE,
+    /* 参数元数据的底层标量解释方式。 */
+    TYPE_INT, /* 参数目标按有符号整数读取和写入。 */
+    TYPE_FLOAT, /* 参数目标按 IEEE 754 单精度浮点数读取和写入。 */
+    TYPE_DOUBLE, /* 参数目标按 IEEE 754 双精度浮点数读取和写入。 */
 }DATA_TYPE;
 typedef enum{
-    LANG_CHINESE = 0,
-    LANG_ENGLISH,
+    /* 参数菜单使用的语言编号。 */
+    LANG_CHINESE = 0, /* 参数菜单使用中文文本。 */
+    LANG_ENGLISH, /* 参数菜单使用英文文本。 */
 }LANG_NUM;
 typedef enum { /* 数据源取自 */
     SOURCE_FROM_MEA,
@@ -981,18 +1027,27 @@ typedef enum { /* 数据源取自 */
 }SOURCE;
 
 /* 位置记步来源：0 使用编码轮，1 使用 TMC5130 XACTUAL 电机步进。 */
+/* 位置记步来源编码 0：使用编码轮计数换算传感器位置。 */
 #define POSITION_COUNT_MODE_ENCODER 0u
+/* 位置记步来源编码 1：使用 TMC5130 XACTUAL 电机步进换算位置。 */
 #define POSITION_COUNT_MODE_MOTOR   1u
 
 /* 流程是否允许自动切换位置源：0=不切换，1=自动切换。 */
+/* 位置源自动切换配置值 0：测量流程保持当前来源，不执行自动切换。 */
 #define POSITION_SOURCE_AUTO_SWITCH_DISABLE 0u
+/* 位置源自动切换配置值 1：流程满足条件时允许在编码器与电机步进来源间切换。 */
 #define POSITION_SOURCE_AUTO_SWITCH_ENABLE  1u
 /* 罐底测量完成后是否修正编码器当前值：0=不修正，1=修正。 */
+/* 探底完成后的编码器修正配置值 0：保留当前编码器累计值。 */
 #define BOTTOM_ENCODER_CORRECTION_DISABLE 0u
+/* 探底完成后的编码器修正配置值 1：使用罐底基准修正编码器当前位置。 */
 #define BOTTOM_ENCODER_CORRECTION_ENABLE  1u
 /* 电机运行电流配置，范围对应 TMC5130 IRUN。 */
+/* TMC5130 运行电流 IRUN 的默认配置值 12；仅在参数缺省或归一化时使用。 */
 #define MOTOR_CURRENT_DEFAULT       12u
+/* TMC5130 运行电流 IRUN 的最小允许值 1；菜单索引和写入校验均以此为下界。 */
 #define MOTOR_CURRENT_MIN           1u
+/* TMC5130 运行电流 IRUN 的最大允许值 31；对应驱动器字段的 5 位上限。 */
 #define MOTOR_CURRENT_MAX           31u
 
 /* **************** 全局变量 *************************** */
@@ -1000,18 +1055,24 @@ extern volatile MeasurementResult g_measurement; /* 测量结果 */
 extern volatile DeviceParameters g_deviceParams; /* 设备参数 */
 extern const int param_metaAmount;
 /**
- * @brief 读取系统参数中的 getHoldValueNum 逻辑。
+ * @brief 根据操作号查找对应的参数元数据索引。
  *
- * @param operanum 业务参数。
- * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ * @param operanum 菜单或参数操作号，对应 `ParameterMetadata.operanum`。
+ * @return 找到时返回 `param_meta` 的零基索引；未找到时返回 -1。
  */
 int getHoldValueNum(int operanum);
 /**
- * @brief 执行系统参数中的 InputValueInit 逻辑。
+ * @brief 初始化 CPU3 本地显示参数和首包同步前的测量运行态。
+ *
+ * @note 本函数在 CPU3 启动初始化阶段调用。它先应用本地显示参数，再将尚未从
+ * CPU2 收到的数据设置为明确的无效值或未激活态，避免界面把零初始化误当成实测结果。
  */
 void InputValueInit(void);
 /**
- * @brief 显示或打印系统参数中的 print_device_params 逻辑。
+ * @brief 将当前 CPU2 设备参数快照按业务分组完整打印到调试串口。
+ *
+ * @note 打印使用局部快照，避免输出过程中 CPU2 同步更新全局参数造成同一次
+ * 打印前后字段不一致；本函数只读取参数，不修改运行态或持久化内容。
  */
 void print_device_params(void); /* 打印设备参数 */
 #endif

@@ -11,22 +11,29 @@
 #include <stdint.h>
 #include <stddef.h>
 #include <string.h>
+/* Wartsila 外部协议参数镜像，由寄存器写入更新并参与命令换算。 */
 wartsila_DeviceParameters wartsila_deviceParams = { 0 };
 
 #include <stdint.h>
 
 /**
- * @brief 执行Modbus 协议中的 WXL_STATE 逻辑。
+ * @brief 将两个状态字节组合成瓦锡兰 16 位状态码。
  *
- * @param hi 业务参数。
- * @param lo 业务参数。
- * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ * @param hi 待合并状态字的高 16 位。
+ * @param lo 待合并状态字的低 16 位。
+ * @return 返回以 hi 为高字节、lo 为低字节组合得到的瓦锡兰 16 位状态码。
  */
 static inline uint16_t WXL_STATE(uint8_t hi, uint8_t lo)
 {
     return (uint16_t)(((uint16_t)hi << 8) | (uint16_t)lo);
 }
 
+/**
+ * @brief 把内部 x100 密度值四舍五入并饱和转换为瓦锡兰 x10 格式。
+ *
+ * @param raw_density CPU2 内部密度原始值，单位 0.01 kg/m3；UNVALID_DENSITY 表示无有效密度。
+ * @return 返回瓦锡兰使用的 0.1 kg/m3 有符号密度值；无效密度返回 0，四舍五入换算结果超过 int16_t 正上限时饱和为 32767。
+ */
 static int16_t Wartsila_DensityRawToX10(uint32_t raw_density)
 {
 	uint32_t raw_x10;
@@ -52,6 +59,9 @@ static int16_t Wartsila_DensityRawToX10(uint32_t raw_density)
  *         0x08 40  向下运动会固定点监测
  *         0x08 64  接收到提浮子指令
  *         0x08 60  提浮子，向上运行
+ *
+ * @param s 待转换为瓦锡兰工作状态的设备状态枚举值。
+ * @return 返回澳邦设备状态对应的瓦锡兰 16 位复合工作状态码。
  */
 uint16_t AubonState_To_WartsilaWorkState(DeviceState s)
 {
@@ -128,6 +138,11 @@ static void WartsilaToDSM(const wartsila_DeviceParameters *wxl, volatile DeviceP
 	dsm->wartsila_max_height_above_surface = wxl->spread_dist_to_surface_mm; /* 0x005D */
 	/* 下发参数 */
 }
+/**
+ * @brief 从瓦锡兰保持寄存器读取命令和分布测量参数，并转换为 CPU2 参数镜像。
+ *
+ * @param reg 目标寄存器地址或寄存器值。该指针指向瓦锡兰连续寄存器镜像，函数按固定地址表装载或写入设备参数字段。
+ */
 void DeviceParams_LoadFromRegisters(uint16_t *reg) {
 
 	wartsila_deviceParams.down_command = reg[0x0006]; /* 下发指令 */
@@ -141,11 +156,10 @@ void DeviceParams_LoadFromRegisters(uint16_t *reg) {
 	WartsilaToDSM(&wartsila_deviceParams, &g_deviceParams);
 }
 /**
- * @brief 执行Modbus 协议中的 DSMToWartsila 逻辑。
+ * @brief 把 CPU2 测量快照转换为瓦锡兰寄存器数据。
  *
- * @param DSM 业务参数。
- * @param WXL 业务参数。
- * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ * @param DSM 待转换的 CPU2 实时测量和设备状态快照。
+ * @param WXL 用于接收瓦锡兰对外寄存器字段的目标结构。
  */
 static void DSMToWartsila(const volatile MeasurementResult *DSM, wartsila_DeviceParameters *WXL) {
 	uint16_t point_count;
@@ -217,10 +231,13 @@ static void DSMToWartsila(const volatile MeasurementResult *DSM, wartsila_Device
 	}
 }
 
-/*
- * 函数用途：刷新 Wärtsilä 可离线读取的 CPU3 本地静态字段。
- * 调用场景：FC03 完成整帧新鲜度分类后、复制寄存器池之前调用。
- * 关键约束：不读取 g_measurement 或 g_deviceParams，点表预留 lane 始终返回零。
+/**
+ * @brief 刷新 Wärtsilä 可离线读取的 CPU3 本地静态字段。
+ *
+ * @details 调用场景：FC03 完成整帧新鲜度分类后、复制寄存器池之前调用。
+ * @note 关键约束：不读取 g_measurement 或 g_deviceParams，点表预留 lane 始终返回零。
+ *
+ * @param reg 目标寄存器地址或寄存器值。该指针指向瓦锡兰连续寄存器镜像，函数按固定地址表装载或写入设备参数字段。
  */
 void Wartsila_StoreLocalStaticRegisters(uint16_t *reg)
 {
@@ -256,7 +273,7 @@ void Wartsila_StoreLocalStaticRegisters(uint16_t *reg)
 
 /**
  * @brief 将当前设备参数同步到瓦锡兰保持寄存器缓存。
- * @param reg 瓦锡兰保持寄存器缓存。
+ * @param reg 目标寄存器地址或寄存器值。该指针指向瓦锡兰连续寄存器镜像，函数按固定地址表装载或写入设备参数字段。
  */
 void DeviceParams_StoreToRegisters(uint16_t *reg) {
 	wartsila_DeviceParameters wxl;

@@ -72,13 +72,28 @@ static void GB_FilterPoints_ByDensity20(DensityDistribution *dist,
                                         int32_t oil_standard_th);
 
 /* ===================== 工具函数 ===================== */
-/* 返回两个 0.1mm/计数类整数中的较大值，避免分布测点排序时重复写三目表达式。 */
+/**
+ * @brief 返回两个 0.1mm/计数类整数中的较大值，避免分布测点排序时重复写三目表达式。
+ *
+ * @param a 第一个有符号比较值；与 b 必须采用相同的长度、计数或定点单位。
+ * @param b 第二个有符号比较值；与 a 必须采用相同的长度、计数或定点单位。
+ * @return 返回 a 与 b 中数值较大的一项；两者相等时返回 b，结果沿用输入的长度、计数或定点单位。
+ */
 static inline int32_t i32_max(int32_t a, int32_t b) { return (a > b) ? a : b; }
-/* 返回有符号位置差的绝对值，用于密度测量位置偏差判断。 */
+/**
+ * @brief 返回有符号位置差的绝对值，用于密度测量位置偏差判断。
+ *
+ * @param x 算法、坐标或比较使用的 X 值。
+ * @return 返回有符号位置差的绝对值，用于密度测量位置偏差判断；有符号边界按函数内饱和规则处理。
+ */
 static inline int32_t i32_abs(int32_t x) { return (x >= 0) ? x : -x; }
 
 /**
  * @brief 测量结果里的位置字段是无符号，上报前负位置统一按0处理。
+ *
+ * @param value_01mm 位置或距离值，单位 0.1 mm。
+ * @param tag 用于区分诊断来源的只读标签文字。
+ * @return 返回完成边界钳位后的数值；输入低于下限时返回下限，高于上限时返回上限，区间内保持原值。
  */
 static uint32_t Density_ValueToU01mmClamped(int32_t value_01mm, const char *tag)
 {
@@ -93,16 +108,23 @@ static uint32_t Density_ValueToU01mmClamped(int32_t value_01mm, const char *tag)
 }
 
 /**
- * @brief 执行密度测量中的 Density_CurrentPositionToU01mmClamped 逻辑。
- * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ * @brief 把当前电机位置换算并钳位为无符号 0.1 mm 坐标。
+ * @return 返回完成边界钳位后的数值；输入低于下限时返回下限，高于上限时返回上限，区间内保持原值。
  */
 static uint32_t Density_CurrentPositionToU01mmClamped(void)
 {
     return Density_ValueToU01mmClamped(g_measurement.debug_data.sensor_position, "测点位置");
 }
 
-/*
- * 打印单点类目标位置超限原因。报错前一次性输出目标、边界、当前位置和错误码，便于现场判断参数还是位置异常。
+/**
+ * @brief 打印单点类目标位置超限原因。报错前一次性输出目标、边界、当前位置和错误码，便于现场判断参数还是位置异常。
+ *
+ * @param scene 用于现场日志标识当前单点位置校验场景的只读文字。
+ * @param reason 用于诊断输出的 NUL 结尾只读原因文字；该文字补充错误发生背景，不代替函数另行记录或返回的数值错误码。
+ * @param target_01mm 待校验或移动到的目标位置，单位 0.1 mm。
+ * @param top_limit_01mm 目标位置允许达到的上边界，单位 0.1 mm。
+ * @param bottom_limit_01mm 目标位置允许达到的下边界，单位 0.1 mm。
+ * @param error_code 待记录、转换或判断的错误码。该值标识单点目标位置或量程错误，用于输出包含目标和允许范围的诊断。
  */
 static void SinglePoint_PrintTargetRangeError(const char *scene,
                                               const char *reason,
@@ -124,11 +146,16 @@ static void SinglePoint_PrintTargetRangeError(const char *scene,
            (unsigned long)error_code);
 }
 
-/*
- * Check single-point target before any motor movement.
- * Valid single-point positions must stay between the tank bottom blind zone
- * and the zero point, both in 0.1mm units.
+/**
+ * @brief 在电机动作前校验单点目标位置是否位于罐底盲区与罐高之间。
+ *
+ * @param scene 用于现场日志标识当前单点位置校验场景的只读文字。
+ * @param target_01mm 待校验或移动到的目标位置，单位 0.1 mm。
+ * @return NO_ERROR 表示目标位置有效；PARAM_CONFIG_MISSING 表示罐高未配置；PARAM_COMBINATION_CONFLICT
+ *         表示盲区大于罐高；PARAM_RANGE_ERROR 表示目标超出罐高或进入盲区。
+ * @note 目标、罐底盲区和罐高均使用 0.1 mm 定点单位；配置缺失、上下限冲突和目标越界分别返回对应错误码并打印现场范围。
  */
+
 uint32_t SinglePoint_CheckTargetPosition(const char *scene, uint32_t target_01mm)
 {
     uint32_t top_limit_01mm = g_deviceParams.tankHeight;
@@ -161,10 +188,11 @@ uint32_t SinglePoint_CheckTargetPosition(const char *scene, uint32_t target_01mm
     return NO_ERROR;
 }
 
-/*
- * 函数用途：开始一轮分布点阵测量并关闭上一轮CPU2完成锁存。
- * 调用场景：普通、国标、每米、区间、瓦锡兰和综合测量进入测量态前。
- * 关键约束：完成计数保持不变，CPU3继续使用上一份已确认快照。
+/**
+ * @brief 开始一轮分布点阵测量并关闭上一轮CPU2完成锁存。
+ *
+ * @details 调用场景：普通、国标、每米、区间、瓦锡兰和综合测量进入测量态前。
+ * @note 关键约束：完成计数保持不变，CPU3继续使用上一份已确认快照。
  */
 void DensityProfile_Begin(void)
 {
@@ -176,10 +204,14 @@ void DensityProfile_Begin(void)
     g_measurement.density_distribution.profile_density_deviation_alarm = 0U;
 }
 
-/*
- * 函数用途：把完整分布点阵、来源和完成锁存按同一代际发布。
- * 调用场景：六种分布类测量取得完整临时候选结果后。
- * 关键约束：候选结构写完并执行屏障后才递增完成计数，CPU3以计数沿启动整阵复核。
+/**
+ * @brief 把完整分布点阵、来源和完成锁存按同一代际发布。
+ *
+ * @details 调用场景：六种分布类测量取得完整临时候选结果后。
+ * @note 关键约束：候选结构写完并执行屏障后才递增完成计数，CPU3以计数沿启动整阵复核。
+ *
+ * @param candidate 待校验或比较的候选值。该可写对象承载本轮完整密度分布、测点数和关联结果，校验通过后才发布到共享测量快照。
+ * @param source 本轮密度剖面结果来源枚举；用于标记标准、国标、密度计或其它测量流程，供发布快照和后续显示选择。
  */
 void DensityProfile_PublishResult(DensityDistribution *candidate, ProfileSource source)
 {
@@ -203,10 +235,16 @@ void DensityProfile_PublishResult(DensityDistribution *candidate, ProfileSource 
     }
 }
 
-/*
- * 函数用途：把一个真实稳定的固定点候选结果按六字段同代发布。
- * 调用场景：单点测量完成、固定点监测取得新样本或样机生成完整样本后。
- * 关键约束：命令切换时拒绝发布；六字段全部写完并执行屏障后才递增对应代际。
+/**
+ * @brief 把一个真实稳定的固定点候选结果按六字段同代发布。
+ *
+ * @details 调用场景：单点测量完成、固定点监测取得新样本或样机生成完整样本后。
+ * @note 关键约束：命令切换时拒绝发布；六字段全部写完并执行屏障后才递增对应代际。
+ *
+ * @param published 用于返回已经通过稳定窗口判定并发布的单点测量结果。
+ * @param candidate 待校验或比较的候选值。该只读单点测量包含频率、密度、温度和位置，只有稳定性与有效性检查通过后才发布。
+ * @param generation_counter 用于递增并发布单点结果代次的输出计数器。
+ * @return 1 表示三个对象指针有效、临界区内未出现有效命令切换，六个结果字段已同代写入且 generation_counter 已递增；0 表示任一指针为空，或发布前检测到命令切换，本次候选未发布。
  */
 static uint8_t SinglePoint_PublishStableResult(volatile DensityMeasurement *published,
                                                const DensityMeasurement *candidate,
@@ -243,10 +281,14 @@ static uint8_t SinglePoint_PublishStableResult(volatile DensityMeasurement *publ
     return 1U;
 }
 
-/*
- * 函数用途：把完整的单点测量候选交给固定点原子发布器，并递增测量完成代际。
- * 调用场景：真实稳定测量和显式串口虚拟展示取得完整六字段后。
- * 关键约束：命令切换期间拒绝发布，调用方必须处理返回值。
+/**
+ * @brief 把完整的单点测量候选交给固定点原子发布器，并递增测量完成代际。
+ *
+ * @details 调用场景：真实稳定测量和显式串口虚拟展示取得完整六字段后。
+ * @note 关键约束：命令切换期间拒绝发布，调用方必须处理返回值。
+ *
+ * @param candidate 待校验或比较的候选值。该只读单点测量包含频率、密度、温度和位置，只有稳定性与有效性检查通过后才发布。
+ * @return 1 表示单点测量候选已原子发布且测量完成代际已递增；候选非法或发布失败时返回 0。
  */
 uint8_t SinglePoint_PublishMeasurementResult(const DensityMeasurement *candidate)
 {
@@ -255,10 +297,14 @@ uint8_t SinglePoint_PublishMeasurementResult(const DensityMeasurement *candidate
                                            &g_measurement.measurement_complete_counter);
 }
 
-/*
- * 函数用途：把完整的固定点监测候选交给固定点原子发布器，并递增监测样本代际。
- * 调用场景：真实稳定监测和显式串口虚拟展示取得完整六字段后。
- * 关键约束：命令切换期间拒绝发布，调用方必须处理返回值。
+/**
+ * @brief 把完整的固定点监测候选交给固定点原子发布器，并递增监测样本代际。
+ *
+ * @details 调用场景：真实稳定监测和显式串口虚拟展示取得完整六字段后。
+ * @note 关键约束：命令切换期间拒绝发布，调用方必须处理返回值。
+ *
+ * @param candidate 待校验或比较的候选值。该只读单点测量包含频率、密度、温度和位置，只有稳定性与有效性检查通过后才发布。
+ * @return 1 表示固定点监测候选已原子发布且监测样本代际已递增；候选非法或发布失败时返回 0。
  */
 uint8_t SinglePoint_PublishMonitoringResult(const DensityMeasurement *candidate)
 {
@@ -272,6 +318,9 @@ uint8_t SinglePoint_PublishMonitoringResult(const DensityMeasurement *candidate)
  * @brief 写入固定点监测样机虚拟数据。
  *
  * 只更新 CPU3/上位机读取的测量结果和调试字段，不访问传感器串口，适合无传感器样机演示。
+ *
+ * @param sample_index 样机虚拟样本序号；用于生成本轮测试频率、密度、温度和位置的可重复变化量，不是正式测量点索引。
+ * @return 1 表示样机虚拟样本已写入固定点监测结果并递增样本代际；发布失败时返回 0。
  */
 static uint8_t SinglePointMonitoringPrototype_WriteSample(uint32_t sample_index)
 {
@@ -322,6 +371,8 @@ static uint8_t SinglePointMonitoringPrototype_WriteSample(uint32_t sample_index)
  * @brief 固定点监测样机循环。
  *
  * 宏启用时替代真实传感器读取；循环期间只响应命令切换，不做 UART6 传感器通信。
+ *
+ * @return STATE_SWITCH 表示样机循环被新命令正常打断；其他非零值为点位运动、驻留等待或固定点样本发布失败，该持续循环没有主动 NO_ERROR 完成出口。
  */
 static uint32_t SinglePointMonitoringPrototype_Run(void)
 {
@@ -346,7 +397,6 @@ static uint32_t SinglePointMonitoringPrototype_Run(void)
         sample_index++;
 
         ret = AbortableDelay_CommandSwitch(SINGLE_POINT_MONITORING_PROTO_PERIOD_MS, 50U);
-        /* 先处理异常边界，避免密度测量状态机带故障继续运行。 */
         if (ret != NO_ERROR) {
             return ret;
         }
@@ -355,12 +405,11 @@ static uint32_t SinglePointMonitoringPrototype_Run(void)
 #endif
 
 /**
- * @brief 显示或打印密度测量中的 PrintPoints01mm 逻辑。
+ * @brief 按 0.1 mm 单位打印密度分布取点数组。
  *
- * @param tag 业务参数。
- * @param p01 输入/输出指针。
- * @param n 业务参数。
- * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ * @param tag 用于区分诊断来源的只读标签文字。
+ * @param p01 包含 n 个取点位置的只读数组，每个元素单位为 0.1 mm；日志同时打印原始整数和毫米值。
+ * @param n 测点数组中参与打印或测量的有效点数。
  */
 static void PrintPoints01mm(const char *tag, const int32_t *p01, uint32_t n)
 {
@@ -371,29 +420,54 @@ static void PrintPoints01mm(const char *tag, const int32_t *p01, uint32_t n)
     printf("\r\n");
 }
 
+/* SI 剖面默认首测点距基准 10.00 mm，单位为 0.01 mm。 */
 #define SI_PROFILE_DEFAULT_FIRST_POINT_01MM 1000U
+/* SI 剖面默认相邻测点间隔 100.00 mm，单位为 0.01 mm。 */
 #define SI_PROFILE_DEFAULT_INCREMENT_01MM 10000U
+/* SI 剖面到达每个测点后的默认停留时间 10 s。 */
 #define SI_PROFILE_DEFAULT_DWELL_TIME_S 10U
+/* SI 剖面探底间隔参数允许上限 1000；用于拒绝异常配置，具体距离单位沿用设备参数定义。 */
 #define SI_PROFILE_MAX_BOTTOM_DETECT_INTERVAL 1000U
+/* SI 剖面空气/液体判别密度阈值 100.0；低于该值视为空气区域，单位与测量密度字段一致。 */
 #define SI_PROFILE_AIR_DENSITY_THRESHOLD 100.0f
+/* SI 剖面稳定判定的密度采样周期 200 ms。 */
 #define SI_PROFILE_DENSITY_SAMPLE_MS 200U
+/* SI 剖面判断密度稳定所需的连续观察窗口 5000 ms。 */
 #define SI_PROFILE_DENSITY_STABLE_WINDOW_MS 5000U
+/* SI 剖面单点等待密度稳定的最长时间 5 min；超时后必须结束该点等待并进入错误处理。 */
 #define SI_PROFILE_DENSITY_MAX_WAIT_MS (5U * 60U * 1000U)
+/* SI 剖面稳定窗口允许的频率波动上限 1.0 Hz。 */
 #define SI_PROFILE_DENSITY_FREQ_EPS_HZ 1.0f
+/* SI 剖面稳定窗口允许的密度数值波动上限 0.1，单位与密度字段一致。 */
 #define SI_PROFILE_DENSITY_VALUE_EPS 0.1f
+/* SI 剖面稳定窗口允许的温度波动上限 0.2 ℃。 */
 #define SI_PROFILE_DENSITY_TEMP_EPS_C 0.2f
+/* SI 剖面本周期罐底位置基准已经建立的标志。 */
 static uint8_t s_si_profile_bottom_ref_valid = 0U;
+/* SI 剖面本周期罐底基准位置，单位为 0.1 mm。 */
 static int32_t s_si_profile_bottom_position_01mm = 0;
+/* 距上次 SI 探底完成后已执行的剖面次数。 */
 static uint32_t s_si_profile_count_since_bottom = 0U;
+/* SI 剖面上电后的首轮标志，用于强制建立罐底基准。 */
 static uint8_t s_si_profile_first_run = 1U;
+/* SI 剖面本轮测量候选点阵，完成全部校验前不对外发布。 */
 static DensityDistribution s_si_profile_candidate;
+/* SI 候选点阵已经完整生成并可提交的标志。 */
 static uint8_t s_si_profile_candidate_valid = 0U;
 
-/* =======================================================================
- * 通用执行器：按点位数组执行测量
- *  - 输入点位单位：0.1mm
- *  - 输出：dist 写入测点列表与平均值
- * ======================================================================= */
+/**
+ * @brief 通用执行器：按点位数组执行测量。
+ *
+ * 输入点位单位：0.1mm。
+ * 输出：dist 写入测点列表与平均值。
+ *
+ * @param p01 按执行顺序排列的测点位置数组，元素单位为 0.1 mm。
+ * @param n 测点数组中参与打印或测量的有效点数。
+ * @param oil_level_01mm 油位值，单位 0.1 mm。
+ * @param dist 密度分布测量结果对象。
+ * @param dwell_time_s 测点到位后的稳定停留时间，单位 s。
+ * @return SYSTEM_CALL_CONDITION_ERROR 表示当前系统状态不允许执行；NO_ERROR 表示操作成功。
+ */
 static uint32_t Density_RunPoints01mmWithDwell(const int32_t *p01,
                                       uint32_t n,
                                       int32_t oil_level_01mm,
@@ -401,7 +475,6 @@ static uint32_t Density_RunPoints01mmWithDwell(const int32_t *p01,
                                       uint32_t dwell_time_s)
 {
     if (!p01 || !dist) return SYSTEM_CALL_CONDITION_ERROR;
-    /* 先处理异常边界，避免密度测量状态机带故障继续运行。 */
     if (n == 0 || n > MAX_MEASUREMENT_POINTS) return MEASUREMENT_DENSITY_PLAN_INVALID;
 
     memset(dist, 0, sizeof(*dist));
@@ -424,7 +497,6 @@ static uint32_t Density_RunPoints01mmWithDwell(const int32_t *p01,
             /* 命令切换是正常打断，直接向上透传，不参与故障重试。 */
             return STATE_SWITCH;
         }
-        /* 先处理异常边界，避免密度测量状态机带故障继续运行。 */
         if (ret != NO_ERROR) {
             printf("分布测量 电机移动失败: 位置=%.1fmm 错误码=%lu\r\n", pos_mm, (unsigned long)ret);
             return ret;
@@ -443,7 +515,6 @@ static uint32_t Density_RunPoints01mmWithDwell(const int32_t *p01,
             /* 命令切换是正常打断，直接向上透传，不参与故障重试。 */
             return STATE_SWITCH;
         }
-        /* 先处理异常边界，避免密度测量状态机带故障继续运行。 */
         if (ret != NO_ERROR) {
             printf("分布测量 单点读取失败: 位置=%.1fmm 错误码=%lu\r\n", pos_mm, (unsigned long)ret);
             return ret;
@@ -482,6 +553,15 @@ static uint32_t Density_RunPoints01mmWithDwell(const int32_t *p01,
     return NO_ERROR;
 }
 
+/**
+ * @brief 按 0.1 mm 点位序列移动传感器并采集密度数据。
+ *
+ * @param p01 按执行顺序排列的测点位置数组，元素单位为 0.1 mm。
+ * @param n 测点数组中参与打印或测量的有效点数。
+ * @param oil_level_01mm 油位值，单位 0.1 mm。
+ * @param dist 密度分布测量结果对象。
+ * @return 返回整机错误码；NO_ERROR 表示全部点位采集完成，其他值透传点位、运动、传感器读取或命令切换失败。
+ */
 static uint32_t Density_RunPoints01mm(const int32_t *p01,
                                       uint32_t n,
                                       int32_t oil_level_01mm,
@@ -494,12 +574,20 @@ static uint32_t Density_RunPoints01mm(const int32_t *p01,
  * 取点逻辑：严格复刻例程
  * ======================================================================= */
 
-/* ---------- 1) 普通分布测（SpredState=1） ----------
- * 关键点：
- *   - floor = max(bottomLimit, blindZone)
- *   - distmin 最小 100mm（0.1mm=1000）
- *   - high_min = oil_level - topLimit - floor
- *   - 实际步距 dis 使用 high_min/(N-1) 等分（不是固定 distance）
+/**
+ * @brief 按液位、顶部限制、罐底盲区和最小点距生成普通密度分布测点。
+ *
+ * 关键点如下。
+ * 可测下边界采用 floor = max(bottomLimit, blindZone)，即取配置下限和传感器盲区中的较大值。
+ * distmin 最小 100mm（0.1mm=1000）；配置值更小时按 1000 个 0.1 mm 单位参与点数计算。
+ * 有效高度 high_min = oil_level - topLimit - floor；液位、点数或有效高度不足时退化为一个液位中点，并保证该点不低于盲区。
+ * 实际步距 dis 使用 high_min/(N-1) 等分（不是固定 distance）；最终点位按配置方向输出并裁剪到有效区间。
+ *
+ * @param oil_level_01mm 油位值，单位 0.1 mm。
+ * @param out_p01 用于接收生成后测点位置的数组，元素单位为 0.1 mm。
+ * @param out_n 用于返回本次生成的有效测点数量。
+ * @return NO_ERROR 表示已生成合法普通分布测点；SYSTEM_CALL_CONDITION_ERROR
+ *         表示输出数组或数量指针无效；MEASUREMENT_DENSITY_PLAN_INVALID 表示可测高度、点数或最小间距无法形成合法方案。
  */
 static uint32_t BuildPoints_Spread_Exact(int32_t oil_level_01mm,
                                         int32_t *out_p01,
@@ -522,9 +610,7 @@ static uint32_t BuildPoints_Spread_Exact(int32_t oil_level_01mm,
     /* 例程：distance>=1000(0.1mm)=100mm */
     if (distmin < 1000) distmin = 1000;
 
-    /* 先处理异常边界，避免密度测量状态机带故障继续运行。 */
     if (high <= 0) return MEASUREMENT_DENSITY_PLAN_INVALID;
-    /* 先处理异常边界，避免密度测量状态机带故障继续运行。 */
     if (N_req == 0) return MEASUREMENT_DENSITY_PLAN_INVALID;
     if (N_req > MAX_MEASUREMENT_POINTS) N_req = MAX_MEASUREMENT_POINTS;
 
@@ -575,12 +661,19 @@ static uint32_t BuildPoints_Spread_Exact(int32_t oil_level_01mm,
     return NO_ERROR;
 }
 
-/* ---------- 2) 国标测（SpredState=3） ----------
- * 关键点：
- *   - 3m 以下：1 点（液位中点，且不低于盲区）
- *   - 3m~4.5m：最多 3 点（5/6、1/2、1/6），若点位低于盲区则退化
- *   - >4.5m：最多 5 点（1/6..5/6），若点位低于盲区则退化
- *   - 顺序按 spreadMeasurementOrder 决定（上->下 / 下->上）
+/**
+ * @brief 按 GB/T 4575 的液位分段规则生成 1、3 或 5 个密度测点，并按配置确定测量顺序。
+ *
+ * 关键点如下。
+ * 3m 以下：1 点（液位中点，且不低于盲区）。
+ * 3m~4.5m：最多 3 点（5/6、1/2、1/6），若点位低于盲区则退化。
+ * >4.5m：最多 5 点（1/6..5/6），若点位低于盲区则退化。
+ * 任何理论点位低于 blindZone 时，从低端开始用盲区边界替代并减少有效点数，保证输出点阵不会进入传感器盲区。
+ * 顺序按 spreadMeasurementOrder 决定（上->下 / 下->上）；调用方提供的数组至少需要容纳五个测点。
+ *
+ * @param high_01mm 当前测量区间的高端位置，单位 0.1 mm。
+ * @param out_p01 用于接收生成后测点位置的数组，元素单位为 0.1 mm。
+ * @param out_n 用于返回本次生成的有效测点数量。
  */
 static void BuildPoints_GB4575_Exact(uint32_t high_01mm,
                                     int32_t *out_p01,
@@ -718,12 +811,21 @@ static void BuildPoints_GB4575_Exact(uint32_t high_01mm,
     *out_n = NumOfPoints;
 }
 
-/* ---------- 3) 每米测（SpredState=4） ----------
- * 关键点：
- *   - floor = max(bottomLimit, blindZone)
- *   - dis01 = oil_level - topLimit - floor，要求 >= 1m
- *   - 上->下：从 (high - (c_num+1)*1m) 逐米往下，必要时砍掉最后一个越界点
- *   - 下->上：从 (c_num+1)*1m 逐米往上，直到超过 high-top
+/**
+ * @brief 在扣除顶部限制和罐底盲区后的有效区间内，按一米间距生成密度测点。
+ *
+ * 关键点如下。
+ * floor = max(bottomLimit, blindZone)，即下边界取配置下限和传感器盲区中的较大值。
+ * dis01 = oil_level - topLimit - floor，要求 >= 1m；按 0.1 mm 单位表示时至少为 10000。
+ * 上->下：从 (high - (c_num+1)*1m) 逐米往下，必要时砍掉最后一个越界点。
+ * 下->上：从 (c_num+1)*1m 逐米往上，直到超过 high-top。
+ * 生成过程最多写入 MAX_MEASUREMENT_POINTS 个点；最终没有合法点位时返回方案无效，不向调用方报告部分结果。
+ *
+ * @param oil_level_01mm 油位值，单位 0.1 mm。
+ * @param out_p01 用于接收生成后测点位置的数组，元素单位为 0.1 mm。
+ * @param out_n 用于返回本次生成的有效测点数量。
+ * @return NO_ERROR 表示已生成合法逐米测点；SYSTEM_CALL_CONDITION_ERROR
+ *         表示输出数组或数量指针无效；MEASUREMENT_DENSITY_PLAN_INVALID 表示有效高度不足一米或生成点数无效。
  */
 static uint32_t BuildPoints_Meter_Exact(int32_t oil_level_01mm,
                                        int32_t *out_p01,
@@ -776,19 +878,28 @@ static uint32_t BuildPoints_Meter_Exact(int32_t oil_level_01mm,
         }
     }
 
-    /* 先处理异常边界，避免密度测量状态机带故障继续运行。 */
     if (NumMeter == 0) return MEASUREMENT_DENSITY_PLAN_INVALID;
 
     *out_n = NumMeter;
     return NO_ERROR;
 }
 
-/* ---------- 4) 区间测（SpredState=5） ----------
- * 关键点：
- *   - 使用 upper/lower 两端点（0.1mm）
- *   - 点数使用 spreadMeasurementCount
- *   - 端点合法性：high_b < high_a，high_a < tankHeight，high_b >= blindZone
- *   - c_num>=3 时：等差取点，最后一点评端点
+/**
+ * @brief 校验用户配置的区间端点和点数，并在合法区间内按等差方式生成密度测点。
+ *
+ * 关键点如下。
+ * 使用 upper/lower 两端点（0.1mm）：区间高端 high_a 由 oil_level 减去 intervalMeasurementTopLimit 得到，低端 high_b 直接使用
+ * intervalMeasurementBottomLimit。
+ * 点数使用 spreadMeasurementCount，并且不得超过 MAX_MEASUREMENT_POINTS 和调用方提供的 out_capacity；非法配置不得静默钳位或部分写入。
+ * 端点合法性：high_b < high_a，high_a < tankHeight，high_b >= blindZone；同时要求 high_a 大于零。
+ * 一个点时按测量方向选择高端或低端，两个点时直接输出两端；c_num>=3 时：等差取点，最后一点评端点，以消除整数除法累计误差。
+ *
+ * @param oil_level_01mm 油位值，单位 0.1 mm。
+ * @param out_p01 用于接收生成后测点位置的数组，元素单位为 0.1 mm。
+ * @param out_capacity out_p01 数组可写入的元素容量；配置点数超过该容量时函数返回方案无效且不写入部分点阵。
+ * @param out_n 用于返回本次生成的有效测点数量。
+ * @return NO_ERROR 表示已生成合法区间测点；SYSTEM_CALL_CONDITION_ERROR
+ *         表示输出数组、容量或数量指针无效；MEASUREMENT_DENSITY_PLAN_INVALID 表示端点、罐高、盲区、点数或输出容量不满足方案约束。
  */
 static uint32_t BuildPoints_Interval_Exact(int32_t oil_level_01mm,
                                            int32_t *out_p01,
@@ -814,7 +925,6 @@ static uint32_t BuildPoints_Interval_Exact(int32_t oil_level_01mm,
     high_a = oil_level_01mm - (int32_t)g_deviceParams.intervalMeasurementTopLimit;
     high_b = (int32_t)g_deviceParams.intervalMeasurementBottomLimit;
 
-    /* 先处理异常边界，避免密度测量状态机带故障继续运行。 */
     if (high_b >= high_a) return MEASUREMENT_DENSITY_PLAN_INVALID;
 
     c_num = g_deviceParams.spreadMeasurementCount;
@@ -869,9 +979,13 @@ static uint32_t BuildPoints_Interval_Exact(int32_t oil_level_01mm,
     return NO_ERROR;
 }
 
-/* =======================================================================
- * 模式路由：取点 + 执行 + 国标后处理
- * ======================================================================= */
+/**
+ * @brief 模式路由：取点 + 执行 + 国标后处理。
+ *
+ * @param mode 本次密度分布使用的 DensitySpreadModeId，决定取点算法、执行器和国标后处理路径。
+ * @param out_dist 用于接收本次模式测量生成的完整密度分布结果。
+ * @return SYSTEM_CALL_CONDITION_ERROR 表示当前系统状态不允许执行；NO_ERROR 表示操作成功。
+ */
 
 uint32_t Density_MeasureByMode_Exact(DensitySpreadModeId mode, DensityDistribution *out_dist)
 {
@@ -881,7 +995,6 @@ uint32_t Density_MeasureByMode_Exact(DensitySpreadModeId mode, DensityDistributi
 
     /* 1) 先液位搜索 */
     ret = SearchOilLevel();
-    /* 先处理异常边界，避免密度测量状态机带故障继续运行。 */
     if (ret != NO_ERROR) {
         printf("密度测量\t液位搜索失败，错误码=0x%08lX\r\n", (unsigned long)ret);
         return ret;
@@ -899,19 +1012,16 @@ uint32_t Density_MeasureByMode_Exact(DensitySpreadModeId mode, DensityDistributi
     /* 3) 按模式取点 */
     if (mode == DENS_MODE_SPREAD) {
         ret = BuildPoints_Spread_Exact(oil_level_01mm, points01, &n);
-        /* 先处理异常边界，避免密度测量状态机带故障继续运行。 */
         if (ret != NO_ERROR) return ret;
         PrintPoints01mm("普通分布测", points01, n);
     }
     else if (mode == DENS_MODE_GB) {
         BuildPoints_GB4575_Exact((uint32_t)oil_level_01mm, points01, &n);
-        /* 先处理异常边界，避免密度测量状态机带故障继续运行。 */
         if (n == 0) return MEASUREMENT_DENSITY_PLAN_INVALID;
         PrintPoints01mm("国标测", points01, n);
     }
     else if (mode == DENS_MODE_METER) {
         ret = BuildPoints_Meter_Exact(oil_level_01mm, points01, &n);
-        /* 先处理异常边界，避免密度测量状态机带故障继续运行。 */
         if (ret != NO_ERROR) return ret;
         PrintPoints01mm("每米测", points01, n);
     }
@@ -921,7 +1031,6 @@ uint32_t Density_MeasureByMode_Exact(DensitySpreadModeId mode, DensityDistributi
             points01,
             (uint32_t)(sizeof(points01) / sizeof(points01[0])),
             &n);
-        /* 先处理异常边界，避免密度测量状态机带故障继续运行。 */
         if (ret != NO_ERROR) return ret;
         PrintPoints01mm("区间测", points01, n);
     }
@@ -931,7 +1040,6 @@ uint32_t Density_MeasureByMode_Exact(DensitySpreadModeId mode, DensityDistributi
 
     /* 4) 统一执行测量 */
     ret = Density_RunPoints01mm(points01, n, oil_level_01mm, out_dist);
-    /* 先处理异常边界，避免密度测量状态机带故障继续运行。 */
     if (ret != NO_ERROR) return ret;
 
     /* 5) 国标后处理：按标密差值阈值过滤点，并重算平均值
@@ -950,10 +1058,11 @@ uint32_t Density_MeasureByMode_Exact(DensitySpreadModeId mode, DensityDistributi
     return NO_ERROR;
 }
 
-/*
- * 函数用途：清除尚未完成的 SI Profile 候选结果。
- * 调用场景：新一轮准备、取消、失败或最终结果提交后。
- * 关键约束：候选缓冲不直接发布给 CPU3，清除动作不改变已发布完成计数。
+/**
+ * @brief 清除尚未完成的 SI Profile 候选结果。
+ *
+ * @details 调用场景：新一轮准备、取消、失败或最终结果提交后。
+ * @note 关键约束：候选缓冲不直接发布给 CPU3，清除动作不改变已发布完成计数。
  */
 static void SiProfile_ClearCandidate(void)
 {
@@ -961,10 +1070,13 @@ static void SiProfile_ClearCandidate(void)
     s_si_profile_candidate_valid = 0U;
 }
 
-/*
- * 函数用途：清空对外发布的分布结果载荷，同时保留完成计数。
- * 调用场景：Point0 建立新周期，或 Point0 后取消、失败。
- * 关键约束：完成计数是最终提交边沿，不得在中间态清零或提前递增。
+/**
+ * @brief 清空对外发布的分布结果载荷，同时保留完成计数。
+ *
+ * @details 调用场景：Point0 建立新周期，或 Point0 后取消、失败。
+ * @note 关键约束：完成计数是最终提交边沿，不得在中间态清零或提前递增。
+ *
+ * @param blocked_by_process 阻塞处理。
  */
 static void SiProfile_ClearPublishedPayload(uint32_t blocked_by_process)
 {
@@ -988,10 +1100,11 @@ static void SiProfile_ClearPublishedPayload(uint32_t blocked_by_process)
     }
 }
 
-/*
- * 函数用途：Point0 有效样本写入候选缓冲后建立新的 SI Profile 周期。
- * 调用场景：SI Profile 第一个有效液体点完成写入后。
- * 关键约束：载荷和阶段先发布，内存屏障后最后递增周期计数。
+/**
+ * @brief Point0 有效样本写入候选缓冲后建立新的 SI Profile 周期。
+ *
+ * @details 调用场景：SI Profile 第一个有效液体点完成写入后。
+ * @note 关键约束：载荷和阶段先发布，内存屏障后最后递增周期计数。
  */
 static void SiProfile_BeginCycleAtPoint0(void)
 {
@@ -1002,10 +1115,13 @@ static void SiProfile_BeginCycleAtPoint0(void)
     g_measurement.si_profile_runtime.cycle_counter++;
 }
 
-/*
- * 函数用途：发布 SI Profile 已完成写入的有效液体点数。
- * 调用场景：Point0 之后每个有效液体点写入候选缓冲后。
- * 关键约束：空气点、失败样本和重试不得调用本函数。
+/**
+ * @brief 发布 SI Profile 已完成写入的有效液体点数。
+ *
+ * @details 调用场景：Point0 之后每个有效液体点写入候选缓冲后。
+ * @note 关键约束：空气点、失败样本和重试不得调用本函数。
+ *
+ * @param valid_points 有效。
  */
 static void SiProfile_UpdateProgress(uint32_t valid_points)
 {
@@ -1013,10 +1129,11 @@ static void SiProfile_UpdateProgress(uint32_t valid_points)
     g_measurement.si_profile_runtime.progress_points = valid_points;
 }
 
-/*
- * 函数用途：按当前 SI Profile 阶段处理显式取消或命令切换。
- * 调用场景：取消命令入口，以及 SI Profile 相关流程返回 STATE_SWITCH 时。
- * 关键约束：Point0 前保留旧结果；Point0 后清除不完整载荷且不增加完成计数。
+/**
+ * @brief 按当前 SI Profile 阶段处理显式取消或命令切换。
+ *
+ * @details 调用场景：取消命令入口，以及 SI Profile 相关流程返回 STATE_SWITCH 时。
+ * @note 关键约束：Point0 前保留旧结果；Point0 后清除不完整载荷且不增加完成计数。
  */
 void SiProfile_HandleCancel(void)
 {
@@ -1037,10 +1154,11 @@ void SiProfile_HandleCancel(void)
     }
 }
 
-/*
- * 函数用途：按当前 SI Profile 阶段处理真实测量失败。
- * 调用场景：SI 采点错误，以及回液位流程的真实错误出口。
- * 关键约束：Point0 前保留旧结果；Point0 后清除不完整载荷并保留原错误上报链路。
+/**
+ * @brief 按当前 SI Profile 阶段处理真实测量失败。
+ *
+ * @details 调用场景：SI 采点错误，以及回液位流程的真实错误出口。
+ * @note 关键约束：Point0 前保留旧结果；Point0 后清除不完整载荷并保留原错误上报链路。
  */
 void SiProfile_HandleFailure(void)
 {
@@ -1067,10 +1185,13 @@ void SiProfile_HandleFailure(void)
     }
 }
 
-/*
- * 函数用途：回到稳定液位后一次性提交 SI Profile 候选结果。
- * 调用场景：找液位成功且完成可选位置源切换后的二次定位，在进入液位跟随前。
- * 关键约束：完整载荷、Complete 和阶段先写完，内存屏障后最后递增完成计数。
+/**
+ * @brief 回到稳定液位后一次性提交 SI Profile 候选结果。
+ *
+ * @details 调用场景：找液位成功且完成可选位置源切换后的二次定位，在进入液位跟随前。
+ * @note 关键约束：完整载荷、Complete 和阶段先写完，内存屏障后最后递增完成计数。
+ *
+ * @return NO_ERROR 表示候选点阵已在稳定液位且电机停稳后一次性发布；无有效候选返回 MEASUREMENT_DENSITY_NO_VALID_POINT，液位未恢复返回 MEASUREMENT_OILLEVEL_NOTFOUND，电机未停返回 POSITION_MOTOR_NOT_STOPPED。
  */
 uint32_t SiProfile_CompleteAfterReturnToLevel(void)
 {
@@ -1120,10 +1241,16 @@ uint32_t SiProfile_CompleteAfterReturnToLevel(void)
     return NO_ERROR;
 }
 
-/*
- * 函数用途：返回 SI profile 参数快照，并补齐旧 FRAM 或非法写入产生的默认值。
- * 调用场景：SI profile 每轮开始前，由 CPU2 独立 profile 流程调用。
- * 关键约束：这里只做运行期兜底，不写回 FRAM；参数持久化归一化仍由参数存储层负责。
+/**
+ * @brief 返回 SI profile 参数快照，并补齐旧 FRAM 或非法写入产生的默认值。
+ *
+ * @details 调用场景：SI profile 每轮开始前，由 CPU2 独立 profile 流程调用。
+ * @note 关键约束：这里只做运行期兜底，不写回 FRAM；参数持久化归一化仍由参数存储层负责。
+ *
+ * @param first_point_01mm SI Profile 中 Point0 之后首个候选点相对底部的距离，单位 0.1 mm。
+ * @param increment_01mm SI Profile 相邻候选测点之间的间距，单位 0.1 mm。
+ * @param dwell_time_s 用于返回归一化后的测点停留时间，单位 s。
+ * @param bottom_detect_interval 用于返回 SI Profile 重新探底的周期间隔；1 表示每轮探底。
  */
 static void SiProfile_GetParams(uint32_t *first_point_01mm,
                                     uint32_t *increment_01mm,
@@ -1154,10 +1281,14 @@ static void SiProfile_GetParams(uint32_t *first_point_01mm,
     *bottom_detect_interval = interval;
 }
 
-/*
- * 函数用途：按 SI 探底频次判断本轮 profile 是否需要重新探底。
- * 调用场景：SI profile 开始阶段。
- * 关键约束：首轮必须探底；interval=1 表示每次探底，N 表示每 N 次 profile 探底。
+/**
+ * @brief 按 SI 探底频次判断本轮 profile 是否需要重新探底。
+ *
+ * @details 调用场景：SI profile 开始阶段。
+ * @note 关键约束：首轮必须探底；interval=1 表示每次探底，N 表示每 N 次 profile 探底。
+ *
+ * @param bottom_detect_interval 罐底。
+ * @return 1 表示首轮或当前间隔已到期，本轮必须重新探底；0 表示可沿用已有底部参考。
  */
 static uint8_t SiProfile_ShouldDetectBottom(uint32_t bottom_detect_interval)
 {
@@ -1170,6 +1301,11 @@ static uint8_t SiProfile_ShouldDetectBottom(uint32_t bottom_detect_interval)
     return ((s_si_profile_count_since_bottom + 1U) >= bottom_detect_interval) ? 1U : 0U;
 }
 
+/**
+ * @brief 按本轮是否执行探底更新 SI 点阵距上次探底计数，并在上限处饱和。
+ *
+ * @param bottom_detect_required 罐底需求标志。
+ */
 static void SiProfile_AdvanceBottomDetectTriggerCount(uint8_t bottom_detect_required)
 {
     if (bottom_detect_required != 0U) {
@@ -1179,10 +1315,14 @@ static void SiProfile_AdvanceBottomDetectTriggerCount(uint8_t bottom_detect_requ
     }
 }
 
-/*
- * 函数用途：把探底记录的尺带长度换算为 SI Profile 的底部坐标。
- * 调用场景：复用普通探底参考或本轮 SI 新探底成功后。
- * 关键约束：使用 tankHeight-bottom_value，并钳位到有符号位置可表达范围。
+/**
+ * @brief 把探底记录的尺带长度换算为 SI Profile 的底部坐标。
+ *
+ * @details 调用场景：复用普通探底参考或本轮 SI 新探底成功后。
+ * @note 关键约束：使用 tankHeight-bottom_value，并钳位到有符号位置可表达范围。
+ *
+ * @param bottom_cable_01mm 探底流程记录的罐底尺带长度，单位 0.1 mm。
+ * @return 返回 tankHeight 减尺带长度得到的 SI 底部坐标，单位 0.1 mm；结果钳位到 0 至 INT32_MAX。
  */
 static int32_t SiProfile_ResolveBottomPositionFromCable(int32_t bottom_cable_01mm)
 {
@@ -1198,10 +1338,11 @@ static int32_t SiProfile_ResolveBottomPositionFromCable(int32_t bottom_cable_01m
     return (int32_t)resolved_bottom;
 }
 
-/*
- * 函数用途：在本轮新探底前快照普通探底流程已经建立的可信底部参考。
- * 调用场景：SI Profile 每轮探底判断之前。
- * 关键约束：只在静态旧底无效且共享有效标志置位时采纳；失败后不得重读可能改写的 bottom_value。
+/**
+ * @brief 在本轮新探底前快照普通探底流程已经建立的可信底部参考。
+ *
+ * @details 调用场景：SI Profile 每轮探底判断之前。
+ * @note 关键约束：只在静态旧底无效且共享有效标志置位时采纳；失败后不得重读可能改写的 bottom_value。
  */
 static void SiProfile_CaptureSharedBottomReference(void)
 {
@@ -1216,10 +1357,15 @@ static void SiProfile_CaptureSharedBottomReference(void)
     }
 }
 
-/*
- * 函数用途：确定 SI profile 的底部基准位置。
- * 调用场景：探底成功、探底失败或本轮跳过探底后。
- * 关键约束：探底失败时优先沿用旧底部；没有旧底部则使用当前位置继续本轮测量。
+/**
+ * @brief 确定 SI profile 的底部基准位置。
+ *
+ * @details 调用场景：探底成功、探底失败或本轮跳过探底后。
+ * @note 关键约束：探底失败时优先沿用旧底部；没有旧底部则使用当前位置继续本轮测量。
+ *
+ * @param bottom_search_done 罐底。
+ * @param bottom_search_ret 罐底。
+ * @return 返回 SI Profile 使用的罐底绝对位置，单位 0.1 mm；已有有效罐底参考时返回锁存值，否则返回当前电机位置作为兼容回退。
  */
 static int32_t SiProfile_SelectBottomPosition(uint8_t bottom_search_done,
                                                   uint32_t bottom_search_ret)
@@ -1250,10 +1396,18 @@ static int32_t SiProfile_SelectBottomPosition(uint8_t bottom_search_done,
     return current_position;
 }
 
-/*
- * 函数用途：按 SI profile 语义生成 Point0 和后续候选停点。
- * 调用场景：SI profile 确定底部基准后。
- * 关键约束：不预先找液位；Point0 固定为底部点，后续点只按罐高和 200 点上限生成。
+/**
+ * @brief 按 SI profile 语义生成 Point0 和后续候选停点。
+ *
+ * @details 调用场景：SI profile 确定底部基准后。
+ * @note 关键约束：不预先找液位；Point0 固定为底部点，后续点只按罐高和 200 点上限生成。
+ *
+ * @param bottom_position_01mm SI Profile 使用的罐底坐标位置，单位 0.1 mm。
+ * @param first_point_01mm SI Profile 中 Point0 之后首个候选点相对底部的距离，单位 0.1 mm。
+ * @param increment_01mm SI Profile 相邻候选测点之间的间距，单位 0.1 mm。
+ * @param points01 用于接收 Point0 及后续候选停点的数组，元素单位为 0.1 mm。
+ * @param point_count 用于返回实际生成的候选停点数量，最大为 200。
+ * @return NO_ERROR 表示已生成至少一个且不超过 200 个合法停点；空输出指针返回 SYSTEM_CALL_CONDITION_ERROR，底部、首点、间距、容量或生成结果非法时返回 MEASUREMENT_DENSITY_PLAN_INVALID。
  */
 static uint32_t SiProfile_BuildPoints(int32_t bottom_position_01mm,
                                           uint32_t first_point_01mm,
@@ -1292,25 +1446,40 @@ static uint32_t SiProfile_BuildPoints(int32_t bottom_position_01mm,
     return (n > 0U) ? NO_ERROR : MEASUREMENT_DENSITY_PLAN_INVALID;
 }
 
+/**
+ * @brief 向 SI 剖面结果区记录当前测点位置，单位 0.1 mm。
+ *
+ * @param point_index 测点索引。
+ * @param movement_position_01mm 当前测点实际到达的位置，单位 0.1 mm。
+ * @return 返回写入 SI Profile 结果区的非负位置值，单位 0.1 mm；超出无符号范围时按钳位规则处理。
+ */
 static uint32_t SiProfile_ReportPosition01mm(uint32_t point_index, int32_t movement_position_01mm)
 {
     (void)point_index;
     return Density_ValueToU01mmClamped(movement_position_01mm, "SI Profile position");
 }
 
+/* SI 剖面单测点临时结果；同时保存原始测量、换算后的频率/密度/温度以及气相判定依据。 */
 typedef struct {
-    DensityMeasurement measurement;
-    float frequency_hz;
-    float density_value;
-    float temperature_c;
-    uint8_t is_air;
-    const char *air_reason;
+    /* SI 剖面单点采样的原始结果、换算结果和气相判定信息。 */
+    DensityMeasurement measurement; /* 该测点保留的完整原始测量结构，供诊断和后续换算复核。 */
+    float frequency_hz; /* 该测点换算后的传感器频率，单位为 Hz。 */
+    float density_value; /* 该测点换算后的密度值，单位遵循当前密度算法输出。 */
+    float temperature_c; /* 该测点换算后的温度，单位为 ℃。 */
+    uint8_t is_air; /* 该测点被判定为气相的标志；非零/true 时不作为有效液相密度点。 */
+    const char *air_reason; /* 气相判定原因的只读文本；非气相点可以为空。 */
 } SiProfilePointSample;
 
-/*
- * 函数用途：判断 SI profile 到点后的密度读数是否已经进入空气区。
- * 调用场景：SI profile 逐点运行时，不预先找液位，依靠到点读数决定是否停止。
- * 关键约束：空气点只作为停止条件，不写入 profile 有效点阵。
+/**
+ * @brief 判断 SI profile 到点后的密度读数是否已经进入空气区。
+ *
+ * @details 调用场景：SI profile 逐点运行时，不预先找液位，依靠到点读数决定是否停止。
+ * @note 关键约束：空气点只作为停止条件，不写入 profile 有效点阵。
+ *
+ * @param density_value 密度数值。
+ * @param frequency_hz 传感器频率，单位 Hz。
+ * @param air_reason 用于返回当前样本被判为空气点的原因文字。
+ * @return 1 表示 SI profile 到点后的密度读数已经进入空气区；0 表示 SI profile 到点后的密度读数尚未进入空气区。
  */
 static uint8_t SiProfile_IsAirPoint(float density_value, float frequency_hz, const char **air_reason)
 {
@@ -1335,10 +1504,18 @@ static uint8_t SiProfile_IsAirPoint(float density_value, float frequency_hz, con
     return 0U;
 }
 
-/*
- * 函数用途：填充 SI profile 单点样本。
- * 调用场景：SI profile 到点后完成空气/液体分类并生成可写入点阵的数据。
- * 关键约束：调用方负责保证空气点不计入有效点数。
+/**
+ * @brief 填充 SI profile 单点样本。
+ *
+ * @details 调用场景：SI profile 到点后完成空气/液体分类并生成可写入点阵的数据。
+ * @note 关键约束：调用方负责保证空气点不计入有效点数。
+ *
+ * @param sample 待处理的单次测量样本。
+ * @param frequency_hz 传感器频率，单位 Hz。
+ * @param density_value 密度数值。
+ * @param temperature_c 温度值，单位 ℃。
+ * @param is_air true 表示当前点为空气点，false 表示液体测点。
+ * @param air_reason 用于返回当前样本被判为空气点的原因文字。
  */
 static void SiProfile_FillPointSample(SiProfilePointSample *sample,
                                           float frequency_hz,
@@ -1366,10 +1543,15 @@ static void SiProfile_FillPointSample(SiProfilePointSample *sample,
     sample->measurement.vcf20 = 1U;
 }
 
-/*
- * 函数用途：SI profile 到点后读取密度并判断该点是液体点还是液面以上点。
- * 调用场景：SiProfile_RunPoints01mmWithDwell() 逐点调用。
- * 关键约束：密度/频率立即满足空气条件时直接返回空气点，避免沿用普通单点测量的 5 分钟零密度等待。
+/**
+ * @brief SI profile 到点后读取密度并判断该点是液体点还是液面以上点。
+ *
+ * @details 调用场景：SiProfile_RunPoints01mmWithDwell() 逐点调用。
+ * @note 关键约束：密度/频率立即满足空气条件时直接返回空气点，避免沿用普通单点测量的 5 分钟零密度等待。
+ *
+ * @param sample 待处理的单次测量样本。
+ * @param stable_win_ms 传感器读数必须持续满足稳定条件的窗口时长，单位 ms。
+ * @return SYSTEM_CALL_CONDITION_ERROR 表示当前系统状态不允许执行；NO_ERROR 表示操作成功。
  */
 static uint32_t SiProfile_ReadPointAndClassify(SiProfilePointSample *sample,
                                                    uint32_t stable_win_ms)
@@ -1509,10 +1691,17 @@ static uint32_t SiProfile_ReadPointAndClassify(SiProfilePointSample *sample,
     }
 }
 
-/*
- * 函数用途：执行 SI profile 候选点阵，遇到液面以上点时停止且不写入该点。
- * 调用场景：CMD_SiProfile() 已确定底部基准并生成候选停点后。
- * 关键约束：至少 Point0 有效才认为本轮 profile 成功；完成后 Density_oil_level 记录最后一个有效 profile 点位置。
+/**
+ * @brief 执行 SI profile 候选点阵，遇到液面以上点时停止且不写入该点。
+ *
+ * @details 调用场景：CMD_SiProfile() 已确定底部基准并生成候选停点后。
+ * @note 关键约束：至少 Point0 有效才认为本轮 profile 成功；完成后 Density_oil_level 记录最后一个有效 profile 点位置。
+ *
+ * @param p01 按执行顺序排列的测点位置数组，元素单位为 0.1 mm。
+ * @param n 测点数组中参与打印或测量的有效点数。
+ * @param dist 密度分布测量结果对象。
+ * @param dwell_time_s 测点到位后的稳定停留时间，单位 s。
+ * @return SYSTEM_CALL_CONDITION_ERROR 表示当前系统状态不允许执行；NO_ERROR 表示操作成功。
  */
 static uint32_t SiProfile_RunPoints01mmWithDwell(const int32_t *p01,
                                                      uint32_t n,
@@ -1630,10 +1819,18 @@ static uint32_t SiProfile_RunPoints01mmWithDwell(const int32_t *p01,
 
     return NO_ERROR;
 }
-/*
- * 函数用途：执行 SI 独立 profile 测量。
+/**
+ * @brief 执行 SI 独立 profile 测量。
+ *
  * 调用场景：CPU3 SI Profile 线圈或自动调度下发 CMD_SI_PROFILE 后由命令分发调用。
- * 关键约束：不复用普通分布测 profile 参数；失败不锁存完成态，命令切换直接退出。
+ * 函数清空上一轮 SI 候选结果，复位进度并进入准备阶段，从独立 SI 参数区取得首点、点距、驻留时间和探底周期；这些参数不复用普通密度分布测量配置。
+ * 到达探底周期时先执行 SearchBottom；命令切换立即取消本轮，其他探底错误只记录诊断，并允许点阵生成按已有罐底参考或当前位置继续。
+ * 点阵生成成功后逐点移动、驻留并采集到局部候选结构；生成或测量失败会清除候选、发布错误并退出，未完成的候选不会成为对外最终结果。
+ * 采点收尾与命令排队共用关中断临界区：若已有新命令或非回液位命令，本轮候选立即取消；否则锁存候选、更新进度阶段，并在命令槽为空时排队 CMD_FIND_OIL。
+ * 函数结束时只进入“等待回液位”阶段；真正的 SI 最终完成快照必须等回到稳定液位且电机停止后由后续流程发布。
+ *
+ * @note 关键约束：不复用普通分布测 profile 参数；失败不锁存完成态，命令切换直接退出。
+ * @note 候选锁存和回液位命令排队期间以新到命令为最高优先级，不得覆盖用户已经送达的其他命令。
  */
 void CMD_SiProfile(void)
 {
@@ -1753,9 +1950,14 @@ void CMD_SiProfile(void)
            (unsigned long)s_si_profile_candidate.measurement_points,
            (unsigned long)g_measurement.si_profile_runtime.cycle_counter);
 }
-/* =======================================================================
- * 四种模式的对外入口
- * ======================================================================= */
+/**
+ * @brief 执行普通密度分布测量，并仅在完整成功后打印和发布新的标准点阵。
+ *
+ * 开始时清除上一轮完成锁存并将设备状态置为普通分布测量中，再调用 Density_MeasureByMode_Exact 生成临时结果。
+ * 测量完整成功后打印结果，通过 PROFILE_SOURCE_STANDARD 发布整份点阵及新代际，最后发布普通分布测量完成状态。
+ *
+ * @note STATE_SWITCH 是新命令触发的正常退出，不发布候选点阵也不进入错误报警；其他失败通过 SET_ERROR 进入统一处理。
+ */
 
 void CMD_MeasureDensitySpread_Spread(void)
 {
@@ -1772,7 +1974,6 @@ void CMD_MeasureDensitySpread_Spread(void)
     if (ret == STATE_SWITCH) {
         return;
     }
-    /* 先处理异常边界，避免密度测量状态机带故障继续运行。 */
     if (ret != NO_ERROR) {
         printf("普通分布测\t失败，错误码=0x%08lX\r\n", (unsigned long)ret);
         SET_ERROR(ret);
@@ -1787,8 +1988,7 @@ void CMD_MeasureDensitySpread_Spread(void)
 }
 
 /**
- * @brief 执行密度测量中的 CMD_MeasureDensitySpread_GB 逻辑。
- * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ * @brief 执行国标密度分布测量；仅在完整成功后发布点阵和完成态。
  */
 void CMD_MeasureDensitySpread_GB(void)
 {
@@ -1805,7 +2005,6 @@ void CMD_MeasureDensitySpread_GB(void)
     if (ret == STATE_SWITCH) {
         return;
     }
-    /* 先处理异常边界，避免密度测量状态机带故障继续运行。 */
     if (ret != NO_ERROR) {
         printf("国标测\t失败，错误码=0x%08lX\r\n", (unsigned long)ret);
         SET_ERROR(ret);
@@ -1820,8 +2019,7 @@ void CMD_MeasureDensitySpread_GB(void)
 }
 
 /**
- * @brief 执行密度测量中的 CMD_MeasureDensitySpread_Meter 逻辑。
- * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ * @brief 执行每米密度分布测量；仅在完整成功后发布点阵和完成态。
  */
 void CMD_MeasureDensitySpread_Meter(void)
 {
@@ -1838,7 +2036,6 @@ void CMD_MeasureDensitySpread_Meter(void)
     if (ret == STATE_SWITCH) {
         return;
     }
-    /* 先处理异常边界，避免密度测量状态机带故障继续运行。 */
     if (ret != NO_ERROR) {
         printf("每米测\t失败，错误码=0x%08lX\r\n", (unsigned long)ret);
         SET_ERROR(ret);
@@ -1853,8 +2050,7 @@ void CMD_MeasureDensitySpread_Meter(void)
 }
 
 /**
- * @brief 执行密度测量中的 CMD_MeasureDensitySpread_Interval 逻辑。
- * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ * @brief 执行区间密度分布测量；仅在完整成功后发布点阵和完成态。
  */
 void CMD_MeasureDensitySpread_Interval(void)
 {
@@ -1900,10 +2096,11 @@ void CMD_MeasureDensitySpread_Interval(void)
 #endif
 
 /**
- * @brief 执行密度测量中的 gb_get_density20_raw 逻辑。
+ * @brief 从国标密度点读取 20 ℃标准密度原始值。
  *
- * @param m 业务参数。
- * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ * @param m 待读取的单个密度测点记录；函数提取其中 20 ℃标准密度的原始定点值。
+ * @return GB_COMPARE_USE_STANDARD_DENSITY 启用时返回测点 standard_density，否则返回 density；两者均沿用内部 0.01 kg/m3
+ *         原始定点格式。
  */
 static inline int32_t gb_get_density20_raw(const DensityMeasurement *m)
 {
@@ -1915,19 +2112,18 @@ static inline int32_t gb_get_density20_raw(const DensityMeasurement *m)
 }
 
 /**
- * @brief 执行密度测量中的 gb_abs_i32 逻辑。
+ * @brief 计算有符号 32 位整数的安全绝对值。
  *
- * @param x 业务参数。
- * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ * @param x 算法、坐标或比较使用的 X 值。
+ * @return 返回有符号 32 位整数的安全绝对值；有符号边界按函数内饱和规则处理。
  */
 static inline int32_t gb_abs_i32(int32_t x) { return (x >= 0) ? x : -x; }
 
 /**
- * @brief 执行密度测量中的 gb_copy_point 逻辑。
+ * @brief 复制一个国标密度测点的全部测量字段。
  *
- * @param dst 业务参数。
- * @param src 业务参数。
- * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ * @param dst 用于接收完整测点数据副本的目标结构。
+ * @param src 待复制的只读测点数据结构。
  */
 static void gb_copy_point(DensityMeasurement *dst, const DensityMeasurement *src)
 {
@@ -1935,10 +2131,9 @@ static void gb_copy_point(DensityMeasurement *dst, const DensityMeasurement *src
 }
 
 /**
- * @brief 计算密度测量中的 gb_recalc_average 逻辑。
+ * @brief 按当前有效点数重新计算温度、密度、标准密度、VCF 和计重密度平均值。
  *
- * @param dist 业务参数。
- * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ * @param dist 密度分布测量结果对象。
  */
 static void gb_recalc_average(DensityDistribution *dist)
 {
@@ -1963,24 +2158,21 @@ static void gb_recalc_average(DensityDistribution *dist)
     dist->average_weight_density   = (uint32_t)(sum_wd / n);
 }
 
-/*
- * 过滤规则（与例程一致）：
- *   1) oil_level < 3m：不做任何删点
- *   2) 3m <= oil_level <= 4.5m：
- *        - 当点数 n==3 且 |d1-d3|<=th：删为2点，保留 [1,3]
- *   3) oil_level > 4.5m：
- *        - n==3：同上，满足则 [1,3] -> 2点
- *        - n==4：
- *            * order==0（上->下，第二点为加测点）：
- *                 若 (1,3,4) 三者两两差值都<=th：删为3点，保留 [1,3,4]
- *            * order==1（下->上）：
- *                 若 (1,2,4) 三者两两差值都<=th：删为3点，保留 [1,2,4]
- *        - n==5：
- *            * 若 (1,3,5) 三者两两差值都<=th：删为3点，保留 [1,3,5]
+/**
+ * @brief 过滤规则（与例程一致）：1) oil_level < 3m：不做任何删点。
  *
- * 数组下标说明：
- *   - dist->single_density_data[] 为 0-based
- *   - 例程 Result.xxx[] 为 1-based
+ * 2) 3m <= oil_level <= 4.5m：- 当点数 n==3 且 |d1-d3|<=th：删为2点，保留 [1,3]。
+ * 3) oil_level > 4.5m：- n==3：同上，满足则 [1,3] -> 2点。
+ * n==4：* order==0（上->下，第二点为加测点）：若 (1,3,4) 三者两两差值都<=th：删为3点，保留 [1,3,4]。
+ * * order==1（下->上）：若 (1,2,4) 三者两两差值都<=th：删为3点，保留 [1,2,4]。
+ * n==5：* 若 (1,3,5) 三者两两差值都<=th：删为3点，保留 [1,3,5]。
+ * 数组下标说明：- dist->single_density_data[] 为 0-based。
+ * 例程 Result.xxx[] 为 1-based。
+ *
+ * @param dist 密度分布测量结果对象。
+ * @param oil_level_01mm 油位值，单位 0.1 mm。
+ * @param order 按密度筛选或排序时使用的测点索引顺序数组。
+ * @param oil_standard_th 油位。
  */
 static void GB_FilterPoints_ByDensity20(DensityDistribution *dist,
                                        int32_t oil_level_01mm,
@@ -2076,9 +2268,11 @@ static void GB_FilterPoints_ByDensity20(DensityDistribution *dist,
     }
 }
 
-/* =======================================================================
- * 打印与单点测量函数（保持原实现，仅补充注释）
- * ======================================================================= */
+/**
+ * @brief 打印密度分布结果的测点数、汇总值以及逐点位置、密度和温度。
+ *
+ * @param dist 待打印的密度分布结果；包含测点数、液位或罐高、汇总密度温度和最多 MAX_MEASUREMENT_POINTS 个单点数据，传入 NULL 时只打印空结果提示。
+ */
 
 void Print_DensitySpreadResult(const DensityDistribution *dist)
 {
@@ -2139,26 +2333,24 @@ void Print_DensitySpreadResult(const DensityDistribution *dist)
 }
 
 /**
- * @brief 单点密度测量（带稳定判定与超时兜底）
+ * @brief 单点密度测量（带稳定判定与超时兜底）。
  *
- * 【总体逻辑】
- *  1) 周期性读取 频率 / 密度 / 温度
- *  2) 仅当“密度为非零”时，才参与稳定判定
- *  3) 若在稳定窗口内，三项数据变化均不超过阈值，则判定“数据稳定”
- *  4) 若 5 分钟内始终未稳定：
- *      - 若曾读到非零密度：取最后一次非零密度作为结果
- *      - 若 5 分钟内从未读到非零密度：输出 0 作为结果
+ * 【总体逻辑】。
+ * 1) 周期性读取 频率 / 密度 / 温度。
+ * 2) 仅当“密度为非零”时，才参与稳定判定。
+ * 3) 若在稳定窗口内，三项数据变化均不超过阈值，则判定“数据稳定”。
+ * 4) 若 5 分钟内始终未稳定：- 若曾读到非零密度：取最后一次非零密度作为结果。
+ * 若 5 分钟内从未读到非零密度：输出 0 作为结果。
+ * 【关键口径】。
+ * 密度 == 0：- 不参与稳定判定。
+ * 不能作为“稳定值”。
+ * 但在“完全无有效密度”的异常场景下，可作为最终兜底输出。
+ * 其他错误码 模式切换/通信等异常。
  *
- * 【关键口径】
- *  - 密度 == 0：
- *      - 不参与稳定判定
- *      - 不能作为“稳定值”
- *      - 但在“完全无有效密度”的异常场景下，可作为最终兜底输出
- *
- * @param[out] result  单点测量结果结构体（RAW 编码）
- *
- * @return NO_ERROR           成功（稳定或兜底）
- *         其他错误码        模式切换/通信等异常
+ * @param result 单点测量结果结构体（RAW 编码）。
+ * @param stable_win_ms 传感器读数必须持续满足稳定条件的窗口时长，单位 ms。
+ * @param stable_out 用于返回稳定窗口是否已满足发布条件。
+ * @return NO_ERROR 成功（稳定或兜底）。
  */
 static uint32_t SinglePoint_ReadSensorWithStableWindow(volatile DensityMeasurement *result,
                                                        uint32_t stable_win_ms,
@@ -2286,10 +2478,8 @@ static uint32_t SinglePoint_ReadSensorWithStableWindow(volatile DensityMeasureme
             /* 命令切换是正常打断，直接向上透传，不参与故障重试。 */
             return STATE_SWITCH;
         }
-        /* 先处理异常边界，避免密度测量状态机带故障继续运行。 */
         if (ret != NO_ERROR) {
             density_read_retry_count++;
-            /* 错误 阶段：错误重试 模块：传感器 操作：读取浮点参数 原因：ErrorLog_GetReasonByCode(ret) 尝试：1U/1U 错误码：ret 错误名：ErrorLog_GetCodeName(ret) */
             ErrorLog_Retry(ERROR_LOG_MODULE_SENSOR,
                            ERROR_LOG_OP_READ_FLOAT_PARAM,
                            ErrorLog_GetReasonByCode(ret),
@@ -2301,7 +2491,6 @@ static uint32_t SinglePoint_ReadSensorWithStableWindow(volatile DensityMeasureme
             return ret;
         }
         if (density_read_retry_count > 0U) {
-            /* 错误 阶段：重试成功 模块：传感器 操作：读取浮点参数 原因：恢复成功 尝试：(density_read_retry_count + 1U)/density_sample_retry_max */
             ErrorLog_Recover(ERROR_LOG_MODULE_SENSOR,
                              ERROR_LOG_OP_READ_FLOAT_PARAM,
                              ERROR_LOG_REASON_RECOVER_OK,
@@ -2332,7 +2521,6 @@ static uint32_t SinglePoint_ReadSensorWithStableWindow(volatile DensityMeasureme
             }
             /* 密度为 0 时会持续重试；这里同样使用可打断延时响应退出命令。 */
             ret = AbortableDelay_CommandSwitch(SAMPLE_INTERVAL_MS, 50U);
-            /* 先处理异常边界，避免密度测量状态机带故障继续运行。 */
             if (ret != NO_ERROR) {
                 return ret;
             }
@@ -2400,13 +2588,18 @@ static uint32_t SinglePoint_ReadSensorWithStableWindow(volatile DensityMeasureme
 
         /* 普通采样间隔也要可打断，固定点监测才能在稳定等待期间退出。 */
         ret = AbortableDelay_CommandSwitch(SAMPLE_INTERVAL_MS, 50U);
-        /* 先处理异常边界，避免密度测量状态机带故障继续运行。 */
         if (ret != NO_ERROR) {
             return ret;
         }
     }
 }
 
+/**
+ * @brief 读取单点密度、温度和频率并写入测量结果。
+ *
+ * @param result 单点测量输出记录；读取成功时写入频率、密度、温度及当前位置等字段。
+ * @return NO_ERROR 表示频率、密度和温度已通过稳定窗口并写入单点结果；其他值为传感器通信、数据有效性、命令切换或稳定采样失败码。
+ */
 uint32_t SinglePoint_ReadSensor(volatile DensityMeasurement *result)
 {
     uint32_t stable_win_ms = g_deviceParams.spreadPointHoverTime * 1000U;
@@ -2428,7 +2621,9 @@ uint32_t SinglePoint_ReadSensor(volatile DensityMeasurement *result)
 
 
 
-/* 单点测量命令：移动到指定高度 -> 单点稳定读取 */
+/**
+ * @brief 单点测量命令：移动到指定高度 -> 单点稳定读取。
+ */
 void CMD_SinglePointMeasurement(void)
 {
     uint32_t ret = 0;
@@ -2469,7 +2664,9 @@ void CMD_SinglePointMeasurement(void)
     g_measurement.device_status.device_state = STATE_SINGLEPOINTOVER;
 }
 
-/* 单点监测命令：移动到监测高度 -> 循环单点稳定读取（直到命令切换） */
+/**
+ * @brief 单点监测命令：移动到监测高度 -> 循环单点稳定读取（直到命令切换）。
+ */
 void CMD_SinglePointMonitoring(void)
 {
     uint32_t ret = 0;

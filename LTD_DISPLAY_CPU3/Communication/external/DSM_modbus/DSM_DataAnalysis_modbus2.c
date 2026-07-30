@@ -14,6 +14,12 @@
 #include "DSM_SlaveModbus_modbus2.h"
 #include "device_param_sync.h"
 
+/**
+ * @brief 将内部 0.01 kg/m3 密度四舍五入为 DSM 0.1 kg/m3 数值，无效值输出 0。
+ *
+ * @param raw_density CPU2 内部密度原始值，单位 0.01 kg/m3；UNVALID_DENSITY 表示无有效密度。
+ * @return 返回 DSM 使用的 0.1 kg/m3 密度整数；UNVALID_DENSITY 返回 0，其他值由内部 0.01 kg/m3 原始值四舍五入除以 10 得到。
+ */
 static uint32_t DSM_DensityRawToExternalX10(uint32_t raw_density)
 {
 	if (raw_density == UNVALID_DENSITY) {
@@ -22,6 +28,12 @@ static uint32_t DSM_DensityRawToExternalX10(uint32_t raw_density)
 	return (raw_density + (DENSITY_PARAM_MIGRATE_FACTOR / 2U)) / DENSITY_PARAM_MIGRATE_FACTOR;
 }
 
+/**
+ * @brief 按新旧修正零点把内部 x100 密度修正换算为 DSM x10，并饱和到 uint16。
+ *
+ * @param raw_correction CPU2 当前密度修正编码，采用以 DENSITY_CORRECTION_BASE_RAW 为零点的 x100 定点格式。
+ * @return 返回以旧版零点为基准的 DSM 密度修正 x10 编码；换算按正负方向对称舍入，小于 0 时返回 0，大于 uint16_t 范围时返回 0xFFFF。
+ */
 static uint32_t DSM_DensityCorrectionRawToExternalX10(uint32_t raw_correction)
 {
 	int64_t delta = (int64_t)raw_correction - (int64_t)DENSITY_CORRECTION_BASE_RAW;
@@ -44,6 +56,12 @@ static uint32_t DSM_DensityCorrectionRawToExternalX10(uint32_t raw_correction)
 	return (uint32_t)external;
 }
 
+/**
+ * @brief 按新旧修正零点把 DSM x10 密度修正还原为内部 x100，并饱和到 uint32。
+ *
+ * @param external_correction DSM 外部保持寄存器中的旧版密度修正编码，采用以 DENSITY_CORRECTION_OLD_BASE_RAW 为零点的 x10 格式。
+ * @return 返回以当前零点为基准的内部密度修正 x100 编码；换算结果小于 0 时返回 0，超过 uint32_t 范围时返回 UINT32_MAX。
+ */
 static uint32_t DSM_DensityCorrectionExternalX10ToRaw(uint32_t external_correction)
 {
 	int64_t delta = (int64_t)external_correction - (int64_t)DENSITY_CORRECTION_OLD_BASE_RAW;
@@ -62,14 +80,13 @@ static uint32_t DSM_DensityCorrectionExternalX10ToRaw(uint32_t external_correcti
 
 
 
-/**********************************************************************************************
-**函数名称：	SystemParameterSet()
-**函数功能：	设置保持寄存器读取系统参数
-**参数:			无
-**返回值:		int：
-				0:	成功!
-				-1:	失败!
-**********************************************************************************************/
+/**
+ * @brief 将 CPU3 当前设备参数和固定兼容值刷新到 DSM 保持寄存器镜像。
+ *
+ * 该函数在 FC03 响应组包前逐项更新 DSM_HoldingRegisterArray，保证上位机读取到本轮最新参数及协议兼容占位值。
+ *
+ * @note 函数只更新 CPU3 内存镜像，不向 CPU2 写参数，也不执行参数持久化。
+ */
 void SystemParameterSet(void)
 {
 	/* 无需权限读取的 */
@@ -199,16 +216,17 @@ void SystemParameterSet(void)
 }
 
 /**
- * @brief  上位机写保持寄存器后的处理：
- *         1) 按当前 DSM_HoldingRegisterArray 刷新 g_deviceParams
- *         2) 把新的 g_deviceParams 与 param_meta / CPU2 对比
- *         3) 通过 CPU2_CombinatePackage_Send 下发差异参数
+ * @brief 将 DSM 保持寄存器写入范围映射到设备参数并同步至 CPU2。
  *
- * @param  startadd  本次写入的起始地址
- * @param  reamount  本次写入的寄存器数量
- * @retval 0              成功
- *         PARAMETER_ERROR 数据越界/非法
- *         PARAMETER_WRITE_FAIL 设备忙等（你需要时可保留）
+ * 函数仅解析本次写入范围完整覆盖的参数字段，并把对应寄存器值刷新到 g_deviceParams。
+ * 本地参数更新完成后统一调用 DeviceParams_SyncAllToCPU2；只有 CPU2 确认全部参数同步成功，外部 Modbus 写请求才可视为成功。
+ * 处理顺序固定为：先从 DSM_HoldingRegisterArray 刷新本次完整覆盖的 g_deviceParams 字段，再与参数元数据和 CPU2
+ * 当前值对比，最后通过统一板间写入口下发差异参数。
+ *
+ * @param startadd 本次 DSM 写保持寄存器请求的起始地址。
+ * @param reamount 本次 DSM 写请求连续覆盖的寄存器数量。
+ * @return 0 表示本次覆盖字段已映射并获得 CPU2 同步确认；PARAMETER_WRITE_FAIL 表示 CPU2 链路不可用或同步未获确认。
+ * @note 没有对应 DeviceParameters 字段的旧兼容寄存器保持忽略；CPU2 链路不可用或同步未获确认时禁止返回成功。
  */
 
 int UpdateDeviceParamsFromLegacyRegs(int startadd, int reamount)
@@ -535,9 +553,13 @@ int UpdateDeviceParamsFromLegacyRegs(int startadd, int reamount)
     return 0;
 }
 
-/*
- * 函数功能：把二代计量仪内部状态翻译为 DSM V1.228 对外状态。
- * 说明：只影响外部输入寄存器0x0001，不修改 CPU2/CPU3 共享协议和内部状态机。
+/**
+ * @brief 把二代计量仪内部状态翻译为 DSM V1.228 对外状态。
+ *
+ * 只影响外部输入寄存器0x0001，不修改 CPU2/CPU3 共享协议和内部状态机。
+ *
+ * @param internal_state 状态。
+ * @return 返回 DSM V1.228 对外状态码；已知测量状态按固定码映射，其他状态保留可兼容的内部状态值。
  */
 static uint16_t DSM_TranslateDeviceState(uint16_t internal_state)
 {
@@ -574,14 +596,12 @@ static uint16_t DSM_TranslateDeviceState(uint16_t internal_state)
 }
 
 
-/******************************************************
- 函数功能： 设置寄存器赋值
-
- 函 数 名： Input_Write
- 参    数：
-
- 返 回 值：
- ******************************************************/
+/**
+ * @brief 设置寄存器赋值。
+ *
+ * 函 数 名： Input_Write。
+ * 参 数：返 回 值。
+ */
 void Input_Write(void) {
 	int i;
 	int point_index;

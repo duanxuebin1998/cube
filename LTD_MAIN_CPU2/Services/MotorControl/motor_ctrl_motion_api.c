@@ -50,17 +50,19 @@
 
 typedef struct
 {
-    bool restore_needed;
-    uint32_t restore_speed_x100;
+    /* 单次运动临时限速及退出时需要恢复的原速度。 */
+    bool restore_needed; /* 本次运动是否临时改写过速度，退出作用域时据此决定是否恢复。 */
+    uint32_t restore_speed_x100; /* 进入临时限速前的速度，单位为 0.01 m/min。 */
 } MotorMotionSpeedScope;
 
 typedef struct
 {
-    float start_mm;
-    float target_mm;
-    float distance_mm;
-    int dir;
-    bool already_reached;
+    /* 绝对目标运动的起点、终点、距离、方向和已到位判定。 */
+    float start_mm; /* 运动规划起始位置，单位为 mm；该字段直接保存浮点物理值，不使用 0.1 mm 整数缩放。 */
+    float target_mm; /* 运动规划目标位置，单位为 mm；该字段直接保存浮点物理值，不使用 0.1 mm 整数缩放。 */
+    float distance_mm; /* 从规划起点到目标的绝对运动距离，单位为 mm。 */
+    int dir; /* 由起点和目标计算出的电机方向。 */
+    bool already_reached; /* 规划时起点已处于目标容差内的标志；为真时无需启动电机。 */
 } MotorMotionTargetPlan;
 
 /**
@@ -170,7 +172,12 @@ static uint32_t MotorMotion_CalcVelocityFromSpeedX100(uint32_t speed_x100,
                                                        float current_mm);
 static uint32_t MotorMotion_ClampVelocityDouble(double vmax);
 
-/* ===================== 对外接口 ===================== */
+/**
+ * @brief 返回电机运动方向对应的现场日志文字。
+ *
+ * @param dir 运动方向。必须使用 MOTOR_DIRECTION_UP 或 MOTOR_DIRECTION_DOWN；函数据此换算符号、目标位置、速度模式或到位条件。
+ * @return 返回电机运动方向对应的现场日志文字对应的只读文本首地址；内容由当前输入或语言配置选择，调用方不得修改或释放。
+ */
 
 const char *MotorCtrl_DirectionText(int dir)
 {
@@ -183,10 +190,10 @@ const char *MotorCtrl_DirectionText(int dir)
     return "未知";
 }
 /**
- * @brief 显示或打印电机控制中的 MotorCtrl_DisplayStateText 逻辑。
+ * @brief 把电机控制状态转换为现场可读文字。
  *
- * @param display_state 状态值。
- * @return 返回业务对象或缓冲区指针，NULL 表示无有效对象。
+ * @param display_state 待转换为文字或运动方向的上层电机显示状态。
+ * @return 返回现场可读文字对应的只读文本首地址；内容由当前输入或语言配置选择，调用方不得修改或释放。
  */
 const char *MotorCtrl_DisplayStateText(uint32_t display_state)
 {
@@ -234,7 +241,6 @@ uint32_t MotorCtrl_MoveByTicksAndWait(int32_t ticks, uint32_t speed_x100)
     MotorDriver_UpdateVelocityFromParams();
 
     ret = MotorDriver_StopIfCommandSwitchRequested();
-    /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
     if (ret != NO_ERROR) {
         /* 提前退出前先恢复临时速度，避免下一条命令沿用本次速度。 */
         return MotorMotion_ReturnWithSpeedScope(ret, &speed_scope);
@@ -247,7 +253,6 @@ uint32_t MotorCtrl_MoveByTicksAndWait(int32_t ticks, uint32_t speed_x100)
         restore_ret = MotorMotion_EndSpeedScope(&speed_scope);
         (void)restore_ret;
         snprintf(detail, sizeof(detail), "增量：%ld", (long)ticks);
-        /* 错误 阶段：错误报警 模块：电机 操作：步进运动 原因：通信失败 处理：停止电机 详情：detail */
         ErrorLog_WarnDetail(ERROR_LOG_MODULE_MOTOR,
                             ERROR_LOG_OP_STEP_MOTION,
                             ERROR_LOG_REASON_COMM_FAIL,
@@ -263,7 +268,6 @@ uint32_t MotorCtrl_MoveByTicksAndWait(int32_t ticks, uint32_t speed_x100)
 /* (double)MotorDriver_GetSpeedSetpointX100() / 100.0); */
     s_motor_driver.applied_velocity = velocity;
     ret = stpr_moveBy(&stepper, &ticks, velocity);
-    /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
     if (ret != NO_ERROR) {
         /* 提前退出前先恢复临时速度，避免下一条命令沿用本次速度。 */
         return MotorMotion_ReturnWithSpeedScope(ret, &speed_scope);
@@ -271,19 +275,16 @@ uint32_t MotorCtrl_MoveByTicksAndWait(int32_t ticks, uint32_t speed_x100)
     MotorMotion_SetActiveState(requested_display_state, true);
 
     ret = MotorMotion_WaitTicksStartChanged(requested_ticks, xactual_before, &speed_scope);
-    /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
     if (ret != NO_ERROR) {
         return ret;
     }
 
     ret = MotorMotion_WaitStopAbortable(10);
-    /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
     if (ret == NO_ERROR) {
         ret = MotorMotion_WaitTicksReachTarget(ticks, detail, sizeof(detail));
     }
 
     restore_ret = MotorMotion_EndSpeedScope(&speed_scope);
-    /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
     if (ret != NO_ERROR) {
         return ret;
     }
@@ -295,17 +296,14 @@ uint32_t MotorCtrl_MoveByTicksAndWait(int32_t ticks, uint32_t speed_x100)
  *
  * 函数只负责换算目标并下发，不等待电机到位。
  * @param move_mm 移动距离，单位 mm。
- * @param dir 运动方向。
+ * @param dir 运动方向。必须使用 MOTOR_DIRECTION_UP 或 MOTOR_DIRECTION_DOWN；函数据此换算符号、目标位置、速度模式或到位条件。
  * @param speed_x100 本次运动速度，0 表示使用默认速度。
  * @return 成功返回 NO_ERROR，否则返回参数或通信错误码。
  */
 uint32_t MotorCtrl_MoveNoWait(float move_mm, int dir, uint32_t speed_x100)
 {
-    /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
     if (move_mm < 0.0f) return PARAM_RANGE_ERROR;
-    /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
     if (move_mm == 0.0f) return NO_ERROR;
-    /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
     if (!MotorDriver_IsDirValid(dir)) return PARAM_RANGE_ERROR;
 
     /* 非阻塞入口返回后电机会继续跑，因此必须在下发目标前完成就绪门控。 */
@@ -333,7 +331,6 @@ uint32_t MotorCtrl_MoveNoWait(float move_mm, int dir, uint32_t speed_x100)
 
     /* 6) 下发运动 */
     ret = stpr_moveBy(&stepper, &ticks, velocity);
-    /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
     if (ret != NO_ERROR) {
         return ret;
     }
@@ -371,7 +368,6 @@ uint32_t MotorCtrl_CalibrateFirstLoopCircumferenceAtZero(void)
 
     /* 2) 下行一圈并等待停止（可打断） */
     uint32_t ret = MotorCtrl_MoveByTicksAndWait(one_rev_ticks, MotorCtrl_GetDefaultSpeedX100());
-    /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
     if (ret != NO_ERROR) {
         printf("首圈周长标定失败 | 下行一圈失败 错误码：0x%08lX\r\n", (unsigned long)ret);
         return ret;
@@ -411,7 +407,6 @@ uint32_t MotorCtrl_CalibrateFirstLoopCircumferenceAtZero(void)
      * 让后续再切回电机记步时从新的零点首圈周长开始。 */
     (void)MotorPosition_SetLocalCircumferenceToParams(C0);
     ret = MotorCtrl_MoveAndWait(dL, MOTOR_DIRECTION_UP, MotorCtrl_GetDefaultSpeedX100()); /* 回到起点 */
-    /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
     if (ret != NO_ERROR) {
         printf("首圈周长标定失败 | 回到起点失败 错误码：0x%08lX\r\n", (unsigned long)ret);
         return ret;
@@ -431,7 +426,7 @@ uint32_t MotorCtrl_CalibrateFirstLoopCircumferenceAtZero(void)
  *
  * 该接口是业务流程推荐的距离运动入口，内部包含目标规划、到位等待和保护检测。
  * @param mm 移动距离，单位 mm。
- * @param dir 运动方向。
+ * @param dir 运动方向。必须使用 MOTOR_DIRECTION_UP 或 MOTOR_DIRECTION_DOWN；函数据此换算符号、目标位置、速度模式或到位条件。
  * @param speed_x100 本次运动速度，0 表示使用默认速度。
  * @return 成功返回 NO_ERROR，否则返回运动、保护或打断错误码。
  */
@@ -473,13 +468,11 @@ uint32_t MotorCtrl_MoveAndWait(float mm, int dir, uint32_t speed_x100)
     }
 
     ret = MotorMotion_RefreshActivePositionMm(&startPos_mm);
-    /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
     if (ret != NO_ERROR) {
         return MotorMotion_ReturnWithSpeedScope(ret, &speed_scope);
     }
 
     ret = MotorMotion_BuildRelativeTargetPlan(startPos_mm, mm, dir, &target_plan);
-    /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
     if (ret != NO_ERROR) {
         return MotorMotion_ReturnWithSpeedScope(ret, &speed_scope);
     }
@@ -498,7 +491,6 @@ uint32_t MotorCtrl_MoveAndWait(float mm, int dir, uint32_t speed_x100)
                                              GetShortFilename(__FILE__),
                                              __LINE__,
                                              __func__);
-    /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
     if (ret != NO_ERROR) {
         return ret;
     }
@@ -514,7 +506,6 @@ uint32_t MotorCtrl_MoveAndWait(float mm, int dir, uint32_t speed_x100)
     }
 
     ret = MotorMotion_WaitUntilStopWithTarget(&stepper, targetPos_mm, EPS_MM, dir);
-    /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
     if (ret != NO_ERROR) {
         /* 提前退出前先恢复临时速度，避免下一条命令沿用本次速度。 */
         return MotorMotion_ReturnWithSpeedScope(ret, &speed_scope);
@@ -526,7 +517,6 @@ uint32_t MotorCtrl_MoveAndWait(float mm, int dir, uint32_t speed_x100)
     }
 
     ret = MotorMotion_RefreshActivePositionMm(&currentPos_mm);
-    /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
     if (ret != NO_ERROR) {
         return MotorMotion_ReturnWithSpeedScope(ret, &speed_scope);
     }
@@ -562,14 +552,12 @@ uint32_t MotorCtrl_MoveAndWait(float mm, int dir, uint32_t speed_x100)
     }
 
     ret = MotorDriver_SyncPositionOrCheckHealth(&stepper);
-    /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
     if (ret == NO_ERROR) {
         MotorMotion_ClearActiveState();
     }
 
     /* 只有主命令整体结束后，才恢复默认速度。 */
     restore_ret = MotorMotion_EndSpeedScope(&speed_scope);
-    /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
     if (ret != NO_ERROR) {
         return ret;
     }
@@ -606,6 +594,13 @@ uint32_t MotorCtrl_MoveDown(uint32_t speed_x100)
     return NO_ERROR;
 }
 
+/**
+ * @brief 检查命令切换、方向、运动门禁和驱动健康后启动连续速度模式。
+ *
+ * @param dir 运动方向。必须使用 MOTOR_DIRECTION_UP 或 MOTOR_DIRECTION_DOWN；函数据此换算符号、目标位置、速度模式或到位条件。
+ * @param speed_x100 本次调试运动速度，单位 0.01 m/min；0 表示使用当前默认速度。
+ * @return PARAM_RANGE_ERROR 表示参数超出允许范围；NO_ERROR 表示操作成功。
+ */
 uint32_t MotorCtrl_StartVelocity(int dir, uint32_t speed_x100)
 {
     uint32_t ret;
@@ -680,14 +675,12 @@ uint32_t MotorCtrl_MoveToPosition(float target_mm, uint32_t speed_x100)
     for (int i = 0; i < 10; i++) {
 
         ret = MotorDriver_StopIfCommandSwitchRequested();
-        /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
         if (ret != NO_ERROR) {
             /* 提前退出前先恢复临时速度，避免下一条命令沿用本次速度。 */
             return MotorMotion_ReturnWithSpeedScope(ret, &speed_scope);
         }
 
         ret = MotorMotion_RefreshActivePositionMm(&cur_mm);
-        /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
         if (ret != NO_ERROR) {
             return MotorMotion_ReturnWithSpeedScope(ret, &speed_scope);
         }
@@ -697,7 +690,6 @@ uint32_t MotorCtrl_MoveToPosition(float target_mm, uint32_t speed_x100)
         if (ret == POSITION_DATA_INVALID) {
             printf("运动到位置 | 当前快照异常：%.3fmm，取消移动\r\n", cur_mm);
         }
-        /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
         if (ret != NO_ERROR) {
             return MotorMotion_ReturnWithSpeedScope(ret, &speed_scope);
         }
@@ -716,7 +708,6 @@ uint32_t MotorCtrl_MoveToPosition(float target_mm, uint32_t speed_x100)
             plan_mm = (EPS_MM * 2.0f);
         }
         ret = MotorCtrl_MoveAndWait(plan_mm, target_plan.dir, 0U);
-        /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
         if (ret != NO_ERROR) {
             /* 提前退出前先恢复临时速度，避免下一条命令沿用本次速度。 */
             return MotorMotion_ReturnWithSpeedScope(ret, &speed_scope); /* 含 COMMAND_SWITCH_ABORT */
@@ -731,7 +722,7 @@ uint32_t MotorCtrl_MoveToPosition(float target_mm, uint32_t speed_x100)
  * 该接口不把目标距离一次性换算成 XTARGET，而是先下发方向和速度，运行中持续读取
  * 当前有效位置源；接近目标时切换到低速，达到或越过保护边界立即慢停。
  * @param mm 移动距离，单位 mm。
- * @param dir 运动方向。
+ * @param dir 运动方向。必须使用 MOTOR_DIRECTION_UP 或 MOTOR_DIRECTION_DOWN；函数据此换算符号、目标位置、速度模式或到位条件。
  * @param speed_x100 本次运动速度，0 表示使用当前默认速度。
  * @return 成功返回 NO_ERROR，否则返回运动、保护或打断错误码。
  */
@@ -752,13 +743,11 @@ uint32_t MotorCtrl_JogMoveAndWait(float mm, int dir, uint32_t speed_x100)
     CHECK_ERROR(ret);
 
     ret = MotorMotion_RefreshActivePositionMm(&start_mm);
-    /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
     if (ret != NO_ERROR) {
         return ret;
     }
 
     ret = MotorMotion_BuildRelativeTargetPlan(start_mm, mm, dir, &target_plan);
-    /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
     if (ret != NO_ERROR) {
         return ret;
     }
@@ -787,7 +776,6 @@ uint32_t MotorCtrl_JogMoveToPosition(float target_mm, uint32_t speed_x100)
     CHECK_ERROR(ret);
 
     ret = MotorMotion_RefreshActivePositionMm(&cur_mm);
-    /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
     if (ret != NO_ERROR) {
         return ret;
     }
@@ -796,7 +784,6 @@ uint32_t MotorCtrl_JogMoveToPosition(float target_mm, uint32_t speed_x100)
                                               target_mm,
                                               MOTOR_JOG_POSITION_EPS_MM,
                                               &target_plan);
-    /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
     if (ret != NO_ERROR) {
         return ret;
     }
@@ -818,7 +805,6 @@ uint32_t MotorCtrl_QuickStop(void)
 
     /* 急停必须主动尝试下发停止命令，避免驱动状态读取失败时跳过停机。 */
     ret = MotorDriver_StopAndMarkStopped();
-    /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
     if (ret != NO_ERROR) {
         return ret;
     }
@@ -851,7 +837,6 @@ uint32_t MotorCtrl_SlowStop(void)
     uint32_t ret;
 
     ret = MotorDriver_StopAndMarkStopped();
-    /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
     if (ret != NO_ERROR) {
         return ret;
     }
@@ -859,7 +844,6 @@ uint32_t MotorCtrl_SlowStop(void)
     /* 慢停后必须等 RAMPSTAT.vzero 确认停稳，再恢复软件速度设定。
      * 否则 TMC5130 仍处于速度模式时写回 VMAX，可能导致电机继续运行。 */
     ret = MotorMotion_WaitStoppedAfterStopCommand(MOTOR_STOP_WAIT_TIMEOUT_MS);
-    /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
     if (ret != NO_ERROR) {
         return ret;
     }
@@ -899,7 +883,6 @@ uint32_t MotorCtrl_GetDisplayState(void)
     }
 
     ret = MotorDriver_ReadMovingState(&stepper, &is_moving);
-    /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
     if (ret != NO_ERROR) {
         return MotorMotion_IsDisplayStateActive(motor_state) ? motor_state : 0U;
     }
@@ -931,14 +914,24 @@ uint32_t MotorCtrl_GetDisplayState(void)
  *
  * 该接口不做撞底和丢步保护，只用于现场调试或受控维护流程。
  * @param mm 移动距离，单位 mm。
- * @param dir 运动方向。
+ * @param dir 运动方向。必须使用 MOTOR_DIRECTION_UP 或 MOTOR_DIRECTION_DOWN；函数据此换算符号、目标位置、速度模式或到位条件。
  * @param speed_x100 本次运动速度，0 表示使用默认速度。
+ *
+ * @return 返回无撞底和丢步检测阻塞运动结果；NO_ERROR 表示到位，其他值保留命令切换、驱动或超时错误。
  */
 uint32_t MotorCtrl_MoveBlockingNoDetect(float mm, int dir, uint32_t speed_x100)
 {
     return MotorMotion_MoveBlockingNoDetectInternal(mm, dir, speed_x100, false, false);
 }
 
+/**
+ * @brief 兼容入口：执行不带撞底和丢步检测、且不打印过程日志的阻塞运动。
+ *
+ * @param mm 本次电机运动的距离，单位 mm。
+ * @param dir 运动方向。必须使用 MOTOR_DIRECTION_UP 或 MOTOR_DIRECTION_DOWN；函数据此换算符号、目标位置、速度模式或到位条件。
+ * @param speed_x100 本次调试运动速度，单位 0.01 m/min；0 表示使用当前默认速度。
+ * @return 返回静默无检测阻塞运动结果；NO_ERROR 表示到位，其他值保留命令切换、驱动或超时错误。
+ */
 uint32_t MotorCtrl_MoveBlockingNoDetectQuiet(float mm, int dir, uint32_t speed_x100)
 {
     return MotorMotion_MoveBlockingNoDetectInternal(mm, dir, speed_x100, false, false);
@@ -949,6 +942,11 @@ uint32_t MotorCtrl_MoveBlockingNoDetectQuiet(float mm, int dir, uint32_t speed_x
  *
  * 只绕过编码器首帧门控，仍保留上电安全停机、驱动初始化和 TMC 健康检查。
  * 仅供人工强制上/下行等调试命令使用，正常测量流程不能调用。
+ *
+ * @param mm 本次电机运动的距离，单位 mm。
+ * @param dir 运动方向。必须使用 MOTOR_DIRECTION_UP 或 MOTOR_DIRECTION_DOWN；函数据此换算符号、目标位置、速度模式或到位条件。
+ * @param speed_x100 本次调试运动速度，单位 0.01 m/min；0 表示使用当前默认速度。
+ * @return 返回强制调试无检测阻塞运动结果；NO_ERROR 表示到位，不可绕过的驱动或超时错误原样返回。
  */
 uint32_t MotorCtrl_MoveBlockingNoDetectForceDebug(float mm, int dir, uint32_t speed_x100)
 {
@@ -956,13 +954,14 @@ uint32_t MotorCtrl_MoveBlockingNoDetectForceDebug(float mm, int dir, uint32_t sp
 }
 
 /**
- * @brief 执行电机控制中的 MotorMotion_MoveBlockingNoDetectInternal 逻辑。
+ * @brief 执行不带碰撞和丢步检测的阻塞运动，同时维护临时速度作用域和基本驱动错误。
  *
- * @param mm 业务参数。
- * @param dir 业务参数。
- * @param speed_x100 业务参数。
- * @param ignore_encoder_ready 业务参数。
- * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ * @param mm 本次电机运动的距离，单位 mm。
+ * @param dir 运动方向。必须使用 MOTOR_DIRECTION_UP 或 MOTOR_DIRECTION_DOWN；函数据此换算符号、目标位置、速度模式或到位条件。
+ * @param speed_x100 本次调试运动速度，单位 0.01 m/min；0 表示使用当前默认速度。
+ * @param ignore_encoder_ready true 表示本次受控调试动作允许跳过编码器就绪门禁，false 表示执行完整门禁。
+ * @param verbose true 表示输出调试过程日志，false 表示静默执行。
+ * @return PARAM_RANGE_ERROR 表示参数超出允许范围；NO_ERROR 表示操作成功。
  */
 static uint32_t MotorMotion_MoveBlockingNoDetectInternal(float mm,
                                                          int dir,
@@ -973,9 +972,7 @@ static uint32_t MotorMotion_MoveBlockingNoDetectInternal(float mm,
     MotorMotionSpeedScope speed_scope = { false, 0U };
     uint32_t ret;
 
-    /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
     if (mm <= 0.0f) return PARAM_RANGE_ERROR;
-    /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
     if (!MotorDriver_IsDirValid(dir)) return PARAM_RANGE_ERROR;
 
     /* 无检测只跳过撞底/丢步检测；强制调试入口才允许额外绕过编码器首帧。 */
@@ -987,7 +984,6 @@ static uint32_t MotorMotion_MoveBlockingNoDetectInternal(float mm,
     /* 该接口是“无检测”版本，只保留基础运动和日志。
      * 但为了让语义一致，临时速度恢复策略仍然与其他阻塞接口保持一致。 */
     ret = MotorMotion_BeginSpeedScope(&speed_scope, speed_x100);
-    /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
     if (ret != NO_ERROR) {
         printf("无检测阻塞运动：速度设置失败 错误码：0x%08lX\r\n", (unsigned long)ret);
         return ret;
@@ -998,7 +994,6 @@ static uint32_t MotorMotion_MoveBlockingNoDetectInternal(float mm,
     }
 
     ret = MotorDriver_SyncPositionOrCheckHealth(&stepper);
-    /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
     if (ret != NO_ERROR) {
         /* 提前退出前先恢复临时速度，避免下一条命令沿用本次速度。 */
         return MotorMotion_ReturnWithSpeedScope(ret, &speed_scope);
@@ -1008,7 +1003,6 @@ static uint32_t MotorMotion_MoveBlockingNoDetectInternal(float mm,
     int32_t ticks = 0;
 
     ret = MotorMotion_DistanceToTicks(mm, dir, Lcur_mm, &ticks);
-    /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
     if (ret != NO_ERROR) {
         return MotorMotion_ReturnWithSpeedScope(ret, &speed_scope);
     }
@@ -1017,20 +1011,17 @@ static uint32_t MotorMotion_MoveBlockingNoDetectInternal(float mm,
     s_motor_driver.applied_velocity = velocity;
 
     ret = MotorDriver_StopIfCommandSwitchRequested();
-    /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
     if (ret != NO_ERROR) {
         /* 提前退出前先恢复临时速度，避免下一条命令沿用本次速度。 */
         return MotorMotion_ReturnWithSpeedScope(ret, &speed_scope);
     }
     ret = stpr_moveBy(&stepper, &ticks, velocity);
-    /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
     if (ret != NO_ERROR) {
         printf("无检测阻塞运动：目标位置越界 错误码：0x%08lX\r\n", (unsigned long)ret);
         return MotorMotion_ReturnWithSpeedScope(ret, &speed_scope);
     }
     MotorMotion_SetActiveState(MotorMotion_DisplayStateFromDirection(dir), true);
     ret = MotorDriver_SyncPositionOrCheckHealth(&stepper);
-    /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
     if (ret != NO_ERROR) {
         /* 提前退出前先恢复临时速度，避免下一条命令沿用本次速度。 */
         return MotorMotion_ReturnWithSpeedScope(ret, &speed_scope);
@@ -1041,7 +1032,6 @@ static uint32_t MotorMotion_MoveBlockingNoDetectInternal(float mm,
     bool is_moving = true;
     while (1) {
         ret = MotorCtrl_IsDriverMoving(&stepper, &is_moving);
-        /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
         if (ret != NO_ERROR) {
             return MotorMotion_ReturnWithSpeedScope(ret, &speed_scope);
         }
@@ -1049,7 +1039,6 @@ static uint32_t MotorMotion_MoveBlockingNoDetectInternal(float mm,
             break;
         }
         ret = MotorMotion_CheckAbortRefreshAndHealth(&stepper, &last_vel_refresh_tick);
-        /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
         if (ret != NO_ERROR) {
             /* 提前退出前先恢复临时速度，避免下一条命令沿用本次速度。 */
             return MotorMotion_ReturnWithSpeedScope(ret, &speed_scope);
@@ -1061,14 +1050,12 @@ static uint32_t MotorMotion_MoveBlockingNoDetectInternal(float mm,
 
     MotorMotion_ClearActiveState();
     ret = MotorDriver_SyncPositionOrCheckHealth(&stepper);
-    /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
     if (ret != NO_ERROR) {
         /* 提前退出前先恢复临时速度，避免下一条命令沿用本次速度。 */
         return MotorMotion_ReturnWithSpeedScope(ret, &speed_scope);
     }
 
     ret = MotorMotion_EndSpeedScope(&speed_scope);
-    /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
     if (ret != NO_ERROR) {
         printf("无检测阻塞运动：恢复默认速度失败 错误码：0x%08lX\r\n", (unsigned long)ret);
         return ret;
@@ -1078,12 +1065,12 @@ static uint32_t MotorMotion_MoveBlockingNoDetectInternal(float mm,
 }
 
 /**
- * @brief 执行电机控制中的 MotorMotion_WaitTicksStartChanged 逻辑。
+ * @brief 等待 XACTUAL 离开启动位置，期间响应命令切换并检查驱动健康。
  *
- * @param requested_ticks 业务参数。
- * @param xactual_before 业务参数。
- * @param speed_scope 业务参数。
- * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ * @param requested_ticks 节拍数。
+ * @param xactual_before 等待启动前读取的 TMC5130 XACTUAL 位置值。
+ * @param speed_scope 本次运动临时速度作用域，记录进入前速度及是否需要在退出路径恢复。
+ * @return NO_ERROR 表示 XACTUAL 已离开启动位置；STATE_SWITCH 和驱动错误在恢复临时速度后返回，观察窗口内始终无位移返回 MOTOR_STEP_ERROR。
  */
 static uint32_t MotorMotion_WaitTicksStartChanged(int32_t requested_ticks,
                                                   int32_t xactual_before,
@@ -1100,7 +1087,6 @@ static uint32_t MotorMotion_WaitTicksStartChanged(int32_t requested_ticks,
 
     do {
         ret = MotorMotion_CheckAbortRefreshAndHealth(&stepper, &last_vel_refresh_tick);
-        /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
         if (ret != NO_ERROR) {
             /* 提前退出前先恢复临时速度，避免下一条命令沿用本次速度。 */
             return MotorMotion_ReturnWithSpeedScope(ret, speed_scope);
@@ -1124,7 +1110,6 @@ static uint32_t MotorMotion_WaitTicksStartChanged(int32_t requested_ticks,
              (long)xtarget_after,
              (unsigned long)rampstat_after,
              (unsigned long)gstat_after);
-    /* 错误 阶段：错误报警 模块：电机 操作：步进运动 原因：ErrorLog_GetReasonByCode(MOTOR_STEP_ERROR) 处理：停止电机 详情：detail */
     ErrorLog_WarnDetail(ERROR_LOG_MODULE_MOTOR,
                         ERROR_LOG_OP_STEP_MOTION,
                         ErrorLog_GetReasonByCode(MOTOR_STEP_ERROR),
@@ -1142,12 +1127,12 @@ static uint32_t MotorMotion_WaitTicksStartChanged(int32_t requested_ticks,
 }
 
 /**
- * @brief 执行电机控制中的 MotorMotion_WaitTicksReachTarget 逻辑。
+ * @brief 等待累计 tick 到达目标，持续检查命令切换、超时和驱动健康。
  *
- * @param target_ticks 业务参数。
- * @param detail 业务参数。
- * @param detail_size 数据长度。
- * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ * @param target_ticks 目标节拍数。
+ * @param detail 错误或诊断记录使用的详细信息。
+ * @param detail_size detail 输出缓冲区总容量，单位字节；格式化诊断时始终为末尾 NUL 保留空间。
+ * @return NO_ERROR 表示实际位置进入目标容差；命令切换或驱动检查失败返回原错误，XACTUAL 读取失败返回 MOTOR_TMC_COMM_ERROR，长期未到位返回 MOTOR_ARRIVAL_WAIT_TIMEOUT。
  */
 static uint32_t MotorMotion_WaitTicksReachTarget(int32_t target_ticks,
                                                  char *detail,
@@ -1165,7 +1150,6 @@ static uint32_t MotorMotion_WaitTicksReachTarget(int32_t target_ticks,
         int32_t diff_ticks;
 
         ret = MotorDriver_StopIfCommandSwitchRequested();
-        /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
         if (ret != NO_ERROR) {
             return ret;
         }
@@ -1173,7 +1157,6 @@ static uint32_t MotorMotion_WaitTicksReachTarget(int32_t target_ticks,
             snprintf(detail, detail_size,
                      "寄存器：XACTUAL,目标位置：%ld",
                      (long)target_ticks);
-            /* 错误 阶段：错误报警 模块：电机 操作：等待电机停止 原因：通信失败 处理：停止电机 详情：detail */
             ErrorLog_WarnDetail(ERROR_LOG_MODULE_MOTOR,
                                 ERROR_LOG_OP_WAIT_STOP,
                                 ERROR_LOG_REASON_COMM_FAIL,
@@ -1189,7 +1172,7 @@ static uint32_t MotorMotion_WaitTicksReachTarget(int32_t target_ticks,
         if (diff_ticks <= target_tolerance_ticks) {
             return NO_ERROR;
         }
-        /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
+        /* 电机已停但实际位置长期未进入目标容差时按到位等待超时处理，并保留目标、实测和差值现场。 */
         if ((HAL_GetTick() - settle_start_tick) > MOTOR_STOP_WAIT_TIMEOUT_MS) {
             snprintf(detail, detail_size,
                      "实际位置：%ld,目标位置：%ld,差值：%ld,超时：%lums",
@@ -1197,7 +1180,6 @@ static uint32_t MotorMotion_WaitTicksReachTarget(int32_t target_ticks,
                      (long)target_ticks,
                      (long)diff_ticks,
                      (unsigned long)MOTOR_STOP_WAIT_TIMEOUT_MS);
-            /* 错误 阶段：错误报警 模块：电机 操作：等待电机停止 原因：ErrorLog_GetReasonByCode(MOTOR_ARRIVAL_WAIT_TIMEOUT) 处理：停止电机 详情：detail */
             ErrorLog_WarnDetail(ERROR_LOG_MODULE_MOTOR,
                                 ERROR_LOG_OP_WAIT_STOP,
                                 ErrorLog_GetReasonByCode(MOTOR_ARRIVAL_WAIT_TIMEOUT),
@@ -1211,7 +1193,6 @@ static uint32_t MotorMotion_WaitTicksReachTarget(int32_t target_ticks,
         }
         MotorDriver_RefreshVelocityDuringRun(&stepper, &last_vel_refresh_tick);
         ret = MotorDriver_SyncPositionOrCheckHealth(&stepper);
-        /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
         if (ret != NO_ERROR) {
             return ret;
         }
@@ -1223,6 +1204,12 @@ static uint32_t MotorMotion_WaitTicksReachTarget(int32_t target_ticks,
  *
  * 上层方向只负责表达收带/放带；本函数统一处理有符号尺带长度、局部周长优先级、
  * 卷筒模型和 int32 目标范围钳位，避免多个运动入口各自维护一份换算逻辑。
+ *
+ * @param move_mm 本次相对运动距离，单位 mm。
+ * @param dir 运动方向。必须使用 MOTOR_DIRECTION_UP 或 MOTOR_DIRECTION_DOWN；函数据此换算符号、目标位置、速度模式或到位条件。
+ * @param current_length_mm 当前值。该值是当前尺带长度，单位 mm；卷筒半径随该长度变化，函数据此把移动距离换算为微步数。
+ * @param ticks 用于返回按当前位置卷筒周长换算的目标微步数。
+ * @return SYSTEM_CALL_CONDITION_ERROR 表示当前系统状态不允许执行；PARAM_RANGE_ERROR 表示参数超出允许范围；NO_ERROR 表示操作成功。
  */
 static uint32_t MotorMotion_DistanceToTicks(float move_mm,
                                             int dir,
@@ -1287,11 +1274,11 @@ static uint32_t MotorMotion_DistanceToTicks(float move_mm,
 }
 
 /**
- * @brief 执行电机控制中的 MotorMotion_BeginSpeedScope 逻辑。
+ * @brief 临时切换运动速度并保存退出时需要恢复的原速度。
  *
- * @param scope 业务参数。
- * @param speed_x100 业务参数。
- * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ * @param scope 保存临时速度覆盖及恢复状态的作用域对象。
+ * @param speed_x100 本次调试运动速度，单位 0.01 m/min；0 表示使用当前默认速度。
+ * @return NO_ERROR 表示作用域对象已保存原速度并按需应用临时速度；scope 为空返回 SYSTEM_CALL_CONDITION_ERROR，其他值为速度范围、驱动状态或寄存器写入错误。
  */
 static uint32_t MotorMotion_BeginSpeedScope(MotorMotionSpeedScope *scope,
                                             uint32_t speed_x100)
@@ -1307,6 +1294,9 @@ static uint32_t MotorMotion_BeginSpeedScope(MotorMotionSpeedScope *scope,
 
 /**
  * @brief 结束临时速度作用域，恢复进入运动前的速度。
+ *
+ * @param scope 保存临时速度覆盖及恢复状态的作用域对象。
+ * @return NO_ERROR 表示无需恢复或原速度已恢复；scope 为空返回 SYSTEM_CALL_CONDITION_ERROR，其他值为恢复速度时的驱动错误。
  */
 static uint32_t MotorMotion_EndSpeedScope(const MotorMotionSpeedScope *scope)
 {
@@ -1319,11 +1309,11 @@ static uint32_t MotorMotion_EndSpeedScope(const MotorMotionSpeedScope *scope)
 }
 
 /**
- * @brief 执行电机控制中的 MotorMotion_ReturnWithSpeedScope 逻辑。
+ * @brief 恢复临时速度后返回当前运动结果。
  *
- * @param ret 业务参数。
- * @param scope 业务参数。
- * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ * @param ret 上一层调用返回的结果码。函数在恢复临时速度、停止点动或保存故障定位后原样传播该运动结果。
+ * @param scope 保存临时速度覆盖及恢复状态的作用域对象。
+ * @return scope 为空时保留原错误，原结果正常则返回 SYSTEM_CALL_CONDITION_ERROR；scope 有效时按原运动错误优先、速度恢复错误次之的顺序返回。
  */
 static uint32_t MotorMotion_ReturnWithSpeedScope(uint32_t ret,
                                                  const MotorMotionSpeedScope *scope)
@@ -1338,14 +1328,14 @@ static uint32_t MotorMotion_ReturnWithSpeedScope(uint32_t ret,
 }
 
 /**
- * @brief 检查电机控制中的 MotorMotion_CheckErrorWithSpeedScope 逻辑。
+ * @brief 发生运动错误时先恢复临时速度，再进入统一错误处理。
  *
- * @param ret 业务参数。
- * @param scope 业务参数。
- * @param file 业务参数。
- * @param line 业务参数。
- * @param func 业务参数。
- * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ * @param ret 上一层调用返回的结果码。函数在恢复临时速度、停止点动或保存故障定位后原样传播该运动结果。
+ * @param scope 保存临时速度覆盖及恢复状态的作用域对象。
+ * @param file 诊断输出关联的源文件名称。
+ * @param line 触发当前错误出口或运动保护检查的源代码行号；与 file 和 func 一起保存，用于最终故障日志定位。
+ * @param func 发起当前运动 API 的源函数名字符串；恢复临时速度后交给统一错误处理保存。
+ * @return 无局部或全局故障时返回 NO_ERROR；存在故障时先恢复临时速度，再返回统一错误处理结果或锁存的真实错误码。
  */
 static uint32_t MotorMotion_CheckErrorWithSpeedScope(uint32_t ret,
                                                      const MotorMotionSpeedScope *scope,
@@ -1353,14 +1343,13 @@ static uint32_t MotorMotion_CheckErrorWithSpeedScope(uint32_t ret,
                                                      uint32_t line,
                                                      const char *func)
 {
-    /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
     if (ret != NO_ERROR) {
         const uint32_t handled_ret = FaultManager_HandleCheckError(ret, file, line, func);
         (void)MotorMotion_EndSpeedScope(scope);
         return handled_ret;
     }
 
-    /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
+    /* 局部检测未返回错误但全局故障已被异步锁存时，仍需走统一故障出口并结束临时速度范围。 */
     if (g_measurement.device_status.error_code != NO_ERROR) {
         const uint32_t handled_ret =
             FaultManager_HandleGlobalError(g_measurement.device_status.error_code,
@@ -1381,10 +1370,14 @@ static uint32_t MotorMotion_CheckErrorWithSpeedScope(uint32_t ret,
     return NO_ERROR;
 }
 
-/*
- * 函数用途：检查命令切换打断，并在打断时恢复本次临时速度。
- * 调用场景：阻塞运动入口已经进入 MotorMotionSpeedScope 后使用。
- * 关键约束：返回非 NO_ERROR 时已经完成速度恢复，调用方直接返回该错误码。
+/**
+ * @brief 检查命令切换打断，并在打断时恢复本次临时速度。
+ *
+ * @details 调用场景：阻塞运动入口已经进入 MotorMotionSpeedScope 后使用。
+ * @note 关键约束：返回非 NO_ERROR 时已经完成速度恢复，调用方直接返回该错误码。
+ *
+ * @param scope 保存临时速度覆盖及恢复状态的作用域对象。
+ * @return 没有命令切换时返回 NO_ERROR；检测到切换时先恢复临时速度，再返回 STATE_SWITCH 或速度恢复失败码。
  */
 static uint32_t MotorMotion_CheckCommandAbortWithSpeedScope(const MotorMotionSpeedScope *scope)
 {
@@ -1398,10 +1391,15 @@ static uint32_t MotorMotion_CheckCommandAbortWithSpeedScope(const MotorMotionSpe
     return NO_ERROR;
 }
 
-/*
- * 函数用途：统一执行受保护运动的运行前门控。
- * 调用场景：正式运动、Jog 运动和无检测运动下发前。
- * 关键约束：只封装既有就绪/健康检查；是否绕过编码器首帧和是否检查健康由调用方显式选择。
+/**
+ * @brief 统一执行受保护运动的运行前门控。
+ *
+ * @details 调用场景：正式运动、Jog 运动和无检测运动下发前。
+ * @note 关键约束：只封装既有就绪/健康检查；是否绕过编码器首帧和是否检查健康由调用方显式选择。
+ *
+ * @param ignore_encoder_ready true 表示本次受控调试动作允许跳过编码器就绪门禁，false 表示执行完整门禁。
+ * @param check_health true 表示启动运动前同时检查驱动器健康状态，false 表示只检查基础门禁。
+ * @return NO_ERROR 表示驱动、24V、位置源、编码器首帧和运动前健康检查均通过；其他值为对应门禁的参数、驱动、编码器、电源或位置错误。
  */
 static uint32_t MotorMotion_CheckReadyForProtectedMotion(bool ignore_encoder_ready,
                                                         bool check_health)
@@ -1424,10 +1422,18 @@ static uint32_t MotorMotion_CheckReadyForProtectedMotion(bool ignore_encoder_rea
     return NO_ERROR;
 }
 
-/*
- * 函数用途：等待正式位置运动下发后的启动观察窗口。
- * 调用场景：MotorCtrl_MoveAndWait() 下发 MoveNoWait 后，到位等待前。
- * 关键约束：只抽取原有 100 次、10ms 观察流程，不改变启动节奏和保护顺序。
+/**
+ * @brief 等待正式位置运动下发后的启动观察窗口。
+ *
+ * @details 调用场景：MotorCtrl_MoveAndWait() 下发 MoveNoWait 后，到位等待前。
+ * @note 关键约束：只抽取原有 100 次、10ms 观察流程，不改变启动节奏和保护顺序。
+ *
+ * @param command_display_state 命令显示状态。
+ * @param speed_scope 本次运动临时速度作用域；启动观察失败时用于恢复进入前速度。
+ * @param file 诊断输出关联的源文件名称。
+ * @param line 触发当前错误出口或运动保护检查的源代码行号；与 file 和 func 一起保存，用于最终故障日志定位。
+ * @param func 发起本次位置运动的源函数名字符串；启动观察失败时写入统一故障上下文。
+ * @return NO_ERROR 表示启动观察窗口内已确认位置变化或驱动正常启动；其他值为命令切换、位置读取、驱动健康或启动观察失败码。
  */
 static uint32_t MotorMotion_WaitMoveStartObservation(uint32_t command_display_state,
                                                      const MotorMotionSpeedScope *speed_scope,
@@ -1463,10 +1469,15 @@ static uint32_t MotorMotion_WaitMoveStartObservation(uint32_t command_display_st
     return NO_ERROR;
 }
 
-/*
- * 函数用途：集中执行等待循环内的命令切换、速度刷新和 TMC 同步/健康检查。
- * 调用场景：阻塞等待循环已确认电机仍在运动后，每轮进入路径专属检查前。
- * 关键约束：不处理路径专属的速度恢复、撞底、丢步、目标判断或停机收尾。
+/**
+ * @brief 集中执行等待循环内的命令切换、速度刷新和 TMC 同步/健康检查。
+ *
+ * @details 调用场景：阻塞等待循环已确认电机仍在运动后，每轮进入路径专属检查前。
+ * @note 关键约束：不处理路径专属的速度恢复、撞底、丢步、目标判断或停机收尾。
+ *
+ * @param tmc5130 目标 TMC5130 驱动实例。对象保存 SPI 句柄、片选 GPIO 和使能 GPIO，底层寄存器访问与驱动使能操作均通过该实例定位硬件。
+ * @param last_vel_refresh_tick 用于读取并更新上一次动态速度刷新时刻的 HAL 毫秒节拍。
+ * @return SYSTEM_CALL_CONDITION_ERROR 表示当前系统状态不允许执行；NO_ERROR 表示操作成功。
  */
 static uint32_t MotorMotion_CheckAbortRefreshAndHealth(TMC5130TypeDef *tmc5130,
                                                        uint32_t *last_vel_refresh_tick)
@@ -1491,10 +1502,14 @@ static uint32_t MotorMotion_CheckAbortRefreshAndHealth(TMC5130TypeDef *tmc5130,
     return NO_ERROR;
 }
 
-/*
- * 函数用途：电机确认停稳后同步最终位置并清理活动状态。
- * 调用场景：等待循环发现驱动不再运动后，返回 NO_ERROR 前使用。
- * 关键约束：只做最终同步和状态清理；同步失败时保留原始错误码且不清活动状态。
+/**
+ * @brief 电机确认停稳后同步最终位置并清理活动状态。
+ *
+ * @details 调用场景：等待循环发现驱动不再运动后，返回 NO_ERROR 前使用。
+ * @note 关键约束：只做最终同步和状态清理；同步失败时保留原始错误码且不清活动状态。
+ *
+ * @param tmc5130 目标 TMC5130 驱动实例。对象保存 SPI 句柄、片选 GPIO 和使能 GPIO，底层寄存器访问与驱动使能操作均通过该实例定位硬件。
+ * @return SYSTEM_CALL_CONDITION_ERROR 表示当前系统状态不允许执行；NO_ERROR 表示操作成功。
  */
 static uint32_t MotorMotion_CheckStoppedAndRefresh(TMC5130TypeDef *tmc5130)
 {
@@ -1514,6 +1529,9 @@ static uint32_t MotorMotion_CheckStoppedAndRefresh(TMC5130TypeDef *tmc5130)
 }
 /**
  * @brief 将业务方向转换为上层显示状态。
+ *
+ * @param dir 运动方向。必须使用 MOTOR_DIRECTION_UP 或 MOTOR_DIRECTION_DOWN；函数据此换算符号、目标位置、速度模式或到位条件。
+ * @return 返回运动方向对应的上行或下行显示状态；方向非法时返回函数定义的安全默认状态。
  */
 static uint32_t MotorMotion_DisplayStateFromDirection(int dir)
 {
@@ -1528,6 +1546,9 @@ static uint32_t MotorMotion_DisplayStateFromDirection(int dir)
 
 /**
  * @brief 将相对 ticks 方向转换为上层显示状态。
+ *
+ * @param ticks 节拍数。
+ * @return 根据目标微步数正负返回上行、下行或停止显示状态。
  */
 static uint32_t MotorMotion_DisplayStateFromTicks(int32_t ticks)
 {
@@ -1542,6 +1563,9 @@ static uint32_t MotorMotion_DisplayStateFromTicks(int32_t ticks)
 
 /**
  * @brief 判断显示状态是否代表有效运动方向。
+ *
+ * @param display_state 待转换为文字或运动方向的上层电机显示状态。
+ * @return true 表示 display_state 为 1 或 2，分别代表有效的上行或下行显示状态；false 表示其它值，不代表活动运动方向。
  */
 static bool MotorMotion_IsDisplayStateActive(uint32_t display_state)
 {
@@ -1550,6 +1574,9 @@ static bool MotorMotion_IsDisplayStateActive(uint32_t display_state)
 
 /**
  * @brief 统一置位当前运动状态。
+ *
+ * @param display_state 待转换为文字或运动方向的上层电机显示状态。
+ * @param wait_active true 表示进入需要等待完成的运动状态，false 表示只发布瞬时运动状态。
  */
 static void MotorMotion_SetActiveState(uint32_t display_state, bool wait_active)
 {
@@ -1575,6 +1602,12 @@ static void MotorMotion_ClearActiveState(void)
 
 /**
  * @brief 判断当前位置是否已经到达或越过目标。
+ *
+ * @param current_mm 当前位置，单位 mm。
+ * @param target_mm 目标位置，单位 mm。
+ * @param eps_mm 判断目标到位或越界使用的位置容差，单位 mm。
+ * @param dir 运动方向。必须使用 MOTOR_DIRECTION_UP 或 MOTOR_DIRECTION_DOWN；函数据此换算符号、目标位置、速度模式或到位条件。
+ * @return true 表示当前位置已经到达或越过目标；false 表示当前位置尚未到达或越过目标。
  */
 static bool MotorMotion_ShouldStopAtTarget(float current_mm,
                                            float target_mm,
@@ -1595,6 +1628,9 @@ static bool MotorMotion_ShouldStopAtTarget(float current_mm,
 
 /**
  * @brief 到位后下发停止并等待驱动确认停稳。
+ *
+ * @param tmc5130 目标 TMC5130 驱动实例。对象保存 SPI 句柄、片选 GPIO 和使能 GPIO，底层寄存器访问与驱动使能操作均通过该实例定位硬件。
+ * @return NO_ERROR 表示已下发停止并确认驱动停稳；其他值为慢停、停稳状态读取、驱动通信或停止超时错误。
  */
 static uint32_t MotorMotion_StopAtTargetAndWait(TMC5130TypeDef *tmc5130)
 {
@@ -1602,14 +1638,12 @@ static uint32_t MotorMotion_StopAtTargetAndWait(TMC5130TypeDef *tmc5130)
     bool is_moving = true;
 
     ret = MotorDriver_StopAndMarkStopped();
-    /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
     if (ret != NO_ERROR) {
         return ret;
     }
 
     while (1) {
         ret = MotorCtrl_IsDriverMoving(tmc5130, &is_moving);
-        /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
         if (ret != NO_ERROR) {
             return ret;
         }
@@ -1631,6 +1665,11 @@ static uint32_t MotorMotion_StopAtTargetAndWait(TMC5130TypeDef *tmc5130)
  * @brief 点动模式运动到目标位置的内部实现。
  *
  * 进入前已经明确目标和方向；本函数负责临时速度、运行中保护、提前降速、慢停和速度恢复。
+ *
+ * @param target_mm 目标位置，单位 mm。
+ * @param dir 运动方向。必须使用 MOTOR_DIRECTION_UP 或 MOTOR_DIRECTION_DOWN；函数据此换算符号、目标位置、速度模式或到位条件。
+ * @param speed_x100 本次调试运动速度，单位 0.01 m/min；0 表示使用当前默认速度。
+ * @return PARAM_RANGE_ERROR 表示参数超出允许范围。
  */
 static uint32_t MotorMotion_JogMoveToTargetInternal(float target_mm,
                                                     int dir,
@@ -1661,25 +1700,21 @@ static uint32_t MotorMotion_JogMoveToTargetInternal(float target_mm,
     fast_velocity = velocity;
 
     ret = MotorDriver_StopIfCommandSwitchRequested();
-    /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
     if (ret != NO_ERROR) {
         return MotorMotion_ReturnWithSpeedScope(ret, &speed_scope);
     }
 
     ret = MotorDriver_SyncPositionOrCheckHealth(&stepper);
-    /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
     if (ret != NO_ERROR) {
         return MotorMotion_ReturnWithSpeedScope(ret, &speed_scope);
     }
 
     ret = MotorMotion_RefreshJogPositionChecked(&cur_mm, target_mm, dir);
-    /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
     if (ret != NO_ERROR) {
         return MotorMotion_ReturnWithSpeedScope(ret, &speed_scope);
     }
 
     ret = MotorMotion_CalcJogSlowdownDistanceMm(cur_mm, fast_velocity, &slowdown_distance_mm);
-    /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
     if (ret != NO_ERROR) {
         return MotorMotion_ReturnWithSpeedScope(ret, &speed_scope);
     }
@@ -1691,7 +1726,6 @@ static uint32_t MotorMotion_JogMoveToTargetInternal(float target_mm,
 
     if (remaining_mm <= slowdown_distance_mm) {
         ret = MotorDriver_SetSpeedQuiet(MOTOR_JOG_CREEP_SPEED_X100);
-        /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
         if (ret != NO_ERROR) {
             return MotorMotion_ReturnWithSpeedScope(ret, &speed_scope);
         }
@@ -1709,7 +1743,6 @@ static uint32_t MotorMotion_JogMoveToTargetInternal(float target_mm,
         velocity = fast_velocity;
     }
     ret = MotorMotion_StartJogVelocity(dir);
-    /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
     if (ret != NO_ERROR) {
         return MotorMotion_ReturnWithSpeedScope(ret, &speed_scope);
     }
@@ -1724,19 +1757,16 @@ static uint32_t MotorMotion_JogMoveToTargetInternal(float target_mm,
         bool is_moving = true;
 
         ret = MotorDriver_StopIfCommandSwitchRequested();
-        /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
         if (ret != NO_ERROR) {
             return MotorMotion_ReturnWithSpeedScope(ret, &speed_scope);
         }
 
         ret = MotorDriver_SyncPositionOrCheckHealth(&stepper);
-        /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
         if (ret != NO_ERROR) {
             return MotorMotion_StopJogAndRestore(ret, &speed_scope, target_mm, dir);
         }
 
         ret = MotorMotion_RefreshJogPositionChecked(&cur_mm, target_mm, dir);
-        /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
         if (ret != NO_ERROR) {
             return MotorMotion_StopJogAndRestore(ret, &speed_scope, target_mm, dir);
         }
@@ -1756,7 +1786,6 @@ static uint32_t MotorMotion_JogMoveToTargetInternal(float target_mm,
         if ((!slow_mode) && (remaining_mm <= slowdown_distance_mm)) {
             /* 接近目标后改用低速 VMAX 继续速度模式，减少停止惯性造成的过冲。 */
             ret = MotorDriver_SetSpeedQuiet(MOTOR_JOG_CREEP_SPEED_X100);
-            /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
             if (ret != NO_ERROR) {
                 return MotorMotion_StopJogAndRestore(ret, &speed_scope, target_mm, dir);
             }
@@ -1768,7 +1797,6 @@ static uint32_t MotorMotion_JogMoveToTargetInternal(float target_mm,
                    slowdown_distance_mm,
                    (unsigned long)velocity);
             ret = MotorMotion_StartJogVelocity(dir);
-            /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
             if (ret != NO_ERROR) {
                 return MotorMotion_StopJogAndRestore(ret, &speed_scope, target_mm, dir);
             }
@@ -1789,6 +1817,9 @@ static uint32_t MotorMotion_JogMoveToTargetInternal(float target_mm,
 
 /**
  * @brief 按当前有效位置源刷新并获取当前位置快照。
+ *
+ * @param pos_mm 位置值，单位 mm。
+ * @return SYSTEM_CALL_CONDITION_ERROR 表示当前系统状态不允许执行；NO_ERROR 表示操作成功。
  */
 static uint32_t MotorMotion_RefreshActivePositionMm(float *pos_mm)
 {
@@ -1803,6 +1834,9 @@ static uint32_t MotorMotion_RefreshActivePositionMm(float *pos_mm)
 
 /**
  * @brief 判断位置快照是否在罐高兜底范围内。
+ *
+ * @param pos_mm 位置值，单位 mm。
+ * @return true 表示位置快照位于 -罐高-1000 mm 至 罐高+1000 mm 的兜底区间内；当罐高无效时按 500000 mm 计算边界；false 表示位置超出该保护范围。
  */
 static bool MotorMotion_IsPositionSnapshotValid(float pos_mm)
 {
@@ -1819,10 +1853,17 @@ static bool MotorMotion_IsPositionSnapshotValid(float pos_mm)
     return (pos_mm >= min_valid_mm) && (pos_mm <= max_valid_mm);
 }
 
-/*
- * 函数用途：按当前位置、相对距离和方向生成统一目标规划。
- * 调用场景：正式相对运动和 Jog 相对点动入口共用。
- * 关键约束：只做目标计算和边界检查，不决定后续使用位置目标模式还是速度点动模式。
+/**
+ * @brief 按当前位置、相对距离和方向生成统一目标规划。
+ *
+ * @details 调用场景：正式相对运动和 Jog 相对点动入口共用。
+ * @note 关键约束：只做目标计算和边界检查，不决定后续使用位置目标模式还是速度点动模式。
+ *
+ * @param start_mm 起始位置。
+ * @param move_mm 本次相对运动距离，单位 mm。
+ * @param dir 运动方向。必须使用 MOTOR_DIRECTION_UP 或 MOTOR_DIRECTION_DOWN；函数据此换算符号、目标位置、速度模式或到位条件。
+ * @param plan 用于返回已经完成边界校验的电机运动计划。
+ * @return SYSTEM_CALL_CONDITION_ERROR 表示当前系统状态不允许执行；NO_ERROR 表示操作成功；PARAM_RANGE_ERROR 表示参数超出允许范围。
  */
 static uint32_t MotorMotion_BuildRelativeTargetPlan(float start_mm,
                                                     float move_mm,
@@ -1863,10 +1904,17 @@ static uint32_t MotorMotion_BuildRelativeTargetPlan(float start_mm,
     return NO_ERROR;
 }
 
-/*
- * 函数用途：按当前位置和绝对目标生成统一目标规划。
- * 调用场景：正式到绝对位置和 Jog 到绝对位置入口共用。
- * 关键约束：只输出方向、剩余距离和是否已经到位，调用方继续选择执行策略。
+/**
+ * @brief 按当前位置和绝对目标生成统一目标规划。
+ *
+ * @details 调用场景：正式到绝对位置和 Jog 到绝对位置入口共用。
+ * @note 关键约束：只输出方向、剩余距离和是否已经到位，调用方继续选择执行策略。
+ *
+ * @param current_mm 当前位置，单位 mm。
+ * @param target_mm 目标位置，单位 mm。
+ * @param eps_mm 判断目标到位或越界使用的位置容差，单位 mm。
+ * @param plan 用于返回已经完成边界校验的电机运动计划。
+ * @return 返回按当前位置和绝对目标生成统一目标规划；有符号边界按函数内饱和规则处理。
  */
 static uint32_t MotorMotion_BuildAbsoluteTargetPlan(float current_mm,
                                                     float target_mm,
@@ -1909,10 +1957,10 @@ static uint32_t MotorMotion_BuildAbsoluteTargetPlan(float current_mm,
 }
 
 /**
- * @brief 检查电机控制中的 MotorMotion_CheckAbsoluteTargetRange 逻辑。
+ * @brief 校验绝对目标位置是否落在允许的机械行程内。
  *
- * @param target_mm 业务参数。
- * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ * @param target_mm 目标位置，单位 mm。
+ * @return 目标和罐高均为有限有效值且 target_mm 位于 0 至 tankHeight 范围内时返回 NO_ERROR；其他情况返回 PARAM_RANGE_ERROR。
  */
 static uint32_t MotorMotion_CheckAbsoluteTargetRange(float target_mm)
 {
@@ -1940,6 +1988,11 @@ static uint32_t MotorMotion_CheckAbsoluteTargetRange(float target_mm)
 
 /**
  * @brief 按方向计算当前位置到目标的剩余距离。
+ *
+ * @param current_mm 当前位置，单位 mm。
+ * @param target_mm 目标位置，单位 mm。
+ * @param dir 运动方向。必须使用 MOTOR_DIRECTION_UP 或 MOTOR_DIRECTION_DOWN；函数据此换算符号、目标位置、速度模式或到位条件。
+ * @return 返回沿当前运动方向到目标位置的剩余距离，单位 mm；已经越过目标时返回 0。
  */
 static float MotorMotion_RemainingDistanceToTarget(float current_mm,
                                                    float target_mm,
@@ -1960,6 +2013,12 @@ static float MotorMotion_RemainingDistanceToTarget(float current_mm,
 
 /**
  * @brief 判断当前位置是否已经越过目标超过允许保护量。
+ *
+ * @param current_mm 当前位置，单位 mm。
+ * @param target_mm 目标位置，单位 mm。
+ * @param dir 运动方向。必须使用 MOTOR_DIRECTION_UP 或 MOTOR_DIRECTION_DOWN；函数据此换算符号、目标位置、速度模式或到位条件。
+ * @param limit_mm 上限。
+ * @return true 表示当前位置已经越过目标超过允许保护量；false 表示当前位置尚未越过目标超过允许保护量。
  */
 static bool MotorMotion_IsOvershotPastTarget(float current_mm,
                                              float target_mm,
@@ -1981,6 +2040,11 @@ static bool MotorMotion_IsOvershotPastTarget(float current_mm,
 
 /**
  * @brief 刷新 Jog 当前位置，并统一检查快照范围和越界保护。
+ *
+ * @param cur_mm 用于返回当前有效位置的输出参数，单位 mm。
+ * @param target_mm 目标位置，单位 mm。
+ * @param dir 运动方向。必须使用 MOTOR_DIRECTION_UP 或 MOTOR_DIRECTION_DOWN；函数据此换算符号、目标位置、速度模式或到位条件。
+ * @return NO_ERROR 表示当前位置快照有效且未越过目标保护；读取失败返回原错误，非法快照返回 POSITION_DATA_INVALID，越过目标返回 POSITION_TARGET_OVERRUN。
  */
 static uint32_t MotorMotion_RefreshJogPositionChecked(float *cur_mm,
                                                       float target_mm,
@@ -1989,7 +2053,6 @@ static uint32_t MotorMotion_RefreshJogPositionChecked(float *cur_mm,
     uint32_t ret;
 
     ret = MotorMotion_RefreshActivePositionMm(cur_mm);
-    /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
     if (ret != NO_ERROR) {
         return ret;
     }
@@ -2006,10 +2069,15 @@ static uint32_t MotorMotion_RefreshJogPositionChecked(float *cur_mm,
     return NO_ERROR;
 }
 
-/*
- * 函数用途：集中执行 Jog 循环每轮末尾的运行保护检查。
- * 调用场景：速度点动模式已经启动后，每轮位置、减速和停机判断完成之后。
- * 关键约束：不计算剩余距离、不切换速度、不下发停机；只返回应由上层慢停收尾的错误码。
+/**
+ * @brief 集中执行 Jog 循环每轮末尾的运行保护检查。
+ *
+ * @details 调用场景：速度点动模式已经启动后，每轮位置、减速和停机判断完成之后。
+ * @note 关键约束：不计算剩余距离、不切换速度、不下发停机；只返回应由上层慢停收尾的错误码。
+ *
+ * @param start_tick 起始位置节拍。
+ * @param is_moving 用于返回 TMC5130 当前是否仍在运动。
+ * @return SYSTEM_CALL_CONDITION_ERROR 表示当前系统状态不允许执行；NO_ERROR 表示操作成功。
  */
 static uint32_t MotorMotion_CheckJogRuntimeGuards(uint32_t start_tick,
                                                   bool *is_moving)
@@ -2051,6 +2119,11 @@ static uint32_t MotorMotion_CheckJogRuntimeGuards(uint32_t start_tick,
 }
 /**
  * @brief 根据 TMC5130 当前斜坡参数估算点动模式提前减速距离。
+ *
+ * @param current_mm 当前位置，单位 mm。
+ * @param fast_velocity TMC5130 快速段速度寄存器值。
+ * @param slowdown_mm 用于返回按当前斜坡参数估算的提前减速距离，单位 mm。
+ * @return SYSTEM_CALL_CONDITION_ERROR 表示当前系统状态不允许执行；NO_ERROR 表示操作成功。
  */
 static uint32_t MotorMotion_CalcJogSlowdownDistanceMm(float current_mm,
                                                       uint32_t fast_velocity,
@@ -2155,6 +2228,9 @@ static uint32_t MotorMotion_CalcJogSlowdownDistanceMm(float current_mm,
 }
 /**
  * @brief 将 TMC5130 VMAX 寄存器值换算为微步每秒。
+ *
+ * @param vmax TMC5130 VMAX 寄存器无符号值，按 fCLK/2^24 的速度比例换算。
+ * @return 返回 vmax × TMC5130_FCLK_HZ / 2^24 得到的微步速度，单位 微步/s。
  */
 static double MotorMotion_TmcVelocityToUstepsPerSec(uint32_t vmax)
 {
@@ -2163,6 +2239,9 @@ static double MotorMotion_TmcVelocityToUstepsPerSec(uint32_t vmax)
 
 /**
  * @brief 将 TMC5130 加速度寄存器值换算为微步每秒平方。
+ *
+ * @param accel TMC5130 AMAX 或 DMAX 同量纲寄存器值，按 fCLK^2/2^41 的加速度比例换算。
+ * @return 返回 accel × TMC5130_FCLK_HZ^2 / 2^41 得到的微步加速度，单位 微步/s2。
  */
 static double MotorMotion_TmcAccelerationToUstepsPerSec2(uint32_t accel)
 {
@@ -2170,6 +2249,10 @@ static double MotorMotion_TmcAccelerationToUstepsPerSec2(uint32_t accel)
 }
 /**
  * @brief 按给定线速度和当前位置直接计算 TMC5130 VMAX。
+ *
+ * @param speed_x100 本次调试运动速度，单位 0.01 m/min；0 表示使用当前默认速度。
+ * @param current_mm 当前位置，单位 mm。
+ * @return 返回按线速度和当前位置卷筒周长换算并钳位后的 TMC5130 VMAX 寄存器值；速度为 0 时返回 0。
  */
 static uint32_t MotorMotion_CalcVelocityFromSpeedX100(uint32_t speed_x100,
                                                       float current_mm)
@@ -2190,6 +2273,9 @@ static uint32_t MotorMotion_CalcVelocityFromSpeedX100(uint32_t speed_x100,
 
 /**
  * @brief 将浮点 VMAX 限制到 TMC5130 速度寄存器范围。
+ *
+ * @param vmax TMC5130 VMAX 寄存器值或待限制的速度原始值。
+ * @return 返回完成边界钳位后的数值；输入低于下限时返回下限，高于上限时返回上限，区间内保持原值。
  */
 static uint32_t MotorMotion_ClampVelocityDouble(double vmax)
 {
@@ -2203,6 +2289,9 @@ static uint32_t MotorMotion_ClampVelocityDouble(double vmax)
 }
 /**
  * @brief 按业务方向下发 TMC5130 速度模式点动命令。
+ *
+ * @param dir 运动方向。必须使用 MOTOR_DIRECTION_UP 或 MOTOR_DIRECTION_DOWN；函数据此换算符号、目标位置、速度模式或到位条件。
+ * @return PARAM_RANGE_ERROR 表示参数超出允许范围。
  */
 static uint32_t MotorMotion_StartJogVelocity(int dir)
 {
@@ -2229,6 +2318,12 @@ static uint32_t MotorMotion_StartJogVelocity(int dir)
 
 /**
  * @brief 点动模式异常或到位退出时慢停并恢复进入前速度。
+ *
+ * @param ret 上一层调用返回的结果码。函数在恢复临时速度、停止点动或保存故障定位后原样传播该运动结果。
+ * @param speed_scope 点动进入前保存的速度作用域，用于慢停完成后恢复原速度设置。
+ * @param target_mm 目标位置，单位 mm。
+ * @param dir 运动方向。必须使用 MOTOR_DIRECTION_UP 或 MOTOR_DIRECTION_DOWN；函数据此换算符号、目标位置、速度模式或到位条件。
+ * @return 按“原运动错误、慢停错误、最终位置复核错误、速度恢复错误”的优先级返回首个失败；全部成功时返回 NO_ERROR。
  */
 static uint32_t MotorMotion_StopJogAndRestore(uint32_t ret,
                                               const MotorMotionSpeedScope *speed_scope,
@@ -2241,10 +2336,10 @@ static uint32_t MotorMotion_StopJogAndRestore(uint32_t ret,
     float final_mm = 0.0f;
 
     stop_ret = MotorCtrl_SlowStop();
-    /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
+    /* 只有运动过程和慢停都成功，才读取最终位置进行到位复核；已有错误时不得用后续读位置结果覆盖根因。 */
     if ((ret == NO_ERROR) && (stop_ret == NO_ERROR)) {
         verify_ret = MotorMotion_RefreshActivePositionMm(&final_mm);
-        /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
+        /* 最终位置快照无效或与目标偏差超过容差时，把本次 Jog 判为到位偏差而不是成功。 */
         if ((verify_ret == NO_ERROR) &&
             ((!MotorMotion_IsPositionSnapshotValid(final_mm)) ||
              (fabsf(final_mm - target_mm) > MOTOR_JOG_FINAL_ERROR_LIMIT_MM))) {
@@ -2259,15 +2354,12 @@ static uint32_t MotorMotion_StopJogAndRestore(uint32_t ret,
 
     restore_ret = MotorMotion_EndSpeedScope(speed_scope);
 
-    /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
     if (ret != NO_ERROR) {
         return ret;
     }
-    /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
     if (stop_ret != NO_ERROR) {
         return stop_ret;
     }
-    /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
     if (verify_ret != NO_ERROR) {
         return verify_ret;
     }
@@ -2288,7 +2380,6 @@ static uint32_t MotorMotion_WaitStopAbortable(uint32_t poll_ms)
 
     while (1) {
         ret = MotorCtrl_IsDriverMoving(&stepper, &is_moving);
-        /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
         if (ret != NO_ERROR) {
             return ret;
         }
@@ -2296,7 +2387,6 @@ static uint32_t MotorMotion_WaitStopAbortable(uint32_t poll_ms)
             break;
         }
         ret = MotorMotion_CheckAbortRefreshAndHealth(&stepper, &last_vel_refresh_tick);
-        /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
         if (ret != NO_ERROR) {
             return ret;
         }
@@ -2309,10 +2399,10 @@ static uint32_t MotorMotion_WaitStopAbortable(uint32_t poll_ms)
  * @brief 等待电机停止并校验目标位置。
  *
  * 等待过程中持续检查到位、命令切换、驱动异常和位置刷新。
- * @param tmc5130 TMC5130 设备对象。
+ * @param tmc5130 TMC5130 设备对象。该实例用于轮询实际速度、位置和斜坡状态，直至停止、到位、超时或出现驱动错误。
  * @param target_mm 目标位置，单位 mm。
  * @param eps_mm 到位公差，单位 mm。
- * @param dir 运动方向。
+ * @param dir 运动方向。必须使用 MOTOR_DIRECTION_UP 或 MOTOR_DIRECTION_DOWN；函数据此换算符号、目标位置、速度模式或到位条件。
  * @return 成功返回 NO_ERROR，否则返回超时、打断或驱动错误码。
  */
 static uint32_t MotorMotion_WaitUntilStopWithTarget(TMC5130TypeDef *tmc5130,
@@ -2330,7 +2420,6 @@ static uint32_t MotorMotion_WaitUntilStopWithTarget(TMC5130TypeDef *tmc5130,
 
     while (1) {
         ret = MotorCtrl_IsDriverMoving(tmc5130, &is_moving);
-        /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
         if (ret != NO_ERROR) {
             return ret;
         }
@@ -2368,7 +2457,6 @@ static uint32_t MotorMotion_WaitUntilStopWithTarget(TMC5130TypeDef *tmc5130,
                      (double)cur_mm,
                      (double)target_mm,
                      (unsigned long)MAX_WAIT_MS);
-            /* 错误 阶段：错误报警 模块：电机 操作：等待电机停止 原因：ErrorLog_GetReasonByCode(MOTOR_RUN_TIMEOUT) 处理：停止电机 详情：detail */
             ErrorLog_WarnDetail(ERROR_LOG_MODULE_MOTOR,
                                 ERROR_LOG_OP_WAIT_STOP,
                                 ErrorLog_GetReasonByCode(MOTOR_RUN_TIMEOUT),
@@ -2403,14 +2491,13 @@ static uint32_t MotorMotion_WaitStoppedAfterStopCommand(uint32_t timeout_ms)
     bool is_moving = true;
     char detail[80];
 
-    /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
+    /* 调用方传入 0 表示使用统一停止等待门限，避免 0 ms 被误解释为立即超时。 */
     if (timeout_ms == 0U) {
         timeout_ms = MOTOR_STOP_WAIT_TIMEOUT_MS;
     }
 
     while (1) {
         ret = MotorDriver_ReadStoppingState(&stepper, &is_moving);
-        /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
         if (ret != NO_ERROR) {
             snprintf(detail, sizeof(detail), "moving state error=0x%08lX", (unsigned long)ret);
             ErrorLog_WarnDetail(ERROR_LOG_MODULE_MOTOR,
@@ -2425,7 +2512,7 @@ static uint32_t MotorMotion_WaitStoppedAfterStopCommand(uint32_t timeout_ms)
             return MotorMotion_CheckStoppedAndRefresh(&stepper);
         }
 
-        /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
+        /* 停止状态轮询超过调用方门限时记录超时详情并返回，不能把尚在运动的电机标记为停稳。 */
         if ((HAL_GetTick() - start_tick) > timeout_ms) {
             snprintf(detail, sizeof(detail),
                      "timeout=%lums",

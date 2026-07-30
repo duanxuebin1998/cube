@@ -1,4 +1,5 @@
 #ifndef ERROR_LOG_H_
+/* ERROR_LOG_H_ 是本头文件的包含保护标记；首次展开后置位，防止重复包含造成类型或接口重复定义。 */
 #define ERROR_LOG_H_
 
 #include <stdint.h>
@@ -104,23 +105,67 @@
 #define ERROR_LOG_ACTION_RETRY_MEASURE "重新执行测量" /* 错误日志处理动作文本：重试 测量。 */
 #define ERROR_LOG_ACTION_USE_DEFAULT_PARAM "使用默认参数" /* 错误日志处理动作文本：使用 默认值 参数。 */
 
-/* 根据错误码返回中文错误名称。 */
+/**
+ * @brief 根据错误码返回中文错误名称。
+ *
+ * @param code 待判断、转换或上报的状态码。该值使用整机模块-原因编码，函数按职责映射模块、原因、名称或记录最近一次报告。
+ * @return 返回根据错误码返回中文错误名称对应的只读文本首地址；内容由当前输入或语言配置选择，调用方不得修改或释放。
+ */
 const char *ErrorLog_GetCodeName(uint32_t code);
-/* 根据错误码返回中文模块名。 */
+/**
+ * @brief 根据逐码责任域和编号高位返回中文模块名。
+ *
+ * 根据错误码返回中文模块名。
+ *
+ * @param code 待判断、转换或上报的状态码。该值使用整机模块-原因编码，函数按职责映射模块、原因、名称或记录最近一次报告。
+ * @return 返回根据逐码责任域和编号高位返回中文模块名对应的只读文本首地址；内容由当前输入或语言配置选择，调用方不得修改或释放。
+ */
 const char *ErrorLog_GetModuleByCode(uint32_t code);
-/* 根据错误码返回中文故障原因。 */
+/**
+ * @brief 根据具体错误码返回中文故障原因。
+ * @note 优先匹配具体错误码，未覆盖时再按错误大类兜底。
+ *
+ * @param code 待判断、转换或上报的状态码。该值使用整机模块-原因编码，函数按职责映射模块、原因、名称或记录最近一次报告。
+ * @return 返回根据具体错误码返回中文故障原因对应的只读文本首地址；内容由当前输入或语言配置选择，调用方不得修改或释放。
+ */
 const char *ErrorLog_GetReasonByCode(uint32_t code);
-/* 取走最近最终报错标记，用于短时间去重。 */
+/**
+ * @brief 判断最近一次最终报错标记。
+ *
+ * 取走最近最终报错标记，用于短时间去重。
+ *
+ * @param code 待判断、转换或上报的状态码。该值使用整机模块-原因编码，函数按职责映射模块、原因、名称或记录最近一次报告。
+ * @return 1 表示指定错误码刚刚已经打印过；0 表示需要继续打印。
+ */
 uint8_t ErrorLog_TakeRecentReport(uint32_t code);
 
-/* 打印错误重试阶段日志。 */
+/**
+ * @brief 打印“错误重试”阶段错误日志。
+ *
+ * @param module 用于日志分类的只读模块名称。该 NUL 结尾标签标识传感器、电机、电源或存储等来源，写入结构化日志前缀。
+ * @param op 用于标识当前失败、重试或恢复操作的只读文字。
+ * @param reason 用于诊断输出的 NUL 结尾只读原因文字；该文字补充错误发生背景，不代替函数另行记录或返回的数值错误码。
+ * @param attempt 当前重试序号。
+ * @param max 本次操作允许的总尝试次数，用于格式化“当前次数/总次数”的重试日志。
+ * @param code 待判断、转换或上报的状态码。该值使用整机模块-原因编码，函数按职责映射模块、原因、名称或记录最近一次报告。
+ */
 void ErrorLog_Retry(const char *module,
                     const char *op,
                     const char *reason,
                     uint32_t attempt,
                     uint32_t max,
                     uint32_t code);
-/* 打印带详情的错误重试阶段日志。 */
+/**
+ * @brief 打印带详情的“错误重试”阶段错误日志。
+ *
+ * @param module 用于日志分类的只读模块名称。该 NUL 结尾标签标识传感器、电机、电源或存储等来源，写入结构化日志前缀。
+ * @param op 用于标识当前失败、重试或恢复操作的只读文字。
+ * @param reason 用于诊断输出的 NUL 结尾只读原因文字；该文字补充错误发生背景，不代替函数另行记录或返回的数值错误码。
+ * @param attempt 当前重试序号。
+ * @param max 本次操作允许的总尝试次数，用于带详情重试日志的次数显示。
+ * @param code 待判断、转换或上报的状态码。该值使用整机模块-原因编码，函数按职责映射模块、原因、名称或记录最近一次报告。
+ * @param detail 错误或诊断记录使用的详细信息。
+ */
 void ErrorLog_RetryDetail(const char *module,
                           const char *op,
                           const char *reason,
@@ -128,32 +173,79 @@ void ErrorLog_RetryDetail(const char *module,
                           uint32_t max,
                           uint32_t code,
                           const char *detail);
-/* 打印重试成功阶段日志。 */
+/**
+ * @brief 打印“重试成功”阶段错误日志。
+ *
+ * @param module 用于日志分类的只读模块名称。该 NUL 结尾标签标识传感器、电机、电源或存储等来源，写入结构化日志前缀。
+ * @param op 用于标识当前失败、重试或恢复操作的只读文字。
+ * @param reason 用于诊断输出的 NUL 结尾只读原因文字；该文字补充错误发生背景，不代替函数另行记录或返回的数值错误码。
+ * @param attempt 当前重试序号。
+ * @param max 本次操作允许的总尝试次数，用于恢复成功日志的次数显示。
+ */
 void ErrorLog_Recover(const char *module,
                       const char *op,
                       const char *reason,
                       uint32_t attempt,
                       uint32_t max);
-/* 打印带详情的重试成功阶段日志。 */
+/**
+ * @brief 打印带详情的“重试成功”阶段错误日志。
+ *
+ * @param module 用于日志分类的只读模块名称。该 NUL 结尾标签标识传感器、电机、电源或存储等来源，写入结构化日志前缀。
+ * @param op 用于标识当前失败、重试或恢复操作的只读文字。
+ * @param reason 用于诊断输出的 NUL 结尾只读原因文字；该文字补充错误发生背景，不代替函数另行记录或返回的数值错误码。
+ * @param attempt 当前重试序号。
+ * @param max 本次操作允许的总尝试次数，用于带详情恢复日志的次数显示。
+ * @param detail 错误或诊断记录使用的详细信息。
+ */
 void ErrorLog_RecoverDetail(const char *module,
                             const char *op,
                             const char *reason,
                             uint32_t attempt,
                             uint32_t max,
                             const char *detail);
-/* 打印带详情的最终报错日志。 */
+/**
+ * @brief 打印最终报错日志，带额外详情字段。
+ *
+ * 打印带详情的最终报错日志。
+ *
+ * @param module 用于日志分类的只读模块名称。该 NUL 结尾标签标识传感器、电机、电源或存储等来源，写入结构化日志前缀。
+ * @param op 用于标识当前失败、重试或恢复操作的只读文字。
+ * @param reason 用于诊断输出的 NUL 结尾只读原因文字；该文字补充错误发生背景，不代替函数另行记录或返回的数值错误码。
+ * @param code 待判断、转换或上报的状态码。该值使用整机模块-原因编码，函数按职责映射模块、原因、名称或记录最近一次报告。
+ * @param action 故障日志中记录的后续处置或恢复动作文字。
+ * @param detail 错误或诊断记录使用的详细信息。
+ */
 void ErrorLog_ReportDetail(const char *module,
                            const char *op,
                            const char *reason,
                            uint32_t code,
                            const char *action,
                            const char *detail);
-/* 打印错误报警阶段日志。 */
+/**
+ * @brief 打印“错误报警”阶段错误日志，不带额外详情。
+ *
+ * 打印错误报警阶段日志。
+ *
+ * @param module 用于日志分类的只读模块名称。该 NUL 结尾标签标识传感器、电机、电源或存储等来源，写入结构化日志前缀。
+ * @param op 用于标识当前失败、重试或恢复操作的只读文字。
+ * @param reason 用于诊断输出的 NUL 结尾只读原因文字；该文字补充错误发生背景，不代替函数另行记录或返回的数值错误码。
+ * @param action 故障日志中记录的后续处置或恢复动作文字。
+ */
 void ErrorLog_Warn(const char *module,
                    const char *op,
                    const char *reason,
                    const char *action);
-/* 打印带详情的错误报警阶段日志。 */
+/**
+ * @brief 打印“错误报警”阶段错误日志，带额外详情字段。
+ *
+ * 打印带详情的错误报警阶段日志。
+ *
+ * @param module 用于日志分类的只读模块名称。该 NUL 结尾标签标识传感器、电机、电源或存储等来源，写入结构化日志前缀。
+ * @param op 用于标识当前失败、重试或恢复操作的只读文字。
+ * @param reason 用于诊断输出的 NUL 结尾只读原因文字；该文字补充错误发生背景，不代替函数另行记录或返回的数值错误码。
+ * @param action 故障日志中记录的后续处置或恢复动作文字。
+ * @param detail 错误或诊断记录使用的详细信息。
+ */
 void ErrorLog_WarnDetail(const char *module,
                          const char *op,
                          const char *reason,

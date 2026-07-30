@@ -27,11 +27,11 @@ static const int slavedevicebusy = 0x06; /* 从设备忙 */
 static uint16_t HoldingRegisterArray[HOLDREGISTER_AMOUNT] = { 0 };
 static uint16_t InputRegisterArray[INPUTREGISTER_AMOUNT] = { 0 };
 /* 发送区暂存数组 */
-static int SlaveTempBuffer[HOSTCOMMU_SENDLENGTH]; /* 主板通信数据缓冲区，注意与中断或 DMA 访问边界保持一致。 */
+static int SlaveTempBuffer[HOSTCOMMU_SENDLENGTH];
 /* 接收到的命令包数据暂存变量 */
-static int RCV_functioncode = 0; /* 主板通信模块级变量，保存跨函数共享的业务状态。 */
+static int RCV_functioncode = 0; /* 当前正在解析的 Modbus 功能码。 */
 static int RCV_startaddress = 0; /* 主板通信地址配置，影响协议寻址或硬件访问。 */
-static int RCV_registercnt = 0; /* 主板通信模块级变量，保存跨函数共享的业务状态。 */
+static int RCV_registercnt = 0; /* 当前 Modbus 请求声明的寄存器数量。 */
 /* 静态函数 */
 static bool JudgeFunctioncode(void);
 static bool JudgeStartAddress(void);
@@ -42,7 +42,13 @@ static int Compose04Package(uint8_t  *revframe, uint8_t  *sendframe);
 static int Compose10Package(uint8_t  const *revframe, uint8_t  *sendframe);
 static bool IsPersistentDeviceParamWrite(uint16_t startAddr, uint16_t regCount);
 static bool PersistentParamWriteRuntimeAllowed(void);
-/* 接收到的数据包进行地址检查 */
+/**
+ * @brief 接收到的数据包进行地址检查。
+ *
+ * @param revframe CPU2 主机 Modbus RTU 请求帧只读缓冲区；函数按固定字段位置解析从站地址、功能码、寄存器地址和数据。
+ * @param framelen 参与地址或 CRC 校验的完整帧长度，单位字节。
+ * @return true 表示请求地址等于本机 SlaveAddress 或为广播地址 0；false 表示请求发往其他从站。
+ */
 bool SlaveCheckAddress(uint8_t  const *revframe, int framelen) {
     if (revframe[0] != SlaveAddress && revframe[0] != 0) {
         return false;
@@ -51,7 +57,12 @@ bool SlaveCheckAddress(uint8_t  const *revframe, int framelen) {
     }
 }
 
-/* 设置从机地址对照量 作为数据包地址是否正确的判断依据 */
+/**
+ * @brief 设置 CPU2 主机 Modbus 接收地址匹配值。
+ *
+ * @param address 准备保存的 CPU2 Modbus 本机地址；后续地址校验同时接受广播地址 0。
+ * @note 保存的从站地址用于后续请求帧地址一致性判断。
+ */
 void SetSlaveaddress(int address) {
 	SlaveAddress = address;
 #if DEBUG_HOSTCOMMU_MODBUS
@@ -60,16 +71,25 @@ void SetSlaveaddress(int address) {
 }
 
 
-/* 只有当前可写参数块触发FRAM保存；命令和AO仿真开关保持非持久化。 */
+/**
+ * @brief 只有当前可写参数块触发FRAM保存；命令和AO仿真开关保持非持久化。
+ *
+ * @param startAddr 起始位置地址。
+ * @param regCount 数量。
+ * @return true 表示写区间命中至少一个需要保存到 FRAM 的 DeviceParameters 字段；false 表示区间无效，或仅覆盖命令、AO 仿真及清锁存瞬时写槽。
+ */
 static bool IsPersistentDeviceParamWrite(uint16_t startAddr, uint16_t regCount)
 {
     return LtdModbus_HoldingWriteTouchesPersistent(startAddr, regCount);
 }
 
-/*
- * 函数用途：判断CPU2当前运行上下文是否允许写入持久参数。
- * 调用场景：FC10地址和值解析完成前的最终权限门禁。
- * 关键约束：普通完成态必须无错误；错误态只在自动恢复和命令队列均空闲时放行。
+/**
+ * @brief 判断CPU2当前运行上下文是否允许写入持久参数。
+ *
+ * @details 调用场景：FC10地址和值解析完成前的最终权限门禁。
+ * @note 关键约束：普通完成态必须无错误；错误态只在自动恢复和命令队列均空闲时放行。
+ *
+ * @return true 表示CPU2当前运行上下文允许写入持久参数；false 表示CPU2当前运行上下文不允许写入持久参数。
  */
 static bool PersistentParamWriteRuntimeAllowed(void)
 {
@@ -81,7 +101,11 @@ static bool PersistentParamWriteRuntimeAllowed(void)
         FaultRecovery_IsActive());
 }
 
-/* 判断功能码是否正确 */
+/**
+ * @brief 判断功能码是否正确。
+ *
+ * @return true 表示收到的功能码为读保持寄存器、读输入寄存器或写多个保持寄存器，属于当前主机 Modbus 实现支持的集合；false 表示其它功能码。
+ */
 static bool JudgeFunctioncode(void) {
 	if ((RCV_functioncode != readholdingregisterfuncode) && (RCV_functioncode != readinputregisterfuncode)
 			&& (RCV_functioncode != presetmultipleregisterfuncode)) {
@@ -90,7 +114,11 @@ static bool JudgeFunctioncode(void) {
 		return true;
 	}
 }
-/* 按标准Modbus数量限制和当前直接地址数组边界验证请求。 */
+/**
+ * @brief 按标准Modbus数量限制和当前直接地址数组边界验证请求。
+ *
+ * @return true 表示当前功能码的寄存器数量未超 Modbus 上限，且完整区间位于对应输入、保持或可写保持寄存器范围；false 表示功能码不匹配、数量非法、区间越界或 FC10 包含不可写地址。
+ */
 static bool JudgeStartAddress(void) {
     uint16_t start;
     uint16_t count;
@@ -114,10 +142,13 @@ static bool JudgeStartAddress(void) {
     }
     return false;
 }
-/*
- 读寄存器
- registertype --> true - 输入寄存器
- --> false - 保持寄存器
+/**
+ * @brief 按当前请求起始地址和数量，从输入或保持寄存器镜像复制连续值到输出数组。
+ *
+ * @param registertype 寄存器区选择标志；true 读取输入寄存器镜像，false 读取保持寄存器镜像。
+ * @param registervalue 连续寄存器值输出数组，容量至少为 RCV_registercnt 个 int 元素。
+ * @note registertype 为 true 时读取输入寄存器，为 false 时读取保持寄存器；调用前必须已经校验 RCV_startaddress、RCV_registercnt
+ *       及输出数组容量。
  */
 static void ReadRegister(bool registertype, int *registervalue) {
     const uint16_t *registers = registertype ? InputRegisterArray : HoldingRegisterArray;
@@ -128,7 +159,13 @@ static void ReadRegister(bool registertype, int *registervalue) {
     }
 }
 
-/* 检查功能码，若错误则组织违法功能码响应包 */
+/**
+ * @brief 检查功能码，若错误则组织违法功能码响应包。
+ *
+ * @param sendframe CPU2 主机 Modbus RTU 响应输出缓冲区；函数按请求功能码写入从站地址、功能码、数据或异常字段，CRC 由统一流程追加。
+ * @param framelength 用于返回已构造 Modbus 响应帧的有效长度，单位字节。
+ * @return true 表示功能码为当前支持的 FC03、FC04 或 FC10，可继续正常处理；false 表示功能码非法，函数已构造异常功能码响应头并写回 framelength=3。
+ */
 bool FunctionCheckIllPack(uint8_t  *sendframe, int *framelength) {
 	if (JudgeFunctioncode() == false) {
 		sendframe[0] = SlaveAddress;
@@ -140,7 +177,13 @@ bool FunctionCheckIllPack(uint8_t  *sendframe, int *framelength) {
 		return true;
 	}
 }
-/* 检查数据起始地址和寄存器数量,若错误则组织违法数据响应包 */
+/**
+ * @brief 检查数据起始地址和寄存器数量,若错误则组织违法数据响应包。
+ *
+ * @param sendframe CPU2 主机 Modbus RTU 响应输出缓冲区；函数按请求功能码写入从站地址、功能码、数据或异常字段，CRC 由统一流程追加。
+ * @param framelength 用于返回已构造 Modbus 响应帧的有效长度，单位字节。
+ * @return true 表示起始地址和寄存器数量合法，可继续访问；false 表示请求区间非法，函数已构造非法数据地址异常响应头并写回 framelength=3。
+ */
 bool IllegalDataAddressPack(uint8_t  *sendframe, int *framelength) {
 	if (JudgeStartAddress() == false) {
 		sendframe[0] = SlaveAddress;
@@ -153,7 +196,13 @@ bool IllegalDataAddressPack(uint8_t  *sendframe, int *framelength) {
 	}
 }
 
-/* 更新功能码\起始地址\寄存器数量 */
+/**
+ * @brief 更新功能码\起始地址\寄存器数量。
+ *
+ * @param funccode 本次 Modbus 请求的功能码。
+ * @param startadd 本次 Modbus 访问的起始寄存器地址。
+ * @param registercnt 本次连续访问的寄存器数量。
+ */
 void UpdateRcvPara(int funccode, int startadd, int registercnt) {
 	RCV_functioncode = funccode;
 	RCV_startaddress = startadd;
@@ -165,7 +214,13 @@ void UpdateRcvPara(int funccode, int startadd, int registercnt) {
     #endif
 }
 
-/* 处理03功能码命令包 并组织响应包 */
+/**
+ * @brief 处理03功能码命令包 并组织响应包。
+ *
+ * @param revframe CPU2 主机 Modbus RTU 请求帧只读缓冲区；函数按固定字段位置解析从站地址、功能码、寄存器地址和数据。
+ * @param sendframe CPU2 主机 Modbus RTU 响应输出缓冲区；函数按请求功能码写入从站地址、功能码、数据或异常字段，CRC 由统一流程追加。
+ * @return 返回 CPU2 FC03 响应帧总长度，单位字节；请求非法时返回已构造异常帧的长度。
+ */
 int Response03Process(uint8_t  *revframe, uint8_t  *sendframe) {
 	int length;
 	/* 重置保持寄存器 */
@@ -175,7 +230,13 @@ int Response03Process(uint8_t  *revframe, uint8_t  *sendframe) {
 	return length;
 }
 
-/* 在命令包格式正确的情况下,组织03响应包 */
+/**
+ * @brief 在命令包格式正确的情况下,组织03响应包。
+ *
+ * @param revframe CPU2 主机 Modbus RTU 请求帧只读缓冲区；函数按固定字段位置解析从站地址、功能码、寄存器地址和数据。
+ * @param sendframe CPU2 主机 Modbus RTU 响应输出缓冲区；函数按请求功能码写入从站地址、功能码、数据或异常字段，CRC 由统一流程追加。
+ * @return 返回 FC03 响应 PDU 组包长度 3 + 2×寄存器数量，单位字节，尚不包含 CRC16。
+ */
 static int Compose03Package(uint8_t  *revframe, uint8_t  *sendframe) {
 	int i;
 	int j;
@@ -192,7 +253,13 @@ static int Compose03Package(uint8_t  *revframe, uint8_t  *sendframe) {
 	sendlength = 3 + RCV_registercnt * 2;
 	return sendlength;
 }
-/* 处理04功能码命令包 并组织响应包 */
+/**
+ * @brief 处理04功能码命令包 并组织响应包。
+ *
+ * @param revframe CPU2 主机 Modbus RTU 请求帧只读缓冲区；函数按固定字段位置解析从站地址、功能码、寄存器地址和数据。
+ * @param sendframe CPU2 主机 Modbus RTU 响应输出缓冲区；函数按请求功能码写入从站地址、功能码、数据或异常字段，CRC 由统一流程追加。
+ * @return 返回 CPU2 FC04 响应帧总长度，单位字节；请求非法时返回已构造异常帧的长度。
+ */
 int Response04Process(uint8_t  *revframe, uint8_t  *sendframe) {
 	int length;
 	/* 重置输入寄存器 */
@@ -201,7 +268,13 @@ int Response04Process(uint8_t  *revframe, uint8_t  *sendframe) {
 	length = Compose04Package(revframe, sendframe);
 	return length;
 }
-/* 在命令包格式正确的情况下,组织04响应包 */
+/**
+ * @brief 在命令包格式正确的情况下,组织04响应包。
+ *
+ * @param revframe CPU2 主机 Modbus RTU 请求帧只读缓冲区；函数按固定字段位置解析从站地址、功能码、寄存器地址和数据。
+ * @param sendframe CPU2 主机 Modbus RTU 响应输出缓冲区；函数按请求功能码写入从站地址、功能码、数据或异常字段，CRC 由统一流程追加。
+ * @return 返回 FC04 响应 PDU 组包长度 3 + 2×寄存器数量，单位字节，尚不包含 CRC16。
+ */
 static int Compose04Package(uint8_t  *revframe, uint8_t  *sendframe) {
 	int i;
 	int j;
@@ -220,7 +293,13 @@ static int Compose04Package(uint8_t  *revframe, uint8_t  *sendframe) {
 }
 
 
-/* 功能码 0x10：写多个保持寄存器处理 */
+/**
+ * @brief 功能码 0x10：写多个保持寄存器处理。
+ *
+ * @param revframe CPU2 主机 Modbus RTU 请求帧只读缓冲区；函数按固定字段位置解析从站地址、功能码、寄存器地址和数据。
+ * @param sendframe CPU2 主机 Modbus RTU 响应输出缓冲区；函数按请求功能码写入从站地址、功能码、数据或异常字段，CRC 由统一流程追加。
+ * @return 返回待追加 CRC 的响应长度：合法 FC10 ACK 为 6 字节，标准异常响应为 3 字节。
+ */
 int Response10Process(uint8_t const *revframe, uint8_t *sendframe)
 {
     DeviceParameters previous_params;
@@ -388,7 +467,13 @@ int Response10Process(uint8_t const *revframe, uint8_t *sendframe)
     return length;
 }
 
-/* 更新保持寄存器,组织10响应包 */
+/**
+ * @brief 更新保持寄存器,组织10响应包。
+ *
+ * @param revframe CPU2 主机 Modbus RTU 请求帧只读缓冲区；函数按固定字段位置解析从站地址、功能码、寄存器地址和数据。
+ * @param sendframe CPU2 主机 Modbus RTU 响应输出缓冲区；函数按请求功能码写入从站地址、功能码、数据或异常字段，CRC 由统一流程追加。
+ * @return 返回 FC10 正常回显响应的固定 PDU 长度 6 字节，尚不包含 CRC16。
+ */
 static int Compose10Package(uint8_t  const *revframe, uint8_t  *sendframe) {
 	int i, j;
 	int length;
@@ -408,10 +493,14 @@ static int Compose10Package(uint8_t  const *revframe, uint8_t  *sendframe) {
 	return length;
 }
 
-/*
- 写寄存器
- registertype --> false - 保持寄存器
- --> true - 输入寄存器
+/**
+ * @brief 把当前主机写请求中的连续寄存器值写入 CPU2 保持寄存器镜像。
+ *
+ * registertype --> false - 保持寄存器。
+ * > true - 输入寄存器。
+ *
+ * @param registertype > false - 保持寄存器。
+ * @param registervalue 待写入 DSM 寄存器的 16 位值或连续寄存器数组。
  */
 static void PresetRegister(bool registertype, int const *registervalue) {
     int index;

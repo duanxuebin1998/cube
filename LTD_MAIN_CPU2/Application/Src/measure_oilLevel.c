@@ -116,10 +116,13 @@ static uint8_t FrequencyLevel_IsStableInsideBand(float frequency_error, float de
 static int FrequencyLevel_CorrectRelativeEndpointDirection(int dir);
 static void FrequencyLevel_RecordCurrentPosition(const char *tag);
 
-/*
- * 函数用途：把液位滞后时间参数转换为旧步进跟随的变化确认窗口。
- * 调用场景：方法0/1在液位跟随中发现频率偏差超滞后阈值后调用。
- * 关键约束：参数为0表示不等待，立即确认液位变化并重找液位。
+/**
+ * @brief 把液位滞后时间参数转换为旧步进跟随的变化确认窗口。
+ *
+ * @details 调用场景：方法0/1在液位跟随中发现频率偏差超滞后阈值后调用。
+ * @note 关键约束：参数为0表示不等待，立即确认液位变化并重找液位。
+ *
+ * @return 返回旧步进跟随变化确认窗口，单位 ms；配置为 0 时返回 0，过大配置钳位到允许上限。
  */
 static uint32_t OilLevel_GetFollowChangeConfirmTimeMs(void)
 {
@@ -132,10 +135,14 @@ static uint32_t OilLevel_GetFollowChangeConfirmTimeMs(void)
     return g_deviceParams.oilLevelHysteresisTime * 1000U;
 }
 
-/*
- * 函数用途：液位跟随检测到偏差后，连续确认偏差是否持续存在。
- * 调用场景：方法0/1旧步进跟随准备执行 SearchOilPrecise() 前调用。
- * 关键约束：确认期间命令切换和读频率错误通过 ret_code 透传给上层。
+/**
+ * @brief 液位跟随检测到偏差后，连续确认偏差是否持续存在。
+ *
+ * @details 调用场景：方法0/1旧步进跟随准备执行 SearchOilPrecise() 前调用。
+ * @note 关键约束：确认期间命令切换和读频率错误通过 ret_code 透传给上层。
+ *
+ * @param ret_code 用于返回跟随偏差确认后的整机结果码。
+ * @return 1 表示确认时间配置为 0，或偏差在整个确认窗口内持续超过阈值，应重新搜索液位；0 表示输出指针无效、等待或测频失败、命令切换中断，或偏差在确认期间回到稳定区；具体执行错误通过 ret_code 返回。
  */
 static uint8_t OilLevel_ConfirmFollowDeviation(uint32_t *ret_code)
 {
@@ -192,15 +199,35 @@ static uint8_t OilLevel_ConfirmFollowDeviation(uint32_t *ret_code)
     return 1U;
 }
 
+/**
+ * @brief 液位跟随打印液位值时，同时输出当前记步来源和两套尺带长度，便于现场比对。
+ */
 static void OilLevel_PrintFollowPositionInfo(void);
+/**
+ * @brief 液位跟随函数，用于持续监测并跟踪液位变化
+ *
+ * 该函数通过超声波频率信号实现液位的实时监测与跟随。当液位稳定时，电机保持静止；
+ * 当检测到液位变动时，重新执行精确搜索并调整传感器位置，确保液位值准确更新。
+ *
+ * @return uint32_t 返回操作状态码：
+ *             - NO_ERROR: 操作成功
+ *             - 其他错误码: 具体错误状态
+ *
+ * @note 函数内部包含无限循环，持续监测液位状态，仅在发生错误时退出
+ * @note 液位稳定判断基于频率波动阈值（oilLevelHysteresisThreshold）
+ * @note 当液位过低进入盲区时，会调用 waitForTheLiquidLevelToExceedTheBlindZone 等待液位恢复
+ */
 uint32_t FollowOilLevel(void);
 
 /**
  * @brief 液位流程故障退出前统一停止电机，避免非阻塞搜索动作继续运行。
+ *
+ * @param error_code 待记录、转换或判断的错误码。该值是液位流程准备返回的失败原因，函数先停止电机并保持原错误归因。
+ * @param reason 用于诊断输出的 NUL 结尾只读原因文字；该文字补充错误发生背景，不代替函数另行记录或返回的数值错误码。
+ * @return 传入真实液位错误或 STATE_SWITCH 时，执行统一停机后原样返回；传入 NO_ERROR 时返回 NO_ERROR。
  */
 static uint32_t OilLevel_StopBeforeReturn(uint32_t error_code, const char *reason)
 {
-    /* 先处理异常边界，避免液位测量状态机带故障继续运行。 */
     if (error_code == NO_ERROR) {
         return NO_ERROR;
     }
@@ -213,6 +240,9 @@ static uint32_t OilLevel_StopBeforeReturn(uint32_t error_code, const char *reaso
 
 
 
+/**
+ * @brief 按油位有效性发布或撤销罐液位 AO 样本，并立即刷新输出。
+ */
 static void OilLevel_UpdateAoOutput(void)
 {
     uint32_t ao_ret;
@@ -234,6 +264,10 @@ static void OilLevel_UpdateAoOutput(void)
 
 /**
  * @brief 液位结果字段是无符号，上报前负位置统一按0处理。
+ *
+ * @param oil_level 准备写入无符号测量结果字段的有符号油位，单位 0.1 mm；负值将钳位为 0。
+ * @param reason 用于诊断输出的 NUL 结尾只读原因文字；该文字补充错误发生背景，不代替函数另行记录或返回的数值错误码。
+ * @return 返回完成边界钳位后的数值；输入低于下限时返回下限，高于上限时返回上限，区间内保持原值。
  */
 static uint32_t OilLevel_ClampLevelForReport(int32_t oil_level, const char *reason)
 {
@@ -248,6 +282,8 @@ static uint32_t OilLevel_ClampLevelForReport(int32_t oil_level, const char *reas
 }
 /**
  * @brief 将当前传感器位置立即同步到液位测量结果和密度分布液位缓存。
+ *
+ * @param reason 用于诊断输出的 NUL 结尾只读原因文字；该文字补充错误发生背景，不代替函数另行记录或返回的数值错误码。
  */
 static void OilLevel_SyncCurrentPositionToResult(const char *reason)
 {
@@ -271,7 +307,9 @@ static void OilLevel_SyncCurrentPositionToResult(const char *reason)
            (unsigned long)g_measurement.oil_measurement.oil_level);
 }
 
-/* 液位跟随打印液位值时，同时输出当前记步来源和两套尺带长度，便于现场比对。 */
+/**
+ * @brief 液位跟随打印液位值时，同时输出当前记步来源和两套尺带长度，便于现场比对。
+ */
 static void OilLevel_PrintFollowPositionInfo(void)
 {
     double motor_cable_mm;
@@ -289,10 +327,13 @@ static void OilLevel_PrintFollowPositionInfo(void)
            encoder_cable_mm);
 }
 
-/*
- * 函数用途：集中计算当前频率和跟随目标频率的偏差。
- * 调用场景：旧步进精找、盲区等待和兼容跟随循环中读取频率差。
- * 关键约束：只读全局测量缓存，不触发传感器读取或状态改变。
+/**
+ * @brief 集中计算当前频率和跟随目标频率的偏差。
+ *
+ * @details 调用场景：旧步进精找、盲区等待和兼容跟随循环中读取频率差。
+ * @note 关键约束：只读全局测量缓存，不触发传感器读取或状态改变。
+ *
+ * @return 返回当前油位频率减去跟随目标频率的有符号偏差，单位 Hz；正值表示当前频率高于目标，负值表示低于目标。
  */
 static float OilLevel_GetFrequencyDifference(void)
 {
@@ -300,20 +341,26 @@ static float OilLevel_GetFrequencyDifference(void)
            (float)g_measurement.oil_measurement.follow_frequency;
 }
 
-/*
- * 函数用途：判断当前平均频率是否属于空气侧。
- * 调用场景：粗找入口和液位状态判定。
- * 关键约束：保持原空气侧判定口径，等于阈值时不判为空气。
+/**
+ * @brief 判断当前平均频率是否属于空气侧。
+ *
+ * @details 调用场景：粗找入口和液位状态判定。
+ * @note 关键约束：保持原空气侧判定口径，等于阈值时不判为空气。
+ *
+ * @return 1 表示当前平均频率属于空气侧；0 表示当前平均频率不属于空气侧。
  */
 static uint8_t OilLevel_IsCurrentFrequencyInAir(void)
 {
     return (g_measurement.oil_measurement.current_frequency > g_deviceParams.oilLevelFrequency) ? 1U : 0U;
 }
 
-/*
- * 函数用途：判断当前平均频率是否属于油中侧。
- * 调用场景：粗找入口判断探头是否已在油中。
- * 关键约束：保持原油中侧判定口径，等于阈值时不判为油中。
+/**
+ * @brief 判断当前平均频率是否属于油中侧。
+ *
+ * @details 调用场景：粗找入口判断探头是否已在油中。
+ * @note 关键约束：保持原油中侧判定口径，等于阈值时不判为油中。
+ *
+ * @return 1 表示当前平均频率属于油中侧；0 表示当前平均频率不属于油中侧。
  */
 static uint8_t OilLevel_IsCurrentFrequencyInOil(void)
 {
@@ -321,6 +368,13 @@ static uint8_t OilLevel_IsCurrentFrequencyInOil(void)
 }
 
 
+/**
+ * @brief 非零退出时撤销液位 AO 样本并慢停电机，同时保留原退出码。
+ *
+ * @param error_code 待记录、转换或判断的错误码。该值是液位流程准备返回的失败原因，函数先停止电机并保持原错误归因。
+ * @param reason 用于诊断输出的 NUL 结尾只读原因文字；该文字补充错误发生背景，不代替函数另行记录或返回的数值错误码。
+ * @return 传入非零 error_code 时慢停并原样返回该退出原因；传入 NO_ERROR 时返回 NO_ERROR，慢停结果仅用于保证电机退出速度模式。
+ */
 static uint32_t DensityLevel_StopAndReturn(uint32_t error_code, const char *reason)
 {
     if (error_code == NO_ERROR) {
@@ -336,6 +390,12 @@ static uint32_t DensityLevel_StopAndReturn(uint32_t error_code, const char *reas
     return error_code;
 }
 
+/**
+ * @brief 把密度液位阈值原始值转换为闭环死区，并为未配置值选用默认死区。
+ *
+ * @param raw_threshold 设备参数中的密度阈值原始值，单位 0.01 kg/m3；0 表示未配置。
+ * @return raw_threshold 为 0 时返回默认死区 0.5 kg/m3；否则把 0.01 kg/m3 原始阈值换算为 kg/m3 浮点死区。
+ */
 static float DensityLevel_GetDeadband(uint32_t raw_threshold)
 {
     if (raw_threshold == 0U) {
@@ -344,11 +404,24 @@ static float DensityLevel_GetDeadband(uint32_t raw_threshold)
     return RAW_TO_DENSITY(raw_threshold);
 }
 
+/**
+ * @brief 返回密度液位闭环进入死区后的固定稳定等待时间。
+ *
+ * @return 返回 OIL_LEVEL_CLOSED_LOOP_STABLE_DELAY_MS 定义的固定稳定等待时间，单位 ms，当前配置为 1000 ms。
+ */
 static uint32_t DensityLevel_GetStableDelayMs(void)
 {
     return OIL_LEVEL_CLOSED_LOOP_STABLE_DELAY_MS;
 }
 
+/**
+ * @brief 读取频率、密度和温度，并拒绝超出 0～3000 kg/m3 的密度样本。
+ *
+ * @param density 实时密度输出指针，成功时写入 kg/m3 浮点值，并由函数校验 0 至 3000 kg/m3 范围。
+ * @param frequency 实时密度传感器频率输出指针，成功时写入 Hz 浮点值。
+ * @param temperature 实时温度输出指针，成功时写入 ℃ 浮点值。
+ * @return SYSTEM_CALL_CONDITION_ERROR 表示当前系统状态不允许执行；NO_ERROR 表示操作成功。
+ */
 static uint32_t DensityLevel_ReadCurrent(float *density, float *frequency, float *temperature)
 {
     uint32_t ret;
@@ -370,6 +443,14 @@ static uint32_t DensityLevel_ReadCurrent(float *density, float *frequency, float
     return NO_ERROR;
 }
 
+/**
+ * @brief 按超出死区的密度误差线性计算速度，并限制到有效速度范围。
+ *
+ * @param density_error 密度故障。
+ * @param deadband 目标判定使用的死区宽度，与函数处理的频率或密度值采用相同单位。
+ * @param max_speed_x100 液位闭环允许使用的最大电机速度，单位 0.01 m/min。
+ * @return 返回按密度误差计算并钳位后的电机线速度，单位 0.01 m/min；误差位于死区内时返回 0。
+ */
 static uint32_t DensityLevel_ComputeSpeedX100(float density_error, float deadband, uint32_t max_speed_x100)
 {
     float abs_error;
@@ -405,6 +486,15 @@ static uint32_t DensityLevel_ComputeSpeedX100(float density_error, float deadban
     return speed_x100;
 }
 
+/**
+ * @brief 反向前先慢停，同向小幅调速不重复下发，其余情况更新运动方向和速度。
+ *
+ * @param dir 运动方向。必须使用 MOTOR_DIRECTION_UP 或 MOTOR_DIRECTION_DOWN；函数据此换算符号、目标位置、速度模式或到位条件。
+ * @param speed_x100 本次调试运动速度，单位 0.01 m/min；0 表示使用当前默认速度。
+ * @param active_dir 用于返回当前已经启动或继续执行的电机运动方向。
+ * @param active_speed_x100 当前液位闭环已经下发的电机速度，单位 0.01 m/min；用于判断是否需要重发速度命令。
+ * @return SYSTEM_CALL_CONDITION_ERROR 表示当前系统状态不允许执行；NO_ERROR 表示操作成功。
+ */
 static uint32_t LevelVelocity_StartOrUpdateMotion(int dir,
                                                  uint32_t speed_x100,
                                                  int *active_dir,
@@ -455,6 +545,11 @@ static uint32_t LevelVelocity_StartOrUpdateMotion(int dir,
     return NO_ERROR;
 }
 
+/**
+ * @brief 把当前位置限制到有效范围后同步油位结果、稳定标志和 AO 输出。
+ *
+ * @param tag 用于区分诊断来源的只读标签文字。
+ */
 static void DensityLevel_RecordCurrentPosition(const char *tag)
 {
     g_measurement.oil_measurement.oil_level =
@@ -468,6 +563,23 @@ static void DensityLevel_RecordCurrentPosition(const char *tag)
            (unsigned long)g_measurement.oil_measurement.oil_level);
 }
 
+/**
+ * @brief 按密度目标执行液位搜索或跟随闭环，并统一处理无效样本、命令切换、调速和停机。
+ *
+ * 函数要求 oilLevelDensity 已配置，把内部原始密度换算为 kg/m3；查找模式使用 oilLevelThreshold 死区，跟随模式改用
+ * oilLevelHysteresisThreshold，并在启动时清除旧的到液面和稳定标志。
+ * 切换到密度模式后周期读取密度、频率和温度；短时 DENSITY_INVALID 允许按上限累计重试，连续无效达到 DENSITY_LEVEL_INVALID_DENSITY_LIMIT
+ * 才作为故障退出。
+ * 目标密度减当前密度为正时下行、为负时上行；落入死区后停止速度运动并累计稳定样本，达到门限时记录当前液位、同步密度分布液位并刷新 AO 过程样本。
+ * 查找模式确认稳定后返回成功；跟随模式保持闭环运行，离开死区后重新清除稳定标志，并按密度偏差计算、钳位 0.01 m/min 电机速度。
+ * 运动期间持续检查业务位置、扭力碰撞和丢步；查找模式另有总超时，跟随模式没有正常超时退出。所有异常和命令切换都经 DensityLevel_StopAndReturn 慢停电机并使本轮 AO
+ * 过程样本失效。
+ *
+ * @param follow_mode 0 表示执行一次密度液位查找并在稳定后返回；非 0 表示使用跟随滞回死区持续闭环，直至命令切换或故障。
+ * @return 查找模式稳定完成返回 NO_ERROR；STATE_SWITCH
+ *         表示被新命令正常打断，其他值区分目标未配置、连续密度无效、传感器、位置、扭力、丢步、电机控制和查找超时错误；跟随模式正常运行时不主动返回。
+ * @note follow_mode 非 0 时函数设计为长期运行，不应把缺少正常返回理解为死循环缺陷；退出由命令切换和安全故障驱动。
+ */
 static uint32_t DensityLevel_RunClosedLoop(uint32_t follow_mode)
 {
     uint32_t ret;
@@ -615,16 +727,14 @@ static uint32_t DensityLevel_RunClosedLoop(uint32_t follow_mode)
     }
 }
 
-/**
- * @brief 液位测量与跟随主流程
- *        包含3个阶段：启用液位模式、搜索液位、跟随液位
- *        每个阶段失败时自动重试3次（状态切换时不重试）
- *
- * @return uint32_t 错误代码（NO_ERROR表示成功）
- */
+
 
 /**
  * @brief 频率连续找液位异常退出统一停机，避免速度模式保持运行。
+ *
+ * @param error_code 待记录、转换或判断的错误码。该值是液位流程准备返回的失败原因，函数先停止电机并保持原错误归因。
+ * @param reason 用于诊断输出的 NUL 结尾只读原因文字；该文字补充错误发生背景，不代替函数另行记录或返回的数值错误码。
+ * @return 非零 error_code 在慢停后原样返回，以保留频率闭环退出根因；正常路径返回 NO_ERROR。
  */
 static uint32_t FrequencyLevel_StopAndReturn(uint32_t error_code, const char *reason)
 {
@@ -641,6 +751,11 @@ static uint32_t FrequencyLevel_StopAndReturn(uint32_t error_code, const char *re
     return error_code;
 }
 
+/**
+ * @brief 校验固定频率目标非零且不超过上限，成功后写入本次跟随目标。
+ *
+ * @return PARAM_RANGE_ERROR 表示参数超出允许范围；NO_ERROR 表示操作成功。
+ */
 static uint32_t FrequencyLevel_SetFixedTarget(void)
 {
     if (g_deviceParams.oilLevelFrequency == 0U) {
@@ -656,6 +771,12 @@ static uint32_t FrequencyLevel_SetFixedTarget(void)
     return NO_ERROR;
 }
 
+/**
+ * @brief 按固定频率目标和死区闭环跟随液位。
+ *
+ * @param follow_mode 跟随模式。
+ * @return 返回整机错误码；NO_ERROR 表示固定频率闭环正常结束，其他值表示命令切换、传感器或电机控制失败。
+ */
 static uint32_t FrequencyLevel_RunFixedClosedLoop(uint32_t follow_mode)
 {
     uint32_t ret = FrequencyLevel_SetFixedTarget();
@@ -664,10 +785,15 @@ static uint32_t FrequencyLevel_RunFixedClosedLoop(uint32_t follow_mode)
     }
     return FrequencyLevel_RunClosedLoop(follow_mode);
 }
-/*
- * 函数用途：端点频率需要写入油中/空气基准，读取失败时做局部重试。
- * 调用场景：SearchOilLevel、SearchOil、SearchAir 记录端点平均频率时调用。
- * 关键约束：只重试传感器平均读数；命令切换和延时中断直接透传。
+/**
+ * @brief 端点频率需要写入油中/空气基准，读取失败时做局部重试。
+ *
+ * @details 调用场景：SearchOilLevel、SearchOil、SearchAir 记录端点平均频率时调用。
+ * @note 关键约束：只重试传感器平均读数；命令切换和延时中断直接透传。
+ *
+ * @param frequency_out 用于返回读取或平均后的液位通道频率。
+ * @param stage_text 写入重试和失败日志的测量阶段名称，不参与频率计算。
+ * @return SYSTEM_CALL_CONDITION_ERROR 表示当前系统状态不允许执行；NO_ERROR 表示操作成功。
  */
 static uint32_t OilLevel_ReadAverageFrequencyWithRetry(volatile uint32_t *frequency_out,
                                                        const char *stage_text)
@@ -683,7 +809,6 @@ static uint32_t OilLevel_ReadAverageFrequencyWithRetry(volatile uint32_t *freque
         uint32_t read_ret = DSM_Get_LevelMode_Frequence_Avg(frequency_out);
         if (read_ret == NO_ERROR) {
             if (try_times > 1U) {
-                /* 错误 阶段：重试成功 模块：传感器 操作：读取液位频率 原因：恢复成功 尝试：try_times/3U */
                 ErrorLog_Recover(ERROR_LOG_MODULE_SENSOR,
                                  ERROR_LOG_OP_READ_LEVEL_FREQ,
                                  ERROR_LOG_REASON_RECOVER_OK,
@@ -701,7 +826,6 @@ static uint32_t OilLevel_ReadAverageFrequencyWithRetry(volatile uint32_t *freque
                (stage_text != NULL) ? stage_text : "端点频率",
                (unsigned long)try_times,
                (unsigned long)read_ret);
-        /* 错误 阶段：错误重试 模块：传感器 操作：读取液位频率 原因：ErrorLog_GetReasonByCode(read_ret) 尝试：try_times/3U 错误码：read_ret 错误名：ErrorLog_GetCodeName(read_ret) */
         ErrorLog_Retry(ERROR_LOG_MODULE_SENSOR,
                        ERROR_LOG_OP_READ_LEVEL_FREQ,
                        ErrorLog_GetReasonByCode(read_ret),
@@ -721,6 +845,9 @@ static uint32_t OilLevel_ReadAverageFrequencyWithRetry(volatile uint32_t *freque
 
 /**
  * @brief 获取频率闭环死区，参数未配置时使用保守默认值。
+ *
+ * @param raw_threshold 兼容参数中的频率阈值 x10 定点值，单位 0.1 Hz；0 表示未配置。
+ * @return raw_threshold 为 0 时返回 0；否则把 0.1 Hz 定点阈值四舍五入换算为整数 Hz。
  */
 static uint32_t FrequencyLevel_GetCompatThresholdHz(uint32_t raw_threshold)
 {
@@ -730,6 +857,12 @@ static uint32_t FrequencyLevel_GetCompatThresholdHz(uint32_t raw_threshold)
     return (raw_threshold + (DENSITY_PARAM_MIGRATE_FACTOR / 2U)) / DENSITY_PARAM_MIGRATE_FACTOR;
 }
 
+/**
+ * @brief 取得频率液位闭环使用的 Hz 死区，并为未配置值选用默认死区。
+ *
+ * @param raw_threshold 兼容参数中的频率阈值 x10 定点值，单位 0.1 Hz；0 时使用默认频率死区。
+ * @return 兼容阈值换算结果为 0 时返回默认死区 15.0 Hz；否则以 float 返回换算后的整数 Hz 阈值。
+ */
 static float FrequencyLevel_GetDeadband(uint32_t raw_threshold)
 {
     uint32_t threshold_hz = FrequencyLevel_GetCompatThresholdHz(raw_threshold);
@@ -742,6 +875,11 @@ static float FrequencyLevel_GetDeadband(uint32_t raw_threshold)
 
 /**
  * @brief 根据频率偏差按比例计算速度模式速度，速度受默认运行速度上限保护。
+ *
+ * @param frequency_error 当前频率减跟随目标频率得到的有符号偏差，单位 Hz；函数按绝对值计算速度。
+ * @param deadband 无需运动的频率死区半宽，单位 Hz。
+ * @param max_speed_x100 本次允许的速度上限，单位 0.01 m/min；0 表示改用电机默认速度。
+ * @return 频率偏差绝对值未超过 deadband 时返回 0；否则返回比例计算并限制后的速度，单位 0.01 m/min，范围不低于最小速度且不高于有效上限。
  */
 static uint32_t FrequencyLevel_ComputeSpeedX100(float frequency_error, float deadband, uint32_t max_speed_x100)
 {
@@ -780,6 +918,10 @@ static uint32_t FrequencyLevel_ComputeSpeedX100(float frequency_error, float dea
 
 /**
  * @brief 判断频率是否已进入稳定区，相对频率法额外避开空气/油中端点。
+ *
+ * @param frequency_error 频率故障。
+ * @param deadband 目标判定使用的死区宽度，与函数处理的频率或密度值采用相同单位。
+ * @return 1 表示频率已进入稳定区，相对频率法额外避开空气/油中端点；0 表示频率尚未进入稳定区，相对频率法额外避开空气/油中端点。
  */
 static uint8_t FrequencyLevel_IsStableInsideBand(float frequency_error, float deadband)
 {
@@ -806,6 +948,9 @@ static uint8_t FrequencyLevel_IsStableInsideBand(float frequency_error, float de
 
 /**
  * @brief 相对频率法在目标死区内但靠近端点时补充运动方向。
+ *
+ * @param dir 前级频率比较得到的运动方向；DENSITY_LEVEL_DIR_NONE 表示已经落入目标死区。
+ * @return 通常原样返回 dir；仅在连续相对频率法已进入死区且当前频率靠近空气端或油端时，分别修正为下行或上行方向。
  */
 static int FrequencyLevel_CorrectRelativeEndpointDirection(int dir)
 {
@@ -832,6 +977,8 @@ static int FrequencyLevel_CorrectRelativeEndpointDirection(int dir)
 
 /**
  * @brief 记录频率闭环确认到的液位，并同步外部协议稳定标志。
+ *
+ * @param tag 用于区分诊断来源的只读标签文字。
  */
 static void FrequencyLevel_RecordCurrentPosition(const char *tag)
 {
@@ -848,6 +995,18 @@ static void FrequencyLevel_RecordCurrentPosition(const char *tag)
 
 /**
  * @brief 相对频率和固定频率共用的速度模式连续找液位/跟随闭环。
+ *
+ * 函数使用调用前已经写入 follow_frequency 的目标频率；连续相对频率法和连续固定频率法共用本闭环，查找模式使用 oilLevelThreshold，跟随模式使用
+ * oilLevelHysteresisThreshold。
+ * 每轮从传感器读取当前液位频率，以当前频率减目标频率的偏差决定下行、上行或停止；连续相对频率法在空气端或油端附近会修正方向，避免把端点误判为最终死区。
+ * 频率满足死区及端点一致性条件时停止速度运动并累计稳定样本，达到门限后记录当前液位、同步密度分布液位及 AO 过程样本；查找模式随后返回，跟随模式继续监测。
+ * 离开稳定区后按频率偏差计算并钳位 0.01 m/min 速度；到达液位下限时先等待探头离开盲区，再恢复闭环，同时持续检查位置上限、扭力碰撞和丢步。
+ * 查找模式受 FREQUENCY_LEVEL_SEARCH_TIMEOUT_MS 限制，跟随模式持续运行直至命令切换或故障。所有异常出口都使 AO 过程样本失效并尝试慢停电机。
+ *
+ * @param follow_mode 0 表示执行一次频率液位查找并在稳定后返回；非 0 表示使用跟随滞回死区持续闭环，直至命令切换或故障。
+ * @return 查找模式稳定完成返回 NO_ERROR；STATE_SWITCH
+ *         表示被新命令正常打断，其他值区分目标未配置、频率读取、盲区恢复、位置、扭力、丢步、电机控制和查找超时错误；跟随模式正常运行时不主动返回。
+ * @note follow_mode 非 0 时函数设计为长期运行，不应把缺少正常返回理解为死循环缺陷；退出由命令切换和安全故障驱动。
  */
 static uint32_t FrequencyLevel_RunClosedLoop(uint32_t follow_mode)
 {
@@ -1023,7 +1182,7 @@ uint32_t SearchAndFollowOilLevel(void) {
 	uint32_t ret;
 	uint8_t try_times;
 	printf("液位测量\t开始\r\n");
-	/* 先处理异常边界，避免液位测量状态机带故障继续运行。 */
+	/* 设备标记需要回零且启用了故障自动回零时，必须先重建零点基准，再开始液位搜索和跟随。 */
 	if ((g_measurement.device_status.zero_point_status == 1)&&(g_deviceParams.error_auto_back_zero==1)){
 		printf("液位测量\t设备需要回零点\r\n");
 		ret = SearchZero();  /* 如果设备需要回零点，先执行回零点测量 */
@@ -1038,10 +1197,8 @@ uint32_t SearchAndFollowOilLevel(void) {
 
 		ret = SearchOilLevel();
 
-		/* 先处理异常边界，避免液位测量状态机带故障继续运行。 */
 		if (ret == NO_ERROR) {
 			if (try_times > 1U) {
-				/* 错误 阶段：重试成功 模块：测量 操作：搜索液位 原因：恢复成功 尝试：try_times/3U */
 				ErrorLog_Recover(ERROR_LOG_MODULE_MEASURE,
 				                 ERROR_LOG_OP_SEARCH_OIL_LEVEL,
 				                 ERROR_LOG_REASON_RECOVER_OK,
@@ -1053,7 +1210,6 @@ uint32_t SearchAndFollowOilLevel(void) {
 			/* 命令切换是正常打断，直接向上透传，不参与故障重试。 */
 			return STATE_SWITCH;
 		} else {
-			/* 错误 阶段：错误重试 模块：测量 操作：搜索液位 原因：搜索失败 尝试：try_times/3U 错误码：ret 错误名：ErrorLog_GetCodeName(ret) */
 			ErrorLog_Retry(ERROR_LOG_MODULE_MEASURE,
 			               ERROR_LOG_OP_SEARCH_OIL_LEVEL,
 			               ERROR_LOG_REASON_SEARCH_FAIL,
@@ -1064,7 +1220,6 @@ uint32_t SearchAndFollowOilLevel(void) {
 			HAL_Delay(1000);
 		}
 	}
-	/* 先处理异常边界，避免液位测量状态机带故障继续运行。 */
 	if (ret != NO_ERROR) {
 		CHECK_ERROR(ret);
 	}
@@ -1080,10 +1235,8 @@ uint32_t SearchAndFollowOilLevel(void) {
 
 		ret = FollowOilLevel();
 
-		/* 先处理异常边界，避免液位测量状态机带故障继续运行。 */
 		if (ret == NO_ERROR) {
 			if (try_times > 1U) {
-				/* 错误 阶段：重试成功 模块：测量 操作：跟随液位 原因：恢复成功 尝试：try_times/3U */
 				ErrorLog_Recover(ERROR_LOG_MODULE_MEASURE,
 				                 ERROR_LOG_OP_FOLLOW_OIL_LEVEL,
 				                 ERROR_LOG_REASON_RECOVER_OK,
@@ -1095,7 +1248,6 @@ uint32_t SearchAndFollowOilLevel(void) {
 			/* 命令切换是正常打断，直接向上透传，不参与故障重试。 */
 			return STATE_SWITCH;
 		} else {
-			/* 错误 阶段：错误重试 模块：测量 操作：跟随液位 原因：跟随失败 尝试：try_times/3U 错误码：ret 错误名：ErrorLog_GetCodeName(ret) */
 			ErrorLog_Retry(ERROR_LOG_MODULE_MEASURE,
 			               ERROR_LOG_OP_FOLLOW_OIL_LEVEL,
 			               ERROR_LOG_REASON_FOLLOW_FAIL,
@@ -1105,7 +1257,6 @@ uint32_t SearchAndFollowOilLevel(void) {
 			HAL_Delay(1000);
 		}
 	}
-	/* 先处理异常边界，避免液位测量状态机带故障继续运行。 */
 	if (ret != NO_ERROR) {
 		CHECK_ERROR(ret);
 	}
@@ -1114,10 +1265,11 @@ uint32_t SearchAndFollowOilLevel(void) {
 	return NO_ERROR;
 }
 
-/*
- * 函数用途：清理单次找液位开始前的命中和稳定状态。
- * 调用场景：SearchOilLevel() 的方法 0/1/4/未知路径，以及方法 5 直接闭环入口。
- * 关键约束：只清运行态标志和故障缓存，不修改目标频率和测量方法。
+/**
+ * @brief 清理单次找液位开始前的命中和稳定状态。
+ *
+ * @details 调用场景：SearchOilLevel() 的方法 0/1/4/未知路径，以及方法 5 直接闭环入口。
+ * @note 关键约束：只清运行态标志和故障缓存，不修改目标频率和测量方法。
  */
 static void OilLevel_ResetSearchRuntimeState(void)
 {
@@ -1126,10 +1278,14 @@ static void OilLevel_ResetSearchRuntimeState(void)
     fault_info_init();
 }
 
-/*
- * 函数用途：处理不需要空气/油中粗找的直接找液位方式。
- * 调用场景：SearchOilLevel() 入口按测量方法分流方法 2、3、5 时调用。
- * 关键约束：方法 5 保持固定频率速度闭环，方法 0/1/4 继续交给后续粗找和精找。
+/**
+ * @brief 处理不需要空气/油中粗找的直接找液位方式。
+ *
+ * @details 调用场景：SearchOilLevel() 入口按测量方法分流方法 2、3、5 时调用。
+ * @note 关键约束：方法 5 保持固定频率速度闭环，方法 0/1/4 继续交给后续粗找和精找。
+ *
+ * @param handled 用于返回当前液位查找方式是否已由直接查找分支处理。
+ * @return SYSTEM_CALL_CONDITION_ERROR 表示当前系统状态不允许执行；NO_ERROR 表示操作成功。
  */
 static uint32_t OilLevel_TryRunDirectSearchMethod(uint8_t *handled)
 {
@@ -1156,10 +1312,13 @@ static uint32_t OilLevel_TryRunDirectSearchMethod(uint8_t *handled)
     }
 }
 
-/*
- * 函数用途：按既有重试策略启用液位模式。
- * 调用场景：SearchOilLevel() 中方法 0/1/4/未知路径进入频率粗找前调用。
- * 关键约束：命令切换直接透传；普通错误在本函数内按 CHECK_ERROR 统一出口处理。
+/**
+ * @brief 按既有重试策略启用液位模式。
+ *
+ * @details 调用场景：SearchOilLevel() 中方法 0/1/4/未知路径进入频率粗找前调用。
+ * @note 关键约束：命令切换直接透传；普通错误在本函数内按 CHECK_ERROR 统一出口处理。
+ *
+ * @return NO_ERROR 表示液位模式在允许次数内启用成功；STATE_SWITCH 表示重试等待被新命令打断，重试耗尽时返回最后一次模式切换或传感器通信错误。
  */
 static uint32_t OilLevel_EnableLevelModeWithRetry(void)
 {
@@ -1172,7 +1331,6 @@ static uint32_t OilLevel_EnableLevelModeWithRetry(void)
         ret = EnableLevelMode();
         if (ret == NO_ERROR) {
             if (mode_try_times > 1) {
-                /* 错误 阶段：重试成功 模块：传感器 操作：启用液位模式 原因：恢复成功 尝试：mode_try_times/3U */
                 ErrorLog_Recover(ERROR_LOG_MODULE_SENSOR,
                                  ERROR_LOG_OP_ENABLE_LEVEL_MODE,
                                  ERROR_LOG_REASON_RECOVER_OK,
@@ -1184,7 +1342,6 @@ static uint32_t OilLevel_EnableLevelModeWithRetry(void)
             /* 命令切换是正常打断，直接向上透传，不参与故障重试。 */
             return STATE_SWITCH;
         } else {
-            /* 错误 阶段：错误重试 模块：传感器 操作：启用液位模式 原因：模式启用失败 尝试：mode_try_times/3U 错误码：ret 错误名：ErrorLog_GetCodeName(ret) */
             ErrorLog_Retry(ERROR_LOG_MODULE_SENSOR,
                            ERROR_LOG_OP_ENABLE_LEVEL_MODE,
                            ERROR_LOG_REASON_MODE_FAIL,
@@ -1202,10 +1359,13 @@ static uint32_t OilLevel_EnableLevelModeWithRetry(void)
     return NO_ERROR;
 }
 
-/*
- * 函数用途：完成方法 0/1/4/未知路径共用的空气/油中端点粗找。
- * 调用场景：SearchOilLevel() 启用液位模式成功后调用。
- * 关键约束：入口读频率失败最多重试 3 次；运动安全错误和端点搜索错误保持原有 CHECK_ERROR 出口。
+/**
+ * @brief 完成方法 0/1/4/未知路径共用的空气/油中端点粗找。
+ *
+ * @details 调用场景：SearchOilLevel() 启用液位模式成功后调用。
+ * @note 关键约束：入口读频率失败最多重试 3 次；运动安全错误和端点搜索错误保持原有 CHECK_ERROR 出口。
+ *
+ * @return NO_ERROR 表示空气端和油中端的粗找频率均已确认；STATE_SWITCH 表示用户命令切换，其他传感器、运动或边界错误由粗找检查宏原样返回。
  */
 static uint32_t OilLevel_RunFrequencyCoarseSearch(void)
 {
@@ -1224,7 +1384,6 @@ static uint32_t OilLevel_RunFrequencyCoarseSearch(void)
         }
         if (ret != NO_ERROR) {
             last_coarse_ret = ret;
-            /* 错误 阶段：错误重试 模块：传感器 操作：读取液位频率 原因：ErrorLog_GetReasonByCode(ret) 尝试：coarse_try_times/3U 错误码：ret 错误名：ErrorLog_GetCodeName(ret) */
             ErrorLog_Retry(ERROR_LOG_MODULE_SENSOR,
                            ERROR_LOG_OP_READ_LEVEL_FREQ,
                            ErrorLog_GetReasonByCode(ret),
@@ -1263,7 +1422,6 @@ static uint32_t OilLevel_RunFrequencyCoarseSearch(void)
         RETURN_ERROR(last_coarse_ret);
     }
     if (coarse_try_times > 1) {
-        /* 错误 阶段：重试成功 模块：测量 操作：搜索液位 原因：恢复成功 尝试：coarse_try_times/3U */
         ErrorLog_Recover(ERROR_LOG_MODULE_MEASURE,
                          ERROR_LOG_OP_SEARCH_OIL_LEVEL,
                          ERROR_LOG_REASON_RECOVER_OK,
@@ -1275,10 +1433,11 @@ static uint32_t OilLevel_RunFrequencyCoarseSearch(void)
     return NO_ERROR;
 }
 
-/*
- * 函数用途：根据测量方法解析本次找液位目标频率。
- * 调用场景：SearchOilLevel() 粗找空气/油中端点完成后调用。
- * 关键约束：方法 0/4 使用端点中点；方法 1 保持固定目标但仍走步进精找。
+/**
+ * @brief 根据测量方法解析本次找液位目标频率。
+ *
+ * @details 调用场景：SearchOilLevel() 粗找空气/油中端点完成后调用。
+ * @note 关键约束：方法 0/4 使用端点中点；方法 1 保持固定目标但仍走步进精找。
  */
 static void OilLevel_ResolveSearchTargetFrequency(void)
 {
@@ -1300,10 +1459,14 @@ static void OilLevel_ResolveSearchTargetFrequency(void)
            (unsigned long)g_measurement.oil_measurement.follow_frequency);
 }
 
-/*
- * 函数用途：按解析后的目标执行精找或相对频率速度闭环搜索。
- * 调用场景：SearchOilLevel() 目标频率确定后调用。
- * 关键约束：方法 4 的闭环函数会自行记录结果；方法 0/1 继续使用 SearchOilPrecise 离散步进。
+/**
+ * @brief 按解析后的目标执行精找或相对频率速度闭环搜索。
+ *
+ * @details 调用场景：SearchOilLevel() 目标频率确定后调用。
+ * @note 关键约束：方法 4 的闭环函数会自行记录结果；方法 0/1 继续使用 SearchOilPrecise 离散步进。
+ *
+ * @param result_recorded 用于返回本轮液位查找结果是否已写入测量状态。
+ * @return NO_ERROR 表示选定的步进精找或频率闭环搜索完成；STATE_SWITCH 表示新命令打断，其他值为目标频率、传感器读取、位置边界或电机运动错误。
  */
 static uint32_t OilLevel_RunResolvedSearchMethod(uint8_t *result_recorded)
 {
@@ -1336,10 +1499,13 @@ static uint32_t OilLevel_RunResolvedSearchMethod(uint8_t *result_recorded)
     return NO_ERROR;
 }
 
-/*
- * 函数用途：记录步进精找成功后的液位结果并刷新 AO 输出。
- * 调用场景：SearchOilLevel() 的方法 0/1/未知配置精找成功后调用。
- * 关键约束：方法 4/5 和密度闭环由各自闭环记录当前位置，不再重复覆盖。
+/**
+ * @brief 记录步进精找成功后的液位结果并刷新 AO 输出。
+ *
+ * @details 调用场景：SearchOilLevel() 的方法 0/1/未知配置精找成功后调用。
+ * @note 关键约束：方法 4/5 和密度闭环由各自闭环记录当前位置，不再重复覆盖。
+ *
+ * @return 固定返回 NO_ERROR；函数完成液位位置、频率、有效标志和 AO 样本更新，当前实现不把后台 AO 刷新结果作为液位搜索失败返回。
  */
 static uint32_t OilLevel_RecordSearchResult(void)
 {
@@ -1477,7 +1643,6 @@ uint32_t FollowOilLevel(void) {
 			}
 			/* 0/1跟随重找期间保持跟随态，按设计允许中间液位继续发布到 AO 和继电器。 */
 			ret = SearchOilPrecise(100);
-			/* 先处理异常边界，避免液位测量状态机带故障继续运行。 */
 			if (ret != NO_ERROR) {
 				return OilLevel_StopBeforeReturn((uint32_t)ret, "液位流程故障");
 			} else {
@@ -1655,15 +1820,15 @@ static int SearchAir() {
 }
 
 /**
- * @brief 确定液位状态
+ * @brief 确定液位状态。
  *
  * 该函数通过获取当前液位模式的频率值，判断传感器当前所处的状态（空气中或油中）。
  * 根据频率值与阈值的比较，返回相应的液位状态枚举值。
+ * OIL: 传感器在油中（频率低于下限阈值）。
  *
- * @return Level_StateTypeDef 返回液位状态：
- *             - AIR: 传感器在空气中（频率超过上限阈值）
- *             - OIL: 传感器在油中（频率低于下限阈值）
- *
+ * @param state_out 用于返回液位频率相对上下阈值的判定状态。
+ * @param allow_mode_recovery 允许模式。
+ * @return Level_StateTypeDef 返回液位状态。
  * @note 函数内部会调用 DSM_Get_LevelMode_Frequence 获取当前频率值。
  * @note 输出信息包括当前频率值和传感器状态（空气中或油中）。
  */
@@ -1688,7 +1853,6 @@ static uint32_t determine_level_status_internal(Level_StateTypeDef *state_out, u
     }
 
     CHECK_COMMAND_SWITCH(ret);
-    /* 先处理异常边界，避免液位测量状态机带故障继续运行。 */
     if (ret != NO_ERROR) {
         return OilLevel_StopBeforeReturn((uint32_t)ret, "液位流程故障");
     }
@@ -1710,18 +1874,26 @@ static uint32_t determine_level_status_internal(Level_StateTypeDef *state_out, u
 
 
 /**
- * @brief 执行液位测量中的 determine_level_status_motion 逻辑。
+ * @brief 根据运动过程中的传感器频率判断浮子位于空气还是油中。
  *
- * @param state_out 状态值。
- * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ * @param state_out 用于返回液位频率相对上下阈值的判定状态。
+ * @return NO_ERROR 表示已读取运动过程频率并通过 state_out 写入 AIR 或 OIL；空输出指针、命令切换、传感器通信或读数错误返回对应错误码。
  */
 uint32_t determine_level_status_motion(Level_StateTypeDef *state_out) {
     return determine_level_status_internal(state_out, 0U);
 }
-/*
- * 函数用途：按旧步进算法计算本轮移动方向和步长。
- * 调用场景：SearchOilPrecise() 每次读取频率后调用。
- * 关键约束：保持原超大偏差、接近端点和标准偏差四段判定顺序。
+/**
+ * @brief 按旧步进算法计算本轮移动方向和步长。
+ *
+ * @details 调用场景：SearchOilPrecise() 每次读取频率后调用。
+ * @note 关键约束：保持原超大偏差、接近端点和标准偏差四段判定顺序。
+ *
+ * @param per_mm_frequency 频率。
+ * @param frequency_error 频率故障。
+ * @param over_time 用于返回超过跟随频率阈值的累计采样时间。
+ * @param lower_time 用于返回低于跟随频率阈值的累计采样时间。
+ * @param run_length 用于返回本轮精确跟随需要移动的距离，单位 mm。
+ * @param dir 本轮精确找油移动方向输出指针；函数根据频率误差写入 MOTOR_DIRECTION_UP 或 MOTOR_DIRECTION_DOWN。
  */
 static void OilLevel_ComputePreciseStep(float per_mm_frequency,
                                         float frequency_error,
@@ -1763,10 +1935,14 @@ static void OilLevel_ComputePreciseStep(float per_mm_frequency,
     }
 }
 
-/*
- * 函数用途：判断旧步进精找是否已处于可稳定计数区间。
- * 调用场景：SearchOilPrecise() 计算步长后决定是否累计 followTime。
- * 关键约束：保持原端点 200Hz 保护，避免停在空气或油中端点附近。
+/**
+ * @brief 判断旧步进精找是否已处于可稳定计数区间。
+ *
+ * @details 调用场景：SearchOilPrecise() 计算步长后决定是否累计 followTime。
+ * @note 关键约束：保持原端点 200Hz 保护，避免停在空气或油中端点附近。
+ *
+ * @param frequency_error 频率故障。
+ * @return 1 表示旧步进精找已处于可稳定计数区间；0 表示旧步进精找尚未处于可稳定计数区间。
  */
 static uint8_t OilLevel_IsPreciseStable(float frequency_error)
 {
@@ -1778,10 +1954,15 @@ static uint8_t OilLevel_IsPreciseStable(float frequency_error)
     return 0U;
 }
 
-/*
- * 函数用途：执行旧步进精找本轮电机移动。
- * 调用场景：SearchOilPrecise() 稳定判断后仍需移动时调用。
- * 关键约束：保持原小步长折半和最小 0.1mm 移动口径。
+/**
+ * @brief 执行旧步进精找本轮电机移动。
+ *
+ * @details 调用场景：SearchOilPrecise() 稳定判断后仍需移动时调用。
+ * @note 关键约束：保持原小步长折半和最小 0.1mm 移动口径。
+ *
+ * @param run_length 本轮精确跟随计划移动的距离，单位 mm。
+ * @param dir 电机或扫描方向编码；使用 MOTOR_DIRECTION_UP 或 MOTOR_DIRECTION_DOWN，决定本轮步进移动的正负方向。
+ * @return 无需移动时返回 NO_ERROR；需要移动时返回 MotorCtrl_MoveAndWait 的结果，包括命令切换、参数、驱动、位置或到位错误。
  */
 static uint32_t OilLevel_RunPreciseMove(float run_length, uint32_t dir)
 {
@@ -1800,10 +1981,13 @@ static uint32_t OilLevel_RunPreciseMove(float run_length, uint32_t dir)
     return MotorCtrl_MoveAndWait(run_length, dir, MotorCtrl_GetDefaultSpeedX100());
 }
 
-/*
- * 函数用途：执行旧步进精找每轮结束后的当前位置更新和盲区等待。
- * 调用场景：SearchOilPrecise() 完成本轮移动和超限检查后调用。
- * 关键约束：命令切换直接透传；其他错误由上层按旧逻辑统一停机返回。
+/**
+ * @brief 执行旧步进精找每轮结束后的当前位置更新和盲区等待。
+ *
+ * @details 调用场景：SearchOilPrecise() 完成本轮移动和超限检查后调用。
+ * @note 关键约束：命令切换直接透传；其他错误由上层按旧逻辑统一停机返回。
+ *
+ * @return 返回本轮位置更新、边界检查和盲区等待结果；NO_ERROR 表示可继续，其他值原样保留切换、边界或传感器错误。
  */
 static int OilLevel_HandlePrecisePositionUpdate(void)
 {
@@ -1816,21 +2000,17 @@ static int OilLevel_HandlePrecisePositionUpdate(void)
 }
 
 /**
- * @func: SearchOilPrecise
- * @brief 通过频率跟随策略定位液位界面
- * @param per_mm_Frequency 每毫米对应的频率变化量（频率-位置换算系数）
- * @return 执行状态码
+ * @brief 通过频率跟随策略定位液位界面。
  *
- * 算法原理：
- * 1. 持续比较当前频率与目标频率(空气/油频率均值)
- * 2. 根据频率偏差计算电机移动距离：
- *    - 小偏差：按线性关系移动
- *    - 大偏差：采用补偿步长 (4 * overTime + ...)
- * 3. 达到稳定条件（连续10次频率波动<阈值）时退出
+ * 算法原理：1. 持续比较当前频率与目标频率(空气/油频率均值)。
+ * 2. 根据频率偏差计算电机移动距离：- 小偏差：按线性关系移动。
+ * 大偏差：采用补偿步长 (4 * overTime + ...)。
+ * 3. 达到稳定条件（连续10次频率波动<阈值）时退出。
+ * 特殊处理：- 死循环保护：超过100次循环强制退出。
+ * 超限保护：连续加速移动仍无法跟踪时报错。
  *
- * 特殊处理：
- * - 死循环保护：超过100次循环强制退出
- * - 超限保护：连续加速移动仍无法跟踪时报错
+ * @param per_mm_Frequency 每毫米对应的频率变化量（频率-位置换算系数）。
+ * @return 执行状态码。
  */
 static int SearchOilPrecise(float per_mm_Frequency)
 {
@@ -1899,10 +2079,13 @@ static int SearchOilPrecise(float per_mm_Frequency)
 
     return NO_ERROR;
 }
-/*
- * 函数用途：按当前设备状态发布液位跟随位置。
- * 调用场景：速度闭环和旧步进精找每轮刷新当前位置后调用。
- * 关键约束：非跟随态只打印动态位置，不覆盖最终液位结果。
+/**
+ * @brief 按当前设备状态发布液位跟随位置。
+ *
+ * @details 调用场景：速度闭环和旧步进精找每轮刷新当前位置后调用。
+ * @note 关键约束：非跟随态只打印动态位置，不覆盖最终液位结果。
+ *
+ * @param oil_level 当前跟随位置计算得到的有符号油位，单位 0.1 mm；仅允许在对应跟随状态发布。
  */
 static void OilLevel_PublishFollowPosition(int32_t oil_level)
 {
@@ -1923,10 +2106,14 @@ static void OilLevel_PublishFollowPosition(int32_t oil_level)
     }
 }
 
-/*
- * 函数用途：检查当前位置是否越过液位上下边界。
- * 调用场景：位置发布后统一判断罐高上限和盲区下限。
- * 关键约束：边界位置不是有效液位点，必须清除外部协议命中和稳定标志。
+/**
+ * @brief 检查当前位置是否越过液位上下边界。
+ *
+ * @details 调用场景：位置发布后统一判断罐高上限和盲区下限。
+ * @note 关键约束：边界位置不是有效液位点，必须清除外部协议命中和稳定标志。
+ *
+ * @param oil_level 待与罐高上限和盲区下限比较的有符号油位，单位 0.1 mm。
+ * @return NO_ERROR 表示当前位置仍在液位搜索允许区间；越过上限或下限时先停机，再分别返回 MEASUREMENT_OILLEVEL_HIGH 或 MEASUREMENT_OILLEVEL_LOW。
  */
 static uint32_t OilLevel_CheckPositionLimit(int32_t oil_level)
 {
@@ -1951,17 +2138,13 @@ static uint32_t OilLevel_CheckPositionLimit(int32_t oil_level)
 }
 
 /**
- * @func: int determineTheSensorPositionAndUpdateTheLevelValue(void)
- * @description: 判断传感器位置并更新液位值
- * 主要功能：
- *  1. 从当前传感器位置取得液位位置
- *  2. 跟随态发布液位结果，非跟随态只打印动态位置
- *  3. 检查液位是否超出上下限范围
- *  4. 当超限时停止电机并返回状态
- * @return:
- *  正常范围：NO_ERROR
- *  到达下限：MEASUREMENT_OILLEVEL_LOW
- *  到达上限：MEASUREMENT_OILLEVEL_HIGH
+ * @brief 发布当前传感器位置并检查液位上下边界。
+ *
+ * 函数从测量调试快照取得传感器位置；液位跟随状态下发布实时液位，其他状态只输出动态位置。
+ * 位置发布后统一检查罐高上限和盲区下限；命中任一边界时停止电机并清除液位命中及稳定标志。
+ *
+ * @return NO_ERROR 表示当前位置仍在有效范围；MEASUREMENT_OILLEVEL_LOW 或 MEASUREMENT_OILLEVEL_HIGH 表示到达下限或上限且电机已停止。
+ * @note 边界位置不作为有效液位结果；具体停机和状态清理由 OilLevel_CheckPositionLimit 完成。
  */
 static int determineTheSensorPositionAndUpdateTheLevelValue(void)
 {
@@ -1971,9 +2154,13 @@ static int determineTheSensorPositionAndUpdateTheLevelValue(void)
     return (int)OilLevel_CheckPositionLimit(oil_level);
 }
 /**
- * @func: int waitForTheLiquidLevelToExceedTheBlindZone(void)
- * @description:在盲区等待，直到液位超过盲区退出
- * @return NO_ERROR
+ * @brief 在盲区内周期读取液位频率，直至频率超过跟随阈值。
+ *
+ * 等待期间保持液位未命中和未稳定状态，每隔 1 秒重新读取当前液位模式频率。
+ * 收到有效命令切换请求时立即退出；传感器读取错误由现有错误传播宏原样返回。
+ *
+ * @return NO_ERROR 表示当前频率已超过跟随阈值；STATE_SWITCH 表示等待被新命令正常打断；其他非零值透传传感器读取错误。
+ * @note 本函数只等待频率越过阈值，不在此处发布液位结果或恢复液位稳定标志。
  */
 static int waitForTheLiquidLevelToExceedTheBlindZone(void) {
     int32_t ret;
@@ -2007,7 +2194,7 @@ static int waitForTheLiquidLevelToExceedTheBlindZone(void) {
     return NO_ERROR;
 }
 /**
- * @brief 液位标定处理函数
+ * @brief 用当前尺带长度和液位标定值修正罐高，刷新位置并持久化设备参数。
  *
  * 该函数用于执行液位标定流程，包括：
  * - 根据缆线长度和标定液位计算并设置罐体高度

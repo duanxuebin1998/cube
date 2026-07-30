@@ -12,10 +12,10 @@
 /* ===================== 私有类型/状态 ===================== */
 
 /* 电机位置持久化恢复缓存，由 MotorPosition_RestorePersistedRegisters() 写入。 */
-static int32_t s_motor_saved_xactual = 0; /* 电机控制模块级变量，保存跨函数共享的业务状态。 */
-static int32_t s_motor_restored_base_length_01mm = 0; /* 电机控制模块级变量，保存跨函数共享的业务状态。 */
-static int32_t s_motor_restored_base_step = 0; /* 电机控制模块级变量，保存跨函数共享的业务状态。 */
-static bool s_motor_restored_base_valid = false; /* 电机控制模块级变量，保存跨函数共享的业务状态。 */
+static int32_t s_motor_saved_xactual = 0; /* 从掉电记录恢复的 TMC5130 XACTUAL 位置。 */
+static int32_t s_motor_restored_base_length_01mm = 0; /* 从掉电记录恢复的尺带基准长度，单位为 0.1 mm。 */
+static int32_t s_motor_restored_base_step = 0; /* 从掉电记录恢复的尺带基准电机步数。 */
+static bool s_motor_restored_base_valid = false; /* 恢复的尺带基准长度和步数通过 CRC/版本校验的标志。 */
 
 /* XACTUAL 单次读取可能因为 SPI 帧错位出现 0 或极大跳变。
  * 这里用很宽的阈值只拦截明显不可能的单帧异常，真实大位移会通过二次读取确认。 */
@@ -107,7 +107,7 @@ bool MotorCtrl_IsPositionSourceMotor(void)
  * @brief 从 TMC5130_XACTUAL 计算并输出卷筒状态。
  *
  * 兼容旧接口：读取失败时使用最近缓存状态填充输出。
- * @param tmc5130 TMC5130 设备对象。
+ * @param tmc5130 TMC5130 设备对象。该实例用于读取 XACTUAL，并按当前位置模型更新卷筒圈数、角度和尺带长度。
  * @param out 输出卷筒状态。
  */
 void MotorCtrl_UpdateDrumStateFromXActual(TMC5130TypeDef *tmc5130,
@@ -296,7 +296,6 @@ void MotorCtrl_PrintMotorCountStatus(void)
     }
 
     moving_ret = MotorDriver_ReadMovingState(&stepper, &is_moving);
-    /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
     if (moving_ret == NO_ERROR) {
         printf("电机记步诊断状态 | 显示状态=%lu(%s) | 驱动运动=%s | 校验=%s\r\n",
                (unsigned long)display_state,
@@ -314,6 +313,8 @@ void MotorCtrl_PrintMotorCountStatus(void)
  * @brief 运行期轮询刷新电机位置。
  *
  * 运动中定期读取 XACTUAL，刷新调试状态，并在电机记步模式下刷新业务位置。
+ *
+ * @return NO_ERROR 表示本轮无需刷新或位置和调试状态已同步；其他值为 XACTUAL 读取、卷筒模型换算或位置源同步错误。
  */
 uint32_t MotorCtrl_PollRuntimePosition(void)
 {
@@ -337,7 +338,6 @@ uint32_t MotorCtrl_PollRuntimePosition(void)
         s_motor_driver.motion_wait_active = false;
         g_measurement.debug_data.motor_state = 0U;
         ret = MotorDriver_SyncPositionOrCheckHealth(&stepper);
-        /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
         if (ret != NO_ERROR) {
             return ret;
         }
@@ -345,10 +345,8 @@ uint32_t MotorCtrl_PollRuntimePosition(void)
     }
 
     ret = MotorDriver_ReadMovingState(&stepper, &is_moving);
-    /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
     if (ret != NO_ERROR) {
         uint32_t sync_ret = MotorDriver_SyncPositionOrCheckHealth(&stepper);
-        /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
         if (sync_ret != NO_ERROR) {
             return sync_ret;
         }
@@ -358,7 +356,6 @@ uint32_t MotorCtrl_PollRuntimePosition(void)
     if (!is_moving) {
         if (s_motor_driver.motion_wait_active) {
             ret = MotorDriver_SyncPositionOrCheckHealth(&stepper);
-            /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
             if (ret != NO_ERROR) {
                 return ret;
             }
@@ -370,7 +367,6 @@ uint32_t MotorCtrl_PollRuntimePosition(void)
             s_motor_driver.motion_wait_active = false;
             g_measurement.debug_data.motor_state = 0U;
             ret = MotorDriver_SyncPositionOrCheckHealth(&stepper);
-            /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
             if (ret != NO_ERROR) {
                 return ret;
             }
@@ -387,7 +383,6 @@ uint32_t MotorCtrl_PollRuntimePosition(void)
     }
 
     ret = MotorDriver_SyncPositionOrCheckHealth(&stepper);
-    /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
     if (ret != NO_ERROR) {
         return ret;
     }
@@ -398,7 +393,7 @@ uint32_t MotorCtrl_PollRuntimePosition(void)
  * @brief 切换为编码轮记步位置源。
  *
  * 切换后业务位置由外部编码器刷新，电机基准仍保留用于诊断和后续切回。
- * @return 成功返回 NO_ERROR，否则返回保存参数错误码。
+ * @return 固定返回 NO_ERROR；当前切换、位置同步和参数保存接口不向调用方报告失败。
  */
 uint32_t MotorCtrl_SwitchPositionSourceToEncoder(void)
 {
@@ -414,7 +409,15 @@ uint32_t MotorCtrl_SwitchPositionSourceToEncoder(void)
  * @brief 切换为电机记步位置源。
  *
  * 切换瞬间记录编码轮长度和 XACTUAL 作为基准，并尝试标定当前位置局部周长。
- * @return 成功返回 NO_ERROR，否则返回运动、参数或保存错误码。
+ * 函数先确认电机驱动和 TMC5130 XACTUAL 可用，并保存原位置来源、局部周长、步数基准、尺带长度基准、卷绕圈数及原错误码，供任一步骤失败时完整回滚。
+ * 切换基准的尺带长度直接取编码轮值，电机步数取当前 XACTUAL；函数据此建立电机记步的长度和卷绕圈数基准，并在没有有效局部周长时使用卷筒模型估算初值。
+ * 为标定当前位置局部周长，函数临时启用电机位置源并按默认速度真实下行一圈，以编码轮长度差测得周长；测量值必须位于 C0_MIN_MM 至 C0_MAX_MM，否则按丢步或差异过大处理。
+ * 完成采样后无论测量值是否有效都尝试反向运动一圈回到切换位置，并重新读取 XACTUAL；运动、通信或周长校验任一失败都会恢复进入函数前的模式、参数、基准和错误状态。
+ * 只有标定有效且返回原位置成功后，才保存位置来源参数和电机持久化快照，使后续电机记步长度以本次编码轮位置为连续起点。
+ *
+ * @return NO_ERROR 表示一圈实测、原位返回、位置源切换和 FRAM 快照保存均已完成；其他值区分驱动未初始化、TMC5130
+ *         通信、运动失败、编码轮丢步或周长差异超限，失败路径已回滚原位置源及基准。
+ * @note 该接口不是纯参数切换，会驱动电机下行一圈再返回；只能在确认运动路径、罐体空间、扭力保护和编码轮均安全可用时调用。
  */
 uint32_t MotorCtrl_SwitchPositionSourceToMotor(void)
 {
@@ -480,7 +483,7 @@ uint32_t MotorCtrl_SwitchPositionSourceToMotor(void)
     /* 标定过程中临时切到电机源，用于屏蔽切换窗口内的编码器 SSI 错误。
      * 成功前不保存参数；任何失败都会回滚到进入函数前的模式和基准。 */
     g_deviceParams.position_count_mode = POSITION_COUNT_MODE_MOTOR;
-    /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
+    /* 临时切换到电机记步后清除由旧编码器源产生的锁存错误；其他模块故障必须原样保留。 */
     if (MotorPosition_IsEncoderErrorCode(g_measurement.device_status.error_code)) {
         g_measurement.device_status.error_code = NO_ERROR;
     }
@@ -493,7 +496,6 @@ uint32_t MotorCtrl_SwitchPositionSourceToMotor(void)
            (long)one_rev_ticks,
            local_circumference_mm);
     ret = MotorCtrl_MoveByTicksAndWait(one_rev_ticks, MotorCtrl_GetDefaultSpeedX100());
-    /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
     if (ret != NO_ERROR) {
         return MotorPosition_RollbackPositionSourceSwitch(ret, old_mode, old_local_circ_param, old_base_step, old_base_length_01mm, old_base_turns, old_error_code);
     }
@@ -529,7 +531,6 @@ uint32_t MotorCtrl_SwitchPositionSourceToMotor(void)
     /* 无论标定值是否有效，都回到切换瞬间的 XACTUAL 位置。 */
     return_ticks = -one_rev_ticks;
     ret = MotorCtrl_MoveByTicksAndWait(return_ticks, MotorCtrl_GetDefaultSpeedX100());
-    /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
     if (ret != NO_ERROR) {
         return MotorPosition_RollbackPositionSourceSwitch(ret, old_mode, old_local_circ_param, old_base_step, old_base_length_01mm, old_base_turns, old_error_code);
     }
@@ -539,7 +540,6 @@ uint32_t MotorCtrl_SwitchPositionSourceToMotor(void)
     }
     MotorPosition_UpdatePositionFromMotorSource(&drum);
 
-    /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
     if (calibration_ret != NO_ERROR) {
         return MotorPosition_RollbackPositionSourceSwitch(calibration_ret, old_mode, old_local_circ_param, old_base_step, old_base_length_01mm, old_base_turns, old_error_code);
     }
@@ -633,8 +633,8 @@ void MotorCtrl_PersistRegistersFromDriver(void)
 }
 
 /**
- * @brief 清除或复位电机控制中的 MotorCtrl_ResetDrumReferenceForZeroCalibration 逻辑。
- * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ * @brief 零点标定完成后重置电机步数基准、尺带基准和当前位置，并保存新的位置参考。
+ * @return NO_ERROR 表示零点步数、尺带基准、当前位置和持久化参考均已重建；周长非法返回 ENCODER_CIRCUMFERENCE_CALIBRATION_ERROR，其他值为驱动读取或 FRAM 保存错误。
  */
 uint32_t MotorCtrl_ResetDrumReferenceForZeroCalibration(void)
 {
@@ -646,7 +646,7 @@ uint32_t MotorCtrl_ResetDrumReferenceForZeroCalibration(void)
         return ENCODER_CIRCUMFERENCE_CALIBRATION_ERROR;
     }
 
-    /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
+    /* 零点标定重建基准时只清除编码器相关旧故障，不能顺带清除电机、传感器或电源错误。 */
     if (MotorPosition_IsEncoderErrorCode(g_measurement.device_status.error_code)) {
         g_measurement.device_status.error_code = NO_ERROR;
     }
@@ -658,7 +658,6 @@ uint32_t MotorCtrl_ResetDrumReferenceForZeroCalibration(void)
     }
     {
         uint32_t ret = stpr_setPos(&stepper, 0);
-        /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
         if (ret != NO_ERROR) {
             printf("标定零点清除电机坐标失败，错误码：0x%08lX\r\n", (unsigned long)ret);
             return ret;
@@ -869,7 +868,9 @@ int32_t MotorPosition_ReadEncoderLengthForFit(void)
  * @brief 上电初始化时从 FRAM 恢复电机位置寄存器。
  *
  * 恢复 XACTUAL/XTARGET，并缓存电机记步基准供位置源恢复使用。
- * @param tmc5130 TMC5130 设备对象。
+ * @param tmc5130 TMC5130 设备对象。该实例用于把持久化位置模型恢复到 XACTUAL 等驱动寄存器并执行回读核对。
+ *
+ * @return SYSTEM_CALL_CONDITION_ERROR 表示当前系统状态不允许执行；NO_ERROR 表示操作成功。
  */
 uint32_t MotorPosition_RestorePersistedRegisters(TMC5130TypeDef *tmc5130)
 {
@@ -914,7 +915,9 @@ uint32_t MotorPosition_RestorePersistedRegisters(TMC5130TypeDef *tmc5130)
 /**
  * @brief 同步调试区中的卷筒步数和模型长度。
  *
- * @param tmc5130 TMC5130 设备对象。
+ * @param tmc5130 TMC5130 设备对象。该实例用于读取当前位置并同步调试卷筒状态，不改变运动目标。
+ *
+ * @return true 表示驱动已初始化，XACTUAL 已通过读取/毛刺过滤，卷筒步数、长度和业务位置已同步；false 表示设备对象为空、驱动未初始化，或无法取得可信 XACTUAL。
  */
 bool MotorPosition_SyncDebugDrumState(TMC5130TypeDef *tmc5130)
 {
@@ -1094,7 +1097,7 @@ static bool MotorPosition_IsEncoderErrorCode(uint32_t error_code)
 /**
  * @brief 尝试读取 XACTUAL 并刷新卷筒状态。
  *
- * @param tmc5130 TMC5130 设备对象。
+ * @param tmc5130 TMC5130 设备对象。该实例用于尝试读取 XACTUAL；读取有效时才更新位置模型和卷筒状态。
  * @param out 输出卷筒状态。
  * @return 读取和换算成功返回 true，通信失败返回 false。
  */
@@ -1123,6 +1126,10 @@ static bool MotorPosition_TryUpdateDrumStateFromXactual(TMC5130TypeDef *tmc5130,
  * 现场日志中曾出现电机尺带从 -80mm 单次跳到 0 或 90m 后立刻恢复的情况。
  * 这类值来自 TMC5130 XACTUAL 的瞬时错误读数；如果直接更新缓存，会污染调试显示、
  * 电机记步位置和持久化记录。可疑值必须二次读取确认，确认失败则保留旧缓存。
+ *
+ * @param tmc5130 目标 TMC5130 驱动实例。对象保存 SPI 句柄、片选 GPIO 和使能 GPIO，底层寄存器访问与驱动使能操作均通过该实例定位硬件。
+ * @param motor_step 输入输出待校验的 TMC5130 XACTUAL；检测到毛刺时替换为上次可信值。
+ * @return true 表示首读值可信，或零值/大跳变经重读与寄存器交叉检查后已接受或修正；false 表示参数为空、疑似 SPI 全零、跳变后重读失败，或首读与重读均无法形成可信位置。
  */
 static bool MotorPosition_FilterXactualGlitch(TMC5130TypeDef *tmc5130,
                                               int32_t *motor_step)
@@ -1197,7 +1204,7 @@ static bool MotorPosition_FilterXactualGlitch(TMC5130TypeDef *tmc5130,
 /**
  * @brief 按变化阈值决定是否保存电机位置寄存器。
  *
- * @param tmc5130 TMC5130 设备对象。
+ * @param tmc5130 TMC5130 设备对象。该实例用于取得达到保存条件时所需的当前位置寄存器，并与持久化状态关联。
  * @param force 为 true 时强制保存，不检查变化阈值。
  */
 static void MotorPosition_MaybePersistRegisters(TMC5130TypeDef *tmc5130, bool force)
@@ -1506,6 +1513,8 @@ static bool MotorPosition_VerifyPersistSlot(
  * @param xactual 当前 XACTUAL。
  * @param base_length_01mm 电机记步基准长度。
  * @param base_step 电机记步基准步数。
+ *
+ * @return true 表示 A/B 槽中至少一槽写入后完整读回与目标记录一致；false 表示两个槽的写入或读回校验均失败，调用方不得推进已保存基线。
  */
 static bool MotorPosition_WritePersistAB(int32_t xactual,
                                   int32_t base_length_01mm,
@@ -1596,6 +1605,14 @@ static void MotorPosition_StorePersistSnapshot(int32_t xactual)
  * @brief 位置源切换失败时回滚旧状态。
  *
  * 恢复旧记步模式、局部周长、电机基准和错误码。
+ *
+ * @param ret 上一层调用返回的结果码。位置源切换失败时函数回滚运行态并保留该原始失败原因。
+ * @param old_mode 模式。
+ * @param old_local_circ_param 周长参数。
+ * @param old_base_step 基址。
+ * @param old_base_length_01mm 位置源切换前保存的尺带基准长度，单位 0.1 mm。
+ * @param old_base_turns 基址。
+ * @param old_error_code 故障。
  * @return 传入的 ret 错误码，便于调用方直接返回。
  */
 static uint32_t MotorPosition_RollbackPositionSourceSwitch(uint32_t ret,
@@ -1614,7 +1631,7 @@ static uint32_t MotorPosition_RollbackPositionSourceSwitch(uint32_t ret,
     s_motor_position.count_base_length_01mm = old_base_length_01mm;
     s_motor_position.count_base_turns = old_base_turns;
 
-    /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
+    /* 位置源切换回滚时，仅当当前仍是切换窗口产生的编码器错误，才恢复进入函数前的错误码。 */
     if (MotorPosition_IsEncoderErrorCode(g_measurement.device_status.error_code)) {
         g_measurement.device_status.error_code = old_error_code;
     }

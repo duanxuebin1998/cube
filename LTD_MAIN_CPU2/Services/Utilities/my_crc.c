@@ -40,7 +40,7 @@ static const uint8_t auchCRCLo[256] = { 0x00, 0xC0, 0xC1, 0x01, 0xC3, 0x03, 0x02
 
 /**
  * @brief CRC16/MODBUS 校验计算
- * @param data 输入数据指针
+ * @param data 输入数据指针。指向参与 CRC16 计算的连续只读字节序列，有效范围为 data[0..length-1]。
  * @param length 数据长度（字节）
  * @return 16位CRC校验值
  */
@@ -56,8 +56,14 @@ uint16_t CRC16_Calculate(const uint8_t *data, uint32_t length) {
 
 	return (crc_hi << 8) | crc_lo;
 }
-/* 接收到的数据包进行CRC校验 */
-/* 接收到的数据包进行CRC校验 */
+
+/**
+ * @brief 重新计算接收帧的 CRC16，并与帧尾低字节在前的校验值比较。
+ *
+ * @param revframe 待校验 CRC16 的 Modbus RTU 完整帧只读缓冲区；末两字节按低字节在前保存线端 CRC。
+ * @param framelen 参与地址或 CRC 校验的完整帧长度，单位字节。
+ * @return true 表示帧内 CRC16 与重新计算值一致；false 表示帧长度不足或 CRC 不一致。
+ */
 bool SlaveCheckCRC(uint8_t const *revframe, int framelen) {
     unsigned char Hi, Lo;
     unsigned short crc;
@@ -75,7 +81,13 @@ bool SlaveCheckCRC(uint8_t const *revframe, int framelen) {
 }
 
 
-/* lenBytes 必须是 4 的倍数，不足时用 0 填充 */
+/**
+ * @brief 使用 STM32 硬件 CRC 单元计算 32 位 CRC，不足整字时以零补齐。
+ *
+ * @param buf 参与 STM32 硬件 CRC32 计算的只读字节序列。
+ * @param lenBytes 必须是 4 的倍数，不足时用 0 填充。
+ * @return 返回 STM32 硬件 CRC 单元计算得到的 32 位 CRC 值。
+ */
 uint32_t CRC32_HAL(const uint8_t *buf, uint32_t lenBytes) {
 	uint32_t word, crc;
 	uint32_t words = lenBytes >> 2;                /* HAL 接口的长度单位是“32-bit word” :contentReference[oaicite:3]{index=3} */
@@ -109,15 +121,20 @@ typedef struct {
 	uint32_t expect; /* 期望 CRC32 */
 } CRC_TestCase;
 
+/* CRC 标准校验向量“123456789”，仅供本模块自检验证算法实现。 */
 static const uint8_t vector1[] = "123456789"; /* 0xCBF43926 */
 static const uint8_t vector2[] = { 0x00 }; /* 0xD202EF8D */
 static const uint8_t vector3[] = { 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A }; /* 0xE3069283 */
 
+/* CRC 自检用例表；每项绑定输入向量、字节长度和当前硬件 CRC 配置下的期望结果。 */
 static const CRC_TestCase kCases[] = { { "ASCII 123456789", vector1, sizeof(vector1) - 1, 0xAFF19057 }, { "Single 0x00 Byte", vector2, sizeof(vector2),
 		0xC704DD7B }, { "10‑byte Incremental", vector3, sizeof(vector3), 0xE8008411 }, };
+/* 当前 CRC 自检用例数组的元素数量；由 sizeof 自动推导，新增或删除用例时无需手工同步计数。 */
 #define CASE_COUNT (sizeof(kCases)/sizeof(kCases[0]))
 
-/* ---------------- 测试主函数 ------------- */
+/**
+ * @brief 使用三组固定测试向量验证硬件 CRC32 计算结果并打印逐例通过情况。
+ */
 void CRC32_HAL_Test(void) {
 	uint32_t ok = 0;
 

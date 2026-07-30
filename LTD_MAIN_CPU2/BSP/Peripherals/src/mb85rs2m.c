@@ -11,10 +11,14 @@ static volatile uint8_t s_fram_emergency_reserved = 0U; /* 1表示掉电保存已预约后
 static volatile uint8_t s_fram_emergency_owner = 0U; /* 1表示当前调用属于编码器紧急保存。 */
 static volatile uint8_t s_fram_normal_write_inhibited = 0U; /* 1表示电源不可信，拒绝普通写。 */
 
-/*
- * 函数用途：把 HAL SPI 状态转换为 FRAM 统一状态。
- * 调用场景：FRAM 事务的每一个命令、地址和数据阶段。
- * 关键约束：不打印、不递归访问 FRAM。
+/**
+ * @brief 把 HAL SPI 状态转换为 FRAM 统一状态。
+ *
+ * @details 调用场景：FRAM 事务的每一个命令、地址和数据阶段。
+ * @note 关键约束：不打印、不递归访问 FRAM。
+ *
+ * @param status 底层 HAL 外设访问状态；函数把 HAL_OK、HAL_ERROR、HAL_BUSY 和 HAL_TIMEOUT映射为模块自己的状态或诊断结果。
+ * @return 返回 FRAM 事务状态；FRAM_STATUS_OK 表示操作完成，其他值区分参数非法、地址越界、资源忙、阶段超时和 HAL SPI 错误。
  */
 static FRAM_Status FRAM_MapHalStatus(HAL_StatusTypeDef status)
 {
@@ -30,10 +34,13 @@ static FRAM_Status FRAM_MapHalStatus(HAL_StatusTypeDef status)
     return FRAM_STATUS_HAL_ERROR;
 }
 
-/*
- * 函数用途：在短临界区内取得唯一 FRAM 事务所有权。
- * 调用场景：FRAM_Read 和 FRAM_Write 进入硬件事务之前。
- * 关键约束：不等待；已有事务时立即返回 BUSY，避免中断上下文死锁。
+/**
+ * @brief 在短临界区内取得唯一 FRAM 事务所有权。
+ *
+ * @details 调用场景：FRAM_Read 和 FRAM_Write 进入硬件事务之前。
+ * @note 关键约束：不等待；已有事务时立即返回 BUSY，避免中断上下文死锁。
+ *
+ * @return 返回 FRAM 事务状态；FRAM_STATUS_OK 表示操作完成，其他值区分参数非法、地址越界、资源忙、阶段超时和 HAL SPI 错误。
  */
 static FRAM_Status FRAM_TryLock(void)
 {
@@ -54,10 +61,11 @@ static FRAM_Status FRAM_TryLock(void)
     return result;
 }
 
-/*
- * 函数用途：释放 FRAM 事务所有权。
- * 调用场景：FRAM 事务统一清理出口。
- * 关键约束：先恢复片选为高，再允许其它调用者进入。
+/**
+ * @brief 释放 FRAM 事务所有权。
+ *
+ * @details 调用场景：FRAM 事务统一清理出口。
+ * @note 关键约束：先恢复片选为高，再允许其它调用者进入。
  */
 static void FRAM_Unlock(void)
 {
@@ -71,10 +79,11 @@ static void FRAM_Unlock(void)
     }
 }
 
-/*
- * 函数用途：为掉电编码器提交预留后续FRAM事务。
- * 调用场景：24V模拟看门狗中断。
- * 关键约束：不打断已经开始的事务；预留后普通新事务立即返回BUSY。
+/**
+ * @brief 为掉电编码器提交预留后续FRAM事务。
+ *
+ * @details 调用场景：24V模拟看门狗中断。
+ * @note 关键约束：不打断已经开始的事务；预留后普通新事务立即返回BUSY。
  */
 void FRAM_RequestEmergencyReservationFromISR(void)
 {
@@ -82,41 +91,53 @@ void FRAM_RequestEmergencyReservationFromISR(void)
     __DMB();
 }
 
-/* PendSV在执行紧急A/B与回执事务前声明所有者，使其可越过普通写门禁。 */
+/**
+ * @brief PendSV在执行紧急A/B与回执事务前声明所有者，使其可越过普通写门禁。
+ */
 void FRAM_EnterEmergencyOwner(void)
 {
     s_fram_emergency_owner = 1U;
     __DMB();
 }
 
-/* 结束紧急所有者身份；预约仍保留到电压稳定且紧急请求完全结束。 */
+/**
+ * @brief 结束紧急所有者身份；预约仍保留到电压稳定且紧急请求完全结束。
+ */
 void FRAM_ExitEmergencyOwner(void)
 {
     __DMB();
     s_fram_emergency_owner = 0U;
 }
 
-/* 释放掉电预约，允许普通读写重新参与无等待仲裁。 */
+/**
+ * @brief 释放掉电预约，允许普通读写重新参与无等待仲裁。
+ */
 void FRAM_ReleaseEmergencyReservation(void)
 {
     __DMB();
     s_fram_emergency_reserved = 0U;
 }
 
-/*
- * 函数用途：查询紧急掉电流程是否已经预约 FRAM。
- * 调用场景：主循环参数延后保存决定是否继续等待。
- * 关键约束：只读取单字节状态，不等待、不打印。
+/**
+ * @brief 查询紧急掉电流程是否已经预约 FRAM。
+ *
+ * @details 调用场景：主循环参数延后保存决定是否继续等待。
+ * @note 关键约束：只读取单字节状态，不等待、不打印。
+ *
+ * @return true 表示紧急掉电流程已预约 FRAM，普通写入应停止占用；false 表示当前没有紧急预约。
  */
 bool FRAM_IsEmergencyReserved(void)
 {
     return s_fram_emergency_reserved != 0U;
 }
 
-/*
- * 函数用途：在电源不可靠时禁止普通 FRAM 写入。
- * 调用场景：24V 监控启动、低压、DMA 故障和恢复边界。
- * 关键约束：紧急所有者仍可写入掉电记录；FRAM 读取不受影响。
+/**
+ * @brief 在电源不可靠时禁止普通 FRAM 写入。
+ *
+ * @details 调用场景：24V 监控启动、低压、DMA 故障和恢复边界。
+ * @note 关键约束：紧急所有者仍可写入掉电记录；FRAM 读取不受影响。
+ *
+ * @param inhibited true 表示禁止普通 FRAM 写事务，false 表示解除该禁止。
  */
 void FRAM_SetNormalWriteInhibitedFromISR(bool inhibited)
 {
@@ -124,7 +145,14 @@ void FRAM_SetNormalWriteInhibitedFromISR(bool inhibited)
     __DMB();
 }
 
-/* 在触碰片选前校验指针、HAL 16bit长度限制及256KiB地址边界。 */
+/**
+ * @brief 在触碰片选前校验指针、HAL 16bit长度限制及256KiB地址边界。
+ *
+ * @param data 待校验的读写缓冲区首地址；length 大于 0 时必须非 NULL，本函数不访问缓冲区内容。
+ * @param address SPI4 FRAM 的绝对字节地址；函数先结合 length 检查容量边界，再从该地址连续读写。
+ * @param length 输入数据的有效长度，单位字节。
+ * @return 返回 FRAM 事务状态；FRAM_STATUS_OK 表示操作完成，其他值区分参数非法、地址越界、资源忙、阶段超时和 HAL SPI 错误。
+ */
 static FRAM_Status FRAM_ValidateRange(const void *data, uint32_t address, uint32_t length)
 {
     if ((data == NULL) || (length == 0U) || (length > UINT16_MAX)) {
@@ -136,7 +164,11 @@ static FRAM_Status FRAM_ValidateRange(const void *data, uint32_t address, uint32
     return FRAM_STATUS_OK;
 }
 
-/* 已持有事务锁时发送WREN；无论HAL结果如何都在返回前释放片选。 */
+/**
+ * @brief 已持有事务锁时发送WREN；无论HAL结果如何都在返回前释放片选。
+ *
+ * @return 返回 FRAM 事务状态；FRAM_STATUS_OK 表示操作完成，其他值区分参数非法、地址越界、资源忙、阶段超时和 HAL SPI 错误。
+ */
 static FRAM_Status FRAM_WriteEnableLocked(void)
 {
     uint8_t command = MB_WRITEENABLE;
@@ -151,9 +183,15 @@ static FRAM_Status FRAM_WriteEnableLocked(void)
     return result;
 }
 
-/*
- * 统一写事务：参数校验、双重普通写门禁、无等待加锁、WREN、24bit地址和数据发送。
+/**
+ * @brief 统一写事务：参数校验、双重普通写门禁、无等待加锁、WREN、24bit地址和数据发送。
+ *
  * 所有硬件阶段共用cleanup出口恢复片选并释放事务锁。
+ *
+ * @param data 准备写入 SPI4 FRAM 的连续只读字节序列；有效范围为 data[0..length-1]。
+ * @param address SPI4 FRAM 的绝对字节地址；函数先结合 length 检查容量边界，再从该地址连续读写。
+ * @param length 输入数据的有效长度，单位字节。
+ * @return 返回 FRAM 事务状态；FRAM_STATUS_OK 表示操作完成，其他值区分参数非法、地址越界、资源忙、阶段超时和 HAL SPI 错误。
  */
 FRAM_Status FRAM_Write(const uint8_t *data, uint32_t address, uint32_t length)
 {
@@ -219,9 +257,15 @@ cleanup:
     return result;
 }
 
-/*
- * 统一读事务：读取不受普通写禁止影响，但仍必须遵守紧急预约和唯一事务锁。
+/**
+ * @brief 统一读事务：读取不受普通写禁止影响，但仍必须遵守紧急预约和唯一事务锁。
+ *
  * 任一SPI阶段失败均从cleanup恢复片选并释放所有权。
+ *
+ * @param data FRAM 连续读取的输出缓冲区；成功时写入 address 起始的 length 个字节。
+ * @param address SPI4 FRAM 的绝对字节地址；函数先结合 length 检查容量边界，再从该地址连续读写。
+ * @param length 输入数据的有效长度，单位字节。
+ * @return 返回 FRAM 事务状态；FRAM_STATUS_OK 表示操作完成，其他值区分参数非法、地址越界、资源忙、阶段超时和 HAL SPI 错误。
  */
 FRAM_Status FRAM_Read(uint8_t *data, uint32_t address, uint32_t length)
 {
@@ -269,6 +313,13 @@ cleanup:
     return result;
 }
 
+/**
+ * @brief 旧兼容接口：从绝对 FRAM 字节地址写入数据，负地址直接返回且不传播底层状态。
+ *
+ * @param p_array 待连续写入 FRAM 的源字节数组。
+ * @param startcnt FRAM 连续读写的起始字节地址。
+ * @param length 输入数据的有效长度，单位字节。
+ */
 void WriteMultiData(uint8_t const *p_array, int startcnt, uint32_t length)
 {
     if (startcnt < 0) {
@@ -277,6 +328,13 @@ void WriteMultiData(uint8_t const *p_array, int startcnt, uint32_t length)
     (void)FRAM_Write(p_array, (uint32_t)startcnt, length);
 }
 
+/**
+ * @brief 旧兼容接口：从绝对 FRAM 字节地址读取数据，负地址直接返回且不传播底层状态。
+ *
+ * @param p_array 用于接收 FRAM 连续读取结果的目标字节数组。
+ * @param startcnt FRAM 连续读写的起始字节地址。
+ * @param length 输入数据的有效长度，单位字节。
+ */
 void ReadMultiData(uint8_t *p_array, int startcnt, uint32_t length)
 {
     if (startcnt < 0) {
@@ -285,6 +343,12 @@ void ReadMultiData(uint8_t *p_array, int startcnt, uint32_t length)
     (void)FRAM_Read(p_array, (uint32_t)startcnt, length);
 }
 
+/**
+ * @brief 使用 24 位绝对字节地址，按大端字节序向 FRAM 写入一个 32 位数；底层失败不向调用方返回。
+ *
+ * @param data 准备写入 CPU2 FRAM 的 32 位原始值；函数按固定字节顺序从 address 开始写入四个连续字节。
+ * @param address SPI4 FRAM 的绝对字节地址；函数先结合 length 检查容量边界，再从该地址连续读写。
+ */
 void WriteSingleData(uint32_t data, uint32_t address)
 {
     uint8_t bytes[4];
@@ -296,6 +360,12 @@ void WriteSingleData(uint32_t data, uint32_t address)
     (void)FRAM_Write(bytes, address, sizeof(bytes));
 }
 
+/**
+ * @brief 使用 24 位绝对字节地址，按大端字节序从 FRAM 读取 32 位数；读取失败与真实零值当前无法区分。
+ *
+ * @param address SPI4 FRAM 的绝对字节地址；函数先结合 length 检查容量边界，再从该地址连续读写。
+ * @return 返回从指定 FRAM 绝对地址按大端顺序组合的 32 位原始值。
+ */
 uint32_t ReadSingleData(uint32_t address)
 {
     uint8_t bytes[4] = {0U};
@@ -309,6 +379,13 @@ uint32_t ReadSingleData(uint32_t address)
            (uint32_t)bytes[3];
 }
 
+/**
+ * @brief 从 address×4 字节地址起，按大端序连续写入 steps 和 circle。
+ *
+ * @param steps 与卷绕圈数一同保存的编码器累计步数。
+ * @param circle 与编码器位置一同保存的卷绕圈数。
+ * @param address SPI4 FRAM 的绝对字节地址；函数先结合 length 检查容量边界，再从该地址连续读写。
+ */
 void WriteTwoData(int steps, int circle, int address)
 {
     uint8_t bytes[8];
@@ -329,6 +406,9 @@ void WriteTwoData(int steps, int circle, int address)
     (void)FRAM_Write(bytes, (uint32_t)address * 4U, sizeof(bytes));
 }
 
+/**
+ * @brief 破坏性 FRAM 维护测试：会覆盖固定测试地址并打印回读结果，禁止在生产流程调用。
+ */
 void Test_FRAM_ReadWrite(void)
 {
     uint32_t test_cases[][2] = {

@@ -1,4 +1,5 @@
 #ifndef INC_FAULT_RECOVERY_H_
+/* INC_FAULT_RECOVERY_H_ 是本头文件的包含保护标记；首次展开后置位，防止重复包含造成类型或接口重复定义。 */
 #define INC_FAULT_RECOVERY_H_
 
 #include <stdint.h>
@@ -35,10 +36,11 @@ void FaultRecovery_Cancel(const char *reason);
  */
 FaultRecoveryResult FaultRecovery_Poll(void);
 
-/*
- * 函数用途：查询自动故障恢复是否正在占用设备恢复流程。
- * 调用场景：CPU2持久参数最终写门禁判断错误态是否真正空闲。
- * 关键约束：只读返回恢复上下文，不清故障、不取消恢复、不触发重试。
+/**
+ * @brief 查询自动故障恢复是否正在占用设备恢复流程。
+ *
+ * @details 调用场景：CPU2持久参数最终写门禁判断错误态是否真正空闲。
+ * @note 关键约束：只读返回恢复上下文，不清故障、不取消恢复、不触发重试。
  */
 bool FaultRecovery_IsActive(void);
 

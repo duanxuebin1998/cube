@@ -4,7 +4,7 @@
  * @Author       : Aubon
  * @Date         : 2026-02-03 14:06:14
  * @LastEditors  : Duan Xuebin
- * @LastEditTime : 2026-05-13 15:17:02
+ * @LastEditTime : 2026-07-29 14:17:38
  * Copyright 2026 Aubon, All Rights Reserved. 
  * 2026-02-03 14:06:14
  */
@@ -29,6 +29,9 @@
 
 /**
  * @brief 判断错误码是否属于编码器故障范围。
+ *
+ * @param error_code 待记录、转换或判断的错误码。该整机错误码用于识别编码器类故障并选择启动或运行期处理路径。
+ * @return true 表示错误码属于编码器通信、校验、就绪或持久化故障集合；否则返回 false。
  */
 static uint8_t App_IsEncoderErrorCode(uint32_t error_code) {
 	return (error_code >= ENCODER_TIMEOUT) && (error_code <= ENCODER_FIRST_SAMPLE_TIMEOUT);
@@ -36,6 +39,8 @@ static uint8_t App_IsEncoderErrorCode(uint32_t error_code) {
 
 /**
  * @brief 执行正式测量命令并处理命令后的恢复、调试刷新和延迟保存。
+ *
+ * @param command 主循环已经取出的正式 CommandType 测量命令，用于选择具体测量流程。
  */
 static void App_ExecuteMeasureCommand(CommandType command) {
     printf("当前命令：%d\r\n", command);
@@ -55,6 +60,8 @@ static void App_ExecuteMeasureCommand(CommandType command) {
 /**
  * @brief 主循环空闲时处理全局错误兜底。
  * @note 只有在没有待执行命令、也没有正在执行命令时，才根据全局 error_code 挂错误态；新命令优先由主循环前面的命令分支处理。
+ *
+ * @return 1 表示命令槽和当前命令均为空时发现非 NO_ERROR、非 STATE_SWITCH 的残留故障，且已进入或保持错误态；0 表示未命中该故障兜底条件，本次可能仅屏蔽电机位置源模式下的编码器错误，或在故障清除后恢复待机。
  */
 static uint8_t App_HandleIdleGlobalError(void) {
 	uint32_t error_code = g_measurement.device_status.error_code;
@@ -70,7 +77,7 @@ static uint8_t App_HandleIdleGlobalError(void) {
 		(g_measurement.device_status.current_command == CMD_NONE) &&
 		(error_code != NO_ERROR) &&
 		(error_code != STATE_SWITCH)) {
-		/* 先处理异常边界，避免应用主循环状态机带故障继续运行。 */
+		/* 空闲且没有待执行命令时发现残留故障码，若尚未进入正式错误态则通过统一入口完成停机和故障现场发布。 */
 		if (g_measurement.device_status.device_state != STATE_ERROR) {
             FaultManager_SetGlobalErrorState(error_code,
                                              GetShortFilename(__FILE__),
@@ -86,7 +93,7 @@ static uint8_t App_HandleIdleGlobalError(void) {
 		return 1;
 	}
 
-	/* 先处理异常边界，避免应用主循环状态机带故障继续运行。 */
+	/* 只有故障码已经清除且命令槽、当前命令都为空，才允许错误态回到待机，避免恢复尚未结束便重新接收业务。 */
 	if ((g_measurement.device_status.device_state == STATE_ERROR) &&
 		(g_deviceParams.command == CMD_NONE) &&
 		(g_measurement.device_status.current_command == CMD_NONE) &&
@@ -96,7 +103,14 @@ static uint8_t App_HandleIdleGlobalError(void) {
 
 	return 0;
 }
-/* 初始化函数 */
+/**
+ * @brief 按安全启动顺序初始化电源监控、参数、位置、通信、输出和电机子系统。
+ *
+ * 先启动 24 V 电源监控，再加载设备参数和恢复编码器位置；只有位置可信时才开放掉电紧急保存。
+ * 随后初始化 HART、扭力、主机 Modbus、继电器和 AO，最后在电源门禁允许时初始化电机，并在故障信息模块就绪后重新发布启动阶段锁存的最高优先级错误。
+ *
+ * @note 电源监控或位置恢复失败会保持运动禁止；AO 初始化失败只记录辅助输出状态，不覆盖更高优先级的整机启动故障。
+ */
 void App_Init(void) {
     /*
      * 各子系统返回值保留到其初始化边界；startup_init_error汇总需要在
@@ -160,7 +174,7 @@ void App_Init(void) {
     } else {
         motor_init_ret = MotorCtrl_Init();
     }
-	/* 先处理异常边界，避免应用主循环状态机带故障继续运行。 */
+	/* 电机初始化失败时保留真实驱动错误，并只在尚无启动错误时登记为首个失败；后续初始化仍继续执行以收集完整启动状态。 */
 	if (motor_init_ret != NO_ERROR) {
 		g_measurement.device_status.error_code = motor_init_ret;
 		if (startup_init_error == NO_ERROR) {
@@ -200,17 +214,19 @@ void App_Init(void) {
 /* MotorCtrl_SwitchPositionSourceToMotor();/ /切换成电机记步测试 */
 }
 /* 主循环任务 */
-/*
- * 主循环本身不直接做测量，它更像一个“调度器”。
- * 每轮循环只做一件最高优先级的事，优先级从高到低如下：
- * 1. 接收侧刚送进来的原始命令（new_command_ready）
- * 2. 已经挂到 g_deviceParams.command 的正式命令
- * 3. 测量命令失败后的自动恢复检查
- * 4. 系统完全空闲时的错误兜底
- * 5. 本轮尾声的参数延迟保存和统一节拍延时
+/**
+ * @brief 主循环本身不直接做测量，它更像一个“调度器”。
  *
- * 这样设计的目的，是避免“错误态”或“后台任务”抢在新命令前面执行，
- * 从而把恢复动作、重试动作、强制运动动作卡死。
+ * 进入主业务分派前，先在线程态处理电源监控延后故障、紧急保存报告、电机运行位置、扭力通信超时、主机通信日志和模拟量输出诊断。
+ * 每轮循环只做一件最高优先级的事，优先级从高到低如下。
+ * 1. 接收侧刚送进来的原始命令（new_command_ready）。
+ * 2. 已经挂到 g_deviceParams.command 的正式命令。
+ * 3. 测量命令失败后的自动恢复检查。
+ * 4. 系统完全空闲时的错误兜底。
+ * 5. 本轮尾声的参数延迟保存和统一节拍延时。
+ * 最新串口原始命令和正式设备命令都会取消等待中的自动恢复，防止旧恢复动作抢在用户新命令前执行；恢复模块只决定本轮是否已处理以及是否需要重跑命令，实际命令选择与执行仍由主循环统一完成。
+ * 这样设计的目的，是避免“错误态”或“后台任务”抢在新命令前面执行，从而把恢复动作、重试动作、强制运动动作卡死。
+ * 恢复分支、错误兜底和普通循环尾声都会推进参数延迟保存并保留 50 ms 主循环节拍；前两类分支完成后立即返回，不再执行本轮后续业务。
  */
 void App_MainLoop(void) {
     CommandType pending_command = CMD_NONE;
@@ -218,13 +234,12 @@ void App_MainLoop(void) {
 
 	/* 测试指令 */
 	/* DSM_V2_Test_AllParams(); / / 二代传感器测试函数 */
-	/* Sensor_Test(); / / 传感器测试 */
 	/* Test_FRAM_ReadWrite(); */
-/* printf("{encoder}%d\r\n{torque}%d\r\n", (int) g_encoder_count, g_weight); */
+	/* printf("{encoder}%d\r\n{torque}%d\r\n", (int) g_encoder_count, g_weight); */
 	/* printf("位置%d", g_measurement.debug_data.sensor_position); */
 	/* HAL_GPIO_WritePin(HART_RTS_GPIO_Port, HART_RTS_Pin, GPIO_PIN_RESET); */
 	/* HAL_UART_Transmit_DMA(&huart2, "123456", 6); / / 通过UART发送响应 */
-
+	// DSM_EnableDensityMode();
 
 	/* 电源监控故障先在线程态发布；恢复服务每轮最多执行一次局部ADC/DMA重启。 */
     power_fault_code = PowerMonitor_ProcessDeferred();
@@ -272,7 +287,7 @@ void App_MainLoop(void) {
                 App_ExecuteMeasureCommand(selected_command);
             }
             process_device_params_deferred_tasks();
-            /* 应用主循环与外设通信之间保留等待时间，避免硬件或对端协议尚未准备好。 */
+            /* 新命令分派完成后仍维持 50 ms 主循环节拍，避免连续命令长期占用前台并挤压后台任务。 */
             HAL_Delay(50);
             return;
         }
@@ -281,13 +296,11 @@ void App_MainLoop(void) {
          * 也就是说：自动恢复会先保持原错误状态，空闲兜底只处理未纳入恢复流程的全局错误。 */
         if (App_HandleIdleGlobalError()) {
             process_device_params_deferred_tasks();
-            /* 应用主循环与外设通信之间保留等待时间，避免硬件或对端协议尚未准备好。 */
-            HAL_Delay(50); /* 出错分支也保持和主循环一致的节拍 */
+            HAL_Delay(50); /* 错误兜底提前返回前仍维持 50 ms 主循环节拍，避免故障检查和日志在空闲状态高频重复。 */
             return;
         }
     }
 	/* 本轮尾声：无论本轮是否空闲，只要没提前 return，就统一走一次节拍延时。 */
 	process_device_params_deferred_tasks();
-	/* 应用主循环与外设通信之间保留等待时间，避免硬件或对端协议尚未准备好。 */
-	HAL_Delay(50); /* 延时50ms */
+	HAL_Delay(50); /* 固定 50 ms 前台循环周期，并为后台参数任务和串口事务留出执行时间。 */
 }

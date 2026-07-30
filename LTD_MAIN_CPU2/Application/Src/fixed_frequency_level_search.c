@@ -11,29 +11,45 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+/* 定频找液位允许的罐顶安全余量 10.00 mm，单位为 0.01 mm；目标位置和当前位置都不得越过罐高减去该余量。 */
 #define LF_TOP_MARGIN_01MM   1000U
+/* 未配置死区时采用的默认频率死区 15 Hz。 */
 #define LF_DEFAULT_BAND_HZ   15U
+/* 定频搜索的最小电机速度 0.10 m/min，线值单位为 0.01 m/min。 */
 #define LF_MIN_SPEED_X100    10U
+/* 频率误差换算速度增量的比例因子：每增加 10 Hz 误差，速度线值增加 1，即 0.01 m/min。 */
 #define LF_HZ_PER_SPEED_X100 10U
+/* 定频搜索循环的传感器采样周期 200 ms。 */
 #define LF_SAMPLE_MS         200U
+/* 频率进入目标死区后单次稳定等待时间 1000 ms；等待期间仍允许命令切换中止当前流程。 */
 #define LF_STABLE_MS         1000U
+/* 确认到达目标频率所需的连续稳定采样次数 3；任一采样离开死区即清零重新累计。 */
 #define LF_STABLE_COUNT      3U
+/* 定频找液位流程总超时 600000 ms，即 10 min。 */
 #define LF_TIMEOUT_MS        600000U
+/* 尚未记录有效电机方向时使用的哨兵值 -1；与正常上、下方向枚举均不相同，用于判断是否需要方向切换。 */
 #define LF_DIR_NONE          (-1)
 
+/* 定频找液位运行配置快照；集中保存目标频率、死区、限速以及位置和扭力安全边界。 */
 typedef struct {
-    uint32_t target_hz;
-    uint32_t deadband_hz;
-    uint32_t max_speed_x100;
-    int32_t position_min;
-    int32_t position_max;
-    int32_t weight_min;
-    int32_t weight_max;
+    /* 定频找液位的目标、死区、限速及位置/扭力保护边界。 */
+    uint32_t target_hz; /* 定频找液位的目标传感器频率，单位为 Hz。 */
+    uint32_t deadband_hz; /* 目标频率两侧不再移动的死区宽度，单位为 Hz。 */
+    uint32_t max_speed_x100; /* 定频找液位允许的最大电机速度，单位为 0.01 m/min。 */
+    int32_t position_min; /* 找液位允许到达的最小位置边界。 */
+    int32_t position_max; /* 找液位允许到达的最大位置边界。 */
+    int32_t weight_min; /* 找液位允许的最小扭力/重量安全边界。 */
+    int32_t weight_max; /* 找液位允许的最大扭力/重量安全边界。 */
 } FixedLevelConfig;
 
-/*
- * 函数用途：快照本次找液位使用的频率、位置、扭力和速度限制。
- * 关键约束：只读设备参数；零覆盖值表示使用设备当前配置。
+/**
+ * @brief 快照本次找液位使用的频率、位置、扭力和速度限制。
+ *
+ * @param target_override 目标。
+ * @param deadband_override 调试命令显式给出的频率死区；未给出时使用系统参数默认值。
+ * @param config 定频找液位配置输出对象；函数写入目标频率、死区、最大速度、位置上下限和扭力保护上下限的本轮快照。
+ * @return PARAM_RANGE_ERROR 表示参数超出允许范围；NO_ERROR 表示操作成功。
+ * @note 只读设备参数；零覆盖值表示使用设备当前配置。
  */
 static uint32_t FixedLevel_BuildConfig(uint32_t target_override,
                                        uint32_t deadband_override,
@@ -89,9 +105,12 @@ static uint32_t FixedLevel_BuildConfig(uint32_t target_override,
     return NO_ERROR;
 }
 
-/*
- * 函数用途：统一慢停并返回原始失败码。
- * 关键约束：用户停止属于状态切换，不作为故障覆盖。
+/**
+ * @brief 统一慢停并返回原始失败码。
+ *
+ * @param error_code 待记录、转换或判断的错误码。该值是定频找液位退出原因，停止函数在保留原错误码的同时完成电机收尾。
+ * @return 原 error_code 非零时始终保留并返回该根因；原结果为 NO_ERROR 但慢停失败时返回慢停错误，否则返回 NO_ERROR。
+ * @note 用户停止属于状态切换，不作为故障覆盖。
  */
 static uint32_t FixedLevel_Stop(uint32_t error_code)
 {
@@ -108,9 +127,13 @@ static uint32_t FixedLevel_Stop(uint32_t error_code)
            stop_ret : error_code;
 }
 
-/*
- * 函数用途：检查位置、绝对扭力、相对碰撞、通信和丢步保护。
- * 关键约束：调用方收到非零返回值后必须统一慢停。
+/**
+ * @brief 检查位置、绝对扭力、相对碰撞、通信和丢步保护。
+ *
+ * @param config 只读定频找液位配置快照；包含目标频率、死区、最大速度以及位置和扭力保护范围，用于运行前后持续执行边界检查。
+ * @param moving 运动状态。
+ * @return NO_ERROR 表示位置、扭力、碰撞、通信和丢步门禁均通过；越过位置边界返回 MEASUREMENT_OILLEVEL_HIGH 或 MEASUREMENT_OILLEVEL_LOW，碰撞返回 WEIGHT_COLLISION_DETECTED，其他值为扭力通信、位置读取或丢步检查的具体错误码。
+ * @note 调用方收到非零返回值后必须统一慢停。
  */
 static uint32_t FixedLevel_CheckGuards(const FixedLevelConfig *config,
                                        uint8_t moving)
@@ -156,6 +179,9 @@ static uint32_t FixedLevel_CheckGuards(const FixedLevelConfig *config,
            ret : MotorCtrl_CheckLostStepAutoTiming(position);
 }
 
+/**
+ * @brief 校验并打印固定频率找液位的目标、死区、位置、扭力、速度和稳定采样配置。
+ */
 void FixedFrequencyLevelSearch_PrintCurrentConfig(void)
 {
     FixedLevelConfig config;
@@ -181,6 +207,21 @@ void FixedFrequencyLevelSearch_PrintCurrentConfig(void)
            (unsigned long)LF_TIMEOUT_MS);
 }
 
+/**
+ * @brief 按固定目标频率和死区闭环搜索液位。
+ *
+ * 函数接受已经通过串口语法分类的 LF 命令；LF=<目标频率>[,<死区>] 提供本次覆盖值，未提供的字段由 FixedLevel_BuildConfig
+ * 使用设备参数或默认值，并同时建立位置、扭力和最大速度保护边界。
+ * 进入液位频率模式后清除旧液位稳定标志并初始化丢步检测；循环内在读取频率前后均检查位置、扭力通信、碰撞和丢步保护，避免一次传感器事务期间越过机械边界。
+ * 当前频率落入目标死区时先慢停电机，并要求连续 LF_STABLE_COUNT 次稳定采样；确认后把当前位置同时写入油位结果和密度分布油位，置位探头到液面及液体稳定标志。
+ * 频率偏差超出死区时按偏差符号选择上行或下行，按偏差量计算并限制 0.01 m/min 速度；方向反转前先慢停，再启动新的速度方向。
+ * 命令切换、总超时、传感器读取、位置、扭力、碰撞、丢步或电机控制失败均进入统一 stop 出口，清除稳定标志并尝试慢停，禁止异常返回后继续保持速度模式。
+ *
+ * @param command 以 NUL 结尾且已通过严格语法校验的 LF 命令；LF=<Hz>[,<死区Hz>] 可覆盖本次目标和死区，LF 或 LF? 不携带覆盖值时使用已配置或默认值。
+ * @return NO_ERROR 表示频率连续稳定达到门限、当前位置已发布且电机已停止；STATE_SWITCH
+ *         表示被新命令中断，其他值区分配置或范围、总超时、传感器、位置、扭力、丢步和电机慢停错误。
+ * @note 除稳定成功直接返回外，所有退出都通过 FixedLevel_Stop；若原错误为 NO_ERROR 而慢停失败，则返回慢停错误，否则保留最先发生的业务错误。
+ */
 uint32_t FixedFrequencyLevelSearch_Run(const uint8_t *command)
 {
     FixedLevelConfig config;

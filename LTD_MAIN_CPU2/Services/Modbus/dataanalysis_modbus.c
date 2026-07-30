@@ -13,45 +13,87 @@
 
 /* ===================== 通用寄存器读写函数 ===================== */
 
-/* 写入 uint32_t 到寄存器数组（高 16 位在前，低 16 位在后） */
+/**
+ * @brief 写入 uint32_t 到寄存器数组（高 16 位在前，低 16 位在后）。
+ *
+ * @param regs 连续寄存器值缓冲区。函数按职责向 regs[] 写入协议镜像，或从可写镜像中读取并更新指定字段。
+ * @param addr 目标 32 位值高 16 位所在的零基寄存器下标；低 16 位写入 addr + 1。
+ * @param value 待编码写入线格式的 32 位数值。
+ */
 static inline void write_u32_to_regs(uint16_t *regs, uint16_t addr, uint32_t value) {
 	regs[addr] = (uint16_t) ((value >> 16) & 0xFFFFu);
 	regs[addr + 1] = (uint16_t) (value & 0xFFFFu);
 }
 
-/* 从寄存器数组读取 uint32_t */
+/**
+ * @brief 从寄存器数组读取 uint32_t。
+ *
+ * @param regs 连续寄存器值缓冲区。函数按既定寄存器数量只读 regs[]，并按高低字、字段偏移或协议映射解析业务值。
+ * @param addr 目标 32 位值高 16 位所在的零基寄存器下标；低 16 位从 addr + 1 读取。
+ * @return 返回寄存器数组中高字在前的两个 16 位寄存器组合得到的 32 位无符号值。
+ */
 static inline uint32_t read_u32_from_regs(const uint16_t *regs, uint16_t addr) {
 	return ((uint32_t) regs[addr] << 16) | (uint32_t) regs[addr + 1];
 }
 
-/* 保护电机运行电流，避免 0 或越界值被保存并用于初始化 TMC5130。 */
+/**
+ * @brief 保护电机运行电流，避免 0 或越界值被保存并用于初始化 TMC5130。
+ *
+ * @param value 准备写入 TMC5130 IRUN 的电流档位，合法范围为 MOTOR_CURRENT_MIN 至 MOTOR_CURRENT_MAX。
+ * @return value 位于 MOTOR_CURRENT_MIN 至 MOTOR_CURRENT_MAX 时原样返回；0 或越界值返回 MOTOR_CURRENT_DEFAULT，当前默认
+ *         IRUN 档位为 12。
+ */
 static inline uint32_t normalize_motor_current(uint32_t value) {
     if ((value < MOTOR_CURRENT_MIN) || (value > MOTOR_CURRENT_MAX)) {
         return MOTOR_CURRENT_DEFAULT;
     }
     return value;
 }
-/* 写入 int32_t 到寄存器数组 */
+/**
+ * @brief 写入 int32_t 到寄存器数组。
+ *
+ * @param regs 连续寄存器值缓冲区。函数按职责向 regs[] 写入协议镜像，或从可写镜像中读取并更新指定字段。
+ * @param addr 目标有符号 32 位值高 16 位所在的零基寄存器下标；低 16 位写入 addr + 1。
+ * @param value 待写入协议缓冲区或寄存器的16 位数值。
+ */
 static inline void write_i32_to_regs(uint16_t *regs, uint16_t addr, int32_t value) {
 	write_u32_to_regs(regs, addr, (uint32_t) value);
 }
 
-/* 从寄存器数组读取 int32_t */
+/**
+ * @brief 从寄存器数组读取 int32_t。
+ *
+ * @param regs 连续寄存器值缓冲区。函数按既定寄存器数量只读 regs[]，并按高低字、字段偏移或协议映射解析业务值。
+ * @param addr 目标有符号 32 位值高 16 位所在的零基寄存器下标；低 16 位从 addr + 1 读取。
+ * @return 返回寄存器数组中两个 16 位寄存器组合并按补码解释的 32 位有符号值。
+ */
 static inline int32_t read_i32_from_regs(const uint16_t *regs, uint16_t addr) {
 	return (int32_t) read_u32_from_regs(regs, addr);
 }
 
-/* 写入 float 到寄存器数组（按 IEEE754 的 uint32_t 比特位存放） */
+/**
+ * @brief 写入 float 到寄存器数组（按 IEEE754 的 uint32_t 比特位存放）。
+ *
+ * @param regs 连续寄存器值缓冲区。函数按职责向 regs[] 写入协议镜像，或从可写镜像中读取并更新指定字段。
+ * @param addr 目标 Float32 位模式高 16 位所在的零基寄存器下标；低 16 位写入 addr + 1。
+ * @param value 待写入协议缓冲区或寄存器的16 位数值。
+ */
 static inline void write_float_to_regs(uint16_t *regs, uint16_t addr, float value) {
 	uint32_t temp;
-	/* 按结构或原始字节复制，保持Modbus 协议协议/存储布局不被字段解释改变。 */
+	/* 把 float 的 IEEE-754 Float32 位模式复制为 32 位整数，再由 write_u32_to_regs 按约定寄存器字序拆分。 */
 	memcpy(&temp, &value, sizeof(float));
 	write_u32_to_regs(regs, addr, temp);
 }
 
 
 
-/* 写入单路继电器报警输出配置。 */
+/**
+ * @brief 写入单路继电器报警输出配置。
+ *
+ * @param regs 连续寄存器值缓冲区。函数按职责向 regs[] 写入协议镜像，或从可写镜像中读取并更新指定字段。
+ * @param channel 零基通道号。合法范围为 0～3，用于选择 CPU2 设备参数中的对应继电器配置块。
+ * @param cfg 共享设备参数区中的只读单路继电器报警配置；读取时保持 volatile 语义，用于生成寄存器镜像或运行态配置快照。
+ */
 static void write_relay_alarm_config_to_regs(uint16_t *regs, uint32_t channel, const volatile RelayAlarmConfig *cfg)
 {
     write_u32_to_regs(regs, HOLDREGISTER_DEVICEPARAM_RELAY_OPERATING_MODE(channel), cfg->operating_mode);
@@ -69,7 +111,13 @@ static void write_relay_alarm_config_to_regs(uint16_t *regs, uint32_t channel, c
     write_u32_to_regs(regs, HOLDREGISTER_DEVICEPARAM_RELAY_CLEAR_ALARM(channel), cfg->clear_alarm);
 }
 
-/* 从保持寄存器读取单路继电器报警输出配置。 */
+/**
+ * @brief 从保持寄存器读取单路继电器报警输出配置。
+ *
+ * @param regs 连续寄存器值缓冲区。函数按既定寄存器数量只读 regs[]，并按高低字、字段偏移或协议映射解析业务值。
+ * @param channel 零基通道号。合法范围为 0～3，用于选择 CPU2 设备参数中的对应继电器配置块。
+ * @param cfg 共享设备参数区中的可写单路继电器报警配置；写入时保持 volatile 语义，并只更新当前函数负责的模式、阈值、滞回或锁存命令字段。
+ */
 static void read_relay_alarm_config_from_regs(const uint16_t *regs, uint32_t channel, volatile RelayAlarmConfig *cfg)
 {
     cfg->operating_mode = read_u32_from_regs(regs, HOLDREGISTER_DEVICEPARAM_RELAY_OPERATING_MODE(channel));
@@ -88,7 +136,13 @@ static void read_relay_alarm_config_from_regs(const uint16_t *regs, uint32_t cha
 }
 
 
-/* 写入单路继电器报警输出运行态。运行态寄存器按参考程序只读区布局：报警值占2个寄存器，其余状态各占1个寄存器。 */
+/**
+ * @brief 写入单路继电器报警输出运行态。运行态寄存器按参考程序只读区布局：报警值占2个寄存器，其余状态各占1个寄存器。
+ *
+ * @param regs 连续寄存器值缓冲区。函数按职责向 regs[] 写入协议镜像，或从可写镜像中读取并更新指定字段。
+ * @param channel 零基通道号。合法范围为 0～3，用于选择 CPU2 设备参数中的对应继电器配置块。
+ * @param state 待编码到 CPU2 输入寄存器的单路继电器运行快照，只读使用其报警值和各状态字段。
+ */
 static void write_relay_alarm_runtime_to_regs(uint16_t *regs, uint32_t channel, const volatile RelayAlarmRuntimeState *state)
 {
     write_float_to_regs(regs, REG_RELAY_ALARM_RUNTIME_ALARM_VALUE(channel), state->alarm_value);
@@ -105,10 +159,13 @@ static void write_relay_alarm_runtime_to_regs(uint16_t *regs, uint32_t channel, 
 
 /* ===================== 参数结构体 <-> 保持寄存器映射 ===================== */
 
-/*----------------------------------------------------------------
- * 将 g_deviceParams 写入保持寄存器数组
- * HoldingRegisterArray: 外部保持寄存器缓存区, 元素类型为 uint16_t
- *---------------------------------------------------------------*/
+/**
+ * @brief 将 g_deviceParams 写入保持寄存器数组。
+ *
+ * HoldingRegisterArray: 外部保持寄存器缓存区, 元素类型为 uint16_t。
+ *
+ * @param HoldingRegisterArray 外部保持寄存器缓存区, 元素类型为 uint16_t。
+ */
 void WriteDeviceParamsToHoldingRegisters(uint16_t *HoldingRegisterArray)
 {
     if (HoldingRegisterArray == NULL) {
@@ -288,11 +345,14 @@ void WriteDeviceParamsToHoldingRegisters(uint16_t *HoldingRegisterArray)
                       AoOutput_IsSimulationEnabled());
 }
 
-/*----------------------------------------------------------------
- * 从保持寄存器数组读取数据到 g_deviceParams
- * HoldingRegisterArray: 外部保持寄存器缓存区, 元素类型为 uint16_t
- * 注意: command 一般由线圈或功能码触发, 这里按照保持寄存器映射也支持读回
- *---------------------------------------------------------------*/
+/**
+ * @brief 从保持寄存器数组读取数据到 g_deviceParams。
+ *
+ * HoldingRegisterArray: 外部保持寄存器缓存区, 元素类型为 uint16_t。
+ *
+ * @param HoldingRegisterArray 外部保持寄存器缓存区, 元素类型为 uint16_t。
+ * @note command 一般由线圈或功能码触发, 这里按照保持寄存器映射也支持读回。
+ */
 void ReadDeviceParamsFromHoldingRegisters(uint16_t *HoldingRegisterArray)
 {
     if (HoldingRegisterArray == NULL) {
@@ -490,8 +550,16 @@ void ReadDeviceParamsFromHoldingRegisters(uint16_t *HoldingRegisterArray)
 /* ===================== MeasurementResult <-> 输入寄存器映射 ===================== */
 
 /**
- * @brief 将全局测量结果写入输入寄存器数组
- * @param regs 输入寄存器数组（uint16_t 数组）
+ * @brief 将全局测量结果写入输入寄存器数组。
+ *
+ * 函数先清零完整输入寄存器镜像，避免本轮未覆盖字段保留旧值，再按 CPU2/CPU3 共享地址表编码设备状态、调试数据、液位、水位、罐高和协议辅助状态。
+ * 单点测量、单点监测和密度分布平均值逐字段写入；同质的密度点阵统一循环写入 MAX_MEASUREMENT_POINTS 个点，每点包含六个 32 位测量字段。
+ * 后续固定块包含无线配对与连接状态、四路继电器报警运行态、AO 运行快照、SI Profile 生命周期、固定点代际计数器以及维护和继电器状态槽。
+ * 所有 32 位无符号量、有符号量和 float 都通过共享编码函数写入，保持高低字和原始位模式一致；电机状态只使用主循环预先刷新的缓存，不在可能由 UART5 请求触发的路径中访问 TMC5130。
+ * 固定点数据字段先写入，完成或采样代际计数器最后写入，供 CPU3 在读取前后执行一致性校验。
+ *
+ * @param regs 输入寄存器数组（uint16_t 数组）；用于接收 CPU2 当前 g_measurement 的编码结果，容量至少为 INPUTREGISTER_AMOUNT 个元素。
+ * @note 调用方必须提供至少 INPUTREGISTER_AMOUNT 个 uint16_t 元素；函数会清零并重写整个镜像，不保留调用方原内容。
  */
 void write_measurement_result_to_InputRegisters(uint16_t *regs) {
 	if (regs == NULL) {

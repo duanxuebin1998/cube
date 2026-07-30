@@ -1,41 +1,68 @@
 #ifndef _STATEFORMODBUS_H
+/* _STATEFORMODBUS_H 是本头文件的包含保护标记；首次展开后置位，防止重复包含造成类型或接口重复定义。 */
 #define _STATEFORMODBUS_H
 
 #include <stdbool.h>
 #include <stdint.h>
 
 /* 标准Modbus功能码 */
+/* Modbus 功能码 0x03：读取保持寄存器；用于读取可配置参数和命令相关寄存器。 */
 #define FUNCTIONCODE_READ_HOLDREGISTER  0x03
+/* Modbus 功能码 0x04：读取输入寄存器；用于读取 CPU2 发布的只读状态与测量快照。 */
 #define FUNCTIONCODE_READ_INPUTREGISTER 0x04
+/* Modbus 功能码 0x10：写多个保持寄存器；写入区间还必须通过地址、步长和权限校验。 */
 #define FUNCTIONCODE_WRITE_MULREGISTER  0x10
 
 /* CPU2/CPU3共享标量统一占两个16位寄存器，高字在前 */
+/* CPU2/CPU3 共享标量的统一地址步长，单位为 16 位寄存器；每个逻辑字段预留两个寄存器并按高字在前传输。 */
 #define REG_STRIDE    2U
+/* 一个 UInt32 字段占用的 16 位寄存器数量；当前固定为高、低两个字。 */
 #define REG_SIZE_U32  2U
+/* 一个 Int32 字段占用的 16 位寄存器数量；符号位随 32 位原始值传输。 */
 #define REG_SIZE_I32  2U
+/* 一个 IEEE-754 单精度字段占用的 16 位寄存器数量；线格式按两个字传输。 */
 #define REG_SIZE_FLOAT 2U
+/* UInt8 逻辑字段在共享表中占用的 16 位寄存器数量；为保持统一步长仍预留两个寄存器，未用字不得解释为新字段。 */
 #define REG_SIZE_U8   2U
 
+/* 单帧 Modbus 读寄存器数量上限 125；遵循标准 PDU 长度限制，分块读取不得超过该值。 */
 #define LTD_MODBUS_MAX_READ_REGISTERS  125U
+/* 单帧 Modbus FC10 写寄存器数量上限 122；预留功能码、地址、字节数和 CRC 开销。 */
 #define LTD_MODBUS_MAX_WRITE_REGISTERS 122U
 
 /* 保持寄存器按功能分块，块内未使用地址继续保留 */
+/* CPU2/CPU3 共享保持寄存器“通用设备参数”块的起始地址；块内未分配地址继续保留，不能跨块推断为连续可写参数。 */
 #define HOLDREG_BASE_GENERAL      0x0000U
+/* CPU2/CPU3 共享保持寄存器“电机与运动参数”块的起始地址；块内未分配地址继续保留，不能跨块推断为连续可写参数。 */
 #define HOLDREG_BASE_MOTOR        0x0100U
+/* CPU2/CPU3 共享保持寄存器“油位和罐高参数”块的起始地址；块内未分配地址继续保留，不能跨块推断为连续可写参数。 */
 #define HOLDREG_BASE_OIL_HEIGHT   0x0200U
+/* CPU2/CPU3 共享保持寄存器“水位测量参数”块的起始地址；块内未分配地址继续保留，不能跨块推断为连续可写参数。 */
 #define HOLDREG_BASE_WATER        0x0300U
+/* CPU2/CPU3 共享保持寄存器“测量修正与标定参数”块的起始地址；块内未分配地址继续保留，不能跨块推断为连续可写参数。 */
 #define HOLDREG_BASE_CORRECTION   0x0400U
+/* CPU2/CPU3 共享保持寄存器“测量流程配置参数”块的起始地址；块内未分配地址继续保留，不能跨块推断为连续可写参数。 */
 #define HOLDREG_BASE_MEAS_CONFIG  0x0500U
+/* CPU2/CPU3 共享保持寄存器“模拟量输出配置参数”块的起始地址；块内未分配地址继续保留，不能跨块推断为连续可写参数。 */
 #define HOLDREG_BASE_AO           0x0600U
+/* CPU2/CPU3 共享保持寄存器“四路继电器报警配置参数”块的起始地址；块内未分配地址继续保留，不能跨块推断为连续可写参数。 */
 #define HOLDREG_BASE_RELAY        0x0700U
+/* CPU2/CPU3 共享保持寄存器“SI 与 Wartsila 协议参数”块的起始地址；块内未分配地址继续保留，不能跨块推断为连续可写参数。 */
 #define HOLDREG_BASE_SI_WARTSILA  0x0800U
+/* CPU2/CPU3 共享保持寄存器“历史参数结构保留”块的起始地址；块内未分配地址继续保留，不能跨块推断为连续可写参数。 */
 #define HOLDREG_BASE_RESERVED     0x0900U
+/* CPU2/CPU3 共享保持寄存器“参数存储元信息”块的起始地址；块内未分配地址继续保留，不能跨块推断为连续可写参数。 */
 #define HOLDREG_BASE_METADATA     0x0E00U
+/* CPU2/CPU3 共享保持寄存器“命令入口与能力位”块的起始地址；块内未分配地址继续保留，不能跨块推断为连续可写参数。 */
 #define HOLDREG_BASE_COMMAND      0x0F00U
+/* CPU2 共享保持寄存器地址空间容量，同时作为合法地址的排他上界；范围校验必须满足 address < HOLDREGISTER_AMOUNT。 */
 #define HOLDREGISTER_AMOUNT       0x1000U
 
+/* 可配置继电器报警通道数量；当前固定为 4 路，通道索引范围为 0～3。 */
 #define HOLDREGISTER_RELAY_ALARM_CHANNEL_COUNT 4U
+/* 每路继电器报警配置包含的逻辑字段数量；修改字段表时必须同步调整该计数。 */
 #define HOLDREGISTER_RELAY_ALARM_FIELD_COUNT 13U
+/* 单路继电器报警配置占用的 16 位寄存器总数；由字段数乘统一 REG_STRIDE 计算，作为相邻通道的地址步长。 */
 #define HOLDREGISTER_RELAY_ALARM_CHANNEL_REG_COUNT \
     (HOLDREGISTER_RELAY_ALARM_FIELD_COUNT * REG_STRIDE)
 
@@ -197,91 +224,156 @@ typedef enum
     HOLEREGISTER_STOP = HOLDREGISTER_AMOUNT
 } HOLD;
 
+/* 计算零基继电器通道 ch 的“工作模式”保持寄存器起始地址；宏只执行地址换算，调用方仍需保证 ch 小于通道数量。 */
 #define HOLDREGISTER_DEVICEPARAM_RELAY_OPERATING_MODE(ch) \
     (HOLDREGISTER_DEVICEPARAM_RELAY_ALARM_BASE + ((ch) * HOLDREGISTER_RELAY_ALARM_CHANNEL_REG_COUNT))
+/* 计算零基继电器通道 ch 的“数字量输入源”保持寄存器起始地址；宏只执行地址换算，调用方仍需保证 ch 小于通道数量。 */
 #define HOLDREGISTER_DEVICEPARAM_RELAY_DIGITAL_SOURCE(ch) \
     (HOLDREGISTER_DEVICEPARAM_RELAY_OPERATING_MODE(ch) + (1U * REG_STRIDE))
+/* 计算零基继电器通道 ch 的“触点常开/常闭类型”保持寄存器起始地址；宏只执行地址换算，调用方仍需保证 ch 小于通道数量。 */
 #define HOLDREGISTER_DEVICEPARAM_RELAY_CONTACT_TYPE(ch) \
     (HOLDREGISTER_DEVICEPARAM_RELAY_OPERATING_MODE(ch) + (2U * REG_STRIDE))
+/* 计算零基继电器通道 ch 的“报警比较模式”保持寄存器起始地址；宏只执行地址换算，调用方仍需保证 ch 小于通道数量。 */
 #define HOLDREGISTER_DEVICEPARAM_RELAY_ALARM_MODE(ch) \
     (HOLDREGISTER_DEVICEPARAM_RELAY_OPERATING_MODE(ch) + (3U * REG_STRIDE))
+/* 计算零基继电器通道 ch 的“错误时替代值”保持寄存器起始地址；宏只执行地址换算，调用方仍需保证 ch 小于通道数量。 */
 #define HOLDREGISTER_DEVICEPARAM_RELAY_ERROR_VALUE(ch) \
     (HOLDREGISTER_DEVICEPARAM_RELAY_OPERATING_MODE(ch) + (4U * REG_STRIDE))
+/* 计算零基继电器通道 ch 的“报警过程量来源”保持寄存器起始地址；宏只执行地址换算，调用方仍需保证 ch 小于通道数量。 */
 #define HOLDREGISTER_DEVICEPARAM_RELAY_ALARM_SOURCE(ch) \
     (HOLDREGISTER_DEVICEPARAM_RELAY_OPERATING_MODE(ch) + (5U * REG_STRIDE))
+/* 计算零基继电器通道 ch 的“高高报警阈值”保持寄存器起始地址；宏只执行地址换算，调用方仍需保证 ch 小于通道数量。 */
 #define HOLDREGISTER_DEVICEPARAM_RELAY_HH_ALARM_VALUE(ch) \
     (HOLDREGISTER_DEVICEPARAM_RELAY_OPERATING_MODE(ch) + (6U * REG_STRIDE))
+/* 计算零基继电器通道 ch 的“高报警阈值”保持寄存器起始地址；宏只执行地址换算，调用方仍需保证 ch 小于通道数量。 */
 #define HOLDREGISTER_DEVICEPARAM_RELAY_H_ALARM_VALUE(ch) \
     (HOLDREGISTER_DEVICEPARAM_RELAY_OPERATING_MODE(ch) + (7U * REG_STRIDE))
+/* 计算零基继电器通道 ch 的“低报警阈值”保持寄存器起始地址；宏只执行地址换算，调用方仍需保证 ch 小于通道数量。 */
 #define HOLDREGISTER_DEVICEPARAM_RELAY_L_ALARM_VALUE(ch) \
     (HOLDREGISTER_DEVICEPARAM_RELAY_OPERATING_MODE(ch) + (8U * REG_STRIDE))
+/* 计算零基继电器通道 ch 的“低低报警阈值”保持寄存器起始地址；宏只执行地址换算，调用方仍需保证 ch 小于通道数量。 */
 #define HOLDREGISTER_DEVICEPARAM_RELAY_LL_ALARM_VALUE(ch) \
     (HOLDREGISTER_DEVICEPARAM_RELAY_OPERATING_MODE(ch) + (9U * REG_STRIDE))
+/* 计算零基继电器通道 ch 的“报警回差”保持寄存器起始地址；宏只执行地址换算，调用方仍需保证 ch 小于通道数量。 */
 #define HOLDREGISTER_DEVICEPARAM_RELAY_ALARM_HYSTERESIS(ch) \
     (HOLDREGISTER_DEVICEPARAM_RELAY_OPERATING_MODE(ch) + (10U * REG_STRIDE))
+/* 计算零基继电器通道 ch 的“报警阻尼系数”保持寄存器起始地址；宏只执行地址换算，调用方仍需保证 ch 小于通道数量。 */
 #define HOLDREGISTER_DEVICEPARAM_RELAY_DAMPING_FACTOR(ch) \
     (HOLDREGISTER_DEVICEPARAM_RELAY_OPERATING_MODE(ch) + (11U * REG_STRIDE))
+/* 计算零基继电器通道 ch 的“清除锁存报警瞬时命令”保持寄存器起始地址；宏只执行地址换算，调用方仍需保证 ch 小于通道数量。 */
 #define HOLDREGISTER_DEVICEPARAM_RELAY_CLEAR_ALARM(ch) \
     (HOLDREGISTER_DEVICEPARAM_RELAY_OPERATING_MODE(ch) + (12U * REG_STRIDE))
 
 /* CPU3本机保持寄存器：0x7000 */
+/* CPU3 本机显示与串口配置保持寄存器块的起始地址 0x7000；该地址段不属于 CPU2 参数存储区。 */
 #define HOLDREGISTER_CPU3_BASE 0x7000U
+/* CPU3 本机“显示板软件版本”保持寄存器起始地址；相对 HOLDREGISTER_CPU3_BASE 按共享标量双寄存器步长布局。 */
 #define HOLDREGISTER_CPU3_LED_VERSION (HOLDREGISTER_CPU3_BASE + 0x00U)
+/* CPU3 本机“界面语言”保持寄存器起始地址；相对 HOLDREGISTER_CPU3_BASE 按共享标量双寄存器步长布局。 */
 #define HOLDREGISTER_CPU3_LANGUAGE (HOLDREGISTER_CPU3_BASE + 0x02U)
+/* CPU3 本机“油位显示数据源”保持寄存器起始地址；相对 HOLDREGISTER_CPU3_BASE 按共享标量双寄存器步长布局。 */
 #define HOLDREGISTER_CPU3_SRC_OIL (HOLDREGISTER_CPU3_BASE + 0x04U)
+/* CPU3 本机“水位显示数据源”保持寄存器起始地址；相对 HOLDREGISTER_CPU3_BASE 按共享标量双寄存器步长布局。 */
 #define HOLDREGISTER_CPU3_SRC_WATER (HOLDREGISTER_CPU3_BASE + 0x06U)
+/* CPU3 本机“密度显示数据源”保持寄存器起始地址；相对 HOLDREGISTER_CPU3_BASE 按共享标量双寄存器步长布局。 */
 #define HOLDREGISTER_CPU3_SRC_D (HOLDREGISTER_CPU3_BASE + 0x08U)
+/* CPU3 本机“温度显示数据源”保持寄存器起始地址；相对 HOLDREGISTER_CPU3_BASE 按共享标量双寄存器步长布局。 */
 #define HOLDREGISTER_CPU3_SRC_T (HOLDREGISTER_CPU3_BASE + 0x0AU)
+/* CPU3 本机“油位显示使能”保持寄存器起始地址；相对 HOLDREGISTER_CPU3_BASE 按共享标量双寄存器步长布局。 */
 #define HOLDREGISTER_CPU3_IN_OIL (HOLDREGISTER_CPU3_BASE + 0x0CU)
+/* CPU3 本机“水位显示使能”保持寄存器起始地址；相对 HOLDREGISTER_CPU3_BASE 按共享标量双寄存器步长布局。 */
 #define HOLDREGISTER_CPU3_IN_WATER (HOLDREGISTER_CPU3_BASE + 0x0EU)
+/* CPU3 本机“密度显示使能”保持寄存器起始地址；相对 HOLDREGISTER_CPU3_BASE 按共享标量双寄存器步长布局。 */
 #define HOLDREGISTER_CPU3_IN_D (HOLDREGISTER_CPU3_BASE + 0x10U)
+/* CPU3 本机“密度显示切换方式”保持寄存器起始地址；相对 HOLDREGISTER_CPU3_BASE 按共享标量双寄存器步长布局。 */
 #define HOLDREGISTER_CPU3_IN_D_SW (HOLDREGISTER_CPU3_BASE + 0x12U)
+/* CPU3 本机“温度显示使能”保持寄存器起始地址；相对 HOLDREGISTER_CPU3_BASE 按共享标量双寄存器步长布局。 */
 #define HOLDREGISTER_CPU3_IN_T (HOLDREGISTER_CPU3_BASE + 0x14U)
+/* CPU3 本机“显示小数位配置”保持寄存器起始地址；相对 HOLDREGISTER_CPU3_BASE 按共享标量双寄存器步长布局。 */
 #define HOLDREGISTER_CPU3_DECIMAL (HOLDREGISTER_CPU3_BASE + 0x16U)
+/* CPU3 本机“菜单密码”保持寄存器起始地址；相对 HOLDREGISTER_CPU3_BASE 按共享标量双寄存器步长布局。 */
 #define HOLDREGISTER_CPU3_PASSWORD (HOLDREGISTER_CPU3_BASE + 0x18U)
+/* CPU3 本机“无操作熄屏时间”保持寄存器起始地址；相对 HOLDREGISTER_CPU3_BASE 按共享标量双寄存器步长布局。 */
 #define HOLDREGISTER_CPU3_OFF_TIME (HOLDREGISTER_CPU3_BASE + 0x1AU)
+/* CPU3 本机“OLED 亮度档位”保持寄存器起始地址；相对 HOLDREGISTER_CPU3_BASE 按共享标量双寄存器步长布局。 */
 #define HOLDREGISTER_CPU3_BRIGHTNESS (HOLDREGISTER_CPU3_BASE + 0x1CU)
 
+/* CPU3 本机“COM1 波特率”保持寄存器起始地址；相对 HOLDREGISTER_CPU3_BASE 按共享标量双寄存器步长布局。 */
 #define HOLDREGISTER_CPU3_COM1_BAUD (HOLDREGISTER_CPU3_BASE + 0x20U)
+/* CPU3 本机“COM1 数据位”保持寄存器起始地址；相对 HOLDREGISTER_CPU3_BASE 按共享标量双寄存器步长布局。 */
 #define HOLDREGISTER_CPU3_COM1_DATABITS (HOLDREGISTER_CPU3_BASE + 0x22U)
+/* CPU3 本机“COM1 校验方式”保持寄存器起始地址；相对 HOLDREGISTER_CPU3_BASE 按共享标量双寄存器步长布局。 */
 #define HOLDREGISTER_CPU3_COM1_PARITY (HOLDREGISTER_CPU3_BASE + 0x24U)
+/* CPU3 本机“COM1 停止位”保持寄存器起始地址；相对 HOLDREGISTER_CPU3_BASE 按共享标量双寄存器步长布局。 */
 #define HOLDREGISTER_CPU3_COM1_STOPBITS (HOLDREGISTER_CPU3_BASE + 0x26U)
+/* CPU3 本机“COM1 外部协议”保持寄存器起始地址；相对 HOLDREGISTER_CPU3_BASE 按共享标量双寄存器步长布局。 */
 #define HOLDREGISTER_CPU3_COM1_PROTO (HOLDREGISTER_CPU3_BASE + 0x28U)
 
+/* CPU3 本机“COM2 波特率”保持寄存器起始地址；相对 HOLDREGISTER_CPU3_BASE 按共享标量双寄存器步长布局。 */
 #define HOLDREGISTER_CPU3_COM2_BAUD (HOLDREGISTER_CPU3_BASE + 0x30U)
+/* CPU3 本机“COM2 数据位”保持寄存器起始地址；相对 HOLDREGISTER_CPU3_BASE 按共享标量双寄存器步长布局。 */
 #define HOLDREGISTER_CPU3_COM2_DATABITS (HOLDREGISTER_CPU3_BASE + 0x32U)
+/* CPU3 本机“COM2 校验方式”保持寄存器起始地址；相对 HOLDREGISTER_CPU3_BASE 按共享标量双寄存器步长布局。 */
 #define HOLDREGISTER_CPU3_COM2_PARITY (HOLDREGISTER_CPU3_BASE + 0x34U)
+/* CPU3 本机“COM2 停止位”保持寄存器起始地址；相对 HOLDREGISTER_CPU3_BASE 按共享标量双寄存器步长布局。 */
 #define HOLDREGISTER_CPU3_COM2_STOPBITS (HOLDREGISTER_CPU3_BASE + 0x36U)
+/* CPU3 本机“COM2 外部协议”保持寄存器起始地址；相对 HOLDREGISTER_CPU3_BASE 按共享标量双寄存器步长布局。 */
 #define HOLDREGISTER_CPU3_COM2_PROTO (HOLDREGISTER_CPU3_BASE + 0x38U)
 
+/* CPU3 本机“COM3 波特率”保持寄存器起始地址；相对 HOLDREGISTER_CPU3_BASE 按共享标量双寄存器步长布局。 */
 #define HOLDREGISTER_CPU3_COM3_BAUD (HOLDREGISTER_CPU3_BASE + 0x40U)
+/* CPU3 本机“COM3 数据位”保持寄存器起始地址；相对 HOLDREGISTER_CPU3_BASE 按共享标量双寄存器步长布局。 */
 #define HOLDREGISTER_CPU3_COM3_DATABITS (HOLDREGISTER_CPU3_BASE + 0x42U)
+/* CPU3 本机“COM3 校验方式”保持寄存器起始地址；相对 HOLDREGISTER_CPU3_BASE 按共享标量双寄存器步长布局。 */
 #define HOLDREGISTER_CPU3_COM3_PARITY (HOLDREGISTER_CPU3_BASE + 0x44U)
+/* CPU3 本机“COM3 停止位”保持寄存器起始地址；相对 HOLDREGISTER_CPU3_BASE 按共享标量双寄存器步长布局。 */
 #define HOLDREGISTER_CPU3_COM3_STOPBITS (HOLDREGISTER_CPU3_BASE + 0x46U)
+/* CPU3 本机“COM3 外部协议”保持寄存器起始地址；相对 HOLDREGISTER_CPU3_BASE 按共享标量双寄存器步长布局。 */
 #define HOLDREGISTER_CPU3_COM3_PROTO (HOLDREGISTER_CPU3_BASE + 0x48U)
 
+/* CPU3 本机“SI 自动剖面测量周期间隔”保持寄存器起始地址；相对 HOLDREGISTER_CPU3_BASE 按共享标量双寄存器步长布局。 */
 #define HOLDREGISTER_CPU3_SI_AUTO_PROFILE_INTERVAL (HOLDREGISTER_CPU3_BASE + 0x50U)
+/* CPU3 本机“SI 自动剖面测量使能”保持寄存器起始地址；相对 HOLDREGISTER_CPU3_BASE 按共享标量双寄存器步长布局。 */
 #define HOLDREGISTER_CPU3_SI_AUTO_PROFILE_ENABLE (HOLDREGISTER_CPU3_BASE + 0x52U)
+/* CPU3 本机“SI 自动剖面启动小时”保持寄存器起始地址；相对 HOLDREGISTER_CPU3_BASE 按共享标量双寄存器步长布局。 */
 #define HOLDREGISTER_CPU3_SI_AUTO_PROFILE_HOUR (HOLDREGISTER_CPU3_BASE + 0x54U)
+/* CPU3 本机“SI 自动剖面启动分钟”保持寄存器起始地址；相对 HOLDREGISTER_CPU3_BASE 按共享标量双寄存器步长布局。 */
 #define HOLDREGISTER_CPU3_SI_AUTO_PROFILE_MINUTE (HOLDREGISTER_CPU3_BASE + 0x56U)
+/* CPU3 本机“SI 低密度报警设定值”保持寄存器起始地址；相对 HOLDREGISTER_CPU3_BASE 按共享标量双寄存器步长布局。 */
 #define HOLDREGISTER_CPU3_SI_LOW_DENSITY_SETPOINT (HOLDREGISTER_CPU3_BASE + 0x58U)
+/* CPU3 本机“SI 高密度报警设定值”保持寄存器起始地址；相对 HOLDREGISTER_CPU3_BASE 按共享标量双寄存器步长布局。 */
 #define HOLDREGISTER_CPU3_SI_HIGH_DENSITY_SETPOINT (HOLDREGISTER_CPU3_BASE + 0x5AU)
+/* CPU3 本机“SI 低温报警设定值”保持寄存器起始地址；相对 HOLDREGISTER_CPU3_BASE 按共享标量双寄存器步长布局。 */
 #define HOLDREGISTER_CPU3_SI_LOW_TEMPERATURE_SETPOINT (HOLDREGISTER_CPU3_BASE + 0x5CU)
+/* CPU3 本机“SI 高温报警设定值”保持寄存器起始地址；相对 HOLDREGISTER_CPU3_BASE 按共享标量双寄存器步长布局。 */
 #define HOLDREGISTER_CPU3_SI_HIGH_TEMPERATURE_SETPOINT (HOLDREGISTER_CPU3_BASE + 0x5EU)
+/* CPU3 本机“SI 低低液位报警设定值”保持寄存器起始地址；相对 HOLDREGISTER_CPU3_BASE 按共享标量双寄存器步长布局。 */
 #define HOLDREGISTER_CPU3_SI_LL_LEVEL_SETPOINT (HOLDREGISTER_CPU3_BASE + 0x60U)
+/* CPU3 本机“SI 高高液位报警设定值”保持寄存器起始地址；相对 HOLDREGISTER_CPU3_BASE 按共享标量双寄存器步长布局。 */
 #define HOLDREGISTER_CPU3_SI_HH_LEVEL_SETPOINT (HOLDREGISTER_CPU3_BASE + 0x62U)
+/* CPU3 本机“SI 低液位报警设定值”保持寄存器起始地址；相对 HOLDREGISTER_CPU3_BASE 按共享标量双寄存器步长布局。 */
 #define HOLDREGISTER_CPU3_SI_LOW_LEVEL_SETPOINT (HOLDREGISTER_CPU3_BASE + 0x64U)
+/* CPU3 本机“SI 高液位报警设定值”保持寄存器起始地址；相对 HOLDREGISTER_CPU3_BASE 按共享标量双寄存器步长布局。 */
 #define HOLDREGISTER_CPU3_SI_HIGH_LEVEL_SETPOINT (HOLDREGISTER_CPU3_BASE + 0x66U)
+/* CPU3 本机“SI 温度偏差报警设定值”保持寄存器起始地址；相对 HOLDREGISTER_CPU3_BASE 按共享标量双寄存器步长布局。 */
 #define HOLDREGISTER_CPU3_SI_TEMP_DEVIATION_SETPOINT (HOLDREGISTER_CPU3_BASE + 0x68U)
+/* CPU3 本机“SI 密度偏差报警设定值”保持寄存器起始地址；相对 HOLDREGISTER_CPU3_BASE 按共享标量双寄存器步长布局。 */
 #define HOLDREGISTER_CPU3_SI_DENSITY_DEVIATION_SETPOINT (HOLDREGISTER_CPU3_BASE + 0x6AU)
+/* CPU3 本机保持寄存器块的排他结束地址；连续读写只能覆盖 BASE（含）到 END（不含）的完整字段。 */
 #define HOLDREGISTER_CPU3_END (HOLDREGISTER_CPU3_BASE + 0x6CU)
 
 /* 能力位序号固定；CPU2业务实现与CPU3网关同时支持后才对外置位。 */
+/* 协议能力位：声明设备已实现“维护模式进入/退出命令及状态闭环”；仅当 CPU2 业务和 CPU3 网关均形成闭环时才允许在能力掩码中置位。 */
 #define LTD_CAPABILITY_MAINTENANCE_MODE                 (1UL << 0)
+/* 协议能力位：声明设备已实现“四路继电器逻辑动作状态”；仅当 CPU2 业务和 CPU3 网关均形成闭环时才允许在能力掩码中置位。 */
 #define LTD_CAPABILITY_RELAY_ALARM_ACTION_STATUS        (1UL << 1)
+/* 协议能力位：声明设备已实现“继电器报警抑制控制及状态”；仅当 CPU2 业务和 CPU3 网关均形成闭环时才允许在能力掩码中置位。 */
 #define LTD_CAPABILITY_RELAY_ALARM_INHIBIT              (1UL << 2)
+/* 协议能力位：声明设备已实现“AO 故障电流抑制控制”；仅当 CPU2 业务和 CPU3 网关均形成闭环时才允许在能力掩码中置位。 */
 #define LTD_CAPABILITY_AO_FAULT_CURRENT_INHIBIT         (1UL << 3)
+/* 协议能力位：声明设备已实现“一次清除全部继电器锁存报警”；仅当 CPU2 业务和 CPU3 网关均形成闭环时才允许在能力掩码中置位。 */
 #define LTD_CAPABILITY_CLEAR_ALL_RELAY_LATCHED_ALARMS   (1UL << 4)
+/* 当前固件对外发布的 LTD 能力位合集；接收端应用按位判断，未列入的保留位必须保持为 0。 */
 #define LTD_CAPABILITY_SUPPORTED_MASK                   \
     (LTD_CAPABILITY_MAINTENANCE_MODE |                  \
      LTD_CAPABILITY_RELAY_ALARM_ACTION_STATUS |         \
@@ -290,193 +382,359 @@ typedef enum
      LTD_CAPABILITY_CLEAR_ALL_RELAY_LATCHED_ALARMS)
 
 /* 输入寄存器按功能分块 */
+/* CPU2 输入寄存器“CPU2 权威状态”块的起始地址；各块独立规划，读取端不得依赖块间空洞的内容。 */
 #define INPUTREG_BASE_STATUS          0x0000U
+/* CPU2 输入寄存器“调试快照”块的起始地址；各块独立规划，读取端不得依赖块间空洞的内容。 */
 #define INPUTREG_BASE_DEBUG           0x0100U
+/* CPU2 输入寄存器“液位、水位与罐高过程量”块的起始地址；各块独立规划，读取端不得依赖块间空洞的内容。 */
 #define INPUTREG_BASE_PROCESS         0x1000U
+/* CPU2 输入寄存器“单点、监测和密度分布固定结果”块的起始地址；各块独立规划，读取端不得依赖块间空洞的内容。 */
 #define INPUTREG_BASE_FIXED_RESULTS   0x1100U
+/* CPU2 输入寄存器“AO 运行状态”块的起始地址；各块独立规划，读取端不得依赖块间空洞的内容。 */
 #define INPUTREG_BASE_AO_RUNTIME      0x1400U
+/* CPU2 输入寄存器“继电器报警运行状态”块的起始地址；各块独立规划，读取端不得依赖块间空洞的内容。 */
 #define INPUTREG_BASE_RELAY_RUNTIME   0x1500U
+/* CPU2 输入寄存器“无线配对、连接与 RSSI 状态”块的起始地址；各块独立规划，读取端不得依赖块间空洞的内容。 */
 #define INPUTREG_BASE_WIRELESS        0x1600U
+/* CPU2 输入寄存器“密度分布测点数据”块的起始地址；各块独立规划，读取端不得依赖块间空洞的内容。 */
 #define INPUTREG_BASE_DENSITY_POINTS  0x2000U
+/* CPU2 输入寄存器镜像数组容量，同时作为合法地址排他上界；连续 FC04 读取必须整体落在该范围内。 */
 #define INPUTREGISTER_AMOUNT          0x2A00U
 
 /* CPU2权威状态，同一快照发布 */
+/* CPU2 状态块中“当前工作模式”字段的起始地址；该值随 CPU2 权威状态快照统一发布。 */
 #define REG_DEVICE_STATUS_WORK_MODE                    (INPUTREG_BASE_STATUS + 0x00U)
+/* CPU2 状态块中“设备主状态机状态”字段的起始地址；该值随 CPU2 权威状态快照统一发布。 */
 #define REG_DEVICE_STATUS_DEVICE_STATE                 (INPUTREG_BASE_STATUS + 0x02U)
+/* CPU2 状态块中“当前汇总故障码”字段的起始地址；该值随 CPU2 权威状态快照统一发布。 */
 #define REG_DEVICE_STATUS_ERROR_CODE                   (INPUTREG_BASE_STATUS + 0x04U)
+/* CPU2 状态块中“当前正在执行的命令”字段的起始地址；该值随 CPU2 权威状态快照统一发布。 */
 #define REG_DEVICE_STATUS_CURRENT_COMMAND              (INPUTREG_BASE_STATUS + 0x06U)
+/* CPU2 状态块中“零点标定状态”字段的起始地址；该值随 CPU2 权威状态快照统一发布。 */
 #define REG_DEVICE_STATUS_ZERO_POINT_STATUS            (INPUTREG_BASE_STATUS + 0x08U)
+/* CPU2 状态块中“参数更新代际标志”字段的起始地址；该值随 CPU2 权威状态快照统一发布。 */
 #define REG_DEVICE_STATUS_PARAM_UPDATE_FLAG            (INPUTREG_BASE_STATUS + 0x0AU)
+/* CPU2 状态块中“装卸料过程活动状态”字段的起始地址；该值随 CPU2 权威状态快照统一发布。 */
 #define REG_DEVICE_STATUS_LOADING_UNLOADING_ACTIVE     (INPUTREG_BASE_STATUS + 0x0CU)
+/* CPU2 状态块中“人工报警抑制请求状态”字段的起始地址；该值随 CPU2 权威状态快照统一发布。 */
 #define REG_DEVICE_STATUS_MANUAL_ALARM_INHIBIT         (INPUTREG_BASE_STATUS + 0x0EU)
+/* CPU2 状态块中“维护模式实际生效状态”字段的起始地址；该值随 CPU2 权威状态快照统一发布。 */
 #define REG_MAINTENANCE_MODE_ACTIVE                    (INPUTREG_BASE_STATUS + 0x10U)
+/* CPU2 状态块中“继电器报警抑制实际生效状态”字段的起始地址；该值随 CPU2 权威状态快照统一发布。 */
 #define REG_RELAY_ALARM_INHIBIT_EFFECTIVE              (INPUTREG_BASE_STATUS + 0x12U)
+/* CPU2 状态块中“继电器通道 1 逻辑动作状态”字段的起始地址；该值随 CPU2 权威状态快照统一发布。 */
 #define REG_RELAY_ALARM_ACTION_CHANNEL1                (INPUTREG_BASE_STATUS + 0x14U)
+/* CPU2 状态块中“继电器通道 2 逻辑动作状态”字段的起始地址；该值随 CPU2 权威状态快照统一发布。 */
 #define REG_RELAY_ALARM_ACTION_CHANNEL2                (INPUTREG_BASE_STATUS + 0x16U)
+/* CPU2 状态块中“继电器通道 3 逻辑动作状态”字段的起始地址；该值随 CPU2 权威状态快照统一发布。 */
 #define REG_RELAY_ALARM_ACTION_CHANNEL3                (INPUTREG_BASE_STATUS + 0x18U)
+/* CPU2 状态块中“继电器通道 4 逻辑动作状态”字段的起始地址；该值随 CPU2 权威状态快照统一发布。 */
 #define REG_RELAY_ALARM_ACTION_CHANNEL4                (INPUTREG_BASE_STATUS + 0x1AU)
+/* CPU2 状态块中“油位探头已到达液面状态”字段的起始地址；该值随 CPU2 权威状态快照统一发布。 */
 #define REG_OIL_MEASUREMENT_PROBE_AT_LIQUID_LEVEL      (INPUTREG_BASE_STATUS + 0x1CU)
+/* CPU2 状态块中“液面稳定判定状态”字段的起始地址；该值随 CPU2 权威状态快照统一发布。 */
 #define REG_OIL_MEASUREMENT_LIQUID_STABLE              (INPUTREG_BASE_STATUS + 0x1EU)
+/* CPU2 状态块中“人工液位更新抑制状态”字段的起始地址；该值随 CPU2 权威状态快照统一发布。 */
 #define REG_OIL_MEASUREMENT_MANUAL_LEVEL_UPDATE_INHIBIT (INPUTREG_BASE_STATUS + 0x20U)
+/* CPU2 状态块中“罐高测量底部基准有效状态”字段的起始地址；该值随 CPU2 权威状态快照统一发布。 */
 #define REG_HEIGHT_MEASUREMENT_BOTTOM_REFERENCE_VALID  (INPUTREG_BASE_STATUS + 0x22U)
+/* CPU2 状态块中“单点测量完成代际计数”字段的起始地址；计数变化用于识别新一代快照，回绕时按无符号计数处理。 */
 #define REG_SINGLE_POINT_MEAS_COMPLETE_COUNTER         (INPUTREG_BASE_STATUS + 0x30U)
+/* CPU2 状态块中“单点监测采样代际计数”字段的起始地址；计数变化用于识别新一代快照，回绕时按无符号计数处理。 */
 #define REG_SINGLE_POINT_MON_SAMPLE_COUNTER            (INPUTREG_BASE_STATUS + 0x32U)
 
 /* 未来物理触点反馈槽；当前不支持，固定返回0 */
+/* CPU2 状态块中“继电器通道 1 物理触点反馈保留槽”字段的起始地址；当前固定返回 0，仅保留协议地址，不能当作真实触点反馈。 */
 #define REG_RELAY_CONTACT_FEEDBACK_CHANNEL1_RESERVED   (INPUTREG_BASE_STATUS + 0x34U)
+/* CPU2 状态块中“继电器通道 2 物理触点反馈保留槽”字段的起始地址；当前固定返回 0，仅保留协议地址，不能当作真实触点反馈。 */
 #define REG_RELAY_CONTACT_FEEDBACK_CHANNEL2_RESERVED   (INPUTREG_BASE_STATUS + 0x36U)
+/* CPU2 状态块中“继电器通道 3 物理触点反馈保留槽”字段的起始地址；当前固定返回 0，仅保留协议地址，不能当作真实触点反馈。 */
 #define REG_RELAY_CONTACT_FEEDBACK_CHANNEL3_RESERVED   (INPUTREG_BASE_STATUS + 0x38U)
+/* CPU2 状态块中“继电器通道 4 物理触点反馈保留槽”字段的起始地址；当前固定返回 0，仅保留协议地址，不能当作真实触点反馈。 */
 #define REG_RELAY_CONTACT_FEEDBACK_CHANNEL4_RESERVED   (INPUTREG_BASE_STATUS + 0x3AU)
+/* CPU2 权威状态块的排他结束地址；用于计算块长度并阻止读取越过预留状态区域。 */
 #define REG_DEVICE_STATUS_BLOCK_END                    (INPUTREG_BASE_STATUS + 0x3CU)
 
 /* 调试数据快照：0x0100 */
+/* 调试快照块的基地址别名；所有 REG_DEBUG_* 字段均相对此地址计算。 */
 #define REG_DEBUG_BASE                INPUTREG_BASE_DEBUG
+/* 调试快照中“当前编码器原始计数”字段的起始地址；该数据用于诊断观察，不替代业务有效性和故障判定。 */
 #define REG_DEBUG_CURRENT_ENCODER     (REG_DEBUG_BASE + 0x00U)
+/* 调试快照中“传感器当前位置”字段的起始地址；该数据用于诊断观察，不替代业务有效性和故障判定。 */
 #define REG_DEBUG_SENSOR_POSITION     (REG_DEBUG_BASE + 0x02U)
+/* 调试快照中“当前钢带放出长度”字段的起始地址；该数据用于诊断观察，不替代业务有效性和故障判定。 */
 #define REG_DEBUG_CABLE_LENGTH        (REG_DEBUG_BASE + 0x04U)
+/* 调试快照中“电机累计步数”字段的起始地址；该数据用于诊断观察，不替代业务有效性和故障判定。 */
 #define REG_DEBUG_MOTOR_STEP          (REG_DEBUG_BASE + 0x06U)
+/* 调试快照中“电机换算移动距离”字段的起始地址；该数据用于诊断观察，不替代业务有效性和故障判定。 */
 #define REG_DEBUG_MOTOR_DISTANCE      (REG_DEBUG_BASE + 0x08U)
+/* 调试快照中“当前传感器频率”字段的起始地址；该数据用于诊断观察，不替代业务有效性和故障判定。 */
 #define REG_DEBUG_FREQUENCY           (REG_DEBUG_BASE + 0x0AU)
+/* 调试快照中“当前温度”字段的起始地址；该数据用于诊断观察，不替代业务有效性和故障判定。 */
 #define REG_DEBUG_TEMPERATURE         (REG_DEBUG_BASE + 0x0CU)
+/* 调试快照中“空气参考频率”字段的起始地址；该数据用于诊断观察，不替代业务有效性和故障判定。 */
 #define REG_DEBUG_AIR_FREQUENCY       (REG_DEBUG_BASE + 0x0EU)
+/* 调试快照中“当前传感器幅值”字段的起始地址；该数据用于诊断观察，不替代业务有效性和故障判定。 */
 #define REG_DEBUG_CURRENT_AMPLITUDE   (REG_DEBUG_BASE + 0x10U)
+/* 调试快照中“当前水相电容放大 10 倍值”字段的起始地址；该数据用于诊断观察，不替代业务有效性和故障判定。 */
 #define REG_DEBUG_WATER_CAPACITANCE_X10 (REG_DEBUG_BASE + 0x12U)
+/* 调试快照中“当前称重值”字段的起始地址；该数据用于诊断观察，不替代业务有效性和故障判定。 */
 #define REG_DEBUG_CURRENT_WEIGHT      (REG_DEBUG_BASE + 0x14U)
+/* 调试快照中“驱动器扭矩与温度状态原始位”字段的起始地址；该数据用于诊断观察，不替代业务有效性和故障判定。 */
 #define REG_DEBUG_TORQUE_TEMPERATURE_BITS (REG_DEBUG_BASE + 0x16U)
+/* 调试快照中“传感器 X 轴倾角”字段的起始地址；该数据用于诊断观察，不替代业务有效性和故障判定。 */
 #define REG_DEBUG_ANGLE_X             (REG_DEBUG_BASE + 0x18U)
+/* 调试快照中“传感器 Y 轴倾角”字段的起始地址；该数据用于诊断观察，不替代业务有效性和故障判定。 */
 #define REG_DEBUG_ANGLE_Y             (REG_DEBUG_BASE + 0x1AU)
+/* 调试快照中“电机当前速度”字段的起始地址；该数据用于诊断观察，不替代业务有效性和故障判定。 */
 #define REG_DEBUG_MOTOR_SPEED         (REG_DEBUG_BASE + 0x1CU)
+/* 调试快照中“电机控制状态”字段的起始地址；该数据用于诊断观察，不替代业务有效性和故障判定。 */
 #define REG_DEBUG_MOTOR_STATE         (REG_DEBUG_BASE + 0x1EU)
+/* 调试快照块的排他结束地址；用于计算连续读取长度和边界检查。 */
 #define REG_DEBUG_BLOCK_END           (REG_DEBUG_BASE + 0x20U)
 
 /* 液位、水位与罐高运行数据：0x1000 */
+/* 过程量块中“油位测量结果”字段的起始地址；数值编码、单位和无效值规则由对应测量结果类型定义。 */
 #define REG_OIL_MEASUREMENT_OIL_LEVEL             (INPUTREG_BASE_PROCESS + 0x00U)
+/* 过程量块中“空气参考频率”字段的起始地址；数值编码、单位和无效值规则由对应测量结果类型定义。 */
 #define REG_OIL_MEASUREMENT_AIR_FREQUENCY         (INPUTREG_BASE_PROCESS + 0x02U)
+/* 过程量块中“油相特征频率”字段的起始地址；数值编码、单位和无效值规则由对应测量结果类型定义。 */
 #define REG_OIL_MEASUREMENT_OIL_FREQUENCY         (INPUTREG_BASE_PROCESS + 0x04U)
+/* 过程量块中“跟随测量频率”字段的起始地址；数值编码、单位和无效值规则由对应测量结果类型定义。 */
 #define REG_OIL_MEASUREMENT_FOLLOW_FREQUENCY      (INPUTREG_BASE_PROCESS + 0x06U)
+/* 过程量块中“当前实时频率”字段的起始地址；数值编码、单位和无效值规则由对应测量结果类型定义。 */
 #define REG_OIL_MEASUREMENT_CURRENT_FREQUENCY     (INPUTREG_BASE_PROCESS + 0x08U)
+/* 过程量块中“水位测量结果”字段的起始地址；数值编码、单位和无效值规则由对应测量结果类型定义。 */
 #define REG_WATER_MEASUREMENT_WATER_LEVEL          (INPUTREG_BASE_PROCESS + 0x0AU)
+/* 过程量块中“水位零点电容”字段的起始地址；数值编码、单位和无效值规则由对应测量结果类型定义。 */
 #define REG_WATER_MEASUREMENT_ZERO_CAPACITANCE     (INPUTREG_BASE_PROCESS + 0x0CU)
+/* 过程量块中“油相参考电容”字段的起始地址；数值编码、单位和无效值规则由对应测量结果类型定义。 */
 #define REG_WATER_MEASUREMENT_OIL_CAPACITANCE      (INPUTREG_BASE_PROCESS + 0x0EU)
+/* 过程量块中“当前实时电容”字段的起始地址；数值编码、单位和无效值规则由对应测量结果类型定义。 */
 #define REG_WATER_MEASUREMENT_CURRENT_CAPACITANCE  (INPUTREG_BASE_PROCESS + 0x10U)
+/* 过程量块中“罐高标定时液位”字段的起始地址；数值编码、单位和无效值规则由对应测量结果类型定义。 */
 #define REG_HEIGHT_MEASUREMENT_CAL_LIQUID_LEVEL    (INPUTREG_BASE_PROCESS + 0x12U)
+/* 过程量块中“当前罐高实测值”字段的起始地址；数值编码、单位和无效值规则由对应测量结果类型定义。 */
 #define REG_HEIGHT_MEASUREMENT_CURRENT_REAL        (INPUTREG_BASE_PROCESS + 0x14U)
+/* 液位、水位与罐高过程量块的排他结束地址；用于限定 FC04 连续读取范围。 */
 #define REG_PROCESS_BLOCK_END                      (INPUTREG_BASE_PROCESS + 0x16U)
 
 /* 固定结果放在同一块内，可用一帧标准FC04读取 */
+/* 固定结果块中“单点测量温度”字段的起始地址；字段按 CPU2 固定结果快照发布，读取端应结合相应完成计数判断新旧。 */
 #define REG_SINGLE_POINT_MEAS_TEMP            (INPUTREG_BASE_FIXED_RESULTS + 0x00U)
+/* 固定结果块中“单点测量密度”字段的起始地址；字段按 CPU2 固定结果快照发布，读取端应结合相应完成计数判断新旧。 */
 #define REG_SINGLE_POINT_MEAS_DENSITY         (INPUTREG_BASE_FIXED_RESULTS + 0x02U)
+/* 固定结果块中“单点测量温度位置”字段的起始地址；字段按 CPU2 固定结果快照发布，读取端应结合相应完成计数判断新旧。 */
 #define REG_SINGLE_POINT_MEAS_TEMP_POS        (INPUTREG_BASE_FIXED_RESULTS + 0x04U)
+/* 固定结果块中“单点测量标准密度”字段的起始地址；字段按 CPU2 固定结果快照发布，读取端应结合相应完成计数判断新旧。 */
 #define REG_SINGLE_POINT_MEAS_STD_DENSITY     (INPUTREG_BASE_FIXED_RESULTS + 0x06U)
+/* 固定结果块中“单点测量 20 ℃ 体积修正系数”字段的起始地址；字段按 CPU2 固定结果快照发布，读取端应结合相应完成计数判断新旧。 */
 #define REG_SINGLE_POINT_MEAS_VCF20           (INPUTREG_BASE_FIXED_RESULTS + 0x08U)
+/* 固定结果块中“单点测量重量密度”字段的起始地址；字段按 CPU2 固定结果快照发布，读取端应结合相应完成计数判断新旧。 */
 #define REG_SINGLE_POINT_MEAS_WEIGHT_DENSITY  (INPUTREG_BASE_FIXED_RESULTS + 0x0AU)
 
+/* 固定结果块中“单点监测温度”字段的起始地址；字段按 CPU2 固定结果快照发布，读取端应结合相应完成计数判断新旧。 */
 #define REG_SINGLE_POINT_MON_TEMP             (INPUTREG_BASE_FIXED_RESULTS + 0x20U)
+/* 固定结果块中“单点监测密度”字段的起始地址；字段按 CPU2 固定结果快照发布，读取端应结合相应完成计数判断新旧。 */
 #define REG_SINGLE_POINT_MON_DENSITY          (INPUTREG_BASE_FIXED_RESULTS + 0x22U)
+/* 固定结果块中“单点监测温度位置”字段的起始地址；字段按 CPU2 固定结果快照发布，读取端应结合相应完成计数判断新旧。 */
 #define REG_SINGLE_POINT_MON_TEMP_POS         (INPUTREG_BASE_FIXED_RESULTS + 0x24U)
+/* 固定结果块中“单点监测标准密度”字段的起始地址；字段按 CPU2 固定结果快照发布，读取端应结合相应完成计数判断新旧。 */
 #define REG_SINGLE_POINT_MON_STD_DENSITY      (INPUTREG_BASE_FIXED_RESULTS + 0x26U)
+/* 固定结果块中“单点监测 20 ℃ 体积修正系数”字段的起始地址；字段按 CPU2 固定结果快照发布，读取端应结合相应完成计数判断新旧。 */
 #define REG_SINGLE_POINT_MON_VCF20            (INPUTREG_BASE_FIXED_RESULTS + 0x28U)
+/* 固定结果块中“单点监测重量密度”字段的起始地址；字段按 CPU2 固定结果快照发布，读取端应结合相应完成计数判断新旧。 */
 #define REG_SINGLE_POINT_MON_WEIGHT_DENSITY   (INPUTREG_BASE_FIXED_RESULTS + 0x2AU)
 
+/* 固定结果块中“密度分布平均温度”字段的起始地址；字段按 CPU2 固定结果快照发布，读取端应结合相应完成计数判断新旧。 */
 #define REG_DENSITY_DIST_AVG_TEMP             (INPUTREG_BASE_FIXED_RESULTS + 0x40U)
+/* 固定结果块中“密度分布平均密度”字段的起始地址；字段按 CPU2 固定结果快照发布，读取端应结合相应完成计数判断新旧。 */
 #define REG_DENSITY_DIST_AVG_DENSITY          (INPUTREG_BASE_FIXED_RESULTS + 0x42U)
+/* 固定结果块中“密度分布平均标准密度”字段的起始地址；字段按 CPU2 固定结果快照发布，读取端应结合相应完成计数判断新旧。 */
 #define REG_DENSITY_DIST_AVG_STD_DENSITY      (INPUTREG_BASE_FIXED_RESULTS + 0x44U)
+/* 固定结果块中“密度分布平均 20 ℃ 体积修正系数”字段的起始地址；字段按 CPU2 固定结果快照发布，读取端应结合相应完成计数判断新旧。 */
 #define REG_DENSITY_DIST_AVG_VCF20            (INPUTREG_BASE_FIXED_RESULTS + 0x46U)
+/* 固定结果块中“密度分布平均重量密度”字段的起始地址；字段按 CPU2 固定结果快照发布，读取端应结合相应完成计数判断新旧。 */
 #define REG_DENSITY_DIST_AVG_WEIGHT_DENSITY   (INPUTREG_BASE_FIXED_RESULTS + 0x48U)
+/* 固定结果块中“密度分布实际有效测点数”字段的起始地址；字段按 CPU2 固定结果快照发布，读取端应结合相应完成计数判断新旧。 */
 #define REG_DENSITY_DIST_MEAS_POINTS          (INPUTREG_BASE_FIXED_RESULTS + 0x4AU)
+/* 固定结果块中“密度分布对应油位”字段的起始地址；字段按 CPU2 固定结果快照发布，读取端应结合相应完成计数判断新旧。 */
 #define REG_DENSITY_DIST_OIL_LEVEL            (INPUTREG_BASE_FIXED_RESULTS + 0x4CU)
+/* 固定结果块中“剖面测量完成锁存标志”字段的起始地址；锁存位由业务完成事件置位，清除语义由命令流程定义。 */
 #define REG_DENSITY_DIST_PROFILE_COMPLETE_LATCHED (INPUTREG_BASE_FIXED_RESULTS + 0x4EU)
+/* 固定结果块中“剖面测量完成代际计数”字段的起始地址；计数变化用于区分新旧结果并允许无符号回绕。 */
 #define REG_DENSITY_DIST_PROFILE_COMPLETE_COUNTER (INPUTREG_BASE_FIXED_RESULTS + 0x50U)
+/* 固定结果块中“当前剖面结果来源”字段的起始地址；字段按 CPU2 固定结果快照发布，读取端应结合相应完成计数判断新旧。 */
 #define REG_DENSITY_DIST_PROFILE_SOURCE       (INPUTREG_BASE_FIXED_RESULTS + 0x52U)
+/* 固定结果块中“剖面测量被其它过程阻塞标志”字段的起始地址；字段按 CPU2 固定结果快照发布，读取端应结合相应完成计数判断新旧。 */
 #define REG_DENSITY_DIST_PROFILE_BLOCKED_BY_PROCESS (INPUTREG_BASE_FIXED_RESULTS + 0x54U)
+/* 固定结果块中“剖面温度偏差报警状态”字段的起始地址；字段按 CPU2 固定结果快照发布，读取端应结合相应完成计数判断新旧。 */
 #define REG_DENSITY_DIST_PROFILE_TEMP_DEVIATION_ALARM (INPUTREG_BASE_FIXED_RESULTS + 0x56U)
+/* 固定结果块中“剖面密度偏差报警状态”字段的起始地址；字段按 CPU2 固定结果快照发布，读取端应结合相应完成计数判断新旧。 */
 #define REG_DENSITY_DIST_PROFILE_DENSITY_DEVIATION_ALARM (INPUTREG_BASE_FIXED_RESULTS + 0x58U)
+/* 固定结果块中“SI 自动剖面当前阶段”字段的起始地址；字段按 CPU2 固定结果快照发布，读取端应结合相应完成计数判断新旧。 */
 #define REG_DENSITY_DIST_SI_PROFILE_PHASE     (INPUTREG_BASE_FIXED_RESULTS + 0x5AU)
+/* 固定结果块中“SI 自动剖面周期计数”字段的起始地址；计数变化用于区分新旧结果并允许无符号回绕。 */
 #define REG_DENSITY_DIST_SI_PROFILE_CYCLE_COUNTER (INPUTREG_BASE_FIXED_RESULTS + 0x5CU)
+/* 固定结果块中“SI 自动剖面已完成点数”字段的起始地址；字段按 CPU2 固定结果快照发布，读取端应结合相应完成计数判断新旧。 */
 #define REG_DENSITY_DIST_SI_PROFILE_PROGRESS_POINTS (INPUTREG_BASE_FIXED_RESULTS + 0x5EU)
+/* 密度分布摘要区连续占用的 16 位寄存器数量；CPU3 用它分块拉取完整摘要，修改布局时必须同步更新。 */
 #define REG_DENSITY_DIST_SUMMARY_REG_COUNT    32U
+/* 单点、监测和密度分布摘要块的排他结束地址；用于完整区间校验。 */
 #define REG_FIXED_RESULT_BLOCK_END            (INPUTREG_BASE_FIXED_RESULTS + 0x60U)
 
 /* AO运行状态：0x1400 */
+/* AO 运行状态块的基地址别名；所有 AO 运行字段均相对此地址计算。 */
 #define REG_AO_OUTPUT_RUNTIME_BASE                    INPUTREG_BASE_AO_RUNTIME
+/* AO 运行状态块中“目标输出电流，单位 0.01 mA”字段的起始地址；CPU3 读取时应结合更新计数和有效标志解释该值。 */
 #define REG_AO_OUTPUT_RUNTIME_TARGET_MA_X100          (REG_AO_OUTPUT_RUNTIME_BASE + 0x00U)
+/* AO 运行状态块中“最近一次下发电流，单位 0.01 mA”字段的起始地址；CPU3 读取时应结合更新计数和有效标志解释该值。 */
 #define REG_AO_OUTPUT_RUNTIME_LAST_SENT_MA_X100       (REG_AO_OUTPUT_RUNTIME_BASE + 0x02U)
+/* AO 运行状态块中“当前输出值来源”字段的起始地址；CPU3 读取时应结合更新计数和有效标志解释该值。 */
 #define REG_AO_OUTPUT_RUNTIME_SOURCE                  (REG_AO_OUTPUT_RUNTIME_BASE + 0x04U)
+/* AO 运行状态块中“AD5421 驱动累计故障位”字段的起始地址；CPU3 读取时应结合更新计数和有效标志解释该值。 */
 #define REG_AO_OUTPUT_RUNTIME_DRIVER_FAULT_FLAGS      (REG_AO_OUTPUT_RUNTIME_BASE + 0x06U)
+/* AO 运行状态块中“AD5421 故障寄存器原始值”字段的起始地址；CPU3 读取时应结合更新计数和有效标志解释该值。 */
 #define REG_AO_OUTPUT_RUNTIME_DRIVER_FAULT_REGISTER   (REG_AO_OUTPUT_RUNTIME_BASE + 0x08U)
+/* AO 运行状态块中“最近一次 AO 更新错误码”字段的起始地址；CPU3 读取时应结合更新计数和有效标志解释该值。 */
 #define REG_AO_OUTPUT_RUNTIME_LAST_ERROR_CODE         (REG_AO_OUTPUT_RUNTIME_BASE + 0x0AU)
+/* AO 运行状态块中“AO 运行快照更新代际计数”字段的起始地址；CPU3 读取时应结合更新计数和有效标志解释该值。 */
 #define REG_AO_OUTPUT_RUNTIME_UPDATE_COUNTER          (REG_AO_OUTPUT_RUNTIME_BASE + 0x0CU)
+/* AO 运行状态块中“最近一次运行值计算时刻”字段的起始地址；CPU3 读取时应结合更新计数和有效标志解释该值。 */
 #define REG_AO_OUTPUT_RUNTIME_LAST_UPDATE_TICK        (REG_AO_OUTPUT_RUNTIME_BASE + 0x0EU)
+/* AO 运行状态块中“最近一次硬件下发时刻”字段的起始地址；CPU3 读取时应结合更新计数和有效标志解释该值。 */
 #define REG_AO_OUTPUT_RUNTIME_LAST_SENT_TICK          (REG_AO_OUTPUT_RUNTIME_BASE + 0x10U)
+/* AO 运行状态块中“参与换算的过程量，单位 0.01 mm”字段的起始地址；CPU3 读取时应结合更新计数和有效标志解释该值。 */
 #define REG_AO_OUTPUT_RUNTIME_PROCESS_VALUE_01MM      (REG_AO_OUTPUT_RUNTIME_BASE + 0x12U)
+/* AO 运行状态块中“量程百分比，单位 0.01%”字段的起始地址；CPU3 读取时应结合更新计数和有效标志解释该值。 */
 #define REG_AO_OUTPUT_RUNTIME_PERCENT_X100            (REG_AO_OUTPUT_RUNTIME_BASE + 0x14U)
+/* AO 运行状态块中“过程量有效标志”字段的起始地址；CPU3 读取时应结合更新计数和有效标志解释该值。 */
 #define REG_AO_OUTPUT_RUNTIME_PROCESS_VALID           (REG_AO_OUTPUT_RUNTIME_BASE + 0x16U)
+/* AO 运行状态块中“模拟输出实际生效标志”字段的起始地址；CPU3 读取时应结合更新计数和有效标志解释该值。 */
 #define REG_AO_OUTPUT_RUNTIME_SIMULATION_ENABLED      (REG_AO_OUTPUT_RUNTIME_BASE + 0x18U)
+/* AO 运行状态块中“DAC 回读电流，单位 0.01 mA”字段的起始地址；CPU3 读取时应结合更新计数和有效标志解释该值。 */
 #define REG_AO_OUTPUT_RUNTIME_DAC_READBACK_MA_X100    (REG_AO_OUTPUT_RUNTIME_BASE + 0x1AU)
+/* AO 运行状态块中“DAC 回读值有效标志”字段的起始地址；CPU3 读取时应结合更新计数和有效标志解释该值。 */
 #define REG_AO_OUTPUT_RUNTIME_DAC_READBACK_VALID      (REG_AO_OUTPUT_RUNTIME_BASE + 0x1CU)
+/* AO 运行状态块的排他结束地址；用于计算完整快照读取长度。 */
 #define REG_AO_OUTPUT_RUNTIME_BLOCK_END               (REG_AO_OUTPUT_RUNTIME_BASE + 0x1EU)
 
 /* 继电器运行状态：浮点数占2个寄存器，既有布尔状态各占1个寄存器 */
+/* 继电器报警运行快照的通道数量；与保持寄存器配置通道数共用同一常量，保证两侧通道一一对应。 */
 #define REG_RELAY_ALARM_RUNTIME_CHANNEL_COUNT HOLDREGISTER_RELAY_ALARM_CHANNEL_COUNT
+/* 单路继电器运行快照占用的寄存器数量；首字段为 Float，后续八个状态字段各占一个寄存器。 */
 #define REG_RELAY_ALARM_RUNTIME_CHANNEL_REG_COUNT (REG_SIZE_FLOAT + 8U)
+/* 继电器报警运行状态块的基地址别名；通道地址均由该基址和通道步长计算。 */
 #define REG_RELAY_ALARM_RUNTIME_BASE INPUTREG_BASE_RELAY_RUNTIME
+/* 计算零基继电器通道 ch 的“当前报警过程量”输入寄存器起始地址；调用方必须先校验 ch 小于运行通道数量。 */
 #define REG_RELAY_ALARM_RUNTIME_ALARM_VALUE(ch) \
     (REG_RELAY_ALARM_RUNTIME_BASE + ((ch) * REG_RELAY_ALARM_RUNTIME_CHANNEL_REG_COUNT))
+/* 计算零基继电器通道 ch 的“高高报警状态”输入寄存器起始地址；调用方必须先校验 ch 小于运行通道数量。 */
 #define REG_RELAY_ALARM_RUNTIME_HH_ALARM(ch) \
     (REG_RELAY_ALARM_RUNTIME_ALARM_VALUE(ch) + REG_SIZE_FLOAT)
+/* 计算零基继电器通道 ch 的“高报警状态”输入寄存器起始地址；调用方必须先校验 ch 小于运行通道数量。 */
 #define REG_RELAY_ALARM_RUNTIME_H_ALARM(ch) \
     (REG_RELAY_ALARM_RUNTIME_HH_ALARM(ch) + 1U)
+/* 计算零基继电器通道 ch 的“高高或高报警汇总状态”输入寄存器起始地址；调用方必须先校验 ch 小于运行通道数量。 */
 #define REG_RELAY_ALARM_RUNTIME_HH_H_ALARM(ch) \
     (REG_RELAY_ALARM_RUNTIME_H_ALARM(ch) + 1U)
+/* 计算零基继电器通道 ch 的“低报警状态”输入寄存器起始地址；调用方必须先校验 ch 小于运行通道数量。 */
 #define REG_RELAY_ALARM_RUNTIME_L_ALARM(ch) \
     (REG_RELAY_ALARM_RUNTIME_HH_H_ALARM(ch) + 1U)
+/* 计算零基继电器通道 ch 的“低低报警状态”输入寄存器起始地址；调用方必须先校验 ch 小于运行通道数量。 */
 #define REG_RELAY_ALARM_RUNTIME_LL_ALARM(ch) \
     (REG_RELAY_ALARM_RUNTIME_L_ALARM(ch) + 1U)
+/* 计算零基继电器通道 ch 的“低低或低报警汇总状态”输入寄存器起始地址；调用方必须先校验 ch 小于运行通道数量。 */
 #define REG_RELAY_ALARM_RUNTIME_LL_L_ALARM(ch) \
     (REG_RELAY_ALARM_RUNTIME_LL_ALARM(ch) + 1U)
+/* 计算零基继电器通道 ch 的“该通道任一错误状态”输入寄存器起始地址；调用方必须先校验 ch 小于运行通道数量。 */
 #define REG_RELAY_ALARM_RUNTIME_ANY_ERROR(ch) \
     (REG_RELAY_ALARM_RUNTIME_LL_L_ALARM(ch) + 1U)
+/* 计算零基继电器通道 ch 的“清除锁存报警写入状态”输入寄存器起始地址；调用方必须先校验 ch 小于运行通道数量。 */
 #define REG_RELAY_ALARM_RUNTIME_CLEAR_ALARM(ch) \
     (REG_RELAY_ALARM_RUNTIME_ANY_ERROR(ch) + 1U)
+/* 四路继电器报警运行状态块的排他结束地址；由基址、通道数和单通道步长统一计算。 */
 #define REG_RELAY_ALARM_RUNTIME_BLOCK_END \
     (REG_RELAY_ALARM_RUNTIME_BASE + \
      (REG_RELAY_ALARM_RUNTIME_CHANNEL_COUNT * REG_RELAY_ALARM_RUNTIME_CHANNEL_REG_COUNT))
 
 /* 无线运行状态：0x1600 */
+/* 无线运行状态块中“最近一次无线配对结果”字段的起始地址；读取端需结合相邻有效标志或更新计数解释。 */
 #define REG_WIRELESS_PAIRING_RESULT                  (INPUTREG_BASE_WIRELESS + 0x00U)
+/* 无线运行状态块中“配对 MAC 地址有效标志”字段的起始地址；为 0 时关联字段不得作为当前有效数据使用。 */
 #define REG_WIRELESS_PAIRING_MAC_VALID               (INPUTREG_BASE_WIRELESS + 0x02U)
+/* 无线运行状态块中“配对 MAC 地址高 16 位”字段的起始地址；读取端需结合相邻有效标志或更新计数解释。 */
 #define REG_WIRELESS_PAIRING_MAC_HIGH                (INPUTREG_BASE_WIRELESS + 0x04U)
+/* 无线运行状态块中“配对 MAC 地址中 16 位”字段的起始地址；读取端需结合相邻有效标志或更新计数解释。 */
 #define REG_WIRELESS_PAIRING_MAC_MID                 (INPUTREG_BASE_WIRELESS + 0x06U)
+/* 无线运行状态块中“配对 MAC 地址低 16 位”字段的起始地址；读取端需结合相邻有效标志或更新计数解释。 */
 #define REG_WIRELESS_PAIRING_MAC_LOW                 (INPUTREG_BASE_WIRELESS + 0x08U)
+/* 无线运行状态块中“最近一次配对错误码”字段的起始地址；读取端需结合相邻有效标志或更新计数解释。 */
 #define REG_WIRELESS_PAIRING_ERROR_CODE              (INPUTREG_BASE_WIRELESS + 0x0AU)
+/* 无线运行状态块中“配对结果更新代际计数”字段的起始地址；计数变化表示对应状态获得了一代新结果。 */
 #define REG_WIRELESS_PAIRING_UPDATE_COUNTER          (INPUTREG_BASE_WIRELESS + 0x0CU)
+/* 无线运行状态块中“无线连接状态有效标志”字段的起始地址；为 0 时关联字段不得作为当前有效数据使用。 */
 #define REG_WIRELESS_PAIRING_CONNECTION_VALID        (INPUTREG_BASE_WIRELESS + 0x0EU)
+/* 无线运行状态块中“RSSI 数值有效标志”字段的起始地址；为 0 时关联字段不得作为当前有效数据使用。 */
 #define REG_WIRELESS_PAIRING_RSSI_VALID              (INPUTREG_BASE_WIRELESS + 0x10U)
+/* 无线运行状态块中“无线接收信号强度，单位 dBm”字段的起始地址；读取端需结合相邻有效标志或更新计数解释。 */
 #define REG_WIRELESS_PAIRING_RSSI                    (INPUTREG_BASE_WIRELESS + 0x12U)
+/* 无线运行状态块中“无线连接或 RSSI 查询错误码”字段的起始地址；读取端需结合相邻有效标志或更新计数解释。 */
 #define REG_WIRELESS_PAIRING_CONNECTION_ERROR_CODE   (INPUTREG_BASE_WIRELESS + 0x14U)
+/* 无线运行状态块中“连接与 RSSI 状态更新代际计数”字段的起始地址；计数变化表示对应状态获得了一代新结果。 */
 #define REG_WIRELESS_PAIRING_RSSI_UPDATE_COUNTER     (INPUTREG_BASE_WIRELESS + 0x16U)
+/* 无线配对、连接和 RSSI 状态块的排他结束地址；用于连续读取边界校验。 */
 #define REG_WIRELESS_PAIRING_BLOCK_END               (INPUTREG_BASE_WIRELESS + 0x18U)
 
-/* 200个密度点，每点6个UInt32字段，按点连续存放 */
+/*
+ * 密度分布结果点阵统一布局：最多 200 个测点，点号 i 使用零基索引。
+ * 每点依次保存温度、密度、温度位置、标准密度、VCF20 和重量密度，
+ * 六个字段均按 UInt32 原始位模式占用两个 16 位寄存器，因此每点跨 12 个寄存器；
+ * 字段数值、单位和无效值约定与上方固定结果区对应字段保持一致。
+ */
+/* 密度分布点阵的零基起始寄存器地址；第 0 点的温度字段从此处开始。 */
 #define REG_DENSITY_DIST_POINT_BASE INPUTREG_BASE_DENSITY_POINTS
+/* 单个密度分布测点的寄存器跨度：6 个 UInt32 字段各占 2 个寄存器，合计 12 个寄存器。 */
 #define REG_DENSITY_DIST_POINT_SIZE (6U * REG_SIZE_U32)
+/* 返回第 i 个测点温度 UInt32 字段的起始地址；i 使用零基点号，字段占 2 个寄存器。 */
 #define REG_DENSITY_POINT_TEMP(i) \
     (REG_DENSITY_DIST_POINT_BASE + ((uint16_t)(i) * REG_DENSITY_DIST_POINT_SIZE))
+/* 返回第 i 个测点实测密度 UInt32 字段的起始地址；该字段位于温度字段之后。 */
 #define REG_DENSITY_POINT_DENSITY(i) (REG_DENSITY_POINT_TEMP(i) + 2U)
+/* 返回第 i 个测点温度位置 UInt32 字段的起始地址；该位置与同点温度数据配套解释。 */
 #define REG_DENSITY_POINT_TEMP_POS(i) (REG_DENSITY_POINT_TEMP(i) + 4U)
+/* 返回第 i 个测点标准密度 UInt32 字段的起始地址；数值口径沿用固定结果区约定。 */
 #define REG_DENSITY_POINT_STD_DENSITY(i) (REG_DENSITY_POINT_TEMP(i) + 6U)
+/* 返回第 i 个测点 VCF20 UInt32 字段的起始地址；数值口径沿用固定结果区约定。 */
 #define REG_DENSITY_POINT_VCF20(i) (REG_DENSITY_POINT_TEMP(i) + 8U)
+/* 返回第 i 个测点重量密度 UInt32 字段的起始地址；这是每点布局中的最后一个字段。 */
 #define REG_DENSITY_POINT_WEIGHT_DENSITY(i) (REG_DENSITY_POINT_TEMP(i) + 10U)
 
+/* CPU2 输入寄存器有效地址的排他结束别名；保留既有符号名供旧代码使用，数值与 INPUTREGISTER_AMOUNT 一致。 */
 #define REG_ENG INPUTREGISTER_AMOUNT
 
-/* 判断[start, start + count)是否完整位于寄存器数组内 */
+/**
+ * @brief 判断[start, start + count)是否完整位于寄存器数组内。
+ *
+ * @param start 本次连续访问区间的起始寄存器或位地址。
+ * @param count 参与本次处理的数据项数量。
+ * @param limit 上限。
+ * @return true 表示 count 非 0，且半开区间 [start, start + count) 的排他末端不超过 limit；false 表示 count 为 0，或区间末端越过 limit。
+ */
 static inline bool LtdModbus_RangeWithin(uint16_t start, uint16_t count, uint16_t limit)
 {
     return (count != 0U) && ((uint32_t)start + (uint32_t)count <= (uint32_t)limit);
 }
 
-/* 判断一个完整区间是否包含另一个完整区间 */
+/**
+ * @brief 判断一个完整区间是否包含另一个完整区间。
+ *
+ * @param start 本次连续访问区间的起始寄存器或位地址。
+ * @param count 参与本次处理的数据项数量。
+ * @param target_start 目标起始位置。
+ * @param target_count 待判断子区间连续覆盖的寄存器数量。
+ * @return true 表示 target_start 不早于 start，且目标区间末端不晚于源区间末端；false 表示目标区间从源区间之前开始，或目标末端越过源区间。
+ */
 static inline bool LtdModbus_RangeContains(uint16_t start,
                                            uint16_t count,
                                            uint16_t target_start,
@@ -487,7 +745,12 @@ static inline bool LtdModbus_RangeContains(uint16_t start,
             (uint32_t)start + (uint32_t)count);
 }
 
-/* 判断单个CPU2保持寄存器地址是否位于可写块 */
+/**
+ * @brief 判断单个CPU2保持寄存器地址是否位于可写块。
+ *
+ * @param address 待分类的 CPU2 共享保持寄存器地址；用于判断写权限或四路锁存报警清除槽。
+ * @return true 表示地址位于电源或默认命令、自动恢复、电机、油位或罐高、水位、修正、测量配置、AO、继电器、SI 或瓦锡兰，或正式命令的任一允许写块；false 表示地址不在全部可写白名单中。
+ */
 static inline bool LtdModbus_HoldingRegisterIsWritable(uint16_t address)
 {
     if (((address >= HOLDREGISTER_DEVICEPARAM_POWER_ON_DEFAULT_COMMAND) &&
@@ -517,7 +780,13 @@ static inline bool LtdModbus_HoldingRegisterIsWritable(uint16_t address)
     return false;
 }
 
-/* 按地址表与权限校验完整FC10写区间 */
+/**
+ * @brief 按地址表与权限校验完整FC10写区间。
+ *
+ * @param start 本次连续访问区间的起始寄存器或位地址。
+ * @param count 参与本次处理的数据项数量。
+ * @return true 表示寄存器数量非零、完整区间未越界且每个地址都属于当前可写保持寄存器；false 表示数量为零、地址加法越界、区间超出表尾，或包含只读/保留地址。
+ */
 static inline bool LtdModbus_HoldingWriteRangeIsValid(uint16_t start, uint16_t count)
 {
     uint16_t offset;
@@ -534,7 +803,12 @@ static inline bool LtdModbus_HoldingWriteRangeIsValid(uint16_t start, uint16_t c
     return true;
 }
 
-/* 判断地址是否属于4路清除锁存报警瞬时写槽 */
+/**
+ * @brief 判断地址是否属于4路清除锁存报警瞬时写槽。
+ *
+ * @param address 待分类的 CPU2 共享保持寄存器地址；用于判断写权限或四路锁存报警清除槽。
+ * @return true 表示地址属于4路清除锁存报警瞬时写槽；false 表示地址不属于4路清除锁存报警瞬时写槽。
+ */
 static inline bool LtdModbus_HoldingRegisterIsRelayClearAlarm(uint16_t address)
 {
     uint16_t channel;
@@ -548,7 +822,13 @@ static inline bool LtdModbus_HoldingRegisterIsRelayClearAlarm(uint16_t address)
     return false;
 }
 
-/* 仅当整个FC10区间完全位于7个带参命令前置参数字段内时放行运行态写入。 */
+/**
+ * @brief 仅当整个FC10区间完全位于7个带参命令前置参数字段内时放行运行态写入。
+ *
+ * @param start 本次连续访问区间的起始寄存器或位地址。
+ * @param count 参与本次处理的数据项数量。
+ * @return true 表示非空 FC10 区间完整落在七个带参命令的前置参数连续区域内；false 表示区间为空、起始地址更早、结束地址越过该区域，或混入其他字段。
+ */
 static inline bool LtdModbus_HoldingWriteIsCommandArgumentOnly(uint16_t start,
                                                                uint16_t count)
 {
@@ -559,7 +839,13 @@ static inline bool LtdModbus_HoldingWriteIsCommandArgumentOnly(uint16_t start,
             (uint32_t)HOLDREGISTER_DEVICEPARAM_MOTOR_COMMAND_DISTANCE + REG_STRIDE);
 }
 
-/* 持久化写入排除命令、AO模拟开关和4路清除锁存报警瞬时写槽 */
+/**
+ * @brief 持久化写入排除命令、AO模拟开关和4路清除锁存报警瞬时写槽。
+ *
+ * @param start 本次连续访问区间的起始寄存器或位地址。
+ * @param count 参与本次处理的数据项数量。
+ * @return true 表示写区间命中至少一个需要保存到参数存储的字段；false 表示区间为空/无效，或仅覆盖命令、AO 仿真开关及四路清锁存报警瞬时写槽。
+ */
 static inline bool LtdModbus_HoldingWriteTouchesPersistent(uint16_t start, uint16_t count)
 {
     uint16_t offset;
@@ -578,7 +864,12 @@ static inline bool LtdModbus_HoldingWriteTouchesPersistent(uint16_t start, uint1
     return false;
 }
 
-/* 仅放行当前 CPU2 已实现并可返回合法 ACK 的命令。 */
+/**
+ * @brief 仅放行当前 CPU2 已实现并可返回合法 ACK 的命令。
+ *
+ * @param command 准备由 LTD Modbus 线圈触发的 32 位 CommandType 编码；仅已形成 CPU2 业务闭环的命令返回已实现。
+ * @return true 表示命令号位于 CPU2 当前已经具备执行和 ACK 闭环的白名单；false 表示命令未知、预留或尚未实现，不能作为有效命令下发。
+ */
 static inline bool LtdModbus_CommandIsImplemented(uint32_t command)
 {
     switch (command) {

@@ -4,16 +4,22 @@
 #include <math.h>
 #include <string.h>
 
+/* 继电器报警源的物理有效范围；配置校验使用上下界及是否有界标志拒绝无意义阈值。 */
 typedef struct {
-    float minimum;
-    float maximum;
-    bool bounded;
+    /* 继电器报警源允许配置的最小值、最大值和是否有界。 */
+    float minimum; /* 有界报警源允许配置的物理最小值。 */
+    float maximum; /* 有界报警源允许配置的物理最大值。 */
+    bool bounded; /* 该报警源是否存在有限物理边界；为假时不应用最小值和最大值限制。 */
 } RelayAlarmPhysicalRange;
 
-/*
- * 函数用途：把继电器配置中的 IEEE754 原始位还原为 Float32。
- * 调用场景：阈值和滞回校验读取持久化配置时调用。
- * 关键约束：只按位复制，不改变共享协议和 FRAM 字段布局。
+/**
+ * @brief 把继电器配置中的 IEEE754 原始位还原为 Float32。
+ *
+ * @details 调用场景：阈值和滞回校验读取持久化配置时调用。
+ * @note 关键约束：只按位复制，不改变共享协议和 FRAM 字段布局。
+ *
+ * @param raw 继电器配置字段保存的 IEEE 754 Float32 原始 32 位位模式。
+ * @return 返回转换后的 IEEE 754 单精度位模式或浮点值；转换保持原始 32 位，不进行数值缩放。
  */
 static float RelayAlarmConfig_RawToFloat(uint32_t raw)
 {
@@ -23,10 +29,14 @@ static float RelayAlarmConfig_RawToFloat(uint32_t raw)
     return value;
 }
 
-/*
- * 函数用途：把归一化后的 Float32 按位保存为继电器配置原始值。
- * 调用场景：旧 FRAM 非法字段恢复为 0 时调用。
- * 关键约束：只按位复制，不执行数值类型转换。
+/**
+ * @brief 把归一化后的 Float32 按位保存为继电器配置原始值。
+ *
+ * @details 调用场景：旧 FRAM 非法字段恢复为 0 时调用。
+ * @note 关键约束：只按位复制，不执行数值类型转换。
+ *
+ * @param value 本次报警门限判断使用的实时输入值。
+ * @return 返回转换后的 IEEE 754 单精度位模式或浮点值；转换保持原始 32 位，不进行数值缩放。
  */
 static uint32_t RelayAlarmConfig_FloatToRaw(float value)
 {
@@ -36,10 +46,15 @@ static uint32_t RelayAlarmConfig_FloatToRaw(float value)
     return raw;
 }
 
-/*
- * 函数用途：取得报警源允许的物理范围。
- * 调用场景：校验四级阈值和报警滞回前调用。
- * 关键约束：液位使用液位罐高，水位使用水位罐高；浮子位置暂不增加物理边界。
+/**
+ * @brief 取得报警源允许的物理范围。
+ *
+ * @details 调用场景：校验四级阈值和报警滞回前调用。
+ * @note 关键约束：液位使用液位罐高，水位使用水位罐高；浮子位置暂不增加物理边界。
+ *
+ * @param params 完整设备参数只读快照；包含版本、结构长度、测量与协议配置、AO、继电器以及 CRC 等持久字段，函数不会修改该快照。
+ * @param alarm_source 报警来源。
+ * @return 返回报警源对应的物理最小值、最大值和有效标志；未知报警源返回 invalid 范围。
  */
 static RelayAlarmPhysicalRange RelayAlarmConfig_GetPhysicalRange(
     const DeviceParameters *params,
@@ -75,10 +90,16 @@ static RelayAlarmPhysicalRange RelayAlarmConfig_GetPhysicalRange(
     return range;
 }
 
-/*
- * 函数用途：校验单个报警阈值的有限性和当前报警源物理范围。
- * 调用场景：禁用通道逐项配置、完整配置校验和旧 FRAM 逐字段归一化共用。
- * 关键约束：报警源枚举非法时不得把阈值按无界值放行。
+/**
+ * @brief 校验单个报警阈值的有限性和当前报警源物理范围。
+ *
+ * @details 调用场景：禁用通道逐项配置、完整配置校验和旧 FRAM 逐字段归一化共用。
+ * @note 关键约束：报警源枚举非法时不得把阈值按无界值放行。
+ *
+ * @param params 完整设备参数只读快照；包含版本、结构长度、测量与协议配置、AO、继电器以及 CRC 等持久字段，函数不会修改该快照。
+ * @param config 只读单路继电器报警配置；包含工作模式、数字源、触点与报警模式、无效值策略、报警源、四级阈值、滞回、阻尼和清除锁存命令。
+ * @param raw_value 原始数值。
+ * @return true 表示上述校验全部通过；false 表示至少一项校验未通过。
  */
 static bool RelayAlarmConfig_ThresholdValueIsValid(
     const DeviceParameters *params,
@@ -108,10 +129,14 @@ static bool RelayAlarmConfig_ThresholdValueIsValid(
     return true;
 }
 
-/*
- * 函数用途：只校验 HH、H、L、LL 四级阈值的相对顺序。
- * 调用场景：完整配置启用校验和旧 FRAM 顺序冲突识别。
- * 关键约束：允许相邻阈值相等；顺序冲突时迁移流程保留原值并禁用通道。
+/**
+ * @brief 只校验 HH、H、L、LL 四级阈值的相对顺序。
+ *
+ * @details 调用场景：完整配置启用校验和旧 FRAM 顺序冲突识别。
+ * @note 关键约束：允许相邻阈值相等；顺序冲突时迁移流程保留原值并禁用通道。
+ *
+ * @param config 只读单路继电器报警配置；包含工作模式、数字源、触点与报警模式、无效值策略、报警源、四级阈值、滞回、阻尼和清除锁存命令。
+ * @return true 表示四级阈值满足 HH≥H≥L≥LL；false 表示配置指针为空，或任一相邻等级次序颠倒。
  */
 static bool RelayAlarmConfig_ThresholdOrderIsValid(
     const RelayAlarmConfig *config)
@@ -131,10 +156,15 @@ static bool RelayAlarmConfig_ThresholdOrderIsValid(
     return (hh >= h) && (h >= l) && (l >= ll);
 }
 
-/*
- * 函数用途：校验 HH、H、L、LL 四级阈值的有限性、顺序和物理范围。
- * 调用场景：启用通道的完整配置校验。
- * 关键约束：禁用通道逐项写入不调用本函数，启用前必须满足 HH >= H >= L >= LL。
+/**
+ * @brief 校验 HH、H、L、LL 四级阈值的有限性、顺序和物理范围。
+ *
+ * @details 调用场景：启用通道的完整配置校验。
+ * @note 关键约束：禁用通道逐项写入不调用本函数，启用前必须满足 HH >= H >= L >= LL。
+ *
+ * @param params 完整设备参数只读快照；包含版本、结构长度、测量与协议配置、AO、继电器以及 CRC 等持久字段，函数不会修改该快照。
+ * @param config 只读单路继电器报警配置；包含工作模式、数字源、触点与报警模式、无效值策略、报警源、四级阈值、滞回、阻尼和清除锁存命令。
+ * @return true 表示上述校验全部通过；false 表示至少一项校验未通过。
  */
 static bool RelayAlarmConfig_ThresholdsAreValid(
     const DeviceParameters *params,
@@ -154,10 +184,15 @@ static bool RelayAlarmConfig_ThresholdsAreValid(
            RelayAlarmConfig_ThresholdOrderIsValid(config);
 }
 
-/*
- * 函数用途：校验报警滞回为有限非负值，并限制在有界报警源的量程跨度内。
- * 调用场景：FC10 候选提交和旧 FRAM 归一化共用。
- * 关键约束：浮子位置没有新增物理范围，但仍拒绝负数、NaN 和无穷值。
+/**
+ * @brief 校验报警滞回为有限非负值，并限制在有界报警源的量程跨度内。
+ *
+ * @details 调用场景：FC10 候选提交和旧 FRAM 归一化共用。
+ * @note 关键约束：浮子位置没有新增物理范围，但仍拒绝负数、NaN 和无穷值。
+ *
+ * @param params 完整设备参数只读快照；包含版本、结构长度、测量与协议配置、AO、继电器以及 CRC 等持久字段，函数不会修改该快照。
+ * @param config 只读单路继电器报警配置；包含工作模式、数字源、触点与报警模式、无效值策略、报警源、四级阈值、滞回、阻尼和清除锁存命令。
+ * @return true 表示上述校验全部通过；false 表示至少一项校验未通过。
  */
 static bool RelayAlarmConfig_HysteresisIsValid(
     const DeviceParameters *params,
@@ -185,10 +220,15 @@ static bool RelayAlarmConfig_HysteresisIsValid(
     return true;
 }
 
-/*
- * 函数用途：校验一路继电器报警配置的枚举、阻尼、阈值和滞回。
- * 调用场景：CPU2 权威写入校验和启动归一化调用。
- * 关键约束：当前阻尼字段为预留项，只接受 0。
+/**
+ * @brief 校验一路继电器报警配置的枚举、阻尼、阈值和滞回。
+ *
+ * @details 调用场景：CPU2 权威写入校验和启动归一化调用。
+ * @note 关键约束：当前阻尼字段为预留项，只接受 0。
+ *
+ * @param params 完整设备参数只读快照；包含版本、结构长度、测量与协议配置、AO、继电器以及 CRC 等持久字段，函数不会修改该快照。
+ * @param config 只读单路继电器报警配置；包含工作模式、数字源、触点与报警模式、无效值策略、报警源、四级阈值、滞回、阻尼和清除锁存命令。
+ * @return true 表示上述校验全部通过；false 表示至少一项校验未通过。
  */
 bool RelayAlarmConfig_IsValid(const DeviceParameters *params,
                               const RelayAlarmConfig *config)
@@ -212,10 +252,16 @@ bool RelayAlarmConfig_IsValid(const DeviceParameters *params,
            RelayAlarmConfig_HysteresisIsValid(params, config);
 }
 
-/*
- * 函数用途：判断一段 FC10 写区间是否触及指定的完整 32 位字段。
- * 调用场景：继电器候选写校验按字段判断本次实际修改范围。
- * 关键约束：共享写入只接受完整 32 位字段，不能把相邻未写字段纳入校验。
+/**
+ * @brief 判断一段 FC10 写区间是否触及指定的完整 32 位字段。
+ *
+ * @details 调用场景：继电器候选写校验按字段判断本次实际修改范围。
+ * @note 关键约束：共享写入只接受完整 32 位字段，不能把相邻未写字段纳入校验。
+ *
+ * @param start 本次连续处理范围的起始索引。该值是继电器配置候选写区间的起始字段或寄存器地址，用于判断受影响字段。
+ * @param count 参与本次处理的数据项数量。
+ * @param field_address 字段地址。
+ * @return true 表示 FC10 写区间完整包含 field_address 起始的两个 16 位寄存器，即触及整个 32 位字段；false 表示该字段未被完整覆盖。
  */
 static bool RelayAlarmConfig_FieldIsTouched(uint16_t start,
                                             uint16_t count,
@@ -224,10 +270,18 @@ static bool RelayAlarmConfig_FieldIsTouched(uint16_t start,
     return LtdModbus_RangeContains(start, count, field_address, REG_STRIDE);
 }
 
-/*
- * 函数用途：校验禁用通道本次实际触及的字段。
- * 调用场景：先逐项配置阈值、报警源和其它字段，再单独启用通道。
- * 关键约束：阈值只校验本字段有限性和物理范围，不要求尚未配置完成的四级顺序。
+/**
+ * @brief 校验禁用通道本次实际触及的字段。
+ *
+ * @details 调用场景：先逐项配置阈值、报警源和其它字段，再单独启用通道。
+ * @note 关键约束：阈值只校验本字段有限性和物理范围，不要求尚未配置完成的四级顺序。
+ *
+ * @param params 完整设备参数只读快照；包含版本、结构长度、测量与协议配置、AO、继电器以及 CRC 等持久字段，函数不会修改该快照。
+ * @param config 只读单路继电器报警配置；包含工作模式、数字源、触点与报警模式、无效值策略、报警源、四级阈值、滞回、阻尼和清除锁存命令。
+ * @param channel 零基通道号。合法范围为 0～3，用于在校验失败时准确标识对应继电器配置。
+ * @param start 本次连续处理范围的起始索引。该值是继电器配置候选写区间的起始字段或寄存器地址，用于判断受影响字段。
+ * @param count 参与本次处理的数据项数量。
+ * @return true 表示上述校验全部通过；false 表示至少一项校验未通过。
  */
 static bool RelayAlarmConfig_TouchedFieldsAreValid(
     const DeviceParameters *params,
@@ -324,11 +378,17 @@ static bool RelayAlarmConfig_TouchedFieldsAreValid(
     return true;
 }
 
-/*
- * 函数用途：按 FC10 实际写区间校验继电器候选参数。
- * 调用场景：CPU2 权威写入口解析完整候选快照后、提交运行态和 FRAM 前调用。
- * 关键约束：禁用通道允许逐项形成暂时不完整组合；启用或已启用通道必须完整合法；
+/**
+ * @brief 按 FC10 实际写区间校验继电器候选参数。
+ *
+ * @details 调用场景：CPU2 权威写入口解析完整候选快照后、提交运行态和 FRAM 前调用。
+ * @note 关键约束：禁用通道允许逐项形成暂时不完整组合；启用或已启用通道必须完整合法；
  *           罐高变化只复核启用且实际使用对应液位源的通道。
+ *
+ * @param params 完整设备参数只读快照；包含版本、结构长度、测量与协议配置、AO、继电器以及 CRC 等持久字段，函数不会修改该快照。
+ * @param start 本次连续处理范围的起始索引。该值是继电器配置候选写区间的起始字段或寄存器地址，用于判断受影响字段。
+ * @param count 参与本次处理的数据项数量。
+ * @return true 表示所有被 FC10 区间触及的继电器字段、阈值交叉关系和相关罐高/AO 来源约束均有效；false 表示参数为空、区间为空，任一触及字段越界，或组合配置在本次候选中不成立。
  */
 bool RelayAlarmConfig_WriteCandidateIsValid(const DeviceParameters *params,
                                             uint16_t start,
@@ -391,10 +451,15 @@ bool RelayAlarmConfig_WriteCandidateIsValid(const DeviceParameters *params,
     return true;
 }
 
-/*
- * 函数用途：按字段修复旧 FRAM 中的非法继电器配置并报告通道掩码。
- * 调用场景：CPU2 上电加载 DeviceParameters 后调用。
- * 关键约束：非法通道必须禁用；合法的一次性清报警命令只清零，不计为非法通道。
+/**
+ * @brief 按字段修复旧 FRAM 中的非法继电器配置并报告通道掩码。
+ *
+ * @details 调用场景：CPU2 上电加载 DeviceParameters 后调用。
+ * @note 关键约束：非法通道必须禁用；合法的一次性清报警命令只清零，不计为非法通道。
+ *
+ * @param params 可写设备参数对象；函数按职责从寄存器或 FRAM 还原字段，并在完成后更新版本、结构长度或 CRC 等完整性信息。
+ * @param invalid_channel_mask 用于返回配置非法的继电器通道位掩码，低 4 位对应通道 1 至 4。
+ * @return 返回本轮被修正字段的位掩码；全部配置原本合法时返回 0。
  */
 uint32_t RelayAlarmConfig_Normalize(DeviceParameters *params,
                                     uint32_t *invalid_channel_mask)

@@ -11,15 +11,15 @@
 /* ===================== 私有类型/状态 ===================== */
 
 /* TFIT 采样和拟合结果缓存，仅在本文件内部使用，断电后丢失。 */
-static MotorTapeFitSample s_motor_tape_fit_samples[MOTOR_TAPE_FIT_MAX_SAMPLES]; /* 电机控制模块级变量，保存跨函数共享的业务状态。 */
-static uint16_t s_motor_tape_fit_count = 0; /* 电机控制计数值，用于节拍、统计或协议数量控制。 */
-static bool s_motor_tape_fit_enabled = false; /* 电机控制模块级变量，保存跨函数共享的业务状态。 */
-static int32_t s_motor_tape_fit_last_step = INT32_MIN; /* 电机控制模块级变量，保存跨函数共享的业务状态。 */
+static MotorTapeFitSample s_motor_tape_fit_samples[MOTOR_TAPE_FIT_MAX_SAMPLES]; /* 尺带几何模型拟合使用的电机步数/编码器长度样本数组。 */
+static uint16_t s_motor_tape_fit_count = 0; /* 当前 TFIT 样本数组中的有效样本数；同时作为下一写入索引，并限制在 MOTOR_TAPE_FIT_MAX_SAMPLES 容量内。 */
+static bool s_motor_tape_fit_enabled = false; /* 尺带模型样本采集当前是否启用的标志。 */
+static int32_t s_motor_tape_fit_last_step = INT32_MIN; /* 最近一次已接受样本的电机步数，用于抑制重复位置采样。 */
 static MotorTapeFitResult s_motor_tape_fit_result = {0};
-static bool s_motor_tape_fit_result_is_local = false; /* 电机控制模块级变量，保存跨函数共享的业务状态。 */
-static bool s_motor_tape_fit_local_origin_valid = false; /* 电机控制模块级变量，保存跨函数共享的业务状态。 */
-static int32_t s_motor_tape_fit_origin_step = 0; /* 电机控制模块级变量，保存跨函数共享的业务状态。 */
-static int32_t s_motor_tape_fit_origin_length_01mm = 0; /* 电机控制模块级变量，保存跨函数共享的业务状态。 */
+static bool s_motor_tape_fit_result_is_local = false; /* 当前拟合结果是否基于局部原点坐标计算的标志。 */
+static bool s_motor_tape_fit_local_origin_valid = false; /* 局部拟合原点步数和长度已经锁存的标志。 */
+static int32_t s_motor_tape_fit_origin_step = 0; /* 局部拟合坐标的原点电机步数。 */
+static int32_t s_motor_tape_fit_origin_length_01mm = 0; /* 局部拟合坐标的原点编码器长度，单位为 0.1 mm。 */
 
 /* ===================== 私有函数声明 ===================== */
 
@@ -343,7 +343,6 @@ uint32_t MotorCtrl_TapeFitApply(bool apply_c0, bool apply_t)
         } else {
             ret = MotorCtrl_TapeFitSolve();
         }
-        /* 先处理异常边界，避免电机控制状态机带故障继续运行。 */
         if (ret != NO_ERROR) {
             return ret;
         }

@@ -28,32 +28,66 @@ static int ResponseCommand1(RCV_TYPE *revframe,SND_TYPE *sendframe);							/* 响
 static int ResponseCommand2(RCV_TYPE *revframe,SND_TYPE *sendframe);							/* 响应指令2：读环路电流和量程百分比 */
 static int ResponseCommand3(RCV_TYPE *revframe,SND_TYPE *sendframe);							/* 响应指令3：读动态变量和环路电流 */
 static int ResponseCommand6(RCV_TYPE *revframe,SND_TYPE *sendframe);
+/**
+ * @brief 读取 AO 所选且有效的过程样本，并把 0.1 mm 值换算为 mm；无有效样本返回 0。
+ *
+ * @return AO 当前选择的过程样本有效时返回其 0.1 mm 定点值换算后的 mm 数值；样本获取失败或无效时返回 0.0。
+ */
 static float Hart_GetPrimaryVariable(void);
+/**
+ * @brief 按现有 HART 兼容口径读取实时温度次变量。
+ *
+ * 遇到实时温度或无线温度无效哨兵时返回 0.0；其他值直接将 g_measurement.debug_data.temperature 除以 100.0。
+ *
+ * @return 实时或无线温度为无效哨兵时返回 0.0；否则直接返回 g_measurement.debug_data.temperature / 100.0f，且不扣除原始编码的 200.00 ℃
+ *         偏移。
+ * @note 当前实现没有扣除 CPU2 温度原始编码中的 200.00 ℃ 偏移，本轮只据实说明既有行为，不改变 HART 数值口径。
+ */
 static float Hart_GetSecondaryVariable(void);
+/**
+ * @brief 把有效平均密度原始值换算为工程值；无效密度返回 0。
+ *
+ * @return 平均密度为 UNVALID_DENSITY 时返回 0.0；否则返回 RAW_TO_DENSITY 换算后的密度工程值，单位 kg/m3。
+ */
 static float Hart_GetTertiaryVariable(void);
+/**
+ * @brief 把长地址响应包转换成短地址响应包。
+ *
+ * @param sendframe 待填充或发送的 HART 响应帧对象。命令处理器在其中写入状态、响应数据和数据长度，最终 BCC 由统一封装流程追加。
+ * @param datalen 协议数据区的有效长度，单位字节。
+ * @param HartCommand 当前 HART 命令号。
+ * @return 返回按当前映射得到的长地址响应包转换成短地址响应包；非法输入使用 @brief 说明的兜底地址或无效值。
+ */
 static u8 ConvertToShortAddressResponsePacket(SND_TYPE *sendframe,u8 datalen,u8 HartCommand);	/* 把长地址响应包转换成短地址响应包 */
+/**
+ * @brief 在发送包数据前添加先导符0XFF。
+ *
+ * @param sendframe 待填充或发送的 HART 响应帧对象。命令处理器在其中写入状态、响应数据和数据长度，最终 BCC 由统一封装流程追加。
+ * @param datalen 协议数据区的有效长度，单位字节。
+ * @param NumberOfPreambles HART 响应前导字节 0xFF 的数量。
+ * @return 返回添加指定数量 0xFF 前导字节后的 HART 发送包总长度，单位字节。
+ */
 static u8 AddPreamble(SND_TYPE *sendframe,u8 datalen,u8 NumberOfPreambles);						/* 在发送包数据前添加先导符0XFF */
 
+/**
+ * @brief 把 HART 调制解调器 RTS 引脚置低。
+ */
 static inline void HART_RTS_LOW(void)
 {
     HAL_GPIO_WritePin(HART_RTS_GPIO_Port, HART_RTS_Pin, GPIO_PIN_RESET);
 }
 
 /**
- * @brief 执行本模块中的 HART_RTS_HIGH 逻辑。
- * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ * @brief 把 HART 调制解调器 RTS 引脚置高。
  */
 static inline void HART_RTS_HIGH(void)
 {
     HAL_GPIO_WritePin(HART_RTS_GPIO_Port, HART_RTS_Pin, GPIO_PIN_SET);
 }
 
-/*************************************************
-Function:HartInit
-Description: Hart初始化
-Input: 无
-Return: 无
-*************************************************/
+/**
+ * @brief 将 HART 收发方向置为发送空闲态，并初始化 HART 过程变量。
+ */
 void HartInit(void)
 {
 	HAL_GPIO_WritePin(HART_RTS_GPIO_Port, HART_RTS_Pin, GPIO_PIN_SET);
@@ -61,12 +95,9 @@ void HartInit(void)
 	HartParameterInit();				/* Hart参数初始化 */ /* TEXT */
 }
 
-/*************************************************
-Function:HartParameterInit
-Description: Hart参数初始化
-Input: 无
-Return: 无
-*************************************************/
+/**
+ * @brief 用当前 AO 电流及实时过程变量初始化 HART 参数缓存。
+ */
 void HartParameterInit(void) /* TEXT */
 {
 	HartParameters.Current = AoOutput_GetCurrent_mA();
@@ -77,6 +108,11 @@ void HartParameterInit(void) /* TEXT */
 	HartParameters.TertiaryVariable =  SetGlobalVariables;
 }
 
+/**
+ * @brief 读取 AO 所选且有效的过程样本，并把 0.1 mm 值换算为 mm；无有效样本返回 0。
+ *
+ * @return AO 当前选择的过程样本有效时返回其 0.1 mm 定点值换算后的 mm 数值；样本获取失败或无效时返回 0.0。
+ */
 static float Hart_GetPrimaryVariable(void)
 {
     AoProcessSample sample;
@@ -88,6 +124,15 @@ static float Hart_GetPrimaryVariable(void)
     return ((float)sample.value_01mm) / 10.0f;
 }
 
+/**
+ * @brief 按现有 HART 兼容口径读取实时温度次变量。
+ *
+ * 遇到实时温度或无线温度无效哨兵时返回 0.0；其他值直接将 g_measurement.debug_data.temperature 除以 100.0。
+ *
+ * @return 实时或无线温度为无效哨兵时返回 0.0；否则直接返回 g_measurement.debug_data.temperature / 100.0f，且不扣除原始编码的 200.00 ℃
+ *         偏移。
+ * @note 当前实现没有扣除 CPU2 温度原始编码中的 200.00 ℃ 偏移，本轮只据实说明既有行为，不改变 HART 数值口径。
+ */
 static float Hart_GetSecondaryVariable(void)
 {
     if ((g_measurement.debug_data.temperature == UNVALID_TEMPERATURE_REALTIME) ||
@@ -98,6 +143,11 @@ static float Hart_GetSecondaryVariable(void)
     return ((float)g_measurement.debug_data.temperature) / 100.0f;
 }
 
+/**
+ * @brief 把有效平均密度原始值换算为工程值；无效密度返回 0。
+ *
+ * @return 平均密度为 UNVALID_DENSITY 时返回 0.0；否则返回 RAW_TO_DENSITY 换算后的密度工程值，单位 kg/m3。
+ */
 static float Hart_GetTertiaryVariable(void)
 {
     if (g_measurement.density_distribution.average_density == UNVALID_DENSITY) {
@@ -106,13 +156,14 @@ static float Hart_GetTertiaryVariable(void)
 
     return RAW_TO_DENSITY(g_measurement.density_distribution.average_density);
 }
-/*************************************************
-Function: HartCommunicationProcess
-Description: HART通信主机指令包处理函数,处理不同指令并发送响应包。
-Input: RcvBuff - 接收包指针
-       SendBuff - 发送包指针
-Return: ret - 错误代码
-*************************************************/
+/**
+ * @brief HART通信主机指令包处理函数,处理不同指令并发送响应包。
+ *
+ * @param RcvBuff 已经接收完成的 HART 请求帧缓冲区。
+ * @param SendBuff 用于输出 HART 响应帧的缓冲区。
+ * @param Sendlen 用于返回 HART 响应帧长度的输出参数，单位字节。
+ * @return 返回 HART 请求解析或命令响应结果码；同时通过 SendBuff 和 Sendlen 输出响应帧。
+ */
 u8 HartCommunicationProcess(u8* RcvBuff,u8* SendBuff,volatile u8* Sendlen)
 {
 	int ret;
@@ -192,17 +243,19 @@ u8 HartCommunicationProcess(u8* RcvBuff,u8* SendBuff,volatile u8* Sendlen)
 	*Sendlen = AddPreamble(SndPackage,*Sendlen,NUMBER_OF_PREAMBLES); /* 发送包添加先导符 */
 	return 0;	
 }
-/*************************************************
-Function: AnalyseRcvPackage
-Description: hart接收解包、校验，读取指令代码
-Input: RcvPackage - 指向接收数据包共用体的指针
-       HartCommand - HART指令代码地址
-	   pFlagofLongFrame - 指向长短帧标志位的指针
-Return: 0 - 正常
-		1 - 定界符异常
-		2 - BCC校验错误
-        3 - 地址错误
-*************************************************/
+/**
+ * @brief hart接收解包、校验，读取指令代码。
+ *
+ * HartCommand - HART指令代码地址。
+ * 1 - 定界符异常。
+ * 2 - BCC校验错误。
+ * 3 - 地址错误。
+ *
+ * @param RcvPackage 已经完成接收的 HART 请求包。
+ * @param HartCommand 当前 HART 命令号。
+ * @param pFlagofLongFrame 用于返回 HART 请求是否采用长帧地址格式。
+ * @return 0 表示 HART 帧地址和 BCC 均有效；1 表示定界符异常，2 表示 BCC 错误，3 表示短地址或长地址不匹配。
+ */
 static int AnalyseRcvPackage(RCV_TYPE *RcvPackage,u8* HartCommand,u8* pFlagofLongFrame)
 {
 	int  i;						/* 循环计数 */
@@ -257,13 +310,14 @@ static int AnalyseRcvPackage(RCV_TYPE *RcvPackage,u8* HartCommand,u8* pFlagofLon
 		return 2;
 	}
 }
-/*************************************************
-Function: InitializeSndPackage
-Description: 设置长指令响应时发送数据包的定界符，地址，命令，通信状态，设备状态
-Input: sendframe - 指向发送数据包共用体的指针
-       HartCommand - HART指令代码
-Return: 无
-*************************************************/
+/**
+ * @brief 设置长指令响应时发送数据包的定界符，地址，命令，通信状态，设备状态。
+ *
+ * HartCommand - HART指令代码。
+ *
+ * @param sendframe 待填充或发送的 HART 响应帧对象。命令处理器在其中写入状态、响应数据和数据长度，最终 BCC 由统一封装流程追加。
+ * @param HartCommand 当前 HART 命令号。
+ */
 static void InitializeSndPackage(SND_TYPE *sendframe,u8 HartCommand)
 {
 	sendframe->Command1.Delimiter = 0X86;				/* 长地址定界符 */
@@ -276,13 +330,13 @@ static void InitializeSndPackage(SND_TYPE *sendframe,u8 HartCommand)
 	sendframe->Command1.CommunicationStatus = HartParameters.CommunicationStatus;	/* 通信状态 */
 	sendframe->Command1.DeviceStatus = HartParameters.DeviceStatus;					/* 设备状态 */
 }
-/*************************************************
-Function: CalculateBCC
-Description: 计算发送包的BCC校验位
-Input: sendframe - 指向发送数据包共用体的指针
-		datalen - 数据包的长度
-Return: datalen+1 - 加校验位后数据包的长度
-*************************************************/
+/**
+ * @brief 计算发送包的BCC校验位。
+ *
+ * @param sendframe 待填充或发送的 HART 响应帧对象。命令处理器在其中写入状态、响应数据和数据长度，最终 BCC 由统一封装流程追加。
+ * @param datalen 协议数据区的有效长度，单位字节。
+ * @return 返回 datalen + 1，即在 sendframe->data[datalen] 写入异或 BCC 后的总数据长度；返回值不是 BCC 校验字节本身。
+ */
 static u8 CalculateBCC(SND_TYPE *sendframe,u8 datalen)
 {
 	int  i;
@@ -295,12 +349,12 @@ static u8 CalculateBCC(SND_TYPE *sendframe,u8 datalen)
 	sendframe->data[datalen]= chk;	/* 赋值 */
 	return datalen+1;				/* 返回数据长度 */
 }
-/*************************************************
-Function: SetFloatData
-Description: 把FLOAT变量小端存储转化成大端存储
-Input: x - 待设置的的数据
-Return: *data - 大端存储的FLOAT变量
-*************************************************/
+/**
+ * @brief 把FLOAT变量小端存储转化成大端存储。
+ *
+ * @param Variable 待按 HART 线格式编码的单精度浮点变量。
+ * @return 返回输入 Float32 原始位模式完成字节反序后的 32 位线格式值。
+ */
 static u32 SetFloatData(float Variable)
 {
 	u32* data=(u32*)(&Variable);
@@ -310,13 +364,13 @@ static u32 SetFloatData(float Variable)
 		  | ((*data & 0x000000ff) << 24);
 	return *data;
 }
-/*************************************************
-Function: Response0
-Description: 响应指令0：读唯一标识
-Input: revframe  - 指向接收数据包共用体的指针
-       sendframe - 指向发送数据包共用体的指针
-Return: sendlen - 发送包的长度
-*************************************************/
+/**
+ * @brief 响应指令0：读唯一标识。
+ *
+ * @param revframe 已经解包的 HART 请求帧对象。命令处理器只读命令号、数据长度和请求数据，不修改接收帧。
+ * @param sendframe 待填充或发送的 HART 响应帧对象。命令处理器在其中写入状态、响应数据和数据长度，最终 BCC 由统一封装流程追加。
+ * @return 返回 HART 命令 0 响应数据区的有效长度，单位字节。
+ */
 static int ResponseCommand0(RCV_TYPE *revframe,SND_TYPE *sendframe)
 {
 	int datalen;
@@ -345,13 +399,13 @@ static int ResponseCommand0(RCV_TYPE *revframe,SND_TYPE *sendframe)
 	datalen = sendframe->Command0.BytesCount+8;		/* 定界符+地址+命令字节+数据总长度+数据 */
 	return datalen;									/* 返回发送包长度 */
 }
-/*************************************************
-Function: Response1
-Description: 响应指令1：读主变量
-Input: revframe  - 指向接收数据包共用体的指针
-       sendframe - 指向发送数据包共用体的指针
-Return: datalen - 发送包的长度
-*************************************************/
+/**
+ * @brief 响应指令1：读主变量。
+ *
+ * @param revframe 已经解包的 HART 请求帧对象。命令处理器只读命令号、数据长度和请求数据，不修改接收帧。
+ * @param sendframe 待填充或发送的 HART 响应帧对象。命令处理器在其中写入状态、响应数据和数据长度，最终 BCC 由统一封装流程追加。
+ * @return 返回 HART 命令 1 响应数据区的有效长度，单位字节。
+ */
 static int ResponseCommand1(RCV_TYPE *revframe,SND_TYPE *sendframe)
 {
 	int datalen;
@@ -364,13 +418,13 @@ static int ResponseCommand1(RCV_TYPE *revframe,SND_TYPE *sendframe)
 	datalen = sendframe->Command1.BytesCount+8;											/* 定界符+地址+命令字节+数据总长度+数据 */
 	return datalen;	
 }
-/*************************************************
-Function: Response2
-Description: 响应指令2：读环路电流和量程百分比
-Input: revframe  - 指向接收数据包共用体的指针
-       sendframe - 指向发送数据包共用体的指针
-Return: datalen - 发送包的长度
-*************************************************/
+/**
+ * @brief 响应指令2：读环路电流和量程百分比。
+ *
+ * @param revframe 已经解包的 HART 请求帧对象。命令处理器只读命令号、数据长度和请求数据，不修改接收帧。
+ * @param sendframe 待填充或发送的 HART 响应帧对象。命令处理器在其中写入状态、响应数据和数据长度，最终 BCC 由统一封装流程追加。
+ * @return 返回 HART 命令 2 响应数据区的有效长度，单位字节。
+ */
 static int ResponseCommand2(RCV_TYPE *revframe,SND_TYPE *sendframe)
 {
 	int datalen;
@@ -383,13 +437,13 @@ static int ResponseCommand2(RCV_TYPE *revframe,SND_TYPE *sendframe)
 	datalen = sendframe->Command2.BytesCount+8;	
 	return datalen;
 }
-/*************************************************
-Function: Response3
-Description: 响应指令3：读动态变量和环路电流
-Input: revframe  - 指向接收数据包共用体的指针
-       sendframe - 指向发送数据包共用体的指针
-Return: datalen - 发送包的长度
-*************************************************/
+/**
+ * @brief 响应指令3：读动态变量和环路电流。
+ *
+ * @param revframe 已经解包的 HART 请求帧对象。命令处理器只读命令号、数据长度和请求数据，不修改接收帧。
+ * @param sendframe 待填充或发送的 HART 响应帧对象。命令处理器在其中写入状态、响应数据和数据长度，最终 BCC 由统一封装流程追加。
+ * @return 返回 HART 命令 3 响应数据区的有效长度，单位字节。
+ */
 static int ResponseCommand3(RCV_TYPE *revframe,SND_TYPE *sendframe)
 {
 	int datalen;
@@ -413,13 +467,13 @@ static int ResponseCommand3(RCV_TYPE *revframe,SND_TYPE *sendframe)
 	datalen = sendframe->Command3.BytesCount+8;												/* 定界符+地址(5)+命令字节+数据总长度+数据 */
 	return datalen;
 }
-/*************************************************
-Function: Response6
-Description: 响应指令6：设置轮询地址
-Input: revframe  - 指向接收数据包共用体的指针
-       sendframe - 指向发送数据包共用体的指针
-Return: datalen - 发送包的长度
-*************************************************/
+/**
+ * @brief 响应指令6：设置轮询地址。
+ *
+ * @param revframe 已经解包的 HART 请求帧对象。命令处理器只读命令号、数据长度和请求数据，不修改接收帧。
+ * @param sendframe 待填充或发送的 HART 响应帧对象。命令处理器在其中写入状态、响应数据和数据长度，最终 BCC 由统一封装流程追加。
+ * @return 返回 HART 命令 6 响应数据区的有效长度，单位字节。
+ */
 static int ResponseCommand6(RCV_TYPE *revframe,SND_TYPE *sendframe)
 {
 	int datalen;
@@ -433,13 +487,14 @@ static int ResponseCommand6(RCV_TYPE *revframe,SND_TYPE *sendframe)
 	return datalen;
 }
 
-/*************************************************
-Function: ConvertToShortAddressResponsePacket
-Description: 把长地址响应包转换成短地址响应包
-Input: 	sendframe - 指向发送数据包共用体的指针
-		datalen - 长地址响应包的长度
-Return: datalen - 短地址响应包的长度
-*************************************************/
+/**
+ * @brief 把长地址响应包转换成短地址响应包。
+ *
+ * @param sendframe 待填充或发送的 HART 响应帧对象。命令处理器在其中写入状态、响应数据和数据长度，最终 BCC 由统一封装流程追加。
+ * @param datalen 协议数据区的有效长度，单位字节。
+ * @param HartCommand 当前 HART 命令号。
+ * @return 返回按当前映射得到的长地址响应包转换成短地址响应包；非法输入使用 @brief 说明的兜底地址或无效值。
+ */
 static u8 ConvertToShortAddressResponsePacket(SND_TYPE *sendframe,u8 datalen,u8 HartCommand)
 {
 	int i = datalen;
@@ -453,14 +508,14 @@ static u8 ConvertToShortAddressResponsePacket(SND_TYPE *sendframe,u8 datalen,u8 
 	return datalen;
 }
 
-/*************************************************
-Function: AddPreamble
-Description: 在发送包数据前添加先导符0XFF
-Input: 	sendframe - 指向发送数据包共用体的指针
-		datalen - 添加先导符前发送包的长度
-		NumberOfPreambles - 先导符的数量
-Return: datalen - 添加先导符后发送包的长度
-*************************************************/
+/**
+ * @brief 在发送包数据前添加先导符0XFF。
+ *
+ * @param sendframe 待填充或发送的 HART 响应帧对象。命令处理器在其中写入状态、响应数据和数据长度，最终 BCC 由统一封装流程追加。
+ * @param datalen 协议数据区的有效长度，单位字节。
+ * @param NumberOfPreambles HART 响应前导字节 0xFF 的数量。
+ * @return 返回添加指定数量 0xFF 前导字节后的 HART 发送包总长度，单位字节。
+ */
 static u8 AddPreamble(SND_TYPE *sendframe,u8 datalen,u8 NumberOfPreambles)
 {
 	int i = datalen;

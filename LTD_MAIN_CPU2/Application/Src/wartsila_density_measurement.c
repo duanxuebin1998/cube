@@ -18,6 +18,9 @@
 
 /**
  * @brief 将 mm 位置转换为 0.1mm 无符号结果，负位置按 0 上报，超范围按上限上报。
+ *
+ * @param pos_mm 位置值，单位 mm。
+ * @return 返回完成边界钳位后的数值；输入低于下限时返回下限，高于上限时返回上限，区间内保持原值。
  */
 static uint32_t PositionMm_ToU01mmClamped(float pos_mm)
 {
@@ -43,22 +46,23 @@ static uint32_t PositionMm_ToU01mmClamped(float pos_mm)
 #define WARTSILA_DENSITY_TEMP_EPS_C         0.2f /* Wartsila 密度测量参数：密度 温度 允许误差 C。 */
 
 typedef struct {
-    DensityMeasurement measurement;
-    float frequency_hz;
-    float density_value;
-    float temperature_c;
-    float actual_position_mm;
-    bool is_air;
-    const char *air_reason;
+    /* Wartsila 剖面单点的原始测量、换算结果、实际位置和气相判定依据。 */
+    DensityMeasurement measurement; /* 该测点保留的完整原始测量结构，供诊断和后续换算复核。 */
+    float frequency_hz; /* 该测点换算后的传感器频率，单位为 Hz。 */
+    float density_value; /* 该测点换算后的密度值，单位遵循当前密度算法输出。 */
+    float temperature_c; /* 该测点换算后的温度，单位为 ℃。 */
+    float actual_position_mm; /* 采样时由位置模型换算的实际位置，单位为 mm。 */
+    bool is_air; /* 该测点被判定为气相的标志；非零/true 时不作为有效液相密度点。 */
+    const char *air_reason; /* 气相判定原因的只读文本；非气相点可以为空。 */
 } WartsilaPointSample;
 
 /**
- * @brief 执行测量流程中的 Wartsila_IsAirPoint 逻辑。
+ * @brief 按密度和频率判定样本是否为空气点，并返回判定原因。
  *
- * @param density_value 待处理数值。
- * @param frequency_hz 业务参数。
- * @param air_reason 业务参数。
- * @return true 表示条件满足或处理成功，false 表示条件不满足或处理失败。
+ * @param density_value 密度数值。
+ * @param frequency_hz 传感器频率，单位 Hz。
+ * @param air_reason 用于返回当前样本被判为空气点的原因文字。
+ * @return true 表示密度低于空气阈值，或频率高于油位频率界限，并按优先级写入对应原因；false 表示两个空气判据均不成立，样本按液体点处理并写入 liquid 原因。
  */
 static bool Wartsila_IsAirPoint(float density_value, float frequency_hz, const char **air_reason)
 {
@@ -83,16 +87,15 @@ static bool Wartsila_IsAirPoint(float density_value, float frequency_hz, const c
 }
 
 /**
- * @brief 执行测量流程中的 Wartsila_FillPointSample 逻辑。
+ * @brief 把工程量和实际位置编码到单个瓦锡兰点阵样本。
  *
- * @param sample 业务参数。
- * @param frequency_hz 业务参数。
- * @param density_value 待处理数值。
- * @param temperature_c 业务参数。
- * @param actual_position_mm 业务参数。
- * @param is_air 业务参数。
- * @param air_reason 业务参数。
- * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ * @param sample 待处理的单次测量样本。
+ * @param frequency_hz 传感器频率，单位 Hz。
+ * @param density_value 密度数值。
+ * @param temperature_c 温度值，单位 ℃。
+ * @param actual_position_mm 实际位置。
+ * @param is_air true 表示当前点为空气点，false 表示液体测点。
+ * @param air_reason 用于返回当前样本被判为空气点的原因文字。
  */
 static void Wartsila_FillPointSample(WartsilaPointSample *sample,
                                      float frequency_hz,
@@ -119,12 +122,12 @@ static void Wartsila_FillPointSample(WartsilaPointSample *sample,
 }
 
 /**
- * @brief 执行测量流程中的 Wartsila_MoveToDensityPoint 逻辑。
+ * @brief 移动到目标测点并复核实际位置，超出容差时有限重试。
  *
- * @param target_mm 业务参数。
- * @param point_no 输入/输出指针。
- * @param actual_position_mm 业务参数。
- * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ * @param target_mm 目标位置，单位 mm。
+ * @param point_no 本轮瓦锡兰密度分布测点的现场编号，用于位置偏差超限后的重试日志，不参与目标位置计算。
+ * @param actual_position_mm 用于返回电机停止后确认的实际位置，单位 mm。
+ * @return SYSTEM_CALL_CONDITION_ERROR 表示当前系统状态不允许执行；NO_ERROR 表示操作成功。
  */
 static uint32_t Wartsila_MoveToDensityPoint(float target_mm,
                                             uint32_t point_no,
@@ -175,10 +178,19 @@ static uint32_t Wartsila_MoveToDensityPoint(float target_mm,
 }
 
 /**
- * @brief 读取测量流程中的 Wartsila_ReadPointAndClassify 逻辑。
+ * @brief 循环读取密度组合值直至稳定或超时，并标记空气点。
  *
- * @param sample 业务参数。
- * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ * 函数先切换传感器到密度模式，并把 spreadPointHoverTime 秒换算为连续稳定窗口；配置为 0 时使用 5 秒兼容窗口。
+ * 循环读取频率、密度和温度，频率非正时清除当前稳定基准并继续等待；满足空气点判定条件时立即连同当前位置和判定原因写入 sample。
+ * 液体点要求频率、密度和温度相对参考值持续位于各自允许偏差内，任一量越界都会更新参考值并重新开始稳定计时；窗口满足后发布参考组合及当前机械位置。
+ * 等待达到 WARTSILA_DENSITY_MAX_WAIT_MS 时，若从未得到有效频率或最新频率仍无效则返回 SONIC_FREQ_ABNORMAL；已有有效频率但始终未形成稳定液体点时按密度 0
+ * 的空气点完成。
+ * 新命令、模式切换、传感器读取或可中断延时错误均立即原样返回，不把未确认的中间样本写成成功点。
+ *
+ * @param sample 用于接收本测点频率、密度、温度、机械位置、空气标志和分类原因的可写对象；只在测点确认成功时可用。
+ * @return NO_ERROR 表示已写入空气点、稳定液体点或超时降级空气点；STATE_SWITCH 表示被新命令中断，SONIC_FREQ_ABNORMAL
+ *         表示总等待结束仍无有效频率，其他值为模式切换、传感器读取或可中断延时错误。
+ * @note sample 只在确认空气点、稳定液体点或超时降级空气点时整体填充；错误返回时调用方不得使用其中未完成的数据。
  */
 static uint32_t Wartsila_ReadPointAndClassify(WartsilaPointSample *sample)
 {
@@ -239,7 +251,6 @@ static uint32_t Wartsila_ReadPointAndClassify(WartsilaPointSample *sample)
         if (ret == STATE_SWITCH) {
             return STATE_SWITCH;
         }
-        /* 先处理异常边界，避免测量流程状态机带故障继续运行。 */
         if (ret != NO_ERROR) {
             return ret;
         }
@@ -303,7 +314,6 @@ static uint32_t Wartsila_ReadPointAndClassify(WartsilaPointSample *sample)
         }
 
         ret = AbortableDelay_CommandSwitch(WARTSILA_DENSITY_SAMPLE_MS, 50U);
-        /* 先处理异常边界，避免测量流程状态机带故障继续运行。 */
         if (ret != NO_ERROR) {
             return ret;
         }
@@ -311,11 +321,11 @@ static uint32_t Wartsila_ReadPointAndClassify(WartsilaPointSample *sample)
 }
 
 /**
- * @brief 执行测量流程中的 Wartsila_MoveDownToLiquidAfterAirPoint 逻辑。
+ * @brief 从空气点持续下行搜索液体，执行命令切换、扭力、丢步和超时保护。
  *
- * @param air_point_mm 业务参数。
- * @param level_mm 业务参数。
- * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ * @param air_point_mm 测点。
+ * @param level_mm 用于返回重新进入液体时确认的液位位置，单位 mm。
+ * @return SYSTEM_CALL_CONDITION_ERROR 表示当前系统状态不允许执行；NO_ERROR 表示操作成功。
  */
 static uint32_t Wartsila_MoveDownToLiquidAfterAirPoint(float air_point_mm, float *level_mm)
 {
@@ -343,7 +353,6 @@ static uint32_t Wartsila_MoveDownToLiquidAfterAirPoint(float air_point_mm, float
         Level_StateTypeDef level_state = AIR;
 
         ret = determine_level_status_motion(&level_state);
-        /* 先处理异常边界，避免测量流程状态机带故障继续运行。 */
         if (ret != NO_ERROR) {
             (void)MotorCtrl_SlowStop();
             return ret;
@@ -359,7 +368,6 @@ static uint32_t Wartsila_MoveDownToLiquidAfterAirPoint(float air_point_mm, float
         }
 
         ret = MotorCtrl_IsDriverMoving(&stepper, &is_moving);
-        /* 先处理异常边界，避免测量流程状态机带故障继续运行。 */
         if (ret != NO_ERROR) {
             (void)MotorCtrl_SlowStop();
             return ret;
@@ -376,34 +384,30 @@ static uint32_t Wartsila_MoveDownToLiquidAfterAirPoint(float air_point_mm, float
         }
 
         ret = MotorCtrl_CheckLostStepAutoTiming(g_measurement.debug_data.cable_length);
-        /* 先处理异常边界，避免测量流程状态机带故障继续运行。 */
         if (ret != NO_ERROR) {
             (void)MotorCtrl_SlowStop();
             return ret;
         }
 
         ret = CheckWeightCollision();
-        /* 先处理异常边界，避免测量流程状态机带故障继续运行。 */
         if (ret != NO_ERROR) {
             (void)MotorCtrl_SlowStop();
             return ret;
         }
 
         ret = MotorCtrl_CheckDriverGstat();
-        /* 先处理异常边界，避免测量流程状态机带故障继续运行。 */
         if (ret != NO_ERROR) {
             (void)MotorCtrl_SlowStop();
             return ret;
         }
 
-        /* 先处理异常边界，避免测量流程状态机带故障继续运行。 */
+        /* 从气相点下行寻找液面超过总时限时先慢停，再按液位过低返回，防止电机持续向下运行。 */
         if ((HAL_GetTick() - start_tick) > WARTSILA_LEVEL_DOWN_TIMEOUT_MS) {
             (void)MotorCtrl_SlowStop();
             return MEASUREMENT_OILLEVEL_LOW;
         }
 
         ret = AbortableDelay_CommandSwitch(WARTSILA_LEVEL_DOWN_POLL_MS, 20U);
-        /* 先处理异常边界，避免测量流程状态机带故障继续运行。 */
         if (ret != NO_ERROR) {
             (void)MotorCtrl_SlowStop();
             return ret;
@@ -412,15 +416,15 @@ static uint32_t Wartsila_MoveDownToLiquidAfterAirPoint(float air_point_mm, float
 }
 
 /**
- * @brief 执行测量流程中的 Wartsila_TrimPointsByOilLevel 逻辑。
+ * @brief 按最终液位裁剪空气点和液面以上点，并重算有效点累计值。
  *
- * @param dist 业务参数。
- * @param valid_points 待处理数值。
- * @param sum_temp 业务参数。
- * @param sum_density 业务参数。
- * @param level_mm 业务参数。
- * @param min_gap_surface 业务参数。
- * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ * @param dist 密度分布测量结果对象。
+ * @param valid_points 用于返回油位以下仍可执行的有效测点数量。
+ * @param sum_temp 用于累计保留测点温度的输出变量。
+ * @param sum_density 用于累计保留测点密度的输出变量。
+ * @param level_mm 液位。
+ * @param min_gap_surface 瓦锡兰测点距液面的最小允许间隔，单位 0.1 mm。
+ * @return SYSTEM_CALL_CONDITION_ERROR 表示当前系统状态不允许执行；NO_ERROR 表示操作成功。
  */
 static uint32_t Wartsila_TrimPointsByOilLevel(DensityDistribution *dist,
                                               uint32_t *valid_points,

@@ -6,6 +6,7 @@
  */
 
 #ifndef WARTSILA_MODBUS_WARTSILA_MODBUS_DATA_ANALYSIS_H_
+/* WARTSILA_MODBUS_WARTSILA_MODBUS_DATA_ANALYSIS_H_ 是本头文件的包含保护标记；首次展开后置位，防止重复包含造成类型或接口重复定义。 */
 #define WARTSILA_MODBUS_WARTSILA_MODBUS_DATA_ANALYSIS_H_
 #include "system_parameter.h"
 typedef struct
@@ -60,21 +61,27 @@ typedef struct
 } wartsila_DeviceParameters;
 
 /**
- * @brief 加载或恢复Modbus 协议中的 DeviceParams_LoadFromRegisters 逻辑。
+ * @brief 从瓦锡兰保持寄存器读取命令和分布测量参数，并转换为 CPU2 参数镜像。
  *
- * @param reg 业务参数。
+ * @param reg 目标寄存器地址或寄存器值。该指针指向瓦锡兰连续寄存器镜像，函数按固定地址表装载或写入设备参数字段。
  */
 void DeviceParams_LoadFromRegisters(uint16_t *reg) ;
 /**
- * @brief 保存Modbus 协议中的 DeviceParams_StoreToRegisters 逻辑。
- *
- * @param reg 业务参数。
+ * @brief 将当前设备参数同步到瓦锡兰保持寄存器缓存。
+ * @param reg 目标寄存器地址或寄存器值。该指针指向瓦锡兰连续寄存器镜像，函数按固定地址表装载或写入设备参数字段。
  */
 void DeviceParams_StoreToRegisters(uint16_t *reg) ;
 
-/*
- * @brief 刷新 Wärtsilä 可离线读取的 CPU3 本地静态寄存器。
+/**
+ * @brief 刷新 Wärtsilä 可离线读取的 CPU3 本地静态字段。
+ *
+ * @details 调用场景：FC03 完成整帧新鲜度分类后、复制寄存器池之前调用。
+ *
  * @param reg Wärtsilä 保持寄存器池。
+ *
+ * @note 关键约束：不读取 g_measurement 或 g_deviceParams，点表预留 lane 始终返回零。
+ *
+ * @param reg 目标寄存器地址或寄存器值。该指针指向瓦锡兰连续寄存器镜像，函数按固定地址表装载或写入设备参数字段。
  */
 void Wartsila_StoreLocalStaticRegisters(uint16_t *reg);
 

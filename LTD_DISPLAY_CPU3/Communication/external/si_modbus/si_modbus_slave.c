@@ -18,178 +18,220 @@
  * - 对内复用 CPU2 已有测量变量、命令和协议辅助状态；
  * - SI 专用配置按归属分别落到 CPU2 profile 参数或 CPU3 本机参数。
  */
+/* SI 外部 Modbus 功能码 0x01，读取线圈；处理前仍需校验完整帧长、地址范围和字段边界。 */
 #define SI_FUNC_READ_COILS             0x01U
+/* SI 外部 Modbus 功能码 0x02，读取离散输入；处理前仍需校验完整帧长、地址范围和字段边界。 */
 #define SI_FUNC_READ_DISCRETE_INPUTS   0x02U
+/* SI 外部 Modbus 功能码 0x03，读取保持寄存器；处理前仍需校验完整帧长、地址范围和字段边界。 */
 #define SI_FUNC_READ_HOLDING_REGS      0x03U
+/* SI 外部 Modbus 功能码 0x04，读取输入寄存器；处理前仍需校验完整帧长、地址范围和字段边界。 */
 #define SI_FUNC_READ_INPUT_REGS        0x04U
+/* SI 外部 Modbus 功能码 0x05，写单个线圈；处理前仍需校验完整帧长、地址范围和字段边界。 */
 #define SI_FUNC_WRITE_SINGLE_COIL      0x05U
+/* SI 外部 Modbus 功能码 0x06，写单个保持寄存器；处理前仍需校验完整帧长、地址范围和字段边界。 */
 #define SI_FUNC_WRITE_SINGLE_REG       0x06U
 
+/* SI Modbus 异常码：非法功能码；异常响应功能码需同时置最高位。 */
 #define SI_EX_ILLEGAL_FUNCTION         0x01U
+/* SI Modbus 异常码：非法数据地址；异常响应功能码需同时置最高位。 */
 #define SI_EX_ILLEGAL_ADDRESS          0x02U
+/* SI Modbus 异常码：非法数据值或长度；异常响应功能码需同时置最高位。 */
 #define SI_EX_ILLEGAL_VALUE            0x03U
+/* SI Modbus 异常码：从站忙，当前无法完成请求；异常响应功能码需同时置最高位。 */
 #define SI_EX_SLAVE_DEVICE_BUSY        0x06U
 
+/* CPU2 共享快照中的历史无效温度原始值 9999；SI 映射时必须转换为 SI_TEMP_INVALID_REGISTER，而不是按有效温度缩放。 */
 #define SI_INVALID_TEMP_RAW_CPU2       9999U
+/* SI 协议对外发布的无效温度寄存器位模式 0xB1E0；对应 -200.00 ℃ 的有符号 0.01 ℃ 编码。 */
 #define SI_TEMP_INVALID_REGISTER       0xB1E0U
+/* SI 自动剖面启动请求未被接受后的最小重试间隔 5000 ms；同一分钟内只在限流后重试。 */
 #define SI_AUTO_PROFILE_RETRY_DELAY_MS 5000U
+/* SI 剖面结果尚未就绪或拉取失败后的重试间隔 1000 ms。 */
 #define SI_PROFILE_FETCH_RETRY_DELAY_MS 1000U
+/* SI 剖面单点停留时间允许上限 3600 s；FC06/FC10 写入超出范围时返回非法数据值。 */
 #define SI_PROFILE_DWELL_TIME_MAX_S    3600U
+/* SI 剖面点缓存占用的寄存器数量；每个测点发布位置、密度和温度三个寄存器字段。 */
 #define SI_PROFILE_POINT_REG_COUNT     (MAX_MEASUREMENT_POINTS * 3U)
 
 /* 线圈地址保持 SI协议手册编号，数组下标即协议 offset。 */
 enum {
-    SI_COIL_MANUAL = 0,
-    SI_COIL_CALIBRATE,
-    SI_COIL_AUTO,
-    SI_COIL_PROFILE,
-    SI_COIL_STOP = 8,
-    SI_COIL_UP_SLOW,
-    SI_COIL_UP_MEDIUM,
-    SI_COIL_UP_FAST,
-    SI_COIL_DOWN_SLOW,
-    SI_COIL_DOWN_MEDIUM,
-    SI_COIL_DOWN_FAST
+    /* SI 线圈地址索引；数值即线圈表偏移，保留的地址间隙不得压缩。 */
+    SI_COIL_MANUAL = 0, /* 切换到 SI 手动控制模式。 */
+    SI_COIL_CALIBRATE, /* 触发 SI 标定流程。 */
+    SI_COIL_AUTO, /* 切换到 SI 自动运行模式。 */
+    SI_COIL_PROFILE, /* 触发一次 SI 剖面测量。 */
+    SI_COIL_STOP = 8, /* 停止当前 SI 运动或测量流程。 */
+    SI_COIL_UP_SLOW, /* 以低速向上移动探头。 */
+    SI_COIL_UP_MEDIUM, /* 以中速向上移动探头。 */
+    SI_COIL_UP_FAST, /* 以高速向上移动探头。 */
+    SI_COIL_DOWN_SLOW, /* 以低速向下移动探头。 */
+    SI_COIL_DOWN_MEDIUM, /* 以中速向下移动探头。 */
+    SI_COIL_DOWN_FAST /* 以高速向下移动探头。 */
 };
 
 /* 离散输入同样按协议 offset 排列，预留洞保留原地址，不重新压缩。 */
 enum {
-    SI_DI_BOTTOM_REFERENCE = 0,
-    SI_DI_LOWER_LEVEL_SENSOR,
-    SI_DI_UPPER_LEVEL_SENSOR,
-    SI_DI_INTERLOCK,
-    SI_DI_PROFILE_COMPLETE,
-    SI_DI_UNIT_IS_METRIC,
-    SI_DI_REEL_ALARM = 8,
-    SI_DI_PROBE_UNCALIBRATED,
-    SI_DI_INTERVAL_TIMER = 11,
-    SI_DI_PROBE_AT_LIQUID_LEVEL = 12,
-    SI_DI_LOW_DENSITY_ALARM = 16,
-    SI_DI_HIGH_DENSITY_ALARM,
-    SI_DI_LOW_TEMP_ALARM,
-    SI_DI_HIGH_TEMP_ALARM,
-    SI_DI_LL_LEVEL_ALARM,
-    SI_DI_HH_LEVEL_ALARM,
-    SI_DI_LOW_LEVEL_ALARM,
-    SI_DI_HIGH_LEVEL_ALARM,
-    SI_DI_PROFILE_TEMP_DEVIATION_ALARM,
-    SI_DI_PROFILE_DENSITY_DEVIATION_ALARM,
-    SI_DI_PROFILE_LOW_TEMP_ALARM = 28,
-    SI_DI_PROFILE_HIGH_TEMP_ALARM,
-    SI_DI_PROFILE_LOW_DENSITY_ALARM,
-    SI_DI_PROFILE_HIGH_DENSITY_ALARM
+    /* SI 离散输入地址索引；数值即离散输入表偏移，保留的地址间隙不得压缩。 */
+    SI_DI_BOTTOM_REFERENCE = 0, /* 罐底位置基准已经建立。 */
+    SI_DI_LOWER_LEVEL_SENSOR, /* 下液位传感条件当前成立。 */
+    SI_DI_UPPER_LEVEL_SENSOR, /* 上液位传感条件当前成立。 */
+    SI_DI_INTERLOCK, /* 设备互锁条件当前成立。 */
+    SI_DI_PROFILE_COMPLETE, /* 最近一次 SI 剖面测量已经完整提交。 */
+    SI_DI_UNIT_IS_METRIC, /* SI 寄存器中的过程量采用公制单位。 */
+    SI_DI_REEL_ALARM = 8, /* 卷筒或尺带机构报警。 */
+    SI_DI_PROBE_UNCALIBRATED, /* 探头尚未完成有效标定。 */
+    SI_DI_INTERVAL_TIMER = 11, /* 自动剖面间隔定时条件已到。 */
+    SI_DI_PROBE_AT_LIQUID_LEVEL = 12, /* 探头当前已到达液面。 */
+    SI_DI_LOW_DENSITY_ALARM = 16, /* 当前密度低于低密度报警阈值。 */
+    SI_DI_HIGH_DENSITY_ALARM, /* 当前密度高于高密度报警阈值。 */
+    SI_DI_LOW_TEMP_ALARM, /* 当前温度低于低温报警阈值。 */
+    SI_DI_HIGH_TEMP_ALARM, /* 当前温度高于高温报警阈值。 */
+    SI_DI_LL_LEVEL_ALARM, /* 当前液位满足低低报警条件。 */
+    SI_DI_HH_LEVEL_ALARM, /* 当前液位满足高高报警条件。 */
+    SI_DI_LOW_LEVEL_ALARM, /* 当前液位满足低报警条件。 */
+    SI_DI_HIGH_LEVEL_ALARM, /* 当前液位满足高报警条件。 */
+    SI_DI_PROFILE_TEMP_DEVIATION_ALARM, /* 剖面内温度最大偏差超过设定阈值。 */
+    SI_DI_PROFILE_DENSITY_DEVIATION_ALARM, /* 剖面内密度最大偏差超过设定阈值。 */
+    SI_DI_PROFILE_LOW_TEMP_ALARM = 28, /* 剖面测点中存在低温报警。 */
+    SI_DI_PROFILE_HIGH_TEMP_ALARM, /* 剖面测点中存在高温报警。 */
+    SI_DI_PROFILE_LOW_DENSITY_ALARM, /* 剖面测点中存在低密度报警。 */
+    SI_DI_PROFILE_HIGH_DENSITY_ALARM /* 剖面测点中存在高密度报警。 */
 };
 
 /* 输入寄存器：实时测量值、profile 时间戳、当前时间和 profile 点阵共用一张表。 */
 enum {
-    SI_IR_CURRENT_PROBE_POSITION = 0,
-    SI_IR_CURRENT_TEMPERATURE,
-    SI_IR_CURRENT_DENSITY,
-    SI_IR_LIQUID_LEVEL,
-    SI_IR_NUMBER_OF_POINTS = 5,
-    SI_IR_PROFILE_TIMESTAMP_MONTH,
-    SI_IR_PROFILE_TIMESTAMP_DAY,
-    SI_IR_PROFILE_TIMESTAMP_HOUR,
-    SI_IR_PROFILE_TIMESTAMP_MINUTE,
-    SI_IR_CURRENT_TIME_HOUR,
-    SI_IR_CURRENT_TIME_MINUTE,
-    SI_IR_CURRENT_TIME_SECOND,
-    SI_IR_COIL_MIRROR,
-    SI_IR_DISCRETE_MIRROR_LOW,
-    SI_IR_DISCRETE_MIRROR_HIGH,
-    SI_IR_PROFILE_POINT0_POSITION = 20
+    /* SI 输入寄存器地址索引；多字测量值按协议规定的连续寄存器布局投影。 */
+    SI_IR_CURRENT_PROBE_POSITION = 0, /* 当前探头位置输入寄存器起址。 */
+    SI_IR_CURRENT_TEMPERATURE, /* 当前温度输入寄存器起址。 */
+    SI_IR_CURRENT_DENSITY, /* 当前密度输入寄存器起址。 */
+    SI_IR_LIQUID_LEVEL, /* 当前液位输入寄存器起址。 */
+    SI_IR_NUMBER_OF_POINTS = 5, /* 当前已发布剖面的有效测点数寄存器。 */
+    SI_IR_PROFILE_TIMESTAMP_MONTH, /* 剖面完成时间的月份寄存器。 */
+    SI_IR_PROFILE_TIMESTAMP_DAY, /* 剖面完成时间的日期寄存器。 */
+    SI_IR_PROFILE_TIMESTAMP_HOUR, /* 剖面完成时间的小时寄存器。 */
+    SI_IR_PROFILE_TIMESTAMP_MINUTE, /* 剖面完成时间的分钟寄存器。 */
+    SI_IR_CURRENT_TIME_HOUR, /* CPU3 当前 RTC 小时寄存器。 */
+    SI_IR_CURRENT_TIME_MINUTE, /* CPU3 当前 RTC 分钟寄存器。 */
+    SI_IR_CURRENT_TIME_SECOND, /* CPU3 当前 RTC 秒寄存器。 */
+    SI_IR_COIL_MIRROR, /* SI 线圈镜像打包寄存器。 */
+    SI_IR_DISCRETE_MIRROR_LOW, /* SI 离散输入位图低 16 位镜像寄存器。 */
+    SI_IR_DISCRETE_MIRROR_HIGH, /* SI 离散输入位图高 16 位镜像寄存器。 */
+    SI_IR_PROFILE_POINT0_POSITION = 20 /* 剖面第 0 点位置字段的输入寄存器起址。 */
 };
 
 /* 保持寄存器：profile 执行参数在 CPU2，自动调度和报警限值在 CPU3。 */
 enum {
-    SI_HR_PROFILE_FIRST_POINT = 0,
-    SI_HR_PROFILE_INCREMENT,
-    SI_HR_PROFILE_DWELL_TIME,
-    SI_HR_COMPAT_RAW_40004,
-    SI_HR_COMPAT_RAW_40005,
-    SI_HR_COMPAT_RAW_40006,
-    SI_HR_COMPAT_RAW_40007,
-    SI_HR_COMPAT_RAW_40008,
-    SI_HR_COMPAT_RAW_40009,
-    SI_HR_AUTO_PROFILE_INTERVAL = 9,
-    SI_HR_AUTO_PROFILE_ENABLE,
-    SI_HR_AUTO_PROFILE_HOUR,
-    SI_HR_AUTO_PROFILE_MINUTE,
-    SI_HR_LOW_DENSITY_SETPOINT,
-    SI_HR_HIGH_DENSITY_SETPOINT,
-    SI_HR_LOW_TEMPERATURE_SETPOINT,
-    SI_HR_HIGH_TEMPERATURE_SETPOINT,
-    SI_HR_LL_LEVEL_SETPOINT,
-    SI_HR_HH_LEVEL_SETPOINT,
-    SI_HR_LOW_LEVEL_SETPOINT,
-    SI_HR_HIGH_LEVEL_SETPOINT,
-    SI_HR_TEMP_DEVIATION_SETPOINT,
-    SI_HR_DENSITY_DEVIATION_SETPOINT
+    /* SI 保持寄存器地址索引；包含剖面配置、自动调度和报警阈值，保留兼容槽不得复用。 */
+    SI_HR_PROFILE_FIRST_POINT = 0, /* SI 剖面首个测点位置配置。 */
+    SI_HR_PROFILE_INCREMENT, /* SI 剖面相邻测点间距配置。 */
+    SI_HR_PROFILE_DWELL_TIME, /* SI 每个剖面测点的停留时间配置。 */
+    SI_HR_COMPAT_RAW_40004, /* 兼容旧主站的 40004 原始保留寄存器。 */
+    SI_HR_COMPAT_RAW_40005, /* 兼容旧主站的 40005 原始保留寄存器。 */
+    SI_HR_COMPAT_RAW_40006, /* 兼容旧主站的 40006 原始保留寄存器。 */
+    SI_HR_COMPAT_RAW_40007, /* 兼容旧主站的 40007 原始保留寄存器。 */
+    SI_HR_COMPAT_RAW_40008, /* 兼容旧主站的 40008 原始保留寄存器。 */
+    SI_HR_COMPAT_RAW_40009, /* 兼容旧主站的 40009 原始保留寄存器。 */
+    SI_HR_AUTO_PROFILE_INTERVAL = 9, /* SI 自动剖面重复间隔配置。 */
+    SI_HR_AUTO_PROFILE_ENABLE, /* SI 自动剖面调度使能配置。 */
+    SI_HR_AUTO_PROFILE_HOUR, /* SI 自动剖面首次启动小时配置。 */
+    SI_HR_AUTO_PROFILE_MINUTE, /* SI 自动剖面首次启动分钟配置。 */
+    SI_HR_LOW_DENSITY_SETPOINT, /* SI 低密度报警设定值。 */
+    SI_HR_HIGH_DENSITY_SETPOINT, /* SI 高密度报警设定值。 */
+    SI_HR_LOW_TEMPERATURE_SETPOINT, /* SI 低温报警设定值。 */
+    SI_HR_HIGH_TEMPERATURE_SETPOINT, /* SI 高温报警设定值。 */
+    SI_HR_LL_LEVEL_SETPOINT, /* SI 低低液位报警设定值。 */
+    SI_HR_HH_LEVEL_SETPOINT, /* SI 高高液位报警设定值。 */
+    SI_HR_LOW_LEVEL_SETPOINT, /* SI 低液位报警设定值。 */
+    SI_HR_HIGH_LEVEL_SETPOINT, /* SI 高液位报警设定值。 */
+    SI_HR_TEMP_DEVIATION_SETPOINT, /* SI 剖面温度偏差报警阈值。 */
+    SI_HR_DENSITY_DEVIATION_SETPOINT /* SI 剖面密度偏差报警阈值。 */
 };
 
+/* SI 剖面测量投影上下文；跨轮询保存 CPU2 周期键、候选快照和最终发布状态，确保只发布前后头一致的完整点阵。 */
 typedef struct {
-    uint8_t initialized;
-    uint8_t connected;
-    uint8_t cycle_established;
-    uint8_t candidate_valid;
-    uint8_t final_snapshot_ready;
-    uint8_t published_key_valid;
-    uint8_t fetch_attempt_valid;
-    uint8_t complete_baseline_valid;
-    uint32_t cpu2_snapshot_generation;
-    uint32_t active_cycle;
-    uint32_t last_phase;
+    /* CPU3 对 SI 剖面测量的投影状态；有效标志和代际键共同约束候选点阵何时可以对外发布。 */
+    uint8_t initialized; /* SI 投影上下文已经清零并建立初始阶段基线的标志。 */
+    uint8_t connected; /* CPU2 通信当前已建立的标志；断开时投影状态会重新建立基线。 */
+    uint8_t cycle_established; /* 当前 SI 剖面周期键已经建立的标志。 */
+    uint8_t candidate_valid; /* candidate_key 和候选点阵已经完整抓取、可进入一致性复核的标志。 */
+    uint8_t final_snapshot_ready; /* 候选点阵已通过完整性检查、等待最终发布的标志。 */
+    uint8_t published_key_valid; /* published_key 已随完整点阵提交、可以参与去重比较的标志。 */
+    uint8_t fetch_attempt_valid; /* 本轮点阵抓取尝试的周期和节拍基线已经建立的标志。 */
+    uint8_t complete_baseline_valid; /* 剖面完成计数基线已经建立、可用于检测新完成事件的标志。 */
+    uint32_t cpu2_snapshot_generation; /* 读取候选剖面时对应的 CPU2 输入快照代际。 */
+    uint32_t active_cycle; /* 当前正在跟踪的 SI 剖面周期计数。 */
+    uint32_t last_phase; /* 上一轮读取到的 SI 剖面阶段，用于检测阶段边沿。 */
     uint32_t cycle_complete_baseline;         /* PREPARING、初始化或重连时冻结的完成计数 */
-    uint32_t fetch_cycle;
-    uint32_t fetch_complete_counter;
-    uint32_t last_fetch_tick;
-    Cpu2SiProfileCandidateKey candidate_key;
-    Cpu2SiProfileCandidateKey published_key;
-    uint16_t progress_points;
-    uint16_t final_points;
-    uint16_t point_regs[SI_PROFILE_POINT_REG_COUNT];
-    uint8_t profile_temp_deviation_alarm;
-    uint8_t profile_density_deviation_alarm;
-    uint8_t profile_low_temp_alarm;
-    uint8_t profile_high_temp_alarm;
-    uint8_t profile_low_density_alarm;
-    uint8_t profile_high_density_alarm;
+    uint32_t fetch_cycle; /* 当前候选点阵抓取所属的 SI 周期计数。 */
+    uint32_t fetch_complete_counter; /* 开始本轮抓取时锁存的剖面完成计数，用于确认结果未被新周期覆盖。 */
+    uint32_t last_fetch_tick; /* 最近一次尝试抓取 SI 点阵的 HAL 毫秒节拍，用于限制重试频率。 */
+    Cpu2SiProfileCandidateKey candidate_key; /* 尚未发布的 SI 剖面候选组合键。 */
+    Cpu2SiProfileCandidateKey published_key; /* 最近一次完整发布的 SI 剖面组合键。 */
+    uint16_t progress_points; /* 当前周期已经完成并可报告的剖面测点数。 */
+    uint16_t final_points; /* 最终快照确认的有效测点数。 */
+    uint16_t point_regs[SI_PROFILE_POINT_REG_COUNT]; /* 从 CPU2 分块读取的 SI 剖面原始寄存器点阵。 */
+    uint8_t profile_temp_deviation_alarm; /* 本次 SI 剖面温度偏差超过设定阈值的报警标志。 */
+    uint8_t profile_density_deviation_alarm; /* 本次 SI 剖面密度偏差超过设定阈值的报警标志。 */
+    uint8_t profile_low_temp_alarm; /* 本次 SI 剖面低温报警标志。 */
+    uint8_t profile_high_temp_alarm; /* 本次 SI 剖面高温报警标志。 */
+    uint8_t profile_low_density_alarm; /* 本次 SI 剖面低密度报警标志。 */
+    uint8_t profile_high_density_alarm; /* 本次 SI 剖面高密度报警标志。 */
 } SiProfileProjection;
 
 static uint8_t s_slave_address = 1U; /* Modbus 协议地址配置，影响协议寻址或硬件访问。 */
 /* 四类寄存器区都是 CPU3 侧快照，收到请求前由 si_modbus_sync_from_system 刷新。 */
-static uint8_t s_coils[SI_COIL_COUNT]; /* Modbus 协议模块级变量，保存跨函数共享的业务状态。 */
-static uint8_t s_discrete_inputs[SI_DISCRETE_INPUT_COUNT]; /* Modbus 协议模块级变量，保存跨函数共享的业务状态。 */
-static uint16_t s_holding_regs[SI_HOLDING_REG_COUNT]; /* Modbus 协议模块级变量，保存跨函数共享的业务状态。 */
-static uint16_t s_input_regs[SI_INPUT_REG_COUNT]; /* Modbus 协议模块级变量，保存跨函数共享的业务状态。 */
-static Cpu3DateTime s_profile_timestamp; /* Modbus 协议模块级变量，保存跨函数共享的业务状态。 */
-static uint8_t s_profile_timestamp_valid = 0U; /* Modbus 协议模块级变量，保存跨函数共享的业务状态。 */
+static uint8_t s_coils[SI_COIL_COUNT]; /* SI 线圈镜像；按 SI 地址表保存命令位，处理后同步清除瞬时动作。 */
+static uint8_t s_discrete_inputs[SI_DISCRETE_INPUT_COUNT]; /* SI 离散输入镜像；每次响应前由 CPU2 运行态和报警状态重建。 */
+static uint16_t s_holding_regs[SI_HOLDING_REG_COUNT]; /* SI 保持寄存器镜像；包含剖面配置、自动调度和报警设定值。 */
+static uint16_t s_input_regs[SI_INPUT_REG_COUNT]; /* SI 输入寄存器镜像；包含当前测量值、状态位和剖面点阵投影。 */
+static Cpu3DateTime s_profile_timestamp; /* 最近一次已发布 SI 剖面快照对应的本地日期时间。 */
+static uint8_t s_profile_timestamp_valid = 0U; /* s_profile_timestamp 已随完整剖面建立的有效标志。 */
 static SiProfileProjection s_profile_projection;
+/* 最近一次成功触发 SI 自动剖面的绝对分钟编号，防止同一分钟重复启动。 */
 static uint32_t s_si_auto_last_trigger_minute = 0xFFFFFFFFUL;
+/* 最近一次尝试启动 SI 自动剖面的 HAL 毫秒节拍。 */
 static uint32_t s_si_auto_last_attempt_tick = 0U;
+/* SI 周期调度锚点的绝对分钟编号。 */
 static uint32_t s_si_auto_schedule_anchor_minute = 0U;
+/* 最近一次校验通过的 SI 自动剖面周期间隔，单位为分钟。 */
 static uint16_t s_si_auto_cached_interval = 0U;
+/* 最近一次缓存的 SI 自动剖面使能值。 */
 static uint8_t s_si_auto_cached_enable = 0U;
+/* 最近一次缓存的 SI 首次启动小时。 */
 static uint8_t s_si_auto_cached_hour = 0U;
+/* 最近一次缓存的 SI 首次启动分钟。 */
 static uint8_t s_si_auto_cached_minute = 0U;
+/* 最近尝试节拍已经建立的标志。 */
 static bool s_si_auto_last_attempt_valid = false;
+/* 上电保护窗口尚未结束、暂不允许自动启动剖面的标志。 */
 static bool s_si_auto_boot_guard_pending = true;
+/* 缓存的 SI 自动调度配置已经通过范围校验的标志。 */
 static bool s_si_auto_config_valid = false;
+/* SI 周期调度锚点已经建立的标志。 */
 static bool s_si_auto_schedule_anchor_valid = false;
+/* 调度锚点应从下一次计划启动时间建立的标志。 */
 static bool s_si_auto_anchor_from_next_start = false;
 
-/*
- * 从 Modbus PDU 中读取大端 16 位值。
+/**
+ * @brief 从 Modbus PDU 中读取大端 16 位值。
+ *
  * 寄存器地址和值都走该入口，CRC 仍按 RTU 小端附加。
+ *
+ * @param p 指向至少 2 字节 Modbus PDU 数据的只读指针。
+ * @return 返回从连续 2 字节 Modbus 大端数据还原的 16 位无符号值。
  */
 static inline uint16_t si_be16(const uint8_t *p)
 {
     return (uint16_t)((p[0] << 8) | p[1]);
 }
 
-/*
- * 将 16 位值按 Modbus 大端格式写入响应 PDU。
+/**
+ * @brief 将 16 位值按 Modbus 大端格式写入响应 PDU。
+ *
  * 该函数只写数据字段，CRC 由各响应构造路径统一追加。
+ *
+ * @param p 指向至少 2 字节可写响应区的指针，用于写入大端 16 位值。
+ * @param value 待写入协议缓冲区或寄存器的16 位数值。
  */
 static inline void si_wr_be16(uint8_t *p, uint16_t value)
 {
@@ -197,18 +239,26 @@ static inline void si_wr_be16(uint8_t *p, uint16_t value)
     p[1] = (uint8_t)(value & 0xFFU);
 }
 
-/*
- * 将 32 位无符号值压缩到 16 位寄存器范围。
+/**
+ * @brief 将 32 位无符号值压缩到 16 位寄存器范围。
+ *
  * SI协议对外寄存器宽度固定为 16 bit，超范围时按最大值饱和。
+ *
+ * @param value 待限制到合法范围的原始输入值。
+ * @return 返回完成边界钳位后的数值；输入低于下限时返回下限，高于上限时返回上限，区间内保持原值。
  */
 static uint16_t si_clamp_u16(uint32_t value)
 {
     return (value > 0xFFFFU) ? 0xFFFFU : (uint16_t)value;
 }
 
-/*
- * 将有符号值压缩到 Modbus 16 位有符号寄存器范围。
+/**
+ * @brief 将有符号值压缩到 Modbus 16 位有符号寄存器范围。
+ *
  * 返回类型保持 uint16_t，实际字节解释由 PLC 按 int16_t 处理。
+ *
+ * @param value 待限制到合法范围的原始输入值。
+ * @return 返回完成边界钳位后的数值；输入低于下限时返回下限，高于上限时返回上限，区间内保持原值。
  */
 static uint16_t si_clamp_s16(int32_t value)
 {
@@ -220,7 +270,11 @@ static uint16_t si_clamp_s16(int32_t value)
     return (uint16_t)((int16_t)value);
 }
 
-/* 优先使用系统参数中的 Modbus 地址；地址非法时回退本模块默认地址。 */
+/**
+ * @brief 优先使用系统参数中的 Modbus 地址；地址非法时回退本模块默认地址。
+ *
+ * @return 返回当前有效 SI Modbus 从机地址；系统配置非法时回退模块默认地址。
+ */
 static uint8_t si_get_effective_slave_address(void)
 {
     if ((SlaveAddress >= 1) && (SlaveAddress <= 247)) {
@@ -230,9 +284,12 @@ static uint8_t si_get_effective_slave_address(void)
     return s_slave_address;
 }
 
-/*
- * 将 CPU2 的 0.1mm 无符号长度转换为 SI 的 mm 寄存器值。
- * CPU2 无效液位统一输出 0，避免 PLC 读到内部哨兵值。
+/**
+ * @brief 将 CPU2 的 0.1mm 无符号长度转换为 SI 的 mm 寄存器值。
+ *
+ * @param value_01mm CPU2 无符号长度原始值，单位 0.1 mm；UNVALID_LEVEL 表示内部液位无效。
+ * @return UNVALID_LEVEL 返回 0；其他输入由 0.1 mm 四舍五入为整毫米，并在超过 SI 16 位寄存器范围时饱和为 UINT16_MAX。
+ * @note CPU2 无效液位统一对外输出 0，禁止把内部哨兵值暴露给 PLC。
  */
 static uint16_t si_u01mm_to_mm_u16(uint32_t value_01mm)
 {
@@ -243,7 +300,12 @@ static uint16_t si_u01mm_to_mm_u16(uint32_t value_01mm)
     return si_clamp_u16((value_01mm + 5U) / 10U);
 }
 
-/* 探头位置对 PLC 暴露为无符号 mm，负位置按 0 处理，避免 SI 端误读为大正数。 */
+/**
+ * @brief 探头位置对 PLC 暴露为无符号 mm，负位置按 0 处理，避免 SI 端误读为大正数。
+ *
+ * @param value_01mm 位置或距离值，单位 0.1 mm。
+ * @return 返回 0.1 mm 位置换算并钳位后的无符号毫米值；负位置返回 0。
+ */
 static uint16_t si_pos01mm_to_mm_u16(int32_t value_01mm)
 {
     if (value_01mm <= 0) {
@@ -253,18 +315,26 @@ static uint16_t si_pos01mm_to_mm_u16(int32_t value_01mm)
     return si_u01mm_to_mm_u16((uint32_t)value_01mm);
 }
 
-/*
- * 将 SI 写入的 mm 参数转换为 CPU2 使用的 0.1mm。
+/**
+ * @brief 将 SI 写入的 mm 参数转换为 CPU2 使用的 0.1mm。
+ *
  * 当前只用于 profile 起点和间距这类非负参数。
+ *
+ * @param value_mm SI 保持寄存器写入的毫米值。
+ * @return 返回 value_mm 乘以 10 后的 CPU2 长度值，单位 0.1 mm；uint16_t 全范围换算均不会溢出 uint32_t。
  */
 static uint32_t si_mm_to_u01mm(uint16_t value_mm)
 {
     return (uint32_t)value_mm * 10U;
 }
 
-/*
- * 判断 CPU2 温度原始值是否有效。
+/**
+ * @brief 判断 CPU2 温度原始值是否有效。
+ *
  * 兼容 0、9999 和无线温度无效值三类历史哨兵，避免对外生成虚假温度。
+ *
+ * @param raw_temperature 原始温度。
+ * @return 1 表示 raw_temperature 为 0、SI_INVALID_TEMP_RAW_CPU2，或无线无效温度哨兵，应判定为无效；0 表示未命中这些哨兵，可继续按 SI 温度口径转换。
  */
 static uint8_t si_is_invalid_temp_raw(uint32_t raw_temperature)
 {
@@ -273,24 +343,48 @@ static uint8_t si_is_invalid_temp_raw(uint32_t raw_temperature)
             (raw_temperature == (uint32_t)(int32_t)UNVALID_TEMPERATURE_WIRELESS)) ? 1U : 0U;
 }
 
+/**
+ * @brief 将 SI 有符号 16 位值按原始位模式转换为保持寄存器无符号字。
+ *
+ * @param value 待处理的 SI 有符号 16 位值按原始位模式。
+ * @return 返回与输入有符号值完全相同的 16 位原始位模式，并以 uint16_t 承载；不执行数值缩放。
+ */
 static uint16_t si_s16_to_holding(int16_t value)
 {
     return (uint16_t)value;
 }
 
+/**
+ * @brief 将 SI 保持寄存器无符号字按原始位模式还原为有符号 16 位值。
+ *
+ * @param value 待处理的 SI 保持寄存器无符号字按原始位模式。
+ * @return 返回与输入保持寄存器完全相同的 16 位原始位模式，并以 int16_t 解释；不执行数值缩放。
+ */
 static int16_t si_holding_to_s16(uint16_t value)
 {
     return (int16_t)value;
 }
 
+/**
+ * @brief 计算两个无符号 16 位数的绝对差值。
+ *
+ * @param a 算法或比较使用的第一个输入值。
+ * @param b 算法或比较使用的第二个输入值。
+ * @return 返回两个无符号 16 位数的绝对差值；有符号边界按函数内饱和规则处理。
+ */
 static uint16_t si_absdiff_u16(uint16_t a, uint16_t b)
 {
     return (a >= b) ? (uint16_t)(a - b) : (uint16_t)(b - a);
 }
 
-/*
- * 计算 SI 温度寄存器的有符号绝对差值。
+/**
+ * @brief 计算 SI 温度寄存器的有符号绝对差值。
+ *
  * 相邻点温差报警必须按 int16 温度值判断，避免负温度跨零时按补码无符号差值误报警。
+ *
+ * @param a 算法或比较使用的第一个输入值。
+ * @param b 算法或比较使用的第二个输入值。
+ * @return 返回 SI 温度寄存器的有符号绝对差值；有符号边界按函数内饱和规则处理。
  */
 static uint16_t si_absdiff_s16(int16_t a, int16_t b)
 {
@@ -303,6 +397,11 @@ static uint16_t si_absdiff_s16(int16_t a, int16_t b)
     return si_clamp_u16((uint32_t)delta);
 }
 
+/**
+ * @brief 仅在 CPU2 处于油位跟随、探头已到液面且液位稳定时返回真。
+ *
+ * @return 1 表示 CPU2 正处于油位跟随、探头命中液面且结果稳定；任一条件不满足时返回 0。
+ */
 static uint8_t si_is_probe_follow_stable(void)
 {
     return ((g_measurement.device_status.device_state == STATE_FLOWOIL) &&
@@ -310,10 +409,19 @@ static uint8_t si_is_probe_follow_stable(void)
             (g_measurement.oil_measurement.liquid_stable != 0U)) ? 1U : 0U;
 }
 
-/* CPU2 温度原始值以 0.01K 偏移编码，SI 按 0.01C 的有符号值输出。 */
+/**
+ * @brief 把 CPU2 带 200.00 ℃ 零点偏移的 0.01 ℃ 温度原始值转换为 SI 有符号 0.01 ℃ 定点寄存器。
+ *
+ * 函数先识别 0、9999 和无线温度无效值三类历史哨兵；有效值减去 20000 后限制到 int16_t 可表示范围。
+ *
+ * @param raw_temperature CPU2 温度原始编码，单位 0.01 ℃ 且包含 +20000 零点偏移；0、9999 和无线无效值均视为无效。
+ * @return 无效温度返回 SI_TEMP_INVALID_REGISTER；有效值减去 20000 后饱和到 int16_t 范围，并以 uint16_t 原样返回其有符号 0.01 ℃ 位模式。
+ * @note 返回类型为 uint16_t，仅用于原样承载 SI 有符号 16 位温度的寄存器位模式。
+ * @note CPU2 温度原始值采用 0.01 K 偏移编码；SI 输出为 0.01 ℃ 的有符号寄存器值。
+ */
 static uint16_t si_temp_raw_to_si_s16(uint32_t raw_temperature)
 {
-    /* 先处理异常边界，避免Modbus 协议状态机带故障继续运行。 */
+    /* CPU2 温度原始值为无效哨兵时直接发布 SI 无效寄存器值，不得继续减去 200.00 ℃ 偏移后伪装成有效负温度。 */
     if (si_is_invalid_temp_raw(raw_temperature) != 0U) {
         return SI_TEMP_INVALID_REGISTER;
     }
@@ -321,9 +429,13 @@ static uint16_t si_temp_raw_to_si_s16(uint32_t raw_temperature)
     return si_clamp_s16((int32_t)raw_temperature - 20000);
 }
 
-/*
- * 将 CPU2 密度原始值转换为 SI 0.01 单位密度。
+/**
+ * @brief 将 CPU2 密度原始值转换为 SI 0.01 单位密度。
+ *
  * 无效值输出 0，超范围按 16 位最大值饱和。
+ *
+ * @param raw_density CPU2 密度原始值，单位 0.01 kg/m3；UNVALID_DENSITY 表示无有效密度。
+ * @return UNVALID_DENSITY 返回 0；有效密度以 0.01 kg/m3 单位返回，超过 16 位范围时饱和为 UINT16_MAX。
  */
 static uint16_t si_density_raw_to_si_u16(uint32_t raw_density)
 {
@@ -333,9 +445,13 @@ static uint16_t si_density_raw_to_si_u16(uint32_t raw_density)
     return si_clamp_u16(raw_density);
 }
 
-/*
- * 判断线圈是否允许 PLC 写入。
+/**
+ * @brief 判断线圈是否允许 PLC 写入。
+ *
  * 只放开会触发明确动作的线圈，未实现或只读状态位返回非法地址。
+ *
+ * @param offset 相对起始位置的偏移量。
+ * @return 1 表示线圈允许 PLC 写入；0 表示线圈不允许 PLC 写入。
  */
 static uint8_t si_is_coil_writeable(uint16_t offset)
 {
@@ -349,9 +465,13 @@ static uint8_t si_is_coil_writeable(uint16_t offset)
     return 0U;
 }
 
-/*
- * 判断保持寄存器是否允许 PLC 写入。
+/**
+ * @brief 判断保持寄存器是否允许 PLC 写入。
+ *
  * 已确认能落地或作为影子配置保存的地址才允许写入。
+ *
+ * @param offset 相对起始位置的偏移量。
+ * @return 1 表示保持寄存器允许 PLC 写入；0 表示保持寄存器不允许 PLC 写入。
  */
 static uint8_t si_is_holding_writeable(uint16_t offset)
 {
@@ -370,31 +490,70 @@ static uint8_t si_is_holding_writeable(uint16_t offset)
     return 0U;
 }
 
+/**
+ * @brief 按低限和滞回值更新无符号 SI 低报警状态。
+ *
+ * @param value 本次报警门限判断使用的实时输入值。
+ * @param setpoint 控制或报警判断使用的设定值。
+ * @return 返回更新后的低限报警状态；1 表示报警激活，0 表示未激活或已越过滞回释放点。
+ */
 static uint8_t si_low_alarm_u16(uint16_t value, uint16_t setpoint)
 {
     return (value < setpoint) ? 1U : 0U;
 }
 
+/**
+ * @brief 按高限和滞回值更新无符号 SI 高报警状态。
+ *
+ * @param value 本次报警门限判断使用的实时输入值。
+ * @param setpoint 控制或报警判断使用的设定值。
+ * @return 返回更新后的高限报警状态；1 表示报警激活，0 表示未激活或已越过滞回释放点。
+ */
 static uint8_t si_high_alarm_u16(uint16_t value, uint16_t setpoint)
 {
     return (value > setpoint) ? 1U : 0U;
 }
 
+/**
+ * @brief 按低限和滞回值更新有符号 SI 低报警状态。
+ *
+ * @param value 本次报警门限判断使用的实时输入值。
+ * @param setpoint 控制或报警判断使用的设定值。
+ * @return 返回更新后的有符号低限报警状态；1 表示报警激活，0 表示未激活或已释放。
+ */
 static uint8_t si_low_alarm_s16(int16_t value, uint16_t setpoint)
 {
     return (value < si_holding_to_s16(setpoint)) ? 1U : 0U;
 }
 
+/**
+ * @brief 按高限和滞回值更新有符号 SI 高报警状态。
+ *
+ * @param value 本次报警门限判断使用的实时输入值。
+ * @param setpoint 控制或报警判断使用的设定值。
+ * @return 返回更新后的有符号高限报警状态；1 表示报警激活，0 表示未激活或已释放。
+ */
 static uint8_t si_high_alarm_s16(int16_t value, uint16_t setpoint)
 {
     return (value > si_holding_to_s16(setpoint)) ? 1U : 0U;
 }
 
+/**
+ * @brief 判断SI协议剖面结果有效性。
+ *
+ * @return final_snapshot_ready 非 0 时返回 1，表示已有可对外发布的 SI 最终剖面快照；否则返回 0。
+ */
 static uint8_t si_is_si_profile_result_valid(void)
 {
     return (s_profile_projection.final_snapshot_ready != 0U) ? 1U : 0U;
 }
 
+/**
+ * @brief 把 SI Profile 点数限制到协议和缓存共同支持的容量。
+ *
+ * @param points 待限制的 SI 剖面测点数量；超过协议允许上限时钳位为最大测点数。
+ * @return 返回完成边界钳位后的数值；输入低于下限时返回下限，高于上限时返回上限，区间内保持原值。
+ */
 static uint16_t si_profile_clamp_points(uint32_t points)
 {
     if (points > MAX_MEASUREMENT_POINTS) {
@@ -404,6 +563,13 @@ static uint16_t si_profile_clamp_points(uint32_t points)
     return (uint16_t)points;
 }
 
+/**
+ * @brief 比较 SI 候选的周期、完成计数、点数、来源和阶段是否一致。
+ *
+ * @param left 区间左端值或左侧比较对象。
+ * @param right 区间右端值或右侧比较对象。
+ * @return 1 表示两个候选键的周期计数、完成计数、点数、来源和阶段全部相等；0 表示任一字段不同。
+ */
 static uint8_t si_profile_key_equal(const Cpu2SiProfileCandidateKey *left,
                                     const Cpu2SiProfileCandidateKey *right)
 {
@@ -414,6 +580,11 @@ static uint8_t si_profile_key_equal(const Cpu2SiProfileCandidateKey *left,
             (left->phase == right->phase)) ? 1U : 0U;
 }
 
+/**
+ * @brief 从 CPU2 共享快照组合当前 SI 候选代际键。
+ *
+ * @return 返回由候选完成计数、周期、阶段、点数和来源组成的 Cpu2SiProfileCandidateKey。
+ */
 static Cpu2SiProfileCandidateKey si_profile_current_key(void)
 {
     Cpu2SiProfileCandidateKey key;
@@ -426,13 +597,24 @@ static Cpu2SiProfileCandidateKey si_profile_current_key(void)
     return key;
 }
 
+/**
+ * @brief 设备故障或 Profile 被工艺阻断时报告互锁有效。
+ *
+ * @return 1 表示设备存在故障或 SI Profile 被工艺阻断；两项均未激活时返回 0。
+ */
 static uint8_t si_profile_interlock_active(void)
 {
     return ((g_measurement.device_status.error_code != NO_ERROR) ||
             (g_measurement.density_distribution.profile_blocked_by_process != 0U)) ? 1U : 0U;
 }
 
-/* 将FC01或FC02连续状态位按Modbus低位优先规则打包成一个镜像寄存器。 */
+/**
+ * @brief 将FC01或FC02连续状态位按Modbus低位优先规则打包成一个镜像寄存器。
+ *
+ * @param bits 至少包含 start 后 16 个离散状态元素的只读数组。
+ * @param start 本次连续处理范围的起始索引。该值是 SI 位池中的起始位号，函数从该位开始按 count 打包为 Modbus 位响应。
+ * @return 返回从 start_bit 开始的连续状态位按 Modbus 低位优先规则打包得到的 16 位镜像值。
+ */
 static uint16_t si_pack_bits_u16(const uint8_t *bits, uint16_t start)
 {
     uint16_t value = 0U;
@@ -447,12 +629,18 @@ static uint16_t si_pack_bits_u16(const uint8_t *bits, uint16_t start)
     return value;
 }
 
+/**
+ * @brief 清除 SI 剖面结果时间戳及其有效标志。
+ */
 static void si_invalidate_profile_timestamp(void)
 {
     memset(&s_profile_timestamp, 0, sizeof(s_profile_timestamp));
     s_profile_timestamp_valid = 0U;
 }
 
+/**
+ * @brief 读取 CPU3 RTC 锁存 Profile 时间；失败时标记时间戳无效。
+ */
 static void si_lock_profile_timestamp_now(void)
 {
     if (Cpu3Clock_GetDateTime(&s_profile_timestamp) != 0U) {
@@ -462,6 +650,9 @@ static void si_lock_profile_timestamp_now(void)
     }
 }
 
+/**
+ * @brief 清除当前 SI Profile 候选的温差、密度差和高低限报警。
+ */
 static void si_profile_clear_alarms(void)
 {
     s_profile_projection.profile_temp_deviation_alarm = 0U;
@@ -472,7 +663,9 @@ static void si_profile_clear_alarms(void)
     s_profile_projection.profile_high_density_alarm = 0U;
 }
 
-/* 清除CPU3本地发布结果；调用方单独决定是否保留Point0时间和活动进度。 */
+/**
+ * @brief 清除CPU3本地发布结果；调用方单独决定是否保留Point0时间和活动进度。
+ */
 static void si_profile_clear_result(void)
 {
     s_profile_projection.candidate_valid = 0U;
@@ -484,7 +677,11 @@ static void si_profile_clear_result(void)
     si_profile_clear_alarms();
 }
 
-/* 把已通过代际复核的CPU2候选转换为SI寄存器格式，并在本地计算六项Profile报警。 */
+/**
+ * @brief 把已通过代际复核的CPU2候选转换为SI寄存器格式，并在本地计算六项Profile报警。
+ *
+ * @param key 候选 profile 的完成锁存、完成计数、测点数和来源组合键。
+ */
 static void si_profile_cache_candidate(const Cpu2SiProfileCandidateKey *key)
 {
     uint16_t points = si_profile_clamp_points(key->measurement_points);
@@ -551,6 +748,11 @@ static void si_profile_cache_candidate(const Cpu2SiProfileCandidateKey *key)
     s_profile_projection.candidate_valid = 1U;
 }
 
+/**
+ * @brief 仅在候选完成、探头稳定、电机停止且无互锁时开放最终发布门禁。
+ *
+ * @return 1 表示候选完成、探头稳定、电机停止且无互锁，允许最终发布；否则返回 0。
+ */
 static uint8_t si_profile_final_gate_open(void)
 {
     return ((s_profile_projection.candidate_valid != 0U) &&
@@ -561,6 +763,12 @@ static uint8_t si_profile_final_gate_open(void)
             (si_profile_interlock_active() == 0U)) ? 1U : 0U;
 }
 
+/**
+ * @brief 判断当前 SI Profile 阶段是否仍属于活动流程。
+ *
+ * @param phase 当前状态机阶段。
+ * @return 1 表示当前 SI Profile 阶段仍属于活动流程；0 表示当前 SI Profile 阶段已不再属于活动流程。
+ */
 static uint8_t si_profile_phase_is_active(uint32_t phase)
 {
     if ((phase == (uint32_t)SI_PROFILE_PHASE_PREPARING) ||
@@ -576,9 +784,12 @@ static uint8_t si_profile_phase_is_active(uint32_t phase)
     return 0U;
 }
 
-/*
- * 判断当前共享头是否仍表示本周期可拉取的SI完成候选。
+/**
+ * @brief 判断当前共享头是否仍表示本周期可拉取的SI完成候选。
+ *
  * 普通分布测量会复用共享缓冲区，来源或代际不匹配时不得把旧SI阶段投影成Profile运行态。
+ *
+ * @return 1 表示当前共享头仍表示本周期可拉取的SI完成候选；0 表示当前共享头已不再表示本周期可拉取的SI完成候选。
  */
 static uint8_t si_profile_current_complete_candidate_is_si(void)
 {
@@ -594,7 +805,12 @@ static uint8_t si_profile_current_complete_candidate_is_si(void)
             (g_measurement.density_distribution.profile_complete_latched != 0U)) ? 1U : 0U;
 }
 
-/* Point0前只有PREPARING及其取消/失败终态允许保留上一轮完整SI结果。 */
+/**
+ * @brief Point0前只有PREPARING及其取消/失败终态允许保留上一轮完整SI结果。
+ *
+ * @param phase 当前状态机阶段。
+ * @return 1 表示当前处于 Point0 前的 PREPARING、ABORTED 或 FAILED 阶段，可保留上一轮结果；否则返回 0。
+ */
 static uint8_t si_profile_phase_keeps_previous_result(uint32_t phase)
 {
     return ((phase == (uint32_t)SI_PROFILE_PHASE_PREPARING) ||
@@ -602,9 +818,12 @@ static uint8_t si_profile_phase_keeps_previous_result(uint32_t phase)
             (phase == (uint32_t)SI_PROFILE_PHASE_FAILED)) ? 1U : 0U;
 }
 
-/*
- * 判断FC01是否仍需输出本轮SI最终组合。
+/**
+ * @brief 判断FC01是否仍需输出本轮SI最终组合。
+ *
  * 已发布结果可以长期保留，但只有共享代际未被其它分布测量覆盖、且设备仍处于SI收尾上下文时才覆盖实时线圈。
+ *
+ * @return 1 表示FC01仍需输出本轮SI最终组合；0 表示FC01已不再需输出本轮SI最终组合。
  */
 static uint8_t si_profile_final_coil_projection_allowed(void)
 {
@@ -635,6 +854,9 @@ static uint8_t si_profile_final_coil_projection_allowed(void)
             (si_profile_interlock_active() == 0U)) ? 1U : 0U;
 }
 
+/**
+ * @brief 校验并发布一组完整的 SI 剖面候选结果。
+ */
 static void si_profile_publish_candidate(void)
 {
     s_profile_projection.final_points =
@@ -651,9 +873,13 @@ static void si_profile_publish_candidate(void)
     s_profile_projection.cycle_established = 0U;
 }
 
-/*
- * CPU3冷启动后尝试重建Point0前仍留在CPU2共享区的上一轮SI快照。
+/**
+ * @brief CPU3冷启动后尝试重建Point0前仍留在CPU2共享区的上一轮SI快照。
+ *
  * 只恢复Complete、N、点阵和报警；本函数不锁存RTC，无法重建的Profile时间继续保持0。
+ *
+ * @param phase 当前状态机阶段。
+ * @param allow_fetch 允许。
  */
 static void si_profile_try_restore_previous_snapshot(uint32_t phase, uint8_t allow_fetch)
 {
@@ -705,9 +931,12 @@ static void si_profile_try_restore_previous_snapshot(uint32_t phase, uint8_t all
     }
 }
 
-/*
- * 更新CPU3本地SI生命周期投影。
+/**
+ * @brief 更新CPU3本地SI生命周期投影。
+ *
  * allow_fetch仅在周期任务中置1，外部Modbus响应路径只做轻量状态更新。
+ *
+ * @param allow_fetch 仅在周期任务中置1，外部Modbus响应路径只做轻量状态更新。
  */
 static void si_update_profile_projection(uint8_t allow_fetch)
 {
@@ -869,9 +1098,9 @@ static void si_update_profile_projection(uint8_t allow_fetch)
 }
 
 /**
- * @brief 发送Modbus 协议中的 si_send_cpu2_command 逻辑。
+ * @brief 把 SI 控制命令转交 CPU2，并返回板间确认结果。
  *
- * @param cmd 命令值。
+ * @param cmd 命令值。该 CommandType 将通过 CPU2 板间保持寄存器下发，并由函数把同步结果映射为 SI Modbus 异常码。
  * @return true 表示 CPU2 返回合法写响应，false 表示本次请求失败。
  */
 static bool si_send_cpu2_command(CommandType cmd)
@@ -898,6 +1127,8 @@ static bool si_send_cpu2_command(CommandType cmd)
  * 调用场景：外部 00004 Profile 线圈、自动 profile 调度和 CPU3 屏幕
  * SI Profile 菜单入口共用。
  * 关键约束：这里只下发命令；Profile Timestamp必须等CPU2发布Point0 cycle事件后锁存。
+ *
+ * @return true 表示 CMD_SI_PROFILE 已通过当前 CPU2 命令通道接受；false 表示CPU2 通信不可用、命令门禁拒绝、Modbus 异常或命令 ACK 无效。
  */
 bool si_profile_request_start(void)
 {
@@ -905,11 +1136,11 @@ bool si_profile_request_start(void)
 }
 
 /**
- * @brief 写入或设置Modbus 协议中的 si_write_device_param_u32 逻辑。
+ * @brief 将一个 32 位 SI 参数写入 CPU2 共享保持寄存器；仅在 CPU2 确认成功后更新 CPU3 影子，参数快照由板间写入口失效并补读。
  *
- * @param hold_addr 地址参数。
- * @param shadow 业务参数。
- * @param value 待处理数值。
+ * @param hold_addr 地址参数。该值是 CPU2 共享保持寄存器中的目标参数起始地址，32 位数据按高字在前写入连续两个寄存器。
+ * @param shadow CPU3 已确认参数影子；仅在 CPU2 接受新值后更新。
+ * @param value 待处理的一个 32 位 SI 参数。
  * @return true 表示 CPU2 已接受参数，false 表示链路不可用或本次请求失败。
  */
 static bool si_write_device_param_u32(uint16_t hold_addr,
@@ -938,6 +1169,12 @@ static bool si_write_device_param_u32(uint16_t hold_addr,
     return true;
 }
 
+/**
+ * @brief 把 SI 保持寄存器 40010～40023 映射为 CPU3 本地参数编号。
+ *
+ * @param offset 相对起始位置的偏移量。
+ * @return 返回 40010 至 40023 偏移对应的 CPU3 SI 参数操作号；偏移越界返回 COM_NUM_NOOPERA。
+ */
 static OperatingNumber si_holding_offset_to_cpu3_param(uint16_t offset)
 {
     switch (offset) {
@@ -975,13 +1212,13 @@ static OperatingNumber si_holding_offset_to_cpu3_param(uint16_t offset)
 }
 
 /**
- * @brief 执行Modbus 协议中的 si_build_exception 逻辑。
+ * @brief 构造 SI Modbus 异常响应帧并返回帧长。
  *
- * @param func 业务参数。
- * @param ex_code 业务参数。
- * @param tx 业务参数。
- * @param tx_len 数据长度。
- * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ * @param func 原请求的 SI Modbus 功能码；函数置位最高位后写入异常响应。
+ * @param ex_code 待写入 Modbus 异常响应的异常码。
+ * @param tx SI 标准 Modbus 异常响应输出缓冲区，调用方至少提供 5 个可写字节。
+ * @param tx_len 数据长度。该输出指针在 SI Modbus 异常帧构造完成后写入包含 CRC 的总字节数。
+ * @return 固定返回 1，表示从机地址、置位最高位的原功能码、异常码和 CRC16 组成的 5 字节 Modbus 异常响应已写入 tx，且 *tx_len 已更新为 5。
  */
 static uint8_t si_build_exception(uint8_t func,
                                       uint8_t ex_code,
@@ -1002,9 +1239,16 @@ static uint8_t si_build_exception(uint8_t func,
     return 1U;
 }
 
-/*
- * 构造 FC05/FC06 写单点的标准回显帧。
+/**
+ * @brief 构造 FC05/FC06 写单点的标准回显帧。
+ *
  * 明确按功能码、地址和值重建回包，避免依赖请求 PDU 前一个字节。
+ *
+ * @param func 需要回显的 SI Modbus FC05 或 FC06 功能码。
+ * @param offset 相对起始位置的偏移量。
+ * @param value 构建写入使用的输入数值。
+ * @param tx SI FC05/FC06 标准 8 字节回显帧输出缓冲区。
+ * @param tx_len 待发送数据的有效长度，单位字节。该指针用于返回已经构造完成的响应帧总长度，长度包含当前协议要求的帧头、数据区及 CRC 等尾部字段。
  */
 static void si_build_write_echo(uint8_t func,
                                     uint16_t offset,
@@ -1025,9 +1269,14 @@ static void si_build_write_echo(uint8_t func,
     *tx_len = 8U;
 }
 
-/*
- * 校验 FC06 写保持寄存器的基础值域。
+/**
+ * @brief 校验 FC06 写保持寄存器的基础值域。
+ *
  * 仅检查协议层确定无歧义的字段，其余影子寄存器保持宽松，避免误拦 PLC 预留配置。
+ *
+ * @param offset 相对起始位置的偏移量。
+ * @param value 保持寄存器数值有效使用的输入数值。
+ * @return 1 表示目标保持寄存器值满足对应启用、时间或范围约束；非法值返回 0；未设专用约束的寄存器返回 1。
  */
 static uint8_t si_is_holding_value_valid(uint16_t offset, uint16_t value)
 {
@@ -1050,9 +1299,10 @@ static uint8_t si_is_holding_value_valid(uint16_t offset, uint16_t value)
     }
 }
 
-/*
- * 根据 CPU2 当前状态刷新 SI 线圈快照。
- * PLC 写线圈只作为命令入口，最终读回以 CPU2 真实状态为准。
+/**
+ * @brief 根据 CPU2 当前状态刷新 SI 线圈快照。
+ *
+ * @note PLC 写线圈只作为命令入口，后续读回值始终以 CPU2 真实状态为准。
  */
 static void si_refresh_coils_from_state(void)
 {
@@ -1128,8 +1378,9 @@ static void si_refresh_coils_from_state(void)
     }
 }
 
-/*
- * 根据测量结果和影子阈值刷新 SI 离散输入。
+/**
+ * @brief 根据测量结果和影子阈值刷新 SI 离散输入。
+ *
  * 该函数不下发 CPU2 命令，只做 CPU3 外部协议状态转换。
  */
 static void si_refresh_discrete_inputs_from_state(void)
@@ -1206,8 +1457,9 @@ static void si_refresh_discrete_inputs_from_state(void)
     }
 }
 
-/*
- * 从 CPU2/CPU3 参数刷新 SI 保持寄存器快照。
+/**
+ * @brief 从 CPU2/CPU3 参数刷新 SI 保持寄存器快照。
+ *
  * 40001~40003 来自 CPU2 SI profile 参数，40010~40023 来自 CPU3 本机参数。
  */
 static void si_refresh_holding_registers_from_config(void)
@@ -1254,6 +1506,12 @@ static void si_refresh_holding_registers_from_config(void)
         g_cpu3_comm_display_params.si_density_deviation_setpoint;
 }
 
+/**
+ * @brief 判断指定年份是否为闰年。
+ *
+ * @param year 完整年份数值。
+ * @return 1 表示指定年份为闰年；0 表示指定年份不是闰年。
+ */
 static uint8_t si_is_leap_year(uint16_t year)
 {
     if ((year % 400U) == 0U) {
@@ -1265,6 +1523,13 @@ static uint8_t si_is_leap_year(uint16_t year)
     return ((year % 4U) == 0U) ? 1U : 0U;
 }
 
+/**
+ * @brief 返回指定年月的实际天数。
+ *
+ * @param year 完整年份数值。
+ * @param month 月份，合法范围为 1～12。
+ * @return 返回指定月份的天数；月份非法时返回 0。
+ */
 static uint16_t si_days_in_month(uint16_t year, uint8_t month)
 {
     static const uint8_t days_per_month[12] = {
@@ -1281,6 +1546,12 @@ static uint16_t si_days_in_month(uint16_t year, uint8_t month)
     return days_per_month[month - 1U];
 }
 
+/**
+ * @brief 计算目标年份之前自纪元起累计的天数。
+ *
+ * @param year 完整年份数值。
+ * @return 返回目标年份之前自 2000 年纪元起累计的完整天数；年份早于纪元时返回 0。
+ */
 static uint32_t si_days_before_year(uint16_t year)
 {
     uint32_t y = (uint32_t)year;
@@ -1292,6 +1563,12 @@ static uint32_t si_days_before_year(uint16_t year)
     return (y * 365U) + (y / 4U) - (y / 100U) + (y / 400U);
 }
 
+/**
+ * @brief 将日期时间换算为 SI 调度使用的绝对分钟数。
+ *
+ * @param dt 待换算的 CPU3 日期时间；字段应已由 RTC 读取链路完成范围校验，传入 NULL 时函数返回 0。
+ * @return 返回公历 0001-01-01 00:00 起累计的绝对分钟数；dt 为 NULL 时返回 0，结果包含当前日期之前的整天及当日时、分。
+ */
 static uint32_t si_datetime_to_schedule_minute(const Cpu3DateTime *dt)
 {
     uint32_t day_index;
@@ -1311,10 +1588,10 @@ static uint32_t si_datetime_to_schedule_minute(const Cpu3DateTime *dt)
     return (day_index * 1440U) + ((uint32_t)dt->hour * 60U) + (uint32_t)dt->minute;
 }
 
-/*
- * 观察自动Profile配置变化并重建运行期调度锚点。
- * 冷启动且自动调度原本已启用时，从当天起始时分恢复周期；运行中启用或改参时，
- * 第一次触发重新对齐到当前或下一次起始时分，随后再按间隔连续跨天运行。
+/**
+ * @brief 观察自动Profile配置变化并重建运行期调度锚点。
+ *
+ * 冷启动且自动调度原本已启用时，从当天起始时分恢复周期；运行中启用或改参时，第一次触发重新对齐到当前或下一次起始时分，随后再按间隔连续跨天运行。
  */
 static void si_auto_profile_refresh_schedule_config(void)
 {
@@ -1349,6 +1626,16 @@ static void si_auto_profile_refresh_schedule_config(void)
     }
 }
 
+/**
+ * @brief 推进 SI 自动剖面调度、候选点同步和报警状态。
+ *
+ * 每次调用先分批同步 SI Profile 候选点阵，并检查自动 Profile 配置是否变化；关闭自动调度或周期为 0 时清除现有计划锚点后返回。
+ * CPU3 启动后必须先取得 CPU2 运行态快照，才能判断计划分钟是否已有正在准备、测量或回液位的 SI 周期，避免重启后重复覆盖活动流程。
+ * 首次建立锚点时使用当天配置时刻；配置在当天时刻之后生效时可顺延到次日。锚点建立后用累计分钟差对 interval 取模，因此 61 或 1000 分钟等非整日周期能够连续跨越午夜。
+ * 同一计划分钟最多触发一次；启动请求未被接受时按 SI_AUTO_PROFILE_RETRY_DELAY_MS 限流重试，只有请求成功才记录该分钟已经触发。
+ *
+ * @note 该函数由 CPU3 主循环周期调用；候选点阵同步可能跨多轮完成，不应挪入外部 Modbus 请求响应路径。
+ */
 void si_modbus_periodic_task(void)
 {
     Cpu3DateTime now;
@@ -1442,8 +1729,9 @@ void si_modbus_periodic_task(void)
     }
 }
 
-/*
- * 从实时测量和 profile 结果刷新 SI 输入寄存器。
+/**
+ * @brief 从实时测量和 profile 结果刷新 SI 输入寄存器。
+ *
  * 未完成 profile 时点阵区域保持 0，避免 PLC 读取上一轮残留。
  */
 static void si_refresh_input_registers_from_measurement(void)
@@ -1512,9 +1800,13 @@ static void si_refresh_input_registers_from_measurement(void)
     }
 }
 
-/*
- * 应用 PLC 对线圈的写入。
- * ON 写入会转成 CPU2 命令；OFF 写入只更新影子位，不主动停止 CPU2。
+/**
+ * @brief 应用 PLC 对线圈的写入。
+ *
+ * @param offset 相对起始位置的偏移量。
+ * @param is_on true 表示线圈写值为导通，false 表示写值为断开。
+ * @return true 表示 OFF 值已按只更新影子位语义接受，或 ON 值已映射并成功下发对应 CPU2 命令；false 表示线圈偏移不受支持，或映射后的命令请求失败。
+ * @note 写 ON 会转换为 CPU2 命令；写 OFF 只更新影子位，不主动停止 CPU2 当前动作。
  */
 static bool si_apply_coil_write(uint16_t offset, uint8_t is_on)
 {
@@ -1579,9 +1871,13 @@ static bool si_apply_coil_write(uint16_t offset, uint8_t is_on)
     return true;
 }
 
-/*
- * 应用 PLC 对保持寄存器的写入。
- * profile 基础参数通过 CPU2 参数通道落地，自动 profile 和报警限值保存在 CPU3。
+/**
+ * @brief 应用 PLC 对保持寄存器的写入。
+ *
+ * @param offset 相对起始位置的偏移量。
+ * @param value 应用保持寄存器写入使用的输入数值。
+ * @return true 表示 SI Profile 参数、兼容槽、本机自动 Profile/报警参数或日期时间字段已按各自策略写入；false 表示偏移未知、值域或日期时间无效，CPU2 参数写入失败，或 CPU3 FRAM 持久化失败。
+ * @note profile 基础参数经 CPU2 参数通道落地；自动 profile 和报警限值保存在 CPU3。
  */
 static bool si_apply_holding_write(uint16_t offset, uint16_t value)
 {
@@ -1642,9 +1938,19 @@ static bool si_apply_holding_write(uint16_t offset, uint16_t value)
     return true;
 }
 
-/*
- * 处理 FC01/FC02 读位请求。
+/**
+ * @brief 处理 FC01/FC02 读位请求。
+ *
  * 请求长度、数量和地址边界都在这里统一检查，响应位按 Modbus 低位优先打包。
+ *
+ * @param func 当前读位请求功能码，FC01 选择线圈池，FC02 选择离散输入池。
+ * @param bit_pool 待按请求起始地址读取的线圈或离散输入快照数组。
+ * @param bit_count 目标离散状态数组可访问的元素总数，用于校验请求范围。
+ * @param pdu 待解析或构造的 Modbus PDU 缓冲区。
+ * @param pdu_len Modbus PDU 有效长度，单位字节。
+ * @param tx SI FC01/FC02 位数据响应或标准异常响应的输出缓冲区；函数同步更新 tx_len。
+ * @param tx_len 待发送数据的有效长度，单位字节。该指针用于返回已经构造完成的响应帧总长度，长度包含当前协议要求的帧头、数据区及 CRC 等尾部字段。
+ * @return 返回 1，表示已构造可发送的 FC01/FC02 正常响应或 Modbus 异常响应。
  */
 static uint8_t si_handle_read_bits(uint8_t func,
                                        const uint8_t *bit_pool,
@@ -1707,9 +2013,19 @@ static uint8_t si_handle_read_bits(uint8_t func,
     return 1U;
 }
 
-/*
- * 处理 FC03/FC04 读寄存器请求。
+/**
+ * @brief 处理 FC03/FC04 读寄存器请求。
+ *
  * 限制最大 125 个寄存器，保证响应始终落在 256 字节发送缓冲区内。
+ *
+ * @param func 当前读寄存器请求功能码，FC03 选择保持寄存器，FC04 选择输入寄存器。
+ * @param reg_pool FC03/FC04 读取使用的只读寄存器镜像首地址。
+ * @param reg_count 目标寄存器镜像可访问的 16 位寄存器总数。
+ * @param pdu 待解析或构造的 Modbus PDU 缓冲区。
+ * @param pdu_len Modbus PDU 有效长度，单位字节。
+ * @param tx SI FC03/FC04 寄存器数据响应或标准异常响应的输出缓冲区；函数同步更新 tx_len。
+ * @param tx_len 待发送数据的有效长度，单位字节。该指针用于返回已经构造完成的响应帧总长度，长度包含当前协议要求的帧头、数据区及 CRC 等尾部字段。
+ * @return 返回 1，表示已构造可发送的 FC03/FC04 正常响应或 Modbus 异常响应。
  */
 static uint8_t si_handle_read_regs(uint8_t func,
                                        const uint16_t *reg_pool,
@@ -1777,9 +2093,16 @@ static uint8_t si_handle_read_regs(uint8_t func,
     return 1U;
 }
 
-/*
- * 处理 FC05 写单线圈请求。
+/**
+ * @brief 处理 FC05 写单线圈请求。
+ *
  * 只接受标准 0xFF00/0x0000 写值，合法 ON 写入再桥接到 CPU2 命令。
+ *
+ * @param pdu 待解析或构造的 Modbus PDU 缓冲区。
+ * @param pdu_len Modbus PDU 有效长度，单位字节。
+ * @param tx SI FC05 8 字节标准回显或异常响应的输出缓冲区。
+ * @param tx_len 待发送数据的有效长度，单位字节。该指针用于返回已经构造完成的响应帧总长度，长度包含当前协议要求的帧头、数据区及 CRC 等尾部字段。
+ * @return 返回 1，表示已构造 FC05 回显或对应的非法地址、非法数值、设备忙异常响应。
  */
 static uint8_t si_handle_write_single_coil(const uint8_t *pdu,
                                                uint16_t pdu_len,
@@ -1827,9 +2150,16 @@ static uint8_t si_handle_write_single_coil(const uint8_t *pdu,
     return 1U;
 }
 
-/*
- * 处理 FC06 写单保持寄存器请求。
+/**
+ * @brief 处理 FC06 写单保持寄存器请求。
+ *
  * 先做地址和值域校验，再更新影子寄存器或通过 CPU2 参数通道下发。
+ *
+ * @param pdu 待解析或构造的 Modbus PDU 缓冲区。
+ * @param pdu_len Modbus PDU 有效长度，单位字节。
+ * @param tx SI FC06 8 字节标准回显或异常响应的输出缓冲区。
+ * @param tx_len 待发送数据的有效长度，单位字节。该指针用于返回已经构造完成的响应帧总长度，长度包含当前协议要求的帧头、数据区及 CRC 等尾部字段。
+ * @return 返回 1，表示已构造 FC06 回显或对应的非法地址、非法数值、设备忙异常响应。
  */
 static uint8_t si_handle_write_single_reg(const uint8_t *pdu,
                                               uint16_t pdu_len,
@@ -1877,8 +2207,9 @@ static uint8_t si_handle_write_single_reg(const uint8_t *pdu,
 
 
 
-/*
- * 手动同步 SI 四类寄存器影子区。
+/**
+ * @brief 手动同步 SI 四类寄存器影子区。
+ *
  * 正常处理请求前会自动调用，外部入口主要用于测试或联调前刷新快照。
  */
 void si_modbus_sync_from_system(void)
@@ -1891,9 +2222,16 @@ void si_modbus_sync_from_system(void)
     si_refresh_input_registers_from_measurement();
 }
 
-/*
- * 处理一帧完整 SI Modbus RTU 请求。
+/**
+ * @brief 处理一帧完整 SI Modbus RTU 请求。
+ *
  * 地址和 CRC 通过后才同步系统状态，避免无关帧扰动 CPU3 快照。
+ *
+ * @param rx 接收到的数据缓冲区。有效字节范围由 rx_len 或调用点固定帧长限定，函数不会修改原始请求帧。
+ * @param rx_len 接收数据的有效长度，单位字节。函数只读取 rx[0..rx_len-1]，并在访问固定字段前检查协议要求的最小长度。
+ * @param tx 完整 SI Modbus RTU 正常或异常响应的输出缓冲区；调用方容量必须覆盖协议允许的最大响应。
+ * @param tx_len 待发送数据的有效长度，单位字节。该指针用于返回已经构造完成的响应帧总长度，长度包含当前协议要求的帧头、数据区及 CRC 等尾部字段。
+ * @return 返回 SI Modbus 分发结果；SI_MODBUS_OK 表示已完成处理，其他值区分帧长、CRC、从机地址和功能码错误；tx_len 非零时仍应发送已生成的异常响应。
  */
 SiModbusResult si_modbus_process(const uint8_t *rx,
                                          uint16_t rx_len,
@@ -1958,9 +2296,16 @@ SiModbusResult si_modbus_process(const uint8_t *rx,
     }
 }
 
-/*
- * 适配 CPU3 协议分发表的返回值口径。
+/**
+ * @brief 适配 CPU3 协议分发表的返回值口径。
+ *
  * 只要已生成正常或异常响应帧，分发层就按成功处理并发送该响应。
+ *
+ * @param rx 接收到的数据缓冲区。有效字节范围由 rx_len 或调用点固定帧长限定，函数不会修改原始请求帧。
+ * @param rx_len 接收数据的有效长度，单位字节。函数只读取 rx[0..rx_len-1]，并在访问固定字段前检查协议要求的最小长度。
+ * @param tx 转交 SI 协议核心处理器的响应输出缓冲区；tx_len 非 0 时内容可直接交给外部端口发送。
+ * @param tx_len 待发送数据的有效长度，单位字节。该指针用于返回已经构造完成的响应帧总长度，长度包含当前协议要求的帧头、数据区及 CRC 等尾部字段。
+ * @return 已生成正常或异常响应时返回 0；没有响应帧时返回 SI Modbus 解析错误码。
  */
 uint32_t si_modbus_process_for_dispatch(const uint8_t *rx,
                                             uint16_t rx_len,

@@ -60,29 +60,66 @@
 #define DEMO_SINGLE_POINT_DISPLAY_WEIGHT_OFFSET_RAW 3U /* 单点展示计重密度偏移，单位 kg/m3 x100。 */
 #define DEMO_SINGLE_POINT_DISPLAY_APPROACH_DENS_RAW 83487U /* 单点展示到位前密度，单位 kg/m3 x100。 */
 typedef struct {
-    DeviceState device_state;
-    uint32_t error_code;
+    /* 电机文本调试命令进入前保存的设备状态和故障码。 */
+    DeviceState device_state; /* 故障或调试快照对应的设备主状态。 */
+    uint32_t error_code; /* 电机文本调试接管前保存的完整统一故障码。 */
 } MotorTextErrorSnapshot;
 
 typedef struct {
-    int32_t a1;
-    int32_t amax;
-    int32_t d1;
-    int32_t dmax;
-    uint8_t valid;
+    /* 电机文本调试命令临时改写前保存的四项加减速参数及有效标志。 */
+    int32_t a1; /* 调试前保存的 TMC5130 第一段加速度参数 A1。 */
+    int32_t amax; /* 调试前保存的 TMC5130 最大加速度参数 AMAX。 */
+    int32_t d1; /* 调试前保存的 TMC5130 第一段减速度参数 D1。 */
+    int32_t dmax; /* 调试前保存的 TMC5130 最大减速度参数 DMAX。 */
+    uint8_t valid; /* 四项加减速参数均已成功读取的标志；退出调试时据此决定是否恢复。 */
 } MotorTextRampSnapshot;
 
+/**
+ * @brief S后缀通信检查只打印通信结果，不改变B/BE退出条件和全局错误态。
+ * @note  只在任务上下文调用；保留进入前的device_state和error_code。
+ *
+ * @param tag 用于区分诊断来源的只读标签文字。
+ */
 static void Test_SensorCommCheckAndPrintOnly(const char *tag);
+/**
+ * @brief BE测试退出时恢复进入前斜坡参数。
+ *
+ * @param snapshot 只读 TMC5130 斜坡寄存器快照；用于临时应用测试参数后恢复进入前的速度、加速度和斜坡配置。
+ */
 static void Test_MotorTextRestoreRampNoError(const MotorTextRampSnapshot *snapshot);
+/**
+ * @brief 跟随测试前按自动切换配置尝试改用电机记步，并通过输出标志报告本次是否切换。
+ *
+ * @param follow_name 本次测试跟随流程的现场名称，用于记录位置源切换结果。
+ * @param switched_to_motor 用于返回测试流程本次是否已切换到电机位置源。
+ * @return NO_ERROR 表示跟随测试前按自动切换配置尝试改用电机记步，并通过输出标志报告本次是否切换已完成；其他值为调用链原样传播的参数、状态、通信、传感器或电机错误码。
+ */
 static uint32_t Test_EnsureMotorPositionSourceBeforeFollow(const char *follow_name, uint8_t *switched_to_motor);
+/**
+ * @brief 执行一次零点测量测试并记录结果。
+ */
 static void Test_RunMeasureZeroOnce(void);
+/**
+ * @brief 执行一次液位测试链：必要时回零、搜索液位、按配置切换位置源并复搜，最后进入液位跟随。
+ */
 static void Test_RunMeasureAndFollowOilLevelOnce(void);
+/**
+ * @brief 处理 AO 正式回读电流命令。
+ *
+ * @details 调用场景：串口发送 AO400、AO1200、AO2000 或 AOS 时验证正式回读和物理电流输出。
+ * @note 关键约束：命令在 MeasureStart 前处理，避免被 A 电机测试路径截获。
+ *
+ * @param command 已经通过语法分类的 AO 输出测试或回读命令文本。
+ * @return 1 表示当前命令已由 AO 回读电流测试处理；不是该命令或参数非法时返回 0。
+ */
 static uint8_t TestCommand_HandleAoOutputTest(const uint8_t *command);
 
 
 /**
  * @brief 保存进入 B/BE 诊断前的业务错误状态。
  * @note  只在串口 B/BE 测试上下文调用，避免诊断过程清错影响正常程序。
+ *
+ * @return 返回进入电机文本诊断前保存的错误码、故障来源和电机状态快照。
  */
 static MotorTextErrorSnapshot Test_MotorTextCaptureErrorState(void)
 {
@@ -97,6 +134,8 @@ static MotorTextErrorSnapshot Test_MotorTextCaptureErrorState(void)
 /**
  * @brief 恢复进入 B/BE 诊断前的业务错误状态。
  * @note  只在 B/BE 退出路径调用，不改变命令切换和电机停机动作。
+ *
+ * @param snapshot 电机文本测试进入前保存的只读错误状态快照；用于测试退出时恢复全局错误码和相关故障上下文。
  */
 static void Test_MotorTextRestoreErrorState(const MotorTextErrorSnapshot *snapshot)
 {
@@ -108,10 +147,10 @@ static void Test_MotorTextRestoreErrorState(const MotorTextErrorSnapshot *snapsh
     g_measurement.device_status.error_code = snapshot->error_code;
 }
 
-static int32_t s_motor_text_raw_target = 0; /* 本模块模块级变量，保存跨函数共享的业务状态。 */
+static int32_t s_motor_text_raw_target = 0; /* 电机文本调试命令当前保存的原始目标步数。 */
 /**
- * @brief 执行本模块中的 Test_ShouldAbortForCommandSwitch 逻辑。
- * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ * @brief 判断测试流程是否因外部命令切换而应立即退出。
+ * @return 1 表示检测到有效命令切换请求，函数已执行电机慢停，调用方应立即退出串口测试；0 表示当前没有命令切换请求，可继续测试。
  */
 static uint8_t Test_ShouldAbortForCommandSwitch(void)
 {
@@ -131,7 +170,6 @@ static uint8_t Test_ShouldAbortForCommandSwitch(void)
 static void Test_MotorTextClearIgnoredError(void)
 {
     g_measurement.device_status.error_code = NO_ERROR;
-    /* 先处理异常边界，避免本模块状态机带故障继续运行。 */
     if (g_measurement.device_status.device_state == STATE_ERROR) {
         g_measurement.device_status.device_state = STATE_DEBUG_MODE;
     }
@@ -140,6 +178,8 @@ static void Test_MotorTextClearIgnoredError(void)
 /**
  * @brief B/BE统一退出收尾，恢复进入前错误状态。
  * @note  所有B/BE提前返回路径都应通过该函数，避免诊断清错泄漏到业务状态机。
+ *
+ * @param error_snapshot 进入电机文本测试前保存的故障快照，用于退出时恢复原有错误上下文。
  */
 static void Test_MotorTextExit(const MotorTextErrorSnapshot *error_snapshot)
 {
@@ -149,6 +189,8 @@ static void Test_MotorTextExit(const MotorTextErrorSnapshot *error_snapshot)
 /**
  * @brief A/B/BE测试专用命令切换检查，只停止并退出当前测试，不把错误码带给业务状态机。
  * @note  只在任务上下文调用；不会解析扭力、电机驱动故障或其它业务错误。
+ *
+ * @return 1 表示检测到命令切换且当前 A/B/BE 测试已安全停止；没有切换请求时返回 0。
  */
 static uint8_t Test_ShouldAbortForCommandSwitchNoError(void)
 {
@@ -160,7 +202,6 @@ static uint8_t Test_ShouldAbortForCommandSwitchNoError(void)
 
     printf("A/B/BE检测到命令切换请求，停止当前串口测试\r\n");
     stop_ret = MotorDriver_StopAndMarkStopped();
-    /* 先处理异常边界，避免本模块状态机带故障继续运行。 */
     if (stop_ret != NO_ERROR) {
         printf("A/B/BE命令切换\t停止等待或切回位置模式失败\t返回=0x%08lX\r\n",
                (unsigned long)stop_ret);
@@ -173,8 +214,8 @@ static uint8_t Test_ShouldAbortForCommandSwitchNoError(void)
 }
 
 /**
- * @brief 检查本模块中的 Test_MotorTextMotorCurrentNoCheck 逻辑。
- * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ * @brief 执行不检查电机电流门限的文字指令测试。
+ * @return 返回文字指令测试采用的电机运行电流档；配置为 0 或非法时回退 MOTOR_CURRENT_DEFAULT。
  */
 static uint32_t Test_MotorTextMotorCurrentNoCheck(void)
 {
@@ -226,6 +267,9 @@ static void Test_MotorTextRawInit(void)
 /**
  * @brief A/B/BE调试命令切换停稳后，直接重新初始化电机配置。
  * @note  命令切换检查已先等待驱动停稳；BE 退出时先初始化回位置模式，再恢复进入 BE 前的斜坡参数。
+ *
+ * @param phase_name 用于日志标识当前阶段的只读文字。
+ * @param ramp_snapshot 命令执行前保存的 TMC5130 斜坡参数快照，用于退出或重启时恢复。
  */
 static void Test_MotorTextRecoverDriverAfterCommandSwitch(const char *phase_name,
                                                           const MotorTextRampSnapshot *ramp_snapshot)
@@ -238,7 +282,6 @@ static void Test_MotorTextRecoverDriverAfterCommandSwitch(const char *phase_name
     s_motor_driver.motion_wait_active = false;
 
     ret = MotorCtrl_Init();
-    /* 先处理异常边界，避免本模块状态机带故障继续运行。 */
     if (ret != NO_ERROR) {
         printf("%s\t退出恢复\t电机重新初始化失败\t返回=0x%08lX\r\n",
                name,
@@ -264,11 +307,13 @@ static void Test_MotorTextRecoverDriverAfterCommandSwitch(const char *phase_name
 
 /**
  * @brief B/BE测试专用准备流程，只响应命令切换，不因任何错误码退出。
+ *
+ * @param name 用于串口测试日志标识当前测试项、阶段或通信目标的 NUL 结尾只读名称。
+ * @return 1 表示测试运动前置状态已经准备完成；命令切换或无法安全准备时返回 0，但不写业务错误态。
  */
 static uint8_t Test_MotorTextPrepareNoExit(const char *name)
 {
     (void)name;
-    /* 先处理异常边界，避免本模块状态机带故障继续运行。 */
     if (Test_ShouldAbortForCommandSwitchNoError()) {
         return 0U;
     }
@@ -278,6 +323,11 @@ static uint8_t Test_MotorTextPrepareNoExit(const char *name)
 /**
  * @brief 将B/BE测试距离换算为TMC5130 ticks，复用现有卷筒模型但不做故障检查。
  * @note  只做参数和数学换算，不访问硬件，不上报错误状态。
+ *
+ * @param move_mm 本次相对运动距离，单位 mm。
+ * @param dir 运动方向。必须使用 MOTOR_DIRECTION_UP 或 MOTOR_DIRECTION_DOWN；函数据此换算符号、目标位置、速度模式或到位条件。
+ * @param ticks_out 用于返回根据当前卷筒模型换算的 TMC5130 目标微步数。
+ * @return SYSTEM_CALL_CONDITION_ERROR 表示当前系统状态不允许执行；PARAM_RANGE_ERROR 表示参数超出允许范围；NO_ERROR 表示操作成功。
  */
 static uint32_t Test_MotorTextDistanceToTicksNoCheck(float move_mm, int dir, int32_t *ticks_out)
 {
@@ -346,6 +396,9 @@ static uint32_t Test_MotorTextDistanceToTicksNoCheck(float move_mm, int dir, int
 /**
  * @brief B/BE测试专用相对运动下发，直接写TMC5130寄存器，不返回、不判断错误码。
  * @note  每段下发前会尽量用 XACTUAL 对齐本地目标；读失败时才沿用上次累计值。
+ *
+ * @param move_mm 本次相对运动距离，单位 mm。
+ * @param dir 运动方向。必须使用 MOTOR_DIRECTION_UP 或 MOTOR_DIRECTION_DOWN；函数据此换算符号、目标位置、速度模式或到位条件。
  */
 static void Test_MotorTextMoveByNoCheck(float move_mm, int dir)
 {
@@ -367,6 +420,9 @@ static void Test_MotorTextMoveByNoCheck(float move_mm, int dir)
 
 /**
  * @brief B指令回零专用绝对运动下发，直接写目标位置，不读取、不判断错误状态。
+ *
+ * @param target 本次比较、运动或写入的目标值。该值是准备写入 TMC5130 XTARGET 的原始微步位置，不执行失步检测。
+ * @param dir 运动方向。必须使用 MOTOR_DIRECTION_UP 或 MOTOR_DIRECTION_DOWN；函数据此换算符号、目标位置、速度模式或到位条件。
  */
 static void Test_MotorTextMoveToNoCheck(int32_t target, int dir)
 {
@@ -384,6 +440,9 @@ static void Test_MotorTextMoveToNoCheck(int32_t target, int dir)
 
 /**
  * @brief 限制 BE 加速度倍率，0 或非法值按 1 档处理。
+ *
+ * @param multiplier 倍率。
+ * @return 返回限制后的 BE 加速度倍率；0 或非法值回退 1，超过上限时返回允许的最大倍率。
  */
 static uint32_t Test_MotorTextClampMultiplier(uint32_t multiplier)
 {
@@ -398,6 +457,9 @@ static uint32_t Test_MotorTextClampMultiplier(uint32_t multiplier)
 
 /**
  * @brief 限制 BE 线速度，单位 0.01m/min；0 表示沿用当前速度配置。
+ *
+ * @param speed_x100 本次调试运动速度，单位 0.01 m/min；0 表示使用当前默认速度。
+ * @return 返回限制后的 BE 线速度，单位 0.01 m/min；输入 0 保持为 0，非零值钳位到允许范围。
  */
 static uint32_t Test_MotorTextClampSpeedX100(uint32_t speed_x100)
 {
@@ -415,6 +477,9 @@ static uint32_t Test_MotorTextClampSpeedX100(uint32_t speed_x100)
 
 /**
  * @brief 获取 BE 本段实际采用的线速度，单位 0.01m/min。
+ *
+ * @param speed_x100 本次调试运动速度，单位 0.01 m/min；0 表示使用当前默认速度。
+ * @return 返回 BE 当前分段实际采用的线速度，单位 0.01 m/min，已包含测试倍率和安全上限处理。
  */
 static uint32_t Test_MotorTextEffectiveSpeedX100(uint32_t speed_x100)
 {
@@ -437,6 +502,9 @@ static uint32_t Test_MotorTextEffectiveSpeedX100(uint32_t speed_x100)
 
 /**
  * @brief 将 BE 线速度临时写入 speed_x100，再复用既有 VMAX 换算函数。
+ *
+ * @param speed_x100 本次调试运动速度，单位 0.01 m/min；0 表示使用当前默认速度。
+ * @return 返回由临时 speed_x100 换算的 TMC5130 VMAX；计算结果为 0 时至少返回 1。
  */
 static uint32_t Test_MotorTextComputeVelocityForSpeed(uint32_t speed_x100)
 {
@@ -458,6 +526,11 @@ static uint32_t Test_MotorTextComputeVelocityForSpeed(uint32_t speed_x100)
 
 /**
  * @brief 按倍率放大加速度寄存器值，并限制在 TMC5130 允许范围内。
+ *
+ * @param base_value 基址数值。
+ * @param multiplier 倍率。
+ * @param fallback_value 兜底值数值。
+ * @return 返回按倍率换算并钳位后的 TMC5130 斜坡寄存器值。
  */
 static int32_t Test_MotorTextScaleRampValue(int32_t base_value,
                                             uint32_t multiplier,
@@ -485,6 +558,8 @@ static int32_t Test_MotorTextScaleRampValue(int32_t base_value,
 /**
  * @brief BE测试进入前读取当前斜坡参数，作为加速度 1 档基准。
  * @note  读取失败时使用驱动初始化默认值，退出时仍按快照恢复。
+ *
+ * @param snapshot TMC5130 斜坡寄存器快照输出对象；成功读取后保存本次测试开始前的速度、加速度和斜坡配置。
  */
 static void Test_MotorTextCaptureRampNoError(MotorTextRampSnapshot *snapshot)
 {
@@ -525,6 +600,9 @@ static void Test_MotorTextCaptureRampNoError(MotorTextRampSnapshot *snapshot)
 
 /**
  * @brief BE测试临时写入加速度倍率，不修改设备参数。
+ *
+ * @param snapshot 只读 TMC5130 斜坡寄存器快照；用于临时应用测试参数后恢复进入前的速度、加速度和斜坡配置。
+ * @param accel_multiplier BE 调试使用的加速度倍率，非法值会限制到允许档位。
  */
 static void Test_MotorTextApplyRampNoError(const MotorTextRampSnapshot *snapshot,
                                            uint32_t accel_multiplier)
@@ -563,6 +641,8 @@ static void Test_MotorTextApplyRampNoError(const MotorTextRampSnapshot *snapshot
 
 /**
  * @brief BE测试退出时恢复进入前斜坡参数。
+ *
+ * @param snapshot 只读 TMC5130 斜坡寄存器快照；用于临时应用测试参数后恢复进入前的速度、加速度和斜坡配置。
  */
 static void Test_MotorTextRestoreRampNoError(const MotorTextRampSnapshot *snapshot)
 {
@@ -580,6 +660,11 @@ static void Test_MotorTextRestoreRampNoError(const MotorTextRampSnapshot *snapsh
 /**
  * @brief BE超时或异常重启前重新初始化电机，并重新应用本次加速度倍率。
  * @note  初始化成功前只重试初始化，不改变固定编码器原点和目标；命令切换时返回 STATE_SWITCH。
+ *
+ * @param phase_name 用于日志标识当前阶段的只读文字。
+ * @param ramp_snapshot 命令执行前保存的 TMC5130 斜坡参数快照，用于退出或重启时恢复。
+ * @param accel_multiplier BE 调试使用的加速度倍率，非法值会限制到允许档位。
+ * @return NO_ERROR 表示电机重新初始化且本次加速度倍率已经恢复；STATE_SWITCH 表示测试被新命令打断，其他值为驱动初始化或速度设置错误。
  */
 static uint32_t Test_MotorTextReinitForRestartNoExit(const char *phase_name,
                                                      const MotorTextRampSnapshot *ramp_snapshot,
@@ -591,7 +676,6 @@ static uint32_t Test_MotorTextReinitForRestartNoExit(const char *phase_name,
     while (1) {
         uint32_t ret;
 
-        /* 先处理异常边界，避免本模块状态机带故障继续运行。 */
         if (Test_ShouldAbortForCommandSwitchNoError()) {
             return STATE_SWITCH;
         }
@@ -602,7 +686,6 @@ static uint32_t Test_MotorTextReinitForRestartNoExit(const char *phase_name,
         s_motor_driver.motion_wait_active = false;
 
         ret = MotorCtrl_Init();
-        /* 先处理异常边界，避免本模块状态机带故障继续运行。 */
         if (ret == NO_ERROR) {
             Test_MotorTextApplyRampNoError(ramp_snapshot, accel_multiplier);
             printf("%s\t重启恢复\t电机已重新初始化\t重试=%lu\t加速度倍率=%lu\r\n",
@@ -625,6 +708,9 @@ static uint32_t Test_MotorTextReinitForRestartNoExit(const char *phase_name,
 /**
  * @brief BE测试专用点动式连续运动下发。
  * @note  不设置近距离XTARGET，直接进入速度模式；到编码器目标后由上层立即换向。
+ *
+ * @param dir 运动方向。必须使用 MOTOR_DIRECTION_UP 或 MOTOR_DIRECTION_DOWN；函数据此换算符号、目标位置、速度模式或到位条件。
+ * @param speed_x100 本次调试运动速度，单位 0.01 m/min；0 表示使用当前默认速度。
  */
 static void Test_MotorTextStartJogNoCheck(int dir, uint32_t speed_x100)
 {
@@ -643,6 +729,9 @@ static void Test_MotorTextStartJogNoCheck(int dir, uint32_t speed_x100)
 /**
  * @brief 用RAMPSTAT.VZERO判断电机是否停稳，不解析驱动故障位。
  * @note  known=0表示本次通信读失败，调用方按继续等待或重试处理。
+ *
+ * @param known 用于返回当前是否已取得可信的电机停止状态。
+ * @return 1 表示 RAMPSTAT 读取成功且 VZERO 置位；寄存器读取失败或电机尚未停止时返回 0。
  */
 static uint8_t Test_MotorTextIsStoppedNoError(uint8_t *known)
 {
@@ -665,6 +754,10 @@ static uint8_t Test_MotorTextIsStoppedNoError(uint8_t *known)
 /**
  * @brief B/BE测试专用停稳二次确认，避免换向瞬间 VZERO 误判。
  * @note  第一次读到 VZERO 后延时，再二次读取 VZERO；期间只响应命令切换。
+ *
+ * @param phase_name 用于日志标识当前阶段的只读文字。
+ * @param known 用于返回重试后是否已确认可信的电机停止状态。
+ * @return 1 表示两次停稳检查均确认 VZERO；状态未知、命令切换或二次确认失败时返回 0。
  */
 static uint8_t Test_MotorTextConfirmStoppedNoError(const char *phase_name, uint8_t *known)
 {
@@ -675,7 +768,6 @@ static uint8_t Test_MotorTextConfirmStoppedNoError(const char *phase_name, uint8
         *known = 0U;
     }
 
-    /* 先处理异常边界，避免本模块状态机带故障继续运行。 */
     if (Test_MotorTextIsStoppedNoError(&first_known) == 0U) {
         if (known != NULL) {
             *known = first_known;
@@ -684,12 +776,10 @@ static uint8_t Test_MotorTextConfirmStoppedNoError(const char *phase_name, uint8
     }
 
     HAL_Delay(MOTOR_TEXT_STOP_CONFIRM_MS);
-    /* 先处理异常边界，避免本模块状态机带故障继续运行。 */
     if (Test_ShouldAbortForCommandSwitchNoError()) {
         return 0U;
     }
 
-    /* 先处理异常边界，避免本模块状态机带故障继续运行。 */
     if (Test_MotorTextIsStoppedNoError(&second_known) == 0U) {
         if (known != NULL) {
             *known = second_known;
@@ -706,6 +796,9 @@ static uint8_t Test_MotorTextConfirmStoppedNoError(const char *phase_name, uint8
 /**
  * @brief 等待电机停稳，只看RAMPSTAT.VZERO，不检测扭力/过热等错误。
  * @note  只在任务上下文调用；通信读失败会继续等待并周期打印。
+ *
+ * @param phase_name 用于日志标识当前阶段的只读文字。
+ * @return 1 表示在时限内观察到 TMC5130 RAMPSTAT.VZERO；命令切换或等待超时返回 0。
  */
 static uint8_t Test_WaitMotorStoppedNoErrorCheck(const char *phase_name)
 {
@@ -717,13 +810,11 @@ static uint8_t Test_WaitMotorStoppedNoErrorCheck(const char *phase_name)
         uint8_t known = 0U;
         uint32_t now;
 
-        /* 先处理异常边界，避免本模块状态机带故障继续运行。 */
         if (Test_ShouldAbortForCommandSwitchNoError()) {
             return 0U;
         }
 
         now = HAL_GetTick();
-        /* 先处理异常边界，避免本模块状态机带故障继续运行。 */
         if ((Test_MotorTextConfirmStoppedNoError(name, &known) != 0U) &&
             ((now - start_tick) >= MOTOR_TEXT_STOP_SETTLE_MS)) {
             Test_MotorTextSyncRawTargetNoError();
@@ -747,6 +838,13 @@ static uint8_t Test_WaitMotorStoppedNoErrorCheck(const char *phase_name)
 /**
  * @brief B指令单段运动执行器，不检测任何错误码，只负责下发运动并等待停转。
  * @note  只响应新串口命令切换；其它错误状态会被清掉，不参与流程判断。
+ *
+ * @param phase_name 用于日志标识当前阶段的只读文字。
+ * @param loop_index B 指令当前循环序号；仅用于阶段日志和测试进度显示，不参与运动距离或目标位置计算。
+ * @param move_to_zero 零点。
+ * @param move_mm 本次相对运动距离，单位 mm。
+ * @param dir 运动方向。必须使用 MOTOR_DIRECTION_UP 或 MOTOR_DIRECTION_DOWN；函数据此换算符号、目标位置、速度模式或到位条件。
+ * @return 1 表示单段运动已下发并等待到停转；命令切换、启动失败或等待超时返回 0。
  */
 static uint8_t Test_MotorTextRunMoveStageNoExit(const char *phase_name,
                                                 uint32_t loop_index,
@@ -754,7 +852,6 @@ static uint8_t Test_MotorTextRunMoveStageNoExit(const char *phase_name,
                                                 float move_mm,
                                                 int dir)
 {
-    /* 先处理异常边界，避免本模块状态机带故障继续运行。 */
     if (Test_ShouldAbortForCommandSwitchNoError()) {
         return 0U;
     }
@@ -768,7 +865,6 @@ static uint8_t Test_MotorTextRunMoveStageNoExit(const char *phase_name,
     printf("[第%lu轮]\t%s\t开始\r\n",
            (unsigned long)(loop_index + 1U),
            phase_name);
-    /* 先处理异常边界，避免本模块状态机带故障继续运行。 */
     if (Test_WaitMotorStoppedNoErrorCheck(phase_name) == 0U) {
         return 0U;
     }
@@ -781,10 +877,15 @@ static uint8_t Test_MotorTextRunMoveStageNoExit(const char *phase_name,
 /**
  * @brief  记录单项通信测试结果
  * @note   仅用于手动测试日志汇总，不改变业务错误状态。
+ *
+ * @param name 用于串口测试日志标识当前测试项、阶段或通信目标的 NUL 结尾只读名称。
+ * @param ret 上一层调用返回的结果码。串口测试流程只据此累计和打印测试结果，不把测试失败提升为正式测量故障。
+ * @param ok_count 输入输出通信成功次数；本次成功时递增。
+ * @param fail_count 输入输出通信失败次数；本次失败时递增。
+ * @return 1 表示本次通信测试成功且成功计数已更新；失败时更新失败计数并返回 0。
  */
 static uint8_t Test_CommRecordResult(const char *name, uint32_t ret, uint32_t *ok_count, uint32_t *fail_count)
 {
-    /* 先处理异常边界，避免本模块状态机带故障继续运行。 */
     if (ret == NO_ERROR) {
         (*ok_count)++;
         printf("[正常]\t%s\r\n", name);
@@ -799,6 +900,9 @@ static uint8_t Test_CommRecordResult(const char *name, uint32_t ret, uint32_t *o
 /**
  * @brief  检查手动通信测试是否需要中止
  * @note   串口调试过程中收到新的有效命令时退出，避免测试函数长时间占用设备。
+ *
+ * @param fail_count 当前连续或累计通信失败次数，用于判断是否达到提前停止门限。
+ * @return 1 表示检测到有效命令切换请求，函数已递增 fail_count 并要求结束通信测试；0 表示当前没有命令切换请求，可继续测试。
  */
 static uint8_t Test_CommShouldStop(uint32_t *fail_count)
 {
@@ -812,8 +916,8 @@ static uint8_t Test_CommShouldStop(uint32_t *fail_count)
 }
 
 /**
- * @brief 执行本模块中的 Test_GetEncoderValue 逻辑。
- * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ * @brief 读取测试使用的当前编码器计数值。
+ * @return 返回测试口径下取反后的当前编码器累计计数。
  */
 static int32_t Test_GetEncoderValue(void)
 {
@@ -822,12 +926,12 @@ static int32_t Test_GetEncoderValue(void)
 }
 
 /**
- * @brief 执行本模块中的 Test_EncoderTargetReached 逻辑。
+ * @brief 判断编码器是否已经到达测试目标位置。
  *
- * @param current 业务参数。
- * @param target 业务参数。
- * @param dir 业务参数。
- * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ * @param current 当前编码器计数或位置值。
+ * @param target 本次比较、运动或写入的目标值。该值是编码器目标计数，函数结合运动方向判断当前位置是否已经到达或越过目标。
+ * @param dir 运动方向。必须使用 MOTOR_DIRECTION_UP 或 MOTOR_DIRECTION_DOWN；函数据此换算符号、目标位置、速度模式或到位条件。
+ * @return 1 表示编码器已经到达测试目标位置；0 表示编码器尚未到达测试目标位置。
  */
 static uint8_t Test_EncoderTargetReached(int32_t current, int32_t target, int dir)
 {
@@ -839,10 +943,10 @@ static uint8_t Test_EncoderTargetReached(int32_t current, int32_t target, int di
 }
 
 /**
- * @brief 执行本模块中的 Test_EncoderDistanceMmToCount 逻辑。
+ * @brief 把测试运动距离从毫米转换为编码器计数。
  *
- * @param distance_mm 业务参数。
- * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ * @param distance_mm 距离。
+ * @return 返回按编码轮周长四舍五入得到的计数；输入距离非正时返回 0，非零距离最小返回 1。
  */
 static int32_t Test_EncoderDistanceMmToCount(float distance_mm)
 {
@@ -862,9 +966,9 @@ static int32_t Test_EncoderDistanceMmToCount(float distance_mm)
 }
 
 /**
- * @brief 执行本模块中的 Test_EncoderCountToDistanceMm 逻辑。
+ * @brief 把编码器计数转换为测试显示使用的毫米距离。
  *
- * @param encoder_count 业务参数。
+ * @param encoder_count 待按编码轮周长换算为距离的编码器累计计数。
  * @return 计算后的业务数值。
  */
 static float Test_EncoderCountToDistanceMm(int32_t encoder_count)
@@ -879,6 +983,10 @@ static float Test_EncoderCountToDistanceMm(int32_t encoder_count)
 
 /**
  * @brief 按 BE 距离和线速度估算单段超时，超时只重启本阶段，不改变固定区间。
+ *
+ * @param distance_mm 距离。
+ * @param speed_x100 本次调试运动速度，单位 0.01 m/min；0 表示使用当前默认速度。
+ * @return 返回按距离和线速度估算并限制后的单段超时时间，单位 ms。
  */
 static uint32_t Test_MotorTextComputeLegTimeoutMs(float distance_mm, uint32_t speed_x100)
 {
@@ -895,11 +1003,9 @@ static uint32_t Test_MotorTextComputeLegTimeoutMs(float distance_mm, uint32_t sp
     timeout_ms = expected_ms * (double)MOTOR_TEXT_ENCODER_TIMEOUT_SCALE +
                  (double)MOTOR_TEXT_ENCODER_TIMEOUT_MARGIN_MS;
 
-    /* 先处理异常边界，避免本模块状态机带故障继续运行。 */
     if (timeout_ms < (double)MOTOR_TEXT_ENCODER_TIMEOUT_MIN_MS) {
         return MOTOR_TEXT_ENCODER_TIMEOUT_MIN_MS;
     }
-    /* 先处理异常边界，避免本模块状态机带故障继续运行。 */
     if (timeout_ms > (double)MOTOR_TEXT_ENCODER_TIMEOUT_MAX_MS) {
         return MOTOR_TEXT_ENCODER_TIMEOUT_MAX_MS;
     }
@@ -908,6 +1014,10 @@ static uint32_t Test_MotorTextComputeLegTimeoutMs(float distance_mm, uint32_t sp
 
 /**
  * @brief BE运动过程中按周期读取传感器，避免只在停机点读取。
+ *
+ * @param phase_name 用于日志标识当前阶段的只读文字。
+ * @param enable_sensor_comm 非零表示每个运动行程后附加一次传感器通信检查，0 表示只测试电机。
+ * @param last_comm_tick 输入输出最近一次传感器通信检查节拍，单位 ms。
  */
 static void Test_MotorTextSensorCommDuringRun(const char *phase_name,
                                               uint8_t enable_sensor_comm,
@@ -931,18 +1041,18 @@ static void Test_MotorTextSensorCommDuringRun(const char *phase_name,
 }
 
 /**
- * @brief 执行本模块中的 Test_MoveUntilEncoderTarget 逻辑。
+ * @brief 以无保护点动方式运行到固定编码器目标，轮询命令切换和可选传感器通信；超时或提前停稳时重建驱动后继续重试。
  *
- * @param target_encoder 业务参数。
- * @param origin_encoder 业务参数。
- * @param dir 业务参数。
- * @param speed_x100 业务参数。
- * @param timeout_ms 业务参数。
- * @param enable_sensor_comm 业务参数。
- * @param ramp_snapshot 业务参数。
- * @param accel_multiplier 业务参数。
- * @param phase_name 输入/输出指针。
- * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ * @param target_encoder 目标编码器。
+ * @param origin_encoder 编码器。
+ * @param dir 运动方向。必须使用 MOTOR_DIRECTION_UP 或 MOTOR_DIRECTION_DOWN；函数据此换算符号、目标位置、速度模式或到位条件。
+ * @param speed_x100 本次调试运动速度，单位 0.01 m/min；0 表示使用当前默认速度。
+ * @param timeout_ms 允许等待的最长时间，单位 ms。
+ * @param enable_sensor_comm 非零表示每个运动行程后附加一次传感器通信检查，0 表示只测试电机。
+ * @param ramp_snapshot 命令执行前保存的 TMC5130 斜坡参数快照，用于退出或重启时恢复。
+ * @param accel_multiplier BE 调试使用的加速度倍率，非法值会限制到允许档位。
+ * @param phase_name 标识本次编码器目标运动阶段的 NUL 结尾只读名称，用于到位、超调、超时和失败日志。
+ * @return PARAM_RANGE_ERROR 表示参数超出允许范围；NO_ERROR 表示操作成功。
  */
 static uint32_t Test_MoveUntilEncoderTarget(int32_t target_encoder,
                                             int32_t origin_encoder,
@@ -959,7 +1069,6 @@ static uint32_t Test_MoveUntilEncoderTarget(int32_t target_encoder,
     uint32_t last_comm_tick = 0U;
     uint32_t restart_count = 0U;
 
-    /* 先处理异常边界，避免本模块状态机带故障继续运行。 */
     if (Test_ShouldAbortForCommandSwitchNoError()) {
         return STATE_SWITCH;
     }
@@ -986,7 +1095,6 @@ static uint32_t Test_MoveUntilEncoderTarget(int32_t target_encoder,
         uint8_t stopped_known = 0U;
         uint32_t now_tick;
 
-        /* 先处理异常边界，避免本模块状态机带故障继续运行。 */
         if (Test_ShouldAbortForCommandSwitchNoError()) {
             return STATE_SWITCH;
         }
@@ -1009,7 +1117,6 @@ static uint32_t Test_MoveUntilEncoderTarget(int32_t target_encoder,
 
         Test_MotorTextSensorCommDuringRun(name, enable_sensor_comm, &last_comm_tick);
 
-        /* 先处理异常边界，避免本模块状态机带故障继续运行。 */
         if ((timeout_ms > 0U) && ((now_tick - start_tick) >= timeout_ms)) {
             restart_error = current_encoder - target_encoder;
             restart_count++;
@@ -1060,8 +1167,8 @@ static uint32_t Test_MoveUntilEncoderTarget(int32_t target_encoder,
 }
 
 /**
- * @brief 处理本模块中的 Test_ProcessCommandSwitchRequested 逻辑。
- * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ * @brief 处理测试过程中收到的外部命令切换请求。
+ * @return 1 表示检测到并已处理外部命令切换请求；没有有效切换请求时返回 0。
  */
 static uint8_t Test_ProcessCommandSwitchRequested(void)
 {
@@ -1077,15 +1184,16 @@ static uint8_t Test_ProcessCommandSwitchRequested(void)
 /**
  * @brief 记录串口调试命令失败告警。
  * @note 串口调试命令只做现场提示，不在这里设置最终错误状态。
+ *
+ * @param operation 本次测试命令的现场可读操作名称，用于失败告警。
+ * @param error_code 待记录、转换或判断的错误码。该值是串口测试命令的失败结果，用于决定警告输出而不覆盖正式测量故障。
  */
 static void Test_ProcessCommandWarnFailure(const char *operation, uint32_t error_code)
 {
-    /* 先处理异常边界，避免本模块状态机带故障继续运行。 */
     if ((error_code == NO_ERROR) || (error_code == STATE_SWITCH)) {
         return;
     }
 
-    /* 错误 阶段：错误报警 模块：通信 操作：operation 原因：ErrorLog_GetReasonByCode(error_code) 处理：仅记录 */
     ErrorLog_Warn(ERROR_LOG_MODULE_COMM,
                   operation,
                   ErrorLog_GetReasonByCode(error_code),
@@ -1093,14 +1201,18 @@ static void Test_ProcessCommandWarnFailure(const char *operation, uint32_t error
 }
 
 
+/* 测试命令临时接管调试显示时的恢复快照；记录原设备状态及接管标志，退出测试后用于恢复。 */
 typedef struct {
-    DeviceState saved_state;
-    uint8_t active;
+    /* 测试命令接管 CPU3 调试显示前保存的设备状态和接管标志。 */
+    DeviceState saved_state; /* 测试命令接管调试显示前的设备主状态。 */
+    uint8_t active; /* 测试命令当前已经接管 CPU3 调试显示的标志。 */
 } TestCommandDebugDisplaySnapshot;
 
 /**
  * @brief 保存串口调试前的显示状态，并临时切到调试模式。
  * @note 只在任务上下文调用；不清错误码、不执行硬件动作。
+ *
+ * @param snapshot 串口测试命令进入前的显示状态快照；保存设备状态、当前命令和显示相关字段，供测试结束后恢复。
  */
 static void Test_EnterDebugDisplayState(TestCommandDebugDisplaySnapshot *snapshot)
 {
@@ -1119,6 +1231,8 @@ static void Test_EnterDebugDisplayState(TestCommandDebugDisplaySnapshot *snapsho
 /**
  * @brief 恢复串口调试前的显示状态。
  * @note 仅当当前仍停留在调试模式时恢复，避免覆盖故障态或其他业务态。
+ *
+ * @param snapshot 串口测试命令进入前的显示状态快照；保存设备状态、当前命令和显示相关字段，供测试结束后恢复。
  */
 static void Test_RestoreDebugDisplayState(TestCommandDebugDisplaySnapshot *snapshot)
 {
@@ -1138,13 +1252,17 @@ static void Test_RestoreDebugDisplayState(TestCommandDebugDisplaySnapshot *snaps
 #define TEST_COMMAND_BE_MULTIPLIER_MAX     20U /* BE 测试命令允许的最大加减速倍率。 */
 
 typedef struct {
-    uint32_t speed_x100;
-    uint32_t accel_multiplier;
-    uint8_t enable_sensor_comm;
+    /* BE 测试命令解析后的速度、加速度倍率和传感器通信开关。 */
+    uint32_t speed_x100; /* BE 测试命令指定的电机速度，单位为 0.01 m/min。 */
+    uint32_t accel_multiplier; /* BE 测试命令指定的加速度倍率。 */
+    uint8_t enable_sensor_comm; /* BE 测试期间是否保持传感器通信的开关。 */
 } TestCommandBeOptions;
 
 /**
  * @brief 限制 BE 调试倍率；0 或负数按 1 档，过大按上限处理。
+ *
+ * @param value 待限制到合法范围的原始输入值。
+ * @return 返回限制后的 BE 调试倍率；0 或负数回退 1，超过上限时返回允许的最大倍率。
  */
 static uint32_t TestCommand_ClampBeMultiplier(long value)
 {
@@ -1159,6 +1277,9 @@ static uint32_t TestCommand_ClampBeMultiplier(long value)
 
 /**
  * @brief 将 BE 命令速度从 m/min 转为 0.01m/min；0 表示沿用当前速度配置。
+ *
+ * @param value 待限制到合法范围的原始输入值。
+ * @return 返回完成边界钳位后的数值；输入低于下限时返回下限，高于上限时返回上限，区间内保持原值。
  */
 static uint32_t TestCommand_ClampBeSpeedMMin(double value)
 {
@@ -1181,6 +1302,9 @@ static uint32_t TestCommand_ClampBeSpeedMMin(double value)
 /**
  * @brief 解析 BJ/BJP 点动测试的可选速度，单位 m/min。
  * @note  找不到逗号或速度非法时返回 0，表示沿用当前默认速度配置。
+ *
+ * @param arg_tail BJ 或 BJP 命令的剩余文本；函数搜索首个逗号，并从逗号后尝试解析 m/min 浮点速度。
+ * @return 未找到逗号、数值无法解析或数值不大于 0 时返回 0，表示沿用默认速度；否则返回换算并钳位后的 0.01 m/min 速度值。
  */
 static uint32_t TestCommand_ParseJogSpeedX100(const char *arg_tail)
 {
@@ -1210,6 +1334,8 @@ static uint32_t TestCommand_ParseJogSpeedX100(const char *arg_tail)
 
 /**
  * @brief 处理 BJ/BJP 点动测试命令。
+ *
+ * @param command 已经通过语法分类的 BJ 或 BJP 测试命令文本。
  * @return 已识别并处理返回 1，非 BJ 命令返回 0。
  */
 static uint8_t TestCommand_HandleJogMotorTest(const uint8_t *command)
@@ -1270,10 +1396,13 @@ static uint8_t TestCommand_HandleJogMotorTest(const uint8_t *command)
     return 1U;
 }
 
-/*
- * 函数用途：执行一次 AO 正式电流下发，并在短时间内重复写入同一电流值。
- * 调用场景：串口 AO 命令现场验证 AD5421 控制寄存器回读、故障寄存器回读和电流环输出。
- * 关键约束：使用正式 Ad5421Init() 初始化路径；诊断失败只提示，不提前结束电流保持。
+/**
+ * @brief 执行一次 AO 正式电流下发，并在短时间内重复写入同一电流值。
+ *
+ * @details 调用场景：串口 AO 命令现场验证 AD5421 控制寄存器回读、故障寄存器回读和电流环输出。
+ * @note 关键约束：使用正式 Ad5421Init() 初始化路径；诊断失败只提示，不提前结束电流保持。
+ *
+ * @param current_mA_x100 本次设置、限制或测试使用的模拟输出电流，单位 0.01 mA。
  */
 static void TestCommand_RunAoOutputPoint(uint32_t current_mA_x100)
 {
@@ -1321,10 +1450,14 @@ static void TestCommand_RunAoOutputPoint(uint32_t current_mA_x100)
         elapsed_ms += TEST_AO_REFRESH_MS;
     }
 }
-/*
- * 函数用途：处理 AO 正式回读电流命令。
- * 调用场景：串口发送 AO400、AO1200、AO2000 或 AOS 时验证正式回读和物理电流输出。
- * 关键约束：命令在 MeasureStart 前处理，避免被 A 电机测试路径截获。
+/**
+ * @brief 处理 AO 正式回读电流命令。
+ *
+ * @details 调用场景：串口发送 AO400、AO1200、AO2000 或 AOS 时验证正式回读和物理电流输出。
+ * @note 关键约束：命令在 MeasureStart 前处理，避免被 A 电机测试路径截获。
+ *
+ * @param command 已经通过语法分类的 AO 输出测试或回读命令文本。
+ * @return 1 表示当前命令已由 AO 回读电流测试处理；不是该命令或参数非法时返回 0。
  */
 static uint8_t TestCommand_HandleAoOutputTest(const uint8_t *command)
 {
@@ -1369,6 +1502,9 @@ static uint8_t TestCommand_HandleAoOutputTest(const uint8_t *command)
 /**
  * @brief 解析 BE 可选参数，兼容旧的 BE100S 和 BE100,1 传感器通信写法。
  * @note  新格式：BE距离,速度m/min,加速度倍率,S 或 BE距离,速度m/min,加速度倍率,1。
+ *
+ * @param arg 待解析的完整命令参数文本。
+ * @param options 用于接收解析后的 BE 距离、速度、倍率和通信选项。
  */
 static void TestCommand_ParseBeOptions(const char *arg, TestCommandBeOptions *options)
 {
@@ -1437,11 +1573,11 @@ static void TestCommand_ParseBeOptions(const char *arg, TestCommandBeOptions *op
 }
 
 /**
- * @brief 执行本模块中的 Test_EnsureMotorPositionSourceBeforeFollow 逻辑。
+ * @brief 跟随测试前按自动切换配置尝试改用电机记步，并通过输出标志报告本次是否切换。
  *
- * @param follow_name 业务参数。
- * @param switched_to_motor 业务参数。
- * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ * @param follow_name 本次测试跟随流程的现场名称，用于记录位置源切换结果。
+ * @param switched_to_motor 用于返回测试流程本次是否已切换到电机位置源。
+ * @return NO_ERROR 表示无需切换或已经切到电机记步，并通过输出标志报告结果；其他值为位置源切换、周长标定、位置同步或参数保存错误。
  */
 static uint32_t Test_EnsureMotorPositionSourceBeforeFollow(const char *follow_name, uint8_t *switched_to_motor)
 {
@@ -1462,7 +1598,6 @@ static uint32_t Test_EnsureMotorPositionSourceBeforeFollow(const char *follow_na
 
     printf("%s\tswitch position source to motor count\r\n", follow_name);
     ret = MotorCtrl_SwitchPositionSourceToMotor();
-    /* 先处理异常边界，避免本模块状态机带故障继续运行。 */
     if (ret != NO_ERROR) {
         printf("%s\tswitch motor count failed:0x%08lX\r\n", follow_name, (unsigned long)ret);
         return ret;
@@ -1476,8 +1611,7 @@ static uint32_t Test_EnsureMotorPositionSourceBeforeFollow(const char *follow_na
 }
 
 /**
- * @brief 执行本模块中的 Test_RunMeasureZeroOnce 逻辑。
- * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ * @brief 执行一次零点测量测试并记录结果。
  */
 static void Test_RunMeasureZeroOnce(void)
 {
@@ -1491,8 +1625,7 @@ static void Test_RunMeasureZeroOnce(void)
 }
 
 /**
- * @brief 执行本模块中的 Test_RunMeasureAndFollowOilLevelOnce 逻辑。
- * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ * @brief 执行一次液位测试链：必要时回零、搜索液位、按配置切换位置源并复搜，最后进入液位跟随。
  */
 static void Test_RunMeasureAndFollowOilLevelOnce(void)
 {
@@ -1528,8 +1661,16 @@ static void Test_RunMeasureAndFollowOilLevelOnce(void)
 }
 
 /**
- * @brief 处理从 measure.c 拆出的串口测试命令。
- * @return 已识别并处理返回 1，非测试命令返回 0。
+ * @brief 校验并分派 CPU2 串口维护测试命令。
+ *
+ * 空缓冲区或未被 SerialCommandParser 严格识别为测试类的命令立即返回，避免仅凭首字符前缀误启动电机或维护动作。
+ * 传感器与无线通信、蓝牙配对、模拟量输出、B/BE 电机往返等无需通用测量初始化的命令优先处理；除 A 手动运动和 X 展示模拟外，其余后续测试在分派前调用 MeasureStart。
+ * 支持固定频率找液位、电机步进与重复性试验、卷筒参数拟合、位置源切换和静态 SPI 等维护入口；需要 OLED 调试状态的分支会保存并恢复原显示状态。
+ * 长时间循环测试会反复检查新命令切换请求，并在需要时慢停电机后退出；这些命令会真实操作传感器、电机、模拟量输出或参数，不得在中断上下文调用。
+ *
+ * @param command 已完成基础收帧的可修改串口测试命令缓冲区，以 NUL 结尾。
+ * @return 已识别并处理返回 1，非测试命令返回 0；空命令或没有匹配到具体测试分支时也返回 0，由上层继续处理。
+ * @note 返回 1 只表示测试命令已被本函数消费，不等同于对应硬件测试成功；实际结果由打印、错误码和设备状态判断。
  */
 uint8_t Test_ProcessSerialCommand(uint8_t *command)
 {
@@ -1645,7 +1786,6 @@ uint8_t Test_ProcessSerialCommand(uint8_t *command)
     /* A 指令走与 B/BE 一致的低检测电机路径；其它调试/恢复动作仍先执行 MeasureStart。 */
     if ((command[0] != 'A') && (command[0] != 'X')) {
         ret = (uint32_t)MeasureStart();
-        /* 先处理异常边界，避免本模块状态机带故障继续运行。 */
         if (ret != NO_ERROR) {
             printf("串口命令\t启动失败\t电机初始化错误码=0x%08lX\\r\\n", (unsigned long)ret);
             return 1U;
@@ -1854,7 +1994,6 @@ uint8_t Test_ProcessSerialCommand(uint8_t *command)
         case 'R':
             /* 求解拟合参数 */
             ret = MotorCtrl_TapeFitSolve();
-            /* 先处理异常边界，避免本模块状态机带故障继续运行。 */
             if (ret != NO_ERROR) {
                 printf("卷筒拟合\t全局求解失败\t错误码=0x%08lX\r\n", (unsigned long)ret);
                 Test_ProcessCommandWarnFailure("卷筒拟合全局求解", ret);
@@ -1864,7 +2003,6 @@ uint8_t Test_ProcessSerialCommand(uint8_t *command)
         case 'V':
             /* 局部 TFIT：用当前位置起点采样求解局部厚度/周长 */
             ret = MotorCtrl_TapeFitSolveLocalOrigin();
-            /* 先处理异常边界，避免本模块状态机带故障继续运行。 */
             if (ret != NO_ERROR) {
                 printf("卷筒拟合\t局部求解失败\t错误码=0x%08lX\r\n", (unsigned long)ret);
                 Test_ProcessCommandWarnFailure("卷筒拟合局部求解", ret);
@@ -1874,7 +2012,6 @@ uint8_t Test_ProcessSerialCommand(uint8_t *command)
         case 'P':
             /* 仅应用拟合出的厚度 t */
             ret = MotorCtrl_TapeFitApply(false, true);
-            /* 先处理异常边界，避免本模块状态机带故障继续运行。 */
             if (ret != NO_ERROR) {
                 printf("卷筒拟合\t应用尺带厚度失败\t错误码=0x%08lX\r\n", (unsigned long)ret);
                 Test_ProcessCommandWarnFailure("卷筒拟合应用尺带厚度", ret);
@@ -1884,7 +2021,6 @@ uint8_t Test_ProcessSerialCommand(uint8_t *command)
         case 'U':
             /* 同时应用拟合出的 C0 和 t */
             ret = MotorCtrl_TapeFitApply(true, true);
-            /* 先处理异常边界，避免本模块状态机带故障继续运行。 */
             if (ret != NO_ERROR) {
                 printf("卷筒拟合\t应用首圈周长和厚度失败\t错误码=0x%08lX\r\n", (unsigned long)ret);
                 Test_ProcessCommandWarnFailure("卷筒拟合应用首圈周长和厚度", ret);
@@ -1908,7 +2044,6 @@ uint8_t Test_ProcessSerialCommand(uint8_t *command)
         case 'M':
             printf("位置源切换\t编码轮切换到电机记步\r\n");
             ret = MotorCtrl_SwitchPositionSourceToMotor();
-            /* 先处理异常边界，避免本模块状态机带故障继续运行。 */
             if (ret != NO_ERROR) {
                 printf("位置源切换\t切换电机记步失败\t错误码=0x%08lX\r\n", (unsigned long)ret);
                 Test_ProcessCommandWarnFailure("切换电机记步", ret);
@@ -1920,7 +2055,6 @@ uint8_t Test_ProcessSerialCommand(uint8_t *command)
         case 'E':
             printf("位置源切换\t电机记步切换到编码轮\r\n");
             ret = MotorCtrl_SwitchPositionSourceToEncoder();
-            /* 先处理异常边界，避免本模块状态机带故障继续运行。 */
             if (ret != NO_ERROR) {
                 printf("位置源切换\t切换编码轮记步失败\t错误码=0x%08lX\r\n", (unsigned long)ret);
                 Test_ProcessCommandWarnFailure("切换编码轮记步", ret);
@@ -1957,7 +2091,13 @@ uint8_t Test_ProcessSerialCommand(uint8_t *command)
     return 0U;
 }
 
-/* 电机小步进上行测试 */
+/**
+ * @brief 以 4×32 微步为单次增量执行长时间上行测试，并周期打印位置参考与扭力采样。
+ *
+ * 启用步进驱动后，每轮向上移动 -4×32 微步，等待两秒，再依次打印循环序号、传感器位置、电机位置参考和三次扭力读数。
+ *
+ * @note 该维护测试最多循环 24000 次并真实驱动电机；命令切换会立即返回，当前提前返回路径不会执行末尾的驱动关闭。
+ */
 void motor_step_up_text(void) {
     int i = 0;
     int32_t ticks = 4 * 32;
@@ -1990,7 +2130,13 @@ void motor_step_up_text(void) {
     printf("motor text over\n");
 }
 
-/* 电机小步进下行测试 */
+/**
+ * @brief 以 4×32 微步为单次增量执行长时间下行测试，并周期打印位置参考与扭力采样。
+ *
+ * 启用步进驱动后，每轮向下移动 4×32 微步，等待两秒，再依次打印循环序号、传感器位置、电机位置参考和三次扭力读数。
+ *
+ * @note 该维护测试最多循环 24000 次并真实驱动电机；命令切换会立即返回，当前提前返回路径不会执行末尾的驱动关闭。
+ */
 void motor_step_down_text(void) {
     int i = 0;
     int32_t ticks = 4 * 32;
@@ -2024,7 +2170,14 @@ void motor_step_down_text(void) {
     printf("motor text over\n");
 }
 
-/* 电机步进测试 */
+/**
+ * @brief 依次按 4、8 和 40 个整步的细分脉冲执行往返耐久测试，并持续打印编码器与扭力数据。
+ *
+ * 每种步长先按正脉冲方向运行固定总行程，再按负脉冲方向返回；步长增大时相应减少循环次数，使三个阶段的累计脉冲量一致。
+ * 每次动作前后检查命令切换，动作后等待两秒并分三次输出循环序号、编码器计数和当前扭力，全部阶段完成后关闭步进驱动。
+ *
+ * @note 该维护测试会真实、长时间驱动电机；每次移动后等待并连续采集编码器与扭力。收到命令切换时会立即返回，当前提前返回路径不会执行函数末尾的驱动关闭。
+ */
 void motor_step_text(void) {
     int i = 0;
     int32_t ticks = 4 * 32;
@@ -2184,7 +2337,11 @@ void motor_step_text(void) {
     stpr_disableDriver(&stepper);
     printf("motor text over\n");
 }
-/* / *********************** 测试函数 *********************** / */
+/**
+ * @brief 写入测试罐高并回读校验设备参数存储，最后恢复原始参数。
+ *
+ * @note 该维护测试会真实写入 FRAM 参数区两次；仅允许在受控测试环境执行，中途掉电可能使测试值保留到下次启动。
+ */
 void Test_Params_Storage(void) {
 	/* 备份原始参数 */
 	DeviceParameters original = g_deviceParams;
@@ -2214,12 +2371,19 @@ void Test_Params_Storage(void) {
 #define TEST_ENCODER_B_ADDRESS   (TEST_ENCODER_A_ADDRESS + TEST_ENCODER_SLOT_SIZE) /* 测试编码器参数 B 分区 FRAM 起始地址。 */
 
 /**
- * @brief 执行本模块中的 Test_ParamEncoder_AB_Backup 逻辑。
- * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ * @brief 验证参数区和编码器位置区的 FRAM A/B 双备份回退与全损坏报错逻辑。
+ *
+ * 测试开始时完整备份参数 A/B 分区、编码器 A/B 测试分区以及当前 g_deviceParams，随后通过破坏 magic 字段模拟单分区和双分区损坏。
+ * 参数区分别验证 A 损坏时能回退到 B，以及 A/B 均损坏时必须返回 PARAM_UNINITIALIZED；编码器区分别验证 A 损坏时能从 B 恢复，以及 A/B 均损坏时必须发布
+ * ENCODER_POWERON_FAIL。
+ * 参数测试后恢复两个原始分区并重新保存当前参数，编码器测试后恢复两个原始分区并重新初始化编码器；每个用例只通过打印报告结果，不返回汇总状态。
+ *
+ * @note 该测试会真实改写 FRAM；若测试在恢复步骤前掉电或被复位，参数区或编码器位置区可能保持故意制造的损坏状态，只能在可恢复的维护环境执行。
  */
 void Test_ParamEncoder_AB_Backup(void)
 {
     DeviceParameters param_backup = g_deviceParams;
+    /* FRAM 参数区与编码器测试区 A/B 双分区的原始备份缓冲；故障注入结束后按原字节恢复，避免测试破坏现场持久数据。 */
     uint8_t param_a_raw[sizeof(DeviceParameters)] = {0};
     uint8_t param_b_raw[sizeof(DeviceParameters)] = {0};
 
@@ -2250,7 +2414,6 @@ void Test_ParamEncoder_AB_Backup(void)
     WriteSingleData(0u, FRAM_PARAM_A_ADDRESS + param_magic_offset);
     WriteSingleData(0u, FRAM_PARAM_B_ADDRESS + param_magic_offset);
 
-    /* 先处理异常边界，避免本模块状态机带故障继续运行。 */
     if ((!load_device_params()) && (g_measurement.device_status.error_code == PARAM_UNINITIALIZED)) {
         printf("[通过] 参数区: A/B魔术字都损坏时已报错 PARAM_UNINITIALIZED\r\n");
     } else {
@@ -2269,7 +2432,6 @@ void Test_ParamEncoder_AB_Backup(void)
     WriteSingleData(0u, TEST_ENCODER_A_ADDRESS);
     Initialize_Encoder();
 
-    /* 先处理异常边界，避免本模块状态机带故障继续运行。 */
     if (g_measurement.device_status.error_code != ENCODER_POWERON_FAIL) {
         printf("[通过] 编码区: A损坏后已回退到B\r\n");
     } else {
@@ -2282,7 +2444,6 @@ void Test_ParamEncoder_AB_Backup(void)
     WriteSingleData(0u, TEST_ENCODER_B_ADDRESS);
     Initialize_Encoder();
 
-    /* 先处理异常边界，避免本模块状态机带故障继续运行。 */
     if (g_measurement.device_status.error_code == ENCODER_POWERON_FAIL) {
         printf("[通过] 编码区: A/B都损坏时已报错 ENCODER_POWERON_FAIL\r\n");
     } else {
@@ -2298,20 +2459,18 @@ void Test_ParamEncoder_AB_Backup(void)
     printf("===== AB双备份回退测试结束 =====\r\n\r\n");
 }
 /**
- * @brief 显示或打印本模块中的 Test_SensorCommPrintResult 逻辑。
+ * @brief 统一打印一次传感器调用结果；失败时按可选计数器累计并输出错误码。
  *
- * @param tag 业务参数。
- * @param name 业务参数。
- * @param ret 业务参数。
- * @param fail_count 业务参数。
- * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ * @param tag 用于区分诊断来源的只读标签文字。
+ * @param name 用于串口测试日志标识当前测试项、阶段或通信目标的 NUL 结尾只读名称。
+ * @param ret 上一层调用返回的结果码。串口测试流程只据此累计和打印测试结果，不把测试失败提升为正式测量故障。
+ * @param fail_count 传感器通信测试累计失败次数。
  */
 static void Test_SensorCommPrintResult(const char *tag,
                                        const char *name,
                                        uint32_t ret,
                                        uint32_t *fail_count)
 {
-    /* 先处理异常边界，避免本模块状态机带故障继续运行。 */
     if (ret == NO_ERROR) {
         printf("[传感器][正常] %s %s\r\n", tag, name);
         return;
@@ -2333,10 +2492,9 @@ static void Test_SensorCommPrintResult(const char *tag,
 }
 
 /**
- * @brief 执行本模块中的 __attribute__ 逻辑。
+ * @brief 检查当前传感器通信状态并输出带标签的诊断日志。
  *
- * @param tag 业务参数。
- * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ * @param tag 用于区分诊断来源的只读标签文字。
  */
 static void __attribute__((unused)) Sensor_CommCheckAndLog(const char *tag)
 {
@@ -2353,7 +2511,6 @@ static void __attribute__((unused)) Sensor_CommCheckAndLog(const char *tag)
 
         ret = (uint32_t)DSM_Read_Frequency_Density_Temp(&frequency, &density, &temp);
         Test_SensorCommPrintResult(tag, "DSM一代读取频率/密度/温度", ret, &comm_fail_cnt);
-        /* 先处理异常边界，避免本模块状态机带故障继续运行。 */
         if (ret == NO_ERROR) {
             printf("[传感器][正常] %s DSM一代 频率=%.3f Hz 密度=%.3f 温度=%.3f C\r\n",
                    tag,
@@ -2371,7 +2528,6 @@ static void __attribute__((unused)) Sensor_CommCheckAndLog(const char *tag)
 
         ret = SensorSafeAdapter_ReadDensity(&frequency, &density, &temp);
         Test_SensorCommPrintResult(tag, "安全协议读取频率/密度/温度", ret, &comm_fail_cnt);
-        /* 先处理异常边界，避免本模块状态机带故障继续运行。 */
         if (ret == NO_ERROR) {
             printf("[传感器][正常] %s 安全协议 频率=%.3f Hz 密度=%.3f 温度=%.3f C\r\n",
                    tag,
@@ -2389,7 +2545,6 @@ static void __attribute__((unused)) Sensor_CommCheckAndLog(const char *tag)
 
         ret = (uint32_t)DSM_V2_Read_Density(&density);
         Test_SensorCommPrintResult(tag, "LTD/V2读取密度", ret, &comm_fail_cnt);
-        /* 先处理异常边界，避免本模块状态机带故障继续运行。 */
         if (ret == NO_ERROR) {
             printf("[传感器][正常] %s LTD/V2 密度=%.3f\r\n", tag, density);
         }
@@ -2405,6 +2560,8 @@ static void __attribute__((unused)) Sensor_CommCheckAndLog(const char *tag)
 /**
  * @brief S后缀通信检查只打印通信结果，不改变B/BE退出条件和全局错误态。
  * @note  只在任务上下文调用；保留进入前的device_state和error_code。
+ *
+ * @param tag 用于区分诊断来源的只读标签文字。
  */
 static void Test_SensorCommCheckAndPrintOnly(const char *tag)
 {
@@ -2439,6 +2596,9 @@ void motor_text_manual_stop(void)
 /**
  * @brief A指令测试专用：按指定方向执行一段低检测运动。
  * @note  运动期间只响应命令切换；不读取扭力、编码器错误或全局错误退出。
+ *
+ * @param run_distance_mm 单个下行行程的目标距离，单位 mm。
+ * @param dir 运动方向。必须使用 MOTOR_DIRECTION_UP 或 MOTOR_DIRECTION_DOWN；函数据此换算符号、目标位置、速度模式或到位条件。
  */
 void motor_text_manual_once(float run_distance_mm, int dir)
 {
@@ -2466,7 +2626,6 @@ void motor_text_manual_once(float run_distance_mm, int dir)
     Test_MotorTextMoveByNoCheck(run_distance_mm, dir);
     printf("%s\t运动已下发\t距离=%.2fmm\r\n", phase_name, run_distance_mm);
 
-    /* 先处理异常边界，避免本模块状态机带故障继续运行。 */
     if (Test_WaitMotorStoppedNoErrorCheck(phase_name) == 0U) {
         Test_MotorTextRecoverDriverAfterCommandSwitch(phase_name, NULL);
         Test_MotorTextExit(&error_snapshot);
@@ -2482,6 +2641,8 @@ void motor_text_manual_once(float run_distance_mm, int dir)
 /**
  * @brief 读取当前有效位置源并返回 mm 快照，供 BJ 点动测试打印前后位置。
  * @note  只在串口调试任务上下文调用；刷新失败由正式运动 API 自行返回错误码。
+ *
+ * @return 返回刷新当前有效位置源后取得的 sensor_position 快照，单位 mm。
  */
 static float Test_MotorJogSnapshotPositionMm(void)
 {
@@ -2495,6 +2656,10 @@ static float Test_MotorJogSnapshotPositionMm(void)
 /**
  * @brief BJ 指令测试专用：初始化电机后直接调用点动相对运动正式接口。
  * @note  该函数不绕过 MotorCtrl_JogMoveAndWait 内部检测，用于现场验证新长距离点动控制方案。
+ *
+ * @param run_distance_mm 单个下行行程的目标距离，单位 mm。
+ * @param dir 运动方向。必须使用 MOTOR_DIRECTION_UP 或 MOTOR_DIRECTION_DOWN；函数据此换算符号、目标位置、速度模式或到位条件。
+ * @param speed_x100 本次调试运动速度，单位 0.01 m/min；0 表示使用当前默认速度。
  */
 void motor_jog_text(float run_distance_mm, int dir, uint32_t speed_x100)
 {
@@ -2513,7 +2678,6 @@ void motor_jog_text(float run_distance_mm, int dir, uint32_t speed_x100)
 
     Test_MotorTextClearIgnoredError();
     ret = MotorCtrl_Init();
-    /* 先处理异常边界，避免本模块状态机带故障继续运行。 */
     if (ret != NO_ERROR) {
         printf("BJ点动测试\t初始化失败\t返回=0x%08lX\r\n", (unsigned long)ret);
         Test_MotorTextExit(&error_snapshot);
@@ -2543,6 +2707,9 @@ void motor_jog_text(float run_distance_mm, int dir, uint32_t speed_x100)
 /**
  * @brief BJP 指令测试专用：初始化电机后直接调用点动绝对位置正式接口。
  * @note  用于验证目标位置、提前降速、越界保护和命令切换等正式 API 行为。
+ *
+ * @param target_mm 目标位置，单位 mm。
+ * @param speed_x100 本次调试运动速度，单位 0.01 m/min；0 表示使用当前默认速度。
  */
 void motor_jog_to_position_text(float target_mm, uint32_t speed_x100)
 {
@@ -2554,7 +2721,6 @@ void motor_jog_to_position_text(float target_mm, uint32_t speed_x100)
 
     Test_MotorTextClearIgnoredError();
     ret = MotorCtrl_Init();
-    /* 先处理异常边界，避免本模块状态机带故障继续运行。 */
     if (ret != NO_ERROR) {
         printf("BJP点动到位测试\t初始化失败\t返回=0x%08lX\r\n", (unsigned long)ret);
         Test_MotorTextExit(&error_snapshot);
@@ -2581,7 +2747,12 @@ void motor_jog_to_position_text(float target_mm, uint32_t speed_x100)
     Test_MotorTextClearIgnoredError();
     Test_MotorTextExit(&error_snapshot);
 }
-/* ========================= 主测试函数 ========================= */
+/**
+ * @brief 按指定距离连续执行下行与回零往返电机测试，并可在每个行程后检查传感器通信。
+ *
+ * @param run_distance_mm 单个下行行程的目标距离，单位 mm。
+ * @param enable_sensor_comm 非零表示每个运动行程后附加一次传感器通信检查，0 表示只测试电机。
+ */
 void motor_text(float run_distance_mm, uint8_t enable_sensor_comm)
 {
     uint32_t loop_cnt = 0U;
@@ -2610,7 +2781,6 @@ void motor_text(float run_distance_mm, uint8_t enable_sensor_comm)
     (void)stpr_writeInt(&stepper, TMC5130_XTARGET, 0);
     Test_MotorTextClearIgnoredError();
     while (1) {
-        /* 先处理异常边界，避免本模块状态机带故障继续运行。 */
         if (Test_ShouldAbortForCommandSwitchNoError()) {
             Test_MotorTextRecoverDriverAfterCommandSwitch("B电机测试", NULL);
             Test_MotorTextExit(&error_snapshot);
@@ -2647,13 +2817,12 @@ void motor_text(float run_distance_mm, uint8_t enable_sensor_comm)
 }
 
 /**
- * @brief 执行本模块中的 motor_text_encoder 逻辑。
+ * @brief 以固定编码器原点和下行目标连续往返测试，支持运动中传感器通信、超时或提前停稳重启及命令切换恢复。
  *
- * @param run_distance_mm 业务参数。
- * @param enable_sensor_comm 业务参数。
- * @param speed_x100 业务参数。
- * @param accel_multiplier 业务参数。
- * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ * @param run_distance_mm 单个下行行程的目标距离，单位 mm。
+ * @param enable_sensor_comm 非零表示每个运动行程后附加一次传感器通信检查，0 表示只测试电机。
+ * @param speed_x100 本次调试运动速度，单位 0.01 m/min；0 表示使用当前默认速度。
+ * @param accel_multiplier BE 调试使用的加速度倍率，非法值会限制到允许档位。
  */
 void motor_text_encoder(float run_distance_mm,
                         uint8_t enable_sensor_comm,
@@ -2715,7 +2884,6 @@ void motor_text_encoder(float run_distance_mm,
            (unsigned int)enable_sensor_comm);
 
     while (1) {
-        /* 先处理异常边界，避免本模块状态机带故障继续运行。 */
         if (Test_ShouldAbortForCommandSwitchNoError()) {
             Test_MotorTextRecoverDriverAfterCommandSwitch("BE编码器测试", &ramp_snapshot);
             Test_MotorTextExit(&error_snapshot);
@@ -2745,7 +2913,6 @@ void motor_text_encoder(float run_distance_mm,
             Test_MotorTextExit(&error_snapshot);
             return;
         }
-        /* 先处理异常边界，避免本模块状态机带故障继续运行。 */
         if (ret != NO_ERROR) {
             printf("BE下行\t阶段异常，先初始化电机再按固定区间重试\t返回=0x%08lX\r\n", (unsigned long)ret);
             if (Test_MotorTextReinitForRestartNoExit("BE下行", &ramp_snapshot, accel_mul) == STATE_SWITCH) {
@@ -2765,7 +2932,6 @@ void motor_text_encoder(float run_distance_mm,
                (long)down_target_encoder,
                Test_EncoderCountToDistanceMm(down_target_encoder - origin_encoder));
 
-        /* 先处理异常边界，避免本模块状态机带故障继续运行。 */
         if (Test_ShouldAbortForCommandSwitchNoError()) {
             Test_MotorTextRecoverDriverAfterCommandSwitch("BE编码器测试", &ramp_snapshot);
             Test_MotorTextExit(&error_snapshot);
@@ -2795,7 +2961,6 @@ void motor_text_encoder(float run_distance_mm,
             Test_MotorTextExit(&error_snapshot);
             return;
         }
-        /* 先处理异常边界，避免本模块状态机带故障继续运行。 */
         if (ret != NO_ERROR) {
             printf("BE上行\t阶段异常，先初始化电机再按固定区间重试\t返回=0x%08lX\r\n", (unsigned long)ret);
             if (Test_MotorTextReinitForRestartNoExit("BE上行", &ramp_snapshot, accel_mul) == STATE_SWITCH) {
@@ -2848,30 +3013,25 @@ void DSM_V2_Test_AllParams(void) {
 	} else
 		printf("读取温度失败\r\n");
 
-	/* 先处理异常边界，避免本模块状态机带故障继续运行。 */
 	if (DSM_V2_Read_Density(&rho) == NO_ERROR) {
 		printf("密度值: %.3f\r\n", rho);
 	} else
 		printf("读取密度失败\r\n");
 
-	/* 先处理异常边界，避免本模块状态机带故障继续运行。 */
 	if (DSM_V2_Read_DynamicViscosity(&mu) == NO_ERROR)
 		printf("动力粘度: %.3f\r\n", mu);
 	else
 		printf("读取动力粘度失败\r\n");
 
-	/* 先处理异常边界，避免本模块状态机带故障继续运行。 */
 	if (DSM_V2_Read_KinematicViscosity(&nu) == NO_ERROR)
 		printf("运动粘度: %.3f\r\n", nu);
 	else
 		printf("读取运动粘度失败\r\n");
 
-    /* 先处理异常边界，避免本模块状态机带故障继续运行。 */
     if (DSM_V2_Read_LevelFrequency(&freq) == NO_ERROR)
         printf("液位频率: %lu Hz\r\n", (unsigned long)freq);
     else printf("读取液位频率失败\r\n");
 
-    /* 先处理异常边界，避免本模块状态机带故障继续运行。 */
     if (DSM_V2_Read_SensorID(&sensor_id) == NO_ERROR)
         printf("传感器号: %lu\r\n", (unsigned long)sensor_id);
     else printf("读取传感器号失败\r\n");
@@ -2942,8 +3102,8 @@ void SensorWireless_CommTest(void)
            (unsigned long)fail_count);
 }
 /**
- * @brief 显示或打印本模块中的 Demo_SinglePointDisplay_ShouldAbort 逻辑。
- * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ * @brief 判断单点数据显示演示是否应因命令切换而退出。
+ * @return 1 表示检测到有效命令切换请求，函数已把设备状态恢复待机并清除演示电机状态，调用方应退出单点展示；0 表示当前没有命令切换请求，可继续演示。
  */
 static uint8_t Demo_SinglePointDisplay_ShouldAbort(void)
 {
@@ -2957,10 +3117,19 @@ static uint8_t Demo_SinglePointDisplay_ShouldAbort(void)
     return 1;
 }
 
-/*
- * 函数用途：构造完整虚拟六字段，并复用正式固定点发布器同步两块结果和对应代际。
- * 调用场景：串口 X 展示在运行到点和稳定刷新阶段生成虚拟样本后。
- * 关键约束：任一发布被命令切换拒绝时返回 0，调用方立即退出展示。
+/**
+ * @brief 构造完整虚拟六字段，并复用正式固定点发布器同步两块结果和对应代际。
+ *
+ * @details 调用场景：串口 X 展示在运行到点和稳定刷新阶段生成虚拟样本后。
+ * @note 关键约束：任一发布被命令切换拒绝时返回 0，调用方立即退出展示。
+ *
+ * @param temperature_raw 温度原始。
+ * @param density_raw 密度原始。
+ * @param pos_01mm 待发布的单点测量位置，单位 0.1 mm。
+ * @param standard_density_raw 密度原始。
+ * @param vcf20_raw 放大 10000 倍保存的无量纲 VCF20 虚拟值，直接写入单点测量记录。
+ * @param weight_density_raw 扭力密度原始。
+ * @return 1 表示完整虚拟六字段已通过正式固定点发布器同步并递增代际；输入或发布失败时返回 0。
  */
 static uint8_t Demo_SinglePointDisplay_PublishResult(uint32_t temperature_raw,
                                                      uint32_t density_raw,
@@ -2985,8 +3154,14 @@ static uint8_t Demo_SinglePointDisplay_PublishResult(uint32_t temperature_raw,
 }
 
 /**
- * @brief 显示或打印本模块中的 Demo_SinglePointDisplayMock 逻辑。
- * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ * @brief 不驱动电机也不读取传感器；先模拟接近测量点，再持续发布带小幅波动的单点显示数据，直至新命令打断。
+ *
+ * 目标位置优先使用单点测量配置；未配置时依次回退到当前有效传感器位置、罐高一半和 1500 mm，并为展示过程构造高于目标点的有效罐高。
+ * 第一阶段把全局设备状态设置为运行到测量点，在六个 500 ms 步骤中从目标上方 300 mm 逐步接近目标，同时发布固定的虚拟温度、密度和调试量。
+ * 到达目标后切换为单点测量中，以十二点波形持续微调位置、温度、密度、标准密度、VCF20、重量密度、频率、幅值和扭力，并每 500 ms 发布一次测量及监测结果。
+ * 任意新命令、命令队列拒绝发布或结果发布失败都会终止展示；本函数不读取真实传感器，也不启动电机。
+ *
+ * @note 该展示会持续覆盖 g_measurement 的设备状态、调试量和单点结果，退出后由后续真实业务流程重新建立测量快照。
  */
 void Demo_SinglePointDisplayMock(void)
 {
@@ -3123,10 +3298,10 @@ void Demo_SinglePointDisplayMock(void)
     }
 }
 /**
- * @brief 执行本模块中的 Test_TMC5130_IsValidGstat 逻辑。
+ * @brief 判断 TMC5130 GSTAT 是否属于测试允许的状态。
  *
- * @param gstat 业务参数。
- * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ * @param gstat TMC5130 GSTAT 寄存器原始值。
+ * @return 1 表示 TMC5130 GSTAT 属于测试允许的状态；0 表示 TMC5130 GSTAT 不属于测试允许的状态。
  */
 static uint8_t Test_TMC5130_IsValidGstat(uint32_t gstat)
 {
@@ -3231,7 +3406,9 @@ void Test_TMC5130_SPI_Static(void)
            (unsigned long)chopconf_read_fail,
            (unsigned long)xactual_read_fail);
 }
-/* 测试主函数 */
+/**
+ * @brief 依次执行 FRAM 读写、设备参数存储和硬件 CRC32 调试测试。
+ */
 void Test_main(void) {
 	Test_FRAM_ReadWrite(); /* 测试FRAM读写 */
 /* motor_text(300.0f, 0U); */

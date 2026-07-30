@@ -40,10 +40,11 @@ static volatile uint8_t s_fault_report_pending = 0U; /* 等待主循环发布故障快照。
 static volatile uint8_t s_recovery_attempts = 0U; /* 当前原因已执行的局部恢复次数。 */
 static volatile PowerMonitorState s_monitor_state = POWER_MONITOR_STATE_STOPPED; /* ADC/DMA链路状态机。 */
 
-/*
- * 函数用途：把电源监控切入禁止运动和禁止普通 FRAM 写入的安全状态。
- * 调用场景：启动失败、真实低压以及 ADC/DMA 运行故障。
- * 关键约束：可在中断上下文调用，只写寄存器和 RAM 标志，不打印、不等待。
+/**
+ * @brief 把电源监控切入禁止运动和禁止普通 FRAM 写入的安全状态。
+ *
+ * @details 调用场景：启动失败、真实低压以及 ADC/DMA 运行故障。
+ * @note 关键约束：可在中断上下文调用，只写寄存器和 RAM 标志，不打印、不等待。
  */
 static void PowerMonitor_ForceSafeState(void)
 {
@@ -53,10 +54,14 @@ static void PowerMonitor_ForceSafeState(void)
     __DMB();
 }
 
-/*
- * 函数用途：返回电源监控故障的升级优先级。
- * 调用场景：同一上电周期出现多个原因时决定对外保留哪个故障码。
- * 关键约束：只允许升级，避免后出现的次要原因覆盖掉电保存或恢复失败。
+/**
+ * @brief 返回电源监控故障的升级优先级。
+ *
+ * @details 调用场景：同一上电周期出现多个原因时决定对外保留哪个故障码。
+ * @note 关键约束：只允许升级，避免后出现的次要原因覆盖掉电保存或恢复失败。
+ *
+ * @param error_code 待记录、转换或判断的错误码。该值是 5 V、24 V 或掉电处理故障，用于优先级比较、锁存和恢复请求。
+ * @return 返回电源故障升级优先级 0 至 6；0 表示无可升级故障，数值越大优先级越高。
  */
 static uint8_t PowerMonitor_GetFaultPriority(uint32_t error_code)
 {
@@ -77,10 +82,13 @@ static uint8_t PowerMonitor_GetFaultPriority(uint32_t error_code)
     }
 }
 
-/*
- * 函数用途：锁存首次故障并按优先级更新当前故障码。
- * 调用场景：启动线程、SysTick、ADC回调和紧急保存报告均可调用。
- * 关键约束：只发布RAM待处理标志并硬禁止，不在中断内打印或进入故障管理器。
+/**
+ * @brief 锁存首次故障并按优先级更新当前故障码。
+ *
+ * @details 调用场景：启动线程、SysTick、ADC回调和紧急保存报告均可调用。
+ * @note 关键约束：只发布RAM待处理标志并硬禁止，不在中断内打印或进入故障管理器。
+ *
+ * @param error_code 待记录、转换或判断的错误码。该值是 5 V、24 V 或掉电处理故障，用于优先级比较、锁存和恢复请求。
  */
 static void PowerMonitor_LatchFault(uint32_t error_code)
 {
@@ -110,10 +118,14 @@ static void PowerMonitor_LatchFault(uint32_t error_code)
     }
 }
 
-/*
- * 函数用途：按当前100k/10k分压假设把ADC计数换算为24V输入毫伏值。
- * 调用场景：上电打印和PWR?查询。
- * 关键约束：换算值用于调试趋势，最终阈值仍需台架实测校准。
+/**
+ * @brief 按当前100k/10k分压假设把ADC计数换算为24V输入毫伏值。
+ *
+ * @details 调用场景：上电打印和PWR?查询。
+ * @note 关键约束：换算值用于调试趋势，最终阈值仍需台架实测校准。
+ *
+ * @param adc_sample ADC1 通道 12 的 12 位原始采样计数。
+ * @return 返回按 VDDA 和 100 kΩ/10 kΩ 分压比四舍五入换算的 24 V 输入电压，单位 mV；超过 ADC 满量程的采样先钳位到满量程。
  */
 static uint32_t PowerMonitor_AdcTo24VMillivolts(uint32_t adc_sample)
 {
@@ -129,10 +141,13 @@ static uint32_t PowerMonitor_AdcTo24VMillivolts(uint32_t adc_sample)
     return (uint32_t)(numerator / POWER_MONITOR_ADC_FULL_SCALE_COUNTS);
 }
 
-/*
- * 函数用途：读取ADC1循环DMA最近一次写入的24V采样值。
- * 调用场景：上电确认、PWR?查询、低压恢复检查和模拟看门狗回调。
- * 关键约束：32位读取在Cortex-M4上原子，不等待DMA、不访问ADC数据寄存器。
+/**
+ * @brief 读取ADC1循环DMA最近一次写入的24V采样值。
+ *
+ * @details 调用场景：上电确认、PWR?查询、低压恢复检查和模拟看门狗回调。
+ * @note 关键约束：32位读取在Cortex-M4上原子，不等待DMA、不访问ADC数据寄存器。
+ *
+ * @return 返回 ADC1 循环 DMA 中最近完成的 24 V 原始采样计数，并同步更新模块缓存。
  */
 static uint32_t PowerMonitor_ReadLatestAdcSample(void)
 {
@@ -144,10 +159,13 @@ static uint32_t PowerMonitor_ReadLatestAdcSample(void)
     return adc_sample;
 }
 
-/*
- * 函数用途：判断ADC循环DMA流是否仍处于硬件使能状态。
- * 调用场景：SysTick监测、恢复验证和PWR?现场诊断。
- * 关键约束：只读取DMA寄存器，不启动、停止或重配DMA。
+/**
+ * @brief 判断ADC循环DMA流是否仍处于硬件使能状态。
+ *
+ * @details 调用场景：SysTick监测、恢复验证和PWR?现场诊断。
+ * @note 关键约束：只读取DMA寄存器，不启动、停止或重配DMA。
+ *
+ * @return 1 表示ADC循环DMA流仍处于硬件使能状态；0 表示ADC循环DMA流已不再处于硬件使能状态。
  */
 static uint8_t PowerMonitor_IsDmaRunning(void)
 {
@@ -157,10 +175,13 @@ static uint8_t PowerMonitor_IsDmaRunning(void)
     return ((hdma_adc1.Instance->CR & DMA_SxCR_EN) != 0U) ? 1U : 0U;
 }
 
-/*
- * 函数用途：判断ADC运行期是否发生过过载。
- * 调用场景：SysTick监测、恢复验证和PWR?现场诊断。
- * 关键约束：HAL错误码具有锁存语义，局部恢复成功前不能忽略。
+/**
+ * @brief 判断ADC运行期是否发生过过载。
+ *
+ * @details 调用场景：SysTick监测、恢复验证和PWR?现场诊断。
+ * @note 关键约束：HAL错误码具有锁存语义，局部恢复成功前不能忽略。
+ *
+ * @return 1 表示 HAL ADC ErrorCode 已记录 HAL_ADC_ERROR_OVR，或 ADC_FLAG_OVR 硬件标志仍置位；0 表示软件错误码和硬件状态均未检测到过载。
  */
 static uint8_t PowerMonitor_HasAdcOverrun(void)
 {
@@ -170,10 +191,13 @@ static uint8_t PowerMonitor_HasAdcOverrun(void)
     return (__HAL_ADC_GET_FLAG(&hadc1, ADC_FLAG_OVR) != RESET) ? 1U : 0U;
 }
 
-/*
- * 函数用途：配置模拟看门狗并启动单样本循环DMA，等待一份新采样。
- * 调用场景：首次启动和主循环局部恢复。
- * 关键约束：只在线程态调用；模拟看门狗中断在采样验证完成后才开放。
+/**
+ * @brief 配置模拟看门狗并启动单样本循环DMA，等待一份新采样。
+ *
+ * @details 调用场景：首次启动和主循环局部恢复。
+ * @note 关键约束：只在线程态调用；模拟看门狗中断在采样验证完成后才开放。
+ *
+ * @return true 表示模拟看门狗配置和单样本循环 DMA 启动成功，首样本已更新，DMA 仍在运行且没有 ADC 溢出；false 表示看门狗配置或 DMA 启动失败、首样本等待超时、DMA 已停止，或检测到 ADC 溢出。
  */
 static bool PowerMonitor_TryStartAdcDma(void)
 {
@@ -231,10 +255,11 @@ static bool PowerMonitor_TryStartAdcDma(void)
     return true;
 }
 
-/*
- * 函数用途：把有效的新采样应用到低压状态机。
- * 调用场景：首次启动或ADC/DMA局部恢复成功后。
- * 关键约束：20V以下触发紧急保存，20V至22V之间只保持安全禁止。
+/**
+ * @brief 把有效的新采样应用到低压状态机。
+ *
+ * @details 调用场景：首次启动或ADC/DMA局部恢复成功后。
+ * @note 关键约束：20V以下触发紧急保存，20V至22V之间只保持安全禁止。
  */
 static void PowerMonitor_ApplyRestartSample(void)
 {
@@ -265,10 +290,13 @@ static void PowerMonitor_ApplyRestartSample(void)
     }
 }
 
-/*
- * 函数用途：配置并启动24V监测，输出首次有效采样值。
- * 调用场景：CPU2业务初始化开始阶段调用一次。
- * 关键约束：失败返回独立初始化故障码，并由主循环继续三次局部恢复。
+/**
+ * @brief 配置并启动24V监测，输出首次有效采样值。
+ *
+ * @details 调用场景：CPU2业务初始化开始阶段调用一次。
+ * @note 关键约束：失败返回独立初始化故障码，并由主循环继续三次局部恢复。
+ *
+ * @return NO_ERROR 表示 ADC/DMA 已启动并取得首个有效 24V 样本；启动配置失败返回 POWER_MONITOR_INIT_FAILED，首样本确认到低压或采样故障时返回对应锁存错误码。
  */
 uint32_t PowerMonitor_Start(void)
 {
@@ -312,10 +340,13 @@ uint32_t PowerMonitor_Start(void)
     return s_latched_fault_code;
 }
 
-/*
- * 函数用途：响应24V低压并投递编码器紧急保存。
- * 调用场景：ADC_IRQHandler通过HAL回调进入。
- * 关键约束：低压期间关闭看门狗中断防止中断风暴；FRAM提交留给PendSV。
+/**
+ * @brief 响应24V低压并投递编码器紧急保存。
+ *
+ * @details 调用场景：ADC_IRQHandler通过HAL回调进入。
+ * @note 关键约束：低压期间关闭看门狗中断防止中断风暴；FRAM提交留给PendSV。
+ *
+ * @param adc_sample ADC1 通道 12 的 12 位原始采样计数。
  */
 void PowerMonitor_Handle24VWatchdogFromISR(uint32_t adc_sample)
 {
@@ -348,10 +379,13 @@ void PowerMonitor_Handle24VWatchdogFromISR(uint32_t adc_sample)
     }
 }
 
-/*
- * 函数用途：记录ADC/DMA监控链路故障并挂起线程态恢复。
- * 调用场景：SysTick或新正式过程入口发现OVR、DMA停止。
- * 关键约束：只记录首次原因、关闭看门狗并硬禁止，不在调用点重启外设。
+/**
+ * @brief 记录ADC/DMA监控链路故障并挂起线程态恢复。
+ *
+ * @details 调用场景：SysTick或新正式过程入口发现OVR、DMA停止。
+ * @note 关键约束：只记录首次原因、关闭看门狗并硬禁止，不在调用点重启外设。
+ *
+ * @param error_code 待记录、转换或判断的错误码。该值是 5 V、24 V 或掉电处理故障，用于优先级比较、锁存和恢复请求。
  */
 static void PowerMonitor_RequestRecovery(uint32_t error_code)
 {
@@ -367,10 +401,11 @@ static void PowerMonitor_RequestRecovery(uint32_t error_code)
     PowerMonitor_LatchFault(error_code);
 }
 
-/*
- * 函数用途：监控ADC/DMA、维持紧急保存投递并统计24V稳定恢复时间。
- * 调用场景：SysTick每1ms调用。
- * 关键约束：不在SysTick内重启ADC/DMA、访问FRAM或打印。
+/**
+ * @brief 监控ADC/DMA、维持紧急保存投递并统计24V稳定恢复时间。
+ *
+ * @details 调用场景：SysTick每1ms调用。
+ * @note 关键约束：不在SysTick内重启ADC/DMA、访问FRAM或打印。
  */
 void PowerMonitor_TickFromISR(void)
 {
@@ -435,10 +470,13 @@ void PowerMonitor_TickFromISR(void)
     }
 }
 
-/*
- * 函数用途：发布待报告故障并执行一次ADC/DMA局部恢复。
- * 调用场景：App_MainLoop每轮最先调用。
- * 关键约束：恢复成功不清故障码，三次失败后保持禁止且不自动重启CPU2。
+/**
+ * @brief 发布待报告故障并执行一次ADC/DMA局部恢复。
+ *
+ * @details 调用场景：App_MainLoop每轮最先调用。
+ * @note 关键约束：恢复成功不清故障码，三次失败后保持禁止且不自动重启CPU2。
+ *
+ * @return NO_ERROR 表示本轮无待报告故障或 ADC/DMA 局部恢复成功；存在待发布电源故障或恢复失败时返回对应锁存错误码。
  */
 uint32_t PowerMonitor_ProcessDeferred(void)
 {
@@ -455,7 +493,6 @@ uint32_t PowerMonitor_ProcessDeferred(void)
         if (s_recovery_attempts < POWER_MONITOR_RECOVERY_RETRY_LIMIT) {
             s_recovery_attempts++;
         }
-        /* 错误 阶段：错误重试 模块：系统 操作：恢复24V电源监测 原因：ErrorLog_GetReasonByCode(recovery_cause) 尝试：s_recovery_attempts/POWER_MONITOR_RECOVERY_RETRY_LIMIT 错误码：recovery_cause 错误名：ErrorLog_GetCodeName(recovery_cause) */
         ErrorLog_Retry(ERROR_LOG_MODULE_SYSTEM,
                        "恢复24V电源监测",
                        ErrorLog_GetReasonByCode(recovery_cause),
@@ -465,7 +502,6 @@ uint32_t PowerMonitor_ProcessDeferred(void)
 
         if (PowerMonitor_TryStartAdcDma()) {
             PowerMonitor_ApplyRestartSample();
-            /* 错误 阶段：重试成功 模块：系统 操作：恢复24V电源监测 原因：ErrorLog_GetReasonByCode(recovery_cause) 尝试：s_recovery_attempts/POWER_MONITOR_RECOVERY_RETRY_LIMIT */
             ErrorLog_Recover(ERROR_LOG_MODULE_SYSTEM,
                              "恢复24V电源监测",
                              ErrorLog_GetReasonByCode(recovery_cause),
@@ -491,10 +527,11 @@ uint32_t PowerMonitor_ProcessDeferred(void)
     return report_code;
 }
 
-/*
- * 函数用途：编码器可信位置建立后开放低压事件的紧急位置保存。
- * 调用场景：启动恢复、回零、人工位置修正以及SysTick自动补布防。
- * 关键约束：位置仍不可信时保持未布防，避免保存无效累计值。
+/**
+ * @brief 编码器可信位置建立后开放低压事件的紧急位置保存。
+ *
+ * @details 调用场景：启动恢复、回零、人工位置修正以及SysTick自动补布防。
+ * @note 关键约束：位置仍不可信时保持未布防，避免保存无效累计值。
  */
 void PowerMonitor_ArmEmergencyPersistence(void)
 {
@@ -522,30 +559,53 @@ void PowerMonitor_ArmEmergencyPersistence(void)
     }
 }
 
+/**
+ * @brief 判断 24 V 低压掉电状态当前是否仍然有效。
+ *
+ * @return true 表示 24 V 低压掉电状态当前仍然有效；false 表示 24 V 低压掉电状态当前已不再有效。
+ */
 bool PowerMonitor_IsPowerFailActive(void)
 {
     return s_power_fail_active != 0U;
 }
 
+/**
+ * @brief 判断电源监控是否仍禁止电机驱动动作。
+ *
+ * @return true 表示电源监控仍禁止电机驱动动作；false 表示电源监控已不再禁止电机驱动动作。
+ */
 bool PowerMonitor_IsMotorInhibited(void)
 {
     return s_motor_power_inhibited != 0U;
 }
 
+/**
+ * @brief 判断电源监控是否已经锁存整机故障码。
+ *
+ * @return true 表示电源监控已经锁存整机故障码；false 表示电源监控尚未锁存整机故障码。
+ */
 bool PowerMonitor_HasLatchedFault(void)
 {
     return s_latched_fault_code != NO_ERROR;
 }
 
+/**
+ * @brief 返回电源监控当前锁存的整机故障码。
+ *
+ * @return 返回当前锁存的电源监控整机错误码；没有锁存故障时返回 NO_ERROR。
+ */
 uint32_t PowerMonitor_GetLatchedFaultCode(void)
 {
     return s_latched_fault_code;
 }
 
-/*
- * 函数用途：检查新正式过程是否可以解除电源监控相关锁存。
- * 调用场景：ProcessMeasureCmd通过即时控制命令过滤后。
- * 关键约束：只有监控健康、DMA运行、无OVR且24V稳定恢复才清除锁存。
+/**
+ * @brief 检查新正式过程是否可以解除电源监控相关锁存。
+ *
+ * @details 调用场景：ProcessMeasureCmd通过即时控制命令过滤后。
+ * @note 关键约束：只有监控健康、DMA运行、无OVR且24V稳定恢复才清除锁存。
+ *
+ * @return 返回新正式过程开始后的当前电源错误码；满足解锁条件时返回 NO_ERROR，否则保留低压、采样或恢复失败锁存。
  */
 uint32_t PowerMonitor_BeginNewProcess(void)
 {
@@ -600,20 +660,32 @@ uint32_t PowerMonitor_BeginNewProcess(void)
     return error_code;
 }
 
+/**
+ * @brief 读取并返回 24 V 监控 ADC 循环 DMA 的最新原始采样值。
+ *
+ * @return 返回最近一次 24 V ADC 原始采样计数；调用时会先从循环 DMA 读取最新值。
+ */
 uint32_t PowerMonitor_GetLast24VAdcSample(void)
 {
     return PowerMonitor_ReadLatestAdcSample();
 }
 
+/**
+ * @brief 将掉电位置紧急保存失败锁存并沿电源故障链发布。
+ */
 void PowerMonitor_ReportEmergencyPersistenceFailure(void)
 {
     PowerMonitor_LatchFault(POWER_LOSS_POSITION_SAVE_FAILED);
 }
 
-/*
- * 函数用途：取得当前24V采样、低压锁存和恢复状态的一致快照。
- * 调用场景：线程态处理PWR?命令。
- * 关键约束：读取DMA最新采样后只短暂关中断复制RAM状态。
+/**
+ * @brief 取得当前24V采样、低压锁存和恢复状态的一致快照。
+ *
+ * @details 调用场景：线程态处理PWR?命令。
+ * @note 关键约束：读取DMA最新采样后只短暂关中断复制RAM状态。
+ *
+ * @param snapshot 电源监测调试快照输出对象；写入采样电压、滤波与阈值状态、故障锁存、保存请求和恢复阶段等诊断字段。
+ * @return true 表示输出指针有效，24V 原始值、滤波值、低压锁存、恢复状态和诊断计数已在临界区内复制为一致快照；false 表示输出指针为空。
  */
 bool PowerMonitor_GetDebugSnapshot(PowerMonitorDebugSnapshot *snapshot)
 {
@@ -654,10 +726,14 @@ bool PowerMonitor_GetDebugSnapshot(PowerMonitorDebugSnapshot *snapshot)
     return true;
 }
 
-/*
- * 函数用途：模拟一次不改变ADC状态的紧急编码器保存请求。
- * 调用场景：线程态处理PWRTEST命令。
- * 关键约束：编码器位置无效或已有紧急请求时拒绝，不直接访问FRAM。
+/**
+ * @brief 模拟一次不改变ADC状态的紧急编码器保存请求。
+ *
+ * @details 调用场景：线程态处理PWRTEST命令。
+ * @note 关键约束：编码器位置无效或已有紧急请求时拒绝，不直接访问FRAM。
+ *
+ * @return 返回请求受理结果；POWER_MONITOR_TEST_QUEUED 表示已入队，POWER_MONITOR_TEST_BUSY
+ *         表示已有请求，POWER_MONITOR_TEST_ENCODER_INVALID 表示编码器位置不可信。
  */
 PowerMonitorTestRequestResult PowerMonitor_RequestEmergencyPersistenceForTest(void)
 {
@@ -687,9 +763,12 @@ PowerMonitorTestRequestResult PowerMonitor_RequestEmergencyPersistenceForTest(vo
     return POWER_MONITOR_TEST_QUEUED;
 }
 
-/*
- * HAL ADC模拟看门狗回调：只接受ADC1事件，并把12bit DR采样交给ISR安全处理路径。
+/**
+ * @brief HAL ADC模拟看门狗回调：只接受ADC1事件，并把12bit DR采样交给ISR安全处理路径。
+ *
  * 回调内不做FRAM事务、日志输出或外设重启。
+ *
+ * @param hadc 触发模拟看门狗回调的 ADC HAL 句柄。
  */
 void HAL_ADC_LevelOutOfWindowCallback(ADC_HandleTypeDef *hadc)
 {

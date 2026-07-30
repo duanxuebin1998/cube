@@ -70,21 +70,25 @@ typedef struct {
 #define ENCODER_STORE_MAGIC                0x454E4344u
 /* 支持读取的历史格式版本号；当前只写V2。 */
 #define ENCODER_STORE_VERSION_V1           1U
+/* 编码器 A/B 持久化记录格式版本 2；加载时只有版本、长度、原因和 CRC 均通过才接受该记录。 */
 #define ENCODER_STORE_VERSION_V2           2U
 /* “COMT”，记录主体读回成功后最后单独写入。 */
 #define ENCODER_STORE_COMMIT_MARKER        0x434F4D54u
 /* “NORM”和“EMER”，区分普通保存与紧急保存证据。 */
 #define ENCODER_PERSIST_REASON_NORMAL       0x4E4F524Du
+/* 编码器紧急掉电保存原因标记 0x454D4552（ASCII 'EMER'）；用于区分正常保存和低压紧急快照。 */
 #define ENCODER_PERSIST_REASON_EMERGENCY    0x454D4552u
 /* 编码器A槽沿用历史FRAM角度地址，避免破坏现场数据布局。 */
 #define FRAM_ENCODER_A_ADDRESS             FRAM_ANGLE_ADDRESS
 /* 每槽预留64字节；V2实际结构必须由编译期断言确认可容纳。 */
 #define FRAM_ENCODER_SLOT_SIZE             0x40U
+/* 编码器持久化 B 槽起始地址；由 A 槽地址加单槽大小计算，保证两个槽连续且不重叠。 */
 #define FRAM_ENCODER_B_ADDRESS             (FRAM_ENCODER_A_ADDRESS + FRAM_ENCODER_SLOT_SIZE)
 /* 独立掉电回执地址，不与A/B记录共享提交标记。 */
 #define FRAM_POWER_SAVE_RECEIPT_ADDRESS    0x1180U
 /* “PWRS”和“COMT”，分别标识回执类型及完整提交。 */
 #define POWER_SAVE_RECEIPT_MAGIC           0x50575253U
+/* 掉电保存回执提交标记 0x434F4D54（ASCII 'COMT'）；最后写入，用于判断回执是否完成原子提交。 */
 #define POWER_SAVE_RECEIPT_COMMIT_MARKER   0x434F4D54U
 /* 上电等待AS5145首个有效帧的最大时间，单位ms。 */
 #define ENCODER_BOOT_READY_TIMEOUT_MS      1500U
@@ -125,7 +129,12 @@ static uint32_t s_encoder_generation = 0U; /* 当前活动记录代次。 */
 
 static void update_sensor_height_from_encoder_impl(bool force_position_update);
 
-/* 计算V1记录受保护字段CRC；magic用于快速识别，不纳入历史CRC兼容范围。 */
+/**
+ * @brief 计算V1记录受保护字段CRC；magic用于快速识别，不纳入历史CRC兼容范围。
+ *
+ * @param record 待校验的 V1 编码器持久化记录；CRC 范围从 version 起至 crc 字段之前。
+ * @return 返回 V1 记录从 version 到 prev_angle 连续字段的硬件 CRC32；magic 和 crc 字段本身不参与计算。
+ */
 static uint32_t EncoderRecordV1CRC(const EncoderPersistRecordV1 *record)
 {
     const uint8_t *base = (const uint8_t *)&record->version;
@@ -134,7 +143,12 @@ static uint32_t EncoderRecordV1CRC(const EncoderPersistRecordV1 *record)
     return CRC32_HAL(base, length);
 }
 
-/* 计算V2记录CRC，覆盖保存原因、累计位置、单圈角和样本序号。 */
+/**
+ * @brief 计算V2记录CRC，覆盖保存原因、累计位置、单圈角和样本序号。
+ *
+ * @param record 待校验的 V2 编码器持久化记录；CRC 范围从 version 起至 crc 字段之前。
+ * @return 返回 V2 记录从 version 到 sample_sequence 连续字段的硬件 CRC32；magic、crc 和最后提交标记不参与计算。
+ */
 static uint32_t EncoderRecordV2CRC(const EncoderPersistRecordV2 *record)
 {
     const uint8_t *base = (const uint8_t *)&record->version;
@@ -143,7 +157,12 @@ static uint32_t EncoderRecordV2CRC(const EncoderPersistRecordV2 *record)
     return CRC32_HAL(base, length);
 }
 
-/* 计算掉电回执CRC；魔术字和最后提交标记不进入CRC范围。 */
+/**
+ * @brief 计算掉电回执CRC；魔术字和最后提交标记不进入CRC范围。
+ *
+ * @param receipt 待计算 CRC 的掉电保存回执；校验范围不包含回执自身的 crc 字段。
+ * @return 返回掉电回执从 source 到 encoder_count 连续字段的硬件 CRC32；magic、crc 和 commit_marker 不参与计算。
+ */
 static uint32_t EncoderPowerSaveReceiptCRC(const EncoderPowerSaveReceipt *receipt)
 {
     const uint8_t *base = (const uint8_t *)&receipt->source;
@@ -153,7 +172,12 @@ static uint32_t EncoderPowerSaveReceiptCRC(const EncoderPowerSaveReceipt *receip
     return CRC32_HAL(base, length);
 }
 
-/* 完整验证当前V2记录，拒绝未知保存原因和未最终提交的半写记录。 */
+/**
+ * @brief 完整验证当前V2记录，拒绝未知保存原因和未最终提交的半写记录。
+ *
+ * @param record 待完整校验的只读 V2 编码器持久化记录，包含结构、代次、保存原因、CRC 和提交标记。
+ * @return true 表示魔术字、V2 版本、结构长度、保存原因、角度范围、提交标记和 CRC 全部有效；false 表示任一字段不符，记录不得用于恢复。
+ */
 static bool EncoderRecordV2IsValid(const EncoderPersistRecordV2 *record)
 {
     if (record->magic != ENCODER_STORE_MAGIC) {
@@ -176,11 +200,25 @@ static bool EncoderRecordV2IsValid(const EncoderPersistRecordV2 *record)
     return EncoderRecordV2CRC(record) == record->crc;
 }
 
+/**
+ * @brief 从指定 FRAM 槽位读取一份 V2 编码器持久化记录。
+ *
+ * @param address 编码器持久化记录所在的 FRAM 槽绝对字节地址；函数从该槽读取固定版本结构并继续校验。
+ * @param record V2 编码器持久化记录输出对象；FRAM 读取成功时写入原始槽内容，尚未执行有效性判断。
+ * @return true 表示指定 FRAM 地址的完整 V2 原始记录已读入 record；false 表示 FRAM_Read 未返回 FRAM_STATUS_OK。
+ */
 static bool EncoderReadV2Raw(uint32_t address, EncoderPersistRecordV2 *record)
 {
     return FRAM_Read((uint8_t *)record, address, sizeof(*record)) == FRAM_STATUS_OK;
 }
 
+/**
+ * @brief 读取并校验旧版 V1 编码器持久化记录。
+ *
+ * @param address 编码器持久化记录所在的 FRAM 槽绝对字节地址；函数从该槽读取固定版本结构并继续校验。
+ * @param record 旧版 V1 编码器记录输出对象；仅在 FRAM 读取且魔术字、版本、角度和 CRC 均有效时可用。
+ * @return true 表示旧版记录已读出，且魔术字、V1 版本、角度范围和 CRC 全部有效；false 表示 FRAM 读取失败或任一完整性检查不通过。
+ */
 static bool EncoderReadV1(uint32_t address, EncoderPersistRecordV1 *record)
 {
     if (FRAM_Read((uint8_t *)record, address, sizeof(*record)) != FRAM_STATUS_OK) {
@@ -194,12 +232,24 @@ static bool EncoderReadV1(uint32_t address, EncoderPersistRecordV1 *record)
     return EncoderRecordV1CRC(record) == record->crc;
 }
 
-/* 以有符号差比较32bit代次，使正常回绕后仍能在半个计数空间内判断新旧。 */
+/**
+ * @brief 以有符号差比较32bit代次，使正常回绕后仍能在半个计数空间内判断新旧。
+ *
+ * @param candidate 待校验或比较的候选值。该值是新读取的 32 位编码器持久化代次，使用有符号差比较以兼容正常回绕。
+ * @param reference 用于比较新旧关系的编码器代次基准值。
+ * @return true 表示 candidate 在 32 位代次的半计数空间内晚于 reference；false 表示两者相等，或 candidate 按回绕规则不比 reference 新。
+ */
 static bool EncoderGenerationIsNewer(uint32_t candidate, uint32_t reference)
 {
     return ((int32_t)(candidate - reference)) > 0;
 }
 
+/**
+ * @brief 校验掉电保存回执的魔术字、提交标记和 CRC。
+ *
+ * @param receipt 待核对魔数、版本、编码器计数和 CRC 的掉电保存回执。
+ * @return true 表示上述校验全部通过；false 表示至少一项校验未通过。
+ */
 static bool EncoderPowerSaveReceiptIsValid(const EncoderPowerSaveReceipt *receipt)
 {
     if ((receipt->magic != POWER_SAVE_RECEIPT_MAGIC) ||
@@ -213,9 +263,12 @@ static bool EncoderPowerSaveReceiptIsValid(const EncoderPowerSaveReceipt *receip
     return EncoderPowerSaveReceiptCRC(receipt) == receipt->crc;
 }
 
-/*
- * 紧急保存开始前先清旧回执提交标记。
+/**
+ * @brief 紧急保存开始前先清旧回执提交标记。
+ *
  * 若后续掉电中断，新启动只能看到不完整回执，不能误用上一次成功证据。
+ *
+ * @return true 表示掉电回执提交标记已清零写入 FRAM；false 表示该标记写入失败，旧回执不能被视为已安全失效。
  */
 static bool EncoderInvalidatePowerSaveReceipt(void)
 {
@@ -229,10 +282,16 @@ static bool EncoderInvalidatePowerSaveReceipt(void)
                       sizeof(cleared_marker)) == FRAM_STATUS_OK;
 }
 
-/*
- * 函数用途：在编码器A/B提交完成后写入独立掉电回执。
- * 调用场景：真实低压和PWRTEST紧急保存。
- * 关键约束：先清提交标记，主体写后读回，最后提交并再次校验。
+/**
+ * @brief 在编码器A/B提交完成后写入独立掉电回执。
+ *
+ * @details 调用场景：真实低压和PWRTEST紧急保存。
+ * @note 关键约束：先清提交标记，主体写后读回，最后提交并再次校验。
+ *
+ * @param source 编码器紧急持久化请求来源；用于区分掉电监测、中断请求和其它触发路径，并写入保存回执与诊断快照。
+ * @param generation 代际。
+ * @param encoder_count 准备写入掉电回执的编码器累计计数。
+ * @return true 表示回执主体写入、主体读回一致、提交标记后写及标记读回均成功；false 表示任一 FRAM 读写失败、主体不一致，或提交标记未正确落盘。
  */
 static bool EncoderWritePowerSaveReceipt(EncoderEmergencyPersistSource source,
                                          uint32_t generation,
@@ -284,10 +343,17 @@ static bool EncoderWritePowerSaveReceipt(EncoderEmergencyPersistSource source,
     return true;
 }
 
-/*
- * 函数用途：向非活动槽提交一份带保存原因的编码器快照。
- * 调用场景：运行期阈值保存、停稳强制保存、旧格式迁移和掉电紧急保存。
- * 关键约束：先写未提交记录，完整读回后最后写提交标记；旧活动槽不被本次覆盖。
+/**
+ * @brief 向非活动槽提交一份带保存原因的编码器快照。
+ *
+ * @details 调用场景：运行期阈值保存、停稳强制保存、旧格式迁移和掉电紧急保存。
+ * @note 关键约束：先写未提交记录，完整读回后最后写提交标记；旧活动槽不被本次覆盖。
+ *
+ * @param encoder_count 准备持久化的编码器累计计数。
+ * @param angle 角度。
+ * @param sample_sequence 序列。
+ * @param persist_reason 编码器快照持久化原因，决定日志和恢复口径。
+ * @return true 表示新记录已写入非活动槽、完整读回一致、提交标记已后写确认，且活动槽/代次/运行快照已原子切换；false 表示任一 FRAM 写读、内容核对或最终有效性检查失败。
  */
 static bool EncoderPersistSnapshot(int32_t encoder_count,
                                    uint16_t angle,
@@ -361,16 +427,28 @@ static bool EncoderPersistSnapshot(int32_t encoder_count,
     return true;
 }
 
-/* 以64bit计算当前值与已保存值的绝对差，避免int32减法在边界溢出。 */
+/**
+ * @brief 以64bit计算当前值与已保存值的绝对差，避免int32减法在边界溢出。
+ *
+ * @return 返回以64bit计算当前值与已保存值的绝对差，避免int32减法在边界溢出；有符号边界按函数内饱和规则处理。
+ */
 static int64_t EncoderUnsavedDistance(void)
 {
     int64_t distance = (int64_t)g_encoder_count - (int64_t)g_encoder_saved;
     return (distance < 0) ? -distance : distance;
 }
 
-/*
- * 在短临界区一次性捕获位置与紧急请求序号。
+/**
+ * @brief 在短临界区一次性捕获位置与紧急请求序号。
+ *
  * 序号用于提交完成时确认本次快照没有误清保存期间新到达的请求。
+ *
+ * @param encoder_count 用于返回本次快照捕获的编码器累计计数。
+ * @param angle 用于返回与编码器累计计数一致的单圈角度原始值。
+ * @param sample_sequence 用于返回本次快照对应的编码器样本序号。
+ * @param emergency_request_sequence 用于返回捕获时观察到的紧急持久化请求序号。
+ * @param emergency_request_active 用于返回捕获时紧急持久化请求是否仍处于活动状态。
+ * @param emergency_source 用于返回紧急持久化请求的触发来源。
  */
 static void EncoderCaptureSnapshot(int32_t *encoder_count,
                                    uint16_t *angle,
@@ -393,8 +471,10 @@ static void EncoderCaptureSnapshot(int32_t *encoder_count,
     }
 }
 
-/*
- * 成功提交后只清除序号仍匹配的紧急请求；随后依据新请求或256计数差重算普通脏标志。
+/**
+ * @brief 成功提交后只清除序号仍匹配的紧急请求；随后依据新请求或256计数差重算普通脏标志。
+ *
+ * @param satisfied_emergency_sequence 紧急状态序列。
  */
 static void EncoderRefreshPendingAfterCommit(uint32_t satisfied_emergency_sequence)
 {
@@ -414,10 +494,14 @@ static void EncoderRefreshPendingAfterCommit(uint32_t satisfied_emergency_sequen
     }
 }
 
-/*
- * 函数用途：记录一次紧急FRAM提交成功快照。
- * 调用场景：PendSV完成紧急编码器持久化后。
- * 关键约束：只写固定RAM结构并置就绪标志，不打印、不阻塞。
+/**
+ * @brief 记录一次紧急FRAM提交成功快照。
+ *
+ * @details 调用场景：PendSV完成紧急编码器持久化后。
+ * @note 关键约束：只写固定RAM结构并置就绪标志，不打印、不阻塞。
+ *
+ * @param source 编码器紧急持久化请求来源；用于区分掉电监测、中断请求和其它触发路径，并写入保存回执与诊断快照。
+ * @param receipt_committed true 表示紧急保存回执已经持久化，false 表示只完成或失败于数据提交阶段。
  */
 static void Encoder_RecordEmergencyPersistenceResult(
     EncoderEmergencyPersistSource source,
@@ -440,10 +524,14 @@ static void Encoder_RecordEmergencyPersistenceResult(
     }
 }
 
-/*
- * 函数用途：在紧急保存达到上限后结束请求并发布失败结果。
- * 调用场景：PendSV 中 A/B 记录或掉电回执连续提交失败。
- * 关键约束：真实低压仍保持电机禁止；测试请求必须释放 FRAM 预约。
+/**
+ * @brief 在紧急保存达到上限后结束请求并发布失败结果。
+ *
+ * @details 调用场景：PendSV 中 A/B 记录或掉电回执连续提交失败。
+ * @note 关键约束：真实低压仍保持电机禁止；测试请求必须释放 FRAM 预约。
+ *
+ * @param satisfied_emergency_sequence 紧急状态序列。
+ * @param emergency_source 紧急状态来源。
  */
 static void EncoderFinishEmergencyFailure(
     uint32_t satisfied_emergency_sequence,
@@ -475,10 +563,11 @@ static void EncoderFinishEmergencyFailure(
     }
 }
 
-/*
- * 函数用途：在PendSV中最多处理一份普通或紧急编码器快照。
- * 调用场景：每次编码器延后事件处理之后。
- * 关键约束：紧急请求先取得FRAM紧急所有权；失败最多跨三次PendSV重试。
+/**
+ * @brief 在PendSV中最多处理一份普通或紧急编码器快照。
+ *
+ * @details 调用场景：每次编码器延后事件处理之后。
+ * @note 关键约束：紧急请求先取得FRAM紧急所有权；失败最多跨三次PendSV重试。
  */
 void Encoder_ProcessDeferredPersistence(void)
 {
@@ -560,10 +649,13 @@ void Encoder_ProcessDeferredPersistence(void)
     }
 }
 
-/*
- * 函数用途：锁存一次掉电紧急保存请求。
- * 调用场景：24V模拟看门狗中断。
- * 关键约束：只置RAM标志，不访问FRAM、不打印、不阻塞。
+/**
+ * @brief 锁存一次掉电紧急保存请求。
+ *
+ * @details 调用场景：24V模拟看门狗中断。
+ * @note 关键约束：只置RAM标志，不访问FRAM、不打印、不阻塞。
+ *
+ * @param source 编码器紧急持久化请求来源；用于区分掉电监测、中断请求和其它触发路径，并写入保存回执与诊断快照。
  */
 void Encoder_RequestEmergencyPersistenceFromISR(EncoderEmergencyPersistSource source)
 {
@@ -584,15 +676,24 @@ void Encoder_RequestEmergencyPersistenceFromISR(EncoderEmergencyPersistSource so
     s_encoder_persist_pending = 1U;
 }
 
+/**
+ * @brief 判断是否仍有待处理的编码器紧急保存请求。
+ *
+ * @return true 表示仍有待处理的编码器紧急保存请求；false 表示已不再有待处理的编码器紧急保存请求。
+ */
 bool Encoder_HasEmergencyPersistencePending(void)
 {
     return s_encoder_emergency_persist_pending != 0U;
 }
 
-/*
- * 函数用途：取得编码器运行值、持久化值和活动槽的一致快照。
- * 调用场景：线程态处理ENC?命令。
- * 关键约束：只短暂关中断复制RAM状态，不读取FRAM。
+/**
+ * @brief 取得编码器运行值、持久化值和活动槽的一致快照。
+ *
+ * @details 调用场景：线程态处理ENC?命令。
+ * @note 关键约束：只短暂关中断复制RAM状态，不读取FRAM。
+ *
+ * @param snapshot 编码器调试快照输出对象；写入最近原始帧、解析结果、持久化请求与回执、掉电处理和错误统计等诊断字段。
+ * @return true 表示输出指针有效，编码器运行值、持久化值和活动槽已在临界区内复制为一致快照；false 表示输出指针为空。
  */
 bool Encoder_GetDebugSnapshot(EncoderDebugSnapshot *snapshot)
 {
@@ -644,10 +745,14 @@ bool Encoder_GetDebugSnapshot(EncoderDebugSnapshot *snapshot)
     return true;
 }
 
-/*
- * 函数用途：消费一份紧急持久化成功快照。
- * 调用场景：主循环输出POWER_SAVE结果。
- * 关键约束：PendSV只发布固定快照，消费方清除一次性就绪标志。
+/**
+ * @brief 消费一份紧急持久化成功快照。
+ *
+ * @details 调用场景：主循环输出POWER_SAVE结果。
+ * @note 关键约束：PendSV只发布固定快照，消费方清除一次性就绪标志。
+ *
+ * @param report 用于接收本次诊断或测量结果的报告对象。
+ * @return true 表示存在一份尚未消费的紧急持久化成功报告，已复制给调用方并清除待报告标志；false 表示输出指针为空或当前没有待消费报告。
  */
 bool Encoder_TakeEmergencyPersistenceReport(EncoderEmergencyPersistenceReport *report)
 {
@@ -673,10 +778,13 @@ bool Encoder_TakeEmergencyPersistenceReport(EncoderEmergencyPersistenceReport *r
     return true;
 }
 
-/*
- * 函数用途：在线程态同步提交当前编码器快照，单次最多尝试三次。
- * 调用场景：停稳、回零、人工修正及受控断电前。
- * 关键约束：紧急请求存在时必须同时提交独立回执；失败不推进已保存基线。
+/**
+ * @brief 在线程态同步提交当前编码器快照，单次最多尝试三次。
+ *
+ * @details 调用场景：停稳、回零、人工修正及受控断电前。
+ * @note 关键约束：紧急请求存在时必须同时提交独立回执；失败不推进已保存基线。
+ *
+ * @return NO_ERROR 表示在线程态三次尝试内取得可信编码器快照并完成持久化；编码器尚未就绪或全部尝试失败时返回 ENCODER_POWERON_FAIL。
  */
 uint32_t Encoder_SaveCurrentPosition(void)
 {
@@ -758,11 +866,24 @@ uint32_t Encoder_SaveCurrentPosition(void)
     return ENCODER_POWERON_FAIL;
 }
 
+/**
+ * @brief 仅在位置恢复有效且 AS5145 已取得有效样本时报告编码器就绪。
+ *
+ * @note 关键约束：在中断或回调上下文中只更新必要状态，避免阻塞和高耗时操作。
+ *
+ * @return true 表示编码器位置恢复有效且 AS5145 已取得至少一帧有效样本；false 表示持久位置尚未建立，或角度传感器仍无有效样本。
+ */
 bool Encoder_IsReady(void)
 {
     return (s_encoder_position_valid != 0U) && AS5145_HasValidSample();
 }
 
+/**
+ * @brief 位置恢复有效时等待 AS5145 首个有效样本；位置无效立即返回 ENCODER_POWERON_FAIL。
+ *
+ * @param timeout_ms 允许等待的最长时间，单位 ms。
+ * @return NO_ERROR 表示已取得首个有效 AS5145 样本；位置恢复无效返回 ENCODER_POWERON_FAIL，等待失败透传 AS5145 错误。
+ */
 uint32_t Encoder_WaitReady(uint32_t timeout_ms)
 {
     if (s_encoder_position_valid == 0U) {
@@ -771,35 +892,59 @@ uint32_t Encoder_WaitReady(uint32_t timeout_ms)
     return AS5145_WaitFirstValidSample(timeout_ms);
 }
 
+/**
+ * @brief 判断 AS5145 是否已有可用于回零的有效样本。
+ *
+ * @return true 表示 AS5145 已有可用于回零的有效样本；false 表示 AS5145 尚未有可用于回零的有效样本。
+ */
 bool Encoder_CanStartHoming(void)
 {
     return AS5145_HasValidSample();
 }
 
+/**
+ * @brief 判断当前累计位置是否来自有效的持久化恢复。
+ *
+ * @return true 表示编码器累计位置有效标志已置位，当前位置来自可信的持久化恢复；false 表示尚未恢复出可信累计位置，调用方不得把当前位置作为已建立基准。
+ */
 bool Encoder_HasTrustedPosition(void)
 {
     return s_encoder_position_valid != 0U;
 }
 
+/**
+ * @brief 判断本次启动是否检测到上次掉电保存失败。
+ *
+ * @return true 表示启动检查已置位掉电保存失败标志，上次紧急位置保存未成功；false 表示本次启动未检测到该失败标志。
+ */
 bool Encoder_DidBootDetectPowerLossSaveFailure(void)
 {
     return s_encoder_boot_power_loss_save_failed != 0U;
 }
 
+/**
+ * @brief 开始新流程前清除 AS5145 的流程级锁存故障。
+ */
 void Encoder_BeginNewProcess(void)
 {
     AS5145_ClearLatchedFaultForNewProcess();
 }
 
+/**
+ * @brief 判断 AS5145 是否仍有锁存故障。
+ *
+ * @return true 表示 AS5145 仍有锁存故障；false 表示 AS5145 已不再有锁存故障。
+ */
 bool Encoder_HasLatchedFault(void)
 {
     return AS5145_IsFaultLatched();
 }
 
-/*
- * 函数用途：上电时把独立回执、当前V2活动记录和MCU复位原因交叉校验。
- * 调用场景：A/B位置恢复完成后、启动编码器定时采集之前。
- * 关键约束：只有BOR/POR下真实ADC回执异常才置23-6；软件测试或软件复位只记录诊断。
+/**
+ * @brief 上电时把独立回执、当前V2活动记录和MCU复位原因交叉校验。
+ *
+ * @details 调用场景：A/B位置恢复完成后、启动编码器定时采集之前。
+ * @note 关键约束：只有BOR/POR下真实ADC回执异常才置23-6；软件测试或软件复位只记录诊断。
  */
 static void EncoderConsumePowerSaveReceipt(void)
 {
@@ -894,10 +1039,13 @@ static void EncoderConsumePowerSaveReceipt(void)
     __HAL_RCC_CLEAR_RESET_FLAGS();
 }
 
-/*
- * 函数用途：按V2、V1优先级恢复编码器位置并启动采集。
- * 调用场景：CPU2业务初始化。
- * 关键约束：V2单槽有效允许降级运行并修复；所有格式都无效时禁止把零值当可信位置。
+/**
+ * @brief 按V2、V1优先级恢复编码器位置并启动采集。
+ *
+ * @details 调用场景：CPU2业务初始化。
+ * @note 关键约束：V2单槽有效允许降级运行并修复；所有格式都无效时禁止把零值当可信位置。
+ *
+ * @return 返回编码器初始化结果码；NO_ERROR 表示位置已从有效记录恢复并启动采集，其他值表示记录或硬件异常。
  */
 uint32_t Initialize_Encoder(void)
 {
@@ -1035,6 +1183,11 @@ uint32_t Initialize_Encoder(void)
 
     return init_error;
 }
+/**
+ * @brief 按单圈角跨零增量更新累计计数和位置快照，并在未保存位移达到阈值时登记延迟持久化。
+ *
+ * @param current_angle 当前值角度。
+ */
 void Update_Encoder_Count(uint16_t current_angle)
 {
     int16_t delta = (int16_t)(current_angle - prev_angle);
@@ -1056,8 +1209,10 @@ void Update_Encoder_Count(uint16_t current_angle)
     }
 }
 
-/*
- * 根据编码器脉冲值更新传感器高度测量。
+/**
+ * @brief 根据编码器脉冲值更新传感器高度测量。
+ *
+ * @param force_position_update true 表示即使位置未变化也强制发布，false 表示允许跳过重复位置。
  */
 static void update_sensor_height_from_encoder_impl(bool force_position_update)
 {
@@ -1077,16 +1232,27 @@ static void update_sensor_height_from_encoder_impl(bool force_position_update)
     g_measurement.debug_data.sensor_position = (int)current_height;
 }
 
+/**
+ * @brief 位置源为编码器时，按累计计数刷新尺带长度和传感器高度。
+ */
 void update_sensor_height_from_encoder(void)
 {
     update_sensor_height_from_encoder_impl(false);
 }
 
+/**
+ * @brief 忽略当前位置源选择，强制按编码器累计计数刷新尺带长度和传感器高度。
+ */
 void update_sensor_height_from_encoder_force(void)
 {
     update_sensor_height_from_encoder_impl(true);
 }
 
+/**
+ * @brief 将编码器累计计数换算为尺带长度，单位 0.1 mm。
+ *
+ * @return 返回尺带长度，单位 0.1 mm的有效长度，单位字节；0 表示没有可供消费的数据。
+ */
 int32_t encoder_get_cable_length_01mm(void)
 {
     const float encoder_value = (float)(-g_encoder_count);
@@ -1097,15 +1263,23 @@ int32_t encoder_get_cable_length_01mm(void)
     return (int32_t)cable_length;
 }
 
+/**
+ * @brief 根据罐高和尺带长度计算传感器位置，单位 0.1 mm。
+ *
+ * @return 返回 tankHeight 减去当前尺带长度得到的有符号传感器位置，单位 0.1 mm；函数不对负值或罐高上限执行钳位。
+ */
 int32_t encoder_get_sensor_position_01mm(void)
 {
     return (int32_t)g_deviceParams.tankHeight - encoder_get_cable_length_01mm();
 }
 
-/*
- * 函数用途：建立编码器零点并同步保存可信位置。
- * 调用场景：回零、零点标定或人工调试完成后。
- * 关键约束：持久化失败必须把错误返回调用方，不能继续宣告标零成功。
+/**
+ * @brief 建立编码器零点并同步保存可信位置。
+ *
+ * @details 调用场景：回零、零点标定或人工调试完成后。
+ * @note 关键约束：持久化失败必须把错误返回调用方，不能继续宣告标零成功。
+ *
+ * @return NO_ERROR 表示零点建立且可信位置已保存；保存步骤失败时返回 Encoder_SaveCurrentPosition 的具体结果。
  */
 uint32_t set_encoder_zero(void)
 {
@@ -1131,6 +1305,11 @@ uint32_t set_encoder_zero(void)
     return NO_ERROR;
 }
 
+/**
+ * @brief 根据目标尺带长度反算编码器计数并持久化，单位 0.1 mm。
+ *
+ * @param cable_length_01mm 待写入编码器位置模型的尺带长度，单位 0.1 mm。
+ */
 void encoder_set_cable_length_01mm(int32_t cable_length_01mm)
 {
     double encoder_value;

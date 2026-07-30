@@ -29,13 +29,13 @@ static double_t GetDensity20ofPMP3(int32_t oilcategory, double_t density, double
 static double_t GetRHOTOmitHydrometer(int32_t oilcategory, double_t density, double_t temperature);
 static double_t GetVCF(int32_t oilcategory, double_t RHO15, double_t T);
 
-/*******************************************************
-* Name    truncd
-* Brief   按指定位数截断小数, 不进行四舍五入
-* Param   value    输入数值
-*         digits   保留的小数位数
-* Return  截断后的结果
-*******************************************************/
+/**
+ * @brief 按指定位数截断小数, 不进行四舍五入。
+ *
+ * @param value 待按指定小数位直接截断的浮点数。
+ * @param digits 需要保留的非负小数位数；函数按该十进制倍率执行截断。
+ * @return 返回按指定小数位直接截断后的浮点值，不执行四舍五入。
+ */
 static double_t truncd(double_t value, int32_t digits)
 {
     int64_t intvalue;
@@ -49,13 +49,13 @@ static double_t truncd(double_t value, int32_t digits)
     return retvalue;
 }
 
-/*******************************************************
-* Name    pow1
-* Brief   计算 x 的 y 次方, 只支持非负整数 y
-* Param   x   底数
-*         y   指数
-* Return  x 的 y 次方
-*******************************************************/
+/**
+ * @brief 计算 x 的 y 次方, 只支持非负整数 y。
+ *
+ * @param x 幂运算底数。
+ * @param y 非负整数指数；负值不在算法支持范围内，当前循环会直接得到 1.0。
+ * @return 返回从 1.0 开始连续乘 y 次 x 得到的结果；y 为 0 时返回 1.0，负指数不受支持且当前实现同样返回 1.0。
+ */
 static double_t pow1(double_t x, int32_t y)
 {
     int32_t i;
@@ -67,13 +67,13 @@ static double_t pow1(double_t x, int32_t y)
     return z;
 }
 
-/*******************************************************
-* Name    roundd
-* Brief   根据指定位数进行四舍五入
-* Param   value    输入值
-*         digits   保留的小数位数
-* Return  四舍五入后的结果
-*******************************************************/
+/**
+ * @brief 根据指定位数进行四舍五入。
+ *
+ * @param value 待按指定小数位执行四舍五入的浮点数。
+ * @param digits 需要保留的非负小数位数。
+ * @return 返回保留 digits 位小数的结果；中间值先乘 10^digits，正数加 0.5、负数减 0.5 后截为 int64_t，因此中点按远离 0 的方向舍入。
+ */
 double_t roundd(double_t value, int32_t digits)
 {
     int64_t intvalue;
@@ -91,13 +91,13 @@ double_t roundd(double_t value, int32_t digits)
     return retvalue;
 }
 
-/*******************************************************
-* Name    roundd5
-* Brief   按 0 和 5 的规则进行四舍五入
-* Param   value    输入值
-*         digits   保留的小数位数
-* Return  结果为最接近 0 或 5 的小数
-*******************************************************/
+/**
+ * @brief 按 0 和 5 的规则进行四舍五入。
+ *
+ * @param value 待按 5 位小数执行四舍五入的浮点数。
+ * @param digits 需要保留的非负小数位数；函数使用五舍六入规则处理边界。
+ * @return 返回按末位 0/5 规则完成四舍五入后的浮点值。
+ */
 static double_t roundd5(double_t value, int32_t digits)
 {
     int32_t valueint;
@@ -127,14 +127,14 @@ static double_t roundd5(double_t value, int32_t digits)
     return retvalue;
 }
 
-/*******************************************************
-* Name    GetRHOT
-* Brief   计算 20 度下的密度计修正密度 RHOT
-* Param   oilcategory   油品类型
-*         density       当前密度
-*         temperature   当前温度
-* Return  RHOT 或错误码
-*******************************************************/
+/**
+ * @brief 校验密度和温度范围，并计算密度计热胀修正后的视密度 RHOT。
+ *
+ * @param oilcategory 保留的油品类别参数；当前 RHOT 密度计热胀修正步骤不按该参数分支。
+ * @param density 测量温度下的密度值，单位 kg/m3；有效范围为 653.0 至 1075.0 kg/m3。
+ * @param temperature 测量温度，单位 ℃；允许上限随密度区间为 95、125 或 150 ℃，下限均为 -100 ℃。
+ * @return 输入有效时返回保留两位小数的密度计热胀修正视密度 RHOT，单位 kg/m3；密度越界返回 ERROR_DENSITY，温度越界返回 ERROR_TEMPERATURE。
+ */
 static double_t GetRHOT(int32_t oilcategory, double_t density, double_t temperature)
 {
     int32_t densitymul;
@@ -175,14 +175,14 @@ static double_t GetRHOT(int32_t oilcategory, double_t density, double_t temperat
     return RHOT;
 }
 
-/*******************************************************
-* Name    GetRHO15
-* Brief   根据 RHOT 和温度计算 15 度标准密度 RHO15
-* Param   oilcategory   油品类型
-*         RHOT          修正后密度
-*         temperature   当前温度
-* Return  RHO15 或错误码
-*******************************************************/
+/**
+ * @brief 根据 RHOT 和温度计算 15 度标准密度 RHO15。
+ *
+ * @param oilcategory 石油产品类别枚举，决定密度与体积修正公式。
+ * @param RHOT 经过密度计热胀修正的测量温度视密度，单位 kg/m3。
+ * @param temperature RHOT 对应的测量温度，单位 ℃。
+ * @return 收敛时返回保留两位小数的 15 ℃ 标准密度 RHO15，单位 kg/m3；迭代达到 1000 次仍不收敛时返回 ERROR_NORESULT。
+ */
 static double_t GetRHO15(int32_t oilcategory, double_t RHOT, double_t temperature)
 {
     int32_t Iteratecount;
@@ -272,14 +272,16 @@ static double_t GetRHO15(int32_t oilcategory, double_t RHOT, double_t temperatur
     return roundd(RHO15, 2);
 }
 
-/*******************************************************
-* Name    GetVcf20
-* Brief   根据 RHO15 和温度计算 VCF20
-* Param   oilcategory   油品类型
-*         RHO15         15 度标准密度
-*         T             当前温度
-* Return  VCF20
-*******************************************************/
+/**
+ * @brief 根据 RHO15 和温度计算 VCF20。
+ *
+ * RHO15 15 度标准密度。
+ *
+ * @param oilcategory 保留的油品类别参数；当前 VCF20 计算按 RHO15 区间选择系数，未直接使用该参数。
+ * @param RHO15 15 ℃ 标准密度，单位 kg/m3。
+ * @param T 待换算到 20 ℃ 基准的测量温度，单位 ℃。
+ * @return 返回由 RHO15 和测量温度计算并保留六位小数的无量纲 VCF20 体积修正系数。
+ */
 static double_t GetVcf20(int32_t oilcategory, double_t RHO15, double_t T)
 {
     double_t RHO15_temp;
@@ -339,14 +341,15 @@ static double_t GetVcf20(int32_t oilcategory, double_t RHO15, double_t T)
     return VCF20;
 }
 
-/*******************************************************
-* Name    GetDensity20ofPMP3
-* Brief   将任意温度下的密度换算为 20 度标准密度
-* Param   oilcategory   油品类型
-*         density       当前密度
-*         temperature   当前温度
-* Return  RHO20 或错误码
-*******************************************************/
+/**
+ * @brief 将任意温度下的密度换算为 20 度标准密度。
+ *
+ * @param oilcategory 石油产品类别枚举，决定密度与体积修正公式。
+ * @param density 测量温度下的密度值，单位 kg/m3。
+ * @param temperature 密度测量温度，单位 ℃。
+ * @return 成功时返回保留一位小数的 20 ℃ 标准密度，单位 kg/m3；输入范围或迭代失败时原样返回 ERROR_DENSITY、ERROR_TEMPERATURE 或
+ *         ERROR_NORESULT。
+ */
 static double_t GetDensity20ofPMP3(int32_t oilcategory, double_t density, double_t temperature)
 {
     double_t RHOT;
@@ -359,7 +362,7 @@ static double_t GetDensity20ofPMP3(int32_t oilcategory, double_t density, double
         return RHOT;
 
     RHO15 = GetRHO15(oilcategory, RHOT, temperature);
-    /* 先处理异常边界，避免密度换算状态机带故障继续运行。 */
+    /* 15 ℃ 密度换算失败时原样传播无结果哨兵，不得继续计算体积修正系数并生成伪造的 20 ℃ 密度。 */
     if (RHO15 == ERROR_NORESULT)
         return RHO15;
 
@@ -369,13 +372,13 @@ static double_t GetDensity20ofPMP3(int32_t oilcategory, double_t density, double
     return roundd(RHO20, 1);
 }
 
-/*******************************************************
-* Name    get_standdensity
-* Brief   以两点插值方式计算 20 度标准密度
-* Param   rhot         当前温度下修正后密度
-*         temperature  当前温度
-* Return  20 度标准密度
-*******************************************************/
+/**
+ * @brief 以两点插值方式计算 20 度标准密度。
+ *
+ * @param rhot 经过密度计热胀修正的测量温度视密度，单位 kg/m3。
+ * @param temperature rhot 对应的测量温度，单位 ℃。
+ * @return 返回以相邻 2 kg/m3 参考点计算的线性插值 20 ℃ 标准密度，单位 kg/m3；函数自身不单独校验下层错误哨兵。
+ */
 double_t get_standdensity(double_t rhot, double_t temperature)
 {
     double_t rhot20;
@@ -399,14 +402,14 @@ double_t get_standdensity(double_t rhot, double_t temperature)
     return rhot20;
 }
 
-/*******************************************************
-* Name    GetRHOTOmitHydrometer
-* Brief   不考虑密度计修正时的 RHOT 计算
-* Param   oilcategory   油品类型
-*         density       密度
-*         temperature   温度
-* Return  RHOT 或错误码
-*******************************************************/
+/**
+ * @brief 不考虑密度计修正时的 RHOT 计算。
+ *
+ * @param oilcategory 保留的油品类别参数；当前省略密度计修正步骤不按该参数分支。
+ * @param density 准备作为 RHOT 使用的密度值，单位 kg/m3；有效范围为 653.0 至 1075.0 kg/m3。
+ * @param temperature 仅用于执行适用范围校验的测量温度，单位 ℃。
+ * @return 输入有效时返回保留一位小数、未施加密度计热胀修正的 RHOT，单位 kg/m3；密度或温度越界时分别返回 ERROR_DENSITY 或 ERROR_TEMPERATURE。
+ */
 static double_t GetRHOTOmitHydrometer(int32_t oilcategory, double_t density, double_t temperature)
 {
     int32_t densitymul;
@@ -434,14 +437,16 @@ static double_t GetRHOTOmitHydrometer(int32_t oilcategory, double_t density, dou
     return RHOT;
 }
 
-/*******************************************************
-* Name    GetVCF
-* Brief   计算体积修正系数 VCF
-* Param   oilcategory   油品类型
-*         RHO15         15 度标准密度
-*         T             当前温度
-* Return  VCF20
-*******************************************************/
+/**
+ * @brief 计算体积修正系数 VCF。
+ *
+ * RHO15 15 度标准密度。
+ *
+ * @param oilcategory 石油产品类别枚举，决定密度与体积修正公式。
+ * @param RHO15 15 ℃ 标准密度值。
+ * @param T 密度换算使用的测量温度，单位 ℃。
+ * @return 返回按密度区间系数计算并最终保留四位小数的无量纲 VCF20 体积修正系数。
+ */
 static double_t GetVCF(int32_t oilcategory, double_t RHO15, double_t T)
 {
     int32_t AreaofDensity;
@@ -515,14 +520,17 @@ static double_t GetVCF(int32_t oilcategory, double_t RHO15, double_t T)
     return roundd(VCF20, 4);
 }
 
-/*******************************************************
-* Name    GetVCF20ofPMP3
-* Brief   计算 20 度的 VCF20
-* Param   oilcategory   油品类型
-*         RHO20         20 度密度
-*         temperature   当前温度
-* Return  VCF20 或错误码
-*******************************************************/
+/**
+ * @brief 计算 20 度的 VCF20。
+ *
+ * RHO20 20 度密度。
+ *
+ * @param oilcategory 石油产品类别枚举，决定密度与体积修正公式。
+ * @param RHO20 20 ℃ 标准密度，单位 kg/m3。
+ * @param temperature 需要计算体积修正系数的目标温度，单位 ℃。
+ * @return 成功时返回由 20 ℃ 标准密度和目标温度计算的无量纲 VCF20；输入范围或迭代失败时返回 ERROR_DENSITY、ERROR_TEMPERATURE 或
+ *         ERROR_NORESULT。
+ */
 double_t GetVCF20ofPMP3(int32_t oilcategory, double_t RHO20, double_t temperature)
 {
     double_t RHOT;
@@ -534,7 +542,7 @@ double_t GetVCF20ofPMP3(int32_t oilcategory, double_t RHO20, double_t temperatur
         return RHOT;
 
     RHO15 = GetRHO15(oilcategory, RHOT, 20.0);
-    /* 先处理异常边界，避免密度换算状态机带故障继续运行。 */
+    /* 无法得到 15 ℃ 标准密度时直接返回无结果哨兵，后续 VCF20 查算不再执行。 */
     if (RHO15 == ERROR_NORESULT)
         return RHO15;
 
@@ -544,13 +552,15 @@ double_t GetVCF20ofPMP3(int32_t oilcategory, double_t RHO20, double_t temperatur
     return VCF20;
 }
 
-/*******************************************************
-* Name    DensityT_Get
-* Brief   根据 VCF20 和 20 度密度计算增量
-* Param   VCF20      体积修正系数放大一万倍
-*         density20  20 度密度 放大十倍
-* Return  Dt         温度修正后的密度增量
-*******************************************************/
+/**
+ * @brief 根据 VCF20 和 20 度密度计算增量。
+ *
+ * density20 20 度密度 放大十倍。
+ *
+ * @param VCF20 放大 10000 倍保存的无量纲 VCF20 体积修正系数。
+ * @param density20 放大 10 倍保存的 20 ℃ 标准密度。
+ * @return density20/10 小于 1.1 时返回 0.0；否则返回 (density20/10 - 1.1) × (VCF20/10000) 得到的密度增量。
+ */
 double_t DensityT_Get(uint32_t VCF20, uint32_t density20)
 {
     double_t vcf20;
@@ -567,13 +577,13 @@ double_t DensityT_Get(uint32_t VCF20, uint32_t density20)
     return Dt;
 }
 
-/*******************************************************
-* Name    RHOTtoRHO
-* Brief   将 RHOT 反算成未修正前的密度
-* Param   density       RHOT 修正后密度
-*         temperature   当前温度
-* Return  RHO 或错误码
-*******************************************************/
+/**
+ * @brief 将 RHOT 反算成未修正前的密度。
+ *
+ * @param density 密度计热胀修正后的 RHOT，单位 kg/m3。
+ * @param temperature RHOT 对应的测量温度，单位 ℃。
+ * @return 输入有效时返回反向消除密度计热胀修正并保留两位小数的密度，单位 kg/m3；密度或温度越界时分别返回 ERROR_DENSITY 或 ERROR_TEMPERATURE。
+ */
 double_t RHOTtoRHO(double_t density, double_t temperature)
 {
     int32_t densitymul;

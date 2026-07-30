@@ -28,10 +28,14 @@
 #define CH9141_AT_VERBOSE_LOG           0U /* CH9141K AT 指令参数：详细日志 日志。 */
 #endif
 
+/* 上电阶段已经收到孤立百分号、等待继续清理 RSSI 文本的标志。 */
 static uint8_t ch9141_boot_percent_pending = 0U;
 
 /**
  * @brief 返回等待模式名称，便于现场日志确认当前 AT 命令在等什么结束条件。
+ *
+ * @param wait_mode CH9141K AT 响应完成判定模式；决定等待 OK、提示符、退出结果或仅收集异步文本。
+ * @return 返回等待模式名称，便于现场日志确认当前 AT 命令在等什么结束条件对应的只读文本首地址；内容由当前输入或语言配置选择，调用方不得修改或释放。
  */
 static const char *CH9141_AT_WaitModeName(CH9141AtWaitMode wait_mode)
 {
@@ -52,6 +56,9 @@ static const char *CH9141_AT_WaitModeName(CH9141AtWaitMode wait_mode)
  * @brief 生成用于打印的 AT 指令文本。
  *
  * LINK/CONN/CONADD 后面的逗号字段是密码，现场日志只保留动作和目标，不直接打印密码。
+ *
+ * @param cmd 命令值。该值是准备发送或记录的 NUL 结尾 CH9141 AT 命令文字，日志会按既定规则隐藏或压缩敏感载荷。
+ * @return 返回存放用于打印的 AT 指令文本的模块静态缓冲区首地址；后续调用可能覆盖其内容，调用方不得释放。
  */
 static const char *CH9141_AT_LogCommand(const char *cmd)
 {
@@ -79,6 +86,8 @@ static const char *CH9141_AT_LogCommand(const char *cmd)
  * @brief 打印 AT 原始响应。
  *
  * 只在失败路径打印原文，避免扫描成功时把候选内容重复刷屏；业务层会打印解析后的候选。
+ *
+ * @param response 只读 CH9141 AT 响应快照；包含原始接收文字、有效长度、ACK/ERROR/提示符及异步 RSSI 等解析标志。
  */
 static void CH9141_AT_PrintRawResponse(const CH9141AtResponse *response)
 {
@@ -94,6 +103,12 @@ static void CH9141_AT_PrintRawResponse(const CH9141AtResponse *response)
  * @brief 打印 AT 指令结果摘要。
  *
  * 现场排查时先看返回码和标志位，失败时再看原始响应，能快速区分无响应、PAIR ERR 和格式异常。
+ *
+ * @param cmd 命令值。该值是准备发送或记录的 NUL 结尾 CH9141 AT 命令文字，日志会按既定规则隐藏或压缩敏感载荷。
+ * @param wait_mode CH9141K AT 响应完成判定模式；决定等待 OK、提示符、退出结果或仅收集异步文本。
+ * @param timeout_ms 允许等待的最长时间，单位 ms。
+ * @param ret 上一层调用返回的结果码。该值与 CH9141 原始响应一并打印，用于区分超时、协议拒绝和成功 ACK。
+ * @param response 只读 CH9141 AT 响应快照；包含原始接收文字、有效长度、ACK/ERROR/提示符及异步 RSSI 等解析标志。
  */
 static void CH9141_AT_PrintResult(const char *cmd,
                                   CH9141AtWaitMode wait_mode,
@@ -101,7 +116,7 @@ static void CH9141_AT_PrintResult(const char *cmd,
                                   uint32_t ret,
                                   const CH9141AtResponse *response)
 {
-    /* 先处理异常边界，避免CH9141K AT 控制状态机带故障继续运行。 */
+    /* 关闭详细日志时省略成功事务，失败和异常响应仍必须打印，避免静默丢失链路诊断。 */
     if ((CH9141_AT_VERBOSE_LOG == 0U) && (ret == NO_ERROR)) {
         return;
     }
@@ -127,7 +142,6 @@ static void CH9141_AT_PrintResult(const char *cmd,
            (unsigned)has_scan_end,
            (unsigned)has_rssi);
 
-    /* 先处理异常边界，避免CH9141K AT 控制状态机带故障继续运行。 */
     if (ret != NO_ERROR) {
         CH9141_AT_PrintRawResponse(response);
     }
@@ -147,6 +161,10 @@ static void CH9141_AT_ClearUartError(void)
  *
  * 匹配会暂时把 UART6 从透传业务切到 AT 配置，进入前必须清掉旧半包。
  * 持续收包时返回通信超时，避免上电检测永久占住主循环。
+ *
+ * @param idle_ms 进入 AT 操作前要求 UART6 连续无数据的空闲时间，单位 ms。
+ * @param total_timeout_ms 本次 UART6 接收排空允许占用的总时限，单位 ms。
+ * @return NO_ERROR 表示 UART6 已连续空闲达到 idle_ms；等待期间检测到命令切换返回 STATE_SWITCH，总时限内始终有残留字节返回 SENSOR_DEVICE_COMM_TIMEOUT。
  */
 static uint32_t CH9141_AT_DrainRxUntilIdle(uint32_t idle_ms, uint32_t total_timeout_ms)
 {
@@ -178,10 +196,9 @@ static uint32_t CH9141_AT_DrainRxUntilIdle(uint32_t idle_ms, uint32_t total_time
 }
 
 /**
- * @brief 清除或复位CH9141K AT 控制中的 CH9141_AT_ResetResponse 逻辑。
+ * @brief 清空 CH9141K AT 响应接收状态和缓存。
  *
- * @param response 业务参数。
- * @note 无返回值，调用方通过全局状态、外设状态或输出参数获取结果。
+ * @param response 可写 CH9141 AT 响应累积对象；函数按职责清空、追加接收字节、更新 ACK/ERROR与提示符标志，或输出完整等待结果。
  */
 void CH9141_AT_ResetResponse(CH9141AtResponse *response)
 {
@@ -198,19 +215,25 @@ void CH9141_AT_ResetResponse(CH9141AtResponse *response)
     response->has_scan_end = 0U;
     response->has_rssi = 0U;
 }
-/*
- * 标记传感器重新上电后的首次百分号透传过滤机会。
- * 调用场景：设备启动或明确重新给传感器供电后，由主循环任务调用。
- * 关键约束：只允许首次进入 AT 失败且响应仅为百分号时重试一次。
+/**
+ * @brief 标记传感器重新上电后的首次百分号透传过滤机会。
+ *
+ * 设备启动或明确重新给传感器供电后，由主循环任务调用。
+ *
+ * @note 只允许首次进入 AT 失败且响应仅为百分号时重试一次。
  */
 void CH9141_AT_NotifySensorPowerOn(void)
 {
     ch9141_boot_percent_pending = 1U;
 }
 
-/*
- * 判断 AT 响应是否只有一个百分号和可选 CR/LF。
+/**
+ * @brief 判断 AT 响应是否只有一个百分号和可选 CR/LF。
+ *
  * 其他任何字节都不能被忽略，避免掩盖真实 AT 异常或串口串扰。
+ *
+ * @param response 只读 CH9141 AT 响应快照；包含原始接收文字、有效长度、ACK/ERROR/提示符及异步 RSSI 等解析标志。
+ * @return 1 表示响应非空，除可选 CR 或 LF 外只包含且恰好包含一个百分号；0 表示响应为空、没有百分号、出现第二个百分号，或包含其它字符。
  */
 static uint8_t CH9141_AT_ResponseIsBootPercentOnly(const CH9141AtResponse *response)
 {
@@ -239,6 +262,10 @@ static uint8_t CH9141_AT_ResponseIsBootPercentOnly(const CH9141AtResponse *respo
 
 /**
  * @brief 判断文本中是否已经出现完整数字，跳过扫描候选的 "1." 序号格式。
+ *
+ * @param text 待检查的 NUL 结尾 CH9141 原始响应文字；函数只做数字、RSSI 或控制行识别，不修改内容。
+ * @param end 待扫描文本区间的尾后指针；函数只在 text 至 end 之间查找数字字符。
+ * @return 1 表示文本中已经出现完整数字，跳过扫描候选的 "1." 序号格式；0 表示文本中尚未出现完整数字，跳过扫描候选的 "1." 序号格式。
  */
 static uint8_t CH9141_AT_TextHasNumber(const char *text, const char *end)
 {
@@ -270,6 +297,9 @@ static uint8_t CH9141_AT_TextHasNumber(const char *text, const char *end)
  * @brief 判断响应文本里是否已经出现完整 RSSI 上报内容。
  *
  * CH9141K RSSI 命令先返回 OK，随后异步输出 RSSI；仅收到不完整的 "-2" 不能提前结束。
+ *
+ * @param text 待检查的 NUL 结尾 CH9141 原始响应文字；函数只做数字、RSSI 或控制行识别，不修改内容。
+ * @return true 表示响应中含有可识别的 RSSI 异步文本前缀；否则返回 false。
  */
 static uint8_t CH9141_AT_ResponseHasRssiText(const char *text)
 {
@@ -345,6 +375,11 @@ static uint8_t CH9141_AT_ResponseHasRssiText(const char *text)
 }
 /**
  * @brief 按独立响应行识别 AT 控制 token，避免扫描数据里的 NAME/文本误触发 OK/ERR。
+ *
+ * @param text 待检查的 NUL 结尾 CH9141 原始响应文字；函数只做数字、RSSI 或控制行识别，不修改内容。
+ * @param token 用于串行化访问共享资源的控制标记。
+ * @param prefix_match 前缀。
+ * @return 1 表示输入文本包含独立 AT 控制行；仅在候选数据字段中出现相似子串时返回 0。
  */
 static uint8_t CH9141_AT_TextHasControlLine(const char *text, const char *token, uint8_t prefix_match)
 {
@@ -398,6 +433,9 @@ static uint8_t CH9141_AT_TextHasControlLine(const char *text, const char *token,
 
 /**
  * @brief 根据已收集文本刷新 AT 响应标志位。
+ *
+ * @param response 可写 CH9141 AT 响应累积对象；函数按职责清空、追加接收字节、更新 ACK/ERROR与提示符标志，或输出完整等待结果。
+ * @param wait_mode CH9141K AT 响应完成判定模式；决定等待 OK、提示符、退出结果或仅收集异步文本。
  */
 static void CH9141_AT_UpdateFlags(CH9141AtResponse *response, CH9141AtWaitMode wait_mode)
 {
@@ -429,6 +467,10 @@ static void CH9141_AT_UpdateFlags(CH9141AtResponse *response, CH9141AtWaitMode w
 
 /**
  * @brief 向响应缓存追加一个字节，并保持字符串以 NUL 结尾。
+ *
+ * @param response 可写 CH9141 AT 响应累积对象；函数按职责清空、追加接收字节、更新 ACK/ERROR与提示符标志，或输出完整等待结果。
+ * @param value 字节使用的输入数值。
+ * @param wait_mode CH9141K AT 响应完成判定模式；决定等待 OK、提示符、退出结果或仅收集异步文本。
  */
 static void CH9141_AT_AppendByte(CH9141AtResponse *response, uint8_t value, CH9141AtWaitMode wait_mode)
 {
@@ -446,6 +488,10 @@ static void CH9141_AT_AppendByte(CH9141AtResponse *response, uint8_t value, CH91
 
 /**
  * @brief 判断当前响应是否满足调用方要求的结束条件。
+ *
+ * @param response 只读 CH9141 AT 响应快照；包含原始接收文字、有效长度、ACK/ERROR/提示符及异步 RSSI 等解析标志。
+ * @param wait_mode CH9141K AT 响应完成判定模式；决定等待 OK、提示符、退出结果或仅收集异步文本。
+ * @return 1 表示响应已经达到当前等待模式的终止条件：扫描结束或错误、连接成功或配对错误、RSSI 到达或错误、普通 ACK 的 OK 或错误；0 表示响应为空，或当前等待模式所需的结束标志尚未出现。
  */
 static uint8_t CH9141_AT_IsComplete(const CH9141AtResponse *response,
                                     CH9141AtWaitMode wait_mode)
@@ -471,6 +517,11 @@ static uint8_t CH9141_AT_IsComplete(const CH9141AtResponse *response,
 
 /**
  * @brief 阻塞收集 AT 响应，直到指定结束条件、命令切换或超时。
+ *
+ * @param wait_mode CH9141K AT 响应完成判定模式；决定等待 OK、提示符、退出结果或仅收集异步文本。
+ * @param timeout_ms 允许等待的最长时间，单位 ms。
+ * @param response 可写 CH9141 AT 响应累积对象；函数按职责清空、追加接收字节、更新 ACK/ERROR与提示符标志，或输出完整等待结果。
+ * @return SYSTEM_CALL_CONDITION_ERROR 表示当前系统状态不允许执行；NO_ERROR 表示操作成功。
  */
 static uint32_t CH9141_AT_CollectResponse(CH9141AtWaitMode wait_mode,
                                           uint32_t timeout_ms,
@@ -511,10 +562,13 @@ static uint32_t CH9141_AT_CollectResponse(CH9141AtWaitMode wait_mode,
     return SENSOR_DEVICE_COMM_TIMEOUT;
 }
 
-/*
- * 函数用途：AT 入口失败或被命令切换打断后，把 CH9141K 和 UART6 尽量恢复到透传可用状态。
- * 调用场景：CH9141_AT_EnterSoftwareMode() 的失败出口；只在主循环任务上下文调用。
- * 关键约束：仅在 AT... 已经发出且可能进入 AT 模式时发送 AT+EXIT，避免无谓污染透传传感器链路。
+/**
+ * @brief AT 入口失败或被命令切换打断后，把 CH9141K 和 UART6 尽量恢复到透传可用状态。
+ *
+ * @details 调用场景：CH9141_AT_EnterSoftwareMode() 的失败出口；只在主循环任务上下文调用。
+ * @note 关键约束：仅在 AT... 已经发出且可能进入 AT 模式时发送 AT+EXIT，避免无谓污染透传传感器链路。
+ *
+ * @param send_exit true 表示恢复透明传输前先发送退出 AT 模式命令，false 表示只恢复串口状态。
  */
 static void CH9141_AT_RecoverTransparentMode(uint8_t send_exit)
 {
@@ -536,16 +590,13 @@ static void CH9141_AT_RecoverTransparentMode(uint8_t send_exit)
                                      CH9141_AT_PRE_COMMAND_DRAIN_TIMEOUT_MS);
     CH9141_AT_ClearUartError();
 }
+
 /**
- * @brief 执行CH9141K AT 控制中的 CH9141_AT_PrepareUart6 逻辑。
+ * @brief 在 RSSI 查询正常清理失败后，强制关闭异步上报并退出 AT 模式。
  *
- * @param idle_ms 业务参数。
- * @return 状态码、计数值或协议数值，具体含义由调用点约定。
- */
-/*
- * 函数用途：在 RSSI 查询正常清理失败后，强制关闭异步上报并退出 AT 模式。
- * 调用场景：无线连接状态查询已进入 AT 模式，但 RSSI OFF 或 AT EXIT 未得到完整应答。
- * 关键约束：忽略命令切换以完成 UART6 清场；只允许在主循环任务上下文调用。
+ * 无线连接状态查询已进入 AT 模式，但 RSSI OFF 或 AT EXIT 未得到完整应答。
+ *
+ * @note 忽略命令切换以完成 UART6 清场；只允许在主循环任务上下文调用。
  */
 void CH9141_AT_RecoverRssiQuery(void)
 {
@@ -578,6 +629,12 @@ void CH9141_AT_RecoverRssiQuery(void)
     CH9141_AT_ClearUartError();
 }
 
+/**
+ * @brief 中止 UART6 上的安全协议和 DMA 收发，清场到连续空闲后再进入 AT 操作。
+ *
+ * @param idle_ms 清场结束前 UART6 必须连续保持无数据的时间，单位 ms。
+ * @return 返回清场结果码；NO_ERROR 表示 UART6 已达到连续空闲，其他值表示超时或通信错误。
+ */
 uint32_t CH9141_AT_PrepareUart6(uint32_t idle_ms)
 {
     /* 切换到 CH9141 AT 前先清除安全协议同步传输状态，避免共享 UART6 保留忙标志。 */
@@ -598,10 +655,10 @@ uint32_t CH9141_AT_PrepareUart6(uint32_t idle_ms)
 
 
 /**
- * @brief 执行CH9141K AT 控制中的 CH9141_AT_EnterSoftwareMode 逻辑。
+ * @brief 准备 UART6 后进入 CH9141K 软件 AT 模式，失败时重试并恢复透传。
  *
- * @param response 业务参数。
- * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ * @param response 可写 CH9141 AT 响应累积对象；函数按职责清空、追加接收字节、更新 ACK/ERROR与提示符标志，或输出完整等待结果。
+ * @return NO_ERROR 表示 UART6 清理、软件 AT 进入和提示符确认成功；其他值为排空、发送、异步等待、命令切换或恢复透传阶段保留下来的具体错误码。
  */
 uint32_t CH9141_AT_EnterSoftwareMode(CH9141AtResponse *response)
 {
@@ -612,7 +669,6 @@ uint32_t CH9141_AT_EnterSoftwareMode(CH9141AtResponse *response)
         printf("CH9141K AT\t进入软件AT模式\r\n");
     }
     ret = CH9141_AT_PrepareUart6(CH9141_AT_SOFTWARE_IDLE_MS);
-    /* 先处理异常边界，避免CH9141K AT 控制状态机带故障继续运行。 */
     if (ret != NO_ERROR) {
         ch9141_boot_percent_pending = 0U;
         return ret;
@@ -633,7 +689,6 @@ uint32_t CH9141_AT_EnterSoftwareMode(CH9141AtResponse *response)
                (response->has_ok == 0U) &&
                (response->has_err == 0U)) {
         ch9141_boot_percent_pending = 0U;
-        /* 错误 阶段：错误重试 模块：滑环通信 操作：进入蓝牙AT模式 原因：ErrorLog_GetReasonByCode(ret) 尝试：1/1 错误码：ret 错误名：ErrorLog_GetCodeName(ret) */
         ErrorLog_Retry(ERROR_LOG_MODULE_SLIPRING_COMM,
                        "进入蓝牙AT模式",
                        ErrorLog_GetReasonByCode(ret),
@@ -651,7 +706,6 @@ uint32_t CH9141_AT_EnterSoftwareMode(CH9141AtResponse *response)
                                         response);
         }
         if (ret == NO_ERROR) {
-            /* 错误 阶段：重试成功 模块：滑环通信 操作：进入蓝牙AT模式 原因：上电AT响应恢复 尝试：1/1 */
             ErrorLog_Recover(ERROR_LOG_MODULE_SLIPRING_COMM,
                              "进入蓝牙AT模式",
                              "上电AT响应恢复",
@@ -682,12 +736,12 @@ uint32_t CH9141_AT_EnterSoftwareMode(CH9141AtResponse *response)
 
 
 /**
- * @brief 执行CH9141K AT 控制中的 CH9141_AT_WaitAsync 逻辑。
+ * @brief 等待并解析 CH9141K 后续异步上报，不发送新命令。
  *
  * @param wait_mode 工作模式。
- * @param timeout_ms 业务参数。
- * @param response 业务参数。
- * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ * @param timeout_ms 允许等待的最长时间，单位 ms。
+ * @param response 可写 CH9141 AT 响应累积对象；函数按职责清空、追加接收字节、更新 ACK/ERROR与提示符标志，或输出完整等待结果。
+ * @return NO_ERROR 表示在 timeout_ms 内收到 wait_mode 要求的完整异步结果；response 为空或模式无效返回 SYSTEM_CALL_CONDITION_ERROR，其他值为UART6 接收、超时、ERROR 响应或命令切换错误。
  */
 uint32_t CH9141_AT_WaitAsync(CH9141AtWaitMode wait_mode,
                              uint32_t timeout_ms,
@@ -715,13 +769,13 @@ uint32_t CH9141_AT_WaitAsync(CH9141AtWaitMode wait_mode,
 
 
 /**
- * @brief 发送CH9141K AT 控制中的 CH9141_AT_SendCommand 逻辑。
+ * @brief 清空残留接收数据，发送一条 AT 命令并按等待模式收集响应。
  *
- * @param cmd 命令值。
+ * @param cmd 命令值。该值是准备发送或记录的 NUL 结尾 CH9141 AT 命令文字，日志会按既定规则隐藏或压缩敏感载荷。
  * @param wait_mode 工作模式。
- * @param timeout_ms 业务参数。
- * @param response 业务参数。
- * @return 状态码、计数值或协议数值，具体含义由调用点约定。
+ * @param timeout_ms 允许等待的最长时间，单位 ms。
+ * @param response 可写 CH9141 AT 响应累积对象；函数按职责清空、追加接收字节、更新 ACK/ERROR与提示符标志，或输出完整等待结果。
+ * @return NO_ERROR 表示残留数据已清理、命令已发送并收到 wait_mode 要求的响应；命令或响应对象无效返回 SYSTEM_CALL_CONDITION_ERROR，其他值为排空、UART6 发送、响应等待、超时、ERROR 或命令切换错误。
  */
 uint32_t CH9141_AT_SendCommand(const char *cmd,
                                CH9141AtWaitMode wait_mode,
@@ -756,14 +810,14 @@ uint32_t CH9141_AT_SendCommand(const char *cmd,
     }
 
     cmd_len = (uint16_t)strlen(cmd);
-    /* 先处理异常边界，避免CH9141K AT 控制状态机带故障继续运行。 */
+    /* AT 命令正文发送失败时清理 UART6 硬件错误并立即返回，不得继续发送行结束符或等待不存在的应答。 */
     if (HAL_UART_Transmit(&huart6, (uint8_t *)cmd, cmd_len, CH9141_AT_COMMAND_TX_TIMEOUT_MS) != HAL_OK) {
         CH9141_AT_ClearUartError();
         ret = COMM_UART_TRANSFER_ERROR;
         CH9141_AT_PrintResult(cmd, wait_mode, timeout_ms, ret, response);
         return ret;
     }
-    /* 先处理异常边界，避免CH9141K AT 控制状态机带故障继续运行。 */
+    /* 命令正文成功但 CRLF 发送失败仍属于不完整 AT 帧，清理 UART6 后按传输错误返回。 */
     if (HAL_UART_Transmit(&huart6, (uint8_t *)line_end, 2U, CH9141_AT_COMMAND_TX_TIMEOUT_MS) != HAL_OK) {
         CH9141_AT_ClearUartError();
         ret = COMM_UART_TRANSFER_ERROR;
