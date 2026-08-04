@@ -2221,6 +2221,8 @@ void CorrectOilLevelProcess(void) {
         return;
     }
     g_deviceParams.tankHeight = (uint32_t)tank_height;
+    /* 液位罐高变化后立即归一化 AO 量程，避免旧量程阻塞后续命令。 */
+    (void)normalize_ao_params_after_write();
     DeviceCommandArguments_ClearIfUnchanged(DEVICE_COMMAND_ARG_CALIBRATE_OIL_LEVEL); /* 未被后续写入时清零 */
     printf("液位流程\t标定完成，罐高设置为：%lu(0.1mm)\r\n", (unsigned long)g_deviceParams.tankHeight);
     MotorCtrl_RefreshPositionFromActiveSource();  /* 修正罐高后按当前记步源刷新当前位置 */

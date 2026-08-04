@@ -12,7 +12,7 @@
 | --- | --- | --- |
 | `EH_Proservo_NMS81_Functional_Safety_Manual_FY01100G_2023.pdf` | Functional Safety Manual - Proservo NMS81，文件号 FY01100G/00/EN/01.23-00，日期 2023-06-12 | 主来源，参考安全手册结构和使用限制 |
 | `SIL认证文档整理_NMS8x_NMS81.html` | NMS8x 证书和 NMS81 安全手册的中文整理 | 快速导读，辅助理解术语、参数、proof test 和项目检查清单 |
-| `../../../NMS81案例对CUBE_SIL认证和软件架构的启发.md` | CUBE 视角的整理和架构启发 | 本工程后续 SIL 资料补强入口 |
+| `../../../02_软件架构/NMS81案例对CUBE_SIL认证和软件架构的启发.md` | CUBE 视角的整理和架构启发 | 本工程后续 SIL 资料补强入口 |
 
 ## 使用边界
 

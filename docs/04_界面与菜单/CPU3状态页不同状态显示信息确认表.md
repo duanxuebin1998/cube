@@ -1,12 +1,12 @@
 # CPU3状态页不同状态显示信息确认表
 
-日期：2026-07-23
+日期：2026-08-03
 
-适用版本：最新正式固件组合为共享协议 `30`、CPU2 `V1.35.0.0` / CPU3 `V1.35.0.0`。协议30在协议29故障码治理口径上新增23类整机供电与电源监控故障；协议21及更早固件必须按对应CPU2历史页解释故障编号，协议22～29也应按各自CPU2版本选择历史故障表，协议30不提供旧故障码别名或翻译。
+适用版本：最新正式固件组合为共享协议 `31`、CPU2 `V1.36.2.0` / CPU3 `V1.36.0.0`；协议31首个正式组合为双端`V1.36.0.0`。协议30在协议29故障码治理口径上新增23类整机供电与电源监控故障，协议31沿用该故障码口径并在读取部件参数结果页增加Newhall扭力模块温度。协议21及更早固件必须按对应CPU2历史页解释故障编号，协议22～30也应按各自CPU2版本选择历史故障表，协议31不提供旧故障码别名或翻译。
 
 源码依据：`LTD_DISPLAY_CPU3/Application/display/display.c`、`LTD_DISPLAY_CPU3/Communication/internal/main_board_modbus/cpu2_communicate.c`、`LTD_DISPLAY_CPU3/Application/system_param/system_parameter.h`、`LTD_MAIN_CPU2/Services/Sensor/sensor.c`
 
-故障状态下，屏幕使用十进制“类别代码-故障码”格式，例如 `13-3`。当前有故障码的类别为11电机驱动、12编码器、13传感器与密度、14零点与位置检测、15测量过程、17参数与存储、18扭力检测、20设备通信链路、21模拟输出与自检、22系统与软件。`13-2`显示“震动管频率异常”；`12-11`不再定义或显示。完整说明以 `../00_构建与版本/故障码/LTD故障代码统一表.xlsx` 为准。
+故障状态下，屏幕使用十进制“类别代码-故障码”格式，例如 `13-3`。当前有故障码的类别为11电机驱动、12编码器、13传感器与密度、14零点与位置检测、15测量过程、17参数与存储、18扭力检测、20设备通信链路、21模拟输出与自检、22系统与软件、23整机供电与电源监控。`13-2`显示“震动管频率异常”；`12-11`不再定义或显示。完整说明以 `../00_构建与版本/故障码/LTD故障代码统一表.xlsx` 为准。
 
 ## 1. 显示规则总览
 
@@ -20,6 +20,7 @@ CPU3 状态页第一行固定显示设备主状态文字。协议27的维护模�
 | 温度 | 当前上下文有温度源，且温度 `> 0` 且 `< 40000` | 单点测量、单点监测或分布平均温度；LTD 密度分布测量中显示 `density_distribution.average_temperature`；读取参数完成显示 `debug_data.temperature` | 显示值为 `temperature - 20000`，小数 2 位，单位 `℃` |
 | 位置 | 正常状态页路径下固定显示 | `debug_data.sensor_position` | `0.1 mm`；值为 `0` 时也显示 |
 | 扭力 | 正常状态页路径下固定显示 | `debug_data.current_weight` | 整数显示，无明确单位；值为 `0` 时也显示 |
+| 扭温 | 读取部件参数完成态固定占一项 | `debug_data.torque_temperature_bits` | 按IEEE754单精度原始位解释，有限且在`-999.99～999.99 ℃`内时四舍五入显示2位小数；NaN、无穷或越界时显示`--.--` |
 | 频率 | 液位过程/液位跟随状态，或读取参数完成，且当前频率有效 | 液位过程取 `oil_measurement.current_frequency` 或 `debug_data.frequency`；读取参数完成取 `debug_data.frequency` | `Hz` |
 | 电容 | 水位过程/水位跟随状态，或读取参数完成，且当前电容有效 | 水位过程取 `water_measurement.current_capacitance`；读取参数完成取 `debug_data.water_capacitance_x10` | 显示为 0.1pF 口径，小数 1 位 |
 | X/Y角 | 读取参数完成时只要求角度不为 `0`；罐高上下文仍要求 `bottom_detect_mode != 0` 且角度不为 `0` | `debug_data.angle_x` / `debug_data.angle_y` | 原始值为角度 `x100`，小数 2 位，单位 `°` |
@@ -77,7 +78,7 @@ CPU3 状态页第一行固定显示设备主状态文字。协议27的维护模�
 | `STATE_WARTSILA_DENSITY_OVER` | 分布测量完成 | 状态、液位、平均密度、平均温度 | `density_distribution.Density_oil_level`、`average_density`、`average_temperature` | 当前实现不显示测点数 |
 | `STATE_SYNTHETICING` | 综合过程/运动调试 | 状态、位置、扭力 | `debug_data.sensor_position`、`debug_data.current_weight` | 保守显示过程量，不显示旧业务结果 |
 | `STATE_SYNTHETICING_OVER` | 综合完成 | 状态、液位、水位、平均密度、平均温度 | `oil_measurement.oil_level`、`water_measurement.water_level`、`density_distribution.average_density`、`average_temperature` | OLED 分页显示；水位为 `0` 时隐藏 |
-| `STATE_READPARAMETEROVER` | 读取参数完成/持续刷新 | 状态、位置、扭力、温度、频率、电容、X角、Y角、RSSI | `debug_data.sensor_position`、`debug_data.current_weight`、`debug_data.temperature`、`debug_data.frequency`、`debug_data.water_capacitance_x10`、`debug_data.angle_x/y`、`wireless_pairing_status.rssi_valid/rssi` | CPU2 `CMD_ReadPartParams()` 在该状态内每 1s 刷新部件参数，RSSI 快照按 5s 节流刷新；读取参数态的 X/Y 角不再受 `bottom_detect_mode` 限制；显示侧展示最新部件参数快照，不混用液位、水位、罐高等历史业务结果 |
+| `STATE_READPARAMETEROVER` | 读取参数完成/持续刷新 | 状态、位置、扭力、扭温、温度、频率、电容、X角、Y角、RSSI | `debug_data.sensor_position`、`debug_data.current_weight`、`debug_data.torque_temperature_bits`、`debug_data.temperature`、`debug_data.frequency`、`debug_data.water_capacitance_x10`、`debug_data.angle_x/y`、`wireless_pairing_status.rssi_valid/rssi` | CPU2 `CMD_ReadPartParams()` 在该状态内每 1s 刷新部件参数，RSSI 快照按 5s 节流刷新；扭温由协议31共享，固定占位且无效时显示`--.--`；读取参数态的 X/Y 角不再受 `bottom_detect_mode` 限制；显示侧展示最新部件参数快照，不混用液位、水位、罐高等历史业务结果 |
 | `STATE_FINDBOTTOM` | 罐高过程 | 状态、位置、扭力、X角、Y角 | `debug_data.sensor_position`、`debug_data.current_weight`、`debug_data.angle_x/y` | 角度需 `bottom_detect_mode != 0` |
 | `STATE_CALIBRATE_TANKHEIGHTING` | 罐高过程 | 状态、位置、扭力、X角、Y角 | `debug_data.sensor_position`、`debug_data.current_weight`、`debug_data.angle_x/y` | 角度需 `bottom_detect_mode != 0` |
 | `STATE_FINDBOTTOM_OVER` | 罐高完成 | 状态、位置、扭力、X角、Y角、罐高 | `debug_data`、`height_measurement.current_real_height` | 罐高不为 `0` 时显示 |
@@ -138,6 +139,6 @@ CPU3 状态页第一行固定显示设备主状态文字。协议27的维护模�
 | 分布测点数 | 分布完成态当前不显示 `measurement_points` | OLED 行数不足时是否需要显示点数，以及优先级 |
 | 待机最近结果 | `STATE_STANDBY` 当前不显示最近测量结果 | 是否新增“最近”来源标签和本地缓存 |
 | CPU2通信超时故障 | 状态快照、完整参数快照、固定点快照、当前连接协议快照、连续请求失败和故障恢复锁存已拆分；普通运行态只依赖状态、协议兼容和无通信故障，完整参数与固定点结果分别使用独立门禁。已建立快照后，第1～2次失败保留快照并重试，第3次失败才清空公开快照并完整重同步，连续第10次未获得合法响应进入 `STATE_ERROR`，错误码 `0x00140007`，屏幕显示 `20-7`。上电或恢复先独立读取`0x0010~0x0011`协议字段；协议不匹配时只保留版本心跳并显示“协议版本不匹配”。已发起的非命令FC16未取得合法响应会立即关闭参数快照；普通命令不确定失败不再触发全量参数刷新，恢复出厂仍按例外强制刷新。主循环可调度时按100 ms门限检查轮询，外部流量不能永久饿死CPU2 | 先建立完整快照，再分别复测第1、2、3、9、10次连续失败；确认前两次不退回通讯尝试页，第3次开始完整重同步，第10次显示20-7；覆盖超时、非法帧、UART/TX失败；固定点握手未完成时确认普通状态/错误码/液位可读、固定点字段及混合读取返回Busy、`0x1140`起分布汇总不受固定点门禁；对参数写和普通命令分别注入ACK丢失，确认只有参数写关闭完整参数快照，恢复出厂仍触发全量刷新；持续外部流量下记录含1000 ms同步阻塞在内的最坏轮询间隔 |
-| 读取参数页分页 | 读取参数完成态当前包含位置、扭力、温度、频率、电容、X/Y角、RSSI，超过一屏时按状态页分页显示 | 现场确认翻页操作是否足够直观 |
+| 读取参数页分页 | 读取参数完成态当前包含位置、扭力、扭温、温度、频率、电容、X/Y角、RSSI；扭温在协议31中固定占一项，无效时显示`--.--`，全部项目超过一屏时按状态页分页显示 | 现场确认翻页操作是否足够直观，并用有效温度、NaN、无穷和越界位模式复核扭温占位与翻页稳定性 |
 | RSSI 无效值 | `rssi_valid == 0` 时显示 `RSSI:N/A`；RSSI 查询只读当前连接，不扫描、不断开、不保存默认连接 | 现场确认是否需要在无效时额外显示错误码或连接状态 |
 | 设置菜单空闲退出 | CPU3 设置菜单 120 秒无按键后自动返回状态页，屏幕亮度/息屏等显示设置生效后仍按该超时规则处理 | 现场确认配置页长时间无人操作时退出状态页是否符合调试习惯 |

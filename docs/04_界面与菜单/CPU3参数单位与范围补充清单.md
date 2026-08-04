@@ -1,6 +1,6 @@
 # CPU3参数单位与范围补充清单
 
-日期：2026-07-22
+日期：2026-08-03
 
 ## 1. 结论
 
@@ -14,8 +14,8 @@
 - 暂不启用新的静态范围：罐高、盲区、分布上下限、单点位置、电机距离等依赖现场配置或其它参数，不适合直接写死范围。
 - 本轮已从源码确认：电机限速为 `0.01m/min`，协议 13 起液位找液/滞后阈值按密度阈值 `kg/m3 x100` 保存，旧频率找液路径由 CPU2 折算回历史 Hz 阈值使用；运行态角度为 `0.01°`，探底角度阈值为 `°`，水位阈值类电容为 `pF` 且参数原始值 `x1000`，零点电容为 `0.1pF`，磁通量 D/T 本质为密度/温度修正量。
 - 已完成密度两位小数口径整改：CPU2/CPU3 共享密度 raw 按 `kg/m3 x100` 解释，CPU3 状态页和参数菜单按两位小数显示；DSM/Wartsila 外部协议在边界继续保持原 `x10` 口径。
-- CPU3本地参数结构已继续演进，当前`CPU3_PARAM_VERSION`为`0x0007`，并保留V3～V6迁移路径；CPU2设备参数和CPU2/CPU3共享协议仍按协议文档单独维护。最新正式组合为CPU2/CPU3 V1.35.0.0、`DEVICE_PROTOCOL_VERSION = 30`；协议30沿用协议29的3000.00 kg/m³密度手输上限，不改变CPU3本机FRAM参数布局。
-- 已同步读取部件参数状态页口径：X/Y 角按 `debug_data.angle_x/y` 的角度 `x100` 显示，读取参数态不受 `bottom_detect_mode` 限制；蓝牙 RSSI 为运行态字段，单位 `dB`，`rssi_valid == 0` 时显示 `RSSI:N/A`，不属于 `param_meta[]` 可写参数。
+- CPU3本地参数结构已继续演进，当前`CPU3_PARAM_VERSION`为`0x0007`，并保留V3～V6迁移路径；CPU2设备参数和CPU2/CPU3共享协议仍按协议文档单独维护。最新正式组合为CPU2 `V1.36.2.0` / CPU3 `V1.36.0.0`、`DEVICE_PROTOCOL_VERSION = 31`；协议31沿用协议29的3000.00 kg/m³密度手输上限，不改变CPU3本机FRAM参数布局。
+- 已同步读取部件参数状态页口径：X/Y 角按 `debug_data.angle_x/y` 的角度 `x100` 显示，读取参数态不受 `bottom_detect_mode` 限制；协议31扭力模块温度按`debug_data.torque_temperature_bits`的IEEE754单精度原始位显示2位小数，无效时显示`--.--`；蓝牙 RSSI 为运行态字段，单位 `dB`，`rssi_valid == 0` 时显示 `RSSI:N/A`。三者都不属于 `param_meta[]` 可写参数。
 - 仍需现场或算法确认：扭力类原始量含义、尺带伸缩率单位、是否给液位探头距差启用范围校验，以及“尺带类型”选项与厚度映射。
 
 ## 2. 参数元数据规则
@@ -117,6 +117,7 @@ CPU3 V1.11.1.1 起，K1~K4 的 HH/H/L/LL 报警阈值和报警滞回不在 `para
 | 运行态电机速度 | 原始值单位为 `0.01m/min` | `debug_data.motor_speed` 注释和打印口径 | 状态/调试页按 `m/min` 显示时用 `point=2` |
 | 运行态 X/Y 角 | 原始值为角度 `x100`；`123` 表示 `1.23°` | 读陀螺仪后写入 `angle_x = ax * 100`，显示侧 `point=2` | 已按 `°`、2 位小数显示，保持 |
 | 读取参数态 X/Y 角 | 与运行态 X/Y 角同口径；读取部件参数完成态直接按 `debug_data.angle_x/y` 显示，不依赖 `bottom_detect_mode` | `CMD_ReadPartParams()` 读取陀螺仪后刷新 `debug_data.angle_x/y`，CPU3 状态页读取参数上下文直接使用该快照 | 读取参数页保持 `°`、2 位小数；探底/罐高上下文仍按探底模式控制角度显示 |
+| 扭力模块温度 | 协议31共享IEEE754单精度原始位；只在读取部件参数完成态消费 | CPU2把Newhall帧温度原始位发布到`debug_data.torque_temperature_bits`；CPU3拒绝NaN、无穷和`-999.99～999.99 ℃`范围外数值 | 状态页只读显示“扭温”/`T.Temp`、单位`℃`和2位小数；无效时固定显示`--.--`，不是`param_meta[]`参数 |
 | 蓝牙连接 RSSI | 运行态原始值为 dB；`rssi_valid` 表示当前快照是否有效 | CPU2 发布 `wireless_pairing_status.rssi_valid/rssi`，CPU3 从协议 9 起读取 | 状态页只读显示 `RSSI:<value>dB` 或 `RSSI:N/A`；不是 `param_meta[]` 参数 |
 | 液位找液阈值 | 底层 raw 仍经协议 13 迁移为原值的 10 倍；频率液位路径通过 `FrequencyLevel_GetCompatThresholdHz(raw/10)` 折算为 Hz | 频率找液位按 Hz 死区比较；密度连续找液位复用同一 raw 时仍按 `RAW_TO_DENSITY()` 比较密度差 | CPU3 按 `Hz`、`point=1` 显示；默认 `150` 显示为 `15.0 Hz` |
 | 液位滞后阈值 | 底层 raw 仍经协议 13 迁移为原值的 10 倍；频率液位路径通过 `FrequencyLevel_GetCompatThresholdHz(raw/10)` 折算为 Hz | 频率跟随按 Hz 滞后死区比较；密度跟随复用同一 raw 时仍按 `RAW_TO_DENSITY()` 比较密度差 | CPU3 按 `Hz`、`point=1` 显示；默认 `200` 显示为 `20.0 Hz` |
