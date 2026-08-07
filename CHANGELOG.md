@@ -2846,3 +2846,27 @@ CPU3通信和界面：
 - 尚未在真实液位标定流程中验证罐高变化后的AO物理电流、FC10后续写入、FRAM保存/掉电恢复以及上位机和屏幕显示。
 - 尚未执行CPU2 V1.36.2.0与CPU3 V1.36.0.0交叉烧写；静态检查和clean-first构建不替代RS485、OLED、传感器、电机、AO电流环或现场验收。
 - 软件详细设计和DM4资料仅形成可审查的文档/静态证据，不构成需求批准、硬件验证、故障注入、FMEDA或SIL认证结论。
+
+## 2026-08-07 - 修复电机目标运动固定一小时超时
+
+版本：
+- CPU2：`V1.36.2.0 -> V1.36.3.0`（PATCH）。
+- CPU3：保持`V1.36.0.0`。
+
+协议版本与兼容性：
+- CPU2/CPU3 `DEVICE_PROTOCOL_VERSION`保持31；不新增或改变共享命令、寄存器、状态、字段宽度或字段语义，CPU3无需升版。
+- CPU2 `DEVICE_PARAM_VERSION`保持3，`DeviceParameters`结构、大小、字段偏移、`struct_size`、CRC范围和FRAM A/B地址不变；升级不恢复出厂、不清除现场参数。
+- `MOTOR_RUN_TIMEOUT`错误码、命令切换、驱动健康、碰撞检测和既有故障恢复策略保持不变。
+
+本次修改：
+- `MotorCtrl_MoveAndWait()`在临时速度已生效、相对目标已规划后，按`理论时间 = 距离(mm) × 60 ÷ 生效线速度(m/min)`计算单次等待预算；允许时间取`max(3600000 ms, 理论时间 × 2 + 60000 ms)`，不再对所有目标运动统一使用固定1小时上限。
+- `MotorMotion_WaitUntilStopWithTarget()`改为接收本次允许时间；超时时保留原`MOTOR_RUN_TIMEOUT`出口，并在结构化日志和现场打印中分别记录实际已运行时间与允许时间。
+- 本次不增加丢步检测、不修改自动恢复、故障码、协议、参数和CPU3行为。
+
+验证：
+- `py tools\check_motor_motion_target_plan.py`和`git diff --check`通过；目标源码保持CP936、CRLF且未新增`//`注释。
+- CPU2按最终V1.36.3.0源码执行`cmake --build build\LTD_MAIN_CPU2 --clean-first`通过，生成`LTD_MAIN_CPU2_V1.36.3.0.hex`；ELF为`text=326596`、`data=2344`、`bss=58352`。
+
+未验证风险：
+- 尚未在真实电机上执行短距离、长距离、最低/最高速度、临界等待预算、命令切换和真实超时验证。
+- 静态检查与clean-first构建只证明源码契约、编码和可编译性，不替代目标板、电机机构、编码器、故障恢复或现场验收。

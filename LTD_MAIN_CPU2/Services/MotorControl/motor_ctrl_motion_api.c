@@ -99,7 +99,8 @@ static uint32_t MotorMotion_WaitStopAbortable(uint32_t poll_ms);
 static uint32_t MotorMotion_WaitUntilStopWithTarget(TMC5130TypeDef *tmc5130,
                                                 float target_mm,
                                                 float eps_mm,
-                                                int dir);
+                                                int dir,
+                                                uint32_t max_wait_ms);
 static uint32_t MotorMotion_WaitStoppedAfterStopCommand(uint32_t timeout_ms);
 static uint32_t MotorMotion_MoveBlockingNoDetectInternal(float mm,
                                                          int dir,
@@ -442,6 +443,9 @@ uint32_t MotorCtrl_MoveAndWait(float mm, int dir, uint32_t speed_x100)
     float total_cmd_mm;
     float moved_mm;
     float diff_pct;
+    float effective_speed_m_min;
+    double estimated_wait_ms;
+    uint32_t max_wait_ms;
     MotorDrumState drum;
 
     if (mm <= 0.0f) {
@@ -480,6 +484,19 @@ uint32_t MotorCtrl_MoveAndWait(float mm, int dir, uint32_t speed_x100)
     targetPos_mm = target_plan.target_mm;
     total_cmd_mm = target_plan.distance_mm;
 
+    /* 动态等待时限按本次计划距离和已生效线速度一次性计算。
+     * 保留 1 小时下限，长距离按理论时间 2 倍并增加 1 分钟启停余量。 */
+    effective_speed_m_min = MotorDriver_GetSpeedSetpointMMin();
+    estimated_wait_ms = ((double)total_cmd_mm * 60.0) / (double)effective_speed_m_min;
+    estimated_wait_ms = estimated_wait_ms * 2.0 + 60000.0;
+    if (estimated_wait_ms < 3600000.0) {
+        estimated_wait_ms = 3600000.0;
+    }
+    if (estimated_wait_ms > (double)(UINT32_MAX - 1U)) {
+        estimated_wait_ms = (double)(UINT32_MAX - 1U);
+    }
+    max_wait_ms = (uint32_t)ceil(estimated_wait_ms);
+
     ret = MotorMotion_CheckCommandAbortWithSpeedScope(&speed_scope);
     if (ret != NO_ERROR) {
         return ret;
@@ -505,7 +522,11 @@ uint32_t MotorCtrl_MoveAndWait(float mm, int dir, uint32_t speed_x100)
         return ret;
     }
 
-    ret = MotorMotion_WaitUntilStopWithTarget(&stepper, targetPos_mm, EPS_MM, dir);
+    ret = MotorMotion_WaitUntilStopWithTarget(&stepper,
+                                              targetPos_mm,
+                                              EPS_MM,
+                                              dir,
+                                              max_wait_ms);
     if (ret != NO_ERROR) {
         /* 提前退出前先恢复临时速度，避免下一条命令沿用本次速度。 */
         return MotorMotion_ReturnWithSpeedScope(ret, &speed_scope);
@@ -2403,18 +2424,20 @@ static uint32_t MotorMotion_WaitStopAbortable(uint32_t poll_ms)
  * @param target_mm 目标位置，单位 mm。
  * @param eps_mm 到位公差，单位 mm。
  * @param dir 运动方向。必须使用 MOTOR_DIRECTION_UP 或 MOTOR_DIRECTION_DOWN；函数据此换算符号、目标位置、速度模式或到位条件。
+ * @param max_wait_ms 本次目标运动的最大等待时间，单位 ms；由计划距离和生效线速度在启动前计算。
  * @return 成功返回 NO_ERROR，否则返回超时、打断或驱动错误码。
  */
 static uint32_t MotorMotion_WaitUntilStopWithTarget(TMC5130TypeDef *tmc5130,
                                                 float target_mm,
                                                 float eps_mm,
-                                                int dir)
+                                                int dir,
+                                                uint32_t max_wait_ms)
 {
     uint32_t ret = NO_ERROR;
     uint32_t startTick = HAL_GetTick();
     uint32_t last_vel_refresh_tick = startTick;
-    const uint32_t MAX_WAIT_MS = 60000 * 60;
-    char detail[96];
+    uint32_t elapsed_ms;
+    char detail[128];
     const uint32_t command_display_state = MotorMotion_DisplayStateFromDirection(dir);
     bool is_moving = true;
 
@@ -2451,21 +2474,24 @@ static uint32_t MotorMotion_WaitUntilStopWithTarget(TMC5130TypeDef *tmc5130,
         CHECK_ERROR(ret);
 
         /* 6) 超时保护 */
-        if (HAL_GetTick() - startTick > MAX_WAIT_MS) {
+        elapsed_ms = HAL_GetTick() - startTick;
+        if (elapsed_ms > max_wait_ms) {
             snprintf(detail, sizeof(detail),
-                     "当前位置=%.2f,目标位置：%.2f,超时：%lums",
+                     "当前位置=%.2f,目标位置：%.2f,已运行：%lums,允许：%lums",
                      (double)cur_mm,
                      (double)target_mm,
-                     (unsigned long)MAX_WAIT_MS);
+                     (unsigned long)elapsed_ms,
+                     (unsigned long)max_wait_ms);
             ErrorLog_WarnDetail(ERROR_LOG_MODULE_MOTOR,
                                 ERROR_LOG_OP_WAIT_STOP,
                                 ErrorLog_GetReasonByCode(MOTOR_RUN_TIMEOUT),
                                 ERROR_LOG_ACTION_STOP_MOTOR,
                                 detail);
-            printf("TMC5130等待停止超时 | 当前位置=%.2fmm | 目标位置：%.2fmm | 超时：%lums\r\n",
+            printf("TMC5130等待停止超时 | 当前位置=%.2fmm | 目标位置：%.2fmm | 已运行：%lums | 允许：%lums\r\n",
                    (double)cur_mm,
                    (double)target_mm,
-                   (unsigned long)MAX_WAIT_MS);
+                   (unsigned long)elapsed_ms,
+                   (unsigned long)max_wait_ms);
             RETURN_ERROR(MOTOR_RUN_TIMEOUT);
         }
 
