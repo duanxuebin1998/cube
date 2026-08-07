@@ -1,12 +1,26 @@
 # CUBE 文档、Git 和提交门禁
 
+## 目录
+
+- [文档与资料边界](#文档与资料边界)
+- [Office、HTML 和 PDF](#officehtml-和-pdf)
+- [当前 turn 必读](#当前-turn-必读)
+- [提交范围模式](#提交范围模式)
+- [提交前顺序](#提交前顺序)
+- [提交信息强制格式](#提交信息强制格式)
+- [CUBE 发布一致性](#cube-发布一致性)
+- [验证边界](#验证边界)
+
 ## 文档与资料边界
 
 - `docs/` 是唯一正式业务文档源；不要新增或恢复 `LTD_MAIN_CPU2/docs/`、`LTD_DISPLAY_CPU3/docs/`。
 - `docs/00_程序流程导航/`、`tools/`、`docs-site/`、`outputs/`、临时渲染和中间产物不进入 Git。
+- 清理上述本机专用或淘汰路径中的历史跟踪文件时，允许暂存删除；仍禁止新增、修改或用 `git add -f` 恢复这些路径。
 - `.agents/skills/cube-development/` 是 CUBE 项目 skill 的正式仓库源，允许跟踪；不要把其中规则反向复制到全局 `engineering-workflow`。
 - 文档整理默认不升级 CPU2/CPU3 固件版本；只有固件输出或行为变化才按版本规则处理。
 - 移动或重命名资料后同步 README、CHANGELOG、计划、索引和旧路径引用，并运行 Markdown 链接与差异检查。
+
+用户所说的“Git库文档区、项目正式文档区、我的Git库中的文档”默认指 `docs/`；“临时产物”指 `tmp/<任务号>/`，“长期本机证据”指 `outputs/<任务号>/`。如果“我的库、文档区域、资料库”仍无法唯一定位，先确认目标，不得自行移动到 Windows Documents、云端库或其它仓库。
 
 ## Office、HTML 和 PDF
 
@@ -26,6 +40,8 @@
 
 不得使用旧会话摘要、其它代理结论或“此前已读取”替代。
 
+提交前先运行 `py .agents/skills/cube-development/scripts/bootstrap_cube_hooks.py --check --repo-root D:\CUBE`。该检查同时确认本机 hooks 与仓库级模板一致、`core.hooksPath=tools/git-hooks`；失败时不得用 `--no-verify` 绕过。
+
 ## 提交范围模式
 
 ### 全部提交
@@ -44,6 +60,7 @@
 - 只有用户点名文件、模块、提交主题，或明确要求保留其它工作区改动时使用 `scoped`。
 - 提交前列出纳入项和保留项；混合状态分别检查 index 与 worktree。
 - 不使用 reset、checkout、覆盖、清理或重生成消除范围外改动。
+- `scoped` 必须把当前任务 JSON 作为 `CUBE_COMMIT_SCOPE_FILE`；门禁按其中 `task.writePaths` 或 `task.allowedPaths` 逐项核对暂存文件。只设置 `CUBE_COMMIT_SCOPE=scoped` 而没有范围文件时提交失败。
 
 ## 提交前顺序
 
@@ -52,7 +69,7 @@
 3. 按最终 diff 判断版本、协议、参数存储、CHANGELOG、版本方案和流程资料影响。
 4. 暂存后检查 `git diff --cached --name-status`、关键 diff、`git diff --cached --check` 和敏感信息。
 5. 运行 `scripts/check_commit_scope.py --mode <all|scoped>`。
-6. 使用完整消息文件创建提交，并显式设置 `CUBE_COMMIT_SCOPE`。
+6. 使用完整消息文件创建提交，并显式设置 `CUBE_COMMIT_SCOPE`；`scoped` 同时设置 `CUBE_COMMIT_SCOPE_FILE=<任务JSON>`。
 7. 提交后检查完整正文、文件范围、剩余状态和版本标题门禁。
 
 ## 提交信息强制格式

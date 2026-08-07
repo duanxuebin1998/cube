@@ -1,0 +1,23 @@
+#!/bin/sh
+set -eu
+
+scope="${CUBE_COMMIT_SCOPE:-}"
+case "$scope" in
+    all|scoped)
+        ;;
+    *)
+        echo "CUBE pre-commit check failed: set CUBE_COMMIT_SCOPE=all or CUBE_COMMIT_SCOPE=scoped." >&2
+        exit 1
+        ;;
+esac
+
+if command -v py >/dev/null 2>&1; then
+    exec py .agents/skills/cube-development/scripts/check_commit_scope.py --mode "$scope"
+fi
+
+if command -v python >/dev/null 2>&1; then
+    exec python .agents/skills/cube-development/scripts/check_commit_scope.py --mode "$scope"
+fi
+
+echo "Python was not found; cannot validate CUBE commit scope." >&2
+exit 1
