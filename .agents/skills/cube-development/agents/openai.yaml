@@ -1,0 +1,4 @@
+interface:
+  display_name: "CUBE 项目开发"
+  short_description: "D:\\CUBE 仓库级固件、协议、文档、版本与提交硬门禁。"
+  default_prompt: "Use $cube-development in D:\\CUBE and follow the repository AGENTS.md, current diff, project references, commit-scope mode, and mandatory commit-message format."
